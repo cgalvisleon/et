@@ -1,4 +1,4 @@
-package jfdb
+package logs
 
 import (
 	"errors"

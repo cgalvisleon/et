@@ -1,6 +1,8 @@
-package et
+package slices
 
-func SliceFindIndex(item Json, list []Json, key string) int {
+import "github.com/cgalvisleon/et/et"
+
+func SliceFindIndex(item et.Json, list []et.Json, key string) int {
 	result := -1
 	for i, element := range list {
 		if item[key] == element[key] {
@@ -11,7 +13,7 @@ func SliceFindIndex(item Json, list []Json, key string) int {
 	return result
 }
 
-func NotInSlice(la, lb []Json, key string) []string {
+func NotInSlice(la, lb []et.Json, key string) []string {
 	var result []string = []string{}
 	for _, item := range la {
 		idx := SliceFindIndex(item, lb, key)

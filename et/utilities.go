@@ -1,12 +1,12 @@
-package et
+package json
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"time"
 
 	"github.com/cgalvisleon/elvis/logs"
-	"github.com/cgalvisleon/elvis/strs"
 )
 
 /**
@@ -15,7 +15,7 @@ import (
 func Quoted(val interface{}) any {
 	switch v := val.(type) {
 	case string:
-		return strs.Format(`'%s'`, v)
+		return fmt.Sprintf(`'%s'`, v)
 	case int:
 		return v
 	case float64:
@@ -31,21 +31,21 @@ func Quoted(val interface{}) any {
 	case bool:
 		return v
 	case time.Time:
-		return strs.Format(`'%s'`, v.Format("2006-01-02 15:04:05"))
+		return fmt.Sprintf(`'%s'`, v.Format("2006-01-02 15:04:05"))
 	case Json:
 		j := Json(v)
-		return strs.Format(`'%s'`, j.ToString())
+		return fmt.Sprintf(`'%s'`, j.ToString())
 	case []Json:
 		var r string
 		for i, _v := range v {
 			j := Json(_v)
 			if i == 0 {
-				r = strs.Format(`'%s'`, j.ToString())
+				r = fmt.Sprintf(`'%s'`, j.ToString())
 			} else {
-				r = strs.Format(`%s, '%s'`, r, j.ToString())
+				r = fmt.Sprintf(`%s, '%s'`, r, j.ToString())
 			}
 		}
-		return strs.Format(`'[%s]'`, r)
+		return fmt.Sprintf(`'[%s]'`, r)
 	case []interface{}:
 		var r string
 		var j Json
@@ -57,28 +57,28 @@ func Quoted(val interface{}) any {
 			}
 			j.Scan(bt)
 			if i == 0 {
-				r = strs.Format(`'%s'`, j.ToString())
+				r = fmt.Sprintf(`'%s'`, j.ToString())
 			} else {
-				r = strs.Format(`%s, '%s'`, r, j.ToString())
+				r = fmt.Sprintf(`%s, '%s'`, r, j.ToString())
 			}
 		}
-		return strs.Format(`'[%s]'`, r)
+		return fmt.Sprintf(`'[%s]'`, r)
 	case map[string]interface{}:
 		j := Json(v)
-		return strs.Format(`'%s'`, j.ToString())
+		return fmt.Sprintf(`'%s'`, j.ToString())
 	case []map[string]interface{}:
 		var r string
 		for i, _v := range v {
 			j := Json(_v)
 			if i == 0 {
-				r = strs.Format(`'%s'`, j.ToString())
+				r = fmt.Sprintf(`'%s'`, j.ToString())
 			} else {
-				r = strs.Format(`%s, '%s'`, r, j.ToString())
+				r = fmt.Sprintf(`%s, '%s'`, r, j.ToString())
 			}
 		}
-		return strs.Format(`'[%s]'`, r)
+		return fmt.Sprintf(`'[%s]'`, r)
 	case nil:
-		return strs.Format(`%s`, "NULL")
+		return fmt.Sprintf(`%s`, "NULL")
 	default:
 		logs.Errorf("Not quoted type:%v value:%v", reflect.TypeOf(v), v)
 		return val
@@ -88,7 +88,7 @@ func Quoted(val interface{}) any {
 func DoubleQuoted(val interface{}) any {
 	switch v := val.(type) {
 	case string:
-		return strs.Format(`"%s"`, v)
+		return fmt.Sprintf(`"%s"`, v)
 	case int:
 		return v
 	case float64:
@@ -104,21 +104,21 @@ func DoubleQuoted(val interface{}) any {
 	case bool:
 		return v
 	case time.Time:
-		return strs.Format(`"%s"`, v.Format("2006-01-02 15:04:05"))
+		return fmt.Sprintf(`"%s"`, v.Format("2006-01-02 15:04:05"))
 	case Json:
 		j := Json(v)
-		return strs.Format(`%s`, j.ToQuoted())
+		return fmt.Sprintf(`%s`, j.ToQuoted())
 	case []Json:
 		var r string
 		for i, _v := range v {
 			j := Json(_v)
 			if i == 0 {
-				r = strs.Format(`%s`, j.ToQuoted())
+				r = fmt.Sprintf(`%s`, j.ToQuoted())
 			} else {
-				r = strs.Format(`%s, %s`, r, j.ToQuoted())
+				r = fmt.Sprintf(`%s, %s`, r, j.ToQuoted())
 			}
 		}
-		return strs.Format(`[%s]`, r)
+		return fmt.Sprintf(`[%s]`, r)
 	case []interface{}:
 		var r string
 		var j Json
@@ -130,28 +130,28 @@ func DoubleQuoted(val interface{}) any {
 			}
 			j.Scan(bt)
 			if i == 0 {
-				r = strs.Format(`%s`, j.ToQuoted())
+				r = fmt.Sprintf(`%s`, j.ToQuoted())
 			} else {
-				r = strs.Format(`%s, %s`, r, j.ToQuoted())
+				r = fmt.Sprintf(`%s, %s`, r, j.ToQuoted())
 			}
 		}
-		return strs.Format(`[%s]`, r)
+		return fmt.Sprintf(`[%s]`, r)
 	case map[string]interface{}:
 		j := Json(v)
-		return strs.Format(`%s`, j.ToQuoted())
+		return fmt.Sprintf(`%s`, j.ToQuoted())
 	case []map[string]interface{}:
 		var r string
 		for i, _v := range v {
 			j := Json(_v)
 			if i == 0 {
-				r = strs.Format(`%s`, j.ToQuoted())
+				r = fmt.Sprintf(`%s`, j.ToQuoted())
 			} else {
-				r = strs.Format(`%s, %s`, r, j.ToQuoted())
+				r = fmt.Sprintf(`%s, %s`, r, j.ToQuoted())
 			}
 		}
-		return strs.Format(`[%s]`, r)
+		return fmt.Sprintf(`[%s]`, r)
 	case nil:
-		return strs.Format(`%s`, "NULL")
+		return fmt.Sprintf(`%s`, "NULL")
 	default:
 		logs.Errorf("Not double quoted type:%v value:%v", reflect.TypeOf(v), v)
 		return val
@@ -238,11 +238,11 @@ func ArrayToString(vals []Json) string {
 		if k == 0 {
 			result = s
 		} else {
-			result = strs.Format(`%s,%s`, result, s)
+			result = fmt.Sprintf(`%s,%s`, result, s)
 		}
 	}
 
-	return strs.Format(`[%s]`, result)
+	return fmt.Sprintf(`[%s]`, result)
 }
 
 /**
@@ -346,7 +346,7 @@ func IsDiferent(a, b Json) bool {
 				}
 				return IsDiferent(_old, _new)
 			default:
-				if strs.Format(`%v`, old) != strs.Format(`%v`, new) {
+				if fmt.Sprintf(`%v`, old) != fmt.Sprintf(`%v`, new) {
 					return true
 				}
 			}
@@ -386,7 +386,7 @@ func IsChange(a, b Json) bool {
 				}
 				return IsChange(_old, _new)
 			default:
-				if strs.Format(`%v`, old) != strs.Format(`%v`, new) {
+				if fmt.Sprintf(`%v`, old) != fmt.Sprintf(`%v`, new) {
 					return true
 				}
 			}

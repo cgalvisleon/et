@@ -1,11 +1,12 @@
 package et
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 
-	"github.com/cgalvisleon/elvis/logs"
-	"github.com/cgalvisleon/elvis/strs"
+	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/strs"
 )
 
 type Items struct {
@@ -41,7 +42,7 @@ func (it *Items) Uppcase(idx int, _default string, atribs ...string) string {
 	case string:
 		return strings.ToUpper(v)
 	default:
-		return strs.Format(`%v`, strings.ToUpper(_default))
+		return fmt.Sprintf(`%v`, strings.ToUpper(_default))
 	}
 }
 
@@ -56,7 +57,7 @@ func (it *Items) Lowcase(idx int, _default string, atribs ...string) string {
 	case string:
 		return strings.ToLower(v)
 	default:
-		return strs.Format(`%v`, strings.ToLower(_default))
+		return fmt.Sprintf(`%v`, strings.ToLower(_default))
 	}
 }
 
@@ -71,7 +72,7 @@ func (it *Items) Titlecase(idx int, _default string, atribs ...string) string {
 	case string:
 		return strings.ToTitle(v)
 	default:
-		return strs.Format(`%v`, strings.ToTitle(_default))
+		return fmt.Sprintf(`%v`, strings.ToTitle(_default))
 	}
 }
 
@@ -140,7 +141,7 @@ func (it *Items) Json(idx int, atribs ...string) Json {
 	case map[string]interface{}:
 		return Json(v)
 	default:
-		logs.Errorf("Not Items.Json type (%v) value:%v", reflect.TypeOf(v), v)
+		console.Errorf("Not Items.Json type (%v) value:%v", reflect.TypeOf(v), v)
 		return Json{}
 	}
 }
@@ -153,10 +154,10 @@ func (it *Items) ToString() string {
 	var result string
 	for _, item := range it.Result {
 		str := item.ToString()
-		result = strs.Append(result, str, ",")
+		result = strs.AppendStr(result, str, ",")
 	}
 
-	return strs.Format(`[%s]`, result)
+	return fmt.Sprintf(`[%s]`, result)
 }
 
 func (it *Items) ToJson() Json {

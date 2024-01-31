@@ -6,9 +6,41 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	"github.com/cgalvisleon/et/generic"
 )
+
+func Namecase(str string) string {
+	regex := `[0-9\s]+`
+	pattern := regexp.MustCompile(regex)
+	return pattern.ReplaceAllString(str, "_")
+}
+
+func Uppcase(s string) string {
+	return strings.ToUpper(s)
+}
+
+func Lowcase(s string) string {
+	return strings.ToLower(s)
+}
+
+func Titlecase(str string) string {
+	var result string
+	var ok bool
+	for i, char := range str {
+		s := fmt.Sprintf("%c", char)
+		if i == 0 {
+			s = strings.ToUpper(s)
+		} else if s == "" {
+			ok = true
+		} else if ok {
+			ok = false
+			s = strings.ToUpper(s)
+		}
+
+		result = AppendStr(result, s, "")
+	}
+
+	return result
+}
 
 func Format(format string, args ...any) string {
 	result := fmt.Sprintf(format, args...)
@@ -41,46 +73,12 @@ func ReplaceAll(str string, olds []string, new string) string {
 	return result
 }
 
-func Name(str string) string {
-	regex := `[0-9\s]+`
-	pattern := regexp.MustCompile(regex)
-	return pattern.ReplaceAllString(str, "_")
-}
-
 func Trim(str string) string {
 	return strings.Trim(str, " ")
 }
 
 func NotSpace(str string) string {
 	return Replace(str, " ", "")
-}
-
-func Uppcase(s string) string {
-	return strings.ToUpper(s)
-}
-
-func Lowcase(s string) string {
-	return strings.ToLower(s)
-}
-
-func Titlecase(str string) string {
-	var result string
-	var ok bool
-	for i, char := range str {
-		s := fmt.Sprintf("%c", char)
-		if i == 0 {
-			s = strings.ToUpper(s)
-		} else if s == "" {
-			ok = true
-		} else if ok {
-			ok = false
-			s = strings.ToUpper(s)
-		}
-
-		result = Append(result, s, "")
-	}
-
-	return result
 }
 
 func Empty(str1, str2 string) string {
@@ -91,7 +89,7 @@ func Empty(str1, str2 string) string {
 	return str1
 }
 
-func Append(str1, str2, sp string) string {
+func AppendStr(str1, str2, sp string) string {
 	if len(str1) == 0 {
 		return str2
 	}
@@ -99,39 +97,14 @@ func Append(str1, str2, sp string) string {
 		return str1
 	}
 
-	return Format(`%s%s%s`, str1, sp, str2)
-}
-
-func AppendStr(s1, s2 string) string {
-	if len(s2) == 0 {
-		return s1
-	}
-	if len(s1) == 0 {
-		return s2
-	}
-
-	return Format(`%s_%s`, strings.ToUpper(s1), strings.ToUpper(s2))
-}
-
-func AppendAny(val1, val2 any, sp string) string {
-	any1 := generic.New(val1)
-	any2 := generic.New(val2)
-
-	if len(any1.Str()) == 0 {
-		return any2.Str()
-	}
-	if len(any2.Str()) == 0 {
-		return any1.Str()
-	}
-
-	return Format(`%v%s%v`, any1, sp, any2)
+	return Format(`%v%v%v`, str1, sp, str2)
 }
 
 func Split(str, sep string) []string {
 	return strings.Split(str, sep)
 }
 
-func GetSplitIndex(str, sep string, idx int) string {
+func SplitIndex(str, sep string, idx int) string {
 	split := Split(str, sep)
 	if idx < 0 {
 		idx = len(split) + idx
@@ -144,7 +117,7 @@ func GetSplitIndex(str, sep string, idx int) string {
 	return ""
 }
 
-func ApendAny(space string, args ...any) string {
+func AppendAny(space string, args ...any) string {
 	var result string = ""
 	for i, a := range args {
 		if i == 0 {

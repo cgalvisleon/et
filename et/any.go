@@ -1,4 +1,4 @@
-package generic
+package et
 
 import (
 	"fmt"

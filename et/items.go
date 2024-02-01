@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/cgalvisleon/et/console"
-	"github.com/cgalvisleon/et/strs"
 )
 
 type Items struct {
@@ -154,7 +153,7 @@ func (it *Items) ToString() string {
 	var result string
 	for _, item := range it.Result {
 		str := item.ToString()
-		result = strs.AppendStr(result, str, ",")
+		result = AppendStr(result, str, ",")
 	}
 
 	return fmt.Sprintf(`[%s]`, result)

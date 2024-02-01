@@ -1,4 +1,4 @@
-package strs
+package et
 
 import (
 	"errors"

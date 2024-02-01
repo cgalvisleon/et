@@ -442,3 +442,23 @@ func (jb Json) ConsolidateAndUpdate(toField string, ruleOut []string, new Json) 
 
 	return result, nil
 }
+
+func (jb Json) FindIndex(list []Json, key string) int {
+	result := -1
+	for i, element := range list {
+		if jb[key] == element[key] {
+			return i
+		}
+	}
+
+	return result
+}
+
+func (jb Json) Append(list []Json, key string) []Json {
+	idx := jb.FindIndex(list, key)
+	if idx != -1 {
+		list = append(list, jb)
+	}
+
+	return list
+}

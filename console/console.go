@@ -145,3 +145,12 @@ func Panic(v ...any) {
 	log("Panic", "Red", v...)
 	os.Exit(1)
 }
+
+func Info(v ...any) {
+	log("Info", "Blue", v...)
+}
+
+func Infof(format string, args ...any) {
+	message := fmt.Sprintf(format, args...)
+	Info(message)
+}

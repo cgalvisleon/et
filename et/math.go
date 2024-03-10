@@ -1,4 +1,4 @@
-package utility
+package et
 
 type Num float64
 

@@ -6,8 +6,6 @@ import (
 	"reflect"
 	"strings"
 	"time"
-
-	"github.com/cgalvisleon/et/console"
 )
 
 type Item struct {
@@ -51,16 +49,16 @@ func (it *Item) ToScan(src interface{}) error {
 	for k, val := range it.Result {
 		field := v.FieldByName(k)
 		if !field.IsValid() {
-			console.Errorf("No such field:%s in struct", k)
+			Errorf("No such field:%s in struct", k)
 			continue
 		}
 		if !field.CanSet() {
-			console.Errorf("Cannot set field:%s in struct", k)
+			Errorf("Cannot set field:%s in struct", k)
 			continue
 		}
 		valType := reflect.ValueOf(val)
 		if field.Type() != valType.Type() {
-			return console.Errorf(`Provided value type didn't match obj field:%s type`, k)
+			return Errorf(`Provided value type didn't match obj field:%s type`, k)
 		}
 		field.Set(valType)
 	}
@@ -194,7 +192,7 @@ func (it *Item) Json(atribs ...string) Json {
 	case map[string]interface{}:
 		return Json(v)
 	default:
-		console.Errorf("Not Item.Json type (%v) value:%v", reflect.TypeOf(v), v)
+		Errorf("Not Item.Json type (%v) value:%v", reflect.TypeOf(v), v)
 		return Json{}
 	}
 }

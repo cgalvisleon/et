@@ -2,8 +2,6 @@ package et
 
 import (
 	"os"
-
-	"github.com/cgalvisleon/et/console"
 )
 
 func metaSet(name string, _default any, usage, _var string) *Any {
@@ -12,7 +10,7 @@ func metaSet(name string, _default any, usage, _var string) *Any {
 	for _, arg := range os.Args[1:] {
 		if ok {
 			if arg == "" {
-				console.Errorf(`-%s in %s (default %s)`, name, usage, _default)
+				Errorf(`-%s in %s (default %s)`, name, usage, _default)
 			}
 
 			os.Setenv(_var, arg)

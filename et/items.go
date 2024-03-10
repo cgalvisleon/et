@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-
-	"github.com/cgalvisleon/et/console"
 )
 
 type Items struct {
@@ -140,7 +138,7 @@ func (it *Items) Json(idx int, atribs ...string) Json {
 	case map[string]interface{}:
 		return Json(v)
 	default:
-		console.Errorf("Not Items.Json type (%v) value:%v", reflect.TypeOf(v), v)
+		Errorf("Not Items.Json type (%v) value:%v", reflect.TypeOf(v), v)
 		return Json{}
 	}
 }

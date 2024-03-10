@@ -1,4 +1,4 @@
-package utility
+package et
 
 import (
 	"fmt"
@@ -6,15 +6,14 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
-	"github.com/cgalvisleon/et/console"
-	"github.com/cgalvisleon/et/et"
 	"github.com/google/uuid"
-	"golang.org/x/exp/slices"
 )
 
+// Utility is function list that can be used in any package
 const NOT_FOUND = "Not found"
 const FOUND = "Found"
 const FOR_DELETE = "-2"
@@ -48,12 +47,12 @@ var ping = 0
 
 func Ping() {
 	ping++
-	console.Infof(`PING %d`, ping)
+	Infof(`PING %d`, ping)
 }
 
 func Pong() {
-	console.Info("PONG")
-	ping = 0
+	ping--
+	Infof(`PONG %d`, ping)
 }
 
 func Now() string {
@@ -93,7 +92,7 @@ func NilId(id string) string {
 }
 
 func Pointer(collection string, id string) string {
-	return et.Format("%s/%s", collection, id)
+	return Format("%s/%s", collection, id)
 }
 
 func Contains(c []string, v string) bool {
@@ -197,7 +196,7 @@ func ExtractMencion(str string) []string {
 func Quote(val interface{}) any {
 	switch v := val.(type) {
 	case string:
-		return et.Format(`'%s'`, v)
+		return Format(`'%s'`, v)
 	case int:
 		return v
 	case float64:
@@ -213,7 +212,7 @@ func Quote(val interface{}) any {
 	case bool:
 		return v
 	case time.Time:
-		return et.Format(`'%s'`, v.Format("2006-01-02 15:04:05"))
+		return Format(`'%s'`, v.Format("2006-01-02 15:04:05"))
 	case []interface{}:
 		var r string
 		for _, _v := range v {
@@ -221,21 +220,21 @@ func Quote(val interface{}) any {
 			if len(r) == 0 {
 				r = q
 			} else {
-				r = et.Format(`%v, %v`, r, q)
+				r = Format(`%v, %v`, r, q)
 			}
 		}
-		return et.Format(`'[%s]'`, r)
+		return Format(`'[%s]'`, r)
 	case map[string]interface{}:
 		var r string
 		for k, _v := range v {
 			q := Quote(_v).(string)
 			if len(r) == 0 {
-				r = et.Format(`"%v": %v`, k, q)
+				r = Format(`"%v": %v`, k, q)
 			} else {
-				r = et.Format(`%v, "%v": %v`, r, k, q)
+				r = Format(`%v, "%v": %v`, r, k, q)
 			}
 		}
-		return et.Format(`'%s'`, r)
+		return Format(`'%s'`, r)
 	case []map[string]interface{}:
 		var r string
 		for _, _v := range v {
@@ -243,14 +242,14 @@ func Quote(val interface{}) any {
 			if len(r) == 0 {
 				r = q
 			} else {
-				r = et.Format(`%v, %v`, r, q)
+				r = Format(`%v, %v`, r, q)
 			}
 		}
-		return et.Format(`'[%s]'`, r)
+		return Format(`'[%s]'`, r)
 	case nil:
 		return "NULL"
 	default:
-		console.Errorf("Not quote type:%v value:%v", reflect.TypeOf(v), v)
+		Errorf("Not quote type:%v value:%v", reflect.TypeOf(v), v)
 		return val
 	}
 }
@@ -258,9 +257,9 @@ func Quote(val interface{}) any {
 func Params(str string, args ...any) string {
 	var result string = str
 	for i, v := range args {
-		p := et.Format(`$%d`, i+1)
-		rp := et.Format(`%v`, v)
-		result = et.Replace(result, p, rp)
+		p := Format(`$%d`, i+1)
+		rp := Format(`%v`, v)
+		result = Replace(result, p, rp)
 	}
 
 	return result
@@ -268,8 +267,8 @@ func Params(str string, args ...any) string {
 
 func ParamQuote(str string, args ...any) string {
 	for i, arg := range args {
-		old := et.Format(`$%d`, i+1)
-		new := et.Format(`%v`, Quote(arg))
+		old := Format(`$%d`, i+1)
+		new := Format(`%v`, Quote(arg))
 		str = strings.ReplaceAll(str, old, new)
 	}
 
@@ -277,11 +276,11 @@ func ParamQuote(str string, args ...any) string {
 }
 
 func Address(host string, port int) string {
-	return et.Format("%s:%d", host, port)
+	return Format("%s:%d", host, port)
 }
 
 func BannerTitle(name, version string, size int) string {
-	return et.Format(`{{ .Title "%s V%s" "" %d }}`, name, version, size)
+	return Format(`{{ .Title "%s V%s" "" %d }}`, name, version, size)
 }
 
 func ModuleName() (string, error) {

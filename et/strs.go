@@ -1,8 +1,10 @@
 package et
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -172,4 +174,153 @@ func RemoveAcents(str string) string {
 	str = strings.ReplaceAll(str, "Ó", "O")
 	str = strings.ReplaceAll(str, "Ú", "U")
 	return str
+}
+
+/**
+*
+**/
+func Quoted(val interface{}) any {
+	switch v := val.(type) {
+	case string:
+		return fmt.Sprintf(`'%s'`, v)
+	case int:
+		return v
+	case float64:
+		return v
+	case float32:
+		return v
+	case int16:
+		return v
+	case int32:
+		return v
+	case int64:
+		return v
+	case bool:
+		return v
+	case time.Time:
+		return fmt.Sprintf(`'%s'`, v.Format("2006-01-02 15:04:05"))
+	case Json:
+		j := Json(v)
+		return fmt.Sprintf(`'%s'`, j.ToString())
+	case []Json:
+		var r string
+		for i, _v := range v {
+			j := Json(_v)
+			if i == 0 {
+				r = fmt.Sprintf(`'%s'`, j.ToString())
+			} else {
+				r = fmt.Sprintf(`%s, '%s'`, r, j.ToString())
+			}
+		}
+		return fmt.Sprintf(`'[%s]'`, r)
+	case []interface{}:
+		var r string
+		var j Json
+		for i, _v := range v {
+			bt, err := json.Marshal(_v)
+			if err != nil {
+				Errorf("Not quoted type:%v value:%v", reflect.TypeOf(v), v)
+				return val
+			}
+			j.Scan(bt)
+			if i == 0 {
+				r = fmt.Sprintf(`'%s'`, j.ToString())
+			} else {
+				r = fmt.Sprintf(`%s, '%s'`, r, j.ToString())
+			}
+		}
+		return fmt.Sprintf(`'[%s]'`, r)
+	case map[string]interface{}:
+		j := Json(v)
+		return fmt.Sprintf(`'%s'`, j.ToString())
+	case []map[string]interface{}:
+		var r string
+		for i, _v := range v {
+			j := Json(_v)
+			if i == 0 {
+				r = fmt.Sprintf(`'%s'`, j.ToString())
+			} else {
+				r = fmt.Sprintf(`%s, '%s'`, r, j.ToString())
+			}
+		}
+		return fmt.Sprintf(`'[%s]'`, r)
+	case nil:
+		return "NULL"
+	default:
+		Errorf("Not quoted type:%v value:%v", reflect.TypeOf(v), v)
+		return val
+	}
+}
+
+func DoubleQuoted(val interface{}) any {
+	switch v := val.(type) {
+	case string:
+		return fmt.Sprintf(`"%s"`, v)
+	case int:
+		return v
+	case float64:
+		return v
+	case float32:
+		return v
+	case int16:
+		return v
+	case int32:
+		return v
+	case int64:
+		return v
+	case bool:
+		return v
+	case time.Time:
+		return fmt.Sprintf(`"%s"`, v.Format("2006-01-02 15:04:05"))
+	case Json:
+		j := Json(v)
+		return j.ToQuoted()
+	case []Json:
+		var r string
+		for i, _v := range v {
+			j := Json(_v)
+			if i == 0 {
+				r = j.ToQuoted()
+			} else {
+				r = fmt.Sprintf(`%s, %s`, r, j.ToQuoted())
+			}
+		}
+		return fmt.Sprintf(`[%s]`, r)
+	case []interface{}:
+		var r string
+		var j Json
+		for i, _v := range v {
+			bt, err := json.Marshal(_v)
+			if err != nil {
+				Errorf("Not double quoted type:%v value:%v", reflect.TypeOf(v), v)
+				return val
+			}
+			j.Scan(bt)
+			if i == 0 {
+				r = j.ToQuoted()
+			} else {
+				r = fmt.Sprintf(`%s, %s`, r, j.ToQuoted())
+			}
+		}
+		return fmt.Sprintf(`[%s]`, r)
+	case map[string]interface{}:
+		j := Json(v)
+		return j.ToQuoted()
+	case []map[string]interface{}:
+		var r string
+		for i, _v := range v {
+			j := Json(_v)
+			if i == 0 {
+				r = j.ToQuoted()
+			} else {
+				r = fmt.Sprintf(`%s, %s`, r, j.ToQuoted())
+			}
+		}
+		return fmt.Sprintf(`[%s]`, r)
+	case nil:
+		return "NULL"
+	default:
+		Errorf("Not double quoted type:%v value:%v", reflect.TypeOf(v), v)
+		return val
+	}
 }

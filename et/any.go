@@ -2,7 +2,6 @@ package et
 
 import (
 	"fmt"
-	"log"
 	"reflect"
 	"strconv"
 	"time"
@@ -69,12 +68,12 @@ func (an *Any) Int() int {
 		}
 		i, err := strconv.Atoi(v)
 		if err != nil {
-			log.Println("Generic value int not conver:", reflect.TypeOf(v), "value:", v)
+			fmt.Println("Generic value int not conver:", reflect.TypeOf(v), "value:", v)
 			return 0
 		}
 		return i
 	default:
-		log.Println("Generic value int not conver:", reflect.TypeOf(v), "value:", v)
+		fmt.Println("Generic value int not conver:", reflect.TypeOf(v), "value:", v)
 		return 0
 	}
 }
@@ -94,7 +93,7 @@ func (an *Any) Num() float64 {
 	case int64:
 		return float64(v)
 	default:
-		log.Println("Generic value number not conver:", reflect.TypeOf(v), "value:", v)
+		fmt.Println("Generic value number not conver:", reflect.TypeOf(v), "value:", v)
 		return 0
 	}
 }
@@ -104,7 +103,7 @@ func (an *Any) Bool() bool {
 	case bool:
 		return v
 	default:
-		log.Println("Generic value boolean not conver:", reflect.TypeOf(v), "value:", v)
+		fmt.Println("Generic value boolean not conver:", reflect.TypeOf(v), "value:", v)
 		return false
 	}
 }
@@ -124,7 +123,7 @@ func (an *Any) Time() time.Time {
 	case time.Time:
 		return v
 	default:
-		log.Println("Generic value time not conver:", reflect.TypeOf(v), "value:", v)
+		fmt.Println("Generic value time not conver:", reflect.TypeOf(v), "value:", v)
 		return _default
 	}
 }

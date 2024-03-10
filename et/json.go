@@ -4,17 +4,382 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	"log"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/cgalvisleon/et/console"
 )
 
 type Json map[string]interface{}
 
+// Marshal functions
+// Convert a struct to a Json
+func Marshal(src interface{}) (Json, error) {
+	j, err := json.Marshal(src)
+	if err != nil {
+		return Json{}, err
+	}
+
+	result := Json{}
+	err = json.Unmarshal(j, &result)
+	if err != nil {
+		return Json{}, err
+	}
+
+	return result, nil
+}
+
+// Convert a Unit8 to a Json
+func ToUnit8Json(src interface{}) Json {
+	result, err := ToJson(src)
+	if err != nil {
+		return nil
+	}
+
+	return result
+}
+
+// Convert a struct to a Json
+func ToJson(src interface{}) (Json, error) {
+	var ba []byte
+	switch v := src.(type) {
+	case []byte:
+		ba = v
+	case string:
+		ba = []byte(v)
+	case Json:
+		return v, nil
+	case map[string]interface{}:
+		r := Json{}
+		for k, v := range v {
+			r[k] = v
+		}
+		return r, nil
+	default:
+		return nil, Errorf(`Failed convert value: %v type: %v`, src, reflect.TypeOf(v))
+	}
+
+	t := map[string]interface{}{}
+	err := json.Unmarshal(ba, &t)
+	if err != nil {
+		return nil, err
+	}
+
+	return Json(t), nil
+}
+
+// Convert a struct to a array Json
+func ToJsonArray(vals []interface{}) ([]Json, error) {
+	result := []Json{}
+	for _, val := range vals {
+		v, err := ToJson(val)
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, v)
+	}
+
+	return result, nil
+}
+
+// Convert map[string]interface{} to a array Json
+func ToArrayJson(src map[string]interface{}) ([]Json, error) {
+	result := []Json{}
+	result = append(result, src)
+
+	return result, nil
+}
+
+// Convert a struct to a string
+func ToString(val interface{}) string {
+	s, err := json.Marshal(val)
+	if err != nil {
+		return ""
+	}
+
+	return string(s)
+}
+
+// Convert byte to a Json
+func ByteToJson(scr interface{}) Json {
+	var result Json
+	result.Scan(scr)
+
+	return result
+}
+
+// Convert array to string
+func ArrayToString(vals []Json) string {
+	var result string
+
+	for k, val := range vals {
+		v, err := ToJson(val)
+		if err != nil {
+			return "[]"
+		}
+
+		s := v.ToString()
+		if k == 0 {
+			result = s
+		} else {
+			result = fmt.Sprintf(`%s,%s`, result, s)
+		}
+	}
+
+	return fmt.Sprintf(`[%s]`, result)
+}
+
+// Extract a value from a levels value Json
+func Val(data Json, _default any, atribs ...string) any {
+	var result any
+	var ok bool
+
+	for i, atrib := range atribs {
+		if i == 0 {
+			result, ok = data[atrib]
+			if !ok {
+				return _default
+			}
+		} else {
+			switch v := result.(type) {
+			case Json:
+				data, err := ToJson(v)
+				if err != nil {
+					return _default
+				}
+
+				result, ok = data[atrib]
+				if !ok {
+					return _default
+				}
+			case []interface{}:
+				data, err := ToJson(v)
+				if err != nil {
+					return _default
+				}
+
+				result, ok = data[atrib]
+				if !ok {
+					return _default
+				}
+			case map[string]interface{}:
+				data, err := ToJson(v)
+				if err != nil {
+					return _default
+				}
+
+				result, ok = data[atrib]
+				if !ok {
+					return _default
+				}
+			default:
+				Errorf("Val. Type (%v) value:%v", reflect.TypeOf(v), v)
+				return _default
+			}
+		}
+		if result == nil {
+			return _default
+		}
+	}
+
+	return result
+}
+
+// Append a Json to another Json
+func ApendJson(a Json, b Json) Json {
+	for k, v := range b {
+		a[k] = v
+	}
+
+	return a
+}
+
+// Compare a against b and set that is different if and only if a is different from b
+func IsDiferent(a, b Json) bool {
+	for k, new := range b {
+		old := a[k]
+
+		if old == nil {
+			return true
+		} else {
+			switch v := old.(type) {
+			case Json:
+				_new, err := ToJson(new)
+				if err != nil {
+					Error(err)
+					return false
+				}
+				return IsDiferent(v, _new)
+			case map[string]interface{}:
+				_old, err := ToJson(old)
+				if err != nil {
+					Error(err)
+					return false
+				}
+				_new, err := ToJson(new)
+				if err != nil {
+					Error(err)
+					return false
+				}
+				return IsDiferent(_old, _new)
+			default:
+				if fmt.Sprintf(`%v`, old) != fmt.Sprintf(`%v`, new) {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+// Compare a against b and get is change
+func IsChange(a, b Json) bool {
+	for k, new := range b {
+		old := a[k]
+
+		if old != nil {
+			switch v := old.(type) {
+			case Json:
+				_new, err := ToJson(new)
+				if err != nil {
+					Error(err)
+					return false
+				}
+				return IsChange(v, _new)
+			case map[string]interface{}:
+				_old, err := ToJson(old)
+				if err != nil {
+					Error(err)
+					return false
+				}
+				_new, err := ToJson(new)
+				if err != nil {
+					Error(err)
+					return false
+				}
+				return IsChange(_old, _new)
+			default:
+				if fmt.Sprintf(`%v`, old) != fmt.Sprintf(`%v`, new) {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+// Uodate a against b and get the result
+func Update(a, b Json) (Json, bool) {
+	var change bool
+	var result Json = Json{}
+
+	for k, val := range a {
+		result[k] = val
+	}
+
+	for k, new := range b {
+		old := result[k]
+
+		if old != nil {
+			switch v := new.(type) {
+			case Json:
+				_old, err := ToJson(old)
+				if err != nil {
+					Error(err)
+				}
+				_new, ch := Update(_old, v)
+				if !change {
+					change = ch
+				}
+				result[k] = _new
+			case map[string]interface{}:
+				_old, err := ToJson(old)
+				if err != nil {
+					Error(err)
+				}
+				_new, ch := Update(_old, v)
+				if !change {
+					change = ch
+				}
+				result[k] = _new
+			case []map[string]interface{}:
+				result[k] = v
+			default:
+				if !change {
+					change = old != v
+				}
+				result[k] = v
+			}
+		}
+	}
+
+	return result, change
+}
+
+// Merge a against b and get the result
+func Merge(a, b Json) (Json, bool) {
+	var change bool
+	var result Json = Json{}
+
+	for k, val := range a {
+		result[k] = val
+	}
+
+	for k, new := range b {
+		old := a[k]
+
+		if old == nil {
+			result[k] = new
+		} else if new != nil {
+			switch v := new.(type) {
+			case Json:
+				_old, err := ToJson(old)
+				if err != nil {
+					Error(err)
+				}
+				_new, ch := Merge(_old, v)
+				if !change {
+					change = ch
+				}
+				result[k] = _new
+			case map[string]interface{}:
+				_old, err := ToJson(old)
+				if err != nil {
+					Error(err)
+				}
+				_new, ch := Merge(_old, v)
+				if !change {
+					change = ch
+				}
+				result[k] = _new
+			case []map[string]interface{}:
+				result[k] = v
+			default:
+				if !change {
+					change = old != v
+				}
+				result[k] = v
+			}
+		}
+	}
+
+	return result, change
+}
+
+// OkOrNotJson
+func OkOrNotJson(condition bool, ok Json, not Json) Json {
+	if condition {
+		return ok
+	} else {
+		return not
+	}
+}
+
+// Json functions
+// Get a value driver.Value from a Json
 func (jb Json) Value() (driver.Value, error) {
 	j, err := json.Marshal(jb)
 
@@ -29,7 +394,7 @@ func (jb *Json) Scan(src interface{}) error {
 	case string:
 		ba = []byte(v)
 	default:
-		return console.Errorf(`Failed to unmarshal JSON value:%s`, src)
+		return Errorf(`Failed to unmarshal JSON value:%s`, src)
 	}
 
 	t := map[string]interface{}{}
@@ -49,16 +414,16 @@ func (jb *Json) ToScan(src interface{}) error {
 	for k, val := range *jb {
 		field := v.FieldByName(k)
 		if !field.IsValid() {
-			console.Errorf("json/ToScan - No such field:%s in struct", k)
+			Errorf("json/ToScan - No such field:%s in struct", k)
 			continue
 		}
 		if !field.CanSet() {
-			console.Errorf("json/ToScan - Cannot set field:%s in struct", k)
+			Errorf("json/ToScan - Cannot set field:%s in struct", k)
 			continue
 		}
 		valType := reflect.ValueOf(val)
 		if field.Type() != valType.Type() {
-			return console.Errorf("json/ToScan - Provided value type didn't match obj field:%s type", k)
+			return Errorf("json/ToScan - Provided value type didn't match obj field:%s type", k)
 		}
 		field.Set(valType)
 	}
@@ -76,12 +441,7 @@ func (jb Json) ToByte() []byte {
 }
 
 func (jb Json) ToString() string {
-	s, err := json.Marshal(jb)
-	if err != nil {
-		return ""
-	}
-
-	return string(s)
+	return ToString(jb)
 }
 
 func (jb Json) ToQuoted() string {
@@ -135,12 +495,12 @@ func (jb Json) ValInt(_default int, atribs ...string) int {
 	case string:
 		i, err := strconv.Atoi(v)
 		if err != nil {
-			log.Println("ValInt value int not conver", reflect.TypeOf(v), v)
+			fmt.Println("ValInt value int not conver", reflect.TypeOf(v), v)
 			return _default
 		}
 		return i
 	default:
-		log.Println("ValInt value is not int, type:", reflect.TypeOf(v), "value:", v)
+		fmt.Println("ValInt value is not int, type:", reflect.TypeOf(v), "value:", v)
 		return _default
 	}
 }
@@ -164,12 +524,12 @@ func (jb Json) ValNum(_default float64, atribs ...string) float64 {
 	case string:
 		i, err := strconv.ParseFloat(v, 64)
 		if err != nil {
-			log.Println("ValNum value float not conver", reflect.TypeOf(v), v)
+			fmt.Println("ValNum value float not conver", reflect.TypeOf(v), v)
 			return _default
 		}
 		return i
 	default:
-		log.Println("ValNum value is not float, type:", reflect.TypeOf(v), "value:", v)
+		fmt.Println("ValNum value is not float, type:", reflect.TypeOf(v), "value:", v)
 		return _default
 	}
 }
@@ -188,11 +548,11 @@ func (jb Json) ValBool(_default bool, atribs ...string) bool {
 		} else if v == "false" {
 			return false
 		} else {
-			log.Println("ValBool value is not bool, type:", reflect.TypeOf(v), "value:", v)
+			fmt.Println("ValBool value is not bool, type:", reflect.TypeOf(v), "value:", v)
 			return _default
 		}
 	default:
-		log.Println("ValBool value is not bool, type:", reflect.TypeOf(v), "value:", v)
+		fmt.Println("ValBool value is not bool, type:", reflect.TypeOf(v), "value:", v)
 		return _default
 	}
 }
@@ -214,7 +574,7 @@ func (jb Json) ValTime(atribs ...string) time.Time {
 	case time.Time:
 		return v
 	default:
-		log.Println("ValTime value is not time, type:", reflect.TypeOf(v), "value:", v)
+		fmt.Println("ValTime value is not time, type:", reflect.TypeOf(v), "value:", v)
 		return _default
 	}
 }
@@ -272,7 +632,7 @@ func (jb Json) Json(atrib string) Json {
 	case map[string]interface{}:
 		return Json(v)
 	default:
-		console.Errorf("json/Json - Atrib:%s Type:%v Value:%v", atrib, reflect.TypeOf(v), v)
+		Errorf("json/Json - Atrib:%s Type:%v Value:%v", atrib, reflect.TypeOf(v), v)
 		return Json{}
 	}
 }
@@ -289,18 +649,18 @@ func (jb Json) Array(atrib string) []Json {
 	case []interface{}:
 		result, err := ToJsonArray(v)
 		if err != nil {
-			console.Errorf("json/Array - Atrib:%s Type:%v Value:%v", atrib, reflect.TypeOf(v), v)
+			Errorf("json/Array - Atrib:%s Type:%v Value:%v", atrib, reflect.TypeOf(v), v)
 			return []Json{}
 		}
 
 		return result
 	case string:
 		if v != "[]" {
-			console.Errorf("json/Array - Atrib:%s Type:%v Value:%v", atrib, reflect.TypeOf(v), v)
+			Errorf("json/Array - Atrib:%s Type:%v Value:%v", atrib, reflect.TypeOf(v), v)
 		}
 		return []Json{}
 	default:
-		console.Errorf("json/Array - Atrib:%s Type:%v Value:%v", atrib, reflect.TypeOf(v), v)
+		Errorf("json/Array - Atrib:%s Type:%v Value:%v", atrib, reflect.TypeOf(v), v)
 		return []Json{}
 	}
 }
@@ -314,7 +674,7 @@ func (jb Json) ArrayStr(atrib string) []string {
 			result = append(result, val.(string))
 		}
 	default:
-		console.Errorf("json/ArrayStr - Atrib:%s Type:%v Value:%v", atrib, reflect.TypeOf(v), v)
+		Errorf("json/ArrayStr - Atrib:%s Type:%v Value:%v", atrib, reflect.TypeOf(v), v)
 	}
 
 	return result
@@ -325,11 +685,9 @@ func (jb Json) ArrayAny(atrib string) []any {
 	vals := jb[atrib]
 	switch v := vals.(type) {
 	case []interface{}:
-		for _, val := range v {
-			result = append(result, val)
-		}
+		result = append(result, v...)
 	default:
-		console.Errorf("json/ArrayAny - Type (%v) value:%v", reflect.TypeOf(v), v)
+		Errorf("json/ArrayAny - Type (%v) value:%v", reflect.TypeOf(v), v)
 	}
 
 	return result

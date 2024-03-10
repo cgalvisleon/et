@@ -1,14 +1,13 @@
-package utility
+package et
 
 import (
 	"regexp"
 
-	"github.com/cgalvisleon/et/et"
 	"golang.org/x/exp/slices"
 )
 
 func ValidStr(val string, min int, notIn []string) bool {
-	v := et.Replace(val, " ", "")
+	v := Replace(val, " ", "")
 	ok := len(v) > min
 	if ok {
 		return ok
@@ -19,7 +18,7 @@ func ValidStr(val string, min int, notIn []string) bool {
 }
 
 func ValidIn(val string, min int, in []string) bool {
-	v := et.Replace(val, " ", "")
+	v := Replace(val, " ", "")
 	ok := len(v) > min && Contains(in, val)
 	return ok
 }

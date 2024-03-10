@@ -78,13 +78,6 @@ func log(kind string, color string, args ...any) string {
 
 	println(result)
 
-	/*
-		event.Action("logs", map[string]interface{}{
-			"date":    now,
-			"kind":    kind,
-			"message": message,
-		})*/
-
 	return result
 }
 
@@ -123,6 +116,11 @@ func Error(err error) error {
 	}
 
 	return err
+}
+
+func Nil(args ...any) error {
+	Log("LOG", args...)
+	return nil
 }
 
 func Errorm(message string) error {

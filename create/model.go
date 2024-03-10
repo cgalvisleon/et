@@ -36,8 +36,8 @@ import (
 	"os/signal"
 
 	serv "$1/internal/service/$2"
-	"github.com/cgalvisleon/elvis/console"
-	"github.com/cgalvisleon/elvis/envar"
+	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/envar"
 	_ "github.com/joho/godotenv/autoload"	
 )
 
@@ -72,10 +72,10 @@ import (
 	"net/http"
 
 	v1 "$1/internal/service/$2/v1"
-	"github.com/cgalvisleon/elvis/console"
-	"github.com/cgalvisleon/elvis/envar"
-	"github.com/cgalvisleon/elvis/middleware"
-	"github.com/cgalvisleon/elvis/strs"
+	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/middleware"
+	"github.com/cgalvisleon/et/strs"
 	"github.com/go-chi/chi"
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/rs/cors"
@@ -141,7 +141,7 @@ func (serv *Server) Start() {
 		}
 
 		svr := serv.http
-		console.LogKF("Http", "Running on http://localhost%s", svr.Addr)
+		console.Logf("Http", "Running on http://localhost%s", svr.Addr)
 		console.Fatal(serv.http.ListenAndServe())
 	}()
 
@@ -151,7 +151,7 @@ func (serv *Server) Start() {
 		}
 
 		svr := *serv.rpc
-		console.LogKF("RPC", "Running on tcp:localhost:%s", svr.Addr().String())
+		console.Logf("RPC", "Running on tcp:localhost:%s", svr.Addr().String())
 		http.Serve(svr, nil)
 	}()
 
@@ -171,11 +171,11 @@ import (
 	"time"
 
 	pkg "$1/pkg/$2"
-	"github.com/cgalvisleon/elvis/cache"
-	"github.com/cgalvisleon/elvis/event"
-	"github.com/cgalvisleon/elvis/jdb"
-	"github.com/cgalvisleon/elvis/utility"
-	"github.com/cgalvisleon/elvis/ws"
+	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/jdb"
+	"github.com/cgalvisleon/et/utility"
+	"github.com/cgalvisleon/et/ws"
 	"github.com/dimiro1/banner"
 	"github.com/go-chi/chi"
 	"github.com/mattn/go-colorable"
@@ -240,9 +240,9 @@ func Banner() {
 const modelEvent = `package $1
 
 import (
-	"github.com/cgalvisleon/elvis/console"
-	"github.com/cgalvisleon/elvis/event"
-	e "github.com/cgalvisleon/elvis/json"
+	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/event"
+	e "github.com/cgalvisleon/et/json"
 )
 
 func initEvents() {
@@ -266,7 +266,7 @@ func eventAction(m event.CreatedEvenMessage) {
 const modelModel = `package $1
 
 import (
-	"github.com/cgalvisleon/elvis/console"
+	"github.com/cgalvisleon/et/console"
 )
 
 func initModels() error {
@@ -280,7 +280,7 @@ func initModels() error {
 
 const modelSchema = `package $1
 
-import "github.com/cgalvisleon/elvis/linq"
+import "github.com/cgalvisleon/et/linq"
 
 var $2 *linq.Schema
 
@@ -298,8 +298,8 @@ const modelhRpc = `package $1
 import (
 	"net/rpc"
 
-	"github.com/cgalvisleon/elvis/console"
-	"github.com/cgalvisleon/elvis/json"
+	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/json"
 )
 
 var initRpc bool
@@ -356,9 +356,9 @@ const modelController = `package $1
 import (
 	"context"
 
-	"github.com/cgalvisleon/elvis/envar"
-	"github.com/cgalvisleon/elvis/jdb"
-	e "github.com/cgalvisleon/elvis/json"
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/jdb"
+	e "github.com/cgalvisleon/et/json"
 )
 
 type Controller struct {
@@ -399,10 +399,10 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/cgalvisleon/elvis/console"
-	"github.com/cgalvisleon/elvis/envar"
-	"github.com/cgalvisleon/elvis/response"
-	er "github.com/cgalvisleon/elvis/router"
+	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/response"
+	er "github.com/cgalvisleon/et/router"
 	"github.com/go-chi/chi"
 )
 
@@ -472,14 +472,14 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/cgalvisleon/elvis/console"
-	"github.com/cgalvisleon/elvis/core"
-	"github.com/cgalvisleon/elvis/generic"
-	e "github.com/cgalvisleon/elvis/json"
-	"github.com/cgalvisleon/elvis/linq"
-	"github.com/cgalvisleon/elvis/msg"
-	"github.com/cgalvisleon/elvis/response"
-	"github.com/cgalvisleon/elvis/utility"
+	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/core"
+	"github.com/cgalvisleon/et/generic"
+	e "github.com/cgalvisleon/et/json"
+	"github.com/cgalvisleon/et/linq"
+	"github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/response"
+	"github.com/cgalvisleon/et/utility"
 	"github.com/go-chi/chi"
 )
 

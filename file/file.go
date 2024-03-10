@@ -3,6 +3,7 @@ package file
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 )
@@ -29,8 +30,8 @@ func append(str1, str2, sp string) string {
 	return fmt.Sprintf(`%s%s%s`, str1, sp, str2)
 }
 
-func ExistPath(name string) bool {
-	_, err := os.Stat(name)
+func ExistPath(path string) bool {
+	_, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false
@@ -40,8 +41,8 @@ func ExistPath(name string) bool {
 	return true
 }
 
-func MakeFile(folder, name, model string, args ...any) (string, error) {
-	path := fmt.Sprintf(`%s/%s`, folder, name)
+func Make(folder, fileName, model string, args ...any) (string, error) {
+	path := fmt.Sprintf(`%s/%s`, folder, fileName)
 
 	if ExistPath(path) {
 		return "", errors.New("file found")
@@ -73,7 +74,7 @@ func MakeFolder(names ...string) (string, error) {
 	return path, nil
 }
 
-func RemoveFile(path string) (bool, error) {
+func Remove(path string) (bool, error) {
 	file := path
 	if _, err := os.Stat(file); os.IsNotExist(err) {
 		if err != nil {
@@ -87,7 +88,7 @@ func RemoveFile(path string) (bool, error) {
 	}
 }
 
-func ExtencionFile(filename string) string {
+func Extencion(filename string) string {
 	lst := strings.Split(filename, ".")
 	n := len(lst)
 	if n > 1 {
@@ -95,4 +96,37 @@ func ExtencionFile(filename string) string {
 	}
 
 	return ""
+}
+
+func Open(fileName string) (*os.File, error) {
+	file, err := os.Open(fileName)
+	if err != nil {
+		return nil, err
+	}
+
+	return file, nil
+}
+
+func Read(fileName string) ([]byte, error) {
+	file, err := Open(fileName)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	content, err := io.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+
+	return content, nil
+}
+
+func Write(fileName string, content []byte) error {
+	err := os.WriteFile(fileName, content, 0666)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

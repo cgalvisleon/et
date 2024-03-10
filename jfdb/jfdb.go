@@ -3,7 +3,6 @@ package jfdb
 import (
 	"time"
 
-	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 	"github.com/google/uuid"
 )
@@ -47,7 +46,7 @@ func (s *Jfdb) indexDatabase(name string) Number {
 func (s *Jfdb) NewDatabase(name, description string) (*Database, error) {
 	idx := s.indexDatabase(name)
 	if idx == -1 {
-		return nil, console.Errorm(T("MSG_DATABASE_EXISTS"))
+		return nil, et.Errorm(T("MSG_DATABASE_EXISTS"))
 	}
 
 	id := uuid.NewString()

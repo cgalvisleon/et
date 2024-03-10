@@ -11,7 +11,7 @@ func MakeScripts(name string) error {
 		return err
 	}
 
-	_, err = file.MakeFile(path, et.Format("%s.http", name), restHttp, name)
+	_, err = file.Make(path, et.Format("%s.http", name), restHttp, name)
 	if err != nil {
 		return err
 	}

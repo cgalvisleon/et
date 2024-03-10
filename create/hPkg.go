@@ -11,35 +11,35 @@ func MakePkg(name, schema, schemaVar string) error {
 		return err
 	}
 
-	_, err = file.MakeFile(path, "event.go", modelEvent, name)
+	_, err = file.Make(path, "event.go", modelEvent, name)
 	if err != nil {
 		return err
 	}
 
 	modelo := et.Titlecase(name)
-	_, err = file.MakeFile(path, "model.go", modelModel, name, modelo)
+	_, err = file.Make(path, "model.go", modelModel, name, modelo)
 	if err != nil {
 		return err
 	}
 
-	_, err = file.MakeFile(path, "msg.go", modelMsg, name)
+	_, err = file.Make(path, "msg.go", modelMsg, name)
 	if err != nil {
 		return err
 	}
 
-	_, err = file.MakeFile(path, "controller.go", modelController, name)
+	_, err = file.Make(path, "controller.go", modelController, name)
 	if err != nil {
 		return err
 	}
 
 	title := et.Titlecase(name)
-	_, err = file.MakeFile(path, "router.go", modelRouter, name, title)
+	_, err = file.Make(path, "router.go", modelRouter, name, title)
 	if err != nil {
 		return err
 	}
 
 	if len(schema) > 0 {
-		_, err = file.MakeFile(path, "schema.go", modelSchema, name, schemaVar, schema)
+		_, err = file.Make(path, "schema.go", modelSchema, name, schemaVar, schema)
 		if err != nil {
 			return err
 		}
@@ -56,7 +56,7 @@ func MakeModel(name, modelo, schemaVar string) error {
 
 	modelo = et.Titlecase(modelo)
 	fileName := et.Format(`h%s.go`, modelo)
-	_, err = file.MakeFile(path, fileName, modelHandler, name, modelo, schemaVar, et.Uppcase(modelo), et.Lowcase(modelo))
+	_, err = file.Make(path, fileName, modelHandler, name, modelo, schemaVar, et.Uppcase(modelo), et.Lowcase(modelo))
 	if err != nil {
 		return err
 	}
@@ -70,7 +70,7 @@ func MakeRpc(name string) error {
 		return err
 	}
 
-	_, err = file.MakeFile(path, "hRpc.go", modelhRpc, name)
+	_, err = file.Make(path, "hRpc.go", modelhRpc, name)
 	if err != nil {
 		return err
 	}

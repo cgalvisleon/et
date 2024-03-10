@@ -1,4 +1,4 @@
-package utility
+package et
 
 import (
 	"crypto/aes"
@@ -7,12 +7,10 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-
-	"github.com/cgalvisleon/et/et"
 )
 
 func EncryptMessage(message string) (string, error) {
-	secret := et.EnvarStr("", "SECRET")
+	secret := EnvarStr("", "SECRET")
 	key := []byte(secret)
 	byteMsg := []byte(message)
 	block, err := aes.NewCipher(key)
@@ -33,7 +31,7 @@ func EncryptMessage(message string) (string, error) {
 }
 
 func DecryptMessage(message string) (string, error) {
-	secret := et.EnvarStr("", "SECRET")
+	secret := EnvarStr("", "SECRET")
 	key := []byte(secret)
 	cipherText, err := base64.StdEncoding.DecodeString(message)
 	if err != nil {

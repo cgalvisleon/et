@@ -71,8 +71,12 @@ func GetCodeVerify(length int) string {
 	return string(b)
 }
 
-func NewId() string {
+func UUID() string {
 	return uuid.NewString()
+}
+
+func NewId() string {
+	return UUID()
 }
 
 func GenId(id string) string {

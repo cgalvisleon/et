@@ -1,19 +1,33 @@
 package apigateway
 
 import (
-	"io"
 	"net/http"
+	"strings"
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/rs/cors"
 )
 
+var methodMap = map[string]bool{
+	CONNECT: true,
+	DELETE:  true,
+	GET:     true,
+	HEAD:    true,
+	OPTIONS: true,
+	PATCH:   true,
+	POST:    true,
+	PUT:     true,
+	TRACE:   true,
+}
+
 type HttpServer struct {
 	addr            string
 	handler         http.Handler
 	mux             *http.ServeMux
 	notFoundHandler http.HandlerFunc
+	handlerFn       http.HandlerFunc
+	handlerWS       http.HandlerFunc
 	// middlewares     []func(http.Handler) http.Handler
 }
 
@@ -27,73 +41,90 @@ func NewHttpServer() *HttpServer {
 		handler: cors.AllowAll().Handler(mux),
 		mux:     mux,
 	}
+	result.notFoundHandler = notFounder
+	result.handlerFn = handlerFn
 
 	// Handler router
-	mux.HandleFunc("/version", result.Version)
-	mux.HandleFunc("/", result.Handler)
-
-	result.notFoundHandler = func(w http.ResponseWriter, r *http.Request) {
-		et.HTTPError(w, r, http.StatusNotFound, "404 Not Found.")
-	}
+	mux.HandleFunc("/", result.handlerFn)
 
 	return result
 }
 
-func (s *HttpServer) Version(w http.ResponseWriter, r *http.Request) {
-	result := Version()
-	et.JSON(w, r, http.StatusOK, result)
-}
-
-func (s *HttpServer) Handler(w http.ResponseWriter, r *http.Request) {
-	resolute := NewResolute(r)
-
-	if resolute.Resolve == nil {
-		s.notFoundHandler(w, r)
-		return
-	}
-
-	kind := resolute.Resolve.Node.Resolve.ValStr("HTTP", "kind")
-	if kind == "REST" {
-		request, err := http.NewRequest(resolute.Method, resolute.URL, resolute.Body)
-		if err != nil {
-			et.HTTPError(w, r, http.StatusInternalServerError, err.Error())
-			return
-		}
-
-		request.Header = resolute.Header
-		client := &http.Client{}
-		res, err := client.Do(request)
-		if err != nil {
-			et.HTTPError(w, r, http.StatusInternalServerError, err.Error())
-			return
-		}
-		defer res.Body.Close()
-
-		for key, value := range res.Header {
-			w.Header().Set(key, value[0])
-		}
-		_, err = io.Copy(w, res.Body)
-		if err != nil {
-			et.HTTPError(w, r, http.StatusInternalServerError, err.Error())
-		}
-
-		return
-	}
-
-	/*
-		if kind == "WEBSOCKET" {
-			// TODO
-
-		}
-	*/
-
-	http.Redirect(w, r, resolute.URL, http.StatusSeeOther)
-}
-
+// NotFound sets the handler function for the server.
 func (s *HttpServer) NotFound(handlerFn http.HandlerFunc) {
 	s.notFoundHandler = handlerFn
 }
 
-func (s *HttpServer) HandlerWebSocket(handlerFn http.HandlerFunc) {
-
+// Handler sets the handler function for the server.
+func (s *HttpServer) Handler(handlerFn http.HandlerFunc) {
+	s.handlerFn = handlerFn
 }
+
+// HandlerWebSocket sets the handler function for the server.
+func (s *HttpServer) HandlerWebSocket(handlerFn http.HandlerFunc) {
+	s.handlerWS = handlerFn
+}
+
+// MethodFunc adds the route `pattern` that matches `method` http method to
+// execute the `handlerFn` http.HandlerFunc.
+func (s *HttpServer) MethodFunc(method, pattern string, handlerFn http.HandlerFunc) {
+	method = strings.ToUpper(method)
+	ok := methodMap[method]
+	if !ok {
+		et.Panicf(`'%s' http method is not supported.`, method)
+	}
+
+	AddHandleMethod(method, pattern, handlerFn)
+}
+
+// Connect adds the route `pattern` that matches `CONNECT` http method to
+func (s *HttpServer) Connect(pattern string, handlerFn http.HandlerFunc) {
+	s.MethodFunc(CONNECT, pattern, handlerFn)
+}
+
+// Delete adds the route `pattern` that matches `DELETE` http method to
+func (s *HttpServer) Delete(pattern string, handlerFn http.HandlerFunc) {
+	s.MethodFunc(DELETE, pattern, handlerFn)
+}
+
+// Get adds the route `pattern` that matches `GET` http method to
+func (s *HttpServer) Get(pattern string, handlerFn http.HandlerFunc) {
+	s.MethodFunc(GET, pattern, handlerFn)
+}
+
+// Head adds the route `pattern` that matches `HEAD` http method to
+func (s *HttpServer) Head(pattern string, handlerFn http.HandlerFunc) {
+	s.MethodFunc(HEAD, pattern, handlerFn)
+}
+
+// Options adds the route `pattern` that matches `OPTIONS` http method to
+func (s *HttpServer) Options(pattern string, handlerFn http.HandlerFunc) {
+	s.MethodFunc(OPTIONS, pattern, handlerFn)
+}
+
+// Patch adds the route `pattern` that matches `PATCH` http method to
+func (s *HttpServer) Patch(pattern string, handlerFn http.HandlerFunc) {
+	s.MethodFunc(PATCH, pattern, handlerFn)
+}
+
+// Post adds the route `pattern` that matches `POST` http method to
+func (s *HttpServer) Post(pattern string, handlerFn http.HandlerFunc) {
+	s.MethodFunc(POST, pattern, handlerFn)
+}
+
+// Put adds the route `pattern` that matches `PUT` http method to
+func (s *HttpServer) Put(pattern string, handlerFn http.HandlerFunc) {
+	s.MethodFunc(PUT, pattern, handlerFn)
+}
+
+// Trace adds the route `pattern` that matches `TRACE` http method to
+func (s *HttpServer) Trace(pattern string, handlerFn http.HandlerFunc) {
+	s.MethodFunc(TRACE, pattern, handlerFn)
+}
+
+// With adds a middleware to the server.
+/*
+func (s *HttpServer) With(middlewares ...func(http.Handler) http.Handler) Router {
+  reurn nil
+}
+*/

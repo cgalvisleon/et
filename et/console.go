@@ -144,6 +144,11 @@ func Panic(v ...any) {
 	os.Exit(1)
 }
 
+func Panicf(format string, v ...any) {
+	message := fmt.Sprintf(format, v...)
+	Panic(message)
+}
+
 func Info(v ...any) {
 	log("Info", "Blue", v...)
 }

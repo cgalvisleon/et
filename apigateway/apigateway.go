@@ -5,45 +5,45 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/ws"
 )
 
-var PackageName = "apigateway"
-var PackageTitle = et.EnvarStr("Apigateway", "PACKAGE_TITLE")
-var PackagePath = "/api/apigateway"
-var PackageVersion = et.EnvarStr("0.0.1", "VERSION")
-var Company = et.EnvarStr("", "COMPANY")
-var Web = et.EnvarStr("", "WEB")
-var HostName, _ = os.Hostname()
-var Host = et.Format(`%s:%d`, et.EnvarStr("http://localhost", "HOST"), et.EnvarInt(3300, "PORT"))
+const (
+	HANDLER   = "HANDLER"
+	HTTP      = "HTTP"
+	REST      = "REST"
+	WEBSOCKET = "WEBSOCKET"
+	// Methods
+	CONNECT = "CONNECT"
+	DELETE  = "DELETE"
+	GET     = "GET"
+	HEAD    = "HEAD"
+	OPTIONS = "OPTIONS"
+	PATCH   = "PATCH"
+	POST    = "POST"
+	PUT     = "PUT"
+	TRACE   = "TRACE"
+)
+
+var (
+	PackageName    = "apigateway"
+	PackageTitle   = et.EnvarStr("Apigateway", "PACKAGE_TITLE")
+	PackagePath    = "/api/apigateway"
+	PackageVersion = et.EnvarStr("0.0.1", "VERSION")
+	Company        = et.EnvarStr("", "COMPANY")
+	Web            = et.EnvarStr("", "WEB")
+	HostName, _    = os.Hostname()
+	Host           = et.Format(`%s:%d`, et.EnvarStr("http://localhost", "HOST"), et.EnvarInt(3300, "PORT"))
+)
 
 type Server struct {
 	http *HttpServer
 	rpc  *net.Listener
 }
 
+var conn *Server
+
 func New() (*Server, error) {
-	// Create cache server
-	_, err := cache.Load()
-	if err != nil {
-		panic(err)
-	}
-
-	// Create event server
-	_, err = event.Load()
-	if err != nil {
-		panic(err)
-	}
-
-	// Create ws server
-	_, err = ws.Load()
-	if err != nil {
-		panic(err)
-	}
-
 	// HTTP server
 	httpServer := NewHttpServer()
 
@@ -51,12 +51,12 @@ func New() (*Server, error) {
 	rpcServer := NewRpc()
 
 	// Create a new server
-	result := &Server{
+	conn = &Server{
 		http: httpServer,
 		rpc:  &rpcServer,
 	}
 
-	return result, nil
+	return conn, nil
 }
 
 func (serv *Server) Close() error {
@@ -85,9 +85,6 @@ func (serv *Server) Start() {
 		et.Logf("RPC", "Running on tcp:localhost:%s", svr.Addr().String())
 		http.Serve(svr, nil)
 	}()
-
-	// Init events
-	initEvents()
 
 	<-make(chan struct{})
 }

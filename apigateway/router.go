@@ -1,11 +1,10 @@
 package apigateway
 
 import (
-	"encoding/json"
+	"net/http"
 	"regexp"
 	"strings"
 
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -13,6 +12,7 @@ type Node struct {
 	_id     string
 	Tag     string
 	Resolve et.Json
+	Handler http.HandlerFunc
 	Nodes   []*Node
 }
 
@@ -35,63 +35,62 @@ type Resolve struct {
 	Resolve string
 }
 
+type Routes interface {
+}
+
+type Router interface {
+	http.Handler
+	Routes
+
+	// Use appends one or more middlewares onto the Router stack.
+	Use(middlewares ...func(http.Handler) http.Handler)
+
+	// With adds inline middlewares for an endpoint handler.
+	With(middlewares ...func(http.Handler) http.Handler) Router
+
+	// Group adds a new inline-Router along the current routing
+	// path, with a fresh middleware stack for the inline-Router.
+	Group(fn func(r Router)) Router
+
+	// Route mounts a sub-Router along a `pattern`` string.
+	Route(pattern string, fn func(r Router)) Router
+
+	// Mount attaches another http.Handler along ./pattern/*
+	Mount(pattern string, h http.Handler)
+
+	// Handle and HandleFunc adds routes for `pattern` that matches
+	// all HTTP methods.
+	Handle(pattern string, h http.Handler)
+	HandleFunc(pattern string, h http.HandlerFunc)
+
+	// Method and MethodFunc adds routes for `pattern` that matches
+	// the `method` HTTP method.
+	Method(method, pattern string, h http.Handler)
+	MethodFunc(method, pattern string, h http.HandlerFunc)
+
+	// HTTP-method routing along `pattern`
+	Connect(pattern string, h http.HandlerFunc)
+	Delete(pattern string, h http.HandlerFunc)
+	Get(pattern string, h http.HandlerFunc)
+	Head(pattern string, h http.HandlerFunc)
+	Options(pattern string, h http.HandlerFunc)
+	Patch(pattern string, h http.HandlerFunc)
+	Post(pattern string, h http.HandlerFunc)
+	Put(pattern string, h http.HandlerFunc)
+	Trace(pattern string, h http.HandlerFunc)
+
+	// NotFound defines a handler to respond whenever a route could
+	// not be found.
+	NotFound(h http.HandlerFunc)
+
+	// MethodNotAllowed defines a handler to respond whenever a method is
+	// not allowed.
+	MethodNotAllowed(h http.HandlerFunc)
+}
+
 // List of routes
 var routes *Nodes
 var pakages *Pakages
-var routesKey = "apigateway/routes"
-var pakagesKey = "apigateway/packages"
-
-// Load routes from file
-func load() error {
-	_routes, err := cache.Get(routesKey, "{routes:[]}")
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal([]byte(_routes), &routes)
-	if err != nil {
-		return err
-	}
-
-	_pakages, err := cache.Get(pakagesKey, "{pakages:[]}")
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal([]byte(_pakages), &pakages)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// Save routes to file
-func save() error {
-	// Convertion struct to json
-	_routes, err := et.Marshal(routes)
-	if err != nil {
-		return err
-	}
-
-	// Save json to cache
-	err = cache.Set(routesKey, _routes.ToString(), 0)
-	if err != nil {
-		return err
-	}
-
-	_pakages, err := et.Marshal(pakages)
-	if err != nil {
-		return err
-	}
-
-	err = cache.Set(pakagesKey, _pakages.ToString(), 0)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
 
 // Create a new node from routes
 func newNode(tag string, nodes []*Node) (*Node, []*Node) {
@@ -201,8 +200,33 @@ func AddRoute(method, path, resolve, kind, stage, packageName string) {
 			pakage = newPakage(packageName)
 			pakage.Nodes = append(pakage.Nodes, node)
 		}
+	}
+}
 
-		save()
+func AddHandleMethod(method, path string, handlerFn http.HandlerFunc) {
+	node := findNode(method, routes.Routes)
+	if node == nil {
+		node, routes.Routes = newNode(method, routes.Routes)
+	}
+
+	tags := strings.Split(path, "/")
+	for _, tag := range tags {
+		if len(tag) > 0 {
+			find := findNode(tag, node.Nodes)
+			if find == nil {
+				node, node.Nodes = newNode(tag, node.Nodes)
+			} else {
+				node = find
+			}
+		}
+	}
+
+	if node != nil {
+		node.Resolve = et.Json{
+			"method": method,
+			"kind":   "HANDLER",
+		}
+		node.Handler = handlerFn
 	}
 }
 
@@ -246,6 +270,4 @@ func init() {
 	pakages = &Pakages{
 		Pakages: []*Pakage{},
 	}
-
-	load()
 }

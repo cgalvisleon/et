@@ -1,8 +1,8 @@
 package create
 
 import (
-	"github.com/cgalvisleon/elvis/file"
-	"github.com/cgalvisleon/elvis/strs"
+	"github.com/cgalvisleon/et/file"
+	"github.com/cgalvisleon/et/strs"
 )
 
 func MakeCmd(packageName, name string) error {

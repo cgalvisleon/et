@@ -70,6 +70,8 @@ func log(kind string, color string, args ...any) string {
 	return result
 }
 
+var ping = 0
+
 func Log(kind string, args ...any) error {
 	log(kind, "", args...)
 	return nil
@@ -161,11 +163,13 @@ func Panic(v ...any) {
 }
 
 func Ping() {
-	log("PING", "")
+	ping++
+	Log("PING", ping)
 }
 
 func Pong() {
-	log("PONG", "")
+	ping++
+	Log("PING", ping)
 }
 
 func Debug(v ...any) {

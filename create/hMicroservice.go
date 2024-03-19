@@ -1,8 +1,6 @@
 package create
 
-import (
-	"github.com/cgalvisleon/elvis/strs"
-)
+import "github.com/cgalvisleon/et/strs"
 
 func MkProject(packageName, name, author, schema string) error {
 	ProgressNext(10)

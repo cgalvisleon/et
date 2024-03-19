@@ -1,6 +1,6 @@
 package create
 
-import "github.com/cgalvisleon/elvis/file"
+import "github.com/cgalvisleon/et/file"
 
 func MakeReadme(packageName string) error {
 	_, err := file.MakeFile("", "README.md", modelReadme, packageName)

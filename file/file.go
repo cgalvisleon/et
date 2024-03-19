@@ -2,17 +2,17 @@ package file
 
 import (
 	"errors"
-	"fmt"
-	"io"
 	"os"
 	"strings"
+
+	"github.com/cgalvisleon/et/strs"
 )
 
 func params(str string, args ...any) string {
 	var result string = str
 	for i, v := range args {
-		p := fmt.Sprintf(`$%d`, i+1)
-		rp := fmt.Sprintf(`%v`, v)
+		p := strs.Format(`$%d`, i+1)
+		rp := strs.Format(`%v`, v)
 		result = strings.ReplaceAll(result, p, rp)
 	}
 
@@ -27,11 +27,11 @@ func append(str1, str2, sp string) string {
 		return str1
 	}
 
-	return fmt.Sprintf(`%s%s%s`, str1, sp, str2)
+	return strs.Format(`%s%s%s`, str1, sp, str2)
 }
 
-func ExistPath(path string) bool {
-	_, err := os.Stat(path)
+func ExistPath(name string) bool {
+	_, err := os.Stat(name)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false
@@ -41,8 +41,8 @@ func ExistPath(path string) bool {
 	return true
 }
 
-func Make(folder, fileName, model string, args ...any) (string, error) {
-	path := fmt.Sprintf(`%s/%s`, folder, fileName)
+func MakeFile(folder, name, model string, args ...any) (string, error) {
+	path := strs.Format(`%s/%s`, folder, name)
 
 	if ExistPath(path) {
 		return "", errors.New("file found")
@@ -74,7 +74,7 @@ func MakeFolder(names ...string) (string, error) {
 	return path, nil
 }
 
-func Remove(path string) (bool, error) {
+func RemoveFile(path string) (bool, error) {
 	file := path
 	if _, err := os.Stat(file); os.IsNotExist(err) {
 		if err != nil {
@@ -88,7 +88,7 @@ func Remove(path string) (bool, error) {
 	}
 }
 
-func Extencion(filename string) string {
+func ExtencionFile(filename string) string {
 	lst := strings.Split(filename, ".")
 	n := len(lst)
 	if n > 1 {
@@ -96,37 +96,4 @@ func Extencion(filename string) string {
 	}
 
 	return ""
-}
-
-func Open(fileName string) (*os.File, error) {
-	file, err := os.Open(fileName)
-	if err != nil {
-		return nil, err
-	}
-
-	return file, nil
-}
-
-func Read(fileName string) ([]byte, error) {
-	file, err := Open(fileName)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	content, err := io.ReadAll(file)
-	if err != nil {
-		return nil, err
-	}
-
-	return content, nil
-}
-
-func Write(fileName string, content []byte) error {
-	err := os.WriteFile(fileName, content, 0666)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }

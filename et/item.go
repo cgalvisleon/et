@@ -2,10 +2,13 @@ package et
 
 import (
 	"database/sql"
-	"fmt"
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/cgalvisleon/et/generic"
+	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/strs"
 )
 
 type Item struct {
@@ -49,16 +52,16 @@ func (it *Item) ToScan(src interface{}) error {
 	for k, val := range it.Result {
 		field := v.FieldByName(k)
 		if !field.IsValid() {
-			Errorf("No such field:%s in struct", k)
+			logs.Errorf("No such field:%s in struct", k)
 			continue
 		}
 		if !field.CanSet() {
-			Errorf("Cannot set field:%s in struct", k)
+			logs.Errorf("Cannot set field:%s in struct", k)
 			continue
 		}
 		valType := reflect.ValueOf(val)
 		if field.Type() != valType.Type() {
-			return Errorf(`Provided value type didn't match obj field:%s type`, k)
+			return logs.Errorf(`Provided value type didn't match obj field:%s type`, k)
 		}
 		field.Set(valType)
 	}
@@ -86,8 +89,12 @@ func (it *Item) ValBool(_default bool, atribs ...string) bool {
 	return it.Result.ValBool(_default, atribs...)
 }
 
-func (it *Item) ValTime(atribs ...string) time.Time {
-	return it.Result.ValTime(atribs...)
+func (it *Item) ValTime(_default time.Time, atribs ...string) time.Time {
+	return it.Result.ValTime(_default, atribs...)
+}
+
+func (it *Item) ValJson(_default Json, atribs ...string) Json {
+	return it.Result.ValJson(_default, atribs...)
 }
 
 func (it *Item) Uppcase(_default string, atribs ...string) string {
@@ -97,7 +104,7 @@ func (it *Item) Uppcase(_default string, atribs ...string) string {
 	case string:
 		return strings.ToUpper(v)
 	default:
-		return fmt.Sprintf(`%v`, strings.ToUpper(_default))
+		return strs.Format(`%v`, strings.ToUpper(_default))
 	}
 }
 
@@ -108,7 +115,7 @@ func (it *Item) Lowcase(_default string, atribs ...string) string {
 	case string:
 		return strings.ToLower(v)
 	default:
-		return fmt.Sprintf(`%v`, strings.ToLower(_default))
+		return strs.Format(`%v`, strings.ToLower(_default))
 	}
 }
 
@@ -119,7 +126,7 @@ func (it *Item) Titlecase(_default string, atribs ...string) string {
 	case string:
 		return strings.ToTitle(v)
 	default:
-		return fmt.Sprintf(`%v`, strings.ToTitle(_default))
+		return strs.Format(`%v`, strings.ToTitle(_default))
 	}
 }
 
@@ -143,7 +150,7 @@ func (it *Item) IsChange(new Json) bool {
 	return IsChange(it.Result, new)
 }
 
-func (it *Item) Any(_default any, atribs ...string) *Any {
+func (it *Item) Any(_default any, atribs ...string) *generic.Any {
 	return it.Result.Any(_default, atribs...)
 }
 
@@ -183,6 +190,10 @@ func (it *Item) Time(atribs ...string) time.Time {
 	return it.Result.Time(atribs...)
 }
 
+func (it *Item) Data(atribs ...string) JsonD {
+	return it.Result.Data(atribs...)
+}
+
 func (it *Item) Json(atribs ...string) Json {
 	val := Val(it.Result, Json{}, atribs...)
 
@@ -192,7 +203,7 @@ func (it *Item) Json(atribs ...string) Json {
 	case map[string]interface{}:
 		return Json(v)
 	default:
-		Errorf("Not Item.Json type (%v) value:%v", reflect.TypeOf(v), v)
+		logs.Errorf("Not Item.Json type (%v) value:%v", reflect.TypeOf(v), v)
 		return Json{}
 	}
 }

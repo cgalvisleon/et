@@ -1,8 +1,8 @@
 package create
 
 import (
-	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/file"
+	"github.com/cgalvisleon/elvis/file"
+	"github.com/cgalvisleon/elvis/strs"
 )
 
 func MakeCmd(packageName, name string) error {
@@ -11,12 +11,12 @@ func MakeCmd(packageName, name string) error {
 		return err
 	}
 
-	_, err = file.Make(path, "Dockerfile", modelDockerfile, name)
+	_, err = file.MakeFile(path, "Dockerfile", modelDockerfile, name)
 	if err != nil {
 		return err
 	}
 
-	_, err = file.Make(path, "main.go", modelMain, packageName, name)
+	_, err = file.MakeFile(path, "main.go", modelMain, packageName, name)
 	if err != nil {
 		return err
 	}
@@ -25,26 +25,26 @@ func MakeCmd(packageName, name string) error {
 }
 
 func DeleteCmd(packageName string) error {
-	path := et.Format(`./cmd/%s`, packageName)
-	_, err := file.Remove(path)
+	path := strs.Format(`./cmd/%s`, packageName)
+	_, err := file.RemoveFile(path)
 	if err != nil {
 		return err
 	}
 
-	path = et.Format(`./internal/service/%s`, packageName)
-	_, err = file.Remove(path)
+	path = strs.Format(`./internal/service/%s`, packageName)
+	_, err = file.RemoveFile(path)
 	if err != nil {
 		return err
 	}
 
-	path = et.Format(`./internal/pkg/%s`, packageName)
-	_, err = file.Remove(path)
+	path = strs.Format(`./internal/pkg/%s`, packageName)
+	_, err = file.RemoveFile(path)
 	if err != nil {
 		return err
 	}
 
-	path = et.Format(`./internal/rest/%s.http`, packageName)
-	_, err = file.Remove(path)
+	path = strs.Format(`./internal/rest/%s.http`, packageName)
+	_, err = file.RemoveFile(path)
 	if err != nil {
 		return err
 	}

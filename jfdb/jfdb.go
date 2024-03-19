@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/google/uuid"
 )
 
@@ -46,7 +47,7 @@ func (s *Jfdb) indexDatabase(name string) Number {
 func (s *Jfdb) NewDatabase(name, description string) (*Database, error) {
 	idx := s.indexDatabase(name)
 	if idx == -1 {
-		return nil, et.Errorm(T("MSG_DATABASE_EXISTS"))
+		return nil, logs.Errorm(T("MSG_DATABASE_EXISTS"))
 	}
 
 	id := uuid.NewString()

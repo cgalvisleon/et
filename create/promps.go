@@ -21,24 +21,28 @@ func PrompCreate() {
 
 	switch opt {
 	case 0:
+		// Permite crear un proyecto
 		err := CmdProject.Execute()
 		if err != nil {
 			fmt.Printf("Prompt failed %v\n", err)
 			return
 		}
 	case 1:
+		// Permite crear un microservicio
 		err := CmdMicro.Execute()
 		if err != nil {
 			fmt.Printf("Prompt failed %v\n", err)
 			return
 		}
 	case 2:
+		// Permite crear un modelo
 		err := CmdModelo.Execute()
 		if err != nil {
 			fmt.Printf("Prompt failed %v\n", err)
 			return
 		}
 	case 3:
+		// Permite crear un servicio rpc
 		err := CmdRpc.Execute()
 		if err != nil {
 			fmt.Printf("Prompt failed %v\n", err)

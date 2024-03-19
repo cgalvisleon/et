@@ -36,14 +36,14 @@ import (
 	"os/signal"
 
 	serv "$1/internal/service/$2"
-	"github.com/cgalvisleon/et/console"
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/elvis/console"
+	"github.com/cgalvisleon/elvis/envar"
 	_ "github.com/joho/godotenv/autoload"	
 )
 
 func main() {
 	envar.SetvarInt("port", 3000, "Port server", "PORT")
-	envar.SetvarInt("rpc", 4200, "Port rpc server", "RPC_PORT")
+	envar.SetvarInt("rpc", 4200, "Port rpc server", "RPC")
 	envar.SetvarStr("dbhost", "localhost", "Database host", "DB_HOST")
 	envar.SetvarInt("dbport", 5432, "Database port", "DB_PORT")
 	envar.SetvarStr("dbname", "", "Database name", "DB_NAME")
@@ -72,11 +72,12 @@ import (
 	"net/http"
 
 	v1 "$1/internal/service/$2/v1"
-	"github.com/cgalvisleon/et/console"
-	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/middleware"
-	"github.com/cgalvisleon/et/strs"
-	"github.com/go-chi/chi"
+	"github.com/cgalvisleon/elvis/console"
+	"github.com/cgalvisleon/elvis/envar"
+	"github.com/cgalvisleon/elvis/middleware"
+	"github.com/cgalvisleon/elvis/response"
+	"github.com/cgalvisleon/elvis/strs"
+	"github.com/go-chi/chi/v5"
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/rs/cors"
 )
@@ -102,6 +103,10 @@ func New() (*Server, error) {
 
 		latest := v1.New()
 
+		r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+			response.HTTPError(w, r, http.StatusNotFound, "404 Not Found")
+		})
+
 		r.Mount("/", latest)
 		r.Mount("/v1", latest)
 
@@ -118,10 +123,10 @@ func New() (*Server, error) {
 	/**
 	 * RPC
 	 **/
-	port = envar.EnvarInt(4200, "RPC_PORT")
+	rpc := envar.EnvarInt(4200, "RPC")
 
-	if port != 0 {
-		serv := v1.NewRpc(port)
+	if rpc != 0 {
+		serv := v1.NewRpc(rpc)
 
 		server.rpc = &serv
 	}
@@ -141,7 +146,7 @@ func (serv *Server) Start() {
 		}
 
 		svr := serv.http
-		console.Logf("Http", "Running on http://localhost%s", svr.Addr)
+		console.LogKF("Http", "Running on http://localhost%s", svr.Addr)
 		console.Fatal(serv.http.ListenAndServe())
 	}()
 
@@ -151,7 +156,7 @@ func (serv *Server) Start() {
 		}
 
 		svr := *serv.rpc
-		console.Logf("RPC", "Running on tcp:localhost:%s", svr.Addr().String())
+		console.LogKF("RPC", "Running on tcp:localhost:%s", svr.Addr().String())
 		http.Serve(svr, nil)
 	}()
 
@@ -171,13 +176,12 @@ import (
 	"time"
 
 	pkg "$1/pkg/$2"
-	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/jdb"
-	"github.com/cgalvisleon/et/utility"
-	"github.com/cgalvisleon/et/ws"
+	"github.com/cgalvisleon/elvis/cache"
+	"github.com/cgalvisleon/elvis/event"
+	"github.com/cgalvisleon/elvis/jdb"
+	"github.com/cgalvisleon/elvis/utility"	
 	"github.com/dimiro1/banner"
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/mattn/go-colorable"
 )
 
@@ -190,11 +194,6 @@ func New() http.Handler {
 	}
 
 	_, err = event.Load()
-	if err != nil {
-		panic(err)
-	}
-
-	_, err = ws.Load()
 	if err != nil {
 		panic(err)
 	}
@@ -240,9 +239,9 @@ func Banner() {
 const modelEvent = `package $1
 
 import (
-	"github.com/cgalvisleon/et/console"
-	"github.com/cgalvisleon/et/event"
-	e "github.com/cgalvisleon/et/json"
+	"github.com/cgalvisleon/elvis/console"
+	"github.com/cgalvisleon/elvis/event"
+	"github.com/cgalvisleon/elvis/et"
 )
 
 func initEvents() {
@@ -254,7 +253,7 @@ func initEvents() {
 }
 
 func eventAction(m event.CreatedEvenMessage) {
-	data, err := e.ToJson(m.Data)
+	data, err := et.ToJson(m.Data)
 	if err != nil {
 		console.Error(err)
 	}
@@ -266,12 +265,12 @@ func eventAction(m event.CreatedEvenMessage) {
 const modelModel = `package $1
 
 import (
-	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/elvis/console"
 )
 
 func initModels() error {
 	if err := Define$2(); err != nil {
-		return console.PanicE(err)
+		return console.Panic(err)
 	}
 
 	return nil
@@ -280,13 +279,13 @@ func initModels() error {
 
 const modelSchema = `package $1
 
-import "github.com/cgalvisleon/et/linq"
+import "github.com/cgalvisleon/elvis/linq"
 
 var $2 *linq.Schema
 
 func defineSchema() error {
 	if $2 == nil {
-		$2 = linq.NewSchema(0, "$3")
+		$2 = linq.NewSchema(0, "$3", true, false, true)
 	}
 
 	return nil
@@ -298,8 +297,8 @@ const modelhRpc = `package $1
 import (
 	"net/rpc"
 
-	"github.com/cgalvisleon/et/console"
-	"github.com/cgalvisleon/et/json"
+	"github.com/cgalvisleon/elvis/console"
+	"github.com/cgalvisleon/elvis/json"
 )
 
 var initRpc bool
@@ -356,20 +355,20 @@ const modelController = `package $1
 import (
 	"context"
 
-	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/jdb"
-	e "github.com/cgalvisleon/et/json"
+	"github.com/cgalvisleon/elvis/envar"
+	"github.com/cgalvisleon/elvis/jdb"
+	"github.com/cgalvisleon/elvis/et"
 )
 
 type Controller struct {
 	Db *jdb.Conn
 }
 
-func (c *Controller) Version(ctx context.Context) (e.Json, error) {
+func (c *Controller) Version(ctx context.Context) (et.Json, error) {
 	company := envar.EnvarStr("", "COMPANY")
 	web := envar.EnvarStr("", "WEB")
 	version := envar.EnvarStr("", "VERSION")
-  service := e.Json{
+  service := et.Json{
 		"version": version,
 		"service": PackageName,
 		"host":    HostName,
@@ -387,7 +386,7 @@ func (c *Controller) Init(ctx context.Context) {
 }
 
 type Repository interface {
-	Version(ctx context.Context) (e.Json, error)
+	Version(ctx context.Context) (et.Json, error)
 	Init(ctx context.Context)
 }
 `
@@ -399,11 +398,12 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/cgalvisleon/et/console"
-	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/response"
-	er "github.com/cgalvisleon/et/router"
-	"github.com/go-chi/chi"
+	"github.com/cgalvisleon/elvis/console"
+	"github.com/cgalvisleon/elvis/envar"
+	"github.com/cgalvisleon/elvis/response"
+	er "github.com/cgalvisleon/elvis/router"
+	"github.com/cgalvisleon/elvis/strs"
+	"github.com/go-chi/chi/v5"
 )
 
 var PackageName = "$1"
@@ -411,22 +411,23 @@ var PackageTitle = "$1"
 var PackagePath = "/api/$1"
 var PackageVersion = envar.EnvarStr("0.0.1", "VERSION")
 var HostName, _ = os.Hostname()
-var Host = "$1"
 
 type Router struct {
 	Repository Repository
 }
 
 func (rt *Router) Routes() http.Handler {
+	var host = strs.Format("%s:%d", envar.EnvarStr("http://localhost", "HOST"), envar.EnvarInt(3300, "PORT"))
+
 	r := chi.NewRouter()
 
-	er.PublicRoute(r, er.Get, "/version", rt.Version, PackageName, PackagePath, Host)
+	er.PublicRoute(r, er.Get, "/version", rt.version, PackageName, PackagePath, host)
 	// $2
-	er.ProtectRoute(r, er.Get, "/$1/{id}", rt.Get$2ById, PackageName, PackagePath, Host)
-	er.ProtectRoute(r, er.Post, "/$1", rt.UpSert$2, PackageName, PackagePath, Host)
-	er.ProtectRoute(r, er.Put, "/$1/state/{id}", rt.State$2, PackageName, PackagePath, Host)
-	er.ProtectRoute(r, er.Delete, "/$1/{id}", rt.Delete$2, PackageName, PackagePath, Host)
-	er.ProtectRoute(r, er.Get, "/$1/all", rt.All$2, PackageName, PackagePath, Host)
+	er.ProtectRoute(r, er.Get, "/{id}", rt.get$2ById, PackageName, PackagePath, host)
+	er.ProtectRoute(r, er.Post, "/", rt.upSert$2, PackageName, PackagePath, host)
+	er.ProtectRoute(r, er.Put, "/state/{id}", rt.state$2, PackageName, PackagePath, host)
+	er.ProtectRoute(r, er.Delete, "/{id}", rt.delete$2, PackageName, PackagePath, host)
+	er.ProtectRoute(r, er.Get, "/all", rt.all$2, PackageName, PackagePath, host)
 
 	ctx := context.Background()
 	rt.Repository.Init(ctx)
@@ -435,7 +436,7 @@ func (rt *Router) Routes() http.Handler {
 	return r
 }
 
-func (rt *Router) Version(w http.ResponseWriter, r *http.Request) {
+func (rt *Router) version(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	result, err := rt.Repository.Version(ctx)
 	if err != nil {
@@ -472,22 +473,24 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/cgalvisleon/et/console"
-	"github.com/cgalvisleon/et/core"
-	"github.com/cgalvisleon/et/generic"
-	e "github.com/cgalvisleon/et/json"
-	"github.com/cgalvisleon/et/linq"
-	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/utility"
-	"github.com/go-chi/chi"
+	"github.com/cgalvisleon/elvis/cache"
+	"github.com/cgalvisleon/elvis/console"
+	"github.com/cgalvisleon/elvis/event"
+	"github.com/cgalvisleon/elvis/core"
+	"github.com/cgalvisleon/elvis/generic"
+	"github.com/cgalvisleon/elvis/et"
+	"github.com/cgalvisleon/elvis/linq"
+	"github.com/cgalvisleon/elvis/msg"
+	"github.com/cgalvisleon/elvis/response"
+	"github.com/cgalvisleon/elvis/utility"
+	"github.com/go-chi/chi/v5"
 )
 
 var $2 *linq.Model
 
 func Define$2() error {
 	if err := defineSchema(); err != nil {
-		return console.PanicE(err)
+		return console.Panic(err)
 	}
 
 	if $2 != nil {
@@ -517,27 +520,59 @@ func Define$2() error {
 		"name:Atributo requerido (name)",
 	})
 	$2.IntegrityAtrib(true)
-	$2.Trigger(linq.BeforeInsert, func(model *linq.Model, old, new *e.Json, data e.Json) error {
+	$2.Trigger(linq.BeforeInsert, func(model *linq.Model, old, new *et.Json, data et.Json) error {
 		return nil
 	})
-	$2.Trigger(linq.AfterInsert, func(model *linq.Model, old, new *e.Json, data e.Json) error {
+	$2.Trigger(linq.AfterInsert, func(model *linq.Model, old, new *et.Json, data et.Json) error {
 		return nil
 	})
-	$2.Trigger(linq.BeforeUpdate, func(model *linq.Model, old, new *e.Json, data e.Json) error {
+	$2.Trigger(linq.BeforeUpdate, func(model *linq.Model, old, new *et.Json, data et.Json) error {
 		return nil
 	})
-	$2.Trigger(linq.AfterUpdate, func(model *linq.Model, old, new *e.Json, data e.Json) error {
+	$2.Trigger(linq.AfterUpdate, func(model *linq.Model, old, new *et.Json, data et.Json) error {
 		return nil
 	})
-	$2.Trigger(linq.BeforeDelete, func(model *linq.Model, old, new *e.Json, data e.Json) error {
+	$2.Trigger(linq.BeforeDelete, func(model *linq.Model, old, new *et.Json, data et.Json) error {
 		return nil
 	})
-	$2.Trigger(linq.AfterDelete, func(model *linq.Model, old, new *e.Json, data e.Json) error {
+	$2.Trigger(linq.AfterDelete, func(model *linq.Model, old, new *et.Json, data et.Json) error {
 		return nil
 	})
+	$2.OnListener = func(data et.Json) {
+		option := data.Str("option")
+		_idt := data.Str("_idt")
+		if option == "insert" {
+			asset, err := Get$2ByIdT(_idt)
+			if err != nil {
+				return
+			}
+
+			_id := asset.Key("_id")
+			cache.SetW(_idt, _id)
+			event.WsPublish(_id, asset.Result, "")
+		} else if option == "update" {
+			asset, err := Get$2ByIdT(_idt)
+			if err != nil {
+				return
+			}
+
+			_id := asset.Key("_id")
+			cache.Del(_idt)
+			cache.Del(_id)
+			event.WsPublish(_id, asset.Result, "")
+		} else if option == "delete" {
+			_id, err := cache.Get(_idt, "-1")
+			if err != nil {
+				return
+			}
+
+			cache.Del(_idt)
+			cache.Del(_id)
+		}
+	}
 	
 	if err := core.InitModel($2); err != nil {
-		return console.PanicE(err)
+		return console.Panic(err)
 	}
 
 	return nil
@@ -546,14 +581,38 @@ func Define$2() error {
 /**
 *	Handler for CRUD data
  */
-func Get$2ById(id string) (e.Item, error) {
-	return $2.Select().
+func Get$2ById(id string) (et.Item, error) {
+	result, err := cache.GetItem(id)
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	if result.Ok {
+		return result, nil
+	}
+
+	result, err = $2.Data().
 		Where($2.Column("_id").Eq(id)).
+		First()
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	if result.Ok {
+		cache.SetItemW(id, result)
+	}
+
+	return result, nil	
+}
+
+func Get$2ByIdT(idt string) (et.Item, error) {
+	return $2.Data().
+		Where($2.Column("_idt").Eq(idt)).
 		First()
 }
 
 func Value$2ById(_default any, id, atrib string) *generic.Any {
-	item, err := $2.Select(atrib).
+	item, err := $2.Data(atrib).
 		Where($2.Column("_id").Eq(id)).
 		First()
 	if err != nil {
@@ -563,13 +622,13 @@ func Value$2ById(_default any, id, atrib string) *generic.Any {
 	return item.Any(_default, atrib)
 }
 
-func UpSert$2(project_id, id string, data e.Json) (e.Item, error) {
+func UpSert$2(project_id, id string, data et.Json) (et.Item, error) {
 	if !utility.ValidId(project_id) {
-		return e.Item{}, console.AlertF(msg.MSG_ATRIB_REQUIRED, "project_id")
+		return et.Item{}, console.AlertF(msg.MSG_ATRIB_REQUIRED, "project_id")
 	}
 
 	if !utility.ValidId(id) {
-		return e.Item{}, console.AlertF(msg.MSG_ATRIB_REQUIRED, "_id")
+		return et.Item{}, console.AlertF(msg.MSG_ATRIB_REQUIRED, "_id")
 	}
 
 	id = utility.GenId(id)
@@ -580,43 +639,43 @@ func UpSert$2(project_id, id string, data e.Json) (e.Item, error) {
 		CommandOne()
 }
 
-func State$2(id, state string) (e.Item, error) {
+func State$2(id, state string) (et.Item, error) {
 	if !utility.ValidId(state) {
-		return e.Item{}, console.AlertF(msg.MSG_ATRIB_REQUIRED, "state")
+		return et.Item{}, console.AlertF(msg.MSG_ATRIB_REQUIRED, "state")
 	}
 
-	item, err := $2.Select("_state").
+	item, err := $2.Data("_state").
 		Where($2.Column("_id").Eq(id)).
 		First()
 	if err != nil {
-		return e.Item{}, err
+		return et.Item{}, err
 	}
 
 	if !item.Ok {
-		return e.Item{}, console.Alert(msg.RECORD_NOT_FOUND)
+		return et.Item{}, console.Alert(msg.RECORD_NOT_FOUND)
 	}
 
 	old_state := item.Key("_state")
 	if old_state == state {
-		return e.Item{
+		return et.Item{
 			Ok: true,
-			Result: e.Json{
+			Result: et.Json{
 				"message": msg.RECORD_NOT_UPDATE,
 			}}, nil
 	}
 
-	return $2.Update(e.Json{
+	return $2.Update(et.Json{
 		"_state":   state,
 	}).
 		Where($2.Column("_id").Eq(id)).
 		CommandOne()	
 }
 
-func Delete$2(id string) (e.Item, error) {
+func Delete$2(id string) (et.Item, error) {
 	return State$2(id, utility.FOR_DELETE)
 }
 
-func All$2(project_id, state, search string, page, rows int, _select string) (e.List, error) {	
+func All$2(project_id, state, search string, page, rows int, _select string) (et.List, error) {	
 	if state == "" {
 		state = utility.ACTIVE
 	}
@@ -624,7 +683,7 @@ func All$2(project_id, state, search string, page, rows int, _select string) (e.
 	auxState := state
 
 	if search != "" {
-		return $2.Select(_select).
+		return $2.Data(_select).
 			Where($2.Column("project_id").In("-1", project_id)).
 			And($2.Concat("NAME:", $2.Column("name"), "DESCRIPTION:", $2.Column("description"), "DATA:", $2.Column("_data"), ":").Like("%"+search+"%")).
 			OrderBy($2.Column("name"), true).
@@ -632,19 +691,19 @@ func All$2(project_id, state, search string, page, rows int, _select string) (e.
 	} else if auxState == "*" {
 		state = utility.FOR_DELETE
 
-		return $2.Select(_select).
+		return $2.Data(_select).
 			Where($2.Column("_state").Neg(state)).
 			And($2.Column("project_id").In("-1", project_id)).
 			OrderBy($2.Column("name"), true).
 			List(page, rows)
 	} else if auxState == "0" {
-		return $2.Select(_select).
+		return $2.Data(_select).
 			Where($2.Column("_state").In("-1", state)).
 			And($2.Column("project_id").In("-1", project_id)).
 			OrderBy($2.Column("name"), true).
 			List(page, rows)
 	} else {
-		return $2.Select(_select).
+		return $2.Data(_select).
 			Where($2.Column("_state").Eq(state)).
 			And($2.Column("project_id").In("-1", project_id)).
 			OrderBy($2.Column("name"), true).
@@ -655,7 +714,7 @@ func All$2(project_id, state, search string, page, rows int, _select string) (e.
 /**
 * Router
 **/
-func (rt *Router) UpSert$2(w http.ResponseWriter, r *http.Request) {
+func (rt *Router) upSert$2(w http.ResponseWriter, r *http.Request) {
 	body, _ := response.GetBody(r)
 	project_id := body.Str("project_id")
 	id := body.Str("id")	
@@ -669,7 +728,7 @@ func (rt *Router) UpSert$2(w http.ResponseWriter, r *http.Request) {
 	response.ITEM(w, r, http.StatusOK, result)
 }
 
-func (rt *Router) Get$2ById(w http.ResponseWriter, r *http.Request) {
+func (rt *Router) get$2ById(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	result, err := Get$2ById(id)
@@ -681,7 +740,7 @@ func (rt *Router) Get$2ById(w http.ResponseWriter, r *http.Request) {
 	response.ITEM(w, r, http.StatusOK, result)
 }
 
-func (rt *Router) State$2(w http.ResponseWriter, r *http.Request) {
+func (rt *Router) state$2(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	body, _ := response.GetBody(r)
 	state := body.Str("state")
@@ -695,7 +754,7 @@ func (rt *Router) State$2(w http.ResponseWriter, r *http.Request) {
 	response.ITEM(w, r, http.StatusOK, result)
 }
 
-func (rt *Router) Delete$2(w http.ResponseWriter, r *http.Request) {
+func (rt *Router) delete$2(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	result, err := Delete$2(id)
@@ -707,23 +766,14 @@ func (rt *Router) Delete$2(w http.ResponseWriter, r *http.Request) {
 	response.ITEM(w, r, http.StatusOK, result)
 }
 
-func (rt *Router) All$2(w http.ResponseWriter, r *http.Request) {
-	project_id := r.URL.Query().Get("project_id")
-	state := r.URL.Query().Get("state")
-	search := r.URL.Query().Get("search")
-	pageStr := r.URL.Query().Get("page")
-	rowsStr := r.URL.Query().Get("rows")
-	_select := r.URL.Query().Get("select")
-
-	page, err := strconv.Atoi(pageStr)
-	if err != nil {
-		page = 1
-	}
-
-	rows, err := strconv.Atoi(rowsStr)
-	if err != nil {
-		rows = 30
-	}
+func (rt *Router) all$2(w http.ResponseWriter, r *http.Request) {
+	query := response.GetQuery(r)
+	project_id := query.Str("project_id")
+	state := query.Str("state")
+	search := query.Str("search")
+	page := query.ValInt(1, "page")
+	rows := query.ValInt(30, "rows")
+	_select := query.Str("select")
 
 	result, err := All$2(project_id, state, search, page, rows, _select)
 	if err != nil {
@@ -736,21 +786,44 @@ func (rt *Router) All$2(w http.ResponseWriter, r *http.Request) {
 
 /** Copy this code to router.go
 	// $2
-	er.ProtectRoute(r, er.Get, "/$5/{id}", rt.Get$2ById, PackageName, PackagePath, Host)
-	er.ProtectRoute(r, er.Post, "/$5", rt.UpSert$2, PackageName, PackagePath, Host)
-	er.ProtectRoute(r, er.Put, "/$5/state/{id}", rt.State$2, PackageName, PackagePath, Host)
-	er.ProtectRoute(r, er.Delete, "/$5/{id}", rt.Delete$2, PackageName, PackagePath, Host)
-	er.ProtectRoute(r, er.Get, "/$5/all", rt.All$2, PackageName, PackagePath, Host)
+	er.ProtectRoute(r, er.Get, "/$5/{id}", rt.get$2ById, PackageName, PackagePath, Host)
+	er.ProtectRoute(r, er.Post, "/$5", rt.upSert$2, PackageName, PackagePath, Host)
+	er.ProtectRoute(r, er.Put, "/$5/state/{id}", rt.state$2, PackageName, PackagePath, Host)
+	er.ProtectRoute(r, er.Delete, "/$5/{id}", rt.delete$2, PackageName, PackagePath, Host)
+	er.ProtectRoute(r, er.Get, "/$5/all", rt.all$2, PackageName, PackagePath, Host)
 **/
 
 /** Copy this code to func initModel in model.go
 	if err := Define$2(); err != nil {
-		return console.PanicE(err)
+		return console.Panic(err)
 	}
 **/
 `
 
-const modelReadme = `### $1`
+const modelReadme = `
+## Project $1
+
+## Create project
+
+go mod init github.com/$1/api
+
+### Dependencias
+
+go get -u github.com/joho/godotenv/autoload &&
+go get -u github.com/redis/go-redis/v9 &&
+go get -u github.com/google/uuid &&
+go get -u github.com/nats-io/nats.go &&
+go get -u golang.org/x/crypto/bcrypt &&
+go get -u golang.org/x/exp/slices &&
+go get -u github.com/manifoldco/promptui &&
+go get -u github.com/schollz/progressbar/v3 &&
+go get -u github.com/spf13/cobra &&
+go get -u github.com/cgalvisleon/elvis@v0.0.114
+
+### Crear projecto, microservicios, modelos
+
+go run github.com/cgalvisleon/elvis/cmd/create-go create
+`
 
 const modelEnvar = `APP=
 PORT=3300

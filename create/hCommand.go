@@ -3,7 +3,8 @@ package create
 import (
 	"fmt"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/elvis/strs"
+	"github.com/cgalvisleon/elvis/utility"
 	"github.com/spf13/cobra"
 )
 
@@ -12,7 +13,7 @@ var CmdProject = &cobra.Command{
 	Short: "Create project base type microservice.",
 	Long:  "Template project to microservice include folder cmd, deployments, pkg, rest, test and web, with files .go required for making a microservice.",
 	Run: func(cmd *cobra.Command, args []string) {
-		packageName, err := et.ModuleName()
+		packageName, err := utility.ModuleName()
 		if err != nil {
 			fmt.Printf("Prompt failed %v\n", err)
 			return
@@ -49,7 +50,7 @@ var CmdMicro = &cobra.Command{
 	Short: "Create project base type microservice.",
 	Long:  "Template project to microservice include folder cmd, deployments, pkg, rest, test and web, with files .go required for making a microservice.",
 	Run: func(cmd *cobra.Command, args []string) {
-		packageName, err := et.ModuleName()
+		packageName, err := utility.ModuleName()
 		if err != nil {
 			fmt.Printf("Prompt failed %v\n", err)
 			return
@@ -104,8 +105,8 @@ var CmdModelo = &cobra.Command{
 			return
 		}
 
-		title := et.Titlecase(name)
-		message := et.Format(`Remember, including the router, that it is on the bottom of the h%s.go, in routers section of the router.go file`, title)
+		title := strs.Titlecase(name)
+		message := strs.Format(`Remember, including the router, that it is on the bottom of the h%s.go, in routers section of the router.go file`, title)
 		fmt.Println(message)
 	},
 }

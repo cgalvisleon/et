@@ -2,9 +2,11 @@ package et
 
 import (
 	"encoding/json"
-	"fmt"
 	"reflect"
 	"strings"
+
+	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/strs"
 )
 
 type Items struct {
@@ -21,7 +23,7 @@ func (it *Items) Scan(src interface{}) error {
 	case string:
 		ba = []byte(v)
 	default:
-		return Errorf(`json/Scan - Failed to unmarshal JSON value:%s`, src)
+		return logs.Errorf(`json/Scan - Failed to unmarshal JSON value:%s`, src)
 	}
 
 	var t []Json
@@ -66,7 +68,7 @@ func (it *Items) Uppcase(idx int, _default string, atribs ...string) string {
 	case string:
 		return strings.ToUpper(v)
 	default:
-		return fmt.Sprintf(`%v`, strings.ToUpper(_default))
+		return strs.Format(`%v`, strings.ToUpper(_default))
 	}
 }
 
@@ -81,7 +83,7 @@ func (it *Items) Lowcase(idx int, _default string, atribs ...string) string {
 	case string:
 		return strings.ToLower(v)
 	default:
-		return fmt.Sprintf(`%v`, strings.ToLower(_default))
+		return strs.Format(`%v`, strings.ToLower(_default))
 	}
 }
 
@@ -96,7 +98,7 @@ func (it *Items) Titlecase(idx int, _default string, atribs ...string) string {
 	case string:
 		return strings.ToTitle(v)
 	default:
-		return fmt.Sprintf(`%v`, strings.ToTitle(_default))
+		return strs.Format(`%v`, strings.ToTitle(_default))
 	}
 }
 
@@ -165,23 +167,19 @@ func (it *Items) Json(idx int, atribs ...string) Json {
 	case map[string]interface{}:
 		return Json(v)
 	default:
-		Errorf("Not Items.Json type (%v) value:%v", reflect.TypeOf(v), v)
+		logs.Errorf("Not Items.Json type (%v) value:%v", reflect.TypeOf(v), v)
 		return Json{}
 	}
-}
-
-func (it *Items) ToStrings(idx int) string {
-	return it.Result[idx].ToString()
 }
 
 func (it *Items) ToString() string {
 	var result string
 	for _, item := range it.Result {
 		str := item.ToString()
-		result = AppendStr(result, str, ",")
+		result = strs.Append(result, str, ",")
 	}
 
-	return fmt.Sprintf(`[%s]`, result)
+	return strs.Format(`[%s]`, result)
 }
 
 func (it *Items) ToJson() Json {

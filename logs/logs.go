@@ -1,4 +1,4 @@
-package et
+package logs
 
 import (
 	"errors"
@@ -19,6 +19,7 @@ var Purple = "\033[35m"
 var Cyan = "\033[36m"
 var Gray = "\033[37m"
 var White = "\033[97m"
+var useColor = true
 
 func init() {
 	if runtime.GOOS == "windows" {
@@ -31,20 +32,8 @@ func init() {
 		Cyan = ""
 		Gray = ""
 		White = ""
+		useColor = false
 	}
-}
-
-func NewError(message string) error {
-	err := errors.New(message)
-
-	return err
-}
-
-func NewErrorF(format string, args ...any) error {
-	message := fmt.Sprintf(format, args...)
-	err := NewError(message)
-
-	return err
 }
 
 func log(kind string, color string, args ...any) string {
@@ -81,8 +70,9 @@ func log(kind string, color string, args ...any) string {
 	return result
 }
 
-func Log(kind string, args ...any) {
+func Log(kind string, args ...any) error {
 	log(kind, "", args...)
+	return nil
 }
 
 func Logf(kind string, format string, args ...any) {
@@ -90,11 +80,11 @@ func Logf(kind string, format string, args ...any) {
 	log(kind, "", message)
 }
 
-func Error(err error) error {
+func Traces(kind, color string, err error) ([]string, error) {
 	var n int = 1
-	var trces []string = []string{err.Error()}
+	var traces []string = []string{err.Error()}
 
-	log("ERROR", "Red", err.Error())
+	log(kind, color, err.Error())
 
 	for {
 		pc, file, line, more := runtime.Caller(n)
@@ -110,17 +100,34 @@ func Error(err error) error {
 		}
 		if !slices.Contains([]string{"ErrorM", "ErrorF"}, name) {
 			trace := fmt.Sprintf("%s:%d func:%s", file, line, name)
-			trces = append(trces, trace)
-			log("TRACE", "Red", trace)
+			traces = append(traces, trace)
+			log("TRACE", color, trace)
 		}
 	}
+
+	return traces, err
+}
+
+func Alert(err error) error {
+	log("Alert", "Yellow", err.Error())
 
 	return err
 }
 
-func Nil(args ...any) error {
-	Log("LOG", args...)
-	return nil
+func Alertm(message string) error {
+	return Alert(errors.New(message))
+}
+
+func Alertf(format string, args ...any) error {
+	message := fmt.Sprintf(format, args...)
+
+	return Alertm(message)
+}
+
+func Error(err error) error {
+	_, err = Traces("Error", "red", err)
+
+	return err
 }
 
 func Errorm(message string) error {
@@ -134,6 +141,15 @@ func Errorf(format string, args ...any) error {
 	return Error(err)
 }
 
+func Info(v ...any) {
+	log("Info", "Blue", v...)
+}
+
+func Infof(format string, args ...any) {
+	message := fmt.Sprintf(format, args...)
+	log("Info", "Blue", message)
+}
+
 func Fatal(v ...any) {
 	log("Fatal", "Red", v...)
 	os.Exit(1)
@@ -144,16 +160,19 @@ func Panic(v ...any) {
 	os.Exit(1)
 }
 
-func Panicf(format string, v ...any) {
-	message := fmt.Sprintf(format, v...)
-	Panic(message)
+func Ping() {
+	log("PING", "")
 }
 
-func Info(v ...any) {
-	log("Info", "Blue", v...)
+func Pong() {
+	log("PONG", "")
 }
 
-func Infof(format string, args ...any) {
+func Debug(v ...any) {
+	log("Debug", "Cyan", v...)
+}
+
+func Debugf(format string, args ...any) {
 	message := fmt.Sprintf(format, args...)
-	Info(message)
+	log("Debug", "Cyan", message)
 }

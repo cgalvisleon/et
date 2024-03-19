@@ -1,6 +1,8 @@
 package create
 
-import "github.com/cgalvisleon/et/et"
+import (
+	"github.com/cgalvisleon/elvis/strs"
+)
 
 func MkProject(packageName, name, author, schema string) error {
 	ProgressNext(10)
@@ -33,10 +35,10 @@ func MkProject(packageName, name, author, schema string) error {
 		return err
 	}
 
-	ProgressNext(60)
+	ProgressNext(50)
 	_, err = Command([]string{
-		et.Format("cd ./%s", name),
-		et.Format("go mod init github.com/%s/%s", author, name),
+		strs.Format("cd ./%s", name),
+		strs.Format("go mod init github.com/%s/%s", author, name),
 	})
 	if err != nil {
 		return err
@@ -67,7 +69,7 @@ func MkMicroservice(packageName, name, schema string) error {
 	}
 
 	ProgressNext(10)
-	schemaVar := et.AppendStr("schema", et.Titlecase(schema), "")
+	schemaVar := strs.Append("schema", strs.Titlecase(schema), "")
 	err = MakePkg(name, schema, schemaVar)
 	if err != nil {
 		return err
@@ -92,7 +94,7 @@ func MkMicroservice(packageName, name, schema string) error {
 
 func MkMolue(name, modelo, schema string) error {
 	ProgressNext(10)
-	schemaVar := et.AppendStr("schema", et.Titlecase(schema), "")
+	schemaVar := strs.Append("schema", strs.Titlecase(schema), "")
 	err := MakeModel(name, modelo, schemaVar)
 	if err != nil {
 		return err

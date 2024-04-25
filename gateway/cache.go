@@ -7,33 +7,54 @@ import (
 	"github.com/cgalvisleon/et/logs"
 )
 
+type Item struct {
+	Datemake   time.Time
+	Dateupdate time.Time
+	Key        string
+	Value      interface{}
+	mutex      sync.RWMutex
+}
+
+// NewItem create new item
+func NewItem(key string, value interface{}) *Item {
+	now := time.Now()
+	return &Item{
+		Datemake:   now,
+		Dateupdate: now,
+		Key:        key,
+		Value:      value,
+		mutex:      sync.RWMutex{},
+	}
+}
+
 // Cache struct to use in gateway
 type Cache struct {
-	items map[string]interface{}
-	mutex *sync.RWMutex
+	items map[string]*Item
 }
 
 // NewCache create new cache
 func NewCache() *Cache {
 	return &Cache{
-		items: make(map[string]interface{}),
-		mutex: &sync.RWMutex{},
+		items: make(map[string]*Item),
 	}
 }
 
 // Set method to use in cache
 func (c *Cache) Set(key string, value interface{}, expiration time.Duration) {
-	c.mutex.Lock()
-	c.items[key] = value
-	c.mutex.Unlock()
+	val, ok := c.items[key]
+	if ok {
+		val.mutex.Lock()
+		val.Dateupdate = time.Now()
+		val.Value = value
+		val.mutex.Unlock()
+	} else {
+		val = NewItem(key, value)
+	}
 
 	duration := expiration * time.Second
 
 	clean := func() {
-		c.mutex.Lock()
-		logs.Log("Cache expired: " + key)
-		delete(c.items, key)
-		c.mutex.Unlock()
+		c.Del(key)
 	}
 
 	time.AfterFunc(duration, clean)
@@ -42,7 +63,7 @@ func (c *Cache) Set(key string, value interface{}, expiration time.Duration) {
 // Get method to use in cache
 func (c *Cache) Get(key string, _default interface{}) interface{} {
 	if val, ok := c.items[key]; ok {
-		return val
+		return val.Value
 	}
 
 	return _default
@@ -54,31 +75,31 @@ func (c *Cache) Del(key string) bool {
 		return false
 	}
 
-	c.mutex.Lock()
+	logs.Log("Cache deleted", key)
 	delete(c.items, key)
-	c.mutex.Unlock()
 
 	return true
 }
 
 func (c *Cache) Count(key string, expiration time.Duration) int {
-	var val int
-	var res interface{}
-	var ok bool
-	if res, ok = c.items[key]; !ok {
-		val = 1
+	var val int = 1
+	res, ok := c.items[key]
+	if ok {
+		res.mutex.Lock()
+		val = res.Value.(int) + 1
+		res.Value = val
+		res.mutex.Unlock()
 	} else {
-		val = res.(int) + 1
+		res = NewItem(key, val)
+		c.items[key] = res
 	}
-
-	c.Set(key, val, expiration)
 
 	return val
 }
 
 // Clear method to use in cache
 func (c *Cache) Clear() {
-	c.items = make(map[string]interface{})
+	c.items = make(map[string]*Item)
 }
 
 // Len method to use in cache
@@ -109,6 +130,6 @@ func (c *Cache) Values() []interface{} {
 }
 
 // Items method to use in cache
-func (c *Cache) Items() map[string]interface{} {
+func (c *Cache) Items() map[string]*Item {
 	return c.items
 }

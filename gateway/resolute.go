@@ -25,6 +25,24 @@ type Resolute struct {
 	URL        string
 }
 
+func (r *Resolute) Definition() et.Json {
+	return et.Json{
+		"method":     r.Method,
+		"proto":      r.Proto,
+		"path":       r.Path,
+		"rawQuery":   r.RawQuery,
+		"query":      r.Query,
+		"requestURI": r.RequestURI,
+		"remoteAddr": r.RemoteAddr,
+		"header":     r.Header,
+		"body":       r.Body,
+		"host":       r.Host,
+		"scheme":     r.Scheme,
+		"resolve":    r.Resolve,
+		"url":        r.URL,
+	}
+}
+
 func GetResolute(r *http.Request) *Resolute {
 	scheme := "http"
 	if r.TLS != nil {

@@ -1,19 +1,16 @@
 package gateway
 
-import (
-	"github.com/cgalvisleon/et/logs"
-)
+import "github.com/cgalvisleon/et/logs"
 
 func initEvents() {
 	logs.Log("Events", "Running svents stack")
 
 	/*
-		err := event.Stack("apigateway/upsert", eventAction)
+		err := event.Stack("gateway/upsert", eventAction)
 		if err != nil {
 			logs.Error(err)
 		}
 	*/
-
 }
 
 /*
@@ -32,6 +29,6 @@ func eventAction(m event.CreatedEvenMessage) {
 
 	conn.http.AddRoute(method, path, resolve, kind, stage, packageName)
 
-	logs.Logf("Api gateway", `[%s] %s - %s`, method, path, packageName)
+	logs.LogKF("Api gateway", `[%s] %s - %s`, method, path, packageName)
 }
 */

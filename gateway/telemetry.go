@@ -43,7 +43,6 @@ type Metrics struct {
 
 type Request struct {
 	Tag     string
-	Time    time.Time
 	Day     int
 	Hour    int
 	Minute  int
@@ -51,20 +50,15 @@ type Request struct {
 	Limit   int
 }
 
-var requests = make(map[string]*Request)
-
 func CallRequests(tag string) Request {
-	limit := envar.EnvarInt(400, "REQUESTS_LIMIT")
-	res := conn.cache.Get(tag, &Request{Tag: tag, Limit: limit})
-	result, _ := res.(Request)
-	result.Time = time.Now()
-	result.Day = conn.cache.Count(strs.Format(`%s-%d`, tag, time.Now().Unix()/86400), 86400)
-	result.Hour = conn.cache.Count(strs.Format(`%s-%d`, tag, time.Now().Unix()/3600), 3600)
-	result.Minute = conn.cache.Count(strs.Format(`%s-%d`, tag, time.Now().Unix()/60), 60)
-	result.Seccond = conn.cache.Count(strs.Format(`%s-%d`, tag, time.Now().Unix()/1), 1)
-	result.Limit = limit
-
-	return result
+	return Request{
+		Tag:     tag,
+		Day:     conn.cache.Count(strs.Format(`%s-%d`, tag, time.Now().Unix()/86400), 86400),
+		Hour:    conn.cache.Count(strs.Format(`%s-%d`, tag, time.Now().Unix()/3600), 3600),
+		Minute:  conn.cache.Count(strs.Format(`%s-%d`, tag, time.Now().Unix()/60), 60),
+		Seccond: conn.cache.Count(strs.Format(`%s-%d`, tag, time.Now().Unix()/1), 1),
+		Limit:   envar.EnvarInt(400, "REQUESTS_LIMIT"),
+	}
 }
 
 func NewMetric(r *http.Request) *Metrics {
@@ -165,7 +159,6 @@ func (m *Metrics) done(res *http.Response) et.Json {
 		},
 		"request_host": et.Json{
 			"host":   m.RequestsHost.Tag,
-			"time":   m.RequestsHost.Time,
 			"day":    m.RequestsHost.Day,
 			"hour":   m.RequestsHost.Hour,
 			"minute": m.RequestsHost.Minute,
@@ -174,7 +167,6 @@ func (m *Metrics) done(res *http.Response) et.Json {
 		},
 		"requests_endpoint": et.Json{
 			"endpoint": m.RequestsEndpoint.Tag,
-			"time":     m.RequestsHost.Time,
 			"day":      m.RequestsEndpoint.Day,
 			"hour":     m.RequestsEndpoint.Hour,
 			"minute":   m.RequestsEndpoint.Minute,

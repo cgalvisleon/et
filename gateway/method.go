@@ -13,7 +13,7 @@ func (s *HttpServer) MethodFunc(method, pattern string, handlerFn http.HandlerFu
 	method = strings.ToUpper(method)
 	ok := methodMap[method]
 	if !ok {
-		logs.Panic(`'%s' http method is not supported.`, method)
+		logs.Panicf(`'%s' http method is not supported.`, method)
 	}
 
 	s.AddHandleMethod(method, pattern, handlerFn, packageName)

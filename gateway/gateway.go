@@ -34,32 +34,27 @@ var Host = strs.Format(`%s:%d`, envar.EnvarStr("http://localhost", "HOST"), enva
 var conn *Server
 
 func New() (*Server, error) {
-	if conn != nil {
-		return conn, nil
-	}
-
-	var err error
-
 	// HTTP server
 	httpServer := newHttpServer()
 
 	// RPC server
 	rpcServer := newRpc()
 
-	// Create a new server
-	conn = &Server{
-		http: httpServer,
-		rpc:  &rpcServer,
-	}
-
 	// WS server
-	conn.ws, err = ws.Load()
+	wsServer, err := ws.Load()
 	if err != nil {
 		panic(err)
 	}
 
-	// Cache server
-	conn.cache = NewCache()
+	cacheServer := NewCache()
+
+	// Create a new server
+	conn = &Server{
+		http:  httpServer,
+		rpc:   &rpcServer,
+		ws:    wsServer,
+		cache: cacheServer,
+	}
 
 	return conn, nil
 }

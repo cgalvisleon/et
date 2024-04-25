@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
 )
@@ -169,6 +170,8 @@ func (s *HttpServer) AddRoute(method, path, resolve, kind, stage, packageName st
 		}
 		pakage.Nodes = append(pakage.Nodes, node)
 		pakage.Count = len(pakage.Nodes)
+
+		logs.Logf("Api gateway", `[%s] %s/%s - %s`, method, resolve, path, packageName)
 	}
 }
 
@@ -192,8 +195,9 @@ func (s *HttpServer) AddHandleMethod(method, path string, handlerFn http.Handler
 
 	if node != nil {
 		node.Resolve = et.Json{
-			"method": method,
-			"kind":   "HANDLER",
+			"method":  method,
+			"kind":    "HANDLER",
+			"resolve": "/",
 		}
 		s.handlers[node._id] = handlerFn
 
@@ -203,6 +207,8 @@ func (s *HttpServer) AddHandleMethod(method, path string, handlerFn http.Handler
 		}
 		pakage.Nodes = append(pakage.Nodes, node)
 		pakage.Count = len(pakage.Nodes)
+
+		logs.Logf("Api Handler", `[%s] %s - %s`, method, path, packageName)
 	}
 }
 

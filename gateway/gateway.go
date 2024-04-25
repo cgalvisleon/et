@@ -7,10 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/ws"
@@ -22,8 +20,7 @@ type Server struct {
 	http  *HttpServer
 	rpc   *net.Listener
 	ws    *ws.Conn
-	cache *cache.Conn
-	event *event.Conn
+	cache *Cache
 }
 
 var PackageName = "gateway"
@@ -37,23 +34,11 @@ var Host = strs.Format(`%s:%d`, envar.EnvarStr("http://localhost", "HOST"), enva
 var conn *Server
 
 func New() (*Server, error) {
-	// Create cache server
-	cacheServer, err := cache.Load()
-	if err != nil {
-		panic(err)
+	if conn != nil {
+		return conn, nil
 	}
 
-	// Create event server
-	eventServer, err := event.Load()
-	if err != nil {
-		panic(err)
-	}
-
-	// WS server
-	wsServer, err := ws.Load()
-	if err != nil {
-		panic(err)
-	}
+	var err error
 
 	// HTTP server
 	httpServer := newHttpServer()
@@ -63,12 +48,18 @@ func New() (*Server, error) {
 
 	// Create a new server
 	conn = &Server{
-		http:  httpServer,
-		rpc:   &rpcServer,
-		ws:    wsServer,
-		cache: cacheServer,
-		event: eventServer,
+		http: httpServer,
+		rpc:  &rpcServer,
 	}
+
+	// WS server
+	conn.ws, err = ws.Load()
+	if err != nil {
+		panic(err)
+	}
+
+	// Cache server
+	conn.cache = NewCache()
 
 	return conn, nil
 }

@@ -1,12 +1,10 @@
 package gateway
 
 import (
-	"encoding/json"
 	"net/http"
 	"regexp"
 	"strings"
 
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
@@ -113,58 +111,6 @@ func findResolve(tag string, nodes []*Node, route *Resolve) (*Node, *Resolve) {
 	}
 
 	return node, route
-}
-
-// Load routes from file
-func (s *HttpServer) LoadRouter() error {
-	_routes, err := cache.Get(s.routesKey, "{routes:[]}")
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal([]byte(_routes), &s.routes)
-	if err != nil {
-		return err
-	}
-
-	_pakages, err := cache.Get(s.pakagesKey, "{pakages:[]}")
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal([]byte(_pakages), &s.pakages)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// Save routes to file
-func (s *HttpServer) Save() error {
-	// Convertion struct to json
-	_routes, err := et.Marshal(s.routes)
-	if err != nil {
-		return err
-	}
-
-	// Save json to cache
-	err = cache.Set(s.routesKey, _routes.ToString(), 0)
-	if err != nil {
-		return err
-	}
-
-	_pakages, err := et.Marshal(s.pakages)
-	if err != nil {
-		return err
-	}
-
-	err = cache.Set(s.pakagesKey, _pakages.ToString(), 0)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // Find a pakage by name

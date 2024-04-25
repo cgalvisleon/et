@@ -37,9 +37,9 @@ func init() {
 }
 
 func log(kind string, color string, args ...any) string {
+	now := time.Now().Format("2006/01/02 15:04:05")
 	kind = strings.ToUpper(kind)
 	message := fmt.Sprint(args...)
-	now := time.Now().Format("2006/01/02 15:04:05")
 	var result string
 
 	switch color {

@@ -1,21 +1,22 @@
 package gateway
 
 import (
-	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 )
 
 func initEvents() {
 	logs.Log("Events", "Running svents stack")
 
-	err := event.Stack("apigateway/upsert", eventAction)
-	if err != nil {
-		logs.Error(err)
-	}
+	/*
+		err := event.Stack("apigateway/upsert", eventAction)
+		if err != nil {
+			logs.Error(err)
+		}
+	*/
 
 }
 
+/*
 func eventAction(m event.CreatedEvenMessage) {
 	data, err := et.ToJson(m.Data)
 	if err != nil {
@@ -33,3 +34,4 @@ func eventAction(m event.CreatedEvenMessage) {
 
 	logs.Logf("Api gateway", `[%s] %s - %s`, method, path, packageName)
 }
+*/

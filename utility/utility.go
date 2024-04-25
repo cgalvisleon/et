@@ -88,12 +88,8 @@ func Pointer(collection string, id string) string {
 	return strs.Format("%s/%s", collection, id)
 }
 
-func Contains(c []string, v string) bool {
-	return slices.Contains(c, v)
-}
-
-func ContainsInt(c []int, v int) bool {
-	for _, i := range c {
+func Contains(v interface{}, vals ...interface{}) bool {
+	for _, i := range vals {
 		if i == v {
 			return true
 		}

@@ -4,7 +4,6 @@ import (
 	"regexp"
 
 	"github.com/cgalvisleon/et/strs"
-	"golang.org/x/exp/slices"
 )
 
 func ValidStr(val string, min int, notIn []string) bool {
@@ -14,34 +13,34 @@ func ValidStr(val string, min int, notIn []string) bool {
 		return ok
 	}
 
-	ok = Contains(notIn, val)
+	ok = Contains(val, notIn)
 	return !ok
 }
 
 func ValidIn(val string, min int, in []string) bool {
 	v := strs.Replace(val, " ", "")
-	ok := len(v) > min && Contains(in, val)
+	ok := len(v) > min && Contains(val, in)
 	return ok
 }
 
 func ValidId(val string) bool {
-	ok := Contains([]string{"", "*", "new"}, val)
+	ok := Contains(val, []string{"", "*", "new"})
 	return !ok
 }
 
 func ValidKey(val string) bool {
-	ok := Contains([]string{"-1", "", "*", "new"}, val)
+	ok := Contains(val, []string{"-1", "", "*", "new"})
 	return !ok
 }
 
 func ValidInt(val int, notIn []int) bool {
-	ok := slices.Contains(notIn, val)
+	ok := Contains(val, notIn)
 
 	return !ok
 }
 
 func ValidNum(val float64, notIn []float64) bool {
-	ok := slices.Contains(notIn, val)
+	ok := Contains(val, notIn)
 
 	return !ok
 }

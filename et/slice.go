@@ -1,5 +1,6 @@
 package et
 
+// SliceFindIndex find the index of an item in a slice
 func SliceFindIndex(item Json, list []Json, key string) int {
 	result := -1
 	for i, element := range list {
@@ -11,6 +12,7 @@ func SliceFindIndex(item Json, list []Json, key string) int {
 	return result
 }
 
+// InSlice return the items that are in the slice
 func NotInSlice(la, lb []Json, key string) []string {
 	var result []string = []string{}
 	for _, item := range la {

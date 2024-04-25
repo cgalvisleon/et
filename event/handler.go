@@ -104,7 +104,7 @@ func Stack(channel string, f func(CreatedEvenMessage)) (err error) {
 		conn.decodeMessage(m.Data, &msg)
 		key := msg.Id
 
-		ok := conn.LockStack(key)
+		ok := conn.Lock(key)
 		if !ok {
 			return
 		}

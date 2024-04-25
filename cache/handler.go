@@ -39,9 +39,9 @@ func GetCtx(ctx context.Context, key, def string) (string, error) {
 		return def, err
 	case result == "":
 		return result, nil
+	default:
+		return result, nil
 	}
-
-	return result, nil
 }
 
 func DelCtx(ctx context.Context, key string) (int64, error) {

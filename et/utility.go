@@ -10,9 +10,7 @@ import (
 	"github.com/cgalvisleon/et/strs"
 )
 
-/**
-*
-**/
+// unquote remove the quotes from a string
 func unquote(str string) string {
 	result, err := strconv.Unquote(str)
 	if err != nil {
@@ -22,16 +20,15 @@ func unquote(str string) string {
 	return result
 }
 
+// quote add quotes to a string
 func quote(str string) string {
 	result := strconv.Quote(str)
 	result = strs.Replace(result, `'`, ``)
 
-	logs.Debug("str", str)
-	logs.Debug("quote", result)
-
 	return result
 }
 
+// Unquote remove the quotes from a value
 func Unquote(val interface{}) any {
 	switch v := val.(type) {
 	case string:
@@ -53,16 +50,14 @@ func Unquote(val interface{}) any {
 	case time.Time:
 		return strs.Format(`'%s'`, v.Format("2006-01-02 15:04:05"))
 	case Json:
-		j := Json(v)
-		return strs.Format(`%s`, j.ToUnquote())
+		return strs.Format(`%s`, v.ToUnquote())
 	case []Json:
 		var r string
 		for i, _v := range v {
-			j := Json(_v)
 			if i == 0 {
-				r = strs.Format(`%s`, j.ToUnquote())
+				r = strs.Format(`%s`, _v.ToUnquote())
 			} else {
-				r = strs.Format(`%s, %s`, r, j.ToUnquote())
+				r = strs.Format(`%s, %s`, r, _v.ToUnquote())
 			}
 		}
 		return strs.Format(`'[%s]'`, r)
@@ -99,6 +94,7 @@ func Unquote(val interface{}) any {
 	}
 }
 
+// Quote add quotes to a value
 func Quote(val interface{}) any {
 	switch v := val.(type) {
 	case string:
@@ -166,6 +162,7 @@ func Quote(val interface{}) any {
 	}
 }
 
+// ToUnit8Json convert a value to a Json
 func ToUnit8Json(src interface{}) Json {
 	result, err := ToJson(src)
 	if err != nil {
@@ -175,6 +172,7 @@ func ToUnit8Json(src interface{}) Json {
 	return result
 }
 
+// ToJson convert a value to a Json
 func ToJson(src interface{}) (Json, error) {
 	var ba []byte
 	switch v := src.(type) {
@@ -191,7 +189,7 @@ func ToJson(src interface{}) (Json, error) {
 		}
 		return r, nil
 	default:
-		return nil, logs.Errorf(`Failed ToJson value: %v type: %v`, src, reflect.TypeOf(v))
+		return nil, logs.Errorf(`ToJson value not is Json: %v type: %v`, src, reflect.TypeOf(v))
 	}
 
 	t := map[string]interface{}{}
@@ -203,6 +201,7 @@ func ToJson(src interface{}) (Json, error) {
 	return Json(t), nil
 }
 
+// ToJsonArray convert a value to a []Json
 func ToJsonArray(vals []interface{}) ([]Json, error) {
 	var result []Json
 	for _, val := range vals {
@@ -217,6 +216,7 @@ func ToJsonArray(vals []interface{}) ([]Json, error) {
 	return result, nil
 }
 
+// ToString convert a value to a string
 func ToString(val interface{}) string {
 	s, err := json.Marshal(val)
 	if err != nil {
@@ -226,6 +226,7 @@ func ToString(val interface{}) string {
 	return string(s)
 }
 
+// ByteToJson convert a byte to a Json
 func ByteToJson(scr interface{}) Json {
 	var result Json
 	result.Scan(scr)
@@ -233,6 +234,7 @@ func ByteToJson(scr interface{}) Json {
 	return result
 }
 
+// ArrayToJson convert a []interface{} to a Json
 func ArrayToString(vals []Json) string {
 	var result string
 
@@ -253,9 +255,7 @@ func ArrayToString(vals []Json) string {
 	return strs.Format(`[%s]`, result)
 }
 
-/**
-*
-**/
+// Val get a value from a Json
 func Val(data Json, _default any, atribs ...string) any {
 	var result any
 	var ok bool
@@ -311,6 +311,7 @@ func Val(data Json, _default any, atribs ...string) any {
 	return result
 }
 
+// ApendJson add a Json to a Json
 func ApendJson(m Json, n Json) Json {
 	result := m
 	for k, v := range n {
@@ -320,10 +321,7 @@ func ApendJson(m Json, n Json) Json {
 	return result
 }
 
-/**
-* Compara b contra a y se establece que es diferente si y solo si
-* los valor de b no estan en a o los valores de b son diferentes en a
-**/
+// IsDiferent compare two Json and return true if they are different
 func IsDiferent(a, b Json) bool {
 	for k, new := range b {
 		old := a[k]
@@ -335,24 +333,27 @@ func IsDiferent(a, b Json) bool {
 			case Json:
 				_new, err := ToJson(new)
 				if err != nil {
-					logs.Error(err)
 					return false
 				}
 				return IsDiferent(v, _new)
+			case *Json:
+				_new, err := ToJson(new)
+				if err != nil {
+					return false
+				}
+				return IsDiferent(*v, _new)
 			case map[string]interface{}:
 				_old, err := ToJson(old)
 				if err != nil {
-					logs.Error(err)
 					return false
 				}
 				_new, err := ToJson(new)
 				if err != nil {
-					logs.Error(err)
 					return false
 				}
 				return IsDiferent(_old, _new)
 			default:
-				if strs.Format(`%v`, old) != strs.Format(`%v`, new) {
+				if Quote(old) != Quote(new) {
 					return true
 				}
 			}
@@ -362,142 +363,7 @@ func IsDiferent(a, b Json) bool {
 	return false
 }
 
-/**
-* Compara b contra a y se establece que si ubo cambio si y solo si
-* los valor de b esta en a y alguno es direfernte
-**/
-func IsChange(a, b Json) bool {
-	for k, new := range b {
-		old := a[k]
-
-		if old != nil {
-			switch v := old.(type) {
-			case Json:
-				_new, err := ToJson(new)
-				if err != nil {
-					logs.Error(err)
-					return false
-				}
-				return IsChange(v, _new)
-			case map[string]interface{}:
-				_old, err := ToJson(old)
-				if err != nil {
-					logs.Error(err)
-					return false
-				}
-				_new, err := ToJson(new)
-				if err != nil {
-					logs.Error(err)
-					return false
-				}
-				return IsChange(_old, _new)
-			default:
-				if strs.Format(`%v`, old) != strs.Format(`%v`, new) {
-					return true
-				}
-			}
-		}
-	}
-
-	return false
-}
-
-func Update(a, b Json) (Json, bool) {
-	var change bool
-	var result Json = Json{}
-
-	for k, val := range a {
-		result[k] = val
-	}
-
-	for k, new := range b {
-		old := result[k]
-
-		if old != nil {
-			switch v := new.(type) {
-			case Json:
-				_old, err := ToJson(old)
-				if err != nil {
-					logs.Error(err)
-				}
-				_new, ch := Update(_old, v)
-				if !change {
-					change = ch
-				}
-				result[k] = _new
-			case map[string]interface{}:
-				_old, err := ToJson(old)
-				if err != nil {
-					logs.Error(err)
-				}
-				_new, ch := Update(_old, v)
-				if !change {
-					change = ch
-				}
-				result[k] = _new
-			case []map[string]interface{}:
-				result[k] = v
-			default:
-				if !change {
-					change = old != v
-				}
-				result[k] = v
-			}
-		}
-	}
-
-	return result, change
-}
-
-func Merge(a, b Json) (Json, bool) {
-	var change bool
-	var result Json = Json{}
-
-	for k, val := range a {
-		result[k] = val
-	}
-
-	for k, new := range b {
-		old := a[k]
-
-		if old == nil {
-			result[k] = new
-		} else if new != nil {
-			switch v := new.(type) {
-			case Json:
-				_old, err := ToJson(old)
-				if err != nil {
-					logs.Error(err)
-				}
-				_new, ch := Merge(_old, v)
-				if !change {
-					change = ch
-				}
-				result[k] = _new
-			case map[string]interface{}:
-				_old, err := ToJson(old)
-				if err != nil {
-					logs.Error(err)
-				}
-				_new, ch := Merge(_old, v)
-				if !change {
-					change = ch
-				}
-				result[k] = _new
-			case []map[string]interface{}:
-				result[k] = v
-			default:
-				if !change {
-					change = old != v
-				}
-				result[k] = v
-			}
-		}
-	}
-
-	return result, change
-}
-
+// OkOrNotJson return a Json depending on a condition
 func OkOrNotJson(condition bool, ok Json, not Json) Json {
 	if condition {
 		return ok

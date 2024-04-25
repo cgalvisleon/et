@@ -18,7 +18,7 @@ type Conn struct {
 	eventCreatedChan chan CreatedEvenMessage
 }
 
-func (c *Conn) LockStack(key string) bool {
+func (c *Conn) Lock(key string) bool {
 	val, err := cache.Del(key)
 	if err != nil {
 		return false

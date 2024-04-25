@@ -14,16 +14,20 @@ import (
 	"github.com/cgalvisleon/et/strs"
 )
 
+// TpObject and TpArray type
 const TpObject = 1
 const TpArray = 2
 
+// JsonD struct to define a json data
 type JsonD struct {
 	Type  int
 	Value interface{}
 }
 
+// Json type
 type Json map[string]interface{}
 
+// JsonToArrayJson convert a map to a json array
 func JsonToArrayJson(src map[string]interface{}) ([]Json, error) {
 	result := []Json{}
 	result = append(result, src)
@@ -31,6 +35,7 @@ func JsonToArrayJson(src map[string]interface{}) ([]Json, error) {
 	return result, nil
 }
 
+// Marshal convert a interface to a json
 func Marshal(src interface{}) (Json, error) {
 	j, err := json.Marshal(src)
 	if err != nil {
@@ -46,12 +51,14 @@ func Marshal(src interface{}) (Json, error) {
 	return result, nil
 }
 
+// Value convert a json to a driver value
 func (s Json) Value() (driver.Value, error) {
 	j, err := json.Marshal(s)
 
 	return j, err
 }
 
+// Scan convert a driver value to a json
 func (s *Json) Scan(src interface{}) error {
 	var ba []byte
 	switch v := src.(type) {
@@ -74,6 +81,7 @@ func (s *Json) Scan(src interface{}) error {
 	return nil
 }
 
+// ToScan convert a json to a struct
 func (s *Json) ToScan(src interface{}) error {
 	v := reflect.ValueOf(src).Elem()
 
@@ -97,6 +105,7 @@ func (s *Json) ToScan(src interface{}) error {
 	return nil
 }
 
+// ToByte convert a json to a byte
 func (s Json) ToByte() []byte {
 	result, err := json.Marshal(s)
 	if err != nil {
@@ -106,6 +115,7 @@ func (s Json) ToByte() []byte {
 	return result
 }
 
+// ToString convert a json to a string
 func (s Json) ToString() string {
 	bt, err := json.Marshal(s)
 	if err != nil {
@@ -117,6 +127,7 @@ func (s Json) ToString() string {
 	return result
 }
 
+// ToUnquote convert a json to a unquote string
 func (s Json) ToUnquote() string {
 	str := s.ToString()
 	result := strs.Format(`'%v'`, str)
@@ -124,6 +135,7 @@ func (s Json) ToUnquote() string {
 	return result
 }
 
+// ToQuote convert a json to a quote string
 func (s Json) ToQuote() string {
 	for k, v := range s {
 		if str, ok := s["mensaje"].(string); ok {
@@ -138,14 +150,11 @@ func (s Json) ToQuote() string {
 		}
 	}
 	str := s.ToString()
-	// result := quote(str)
-
-	logs.Debugf("str: %s", str)
-	// logs.Debugf("quote: %s", result)
 
 	return str
 }
 
+// ToItem convert a json to a item
 func (s Json) ToItem(src interface{}) Item {
 	s.Scan(src)
 	return Item{
@@ -154,10 +163,12 @@ func (s Json) ToItem(src interface{}) Item {
 	}
 }
 
+// ValAny return the value of the key
 func (s Json) ValAny(_default any, atribs ...string) any {
 	return Val(s, _default, atribs...)
 }
 
+// ValStr return the value of the key
 func (s Json) ValStr(_default string, atribs ...string) string {
 	val := s.ValAny(_default, atribs...)
 
@@ -169,6 +180,7 @@ func (s Json) ValStr(_default string, atribs ...string) string {
 	}
 }
 
+// ValInt return the value of the key
 func (s Json) ValInt(_default int, atribs ...string) int {
 	val := s.ValAny(_default, atribs...)
 
@@ -198,6 +210,7 @@ func (s Json) ValInt(_default int, atribs ...string) int {
 	}
 }
 
+// ValNum return the value of the key
 func (s Json) ValNum(_default float64, atribs ...string) float64 {
 	val := s.ValAny(_default, atribs...)
 
@@ -227,6 +240,7 @@ func (s Json) ValNum(_default float64, atribs ...string) float64 {
 	}
 }
 
+// ValBool return the value of the key
 func (s Json) ValBool(_default bool, atribs ...string) bool {
 	val := s.ValAny(_default, atribs...)
 
@@ -250,6 +264,7 @@ func (s Json) ValBool(_default bool, atribs ...string) bool {
 	}
 }
 
+// ValTime return the value of the key
 func (s Json) ValTime(_default time.Time, atribs ...string) time.Time {
 	val := s.ValAny(_default, atribs...)
 
@@ -271,6 +286,7 @@ func (s Json) ValTime(_default time.Time, atribs ...string) time.Time {
 	}
 }
 
+// ValJson return the value of the key
 func (s Json) ValJson(_default Json, atribs ...string) Json {
 	val := s.ValAny(_default, atribs...)
 
@@ -278,51 +294,63 @@ func (s Json) ValJson(_default Json, atribs ...string) Json {
 	case Json:
 		return v
 	default:
-		log.Println("ValTime value is not json, type:", reflect.TypeOf(v), "value:", v)
+		log.Println("ValJson value is not json, type:", reflect.TypeOf(v), "value:", v)
 		return _default
 	}
 }
+
+// Any return the value of the key
 func (s Json) Any(_default any, atribs ...string) *generic.Any {
 	result := Val(s, _default, atribs...)
 	return generic.New(result)
 }
 
+// Id return the value of the key
 func (s Json) Id() string {
 	return s.ValStr("-1", "_id")
 }
 
+// IdT return the value of the key
 func (s Json) IdT() string {
 	return s.ValStr("-1", "_idT")
 }
 
+// Index return the value of the key
 func (s Json) Index() int {
 	return s.ValInt(-1, "index")
 }
 
+// Key return the value of the key
 func (s Json) Key(atribs ...string) string {
 	return s.ValStr("-1", atribs...)
 }
 
+// Str return the value of the key
 func (s Json) Str(atribs ...string) string {
 	return s.ValStr("", atribs...)
 }
 
+// Int return the value of the key
 func (s Json) Int(atribs ...string) int {
 	return s.ValInt(0, atribs...)
 }
 
+// Num return the value of the key
 func (s Json) Num(atribs ...string) float64 {
 	return s.ValNum(0.00, atribs...)
 }
 
+// Bool return the value of the key
 func (s Json) Bool(atribs ...string) bool {
 	return s.ValBool(false, atribs...)
 }
 
+// Time return the value of the key
 func (s Json) Time(atribs ...string) time.Time {
 	return s.ValTime(time.Now(), atribs...)
 }
 
+// Data return the value of the key
 func (s Json) Data(atrib ...string) JsonD {
 	val := Val(s, nil, atrib...)
 	if val == nil {
@@ -362,6 +390,7 @@ func (s Json) Data(atrib ...string) JsonD {
 	}
 }
 
+// Json return the value of the key
 func (s Json) Json(atrib string) Json {
 	val := Val(s, nil, atrib)
 	if val == nil {
@@ -385,6 +414,7 @@ func (s Json) Json(atrib string) Json {
 	}
 }
 
+// Array return the value of the key
 func (s Json) Array(atrib string) []Json {
 	val := Val(s, nil, atrib)
 	if val == nil {
@@ -420,6 +450,7 @@ func (s Json) Array(atrib string) []Json {
 	}
 }
 
+// ArrayStr return the value of the key
 func (s Json) ArrayStr(atrib string) []string {
 	result := []string{}
 	vals := s[atrib]
@@ -435,6 +466,7 @@ func (s Json) ArrayStr(atrib string) []string {
 	return result
 }
 
+// ArrayAny return the value of the key
 func (s Json) ArrayAny(atrib string) []any {
 	result := []any{}
 	vals := s[atrib]
@@ -450,6 +482,7 @@ func (s Json) ArrayAny(atrib string) []any {
 	return result
 }
 
+// Update a json with a new json
 func (s Json) Update(fromJson Json) error {
 	var result bool = false
 	for k, new := range fromJson {
@@ -468,17 +501,12 @@ func (s Json) Update(fromJson Json) error {
 	return nil
 }
 
+// IsDiferent compare two json
 func (s Json) IsDiferent(new Json) bool {
 	return IsDiferent(s, new)
 }
 
-func (s Json) IsChange(new Json) bool {
-	return IsChange(s, new)
-}
-
-/**
-*
-**/
+// Get return the value of the key
 func (s Json) Get(key string) interface{} {
 	v, ok := s[key]
 	if !ok {
@@ -488,6 +516,7 @@ func (s Json) Get(key string) interface{} {
 	return v
 }
 
+// Set a value from a json
 func (s Json) Set(key string, val interface{}) bool {
 	key = strings.ToLower(key)
 
@@ -500,17 +529,7 @@ func (s Json) Set(key string, val interface{}) bool {
 	return false
 }
 
-func (s *Json) Append(obj Json) *Json {
-	var result Json = *s
-	for k, v := range obj {
-		if _, ok := result[k]; !ok {
-			result[k] = v
-		}
-	}
-
-	return &result
-}
-
+// Del a value from the key
 func (s Json) Del(key string) bool {
 	if _, ok := s[key]; !ok {
 		return false
@@ -520,43 +539,159 @@ func (s Json) Del(key string) bool {
 	return true
 }
 
+// ExistKey return if the key exist in the json
 func (s Json) ExistKey(key string) bool {
 	return s[key] != nil
 }
 
-func (s Json) Consolidate(toField string, ruleOut ...string) Json {
-	FindIndex := func(arr []string, valor string) int {
-		for i, v := range arr {
-			if v == valor {
-				return i
-			}
-		}
-		return -1
-	}
-
-	result := s
-	if s.ExistKey(toField) {
-		result = s.Json(toField)
-	}
-
+// Clone a json
+func (s Json) Clone() Json {
+	var result Json = Json{}
 	for k, v := range s {
-		if k != toField {
-			idx := FindIndex(ruleOut, k)
-			if idx == -1 {
-				result[k] = v
-			}
-		}
+		result[k] = v
 	}
 
 	return result
 }
 
-func (s Json) ConsolidateAndUpdate(toField string, ruleOut []string, new Json) (Json, error) {
-	result := s.Consolidate(toField, ruleOut...)
-	err := result.Update(new)
-	if err != nil {
-		return Json{}, nil
+// Append s json with a other json
+func (s Json) Append(obj Json) (*Json, bool) {
+	result := s.Clone()
+	var change bool
+	var ch bool
+
+	changed := func(v bool) {
+		if !change {
+			change = v
+		}
 	}
 
-	return result, nil
+	for k, v := range obj {
+		if _, ok := result[k]; !ok {
+			result[k] = v
+			changed(true)
+			continue
+		}
+
+		switch v := v.(type) {
+		case Json:
+			val := result.Json(k)
+			result[k], ch = val.Append(v)
+			changed(ch)
+		case *Json:
+			val := result.Json(k)
+			result[k], ch = val.Append(*v)
+			changed(ch)
+		case map[string]interface{}:
+			val := result.Json(k)
+			result[k], ch = val.Append(Json(v))
+			changed(ch)
+		}
+	}
+
+	return &result, change
+}
+
+// Merge s json with a other json
+func (s Json) Merge(obj Json) (*Json, bool) {
+	result := s.Clone()
+	var change bool
+	var ch bool
+
+	changed := func(v bool) {
+		if !change {
+			change = v
+		}
+	}
+
+	for k, v := range obj {
+		if _, ok := result[k]; !ok {
+			result[k] = v
+			changed(true)
+			continue
+		}
+
+		switch v := v.(type) {
+		case Json:
+			val := result.Json(k)
+			result[k], ch = val.Merge(v)
+			changed(ch)
+		case *Json:
+			val := result.Json(k)
+			result[k], ch = val.Merge(*v)
+			changed(ch)
+		case map[string]interface{}:
+			val := result.Json(k)
+			result[k], ch = val.Merge(Json(v))
+			changed(ch)
+		default:
+			ch := !reflect.DeepEqual(result[k], v)
+			result[k] = v
+			changed(ch)
+		}
+	}
+
+	return &result, change
+}
+
+// Cange s json with a other json and return the change and is changed a json
+func (s Json) Chage(obj Json) (*Json, bool) {
+	var changes *Json = &Json{}
+	var change bool
+
+	changed := func(v bool, key string, value interface{}) {
+		if !change {
+			change = v
+		}
+
+		if v {
+			changes.Set(key, value)
+		}
+	}
+
+	for k, v := range obj {
+		if _, ok := s[k]; !ok {
+			changed(true, k, v)
+			continue
+		}
+
+		switch v := v.(type) {
+		case Json:
+			val := s.Json(k)
+			pv, ch := val.Chage(v)
+			changed(ch, k, *pv)
+		case *Json:
+			val := s.Json(k)
+			pv, ch := val.Chage(*v)
+			changed(ch, k, *pv)
+		case map[string]interface{}:
+			val := s.Json(k)
+			pv, ch := val.Chage(Json(v))
+			changed(ch, k, *pv)
+		default:
+			ch := !reflect.DeepEqual(s[k], v)
+			s[k] = v
+			changed(ch, k, v)
+		}
+	}
+
+	return changes, change
+}
+
+func Append(a, b Json) (Json, bool) {
+	c, ch := a.Append(b)
+
+	return *c, ch
+}
+
+func Merge(a, b Json) (Json, bool) {
+	c, ch := a.Merge(b)
+
+	return *c, ch
+}
+
+func Chage(a, b Json) (Json, bool) {
+	c, ch := a.Chage(b)
+
+	return *c, ch
 }

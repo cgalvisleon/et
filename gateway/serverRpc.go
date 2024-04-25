@@ -5,9 +5,9 @@ import (
 	"net"
 	"net/rpc"
 
-	"github.com/cgalvisleon/elvis/console"
-	"github.com/cgalvisleon/elvis/envar"
-	"github.com/cgalvisleon/elvis/et"
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 )
 
 type Service et.Item
@@ -17,7 +17,7 @@ func initRpc() error {
 
 	err := rpc.Register(service)
 	if err != nil {
-		return console.Error(err)
+		return logs.Error(err)
 	}
 
 	return nil

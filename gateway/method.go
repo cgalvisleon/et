@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cgalvisleon/elvis/console"
+	"github.com/cgalvisleon/et/logs"
 )
 
 // MethodFunc adds the route `pattern` that matches `method` http method to
@@ -13,7 +13,7 @@ func (s *HttpServer) MethodFunc(method, pattern string, handlerFn http.HandlerFu
 	method = strings.ToUpper(method)
 	ok := methodMap[method]
 	if !ok {
-		console.PanicF(`'%s' http method is not supported.`, method)
+		logs.Panic(`'%s' http method is not supported.`, method)
 	}
 
 	s.AddHandleMethod(method, pattern, handlerFn, packageName)

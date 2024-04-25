@@ -3,8 +3,8 @@ package gateway
 import (
 	"net/http"
 
-	"github.com/cgalvisleon/elvis/response"
-	"github.com/cgalvisleon/elvis/ws"
+	"github.com/cgalvisleon/et/response"
+	"github.com/cgalvisleon/et/ws"
 )
 
 // Handler for websocket

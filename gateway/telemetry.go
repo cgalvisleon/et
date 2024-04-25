@@ -7,13 +7,13 @@ import (
 	"os"
 	"time"
 
-	"github.com/cgalvisleon/elvis/cache"
-	"github.com/cgalvisleon/elvis/envar"
-	"github.com/cgalvisleon/elvis/et"
-	"github.com/cgalvisleon/elvis/event"
-	"github.com/cgalvisleon/elvis/logs"
-	"github.com/cgalvisleon/elvis/strs"
-	"github.com/cgalvisleon/elvis/utility"
+	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/strs"
+	"github.com/cgalvisleon/et/utility"
 	"github.com/shirou/gopsutil/v3/mem"
 )
 

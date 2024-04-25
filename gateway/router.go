@@ -6,10 +6,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/cgalvisleon/elvis/cache"
-	"github.com/cgalvisleon/elvis/et"
-	"github.com/cgalvisleon/elvis/strs"
-	"github.com/cgalvisleon/elvis/utility"
+	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/strs"
+	"github.com/cgalvisleon/et/utility"
 )
 
 type Node struct {

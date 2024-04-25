@@ -7,21 +7,23 @@ import (
 	"os"
 	"time"
 
-	"github.com/cgalvisleon/elvis/cache"
-	"github.com/cgalvisleon/elvis/console"
-	"github.com/cgalvisleon/elvis/envar"
-	"github.com/cgalvisleon/elvis/et"
-	"github.com/cgalvisleon/elvis/event"
-	"github.com/cgalvisleon/elvis/strs"
-	"github.com/cgalvisleon/elvis/ws"
+	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/strs"
+	"github.com/cgalvisleon/et/ws"
 	"github.com/dimiro1/banner"
 	"github.com/mattn/go-colorable"
 )
 
 type Server struct {
-	http *HttpServer
-	rpc  *net.Listener
-	ws   *ws.Conn
+	http  *HttpServer
+	rpc   *net.Listener
+	ws    *ws.Conn
+	cache *cache.Conn
+	event *event.Conn
 }
 
 var PackageName = "gateway"
@@ -36,13 +38,19 @@ var conn *Server
 
 func New() (*Server, error) {
 	// Create cache server
-	_, err := cache.Load()
+	cacheServer, err := cache.Load()
 	if err != nil {
 		panic(err)
 	}
 
 	// Create event server
-	_, err = event.Load()
+	eventServer, err := event.Load()
+	if err != nil {
+		panic(err)
+	}
+
+	// WS server
+	wsServer, err := ws.Load()
 	if err != nil {
 		panic(err)
 	}
@@ -53,17 +61,13 @@ func New() (*Server, error) {
 	// RPC server
 	rpcServer := newRpc()
 
-	// WS server
-	wsServer, err := ws.Load()
-	if err != nil {
-		panic(err)
-	}
-
 	// Create a new server
 	conn = &Server{
-		http: httpServer,
-		rpc:  &rpcServer,
-		ws:   wsServer,
+		http:  httpServer,
+		rpc:   &rpcServer,
+		ws:    wsServer,
+		cache: cacheServer,
+		event: eventServer,
 	}
 
 	return conn, nil
@@ -81,8 +85,8 @@ func (serv *Server) Start() {
 		}
 
 		svr := *serv.http
-		console.LogKF("Http", "Running Api Gateway on http://localhost%s", svr.addr)
-		console.Fatal(http.ListenAndServe(svr.addr, svr.handler))
+		logs.Logf("Http", "Running Api Gateway on http://localhost%s", svr.addr)
+		logs.Fatal(http.ListenAndServe(svr.addr, svr.handler))
 	}()
 
 	// Start RPC server
@@ -92,7 +96,7 @@ func (serv *Server) Start() {
 		}
 
 		svr := *serv.rpc
-		console.LogKF("RPC", "Running on tcp:localhost:%s", svr.Addr().String())
+		logs.Logf("RPC", "Running on tcp:localhost:%s", svr.Addr().String())
 		http.Serve(svr, nil)
 	}()
 

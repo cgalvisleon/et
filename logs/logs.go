@@ -162,6 +162,11 @@ func Panic(v ...any) {
 	os.Exit(1)
 }
 
+func Panicf(format string, args ...any) {
+	message := fmt.Sprintf(format, args...)
+	Panic(message)
+}
+
 func Ping() {
 	ping++
 	Log("PING", ping)

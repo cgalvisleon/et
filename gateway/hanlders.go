@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cgalvisleon/elvis/et"
-	"github.com/cgalvisleon/elvis/response"
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/response"
 )
 
 // Version information this package

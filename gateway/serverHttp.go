@@ -3,8 +3,8 @@ package gateway
 import (
 	"net/http"
 
-	"github.com/cgalvisleon/elvis/envar"
-	"github.com/cgalvisleon/elvis/strs"
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/strs"
 	"github.com/rs/cors"
 )
 

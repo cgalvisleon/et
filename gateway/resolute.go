@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/cgalvisleon/elvis/et"
-	"github.com/cgalvisleon/elvis/strs"
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/strs"
 )
 
 type Resolute struct {

@@ -1,17 +1,17 @@
 package gateway
 
 import (
-	"github.com/cgalvisleon/elvis/console"
-	"github.com/cgalvisleon/elvis/et"
-	"github.com/cgalvisleon/elvis/event"
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/logs"
 )
 
 func initEvents() {
-	console.LogK("Events", "Running svents stack")
+	logs.Log("Events", "Running svents stack")
 
-	err := event.Stack("gateway/upsert", eventAction)
+	err := event.Stack("apigateway/upsert", eventAction)
 	if err != nil {
-		console.Error(err)
+		logs.Error(err)
 	}
 
 }
@@ -19,7 +19,7 @@ func initEvents() {
 func eventAction(m event.CreatedEvenMessage) {
 	data, err := et.ToJson(m.Data)
 	if err != nil {
-		console.Error(err)
+		logs.Error(err)
 	}
 
 	method := data.Str("method")
@@ -31,5 +31,5 @@ func eventAction(m event.CreatedEvenMessage) {
 
 	conn.http.AddRoute(method, path, resolve, kind, stage, packageName)
 
-	console.LogKF("Api gateway", `[%s] %s - %s`, method, path, packageName)
+	logs.Logf("Api gateway", `[%s] %s - %s`, method, path, packageName)
 }

@@ -22,7 +22,7 @@ func Connect(w http.ResponseWriter, r *http.Request) (*Client, error) {
 		clientId = val.(string)
 	}
 
-	val = ctx.Value("username")
+	val = ctx.Value("name")
 	if val == nil {
 		userName = "Anonimo"
 	} else {

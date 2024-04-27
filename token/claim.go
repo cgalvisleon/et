@@ -1,14 +1,11 @@
 package token
 
 import (
-	"context"
+	"errors"
 	"net/http"
 	"time"
 
-	"github.com/cgalvisleon/elvis/cache"
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/generic"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
@@ -17,7 +14,6 @@ import (
 )
 
 type Claim struct {
-	Id     string        `json:"id"`
 	Sub    string        `json:"sub"`
 	Name   string        `json:"name"`
 	Iat    time.Time     `json:"iat"`
@@ -28,15 +24,24 @@ type Claim struct {
 	jwt.StandardClaims
 }
 
-func DelToken(app, device, id string) error {
+func TokenKey(app, device, sub string) string {
+	result := strs.Append(app, device, "-")
+	result = strs.Append(result, sub, "-")
+	return strs.Format(`token:%s`, result)
+}
+
+func DelToken(app, device, sub string) error {
 	if conn == nil {
 		return logs.Log(ERR_NOT_TOKEN_SERVICE)
 	}
 
-	key := TokenKey(app, device, id)
+	key := TokenKey(app, device, sub)
 	ok := conn.cache.Del(key)
+	if !ok {
+		return logs.Alertm(MSG_TOKEN_NOT_FOUND)
+	}
 
-	event.Publish(key, "token/delete", et.Json{
+	conn.pubsub.Publish("token/delete", et.Json{
 		"key": key,
 	})
 
@@ -44,15 +49,21 @@ func DelToken(app, device, id string) error {
 }
 
 func DelTokeStrng(tokenString string) error {
-	secret := envar.EnvarStr("", "SECRET")
-	token, err := jwt.Parse(tokenString, func(*jwt.Token) (interface{}, error) {
-		return []byte(secret), nil
-	})
+	if conn == nil {
+		return logs.Log(ERR_NOT_TOKEN_SERVICE)
+	}
+
+	token, err := conn.parce(tokenString)
 	if err != nil {
 		return err
 	}
 
 	claim, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return errors.New(ERR_INVALID_CLAIM)
+	}
+
+	sub, ok := claim["sub"].(string)
 	if !ok {
 		return nil
 	}
@@ -62,31 +73,20 @@ func DelTokeStrng(tokenString string) error {
 		return nil
 	}
 
-	id, ok := claim["id"].(string)
-	if !ok {
-		return nil
-	}
-
 	device, ok := claim["device"].(string)
 	if !ok {
 		return nil
 	}
 
-	ctx := context.Background()
-	return DelTokenCtx(ctx, app, device, id)
-}
-
-func TokenKey(app, device, id string) string {
-	str := strs.Append(app, device, "-")
-	str = strs.Append(str, id, "-")
-	return strs.Format(`token:%s`, str)
+	return DelToken(app, device, sub)
 }
 
 func ParceToken(tokenString string) (*Claim, error) {
-	secret := envar.EnvarStr("", "SECRET")
-	token, err := jwt.Parse(tokenString, func(*jwt.Token) (interface{}, error) {
-		return []byte(secret), nil
-	})
+	if conn == nil {
+		return nil, logs.Log(ERR_NOT_TOKEN_SERVICE)
+	}
+
+	token, err := conn.parce(tokenString)
 	if err != nil {
 		return nil, err
 	}
@@ -100,14 +100,19 @@ func ParceToken(tokenString string) (*Claim, error) {
 		return nil, logs.Alertm(MSG_REQUIRED_INVALID)
 	}
 
+	sub, ok := claim["sub"].(string)
+	if !ok {
+		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "sub")
+	}
+
 	app, ok := claim["app"].(string)
 	if !ok {
 		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "app")
 	}
 
-	id, ok := claim["id"].(string)
+	device, ok := claim["device"].(string)
 	if !ok {
-		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "id")
+		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "device")
 	}
 
 	name, ok := claim["name"].(string)
@@ -120,80 +125,58 @@ func ParceToken(tokenString string) (*Claim, error) {
 		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "kind")
 	}
 
-	username, ok := claim["username"].(string)
-	if !ok {
-		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "username")
-	}
-
-	device, ok := claim["device"].(string)
-	if !ok {
-		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "device")
-	}
-
-	second, ok := claim["duration"].(float64)
+	_exp, ok := claim["exp"].(float64)
 	if !ok {
 		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "duration")
 	}
 
-	duration := time.Duration(second)
+	exp := time.Duration(_exp)
 
 	return &Claim{
-		ID:       id,
-		App:      app,
-		Name:     name,
-		Kind:     kind,
-		Username: username,
-		Device:   device,
-		Duration: duration,
+		Sub:    sub,
+		Name:   name,
+		Exp:    exp,
+		App:    app,
+		Kind:   kind,
+		Device: device,
 	}, nil
 }
 
-func GetFromToken(ctx context.Context, tokenString string) (*Claim, error) {
+func GetFromToken(tokenString string) (*Claim, error) {
 	result, err := ParceToken(tokenString)
 	if err != nil {
 		return nil, err
 	}
 
-	key := TokenKey(result.App, result.Device, result.ID)
-	c, err := cache.GetCtx(ctx, key, "")
-	if err != nil {
+	key := TokenKey(result.App, result.Device, result.Sub)
+	token := conn.cache.Get(key, "")
+	if token != tokenString {
 		return nil, logs.Alertm(MSG_TOKEN_INVALID)
 	}
 
-	if c != tokenString {
-		return nil, logs.Alertm(MSG_TOKEN_INVALID)
-	}
-
-	err = cache.SetCtx(ctx, key, c, result.Duration)
-	if err != nil {
-		return nil, logs.Alertm(MSG_TOKEN_INVALID)
-	}
+	conn.cache.Set(key, token, result.Exp)
 
 	return result, nil
 }
 
-func GenTokenCtx(ctx context.Context, id, app, name, kind, username, device string, duration time.Duration) (string, error) {
-	token, key, err := genToken(id, app, name, kind, username, device, duration)
+func GenToken(sub, name, app, kind, device string, expired time.Duration) (string, error) {
+	if conn == nil {
+		return "", logs.Log(ERR_NOT_TOKEN_SERVICE)
+	}
+
+	token, key, err := conn.generate(sub, name, app, kind, device, expired)
 	if err != nil {
 		return "", err
 	}
 
-	err = cache.SetCtx(ctx, key, token, duration)
-	if err != nil {
-		return "", err
-	}
+	conn.cache.Set(key, token, expired)
 
-	event.Publish(key, "token/create", et.Json{
+	conn.pubsub.Publish("token/create", et.Json{
 		"key":  key,
 		"toke": token,
 	})
 
 	return token, nil
-}
-
-func GenToken(id, app, name, kind, username, device string, duration time.Duration) (string, error) {
-	ctx := context.Background()
-	return GenTokenCtx(ctx, id, app, name, kind, username, device, duration)
 }
 
 func GetClient(r *http.Request) et.Json {
@@ -203,7 +186,6 @@ func GetClient(r *http.Request) et.Json {
 	return et.Json{
 		"date_of":   now,
 		"client_id": generic.New(ctx.Value("clientId")).Str(),
-		"username":  generic.New(ctx.Value("username")).Str(),
 		"name":      generic.New(ctx.Value("name")).Str(),
 	}
 }

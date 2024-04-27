@@ -95,7 +95,7 @@ func (h *Hub) onDisconnect(client *Client) {
 	h.clients[len(h.clients)-1] = nil
 	h.clients = h.clients[:len(h.clients)-1]
 
-	h.Publish("ws/disconnect", client.Params, client.Id)
+	h.Mute("ws/disconnect", client.Params, client.Id)
 
 	logs.Logf("Websocket", MSG_CLIENT_DISCONNECT, client.Id, h.Id)
 }
@@ -139,6 +139,17 @@ func (h *Hub) Broadcast(message interface{}, ignoreId string) {
 	h.broadcast(message, client)
 }
 
+func (h *Hub) publish(channel *Channel, message interface{}, ignoreId string) error {
+	data, _ := json.Marshal(message)
+	for _, client := range channel.Subscribers {
+		if client.Id != ignoreId {
+			client.sendMessage(data)
+		}
+	}
+
+	return nil
+}
+
 // Publish a message to a channel less the ignore client
 func (h *Hub) Publish(channel string, message interface{}, ignoreId string) error {
 	_channel := h.GetChannel(channel)
@@ -146,14 +157,13 @@ func (h *Hub) Publish(channel string, message interface{}, ignoreId string) erro
 		return logs.Alertm(ERR_CHANNEL_NOT_SUBSCRIBERS)
 	}
 
-	data, _ := json.Marshal(message)
-	for _, client := range _channel.Subscribers {
-		if client.Id != ignoreId {
-			client.sendMessage(data)
-		}
-	}
+	return h.publish(_channel, message, ignoreId)
+}
 
-	return nil
+// Publish mute a message to a channel less the ignore client
+func (h *Hub) Mute(channel string, message interface{}, ignoreId string) error {
+	_channel := h.GetChannel(channel)
+	return h.publish(_channel, message, ignoreId)
 }
 
 // Send a message to a client in a channel

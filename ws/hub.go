@@ -148,30 +148,37 @@ func (h *Hub) Broadcast(message interface{}, ignoreId string) {
 }
 
 // Publish a message to a channel less the ignore client
-func (h *Hub) Publish(channel string, message interface{}, ignoreId string) {
+func (h *Hub) Publish(channel string, message interface{}, ignoreId string) error {
 	data, _ := json.Marshal(message)
 	idx := slices.IndexFunc(h.channels, func(c *Channel) bool { return c.Name == channel })
-	if idx != -1 {
-		_channel := h.channels[idx]
+	if idx == -1 {
+		return logs.Alertm(ERR_CHANNEL_NOT_FOUND)
+	}
 
-		for _, client := range _channel.Subscribers {
-			if client.Id != ignoreId {
-				client.sendMessage(data)
-			}
+	_channel := h.channels[idx]
+	if len(_channel.Subscribers) == 0 {
+		return logs.Alertm(ERR_CHANNEL_NOT_SUBSCRIBERS)
+	}
+
+	for _, client := range _channel.Subscribers {
+		if client.Id != ignoreId {
+			client.sendMessage(data)
 		}
 	}
+
+	return nil
 }
 
 // Send a message to a client in a channel
-func (h *Hub) SendMessage(clientId string, message interface{}) bool {
+func (h *Hub) SendMessage(clientId string, message interface{}) error {
 	data, _ := json.Marshal(message)
 	idx := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == clientId })
-	if idx != -1 {
-		client := h.clients[idx]
-		return client.sendMessage(data)
+	if idx == -1 {
+		return logs.Alertm(ERR_CLIENT_NOT_FOUND)
 	}
 
-	return false
+	client := h.clients[idx]
+	return client.sendMessage(data)
 }
 
 func (h *Hub) GetChannel(name string) *Channel {
@@ -188,25 +195,25 @@ func (h *Hub) GetChannel(name string) *Channel {
 // Subscribe a client to hub channels
 func (h *Hub) Subscribe(clientId string, channel string) error {
 	idx := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == clientId })
-	if idx != -1 {
-		_channel := h.GetChannel(channel)
-		client := h.clients[idx]
-		client.subscribe([]string{_channel.Low()})
-		return nil
+	if idx == -1 {
+		return logs.Alertm(ERR_CLIENT_NOT_FOUND)
 	}
 
-	return logs.Log(ERR_CLIENT_NOT_FOUND)
+	_channel := h.GetChannel(channel)
+	client := h.clients[idx]
+	client.subscribe([]string{_channel.Low()})
+	return nil
 }
 
 // Unsubscribe a client from hub channels
-func (h *Hub) Unsubscribe(clientId string, channel string) bool {
-	var result bool
-
+func (h *Hub) Unsubscribe(clientId string, channel string) error {
 	idx := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == clientId })
-	if idx != -1 {
-		client := h.clients[idx]
-		result = client.unsubscribe([]string{channel})
+	if idx == -1 {
+		return logs.Alertm(ERR_CLIENT_NOT_FOUND)
 	}
+
+	client := h.clients[idx]
+	client.unsubscribe([]string{channel})
 
 	_channel := h.GetChannel(channel)
 	_channel.Unsubcribe(clientId)
@@ -217,7 +224,7 @@ func (h *Hub) Unsubscribe(clientId string, channel string) bool {
 		}
 	}
 
-	return result
+	return nil
 }
 
 // Return client list subscribed to channel

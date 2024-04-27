@@ -11,6 +11,7 @@ import (
 )
 
 type ClientWS struct {
+	host      string
 	socket    *websocket.Conn
 	reciveFn  func(messageType int, message []byte)
 	connected bool
@@ -25,21 +26,13 @@ func NewClientWS(host string, reciveFn func(messageType int, message []byte)) *C
 		host = ":3300"
 	}
 
-	u := url.URL{Scheme: "ws", Host: host, Path: "/ws"}
-
 	// Connect to the server
-	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
-	if err != nil {
-		return nil
-	}
-
 	result := &ClientWS{
-		socket:    c,
-		reciveFn:  reciveFn,
-		connected: true,
+		host:     host,
+		reciveFn: reciveFn,
 	}
 
-	go result.read()
+	result.Connect()
 
 	return result
 }
@@ -75,14 +68,36 @@ func (c *ClientWS) Close() {
 	c.socket.Close()
 }
 
+func (c *ClientWS) Connect() (bool, error) {
+	if c.connected {
+		return true, nil
+	}
+
+	u := url.URL{Scheme: "ws", Host: c.host, Path: "/ws"}
+	socket, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	if err != nil {
+		return false, err
+	}
+
+	c.socket = socket
+	c.connected = true
+	go c.read()
+
+	return c.connected, nil
+}
+
 // Send a message to the server
-func (s *ClientWS) SendMessage(message string) error {
-	if !s.connected {
-		return logs.Log(ERR_NOT_CONNECT_WS)
+func (c *ClientWS) SendMessage(message string) error {
+	if !c.connected {
+		return logs.Alertm(ERR_NOT_CONNECT_WS)
+	}
+
+	if c.socket == nil {
+		return logs.Alertm(ERR_NOT_CONNECT_WS)
 	}
 
 	msg := []byte(message)
-	err := s.socket.WriteMessage(websocket.TextMessage, msg)
+	err := c.socket.WriteMessage(websocket.TextMessage, msg)
 	if err != nil {
 		return err
 	}

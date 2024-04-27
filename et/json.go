@@ -163,6 +163,11 @@ func (s Json) ToItem(src interface{}) Item {
 	}
 }
 
+// Empty return if the json is empty
+func (s Json) Emptyt() bool {
+	return len(s) == 0
+}
+
 // ValAny return the value of the key
 func (s Json) ValAny(_default any, atribs ...string) any {
 	return Val(s, _default, atribs...)

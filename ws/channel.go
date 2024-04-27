@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 	"golang.org/x/exp/slices"
 )
@@ -45,12 +46,13 @@ func (ch *Channel) Subscribe(client *Client) {
 }
 
 // Unsubcribe a client from channel
-func (ch *Channel) Unsubcribe(clientId string) bool {
+func (ch *Channel) Unsubcribe(clientId string) error {
 	idx := slices.IndexFunc(ch.Subscribers, func(e *Client) bool { return e.Id == clientId })
-	if idx != -1 {
-		ch.Subscribers = append(ch.Subscribers[:idx], ch.Subscribers[idx+1:]...)
-		return true
+	if idx == -1 {
+		return logs.Alertm(ERR_CLIENT_NOT_FOUND)
 	}
 
-	return false
+	ch.Subscribers = append(ch.Subscribers[:idx], ch.Subscribers[idx+1:]...)
+
+	return nil
 }

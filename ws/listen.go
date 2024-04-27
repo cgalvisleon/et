@@ -19,6 +19,32 @@ func (c *Client) listen(messageType int, message []byte) {
 
 	_type := data.Str("type")
 	switch _type {
+	case "ping":
+		c.SendMessage(et.Json{
+			"ok":      true,
+			"message": "pong",
+		})
+	case "params":
+		params := data.Json("params")
+		if params.Emptyt() {
+			c.SendMessage(et.Json{
+				"ok":    false,
+				"error": "Params not found",
+			})
+			return
+		}
+
+		name := params.ValStr("", "name")
+		if name != "" {
+			c.Name = name
+		}
+
+		c.SetParams(params)
+		c.SendMessage(et.Json{
+			"ok":      true,
+			"message": "Params updated",
+			"params":  c.Params,
+		})
 	case "subscribe":
 		channel := data.ValStr("", "channel")
 		if channel == "" {
@@ -64,31 +90,6 @@ func (c *Client) listen(messageType int, message []byte) {
 		c.SendMessage(et.Json{
 			"ok":      true,
 			"message": "Unsubscribed from channel " + channel,
-		})
-	case "params":
-		params := data.Json("params")
-		if params.Emptyt() {
-			c.SendMessage(et.Json{
-				"ok":    false,
-				"error": "Params not found",
-			})
-			return
-		}
-
-		name := params.ValStr("", "name")
-		if name != "" {
-			c.Name = name
-		}
-
-		c.SetParams(params)
-		c.SendMessage(et.Json{
-			"ok":    false,
-			"error": "Name not found",
-		})
-	case "ping":
-		c.SendMessage(et.Json{
-			"ok":      true,
-			"message": "pong",
 		})
 	case "message":
 		clientId := data.ValStr("-1", "client_id")

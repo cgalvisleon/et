@@ -51,7 +51,7 @@ func (c *ClientWS) read() {
 		for {
 			mt, message, err := c.socket.ReadMessage()
 			if err != nil {
-				logs.Alertf(`Error al leer mensaje:%v`, err)
+				logs.Alertm(err.Error())
 				c.connected = false
 				return
 			}

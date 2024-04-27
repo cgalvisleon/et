@@ -32,15 +32,17 @@ func handlerFn(w http.ResponseWriter, r *http.Request) {
 	// Get resolute
 	resolute := GetResolute(r)
 
-	// Call search time since begin
-	metric.SearchTime = time.Since(metric.TimeBegin)
-	metric.TimeExec = time.Now()
-	metric.EndPoint = resolute.URL
+	// Check if resolve is nil
+	metric.CallExecute()
 
 	if resolute.Resolve == nil || resolute.URL == "" {
 		r.RequestURI = fmt.Sprintf(`%s://%s%s`, resolute.Scheme, resolute.Host, resolute.Path)
 		conn.http.notFoundHandler(w, r)
-		metric.notFounder(r)
+
+		defer func() {
+			go metric.notFounder(r)
+		}()
+
 		return
 	}
 
@@ -52,6 +54,10 @@ func handlerFn(w http.ResponseWriter, r *http.Request) {
 			response.HTTPError(w, r, http.StatusNotFound, "404 Not Found.")
 			return
 		}
+
+		defer func() {
+			go metric.doneHandler()
+		}()
 
 		handler(w, r)
 		return

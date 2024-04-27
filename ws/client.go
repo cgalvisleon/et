@@ -1,8 +1,7 @@
 package ws
 
 import (
-	"sync"
-
+	"github.com/cgalvisleon/et/strs"
 	"github.com/gorilla/websocket"
 	"golang.org/x/exp/slices"
 )
@@ -18,9 +17,8 @@ type Client struct {
 	Name     string
 	Addr     string
 	socket   *websocket.Conn
-	channels []*Channel
+	channels []string
 	outbound chan []byte
-	mutex    *sync.Mutex
 }
 
 func newClient(hub *Hub, socket *websocket.Conn, id, name string) (*Client, bool) {
@@ -29,15 +27,32 @@ func newClient(hub *Hub, socket *websocket.Conn, id, name string) (*Client, bool
 		Id:       id,
 		Name:     name,
 		socket:   socket,
-		channels: make([]*Channel, 0),
+		channels: make([]string, 0),
 		outbound: make(chan []byte),
-		mutex:    &sync.Mutex{},
 	}, true
+}
+
+// SendMessage send a message to the client
+func (c *Client) sendMessage(message []byte) bool {
+	if c.socket == nil {
+		return false
+	}
+
+	if c.outbound == nil {
+		return false
+	}
+
+	c.outbound <- message
+
+	return true
 }
 
 func (c *Client) read() {
 	defer func() {
-		c.hub.unregister <- c
+		if c.hub != nil {
+			c.hub.unregister <- c
+			c.socket.Close()
+		}
 	}()
 
 	for {
@@ -46,9 +61,7 @@ func (c *Client) read() {
 			break
 		}
 
-		if c.hub != nil {
-			c.hub.listen(c, mt, message)
-		}
+		c.listen(mt, message)
 	}
 }
 
@@ -66,68 +79,43 @@ func (c *Client) write() {
 }
 
 func (c *Client) Close() {
-	c.mutex.Lock()
 	c.socket.Close()
 	close(c.outbound)
-	c.mutex.Unlock()
 }
 
-func (c *Client) sendMessage(message []byte) {
-	if c.socket == nil {
-		return
-	}
-
-	if c.outbound == nil {
-		return
-	}
-
-	c.outbound <- message
-}
-
-func (c *Client) Channels() []*Channel {
-	return c.channels
-}
-
-func (c *Client) Subscribe(channel string) {
-	idx := slices.IndexFunc(c.channels, func(e *Channel) bool { return e.Name == channel })
-	if idx == -1 {
-		_channel := NewChanel(c.hub, channel)
-		_channel.Subscribers = append(_channel.Subscribers, c)
-		c.channels = append(c.channels, _channel)
-	} else {
-		_channel := c.channels[idx]
-
-		idxS := slices.IndexFunc(_channel.Subscribers, func(e *Client) bool { return e.Id == c.Id })
-		if idxS == -1 {
-			_channel.Subscribers = append(_channel.Subscribers, c)
+func (c *Client) subscribe(channels []string) {
+	for _, channel := range channels {
+		idx := slices.IndexFunc(c.channels, func(e string) bool { return e == strs.Lowcase(channel) })
+		if idx == -1 {
+			c.channels = append(c.channels, strs.Lowcase(channel))
 		}
 	}
 }
 
-func (c *Client) Unsubscribe(channel string) {
-	idx := slices.IndexFunc(c.channels, func(e *Channel) bool { return e.Name == channel })
-	if idx == -1 {
-		return
+func (c *Client) unsubscribe(channels []string) bool {
+	var result bool
+
+	ch := func() {
+		if !result {
+			result = true
+		}
 	}
 
-	c.channels[idx].Unsubcribe(c.Id)
-	c.channels = append(c.channels[:idx], c.channels[idx+1:]...)
+	for _, channel := range channels {
+		idx := slices.IndexFunc(c.channels, func(e string) bool { return e == strs.Lowcase(channel) })
+		if idx != -1 {
+			c.channels = append(c.channels[:idx], c.channels[idx+1:]...)
+			ch()
+		}
+	}
+
+	return result
 }
 
-func (c *Client) Subscribers(channels []string) {
-	for _, channel := range channels {
-		c.Subscribe(channel)
-	}
-}
-
-func (c *Client) Unsubscribers(channels []string) {
-	for _, channel := range channels {
-		c.Unsubscribe(channel)
-	}
+func (c *Client) Channels() []string {
+	return c.channels
 }
 
 func (c *Client) Clear() {
-	for _, channel := range c.channels {
-		channel.Unsubcribe(c.Id)
-	}
+	c.unsubscribe(c.channels)
 }

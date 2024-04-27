@@ -1,41 +1,56 @@
 package ws
 
 import (
+	"github.com/cgalvisleon/et/strs"
 	"golang.org/x/exp/slices"
 )
 
 // Channel is a hub websocket channel
 type Channel struct {
-	hub         *Hub
 	Name        string
 	Subscribers []*Client
 }
 
-// NewChanel create a new channel
-func NewChanel(hub *Hub, name string) *Channel {
+// NewChannel create a new channel
+func newChannel(name string) *Channel {
 	result := &Channel{
-		hub:         hub,
-		Name:        name,
+		Name:        strs.Lowcase(name),
 		Subscribers: []*Client{},
 	}
-	hub.channels = append(hub.channels, result)
 
 	return result
 }
 
+// Up return the channel name in uppercase
+func (ch *Channel) Up() string {
+	return strs.Uppcase(ch.Name)
+}
+
+// Low return the channel name in lowercase
+func (ch *Channel) Low() string {
+	return strs.Lowcase(ch.Name)
+}
+
+// Count return the number of subscribers in channel
+func (ch *Channel) Count() int {
+	return len(ch.Subscribers)
+}
+
+// Subscribe a client to channel
+func (ch *Channel) Subscribe(client *Client) {
+	idx := slices.IndexFunc(ch.Subscribers, func(e *Client) bool { return e.Id == client.Id })
+	if idx == -1 {
+		ch.Subscribers = append(ch.Subscribers, client)
+	}
+}
+
 // Unsubcribe a client from channel
-func (ch *Channel) Unsubcribe(clientId string) {
+func (ch *Channel) Unsubcribe(clientId string) bool {
 	idx := slices.IndexFunc(ch.Subscribers, func(e *Client) bool { return e.Id == clientId })
 	if idx != -1 {
 		ch.Subscribers = append(ch.Subscribers[:idx], ch.Subscribers[idx+1:]...)
+		return true
 	}
 
-	count := len(ch.Subscribers)
-	if count == 0 {
-		hub := ch.hub
-		idxC := slices.IndexFunc(hub.channels, func(e *Channel) bool { return e.Name == ch.Name })
-		if idxC != -1 {
-			hub.channels = append(hub.channels[:idxC], hub.channels[idxC+1:]...)
-		}
-	}
+	return false
 }

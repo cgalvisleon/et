@@ -29,25 +29,21 @@ func Connect(w http.ResponseWriter, r *http.Request) (*Client, error) {
 		userName = val.(string)
 	}
 
-	idxC := conn.hub.indexClient(clientId)
-	if idxC != -1 {
-		return conn.hub.clients[idxC], nil
-	}
-
 	socket, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return conn.hub.connect(socket, clientId, userName)
+	return conn.connect(socket, clientId, userName)
 }
 
+/*
 func Broadcast(message interface{}, ignoreId string) error {
 	if conn == nil {
 		return logs.Log(ERR_NOT_WS_SERVICE)
 	}
 
-	conn.hub.Broadcast(message, ignoreId)
+	conn.Broadcast(message, ignoreId)
 
 	return nil
 }
@@ -57,7 +53,7 @@ func Publish(channel string, message interface{}, ignoreId string) error {
 		return logs.Log(ERR_NOT_WS_SERVICE)
 	}
 
-	conn.hub.Publish(channel, message, ignoreId)
+	conn.Publish(channel, message, ignoreId)
 
 	return nil
 }
@@ -67,7 +63,7 @@ func SendMessage(clientId, channel string, message interface{}) (bool, error) {
 		return false, logs.Log(ERR_NOT_WS_SERVICE)
 	}
 
-	result := conn.hub.SendMessage(clientId, channel, message)
+	result := conn.SendMessage(clientId, channel, message)
 
 	return result, nil
 }
@@ -78,7 +74,7 @@ func Subscribe(clientId string, channel string) bool {
 		return false
 	}
 
-	return conn.hub.Subscribe(clientId, channel)
+	return conn.Subscribe(clientId, channel)
 }
 
 func Unsubscribe(clientId string, channel string) bool {
@@ -87,7 +83,7 @@ func Unsubscribe(clientId string, channel string) bool {
 		return false
 	}
 
-	return conn.hub.Unsubscribe(clientId, channel)
+	return conn.Unsubscribe(clientId, channel)
 }
 
 func GetChannels() []*Channel {
@@ -96,7 +92,7 @@ func GetChannels() []*Channel {
 		return []*Channel{}
 	}
 
-	return conn.hub.channels
+	return conn.channels
 }
 
 func GetClients() []*Client {
@@ -105,7 +101,7 @@ func GetClients() []*Client {
 		return []*Client{}
 	}
 
-	return conn.hub.clients
+	return conn.clients
 }
 
 func GetSubscribers(channel string) []*Client {
@@ -114,5 +110,6 @@ func GetSubscribers(channel string) []*Client {
 		return []*Client{}
 	}
 
-	return conn.hub.GetSubscribers(channel)
+	return conn.GetSubscribers(channel)
 }
+*/

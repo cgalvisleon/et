@@ -1,7 +1,6 @@
 package ws
 
 import (
-	"bytes"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -9,6 +8,7 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/gorilla/websocket"
 	"golang.org/x/exp/slices"
@@ -44,82 +44,90 @@ func NewHub() *Hub {
 }
 
 // Run the hub
-func (hub *Hub) Run() {
-	if hub.run {
+func (h *Hub) Run() {
+	if h.run {
 		return
 	}
 
-	hub.run = true
+	h.run = true
 	host, _ := os.Hostname()
 	logs.Logf("Websocket", "Run server host:%s", host)
 
 	for {
 		select {
-		case client := <-hub.register:
-			hub.onConnect(client)
-		case client := <-hub.unregister:
-			hub.onDisconnect(client)
+		case client := <-h.register:
+			h.onConnect(client)
+		case client := <-h.unregister:
+			h.onDisconnect(client)
 		}
 	}
 }
 
+// Connect a client to the hub
+func (h *Hub) onConnect(client *Client) {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
+	h.clients = append(h.clients, client)
+	client.Addr = client.socket.RemoteAddr().String()
+
+	h.Publish("ws/connect", et.Json{
+		"client": client.Id,
+		"hub":    h.Id,
+	}, client.Id)
+
+	client.sendMessage([]byte(et.Json{
+		"type": "connect",
+		"client": et.Json{
+			"id":   client.Id,
+			"name": client.Name,
+		},
+	}.ToString()))
+
+	logs.Logf("Websocket", MSG_CLIENT_CONNECT, client.Id, h.Id)
+}
+
+// Disconnect a client from the hub
+func (h *Hub) onDisconnect(client *Client) {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
+	client.Close()
+	client.Clear()
+	idx := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == client.Id })
+
+	copy(h.clients[idx:], h.clients[idx+1:])
+	h.clients[len(h.clients)-1] = nil
+	h.clients = h.clients[:len(h.clients)-1]
+
+	h.Publish("ws/disconnect", et.Json{
+		"client": client.Id,
+		"hub":    h.Id,
+	}, client.Id)
+
+	logs.Logf("Websocket", MSG_CLIENT_DISCONNECT, client.Id, h.Id)
+}
+
 // Broadcast a message to all clients less the ignore client
-func (hub *Hub) broadcast(message interface{}, ignore *Client) {
+func (h *Hub) broadcast(message interface{}, ignore *Client) {
 	data, _ := json.Marshal(message)
-	for _, client := range hub.clients {
+	for _, client := range h.clients {
 		if client != ignore {
 			client.sendMessage(data)
 		}
 	}
 }
 
-// Connect a client to the hub
-func (hub *Hub) onConnect(client *Client) {
-	hub.mutex.Lock()
-	defer hub.mutex.Unlock()
-
-	hub.clients = append(hub.clients, client)
-	client.Addr = client.socket.RemoteAddr().String()
-
-	hub.Publish("ws/connect", et.Json{
-		"client": client.Id,
-		"hub":    hub.Id,
-	}, client.Id)
-
-	logs.Logf("Websocket", MSG_CLIENT_CONNECT, client.Id, hub.Id)
-}
-
-// Disconnect a client from the hub
-func (hub *Hub) onDisconnect(client *Client) {
-	hub.mutex.Lock()
-	defer hub.mutex.Unlock()
-
-	client.Close()
-	client.Clear()
-	idx := slices.IndexFunc(hub.clients, func(c *Client) bool { return c.Id == client.Id })
-
-	copy(hub.clients[idx:], hub.clients[idx+1:])
-	hub.clients[len(hub.clients)-1] = nil
-	hub.clients = hub.clients[:len(hub.clients)-1]
-
-	hub.Publish("ws/disconnect", et.Json{
-		"client": client.Id,
-		"hub":    hub.Id,
-	}, client.Id)
-
-	logs.Logf("Websocket", MSG_CLIENT_DISCONNECT, client.Id, hub.Id)
-}
-
-// Get the index of a client in the hub
-func (hub *Hub) indexClient(clientId string) int {
-	return slices.IndexFunc(hub.clients, func(c *Client) bool { return c.Id == clientId })
-}
-
 // Create a client and connect to the hub
-func (hub *Hub) connect(socket *websocket.Conn, id, name string) (*Client, error) {
-	client, isNew := newClient(hub, socket, id, name)
+func (h *Hub) connect(socket *websocket.Conn, clientId, name string) (*Client, error) {
+	idxC := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == clientId })
+	if idxC != -1 {
+		return conn.clients[idxC], nil
+	}
+
+	client, isNew := newClient(h, socket, clientId, name)
 	if isNew {
-		hub.register <- client
+		h.register <- client
 
 		go client.write()
 		go client.read()
@@ -128,36 +136,23 @@ func (hub *Hub) connect(socket *websocket.Conn, id, name string) (*Client, error
 	return client, nil
 }
 
-// Listen a client message
-func (hub *Hub) listen(client *Client, messageType int, message []byte) {
-	data, err := et.ToJson(message)
-	if err != nil {
-		data = et.Json{
-			"type":    messageType,
-			"message": bytes.NewBuffer(message).String(),
-		}
-	}
-
-	client.sendMessage([]byte(data.ToString()))
-}
-
 // Broadcast a message to all clients less the ignore client
-func (hub *Hub) Broadcast(message interface{}, ignoreId string) {
+func (h *Hub) Broadcast(message interface{}, ignoreId string) {
 	var client *Client = nil
-	idx := slices.IndexFunc(hub.clients, func(c *Client) bool { return c.Id == ignoreId })
+	idx := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == ignoreId })
 	if idx != -1 {
-		client = hub.clients[idx]
+		client = h.clients[idx]
 	}
 
-	hub.broadcast(message, client)
+	h.broadcast(message, client)
 }
 
 // Publish a message to a channel less the ignore client
-func (hub *Hub) Publish(channel string, message interface{}, ignoreId string) {
+func (h *Hub) Publish(channel string, message interface{}, ignoreId string) {
 	data, _ := json.Marshal(message)
-	idx := slices.IndexFunc(hub.channels, func(c *Channel) bool { return c.Name == channel })
+	idx := slices.IndexFunc(h.channels, func(c *Channel) bool { return c.Name == channel })
 	if idx != -1 {
-		_channel := hub.channels[idx]
+		_channel := h.channels[idx]
 
 		for _, client := range _channel.Subscribers {
 			if client.Id != ignoreId {
@@ -168,55 +163,68 @@ func (hub *Hub) Publish(channel string, message interface{}, ignoreId string) {
 }
 
 // Send a message to a client in a channel
-func (hub *Hub) SendMessage(clientId, channel string, message interface{}) bool {
+func (h *Hub) SendMessage(clientId string, message interface{}) bool {
 	data, _ := json.Marshal(message)
-	idx := slices.IndexFunc(hub.clients, func(c *Client) bool { return c.Id == clientId })
+	idx := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == clientId })
 	if idx != -1 {
-		client := hub.clients[idx]
-
-		idx = slices.IndexFunc(client.channels, func(c *Channel) bool { return c.Name == channel })
-		if idx != -1 {
-			client.sendMessage(data)
-			return true
-		}
+		client := h.clients[idx]
+		return client.sendMessage(data)
 	}
 
 	return false
+}
+
+func (h *Hub) GetChannel(name string) *Channel {
+	idx := slices.IndexFunc(h.channels, func(c *Channel) bool { return c.Up() == strs.Uppcase(name) })
+	if idx != -1 {
+		result := newChannel(name)
+		h.channels = append(h.channels, result)
+		return result
+	} else {
+		return h.channels[idx]
+	}
 }
 
 // Subscribe a client to hub channels
-func (hub *Hub) Subscribe(clientId string, channel string) bool {
-	idx := slices.IndexFunc(hub.clients, func(c *Client) bool { return c.Id == clientId })
-
+func (h *Hub) Subscribe(clientId string, channel string) error {
+	idx := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == clientId })
 	if idx != -1 {
-		client := hub.clients[idx]
-		client.Subscribe(channel)
-
-		return true
+		_channel := h.GetChannel(channel)
+		client := h.clients[idx]
+		client.subscribe([]string{_channel.Low()})
+		return nil
 	}
 
-	return false
+	return logs.Log(ERR_CLIENT_NOT_FOUND)
 }
 
 // Unsubscribe a client from hub channels
-func (hub *Hub) Unsubscribe(clientId string, channel string) bool {
-	idx := slices.IndexFunc(hub.clients, func(c *Client) bool { return c.Id == clientId })
+func (h *Hub) Unsubscribe(clientId string, channel string) bool {
+	var result bool
 
+	idx := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == clientId })
 	if idx != -1 {
-		client := hub.clients[idx]
-		client.Unsubscribe(channel)
-
-		return true
+		client := h.clients[idx]
+		result = client.unsubscribe([]string{channel})
 	}
 
-	return false
+	_channel := h.GetChannel(channel)
+	_channel.Unsubcribe(clientId)
+	if _channel.Count() == 0 {
+		idx := slices.IndexFunc(h.channels, func(c *Channel) bool { return c.Low() == strs.Lowcase(channel) })
+		if idx != -1 {
+			h.channels = append(h.channels[:idx], h.channels[idx+1:]...)
+		}
+	}
+
+	return result
 }
 
 // Return client list subscribed to channel
-func (hub *Hub) GetSubscribers(channel string) []*Client {
-	idx := slices.IndexFunc(hub.channels, func(c *Channel) bool { return c.Name == channel })
+func (h *Hub) GetSubscribers(channel string) []*Client {
+	idx := slices.IndexFunc(h.channels, func(c *Channel) bool { return c.Low() == strs.Lowcase(channel) })
 	if idx != -1 {
-		_channel := hub.channels[idx]
+		_channel := h.channels[idx]
 		return _channel.Subscribers
 	}
 

@@ -138,7 +138,7 @@ func (s *HttpServer) newPakage(name string) *Pakage {
 }
 
 // Add a route to the list
-func (s *HttpServer) AddRoute(method, path, resolve, kind, stage, packageName string) {
+func (s *HttpServer) AddRoute(method, path, resolve, kind, stage, packageName string) *Node {
 	node := findNode(method, s.routes.Routes)
 	if node == nil {
 		node, s.routes.Routes = newNode(method, s.routes.Routes)
@@ -171,45 +171,15 @@ func (s *HttpServer) AddRoute(method, path, resolve, kind, stage, packageName st
 		pakage.Nodes = append(pakage.Nodes, node)
 		pakage.Count = len(pakage.Nodes)
 
-		logs.Logf("Api gateway", `[%s] %s/%s - %s`, method, resolve, path, packageName)
+		logs.Logf("Api Handler", `[%s] %s - %s`, method, path, packageName)
 	}
+
+	return node
 }
 
 func (s *HttpServer) AddHandleMethod(method, path string, handlerFn http.HandlerFunc, packageName string) {
-	node := findNode(method, s.routes.Routes)
-	if node == nil {
-		node, s.routes.Routes = newNode(method, s.routes.Routes)
-	}
-
-	tags := strings.Split(path, "/")
-	for _, tag := range tags {
-		if len(tag) > 0 {
-			find := findNode(tag, node.Nodes)
-			if find == nil {
-				node, node.Nodes = newNode(tag, node.Nodes)
-			} else {
-				node = find
-			}
-		}
-	}
-
-	if node != nil {
-		node.Resolve = et.Json{
-			"method":  method,
-			"kind":    "HANDLER",
-			"resolve": "/",
-		}
-		s.handlers[node._id] = handlerFn
-
-		pakage := s.findPakage(packageName)
-		if pakage == nil {
-			pakage = s.newPakage(packageName)
-		}
-		pakage.Nodes = append(pakage.Nodes, node)
-		pakage.Count = len(pakage.Nodes)
-
-		logs.Logf("Api Handler", `[%s] %s - %s`, method, path, packageName)
-	}
+	node := s.AddRoute(method, path, "/", HANDLER, "default", packageName)
+	s.handlers[node._id] = handlerFn
 }
 
 // Get a route from the list

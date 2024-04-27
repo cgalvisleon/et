@@ -10,6 +10,7 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/store"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/ws"
 	"github.com/dimiro1/banner"
@@ -19,8 +20,8 @@ import (
 type Server struct {
 	http  *HttpServer
 	rpc   *net.Listener
-	ws    *ws.Conn
-	cache *Cache
+	ws    *ws.Hub
+	cache *store.Mem
 }
 
 var PackageName = "gateway"
@@ -46,14 +47,14 @@ func New() (*Server, error) {
 		panic(err)
 	}
 
-	cacheServer := NewCache()
+	memCache := store.NewMem()
 
 	// Create a new server
 	conn = &Server{
 		http:  httpServer,
 		rpc:   &rpcServer,
 		ws:    wsServer,
-		cache: cacheServer,
+		cache: memCache,
 	}
 
 	return conn, nil

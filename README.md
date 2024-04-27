@@ -18,6 +18,15 @@ go get github.com/shirou/gopsutil/v3/mem
 ## CDM
 
 ```
-go run ./cmd/stdout/main.go
+go run ./cmd/service/main.go
 go run ./cmd/gateway/main.go -port 3300 -rpc 4200
+```
+
+## Condicion de carrera
+
+```
+go build --race ./cmd/gateway/main.go
+go build --race ./cmd/serive/main.go
+
+go build ./cmd/gateway/main.go
 ```

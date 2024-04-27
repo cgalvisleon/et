@@ -1,4 +1,4 @@
-package store
+package mem
 
 import (
 	"sync"
@@ -14,11 +14,18 @@ type Mem struct {
 }
 
 // NewCache create new cache
-func NewMem() *Mem {
-	return &Mem{
+func Load() (Mem, error) {
+	result := Mem{
 		items: make(map[string]*Item),
 		mutex: sync.RWMutex{},
 	}
+
+	return result, nil
+}
+
+// Type method to use in cache
+func (c *Mem) Type() string {
+	return "mem"
 }
 
 // Set method to use in cache
@@ -116,9 +123,4 @@ func (c *Mem) Values() []interface{} {
 	}
 
 	return values
-}
-
-// Items method to use in cache
-func (c *Mem) Items() map[string]*Item {
-	return c.items
 }

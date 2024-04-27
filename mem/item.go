@@ -1,4 +1,4 @@
-package store
+package mem
 
 import (
 	"sync"

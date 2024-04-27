@@ -1,4 +1,4 @@
-package cache
+package redis
 
 const (
 	ERR_ENV_REQUIRED      = "Variables de entorno requerida (%s)"

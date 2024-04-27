@@ -36,9 +36,10 @@ go build ./cmd/gateway/main.go
 ```
 {"type": "ping"}
 {"type": "params", "params": {"name": "Cesar Galvis"}}
+{"type": "system", "params": {"name": "Cesar Galvis"}}
+{"type": "sendmessage", "client_id": "0daa7ed8-7775-418b-973d-03f3f5132a2f", "message": "Hola"}
 {"type": "subscribe", "channel": ""}
 {"type": "unsubscribe", "channel": ""}
-{"type": "message", "client_id": "0daa7ed8-7775-418b-973d-03f3f5132a2f", "message": "Hola"}
-{"type": "publish", "message": "Hola, hola"}
+{"type": "publish", "channel": "", "message": "Hola, hola"}
 
 ```

@@ -23,6 +23,8 @@ var upgrader = websocket.Upgrader{
 
 type Hub struct {
 	Id         string
+	Name       string
+	Params     *et.Json
 	clients    []*Client
 	channels   []*Channel
 	register   chan *Client
@@ -33,8 +35,15 @@ type Hub struct {
 
 // Create a new hub
 func NewHub() *Hub {
+	id := utility.UUID()
+	name := "Hub"
 	return &Hub{
-		Id:         utility.NewId(),
+		Id:   id,
+		Name: name,
+		Params: &et.Json{
+			"_id":  id,
+			"name": name,
+		},
 		clients:    make([]*Client, 0),
 		channels:   make([]*Channel, 0),
 		register:   make(chan *Client),
@@ -72,9 +81,9 @@ func (h *Hub) onConnect(client *Client) {
 	h.clients = append(h.clients, client)
 	client.Addr = client.socket.RemoteAddr().String()
 
-	h.Mute("ws/connect", client.Params, client.Id)
+	h.Mute("ws/connect", client.Params, []string{client.Id}, *h.Params)
 
-	client.sendMessage([]byte(et.Json{
+	client.send([]byte(et.Json{
 		"type":   "connect",
 		"client": client.Params,
 	}.ToString()))
@@ -87,15 +96,15 @@ func (h *Hub) onDisconnect(client *Client) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
-	client.Close()
-	client.Clear()
+	client.cLose()
+	client.clear()
 	idx := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == client.Id })
 
 	copy(h.clients[idx:], h.clients[idx+1:])
 	h.clients[len(h.clients)-1] = nil
 	h.clients = h.clients[:len(h.clients)-1]
 
-	h.Mute("ws/disconnect", client.Params, client.Id)
+	h.Mute("ws/disconnect", client.Params, []string{client.Id}, *h.Params)
 
 	logs.Logf("Websocket", MSG_CLIENT_DISCONNECT, client.Id, h.Id)
 }
@@ -105,7 +114,7 @@ func (h *Hub) broadcast(message interface{}, ignore *Client) {
 	data, _ := json.Marshal(message)
 	for _, client := range h.clients {
 		if client != ignore {
-			client.sendMessage(data)
+			client.send(data)
 		}
 	}
 }
@@ -128,6 +137,26 @@ func (h *Hub) connect(socket *websocket.Conn, clientId, name string) (*Client, e
 	return client, nil
 }
 
+func (h *Hub) publish(channel *Channel, message interface{}, ignored []string, from et.Json) error {
+	msg, _ := json.Marshal(et.Json{
+		"from":    from,
+		"channel": channel.Name,
+		"message": message,
+	})
+	for _, client := range channel.Subscribers {
+		if !slices.Contains(ignored, client.Id) {
+			client.send(msg)
+		}
+	}
+
+	return nil
+}
+
+// SetAtribs set a value to the client data
+func (h *Hub) SetParams(params et.Json) {
+	h.Params = &params
+}
+
 // Broadcast a message to all clients less the ignore client
 func (h *Hub) Broadcast(message interface{}, ignoreId string) {
 	var client *Client = nil
@@ -139,31 +168,20 @@ func (h *Hub) Broadcast(message interface{}, ignoreId string) {
 	h.broadcast(message, client)
 }
 
-func (h *Hub) publish(channel *Channel, message interface{}, ignoreId string) error {
-	data, _ := json.Marshal(message)
-	for _, client := range channel.Subscribers {
-		if client.Id != ignoreId {
-			client.sendMessage(data)
-		}
-	}
-
-	return nil
-}
-
 // Publish a message to a channel less the ignore client
-func (h *Hub) Publish(channel string, message interface{}, ignoreId string) error {
-	_channel := h.GetChannel(channel)
+func (h *Hub) Publish(channel string, message interface{}, ignored []string, from et.Json) error {
+	_channel := h.getChanel(channel)
 	if len(_channel.Subscribers) == 0 {
 		return logs.Alertm(ERR_CHANNEL_NOT_SUBSCRIBERS)
 	}
 
-	return h.publish(_channel, message, ignoreId)
+	return h.publish(_channel, message, ignored, from)
 }
 
 // Publish mute a message to a channel less the ignore client
-func (h *Hub) Mute(channel string, message interface{}, ignoreId string) error {
-	_channel := h.GetChannel(channel)
-	return h.publish(_channel, message, ignoreId)
+func (h *Hub) Mute(channel string, message interface{}, ignored []string, from et.Json) error {
+	_channel := h.getChanel(channel)
+	return h.publish(_channel, message, ignored, from)
 }
 
 // Send a message to a client in a channel
@@ -175,7 +193,7 @@ func (h *Hub) SendMessage(clientId string, message interface{}) error {
 	}
 
 	client := h.clients[idx]
-	return client.sendMessage(data)
+	return client.send(data)
 }
 
 // Prune a channel if no subscribers
@@ -193,7 +211,7 @@ func (h *Hub) pruneChanner(channel *Channel) {
 	}
 }
 
-func (h *Hub) GetChannel(name string) *Channel {
+func (h *Hub) getChanel(name string) *Channel {
 	var result *Channel
 
 	clean := func() {
@@ -223,7 +241,7 @@ func (h *Hub) Subscribe(clientId string, channel string) error {
 	}
 
 	client := h.clients[idx]
-	_channel := h.GetChannel(channel)
+	_channel := h.getChanel(channel)
 	_channel.Subscribe(client)
 	client.subscribe([]string{channel})
 	return nil
@@ -239,7 +257,7 @@ func (h *Hub) Unsubscribe(clientId string, channel string) error {
 	client := h.clients[idx]
 	client.unsubscribe([]string{channel})
 
-	_channel := h.GetChannel(channel)
+	_channel := h.getChanel(channel)
 	_channel.Unsubcribe(clientId)
 	h.pruneChanner(_channel)
 
@@ -248,6 +266,6 @@ func (h *Hub) Unsubscribe(clientId string, channel string) error {
 
 // Return client list subscribed to channel
 func (h *Hub) GetSubscribers(channel string) []*Client {
-	_channel := h.GetChannel(channel)
+	_channel := h.getChanel(channel)
 	return _channel.Subscribers
 }

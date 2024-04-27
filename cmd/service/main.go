@@ -11,12 +11,12 @@ import (
 var wcs *ws.Client
 
 func main() {
-	wsc := ws.NewClientWS("", inbox)
+	wsc := ws.NewPubSub("", inbox)
 	if wsc == nil {
 		logs.Fatal("Error al crear el cliente websocket.")
 	}
 
-	wsc.SendMessage("Hola mundo")
+	wsc.Publish("helo", "Hola mundo")
 	// serv, err := New()
 	// if err != nil {
 	// 	logs.Fatal(err)

@@ -1,4 +1,4 @@
-package event
+package nats
 
 import (
 	"sync"
@@ -16,21 +16,28 @@ type Conn struct {
 	conn             *nats.Conn
 	eventCreatedSub  *nats.Subscription
 	eventCreatedChan chan CreatedEvenMessage
+	cache            cache.Cache
 }
 
 func (c *Conn) Lock(key string) bool {
-	val, err := cache.Del(key)
-	if err != nil {
-		return false
-	}
-
-	return val == 1
+	return c.cache.Del(key)
 }
 
-func Load() (*Conn, error) {
-	once.Do(connect)
+func Load(cache cache.Cache) (*Conn, error) {
+	if conn != nil {
+		return conn, nil
+	}
 
-	return conn, nil
+	_conn, err := connect(cache)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Conn{
+		conn:             _conn,
+		eventCreatedChan: make(chan CreatedEvenMessage),
+		cache:            cache,
+	}, nil
 }
 
 func Close() {

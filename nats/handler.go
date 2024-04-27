@@ -1,9 +1,8 @@
-package event
+package nats
 
 import (
 	"time"
 
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
@@ -30,7 +29,7 @@ func Publish(clientId, channel string, data map[string]interface{}) error {
 	}
 
 	key := id
-	cache.Set(key, msg.ToString(), 15)
+	conn.cache.Set(key, msg.ToString(), 15)
 
 	return conn.conn.Publish(msg.Type(), dt)
 }

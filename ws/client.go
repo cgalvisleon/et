@@ -23,6 +23,7 @@ type Client struct {
 	Channels []string
 	outbound chan []byte
 	close    bool
+	allowed  bool
 }
 
 func newClient(hub *Hub, socket *websocket.Conn, id, name string) (*Client, bool) {
@@ -37,11 +38,13 @@ func newClient(hub *Hub, socket *websocket.Conn, id, name string) (*Client, bool
 		socket:   socket,
 		Channels: make([]string, 0),
 		outbound: make(chan []byte),
+		close:    false,
+		allowed:  true,
 	}, true
 }
 
 // SendMessage send a message to the client
-func (c *Client) sendMessage(message []byte) error {
+func (c *Client) send(message []byte) error {
 	if c.close {
 		return logs.Alertm(ERR_CLIENT_IS_CLOSED)
 	}
@@ -112,38 +115,33 @@ func (c *Client) unsubscribe(channels []string) {
 	}
 }
 
-// SetAtrib set a value to the client data
-func (c *Client) SetParam(key string, value interface{}) {
-	c.Params.Set(key, value)
-}
-
 // SetAtribs set a value to the client data
-func (c *Client) SetParams(params et.Json) {
+func (c *Client) setParams(params et.Json) {
 	c.Params = &params
 }
 
 // SendMessage send a message to the client
-func (c *Client) SendMessage(message interface{}) {
+func (c *Client) sendMessage(message interface{}) {
 	switch v := message.(type) {
 	case string:
-		c.sendMessage([]byte(v))
+		c.send([]byte(v))
 	case []byte:
-		c.sendMessage(v)
+		c.send(v)
 	case et.Json:
-		c.sendMessage([]byte(v.ToString()))
+		c.send([]byte(v.ToString()))
 	default:
-		c.sendMessage([]byte(message.(string)))
+		c.send([]byte(message.(string)))
 	}
 }
 
 // Close the client websocket connection
-func (c *Client) Close() {
+func (c *Client) cLose() {
 	c.close = true
 	c.socket.Close()
 	close(c.outbound)
 }
 
 // Clear the client channels
-func (c *Client) Clear() {
+func (c *Client) clear() {
 	c.unsubscribe(c.Channels)
 }

@@ -1,11 +1,11 @@
-package claim
+package token
 
 import (
 	"context"
 	"net/http"
 	"time"
 
-	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/elvis/cache"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
@@ -17,42 +17,24 @@ import (
 )
 
 type Claim struct {
-	ID       string        `json:"id"`
-	App      string        `json:"app"`
-	Name     string        `json:"name"`
-	Kind     string        `json:"kind"`
-	Username string        `json:"username"`
-	Device   string        `json:"device"`
-	Duration time.Duration `json:"duration"`
+	Id     string        `json:"id"`
+	Sub    string        `json:"sub"`
+	Name   string        `json:"name"`
+	Iat    time.Time     `json:"iat"`
+	Exp    time.Duration `json:"exp"`
+	App    string        `json:"app"`
+	Kind   string        `json:"kind"`
+	Device string        `json:"device"`
 	jwt.StandardClaims
 }
 
-func genToken(id, app, name, kind, username, device string, duration time.Duration) (token, key string, err error) {
-	secret := envar.EnvarStr("", "SECRET")
-	c := Claim{}
-	c.ID = id
-	c.App = app
-	c.Name = name
-	c.Kind = kind
-	c.Username = username
-	c.Device = device
-	c.Duration = duration
-	_jwt := jwt.NewWithClaims(jwt.SigningMethodHS256, c)
-	token, err = _jwt.SignedString([]byte(secret))
-	if err != nil {
-		return
+func DelToken(app, device, id string) error {
+	if conn == nil {
+		return logs.Log(ERR_NOT_TOKEN_SERVICE)
 	}
-	key = TokenKey(app, device, id)
 
-	return
-}
-
-func DelTokenCtx(ctx context.Context, app, device, id string) error {
 	key := TokenKey(app, device, id)
-	_, err := cache.DelCtx(ctx, key)
-	if err != nil {
-		return err
-	}
+	ok := conn.cache.Del(key)
 
 	event.Publish(key, "token/delete", et.Json{
 		"key": key,

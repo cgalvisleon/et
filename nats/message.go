@@ -1,4 +1,4 @@
-package event
+package nats
 
 import (
 	"encoding/json"

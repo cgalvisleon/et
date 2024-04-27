@@ -72,7 +72,7 @@ func (h *Hub) onConnect(client *Client) {
 	h.clients = append(h.clients, client)
 	client.Addr = client.socket.RemoteAddr().String()
 
-	h.Publish("ws/connect", client.Params, client.Id)
+	h.Mute("ws/connect", client.Params, client.Id)
 
 	client.sendMessage([]byte(et.Json{
 		"type":   "connect",

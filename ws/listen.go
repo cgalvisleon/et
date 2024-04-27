@@ -5,6 +5,7 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/utility"
 )
 
 // Listen a client message
@@ -16,6 +17,7 @@ func (c *Client) listen(messageType int, message []byte) {
 			"message": bytes.NewBuffer(message).String(),
 		}
 	}
+	data.Set("_id", utility.UUID())
 
 	_type := data.Str("type")
 	switch _type {

@@ -175,6 +175,7 @@ func (h *Hub) pruneChanner(channel *Channel) {
 	}
 
 	if channel.Count() == 0 {
+		logs.Log("Channel prune", channel.Name)
 		idx := slices.IndexFunc(h.channels, func(c *Channel) bool { return c.Low() == channel.Low() })
 		if idx != -1 {
 			h.channels = append(h.channels[:idx], h.channels[idx+1:]...)
@@ -186,7 +187,6 @@ func (h *Hub) GetChannel(name string) *Channel {
 	var result *Channel
 
 	clean := func() {
-		logs.Log("Channel expired", name)
 		h.pruneChanner(result)
 	}
 

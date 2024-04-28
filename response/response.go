@@ -8,6 +8,7 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/generic"
+	"github.com/cgalvisleon/et/utility"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -16,6 +17,7 @@ type Result struct {
 	Result interface{} `json:"result"`
 }
 
+// ScanBody function to scan the body of a request
 func ScanBody(r io.Reader) (et.Json, error) {
 	var result et.Json
 	err := json.NewDecoder(r).Decode(&result)
@@ -26,15 +28,30 @@ func ScanBody(r io.Reader) (et.Json, error) {
 	return result, nil
 }
 
+// ScanStr function to scan a string
 func ScanStr(value string) (et.Json, error) {
 	return ScanBody(strings.NewReader(value))
 }
 
+// ScanJson function to scan a json
 func ScanJson(value map[string]interface{}) (et.Json, error) {
 	var result et.Json = value
 	return result, nil
 }
 
+// Client function to get the client information
+func Client(r *http.Request) et.Json {
+	now := utility.Now()
+	ctx := r.Context()
+
+	return et.Json{
+		"date_of":   now,
+		"client_id": generic.New(ctx.Value("clientId")).Str(),
+		"name":      generic.New(ctx.Value("name")).Str(),
+	}
+}
+
+// GetBody function to get the body of a request
 func GetBody(r *http.Request) (et.Json, error) {
 	var result et.Json
 	err := json.NewDecoder(r.Body).Decode(&result)
@@ -46,6 +63,7 @@ func GetBody(r *http.Request) (et.Json, error) {
 	return result, nil
 }
 
+// GetQuery function to get the query of a request
 func GetQuery(r *http.Request) et.Json {
 	var result et.Json = et.Json{}
 	values := r.URL.Query()
@@ -58,6 +76,7 @@ func GetQuery(r *http.Request) et.Json {
 	return result
 }
 
+// GetParam function to get the param of a request
 func GetParam(r *http.Request, key string) *generic.Any {
 	val := chi.URLParam(r, key)
 	result := generic.New(val)
@@ -65,6 +84,7 @@ func GetParam(r *http.Request, key string) *generic.Any {
 	return result
 }
 
+// WriteResponse function to write a response
 func WriteResponse(w http.ResponseWriter, statusCode int, e []byte) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(statusCode)
@@ -73,6 +93,7 @@ func WriteResponse(w http.ResponseWriter, statusCode int, e []byte) error {
 	return nil
 }
 
+// JSON function to return a json response
 func JSON(w http.ResponseWriter, r *http.Request, statusCode int, dt interface{}) error {
 	if dt == nil {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -93,6 +114,7 @@ func JSON(w http.ResponseWriter, r *http.Request, statusCode int, dt interface{}
 	return WriteResponse(w, statusCode, e)
 }
 
+// ITEM function to return a json response
 func ITEM(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Item) error {
 	if &dt == (&et.Item{}) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -108,6 +130,7 @@ func ITEM(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Item) er
 	return WriteResponse(w, statusCode, e)
 }
 
+// ITEMS function to return a json response
 func ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Items) error {
 	if &dt == (&et.Items{}) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -123,6 +146,7 @@ func ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Items) 
 	return WriteResponse(w, statusCode, e)
 }
 
+// HTTPError function to return a json response
 func HTTPError(w http.ResponseWriter, r *http.Request, statusCode int, message string) error {
 	msg := et.Json{
 		"message": message,
@@ -131,10 +155,12 @@ func HTTPError(w http.ResponseWriter, r *http.Request, statusCode int, message s
 	return JSON(w, r, statusCode, msg)
 }
 
+// HTTPAlert function to return a json response
 func HTTPAlert(w http.ResponseWriter, r *http.Request, message string) error {
 	return HTTPError(w, r, http.StatusBadRequest, message)
 }
 
+// Stream function to return a json response
 func Stream(w http.ResponseWriter, r *http.Request, statusCode int, dt interface{}) error {
 	if dt == nil {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -155,6 +181,7 @@ func Stream(w http.ResponseWriter, r *http.Request, statusCode int, dt interface
 	return nil
 }
 
+// HTTPApp function to return a json response
 func HTTPApp(r chi.Router, path string, root http.FileSystem) {
 	if strings.ContainsAny(path, "{}*") {
 		panic("FileServer does not permit any URL parameters.")

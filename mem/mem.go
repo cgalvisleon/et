@@ -47,7 +47,9 @@ func (c *Mem) Set(key string, value interface{}, expiration time.Duration) inter
 	}
 
 	duration := expiration * time.Second
-	go time.AfterFunc(duration, clean)
+	if duration != 0 {
+		go time.AfterFunc(duration, clean)
+	}
 
 	return value
 }

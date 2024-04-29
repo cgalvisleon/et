@@ -1,7 +1,8 @@
 package nats
 
 import (
-	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/nats-io/nats.go"
 )
 
@@ -11,29 +12,30 @@ var (
 
 type Conn struct {
 	conn             *nats.Conn
-	cache            cache.Cache
 	eventCreatedSub  *nats.Subscription
 	eventCreatedChan chan Message
+	connected        bool
 }
 
-func (c *Conn) Lock(key string) bool {
-	return c.cache.Del(key)
-}
-
-func Load(cache cache.Cache) (*Conn, error) {
+func Load() (*Conn, error) {
 	if conn != nil {
 		return conn, nil
 	}
 
-	_conn, err := connect(cache)
+	host := envar.EnvarStr("", "NATS_HOST")
+	if host == "" {
+		return nil, logs.Alertm("NATS_HOST not found")
+	}
+
+	_conn, err := connect(host)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Conn{
 		conn:             _conn,
-		cache:            cache,
 		eventCreatedChan: make(chan Message),
+		connected:        true,
 	}, nil
 }
 

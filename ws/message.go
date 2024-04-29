@@ -32,12 +32,12 @@ func NewMessage(from, to et.Json, message interface{}) Message {
 }
 
 // Type return the type of message
-func (e *Message) Type() pubsub.TpMessage {
+func (e Message) Type() pubsub.TpMessage {
 	return e.Tp
 }
 
 // ToString return the message as string
-func (e *Message) ToString() string {
+func (e Message) ToString() string {
 	j, err := json.Marshal(e)
 	if err != nil {
 		return ""
@@ -47,7 +47,7 @@ func (e *Message) ToString() string {
 }
 
 // Encode return the message as byte
-func (e *Message) Encode() ([]byte, error) {
+func (e Message) Encode() ([]byte, error) {
 	b, err := json.Marshal(e)
 	if err != nil {
 		return nil, err
@@ -56,7 +56,7 @@ func (e *Message) Encode() ([]byte, error) {
 	return b, nil
 }
 
-func (e *Message) Json() (et.Json, error) {
+func (e Message) Json() (et.Json, error) {
 	result := et.Json{}
 	err := result.Scan(e.Data)
 	if err != nil {

@@ -36,16 +36,24 @@ func (t TpMessage) String() string {
 	return ""
 }
 
+type Message interface {
+	Type() TpMessage
+	ToString() string
+	Encode() ([]byte, error)
+	Json() (et.Json, error)
+}
+
+// PubSub interface
 type PubSub interface {
 	Type() string
 	IsConnected() bool
 	Close()
 	Connect() (bool, error)
 	Ping()
-	Params(params et.Json)
-	System(params et.Json)
-	Subscribe(channel string)
+	Params(params et.Json) error
+	System(params et.Json) error
+	Subscribe(channel string, reciveFn func(Message))
 	Unsubscribe(channel string)
 	Publish(channel string, message interface{})
-	SendMessage(clientId string, message string)
+	SendMessage(to et.Json, message string) error
 }

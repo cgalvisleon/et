@@ -46,7 +46,7 @@ func Load(cache cache.Cache) (*Server, error) {
 	_rpc := newRpc()
 
 	// WS server
-	_ws, err := ws.Load(cache)
+	_ws, err := ws.Load()
 	if err != nil {
 		panic(err)
 	}

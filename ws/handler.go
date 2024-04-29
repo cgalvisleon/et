@@ -13,7 +13,7 @@ func Connect(w http.ResponseWriter, r *http.Request) (*Client, error) {
 	}
 
 	var clientId string
-	var userName string
+	var name string
 	ctx := r.Context()
 	val := ctx.Value("clientId")
 	if val == nil {
@@ -24,9 +24,9 @@ func Connect(w http.ResponseWriter, r *http.Request) (*Client, error) {
 
 	val = ctx.Value("name")
 	if val == nil {
-		userName = "Anonimo"
+		name = "Anonimo"
 	} else {
-		userName = val.(string)
+		name = val.(string)
 	}
 
 	socket, err := upgrader.Upgrade(w, r, nil)
@@ -34,7 +34,7 @@ func Connect(w http.ResponseWriter, r *http.Request) (*Client, error) {
 		return nil, err
 	}
 
-	return conn.hub.connect(socket, clientId, userName)
+	return conn.hub.connect(socket, clientId, name)
 }
 
 /*

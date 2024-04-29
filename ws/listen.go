@@ -11,10 +11,8 @@ func (c *Client) listen(messageType int, message []byte) {
 	msg, err := DecodeMessage(message)
 	if err != nil {
 		msg = NewMessage(*c.hub.Params, *c.Params, et.Json{
-			"ok": false,
-			"result": et.Json{
-				"message": err.Error(),
-			},
+			"ok":      false,
+			"message": err.Error(),
 		})
 		c.sendMessage(msg)
 		return
@@ -24,31 +22,16 @@ func (c *Client) listen(messageType int, message []byte) {
 	switch _type {
 	case pubsub.TpPing:
 		msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
-			"ok": true,
-			"result": et.Json{
-				"message": "pong",
-			},
+			"ok":      true,
+			"message": "pong",
 		})
 		c.sendMessage(msg)
 	case pubsub.TpParams:
 		params, err := msg.Json()
 		if err != nil {
 			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
-				"ok": false,
-				"result": et.Json{
-					"message": err.Error(),
-				},
-			})
-			c.sendMessage(msg)
-			return
-		}
-
-		if params.Emptyt() {
-			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
-				"ok": false,
-				"result": et.Json{
-					"message": ERR_PARAM_NOT_FOUND,
-				},
+				"ok":      false,
+				"message": err.Error(),
 			})
 			c.sendMessage(msg)
 			return
@@ -63,31 +46,16 @@ func (c *Client) listen(messageType int, message []byte) {
 		params.Set("name", c.Name)
 		c.setParams(params)
 		msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
-			"ok": true,
-			"result": et.Json{
-				"message": PARAMS_UPDATED,
-			},
+			"ok":      true,
+			"message": PARAMS_UPDATED,
 		})
 		c.sendMessage(msg)
 	case pubsub.TpSystem:
 		params, err := msg.Json()
 		if err != nil {
 			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
-				"ok": false,
-				"result": et.Json{
-					"message": err.Error(),
-				},
-			})
-			c.sendMessage(msg)
-			return
-		}
-
-		if params.Emptyt() {
-			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
-				"ok": false,
-				"result": et.Json{
-					"message": ERR_PARAM_NOT_FOUND,
-				},
+				"ok":      false,
+				"message": err.Error(),
 			})
 			c.sendMessage(msg)
 			return
@@ -102,20 +70,16 @@ func (c *Client) listen(messageType int, message []byte) {
 		params.Set("name", c.Name)
 		c.hub.SetParams(params)
 		msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
-			"ok": true,
-			"result": et.Json{
-				"message": PARAMS_UPDATED,
-			},
+			"ok":      true,
+			"message": PARAMS_UPDATED,
 		})
 		c.sendMessage(msg)
 	case pubsub.TpSubscribe:
 		channel := msg.Channel
 		if channel == "" {
 			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
-				"ok": false,
-				"result": et.Json{
-					"message": ERR_CHANNEL_EMPTY,
-				},
+				"ok":      false,
+				"message": ERR_CHANNEL_EMPTY,
 			})
 			c.sendMessage(msg)
 			return
@@ -124,30 +88,24 @@ func (c *Client) listen(messageType int, message []byte) {
 		err := c.hub.Subscribe(c.Id, channel)
 		if err != nil {
 			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
-				"ok": false,
-				"result": et.Json{
-					"message": err.Error(),
-				},
+				"ok":      false,
+				"message": err.Error(),
 			})
 			c.sendMessage(msg)
 			return
 		}
 
 		msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
-			"ok": true,
-			"result": et.Json{
-				"message": "Subscribed to channel " + channel,
-			},
+			"ok":      true,
+			"message": "Subscribed to channel " + channel,
 		})
 		c.sendMessage(msg)
 	case pubsub.TpUnsubscribe:
 		channel := msg.Channel
 		if channel == "" {
 			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
-				"ok": false,
-				"result": et.Json{
-					"message": ERR_CHANNEL_EMPTY,
-				},
+				"ok":      false,
+				"message": ERR_CHANNEL_EMPTY,
 			})
 			c.sendMessage(msg)
 			return
@@ -156,30 +114,24 @@ func (c *Client) listen(messageType int, message []byte) {
 		err := c.hub.Subscribe(c.Id, channel)
 		if err != nil {
 			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
-				"ok": false,
-				"result": et.Json{
-					"message": err.Error(),
-				},
+				"ok":      false,
+				"message": err.Error(),
 			})
 			c.sendMessage(msg)
 			return
 		}
 
 		msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
-			"ok": true,
-			"result": et.Json{
-				"message": "Unsubscribed from channel " + channel,
-			},
+			"ok":      true,
+			"message": "Unsubscribed from channel " + channel,
 		})
 		c.sendMessage(msg)
 	case pubsub.TpPublish:
 		channel := msg.Channel
 		if channel == "" {
 			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
-				"ok": false,
-				"result": et.Json{
-					"message": ERR_CHANNEL_EMPTY,
-				},
+				"ok":      false,
+				"message": ERR_CHANNEL_EMPTY,
 			})
 			c.sendMessage(msg)
 			return
@@ -187,36 +139,28 @@ func (c *Client) listen(messageType int, message []byte) {
 
 		go c.hub.Publish(channel, msg, []string{c.Id}, *c.Params)
 		msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
-			"ok": true,
-			"result": et.Json{
-				"message": "Message published to " + channel,
-			},
+			"ok":      true,
+			"message": "Message published to " + channel,
 		})
 		c.sendMessage(msg)
 	default:
 		clientId := msg.To.ValStr("-1", "client_id")
-		if clientId == "-1" {
-			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
-				"ok": false,
-				"result": et.Json{
-					"message": ERR_CLIENT_ID_EMPTY,
-				},
-			})
-			c.sendMessage(msg)
-			return
-		}
 
 		msg.From = *c.Params
 		err := c.hub.SendMessage(clientId, msg)
 		if err != nil {
 			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
-				"ok": false,
-				"result": et.Json{
-					"message": err.Error(),
-				},
+				"ok":      false,
+				"message": err.Error(),
 			})
 			c.sendMessage(msg)
 		}
+
+		msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+			"ok":      true,
+			"message": "Message sent to " + clientId,
+		})
+		c.sendMessage(msg)
 	}
 
 	logs.Logf("Websocket", "Client %s message: %s", c.Id, msg.ToString())

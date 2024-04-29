@@ -1,28 +1,22 @@
 package ws
 
-import (
-	"github.com/cgalvisleon/et/cache"
-)
-
 var (
 	conn *Conn
 )
 
 type Conn struct {
-	hub   *Hub
-	cache cache.Cache
+	hub *Hub
 }
 
 // Load the Websocket Hub
-func Load(cache cache.Cache) (*Conn, error) {
+func Load() (*Conn, error) {
 	if conn != nil {
 		return conn, nil
 	}
 
-	hub := connect(cache)
+	hub := connect()
 	conn = &Conn{
-		hub:   hub,
-		cache: cache,
+		hub: hub,
 	}
 
 	return conn, nil

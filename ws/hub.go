@@ -81,11 +81,9 @@ func (h *Hub) onConnect(client *Client) {
 	client.Addr = client.socket.RemoteAddr().String()
 
 	msg := NewMessage(*h.Params, *client.Params, et.Json{
-		"ok": true,
-		"result": et.Json{
-			"message": "Connected successfully",
-			"client":  client.Params,
-		},
+		"ok":      true,
+		"message": "Connected successfully",
+		"client":  client.Params,
 	})
 
 	h.Mute("ws/connect", msg, []string{client.Id}, *h.Params)
@@ -108,11 +106,9 @@ func (h *Hub) onDisconnect(client *Client) {
 	h.clients = h.clients[:len(h.clients)-1]
 
 	msg := NewMessage(*h.Params, et.Json{}, et.Json{
-		"ok": true,
-		"result": et.Json{
-			"message": "Client disconnected",
-			"client":  client.Params,
-		},
+		"ok":      true,
+		"message": "Client disconnected",
+		"client":  client.Params,
 	})
 
 	h.Mute("ws/disconnect", msg, []string{client.Id}, *h.Params)

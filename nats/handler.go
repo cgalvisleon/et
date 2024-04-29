@@ -1,37 +1,71 @@
 package nats
 
 import (
-	"time"
-
 	"github.com/cgalvisleon/et/et"
-	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 )
 
-func Publish(clientId, channel string, data map[string]interface{}) error {
+func Publish(clientId, channel string, message interface{}) error {
 	if conn == nil {
 		return nil
 	}
 
-	now := time.Now().UTC()
-	id := uuid.NewString()
-	msg := EventMessage{
-		Created_at: now,
-		Id:         id,
-		ClientId:   clientId,
-		Channel:    channel,
-		Data:       data,
-	}
-
-	dt, err := conn.encodeMessage(msg)
+	msg := NewMessage(et.Json{}, et.Json{}, message)
+	dt, err := msg.Encode()
 	if err != nil {
 		return err
 	}
 
-	key := id
-	conn.cache.Set(key, msg.ToString(), 15)
+	// key := id
+	// conn.cache.Set(key, msg.ToString(), 15)
 
-	return conn.conn.Publish(msg.Type(), dt)
+	return conn.conn.Publish(msg.Channel, dt)
+}
+
+func Subscribe(channel string, f func(Message)) (err error) {
+	if conn == nil {
+		return
+	}
+
+	msg := Message{
+		Channel: channel,
+	}
+	conn.eventCreatedSub, err = conn.conn.Subscribe(
+		msg.Channel,
+		func(m *nats.Msg) {
+			f(msg)
+		},
+	)
+
+	return
+}
+
+func Stack(channel string, f func(Message)) (err error) {
+	if conn == nil {
+		return
+	}
+
+	msg := Message{
+		Channel: channel,
+	}
+
+	conn.eventCreatedSub, err = conn.conn.Subscribe(
+		channel,
+		func(m *nats.Msg) {
+			/*
+				key := msg.Id
+
+
+					ok := conn.Lock(key)
+					if !ok {
+						return
+					}
+			*/
+			f(msg)
+		},
+	)
+
+	return
 }
 
 func Event(event string, data interface{}) {
@@ -72,46 +106,6 @@ func Rejected(work_id, event string) {
 
 func Action(action string, data map[string]interface{}) {
 	go Publish("action", action, data)
-}
-
-func Subscribe(channel string, f func(EventMessage)) (err error) {
-	if conn == nil {
-		return
-	}
-
-	msg := EventMessage{
-		Channel: channel,
-	}
-	conn.eventCreatedSub, err = conn.conn.Subscribe(msg.Type(), func(m *nats.Msg) {
-		conn.decodeMessage(m.Data, &msg)
-		f(msg)
-	})
-
-	return
-}
-
-func Stack(channel string, f func(EventMessage)) (err error) {
-	if conn == nil {
-		return
-	}
-
-	msg := EventMessage{
-		Channel: channel,
-	}
-
-	conn.eventCreatedSub, err = conn.conn.Subscribe(channel, func(m *nats.Msg) {
-		conn.decodeMessage(m.Data, &msg)
-		key := msg.Id
-
-		ok := conn.Lock(key)
-		if !ok {
-			return
-		}
-
-		f(msg)
-	})
-
-	return
 }
 
 func WsBroadcast(message interface{}, ignoreId string) {

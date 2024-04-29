@@ -15,7 +15,7 @@ func Publish(clientId, channel string, data map[string]interface{}) error {
 
 	now := time.Now().UTC()
 	id := uuid.NewString()
-	msg := CreatedEvenMessage{
+	msg := EventMessage{
 		Created_at: now,
 		Id:         id,
 		ClientId:   clientId,
@@ -74,12 +74,12 @@ func Action(action string, data map[string]interface{}) {
 	go Publish("action", action, data)
 }
 
-func Subscribe(channel string, f func(CreatedEvenMessage)) (err error) {
+func Subscribe(channel string, f func(EventMessage)) (err error) {
 	if conn == nil {
 		return
 	}
 
-	msg := CreatedEvenMessage{
+	msg := EventMessage{
 		Channel: channel,
 	}
 	conn.eventCreatedSub, err = conn.conn.Subscribe(msg.Type(), func(m *nats.Msg) {
@@ -90,12 +90,12 @@ func Subscribe(channel string, f func(CreatedEvenMessage)) (err error) {
 	return
 }
 
-func Stack(channel string, f func(CreatedEvenMessage)) (err error) {
+func Stack(channel string, f func(EventMessage)) (err error) {
 	if conn == nil {
 		return
 	}
 
-	msg := CreatedEvenMessage{
+	msg := EventMessage{
 		Channel: channel,
 	}
 

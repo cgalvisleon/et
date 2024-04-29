@@ -1,7 +1,6 @@
 package ws
 
 import (
-	"encoding/json"
 	"net/http"
 	"os"
 	"sync"
@@ -41,7 +40,7 @@ func NewHub() *Hub {
 		Id:   id,
 		Name: name,
 		Params: &et.Json{
-			"_id":  id,
+			"id":   id,
 			"name": name,
 		},
 		clients:    make([]*Client, 0),
@@ -81,12 +80,16 @@ func (h *Hub) onConnect(client *Client) {
 	h.clients = append(h.clients, client)
 	client.Addr = client.socket.RemoteAddr().String()
 
-	h.Mute("ws/connect", client.Params, []string{client.Id}, *h.Params)
+	msg := NewMessage(*h.Params, *client.Params, et.Json{
+		"ok": true,
+		"result": et.Json{
+			"message": "Connected successfully",
+			"client":  client.Params,
+		},
+	})
 
-	client.send([]byte(et.Json{
-		"type":   "connect",
-		"client": client.Params,
-	}.ToString()))
+	h.Mute("ws/connect", msg, []string{client.Id}, *h.Params)
+	client.sendMessage(msg)
 
 	logs.Logf("Websocket", MSG_CLIENT_CONNECT, client.Id, h.Id)
 }
@@ -104,26 +107,24 @@ func (h *Hub) onDisconnect(client *Client) {
 	h.clients[len(h.clients)-1] = nil
 	h.clients = h.clients[:len(h.clients)-1]
 
-	h.Mute("ws/disconnect", client.Params, []string{client.Id}, *h.Params)
+	msg := NewMessage(*h.Params, et.Json{}, et.Json{
+		"ok": true,
+		"result": et.Json{
+			"message": "Client disconnected",
+			"client":  client.Params,
+		},
+	})
+
+	h.Mute("ws/disconnect", msg, []string{client.Id}, *h.Params)
 
 	logs.Logf("Websocket", MSG_CLIENT_DISCONNECT, client.Id, h.Id)
-}
-
-// Broadcast a message to all clients less the ignore client
-func (h *Hub) broadcast(message interface{}, ignore *Client) {
-	data, _ := json.Marshal(message)
-	for _, client := range h.clients {
-		if client != ignore {
-			client.send(data)
-		}
-	}
 }
 
 // Create a client and connect to the hub
 func (h *Hub) connect(socket *websocket.Conn, clientId, name string) (*Client, error) {
 	idxC := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == clientId })
 	if idxC != -1 {
-		return conn.clients[idxC], nil
+		return conn.hub.clients[idxC], nil
 	}
 
 	client, isNew := newClient(h, socket, clientId, name)
@@ -137,15 +138,13 @@ func (h *Hub) connect(socket *websocket.Conn, clientId, name string) (*Client, e
 	return client, nil
 }
 
-func (h *Hub) publish(channel *Channel, message interface{}, ignored []string, from et.Json) error {
-	msg, _ := json.Marshal(et.Json{
-		"from":    from,
-		"channel": channel.Name,
-		"message": message,
-	})
+// Publish a message to a channel less the ignore client
+func (h *Hub) publish(channel *Channel, msg Message, ignored []string, from et.Json) error {
+	msg.Channel = channel.Low()
+	msg.From = from
 	for _, client := range channel.Subscribers {
 		if !slices.Contains(ignored, client.Id) {
-			client.send(msg)
+			client.sendMessage(msg)
 		}
 	}
 
@@ -158,42 +157,39 @@ func (h *Hub) SetParams(params et.Json) {
 }
 
 // Broadcast a message to all clients less the ignore client
-func (h *Hub) Broadcast(message interface{}, ignoreId string) {
-	var client *Client = nil
-	idx := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == ignoreId })
-	if idx != -1 {
-		client = h.clients[idx]
+func (h *Hub) Broadcast(msg Message, ignored []string) {
+	for _, client := range h.clients {
+		if !slices.Contains(ignored, client.Id) {
+			client.sendMessage(msg)
+		}
 	}
-
-	h.broadcast(message, client)
 }
 
 // Publish a message to a channel less the ignore client
-func (h *Hub) Publish(channel string, message interface{}, ignored []string, from et.Json) error {
+func (h *Hub) Publish(channel string, msg Message, ignored []string, from et.Json) error {
 	_channel := h.getChanel(channel)
 	if len(_channel.Subscribers) == 0 {
 		return logs.Alertm(ERR_CHANNEL_NOT_SUBSCRIBERS)
 	}
 
-	return h.publish(_channel, message, ignored, from)
+	return h.publish(_channel, msg, ignored, from)
 }
 
 // Publish mute a message to a channel less the ignore client
-func (h *Hub) Mute(channel string, message interface{}, ignored []string, from et.Json) error {
+func (h *Hub) Mute(channel string, msg Message, ignored []string, from et.Json) error {
 	_channel := h.getChanel(channel)
-	return h.publish(_channel, message, ignored, from)
+	return h.publish(_channel, msg, ignored, from)
 }
 
 // Send a message to a client in a channel
-func (h *Hub) SendMessage(clientId string, message interface{}) error {
-	data, _ := json.Marshal(message)
+func (h *Hub) SendMessage(clientId string, msg Message) error {
 	idx := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == clientId })
 	if idx == -1 {
 		return logs.Alertm(ERR_CLIENT_NOT_FOUND)
 	}
 
 	client := h.clients[idx]
-	return client.send(data)
+	return client.sendMessage(msg)
 }
 
 // Prune a channel if no subscribers

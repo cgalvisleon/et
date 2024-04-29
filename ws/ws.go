@@ -1,31 +1,29 @@
 package ws
 
 import (
-	"sync"
+	"github.com/cgalvisleon/et/cache"
 )
 
 var (
-	conn *Hub
-	once sync.Once
+	conn *Conn
 )
 
 type Conn struct {
-	hub *Hub
-}
-
-// Create a Hub and run it
-func connect() {
-	if conn != nil {
-		return
-	}
-
-	conn = NewHub()
-	go conn.Run()
+	hub   *Hub
+	cache cache.Cache
 }
 
 // Load the Websocket Hub
-func Load() (*Hub, error) {
-	once.Do(connect)
+func Load(cache cache.Cache) (*Conn, error) {
+	if conn != nil {
+		return conn, nil
+	}
+
+	hub := connect(cache)
+	conn = &Conn{
+		hub:   hub,
+		cache: cache,
+	}
 
 	return conn, nil
 }

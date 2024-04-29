@@ -1,6 +1,8 @@
 package ws
 
 import (
+	"time"
+
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
@@ -14,25 +16,27 @@ type WsMessage struct {
 }
 
 type Client struct {
-	hub      *Hub
-	Id       string
-	Name     string
-	Params   *et.Json
-	Addr     string
-	socket   *websocket.Conn
-	Channels []string
-	outbound chan []byte
-	close    bool
-	allowed  bool
+	Created_at time.Time
+	hub        *Hub
+	Id         string
+	Name       string
+	Params     *et.Json
+	Addr       string
+	socket     *websocket.Conn
+	Channels   []string
+	outbound   chan []byte
+	close      bool
+	allowed    bool
 }
 
 func newClient(hub *Hub, socket *websocket.Conn, id, name string) (*Client, bool) {
 	return &Client{
-		hub:  hub,
-		Id:   id,
-		Name: name,
+		Created_at: time.Now(),
+		hub:        hub,
+		Id:         id,
+		Name:       name,
 		Params: &et.Json{
-			"_id":  id,
+			"id":   id,
 			"name": name,
 		},
 		socket:   socket,
@@ -41,25 +45,6 @@ func newClient(hub *Hub, socket *websocket.Conn, id, name string) (*Client, bool
 		close:    false,
 		allowed:  true,
 	}, true
-}
-
-// SendMessage send a message to the client
-func (c *Client) send(message []byte) error {
-	if c.close {
-		return logs.Alertm(ERR_CLIENT_IS_CLOSED)
-	}
-
-	if c.socket == nil {
-		return logs.Alertm(ERR_NOT_WS_SERVICE)
-	}
-
-	if c.outbound == nil {
-		return logs.Alertm(ERR_NOT_WS_SERVICE)
-	}
-
-	c.outbound <- message
-
-	return nil
 }
 
 // Listen a client message
@@ -121,17 +106,27 @@ func (c *Client) setParams(params et.Json) {
 }
 
 // SendMessage send a message to the client
-func (c *Client) sendMessage(message interface{}) {
-	switch v := message.(type) {
-	case string:
-		c.send([]byte(v))
-	case []byte:
-		c.send(v)
-	case et.Json:
-		c.send([]byte(v.ToString()))
-	default:
-		c.send([]byte(message.(string)))
+func (c *Client) sendMessage(message Message) error {
+	msg, err := message.Encode()
+	if err != nil {
+		return err
 	}
+
+	if c.close {
+		return logs.Alertm(ERR_CLIENT_IS_CLOSED)
+	}
+
+	if c.socket == nil {
+		return logs.Alertm(ERR_NOT_WS_SERVICE)
+	}
+
+	if c.outbound == nil {
+		return logs.Alertm(ERR_NOT_WS_SERVICE)
+	}
+
+	c.outbound <- msg
+
+	return nil
 }
 
 // Close the client websocket connection

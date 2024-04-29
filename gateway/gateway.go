@@ -20,7 +20,7 @@ import (
 type Server struct {
 	http  *HttpServer
 	rpc   *net.Listener
-	ws    *ws.Hub
+	ws    *ws.Conn
 	cache cache.Cache
 }
 
@@ -40,22 +40,22 @@ func Load(cache cache.Cache) (*Server, error) {
 	}
 
 	// HTTP server
-	httpServer := newHttpServer()
+	_http := newHttpServer()
 
 	// RPC server
-	rpcServer := newRpc()
+	_rpc := newRpc()
 
 	// WS server
-	wsServer, err := ws.Load()
+	_ws, err := ws.Load(cache)
 	if err != nil {
 		panic(err)
 	}
 
 	// Create a new server
 	conn = &Server{
-		http:  httpServer,
-		rpc:   &rpcServer,
-		ws:    wsServer,
+		http:  _http,
+		rpc:   &_rpc,
+		ws:    _ws,
 		cache: cache,
 	}
 

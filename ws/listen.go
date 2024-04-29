@@ -1,38 +1,56 @@
 package ws
 
 import (
-	"bytes"
-
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/utility"
+	"github.com/cgalvisleon/et/pubsub"
 )
 
 // Listen a client message
 func (c *Client) listen(messageType int, message []byte) {
-	data, err := et.ToJson(message)
+	msg, err := DecodeMessage(message)
 	if err != nil {
-		data = et.Json{
-			"type":    messageType,
-			"message": bytes.NewBuffer(message).String(),
-		}
-	}
-	data.Set("_id", utility.UUID())
-
-	_type := data.Str("type")
-	switch _type {
-	case "ping":
-		c.sendMessage(et.Json{
-			"ok":      true,
-			"message": "pong",
+		msg = NewMessage(*c.hub.Params, *c.Params, et.Json{
+			"ok": false,
+			"result": et.Json{
+				"message": err.Error(),
+			},
 		})
-	case "params":
-		params := data.Json("params")
-		if params.Emptyt() {
-			c.sendMessage(et.Json{
-				"ok":    false,
-				"error": "Params not found",
+		c.sendMessage(msg)
+		return
+	}
+
+	_type := msg.Type()
+	switch _type {
+	case pubsub.TpPing:
+		msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+			"ok": true,
+			"result": et.Json{
+				"message": "pong",
+			},
+		})
+		c.sendMessage(msg)
+	case pubsub.TpParams:
+		params, err := msg.Json()
+		if err != nil {
+			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+				"ok": false,
+				"result": et.Json{
+					"message": err.Error(),
+				},
 			})
+			c.sendMessage(msg)
+			return
+		}
+
+		if params.Emptyt() {
+			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+				"ok": false,
+				"result": et.Json{
+					"message": ERR_PARAM_NOT_FOUND,
+				},
+			})
+			c.sendMessage(msg)
 			return
 		}
 
@@ -41,149 +59,165 @@ func (c *Client) listen(messageType int, message []byte) {
 			c.Name = name
 		}
 
-		params.Set("_id", c.Id)
+		params.Set("id", c.Id)
 		params.Set("name", c.Name)
 		c.setParams(params)
-		c.sendMessage(et.Json{
-			"ok":      true,
-			"message": "Params updated",
-			"params":  c.Params,
+		msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+			"ok": true,
+			"result": et.Json{
+				"message": PARAMS_UPDATED,
+			},
 		})
-	case "system":
-		params := data.Json("params")
-		if params.Emptyt() {
-			c.sendMessage(et.Json{
-				"ok":    false,
-				"error": "Params not found",
+		c.sendMessage(msg)
+	case pubsub.TpSystem:
+		params, err := msg.Json()
+		if err != nil {
+			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+				"ok": false,
+				"result": et.Json{
+					"message": err.Error(),
+				},
 			})
+			c.sendMessage(msg)
+			return
+		}
+
+		if params.Emptyt() {
+			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+				"ok": false,
+				"result": et.Json{
+					"message": ERR_PARAM_NOT_FOUND,
+				},
+			})
+			c.sendMessage(msg)
 			return
 		}
 
 		name := params.ValStr("", "name")
 		if name != "" {
-			c.hub.Name = name
+			c.Name = name
 		}
 
-		params.Set("_id", c.hub.Id)
-		params.Set("name", c.hub.Name)
+		params.Set("id", c.Id)
+		params.Set("name", c.Name)
 		c.hub.SetParams(params)
-		c.sendMessage(et.Json{
-			"ok":      true,
-			"message": "Params updated",
-			"params":  c.Params,
+		msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+			"ok": true,
+			"result": et.Json{
+				"message": PARAMS_UPDATED,
+			},
 		})
-	case "subscribe":
-		channel := data.ValStr("", "channel")
+		c.sendMessage(msg)
+	case pubsub.TpSubscribe:
+		channel := msg.Channel
 		if channel == "" {
-			c.sendMessage(et.Json{
-				"ok":    false,
-				"error": "Channel not found",
+			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+				"ok": false,
+				"result": et.Json{
+					"message": ERR_CHANNEL_EMPTY,
+				},
 			})
+			c.sendMessage(msg)
 			return
 		}
 
 		err := c.hub.Subscribe(c.Id, channel)
 		if err != nil {
-			c.sendMessage(et.Json{
-				"ok":    false,
-				"error": err.Error(),
+			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+				"ok": false,
+				"result": et.Json{
+					"message": err.Error(),
+				},
 			})
+			c.sendMessage(msg)
 			return
 		}
 
-		c.sendMessage(et.Json{
-			"ok":      true,
-			"message": "Subscribed to channel " + channel,
+		msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+			"ok": true,
+			"result": et.Json{
+				"message": "Subscribed to channel " + channel,
+			},
 		})
-	case "unsubscribe":
-		channel := data.ValStr("", "channel")
+		c.sendMessage(msg)
+	case pubsub.TpUnsubscribe:
+		channel := msg.Channel
 		if channel == "" {
-			c.sendMessage(et.Json{
-				"ok":    false,
-				"error": "Channel not found",
+			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+				"ok": false,
+				"result": et.Json{
+					"message": ERR_CHANNEL_EMPTY,
+				},
 			})
+			c.sendMessage(msg)
 			return
 		}
 
-		err := c.hub.Unsubscribe(c.Id, channel)
+		err := c.hub.Subscribe(c.Id, channel)
 		if err != nil {
-			c.sendMessage(et.Json{
-				"ok":    false,
-				"error": err.Error(),
+			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+				"ok": false,
+				"result": et.Json{
+					"message": err.Error(),
+				},
 			})
+			c.sendMessage(msg)
 			return
 		}
 
-		c.sendMessage(et.Json{
-			"ok":      true,
-			"message": "Unsubscribed from channel " + channel,
+		msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+			"ok": true,
+			"result": et.Json{
+				"message": "Unsubscribed from channel " + channel,
+			},
 		})
-	case "sendmessage":
-		clientId := data.ValStr("-1", "client_id")
+		c.sendMessage(msg)
+	case pubsub.TpPublish:
+		channel := msg.Channel
+		if channel == "" {
+			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+				"ok": false,
+				"result": et.Json{
+					"message": ERR_CHANNEL_EMPTY,
+				},
+			})
+			c.sendMessage(msg)
+			return
+		}
+
+		go c.hub.Publish(channel, msg, []string{c.Id}, *c.Params)
+		msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+			"ok": true,
+			"result": et.Json{
+				"message": "Message published to " + channel,
+			},
+		})
+		c.sendMessage(msg)
+	default:
+		clientId := msg.To.ValStr("-1", "client_id")
 		if clientId == "-1" {
-			c.sendMessage(et.Json{
-				"ok":    false,
-				"error": "client_id not found",
+			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+				"ok": false,
+				"result": et.Json{
+					"message": ERR_CLIENT_ID_EMPTY,
+				},
 			})
+			c.sendMessage(msg)
 			return
 		}
 
-		message := data.Get("message")
-		if message == nil {
-			c.sendMessage(et.Json{
-				"ok":    false,
-				"error": "Message not found",
-			})
-			return
-		}
-
-		msg := et.Json{
-			"from":    c.Params,
-			"message": message,
-		}
+		msg.From = *c.Params
 		err := c.hub.SendMessage(clientId, msg)
 		if err != nil {
-			c.sendMessage(et.Json{
-				"ok":    false,
-				"error": err.Error(),
+			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+				"ok": false,
+				"result": et.Json{
+					"message": err.Error(),
+				},
 			})
-			return
+			c.sendMessage(msg)
 		}
-
-		c.sendMessage(et.Json{
-			"ok":      true,
-			"message": "Message sent to " + clientId,
-		})
-	case "publish":
-		channel := data.ValStr("", "channel")
-		if channel == "" {
-			c.sendMessage(et.Json{
-				"ok":    false,
-				"error": "Channel not found",
-			})
-			return
-		}
-
-		message := data.Get("message")
-		if message == nil {
-			c.sendMessage(et.Json{
-				"ok":    false,
-				"error": "Message not found",
-			})
-			return
-		}
-
-		msg := et.Json{
-			"from":    c.Params,
-			"message": message,
-		}
-		go c.hub.Publish(channel, msg, []string{c.Id}, *c.Params)
-
-		c.sendMessage(et.Json{
-			"ok":      true,
-			"message": "Message published to " + channel,
-		})
 	}
 
-	logs.Logf("Websocket", "Client %s message: %s", c.Id, data.ToString())
+	logs.Logf("Websocket", "Client %s message: %s", c.Id, msg.ToString())
 }

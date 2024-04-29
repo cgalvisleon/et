@@ -34,7 +34,7 @@ func Connect(w http.ResponseWriter, r *http.Request) (*Client, error) {
 		return nil, err
 	}
 
-	return conn.connect(socket, clientId, userName)
+	return conn.hub.connect(socket, clientId, userName)
 }
 
 /*

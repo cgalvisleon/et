@@ -1,22 +1,19 @@
 package nats
 
 import (
-	"sync"
-
 	"github.com/cgalvisleon/et/cache"
 	"github.com/nats-io/nats.go"
 )
 
 var (
 	conn *Conn
-	once sync.Once
 )
 
 type Conn struct {
 	conn             *nats.Conn
-	eventCreatedSub  *nats.Subscription
-	eventCreatedChan chan CreatedEvenMessage
 	cache            cache.Cache
+	eventCreatedSub  *nats.Subscription
+	eventCreatedChan chan Message
 }
 
 func (c *Conn) Lock(key string) bool {
@@ -35,8 +32,8 @@ func Load(cache cache.Cache) (*Conn, error) {
 
 	return &Conn{
 		conn:             _conn,
-		eventCreatedChan: make(chan CreatedEvenMessage),
 		cache:            cache,
+		eventCreatedChan: make(chan Message),
 	}, nil
 }
 

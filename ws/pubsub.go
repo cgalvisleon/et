@@ -7,18 +7,21 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/pubsub"
 	"github.com/gorilla/websocket"
 )
 
 type PubSub struct {
 	host      string
 	socket    *websocket.Conn
-	reciveFn  func(messageType int, message []byte)
+	reciveFn  func(Message)
+	channels  map[string]func(Message)
+	from      et.Json
 	connected bool
 }
 
 // Create a new client websocket connection
-func NewPubSub(host string, reciveFn func(messageType int, message []byte)) *PubSub {
+func NewPubSub(host string, from et.Json, recivefn func(Message)) *PubSub {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
@@ -29,7 +32,8 @@ func NewPubSub(host string, reciveFn func(messageType int, message []byte)) *Pub
 	// Connect to the server
 	result := &PubSub{
 		host:     host,
-		reciveFn: reciveFn,
+		from:     from,
+		reciveFn: recivefn,
 	}
 
 	result.Connect()
@@ -45,22 +49,31 @@ func (p *PubSub) read() {
 		defer close(done)
 
 		for {
-			mt, message, err := p.socket.ReadMessage()
+			_, data, err := p.socket.ReadMessage()
 			if err != nil {
 				logs.Alertm(err.Error())
 				p.connected = false
 				return
 			}
 
-			if p.reciveFn != nil {
-				p.reciveFn(mt, message)
+			msg, err := DecodeMessage(data)
+			if err != nil {
+				logs.Alertm(err.Error())
+				return
+			}
+
+			f, ok := p.channels[msg.Channel]
+			if ok {
+				f(msg)
+			} else {
+				p.reciveFn(msg)
 			}
 		}
 	}()
 }
 
 // Send a message to the server
-func (p *PubSub) send(message string) error {
+func (p *PubSub) send(message Message) error {
 	if !p.connected {
 		return logs.Alertm(ERR_NOT_CONNECT_WS)
 	}
@@ -69,8 +82,12 @@ func (p *PubSub) send(message string) error {
 		return logs.Alertm(ERR_NOT_CONNECT_WS)
 	}
 
-	msg := []byte(message)
-	err := p.socket.WriteMessage(websocket.TextMessage, msg)
+	msg, err := message.Encode()
+	if err != nil {
+		return err
+	}
+
+	err = p.socket.WriteMessage(websocket.TextMessage, msg)
 	if err != nil {
 		return err
 	}
@@ -114,71 +131,55 @@ func (p *PubSub) Connect() (bool, error) {
 
 // Ping the server
 func (p *PubSub) Ping() {
-	msg := et.Json{
-		"type": "ping",
-	}
-
-	p.send(msg.ToString())
+	msg := NewMessage(p.from, et.Json{}, et.Json{})
+	msg.Tp = pubsub.TpPing
+	p.send(msg)
 }
 
 // Set the client parameters
 func (p *PubSub) Params(params et.Json) {
-	msg := et.Json{
-		"type":   "params",
-		"params": params,
-	}
-
-	p.send(msg.ToString())
+	msg := NewMessage(p.from, et.Json{}, params)
+	msg.Tp = pubsub.TpParams
+	p.send(msg)
 }
 
 // Set the client system parameters
 func (p *PubSub) System(params et.Json) {
-	msg := et.Json{
-		"type":   "system",
-		"params": params,
-	}
-
-	p.send(msg.ToString())
+	msg := NewMessage(p.from, et.Json{}, params)
+	msg.Tp = pubsub.TpSystem
+	p.send(msg)
 }
 
 // Subscribe to a channel
 func (p *PubSub) Subscribe(channel string) {
-	msg := et.Json{
-		"type":    "subscribe",
-		"channel": channel,
-	}
-
-	p.send(msg.ToString())
+	msg := NewMessage(p.from, et.Json{}, et.Json{})
+	msg.Tp = pubsub.TpSubscribe
+	msg.Channel = channel
+	p.send(msg)
 }
 
 // Unsubscribe from a channel
 func (p *PubSub) Unsubscribe(channel string) {
-	msg := et.Json{
-		"type":    "unsubscribe",
-		"channel": channel,
-	}
-
-	p.send(msg.ToString())
+	msg := NewMessage(p.from, et.Json{}, et.Json{})
+	msg.Tp = pubsub.TpUnsubscribe
+	msg.Channel = channel
+	p.send(msg)
 }
 
 // Publish a message to a channel
 func (p *PubSub) Publish(channel string, message interface{}) {
-	msg := et.Json{
-		"type":    "publish",
+	msg := NewMessage(p.from, et.Json{}, et.Json{
 		"channel": channel,
 		"message": message,
-	}
-
-	p.send(msg.ToString())
+	})
+	msg.Tp = pubsub.TpPublish
+	msg.Channel = channel
+	p.send(msg)
 }
 
 // Send a message to the server
-func (p *PubSub) SendMessage(clientId string, message string) {
-	msg := et.Json{
-		"type":      "sendmessage",
-		"client_id": clientId,
-		"message":   message,
-	}
-
-	p.send(msg.ToString())
+func (p *PubSub) SendMessage(to et.Json, message interface{}) {
+	msg := NewMessage(p.from, to, message)
+	msg.Tp = pubsub.TpDirect
+	p.send(msg)
 }

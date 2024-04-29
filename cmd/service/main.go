@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/pubsub"
 	"github.com/cgalvisleon/et/ws"
@@ -17,7 +18,7 @@ func main() {
 		logs.Fatal("Error al crear el cliente websocket.")
 	}
 
-	wsc.Publish("helo", "Hola mundo")
+	// wsc.Publish("helo", "Hola mundo")
 	// serv, err := New()
 	// if err != nil {
 	// 	logs.Fatal(err)
@@ -33,5 +34,10 @@ func main() {
 }
 
 func inbox(msg pubsub.Message) {
-	logs.Debug(msg)
+	dt, err := et.Marshal(msg)
+	if err != nil {
+		return
+	}
+
+	logs.Debug(dt.ToString())
 }

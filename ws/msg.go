@@ -14,5 +14,6 @@ const (
 	ERR_CHANNEL_EMPTY           = "Channel is empty"
 	ERR_PARAM_NOT_FOUND         = "Param not found"
 	ERR_CLIENT_ID_EMPTY         = "Client id is empty"
+	ERR_MESSAGE_UNFORMATTED     = "Message unformatted"
 	PARAMS_UPDATED              = "Params updated"
 )

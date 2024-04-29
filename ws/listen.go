@@ -10,7 +10,7 @@ import (
 func (c *Client) listen(messageType int, message []byte) {
 	msg, err := DecodeMessage(message)
 	if err != nil {
-		msg = NewMessage(*c.hub.Params, *c.Params, et.Json{
+		msg = NewMessage(*c.hub.Params, et.Json{
 			"ok":      false,
 			"message": err.Error(),
 		})
@@ -21,7 +21,7 @@ func (c *Client) listen(messageType int, message []byte) {
 	_type := msg.Type()
 	switch _type {
 	case pubsub.TpPing:
-		msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+		msg := NewMessage(*c.hub.Params, et.Json{
 			"ok":      true,
 			"message": "pong",
 		})
@@ -29,7 +29,7 @@ func (c *Client) listen(messageType int, message []byte) {
 	case pubsub.TpParams:
 		params, err := msg.Json()
 		if err != nil {
-			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+			msg := NewMessage(*c.hub.Params, et.Json{
 				"ok":      false,
 				"message": err.Error(),
 			})
@@ -45,7 +45,7 @@ func (c *Client) listen(messageType int, message []byte) {
 		params.Set("id", c.Id)
 		params.Set("name", c.Name)
 		c.setParams(params)
-		msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+		msg := NewMessage(*c.hub.Params, et.Json{
 			"ok":      true,
 			"message": PARAMS_UPDATED,
 		})
@@ -53,7 +53,7 @@ func (c *Client) listen(messageType int, message []byte) {
 	case pubsub.TpSystem:
 		params, err := msg.Json()
 		if err != nil {
-			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+			msg := NewMessage(*c.hub.Params, et.Json{
 				"ok":      false,
 				"message": err.Error(),
 			})
@@ -69,7 +69,7 @@ func (c *Client) listen(messageType int, message []byte) {
 		params.Set("id", c.Id)
 		params.Set("name", c.Name)
 		c.hub.SetParams(params)
-		msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+		msg := NewMessage(*c.hub.Params, et.Json{
 			"ok":      true,
 			"message": PARAMS_UPDATED,
 		})
@@ -77,7 +77,7 @@ func (c *Client) listen(messageType int, message []byte) {
 	case pubsub.TpSubscribe:
 		channel := msg.Channel
 		if channel == "" {
-			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+			msg := NewMessage(*c.hub.Params, et.Json{
 				"ok":      false,
 				"message": ERR_CHANNEL_EMPTY,
 			})
@@ -87,7 +87,7 @@ func (c *Client) listen(messageType int, message []byte) {
 
 		err := c.hub.Subscribe(c.Id, channel)
 		if err != nil {
-			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+			msg := NewMessage(*c.hub.Params, et.Json{
 				"ok":      false,
 				"message": err.Error(),
 			})
@@ -95,7 +95,7 @@ func (c *Client) listen(messageType int, message []byte) {
 			return
 		}
 
-		msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+		msg := NewMessage(*c.hub.Params, et.Json{
 			"ok":      true,
 			"message": "Subscribed to channel " + channel,
 		})
@@ -103,7 +103,7 @@ func (c *Client) listen(messageType int, message []byte) {
 	case pubsub.TpUnsubscribe:
 		channel := msg.Channel
 		if channel == "" {
-			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+			msg := NewMessage(*c.hub.Params, et.Json{
 				"ok":      false,
 				"message": ERR_CHANNEL_EMPTY,
 			})
@@ -113,7 +113,7 @@ func (c *Client) listen(messageType int, message []byte) {
 
 		err := c.hub.Subscribe(c.Id, channel)
 		if err != nil {
-			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+			msg := NewMessage(*c.hub.Params, et.Json{
 				"ok":      false,
 				"message": err.Error(),
 			})
@@ -121,7 +121,7 @@ func (c *Client) listen(messageType int, message []byte) {
 			return
 		}
 
-		msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+		msg := NewMessage(*c.hub.Params, et.Json{
 			"ok":      true,
 			"message": "Unsubscribed from channel " + channel,
 		})
@@ -129,7 +129,7 @@ func (c *Client) listen(messageType int, message []byte) {
 	case pubsub.TpPublish:
 		channel := msg.Channel
 		if channel == "" {
-			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+			msg := NewMessage(*c.hub.Params, et.Json{
 				"ok":      false,
 				"message": ERR_CHANNEL_EMPTY,
 			})
@@ -138,27 +138,33 @@ func (c *Client) listen(messageType int, message []byte) {
 		}
 
 		go c.hub.Publish(channel, msg, []string{c.Id}, *c.Params)
-		msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+		msg := NewMessage(*c.hub.Params, et.Json{
 			"ok":      true,
 			"message": "Message published to " + channel,
 		})
 		c.sendMessage(msg)
-	default:
-		clientId := msg.To.ValStr("-1", "client_id")
+	case pubsub.TpDirect:
+		clientId := msg.to
 
 		msg.From = *c.Params
 		err := c.hub.SendMessage(clientId, msg)
 		if err != nil {
-			msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+			msg := NewMessage(*c.hub.Params, et.Json{
 				"ok":      false,
 				"message": err.Error(),
 			})
 			c.sendMessage(msg)
 		}
 
-		msg := NewMessage(*c.hub.Params, *c.Params, et.Json{
+		msg := NewMessage(*c.hub.Params, et.Json{
 			"ok":      true,
 			"message": "Message sent to " + clientId,
+		})
+		c.sendMessage(msg)
+	default:
+		msg := NewMessage(*c.hub.Params, et.Json{
+			"ok":      false,
+			"message": ERR_MESSAGE_UNFORMATTED,
 		})
 		c.sendMessage(msg)
 	}

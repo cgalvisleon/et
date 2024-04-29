@@ -91,10 +91,6 @@ func (p *PubSub) read() {
 
 // Send a message to the server
 func (p *PubSub) send(message Message) error {
-	if !p.connected {
-		return logs.Alertm(ERR_NOT_CONNECT_WS)
-	}
-
 	if p.socket == nil {
 		return logs.Alertm(ERR_NOT_CONNECT_WS)
 	}
@@ -148,7 +144,7 @@ func (p PubSub) Connect() (bool, error) {
 
 // Ping the server
 func (p PubSub) Ping() {
-	msg := NewMessage(p.from, et.Json{}, et.Json{})
+	msg := NewMessage(p.from, et.Json{})
 	msg.Tp = pubsub.TpPing
 	p.send(msg)
 }
@@ -159,7 +155,7 @@ func (p PubSub) Params(params et.Json) error {
 		return logs.Alertm(ERR_PARAM_NOT_FOUND)
 	}
 
-	msg := NewMessage(p.from, et.Json{}, params)
+	msg := NewMessage(p.from, params)
 	msg.Tp = pubsub.TpParams
 	return p.send(msg)
 }
@@ -170,7 +166,7 @@ func (p PubSub) System(params et.Json) error {
 		return logs.Alertm(ERR_PARAM_NOT_FOUND)
 	}
 
-	msg := NewMessage(p.from, et.Json{}, params)
+	msg := NewMessage(p.from, params)
 	msg.Tp = pubsub.TpSystem
 	return p.send(msg)
 }
@@ -179,7 +175,7 @@ func (p PubSub) System(params et.Json) error {
 func (p PubSub) Subscribe(channel string, reciveFn func(pubsub.Message)) {
 	p.channels[channel] = reciveFn
 
-	msg := NewMessage(p.from, et.Json{}, et.Json{})
+	msg := NewMessage(p.from, et.Json{})
 	msg.Tp = pubsub.TpSubscribe
 	msg.Channel = channel
 	p.send(msg)
@@ -189,7 +185,7 @@ func (p PubSub) Subscribe(channel string, reciveFn func(pubsub.Message)) {
 func (p PubSub) Unsubscribe(channel string) {
 	delete(p.channels, channel)
 
-	msg := NewMessage(p.from, et.Json{}, et.Json{})
+	msg := NewMessage(p.from, et.Json{})
 	msg.Tp = pubsub.TpUnsubscribe
 	msg.Channel = channel
 	p.send(msg)
@@ -197,20 +193,16 @@ func (p PubSub) Unsubscribe(channel string) {
 
 // Publish a message to a channel
 func (p *PubSub) Publish(channel string, message interface{}) {
-	msg := NewMessage(p.from, et.Json{}, message)
+	msg := NewMessage(p.from, message)
 	msg.Tp = pubsub.TpPublish
 	msg.Channel = channel
 	p.send(msg)
 }
 
 // Send a message to the server
-func (p *PubSub) SendMessage(to et.Json, message interface{}) error {
-	clientId := to.ValStr("-1", "client_id")
-	if clientId == "-1" {
-		return logs.Alertm(ERR_CLIENT_ID_EMPTY)
-	}
-
-	msg := NewMessage(p.from, to, message)
+func (p *PubSub) SendMessage(clientId string, message interface{}) error {
+	msg := NewMessage(p.from, message)
+	msg.to = clientId
 	msg.Tp = pubsub.TpDirect
 	return p.send(msg)
 }

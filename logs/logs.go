@@ -169,12 +169,7 @@ func Panicf(format string, args ...any) {
 
 func Ping() {
 	ping++
-	Log("PING", ping)
-}
-
-func Pong() {
-	ping++
-	Log("PING", ping)
+	Log("PONG", ping)
 }
 
 func Debug(v ...any) {

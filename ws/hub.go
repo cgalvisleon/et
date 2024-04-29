@@ -80,7 +80,7 @@ func (h *Hub) onConnect(client *Client) {
 	h.clients = append(h.clients, client)
 	client.Addr = client.socket.RemoteAddr().String()
 
-	msg := NewMessage(*h.Params, *client.Params, et.Json{
+	msg := NewMessage(*h.Params, et.Json{
 		"ok":      true,
 		"message": "Connected successfully",
 		"client":  client.Params,
@@ -105,7 +105,7 @@ func (h *Hub) onDisconnect(client *Client) {
 	h.clients[len(h.clients)-1] = nil
 	h.clients = h.clients[:len(h.clients)-1]
 
-	msg := NewMessage(*h.Params, et.Json{}, et.Json{
+	msg := NewMessage(*h.Params, et.Json{
 		"ok":      true,
 		"message": "Client disconnected",
 		"client":  client.Params,

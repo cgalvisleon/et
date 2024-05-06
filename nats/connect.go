@@ -5,6 +5,7 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+// Connect to a host
 func connect(host string) (*nats.Conn, error) {
 	connect, err := nats.Connect(host)
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
@@ -24,6 +25,7 @@ type Hub struct {
 	Id         string
 	Name       string
 	Params     *et.Json
+	main       *websocket.Conn
 	clients    []*Client
 	channels   []*Channel
 	register   chan *Client
@@ -36,12 +38,18 @@ type Hub struct {
 func NewHub() *Hub {
 	id := utility.UUID()
 	name := "Hub"
-	return &Hub{
+	main := envar.GetStr("", "WS_MAIN_HOST")
+	scheme := envar.GetStr("ws", "WS_SCHEME")
+	result := &Hub{
 		Id:   id,
 		Name: name,
 		Params: &et.Json{
 			"id":   id,
 			"name": name,
+			"main": et.Json{
+				"host":   main,
+				"scheme": scheme,
+			},
 		},
 		clients:    make([]*Client, 0),
 		channels:   make([]*Channel, 0),
@@ -50,6 +58,16 @@ func NewHub() *Hub {
 		mutex:      &sync.Mutex{},
 		run:        false,
 	}
+
+	if main != "" {
+		var err error
+		result.main, err = connectWs(main, scheme)
+		if err != nil {
+			result.main = nil
+		}
+	}
+
+	return result
 }
 
 // Run the hub
@@ -138,9 +156,16 @@ func (h *Hub) connect(socket *websocket.Conn, clientId, name string) (*Client, e
 func (h *Hub) publish(channel *Channel, msg Message, ignored []string, from et.Json) error {
 	msg.Channel = channel.Low()
 	msg.From = from
-	for _, client := range channel.Subscribers {
-		if !slices.Contains(ignored, client.Id) {
-			client.sendMessage(msg)
+	if channel.TpBroadcast == TpRoundRobin {
+		client := channel.NextTurn()
+		if client != nil {
+			return client.sendMessage(msg)
+		}
+	} else {
+		for _, client := range channel.Subscribers {
+			if !slices.Contains(ignored, client.Id) {
+				client.sendMessage(msg)
+			}
 		}
 	}
 
@@ -163,18 +188,18 @@ func (h *Hub) Broadcast(msg Message, ignored []string) {
 
 // Publish a message to a channel less the ignore client
 func (h *Hub) Publish(channel string, msg Message, ignored []string, from et.Json) error {
-	_channel := h.getChanel(channel)
-	if len(_channel.Subscribers) == 0 {
+	ch := h.getChanel(channel)
+	if len(ch.Subscribers) == 0 {
 		return logs.Alertm(ERR_CHANNEL_NOT_SUBSCRIBERS)
 	}
 
-	return h.publish(_channel, msg, ignored, from)
+	return h.publish(ch, msg, ignored, from)
 }
 
 // Publish mute a message to a channel less the ignore client
 func (h *Hub) Mute(channel string, msg Message, ignored []string, from et.Json) error {
-	_channel := h.getChanel(channel)
-	return h.publish(_channel, msg, ignored, from)
+	ch := h.getChanel(channel)
+	return h.publish(ch, msg, ignored, from)
 }
 
 // Send a message to a client in a channel
@@ -225,17 +250,35 @@ func (h *Hub) getChanel(name string) *Channel {
 	return result
 }
 
-// Subscribe a client to hub channels
-func (h *Hub) Subscribe(clientId string, channel string) error {
+func (h *Hub) subscribe(clientId string, channel string) (*Channel, error) {
 	idx := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == clientId })
 	if idx == -1 {
-		return logs.Alertm(ERR_CLIENT_NOT_FOUND)
+		return nil, logs.Alertm(ERR_CLIENT_NOT_FOUND)
 	}
 
 	client := h.clients[idx]
-	_channel := h.getChanel(channel)
-	_channel.Subscribe(client)
+	result := h.getChanel(channel)
+	result.Subscribe(client)
 	client.subscribe([]string{channel})
+
+	return result, nil
+}
+
+// Subscribe a client to hub channels
+func (h *Hub) Subscribe(clientId string, channel string) error {
+	_, err := h.subscribe(clientId, channel)
+	return err
+}
+
+// Subscribe a client to hub channels
+func (h *Hub) Stack(clientId string, channel string) error {
+	ch, err := h.subscribe(clientId, channel)
+	if err != nil {
+		return err
+	}
+
+	ch.TpBroadcast = TpRoundRobin
+
 	return nil
 }
 
@@ -249,15 +292,15 @@ func (h *Hub) Unsubscribe(clientId string, channel string) error {
 	client := h.clients[idx]
 	client.unsubscribe([]string{channel})
 
-	_channel := h.getChanel(channel)
-	_channel.Unsubcribe(clientId)
-	h.pruneChanner(_channel)
+	ch := h.getChanel(channel)
+	ch.Unsubcribe(clientId)
+	h.pruneChanner(ch)
 
 	return nil
 }
 
 // Return client list subscribed to channel
 func (h *Hub) GetSubscribers(channel string) []*Client {
-	_channel := h.getChanel(channel)
-	return _channel.Subscribers
+	ch := h.getChanel(channel)
+	return ch.Subscribers
 }

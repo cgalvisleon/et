@@ -146,6 +146,7 @@ func (p PubSub) Connect() (bool, error) {
 func (p PubSub) Ping() {
 	msg := NewMessage(p.from, et.Json{})
 	msg.Tp = pubsub.TpPing
+
 	p.send(msg)
 }
 
@@ -157,17 +158,7 @@ func (p PubSub) Params(params et.Json) error {
 
 	msg := NewMessage(p.from, params)
 	msg.Tp = pubsub.TpParams
-	return p.send(msg)
-}
 
-// Set the client system parameters
-func (p PubSub) System(params et.Json) error {
-	if params.Emptyt() {
-		return logs.Alertm(ERR_PARAM_NOT_FOUND)
-	}
-
-	msg := NewMessage(p.from, params)
-	msg.Tp = pubsub.TpSystem
 	return p.send(msg)
 }
 
@@ -178,6 +169,7 @@ func (p PubSub) Subscribe(channel string, reciveFn func(pubsub.Message)) {
 	msg := NewMessage(p.from, et.Json{})
 	msg.Tp = pubsub.TpSubscribe
 	msg.Channel = channel
+
 	p.send(msg)
 }
 
@@ -188,6 +180,18 @@ func (p PubSub) Unsubscribe(channel string) {
 	msg := NewMessage(p.from, et.Json{})
 	msg.Tp = pubsub.TpUnsubscribe
 	msg.Channel = channel
+
+	p.send(msg)
+}
+
+// Subscribe to a channel type fisrt, so send message to first client
+func (p PubSub) Stack(channel string, reciveFn func(pubsub.Message)) {
+	p.channels[channel] = reciveFn
+
+	msg := NewMessage(p.from, et.Json{})
+	msg.Tp = pubsub.TpStack
+	msg.Channel = channel
+
 	p.send(msg)
 }
 
@@ -196,6 +200,7 @@ func (p *PubSub) Publish(channel string, message interface{}) {
 	msg := NewMessage(p.from, message)
 	msg.Tp = pubsub.TpPublish
 	msg.Channel = channel
+
 	p.send(msg)
 }
 
@@ -204,5 +209,6 @@ func (p *PubSub) SendMessage(clientId string, message interface{}) error {
 	msg := NewMessage(p.from, message)
 	msg.to = clientId
 	msg.Tp = pubsub.TpDirect
+
 	return p.send(msg)
 }

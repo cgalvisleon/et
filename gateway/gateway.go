@@ -25,13 +25,13 @@ type Server struct {
 }
 
 var PackageName = "gateway"
-var PackageTitle = envar.EnvarStr("Apigateway", "PACKAGE_TITLE")
+var PackageTitle = envar.GetStr("Apigateway", "PACKAGE_TITLE")
 var PackagePath = "/api/gateway"
-var PackageVersion = envar.EnvarStr("0.0.1", "VERSION")
-var Company = envar.EnvarStr("", "COMPANY")
-var Web = envar.EnvarStr("", "WEB")
+var PackageVersion = envar.GetStr("0.0.1", "VERSION")
+var Company = envar.GetStr("", "COMPANY")
+var Web = envar.GetStr("", "WEB")
 var HostName, _ = os.Hostname()
-var Host = strs.Format(`%s:%d`, envar.EnvarStr("http://localhost", "HOST"), envar.EnvarInt(3300, "PORT"))
+var Host = strs.Format(`%s:%d`, envar.GetStr("http://localhost", "HOST"), envar.GetInt(3300, "PORT"))
 var conn *Server
 
 func Load(cache cache.Cache) (*Server, error) {
@@ -100,7 +100,7 @@ func (serv *Server) Start() {
 
 func Version() et.Json {
 	service := et.Json{
-		"version": envar.EnvarStr("", "VERSION"),
+		"version": envar.GetStr("", "VERSION"),
 		"service": PackageName,
 		"host":    HostName,
 		"company": Company,

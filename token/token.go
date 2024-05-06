@@ -25,7 +25,7 @@ func Load(cache cache.Cache, pubsub pubsub.PubSub) (*Token, error) {
 	}
 
 	conn = &Token{
-		secret: envar.EnvarStr("", "SECRET"),
+		secret: envar.GetStr("", "SECRET"),
 		cache:  cache,
 		pubsub: pubsub,
 	}

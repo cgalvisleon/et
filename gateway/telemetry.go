@@ -88,7 +88,7 @@ func (m *Metrics) CallRequests(tag string) *Request {
 		Hour:    conn.cache.Count(strs.Format(`%s-%d`, tag, time.Now().Unix()/3600), 3600),
 		Minute:  conn.cache.Count(strs.Format(`%s-%d`, tag, time.Now().Unix()/60), 60),
 		Seccond: conn.cache.Count(strs.Format(`%s-%d`, tag, time.Now().Unix()/1), 1),
-		Limit:   envar.EnvarInt(400, "REQUESTS_LIMIT"),
+		Limit:   envar.GetInt(400, "REQUESTS_LIMIT"),
 	}
 }
 

@@ -56,7 +56,7 @@ func newHttpServer() *HttpServer {
 	// Create a new server
 	mux := http.NewServeMux()
 
-	port := envar.EnvarInt(3300, "PORT")
+	port := envar.GetInt(3300, "PORT")
 	result := &HttpServer{
 		addr:       strs.Format(":%d", port),
 		handler:    cors.AllowAll().Handler(mux),

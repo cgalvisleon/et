@@ -10,23 +10,22 @@ import (
 )
 
 type Message struct {
-	Created_at time.Time        `json:"created_at"`
-	Id         string           `json:"id"`
-	From       et.Json          `json:"from"`
-	To         et.Json          `json:"to"`
+	Created_at time.Time `json:"created_at"`
+	Id         string    `json:"id"`
+	From       et.Json   `json:"from"`
+	to         string
 	Tp         pubsub.TpMessage `json:"tp"`
 	Channel    string           `json:"channel"`
 	Data       interface{}      `json:"data"`
 }
 
 // NewMessage create a new message
-func NewMessage(from, to et.Json, message interface{}) Message {
+func NewMessage(from et.Json, message interface{}) Message {
 	id := utility.UUID()
 	return Message{
 		Created_at: time.Now(),
 		Id:         id,
 		From:       from,
-		To:         to,
 		Data:       message,
 	}
 }
@@ -56,6 +55,7 @@ func (e Message) Encode() ([]byte, error) {
 	return b, nil
 }
 
+// Json return the message as json
 func (e Message) Json() (et.Json, error) {
 	result := et.Json{}
 	err := result.Scan(e.Data)

@@ -7,9 +7,9 @@ type TpMessage string
 const (
 	TpPing        = TpMessage("ping")
 	TpParams      = TpMessage("params")
-	TpSystem      = TpMessage("system")
 	TpSubscribe   = TpMessage("subscribe")
 	TpUnsubscribe = TpMessage("unsubscribe")
+	TpStack       = TpMessage("stack")
 	TpPublish     = TpMessage("publish")
 	TpDirect      = TpMessage("direct")
 	TpLog         = TpMessage("log")
@@ -32,6 +32,7 @@ type PubSub interface {
 	Params(params et.Json) error
 	System(params et.Json) error
 	Subscribe(channel string, reciveFn func(Message))
+	Stack(channel string, reciveFn func(Message))
 	Unsubscribe(channel string)
 	Publish(channel string, message interface{})
 	SendMessage(to et.Json, message string) error

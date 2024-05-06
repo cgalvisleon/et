@@ -37,7 +37,7 @@ func (c *Service) Version(rq []byte, rp *et.Item) error {
 func newRpc() net.Listener {
 	initRpc()
 	rpc.HandleHTTP()
-	port := envar.EnvarInt(0, "RPC")
+	port := envar.GetInt(0, "RPC")
 
 	result, err := net.Listen("tcp", fmt.Sprintf(`0.0.0.0:%d`, port))
 	if err != nil {

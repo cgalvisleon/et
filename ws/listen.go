@@ -18,8 +18,8 @@ func (c *Client) listen(messageType int, message []byte) {
 		return
 	}
 
-	_type := msg.Type()
-	switch _type {
+	tp := msg.Type()
+	switch tp {
 	case pubsub.TpPing:
 		msg := NewMessage(*c.hub.Params, et.Json{
 			"ok":      true,
@@ -50,30 +50,6 @@ func (c *Client) listen(messageType int, message []byte) {
 			"message": PARAMS_UPDATED,
 		})
 		c.sendMessage(msg)
-	case pubsub.TpSystem:
-		params, err := msg.Json()
-		if err != nil {
-			msg := NewMessage(*c.hub.Params, et.Json{
-				"ok":      false,
-				"message": err.Error(),
-			})
-			c.sendMessage(msg)
-			return
-		}
-
-		name := params.ValStr("", "name")
-		if name != "" {
-			c.Name = name
-		}
-
-		params.Set("id", c.Id)
-		params.Set("name", c.Name)
-		c.hub.SetParams(params)
-		msg := NewMessage(*c.hub.Params, et.Json{
-			"ok":      true,
-			"message": PARAMS_UPDATED,
-		})
-		c.sendMessage(msg)
 	case pubsub.TpSubscribe:
 		channel := msg.Channel
 		if channel == "" {
@@ -98,6 +74,32 @@ func (c *Client) listen(messageType int, message []byte) {
 		msg := NewMessage(*c.hub.Params, et.Json{
 			"ok":      true,
 			"message": "Subscribed to channel " + channel,
+		})
+		c.sendMessage(msg)
+	case pubsub.TpStack:
+		channel := msg.Channel
+		if channel == "" {
+			msg := NewMessage(*c.hub.Params, et.Json{
+				"ok":      false,
+				"message": ERR_CHANNEL_EMPTY,
+			})
+			c.sendMessage(msg)
+			return
+		}
+
+		err := c.hub.Stack(c.Id, channel)
+		if err != nil {
+			msg := NewMessage(*c.hub.Params, et.Json{
+				"ok":      false,
+				"message": err.Error(),
+			})
+			c.sendMessage(msg)
+			return
+		}
+
+		msg := NewMessage(*c.hub.Params, et.Json{
+			"ok":      true,
+			"message": "Stacked to channel " + channel,
 		})
 		c.sendMessage(msg)
 	case pubsub.TpUnsubscribe:

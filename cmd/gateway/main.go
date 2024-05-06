@@ -11,13 +11,13 @@ import (
 )
 
 func main() {
-	envar.SetvarInt("port", 3000, "Port server", "PORT")
-	envar.SetvarInt("rpc", 4200, "Port rpc server", "RPC")
-	envar.SetvarStr("dbhost", "localhost", "Database host", "DB_HOST")
-	envar.SetvarInt("dbport", 5432, "Database port", "DB_PORT")
-	envar.SetvarStr("dbname", "", "Database name", "DB_NAME")
-	envar.SetvarStr("dbuser", "", "Database user", "DB_USER")
-	envar.SetvarStr("dbpass", "", "Database password", "DB_PASSWORD")
+	envar.SetInt("port", 3000, "Port server", "PORT")
+	envar.SetInt("rpc", 4200, "Port rpc server", "RPC")
+	envar.SetStr("dbhost", "localhost", "Database host", "DB_HOST")
+	envar.SetInt("dbport", 5432, "Database port", "DB_PORT")
+	envar.SetStr("dbname", "", "Database name", "DB_NAME")
+	envar.SetStr("dbuser", "", "Database user", "DB_USER")
+	envar.SetStr("dbpass", "", "Database password", "DB_PASSWORD")
 
 	cache, err := store.Load()
 	if err != nil {

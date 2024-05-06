@@ -14,7 +14,7 @@ func Load() (*Conn, error) {
 		return conn, nil
 	}
 
-	hub := connect()
+	hub := connectHub()
 	conn = &Conn{
 		hub: hub,
 	}

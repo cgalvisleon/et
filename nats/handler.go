@@ -1,132 +1,64 @@
 package nats
 
 import (
-	"github.com/cgalvisleon/et/et"
-	"github.com/nats-io/nats.go"
+	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/pubsub"
 )
 
-func Publish(clientId, channel string, message interface{}) error {
+// Subscribe to a channel
+func Subscribe(channel string, f func(pubsub.Message)) error {
 	if conn == nil {
-		return nil
+		return logs.Alertm(ERR_NOT_CONNECT_NATS)
 	}
 
-	msg := NewMessage(et.Json{}, et.Json{}, message)
-	dt, err := msg.Encode()
+	conn.Subscribe(channel, f)
+
+	return nil
+}
+
+// Unsubscribe to a channel
+func Unsubscribe(channel string) error {
+	if conn == nil {
+		return logs.Alertm(ERR_NOT_CONNECT_NATS)
+	}
+
+	conn.Unsubscribe(channel)
+
+	return nil
+}
+
+// Stack to a channel
+func Stack(channel string, f func(pubsub.Message)) error {
+	if conn == nil {
+		return logs.Alertm(ERR_NOT_CONNECT_NATS)
+	}
+
+	err := conn.stack(channel, f)
 	if err != nil {
 		return err
 	}
 
-	// key := id
-	// conn.cache.Set(key, msg.ToString(), 15)
-
-	return conn.conn.Publish(msg.Channel, dt)
+	return nil
 }
 
-func Subscribe(channel string, f func(Message)) (err error) {
+// Publish to a channel
+func Publish(channel string, message pubsub.Message) error {
 	if conn == nil {
-		return
+		return logs.Alertm(ERR_NOT_CONNECT_NATS)
 	}
 
-	msg := Message{
-		Channel: channel,
-	}
-	conn.eventCreatedSub, err = conn.conn.Subscribe(
-		msg.Channel,
-		func(m *nats.Msg) {
-			f(msg)
-		},
-	)
+	conn.Publish(channel, message)
 
-	return
+	return nil
 }
 
-func Stack(channel string, f func(Message)) (err error) {
+// SendMessage to a client
+func SendMessage(clientId string, message pubsub.Message) error {
 	if conn == nil {
-		return
+		return logs.Alertm(ERR_NOT_CONNECT_NATS)
 	}
 
-	msg := Message{
-		Channel: channel,
-	}
+	conn.SendMessage(clientId, message)
 
-	conn.eventCreatedSub, err = conn.conn.Subscribe(
-		channel,
-		func(m *nats.Msg) {
-			/*
-				key := msg.Id
-
-
-					ok := conn.Lock(key)
-					if !ok {
-						return
-					}
-			*/
-			f(msg)
-		},
-	)
-
-	return
-}
-
-func Event(event string, data interface{}) {
-	go Publish("event", "event/publish", et.Json{
-		"event": event,
-		"data":  data,
-	})
-}
-
-func Work(work, work_id string, data interface{}) {
-	go Publish("event", work, et.Json{
-		"work":    work,
-		"work_id": work_id,
-		"data":    data,
-	})
-}
-
-func Working(worker, work_id string) {
-	go Publish("event", "event/working", et.Json{
-		"worker":  worker,
-		"work_id": work_id,
-	})
-}
-
-func Done(work_id, event string) {
-	go Publish("event", "event/done", et.Json{
-		"work_id": work_id,
-		"event":   event,
-	})
-}
-
-func Rejected(work_id, event string) {
-	go Publish("event", "event/rejected", et.Json{
-		"work_id": work_id,
-		"event":   event,
-	})
-}
-
-func Action(action string, data map[string]interface{}) {
-	go Publish("action", action, data)
-}
-
-func WsBroadcast(message interface{}, ignoreId string) {
-	go Publish("ws", "ws/broadcast", et.Json{
-		"message":   message,
-		"ignore_id": ignoreId,
-	})
-}
-
-func WsPublish(channel string, message interface{}, ignoreId string) {
-	go Publish("ws", "ws/publish", et.Json{
-		"channel":   channel,
-		"message":   message,
-		"ignore_id": ignoreId,
-	})
-}
-
-func WsSendMessage(clientId, channel string, message interface{}) {
-	go Publish("ws", "ws/send_message", et.Json{
-		"client_id": clientId,
-		"channel":   channel,
-		"message":   message,
-	})
+	return nil
 }

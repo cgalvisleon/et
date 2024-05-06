@@ -6,16 +6,36 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+type TpBroadcast int
+
+const (
+	TpAll TpBroadcast = iota
+	TpRoundRobin
+)
+
 // Channel is a hub websocket channel
 type Channel struct {
 	Name        string
+	TpBroadcast TpBroadcast
 	Subscribers []*Client
+	turn        int
+}
+
+// String return the string representation of the broadcast type
+func (tp TpBroadcast) String() string {
+	switch tp {
+	case TpRoundRobin:
+		return "roundrobin"
+	default:
+		return "all"
+	}
 }
 
 // NewChannel create a new channel
 func newChannel(name string) *Channel {
 	result := &Channel{
 		Name:        strs.Lowcase(name),
+		TpBroadcast: TpAll,
 		Subscribers: []*Client{},
 	}
 
@@ -35,6 +55,22 @@ func (ch *Channel) Low() string {
 // Count return the number of subscribers in channel
 func (ch *Channel) Count() int {
 	return len(ch.Subscribers)
+}
+
+func (ch *Channel) NextTurn() *Client {
+	n := ch.Count()
+	if n == 0 {
+		return nil
+	}
+
+	if ch.turn >= n {
+		ch.turn = 0
+	}
+
+	result := ch.Subscribers[ch.turn]
+	ch.turn++
+
+	return result
 }
 
 // Subscribe a client to channel

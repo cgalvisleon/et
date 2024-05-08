@@ -8,6 +8,7 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/response"
+	"github.com/cgalvisleon/et/telemetry"
 )
 
 // Version information this package
@@ -27,7 +28,7 @@ func notFounder(w http.ResponseWriter, r *http.Request) {
 // Handler function
 func handlerFn(w http.ResponseWriter, r *http.Request) {
 	// Begin telemetry
-	metric := NewMetric(r)
+	metric := telemetry.NewMetric(r)
 
 	// Get resolute
 	resolute := GetResolute(r)
@@ -40,7 +41,7 @@ func handlerFn(w http.ResponseWriter, r *http.Request) {
 		conn.http.notFoundHandler(w, r)
 
 		defer func() {
-			go metric.notFounder(r)
+			go metric.NotFounder(r)
 		}()
 
 		return
@@ -56,7 +57,7 @@ func handlerFn(w http.ResponseWriter, r *http.Request) {
 		}
 
 		defer func() {
-			go metric.doneHandler()
+			go metric.DoneHandler()
 		}()
 
 		handler(w, r)
@@ -79,7 +80,7 @@ func handlerFn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer func() {
-		go metric.done(res)
+		go metric.Done(res)
 		res.Body.Close()
 	}()
 

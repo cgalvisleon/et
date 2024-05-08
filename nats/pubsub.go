@@ -4,9 +4,10 @@ import (
 	"slices"
 
 	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/pubsub"
+	m "github.com/cgalvisleon/et/message"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/nats-io/nats.go"
 )
@@ -18,14 +19,14 @@ type PubSub struct {
 	from         et.Json
 	conn         *nats.Conn
 	subscription map[string]*nats.Subscription
-	reciveFn     func(pubsub.Message)
-	channels     map[string]func(pubsub.Message)
+	reciveFn     func(m.Message)
+	channels     map[string]func(m.Message)
 	connected    bool
-	cache        cache.Cache
 }
 
 // Create a new client websocket connection
-func NewPubSub(host, clientId, name string, cache cache.Cache, reciveFn func(pubsub.Message)) *PubSub {
+func NewPubSub(clientId, name string, reciveFn func(m.Message)) (*PubSub, error) {
+	host := envar.GetStr("", "NATS_HOST")
 	if host == "" {
 		host = "localhost:4222"
 	}
@@ -48,16 +49,18 @@ func NewPubSub(host, clientId, name string, cache cache.Cache, reciveFn func(pub
 		},
 		subscription: make(map[string]*nats.Subscription),
 		reciveFn:     reciveFn,
-		cache:        cache,
 	}
 
-	result.Connect()
+	_, err := result.Connect()
+	if err != nil {
+		return nil, err
+	}
 
-	return result
+	return result, nil
 }
 
 // Subscribe to a channel
-func (p PubSub) subscribe(channel string, f func(pubsub.Message)) error {
+func (p PubSub) subscribe(channel string, f func(m.Message)) error {
 	if p.conn == nil {
 		return logs.Alertm(ERR_NOT_CONNECT_NATS)
 	}
@@ -81,17 +84,13 @@ func (p PubSub) subscribe(channel string, f func(pubsub.Message)) error {
 }
 
 // Subscribe to a channel
-func (p PubSub) stack(channel string, f func(pubsub.Message)) error {
+func (p PubSub) stack(channel string, f func(m.Message)) error {
 	if p.conn == nil {
 		return logs.Alertm(ERR_NOT_CONNECT_NATS)
 	}
 
 	lock := func(id string) bool {
-		if p.cache == nil {
-			return true
-		}
-
-		return p.cache.Del(id)
+		return cache.Del(id)
 	}
 
 	msg := Message{
@@ -128,9 +127,7 @@ func (p PubSub) send(subj string, message Message) error {
 		return err
 	}
 
-	if p.cache != nil {
-		p.cache.Set(message.Id, msg, 15)
-	}
+	cache.Set(message.Id, msg, 15)
 
 	err = p.conn.Publish(subj, msg)
 	if err != nil {
@@ -193,7 +190,7 @@ func (p PubSub) Ping() {
 		"ok":      true,
 		"message": "pong",
 	})
-	msg.Tp = pubsub.TpPing
+	msg.Tp = m.TpPing
 
 	p.send(p.ClientId, msg)
 }
@@ -221,7 +218,7 @@ func (p PubSub) Params(params et.Json) error {
 }
 
 // Subscribe to a channel
-func (p PubSub) Subscribe(channel string, reciveFn func(pubsub.Message)) {
+func (p PubSub) Subscribe(channel string, reciveFn func(m.Message)) {
 	p.channels[channel] = reciveFn
 	p.subscribe(channel, reciveFn)
 	msg := NewMessage(p.from, et.Json{
@@ -233,7 +230,7 @@ func (p PubSub) Subscribe(channel string, reciveFn func(pubsub.Message)) {
 }
 
 // Subscribe to a channel type fisrt, so send message to first client
-func (p PubSub) Stack(channel string, reciveFn func(pubsub.Message)) {
+func (p PubSub) Stack(channel string, reciveFn func(m.Message)) {
 	p.channels[channel] = reciveFn
 	p.stack(channel, reciveFn)
 	msg := NewMessage(p.from, et.Json{
@@ -259,7 +256,7 @@ func (p PubSub) Unsubscribe(channel string) {
 // Publish a message to a channel
 func (p *PubSub) Publish(channel string, message interface{}) {
 	msg := NewMessage(p.from, message)
-	msg.Tp = pubsub.TpPublish
+	msg.Tp = m.TpPublish
 	msg.Channel = channel
 	p.send(msg.Channel, msg)
 
@@ -275,7 +272,7 @@ func (p *PubSub) Publish(channel string, message interface{}) {
 func (p *PubSub) SendMessage(clientId string, message interface{}) error {
 	msg := NewMessage(p.from, message)
 	msg.to = clientId
-	msg.Tp = pubsub.TpDirect
+	msg.Tp = m.TpDirect
 
 	return p.send(msg.to, msg)
 }

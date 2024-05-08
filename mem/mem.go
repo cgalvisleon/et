@@ -14,8 +14,8 @@ type Mem struct {
 }
 
 // NewCache create new cache
-func Load() (Mem, error) {
-	result := Mem{
+func Load() (*Mem, error) {
+	result := &Mem{
 		items: make(map[string]*Item),
 		mutex: sync.RWMutex{},
 	}
@@ -55,7 +55,7 @@ func (c *Mem) Set(key string, value interface{}, expiration time.Duration) inter
 }
 
 // Get method to use in cache
-func (c *Mem) Get(key string, _default interface{}) interface{} {
+func (c *Mem) Get(key string, def interface{}) interface{} {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
@@ -63,7 +63,7 @@ func (c *Mem) Get(key string, _default interface{}) interface{} {
 		return item.Get()
 	}
 
-	return _default
+	return def
 }
 
 // Del method to use in cache

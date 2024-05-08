@@ -24,6 +24,8 @@ const (
 	POST    = "POST"
 	PUT     = "PUT"
 	TRACE   = "TRACE"
+	//
+	PACKAGE_NAME = "Api Gateway"
 )
 
 var methodMap = map[string]bool{
@@ -69,10 +71,10 @@ func newHttpServer() *HttpServer {
 	}
 	result.notFoundHandler = notFounder
 	result.handlerFn = handlerFn
-	result.Get("/version", version, "Api Gateway")
-	result.Get("/gateway/all", getAll, "Api Gateway")
-	result.Post("/gateway", upsert, "Api Gateway")
-	result.Get("/ws", wsConnect, "Api Gateway")
+	result.Get("/version", version, PACKAGE_NAME)
+	result.Get("/gateway/all", getAll, PACKAGE_NAME)
+	result.Post("/gateway", upsert, PACKAGE_NAME)
+	result.Get("/ws", wsConnect, PACKAGE_NAME)
 
 	// Handler router
 	mux.HandleFunc("/", result.handlerFn)

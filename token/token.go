@@ -8,35 +8,38 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/pubsub"
+	"github.com/cgalvisleon/et/strs"
 	"github.com/golang-jwt/jwt/v4"
 )
 
-type Token struct {
-	secret string
-	cache  cache.Cache
-	pubsub pubsub.PubSub
+type Claim struct {
+	ClientId string        `json:"clientId"`
+	Name     string        `json:"name"`
+	Iat      time.Time     `json:"iat"`
+	Exp      time.Duration `json:"exp"`
+	App      string        `json:"app"`
+	Kind     string        `json:"kind"`
+	Device   string        `json:"device"`
+	jwt.StandardClaims
 }
 
-var conn *Token
+const (
+	ERR_INVALID_CLAIM = "Invalid claim"
+	ERR_AUTORIZATION  = "Invalid autorization"
+)
 
-func Load(cache cache.Cache, pubsub pubsub.PubSub) (*Token, error) {
-	if conn != nil {
-		return conn, nil
-	}
-
-	conn = &Token{
-		secret: envar.GetStr("", "SECRET"),
-		cache:  cache,
-		pubsub: pubsub,
-	}
-
-	return conn, nil
+// TokenKey generate a key for the token
+func tokenKey(app, device, clientId string) string {
+	result := strs.Append(app, device, "-")
+	result = strs.Append(result, clientId, "-")
+	return strs.Format(`token:%s`, result)
 }
 
 // Parece method to use in token
-func (t *Token) parce(tokenString string) (*jwt.Token, error) {
+func parce(tokenString string) (*jwt.Token, error) {
+	secret := envar.GetStr("", "SECRET")
 	token, err := jwt.Parse(tokenString, func(*jwt.Token) (interface{}, error) {
-		return []byte(t.secret), nil
+		return []byte(secret), nil
 	})
 	if err != nil {
 		return nil, err
@@ -46,30 +49,37 @@ func (t *Token) parce(tokenString string) (*jwt.Token, error) {
 }
 
 // Generate method to use in token
-func (t *Token) Generate(sub, name, app, kind, device string, expired time.Duration) (string, error) {
+func Generate(clientId, name, app, kind, device string, expired time.Duration) (string, error) {
 	c := Claim{
-		Sub:    sub,
-		Name:   name,
-		Iat:    time.Now(),
-		Exp:    expired,
-		App:    app,
-		Kind:   kind,
-		Device: device,
+		ClientId: clientId,
+		Name:     name,
+		Iat:      time.Now(),
+		Exp:      expired,
+		App:      app,
+		Kind:     kind,
+		Device:   device,
 	}
-	_jwt := jwt.NewWithClaims(jwt.SigningMethodHS256, c)
-	token, err := _jwt.SignedString([]byte(t.secret))
+	jwT := jwt.NewWithClaims(jwt.SigningMethodHS256, c)
+	secret := envar.GetStr("", "SECRET")
+	token, err := jwT.SignedString([]byte(secret))
 	if err != nil {
 		return "", err
 	}
 
-	key := tokenKey(app, device, sub)
-	old := t.cache.Get(key, "")
-	if t.cache != nil {
-		t.cache.Set(key, token, expired)
+	return token, nil
+}
+
+func Authorizacion(clientId, name, app, kind, device string, expired time.Duration) (string, error) {
+	token, err := Generate(clientId, name, app, kind, device, expired)
+	if err != nil {
+		return "", err
 	}
 
-	if t.pubsub != nil && old != token {
-		t.pubsub.Publish(key, et.Json{
+	key := tokenKey(app, device, clientId)
+	old := cache.Get(key, "")
+	cache.Set(key, token, expired)
+	if old != token {
+		pubsub.Publish(key, et.Json{
 			"action": "close",
 		})
 	}
@@ -77,28 +87,9 @@ func (t *Token) Generate(sub, name, app, kind, device string, expired time.Durat
 	return token, nil
 }
 
-// Validate method to use in token
-func (t *Token) Validate(tokenString string) (bool, error) {
-	token, err := t.parce(tokenString)
-	if err != nil {
-		return false, err
-	}
-
-	if token.Valid {
-		return true, nil
-	}
-
-	err = t.Delete(tokenString)
-	if err != nil {
-		return false, err
-	}
-
-	return false, nil
-}
-
 // Delete method to use in token
-func (t *Token) Delete(tokenString string) error {
-	token, err := t.parce(tokenString)
+func Delete(tokenString string) error {
+	token, err := parce(tokenString)
 	if err != nil {
 		return err
 	}
@@ -108,7 +99,7 @@ func (t *Token) Delete(tokenString string) error {
 		return logs.Alertm(ERR_INVALID_CLAIM)
 	}
 
-	sub, ok := claims["sub"].(string)
+	clientId, ok := claims["clientId"].(string)
 	if !ok {
 		return nil
 	}
@@ -123,25 +114,29 @@ func (t *Token) Delete(tokenString string) error {
 		return nil
 	}
 
-	key := tokenKey(app, device, sub)
-	if t.cache != nil {
-		t.cache.Del(key)
-	}
-
-	if t.pubsub != nil {
-		t.pubsub.Publish(key, et.Json{
-			"action": "close",
-		})
-	}
+	key := tokenKey(app, device, clientId)
+	cache.Del(key)
+	pubsub.Publish(key, et.Json{
+		"action": "close",
+	})
 
 	return nil
 }
 
-// Parce method to use in token
-func (t *Token) Parce(tokenString string) (*Claim, error) {
-	token, err := t.parce(tokenString)
+// Validate method to use in token
+func Validate(tokenString string) (*Claim, error) {
+	token, err := parce(tokenString)
 	if err != nil {
 		return nil, err
+	}
+
+	if !token.Valid {
+		err := Delete(tokenString)
+		if err != nil {
+			return nil, err
+		}
+
+		return nil, logs.Errorm(ERR_AUTORIZATION)
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
@@ -149,48 +144,48 @@ func (t *Token) Parce(tokenString string) (*Claim, error) {
 		return nil, logs.Alertm(ERR_INVALID_CLAIM)
 	}
 
-	sub, ok := claims["sub"].(string)
+	clientId, ok := claims["clientId"].(string)
 	if !ok {
-		return nil, nil
+		return nil, logs.Alertm(ERR_INVALID_CLAIM)
 	}
 
 	name, ok := claims["name"].(string)
 	if !ok {
-		return nil, nil
+		return nil, logs.Alertm(ERR_INVALID_CLAIM)
 	}
 
 	iat, ok := claims["iat"].(float64)
 	if !ok {
-		return nil, nil
+		return nil, logs.Alertm(ERR_INVALID_CLAIM)
 	}
 
 	exp, ok := claims["exp"].(float64)
 	if !ok {
-		return nil, nil
+		return nil, logs.Alertm(ERR_INVALID_CLAIM)
 	}
 
 	app, ok := claims["app"].(string)
 	if !ok {
-		return nil, nil
+		return nil, logs.Alertm(ERR_INVALID_CLAIM)
 	}
 
 	kind, ok := claims["kind"].(string)
 	if !ok {
-		return nil, nil
+		return nil, logs.Alertm(ERR_INVALID_CLAIM)
 	}
 
 	device, ok := claims["device"].(string)
 	if !ok {
-		return nil, nil
+		return nil, logs.Alertm(ERR_INVALID_CLAIM)
 	}
 
 	return &Claim{
-		Sub:    sub,
-		Name:   name,
-		Iat:    time.Unix(int64(iat), 0),
-		Exp:    time.Duration(exp),
-		App:    app,
-		Kind:   kind,
-		Device: device,
+		ClientId: clientId,
+		Name:     name,
+		Iat:      time.Unix(int64(iat), 0),
+		Exp:      time.Duration(exp),
+		App:      app,
+		Kind:     kind,
+		Device:   device,
 	}, nil
 }

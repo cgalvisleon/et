@@ -1,13 +1,15 @@
 package ws
 
 import (
+	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
 
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/pubsub"
+	m "github.com/cgalvisleon/et/message"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/gorilla/websocket"
 	"golang.org/x/exp/slices"
@@ -16,8 +18,8 @@ import (
 type PubSub struct {
 	host      string
 	socket    *websocket.Conn
-	reciveFn  func(pubsub.Message)
-	channels  map[string]func(pubsub.Message)
+	reciveFn  func(m.Message)
+	channels  map[string]func(m.Message)
 	ClientId  string
 	Name      string
 	from      et.Json
@@ -25,19 +27,20 @@ type PubSub struct {
 }
 
 // Create a new client websocket connection
-func NewPubSub(host, clientId, name string, reciveFn func(pubsub.Message)) *PubSub {
+func NewPubSub(clientId, name string, reciveFn func(m.Message)) (*PubSub, error) {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
+	host := envar.GetStr("", "WS_HOST")
 	if host == "" {
 		host = ":3300"
 	}
 
-	if !slices.Contains([]string{"", "-1", "new"}, clientId) {
+	if slices.Contains([]string{"", "-1", "new"}, clientId) {
 		clientId = utility.UUID()
 	}
 
-	if !slices.Contains([]string{"", "-1"}, name) {
+	if slices.Contains([]string{"", "-1"}, name) {
 		name = "Anonimo"
 	}
 
@@ -53,9 +56,12 @@ func NewPubSub(host, clientId, name string, reciveFn func(pubsub.Message)) *PubS
 		reciveFn: reciveFn,
 	}
 
-	result.Connect()
+	_, err := result.Connect()
+	if err != nil {
+		return nil, err
+	}
 
-	return result
+	return result, nil
 }
 
 // Read messages from the server
@@ -130,7 +136,9 @@ func (p PubSub) Connect() (bool, error) {
 	}
 
 	u := url.URL{Scheme: "ws", Host: p.host, Path: "/ws"}
-	socket, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	header := make(http.Header)
+	header.Add("clientId", p.ClientId)
+	socket, _, err := websocket.DefaultDialer.Dial(u.String(), header)
 	if err != nil {
 		return false, err
 	}
@@ -145,7 +153,7 @@ func (p PubSub) Connect() (bool, error) {
 // Ping the server
 func (p PubSub) Ping() {
 	msg := NewMessage(p.from, et.Json{})
-	msg.Tp = pubsub.TpPing
+	msg.Tp = m.TpPing
 
 	p.send(msg)
 }
@@ -157,17 +165,17 @@ func (p PubSub) Params(params et.Json) error {
 	}
 
 	msg := NewMessage(p.from, params)
-	msg.Tp = pubsub.TpParams
+	msg.Tp = m.TpParams
 
 	return p.send(msg)
 }
 
 // Subscribe to a channel
-func (p PubSub) Subscribe(channel string, reciveFn func(pubsub.Message)) {
+func (p PubSub) Subscribe(channel string, reciveFn func(m.Message)) {
 	p.channels[channel] = reciveFn
 
 	msg := NewMessage(p.from, et.Json{})
-	msg.Tp = pubsub.TpSubscribe
+	msg.Tp = m.TpSubscribe
 	msg.Channel = channel
 
 	p.send(msg)
@@ -178,18 +186,18 @@ func (p PubSub) Unsubscribe(channel string) {
 	delete(p.channels, channel)
 
 	msg := NewMessage(p.from, et.Json{})
-	msg.Tp = pubsub.TpUnsubscribe
+	msg.Tp = m.TpUnsubscribe
 	msg.Channel = channel
 
 	p.send(msg)
 }
 
 // Subscribe to a channel type fisrt, so send message to first client
-func (p PubSub) Stack(channel string, reciveFn func(pubsub.Message)) {
+func (p PubSub) Stack(channel string, reciveFn func(m.Message)) {
 	p.channels[channel] = reciveFn
 
 	msg := NewMessage(p.from, et.Json{})
-	msg.Tp = pubsub.TpStack
+	msg.Tp = m.TpStack
 	msg.Channel = channel
 
 	p.send(msg)
@@ -198,7 +206,8 @@ func (p PubSub) Stack(channel string, reciveFn func(pubsub.Message)) {
 // Publish a message to a channel
 func (p *PubSub) Publish(channel string, message interface{}) {
 	msg := NewMessage(p.from, message)
-	msg.Tp = pubsub.TpPublish
+	msg.Ignored = []string{p.ClientId}
+	msg.Tp = m.TpPublish
 	msg.Channel = channel
 
 	p.send(msg)
@@ -207,8 +216,9 @@ func (p *PubSub) Publish(channel string, message interface{}) {
 // Send a message to the server
 func (p *PubSub) SendMessage(clientId string, message interface{}) error {
 	msg := NewMessage(p.from, message)
+	msg.Ignored = []string{p.ClientId}
 	msg.to = clientId
-	msg.Tp = pubsub.TpDirect
+	msg.Tp = m.TpDirect
 
 	return p.send(msg)
 }

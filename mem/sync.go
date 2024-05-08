@@ -29,7 +29,7 @@ func NewPetciones(capacity, timeWait int) *Peticiones {
 func (c *Peticiones) Ejecucion(executeFc func(params et.Json) (et.Items, error), params et.Json) (et.Items, error) {
 	turno := c.Peticiones + 1
 	if turno > c.SizeStack {
-		return et.Items{}, logs.Alertf(`Se ha superado el límite de peticiones`, c.SizeStack)
+		return et.Items{}, logs.Alertf(`Se ha superado el límite de peticiones %d`, c.SizeStack)
 	}
 
 	c.mutex.Lock()

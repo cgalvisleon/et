@@ -152,10 +152,16 @@ func (h *Hub) connect(socket *websocket.Conn, clientId, name string) (*Client, e
 	return client, nil
 }
 
+// SetAtribs set a value to the client data
+func (h *Hub) SetParams(params et.Json) {
+	h.Params = &params
+}
+
 // Publish a message to a channel less the ignore client
 func (h *Hub) publish(channel *Channel, msg Message, ignored []string, from et.Json) error {
 	msg.Channel = channel.Low()
 	msg.From = from
+	msg.Ignored = ignored
 	if channel.TpBroadcast == TpRoundRobin {
 		client := channel.NextTurn()
 		if client != nil {
@@ -169,21 +175,15 @@ func (h *Hub) publish(channel *Channel, msg Message, ignored []string, from et.J
 		}
 	}
 
-	return nil
-}
-
-// SetAtribs set a value to the client data
-func (h *Hub) SetParams(params et.Json) {
-	h.Params = &params
-}
-
-// Broadcast a message to all clients less the ignore client
-func (h *Hub) Broadcast(msg Message, ignored []string) {
-	for _, client := range h.clients {
-		if !slices.Contains(ignored, client.Id) {
-			client.sendMessage(msg)
+	if h.main == nil {
+		for _, client := range h.clients {
+			if client.IsNode {
+				client.sendMessage(msg)
+			}
 		}
 	}
+
+	return nil
 }
 
 // Publish a message to a channel less the ignore client
@@ -199,6 +199,7 @@ func (h *Hub) Publish(channel string, msg Message, ignored []string, from et.Jso
 // Publish mute a message to a channel less the ignore client
 func (h *Hub) Mute(channel string, msg Message, ignored []string, from et.Json) error {
 	ch := h.getChanel(channel)
+
 	return h.publish(ch, msg, ignored, from)
 }
 

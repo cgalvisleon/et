@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/pubsub"
+	"github.com/cgalvisleon/et/message"
 	"github.com/cgalvisleon/et/utility"
 )
 
@@ -14,9 +14,9 @@ type Message struct {
 	Id         string    `json:"id"`
 	From       et.Json   `json:"from"`
 	to         string
-	Tp         pubsub.TpMessage `json:"tp"`
-	Channel    string           `json:"channel"`
-	Data       interface{}      `json:"data"`
+	Tp         message.TpMessage `json:"tp"`
+	Channel    string            `json:"channel"`
+	Data       interface{}       `json:"data"`
 }
 
 // NewMessage create a new message
@@ -31,7 +31,7 @@ func NewMessage(from et.Json, message interface{}) Message {
 }
 
 // Type return the type of message
-func (e Message) Type() pubsub.TpMessage {
+func (e Message) Type() message.TpMessage {
 	return e.Tp
 }
 

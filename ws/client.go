@@ -24,6 +24,7 @@ type Client struct {
 	Addr       string
 	socket     *websocket.Conn
 	Channels   []string
+	IsNode     bool
 	outbound   chan []byte
 	close      bool
 	allowed    bool

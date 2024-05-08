@@ -7,7 +7,6 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	serv "github.com/cgalvisleon/et/gateway"
 	"github.com/cgalvisleon/et/logs"
-	store "github.com/cgalvisleon/et/mem"
 )
 
 func main() {
@@ -19,12 +18,7 @@ func main() {
 	envar.SetStr("dbuser", "", "Database user", "DB_USER")
 	envar.SetStr("dbpass", "", "Database password", "DB_PASSWORD")
 
-	cache, err := store.Load()
-	if err != nil {
-		logs.Fatal(err)
-	}
-
-	serv, err := serv.Load(&cache)
+	serv, err := serv.Load()
 	if err != nil {
 		logs.Fatal(err)
 	}

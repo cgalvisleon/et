@@ -3,7 +3,7 @@ package ws
 import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/pubsub"
+	m "github.com/cgalvisleon/et/message"
 )
 
 // Listen a client message
@@ -20,13 +20,13 @@ func (c *Client) listen(messageType int, message []byte) {
 
 	tp := msg.Type()
 	switch tp {
-	case pubsub.TpPing:
+	case m.TpPing:
 		msg := NewMessage(*c.hub.Params, et.Json{
 			"ok":      true,
 			"message": "pong",
 		})
 		c.sendMessage(msg)
-	case pubsub.TpParams:
+	case m.TpParams:
 		params, err := msg.Json()
 		if err != nil {
 			msg := NewMessage(*c.hub.Params, et.Json{
@@ -42,15 +42,24 @@ func (c *Client) listen(messageType int, message []byte) {
 			c.Name = name
 		}
 
+		isNode := params.ValBool(false, "isNode")
+		if !c.IsNode && isNode {
+			c.IsNode = isNode
+		}
+
 		params.Set("id", c.Id)
 		params.Set("name", c.Name)
+		if c.IsNode {
+			params.Set("isNode", c.IsNode)
+		}
+
 		c.setParams(params)
 		msg := NewMessage(*c.hub.Params, et.Json{
 			"ok":      true,
 			"message": PARAMS_UPDATED,
 		})
 		c.sendMessage(msg)
-	case pubsub.TpSubscribe:
+	case m.TpSubscribe:
 		channel := msg.Channel
 		if channel == "" {
 			msg := NewMessage(*c.hub.Params, et.Json{
@@ -76,7 +85,7 @@ func (c *Client) listen(messageType int, message []byte) {
 			"message": "Subscribed to channel " + channel,
 		})
 		c.sendMessage(msg)
-	case pubsub.TpStack:
+	case m.TpStack:
 		channel := msg.Channel
 		if channel == "" {
 			msg := NewMessage(*c.hub.Params, et.Json{
@@ -102,7 +111,7 @@ func (c *Client) listen(messageType int, message []byte) {
 			"message": "Stacked to channel " + channel,
 		})
 		c.sendMessage(msg)
-	case pubsub.TpUnsubscribe:
+	case m.TpUnsubscribe:
 		channel := msg.Channel
 		if channel == "" {
 			msg := NewMessage(*c.hub.Params, et.Json{
@@ -128,7 +137,7 @@ func (c *Client) listen(messageType int, message []byte) {
 			"message": "Unsubscribed from channel " + channel,
 		})
 		c.sendMessage(msg)
-	case pubsub.TpPublish:
+	case m.TpPublish:
 		channel := msg.Channel
 		if channel == "" {
 			msg := NewMessage(*c.hub.Params, et.Json{
@@ -145,7 +154,7 @@ func (c *Client) listen(messageType int, message []byte) {
 			"message": "Message published to " + channel,
 		})
 		c.sendMessage(msg)
-	case pubsub.TpDirect:
+	case m.TpDirect:
 		clientId := msg.to
 
 		msg.From = *c.Params

@@ -7,7 +7,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
@@ -18,10 +17,9 @@ import (
 )
 
 type Server struct {
-	http  *HttpServer
-	rpc   *net.Listener
-	ws    *ws.Conn
-	cache cache.Cache
+	http *HttpServer
+	rpc  *net.Listener
+	ws   *ws.Conn
 }
 
 var PackageName = "gateway"
@@ -34,29 +32,28 @@ var HostName, _ = os.Hostname()
 var Host = strs.Format(`%s:%d`, envar.GetStr("http://localhost", "HOST"), envar.GetInt(3300, "PORT"))
 var conn *Server
 
-func Load(cache cache.Cache) (*Server, error) {
+func Load() (*Server, error) {
 	if conn != nil {
 		return conn, nil
 	}
 
 	// HTTP server
-	_http := newHttpServer()
+	http := newHttpServer()
 
 	// RPC server
-	_rpc := newRpc()
+	rpc := newRpc()
 
 	// WS server
-	_ws, err := ws.Load()
+	ws, err := ws.Load()
 	if err != nil {
 		panic(err)
 	}
 
 	// Create a new server
 	conn = &Server{
-		http:  _http,
-		rpc:   &_rpc,
-		ws:    _ws,
-		cache: cache,
+		http: http,
+		rpc:  &rpc,
+		ws:   ws,
 	}
 
 	return conn, nil

@@ -6,14 +6,18 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/pubsub"
+	"github.com/cgalvisleon/et/message"
 	"github.com/cgalvisleon/et/ws"
 )
 
 var wcs *ws.Client
 
 func main() {
-	wsc := ws.NewPubSub("", "91499023", "Cesar", inbox)
+	wsc, err := ws.NewPubSub("91499023", "Cesar", inbox)
+	if err != nil {
+		logs.Fatal(err)
+	}
+
 	if wsc == nil {
 		logs.Fatal("Error al crear el cliente websocket.")
 	}
@@ -33,7 +37,7 @@ func main() {
 	// serv.Close()
 }
 
-func inbox(msg pubsub.Message) {
+func inbox(msg message.Message) {
 	dt, err := et.Marshal(msg)
 	if err != nil {
 		return

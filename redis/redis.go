@@ -2,15 +2,9 @@ package redis
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
-)
-
-var (
-	conn *Conn
-	once sync.Once
 )
 
 type Conn struct {
@@ -20,11 +14,15 @@ type Conn struct {
 	db     *redis.Client
 }
 
-// NewCache create new cache
-func Load() (Conn, error) {
-	once.Do(connect)
+var conn *Conn
 
-	return *conn, nil
+// NewCache create new cache
+func Load() (*Conn, error) {
+	if conn != nil {
+		return conn, nil
+	}
+
+	return connect()
 }
 
 // Close method to use in cache
@@ -37,7 +35,7 @@ func Close() error {
 }
 
 // Type method to use in cache
-func Type() string {
+func (c *Conn) Type() string {
 	return "redis"
 }
 
@@ -48,13 +46,13 @@ func (c *Conn) Set(key string, value interface{}, expiration time.Duration) inte
 }
 
 // Get method to use in cache
-func (c *Conn) Get(key string, _default interface{}) interface{} {
+func (c *Conn) Get(key string, def interface{}) interface{} {
 	result, err := c.db.Get(c.ctx, key).Result()
 	switch {
 	case err == redis.Nil:
-		return _default
+		return def
 	case err != nil:
-		return _default
+		return def
 	case result == "":
 		return result
 	default:

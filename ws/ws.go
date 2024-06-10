@@ -14,7 +14,9 @@ func Load() (*Conn, error) {
 		return conn, nil
 	}
 
-	hub := connectHub()
+	hub := NewHub()
+	go hub.Run()
+
 	conn = &Conn{
 		hub: hub,
 	}

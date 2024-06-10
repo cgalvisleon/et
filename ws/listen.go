@@ -8,32 +8,28 @@ import (
 
 // Listen a client message
 func (c *Client) listen(messageType int, message []byte) {
-	msg, err := DecodeMessage(message)
-	if err != nil {
-		msg = NewMessage(*c.hub.Params, et.Json{
-			"ok":      false,
-			"message": err.Error(),
+	send := func(ok bool, message string) {
+		msg := NewMessage(c.hub.Identify(), et.Json{
+			"ok":      ok,
+			"message": message,
 		})
 		c.sendMessage(msg)
+	}
+
+	msg, err := DecodeMessage(message)
+	if err != nil {
+		send(false, err.Error())
 		return
 	}
 
 	tp := msg.Type()
 	switch tp {
 	case m.TpPing:
-		msg := NewMessage(*c.hub.Params, et.Json{
-			"ok":      true,
-			"message": "pong",
-		})
-		c.sendMessage(msg)
+		send(true, "pong")
 	case m.TpParams:
 		params, err := msg.Json()
 		if err != nil {
-			msg := NewMessage(*c.hub.Params, et.Json{
-				"ok":      false,
-				"message": err.Error(),
-			})
-			c.sendMessage(msg)
+			send(false, err.Error())
 			return
 		}
 
@@ -42,142 +38,71 @@ func (c *Client) listen(messageType int, message []byte) {
 			c.Name = name
 		}
 
-		isNode := params.ValBool(false, "isNode")
-		if !c.IsNode && isNode {
-			c.IsNode = isNode
-		}
-
-		params.Set("id", c.Id)
-		params.Set("name", c.Name)
-		if c.IsNode {
-			params.Set("isNode", c.IsNode)
-		}
-
-		c.setParams(params)
-		msg := NewMessage(*c.hub.Params, et.Json{
-			"ok":      true,
-			"message": PARAMS_UPDATED,
-		})
-		c.sendMessage(msg)
+		send(true, PARAMS_UPDATED)
 	case m.TpSubscribe:
 		channel := msg.Channel
 		if channel == "" {
-			msg := NewMessage(*c.hub.Params, et.Json{
-				"ok":      false,
-				"message": ERR_CHANNEL_EMPTY,
-			})
-			c.sendMessage(msg)
+			send(false, ERR_CHANNEL_EMPTY)
 			return
 		}
 
 		err := c.hub.Subscribe(c.Id, channel)
 		if err != nil {
-			msg := NewMessage(*c.hub.Params, et.Json{
-				"ok":      false,
-				"message": err.Error(),
-			})
-			c.sendMessage(msg)
+			send(false, err.Error())
 			return
 		}
 
-		msg := NewMessage(*c.hub.Params, et.Json{
-			"ok":      true,
-			"message": "Subscribed to channel " + channel,
-		})
-		c.sendMessage(msg)
+		send(true, "Subscribed to channel "+channel)
 	case m.TpStack:
 		channel := msg.Channel
 		if channel == "" {
-			msg := NewMessage(*c.hub.Params, et.Json{
-				"ok":      false,
-				"message": ERR_CHANNEL_EMPTY,
-			})
-			c.sendMessage(msg)
+			send(false, ERR_CHANNEL_EMPTY)
 			return
 		}
 
 		err := c.hub.Stack(c.Id, channel)
 		if err != nil {
-			msg := NewMessage(*c.hub.Params, et.Json{
-				"ok":      false,
-				"message": err.Error(),
-			})
-			c.sendMessage(msg)
+			send(false, err.Error())
 			return
 		}
 
-		msg := NewMessage(*c.hub.Params, et.Json{
-			"ok":      true,
-			"message": "Stacked to channel " + channel,
-		})
-		c.sendMessage(msg)
+		send(true, "Stacked to channel "+channel)
 	case m.TpUnsubscribe:
 		channel := msg.Channel
 		if channel == "" {
-			msg := NewMessage(*c.hub.Params, et.Json{
-				"ok":      false,
-				"message": ERR_CHANNEL_EMPTY,
-			})
-			c.sendMessage(msg)
+			send(false, ERR_CHANNEL_EMPTY)
 			return
 		}
 
 		err := c.hub.Subscribe(c.Id, channel)
 		if err != nil {
-			msg := NewMessage(*c.hub.Params, et.Json{
-				"ok":      false,
-				"message": err.Error(),
-			})
-			c.sendMessage(msg)
+			send(false, err.Error())
 			return
 		}
 
-		msg := NewMessage(*c.hub.Params, et.Json{
-			"ok":      true,
-			"message": "Unsubscribed from channel " + channel,
-		})
-		c.sendMessage(msg)
+		send(true, "Unsubscribed from channel "+channel)
 	case m.TpPublish:
 		channel := msg.Channel
 		if channel == "" {
-			msg := NewMessage(*c.hub.Params, et.Json{
-				"ok":      false,
-				"message": ERR_CHANNEL_EMPTY,
-			})
-			c.sendMessage(msg)
+			send(false, ERR_CHANNEL_EMPTY)
 			return
 		}
 
-		go c.hub.Publish(channel, msg, []string{c.Id}, *c.Params)
-		msg := NewMessage(*c.hub.Params, et.Json{
-			"ok":      true,
-			"message": "Message published to " + channel,
-		})
-		c.sendMessage(msg)
+		go c.hub.Publish(channel, msg, []string{c.Id}, c.Identify())
+		send(true, "Message published to "+channel)
 	case m.TpDirect:
 		clientId := msg.to
 
-		msg.From = *c.Params
+		msg.From = c.Identify()
 		err := c.hub.SendMessage(clientId, msg)
 		if err != nil {
-			msg := NewMessage(*c.hub.Params, et.Json{
-				"ok":      false,
-				"message": err.Error(),
-			})
-			c.sendMessage(msg)
+			send(false, err.Error())
+			return
 		}
 
-		msg := NewMessage(*c.hub.Params, et.Json{
-			"ok":      true,
-			"message": "Message sent to " + clientId,
-		})
-		c.sendMessage(msg)
+		send(true, "Message sent to "+clientId)
 	default:
-		msg := NewMessage(*c.hub.Params, et.Json{
-			"ok":      false,
-			"message": ERR_MESSAGE_UNFORMATTED,
-		})
-		c.sendMessage(msg)
+		send(false, ERR_MESSAGE_UNFORMATTED)
 	}
 
 	logs.Logf("Websocket", "Client %s message: %s", c.Id, msg.ToString())

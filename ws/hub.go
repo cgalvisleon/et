@@ -2,11 +2,11 @@ package ws
 
 import (
 	"net/http"
+	"net/url"
 	"os"
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
@@ -21,35 +21,34 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+type HubParams struct {
+	Id   string
+	Name string
+}
+
 type Hub struct {
 	Id         string
 	Name       string
-	Params     *et.Json
-	main       *websocket.Conn
+	Params     *HubParams
 	clients    []*Client
 	channels   []*Channel
 	register   chan *Client
 	unregister chan *Client
 	mutex      *sync.Mutex
+	adapter    *RedisAdapter
 	run        bool
 }
 
 // Create a new hub
 func NewHub() *Hub {
 	id := utility.UUID()
-	name := "Hub"
-	main := envar.GetStr("", "WS_MAIN_HOST")
-	scheme := envar.GetStr("ws", "WS_SCHEME")
+	name := "Websocket Hub"
 	result := &Hub{
 		Id:   id,
 		Name: name,
-		Params: &et.Json{
-			"id":   id,
-			"name": name,
-			"main": et.Json{
-				"host":   main,
-				"scheme": scheme,
-			},
+		Params: &HubParams{
+			Id:   id,
+			Name: name,
 		},
 		clients:    make([]*Client, 0),
 		channels:   make([]*Channel, 0),
@@ -59,15 +58,24 @@ func NewHub() *Hub {
 		run:        false,
 	}
 
-	if main != "" {
-		var err error
-		result.main, err = connectWs(main, scheme)
-		if err != nil {
-			result.main = nil
-		}
+	return result
+}
+
+// Connect to the server from the client
+func connect(host, scheme string) (*websocket.Conn, error) {
+	if scheme == "" {
+		scheme = "ws"
 	}
 
-	return result
+	path := strs.Format("/%s", scheme)
+
+	u := url.URL{Scheme: scheme, Host: host, Path: path}
+	result, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 // Run the hub
@@ -90,6 +98,14 @@ func (h *Hub) Run() {
 	}
 }
 
+// Identify Hub
+func (h *Hub) Identify() et.Json {
+	return et.Json{
+		"id":   h.Id,
+		"name": h.Name,
+	}
+}
+
 // Connect a client to the hub
 func (h *Hub) onConnect(client *Client) {
 	h.mutex.Lock()
@@ -98,13 +114,13 @@ func (h *Hub) onConnect(client *Client) {
 	h.clients = append(h.clients, client)
 	client.Addr = client.socket.RemoteAddr().String()
 
-	msg := NewMessage(*h.Params, et.Json{
+	msg := NewMessage(h.Identify(), et.Json{
 		"ok":      true,
 		"message": "Connected successfully",
-		"client":  client.Params,
+		"client":  client.Identify(),
 	})
 
-	h.Mute("ws/connect", msg, []string{client.Id}, *h.Params)
+	h.Mute("ws/connect", msg, []string{client.Id}, h.Identify())
 	client.sendMessage(msg)
 
 	logs.Logf("Websocket", MSG_CLIENT_CONNECT, client.Id, h.Id)
@@ -123,13 +139,13 @@ func (h *Hub) onDisconnect(client *Client) {
 	h.clients[len(h.clients)-1] = nil
 	h.clients = h.clients[:len(h.clients)-1]
 
-	msg := NewMessage(*h.Params, et.Json{
+	msg := NewMessage(h.Identify(), et.Json{
 		"ok":      true,
 		"message": "Client disconnected",
-		"client":  client.Params,
+		"client":  client.Identify(),
 	})
 
-	h.Mute("ws/disconnect", msg, []string{client.Id}, *h.Params)
+	h.Mute("ws/disconnect", msg, []string{client.Id}, h.Identify())
 
 	logs.Logf("Websocket", MSG_CLIENT_DISCONNECT, client.Id, h.Id)
 }
@@ -153,8 +169,8 @@ func (h *Hub) connect(socket *websocket.Conn, clientId, name string) (*Client, e
 }
 
 // SetAtribs set a value to the client data
-func (h *Hub) SetParams(params et.Json) {
-	h.Params = &params
+func (h *Hub) SetName(name string) {
+	h.Params.Name = name
 }
 
 // Publish a message to a channel less the ignore client
@@ -175,15 +191,32 @@ func (h *Hub) publish(channel *Channel, msg Message, ignored []string, from et.J
 		}
 	}
 
-	if h.main == nil {
-		for _, client := range h.clients {
-			if client.IsNode {
-				client.sendMessage(msg)
-			}
-		}
+	if h.adapter != nil {
+		h.adapter.Broadcast(channel.Name, msg, ignored, from)
 	}
 
 	return nil
+}
+
+func (h *Hub) listend(msg interface{}) {
+	logs.Log("Broadcast", msg)
+
+	m, err := decodeMessageBroadcat([]byte(msg.(string)))
+	if err != nil {
+		logs.Alertm(err.Error())
+		return
+	}
+
+	switch m.Kind {
+	case TpAll:
+		h.Publish(m.To, m.Msg, m.Ignored, m.From)
+	case TpDirect:
+		idx := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == m.To })
+		if idx != -1 {
+			client := h.clients[idx]
+			client.sendMessage(m.Msg)
+		}
+	}
 }
 
 // Publish a message to a channel less the ignore client
@@ -207,7 +240,9 @@ func (h *Hub) Mute(channel string, msg Message, ignored []string, from et.Json) 
 func (h *Hub) SendMessage(clientId string, msg Message) error {
 	idx := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == clientId })
 	if idx == -1 {
-		return logs.Alertm(ERR_CLIENT_NOT_FOUND)
+		if h.adapter != nil {
+			h.adapter.Direct(clientId, msg)
+		}
 	}
 
 	client := h.clients[idx]

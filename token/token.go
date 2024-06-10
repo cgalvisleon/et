@@ -3,11 +3,8 @@ package token
 import (
 	"time"
 
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/pubsub"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/golang-jwt/jwt/v4"
 )
@@ -69,60 +66,6 @@ func Generate(clientId, name, app, kind, device string, expired time.Duration) (
 	return token, nil
 }
 
-func Authorizacion(clientId, name, app, kind, device string, expired time.Duration) (string, error) {
-	token, err := Generate(clientId, name, app, kind, device, expired)
-	if err != nil {
-		return "", err
-	}
-
-	key := tokenKey(app, device, clientId)
-	old := cache.Get(key, "")
-	cache.Set(key, token, expired)
-	if old != token {
-		pubsub.Publish(key, et.Json{
-			"action": "close",
-		})
-	}
-
-	return token, nil
-}
-
-// Delete method to use in token
-func Delete(tokenString string) error {
-	token, err := parce(tokenString)
-	if err != nil {
-		return err
-	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		return logs.Alertm(ERR_INVALID_CLAIM)
-	}
-
-	clientId, ok := claims["clientId"].(string)
-	if !ok {
-		return nil
-	}
-
-	app, ok := claims["app"].(string)
-	if !ok {
-		return nil
-	}
-
-	device, ok := claims["device"].(string)
-	if !ok {
-		return nil
-	}
-
-	key := tokenKey(app, device, clientId)
-	cache.Del(key)
-	pubsub.Publish(key, et.Json{
-		"action": "close",
-	})
-
-	return nil
-}
-
 // Validate method to use in token
 func Validate(tokenString string) (*Claim, error) {
 	token, err := parce(tokenString)
@@ -131,11 +74,6 @@ func Validate(tokenString string) (*Claim, error) {
 	}
 
 	if !token.Valid {
-		err := Delete(tokenString)
-		if err != nil {
-			return nil, err
-		}
-
 		return nil, logs.Errorm(ERR_AUTORIZATION)
 	}
 

@@ -7,6 +7,7 @@ import (
 	"github.com/cgalvisleon/et/logs"
 )
 
+// Publish a message to a channel with context
 func PubCtx(ctx context.Context, channel string, message interface{}) error {
 	if conn == nil {
 		return logs.Errorm(ERR_NOT_CACHE_SERVICE)
@@ -20,11 +21,7 @@ func PubCtx(ctx context.Context, channel string, message interface{}) error {
 	return nil
 }
 
-func Pub(channel string, message interface{}) error {
-	ctx := context.Background()
-	return PubCtx(ctx, channel, message)
-}
-
+// Subscribe to a channel with context
 func SubCtx(ctx context.Context, channel string, f func(interface{})) {
 	if conn == nil {
 		return
@@ -41,6 +38,13 @@ func SubCtx(ctx context.Context, channel string, f func(interface{})) {
 	}
 }
 
+// Publish a message to a channel
+func Pub(channel string, message interface{}) error {
+	ctx := context.Background()
+	return PubCtx(ctx, channel, message)
+}
+
+// Subscribe to a channel
 func Sub(channel string, f func(interface{})) {
 	ctx := context.Background()
 	SubCtx(ctx, channel, f)

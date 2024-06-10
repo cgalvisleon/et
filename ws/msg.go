@@ -15,5 +15,6 @@ const (
 	ERR_PARAM_NOT_FOUND         = "Param not found"
 	ERR_CLIENT_ID_EMPTY         = "Client id is empty"
 	ERR_MESSAGE_UNFORMATTED     = "Message unformatted"
+	ERR_REDISADAPTER_NOT_FOUND  = "Redis adapter not found"
 	PARAMS_UPDATED              = "Params updated"
 )

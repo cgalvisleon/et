@@ -183,6 +183,12 @@ func (m *Metrics) printLn() et.Json {
 		},
 	}
 
+	go pubsub.Telemetry(result)
+
+	if m.RequestsHost.Seccond > m.RequestsHost.Limit {
+		go pubsub.Overflow(result)
+	}
+
 	return result
 }
 
@@ -193,12 +199,6 @@ func (m *Metrics) Done(res *http.Response) et.Json {
 	m.Status = res.StatusCode
 	m.ContentLength = res.ContentLength
 	result := m.printLn()
-
-	go pubsub.Telemetry(result)
-
-	if m.RequestsHost.Seccond > m.RequestsHost.Limit {
-		go pubsub.Overflow(result)
-	}
 
 	return result
 }
@@ -211,12 +211,6 @@ func (m *Metrics) DoneResponse(status int, contentLength int64) et.Json {
 	m.ContentLength = contentLength
 	result := m.printLn()
 
-	go pubsub.Telemetry(result)
-
-	if m.RequestsHost.Seccond > m.RequestsHost.Limit {
-		go pubsub.Overflow(result)
-	}
-
 	return result
 }
 
@@ -227,12 +221,6 @@ func (m *Metrics) DoneHandler() et.Json {
 	m.Status = http.StatusOK
 	m.ContentLength = 0
 	result := m.printLn()
-
-	go pubsub.Telemetry(result)
-
-	if m.RequestsHost.Seccond > m.RequestsHost.Limit {
-		go pubsub.Overflow(result)
-	}
 
 	return result
 }
@@ -246,12 +234,6 @@ func (m *Metrics) NotFounder(r *http.Request) et.Json {
 	m.Status = http.StatusNotFound
 	m.ContentLength = 0
 	result := m.printLn()
-
-	go pubsub.Telemetry(result)
-
-	if m.RequestsHost.Seccond > m.RequestsHost.Limit {
-		go pubsub.Overflow(result)
-	}
 
 	return result
 }

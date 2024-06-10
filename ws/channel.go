@@ -11,6 +11,8 @@ type TpBroadcast int
 const (
 	TpAll TpBroadcast = iota
 	TpRoundRobin
+	TpDirect
+	TpCommand
 )
 
 // Channel is a hub websocket channel

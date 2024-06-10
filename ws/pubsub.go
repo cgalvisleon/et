@@ -10,6 +10,8 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	m "github.com/cgalvisleon/et/message"
+	"github.com/cgalvisleon/et/strs"
+	"github.com/cgalvisleon/et/token"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/gorilla/websocket"
 	"golang.org/x/exp/slices"
@@ -137,7 +139,13 @@ func (p PubSub) Connect() (bool, error) {
 
 	u := url.URL{Scheme: "ws", Host: p.host, Path: "/ws"}
 	header := make(http.Header)
-	header.Add("clientId", p.ClientId)
+	tk, err := token.Generate(p.ClientId, p.Name, "ws", "ws", "microservice", 0)
+	if err != nil {
+		return false, err
+	}
+
+	tk = strs.Format(`Bearer %s`, tk)
+	header.Add("Authorization", tk)
 	socket, _, err := websocket.DefaultDialer.Dial(u.String(), header)
 	if err != nil {
 		return false, err

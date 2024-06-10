@@ -25,22 +25,26 @@ var conn Cache
 const MSG_CACHE_NOT_FOUND = "Cache not found"
 
 // Load a new cache connection
-func Load(tp string) {
+func Load(tp string) error {
 	switch tp {
 	case "redis":
 		res, err := redis.Load()
 		if err != nil {
-			logs.Fatal(err)
+			return err
 		}
 
 		conn = res
+
+		return nil
 	default:
 		res, err := mem.Load()
 		if err != nil {
-			logs.Fatal(err)
+			return err
 		}
 
 		conn = res
+
+		return nil
 	}
 }
 

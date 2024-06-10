@@ -2,14 +2,15 @@ package gateway
 
 import (
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"time"
 
+	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/message"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/ws"
 	"github.com/dimiro1/banner"
@@ -18,7 +19,6 @@ import (
 
 type Server struct {
 	http *HttpServer
-	rpc  *net.Listener
 	ws   *ws.Conn
 }
 
@@ -37,11 +37,13 @@ func Load() (*Server, error) {
 		return conn, nil
 	}
 
+	err := cache.Load("")
+	if err != nil {
+		return nil, err
+	}
+
 	// HTTP server
 	http := newHttpServer()
-
-	// RPC server
-	rpc := newRpc()
 
 	// WS server
 	ws, err := ws.Load()
@@ -52,17 +54,22 @@ func Load() (*Server, error) {
 	// Create a new server
 	conn = &Server{
 		http: http,
-		rpc:  &rpc,
 		ws:   ws,
 	}
 
 	return conn, nil
 }
 
+func inbox(msg message.Message) {
+	logs.Debug(msg.ToString())
+}
+
+// Server close
 func (serv *Server) Close() error {
 	return nil
 }
 
+// Server start
 func (serv *Server) Start() {
 	// Start HTTP server
 	go func() {
@@ -73,17 +80,6 @@ func (serv *Server) Start() {
 		svr := *serv.http
 		logs.Logf("Http", "Running Api Gateway on http://localhost%s", svr.addr)
 		logs.Fatal(http.ListenAndServe(svr.addr, svr.handler))
-	}()
-
-	// Start RPC server
-	go func() {
-		if serv.rpc == nil {
-			return
-		}
-
-		svr := *serv.rpc
-		logs.Logf("RPC", "Running on tcp:localhost:%s", svr.Addr().String())
-		http.Serve(svr, nil)
 	}()
 
 	// Init events

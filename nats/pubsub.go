@@ -62,7 +62,7 @@ func NewPubSub(clientId, name string, reciveFn func(m.Message)) (*PubSub, error)
 // Subscribe to a channel
 func (p PubSub) subscribe(channel string, f func(m.Message)) error {
 	if p.conn == nil {
-		return logs.Alertm(ERR_NOT_CONNECT_NATS)
+		return logs.Alertm(ERR_NOT_CONNECT)
 	}
 
 	msg := Message{
@@ -86,7 +86,7 @@ func (p PubSub) subscribe(channel string, f func(m.Message)) error {
 // Subscribe to a channel
 func (p PubSub) stack(channel string, f func(m.Message)) error {
 	if p.conn == nil {
-		return logs.Alertm(ERR_NOT_CONNECT_NATS)
+		return logs.Alertm(ERR_NOT_CONNECT)
 	}
 
 	lock := func(id string) bool {
@@ -119,7 +119,7 @@ func (p PubSub) stack(channel string, f func(m.Message)) error {
 // Send a message to the server
 func (p PubSub) send(subj string, message Message) error {
 	if p.conn == nil {
-		return logs.Alertm(ERR_NOT_CONNECT_NATS)
+		return logs.Alertm(ERR_NOT_CONNECT)
 	}
 
 	msg, err := message.Encode()

@@ -70,6 +70,7 @@ func (c *Conn) Del(key string) bool {
 	return intCmd.Val() > 0
 }
 
+// Count method to use in cache
 func (c *Conn) Count(key string, expiration time.Duration) int {
 	result := c.Get(key, 0)
 	if result == 0 {

@@ -10,8 +10,6 @@ import (
 	"github.com/cgalvisleon/et/ws"
 )
 
-var wcs *ws.Client
-
 func main() {
 	wsc, err := ws.NewPubSub("91499023", "Cesar", inbox)
 	if err != nil {

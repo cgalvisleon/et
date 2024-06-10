@@ -20,32 +20,35 @@ type Client struct {
 	hub        *Hub
 	Id         string
 	Name       string
-	Params     *et.Json
 	Addr       string
 	socket     *websocket.Conn
 	Channels   []string
-	IsNode     bool
 	outbound   chan []byte
 	close      bool
 	allowed    bool
 }
 
+// NewClient create a new client
 func newClient(hub *Hub, socket *websocket.Conn, id, name string) (*Client, bool) {
 	return &Client{
 		Created_at: time.Now(),
 		hub:        hub,
 		Id:         id,
 		Name:       name,
-		Params: &et.Json{
-			"id":   id,
-			"name": name,
-		},
-		socket:   socket,
-		Channels: make([]string, 0),
-		outbound: make(chan []byte),
-		close:    false,
-		allowed:  true,
+		socket:     socket,
+		Channels:   make([]string, 0),
+		outbound:   make(chan []byte),
+		close:      false,
+		allowed:    true,
 	}, true
+}
+
+// Identify the client
+func (c *Client) Identify() et.Json {
+	return et.Json{
+		"id":   c.Id,
+		"name": c.Name,
+	}
 }
 
 // Listen a client message
@@ -99,11 +102,6 @@ func (c *Client) unsubscribe(channels []string) {
 			c.Channels = append(c.Channels[:idx], c.Channels[idx+1:]...)
 		}
 	}
-}
-
-// SetAtribs set a value to the client data
-func (c *Client) setParams(params et.Json) {
-	c.Params = &params
 }
 
 // SendMessage send a message to the client

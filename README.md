@@ -13,6 +13,8 @@ go get github.com/mattn/go-colorable
 go get github.com/dimiro1/banner
 go get github.com/go-chi/chi/v5
 go get github.com/shirou/gopsutil/v3/mem
+go get github.com/googollee/go-socket.io
+go get "github.com/satyakb/go-socket.io-redis"
 ```
 
 ## CDM

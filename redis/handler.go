@@ -11,6 +11,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// Set a key with a value and a duration
 func SetCtx(ctx context.Context, key, val string, second time.Duration) error {
 	if conn == nil {
 		return logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -26,6 +27,7 @@ func SetCtx(ctx context.Context, key, val string, second time.Duration) error {
 	return nil
 }
 
+// Get a key value
 func GetCtx(ctx context.Context, key, def string) (string, error) {
 	if conn == nil {
 		return def, logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -44,6 +46,7 @@ func GetCtx(ctx context.Context, key, def string) (string, error) {
 	}
 }
 
+// Delete a key
 func DelCtx(ctx context.Context, key string) (int64, error) {
 	if conn == nil {
 		return 0, logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -54,6 +57,7 @@ func DelCtx(ctx context.Context, key string) (int64, error) {
 	return intCmd.Val(), intCmd.Err()
 }
 
+// Set a key with a value and a duration
 func HSetCtx(ctx context.Context, key string, val map[string]string) error {
 	if conn == nil {
 		return logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -69,6 +73,7 @@ func HSetCtx(ctx context.Context, key string, val map[string]string) error {
 	return nil
 }
 
+// Get a key value
 func HGetCtx(ctx context.Context, key string) (map[string]string, error) {
 	if conn == nil {
 		return map[string]string{}, logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -79,6 +84,7 @@ func HGetCtx(ctx context.Context, key string) (map[string]string, error) {
 	return result, nil
 }
 
+// Delete a key
 func HDelCtx(ctx context.Context, key, atr string) error {
 	if conn == nil {
 		return logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -93,8 +99,10 @@ func HDelCtx(ctx context.Context, key, atr string) error {
 }
 
 /**
-*
+* Not contect functions
 **/
+
+// Get a key value
 func Get(key, def string) (string, error) {
 	if conn == nil {
 		return def, logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -103,6 +111,7 @@ func Get(key, def string) (string, error) {
 	return GetCtx(conn.ctx, key, def)
 }
 
+// Delete a key
 func Del(key string) (int64, error) {
 	if conn == nil {
 		return 0, logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -111,6 +120,7 @@ func Del(key string) (int64, error) {
 	return DelCtx(conn.ctx, key)
 }
 
+// Set a key with a value and a duration
 func Set(key, val string, second time.Duration) error {
 	if conn == nil {
 		return logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -119,22 +129,27 @@ func Set(key, val string, second time.Duration) error {
 	return SetCtx(conn.ctx, key, val, second)
 }
 
+// Set a key with a value and a day duration
 func SetD(key, val string) error {
 	return Set(key, val, time.Hour*24)
 }
 
+// Set a key with a value and a week duration
 func SetW(key, val string) error {
 	return Set(key, val, time.Hour*24*7)
 }
 
+// Set a key with a value and a month duration
 func SetM(key, val string) error {
 	return Set(key, val, time.Hour*24*30)
 }
 
+// Set a key with a value and a year duration
 func SetY(key, val string) error {
 	return Set(key, val, time.Hour*24*365)
 }
 
+// Empty the cache
 func Empty() error {
 	if conn == nil {
 		return logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -150,6 +165,7 @@ func Empty() error {
 	return nil
 }
 
+// Increment a key
 func More(key string, second time.Duration) int {
 	n, err := Get(key, "")
 	if err != nil {
@@ -171,6 +187,7 @@ func More(key string, second time.Duration) int {
 	return val
 }
 
+// Set a key with a map values
 func HSet(key string, val map[string]string) error {
 	if conn == nil {
 		return logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -179,6 +196,7 @@ func HSet(key string, val map[string]string) error {
 	return HSetCtx(conn.ctx, key, val)
 }
 
+// Get a key with a map values
 func HGet(key string) (map[string]string, error) {
 	if conn == nil {
 		return map[string]string{}, logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -187,6 +205,7 @@ func HGet(key string) (map[string]string, error) {
 	return HGetCtx(conn.ctx, key)
 }
 
+// Set a key with a atrib and a value
 func HSetAtrib(key, atr, val string) error {
 	if conn == nil {
 		return logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -195,6 +214,7 @@ func HSetAtrib(key, atr, val string) error {
 	return HSetCtx(conn.ctx, key, map[string]string{atr: val})
 }
 
+// Get a key with a atrib value
 func HGetAtrib(key, atr string) (string, error) {
 	if conn == nil {
 		return "", logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -214,6 +234,11 @@ func HGetAtrib(key, atr string) (string, error) {
 	return "", nil
 }
 
+/**
+* Verify OTP values
+**/
+
+// Delete a key with a atrib
 func HDel(key, atr string) error {
 	if conn == nil {
 		return logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -222,21 +247,29 @@ func HDel(key, atr string) error {
 	return HDelCtx(conn.ctx, key, atr)
 }
 
+// Increment a key with a atrib
 func SetVerify(device, key, val string) error {
 	key = strs.Format(`verify:%s/%s`, device, key)
 	return Set(key, val, 5*60)
 }
 
+// Get a key with a atrib
 func GetVerify(device string, key string) (string, error) {
 	key = strs.Format(`verify:%s/%s`, device, key)
 	return Get(key, "")
 }
 
+// Delete a key with a atrib
 func DelVerify(device string, key string) (int64, error) {
 	key = strs.Format(`verify:%s/%s`, device, key)
 	return Del(key)
 }
 
+/**
+* Other functions
+**/
+
+// Get all keys
 func AllCache(search string, page, rows int) (et.List, error) {
 	if conn == nil {
 		return et.List{}, logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -260,9 +293,7 @@ func AllCache(search string, page, rows int) (et.List, error) {
 	return items.ToList(items.Count, page, rows), nil
 }
 
-/**
-* Json
-**/
+// Get key and json value
 func GetJson(key string) (et.Json, error) {
 	if conn == nil {
 		return et.Json{}, logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -287,6 +318,7 @@ func GetJson(key string) (et.Json, error) {
 	return result, nil
 }
 
+// Set key and json value
 func SetJson(key string, val et.Json, second time.Duration) (et.Json, error) {
 	if conn == nil {
 		return val, logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -300,29 +332,35 @@ func SetJson(key string, val et.Json, second time.Duration) (et.Json, error) {
 	return val, nil
 }
 
+// Set key and json value with a day duration
 func SetJsonD(key string, val et.Json) (et.Json, error) {
 	day := time.Hour * 24
 	return SetJson(key, val, day)
 }
 
+// Set key and json value with a week duration
 func SetJsonW(key string, val et.Json) (et.Json, error) {
 	week := time.Hour * 24 * 7
 	return SetJson(key, val, week)
 }
 
+// Set key and json value with a month duration
 func SetJsonM(key string, val et.Json) (et.Json, error) {
 	month := time.Hour * 24 * 30
 	return SetJson(key, val, month)
 }
 
+// Set key and json value with a year duration
 func SetJsonY(key string, val et.Json) (et.Json, error) {
 	year := time.Hour * 24 * 365
 	return SetJson(key, val, year)
 }
 
 /**
-* Item
+* Item values
 **/
+
+// Get a key and item value
 func GetItem(key string) (et.Item, error) {
 	if conn == nil {
 		return et.Item{}, logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -350,6 +388,7 @@ func GetItem(key string) (et.Item, error) {
 	}, nil
 }
 
+// Set a key and item value
 func SetItem(key string, val et.Item, second time.Duration) (et.Item, error) {
 	if conn == nil {
 		return val, logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -363,29 +402,35 @@ func SetItem(key string, val et.Item, second time.Duration) (et.Item, error) {
 	return val, nil
 }
 
+// Set a key and item value with a day duration
 func SetItemD(key string, val et.Item) (et.Item, error) {
 	day := time.Hour * 24
 	return SetItem(key, val, day)
 }
 
+// Set a key and item value with a week duration
 func SetItemW(key string, val et.Item) (et.Item, error) {
 	week := time.Hour * 24 * 7
 	return SetItem(key, val, week)
 }
 
+// Set a key and item value with a month duration
 func SetItemM(key string, val et.Item) (et.Item, error) {
 	month := time.Hour * 24 * 30
 	return SetItem(key, val, month)
 }
 
+// Set a key and item value with a year duration
 func SetItemY(key string, val et.Item) (et.Item, error) {
 	year := time.Hour * 24 * 365
 	return SetItem(key, val, year)
 }
 
 /**
-* Items
+* Items values
 **/
+
+// Get a key and items value
 func GetItems(key string) (et.Items, error) {
 	if conn == nil {
 		return et.Items{}, logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -410,6 +455,7 @@ func GetItems(key string) (et.Items, error) {
 	return result, nil
 }
 
+// Set a key and items value
 func SetItems(key string, val et.Items, second time.Duration) (et.Items, error) {
 	if conn == nil {
 		return val, logs.Log(ERR_NOT_CACHE_SERVICE)
@@ -423,6 +469,7 @@ func SetItems(key string, val et.Items, second time.Duration) (et.Items, error) 
 	return val, nil
 }
 
+// Set a key and items value with a day duration
 func SetItemsD(key string, val et.Items) (et.Items, error) {
 	day := time.Hour * 24
 	return SetItems(key, val, day)
@@ -433,11 +480,13 @@ func SetItemsW(key string, val et.Items) (et.Items, error) {
 	return SetItems(key, val, week)
 }
 
+// Set a key and items value with a month duration
 func SetItemsM(key string, val et.Items) (et.Items, error) {
 	month := time.Hour * 24 * 30
 	return SetItems(key, val, month)
 }
 
+// Set a key and items value with a year duration
 func SetItemsY(key string, val et.Items) (et.Items, error) {
 	year := time.Hour * 24 * 365
 	return SetItems(key, val, year)

@@ -160,8 +160,7 @@ func (p PubSub) Connect() (bool, error) {
 
 // Ping the server
 func (p PubSub) Ping() {
-	msg := NewMessage(p.from, et.Json{})
-	msg.Tp = m.TpPing
+	msg := NewMessage(p.from, et.Json{}, m.TpPing)
 
 	p.send(msg)
 }
@@ -172,8 +171,7 @@ func (p PubSub) Params(params et.Json) error {
 		return logs.Alertm(ERR_PARAM_NOT_FOUND)
 	}
 
-	msg := NewMessage(p.from, params)
-	msg.Tp = m.TpParams
+	msg := NewMessage(p.from, params, m.TpParams)
 
 	return p.send(msg)
 }
@@ -182,8 +180,7 @@ func (p PubSub) Params(params et.Json) error {
 func (p PubSub) Subscribe(channel string, reciveFn func(m.Message)) {
 	p.channels[channel] = reciveFn
 
-	msg := NewMessage(p.from, et.Json{})
-	msg.Tp = m.TpSubscribe
+	msg := NewMessage(p.from, et.Json{}, m.TpSubscribe)
 	msg.Channel = channel
 
 	p.send(msg)
@@ -193,8 +190,7 @@ func (p PubSub) Subscribe(channel string, reciveFn func(m.Message)) {
 func (p PubSub) Unsubscribe(channel string) {
 	delete(p.channels, channel)
 
-	msg := NewMessage(p.from, et.Json{})
-	msg.Tp = m.TpUnsubscribe
+	msg := NewMessage(p.from, et.Json{}, m.TpUnsubscribe)
 	msg.Channel = channel
 
 	p.send(msg)
@@ -204,8 +200,7 @@ func (p PubSub) Unsubscribe(channel string) {
 func (p PubSub) Stack(channel string, reciveFn func(m.Message)) {
 	p.channels[channel] = reciveFn
 
-	msg := NewMessage(p.from, et.Json{})
-	msg.Tp = m.TpStack
+	msg := NewMessage(p.from, et.Json{}, m.TpStack)
 	msg.Channel = channel
 
 	p.send(msg)
@@ -213,9 +208,8 @@ func (p PubSub) Stack(channel string, reciveFn func(m.Message)) {
 
 // Publish a message to a channel
 func (p *PubSub) Publish(channel string, message interface{}) {
-	msg := NewMessage(p.from, message)
+	msg := NewMessage(p.from, message, m.TpPublish)
 	msg.Ignored = []string{p.ClientId}
-	msg.Tp = m.TpPublish
 	msg.Channel = channel
 
 	p.send(msg)
@@ -223,10 +217,9 @@ func (p *PubSub) Publish(channel string, message interface{}) {
 
 // Send a message to the server
 func (p *PubSub) SendMessage(clientId string, message interface{}) error {
-	msg := NewMessage(p.from, message)
+	msg := NewMessage(p.from, message, m.TpDirect)
 	msg.Ignored = []string{p.ClientId}
 	msg.to = clientId
-	msg.Tp = m.TpDirect
 
 	return p.send(msg)
 }

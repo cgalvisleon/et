@@ -12,7 +12,7 @@ func (c *Client) listen(messageType int, message []byte) {
 		msg := NewMessage(c.hub.Identify(), et.Json{
 			"ok":      ok,
 			"message": message,
-		})
+		}, m.TpDirect)
 		c.sendMessage(msg)
 	}
 

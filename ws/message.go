@@ -21,13 +21,14 @@ type Message struct {
 }
 
 // NewMessage create a new message
-func NewMessage(from et.Json, message interface{}) Message {
-	id := utility.UUID()
+func NewMessage(from et.Json, message interface{}, tp m.TpMessage) Message {
 	return Message{
 		Created_at: time.Now(),
-		Id:         id,
+		Id:         utility.UUID(),
 		From:       from,
 		Data:       message,
+		Tp:         tp,
+		Ignored:    []string{},
 	}
 }
 

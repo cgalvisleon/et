@@ -9,6 +9,7 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
+	m "github.com/cgalvisleon/et/message"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/gorilla/websocket"
@@ -118,9 +119,10 @@ func (h *Hub) onConnect(client *Client) {
 		"ok":      true,
 		"message": "Connected successfully",
 		"client":  client.Identify(),
-	})
+	}, m.TpConnect)
+	msg.Channel = "ws/connect"
 
-	h.Mute("ws/connect", msg, []string{client.Id}, h.Identify())
+	h.Mute(msg.Channel, msg, []string{client.Id}, h.Identify())
 	client.sendMessage(msg)
 
 	logs.Logf("Websocket", MSG_CLIENT_CONNECT, client.Id, h.Id)
@@ -143,9 +145,10 @@ func (h *Hub) onDisconnect(client *Client) {
 		"ok":      true,
 		"message": "Client disconnected",
 		"client":  client.Identify(),
-	})
+	}, m.TpDisconnect)
+	msg.Channel = "ws/disconnect"
 
-	h.Mute("ws/disconnect", msg, []string{client.Id}, h.Identify())
+	h.Mute(msg.Channel, msg, []string{client.Id}, h.Identify())
 
 	logs.Logf("Websocket", MSG_CLIENT_DISCONNECT, client.Id, h.Id)
 }

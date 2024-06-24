@@ -20,6 +20,8 @@ func Load() (*Mem, error) {
 		mutex: sync.RWMutex{},
 	}
 
+	logs.Logf("Mem", "Load memory cache")
+
 	return result, nil
 }
 

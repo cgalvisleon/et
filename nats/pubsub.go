@@ -17,7 +17,6 @@ type PubSub struct {
 	ClientId     string
 	Name         string
 	from         et.Json
-	conn         *nats.Conn
 	subscription map[string]*nats.Subscription
 	reciveFn     func(m.Message)
 	channels     map[string]func(m.Message)
@@ -60,15 +59,15 @@ func NewPubSub(clientId, name string, reciveFn func(m.Message)) (*PubSub, error)
 }
 
 // Subscribe to a channel
-func (p PubSub) subscribe(channel string, f func(m.Message)) error {
-	if p.conn == nil {
+func (p *PubSub) subscribe(channel string, f func(m.Message)) error {
+	if conn == nil {
 		return logs.Alertm(ERR_NOT_CONNECT)
 	}
 
 	msg := Message{
 		Channel: channel,
 	}
-	subscription, err := p.conn.Subscribe(
+	subscription, err := conn.conn.Subscribe(
 		msg.Channel,
 		func(m *nats.Msg) {
 			f(msg)
@@ -84,8 +83,8 @@ func (p PubSub) subscribe(channel string, f func(m.Message)) error {
 }
 
 // Subscribe to a channel
-func (p PubSub) stack(channel string, f func(m.Message)) error {
-	if p.conn == nil {
+func (p *PubSub) stack(channel string, f func(m.Message)) error {
+	if conn == nil {
 		return logs.Alertm(ERR_NOT_CONNECT)
 	}
 
@@ -96,7 +95,7 @@ func (p PubSub) stack(channel string, f func(m.Message)) error {
 	msg := Message{
 		Channel: channel,
 	}
-	subscription, err := p.conn.Subscribe(
+	subscription, err := conn.conn.Subscribe(
 		msg.Channel,
 		func(m *nats.Msg) {
 			ok := lock(msg.Id)
@@ -117,8 +116,8 @@ func (p PubSub) stack(channel string, f func(m.Message)) error {
 }
 
 // Send a message to the server
-func (p PubSub) send(subj string, message Message) error {
-	if p.conn == nil {
+func (p *PubSub) send(subj string, message Message) error {
+	if conn == nil {
 		return logs.Alertm(ERR_NOT_CONNECT)
 	}
 
@@ -129,7 +128,7 @@ func (p PubSub) send(subj string, message Message) error {
 
 	cache.Set(message.Id, msg, 15)
 
-	err = p.conn.Publish(subj, msg)
+	err = conn.conn.Publish(subj, msg)
 	if err != nil {
 		return err
 	}
@@ -138,13 +137,13 @@ func (p PubSub) send(subj string, message Message) error {
 }
 
 // Return type server pubsub
-func (p PubSub) Type() string {
+func (p *PubSub) Type() string {
 	return "Nats"
 }
 
 // Check if the client is connected
-func (p PubSub) IsConnected() bool {
-	if p.conn == nil {
+func (p *PubSub) IsConnected() bool {
+	if conn == nil {
 		return false
 	}
 
@@ -152,9 +151,9 @@ func (p PubSub) IsConnected() bool {
 }
 
 // Close the client websocket connection
-func (p PubSub) Close() {
-	if p.conn != nil {
-		p.conn.Close()
+func (p *PubSub) Close() {
+	if conn != nil {
+		conn.conn.Close()
 	}
 
 	for _, sub := range p.subscription {
@@ -163,17 +162,15 @@ func (p PubSub) Close() {
 }
 
 // Connect to the server
-func (p PubSub) Connect() (bool, error) {
+func (p *PubSub) Connect() (bool, error) {
 	if p.connected {
 		return true, nil
 	}
 
-	conn, err := connect(p.host)
+	_, err := Load()
 	if err != nil {
 		return false, err
 	}
-
-	p.conn = conn
 	err = p.subscribe(p.ClientId, p.reciveFn)
 	if err != nil {
 		return false, err
@@ -185,7 +182,7 @@ func (p PubSub) Connect() (bool, error) {
 }
 
 // Ping the server
-func (p PubSub) Ping() {
+func (p *PubSub) Ping() {
 	msg := NewMessage(p.from, et.Json{
 		"ok":      true,
 		"message": "pong",
@@ -196,7 +193,7 @@ func (p PubSub) Ping() {
 }
 
 // Set the client parameters
-func (p PubSub) Params(params et.Json) error {
+func (p *PubSub) Params(params et.Json) error {
 	if params.Emptyt() {
 		return logs.Alertm(ERR_PARAM_NOT_FOUND)
 	}
@@ -218,7 +215,7 @@ func (p PubSub) Params(params et.Json) error {
 }
 
 // Subscribe to a channel
-func (p PubSub) Subscribe(channel string, reciveFn func(m.Message)) {
+func (p *PubSub) Subscribe(channel string, reciveFn func(m.Message)) {
 	p.channels[channel] = reciveFn
 	p.subscribe(channel, reciveFn)
 	msg := NewMessage(p.from, et.Json{
@@ -230,7 +227,7 @@ func (p PubSub) Subscribe(channel string, reciveFn func(m.Message)) {
 }
 
 // Subscribe to a channel type fisrt, so send message to first client
-func (p PubSub) Stack(channel string, reciveFn func(m.Message)) {
+func (p *PubSub) Stack(channel string, reciveFn func(m.Message)) {
 	p.channels[channel] = reciveFn
 	p.stack(channel, reciveFn)
 	msg := NewMessage(p.from, et.Json{
@@ -242,7 +239,7 @@ func (p PubSub) Stack(channel string, reciveFn func(m.Message)) {
 }
 
 // Unsubscribe from a channel
-func (p PubSub) Unsubscribe(channel string) {
+func (p *PubSub) Unsubscribe(channel string) {
 	delete(p.channels, channel)
 	delete(p.subscription, channel)
 	msg := NewMessage(p.from, et.Json{

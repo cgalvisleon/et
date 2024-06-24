@@ -83,11 +83,10 @@ func Logf(kind string, format string, args ...any) {
 }
 
 func Traces(kind, color string, err error) ([]string, error) {
-	var n int = 1
-	var traces []string = []string{err.Error()}
-
 	log(kind, color, err.Error())
 
+	var n int = 1
+	var traces []string = []string{err.Error()}
 	for {
 		pc, file, line, more := runtime.Caller(n)
 		if !more {
@@ -111,7 +110,8 @@ func Traces(kind, color string, err error) ([]string, error) {
 }
 
 func Alert(err error) error {
-	log("Alert", "Yellow", err.Error())
+	color := "Yellow"
+	log("Alert", color, err.Error())
 
 	return err
 }

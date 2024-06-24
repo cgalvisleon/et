@@ -10,7 +10,6 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/message"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/ws"
 	"github.com/dimiro1/banner"
@@ -37,16 +36,11 @@ func Load() (*Server, error) {
 		return conn, nil
 	}
 
-	err := cache.Load("")
-	if err != nil {
-		return nil, err
-	}
-
 	// HTTP server
 	http := newHttpServer()
 
 	// WS server
-	ws, err := ws.Load()
+	ws, err := ws.Server()
 	if err != nil {
 		panic(err)
 	}
@@ -57,11 +51,14 @@ func Load() (*Server, error) {
 		ws:   ws,
 	}
 
-	return conn, nil
-}
+	// Cache
+	cacheType := envar.GetStr(cache.TpMem.String(), "CACHE_TYPE")
+	err = cache.Load(cacheType)
+	if err != nil {
+		return nil, err
+	}
 
-func inbox(msg message.Message) {
-	logs.Debug(msg.ToString())
+	return conn, nil
 }
 
 // Server close

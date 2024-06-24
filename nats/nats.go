@@ -18,27 +18,26 @@ func (c *Conn) Lock(key string) bool {
 
 var conn *Conn
 
-func Load() *Conn {
+func Load() (*Conn, error) {
 	if conn != nil {
-		return conn
+		return conn, nil
 	}
 
 	host := envar.GetStr("", "NATS_HOST")
 	if host == "" {
-		logs.Alertf(ERR_ENV_REQUIRED, "REDIS_HOST")
-		return nil
+		return nil, logs.Alertf(ERR_ENV_REQUIRED, "REDIS_HOST")
 	}
 
 	c, err := connect(host)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	conn = &Conn{
 		conn: c,
 	}
 
-	return conn
+	return conn, nil
 }
 
 func Close() {

@@ -2,7 +2,6 @@ package ws
 
 import (
 	"net/http"
-	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -60,23 +59,6 @@ func NewHub() *Hub {
 	}
 
 	return result
-}
-
-// Connect to the server from the client
-func connect(host, scheme string) (*websocket.Conn, error) {
-	if scheme == "" {
-		scheme = "ws"
-	}
-
-	path := strs.Format("/%s", scheme)
-
-	u := url.URL{Scheme: scheme, Host: host, Path: path}
-	result, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
 }
 
 // Run the hub
@@ -157,7 +139,7 @@ func (h *Hub) onDisconnect(client *Client) {
 func (h *Hub) connect(socket *websocket.Conn, clientId, name string) (*Client, error) {
 	idxC := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == clientId })
 	if idxC != -1 {
-		return conn.hub.clients[idxC], nil
+		return servws.hub.clients[idxC], nil
 	}
 
 	client, isNew := newClient(h, socket, clientId, name)
@@ -226,7 +208,7 @@ func (h *Hub) listend(msg interface{}) {
 func (h *Hub) Publish(channel string, msg Message, ignored []string, from et.Json) error {
 	ch := h.getChanel(channel)
 	if len(ch.Subscribers) == 0 {
-		return logs.Alertm(ERR_CHANNEL_NOT_SUBSCRIBERS)
+		return logs.Alertf(ERR_CHANNEL_NOT_SUBSCRIBERS, channel)
 	}
 
 	return h.publish(ch, msg, ignored, from)

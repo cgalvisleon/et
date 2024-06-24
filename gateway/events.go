@@ -1,9 +1,22 @@
 package gateway
 
-import "github.com/cgalvisleon/et/logs"
+import (
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/message"
+	"github.com/cgalvisleon/et/utility"
+)
 
-func initEvents() {
-	logs.Log("Events", "Running svents stack")
+func initEvents() error {
+	// Events
+	evetType := envar.GetStr(event.TpWs.String(), "EVENT_TYPE")
+	clientId := utility.UUID()
+	name := "Api gateway"
+	err := event.Load(evetType, clientId, name, inbox)
+	if err != nil {
+		return err
+	}
 
 	/*
 		err := event.Stack("gateway/upsert", eventAction)
@@ -11,6 +24,14 @@ func initEvents() {
 			logs.Error(err)
 		}
 	*/
+
+	logs.Log("Events", "Load events")
+
+	return nil
+}
+
+func inbox(msg message.Message) {
+	logs.Debug(msg.ToString())
 }
 
 /*

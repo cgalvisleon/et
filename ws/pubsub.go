@@ -1,8 +1,6 @@
 package ws
 
 import (
-	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 
@@ -10,8 +8,6 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	m "github.com/cgalvisleon/et/message"
-	"github.com/cgalvisleon/et/strs"
-	"github.com/cgalvisleon/et/token"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/gorilla/websocket"
 	"golang.org/x/exp/slices"
@@ -117,36 +113,32 @@ func (p *PubSub) send(message Message) error {
 }
 
 // Return type server pubsub
-func (p PubSub) Type() string {
+func (p *PubSub) Type() string {
 	return "ETws"
 }
 
 // Check if the client is connected
-func (p PubSub) IsConnected() bool {
+func (p *PubSub) IsConnected() bool {
 	return p.connected
 }
 
 // Close the client websocket connection
-func (p PubSub) Close() {
+func (p *PubSub) Close() {
 	p.socket.Close()
 }
 
 // Connect to the server
-func (p PubSub) Connect() (bool, error) {
+func (p *PubSub) Connect() (bool, error) {
 	if p.connected {
 		return true, nil
 	}
 
-	u := url.URL{Scheme: "ws", Host: p.host, Path: "/ws"}
-	header := make(http.Header)
-	tk, err := token.Generate(p.ClientId, p.Name, "ws", "ws", "microservice", 0)
-	if err != nil {
-		return false, err
+	scheme := envar.GetStr("", "WS_SCHEME")
+	if scheme == "" {
+		scheme = "ws"
 	}
 
-	tk = strs.Format(`Bearer %s`, tk)
-	header.Add("Authorization", tk)
-	socket, _, err := websocket.DefaultDialer.Dial(u.String(), header)
+	socket, err := ConnectWs(p.host, scheme, p.ClientId, p.Name)
 	if err != nil {
 		return false, err
 	}
@@ -159,14 +151,14 @@ func (p PubSub) Connect() (bool, error) {
 }
 
 // Ping the server
-func (p PubSub) Ping() {
+func (p *PubSub) Ping() {
 	msg := NewMessage(p.from, et.Json{}, m.TpPing)
 
 	p.send(msg)
 }
 
 // Set the client parameters
-func (p PubSub) Params(params et.Json) error {
+func (p *PubSub) Params(params et.Json) error {
 	if params.Emptyt() {
 		return logs.Alertm(ERR_PARAM_NOT_FOUND)
 	}
@@ -177,7 +169,7 @@ func (p PubSub) Params(params et.Json) error {
 }
 
 // Subscribe to a channel
-func (p PubSub) Subscribe(channel string, reciveFn func(m.Message)) {
+func (p *PubSub) Subscribe(channel string, reciveFn func(m.Message)) {
 	p.channels[channel] = reciveFn
 
 	msg := NewMessage(p.from, et.Json{}, m.TpSubscribe)
@@ -187,7 +179,7 @@ func (p PubSub) Subscribe(channel string, reciveFn func(m.Message)) {
 }
 
 // Unsubscribe from a channel
-func (p PubSub) Unsubscribe(channel string) {
+func (p *PubSub) Unsubscribe(channel string) {
 	delete(p.channels, channel)
 
 	msg := NewMessage(p.from, et.Json{}, m.TpUnsubscribe)
@@ -197,7 +189,7 @@ func (p PubSub) Unsubscribe(channel string) {
 }
 
 // Subscribe to a channel type fisrt, so send message to first client
-func (p PubSub) Stack(channel string, reciveFn func(m.Message)) {
+func (p *PubSub) Stack(channel string, reciveFn func(m.Message)) {
 	p.channels[channel] = reciveFn
 
 	msg := NewMessage(p.from, et.Json{}, m.TpStack)

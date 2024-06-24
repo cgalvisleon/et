@@ -1,27 +1,25 @@
 package ws
 
-var (
-	conn *Conn
-)
-
 type Conn struct {
 	hub *Hub
 }
 
+var servws *Conn
+
 // Load the Websocket Hub
-func Load() (*Conn, error) {
-	if conn != nil {
-		return conn, nil
+func Server() (*Conn, error) {
+	if servws != nil {
+		return servws, nil
 	}
 
 	hub := NewHub()
 	go hub.Run()
 
-	conn = &Conn{
+	servws = &Conn{
 		hub: hub,
 	}
 
-	return conn, nil
+	return servws, nil
 }
 
 // Close the Websocket Hub

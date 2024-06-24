@@ -9,7 +9,7 @@ import (
 
 // Handler for websocket
 func wsConnect(w http.ResponseWriter, r *http.Request) {
-	_, err := ws.Connect(w, r)
+	_, err := ws.ConnectHttp(w, r)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return

@@ -20,14 +20,37 @@ type Cache interface {
 	Values() []interface{}
 }
 
+// Type adatapter
+type TpCahe int
+
+const (
+	TpRedis TpCahe = iota
+	TpMem
+)
+
+func (tp TpCahe) String() string {
+	switch tp {
+	case TpRedis:
+		return "redis"
+	case TpMem:
+		return "memory"
+	default:
+		return ""
+	}
+}
+
 var conn Cache
 
 const MSG_CACHE_NOT_FOUND = "Cache not found"
 
 // Load a new cache connection
 func Load(tp string) error {
+	if conn != nil {
+		return nil
+	}
+
 	switch tp {
-	case "redis":
+	case TpRedis.String():
 		res, err := redis.Load()
 		if err != nil {
 			return err

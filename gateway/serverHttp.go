@@ -70,7 +70,7 @@ func newHttpServer() *HttpServer {
 		pakagesKey: "gateway/packages",
 	}
 	result.notFoundHandler = notFounder
-	result.handlerFn = handlerFn
+	result.handlerFn = handlerRouter
 	result.Get("/version", version, PACKAGE_NAME)
 	result.Get("/gateway/all", getAll, PACKAGE_NAME)
 	result.Post("/gateway", upsert, PACKAGE_NAME)

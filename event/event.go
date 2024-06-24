@@ -1,0 +1,238 @@
+package event
+
+import (
+	"regexp"
+	"strings"
+
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/message"
+	"github.com/cgalvisleon/et/nats"
+	"github.com/cgalvisleon/et/pubsub"
+	"github.com/cgalvisleon/et/ws"
+)
+
+// Type adatapter
+type TpAdapter int
+
+const (
+	TpNats TpAdapter = iota
+	TpWs
+)
+
+func (tp TpAdapter) String() string {
+	switch tp {
+	case TpWs:
+		return "ws"
+	case TpNats:
+		return "nats"
+	default:
+		return ""
+	}
+}
+
+var conn pubsub.PubSub
+
+const ERR_NOT_PUBSUB_SERVICE = "PubSub service not found func:%s"
+
+func Load(tp string, clientId, name string, reciveFn func(message.Message)) error {
+	if conn != nil {
+		return nil
+	}
+
+	switch tp {
+	case TpNats.String():
+		res, err := nats.NewPubSub(clientId, name, reciveFn)
+		if err != nil {
+			return err
+		}
+
+		conn = res
+
+		return nil
+	case TpWs.String():
+		res, err := ws.NewPubSub(clientId, name, reciveFn)
+		if err != nil {
+			return err
+		}
+
+		conn = res
+
+		return nil
+	default:
+		return logs.Alertm("Event adapter required (nats, ws)")
+	}
+}
+
+// Prune a channel
+func ChannelPrune(channel string) string {
+	// Encuentra la cadena que no comienza con "/"
+	re := regexp.MustCompile(`^\/*(.+)$`)
+	// Agrega "/" al inicio si no está presente
+	result := re.ReplaceAllString(channel, "/$1")
+	// Reemplazar espacios con "-"
+	result = strings.ReplaceAll(result, " ", "-")
+	// Convertir a minúsculas
+	result = strings.ToLower(result)
+
+	return result
+}
+
+// Return the connection pubsub type
+func Type() string {
+	if conn == nil {
+		return ""
+	}
+
+	return conn.Type()
+}
+
+// Check if the client is connected
+func IsConnected() bool {
+	if conn == nil {
+		return false
+	}
+
+	return conn.IsConnected()
+}
+
+// Close the client websocket connection
+func Close() {
+	if conn == nil {
+		return
+	}
+
+	conn.Close()
+}
+
+// Connect to the service pubsub
+func Connect() (bool, error) {
+	if conn == nil {
+		return false, logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "Connect")
+	}
+
+	return conn.Connect()
+}
+
+// Ping the service pubsub
+func Ping() {
+	if conn == nil {
+		logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "Ping")
+		return
+	}
+
+	conn.Ping()
+}
+
+// Set the params of the service pubsub
+func Params(params et.Json) error {
+	if conn == nil {
+		return logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "Params")
+	}
+
+	return conn.Params(params)
+}
+
+// Subscribe a client to a channel
+func Subscribe(channel string, reciveFn func(message.Message)) {
+	if conn == nil {
+		logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "Subscribe")
+		return
+	}
+
+	conn.Subscribe(channel, reciveFn)
+}
+
+// Stack a client to a channel
+func Stack(channel string, reciveFn func(message.Message)) {
+	if conn == nil {
+		logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "Stack")
+		return
+	}
+
+	conn.Stack(channel, reciveFn)
+}
+
+// Unsubscribe a client from a channel
+func Unsubscribe(channel string) {
+	if conn == nil {
+		logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "Unsubscribe")
+		return
+	}
+
+	conn.Unsubscribe(channel)
+}
+
+// Publish a message to a channel
+func Publish(channel string, message interface{}) {
+	if conn == nil {
+		logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "Publish")
+		return
+	}
+
+	conn.Publish(channel, message)
+}
+
+// Send a message to a client
+func SendMessage(clientId string, message interface{}) error {
+	if conn == nil {
+		return logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "SendMessage")
+	}
+
+	return conn.SendMessage(clientId, message)
+}
+
+// Send a message to a event worker
+func Worker(event string, data interface{}) error {
+	if conn == nil {
+		return logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "Worker")
+	}
+
+	conn.Publish(event, data)
+
+	return nil
+}
+
+// Send a log message
+func Log(message interface{}) error {
+	if conn == nil {
+		return logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "Log")
+	}
+
+	conn.Publish("/log", message)
+
+	return nil
+}
+
+// Send a telemetry message
+func Telemetry(message interface{}) error {
+	if conn == nil {
+		return logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "Telemetry")
+	}
+
+	conn.Publish("/telemetry", message)
+
+	return nil
+}
+
+// Send a overflow message
+func Overflow(message interface{}) error {
+	if conn == nil {
+		return logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "Overflow")
+	}
+
+	conn.Publish("/overflow", message)
+
+	return nil
+}
+
+// Send a token last use message
+func TokeLastUse(message interface{}) error {
+	if conn == nil {
+		return logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "TokeLastUse")
+	}
+
+	conn.Publish("/token_last_use", message)
+
+	return nil
+}

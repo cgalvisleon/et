@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/pubsub"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/token"
 	"github.com/cgalvisleon/et/utility"
@@ -74,7 +74,7 @@ func Authorization(next http.Handler) http.Handler {
 			"token":     tokenString,
 		}
 
-		go pubsub.TokeLastUse(data)
+		go event.TokeLastUse(data)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

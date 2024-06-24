@@ -10,8 +10,8 @@ import (
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/pubsub"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -21,6 +21,7 @@ var DefaultTelemetry func(next http.Handler) http.Handler
 
 type Metrics struct {
 	ReqID            string
+	Channel          string
 	TimeBegin        time.Time
 	TimeEnd          time.Time
 	TimeExec         time.Time
@@ -104,7 +105,9 @@ func (m *Metrics) CallExecute() {
 }
 
 func (m *Metrics) printLn() et.Json {
-	w := logs.Color(logs.NMagenta, fmt.Sprintf(" [%s]: ", m.Method))
+	w := logs.Color(logs.NMagenta, fmt.Sprintf(" [%s]:", "TELEMETRY"))
+	logs.CW(w, logs.NCyan, fmt.Sprintf(" [%s]:", strs.Uppcase(m.Channel)))
+	logs.CW(w, logs.NCyan, fmt.Sprintf(" [%s]:", m.Method))
 	logs.CW(w, logs.NCyan, fmt.Sprintf("%s %s", m.EndPoint, m.Proto))
 	logs.CW(w, logs.NWhite, fmt.Sprintf(" from %s", m.RemoteAddr))
 	status := fmt.Sprintf(" - %d %s", m.Status, getStatusDescription(m.Status))
@@ -133,9 +136,9 @@ func (m *Metrics) printLn() et.Json {
 	}
 	logs.CW(w, logs.NRed, " Downtime:%s", m.Downtime)
 	if m.RequestsHost.Seccond > m.RequestsHost.Limit {
-		logs.CW(w, logs.NRed, " - Request S:%vM:%vH:%vL:%v", m.RequestsHost.Seccond, m.RequestsHost.Minute, m.RequestsHost.Hour, m.RequestsHost.Limit)
+		logs.CW(w, logs.NRed, " - Request S:%vM:%vH:%vD:%vL:%v", m.RequestsHost.Seccond, m.RequestsHost.Minute, m.RequestsHost.Hour, m.RequestsHost.Day, m.RequestsHost.Limit)
 	} else {
-		logs.CW(w, logs.NYellow, " - Request S:%vM:%vH:%vL:%v", m.RequestsHost.Seccond, m.RequestsHost.Minute, m.RequestsHost.Hour, m.RequestsHost.Limit)
+		logs.CW(w, logs.NYellow, " - Request S:%vM:%vH:%vD:%vL:%v", m.RequestsHost.Seccond, m.RequestsHost.Minute, m.RequestsHost.Hour, m.RequestsHost.Day, m.RequestsHost.Limit)
 	}
 
 	logs.Println(w)
@@ -183,10 +186,10 @@ func (m *Metrics) printLn() et.Json {
 		},
 	}
 
-	go pubsub.Telemetry(result)
+	go event.Telemetry(result)
 
 	if m.RequestsHost.Seccond > m.RequestsHost.Limit {
-		go pubsub.Overflow(result)
+		go event.Overflow(result)
 	}
 
 	return result
@@ -194,6 +197,7 @@ func (m *Metrics) printLn() et.Json {
 
 func (m *Metrics) Done(res *http.Response) et.Json {
 	m.TimeEnd = time.Now()
+	m.Channel = "Done"
 	m.ResponseTime = time.Since(m.TimeExec)
 	m.Latency = time.Since(m.TimeBegin)
 	m.Status = res.StatusCode
@@ -205,6 +209,7 @@ func (m *Metrics) Done(res *http.Response) et.Json {
 
 func (m *Metrics) DoneResponse(status int, contentLength int64) et.Json {
 	m.TimeEnd = time.Now()
+	m.Channel = "Done-Reponse"
 	m.ResponseTime = time.Since(m.TimeExec)
 	m.Latency = time.Since(m.TimeBegin)
 	m.Status = status
@@ -216,6 +221,7 @@ func (m *Metrics) DoneResponse(status int, contentLength int64) et.Json {
 
 func (m *Metrics) DoneHandler() et.Json {
 	m.TimeEnd = time.Now()
+	m.Channel = "Done-Handler"
 	m.ResponseTime = time.Since(m.TimeExec)
 	m.Latency = time.Since(m.TimeBegin)
 	m.Status = http.StatusOK
@@ -225,8 +231,9 @@ func (m *Metrics) DoneHandler() et.Json {
 	return result
 }
 
-func (m *Metrics) NotFounder(r *http.Request) et.Json {
+func (m *Metrics) NotFound(r *http.Request) et.Json {
 	m.NotFount = true
+	m.Channel = "NotFound"
 	m.TimeEnd = time.Now()
 	m.ResponseTime = time.Since(m.TimeExec)
 	m.Latency = time.Since(m.TimeBegin)

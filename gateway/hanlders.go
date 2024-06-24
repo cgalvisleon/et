@@ -25,8 +25,8 @@ func notFounder(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Handler function
-func handlerFn(w http.ResponseWriter, r *http.Request) {
+// Handler Router
+func handlerRouter(w http.ResponseWriter, r *http.Request) {
 	// Begin telemetry
 	metric := telemetry.NewMetric(r)
 
@@ -41,7 +41,7 @@ func handlerFn(w http.ResponseWriter, r *http.Request) {
 		conn.http.notFoundHandler(w, r)
 
 		defer func() {
-			go metric.NotFounder(r)
+			go metric.NotFound(r)
 		}()
 
 		return
@@ -61,6 +61,7 @@ func handlerFn(w http.ResponseWriter, r *http.Request) {
 		}()
 
 		handler(w, r)
+
 		return
 	}
 

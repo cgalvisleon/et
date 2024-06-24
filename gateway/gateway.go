@@ -23,7 +23,7 @@ type Server struct {
 
 var PackageName = "gateway"
 var PackageTitle = envar.GetStr("Apigateway", "PACKAGE_TITLE")
-var PackagePath = "/api/gateway"
+var PackagePath = envar.GetStr("/api/gateway", "PATH_URL")
 var PackageVersion = envar.GetStr("0.0.1", "VERSION")
 var Company = envar.GetStr("", "COMPANY")
 var Web = envar.GetStr("", "WEB")

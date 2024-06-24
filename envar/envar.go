@@ -9,7 +9,7 @@ import (
 	_ "github.com/joho/godotenv/autoload"
 )
 
-func metaSet(name string, def string, usage, _var string) string {
+func metaSet(name, def, _var string) string {
 	for i, arg := range os.Args[1:] {
 		if arg == strs.Format("-%s", name) {
 			val := os.Args[i+2]
@@ -22,13 +22,13 @@ func metaSet(name string, def string, usage, _var string) string {
 }
 
 // Set a string environment variable
-func SetStr(name string, def string, usage, _var string) string {
-	return metaSet(name, def, usage, _var)
+func SetStr(name, def, _var string) string {
+	return metaSet(name, def, _var)
 }
 
 // Set an integer environment variable
-func SetInt(name string, def int, usage, _var string) int {
-	result := metaSet(name, strconv.Itoa(def), usage, _var)
+func SetInt(name string, def int, _var string) int {
+	result := metaSet(name, strconv.Itoa(def), _var)
 
 	val, err := strconv.Atoi(result)
 	if err != nil {
@@ -39,8 +39,8 @@ func SetInt(name string, def int, usage, _var string) int {
 }
 
 // Set a boolean environment variable
-func SetBool(name string, def bool, usage, _var string) bool {
-	result := metaSet(name, strconv.FormatBool(def), usage, _var)
+func SetBool(name string, def bool, _var string) bool {
+	result := metaSet(name, strconv.FormatBool(def), _var)
 
 	val, err := strconv.ParseBool(result)
 	if err != nil {
@@ -51,8 +51,8 @@ func SetBool(name string, def bool, usage, _var string) bool {
 }
 
 // Set a time environment variable
-func SetTime(name string, def time.Time, usage, _var string) time.Time {
-	result := metaSet(name, def.Format(time.RFC3339), usage, _var)
+func SetTime(name string, def time.Time, _var string) time.Time {
+	result := metaSet(name, def.Format(time.RFC3339), _var)
 
 	val, err := time.Parse(time.RFC3339, result)
 	if err != nil {

@@ -134,43 +134,47 @@ func Params(params et.Json) error {
 }
 
 // Subscribe a client to a channel
-func Subscribe(channel string, reciveFn func(message.Message)) {
+func Subscribe(channel string, reciveFn func(message.Message)) error {
 	if conn == nil {
-		logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "Subscribe")
-		return
+		return logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "Subscribe")
 	}
 
 	conn.Subscribe(channel, reciveFn)
+
+	return nil
 }
 
 // Stack a client to a channel
-func Stack(channel string, reciveFn func(message.Message)) {
+func Stack(channel string, reciveFn func(message.Message)) error {
 	if conn == nil {
-		logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "Stack")
-		return
+		return logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "Stack")
 	}
 
 	conn.Stack(channel, reciveFn)
+
+	return nil
 }
 
 // Unsubscribe a client from a channel
-func Unsubscribe(channel string) {
+func Unsubscribe(channel string) error {
 	if conn == nil {
-		logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "Unsubscribe")
-		return
+		return logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "Unsubscribe")
 	}
 
 	conn.Unsubscribe(channel)
+
+	return nil
 }
 
 // Publish a message to a channel
-func Publish(channel string, message interface{}) {
+func Publish(channel string, message interface{}) error {
 	if conn == nil {
-		logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "Publish")
-		return
+		return logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "Publish")
 	}
 
 	conn.Publish(channel, message)
+
+	return nil
 }
 
 // Send a message to a client

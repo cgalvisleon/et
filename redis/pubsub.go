@@ -22,7 +22,7 @@ func PubCtx(ctx context.Context, channel string, message interface{}) error {
 }
 
 // Subscribe to a channel with context
-func SubCtx(ctx context.Context, channel string, f func(interface{})) {
+func SubCtx(ctx context.Context, channel string, reciveFn func(interface{})) {
 	if conn == nil {
 		return
 	}
@@ -34,7 +34,7 @@ func SubCtx(ctx context.Context, channel string, f func(interface{})) {
 
 	for msg := range ch {
 		fmt.Println(msg.Channel, msg.Payload)
-		f(msg.Payload)
+		reciveFn(msg.Payload)
 	}
 }
 
@@ -45,7 +45,7 @@ func Pub(channel string, message interface{}) error {
 }
 
 // Subscribe to a channel
-func Sub(channel string, f func(interface{})) {
+func Sub(channel string, reciveFn func(interface{})) {
 	ctx := context.Background()
-	SubCtx(ctx, channel, f)
+	SubCtx(ctx, channel, reciveFn)
 }

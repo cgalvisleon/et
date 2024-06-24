@@ -255,11 +255,12 @@ func (s Json) ValBool(_default bool, atribs ...string) bool {
 	case int:
 		return v == 1
 	case string:
-		if v == "true" {
+		switch v {
+		case "true":
 			return true
-		} else if v == "false" {
+		case "false":
 			return false
-		} else {
+		default:
 			log.Println("ValBool value is not bool, type:", reflect.TypeOf(v), "value:", v)
 			return _default
 		}

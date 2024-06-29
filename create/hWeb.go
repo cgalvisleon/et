@@ -2,8 +2,8 @@ package create
 
 import "github.com/cgalvisleon/et/file"
 
-func MakeWeb(name string) error {
-	_, err := file.MakeFolder(name, "web")
+func MakeWWW(name string) error {
+	_, err := file.MakeFolder("www", name)
 	if err != nil {
 		return err
 	}

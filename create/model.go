@@ -36,23 +36,22 @@ import (
 	"os/signal"
 
 	serv "$1/internal/service/$2"
-	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/envar"
-	_ "github.com/joho/godotenv/autoload"	
 )
 
 func main() {
-	envar.SetInt("port", 3000, "PORT")
-	envar.SetInt("rpc", 0, "RPC_PORT")
-	envar.SetStr("dbhost", "localhost", "DB_HOST")
-	envar.SetInt("dbport", 5432, "DB_PORT")
-	envar.SetStr("dbname", "", "DB_NAME")
-	envar.SetStr("dbuser", "", "DB_USER")
-	envar.SetStr("dbpass", "", "DB_PASSWORD")
+	envar.SetvarInt("port", 3000, "Port server", "PORT")
+	envar.SetvarInt("rpc", 4200, "Port rpc server", "RPC")
+	envar.SetvarStr("dbhost", "localhost", "Database host", "DB_HOST")
+	envar.SetvarInt("dbport", 5432, "Database port", "DB_PORT")
+	envar.SetvarStr("dbname", "", "Database name", "DB_NAME")
+	envar.SetvarStr("dbuser", "", "Database user", "DB_USER")
+	envar.SetvarStr("dbpass", "", "Database password", "DB_PASSWORD")
 
 	serv, err := serv.New()
 	if err != nil {
-		logs.Fatal(err)
+		console.Fatal(err)
 	}
 
 	go serv.Start()
@@ -65,20 +64,22 @@ func main() {
 }
 `
 
-const modelService = `package service
+const modelService = `package module
 
 import (
 	"net"
 	"net/http"
 
-	v1 "$1/internal/service/$2/v1"
-	"github.com/cgalvisleon/elvis/console"
-	"github.com/cgalvisleon/elvis/envar"
-	"github.com/cgalvisleon/elvis/middleware"
-	"github.com/cgalvisleon/elvis/response"
-	"github.com/cgalvisleon/elvis/strs"
+	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/jdb"
+	"github.com/cgalvisleon/et/middleware"
+	"github.com/cgalvisleon/et/response"
+	"github.com/cgalvisleon/et/strs"
 	"github.com/go-chi/chi/v5"
-	_ "github.com/joho/godotenv/autoload"
+	v1 "$1/internal/service/$2/v1"	
 	"github.com/rs/cors"
 )
 
@@ -88,11 +89,27 @@ type Server struct {
 }
 
 func New() (*Server, error) {
-	server := Server{}
+	_, err := cache.Load()
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = event.Load()
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = jdb.Load()
+	if err != nil {
+		panic(err)
+	}
 
 	/**
-	 * HTTP
-	 **/
+	* HTTP
+	**/
+
+	server := Server{}
+
 	port := envar.EnvarInt(3300, "PORT")
 
 	if port != 0 {
@@ -123,7 +140,7 @@ func New() (*Server, error) {
 	/**
 	 * RPC
 	 **/
-	rpc := envar.EnvarInt(4200, "RPC")
+	rpc := envar.EnvarInt(0, "RPC")
 
 	if rpc != 0 {
 		serv := v1.NewRpc(rpc)
@@ -175,37 +192,18 @@ import (
 	"net/rpc"
 	"time"
 
-	pkg "$1/pkg/$2"
-	"github.com/cgalvisleon/elvis/cache"
-	"github.com/cgalvisleon/elvis/event"
-	"github.com/cgalvisleon/elvis/jdb"
-	"github.com/cgalvisleon/elvis/utility"	
+	"github.com/cgalvisleon/et/utility"
 	"github.com/dimiro1/banner"
 	"github.com/go-chi/chi/v5"
-	"github.com/mattn/go-colorable"
+	"github.com/mattn/go-colorable"	
+	pkg "$1/pkg/$2"	
 )
 
 func New() http.Handler {
 	r := chi.NewRouter()
-
-	_, err := cache.Load()
-	if err != nil {
-		panic(err)
-	}
-
-	_, err = event.Load()
-	if err != nil {
-		panic(err)
-	}
-
-	Db, err := jdb.Load()
-	if err != nil {
-		panic(err)
-	}
-
+	
 	_pkg := &pkg.Router{
 		Repository: &pkg.Controller{
-			Db: Db,
 		},
 	}
 
@@ -239,9 +237,9 @@ func Banner() {
 const modelEvent = `package $1
 
 import (
-	"github.com/cgalvisleon/elvis/console"
-	"github.com/cgalvisleon/elvis/event"
-	"github.com/cgalvisleon/elvis/et"
+	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/et"
 )
 
 func initEvents() {
@@ -265,7 +263,7 @@ func eventAction(m event.CreatedEvenMessage) {
 const modelModel = `package $1
 
 import (
-	"github.com/cgalvisleon/elvis/console"
+	"github.com/cgalvisleon/et/console"
 )
 
 func initModels() error {
@@ -279,7 +277,7 @@ func initModels() error {
 
 const modelSchema = `package $1
 
-import "github.com/cgalvisleon/elvis/linq"
+import "github.com/cgalvisleon/et/linq"
 
 var $2 *linq.Schema
 
@@ -297,13 +295,13 @@ const modelhRpc = `package $1
 import (
 	"net/rpc"
 
-	"github.com/cgalvisleon/elvis/console"
-	"github.com/cgalvisleon/elvis/json"
+	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/et"
 )
 
 var initRpc bool
 
-type Service json.Item
+type Service et.Item
 
 func InitRpc() error {
 	service := new(Service)
@@ -323,12 +321,12 @@ func (c *Service) Version(require []byte, response *[]byte) error {
 		return nil
 	}
 
-	rq := json.ByteToJson(require)
+	rq := et.ByteToJson(require)
 	help := rq.Str("help")
 
-	result := json.Item{
+	result := et.Item{
 		Ok: true,
-		Result: json.Json{
+		Result: et.Json{
 			"service": PackageName,
 			"host":    HostName,
 			"help":    help,
@@ -350,14 +348,14 @@ const (
 )
 `
 
-const modelController = `package $1
+const modelDbController = `package $1
 
 import (
 	"context"
 
-	"github.com/cgalvisleon/elvis/envar"
-	"github.com/cgalvisleon/elvis/jdb"
-	"github.com/cgalvisleon/elvis/et"
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/jdb"
+	"github.com/cgalvisleon/et/et"
 )
 
 type Controller struct {
@@ -391,24 +389,64 @@ type Repository interface {
 }
 `
 
-const modelRouter = `package $1
+const modelController = `package $1
+
+import (
+	"context"
+
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/jdb"
+	"github.com/cgalvisleon/et/et"
+)
+
+type Controller struct {
+	Db *jdb.Conn
+}
+
+func (c *Controller) Version(ctx context.Context) (et.Json, error) {
+	company := envar.EnvarStr("", "COMPANY")
+	web := envar.EnvarStr("", "WEB")
+	version := envar.EnvarStr("", "VERSION")
+  service := et.Json{
+		"version": version,
+		"service": PackageName,
+		"host":    HostName,
+		"company": company,
+		"web":     web,
+		"help":    "",
+	}
+
+	return service, nil
+}
+
+func (c *Controller) Init(ctx context.Context) {
+	initEvents()
+}
+
+type Repository interface {
+	Version(ctx context.Context) (et.Json, error)
+	Init(ctx context.Context)
+}
+`
+
+const modelDbRouter = `package $1
 
 import (
 	"context"
 	"net/http"
 	"os"
 
-	"github.com/cgalvisleon/elvis/console"
-	"github.com/cgalvisleon/elvis/envar"
-	"github.com/cgalvisleon/elvis/response"
-	er "github.com/cgalvisleon/elvis/router"
-	"github.com/cgalvisleon/elvis/strs"
+	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/response"
+	er "github.com/cgalvisleon/et/router"
+	"github.com/cgalvisleon/et/strs"
 	"github.com/go-chi/chi/v5"
 )
 
 var PackageName = "$1"
 var PackageTitle = "$1"
-var PackagePath = "/api/$1"
+var PackagePath = envar.EnvarStr("/api/$1", "PATH_URL")
 var PackageVersion = envar.EnvarStr("0.0.1", "VERSION")
 var HostName, _ = os.Hostname()
 
@@ -448,6 +486,59 @@ func (rt *Router) version(w http.ResponseWriter, r *http.Request) {
 }
 `
 
+const modelRouter = `package $1
+
+import (
+	"context"
+	"net/http"
+	"os"
+
+	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/response"
+	er "github.com/cgalvisleon/et/router"
+	"github.com/cgalvisleon/et/strs"
+	"github.com/go-chi/chi/v5"
+)
+
+var PackageName = "$1"
+var PackageTitle = "$1"
+var PackagePath = envar.EnvarStr("/api/$1", "PATH_URL")
+var PackageVersion = envar.EnvarStr("0.0.1", "VERSION")
+var HostName, _ = os.Hostname()
+
+type Router struct {
+	Repository Repository
+}
+
+func (rt *Router) Routes() http.Handler {
+	var host = strs.Format("%s:%d", envar.EnvarStr("http://localhost", "HOST"), envar.EnvarInt(3300, "PORT"))
+
+	r := chi.NewRouter()
+
+	er.PublicRoute(r, er.Get, "/version", rt.version, PackageName, PackagePath, host)
+	// $2
+	er.ProtectRoute(r, er.Post, "/", rt.$2, PackageName, PackagePath, host)
+	
+	ctx := context.Background()
+	rt.Repository.Init(ctx)
+
+	console.LogKF(PackageName, "Router version:%s", PackageVersion)
+	return r
+}
+
+func (rt *Router) version(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	result, err := rt.Repository.Version(ctx)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.JSON(w, r, http.StatusOK, result)
+}
+`
+
 const restHttp = `@host=localhost:3300
 @token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IlVTRVIuQURNSU4iLCJhcHAiOiJEZXZvcHMtSW50ZXJuZXQiLCJuYW1lIjoiQ2VzYXIgR2FsdmlzIExlw7NuIiwia2luZCI6ImF1dGgiLCJ1c2VybmFtZSI6Iis1NzMxNjA0Nzk3MjQiLCJkZXZpY2UiOiJkZXZlbG9wIiwiZHVyYXRpb24iOjI1OTIwMDB9.dexIOute7r9o_P8U3t6l9RihN8BOnLl4xpoh9QbQI4k
 
@@ -467,22 +558,20 @@ Content-Length: 227
 }
 `
 
-const modelHandler = `package $1
+const modelDbHandler = `package $1
 
 import (
 	"net/http"
-	"strconv"
 
-	"github.com/cgalvisleon/elvis/cache"
-	"github.com/cgalvisleon/elvis/console"
-	"github.com/cgalvisleon/elvis/event"
-	"github.com/cgalvisleon/elvis/core"
-	"github.com/cgalvisleon/elvis/generic"
-	"github.com/cgalvisleon/elvis/et"
-	"github.com/cgalvisleon/elvis/linq"
-	"github.com/cgalvisleon/elvis/msg"
-	"github.com/cgalvisleon/elvis/response"
-	"github.com/cgalvisleon/elvis/utility"
+	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/core"
+	"github.com/cgalvisleon/et/generic"
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/linq"
+	"github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/response"
+	"github.com/cgalvisleon/et/utility"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -539,36 +628,7 @@ func Define$2() error {
 		return nil
 	})
 	$2.OnListener = func(data et.Json) {
-		option := data.Str("option")
-		_idt := data.Str("_idt")
-		if option == "insert" {
-			asset, err := Get$2ByIdT(_idt)
-			if err != nil {
-				return
-			}
-
-			_id := asset.Key("_id")
-			cache.SetW(_idt, _id)
-			event.WsPublish(_id, asset.Result, "")
-		} else if option == "update" {
-			asset, err := Get$2ByIdT(_idt)
-			if err != nil {
-				return
-			}
-
-			_id := asset.Key("_id")
-			cache.Del(_idt)
-			cache.Del(_id)
-			event.WsPublish(_id, asset.Result, "")
-		} else if option == "delete" {
-			_id, err := cache.Get(_idt, "-1")
-			if err != nil {
-				return
-			}
-
-			cache.Del(_idt)
-			cache.Del(_id)
-		}
+		console.Debug(data.ToString())
 	}
 	
 	if err := core.InitModel($2); err != nil {
@@ -603,12 +663,6 @@ func Get$2ById(id string) (et.Item, error) {
 	}
 
 	return result, nil	
-}
-
-func Get$2ByIdT(idt string) (et.Item, error) {
-	return $2.Data().
-		Where($2.Column("_idt").Eq(idt)).
-		First()
 }
 
 func Value$2ById(_default any, id, atrib string) *generic.Any {
@@ -800,6 +854,44 @@ func (rt *Router) all$2(w http.ResponseWriter, r *http.Request) {
 **/
 `
 
+const modelHandler = `package $1
+
+import (
+	"net/http"
+
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/response"
+)
+
+func $2(project_id, id string, params et.Json) (et.Item, error) {
+
+	return et.Item{}, nil
+}
+
+
+/**
+* Router
+**/
+func (rt *Router) $3(w http.ResponseWriter, r *http.Request) {
+	body, _ := response.GetBody(r)
+	project_id := body.Str("project_id")
+	id := body.Str("id")	
+
+	result, err := $2(project_id, id, body)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.ITEM(w, r, http.StatusOK, result)
+}
+
+/** Copy this code to router.go
+	// $2
+	er.ProtectRoute(r, er.Post, "/$3", rt.$2, PackageName, PackagePath, Host)	
+**/
+`
+
 const modelReadme = `
 ## Project $1
 
@@ -818,18 +910,21 @@ go get -u golang.org/x/exp/slices &&
 go get -u github.com/manifoldco/promptui &&
 go get -u github.com/schollz/progressbar/v3 &&
 go get -u github.com/spf13/cobra &&
-go get -u github.com/cgalvisleon/elvis@v0.0.114
+go get -u github.com/cgalvisleon/et
 
 ### Crear projecto, microservicios, modelos
 
-go run github.com/cgalvisleon/elvis/cmd/create-go create
+go run github.com/cgalvisleon/et/cmd/create-go create
 `
 
 const modelEnvar = `APP=
 PORT=3300
 VERSION=0.0.0
 COMPANY=Company
-WEB=https://www.company.com
+PATH_URL=
+WEB=https://www.celsia.com
+PRODUCTION=false
+HOST=localhost
 
 # DB
 DB_DRIVE=postgres
@@ -855,4 +950,55 @@ AWS_REGION=
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
 AWS_SESSION_TOKEN=
+`
+
+const modelDeploy = `version: "3"
+
+networks:
+  $3:
+    external: true
+
+services:
+  $1:
+    image: $1:latest
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "2"
+    networks:
+      - $3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.$1.rule=PathPrefix($2)"
+      - "traefik.http.services.$1.loadbalancer.server.port=3300"
+    deploy:
+      replicas: 1
+    environment:
+      - "APP=Celsia Internet - Event Stack"
+      - "PORT=3300"
+      - "VERSION=1.0.1"
+      - "COMPANY=Celsia Internet"
+      - "WEB=https://www.internet.celsia.com"
+      - "PATH_URL=/api/$1"
+      - "PRODUCTION=true"
+      - "HOST=stack"
+      # DB
+      - "DB_DRIVE=postgres"
+      - "DB_HOST="
+      - "DB_PORT=5432"
+      - "DB_NAME=internet"
+      - "DB_USER=internet"
+      - "DB_PASSWORD="
+      - "DB_APPLICATION_NAME=$1"
+      # REDIS
+      - "REDIS_HOST="
+      - "REDIS_PASSWORD="
+      - "REDIS_DB=0"
+      # NATS
+      - "NATS_HOST=nats:4222"
+      # CALM
+      - "SECRET="
+      # RPC
+      - "PORT_RPC=4200"
 `

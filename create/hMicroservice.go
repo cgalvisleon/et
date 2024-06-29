@@ -1,43 +1,22 @@
 package create
 
-import "github.com/cgalvisleon/et/strs"
-
 func MkProject(packageName, name, author, schema string) error {
-	ProgressNext(10)
-	err := MakeProject(name)
+	ProgressNext(20)
+
+	ProgressNext(20)
+	err := MkMicroservice(packageName, name, schema)
 	if err != nil {
 		return err
 	}
 
-	ProgressNext(10)
-	err = MkMicroservice(packageName, name, schema)
-	if err != nil {
-		return err
-	}
-
-	ProgressNext(10)
-	err = MakeWeb(name)
-	if err != nil {
-		return err
-	}
-
-	ProgressNext(10)
+	ProgressNext(20)
 	err = MakeReadme(name)
 	if err != nil {
 		return err
 	}
 
-	ProgressNext(10)
+	ProgressNext(20)
 	err = MakeEnv(name)
-	if err != nil {
-		return err
-	}
-
-	ProgressNext(50)
-	_, err = Command([]string{
-		strs.Format("cd ./%s", name),
-		strs.Format("go mod init github.com/%s/%s", author, name),
-	})
 	if err != nil {
 		return err
 	}
@@ -67,8 +46,7 @@ func MkMicroservice(packageName, name, schema string) error {
 	}
 
 	ProgressNext(10)
-	schemaVar := strs.Append("schema", strs.Titlecase(schema), "")
-	err = MakePkg(name, schema, schemaVar)
+	err = MakePkg(name, schema)
 	if err != nil {
 		return err
 	}
@@ -90,10 +68,9 @@ func MkMicroservice(packageName, name, schema string) error {
 	return nil
 }
 
-func MkMolue(name, modelo, schema string) error {
+func MkMolue(packageName, modelo, schema string) error {
 	ProgressNext(10)
-	schemaVar := strs.Append("schema", strs.Titlecase(schema), "")
-	err := MakeModel(name, modelo, schemaVar)
+	err := MakeModel(packageName, modelo, schema)
 	if err != nil {
 		return err
 	}

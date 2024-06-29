@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	var rootCmd = &cobra.Command{Use: "create-go"}
+	var rootCmd = &cobra.Command{Use: "go"}
 	rootCmd.AddCommand(create.Create)
 	rootCmd.Execute()
 }

@@ -10,13 +10,13 @@ import (
 )
 
 func main() {
-	envar.SetInt("port", 3000, "PORT")
-	envar.SetInt("rpc", 4200, "RPC")
-	envar.SetStr("dbhost", "localhost", "DB_HOST")
-	envar.SetInt("dbport", 5432, "DB_PORT")
-	envar.SetStr("dbname", "", "DB_NAME")
-	envar.SetStr("dbuser", "", "DB_USER")
-	envar.SetStr("dbpass", "", "DB_PASSWORD")
+	envar.SetInt("port", 3000, "Puerto Http", "PORT")
+	envar.SetInt("rpc", 4200, "Puerto RPC", "RPC")
+	envar.SetStr("dbhost", "localhost", "Database host", "DB_HOST")
+	envar.SetInt("dbport", 5432, "Database port", "DB_PORT")
+	envar.SetStr("dbname", "", "Database name", "DB_NAME")
+	envar.SetStr("dbuser", "", "Database user", "DB_USER")
+	envar.SetStr("dbpass", "", "Database password", "DB_PASSWORD")
 
 	serv, err := serv.Load()
 	if err != nil {

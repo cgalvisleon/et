@@ -31,9 +31,11 @@ go run ./cmd/gateway/main.go -port 3300 -rpc 4200
 go mod tidy &&
 gofmt -w . &&
 git update &&
-git tag v0.0.1
+git tag v0.0.2
 
 git tags
+
+go get github.com/cgalvisleon/et@v0.0.1
 ```
 
 ## Condicion de carrera
@@ -43,6 +45,8 @@ go build --race ./cmd/gateway/main.go
 go build --race ./cmd/serive/main.go
 
 go build ./cmd/gateway/main.go
+
+go run github.com/cgalvisleon/et/cmd/create go
 ```
 
 ## Websocket message

@@ -3,10 +3,7 @@ package create
 import "github.com/cgalvisleon/et/file"
 
 func MakeReadme(packageName string) error {
-	_, err := file.MakeFile("", "README.md", modelReadme, packageName)
-	if err != nil {
-		return err
-	}
+	_, _ = file.MakeFile(".", "README.md", modelReadme, packageName)
 
 	return nil
 }

@@ -3,10 +3,13 @@ package create
 import "github.com/cgalvisleon/et/file"
 
 func MakeEnv(packageName string) error {
-	_, err := file.MakeFile("", ".env", modelEnvar, packageName)
-	if err != nil {
-		return err
-	}
+	_, _ = file.MakeFile(".", ".env", modelEnvar, packageName)
+
+	_, _ = file.MakeFile(".", ".env.local", modelEnvar, packageName)
+
+	_, _ = file.MakeFile(".", ".env.prd", modelEnvar, packageName)
+
+	_, _ = file.MakeFile(".", ".env.qa", modelEnvar, packageName)
 
 	return nil
 }

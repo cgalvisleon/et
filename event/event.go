@@ -9,59 +9,26 @@ import (
 	"github.com/cgalvisleon/et/message"
 	"github.com/cgalvisleon/et/nats"
 	"github.com/cgalvisleon/et/pubsub"
-	"github.com/cgalvisleon/et/ws"
 )
-
-// Type adatapter
-type TpAdapter int
-
-const (
-	TpNats TpAdapter = iota
-	TpWs
-)
-
-func (tp TpAdapter) String() string {
-	switch tp {
-	case TpWs:
-		return "ws"
-	case TpNats:
-		return "nats"
-	default:
-		return ""
-	}
-}
 
 var conn pubsub.PubSub
 
 const ERR_NOT_PUBSUB_SERVICE = "PubSub service not found func:%s"
 
-func Load(tp string, clientId, name string, reciveFn func(message.Message)) error {
+// Load the event adapter
+func Load() error {
 	if conn != nil {
 		return nil
 	}
 
-	switch tp {
-	case TpNats.String():
-		res, err := nats.NewPubSub(clientId, name, reciveFn)
-		if err != nil {
-			return err
-		}
-
-		conn = res
-
-		return nil
-	case TpWs.String():
-		res, err := ws.NewPubSub(clientId, name, reciveFn)
-		if err != nil {
-			return err
-		}
-
-		conn = res
-
-		return nil
-	default:
-		return logs.Alertm("Event adapter required (nats, ws)")
+	res, err := nats.NewPubSub()
+	if err != nil {
+		return err
 	}
+
+	conn = res
+
+	return nil
 }
 
 // Prune a channel

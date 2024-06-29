@@ -63,3 +63,14 @@ func (s *HttpServer) Put(pattern string, handlerFn http.HandlerFunc, packageName
 func (s *HttpServer) Trace(pattern string, handlerFn http.HandlerFunc, packageName string) {
 	s.MethodFunc(TRACE, pattern, handlerFn, packageName)
 }
+
+/**
+* Middleware adds the route `pattern` that matches `method` http method to execute the `handlerFn` http.HandlerFunc.
+**/
+
+type Middleware func(http.Handler) http.Handler
+
+func (s *HttpServer) With(next func(http.Handler) http.Handler) *HttpServer {
+
+	return s
+}

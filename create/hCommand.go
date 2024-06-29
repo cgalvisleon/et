@@ -9,7 +9,7 @@ import (
 )
 
 var CmdProject = &cobra.Command{
-	Use:   "micro [name author schema, schema_var]",
+	Use:   "micro [name author schema]",
 	Short: "Create project base type microservice.",
 	Long:  "Template project to microservice include folder cmd, deployments, pkg, rest, test and web, with files .go required for making a microservice.",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -46,7 +46,7 @@ var CmdProject = &cobra.Command{
 }
 
 var CmdMicro = &cobra.Command{
-	Use:   "micro [name schema, schema_var]",
+	Use:   "micro [name schema]",
 	Short: "Create project base type microservice.",
 	Long:  "Template project to microservice include folder cmd, deployments, pkg, rest, test and web, with files .go required for making a microservice.",
 	Run: func(cmd *cobra.Command, args []string) {

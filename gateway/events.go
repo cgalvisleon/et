@@ -1,19 +1,14 @@
 package gateway
 
 import (
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/message"
-	"github.com/cgalvisleon/et/utility"
 )
 
 func initEvents() error {
 	// Events
-	evetType := envar.GetStr(event.TpWs.String(), "EVENT_TYPE")
-	clientId := utility.UUID()
-	name := "Api gateway"
-	err := event.Load(evetType, clientId, name, inbox)
+	err := event.Load()
 	if err != nil {
 		return err
 	}

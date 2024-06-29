@@ -36,23 +36,23 @@ import (
 	"os/signal"
 
 	serv "$1/internal/service/$2"
-	"github.com/cgalvisleon/elvis/console"
-	"github.com/cgalvisleon/elvis/envar"
+	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/envar"
 	_ "github.com/joho/godotenv/autoload"	
 )
 
 func main() {
-	envar.SetvarInt("port", 3000, "Port server", "PORT")
-	envar.SetvarInt("rpc", 4200, "Port rpc server", "RPC")
-	envar.SetvarStr("dbhost", "localhost", "Database host", "DB_HOST")
-	envar.SetvarInt("dbport", 5432, "Database port", "DB_PORT")
-	envar.SetvarStr("dbname", "", "Database name", "DB_NAME")
-	envar.SetvarStr("dbuser", "", "Database user", "DB_USER")
-	envar.SetvarStr("dbpass", "", "Database password", "DB_PASSWORD")
+	envar.SetInt("port", 3000, "PORT")
+	envar.SetInt("rpc", 0, "RPC_PORT")
+	envar.SetStr("dbhost", "localhost", "DB_HOST")
+	envar.SetInt("dbport", 5432, "DB_PORT")
+	envar.SetStr("dbname", "", "DB_NAME")
+	envar.SetStr("dbuser", "", "DB_USER")
+	envar.SetStr("dbpass", "", "DB_PASSWORD")
 
 	serv, err := serv.New()
 	if err != nil {
-		console.Fatal(err)
+		logs.Fatal(err)
 	}
 
 	go serv.Start()
@@ -65,7 +65,7 @@ func main() {
 }
 `
 
-const modelService = `package module
+const modelService = `package service
 
 import (
 	"net"

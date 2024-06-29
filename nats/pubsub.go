@@ -1,8 +1,6 @@
 package nats
 
 import (
-	"slices"
-
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
@@ -18,26 +16,19 @@ type PubSub struct {
 	Name         string
 	from         et.Json
 	subscription map[string]*nats.Subscription
-	reciveFn     func(m.Message)
 	channels     map[string]func(m.Message)
 	connected    bool
 }
 
 // Create a new client websocket connection
-func NewPubSub(clientId, name string, reciveFn func(m.Message)) (*PubSub, error) {
+func NewPubSub() (*PubSub, error) {
 	host := envar.GetStr("", "NATS_HOST")
 	if host == "" {
 		host = "localhost:4222"
 	}
 
-	if !slices.Contains([]string{"", "-1", "new"}, clientId) {
-		clientId = utility.UUID()
-	}
-
-	if !slices.Contains([]string{"", "-1"}, name) {
-		name = "Anonimo"
-	}
-
+	clientId := utility.UUID()
+	name := "Anonimo"
 	result := &PubSub{
 		host:     host,
 		ClientId: clientId,
@@ -47,7 +38,6 @@ func NewPubSub(clientId, name string, reciveFn func(m.Message)) (*PubSub, error)
 			"name": name,
 		},
 		subscription: make(map[string]*nats.Subscription),
-		reciveFn:     reciveFn,
 	}
 
 	_, err := result.Connect()
@@ -171,10 +161,6 @@ func (p *PubSub) Connect() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	err = p.subscribe(p.ClientId, p.reciveFn)
-	if err != nil {
-		return false, err
-	}
 
 	p.connected = true
 
@@ -206,12 +192,8 @@ func (p *PubSub) Params(params et.Json) error {
 	params.Set("id", p.ClientId)
 	params.Set("name", p.Name)
 	p.from = params
-	msg := NewMessage(p.from, et.Json{
-		"ok":      true,
-		"message": PARAMS_UPDATED,
-	})
 
-	return p.send(p.ClientId, msg)
+	return nil
 }
 
 // Subscribe to a channel

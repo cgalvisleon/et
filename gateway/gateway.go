@@ -36,14 +36,14 @@ func Load() (*Server, error) {
 		return conn, nil
 	}
 
-	// HTTP server
-	http := newHttpServer()
-
 	// WS server
 	ws, err := ws.Server()
 	if err != nil {
 		panic(err)
 	}
+
+	// HTTP server
+	http := newHttpServer()
 
 	// Create a new server
 	conn = &Server{

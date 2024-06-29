@@ -4,14 +4,12 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/message"
 	"github.com/cgalvisleon/et/ws"
 )
 
 func main() {
-	wsc, err := ws.NewPubSub("91499023", "Cesar", inbox)
+	wsc, err := ws.NewPubSub()
 	if err != nil {
 		logs.Fatal(err)
 	}
@@ -33,13 +31,4 @@ func main() {
 	<-c
 
 	// serv.Close()
-}
-
-func inbox(msg message.Message) {
-	dt, err := et.Marshal(msg)
-	if err != nil {
-		return
-	}
-
-	logs.Debug(dt.ToString())
 }

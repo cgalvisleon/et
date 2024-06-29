@@ -77,7 +77,7 @@ func newHttpServer() *HttpServer {
 	result.Get("/ws", wsConnect, PACKAGE_NAME)
 
 	// Handler router
-	mux.HandleFunc("/", result.handlerFn)
+	result.mux.HandleFunc("/", result.handlerFn)
 
 	return result
 }

@@ -97,6 +97,8 @@ func (h *Hub) onConnect(client *Client) {
 	h.clients = append(h.clients, client)
 	client.Addr = client.socket.RemoteAddr().String()
 
+	logs.Debug("Client connected", client.Id, client.Name)
+
 	msg := NewMessage(h.Identify(), et.Json{
 		"ok":      true,
 		"message": "Connected successfully",

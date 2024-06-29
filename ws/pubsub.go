@@ -10,22 +10,20 @@ import (
 	m "github.com/cgalvisleon/et/message"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/gorilla/websocket"
-	"golang.org/x/exp/slices"
 )
 
 type PubSub struct {
 	host      string
-	socket    *websocket.Conn
-	reciveFn  func(m.Message)
-	channels  map[string]func(m.Message)
 	ClientId  string
 	Name      string
+	socket    *websocket.Conn
+	channels  map[string]func(m.Message)
 	from      et.Json
 	connected bool
 }
 
 // Create a new client websocket connection
-func NewPubSub(clientId, name string, reciveFn func(m.Message)) (*PubSub, error) {
+func NewPubSub() (*PubSub, error) {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
@@ -34,15 +32,8 @@ func NewPubSub(clientId, name string, reciveFn func(m.Message)) (*PubSub, error)
 		host = ":3300"
 	}
 
-	if slices.Contains([]string{"", "-1", "new"}, clientId) {
-		clientId = utility.UUID()
-	}
-
-	if slices.Contains([]string{"", "-1"}, name) {
-		name = "Anonimo"
-	}
-
-	// Connect to the server
+	clientId := utility.UUID()
+	name := "Anonimo"
 	result := &PubSub{
 		host:     host,
 		ClientId: clientId,
@@ -51,7 +42,6 @@ func NewPubSub(clientId, name string, reciveFn func(m.Message)) (*PubSub, error)
 			"id":   clientId,
 			"name": name,
 		},
-		reciveFn: reciveFn,
 	}
 
 	_, err := result.Connect()
@@ -86,8 +76,6 @@ func (p *PubSub) read() {
 			f, ok := p.channels[msg.Channel]
 			if ok {
 				f(msg)
-			} else {
-				p.reciveFn(msg)
 			}
 		}
 	}()
@@ -163,9 +151,16 @@ func (p *PubSub) Params(params et.Json) error {
 		return logs.Alertm(ERR_PARAM_NOT_FOUND)
 	}
 
-	msg := NewMessage(p.from, params, m.TpParams)
+	name := params.ValStr("", "name")
+	if name != "" {
+		p.Name = name
+	}
 
-	return p.send(msg)
+	params.Set("id", p.ClientId)
+	params.Set("name", p.Name)
+	p.from = params
+
+	return nil
 }
 
 // Subscribe to a channel

@@ -30,7 +30,7 @@ func Load() (*Conn, error) {
 
 	c, err := connect(host)
 	if err != nil {
-		return nil, err
+		return nil, logs.Alert(err)
 	}
 
 	conn = &Conn{

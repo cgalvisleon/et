@@ -2,6 +2,7 @@
 
 ```
 go mod init github.com/cgalvisleon/et
+go get github.com/cgalvisleon/et
 ```
 
 ## Dependencis
@@ -22,6 +23,17 @@ go get "github.com/satyakb/go-socket.io-redis"
 ```
 go run ./cmd/service/main.go
 go run ./cmd/gateway/main.go -port 3300 -rpc 4200
+```
+
+# Public
+
+```
+go mod tidy &&
+gofmt -w . &&
+git update &&
+git tag v0.0.1
+
+git tags
 ```
 
 ## Condicion de carrera

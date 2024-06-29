@@ -3,6 +3,8 @@ package cache
 import (
 	"time"
 
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/mem"
 	"github.com/cgalvisleon/et/redis"
@@ -44,10 +46,12 @@ var conn Cache
 const MSG_CACHE_NOT_FOUND = "Cache not found"
 
 // Load a new cache connection
-func Load(tp string) error {
+func Load() error {
 	if conn != nil {
 		return nil
 	}
+
+	tp := envar.GetStr(TpMem.String(), "CACHE_TYPE")
 
 	switch tp {
 	case TpRedis.String():
@@ -74,7 +78,7 @@ func Load(tp string) error {
 // Return the type of cache
 func Type() string {
 	if conn == nil {
-		logs.Fatal(MSG_CACHE_NOT_FOUND)
+		logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
 
 	return conn.Type()
@@ -83,8 +87,41 @@ func Type() string {
 // Set a value in cache
 func Set(key string, value interface{}, expiration time.Duration) interface{} {
 	if conn == nil {
-		logs.Fatal(MSG_CACHE_NOT_FOUND)
+		logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
+
+	return conn.Set(key, value, expiration)
+}
+
+// Set a value in cache for one day
+func SetD(key string, value interface{}) interface{} {
+	if conn == nil {
+		logs.Alertm(MSG_CACHE_NOT_FOUND)
+	}
+
+	expiration := time.Hour * 24
+
+	return conn.Set(key, value, expiration)
+}
+
+// Set a value in cache for one week
+func SetW(key string, value interface{}) interface{} {
+	if conn == nil {
+		logs.Alertm(MSG_CACHE_NOT_FOUND)
+	}
+
+	expiration := time.Hour * 24 * 7
+
+	return conn.Set(key, value, expiration)
+}
+
+// Set a value in cache for one month
+func SetM(key string, value interface{}) interface{} {
+	if conn == nil {
+		logs.Alertm(MSG_CACHE_NOT_FOUND)
+	}
+
+	expiration := time.Hour * 24 * 30
 
 	return conn.Set(key, value, expiration)
 }
@@ -92,7 +129,7 @@ func Set(key string, value interface{}, expiration time.Duration) interface{} {
 // Get a value from cache
 func Get(key string, def interface{}) interface{} {
 	if conn == nil {
-		logs.Fatal(MSG_CACHE_NOT_FOUND)
+		logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
 
 	return conn.Get(key, def)
@@ -101,7 +138,7 @@ func Get(key string, def interface{}) interface{} {
 // Delete a value from cache
 func Del(key string) bool {
 	if conn == nil {
-		logs.Fatal(MSG_CACHE_NOT_FOUND)
+		logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
 
 	return conn.Del(key)
@@ -110,7 +147,7 @@ func Del(key string) bool {
 // Count the number of keys in cache
 func Count(key string, expiration time.Duration) int {
 	if conn == nil {
-		logs.Fatal(MSG_CACHE_NOT_FOUND)
+		logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
 
 	return conn.Count(key, expiration)
@@ -119,7 +156,7 @@ func Count(key string, expiration time.Duration) int {
 // Clear all keys in cache
 func Clear() {
 	if conn == nil {
-		logs.Fatal(MSG_CACHE_NOT_FOUND)
+		logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
 
 	conn.Clear()
@@ -128,7 +165,7 @@ func Clear() {
 // Return the number of keys in cache
 func Len() int {
 	if conn == nil {
-		logs.Fatal(MSG_CACHE_NOT_FOUND)
+		logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
 
 	return conn.Len()
@@ -137,7 +174,7 @@ func Len() int {
 // Return all keys in cache
 func Keys() []string {
 	if conn == nil {
-		logs.Fatal(MSG_CACHE_NOT_FOUND)
+		logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
 
 	return conn.Keys()
@@ -146,8 +183,55 @@ func Keys() []string {
 // Return all values in cache
 func Values() []interface{} {
 	if conn == nil {
-		logs.Fatal(MSG_CACHE_NOT_FOUND)
+		logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
 
 	return conn.Values()
+}
+
+// Json return a json object from cache
+func Json(key string) (et.Json, error) {
+	if conn == nil {
+		return et.Json{}, logs.Alertm(MSG_CACHE_NOT_FOUND)
+	}
+
+	result := et.Json{}
+	val := Get(key, result)
+	err := result.Scan(val)
+	if err != nil {
+		return et.Json{}, logs.Alert(err)
+	}
+
+	return result, nil
+}
+
+// Items return a items object from cache
+func Items(key string) (et.Items, error) {
+	if conn == nil {
+		return et.Items{}, logs.Alertm(MSG_CACHE_NOT_FOUND)
+	}
+
+	result := et.Items{}
+	val := Get(key, result)
+	err := result.Scan(val)
+	if err != nil {
+		return et.Items{}, logs.Alert(err)
+	}
+
+	return result, nil
+}
+
+func Item(key string) (et.Item, error) {
+	if conn == nil {
+		return et.Item{}, logs.Alertm(MSG_CACHE_NOT_FOUND)
+	}
+
+	result := et.Item{}
+	val := Get(key, result)
+	err := result.Scan(val)
+	if err != nil {
+		return et.Item{}, logs.Alert(err)
+	}
+
+	return result, nil
 }

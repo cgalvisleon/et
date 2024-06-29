@@ -157,14 +157,17 @@ func Fatal(v ...any) {
 	os.Exit(1)
 }
 
-func Panic(v ...any) {
-	log("Panic", "Red", v...)
+func Panic(err error) error {
+	log("Panic", "Red", err)
 	os.Exit(1)
+
+	return err
 }
 
-func Panicf(format string, args ...any) {
+func Panicf(format string, args ...any) error {
 	message := fmt.Sprintf(format, args...)
-	Panic(message)
+	err := errors.New(message)
+	return Panic(err)
 }
 
 func Ping() {

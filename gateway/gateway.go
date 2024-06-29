@@ -52,8 +52,7 @@ func Load() (*Server, error) {
 	}
 
 	// Cache
-	cacheType := envar.GetStr(cache.TpMem.String(), "CACHE_TYPE")
-	err = cache.Load(cacheType)
+	err = cache.Load()
 	if err != nil {
 		return nil, err
 	}

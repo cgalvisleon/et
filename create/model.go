@@ -1,6 +1,6 @@
 package create
 
-const modelDockerfile = `ARG GO_VERSION=1.21.3
+const modelDockerfile = `ARG GO_VERSION=1.22
 
 FROM golang:${GO_VERSION}-alpine AS builder
 
@@ -35,23 +35,23 @@ import (
 	"os"
 	"os/signal"
 
-	serv "$1/internal/service/$2"
-	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/logs"
+	serv "$1/internal/service/$2"	
 )
 
 func main() {
-	envar.SetvarInt("port", 3000, "Port server", "PORT")
-	envar.SetvarInt("rpc", 4200, "Port rpc server", "RPC")
-	envar.SetvarStr("dbhost", "localhost", "Database host", "DB_HOST")
-	envar.SetvarInt("dbport", 5432, "Database port", "DB_PORT")
-	envar.SetvarStr("dbname", "", "Database name", "DB_NAME")
-	envar.SetvarStr("dbuser", "", "Database user", "DB_USER")
-	envar.SetvarStr("dbpass", "", "Database password", "DB_PASSWORD")
+	envar.SetInt("port", 3000, "Port server", "PORT")
+	envar.SetInt("rpc", 4200, "Port rpc server", "RPC")
+	envar.SetStr("dbhost", "localhost", "Database host", "DB_HOST")
+	envar.SetInt("dbport", 5432, "Database port", "DB_PORT")
+	envar.SetStr("dbname", "", "Database name", "DB_NAME")
+	envar.SetStr("dbuser", "", "Database user", "DB_USER")
+	envar.SetStr("dbpass", "", "Database password", "DB_PASSWORD")
 
 	serv, err := serv.New()
 	if err != nil {
-		console.Fatal(err)
+		logs.Fatal(err)
 	}
 
 	go serv.Start()
@@ -71,7 +71,7 @@ import (
 	"net/http"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jdb"
@@ -89,12 +89,12 @@ type Server struct {
 }
 
 func New() (*Server, error) {
-	_, err := cache.Load()
+	err := cache.Load()
 	if err != nil {
 		panic(err)
 	}
 
-	_, err = event.Load()
+	err = event.Load()
 	if err != nil {
 		panic(err)
 	}
@@ -110,7 +110,7 @@ func New() (*Server, error) {
 
 	server := Server{}
 
-	port := envar.EnvarInt(3300, "PORT")
+	port := envar.GetInt(3300, "PORT")
 
 	if port != 0 {
 		r := chi.NewRouter()
@@ -140,7 +140,7 @@ func New() (*Server, error) {
 	/**
 	 * RPC
 	 **/
-	rpc := envar.EnvarInt(0, "RPC")
+	rpc := envar.GetInt(0, "RPC")
 
 	if rpc != 0 {
 		serv := v1.NewRpc(rpc)
@@ -163,8 +163,8 @@ func (serv *Server) Start() {
 		}
 
 		svr := serv.http
-		console.LogKF("Http", "Running on http://localhost%s", svr.Addr)
-		console.Fatal(serv.http.ListenAndServe())
+		logs.Log("Http", "Running on http://localhost%s", svr.Addr)
+		logs.Fatal(serv.http.ListenAndServe())
 	}()
 
 	go func() {
@@ -173,7 +173,7 @@ func (serv *Server) Start() {
 		}
 
 		svr := *serv.rpc
-		console.LogKF("RPC", "Running on tcp:localhost:%s", svr.Addr().String())
+		logs.Log("RPC", "Running on tcp:localhost:%s", svr.Addr().String())
 		http.Serve(svr, nil)
 	}()
 
@@ -237,38 +237,38 @@ func Banner() {
 const modelEvent = `package $1
 
 import (
-	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/message"
 )
 
 func initEvents() {
 	err := event.Stack("<channel>", eventAction)
 	if err != nil {
-		console.Error(err)
+		logs.Error(err)
 	}
 
 }
 
-func eventAction(m event.CreatedEvenMessage) {
-	data, err := et.ToJson(m.Data)
+func eventAction(m message.Message) {
+	data, err := m.Json()
 	if err != nil {
-		console.Error(err)
+		logs.Alert(err)
 	}
 
-	console.Log("eventAction", data)
+	logs.Log("eventAction", data)
 }
 `
 
 const modelModel = `package $1
 
 import (
-	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/logs"
 )
 
 func initModels() error {
 	if err := Define$2(); err != nil {
-		return console.Panic(err)
+		return logs.Panic(err)
 	}
 
 	return nil
@@ -295,7 +295,7 @@ const modelhRpc = `package $1
 import (
 	"net/rpc"
 
-	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -308,7 +308,7 @@ func InitRpc() error {
 
 	err := rpc.Register(service)
 	if err != nil {
-		return console.Error(err)
+		return logs.Error(err)
 	}
 
 	initRpc = true
@@ -343,8 +343,10 @@ const modelMsg = `package $1
 
 const (
 	// MSG
-	MSG_ATRIB_REQUIRED      = "Atributo requerido (%s)"
-	MSG_VALUE_REQUIRED      = "Atributo requerido (%s) value:%s"
+	MSG_ATRIB_REQUIRED = "Atributo requerido (%s)"
+	MSG_VALUE_REQUIRED = "Atributo requerido (%s) value:%s"
+	RECORD_NOT_FOUND   = "Registro no encontrado"
+	RECORD_NOT_UPDATE  = "Registro no actualizado"
 )
 `
 
@@ -354,18 +356,15 @@ import (
 	"context"
 
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/jdb"
 	"github.com/cgalvisleon/et/et"
 )
 
-type Controller struct {
-	Db *jdb.Conn
-}
+type Controller struct{}
 
 func (c *Controller) Version(ctx context.Context) (et.Json, error) {
-	company := envar.EnvarStr("", "COMPANY")
-	web := envar.EnvarStr("", "WEB")
-	version := envar.EnvarStr("", "VERSION")
+	company := envar.GetStr("", "COMPANY")
+	web := envar.GetStr("", "WEB")
+	version := envar.GetStr("", "VERSION")
   service := et.Json{
 		"version": version,
 		"service": PackageName,
@@ -404,9 +403,9 @@ type Controller struct {
 }
 
 func (c *Controller) Version(ctx context.Context) (et.Json, error) {
-	company := envar.EnvarStr("", "COMPANY")
-	web := envar.EnvarStr("", "WEB")
-	version := envar.EnvarStr("", "VERSION")
+	company := envar.GetStr("", "COMPANY")
+	web := envar.GetStr("", "WEB")
+	version := envar.GetStr("", "VERSION")
   service := et.Json{
 		"version": version,
 		"service": PackageName,
@@ -436,18 +435,18 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/response"
-	er "github.com/cgalvisleon/et/router"
+	"github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/go-chi/chi/v5"
 )
 
 var PackageName = "$1"
 var PackageTitle = "$1"
-var PackagePath = envar.EnvarStr("/api/$1", "PATH_URL")
-var PackageVersion = envar.EnvarStr("0.0.1", "VERSION")
+var PackagePath = envar.GetStr("/api/$1", "PATH_URL")
+var PackageVersion = envar.GetStr("0.0.1", "VERSION")
 var HostName, _ = os.Hostname()
 
 type Router struct {
@@ -455,22 +454,22 @@ type Router struct {
 }
 
 func (rt *Router) Routes() http.Handler {
-	var host = strs.Format("%s:%d", envar.EnvarStr("http://localhost", "HOST"), envar.EnvarInt(3300, "PORT"))
+	var host = strs.Format("%s:%d", envar.GetStr("http://localhost", "HOST"), envar.GetInt(3300, "PORT"))
 
 	r := chi.NewRouter()
 
-	er.PublicRoute(r, er.Get, "/version", rt.version, PackageName, PackagePath, host)
+	router.Public(r, router.Get, "/version", rt.version, PackageName, PackagePath, host)
 	// $2
-	er.ProtectRoute(r, er.Get, "/{id}", rt.get$2ById, PackageName, PackagePath, host)
-	er.ProtectRoute(r, er.Post, "/", rt.upSert$2, PackageName, PackagePath, host)
-	er.ProtectRoute(r, er.Put, "/state/{id}", rt.state$2, PackageName, PackagePath, host)
-	er.ProtectRoute(r, er.Delete, "/{id}", rt.delete$2, PackageName, PackagePath, host)
-	er.ProtectRoute(r, er.Get, "/all", rt.all$2, PackageName, PackagePath, host)
+	router.Protect(r, router.Get, "/{id}", rt.get$2ById, PackageName, PackagePath, host)
+	router.Protect(r, router.Post, "/", rt.upSert$2, PackageName, PackagePath, host)
+	router.Protect(r, router.Put, "/state/{id}", rt.state$2, PackageName, PackagePath, host)
+	router.Protect(r, router.Delete, "/{id}", rt.delete$2, PackageName, PackagePath, host)
+	router.Protect(r, router.Get, "/all", rt.all$2, PackageName, PackagePath, host)
 
 	ctx := context.Background()
 	rt.Repository.Init(ctx)
 
-	console.LogKF(PackageName, "Router version:%s", PackageVersion)
+	logs.Log(PackageName, "Router version:%s", PackageVersion)
 	return r
 }
 
@@ -493,18 +492,18 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/response"
-	er "github.com/cgalvisleon/et/router"
+	"github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/go-chi/chi/v5"
 )
 
 var PackageName = "$1"
 var PackageTitle = "$1"
-var PackagePath = envar.EnvarStr("/api/$1", "PATH_URL")
-var PackageVersion = envar.EnvarStr("0.0.1", "VERSION")
+var PackagePath = envar.GetStr("/api/$1", "PATH_URL")
+var PackageVersion = envar.GetStr("0.0.1", "VERSION")
 var HostName, _ = os.Hostname()
 
 type Router struct {
@@ -512,18 +511,18 @@ type Router struct {
 }
 
 func (rt *Router) Routes() http.Handler {
-	var host = strs.Format("%s:%d", envar.EnvarStr("http://localhost", "HOST"), envar.EnvarInt(3300, "PORT"))
+	var host = strs.Format("%s:%d", envar.GetStr("http://localhost", "HOST"), envar.GetInt(3300, "PORT"))
 
 	r := chi.NewRouter()
 
-	er.PublicRoute(r, er.Get, "/version", rt.version, PackageName, PackagePath, host)
+	router.Public(r, router.Get, "/version", rt.version, PackageName, PackagePath, host)
 	// $2
-	er.ProtectRoute(r, er.Post, "/", rt.$2, PackageName, PackagePath, host)
+	router.Protect(r, router.Post, "/", rt.$2, PackageName, PackagePath, host)
 	
 	ctx := context.Background()
 	rt.Repository.Init(ctx)
 
-	console.LogKF(PackageName, "Router version:%s", PackageVersion)
+	logs.Log(PackageName, "Router version:%s", PackageVersion)
 	return r
 }
 
@@ -563,12 +562,11 @@ const modelDbHandler = `package $1
 import (
 	"net/http"
 
-	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/core"
-	"github.com/cgalvisleon/et/generic"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/generic"
 	"github.com/cgalvisleon/et/linq"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/utility"
@@ -579,7 +577,7 @@ var $2 *linq.Model
 
 func Define$2() error {
 	if err := defineSchema(); err != nil {
-		return console.Panic(err)
+		return logs.Panic(err)
 	}
 
 	if $2 != nil {
@@ -628,11 +626,11 @@ func Define$2() error {
 		return nil
 	})
 	$2.OnListener = func(data et.Json) {
-		console.Debug(data.ToString())
+		logs.Debug(data.ToString())
 	}
 	
 	if err := core.InitModel($2); err != nil {
-		return console.Panic(err)
+		return logs.Panic(err)
 	}
 
 	return nil
@@ -641,27 +639,14 @@ func Define$2() error {
 /**
 *	Handler for CRUD data
  */
-func Get$2ById(id string) (et.Item, error) {
-	result, err := cache.GetItem(id)
-	if err != nil {
-		return et.Item{}, err
-	}
-
-	if result.Ok {
-		return result, nil
-	}
-
-	result, err = $2.Data().
+func Get$2ById(id string) (et.Item, error) {	
+	result, err := $2.Data().
 		Where($2.Column("_id").Eq(id)).
 		First()
 	if err != nil {
 		return et.Item{}, err
 	}
-
-	if result.Ok {
-		cache.SetItemW(id, result)
-	}
-
+	
 	return result, nil	
 }
 
@@ -678,11 +663,11 @@ func Value$2ById(_default any, id, atrib string) *generic.Any {
 
 func UpSert$2(project_id, id string, data et.Json) (et.Item, error) {
 	if !utility.ValidId(project_id) {
-		return et.Item{}, console.AlertF(msg.MSG_ATRIB_REQUIRED, "project_id")
+		return et.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "project_id")
 	}
 
 	if !utility.ValidId(id) {
-		return et.Item{}, console.AlertF(msg.MSG_ATRIB_REQUIRED, "_id")
+		return et.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "_id")
 	}
 
 	id = utility.GenId(id)
@@ -695,7 +680,7 @@ func UpSert$2(project_id, id string, data et.Json) (et.Item, error) {
 
 func State$2(id, state string) (et.Item, error) {
 	if !utility.ValidId(state) {
-		return et.Item{}, console.AlertF(msg.MSG_ATRIB_REQUIRED, "state")
+		return et.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "state")
 	}
 
 	item, err := $2.Data("_state").
@@ -706,7 +691,7 @@ func State$2(id, state string) (et.Item, error) {
 	}
 
 	if !item.Ok {
-		return et.Item{}, console.Alert(msg.RECORD_NOT_FOUND)
+		return et.Item{}, logs.Alertm(RECORD_NOT_FOUND)
 	}
 
 	old_state := item.Key("_state")
@@ -714,7 +699,7 @@ func State$2(id, state string) (et.Item, error) {
 		return et.Item{
 			Ok: true,
 			Result: et.Json{
-				"message": msg.RECORD_NOT_UPDATE,
+				"message": RECORD_NOT_UPDATE,
 			}}, nil
 	}
 
@@ -849,7 +834,7 @@ func (rt *Router) all$2(w http.ResponseWriter, r *http.Request) {
 
 /** Copy this code to func initModel in model.go
 	if err := Define$2(); err != nil {
-		return console.Panic(err)
+		return logs.Panic(err)
 	}
 **/
 `
@@ -924,6 +909,7 @@ COMPANY=Company
 PATH_URL=
 WEB=https://www.celsia.com
 PRODUCTION=false
+PATH_URL=/api/$1
 HOST=localhost
 
 # DB
@@ -944,12 +930,6 @@ NATS_HOST=localhost:4222
 
 # CALM
 SECRET=test
-
-# AWS
-AWS_REGION=
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
-AWS_SESSION_TOKEN=
 `
 
 const modelDeploy = `version: "3"

@@ -47,6 +47,8 @@ go build --race ./cmd/serive/main.go
 go build ./cmd/gateway/main.go
 
 go run github.com/cgalvisleon/et/cmd/create go
+
+go run ./cmd/create go
 ```
 
 ## Websocket message

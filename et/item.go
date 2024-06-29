@@ -18,7 +18,7 @@ type Item struct {
 }
 
 // Scan a row from a sql query
-func (it *Item) Scan(rows *sql.Rows) error {
+func (it *Item) OfRows(rows *sql.Rows) error {
 	cols, err := rows.Columns()
 	if err != nil {
 		return err
@@ -50,7 +50,7 @@ func (it *Item) Scan(rows *sql.Rows) error {
 }
 
 // ToScan a struct from a item
-func (it *Item) ToScan(src interface{}) error {
+func (it *Item) Scan(src interface{}) error {
 	v := reflect.ValueOf(src).Elem()
 	for k, val := range it.Result {
 		field := v.FieldByName(k)

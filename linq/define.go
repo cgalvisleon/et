@@ -13,7 +13,7 @@ func (m *Model) DefineColum(name, description string, typeData TypeData, _defaul
 func (m *Model) DefineAtrib(name, description string, typeData TypeData, _default interface{}) *Column {
 	source := COlumn(m, SourceField.Low())
 	if source == nil {
-		source = m.DefineColum(SourceField.Low(), "Source field", TpJson, TpJson.Default())
+		_ = m.DefineColum(SourceField.Low(), "Source field", TpJson, TpJson.Default())
 	}
 
 	result := newColumn(m, name, description, TpAtrib, typeData, _default)

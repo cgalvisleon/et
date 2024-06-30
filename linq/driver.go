@@ -35,15 +35,17 @@ func (d TypeDriver) String() string {
 type Driver interface {
 	Type() string
 	Connect(params et.Json) (*sql.DB, error)
-	InitModel(model *Model) string
+	// DDL (Data Definition Language)
+	DefineSql(model *Model) string
+	MutationSql(model *Model) string
+	// Querys
 	SelectSql(linq *Linq) string
 	CurrentSql(linq *Linq) string
 	InsertSql(linq *Linq) string
 	UpdateSql(linq *Linq) string
 	DeleteSql(linq *Linq) string
-	MutationSql(linq *Linq) string
+	// DCL (Data Control Language)
 	DCL(command string, params et.Json) error
-	Sql(command string) string
 	// Serires
 	NextSerie(tag string) int64
 	NextCode(tag, format string) string

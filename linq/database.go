@@ -8,7 +8,9 @@ import (
 	"github.com/cgalvisleon/et/strs"
 )
 
-// Database struct used to define a database
+/**
+* Database struct to define a database
+**/
 type Database struct {
 	Name        string
 	Description string
@@ -20,7 +22,13 @@ type Database struct {
 	debug       bool
 }
 
-// NewDatabase create a new database
+/**
+* NewDatabase create a new database
+* @param name string
+* @param description string
+* @param drive Driver
+* @return *Database
+**/
 func NewDatabase(name, description string, drive Driver) *Database {
 	for _, v := range dbs {
 		if v.Name == strs.Uppcase(name) {
@@ -41,7 +49,10 @@ func NewDatabase(name, description string, drive Driver) *Database {
 	return result
 }
 
-// Definition return a json with the definition of the database
+/**
+* Definition return the definition of the database
+* @return et.Json
+**/
 func (d *Database) Definition() et.Json {
 	var _schemes []et.Json = []et.Json{}
 	for _, s := range d.Schemes {
@@ -66,11 +77,18 @@ func (d *Database) Definition() et.Json {
 	}
 }
 
+/**
+* Debug set debug mode
+**/
 func (d *Database) Debug() {
 	d.debug = true
 }
 
-// AddModel add a model to the database
+/**
+* InitSchema init a schema
+* @param schema *Schema
+* @return error
+**/
 func (d *Database) InitModel(model *Model) error {
 	if d.DB == nil {
 		return logs.Alertm("Connected is required")
@@ -94,7 +112,11 @@ func (d *Database) InitModel(model *Model) error {
 	return nil
 }
 
-// Get or add a schema to the database
+/**
+* GetSchema get a schema
+* @param schema *Schema
+* @return *Schema
+**/
 func (d *Database) GetSchema(val *Schema) *Schema {
 	for _, v := range d.Schemes {
 		if v == val {
@@ -108,7 +130,11 @@ func (d *Database) GetSchema(val *Schema) *Schema {
 	return val
 }
 
-// Get or add a model to the database
+/**
+* GetModel get model by model
+* @param model *Model
+* @return *Model
+**/
 func (d *Database) GetModel(val *Model) *Model {
 	for _, v := range d.Models {
 		if v == val {
@@ -122,6 +148,11 @@ func (d *Database) GetModel(val *Model) *Model {
 	return val
 }
 
+/**
+* Model get model by name
+* @param name string
+* @return *Model
+**/
 func (d *Database) Model(name string) *Model {
 	for _, v := range d.Models {
 		if strs.Uppcase(v.Name) == strs.Uppcase(name) {
@@ -132,7 +163,11 @@ func (d *Database) Model(name string) *Model {
 	return nil
 }
 
-// Connected to database
+/**
+* Connected to database
+* @param params et.Json
+* @return error
+**/
 func (d *Database) Connected(params et.Json) error {
 	if d.Driver == nil {
 		return logs.Errorm("Driver is required")
@@ -148,7 +183,10 @@ func (d *Database) Connected(params et.Json) error {
 	return nil
 }
 
-// Disconnected to database
+/**
+* Disconnected to database
+* @return error
+**/
 func (d *Database) Disconnected() error {
 	if d.DB != nil {
 		return d.DB.Close()
@@ -157,7 +195,11 @@ func (d *Database) Disconnected() error {
 	return nil
 }
 
-// DDLModel return the ddl to create a model
+/**
+* initModel init a model
+* @param model *Model
+* @return error
+**/
 func (d *Database) initModel(model *Model) error {
 	if d.Driver == nil {
 		return logs.Alertm("Driver is required")
@@ -177,7 +219,28 @@ func (d *Database) initModel(model *Model) error {
 			return err
 		}
 
-		sql := driver.InitModel(model)
+		sql := driver.DefineSql(model)
+		if d.debug {
+			logs.Debug(model.Definition().ToString())
+			logs.Debug(sql)
+		}
+
+		_, err = Exec(d.DB, sql)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	version := result.Int("version")
+	if version < model.Version {
+		_, err = driver.UpSetModel(model.Schema.Name, model.Name, kind, model.Version, model.Definition())
+		if err != nil {
+			return err
+		}
+
+		sql := driver.MutationSql(model)
 		if d.debug {
 			logs.Debug(model.Definition().ToString())
 			logs.Debug(sql)
@@ -192,7 +255,12 @@ func (d *Database) initModel(model *Model) error {
 	return nil
 }
 
-// SelectSql return the sql to select
+/**
+* selectSql return the sql to select
+* @param linq *Linq
+* @return string
+* @return error
+**/
 func (d *Database) selectSql(linq *Linq) (string, error) {
 	if d.Driver == nil {
 		return "", logs.Errorm("Driver is required")
@@ -202,7 +270,12 @@ func (d *Database) selectSql(linq *Linq) (string, error) {
 	return driver.SelectSql(linq), nil
 }
 
-// CurrentSql return the sql to current
+/**
+* currentSql return the sql to current
+* @param linq *Linq
+* @return string
+* @return error
+**/
 func (d *Database) currentSql(linq *Linq) (string, error) {
 	if d.Driver == nil {
 		return "", logs.Errorm("Driver is required")
@@ -212,7 +285,12 @@ func (d *Database) currentSql(linq *Linq) (string, error) {
 	return driver.CurrentSql(linq), nil
 }
 
-// InsertSql return the sql to insert
+/**
+* insertSql return the sql to insert
+* @param linq *Linq
+* @return string
+* @return error
+**/
 func (d *Database) insertSql(linq *Linq) (string, error) {
 	if d.Driver == nil {
 		return "", logs.Errorm("Driver is required")
@@ -222,7 +300,12 @@ func (d *Database) insertSql(linq *Linq) (string, error) {
 	return driver.InsertSql(linq), nil
 }
 
-// UpdateSql return the sql to update
+/**
+* updateSql return the sql to update
+* @param linq *Linq
+* @return string
+* @return error
+**/
 func (d *Database) updateSql(linq *Linq) (string, error) {
 	if d.Driver == nil {
 		return "", logs.Errorm("Driver is required")
@@ -232,7 +315,12 @@ func (d *Database) updateSql(linq *Linq) (string, error) {
 	return driver.UpdateSql(linq), nil
 }
 
-// DeleteSql return the sql to delete
+/**
+* deleteSql return the sql to delete
+* @param linq *Linq
+* @return string
+* @return error
+**/
 func (d *Database) deleteSql(linq *Linq) (string, error) {
 	if d.Driver == nil {
 		return "", logs.Errorm("Driver is required")

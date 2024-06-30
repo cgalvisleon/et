@@ -170,7 +170,11 @@ func ddlUnique(col *linq.Column) string {
 	return strs.Format(`CREATE UNIQUE INDEX IF NOT EXISTS %v ON %v(%v);`, name, strs.Uppcase(col.Table()), col.Up())
 }
 
-// ddlPrimaryKey return sql primary key ddl
+/**
+* ddlPrimaryKey return PrimaryKey ddl
+* @param col *linq.Column
+* @return string
+**/
 func ddlPrimaryKey(col *linq.Column) string {
 	key := strs.Replace(col.Table(), ".", "_")
 	key = strs.Replace(key, "-", "_") + "_pkey"
@@ -178,7 +182,11 @@ func ddlPrimaryKey(col *linq.Column) string {
 	return strs.Format(`ALTER TABLE IF EXISTS %s ADD CONSTRAINT %s PRIMARY KEY (%s);`, strs.Uppcase(col.Table()), key, strings.Join(col.PrimaryKeys(), ", "))
 }
 
-// ddlForeignKeys return ForeignKey ddl
+/**
+* ddlForeignKeys return ForeignKeys ddl
+* @param model *linq.Model
+* @return string
+**/
 func ddlForeignKeys(model *linq.Model) string {
 	var result string
 	for _, ref := range model.ForeignKey {
@@ -191,7 +199,11 @@ func ddlForeignKeys(model *linq.Model) string {
 	return result
 }
 
-// ddlSetSync return sql set sync ddl
+/**
+* ddlSetSync return Sync ddl
+* @param model *linq.Model
+* @return string
+**/
 func ddlSetSync(model *linq.Model) string {
 	result := linq.SQLDDL(`
 	DROP TRIGGER IF EXISTS SYNC_INSERT ON $1 CASCADE;
@@ -217,6 +229,11 @@ func ddlSetSync(model *linq.Model) string {
 	return result
 }
 
+/**
+* ddlSetRecycling return Recycling ddl
+* @param model *linq.Model
+* @return string
+**/
 func ddlSetRecycling(model *linq.Model) string {
 	result := linq.SQLDDL(`	
 	DROP TRIGGER IF EXISTS RECYCLING ON $1 CASCADE;
@@ -236,6 +253,11 @@ func ddlSetRecycling(model *linq.Model) string {
 	return result
 }
 
+/**
+* ddlSetSeries return Series ddl
+* @param model *linq.Model
+* @return string
+**/
 func ddlSetSeries(model *linq.Model) string {
 	result := linq.SQLDDL(`	
 	DROP TRIGGER IF EXISTS SERIES_INSERT ON $1 CASCADE;
@@ -255,6 +277,11 @@ func ddlSetSeries(model *linq.Model) string {
 	return result
 }
 
+/**
+* ddlSetModel return SetModel ddl
+* @param model *linq.Model
+* @return string
+**/
 func ddlSetModel(model *linq.Model) string {
 	schema := model.Schema.Name
 	table := model.Name
@@ -267,7 +294,11 @@ func ddlSetModel(model *linq.Model) string {
 	return result
 }
 
-// ddlTable return table ddl
+/**
+* ddlTable return Table ddl
+* @param model *linq.Model
+* @return string
+**/
 func ddlTable(model *linq.Model) string {
 	var result string
 	var columns string
@@ -306,4 +337,24 @@ func ddlTable(model *linq.Model) string {
 	result = strs.Append(result, define, "\n\n")
 
 	return result
+}
+
+/**
+* ddlTableRename return TableRename ddl
+* @param model *linq.Model
+* @return string
+**/
+func ddlTableRename(model *linq.Model, name string) string {
+	newName := model.Schema.Name + "." + name
+	return strs.Format(`ALTER TABLE IF EXISTS %s RENAME TO %s;`, model.Table, newName)
+}
+
+/**
+* ddlTableDrop return TableDrop ddl
+* @param model *linq.Model
+* @return string
+**/
+func ddlTableDrop(schema, name string) string {
+	dropName := schema + "." + name
+	return strs.Format(`DROP TABLE IF EXISTS %s;`, dropName)
 }

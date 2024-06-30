@@ -26,12 +26,20 @@ func Load(params et.Json) *Postgres {
 	return result
 }
 
-// Type return the type of the driver
+/**
+* Type return the type of the database
+* @return string
+**/
 func (d *Postgres) Type() string {
 	return linq.Postgres.String()
 }
 
-// Connect to the database
+/**
+* Connect to the database
+* @param params et.Json
+* @return *sql.DB
+* @return error
+**/
 func (d *Postgres) Connect(params et.Json) (*sql.DB, error) {
 	if params["user"] == nil {
 		return nil, logs.Errorm("User is required")
@@ -105,8 +113,12 @@ func (d *Postgres) Connect(params et.Json) (*sql.DB, error) {
 	return d.DB, nil
 }
 
-// DDLModel return the ddl to create the model
-func (d *Postgres) InitModel(m *linq.Model) string {
+/**
+* DefineSql return DDL sql to define a model
+* @param m *linq.Model
+* @return string
+**/
+func (d *Postgres) DefineSql(m *linq.Model) string {
 	var result string
 
 	result = ddlTable(m)
@@ -116,7 +128,21 @@ func (d *Postgres) InitModel(m *linq.Model) string {
 	return result
 }
 
-// SelectSql return the sql to select
+/**
+* MutationSql return DDL mutation the sql to mutate
+* @param l *linq.Linq
+* @return string
+**/
+func (d *Postgres) MutationSql(m *linq.Model) string {
+
+	return ""
+}
+
+/**
+* SelectSql return the sql to select
+* @param l *linq.Linq
+* @return string
+**/
 func (d *Postgres) SelectSql(l *linq.Linq) string {
 	l.Clear()
 
@@ -141,7 +167,11 @@ func (d *Postgres) SelectSql(l *linq.Linq) string {
 	return l.SQL()
 }
 
-// CurrentSql return the sql to get the current
+/**
+* CurrentSql return the sql to select
+* @param l *linq.Linq
+* @return string
+**/
 func (d *Postgres) CurrentSql(l *linq.Linq) string {
 	l.Clear()
 
@@ -156,7 +186,11 @@ func (d *Postgres) CurrentSql(l *linq.Linq) string {
 	return l.SQL()
 }
 
-// InsertSql return the sql to insert
+/**
+* InsertSql return the sql to insert
+* @param l *linq.Linq
+* @return string
+**/
 func (d *Postgres) InsertSql(l *linq.Linq) string {
 	l.Clear()
 
@@ -167,7 +201,11 @@ func (d *Postgres) InsertSql(l *linq.Linq) string {
 	return l.SQL()
 }
 
-// UpdateSql return the sql to update
+/**
+* UpdateSql return the sql to update
+* @param l *linq.Linq
+* @return string
+**/
 func (d *Postgres) UpdateSql(l *linq.Linq) string {
 	l.Clear()
 
@@ -180,7 +218,11 @@ func (d *Postgres) UpdateSql(l *linq.Linq) string {
 	return l.SQL()
 }
 
-// DeleteSql return the sql to delete
+/**
+* DeleteSql return the sql to delete
+* @param l *linq.Linq
+* @return string
+**/
 func (d *Postgres) DeleteSql(l *linq.Linq) string {
 	l.Clear()
 
@@ -193,7 +235,12 @@ func (d *Postgres) DeleteSql(l *linq.Linq) string {
 	return l.SQL()
 }
 
-// DCL Data Control Language execute a command
+/**
+* DCL execute a Data Control Language command
+* @param command string
+* @param params et.Json
+* @return error
+**/
 func (d *Postgres) DCL(command string, params et.Json) error {
 	switch command {
 	case "exist_database":
@@ -422,22 +469,5 @@ func (d *Postgres) DCL(command string, params et.Json) error {
 		return nil
 	default:
 		return nil
-	}
-}
-
-// MutationSql return the sql to mutate tables
-func (d *Postgres) MutationSql(l *linq.Linq) string {
-
-	return ""
-}
-
-func (d *Postgres) Sql(command string) string {
-	switch command {
-	case "next_serie":
-		return `SELECT linq.nextserie($1) AS INDEX;`
-	case "set_serie":
-		return `SELECT linq.setserie($1, $2) AS INDEX;`
-	default:
-		return ""
 	}
 }

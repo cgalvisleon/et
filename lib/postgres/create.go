@@ -25,7 +25,7 @@ func CreateDatabase(db *sql.DB, name string) (bool, error) {
 	if !exists {
 		sql := strs.Format(`CREATE DATABASE %s;`, name)
 
-		_, err := linq.Query(db, sql)
+		_, err := linq.Exec(db, sql)
 		if err != nil {
 			return false, err
 		}
@@ -45,7 +45,7 @@ func CreateSchema(db *sql.DB, name string) (bool, error) {
 	if !exists {
 		sql := strs.Format(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"; CREATE SCHEMA IF NOT EXISTS "%s";`, name)
 
-		_, err := linq.Query(db, sql)
+		_, err := linq.Exec(db, sql)
 		if err != nil {
 			return false, err
 		}
@@ -129,8 +129,8 @@ func CreateTrigger(db *sql.DB, schema, table, name, when, event, function string
 	return !exists, nil
 }
 
-// CreateSerie create a serie if not exists
-func CreateSerie(db *sql.DB, schema, tag string) (bool, error) {
+// CreateSequence create a sequence if not exists
+func CreateSequence(db *sql.DB, schema, tag string) (bool, error) {
 	exists, err := ExistSerie(db, schema, tag)
 	if err != nil {
 		return false, err

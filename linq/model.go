@@ -136,7 +136,6 @@ type Model struct {
 	AfterDelete       []Trigger
 	OnListener        Listener
 	Integrity         bool
-	ItIsBuilt         bool
 	DDL               string
 	Version           int
 }
@@ -185,7 +184,6 @@ func NewModel(schema *Schema, name, description string, version int) *Model {
 		AfterDelete:       []Trigger{},
 		OnListener:        nil,
 		Integrity:         false,
-		ItIsBuilt:         false,
 		DDL:               "",
 		Version:           version,
 	}
@@ -197,14 +195,6 @@ func NewModel(schema *Schema, name, description string, version int) *Model {
 	schema.AddModel(result)
 
 	return result
-}
-
-func (m *Model) Save() error {
-	if m.ItIsBuilt {
-
-	}
-
-	return nil
 }
 
 // Definition return a json with the definition of the model
@@ -283,7 +273,6 @@ func (m *Model) Definition() et.Json {
 		"useLastEditedBy":   m.UseLastEditedBy,
 		"useProject":        m.UseProject,
 		"integrity":         m.Integrity,
-		"itIsBuilt":         m.ItIsBuilt,
 		"version":           m.Version,
 	}
 
@@ -329,8 +318,6 @@ func (m *Model) C(name string) *Column {
 
 func (m *Model) AddColumn(col *Column) {
 	m.Columns = append(m.Columns, col)
-
-	m.Save()
 }
 
 // Add unique column by name to the model
@@ -342,7 +329,6 @@ func (m *Model) AddUnique(name string, asc bool) *Column {
 			Column: col,
 			Asc:    asc,
 		})
-		m.Save()
 
 		return col
 	}
@@ -359,7 +345,6 @@ func (m *Model) AddIndex(name string, asc bool) *Column {
 			Column: col,
 			Asc:    asc,
 		})
-		m.Save()
 
 		return col
 	}
@@ -374,7 +359,6 @@ func (m *Model) AddPrimaryKey(name string) *Column {
 		col.Unique = true
 		col.PrimaryKey = true
 		m.PrimaryKeys = append(m.PrimaryKeys, col)
-		m.Save()
 
 		return col
 	}
@@ -414,7 +398,6 @@ func (m *Model) AddForeignKey(foreignKey []string, parentModel *Model, parentKey
 	}
 
 	m.ForeignKey = append(m.ForeignKey, result)
-	m.Save()
 
 	return result
 }

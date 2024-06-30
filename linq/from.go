@@ -131,9 +131,6 @@ func From(model *Model) *Linq {
 	result.Froms = append(result.Froms, form)
 	result.Command = newCommand(form, Tpnone)
 	result.Command.Linq = result
-	if !result.ItIsBuilt && model.ItIsBuilt {
-		result.ItIsBuilt = true
-	}
 
 	return result
 }

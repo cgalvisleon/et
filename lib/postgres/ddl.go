@@ -239,55 +239,8 @@ func ddlSetRecycling(model *linq.Model) string {
 	DROP TRIGGER IF EXISTS RECYCLING ON $1 CASCADE;
 	CREATE TRIGGER RECYCLING
 	AFTER UPDATE ON $1
-	FOR EACH ROW
-	EXECUTE PROCEDURE linq.RECYCLING();
-
-	DROP TRIGGER IF EXISTS ERASE ON $1 CASCADE;
-	CREATE TRIGGER ERASE
-	AFTER DELETE ON $1
-	FOR EACH ROW
-	EXECUTE PROCEDURE linq.ERASE();`, strs.Uppcase(model.Table))
-
-	result = strs.Replace(result, "\t", "")
-
-	return result
-}
-
-/**
-* ddlSetSeries return Series ddl
-* @param model *linq.Model
-* @return string
-**/
-func ddlSetSeries(model *linq.Model) string {
-	result := linq.SQLDDL(`	
-	DROP TRIGGER IF EXISTS SERIES_INSERT ON $1 CASCADE;
-	CREATE TRIGGER SERIES_INSERT
-	BEFORE INSERT ON $1
-	FOR EACH ROW
-	EXECUTE PROCEDURE linq.SERIES_INSERT();
-
-	DROP TRIGGER IF EXISTS SERIES_UPDATE ON $1 CASCADE;
-	CREATE TRIGGER SERIES_UPDATE
-	AFTER UPDATE ON $1
-	FOR EACH ROW WHEN (NEW!=OLD)
-	EXECUTE PROCEDURE linq.SERIES_UPDATE();`, strs.Uppcase(model.Table))
-
-	result = strs.Replace(result, "\t", "")
-
-	return result
-}
-
-/**
-* ddlSetModel return SetModel ddl
-* @param model *linq.Model
-* @return string
-**/
-func ddlSetModel(model *linq.Model) string {
-	schema := model.Schema.Name
-	table := model.Name
-	definition := model.Definition().ToString()
-	result := linq.SQLDDL(`	
-	SELECT linq.setmodel('$1', '$2', '$3');`, schema, table, definition)
+	FOR EACH ROW WHEN (OLD._STATE!=NEW._STATE)
+	EXECUTE PROCEDURE linq.RECYCLING_UPDATE();`, strs.Uppcase(model.Table))
 
 	result = strs.Replace(result, "\t", "")
 
@@ -330,11 +283,7 @@ func ddlTable(model *linq.Model) string {
 	result = strs.Append(result, sync, "\n\n")
 	recycle := ddlSetRecycling(model)
 	result = strs.Append(result, recycle, "\n\n")
-	series := ddlSetSeries(model)
-	result = strs.Append(result, series, "\n\n")
 	model.DDL = result
-	define := ddlSetModel(model)
-	result = strs.Append(result, define, "\n\n")
 
 	return result
 }

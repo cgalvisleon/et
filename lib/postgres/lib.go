@@ -93,17 +93,17 @@ func (d *Postgres) Connect(params et.Json) (*sql.DB, error) {
 		return nil, err
 	}
 
+	_, err = defineModels(d.DB)
+	if err != nil {
+		return nil, err
+	}
+
 	_, err = defineSync(d.DB)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = defineModels(d.DB)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = defineModels(d.DB)
+	_, err = defineRecycling(d.DB)
 	if err != nil {
 		return nil, err
 	}
@@ -366,10 +366,10 @@ func (d *Postgres) DCL(command string, params et.Json) error {
 		}
 
 		return nil
-	case "create_serie":
+	case "create_sequence":
 		schema := params.Str("schema")
 		name := params.Str("name")
-		_, err := CreateSerie(d.DB, schema, name)
+		_, err := CreateSequence(d.DB, schema, name)
 		if err != nil {
 			return err
 		}

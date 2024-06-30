@@ -12,16 +12,16 @@ import (
 
 // Postgres struct to define a postgres database
 type Postgres struct {
-	Params et.Json
+	params et.Json
 	DB     *sql.DB
 }
 
 func Load(params et.Json) *Postgres {
 	result := &Postgres{
-		Params: params,
+		params: params,
 	}
 
-	result.Connect(result.Params)
+	result.Connect(result.params)
 
 	return result
 }
@@ -76,34 +76,26 @@ func (d *Postgres) Connect(params et.Json) (*sql.DB, error) {
 		return nil, err
 	}
 
+	params.Del("password")
 	d.DB = result
+	d.params = params
 
-	sql := ddlSeries()
-	_, err = d.DB.Exec(sql)
+	_, err = defineSeries(d.DB)
 	if err != nil {
 		return nil, err
 	}
 
-	sql = ddlSync()
-	_, err = d.DB.Exec(sql)
+	_, err = defineSync(d.DB)
 	if err != nil {
 		return nil, err
 	}
 
-	sql = ddlRecycling()
-	_, err = d.DB.Exec(sql)
+	_, err = defineModels(d.DB)
 	if err != nil {
 		return nil, err
 	}
 
-	sql = ddlModels()
-	_, err = d.DB.Exec(sql)
-	if err != nil {
-		return nil, err
-	}
-
-	sql = ddlFuntions()
-	_, err = d.DB.Exec(sql)
+	_, err = defineModels(d.DB)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +106,7 @@ func (d *Postgres) Connect(params et.Json) (*sql.DB, error) {
 }
 
 // DDLModel return the ddl to create the model
-func (d *Postgres) DdlSql(m *linq.Model) string {
+func (d *Postgres) InitModel(m *linq.Model) string {
 	var result string
 
 	result = ddlTable(m)

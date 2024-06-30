@@ -1,6 +1,7 @@
 package et
 
 import (
+	"database/sql"
 	"encoding/json"
 	"reflect"
 	"strings"
@@ -16,7 +17,28 @@ type Items struct {
 	Result []Json `json:"result"`
 }
 
-// Scan a row from a sql query
+/**
+* Items methods
+* @param rows *sql.Rows
+* @return error
+**/
+func (it *Items) OfRows(rows *sql.Rows) error {
+	for rows.Next() {
+		var item Item
+		item.OfRows(rows)
+		it.Result = append(it.Result, item.Result)
+		it.Ok = true
+		it.Count++
+	}
+
+	return nil
+}
+
+/**
+* Items methods
+* @param src interface{}
+* @return error
+**/
 func (it *Items) Scan(src interface{}) error {
 	var ba []byte
 	switch v := src.(type) {
@@ -43,7 +65,13 @@ func (it *Items) Scan(src interface{}) error {
 	return nil
 }
 
-// ValAny return the value of the key
+/**
+* ValAny return the value of the key
+* @param idx int
+* @param _default any
+* @param atribs ...string
+* @return any
+**/
 func (it *Items) ValAny(idx int, _default any, atribs ...string) any {
 	if it.Result[idx] == nil {
 		return _default
@@ -52,7 +80,13 @@ func (it *Items) ValAny(idx int, _default any, atribs ...string) any {
 	return it.Result[idx].ValAny(_default, atribs...)
 }
 
-// ValStr return the value of the key
+/**
+* ValStr return the value of the key
+* @param idx int
+* @param _default string
+* @param atribs ...string
+* @return string
+**/
 func (it *Items) ValStr(idx int, _default string, atribs ...string) string {
 	if it.Result[idx] == nil {
 		return _default
@@ -61,7 +95,13 @@ func (it *Items) ValStr(idx int, _default string, atribs ...string) string {
 	return it.Result[idx].ValStr(_default, atribs...)
 }
 
-// Uppcase return the value of the key in uppercase
+/**
+* Uppcase return the value of the key in uppercase
+* @param idx int
+* @param _default string
+* @param atribs ...string
+* @return string
+**/
 func (it *Items) Uppcase(idx int, _default string, atribs ...string) string {
 	if it.Result[idx] == nil {
 		return _default
@@ -77,7 +117,13 @@ func (it *Items) Uppcase(idx int, _default string, atribs ...string) string {
 	}
 }
 
-// Lowcase return the value of the key in lowercase
+/**
+* Lowcase return the value of the key in lowercase
+* @param idx int
+* @param _default string
+* @param atribs ...string
+* @return string
+**/
 func (it *Items) Lowcase(idx int, _default string, atribs ...string) string {
 	if it.Result[idx] == nil {
 		return _default
@@ -93,7 +139,13 @@ func (it *Items) Lowcase(idx int, _default string, atribs ...string) string {
 	}
 }
 
-// Titlecase return the value of the key in titlecase
+/**
+* Titlecase return the value of the key in titlecase
+* @param idx int
+* @param _default string
+* @param atribs ...string
+* @return string
+**/
 func (it *Items) Titlecase(idx int, _default string, atribs ...string) string {
 	if it.Result[idx] == nil {
 		return _default
@@ -109,7 +161,12 @@ func (it *Items) Titlecase(idx int, _default string, atribs ...string) string {
 	}
 }
 
-// Get return the value of the key
+/**
+* Get a value from the key
+* @param idx int
+* @param key string
+* @return interface{}
+**/
 func (it *Items) Get(idx int, key string) interface{} {
 	if it.Result[idx] == nil {
 		return nil
@@ -118,7 +175,13 @@ func (it *Items) Get(idx int, key string) interface{} {
 	return it.Result[idx].Get(key)
 }
 
-// Set a value to the key
+/**
+* Set a value from the key
+* @param idx int
+* @param key string
+* @param val interface{}
+* @return bool
+**/
 func (it *Items) Set(idx int, key string, val interface{}) bool {
 	if it.Result[idx] == nil {
 		return false
@@ -127,7 +190,12 @@ func (it *Items) Set(idx int, key string, val interface{}) bool {
 	return it.Result[idx].Set(key, val)
 }
 
-// Del a value from the key
+/**
+* Del a value from the key
+* @param idx int
+* @param key string
+* @return bool
+**/
 func (it *Items) Del(idx int, key string) bool {
 	if it.Result[idx] == nil {
 		return false
@@ -136,42 +204,71 @@ func (it *Items) Del(idx int, key string) bool {
 	return it.Result[idx].Del(key)
 }
 
-// Id return the value of the key
-func (it *Items) Id(idx int) string {
-	return it.Result[idx].Id()
-}
-
-// IdT return the value of the key
+/**
+* IdT return the value of the key
+* @param idx int
+* @return string
+**/
 func (it *Items) IdT(idx int) string {
 	return it.Result[idx].IdT()
 }
 
-// Key return the value of the key
+/**
+* Index return the value of the key
+* @param idx int
+* @atrib ...string
+* @return int
+**/
 func (it *Items) Key(idx int, atribs ...string) string {
 	return it.Result[idx].Key()
 }
 
-// Str return the value of the key
+/**
+* Str return the value of the key
+* @param idx int
+* @atrib ...string
+* @return string
+**/
 func (it *Items) Str(idx int, atribs ...string) string {
 	return it.Result[idx].Str()
 }
 
-// Int return the value of the key
+/**
+* Int return the value of the key
+* @param idx int
+* @atrib ...string
+* @return int
+**/
 func (it *Items) Int(idx int, atribs ...string) int {
 	return it.Result[idx].Int()
 }
 
-// Num return the value of the key
+/**
+* Num return the value of the key
+* @param idx int
+* @atrib ...string
+* @return float64
+**/
 func (it *Items) Num(idx int, atribs ...string) float64 {
 	return it.Result[idx].Num()
 }
 
-// Bool return the value of the key
+/**
+* Bool return the value of the key
+* @param idx int
+* @atrib ...string
+* @return bool
+**/
 func (it *Items) Bool(idx int, atribs ...string) bool {
 	return it.Result[idx].Bool()
 }
 
-// Json return the value of the key
+/**
+* Json return the value of the key
+* @param idx int
+* @atrib ...string
+* @return Json
+**/
 func (it *Items) Json(idx int, atribs ...string) Json {
 	if it.Result[idx] == nil {
 		return Json{}
@@ -190,7 +287,10 @@ func (it *Items) Json(idx int, atribs ...string) Json {
 	}
 }
 
-// ToString return the value of the key
+/**
+* Data return the value type string
+* @return string
+**/
 func (it *Items) ToString() string {
 	var result string
 	for _, item := range it.Result {
@@ -201,7 +301,10 @@ func (it *Items) ToString() string {
 	return strs.Format(`[%s]`, result)
 }
 
-// ToJson return the value of the key
+/**
+* ToJson return the value type Json
+* @return Json
+**/
 func (it *Items) ToJson() Json {
 	return Json{
 		"Ok":     it.Ok,
@@ -210,7 +313,13 @@ func (it *Items) ToJson() Json {
 	}
 }
 
-// ToList return the value of the key
+/**
+* ToList return the value type List
+* @param all int
+* @param page int
+* @param rows int
+* @return List
+**/
 func (it *Items) ToList(all, page, rows int) List {
 	var start int
 	var end int

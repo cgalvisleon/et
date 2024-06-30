@@ -19,7 +19,7 @@ func sqlColumns(l *linq.Linq, cols ...*linq.Lselect) string {
 	var def string
 
 	appendColumn := func(val string) {
-		result = strs.Append(result, def, ",\n")
+		result = strs.Append(result, val, ",\n")
 	}
 
 	appendColumns := func(f *linq.Lfrom, c *linq.Column) {
@@ -37,7 +37,7 @@ func sqlColumns(l *linq.Linq, cols ...*linq.Lselect) string {
 			} else if slices.Contains([]linq.TypeData{linq.TpRollup, linq.TpRelation}, c.TypeData) {
 				r := c.RelationTo
 				parent := l.NewFrom(r.Parent)
-				def = strs.Format(`(SELECT row_to_json(%s) FROM %s AS %s WHERE %s LIMIT 1)`, r.SelectsAs(l), parent.Table, parent.AS, r.WhereAs(l))
+				def = strs.Format(`(SELECT row_to_json(%s) FROM %s AS %s WHERE %s LIMIT 1)`, r.SelectsAs(l), parent.Table(), parent.AS, r.WhereAs(l))
 				def = strs.Format(`%s AS %s`, def, c.Up())
 				appendColumn(def)
 			} else if linq.TpFormula == c.TypeData {
@@ -104,7 +104,7 @@ func sqlData(l *linq.Linq, cols ...*linq.Lselect) string {
 			} else if slices.Contains([]linq.TypeData{linq.TpRollup, linq.TpRelation}, c.TypeData) { // 'name', (SELECT row_to_json() FROM WUERE)
 				r := c.RelationTo
 				parent := l.NewFrom(r.Parent)
-				def = strs.Format(`(SELECT row_to_json(%s) FROM %s AS %s WHERE %s LIMIT 1)`, r.SelectsAs(l), parent.Table, parent.AS, r.WhereAs(l))
+				def = strs.Format(`(SELECT row_to_json(%s) FROM %s AS %s WHERE %s LIMIT 1)`, r.SelectsAs(l), parent.Table(), parent.AS, r.WhereAs(l))
 				def = strs.Format(`'%s', %s`, c.Low(), def)
 				appendObjects(def)
 			} else if linq.TpFormula == c.TypeData {

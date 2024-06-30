@@ -35,7 +35,7 @@ func (d TypeDriver) String() string {
 type Driver interface {
 	Type() string
 	Connect(params et.Json) (*sql.DB, error)
-	DdlSql(model *Model) string
+	InitModel(model *Model) string
 	SelectSql(linq *Linq) string
 	CurrentSql(linq *Linq) string
 	InsertSql(linq *Linq) string
@@ -44,4 +44,14 @@ type Driver interface {
 	MutationSql(linq *Linq) string
 	DCL(command string, params et.Json) error
 	Sql(command string) string
+	// Serires
+	NextSerie(tag string) int64
+	NextCode(tag, format string) string
+	SetSerie(tag string, val int) int64
+	CurrentSerie(tag string) int64
+	DeleteSerie(tag string) int64
+	// Models
+	UpSetModel(main, name, kind string, version int, data et.Json) (et.Item, error)
+	GetModel(main, name, kind string) (et.Item, error)
+	DeleteModel(main, name, kind string) error
 }

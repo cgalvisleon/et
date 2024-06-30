@@ -73,7 +73,7 @@ func (d *Database) Debug() {
 // AddModel add a model to the database
 func (d *Database) InitModel(model *Model) error {
 	if d.DB == nil {
-		return logs.Errorm("Connected is required")
+		return logs.Alertm("Connected is required")
 	}
 
 	for _, v := range d.Models {
@@ -84,17 +84,7 @@ func (d *Database) InitModel(model *Model) error {
 
 	model.SetDb(d)
 
-	sql, err := d.ddlSql(model)
-	if err != nil {
-		return err
-	}
-
-	if d.debug {
-		logs.Debug(model.Definition().ToString())
-		logs.Debug(sql)
-	}
-
-	_, err = Exec(d.DB, sql)
+	err := d.initModel(model)
 	if err != nil {
 		return err
 	}
@@ -168,13 +158,38 @@ func (d *Database) Disconnected() error {
 }
 
 // DDLModel return the ddl to create a model
-func (d *Database) ddlSql(model *Model) (string, error) {
+func (d *Database) initModel(model *Model) error {
 	if d.Driver == nil {
-		return "", logs.Errorm("Driver is required")
+		return logs.Alertm("Driver is required")
 	}
 
 	driver := *d.Driver
-	return driver.DdlSql(model), nil
+	kind := "model"
+
+	result, err := driver.GetModel(model.Schema.Name, model.Name, kind)
+	if err != nil {
+		return err
+	}
+
+	if !result.Ok {
+		_, err = driver.UpSetModel(model.Schema.Name, model.Name, kind, model.Version, model.Definition())
+		if err != nil {
+			return err
+		}
+
+		sql := driver.InitModel(model)
+		if d.debug {
+			logs.Debug(model.Definition().ToString())
+			logs.Debug(sql)
+		}
+
+		_, err = Exec(d.DB, sql)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // SelectSql return the sql to select

@@ -11,14 +11,18 @@ import (
 
 // Sqlite struct to define a sqlite database
 type Sqlite struct {
-	Database string
-	DB       *sql.DB
+	params et.Json
+	DB     *sql.DB
 }
 
-func Load(database string) Sqlite {
-	return Sqlite{
-		Database: database,
+func Load(params et.Json) Sqlite {
+	result := Sqlite{
+		params: params,
 	}
+
+	result.Connect(result.params)
+
+	return result
 }
 
 // Type return the type of the driver
@@ -28,9 +32,14 @@ func (d *Sqlite) Type() string {
 
 // Connect to the database
 func (d *Sqlite) Connect(params et.Json) (*sql.DB, error) {
-	driver := "sqlite3"
+	if params["database"] == nil {
+		return nil, logs.Errorm("Database is required")
+	}
 
-	result, err := sql.Open(driver, d.Database)
+	driver := "sqlite3"
+	database := params["database"].(string)
+
+	result, err := sql.Open(driver, database)
 	if err != nil {
 		return nil, err
 	}
@@ -41,8 +50,9 @@ func (d *Sqlite) Connect(params et.Json) (*sql.DB, error) {
 	}
 
 	d.DB = result
+	d.params = params
 
-	logs.Infof("Connected to %s database %s", driver, d.Database)
+	logs.Infof("Connected to %s database %s", driver, database)
 
 	return d.DB, nil
 }

@@ -214,7 +214,7 @@ func (d *Database) initModel(model *Model) error {
 	}
 
 	if !result.Ok {
-		_, err = driver.UpSetModel(model.Schema.Name, model.Name, kind, model.Version, model.Definition())
+		_, err = driver.UpSertModel(model.Schema.Name, model.Name, kind, model.Version, model.Definition())
 		if err != nil {
 			return err
 		}
@@ -235,7 +235,7 @@ func (d *Database) initModel(model *Model) error {
 
 	version := result.Int("version")
 	if version < model.Version {
-		_, err = driver.UpSetModel(model.Schema.Name, model.Name, kind, model.Version, model.Definition())
+		_, err = driver.UpSertModel(model.Schema.Name, model.Name, kind, model.Version, model.Definition())
 		if err != nil {
 			return err
 		}

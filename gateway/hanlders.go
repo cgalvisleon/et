@@ -95,8 +95,8 @@ func handlerRouter(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Upsert a update or new route
-func upsert(w http.ResponseWriter, r *http.Request) {
+// UpSert a update or new route
+func upSert(w http.ResponseWriter, r *http.Request) {
 	body, _ := response.GetBody(r)
 	method := body.Str("method")
 	path := body.Str("path")

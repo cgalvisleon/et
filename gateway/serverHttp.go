@@ -73,7 +73,7 @@ func newHttpServer() *HttpServer {
 	result.handlerFn = handlerRouter
 	result.Get("/version", version, PACKAGE_NAME)
 	result.Get("/gateway/all", getAll, PACKAGE_NAME)
-	result.Post("/gateway", upsert, PACKAGE_NAME)
+	result.Post("/gateway", upSert, PACKAGE_NAME)
 	result.Get("/ws", wsConnect, PACKAGE_NAME)
 
 	// Handler router

@@ -53,7 +53,7 @@ type Driver interface {
 	CurrentSerie(tag string) int64
 	DeleteSerie(tag string) int64
 	// Models
-	UpSetModel(main, name, kind string, version int, data et.Json) (et.Item, error)
+	UpSertModel(main, name, kind string, version int, data et.Json) (et.Item, error)
 	GetModel(main, name, kind string) (et.Item, error)
 	DeleteModel(main, name, kind string) error
 }

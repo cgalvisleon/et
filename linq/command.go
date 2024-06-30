@@ -196,12 +196,12 @@ func (c *Lcommand) query(sql string, args ...any) (et.Items, error) {
 	var items et.Items
 	var err error
 	if c.From.Model.UseSource {
-		items, err = c.Linq.querySource(c.Linq.Sql, args...)
+		items, err = c.Linq.querySource(sql, args...)
 		if err != nil {
 			return et.Items{}, err
 		}
 	} else {
-		items, err = c.Linq.query(c.Linq.Sql, args...)
+		items, err = c.Linq.query(sql, args...)
 		if err != nil {
 			return et.Items{}, err
 		}
@@ -315,7 +315,10 @@ func (c *Lcommand) afterDelete() error {
 	return nil
 }
 
-// Execute insert function
+/**
+* Insert method to use in linq
+* @return error
+**/
 func (c *Lcommand) Insert() error {
 	var err error
 	err = c.beforeInsert()
@@ -405,7 +408,10 @@ func (c *Lcommand) update(current et.Items) error {
 	return nil
 }
 
-// Execute update function
+/**
+* Update method to use in linq
+* @return error
+**/
 func (c *Lcommand) Update() error {
 	current, err := c.curren()
 	if err != nil {
@@ -419,8 +425,11 @@ func (c *Lcommand) Update() error {
 	return c.update(current)
 }
 
-// Execute update or insert function
-func (c *Lcommand) Upsert() error {
+/**
+* UpSert method to use in linq
+* @return error
+**/
+func (c *Lcommand) UpSert() error {
 	current, err := c.curren()
 	if err != nil {
 		return err
@@ -433,7 +442,10 @@ func (c *Lcommand) Upsert() error {
 	return c.update(current)
 }
 
-// Execute delete function
+/**
+* Delete method to use in linq
+* @return error
+**/
 func (c *Lcommand) Delete() error {
 	current, err := c.curren()
 	if err != nil {
@@ -488,17 +500,26 @@ func (c *Lcommand) Delete() error {
 	return nil
 }
 
-// Update cascade data to linq
+/**
+* UpdateCascade method to use in linq
+* @return error
+**/
 func (c *Lcommand) UpdateCascade() error {
 	return nil
 }
 
-// Delete cascade data to linq
+/**
+* DeleteCascade method to use in linq
+* @return error
+**/
 func (c *Lcommand) DeleteCascade() error {
 	return nil
 }
 
-// Insert method to use in linq
+/**
+* Insert method to use in linq
+* @return error
+**/
 func (m *Model) Insert(data et.Json) *Linq {
 	l := From(m)
 	l.TypeQuery = TpCommand
@@ -510,7 +531,10 @@ func (m *Model) Insert(data et.Json) *Linq {
 	return l
 }
 
-// Update method to use in linq
+/**
+* Update method to use in linq
+* @return error
+**/
 func (m *Model) Update(data et.Json) *Linq {
 	l := From(m)
 	l.TypeQuery = TpCommand
@@ -522,8 +546,11 @@ func (m *Model) Update(data et.Json) *Linq {
 	return l
 }
 
-// Update or insert method to use in linq
-func (m *Model) Upsert(data et.Json) *Linq {
+/**
+* UpSert method to use in linq
+* @return error
+**/
+func (m *Model) UpSert(data et.Json) *Linq {
 	l := From(m)
 	l.TypeQuery = TpCommand
 	l.Command.From = l.Froms[0]
@@ -534,7 +561,10 @@ func (m *Model) Upsert(data et.Json) *Linq {
 	return l
 }
 
-// Delete method to use in linq
+/**
+* Delete method to use in linq
+* @return error
+**/
 func (m *Model) Delete() *Linq {
 	l := From(m)
 	l.TypeQuery = TpCommand

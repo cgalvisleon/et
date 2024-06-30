@@ -46,7 +46,7 @@ func defineModels(db *sql.DB) (string, error) {
 * @param data et.Json
 * @return error
 **/
-func (d *Postgres) UpSetModel(main, name, kind string, version int, data et.Json) (et.Item, error) {
+func (d *Postgres) UpSertModel(main, name, kind string, version int, data et.Json) (et.Item, error) {
 	sql := `
 	INSERT INTO core.MODELS AS A (MAIN, NAME, KIND, VERSION, _DATA)
 	SELECT $1, $2, $3, $4, $5

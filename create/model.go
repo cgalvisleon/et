@@ -673,7 +673,7 @@ func UpSert$2(project_id, id string, data et.Json) (et.Item, error) {
 	id = utility.GenId(id)
 	data["project_id"] = project_id
 	data["_id"] = id
-	return $2.Upsert(data).
+	return $2.UpSert(data).
 		Where($2.Column("_id").Eq(id)).
 		CommandOne()
 }

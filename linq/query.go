@@ -242,7 +242,7 @@ func (l *Linq) Exec() (et.Items, error) {
 			return et.Items{}, err
 		}
 	case TpUdsert:
-		err := c.Upsert()
+		err := c.UpSert()
 		if err != nil {
 			return et.Items{}, err
 		}

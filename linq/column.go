@@ -14,6 +14,7 @@ const (
 	TpColumn TypeColumn = iota
 	TpAtrib
 	TpDetail
+	TpConcat
 )
 
 // String return string of type column
@@ -68,6 +69,7 @@ type Column struct {
 	Hidden        bool
 	IsSourceField bool
 	Required      *Required
+	Concats       []*Lselect
 }
 
 // name return a valid name of column, table, schema or database

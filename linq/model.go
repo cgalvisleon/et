@@ -154,7 +154,6 @@ func NewModel(schema *Schema, name, description string, version int) *Model {
 
 	result := &Model{
 		Schema:            schema,
-		Db:                schema.Db,
 		Name:              name,
 		Tag:               tag,
 		Table:             table,
@@ -188,9 +187,9 @@ func NewModel(schema *Schema, name, description string, version int) *Model {
 		Version:           version,
 	}
 
-	result.DefineColum(IdTField.Low(), "_idT of the table", TpKey, TpKey.Default())
-	result.DefineColum(IndexField.Low(), "_index of the table", TpSerie, TpSerie.Default())
-	result.DefineColum(StateField.Low(), "_state record of the table", TpKey, "0")
+	result.DefineColumn(IdTField.Low(), "_idT of the table", TpKey, TpKey.Default())
+	result.DefineColumn(IndexField.Low(), "_index of the table", TpSerie, TpSerie.Default())
+	result.DefineColumn(StateField.Low(), "_state record of the table", TpKey, "0")
 
 	schema.AddModel(result)
 
@@ -281,19 +280,10 @@ func (m *Model) Definition() et.Json {
 
 // Set db to model
 func (m *Model) Init(db *Database) error {
-	return db.InitModel(m)
-}
-
-func (m *Model) SetDb(db *Database) {
 	m.Db = db
-	m.Schema.Db = db
-	driver := *db.Driver
-	if driver.Type() == "sqlite" {
-		m.Table = m.Name
-	}
-
 	db.GetSchema(m.Schema)
 	db.GetModel(m)
+	return db.InitModel(m)
 }
 
 // Find a column in the model

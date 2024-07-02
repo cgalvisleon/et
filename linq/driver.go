@@ -1,8 +1,6 @@
 package linq
 
 import (
-	"database/sql"
-
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -34,7 +32,7 @@ func (d TypeDriver) String() string {
 
 type Driver interface {
 	Type() string
-	Connect(params et.Json) (*sql.DB, error)
+	Connect(params et.Json) error
 	// DDL (Data Definition Language)
 	DefineSql(model *Model) string
 	MutationSql(model *Model) string

@@ -34,6 +34,11 @@ func sqlColumns(l *linq.Linq, cols ...*linq.Lselect) string {
 				def = strs.Format(`%s.%s#>>'{%s}'`, f.AS, linq.SourceField.Up(), c.Low())
 				def = strs.Format(`%s AS %s`, def, c.Up())
 				appendColumn(def)
+			} else if linq.TpConcat == c.TypeColumn {
+				def = c.Concat()
+				def = strs.Format(`CONCAT(%s)`, def)
+				def = strs.Format(`%s AS %s`, def, c.Up())
+				appendColumn(def)
 			} else if slices.Contains([]linq.TypeData{linq.TpRollup, linq.TpRelation}, c.TypeData) {
 				r := c.RelationTo
 				parent := l.NewFrom(r.Parent)
@@ -63,7 +68,12 @@ func sqlColumns(l *linq.Linq, cols ...*linq.Lselect) string {
 	return result
 }
 
-// Return json string  can you use to select or return sql
+/**
+* Return string can you use to select or return sql
+* @param l *linq.Linq
+* @param cols ...*linq.Lselect
+* @return string
+**/
 func sqlData(l *linq.Linq, cols ...*linq.Lselect) string {
 	if len(l.Froms) == 0 {
 		return ""
@@ -99,6 +109,11 @@ func sqlData(l *linq.Linq, cols ...*linq.Lselect) string {
 				} else {
 					def = strs.Format(`%s.%s#>>'{%s}'`, f.AS, linq.SourceField.Up(), c.Low())
 				}
+				def = strs.Format(`'%s', %s`, c.Low(), def)
+				appendObjects(def)
+			} else if linq.TpConcat == c.TypeColumn {
+				def = c.Concat()
+				def = strs.Format(`CONCAT(%s)`, def)
 				def = strs.Format(`'%s', %s`, c.Low(), def)
 				appendObjects(def)
 			} else if slices.Contains([]linq.TypeData{linq.TpRollup, linq.TpRelation}, c.TypeData) { // 'name', (SELECT row_to_json() FROM WUERE)

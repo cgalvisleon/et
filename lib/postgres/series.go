@@ -70,7 +70,7 @@ func (d *Postgres) NextCode(tag, format string) string {
 * @param val int
 * @return int
 **/
-func (d *Postgres) SetSerie(tag string, val int64) int64 {
+func (d *Postgres) SetSerie(tag string, val int) int64 {
 	sql := `
 	INSERT INTO core.SERIES AS A (SERIE, VALUE)
 	SELECT $1, $2

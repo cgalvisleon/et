@@ -9,7 +9,6 @@ import (
 type Schema struct {
 	Name        string
 	Description string
-	Db          *Database
 	Models      []*Model
 }
 

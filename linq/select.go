@@ -199,27 +199,27 @@ func (l *Linq) GetData(model *Model, name string) *Lselect {
 }
 
 // Select columns to use in linq
-func (m *Model) Select(sel ...any) *Linq {
+func (m *Model) Select(sel ...interface{}) *Linq {
 	l := From(m)
 
 	return l.Select(sel...)
 }
 
-func (m *Model) Distint(sel ...any) *Linq {
+func (m *Model) Distint(sel ...interface{}) *Linq {
 	l := From(m)
 
 	return l.DIstinct(sel...)
 }
 
 // Select SourceField a linq with data
-func (m *Model) Data(sel ...any) *Linq {
+func (m *Model) Data(sel ...interface{}) *Linq {
 	l := From(m)
 
 	return l.DAta(sel...)
 }
 
 // Select  columns a query
-func (l *Linq) Select(sel ...any) *Linq {
+func (l *Linq) Select(sel ...interface{}) *Linq {
 	l.Selects.Used = true
 
 	for _, col := range sel {
@@ -247,14 +247,14 @@ func (l *Linq) Select(sel ...any) *Linq {
 }
 
 // Select distinct columns a query
-func (l *Linq) DIstinct(sel ...any) *Linq {
+func (l *Linq) DIstinct(sel ...interface{}) *Linq {
 	l.Distinct = true
 
 	return l.Select(sel...)
 }
 
 // Select SourceField a linq with data
-func (l *Linq) DAta(sel ...any) *Linq {
+func (l *Linq) DAta(sel ...interface{}) *Linq {
 	l.Data.Used = true
 
 	for _, col := range sel {

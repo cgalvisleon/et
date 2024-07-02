@@ -116,7 +116,7 @@ func (c *Column) Eq(val interface{}) *Lwhere {
 }
 
 // NotEqual method to use in column
-func (c *Column) Neq(val interface{}) *Lwhere {
+func (c *Column) Neg(val interface{}) *Lwhere {
 	return Where(c, "!=", val)
 }
 

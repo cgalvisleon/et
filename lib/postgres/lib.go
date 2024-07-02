@@ -12,25 +12,15 @@ import (
 
 // Postgres struct to define a postgres database
 type Postgres struct {
-	params et.Json
+	Params et.Json
 	DB     *sql.DB
-}
-
-func Load(params et.Json) *Postgres {
-	result := &Postgres{
-		params: params,
-	}
-
-	result.Connect(result.params)
-
-	return result
 }
 
 /**
 * Type return the type of the database
 * @return string
 **/
-func (d *Postgres) Type() string {
+func (d Postgres) Type() string {
 	return linq.Postgres.String()
 }
 
@@ -40,29 +30,29 @@ func (d *Postgres) Type() string {
 * @return *sql.DB
 * @return error
 **/
-func (d *Postgres) Connect(params et.Json) (*sql.DB, error) {
+func (d Postgres) Connect(params et.Json) error {
 	if params["user"] == nil {
-		return nil, logs.Errorm("User is required")
+		logs.Errorm("User is required")
 	}
 
 	if params["password"] == nil {
-		return nil, logs.Errorm("Password is required")
+		logs.Errorm("Password is required")
 	}
 
 	if params["host"] == nil {
-		return nil, logs.Errorm("Host is required")
+		logs.Errorm("Host is required")
 	}
 
 	if params["port"] == nil {
-		return nil, logs.Errorm("Port is required")
+		logs.Errorm("Port is required")
 	}
 
 	if params["database"] == nil {
-		return nil, logs.Errorm("Database is required")
+		logs.Errorm("Database is required")
 	}
 
 	if params["app"] == nil {
-		return nil, logs.Errorm("App name is required")
+		logs.Errorm("App name is required")
 	}
 
 	driver := "postgres"
@@ -74,43 +64,43 @@ func (d *Postgres) Connect(params et.Json) (*sql.DB, error) {
 	app := params.Str("app")
 
 	connStr := strs.Format(`%s://%s:%s@%s:%d/%s?sslmode=disable&application_name=%s`, driver, user, password, host, port, database, app)
-	result, err := sql.Open(driver, connStr)
+	db, err := sql.Open(driver, connStr)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	err = result.Ping()
+	err = db.Ping()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	params.Del("password")
-	d.DB = result
-	d.params = params
-
-	_, err = defineSeries(d.DB)
+	_, err = defineSeries(db)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	_, err = defineModels(d.DB)
+	_, err = defineModels(db)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	_, err = defineSync(d.DB)
+	_, err = defineSync(db)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	_, err = defineRecycling(d.DB)
+	_, err = defineRecycling(db)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	logs.Infof("Connected to %s database %s", driver, database)
 
-	return d.DB, nil
+	params.Del("password")
+	d.DB = db
+	d.Params = params
+
+	return nil
 }
 
 /**

@@ -26,6 +26,8 @@ func ddlDefault(col *linq.Column) string {
 		result = `''`
 	case linq.TpMemo:
 		result = `''`
+	case linq.TpInteger:
+		result = `0`
 	case linq.TpNumber:
 		result = `0`
 	case linq.TpDate:
@@ -83,10 +85,12 @@ func ddlDefault(col *linq.Column) string {
 **/
 func ddlType(col *linq.Column) string {
 	switch col.TypeData {
-	case linq.TpKey, linq.TpRelation, linq.TpRollup, linq.TpStatus, linq.TpPhone, linq.TpSelect, linq.TpMultiSelect:
+	case linq.TpKey, linq.TpRelation, linq.TpRollup, linq.TpStatus, linq.TpPhone, linq.TpSelect, linq.TpMultiSelect, linq.TpCode:
 		return "VARCHAR(80)"
 	case linq.TpMemo:
 		return "TEXT"
+	case linq.TpInteger:
+		return "BIGINT"
 	case linq.TpNumber:
 		return "DECIMAL(18, 2)"
 	case linq.TpDate:

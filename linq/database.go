@@ -12,6 +12,7 @@ import (
 * Database struct to define a database
 **/
 type Database struct {
+	Index       int
 	Name        string
 	Description string
 	DB          *sql.DB
@@ -29,24 +30,30 @@ type Database struct {
 * @param drive Driver
 * @return *Database
 **/
-func NewDatabase(name, description string, drive Driver) *Database {
+func NewDatabase(name, description string, params et.Json, driver Driver) (*Database, error) {
 	for _, v := range dbs {
 		if v.Name == strs.Uppcase(name) {
-			return v
+			return v, nil
 		}
 	}
 
+	err := driver.Connect(params)
+	if err != nil {
+		return nil, logs.Alertm(err.Error())
+	}
+
 	result := &Database{
+		Index:       len(dbs) + 1,
 		Name:        strs.Lowcase(name),
 		Description: description,
-		Driver:      &drive,
+		Driver:      &driver,
 		Schemes:     []*Schema{},
 		Models:      []*Model{},
 	}
 
 	dbs = append(dbs, result)
 
-	return result
+	return result, nil
 }
 
 /**
@@ -100,8 +107,6 @@ func (d *Database) InitModel(model *Model) error {
 		}
 	}
 
-	model.SetDb(d)
-
 	err := d.initModel(model)
 	if err != nil {
 		return err
@@ -115,17 +120,17 @@ func (d *Database) InitModel(model *Model) error {
 * @param schema *Schema
 * @return *Schema
 **/
-func (d *Database) GetSchema(val *Schema) *Schema {
+func (d *Database) GetSchema(schema *Schema) *Schema {
 	for _, v := range d.Schemes {
-		if v == val {
+		if v == schema {
 			return v
 		}
 	}
 
-	d.Schemes = append(d.Schemes, val)
-	schemas = append(schemas, val)
+	d.Schemes = append(d.Schemes, schema)
+	schemas = append(schemas, schema)
 
-	return val
+	return schema
 }
 
 /**
@@ -133,17 +138,22 @@ func (d *Database) GetSchema(val *Schema) *Schema {
 * @param model *Model
 * @return *Model
 **/
-func (d *Database) GetModel(val *Model) *Model {
+func (d *Database) GetModel(model *Model) *Model {
 	for _, v := range d.Models {
-		if v == val {
+		if v == model {
 			return v
 		}
 	}
 
-	d.Models = append(d.Models, val)
-	models = append(models, val)
+	model.Db = d
+	driver := *d.Driver
+	if driver.Type() == "sqlite" {
+		model.Table = model.Name
+	}
+	d.Models = append(d.Models, model)
+	models = append(models, model)
 
-	return val
+	return model
 }
 
 /**
@@ -156,26 +166,6 @@ func (d *Database) Model(name string) *Model {
 		if strs.Uppcase(v.Name) == strs.Uppcase(name) {
 			return v
 		}
-	}
-
-	return nil
-}
-
-/**
-* Connected to database
-* @param params et.Json
-* @return error
-**/
-func (d *Database) Connected(params et.Json) error {
-	if d.Driver == nil {
-		return logs.Errorm("Driver is required")
-	}
-
-	var err error
-	driver := *d.Driver
-	d.DB, err = driver.Connect(params)
-	if err != nil {
-		return err
 	}
 
 	return nil

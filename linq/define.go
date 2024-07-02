@@ -4,16 +4,30 @@ import (
 	"github.com/cgalvisleon/et/strs"
 )
 
-// DefineColumn define a column in the model
-func (m *Model) DefineColum(name, description string, typeData TypeData, _default interface{}) *Column {
+/**
+ * Define column define a column in the model
+ * @param name string
+ * @param description string
+ * @param typeData TypeData
+ * @param _default interface{}
+ * @return *Column
+**/
+func (m *Model) DefineColumn(name, description string, typeData TypeData, _default interface{}) *Column {
 	return newColumn(m, name, description, TpColumn, typeData, _default)
 }
 
-// DefineAtrib define a atrib in the model
+/**
+ * Define atrib define a atrib in the model
+ * @param name string
+ * @param description string
+ * @param typeData TypeData
+ * @param _default interface{}
+ * @return *Column
+**/
 func (m *Model) DefineAtrib(name, description string, typeData TypeData, _default interface{}) *Column {
 	source := COlumn(m, SourceField.Low())
 	if source == nil {
-		_ = m.DefineColum(SourceField.Low(), "Source field", TpJson, TpJson.Default())
+		_ = m.DefineColumn(SourceField.Low(), "Source field", TpJson, TpJson.Default())
 	}
 
 	result := newColumn(m, name, description, TpAtrib, typeData, _default)
@@ -21,7 +35,13 @@ func (m *Model) DefineAtrib(name, description string, typeData TypeData, _defaul
 	return result
 }
 
-// Define a detail collumn to the model
+/**
+ * Define detail define a detail in the model
+ * @param name string
+ * @param description string
+ * @param _default interface{}
+ * @return *Column
+**/
 func (m *Model) DefineDetail(name, description string, _default interface{}, funcDetail FuncDetail) *Column {
 	result := newColumn(m, name, description, TpDetail, TpFunction, _default)
 	result.FuncDetail = funcDetail
@@ -31,7 +51,16 @@ func (m *Model) DefineDetail(name, description string, _default interface{}, fun
 	return result
 }
 
-// Define reference to object in the model
+/**
+ * Define relation to object in the model
+ * @param name string
+ * @param foreignKey []string
+ * @param parentModel *Model
+ * @param parentKey []string
+ * @param _select []string
+ * @param tpCalculate TpCaculate
+ * @return *Column
+**/
 func (m *Model) DefineRelation(name string, foreignKey []string, parentModel *Model, parentKey []string, _select []string, tpCalculate TpCaculate) *Column {
 	result := newColumn(m, name, "", TpDetail, TpRelation, TpRelation.Default())
 	if result == nil {
@@ -53,7 +82,15 @@ func (m *Model) DefineRelation(name string, foreignKey []string, parentModel *Mo
 	return result
 }
 
-// Define reference to object in the model
+/**
+ * Define rollup in the model
+ * @param name string
+ * @param foreignKey []string
+ * @param parentModel *Model
+ * @param parentKey []string
+ * @param _select string
+ * @return *Column
+**/
 func (m *Model) DefineRollup(name string, foreignKey []string, parentModel *Model, parentKey []string, _select string) *Column {
 	result := newColumn(m, name, "", TpDetail, TpRollup, TpRollup.Default())
 	if result == nil {
@@ -75,21 +112,37 @@ func (m *Model) DefineRollup(name string, foreignKey []string, parentModel *Mode
 	return result
 }
 
-// Define index in the model
-func (m *Model) DefineIndex(name string, asc bool) *Model {
-	m.AddIndex(name, asc)
+/**
+ * Define index in the model
+ * @param name []string
+ * @param asc bool
+ * @return *Model
+**/
+func (m *Model) DefineIndex(name []string, asc bool) *Model {
+	for _, v := range name {
+		m.AddIndex(v, asc)
+	}
 
 	return m
 }
 
-// Define unique index in the model
+/**
+ * Define unique in the model
+ * @param name string
+ * @param asc bool
+ * @return *Model
+**/
 func (m *Model) DefineUnique(name string, asc bool) *Model {
 	m.AddUnique(name, asc)
 
 	return m
 }
 
-// Define hidden columns in the model
+/**
+ * Define hidden columns in the model
+ * @param cols []string
+ * @return *Model
+**/
 func (m *Model) DefineHidden(cols []string) *Model {
 	for _, v := range cols {
 		col := COlumn(m, v)
@@ -101,17 +154,28 @@ func (m *Model) DefineHidden(cols []string) *Model {
 	return m
 }
 
-// Define required columns in the model
-func (m *Model) DefineRequired(col string, msg string) *Model {
-	column := COlumn(m, col)
-	if column != nil {
-		column.SetRequired(true, msg)
+/**
+ * Define required columns in the model
+ * @param col string
+ * @param msg string
+ * @return *Model
+**/
+func (m *Model) DefineRequired(cols []ColRequired) *Model {
+	for _, def := range cols {
+		column := COlumn(m, def.Name)
+		if column != nil {
+			column.SetRequired(true, def.Message)
+		}
 	}
 
 	return m
 }
 
-// Define primary key in the model
+/**
+ * Define primary key in the model
+ * @param cols []string
+ * @return *Model
+**/
 func (m *Model) DefinePrimaryKey(cols []string) *Model {
 	for _, v := range cols {
 		m.AddPrimaryKey(v)
@@ -120,7 +184,13 @@ func (m *Model) DefinePrimaryKey(cols []string) *Model {
 	return m
 }
 
-// Define foreign key in the model
+/**
+ * Define foreign key in the model
+ * @param foreignKey []string
+ * @param parentModel *Model
+ * @param parentKey []string
+ * @return *Model
+**/
 func (m *Model) DefineForeignKey(foreignKey []string, parentModel *Model, parentKey []string) *Model {
 	for i, key := range foreignKey {
 		foreignKey[i] = strs.Uppcase(key)
@@ -133,7 +203,12 @@ func (m *Model) DefineForeignKey(foreignKey []string, parentModel *Model, parent
 	return m
 }
 
-// Define a sql column to the model
+/**
+ * Define formula in the model
+ * @param name string
+ * @param formula string
+ * @return *Column
+**/
 func (m *Model) DefineFormula(name, formula string) *Column {
 	result := newColumn(m, name, "", TpDetail, TpFormula, *TpFormula.Definition())
 	result.Formula = formula
@@ -141,6 +216,11 @@ func (m *Model) DefineFormula(name, formula string) *Column {
 	return result
 }
 
+/**
+ * Define trigger in the model
+ * @param event TypeTrigger
+ * @param trigger Trigger
+**/
 func (m *Model) DefineTrigger(event TypeTrigger, trigger Trigger) {
 	switch event {
 	case BeforeInsert:
@@ -156,4 +236,12 @@ func (m *Model) DefineTrigger(event TypeTrigger, trigger Trigger) {
 	case AfterDelete:
 		m.AfterDelete = append(m.AfterDelete, trigger)
 	}
+}
+
+/**
+ * Define integrity in the model
+ * @param integrity bool
+**/
+func (m *Model) DefineIntegrity(integrity bool) {
+	m.Integrity = integrity
 }

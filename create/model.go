@@ -263,11 +263,12 @@ func eventAction(m message.Message) {
 const modelModel = `package $1
 
 import (
+	"github.com/cgalvisleon/et/linq"
 	"github.com/cgalvisleon/et/logs"
 )
 
-func initModels() error {
-	if err := Define$2(); err != nil {
+func initModels(db *linq.Database) error {
+	if err := Define$2(db); err != nil {
 		return logs.Panic(err)
 	}
 
@@ -283,7 +284,7 @@ var $2 *linq.Schema
 
 func defineSchema() error {
 	if $2 == nil {
-		$2 = linq.NewSchema(0, "$3", true, false, true)
+		$2 = linq.NewSchema("$3", "")
 	}
 
 	return nil
@@ -357,9 +358,12 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/linq"
 )
 
-type Controller struct{}
+type Controller struct {
+	Db *linq.Database
+}
 
 func (c *Controller) Version(ctx context.Context) (et.Json, error) {
 	company := envar.GetStr("", "COMPANY")
@@ -378,7 +382,7 @@ func (c *Controller) Version(ctx context.Context) (et.Json, error) {
 }
 
 func (c *Controller) Init(ctx context.Context) {
-	initModels()
+	initModels(c.DB)
 	initEvents()
 }
 
@@ -394,12 +398,12 @@ import (
 	"context"
 
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/jdb"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/linq"
 )
 
 type Controller struct {
-	Db *jdb.Conn
+	Db *linq.Database
 }
 
 func (c *Controller) Version(ctx context.Context) (et.Json, error) {
@@ -562,12 +566,10 @@ const modelDbHandler = `package $1
 import (
 	"net/http"
 
-	"github.com/cgalvisleon/et/core"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/generic"
 	"github.com/cgalvisleon/et/linq"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/go-chi/chi/v5"
@@ -575,7 +577,7 @@ import (
 
 var $2 *linq.Model
 
-func Define$2() error {
+func Define$2(db *linq.Database) error {
 	if err := defineSchema(); err != nil {
 		return logs.Panic(err)
 	}
@@ -585,15 +587,15 @@ func Define$2() error {
 	}
 
 	$2 = linq.NewModel($3, "$4", "Tabla", 1)
-	$2.DefineColum("date_make", "", "TIMESTAMP", "NOW()")
-	$2.DefineColum("date_update", "", "TIMESTAMP", "NOW()")
-	$2.DefineColum("_state", "", "VARCHAR(80)", utility.ACTIVE)
-	$2.DefineColum("_id", "", "VARCHAR(80)", "-1")
-	$2.DefineColum("project_id", "", "VARCHAR(80)", "-1")
-	$2.DefineColum("name", "", "VARCHAR(250)", "")
-	$2.DefineColum("description", "", "TEXT", "")
-	$2.DefineColum("_data", "", "JSONB", "{}")
-	$2.DefineColum("index", "", "INTEGER", 0)
+	$2.DefineColumn("date_make", "", linq.TpDate, "NOW()")
+	$2.DefineColumn("date_update", "", linq.TpDate, "NOW()")
+	$2.DefineColumn("_state", "", linq.TpStatus, utility.ACTIVE)
+	$2.DefineColumn("_id", "", linq.TpKey, "-1")
+	$2.DefineColumn("project_id", "", linq.TpKey, "-1")
+	$2.DefineColumn("name", "", linq.TpText, "")
+	$2.DefineColumn("description", "", linq.TpMemo, "")
+	$2.DefineColumn("_data", "", linq.TpJson, "{}")
+	$2.DefineColumn("index", "", linq.TpSerie, 0)
 	$2.DefinePrimaryKey([]string{"_id"})
 	$2.DefineIndex([]string{
 		"date_make",
@@ -602,34 +604,37 @@ func Define$2() error {
 		"project_id",
 		"name",
 		"index",
+	}, true)
+	$2.DefineRequired([]linq.ColRequired{
+		linq.ColRequired{
+			Name:    "name",
+			Message: "Atributo requerido - (name)",
+		},
 	})
-	$2.DefineRequired([]string{
-		"name:Atributo requerido (name)",
-	})
-	$2.IntegrityAtrib(true)
-	$2.Trigger(linq.BeforeInsert, func(model *linq.Model, old, new *et.Json, data et.Json) error {
+	$2.DefineIntegrity(true)
+	$2.DefineTrigger(linq.BeforeInsert, func(model *linq.Model, old, new *et.Json, data et.Json) error {
 		return nil
 	})
-	$2.Trigger(linq.AfterInsert, func(model *linq.Model, old, new *et.Json, data et.Json) error {
+	$2.DefineTrigger(linq.AfterInsert, func(model *linq.Model, old, new *et.Json, data et.Json) error {
 		return nil
 	})
-	$2.Trigger(linq.BeforeUpdate, func(model *linq.Model, old, new *et.Json, data et.Json) error {
+	$2.DefineTrigger(linq.BeforeUpdate, func(model *linq.Model, old, new *et.Json, data et.Json) error {
 		return nil
 	})
-	$2.Trigger(linq.AfterUpdate, func(model *linq.Model, old, new *et.Json, data et.Json) error {
+	$2.DefineTrigger(linq.AfterUpdate, func(model *linq.Model, old, new *et.Json, data et.Json) error {
 		return nil
 	})
-	$2.Trigger(linq.BeforeDelete, func(model *linq.Model, old, new *et.Json, data et.Json) error {
+	$2.DefineTrigger(linq.BeforeDelete, func(model *linq.Model, old, new *et.Json, data et.Json) error {
 		return nil
 	})
-	$2.Trigger(linq.AfterDelete, func(model *linq.Model, old, new *et.Json, data et.Json) error {
+	$2.DefineTrigger(linq.AfterDelete, func(model *linq.Model, old, new *et.Json, data et.Json) error {
 		return nil
 	})
 	$2.OnListener = func(data et.Json) {
 		logs.Debug(data.ToString())
 	}
 	
-	if err := core.InitModel($2); err != nil {
+	if err := $2.Init(db); err != nil {
 		return logs.Panic(err)
 	}
 
@@ -675,7 +680,7 @@ func UpSert$2(project_id, id string, data et.Json) (et.Item, error) {
 	data["_id"] = id
 	return $2.UpSert(data).
 		Where($2.Column("_id").Eq(id)).
-		CommandOne()
+		ExecOne()
 }
 
 func State$2(id, state string) (et.Item, error) {
@@ -707,7 +712,7 @@ func State$2(id, state string) (et.Item, error) {
 		"_state":   state,
 	}).
 		Where($2.Column("_id").Eq(id)).
-		CommandOne()	
+		ExecOne()	
 }
 
 func Delete$2(id string) (et.Item, error) {
@@ -725,7 +730,7 @@ func All$2(project_id, state, search string, page, rows int, _select string) (et
 		return $2.Data(_select).
 			Where($2.Column("project_id").In("-1", project_id)).
 			And($2.Concat("NAME:", $2.Column("name"), "DESCRIPTION:", $2.Column("description"), "DATA:", $2.Column("_data"), ":").Like("%"+search+"%")).
-			OrderBy($2.Column("name"), true).
+			OrderBy($2.Column("name")).
 			List(page, rows)
 	} else if auxState == "*" {
 		state = utility.FOR_DELETE
@@ -733,19 +738,19 @@ func All$2(project_id, state, search string, page, rows int, _select string) (et
 		return $2.Data(_select).
 			Where($2.Column("_state").Neg(state)).
 			And($2.Column("project_id").In("-1", project_id)).
-			OrderBy($2.Column("name"), true).
+			OrderBy($2.Column("name")).
 			List(page, rows)
 	} else if auxState == "0" {
 		return $2.Data(_select).
 			Where($2.Column("_state").In("-1", state)).
 			And($2.Column("project_id").In("-1", project_id)).
-			OrderBy($2.Column("name"), true).
+			OrderBy($2.Column("name")).
 			List(page, rows)
 	} else {
 		return $2.Data(_select).
 			Where($2.Column("_state").Eq(state)).
 			And($2.Column("project_id").In("-1", project_id)).
-			OrderBy($2.Column("name"), true).
+			OrderBy($2.Column("name")).
 			List(page, rows)
 	}
 }

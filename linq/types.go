@@ -12,11 +12,12 @@ const (
 	TpKey TypeData = iota
 	TpText
 	TpMemo
+	TpInteger
 	TpNumber
 	TpSelect
 	TpMultiSelect
 	TpStatus
-	TpDate
+	TpDate // Date & Time
 	TpPerson
 	TpFile // files & media
 	TpCheckbox
@@ -35,6 +36,7 @@ const (
 	TpJson
 	TpArray
 	TpSerie
+	TpCode
 )
 
 func (t TypeData) String() string {
@@ -45,6 +47,8 @@ func (t TypeData) String() string {
 		return "Text"
 	case TpMemo:
 		return "Memo"
+	case TpInteger:
+		return "Integer"
 	case TpNumber:
 		return "Number"
 	case TpSelect:
@@ -91,6 +95,8 @@ func (t TypeData) String() string {
 		return "Array"
 	case TpSerie:
 		return "Serie"
+	case TpCode:
+		return "Code"
 	default:
 		return "Unknown"
 	}
@@ -104,6 +110,8 @@ func (t TypeData) Default() interface{} {
 		return ""
 	case TpMemo:
 		return ""
+	case TpInteger:
+		return 0
 	case TpNumber:
 		return 0
 	case TpSelect:
@@ -159,6 +167,8 @@ func (t TypeData) Default() interface{} {
 		return []et.Json{}
 	case TpSerie:
 		return 0
+	case TpCode:
+		return "000000"
 	default:
 		return ""
 	}
@@ -166,7 +176,7 @@ func (t TypeData) Default() interface{} {
 
 func (t TypeData) Indexed() bool {
 	switch t {
-	case TpKey, TpSelect, TpMultiSelect, TpStatus, TpDate, TpPerson, TpCheckbox, TpURL, TpEmail, TpPhone, TpRelation, TpRollup, TpCreatedTime, TpCreatedBy, TpLastEditedTime, TpLastEditedBy, TpProject, TpSerie:
+	case TpKey, TpSelect, TpMultiSelect, TpStatus, TpDate, TpPerson, TpCheckbox, TpURL, TpEmail, TpPhone, TpRelation, TpRollup, TpCreatedTime, TpCreatedBy, TpLastEditedTime, TpLastEditedBy, TpProject, TpSerie, TpCode:
 		return true
 	default:
 		return false
@@ -175,7 +185,9 @@ func (t TypeData) Indexed() bool {
 
 func (t TypeData) Mutate(val interface{}) {
 	switch val.(type) {
-	case int, int8, int16, int32, int64, float32, float64:
+	case int, int8, int16, int32, int64:
+		t = TpInteger
+	case float32, float64:
 		t = TpNumber
 	case bool:
 		t = TpCheckbox
@@ -208,6 +220,12 @@ func (t TypeData) Definition() *et.Json {
 	case TpMemo:
 		return &et.Json{
 			"default": t.Default(),
+			"max":     0,
+		}
+	case TpInteger:
+		return &et.Json{
+			"default": t.Default(),
+			"min":     0,
 			"max":     0,
 		}
 	case TpNumber:
@@ -328,6 +346,11 @@ func (t TypeData) Definition() *et.Json {
 	case TpSerie:
 		return &et.Json{
 			"default": 0,
+		}
+	case TpCode:
+		return &et.Json{
+			"default": "000000",
+			"format":  "%06d",
 		}
 	}
 	return &et.Json{

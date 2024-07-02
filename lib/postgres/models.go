@@ -92,7 +92,14 @@ func (d *Postgres) GetModel(main, name, kind string) (et.Item, error) {
 	return result, nil
 }
 
-func (d *Postgres) DeleteModel(main, name, kind string) (et.Item, error) {
+/**
+* DeleteModel delete a model from the database
+* @param main string
+* @param name string
+* @param kind string
+* @return et.Item
+**/
+func (d *Postgres) DeleteModel(main, name, kind string) error {
 	sql := `
 	DELETE FROM core.MODELS
 	WHERE MAIN = $1 AND NAME = $2 AND KIND = $3
@@ -100,13 +107,8 @@ func (d *Postgres) DeleteModel(main, name, kind string) (et.Item, error) {
 
 	_, err := d.DB.Query(sql, main, name, kind)
 	if err != nil {
-		return et.Item{}, err
+		return err
 	}
 
-	return et.Item{
-		Ok: true,
-		Result: et.Json{
-			"message": "Model deleted",
-		},
-	}, nil
+	return nil
 }

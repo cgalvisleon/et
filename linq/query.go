@@ -7,10 +7,14 @@ import (
 	"github.com/cgalvisleon/et/logs"
 )
 
-// TypeQuery struct to use in linq
+/**
+* TypeQuery, type of query
+**/
 type TypeQuery int
 
-// Values for TypeQuery
+/**
+* TypeQuery, type of query
+**/
 const (
 	TpQuery TypeQuery = iota
 	TpCommand
@@ -20,7 +24,9 @@ const (
 	TpPage
 )
 
-// String method to use in linq
+/**
+* TypeQuery, return string type of query
+**/
 func (d TypeQuery) String() string {
 	switch d {
 	case TpQuery:
@@ -39,7 +45,14 @@ func (d TypeQuery) String() string {
 	return ""
 }
 
-// Query execute a query in the database
+/**
+* query
+* @parms db
+* @parms sql
+* @parms args
+* @return *sql.Rows
+* @return error
+**/
 func query(db *sql.DB, sql string, args ...any) (*sql.Rows, error) {
 	if db == nil {
 		return nil, logs.Alertm("Database is required")
@@ -53,7 +66,14 @@ func query(db *sql.DB, sql string, args ...any) (*sql.Rows, error) {
 	return rows, nil
 }
 
-// Exec execute a command in the database
+/**
+* Exec execute a command in the database
+* @parms db
+* @parms sql
+* @parms args
+* @return sql.Result
+* @return error
+**/
 func Exec(db *sql.DB, sql string, args ...any) (sql.Result, error) {
 	if db == nil {
 		return nil, logs.Alertm("Database is required")
@@ -67,7 +87,14 @@ func Exec(db *sql.DB, sql string, args ...any) (sql.Result, error) {
 	return result, nil
 }
 
-// Query execute a query in the database
+/**
+* Query execute a query in the database
+* @parms db
+* @parms sql
+* @parms args
+* @return et.Items
+* @return error
+**/
 func Query(db *sql.DB, sql string, args ...any) (et.Items, error) {
 	rows, err := query(db, sql, args...)
 	if err != nil {
@@ -80,7 +107,14 @@ func Query(db *sql.DB, sql string, args ...any) (et.Items, error) {
 	return items, nil
 }
 
-// QueryOne execute a query in the database and return one item
+/**
+* QueryOne execute a query in the database and return one item
+* @parms db
+* @parms sql
+* @parms args
+* @return et.Item
+* @return error
+**/
 func QueryOne(db *sql.DB, sql string, args ...any) (et.Item, error) {
 	items, err := Query(db, sql, args...)
 	if err != nil {
@@ -100,7 +134,14 @@ func QueryOne(db *sql.DB, sql string, args ...any) (et.Item, error) {
 	}, nil
 }
 
-// Query execute a query in the database
+/**
+* Query execute a query in the database
+* @parms db
+* @parms sql
+* @parms args
+* @return et.Items
+* @return error
+**/
 func (d *Database) Query(db *sql.DB, sql string, args ...any) (et.Items, error) {
 	_query := SQLParse(sql, args...)
 
@@ -119,7 +160,14 @@ func (d *Database) Query(db *sql.DB, sql string, args ...any) (et.Items, error) 
 	return items, nil
 }
 
-// QueryOne execute a query in the database and return one item
+/**
+* QueryOne execute a query in the database and return one item
+* @parms db
+* @parms sql
+* @parms args
+* @return et.Item
+* @return error
+**/
 func (d *Database) QueryOne(db *sql.DB, sql string, args ...any) (et.Item, error) {
 	items, err := Query(db, sql, args...)
 	if err != nil {
@@ -139,7 +187,13 @@ func (d *Database) QueryOne(db *sql.DB, sql string, args ...any) (et.Item, error
 	}, nil
 }
 
-// Return sql row to items by linq
+/**
+* Query execute a query in the database
+* @parms sql
+* @parms args
+* @return et.Items
+* @return error
+**/
 func (l *Linq) query(sql string, args ...any) (et.Items, error) {
 	if l.Db.DB == nil {
 		return et.Items{}, logs.Errorm("Connected is required")
@@ -181,7 +235,13 @@ func (l *Linq) query(sql string, args ...any) (et.Items, error) {
 	return result, nil
 }
 
-// Return sql row _date to items by linq
+/**
+* Querysource execute a query in the database
+* @parms sql
+* @parms args
+* @return et.Items
+* @return error
+**/
 func (l *Linq) querySource(sql string, args ...any) (et.Items, error) {
 	if l.Db.DB == nil {
 		return et.Items{}, logs.Errorm("Connected is required")
@@ -223,7 +283,11 @@ func (l *Linq) querySource(sql string, args ...any) (et.Items, error) {
 	return result, nil
 }
 
-// Exec method to use in linq
+/**
+* Exec execute a command in the database
+* @return et.Items
+* @return error
+**/
 func (l *Linq) Exec() (et.Items, error) {
 	if l.TypeQuery != TpCommand {
 		return et.Items{}, logs.Alertm("The query is not a command")
@@ -256,7 +320,11 @@ func (l *Linq) Exec() (et.Items, error) {
 	return *l.Result, nil
 }
 
-// ExecOne method to use in linq
+/**
+* ExecOne is a Exec function and return item
+* @return et.Item
+* @return error
+**/
 func (l *Linq) ExecOne() (et.Item, error) {
 	items, err := l.Exec()
 	if err != nil {
@@ -273,7 +341,29 @@ func (l *Linq) ExecOne() (et.Item, error) {
 	}, nil
 }
 
-// Select query
+/**
+* Go is a Exec function and return items
+* @return et.Items
+* @return error
+**/
+func (l *Linq) Go() (et.Items, error) {
+	return l.Exec()
+}
+
+/**
+* GoOne is a Exec function and return item
+* @return et.Item
+* @return error
+**/
+func (l *Linq) GoOne() (et.Item, error) {
+	return l.ExecOne()
+}
+
+/**
+* Query is a function to execute a query
+* @return et.Items
+* @return error
+**/
 func (l *Linq) Query() (et.Items, error) {
 	var err error
 	l.Sql, err = l.selectSql()
@@ -291,7 +381,11 @@ func (l *Linq) Query() (et.Items, error) {
 	return result, nil
 }
 
-// Execute query and return item
+/**
+* QueryOne is a function to execute a query and return one item
+* @return et.Item
+* @return error
+**/
 func (l *Linq) QueryOne() (et.Item, error) {
 	items, err := l.Query()
 	if err != nil {
@@ -311,14 +405,22 @@ func (l *Linq) QueryOne() (et.Item, error) {
 	}, nil
 }
 
-// Select query take n element data
+/**
+* Take is a function to select n element data
+* @return et.Items
+* @return error
+**/
 func (l *Linq) Take(n int) (et.Items, error) {
 	l.Limit = n
 
 	return l.Query()
 }
 
-// Select skip n element data
+/**
+* Skip is a function to skip n element data
+* @return et.Items
+* @return error
+**/
 func (l *Linq) Skip(n int) (et.Items, error) {
 	l.TypeQuery = TpSkip
 	l.Limit = 1
@@ -327,14 +429,31 @@ func (l *Linq) Skip(n int) (et.Items, error) {
 	return l.Query()
 }
 
-// Select query all data
+/**
+* All is a function to select all data
+* @return et.Items
+* @return error
+**/
 func (l *Linq) All() (et.Items, error) {
 	l.Limit = 0
 
 	return l.Query()
 }
 
-// Select query first data
+/**
+* Find is a function to select all data
+* @return et.Items
+* @return error
+**/
+func (l *Linq) Find() (et.Items, error) {
+	return l.All()
+}
+
+/**
+* First is a function to select first data
+* @return et.Item
+* @return error
+**/
 func (l *Linq) First() (et.Item, error) {
 	items, err := l.Take(1)
 	if err != nil {
@@ -351,7 +470,11 @@ func (l *Linq) First() (et.Item, error) {
 	}, nil
 }
 
-// Select query type last data
+/**
+* Last is a function to select last data
+* @return et.Item
+* @return error
+**/
 func (l *Linq) Last() (et.Item, error) {
 	l.TypeQuery = TpLast
 	items, err := l.Take(1)
@@ -369,7 +492,11 @@ func (l *Linq) Last() (et.Item, error) {
 	}, nil
 }
 
-// Select query type page data
+/**
+* Page is a function to select page data
+* @return et.Items
+* @return error
+**/
 func (l *Linq) Page(page, rows int) (et.Items, error) {
 	l.TypeQuery = TpPage
 	offset := (page - 1) * rows
@@ -379,7 +506,11 @@ func (l *Linq) Page(page, rows int) (et.Items, error) {
 	return l.Query()
 }
 
-// Select query list, include count, page and rows
+/**
+* List is a function to select page data and return list
+* @return et.List
+* @return error
+**/
 func (l *Linq) List(page, rows int) (et.List, error) {
 	l.TypeQuery = TpAll
 	var err error

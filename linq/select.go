@@ -137,11 +137,12 @@ func (l *Linq) GetColumn(column *Column) *Lselect {
 	}
 
 	var result *Lselect
-	if column.TypeColumn == TpDetail {
+	switch column.TypeColumn {
+	case TpDetail:
 		result = l.GetDetail(column)
-	} else if column.TypeColumn == TpAtrib {
+	case TpAtrib:
 		result = l.GetAtrib(column)
-	} else {
+	default:
 		lform := l.GetFrom(column.Model)
 		result = &Lselect{
 			Linq:       l,
@@ -216,6 +217,41 @@ func (m *Model) Data(sel ...interface{}) *Linq {
 	l := From(m)
 
 	return l.DAta(sel...)
+}
+
+func (m *Model) Count(col *Column, as string) *Linq {
+	l := From(m)
+	l.Count(col, as)
+
+	return l
+}
+
+func (m *Model) Sum(col *Column, as string) *Linq {
+	l := From(m)
+	l.Sum(col, as)
+
+	return l
+}
+
+func (m *Model) Avg(col *Column, as string) *Linq {
+	l := From(m)
+	l.Avg(col, as)
+
+	return l
+}
+
+func (m *Model) Max(col *Column, as string) *Linq {
+	l := From(m)
+	l.Max(col, as)
+
+	return l
+}
+
+func (m *Model) Min(col *Column, as string) *Linq {
+	l := From(m)
+	l.Min(col, as)
+
+	return l
 }
 
 // Select  columns a query

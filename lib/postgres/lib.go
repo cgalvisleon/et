@@ -20,7 +20,7 @@ type Postgres struct {
 * Type return the type of the database
 * @return string
 **/
-func (d Postgres) Type() string {
+func (d *Postgres) Type() string {
 	return linq.Postgres.String()
 }
 
@@ -30,7 +30,7 @@ func (d Postgres) Type() string {
 * @return *sql.DB
 * @return error
 **/
-func (d Postgres) Connect(params et.Json) error {
+func (d *Postgres) Connect(params et.Json) error {
 	if params["user"] == nil {
 		logs.Errorm("User is required")
 	}

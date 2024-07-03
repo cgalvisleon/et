@@ -35,7 +35,7 @@ git tag v0.0.2
 
 git tags
 
-go get github.com/cgalvisleon/et@v0.0.1
+go get github.com/cgalvisleon/et@v0.0.2
 ```
 
 ## Condicion de carrera

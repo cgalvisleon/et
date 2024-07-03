@@ -74,7 +74,6 @@ import (
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/jdb"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/strs"
@@ -98,12 +97,7 @@ func New() (*Server, error) {
 	if err != nil {
 		panic(err)
 	}
-
-	_, err = jdb.Load()
-	if err != nil {
-		panic(err)
-	}
-
+	
 	/**
 	* HTTP
 	**/
@@ -163,7 +157,7 @@ func (serv *Server) Start() {
 		}
 
 		svr := serv.http
-		logs.Log("Http", "Running on http://localhost%s", svr.Addr)
+		logs.Logf("Http", "Running on http://localhost%s", svr.Addr)
 		logs.Fatal(serv.http.ListenAndServe())
 	}()
 
@@ -173,7 +167,7 @@ func (serv *Server) Start() {
 		}
 
 		svr := *serv.rpc
-		logs.Log("RPC", "Running on tcp:localhost:%s", svr.Addr().String())
+		logs.Logf("RPC", "Running on tcp:localhost:%s", svr.Addr().String())
 		http.Serve(svr, nil)
 	}()
 
@@ -192,18 +186,26 @@ import (
 	"net/rpc"
 	"time"
 
+	"github.com/cgalvisleon/et/jdb"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/dimiro1/banner"
 	"github.com/go-chi/chi/v5"
-	"github.com/mattn/go-colorable"	
+	"github.com/mattn/go-colorable"
 	pkg "$1/pkg/$2"	
 )
 
 func New() http.Handler {
 	r := chi.NewRouter()
+
+	db, err := jdb.Load()
+	if err != nil {
+		panic(err)
+	}
+
 	
 	_pkg := &pkg.Router{
 		Repository: &pkg.Controller{
+			Db: db,
 		},
 	}
 
@@ -382,7 +384,7 @@ func (c *Controller) Version(ctx context.Context) (et.Json, error) {
 }
 
 func (c *Controller) Init(ctx context.Context) {
-	initModels(c.DB)
+	initModels(c.Db)
 	initEvents()
 }
 
@@ -473,7 +475,7 @@ func (rt *Router) Routes() http.Handler {
 	ctx := context.Background()
 	rt.Repository.Init(ctx)
 
-	logs.Log(PackageName, "Router version:%s", PackageVersion)
+	logs.Logf(PackageName, "Router version:%s", PackageVersion)
 	return r
 }
 
@@ -526,7 +528,7 @@ func (rt *Router) Routes() http.Handler {
 	ctx := context.Background()
 	rt.Repository.Init(ctx)
 
-	logs.Log(PackageName, "Router version:%s", PackageVersion)
+	logs.Logf(PackageName, "Router version:%s", PackageVersion)
 	return r
 }
 
@@ -606,7 +608,7 @@ func Define$2(db *linq.Database) error {
 		"index",
 	}, true)
 	$2.DefineRequired([]linq.ColRequired{
-		linq.ColRequired{
+		{
 			Name:    "name",
 			Message: "Atributo requerido - (name)",
 		},

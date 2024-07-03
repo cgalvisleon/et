@@ -8,7 +8,7 @@ import (
 // ddlSchemes return sql series ddl
 func defineSeries(db *sql.DB) (string, error) {
 	sql := `
-	CREATE SCHEMA IF NOT EXISTS linq;
+	CREATE SCHEMA IF NOT EXISTS core;
 
   CREATE TABLE IF NOT EXISTS core.SERIES(		
 		SERIE VARCHAR(250) DEFAULT '',

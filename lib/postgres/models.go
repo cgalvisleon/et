@@ -13,7 +13,7 @@ import (
 **/
 func defineModels(db *sql.DB) (string, error) {
 	sql := `
-	CREATE SCHEMA IF NOT EXISTS linq;
+	CREATE SCHEMA IF NOT EXISTS core;
 
   CREATE TABLE IF NOT EXISTS core.MODELS(
 		MAIN VARCHAR(80) DEFAULT '',
@@ -21,7 +21,7 @@ func defineModels(db *sql.DB) (string, error) {
 		KIND VARCHAR(80) DEFAULT '',
 		VERSION INT DEFAULT 1,
 		_DATA JSONB DEFAULT '{}',		
-    _INDEX BIGINT DEFAULT 0,
+    _INDEX SERIAL,
 		PRIMARY KEY(MAIN, NAME)
 	);  
 	CREATE INDEX IF NOT EXISTS MODELS_MAIN_IDX ON core.MODELS(MAIN);

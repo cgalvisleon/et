@@ -8,7 +8,7 @@ import "database/sql"
 **/
 func defineSync(db *sql.DB) (string, error) {
 	sql := `
-	CREATE SCHEMA IF NOT EXISTS linq;
+	CREATE SCHEMA IF NOT EXISTS core;
 
   CREATE TABLE IF NOT EXISTS core.SYNCS(
     DATE_MAKE TIMESTAMP DEFAULT NOW(),
@@ -18,7 +18,7 @@ func defineSync(db *sql.DB) (string, error) {
     _IDT VARCHAR(80) DEFAULT '-1',
     ACTION VARCHAR(80) DEFAULT '',
     _SYNC BOOLEAN DEFAULT FALSE,    
-    _INDEX BIGINT DEFAULT 0,
+    _INDEX SERIAL,
     PRIMARY KEY (TABLE_SCHEMA, TABLE_NAME, _IDT)
   );    
   CREATE INDEX IF NOT EXISTS SYNCS_TABLE_SCHEMA_IDX ON core.SYNCS(TABLE_SCHEMA);

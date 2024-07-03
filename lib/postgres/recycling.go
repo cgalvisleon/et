@@ -31,7 +31,7 @@ func defineRecycling(db *sql.DB) (string, error) {
   DECLARE
     CHANNEL VARCHAR(250);
   BEGIN
-    IF NEW._STATE != OLD._STATE && NEW._STATE="-2" THEN      
+    IF NEW._STATE != OLD._STATE && NEW._STATE == '-2' THEN      
       INSERT INTO core.RECYCLING(TABLE_SCHEMA, TABLE_NAME, _IDT)
       VALUES (TG_TABLE_SCHEMA, TG_TABLE_NAME, NEW._IDT);
 		ELSEIF NEW._STATE != OLD._STATE THEN

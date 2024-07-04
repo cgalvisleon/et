@@ -18,6 +18,19 @@ import (
 * @return string
 **/
 func ddlDefault(col *linq.Column) string {
+	str, ok := col.Default.(string)
+	if ok {
+		switch str {
+		case "NOW()":
+			return "DEFAULT NOW()"
+		case "FALSE":
+			return "DEFAULT FALSE"
+		case "TRUE":
+			return "DEFAULT TRUE"
+		default:
+			return strs.Format(`DEFAULT '%v'`, str)
+		}
+	}
 	var result string
 	switch col.TypeData {
 	case linq.TpKey:
@@ -64,6 +77,8 @@ func ddlDefault(col *linq.Column) string {
 		result = `''`
 	case linq.TpMultiSelect:
 		result = `''`
+	case linq.TpSource:
+		result = `'{}'`
 	case linq.TpJson:
 		result = `'{}'`
 	case linq.TpArray:
@@ -113,6 +128,8 @@ func ddlType(col *linq.Column) string {
 		return "TEXT"
 	case linq.TpFormula:
 		return "JSONB"
+	case linq.TpSource:
+		return "JSONB"
 	case linq.TpJson:
 		return "JSONB"
 	case linq.TpArray:
@@ -159,7 +176,7 @@ func ddlIndex(col *linq.Column) string {
 	name := strs.Format(`%v_%v_IDX`, strs.Uppcase(col.Table()), col.Up())
 	name = strs.Replace(name, "-", "_")
 	name = strs.Replace(name, ".", "_")
-	return strs.Format(`CREATE INDEX IF NOT EXISTS %v ON %v(%v);`, name, strs.Uppcase(col.Table()), col.Up())
+	return strs.Format(`CREATE INDEX IF NOT EXISTS %v ON %v(%v);`, name, col.Table(), col.Up())
 }
 
 /**
@@ -171,7 +188,7 @@ func ddlUnique(col *linq.Column) string {
 	name := strs.Format(`%v_%v_IDX`, strs.Uppcase(col.Table()), col.Up())
 	name = strs.Replace(name, "-", "_")
 	name = strs.Replace(name, ".", "_")
-	return strs.Format(`CREATE UNIQUE INDEX IF NOT EXISTS %v ON %v(%v);`, name, strs.Uppcase(col.Table()), col.Up())
+	return strs.Format(`CREATE UNIQUE INDEX IF NOT EXISTS %v ON %v(%v);`, name, col.Table(), col.Up())
 }
 
 /**
@@ -179,11 +196,17 @@ func ddlUnique(col *linq.Column) string {
 * @param col *linq.Column
 * @return string
 **/
-func ddlPrimaryKey(col *linq.Column) string {
-	key := strs.Replace(col.Table(), ".", "_")
-	key = strs.Replace(key, "-", "_") + "_pkey"
-	key = strs.Lowcase(key)
-	return strs.Format(`ALTER TABLE IF EXISTS %s ADD CONSTRAINT %s PRIMARY KEY (%s);`, strs.Uppcase(col.Table()), key, strings.Join(col.PrimaryKeys(), ", "))
+func ddlPrimaryKey(model *linq.Model) string {
+	primaryKeys := func() []string {
+		var result []string
+		for _, v := range model.PrimaryKeys {
+			result = append(result, v.Name)
+		}
+
+		return result
+	}
+
+	return strs.Format(`PRIMARY KEY (%s)`, strings.Join(primaryKeys(), ", "))
 }
 
 /**
@@ -197,7 +220,7 @@ func ddlForeignKeys(model *linq.Model) string {
 		key := strs.Replace(model.Table, ".", "_") + "_" + strings.Join(ref.ForeignKey, "_")
 		key = strs.Replace(key, "-", "_") + "_fkey"
 		key = strs.Lowcase(key)
-		return strs.Format(`ALTER TABLE IF EXISTS %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s(%s);`, strs.Uppcase(model.Table), key, strings.Join(ref.ForeignKey, ", "), ref.Parent.Table, strings.Join(ref.ParentKey, ", "))
+		return strs.Format(`ALTER TABLE IF EXISTS %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s(%s);`, model.Table, strs.Uppcase(key), strings.Join(ref.ForeignKey, ", "), ref.Parent.Table, strings.Join(ref.ParentKey, ", "))
 	}
 
 	return result
@@ -214,19 +237,19 @@ func ddlSetSync(model *linq.Model) string {
 	CREATE TRIGGER SYNC_INSERT
 	BEFORE INSERT ON $1
 	FOR EACH ROW
-	EXECUTE PROCEDURE linq.SYNC_INSERT();
+	EXECUTE PROCEDURE core.SYNC_INSERT();
 
 	DROP TRIGGER IF EXISTS SYNC_UPDATE ON $1 CASCADE;
 	CREATE TRIGGER SYNC_UPDATE
 	BEFORE UPDATE ON $1
 	FOR EACH ROW
-	EXECUTE PROCEDURE linq.SYNC_UPDATE();
+	EXECUTE PROCEDURE core.SYNC_UPDATE();
 
 	DROP TRIGGER IF EXISTS SYNC_DELETE ON $1 CASCADE;
 	CREATE TRIGGER SYNC_DELETE
 	BEFORE DELETE ON $1
 	FOR EACH ROW
-	EXECUTE PROCEDURE linq.SYNC_DELETE();`, strs.Uppcase(model.Table))
+	EXECUTE PROCEDURE core.SYNC_DELETE();`, model.Table)
 
 	result = strs.Replace(result, "\t", "")
 
@@ -244,7 +267,7 @@ func ddlSetRecycling(model *linq.Model) string {
 	CREATE TRIGGER RECYCLING
 	AFTER UPDATE ON $1
 	FOR EACH ROW WHEN (OLD._STATE!=NEW._STATE)
-	EXECUTE PROCEDURE linq.RECYCLING_UPDATE();`, strs.Uppcase(model.Table))
+	EXECUTE PROCEDURE core.RECYCLING_UPDATE();`, strs.Uppcase(model.Table))
 
 	result = strs.Replace(result, "\t", "")
 
@@ -260,33 +283,50 @@ func ddlTable(model *linq.Model) string {
 	var result string
 	var columns string
 	var indexs string
+	var primaryKeys string
+	var uniqueKeys string
+
+	appedColumns := func(def string) {
+		columns = strs.Append(columns, def, ",\n")
+	}
+
+	appendIndex := func(def string) {
+		indexs = strs.Append(indexs, def, "\n")
+	}
+
+	appendUniqueKey := func(def string) {
+		uniqueKeys = strs.Append(uniqueKeys, def, ", ")
+	}
+
 	for _, col := range model.Columns {
 		if col.TypeColumn == linq.TpColumn {
 			def := ddlColumn(col)
-			columns = strs.Append(def, columns, ",\n")
-			if col.PrimaryKey {
-				def = ddlPrimaryKey(col)
-				indexs = strs.Append(def, indexs, "\n")
-			} else if col.Unique {
+			appedColumns(def)
+			if col.Unique && !col.PrimaryKey {
 				def = ddlUnique(col)
-				indexs = strs.Append(def, indexs, "\n")
+				appendUniqueKey(def)
 			} else if col.Indexed {
 				def = ddlIndex(col)
-				indexs = strs.Append(def, indexs, "\n")
+				appendIndex(def)
 			}
 		}
 	}
-	schema := ddlSchema(model.Schema)
-	result = strs.Append(result, schema, "\n")
-	table := strs.Format("CREATE TABLE IF NOT EXISTS %s (\n%s);", model.Table, columns)
+	columns = strs.Append(columns, ",", "")
+	columns = strs.Append(columns, ddlPrimaryKey(model), "\n")
+	result = ddlSchema(model.Schema)
+	table := strs.Format("\nCREATE TABLE IF NOT EXISTS %s (\n%s);", model.Table, columns)
 	result = strs.Append(result, table, "\n")
+	result = strs.Append(result, primaryKeys, "\n")
+	result = strs.Append(result, uniqueKeys, "\n")
 	result = strs.Append(result, indexs, "\n\n")
 	foreign := ddlForeignKeys(model)
 	result = strs.Append(result, foreign, "\n\n")
 	sync := ddlSetSync(model)
 	result = strs.Append(result, sync, "\n\n")
-	recycle := ddlSetRecycling(model)
-	result = strs.Append(result, recycle, "\n\n")
+	if model.ColumnStatus != nil {
+		recycle := ddlSetRecycling(model)
+		result = strs.Append(result, recycle, "\n\n")
+	}
 	model.DDL = result
 
 	return result

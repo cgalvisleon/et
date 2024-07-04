@@ -26,7 +26,7 @@ const (
 )
 
 // TokenKey generate a key for the token
-func tokenKey(app, device, clientId string) string {
+func Key(app, device, clientId string) string {
 	result := strs.Append(app, device, "-")
 	result = strs.Append(result, clientId, "-")
 	return strs.Format(`token:%s`, result)

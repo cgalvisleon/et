@@ -33,6 +33,7 @@ const (
 	TpLastEditedTime
 	TpLastEditedBy
 	TpProject
+	TpSource
 	TpJson
 	TpArray
 	TpSerie
@@ -89,6 +90,8 @@ func (t TypeData) String() string {
 		return "Last edited by"
 	case TpProject:
 		return "Project"
+	case TpSource:
+		return "Source"
 	case TpJson:
 		return "Json"
 	case TpArray:
@@ -161,6 +164,8 @@ func (t TypeData) Default() interface{} {
 		}
 	case TpProject:
 		return ""
+	case TpSource:
+		return et.Json{}
 	case TpJson:
 		return et.Json{}
 	case TpArray:
@@ -333,6 +338,10 @@ func (t TypeData) Definition() *et.Json {
 	case TpProject:
 		return &et.Json{
 			"default": "",
+		}
+	case TpSource:
+		return &et.Json{
+			"default": et.Json{},
 		}
 	case TpJson:
 		return &et.Json{

@@ -309,7 +309,7 @@ func sqlReturns(l *linq.Linq) {
 	var def, result string
 	f := l.Froms[0]
 	m := f.Model
-	if m.UseSource {
+	if m.ColumnSource != nil {
 		def = sqlData(l, l.Returns.Columns...)
 	} else {
 		def = sqlColumns(l, l.Returns.Columns...)
@@ -322,7 +322,7 @@ func sqlReturns(l *linq.Linq) {
 // Build current sql used to trigger in linq
 func sqlCurrent(l *linq.Linq) {
 	var result string
-	if l.Command.From.Model.UseSource {
+	if l.Command.From.Model.ColumnSource != nil {
 		def := sqlData(l, []*linq.Lselect{}...)
 		result = strs.Append(result, def, ",\n")
 	} else {

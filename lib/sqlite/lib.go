@@ -59,9 +59,7 @@ func (d *Sqlite) Connect(params et.Json) (*sql.DB, error) {
 
 // DDLModel return the ddl to create the model
 func (d *Sqlite) DdlSql(m *linq.Model) string {
-	var result string
-
-	result = ddlTable(m)
+	result := ddlTable(m)
 
 	return result
 }

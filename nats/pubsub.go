@@ -38,6 +38,7 @@ func NewPubSub() (*PubSub, error) {
 			"name": name,
 		},
 		subscription: make(map[string]*nats.Subscription),
+		channels:     make(map[string]func(m.Message)),
 	}
 
 	_, err := result.Connect()

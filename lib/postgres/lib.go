@@ -12,8 +12,8 @@ import (
 
 // Postgres struct to define a postgres database
 type Postgres struct {
-	Params et.Json
 	DB     *sql.DB
+	Params et.Json
 }
 
 /**
@@ -30,29 +30,29 @@ func (d *Postgres) Type() string {
 * @return *sql.DB
 * @return error
 **/
-func (d *Postgres) Connect(params et.Json) error {
+func (d *Postgres) Connect(params et.Json) (*sql.DB, error) {
 	if params["user"] == nil {
-		logs.Errorm("User is required")
+		return nil, logs.Errorm("User is required")
 	}
 
 	if params["password"] == nil {
-		logs.Errorm("Password is required")
+		return nil, logs.Errorm("Password is required")
 	}
 
 	if params["host"] == nil {
-		logs.Errorm("Host is required")
+		return nil, logs.Errorm("Host is required")
 	}
 
 	if params["port"] == nil {
-		logs.Errorm("Port is required")
+		return nil, logs.Errorm("Port is required")
 	}
 
 	if params["database"] == nil {
-		logs.Errorm("Database is required")
+		return nil, logs.Errorm("Database is required")
 	}
 
 	if params["app"] == nil {
-		logs.Errorm("App name is required")
+		return nil, logs.Errorm("App name is required")
 	}
 
 	driver := "postgres"
@@ -66,41 +66,36 @@ func (d *Postgres) Connect(params et.Json) error {
 	connStr := strs.Format(`%s://%s:%s@%s:%d/%s?sslmode=disable&application_name=%s`, driver, user, password, host, port, database, app)
 	db, err := sql.Open(driver, connStr)
 	if err != nil {
-		return err
-	}
-
-	err = db.Ping()
-	if err != nil {
-		return err
+		return nil, err
 	}
 
 	_, err = defineSeries(db)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	_, err = defineModels(db)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	_, err = defineSync(db)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	_, err = defineRecycling(db)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	logs.Infof("Connected to %s database %s", driver, database)
+	logs.Logf("DB", "Connected to %s database %s", driver, database)
 
 	params.Del("password")
 	d.DB = db
 	d.Params = params
 
-	return nil
+	return d.DB, nil
 }
 
 /**
@@ -109,11 +104,9 @@ func (d *Postgres) Connect(params et.Json) error {
 * @return string
 **/
 func (d *Postgres) DefineSql(m *linq.Model) string {
-	var result string
+	result := ddlTable(m)
 
-	result = ddlTable(m)
-
-	result = strs.Format(`%s;`, result)
+	result = strs.Format(`%s`, result)
 
 	return result
 }

@@ -130,42 +130,35 @@ func newColumn(model *Model, name, description string, typeColumm TypeColumn, ty
 		IsSourceField: name == SourceField.Up(),
 	}
 
-	if !model.UseStatus {
-		model.UseStatus = result.Up() == StateField.Up()
+	if model.ColumnStatus == nil && TpStatus == typeData {
+		model.ColumnStatus = result
 	}
 
-	if !model.UseSource {
-		model.UseSource = result.Up() == SourceField.Up()
-		if model.UseSource {
-			model.Source = result
-		}
+	if model.ColumnSource == nil && TpSource == typeData {
+		model.ColumnSource = result
 	}
 
-	if !model.UseCreatedTime {
-		model.UseCreatedTime = TpCreatedTime == TpDate
+	if model.ColumnCreatedTime == nil && TpCreatedTime == typeData {
+		model.ColumnCreatedTime = result
 	}
 
-	if !model.UseCreatedBy {
-		model.UseCreatedBy = TpCreatedBy == TpDate
+	if model.ColumnCreatedBy == nil && TpCreatedBy == typeData {
+		model.ColumnCreatedBy = result
 	}
 
-	if !model.UseLastEditedTime {
-		model.UseLastEditedTime = TpLastEditedTime == TpDate
+	if model.ColumnLastEditedTime == nil && TpLastEditedTime == typeData {
+		model.ColumnLastEditedTime = result
 	}
 
-	if !model.UseLastEditedBy {
-		model.UseLastEditedBy = TpLastEditedBy == TpDate
+	if model.ColumnLastEditedBy == nil && TpLastEditedBy == typeData {
+		model.ColumnLastEditedBy = result
 	}
 
-	if !model.UseProject {
-		model.UseProject = TpProject == TpDate
+	if model.ColumnProject == nil && TpProject == typeData {
+		model.ColumnProject = result
 	}
 
 	model.AddColumn(result)
-
-	if typeData.Indexed() {
-		model.AddIndex(name, true)
-	}
 
 	return result
 }
@@ -224,16 +217,6 @@ func (c *Column) As(l *Linq) string {
 // Table return table name of column
 func (c *Column) Table() string {
 	return c.Model.Table
-}
-
-// Return name of column in array string
-func (c *Column) PrimaryKeys() []string {
-	var result []string
-	for _, v := range c.Model.PrimaryKeys {
-		result = append(result, v.Name)
-	}
-
-	return result
 }
 
 // Hidden set hidden column

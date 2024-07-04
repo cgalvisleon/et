@@ -34,7 +34,7 @@ func Load() (*linq.Database, error) {
 
 		result, err := linq.NewDatabase(name, "", params, drive)
 		if err != nil {
-			return nil, logs.Alertm(err.Error())
+			return nil, logs.Alert(err)
 		}
 
 		return result, nil

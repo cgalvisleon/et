@@ -37,15 +37,16 @@ func NewDatabase(name, description string, params et.Json, driver Driver) (*Data
 		}
 	}
 
-	err := driver.Connect(params)
+	db, err := driver.Connect(params)
 	if err != nil {
-		return nil, logs.Alertm(err.Error())
+		return nil, logs.Alert(err)
 	}
 
 	result := &Database{
 		Index:       len(dbs) + 1,
 		Name:        strs.Lowcase(name),
 		Description: description,
+		DB:          db,
 		Driver:      &driver,
 		Schemes:     []*Schema{},
 		Models:      []*Model{},
@@ -111,6 +112,9 @@ func (d *Database) InitModel(model *Model) error {
 	if err != nil {
 		return err
 	}
+
+	d.GetSchema(model.Schema)
+	d.GetModel(model)
 
 	return nil
 }
@@ -202,11 +206,7 @@ func (d *Database) initModel(model *Model) error {
 	}
 
 	if !result.Ok {
-		_, err = driver.UpSertModel(model.Schema.Name, model.Name, kind, model.Version, model.Definition())
-		if err != nil {
-			return err
-		}
-
+		model.DefineColumn(IdTField.Low(), "_idT of the table", TpKey, TpKey.Default())
 		sql := driver.DefineSql(model)
 		if d.debug {
 			logs.Debug(model.Definition().ToString())
@@ -214,6 +214,11 @@ func (d *Database) initModel(model *Model) error {
 		}
 
 		_, err = Exec(d.DB, sql)
+		if err != nil {
+			return err
+		}
+
+		_, err = driver.UpSertModel(model.Schema.Name, model.Name, kind, model.Version, model.Definition())
 		if err != nil {
 			return err
 		}

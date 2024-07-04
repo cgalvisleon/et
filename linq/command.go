@@ -195,7 +195,7 @@ func (c *Lcommand) consolidate() {
 func (c *Lcommand) query(sql string, args ...any) (et.Items, error) {
 	var items et.Items
 	var err error
-	if c.From.Model.UseSource {
+	if c.From.Model.ColumnSource != nil {
 		items, err = c.Linq.querySource(sql, args...)
 		if err != nil {
 			return et.Items{}, err

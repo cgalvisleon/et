@@ -190,7 +190,7 @@ func (h *Hub) listend(msg interface{}) {
 
 	m, err := decodeMessageBroadcat([]byte(msg.(string)))
 	if err != nil {
-		logs.Alertm(err.Error())
+		logs.Alert(err)
 		return
 	}
 

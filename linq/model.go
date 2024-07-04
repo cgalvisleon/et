@@ -7,10 +7,11 @@ import (
 	"github.com/cgalvisleon/et/strs"
 )
 
-// Type columns
+/**
+* TypeTrigger is a enum for trigger type
+**/
 type TypeTrigger int
 
-// TypeTrigger is a enum for trigger type
 const (
 	BeforeInsert TypeTrigger = iota
 	AfterInsert
@@ -20,7 +21,10 @@ const (
 	AfterDelete
 )
 
-// String return string of type trigger
+/**
+* String return string of type trigger
+* @return string
+**/
 func (t TypeTrigger) String() string {
 	switch t {
 	case BeforeInsert:
@@ -39,14 +43,19 @@ func (t TypeTrigger) String() string {
 	return ""
 }
 
-// Constraint is a struct for foreign key
+/**
+* Constraint is a struct for constraint
+**/
 type Constraint struct {
 	ForeignKey []string
 	Parent     *Model
 	ParentKey  []string
 }
 
-// Definition return a json with the definition of the constraint
+/**
+* Definition return a json with the definition of the constraint
+* @return et.Json
+**/
 func (c *Constraint) Definition() et.Json {
 	return et.Json{
 		"foreignKey": c.ForeignKey,
@@ -55,27 +64,42 @@ func (c *Constraint) Definition() et.Json {
 	}
 }
 
-// Name return a valid key name of constraint
+/**
+* Fkey return a valid name of constraint
+* @return string
+**/
 func (c *Constraint) Fkey() string {
 	return strings.Join(c.ForeignKey, "_")
 }
 
-// Name return a valid name of constraint
+/**
+* Table return a valid parent table name of constraint
+* @return string
+**/
 func (c *Constraint) Table() string {
 	return c.Parent.Table
 }
 
-// Name return a valid parent key name of constraint
+/**
+* Pkey return a valid parent key name of constraint
+* @return string
+**/
 func (c *Constraint) Pkey() string {
 	return strings.Join(c.ParentKey, "_")
 }
 
-// Index is a struct for index
+/**
+* Index is a struct for index
+**/
 type Index struct {
 	Column *Column
 	Asc    bool
 }
 
+/**
+* Definition return a json with the definition of the index
+* @return et.Json
+**/
 func (i *Index) Definition() et.Json {
 	return et.Json{
 		"column": i.Column.Name,
@@ -83,18 +107,34 @@ func (i *Index) Definition() et.Json {
 	}
 }
 
-// Trigger is a function for trigger
+/**
+* Trigger is a function for trigger
+* @param model *Model
+* @param old et.Json
+* @param new et.Json
+* @param data et.Json
+* @return error
+**/
 type Trigger func(model *Model, old, new *et.Json, data et.Json) error
 
-// Listener is a function for listener
+/**
+* Listener is a function for listener
+* @param data et.Json
+**/
 type Listener func(data et.Json)
 
-// RelationTo is a struct for relation to
+/**
+* RelationTo is a struct for relation to
+**/
 type RelationTo struct {
 	PrimaryKey *Column
 	ForeignKey *Column
 }
 
+/**
+* Definition return a json with the definition of the relation to
+* @return et.Json
+**/
 func (r *RelationTo) Definition() et.Json {
 	return et.Json{
 		"primaryKey": r.PrimaryKey.Name,
@@ -102,45 +142,54 @@ func (r *RelationTo) Definition() et.Json {
 	}
 }
 
-// Model is a struct for models in a schema
+/**
+* Model is a struct for model
+**/
 type Model struct {
-	Schema            *Schema
-	Db                *Database
-	Name              string
-	Tag               string
-	Table             string
-	Description       string
-	Columns           []*Column
-	PrimaryKeys       []*Column
-	ForeignKey        []*Constraint
-	Index             []*Index
-	Unique            []*Index
-	RelationTo        []*Column
-	Details           []*Column
-	Hidden            []*Column
-	Required          []*Column
-	Source            *Column
-	UseStatus         bool
-	UseSource         bool
-	UseCreatedTime    bool
-	UseUpdatedTime    bool
-	UseCreatedBy      bool
-	UseLastEditedTime bool
-	UseLastEditedBy   bool
-	UseProject        bool
-	BeforeInsert      []Trigger
-	AfterInsert       []Trigger
-	BeforeUpdate      []Trigger
-	AfterUpdate       []Trigger
-	BeforeDelete      []Trigger
-	AfterDelete       []Trigger
-	OnListener        Listener
-	Integrity         bool
-	DDL               string
-	Version           int
+	Schema               *Schema
+	Db                   *Database
+	Name                 string
+	Tag                  string
+	Table                string
+	Description          string
+	Columns              []*Column
+	PrimaryKeys          []*Column
+	ForeignKey           []*Constraint
+	Index                []*Index
+	Unique               []*Index
+	RelationTo           []*Column
+	Details              []*Column
+	Hidden               []*Column
+	Required             []*Column
+	Source               *Column
+	ColumnStatus         *Column
+	ColumnSource         *Column
+	ColumnCreatedTime    *Column
+	ColumnUpdatedTime    *Column
+	ColumnCreatedBy      *Column
+	ColumnLastEditedTime *Column
+	ColumnLastEditedBy   *Column
+	ColumnProject        *Column
+	BeforeInsert         []Trigger
+	AfterInsert          []Trigger
+	BeforeUpdate         []Trigger
+	AfterUpdate          []Trigger
+	BeforeDelete         []Trigger
+	AfterDelete          []Trigger
+	OnListener           Listener
+	Integrity            bool
+	DDL                  string
+	Version              int
 }
 
-// NewModel create a new model
+/**
+* NewModel create a new model
+* @param schema *Schema
+* @param name string
+* @param description string
+* @param version int
+* @return *Model
+**/
 func NewModel(schema *Schema, name, description string, version int) *Model {
 	tag := strs.Lowcase(name)
 	name = nAme(name)
@@ -153,50 +202,42 @@ func NewModel(schema *Schema, name, description string, version int) *Model {
 	}
 
 	result := &Model{
-		Schema:            schema,
-		Name:              name,
-		Tag:               tag,
-		Table:             table,
-		Description:       description,
-		Columns:           []*Column{},
-		PrimaryKeys:       []*Column{},
-		ForeignKey:        []*Constraint{},
-		Index:             []*Index{},
-		Unique:            []*Index{},
-		RelationTo:        []*Column{},
-		Details:           []*Column{},
-		Hidden:            []*Column{},
-		Required:          []*Column{},
-		Source:            nil,
-		UseStatus:         false,
-		UseSource:         false,
-		UseCreatedTime:    false,
-		UseCreatedBy:      false,
-		UseLastEditedTime: false,
-		UseLastEditedBy:   false,
-		UseProject:        false,
-		BeforeInsert:      []Trigger{},
-		AfterInsert:       []Trigger{},
-		BeforeUpdate:      []Trigger{},
-		AfterUpdate:       []Trigger{},
-		BeforeDelete:      []Trigger{},
-		AfterDelete:       []Trigger{},
-		OnListener:        nil,
-		Integrity:         false,
-		DDL:               "",
-		Version:           version,
+		Schema:       schema,
+		Name:         name,
+		Tag:          tag,
+		Table:        table,
+		Description:  description,
+		Columns:      []*Column{},
+		PrimaryKeys:  []*Column{},
+		ForeignKey:   []*Constraint{},
+		Index:        []*Index{},
+		Unique:       []*Index{},
+		RelationTo:   []*Column{},
+		Details:      []*Column{},
+		Hidden:       []*Column{},
+		Required:     []*Column{},
+		Source:       nil,
+		BeforeInsert: []Trigger{},
+		AfterInsert:  []Trigger{},
+		BeforeUpdate: []Trigger{},
+		AfterUpdate:  []Trigger{},
+		BeforeDelete: []Trigger{},
+		AfterDelete:  []Trigger{},
+		OnListener:   nil,
+		Integrity:    false,
+		DDL:          "",
+		Version:      version,
 	}
-
-	result.DefineColumn(IdTField.Low(), "_idT of the table", TpKey, TpKey.Default())
-	result.DefineColumn(IndexField.Low(), "_index of the table", TpSerie, TpSerie.Default())
-	result.DefineColumn(StateField.Low(), "_state record of the table", TpKey, "0")
 
 	schema.AddModel(result)
 
 	return result
 }
 
-// Definition return a json with the definition of the model
+/**
+* Definition return a json with the definition of the model
+* @return et.Json
+**/
 func (m *Model) Definition() et.Json {
 	var columns []et.Json = []et.Json{}
 	for _, v := range m.Columns {
@@ -264,13 +305,13 @@ func (m *Model) Definition() et.Json {
 		"hidden":            hiddens,
 		"requireds":         requireds,
 		"source":            source,
-		"useStatus":         m.UseStatus,
-		"useSource":         m.UseSource,
-		"useCreatedTime":    m.UseCreatedTime,
-		"useCreatedBy":      m.UseCreatedBy,
-		"useLastEditedTime": m.UseLastEditedTime,
-		"useLastEditedBy":   m.UseLastEditedBy,
-		"useProject":        m.UseProject,
+		"useStatus":         m.ColumnStatus != nil,
+		"useSource":         m.ColumnSource != nil,
+		"useCreatedTime":    m.ColumnCreatedTime != nil,
+		"useCreatedBy":      m.ColumnCreatedBy != nil,
+		"useLastEditedTime": m.ColumnLastEditedTime != nil,
+		"useLastEditedBy":   m.ColumnLastEditedBy != nil,
+		"useProject":        m.ColumnProject != nil,
 		"integrity":         m.Integrity,
 		"version":           m.Version,
 	}
@@ -278,15 +319,21 @@ func (m *Model) Definition() et.Json {
 	return result
 }
 
-// Set db to model
+/**
+* Init a model
+* @param db *Database
+* @return error
+**/
 func (m *Model) Init(db *Database) error {
 	m.Db = db
-	db.GetSchema(m.Schema)
-	db.GetModel(m)
 	return db.InitModel(m)
 }
 
-// Find a column in the model
+/**
+* Column add a column to the model
+* @param name string
+* @return *Column
+**/
 func (m *Model) Column(name string) *Column {
 	idx := IndexColumn(m, name)
 	if idx != -1 {
@@ -296,21 +343,38 @@ func (m *Model) Column(name string) *Column {
 	return nil
 }
 
-// Method short to find a column in the model
+/**
+* Col short to find a column in the model
+* @param name string
+* @return *Column
+**/
 func (m *Model) Col(name string) *Column {
 	return m.Column(name)
 }
 
-// Method short to find a column in the model
+/**
+* C short to find a column in the model
+* @param name string
+* @return *Column
+**/
 func (m *Model) C(name string) *Column {
 	return m.Column(name)
 }
 
+/**
+* AddColumn add a column to the model
+* @param col *Column
+**/
 func (m *Model) AddColumn(col *Column) {
 	m.Columns = append(m.Columns, col)
 }
 
-// Add unique column by name to the model
+/**
+* AddUnique add unique column by name to the model
+* @param name string
+* @param asc bool
+* @return *Column
+**/
 func (m *Model) AddUnique(name string, asc bool) *Column {
 	col := COlumn(m, name)
 	if col != nil {
@@ -326,7 +390,12 @@ func (m *Model) AddUnique(name string, asc bool) *Column {
 	return nil
 }
 
-// Add index column by name to the model
+/**
+* AddIndex add index column by name to the model
+* @param name string
+* @param asc bool
+* @return *Column
+**/
 func (m *Model) AddIndex(name string, asc bool) *Column {
 	col := COlumn(m, name)
 	if col != nil {
@@ -342,7 +411,11 @@ func (m *Model) AddIndex(name string, asc bool) *Column {
 	return nil
 }
 
-// Add primary key column to the model
+/**
+* AddPrimaryKey add primary key column by name to the model
+* @param name string
+* @return *Column
+**/
 func (m *Model) AddPrimaryKey(name string) *Column {
 	col := COlumn(m, name)
 	if col != nil {
@@ -356,7 +429,13 @@ func (m *Model) AddPrimaryKey(name string) *Column {
 	return nil
 }
 
-// Add foreign key to the model
+/**
+* AddForeignKey add foreign key column by name to the model
+* @param foreignKey []string
+* @param parentModel *Model
+* @param parentKey []string
+* @return *Constraint
+**/
 func (m *Model) AddForeignKey(foreignKey []string, parentModel *Model, parentKey []string) *Constraint {
 	for _, v := range m.ForeignKey {
 		if v.Fkey() == strings.Join(foreignKey, "_") {
@@ -392,6 +471,10 @@ func (m *Model) AddForeignKey(foreignKey []string, parentModel *Model, parentKey
 	return result
 }
 
+/**
+* AddRelationTo add relation to column to the model
+* @param col *Column
+**/
 func (m *Model) AddRelationTo(col *Column) {
 	for _, v := range m.RelationTo {
 		if v == col {

@@ -62,14 +62,14 @@ func (p *PubSub) read() {
 		for {
 			_, data, err := p.socket.ReadMessage()
 			if err != nil {
-				logs.Alertm(err.Error())
+				logs.Alert(err)
 				p.connected = false
 				return
 			}
 
 			msg, err := DecodeMessage(data)
 			if err != nil {
-				logs.Alertm(err.Error())
+				logs.Alert(err)
 				return
 			}
 

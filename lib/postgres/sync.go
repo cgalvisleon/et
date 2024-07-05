@@ -6,7 +6,7 @@ import "database/sql"
 * defineSync return sql syncs ddl
 * @return string
 **/
-func defineSync(db *sql.DB) (string, error) {
+func defineSync(db *sql.DB) error {
 	sql := `
 	CREATE SCHEMA IF NOT EXISTS core;
 
@@ -46,7 +46,7 @@ func defineSync(db *sql.DB) (string, error) {
         'option', TG_OP,        
         '_idt', NEW._IDT
       )::text
-      );      
+      );
     END IF;
 
   RETURN NEW;
@@ -120,8 +120,8 @@ func defineSync(db *sql.DB) (string, error) {
 
 	_, err := db.Exec(sql)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	return sql, nil
+	return nil
 }

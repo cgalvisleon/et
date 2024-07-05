@@ -219,18 +219,7 @@ func (l *Linq) query(sql string, args ...any) (et.Items, error) {
 	}
 	defer rows.Close()
 
-	var result et.Items
-	for rows.Next() {
-		var item et.Item
-		item.Scan(rows)
-		for _, col := range l.Details.Columns {
-			col.FuncDetail(&item.Result)
-		}
-
-		result.Result = append(result.Result, item.Result)
-		result.Ok = true
-		result.Count++
-	}
+	result := RowsItems(rows)
 
 	return result, nil
 }
@@ -267,7 +256,7 @@ func (l *Linq) querySource(sql string, args ...any) (et.Items, error) {
 	}
 	defer rows.Close()
 
-	var result et.Items
+	var result et.Items = et.Items{}
 	for rows.Next() {
 		var item et.Item
 		item.Scan(rows)

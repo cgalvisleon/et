@@ -63,6 +63,19 @@ func RowsItems(rows *sql.Rows) et.Items {
 	return result
 }
 
+func RowsItem(rows *sql.Rows) et.Item {
+	items := RowsItems(rows)
+
+	if items.Count == 0 {
+		return et.Item{}
+	}
+
+	return et.Item{
+		Ok:     items.Ok,
+		Result: items.Result[0],
+	}
+}
+
 // rowsItems return a items from a sql query
 func DataItems(rows *sql.Rows, sourceField string) et.Items {
 	var result et.Items = et.Items{Result: []et.Json{}}

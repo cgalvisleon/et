@@ -15,7 +15,7 @@ func main() {
 	}
 
 	if wsc == nil {
-		logs.Fatal("Error al crear el cliente websocket.")
+		logs.Fatalm("Error al crear el cliente websocket.")
 	}
 
 	// wsc.Publish("helo", "Hola mundo")

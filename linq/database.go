@@ -205,6 +205,8 @@ func (d *Database) initModel(model *Model) error {
 		return err
 	}
 
+	logs.Debug(result.ToString())
+
 	if !result.Ok {
 		model.DefineColumn(IdTField.Low(), "_idT of the table", TpKey, TpKey.Default())
 		sql := driver.DefineSql(model)
@@ -218,7 +220,7 @@ func (d *Database) initModel(model *Model) error {
 			return err
 		}
 
-		_, err = driver.UpSertModel(model.Schema.Name, model.Name, kind, model.Version, model.Definition())
+		err = driver.InsertModel(model.Schema.Name, model.Name, kind, model.Version, model.Definition())
 		if err != nil {
 			return err
 		}
@@ -228,11 +230,6 @@ func (d *Database) initModel(model *Model) error {
 
 	version := result.Int("version")
 	if version < model.Version {
-		_, err = driver.UpSertModel(model.Schema.Name, model.Name, kind, model.Version, model.Definition())
-		if err != nil {
-			return err
-		}
-
 		sql := driver.MutationSql(model)
 		if d.debug {
 			logs.Debug(model.Definition().ToString())
@@ -240,6 +237,11 @@ func (d *Database) initModel(model *Model) error {
 		}
 
 		_, err = Exec(d.DB, sql)
+		if err != nil {
+			return err
+		}
+
+		err = driver.UpdateModel(model.Schema.Name, model.Name, kind, model.Version, model.Definition())
 		if err != nil {
 			return err
 		}

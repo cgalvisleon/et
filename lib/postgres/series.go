@@ -3,10 +3,13 @@ package lib
 import (
 	"database/sql"
 	"fmt"
+	"sync"
+
+	"github.com/cgalvisleon/et/linq"
 )
 
 // ddlSchemes return sql series ddl
-func defineSeries(db *sql.DB) (string, error) {
+func defineSeries(db *sql.DB) error {
 	sql := `
 	CREATE SCHEMA IF NOT EXISTS core;
 
@@ -18,37 +21,143 @@ func defineSeries(db *sql.DB) (string, error) {
 
 	_, err := db.Exec(sql)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	return sql, nil
+	return nil
+}
+
+/**
+* insertSerie insert a serie
+* @param db *sql.DB
+* @param tag string
+* @param val int
+* @param lock *sync.RWMutex
+* @return error
+**/
+func insertSerie(db *sql.DB, tag string, val int, lock *sync.RWMutex) (int, error) {
+	defer lock.Unlock()
+	lock.Lock()
+
+	sql := `
+	INSERT INTO core.SERIES (SERIE, VALUE)
+	VALUES ($1, $2);`
+
+	_, err := db.Exec(sql, tag, val)
+	if err != nil {
+		return 0, err
+	}
+
+	return val, nil
+}
+
+/**
+* currentSerie return the current value of a serie
+* @param db *sql.DB
+* @param tag string
+* @param lock *sync.RWMutex
+* @return int
+**/
+func currentSerie(db *sql.DB, tag string, lock *sync.RWMutex) (int, error) {
+	defer lock.RUnlock()
+	lock.RLock()
+
+	sql := `
+	SELECT VALUE INTO result
+	FROM core.SERIES
+	WHERE SERIE = $1 LIMIT 1;`
+
+	rows, err := db.Query(sql, tag)
+	if err != nil {
+		return 0, err
+	}
+
+	defer rows.Close()
+
+	item := linq.RowsItem(rows)
+	if !item.Ok {
+		result, err := insertSerie(db, tag, 1, lock)
+		if err != nil {
+			return 0, err
+		}
+
+		return result, nil
+	}
+
+	result := item.Int("result")
+
+	return result, nil
+}
+
+/**
+* nextSerie return the next value of a serie
+* @param db *sql.DB
+* @param tag string
+* @param lock *sync.RWMutex
+* @return int
+**/
+func nextSerie(db *sql.DB, tag string, lock *sync.RWMutex) (int, error) {
+	defer lock.Unlock()
+	lock.Lock()
+
+	current, err := currentSerie(db, tag, lock)
+	if err != nil {
+		return 0, err
+	}
+
+	sql := `
+	UPDATE core.SERIES SET	
+	VALUE = $2
+	WHERE SERIE = $1
+	RETERNING VALUE INTO result;`
+
+	result := current + 1
+	_, err = db.Exec(sql, tag, result)
+	if err != nil {
+		return 0, err
+	}
+
+	return result, nil
+}
+
+/**
+* deleteSerie delete a serie
+* @param db *sql.DB
+* @param tag string
+* @param lock *sync.RWMutex
+* @return error
+**/
+func deleteSerie(db *sql.DB, tag string, lock *sync.RWMutex) error {
+	defer lock.Unlock()
+	lock.Lock()
+
+	sql := `
+	DELETE FROM core.SERIES
+	WHERE SERIE = $1
+	RETURNING VALUE INTO result;`
+
+	_, err := db.Exec(sql, tag)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 /**
 * NextSerie return the next value of a serie
 * @param tag string
-* @return string
+* @return int
+* @return error
 **/
-func (d *Postgres) NextSerie(tag string) int64 {
-	sql := `
-	INSERT INTO core.SERIES AS A (SERIE, VALUE)
-	SELECT $1, 1
-	ON CONFLICT (SERIE) DO UPDATE SET
-	VALUE = A.VALUE + 1
-	RETURNING VALUE INTO result;`
-
-	rows, err := d.DB.Query(sql, tag)
+func (d *Postgres) NextSerie(tag string) (int, error) {
+	lock := d.lock(tag)
+	result, err := nextSerie(d.DB, tag, lock)
 	if err != nil {
-		return -1
+		return 0, err
 	}
 
-	var result int64
-	for rows.Next() {
-		rows.Scan(&result)
-	}
-	defer rows.Close()
-
-	return result
+	return result, nil
 }
 
 /**
@@ -56,40 +165,43 @@ func (d *Postgres) NextSerie(tag string) int64 {
 * @param tag string
 * @param format string, example 'A000000-2024' A%05d-2024
 * @return string
+* @return error
 **/
-func (d *Postgres) NextCode(tag, format string) string {
-	val := d.NextSerie(tag)
+func (d *Postgres) NextCode(tag, format string) (string, error) {
+	val, err := d.NextSerie(tag)
+	if err != nil {
+		return "", err
+	}
+
 	result := fmt.Sprintf(format, val)
 
-	return result
+	return result, nil
 }
 
 /**
 * SetSerie set the value of a serie
 * @param tag string
 * @param val int
-* @return int
+* @return error
 **/
-func (d *Postgres) SetSerie(tag string, val int) int64 {
-	sql := `
-	INSERT INTO core.SERIES AS A (SERIE, VALUE)
-	SELECT $1, $2
-	ON CONFLICT (SERIE) DO UPDATE SET
-	VALUE = $2
-	RETURNING VALUE INTO result;`
-
-	rows, err := d.DB.Query(sql, tag, val)
+func (d *Postgres) SetSerie(tag string, val int) error {
+	lock := d.lock(tag)
+	_, err := currentSerie(d.DB, tag, lock)
 	if err != nil {
-		return 0
+		return err
 	}
 
-	var result int64
-	for rows.Next() {
-		rows.Scan(&result)
-	}
-	defer rows.Close()
+	sql := `
+	UPDATE core.SERIES SET
+	VALUE = $2
+	WHERE SERIE = $1`
 
-	return result
+	_, err = d.DB.Exec(sql, tag, val)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 /**
@@ -97,24 +209,14 @@ func (d *Postgres) SetSerie(tag string, val int) int64 {
 * @param tag string
 * @return int
 **/
-func (d *Postgres) CurrentSerie(tag string) int64 {
-	sql := `
-	SELECT VALUE INTO result
-	FROM core.SERIES
-	WHERE SERIE = $1 LIMIT 1;`
-
-	rows, err := d.DB.Query(sql, tag)
+func (d *Postgres) CurrentSerie(tag string) (int, error) {
+	lock := d.lock(tag)
+	result, err := currentSerie(d.DB, tag, lock)
 	if err != nil {
-		return 0
+		return 0, err
 	}
 
-	var result int64
-	for rows.Next() {
-		rows.Scan(&result)
-	}
-	defer rows.Close()
-
-	return result
+	return result, nil
 }
 
 /**
@@ -122,22 +224,12 @@ func (d *Postgres) CurrentSerie(tag string) int64 {
 * @param tag string
 * @return int
 **/
-func (d *Postgres) DeleteSerie(tag string) int64 {
-	sql := `
-	DELETE FROM core.SERIES
-	WHERE SERIE = $1
-	RETURNING VALUE INTO result;`
-
-	rows, err := d.DB.Query(sql, tag)
+func (d *Postgres) DeleteSerie(tag string) error {
+	lock := d.lock(tag)
+	err := deleteSerie(d.DB, tag, lock)
 	if err != nil {
-		return 0
+		return err
 	}
 
-	var result int64
-	for rows.Next() {
-		rows.Scan(&result)
-	}
-	defer rows.Close()
-
-	return result
+	return nil
 }

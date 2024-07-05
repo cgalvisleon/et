@@ -152,9 +152,16 @@ func Infof(format string, args ...any) {
 	log("Info", "Blue", message)
 }
 
-func Fatal(v ...any) {
-	log("Fatal", "Red", v...)
+func Fatal(err error) error {
+	log("Fatal", "Red", err)
 	os.Exit(1)
+
+	return err
+}
+
+func Fatalm(message string) error {
+	err := errors.New(message)
+	return Fatal(err)
 }
 
 func Panic(err error) error {

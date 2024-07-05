@@ -27,9 +27,7 @@ func Load() (*linq.Database, error) {
 			"database": name,
 			"app":      app,
 		}
-		drivePg := &lpg.Postgres{
-			Params: params,
-		}
+		drivePg := lpg.NewDriver(params)
 		drive = drivePg
 
 		result, err := linq.NewDatabase(name, "", params, drive)

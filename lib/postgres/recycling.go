@@ -8,7 +8,7 @@ import "database/sql"
 * @return string
 * @return error
 **/
-func defineRecycling(db *sql.DB) (string, error) {
+func defineRecycling(db *sql.DB) error {
 	sql := `
 	CREATE SCHEMA IF NOT EXISTS core;
 
@@ -34,6 +34,13 @@ func defineRecycling(db *sql.DB) (string, error) {
     IF NEW._STATE != OLD._STATE && NEW._STATE == '-2' THEN      
       INSERT INTO core.RECYCLING(TABLE_SCHEMA, TABLE_NAME, _IDT)
       VALUES (TG_TABLE_SCHEMA, TG_TABLE_NAME, NEW._IDT);
+
+      PERFORM pg_notify(
+      'recycling',
+      json_build_object(
+        '_idt', NEW._IDT
+      )::text
+      );
 		ELSEIF NEW._STATE != OLD._STATE THEN
       DELETE FROM core.RECYCLING
       WHERE TABLE_SCHEMA = TG_TABLE_SCHEMA
@@ -47,8 +54,8 @@ func defineRecycling(db *sql.DB) (string, error) {
 
 	_, err := db.Exec(sql)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	return sql, nil
+	return nil
 }

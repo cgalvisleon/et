@@ -267,7 +267,7 @@ func ddlSetRecycling(model *linq.Model) string {
 	CREATE TRIGGER RECYCLING
 	AFTER UPDATE ON $1
 	FOR EACH ROW WHEN (OLD._STATE!=NEW._STATE)
-	EXECUTE PROCEDURE core.RECYCLING_UPDATE();`, strs.Uppcase(model.Table))
+	EXECUTE PROCEDURE core.RECYCLING_UPDATE();`, model.Table)
 
 	result = strs.Replace(result, "\t", "")
 

@@ -1,7 +1,6 @@
 package et
 
 import (
-	"database/sql"
 	"reflect"
 	"strings"
 	"time"
@@ -15,42 +14,6 @@ import (
 type Item struct {
 	Ok     bool `json:"ok"`
 	Result Json `json:"result"`
-}
-
-/**
- * Item methods
- * @param rows *sql.Rows
- * @return error
-**/
-func (it *Item) OfRows(rows *sql.Rows) error {
-	cols, err := rows.Columns()
-	if err != nil {
-		return err
-	}
-
-	values := make([]interface{}, len(cols))
-	pointers := make([]interface{}, len(cols))
-	for i := range values {
-		pointers[i] = &values[i]
-	}
-
-	if err := rows.Scan(pointers...); err != nil {
-		return err
-	}
-
-	it.Ok = true
-	it.Result = make(Json)
-	for i, colName := range cols {
-		if values[i] == nil {
-			it.Result[colName] = nil
-		} else if reflect.TypeOf(values[i]).String() == "[]uint8" {
-			it.Result[colName] = ToUnit8Json(values[i])
-		} else {
-			it.Result[colName] = values[i]
-		}
-	}
-
-	return nil
 }
 
 /**

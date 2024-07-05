@@ -1,7 +1,6 @@
 package et
 
 import (
-	"database/sql"
 	"encoding/json"
 	"reflect"
 	"strings"
@@ -15,23 +14,6 @@ type Items struct {
 	Ok     bool   `json:"ok"`
 	Count  int    `json:"count"`
 	Result []Json `json:"result"`
-}
-
-/**
-* Items methods
-* @param rows *sql.Rows
-* @return error
-**/
-func (it *Items) OfRows(rows *sql.Rows) error {
-	for rows.Next() {
-		var item Item
-		item.OfRows(rows)
-		it.Result = append(it.Result, item.Result)
-		it.Ok = true
-		it.Count++
-	}
-
-	return nil
 }
 
 /**

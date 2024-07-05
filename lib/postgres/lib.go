@@ -2,6 +2,7 @@ package lib
 
 import (
 	"database/sql"
+	"sync"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/linq"
@@ -14,6 +15,55 @@ import (
 type Postgres struct {
 	DB     *sql.DB
 	Params et.Json
+	locks  map[string]*sync.RWMutex
+	wgs    map[string]*sync.WaitGroup
+}
+
+func NewDriver(params et.Json) *Postgres {
+	return &Postgres{
+		Params: params,
+		locks:  make(map[string]*sync.RWMutex),
+		wgs:    make(map[string]*sync.WaitGroup),
+	}
+}
+
+/**
+* wg return a wait group
+* @param tag string
+* @return *sync.WaitGroup
+**/
+func (d *Postgres) wg(tag string) *sync.WaitGroup {
+	if d.wgs[tag] == nil {
+		d.wgs[tag] = &sync.WaitGroup{}
+	}
+
+	return d.wgs[tag]
+}
+
+/**
+* wgAdd add a delta to a wait group
+* @param tag string
+* @param delta int
+* @return *sync.WaitGroup
+**/
+func (d *Postgres) wgAdd(tag string, delta int) *sync.WaitGroup {
+	result := d.wg(tag)
+	result.Add(delta)
+
+	return result
+}
+
+/**
+* lock return a lock
+* @param tag string
+* @return *sync.RWMutex
+**/
+func (d *Postgres) lock(tag string) *sync.RWMutex {
+	if d.locks[tag] == nil {
+		d.locks[tag] = &sync.RWMutex{}
+	}
+
+	return d.locks[tag]
 }
 
 /**
@@ -69,25 +119,27 @@ func (d *Postgres) Connect(params et.Json) (*sql.DB, error) {
 		return nil, err
 	}
 
-	_, err = defineSeries(db)
+	err = defineSeries(db)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = defineModels(db)
+	err = defineModels(db)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = defineSync(db)
+	err = defineSync(db)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = defineRecycling(db)
+	err = defineRecycling(db)
 	if err != nil {
 		return nil, err
 	}
+
+	// go defineListen(connStr, []string{"sync", "recycling"})
 
 	logs.Logf("DB", "Connected to %s database %s", driver, database)
 
@@ -96,6 +148,61 @@ func (d *Postgres) Connect(params et.Json) (*sql.DB, error) {
 	d.Params = params
 
 	return d.DB, nil
+}
+
+/**
+* Query execute a query
+* @param query string
+* @param args ...any
+* @return et.Items
+* @return error
+**/
+func (d *Postgres) Query(query string, args ...any) (et.Items, error) {
+	rows, err := d.DB.Query(query, args...)
+	if err != nil {
+		return et.Items{}, err
+	}
+
+	defer rows.Close()
+
+	result := linq.RowsItems(rows)
+
+	return result, nil
+}
+
+/**
+* QueryOne execute a query and return one row
+* @param query string
+* @param args ...any
+* @return et.Item
+* @return error
+**/
+func (d *Postgres) QueryOne(query string, args ...any) (et.Item, error) {
+	rows, err := d.DB.Query(query, args...)
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	defer rows.Close()
+
+	result := linq.RowsItem(rows)
+
+	return result, nil
+}
+
+/**
+* Exec execute a query
+* @param query string
+* @param args ...any
+* @return error
+**/
+func (d *Postgres) Exec(query string, args ...any) error {
+	_, err := d.DB.Exec(query, args...)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 /**

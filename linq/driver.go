@@ -39,6 +39,10 @@ type Driver interface {
 	DefineSql(model *Model) string
 	MutationSql(model *Model) string
 	// Querys
+	Query(query string, args ...any) (et.Items, error)
+	QueryOne(query string, args ...any) (et.Item, error)
+	Exec(query string, args ...any) error
+	// Crud
 	SelectSql(linq *Linq) string
 	CurrentSql(linq *Linq) string
 	InsertSql(linq *Linq) string
@@ -47,13 +51,14 @@ type Driver interface {
 	// DCL (Data Control Language)
 	DCL(command string, params et.Json) error
 	// Serires
-	NextSerie(tag string) int64
-	NextCode(tag, format string) string
-	SetSerie(tag string, val int) int64
-	CurrentSerie(tag string) int64
-	DeleteSerie(tag string) int64
+	NextSerie(tag string) (int, error)
+	NextCode(tag, format string) (string, error)
+	SetSerie(tag string, val int) error
+	CurrentSerie(tag string) (int, error)
+	DeleteSerie(tag string) error
 	// Models
-	UpSertModel(main, name, kind string, version int, data et.Json) (et.Item, error)
 	GetModel(main, name, kind string) (et.Item, error)
+	InsertModel(main, name, kind string, version int, data et.Json) error
+	UpdateModel(main, name, kind string, version int, data et.Json) error
 	DeleteModel(main, name, kind string) error
 }

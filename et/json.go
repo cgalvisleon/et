@@ -478,9 +478,7 @@ func (s Json) ArrayAny(atrib string) []any {
 	vals := s[atrib]
 	switch v := vals.(type) {
 	case []interface{}:
-		for _, val := range v {
-			result = append(result, val)
-		}
+		result = append(result, v...)
 	default:
 		logs.Errorf("json/ArrayAny - Type (%v) value:%v", reflect.TypeOf(v), v)
 	}

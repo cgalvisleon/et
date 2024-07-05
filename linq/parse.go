@@ -8,7 +8,11 @@ import (
 	"github.com/cgalvisleon/et/strs"
 )
 
-// SQLQuote return a sql string quoted
+/**
+* SQLQuote return a sql cuote string
+* @param sql string
+* @return string
+**/
 func SQLQuote(sql string) string {
 	sql = strings.TrimSpace(sql)
 
@@ -18,7 +22,12 @@ func SQLQuote(sql string) string {
 	return result
 }
 
-// SQLDDL return a sql string with the args
+/**
+* SQLDDL return a sql string with the args
+* @param sql string
+* @param args ...any
+* @return string
+**/
 func SQLDDL(sql string, args ...any) string {
 	sql = strings.TrimSpace(sql)
 
@@ -31,7 +40,12 @@ func SQLDDL(sql string, args ...any) string {
 	return sql
 }
 
-// SQLParse return a sql string with the args
+/**
+* SQLParse return a sql string with the args
+* @param sql string
+* @param args ...any
+* @return string
+**/
 func SQLParse(sql string, args ...any) string {
 	for i := range args {
 		old := strs.Format(`$%d`, i+1)
@@ -48,7 +62,11 @@ func SQLParse(sql string, args ...any) string {
 	return sql
 }
 
-// rowsItems return a items from a sql query
+/**
+* RowsItems return a items from a sql rows
+* @param rows *sql.Rows
+* @return et.Items
+**/
 func RowsItems(rows *sql.Rows) et.Items {
 	var result et.Items = et.Items{Result: []et.Json{}}
 
@@ -63,9 +81,13 @@ func RowsItems(rows *sql.Rows) et.Items {
 	return result
 }
 
+/**
+* RowsItem return a item from a sql rows
+* @param rows *sql.Rows
+* @return et.Item
+**/
 func RowsItem(rows *sql.Rows) et.Item {
 	items := RowsItems(rows)
-
 	if items.Count == 0 {
 		return et.Item{}
 	}
@@ -76,7 +98,12 @@ func RowsItem(rows *sql.Rows) et.Item {
 	}
 }
 
-// rowsItems return a items from a sql query
+/**
+* DataItems return a items from a sql rows and source field
+* @param rows *sql.Rows
+* @param sourceField string
+* @return et.Items
+**/
 func DataItems(rows *sql.Rows, sourceField string) et.Items {
 	var result et.Items = et.Items{Result: []et.Json{}}
 
@@ -89,4 +116,22 @@ func DataItems(rows *sql.Rows, sourceField string) et.Items {
 	}
 
 	return result
+}
+
+/**
+* DataItem return a item from a sql rows and source field
+* @param rows *sql.Rows
+* @param sourceField string
+* @return et.Item
+**/
+func DataItem(rows *sql.Rows, sourceField string) et.Item {
+	items := DataItems(rows, sourceField)
+	if items.Count == 0 {
+		return et.Item{}
+	}
+
+	return et.Item{
+		Ok:     items.Ok,
+		Result: items.Result[0],
+	}
 }

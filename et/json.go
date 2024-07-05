@@ -67,7 +67,7 @@ func (s *Json) Scan(src interface{}) error {
 	case string:
 		ba = []byte(v)
 	default:
-		return logs.Errorf(`json/Scan - Failed to unmarshal JSON value:%s`, src)
+		return logs.Errorf(`Json/Scan - Failed to unmarshal JSON value:%s`, src)
 	}
 
 	t := map[string]interface{}{}
@@ -88,16 +88,16 @@ func (s *Json) ToScan(src interface{}) error {
 	for k, val := range *s {
 		field := v.FieldByName(k)
 		if !field.IsValid() {
-			logs.Errorf("json/ToScan - No such field:%s in struct", k)
+			logs.Errorf("Json/ToScan - No such field:%s in struct", k)
 			continue
 		}
 		if !field.CanSet() {
-			logs.Errorf("json/ToScan - Cannot set field:%s in struct", k)
+			logs.Errorf("Json/ToScan - Cannot set field:%s in struct", k)
 			continue
 		}
 		valType := reflect.ValueOf(val)
 		if field.Type() != valType.Type() {
-			return logs.Errorf("json/ToScan - Provided value type didn't match obj field:%s type", k)
+			return logs.Errorf("Json/ToScan - Provided value type didn't match obj field:%s type", k)
 		}
 		field.Set(valType)
 	}

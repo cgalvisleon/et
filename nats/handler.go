@@ -38,14 +38,10 @@ func Stack(channel string, reciveFn func(Message)) error {
 		Channel: channel,
 	}
 	var err error
-	conn.events, err = conn.conn.Subscribe(
+	conn.events, err = conn.conn.QueueSubscribe(
 		msg.Channel,
+		"workers",
 		func(m *nats.Msg) {
-			ok := conn.Lock(msg.Id)
-			if !ok {
-				return
-			}
-
 			reciveFn(msg)
 		},
 	)

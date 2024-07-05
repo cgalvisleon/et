@@ -1,7 +1,6 @@
 package nats
 
 import (
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/nats-io/nats.go"
@@ -10,10 +9,6 @@ import (
 type Conn struct {
 	conn   *nats.Conn
 	events *nats.Subscription
-}
-
-func (c *Conn) Lock(key string) bool {
-	return cache.Del(key)
 }
 
 var conn *Conn

@@ -9,7 +9,16 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// MessageBroadcast is a struct to manage the message to broadcast
+type TpBroadcast int
+
+const (
+	TpAll TpBroadcast = iota
+	TpDirect
+)
+
+/**
+* MessageBroadcast is a struct to manage the message to broadcast
+**/
 type MessageBroadcast struct {
 	Kind    TpBroadcast `json:"kind"`
 	To      string      `json:"channel"`
@@ -18,7 +27,11 @@ type MessageBroadcast struct {
 	From    et.Json     `json:"from"`
 }
 
-// Encode return the message as byte
+/**
+* Encode return the message as byte array
+* @return []byte
+* @return error
+**/
 func (m MessageBroadcast) Encode() ([]byte, error) {
 	b, err := json.Marshal(m)
 	if err != nil {
@@ -28,7 +41,12 @@ func (m MessageBroadcast) Encode() ([]byte, error) {
 	return b, nil
 }
 
-// Decode return the message as struct
+/**
+* decodeMessageBroadcat return a MessageBroadcast from a byte array
+* @param data []byte
+* @return MessageBroadcast
+* @return error
+**/
 func decodeMessageBroadcat(data []byte) (MessageBroadcast, error) {
 	var m MessageBroadcast
 	err := json.Unmarshal(data, &m)
@@ -55,7 +73,12 @@ type RedisAdapter struct {
 	channel string
 }
 
-// NewRedisAdapter create a new RedisAdapter
+/**
+* NewRedisAdapter return a new RedisAdapter
+* @param params *RedisAdapterParams
+* @return *RedisAdapter
+* @return error
+**/
 func NewRedisAdapter(params *RedisAdapterParams) (*RedisAdapter, error) {
 	db := redis.NewClient(&redis.Options{
 		Addr:     params.Addr,
@@ -70,7 +93,12 @@ func NewRedisAdapter(params *RedisAdapterParams) (*RedisAdapter, error) {
 	}, nil
 }
 
-// Set a adapter to make a cluster hub
+/**
+* RedisAdapter is a struct to manage the Redis connection
+* to broadcast messages to all clients in the cluster hub
+* @param params *RedisAdapterParams
+* @return error
+**/
 func (h *Hub) RedisAdapter(params *RedisAdapterParams) error {
 	adapter, err := NewRedisAdapter(params)
 	if err != nil {
@@ -83,12 +111,19 @@ func (h *Hub) RedisAdapter(params *RedisAdapterParams) error {
 	return nil
 }
 
-// Close the connection
+/**
+* Close the RedisAdapter
+* @return error
+**/
 func (a *RedisAdapter) Close() error {
 	return a.db.Close()
 }
 
-// Publish a message to a broadcast channel
+/**
+* publish a message to the Redis channel
+* @param message MessageBroadcast
+* @return error
+**/
 func (a *RedisAdapter) publish(message MessageBroadcast) error {
 	if a.db == nil {
 		return logs.Errorm(ERR_REDISADAPTER_NOT_FOUND)
@@ -102,7 +137,11 @@ func (a *RedisAdapter) publish(message MessageBroadcast) error {
 	return nil
 }
 
-// Subscribe to a channel with context
+/**
+* subscribe to the Redis channel
+* @param channel string
+* @param f func(interface{})
+**/
 func (a *RedisAdapter) subscribe(channel string, f func(interface{})) {
 	if a.db == nil {
 		return
@@ -118,7 +157,14 @@ func (a *RedisAdapter) subscribe(channel string, f func(interface{})) {
 	}
 }
 
-// Broadcast a message to all clients in the cluster hub
+/**
+* Broadcast a message to all clients in the cluster hub
+* @param to string
+* @param msg Message
+* @param ignored []string
+* @param from et.Json
+* @return error
+**/
 func (a *RedisAdapter) Broadcast(to string, msg Message, ignored []string, from et.Json) error {
 	mbroadcast := MessageBroadcast{
 		Kind:    TpAll,
@@ -131,7 +177,12 @@ func (a *RedisAdapter) Broadcast(to string, msg Message, ignored []string, from 
 	return a.publish(mbroadcast)
 }
 
-// Broadcast a message to all clients in the cluster hub
+/**
+* Direct send a message to a specific client in the cluster hub
+* @param to string
+* @param msg Message
+* @return error
+**/
 func (a *RedisAdapter) Direct(to string, msg Message) error {
 	mbroadcast := MessageBroadcast{
 		Kind:    TpDirect,
@@ -144,6 +195,12 @@ func (a *RedisAdapter) Direct(to string, msg Message) error {
 	return a.publish(mbroadcast)
 }
 
+/**
+* Command send a command to all clients in the cluster hub
+* @param command string
+* @param params et.Json
+* @return error
+**/
 func (a *RedisAdapter) Command(command string, params et.Json) error {
 	mbroadcast := MessageBroadcast{
 		Kind:    TpDirect,

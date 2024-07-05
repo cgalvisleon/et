@@ -39,7 +39,10 @@ type Hub struct {
 	run        bool
 }
 
-// Create a new hub
+/**
+* NewHub
+* @return *Hub
+**/
 func NewHub() *Hub {
 	id := utility.UUID()
 	name := "Websocket Hub"
@@ -61,7 +64,9 @@ func NewHub() *Hub {
 	return result
 }
 
-// Run the hub
+/**
+* Run
+**/
 func (h *Hub) Run() {
 	if h.run {
 		return
@@ -81,7 +86,10 @@ func (h *Hub) Run() {
 	}
 }
 
-// Identify Hub
+/**
+* Identify the hub
+* @return et.Json
+**/
 func (h *Hub) Identify() et.Json {
 	return et.Json{
 		"id":   h.Id,
@@ -89,7 +97,10 @@ func (h *Hub) Identify() et.Json {
 	}
 }
 
-// Connect a client to the hub
+/**
+* onConnect
+* @param client *Client
+**/
 func (h *Hub) onConnect(client *Client) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
@@ -112,7 +123,10 @@ func (h *Hub) onConnect(client *Client) {
 	logs.Logf("Websocket", MSG_CLIENT_CONNECT, client.Id, h.Id)
 }
 
-// Disconnect a client from the hub
+/**
+* onDisconnect
+* @param client *Client
+**/
 func (h *Hub) onDisconnect(client *Client) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
@@ -137,7 +151,14 @@ func (h *Hub) onDisconnect(client *Client) {
 	logs.Logf("Websocket", MSG_CLIENT_DISCONNECT, client.Id, h.Id)
 }
 
-// Create a client and connect to the hub
+/**
+* connect
+* @param socket *websocket.Conn
+* @param clientId string
+* @param name string
+* @return *Client
+* @return error
+**/
 func (h *Hub) connect(socket *websocket.Conn, clientId, name string) (*Client, error) {
 	idxC := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == clientId })
 	if idxC != -1 {
@@ -155,17 +176,19 @@ func (h *Hub) connect(socket *websocket.Conn, clientId, name string) (*Client, e
 	return client, nil
 }
 
-// SetAtribs set a value to the client data
-func (h *Hub) SetName(name string) {
-	h.Params.Name = name
-}
-
-// Publish a message to a channel less the ignore client
+/**
+* publish
+* @param channel *Channel
+* @param msg Message
+* @param ignored []string
+* @param from et.Json
+* @return error
+**/
 func (h *Hub) publish(channel *Channel, msg Message, ignored []string, from et.Json) error {
 	msg.Channel = channel.Low()
 	msg.From = from
 	msg.Ignored = ignored
-	if channel.TpBroadcast == TpRoundRobin {
+	if channel.Group != "" {
 		client := channel.NextTurn()
 		if client != nil {
 			return client.sendMessage(msg)
@@ -185,6 +208,10 @@ func (h *Hub) publish(channel *Channel, msg Message, ignored []string, from et.J
 	return nil
 }
 
+/**
+* listend
+* @param msg interface{}
+**/
 func (h *Hub) listend(msg interface{}) {
 	logs.Log("Broadcast", msg)
 
@@ -206,37 +233,10 @@ func (h *Hub) listend(msg interface{}) {
 	}
 }
 
-// Publish a message to a channel less the ignore client
-func (h *Hub) Publish(channel string, msg Message, ignored []string, from et.Json) error {
-	ch := h.getChanel(channel)
-	if len(ch.Subscribers) == 0 {
-		return logs.Alertf(ERR_CHANNEL_NOT_SUBSCRIBERS, channel)
-	}
-
-	return h.publish(ch, msg, ignored, from)
-}
-
-// Publish mute a message to a channel less the ignore client
-func (h *Hub) Mute(channel string, msg Message, ignored []string, from et.Json) error {
-	ch := h.getChanel(channel)
-
-	return h.publish(ch, msg, ignored, from)
-}
-
-// Send a message to a client in a channel
-func (h *Hub) SendMessage(clientId string, msg Message) error {
-	idx := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == clientId })
-	if idx == -1 {
-		if h.adapter != nil {
-			h.adapter.Direct(clientId, msg)
-		}
-	}
-
-	client := h.clients[idx]
-	return client.sendMessage(msg)
-}
-
-// Prune a channel if no subscribers
+/**
+* pruneChanner
+* @param channel *Channel
+**/
 func (h *Hub) pruneChanner(channel *Channel) {
 	if channel == nil {
 		return
@@ -251,6 +251,11 @@ func (h *Hub) pruneChanner(channel *Channel) {
 	}
 }
 
+/**
+* getChanel
+* @param name string
+* @return *Channel
+**/
 func (h *Hub) getChanel(name string) *Channel {
 	var result *Channel
 
@@ -273,6 +278,13 @@ func (h *Hub) getChanel(name string) *Channel {
 	return result
 }
 
+/**
+* subscribe
+* @param clientId string
+* @param channel string
+* @return *Channel
+* @return error
+**/
 func (h *Hub) subscribe(clientId string, channel string) (*Channel, error) {
 	idx := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == clientId })
 	if idx == -1 {
@@ -287,25 +299,117 @@ func (h *Hub) subscribe(clientId string, channel string) (*Channel, error) {
 	return result, nil
 }
 
-// Subscribe a client to hub channels
+/**
+* queueSubscribe
+* @param clientId string
+* @param channel string
+* @param queue string
+* @return *Channel
+* @return error
+**/
+func (h *Hub) queueSubscribe(clientId string, channel, queue string) (*Channel, error) {
+	idx := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == clientId })
+	if idx == -1 {
+		return nil, logs.Alertm(ERR_CLIENT_NOT_FOUND)
+	}
+
+	client := h.clients[idx]
+	result := h.getChanel(channel)
+	result.QueueSubscribe(client, queue)
+	client.subscribe([]string{channel})
+
+	return result, nil
+}
+
+/**
+* SetName
+* @param name string
+**/
+func (h *Hub) SetName(name string) {
+	h.Params.Name = name
+}
+
+/**
+* Publish a message to a channel
+* @param channel string
+* @param msg Message
+* @param ignored []string
+* @param from et.Json
+* @return error
+**/
+func (h *Hub) Publish(channel string, msg Message, ignored []string, from et.Json) error {
+	ch := h.getChanel(channel)
+	if len(ch.Subscribers) == 0 {
+		return logs.Alertf(ERR_CHANNEL_NOT_SUBSCRIBERS, channel)
+	}
+
+	return h.publish(ch, msg, ignored, from)
+}
+
+/**
+* Mute a message to a channel
+* @param channel string
+* @param msg Message
+* @param ignored []string
+* @param from et.Json
+* @return error
+**/
+func (h *Hub) Mute(channel string, msg Message, ignored []string, from et.Json) error {
+	ch := h.getChanel(channel)
+
+	return h.publish(ch, msg, ignored, from)
+}
+
+/**
+* SendMessage
+* @param clientId string
+* @param msg Message
+* @return error
+**/
+func (h *Hub) SendMessage(clientId string, msg Message) error {
+	idx := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == clientId })
+	if idx == -1 {
+		if h.adapter != nil {
+			h.adapter.Direct(clientId, msg)
+		}
+	}
+
+	client := h.clients[idx]
+	return client.sendMessage(msg)
+}
+
+/**
+* Subscribe a client to hub channels
+* @param clientId string
+* @param channel string
+* @return error
+**/
 func (h *Hub) Subscribe(clientId string, channel string) error {
 	_, err := h.subscribe(clientId, channel)
 	return err
 }
 
-// Subscribe a client to hub channels
+/**
+* Stack a client to hub channels
+* @param clientId string
+* @param channel string
+* @return error
+**/
 func (h *Hub) Stack(clientId string, channel string) error {
-	ch, err := h.subscribe(clientId, channel)
+	_, err := h.queueSubscribe(clientId, channel, "workers")
 	if err != nil {
 		return err
 	}
 
-	ch.TpBroadcast = TpRoundRobin
-
 	return nil
 }
 
-// Unsubscribe a client from hub channels
+/**
+* Unsubscribe a client from hub channels
+* @param clientId string
+* @param channel string
+* @return error
+**/
 func (h *Hub) Unsubscribe(clientId string, channel string) error {
 	idx := slices.IndexFunc(h.clients, func(c *Client) bool { return c.Id == clientId })
 	if idx == -1 {
@@ -322,7 +426,11 @@ func (h *Hub) Unsubscribe(clientId string, channel string) error {
 	return nil
 }
 
-// Return client list subscribed to channel
+/**
+* GetSubscribers
+* @param channel string
+* @return []*Client
+**/
 func (h *Hub) GetSubscribers(channel string) []*Client {
 	ch := h.getChanel(channel)
 	return ch.Subscribers

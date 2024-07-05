@@ -1,7 +1,6 @@
 package nats
 
 import (
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
@@ -79,21 +78,13 @@ func (p *PubSub) stack(channel string, f func(m.Message)) error {
 		return logs.Alertm(ERR_NOT_CONNECT)
 	}
 
-	lock := func(id string) bool {
-		return cache.Del(id)
-	}
-
 	msg := Message{
 		Channel: channel,
 	}
-	subscription, err := conn.conn.Subscribe(
+	subscription, err := conn.conn.QueueSubscribe(
 		msg.Channel,
+		"workers",
 		func(m *nats.Msg) {
-			ok := lock(msg.Id)
-			if !ok {
-				return
-			}
-
 			f(msg)
 		},
 	)
@@ -116,8 +107,6 @@ func (p *PubSub) send(subj string, message Message) error {
 	if err != nil {
 		return err
 	}
-
-	cache.Set(message.Id, msg, 15)
 
 	err = conn.conn.Publish(subj, msg)
 	if err != nil {

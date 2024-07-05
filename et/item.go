@@ -1,6 +1,7 @@
 package et
 
 import (
+	"database/sql"
 	"reflect"
 	"strings"
 	"time"
@@ -17,27 +18,36 @@ type Item struct {
 }
 
 /**
-* Item methods
-* @param src interface{}
+* Scan load rows to a item
+* @param rows *sql.Rows
 * @return error
 **/
-func (it *Item) Scan(src interface{}) error {
-	v := reflect.ValueOf(src).Elem()
-	for k, val := range it.Result {
-		field := v.FieldByName(k)
-		if !field.IsValid() {
-			logs.Errorf("No such field:%s in struct", k)
-			continue
+func (it *Item) Scan(rows *sql.Rows) error {
+	cols, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+
+	values := make([]interface{}, len(cols))
+	pointers := make([]interface{}, len(cols))
+	for i := range values {
+		pointers[i] = &values[i]
+	}
+
+	if err := rows.Scan(pointers...); err != nil {
+		return err
+	}
+
+	it.Ok = true
+	it.Result = make(Json)
+	for i, colName := range cols {
+		if values[i] == nil {
+			it.Result[colName] = nil
+		} else if reflect.TypeOf(values[i]).String() == "[]uint8" {
+			it.Result[colName] = ToUnit8Json(values[i])
+		} else {
+			it.Result[colName] = values[i]
 		}
-		if !field.CanSet() {
-			logs.Errorf("Cannot set field:%s in struct", k)
-			continue
-		}
-		valType := reflect.ValueOf(val)
-		if field.Type() != valType.Type() {
-			return logs.Errorf(`Provided value type didn't match obj field:%s type`, k)
-		}
-		field.Set(valType)
 	}
 
 	return nil

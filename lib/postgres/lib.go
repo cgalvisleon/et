@@ -139,7 +139,7 @@ func (d *Postgres) Connect(params et.Json) (*sql.DB, error) {
 		return nil, err
 	}
 
-	// go defineListen(connStr, []string{"sync", "recycling"})
+	go defineListen(connStr, []string{"sync", "recycling"})
 
 	logs.Logf("DB", "Connected to %s database %s", driver, database)
 
@@ -178,16 +178,19 @@ func (d *Postgres) Query(query string, args ...any) (et.Items, error) {
 * @return error
 **/
 func (d *Postgres) QueryOne(query string, args ...any) (et.Item, error) {
-	rows, err := d.DB.Query(query, args...)
+	items, err := d.Query(query, args...)
 	if err != nil {
 		return et.Item{}, err
 	}
 
-	defer rows.Close()
+	if items.Count == 0 {
+		return et.Item{}, nil
+	}
 
-	result := linq.RowsItem(rows)
-
-	return result, nil
+	return et.Item{
+		Ok:     true,
+		Result: items.Result[0],
+	}, nil
 }
 
 /**

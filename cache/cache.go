@@ -222,16 +222,17 @@ func Items(key string) (et.Items, error) {
 }
 
 func Item(key string) (et.Item, error) {
-	if conn == nil {
-		return et.Item{}, logs.Alertm(MSG_CACHE_NOT_FOUND)
-	}
-
-	result := et.Item{}
-	val := Get(key, result)
-	err := result.Scan(val)
+	items, err := Items(key)
 	if err != nil {
 		return et.Item{}, logs.Alert(err)
 	}
 
-	return result, nil
+	if items.Count == 0 {
+		return et.Item{}, nil
+	}
+
+	return et.Item{
+		Ok:     items.Ok,
+		Result: items.Result[0],
+	}, nil
 }

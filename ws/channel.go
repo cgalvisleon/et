@@ -6,59 +6,58 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-type TpBroadcast int
-
-const (
-	TpAll TpBroadcast = iota
-	TpRoundRobin
-	TpDirect
-	TpCommand
-)
-
-// Channel is a hub websocket channel
+/**
+* Channel
+**/
 type Channel struct {
 	Name        string
-	TpBroadcast TpBroadcast
+	Group       string
 	Subscribers []*Client
 	turn        int
 }
 
-// String return the string representation of the broadcast type
-func (tp TpBroadcast) String() string {
-	switch tp {
-	case TpRoundRobin:
-		return "roundrobin"
-	default:
-		return "all"
-	}
-}
-
-// NewChannel create a new channel
+/**
+* newChannel
+* @param name string
+* @return *Channel
+**/
 func newChannel(name string) *Channel {
 	result := &Channel{
 		Name:        strs.Lowcase(name),
-		TpBroadcast: TpAll,
 		Subscribers: []*Client{},
 	}
 
 	return result
 }
 
-// Up return the channel name in uppercase
+/**
+* Up return the channel name in uppercase
+* @return string
+**/
 func (ch *Channel) Up() string {
 	return strs.Uppcase(ch.Name)
 }
 
-// Low return the channel name in lowercase
+/**
+* Low return the channel name in lowercase
+* @return string
+**/
 func (ch *Channel) Low() string {
 	return strs.Lowcase(ch.Name)
 }
 
-// Count return the number of subscribers in channel
+/**
+* Count return the number of subscribers
+* @return int
+**/
 func (ch *Channel) Count() int {
 	return len(ch.Subscribers)
 }
 
+/**
+* NextTurn return the next subscriber
+* @return *Client
+**/
 func (ch *Channel) NextTurn() *Client {
 	n := ch.Count()
 	if n == 0 {
@@ -75,7 +74,10 @@ func (ch *Channel) NextTurn() *Client {
 	return result
 }
 
-// Subscribe a client to channel
+/**
+* Subscribe a client to channel
+* @param client *Client
+**/
 func (ch *Channel) Subscribe(client *Client) {
 	idx := slices.IndexFunc(ch.Subscribers, func(e *Client) bool { return e.Id == client.Id })
 	if idx == -1 {
@@ -83,7 +85,29 @@ func (ch *Channel) Subscribe(client *Client) {
 	}
 }
 
-// Unsubcribe a client from channel
+/**
+* QueueSubscribe a client to channel
+* @param client *Client
+**/
+func (ch *Channel) QueueSubscribe(client *Client, queue string) {
+
+}
+
+/**
+* Broadcast a message to all subscribers
+* @param message []byte
+**/
+func (ch *Channel) Broadcast(message []byte) {
+	for _, client := range ch.Subscribers {
+		client.outbound <- message
+	}
+}
+
+/**
+* Unsubcribe a client from channel
+* @param clientId string
+* @return error
+**/
 func (ch *Channel) Unsubcribe(clientId string) error {
 	idx := slices.IndexFunc(ch.Subscribers, func(e *Client) bool { return e.Id == clientId })
 	if idx == -1 {

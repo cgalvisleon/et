@@ -114,7 +114,7 @@ func (d *Postgres) DeleteModel(main, name, kind string) error {
 	WHERE MAIN = $1 AND NAME = $2 AND KIND = $3
 	RETURNING _DATA INTO result;`
 
-	_, err := d.DB.Query(sql, main, name, kind)
+	err := d.Exec(sql, main, name, kind)
 	if err != nil {
 		return err
 	}

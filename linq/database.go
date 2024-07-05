@@ -205,8 +205,6 @@ func (d *Database) initModel(model *Model) error {
 		return err
 	}
 
-	logs.Debug(result.ToString())
-
 	if !result.Ok {
 		model.DefineColumn(IdTField.Low(), "_idT of the table", TpKey, TpKey.Default())
 		sql := driver.DefineSql(model)

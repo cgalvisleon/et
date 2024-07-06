@@ -118,7 +118,6 @@ type Linq struct {
 	TypeQuery TypeQuery
 	Sql       string
 	Result    *et.Items
-	ItIsBuilt bool
 	debug     bool
 }
 

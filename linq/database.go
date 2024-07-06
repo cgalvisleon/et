@@ -322,3 +322,28 @@ func (d *Database) deleteSql(linq *Linq) (string, error) {
 	driver := *d.Driver
 	return driver.DeleteSql(linq), nil
 }
+
+func (d *Database) NextSerie(tag string) (int, error) {
+	driver := *d.Driver
+	return driver.NextSerie(tag)
+}
+
+func (d *Database) NextCode(tag, format string) (string, error) {
+	driver := *d.Driver
+	return driver.NextCode(tag, format)
+}
+
+func (d *Database) SetSerie(tag string, val int) error {
+	driver := *d.Driver
+	return driver.SetSerie(tag, val)
+}
+
+func (d *Database) CurrentSerie(tag string) (int, error) {
+	driver := *d.Driver
+	return driver.CurrentSerie(tag)
+}
+
+func (d *Database) DeleteSerie(tag string) error {
+	driver := *d.Driver
+	return driver.DeleteSerie(tag)
+}

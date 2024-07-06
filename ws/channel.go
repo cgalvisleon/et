@@ -11,9 +11,8 @@ import (
 **/
 type Channel struct {
 	Name        string
-	Group       string
+	Group       map[string]int
 	Subscribers []*Client
-	turn        int
 }
 
 /**
@@ -24,6 +23,7 @@ type Channel struct {
 func newChannel(name string) *Channel {
 	result := &Channel{
 		Name:        strs.Lowcase(name),
+		Group:       map[string]int{},
 		Subscribers: []*Client{},
 	}
 
@@ -58,18 +58,25 @@ func (ch *Channel) Count() int {
 * NextTurn return the next subscriber
 * @return *Client
 **/
-func (ch *Channel) NextTurn() *Client {
+func (ch *Channel) NextTurn(queue string) *Client {
 	n := ch.Count()
 	if n == 0 {
 		return nil
 	}
 
-	if ch.turn >= n {
-		ch.turn = 0
+	_, exist := ch.Group[queue]
+	if !exist {
+		ch.Group[queue] = 0
 	}
 
-	result := ch.Subscribers[ch.turn]
-	ch.turn++
+	turn := ch.Group[queue]
+	if turn >= n {
+		turn = 0
+		ch.Group[queue] = turn
+	}
+
+	result := ch.Subscribers[turn]
+	ch.Group[queue]++
 
 	return result
 }
@@ -90,7 +97,12 @@ func (ch *Channel) Subscribe(client *Client) {
 * @param client *Client
 **/
 func (ch *Channel) QueueSubscribe(client *Client, queue string) {
+	_, exist := ch.Group[queue]
+	if !exist {
+		ch.Group[queue] = 0
+	}
 
+	ch.Subscribe(client)
 }
 
 /**

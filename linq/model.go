@@ -170,6 +170,7 @@ type Model struct {
 	ColumnLastEditedTime *Column
 	ColumnLastEditedBy   *Column
 	ColumnProject        *Column
+	ColumnSerie          *Column
 	BeforeInsert         []Trigger
 	AfterInsert          []Trigger
 	BeforeUpdate         []Trigger
@@ -312,6 +313,7 @@ func (m *Model) Definition() et.Json {
 		"useLastEditedTime": m.ColumnLastEditedTime != nil,
 		"useLastEditedBy":   m.ColumnLastEditedBy != nil,
 		"useProject":        m.ColumnProject != nil,
+		"useSerie":          m.ColumnSerie != nil,
 		"integrity":         m.Integrity,
 		"version":           m.Version,
 	}

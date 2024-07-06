@@ -11,7 +11,15 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// Connect to the ws server from the client
+/**
+* ConnectWs connect to the server using the websocket
+* @param host string
+* @param scheme string
+* @param clientId string
+* @param name string
+* @return *websocket.Conn
+* @return error
+**/
 func ConnectWs(host, scheme, clientId, name string) (*websocket.Conn, error) {
 	if scheme == "" {
 		scheme = "ws"
@@ -36,7 +44,13 @@ func ConnectWs(host, scheme, clientId, name string) (*websocket.Conn, error) {
 	return result, nil
 }
 
-// Connect to the server from the http client
+/**
+* ConnectHttp connect to the server using the http
+* @param w http.ResponseWriter
+* @param r *http.Request
+* @return *Client
+* @return error
+**/
 func ConnectHttp(w http.ResponseWriter, r *http.Request) (*Client, error) {
 	if servws == nil {
 		return nil, logs.Log(ERR_NOT_WS_SERVICE)

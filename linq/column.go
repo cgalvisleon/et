@@ -158,6 +158,20 @@ func newColumn(model *Model, name, description string, typeColumm TypeColumn, ty
 		model.ColumnProject = result
 	}
 
+	if model.ColumnSerie == nil && TpSerie == typeData {
+		model.ColumnSerie = result
+		model.DefineTrigger(BeforeInsert, func(model *Model, old, new *et.Json, data et.Json) error {
+			index, err := model.Db.NextSerie(model.Table)
+			if err != nil {
+				return err
+			}
+
+			new.Set(model.ColumnSerie.Name, index)
+
+			return nil
+		})
+	}
+
 	model.AddColumn(result)
 
 	return result

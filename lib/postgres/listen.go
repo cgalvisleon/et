@@ -1,7 +1,6 @@
 package lib
 
 import (
-	"fmt"
 	"log"
 	"time"
 
@@ -33,20 +32,14 @@ func defineListen(connStr string, channels []string) {
 			if notification != nil {
 				result, err := et.ToJson(notification.Extra)
 				if err != nil {
-					logs.Alertm("defineLinten: Not conver to Json")
+					logs.Alertm("defineListen: Not conver to Json")
 				}
 
 				result.Set("channel", notification.Channel)
 				handleListen(result)
 			}
 		case <-time.After(90 * time.Second):
-			go func() {
-				err := listener.Ping()
-				if err != nil {
-					log.Println(err)
-				}
-			}()
-			fmt.Println("No notifications received for 90 seconds, checking connection...")
+			go listener.Ping()
 		}
 	}
 }

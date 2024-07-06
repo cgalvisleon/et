@@ -209,10 +209,6 @@ func (l *Linq) query(sql string, args ...any) (et.Items, error) {
 		logs.Debug(_query)
 	}
 
-	if !l.ItIsBuilt {
-		return et.Items{}, logs.Alertm("Linq not built")
-	}
-
 	rows, err := query(l.Db.DB, _query)
 	if err != nil {
 		return et.Items{}, logs.Error(err)
@@ -244,10 +240,6 @@ func (l *Linq) querySource(sql string, args ...any) (et.Items, error) {
 	if l.debug {
 		logs.Debug(l.Definition().ToString())
 		logs.Debug(_query)
-	}
-
-	if !l.ItIsBuilt {
-		return et.Items{}, logs.Alertm("Linq not built")
 	}
 
 	rows, err := query(l.Db.DB, _query)

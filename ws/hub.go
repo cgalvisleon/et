@@ -184,14 +184,16 @@ func (h *Hub) connect(socket *websocket.Conn, clientId, name string) (*Client, e
 * @param from et.Json
 * @return error
 **/
-func (h *Hub) publish(channel *Channel, msg Message, ignored []string, from et.Json) error {
+func (h *Hub) broadcast(channel *Channel, msg Message, ignored []string, from et.Json) error {
 	msg.Channel = channel.Low()
 	msg.From = from
 	msg.Ignored = ignored
-	if channel.Group != "" {
-		client := channel.NextTurn()
-		if client != nil {
-			return client.sendMessage(msg)
+	if len(channel.Group) > 0 {
+		for queue, _ := range channel.Group {
+			client := channel.NextTurn(queue)
+			if client != nil {
+				return client.sendMessage(msg)
+			}
 		}
 	} else {
 		for _, client := range channel.Subscribers {
@@ -343,7 +345,7 @@ func (h *Hub) Publish(channel string, msg Message, ignored []string, from et.Jso
 		return logs.Alertf(ERR_CHANNEL_NOT_SUBSCRIBERS, channel)
 	}
 
-	return h.publish(ch, msg, ignored, from)
+	return h.broadcast(ch, msg, ignored, from)
 }
 
 /**
@@ -357,7 +359,7 @@ func (h *Hub) Publish(channel string, msg Message, ignored []string, from et.Jso
 func (h *Hub) Mute(channel string, msg Message, ignored []string, from et.Json) error {
 	ch := h.getChanel(channel)
 
-	return h.publish(ch, msg, ignored, from)
+	return h.broadcast(ch, msg, ignored, from)
 }
 
 /**

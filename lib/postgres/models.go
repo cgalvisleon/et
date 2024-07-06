@@ -13,8 +13,6 @@ import (
 **/
 func defineModels(db *sql.DB) error {
 	sql := `
-	CREATE SCHEMA IF NOT EXISTS core;
-
   CREATE TABLE IF NOT EXISTS core.MODELS(
 		MAIN VARCHAR(80) DEFAULT '',
     NAME VARCHAR(80) DEFAULT '',

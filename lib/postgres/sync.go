@@ -8,8 +8,6 @@ import "database/sql"
 **/
 func defineSync(db *sql.DB) error {
 	sql := `
-	CREATE SCHEMA IF NOT EXISTS core;
-
   CREATE TABLE IF NOT EXISTS core.SYNCS(
     DATE_MAKE TIMESTAMP DEFAULT NOW(),
     DATE_UPDATE TIMESTAMP DEFAULT NOW(),

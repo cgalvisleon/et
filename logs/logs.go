@@ -82,7 +82,7 @@ func Logf(kind string, format string, args ...any) {
 	log(kind, "", message)
 }
 
-func Traces(kind, color string, err error) ([]string, error) {
+func Traces(kind, color string, err error) error {
 	log(kind, color, err.Error())
 
 	var n int = 1
@@ -106,7 +106,45 @@ func Traces(kind, color string, err error) ([]string, error) {
 		}
 	}
 
-	return traces, err
+	return err
+}
+
+func errorTraces(err error) []string {
+	var n int = 1
+	var traces []string = []string{err.Error()}
+	for {
+		pc, file, line, more := runtime.Caller(n)
+		if !more {
+			break
+		}
+		n++
+		function := runtime.FuncForPC(pc)
+		name := function.Name()
+		list := strings.Split(name, ".")
+		if len(list) > 0 {
+			name = list[len(list)-1]
+		}
+		if !slices.Contains([]string{"ErrorM", "ErrorF"}, name) {
+			trace := fmt.Sprintf("%s:%d func:%s", file, line, name)
+			traces = append(traces, trace)
+		}
+	}
+
+	return traces
+}
+
+func errorTarget(kind, color string, err error) error {
+	traces := errorTraces(err)
+	if len(traces) > 0 {
+		n := len(traces) - 1
+		log(kind, color, err.Error(), "::", traces[n])
+
+		return err
+	}
+
+	log(kind, color, err.Error())
+
+	return err
 }
 
 func Alert(err error) error {
@@ -127,7 +165,7 @@ func Alertf(format string, args ...any) error {
 }
 
 func Error(err error) error {
-	_, err = Traces("Error", "red", err)
+	Traces("Error", "Red", err)
 
 	return err
 }
@@ -153,7 +191,7 @@ func Infof(format string, args ...any) {
 }
 
 func Fatal(err error) error {
-	log("Fatal", "Red", err)
+	Traces("Fatal", "Red", err)
 	os.Exit(1)
 
 	return err
@@ -165,7 +203,7 @@ func Fatalm(message string) error {
 }
 
 func Panic(err error) error {
-	log("Panic", "Red", err)
+	Traces("Panic", "Red", err)
 	os.Exit(1)
 
 	return err

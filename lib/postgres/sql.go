@@ -216,11 +216,23 @@ func sqlJoin(l *linq.Linq) {
 // Add where to sql
 func sqlWhere(l *linq.Linq) {
 	var result string
+
+	def := func(v *linq.Lwhere) string {
+		if v.Operator == "IN" {
+			value := v.Unquote()
+			value = strs.Replace(value, "]'", ")")
+			value = strs.Replace(value, "'[", "(")
+			return strs.Format(`%s %s %s`, v.Column.As(), v.Operator, value)
+		}
+
+		return v.Where()
+	}
+
 	for i, v := range l.Wheres {
 		if i == 0 {
-			result = strs.Format(`WHERE %s`, v.Where())
+			result = strs.Format(`WHERE %s`, def(v))
 		} else {
-			def := strs.Format(`%s %s`, strs.Uppcase(v.Connetor), v.Where())
+			def := strs.Format(`%s %s`, strs.Uppcase(v.Connetor), def(v))
 			result = strs.Append(result, def, "\n")
 		}
 	}

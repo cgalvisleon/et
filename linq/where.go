@@ -14,9 +14,45 @@ type Lwhere struct {
 	Connetor string
 }
 
+func (w *Lwhere) Unquote() string {
+	switch v := w.Value.(type) {
+	case *Column:
+		s := w.Linq.GetColumn(v)
+		return s.As()
+	case Column:
+		s := w.Linq.GetColumn(&v)
+		return s.As()
+	case *Lselect:
+		return v.As()
+	case Lselect:
+		return v.As()
+	default:
+		val := et.Unquote(v)
+		return strs.Format(`%v`, val)
+	}
+}
+
+func (w *Lwhere) Quote() string {
+	switch v := w.Value.(type) {
+	case *Column:
+		s := w.Linq.GetColumn(v)
+		return s.As()
+	case Column:
+		s := w.Linq.GetColumn(&v)
+		return s.As()
+	case *Lselect:
+		return v.As()
+	case Lselect:
+		return v.As()
+	default:
+		val := et.Quote(v)
+		return strs.Format(`%v`, val)
+	}
+}
+
 // Definition method to use in linq
 func (w *Lwhere) Definition() et.Json {
-	value := w.value()
+	value := w.Unquote()
 
 	return et.Json{
 		"column":   w.Column.As(),
@@ -26,30 +62,9 @@ func (w *Lwhere) Definition() et.Json {
 	}
 }
 
-func (w *Lwhere) value() string {
-	var value string
-	switch v := w.Value.(type) {
-	case *Column:
-		s := w.Linq.GetColumn(v)
-		value = s.As()
-	case Column:
-		s := w.Linq.GetColumn(&v)
-		value = s.As()
-	case *Lselect:
-		value = v.As()
-	case Lselect:
-		value = v.As()
-	default:
-		val := et.Unquote(v)
-		value = strs.Format(`%v`, val)
-	}
-
-	return value
-}
-
 // Where method to use in linq
 func (w *Lwhere) Where() string {
-	value := w.value()
+	value := w.Unquote()
 
 	return strs.Format(`%s %s %s`, w.Column.As(), w.Operator, value)
 }

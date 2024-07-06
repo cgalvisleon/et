@@ -4,7 +4,6 @@ import (
 	"database/sql"
 
 	"github.com/cgalvisleon/et/linq"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
 )
@@ -15,186 +14,126 @@ import (
 **/
 
 // CreateDatabase create a database if not exists
-func CreateDatabase(db *sql.DB, name string) (bool, error) {
+func CreateDatabase(db *sql.DB, name string) error {
 	name = strs.Lowcase(name)
-	exists, err := ExistDatabase(db, name)
+	sql := strs.Format(`CREATE DATABASE %s;`, name)
+
+	_, err := linq.Exec(db, sql)
 	if err != nil {
-		return false, err
+		return err
 	}
 
-	if !exists {
-		sql := strs.Format(`CREATE DATABASE %s;`, name)
-
-		_, err := linq.Exec(db, sql)
-		if err != nil {
-			return false, err
-		}
-	}
-
-	return !exists, nil
+	return nil
 }
 
 // CreateSchema create a schema if not exists
-func CreateSchema(db *sql.DB, name string) (bool, error) {
-	name = strs.Lowcase(name)
-	exists, err := ExistSchema(db, name)
+func CreateSchema(db *sql.DB, name string) error {
+	sql := ddlSchema(name)
+
+	_, err := linq.Exec(db, sql)
 	if err != nil {
-		return false, err
+		return err
 	}
 
-	if !exists {
-		sql := strs.Format(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"; CREATE SCHEMA IF NOT EXISTS "%s";`, name)
-
-		_, err := linq.Exec(db, sql)
-		if err != nil {
-			return false, err
-		}
-	}
-
-	return !exists, nil
+	return nil
 }
 
 // CreateColumn create a column if not exists in the table
-func CreateColumn(db *sql.DB, schema, table, name, kind, _default string) (bool, error) {
-	exists, err := ExistColum(db, schema, table, name)
-	if err != nil {
-		return false, err
-	}
-
-	if !exists {
-		tableName := strs.Format(`%s.%s`, schema, strs.Uppcase(table))
-		sql := linq.SQLDDL(`
-		DO $$
+func CreateColumn(db *sql.DB, schema, table, name, kind, _default string) error {
+	tableName := strs.Format(`%s.%s`, schema, strs.Uppcase(table))
+	sql := linq.SQLDDL(`
+	DO $$
+	BEGIN
 		BEGIN
-			BEGIN
-				ALTER TABLE $1 ADD COLUMN $2 $3 DEFAULT $4;
-			EXCEPTION
-				WHEN duplicate_column THEN RAISE NOTICE 'column <column_name> already exists in <table_name>.';
-			END;
+			ALTER TABLE $1 ADD COLUMN $2 $3 DEFAULT $4;
+		EXCEPTION
+			WHEN duplicate_column THEN RAISE NOTICE 'column <column_name> already exists in <table_name>.';
 		END;
-		$$;`, tableName, strs.Uppcase(name), strs.Uppcase(kind), _default)
+	END;
+	$$;`, tableName, strs.Uppcase(name), strs.Uppcase(kind), _default)
 
-		_, err := linq.Query(db, sql)
-		if err != nil {
-			return false, err
-		}
+	_, err := linq.Exec(db, sql)
+	if err != nil {
+		return err
 	}
 
-	return !exists, nil
+	return nil
 }
 
 // CreateIndex create a index if not exists in the table
-func CreateIndex(db *sql.DB, schema, table, field string) (bool, error) {
-	exists, err := ExistIndex(db, schema, table, field)
+func CreateIndex(db *sql.DB, schema, table, field string) error {
+	sql := linq.SQLDDL(`
+	CREATE INDEX IF NOT EXISTS $2_$3_IDX ON $1.$2($3);`,
+		strs.Uppcase(schema), strs.Uppcase(table), strs.Uppcase(field))
+
+	_, err := linq.Exec(db, sql)
 	if err != nil {
-		return false, err
+		return err
 	}
 
-	if !exists {
-		sql := linq.SQLDDL(`
-		CREATE INDEX IF NOT EXISTS $2_$3_IDX ON $1.$2($3);`,
-			strs.Uppcase(schema), strs.Uppcase(table), strs.Uppcase(field))
-
-		_, err := linq.Query(db, sql)
-		if err != nil {
-			return false, err
-		}
-	}
-
-	return !exists, nil
+	return nil
 }
 
 // CreateTrigger create a trigger if not exists in the table
-func CreateTrigger(db *sql.DB, schema, table, name, when, event, function string) (bool, error) {
-	exists, err := ExistTrigger(db, schema, table, name)
+func CreateTrigger(db *sql.DB, schema, table, name, when, event, function string) error {
+	sql := linq.SQLDDL(`
+	DROP TRIGGER IF EXISTS $3 ON $1.$2 CASCADE;
+	CREATE TRIGGER $3
+	$4 $5 ON $1.$2
+	FOR EACH ROW
+	EXECUTE PROCEDURE $6;`,
+		strs.Uppcase(schema), strs.Uppcase(table), strs.Uppcase(name), when, event, function)
+
+	_, err := linq.Exec(db, sql)
 	if err != nil {
-		return false, err
+		return err
 	}
 
-	if !exists {
-		sql := linq.SQLDDL(`
-		DROP TRIGGER IF EXISTS $3 ON $1.$2 CASCADE;
-		CREATE TRIGGER $3
-		$4 $5 ON $1.$2
-		FOR EACH ROW
-		EXECUTE PROCEDURE $6;`,
-			strs.Uppcase(schema), strs.Uppcase(table), strs.Uppcase(name), when, event, function)
-
-		_, err := linq.Query(db, sql)
-		if err != nil {
-			return false, err
-		}
-	}
-
-	return !exists, nil
+	return nil
 }
 
 // CreateSequence create a sequence if not exists
-func CreateSequence(db *sql.DB, schema, tag string) (bool, error) {
-	exists, err := ExistSerie(db, schema, tag)
+func CreateSequence(db *sql.DB, schema, tag string) error {
+	sql := strs.Format(`CREATE SEQUENCE IF NOT EXISTS %s START 1;`, tag)
+
+	_, err := linq.Exec(db, sql)
 	if err != nil {
-		return false, err
+		return err
 	}
 
-	if !exists {
-		sql := strs.Format(`CREATE SEQUENCE IF NOT EXISTS %s START 1;`, tag)
-
-		_, err := linq.Query(db, sql)
-		if err != nil {
-			return false, err
-		}
-	}
-
-	return !exists, nil
+	return nil
 }
 
 // CreateUser create a user if not exists
-func CreateUser(db *sql.DB, name, password string) (bool, error) {
-	name = strs.Uppcase(name)
-	exists, err := ExistUser(db, name)
+func CreateUser(db *sql.DB, name, password string) error {
+	passwordHash, err := utility.PasswordHash(password)
 	if err != nil {
-		return false, err
+		return err
 	}
 
-	if !exists {
-		passwordHash, err := utility.PasswordHash(password)
-		if err != nil {
-			return false, err
-		}
+	sql := strs.Format(`CREATE USER %s WITH PASSWORD '%s';`, name, passwordHash)
 
-		sql := strs.Format(`CREATE USER %s WITH PASSWORD '%s';`, name, passwordHash)
-
-		_, err = linq.Query(db, sql)
-		if err != nil {
-			return false, err
-		}
+	_, err = linq.Exec(db, sql)
+	if err != nil {
+		return err
 	}
 
-	return !exists, nil
+	return nil
 }
 
 // ChangePassword change the password of the user
-func ChangePassword(db *sql.DB, name, password string) (bool, error) {
-	exists, err := ExistUser(db, name)
-	if err != nil {
-		return false, err
-	}
-
-	if !exists {
-		return false, logs.Errorm("User not exists")
-	}
-
+func ChangePassword(db *sql.DB, name, password string) error {
 	passwordHash, err := utility.PasswordHash(password)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	sql := strs.Format(`ALTER USER %s WITH PASSWORD '%s';`, name, passwordHash)
 
-	_, err = linq.Query(db, sql)
+	_, err = linq.Exec(db, sql)
 	if err != nil {
-		return false, err
+		return err
 	}
 
-	return true, nil
+	return nil
 }

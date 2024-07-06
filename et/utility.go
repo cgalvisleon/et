@@ -51,6 +51,16 @@ func Unquote(val interface{}) any {
 		return strs.Format(`'%s'`, v.Format("2006-01-02 15:04:05"))
 	case Json:
 		return strs.Format(`%s`, v.ToUnquote())
+	case []string:
+		var r string
+		for i, _v := range v {
+			if i == 0 {
+				r = strs.Format(`'%s'`, unquote(_v))
+			} else {
+				r = strs.Format(`%s, '%s'`, r, unquote(_v))
+			}
+		}
+		return strs.Format(`'(%s)'`, r)
 	case []Json:
 		var r string
 		for i, _v := range v {
@@ -118,6 +128,16 @@ func Quote(val interface{}) any {
 	case Json:
 		j := Json(v)
 		return strs.Format(`%s`, j.ToQuote())
+	case []string:
+		var r string
+		for i, _v := range v {
+			if i == 0 {
+				r = strs.Format(`'%s'`, unquote(_v))
+			} else {
+				r = strs.Format(`%s, '%s'`, r, unquote(_v))
+			}
+		}
+		return strs.Format(`(%s)`, r)
 	case []Json:
 		var r string
 		for i, _v := range v {

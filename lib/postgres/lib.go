@@ -6,7 +6,6 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/linq"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 	_ "github.com/lib/pq"
 )
@@ -81,67 +80,10 @@ func (d *Postgres) Type() string {
 * @return error
 **/
 func (d *Postgres) Connect(params et.Json) (*sql.DB, error) {
-	if params["user"] == nil {
-		return nil, logs.Errorm("User is required")
-	}
-
-	if params["password"] == nil {
-		return nil, logs.Errorm("Password is required")
-	}
-
-	if params["host"] == nil {
-		return nil, logs.Errorm("Host is required")
-	}
-
-	if params["port"] == nil {
-		return nil, logs.Errorm("Port is required")
-	}
-
-	if params["database"] == nil {
-		return nil, logs.Errorm("Database is required")
-	}
-
-	if params["app"] == nil {
-		return nil, logs.Errorm("App name is required")
-	}
-
-	driver := "postgres"
-	user := params.Str("user")
-	password := params.Str("password")
-	host := params.Str("host")
-	port := params.Int("port")
-	database := params.Str("database")
-	app := params.Str("app")
-
-	connStr := strs.Format(`%s://%s:%s@%s:%d/%s?sslmode=disable&application_name=%s`, driver, user, password, host, port, database, app)
-	db, err := sql.Open(driver, connStr)
+	db, err := connect(params)
 	if err != nil {
 		return nil, err
 	}
-
-	err = defineSeries(db)
-	if err != nil {
-		return nil, err
-	}
-
-	err = defineModels(db)
-	if err != nil {
-		return nil, err
-	}
-
-	err = defineSync(db)
-	if err != nil {
-		return nil, err
-	}
-
-	err = defineRecycling(db)
-	if err != nil {
-		return nil, err
-	}
-
-	go defineListen(connStr, []string{"sync", "recycling"})
-
-	logs.Logf("DB", "Connected to %s database %s", driver, database)
 
 	params.Del("password")
 	d.DB = db
@@ -410,7 +352,7 @@ func (d *Postgres) DCL(command string, params et.Json) error {
 		return nil
 	case "create_database":
 		name := params.Str("name")
-		_, err := CreateDatabase(d.DB, name)
+		err := CreateDatabase(d.DB, name)
 		if err != nil {
 			return err
 		}
@@ -418,7 +360,7 @@ func (d *Postgres) DCL(command string, params et.Json) error {
 		return nil
 	case "create_schema":
 		name := params.Str("name")
-		_, err := CreateSchema(d.DB, name)
+		err := CreateSchema(d.DB, name)
 		if err != nil {
 			return err
 		}
@@ -430,7 +372,7 @@ func (d *Postgres) DCL(command string, params et.Json) error {
 		name := params.Str("name")
 		kind := params.Str("kind")
 		_default := params.Str("default")
-		_, err := CreateColumn(d.DB, schema, table, name, kind, _default)
+		err := CreateColumn(d.DB, schema, table, name, kind, _default)
 		if err != nil {
 			return err
 		}
@@ -440,7 +382,7 @@ func (d *Postgres) DCL(command string, params et.Json) error {
 		schema := params.Str("schema")
 		table := params.Str("table")
 		name := params.Str("name")
-		_, err := CreateIndex(d.DB, schema, table, name)
+		err := CreateIndex(d.DB, schema, table, name)
 		if err != nil {
 			return err
 		}
@@ -453,7 +395,7 @@ func (d *Postgres) DCL(command string, params et.Json) error {
 		when := params.Str("when")
 		event := params.Str("event")
 		function := params.Str("function")
-		_, err := CreateTrigger(d.DB, schema, table, name, when, event, function)
+		err := CreateTrigger(d.DB, schema, table, name, when, event, function)
 		if err != nil {
 			return err
 		}
@@ -462,7 +404,7 @@ func (d *Postgres) DCL(command string, params et.Json) error {
 	case "create_sequence":
 		schema := params.Str("schema")
 		name := params.Str("name")
-		_, err := CreateSequence(d.DB, schema, name)
+		err := CreateSequence(d.DB, schema, name)
 		if err != nil {
 			return err
 		}
@@ -471,7 +413,7 @@ func (d *Postgres) DCL(command string, params et.Json) error {
 	case "create_user":
 		name := params.Str("name")
 		password := params.Str("password")
-		_, err := CreateUser(d.DB, name, password)
+		err := CreateUser(d.DB, name, password)
 		if err != nil {
 			return err
 		}
@@ -480,7 +422,7 @@ func (d *Postgres) DCL(command string, params et.Json) error {
 	case "change_password":
 		name := params.Str("name")
 		password := params.Str("password")
-		_, err := ChangePassword(d.DB, name, password)
+		err := ChangePassword(d.DB, name, password)
 		if err != nil {
 			return err
 		}

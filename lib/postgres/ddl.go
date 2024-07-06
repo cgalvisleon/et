@@ -146,8 +146,9 @@ func ddlType(col *linq.Column) string {
 * @param schema *linq.Schema
 * @return string
 **/
-func ddlSchema(schema *linq.Schema) string {
-	return strs.Format(`CREATE SCHEMA IF NOT EXISTS %s;`, schema.Name)
+func ddlSchema(name string) string {
+	name = strs.Lowcase(name)
+	return strs.Format(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"; CREATE EXTENSION IF NOT EXISTS pgcrypto; CREATE SCHEMA IF NOT EXISTS "%s";`, name)
 }
 
 /**
@@ -313,7 +314,7 @@ func ddlTable(model *linq.Model) string {
 	}
 	columns = strs.Append(columns, ",", "")
 	columns = strs.Append(columns, ddlPrimaryKey(model), "\n")
-	result = ddlSchema(model.Schema)
+	result = ddlSchema(model.Schema.Name)
 	table := strs.Format("\nCREATE TABLE IF NOT EXISTS %s (\n%s);", model.Table, columns)
 	result = strs.Append(result, table, "\n")
 	result = strs.Append(result, primaryKeys, "\n")

@@ -10,8 +10,6 @@ import "database/sql"
 **/
 func defineRecycling(db *sql.DB) error {
 	sql := `
-	CREATE SCHEMA IF NOT EXISTS core;
-
   CREATE TABLE IF NOT EXISTS core.RECYCLING(
     DATE_MAKE TIMESTAMP DEFAULT NOW(),
     TABLE_SCHEMA VARCHAR(80) DEFAULT '',

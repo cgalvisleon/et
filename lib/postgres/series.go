@@ -11,8 +11,6 @@ import (
 // ddlSchemes return sql series ddl
 func defineSeries(db *sql.DB) error {
 	sql := `
-	CREATE SCHEMA IF NOT EXISTS core;
-
   CREATE TABLE IF NOT EXISTS core.SERIES(		
 		SERIE VARCHAR(250) DEFAULT '',
 		VALUE BIGINT DEFAULT 0,
@@ -36,7 +34,6 @@ func defineSeries(db *sql.DB) error {
 * @return error
 **/
 func insertSerie(db *sql.DB, tag string, val int, lock *sync.RWMutex) (int, error) {
-	defer lock.Unlock()
 	lock.Lock()
 
 	sql := `
@@ -47,6 +44,8 @@ func insertSerie(db *sql.DB, tag string, val int, lock *sync.RWMutex) (int, erro
 	if err != nil {
 		return 0, err
 	}
+
+	lock.Unlock()
 
 	return val, nil
 }
@@ -97,14 +96,12 @@ func currentSerie(db *sql.DB, tag string, lock *sync.RWMutex) (int, error) {
 * @return int
 **/
 func nextSerie(db *sql.DB, tag string, lock *sync.RWMutex) (int, error) {
-	defer lock.Unlock()
-	lock.Lock()
-
 	current, err := currentSerie(db, tag, lock)
 	if err != nil {
 		return 0, err
 	}
 
+	lock.Lock()
 	sql := `
 	UPDATE core.SERIES SET	
 	VALUE = $2
@@ -117,6 +114,8 @@ func nextSerie(db *sql.DB, tag string, lock *sync.RWMutex) (int, error) {
 		return 0, err
 	}
 
+	lock.Unlock()
+
 	return result, nil
 }
 
@@ -128,7 +127,6 @@ func nextSerie(db *sql.DB, tag string, lock *sync.RWMutex) (int, error) {
 * @return error
 **/
 func deleteSerie(db *sql.DB, tag string, lock *sync.RWMutex) error {
-	defer lock.Unlock()
 	lock.Lock()
 
 	sql := `
@@ -140,6 +138,8 @@ func deleteSerie(db *sql.DB, tag string, lock *sync.RWMutex) error {
 	if err != nil {
 		return err
 	}
+
+	lock.Unlock()
 
 	return nil
 }

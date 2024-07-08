@@ -246,8 +246,6 @@ func (d *Postgres) UpdateSql(l *linq.Linq) string {
 
 	sqlUpdate(l)
 
-	sqlWhere(l)
-
 	sqlReturns(l)
 
 	return l.SQL()
@@ -262,8 +260,6 @@ func (d *Postgres) DeleteSql(l *linq.Linq) string {
 	l.Clear()
 
 	sqlDelete(l)
-
-	sqlWhere(l)
 
 	sqlReturns(l)
 

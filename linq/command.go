@@ -174,10 +174,6 @@ func (c *Values) consolidate(data et.Json) {
 		return
 	}
 
-	if c.TypeCommand == TpDelete {
-		return
-	}
-
 	from := c.From
 	model := from.Model
 
@@ -192,6 +188,10 @@ func (c *Values) consolidate(data et.Json) {
 	if c.TypeCommand == TpInsert {
 		for _, col := range model.Columns {
 			if col.TypeColumn == TpDetail {
+				continue
+			}
+
+			if col.TypeColumn == TpPseudo {
 				continue
 			}
 

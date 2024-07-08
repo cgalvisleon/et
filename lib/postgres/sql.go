@@ -49,20 +49,11 @@ func sqlColumns(current bool, l *linq.Linq, cols ...*linq.Lselect) string {
 				def = strs.Format(`(%s)`, c.Formula)
 				def = strs.Format(`%s AS %s`, def, c.Up())
 				appendColumn(def)
-			} else if linq.TpPseudo == c.TypeColumn {
+			} else if current && linq.TpPseudo == c.TypeColumn {
 				def = strs.Format(`%s`, s.As())
 				appendColumn(def)
 			}
 		}
-	}
-
-	if current {
-		appendColumns(l.Froms[0], &linq.Column{
-			Name:       "CTID",
-			TypeColumn: linq.TpPseudo,
-			TypeData:   linq.TpKey,
-			Default:    "(0,0)",
-		})
 	}
 
 	if len(cols) == 0 {
@@ -137,20 +128,11 @@ func sqlData(current bool, l *linq.Linq, cols ...*linq.Lselect) string {
 				def = strs.Format(`'%s', %s`, c.Low(), def)
 				def = strs.Format(`(%s)`, c.Formula)
 				appendObjects(def)
-			} else if linq.TpPseudo == c.TypeColumn {
+			} else if current && linq.TpPseudo == c.TypeColumn {
 				def = strs.Format(`'%s', %s`, c.Low(), s.As())
 				appendObjects(def)
 			}
 		}
-	}
-
-	if current {
-		appendColumns(l.Froms[0], &linq.Column{
-			Name:       "CTID",
-			TypeColumn: linq.TpPseudo,
-			TypeData:   linq.TpKey,
-			Default:    "(0,0)",
-		})
 	}
 
 	if len(cols) == 0 {
@@ -414,6 +396,7 @@ func sqlUpdate(l *linq.Linq) {
 	var result string
 	var values string
 	var atribs string = linq.SourceField.Up()
+	var ctid any
 	vals := *l.Values
 	mod := vals.From.Model
 
@@ -432,6 +415,8 @@ func sqlUpdate(l *linq.Linq) {
 			col := val.Column.Low()
 			val := et.Quote(val.New)
 			atribs = strs.Format(`jsonb_set(%s, '{%s}', '%v', true)`, atribs, col, val)
+		case linq.TpPseudo:
+			ctid = et.Unquote(val.New)
 		}
 	}
 
@@ -440,7 +425,7 @@ func sqlUpdate(l *linq.Linq) {
 		values = strs.Append(values, def, ",\n")
 	}
 
-	result = strs.Format("UPDATE %s SET\n%s", mod.Table, values)
+	result = strs.Format("UPDATE %s SET\n%s WHERE ctid = '%v'", mod.Table, values, ctid)
 
 	l.Sql = strs.Append(l.Sql, result, "\n")
 }
@@ -448,10 +433,18 @@ func sqlUpdate(l *linq.Linq) {
 // Add sql delete to sql
 func sqlDelete(l *linq.Linq) {
 	var result string
+	var ctid any
 	vals := *l.Values
 	mod := vals.From.Model
 
-	result = strs.Format("DELETE FROM %s", mod.Table)
+	for _, val := range vals.Values {
+		switch val.Column.TypeColumn {
+		case linq.TpPseudo:
+			ctid = et.Unquote(val.New)
+		}
+	}
+
+	result = strs.Format("DELETE FROM %s WHERE ctid = '%v'", mod.Table, ctid)
 
 	l.Sql = strs.Append(l.Sql, result, "\n")
 }

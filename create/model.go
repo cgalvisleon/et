@@ -657,18 +657,7 @@ func Get$2ById(id string) (et.Item, error) {
 	return result, nil	
 }
 
-func Value$2ById(_default any, id, atrib string) *generic.Any {
-	item, err := $2.Data(atrib).
-		Where($2.Column("_id").Eq(id)).
-		First()
-	if err != nil {
-		return &generic.Any{}
-	}
-
-	return item.Any(_default, atrib)
-}
-
-func UpSert$2(project_id, id string, data et.Json) (et.Item, error) {
+func Insert$2(project_id, id string, data et.Json) (et.Item, error) {
 	if !utility.ValidId(project_id) {
 		return et.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "project_id")
 	}
@@ -680,7 +669,7 @@ func UpSert$2(project_id, id string, data et.Json) (et.Item, error) {
 	id = utility.GenId(id)
 	data["project_id"] = project_id
 	data["_id"] = id
-	return $2.UpSert(data).
+	return $2.Insert(data).
 		Where($2.Column("_id").Eq(id)).
 		ExecOne()
 }
@@ -760,12 +749,12 @@ func All$2(project_id, state, search string, page, rows int, _select string) (et
 /**
 * Router
 **/
-func (rt *Router) upSert$2(w http.ResponseWriter, r *http.Request) {
+func (rt *Router) insert$2(w http.ResponseWriter, r *http.Request) {
 	body, _ := response.GetBody(r)
 	project_id := body.Str("project_id")
 	id := body.Str("id")	
 
-	result, err := UpSert$2(project_id, id, body)
+	result, err := Insert$2(project_id, id, body)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return

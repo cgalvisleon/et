@@ -24,20 +24,10 @@ type JsonD struct {
 	Value interface{}
 }
 
-// Json type
-type Json map[string]interface{}
-
 /**
-* JsonToArrayJson convert a map to a array of json
-* @param src map[string]interface{}
-* @return []Json
+* Json type
 **/
-func JsonToArrayJson(src map[string]interface{}) ([]Json, error) {
-	result := []Json{}
-	result = append(result, src)
-
-	return result, nil
-}
+type Json map[string]interface{}
 
 /**
 * Marshall convert a interface to a json
@@ -554,67 +544,34 @@ func (s Json) Array(atrib string) []Json {
 	case []Json:
 		return v
 	case []interface{}:
-		result, err := ToJsonArray(v)
-		if err != nil {
-			logs.Errorf("json/Array - Atrib:%s Type:%v Value:%v", atrib, reflect.TypeOf(v), v)
-			return []Json{}
+		var result []Json
+		for _, val := range v {
+			switch val := val.(type) {
+			case Json:
+				result = append(result, val)
+			case map[string]interface{}:
+				result = append(result, Json(val))
+			default:
+				logs.Errorf("json/Array - Atrib:%s Type:%v Value:%v", atrib, reflect.TypeOf(val), val)
+			}
 		}
-
 		return result
 	case map[string]interface{}:
-		result, err := JsonToArrayJson(v)
-		if err != nil {
-			return []Json{}
-		}
-
+		var result []Json
+		result = append(result, v)
 		return result
 	case string:
-		if v != "[]" {
-			logs.Errorf("json/Array - Atrib:%s Type:%v Value:%v", atrib, reflect.TypeOf(v), v)
+		var result []Json
+		err := json.Unmarshal([]byte(v), &result)
+		if err != nil {
+			logs.Errorf("json/Array - Atrib:%s Type:%v Value:%v", val, reflect.TypeOf(v), v)
+			return []Json{}
 		}
+		return result
+	default:
+		logs.Errorf("json/Array - Atrib:%s Type:%v Value:%v", val, reflect.TypeOf(v), v)
 		return []Json{}
-	default:
-		logs.Errorf("json/Array - Atrib:%s Type:%v Value:%v", atrib, reflect.TypeOf(v), v)
-		return []Json{}
 	}
-}
-
-/**
-* ArrayStr return the value of the key
-* @param atrib string
-* @return []string
-**/
-func (s Json) ArrayStr(atrib string) []string {
-	result := []string{}
-	vals := s[atrib]
-	switch v := vals.(type) {
-	case []interface{}:
-		for _, val := range v {
-			result = append(result, val.(string))
-		}
-	default:
-		logs.Errorf("json/ArrayStr - Atrib:%s Type:%v Value:%v", atrib, reflect.TypeOf(v), v)
-	}
-
-	return result
-}
-
-/**
-* ArrayInt return the value of the key
-* @param atrib string
-* @return []int
-**/
-func (s Json) ArrayAny(atrib string) []any {
-	result := []any{}
-	vals := s[atrib]
-	switch v := vals.(type) {
-	case []interface{}:
-		result = append(result, v...)
-	default:
-		logs.Errorf("json/ArrayAny - Type (%v) value:%v", reflect.TypeOf(v), v)
-	}
-
-	return result
 }
 
 /**

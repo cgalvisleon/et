@@ -30,14 +30,14 @@ type Database struct {
 * @param drive Driver
 * @return *Database
 **/
-func NewDatabase(name, description string, params et.Json, driver Driver) (*Database, error) {
+func NewDatabase(name, description string, driver Driver) (*Database, error) {
 	for _, v := range dbs {
 		if v.Name == strs.Uppcase(name) {
 			return v, nil
 		}
 	}
 
-	db, err := driver.Connect(params)
+	db, err := driver.Connect()
 	if err != nil {
 		return nil, logs.Alert(err)
 	}
@@ -210,7 +210,6 @@ func (d *Database) initModel(model *Model) error {
 		sql := driver.DefineSql(model)
 		if d.debug {
 			logs.Debug(model.Definition().ToString())
-			logs.Debug(sql)
 		}
 
 		_, err = Exec(d.DB, sql)
@@ -231,7 +230,6 @@ func (d *Database) initModel(model *Model) error {
 		sql := driver.MutationSql(model)
 		if d.debug {
 			logs.Debug(model.Definition().ToString())
-			logs.Debug(sql)
 		}
 
 		_, err = Exec(d.DB, sql)

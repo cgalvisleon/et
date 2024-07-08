@@ -6,19 +6,29 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/linq"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 	_ "github.com/lib/pq"
 )
 
+type Connection struct {
+	User     string
+	Password string
+	Host     string
+	Port     int
+	Database string
+	App      string
+}
+
 // Postgres struct to define a postgres database
 type Postgres struct {
 	DB     *sql.DB
-	Params et.Json
+	Params *Connection
 	locks  map[string]*sync.RWMutex
 	wgs    map[string]*sync.WaitGroup
 }
 
-func NewDriver(params et.Json) *Postgres {
+func NewDriver(params *Connection) *Postgres {
 	return &Postgres{
 		Params: params,
 		locks:  make(map[string]*sync.RWMutex),
@@ -79,15 +89,50 @@ func (d *Postgres) Type() string {
 * @return *sql.DB
 * @return error
 **/
-func (d *Postgres) Connect(params et.Json) (*sql.DB, error) {
-	db, err := connect(params)
+func (d *Postgres) Connect() (*sql.DB, error) {
+	if d.DB != nil {
+		return d.DB, nil
+	}
+
+	connStr, err := ConnStr(d.Params)
 	if err != nil {
 		return nil, err
 	}
 
-	params.Del("password")
+	db, err := Connect(connStr)
+	if err != nil {
+		return nil, err
+	}
+
+	err = defineCore(db)
+	if err != nil {
+		return nil, err
+	}
+
+	err = defineSeries(db)
+	if err != nil {
+		return nil, err
+	}
+
+	err = defineModels(db)
+	if err != nil {
+		return nil, err
+	}
+
+	err = defineSync(db, connStr)
+	if err != nil {
+		return nil, err
+	}
+
+	err = defineRecycling(db)
+	if err != nil {
+		return nil, err
+	}
+
+	logs.Logf("DB", "Connected to database:%s", d.Params.Database)
+
+	d.Params.Password = ""
 	d.DB = db
-	d.Params = params
 
 	return d.DB, nil
 }

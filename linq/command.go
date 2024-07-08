@@ -586,20 +586,6 @@ func (m *Model) Update(data et.Json) *Linq {
 }
 
 /**
-* UpSert method to use in linq
-* @return error
-**/
-func (m *Model) UpSert(data et.Json) *Linq {
-	l := From(m)
-	l.TypeQuery = TpCommand
-	l.Values.From = l.Froms[0]
-	l.Values.TypeCommand = TpUpdate
-	l.Values.Data = data
-
-	return l
-}
-
-/**
 * Delete method to use in linq
 * @return error
 **/

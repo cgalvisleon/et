@@ -6,7 +6,7 @@ import "database/sql"
 * defineSync return sql syncs ddl
 * @return string
 **/
-func defineSync(db *sql.DB) error {
+func defineSync(db *sql.DB, connStr string) error {
 	sql := `
   CREATE TABLE IF NOT EXISTS core.SYNCS(
     DATE_MAKE TIMESTAMP DEFAULT NOW(),
@@ -120,6 +120,8 @@ func defineSync(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
+
+	go defineListen(connStr, []string{"sync", "recycling"})
 
 	return nil
 }

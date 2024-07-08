@@ -332,15 +332,6 @@ func (it *Item) Array(atrib string) []Json {
 }
 
 /**
-* ArrayStr return []string value of the key
-* @param atribs ...string
-* @return []string
-**/
-func (it *Item) ArrayStr(atrib string) []string {
-	return it.Result.ArrayStr(atrib)
-}
-
-/**
 * ToString convert to string values
 * @return string
 **/

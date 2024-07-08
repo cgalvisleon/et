@@ -221,21 +221,6 @@ func ToJson(src interface{}) (Json, error) {
 	return Json(t), nil
 }
 
-// ToJsonArray convert a value to a []Json
-func ToJsonArray(vals []interface{}) ([]Json, error) {
-	var result []Json
-	for _, val := range vals {
-		v, err := ToJson(val)
-		if err != nil {
-			return nil, err
-		}
-
-		result = append(result, v)
-	}
-
-	return result, nil
-}
-
 // ToString convert a value to a string
 func ToString(val interface{}) string {
 	s, err := json.Marshal(val)

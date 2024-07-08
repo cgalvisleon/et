@@ -34,7 +34,7 @@ func (d TypeDriver) String() string {
 
 type Driver interface {
 	Type() string
-	Connect(params et.Json) (*sql.DB, error)
+	Connect() (*sql.DB, error)
 	// DDL (Data Definition Language)
 	DefineSql(model *Model) string
 	MutationSql(model *Model) string

@@ -23,7 +23,7 @@ func (l *Linq) GetRetun(model *Model, name string) *Lselect {
 	return result
 }
 
-func (l *Linq) REturns(sel ...any) *Linq {
+func (l *Linq) Returning(sel ...any) *Linq {
 	l.Returns.Used = true
 
 	for _, col := range sel {

@@ -1,8 +1,9 @@
 package jdb
 
 import (
+	"database/sql"
+
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/et"
 	lpg "github.com/cgalvisleon/et/lib/postgres"
 	"github.com/cgalvisleon/et/linq"
 	"github.com/cgalvisleon/et/logs"
@@ -19,18 +20,18 @@ func Load() (*linq.Database, error) {
 
 	if kind == "postgres" {
 		var drive linq.Driver
-		params := et.Json{
-			"user":     user,
-			"password": password,
-			"host":     host,
-			"port":     port,
-			"database": name,
-			"app":      app,
-		}
-		drivePg := lpg.NewDriver(params)
+		drivePg := lpg.NewDriver(&lpg.Connection{
+			User:     user,
+			Password: password,
+			Host:     host,
+			Port:     port,
+			Database: name,
+			App:      app,
+		})
+
 		drive = drivePg
 
-		result, err := linq.NewDatabase(name, "", params, drive)
+		result, err := linq.NewDatabase(name, "", drive)
 		if err != nil {
 			return nil, logs.Alert(err)
 		}
@@ -39,4 +40,18 @@ func Load() (*linq.Database, error) {
 	} else {
 		return nil, logs.Alertm(MSG_DRIVER_NOT_FOUND)
 	}
+}
+
+func Connect(params *lpg.Connection) (*sql.DB, error) {
+	connStr, err := lpg.ConnStr(params)
+	if err != nil {
+		return nil, logs.Alert(err)
+	}
+
+	result, err := lpg.Connect(connStr)
+	if err != nil {
+		return nil, logs.Alert(err)
+	}
+
+	return result, nil
 }

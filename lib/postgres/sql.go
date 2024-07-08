@@ -10,7 +10,7 @@ import (
 )
 
 // Return string can you use to select or return sql
-func sqlColumns(l *linq.Linq, cols ...*linq.Lselect) string {
+func sqlColumns(current bool, l *linq.Linq, cols ...*linq.Lselect) string {
 	if len(l.Froms) == 0 {
 		return ""
 	}
@@ -49,13 +49,24 @@ func sqlColumns(l *linq.Linq, cols ...*linq.Lselect) string {
 				def = strs.Format(`(%s)`, c.Formula)
 				def = strs.Format(`%s AS %s`, def, c.Up())
 				appendColumn(def)
+			} else if linq.TpPseudo == c.TypeColumn {
+				def = strs.Format(`%s`, s.As())
+				appendColumn(def)
 			}
 		}
 	}
 
+	if current {
+		appendColumns(l.Froms[0], &linq.Column{
+			Name:       "CTID",
+			TypeColumn: linq.TpPseudo,
+			TypeData:   linq.TpKey,
+			Default:    "(0,0)",
+		})
+	}
+
 	if len(cols) == 0 {
 		f := l.Froms[0]
-
 		for _, c := range f.Model.Columns {
 			appendColumns(f, c)
 		}
@@ -74,7 +85,7 @@ func sqlColumns(l *linq.Linq, cols ...*linq.Lselect) string {
 * @param cols ...*linq.Lselect
 * @return string
 **/
-func sqlData(l *linq.Linq, cols ...*linq.Lselect) string {
+func sqlData(current bool, l *linq.Linq, cols ...*linq.Lselect) string {
 	if len(l.Froms) == 0 {
 		return ""
 	}
@@ -126,8 +137,20 @@ func sqlData(l *linq.Linq, cols ...*linq.Lselect) string {
 				def = strs.Format(`'%s', %s`, c.Low(), def)
 				def = strs.Format(`(%s)`, c.Formula)
 				appendObjects(def)
+			} else if linq.TpPseudo == c.TypeColumn {
+				def = strs.Format(`'%s', %s`, c.Low(), s.As())
+				appendObjects(def)
 			}
 		}
+	}
+
+	if current {
+		appendColumns(l.Froms[0], &linq.Column{
+			Name:       "CTID",
+			TypeColumn: linq.TpPseudo,
+			TypeData:   linq.TpKey,
+			Default:    "(0,0)",
+		})
 	}
 
 	if len(cols) == 0 {
@@ -159,10 +182,10 @@ func sqlData(l *linq.Linq, cols ...*linq.Lselect) string {
 func sqlSelect(l *linq.Linq) {
 	var result string
 	if l.Selects.Used {
-		result = sqlColumns(l, l.Selects.Columns...)
+		result = sqlColumns(false, l, l.Selects.Columns...)
 	}
 	if l.Data.Used {
-		def := sqlData(l, l.Data.Columns...)
+		def := sqlData(false, l, l.Data.Columns...)
 		result = strs.Append(result, def, ",\n")
 	}
 
@@ -175,10 +198,25 @@ func sqlSelect(l *linq.Linq) {
 	l.Sql = strs.Append(l.Sql, result, "\n")
 }
 
+// Build current sql used to trigger in linq
+func sqlCurrent(l *linq.Linq) {
+	var result string
+	if l.Values.From.Model.ColumnData == nil {
+		result = sqlColumns(true, l, []*linq.Lselect{}...)
+	} else {
+		def := sqlData(true, l, []*linq.Lselect{}...)
+		result = strs.Append(result, def, ",\n")
+	}
+
+	result = strs.Append("SELECT ", result, " ")
+
+	l.Sql = strs.Append(l.Sql, result, "\n")
+}
+
 // Add from to sql
 func sqlFrom(l *linq.Linq) error {
 	if l.TypeQuery == linq.TpCommand {
-		f := l.Command.From
+		f := l.Values.From
 		result := strs.Format(`FROM %s`, f.Model.Table)
 		l.Sql = strs.Append(l.Sql, result, "\n")
 
@@ -321,27 +359,12 @@ func sqlReturns(l *linq.Linq) {
 	var def, result string
 	f := l.Froms[0]
 	m := f.Model
-	if m.ColumnSource != nil {
-		def = sqlData(l, l.Returns.Columns...)
+	if m.ColumnData == nil {
+		def = sqlColumns(false, l, l.Returns.Columns...)
 	} else {
-		def = sqlColumns(l, l.Returns.Columns...)
+		def = sqlData(false, l, l.Returns.Columns...)
 	}
 	result = strs.Format(`RETURNING %s`, def)
-
-	l.Sql = strs.Append(l.Sql, result, "\n")
-}
-
-// Build current sql used to trigger in linq
-func sqlCurrent(l *linq.Linq) {
-	var result string
-	if l.Command.From.Model.ColumnSource != nil {
-		def := sqlData(l, []*linq.Lselect{}...)
-		result = strs.Append(result, def, ",\n")
-	} else {
-		result = sqlColumns(l, []*linq.Lselect{}...)
-	}
-
-	result = strs.Append("SELECT", result, " ")
 
 	l.Sql = strs.Append(l.Sql, result, "\n")
 }
@@ -352,28 +375,27 @@ func sqlInsert(l *linq.Linq) {
 	var columns string
 	var values string
 	var atribs string
-	com := l.Command
-	m := com.From.Model
+	vals := *l.Values
+	mod := vals.From.Model
 
-	for k, v := range *com.Columns {
-		if strs.Lowcase(k) == linq.SourceField.Low() {
+	for _, val := range vals.Values {
+		if val.Column.IsSourceField {
 			continue
 		}
 
-		field := strs.Uppcase(k)
-		value := et.Unquote(v)
-		def := strs.Format(`%v`, value)
-
-		columns = strs.Append(columns, field, ", ")
-		values = strs.Append(values, def, ", ")
-	}
-
-	for k, v := range *com.Atribs {
-		field := strs.Lowcase(k)
-		value := et.Quote(v)
-		def := strs.Format(`"%s": %v`, field, value)
-
-		atribs = strs.Append(atribs, def, ",\n")
+		switch val.Column.TypeColumn {
+		case linq.TpColumn:
+			col := val.Column.Up()
+			val := et.Unquote(val.New)
+			def := strs.Format(`%v`, val)
+			columns = strs.Append(columns, col, ", ")
+			values = strs.Append(values, def, ", ")
+		case linq.TpAtrib:
+			col := val.Column.Low()
+			val := et.Quote(val.New)
+			def := strs.Format(`"%s": %v`, col, val)
+			atribs = strs.Append(atribs, def, ",\n")
+		}
 	}
 
 	if len(atribs) > 0 {
@@ -382,7 +404,7 @@ func sqlInsert(l *linq.Linq) {
 		values = strs.Append(values, def, ", ")
 	}
 
-	result = strs.Format("INSERT INTO %s(%s)\nVALUES (%s)", m.Table, columns, values)
+	result = strs.Format("INSERT INTO %s(%s)\nVALUES (%s)", mod.Table, columns, values)
 
 	l.Sql = strs.Append(l.Sql, result, "\n")
 }
@@ -392,21 +414,25 @@ func sqlUpdate(l *linq.Linq) {
 	var result string
 	var values string
 	var atribs string = linq.SourceField.Up()
-	com := l.Command
+	vals := *l.Values
+	mod := vals.From.Model
 
-	for k, v := range *com.Columns {
-		field := strs.Uppcase(k)
-		value := et.Unquote(v)
-		def := strs.Format(`%s = %v`, field, value)
+	for _, val := range vals.Values {
+		if val.Column.IsSourceField {
+			continue
+		}
 
-		values = strs.Append(values, def, ",\n")
-	}
-
-	for k, v := range *com.Atribs {
-		field := strs.Lowcase(k)
-		value := et.Quote(v)
-
-		atribs = strs.Format(`jsonb_set(%s, '{%s}', '%v', true)`, atribs, field, value)
+		switch val.Column.TypeColumn {
+		case linq.TpColumn:
+			col := val.Column.Up()
+			val := et.Unquote(val.New)
+			def := strs.Format(`%s = %v`, col, val)
+			values = strs.Append(values, def, ",\n")
+		case linq.TpAtrib:
+			col := val.Column.Low()
+			val := et.Quote(val.New)
+			atribs = strs.Format(`jsonb_set(%s, '{%s}', '%v', true)`, atribs, col, val)
+		}
 	}
 
 	if len(atribs) > 0 {
@@ -414,7 +440,7 @@ func sqlUpdate(l *linq.Linq) {
 		values = strs.Append(values, def, ",\n")
 	}
 
-	result = strs.Format("UPDATE %s SET\n%s", com.From.Model.Table, values)
+	result = strs.Format("UPDATE %s SET\n%s", mod.Table, values)
 
 	l.Sql = strs.Append(l.Sql, result, "\n")
 }
@@ -422,9 +448,10 @@ func sqlUpdate(l *linq.Linq) {
 // Add sql delete to sql
 func sqlDelete(l *linq.Linq) {
 	var result string
-	com := l.Command
+	vals := *l.Values
+	mod := vals.From.Model
 
-	result = strs.Format("DELETE FROM %s", com.From.Model.Table)
+	result = strs.Format("DELETE FROM %s", mod.Table)
 
 	l.Sql = strs.Append(l.Sql, result, "\n")
 }

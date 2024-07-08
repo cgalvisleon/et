@@ -57,7 +57,7 @@ func (d *Postgres) wgAdd(tag string, delta int) *sync.WaitGroup {
 * @param tag string
 * @return *sync.RWMutex
 **/
-func (d *Postgres) lock(tag string) *sync.RWMutex {
+func (d *Postgres) Lock(tag string) *sync.RWMutex {
 	if d.locks[tag] == nil {
 		d.locks[tag] = &sync.RWMutex{}
 	}

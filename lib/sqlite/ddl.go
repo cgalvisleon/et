@@ -57,7 +57,7 @@ func ddlDefault(col *linq.Column) string {
 		result = `''`
 	case linq.TpMultiSelect:
 		result = `''`
-	case linq.TpSource:
+	case linq.TpData:
 		result = `'{}'`
 	case linq.TpJson:
 		result = `'{}'`

@@ -11,6 +11,8 @@ import (
 // ddlSchemes return sql series ddl
 func defineSeries(db *sql.DB) error {
 	sql := `
+	CREATE SCHEMA IF NOT EXISTS core;
+
   CREATE TABLE IF NOT EXISTS core.SERIES(		
 		SERIE VARCHAR(250) DEFAULT '',
 		VALUE BIGINT DEFAULT 0,
@@ -33,8 +35,9 @@ func defineSeries(db *sql.DB) error {
 * @param lock *sync.RWMutex
 * @return error
 **/
-func insertSerie(db *sql.DB, tag string, val int, lock *sync.RWMutex) (int, error) {
+func insertSerie(db *sql.DB, tag string, val int, lock *sync.RWMutex) error {
 	lock.Lock()
+	defer lock.Unlock()
 
 	sql := `
 	INSERT INTO core.SERIES (SERIE, VALUE)
@@ -42,12 +45,10 @@ func insertSerie(db *sql.DB, tag string, val int, lock *sync.RWMutex) (int, erro
 
 	_, err := db.Exec(sql, tag, val)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
-	lock.Unlock()
-
-	return val, nil
+	return nil
 }
 
 /**
@@ -58,11 +59,11 @@ func insertSerie(db *sql.DB, tag string, val int, lock *sync.RWMutex) (int, erro
 * @return int
 **/
 func currentSerie(db *sql.DB, tag string, lock *sync.RWMutex) (int, error) {
-	defer lock.RUnlock()
 	lock.RLock()
+	defer lock.RUnlock()
 
 	sql := `
-	SELECT VALUE INTO result
+	SELECT VALUE AS result
 	FROM core.SERIES
 	WHERE SERIE = $1 LIMIT 1;`
 
@@ -75,12 +76,7 @@ func currentSerie(db *sql.DB, tag string, lock *sync.RWMutex) (int, error) {
 
 	item := linq.RowsItem(rows)
 	if !item.Ok {
-		result, err := insertSerie(db, tag, 1, lock)
-		if err != nil {
-			return 0, err
-		}
-
-		return result, nil
+		return 0, nil
 	}
 
 	result := item.Int("result")
@@ -101,20 +97,29 @@ func nextSerie(db *sql.DB, tag string, lock *sync.RWMutex) (int, error) {
 		return 0, err
 	}
 
+	if current == 0 {
+		result := 1
+		err := insertSerie(db, tag, result, lock)
+		if err != nil {
+			return 0, err
+		}
+
+		return result, nil
+	}
+
 	lock.Lock()
+	defer lock.Unlock()
+
 	sql := `
 	UPDATE core.SERIES SET	
 	VALUE = $2
-	WHERE SERIE = $1
-	RETERNING VALUE INTO result;`
+	WHERE SERIE = $1;`
 
 	result := current + 1
 	_, err = db.Exec(sql, tag, result)
 	if err != nil {
 		return 0, err
 	}
-
-	lock.Unlock()
 
 	return result, nil
 }
@@ -128,18 +133,16 @@ func nextSerie(db *sql.DB, tag string, lock *sync.RWMutex) (int, error) {
 **/
 func deleteSerie(db *sql.DB, tag string, lock *sync.RWMutex) error {
 	lock.Lock()
+	defer lock.Unlock()
 
 	sql := `
 	DELETE FROM core.SERIES
-	WHERE SERIE = $1
-	RETURNING VALUE INTO result;`
+	WHERE SERIE = $1;`
 
 	_, err := db.Exec(sql, tag)
 	if err != nil {
 		return err
 	}
-
-	lock.Unlock()
 
 	return nil
 }
@@ -151,7 +154,7 @@ func deleteSerie(db *sql.DB, tag string, lock *sync.RWMutex) error {
 * @return error
 **/
 func (d *Postgres) NextSerie(tag string) (int, error) {
-	lock := d.lock(tag)
+	lock := d.Lock(tag)
 	result, err := nextSerie(d.DB, tag, lock)
 	if err != nil {
 		return 0, err
@@ -185,11 +188,23 @@ func (d *Postgres) NextCode(tag, format string) (string, error) {
 * @return error
 **/
 func (d *Postgres) SetSerie(tag string, val int) error {
-	lock := d.lock(tag)
-	_, err := currentSerie(d.DB, tag, lock)
+	lock := d.Lock(tag)
+	current, err := currentSerie(d.DB, tag, lock)
 	if err != nil {
 		return err
 	}
+
+	if current == 0 {
+		err := insertSerie(d.DB, tag, val, lock)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	lock.Lock()
+	defer lock.Unlock()
 
 	sql := `
 	UPDATE core.SERIES SET
@@ -210,7 +225,7 @@ func (d *Postgres) SetSerie(tag string, val int) error {
 * @return int
 **/
 func (d *Postgres) CurrentSerie(tag string) (int, error) {
-	lock := d.lock(tag)
+	lock := d.Lock(tag)
 	result, err := currentSerie(d.DB, tag, lock)
 	if err != nil {
 		return 0, err
@@ -225,7 +240,7 @@ func (d *Postgres) CurrentSerie(tag string) (int, error) {
 * @return int
 **/
 func (d *Postgres) DeleteSerie(tag string) error {
-	lock := d.lock(tag)
+	lock := d.Lock(tag)
 	err := deleteSerie(d.DB, tag, lock)
 	if err != nil {
 		return err

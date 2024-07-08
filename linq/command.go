@@ -1,6 +1,7 @@
 package linq
 
 import (
+	"slices"
 	"time"
 
 	"github.com/cgalvisleon/et/et"
@@ -36,37 +37,99 @@ func (d TypeCommand) String() string {
 	return ""
 }
 
+type Value struct {
+	Column *Column
+	Old    interface{}
+	New    interface{}
+	Change bool
+}
+
 // Command struct to use in linq
-type Lcommand struct {
+type Values struct {
 	Linq        *Linq
 	From        *Lfrom
 	TypeCommand TypeCommand
-	Data        *et.Json
-	Old         *et.Json
-	New         *et.Json
-	Change      *et.Json
-	Columns     *et.Json
-	Atribs      *et.Json
-	User        et.Json
-	Project     et.Json
+	Data        et.Json
+	Values      []*Value
+	Change      bool
+	User        interface{}
+	Project     interface{}
 }
 
-// Definition method to use in linq
-func (l *Lcommand) Definition() et.Json {
+/**
+* values returns a json with the values of the command
+* @return et.Json
+**/
+func (l *Values) values() []et.Json {
+	var result []et.Json
+	for _, v := range l.Values {
+		result = append(result, et.Json{
+			"column": v.Column.Name,
+			"old":    v.Old,
+			"new":    v.New,
+			"change": v.Change,
+		})
+	}
+
+	return result
+}
+
+/**
+* Definition returns a json with the definition of the command
+* @return et.Json
+**/
+func (l *Values) Definition() et.Json {
 	return et.Json{
 		"from":        l.From.Definition(),
 		"typeCommand": l.TypeCommand.String(),
 		"data":        l.Data,
-		"columns":     l.Columns,
-		"atrib":       l.Atribs,
-		"old":         l.Old,
-		"new":         l.New,
+		"values":      l.values(),
 		"change":      l.Change,
+		"user":        l.User,
+		"project":     l.Project,
 	}
 }
 
-// Return default value for column
-func (l *Lcommand) Default(col *Column) interface{} {
+/**
+* Set values to command
+* @param col interface{}
+* @param value interface{}
+**/
+func (l *Values) Set(col interface{}, value interface{}) {
+	var _col *Column
+	switch v := col.(type) {
+	case string:
+		_col = l.From.Column(v)
+	case *Column:
+		_col = v
+	}
+
+	if _col == nil {
+		return
+	}
+
+	idx := slices.IndexFunc(l.Values, func(e *Value) bool { return e.Column == _col })
+	if idx == -1 {
+		l.Values = append(l.Values, &Value{
+			Column: _col,
+			Old:    value,
+			New:    value,
+		})
+	} else {
+		l.Values[idx].New = value
+		l.Values[idx].Change = true
+		if !l.Change {
+			l.Change = true
+		}
+	}
+}
+
+/**
+* Default return the default value of the column in command
+* @param col *Column
+* @return interface{}
+**/
+func (l *Values) Default(col *Column) interface{} {
 	switch col.TypeData {
 	case TpStatus:
 		return col.TypeData.Default()
@@ -85,48 +148,28 @@ func (l *Lcommand) Default(col *Column) interface{} {
 	return col.Default
 }
 
-// NewCommand method to use in linq
-func newCommand(from *Lfrom, tp TypeCommand) *Lcommand {
-	return &Lcommand{
+/**
+* newValues create a new values
+* @param from *Lfrom
+* @param tp TypeCommand
+* @return *Values
+**/
+func newValues(from *Lfrom, tp TypeCommand) *Values {
+	return &Values{
 		From:        from,
 		TypeCommand: tp,
-		Data:        &et.Json{},
-		Old:         &et.Json{},
-		New:         &et.Json{},
-		Change:      &et.Json{},
-		Columns:     &et.Json{},
-		Atribs:      &et.Json{},
+		Data:        et.Json{},
+		Values:      []*Value{},
+		Change:      false,
+		User:        "",
+		Project:     "",
 	}
 }
 
-// Add key value to command source
-func (c *Lcommand) setSource(col *Column, value interface{}) {
-	if col.TypeColumn == TpDetail {
-		return
-	}
-
-	if col.TypeColumn == TpColumn {
-		c.Columns.Set(col.Low(), value)
-	}
-
-	if col.TypeColumn == TpAtrib {
-		c.Atribs.Set(col.Low(), value)
-	}
-}
-
-// Add key value to command new
-func (c *Lcommand) setNew(key string, value interface{}) {
-	if c.New == nil {
-		c.New = &et.Json{}
-	}
-
-	if c.New.Get(key) == nil {
-		c.New.Set(key, value)
-	}
-}
-
-// Consolidate data to command new
-func (c *Lcommand) consolidate() {
+/**
+* consolidate values
+**/
+func (c *Values) consolidate(data et.Json) {
 	if c.TypeCommand == Tpnone {
 		return
 	}
@@ -154,12 +197,11 @@ func (c *Lcommand) consolidate() {
 
 			key := col.Low()
 			def := c.Default(col)
-			val := c.Data.Get(key)
+			val := data.Get(key)
 			if val == nil {
 				val = def
 			}
-			c.setSource(col, val)
-			c.setNew(key, val)
+			c.Set(col, val)
 			properties[key] = true
 		}
 
@@ -167,17 +209,16 @@ func (c *Lcommand) consolidate() {
 			return
 		}
 
-		for k, v := range *c.Data {
+		for k, v := range data {
 			if properties[k] {
 				continue
 			}
 
 			col := newAtrib(k, v)
-			c.setSource(col, v)
-			c.setNew(k, v)
+			c.Set(col, v)
 		}
 	} else {
-		for k, v := range *c.Data {
+		for k, v := range data {
 			col := model.Column(k)
 			if col == nil && model.Integrity {
 				continue
@@ -185,33 +226,42 @@ func (c *Lcommand) consolidate() {
 				col = newAtrib(k, v)
 			}
 
-			c.setSource(col, v)
-			c.setNew(k, v)
+			c.Set(col, v)
 		}
 	}
 }
 
-// Query method to use in linq
-func (c *Lcommand) query(sql string, args ...any) (et.Items, error) {
-	var items et.Items
+/**
+* query, evaluate this model if use columnData and return the result for this condition
+* @param sql string
+* @param args ...any
+* @return et.Items
+**/
+func (c *Values) query(sql string, args ...any) (et.Items, error) {
 	var err error
-	if c.From.Model.ColumnSource != nil {
-		items, err = c.Linq.querySource(sql, args...)
+	if c.From.Model.ColumnData == nil {
+		items, err := c.Linq.query(sql, args...)
 		if err != nil {
 			return et.Items{}, err
 		}
-	} else {
-		items, err = c.Linq.query(sql, args...)
-		if err != nil {
-			return et.Items{}, err
-		}
+
+		return items, nil
+	}
+
+	items, err := c.Linq.querySource(sql, args...)
+	if err != nil {
+		return et.Items{}, err
 	}
 
 	return items, nil
 }
 
-// Get current values
-func (c *Lcommand) curren() (et.Items, error) {
+/**
+* curren, return the current values of the model
+* @return et.Items
+* @return error
+**/
+func (c *Values) curren() (et.Items, error) {
 	currentSql, err := c.Linq.currentSql()
 	if err != nil {
 		return et.Items{}, err
@@ -225,13 +275,16 @@ func (c *Lcommand) curren() (et.Items, error) {
 	return result, nil
 }
 
-// Execute before insert triggers
-func (c *Lcommand) beforeInsert() error {
+/**
+* beforeInsert, execute before insert triggers
+* @return error
+**/
+func (c *Values) beforeInsert() error {
 	f := c.From
 	m := f.Model
 
 	for _, trigger := range m.BeforeInsert {
-		err := trigger(m, c.Old, c.New, *c.Data)
+		err := trigger(m, c)
 		if err != nil {
 			return err
 		}
@@ -240,13 +293,16 @@ func (c *Lcommand) beforeInsert() error {
 	return nil
 }
 
-// Execute after insert triggers
-func (c *Lcommand) afterInsert() error {
+/**
+* afterInsert, execute after insert triggers
+* @return error
+**/
+func (c *Values) afterInsert() error {
 	f := c.From
 	m := f.Model
 
 	for _, trigger := range m.AfterInsert {
-		err := trigger(m, c.Old, c.New, *c.Data)
+		err := trigger(m, c)
 		if err != nil {
 			return err
 		}
@@ -255,13 +311,16 @@ func (c *Lcommand) afterInsert() error {
 	return nil
 }
 
-// Execute before update triggers
-func (c *Lcommand) beforeUpdate() error {
+/**
+* beforeUpdate, execute before update triggers
+* @return error
+**/
+func (c *Values) beforeUpdate() error {
 	f := c.From
 	m := f.Model
 
 	for _, trigger := range m.BeforeUpdate {
-		err := trigger(m, c.Old, c.New, *c.Data)
+		err := trigger(m, c)
 		if err != nil {
 			return err
 		}
@@ -270,13 +329,16 @@ func (c *Lcommand) beforeUpdate() error {
 	return nil
 }
 
-// Execute after update triggers
-func (c *Lcommand) afterUpdate() error {
+/**
+* afterUpdate, execute after update triggers
+* @return error
+**/
+func (c *Values) afterUpdate() error {
 	f := c.From
 	m := f.Model
 
 	for _, trigger := range m.AfterUpdate {
-		err := trigger(m, c.Old, c.New, *c.Data)
+		err := trigger(m, c)
 		if err != nil {
 			return err
 		}
@@ -285,13 +347,16 @@ func (c *Lcommand) afterUpdate() error {
 	return nil
 }
 
-// Execute before delete triggers
-func (c *Lcommand) beforeDelete() error {
+/**
+* beforeDelete, execute before delete triggers
+* @return error
+**/
+func (c *Values) beforeDelete() error {
 	f := c.From
 	m := f.Model
 
 	for _, trigger := range m.BeforeDelete {
-		err := trigger(m, c.Old, c.New, *c.Data)
+		err := trigger(m, c)
 		if err != nil {
 			return err
 		}
@@ -300,13 +365,16 @@ func (c *Lcommand) beforeDelete() error {
 	return nil
 }
 
-// Execute after delete triggers
-func (c *Lcommand) afterDelete() error {
+/**
+* afterDelete, execute after delete triggers
+* @return error
+**/
+func (c *Values) afterDelete() error {
 	f := c.From
 	m := f.Model
 
 	for _, trigger := range m.AfterDelete {
-		err := trigger(m, c.Old, c.New, *c.Data)
+		err := trigger(m, c)
 		if err != nil {
 			return err
 		}
@@ -319,8 +387,10 @@ func (c *Lcommand) afterDelete() error {
 * Insert method to use in linq
 * @return error
 **/
-func (c *Lcommand) Insert() error {
+func (c *Values) Insert() error {
 	var err error
+	c.consolidate(c.Data)
+
 	err = c.beforeInsert()
 	if err != nil {
 		return err
@@ -338,8 +408,10 @@ func (c *Lcommand) Insert() error {
 	}
 
 	c.Linq.Result = &items
-	if items.Ok {
-		c.New = &items.Result[0]
+	for _, data := range items.Result {
+		for k, v := range data {
+			c.Set(k, v)
+		}
 	}
 
 	err = c.afterInsert()
@@ -350,23 +422,21 @@ func (c *Lcommand) Insert() error {
 	return nil
 }
 
-// Execute update function
-func (c *Lcommand) update(current et.Items) error {
+/**
+* update method to use in linq
+* @param current et.Items
+* @return error
+**/
+func (c *Values) update(current et.Items) error {
 	if current.Count > MaxUpdate {
 		return logs.Errorf("Update only allow %d items", MaxUpdate)
 	}
 
 	var err error
-	form := c.From
-	model := form.Model
-	ch := false
-	new := *c.New
 	for _, data := range current.Result {
-		c.Old = &data
-		c.New, ch = data.Merge(new)
-		c.Change, _ = data.Chage(new)
+		c.consolidate(data)
 
-		if !ch {
+		if !c.Change {
 			continue
 		}
 
@@ -375,13 +445,6 @@ func (c *Lcommand) update(current et.Items) error {
 			return err
 		}
 
-		_idt := c.Old.Get(IdTField.Low())
-		if _idt == nil {
-			return logs.Errorm("No idT in data")
-		}
-
-		c.Linq.Returns.Used = true
-		c.Linq.Where(model.C(IdTField.Low()).Eq(_idt))
 		c.Linq.Sql, err = c.Linq.updateSql()
 		if err != nil {
 			return err
@@ -393,16 +456,18 @@ func (c *Lcommand) update(current et.Items) error {
 		}
 
 		c.Linq.Result = &items
-		if items.Ok {
-			c.New = &items.Result[0]
+		for _, data := range items.Result {
+			for k, v := range data {
+				c.Set(k, v)
+			}
 		}
-
-		go c.UpdateCascade()
 
 		err = c.afterUpdate()
 		if err != nil {
 			return err
 		}
+
+		go c.UpdateCascade()
 	}
 
 	return nil
@@ -412,7 +477,7 @@ func (c *Lcommand) update(current et.Items) error {
 * Update method to use in linq
 * @return error
 **/
-func (c *Lcommand) Update() error {
+func (c *Values) Update() error {
 	current, err := c.curren()
 	if err != nil {
 		return err
@@ -429,7 +494,7 @@ func (c *Lcommand) Update() error {
 * UpSert method to use in linq
 * @return error
 **/
-func (c *Lcommand) UpSert() error {
+func (c *Values) UpSert() error {
 	current, err := c.curren()
 	if err != nil {
 		return err
@@ -446,7 +511,7 @@ func (c *Lcommand) UpSert() error {
 * Delete method to use in linq
 * @return error
 **/
-func (c *Lcommand) Delete() error {
+func (c *Values) Delete() error {
 	current, err := c.curren()
 	if err != nil {
 		return err
@@ -460,23 +525,14 @@ func (c *Lcommand) Delete() error {
 		return logs.Errorf("Update only allow %d items", MaxDelete)
 	}
 
-	form := c.From
-	model := form.Model
 	for _, data := range current.Result {
-		c.Old = &data
+		c.consolidate(data)
 
 		err = c.beforeDelete()
 		if err != nil {
 			return err
 		}
 
-		_idt := c.Old.Get(IdTField.Low())
-		if _idt == nil {
-			return logs.Errorm("No idT in data")
-		}
-
-		c.Linq.Returns.Used = false
-		c.Linq.Where(model.C(IdTField.Low()).Eq(_idt))
 		c.Linq.Sql, err = c.Linq.deleteSql()
 		if err != nil {
 			return err
@@ -489,12 +545,12 @@ func (c *Lcommand) Delete() error {
 
 		c.Linq.Result = &items
 
-		go c.DeleteCascade()
-
 		err = c.afterDelete()
 		if err != nil {
 			return err
 		}
+
+		go c.DeleteCascade()
 	}
 
 	return nil
@@ -504,7 +560,7 @@ func (c *Lcommand) Delete() error {
 * UpdateCascade method to use in linq
 * @return error
 **/
-func (c *Lcommand) UpdateCascade() error {
+func (c *Values) UpdateCascade() error {
 	return nil
 }
 
@@ -512,7 +568,7 @@ func (c *Lcommand) UpdateCascade() error {
 * DeleteCascade method to use in linq
 * @return error
 **/
-func (c *Lcommand) DeleteCascade() error {
+func (c *Values) DeleteCascade() error {
 	return nil
 }
 
@@ -523,10 +579,9 @@ func (c *Lcommand) DeleteCascade() error {
 func (m *Model) Insert(data et.Json) *Linq {
 	l := From(m)
 	l.TypeQuery = TpCommand
-	l.Command.From = l.Froms[0]
-	l.Command.TypeCommand = TpInsert
-	l.Command.Data = &data
-	l.Command.consolidate()
+	l.Values.From = l.Froms[0]
+	l.Values.TypeCommand = TpInsert
+	l.Values.Data = data
 
 	return l
 }
@@ -538,10 +593,9 @@ func (m *Model) Insert(data et.Json) *Linq {
 func (m *Model) Update(data et.Json) *Linq {
 	l := From(m)
 	l.TypeQuery = TpCommand
-	l.Command.From = l.Froms[0]
-	l.Command.TypeCommand = TpUpdate
-	l.Command.Data = &data
-	l.Command.consolidate()
+	l.Values.From = l.Froms[0]
+	l.Values.TypeCommand = TpUpdate
+	l.Values.Data = data
 
 	return l
 }
@@ -553,10 +607,9 @@ func (m *Model) Update(data et.Json) *Linq {
 func (m *Model) UpSert(data et.Json) *Linq {
 	l := From(m)
 	l.TypeQuery = TpCommand
-	l.Command.From = l.Froms[0]
-	l.Command.TypeCommand = TpUdsert
-	l.Command.Data = &data
-	l.Command.consolidate()
+	l.Values.From = l.Froms[0]
+	l.Values.TypeCommand = TpUpdate
+	l.Values.Data = data
 
 	return l
 }
@@ -568,9 +621,8 @@ func (m *Model) UpSert(data et.Json) *Linq {
 func (m *Model) Delete() *Linq {
 	l := From(m)
 	l.TypeQuery = TpCommand
-	l.Command.From = l.Froms[0]
-	l.Command.TypeCommand = TpDelete
-	l.Command.consolidate()
+	l.Values.From = l.Froms[0]
+	l.Values.TypeCommand = TpUpdate
 
 	return l
 }

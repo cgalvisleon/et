@@ -274,7 +274,7 @@ func (l *Linq) Exec() (et.Items, error) {
 		return et.Items{}, logs.Alertm("The query is not a command")
 	}
 
-	c := l.Command
+	c := l.Values
 	switch c.TypeCommand {
 	case TpInsert:
 		err := c.Insert()

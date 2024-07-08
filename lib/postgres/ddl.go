@@ -77,7 +77,7 @@ func ddlDefault(col *linq.Column) string {
 		result = `''`
 	case linq.TpMultiSelect:
 		result = `''`
-	case linq.TpSource:
+	case linq.TpData:
 		result = `'{}'`
 	case linq.TpJson:
 		result = `'{}'`
@@ -128,7 +128,7 @@ func ddlType(col *linq.Column) string {
 		return "TEXT"
 	case linq.TpFormula:
 		return "JSONB"
-	case linq.TpSource:
+	case linq.TpData:
 		return "JSONB"
 	case linq.TpJson:
 		return "JSONB"

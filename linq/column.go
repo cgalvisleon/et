@@ -4,6 +4,7 @@ import (
 	"regexp"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 )
 
@@ -15,6 +16,7 @@ const (
 	TpAtrib
 	TpDetail
 	TpConcat
+	TpPseudo
 )
 
 // String return string of type column
@@ -134,8 +136,8 @@ func newColumn(model *Model, name, description string, typeColumm TypeColumn, ty
 		model.ColumnStatus = result
 	}
 
-	if model.ColumnSource == nil && TpSource == typeData {
-		model.ColumnSource = result
+	if model.ColumnData == nil && TpData == typeData {
+		model.ColumnData = result
 	}
 
 	if model.ColumnCreatedTime == nil && TpCreatedTime == typeData {
@@ -160,13 +162,13 @@ func newColumn(model *Model, name, description string, typeColumm TypeColumn, ty
 
 	if model.ColumnSerie == nil && TpSerie == typeData {
 		model.ColumnSerie = result
-		model.DefineTrigger(BeforeInsert, func(model *Model, old, new *et.Json, data et.Json) error {
+		model.DefineTrigger(BeforeInsert, func(model *Model, value *Values) error {
 			index, err := model.Db.NextSerie(model.Table)
 			if err != nil {
-				return err
+				return logs.Alert(err)
 			}
 
-			new.Set(model.ColumnSerie.Name, index)
+			value.Set(model.ColumnSerie, index)
 
 			return nil
 		})

@@ -114,7 +114,7 @@ type Linq struct {
 	Union     []*Linq
 	Limit     int
 	Offset    int
-	Command   *Lcommand
+	Values    *Values
 	TypeQuery TypeQuery
 	Sql       string
 	Result    *et.Items
@@ -185,7 +185,7 @@ func (l *Linq) Definition() *et.Json {
 		"unions":    unions,
 		"limit":     l.Limit,
 		"offset":    l.Offset,
-		"command":   l.Command.Definition(),
+		"values":    l.Values.Definition(),
 		"typeQuery": l.TypeQuery.String(),
 		"sql":       l.Sql,
 	}
@@ -213,15 +213,15 @@ func (l *Linq) Clear() string {
 }
 
 // Set user to linq
-func (l *Linq) User(val et.Json) *Linq {
-	l.Command.User = val
+func (l *Linq) User(val interface{}) *Linq {
+	l.Values.User = val
 
 	return l
 }
 
 // Set project to linq
-func (l *Linq) Project(val et.Json) *Linq {
-	l.Command.Project = val
+func (l *Linq) Project(val interface{}) *Linq {
+	l.Values.Project = val
 
 	return l
 }

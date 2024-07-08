@@ -115,7 +115,7 @@ func (i *Index) Definition() et.Json {
 * @param data et.Json
 * @return error
 **/
-type Trigger func(model *Model, old, new *et.Json, data et.Json) error
+type Trigger func(model *Model, value *Values) error
 
 /**
 * Listener is a function for listener
@@ -163,7 +163,7 @@ type Model struct {
 	Required             []*Column
 	Source               *Column
 	ColumnStatus         *Column
-	ColumnSource         *Column
+	ColumnData           *Column
 	ColumnCreatedTime    *Column
 	ColumnUpdatedTime    *Column
 	ColumnCreatedBy      *Column
@@ -307,7 +307,7 @@ func (m *Model) Definition() et.Json {
 		"requireds":         requireds,
 		"source":            source,
 		"useStatus":         m.ColumnStatus != nil,
-		"useSource":         m.ColumnSource != nil,
+		"useDataSource":     m.ColumnData != nil,
 		"useCreatedTime":    m.ColumnCreatedTime != nil,
 		"useCreatedBy":      m.ColumnCreatedBy != nil,
 		"useLastEditedTime": m.ColumnLastEditedTime != nil,

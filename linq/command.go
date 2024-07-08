@@ -16,7 +16,6 @@ const (
 	Tpnone TypeCommand = iota
 	TpInsert
 	TpUpdate
-	TpUdsert
 	TpDelete
 )
 
@@ -29,8 +28,6 @@ func (d TypeCommand) String() string {
 		return "insert"
 	case TpUpdate:
 		return "update"
-	case TpUdsert:
-		return "upsert"
 	case TpDelete:
 		return "delete"
 	}
@@ -52,6 +49,7 @@ type Values struct {
 	Data        et.Json
 	Values      []*Value
 	Change      bool
+	Ctid        string
 	User        interface{}
 	Project     interface{}
 }
@@ -96,6 +94,10 @@ func (l *Values) Definition() et.Json {
 * @param value interface{}
 **/
 func (l *Values) Set(col interface{}, value interface{}) {
+	if col == nil {
+		return
+	}
+
 	var _col *Column
 	switch v := col.(type) {
 	case string:
@@ -191,10 +193,6 @@ func (c *Values) consolidate(data et.Json) {
 				continue
 			}
 
-			if col.TypeColumn == TpPseudo {
-				continue
-			}
-
 			key := col.Low()
 			def := c.Default(col)
 			val := data.Get(key)
@@ -218,14 +216,18 @@ func (c *Values) consolidate(data et.Json) {
 			c.Set(col, v)
 		}
 	} else {
-		for k, v := range data {
+		for k, v := range c.Data {
 			col := model.Column(k)
-			if col == nil && model.Integrity {
+			if col.TypeData == TpData {
+				continue
+			} else if col == nil && model.Integrity {
 				continue
 			} else if col == nil {
 				col = newAtrib(k, v)
 			}
 
+			old := data.Get(col.Low())
+			c.Set(col, old)
 			c.Set(col, v)
 		}
 	}
@@ -423,18 +425,30 @@ func (c *Values) Insert() error {
 }
 
 /**
-* update method to use in linq
-* @param current et.Items
+* Update method to use in linq
 * @return error
 **/
-func (c *Values) update(current et.Items) error {
+func (c *Values) Update() error {
+	current, err := c.curren()
+	if err != nil {
+		return err
+	}
+
+	if !current.Ok {
+		return nil
+	}
+
 	if current.Count > MaxUpdate {
 		return logs.Errorf("Update only allow %d items", MaxUpdate)
 	}
 
-	var err error
-	for _, data := range current.Result {
-		c.consolidate(data)
+	for _, old := range current.Result {
+		ctid := old.Get("ctid")
+		if ctid != nil {
+			c.Ctid = ctid.(string)
+		}
+
+		c.consolidate(old)
 
 		if !c.Change {
 			continue
@@ -474,40 +488,6 @@ func (c *Values) update(current et.Items) error {
 }
 
 /**
-* Update method to use in linq
-* @return error
-**/
-func (c *Values) Update() error {
-	current, err := c.curren()
-	if err != nil {
-		return err
-	}
-
-	if !current.Ok {
-		return nil
-	}
-
-	return c.update(current)
-}
-
-/**
-* UpSert method to use in linq
-* @return error
-**/
-func (c *Values) UpSert() error {
-	current, err := c.curren()
-	if err != nil {
-		return err
-	}
-
-	if !current.Ok {
-		return c.Insert()
-	}
-
-	return c.update(current)
-}
-
-/**
 * Delete method to use in linq
 * @return error
 **/
@@ -522,11 +502,16 @@ func (c *Values) Delete() error {
 	}
 
 	if current.Count > MaxDelete {
-		return logs.Errorf("Update only allow %d items", MaxDelete)
+		return logs.Errorf("Delete only allow %d items", MaxDelete)
 	}
 
-	for _, data := range current.Result {
-		c.consolidate(data)
+	for _, old := range current.Result {
+		ctid := old.Get("ctid")
+		if ctid != nil {
+			c.Ctid = ctid.(string)
+		}
+
+		c.consolidate(old)
 
 		err = c.beforeDelete()
 		if err != nil {

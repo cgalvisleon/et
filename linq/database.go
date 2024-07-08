@@ -206,7 +206,6 @@ func (d *Database) initModel(model *Model) error {
 	}
 
 	if !result.Ok {
-		newColumn(model, "ctid", "", TpPseudo, TpKey, "(0,0)")
 		newColumn(model, IdTField.Low(), "", TpColumn, TpKey, TpKey.Default())
 		sql := driver.DefineSql(model)
 		if d.debug {

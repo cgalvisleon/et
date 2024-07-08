@@ -16,7 +16,6 @@ const (
 	TpAtrib
 	TpDetail
 	TpConcat
-	TpPseudo
 )
 
 // String return string of type column

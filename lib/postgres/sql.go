@@ -10,7 +10,7 @@ import (
 )
 
 // Return string can you use to select or return sql
-func sqlColumns(current bool, l *linq.Linq, cols ...*linq.Lselect) string {
+func sqlColumns(l *linq.Linq, cols ...*linq.Lselect) string {
 	if len(l.Froms) == 0 {
 		return ""
 	}
@@ -49,9 +49,6 @@ func sqlColumns(current bool, l *linq.Linq, cols ...*linq.Lselect) string {
 				def = strs.Format(`(%s)`, c.Formula)
 				def = strs.Format(`%s AS %s`, def, c.Up())
 				appendColumn(def)
-			} else if current && linq.TpPseudo == c.TypeColumn {
-				def = strs.Format(`%s`, s.As())
-				appendColumn(def)
 			}
 		}
 	}
@@ -76,7 +73,7 @@ func sqlColumns(current bool, l *linq.Linq, cols ...*linq.Lselect) string {
 * @param cols ...*linq.Lselect
 * @return string
 **/
-func sqlData(current bool, l *linq.Linq, cols ...*linq.Lselect) string {
+func sqlData(l *linq.Linq, cols ...*linq.Lselect) string {
 	if len(l.Froms) == 0 {
 		return ""
 	}
@@ -128,9 +125,6 @@ func sqlData(current bool, l *linq.Linq, cols ...*linq.Lselect) string {
 				def = strs.Format(`'%s', %s`, c.Low(), def)
 				def = strs.Format(`(%s)`, c.Formula)
 				appendObjects(def)
-			} else if current && linq.TpPseudo == c.TypeColumn {
-				def = strs.Format(`'%s', %s`, c.Low(), s.As())
-				appendObjects(def)
 			}
 		}
 	}
@@ -164,10 +158,10 @@ func sqlData(current bool, l *linq.Linq, cols ...*linq.Lselect) string {
 func sqlSelect(l *linq.Linq) {
 	var result string
 	if l.Selects.Used {
-		result = sqlColumns(false, l, l.Selects.Columns...)
+		result = sqlColumns(l, l.Selects.Columns...)
 	}
 	if l.Data.Used {
-		def := sqlData(false, l, l.Data.Columns...)
+		def := sqlData(l, l.Data.Columns...)
 		result = strs.Append(result, def, ",\n")
 	}
 
@@ -182,16 +176,7 @@ func sqlSelect(l *linq.Linq) {
 
 // Build current sql used to trigger in linq
 func sqlCurrent(l *linq.Linq) {
-	var result string
-	if l.Values.From.Model.ColumnData == nil {
-		result = sqlColumns(true, l, []*linq.Lselect{}...)
-	} else {
-		def := sqlData(true, l, []*linq.Lselect{}...)
-		result = strs.Append(result, def, ",\n")
-	}
-
-	result = strs.Append("SELECT ", result, " ")
-
+	var result string = "SELECT *, ctid"
 	l.Sql = strs.Append(l.Sql, result, "\n")
 }
 
@@ -342,9 +327,9 @@ func sqlReturns(l *linq.Linq) {
 	f := l.Froms[0]
 	m := f.Model
 	if m.ColumnData == nil {
-		def = sqlColumns(false, l, l.Returns.Columns...)
+		def = sqlColumns(l, l.Returns.Columns...)
 	} else {
-		def = sqlData(false, l, l.Returns.Columns...)
+		def = sqlData(l, l.Returns.Columns...)
 	}
 	result = strs.Format(`RETURNING %s`, def)
 
@@ -396,7 +381,6 @@ func sqlUpdate(l *linq.Linq) {
 	var result string
 	var values string
 	var atribs string = linq.SourceField.Up()
-	var ctid any
 	vals := *l.Values
 	mod := vals.From.Model
 
@@ -415,8 +399,6 @@ func sqlUpdate(l *linq.Linq) {
 			col := val.Column.Low()
 			val := et.Quote(val.New)
 			atribs = strs.Format(`jsonb_set(%s, '{%s}', '%v', true)`, atribs, col, val)
-		case linq.TpPseudo:
-			ctid = et.Unquote(val.New)
 		}
 	}
 
@@ -425,6 +407,7 @@ func sqlUpdate(l *linq.Linq) {
 		values = strs.Append(values, def, ",\n")
 	}
 
+	ctid := et.Unquote(l.Values.Ctid)
 	result = strs.Format("UPDATE %s SET\n%s WHERE ctid = '%v'", mod.Table, values, ctid)
 
 	l.Sql = strs.Append(l.Sql, result, "\n")
@@ -433,17 +416,10 @@ func sqlUpdate(l *linq.Linq) {
 // Add sql delete to sql
 func sqlDelete(l *linq.Linq) {
 	var result string
-	var ctid any
 	vals := *l.Values
 	mod := vals.From.Model
 
-	for _, val := range vals.Values {
-		switch val.Column.TypeColumn {
-		case linq.TpPseudo:
-			ctid = et.Unquote(val.New)
-		}
-	}
-
+	ctid := et.Unquote(l.Values.Ctid)
 	result = strs.Format("DELETE FROM %s WHERE ctid = '%v'", mod.Table, ctid)
 
 	l.Sql = strs.Append(l.Sql, result, "\n")

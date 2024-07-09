@@ -6,6 +6,7 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
+	"github.com/cgalvisleon/et/utility"
 )
 
 /**
@@ -55,6 +56,41 @@ func NewDatabase(name, description string, driver Driver) (*Database, error) {
 	dbs = append(dbs, result)
 
 	return result, nil
+}
+
+/**
+* beforeInsert set the values before insert
+* @param model *Model
+* @param value *Values
+* @return error
+**/
+func beforeInsert(model *Model, value *Values) error {
+	now := utility.Now()
+	if model.ColumnCreatedTime != nil {
+		value.Set(model.ColumnCreatedTime, now)
+	}
+	if model.ColumnLastEditedTime != nil {
+		value.Set(model.ColumnLastEditedTime, now)
+	}
+	if model.ColumnSerie != nil {
+		index, err := model.Db.NextSerie(model.Table)
+		if err != nil {
+			return logs.Alert(err)
+		}
+
+		value.Set(model.ColumnSerie, index)
+	}
+
+	return nil
+}
+
+func beforeUpdate(model *Model, value *Values) error {
+	now := utility.Now()
+	if model.ColumnLastEditedTime != nil {
+		value.Set(model.ColumnLastEditedTime, now)
+	}
+
+	return nil
 }
 
 /**
@@ -112,6 +148,9 @@ func (d *Database) InitModel(model *Model) error {
 	if err != nil {
 		return err
 	}
+
+	model.DefineTrigger(BeforeInsert, beforeInsert)
+	model.DefineTrigger(BeforeUpdate, beforeUpdate)
 
 	d.GetSchema(model.Schema)
 	d.GetModel(model)

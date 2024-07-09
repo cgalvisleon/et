@@ -36,6 +36,8 @@ func defineRecycling(db *sql.DB) error {
       PERFORM pg_notify(
       'recycling',
       json_build_object(
+        'schema', TG_TABLE_SCHEMA,
+        'table', TG_TABLE_NAME,
         '_idt', NEW._IDT
       )::text
       );

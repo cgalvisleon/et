@@ -250,7 +250,7 @@ func (c *Values) query(sql string, args ...any) (et.Items, error) {
 		return items, nil
 	}
 
-	items, err := c.Linq.querySource(sql, args...)
+	items, err := c.Linq.queryData(sql, args...)
 	if err != nil {
 		return et.Items{}, err
 	}
@@ -398,7 +398,6 @@ func (c *Values) Insert() error {
 		return err
 	}
 
-	c.Linq.Returns.Used = true
 	c.Linq.Sql, err = c.Linq.insertSql()
 	if err != nil {
 		return err
@@ -593,7 +592,8 @@ func (m *Model) Delete() *Linq {
 	l := From(m)
 	l.TypeQuery = TpCommand
 	l.Values.From = l.Froms[0]
-	l.Values.TypeCommand = TpUpdate
+	l.Values.TypeCommand = TpDelete
+	l.Values.Data = et.Json{}
 
 	return l
 }

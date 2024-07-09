@@ -4,7 +4,6 @@ import (
 	"regexp"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 )
 
@@ -52,25 +51,25 @@ type Validation func(col *Column, value interface{}) bool
 
 // Column is a struct for columns in a model
 type Column struct {
-	Model         *Model
-	Name          string
-	Tag           string
-	Description   string
-	TypeColumn    TypeColumn
-	TypeData      TypeData
-	Definition    et.Json
-	Default       interface{}
-	RelationTo    *Relation
-	FuncDetail    FuncDetail
-	Formula       string
-	PrimaryKey    bool
-	ForeignKey    bool
-	Indexed       bool
-	Unique        bool
-	Hidden        bool
-	IsSourceField bool
-	Required      *Required
-	Concats       []*Lselect
+	Model       *Model
+	Name        string
+	Tag         string
+	Description string
+	TypeColumn  TypeColumn
+	TypeData    TypeData
+	Definition  et.Json
+	Default     interface{}
+	RelationTo  *Relation
+	FuncDetail  FuncDetail
+	Formula     string
+	PrimaryKey  bool
+	ForeignKey  bool
+	Indexed     bool
+	Unique      bool
+	Hidden      bool
+	IsDataField bool
+	Required    *Required
+	Concats     []*Lselect
 }
 
 // name return a valid name of column, table, schema or database
@@ -120,15 +119,14 @@ func newColumn(model *Model, name, description string, typeColumm TypeColumn, ty
 	}
 
 	result = &Column{
-		Model:         model,
-		Name:          name,
-		Tag:           tag,
-		Description:   description,
-		TypeColumn:    typeColumm,
-		TypeData:      typeData,
-		Definition:    *typeData.Definition(),
-		Default:       _default,
-		IsSourceField: name == SourceField.Up(),
+		Model:       model,
+		Name:        name,
+		Tag:         tag,
+		Description: description,
+		TypeColumn:  typeColumm,
+		TypeData:    typeData,
+		Definition:  *typeData.Definition(),
+		Default:     _default,
 	}
 
 	if model.ColumnStatus == nil && TpStatus == typeData {
@@ -137,6 +135,7 @@ func newColumn(model *Model, name, description string, typeColumm TypeColumn, ty
 
 	if model.ColumnData == nil && TpData == typeData {
 		model.ColumnData = result
+		result.IsDataField = true
 	}
 
 	if model.ColumnCreatedTime == nil && TpCreatedTime == typeData {
@@ -161,16 +160,6 @@ func newColumn(model *Model, name, description string, typeColumm TypeColumn, ty
 
 	if model.ColumnSerie == nil && TpSerie == typeData {
 		model.ColumnSerie = result
-		model.DefineTrigger(BeforeInsert, func(model *Model, value *Values) error {
-			index, err := model.Db.NextSerie(model.Table)
-			if err != nil {
-				return logs.Alert(err)
-			}
-
-			value.Set(model.ColumnSerie, index)
-
-			return nil
-		})
 	}
 
 	model.AddColumn(result)
@@ -207,7 +196,7 @@ func (c *Column) DEfinition() et.Json {
 		"indexed":     c.Indexed,
 		"unique":      c.Unique,
 		"hidden":      c.Hidden,
-		"sourceField": c.IsSourceField,
+		"isDataField": c.IsDataField,
 		"required":    required,
 	}
 }

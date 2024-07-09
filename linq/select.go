@@ -114,7 +114,7 @@ func (l *Linq) GetAtrib(column *Column) *Lselect {
 	}
 
 	var result *Lselect
-	l.GetColumn(column.Model.Source)
+	l.GetColumn(column.Model.ColumnData)
 	lform := l.GetFrom(column.Model)
 	result = &Lselect{
 		Linq:       l,
@@ -173,7 +173,6 @@ func (l *Linq) GetSelect(model *Model, name string) *Lselect {
 	}
 
 	l.Selects.Columns = append(l.Selects.Columns, result)
-	l.Selects.Used = len(l.Selects.Columns) > 0
 
 	return result
 }
@@ -194,7 +193,6 @@ func (l *Linq) GetData(model *Model, name string) *Lselect {
 	}
 
 	l.Data.Columns = append(l.Data.Columns, result)
-	l.Data.Used = len(l.Data.Columns) > 0
 
 	return result
 }
@@ -202,19 +200,26 @@ func (l *Linq) GetData(model *Model, name string) *Lselect {
 // Select columns to use in linq
 func (m *Model) Select(sel ...interface{}) *Linq {
 	l := From(m)
+	l.Selects.Used = true
 
 	return l.Select(sel...)
 }
 
 func (m *Model) Distint(sel ...interface{}) *Linq {
 	l := From(m)
+	l.Selects.Used = true
 
 	return l.DIstinct(sel...)
 }
 
 // Select SourceField a linq with data
 func (m *Model) Data(sel ...interface{}) *Linq {
+	if m.ColumnData == nil {
+		return m.Select(sel...)
+	}
+
 	l := From(m)
+	l.Data.Used = m.ColumnData != nil
 
 	return l.DAta(sel...)
 }
@@ -256,8 +261,6 @@ func (m *Model) Min(col *Column, as string) *Linq {
 
 // Select  columns a query
 func (l *Linq) Select(sel ...interface{}) *Linq {
-	l.Selects.Used = true
-
 	for _, col := range sel {
 		switch v := col.(type) {
 		case Column:
@@ -291,8 +294,6 @@ func (l *Linq) DIstinct(sel ...interface{}) *Linq {
 
 // Select SourceField a linq with data
 func (l *Linq) DAta(sel ...interface{}) *Linq {
-	l.Data.Used = true
-
 	for _, col := range sel {
 		switch v := col.(type) {
 		case Column:

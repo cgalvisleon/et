@@ -88,7 +88,7 @@ func sqlData(l *linq.Linq, cols ...*linq.Lselect) string {
 	appendColumns := func(f *linq.Lfrom, c *linq.Column) {
 		if c.TypeColumn == linq.TpDetail {
 			l.GetDetail(c)
-		} else if !c.IsSourceField {
+		} else if !c.IsDataField {
 			s := l.GetColumn(c)
 			if linq.TpColumn == c.TypeColumn { // 'name', A.NAME
 				def = strs.Format(`'%s', %s`, c.Low(), s.As())
@@ -321,7 +321,7 @@ func sqlInsert(l *linq.Linq) {
 	mod := vals.From.Model
 
 	for _, val := range vals.Values {
-		if val.Column.IsSourceField {
+		if val.Column.IsDataField {
 			continue
 		}
 
@@ -360,7 +360,7 @@ func sqlUpdate(l *linq.Linq) {
 	mod := vals.From.Model
 
 	for _, val := range vals.Values {
-		if val.Column.IsSourceField {
+		if val.Column.IsDataField {
 			continue
 		}
 

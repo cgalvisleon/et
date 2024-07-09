@@ -221,13 +221,13 @@ func (l *Linq) query(sql string, args ...any) (et.Items, error) {
 }
 
 /**
-* Querysource execute a query in the database
+* queryData execute a query in the database
 * @parms sql
 * @parms args
 * @return et.Items
 * @return error
 **/
-func (l *Linq) querySource(sql string, args ...any) (et.Items, error) {
+func (l *Linq) queryData(sql string, args ...any) (et.Items, error) {
 	if l.Db.DB == nil {
 		return et.Items{}, logs.Errorm("Connected is required")
 	}
@@ -347,14 +347,22 @@ func (l *Linq) Query() (et.Items, error) {
 		return et.Items{}, err
 	}
 
-	result, err := l.query(l.Sql)
+	items, err := l.query(l.Sql)
 	if err != nil {
 		return et.Items{}, err
 	}
 
-	l.Result = &result
+	if l.Details.Used {
+		for _, data := range items.Result {
+			for _, col := range l.Details.Columns {
+				col.FuncDetail(&data)
+			}
+		}
+	}
 
-	return result, nil
+	l.Result = &items
+
+	return items, nil
 }
 
 /**

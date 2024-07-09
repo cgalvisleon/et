@@ -41,6 +41,8 @@ func defineSync(db *sql.DB, connStr string) error {
       PERFORM pg_notify(
       'sync',
       json_build_object(
+        'schema', TG_TABLE_SCHEMA,
+        'table', TG_TABLE_NAME,
         'option', TG_OP,        
         '_idt', NEW._IDT
       )::text
@@ -73,6 +75,8 @@ func defineSync(db *sql.DB, connStr string) error {
      PERFORM pg_notify(
      'sync',
      json_build_object(
+       'schema', TG_TABLE_SCHEMA,
+       'table', TG_TABLE_NAME,
        'option', TG_OP,
        '_idt', NEW._IDT
      )::text
@@ -106,6 +110,8 @@ func defineSync(db *sql.DB, connStr string) error {
       PERFORM pg_notify(
       'sync',
       json_build_object(
+        'schema', TG_TABLE_SCHEMA,
+        'table', TG_TABLE_NAME,
         'option', TG_OP,
         '_idt', OLD._IDT
       )::text

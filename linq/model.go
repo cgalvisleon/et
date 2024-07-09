@@ -161,7 +161,6 @@ type Model struct {
 	Details              []*Column
 	Hidden               []*Column
 	Required             []*Column
-	Source               *Column
 	ColumnStatus         *Column
 	ColumnData           *Column
 	ColumnCreatedTime    *Column
@@ -217,7 +216,6 @@ func NewModel(schema *Schema, name, description string, version int) *Model {
 		Details:      []*Column{},
 		Hidden:       []*Column{},
 		Required:     []*Column{},
-		Source:       nil,
 		BeforeInsert: []Trigger{},
 		AfterInsert:  []Trigger{},
 		BeforeUpdate: []Trigger{},
@@ -286,8 +284,8 @@ func (m *Model) Definition() et.Json {
 	}
 
 	var source string = ""
-	if m.Source != nil {
-		source = m.Source.Name
+	if m.ColumnData != nil {
+		source = m.ColumnData.Name
 	}
 
 	result := et.Json{

@@ -118,11 +118,12 @@ func From(model *Model) *Linq {
 		Groups:    []*Lgroup{},
 		Orders:    []*Lorder{},
 		Joins:     []*Ljoin{},
-		Limit:     0,
+		Limit:     30,
 		Offset:    0,
 		TypeQuery: TpQuery,
 		Sql:       "",
 		Result:    &et.Items{},
+		setResult: et.Json{},
 	}
 
 	as := getAs(result)
@@ -180,6 +181,12 @@ func (l *Linq) GetFrom(model *Model) *Lfrom {
 // From method to use in linq
 func (l *Linq) From(model *Model) *Linq {
 	l.GetFrom(model)
+
+	return l
+}
+
+func (l *Linq) SetResult(values et.Json) *Linq {
+	l.setResult = values
 
 	return l
 }

@@ -51,6 +51,7 @@ func (t TypeVar) Low() string {
 var (
 	MaxUpdate = 1000
 	MaxDelete = 1000
+	MaxRows   = 1000
 	dbs       []*Database
 	schemas   []*Schema
 	models    []*Model
@@ -118,6 +119,7 @@ type Linq struct {
 	TypeQuery TypeQuery
 	Sql       string
 	Result    *et.Items
+	setResult et.Json
 	debug     bool
 }
 

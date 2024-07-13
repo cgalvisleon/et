@@ -25,7 +25,6 @@ type ColRol struct {
 type ColDetail struct {
 	Name        string
 	Description string
-	Default     any
 	FuncDetail  FuncDetail
 }
 
@@ -90,7 +89,7 @@ func MOdel(def *Definition) *Model {
 		result.DefineRelation(ref.Name, ref.ForeignKey, ref.Parent, ref.ParentKey, ref.Select, ref.Calculate)
 	}
 	for _, det := range def.Details {
-		result.DefineDetail(det.Name, det.Description, det.Default, det.FuncDetail)
+		result.DefineDetail(det.Name, det.Description, det.FuncDetail)
 	}
 	for _, frm := range def.Formulas {
 		result.DefineFormula(frm.Name, frm.Formula)

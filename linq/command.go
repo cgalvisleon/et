@@ -44,12 +44,12 @@ type Value struct {
 // Command struct to use in linq
 type Values struct {
 	Linq        *Linq
-	From        *Lfrom
+	Model       *Model
 	TypeCommand TypeCommand
 	Data        et.Json
 	Values      []*Value
 	Change      bool
-	Ctid        string
+	IdT         string
 	User        interface{}
 	Project     interface{}
 }
@@ -78,11 +78,12 @@ func (l *Values) values() []et.Json {
 **/
 func (l *Values) Definition() et.Json {
 	return et.Json{
-		"from":        l.From.Definition(),
+		"Model":       l.Model.Definition(),
 		"typeCommand": l.TypeCommand.String(),
 		"data":        l.Data,
 		"values":      l.values(),
 		"change":      l.Change,
+		"idt":         l.IdT,
 		"user":        l.User,
 		"project":     l.Project,
 	}
@@ -101,7 +102,7 @@ func (l *Values) Set(col interface{}, value interface{}) {
 	var _col *Column
 	switch v := col.(type) {
 	case string:
-		_col = l.From.Column(v)
+		_col = l.Model.Column(v)
 	case *Column:
 		_col = v
 	}
@@ -158,7 +159,7 @@ func (l *Values) Default(col *Column) interface{} {
 **/
 func newValues(from *Lfrom, tp TypeCommand) *Values {
 	return &Values{
-		From:        from,
+		Model:       from.Model,
 		TypeCommand: tp,
 		Data:        et.Json{},
 		Values:      []*Value{},
@@ -171,14 +172,12 @@ func newValues(from *Lfrom, tp TypeCommand) *Values {
 /**
 * consolidate values
 **/
-func (c *Values) consolidate(data et.Json) {
+func (c *Values) consolidate(old, new et.Json) {
 	if c.TypeCommand == Tpnone {
 		return
 	}
 
-	from := c.From
-	model := from.Model
-
+	model := c.Model
 	newAtrib := func(name string, value interface{}) *Column {
 		var tp TypeData
 		tp.Mutate(value)
@@ -186,7 +185,6 @@ func (c *Values) consolidate(data et.Json) {
 		return model.DefineAtrib(name, "", tp, *tp.Definition())
 	}
 
-	properties := make(map[string]bool)
 	if c.TypeCommand == TpInsert {
 		for _, col := range model.Columns {
 			if col.TypeColumn == TpDetail {
@@ -195,28 +193,25 @@ func (c *Values) consolidate(data et.Json) {
 
 			key := col.Low()
 			def := c.Default(col)
-			val := data.Get(key)
+			val := new.Get(key)
 			if val == nil {
 				val = def
+			} else {
+				delete(new, key)
 			}
 			c.Set(col, val)
-			properties[key] = true
 		}
 
 		if model.Integrity {
 			return
 		}
 
-		for k, v := range data {
-			if properties[k] {
-				continue
-			}
-
+		for k, v := range new {
 			col := newAtrib(k, v)
 			c.Set(col, v)
 		}
 	} else {
-		for k, v := range c.Data {
+		for k, v := range new {
 			col := model.Column(k)
 			if col.TypeData == TpData {
 				continue
@@ -226,8 +221,8 @@ func (c *Values) consolidate(data et.Json) {
 				col = newAtrib(k, v)
 			}
 
-			old := data.Get(col.Low())
-			c.Set(col, old)
+			old_val := old.Get(col.Low())
+			c.Set(col, old_val)
 			c.Set(col, v)
 		}
 	}
@@ -240,17 +235,40 @@ func (c *Values) consolidate(data et.Json) {
 * @return et.Items
 **/
 func (c *Values) query(sql string, args ...any) (et.Items, error) {
-	var err error
-	if c.From.Model.ColumnData == nil {
-		items, err := c.Linq.query(sql, args...)
-		if err != nil {
-			return et.Items{}, err
-		}
-
-		return items, nil
+	items, err := c.Linq.query(sql, args...)
+	if err != nil {
+		return et.Items{}, err
 	}
 
-	items, err := c.Linq.queryData(sql, args...)
+	return items, nil
+}
+
+/**
+* data, execute a query in the database
+* @param sql string
+* @param args ...any
+* @return et.Items
+* @return error
+**/
+func (c *Values) data(sql string, args ...any) (et.Items, error) {
+	items, err := c.Linq.data(sql, args...)
+	if err != nil {
+		return et.Items{}, err
+	}
+
+	return items, nil
+}
+
+/**
+* query, execute a query in the database
+* @param sql string
+* @param args ...any
+* @return et.Items
+* @return error
+**/
+func (c *Values) exec(sql string, args ...any) (et.Items, error) {
+	var err error
+	items, err := c.Linq.query(sql, args...)
 	if err != nil {
 		return et.Items{}, err
 	}
@@ -282,8 +300,7 @@ func (c *Values) curren() (et.Items, error) {
 * @return error
 **/
 func (c *Values) beforeInsert() error {
-	f := c.From
-	m := f.Model
+	m := c.Model
 
 	for _, trigger := range m.BeforeInsert {
 		err := trigger(m, c)
@@ -300,8 +317,7 @@ func (c *Values) beforeInsert() error {
 * @return error
 **/
 func (c *Values) afterInsert() error {
-	f := c.From
-	m := f.Model
+	m := c.Model
 
 	for _, trigger := range m.AfterInsert {
 		err := trigger(m, c)
@@ -318,8 +334,7 @@ func (c *Values) afterInsert() error {
 * @return error
 **/
 func (c *Values) beforeUpdate() error {
-	f := c.From
-	m := f.Model
+	m := c.Model
 
 	for _, trigger := range m.BeforeUpdate {
 		err := trigger(m, c)
@@ -336,8 +351,7 @@ func (c *Values) beforeUpdate() error {
 * @return error
 **/
 func (c *Values) afterUpdate() error {
-	f := c.From
-	m := f.Model
+	m := c.Model
 
 	for _, trigger := range m.AfterUpdate {
 		err := trigger(m, c)
@@ -354,8 +368,7 @@ func (c *Values) afterUpdate() error {
 * @return error
 **/
 func (c *Values) beforeDelete() error {
-	f := c.From
-	m := f.Model
+	m := c.Model
 
 	for _, trigger := range m.BeforeDelete {
 		err := trigger(m, c)
@@ -372,8 +385,7 @@ func (c *Values) beforeDelete() error {
 * @return error
 **/
 func (c *Values) afterDelete() error {
-	f := c.From
-	m := f.Model
+	m := c.Model
 
 	for _, trigger := range m.AfterDelete {
 		err := trigger(m, c)
@@ -391,7 +403,7 @@ func (c *Values) afterDelete() error {
 **/
 func (c *Values) Insert() error {
 	var err error
-	c.consolidate(c.Data)
+	c.consolidate(nil, c.Data)
 
 	err = c.beforeInsert()
 	if err != nil {
@@ -403,7 +415,7 @@ func (c *Values) Insert() error {
 		return err
 	}
 
-	items, err := c.query(c.Linq.Sql)
+	items, err := c.exec(c.Linq.Sql)
 	if err != nil {
 		return err
 	}
@@ -442,12 +454,12 @@ func (c *Values) Update() error {
 	}
 
 	for _, old := range current.Result {
-		ctid := old.Get("ctid")
-		if ctid != nil {
-			c.Ctid = ctid.(string)
+		idT := old.Key("_idt")
+		if idT == "-1" {
+			return logs.Errorm("Not found idt in the current values")
 		}
 
-		c.consolidate(old)
+		c.consolidate(old, c.Data)
 
 		if !c.Change {
 			continue
@@ -463,7 +475,7 @@ func (c *Values) Update() error {
 			return err
 		}
 
-		items, err := c.query(c.Linq.Sql)
+		items, err := c.exec(c.Linq.Sql)
 		if err != nil {
 			return err
 		}
@@ -505,12 +517,12 @@ func (c *Values) Delete() error {
 	}
 
 	for _, old := range current.Result {
-		ctid := old.Get("ctid")
-		if ctid != nil {
-			c.Ctid = ctid.(string)
+		idT := old.Key("_idt")
+		if idT == "-1" {
+			return logs.Errorm("Not found idt in the current values")
 		}
 
-		c.consolidate(old)
+		c.consolidate(old, c.Data)
 
 		err = c.beforeDelete()
 		if err != nil {
@@ -522,7 +534,7 @@ func (c *Values) Delete() error {
 			return err
 		}
 
-		items, err := c.query(c.Linq.Sql)
+		items, err := c.exec(c.Linq.Sql)
 		if err != nil {
 			return err
 		}
@@ -563,7 +575,7 @@ func (c *Values) DeleteCascade() error {
 func (m *Model) Insert(data et.Json) *Linq {
 	l := From(m)
 	l.TypeQuery = TpCommand
-	l.Values.From = l.Froms[0]
+	l.Values.Model = l.Froms[0].Model
 	l.Values.TypeCommand = TpInsert
 	l.Values.Data = data
 
@@ -577,7 +589,7 @@ func (m *Model) Insert(data et.Json) *Linq {
 func (m *Model) Update(data et.Json) *Linq {
 	l := From(m)
 	l.TypeQuery = TpCommand
-	l.Values.From = l.Froms[0]
+	l.Values.Model = l.Froms[0].Model
 	l.Values.TypeCommand = TpUpdate
 	l.Values.Data = data
 
@@ -591,7 +603,7 @@ func (m *Model) Update(data et.Json) *Linq {
 func (m *Model) Delete() *Linq {
 	l := From(m)
 	l.TypeQuery = TpCommand
-	l.Values.From = l.Froms[0]
+	l.Values.Model = l.Froms[0].Model
 	l.Values.TypeCommand = TpDelete
 	l.Values.Data = et.Json{}
 

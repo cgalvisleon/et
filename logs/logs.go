@@ -148,6 +148,10 @@ func errorTarget(kind, color string, err error) error {
 }
 
 func Alert(err error) error {
+	if err == nil {
+		return nil
+	}
+
 	color := "Yellow"
 	log("Alert", color, err.Error())
 
@@ -164,10 +168,16 @@ func Alertf(format string, args ...any) error {
 	return Alertm(message)
 }
 
-func Error(err error) error {
-	Traces("Error", "Red", err)
+func Trace(err error) error {
+	if err == nil {
+		return nil
+	}
 
-	return err
+	return Traces("Trace", "Blue", err)
+}
+
+func Error(err error) error {
+	return Traces("Error", "Red", err)
 }
 
 func Errorm(message string) error {

@@ -644,8 +644,11 @@ func Define$2(db *linq.Database) error {
 }
 
 /**
-*	Handler for CRUD data
- */
+* Get$2ById
+* @param id string
+* @return et.Item
+* @return error
+**/
 func Get$2ById(id string) (et.Item, error) {	
 	result, err := $2.Data().
 		Where($2.Column("_id").Eq(id)).
@@ -657,7 +660,15 @@ func Get$2ById(id string) (et.Item, error) {
 	return result, nil	
 }
 
-func Insert$2(project_id, id string, data et.Json) (et.Item, error) {
+/**
+* Insert$2
+* @param project_id string
+* @param id string
+* @param data et.Json
+* @return et.Item
+* @return error
+**/
+func Insert$2(project_id, id, state string, data et.Json) (et.Item, error) {
 	if !utility.ValidId(project_id) {
 		return et.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "project_id")
 	}
@@ -666,14 +677,81 @@ func Insert$2(project_id, id string, data et.Json) (et.Item, error) {
 		return et.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "_id")
 	}
 
+	item, err := $2.Data("_state", "_id").
+		Where($2.Column("_id").Eq(id)).
+		First()
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	if item.Ok {
+		return et.Item{
+			Ok: false,
+			Result: item.Result,
+		}, nil
+	}
+
 	id = utility.GenId(id)
 	data["project_id"] = project_id
 	data["_id"] = id
-	return $2.Insert(data).
-		Where($2.Column("_id").Eq(id)).
+	result $2.Insert(data).		
 		ExecOne()
 }
 
+/**
+* UpSert$2
+* @param project_id string
+* @param id string
+* @param data et.Json
+* @param user_id string
+* @return et.Item
+* @return error
+**/
+func UpSert$2(project_id, id, data et.Json, user_id string) (et.Item, error) {
+	item, err := Insert$2(project_id, id, utility.ACTIVE, data, user_id)
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	if item.Ok {
+		item, err = GetTypoById(project_id, id)
+		if err != nil {
+			return et.Item{}, err
+		}
+
+		return item, nil
+	}
+
+	current_state := item.Key("_state")
+	if current_state != utility.ACTIVE {
+		return et.Item{}, logs.Alertf(MSG_STATE_NOT_ACTIVE, current_state)
+	}
+
+	data["project_id"] = project_id
+	data["_id"] = id
+	data["user_id"] = user_id	
+	item, err = $2.Update(data).
+		Where($2.Col("_id").Eq(id)).
+		ExecOne()
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	item, err = Get$2ById(project_id, id)
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	return item, nil
+}
+
+/**
+* State$2
+* @param id string
+* @param state string
+* @return et.Item
+* @return error
+**/
 func State$2(id, state string) (et.Item, error) {
 	if !utility.ValidId(state) {
 		return et.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "state")
@@ -706,10 +784,27 @@ func State$2(id, state string) (et.Item, error) {
 		ExecOne()	
 }
 
+/**
+* Delete$2
+* @param id string
+* @return et.Item
+* @return error
+**/
 func Delete$2(id string) (et.Item, error) {
 	return State$2(id, utility.FOR_DELETE)
 }
 
+/**
+* All$2
+* @param project_id string
+* @param state string
+* @param search string
+* @param page int
+* @param rows int
+* @param _select string
+* @return et.List
+* @return error
+**/
 func All$2(project_id, state, search string, page, rows int, _select string) (et.List, error) {	
 	if state == "" {
 		state = utility.ACTIVE
@@ -747,9 +842,11 @@ func All$2(project_id, state, search string, page, rows int, _select string) (et
 }
 
 /**
-* Router
+* insert$2
+* @param w http.ResponseWriter
+* @param r *http.Request
 **/
-func (rt *Router) insert$2(w http.ResponseWriter, r *http.Request) {
+func (rt *Router) upSert$2(w http.ResponseWriter, r *http.Request) {
 	body, _ := response.GetBody(r)
 	project_id := body.Str("project_id")
 	id := body.Str("id")	
@@ -763,6 +860,11 @@ func (rt *Router) insert$2(w http.ResponseWriter, r *http.Request) {
 	response.ITEM(w, r, http.StatusOK, result)
 }
 
+/**
+* get$2ById
+* @param w http.ResponseWriter
+* @param r *http.Request
+**/
 func (rt *Router) get$2ById(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
@@ -775,6 +877,11 @@ func (rt *Router) get$2ById(w http.ResponseWriter, r *http.Request) {
 	response.ITEM(w, r, http.StatusOK, result)
 }
 
+/**
+* state$2
+* @param w http.ResponseWriter
+* @param r *http.Request
+**/
 func (rt *Router) state$2(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	body, _ := response.GetBody(r)
@@ -789,6 +896,11 @@ func (rt *Router) state$2(w http.ResponseWriter, r *http.Request) {
 	response.ITEM(w, r, http.StatusOK, result)
 }
 
+/**
+* delete$2
+* @param w http.ResponseWriter
+* @param r *http.Request
+**/
 func (rt *Router) delete$2(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
@@ -801,6 +913,11 @@ func (rt *Router) delete$2(w http.ResponseWriter, r *http.Request) {
 	response.ITEM(w, r, http.StatusOK, result)
 }
 
+/**
+* all$2
+* @param w http.ResponseWriter
+* @param r *http.Request
+**/
 func (rt *Router) all$2(w http.ResponseWriter, r *http.Request) {
 	query := response.GetQuery(r)
 	project_id := query.Str("project_id")
@@ -829,7 +946,7 @@ func (rt *Router) all$2(w http.ResponseWriter, r *http.Request) {
 **/
 
 /** Copy this code to func initModel in model.go
-	if err := Define$2(); err != nil {
+	if err := Define$2(db); err != nil {
 		return logs.Panic(err)
 	}
 **/

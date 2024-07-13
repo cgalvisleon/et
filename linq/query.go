@@ -203,13 +203,12 @@ func (l *Linq) query(sql string, args ...any) (et.Items, error) {
 		return et.Items{}, logs.Errorm("Sql is required")
 	}
 
-	_query := SQLParse(sql, args...)
+	l.Sql = SQLParse(sql, args...)
 	if l.debug {
-		logs.Debug(l.Definition().ToString())
-		logs.Debug(_query)
+		debug(l)
 	}
 
-	rows, err := query(l.Db.DB, _query)
+	rows, err := query(l.Db.DB, l.Sql)
 	if err != nil {
 		return et.Items{}, logs.Error(err)
 	}
@@ -221,13 +220,13 @@ func (l *Linq) query(sql string, args ...any) (et.Items, error) {
 }
 
 /**
-* queryData execute a query in the database
+* data execute a query in the database
 * @parms sql
 * @parms args
 * @return et.Items
 * @return error
 **/
-func (l *Linq) queryData(sql string, args ...any) (et.Items, error) {
+func (l *Linq) data(sql string, args ...any) (et.Items, error) {
 	if l.Db.DB == nil {
 		return et.Items{}, logs.Errorm("Connected is required")
 	}
@@ -236,13 +235,12 @@ func (l *Linq) queryData(sql string, args ...any) (et.Items, error) {
 		return et.Items{}, logs.Errorm("Sql is required")
 	}
 
-	_query := SQLParse(sql, args...)
+	l.Sql = SQLParse(sql, args...)
 	if l.debug {
-		logs.Debug(l.Definition().ToString())
-		logs.Debug(_query)
+		debug(l)
 	}
 
-	rows, err := query(l.Db.DB, _query)
+	rows, err := query(l.Db.DB, l.Sql)
 	if err != nil {
 		return et.Items{}, logs.Error(err)
 	}
@@ -251,12 +249,12 @@ func (l *Linq) queryData(sql string, args ...any) (et.Items, error) {
 	var result et.Items = et.Items{}
 	for rows.Next() {
 		var item et.Item
-		item.Scan(rows)
-		for _, col := range l.Details.Columns {
-			col.FuncDetail(&item.Result)
+		err := item.Scan(rows)
+		if err != nil {
+			continue
 		}
 
-		result.Result = append(result.Result, item.Result.Json(SourceField.Low()))
+		result.Result = append(result.Result, item.Json(SourceField.Low()))
 		result.Ok = true
 		result.Count++
 	}
@@ -342,21 +340,32 @@ func (l *Linq) GoOne() (et.Item, error) {
 **/
 func (l *Linq) Query() (et.Items, error) {
 	var err error
+	var items et.Items
+
 	l.Sql, err = l.selectSql()
 	if err != nil {
 		return et.Items{}, err
 	}
 
-	items, err := l.query(l.Sql)
-	if err != nil {
-		return et.Items{}, err
+	if l.Data.Used {
+		items, err = l.data(l.Sql)
+		if err != nil {
+			return et.Items{}, err
+		}
+	} else {
+		items, err = l.query(l.Sql)
+		if err != nil {
+			return et.Items{}, err
+		}
 	}
 
-	if l.Details.Used {
-		for _, data := range items.Result {
-			for _, col := range l.Details.Columns {
-				col.FuncDetail(&data)
-			}
+	for _, data := range items.Result {
+		for k, v := range l.setResult {
+			data.Set(k, v)
+		}
+
+		for _, col := range l.Details.Columns {
+			col.FuncDetail(&data)
 		}
 	}
 

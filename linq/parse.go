@@ -68,11 +68,15 @@ func SQLParse(sql string, args ...any) string {
 * @return et.Items
 **/
 func RowsItems(rows *sql.Rows) et.Items {
-	var result et.Items = et.Items{Result: []et.Json{}}
+	var result et.Items = et.Items{}
 
 	for rows.Next() {
 		var item et.Item
-		item.Scan(rows)
+		err := item.Scan(rows)
+		if err != nil {
+			continue
+		}
+
 		result.Result = append(result.Result, item.Result)
 		result.Ok = true
 		result.Count++
@@ -109,7 +113,11 @@ func DataItems(rows *sql.Rows, sourceField string) et.Items {
 
 	for rows.Next() {
 		var item et.Item
-		item.Scan(rows)
+		err := item.Scan(rows)
+		if err != nil {
+			continue
+		}
+
 		result.Result = append(result.Result, item.Json(sourceField))
 		result.Ok = true
 		result.Count++

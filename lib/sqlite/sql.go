@@ -299,7 +299,7 @@ func sqlReturns(l *linq.Linq) {
 // Build current sql used to trigger in linq
 func sqlCurrent(l *linq.Linq) {
 	var result string
-	if l.Values.From.Model.ColumnData != nil {
+	if l.Values.Model.ColumnData != nil {
 		def := sqlData(l, []*linq.Lselect{}...)
 		result = strs.Append(result, def, ",\n")
 	} else {
@@ -318,7 +318,7 @@ func sqlInsert(l *linq.Linq) {
 	var values string
 	var atribs string
 	vals := *l.Values
-	mod := vals.From.Model
+	mod := vals.Model
 
 	for _, val := range vals.Values {
 		if val.Column.IsDataField {
@@ -357,7 +357,7 @@ func sqlUpdate(l *linq.Linq) {
 	var values string
 	var atribs string
 	vals := *l.Values
-	mod := vals.From.Model
+	mod := vals.Model
 
 	for _, val := range vals.Values {
 		if val.Column.IsDataField {
@@ -391,7 +391,7 @@ func sqlUpdate(l *linq.Linq) {
 func sqlDelete(l *linq.Linq) {
 	var result string
 	vals := *l.Values
-	mod := vals.From.Model
+	mod := vals.Model
 
 	result = strs.Format("DELETE FROM %s", mod.Table)
 

@@ -42,8 +42,8 @@ func (m *Model) DefineAtrib(name, description string, typeData TypeData, _defaul
  * @param _default interface{}
  * @return *Column
 **/
-func (m *Model) DefineDetail(name, description string, _default interface{}, funcDetail FuncDetail) *Column {
-	result := newColumn(m, name, description, TpDetail, TpFunction, _default)
+func (m *Model) DefineDetail(name, description string, funcDetail FuncDetail) *Column {
+	result := newColumn(m, name, description, TpDetail, TpFunction, nil)
 	result.FuncDetail = funcDetail
 
 	m.Details = append(m.Details, result)

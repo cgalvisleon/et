@@ -242,8 +242,6 @@ func (d *Postgres) SelectSql(l *linq.Linq) string {
 
 	sqlLimit(l)
 
-	sqlOffset(l)
-
 	return l.SQL()
 }
 

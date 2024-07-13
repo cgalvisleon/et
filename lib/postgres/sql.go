@@ -175,15 +175,23 @@ func sqlSelect(l *linq.Linq) {
 
 // Build current sql used to trigger in linq
 func sqlCurrent(l *linq.Linq) {
-	var result string = "SELECT *, ctid"
+	var result string
+	module := l.Values.Model
+	if module.ColumnData == nil {
+		result = sqlColumns(l, l.Selects.Columns...)
+	} else {
+		result = sqlData(l, l.Data.Columns...)
+	}
+
+	result = strs.Append("SELECT", result, " ")
 	l.Sql = strs.Append(l.Sql, result, "\n")
 }
 
 // Add from to sql
 func sqlFrom(l *linq.Linq) error {
 	if l.TypeQuery == linq.TpCommand {
-		f := l.Values.From
-		result := strs.Format(`FROM %s`, f.Model.Table)
+		model := l.Values.Model
+		result := strs.Format(`FROM %s`, model.Table)
 		l.Sql = strs.Append(l.Sql, result, "\n")
 
 		return nil
@@ -290,27 +298,27 @@ func sqlOrderBy(l *linq.Linq) {
 
 // Add limit to sql
 func sqlLimit(l *linq.Linq) {
+	if l.TypeQuery == linq.TpPage {
+		var result string
+		if l.Limit < linq.MaxRows {
+			result = strs.Format(`LIMIT %d OFFSET %d`, l.Limit, l.Offset)
+		} else {
+			result = strs.Format(`LIMIT %d OFFSET %d`, linq.MaxRows, l.Offset)
+		}
+
+		l.Sql = strs.Append(l.Sql, result, "\n")
+		return
+	}
+
 	if l.TypeQuery != linq.TpQuery {
 		return
 	}
 
 	var result string
-	if l.Limit > 0 {
+	if l.Limit < linq.MaxRows {
 		result = strs.Format(`LIMIT %d`, l.Limit)
-	}
-
-	l.Sql = strs.Append(l.Sql, result, "\n")
-}
-
-// Add offset to sql
-func sqlOffset(l *linq.Linq) {
-	if l.TypeQuery != linq.TpPage {
-		return
-	}
-
-	var result string
-	if l.Limit > 0 {
-		result = strs.Format(`LIMIT %d OFFSET %d`, l.Limit, l.Offset)
+	} else {
+		result = strs.Format(`LIMIT %d`, linq.MaxRows)
 	}
 
 	l.Sql = strs.Append(l.Sql, result, "\n")
@@ -342,7 +350,7 @@ func sqlInsert(l *linq.Linq) {
 	var values string
 	var atribs string
 	vals := *l.Values
-	mod := vals.From.Model
+	mod := vals.Model
 
 	for _, val := range vals.Values {
 		if val.Column.IsDataField {
@@ -381,7 +389,7 @@ func sqlUpdate(l *linq.Linq) {
 	var values string
 	var atribs string = linq.SourceField.Up()
 	vals := *l.Values
-	mod := vals.From.Model
+	mod := vals.Model
 
 	for _, val := range vals.Values {
 		if val.Column.IsDataField {
@@ -406,8 +414,8 @@ func sqlUpdate(l *linq.Linq) {
 		values = strs.Append(values, def, ",\n")
 	}
 
-	ctid := et.Unquote(l.Values.Ctid)
-	result = strs.Format("UPDATE %s SET\n%s WHERE ctid = '%v'", mod.Table, values, ctid)
+	idt := et.Unquote(l.Values.IdT)
+	result = strs.Format("UPDATE %s SET\n%s WHERE _IDT = '%v'", mod.Table, values, idt)
 
 	l.Sql = strs.Append(l.Sql, result, "\n")
 }
@@ -416,10 +424,10 @@ func sqlUpdate(l *linq.Linq) {
 func sqlDelete(l *linq.Linq) {
 	var result string
 	vals := *l.Values
-	mod := vals.From.Model
+	mod := vals.Model
 
-	ctid := et.Unquote(l.Values.Ctid)
-	result = strs.Format("DELETE FROM %s WHERE ctid = '%v'", mod.Table, ctid)
+	idt := et.Unquote(l.Values.IdT)
+	result = strs.Format("DELETE FROM %s WHERE _IDT = '%v'", mod.Table, idt)
 
 	l.Sql = strs.Append(l.Sql, result, "\n")
 }

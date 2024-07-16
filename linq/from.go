@@ -127,7 +127,7 @@ func From(model *Model) *Linq {
 	}
 
 	as := getAs(result)
-	result.Db = model.Db
+	result.DB = model.DB
 	form := &Lfrom{Linq: result, Model: model, AS: as}
 	result.Froms = append(result.Froms, form)
 	result.Values = newValues(form, Tpnone)

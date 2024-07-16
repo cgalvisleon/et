@@ -147,7 +147,7 @@ func (r *RelationTo) Describe() et.Json {
 **/
 type Model struct {
 	Schema               *Schema
-	Db                   *Database
+	DB                   *Database
 	Name                 string
 	Tag                  string
 	Table                string
@@ -325,7 +325,7 @@ func (m *Model) Describe() et.Json {
 * @return error
 **/
 func (m *Model) Init(db *Database) error {
-	m.Db = db
+	m.DB = db
 	return db.InitModel(m)
 }
 
@@ -483,4 +483,24 @@ func (m *Model) AddRelationTo(col *Column) {
 	}
 
 	m.RelationTo = append(m.RelationTo, col)
+}
+
+/**
+* GetMigrateId get migrate id
+* @param old_id string
+* @return string
+* @return error
+**/
+func (m *Model) GetMigrateId(old_id string) (string, error) {
+	return m.DB.GetMigrateId(old_id, m.Table)
+}
+
+/**
+* UpSertMigrateId upsert migrate id
+* @param old_id string
+* @param _id string
+* @return error
+**/
+func (m *Model) UpSertMigrateId(old_id, _id string) error {
+	return m.DB.UpSertMigrateId(old_id, _id, m.Table)
 }

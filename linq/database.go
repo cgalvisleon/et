@@ -53,6 +53,9 @@ func NewDatabase(name, description string, driver Driver) (*Database, error) {
 		Models:      []*Model{},
 	}
 
+	driver.SetListen(result.handlerListened)
+	result.Driver = &driver
+
 	dbs = append(dbs, result)
 
 	return result, nil
@@ -73,7 +76,7 @@ func beforeInsert(model *Model, value *Values) error {
 		value.Set(model.ColumnLastEditedTime, now)
 	}
 	if model.ColumnSerie != nil {
-		index, err := model.Db.NextSerie(model.Table)
+		index, err := model.DB.NextSerie(model.Table)
 		if err != nil {
 			return logs.Alert(err)
 		}
@@ -84,6 +87,12 @@ func beforeInsert(model *Model, value *Values) error {
 	return nil
 }
 
+/**
+* beforeUpdate set the values before update
+* @param model *Model
+* @param value *Values
+* @return error
+**/
 func beforeUpdate(model *Model, value *Values) error {
 	now := utility.Now()
 	if model.ColumnLastEditedTime != nil {
@@ -91,6 +100,14 @@ func beforeUpdate(model *Model, value *Values) error {
 	}
 
 	return nil
+}
+
+/**
+* handlerListened handler listened
+* @param res et.Json
+**/
+func (d *Database) handlerListened(res et.Json) {
+	logs.Debug("Lintened: ", res.ToString())
 }
 
 /**
@@ -188,7 +205,7 @@ func (d *Database) GetModel(model *Model) *Model {
 		}
 	}
 
-	model.Db = d
+	model.DB = d
 	driver := *d.Driver
 	if driver.Type() == "sqlite" {
 		model.Table = model.Name
@@ -360,27 +377,161 @@ func (d *Database) deleteSql(linq *Linq) (string, error) {
 	return driver.DeleteSql(linq), nil
 }
 
+/**
+* Query execute a query in the database
+* @parms db
+* @parms sql
+* @parms args
+* @return et.Items
+* @return error
+**/
+func (d *Database) Query(sql string, args ...any) (et.Items, error) {
+	_query := SQLParse(sql, args...)
+
+	if d.debug {
+		logs.Debug(_query)
+	}
+
+	items, err := Query(d.DB, _query)
+	if err != nil {
+		return et.Items{}, err
+	}
+
+	return items, nil
+}
+
+/**
+* QueryOne execute a query in the database and return one item
+* @parms db
+* @parms sql
+* @parms args
+* @return et.Item
+* @return error
+**/
+func (d *Database) QueryOne(sql string, args ...any) (et.Item, error) {
+	items, err := d.Query(sql, args...)
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	if items.Count == 0 {
+		return et.Item{
+			Ok:     false,
+			Result: et.Json{},
+		}, nil
+	}
+
+	return et.Item{
+		Ok:     items.Ok,
+		Result: items.Result[0],
+	}, nil
+}
+
+/**
+* Exec execute a query
+* @param sql string
+* @param args ...any
+* @return et.Items
+* @return error
+**/
+func (d *Database) Data(source, sql string, args ...any) (et.Items, error) {
+	rows, err := query(d.DB, sql, args...)
+	if err != nil {
+		return et.Items{}, logs.Error(err)
+	}
+	defer rows.Close()
+
+	var result et.Items = et.Items{}
+	for rows.Next() {
+		var item et.Item
+		err := item.Scan(rows)
+		if err != nil {
+			continue
+		}
+
+		result.Result = append(result.Result, item.Json(source))
+		result.Ok = true
+		result.Count++
+	}
+
+	return result, nil
+}
+
+/**
+* NextSerie return the next serie
+* @param tag string
+* @return int
+* @return error
+**/
 func (d *Database) NextSerie(tag string) (int, error) {
 	driver := *d.Driver
 	return driver.NextSerie(tag)
 }
 
+/**
+* NextCode return the next code
+* @param tag string
+* @param format string
+* @return string
+* @return error
+**/
 func (d *Database) NextCode(tag, format string) (string, error) {
 	driver := *d.Driver
 	return driver.NextCode(tag, format)
 }
 
+/**
+* SetSerie set the serie
+* @param tag string
+* @param val int
+* @return error
+**/
 func (d *Database) SetSerie(tag string, val int) error {
 	driver := *d.Driver
 	return driver.SetSerie(tag, val)
 }
 
+/**
+* CurrentSerie return the current serie
+* @param tag string
+* @return int
+* @return error
+**/
 func (d *Database) CurrentSerie(tag string) (int, error) {
 	driver := *d.Driver
 	return driver.CurrentSerie(tag)
 }
 
+/**
+* DeleteSerie delete the serie
+* @param tag string
+* @return error
+**/
 func (d *Database) DeleteSerie(tag string) error {
 	driver := *d.Driver
 	return driver.DeleteSerie(tag)
+}
+
+/**
+* GetMigrateId get a migrate id
+* @param old_id string
+* @param tag string
+* @return string
+* @return error
+**/
+func (d *Database) GetMigrateId(old_id, tag string) (string, error) {
+	driver := *d.Driver
+	return driver.GetMigrateId(old_id, tag)
+}
+
+/**
+* UpSertMigrateId upsert a migrate id
+* @param old_id string
+* @param _id string
+* @param tag string
+* @return error
+**/
+func (d *Database) UpSertMigrateId(old_id, _id, tag string) error {
+	driver := *d.Driver
+	return driver.UpSertMigrateId(old_id, _id, tag)
 }

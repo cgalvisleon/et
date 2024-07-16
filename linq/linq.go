@@ -96,8 +96,7 @@ func NewColumns() *Lcolumns {
 
 // Linq struct
 type Linq struct {
-	Db        *Database
-	as        int
+	DB        *Database
 	Froms     []*Lfrom
 	Columns   []*Lselect
 	Atribs    []*Lselect
@@ -119,6 +118,7 @@ type Linq struct {
 	TypeQuery TypeQuery
 	Sql       string
 	Result    *et.Items
+	as        int
 	setResult et.Json
 	debug     bool
 }

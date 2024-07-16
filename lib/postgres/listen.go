@@ -5,20 +5,21 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/linq"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/lib/pq"
 )
 
 var listened bool
 
-func defineListen(connStr string, channels []string) {
+func (p *Postgres) defineListend(channels []string, lited linq.HandleListen) {
 	reportProblem := func(ev pq.ListenerEventType, err error) {
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
 
-	listener := pq.NewListener(connStr, 10*time.Second, time.Minute, reportProblem)
+	listener := pq.NewListener(p.connStr, 10*time.Second, time.Minute, reportProblem)
 	for _, channel := range channels {
 		err := listener.Listen(channel)
 		if err != nil {
@@ -36,7 +37,7 @@ func defineListen(connStr string, channels []string) {
 				}
 
 				result.Set("channel", notification.Channel)
-				handleListen(result)
+				lited(result)
 			}
 		case <-time.After(90 * time.Second):
 			go listener.Ping()
@@ -44,6 +45,6 @@ func defineListen(connStr string, channels []string) {
 	}
 }
 
-func handleListen(res et.Json) {
-	logs.Debug("lintened: ", res.ToString())
+func (p *Postgres) SetListen(listen linq.HandleListen) {
+	go p.defineListend([]string{"sync", "recycling"}, listen)
 }

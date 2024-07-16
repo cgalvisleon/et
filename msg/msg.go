@@ -25,6 +25,7 @@ const (
 	NOT_TOKEN_NOT_EXISTS    = "Token not exists"
 	RECORD_NOT_FOUND        = "Record not found"
 	RECORD_FOUND            = "Record found"
+	RECORD_DUPLICATE        = "Record duplicate:%s"
 	RECORD_NOT_ACTIVE       = "Record not active:%s"
 	RECORD_NOT_CREATE       = "Record not create"
 	RECORD_DELETE           = "Record delete"

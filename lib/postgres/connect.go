@@ -3,12 +3,13 @@ package lib
 import (
 	"database/sql"
 
+	"github.com/cgalvisleon/et/linq"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 	_ "github.com/lib/pq"
 )
 
-func ConnStr(params *Connection) (string, error) {
+func ConnStr(params *linq.Connection) (string, error) {
 	if params.User == "" {
 		return "", logs.Errorm("User is required")
 	}
@@ -33,7 +34,7 @@ func ConnStr(params *Connection) (string, error) {
 		return "", logs.Errorm("App name is required")
 	}
 
-	driver := "postgres"
+	driver := params.Drive.String()
 	user := params.User
 	password := params.Password
 	host := params.Host

@@ -9,6 +9,11 @@ import (
 	"github.com/cgalvisleon/et/logs"
 )
 
+/**
+* Load a database
+* @return *linq.Database
+* @return error
+**/
 func Load() (*linq.Database, error) {
 	kind := envar.GetStr("postgre", "DB_DRIVE")
 	host := envar.GetStr("localhost", "DB_HOST")
@@ -20,13 +25,15 @@ func Load() (*linq.Database, error) {
 
 	if kind == "postgres" {
 		var drive linq.Driver
-		drivePg := lpg.NewDriver(&lpg.Connection{
+		drivePg := lpg.NewDriver(&linq.Connection{
+			Drive:    linq.Postgres,
 			User:     user,
 			Password: password,
 			Host:     host,
 			Port:     port,
 			Database: name,
 			App:      app,
+			UsedCore: true,
 		})
 
 		drive = drivePg
@@ -42,7 +49,20 @@ func Load() (*linq.Database, error) {
 	}
 }
 
-func Connect(params *lpg.Connection) (*sql.DB, error) {
+func LoadTo(params *linq.Connection) (*linq.Database, error) {
+	var drive linq.Driver
+	drivePg := lpg.NewDriver(params)
+	drive = drivePg
+
+	result, err := linq.NewDatabase(params.Database, "", drive)
+	if err != nil {
+		return nil, logs.Alert(err)
+	}
+
+	return result, nil
+}
+
+func Connect(params *linq.Connection) (*sql.DB, error) {
 	connStr, err := lpg.ConnStr(params)
 	if err != nil {
 		return nil, logs.Alert(err)

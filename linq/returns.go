@@ -34,7 +34,7 @@ func (l *Linq) Returning(sel ...any) *Linq {
 			sp := strings.Split(v, ".")
 			if len(sp) > 1 {
 				n := sp[0]
-				m := l.Db.Model(n)
+				m := l.DB.Model(n)
 				if m != nil {
 					l.GetRetun(m, sp[1])
 				}

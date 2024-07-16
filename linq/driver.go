@@ -32,6 +32,19 @@ func (d TypeDriver) String() string {
 	return ""
 }
 
+type Connection struct {
+	Drive    TypeDriver
+	User     string
+	Password string
+	Host     string
+	Port     int
+	Database string
+	App      string
+	UsedCore bool
+}
+
+type HandleListen func(res et.Json)
+
 type Driver interface {
 	Type() string
 	Connect() (*sql.DB, error)
@@ -50,6 +63,8 @@ type Driver interface {
 	DeleteSql(linq *Linq) string
 	// DCL (Data Control Language)
 	DCL(command string, params et.Json) error
+	// Listener
+	SetListen(handler HandleListen)
 	// Serires
 	NextSerie(tag string) (int, error)
 	NextCode(tag, format string) (string, error)
@@ -61,4 +76,7 @@ type Driver interface {
 	InsertModel(main, name, kind string, version int, data et.Json) error
 	UpdateModel(main, name, kind string, version int, data et.Json) error
 	DeleteModel(main, name, kind string) error
+	// Migrations IDs
+	UpSertMigrateId(old_id, _id, tag string) error
+	GetMigrateId(old_id, tag string) (string, error)
 }

@@ -136,66 +136,13 @@ func QueryOne(db *sql.DB, sql string, args ...any) (et.Item, error) {
 
 /**
 * Query execute a query in the database
-* @parms db
-* @parms sql
-* @parms args
-* @return et.Items
-* @return error
-**/
-func (d *Database) Query(db *sql.DB, sql string, args ...any) (et.Items, error) {
-	_query := SQLParse(sql, args...)
-
-	if d.debug {
-		logs.Debug(_query)
-	}
-
-	rows, err := query(db, _query)
-	if err != nil {
-		return et.Items{}, err
-	}
-	defer rows.Close()
-
-	items := RowsItems(rows)
-
-	return items, nil
-}
-
-/**
-* QueryOne execute a query in the database and return one item
-* @parms db
-* @parms sql
-* @parms args
-* @return et.Item
-* @return error
-**/
-func (d *Database) QueryOne(db *sql.DB, sql string, args ...any) (et.Item, error) {
-	items, err := Query(db, sql, args...)
-	if err != nil {
-		return et.Item{}, err
-	}
-
-	if items.Count == 0 {
-		return et.Item{
-			Ok:     false,
-			Result: et.Json{},
-		}, nil
-	}
-
-	return et.Item{
-		Ok:     items.Ok,
-		Result: items.Result[0],
-	}, nil
-}
-
-/**
-* Query execute a query in the database
 * @parms sql
 * @parms args
 * @return et.Items
 * @return error
 **/
 func (l *Linq) query(sql string, args ...any) (et.Items, error) {
-	if l.Db.DB == nil {
+	if l.DB == nil {
 		return et.Items{}, logs.Errorm("Connected is required")
 	}
 
@@ -208,15 +155,12 @@ func (l *Linq) query(sql string, args ...any) (et.Items, error) {
 		debug(l)
 	}
 
-	rows, err := query(l.Db.DB, l.Sql)
+	items, err := l.DB.Query(l.Sql)
 	if err != nil {
 		return et.Items{}, logs.Error(err)
 	}
-	defer rows.Close()
 
-	result := RowsItems(rows)
-
-	return result, nil
+	return items, nil
 }
 
 /**
@@ -227,7 +171,7 @@ func (l *Linq) query(sql string, args ...any) (et.Items, error) {
 * @return error
 **/
 func (l *Linq) data(sql string, args ...any) (et.Items, error) {
-	if l.Db.DB == nil {
+	if l.DB == nil {
 		return et.Items{}, logs.Errorm("Connected is required")
 	}
 
@@ -240,26 +184,12 @@ func (l *Linq) data(sql string, args ...any) (et.Items, error) {
 		debug(l)
 	}
 
-	rows, err := query(l.Db.DB, l.Sql)
+	items, err := l.DB.Data(SourceField.Low(), l.Sql)
 	if err != nil {
 		return et.Items{}, logs.Error(err)
 	}
-	defer rows.Close()
 
-	var result et.Items = et.Items{}
-	for rows.Next() {
-		var item et.Item
-		err := item.Scan(rows)
-		if err != nil {
-			continue
-		}
-
-		result.Result = append(result.Result, item.Json(SourceField.Low()))
-		result.Ok = true
-		result.Count++
-	}
-
-	return result, nil
+	return items, nil
 }
 
 /**

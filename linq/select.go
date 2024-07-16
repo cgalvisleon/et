@@ -279,7 +279,7 @@ func (l *Linq) Select(sel ...interface{}) *Linq {
 			sp := strings.Split(v, ".")
 			if len(sp) > 1 {
 				n := sp[0]
-				m := l.Db.Model(n)
+				m := l.DB.Model(n)
 				if m != nil {
 					l.GetSelect(m, sp[1])
 				}
@@ -312,7 +312,7 @@ func (l *Linq) DAta(sel ...interface{}) *Linq {
 			sp := strings.Split(v, ".")
 			if len(sp) > 1 {
 				n := sp[0]
-				m := l.Db.Model(n)
+				m := l.DB.Model(n)
 				if m != nil {
 					l.GetData(m, sp[1])
 				}

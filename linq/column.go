@@ -35,8 +35,8 @@ type Required struct {
 	Message  string
 }
 
-// Definition return a json with the definition of the required
-func (r *Required) Definition() et.Json {
+// Describe return a json with the definition of the required
+func (r *Required) Describe() et.Json {
 	return et.Json{
 		"required": r.Required,
 		"message":  r.Message,
@@ -73,7 +73,7 @@ type Column struct {
 }
 
 // name return a valid name of column, table, schema or database
-func nAme(name string) string {
+func nameCase(name string) string {
 	re := regexp.MustCompile("[^a-zA-Z0-9_-]+")
 	s := re.ReplaceAllString(name, "")
 	s = strs.Replace(s, " ", "_")
@@ -82,7 +82,7 @@ func nAme(name string) string {
 }
 
 func atribName(name string) string {
-	name = nAme(name)
+	name = nameCase(name)
 
 	return strs.Lowcase(name)
 }
@@ -99,8 +99,8 @@ func IndexColumn(model *Model, name string) int {
 	return result
 }
 
-// Column return a column in the model
-func COlumn(model *Model, name string) *Column {
+// Col return a column in the model
+func Col(model *Model, name string) *Column {
 	idx := IndexColumn(model, name)
 	if idx != -1 {
 		return model.Columns[idx]
@@ -112,8 +112,8 @@ func COlumn(model *Model, name string) *Column {
 // NewColumn create a new column
 func newColumn(model *Model, name, description string, typeColumm TypeColumn, typeData TypeData, _default interface{}) *Column {
 	tag := strs.Lowcase(name)
-	name = nAme(name)
-	result := COlumn(model, name)
+	name = nameCase(name)
+	result := Col(model, name)
 	if result != nil {
 		return result
 	}
@@ -125,7 +125,7 @@ func newColumn(model *Model, name, description string, typeColumm TypeColumn, ty
 		Description: description,
 		TypeColumn:  typeColumm,
 		TypeData:    typeData,
-		Definition:  *typeData.Definition(),
+		Definition:  *typeData.Describe(),
 		Default:     _default,
 	}
 
@@ -168,15 +168,15 @@ func newColumn(model *Model, name, description string, typeColumm TypeColumn, ty
 }
 
 // Describe carapteristics of column
-func (c *Column) DEfinition() et.Json {
+func (c *Column) Describe() et.Json {
 	relationTo := et.Json{}
 	if c.RelationTo != nil {
-		relationTo = c.RelationTo.Definition()
+		relationTo = c.RelationTo.Describe()
 	}
 
 	required := et.Json{}
 	if c.Required != nil {
-		required = c.Required.Definition()
+		required = c.Required.Describe()
 	}
 
 	return et.Json{

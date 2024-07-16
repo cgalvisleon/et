@@ -16,10 +16,10 @@ type Lselect struct {
 	TpCaculate TpCaculate
 }
 
-// Definition method to use in linq
-func (l *Lselect) Definition() et.Json {
+// Describe method to use in linq
+func (l *Lselect) Describe() et.Json {
 	return et.Json{
-		"form":          l.From.Definition(),
+		"form":          l.From.Describe(),
 		"column":        l.Column.Name,
 		"type":          l.Column.TypeColumn.String(),
 		"as":            l.AS,
@@ -54,6 +54,10 @@ func (l *Lselect) As() string {
 			def := strs.Format(`%s`, l.AS)
 			return strs.Format(`MIN(%s)`, def)
 		default:
+			if l.Column == nil {
+				return strs.Format(`%s`, et.Unquote(l.AS))
+			}
+
 			return strs.Format(`%s`, l.AS)
 		}
 	}
@@ -75,6 +79,10 @@ func (l *Lselect) As() string {
 		def := strs.Format(`%s.%s`, l.From.AS, l.AS)
 		return strs.Format(`MIN(%s)`, def)
 	default:
+		if l.Column == nil {
+			return strs.Format(`%s`, et.Unquote(l.AS))
+		}
+
 		return strs.Format(`%s.%s`, l.From.AS, l.AS)
 	}
 }
@@ -159,7 +167,7 @@ func (l *Linq) GetColumn(column *Column) *Lselect {
 
 // Add column to select by name
 func (l *Linq) GetSelect(model *Model, name string) *Lselect {
-	column := COlumn(model, name)
+	column := Col(model, name)
 	if column == nil {
 		return nil
 	}
@@ -179,7 +187,7 @@ func (l *Linq) GetSelect(model *Model, name string) *Lselect {
 
 // Add column to data by name
 func (l *Linq) GetData(model *Model, name string) *Lselect {
-	column := COlumn(model, name)
+	column := Col(model, name)
 	if column == nil {
 		return nil
 	}

@@ -25,7 +25,7 @@ func (m *Model) DefineColumn(name, description string, typeData TypeData, _defau
  * @return *Column
 **/
 func (m *Model) DefineAtrib(name, description string, typeData TypeData, _default interface{}) *Column {
-	source := COlumn(m, SourceField.Low())
+	source := Col(m, SourceField.Low())
 	if source == nil {
 		_ = m.DefineColumn(SourceField.Low(), "Source field", TpData, TpJson.Default())
 	}
@@ -145,7 +145,7 @@ func (m *Model) DefineUnique(name string, asc bool) *Model {
 **/
 func (m *Model) DefineHidden(cols []string) *Model {
 	for _, v := range cols {
-		col := COlumn(m, v)
+		col := Col(m, v)
 		if col != nil {
 			col.SetHidden(true)
 		}
@@ -162,7 +162,7 @@ func (m *Model) DefineHidden(cols []string) *Model {
 **/
 func (m *Model) DefineRequired(cols []ColRequired) *Model {
 	for _, def := range cols {
-		column := COlumn(m, def.Name)
+		column := Col(m, def.Name)
 		if column != nil {
 			column.SetRequired(true, def.Message)
 		}
@@ -210,7 +210,7 @@ func (m *Model) DefineForeignKey(foreignKey []string, parentModel *Model, parent
  * @return *Column
 **/
 func (m *Model) DefineFormula(name, formula string) *Column {
-	result := newColumn(m, name, "", TpDetail, TpFormula, *TpFormula.Definition())
+	result := newColumn(m, name, "", TpDetail, TpFormula, *TpFormula.Describe())
 	result.Formula = formula
 
 	return result

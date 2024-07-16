@@ -11,10 +11,10 @@ type Lorder struct {
 	Asc    bool
 }
 
-// Definition method to use in linq
-func (l *Lorder) Definition() et.Json {
+// Describe method to use in linq
+func (l *Lorder) Describe() et.Json {
 	return et.Json{
-		"column": l.Column.Definition(),
+		"column": l.Column.Describe(),
 		"asc":    l.Asc,
 	}
 }

@@ -5,15 +5,21 @@ import (
 	"github.com/cgalvisleon/et/strs"
 )
 
-// Where struct to use in linq
+/**
+* Lwhere struct to use in linq
+**/
 type Lwhere struct {
 	Linq     *Linq
-	Column   *Lselect
+	Columns  []*Lselect
 	Operator string
 	Value    interface{}
 	Connetor string
 }
 
+/**
+* Unquote method to use in linq
+* @return string
+**/
 func (w *Lwhere) Unquote() string {
 	switch v := w.Value.(type) {
 	case *Column:
@@ -32,6 +38,10 @@ func (w *Lwhere) Unquote() string {
 	}
 }
 
+/**
+* Quote method to use in linq
+* @return string
+**/
 func (w *Lwhere) Quote() string {
 	switch v := w.Value.(type) {
 	case *Column:
@@ -50,56 +60,237 @@ func (w *Lwhere) Quote() string {
 	}
 }
 
-// Definition method to use in linq
-func (w *Lwhere) Definition() et.Json {
+/**
+* Describe method to use in linq
+* @return et.Json
+**/
+func (w *Lwhere) Describe() et.Json {
 	value := w.Unquote()
 
+	var columns []string = make([]string, 0)
+	for _, _select := range w.Columns {
+		columns = append(columns, _select.As())
+	}
+
 	return et.Json{
-		"column":   w.Column.As(),
+		"columns":  columns,
 		"operator": w.Operator,
 		"value":    value,
 		"connetor": w.Connetor,
 	}
 }
 
-// Where method to use in linq
+/**
+* As method to use in linq
+* @return string
+**/
+func (w *Lwhere) As() string {
+	var result string
+	for i, _select := range w.Columns {
+		if i == 0 {
+			result = _select.As()
+		} else {
+			result = strs.Format(`%s, %s`, result, _select.As())
+		}
+	}
+
+	if len(w.Columns) > 1 {
+		result = strs.Format(`CONCAT(%s)`, result)
+	}
+
+	return result
+}
+
+/**
+* Where method to use in linq
+* @return string
+**/
 func (w *Lwhere) Where() string {
 	value := w.Unquote()
 
-	return strs.Format(`%s %s %s`, w.Column.As(), w.Operator, value)
+	return strs.Format(`%s %s %s`, w.As(), w.Operator, value)
 }
 
-// setLinq to where
+/**
+* setLinq method to use in linq
+* @param *Linq
+* @return *Lwhere
+**/
 func (w *Lwhere) setLinq(l *Linq) *Lwhere {
-	_select := w.Column
-	_from := l.GetFrom(_select.Column.Model)
-
 	w.Linq = l
-	_select.Linq = l
-	_select.From = _from
+	for _, _select := range w.Columns {
+		_select.Linq = l
+
+		if _select.Column == nil {
+			continue
+		}
+		if _select.Column.Model == nil {
+			continue
+		}
+
+		_from := l.GetFrom(_select.Column.Model)
+		_select.From = _from
+	}
 
 	return w
 }
 
-// Where function to use in linq
+/**
+* Eq method to use in linq
+* @param interface{}
+* @return *Lwhere
+**/
+func (w *Lwhere) Eq(val interface{}) *Lwhere {
+	w.Operator = "="
+	w.Value = val
+
+	return w
+}
+
+/**
+* Neg method to use in linq
+* @param interface{}
+* @return *Lwhere
+**/
+func (w *Lwhere) Neg(val interface{}) *Lwhere {
+	w.Operator = "!="
+	w.Value = val
+
+	return w
+}
+
+/**
+* In method to use in linq
+* @param ...interface{}
+* @return *Lwhere
+**/
+func (w *Lwhere) In(vals ...interface{}) *Lwhere {
+	w.Operator = "IN"
+	w.Value = vals
+
+	return w
+}
+
+/**
+* Like method to use in linq
+* @param ...interface{}
+* @return *Lwhere
+**/
+func (w *Lwhere) Like(val interface{}) *Lwhere {
+	w.Operator = "LIKE"
+	w.Value = val
+
+	return w
+}
+
+/**
+* More method to use in linq
+* @param ...interface{}
+* @return *Lwhere
+**/
+func (w *Lwhere) More(val interface{}) *Lwhere {
+	w.Operator = ">"
+	w.Value = val
+
+	return w
+}
+
+/**
+* Less method to use in linq
+* @param ...interface{}
+* @return *Lwhere
+**/
+func (w *Lwhere) Less(val interface{}) *Lwhere {
+	w.Operator = "<"
+	w.Value = val
+
+	return w
+}
+
+/**
+* MoreEq method to use in linq
+* @param ...interface{}
+* @return *Lwhere
+**/
+func (w *Lwhere) MoreEq(val interface{}) *Lwhere {
+	w.Operator = ">="
+	w.Value = val
+
+	return w
+}
+
+/**
+* LessEq method to use in linq
+* @param ...interface{}
+* @return *Lwhere
+**/
+func (w *Lwhere) LessEq(val interface{}) *Lwhere {
+	w.Operator = "<="
+	w.Value = val
+
+	return w
+}
+
+/**
+* Between method to use in linq
+* @param ...interface{}
+* @return *Lwhere
+**/
+func (w *Lwhere) Between(vals ...interface{}) *Lwhere {
+	w.Operator = "BETWEEN"
+	w.Value = vals
+
+	return w
+}
+
+/**
+* NotBetween method to use in linq
+* @param ...interface{}
+* @return *Lwhere
+**/
+func (w *Lwhere) NotBetween(vals ...interface{}) *Lwhere {
+	w.Operator = "NOT BETWEEN"
+	w.Value = vals
+
+	return w
+}
+
+/**
+* Where method to use in linq
+* @param *Column
+* @param string
+* @param interface{}
+* @return *Lwhere
+**/
 func Where(column *Column, operator string, value interface{}) *Lwhere {
+	_select := &Lselect{Column: column, AS: column.Name}
 	return &Lwhere{
-		Column:   &Lselect{Column: column, AS: column.Name},
+		Columns:  []*Lselect{_select},
 		Operator: operator,
 		Value:    value,
 	}
 }
 
-// Where method to use in linq
+/**
+* Where method to use in linq
+* @param *Lselect
+* @param string
+* @param interface{}
+* @return *Lwhere
+**/
 func (l *Linq) Where(where *Lwhere) *Linq {
 	where.setLinq(l)
-	l.Wheres = []*Lwhere{where}
+	l.Wheres = append(l.Wheres, where)
 	l.isHaving = false
 
 	return l
 }
 
-// And method to use in where linq
+/**
+* And connector to use in where
+* @param *Lwhere
+* @return *Linq
+**/
 func (l *Linq) And(where *Lwhere) *Linq {
 	where.setLinq(l)
 	where.Connetor = "AND"
@@ -112,7 +303,11 @@ func (l *Linq) And(where *Lwhere) *Linq {
 	return l
 }
 
-// Or method to use in where linq
+/**
+* Or connector to use in where
+* @param *Lwhere
+* @return *Linq
+**/
 func (l *Linq) Or(where *Lwhere) *Linq {
 	where.setLinq(l)
 	where.Connetor = "OR"
@@ -125,52 +320,92 @@ func (l *Linq) Or(where *Lwhere) *Linq {
 	return l
 }
 
-// Equal method to use in column
+/**
+* Eq method to use in column
+* @param interface{}
+* @return *Lwhere
+**/
 func (c *Column) Eq(val interface{}) *Lwhere {
 	return Where(c, "=", val)
 }
 
-// NotEqual method to use in column
+/**
+* Neg method to use in column
+* @param interface{}
+* @return *Lwhere
+**/
 func (c *Column) Neg(val interface{}) *Lwhere {
 	return Where(c, "!=", val)
 }
 
-// Values in method to use in column
+/**
+* In method to use in column
+* @param ...interface{}
+* @return *Lwhere
+**/
 func (c *Column) In(vals ...interface{}) *Lwhere {
 	return Where(c, "IN", vals)
 }
 
-// Like method to use in column
+/**
+* Like method to use in column
+* @param ...interface{}
+* @return *Lwhere
+**/
 func (c *Column) Like(val interface{}) *Lwhere {
 	return Where(c, "LIKE", val)
 }
 
-// More method to use in column
+/**
+* More method to use in column
+* @param ...interface{}
+* @return *Lwhere
+**/
 func (c *Column) More(val interface{}) *Lwhere {
 	return Where(c, ">", val)
 }
 
-// Less method to use in column
+/**
+* Less method to use in column
+* @param ...interface{}
+* @return *Lwhere
+**/
 func (c *Column) Less(val interface{}) *Lwhere {
 	return Where(c, ">", val)
 }
 
-// MoreEq method to use in column
+/**
+* MoreEq method to use in column
+* @param ...interface{}
+* @return *Lwhere
+**/
 func (c *Column) MoreEq(val interface{}) *Lwhere {
 	return Where(c, ">=", val)
 }
 
-// LessEq method to use in column
+/**
+* LessEq method to use in column
+* @param ...interface{}
+* @return *Lwhere
+**/
 func (c *Column) LessEq(val interface{}) *Lwhere {
 	return Where(c, "<=", val)
 }
 
-// Between method to use in column
+/**
+* Between method to use in column
+* @param ...interface{}
+* @return *Lwhere
+**/
 func (c *Column) Between(vals ...interface{}) *Lwhere {
 	return Where(c, "BETWEEN", vals)
 }
 
-// NotBetween method to use in column
+/**
+* NotBetween method to use in column
+* @param ...interface{}
+* @return *Lwhere
+**/
 func (c *Column) NotBetween(vals ...interface{}) *Lwhere {
 	return Where(c, "NOT BETWEEN", vals)
 }

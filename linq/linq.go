@@ -63,11 +63,11 @@ type Lcolumns struct {
 	Columns []*Lselect
 }
 
-// Definition method to use in linq
-func (l *Lcolumns) Definition() et.Json {
+// Describe method to use in linq
+func (l *Lcolumns) Describe() et.Json {
 	var columns []et.Json = []et.Json{}
 	for _, c := range l.Columns {
-		columns = append(columns, c.Definition())
+		columns = append(columns, c.Describe())
 	}
 
 	return et.Json{
@@ -123,50 +123,54 @@ type Linq struct {
 	debug     bool
 }
 
-func (l *Linq) Definition() *et.Json {
+/**
+* Describe return a json with the definition of the linq
+* @return et.Json
+**/
+func (l *Linq) Describe() *et.Json {
 	var froms []et.Json = []et.Json{}
 	for _, f := range l.Froms {
-		froms = append(froms, f.Definition())
+		froms = append(froms, f.Describe())
 	}
 
 	var columns []et.Json = []et.Json{}
 	for _, c := range l.Columns {
-		columns = append(columns, c.Definition())
+		columns = append(columns, c.Describe())
 	}
 
 	var atribs []et.Json = []et.Json{}
 	for _, a := range l.Atribs {
-		atribs = append(atribs, a.Definition())
+		atribs = append(atribs, a.Describe())
 	}
 
 	var wheres []et.Json = []et.Json{}
 	for _, w := range l.Wheres {
-		wheres = append(wheres, w.Definition())
+		wheres = append(wheres, w.Describe())
 	}
 
 	var groups []et.Json = []et.Json{}
 	for _, g := range l.Groups {
-		groups = append(groups, g.Definition())
+		groups = append(groups, g.Describe())
 	}
 
 	var havings []et.Json = []et.Json{}
 	for _, h := range l.Havings {
-		havings = append(havings, h.Definition())
+		havings = append(havings, h.Describe())
 	}
 
 	var orders []et.Json = []et.Json{}
 	for _, o := range l.Orders {
-		orders = append(orders, o.Definition())
+		orders = append(orders, o.Describe())
 	}
 
 	var joins []et.Json = []et.Json{}
 	for _, j := range l.Joins {
-		joins = append(joins, j.Definition())
+		joins = append(joins, j.Describe())
 	}
 
 	var unions []et.Json = []et.Json{}
 	for _, u := range l.Union {
-		unions = append(unions, *u.Definition())
+		unions = append(unions, *u.Describe())
 	}
 
 	return &et.Json{
@@ -174,10 +178,10 @@ func (l *Linq) Definition() *et.Json {
 		"froms":     froms,
 		"columns":   columns,
 		"atribs":    atribs,
-		"selects":   l.Selects.Definition(),
-		"data":      l.Data.Definition(),
-		"returns":   l.Returns.Definition(),
-		"details":   l.Details.Definition(),
+		"selects":   l.Selects.Describe(),
+		"data":      l.Data.Describe(),
+		"returns":   l.Returns.Describe(),
+		"details":   l.Details.Describe(),
 		"distinct":  l.Distinct,
 		"wheres":    wheres,
 		"groups":    groups,
@@ -187,7 +191,7 @@ func (l *Linq) Definition() *et.Json {
 		"unions":    unions,
 		"limit":     l.Limit,
 		"offset":    l.Offset,
-		"values":    l.Values.Definition(),
+		"values":    l.Values.Describe(),
 		"typeQuery": l.TypeQuery.String(),
 		"sql":       l.Sql,
 	}

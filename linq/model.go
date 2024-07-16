@@ -53,10 +53,10 @@ type Constraint struct {
 }
 
 /**
-* Definition return a json with the definition of the constraint
+* Describe return a json with the definition of the constraint
 * @return et.Json
 **/
-func (c *Constraint) Definition() et.Json {
+func (c *Constraint) Describe() et.Json {
 	return et.Json{
 		"foreignKey": c.ForeignKey,
 		"parent":     c.Parent.Name,
@@ -97,10 +97,10 @@ type Index struct {
 }
 
 /**
-* Definition return a json with the definition of the index
+* Describe return a json with the definition of the index
 * @return et.Json
 **/
-func (i *Index) Definition() et.Json {
+func (i *Index) Describe() et.Json {
 	return et.Json{
 		"column": i.Column.Name,
 		"asc":    i.Asc,
@@ -132,10 +132,10 @@ type RelationTo struct {
 }
 
 /**
-* Definition return a json with the definition of the relation to
+* Describe return a json with the definition of the relation to
 * @return et.Json
 **/
-func (r *RelationTo) Definition() et.Json {
+func (r *RelationTo) Describe() et.Json {
 	return et.Json{
 		"primaryKey": r.PrimaryKey.Name,
 		"foreignKey": r.ForeignKey.Name,
@@ -192,7 +192,7 @@ type Model struct {
 **/
 func NewModel(schema *Schema, name, description string, version int) *Model {
 	tag := strs.Lowcase(name)
-	name = nAme(name)
+	name = nameCase(name)
 	table := strs.Append(schema.Name, name, ".")
 
 	for _, v := range models {
@@ -234,13 +234,13 @@ func NewModel(schema *Schema, name, description string, version int) *Model {
 }
 
 /**
-* Definition return a json with the definition of the model
+* Describe return a json with the definition of the model
 * @return et.Json
 **/
-func (m *Model) Definition() et.Json {
+func (m *Model) Describe() et.Json {
 	var columns []et.Json = []et.Json{}
 	for _, v := range m.Columns {
-		columns = append(columns, v.DEfinition())
+		columns = append(columns, v.Describe())
 	}
 
 	var primaryKeys []string = []string{}
@@ -250,22 +250,22 @@ func (m *Model) Definition() et.Json {
 
 	var foreignKey []et.Json = []et.Json{}
 	for _, v := range m.ForeignKey {
-		foreignKey = append(foreignKey, v.Definition())
+		foreignKey = append(foreignKey, v.Describe())
 	}
 
 	var index []et.Json = []et.Json{}
 	for _, v := range m.Index {
-		index = append(index, v.Definition())
+		index = append(index, v.Describe())
 	}
 
 	var unique []et.Json = []et.Json{}
 	for _, v := range m.Unique {
-		unique = append(unique, v.Definition())
+		unique = append(unique, v.Describe())
 	}
 
 	var relationTo []et.Json = []et.Json{}
 	for _, v := range m.RelationTo {
-		relationTo = append(relationTo, v.DEfinition())
+		relationTo = append(relationTo, v.Describe())
 	}
 
 	var details []string = []string{}
@@ -376,7 +376,7 @@ func (m *Model) AddColumn(col *Column) {
 * @return *Column
 **/
 func (m *Model) AddUnique(name string, asc bool) *Column {
-	col := COlumn(m, name)
+	col := Col(m, name)
 	if col != nil {
 		col.Unique = true
 		m.Unique = append(m.Unique, &Index{
@@ -397,7 +397,7 @@ func (m *Model) AddUnique(name string, asc bool) *Column {
 * @return *Column
 **/
 func (m *Model) AddIndex(name string, asc bool) *Column {
-	col := COlumn(m, name)
+	col := Col(m, name)
 	if col != nil {
 		col.Indexed = true
 		m.Index = append(m.Index, &Index{
@@ -417,7 +417,7 @@ func (m *Model) AddIndex(name string, asc bool) *Column {
 * @return *Column
 **/
 func (m *Model) AddPrimaryKey(name string) *Column {
-	col := COlumn(m, name)
+	col := Col(m, name)
 	if col != nil {
 		col.Unique = true
 		col.PrimaryKey = true

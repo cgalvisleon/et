@@ -79,8 +79,8 @@ type Relation struct {
 	Limit      int
 }
 
-// Definition return a json with the definition of the relation
-func (r *Relation) Definition() et.Json {
+// Describe return a json with the definition of the relation
+func (r *Relation) Describe() et.Json {
 	return et.Json{
 		"foreignKey": r.ForeignKey,
 		"parent":     r.Parent.Name,

@@ -73,12 +73,12 @@ func (l *Values) values() []et.Json {
 }
 
 /**
-* Definition returns a json with the definition of the command
+* Describe returns a json with the definition of the command
 * @return et.Json
 **/
-func (l *Values) Definition() et.Json {
+func (l *Values) Describe() et.Json {
 	return et.Json{
-		"Model":       l.Model.Definition(),
+		"Model":       l.Model.Describe(),
 		"typeCommand": l.TypeCommand.String(),
 		"data":        l.Data,
 		"values":      l.values(),
@@ -182,7 +182,7 @@ func (c *Values) consolidate(old, new et.Json) {
 		var tp TypeData
 		tp.Mutate(value)
 
-		return model.DefineAtrib(name, "", tp, *tp.Definition())
+		return model.DefineAtrib(name, "", tp, *tp.Describe())
 	}
 
 	if c.TypeCommand == TpInsert {

@@ -94,18 +94,18 @@ func beforeUpdate(model *Model, value *Values) error {
 }
 
 /**
-* Definition return the definition of the database
+* Describe return the definition of the database
 * @return et.Json
 **/
-func (d *Database) Definition() et.Json {
+func (d *Database) Describe() et.Json {
 	var _schemes []et.Json = []et.Json{}
 	for _, s := range d.Schemes {
-		_schemes = append(_schemes, s.Definition())
+		_schemes = append(_schemes, s.Describe())
 	}
 
 	var _models []et.Json = []et.Json{}
 	for _, m := range d.Models {
-		_models = append(_models, m.Definition())
+		_models = append(_models, m.Describe())
 	}
 
 	driver := *d.Driver
@@ -248,7 +248,7 @@ func (d *Database) initModel(model *Model) error {
 		newColumn(model, IdTField.Low(), "", TpColumn, TpKey, TpKey.Default())
 		sql := driver.DefineSql(model)
 		if d.debug {
-			logs.Debug(model.Definition().ToString())
+			logs.Debug(model.Describe().ToString())
 		}
 
 		_, err = Exec(d.DB, sql)
@@ -256,7 +256,7 @@ func (d *Database) initModel(model *Model) error {
 			return err
 		}
 
-		err = driver.InsertModel(model.Schema.Name, model.Name, kind, model.Version, model.Definition())
+		err = driver.InsertModel(model.Schema.Name, model.Name, kind, model.Version, model.Describe())
 		if err != nil {
 			return err
 		}
@@ -268,7 +268,7 @@ func (d *Database) initModel(model *Model) error {
 	if version < model.Version {
 		sql := driver.MutationSql(model)
 		if d.debug {
-			logs.Debug(model.Definition().ToString())
+			logs.Debug(model.Describe().ToString())
 		}
 
 		_, err = Exec(d.DB, sql)
@@ -276,7 +276,7 @@ func (d *Database) initModel(model *Model) error {
 			return err
 		}
 
-		err = driver.UpdateModel(model.Schema.Name, model.Name, kind, model.Version, model.Definition())
+		err = driver.UpdateModel(model.Schema.Name, model.Name, kind, model.Version, model.Describe())
 		if err != nil {
 			return err
 		}

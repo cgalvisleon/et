@@ -55,8 +55,8 @@ type Lfrom struct {
 	AS    string
 }
 
-// Definition method to use in linq
-func (l *Lfrom) Definition() et.Json {
+// Describe method to use in linq
+func (l *Lfrom) Describe() et.Json {
 	model := ""
 	if l.Model != nil {
 		model = l.Model.Name

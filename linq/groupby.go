@@ -11,10 +11,10 @@ type Lgroup struct {
 	AS     string
 }
 
-// Definition method to use in linq
-func (l *Lgroup) Definition() et.Json {
+// Describe method to use in linq
+func (l *Lgroup) Describe() et.Json {
 	return et.Json{
-		"column": l.Column.Definition(),
+		"column": l.Column.Describe(),
 		"as":     l.AS,
 	}
 }

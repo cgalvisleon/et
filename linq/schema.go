@@ -14,7 +14,7 @@ type Schema struct {
 
 // NewSchema create a new schema
 func NewSchema(name, description string) *Schema {
-	name = nAme(name)
+	name = nameCase(name)
 	for _, v := range schemas {
 		if v.Up() == strs.Uppcase(name) {
 			return v
@@ -32,11 +32,11 @@ func NewSchema(name, description string) *Schema {
 	return result
 }
 
-// Definition return a json with the definition of the schema
-func (s *Schema) Definition() et.Json {
+// Describe return a json with the definition of the schema
+func (s *Schema) Describe() et.Json {
 	var _models []et.Json = []et.Json{}
 	for _, v := range s.Models {
-		_models = append(_models, v.Definition())
+		_models = append(_models, v.Describe())
 	}
 
 	return et.Json{

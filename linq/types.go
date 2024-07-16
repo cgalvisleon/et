@@ -211,7 +211,7 @@ func (t TypeData) Mutate(val interface{}) {
 	}
 }
 
-func (t TypeData) Definition() *et.Json {
+func (t TypeData) Describe() *et.Json {
 	switch t {
 	case TpKey:
 		return &et.Json{

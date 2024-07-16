@@ -5,7 +5,7 @@ import (
 )
 
 func (l *Linq) GetRetun(model *Model, name string) *Lselect {
-	column := COlumn(model, name)
+	column := Col(model, name)
 	if column == nil {
 		return nil
 	}

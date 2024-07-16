@@ -1,57 +1,58 @@
 package linq
 
 import (
-	"strings"
-
 	"github.com/cgalvisleon/et/strs"
 )
 
-func (l *Linq) Concat(cols ...interface{}) *Column {
-	result := &Column{
-		Name:       "CONCAT",
-		TypeColumn: TpConcat,
-		Concats:    make([]*Lselect, 0),
-	}
-
-	addConcat := func(model *Model, name string) {
-		name = nAme(name)
-		lform := l.GetFrom(model)
-		column := COlumn(model, name)
-		col := &Lselect{
-			Linq:       l,
-			From:       lform,
-			Column:     column,
-			AS:         column.Name,
-			TpCaculate: TpShowOriginal,
-		}
-
-		result.Concats = append(result.Concats, col)
+/**
+* Concat struct to use in linq
+* @param []interfase{}
+* @return *Lwhere
+**/
+func Concat(cols ...interface{}) *Lwhere {
+	result := &Lwhere{
+		Columns:  []*Lselect{},
+		Operator: "",
+		Value:    "",
 	}
 
 	for _, col := range cols {
 		switch v := col.(type) {
 		case Column:
-			addConcat(v.Model, v.Name)
+			result.Columns = append(result.Columns, &Lselect{
+				Column: &v, AS: v.Name,
+			})
 		case *Column:
-			addConcat(v.Model, v.Name)
+			result.Columns = append(result.Columns, &Lselect{
+				Column: v, AS: v.Name,
+			})
 		case string:
-			sp := strings.Split(v, ".")
-			if len(sp) > 1 {
-				n := sp[0]
-				m := l.Db.Model(n)
-				if m != nil {
-					addConcat(m, sp[1])
-				}
-			} else {
-				m := l.Froms[0].Model
-				addConcat(m, v)
-			}
+			result.Columns = append(result.Columns, &Lselect{
+				AS: v,
+			})
 		}
 	}
 
 	return result
 }
 
+/**
+* Concat method to use in linq
+* @param []interfase{}
+* @return *Lwhere
+**/
+func (l *Linq) Concat(cols ...interface{}) *Lwhere {
+	where := Concat(cols...)
+	where.setLinq(l)
+	l.Wheres = append(l.Wheres, where)
+
+	return where
+}
+
+/**
+* Concat method to use in linq
+* @return string
+**/
 func (c *Column) Concat() string {
 	var result string
 	for i, v := range c.Concats {
@@ -63,10 +64,4 @@ func (c *Column) Concat() string {
 	}
 
 	return result
-}
-
-func (m *Model) Concat(sel ...interface{}) *Column {
-	l := From(m)
-
-	return l.Concat(sel...)
 }

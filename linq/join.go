@@ -33,12 +33,12 @@ type Ljoin struct {
 	TypeJoin TypeJoin
 }
 
-// Definition method to use in linq
-func (l *Ljoin) Definition() et.Json {
+// Describe method to use in linq
+func (l *Ljoin) Describe() et.Json {
 	return et.Json{
-		"t1":   l.T1.Definition(),
-		"t2":   l.T2.Definition(),
-		"on":   l.On.Definition(),
+		"t1":   l.T1.Describe(),
+		"t2":   l.T2.Describe(),
+		"on":   l.On.Describe(),
 		"type": l.TypeJoin.String(),
 	}
 }

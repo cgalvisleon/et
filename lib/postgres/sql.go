@@ -234,7 +234,7 @@ func sqlWhere(l *linq.Linq) {
 			value := v.Unquote()
 			value = strs.Replace(value, "]'", ")")
 			value = strs.Replace(value, "'[", "(")
-			return strs.Format(`%s %s %s`, v.Column.As(), v.Operator, value)
+			return strs.Format(`%s %s %s`, v.As(), v.Operator, value)
 		}
 
 		return v.Where()

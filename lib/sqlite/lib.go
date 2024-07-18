@@ -3,7 +3,7 @@ package lib
 import (
 	"database/sql"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/linq"
 	"github.com/cgalvisleon/et/logs"
 	_ "github.com/mattn/go-sqlite3"
@@ -11,11 +11,11 @@ import (
 
 // Sqlite struct to define a sqlite database
 type Sqlite struct {
-	params et.Json
+	params js.Json
 	DB     *sql.DB
 }
 
-func Load(params et.Json) Sqlite {
+func Load(params js.Json) Sqlite {
 	result := Sqlite{
 		params: params,
 	}
@@ -31,7 +31,7 @@ func (d *Sqlite) Type() string {
 }
 
 // Connect to the database
-func (d *Sqlite) Connect(params et.Json) (*sql.DB, error) {
+func (d *Sqlite) Connect(params js.Json) (*sql.DB, error) {
 	if params["database"] == nil {
 		return nil, logs.Errorm("Database is required")
 	}
@@ -130,7 +130,7 @@ func (d *Sqlite) DeleteSql(l *linq.Linq) string {
 }
 
 // DCL Data Control Language execute a command
-func (d *Sqlite) DCL(command string, params et.Json) error {
+func (d *Sqlite) DCL(command string, params js.Json) error {
 	return nil
 }
 

@@ -1,4 +1,4 @@
-package et
+package js
 
 // List struct to use in et
 type List struct {

@@ -1,7 +1,7 @@
 package linq
 
 import (
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/strs"
 )
 
@@ -32,31 +32,51 @@ func NewSchema(name, description string) *Schema {
 	return result
 }
 
-// Describe return a json with the definition of the schema
-func (s *Schema) Describe() et.Json {
-	var _models []et.Json = []et.Json{}
+/**
+* Describe return a json with the schema description
+* @return js.Json
+**/
+func (s *Schema) Describe() js.Json {
+	var _models []js.Json = []js.Json{}
 	for _, v := range s.Models {
 		_models = append(_models, v.Describe())
 	}
 
-	return et.Json{
+	return js.Json{
 		"name":        s.Name,
 		"description": s.Description,
 		"models":      _models,
 	}
 }
 
-// Up return the name of the schema in uppercase
+/**
+* Kind
+* @return string
+**/
+func (s *Schema) Kind() string {
+	return "schema"
+}
+
+/**
+* Up return the name of the schema in uppercase
+* @return string
+**/
 func (s *Schema) Up() string {
 	return strs.Uppcase(s.Name)
 }
 
-// Low return the name of the schema in lowercase
+/**
+* Low return the name of the schema in lowercase
+* @return string
+**/
 func (s *Schema) Low() string {
 	return strs.Lowcase(s.Name)
 }
 
-// AddModel add a model to the schema
+/**
+* AddModel add a model to the schema
+* @param model *Model
+**/
 func (s *Schema) AddModel(model *Model) {
 	for _, v := range s.Models {
 		if v == model {

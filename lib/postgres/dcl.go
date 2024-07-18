@@ -1,14 +1,14 @@
 package lib
 
-import "github.com/cgalvisleon/et/et"
+import "github.com/cgalvisleon/et/js"
 
 /**
 * DCL execute a Data Control Language command
 * @param command string
-* @param params et.Json
+* @param params js.Json
 * @return error
 **/
-func (d *Postgres) DCL(command string, params et.Json) error {
+func (d *Postgres) DCL(command string, params js.Json) error {
 	switch command {
 	case "exist_database":
 		name := params.Str("name")

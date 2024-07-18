@@ -3,7 +3,7 @@ package linq
 import (
 	"strings"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/strs"
 )
 
@@ -17,8 +17,8 @@ type Lselect struct {
 }
 
 // Describe method to use in linq
-func (l *Lselect) Describe() et.Json {
-	return et.Json{
+func (l *Lselect) Describe() js.Json {
+	return js.Json{
 		"form":          l.From.Describe(),
 		"column":        l.Column.Name,
 		"type":          l.Column.TypeColumn.String(),
@@ -55,7 +55,7 @@ func (l *Lselect) As() string {
 			return strs.Format(`MIN(%s)`, def)
 		default:
 			if l.Column == nil {
-				return strs.Format(`%s`, et.Unquote(l.AS))
+				return strs.Format(`%s`, js.Unquote(l.AS))
 			}
 
 			return strs.Format(`%s`, l.AS)
@@ -80,7 +80,7 @@ func (l *Lselect) As() string {
 		return strs.Format(`MIN(%s)`, def)
 	default:
 		if l.Column == nil {
-			return strs.Format(`%s`, et.Unquote(l.AS))
+			return strs.Format(`%s`, js.Unquote(l.AS))
 		}
 
 		return strs.Format(`%s.%s`, l.From.AS, l.AS)
@@ -88,7 +88,7 @@ func (l *Lselect) As() string {
 }
 
 // Details method to use in linq
-func (l *Lselect) FuncDetail(data *et.Json) {
+func (l *Lselect) FuncDetail(data *js.Json) {
 	l.Column.FuncDetail(l.Column, data)
 }
 
@@ -194,13 +194,13 @@ func (l *Linq) GetData(model *Model, name string) *Lselect {
 
 	result := l.GetColumn(column)
 
-	for _, v := range l.Data.Columns {
+	for _, v := range l.Datas.Columns {
 		if v.Column == column {
 			return v
 		}
 	}
 
-	l.Data.Columns = append(l.Data.Columns, result)
+	l.Datas.Columns = append(l.Datas.Columns, result)
 
 	return result
 }
@@ -213,11 +213,10 @@ func (m *Model) Select(sel ...interface{}) *Linq {
 	return l.Select(sel...)
 }
 
-func (m *Model) Distint(sel ...interface{}) *Linq {
-	l := From(m)
-	l.Selects.Used = true
+func (m *Model) Distinct() *Linq {
+	l := m.Data()
 
-	return l.DIstinct(sel...)
+	return l.Distinct()
 }
 
 // Select SourceField a linq with data
@@ -227,9 +226,9 @@ func (m *Model) Data(sel ...interface{}) *Linq {
 	}
 
 	l := From(m)
-	l.Data.Used = m.ColumnData != nil
+	l.Datas.Used = m.ColumnData != nil
 
-	return l.DAta(sel...)
+	return l.Data(sel...)
 }
 
 func (m *Model) Count(col *Column, as string) *Linq {
@@ -277,7 +276,14 @@ func (l *Linq) Select(sel ...interface{}) *Linq {
 			l.GetSelect(v.Model, v.Name)
 		case string:
 			sp := strings.Split(v, ".")
-			if len(sp) > 1 {
+			if len(sp) == 3 {
+				s := sp[0]
+				n := sp[1]
+				m := l.DB.Table(s, n)
+				if m != nil {
+					l.GetSelect(m, sp[2])
+				}
+			} else if len(sp) == 2 {
 				n := sp[0]
 				m := l.DB.Model(n)
 				if m != nil {
@@ -293,15 +299,8 @@ func (l *Linq) Select(sel ...interface{}) *Linq {
 	return l
 }
 
-// Select distinct columns a query
-func (l *Linq) DIstinct(sel ...interface{}) *Linq {
-	l.Distinct = true
-
-	return l.Select(sel...)
-}
-
 // Select SourceField a linq with data
-func (l *Linq) DAta(sel ...interface{}) *Linq {
+func (l *Linq) Data(sel ...interface{}) *Linq {
 	for _, col := range sel {
 		switch v := col.(type) {
 		case Column:
@@ -310,7 +309,14 @@ func (l *Linq) DAta(sel ...interface{}) *Linq {
 			l.GetData(v.Model, v.Name)
 		case string:
 			sp := strings.Split(v, ".")
-			if len(sp) > 1 {
+			if len(sp) == 3 {
+				s := sp[0]
+				n := sp[1]
+				m := l.DB.Table(s, n)
+				if m != nil {
+					l.GetData(m, sp[2])
+				}
+			} else if len(sp) == 2 {
 				n := sp[0]
 				m := l.DB.Model(n)
 				if m != nil {
@@ -321,6 +327,17 @@ func (l *Linq) DAta(sel ...interface{}) *Linq {
 				l.GetData(m, v)
 			}
 		}
+	}
+
+	return l
+}
+
+// Select distinct columns a query
+func (l *Linq) Distinct() *Linq {
+	if l.Selects.Used {
+		l.Selects.Distinct = true
+	} else if l.Datas.Used {
+		l.Datas.Distinct = true
 	}
 
 	return l

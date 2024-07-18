@@ -3,7 +3,7 @@ package ws
 import (
 	"time"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/gorilla/websocket"
@@ -44,8 +44,8 @@ func newClient(hub *Hub, socket *websocket.Conn, id, name string) (*Client, bool
 }
 
 // Identify the client
-func (c *Client) Identify() et.Json {
-	return et.Json{
+func (c *Client) Identify() js.Json {
+	return js.Json{
 		"id":   c.Id,
 		"name": c.Name,
 	}

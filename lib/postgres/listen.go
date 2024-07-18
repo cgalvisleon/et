@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/linq"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/lib/pq"
@@ -31,7 +31,7 @@ func (p *Postgres) defineListend(channels []string, lited linq.HandleListen) {
 		select {
 		case notification := <-listener.Notify:
 			if notification != nil {
-				result, err := et.ToJson(notification.Extra)
+				result, err := js.ToJson(notification.Extra)
 				if err != nil {
 					logs.Alertm("defineListen: Not conver to Json")
 				}

@@ -3,7 +3,7 @@ package linq
 import (
 	"time"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 )
 
 type TypeData int
@@ -126,12 +126,12 @@ func (t TypeData) Default() interface{} {
 	case TpDate:
 		return ""
 	case TpPerson:
-		return et.Json{
+		return js.Json{
 			"_id":  "-1",
 			"name": "",
 		}
 	case TpFile:
-		return et.Json{}
+		return js.Json{}
 	case TpCheckbox:
 		return false
 	case TpURL:
@@ -151,25 +151,25 @@ func (t TypeData) Default() interface{} {
 	case TpCreatedTime:
 		return time.Now()
 	case TpCreatedBy:
-		return et.Json{
+		return js.Json{
 			"_id":  "-1",
 			"name": "",
 		}
 	case TpLastEditedTime:
 		return time.Now()
 	case TpLastEditedBy:
-		return et.Json{
+		return js.Json{
 			"_id":  "-1",
 			"name": "",
 		}
 	case TpProject:
 		return ""
 	case TpData:
-		return et.Json{}
+		return js.Json{}
 	case TpJson:
-		return et.Json{}
+		return js.Json{}
 	case TpArray:
-		return []et.Json{}
+		return []js.Json{}
 	case TpSerie:
 		return 0
 	case TpCode:
@@ -196,13 +196,13 @@ func (t TypeData) Mutate(val interface{}) {
 		t = TpNumber
 	case bool:
 		t = TpCheckbox
-	case et.Json:
+	case js.Json:
 		t = TpJson
-	case *et.Json:
+	case *js.Json:
 		t = TpJson
-	case []et.Json:
+	case []js.Json:
 		t = TpArray
-	case []*et.Json:
+	case []*js.Json:
 		t = TpArray
 	case time.Time:
 		t = TpDate
@@ -211,158 +211,158 @@ func (t TypeData) Mutate(val interface{}) {
 	}
 }
 
-func (t TypeData) Describe() *et.Json {
+func (t TypeData) Describe() *js.Json {
 	switch t {
 	case TpKey:
-		return &et.Json{
+		return &js.Json{
 			"default": t.Default(),
 		}
 	case TpText:
-		return &et.Json{
+		return &js.Json{
 			"default": t.Default(),
 			"max":     250,
 		}
 	case TpMemo:
-		return &et.Json{
+		return &js.Json{
 			"default": t.Default(),
 			"max":     0,
 		}
 	case TpInteger:
-		return &et.Json{
+		return &js.Json{
 			"default": t.Default(),
 			"min":     0,
 			"max":     0,
 		}
 	case TpNumber:
-		return &et.Json{
+		return &js.Json{
 			"default": t.Default(),
 			"format":  "number",
 			"min":     0,
 			"max":     0,
 		}
 	case TpSelect: //check
-		return &et.Json{
+		return &js.Json{
 			"default": t.Default(),
-			"options": []et.Json{},
+			"options": []js.Json{},
 			"sort":    false,
 		}
 	case TpMultiSelect: //Check
-		return &et.Json{
+		return &js.Json{
 			"default": t.Default(),
-			"options": []et.Json{},
+			"options": []js.Json{},
 			"sort":    false,
 		}
 	case TpStatus: //Type
-		return &et.Json{
+		return &js.Json{
 			"default": t.Default(),
-			"options": []et.Json{},
+			"options": []js.Json{},
 			"sort":    false,
 		}
 	case TpDate:
-		return &et.Json{
+		return &js.Json{
 			"default":     t.Default(),
 			"format_data": "date time",
 			"time_zone":   "12_hour",
 		}
 	case TpPerson:
-		return &et.Json{
+		return &js.Json{
 			"default": t.Default(),
 		}
 	case TpFile:
-		return &et.Json{
+		return &js.Json{
 			"default": t.Default(),
 		}
 	case TpCheckbox:
-		return &et.Json{
+		return &js.Json{
 			"default": t.Default(),
 		}
 	case TpURL:
-		return &et.Json{
+		return &js.Json{
 			"default":       t.Default(),
 			"show_full_url": false,
 		}
 	case TpEmail:
-		return &et.Json{
+		return &js.Json{
 			"default": t.Default(),
 		}
 	case TpPhone:
-		return &et.Json{
+		return &js.Json{
 			"default": t.Default(),
 		}
 	case TpFormula:
-		return &et.Json{
+		return &js.Json{
 			"default":       t.Default(),
 			"formula":       "",
 			"number_format": "number",
 			"show_as":       "number",
 		}
 	case TpFunction:
-		return &et.Json{
+		return &js.Json{
 			"default":  t.Default(),
 			"function": "",
 		}
 	case TpRelation:
-		return &et.Json{
+		return &js.Json{
 			"default":             t.Default(),
 			"related_to":          "",
 			"limit":               0,
 			"show_on_actividades": false,
 		}
 	case TpRollup:
-		return &et.Json{
+		return &js.Json{
 			"default":    "",
 			"related_to": "",
 			"property":   "",
 			"calculate":  "",
 		}
 	case TpCreatedTime:
-		return &et.Json{
+		return &js.Json{
 			"default":     "",
 			"format_data": "date",
 			"time_zone":   "12_hour",
 		}
 	case TpCreatedBy:
-		return &et.Json{
+		return &js.Json{
 			"default": "",
 		}
 	case TpLastEditedTime:
-		return &et.Json{
+		return &js.Json{
 			"default":     "",
 			"format_data": "date",
 			"time_zone":   "12_hour",
 		}
 	case TpLastEditedBy:
-		return &et.Json{
+		return &js.Json{
 			"default": "",
 		}
 	case TpProject:
-		return &et.Json{
+		return &js.Json{
 			"default": "",
 		}
 	case TpData:
-		return &et.Json{
-			"default": et.Json{},
+		return &js.Json{
+			"default": js.Json{},
 		}
 	case TpJson:
-		return &et.Json{
-			"default": et.Json{},
+		return &js.Json{
+			"default": js.Json{},
 		}
 	case TpArray:
-		return &et.Json{
-			"default": []et.Json{},
+		return &js.Json{
+			"default": []js.Json{},
 			"limit":   0,
 		}
 	case TpSerie:
-		return &et.Json{
+		return &js.Json{
 			"default": 0,
 		}
 	case TpCode:
-		return &et.Json{
+		return &js.Json{
 			"default": "000000",
 			"format":  "%06d",
 		}
 	}
-	return &et.Json{
+	return &js.Json{
 		"default": "",
 	}
 }

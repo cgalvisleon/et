@@ -6,11 +6,11 @@ import (
 	"net/rpc"
 
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
 )
 
-type Service et.Item
+type Service js.Item
 
 func initRpc() error {
 	service := new(Service)
@@ -23,8 +23,8 @@ func initRpc() error {
 	return nil
 }
 
-func (c *Service) Version(rq []byte, rp *et.Item) error {
-	result := et.Item{
+func (c *Service) Version(rq []byte, rp *js.Item) error {
+	result := js.Item{
 		Ok:     true,
 		Result: Version(),
 	}

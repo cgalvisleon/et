@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
@@ -14,7 +14,7 @@ import (
 type Node struct {
 	_id     string
 	Tag     string
-	Resolve et.Json
+	Resolve js.Json
 	Nodes   []*Node
 }
 
@@ -34,7 +34,7 @@ type Pakages struct {
 
 type Resolve struct {
 	Node    *Node
-	Params  []et.Json
+	Params  []js.Json
 	Resolve string
 }
 
@@ -64,7 +64,7 @@ func newNode(tag string, nodes []*Node) (*Node, []*Node) {
 	result := &Node{
 		_id:     utility.UUID(),
 		Tag:     tag,
-		Resolve: et.Json{},
+		Resolve: js.Json{},
 		Nodes:   []*Node{},
 	}
 
@@ -94,18 +94,18 @@ func findResolve(tag string, nodes []*Node, route *Resolve) (*Node, *Resolve) {
 			if regex.MatchString(n.Tag) {
 				if route == nil {
 					route = &Resolve{
-						Params: []et.Json{},
+						Params: []js.Json{},
 					}
 				}
 				route.Node = n
-				route.Params = append(route.Params, et.Json{n.Tag: tag})
+				route.Params = append(route.Params, js.Json{n.Tag: tag})
 				return n, route
 			}
 		}
 	} else if route == nil {
 		route = &Resolve{
 			Node:   node,
-			Params: []et.Json{},
+			Params: []js.Json{},
 		}
 	} else {
 		route.Node = node
@@ -157,7 +157,7 @@ func (s *HttpServer) AddRoute(method, path, resolve, kind, stage, packageName st
 	}
 
 	if node != nil {
-		node.Resolve = et.Json{
+		node.Resolve = js.Json{
 			"method":  method,
 			"kind":    kind,
 			"stage":   stage,

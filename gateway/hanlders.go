@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/telemetry"
 )
@@ -19,7 +19,7 @@ func version(w http.ResponseWriter, r *http.Request) {
 
 // Handler for not found
 func notFounder(w http.ResponseWriter, r *http.Request) {
-	response.JSON(w, r, http.StatusNotFound, et.Json{
+	response.JSON(w, r, http.StatusNotFound, js.Json{
 		"message": "404 Not Found.",
 		"route":   r.RequestURI,
 	})
@@ -107,14 +107,14 @@ func upSert(w http.ResponseWriter, r *http.Request) {
 
 	conn.http.AddRoute(method, path, resolve, kind, stage, packageName)
 
-	response.JSON(w, r, http.StatusOK, et.Json{
+	response.JSON(w, r, http.StatusOK, js.Json{
 		"message": "Router added",
 	})
 }
 
 // Getall list of routes
 func getAll(w http.ResponseWriter, r *http.Request) {
-	_pakages, err := et.Marshal(conn.http.pakages)
+	_pakages, err := js.Marshal(conn.http.pakages)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 		return

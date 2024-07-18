@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"sync"
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/logs"
@@ -31,6 +32,7 @@ func connect() (*Conn, error) {
 
 	return &Conn{
 		ctx:    context.Background(),
+		locks:  make(map[string]*sync.RWMutex),
 		host:   host,
 		dbname: dbname,
 		db:     client,

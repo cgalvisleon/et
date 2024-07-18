@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/token"
@@ -80,7 +80,7 @@ func Authorization(next http.Handler) http.Handler {
 
 		now := utility.Now()
 		hostName, _ := os.Hostname()
-		data := et.Json{
+		data := js.Json{
 			"clientId":  c.ClientId,
 			"last_use":  now,
 			"host_name": hostName,

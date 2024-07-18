@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/go-chi/chi/v5"
 )
@@ -31,7 +31,7 @@ func eventApiGateway(method, path, packageName, packagePath, host string) {
 	path = packagePath + path
 	resolve := host + path
 
-	event.Publish("gateway/upsert", et.Json{
+	event.Publish("gateway/upsert", js.Json{
 		"kind":    kind,
 		"method":  method,
 		"path":    path,

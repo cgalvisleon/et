@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/strs"
 )
 
@@ -25,8 +25,8 @@ type Resolute struct {
 	URL        string
 }
 
-func (r *Resolute) Definition() et.Json {
-	return et.Json{
+func (r *Resolute) Definition() js.Json {
+	return js.Json{
 		"method":     r.Method,
 		"proto":      r.Proto,
 		"path":       r.Path,
@@ -72,7 +72,7 @@ func GetResolute(r *http.Request) *Resolute {
 }
 
 func (r *Resolute) ToString() string {
-	j := et.Json{
+	j := js.Json{
 		"Method":     r.Method,
 		"Proto":      r.Proto,
 		"Path":       r.Path,

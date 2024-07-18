@@ -1,6 +1,6 @@
 package message
 
-import "github.com/cgalvisleon/et/et"
+import "github.com/cgalvisleon/et/js"
 
 type TpMessage string
 
@@ -22,5 +22,5 @@ type Message interface {
 	Type() TpMessage
 	ToString() string
 	Encode() ([]byte, error)
-	Json() (et.Json, error)
+	Json() (js.Json, error)
 }

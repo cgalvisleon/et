@@ -3,7 +3,7 @@ package mem
 import (
 	"sync"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
 )
 
@@ -17,7 +17,7 @@ type Peticiones struct {
 	SizeStack int // Tamaño de la pila de peticiones
 }
 
-func NewPetciones(capacity, timeWait int) *Peticiones {
+func NewPeticiones(capacity, timeWait int) *Peticiones {
 	return &Peticiones{
 		Peticiones: 0,
 		Capacity:   capacity,
@@ -26,10 +26,10 @@ func NewPetciones(capacity, timeWait int) *Peticiones {
 	}
 }
 
-func (c *Peticiones) Ejecucion(executeFc func(params et.Json) (et.Items, error), params et.Json) (et.Items, error) {
+func (c *Peticiones) Ejecucion(executeFc func(params js.Json) (js.Items, error), params js.Json) (js.Items, error) {
 	turno := c.Peticiones + 1
 	if turno > c.SizeStack {
-		return et.Items{}, logs.Alertf(`Se ha superado el límite de peticiones %d`, c.SizeStack)
+		return js.Items{}, logs.Alertf(`Se ha superado el límite de peticiones %d`, c.SizeStack)
 	}
 
 	c.mutex.Lock()
@@ -39,7 +39,7 @@ func (c *Peticiones) Ejecucion(executeFc func(params et.Json) (et.Items, error),
 	// Ejecutar la petición
 	result, err := executeFc(params)
 	if err != nil {
-		return et.Items{}, err
+		return js.Items{}, err
 	}
 
 	c.mutex.Lock()
@@ -56,8 +56,8 @@ func (c *Peticiones) GetPeticiones() int {
 	return c.Peticiones
 }
 
-func (c *Peticiones) GetConfig() et.Json {
-	return et.Json{
+func (c *Peticiones) GetConfig() js.Json {
+	return js.Json{
 		"peticiones": c.Peticiones,
 		"capacity":   c.Capacity,
 		"timeWait":   c.TimeWait,
@@ -68,5 +68,5 @@ func (c *Peticiones) GetConfig() et.Json {
 var execute *Peticiones
 
 func init() {
-	execute = NewPetciones(10, 1)
+	execute = NewPeticiones(10, 1)
 }

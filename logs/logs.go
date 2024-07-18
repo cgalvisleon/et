@@ -238,3 +238,12 @@ func Debugf(format string, args ...any) {
 	message := fmt.Sprintf(format, args...)
 	log("Debug", "Cyan", message)
 }
+
+func NewError(message string) error {
+	return errors.New(message)
+}
+
+func NewErrorf(format string, args ...any) error {
+	message := fmt.Sprintf(format, args...)
+	return errors.New(message)
+}

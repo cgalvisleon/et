@@ -2,13 +2,17 @@ package redis
 
 import (
 	"context"
+	"strconv"
+	"sync"
 	"time"
 
+	"github.com/cgalvisleon/et/logs"
 	"github.com/redis/go-redis/v9"
 )
 
 type Conn struct {
 	ctx    context.Context
+	locks  map[string]*sync.RWMutex
 	host   string
 	dbname int
 	db     *redis.Client
@@ -16,7 +20,10 @@ type Conn struct {
 
 var conn *Conn
 
-// NewCache create new cache
+/**
+* Load redis connection
+* @return (*Conn, error)
+**/
 func Load() (*Conn, error) {
 	if conn != nil {
 		return conn, nil
@@ -25,7 +32,10 @@ func Load() (*Conn, error) {
 	return connect()
 }
 
-// Close method to use in cache
+/**
+* Close redis connection
+* @return error
+**/
 func Close() error {
 	if conn.db == nil {
 		return nil
@@ -34,19 +44,52 @@ func Close() error {
 	return conn.db.Close()
 }
 
-// Type method to use in cache
+/**
+* lock return a lock
+* @param tag string
+* @return *sync.RWMutex
+**/
+func (c *Conn) lock(tag string) *sync.RWMutex {
+	if c.locks[tag] == nil {
+		c.locks[tag] = &sync.RWMutex{}
+	}
+
+	return c.locks[tag]
+}
+
+/**
+* Type return the type of connection
+* @return string
+**/
 func (c *Conn) Type() string {
 	return "redis"
 }
 
-// Set method to use in cache
+/**
+* Set method to use in cache
+* @param key string
+* @param value string
+* @param expiration time.Duration
+* @return string
+**/
 func (c *Conn) Set(key string, value interface{}, expiration time.Duration) interface{} {
-	c.db.Set(c.ctx, key, value, expiration)
+	duration := expiration * time.Second
+
+	err := c.db.Set(c.ctx, key, value, duration).Err()
+	if logs.Alert(err) != nil {
+		return value
+	}
+
 	return value
 }
 
-// Get method to use in cache
-func (c *Conn) Get(key string, def interface{}) interface{} {
+/**
+* Get method to use in cache
+* @param key string
+* @param def string
+* @return string
+**/
+func (c *Conn) Get(key string, def string) string {
 	result, err := c.db.Get(c.ctx, key).Result()
 	switch {
 	case err == redis.Nil:
@@ -60,7 +103,11 @@ func (c *Conn) Get(key string, def interface{}) interface{} {
 	}
 }
 
-// Del method to use in cache
+/**
+* Del method to use in cache
+* @param key string
+* @return bool
+**/
 func (c *Conn) Del(key string) bool {
 	intCmd := c.db.Del(c.ctx, key)
 	if intCmd.Err() != nil {
@@ -70,18 +117,37 @@ func (c *Conn) Del(key string) bool {
 	return intCmd.Val() > 0
 }
 
-// Count method to use in cache
+/**
+* Count method to use in cache
+* @param key string
+* @param expiration time.Duration
+* @return int
+**/
 func (c *Conn) Count(key string, expiration time.Duration) int {
-	result := c.Get(key, 0)
-	if result == 0 {
-		c.Set(key, 1, expiration)
+	lock := c.lock(key)
+	lock.RLock()
+
+	def := "0"
+	val := c.Get(key, def)
+	lock.RUnlock()
+
+	lock.Lock()
+	defer lock.Unlock()
+
+	if val == def {
+		c.Set(key, "1", expiration)
 		return 1
 	}
 
-	val := result.(int) + 1
+	num, err := strconv.Atoi(val)
+	if logs.Alert(err) != nil {
+		return 0
+	}
+
+	num++
 	c.Set(key, val, expiration)
 
-	return val
+	return num
 }
 
 // Clear method to use in cache
@@ -102,12 +168,12 @@ func (c *Conn) Keys() []string {
 }
 
 // Values method to use in cache
-func (c *Conn) Values() []interface{} {
+func (c *Conn) Values() []string {
 	keys := c.Keys()
-	values := make([]interface{}, len(keys))
+	values := make([]string, len(keys))
 
 	for i, key := range keys {
-		values[i] = c.Get(key, nil)
+		values[i] = c.Get(key, "")
 	}
 
 	return values

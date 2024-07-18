@@ -4,22 +4,42 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 )
 
-// Item struct to use in cache
 type Item struct {
 	Datemake   time.Time
 	Dateupdate time.Time
 	Key        string
 	Value      interface{}
-	mutex      sync.RWMutex
+	lock       sync.RWMutex
 }
 
-// Set method to use in item
+/**
+* New create new item
+* @param key string
+* @param value interface{}
+* @return *Item
+**/
+func New(key string, value interface{}) *Item {
+	now := time.Now()
+	return &Item{
+		Datemake:   now,
+		Dateupdate: now,
+		Key:        key,
+		Value:      value,
+		lock:       sync.RWMutex{},
+	}
+}
+
+/**
+* Set a value in item
+* @param value interface{}
+* @return interface{}
+**/
 func (i *Item) Set(value interface{}) interface{} {
-	i.mutex.Lock()
-	defer i.mutex.Unlock()
+	i.lock.Lock()
+	defer i.lock.Unlock()
 
 	i.Dateupdate = time.Now()
 	i.Value = value
@@ -27,118 +47,237 @@ func (i *Item) Set(value interface{}) interface{} {
 	return value
 }
 
-// Get method to use in item
+/**
+* Get a value from item
+* @return interface{}
+**/
 func (i *Item) Get() interface{} {
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
+	i.lock.RLock()
+	defer i.lock.RUnlock()
 
 	return i.Value
 }
 
-// Return value string from item
+/**
+* Str return the value of item
+* @return string
+**/
 func (i *Item) Str() string {
 	result := i.Get()
-	return result.(string)
+	val, ok := result.(string)
+	if !ok {
+		return ""
+	}
+
+	return val
 }
 
-// Return value int from item
+/**
+* Int return the value of item
+* @return int
+**/
 func (i *Item) Int() int {
 	result := i.Get()
-	return result.(int)
+	val, ok := result.(int)
+	if !ok {
+		return 0
+	}
+
+	return val
 }
 
-// Return value float from item
+/**
+* Float return the value of item
+* @return float64
+**/
 func (i *Item) Float() float64 {
 	result := i.Get()
-	return result.(float64)
+	val, ok := result.(float64)
+	if !ok {
+		return 0
+	}
+
+	return val
 }
 
-// Return value bool from item
+/**
+* Bool return the value of item
+* @return bool
+**/
 func (i *Item) Bool() bool {
 	result := i.Get()
-	return result.(bool)
+	val, ok := result.(bool)
+	if !ok {
+		return false
+	}
+
+	return val
 }
 
-// Return value time from item
+/**
+* Time return the value of item
+* @return time.Time
+**/
 func (i *Item) Time() time.Time {
 	result := i.Get()
-	return result.(time.Time)
+	val, ok := result.(time.Time)
+	if !ok {
+		return time.Time{}
+	}
+
+	return val
 }
 
-// Return value duration from item
+/**
+* Duration return the value of item
+* @return time.Duration
+**/
 func (i *Item) Duration() time.Duration {
 	result := i.Get()
-	return result.(time.Duration)
+	val, ok := result.(time.Duration)
+	if !ok {
+		return time.Duration(0)
+	}
+
+	return val
 }
 
-// Return value json from item
-func (i *Item) Json() et.Json {
+/**
+* Json return the value of item
+* @return js.Json
+**/
+func (i *Item) Json() js.Json {
 	result := i.Get()
-	return result.(et.Json)
+	val, ok := result.(js.Json)
+	if !ok {
+		return js.Json{}
+	}
+
+	return val
 }
 
-// Return value map from item
+/**
+* Map return the value of item
+* @return map[string]interface{}
+**/
 func (i *Item) Map() map[string]interface{} {
 	result := i.Get()
-	return result.(map[string]interface{})
+	val, ok := result.(map[string]interface{})
+	if !ok {
+		return map[string]interface{}{}
+	}
+
+	return val
 }
 
-// Return value array from item
+/**
+* ArrayMap return the value of item
+* @return []interface{}
+**/
 func (i *Item) ArrayMap() []map[string]interface{} {
 	result := i.Get()
-	return result.([]map[string]interface{})
+	val, ok := result.([]map[string]interface{})
+	if !ok {
+		return []map[string]interface{}{}
+	}
+
+	return val
 }
 
-// Return value array from item
+/**
+* ArrayStr return the value of item
+* @return []string
+**/
 func (i *Item) ArrayStr() []string {
 	result := i.Get()
-	return result.([]string)
+	val, ok := result.([]string)
+	if !ok {
+		return []string{}
+	}
+
+	return val
 }
 
-// Return value array from item
+/**
+* ArrayInt return the value of item
+* @return []int
+**/
 func (i *Item) ArrayInt() []int {
 	result := i.Get()
-	return result.([]int)
+	val, ok := result.([]int)
+	if !ok {
+		return []int{}
+	}
+
+	return val
 }
 
-// Return value array from item
+/**
+* ArrayFloat return the value of item
+* @return []float64
+**/
 func (i *Item) ArrayFloat() []float64 {
 	result := i.Get()
-	return result.([]float64)
+	val, ok := result.([]float64)
+	if !ok {
+		return []float64{}
+	}
+
+	return val
 }
 
-// Return value array from item
+/**
+* ArrayBool return the value of item
+* @return []bool
+**/
 func (i *Item) ArrayBool() []bool {
 	result := i.Get()
-	return result.([]bool)
+	val, ok := result.([]bool)
+	if !ok {
+		return []bool{}
+	}
+
+	return val
 }
 
-// Return value array from item
+/**
+* ArrayTime return the value of item
+* @return []time.Time
+**/
 func (i *Item) ArrayTime() []time.Time {
 	result := i.Get()
-	return result.([]time.Time)
+	val, ok := result.([]time.Time)
+	if !ok {
+		return []time.Time{}
+	}
+
+	return val
 }
 
-// Return value array from item
+/**
+* ArrayDuration return the value of item
+* @return []time.Duration
+**/
 func (i *Item) ArrayDuration() []time.Duration {
 	result := i.Get()
-	return result.([]time.Duration)
-}
-
-// Return value array from item
-func (i *Item) ArrayJson() []et.Json {
-	result := i.Get()
-	return result.([]et.Json)
-}
-
-// NewItem create new item
-func NewItem(key string, value interface{}) *Item {
-	now := time.Now()
-	return &Item{
-		Datemake:   now,
-		Dateupdate: now,
-		Key:        key,
-		Value:      value,
-		mutex:      sync.RWMutex{},
+	val, ok := result.([]time.Duration)
+	if !ok {
+		return []time.Duration{}
 	}
+
+	return val
+}
+
+/**
+* ArrayJson return the value of item
+* @return []js.Json
+**/
+func (i *Item) ArrayJson() []js.Json {
+	result := i.Get()
+	val, ok := result.([]js.Json)
+	if !ok {
+		return []js.Json{}
+	}
+
+	return val
 }

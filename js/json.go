@@ -1,9 +1,8 @@
-package et
+package js
 
 import (
 	"database/sql/driver"
 	"encoding/json"
-	"log"
 	"reflect"
 	"strconv"
 	"strings"
@@ -248,12 +247,10 @@ func (s Json) ValInt(_default int, atribs ...string) int {
 	case string:
 		i, err := strconv.Atoi(v)
 		if err != nil {
-			log.Println("ValInt value int not conver", reflect.TypeOf(v), v)
 			return _default
 		}
 		return i
 	default:
-		log.Println("ValInt value is not int, type:", reflect.TypeOf(v), "value:", v)
 		return _default
 	}
 }
@@ -283,12 +280,10 @@ func (s Json) ValNum(_default float64, atribs ...string) float64 {
 	case string:
 		i, err := strconv.ParseFloat(v, 64)
 		if err != nil {
-			log.Println("ValNum value float not conver", reflect.TypeOf(v), v)
 			return _default
 		}
 		return i
 	default:
-		log.Println("ValNum value is not float, type:", reflect.TypeOf(v), "value:", v)
 		return _default
 	}
 }
@@ -314,11 +309,9 @@ func (s Json) ValBool(_default bool, atribs ...string) bool {
 		case "false", "False", "FALSE":
 			return false
 		default:
-			log.Println("ValBool value is not bool, type:", reflect.TypeOf(v), "value:", v)
 			return _default
 		}
 	default:
-		log.Println("ValBool value is not bool, type:", reflect.TypeOf(v), "value:", v)
 		return _default
 	}
 }
@@ -345,7 +338,6 @@ func (s Json) ValTime(_default time.Time, atribs ...string) time.Time {
 	case time.Time:
 		return v
 	default:
-		log.Println("ValTime value is not time, type:", reflect.TypeOf(v), "value:", v)
 		return _default
 	}
 }
@@ -363,7 +355,6 @@ func (s Json) ValJson(_default Json, atribs ...string) Json {
 	case Json:
 		return v
 	default:
-		log.Println("ValJson value is not json, type:", reflect.TypeOf(v), "value:", v)
 		return _default
 	}
 }

@@ -1,7 +1,7 @@
 package linq
 
 import (
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/strs"
 )
 
@@ -33,7 +33,7 @@ func (w *Lwhere) Unquote() string {
 	case Lselect:
 		return v.As()
 	default:
-		val := et.Unquote(v)
+		val := js.Unquote(v)
 		return strs.Format(`%v`, val)
 	}
 }
@@ -55,16 +55,16 @@ func (w *Lwhere) Quote() string {
 	case Lselect:
 		return v.As()
 	default:
-		val := et.Quote(v)
+		val := js.Quote(v)
 		return strs.Format(`%v`, val)
 	}
 }
 
 /**
 * Describe method to use in linq
-* @return et.Json
+* @return js.Json
 **/
-func (w *Lwhere) Describe() et.Json {
+func (w *Lwhere) Describe() js.Json {
 	value := w.Unquote()
 
 	var columns []string = make([]string, 0)
@@ -72,7 +72,7 @@ func (w *Lwhere) Describe() et.Json {
 		columns = append(columns, _select.As())
 	}
 
-	return et.Json{
+	return js.Json{
 		"columns":  columns,
 		"operator": w.Operator,
 		"value":    value,

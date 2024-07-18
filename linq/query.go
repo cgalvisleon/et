@@ -3,7 +3,7 @@ package linq
 import (
 	"database/sql"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
 )
 
@@ -92,13 +92,13 @@ func Exec(db *sql.DB, sql string, args ...any) (sql.Result, error) {
 * @parms db
 * @parms sql
 * @parms args
-* @return et.Items
+* @return js.Items
 * @return error
 **/
-func Query(db *sql.DB, sql string, args ...any) (et.Items, error) {
+func Query(db *sql.DB, sql string, args ...any) (js.Items, error) {
 	rows, err := query(db, sql, args...)
 	if err != nil {
-		return et.Items{}, err
+		return js.Items{}, err
 	}
 	defer rows.Close()
 
@@ -112,23 +112,23 @@ func Query(db *sql.DB, sql string, args ...any) (et.Items, error) {
 * @parms db
 * @parms sql
 * @parms args
-* @return et.Item
+* @return js.Item
 * @return error
 **/
-func QueryOne(db *sql.DB, sql string, args ...any) (et.Item, error) {
+func QueryOne(db *sql.DB, sql string, args ...any) (js.Item, error) {
 	items, err := Query(db, sql, args...)
 	if err != nil {
-		return et.Item{}, err
+		return js.Item{}, err
 	}
 
 	if items.Count == 0 {
-		return et.Item{
+		return js.Item{
 			Ok:     false,
-			Result: et.Json{},
+			Result: js.Json{},
 		}, nil
 	}
 
-	return et.Item{
+	return js.Item{
 		Ok:     items.Ok,
 		Result: items.Result[0],
 	}, nil
@@ -138,16 +138,16 @@ func QueryOne(db *sql.DB, sql string, args ...any) (et.Item, error) {
 * Query execute a query in the database
 * @parms sql
 * @parms args
-* @return et.Items
+* @return js.Items
 * @return error
 **/
-func (l *Linq) query(sql string, args ...any) (et.Items, error) {
+func (l *Linq) query(sql string, args ...any) (js.Items, error) {
 	if l.DB == nil {
-		return et.Items{}, logs.Errorm("Connected is required")
+		return js.Items{}, logs.Alertm("Connected is required")
 	}
 
 	if len(sql) == 0 {
-		return et.Items{}, logs.Errorm("Sql is required")
+		return js.Items{}, logs.Alertm("Sql is required")
 	}
 
 	l.Sql = SQLParse(sql, args...)
@@ -157,7 +157,7 @@ func (l *Linq) query(sql string, args ...any) (et.Items, error) {
 
 	items, err := l.DB.Query(l.Sql)
 	if err != nil {
-		return et.Items{}, logs.Error(err)
+		return js.Items{}, logs.Alertf("Error:%s\nSQL:%s", err.Error(), l.Sql)
 	}
 
 	return items, nil
@@ -167,16 +167,16 @@ func (l *Linq) query(sql string, args ...any) (et.Items, error) {
 * data execute a query in the database
 * @parms sql
 * @parms args
-* @return et.Items
+* @return js.Items
 * @return error
 **/
-func (l *Linq) data(sql string, args ...any) (et.Items, error) {
+func (l *Linq) data(sql string, args ...any) (js.Items, error) {
 	if l.DB == nil {
-		return et.Items{}, logs.Errorm("Connected is required")
+		return js.Items{}, logs.Errorm("Connected is required")
 	}
 
 	if len(sql) == 0 {
-		return et.Items{}, logs.Errorm("Sql is required")
+		return js.Items{}, logs.Errorm("Sql is required")
 	}
 
 	l.Sql = SQLParse(sql, args...)
@@ -186,7 +186,7 @@ func (l *Linq) data(sql string, args ...any) (et.Items, error) {
 
 	items, err := l.DB.Data(SourceField.Low(), l.Sql)
 	if err != nil {
-		return et.Items{}, logs.Error(err)
+		return js.Items{}, logs.Error(err)
 	}
 
 	return items, nil
@@ -194,12 +194,12 @@ func (l *Linq) data(sql string, args ...any) (et.Items, error) {
 
 /**
 * Exec execute a command in the database
-* @return et.Items
+* @return js.Items
 * @return error
 **/
-func (l *Linq) Exec() (et.Items, error) {
+func (l *Linq) Exec() (js.Items, error) {
 	if l.TypeQuery != TpCommand {
-		return et.Items{}, logs.Alertm("The query is not a command")
+		return js.Items{}, logs.Alertm("The query is not a command")
 	}
 
 	c := l.Values
@@ -207,17 +207,17 @@ func (l *Linq) Exec() (et.Items, error) {
 	case TpInsert:
 		err := c.Insert()
 		if err != nil {
-			return et.Items{}, err
+			return js.Items{}, err
 		}
 	case TpUpdate:
 		err := c.Update()
 		if err != nil {
-			return et.Items{}, err
+			return js.Items{}, err
 		}
 	case TpDelete:
 		err := c.Delete()
 		if err != nil {
-			return et.Items{}, err
+			return js.Items{}, err
 		}
 	}
 
@@ -226,20 +226,20 @@ func (l *Linq) Exec() (et.Items, error) {
 
 /**
 * ExecOne is a Exec function and return item
-* @return et.Item
+* @return js.Item
 * @return error
 **/
-func (l *Linq) ExecOne() (et.Item, error) {
+func (l *Linq) ExecOne() (js.Item, error) {
 	items, err := l.Exec()
 	if err != nil {
-		return et.Item{}, err
+		return js.Item{}, err
 	}
 
 	if !items.Ok {
-		return et.Item{}, nil
+		return js.Item{}, nil
 	}
 
-	return et.Item{
+	return js.Item{
 		Ok:     items.Ok,
 		Result: items.Result[0],
 	}, nil
@@ -247,45 +247,45 @@ func (l *Linq) ExecOne() (et.Item, error) {
 
 /**
 * Go is a Exec function and return items
-* @return et.Items
+* @return js.Items
 * @return error
 **/
-func (l *Linq) Go() (et.Items, error) {
+func (l *Linq) Go() (js.Items, error) {
 	return l.Exec()
 }
 
 /**
 * GoOne is a Exec function and return item
-* @return et.Item
+* @return js.Item
 * @return error
 **/
-func (l *Linq) GoOne() (et.Item, error) {
+func (l *Linq) GoOne() (js.Item, error) {
 	return l.ExecOne()
 }
 
 /**
 * Query is a function to execute a query
-* @return et.Items
+* @return js.Items
 * @return error
 **/
-func (l *Linq) Query() (et.Items, error) {
+func (l *Linq) Query() (js.Items, error) {
 	var err error
-	var items et.Items
+	var items js.Items
 
 	l.Sql, err = l.selectSql()
 	if err != nil {
-		return et.Items{}, err
+		return js.Items{}, err
 	}
 
-	if l.Data.Used {
+	if l.Datas.Used {
 		items, err = l.data(l.Sql)
 		if err != nil {
-			return et.Items{}, err
+			return js.Items{}, err
 		}
 	} else {
 		items, err = l.query(l.Sql)
 		if err != nil {
-			return et.Items{}, err
+			return js.Items{}, err
 		}
 	}
 
@@ -306,23 +306,23 @@ func (l *Linq) Query() (et.Items, error) {
 
 /**
 * QueryOne is a function to execute a query and return one item
-* @return et.Item
+* @return js.Item
 * @return error
 **/
-func (l *Linq) QueryOne() (et.Item, error) {
+func (l *Linq) One() (js.Item, error) {
 	items, err := l.Query()
 	if err != nil {
-		return et.Item{}, err
+		return js.Item{}, err
 	}
 
 	if items.Count == 0 {
-		return et.Item{
+		return js.Item{
 			Ok:     false,
-			Result: et.Json{},
+			Result: js.Json{},
 		}, nil
 	}
 
-	return et.Item{
+	return js.Item{
 		Ok:     items.Ok,
 		Result: items.Result[0],
 	}, nil
@@ -330,10 +330,10 @@ func (l *Linq) QueryOne() (et.Item, error) {
 
 /**
 * Take is a function to select n element data
-* @return et.Items
+* @return js.Items
 * @return error
 **/
-func (l *Linq) Take(n int) (et.Items, error) {
+func (l *Linq) Take(n int) (js.Items, error) {
 	l.Limit = n
 
 	return l.Query()
@@ -341,10 +341,10 @@ func (l *Linq) Take(n int) (et.Items, error) {
 
 /**
 * Skip is a function to skip n element data
-* @return et.Items
+* @return js.Items
 * @return error
 **/
-func (l *Linq) Skip(n int) (et.Items, error) {
+func (l *Linq) Skip(n int) (js.Items, error) {
 	l.TypeQuery = TpSkip
 	l.Limit = 1
 	l.Offset = n
@@ -354,10 +354,10 @@ func (l *Linq) Skip(n int) (et.Items, error) {
 
 /**
 * All is a function to select all data
-* @return et.Items
+* @return js.Items
 * @return error
 **/
-func (l *Linq) All() (et.Items, error) {
+func (l *Linq) All() (js.Items, error) {
 	l.Limit = 0
 
 	return l.Query()
@@ -365,29 +365,29 @@ func (l *Linq) All() (et.Items, error) {
 
 /**
 * Find is a function to select all data
-* @return et.Items
+* @return js.Items
 * @return error
 **/
-func (l *Linq) Find() (et.Items, error) {
+func (l *Linq) Find() (js.Items, error) {
 	return l.All()
 }
 
 /**
 * First is a function to select first data
-* @return et.Item
+* @return js.Item
 * @return error
 **/
-func (l *Linq) First() (et.Item, error) {
+func (l *Linq) First() (js.Item, error) {
 	items, err := l.Take(1)
 	if err != nil {
-		return et.Item{}, err
+		return js.Item{}, err
 	}
 
 	if !items.Ok {
-		return et.Item{}, nil
+		return js.Item{}, nil
 	}
 
-	return et.Item{
+	return js.Item{
 		Ok:     items.Ok,
 		Result: items.Result[0],
 	}, nil
@@ -395,21 +395,21 @@ func (l *Linq) First() (et.Item, error) {
 
 /**
 * Last is a function to select last data
-* @return et.Item
+* @return js.Item
 * @return error
 **/
-func (l *Linq) Last() (et.Item, error) {
+func (l *Linq) Last() (js.Item, error) {
 	l.TypeQuery = TpLast
 	items, err := l.Take(1)
 	if err != nil {
-		return et.Item{}, err
+		return js.Item{}, err
 	}
 
 	if !items.Ok {
-		return et.Item{}, nil
+		return js.Item{}, nil
 	}
 
-	return et.Item{
+	return js.Item{
 		Ok:     items.Ok,
 		Result: items.Result[0],
 	}, nil
@@ -417,10 +417,10 @@ func (l *Linq) Last() (et.Item, error) {
 
 /**
 * Page is a function to select page data
-* @return et.Items
+* @return js.Items
 * @return error
 **/
-func (l *Linq) Page(page, rows int) (et.Items, error) {
+func (l *Linq) Page(page, rows int) (js.Items, error) {
 	l.TypeQuery = TpPage
 	offset := (page - 1) * rows
 	l.Limit = rows
@@ -431,27 +431,27 @@ func (l *Linq) Page(page, rows int) (et.Items, error) {
 
 /**
 * List is a function to select page data and return list
-* @return et.List
+* @return js.List
 * @return error
 **/
-func (l *Linq) List(page, rows int) (et.List, error) {
+func (l *Linq) List(page, rows int) (js.List, error) {
 	l.TypeQuery = TpAll
 	var err error
 	l.Sql, err = l.selectSql()
 	if err != nil {
-		return et.List{}, err
+		return js.List{}, err
 	}
 
-	item, err := l.QueryOne()
+	item, err := l.One()
 	if err != nil {
-		return et.List{}, err
+		return js.List{}, err
 	}
 
 	all := item.Int("count")
 
 	items, err := l.Page(page, rows)
 	if err != nil {
-		return et.List{}, err
+		return js.List{}, err
 	}
 
 	return items.ToList(all, page, rows), nil

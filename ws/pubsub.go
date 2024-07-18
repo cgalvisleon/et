@@ -5,7 +5,7 @@ import (
 	"os/signal"
 
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
 	m "github.com/cgalvisleon/et/message"
 	"github.com/cgalvisleon/et/utility"
@@ -18,7 +18,7 @@ type PubSub struct {
 	Name      string
 	socket    *websocket.Conn
 	channels  map[string]func(m.Message)
-	from      et.Json
+	from      js.Json
 	connected bool
 }
 
@@ -38,7 +38,7 @@ func NewPubSub() (*PubSub, error) {
 		host:     host,
 		ClientId: clientId,
 		Name:     name,
-		from: et.Json{
+		from: js.Json{
 			"id":   clientId,
 			"name": name,
 		},
@@ -140,13 +140,13 @@ func (p *PubSub) Connect() (bool, error) {
 
 // Ping the server
 func (p *PubSub) Ping() {
-	msg := NewMessage(p.from, et.Json{}, m.TpPing)
+	msg := NewMessage(p.from, js.Json{}, m.TpPing)
 
 	p.send(msg)
 }
 
 // Set the client parameters
-func (p *PubSub) Params(params et.Json) error {
+func (p *PubSub) Params(params js.Json) error {
 	if params.Empty() {
 		return logs.Alertm(ERR_PARAM_NOT_FOUND)
 	}
@@ -167,7 +167,7 @@ func (p *PubSub) Params(params et.Json) error {
 func (p *PubSub) Subscribe(channel string, reciveFn func(m.Message)) {
 	p.channels[channel] = reciveFn
 
-	msg := NewMessage(p.from, et.Json{}, m.TpSubscribe)
+	msg := NewMessage(p.from, js.Json{}, m.TpSubscribe)
 	msg.Channel = channel
 
 	p.send(msg)
@@ -177,7 +177,7 @@ func (p *PubSub) Subscribe(channel string, reciveFn func(m.Message)) {
 func (p *PubSub) Unsubscribe(channel string) {
 	delete(p.channels, channel)
 
-	msg := NewMessage(p.from, et.Json{}, m.TpUnsubscribe)
+	msg := NewMessage(p.from, js.Json{}, m.TpUnsubscribe)
 	msg.Channel = channel
 
 	p.send(msg)
@@ -187,7 +187,7 @@ func (p *PubSub) Unsubscribe(channel string) {
 func (p *PubSub) Stack(channel string, reciveFn func(m.Message)) {
 	p.channels[channel] = reciveFn
 
-	msg := NewMessage(p.from, et.Json{}, m.TpStack)
+	msg := NewMessage(p.from, js.Json{}, m.TpStack)
 	msg.Channel = channel
 
 	p.send(msg)

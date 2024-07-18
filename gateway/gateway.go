@@ -8,7 +8,7 @@ import (
 
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/ws"
@@ -87,8 +87,8 @@ func (serv *Server) Start() {
 	<-make(chan struct{})
 }
 
-func Version() et.Json {
-	service := et.Json{
+func Version() js.Json {
+	service := js.Json{
 		"version": envar.GetStr("", "VERSION"),
 		"service": PackageName,
 		"host":    HostName,

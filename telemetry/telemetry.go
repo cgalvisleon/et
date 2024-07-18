@@ -9,8 +9,8 @@ import (
 
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
@@ -104,7 +104,7 @@ func (m *Metrics) CallExecute() {
 	m.TimeExec = time.Now()
 }
 
-func (m *Metrics) printLn() et.Json {
+func (m *Metrics) printLn() js.Json {
 	w := logs.Color(logs.NMagenta, fmt.Sprintf(" [%s]:", "TELEMETRY"))
 	logs.CW(w, logs.NCyan, fmt.Sprintf(" [%s]:", strs.Uppcase(m.Channel)))
 	logs.CW(w, logs.NCyan, fmt.Sprintf(" [%s]:", m.Method))
@@ -143,7 +143,7 @@ func (m *Metrics) printLn() et.Json {
 
 	logs.Println(w)
 
-	result := et.Json{
+	result := js.Json{
 		"reqID":         m.ReqID,
 		"time_begin":    m.TimeBegin,
 		"time_end":      m.TimeEnd,
@@ -153,7 +153,7 @@ func (m *Metrics) printLn() et.Json {
 		"response_time": m.ResponseTime,
 		"host_name":     m.HostName,
 		"remote_addr":   m.RemoteAddr,
-		"request": et.Json{
+		"request": js.Json{
 			"end_point": m.EndPoint,
 			"method":    m.Method,
 			"status":    m.Status,
@@ -161,14 +161,14 @@ func (m *Metrics) printLn() et.Json {
 			"scheme":    m.Scheme,
 			"host":      m.HostRequest,
 		},
-		"memory": et.Json{
+		"memory": js.Json{
 			"unity":        "MB",
 			"total":        m.MTotal / 1024 / 1024,
 			"used":         m.MUsed / 1024 / 1024,
 			"free":         m.MFree / 1024 / 1024,
 			"percent_free": math.Floor(m.PFree*100) / 100,
 		},
-		"request_host": et.Json{
+		"request_host": js.Json{
 			"host":   m.RequestsHost.Tag,
 			"day":    m.RequestsHost.Day,
 			"hour":   m.RequestsHost.Hour,
@@ -176,7 +176,7 @@ func (m *Metrics) printLn() et.Json {
 			"second": m.RequestsHost.Seccond,
 			"limit":  m.RequestsHost.Limit,
 		},
-		"requests_endpoint": et.Json{
+		"requests_endpoint": js.Json{
 			"endpoint": m.RequestsEndpoint.Tag,
 			"day":      m.RequestsEndpoint.Day,
 			"hour":     m.RequestsEndpoint.Hour,
@@ -195,7 +195,7 @@ func (m *Metrics) printLn() et.Json {
 	return result
 }
 
-func (m *Metrics) Done(res *http.Response) et.Json {
+func (m *Metrics) Done(res *http.Response) js.Json {
 	m.TimeEnd = time.Now()
 	m.Channel = "Done"
 	m.ResponseTime = time.Since(m.TimeExec)
@@ -207,7 +207,7 @@ func (m *Metrics) Done(res *http.Response) et.Json {
 	return result
 }
 
-func (m *Metrics) DoneResponse(status int, contentLength int64) et.Json {
+func (m *Metrics) DoneResponse(status int, contentLength int64) js.Json {
 	m.TimeEnd = time.Now()
 	m.Channel = "Done-Reponse"
 	m.ResponseTime = time.Since(m.TimeExec)
@@ -219,7 +219,7 @@ func (m *Metrics) DoneResponse(status int, contentLength int64) et.Json {
 	return result
 }
 
-func (m *Metrics) DoneHandler() et.Json {
+func (m *Metrics) DoneHandler() js.Json {
 	m.TimeEnd = time.Now()
 	m.Channel = "Done-Handler"
 	m.ResponseTime = time.Since(m.TimeExec)
@@ -231,7 +231,7 @@ func (m *Metrics) DoneHandler() et.Json {
 	return result
 }
 
-func (m *Metrics) NotFound(r *http.Request) et.Json {
+func (m *Metrics) NotFound(r *http.Request) js.Json {
 	m.NotFount = true
 	m.Channel = "NotFound"
 	m.TimeEnd = time.Now()

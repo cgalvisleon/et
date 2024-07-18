@@ -2,7 +2,7 @@ package nats
 
 import (
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
 	m "github.com/cgalvisleon/et/message"
 	"github.com/cgalvisleon/et/utility"
@@ -13,7 +13,7 @@ type PubSub struct {
 	host         string
 	ClientId     string
 	Name         string
-	from         et.Json
+	from         js.Json
 	subscription map[string]*nats.Subscription
 	channels     map[string]func(m.Message)
 	connected    bool
@@ -32,7 +32,7 @@ func NewPubSub() (*PubSub, error) {
 		host:     host,
 		ClientId: clientId,
 		Name:     name,
-		from: et.Json{
+		from: js.Json{
 			"id":   clientId,
 			"name": name,
 		},
@@ -159,7 +159,7 @@ func (p *PubSub) Connect() (bool, error) {
 
 // Ping the server
 func (p *PubSub) Ping() {
-	msg := NewMessage(p.from, et.Json{
+	msg := NewMessage(p.from, js.Json{
 		"ok":      true,
 		"message": "pong",
 	})
@@ -169,7 +169,7 @@ func (p *PubSub) Ping() {
 }
 
 // Set the client parameters
-func (p *PubSub) Params(params et.Json) error {
+func (p *PubSub) Params(params js.Json) error {
 	if params.Empty() {
 		return logs.Alertm(ERR_PARAM_NOT_FOUND)
 	}
@@ -190,7 +190,7 @@ func (p *PubSub) Params(params et.Json) error {
 func (p *PubSub) Subscribe(channel string, reciveFn func(m.Message)) {
 	p.channels[channel] = reciveFn
 	p.subscribe(channel, reciveFn)
-	msg := NewMessage(p.from, et.Json{
+	msg := NewMessage(p.from, js.Json{
 		"ok":      true,
 		"message": "Subscribed to channel " + channel,
 	})
@@ -202,7 +202,7 @@ func (p *PubSub) Subscribe(channel string, reciveFn func(m.Message)) {
 func (p *PubSub) Stack(channel string, reciveFn func(m.Message)) {
 	p.channels[channel] = reciveFn
 	p.stack(channel, reciveFn)
-	msg := NewMessage(p.from, et.Json{
+	msg := NewMessage(p.from, js.Json{
 		"ok":      true,
 		"message": "Stacked to channel " + channel,
 	})
@@ -214,7 +214,7 @@ func (p *PubSub) Stack(channel string, reciveFn func(m.Message)) {
 func (p *PubSub) Unsubscribe(channel string) {
 	delete(p.channels, channel)
 	delete(p.subscription, channel)
-	msg := NewMessage(p.from, et.Json{
+	msg := NewMessage(p.from, js.Json{
 		"ok":      true,
 		"message": "Unsubscribed from channel " + channel,
 	})
@@ -229,7 +229,7 @@ func (p *PubSub) Publish(channel string, message interface{}) {
 	msg.Channel = channel
 	p.send(msg.Channel, msg)
 
-	msg = NewMessage(p.from, et.Json{
+	msg = NewMessage(p.from, js.Json{
 		"ok":      true,
 		"message": "Message published to " + channel,
 	})

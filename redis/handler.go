@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/redis/go-redis/v9"
@@ -129,6 +129,10 @@ func Set(key, val string, second time.Duration) error {
 	return SetCtx(conn.ctx, key, val, second)
 }
 
+func SetH(key, val string) error {
+	return Set(key, val, time.Hour*1)
+}
+
 // Set a key with a value and a day duration
 func SetD(key, val string) error {
 	return Set(key, val, time.Hour*24)
@@ -247,38 +251,20 @@ func HDel(key, atr string) error {
 	return HDelCtx(conn.ctx, key, atr)
 }
 
-// Increment a key with a atrib
-func SetVerify(device, key, val string) error {
-	key = strs.Format(`verify:%s/%s`, device, key)
-	return Set(key, val, 5*60)
-}
-
-// Get a key with a atrib
-func GetVerify(device string, key string) (string, error) {
-	key = strs.Format(`verify:%s/%s`, device, key)
-	return Get(key, "")
-}
-
-// Delete a key with a atrib
-func DelVerify(device string, key string) (int64, error) {
-	key = strs.Format(`verify:%s/%s`, device, key)
-	return Del(key)
-}
-
 /**
 * Other functions
 **/
 
 // Get all keys
-func AllCache(search string, page, rows int) (et.List, error) {
+func AllCache(search string, page, rows int) (js.List, error) {
 	if conn == nil {
-		return et.List{}, logs.Log(ERR_NOT_CACHE_SERVICE)
+		return js.List{}, logs.Log(ERR_NOT_CACHE_SERVICE)
 	}
 
 	ctx := context.Background()
 	var cursor uint64
 	var count int64
-	var items et.Items = et.Items{}
+	var items js.Items = js.Items{}
 	offset := (page - 1) * rows
 	cursor = uint64(offset)
 	count = int64(rows)
@@ -286,7 +272,7 @@ func AllCache(search string, page, rows int) (et.List, error) {
 	iter := conn.db.Scan(ctx, cursor, search, count).Iterator()
 	for iter.Next(ctx) {
 		key := iter.Val()
-		items.Result = append(items.Result, et.Json{"key": key})
+		items.Result = append(items.Result, js.Json{"key": key})
 		items.Count++
 	}
 
@@ -294,64 +280,64 @@ func AllCache(search string, page, rows int) (et.List, error) {
 }
 
 // Get key and json value
-func GetJson(key string) (et.Json, error) {
+func GetJson(key string) (js.Json, error) {
 	if conn == nil {
-		return et.Json{}, logs.Log(ERR_NOT_CACHE_SERVICE)
+		return js.Json{}, logs.Log(ERR_NOT_CACHE_SERVICE)
 	}
 
 	_default := "{}"
 	val, err := Get(key, _default)
 	if err != nil {
-		return et.Json{}, err
+		return js.Json{}, err
 	}
 
 	if val == _default {
-		return et.Json{}, nil
+		return js.Json{}, nil
 	}
 
-	var result et.Json = et.Json{}
+	var result js.Json = js.Json{}
 	err = result.Scan(val)
 	if err != nil {
-		return et.Json{}, err
+		return js.Json{}, err
 	}
 
 	return result, nil
 }
 
 // Set key and json value
-func SetJson(key string, val et.Json, second time.Duration) (et.Json, error) {
+func SetJson(key string, val js.Json, second time.Duration) (js.Json, error) {
 	if conn == nil {
 		return val, logs.Log(ERR_NOT_CACHE_SERVICE)
 	}
 
 	err := Set(key, val.ToString(), second)
 	if err != nil {
-		return et.Json{}, err
+		return js.Json{}, err
 	}
 
 	return val, nil
 }
 
 // Set key and json value with a day duration
-func SetJsonD(key string, val et.Json) (et.Json, error) {
+func SetJsonD(key string, val js.Json) (js.Json, error) {
 	day := time.Hour * 24
 	return SetJson(key, val, day)
 }
 
 // Set key and json value with a week duration
-func SetJsonW(key string, val et.Json) (et.Json, error) {
+func SetJsonW(key string, val js.Json) (js.Json, error) {
 	week := time.Hour * 24 * 7
 	return SetJson(key, val, week)
 }
 
 // Set key and json value with a month duration
-func SetJsonM(key string, val et.Json) (et.Json, error) {
+func SetJsonM(key string, val js.Json) (js.Json, error) {
 	month := time.Hour * 24 * 30
 	return SetJson(key, val, month)
 }
 
 // Set key and json value with a year duration
-func SetJsonY(key string, val et.Json) (et.Json, error) {
+func SetJsonY(key string, val js.Json) (js.Json, error) {
 	year := time.Hour * 24 * 365
 	return SetJson(key, val, year)
 }
@@ -361,67 +347,67 @@ func SetJsonY(key string, val et.Json) (et.Json, error) {
 **/
 
 // Get a key and item value
-func GetItem(key string) (et.Item, error) {
+func GetItem(key string) (js.Item, error) {
 	if conn == nil {
-		return et.Item{}, logs.Log(ERR_NOT_CACHE_SERVICE)
+		return js.Item{}, logs.Log(ERR_NOT_CACHE_SERVICE)
 	}
 
 	_default := "{}"
 	val, err := Get(key, _default)
 	if err != nil {
-		return et.Item{}, err
+		return js.Item{}, err
 	}
 
 	if val == _default {
-		return et.Item{}, nil
+		return js.Item{}, nil
 	}
 
-	var result et.Json = et.Json{}
+	var result js.Json = js.Json{}
 	err = result.Scan(val)
 	if err != nil {
-		return et.Item{}, err
+		return js.Item{}, err
 	}
 
-	return et.Item{
+	return js.Item{
 		Ok:     true,
 		Result: result,
 	}, nil
 }
 
 // Set a key and item value
-func SetItem(key string, val et.Item, second time.Duration) (et.Item, error) {
+func SetItem(key string, val js.Item, second time.Duration) (js.Item, error) {
 	if conn == nil {
 		return val, logs.Log(ERR_NOT_CACHE_SERVICE)
 	}
 
 	err := Set(key, val.ToString(), second)
 	if err != nil {
-		return et.Item{}, err
+		return js.Item{}, err
 	}
 
 	return val, nil
 }
 
 // Set a key and item value with a day duration
-func SetItemD(key string, val et.Item) (et.Item, error) {
+func SetItemD(key string, val js.Item) (js.Item, error) {
 	day := time.Hour * 24
 	return SetItem(key, val, day)
 }
 
 // Set a key and item value with a week duration
-func SetItemW(key string, val et.Item) (et.Item, error) {
+func SetItemW(key string, val js.Item) (js.Item, error) {
 	week := time.Hour * 24 * 7
 	return SetItem(key, val, week)
 }
 
 // Set a key and item value with a month duration
-func SetItemM(key string, val et.Item) (et.Item, error) {
+func SetItemM(key string, val js.Item) (js.Item, error) {
 	month := time.Hour * 24 * 30
 	return SetItem(key, val, month)
 }
 
 // Set a key and item value with a year duration
-func SetItemY(key string, val et.Item) (et.Item, error) {
+func SetItemY(key string, val js.Item) (js.Item, error) {
 	year := time.Hour * 24 * 365
 	return SetItem(key, val, year)
 }
@@ -431,63 +417,63 @@ func SetItemY(key string, val et.Item) (et.Item, error) {
 **/
 
 // Get a key and items value
-func GetItems(key string) (et.Items, error) {
+func GetItems(key string) (js.Items, error) {
 	if conn == nil {
-		return et.Items{}, logs.Log(ERR_NOT_CACHE_SERVICE)
+		return js.Items{}, logs.Log(ERR_NOT_CACHE_SERVICE)
 	}
 
 	_default := "[]"
 	val, err := Get(key, _default)
 	if err != nil {
-		return et.Items{}, err
+		return js.Items{}, err
 	}
 
 	if val == _default {
-		return et.Items{}, nil
+		return js.Items{}, nil
 	}
 
-	var result et.Items = et.Items{}
+	var result js.Items = js.Items{}
 	err = result.Scan(val)
 	if err != nil {
-		return et.Items{}, err
+		return js.Items{}, err
 	}
 
 	return result, nil
 }
 
 // Set a key and items value
-func SetItems(key string, val et.Items, second time.Duration) (et.Items, error) {
+func SetItems(key string, val js.Items, second time.Duration) (js.Items, error) {
 	if conn == nil {
 		return val, logs.Log(ERR_NOT_CACHE_SERVICE)
 	}
 
 	err := Set(key, val.ToString(), second)
 	if err != nil {
-		return et.Items{}, err
+		return js.Items{}, err
 	}
 
 	return val, nil
 }
 
 // Set a key and items value with a day duration
-func SetItemsD(key string, val et.Items) (et.Items, error) {
+func SetItemsD(key string, val js.Items) (js.Items, error) {
 	day := time.Hour * 24
 	return SetItems(key, val, day)
 }
 
-func SetItemsW(key string, val et.Items) (et.Items, error) {
+func SetItemsW(key string, val js.Items) (js.Items, error) {
 	week := time.Hour * 24 * 7
 	return SetItems(key, val, week)
 }
 
 // Set a key and items value with a month duration
-func SetItemsM(key string, val et.Items) (et.Items, error) {
+func SetItemsM(key string, val js.Items) (js.Items, error) {
 	month := time.Hour * 24 * 30
 	return SetItems(key, val, month)
 }
 
 // Set a key and items value with a year duration
-func SetItemsY(key string, val et.Items) (et.Items, error) {
+func SetItemsY(key string, val js.Items) (js.Items, error) {
 	year := time.Hour * 24 * 365
 	return SetItems(key, val, year)
 }

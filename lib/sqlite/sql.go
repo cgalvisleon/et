@@ -3,7 +3,7 @@ package lib
 import (
 	"slices"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/linq"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
@@ -144,17 +144,20 @@ func sqlData(l *linq.Linq, cols ...*linq.Lselect) string {
 func sqlSelect(l *linq.Linq) {
 	var result string
 	if l.Selects.Used {
-		result = sqlColumns(l, l.Selects.Columns...)
-	}
-	if l.Data.Used {
-		def := sqlData(l, l.Data.Columns...)
-		result = strs.Append(result, def, ",\n")
-	}
-
-	if l.Distinct {
-		result = strs.Append("SELECT DISTINCT", result, " ")
-	} else {
-		result = strs.Append("SELECT", result, " ")
+		def := sqlColumns(l, l.Selects.Columns...)
+		if l.Selects.Distinct {
+			result = strs.Append("SELECT DISTINCT", def, " ")
+		} else {
+			result = strs.Append("SELECT", def, " ")
+		}
+	} else if l.Datas.Used {
+		def := sqlData(l, l.Datas.Columns...)
+		def = strs.Append(result, def, ",\n")
+		if l.Selects.Distinct {
+			result = strs.Append("SELECT DISTINCT", def, " ")
+		} else {
+			result = strs.Append("SELECT", def, " ")
+		}
 	}
 
 	l.Sql = strs.Append(l.Sql, result, "\n")
@@ -328,13 +331,13 @@ func sqlInsert(l *linq.Linq) {
 		switch val.Column.TypeColumn {
 		case linq.TpColumn:
 			col := val.Column.Up()
-			val := et.Unquote(val.New)
+			val := js.Unquote(val.New)
 			def := strs.Format(`%v`, val)
 			columns = strs.Append(columns, col, ", ")
 			values = strs.Append(values, def, ", ")
 		case linq.TpAtrib:
 			col := val.Column.Low()
-			val := et.Quote(val.New)
+			val := js.Quote(val.New)
 			def := strs.Format(`"%s": %v`, col, val)
 			atribs = strs.Append(atribs, def, ",\n")
 		}
@@ -367,12 +370,12 @@ func sqlUpdate(l *linq.Linq) {
 		switch val.Column.TypeColumn {
 		case linq.TpColumn:
 			col := val.Column.Up()
-			val := et.Unquote(val.New)
+			val := js.Unquote(val.New)
 			def := strs.Format(`%s = %v`, col, val)
 			values = strs.Append(values, def, ",\n")
 		case linq.TpAtrib:
 			col := val.Column.Low()
-			val := et.Quote(val.New)
+			val := js.Quote(val.New)
 			atribs = strs.Format(`jsonb_set(%s, '{%s}', '%v', true)`, atribs, col, val)
 		}
 	}

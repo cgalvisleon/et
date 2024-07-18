@@ -1,8 +1,6 @@
 package linq
 
-import (
-	"github.com/cgalvisleon/et/et"
-)
+import "github.com/cgalvisleon/et/js"
 
 // OrderBy struct to use in linq
 type Lorder struct {
@@ -12,8 +10,8 @@ type Lorder struct {
 }
 
 // Describe method to use in linq
-func (l *Lorder) Describe() et.Json {
-	return et.Json{
+func (l *Lorder) Describe() js.Json {
+	return js.Json{
 		"column": l.Column.Describe(),
 		"asc":    l.Asc,
 	}

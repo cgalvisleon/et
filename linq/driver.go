@@ -3,7 +3,7 @@ package linq
 import (
 	"database/sql"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 )
 
 type TypeDriver int
@@ -43,17 +43,18 @@ type Connection struct {
 	UsedCore bool
 }
 
-type HandleListen func(res et.Json)
+type HandleListen func(res js.Json)
 
 type Driver interface {
 	Type() string
 	Connect() (*sql.DB, error)
+	UsedCore() bool
 	// DDL (Data Definition Language)
 	DefineSql(model *Model) string
 	MutationSql(model *Model) string
 	// Querys
-	Query(query string, args ...any) (et.Items, error)
-	QueryOne(query string, args ...any) (et.Item, error)
+	Query(query string, args ...any) (js.Items, error)
+	QueryOne(query string, args ...any) (js.Item, error)
 	Exec(query string, args ...any) error
 	// Crud
 	SelectSql(linq *Linq) string
@@ -62,7 +63,7 @@ type Driver interface {
 	UpdateSql(linq *Linq) string
 	DeleteSql(linq *Linq) string
 	// DCL (Data Control Language)
-	DCL(command string, params et.Json) error
+	DCL(command string, params js.Json) error
 	// Listener
 	SetListen(handler HandleListen)
 	// Serires
@@ -72,9 +73,9 @@ type Driver interface {
 	CurrentSerie(tag string) (int, error)
 	DeleteSerie(tag string) error
 	// Models
-	GetModel(main, name, kind string) (et.Item, error)
-	InsertModel(main, name, kind string, version int, data et.Json) error
-	UpdateModel(main, name, kind string, version int, data et.Json) error
+	GetModel(main, name, kind string) (js.Item, error)
+	InsertModel(main, name, kind string, version int, data js.Json) error
+	UpdateModel(main, name, kind string, version int, data js.Json) error
 	DeleteModel(main, name, kind string) error
 	// Migrations IDs
 	UpSertMigrateId(old_id, _id, tag string) error

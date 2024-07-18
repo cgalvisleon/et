@@ -6,7 +6,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 )
 
 type Status struct {
@@ -17,8 +17,8 @@ type Status struct {
 }
 
 // ToJson returns a Json object
-func (s Status) ToJson() et.Json {
-	return et.Json{
+func (s Status) ToJson() js.Json {
+	return js.Json{
 		"ok":      s.Ok,
 		"group":   s.Group,
 		"code":    s.Code,
@@ -32,11 +32,11 @@ func (s Status) ToString() string {
 }
 
 // ioReadeToJson reads the io.Reader and returns a Json object
-func ioReadeToJson(r io.Reader) (et.Json, error) {
-	var result et.Json
+func ioReadeToJson(r io.Reader) (js.Json, error) {
+	var result js.Json
 	err := json.NewDecoder(r).Decode(&result)
 	if err != nil {
-		return et.Json{}, err
+		return js.Json{}, err
 	}
 
 	return result, nil
@@ -66,11 +66,11 @@ func StatusValid(status int, message string) Status {
 }
 
 // Request post method
-func Post(url string, header, body et.Json) (et.Json, Status) {
+func Post(url string, header, body js.Json) (js.Json, Status) {
 	bodyParams := []byte(body.ToString())
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(bodyParams))
 	if err != nil {
-		return et.Json{}, StatusValid(http.StatusBadRequest, err.Error())
+		return js.Json{}, StatusValid(http.StatusBadRequest, err.Error())
 	}
 
 	for k, v := range header {
@@ -80,23 +80,23 @@ func Post(url string, header, body et.Json) (et.Json, Status) {
 	client := &http.Client{}
 	res, err := client.Do(req)
 	if err != nil {
-		return et.Json{}, StatusValid(res.StatusCode, err.Error())
+		return js.Json{}, StatusValid(res.StatusCode, err.Error())
 	}
 	defer res.Body.Close()
 
 	result, err := ioReadeToJson(res.Body)
 	if err != nil {
-		return et.Json{}, StatusValid(http.StatusBadRequest, err.Error())
+		return js.Json{}, StatusValid(http.StatusBadRequest, err.Error())
 	}
 
 	return result, StatusValid(res.StatusCode, http.StatusText(res.StatusCode))
 }
 
 // Request get method
-func Get(url string, header et.Json) (et.Json, Status) {
+func Get(url string, header js.Json) (js.Json, Status) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return et.Json{}, StatusValid(http.StatusBadRequest, err.Error())
+		return js.Json{}, StatusValid(http.StatusBadRequest, err.Error())
 	}
 
 	for k, v := range header {
@@ -106,24 +106,24 @@ func Get(url string, header et.Json) (et.Json, Status) {
 	client := &http.Client{}
 	res, err := client.Do(req)
 	if err != nil {
-		return et.Json{}, StatusValid(res.StatusCode, err.Error())
+		return js.Json{}, StatusValid(res.StatusCode, err.Error())
 	}
 	defer res.Body.Close()
 
 	result, err := ioReadeToJson(res.Body)
 	if err != nil {
-		return et.Json{}, StatusValid(http.StatusBadRequest, err.Error())
+		return js.Json{}, StatusValid(http.StatusBadRequest, err.Error())
 	}
 
 	return result, StatusValid(res.StatusCode, http.StatusText(res.StatusCode))
 }
 
 // Request put method
-func Put(url string, header, body et.Json) (et.Json, Status) {
+func Put(url string, header, body js.Json) (js.Json, Status) {
 	bodyParams := []byte(body.ToString())
 	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(bodyParams))
 	if err != nil {
-		return et.Json{}, StatusValid(http.StatusBadRequest, err.Error())
+		return js.Json{}, StatusValid(http.StatusBadRequest, err.Error())
 	}
 
 	for k, v := range header {
@@ -133,23 +133,23 @@ func Put(url string, header, body et.Json) (et.Json, Status) {
 	client := &http.Client{}
 	res, err := client.Do(req)
 	if err != nil {
-		return et.Json{}, StatusValid(res.StatusCode, err.Error())
+		return js.Json{}, StatusValid(res.StatusCode, err.Error())
 	}
 	defer res.Body.Close()
 
 	result, err := ioReadeToJson(res.Body)
 	if err != nil {
-		return et.Json{}, StatusValid(http.StatusBadRequest, err.Error())
+		return js.Json{}, StatusValid(http.StatusBadRequest, err.Error())
 	}
 
 	return result, StatusValid(res.StatusCode, http.StatusText(res.StatusCode))
 }
 
 // Request delete method
-func Delete(url string, header et.Json) (et.Json, Status) {
+func Delete(url string, header js.Json) (js.Json, Status) {
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
-		return et.Json{}, StatusValid(http.StatusBadRequest, err.Error())
+		return js.Json{}, StatusValid(http.StatusBadRequest, err.Error())
 	}
 
 	for k, v := range header {
@@ -159,24 +159,24 @@ func Delete(url string, header et.Json) (et.Json, Status) {
 	client := &http.Client{}
 	res, err := client.Do(req)
 	if err != nil {
-		return et.Json{}, StatusValid(res.StatusCode, err.Error())
+		return js.Json{}, StatusValid(res.StatusCode, err.Error())
 	}
 	defer res.Body.Close()
 
 	result, err := ioReadeToJson(res.Body)
 	if err != nil {
-		return et.Json{}, StatusValid(http.StatusBadRequest, err.Error())
+		return js.Json{}, StatusValid(http.StatusBadRequest, err.Error())
 	}
 
 	return result, StatusValid(res.StatusCode, http.StatusText(res.StatusCode))
 }
 
 // Request patch method
-func Patch(url string, header, body et.Json) (et.Json, Status) {
+func Patch(url string, header, body js.Json) (js.Json, Status) {
 	bodyParams := []byte(body.ToString())
 	req, err := http.NewRequest("PATCH", url, bytes.NewBuffer(bodyParams))
 	if err != nil {
-		return et.Json{}, StatusValid(http.StatusBadRequest, err.Error())
+		return js.Json{}, StatusValid(http.StatusBadRequest, err.Error())
 	}
 
 	for k, v := range header {
@@ -186,23 +186,23 @@ func Patch(url string, header, body et.Json) (et.Json, Status) {
 	client := &http.Client{}
 	res, err := client.Do(req)
 	if err != nil {
-		return et.Json{}, StatusValid(res.StatusCode, err.Error())
+		return js.Json{}, StatusValid(res.StatusCode, err.Error())
 	}
 	defer res.Body.Close()
 
 	result, err := ioReadeToJson(res.Body)
 	if err != nil {
-		return et.Json{}, StatusValid(http.StatusBadRequest, err.Error())
+		return js.Json{}, StatusValid(http.StatusBadRequest, err.Error())
 	}
 
 	return result, StatusValid(res.StatusCode, http.StatusText(res.StatusCode))
 }
 
 // Request options method
-func Options(url string, header et.Json) (et.Json, Status) {
+func Options(url string, header js.Json) (js.Json, Status) {
 	req, err := http.NewRequest("OPTIONS", url, nil)
 	if err != nil {
-		return et.Json{}, StatusValid(http.StatusBadRequest, err.Error())
+		return js.Json{}, StatusValid(http.StatusBadRequest, err.Error())
 	}
 
 	for k, v := range header {
@@ -212,13 +212,13 @@ func Options(url string, header et.Json) (et.Json, Status) {
 	client := &http.Client{}
 	res, err := client.Do(req)
 	if err != nil {
-		return et.Json{}, StatusValid(res.StatusCode, err.Error())
+		return js.Json{}, StatusValid(res.StatusCode, err.Error())
 	}
 	defer res.Body.Close()
 
 	result, err := ioReadeToJson(res.Body)
 	if err != nil {
-		return et.Json{}, StatusValid(http.StatusBadRequest, err.Error())
+		return js.Json{}, StatusValid(http.StatusBadRequest, err.Error())
 	}
 
 	return result, StatusValid(res.StatusCode, http.StatusText(res.StatusCode))

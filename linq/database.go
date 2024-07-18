@@ -3,7 +3,7 @@ package linq
 import (
 	"database/sql"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
@@ -104,23 +104,28 @@ func beforeUpdate(model *Model, value *Values) error {
 
 /**
 * handlerListened handler listened
-* @param res et.Json
+* @param res js.Json
 **/
-func (d *Database) handlerListened(res et.Json) {
-	logs.Debug("Lintened: ", res.ToString())
+func (d *Database) handlerListened(res js.Json) {
+	schema := res.Str("schema")
+	table := res.Str("table")
+	model := d.Table(schema, table)
+	if model != nil && model.OnListener != nil {
+		model.OnListener(res)
+	}
 }
 
 /**
 * Describe return the definition of the database
-* @return et.Json
+* @return js.Json
 **/
-func (d *Database) Describe() et.Json {
-	var _schemes []et.Json = []et.Json{}
+func (d *Database) Describe() js.Json {
+	var _schemes []js.Json = []js.Json{}
 	for _, s := range d.Schemes {
 		_schemes = append(_schemes, s.Describe())
 	}
 
-	var _models []et.Json = []et.Json{}
+	var _models []js.Json = []js.Json{}
 	for _, m := range d.Models {
 		_models = append(_models, m.Describe())
 	}
@@ -128,7 +133,7 @@ func (d *Database) Describe() et.Json {
 	driver := *d.Driver
 	typeDriver := driver.Type()
 
-	return et.Json{
+	return js.Json{
 		"name":        d.Name,
 		"description": d.Description,
 		"typeDriver":  typeDriver,
@@ -222,9 +227,26 @@ func (d *Database) GetModel(model *Model) *Model {
 * @return *Model
 **/
 func (d *Database) Model(name string) *Model {
-	for _, v := range d.Models {
-		if strs.Uppcase(v.Name) == strs.Uppcase(name) {
-			return v
+	for _, m := range d.Models {
+		if strs.Uppcase(m.Name) == strs.Uppcase(name) {
+			return m
+		}
+	}
+
+	return nil
+}
+
+/**
+* Table get model by tablename
+* @param schema string
+* @param name string
+* @return *Model
+**/
+func (d *Database) Table(schema, name string) *Model {
+	table := strs.Format("%s.%s", schema, name)
+	for _, m := range d.Models {
+		if strs.Uppcase(m.Table) == strs.Uppcase(table) {
+			return m
 		}
 	}
 
@@ -254,9 +276,13 @@ func (d *Database) initModel(model *Model) error {
 	}
 
 	driver := *d.Driver
-	kind := "model"
+	usedCore := driver.UsedCore()
 
-	result, err := driver.GetModel(model.Schema.Name, model.Name, kind)
+	if !usedCore {
+		return nil
+	}
+
+	result, err := driver.GetModel(model.Schema.Name, model.Name, model.Kind())
 	if err != nil {
 		return err
 	}
@@ -273,27 +299,7 @@ func (d *Database) initModel(model *Model) error {
 			return err
 		}
 
-		err = driver.InsertModel(model.Schema.Name, model.Name, kind, model.Version, model.Describe())
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}
-
-	version := result.Int("version")
-	if version < model.Version {
-		sql := driver.MutationSql(model)
-		if d.debug {
-			logs.Debug(model.Describe().ToString())
-		}
-
-		_, err = Exec(d.DB, sql)
-		if err != nil {
-			return err
-		}
-
-		err = driver.UpdateModel(model.Schema.Name, model.Name, kind, model.Version, model.Describe())
+		err = driver.InsertModel(model.Schema.Name, model.Name, model.Kind(), model.Version, model.Describe())
 		if err != nil {
 			return err
 		}
@@ -382,10 +388,10 @@ func (d *Database) deleteSql(linq *Linq) (string, error) {
 * @parms db
 * @parms sql
 * @parms args
-* @return et.Items
+* @return js.Items
 * @return error
 **/
-func (d *Database) Query(sql string, args ...any) (et.Items, error) {
+func (d *Database) Query(sql string, args ...any) (js.Items, error) {
 	_query := SQLParse(sql, args...)
 
 	if d.debug {
@@ -394,7 +400,7 @@ func (d *Database) Query(sql string, args ...any) (et.Items, error) {
 
 	items, err := Query(d.DB, _query)
 	if err != nil {
-		return et.Items{}, err
+		return js.Items{}, err
 	}
 
 	return items, nil
@@ -405,23 +411,23 @@ func (d *Database) Query(sql string, args ...any) (et.Items, error) {
 * @parms db
 * @parms sql
 * @parms args
-* @return et.Item
+* @return js.Item
 * @return error
 **/
-func (d *Database) QueryOne(sql string, args ...any) (et.Item, error) {
+func (d *Database) QueryOne(sql string, args ...any) (js.Item, error) {
 	items, err := d.Query(sql, args...)
 	if err != nil {
-		return et.Item{}, err
+		return js.Item{}, err
 	}
 
 	if items.Count == 0 {
-		return et.Item{
+		return js.Item{
 			Ok:     false,
-			Result: et.Json{},
+			Result: js.Json{},
 		}, nil
 	}
 
-	return et.Item{
+	return js.Item{
 		Ok:     items.Ok,
 		Result: items.Result[0],
 	}, nil
@@ -431,19 +437,19 @@ func (d *Database) QueryOne(sql string, args ...any) (et.Item, error) {
 * Exec execute a query
 * @param sql string
 * @param args ...any
-* @return et.Items
+* @return js.Items
 * @return error
 **/
-func (d *Database) Data(source, sql string, args ...any) (et.Items, error) {
+func (d *Database) Data(source, sql string, args ...any) (js.Items, error) {
 	rows, err := query(d.DB, sql, args...)
 	if err != nil {
-		return et.Items{}, logs.Error(err)
+		return js.Items{}, logs.Error(err)
 	}
 	defer rows.Close()
 
-	var result et.Items = et.Items{}
+	var result js.Items = js.Items{}
 	for rows.Next() {
-		var item et.Item
+		var item js.Item
 		err := item.Scan(rows)
 		if err != nil {
 			continue

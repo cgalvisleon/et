@@ -299,12 +299,12 @@ import (
 	"net/rpc"
 
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 )
 
 var initRpc bool
 
-type Service et.Item
+type Service js.Item
 
 func InitRpc() error {
 	service := new(Service)
@@ -324,12 +324,12 @@ func (c *Service) Version(require []byte, response *[]byte) error {
 		return nil
 	}
 
-	rq := et.ByteToJson(require)
+	rq := js.ByteToJson(require)
 	help := rq.Str("help")
 
-	result := et.Item{
+	result := js.Item{
 		Ok: true,
-		Result: et.Json{
+		Result: js.Json{
 			"service": PackageName,
 			"host":    HostName,
 			"help":    help,
@@ -359,7 +359,7 @@ import (
 	"context"
 
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/linq"
 )
 
@@ -367,11 +367,11 @@ type Controller struct {
 	Db *linq.Database
 }
 
-func (c *Controller) Version(ctx context.Context) (et.Json, error) {
+func (c *Controller) Version(ctx context.Context) (js.Json, error) {
 	company := envar.GetStr("", "COMPANY")
 	web := envar.GetStr("", "WEB")
 	version := envar.GetStr("", "VERSION")
-  service := et.Json{
+  service := js.Json{
 		"version": version,
 		"service": PackageName,
 		"host":    HostName,
@@ -389,7 +389,7 @@ func (c *Controller) Init(ctx context.Context) {
 }
 
 type Repository interface {
-	Version(ctx context.Context) (et.Json, error)
+	Version(ctx context.Context) (js.Json, error)
 	Init(ctx context.Context)
 }
 `
@@ -400,7 +400,7 @@ import (
 	"context"
 
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/linq"
 )
 
@@ -408,11 +408,11 @@ type Controller struct {
 	Db *linq.Database
 }
 
-func (c *Controller) Version(ctx context.Context) (et.Json, error) {
+func (c *Controller) Version(ctx context.Context) (js.Json, error) {
 	company := envar.GetStr("", "COMPANY")
 	web := envar.GetStr("", "WEB")
 	version := envar.GetStr("", "VERSION")
-  service := et.Json{
+  service := js.Json{
 		"version": version,
 		"service": PackageName,
 		"host":    HostName,
@@ -429,7 +429,7 @@ func (c *Controller) Init(ctx context.Context) {
 }
 
 type Repository interface {
-	Version(ctx context.Context) (et.Json, error)
+	Version(ctx context.Context) (js.Json, error)
 	Init(ctx context.Context)
 }
 `
@@ -568,7 +568,7 @@ const modelDbHandler = `package $1
 import (
 	"net/http"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/generic"
 	"github.com/cgalvisleon/et/linq"
 	"github.com/cgalvisleon/et/logs"
@@ -614,25 +614,25 @@ func Define$2(db *linq.Database) error {
 		},
 	})
 	$2.DefineIntegrity(true)
-	$2.DefineTrigger(linq.BeforeInsert, func(model *linq.Model, old, new *et.Json, data et.Json) error {
+	$2.DefineTrigger(linq.BeforeInsert, func(model *linq.Model, old, new *js.Json, data js.Json) error {
 		return nil
 	})
-	$2.DefineTrigger(linq.AfterInsert, func(model *linq.Model, old, new *et.Json, data et.Json) error {
+	$2.DefineTrigger(linq.AfterInsert, func(model *linq.Model, old, new *js.Json, data js.Json) error {
 		return nil
 	})
-	$2.DefineTrigger(linq.BeforeUpdate, func(model *linq.Model, old, new *et.Json, data et.Json) error {
+	$2.DefineTrigger(linq.BeforeUpdate, func(model *linq.Model, old, new *js.Json, data js.Json) error {
 		return nil
 	})
-	$2.DefineTrigger(linq.AfterUpdate, func(model *linq.Model, old, new *et.Json, data et.Json) error {
+	$2.DefineTrigger(linq.AfterUpdate, func(model *linq.Model, old, new *js.Json, data js.Json) error {
 		return nil
 	})
-	$2.DefineTrigger(linq.BeforeDelete, func(model *linq.Model, old, new *et.Json, data et.Json) error {
+	$2.DefineTrigger(linq.BeforeDelete, func(model *linq.Model, old, new *js.Json, data js.Json) error {
 		return nil
 	})
-	$2.DefineTrigger(linq.AfterDelete, func(model *linq.Model, old, new *et.Json, data et.Json) error {
+	$2.DefineTrigger(linq.AfterDelete, func(model *linq.Model, old, new *js.Json, data js.Json) error {
 		return nil
 	})
-	$2.OnListener = func(data et.Json) {
+	$2.OnListener = func(data js.Json) {
 		logs.Debug(data.ToString())
 	}
 	
@@ -646,15 +646,15 @@ func Define$2(db *linq.Database) error {
 /**
 * Get$2ById
 * @param id string
-* @return et.Item
+* @return js.Item
 * @return error
 **/
-func Get$2ById(id string) (et.Item, error) {	
+func Get$2ById(id string) (js.Item, error) {	
 	result, err := $2.Data().
 		Where($2.Column("_id").Eq(id)).
 		First()
 	if err != nil {
-		return et.Item{}, err
+		return js.Item{}, err
 	}
 	
 	return result, nil	
@@ -664,28 +664,28 @@ func Get$2ById(id string) (et.Item, error) {
 * Insert$2
 * @param project_id string
 * @param id string
-* @param data et.Json
-* @return et.Item
+* @param data js.Json
+* @return js.Item
 * @return error
 **/
-func Insert$2(project_id, id, state string, data et.Json) (et.Item, error) {
+func Insert$2(project_id, id, state string, data js.Json) (js.Item, error) {
 	if !utility.ValidId(project_id) {
-		return et.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "project_id")
+		return js.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "project_id")
 	}
 
 	if !utility.ValidId(id) {
-		return et.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "_id")
+		return js.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "_id")
 	}
 
 	item, err := $2.Data("_state", "_id").
 		Where($2.Column("_id").Eq(id)).
 		First()
 	if err != nil {
-		return et.Item{}, err
+		return js.Item{}, err
 	}
 
 	if item.Ok {
-		return et.Item{
+		return js.Item{
 			Ok: false,
 			Result: item.Result,
 		}, nil
@@ -702,21 +702,21 @@ func Insert$2(project_id, id, state string, data et.Json) (et.Item, error) {
 * UpSert$2
 * @param project_id string
 * @param id string
-* @param data et.Json
+* @param data js.Json
 * @param user_id string
-* @return et.Item
+* @return js.Item
 * @return error
 **/
-func UpSert$2(project_id, id, data et.Json, user_id string) (et.Item, error) {
+func UpSert$2(project_id, id, data js.Json, user_id string) (js.Item, error) {
 	item, err := Insert$2(project_id, id, utility.ACTIVE, data, user_id)
 	if err != nil {
-		return et.Item{}, err
+		return js.Item{}, err
 	}
 
 	if item.Ok {
 		item, err = GetTypoById(project_id, id)
 		if err != nil {
-			return et.Item{}, err
+			return js.Item{}, err
 		}
 
 		return item, nil
@@ -724,7 +724,7 @@ func UpSert$2(project_id, id, data et.Json, user_id string) (et.Item, error) {
 
 	current_state := item.Key("_state")
 	if current_state != utility.ACTIVE {
-		return et.Item{}, logs.Alertf(MSG_STATE_NOT_ACTIVE, current_state)
+		return js.Item{}, logs.Alertf(MSG_STATE_NOT_ACTIVE, current_state)
 	}
 
 	data["project_id"] = project_id
@@ -734,12 +734,12 @@ func UpSert$2(project_id, id, data et.Json, user_id string) (et.Item, error) {
 		Where($2.Col("_id").Eq(id)).
 		ExecOne()
 	if err != nil {
-		return et.Item{}, err
+		return js.Item{}, err
 	}
 
 	item, err = Get$2ById(project_id, id)
 	if err != nil {
-		return et.Item{}, err
+		return js.Item{}, err
 	}
 
 	return item, nil
@@ -749,35 +749,35 @@ func UpSert$2(project_id, id, data et.Json, user_id string) (et.Item, error) {
 * State$2
 * @param id string
 * @param state string
-* @return et.Item
+* @return js.Item
 * @return error
 **/
-func State$2(id, state string) (et.Item, error) {
+func State$2(id, state string) (js.Item, error) {
 	if !utility.ValidId(state) {
-		return et.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "state")
+		return js.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "state")
 	}
 
 	item, err := $2.Data("_state").
 		Where($2.Column("_id").Eq(id)).
 		First()
 	if err != nil {
-		return et.Item{}, err
+		return js.Item{}, err
 	}
 
 	if !item.Ok {
-		return et.Item{}, logs.Alertm(RECORD_NOT_FOUND)
+		return js.Item{}, logs.Alertm(RECORD_NOT_FOUND)
 	}
 
 	old_state := item.Key("_state")
 	if old_state == state {
-		return et.Item{
+		return js.Item{
 			Ok: true,
-			Result: et.Json{
+			Result: js.Json{
 				"message": RECORD_NOT_UPDATE,
 			}}, nil
 	}
 
-	return $2.Update(et.Json{
+	return $2.Update(js.Json{
 		"_state":   state,
 	}).
 		Where($2.Column("_id").Eq(id)).
@@ -787,10 +787,10 @@ func State$2(id, state string) (et.Item, error) {
 /**
 * Delete$2
 * @param id string
-* @return et.Item
+* @return js.Item
 * @return error
 **/
-func Delete$2(id string) (et.Item, error) {
+func Delete$2(id string) (js.Item, error) {
 	return State$2(id, utility.FOR_DELETE)
 }
 
@@ -802,10 +802,10 @@ func Delete$2(id string) (et.Item, error) {
 * @param page int
 * @param rows int
 * @param _select string
-* @return et.List
+* @return js.List
 * @return error
 **/
-func All$2(project_id, state, search string, page, rows int, _select string) (et.List, error) {	
+func All$2(project_id, state, search string, page, rows int, _select string) (js.List, error) {	
 	if state == "" {
 		state = utility.ACTIVE
 	}
@@ -957,13 +957,13 @@ const modelHandler = `package $1
 import (
 	"net/http"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/response"
 )
 
-func $2(project_id, id string, params et.Json) (et.Item, error) {
+func $2(project_id, id string, params js.Json) (js.Item, error) {
 
-	return et.Item{}, nil
+	return js.Item{}, nil
 }
 
 

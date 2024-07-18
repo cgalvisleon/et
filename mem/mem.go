@@ -1,6 +1,7 @@
 package mem
 
 import (
+	"strconv"
 	"sync"
 	"time"
 
@@ -31,7 +32,7 @@ func (c *Mem) Type() string {
 }
 
 // Set method to use in cache
-func (c *Mem) Set(key string, value interface{}, expiration time.Duration) interface{} {
+func (c *Mem) Set(key string, value string, expiration time.Duration) string {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -39,7 +40,7 @@ func (c *Mem) Set(key string, value interface{}, expiration time.Duration) inter
 	if ok {
 		item.Set(value)
 	} else {
-		item = NewItem(key, value)
+		item = New(key, value)
 		c.items[key] = item
 	}
 
@@ -57,12 +58,12 @@ func (c *Mem) Set(key string, value interface{}, expiration time.Duration) inter
 }
 
 // Get method to use in cache
-func (c *Mem) Get(key string, def interface{}) interface{} {
+func (c *Mem) Get(key string, def string) string {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
 	if item, ok := c.items[key]; ok {
-		return item.Get()
+		return item.Str()
 	}
 
 	return def
@@ -85,11 +86,12 @@ func (c *Mem) Del(key string) bool {
 func (c *Mem) Count(key string, expiration time.Duration) int {
 	item, ok := c.items[key]
 	if !ok {
-		c.Set(key, 1, expiration)
+		c.Set(key, "1", expiration)
 		return 1
 	} else {
 		result := item.Int() + 1
-		c.Set(key, result, expiration)
+		str := strconv.Itoa(result)
+		c.Set(key, str, expiration)
 		return result
 	}
 }
@@ -119,11 +121,12 @@ func (c *Mem) Keys() []string {
 }
 
 // Values method to use in cache
-func (c *Mem) Values() []interface{} {
-	values := make([]interface{}, 0, len(c.items))
+func (c *Mem) Values() []string {
+	values := make([]string, 0, len(c.items))
 
-	for _, value := range c.items {
-		values = append(values, value)
+	for _, item := range c.items {
+		str := item.Str()
+		values = append(values, str)
 	}
 
 	return values

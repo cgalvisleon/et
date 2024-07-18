@@ -1,4 +1,4 @@
-package et
+package js
 
 // SliceFindIndex find the index of an item in a slice
 func SliceFindIndex(item Json, list []Json, key string) int {

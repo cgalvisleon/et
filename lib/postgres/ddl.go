@@ -3,7 +3,7 @@ package lib
 import (
 	"strings"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/linq"
 	"github.com/cgalvisleon/et/strs"
 )
@@ -27,6 +27,8 @@ func ddlDefault(col *linq.Column) string {
 			return "DEFAULT FALSE"
 		case "TRUE":
 			return "DEFAULT TRUE"
+		case "NULL":
+			return "DEFAULT NULL"
 		default:
 			return strs.Format(`DEFAULT '%v'`, str)
 		}
@@ -87,7 +89,7 @@ func ddlDefault(col *linq.Column) string {
 		result = `0`
 	default:
 		val := col.Default
-		result = strs.Format(`%v`, et.Quote(val))
+		result = strs.Format(`%v`, js.Quote(val))
 	}
 
 	return strs.Append("DEFAULT", result, " ")

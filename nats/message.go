@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/message"
 	"github.com/cgalvisleon/et/utility"
 )
@@ -12,7 +12,7 @@ import (
 type Message struct {
 	Created_at time.Time `json:"created_at"`
 	Id         string    `json:"id"`
-	From       et.Json   `json:"from"`
+	From       js.Json   `json:"from"`
 	to         string
 	Tp         message.TpMessage `json:"tp"`
 	Channel    string            `json:"channel"`
@@ -20,7 +20,7 @@ type Message struct {
 }
 
 // NewMessage create a new message
-func NewMessage(from et.Json, message interface{}) Message {
+func NewMessage(from js.Json, message interface{}) Message {
 	id := utility.UUID()
 	return Message{
 		Created_at: time.Now(),
@@ -56,11 +56,11 @@ func (e Message) Encode() ([]byte, error) {
 }
 
 // Json return the message as json
-func (e Message) Json() (et.Json, error) {
-	result := et.Json{}
+func (e Message) Json() (js.Json, error) {
+	result := js.Json{}
 	err := result.Scan(e.Data)
 	if err != nil {
-		return et.Json{}, err
+		return js.Json{}, err
 	}
 
 	return result, nil

@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"strings"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/strs"
 )
 
@@ -55,7 +55,7 @@ func SQLParse(sql string, args ...any) string {
 
 	for i, arg := range args {
 		old := strs.Format(`{$%d}`, i+1)
-		new := strs.Format(`%v`, et.Unquote(arg))
+		new := strs.Format(`%v`, js.Unquote(arg))
 		sql = strings.ReplaceAll(sql, old, new)
 	}
 
@@ -65,13 +65,13 @@ func SQLParse(sql string, args ...any) string {
 /**
 * RowsItems return a items from a sql rows
 * @param rows *sql.Rows
-* @return et.Items
+* @return js.Items
 **/
-func RowsItems(rows *sql.Rows) et.Items {
-	var result et.Items = et.Items{}
+func RowsItems(rows *sql.Rows) js.Items {
+	var result js.Items = js.Items{}
 
 	for rows.Next() {
-		var item et.Item
+		var item js.Item
 		err := item.Scan(rows)
 		if err != nil {
 			continue
@@ -88,15 +88,15 @@ func RowsItems(rows *sql.Rows) et.Items {
 /**
 * RowsItem return a item from a sql rows
 * @param rows *sql.Rows
-* @return et.Item
+* @return js.Item
 **/
-func RowsItem(rows *sql.Rows) et.Item {
+func RowsItem(rows *sql.Rows) js.Item {
 	items := RowsItems(rows)
 	if items.Count == 0 {
-		return et.Item{}
+		return js.Item{}
 	}
 
-	return et.Item{
+	return js.Item{
 		Ok:     items.Ok,
 		Result: items.Result[0],
 	}
@@ -106,13 +106,13 @@ func RowsItem(rows *sql.Rows) et.Item {
 * DataItems return a items from a sql rows and source field
 * @param rows *sql.Rows
 * @param sourceField string
-* @return et.Items
+* @return js.Items
 **/
-func DataItems(rows *sql.Rows, sourceField string) et.Items {
-	var result et.Items = et.Items{Result: []et.Json{}}
+func DataItems(rows *sql.Rows, sourceField string) js.Items {
+	var result js.Items = js.Items{Result: []js.Json{}}
 
 	for rows.Next() {
-		var item et.Item
+		var item js.Item
 		err := item.Scan(rows)
 		if err != nil {
 			continue
@@ -130,15 +130,15 @@ func DataItems(rows *sql.Rows, sourceField string) et.Items {
 * DataItem return a item from a sql rows and source field
 * @param rows *sql.Rows
 * @param sourceField string
-* @return et.Item
+* @return js.Item
 **/
-func DataItem(rows *sql.Rows, sourceField string) et.Item {
+func DataItem(rows *sql.Rows, sourceField string) js.Item {
 	items := DataItems(rows, sourceField)
 	if items.Count == 0 {
-		return et.Item{}
+		return js.Item{}
 	}
 
-	return et.Item{
+	return js.Item{
 		Ok:     items.Ok,
 		Result: items.Result[0],
 	}

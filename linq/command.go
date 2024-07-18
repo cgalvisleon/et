@@ -4,7 +4,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
 )
 
@@ -46,7 +46,7 @@ type Values struct {
 	Linq        *Linq
 	Model       *Model
 	TypeCommand TypeCommand
-	Data        et.Json
+	Data        js.Json
 	Values      []*Value
 	Change      bool
 	IdT         string
@@ -56,12 +56,12 @@ type Values struct {
 
 /**
 * values returns a json with the values of the command
-* @return et.Json
+* @return js.Json
 **/
-func (l *Values) values() []et.Json {
-	var result []et.Json
+func (l *Values) values() []js.Json {
+	var result []js.Json
 	for _, v := range l.Values {
-		result = append(result, et.Json{
+		result = append(result, js.Json{
 			"column": v.Column.Name,
 			"old":    v.Old,
 			"new":    v.New,
@@ -74,10 +74,10 @@ func (l *Values) values() []et.Json {
 
 /**
 * Describe returns a json with the definition of the command
-* @return et.Json
+* @return js.Json
 **/
-func (l *Values) Describe() et.Json {
-	return et.Json{
+func (l *Values) Describe() js.Json {
+	return js.Json{
 		"Model":       l.Model.Describe(),
 		"typeCommand": l.TypeCommand.String(),
 		"data":        l.Data,
@@ -161,7 +161,7 @@ func newValues(from *Lfrom, tp TypeCommand) *Values {
 	return &Values{
 		Model:       from.Model,
 		TypeCommand: tp,
-		Data:        et.Json{},
+		Data:        js.Json{},
 		Values:      []*Value{},
 		Change:      false,
 		User:        "",
@@ -172,7 +172,7 @@ func newValues(from *Lfrom, tp TypeCommand) *Values {
 /**
 * consolidate values
 **/
-func (c *Values) consolidate(old, new et.Json) {
+func (c *Values) consolidate(old, new js.Json) {
 	if c.TypeCommand == Tpnone {
 		return
 	}
@@ -232,12 +232,12 @@ func (c *Values) consolidate(old, new et.Json) {
 * query, evaluate this model if use columnData and return the result for this condition
 * @param sql string
 * @param args ...any
-* @return et.Items
+* @return js.Items
 **/
-func (c *Values) query(sql string, args ...any) (et.Items, error) {
+func (c *Values) query(sql string, args ...any) (js.Items, error) {
 	items, err := c.Linq.query(sql, args...)
 	if err != nil {
-		return et.Items{}, err
+		return js.Items{}, err
 	}
 
 	return items, nil
@@ -247,13 +247,13 @@ func (c *Values) query(sql string, args ...any) (et.Items, error) {
 * data, execute a query in the database
 * @param sql string
 * @param args ...any
-* @return et.Items
+* @return js.Items
 * @return error
 **/
-func (c *Values) data(sql string, args ...any) (et.Items, error) {
+func (c *Values) data(sql string, args ...any) (js.Items, error) {
 	items, err := c.Linq.data(sql, args...)
 	if err != nil {
-		return et.Items{}, err
+		return js.Items{}, err
 	}
 
 	return items, nil
@@ -263,14 +263,14 @@ func (c *Values) data(sql string, args ...any) (et.Items, error) {
 * query, execute a query in the database
 * @param sql string
 * @param args ...any
-* @return et.Items
+* @return js.Items
 * @return error
 **/
-func (c *Values) exec(sql string, args ...any) (et.Items, error) {
+func (c *Values) exec(sql string, args ...any) (js.Items, error) {
 	var err error
 	items, err := c.Linq.query(sql, args...)
 	if err != nil {
-		return et.Items{}, err
+		return js.Items{}, err
 	}
 
 	return items, nil
@@ -278,18 +278,18 @@ func (c *Values) exec(sql string, args ...any) (et.Items, error) {
 
 /**
 * curren, return the current values of the model
-* @return et.Items
+* @return js.Items
 * @return error
 **/
-func (c *Values) curren() (et.Items, error) {
+func (c *Values) curren() (js.Items, error) {
 	currentSql, err := c.Linq.currentSql()
 	if err != nil {
-		return et.Items{}, err
+		return js.Items{}, err
 	}
 
 	result, err := c.query(currentSql)
 	if err != nil {
-		return et.Items{}, err
+		return js.Items{}, err
 	}
 
 	return result, nil
@@ -572,7 +572,7 @@ func (c *Values) DeleteCascade() error {
 * Insert method to use in linq
 * @return error
 **/
-func (m *Model) Insert(data et.Json) *Linq {
+func (m *Model) Insert(data js.Json) *Linq {
 	l := From(m)
 	l.TypeQuery = TpCommand
 	l.Values.Model = l.Froms[0].Model
@@ -586,7 +586,7 @@ func (m *Model) Insert(data et.Json) *Linq {
 * Update method to use in linq
 * @return error
 **/
-func (m *Model) Update(data et.Json) *Linq {
+func (m *Model) Update(data js.Json) *Linq {
 	l := From(m)
 	l.TypeQuery = TpCommand
 	l.Values.Model = l.Froms[0].Model
@@ -605,7 +605,7 @@ func (m *Model) Delete() *Linq {
 	l.TypeQuery = TpCommand
 	l.Values.Model = l.Froms[0].Model
 	l.Values.TypeCommand = TpDelete
-	l.Values.Data = et.Json{}
+	l.Values.Data = js.Json{}
 
 	return l
 }

@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/generic"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/go-chi/chi/v5"
 )
@@ -18,33 +18,33 @@ type Result struct {
 }
 
 // ScanBody function to scan the body of a request
-func ScanBody(r io.Reader) (et.Json, error) {
-	var result et.Json
+func ScanBody(r io.Reader) (js.Json, error) {
+	var result js.Json
 	err := json.NewDecoder(r).Decode(&result)
 	if err != nil {
-		return et.Json{}, err
+		return js.Json{}, err
 	}
 
 	return result, nil
 }
 
 // ScanStr function to scan a string
-func ScanStr(value string) (et.Json, error) {
+func ScanStr(value string) (js.Json, error) {
 	return ScanBody(strings.NewReader(value))
 }
 
 // ScanJson function to scan a json
-func ScanJson(value map[string]interface{}) (et.Json, error) {
-	var result et.Json = value
+func ScanJson(value map[string]interface{}) (js.Json, error) {
+	var result js.Json = value
 	return result, nil
 }
 
 // Client function to get the client information
-func Client(r *http.Request) et.Json {
+func Client(r *http.Request) js.Json {
 	now := utility.Now()
 	ctx := r.Context()
 
-	return et.Json{
+	return js.Json{
 		"date_of":   now,
 		"client_id": generic.New(ctx.Value("clientId")).Str(),
 		"name":      generic.New(ctx.Value("name")).Str(),
@@ -52,11 +52,11 @@ func Client(r *http.Request) et.Json {
 }
 
 // GetBody function to get the body of a request
-func GetBody(r *http.Request) (et.Json, error) {
-	var result et.Json
+func GetBody(r *http.Request) (js.Json, error) {
+	var result js.Json
 	err := json.NewDecoder(r.Body).Decode(&result)
 	if err != nil {
-		return et.Json{}, err
+		return js.Json{}, err
 	}
 	defer r.Body.Close()
 
@@ -64,8 +64,8 @@ func GetBody(r *http.Request) (et.Json, error) {
 }
 
 // GetQuery function to get the query of a request
-func GetQuery(r *http.Request) et.Json {
-	var result et.Json = et.Json{}
+func GetQuery(r *http.Request) js.Json {
+	var result js.Json = js.Json{}
 	values := r.URL.Query()
 	for key, value := range values {
 		if len(value) > 0 {
@@ -115,8 +115,8 @@ func JSON(w http.ResponseWriter, r *http.Request, statusCode int, dt interface{}
 }
 
 // ITEM function to return a json response
-func ITEM(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Item) error {
-	if &dt == (&et.Item{}) {
+func ITEM(w http.ResponseWriter, r *http.Request, statusCode int, dt js.Item) error {
+	if &dt == (&js.Item{}) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(statusCode)
 		return nil
@@ -131,8 +131,8 @@ func ITEM(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Item) er
 }
 
 // ITEMS function to return a json response
-func ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Items) error {
-	if &dt == (&et.Items{}) {
+func ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, dt js.Items) error {
+	if &dt == (&js.Items{}) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(statusCode)
 		return nil
@@ -148,7 +148,7 @@ func ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Items) 
 
 // HTTPError function to return a json response
 func HTTPError(w http.ResponseWriter, r *http.Request, statusCode int, message string) error {
-	msg := et.Json{
+	msg := js.Json{
 		"message": message,
 	}
 

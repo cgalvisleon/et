@@ -1,7 +1,7 @@
 package nats
 
 import (
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/nats-io/nats.go"
 )
@@ -58,7 +58,7 @@ func Publish(channel string, message interface{}) error {
 		return logs.Errorm(ERR_NOT_PUBSUB_SERVICE)
 	}
 
-	msg := NewMessage(et.Json{}, message)
+	msg := NewMessage(js.Json{}, message)
 	bt, err := msg.Encode()
 	if err != nil {
 		return err
@@ -79,7 +79,7 @@ func Telemetry(message interface{}) {
 	}
 
 	switch v := message.(type) {
-	case et.Json:
+	case js.Json:
 		logs.Log("telemetry", v.ToString())
 	default:
 		logs.Log("telemetry", message)
@@ -95,7 +95,7 @@ func Overflow(message interface{}) {
 	}
 
 	switch v := message.(type) {
-	case et.Json:
+	case js.Json:
 		logs.Log("overflow", v.ToString())
 	default:
 		logs.Log("overflow", message)

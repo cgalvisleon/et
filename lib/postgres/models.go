@@ -3,7 +3,7 @@ package lib
 import (
 	"database/sql"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 )
 
 /**
@@ -39,16 +39,16 @@ func defineModels(db *sql.DB) error {
 * GetModel get a model from the database
 * @param main string
 * @param name string
-* @return et.Json
+* @return js.Json
 **/
-func (d *Postgres) GetModel(main, name, kind string) (et.Item, error) {
+func (d *Postgres) GetModel(main, name, kind string) (js.Item, error) {
 	sql := `
 	SELECT * FROM core.MODELS
 	WHERE MAIN = $1 AND NAME = $2 AND KIND = $3;`
 
 	result, err := d.QueryOne(sql, main, name, kind)
 	if err != nil {
-		return et.Item{}, err
+		return js.Item{}, err
 	}
 
 	return result, nil
@@ -60,10 +60,10 @@ func (d *Postgres) GetModel(main, name, kind string) (et.Item, error) {
 * @param name string
 * @param kind string
 * @param version int
-* @param data et.Json
+* @param data js.Json
 * @return error
 **/
-func (d *Postgres) InsertModel(main, name, kind string, version int, data et.Json) error {
+func (d *Postgres) InsertModel(main, name, kind string, version int, data js.Json) error {
 	sql := `
 		INSERT INTO core.MODELS (MAIN, NAME, KIND, VERSION, _DATA)
 		VALUES ($1, $2, $3, $4, $5);`
@@ -82,10 +82,10 @@ func (d *Postgres) InsertModel(main, name, kind string, version int, data et.Jso
 * @param name string
 * @param kind string
 * @param version int
-* @param data et.Json
+* @param data js.Json
 * @return error
 **/
-func (d *Postgres) UpdateModel(main, name, kind string, version int, data et.Json) error {
+func (d *Postgres) UpdateModel(main, name, kind string, version int, data js.Json) error {
 	sql := `
 	UPDATE core.MODELS SET	
 	_DATA = $4
@@ -104,7 +104,7 @@ func (d *Postgres) UpdateModel(main, name, kind string, version int, data et.Jso
 * @param main string
 * @param name string
 * @param kind string
-* @return et.Item
+* @return js.Item
 **/
 func (d *Postgres) DeleteModel(main, name, kind string) error {
 	sql := `

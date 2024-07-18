@@ -3,7 +3,7 @@ package linq
 import (
 	"strings"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/strs"
 )
 
@@ -80,8 +80,8 @@ type Relation struct {
 }
 
 // Describe return a json with the definition of the relation
-func (r *Relation) Describe() et.Json {
-	return et.Json{
+func (r *Relation) Describe() js.Json {
+	return js.Json{
 		"foreignKey": r.ForeignKey,
 		"parent":     r.Parent.Name,
 		"parentKey":  r.ParentKey,

@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/message"
 	"github.com/cgalvisleon/et/nats"
@@ -92,7 +92,7 @@ func Ping() {
 }
 
 // Set the params of the service pubsub
-func Params(params et.Json) error {
+func Params(params js.Json) error {
 	if conn == nil {
 		return logs.Alertf(ERR_NOT_PUBSUB_SERVICE, "Params")
 	}

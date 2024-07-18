@@ -1,8 +1,6 @@
 package linq
 
-import (
-	"github.com/cgalvisleon/et/et"
-)
+import "github.com/cgalvisleon/et/js"
 
 // GroupBy struct to use in linq
 type Lgroup struct {
@@ -12,8 +10,8 @@ type Lgroup struct {
 }
 
 // Describe method to use in linq
-func (l *Lgroup) Describe() et.Json {
-	return et.Json{
+func (l *Lgroup) Describe() js.Json {
+	return js.Json{
 		"column": l.Column.Describe(),
 		"as":     l.AS,
 	}

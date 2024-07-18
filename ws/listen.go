@@ -1,7 +1,7 @@
 package ws
 
 import (
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
 	m "github.com/cgalvisleon/et/message"
 )
@@ -9,7 +9,7 @@ import (
 // Listen a client message
 func (c *Client) listen(messageType int, message []byte) {
 	send := func(ok bool, message string) {
-		msg := NewMessage(c.hub.Identify(), et.Json{
+		msg := NewMessage(c.hub.Identify(), js.Json{
 			"ok":      ok,
 			"message": message,
 		}, m.TpDirect)

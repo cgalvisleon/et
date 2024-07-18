@@ -1,7 +1,7 @@
 package linq
 
 import (
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/strs"
 )
 
@@ -59,20 +59,22 @@ var (
 
 // Define type columns in linq
 type Lcolumns struct {
-	Used    bool
-	Columns []*Lselect
+	Used     bool
+	Columns  []*Lselect
+	Distinct bool
 }
 
 // Describe method to use in linq
-func (l *Lcolumns) Describe() et.Json {
-	var columns []et.Json = []et.Json{}
+func (l *Lcolumns) Describe() js.Json {
+	var columns []js.Json = []js.Json{}
 	for _, c := range l.Columns {
 		columns = append(columns, c.Describe())
 	}
 
-	return et.Json{
-		"used":    l.Used,
-		"columns": columns,
+	return js.Json{
+		"used":     l.Used,
+		"columns":  columns,
+		"distinct": l.Distinct,
 	}
 }
 
@@ -101,10 +103,9 @@ type Linq struct {
 	Columns   []*Lselect
 	Atribs    []*Lselect
 	Selects   *Lcolumns
-	Data      *Lcolumns
+	Datas     *Lcolumns
 	Returns   *Lcolumns
 	Details   *Lcolumns
-	Distinct  bool
 	Wheres    []*Lwhere
 	Groups    []*Lgroup
 	Havings   []*Lwhere
@@ -117,72 +118,71 @@ type Linq struct {
 	Values    *Values
 	TypeQuery TypeQuery
 	Sql       string
-	Result    *et.Items
+	Result    *js.Items
 	as        int
-	setResult et.Json
+	setResult js.Json
 	debug     bool
 }
 
 /**
 * Describe return a json with the definition of the linq
-* @return et.Json
+* @return js.Json
 **/
-func (l *Linq) Describe() *et.Json {
-	var froms []et.Json = []et.Json{}
+func (l *Linq) Describe() *js.Json {
+	var froms []js.Json = []js.Json{}
 	for _, f := range l.Froms {
 		froms = append(froms, f.Describe())
 	}
 
-	var columns []et.Json = []et.Json{}
+	var columns []js.Json = []js.Json{}
 	for _, c := range l.Columns {
 		columns = append(columns, c.Describe())
 	}
 
-	var atribs []et.Json = []et.Json{}
+	var atribs []js.Json = []js.Json{}
 	for _, a := range l.Atribs {
 		atribs = append(atribs, a.Describe())
 	}
 
-	var wheres []et.Json = []et.Json{}
+	var wheres []js.Json = []js.Json{}
 	for _, w := range l.Wheres {
 		wheres = append(wheres, w.Describe())
 	}
 
-	var groups []et.Json = []et.Json{}
+	var groups []js.Json = []js.Json{}
 	for _, g := range l.Groups {
 		groups = append(groups, g.Describe())
 	}
 
-	var havings []et.Json = []et.Json{}
+	var havings []js.Json = []js.Json{}
 	for _, h := range l.Havings {
 		havings = append(havings, h.Describe())
 	}
 
-	var orders []et.Json = []et.Json{}
+	var orders []js.Json = []js.Json{}
 	for _, o := range l.Orders {
 		orders = append(orders, o.Describe())
 	}
 
-	var joins []et.Json = []et.Json{}
+	var joins []js.Json = []js.Json{}
 	for _, j := range l.Joins {
 		joins = append(joins, j.Describe())
 	}
 
-	var unions []et.Json = []et.Json{}
+	var unions []js.Json = []js.Json{}
 	for _, u := range l.Union {
 		unions = append(unions, *u.Describe())
 	}
 
-	return &et.Json{
+	return &js.Json{
 		"as":        l.as,
 		"froms":     froms,
 		"columns":   columns,
 		"atribs":    atribs,
 		"selects":   l.Selects.Describe(),
-		"data":      l.Data.Describe(),
+		"data":      l.Datas.Describe(),
 		"returns":   l.Returns.Describe(),
 		"details":   l.Details.Describe(),
-		"distinct":  l.Distinct,
 		"wheres":    wheres,
 		"groups":    groups,
 		"havings":   havings,

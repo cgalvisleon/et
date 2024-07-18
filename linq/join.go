@@ -1,8 +1,6 @@
 package linq
 
-import (
-	"github.com/cgalvisleon/et/et"
-)
+import "github.com/cgalvisleon/et/js"
 
 type TypeJoin int
 
@@ -34,8 +32,8 @@ type Ljoin struct {
 }
 
 // Describe method to use in linq
-func (l *Ljoin) Describe() et.Json {
-	return et.Json{
+func (l *Ljoin) Describe() js.Json {
+	return js.Json{
 		"t1":   l.T1.Describe(),
 		"t2":   l.T2.Describe(),
 		"on":   l.On.Describe(),

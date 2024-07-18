@@ -3,7 +3,7 @@ package linq
 import (
 	"regexp"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/strs"
 )
 
@@ -36,15 +36,15 @@ type Required struct {
 }
 
 // Describe return a json with the definition of the required
-func (r *Required) Describe() et.Json {
-	return et.Json{
+func (r *Required) Describe() js.Json {
+	return js.Json{
 		"required": r.Required,
 		"message":  r.Message,
 	}
 }
 
 // Details is a function for details
-type FuncDetail func(col *Column, data *et.Json)
+type FuncDetail func(col *Column, data *js.Json)
 
 // Validation tipe function
 type Validation func(col *Column, value interface{}) bool
@@ -57,7 +57,7 @@ type Column struct {
 	Description string
 	TypeColumn  TypeColumn
 	TypeData    TypeData
-	Definition  et.Json
+	Definition  js.Json
 	Default     interface{}
 	RelationTo  *Relation
 	FuncDetail  FuncDetail
@@ -168,18 +168,18 @@ func newColumn(model *Model, name, description string, typeColumm TypeColumn, ty
 }
 
 // Describe carapteristics of column
-func (c *Column) Describe() et.Json {
-	relationTo := et.Json{}
+func (c *Column) Describe() js.Json {
+	relationTo := js.Json{}
 	if c.RelationTo != nil {
 		relationTo = c.RelationTo.Describe()
 	}
 
-	required := et.Json{}
+	required := js.Json{}
 	if c.Required != nil {
 		required = c.Required.Describe()
 	}
 
-	return et.Json{
+	return js.Json{
 		"schema":      c.Model.Schema.Name,
 		"model":       c.Model.Name,
 		"name":        c.Name,

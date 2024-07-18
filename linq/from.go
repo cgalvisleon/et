@@ -3,7 +3,7 @@ package linq
 import (
 	"fmt"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/strs"
 )
 
@@ -56,13 +56,13 @@ type Lfrom struct {
 }
 
 // Describe method to use in linq
-func (l *Lfrom) Describe() et.Json {
+func (l *Lfrom) Describe() js.Json {
 	model := ""
 	if l.Model != nil {
 		model = l.Model.Name
 	}
 
-	return et.Json{
+	return js.Json{
 		"model": model,
 		"as":    l.AS,
 	}
@@ -111,7 +111,7 @@ func From(model *Model) *Linq {
 		Columns:   []*Lselect{},
 		Atribs:    []*Lselect{},
 		Selects:   NewColumns(),
-		Data:      NewColumns(),
+		Datas:     NewColumns(),
 		Returns:   NewColumns(),
 		Details:   NewColumns(),
 		Wheres:    []*Lwhere{},
@@ -122,8 +122,8 @@ func From(model *Model) *Linq {
 		Offset:    0,
 		TypeQuery: TpQuery,
 		Sql:       "",
-		Result:    &et.Items{},
-		setResult: et.Json{},
+		Result:    &js.Items{},
+		setResult: js.Json{},
 	}
 
 	as := getAs(result)
@@ -185,7 +185,7 @@ func (l *Linq) From(model *Model) *Linq {
 	return l
 }
 
-func (l *Linq) SetResult(values et.Json) *Linq {
+func (l *Linq) Set(values js.Json) *Linq {
 	l.setResult = values
 
 	return l

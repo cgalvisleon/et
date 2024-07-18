@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/redis/go-redis/v9"
 )
@@ -24,7 +24,7 @@ type MessageBroadcast struct {
 	To      string      `json:"channel"`
 	Msg     Message     `json:"msg"`
 	Ignored []string    `json:"ignored"`
-	From    et.Json     `json:"from"`
+	From    js.Json     `json:"from"`
 }
 
 /**
@@ -162,10 +162,10 @@ func (a *RedisAdapter) subscribe(channel string, f func(interface{})) {
 * @param to string
 * @param msg Message
 * @param ignored []string
-* @param from et.Json
+* @param from js.Json
 * @return error
 **/
-func (a *RedisAdapter) Broadcast(to string, msg Message, ignored []string, from et.Json) error {
+func (a *RedisAdapter) Broadcast(to string, msg Message, ignored []string, from js.Json) error {
 	mbroadcast := MessageBroadcast{
 		Kind:    TpAll,
 		To:      to,
@@ -189,7 +189,7 @@ func (a *RedisAdapter) Direct(to string, msg Message) error {
 		To:      to,
 		Msg:     msg,
 		Ignored: []string{},
-		From:    et.Json{},
+		From:    js.Json{},
 	}
 
 	return a.publish(mbroadcast)
@@ -198,10 +198,10 @@ func (a *RedisAdapter) Direct(to string, msg Message) error {
 /**
 * Command send a command to all clients in the cluster hub
 * @param command string
-* @param params et.Json
+* @param params js.Json
 * @return error
 **/
-func (a *RedisAdapter) Command(command string, params et.Json) error {
+func (a *RedisAdapter) Command(command string, params js.Json) error {
 	mbroadcast := MessageBroadcast{
 		Kind:    TpDirect,
 		To:      command,

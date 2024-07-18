@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"sync"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/linq"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
@@ -78,7 +78,7 @@ func (d *Postgres) Type() string {
 
 /**
 * Connect to the database
-* @param params et.Json
+* @param params js.Json
 * @return *sql.DB
 * @return error
 **/
@@ -143,16 +143,24 @@ func (d *Postgres) Connect() (*sql.DB, error) {
 }
 
 /**
+* UsedCore return if the core is used
+* @return bool
+**/
+func (d *Postgres) UsedCore() bool {
+	return d.Params.UsedCore
+}
+
+/**
 * Query execute a query
 * @param query string
 * @param args ...any
-* @return et.Items
+* @return js.Items
 * @return error
 **/
-func (d *Postgres) Query(query string, args ...any) (et.Items, error) {
+func (d *Postgres) Query(query string, args ...any) (js.Items, error) {
 	rows, err := d.DB.Query(query, args...)
 	if err != nil {
-		return et.Items{}, err
+		return js.Items{}, err
 	}
 
 	defer rows.Close()
@@ -166,20 +174,20 @@ func (d *Postgres) Query(query string, args ...any) (et.Items, error) {
 * QueryOne execute a query and return one row
 * @param query string
 * @param args ...any
-* @return et.Item
+* @return js.Item
 * @return error
 **/
-func (d *Postgres) QueryOne(query string, args ...any) (et.Item, error) {
+func (d *Postgres) QueryOne(query string, args ...any) (js.Item, error) {
 	items, err := d.Query(query, args...)
 	if err != nil {
-		return et.Item{}, err
+		return js.Item{}, err
 	}
 
 	if items.Count == 0 {
-		return et.Item{}, nil
+		return js.Item{}, nil
 	}
 
-	return et.Item{
+	return js.Item{
 		Ok:     true,
 		Result: items.Result[0],
 	}, nil

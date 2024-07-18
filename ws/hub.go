@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
 	m "github.com/cgalvisleon/et/message"
 	"github.com/cgalvisleon/et/strs"
@@ -88,10 +88,10 @@ func (h *Hub) Run() {
 
 /**
 * Identify the hub
-* @return et.Json
+* @return js.Json
 **/
-func (h *Hub) Identify() et.Json {
-	return et.Json{
+func (h *Hub) Identify() js.Json {
+	return js.Json{
 		"id":   h.Id,
 		"name": h.Name,
 	}
@@ -110,7 +110,7 @@ func (h *Hub) onConnect(client *Client) {
 
 	logs.Debug("Client connected", client.Id, client.Name)
 
-	msg := NewMessage(h.Identify(), et.Json{
+	msg := NewMessage(h.Identify(), js.Json{
 		"ok":      true,
 		"message": "Connected successfully",
 		"client":  client.Identify(),
@@ -139,7 +139,7 @@ func (h *Hub) onDisconnect(client *Client) {
 	h.clients[len(h.clients)-1] = nil
 	h.clients = h.clients[:len(h.clients)-1]
 
-	msg := NewMessage(h.Identify(), et.Json{
+	msg := NewMessage(h.Identify(), js.Json{
 		"ok":      true,
 		"message": "Client disconnected",
 		"client":  client.Identify(),
@@ -181,10 +181,10 @@ func (h *Hub) connect(socket *websocket.Conn, clientId, name string) (*Client, e
 * @param channel *Channel
 * @param msg Message
 * @param ignored []string
-* @param from et.Json
+* @param from js.Json
 * @return error
 **/
-func (h *Hub) broadcast(channel *Channel, msg Message, ignored []string, from et.Json) error {
+func (h *Hub) broadcast(channel *Channel, msg Message, ignored []string, from js.Json) error {
 	msg.Channel = channel.Low()
 	msg.From = from
 	msg.Ignored = ignored
@@ -336,10 +336,10 @@ func (h *Hub) SetName(name string) {
 * @param channel string
 * @param msg Message
 * @param ignored []string
-* @param from et.Json
+* @param from js.Json
 * @return error
 **/
-func (h *Hub) Publish(channel string, msg Message, ignored []string, from et.Json) error {
+func (h *Hub) Publish(channel string, msg Message, ignored []string, from js.Json) error {
 	ch := h.getChanel(channel)
 	if len(ch.Subscribers) == 0 {
 		return logs.Alertf(ERR_CHANNEL_NOT_SUBSCRIBERS, channel)
@@ -353,10 +353,10 @@ func (h *Hub) Publish(channel string, msg Message, ignored []string, from et.Jso
 * @param channel string
 * @param msg Message
 * @param ignored []string
-* @param from et.Json
+* @param from js.Json
 * @return error
 **/
-func (h *Hub) Mute(channel string, msg Message, ignored []string, from et.Json) error {
+func (h *Hub) Mute(channel string, msg Message, ignored []string, from js.Json) error {
 	ch := h.getChanel(channel)
 
 	return h.broadcast(ch, msg, ignored, from)

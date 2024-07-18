@@ -3,7 +3,7 @@ package linq
 import (
 	"strings"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/strs"
 )
 
@@ -54,10 +54,10 @@ type Constraint struct {
 
 /**
 * Describe return a json with the definition of the constraint
-* @return et.Json
+* @return js.Json
 **/
-func (c *Constraint) Describe() et.Json {
-	return et.Json{
+func (c *Constraint) Describe() js.Json {
+	return js.Json{
 		"foreignKey": c.ForeignKey,
 		"parent":     c.Parent.Name,
 		"parentKey":  c.ParentKey,
@@ -98,10 +98,10 @@ type Index struct {
 
 /**
 * Describe return a json with the definition of the index
-* @return et.Json
+* @return js.Json
 **/
-func (i *Index) Describe() et.Json {
-	return et.Json{
+func (i *Index) Describe() js.Json {
+	return js.Json{
 		"column": i.Column.Name,
 		"asc":    i.Asc,
 	}
@@ -110,18 +110,18 @@ func (i *Index) Describe() et.Json {
 /**
 * Trigger is a function for trigger
 * @param model *Model
-* @param old et.Json
-* @param new et.Json
-* @param data et.Json
+* @param old js.Json
+* @param new js.Json
+* @param data js.Json
 * @return error
 **/
 type Trigger func(model *Model, value *Values) error
 
 /**
 * Listener is a function for listener
-* @param data et.Json
+* @param data js.Json
 **/
-type Listener func(data et.Json)
+type Listener func(data js.Json)
 
 /**
 * RelationTo is a struct for relation to
@@ -133,10 +133,10 @@ type RelationTo struct {
 
 /**
 * Describe return a json with the definition of the relation to
-* @return et.Json
+* @return js.Json
 **/
-func (r *RelationTo) Describe() et.Json {
-	return et.Json{
+func (r *RelationTo) Describe() js.Json {
+	return js.Json{
 		"primaryKey": r.PrimaryKey.Name,
 		"foreignKey": r.ForeignKey.Name,
 	}
@@ -235,10 +235,10 @@ func NewModel(schema *Schema, name, description string, version int) *Model {
 
 /**
 * Describe return a json with the definition of the model
-* @return et.Json
+* @return js.Json
 **/
-func (m *Model) Describe() et.Json {
-	var columns []et.Json = []et.Json{}
+func (m *Model) Describe() js.Json {
+	var columns []js.Json = []js.Json{}
 	for _, v := range m.Columns {
 		columns = append(columns, v.Describe())
 	}
@@ -248,22 +248,22 @@ func (m *Model) Describe() et.Json {
 		primaryKeys = append(primaryKeys, v.Name)
 	}
 
-	var foreignKey []et.Json = []et.Json{}
+	var foreignKey []js.Json = []js.Json{}
 	for _, v := range m.ForeignKey {
 		foreignKey = append(foreignKey, v.Describe())
 	}
 
-	var index []et.Json = []et.Json{}
+	var index []js.Json = []js.Json{}
 	for _, v := range m.Index {
 		index = append(index, v.Describe())
 	}
 
-	var unique []et.Json = []et.Json{}
+	var unique []js.Json = []js.Json{}
 	for _, v := range m.Unique {
 		unique = append(unique, v.Describe())
 	}
 
-	var relationTo []et.Json = []et.Json{}
+	var relationTo []js.Json = []js.Json{}
 	for _, v := range m.RelationTo {
 		relationTo = append(relationTo, v.Describe())
 	}
@@ -288,7 +288,7 @@ func (m *Model) Describe() et.Json {
 		source = m.ColumnData.Name
 	}
 
-	result := et.Json{
+	result := js.Json{
 		"schema":            m.Schema.Name,
 		"name":              m.Name,
 		"tag":               m.Tag,
@@ -317,6 +317,14 @@ func (m *Model) Describe() et.Json {
 	}
 
 	return result
+}
+
+/**
+* Kind
+* @return string
+**/
+func (m *Model) Kind() string {
+	return "model"
 }
 
 /**

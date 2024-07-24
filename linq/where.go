@@ -128,7 +128,7 @@ func (w *Lwhere) setLinq(l *Linq) *Lwhere {
 			continue
 		}
 
-		_from := l.GetFrom(_select.Column.Model)
+		_from := l.From(_select.Column.Model)
 		_select.From = _from
 	}
 

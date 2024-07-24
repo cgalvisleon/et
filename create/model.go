@@ -569,9 +569,9 @@ import (
 	"net/http"
 
 	"github.com/cgalvisleon/et/js"
-	"github.com/cgalvisleon/et/generic"
 	"github.com/cgalvisleon/et/linq"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/go-chi/chi/v5"
@@ -591,12 +591,12 @@ func Define$2(db *linq.Database) error {
 	$2 = linq.NewModel($3, "$4", "Tabla", 1)
 	$2.DefineColumn("date_make", "", linq.TpDate, "NOW()")
 	$2.DefineColumn("date_update", "", linq.TpDate, "NOW()")
-	$2.DefineColumn("_state", "", linq.TpStatus, utility.ACTIVE)
-	$2.DefineColumn("_id", "", linq.TpKey, "-1")
 	$2.DefineColumn("project_id", "", linq.TpKey, "-1")
+	$2.DefineColumn("_state", "", linq.TpStatus, utility.ACTIVE)
+	$2.DefineColumn("_id", "", linq.TpKey, "-1")	
 	$2.DefineColumn("name", "", linq.TpText, "")
 	$2.DefineColumn("description", "", linq.TpMemo, "")
-	$2.DefineColumn("_data", "", linq.TpJson, "{}")
+	$2.DefineColumn("_data", "", linq.TpSource, "{}")
 	$2.DefineColumn("index", "", linq.TpSerie, 0)
 	$2.DefinePrimaryKey([]string{"_id"})
 	$2.DefineIndex([]string{
@@ -614,22 +614,22 @@ func Define$2(db *linq.Database) error {
 		},
 	})
 	$2.DefineIntegrity(true)
-	$2.DefineTrigger(linq.BeforeInsert, func(model *linq.Model, old, new *js.Json, data js.Json) error {
+	$2.DefineTrigger(linq.BeforeInsert, func(model *linq.Model, values *linq.Values) error {
 		return nil
 	})
-	$2.DefineTrigger(linq.AfterInsert, func(model *linq.Model, old, new *js.Json, data js.Json) error {
+	$2.DefineTrigger(linq.AfterInsert, func(model *linq.Model, values *linq.Values) error {
 		return nil
 	})
-	$2.DefineTrigger(linq.BeforeUpdate, func(model *linq.Model, old, new *js.Json, data js.Json) error {
+	$2.DefineTrigger(linq.BeforeUpdate, func(model *linq.Model, values *linq.Values) error {
 		return nil
 	})
-	$2.DefineTrigger(linq.AfterUpdate, func(model *linq.Model, old, new *js.Json, data js.Json) error {
+	$2.DefineTrigger(linq.AfterUpdate, func(model *linq.Model, values *linq.Values) error {
 		return nil
 	})
-	$2.DefineTrigger(linq.BeforeDelete, func(model *linq.Model, old, new *js.Json, data js.Json) error {
+	$2.DefineTrigger(linq.BeforeDelete, func(model *linq.Model, values *linq.Values) error {
 		return nil
 	})
-	$2.DefineTrigger(linq.AfterDelete, func(model *linq.Model, old, new *js.Json, data js.Json) error {
+	$2.DefineTrigger(linq.AfterDelete, func(model *linq.Model, values *linq.Values) error {
 		return nil
 	})
 	$2.OnListener = func(data js.Json) {
@@ -650,25 +650,30 @@ func Define$2(db *linq.Database) error {
 * @return error
 **/
 func Get$2ById(id string) (js.Item, error) {	
-	result, err := $2.Data().
-		Where($2.Column("_id").Eq(id)).
+	if !utility.ValidId(id) {
+		return js.Item{}, logs.NewErrorf(msg.MSG_ATRIB_REQUIRED, "_id")
+	}
+
+	item, err := $2.Data().
+		Where($2.Col("_id").Eq(id)).
 		First()
 	if err != nil {
 		return js.Item{}, err
 	}
 	
-	return result, nil	
+	return item, nil	
 }
 
 /**
 * Insert$2
 * @param project_id string
+* @param state string
 * @param id string
 * @param data js.Json
 * @return js.Item
 * @return error
 **/
-func Insert$2(project_id, id, state string, data js.Json) (js.Item, error) {
+func Insert$2(project_id, state, id string, data js.Json, user_id string) (js.Item, error) {
 	if !utility.ValidId(project_id) {
 		return js.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "project_id")
 	}
@@ -677,8 +682,9 @@ func Insert$2(project_id, id, state string, data js.Json) (js.Item, error) {
 		return js.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "_id")
 	}
 
+	id = utility.GenId(id)
 	item, err := $2.Data("_state", "_id").
-		Where($2.Column("_id").Eq(id)).
+		Where($2.Col("_id").Eq(id)).
 		First()
 	if err != nil {
 		return js.Item{}, err
@@ -690,12 +696,18 @@ func Insert$2(project_id, id, state string, data js.Json) (js.Item, error) {
 			Result: item.Result,
 		}, nil
 	}
-
-	id = utility.GenId(id)
+	
 	data["project_id"] = project_id
+	data["_state"] = state
 	data["_id"] = id
-	result $2.Insert(data).		
-		ExecOne()
+	data["user_id"] = user_id
+	item, err = $2.Insert(data).		
+		Exec()
+	if err != nil {
+		return js.Item{}, err
+	}
+
+	return item, nil
 }
 
 /**
@@ -707,14 +719,14 @@ func Insert$2(project_id, id, state string, data js.Json) (js.Item, error) {
 * @return js.Item
 * @return error
 **/
-func UpSert$2(project_id, id, data js.Json, user_id string) (js.Item, error) {
-	item, err := Insert$2(project_id, id, utility.ACTIVE, data, user_id)
+func UpSert$2(project_id, id string, data js.Json, user_id string) (js.Item, error) {
+	item, err := Insert$2(project_id, utility.ACTIVE, id, data, user_id)
 	if err != nil {
 		return js.Item{}, err
 	}
 
 	if item.Ok {
-		item, err = GetTypoById(project_id, id)
+		item, err = Get$2ById(id)
 		if err != nil {
 			return js.Item{}, err
 		}
@@ -726,18 +738,16 @@ func UpSert$2(project_id, id, data js.Json, user_id string) (js.Item, error) {
 	if current_state != utility.ACTIVE {
 		return js.Item{}, logs.Alertf(MSG_STATE_NOT_ACTIVE, current_state)
 	}
-
-	data["project_id"] = project_id
-	data["_id"] = id
+	
 	data["user_id"] = user_id	
 	item, err = $2.Update(data).
 		Where($2.Col("_id").Eq(id)).
-		ExecOne()
+		Exec()
 	if err != nil {
 		return js.Item{}, err
 	}
 
-	item, err = Get$2ById(project_id, id)
+	item, err = Get$2ById(id)
 	if err != nil {
 		return js.Item{}, err
 	}
@@ -758,14 +768,14 @@ func State$2(id, state string) (js.Item, error) {
 	}
 
 	item, err := $2.Data("_state").
-		Where($2.Column("_id").Eq(id)).
+		Where($2.Col("_id").Eq(id)).
 		First()
 	if err != nil {
 		return js.Item{}, err
 	}
 
 	if !item.Ok {
-		return js.Item{}, logs.Alertm(RECORD_NOT_FOUND)
+		return js.Item{}, logs.Alertm(msg.RECORD_NOT_FOUND)
 	}
 
 	old_state := item.Key("_state")
@@ -773,15 +783,15 @@ func State$2(id, state string) (js.Item, error) {
 		return js.Item{
 			Ok: true,
 			Result: js.Json{
-				"message": RECORD_NOT_UPDATE,
+				"message": msg.RECORD_NOT_UPDATE,
 			}}, nil
 	}
 
 	return $2.Update(js.Json{
 		"_state":   state,
 	}).
-		Where($2.Column("_id").Eq(id)).
-		ExecOne()	
+		Where($2.Col("_id").Eq(id)).
+		Exec()	
 }
 
 /**
@@ -814,29 +824,29 @@ func All$2(project_id, state, search string, page, rows int, _select string) (js
 
 	if search != "" {
 		return $2.Data(_select).
-			Where($2.Column("project_id").In("-1", project_id)).
-			And($2.Concat("NAME:", $2.Column("name"), "DESCRIPTION:", $2.Column("description"), "DATA:", $2.Column("_data"), ":").Like("%"+search+"%")).
-			OrderBy($2.Column("name")).
+			Where($2.Col("project_id").In("-1", project_id)).
+			And(linq.Concat("NAME:", $2.Col("name"), "DESCRIPTION:", $2.Col("description"), "DATA:", $2.Col("_data"), ":").Like("%"+search+"%")).
+			OrderBy($2.Col("name")).
 			List(page, rows)
 	} else if auxState == "*" {
 		state = utility.FOR_DELETE
 
 		return $2.Data(_select).
-			Where($2.Column("_state").Neg(state)).
-			And($2.Column("project_id").In("-1", project_id)).
-			OrderBy($2.Column("name")).
+			Where($2.Col("_state").Neg(state)).
+			And($2.Col("project_id").In("-1", project_id)).
+			OrderBy($2.Col("name")).
 			List(page, rows)
 	} else if auxState == "0" {
 		return $2.Data(_select).
-			Where($2.Column("_state").In("-1", state)).
-			And($2.Column("project_id").In("-1", project_id)).
-			OrderBy($2.Column("name")).
+			Where($2.Col("_state").In("-1", state)).
+			And($2.Col("project_id").In("-1", project_id)).
+			OrderBy($2.Col("name")).
 			List(page, rows)
 	} else {
 		return $2.Data(_select).
-			Where($2.Column("_state").Eq(state)).
-			And($2.Column("project_id").In("-1", project_id)).
-			OrderBy($2.Column("name")).
+			Where($2.Col("_state").Eq(state)).
+			And($2.Col("project_id").In("-1", project_id)).
+			OrderBy($2.Col("name")).
 			List(page, rows)
 	}
 }
@@ -849,9 +859,10 @@ func All$2(project_id, state, search string, page, rows int, _select string) (js
 func (rt *Router) upSert$2(w http.ResponseWriter, r *http.Request) {
 	body, _ := response.GetBody(r)
 	project_id := body.Str("project_id")
-	id := body.Str("id")	
+	id := body.Str("id")
+	user_id := body.Str("user_id")
 
-	result, err := Insert$2(project_id, id, body)
+	result, err := UpSert$2(project_id, id, body, user_id)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -938,11 +949,11 @@ func (rt *Router) all$2(w http.ResponseWriter, r *http.Request) {
 
 /** Copy this code to router.go
 	// $2
-	er.ProtectRoute(r, er.Get, "/$5/{id}", rt.get$2ById, PackageName, PackagePath, Host)
-	er.ProtectRoute(r, er.Post, "/$5", rt.upSert$2, PackageName, PackagePath, Host)
-	er.ProtectRoute(r, er.Put, "/$5/state/{id}", rt.state$2, PackageName, PackagePath, Host)
-	er.ProtectRoute(r, er.Delete, "/$5/{id}", rt.delete$2, PackageName, PackagePath, Host)
-	er.ProtectRoute(r, er.Get, "/$5/all", rt.all$2, PackageName, PackagePath, Host)
+	router.Protect(r, router.Get, "/$5/{id}", rt.get$2ById, PackageName, PackagePath, host)
+	router.Protect(r, router.Post, "/$5", rt.upSert$2, PackageName, PackagePath, host)
+	router.Protect(r, router.Put, "/$5/state/{id}", rt.state$2, PackageName, PackagePath, host)
+	router.Protect(r, router.Delete, "/$5/{id}", rt.delete$2, PackageName, PackagePath, host)
+	router.Protect(r, router.Get, "/$5/all", rt.all$2, PackageName, PackagePath, host)
 **/
 
 /** Copy this code to func initModel in model.go
@@ -986,7 +997,7 @@ func (rt *Router) $3(w http.ResponseWriter, r *http.Request) {
 
 /** Copy this code to router.go
 	// $2
-	er.ProtectRoute(r, er.Post, "/$3", rt.$2, PackageName, PackagePath, Host)	
+	router.Protect(r, router.Post, "/$3", rt.$2, PackageName, PackagePath, host)	
 **/
 `
 

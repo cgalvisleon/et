@@ -89,6 +89,10 @@ func (l *Lselect) As() string {
 
 // Details method to use in linq
 func (l *Lselect) FuncDetail(data *js.Json) {
+	if l.Column.FuncDetail == nil {
+		return
+	}
+
 	l.Column.FuncDetail(l.Column, data)
 }
 
@@ -100,7 +104,7 @@ func (l *Linq) GetDetail(column *Column) *Lselect {
 		}
 	}
 
-	lform := l.GetFrom(column.Model)
+	lform := l.From(column.Model)
 	result := &Lselect{
 		Linq:       l,
 		From:       lform,
@@ -122,8 +126,8 @@ func (l *Linq) GetAtrib(column *Column) *Lselect {
 	}
 
 	var result *Lselect
-	l.GetColumn(column.Model.ColumnData)
-	lform := l.GetFrom(column.Model)
+	l.GetColumn(column.Model.ColumnSource)
+	lform := l.From(column.Model)
 	result = &Lselect{
 		Linq:       l,
 		From:       lform,
@@ -151,7 +155,7 @@ func (l *Linq) GetColumn(column *Column) *Lselect {
 	case TpAtrib:
 		result = l.GetAtrib(column)
 	default:
-		lform := l.GetFrom(column.Model)
+		lform := l.From(column.Model)
 		result = &Lselect{
 			Linq:       l,
 			From:       lform,
@@ -221,12 +225,12 @@ func (m *Model) Distinct() *Linq {
 
 // Select SourceField a linq with data
 func (m *Model) Data(sel ...interface{}) *Linq {
-	if m.ColumnData == nil {
+	if m.ColumnSource == nil {
 		return m.Select(sel...)
 	}
 
 	l := From(m)
-	l.Datas.Used = m.ColumnData != nil
+	l.Datas.Used = m.ColumnSource != nil
 
 	return l.Data(sel...)
 }

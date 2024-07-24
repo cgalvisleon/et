@@ -66,7 +66,13 @@ type Driver interface {
 	DCL(command string, params js.Json) error
 	// Listener
 	SetListen(handler HandleListen)
+	// Vars
+	SetVar(key, value string) error
+	DelVal(key string) error
+	Var(key string) (string, error)
+	VarInt(key string) (int64, error)
 	// Serires
+	UUIndex() (int64, error)
 	NextSerie(tag string) (int, error)
 	NextCode(tag, format string) (string, error)
 	SetSerie(tag string, val int) error

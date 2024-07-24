@@ -118,9 +118,10 @@ type Linq struct {
 	Values    *Values
 	TypeQuery TypeQuery
 	Sql       string
-	Result    *js.Items
+	Args      []any
+	Result    *js.Item
 	as        int
-	setResult js.Json
+	sets      js.Json
 	debug     bool
 }
 

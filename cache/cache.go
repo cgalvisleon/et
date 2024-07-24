@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/cgalvisleon/et/envar"
@@ -110,7 +111,12 @@ func Set(key string, value interface{}, expiration time.Duration) interface{} {
 	case js.Item:
 		return conn.Set(key, v.ToString(), expiration)
 	default:
-		return conn.Set(key, value, expiration)
+		val, ok := value.(string)
+		if ok {
+			return conn.Set(key, val, expiration)
+		}
+
+		return val
 	}
 }
 
@@ -127,7 +133,7 @@ func SetH(key string, value interface{}) interface{} {
 
 	expiration := time.Hour * 1
 
-	return conn.Set(key, value, expiration)
+	return Set(key, value, expiration)
 }
 
 /**
@@ -143,7 +149,7 @@ func SetD(key string, value interface{}) interface{} {
 
 	expiration := time.Hour * 24
 
-	return conn.Set(key, value, expiration)
+	return Set(key, value, expiration)
 }
 
 /**
@@ -159,7 +165,7 @@ func SetW(key string, value interface{}) interface{} {
 
 	expiration := time.Hour * 24 * 7
 
-	return conn.Set(key, value, expiration)
+	return Set(key, value, expiration)
 }
 
 /**
@@ -175,7 +181,7 @@ func SetM(key string, value interface{}) interface{} {
 
 	expiration := time.Hour * 24 * 30
 
-	return conn.Set(key, value, expiration)
+	return Set(key, value, expiration)
 }
 
 /**
@@ -189,7 +195,32 @@ func Get(key string, def interface{}) interface{} {
 		logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
 
-	return conn.Get(key, def)
+	if def == nil {
+		result := conn.Get(key, "<nil>")
+		if result == "<nil>" {
+			return nil
+		}
+
+		return result
+	}
+
+	switch v := def.(type) {
+	case js.Json:
+		return conn.Get(key, v.ToString())
+	case js.Items:
+		return conn.Get(key, v.ToString())
+	case js.Item:
+		return conn.Get(key, v.ToString())
+	case string:
+		return conn.Get(key, v)
+	default:
+		val, ok := v.(string)
+		if ok {
+			return conn.Get(key, val)
+		}
+
+		return val
+	}
 }
 
 /**
@@ -256,9 +287,9 @@ func Keys() []string {
 
 /**
 * Values return all values in cache
-* @return []interface{}
+* @return []string
 **/
-func Values() []interface{} {
+func Values() []string {
 	if conn == nil {
 		logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
@@ -277,12 +308,12 @@ func Json(key string) (js.Json, error) {
 		return js.Json{}, logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
 
-	result := js.Json{}
 	val := Get(key, nil)
 	if val == nil {
-		return result, nil
+		return js.Json{}, nil
 	}
 
+	result := js.Json{}
 	err := result.Scan(val)
 	if err != nil {
 		return js.Json{}, logs.Alert(err)
@@ -302,18 +333,22 @@ func Items(key string) (js.Items, error) {
 		return js.Items{}, logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
 
-	result := js.Items{}
 	val := Get(key, nil)
 	if val == nil {
-		return result, nil
+		return js.Items{}, nil
 	}
 
-	err := result.Scan(val)
+	jsonString := val.(string)
+	var result []js.Json
+	err := json.Unmarshal([]byte(jsonString), &result)
 	if err != nil {
-		return js.Items{}, logs.Alert(err)
+		return js.Items{}, err
 	}
 
-	return result, nil
+	return js.Items{
+		Ok:     true,
+		Result: result,
+	}, nil
 }
 
 /**
@@ -323,17 +358,24 @@ func Items(key string) (js.Items, error) {
 * @return error
 **/
 func Item(key string) (js.Item, error) {
-	items, err := Items(key)
-	if err != nil {
-		return js.Item{}, logs.Alert(err)
+	if conn == nil {
+		return js.Item{}, logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
 
-	if items.Count == 0 {
+	val := Get(key, nil)
+	if val == nil {
 		return js.Item{}, nil
 	}
 
+	jsonString := val.(string)
+	var result js.Json
+	err := json.Unmarshal([]byte(jsonString), &result)
+	if err != nil {
+		return js.Item{}, err
+	}
+
 	return js.Item{
-		Ok:     items.Ok,
-		Result: items.Result[0],
+		Ok:     true,
+		Result: result,
 	}, nil
 }

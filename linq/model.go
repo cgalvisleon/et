@@ -162,7 +162,7 @@ type Model struct {
 	Hidden               []*Column
 	Required             []*Column
 	ColumnStatus         *Column
-	ColumnData           *Column
+	ColumnSource         *Column
 	ColumnCreatedTime    *Column
 	ColumnUpdatedTime    *Column
 	ColumnCreatedBy      *Column
@@ -284,8 +284,8 @@ func (m *Model) Describe() js.Json {
 	}
 
 	var source string = ""
-	if m.ColumnData != nil {
-		source = m.ColumnData.Name
+	if m.ColumnSource != nil {
+		source = m.ColumnSource.Name
 	}
 
 	result := js.Json{
@@ -305,7 +305,7 @@ func (m *Model) Describe() js.Json {
 		"requireds":         requireds,
 		"source":            source,
 		"useStatus":         m.ColumnStatus != nil,
-		"useDataSource":     m.ColumnData != nil,
+		"useDataSource":     m.ColumnSource != nil,
 		"useCreatedTime":    m.ColumnCreatedTime != nil,
 		"useCreatedBy":      m.ColumnCreatedBy != nil,
 		"useLastEditedTime": m.ColumnLastEditedTime != nil,

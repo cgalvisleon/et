@@ -108,13 +108,29 @@ func (r *Relation) Pkey() string {
 
 // SelectsAs return a string with the select columns
 func (r *Relation) SelectsAs(l *Linq) string {
+	n := len(r.Select)
+	if n == 0 {
+		return ""
+	}
+
+	parent := l.From(r.Parent)
+	if n == 1 {
+		v := r.Select[0]
+		col := parent.Column(v)
+		def := parent.AsColumn(col)
+
+		return def
+	}
+
 	var result string
-	parent := l.NewFrom(r.Parent)
 	for _, v := range r.Select {
 		col := parent.Column(v)
 		def := parent.AsColumn(col)
+		def = strs.Format(`'%s', %s`, strs.Lowcase(v), def)
 		result = strs.Append(result, def, ", ")
 	}
+
+	result = strs.Format(`jsonb_build_object(%s)`, result)
 
 	return result
 }
@@ -123,13 +139,13 @@ func (r *Relation) SelectsAs(l *Linq) string {
 func (r *Relation) WhereAs(l *Linq) string {
 	var result string
 	model := l.Froms[0]
-	parent := l.NewFrom(r.Parent)
+	parent := l.From(r.Parent)
 	for i, v := range r.ForeignKey {
 		c1 := model.Column(v)
 		c2 := parent.Column(r.ParentKey[i])
 		a := model.AsColumn(c1)
 		b := parent.AsColumn(c2)
-		def := strs.Format(`%s=%s`, a, b)
+		def := strs.Format(`%s=%s`, b, a)
 		result = strs.Append(result, def, " AND ")
 	}
 

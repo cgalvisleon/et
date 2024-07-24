@@ -83,7 +83,7 @@ func MOdel(def *Definition) *Model {
 		result.DefineForeignKey(fk.ForeignKey, fk.ParentModel, fk.ParentKey)
 	}
 	for _, ref := range def.Rollup {
-		result.DefineRollup(ref.Name, ref.ForeignKey, ref.Parent, ref.ParentKey, ref.Select[0])
+		result.DefineRollup(ref.Name, ref.ForeignKey, ref.Parent, ref.ParentKey, ref.Select)
 	}
 	for _, ref := range def.Relation {
 		result.DefineRelation(ref.Name, ref.ForeignKey, ref.Parent, ref.ParentKey, ref.Select, ref.Calculate)

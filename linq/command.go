@@ -6,6 +6,7 @@ import (
 
 	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/strs"
 )
 
 // TypeCommand struct to use in linq
@@ -49,9 +50,36 @@ type Values struct {
 	Data        js.Json
 	Values      []*Value
 	Change      bool
+	History     bool
 	IdT         string
 	User        interface{}
 	Project     interface{}
+}
+
+/**
+* Old returns a json with the old values of the command
+* @return js.Json
+**/
+func (v *Values) Olds() js.Json {
+	result := js.Json{}
+	for _, value := range v.Values {
+		result[value.Column.Low()] = value.Old
+	}
+
+	return result
+}
+
+/**
+* New returns a json with the new values of the command
+* @return js.Json
+**/
+func (v *Values) News() js.Json {
+	result := js.Json{}
+	for _, value := range v.Values {
+		result[value.Column.Low()] = value.New
+	}
+
+	return result
 }
 
 /**
@@ -128,6 +156,43 @@ func (l *Values) Set(col interface{}, value interface{}) {
 }
 
 /**
+* Old return the old value of the column in command
+* @param def interface{}
+* @param name string
+* @return interface{}
+**/
+func (l *Values) Old(def interface{}, name string) interface{} {
+	idx := slices.IndexFunc(l.Values, func(e *Value) bool { return e.Column.Low() == strs.Lowcase(name) })
+	if idx == -1 {
+		return def
+	}
+
+	return l.Values[idx].Old
+}
+
+func (l *Values) IsDifferent(name string) bool {
+	old := l.Old(nil, name)
+	new := l.New(nil, name)
+	result := old != nil && new != nil && old != new
+	return result
+}
+
+/**
+* New return the new value of the column in command
+* @param def interface{}
+* @param name string
+* @return interface{}
+**/
+func (l *Values) New(def interface{}, name string) interface{} {
+	idx := slices.IndexFunc(l.Values, func(e *Value) bool { return e.Column.Low() == strs.Lowcase(name) })
+	if idx == -1 {
+		return def
+	}
+
+	return l.Values[idx].New
+}
+
+/**
 * Default return the default value of the column in command
 * @param col *Column
 * @return interface{}
@@ -187,7 +252,7 @@ func (c *Values) consolidate(old, new js.Json) {
 
 	if c.TypeCommand == TpInsert {
 		for _, col := range model.Columns {
-			if col.TypeColumn == TpDetail {
+			if col.TypeColumn > TpAtrib {
 				continue
 			}
 
@@ -202,23 +267,30 @@ func (c *Values) consolidate(old, new js.Json) {
 			c.Set(col, val)
 		}
 
+		if model.ColumnSource == nil {
+			return
+		}
+
 		if model.Integrity {
 			return
 		}
 
 		for k, v := range new {
-			col := newAtrib(k, v)
-			c.Set(col, v)
+			col := model.Col(k)
+			if col == nil {
+				col := newAtrib(k, v)
+				c.Set(col, v)
+			}
 		}
 	} else {
 		for k, v := range new {
-			col := model.Column(k)
-			if col.TypeData == TpData {
-				continue
-			} else if col == nil && model.Integrity {
+			col := model.Col(k)
+			if col == nil && model.Integrity {
 				continue
 			} else if col == nil {
 				col = newAtrib(k, v)
+			} else if col.TypeData == TpSource {
+				continue
 			}
 
 			old_val := old.Get(col.Low())
@@ -266,14 +338,14 @@ func (c *Values) data(sql string, args ...any) (js.Items, error) {
 * @return js.Items
 * @return error
 **/
-func (c *Values) exec(sql string, args ...any) (js.Items, error) {
+func (c *Values) exec(sql string, args ...any) (js.Item, error) {
 	var err error
-	items, err := c.Linq.query(sql, args...)
+	result, err := c.Linq.exec(sql, args...)
 	if err != nil {
-		return js.Items{}, err
+		return js.Item{}, err
 	}
 
-	return items, nil
+	return result, nil
 }
 
 /**
@@ -282,12 +354,21 @@ func (c *Values) exec(sql string, args ...any) (js.Items, error) {
 * @return error
 **/
 func (c *Values) curren() (js.Items, error) {
-	currentSql, err := c.Linq.currentSql()
+	sql, err := c.Linq.currentSql()
 	if err != nil {
 		return js.Items{}, err
 	}
 
-	result, err := c.query(currentSql)
+	if c.Model.ColumnSource == nil {
+		result, err := c.query(sql)
+		if err != nil {
+			return js.Items{}, err
+		}
+
+		return result, nil
+	}
+
+	result, err := c.data(sql)
 	if err != nil {
 		return js.Items{}, err
 	}
@@ -415,16 +496,14 @@ func (c *Values) Insert() error {
 		return err
 	}
 
-	items, err := c.exec(c.Linq.Sql)
+	result, err := c.exec(c.Linq.Sql)
 	if err != nil {
 		return err
 	}
 
-	c.Linq.Result = &items
-	for _, data := range items.Result {
-		for k, v := range data {
-			c.Set(k, v)
-		}
+	c.Linq.Result = &result
+	for k, v := range result.Result {
+		c.Set(k, v)
 	}
 
 	err = c.afterInsert()
@@ -475,16 +554,14 @@ func (c *Values) Update() error {
 			return err
 		}
 
-		items, err := c.exec(c.Linq.Sql)
+		result, err := c.exec(c.Linq.Sql)
 		if err != nil {
 			return err
 		}
 
-		c.Linq.Result = &items
-		for _, data := range items.Result {
-			for k, v := range data {
-				c.Set(k, v)
-			}
+		c.Linq.Result = &result
+		for k, v := range result.Result {
+			c.Set(k, v)
 		}
 
 		err = c.afterUpdate()
@@ -607,5 +684,14 @@ func (m *Model) Delete() *Linq {
 	l.Values.TypeCommand = TpDelete
 	l.Values.Data = js.Json{}
 
+	return l
+}
+
+/**
+* History method to use in linq
+* @return *Linq
+**/
+func (l *Linq) History(val bool) *Linq {
+	l.Values.History = val
 	return l
 }

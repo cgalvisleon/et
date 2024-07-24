@@ -33,11 +33,12 @@ const (
 	TpLastEditedTime
 	TpLastEditedBy
 	TpProject
-	TpData
+	TpSource
 	TpJson
 	TpArray
 	TpSerie
 	TpCode
+	TpShape
 )
 
 func (t TypeData) String() string {
@@ -90,8 +91,8 @@ func (t TypeData) String() string {
 		return "Last edited by"
 	case TpProject:
 		return "Project"
-	case TpData:
-		return "Data"
+	case TpSource:
+		return "Source"
 	case TpJson:
 		return "Json"
 	case TpArray:
@@ -100,6 +101,8 @@ func (t TypeData) String() string {
 		return "Serie"
 	case TpCode:
 		return "Code"
+	case TpShape:
+		return "Shape"
 	default:
 		return "Unknown"
 	}
@@ -164,7 +167,7 @@ func (t TypeData) Default() interface{} {
 		}
 	case TpProject:
 		return ""
-	case TpData:
+	case TpSource:
 		return js.Json{}
 	case TpJson:
 		return js.Json{}
@@ -174,6 +177,12 @@ func (t TypeData) Default() interface{} {
 		return 0
 	case TpCode:
 		return "000000"
+	case TpShape:
+		return js.Json{
+			"lat":     0,
+			"lng":     0,
+			"located": false,
+		}
 	default:
 		return ""
 	}
@@ -181,7 +190,7 @@ func (t TypeData) Default() interface{} {
 
 func (t TypeData) Indexed() bool {
 	switch t {
-	case TpKey, TpSelect, TpMultiSelect, TpStatus, TpDate, TpPerson, TpCheckbox, TpURL, TpEmail, TpPhone, TpRelation, TpRollup, TpCreatedTime, TpCreatedBy, TpLastEditedTime, TpLastEditedBy, TpProject, TpSerie, TpCode:
+	case TpKey, TpSelect, TpMultiSelect, TpStatus, TpDate, TpPerson, TpCheckbox, TpURL, TpEmail, TpPhone, TpRelation, TpRollup, TpCreatedTime, TpCreatedBy, TpLastEditedTime, TpLastEditedBy, TpProject, TpSerie, TpCode, TpShape:
 		return true
 	default:
 		return false
@@ -339,7 +348,7 @@ func (t TypeData) Describe() *js.Json {
 		return &js.Json{
 			"default": "",
 		}
-	case TpData:
+	case TpSource:
 		return &js.Json{
 			"default": js.Json{},
 		}
@@ -360,6 +369,14 @@ func (t TypeData) Describe() *js.Json {
 		return &js.Json{
 			"default": "000000",
 			"format":  "%06d",
+		}
+	case TpShape:
+		return &js.Json{
+			"default": js.Json{
+				"lat":     0,
+				"lng":     0,
+				"located": false,
+			},
 		}
 	}
 	return &js.Json{

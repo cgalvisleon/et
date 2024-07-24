@@ -4,11 +4,18 @@ import (
 	"database/sql"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/cgalvisleon/et/linq"
 )
 
-// ddlSchemes return sql series ddl
+var items map[string]map[int64]int64
+
+/**
+* defineSeries define the series table
+* @param db *sql.DB
+* @return error
+**/
 func defineSeries(db *sql.DB) error {
 	sql := `
 	CREATE SCHEMA IF NOT EXISTS core;
@@ -84,6 +91,41 @@ func currentSerie(db *sql.DB, tag string, lock *sync.RWMutex) (int, error) {
 	return result, nil
 }
 
+func nextUUId(db *sql.DB, tag string, lock *sync.RWMutex) (int64, error) {
+	now := time.Now()
+	result := now.UnixMilli()
+	replica, err := getVarInt(db, "REPLICA", 10000)
+	if err != nil {
+		return 0, err
+	}
+
+	result = result * replica
+	count, ok := items[tag][result]
+	if ok {
+		lock.Lock()
+		defer lock.Unlock()
+		count++
+	} else {
+		lock.Lock()
+		defer lock.Unlock()
+		count = 0
+	}
+
+	items[tag][result] = count
+
+	clean := func() {
+		delete(items[tag], result)
+	}
+
+	duration := 1 * time.Second
+	if duration != 0 {
+		go time.AfterFunc(duration, clean)
+	}
+
+	result = result + count
+	return result, nil
+}
+
 /**
 * nextSerie return the next value of a serie
 * @param db *sql.DB
@@ -145,6 +187,22 @@ func deleteSerie(db *sql.DB, tag string, lock *sync.RWMutex) error {
 	}
 
 	return nil
+}
+
+/**
+* UUIndex return the next value of a serie
+* @param tag string
+* @return int64
+* @return error
+**/
+func (d *Postgres) UUIndex(tag string) (int64, error) {
+	lock := d.Lock(tag)
+	result, err := nextUUId(d.DB, tag, lock)
+	if err != nil {
+		return 0, err
+	}
+
+	return result, nil
 }
 
 /**
@@ -247,4 +305,8 @@ func (d *Postgres) DeleteSerie(tag string) error {
 	}
 
 	return nil
+}
+
+func init() {
+	items = make(map[string]map[int64]int64)
 }

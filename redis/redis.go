@@ -72,7 +72,7 @@ func (c *Conn) Type() string {
 * @param expiration time.Duration
 * @return string
 **/
-func (c *Conn) Set(key string, value interface{}, expiration time.Duration) interface{} {
+func (c *Conn) Set(key string, value string, expiration time.Duration) string {
 	duration := expiration * time.Second
 
 	err := c.db.Set(c.ctx, key, value, duration).Err()

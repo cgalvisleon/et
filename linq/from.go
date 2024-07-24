@@ -104,9 +104,8 @@ func (l *Lfrom) C(name string) *Column {
 	return l.Column(name)
 }
 
-// From method new linq
-func From(model *Model) *Linq {
-	result := &Linq{
+func NewLinQ() *Linq {
+	return &Linq{
 		Froms:     []*Lfrom{},
 		Columns:   []*Lselect{},
 		Atribs:    []*Lselect{},
@@ -122,13 +121,22 @@ func From(model *Model) *Linq {
 		Offset:    0,
 		TypeQuery: TpQuery,
 		Sql:       "",
-		Result:    &js.Items{},
-		setResult: js.Json{},
+		Result:    &js.Item{},
+		sets:      js.Json{},
 	}
+}
 
-	as := getAs(result)
+// From method new linq
+func From(model *Model, as ...string) *Linq {
+	result := NewLinQ()
+	var aS string
+	if len(as) > 0 {
+		aS = as[0]
+	} else {
+		aS = getAs(result)
+	}
 	result.DB = model.DB
-	form := &Lfrom{Linq: result, Model: model, AS: as}
+	form := &Lfrom{Linq: result, Model: model, AS: aS}
 	result.Froms = append(result.Froms, form)
 	result.Values = newValues(form, Tpnone)
 	result.Values.Linq = result
@@ -149,27 +157,21 @@ func (l *Linq) indexFrom(model *Model) int {
 	return result
 }
 
-// AddFrom method to use in linq
-func (l *Linq) NewFrom(model *Model) *Lfrom {
+// From method to use in linq
+func (l *Linq) From(model *Model, as ...string) *Lfrom {
 	var result *Lfrom
-	idx := l.indexFrom(model)
-	if idx == -1 {
-		as := getAs(l)
-		result = &Lfrom{Linq: l, Model: model, AS: as}
-	} else {
-		result = l.Froms[idx]
+	if len(as) > 0 {
+		aS := as[0]
+		result = &Lfrom{Linq: l, Model: model, AS: aS}
+		l.Froms = append(l.Froms, result)
+
+		return result
 	}
 
-	return result
-}
-
-// AddFrom method to use in linq
-func (l *Linq) GetFrom(model *Model) *Lfrom {
-	var result *Lfrom
 	idx := l.indexFrom(model)
 	if idx == -1 {
-		as := getAs(l)
-		result = &Lfrom{Linq: l, Model: model, AS: as}
+		aS := getAs(l)
+		result = &Lfrom{Linq: l, Model: model, AS: aS}
 		l.Froms = append(l.Froms, result)
 	} else {
 		result = l.Froms[idx]
@@ -178,15 +180,24 @@ func (l *Linq) GetFrom(model *Model) *Lfrom {
 	return result
 }
 
-// From method to use in linq
-func (l *Linq) From(model *Model) *Linq {
-	l.GetFrom(model)
+func (l *Linq) Set(values js.Json) *Linq {
+	l.sets = values
 
 	return l
 }
 
-func (l *Linq) Set(values js.Json) *Linq {
-	l.setResult = values
+func (l *Linq) F(as string) *Lfrom {
+	result := -1
+	for i, f := range l.Froms {
+		if f.AS == as {
+			result = i
+			break
+		}
+	}
 
-	return l
+	if result == -1 {
+		return nil
+	}
+
+	return l.Froms[result]
 }

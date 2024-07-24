@@ -6,7 +6,6 @@ import (
 	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
-	"github.com/cgalvisleon/et/utility"
 )
 
 /**
@@ -21,7 +20,6 @@ type Database struct {
 	SourceField string
 	Schemes     []*Schema
 	Models      []*Model
-	debug       bool
 }
 
 /**
@@ -59,47 +57,6 @@ func NewDatabase(name, description string, driver Driver) (*Database, error) {
 	dbs = append(dbs, result)
 
 	return result, nil
-}
-
-/**
-* beforeInsert set the values before insert
-* @param model *Model
-* @param value *Values
-* @return error
-**/
-func beforeInsert(model *Model, value *Values) error {
-	now := utility.Now()
-	if model.ColumnCreatedTime != nil {
-		value.Set(model.ColumnCreatedTime, now)
-	}
-	if model.ColumnLastEditedTime != nil {
-		value.Set(model.ColumnLastEditedTime, now)
-	}
-	if model.ColumnSerie != nil {
-		index, err := model.DB.NextSerie(model.Table)
-		if err != nil {
-			return logs.Alert(err)
-		}
-
-		value.Set(model.ColumnSerie, index)
-	}
-
-	return nil
-}
-
-/**
-* beforeUpdate set the values before update
-* @param model *Model
-* @param value *Values
-* @return error
-**/
-func beforeUpdate(model *Model, value *Values) error {
-	now := utility.Now()
-	if model.ColumnLastEditedTime != nil {
-		value.Set(model.ColumnLastEditedTime, now)
-	}
-
-	return nil
 }
 
 /**
@@ -141,13 +98,6 @@ func (d *Database) Describe() js.Json {
 		"schemes":     _schemes,
 		"models":      _models,
 	}
-}
-
-/**
-* Debug set debug mode
-**/
-func (d *Database) Debug() {
-	d.debug = true
 }
 
 /**
@@ -276,11 +226,11 @@ func (d *Database) initModel(model *Model) error {
 	}
 
 	driver := *d.Driver
-	usedCore := driver.UsedCore()
-
-	if !usedCore {
+	if !driver.UsedCore() {
 		return nil
 	}
+
+	newColumn(model, IdTField.Low(), "Universal key", TpColumn, TpKey, TpKey.Default())
 
 	result, err := driver.GetModel(model.Schema.Name, model.Name, model.Kind())
 	if err != nil {
@@ -288,13 +238,8 @@ func (d *Database) initModel(model *Model) error {
 	}
 
 	if !result.Ok {
-		newColumn(model, IdTField.Low(), "", TpColumn, TpKey, TpKey.Default())
 		sql := driver.DefineSql(model)
-		if d.debug {
-			logs.Debug(model.Describe().ToString())
-		}
-
-		_, err = Exec(d.DB, sql)
+		_, err = Query(d.DB, sql)
 		if err != nil {
 			return err
 		}
@@ -392,18 +337,12 @@ func (d *Database) deleteSql(linq *Linq) (string, error) {
 * @return error
 **/
 func (d *Database) Query(sql string, args ...any) (js.Items, error) {
-	_query := SQLParse(sql, args...)
-
-	if d.debug {
-		logs.Debug(_query)
-	}
-
-	items, err := Query(d.DB, _query)
+	result, err := Query(d.DB, sql, args...)
 	if err != nil {
 		return js.Items{}, err
 	}
 
-	return items, nil
+	return result, nil
 }
 
 /**
@@ -415,22 +354,12 @@ func (d *Database) Query(sql string, args ...any) (js.Items, error) {
 * @return error
 **/
 func (d *Database) QueryOne(sql string, args ...any) (js.Item, error) {
-	items, err := d.Query(sql, args...)
+	result, err := QueryOne(d.DB, sql, args...)
 	if err != nil {
 		return js.Item{}, err
 	}
 
-	if items.Count == 0 {
-		return js.Item{
-			Ok:     false,
-			Result: js.Json{},
-		}, nil
-	}
-
-	return js.Item{
-		Ok:     items.Ok,
-		Result: items.Result[0],
-	}, nil
+	return result, nil
 }
 
 /**
@@ -461,6 +390,27 @@ func (d *Database) Data(source, sql string, args ...any) (js.Items, error) {
 	}
 
 	return result, nil
+}
+
+/**
+* Exec execute a query
+* @param sql string
+* @param args ...any
+* @return js.Items
+* @return error
+**/
+func (d *Database) Exec(sql string, args ...any) (js.Item, error) {
+	result, err := Exec(d.DB, sql, args...)
+	if err != nil {
+		return js.Item{}, err
+	}
+
+	return result, nil
+}
+
+func (d *Database) UUIndex() (int64, error) {
+	driver := *d.Driver
+	return driver.UUIndex()
 }
 
 /**

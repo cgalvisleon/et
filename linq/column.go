@@ -15,6 +15,7 @@ const (
 	TpAtrib
 	TpDetail
 	TpConcat
+	TpOther
 )
 
 // String return string of type column
@@ -26,6 +27,10 @@ func (t TypeColumn) String() string {
 		return "Atrib"
 	case TpDetail:
 		return "Detail"
+	case TpConcat:
+		return "Concat"
+	case TpOther:
+		return "Other"
 	}
 	return ""
 }
@@ -133,8 +138,8 @@ func newColumn(model *Model, name, description string, typeColumm TypeColumn, ty
 		model.ColumnStatus = result
 	}
 
-	if model.ColumnData == nil && TpData == typeData {
-		model.ColumnData = result
+	if model.ColumnSource == nil && TpSource == typeData {
+		model.ColumnSource = result
 		result.IsDataField = true
 	}
 
@@ -203,13 +208,13 @@ func (c *Column) Describe() js.Json {
 
 // AsModel return as name of model
 func (c *Column) AsModel(l *Linq) string {
-	f := l.GetFrom(c.Model)
+	f := l.From(c.Model)
 	return f.AS
 }
 
 // AsModel return as name of model
 func (c *Column) As(l *Linq) string {
-	f := l.GetFrom(c.Model)
+	f := l.From(c.Model)
 	s := l.GetColumn(c)
 	if s.AS != c.Name {
 		return strs.Format(`%s.%s AS %s`, f.AS, c.Name, s.AS)

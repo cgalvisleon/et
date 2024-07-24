@@ -76,7 +76,7 @@ func GenId(id string) string {
 	return id
 }
 
-func NilId(id string) string {
+func GenKey(id string) string {
 	if map[string]bool{"": true, "-1": true, "*": true, "new": true}[id] {
 		return uuid.NewString()
 	}

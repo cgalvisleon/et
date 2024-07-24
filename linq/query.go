@@ -66,25 +66,17 @@ func query(db *sql.DB, sql string, args ...any) (*sql.Rows, error) {
 	return rows, nil
 }
 
-/**
-* Exec execute a command in the database
-* @parms db
-* @parms sql
-* @parms args
-* @return sql.Result
-* @return error
-**/
-func Exec(db *sql.DB, sql string, args ...any) (sql.Result, error) {
+func exec(db *sql.DB, sql string, args ...any) (*sql.Rows, error) {
 	if db == nil {
 		return nil, logs.Alertm("Database is required")
 	}
 
-	result, err := db.Exec(sql, args...)
+	rows, err := db.Query(sql, args...)
 	if err != nil {
 		return nil, err
 	}
 
-	return result, nil
+	return rows, nil
 }
 
 /**
@@ -102,9 +94,9 @@ func Query(db *sql.DB, sql string, args ...any) (js.Items, error) {
 	}
 	defer rows.Close()
 
-	items := RowsItems(rows)
+	result := RowsItems(rows)
 
-	return items, nil
+	return result, nil
 }
 
 /**
@@ -116,22 +108,35 @@ func Query(db *sql.DB, sql string, args ...any) (js.Items, error) {
 * @return error
 **/
 func QueryOne(db *sql.DB, sql string, args ...any) (js.Item, error) {
-	items, err := Query(db, sql, args...)
+	rows, err := query(db, sql, args...)
 	if err != nil {
 		return js.Item{}, err
 	}
+	defer rows.Close()
 
-	if items.Count == 0 {
-		return js.Item{
-			Ok:     false,
-			Result: js.Json{},
-		}, nil
+	result := RowsItem(rows)
+
+	return result, nil
+}
+
+/**
+* Exec execute a command in the database
+* @parms db
+* @parms sql
+* @parms args
+* @return sql.Result
+* @return error
+**/
+func Exec(db *sql.DB, sql string, args ...any) (js.Item, error) {
+	rows, err := exec(db, sql, args...)
+	if err != nil {
+		return js.Item{}, err
 	}
+	defer rows.Close()
 
-	return js.Item{
-		Ok:     items.Ok,
-		Result: items.Result[0],
-	}, nil
+	result := RowsItem(rows)
+
+	return result, nil
 }
 
 /**
@@ -157,7 +162,7 @@ func (l *Linq) query(sql string, args ...any) (js.Items, error) {
 
 	items, err := l.DB.Query(l.Sql)
 	if err != nil {
-		return js.Items{}, logs.Alertf("Error:%s\nSQL:%s", err.Error(), l.Sql)
+		return js.Items{}, err
 	}
 
 	return items, nil
@@ -186,10 +191,39 @@ func (l *Linq) data(sql string, args ...any) (js.Items, error) {
 
 	items, err := l.DB.Data(SourceField.Low(), l.Sql)
 	if err != nil {
-		return js.Items{}, logs.Error(err)
+		return js.Items{}, err
 	}
 
 	return items, nil
+}
+
+/**
+* exec execute a query in the database
+* @parms sql
+* @parms args
+* @return js.Items
+* @return error
+**/
+func (l *Linq) exec(sql string, args ...any) (js.Item, error) {
+	if l.DB == nil {
+		return js.Item{}, logs.Errorm("Connected is required")
+	}
+
+	if len(sql) == 0 {
+		return js.Item{}, logs.Errorm("Sql is required")
+	}
+
+	l.Sql = SQLParse(sql, args...)
+	if l.debug {
+		debug(l)
+	}
+
+	result, err := l.DB.Exec(sql, args...)
+	if err != nil {
+		return js.Item{}, err
+	}
+
+	return result, nil
 }
 
 /**
@@ -197,9 +231,9 @@ func (l *Linq) data(sql string, args ...any) (js.Items, error) {
 * @return js.Items
 * @return error
 **/
-func (l *Linq) Exec() (js.Items, error) {
+func (l *Linq) Exec() (js.Item, error) {
 	if l.TypeQuery != TpCommand {
-		return js.Items{}, logs.Alertm("The query is not a command")
+		return js.Item{}, logs.Alertm("The query is not a command")
 	}
 
 	c := l.Values
@@ -207,17 +241,17 @@ func (l *Linq) Exec() (js.Items, error) {
 	case TpInsert:
 		err := c.Insert()
 		if err != nil {
-			return js.Items{}, err
+			return js.Item{}, err
 		}
 	case TpUpdate:
 		err := c.Update()
 		if err != nil {
-			return js.Items{}, err
+			return js.Item{}, err
 		}
 	case TpDelete:
 		err := c.Delete()
 		if err != nil {
-			return js.Items{}, err
+			return js.Item{}, err
 		}
 	}
 
@@ -225,42 +259,12 @@ func (l *Linq) Exec() (js.Items, error) {
 }
 
 /**
-* ExecOne is a Exec function and return item
-* @return js.Item
-* @return error
-**/
-func (l *Linq) ExecOne() (js.Item, error) {
-	items, err := l.Exec()
-	if err != nil {
-		return js.Item{}, err
-	}
-
-	if !items.Ok {
-		return js.Item{}, nil
-	}
-
-	return js.Item{
-		Ok:     items.Ok,
-		Result: items.Result[0],
-	}, nil
-}
-
-/**
 * Go is a Exec function and return items
 * @return js.Items
 * @return error
 **/
-func (l *Linq) Go() (js.Items, error) {
+func (l *Linq) Go() (js.Item, error) {
 	return l.Exec()
-}
-
-/**
-* GoOne is a Exec function and return item
-* @return js.Item
-* @return error
-**/
-func (l *Linq) GoOne() (js.Item, error) {
-	return l.ExecOne()
 }
 
 /**
@@ -290,7 +294,7 @@ func (l *Linq) Query() (js.Items, error) {
 	}
 
 	for _, data := range items.Result {
-		for k, v := range l.setResult {
+		for k, v := range l.sets {
 			data.Set(k, v)
 		}
 
@@ -298,8 +302,6 @@ func (l *Linq) Query() (js.Items, error) {
 			col.FuncDetail(&data)
 		}
 	}
-
-	l.Result = &items
 
 	return items, nil
 }

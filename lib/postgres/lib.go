@@ -112,6 +112,11 @@ func (d *Postgres) Connect() (*sql.DB, error) {
 		return nil, err
 	}
 
+	err = defineVars(db)
+	if err != nil {
+		return nil, err
+	}
+
 	err = defineSeries(db)
 	if err != nil {
 		return nil, err

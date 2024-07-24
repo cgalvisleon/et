@@ -274,13 +274,12 @@ func (it *Items) Json(idx int, atribs ...string) Json {
 * @return string
 **/
 func (it *Items) ToString() string {
-	var result string
-	for _, item := range it.Result {
-		str := item.ToString()
-		result = strs.Append(result, str, ",")
+	jsonData, err := json.Marshal(it.Result)
+	if err != nil {
+		return "[]"
 	}
 
-	return strs.Format(`[%s]`, result)
+	return string(jsonData)
 }
 
 /**

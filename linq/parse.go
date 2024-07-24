@@ -68,8 +68,7 @@ func SQLParse(sql string, args ...any) string {
 * @return js.Items
 **/
 func RowsItems(rows *sql.Rows) js.Items {
-	var result js.Items = js.Items{}
-
+	var result js.Items = js.Items{Result: []js.Json{}}
 	for rows.Next() {
 		var item js.Item
 		err := item.Scan(rows)
@@ -91,15 +90,17 @@ func RowsItems(rows *sql.Rows) js.Items {
 * @return js.Item
 **/
 func RowsItem(rows *sql.Rows) js.Item {
-	items := RowsItems(rows)
-	if items.Count == 0 {
-		return js.Item{}
+	var result js.Item = js.Item{Result: js.Json{}}
+	for rows.Next() {
+		err := result.Scan(rows)
+		if err != nil {
+			continue
+		}
+
+		break
 	}
 
-	return js.Item{
-		Ok:     items.Ok,
-		Result: items.Result[0],
-	}
+	return result
 }
 
 /**
@@ -110,7 +111,6 @@ func RowsItem(rows *sql.Rows) js.Item {
 **/
 func DataItems(rows *sql.Rows, sourceField string) js.Items {
 	var result js.Items = js.Items{Result: []js.Json{}}
-
 	for rows.Next() {
 		var item js.Item
 		err := item.Scan(rows)
@@ -133,13 +133,17 @@ func DataItems(rows *sql.Rows, sourceField string) js.Items {
 * @return js.Item
 **/
 func DataItem(rows *sql.Rows, sourceField string) js.Item {
-	items := DataItems(rows, sourceField)
-	if items.Count == 0 {
-		return js.Item{}
+	var result js.Item = js.Item{Result: js.Json{}}
+	for rows.Next() {
+		err := result.Scan(rows)
+		if err != nil {
+			continue
+		}
+
+		break
 	}
 
-	return js.Item{
-		Ok:     items.Ok,
-		Result: items.Result[0],
-	}
+	result.Result = result.Json(sourceField)
+
+	return result
 }

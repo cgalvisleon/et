@@ -3,13 +3,17 @@ package lib
 import (
 	"slices"
 
-	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/linq"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 )
 
-// Return string can you use to select or return sql
+/**
+* sqlColumns return string with columns
+* @param l *linq.Linq
+* @param cols ...*linq.Lselect
+* @return string
+**/
 func sqlColumns(l *linq.Linq, cols ...*linq.Lselect) string {
 	if len(l.Froms) == 0 {
 		return ""
@@ -27,25 +31,25 @@ func sqlColumns(l *linq.Linq, cols ...*linq.Lselect) string {
 			l.GetDetail(c)
 		} else {
 			s := l.GetColumn(c)
-			if linq.TpColumn == c.TypeColumn {
+			if c.TypeColumn == linq.TpColumn {
 				def = strs.Format(`%s`, s.As())
 				appendColumn(def)
-			} else if linq.TpAtrib == c.TypeColumn {
+			} else if c.TypeColumn == linq.TpAtrib {
 				def = strs.Format(`%s.%s#>>'{%s}'`, f.AS, linq.SourceField.Up(), c.Low())
 				def = strs.Format(`%s AS %s`, def, c.Up())
 				appendColumn(def)
-			} else if linq.TpConcat == c.TypeColumn {
+			} else if c.TypeColumn == linq.TpConcat {
 				def = c.Concat()
 				def = strs.Format(`CONCAT(%s)`, def)
 				def = strs.Format(`%s AS %s`, def, c.Up())
 				appendColumn(def)
 			} else if slices.Contains([]linq.TypeData{linq.TpRollup, linq.TpRelation}, c.TypeData) {
 				r := c.RelationTo
-				parent := l.NewFrom(r.Parent)
-				def = strs.Format(`(SELECT row_to_json(%s) FROM %s AS %s WHERE %s LIMIT 1)`, r.SelectsAs(l), parent.Table(), parent.AS, r.WhereAs(l))
+				parent := l.From(r.Parent)
+				def = strs.Format(`(SELECT %s FROM %s AS %s WHERE %s LIMIT 1)`, r.SelectsAs(l), parent.Table(), parent.AS, r.WhereAs(l))
 				def = strs.Format(`%s AS %s`, def, c.Up())
 				appendColumn(def)
-			} else if linq.TpFormula == c.TypeData {
+			} else if c.TypeData == linq.TpFormula {
 				def = strs.Format(`(%s)`, c.Formula)
 				def = strs.Format(`%s AS %s`, def, c.Up())
 				appendColumn(def)
@@ -68,7 +72,7 @@ func sqlColumns(l *linq.Linq, cols ...*linq.Lselect) string {
 }
 
 /**
-* Return string can you use to select or return sql
+* sqlData return string with data
 * @param l *linq.Linq
 * @param cols ...*linq.Lselect
 * @return string
@@ -99,10 +103,10 @@ func sqlData(l *linq.Linq, cols ...*linq.Lselect) string {
 			l.GetDetail(c)
 		} else if !c.IsDataField {
 			s := l.GetColumn(c)
-			if linq.TpColumn == c.TypeColumn { // 'name', A.NAME
+			if c.TypeColumn == linq.TpColumn { // 'name', A.NAME
 				def = strs.Format(`'%s', %s`, c.Low(), s.As())
 				appendObjects(def)
-			} else if linq.TpAtrib == c.TypeColumn { // 'name', A._DATA#>>'{name}'
+			} else if c.TypeColumn == linq.TpAtrib { // 'name', A._DATA#>>'{name}'
 				if f.Linq.TypeQuery == linq.TpCommand {
 					def = strs.Format(`%s#>>'{%s}'`, linq.SourceField.Up(), c.Low())
 				} else {
@@ -110,18 +114,18 @@ func sqlData(l *linq.Linq, cols ...*linq.Lselect) string {
 				}
 				def = strs.Format(`'%s', %s`, c.Low(), def)
 				appendObjects(def)
-			} else if linq.TpConcat == c.TypeColumn {
+			} else if c.TypeColumn == linq.TpConcat {
 				def = c.Concat()
 				def = strs.Format(`CONCAT(%s)`, def)
 				def = strs.Format(`'%s', %s`, c.Low(), def)
 				appendObjects(def)
-			} else if slices.Contains([]linq.TypeData{linq.TpRollup, linq.TpRelation}, c.TypeData) { // 'name', (SELECT row_to_json() FROM WUERE)
+			} else if slices.Contains([]linq.TypeData{linq.TpRollup, linq.TpRelation}, c.TypeData) {
 				r := c.RelationTo
-				parent := l.NewFrom(r.Parent)
-				def = strs.Format(`(SELECT row_to_json(%s) FROM %s AS %s WHERE %s LIMIT 1)`, r.SelectsAs(l), parent.Table(), parent.AS, r.WhereAs(l))
+				parent := l.From(r.Parent)
+				def = strs.Format(`(SELECT %s FROM %s AS %s WHERE %s LIMIT 1)`, r.SelectsAs(l), parent.Table(), parent.AS, r.WhereAs(l))
 				def = strs.Format(`'%s', %s`, c.Low(), def)
 				appendObjects(def)
-			} else if linq.TpFormula == c.TypeData {
+			} else if c.TypeData == linq.TpFormula {
 				def = strs.Format(`'%s', %s`, c.Low(), def)
 				def = strs.Format(`(%s)`, c.Formula)
 				appendObjects(def)
@@ -154,7 +158,10 @@ func sqlData(l *linq.Linq, cols ...*linq.Lselect) string {
 	return strs.Format(`%s AS %s`, result, linq.SourceField.Up())
 }
 
-// Add select to sql
+/**
+*sqlSelect add select to sql
+* @param l *linq.Linq
+**/
 func sqlSelect(l *linq.Linq) {
 	var result string
 	if l.Selects.Used {
@@ -177,21 +184,10 @@ func sqlSelect(l *linq.Linq) {
 	l.Sql = strs.Append(l.Sql, result, "\n")
 }
 
-// Build current sql used to trigger in linq
-func sqlCurrent(l *linq.Linq) {
-	var result string
-	module := l.Values.Model
-	if module.ColumnData == nil {
-		result = sqlColumns(l, l.Selects.Columns...)
-	} else {
-		result = sqlData(l, l.Datas.Columns...)
-	}
-
-	result = strs.Append("SELECT", result, " ")
-	l.Sql = strs.Append(l.Sql, result, "\n")
-}
-
-// Add from to sql
+/**
+* sqlFrom add from to sql
+* @param l *linq.Linq
+**/
 func sqlFrom(l *linq.Linq) error {
 	if l.TypeQuery == linq.TpCommand {
 		model := l.Values.Model
@@ -212,7 +208,10 @@ func sqlFrom(l *linq.Linq) error {
 	return nil
 }
 
-// Add join to sql
+/**
+* sqlJoin add join to sql
+* @param l *linq.Linq
+**/
 func sqlJoin(l *linq.Linq) {
 	var result string
 	for _, v := range l.Joins {
@@ -229,7 +228,10 @@ func sqlJoin(l *linq.Linq) {
 	l.Sql = strs.Append(l.Sql, result, "\n")
 }
 
-// Add where to sql
+/**
+* sqlWhere add where to sql
+* @param l *linq.Linq
+**/
 func sqlWhere(l *linq.Linq) {
 	var result string
 
@@ -256,7 +258,10 @@ func sqlWhere(l *linq.Linq) {
 	l.Sql = strs.Append(l.Sql, result, "\n")
 }
 
-// Add group by to sql
+/**
+* sqlGroupBy add group by to sql
+* @param l *linq.Linq
+**/
 func sqlGroupBy(l *linq.Linq) {
 	var result string
 	for i, v := range l.Groups {
@@ -270,7 +275,10 @@ func sqlGroupBy(l *linq.Linq) {
 	l.Sql = strs.Append(l.Sql, result, "\n")
 }
 
-// Add having to sql
+/**
+* sqlHaving add having to sql
+* @param l *linq.Linq
+**/
 func sqlHaving(l *linq.Linq) {
 	var result string
 	for i, v := range l.Havings {
@@ -285,7 +293,10 @@ func sqlHaving(l *linq.Linq) {
 	l.Sql = strs.Append(l.Sql, result, "\n")
 }
 
-// Add order by to sql
+/**
+* sqlOrderBy add order by to sql
+* @param l *linq.Linq
+**/
 func sqlOrderBy(l *linq.Linq) {
 	var result string
 	for i, v := range l.Orders {
@@ -300,7 +311,10 @@ func sqlOrderBy(l *linq.Linq) {
 	l.Sql = strs.Append(l.Sql, result, "\n")
 }
 
-// Add limit to sql
+/**
+* sqlLimit add limit to sql
+* @param l *linq.Linq
+**/
 func sqlLimit(l *linq.Linq) {
 	if l.TypeQuery == linq.TpPage {
 		var result string
@@ -324,114 +338,6 @@ func sqlLimit(l *linq.Linq) {
 	} else {
 		result = strs.Format(`LIMIT %d`, linq.MaxRows)
 	}
-
-	l.Sql = strs.Append(l.Sql, result, "\n")
-}
-
-// Add return to sql
-func sqlReturns(l *linq.Linq) {
-	if !l.Returns.Used {
-		return
-	}
-
-	var def, result string
-	f := l.Froms[0]
-	m := f.Model
-	if m.ColumnData == nil {
-		def = sqlColumns(l, l.Returns.Columns...)
-	} else {
-		def = sqlData(l, l.Returns.Columns...)
-	}
-	result = strs.Format(`RETURNING %s`, def)
-
-	l.Sql = strs.Append(l.Sql, result, "\n")
-}
-
-// Add sql insert to sql
-func sqlInsert(l *linq.Linq) {
-	var result string
-	var columns string
-	var values string
-	var atribs string
-	vals := *l.Values
-	mod := vals.Model
-
-	for _, val := range vals.Values {
-		if val.Column.IsDataField {
-			continue
-		}
-
-		switch val.Column.TypeColumn {
-		case linq.TpColumn:
-			col := val.Column.Up()
-			val := js.Unquote(val.New)
-			def := strs.Format(`%v`, val)
-			columns = strs.Append(columns, col, ", ")
-			values = strs.Append(values, def, ", ")
-		case linq.TpAtrib:
-			col := val.Column.Low()
-			val := js.Quote(val.New)
-			def := strs.Format(`"%s": %v`, col, val)
-			atribs = strs.Append(atribs, def, ",\n")
-		}
-	}
-
-	if len(atribs) > 0 {
-		columns = strs.Append(columns, linq.SourceField.Up(), ", ")
-		def := strs.Format(`'{%s}'`, atribs)
-		values = strs.Append(values, def, ", ")
-	}
-
-	result = strs.Format("INSERT INTO %s(%s)\nVALUES (%s)", mod.Table, columns, values)
-
-	l.Sql = strs.Append(l.Sql, result, "\n")
-}
-
-// Add sql update to sql
-func sqlUpdate(l *linq.Linq) {
-	var result string
-	var values string
-	var atribs string = linq.SourceField.Up()
-	vals := *l.Values
-	mod := vals.Model
-
-	for _, val := range vals.Values {
-		if val.Column.IsDataField {
-			continue
-		}
-
-		switch val.Column.TypeColumn {
-		case linq.TpColumn:
-			col := val.Column.Up()
-			val := js.Unquote(val.New)
-			def := strs.Format(`%s = %v`, col, val)
-			values = strs.Append(values, def, ",\n")
-		case linq.TpAtrib:
-			col := val.Column.Low()
-			val := js.Quote(val.New)
-			atribs = strs.Format(`jsonb_set(%s, '{%s}', '%v', true)`, atribs, col, val)
-		}
-	}
-
-	if len(atribs) > 0 {
-		def := strs.Format(`%s = %v`, linq.SourceField.Up(), atribs)
-		values = strs.Append(values, def, ",\n")
-	}
-
-	idt := js.Unquote(l.Values.IdT)
-	result = strs.Format("UPDATE %s SET\n%s WHERE _IDT = '%v'", mod.Table, values, idt)
-
-	l.Sql = strs.Append(l.Sql, result, "\n")
-}
-
-// Add sql delete to sql
-func sqlDelete(l *linq.Linq) {
-	var result string
-	vals := *l.Values
-	mod := vals.Model
-
-	idt := js.Unquote(l.Values.IdT)
-	result = strs.Format("DELETE FROM %s WHERE _IDT = '%v'", mod.Table, idt)
 
 	l.Sql = strs.Append(l.Sql, result, "\n")
 }

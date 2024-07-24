@@ -27,7 +27,7 @@ func (m *Model) DefineColumn(name, description string, typeData TypeData, _defau
 func (m *Model) DefineAtrib(name, description string, typeData TypeData, _default interface{}) *Column {
 	source := Col(m, SourceField.Low())
 	if source == nil {
-		_ = m.DefineColumn(SourceField.Low(), "Source field", TpData, TpJson.Default())
+		_ = m.DefineColumn(SourceField.Low(), "Source field", TpSource, TpJson.Default())
 	}
 
 	result := newColumn(m, name, description, TpAtrib, typeData, _default)
@@ -91,8 +91,8 @@ func (m *Model) DefineRelation(name string, foreignKey []string, parentModel *Mo
  * @param _select string
  * @return *Column
 **/
-func (m *Model) DefineRollup(name string, foreignKey []string, parentModel *Model, parentKey []string, _select string) *Column {
-	result := newColumn(m, name, "", TpDetail, TpRollup, TpRollup.Default())
+func (m *Model) DefineRollup(name string, foreignKey []string, parentModel *Model, parentKey []string, _select []string) *Column {
+	result := newColumn(m, name, "", TpOther, TpRollup, TpRollup.Default())
 	if result == nil {
 		return nil
 	}
@@ -101,7 +101,7 @@ func (m *Model) DefineRollup(name string, foreignKey []string, parentModel *Mode
 		ForeignKey: foreignKey,
 		Parent:     parentModel,
 		ParentKey:  parentKey,
-		Select:     []string{_select},
+		Select:     _select,
 		Calculate:  TpUniqueValue,
 		Limit:      1,
 	}

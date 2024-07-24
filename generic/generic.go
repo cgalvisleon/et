@@ -4,53 +4,62 @@ import (
 	"fmt"
 	"log"
 	"reflect"
-	"strconv"
+	"strings"
 	"time"
 )
 
 type Any struct {
-	value any
+	value interface{}
 }
 
-func New(val any) *Any {
+/**
+* New, create new Any
+* @param val interface{}
+* @return *Any
+**/
+func New(val interface{}) *Any {
 	return &Any{
 		value: val,
 	}
 }
 
-func (an *Any) IsNil() bool {
-	if an.value == nil {
-		return true
-	} else if an.value == "<nil>" {
-		return true
-	} else if an.value == "" {
-		return true
-	} else if an.value == "0" {
-		return true
-	} else if an.value == "0.0" {
-		return true
+/**
+* Set, set value to Any
+* @param val interface{}
+* @return interface{}
+**/
+func (a *Any) Set(val interface{}) interface{} {
+	a.value = val
+	return a.value
+}
+
+/**
+* Val, get value from Any
+* @return interface{}
+**/
+func (a *Any) Val() interface{} {
+	return a.value
+}
+
+/**
+* Str, get value from Any as string
+* @return string
+**/
+func (a *Any) Str() string {
+	result, ok := a.value.(string)
+	if !ok {
+		result = fmt.Sprintf(`%v`, a.value)
 	}
-
-	return false
-}
-
-func (an *Any) Set(val any) any {
-	an.value = val
-	return an.value
-}
-
-func (an *Any) Val() any {
-	return an.value
-}
-
-func (an *Any) Str() string {
-	result := fmt.Sprintf(`%v`, an.value)
 
 	return result
 }
 
-func (an *Any) Int() int {
-	switch v := an.value.(type) {
+/**
+* Int, get value from Any as int
+* @return int
+**/
+func (a *Any) Int() int {
+	switch v := a.value.(type) {
 	case int:
 		return v
 	case float64:
@@ -63,24 +72,22 @@ func (an *Any) Int() int {
 		return int(v)
 	case int64:
 		return int(v)
-	case string:
-		if v == "" {
-			return 0
-		}
-		i, err := strconv.Atoi(v)
-		if err != nil {
-			log.Println("Generic value int not conver:", reflect.TypeOf(v), "value:", v)
-			return 0
-		}
-		return i
 	default:
-		log.Println("Generic value int not conver:", reflect.TypeOf(v), "value:", v)
-		return 0
+		result, ok := a.value.(int)
+		if !ok {
+			log.Println("Any value int not conver:", reflect.TypeOf(v), "value:", v)
+			return 0
+		}
+		return result
 	}
 }
 
-func (an *Any) Num() float64 {
-	switch v := an.value.(type) {
+/**
+* Num, get value from Any as float64
+* @return float64
+**/
+func (a *Any) Num() float64 {
+	switch v := a.value.(type) {
 	case int:
 		return float64(v)
 	case float64:
@@ -94,24 +101,48 @@ func (an *Any) Num() float64 {
 	case int64:
 		return float64(v)
 	default:
-		log.Println("Generic value number not conver:", reflect.TypeOf(v), "value:", v)
+		log.Println("Any value number not conver:", reflect.TypeOf(v), "value:", v)
 		return 0
 	}
 }
 
-func (an *Any) Bool() bool {
-	switch v := an.value.(type) {
+/**
+* Bool, get value from Any as boolean
+* @return bool
+**/
+func (a *Any) Bool() bool {
+	switch v := a.value.(type) {
 	case bool:
 		return v
+	case int:
+		if v == 1 {
+			return true
+		}
+
+		return false
+	case string:
+		if strings.ToLower(v) == "true" {
+			return true
+		}
+
+		if strings.ToLower(v) == "si" {
+			return true
+		}
+
+		return false
 	default:
-		log.Println("Generic value boolean not conver:", reflect.TypeOf(v), "value:", v)
+		log.Println("Any value boolean not conver:", reflect.TypeOf(v), "value:", v)
 		return false
 	}
 }
 
-func (an *Any) Time() time.Time {
+/**
+* Time, get value from Any as time.Time
+* @return time.Time
+**/
+func (a *Any) Time() time.Time {
 	_default := time.Now()
-	switch v := an.value.(type) {
+	switch v := a.value.(type) {
 	case int:
 		return _default
 	case string:
@@ -124,7 +155,7 @@ func (an *Any) Time() time.Time {
 	case time.Time:
 		return v
 	default:
-		log.Println("Generic value time not conver:", reflect.TypeOf(v), "value:", v)
+		log.Println("Any value time not conver:", reflect.TypeOf(v), "value:", v)
 		return _default
 	}
 }

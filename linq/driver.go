@@ -72,7 +72,7 @@ type Driver interface {
 	Var(key string) (string, error)
 	VarInt(key string) (int64, error)
 	// Serires
-	UUIndex() (int64, error)
+	UUIndex(tag string) (int64, error)
 	NextSerie(tag string) (int, error)
 	NextCode(tag, format string) (string, error)
 	SetSerie(tag string, val int) error

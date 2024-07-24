@@ -20,7 +20,7 @@ func beforeInsert(model *Model, value *Values) error {
 		value.Set(model.ColumnLastEditedTime, now)
 	}
 	if model.ColumnSerie != nil {
-		index, err := model.DB.NextSerie(model.Table)
+		index, err := model.DB.UUIndex(model.Table)
 		if err != nil {
 			return logs.Alert(err)
 		}

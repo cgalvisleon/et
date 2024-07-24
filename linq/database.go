@@ -408,9 +408,9 @@ func (d *Database) Exec(sql string, args ...any) (js.Item, error) {
 	return result, nil
 }
 
-func (d *Database) UUIndex() (int64, error) {
+func (d *Database) UUIndex(tag string) (int64, error) {
 	driver := *d.Driver
-	return driver.UUIndex()
+	return driver.UUIndex(tag)
 }
 
 /**

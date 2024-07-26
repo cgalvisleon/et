@@ -123,6 +123,7 @@ type Linq struct {
 	as        int
 	sets      js.Json
 	debug     bool
+	showModel bool
 }
 
 /**
@@ -198,9 +199,22 @@ func (l *Linq) Describe() *js.Json {
 	}
 }
 
-// AddSelect method to use in linq
+/**
+* Debug show sql in debug mode
+* @return *Linq
+**/
 func (l *Linq) Debug() *Linq {
 	l.debug = true
+
+	return l
+}
+
+/**
+* ShowModel show model id debug model
+* @return *Linq
+**/
+func (l *Linq) ShowModel() *Linq {
+	l.showModel = true
 
 	return l
 }

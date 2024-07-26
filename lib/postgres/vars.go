@@ -3,6 +3,8 @@ package lib
 import (
 	"database/sql"
 	"strconv"
+
+	"github.com/cgalvisleon/et/linq"
 )
 
 /**
@@ -15,7 +17,7 @@ func defineVars(db *sql.DB) error {
 	CREATE SCHEMA IF NOT EXISTS core;
 
   CREATE TABLE IF NOT EXISTS core.VARS(		
-		VAR VARCHAR(00) DEFAULT '',
+		VAR VARCHAR(80) DEFAULT '',
 		VALUE VARCHAR(250) DEFAULT '',
 		PRIMARY KEY(VAR)
 	);`
@@ -25,7 +27,7 @@ func defineVars(db *sql.DB) error {
 		return err
 	}
 
-	err = initVar(db, "REPLICA", "10000")
+	err = initVar(db, "REPLICA", "1")
 	if err != nil {
 		return err
 	}
@@ -42,12 +44,24 @@ func defineVars(db *sql.DB) error {
 **/
 func initVar(db *sql.DB, name string, value string) error {
 	sql := `
-	INSERT INTO core.VARS (VAR, VALUE)
-	VALUES ($1, $2);`
+	SELECT VALUE
+	FROM core.VARS
+	WHERE VAR = $1;`
 
-	_, err := db.Exec(sql, name, value)
+	item, err := linq.QueryOne(db, sql, name)
 	if err != nil {
 		return err
+	}
+
+	if !item.Ok {
+		sql = `
+		INSERT INTO core.VARS (VAR, VALUE)
+		VALUES ($1, $2);`
+
+		_, err := linq.Exec(db, sql, name, value)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -89,21 +103,18 @@ func getVar(db *sql.DB, name, def string) (string, error) {
 	FROM core.VARS
 	WHERE VAR = $1;`
 
-	rows, err := db.Query(sql, name)
+	item, err := linq.QueryOne(db, sql, name)
 	if err != nil {
 		return def, err
 	}
-	defer rows.Close()
 
-	var value string
-	for rows.Next() {
-		err := rows.Scan(&value)
-		if err != nil {
-			return def, err
-		}
+	if !item.Ok {
+		return def, nil
 	}
 
-	return value, nil
+	result := item.ValStr(def, "value")
+
+	return result, nil
 }
 
 /**
@@ -115,23 +126,9 @@ func getVar(db *sql.DB, name, def string) (string, error) {
 * @return error
 **/
 func getVarInt(db *sql.DB, name string, def int64) (int64, error) {
-	sql := `
-	SELECT VALUE
-	FROM core.VARS
-	WHERE VAR = $1;`
-
-	rows, err := db.Query(sql, name)
+	value, err := getVar(db, name, "0")
 	if err != nil {
 		return def, err
-	}
-	defer rows.Close()
-
-	var value string
-	for rows.Next() {
-		err := rows.Scan(&value)
-		if err != nil {
-			return def, err
-		}
 	}
 
 	result, err := strconv.ParseInt(value, 10, 64)

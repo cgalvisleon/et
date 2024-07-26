@@ -1,6 +1,8 @@
 package mem
 
 import (
+	"fmt"
+	"regexp"
 	"strconv"
 	"sync"
 	"time"
@@ -83,25 +85,46 @@ func (c *Mem) Del(key string) bool {
 	return true
 }
 
-func (c *Mem) Count(key string, expiration time.Duration) int {
+func (c *Mem) Count(key string, expiration time.Duration) int64 {
 	item, ok := c.items[key]
 	if !ok {
-		c.Set(key, "1", expiration)
-		return 1
+		c.Set(key, "0", expiration)
+		return 0
 	} else {
-		result := item.Int() + 1
-		str := strconv.Itoa(result)
+		result := item.Int64() + 1
+		str := strconv.FormatInt(result, 10)
 		c.Set(key, str, expiration)
 		return result
 	}
 }
 
 // Clear method to use in cache
-func (c *Mem) Clear() {
+func (c *Mem) Clear(match string) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	c.items = make(map[string]*Item)
+	matchPattern := func(substring, str string) bool {
+		pattern := fmt.Sprintf(".*%s.*", regexp.QuoteMeta(substring))
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			fmt.Println("Error compilando la expresión regular:", err)
+			return false
+		}
+		return re.MatchString(str)
+	}
+
+	for key := range c.items {
+		if matchPattern(match, key) {
+			delete(c.items, key)
+		}
+	}
+}
+
+func (c *Mem) Empty() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	c.Clear("")
 }
 
 // Len method to use in cache

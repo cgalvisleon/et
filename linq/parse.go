@@ -63,11 +63,11 @@ func SQLParse(sql string, args ...any) string {
 }
 
 /**
-* RowsItems return a items from a sql rows
+* RowsToItems return a items from a sql rows
 * @param rows *sql.Rows
 * @return js.Items
 **/
-func RowsItems(rows *sql.Rows) js.Items {
+func RowsToItems(rows *sql.Rows) js.Items {
 	var result js.Items = js.Items{Result: []js.Json{}}
 	for rows.Next() {
 		var item js.Item
@@ -85,14 +85,14 @@ func RowsItems(rows *sql.Rows) js.Items {
 }
 
 /**
-* RowsItem return a item from a sql rows
+* RowsToItem return a item from a sql rows
 * @param rows *sql.Rows
 * @return js.Item
 **/
-func RowsItem(rows *sql.Rows) js.Item {
-	var result js.Item = js.Item{Result: js.Json{}}
+func RowsToItem(rows *sql.Rows) js.Item {
+	var item js.Item
 	for rows.Next() {
-		err := result.Scan(rows)
+		err := item.Scan(rows)
 		if err != nil {
 			continue
 		}
@@ -100,7 +100,7 @@ func RowsItem(rows *sql.Rows) js.Item {
 		break
 	}
 
-	return result
+	return item
 }
 
 /**

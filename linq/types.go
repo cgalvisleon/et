@@ -49,7 +49,6 @@ const (
 	TpPhone
 	TpFormula  // Formula
 	TpFunction // Function
-	TpRelation // Relation with other model
 	TpRollup   // Rollup (Enrollar) with other model
 	TpCreatedTime
 	TpCreatedBy
@@ -100,8 +99,6 @@ func (t TypeData) String() string {
 		return "Formula"
 	case TpFunction:
 		return "Function"
-	case TpRelation:
-		return "Relation"
 	case TpRollup:
 		return "Rollup"
 	case TpCreatedTime:
@@ -170,8 +167,6 @@ func (t TypeData) Default() interface{} {
 		return ""
 	case TpFunction:
 		return ""
-	case TpRelation:
-		return ""
 	case TpRollup:
 		return ""
 	case TpCreatedTime:
@@ -214,7 +209,7 @@ func (t TypeData) Default() interface{} {
 
 func (t TypeData) Indexed() bool {
 	switch t {
-	case TpKey, TpSelect, TpMultiSelect, TpStatus, TpDate, TpPerson, TpCheckbox, TpURL, TpEmail, TpPhone, TpRelation, TpRollup, TpCreatedTime, TpCreatedBy, TpLastEditedTime, TpLastEditedBy, TpProject, TpSerie, TpCode, TpShape:
+	case TpKey, TpSelect, TpMultiSelect, TpStatus, TpDate, TpPerson, TpCheckbox, TpURL, TpEmail, TpPhone, TpRollup, TpCreatedTime, TpCreatedBy, TpLastEditedTime, TpLastEditedBy, TpProject, TpSerie, TpCode, TpShape:
 		return true
 	default:
 		return false
@@ -333,13 +328,6 @@ func (t TypeData) Describe() *js.Json {
 		return &js.Json{
 			"default":  t.Default(),
 			"function": "",
-		}
-	case TpRelation:
-		return &js.Json{
-			"default":             t.Default(),
-			"related_to":          "",
-			"limit":               0,
-			"show_on_actividades": false,
 		}
 	case TpRollup:
 		return &js.Json{

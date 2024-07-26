@@ -85,6 +85,17 @@ func GetInt(def int, _var string) int {
 	return val
 }
 
+func GetInt64(def int64, _var string) int64 {
+	result := GetStr(strconv.FormatInt(def, 10), _var)
+
+	val, err := strconv.ParseInt(result, 10, 64)
+	if err != nil {
+		return def
+	}
+
+	return val
+}
+
 // Get a boolean environment variable
 func GetBool(def bool, _var string) bool {
 	result := GetStr(strconv.FormatBool(def), _var)

@@ -532,6 +532,8 @@ func (s Json) Array(atrib string) []Json {
 	}
 
 	switch v := val.(type) {
+	case Json:
+		return []Json{v}
 	case []Json:
 		return v
 	case []interface{}:

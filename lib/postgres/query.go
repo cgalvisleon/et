@@ -1,8 +1,7 @@
 package lib
 
 import (
-	"slices"
-
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/linq"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
@@ -29,13 +28,27 @@ func sqlColumns(l *linq.Linq, cols ...*linq.Lselect) string {
 	appendColumns := func(f *linq.Lfrom, c *linq.Column) {
 		if c.TypeColumn == linq.TpDetail {
 			l.GetDetail(c)
+			switch c.TypeData {
+			case linq.TpFunction:
+				val := js.Unquote(c.Default)
+				def = strs.Format(`%s AS %s`, val, c.Up())
+				appendColumn(def)
+			case linq.TpFormula:
+				def = strs.Format(`(%s)`, c.Formula)
+				def = strs.Format(`%s AS %s`, def, c.Up())
+				appendColumn(def)
+			}
 		} else {
 			s := l.GetColumn(c)
 			if c.TypeColumn == linq.TpColumn {
 				def = strs.Format(`%s`, s.As())
 				appendColumn(def)
 			} else if c.TypeColumn == linq.TpAtrib {
-				def = strs.Format(`%s.%s#>>'{%s}'`, f.AS, linq.SourceField.Up(), c.Low())
+				if f.Linq.TypeQuery == linq.TpCommand {
+					def = strs.Format(`%s#>>'{%s}'`, linq.SourceField.Up(), c.Low())
+				} else {
+					def = strs.Format(`%s.%s#>>'{%s}'`, f.AS, linq.SourceField.Up(), c.Low())
+				}
 				def = strs.Format(`%s AS %s`, def, c.Up())
 				appendColumn(def)
 			} else if c.TypeColumn == linq.TpConcat {
@@ -43,14 +56,10 @@ func sqlColumns(l *linq.Linq, cols ...*linq.Lselect) string {
 				def = strs.Format(`CONCAT(%s)`, def)
 				def = strs.Format(`%s AS %s`, def, c.Up())
 				appendColumn(def)
-			} else if slices.Contains([]linq.TypeData{linq.TpRollup, linq.TpRelation}, c.TypeData) {
+			} else if c.TypeData == linq.TpRollup {
 				r := c.RelationTo
 				parent := l.From(r.Parent)
 				def = strs.Format(`(SELECT %s FROM %s AS %s WHERE %s LIMIT 1)`, r.SelectsAs(l), parent.Table(), parent.AS, r.WhereAs(l))
-				def = strs.Format(`%s AS %s`, def, c.Up())
-				appendColumn(def)
-			} else if c.TypeData == linq.TpFormula {
-				def = strs.Format(`(%s)`, c.Formula)
 				def = strs.Format(`%s AS %s`, def, c.Up())
 				appendColumn(def)
 			}
@@ -101,6 +110,16 @@ func sqlData(l *linq.Linq, cols ...*linq.Lselect) string {
 	appendColumns := func(f *linq.Lfrom, c *linq.Column) {
 		if c.TypeColumn == linq.TpDetail {
 			l.GetDetail(c)
+			switch c.TypeData {
+			case linq.TpFunction:
+				val := js.Unquote(c.Default)
+				def = strs.Format(`'%s', %s`, c.Low(), val)
+				appendObjects(def)
+			case linq.TpFormula:
+				def = strs.Format(`'%s', %s`, c.Low(), def)
+				def = strs.Format(`(%s)`, c.Formula)
+				appendObjects(def)
+			}
 		} else if !c.IsDataField {
 			s := l.GetColumn(c)
 			if c.TypeColumn == linq.TpColumn { // 'name', A.NAME
@@ -119,15 +138,11 @@ func sqlData(l *linq.Linq, cols ...*linq.Lselect) string {
 				def = strs.Format(`CONCAT(%s)`, def)
 				def = strs.Format(`'%s', %s`, c.Low(), def)
 				appendObjects(def)
-			} else if slices.Contains([]linq.TypeData{linq.TpRollup, linq.TpRelation}, c.TypeData) {
+			} else if c.TypeData == linq.TpRollup {
 				r := c.RelationTo
 				parent := l.From(r.Parent)
 				def = strs.Format(`(SELECT %s FROM %s AS %s WHERE %s LIMIT 1)`, r.SelectsAs(l), parent.Table(), parent.AS, r.WhereAs(l))
 				def = strs.Format(`'%s', %s`, c.Low(), def)
-				appendObjects(def)
-			} else if c.TypeData == linq.TpFormula {
-				def = strs.Format(`'%s', %s`, c.Low(), def)
-				def = strs.Format(`(%s)`, c.Formula)
 				appendObjects(def)
 			}
 		}

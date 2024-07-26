@@ -49,11 +49,11 @@ type Metrics struct {
 
 type Request struct {
 	Tag     string
-	Day     int
-	Hour    int
-	Minute  int
-	Seccond int
-	Limit   int
+	Day     int64
+	Hour    int64
+	Minute  int64
+	Seccond int64
+	Limit   int64
 }
 
 func NewMetric(r *http.Request) *Metrics {
@@ -95,7 +95,7 @@ func (m *Metrics) CallRequests(tag string) *Request {
 		Hour:    cache.Count(strs.Format(`%s-%d`, tag, time.Now().Unix()/3600), 3600),
 		Minute:  cache.Count(strs.Format(`%s-%d`, tag, time.Now().Unix()/60), 60),
 		Seccond: cache.Count(strs.Format(`%s-%d`, tag, time.Now().Unix()/1), 1),
-		Limit:   envar.GetInt(400, "REQUESTS_LIMIT"),
+		Limit:   envar.GetInt64(400, "REQUESTS_LIMIT"),
 	}
 }
 

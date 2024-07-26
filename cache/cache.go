@@ -16,8 +16,9 @@ type Cache interface {
 	Set(key string, value string, expiration time.Duration) string
 	Get(key string, def string) string
 	Del(key string) bool
-	Count(key string, expiration time.Duration) int
-	Clear()
+	Count(key string, expiration time.Duration) int64
+	Clear(match string)
+	Empty()
 	Len() int
 	Keys() []string
 	Values() []string
@@ -242,7 +243,7 @@ func Del(key string) bool {
 * @param expiration time.Duration
 * @return int
 **/
-func Count(key string, expiration time.Duration) int {
+func Count(key string, expiration time.Duration) int64 {
 	if conn == nil {
 		logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
@@ -253,12 +254,12 @@ func Count(key string, expiration time.Duration) int {
 /**
 * Clear all keys in cache
 **/
-func Clear() {
+func Clear(match string) {
 	if conn == nil {
 		logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
 
-	conn.Clear()
+	conn.Clear(match)
 }
 
 /**
@@ -295,6 +296,102 @@ func Values() []string {
 	}
 
 	return conn.Values()
+}
+
+/**
+* Int return a int from cache
+* @param key string
+* @param def int
+* @return int
+**/
+func Int(key string, def int64) int64 {
+	if conn == nil {
+		return def
+	}
+
+	val := Get(key, nil)
+	if val == nil {
+		return def
+	}
+
+	result, ok := val.(int64)
+	if !ok {
+		return def
+	}
+
+	return result
+}
+
+/**
+* Num return a float64 from cache
+* @param key string
+* @param def float64
+* @return float64
+**/
+func Num(key string, def float64) float64 {
+	if conn == nil {
+		return def
+	}
+
+	val := Get(key, nil)
+	if val == nil {
+		return def
+	}
+
+	result, ok := val.(float64)
+	if !ok {
+		return def
+	}
+
+	return result
+}
+
+/**
+* Bool return a bool from cache
+* @param key string
+* @param def bool
+* @return bool
+**/
+func Bool(key string, def bool) bool {
+	if conn == nil {
+		return def
+	}
+
+	val := Get(key, nil)
+	if val == nil {
+		return def
+	}
+
+	result, ok := val.(bool)
+	if !ok {
+		return def
+	}
+
+	return result
+}
+
+/**
+* Time return a time.Time from cache
+* @param key string
+* @param def time.Time
+* @return time.Time
+**/
+func Time(key string, def time.Time) time.Time {
+	if conn == nil {
+		return def
+	}
+
+	val := Get(key, nil)
+	if val == nil {
+		return def
+	}
+
+	result, ok := val.(time.Time)
+	if !ok {
+		return def
+	}
+
+	return result
 }
 
 /**

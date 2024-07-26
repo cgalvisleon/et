@@ -49,13 +49,11 @@ func upSertMigrateId(db *sql.DB, old_id, id, tag string) error {
 	WHERE OLD_ID = $1
 	AND TAG = $2`
 
-	rows, err := db.Query(sql, old_id, tag)
+	items, err := linq.Query(db, sql, old_id, tag)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
 
-	items := linq.RowsItems(rows)
 	if items.Count == 0 {
 		return insertMigrateId(db, old_id, id, tag)
 	}
@@ -66,7 +64,7 @@ func upSertMigrateId(db *sql.DB, old_id, id, tag string) error {
 	WHERE OLD_ID = $2
 	AND TAG = $3;`
 
-	_, err = db.Exec(sql, id, old_id, tag)
+	_, err = linq.Query(db, sql, id, old_id, tag)
 	if err != nil {
 		return err
 	}
@@ -82,17 +80,16 @@ func getMigrateId(db *sql.DB, old_id, tag string) (string, error) {
 	WHERE OLD_ID = $1
 	AND TAG = $2`
 
-	rows, err := db.Query(sql, old_id, tag)
+	items, err := linq.QueryOne(db, sql, old_id, tag)
 	if err != nil {
 		return "", err
 	}
-	defer rows.Close()
 
-	items := linq.RowsItems(rows)
-	if items.Count == 0 {
+	if !items.Ok {
 		return old_id, nil
 	}
 
-	item := items.Result[0]
-	return item.Key("_id"), nil
+	result := items.Key("_id")
+
+	return result, nil
 }

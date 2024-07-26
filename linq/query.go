@@ -94,7 +94,7 @@ func Query(db *sql.DB, sql string, args ...any) (js.Items, error) {
 	}
 	defer rows.Close()
 
-	result := RowsItems(rows)
+	result := RowsToItems(rows)
 
 	return result, nil
 }
@@ -114,7 +114,7 @@ func QueryOne(db *sql.DB, sql string, args ...any) (js.Item, error) {
 	}
 	defer rows.Close()
 
-	result := RowsItem(rows)
+	result := RowsToItem(rows)
 
 	return result, nil
 }
@@ -134,7 +134,7 @@ func Exec(db *sql.DB, sql string, args ...any) (js.Item, error) {
 	}
 	defer rows.Close()
 
-	result := RowsItem(rows)
+	result := RowsToItem(rows)
 
 	return result, nil
 }
@@ -158,6 +158,10 @@ func (l *Linq) query(sql string, args ...any) (js.Items, error) {
 	l.Sql = SQLParse(sql, args...)
 	if l.debug {
 		debug(l)
+	}
+
+	if l.showModel {
+		showModel(l)
 	}
 
 	items, err := l.DB.Query(l.Sql)
@@ -189,6 +193,10 @@ func (l *Linq) data(sql string, args ...any) (js.Items, error) {
 		debug(l)
 	}
 
+	if l.showModel {
+		showModel(l)
+	}
+
 	items, err := l.DB.Data(SourceField.Low(), l.Sql)
 	if err != nil {
 		return js.Items{}, err
@@ -216,6 +224,10 @@ func (l *Linq) exec(sql string, args ...any) (js.Item, error) {
 	l.Sql = SQLParse(sql, args...)
 	if l.debug {
 		debug(l)
+	}
+
+	if l.showModel {
+		showModel(l)
 	}
 
 	result, err := l.DB.Exec(sql, args...)

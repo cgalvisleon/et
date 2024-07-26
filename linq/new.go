@@ -25,6 +25,7 @@ type ColRol struct {
 type ColDetail struct {
 	Name        string
 	Description string
+	Default     interface{}
 	FuncDetail  FuncDetail
 }
 
@@ -56,7 +57,6 @@ type Definition struct {
 	Required    []ColRequired
 	PrimaryKey  []string
 	ForeignKey  []ColFkey
-	Relation    []ColRol
 	Rollup      []ColRol
 	Details     []ColDetail
 	Formulas    []ColFormula
@@ -85,11 +85,8 @@ func MOdel(def *Definition) *Model {
 	for _, ref := range def.Rollup {
 		result.DefineRollup(ref.Name, ref.ForeignKey, ref.Parent, ref.ParentKey, ref.Select)
 	}
-	for _, ref := range def.Relation {
-		result.DefineRelation(ref.Name, ref.ForeignKey, ref.Parent, ref.ParentKey, ref.Select, ref.Calculate)
-	}
 	for _, det := range def.Details {
-		result.DefineDetail(det.Name, det.Description, det.FuncDetail)
+		result.DefineDetail(det.Name, det.Description, det.Default, det.FuncDetail)
 	}
 	for _, frm := range def.Formulas {
 		result.DefineFormula(frm.Name, frm.Formula)

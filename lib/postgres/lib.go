@@ -162,15 +162,11 @@ func (d *Postgres) UsedCore() bool {
 * @return js.Items
 * @return error
 **/
-func (d *Postgres) Query(query string, args ...any) (js.Items, error) {
-	rows, err := d.DB.Query(query, args...)
+func (d *Postgres) Query(sql string, args ...any) (js.Items, error) {
+	result, err := linq.Query(d.DB, sql, args...)
 	if err != nil {
 		return js.Items{}, err
 	}
-
-	defer rows.Close()
-
-	result := linq.RowsItems(rows)
 
 	return result, nil
 }
@@ -182,20 +178,13 @@ func (d *Postgres) Query(query string, args ...any) (js.Items, error) {
 * @return js.Item
 * @return error
 **/
-func (d *Postgres) QueryOne(query string, args ...any) (js.Item, error) {
-	items, err := d.Query(query, args...)
+func (d *Postgres) QueryOne(sql string, args ...any) (js.Item, error) {
+	result, err := linq.QueryOne(d.DB, sql, args...)
 	if err != nil {
 		return js.Item{}, err
 	}
 
-	if items.Count == 0 {
-		return js.Item{}, nil
-	}
-
-	return js.Item{
-		Ok:     true,
-		Result: items.Result[0],
-	}, nil
+	return result, nil
 }
 
 /**
@@ -204,8 +193,8 @@ func (d *Postgres) QueryOne(query string, args ...any) (js.Item, error) {
 * @param args ...any
 * @return error
 **/
-func (d *Postgres) Exec(query string, args ...any) error {
-	_, err := d.DB.Exec(query, args...)
+func (d *Postgres) Exec(sql string, args ...any) error {
+	_, err := linq.Exec(d.DB, sql, args...)
 	if err != nil {
 		return err
 	}

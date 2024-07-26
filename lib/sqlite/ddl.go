@@ -27,8 +27,6 @@ func ddlDefault(col *linq.Column) string {
 		result = `NOW()`
 	case linq.TpCheckbox:
 		result = `FALSE`
-	case linq.TpRelation:
-		result = `''`
 	case linq.TpRollup:
 		result = `''`
 	case linq.TpCreatedTime:

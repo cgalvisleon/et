@@ -42,42 +42,11 @@ func (m *Model) DefineAtrib(name, description string, typeData TypeData, _defaul
  * @param _default interface{}
  * @return *Column
 **/
-func (m *Model) DefineDetail(name, description string, funcDetail FuncDetail) *Column {
-	result := newColumn(m, name, description, TpDetail, TpFunction, nil)
+func (m *Model) DefineDetail(name, description string, _default interface{}, funcDetail FuncDetail) *Column {
+	result := newColumn(m, name, description, TpDetail, TpFunction, _default)
 	result.FuncDetail = funcDetail
 
 	m.Details = append(m.Details, result)
-
-	return result
-}
-
-/**
- * Define relation to object in the model
- * @param name string
- * @param foreignKey []string
- * @param parentModel *Model
- * @param parentKey []string
- * @param _select []string
- * @param tpCalculate TpCaculate
- * @return *Column
-**/
-func (m *Model) DefineRelation(name string, foreignKey []string, parentModel *Model, parentKey []string, _select []string, tpCalculate TpCaculate) *Column {
-	result := newColumn(m, name, "", TpDetail, TpRelation, TpRelation.Default())
-	if result == nil {
-		return nil
-	}
-
-	result.RelationTo = &Relation{
-		ForeignKey: foreignKey,
-		Parent:     parentModel,
-		ParentKey:  parentKey,
-		Select:     _select,
-		Calculate:  tpCalculate,
-		Limit:      tpCalculate.Limit(),
-	}
-
-	m.DefineForeignKey(foreignKey, parentModel, parentKey)
-	m.RelationTo = append(m.RelationTo, result)
 
 	return result
 }

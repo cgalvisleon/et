@@ -38,7 +38,7 @@ func NewDatabase(name, description string, driver Driver) (*Database, error) {
 
 	db, err := driver.Connect()
 	if err != nil {
-		return nil, logs.Alert(err)
+		return nil, err
 	}
 
 	result := &Database{

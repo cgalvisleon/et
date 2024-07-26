@@ -43,8 +43,6 @@ func ddlDefault(col *linq.Column) string {
 		result = `NOW()`
 	case linq.TpCheckbox:
 		result = `FALSE`
-	case linq.TpRelation:
-		result = `''`
 	case linq.TpRollup:
 		result = `''`
 	case linq.TpCreatedTime:
@@ -100,7 +98,7 @@ func ddlDefault(col *linq.Column) string {
 **/
 func ddlType(col *linq.Column) string {
 	switch col.TypeData {
-	case linq.TpKey, linq.TpRelation, linq.TpRollup, linq.TpStatus, linq.TpPhone, linq.TpSelect, linq.TpMultiSelect, linq.TpCode:
+	case linq.TpKey, linq.TpRollup, linq.TpStatus, linq.TpPhone, linq.TpSelect, linq.TpMultiSelect, linq.TpCode:
 		return "VARCHAR(80)"
 	case linq.TpMemo:
 		return "TEXT"

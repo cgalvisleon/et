@@ -87,6 +87,20 @@ func (i *Item) Int() int {
 }
 
 /**
+* Int64 return the value of item
+* @return int64
+**/
+func (i *Item) Int64() int64 {
+	result := i.Get()
+	val, ok := result.(int64)
+	if !ok {
+		return 0
+	}
+
+	return val
+}
+
+/**
 * Float return the value of item
 * @return float64
 **/

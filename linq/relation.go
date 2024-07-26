@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/cgalvisleon/et/js"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 )
 
@@ -117,6 +118,10 @@ func (r *Relation) SelectsAs(l *Linq) string {
 	if n == 1 {
 		v := r.Select[0]
 		col := parent.Column(v)
+		if col == nil {
+			logs.Debugf(`Column %s not found in %s`, v, parent.AS)
+		}
+
 		def := parent.AsColumn(col)
 
 		return def
@@ -125,6 +130,10 @@ func (r *Relation) SelectsAs(l *Linq) string {
 	var result string
 	for _, v := range r.Select {
 		col := parent.Column(v)
+		if col == nil {
+			logs.Debugf(`Column %s not found in %s`, v, parent.AS)
+		}
+
 		def := parent.AsColumn(col)
 		def = strs.Format(`'%s', %s`, strs.Lowcase(v), def)
 		result = strs.Append(result, def, ", ")

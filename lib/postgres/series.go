@@ -6,10 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/linq"
 )
-
-var items map[string]map[int64]int64
 
 /**
 * defineSeries define the series table
@@ -74,14 +73,11 @@ func currentSerie(db *sql.DB, tag string, lock *sync.RWMutex) (int, error) {
 	FROM core.SERIES
 	WHERE SERIE = $1 LIMIT 1;`
 
-	rows, err := db.Query(sql, tag)
+	item, err := linq.QueryOne(db, sql, tag)
 	if err != nil {
 		return 0, err
 	}
 
-	defer rows.Close()
-
-	item := linq.RowsItem(rows)
 	if !item.Ok {
 		return 0, nil
 	}
@@ -93,34 +89,23 @@ func currentSerie(db *sql.DB, tag string, lock *sync.RWMutex) (int, error) {
 
 func nextUUId(db *sql.DB, tag string, lock *sync.RWMutex) (int64, error) {
 	now := time.Now()
-	result := now.UnixMilli()
-	replica, err := getVarInt(db, "REPLICA", 10000)
+	result := now.UnixMilli() * 10000
+	replica, err := getVarInt(db, "REPLICA", 1)
 	if err != nil {
 		return 0, err
 	}
 
-	result = result * replica
-	count, ok := items[tag][result]
-	if ok {
-		lock.Lock()
-		defer lock.Unlock()
-		count++
+	if replica < 10 {
+		replica = replica * 1000
+	} else if replica < 100 {
+		replica = replica * 100
 	} else {
-		lock.Lock()
-		defer lock.Unlock()
-		count = 0
+		replica = replica * 10
 	}
 
-	items[tag][result] = count
-
-	clean := func() {
-		delete(items[tag], result)
-	}
-
-	duration := 1 * time.Second
-	if duration != 0 {
-		go time.AfterFunc(duration, clean)
-	}
+	result = result + replica
+	key := fmt.Sprintf("%s:%d", tag, result)
+	count := cache.Count(key, 1)
 
 	result = result + count
 	return result, nil
@@ -305,8 +290,4 @@ func (d *Postgres) DeleteSerie(tag string) error {
 	}
 
 	return nil
-}
-
-func init() {
-	items = make(map[string]map[int64]int64)
 }

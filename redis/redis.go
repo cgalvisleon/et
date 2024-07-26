@@ -123,11 +123,11 @@ func (c *Conn) Del(key string) bool {
 * @param expiration time.Duration
 * @return int
 **/
-func (c *Conn) Count(key string, expiration time.Duration) int {
+func (c *Conn) Count(key string, expiration time.Duration) int64 {
 	lock := c.lock(key)
 	lock.RLock()
 
-	def := "0"
+	def := "-1"
 	val := c.Get(key, def)
 	lock.RUnlock()
 
@@ -135,11 +135,11 @@ func (c *Conn) Count(key string, expiration time.Duration) int {
 	defer lock.Unlock()
 
 	if val == def {
-		c.Set(key, "1", expiration)
-		return 1
+		c.Set(key, "0", expiration)
+		return 0
 	}
 
-	num, err := strconv.Atoi(val)
+	num, err := strconv.ParseInt(val, 10, 64)
 	if logs.Alert(err) != nil {
 		return 0
 	}
@@ -151,8 +151,20 @@ func (c *Conn) Count(key string, expiration time.Duration) int {
 }
 
 // Clear method to use in cache
-func (c *Conn) Clear() {
-	c.db.FlushDB(c.ctx)
+func (c *Conn) Clear(match string) {
+	keys, err := c.db.Keys(c.ctx, match).Result()
+	if logs.Alert(err) != nil {
+		return
+	}
+
+	for _, key := range keys {
+		c.Del(key)
+	}
+}
+
+// Empty method to use in cache
+func (c *Conn) Empty() {
+	conn.db.FlushAll(c.ctx)
 }
 
 // Len method to use in cache

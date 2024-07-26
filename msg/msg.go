@@ -39,6 +39,7 @@ const (
 	RECORD_ON_DELETE        = "Record on deleted"
 	RECORD_IN_PROCESS       = "Record in process"
 	RECORD_BATCH_LOAD       = "Record batch loaded"
+	RECORD_ALREADY_EXISTS   = "Record already exists: (%s)"
 	ERR_WHERE_NOT_DEFINED   = "Condition where not defined"
 	ERR_DB_NOT_EXISTS       = "Conection to database not exist"
 	ERR_DB_INDEX_NOT_EXISTS = "Database not exist index:(%d)"

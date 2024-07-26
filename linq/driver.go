@@ -69,8 +69,8 @@ type Driver interface {
 	// Vars
 	SetVar(key, value string) error
 	DelVal(key string) error
-	Var(key string) (string, error)
-	VarInt(key string) (int64, error)
+	Var(key string, def string) (string, error)
+	VarInt(key string, def int64) (int64, error)
 	// Serires
 	UUIndex(tag string) (int64, error)
 	NextSerie(tag string) (int, error)

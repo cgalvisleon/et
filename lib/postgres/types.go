@@ -84,7 +84,7 @@ func ddlDefault(col *linq.Column) string {
 	case linq.TpCode:
 		result = `'000000'`
 	case linq.TpShape:
-		result = `'{ "lat": 0, "lng": 0, "located": false }'`
+		result = `'{ "tp": 0, "lat": 0, "lng": 0, "located": false }'`
 	default:
 		val := col.Default
 		result = strs.Format(`%v`, js.Quote(val))

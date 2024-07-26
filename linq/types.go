@@ -6,6 +6,29 @@ import (
 	"github.com/cgalvisleon/et/js"
 )
 
+type TypeShape int
+
+const (
+	ShapePoint TypeShape = iota
+	ShapeLine
+	ShapePolygon
+	ShapeMultiPart
+)
+
+func (t TypeShape) String() string {
+	switch t {
+	case ShapePoint:
+		return "Point"
+	case ShapeLine:
+		return "Line"
+	case ShapePolygon:
+		return "Polygon"
+	case ShapeMultiPart:
+		return "MultiPart"
+	}
+	return "Unknown"
+}
+
 type TypeData int
 
 const (
@@ -179,6 +202,7 @@ func (t TypeData) Default() interface{} {
 		return "000000"
 	case TpShape:
 		return js.Json{
+			"tp":      ShapePoint,
 			"lat":     0,
 			"lng":     0,
 			"located": false,
@@ -373,6 +397,7 @@ func (t TypeData) Describe() *js.Json {
 	case TpShape:
 		return &js.Json{
 			"default": js.Json{
+				"tp":      ShapePoint,
 				"lat":     0,
 				"lng":     0,
 				"located": false,

@@ -183,11 +183,12 @@ func (d *Postgres) DelVal(key string) error {
 /**
 * Var get a var
 * @param key string
+* @param def string
 * @return string
 * @return error
 **/
-func (d *Postgres) Var(key string) (string, error) {
-	return getVar(d.DB, key, "")
+func (d *Postgres) Var(key string, def string) (string, error) {
+	return getVar(d.DB, key, def)
 }
 
 /**

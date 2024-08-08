@@ -122,11 +122,6 @@ func (d *Postgres) Connect() (*sql.DB, error) {
 		return nil, err
 	}
 
-	err = defineModels(db)
-	if err != nil {
-		return nil, err
-	}
-
 	err = defineSync(db)
 	if err != nil {
 		return nil, err

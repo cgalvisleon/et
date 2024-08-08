@@ -1,13 +1,18 @@
-package nats
+package mongo
 
 import (
+	"context"
+
 	"github.com/cgalvisleon/et/logs"
-	"github.com/nats-io/nats.go"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type Conn struct {
-	conn   *nats.Conn
-	events *nats.Subscription
+	ctx    context.Context
+	host   string
+	port   int
+	dbname string
+	db     *mongo.Client
 }
 
 var conn *Conn
@@ -17,24 +22,17 @@ func Load() (*Conn, error) {
 		return conn, nil
 	}
 
-	c, err := connect()
+	var err error
+	conn, err = connect()
 	if err != nil {
 		return nil, logs.Alert(err)
-	}
-
-	conn = &Conn{
-		conn: c,
 	}
 
 	return conn, nil
 }
 
 func Close() {
-	if conn.conn != nil {
-		conn.conn.Close()
-	}
-
-	if conn.events != nil {
-		conn.events.Unsubscribe()
+	if conn != nil {
+		conn.db.Disconnect(conn.ctx)
 	}
 }

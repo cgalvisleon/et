@@ -51,7 +51,10 @@ func NewDatabase(name, description string, driver Driver) (*Database, error) {
 		Models:      []*Model{},
 	}
 
-	driver.SetListen(result.handlerListened)
+	if driver.UsedCore() {
+		driver.SetListen(result.handlerListened)
+	}
+
 	result.Driver = &driver
 
 	dbs = append(dbs, result)
@@ -232,21 +235,16 @@ func (d *Database) initModel(model *Model) error {
 
 	newColumn(model, IdTField.Low(), "Universal key", TpColumn, TpKey, TpKey.Default())
 
-	result, err := driver.GetModel(model.Schema.Name, model.Name, model.Kind())
+	exist, err := driver.ModelExist(model.Schema.Name, model.Name)
 	if err != nil {
 		return err
 	}
 
-	if !result.Ok {
+	if !exist {
 		sql := driver.DefineSql(model)
 		_, err = Query(d.DB, sql)
 		if err != nil {
-			return err
-		}
-
-		err = driver.InsertModel(model.Schema.Name, model.Name, model.Kind(), model.Version, model.Describe())
-		if err != nil {
-			return err
+			return logs.Alertf("%s\n%s", err.Error(), sql)
 		}
 	}
 
@@ -369,36 +367,6 @@ func (d *Database) QueryOne(sql string, args ...any) (js.Item, error) {
 * @return js.Items
 * @return error
 **/
-func (d *Database) Data(source, sql string, args ...any) (js.Items, error) {
-	rows, err := query(d.DB, sql, args...)
-	if err != nil {
-		return js.Items{}, logs.Error(err)
-	}
-	defer rows.Close()
-
-	var result js.Items = js.Items{}
-	for rows.Next() {
-		var item js.Item
-		err := item.Scan(rows)
-		if err != nil {
-			continue
-		}
-
-		result.Result = append(result.Result, item.Json(source))
-		result.Ok = true
-		result.Count++
-	}
-
-	return result, nil
-}
-
-/**
-* Exec execute a query
-* @param sql string
-* @param args ...any
-* @return js.Items
-* @return error
-**/
 func (d *Database) Exec(sql string, args ...any) (js.Item, error) {
 	result, err := Exec(d.DB, sql, args...)
 	if err != nil {
@@ -408,6 +376,44 @@ func (d *Database) Exec(sql string, args ...any) (js.Item, error) {
 	return result, nil
 }
 
+/**
+* Data execute a query
+* @param sql string
+* @param args ...any
+* @return js.Items
+* @return error
+**/
+func (d *Database) Data(source, sql string, args ...any) (js.Items, error) {
+	result, err := Data(d.DB, sql, args...)
+	if err != nil {
+		return js.Items{}, err
+	}
+
+	return result, nil
+}
+
+/**
+* DataOne execute a query and return one item
+* @param sql string
+* @param args ...any
+* @return js.Item
+* @return error
+**/
+func (d *Database) DataOne(source, sql string, args ...any) (js.Item, error) {
+	result, err := DataOne(d.DB, sql, args...)
+	if err != nil {
+		return js.Item{}, err
+	}
+
+	return result, nil
+}
+
+/**
+* UUIndex return the next index
+* @param tag string
+* @return int64
+* @return error
+**/
 func (d *Database) UUIndex(tag string) (int64, error) {
 	driver := *d.Driver
 	return driver.UUIndex(tag)

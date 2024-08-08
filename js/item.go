@@ -2,6 +2,7 @@ package js
 
 import (
 	"database/sql"
+	"encoding/json"
 	"reflect"
 	"strings"
 	"time"
@@ -18,37 +19,28 @@ type Item struct {
 }
 
 /**
-* Scan load rows to a item
-* @param rows *sql.Rows
+* FromString
+* @param src string
 * @return error
 **/
-func (it *Item) Scan(rows *sql.Rows) error {
-	cols, err := rows.Columns()
+func (it *Item) FromString(src string) error {
+	err := json.Unmarshal([]byte(src), &it)
 	if err != nil {
 		return err
 	}
 
-	values := make([]interface{}, len(cols))
-	pointers := make([]interface{}, len(cols))
-	for i := range values {
-		pointers[i] = &values[i]
-	}
+	return nil
+}
 
-	if err := rows.Scan(pointers...); err != nil {
-		return err
-	}
-
+/**
+* ScanRows load rows to a item
+* @param rows *sql.Rows
+* @return error
+**/
+func (it *Item) ScanRows(rows *sql.Rows) error {
 	it.Ok = true
 	it.Result = make(Json)
-	for i, colName := range cols {
-		if values[i] == nil {
-			it.Result[colName] = nil
-		} else if reflect.TypeOf(values[i]).String() == "[]uint8" {
-			it.Result[colName] = ToUnit8Json(values[i])
-		} else {
-			it.Result[colName] = values[i]
-		}
-	}
+	it.Result.ScanRows(rows)
 
 	return nil
 }
@@ -268,6 +260,15 @@ func (it *Item) Int(atribs ...string) int {
 }
 
 /**
+* Int64 return the value of the key
+* @param atribs ...string
+* @return int
+**/
+func (it *Item) Int64(atribs ...string) int64 {
+	return it.Result.Int64(atribs...)
+}
+
+/**
 * Num return float64 value of the key
 * @param atribs ...string
 * @return float64
@@ -332,11 +333,23 @@ func (it *Item) Array(atrib string) []Json {
 }
 
 /**
+* ToByte covert to byte values
+* @return []byte
+**/
+func (it *Item) ToByte() []byte {
+	return Json{
+		"Ok":     it.Ok,
+		"Result": it.Result,
+	}.ToByte()
+}
+
+/**
 * ToString convert to string values
 * @return string
 **/
 func (it *Item) ToString() string {
-	return it.Result.ToString()
+	result := it.ToJson()
+	return result.ToString()
 }
 
 /**
@@ -348,15 +361,4 @@ func (it *Item) ToJson() Json {
 		"Ok":     it.Ok,
 		"Result": it.Result,
 	}
-}
-
-/**
-* ToByte covert to byte values
-* @return []byte
-**/
-func (it *Item) ToByte() []byte {
-	return Json{
-		"Ok":     it.Ok,
-		"Result": it.Result,
-	}.ToByte()
 }

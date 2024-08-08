@@ -10,7 +10,7 @@ import (
 	"time"
 
 	lg "github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/telemetry"
+	"github.com/cgalvisleon/et/utility"
 )
 
 var (
@@ -49,15 +49,15 @@ func Logger(next http.Handler) http.Handler {
 func RequestLogger(f LogFormatter) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
-			tel := telemetry.NewMetric(r)
-			w.Header().Set("Reqid", tel.ReqID)
+			metric := NewMetric(r)
+			metric.CallExecute()
+			w.Header().Set("Reqid", utility.UUID())
 			ww := NewWrapResponseWriter(w, r.ProtoMajor)
-
-			tel.CallExecute()
+			metric.CallExecute()
 			entry := f.NewLogEntry(r)
 
 			defer func() {
-				go tel.DoneResponse(ww.Status(), int64(ww.BytesWritten()))
+				go metric.DoneFn(http.StatusOK, w, r)
 			}()
 
 			next.ServeHTTP(ww, WithLogEntry(r, entry))
@@ -150,9 +150,7 @@ func (l *defaultLogEntry) Write(status, bytes int, header http.Header, elapsed t
 	default:
 		lg.CW(l.buf, lg.BRed, "%03d", status)
 	}
-
 	lg.CW(l.buf, lg.BBlue, " %dB", bytes)
-
 	l.buf.WriteString(" in ")
 	if elapsed < 500*time.Millisecond {
 		lg.CW(l.buf, lg.NGreen, "%s", elapsed)
@@ -161,7 +159,6 @@ func (l *defaultLogEntry) Write(status, bytes int, header http.Header, elapsed t
 	} else {
 		lg.CW(l.buf, lg.NRed, "%s", elapsed)
 	}
-
 	l.Logger.Print(l.buf.String())
 }
 

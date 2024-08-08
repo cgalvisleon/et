@@ -348,7 +348,9 @@ func sqlLimit(l *linq.Linq) {
 	}
 
 	var result string
-	if l.Limit < linq.MaxRows {
+	if l.Limit <= 0 {
+		result = strs.Format(`LIMIT %d`, linq.MaxRows)
+	} else if l.Limit < linq.MaxRows {
 		result = strs.Format(`LIMIT %d`, l.Limit)
 	} else {
 		result = strs.Format(`LIMIT %d`, linq.MaxRows)

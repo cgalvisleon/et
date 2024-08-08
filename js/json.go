@@ -1,7 +1,7 @@
 package js
 
 import (
-	"database/sql/driver"
+	"database/sql"
 	"encoding/json"
 	"reflect"
 	"strconv"
@@ -49,16 +49,6 @@ func Marshal(src interface{}) (Json, error) {
 }
 
 /**
-* Value return drive value of json
-* @return driver.Value, error
-**/
-func (s Json) Value() (driver.Value, error) {
-	j, err := json.Marshal(s)
-
-	return j, err
-}
-
-/**
 * Scan load rows to a json
 * @param src interface{}
 * @return error
@@ -86,32 +76,55 @@ func (s *Json) Scan(src interface{}) error {
 }
 
 /**
-* ToScan convert a json to a struct
-* @param src interface{}
+* ScanRows load rows to a json
+* @param rows *sql.Rows
 * @return error
 **/
-func (s *Json) ToScan(src interface{}) error {
-	v := reflect.ValueOf(src).Elem()
-
-	for k, val := range *s {
-		field := v.FieldByName(k)
-		if !field.IsValid() {
-			logs.Errorf("Json/ToScan - No such field:%s in struct", k)
-			continue
-		}
-		if !field.CanSet() {
-			logs.Errorf("Json/ToScan - Cannot set field:%s in struct", k)
-			continue
-		}
-		valType := reflect.ValueOf(val)
-		if field.Type() != valType.Type() {
-			return logs.Errorf("Json/ToScan - Provided value type didn't match obj field:%s type", k)
-		}
-		field.Set(valType)
+func (s *Json) ScanRows(rows *sql.Rows) error {
+	cols, err := rows.Columns()
+	if err != nil {
+		return err
 	}
+
+	values := make([]interface{}, len(cols))
+	pointers := make([]interface{}, len(cols))
+	for i := range values {
+		pointers[i] = &values[i]
+	}
+
+	if err := rows.Scan(pointers...); err != nil {
+		return err
+	}
+
+	result := make(Json)
+	for i, col := range cols {
+		src := values[i]
+		switch v := src.(type) {
+		case nil:
+			result[col] = nil
+		case []byte:
+			var bt interface{}
+			err = json.Unmarshal(v, &bt)
+			if err == nil {
+				result[col] = bt
+				continue
+			}
+			result[col] = src
+			logs.Debugf(`[]byte Col:%s Type:%v Value:%v`, col, reflect.TypeOf(v), v)
+		default:
+			result[col] = src
+		}
+	}
+
+	*s = result
 
 	return nil
 }
+
+/**
+* Value return drive value of json
+* @return driver.Value, error
+**/
 
 /**
 * ToByte convert a json to a []byte
@@ -191,7 +204,7 @@ func (s Json) ToItem(src interface{}) Item {
 * Empty return if the json is empty
 * @return bool
 **/
-func (s Json) Empty() bool {
+func (s Json) IsEmpty() bool {
 	return len(s) == 0
 }
 
@@ -246,6 +259,33 @@ func (s Json) ValInt(_default int, atribs ...string) int {
 		return int(v)
 	case string:
 		i, err := strconv.Atoi(v)
+		if err != nil {
+			return _default
+		}
+		return i
+	default:
+		return _default
+	}
+}
+
+func (s Json) ValInt64(_default int64, atribs ...string) int64 {
+	val := s.ValAny(_default, atribs...)
+
+	switch v := val.(type) {
+	case int:
+		return int64(v)
+	case float64:
+		return int64(v)
+	case float32:
+		return int64(v)
+	case int16:
+		return int64(v)
+	case int32:
+		return int64(v)
+	case int64:
+		return v
+	case string:
+		i, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
 			return _default
 		}
@@ -422,6 +462,15 @@ func (s Json) Int(atribs ...string) int {
 }
 
 /**
+* Int64 return the value of the key
+* @param atribs ...string
+* @return int64
+**/
+func (s Json) Int64(atribs ...string) int64 {
+	return s.ValInt64(0, atribs...)
+}
+
+/**
 * Num return the value of the key
 * @param atribs ...string
 * @return float64
@@ -531,40 +580,18 @@ func (s Json) Array(atrib string) []Json {
 		return []Json{}
 	}
 
-	switch v := val.(type) {
-	case Json:
-		return []Json{v}
-	case []Json:
-		return v
-	case []interface{}:
-		var result []Json
-		for _, val := range v {
-			switch val := val.(type) {
-			case Json:
-				result = append(result, val)
-			case map[string]interface{}:
-				result = append(result, Json(val))
-			default:
-				logs.Errorf("json/Array - Atrib:%s Type:%v Value:%v", atrib, reflect.TypeOf(val), val)
-			}
-		}
-		return result
-	case map[string]interface{}:
-		var result []Json
-		result = append(result, v)
-		return result
-	case string:
-		var result []Json
-		err := json.Unmarshal([]byte(v), &result)
-		if err != nil {
-			logs.Errorf("json/Array - Atrib:%s Type:%v Value:%v", val, reflect.TypeOf(v), v)
-			return []Json{}
-		}
-		return result
-	default:
-		logs.Errorf("json/Array - Atrib:%s Type:%v Value:%v", val, reflect.TypeOf(v), v)
+	data, err := json.MarshalIndent(val, "", "  ")
+	if err != nil {
 		return []Json{}
 	}
+
+	var result []Json
+	err = json.Unmarshal(data, &result)
+	if err != nil {
+		return []Json{}
+	}
+
+	return result
 }
 
 /**

@@ -48,6 +48,20 @@ func (it *Items) Scan(src interface{}) error {
 }
 
 /**
+* FromString
+* @param src string
+* @return error
+**/
+func (it *Items) FromString(src string) error {
+	err := json.Unmarshal([]byte(src), &it)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/**
 * ValAny return the value of the key
 * @param idx int
 * @param _default any
@@ -270,16 +284,24 @@ func (it *Items) Json(idx int, atribs ...string) Json {
 }
 
 /**
-* Data return the value type string
+* ToByte
+* @return []byte
+**/
+func (it *Items) ToByte() []byte {
+	return Json{
+		"Ok":     it.Ok,
+		"Count":  it.Count,
+		"Result": it.Result,
+	}.ToByte()
+}
+
+/**
+* ToString
 * @return string
 **/
 func (it *Items) ToString() string {
-	jsonData, err := json.Marshal(it.Result)
-	if err != nil {
-		return "[]"
-	}
-
-	return string(jsonData)
+	result := it.ToJson()
+	return result.ToString()
 }
 
 /**

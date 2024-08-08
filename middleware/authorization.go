@@ -9,23 +9,22 @@ import (
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/token"
 	"github.com/cgalvisleon/et/utility"
 )
 
 func tokenFromAuthorization(authorization string) (string, error) {
 	if authorization == "" {
-		return "", logs.Alertm(ERR_AUTORIZATION_IS_REQUIRED)
+		return "", logs.Nerror(ERR_AUTORIZATION_IS_REQUIRED)
 	}
 
 	if !strings.HasPrefix(authorization, "Bearer") {
-		return "", logs.Alertm(ERR_INVALID_AUTORIZATION_FORMAT)
+		return "", logs.Nerror(ERR_INVALID_AUTORIZATION_FORMAT)
 	}
 
 	l := strings.Split(authorization, " ")
 	if len(l) != 2 {
-		return "", logs.Alertm(ERR_INVALID_AUTORIZATION_FORMAT)
+		return "", logs.Nerror(ERR_INVALID_AUTORIZATION_FORMAT)
 	}
 
 	return l[1], nil
@@ -43,33 +42,37 @@ func GetAuthorization(w http.ResponseWriter, r *http.Request) (string, error) {
 
 func Authorization(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		metric := NewMetric(r)
 		ctx := r.Context()
 		tokenString, err := GetAuthorization(w, r)
 		if err != nil {
-			response.HTTPError(w, r, http.StatusUnauthorized, "401 Unauthorized")
+			metric.Unauthorized(w, r)
 			return
 		}
 
 		c, err := token.Validate(tokenString)
 		if err != nil {
-			response.HTTPError(w, r, http.StatusUnauthorized, "401 Unauthorized")
+			metric.Unauthorized(w, r)
 			return
 		}
 
 		type contextKey string
 
 		const (
-			clientId  contextKey = "clientId"
-			nameKey   contextKey = "name"
-			iatKey    contextKey = "iat"
-			expKey    contextKey = "exp"
-			appKey    contextKey = "app"
-			kindKey   contextKey = "kind"
-			deviceKey contextKey = "device"
-			tokenKey  contextKey = "token"
+			serviceIdKey contextKey = "serviceId"
+			clientIdKey  contextKey = "clientId"
+			nameKey      contextKey = "name"
+			iatKey       contextKey = "iat"
+			expKey       contextKey = "exp"
+			appKey       contextKey = "app"
+			kindKey      contextKey = "kind"
+			deviceKey    contextKey = "device"
+			tokenKey     contextKey = "token"
 		)
 
-		ctx = context.WithValue(ctx, clientId, c.ClientId)
+		serviceId := utility.UUID()
+		ctx = context.WithValue(ctx, serviceIdKey, serviceId)
+		ctx = context.WithValue(ctx, clientIdKey, c.ClientId)
 		ctx = context.WithValue(ctx, nameKey, c.Name)
 		ctx = context.WithValue(ctx, iatKey, c.Iat)
 		ctx = context.WithValue(ctx, expKey, c.Exp)
@@ -81,6 +84,7 @@ func Authorization(next http.Handler) http.Handler {
 		now := utility.Now()
 		hostName, _ := os.Hostname()
 		data := js.Json{
+			"serviceId": serviceId,
 			"clientId":  c.ClientId,
 			"last_use":  now,
 			"host_name": hostName,

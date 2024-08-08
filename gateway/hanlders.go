@@ -7,64 +7,122 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/js"
+	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/telemetry"
 )
 
-// Version information this package
+/**
+* version
+* @params w http.ResponseWriter
+* @params r *http.Request
+**/
 func version(w http.ResponseWriter, r *http.Request) {
 	result := Version()
 	response.JSON(w, r, http.StatusOK, result)
 }
 
-// Handler for not found
+/**
+* notFounder
+* @params w http.ResponseWriter
+* @params r *http.Request
+**/
 func notFounder(w http.ResponseWriter, r *http.Request) {
-	response.JSON(w, r, http.StatusNotFound, js.Json{
+	result := js.Json{
 		"message": "404 Not Found.",
 		"route":   r.RequestURI,
+	}
+	response.JSON(w, r, http.StatusNotFound, result)
+}
+
+/**
+* upsert
+* @params w http.ResponseWriter
+* @params r *http.Request
+**/
+func upsert(w http.ResponseWriter, r *http.Request) {
+	body, _ := response.GetBody(r)
+	method := body.Str("method")
+	path := body.Str("path")
+	resolve := body.Str("resolve")
+	kind := body.ValStr("HTTP", "kind")
+	stage := body.ValStr("default", "stage")
+	packageName := body.Str("package")
+
+	conn.http.AddRoute(method, path, resolve, kind, stage, packageName)
+
+	response.JSON(w, r, http.StatusOK, js.Json{
+		"message": "Router added",
 	})
 }
 
-// Handler Router
-func handlerRouter(w http.ResponseWriter, r *http.Request) {
+/**
+* getAll
+* @params w http.ResponseWriter
+* @params r *http.Request
+**/
+func getAll(w http.ResponseWriter, r *http.Request) {
+	_pakages, err := js.Marshal(conn.http.pakages)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response.JSON(w, r, http.StatusOK, _pakages)
+}
+
+/**
+* handlerFn
+* @params w http.ResponseWriter
+* @params r *http.Request
+**/
+func handlerFn(w http.ResponseWriter, r *http.Request) {
+	finalHandler := http.HandlerFunc(handlerExec)
+	middleware.Authorization(finalHandler).ServeHTTP(w, r)
+}
+
+/**
+* handlerExec
+* @params w http.ResponseWriter
+* @params r *http.Request
+**/
+func handlerExec(w http.ResponseWriter, r *http.Request) {
 	// Begin telemetry
-	metric := telemetry.NewMetric(r)
+	metric := middleware.NewMetric(r)
 
 	// Get resolute
 	resolute := GetResolute(r)
 
-	// Check if resolve is nil
+	// Call search time since begin
 	metric.CallExecute()
 
+	// If not found
 	if resolute.Resolve == nil || resolute.URL == "" {
 		r.RequestURI = fmt.Sprintf(`%s://%s%s`, resolute.Scheme, resolute.Host, resolute.Path)
-		conn.http.notFoundHandler(w, r)
-
-		defer func() {
-			go metric.NotFound(r)
-		}()
-
+		metric.NotFound(conn.http.notFoundHandler, w, r)
 		return
 	}
 
-	kind := resolute.Resolve.Node.Resolve.ValStr("HTTP", "kind")
+	// If HandlerFunc is handler
+	kind := resolute.Resolve.Route.Resolve.ValStr("HTTP", "kind")
 	if kind == HANDLER {
-		metric.Downtime = time.Since(metric.TimeBegin)
-		handler := conn.http.handlers[resolute.Resolve.Node._id]
+		handler := conn.http.handlers[resolute.Resolve.Route.Id]
 		if handler == nil {
-			response.HTTPError(w, r, http.StatusNotFound, "404 Not Found.")
+			r.RequestURI = fmt.Sprintf(`%s://%s%s`, resolute.Scheme, resolute.Host, resolute.Path)
+			metric.NotFound(conn.http.notFoundHandler, w, r)
 			return
 		}
 
-		defer func() {
-			go metric.DoneHandler()
-		}()
+		if resolute.Resolve.Route.IsWs {
+			handler(w, r)
+			go metric.DoneFn(http.StatusOK, w, r)
+			return
+		}
 
-		handler(w, r)
-
+		metric.Handler(handler, w, r)
 		return
 	}
 
+	// If REST is handler
 	request, err := http.NewRequest(resolute.Method, resolute.URL, resolute.Body)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
@@ -93,32 +151,4 @@ func handlerRouter(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 	}
-}
-
-// UpSert a update or new route
-func upSert(w http.ResponseWriter, r *http.Request) {
-	body, _ := response.GetBody(r)
-	method := body.Str("method")
-	path := body.Str("path")
-	resolve := body.Str("resolve")
-	kind := body.ValStr("HTTP", "kind")
-	stage := body.ValStr("default", "stage")
-	packageName := body.Str("package")
-
-	conn.http.AddRoute(method, path, resolve, kind, stage, packageName)
-
-	response.JSON(w, r, http.StatusOK, js.Json{
-		"message": "Router added",
-	})
-}
-
-// Getall list of routes
-func getAll(w http.ResponseWriter, r *http.Request) {
-	_pakages, err := js.Marshal(conn.http.pakages)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	response.JSON(w, r, http.StatusOK, _pakages)
 }

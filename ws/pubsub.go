@@ -147,7 +147,7 @@ func (p *PubSub) Ping() {
 
 // Set the client parameters
 func (p *PubSub) Params(params js.Json) error {
-	if params.Empty() {
+	if params.IsEmpty() {
 		return logs.Alertm(ERR_PARAM_NOT_FOUND)
 	}
 

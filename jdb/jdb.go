@@ -1,8 +1,6 @@
 package jdb
 
 import (
-	"database/sql"
-
 	"github.com/cgalvisleon/et/envar"
 	lpg "github.com/cgalvisleon/et/lib/postgres"
 	"github.com/cgalvisleon/et/linq"
@@ -55,20 +53,6 @@ func LoadTo(params *linq.Connection) (*linq.Database, error) {
 	drive = drivePg
 
 	result, err := linq.NewDatabase(params.Database, "", drive)
-	if err != nil {
-		return nil, logs.Alert(err)
-	}
-
-	return result, nil
-}
-
-func Connect(params *linq.Connection) (*sql.DB, error) {
-	connStr, err := lpg.ConnStr(params)
-	if err != nil {
-		return nil, logs.Alert(err)
-	}
-
-	result, err := lpg.Connect(connStr)
 	if err != nil {
 		return nil, logs.Alert(err)
 	}

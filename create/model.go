@@ -651,7 +651,7 @@ func Define$2(db *linq.Database) error {
 **/
 func Get$2ById(id string) (js.Item, error) {	
 	if !utility.ValidId(id) {
-		return js.Item{}, logs.NewErrorf(msg.MSG_ATRIB_REQUIRED, "_id")
+		return js.Item{}, logs.Nerrorf(msg.MSG_ATRIB_REQUIRED, "_id")
 	}
 
 	item, err := $2.Data().

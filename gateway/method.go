@@ -4,73 +4,181 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/cgalvisleon/et/js"
 	"github.com/cgalvisleon/et/logs"
 )
 
-// MethodFunc adds the route `pattern` that matches `method` http method to
-// execute the `handlerFn` http.HandlerFunc.
-func (s *HttpServer) MethodFunc(method, pattern string, handlerFn http.HandlerFunc, packageName string) {
+/**
+* MethodFunc
+* @param method string
+* @param path string
+* @param handlerFn http.HandlerFunc
+* @param packageName string
+**/
+func (s *HttpServer) MethodFunc(method, path string, handlerFn http.HandlerFunc, packageName string) *Route {
+	isWS := method == WS
+	method = GET
 	method = strings.ToUpper(method)
 	ok := methodMap[method]
 	if !ok {
 		logs.Panicf(`'%s' http method is not supported.`, method)
 	}
 
-	s.AddHandleMethod(method, pattern, handlerFn, packageName)
-}
+	route := findRoute(method, s.routes)
+	if route == nil {
+		route, s.routes = newRoute(method, s, s.routes)
+	}
 
-// Connect adds the route `pattern` that matches `CONNECT` http method to
-func (s *HttpServer) Connect(pattern string, handlerFn http.HandlerFunc, packageName string) {
-	s.MethodFunc(CONNECT, pattern, handlerFn, packageName)
-}
+	tags := strings.Split(path, "/")
+	for _, tag := range tags {
+		if len(tag) > 0 {
+			find := findRoute(tag, route.Routes)
+			if find == nil {
+				route, route.Routes = newRoute(tag, route.server, route.Routes)
+			} else {
+				route = find
+			}
+		}
+	}
 
-// Delete adds the route `pattern` that matches `DELETE` http method to
-func (s *HttpServer) Delete(pattern string, handlerFn http.HandlerFunc, packageName string) {
-	s.MethodFunc(DELETE, pattern, handlerFn, packageName)
-}
+	if route != nil {
+		route.IsWs = isWS
+		route.Resolve = js.Json{
+			"method":  method,
+			"kind":    "HANDLER",
+			"resolve": "/",
+		}
+		s.handlers[route.Id] = handlerFn
 
-// Get adds the route `pattern` that matches `GET` http method to
-func (s *HttpServer) Get(pattern string, handlerFn http.HandlerFunc, packageName string) {
-	s.MethodFunc(GET, pattern, handlerFn, packageName)
-}
+		pakage := s.findPakage(packageName)
+		if pakage == nil {
+			pakage = s.newPakage(packageName)
+		}
+		pakage.Routes = append(pakage.Routes, route)
+		pakage.Count = len(pakage.Routes)
+	}
 
-// Head adds the route `pattern` that matches `HEAD` http method to
-func (s *HttpServer) Head(pattern string, handlerFn http.HandlerFunc, packageName string) {
-	s.MethodFunc(HEAD, pattern, handlerFn, packageName)
-}
-
-// Options adds the route `pattern` that matches `OPTIONS` http method to
-func (s *HttpServer) Options(pattern string, handlerFn http.HandlerFunc, packageName string) {
-	s.MethodFunc(OPTIONS, pattern, handlerFn, packageName)
-}
-
-// Patch adds the route `pattern` that matches `PATCH` http method to
-func (s *HttpServer) Patch(pattern string, handlerFn http.HandlerFunc, packageName string) {
-	s.MethodFunc(PATCH, pattern, handlerFn, packageName)
-}
-
-// Post adds the route `pattern` that matches `POST` http method to
-func (s *HttpServer) Post(pattern string, handlerFn http.HandlerFunc, packageName string) {
-	s.MethodFunc(POST, pattern, handlerFn, packageName)
-}
-
-// Put adds the route `pattern` that matches `PUT` http method to
-func (s *HttpServer) Put(pattern string, handlerFn http.HandlerFunc, packageName string) {
-	s.MethodFunc(PUT, pattern, handlerFn, packageName)
-}
-
-// Trace adds the route `pattern` that matches `TRACE` http method to
-func (s *HttpServer) Trace(pattern string, handlerFn http.HandlerFunc, packageName string) {
-	s.MethodFunc(TRACE, pattern, handlerFn, packageName)
+	return route
 }
 
 /**
-* Middleware adds the route `pattern` that matches `method` http method to execute the `handlerFn` http.HandlerFunc.
+* Use
+* @param middlewares ...func(http.HandlerFunc) http.HandlerFunc
 **/
+func (s *HttpServer) Use(middlewares ...func(http.Handler) http.Handler) {
+	s.middlewares = append(s.middlewares, middlewares...)
+}
 
-type Middleware func(http.Handler) http.Handler
+/**
+* With
+* @param middlewares ...func(http.HandlerFunc) http.HandlerFunc
+**/
+func (s *HttpServer) With(middlewares ...func(http.Handler) http.Handler) *Route {
+	result := &Route{
+		middlewares: make([]func(http.Handler) http.Handler, 0),
+	}
 
-func (s *HttpServer) With(next func(http.Handler) http.Handler) *HttpServer {
+	result.middlewares = append(result.middlewares, middlewares...)
 
-	return s
+	return result
+}
+
+/**
+* Connect
+* @param path string
+* @param handlerFn http.HandlerFunc
+* @param packageName string
+**/
+func (s *HttpServer) Connect(path string, handlerFn http.HandlerFunc, packageName string) {
+	s.MethodFunc(CONNECT, path, handlerFn, packageName)
+}
+
+/**
+* Delete
+* @param path string
+* @param handlerFn http.HandlerFunc
+* @param packageName string
+**/
+func (s *HttpServer) Delete(path string, handlerFn http.HandlerFunc, packageName string) {
+	s.MethodFunc(DELETE, path, handlerFn, packageName)
+}
+
+/**
+* Get
+* @param path string
+* @param handlerFn http.HandlerFunc
+* @param packageName string
+**/
+func (s *HttpServer) Get(path string, handlerFn http.HandlerFunc, packageName string) {
+	s.MethodFunc(GET, path, handlerFn, packageName)
+}
+
+/**
+* Head
+* @param path string
+* @param handlerFn http.HandlerFunc
+* @param packageName string
+**/
+func (s *HttpServer) Head(path string, handlerFn http.HandlerFunc, packageName string) {
+	s.MethodFunc(HEAD, path, handlerFn, packageName)
+}
+
+/**
+* Options
+* @param path string
+* @param handlerFn http.HandlerFunc
+* @param packageName string
+**/
+func (s *HttpServer) Options(path string, handlerFn http.HandlerFunc, packageName string) {
+	s.MethodFunc(OPTIONS, path, handlerFn, packageName)
+}
+
+/**
+* Patch
+* @param path string
+* @param handlerFn http.HandlerFunc
+* @param packageName string
+**/
+func (s *HttpServer) Patch(path string, handlerFn http.HandlerFunc, packageName string) {
+	s.MethodFunc(PATCH, path, handlerFn, packageName)
+}
+
+/**
+* Post
+* @param path string
+* @param handlerFn http.HandlerFunc
+* @param packageName string
+**/
+func (s *HttpServer) Post(path string, handlerFn http.HandlerFunc, packageName string) {
+	s.MethodFunc(POST, path, handlerFn, packageName)
+}
+
+/**
+* Put
+* @param path string
+* @param handlerFn http.HandlerFunc
+* @param packageName string
+**/
+func (s *HttpServer) Put(path string, handlerFn http.HandlerFunc, packageName string) {
+	s.MethodFunc(PUT, path, handlerFn, packageName)
+}
+
+/**
+* Trace
+* @param path string
+* @param handlerFn http.HandlerFunc
+* @param packageName string
+**/
+func (s *HttpServer) Trace(path string, handlerFn http.HandlerFunc, packageName string) {
+	s.MethodFunc(TRACE, path, handlerFn, packageName)
+}
+
+/**
+* Ws
+* @param path string
+* @param handlerFn http.HandlerFunc
+* @param packageName string
+**/
+func (s *HttpServer) Ws(path string, handlerFn http.HandlerFunc, packageName string) {
+	s.MethodFunc(WS, path, handlerFn, packageName)
 }

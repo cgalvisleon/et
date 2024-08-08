@@ -1,7 +1,7 @@
 package cache
 
 import (
-	"encoding/json"
+	"strconv"
 	"time"
 
 	"github.com/cgalvisleon/et/envar"
@@ -14,9 +14,9 @@ import (
 type Cache interface {
 	Type() string
 	Set(key string, value string, expiration time.Duration) string
-	Get(key string, def string) string
+	Get(key string, def string) (string, error)
 	Del(key string) bool
-	Count(key string, expiration time.Duration) int64
+	More(key string, expiration time.Duration) int64
 	Clear(match string)
 	Empty()
 	Len() int
@@ -191,37 +191,17 @@ func SetM(key string, value interface{}) interface{} {
 * @param value interface{}
 * @return interface{}
 **/
-func Get(key string, def interface{}) interface{} {
+func Get(key string, def string) (string, error) {
 	if conn == nil {
 		logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
 
-	if def == nil {
-		result := conn.Get(key, "<nil>")
-		if result == "<nil>" {
-			return nil
-		}
-
-		return result
+	val, err := conn.Get(key, def)
+	if err != nil {
+		return def, nil
 	}
 
-	switch v := def.(type) {
-	case js.Json:
-		return conn.Get(key, v.ToString())
-	case js.Items:
-		return conn.Get(key, v.ToString())
-	case js.Item:
-		return conn.Get(key, v.ToString())
-	case string:
-		return conn.Get(key, v)
-	default:
-		val, ok := v.(string)
-		if ok {
-			return conn.Get(key, val)
-		}
-
-		return val
-	}
+	return val, nil
 }
 
 /**
@@ -243,12 +223,12 @@ func Del(key string) bool {
 * @param expiration time.Duration
 * @return int
 **/
-func Count(key string, expiration time.Duration) int64 {
+func More(key string, expiration time.Duration) int64 {
 	if conn == nil {
 		logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
 
-	return conn.Count(key, expiration)
+	return conn.More(key, expiration)
 }
 
 /**
@@ -309,13 +289,13 @@ func Int(key string, def int64) int64 {
 		return def
 	}
 
-	val := Get(key, nil)
-	if val == nil {
+	val, err := Get(key, "0")
+	if err != nil {
 		return def
 	}
 
-	result, ok := val.(int64)
-	if !ok {
+	result, err := strconv.ParseInt(val, 10, 64)
+	if err != nil {
 		return def
 	}
 
@@ -333,13 +313,13 @@ func Num(key string, def float64) float64 {
 		return def
 	}
 
-	val := Get(key, nil)
-	if val == nil {
+	val, err := Get(key, "0")
+	if err != nil {
 		return def
 	}
 
-	result, ok := val.(float64)
-	if !ok {
+	result, err := strconv.ParseFloat(val, 64)
+	if err != nil {
 		return def
 	}
 
@@ -357,13 +337,13 @@ func Bool(key string, def bool) bool {
 		return def
 	}
 
-	val := Get(key, nil)
-	if val == nil {
+	val, err := Get(key, "false")
+	if err != nil {
 		return def
 	}
 
-	result, ok := val.(bool)
-	if !ok {
+	result, err := strconv.ParseBool(val)
+	if err != nil {
 		return def
 	}
 
@@ -381,13 +361,14 @@ func Time(key string, def time.Time) time.Time {
 		return def
 	}
 
-	val := Get(key, nil)
-	if val == nil {
+	val, err := Get(key, def.String())
+	if err != nil {
 		return def
 	}
 
-	result, ok := val.(time.Time)
-	if !ok {
+	layout := "2006-01-02 15:04:05"
+	result, err := time.Parse(layout, val)
+	if err != nil {
 		return def
 	}
 
@@ -405,15 +386,15 @@ func Json(key string) (js.Json, error) {
 		return js.Json{}, logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
 
-	val := Get(key, nil)
-	if val == nil {
-		return js.Json{}, nil
+	result := js.Json{}
+	val, err := Get(key, result.ToString())
+	if err != nil {
+		return result, nil
 	}
 
-	result := js.Json{}
-	err := result.Scan(val)
+	err = result.Scan(val)
 	if err != nil {
-		return js.Json{}, logs.Alert(err)
+		return js.Json{}, err
 	}
 
 	return result, nil
@@ -430,22 +411,18 @@ func Items(key string) (js.Items, error) {
 		return js.Items{}, logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
 
-	val := Get(key, nil)
-	if val == nil {
-		return js.Items{}, nil
+	result := js.Items{}
+	val, err := Get(key, result.ToString())
+	if err != nil {
+		return result, nil
 	}
 
-	jsonString := val.(string)
-	var result []js.Json
-	err := json.Unmarshal([]byte(jsonString), &result)
+	err = result.FromString(val)
 	if err != nil {
 		return js.Items{}, err
 	}
 
-	return js.Items{
-		Ok:     true,
-		Result: result,
-	}, nil
+	return result, nil
 }
 
 /**
@@ -459,20 +436,16 @@ func Item(key string) (js.Item, error) {
 		return js.Item{}, logs.Alertm(MSG_CACHE_NOT_FOUND)
 	}
 
-	val := Get(key, nil)
-	if val == nil {
-		return js.Item{}, nil
+	result := js.Item{}
+	val, err := Get(key, result.ToString())
+	if err != nil {
+		return result, nil
 	}
 
-	jsonString := val.(string)
-	var result js.Json
-	err := json.Unmarshal([]byte(jsonString), &result)
+	err = result.FromString(val)
 	if err != nil {
 		return js.Item{}, err
 	}
 
-	return js.Item{
-		Ok:     true,
-		Result: result,
-	}, nil
+	return result, nil
 }

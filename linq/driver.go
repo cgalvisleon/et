@@ -79,10 +79,7 @@ type Driver interface {
 	CurrentSerie(tag string) (int, error)
 	DeleteSerie(tag string) error
 	// Models
-	GetModel(main, name, kind string) (js.Item, error)
-	InsertModel(main, name, kind string, version int, data js.Json) error
-	UpdateModel(main, name, kind string, version int, data js.Json) error
-	DeleteModel(main, name, kind string) error
+	ModelExist(schema, name string) (bool, error)
 	// Migrations IDs
 	UpSertMigrateId(old_id, _id, tag string) error
 	GetMigrateId(old_id, tag string) (string, error)

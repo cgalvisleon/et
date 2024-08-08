@@ -120,6 +120,46 @@ func QueryOne(db *sql.DB, sql string, args ...any) (js.Item, error) {
 }
 
 /**
+* Data execute a query in the database
+* @parms db
+* @parms sql
+* @parms args
+* @return js.Items
+* @return error
+**/
+func Data(db *sql.DB, sql string, args ...any) (js.Items, error) {
+	rows, err := query(db, sql, args...)
+	if err != nil {
+		return js.Items{}, err
+	}
+	defer rows.Close()
+
+	result := DataToItems(rows, SourceField.Low())
+
+	return result, nil
+}
+
+/**
+* DataOne execute a query in the database and return one item
+* @parms db
+* @parms sql
+* @parms args
+* @return js.Item
+* @return error
+**/
+func DataOne(db *sql.DB, sql string, args ...any) (js.Item, error) {
+	rows, err := query(db, sql, args...)
+	if err != nil {
+		return js.Item{}, err
+	}
+	defer rows.Close()
+
+	result := DataToItem(rows, SourceField.Low())
+
+	return result, nil
+}
+
+/**
 * Exec execute a command in the database
 * @parms db
 * @parms sql

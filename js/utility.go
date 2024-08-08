@@ -182,16 +182,6 @@ func Quote(val interface{}) any {
 	}
 }
 
-// ToUnit8Json convert a value to a Json
-func ToUnit8Json(src interface{}) Json {
-	result, err := ToJson(src)
-	if err != nil {
-		return nil
-	}
-
-	return result
-}
-
 // ToJson convert a value to a Json
 func ToJson(src interface{}) (Json, error) {
 	var ba []byte
@@ -209,7 +199,7 @@ func ToJson(src interface{}) (Json, error) {
 		}
 		return r, nil
 	default:
-		return nil, logs.Errorf(`ToJson value not is Json: %v type: %v`, src, reflect.TypeOf(v))
+		return nil, logs.Errorf(`ToJson value: %v type: %v`, src, reflect.TypeOf(v))
 	}
 
 	t := map[string]interface{}{}
@@ -241,23 +231,12 @@ func ByteToJson(scr interface{}) Json {
 
 // ArrayToJson convert a []interface{} to a Json
 func ArrayToString(vals []Json) string {
-	var result string
-
-	for k, val := range vals {
-		v, err := ToJson(val)
-		if err != nil {
-			return "[]"
-		}
-
-		s := v.ToString()
-		if k == 0 {
-			result = s
-		} else {
-			result = strs.Format(`%s,%s`, result, s)
-		}
+	jsonData, err := json.Marshal(vals)
+	if err != nil {
+		return "[]"
 	}
 
-	return strs.Format(`[%s]`, result)
+	return string(jsonData)
 }
 
 // Val get a value from a Json

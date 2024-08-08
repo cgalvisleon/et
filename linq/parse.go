@@ -68,17 +68,14 @@ func SQLParse(sql string, args ...any) string {
 * @return js.Items
 **/
 func RowsToItems(rows *sql.Rows) js.Items {
-	var result js.Items = js.Items{Result: []js.Json{}}
+	var result js.Items = js.Items{}
 	for rows.Next() {
-		var item js.Item
-		err := item.Scan(rows)
-		if err != nil {
-			continue
-		}
+		var item js.Json
+		item.ScanRows(rows)
 
-		result.Result = append(result.Result, item.Result)
 		result.Ok = true
 		result.Count++
+		result.Result = append(result.Result, item)
 	}
 
 	return result
@@ -90,37 +87,34 @@ func RowsToItems(rows *sql.Rows) js.Items {
 * @return js.Item
 **/
 func RowsToItem(rows *sql.Rows) js.Item {
-	var item js.Item
+	var result js.Item = js.Item{}
 	for rows.Next() {
-		err := item.Scan(rows)
-		if err != nil {
-			continue
-		}
+		var item js.Json
+		item.ScanRows(rows)
 
+		result.Ok = true
+		result.Result = item
 		break
 	}
 
-	return item
+	return result
 }
 
 /**
 * DataItems return a items from a sql rows and source field
 * @param rows *sql.Rows
-* @param sourceField string
+* @param source string
 * @return js.Items
 **/
-func DataItems(rows *sql.Rows, sourceField string) js.Items {
-	var result js.Items = js.Items{Result: []js.Json{}}
+func DataToItems(rows *sql.Rows, source string) js.Items {
+	var result js.Items = js.Items{}
 	for rows.Next() {
-		var item js.Item
-		err := item.Scan(rows)
-		if err != nil {
-			continue
-		}
+		var item js.Json
+		item.ScanRows(rows)
 
-		result.Result = append(result.Result, item.Json(sourceField))
 		result.Ok = true
 		result.Count++
+		result.Result = append(result.Result, item.Json(source))
 	}
 
 	return result
@@ -129,21 +123,19 @@ func DataItems(rows *sql.Rows, sourceField string) js.Items {
 /**
 * DataItem return a item from a sql rows and source field
 * @param rows *sql.Rows
-* @param sourceField string
+* @param source string
 * @return js.Item
 **/
-func DataItem(rows *sql.Rows, sourceField string) js.Item {
-	var result js.Item = js.Item{Result: js.Json{}}
+func DataToItem(rows *sql.Rows, source string) js.Item {
+	var result js.Item = js.Item{}
 	for rows.Next() {
-		err := result.Scan(rows)
-		if err != nil {
-			continue
-		}
+		var item js.Json
+		item.ScanRows(rows)
 
+		result.Ok = true
+		result.Result = item.Json(source)
 		break
 	}
-
-	result.Result = result.Json(sourceField)
 
 	return result
 }

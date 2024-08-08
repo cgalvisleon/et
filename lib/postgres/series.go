@@ -19,7 +19,7 @@ func defineSeries(db *sql.DB) error {
 	sql := `
 	CREATE SCHEMA IF NOT EXISTS core;
 
-  CREATE TABLE IF NOT EXISTS core.SERIES(		
+  CREATE TABLE IF NOT EXISTS core.SERIES(
 		SERIE VARCHAR(250) DEFAULT '',
 		VALUE BIGINT DEFAULT 0,
 		PRIMARY KEY(SERIE)
@@ -87,7 +87,18 @@ func currentSerie(db *sql.DB, tag string, lock *sync.RWMutex) (int, error) {
 	return result, nil
 }
 
-func nextUUId(db *sql.DB, tag string, lock *sync.RWMutex) (int64, error) {
+/**
+* UUIndex return the next value of a serie
+* @param db *sql.DB
+* @param tag string
+* @param lock *sync.RWMutex
+* @return int64
+* @return error
+**/
+func UUIndex(db *sql.DB, tag string, lock *sync.RWMutex) (int64, error) {
+	lock.RLock()
+	defer lock.RUnlock()
+
 	now := time.Now()
 	result := now.UnixMilli() * 10000
 	replica, err := getVarInt(db, "REPLICA", 1)
@@ -105,7 +116,7 @@ func nextUUId(db *sql.DB, tag string, lock *sync.RWMutex) (int64, error) {
 
 	result = result + replica
 	key := fmt.Sprintf("%s:%d", tag, result)
-	count := cache.Count(key, 1)
+	count := cache.More(key, 1)
 
 	result = result + count
 	return result, nil
@@ -182,7 +193,7 @@ func deleteSerie(db *sql.DB, tag string, lock *sync.RWMutex) error {
 **/
 func (d *Postgres) UUIndex(tag string) (int64, error) {
 	lock := d.Lock(tag)
-	result, err := nextUUId(d.DB, tag, lock)
+	result, err := UUIndex(d.DB, tag, lock)
 	if err != nil {
 		return 0, err
 	}

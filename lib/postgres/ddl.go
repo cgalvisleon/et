@@ -154,7 +154,6 @@ func ddlTable(model *linq.Model) string {
 	var result string
 	var columns string
 	var indexs string
-	var primaryKeys string
 	var uniqueKeys string
 
 	appedColumns := func(def string) {
@@ -187,7 +186,6 @@ func ddlTable(model *linq.Model) string {
 	result = ddlSchema(model.Schema.Name)
 	table := strs.Format("\nCREATE TABLE IF NOT EXISTS %s (\n%s);", model.Table, columns)
 	result = strs.Append(result, table, "\n")
-	result = strs.Append(result, primaryKeys, "\n")
 	result = strs.Append(result, uniqueKeys, "\n")
 	result = strs.Append(result, indexs, "\n\n")
 	foreign := ddlForeignKeys(model)

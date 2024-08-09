@@ -8,13 +8,13 @@ import (
 
 type Mem struct {
 	items map[string]*Item
-	mutex sync.RWMutex
+	locks map[string]*sync.RWMutex
 }
 
 func Load() (*Mem, error) {
 	result := &Mem{
 		items: make(map[string]*Item),
-		mutex: sync.RWMutex{},
+		locks: make(map[string]*sync.RWMutex),
 	}
 
 	logs.Logf("Mem", "Load memory cache")

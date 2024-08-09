@@ -5,6 +5,7 @@ import (
 	"net/url"
 
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/token"
 	"github.com/cgalvisleon/et/utility"
@@ -59,7 +60,10 @@ func ConnectHttp(w http.ResponseWriter, r *http.Request) (*Client, error) {
 	ctx := r.Context()
 
 	var clientId string
-	val := ctx.Value("clientId")
+	val := ctx.Value(middleware.ClientIdKey)
+
+	logs.Debug("WS ConnectHttp: clientId:", val)
+
 	if val == nil {
 		clientId = utility.UUID()
 	} else {

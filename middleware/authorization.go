@@ -13,6 +13,20 @@ import (
 	"github.com/cgalvisleon/et/utility"
 )
 
+type contextKey string
+
+const (
+	ServiceIdKey contextKey = "serviceId"
+	ClientIdKey  contextKey = "clientId"
+	NameKey      contextKey = "name"
+	IatKey       contextKey = "iat"
+	ExpKey       contextKey = "exp"
+	AppKey       contextKey = "app"
+	KindKey      contextKey = "kind"
+	DeviceKey    contextKey = "device"
+	TokenKey     contextKey = "token"
+)
+
 func tokenFromAuthorization(authorization string) (string, error) {
 	if authorization == "" {
 		return "", logs.Nerror(ERR_AUTORIZATION_IS_REQUIRED)
@@ -56,30 +70,16 @@ func Authorization(next http.Handler) http.Handler {
 			return
 		}
 
-		type contextKey string
-
-		const (
-			serviceIdKey contextKey = "serviceId"
-			clientIdKey  contextKey = "clientId"
-			nameKey      contextKey = "name"
-			iatKey       contextKey = "iat"
-			expKey       contextKey = "exp"
-			appKey       contextKey = "app"
-			kindKey      contextKey = "kind"
-			deviceKey    contextKey = "device"
-			tokenKey     contextKey = "token"
-		)
-
 		serviceId := utility.UUID()
-		ctx = context.WithValue(ctx, serviceIdKey, serviceId)
-		ctx = context.WithValue(ctx, clientIdKey, c.ClientId)
-		ctx = context.WithValue(ctx, nameKey, c.Name)
-		ctx = context.WithValue(ctx, iatKey, c.Iat)
-		ctx = context.WithValue(ctx, expKey, c.Exp)
-		ctx = context.WithValue(ctx, appKey, c.App)
-		ctx = context.WithValue(ctx, kindKey, c.Kind)
-		ctx = context.WithValue(ctx, deviceKey, c.Device)
-		ctx = context.WithValue(ctx, tokenKey, tokenString)
+		ctx = context.WithValue(ctx, ServiceIdKey, serviceId)
+		ctx = context.WithValue(ctx, ClientIdKey, c.ClientId)
+		ctx = context.WithValue(ctx, NameKey, c.Name)
+		ctx = context.WithValue(ctx, IatKey, c.Iat)
+		ctx = context.WithValue(ctx, ExpKey, c.Exp)
+		ctx = context.WithValue(ctx, AppKey, c.App)
+		ctx = context.WithValue(ctx, KindKey, c.Kind)
+		ctx = context.WithValue(ctx, DeviceKey, c.Device)
+		ctx = context.WithValue(ctx, TokenKey, tokenString)
 
 		now := utility.Now()
 		hostName, _ := os.Hostname()

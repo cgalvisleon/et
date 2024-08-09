@@ -36,6 +36,15 @@ func init() {
 	}
 }
 
+func Nerror(message string) error {
+	return errors.New(message)
+}
+
+func Nerrorf(format string, args ...any) error {
+	message := fmt.Sprintf(format, args...)
+	return Nerror(message)
+}
+
 func log(kind string, color string, args ...any) string {
 	now := time.Now().Format("2006/01/02 15:04:05")
 	kind = strings.ToUpper(kind)
@@ -159,7 +168,8 @@ func Alert(err error) error {
 }
 
 func Alertm(message string) error {
-	return Alert(errors.New(message))
+	err := Nerror(message)
+	return Alert(err)
 }
 
 func Alertf(format string, args ...any) error {
@@ -181,13 +191,13 @@ func Error(err error) error {
 }
 
 func Errorm(message string) error {
-	err := errors.New(message)
+	err := Nerror(message)
 	return Error(err)
 }
 
 func Errorf(format string, args ...any) error {
 	message := fmt.Sprintf(format, args...)
-	err := errors.New(message)
+	err := Nerror(message)
 	return Error(err)
 }
 
@@ -208,7 +218,7 @@ func Fatal(err error) error {
 }
 
 func Fatalm(message string) error {
-	err := errors.New(message)
+	err := Nerror(message)
 	return Fatal(err)
 }
 
@@ -221,7 +231,7 @@ func Panic(err error) error {
 
 func Panicf(format string, args ...any) error {
 	message := fmt.Sprintf(format, args...)
-	err := errors.New(message)
+	err := Nerror(message)
 	return Panic(err)
 }
 
@@ -237,13 +247,4 @@ func Debug(v ...any) {
 func Debugf(format string, args ...any) {
 	message := fmt.Sprintf(format, args...)
 	log("Debug", "Cyan", message)
-}
-
-func Nerror(message string) error {
-	return errors.New(message)
-}
-
-func Nerrorf(format string, args ...any) error {
-	message := fmt.Sprintf(format, args...)
-	return errors.New(message)
 }

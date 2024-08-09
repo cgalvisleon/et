@@ -15,7 +15,7 @@ import (
 
 var (
 	// LogEntryCtxKey is the context.Context key to store the request log entry.
-	LogEntryCtxKey = &contextKey{"LogEntry"}
+	LogEntryCtxKey = contextKey("LogEntry")
 
 	// DefaultLogger is called by the Logger middleware handler to log each request.
 	// Its made a package-level variable so that it can be reconfigured for custom
@@ -57,7 +57,8 @@ func RequestLogger(f LogFormatter) func(next http.Handler) http.Handler {
 			entry := f.NewLogEntry(r)
 
 			defer func() {
-				go metric.DoneFn(http.StatusOK, w, r)
+				rw := &ResponseWriterWrapper{ResponseWriter: w, StatusCode: http.StatusOK, Host: r.Host}
+				go metric.DoneFn(rw, r)
 			}()
 
 			next.ServeHTTP(ww, WithLogEntry(r, entry))

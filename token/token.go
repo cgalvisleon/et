@@ -25,14 +25,25 @@ const (
 	ERR_AUTORIZATION  = "Invalid autorization"
 )
 
-// TokenKey generate a key for the token
+/**
+* Key return a key
+* @param app string
+* @param device string
+* @param clientId string
+* @return string
+**/
 func Key(app, device, clientId string) string {
 	result := strs.Append(app, device, "-")
 	result = strs.Append(result, clientId, "-")
 	return strs.Format(`token:%s`, result)
 }
 
-// Parece method to use in token
+/**
+* parce method to use in token
+* @param tokenString string
+* @return *jwt.Token
+* @return error
+**/
 func parce(tokenString string) (*jwt.Token, error) {
 	secret := envar.GetStr("", "SECRET")
 	token, err := jwt.Parse(tokenString, func(*jwt.Token) (interface{}, error) {
@@ -45,7 +56,17 @@ func parce(tokenString string) (*jwt.Token, error) {
 	return token, nil
 }
 
-// Generate method to use in token
+/**
+* Generate method to use in token
+* @param clientId string
+* @param name string
+* @param app string
+* @param kind string
+* @param device string
+* @param expired time.Duration
+* @return string
+* @return error
+**/
 func Generate(clientId, name, app, kind, device string, expired time.Duration) (string, error) {
 	c := Claim{
 		ClientId: clientId,
@@ -66,7 +87,12 @@ func Generate(clientId, name, app, kind, device string, expired time.Duration) (
 	return token, nil
 }
 
-// Validate method to use in token
+/**
+* Validate method to use in token
+* @param tokenString string
+* @return *Claim
+* @return error
+**/
 func Validate(tokenString string) (*Claim, error) {
 	token, err := parce(tokenString)
 	if err != nil {
@@ -74,47 +100,47 @@ func Validate(tokenString string) (*Claim, error) {
 	}
 
 	if !token.Valid {
-		return nil, logs.Errorm(ERR_AUTORIZATION)
+		return nil, logs.Nerror(ERR_AUTORIZATION)
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return nil, logs.Alertm(ERR_INVALID_CLAIM)
+		return nil, logs.Nerror(ERR_INVALID_CLAIM)
 	}
 
 	clientId, ok := claims["clientId"].(string)
 	if !ok {
-		return nil, logs.Alertm(ERR_INVALID_CLAIM)
+		return nil, logs.Nerror(ERR_INVALID_CLAIM)
 	}
 
 	name, ok := claims["name"].(string)
 	if !ok {
-		return nil, logs.Alertm(ERR_INVALID_CLAIM)
+		return nil, logs.Nerror(ERR_INVALID_CLAIM)
 	}
 
 	iat, ok := claims["iat"].(float64)
 	if !ok {
-		return nil, logs.Alertm(ERR_INVALID_CLAIM)
+		return nil, logs.Nerror(ERR_INVALID_CLAIM)
 	}
 
 	exp, ok := claims["exp"].(float64)
 	if !ok {
-		return nil, logs.Alertm(ERR_INVALID_CLAIM)
+		return nil, logs.Nerror(ERR_INVALID_CLAIM)
 	}
 
 	app, ok := claims["app"].(string)
 	if !ok {
-		return nil, logs.Alertm(ERR_INVALID_CLAIM)
+		return nil, logs.Nerror(ERR_INVALID_CLAIM)
 	}
 
 	kind, ok := claims["kind"].(string)
 	if !ok {
-		return nil, logs.Alertm(ERR_INVALID_CLAIM)
+		return nil, logs.Nerror(ERR_INVALID_CLAIM)
 	}
 
 	device, ok := claims["device"].(string)
 	if !ok {
-		return nil, logs.Alertm(ERR_INVALID_CLAIM)
+		return nil, logs.Nerror(ERR_INVALID_CLAIM)
 	}
 
 	return &Claim{

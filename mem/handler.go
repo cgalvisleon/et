@@ -5,8 +5,22 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"sync"
 	"time"
 )
+
+/**
+* lock return a lock
+* @param tag string
+* @return *sync.RWMutex
+**/
+func (c *Mem) lock(tag string) *sync.RWMutex {
+	if c.locks[tag] == nil {
+		c.locks[tag] = &sync.RWMutex{}
+	}
+
+	return c.locks[tag]
+}
 
 /**
 * Type
@@ -24,8 +38,9 @@ func (c *Mem) Type() string {
 * @return string
 **/
 func (c *Mem) Set(key string, value string, expiration time.Duration) string {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	lock := c.lock(key)
+	lock.Lock()
+	defer lock.Unlock()
 
 	item, ok := c.items[key]
 	if ok {
@@ -55,8 +70,9 @@ func (c *Mem) Set(key string, value string, expiration time.Duration) string {
 * @return error
 **/
 func (c *Mem) Get(key string, def string) (string, error) {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
+	lock := c.lock(key)
+	lock.RLock()
+	defer lock.RUnlock()
 
 	if item, ok := c.items[key]; ok {
 		return item.Str(), nil
@@ -71,8 +87,9 @@ func (c *Mem) Get(key string, def string) (string, error) {
 * @return bool
 **/
 func (c *Mem) Del(key string) bool {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	lock := c.lock(key)
+	lock.Lock()
+	defer lock.Unlock()
 
 	if _, ok := c.items[key]; !ok {
 		return false
@@ -107,9 +124,6 @@ func (c *Mem) More(key string, expiration time.Duration) int64 {
 * @param match string
 **/
 func (c *Mem) Clear(match string) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
 	matchPattern := func(substring, str string) bool {
 		pattern := fmt.Sprintf(".*%s.*", regexp.QuoteMeta(substring))
 		re, err := regexp.Compile(pattern)
@@ -128,9 +142,6 @@ func (c *Mem) Clear(match string) {
 }
 
 func (c *Mem) Empty() {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
 	c.Clear("")
 }
 

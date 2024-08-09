@@ -91,13 +91,15 @@ func (c *Conn) Del(key string) bool {
 func (c *Conn) More(key string, expiration time.Duration) int64 {
 	lock := c.lock(key)
 	lock.RLock()
-	defer lock.RUnlock()
 
 	def := "0"
 	val, err := c.Get(key, def)
 	if err != nil {
 		c.Set(key, "0", expiration)
+		lock.RUnlock()
 		return 0
+	} else {
+		lock.RUnlock()
 	}
 
 	lock.Lock()

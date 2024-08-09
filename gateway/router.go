@@ -12,7 +12,6 @@ type Route struct {
 	Id          string
 	middlewares []func(http.Handler) http.Handler
 	server      *HttpServer
-	IsWs        bool
 	Tag         string
 	Resolve     js.Json
 	Routes      []*Route
@@ -30,7 +29,6 @@ func (r *Route) ToJson() js.Json {
 
 	return js.Json{
 		"id":      r.Id,
-		"isWs":    r.IsWs,
 		"tag":     r.Tag,
 		"resolve": r.Resolve,
 		"routes":  routes,
@@ -138,7 +136,7 @@ func basicRouter(server *HttpServer) {
 	server.Get("/version", version, "Api Gateway")
 	server.Get("/gateway/all", getAll, "Api Gateway")
 	server.Post("/gateway", upsert, "Api Gateway")
-	server.Ws("/ws", server.handlerWS, "Api Gateway")
+	server.Get("/ws", server.handlerWS, "Api Gateway")
 }
 
 /**

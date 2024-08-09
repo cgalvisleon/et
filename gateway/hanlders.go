@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/js"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
 )
@@ -77,7 +78,8 @@ func getAll(w http.ResponseWriter, r *http.Request) {
 **/
 func handlerFn(w http.ResponseWriter, r *http.Request) {
 	finalHandler := http.HandlerFunc(handlerExec)
-	middleware.Authorization(finalHandler).ServeHTTP(w, r)
+	middleware.Test(finalHandler).ServeHTTP(w, r)
+	// middleware.Authorization(finalHandler).ServeHTTP(w, r)
 }
 
 /**
@@ -86,6 +88,10 @@ func handlerFn(w http.ResponseWriter, r *http.Request) {
 * @params r *http.Request
 **/
 func handlerExec(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	val := ctx.Value(middleware.ClientIdKey)
+	logs.Debug("clientId:", val)
+
 	// Begin telemetry
 	metric := middleware.NewMetric(r)
 
@@ -109,12 +115,6 @@ func handlerExec(w http.ResponseWriter, r *http.Request) {
 		if handler == nil {
 			r.RequestURI = fmt.Sprintf(`%s://%s%s`, resolute.Scheme, resolute.Host, resolute.Path)
 			metric.NotFound(conn.http.notFoundHandler, w, r)
-			return
-		}
-
-		if resolute.Resolve.Route.IsWs {
-			handler(w, r)
-			go metric.DoneFn(http.StatusOK, w, r)
 			return
 		}
 

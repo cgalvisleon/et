@@ -13,7 +13,7 @@ import (
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
-	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/mem"
 )
 
 type ResponseWriterWrapper struct {
@@ -43,7 +43,7 @@ func (rw *ResponseWriterWrapper) Write(b []byte) (int, error) {
 }
 
 type Metrics struct {
-	ReqID            string
+	ServiceId        string
 	TimeBegin        time.Time
 	TimeEnd          time.Time
 	TimeExec         time.Time
@@ -78,7 +78,7 @@ type Metrics struct {
 func NewMetric(r *http.Request) *Metrics {
 	result := &Metrics{}
 	result.TimeBegin = time.Now()
-	result.ReqID = utility.NewId()
+	result.ServiceId = utility.NewId()
 	result.EndPoint = r.URL.Path
 	result.Method = r.Method
 	result.Proto = r.Proto
@@ -152,7 +152,7 @@ func (m *Metrics) println() js.Json {
 	logs.Println(w)
 
 	result := js.Json{
-		"reqID":         m.ReqID,
+		"serviceId":     m.ServiceId,
 		"time_begin":    m.TimeBegin,
 		"time_end":      m.TimeEnd,
 		"time_exec":     m.TimeExec,
@@ -238,8 +238,7 @@ func (m *Metrics) Done(res *http.Response) js.Json {
 * @params r *http.Request
 * @return js.Json
 **/
-func (m *Metrics) DoneFn(statusCode int, w http.ResponseWriter, r *http.Request) js.Json {
-	rw := &ResponseWriterWrapper{ResponseWriter: w, StatusCode: statusCode, Host: r.Host}
+func (m *Metrics) DoneFn(rw *ResponseWriterWrapper, r *http.Request) js.Json {
 	m.TimeEnd = time.Now()
 	m.ResponseTime = time.Since(m.TimeExec)
 	m.Latency = time.Since(m.TimeBegin)
@@ -259,9 +258,10 @@ func (m *Metrics) DoneFn(statusCode int, w http.ResponseWriter, r *http.Request)
 * @params r *http.Request
 **/
 func (m *Metrics) Unauthorized(w http.ResponseWriter, r *http.Request) {
+	rw := &ResponseWriterWrapper{ResponseWriter: w, StatusCode: http.StatusUnauthorized, Host: r.Host}
 	m.CallExecute()
-	response.HTTPError(w, r, http.StatusUnauthorized, "401 Unauthorized")
-	go m.DoneFn(http.StatusUnauthorized, w, r)
+	response.HTTPError(rw, r, http.StatusUnauthorized, "401 Unauthorized")
+	go m.DoneFn(rw, r)
 }
 
 /**
@@ -271,9 +271,10 @@ func (m *Metrics) Unauthorized(w http.ResponseWriter, r *http.Request) {
 * @params r *http.Request
 **/
 func (m *Metrics) NotFound(handler http.HandlerFunc, w http.ResponseWriter, r *http.Request) {
+	rw := &ResponseWriterWrapper{ResponseWriter: w, StatusCode: http.StatusNotFound, Host: r.Host}
 	m.CallExecute()
-	handler(w, r)
-	go m.DoneFn(http.StatusNotFound, w, r)
+	handler(rw, r)
+	go m.DoneFn(rw, r)
 }
 
 /**
@@ -283,6 +284,12 @@ func (m *Metrics) NotFound(handler http.HandlerFunc, w http.ResponseWriter, r *h
 * @params r *http.Request
 **/
 func (m *Metrics) Handler(handler http.HandlerFunc, w http.ResponseWriter, r *http.Request) {
-	handler(w, r)
-	go m.DoneFn(http.StatusOK, w, r)
+	rw := &ResponseWriterWrapper{ResponseWriter: w, StatusCode: http.StatusOK, Host: r.Host}
+	connection := r.Header.Get("Connection")
+	if connection == "Upgrade" {
+		handler(w, r)
+	} else {
+		handler(rw, r)
+	}
+	go m.DoneFn(rw, r)
 }

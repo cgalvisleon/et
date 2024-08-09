@@ -57,5 +57,6 @@ require (
 	github.com/redis/go-redis/v9 v9.5.1
 	github.com/rs/cors v1.10.1
 	github.com/schollz/progressbar/v3 v3.14.1
+	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/spf13/pflag v1.0.5 // indirect
 )

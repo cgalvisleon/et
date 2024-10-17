@@ -38,8 +38,7 @@ go run ./cmd/ws/client
 go mod tidy &&
 gofmt -w . &&
 git update &&
-git tag v0.0.3
-
+git tag v0.0.3 &&
 git tags
 
 go get github.com/cgalvisleon/et@v0.0.3

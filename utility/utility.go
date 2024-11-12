@@ -47,12 +47,21 @@ const BEFORE_DELETE = "BEFORE_DELETE"
 const AFTER_DELETE = "AFTER_DELETE"
 const VALUE_NOT_BOOL = "Value is not bolean"
 const ROWS = 30
+const QUEUE_STACK = "stack"
 
 var locks = make(map[string]*sync.RWMutex)
 var count = make(map[string]int64)
 
 /**
-* Now return the current date and time
+* NowTime
+* @return time.Time
+**/
+func NowTime() time.Time {
+	return timezone.NowTime()
+}
+
+/**
+* Now return the current date
 * @return string
 **/
 func Now() string {
@@ -60,11 +69,11 @@ func Now() string {
 }
 
 /**
-* GetCodeVerify return a code verify
+* GetOTP return a code verify
 * @param length int
 * @return string
 **/
-func GetCodeVerify(length int) string {
+func GetOTP(length int) string {
 	const charset = "0123456789"
 	var seededRand *rand.Rand = rand.New(rand.NewSource(timezone.NowTime().UnixNano()))
 

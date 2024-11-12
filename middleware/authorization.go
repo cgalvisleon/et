@@ -15,30 +15,6 @@ import (
 	"github.com/cgalvisleon/et/utility"
 )
 
-type contextKey string
-
-func (c contextKey) String(ctx context.Context, def string) string {
-	val := ctx.Value(c)
-	result, ok := val.(string)
-	if !ok {
-		return def
-	}
-
-	return result
-}
-
-const (
-	ServiceIdKey contextKey = "serviceId"
-	ClientIdKey  contextKey = "clientId"
-	NameKey      contextKey = "name"
-	IatKey       contextKey = "iat"
-	ExpKey       contextKey = "exp"
-	AppKey       contextKey = "app"
-	KindKey      contextKey = "kind"
-	DeviceKey    contextKey = "device"
-	TokenKey     contextKey = "token"
-)
-
 /**
 * tokenFromAuthorization
 * @param authorization string

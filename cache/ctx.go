@@ -22,9 +22,7 @@ func SetCtx(ctx context.Context, key, val string, second time.Duration) error {
 		return logs.Log(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
-	duration := second * time.Second
-
-	err := conn.db.Set(ctx, key, val, duration).Err()
+	err := conn.db.Set(ctx, key, val, second).Err()
 	if err != nil {
 		return err
 	}

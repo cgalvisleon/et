@@ -1,23 +1,48 @@
 package token
 
 import (
+	"context"
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/golang-jwt/jwt/v4"
 )
 
+type contextKey string
+
+func (c contextKey) String(ctx context.Context, def string) string {
+	val := ctx.Value(c)
+	result, ok := val.(string)
+	if !ok {
+		return def
+	}
+
+	return result
+}
+
+const (
+	ServiceIdKey contextKey = "serviceId"
+	ClientIdKey  contextKey = "clientId"
+	NameKey      contextKey = "name"
+	IatKey       contextKey = "iat"
+	ExpKey       contextKey = "expired"
+	AppKey       contextKey = "app"
+	KindKey      contextKey = "kind"
+	DeviceKey    contextKey = "device"
+	TokenKey     contextKey = "token"
+)
+
 type Claim struct {
+	Salt     string        `json:"salt"`
 	ClientId string        `json:"clientId"`
 	Name     string        `json:"name"`
 	Iat      time.Time     `json:"iat"`
-	Exp      time.Duration `json:"exp"`
+	Expired  time.Duration `json:"expired"`
 	App      string        `json:"app"`
 	Kind     string        `json:"kind"`
 	Device   string        `json:"device"`
@@ -33,7 +58,7 @@ func (c *Claim) ToJson() et.Json {
 		"clientId": c.ClientId,
 		"name":     c.Name,
 		"iat":      c.Iat,
-		"exp":      c.Exp,
+		"exp":      c.Expired,
 		"app":      c.App,
 		"kind":     c.Kind,
 		"device":   c.Device,
@@ -48,10 +73,7 @@ func (c *Claim) ToJson() et.Json {
 * @return string
 **/
 func Key(app, device, clientId string) string {
-	result := strs.Append(app, device, "-")
-	result = strs.Append(result, clientId, "-")
-	result = strs.Format(`token:%s`, result)
-	return utility.ToBase64(result)
+	return cache.GenKey("token", app, device, clientId)
 }
 
 /**
@@ -85,13 +107,17 @@ func parce(token string) (*jwt.Token, error) {
 **/
 func Generate(clientId, name, app, kind, device string, expired time.Duration) (string, error) {
 	c := Claim{
+		Salt:     utility.GetOTP(6),
 		ClientId: clientId,
 		Name:     name,
 		Iat:      timezone.NowTime(),
-		Exp:      expired,
+		Expired:  expired,
 		App:      app,
 		Kind:     kind,
 		Device:   device,
+	}
+	if expired > 0 {
+		c.ExpiresAt = timezone.NowTime().Add(expired).Unix()
 	}
 	jwT := jwt.NewWithClaims(jwt.SigningMethodHS256, c)
 	secret := envar.GetStr("1977", "SECRET")
@@ -108,21 +134,21 @@ func Generate(clientId, name, app, kind, device string, expired time.Duration) (
 
 /**
 * Validate method to use in token
-* @param tokenString string
+* @param token string
 * @return *Claim
 * @return error
 **/
-func Validate(tokenString string) (*Claim, error) {
-	token, err := parce(tokenString)
+func Validate(token string) (*Claim, error) {
+	jwT, err := parce(token)
 	if err != nil {
 		return nil, err
 	}
 
-	if !token.Valid {
+	if !jwT.Valid {
 		return nil, logs.Alertm(ERR_AUTORIZATION)
 	}
 
-	claims, ok := token.Claims.(jwt.MapClaims)
+	claims, ok := jwT.Claims.(jwt.MapClaims)
 	if !ok {
 		return nil, logs.Alertm(ERR_INVALID_CLAIM)
 	}
@@ -142,7 +168,7 @@ func Validate(tokenString string) (*Claim, error) {
 		return nil, logs.Alertm(ERR_INVALID_CLAIM)
 	}
 
-	exp, ok := claims["exp"].(float64)
+	exp, ok := claims["expired"].(float64)
 	if !ok {
 		return nil, logs.Alertm(ERR_INVALID_CLAIM)
 	}
@@ -162,13 +188,18 @@ func Validate(tokenString string) (*Claim, error) {
 		return nil, logs.Alertm(ERR_INVALID_CLAIM)
 	}
 
-	return &Claim{
+	result := &Claim{
 		ClientId: clientId,
 		Name:     name,
 		Iat:      time.Unix(int64(iat), 0),
-		Exp:      time.Duration(exp),
+		Expired:  time.Duration(exp),
 		App:      app,
 		Kind:     kind,
 		Device:   device,
-	}, nil
+	}
+	if result.Expired != 0 {
+		result.ExpiresAt = int64(claims["exp"].(float64))
+	}
+
+	return result, nil
 }

@@ -8,23 +8,24 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-/**
-* Channel
-**/
-type Channel struct {
+type Queue struct {
 	Name        string        `json:"name"`
+	Queue       string        `json:"queue"`
+	Turn        int           `json:"turn"`
 	Subscribers []*Subscriber `json:"subscribers"`
 	mutex       *sync.RWMutex
 }
 
 /**
-* newChannel
+* newQueue
 * @param name string
-* @return *Channel
+* @return *Queue
 **/
-func newChannel(name string) *Channel {
-	result := &Channel{
+func newQueue(name, queue string) *Queue {
+	result := &Queue{
 		Name:        name,
+		Queue:       queue,
+		Turn:        0,
 		Subscribers: []*Subscriber{},
 		mutex:       &sync.RWMutex{},
 	}
@@ -33,9 +34,40 @@ func newChannel(name string) *Channel {
 }
 
 /**
-* drain
+* Count return the number of subscribers
+* @return int
 **/
-func (c *Channel) drain() {
+func (c *Queue) Count() int {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	return len(c.Subscribers)
+}
+
+/**
+* nextTurn return the next subscriber
+* @return *Subscriber
+**/
+func (c *Queue) nextTurn() *Subscriber {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	n := len(c.Subscribers)
+	if n == 0 {
+		return nil
+	}
+
+	if c.Turn >= n {
+		c.Turn = 0
+	}
+
+	result := c.Subscribers[c.Turn]
+	c.Turn++
+
+	return result
+}
+
+func (c *Queue) drain() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -53,15 +85,20 @@ func (c *Channel) drain() {
 /**
 * close
 **/
-func (c *Channel) close() {
+func (c *Queue) close() {
 	c.drain()
+
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	c.Subscribers = nil
 }
 
 /**
 * describe return the channel name
 * @return et.Json
 **/
-func (c *Channel) describe(mode int) et.Json {
+func (c *Queue) describe(mode int) et.Json {
 	if mode == 0 {
 		subscribers := []et.Json{}
 		for _, subscriber := range c.Subscribers {
@@ -70,34 +107,26 @@ func (c *Channel) describe(mode int) et.Json {
 
 		return et.Json{
 			"name":        c.Name,
-			"type":        "channel",
-			"count":       len(c.Subscribers),
+			"queue":       c.Queue,
+			"turn":        c.Turn,
+			"type":        "queue",
 			"subscribers": subscribers,
 		}
 	}
 
 	return et.Json{
-		"name": c.Name,
-		"type": "channel",
+		"name":  c.Name,
+		"queue": c.Queue,
+		"turn":  c.Turn,
+		"type":  "queue",
 	}
 }
 
 /**
-* Count return the number of subscribers
-* @return int
-**/
-func (c *Channel) Count() int {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
-	return len(c.Subscribers)
-}
-
-/**
-* subscribe a client to channel
+* queueSubscribe a client to channel
 * @param client *Subscriber
 **/
-func (c *Channel) subscribe(client *Subscriber) {
+func (c *Queue) subscribe(client *Subscriber) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -107,14 +136,14 @@ func (c *Channel) subscribe(client *Subscriber) {
 	}
 
 	c.Subscribers = append(c.Subscribers, client)
-	client.Channels[c.Name] = c
+	client.Queue[c.Name] = c
 }
 
 /**
 * unsubscribe
 * @param clientId string
 **/
-func (c *Channel) unsubscribe(client *Subscriber) {
+func (c *Queue) unsubscribe(client *Subscriber) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -133,20 +162,16 @@ func (c *Channel) unsubscribe(client *Subscriber) {
 * @param ignored []string
 * @return int
 **/
-func (c *Channel) broadcast(msg Message, ignored []string) int {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
+func (c *Queue) broadcast(msg Message, ignored []string) int {
 	result := 0
 	msg.Channel = c.Name
-	for _, client := range c.Subscribers {
-		if !slices.Contains(ignored, client.Id) {
-			err := client.sendMessage(msg)
-			if err != nil {
-				logs.Alert(err)
-			} else {
-				result++
-			}
+	client := c.nextTurn()
+	if client != nil && !slices.Contains(ignored, client.Id) {
+		err := client.sendMessage(msg)
+		if err != nil {
+			logs.Alert(err)
+		} else {
+			result++
 		}
 	}
 

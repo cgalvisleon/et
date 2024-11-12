@@ -1,105 +1,38 @@
 package rt
 
 import (
+	"net/http"
+
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/response"
+	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/cgalvisleon/et/ws"
-	"github.com/gorilla/websocket"
 )
-
-/**
-* read
-**/
-func (c *ClientWS) read() {
-	done := make(chan struct{})
-
-	go func() {
-		defer close(done)
-
-		for {
-			_, data, err := c.socket.ReadMessage()
-			if err != nil {
-				logs.Alert(err)
-				c.connected = false
-				return
-			}
-
-			msg, err := ws.DecodeMessage(data)
-			if err != nil {
-				logs.Alert(err)
-				return
-			}
-
-			f, ok := c.channels[msg.Channel]
-			if ok {
-				f(msg)
-			}
-		}
-	}()
-}
-
-/**
-* send
-* @param message ws.ws.Message
-* @return error
-**/
-func (c *ClientWS) send(message ws.Message) error {
-	if c.socket == nil {
-		return logs.Alertm(ERR_NOT_CONNECT_WS)
-	}
-
-	msg, err := message.Encode()
-	if err != nil {
-		return err
-	}
-
-	err = conn.socket.WriteMessage(websocket.TextMessage, msg)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-/**
-* wsConnect
-* @param ws.Message
-**/
-func (c *ClientWS) wsConnect(ws.Message) {
-
-}
-
-/**
-* IsConnected
-* @return bool
-**/
-func IsConnected() bool {
-	if conn == nil {
-		return false
-	}
-
-	return conn.connected
-}
 
 /**
 * From
 * @return et.Json
 **/
 func From() et.Json {
-	return et.Json{
-		"id":   conn.ClientId,
-		"name": conn.Name,
+	if conn == nil {
+		return et.Json{}
 	}
+
+	return conn.From()
 }
 
 /**
 * Ping
 **/
 func Ping() {
-	msg := ws.NewMessage(From(), et.Json{}, ws.TpPing)
+	if conn == nil {
+		return
+	}
 
-	conn.send(msg)
+	conn.Ping()
 }
 
 /**
@@ -108,55 +41,11 @@ func Ping() {
 * @return error
 **/
 func SetFrom(name string) error {
-	if !utility.ValidName(name) {
-		return logs.Alertm(ERR_INVALID_NAME)
+	if conn == nil {
+		return logs.NewError(ERR_NOT_CONNECT_WS)
 	}
 
-	conn.Name = name
-	msg := ws.NewMessage(From(), From(), ws.TpSetFrom)
-	return conn.send(msg)
-}
-
-/**
-* Subscribe to a channel
-* @param channel string
-* @param reciveFn func(message.ws.Message)
-**/
-func Subscribe(channel string, reciveFn func(ws.Message)) {
-	conn.channels[channel] = reciveFn
-
-	msg := ws.NewMessage(From(), et.Json{}, ws.TpSubscribe)
-	msg.Channel = channel
-
-	conn.send(msg)
-}
-
-/**
-* Queue to a channel
-* @param channel string
-* @param reciveFn func(message.ws.Message)
-**/
-func Queue(channel, queue string, reciveFn func(ws.Message)) {
-	conn.channels[channel] = reciveFn
-
-	msg := ws.NewMessage(From(), et.Json{}, ws.TpQueue)
-	msg.Channel = channel
-	msg.Queue = queue
-
-	conn.send(msg)
-}
-
-/**
-* Unsubscribe to a channel
-* @param channel string
-**/
-func Unsubscribe(channel string) {
-	delete(conn.channels, channel)
-
-	msg := ws.NewMessage(From(), et.Json{}, ws.TpUnsubscribe)
-	msg.Channel = channel
-
-	conn.send(msg)
+	return conn.SetFrom(name)
 }
 
 /**
@@ -164,12 +53,13 @@ func Unsubscribe(channel string) {
 * @param channel string
 * @param message interface{}
 **/
-func Publish(channel string, message interface{}) {
-	msg := ws.NewMessage(From(), message, ws.TpPublish)
-	msg.Ignored = []string{conn.ClientId}
-	msg.Channel = channel
+func Publish(channel string, message interface{}) error {
+	if conn == nil {
+		return logs.NewError(ERR_NOT_CONNECT_WS)
+	}
 
-	conn.send(msg)
+	conn.Publish(channel, message)
+	return nil
 }
 
 /**
@@ -179,9 +69,176 @@ func Publish(channel string, message interface{}) {
 * @return error
 **/
 func SendMessage(clientId string, message interface{}) error {
-	msg := ws.NewMessage(From(), message, ws.TpDirect)
-	msg.Ignored = []string{conn.ClientId}
-	msg.To = clientId
+	if conn == nil {
+		return logs.NewError(ERR_NOT_CONNECT_WS)
+	}
 
-	return conn.send(msg)
+	return conn.SendMessage(clientId, message)
+}
+
+/**
+* Subscribe to a channel
+* @param channel string
+* @param reciveFn func(message.ws.Message)
+**/
+func Subscribe(channel string, reciveFn func(ws.Message)) error {
+	if conn == nil {
+		return logs.NewError(ERR_NOT_CONNECT_WS)
+	}
+
+	conn.Subscribe(channel, reciveFn)
+	return nil
+}
+
+/**
+* Unsubscribe to a channel
+* @param channel string
+**/
+func Unsubscribe(channel string) {
+	if conn == nil {
+		return
+	}
+
+	conn.Unsubscribe(channel)
+}
+
+/**
+* Queue to a channel
+* @param channel string
+* @param reciveFn func(message.ws.Message)
+**/
+func Queue(channel, queue string, reciveFn func(ws.Message)) {
+	if conn == nil {
+		return
+	}
+
+	conn.Queue(channel, queue, reciveFn)
+}
+
+/**
+* Stack to a channel
+* @param channel string
+* @param reciveFn func(ws.Message)
+**/
+func Stack(channel string, reciveFn func(ws.Message)) {
+	if conn == nil {
+		return
+	}
+
+	conn.Queue(channel, utility.QUEUE_STACK, reciveFn)
+}
+
+/**
+* Work
+* @param event string
+* @param data et.Json
+**/
+func Work(event string, data et.Json) et.Json {
+	work := et.Json{
+		"created_at": timezone.Now(),
+		"_id":        utility.UUID(),
+		"event":      event,
+		"data":       data,
+	}
+
+	go Publish("event/worker", work)
+	go Publish(event, work)
+
+	return work
+}
+
+/**
+* WorkState
+* @param work_id string
+* @param status WorkStatus
+* @param data et.Json
+**/
+func WorkState(work_id string, status event.WorkStatus, data et.Json) {
+	work := et.Json{
+		"update_at": timezone.Now(),
+		"_id":       work_id,
+		"status":    status.String(),
+		"data":      data,
+	}
+	switch status {
+	case event.WorkStatusPending:
+		work["pending_at"] = utility.Now()
+	case event.WorkStatusAccepted:
+		work["accepted_at"] = utility.Now()
+	case event.WorkStatusProcessing:
+		work["processing_at"] = utility.Now()
+	case event.WorkStatusCompleted:
+		work["completed_at"] = utility.Now()
+	case event.WorkStatusFailed:
+		work["failed_at"] = utility.Now()
+	}
+
+	go Publish("event/worker/state", work)
+}
+
+/**
+* Data
+* @param string channel
+* @param func(Message) reciveFn
+* @return error
+**/
+func Data(channel string, data et.Json) error {
+	return Publish(channel, data)
+}
+
+/**
+* Source
+* @param string channel
+* @param func(Message) reciveFn
+* @return error
+**/
+func Source(channel string, reciveFn func(ws.Message)) error {
+	return Subscribe(channel, reciveFn)
+}
+
+/**
+* Log
+* @param event string
+* @param data et.Json
+**/
+func Log(event string, data et.Json) {
+	go Publish("log", data)
+}
+
+/**
+* Telemetry
+* @param data et.Json
+**/
+func Telemetry(data et.Json) {
+	go Publish("telemetry", data)
+}
+
+/**
+* Overflow
+* @param data et.Json
+**/
+func Overflow(data et.Json) {
+	go Publish("requests/overflow", data)
+}
+
+/**
+* TokenLastUse
+* @param data et.Json
+**/
+func TokenLastUse(data et.Json) {
+	go Publish("telemetry.token.last_use", data)
+}
+
+/**
+* HttpEventWork
+* @param w http.ResponseWriter
+* @param r *http.Request
+**/
+func HttpEventWork(w http.ResponseWriter, r *http.Request) {
+	body, _ := response.GetBody(r)
+	event := body.Str("event")
+	data := body.Json("data")
+	work := Work(event, data)
+
+	response.JSON(w, r, http.StatusOK, work)
 }

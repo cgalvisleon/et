@@ -12,15 +12,16 @@ import (
 type TpMessage int
 
 const (
-	TpPing TpMessage = iota
-	TpSetFrom
-	TpSubscribe
-	TpUnsubscribe
-	TpQueue
-	TpPublish
-	TpDirect
-	TpConnect
-	TpDisconnect
+	TpPing           TpMessage = iota // 0
+	TpSetFrom                         // 1
+	TpSubscribe                       // 2
+	TpQueueSubscribe                  // 3
+	TpStack                           // 4
+	TpUnsubscribe                     // 5
+	TpPublish                         // 6
+	TpDirect                          // 7
+	TpConnect                         // 8
+	TpDisconnect                      // 9
 )
 
 func (s TpMessage) String() string {
@@ -31,16 +32,29 @@ func (s TpMessage) String() string {
 		return "Set id and name"
 	case TpSubscribe:
 		return "Subscribe"
+	case TpQueueSubscribe:
+		return "Queue"
+	case TpStack:
+		return "Stack"
 	case TpUnsubscribe:
 		return "Unsubscribe"
-	case TpQueue:
-		return "Queue"
 	case TpPublish:
 		return "Publish"
 	case TpDirect:
 		return "Direct"
+	case TpConnect:
+		return "Connected"
+	case TpDisconnect:
+		return "Disconnected"
 	default:
 		return "Unknown"
+	}
+}
+
+func (s TpMessage) ToJson() et.Json {
+	return et.Json{
+		"code": s,
+		"name": s.String(),
 	}
 }
 
@@ -52,10 +66,12 @@ func ToTpMessage(s string) TpMessage {
 		return TpSetFrom
 	case "Subscribe":
 		return TpSubscribe
+	case "Queue":
+		return TpQueueSubscribe
+	case "Stack":
+		return TpStack
 	case "Unsubscribe":
 		return TpUnsubscribe
-	case "Queue":
-		return TpQueue
 	case "Publish":
 		return TpPublish
 	case "Direct":
@@ -71,10 +87,11 @@ type Message struct {
 	From       et.Json     `json:"from"`
 	To         string      `json:"to"`
 	Ignored    []string    `json:"ignored"`
-	Tp         TpMessage   `json:"tp"`
+	Data       interface{} `json:"data"`
 	Channel    string      `json:"channel"`
 	Queue      string      `json:"queue"`
-	Data       interface{} `json:"data"`
+	Tp         et.Json     `json:"tp"`
+	tp         TpMessage
 }
 
 /**
@@ -89,9 +106,10 @@ func NewMessage(from et.Json, message interface{}, tp TpMessage) Message {
 		Created_at: timezone.NowTime(),
 		Id:         utility.UUID(),
 		From:       from,
-		Data:       message,
-		Tp:         tp,
 		Ignored:    []string{},
+		Data:       message,
+		Tp:         tp.ToJson(),
+		tp:         tp,
 	}
 }
 
@@ -109,29 +127,26 @@ func (e Message) Encode() ([]byte, error) {
 }
 
 /**
+* ToJson return the message as et.Json
+* @return et.Json
+**/
+func (e Message) ToJson() et.Json {
+	result, err := et.Object(e)
+	if err != nil {
+		return et.Json{}
+	}
+
+	return result
+}
+
+/**
 * ToString return the message as string
 * @return string
 **/
 func (e Message) ToString() string {
-	b, err := e.Encode()
-	if err != nil {
-		return ""
-	}
+	result := e.ToJson()
 
-	return string(b)
-}
-
-/**
-* ToJson return the message as et.Json
-* @return et.Json
-**/
-func (e Message) ToJson() (et.Json, error) {
-	result, err := et.Object(e)
-	if err != nil {
-		return et.Json{}, err
-	}
-
-	return result, nil
+	return result.ToString()
 }
 
 /**

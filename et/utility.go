@@ -10,7 +10,73 @@ import (
 	"github.com/cgalvisleon/et/strs"
 )
 
-// unquote remove the quotes from a string
+/**
+* Object convert a interface to a json
+* @param src interface{}
+* @return Json
+* @return error
+**/
+func Object(src interface{}) (Json, error) {
+	j, err := json.Marshal(src)
+	if err != nil {
+		return Json{}, err
+	}
+
+	result := Json{}
+	err = json.Unmarshal(j, &result)
+	if err != nil {
+		return Json{}, err
+	}
+
+	return result, nil
+}
+
+/**
+* Array convert a interface to a []Json
+* @param src interface{}
+* @return []Json
+* @return error
+**/
+func Array(src interface{}) ([]interface{}, error) {
+	var result []interface{} = []interface{}{}
+	j, err := json.Marshal(src)
+	if err != nil {
+		return result, err
+	}
+
+	err = json.Unmarshal(j, &result)
+	if err != nil {
+		return result, err
+	}
+
+	return result, nil
+}
+
+/**
+* ToItem convert a json to a item
+* @param src interface{}
+* @return Item
+**/
+func ToItem(src interface{}) (Item, error) {
+	j, err := json.Marshal(src)
+	if err != nil {
+		return Item{}, err
+	}
+
+	result := Item{}
+	err = json.Unmarshal(j, &result)
+	if err != nil {
+		return Item{}, err
+	}
+
+	return result, nil
+}
+
+/**
+* unquote
+* @param str string
+* @return string
+**/
 func unquote(str string) string {
 	result, err := strconv.Unquote(str)
 	if err != nil {
@@ -20,7 +86,11 @@ func unquote(str string) string {
 	return result
 }
 
-// quote add quotes to a string
+/**
+* quote
+* @param str string
+* @return string
+**/
 func quote(str string) string {
 	result := strconv.Quote(str)
 	result = strs.Replace(result, `'`, ``)
@@ -28,7 +98,11 @@ func quote(str string) string {
 	return result
 }
 
-// Unquote remove the quotes from a value
+/**
+* Unquote
+* @param val interface{}
+* @return any
+**/
 func Unquote(val interface{}) any {
 	switch v := val.(type) {
 	case string:
@@ -104,7 +178,11 @@ func Unquote(val interface{}) any {
 	}
 }
 
-// Quote add quotes to a value
+/**
+* Quote
+* @param val interface{}
+* @return any
+**/
 func Quote(val interface{}) any {
 	switch v := val.(type) {
 	case string:
@@ -179,179 +257,5 @@ func Quote(val interface{}) any {
 	default:
 		logs.Errorf("Not double quoted type:%v value:%v", reflect.TypeOf(v), v)
 		return val
-	}
-}
-
-// ToJson convert a value to a Json
-func ToJson(src interface{}) (Json, error) {
-	var ba []byte
-	switch v := src.(type) {
-	case []byte:
-		ba = v
-	case string:
-		ba = []byte(v)
-	case Json:
-		return v, nil
-	case map[string]interface{}:
-		r := Json{}
-		for k, v := range v {
-			r[k] = v
-		}
-		return r, nil
-	default:
-		return nil, logs.Errorf(`ToJson value: %v type: %v`, src, reflect.TypeOf(v))
-	}
-
-	t := map[string]interface{}{}
-	err := json.Unmarshal(ba, &t)
-	if err != nil {
-		return nil, err
-	}
-
-	return Json(t), nil
-}
-
-// ToString convert a value to a string
-func ToString(val interface{}) string {
-	s, err := json.Marshal(val)
-	if err != nil {
-		return ""
-	}
-
-	return string(s)
-}
-
-// ByteToJson convert a byte to a Json
-func ByteToJson(scr interface{}) Json {
-	var result Json
-	result.Scan(scr)
-
-	return result
-}
-
-// ArrayToJson convert a []interface{} to a Json
-func ArrayToString(vals []Json) string {
-	jsonData, err := json.Marshal(vals)
-	if err != nil {
-		return "[]"
-	}
-
-	return string(jsonData)
-}
-
-// Val get a value from a Json
-func Val(data Json, _default any, atribs ...string) any {
-	var result any
-	var ok bool
-
-	for i, atrib := range atribs {
-		if i == 0 {
-			result, ok = data[atrib]
-			if !ok {
-				return _default
-			}
-		} else {
-			switch v := result.(type) {
-			case Json:
-				data, err := ToJson(v)
-				if err != nil {
-					return _default
-				}
-
-				result, ok = data[atrib]
-				if !ok {
-					return _default
-				}
-			case []interface{}:
-				data, err := ToJson(v)
-				if err != nil {
-					return _default
-				}
-
-				result, ok = data[atrib]
-				if !ok {
-					return _default
-				}
-			case map[string]interface{}:
-				data, err := ToJson(v)
-				if err != nil {
-					return _default
-				}
-
-				result, ok = data[atrib]
-				if !ok {
-					return _default
-				}
-			default:
-				logs.Errorf("Val. Type (%v) value:%v", reflect.TypeOf(v), v)
-				return _default
-			}
-		}
-		if result == nil {
-			return _default
-		}
-	}
-
-	return result
-}
-
-// ApendJson add a Json to a Json
-func ApendJson(m Json, n Json) Json {
-	result := m
-	for k, v := range n {
-		result[k] = v
-	}
-
-	return result
-}
-
-// IsDiferent compare two Json and return true if they are different
-func IsDiferent(a, b Json) bool {
-	for k, new := range b {
-		old := a[k]
-
-		if old == nil {
-			return true
-		} else {
-			switch v := old.(type) {
-			case Json:
-				_new, err := ToJson(new)
-				if err != nil {
-					return false
-				}
-				return IsDiferent(v, _new)
-			case *Json:
-				_new, err := ToJson(new)
-				if err != nil {
-					return false
-				}
-				return IsDiferent(*v, _new)
-			case map[string]interface{}:
-				_old, err := ToJson(old)
-				if err != nil {
-					return false
-				}
-				_new, err := ToJson(new)
-				if err != nil {
-					return false
-				}
-				return IsDiferent(_old, _new)
-			default:
-				if Quote(old) != Quote(new) {
-					return true
-				}
-			}
-		}
-	}
-
-	return false
-}
-
-// OkOrNotJson return a Json depending on a condition
-func OkOrNotJson(condition bool, ok Json, not Json) Json {
-	if condition {
-		return ok
-	} else {
-		return not
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cgalvisleon/et/et"
@@ -11,10 +12,26 @@ import (
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/strs"
+	"github.com/cgalvisleon/et/utility"
 	"github.com/redis/go-redis/v9"
 )
 
 const IsNil = redis.Nil
+
+/**
+* GenKey
+* @params args ...interface{}
+* @return string
+**/
+func GenKey(args ...interface{}) string {
+	var keys []string
+	for _, arg := range args {
+		keys = append(keys, strs.Format(`%v`, arg))
+	}
+
+	result := strings.Join(keys, ":")
+	return utility.ToBase64(result)
+}
 
 /**
 * Set
@@ -35,10 +52,24 @@ func Set(key string, val interface{}, second time.Duration) error {
 		return SetCtx(conn.ctx, key, v.ToString(), second)
 	case et.Item:
 		return SetCtx(conn.ctx, key, v.ToString(), second)
+	case int:
+		return SetCtx(conn.ctx, key, strs.Format(`%d`, v), second)
+	case int64:
+		return SetCtx(conn.ctx, key, strs.Format(`%d`, v), second)
+	case float64:
+		return SetCtx(conn.ctx, key, strs.Format(`%f`, v), second)
+	case bool:
+		return SetCtx(conn.ctx, key, strs.Format(`%t`, v), second)
+	case []byte:
+		return SetCtx(conn.ctx, key, string(v), second)
+	case time.Time:
+		return SetCtx(conn.ctx, key, v.Format(time.RFC3339), second)
+	case time.Duration:
+		return SetCtx(conn.ctx, key, v.String(), second)
 	default:
-		val, ok := val.(string)
+		s, ok := v.(string)
 		if ok {
-			return SetCtx(conn.ctx, key, val, second)
+			return SetCtx(conn.ctx, key, s, second)
 		}
 	}
 
@@ -75,34 +106,31 @@ func Delete(key string) (int64, error) {
 /**
 * Count
 * @params key string
-* @params expiration time.Duration
+* @params expiration time.Duration (second)
 * @return int64
 **/
-func Count(key string, expiration time.Duration) int64 {
+func Count(key string, expiration time.Duration) int {
 	if conn == nil {
 		return 0
 	}
 
-	def := "-1"
-	val, err := Get(key, def)
+	val, err := Get(key, "0")
 	if err != nil {
 		return 0
 	}
 
-	if val == def {
-		Set(key, "0", expiration)
+	result, err := strconv.Atoi(val)
+	if err != nil {
 		return 0
 	}
 
-	num, err := strconv.ParseInt(val, 10, 64)
-	if logs.Alert(err) != nil {
+	result++
+	err = Set(key, result, expiration)
+	if err != nil {
 		return 0
 	}
 
-	num++
-	Set(key, val, expiration)
-
-	return num
+	return result
 }
 
 /**
@@ -159,13 +187,13 @@ func SetY(key string, val interface{}) error {
 * Empty
 * @return error
 **/
-func Empty() error {
+func Empty(match string) error {
 	if conn == nil {
 		return logs.Log(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
 	ctx := context.Background()
-	iter := conn.db.Scan(ctx, 0, "*", 0).Iterator()
+	iter := conn.db.Scan(ctx, 0, match, 0).Iterator()
 	for iter.Next(ctx) {
 		key := iter.Val()
 		DeleteCtx(ctx, key)
@@ -291,7 +319,7 @@ func HDelete(key, atr string) error {
 * @return error
 **/
 func SetVerify(device, key, val string, duration time.Duration) error {
-	key = strs.Format(`verify:%s:%s`, device, key)
+	key = GenKey("verify", device, key)
 	return Set(key, val, duration)
 }
 
@@ -302,8 +330,15 @@ func SetVerify(device, key, val string, duration time.Duration) error {
 * @return string, error
 **/
 func GetVerify(device string, key string) (string, error) {
-	key = strs.Format(`verify:%s:%s`, device, key)
-	return Get(key, "")
+	key = GenKey("verify", device, key)
+	result, err := Get(key, "")
+	if err != nil {
+		return "", err
+	}
+
+	Delete(key)
+
+	return result, nil
 }
 
 /**
@@ -313,7 +348,7 @@ func GetVerify(device string, key string) (string, error) {
 * @return int64, error
 **/
 func DeleteVerify(device string, key string) (int64, error) {
-	key = strs.Format(`verify:%s:%s`, device, key)
+	key = GenKey("verify", device, key)
 	return Delete(key)
 }
 

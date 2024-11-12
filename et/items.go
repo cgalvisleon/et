@@ -2,11 +2,9 @@ package et
 
 import (
 	"encoding/json"
-	"reflect"
-	"strings"
+	"time"
 
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/strs"
 )
 
 // Items struct to define a items
@@ -21,7 +19,7 @@ type Items struct {
 * @param src interface{}
 * @return error
 **/
-func (it *Items) Scan(src interface{}) error {
+func (s *Items) Scan(src interface{}) error {
 	var ba []byte
 	switch v := src.(type) {
 	case []byte:
@@ -38,7 +36,7 @@ func (it *Items) Scan(src interface{}) error {
 		return err
 	}
 
-	*it = Items{
+	*s = Items{
 		Ok:     len(t) > 0,
 		Count:  len(t),
 		Result: t,
@@ -48,17 +46,31 @@ func (it *Items) Scan(src interface{}) error {
 }
 
 /**
-* FromString
-* @param src string
-* @return error
+* ToByte convert a json to a []byte
+* @return []byte
 **/
-func (it *Items) FromString(src string) error {
-	err := json.Unmarshal([]byte(src), &it)
+func (s Items) ToByte() []byte {
+	result, err := json.Marshal(s)
 	if err != nil {
-		return err
+		return nil
 	}
 
-	return nil
+	return result
+}
+
+/**
+* ToString convert a json to a string
+* @return string
+**/
+func (s Items) ToString() string {
+	bt, err := json.Marshal(s)
+	if err != nil {
+		return ""
+	}
+
+	result := string(bt)
+
+	return result
 }
 
 /**
@@ -68,12 +80,12 @@ func (it *Items) FromString(src string) error {
 * @param atribs ...string
 * @return any
 **/
-func (it *Items) ValAny(idx int, _default any, atribs ...string) any {
-	if it.Result[idx] == nil {
+func (s *Items) ValAny(idx int, _default any, atribs ...string) interface{} {
+	if s.Result[idx] == nil {
 		return _default
 	}
 
-	return it.Result[idx].ValAny(_default, atribs...)
+	return s.Result[idx].ValAny(_default, atribs...)
 }
 
 /**
@@ -83,237 +95,314 @@ func (it *Items) ValAny(idx int, _default any, atribs ...string) any {
 * @param atribs ...string
 * @return string
 **/
-func (it *Items) ValStr(idx int, _default string, atribs ...string) string {
-	if it.Result[idx] == nil {
+func (s *Items) ValStr(idx int, _default string, atribs ...string) string {
+	if s.Result[idx] == nil {
 		return _default
 	}
 
-	return it.Result[idx].ValStr(_default, atribs...)
+	return s.Result[idx].ValStr(_default, atribs...)
 }
 
 /**
-* Uppcase return the value of the key in uppercase
+* ValInt return int value of the key
 * @param idx int
-* @param _default string
+* @param _default int
 * @param atribs ...string
-* @return string
+* @return int
 **/
-func (it *Items) Uppcase(idx int, _default string, atribs ...string) string {
-	if it.Result[idx] == nil {
+func (s *Items) ValInt(idx int, _default int, atribs ...string) int {
+	if s.Result[idx] == nil {
 		return _default
 	}
 
-	result := Val(it.Result[idx], _default, atribs...)
-
-	switch v := result.(type) {
-	case string:
-		return strings.ToUpper(v)
-	default:
-		return strs.Format(`%v`, strings.ToUpper(_default))
-	}
+	return s.Result[idx].ValInt(_default, atribs...)
 }
 
 /**
-* Lowcase return the value of the key in lowercase
+* ValInt64 return int64 value of the key
 * @param idx int
-* @param _default string
+* @param _default int64
 * @param atribs ...string
-* @return string
+* @return int64
 **/
-func (it *Items) Lowcase(idx int, _default string, atribs ...string) string {
-	if it.Result[idx] == nil {
+func (s *Items) ValInt64(idx int64, _default int64, atribs ...string) int64 {
+	if s.Result[idx] == nil {
 		return _default
 	}
 
-	result := Val(it.Result[idx], _default, atribs...)
-
-	switch v := result.(type) {
-	case string:
-		return strings.ToLower(v)
-	default:
-		return strs.Format(`%v`, strings.ToLower(_default))
-	}
+	return s.Result[idx].ValInt64(_default, atribs...)
 }
 
 /**
-* Titlecase return the value of the key in titlecase
+* ValNum return float64 value of the key
 * @param idx int
-* @param _default string
+* @param _default float64
 * @param atribs ...string
-* @return string
+* @return float64
 **/
-func (it *Items) Titlecase(idx int, _default string, atribs ...string) string {
-	if it.Result[idx] == nil {
+func (s *Items) ValNum(idx int, _default float64, atribs ...string) float64 {
+	if s.Result[idx] == nil {
 		return _default
 	}
 
-	result := Val(it.Result[idx], _default, atribs...)
-
-	switch v := result.(type) {
-	case string:
-		return strings.ToTitle(v)
-	default:
-		return strs.Format(`%v`, strings.ToTitle(_default))
-	}
+	return s.Result[idx].ValNum(_default, atribs...)
 }
 
 /**
-* Get a value from the key
+* ValBool return bool value of the key
 * @param idx int
-* @param key string
-* @return interface{}
-**/
-func (it *Items) Get(idx int, key string) interface{} {
-	if it.Result[idx] == nil {
-		return nil
-	}
-
-	return it.Result[idx].Get(key)
-}
-
-/**
-* Set a value from the key
-* @param idx int
-* @param key string
-* @param val interface{}
+* @param _default bool
+* @param atribs ...string
 * @return bool
 **/
-func (it *Items) Set(idx int, key string, val interface{}) bool {
-	if it.Result[idx] == nil {
-		return false
+func (s *Items) ValBool(idx int, _default bool, atribs ...string) bool {
+	if s.Result[idx] == nil {
+		return _default
 	}
 
-	return it.Result[idx].Set(key, val)
+	return s.Result[idx].ValBool(_default, atribs...)
 }
 
 /**
-* Del a value from the key
+* ValTime return time.Time value of the key
 * @param idx int
-* @param key string
-* @return bool
+* @param _default time.Time
+* @param atribs ...string
+* @return time.Time
 **/
-func (it *Items) Del(idx int, key string) bool {
-	if it.Result[idx] == nil {
-		return false
+func (s *Items) ValTime(idx int, _default time.Time, atribs ...string) time.Time {
+	if s.Result[idx] == nil {
+		return _default
 	}
 
-	return it.Result[idx].Del(key)
+	return s.Result[idx].ValTime(_default, atribs...)
+}
+
+/**
+* ValJson return the value of the key
+* @param idx int
+* @param _default Json
+* @param atribs ...string
+* @return Json
+**/
+func (s *Items) ValJson(idx int, _default Json, atribs ...string) Json {
+	if s.Result[idx] == nil {
+		return _default
+	}
+
+	return s.Result[idx].ValJson(_default, atribs...)
+}
+
+/**
+* ValArray return the value of the key
+* @param idx int
+* @param _default []interface{}
+* @param atribs ...string
+* @return []interface{}
+**/
+func (s *Items) ValArray(idx int, _default []interface{}, atribs ...string) []interface{} {
+	if s.Result[idx] == nil {
+		return _default
+	}
+
+	return s.Result[idx].ValArray(_default, atribs...)
+}
+
+/**
+* Any return the value of the key
+* @param idx int
+* @param _default any
+* @param atribs ...string
+* @return any
+**/
+func (s *Items) Any(idx int, _default interface{}, atribs ...string) interface{} {
+	if s.Result[idx] == nil {
+		return _default
+	}
+
+	return s.Result[idx].Any(_default, atribs...)
+}
+
+/**
+* Id return the value of the key
+* @return string
+**/
+func (s Items) Id(idx int) string {
+	return s.Result[idx].Id()
 }
 
 /**
 * IdT return the value of the key
-* @param idx int
 * @return string
 **/
-func (it *Items) IdT(idx int) string {
-	return it.Result[idx].IdT()
+func (s Items) IdT(dx int) string {
+	return s.Result[dx].IdT()
 }
 
 /**
 * Index return the value of the key
-* @param idx int
-* @atrib ...string
 * @return int
 **/
-func (it *Items) Key(idx int, atribs ...string) string {
-	return it.Result[idx].Key()
+func (s Items) Index(dx int) int {
+	return s.Result[dx].Index()
+}
+
+/**
+* Key return the value of the key
+* @param atribs ...string
+* @return string
+**/
+func (s Items) Key(dx int, atribs ...string) string {
+	return s.Result[dx].Key(atribs...)
 }
 
 /**
 * Str return the value of the key
-* @param idx int
-* @atrib ...string
+* @param atribs ...string
 * @return string
 **/
-func (it *Items) Str(idx int, atribs ...string) string {
-	return it.Result[idx].Str()
+func (s Items) Str(dx int, atribs ...string) string {
+	return s.Result[dx].Str(atribs...)
 }
 
 /**
 * Int return the value of the key
-* @param idx int
-* @atrib ...string
+* @param atribs ...string
 * @return int
 **/
-func (it *Items) Int(idx int, atribs ...string) int {
-	return it.Result[idx].Int()
+func (s Items) Int(dx int, atribs ...string) int {
+	return s.Result[dx].Int(atribs...)
+}
+
+/**
+* Int64 return the value of the key
+* @param atribs ...string
+* @return int64
+**/
+func (s Items) Int64(dx int, atribs ...string) int64 {
+	return s.Result[dx].Int64(atribs...)
 }
 
 /**
 * Num return the value of the key
-* @param idx int
-* @atrib ...string
+* @param atribs ...string
 * @return float64
 **/
-func (it *Items) Num(idx int, atribs ...string) float64 {
-	return it.Result[idx].Num()
+func (s Items) Num(dx int, atribs ...string) float64 {
+	return s.Result[dx].Num(atribs...)
 }
 
 /**
 * Bool return the value of the key
-* @param idx int
-* @atrib ...string
+* @param atribs ...string
 * @return bool
 **/
-func (it *Items) Bool(idx int, atribs ...string) bool {
-	return it.Result[idx].Bool()
+func (s Items) Bool(dx int, atribs ...string) bool {
+	return s.Result[dx].Bool(atribs...)
+}
+
+/**
+* Time return the value of the key
+* @param atribs ...string
+* @return time.Time
+**/
+func (s Items) Time(dx int, atribs ...string) time.Time {
+	return s.Result[dx].Time(atribs...)
 }
 
 /**
 * Json return the value of the key
-* @param idx int
-* @atrib ...string
+* @param atrib string
 * @return Json
 **/
-func (it *Items) Json(idx int, atribs ...string) Json {
-	if it.Result[idx] == nil {
-		return Json{}
-	}
-
-	val := Val(it.Result[idx], Json{}, atribs...)
-
-	switch v := val.(type) {
-	case Json:
-		return Json(v)
-	case map[string]interface{}:
-		return Json(v)
-	default:
-		logs.Errorf("Not Items.Json type (%v) value:%v", reflect.TypeOf(v), v)
-		return Json{}
-	}
+func (s Items) Json(dx int, atrib string) Json {
+	return s.Result[dx].Json(atrib)
 }
 
 /**
-* ToByte
-* @return []byte
+* Array return the value of the key
+* @param atrib string
+* @return []Json
 **/
-func (it *Items) ToByte() []byte {
-	return Json{
-		"Ok":     it.Ok,
-		"Count":  it.Count,
-		"Result": it.Result,
-	}.ToByte()
+func (s Items) Array(dx int, atrib string) []interface{} {
+	return s.Result[dx].Array(atrib)
 }
 
 /**
-* ToString
-* @return string
+* ArrayStr
+* @param _default []string
+* @param atribs ...string
+* @return []string
 **/
-func (it *Items) ToString() string {
-	result := it.ToJson()
-	return result.ToString()
+func (s Items) ArrayStr(dx int, _default []string, atribs ...string) []string {
+	return s.Result[dx].ArrayStr(_default, atribs...)
 }
 
 /**
-* ToJson return the value type Json
-* @return Json
+* ArrayInt
+* @param _default []int
+* @param atribs ...string
+* @return []int
 **/
-func (it *Items) ToJson() Json {
-	return Json{
-		"Ok":     it.Ok,
-		"Count":  it.Count,
-		"Result": it.Result,
-	}
+func (s Items) ArrayInt(dx int, _default []int, atribs ...string) []int {
+	return s.Result[dx].ArrayInt(_default, atribs...)
+}
+
+/**
+* ArrayInt64
+* @param _default []int64
+* @param atribs ...string
+* @return []int64
+**/
+func (s Items) ArrayInt64(dx int, _default []int64, atribs ...string) []int64 {
+	return s.Result[dx].ArrayInt64(_default, atribs...)
+}
+
+/**
+* ArrayJson
+* @param _default []Json
+* @param atribs ...string
+* @return []Json
+**/
+func (s Items) ArrayJson(dx int, _default []Json, atribs ...string) []Json {
+	return s.Result[dx].ArrayJson(_default, atribs...)
+}
+
+/**
+* Get
+* @param key string
+* @return interface{}
+**/
+func (s Items) Get(dx int, key string) interface{} {
+	return s.Result[dx].Get(key)
+}
+
+/**
+* Set a value in the key
+* @param key string
+* @param val interface{}
+* @return bool
+**/
+func (s *Items) Set(dx int, keys []string, val interface{}) {
+	(*s).Result[dx].Set(keys, val)
+}
+
+/**
+* Delete a value in the key
+* @param key string
+* @return bool
+**/
+func (s *Items) Delete(dx int, keys []string) bool {
+	return s.Result[dx].Delete(keys)
+}
+
+/**
+* ExistKey return if the key exist
+* @param key string
+* @return bool
+**/
+func (s Items) ExistKey(dx int, key string) bool {
+	return s.Result[dx].ExistKey(key)
 }
 
 /**
@@ -323,10 +412,10 @@ func (it *Items) ToJson() Json {
 * @param rows int
 * @return List
 **/
-func (it *Items) ToList(all, page, rows int) List {
+func (s *Items) ToList(all, page, rows int) List {
 	var start int
 	var end int
-	count := it.Count
+	count := s.Count
 
 	if count <= 0 {
 		start = 0
@@ -350,6 +439,6 @@ func (it *Items) ToList(all, page, rows int) List {
 		Page:   page,
 		Start:  start,
 		End:    end,
-		Result: it.Result,
+		Result: s.Result,
 	}
 }

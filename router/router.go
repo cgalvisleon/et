@@ -137,7 +137,7 @@ func pushApiGateway(method, path, packagePath, host, packageName string, private
 }
 
 /**
-* PublicRoute
+* Public
 * @param r *chi.Mux
 * @param method string
 * @param path string
@@ -147,7 +147,7 @@ func pushApiGateway(method, path, packagePath, host, packageName string, private
 * @param host string
 * @return *chi.Mux
 **/
-func PublicRoute(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, packagePath, host string) *chi.Mux {
+func Public(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, packagePath, host string) *chi.Mux {
 	switch method {
 	case "GET":
 		r.Get(path, h)
@@ -173,7 +173,7 @@ func PublicRoute(r *chi.Mux, method, path string, h http.HandlerFunc, packageNam
 }
 
 /**
-* ProtectRoute
+* Protect
 * @param r *chi.Mux
 * @param method string
 * @param path string
@@ -183,7 +183,7 @@ func PublicRoute(r *chi.Mux, method, path string, h http.HandlerFunc, packageNam
 * @param host string
 * @return *chi.Mux
 **/
-func ProtectRoute(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, packagePath, host string) *chi.Mux {
+func Protect(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, packagePath, host string) *chi.Mux {
 	switch method {
 	case "GET":
 		r.With(middleware.Authorization).Get(path, h)

@@ -1,6 +1,8 @@
 package event
 
 import (
+	"sync"
+
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
@@ -25,9 +27,11 @@ func connect() (*Conn, error) {
 		return nil, err
 	}
 
-	logs.Logf("NATS", `Connected host:%s`, host)
+	logs.Logf(PackageName, `Connected host:%s`, host)
 
 	return &Conn{
-		conn: connect,
+		Conn:            connect,
+		eventCreatedSub: map[string]*nats.Subscription{},
+		mutex:           &sync.RWMutex{},
 	}, nil
 }

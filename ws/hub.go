@@ -90,8 +90,6 @@ func (h *Hub) removeClient(value *Subscriber) {
 		return
 	}
 
-	value.close()
-
 	h.clients = append(h.clients[:idx], h.clients[idx+1:]...)
 }
 
@@ -165,6 +163,10 @@ func (h *Hub) removeQueue(value *Queue) {
 }
 
 func (h *Hub) onConnect(client *Subscriber) {
+	if client == nil {
+		return
+	}
+
 	h.addClient(client)
 	msg := NewMessage(h.From(), et.Json{
 		"ok":       true,
@@ -181,6 +183,10 @@ func (h *Hub) onConnect(client *Subscriber) {
 }
 
 func (h *Hub) onDisconnect(client *Subscriber) {
+	if client == nil {
+		return
+	}
+
 	clientId := client.Id
 	name := client.Name
 	h.removeClient(client)

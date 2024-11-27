@@ -383,8 +383,8 @@ func (s Items) Get(dx int, key string) interface{} {
 * @param val interface{}
 * @return bool
 **/
-func (s *Items) Set(dx int, keys []string, val interface{}) {
-	(*s).Result[dx].Set(keys, val)
+func (s *Items) Set(dx int, key string, val interface{}) {
+	(*s).Result[dx].Set(key, val)
 }
 
 /**

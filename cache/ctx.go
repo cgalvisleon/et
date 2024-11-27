@@ -19,10 +19,10 @@ import (
 **/
 func SetCtx(ctx context.Context, key, val string, second time.Duration) error {
 	if conn == nil {
-		return logs.Log(msg.ERR_NOT_CACHE_SERVICE)
+		return logs.NewError(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
-	err := conn.db.Set(ctx, key, val, second).Err()
+	err := conn.Set(ctx, key, val, second).Err()
 	if err != nil {
 		return err
 	}
@@ -39,18 +39,17 @@ func SetCtx(ctx context.Context, key, val string, second time.Duration) error {
 **/
 func GetCtx(ctx context.Context, key, def string) (string, error) {
 	if conn == nil {
-		return def, logs.Log(msg.ERR_NOT_CACHE_SERVICE)
+		return def, logs.NewError(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
-	result, err := conn.db.Get(ctx, key).Result()
-	switch {
-	case err == redis.Nil:
+	result, err := conn.Get(ctx, key).Result()
+	if err == redis.Nil {
 		return def, nil
-	case err != nil:
+	} else if err != nil {
 		return def, err
-	default:
-		return result, nil
 	}
+
+	return result, nil
 }
 
 /**
@@ -61,10 +60,10 @@ func GetCtx(ctx context.Context, key, def string) (string, error) {
 **/
 func DeleteCtx(ctx context.Context, key string) (int64, error) {
 	if conn == nil {
-		return 0, logs.Log(msg.ERR_NOT_CACHE_SERVICE)
+		return 0, logs.NewError(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
-	intCmd := conn.db.Del(ctx, key)
+	intCmd := conn.Del(ctx, key)
 
 	return intCmd.Val(), intCmd.Err()
 }
@@ -78,10 +77,10 @@ func DeleteCtx(ctx context.Context, key string) (int64, error) {
 **/
 func HSetCtx(ctx context.Context, key string, val map[string]string) error {
 	if conn == nil {
-		return logs.Log(msg.ERR_NOT_CACHE_SERVICE)
+		return logs.NewError(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
-	err := conn.db.HSet(ctx, key, val).Err()
+	err := conn.HSet(ctx, key, val).Err()
 	if err != nil {
 		return err
 	}
@@ -97,10 +96,10 @@ func HSetCtx(ctx context.Context, key string, val map[string]string) error {
 **/
 func HGetCtx(ctx context.Context, key string) (map[string]string, error) {
 	if conn == nil {
-		return map[string]string{}, logs.Log(msg.ERR_NOT_CACHE_SERVICE)
+		return map[string]string{}, logs.NewError(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
-	result := conn.db.HGetAll(ctx, key).Val()
+	result := conn.HGetAll(ctx, key).Val()
 
 	return result, nil
 }
@@ -114,10 +113,10 @@ func HGetCtx(ctx context.Context, key string) (map[string]string, error) {
 **/
 func HDeleteCtx(ctx context.Context, key, atr string) error {
 	if conn == nil {
-		return logs.Log(msg.ERR_NOT_CACHE_SERVICE)
+		return logs.NewError(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
-	err := conn.db.Do(ctx, "HDEL", key, atr).Err()
+	err := conn.Do(ctx, "HDEL", key, atr).Err()
 	if err != nil {
 		return err
 	}

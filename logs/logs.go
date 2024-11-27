@@ -157,26 +157,40 @@ func errorTarget(kind, color string, err error) error {
 	return err
 }
 
-func Alert(err error) error {
-	if err == nil {
-		return nil
-	}
+func PrintFunctionName() string {
+	pc, _, _, _ := runtime.Caller(2)
+	fullFuncName := runtime.FuncForPC(pc).Name()
 
-	color := "Yellow"
-	log("Alert", color, err.Error())
+	return fullFuncName
+}
+
+func Alert(err error) error {
+	functionName := PrintFunctionName()
+	if err != nil {
+		log("Alert", "Yellow", err.Error(), " - ", functionName)
+	}
 
 	return err
 }
 
 func Alertm(message string) error {
 	err := NewError(message)
-	return Alert(err)
+	functionName := PrintFunctionName()
+	if err != nil {
+		log("Alert", "Yellow", err.Error(), " - ", functionName)
+	}
+
+	return err
 }
 
 func Alertf(format string, args ...any) error {
-	message := fmt.Sprintf(format, args...)
+	err := NewError(fmt.Sprintf(format, args...))
+	functionName := PrintFunctionName()
+	if err != nil {
+		log("Alert", "Yellow", err.Error(), " - ", functionName)
+	}
 
-	return Alertm(message)
+	return err
 }
 
 func Trace(err error) error {

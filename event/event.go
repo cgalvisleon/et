@@ -1,16 +1,20 @@
 package event
 
 import (
+	"sync"
+
 	"github.com/cgalvisleon/et/logs"
 	"github.com/nats-io/nats.go"
 )
 
+const PackageName = "event"
+
 var conn *Conn
 
 type Conn struct {
-	conn             *nats.Conn
-	eventCreatedSub  *nats.Subscription
-	eventCreatedChan chan EvenMessage
+	*nats.Conn
+	eventCreatedSub map[string]*nats.Subscription
+	mutex           *sync.RWMutex
 }
 
 /**
@@ -35,17 +39,15 @@ func Load() (*Conn, error) {
 * Close the connection to the service pubsub
 **/
 func Close() {
-	if conn != nil && conn.conn != nil {
-		conn.conn.Close()
+	if conn == nil {
+		return
 	}
 
-	if conn.eventCreatedSub != nil {
-		conn.eventCreatedSub.Unsubscribe()
+	for _, sub := range conn.eventCreatedSub {
+		sub.Unsubscribe()
 	}
 
-	if conn.eventCreatedChan != nil {
-		close(conn.eventCreatedChan)
-	}
+	conn.Close()
 
-	logs.Log("Event", `Disconnect...`)
+	logs.Log(PackageName, `Disconnect...`)
 }

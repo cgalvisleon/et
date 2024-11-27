@@ -169,16 +169,20 @@ func (s Json) IsEmpty() bool {
 func (s Json) ValAny(_default interface{}, atribs ...string) interface{} {
 	var current interface{} = s
 
-	for _, atrib := range atribs {
-		if m, ok := current.(map[string]interface{}); ok {
-			current = m[atrib]
-		} else {
+	n := len(atribs)
+	for i := 0; i < n; i++ {
+		switch v := current.(type) {
+		case Json:
+			current = v[atribs[i]]
+		case map[string]interface{}:
+			current = v[atribs[i]]
+		default:
 			return _default
 		}
-	}
 
-	if current == nil {
-		return _default
+		if i == n-1 {
+			return current
+		}
 	}
 
 	return current
@@ -193,12 +197,12 @@ func (s Json) ValAny(_default interface{}, atribs ...string) interface{} {
 func (s Json) ValStr(_default string, atribs ...string) string {
 	val := s.ValAny(_default, atribs...)
 
-	result, ok := val.(string)
-	if !ok {
-		return _default
+	switch v := val.(type) {
+	case string:
+		return v
+	default:
+		return strs.Format(`%v`, v)
 	}
-
-	return result
 }
 
 /**
@@ -659,27 +663,8 @@ func (s Json) Get(key string) interface{} {
 * @param val interface{}
 * @return bool
 **/
-func (s *Json) Set(keys []string, val interface{}) {
-	if *s == nil {
-		*s = make(Json)
-	}
-
-	current := *s
-	for i, k := range keys {
-		if i == len(keys)-1 {
-			current[k] = val
-		} else {
-			if _, exists := current[k]; !exists {
-				current[k] = Json{}
-			}
-
-			if nextMap, ok := current[k].(Json); ok {
-				current = nextMap // Avanzamos al siguiente nivel
-			} else {
-				return
-			}
-		}
-	}
+func (s *Json) Set(key string, val interface{}) {
+	(*s)[key] = val
 }
 
 /**

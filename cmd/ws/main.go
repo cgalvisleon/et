@@ -8,11 +8,11 @@ import (
 
 	"math/rand"
 
-	"github.com/celsiainternet/elvis/console"
-	"github.com/celsiainternet/elvis/envar"
-	"github.com/celsiainternet/elvis/et"
-	"github.com/celsiainternet/elvis/strs"
-	"github.com/celsiainternet/elvis/ws"
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/strs"
+	"github.com/cgalvisleon/et/ws"
 )
 
 var conn *ws.Hub
@@ -39,7 +39,7 @@ func main() {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	<-sigs
 
-	console.LogK("WebSocket", "Shoutdown server...")
+	logs.Log("WebSocket", "Shoutdown server...")
 }
 
 func test1(port int) {
@@ -51,14 +51,14 @@ func test1(port int) {
 			ClientId:  strs.Format("client-%d", i),
 			Name:      strs.Format("Client%d", i),
 			Url:       url,
-			Reconcect: 3,
+			Reconnect: 3,
 		})
 		if err != nil {
-			console.AlertE(err)
+			logs.Alert(err)
 		}
 
 		client.Subscribe("Hola", func(msg ws.Message) {
-			console.Debug("client1", msg.ToString())
+			logs.Debug("client1", msg.ToString())
 		})
 
 		clients = append(clients, client)

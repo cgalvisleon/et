@@ -3,35 +3,34 @@ package middleware
 import (
 	"context"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/timezone"
-	"github.com/cgalvisleon/et/token"
+	tk "github.com/cgalvisleon/et/token"
 	"github.com/cgalvisleon/et/utility"
 )
 
 /**
 * tokenFromAuthorization
 * @param authorization string
-* @return string, error
+* @return string
+* @return error
 **/
 func tokenFromAuthorization(authorization string) (string, error) {
 	if authorization == "" {
-		return "", logs.Alertm(ERR_AUTORIZATION_IS_REQUIRED)
+		return "", logs.Alertm("Autorization is required")
 	}
 
 	if !strings.HasPrefix(authorization, "Bearer") {
-		return "", logs.Alertm(ERR_INVALID_AUTORIZATION_FORMAT)
+		return "", logs.Alertm("Invalid autorization format")
 	}
 
 	l := strings.Split(authorization, " ")
 	if len(l) != 2 {
-		return "", logs.Alertm(ERR_INVALID_AUTORIZATION_FORMAT)
+		return "", logs.Alertm("Invalid autorization format")
 	}
 
 	return l[1], nil
@@ -41,56 +40,64 @@ func tokenFromAuthorization(authorization string) (string, error) {
 * GetAuthorization
 * @param w http.ResponseWriter
 * @param r *http.Request
-* @return string, error
+* @return string
+* @return error
 **/
 func GetAuthorization(w http.ResponseWriter, r *http.Request) (string, error) {
+	cookie, err := r.Cookie("auth_token")
+	if err == nil {
+		return cookie.Value, nil
+	}
+
 	authorization := r.Header.Get("Authorization")
 	result, err := tokenFromAuthorization(authorization)
 	if err != nil {
-		return "", err
+		return "", logs.Alert(err)
 	}
 
 	return result, nil
 }
 
 /**
-* Authorization
+* Autentication
 * @param next http.Handler
 **/
-func Authorization(next http.Handler) http.Handler {
+func Autentication(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		tokenString, err := GetAuthorization(w, r)
+		token, err := GetAuthorization(w, r)
 		if err != nil {
 			response.Unauthorized(w, r)
 			return
 		}
 
-		c, err := token.Validate(tokenString)
+		clm, err := tk.Valid(token)
 		if err != nil {
+			response.Unauthorized(w, r)
+			return
+		}
+
+		if clm == nil {
 			response.Unauthorized(w, r)
 			return
 		}
 
 		serviceId := utility.UUID()
-		ctx = context.WithValue(ctx, ServiceIdKey, serviceId)
-		ctx = context.WithValue(ctx, ClientIdKey, c.ClientId)
-		ctx = context.WithValue(ctx, NameKey, c.Name)
-		ctx = context.WithValue(ctx, IatKey, c.Iat)
-		ctx = context.WithValue(ctx, ExpKey, c.Exp)
-		ctx = context.WithValue(ctx, AppKey, c.App)
-		ctx = context.WithValue(ctx, KindKey, c.Kind)
-		ctx = context.WithValue(ctx, DeviceKey, c.Device)
-		ctx = context.WithValue(ctx, TokenKey, tokenString)
+		ctx := r.Context()
+		ctx = context.WithValue(ctx, tk.ServiceIdKey, serviceId)
+		ctx = context.WithValue(ctx, tk.ClientIdKey, clm.ClientId)
+		ctx = context.WithValue(ctx, tk.NameKey, clm.Name)
+		ctx = context.WithValue(ctx, tk.AppKey, clm.App)
+		ctx = context.WithValue(ctx, tk.DeviceKey, clm.Device)
+		ctx = context.WithValue(ctx, tk.DuractionKey, clm.Duration)
+		ctx = context.WithValue(ctx, tk.TokenKey, token)
 
-		now := timezone.Now()
-		hostName, _ := os.Hostname()
+		now := utility.Now()
 		data := et.Json{
 			"serviceId": serviceId,
-			"clientId":  c.ClientId,
+			"clientId":  clm.ClientId,
 			"last_use":  now,
 			"host_name": hostName,
-			"token":     tokenString,
+			"token":     token,
 		}
 
 		go event.TokenLastUse(data)

@@ -10,9 +10,9 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/celsiainternet/elvis/et"
-	"github.com/celsiainternet/elvis/logs"
-	"github.com/celsiainternet/elvis/strs"
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/strs"
 	"github.com/go-chi/chi/v5"
 )
 

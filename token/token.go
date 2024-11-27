@@ -2,20 +2,20 @@ package token
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/golang-jwt/jwt/v4"
 )
 
-type contextKey string
+type ContextKey string
 
-func (c contextKey) String(ctx context.Context, def string) string {
+func (c ContextKey) String(ctx context.Context, def string) string {
 	val := ctx.Value(c)
 	result, ok := val.(string)
 	if !ok {
@@ -26,26 +26,22 @@ func (c contextKey) String(ctx context.Context, def string) string {
 }
 
 const (
-	ServiceIdKey contextKey = "serviceId"
-	ClientIdKey  contextKey = "clientId"
-	NameKey      contextKey = "name"
-	IatKey       contextKey = "iat"
-	ExpKey       contextKey = "expired"
-	AppKey       contextKey = "app"
-	KindKey      contextKey = "kind"
-	DeviceKey    contextKey = "device"
-	TokenKey     contextKey = "token"
+	ServiceIdKey ContextKey = "serviceId"
+	ClientIdKey  ContextKey = "clientId"
+	NameKey      ContextKey = "name"
+	AppKey       ContextKey = "app"
+	DeviceKey    ContextKey = "device"
+	DuractionKey ContextKey = "duration"
+	TokenKey     ContextKey = "token"
 )
 
 type Claim struct {
 	Salt     string        `json:"salt"`
 	ClientId string        `json:"clientId"`
 	Name     string        `json:"name"`
-	Iat      time.Time     `json:"iat"`
-	Expired  time.Duration `json:"expired"`
 	App      string        `json:"app"`
-	Kind     string        `json:"kind"`
 	Device   string        `json:"device"`
+	Duration time.Duration `json:"expired"`
 	jwt.StandardClaims
 }
 
@@ -57,11 +53,9 @@ func (c *Claim) ToJson() et.Json {
 	return et.Json{
 		"clientId": c.ClientId,
 		"name":     c.Name,
-		"iat":      c.Iat,
-		"exp":      c.Expired,
 		"app":      c.App,
-		"kind":     c.Kind,
 		"device":   c.Device,
+		"expired":  c.Duration,
 	}
 }
 
@@ -105,19 +99,17 @@ func parce(token string) (*jwt.Token, error) {
 * @return string
 * @return error
 **/
-func Generate(clientId, name, app, kind, device string, expired time.Duration) (string, error) {
+func Generate(clientId, name, app, device string, expired time.Duration) (string, error) {
 	c := Claim{
 		Salt:     utility.GetOTP(6),
 		ClientId: clientId,
 		Name:     name,
-		Iat:      timezone.NowTime(),
-		Expired:  expired,
 		App:      app,
-		Kind:     kind,
 		Device:   device,
+		Duration: expired,
 	}
-	if expired > 0 {
-		c.ExpiresAt = timezone.NowTime().Add(expired).Unix()
+	if c.Duration != 0 {
+		c.ExpiresAt = time.Now().Add(c.Duration).Unix()
 	}
 	jwT := jwt.NewWithClaims(jwt.SigningMethodHS256, c)
 	secret := envar.GetStr("1977", "SECRET")
@@ -133,12 +125,12 @@ func Generate(clientId, name, app, kind, device string, expired time.Duration) (
 }
 
 /**
-* Validate method to use in token
+* Parce
 * @param token string
 * @return *Claim
 * @return error
 **/
-func Validate(token string) (*Claim, error) {
+func Parce(token string) (*Claim, error) {
 	jwT, err := parce(token)
 	if err != nil {
 		return nil, err
@@ -153,53 +145,115 @@ func Validate(token string) (*Claim, error) {
 		return nil, logs.Alertm(ERR_INVALID_CLAIM)
 	}
 
-	clientId, ok := claims["clientId"].(string)
+	clientId, ok := claims[string(ClientIdKey)].(string)
 	if !ok {
 		return nil, logs.Alertm(ERR_INVALID_CLAIM)
 	}
 
-	name, ok := claims["name"].(string)
+	name, ok := claims[string(NameKey)].(string)
 	if !ok {
 		return nil, logs.Alertm(ERR_INVALID_CLAIM)
 	}
 
-	iat, ok := claims["iat"].(float64)
+	app, ok := claims[string(AppKey)].(string)
 	if !ok {
 		return nil, logs.Alertm(ERR_INVALID_CLAIM)
 	}
 
-	exp, ok := claims["expired"].(float64)
+	device, ok := claims[string(DeviceKey)].(string)
 	if !ok {
 		return nil, logs.Alertm(ERR_INVALID_CLAIM)
 	}
 
-	app, ok := claims["app"].(string)
+	second, ok := claims[string(DuractionKey)].(float64)
 	if !ok {
-		return nil, logs.Alertm(ERR_INVALID_CLAIM)
+		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "duration")
 	}
 
-	kind, ok := claims["kind"].(string)
-	if !ok {
-		return nil, logs.Alertm(ERR_INVALID_CLAIM)
-	}
-
-	device, ok := claims["device"].(string)
-	if !ok {
-		return nil, logs.Alertm(ERR_INVALID_CLAIM)
-	}
+	duration := time.Duration(second)
 
 	result := &Claim{
 		ClientId: clientId,
 		Name:     name,
-		Iat:      time.Unix(int64(iat), 0),
-		Expired:  time.Duration(exp),
 		App:      app,
-		Kind:     kind,
 		Device:   device,
+		Duration: duration,
 	}
-	if result.Expired != 0 {
+	if result.Duration != 0 {
 		result.ExpiresAt = int64(claims["exp"].(float64))
 	}
 
 	return result, nil
+}
+
+/**
+* Valid
+* @param token string
+* @return *Claim
+* @return error
+**/
+func Valid(token string) (*Claim, error) {
+	result, err := Parce(token)
+	if err != nil {
+		return nil, err
+	}
+
+	key := Key(result.App, result.Device, result.ClientId)
+	val, err := cache.Get(key, "")
+	if err != nil {
+		return nil, err
+	}
+
+	if val != token {
+		cache.Delete(key)
+		return nil, err
+	}
+
+	return result, nil
+}
+
+/**
+* Set
+* @param app string
+* @param device string
+* @param id string
+* @param token string
+* @return error
+**/
+func Set(app, device, id, token string, duration time.Duration) error {
+	key := Key(app, device, id)
+	err := cache.Set(key, token, duration)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/**
+* GetUser
+* @param r *http.Request
+* @return et.Json
+**/
+func ClientId(r *http.Request) string {
+	ctx := r.Context()
+	return ClientIdKey.String(ctx, "-1")
+}
+
+/**
+* GetUser
+* @param r *http.Request
+* @return et.Json
+**/
+func GetUser(r *http.Request) et.Json {
+	now := utility.Now()
+	ctx := r.Context()
+	username := ClientIdKey.String(ctx, "Anonimo")
+	fullName := NameKey.String(ctx, "Anonimo")
+
+	return et.Json{
+		"date_at":   now,
+		"username":  username,
+		"full_name": fullName,
+	}
 }

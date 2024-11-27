@@ -74,7 +74,7 @@ func (h *Hub) InitMaster() {
 			name:      h.Name,
 			url:       "",
 			header:    http.Header{},
-			reconcect: 3,
+			reconnect: 3,
 		},
 		typeNode: NodeMaster,
 	}
@@ -99,7 +99,7 @@ func (h *Hub) Join(config AdapterConfig) error {
 			name:      h.Name,
 			url:       config.Url,
 			header:    config.Header,
-			reconcect: config.Reconcect,
+			reconnect: config.Reconcect,
 		},
 		typeNode: config.TypeNode,
 	}
@@ -108,13 +108,7 @@ func (h *Hub) Join(config AdapterConfig) error {
 		return err
 	}
 
-	adapter.SetReconnectCallback(func(c *Client) {
-		logs.Debug("ReconnectCallback:", "Hola")
-	})
-
-	adapter.SetDirectMessage(func(msg Message) {
-		logs.Debug("DirectMessage:", msg.ToString())
-	})
+	logs.Log(ServiceName, "Connected to master")
 
 	return nil
 }

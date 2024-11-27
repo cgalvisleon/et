@@ -7,13 +7,15 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+const PackageName = "cache"
+
 var conn *Conn
 
 type Conn struct {
+	*redis.Client
 	ctx    context.Context
 	host   string
 	dbname int
-	db     *redis.Client
 }
 
 func Load() (*Conn, error) {
@@ -31,9 +33,11 @@ func Load() (*Conn, error) {
 }
 
 func Close() {
-	if conn != nil && conn.db != nil {
-		conn.db.Close()
+	if conn == nil {
+		return
 	}
 
-	logs.Log("Cache", `Disconnect...`)
+	conn.Close()
+
+	logs.Log(PackageName, `Disconnect...`)
 }

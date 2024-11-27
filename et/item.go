@@ -332,8 +332,8 @@ func (s Item) Get(key string) interface{} {
 * @param val interface{}
 * @return bool
 **/
-func (s *Item) Set(keys []string, val interface{}) {
-	(*s).Result.Set(keys, val)
+func (s *Item) Set(key string, val interface{}) {
+	(*s).Result.Set(key, val)
 }
 
 /**

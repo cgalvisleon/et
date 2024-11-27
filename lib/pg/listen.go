@@ -45,7 +45,7 @@ func (p *Postgres) defineListend(channels []string, lited linq.HandlerListend) {
 		select {
 		case notification := <-listener.Notify:
 			if notification != nil {
-				result, err := et.ToJson(notification.Extra)
+				result, err := et.Object(notification.Extra)
 				if err != nil {
 					logs.Alertm("defineListend: Not conver to Json")
 				}

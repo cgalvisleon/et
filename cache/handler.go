@@ -19,17 +19,26 @@ import (
 const IsNil = redis.Nil
 
 /**
-* GenKey
+* GenId
 * @params args ...interface{}
 * @return string
 **/
-func GenKey(args ...interface{}) string {
+func GenId(args ...interface{}) string {
 	var keys []string
 	for _, arg := range args {
 		keys = append(keys, strs.Format(`%v`, arg))
 	}
 
-	result := strings.Join(keys, ":")
+	return strings.Join(keys, ":")
+}
+
+/**
+* GenKey
+* @params args ...interface{}
+* @return string
+**/
+func GenKey(args ...interface{}) string {
+	result := GenId(args...)
 	return utility.ToBase64(result)
 }
 
@@ -42,7 +51,7 @@ func GenKey(args ...interface{}) string {
 **/
 func Set(key string, val interface{}, second time.Duration) error {
 	if conn == nil {
-		return logs.Log(msg.ERR_NOT_CACHE_SERVICE)
+		return logs.NewError(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
 	switch v := val.(type) {
@@ -84,7 +93,7 @@ func Set(key string, val interface{}, second time.Duration) error {
 **/
 func Get(key, def string) (string, error) {
 	if conn == nil {
-		return def, logs.Log(msg.ERR_NOT_CACHE_SERVICE)
+		return def, logs.NewError(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
 	return GetCtx(conn.ctx, key, def)
@@ -97,7 +106,7 @@ func Get(key, def string) (string, error) {
 **/
 func Delete(key string) (int64, error) {
 	if conn == nil {
-		return 0, logs.Log(msg.ERR_NOT_CACHE_SERVICE)
+		return 0, logs.NewError(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
 	return DeleteCtx(conn.ctx, key)
@@ -189,11 +198,11 @@ func SetY(key string, val interface{}) error {
 **/
 func Empty(match string) error {
 	if conn == nil {
-		return logs.Log(msg.ERR_NOT_CACHE_SERVICE)
+		return logs.NewError(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
 	ctx := context.Background()
-	iter := conn.db.Scan(ctx, 0, match, 0).Iterator()
+	iter := conn.Scan(ctx, 0, match, 0).Iterator()
 	for iter.Next(ctx) {
 		key := iter.Val()
 		DeleteCtx(ctx, key)
@@ -237,7 +246,7 @@ func More(key string, second time.Duration) int {
 **/
 func HSet(key string, val map[string]string) error {
 	if conn == nil {
-		return logs.Log(msg.ERR_NOT_CACHE_SERVICE)
+		return logs.NewError(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
 	return HSetCtx(conn.ctx, key, val)
@@ -250,7 +259,7 @@ func HSet(key string, val map[string]string) error {
 **/
 func HGet(key string) (map[string]string, error) {
 	if conn == nil {
-		return map[string]string{}, logs.Log(msg.ERR_NOT_CACHE_SERVICE)
+		return map[string]string{}, logs.NewError(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
 	return HGetCtx(conn.ctx, key)
@@ -265,7 +274,7 @@ func HGet(key string) (map[string]string, error) {
 **/
 func HSetAtrib(key, atr, val string) error {
 	if conn == nil {
-		return logs.Log(msg.ERR_NOT_CACHE_SERVICE)
+		return logs.NewError(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
 	return HSetCtx(conn.ctx, key, map[string]string{atr: val})
@@ -279,7 +288,7 @@ func HSetAtrib(key, atr, val string) error {
 **/
 func HGetAtrib(key, atr string) (string, error) {
 	if conn == nil {
-		return "", logs.Log(msg.ERR_NOT_CACHE_SERVICE)
+		return "", logs.NewError(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
 	atribs, err := HGetCtx(conn.ctx, key)
@@ -304,7 +313,7 @@ func HGetAtrib(key, atr string) (string, error) {
 **/
 func HDelete(key, atr string) error {
 	if conn == nil {
-		return logs.Log(msg.ERR_NOT_CACHE_SERVICE)
+		return logs.NewError(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
 	return HDeleteCtx(conn.ctx, key, atr)
@@ -361,7 +370,7 @@ func DeleteVerify(device string, key string) (int64, error) {
 **/
 func AllCache(search string, page, rows int) (et.List, error) {
 	if conn == nil {
-		return et.List{}, logs.Log(msg.ERR_NOT_CACHE_SERVICE)
+		return et.List{}, logs.NewError(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
 	ctx := context.Background()
@@ -372,7 +381,7 @@ func AllCache(search string, page, rows int) (et.List, error) {
 	cursor = uint64(offset)
 	count = int64(rows)
 
-	iter := conn.db.Scan(ctx, cursor, search, count).Iterator()
+	iter := conn.Scan(ctx, cursor, search, count).Iterator()
 	for iter.Next(ctx) {
 		key := iter.Val()
 		items.Result = append(items.Result, et.Json{"key": key})
@@ -389,17 +398,17 @@ func AllCache(search string, page, rows int) (et.List, error) {
 **/
 func GetJson(key string) (et.Json, error) {
 	if conn == nil {
-		return et.Json{}, logs.Log(msg.ERR_NOT_CACHE_SERVICE)
+		return et.Json{}, logs.NewError(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
-	_default := "{}"
+	_default := ""
 	val, err := Get(key, _default)
 	if err != nil {
 		return et.Json{}, err
 	}
 
 	if val == _default {
-		return et.Json{}, nil
+		return et.Json{}, IsNil
 	}
 
 	var result et.Json
@@ -418,17 +427,17 @@ func GetJson(key string) (et.Json, error) {
 **/
 func GetItem(key string) (et.Item, error) {
 	if conn == nil {
-		return et.Item{}, logs.Log(msg.ERR_NOT_CACHE_SERVICE)
+		return et.Item{}, logs.NewError(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
-	_default := "{}"
+	_default := ""
 	val, err := Get(key, _default)
 	if err != nil {
 		return et.Item{}, err
 	}
 
 	if val == _default {
-		return et.Item{}, nil
+		return et.Item{}, IsNil
 	}
 
 	var result et.Json
@@ -450,17 +459,17 @@ func GetItem(key string) (et.Item, error) {
 **/
 func GetItems(key string) (et.Items, error) {
 	if conn == nil {
-		return et.Items{}, logs.Log(msg.ERR_NOT_CACHE_SERVICE)
+		return et.Items{}, logs.NewError(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
-	_default := "[]"
+	_default := ""
 	val, err := Get(key, _default)
 	if err != nil {
 		return et.Items{}, err
 	}
 
 	if val == _default {
-		return et.Items{}, nil
+		return et.Items{}, IsNil
 	}
 
 	var result et.Items

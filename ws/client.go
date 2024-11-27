@@ -2,6 +2,7 @@ package ws
 
 import (
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,7 +19,7 @@ type ClientConfig struct {
 	Name      string
 	Url       string
 	Header    http.Header
-	Reconcect int
+	Reconnect int
 }
 
 /**
@@ -40,7 +41,7 @@ type Client struct {
 	name              string
 	url               string
 	header            http.Header
-	reconcect         int
+	reconnect         int
 	directMessage     func(Message)
 	reconnectCallback func(*Client)
 	socket            *websocket.Conn
@@ -62,7 +63,7 @@ func NewClient(config *ClientConfig) (*Client, error) {
 		name:      config.Name,
 		url:       config.Url,
 		header:    config.Header,
-		reconcect: config.Reconcect,
+		reconnect: config.Reconnect,
 	}
 
 	err := result.Connect()
@@ -104,7 +105,8 @@ func (c *Client) Connect() error {
 		return nil
 	}
 
-	path := strs.Format(`%s?clientId=%s&name=%s`, c.url, c.clientId, c.name)
+	name := strings.ReplaceAll(c.name, " ", "_")
+	path := strs.Format(`%s?clientId=%s&name=%s`, c.url, c.clientId, name)
 	socket, _, err := websocket.DefaultDialer.Dial(path, c.header)
 	if err != nil {
 		return err
@@ -116,18 +118,18 @@ func (c *Client) Connect() error {
 
 	go c.Listener()
 
-	logs.Log(ServiceName, "Connected websocket")
+	logs.Logf(ServiceName, `Connected host:%s`, c.url)
 
 	return nil
 }
 
 func (c *Client) Reconnect() {
-	if c.reconcect == 0 {
+	if c.reconnect == 0 {
 		logs.Log(ServiceName, "Reconnect disabled")
 		return
 	}
 
-	ticker := time.NewTicker(time.Duration(c.reconcect) * time.Second)
+	ticker := time.NewTicker(time.Duration(c.reconnect) * time.Second)
 	for range ticker.C {
 		if !c.Connected.Bool() {
 			err := c.Connect()
@@ -187,10 +189,10 @@ func (c *Client) Listener() {
 }
 
 /**
-* SetDirectMessage
+* SetDirectMessageCallback
 * @param reciveFn func(message.Message)
 **/
-func (c *Client) SetDirectMessage(reciveFn func(Message)) {
+func (c *Client) SetDirectMessageCallback(reciveFn func(Message)) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 

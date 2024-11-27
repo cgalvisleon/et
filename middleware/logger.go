@@ -10,11 +10,12 @@ import (
 	"time"
 
 	lg "github.com/cgalvisleon/et/logs"
+	tk "github.com/cgalvisleon/et/token"
 )
 
 var (
 	// LogEntryCtxKey is the context.Context key to store the request log entry.
-	LogEntryCtxKey = contextKey("LogEntry")
+	LogEntryCtxKey = tk.ContextKey("LogEntry")
 
 	// DefaultLogger is called by the Logger middleware handler to log each request.
 	// Its made a package-level variable so that it can be reconfigured for custom
@@ -51,13 +52,12 @@ func RequestLogger(f LogFormatter) func(next http.Handler) http.Handler {
 			metric := NewMetric(r)
 			metric.CallSearchTime()
 			w.Header().Set("Reqid", metric.ReqID)
-			rww := &ResponseWriterWrapper{ResponseWriter: w, StatusCode: http.StatusOK, Host: r.Host}
-			ww := NewWrapResponseWriter(rww, r.ProtoMajor)
+			ww := &ResponseWriterWrapper{ResponseWriter: w, StatusCode: http.StatusOK}
 			entry := f.NewLogEntry(r)
-			rw := WithLogEntry(r, entry)
+			wr := WithLogEntry(r, entry)
 
-			next.ServeHTTP(ww, rw)
-			metric.DoneFn(rww)
+			next.ServeHTTP(ww, wr)
+			metric.DoneHTTP(ww)
 		}
 
 		return http.HandlerFunc(fn)

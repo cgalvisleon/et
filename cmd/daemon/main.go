@@ -3,7 +3,7 @@ package daemon
 import (
 	"os"
 
-	"github.com/celsiainternet/elvis/et"
+	"github.com/cgalvisleon/et/et"
 )
 
 type TypeCommand string

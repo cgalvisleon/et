@@ -35,12 +35,12 @@ func connect() (*Conn, error) {
 		log.Fatal(err)
 	}
 
-	logs.Logf("Redis", "Connected host:%s", host)
+	logs.Logf(PackageName, "Connected host:%s", host)
 
 	return &Conn{
+		Client: client,
 		ctx:    context.Background(),
 		host:   host,
 		dbname: dbname,
-		db:     client,
 	}, nil
 }

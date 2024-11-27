@@ -11,58 +11,13 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-type WorkStatus int
-
-const (
-	WorkStatusPending WorkStatus = iota
-	WorkStatusAccepted
-	WorkStatusProcessing
-	WorkStatusCompleted
-	WorkStatusFailed
-)
-
-/**
-* String
-* @return string
-**/
-func (s WorkStatus) String() string {
-	switch s {
-	case WorkStatusPending:
-		return "Pending"
-	case WorkStatusAccepted:
-		return "Accepted"
-	case WorkStatusProcessing:
-		return "Processing"
-	case WorkStatusCompleted:
-		return "Completed"
-	case WorkStatusFailed:
-		return "Failed"
-	default:
-		return "Unknown"
-	}
-}
-
-/**
-* ToWorkStatus
-* @param int n
-* @return WorkStatus
-**/
-func ToWorkStatus(n int) WorkStatus {
-	switch n {
-	case 0:
-		return WorkStatusPending
-	case 1:
-		return WorkStatusAccepted
-	case 2:
-		return WorkStatusProcessing
-	case 3:
-		return WorkStatusCompleted
-	case 4:
-		return WorkStatusFailed
-	default:
-		return WorkStatusPending
-	}
-}
+const QUEUE_STACK = "stack"
+const EVENT_LOG = "log"
+const EVENT_TELEMETRY = "telemetry"
+const EVENT_OVERFLOW = "requests/overflow"
+const EVENT_LAT_TOKEN_USE = "telemetry.token.last_use"
+const EVENT_WORK = "event/worker"
+const EVENT_WORK_STATE = "event/worker/state"
 
 /**
 * Publish
@@ -81,7 +36,7 @@ func Publish(channel string, data et.Json) error {
 		return err
 	}
 
-	return conn.conn.Publish(msg.Channel, dt)
+	return conn.Publish(msg.Channel, dt)
 }
 
 /**
@@ -99,7 +54,7 @@ func Subscribe(channel string, f func(EvenMessage)) (err error) {
 		return
 	}
 
-	conn.eventCreatedSub, err = conn.conn.Subscribe(channel,
+	subscribe, err := conn.Subscribe(channel,
 		func(m *nats.Msg) {
 			msg, err := DecodeMessage(m.Data)
 			if err != nil {
@@ -109,8 +64,15 @@ func Subscribe(channel string, f func(EvenMessage)) (err error) {
 			f(msg)
 		},
 	)
+	if err != nil {
+		return err
+	}
 
-	return
+	conn.mutex.Lock()
+	conn.eventCreatedSub[channel] = subscribe
+	conn.mutex.Unlock()
+
+	return err
 }
 
 /**
@@ -128,7 +90,7 @@ func Queue(channel, queue string, f func(EvenMessage)) (err error) {
 		return nil
 	}
 
-	conn.eventCreatedSub, err = conn.conn.QueueSubscribe(
+	subscribe, err := conn.QueueSubscribe(
 		channel,
 		queue,
 		func(m *nats.Msg) {
@@ -144,6 +106,10 @@ func Queue(channel, queue string, f func(EvenMessage)) (err error) {
 		return err
 	}
 
+	conn.mutex.Lock()
+	conn.eventCreatedSub[channel] = subscribe
+	conn.mutex.Unlock()
+
 	return nil
 }
 
@@ -154,7 +120,7 @@ func Queue(channel, queue string, f func(EvenMessage)) (err error) {
 * @return error
 **/
 func Stack(channel string, f func(EvenMessage)) error {
-	return Queue(channel, "stack", f)
+	return Queue(channel, QUEUE_STACK, f)
 }
 
 /**
@@ -170,7 +136,7 @@ func Work(event string, data et.Json) et.Json {
 		"data":       data,
 	}
 
-	go Publish("event/worker", work)
+	go Publish(EVENT_WORK, work)
 	go Publish(event, work)
 
 	return work
@@ -202,7 +168,7 @@ func WorkState(work_id string, status WorkStatus, data et.Json) {
 		work["failed_at"] = utility.Now()
 	}
 
-	go Publish("event/worker/state", work)
+	go Publish(EVENT_WORK_STATE, work)
 }
 
 /**
@@ -231,7 +197,7 @@ func Source(channel string, f func(EvenMessage)) error {
 * @param data et.Json
 **/
 func Log(event string, data et.Json) {
-	go Publish("log", data)
+	go Publish(EVENT_LOG, data)
 }
 
 /**
@@ -239,7 +205,7 @@ func Log(event string, data et.Json) {
 * @param data et.Json
 **/
 func Telemetry(data et.Json) {
-	go Publish("telemetry", data)
+	go Publish(EVENT_TELEMETRY, data)
 }
 
 /**
@@ -247,7 +213,7 @@ func Telemetry(data et.Json) {
 * @param data et.Json
 **/
 func Overflow(data et.Json) {
-	go Publish("requests/overflow", data)
+	go Publish(EVENT_OVERFLOW, data)
 }
 
 /**
@@ -255,23 +221,7 @@ func Overflow(data et.Json) {
 * @param data et.Json
 **/
 func TokenLastUse(data et.Json) {
-	go Publish("telemetry.token.last_use", data)
-}
-
-/**
-* RealTime
-* @param data et.Json
-**/
-func RealTime(channel string, from et.Json, message interface{}) {
-	data := et.Json{
-		"created_at": timezone.Now(),
-		"_id":        utility.UUID(),
-		"channel":    channel,
-		"from":       from,
-		"message":    message,
-	}
-
-	go Publish("realtime", data)
+	go Publish(EVENT_LAT_TOKEN_USE, data)
 }
 
 /**

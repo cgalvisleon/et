@@ -3,11 +3,11 @@ package middleware
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/http"
 	"os"
 	"time"
 
+	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
@@ -15,49 +15,21 @@ import (
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/mem"
 )
 
 var hostName, _ = os.Hostname()
+var commonHeader = make(map[string]bool)
+var serviceName = "telemetry"
 
 type Result struct {
 	Ok     bool        `json:"ok"`
 	Result interface{} `json:"result"`
 }
 
-type ContentLength struct {
-	Header int
-	Body   int
-	Total  int
-}
-
 type ResponseWriterWrapper struct {
 	http.ResponseWriter
+	Size       int
 	StatusCode int
-	SizeHeader int
-	SizeBody   int
-	SizeTotal  int
-	Host       string
-}
-
-/**
-* WriteHeader
-* @params statusCode int
-**/
-func (rw *ResponseWriterWrapper) WriteHeader(statusCode int) {
-	rw.StatusCode = statusCode
-	rw.ResponseWriter.WriteHeader(statusCode)
-	totalHeader := 0
-	for key, values := range rw.Header() {
-		totalHeader += len(key)
-		for _, value := range values {
-			totalHeader += len(value) + len(": ") + len("\r\n")
-		}
-	}
-	totalHeader += len("\r\n") * len(rw.Header())
-	rw.SizeHeader = totalHeader
-	rw.SizeTotal = rw.SizeHeader + rw.SizeBody
 }
 
 /**
@@ -66,100 +38,113 @@ func (rw *ResponseWriterWrapper) WriteHeader(statusCode int) {
 **/
 func (rw *ResponseWriterWrapper) Write(b []byte) (int, error) {
 	size, err := rw.ResponseWriter.Write(b)
-	rw.SizeBody += size
-	rw.SizeTotal = rw.SizeHeader + rw.SizeBody
+	rw.Size += size
 	return size, err
 }
 
 /**
-* ContentLength
-* @return ContentLength
+* WriteHeader
+* @params statusCode int
 **/
-func (rw *ResponseWriterWrapper) ContentLength() ContentLength {
-	totalHeader := 0
-	for key, values := range rw.Header() {
-		totalHeader += len(key)
+func (rw *ResponseWriterWrapper) SetHeader(header http.Header) {
+	for key, values := range header {
 		for _, value := range values {
-			totalHeader += len(value) + len(": ") + len("\r\n")
+			if commonHeader[key] {
+				continue
+			} else if len(value) > 255 {
+				continue
+			}
+			rw.Header().Add(key, value)
 		}
-	}
-	totalHeader += len("\r\n") * len(rw.Header())
-	rw.SizeHeader = totalHeader
-	rw.SizeTotal = rw.SizeHeader + rw.SizeBody
-	return ContentLength{
-		Header: rw.SizeHeader,
-		Body:   rw.SizeBody,
-		Total:  rw.SizeTotal,
 	}
 }
 
 /**
-* headerLength
-* @params res *http.Response
-* @return int
+* SetServiceName
+* @params name string
 **/
-func headerLength(res *http.Response) int {
-	result := 0
-	for key, values := range res.Header {
-		result += len(key)
-		for _, value := range values {
-			result += len(value) + len(": ") + len("\r\n")
-		}
-	}
-	result += len("\r\n") * len(res.Header)
-
-	return result
-}
-
-/**
-* contentLength
-* @params res *http.Response
-* @return int
-**/
-func contentLength(res *http.Response) ContentLength {
-	result := headerLength(res)
-
-	return ContentLength{
-		Header: result,
-		Body:   int(res.ContentLength),
-		Total:  result + int(res.ContentLength),
-	}
+func SetServiceName(name string) {
+	serviceName = name
 }
 
 type Metrics struct {
-	ReqID            string
-	TimeBegin        time.Time
-	TimeEnd          time.Time
-	TimeExec         time.Time
-	SearchTime       time.Duration
-	ResponseTime     time.Duration
-	Downtime         time.Duration
-	Latency          time.Duration
-	StatusCode       int
-	Status           string
-	ContentLength    ContentLength
-	Header           http.Header
-	Host             string
-	EndPoint         string
-	Method           string
-	Proto            string
-	RemoteAddr       string
-	HostName         string
-	RequestsHost     Request
-	RequestsEndpoint Request
-	Scheme           string
-	CPUUsage         float64
-	MemoryTotal      uint64
-	MemoeryUsage     uint64
-	MmemoryFree      uint64
+	TimeStamp    time.Time     `json:"timestamp"`
+	ServiceName  string        `json:"service_name"`
+	ReqID        string        `json:"req_id"`
+	ClientIP     string        `json:"client_ip"`
+	Scheme       string        `json:"scheme"`
+	Host         string        `json:"host"`
+	Method       string        `json:"method"`
+	Path         string        `json:"path"`
+	StatusCode   int           `json:"status_code"`
+	ResponseSize int           `json:"response_size"`
+	SearchTime   time.Duration `json:"search_time"`
+	ResponseTime time.Duration `json:"response_time"`
+	Latency      time.Duration `json:"latency"`
+	key          string
+	mark         time.Time
+	metrics      Telemetry
+}
+
+/**
+* ToJson
+* @return et.Json
+**/
+func (m *Metrics) ToJson() et.Json {
+	return et.Json{
+		"timestamp":     strs.FormatDateTime("02/01/2006 03:04:05 PM", m.TimeStamp),
+		"req_id":        m.ReqID,
+		"client_ip":     m.ClientIP,
+		"scheme":        m.Scheme,
+		"host":          m.Host,
+		"method":        m.Method,
+		"path":          m.Path,
+		"status_code":   m.StatusCode,
+		"search_time":   m.SearchTime,
+		"response_time": m.ResponseTime,
+		"latency":       m.Latency,
+		"response_size": m.ResponseSize,
+	}
+}
+
+type Telemetry struct {
+	TimeStamp         string
+	ServiceName       string
+	Key               string
+	RequestsPerSecond int
+	RequestsPerMinute int
+	RequestsPerHour   int
+	RequestsPerDay    int
+	RequestsLimit     int
+}
+
+/**
+* ToJson
+* @return et.Json
+**/
+func (m *Telemetry) ToJson() et.Json {
+	return et.Json{
+		"timestamp":           m.TimeStamp,
+		"key":                 m.Key,
+		"service_name":        m.ServiceName,
+		"requests_per_second": m.RequestsPerSecond,
+		"requests_per_minute": m.RequestsPerMinute,
+		"requests_per_hour":   m.RequestsPerHour,
+		"requests_per_day":    m.RequestsPerDay,
+		"requests_limit":      m.RequestsLimit,
+	}
 }
 
 /**
 * NewMetric
 * @params r *http.Request
+* @return *Metrics
 **/
 func NewMetric(r *http.Request) *Metrics {
-	remoteAddr := r.Header.Get("X-Forwarded-For")
+	remoteAddr := r.RemoteAddr
+	if remoteAddr == "" {
+		remoteAddr = r.Header.Get("X-Forwarded-For")
+	}
 	if remoteAddr == "" {
 		remoteAddr = r.Header.Get("X-Real-IP")
 	}
@@ -170,98 +155,167 @@ func NewMetric(r *http.Request) *Metrics {
 	if r.TLS != nil {
 		scheme = "https"
 	}
-	host := envar.GetStr(hostName, "HOST")
-	endPoint := strs.Format(`%s/%s`, host, r.URL.Path)
 
 	result := &Metrics{
-		TimeBegin:        timezone.NowTime(),
-		ReqID:            utility.UUID(),
-		EndPoint:         r.URL.Path,
-		Method:           r.Method,
-		Proto:            r.Proto,
-		RemoteAddr:       remoteAddr,
-		Host:             host,
-		HostName:         hostName,
-		RequestsHost:     callRequests(hostName),
-		RequestsEndpoint: callRequests(endPoint),
-		Scheme:           scheme,
+		TimeStamp:   timezone.NowTime(),
+		ServiceName: serviceName,
+		ReqID:       utility.UUID(),
+		ClientIP:    remoteAddr,
+		Host:        hostName,
+		Method:      r.Method,
+		Path:        r.URL.Path,
+		Scheme:      scheme,
+		mark:        timezone.NowTime(),
+		key:         strs.Format(`%s:%s`, r.Method, r.URL.Path),
 	}
-
-	go result.CallCPUUsage()
-	go result.CallMemoryUsage()
 
 	return result
 }
 
 /**
 * NewRpcMetric
-* @params r *http.Request
+* @params method string
+* @return *Metrics
 **/
 func NewRpcMetric(method string) *Metrics {
-	endPoint := method
 	scheme := "rpc"
 
 	result := &Metrics{
-		TimeBegin:        timezone.NowTime(),
-		ReqID:            utility.UUID(),
-		EndPoint:         endPoint,
-		Method:           "RPC",
-		Proto:            "Http/1.2",
-		HostName:         hostName,
-		RequestsHost:     callRequests(hostName),
-		RequestsEndpoint: callRequests(endPoint),
-		Scheme:           scheme,
+		TimeStamp:   timezone.NowTime(),
+		ServiceName: serviceName,
+		ReqID:       utility.UUID(),
+		Path:        method,
+		Method:      strs.Uppcase(scheme),
+		Scheme:      scheme,
+		mark:        timezone.NowTime(),
+		key:         strs.Format(`%s:%s`, strs.Uppcase(scheme), method),
 	}
-
-	go result.CallCPUUsage()
-	go result.CallMemoryUsage()
 
 	return result
 }
 
 /**
-* SetAddress
-* @params address string
-* @return *Metrics
+* SetPath
+* @params val string
 **/
-func (m *Metrics) SetAddress(address string) *Metrics {
-	m.RemoteAddr = address
-
-	return m
-}
-
-/**
-* CallCPUUsage
-**/
-func (m *Metrics) CallCPUUsage() {
-	percentages, err := cpu.Percent(time.Second, false)
-	if err != nil {
-		m.CPUUsage = 0
+func (m *Metrics) SetPath(val string) {
+	if val == "" {
+		return
 	}
-	m.CPUUsage = percentages[0]
-}
 
-/**
-* CallMemoryUsage
-**/
-func (m *Metrics) CallMemoryUsage() {
-	v, err := mem.VirtualMemory()
-	if err != nil {
-		m.MemoryTotal = 0
-		m.MemoeryUsage = 0
-		m.MmemoryFree = 0
-	}
-	m.MemoryTotal = v.Total
-	m.MemoeryUsage = v.Used
-	m.MmemoryFree = v.Free
+	m.Path = val
+	m.key = strs.Format(`%s:%s`, m.Method, m.Path)
 }
 
 /**
 * CallSearchTime
 **/
 func (m *Metrics) CallSearchTime() {
-	m.SearchTime = time.Since(m.TimeBegin)
-	m.TimeExec = timezone.NowTime()
+	m.SearchTime = time.Since(m.mark)
+	m.mark = timezone.NowTime()
+}
+
+/**
+* CallResponseTime
+**/
+func (m *Metrics) CallResponseTime() {
+	m.ResponseTime = time.Since(m.mark)
+	m.mark = timezone.NowTime()
+}
+
+/**
+* CallLatency
+**/
+func (m *Metrics) CallLatency() {
+	m.Latency = time.Since(m.TimeStamp)
+}
+
+/**
+* CallMetrics
+* @return Telemetry
+**/
+func (m *Metrics) CallMetrics() Telemetry {
+	timeNow := timezone.NowTime()
+	date := timeNow.Format("2006-01-02")
+	hour := timeNow.Format("2006-01-02-15")
+	minute := timeNow.Format("2006-01-02-15:04")
+	second := timeNow.Format("2006-01-02-15:04:05")
+
+	return Telemetry{
+		TimeStamp:         date,
+		ServiceName:       serviceName,
+		Key:               m.key,
+		RequestsPerSecond: cache.Count(cache.GenKey(m.key, second), 2*time.Second),
+		RequestsPerMinute: cache.Count(cache.GenKey(m.key, minute), 1*time.Minute+1*time.Second),
+		RequestsPerHour:   cache.Count(cache.GenKey(m.key, hour), 1*time.Hour+1*time.Second),
+		RequestsPerDay:    cache.Count(cache.GenKey(m.key, date), 24*time.Hour+1*time.Second),
+		RequestsLimit:     envar.GetInt(400, "LIMIT_REQUESTS"),
+	}
+}
+
+/**
+* println
+* @return et.Json
+**/
+func (m *Metrics) println() et.Json {
+	w := lg.Color(lg.NMagenta, fmt.Sprintf(" [%s]: ", m.Method))
+	lg.CW(w, lg.NCyan, fmt.Sprintf("%s", m.Path))
+	lg.CW(w, lg.NWhite, fmt.Sprintf(" from:%s", m.ClientIP))
+	if m.StatusCode >= 500 {
+		lg.CW(w, lg.NRed, fmt.Sprintf(" - %s", http.StatusText(m.StatusCode)))
+	} else if m.StatusCode >= 400 {
+		lg.CW(w, lg.NYellow, fmt.Sprintf(" - %s", http.StatusText(m.StatusCode)))
+	} else if m.StatusCode >= 300 {
+		lg.CW(w, lg.NCyan, fmt.Sprintf(" - %s", http.StatusText(m.StatusCode)))
+	} else {
+		lg.CW(w, lg.NGreen, fmt.Sprintf(" - %s", http.StatusText(m.StatusCode)))
+	}
+	size := float64(m.ResponseSize) / 1024
+	lg.CW(w, lg.NCyan, fmt.Sprintf(` Size:%.2f%s`, size, "KB"))
+	lg.CW(w, lg.NWhite, " in ")
+	limitLatency := time.Duration(envar.GetInt64(1000, "LIMIT_LATENCY")) * time.Millisecond
+	if m.Latency < limitLatency {
+		lg.CW(w, lg.NGreen, " Latency:%s", m.Latency)
+	} else if m.Latency < 5*time.Second {
+		lg.CW(w, lg.NYellow, " Latency:%s", m.Latency)
+	} else {
+		lg.CW(w, lg.NRed, " Latency:%s", m.Latency)
+	}
+	lg.CW(w, lg.NWhite, " Response:%s", m.ResponseTime)
+	m.metrics = m.CallMetrics()
+	if m.metrics.RequestsPerSecond > m.metrics.RequestsLimit {
+		lg.CW(w, lg.NRed, " - Request:S:%vM:%vH:%vD:%vL:%v", m.metrics.RequestsPerSecond, m.metrics.RequestsPerMinute, m.metrics.RequestsPerHour, m.metrics.RequestsPerDay, m.metrics.RequestsLimit)
+	} else if m.metrics.RequestsPerSecond > int(float64(m.metrics.RequestsLimit)*0.6) {
+		lg.CW(w, lg.NYellow, " - Request:S:%vM:%vH:%vD:%vL:%v", m.metrics.RequestsPerSecond, m.metrics.RequestsPerMinute, m.metrics.RequestsPerHour, m.metrics.RequestsPerDay, m.metrics.RequestsLimit)
+	} else {
+		lg.CW(w, lg.NGreen, " - Request:S:%vM:%vH:%vD:%vL:%v", m.metrics.RequestsPerSecond, m.metrics.RequestsPerMinute, m.metrics.RequestsPerHour, m.metrics.RequestsPerDay, m.metrics.RequestsLimit)
+	}
+	lg.Println(w)
+
+	return m.ToJson()
+}
+
+/**
+* telemetry
+* @return et.Json
+**/
+func (m *Metrics) telemetry() et.Json {
+	result := m.ToJson()
+	result["metric"] = m.metrics.ToJson()
+
+	go event.Telemetry(et.Json{
+		"response": m,
+		"metric":   m.metrics.ToJson(),
+	})
+
+	if m.metrics.RequestsPerSecond > m.metrics.RequestsLimit {
+		go event.Overflow(et.Json{
+			"response": m,
+			"metric":   m.metrics.ToJson(),
+		})
+	}
+
+	return result
 }
 
 /**
@@ -271,49 +325,58 @@ func (m *Metrics) CallSearchTime() {
 * @return et.Json
 **/
 func (m *Metrics) DoneFn(rw *ResponseWriterWrapper) et.Json {
-	m.TimeEnd = timezone.NowTime()
-	m.ResponseTime = time.Since(m.TimeExec)
-	m.Latency = time.Since(m.TimeBegin)
-	m.Downtime = m.Latency - m.ResponseTime
 	m.StatusCode = rw.StatusCode
-	m.Status = http.StatusText(m.StatusCode)
-	m.ContentLength = ContentLength{
-		Header: rw.SizeHeader,
-		Body:   rw.SizeBody,
-		Total:  rw.SizeTotal,
-	}
-	m.Header = rw.Header()
+	m.ResponseSize = rw.Size
+	m.CallResponseTime()
+	m.CallLatency()
+	m.println()
+
+	return m.telemetry()
+}
+
+/**
+* DoneHTTP
+* @params rw *ResponseWriterWrapper
+* @return et.Json
+**/
+func (m *Metrics) DoneHTTP(rw *ResponseWriterWrapper) et.Json {
+	m.StatusCode = rw.StatusCode
+	m.ResponseSize = rw.Size
+	m.CallResponseTime()
+	m.CallLatency()
 
 	return m.println()
 }
 
-func (m *Metrics) DoneRpc(r interface{}) et.Json {
-	var size int
-	jsonData, err := json.Marshal(r)
-	if err != nil {
-		size = 0
+/**
+* DoneRpc
+* @params r et.Json
+* @return et.Json
+**/
+func (m *Metrics) DoneRpc(r any) et.Json {
+	str, ok := r.(string)
+	if !ok {
+		m.ResponseSize = 0
 	} else {
-		size = len(jsonData)
-		size = size / 1024
+		m.ResponseSize = len(str)
 	}
-
-	m.TimeEnd = timezone.NowTime()
-	m.ResponseTime = time.Since(m.TimeExec)
-	m.Latency = time.Since(m.TimeBegin)
-	m.Downtime = m.Latency - m.ResponseTime
 	m.StatusCode = http.StatusOK
-	m.Status = http.StatusText(m.StatusCode)
-	m.ContentLength = ContentLength{
-		Header: 0,
-		Body:   size,
-		Total:  size,
-	}
+	m.CallResponseTime()
+	m.CallLatency()
+	m.println()
 
-	return m.println()
+	return m.telemetry()
 }
 
+/**
+* WriteResponse
+* @params w http.ResponseWriter
+* @params r *http.Request
+* @params statusCode int
+* @params e []byte
+**/
 func (m *Metrics) WriteResponse(w http.ResponseWriter, r *http.Request, statusCode int, e []byte) error {
-	rw := &ResponseWriterWrapper{ResponseWriter: w, StatusCode: statusCode, Host: r.Host}
+	rw := &ResponseWriterWrapper{ResponseWriter: w, StatusCode: statusCode}
 
 	rw.Header().Set("Content-Type", "application/json; charset=utf-8")
 	rw.WriteHeader(statusCode)
@@ -323,6 +386,13 @@ func (m *Metrics) WriteResponse(w http.ResponseWriter, r *http.Request, statusCo
 	return nil
 }
 
+/**
+* JSON
+* @params w http.ResponseWriter
+* @params r *http.Request
+* @params statusCode int
+* @params dt interface{}
+**/
 func (m *Metrics) JSON(w http.ResponseWriter, r *http.Request, statusCode int, dt interface{}) error {
 	if dt == nil {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -343,6 +413,13 @@ func (m *Metrics) JSON(w http.ResponseWriter, r *http.Request, statusCode int, d
 	return m.WriteResponse(w, r, statusCode, e)
 }
 
+/**
+* ITEM
+* @params w http.ResponseWriter
+* @params r *http.Request
+* @params statusCode int
+* @params dt et.Item
+**/
 func (m *Metrics) ITEM(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Item) error {
 	if &dt == (&et.Item{}) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -355,13 +432,16 @@ func (m *Metrics) ITEM(w http.ResponseWriter, r *http.Request, statusCode int, d
 		return err
 	}
 
-	if !dt.Ok {
-		statusCode = http.StatusNotFound
-	}
-
 	return m.WriteResponse(w, r, statusCode, e)
 }
 
+/**
+* ITEMS
+* @params w http.ResponseWriter
+* @params r *http.Request
+* @params statusCode int
+* @params dt et.Items
+**/
 func (m *Metrics) ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Items) error {
 	if &dt == (&et.Items{}) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -374,13 +454,16 @@ func (m *Metrics) ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, 
 		return err
 	}
 
-	if !dt.Ok {
-		statusCode = http.StatusNotFound
-	}
-
 	return m.WriteResponse(w, r, statusCode, e)
 }
 
+/**
+* HTTPError
+* @params w http.ResponseWriter
+* @params r *http.Request
+* @params statusCode int
+* @params message string
+**/
 func (m *Metrics) HTTPError(w http.ResponseWriter, r *http.Request, statusCode int, message string) error {
 	msg := et.Json{
 		"message": message,
@@ -398,95 +481,11 @@ func (m *Metrics) Unauthorized(w http.ResponseWriter, r *http.Request) {
 	m.HTTPError(w, r, http.StatusUnauthorized, "401 Unauthorized")
 }
 
-/**
-* println
-* @return et.Json
-**/
-func (m *Metrics) println() et.Json {
-	w := lg.Color(lg.NMagenta, fmt.Sprintf(" [%s]: ", m.Method))
-	lg.CW(w, lg.NCyan, fmt.Sprintf("%s %s", m.EndPoint, m.Proto))
-	lg.CW(w, lg.NWhite, fmt.Sprintf(" from %s", m.RemoteAddr))
-	if m.StatusCode >= 500 {
-		lg.CW(w, lg.NRed, fmt.Sprintf(" - %s", m.Status))
-	} else if m.StatusCode >= 400 {
-		lg.CW(w, lg.NYellow, fmt.Sprintf(" - %s", m.Status))
-	} else if m.StatusCode >= 300 {
-		lg.CW(w, lg.NCyan, fmt.Sprintf(" - %s", m.Status))
-	} else {
-		lg.CW(w, lg.NGreen, fmt.Sprintf(" - %s", m.Status))
+func init() {
+	for _, v := range []string{
+		"Content-Security-Policy",
+		"Content-Length",
+	} {
+		commonHeader[v] = true
 	}
-	lg.CW(w, lg.NCyan, fmt.Sprintf(" Size: %v%s", m.ContentLength.Total, "KB"))
-	lg.CW(w, lg.NWhite, " in ")
-	limitLatency := time.Duration(envar.GetInt64(500, "LIMIT_LATENCY")) * time.Millisecond
-	if m.Latency < limitLatency {
-		lg.CW(w, lg.NGreen, "Latency:%s", m.Latency)
-	} else if m.Latency < 5*time.Second {
-		lg.CW(w, lg.NYellow, "Latency:%s", m.Latency)
-	} else {
-		lg.CW(w, lg.NRed, "Latency:%s", m.Latency)
-	}
-	lg.CW(w, lg.NWhite, " Response:%s", m.ResponseTime)
-	lg.CW(w, lg.NRed, " Downtime:%s", m.Downtime)
-	if m.RequestsHost.Seccond > m.RequestsHost.Limit {
-		lg.CW(w, lg.NRed, " - Request S:%vM:%vH:%vD:%vL:%v", m.RequestsHost.Seccond, m.RequestsHost.Minute, m.RequestsHost.Hour, m.RequestsHost.Day, m.RequestsHost.Limit)
-	} else {
-		lg.CW(w, lg.NYellow, " - Request S:%vM:%vH:%vD:%vL:%v", m.RequestsHost.Seccond, m.RequestsHost.Minute, m.RequestsHost.Hour, m.RequestsHost.Day, m.RequestsHost.Limit)
-	}
-	lg.Println(w)
-
-	result := et.Json{
-		"reqID":         m.ReqID,
-		"time_begin":    m.TimeBegin,
-		"time_end":      m.TimeEnd,
-		"time_exec":     m.TimeExec,
-		"latency":       m.Latency,
-		"search_time":   m.SearchTime,
-		"response_time": m.ResponseTime,
-		"host_name":     m.HostName,
-		"remote_addr":   m.RemoteAddr,
-		"request": et.Json{
-			"end_point": m.EndPoint,
-			"method":    m.Method,
-			"status":    m.Status,
-			"size": et.Json{
-				"header": m.ContentLength.Header,
-				"body":   m.ContentLength.Body,
-			},
-			"header": m.Header,
-			"scheme": m.Scheme,
-			"host":   m.Host,
-		},
-		"system": et.Json{
-			"unity":        "MB",
-			"total":        m.MemoryTotal / 1024 / 1024,
-			"used":         m.MemoeryUsage / 1024 / 1024,
-			"free":         m.MmemoryFree / 1024 / 1024,
-			"percent_free": math.Floor(float64(m.MmemoryFree) / float64(m.MemoryTotal)),
-			"cpu_usage":    m.CPUUsage,
-		},
-		"request_host": et.Json{
-			"host":   m.RequestsHost.Tag,
-			"day":    m.RequestsHost.Day,
-			"hour":   m.RequestsHost.Hour,
-			"minute": m.RequestsHost.Minute,
-			"second": m.RequestsHost.Seccond,
-			"limit":  m.RequestsHost.Limit,
-		},
-		"requests_endpoint": et.Json{
-			"endpoint": m.RequestsEndpoint.Tag,
-			"day":      m.RequestsEndpoint.Day,
-			"hour":     m.RequestsEndpoint.Hour,
-			"minute":   m.RequestsEndpoint.Minute,
-			"second":   m.RequestsEndpoint.Seccond,
-			"limit":    m.RequestsEndpoint.Limit,
-		},
-	}
-
-	go event.Telemetry(result)
-
-	if m.RequestsHost.Seccond > m.RequestsHost.Limit {
-		go event.Overflow(result)
-	}
-
-	return result
 }

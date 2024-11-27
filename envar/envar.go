@@ -3,21 +3,20 @@ package envar
 import (
 	"os"
 	"strconv"
-	"time"
 
 	"github.com/cgalvisleon/et/strs"
 	_ "github.com/joho/godotenv/autoload"
 )
 
 /**
-* metaSet
-* @param name string
-* @param def string
-* @param description string
-* @param _var string
+* MetaSet
+* @param string name
+* @param string _default
+* @param string description
+* @param string _var
 * @return string
 **/
-func metaSet(name, def, description, _var string) string {
+func MetaSet(name string, _default string, description, _var string) string {
 	for i, arg := range os.Args[1:] {
 		if arg == strs.Format("-%s", name) {
 			val := os.Args[i+2]
@@ -26,157 +25,184 @@ func metaSet(name, def, description, _var string) string {
 		}
 	}
 
-	return def
+	return _default
 }
 
 /**
-* SetStr, set string environment variable
-* @param name string
-* @param def string
-* @param description string
-* @param _var string
+* SetStr
+* @param string name
+* @param string _default
+* @param string usage
+* @param string _var
 * @return string
 **/
-func SetStr(name, def, description, _var string) string {
-	return metaSet(name, def, description, _var)
+func SetStr(name string, _default string, usage, _var string) string {
+	return MetaSet(name, _default, usage, _var)
 }
 
 /**
-* SetInt, set integer environment variable
-* @param name string
-* @param def int
-* @param description string
-* @param _var string
+* SetInt
+* @param string name
+* @param int _default
+* @param string usage
+* @param string _var
 * @return int
 **/
-func SetInt(name string, def int, description, _var string) int {
-	result := metaSet(name, strconv.Itoa(def), description, _var)
+func SetInt(name string, _default int, usage, _var string) int {
+	result := MetaSet(name, strconv.Itoa(_default), usage, _var)
 
 	val, err := strconv.Atoi(result)
 	if err != nil {
-		return def
+		return _default
 	}
 
 	return val
 }
 
 /**
-* SetInt64, set integer64 environment variable
-* @param name string
-* @param def int64
-* @param description string
-* @param _var string
+* SetInt64
+* @param string name
+* @param int64 _default
+* @param string usage
+* @param string _var
 * @return int64
 **/
-func SetBool(name string, def bool, description, _var string) bool {
-	result := metaSet(name, strconv.FormatBool(def), description, _var)
+func SetIn64(name string, _default int64, usage, _var string) int64 {
+	result := MetaSet(name, strconv.FormatInt(_default, 10), usage, _var)
+
+	val, err := strconv.ParseInt(result, 10, 64)
+	if err != nil {
+		return _default
+	}
+
+	return val
+}
+
+/**
+* SetBool
+* @param string name
+* @param bool _default
+* @param string usage
+* @param string _var
+* @return bool
+**/
+func SetBool(name string, _default bool, usage, _var string) bool {
+	result := MetaSet(name, strconv.FormatBool(_default), usage, _var)
 
 	val, err := strconv.ParseBool(result)
 	if err != nil {
-		return def
+		return _default
 	}
 
 	return val
 }
 
 /**
-* SetTime, set time environment variable
-* @param name string
-* @param def time.Time
-* @param description string
-* @param _var string
-* @return time.Time
-**/
-func SetTime(name string, def time.Time, description, _var string) time.Time {
-	result := metaSet(name, def.Format(time.RFC3339), description, _var)
-
-	val, err := time.Parse(time.RFC3339, result)
-	if err != nil {
-		return def
-	}
-
-	return val
-}
-
-/**
-* GetStr, get string environment variable
-* @param def string
-* @param _var string
+* UpSetStr
+* @param string name
+* @param string value
 * @return string
 **/
-func GetStr(def string, _var string) string {
+func UpSetStr(name string, value string) string {
+	os.Setenv(name, value)
+	return value
+}
+
+/**
+* SetInt
+* @param string name
+* @param int value
+* @return int
+**/
+func UpSetInt(name string, value int) int {
+	os.Setenv(name, strconv.Itoa(value))
+	return value
+}
+
+/**
+* UpSetFloat
+* @param string name
+* @param int64 value
+* @return int64
+**/
+func UpSetFloat(name string, value float64) float64 {
+	os.Setenv(name, strconv.FormatFloat(float64(value), 'f', -1, 64))
+	return value
+}
+
+/**
+* UpSetBool
+* @param string name
+* @param bool value
+* @return bool
+**/
+func UpSetBool(name string, value bool) bool {
+	os.Setenv(name, strconv.FormatBool(value))
+	return value
+}
+
+/**
+* GetStr
+* @param string _default
+* @param string _var
+* @return string
+**/
+func GetStr(_default string, _var string) string {
 	result := os.Getenv(_var)
 
 	if result == "" {
-		return def
+		return _default
 	}
 
 	return result
 }
 
 /**
-* GetInt, get integer environment variable
-* @param def int
-* @param _var string
+* GetInt
+* @param int _default
+* @param string _var
 * @return int
 **/
-func GetInt(def int, _var string) int {
-	result := GetStr(strconv.Itoa(def), _var)
+func GetInt(_default int, _var string) int {
+	result := GetStr(strconv.Itoa(_default), _var)
 
 	val, err := strconv.Atoi(result)
 	if err != nil {
-		return def
+		return _default
 	}
 
 	return val
 }
 
 /**
-* GetInt64, get integer64 environment variable
-* @param def int64
-* @param _var string
+* GetInt64
+* @param int64 _default
+* @param string _var
 * @return int64
 **/
-func GetInt64(def int64, _var string) int64 {
-	result := GetStr(strconv.FormatInt(def, 10), _var)
+func GetInt64(_default int64, _var string) int64 {
+	result := GetStr(strconv.FormatInt(_default, 10), _var)
 
 	val, err := strconv.ParseInt(result, 10, 64)
 	if err != nil {
-		return def
+		return _default
 	}
 
 	return val
 }
 
 /**
-* GetBool, get boolean environment variable
-* @param def bool
-* @param _var string
+* GetBool
+* @param bool _default
+* @param string _var
 * @return bool
 **/
-func GetBool(def bool, _var string) bool {
-	result := GetStr(strconv.FormatBool(def), _var)
+func GetBool(_default bool, _var string) bool {
+	result := GetStr(strconv.FormatBool(_default), _var)
 
 	val, err := strconv.ParseBool(result)
 	if err != nil {
-		return def
-	}
-
-	return val
-}
-
-/**
-* GetTime, get time environment variable
-* @param def time.Time
-* @param _var string
-* @return time.Time
-**/
-func GetTime(def time.Time, _var string) time.Time {
-	result := GetStr(def.Format(time.RFC3339), _var)
-
-	val, err := time.Parse(time.RFC3339, result)
-	if err != nil {
-		return def
+		return _default
 	}
 
 	return val

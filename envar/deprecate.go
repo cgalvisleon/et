@@ -6,10 +6,17 @@ import (
 )
 
 /**
+* This function is deprecated, use SetStr instead
+**/
+func SetvarStr(name string, _default string, usage, _var string) string {
+	return MetaSet(name, _default, usage, _var)
+}
+
+/**
 * This function is deprecated, use SetInt instead
 **/
 func SetvarInt(name string, _default int, usage, _var string) int {
-	result := metaSet(name, strconv.Itoa(_default), usage, _var)
+	result := MetaSet(name, strconv.Itoa(_default), usage, _var)
 
 	val, err := strconv.Atoi(result)
 	if err != nil {
@@ -23,7 +30,7 @@ func SetvarInt(name string, _default int, usage, _var string) int {
 * This function is deprecated, use SetBool instead
 **/
 func SetvarBool(name string, _default bool, usage, _var string) bool {
-	result := metaSet(name, strconv.FormatBool(_default), usage, _var)
+	result := MetaSet(name, strconv.FormatBool(_default), usage, _var)
 
 	val, err := strconv.ParseBool(result)
 	if err != nil {

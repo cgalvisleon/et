@@ -105,7 +105,7 @@ func NewDB(name string, db *sql.DB, driver Driver) (*DB, error) {
 
 	switch driver.Mode() {
 	case ModeMaster:
-		result.WS = ws.NewWs()
+		result.WS = ws.NewHub()
 
 		driver.SetListen([]string{"command"}, result.commandPublish)
 		driver.SetListen([]string{"sync"}, result.syncListener)

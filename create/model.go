@@ -306,7 +306,7 @@ import (
 	"net/rpc"
 
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/js"
+	"github.com/cgalvisleon/et/et"
 )
 
 var initRpc bool
@@ -367,7 +367,7 @@ import (
 	"context"
 
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/js"
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/linq"
 )
 
@@ -408,7 +408,7 @@ import (
 	"context"
 
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/js"
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/linq"
 )
 
@@ -576,7 +576,7 @@ const modelDbHandler = `package $1
 import (
 	"net/http"
 
-	"github.com/cgalvisleon/et/js"
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/linq"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
@@ -976,7 +976,7 @@ const modelHandler = `package $1
 import (
 	"net/http"
 
-	"github.com/cgalvisleon/et/js"
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/response"
 )
 

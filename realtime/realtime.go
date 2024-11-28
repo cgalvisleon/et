@@ -3,8 +3,8 @@ package realtime
 import (
 	"net/http"
 
-	"github.com/cgalvisleon/elvis/console"
 	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/cgalvisleon/et/ws"
 )
@@ -24,12 +24,12 @@ func Load() (*ws.Client, error) {
 
 	url := envar.GetStr("", "RT_HOST")
 	if url == "" {
-		return nil, console.NewError(MSG_RT_HOST_REQUIRED)
+		return nil, logs.NewError(MSG_RT_HOST_REQUIRED)
 	}
 
 	token := envar.GetStr("", "RT_AUTH")
 	if token == "" {
-		return nil, console.NewError(MSG_RT_AUTH_REQUIRED)
+		return nil, logs.NewError(MSG_RT_AUTH_REQUIRED)
 	}
 
 	client, err := ws.NewClient(&ws.ClientConfig{

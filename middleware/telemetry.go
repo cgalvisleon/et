@@ -43,23 +43,6 @@ func (rw *ResponseWriterWrapper) Write(b []byte) (int, error) {
 }
 
 /**
-* WriteHeader
-* @params statusCode int
-**/
-func (rw *ResponseWriterWrapper) SetHeader(header http.Header) {
-	for key, values := range header {
-		for _, value := range values {
-			if commonHeader[key] {
-				continue
-			} else if len(value) > 255 {
-				continue
-			}
-			rw.Header().Add(key, value)
-		}
-	}
-}
-
-/**
 * SetServiceName
 * @params name string
 **/

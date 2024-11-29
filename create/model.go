@@ -71,18 +71,18 @@ func main() {
 	envar.SetStr("dbpass", "", "Database password", "DB_PASSWORD")
 	envar.SetStr("dbapp", "Test", "Database app name", "DB_APP_NAME")
 
-	serv, err := serv.New()
+	srv, err := serv.New()
 	if err != nil {
 		logs.Fatal(err)
 	}
 
-	go serv.Start()
+	go srv.Start()
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	<-c
 
-	serv.Close()
+	srv.Close()
 }
 `
 
@@ -213,7 +213,7 @@ func Banner() {
 }
 `
 
-const modelService = `package $1
+const modelService = `package $2
 
 import (
 	"net/http"
@@ -453,7 +453,7 @@ func Define$2(db *jdb.DB) error {
 		return nil
 	}
 
-	$2 = jdb.NewModel(schema$4, "$3")
+	$2 = jdb.NewModel($4, "$3")
 	$2.DefineColumn(jdb.CreatedAtField, jdb.TypeDataTime)
 	$2.DefineColumn(jdb.UpdatedAtField, jdb.TypeDataTime)
 	$2.DefineColumn(jdb.ProjectField, jdb.TypeDataKey)
@@ -875,13 +875,15 @@ func initModels(db *jdb.DB) error {
 
 const modelSchema = `package $1
 
-import "github.com/cgalvisleon/et/linq"
+import (
+	"github.com/cgalvisleon/jdb/jdb"
+)
 
-var $2 *linq.Schema
+var $2 *jdb.Schema
 
-func defineSchema() error {
+func defineSchema(db *jdb.DB) error {
 	if $2 == nil {
-		$2 = linq.NewSchema("$3", "")
+		$2 = jdb.NewSchema(db, "$3")
 	}
 
 	return nil
@@ -957,6 +959,7 @@ import (
 	"os"
 
 	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
@@ -1011,7 +1014,7 @@ func (rt *Router) version(w http.ResponseWriter, r *http.Request) {
 }
 
 func (rt *Router) routes(w http.ResponseWriter, r *http.Request) {
-	_routes := er.GetRoutes()
+	_routes := router.GetRoutes()
 	routes := []et.Json{}
 	for _, route := range _routes {
 		routes = append(routes, et.Json{
@@ -1042,6 +1045,7 @@ import (
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/strs"
+	"github.com/cgalvisleon/et/et"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -1087,7 +1091,7 @@ func (rt *Router) version(w http.ResponseWriter, r *http.Request) {
 }
 
 func (rt *Router) routes(w http.ResponseWriter, r *http.Request) {
-	_routes := er.GetRoutes()
+	_routes := router.GetRoutes()
 	routes := []et.Json{}
 	for _, route := range _routes {
 		routes = append(routes, et.Json{

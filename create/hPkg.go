@@ -21,6 +21,16 @@ func MakePkg(name, schema string) error {
 		return err
 	}
 
+	_, err = file.MakeFile(path, "config.go", modelConfig, name)
+	if err != nil {
+		return err
+	}
+
+	_, err = file.MakeFile(path, "rpc.go", modelRpc, name)
+	if err != nil {
+		return err
+	}
+
 	if len(schema) > 0 {
 		_, err = file.MakeFile(path, "controller.go", modelDbController, name)
 		if err != nil {

@@ -1,32 +1,53 @@
 package create
 
-const modelDockerfile = `ARG GO_VERSION=1.22
+const modelDockerfile = `# Versión de Go como argumento3
+ARG GO_VERSION=1.23
 
-FROM golang:${GO_VERSION}-alpine AS builder
+# Stage 1: Compilación (builder)
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS builder
 
-RUN apk update && apk add --no-cache ca-certificates openssl git tzdata
-RUN update-ca-certificates
+# Argumentos para el sistema operativo y la arquitectura
+ARG TARGETOS
+ARG TARGETARCH
 
+# Instalación de dependencias necesarias
+RUN apk update && apk add --no-cache ca-certificates openssl git \
+    && update-ca-certificates
+
+# Configuración de las variables de entorno para la build
 ENV GO111MODULE=on \
     CGO_ENABLED=0 \
-    GOOS=linux \
-    GOARCH=amd64
+    GOOS=${TARGETOS} \
+    GOARCH=${TARGETARCH}
 
+# Directorio de trabajo
 WORKDIR /src
 
-COPY go.mod .
-COPY go.sum .
+# Descargar dependencias
+COPY go.mod go.sum ./
 RUN go mod download
 
+# Copiar el código fuente
 COPY . .
 
-RUN gofmt -w . && go build ./cmd/$1
+# Formatear el código Go
+RUN gofmt -w .
 
+# Compilar el binario
+RUN go build -a -v -o /$1 ./cmd/$1
+
+# Cambiar permisos del binario
+RUN chmod +x /$1
+
+# Stage 2: Imagen final mínima
 FROM scratch
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=builder /src/$1 ./$1
 
-ENTRYPOINT ["./$1"]
+# Copiar certificados y binario
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /$1 /$1
+
+# Establecer el binario como punto de entrada
+ENTRYPOINT ["/$1"]
 `
 
 const modelMain = `package main
@@ -42,7 +63,7 @@ import (
 
 func main() {
 	envar.SetInt("port", 3000, "Port server", "PORT")
-	envar.SetInt("rpc", 4200, "Port rpc server", "RPC")
+	envar.SetInt("rpc", 4200, "Port rpc server", "RPC_PORT")
 	envar.SetStr("dbhost", "localhost", "Database host", "DB_HOST")
 	envar.SetInt("dbport", 5432, "Database port", "DB_PORT")
 	envar.SetStr("dbname", "", "Database name", "DB_NAME")
@@ -65,48 +86,156 @@ func main() {
 }
 `
 
-const modelService = `package module
+const modelApi = `package v1
 
 import (
-	"net"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/jrpc"
+	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/utility"
+	"github.com/dimiro1/banner"
+	"github.com/go-chi/chi/v5"
+	"github.com/mattn/go-colorable"
+	pkg "$1/pkg/$2"	
+)
+
+func New() http.Handler {
+	r := chi.NewRouter()
+
+	err := pkg.LoadConfig()
+	if err != nil {
+		logs.Panic(err)
+	}
+
+	_, err = cache.Load()
+	if err != nil {
+		logs.Panic(err)
+	}
+
+	_, err = event.Load()
+	if err != nil {
+		logs.Panic(err)
+	}
+
+	_pkg := &pkg.Router{
+		Repository: &pkg.Controller{
+		},
+	}
+
+	r.Mount(pkg.PackagePath, _pkg.Routes())
+
+	return r
+}
+
+func Close() {
+	jrpc.Close()
+	cache.Close()
+	event.Close()
+}
+
+func Banner() {
+	time.Sleep(3 * time.Second)
+	templ := utility.BannerTitle(pkg.PackageName, 4)
+	banner.InitString(colorable.NewColorableStdout(), true, true, templ)
+	fmt.Println()
+}
+`
+
+const modelDbApi = `package v1
+
+import (
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/jrpc"
+	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/utility"
+	"github.com/cgalvisleon/jdb/jdb"
+	"github.com/dimiro1/banner"
+	"github.com/go-chi/chi/v5"
+	"github.com/mattn/go-colorable"
+	pkg "$1/pkg/$2"	
+)
+
+func New() http.Handler {
+	r := chi.NewRouter()
+
+	err := pkg.LoadConfig()
+	if err != nil {
+		logs.Panic(err)
+	}
+
+	_, err = cache.Load()
+	if err != nil {
+		logs.Panic(err)
+	}
+
+	_, err = event.Load()
+	if err != nil {
+		logs.Panic(err)
+	}
+
+	db, err := jdb.Load()
+	if err != nil {
+		logs.Panic(err)
+	}
+
+	_pkg := &pkg.Router{
+		Repository: &pkg.Controller{
+			Db: db,
+		},
+	}
+
+	r.Mount(pkg.PackagePath, _pkg.Routes())
+
+	return r
+}
+
+func Close() {
+	jrpc.Close()
+	cache.Close()
+	event.Close()
+}
+
+func Banner() {
+	time.Sleep(3 * time.Second)
+	templ := utility.BannerTitle(pkg.PackageName, 4)
+	banner.InitString(colorable.NewColorableStdout(), true, true, templ)
+	fmt.Println()
+}
+`
+
+const modelService = `package $1
+
+import (
+	"net/http"
+
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/go-chi/chi/v5"
-	v1 "$1/internal/service/$2/v1"	
-	"github.com/rs/cors"
+	v1 "$1/internal/service/$2/v1"
+	"github.com/rs/cors"	
 )
 
 type Server struct {
 	http *http.Server
-	rpc  *net.Listener
 }
 
 func New() (*Server, error) {
-	err := cache.Load()
-	if err != nil {
-		panic(err)
-	}
-
-	err = event.Load()
-	if err != nil {
-		panic(err)
-	}
-	
-	/**
-	* HTTP
-	**/
-
 	server := Server{}
 
-	port := envar.GetInt(3300, "PORT")
-
+	port := envar.EnvarInt(3300, "PORT")
 	if port != 0 {
 		r := chi.NewRouter()
 
@@ -132,45 +261,27 @@ func New() (*Server, error) {
 		server.http = serv
 	}
 
-	/**
-	 * RPC
-	 **/
-	rpc := envar.GetInt(0, "RPC")
-
-	if rpc != 0 {
-		serv := v1.NewRpc(rpc)
-
-		server.rpc = &serv
-	}
-
 	return &server, nil
 }
 
-func (serv *Server) Close() error {
+func (serv *Server) Close() {
 	v1.Close()
-	return nil
+
+	logs.Log("Http", "Shutting down server...")
+}
+
+func (serv *Server) StartHttpServer() {
+	if serv.http == nil {
+		return
+	}
+
+	svr := serv.http
+	logs.Logf("Http", "Running on http://localhost%s", svr.Addr)
+	logs.Fatal(serv.http.ListenAndServe())
 }
 
 func (serv *Server) Start() {
-	go func() {
-		if serv.http == nil {
-			return
-		}
-
-		svr := serv.http
-		logs.Logf("Http", "Running on http://localhost%s", svr.Addr)
-		logs.Fatal(serv.http.ListenAndServe())
-	}()
-
-	go func() {
-		if serv.rpc == nil {
-			return
-		}
-
-		svr := *serv.rpc
-		logs.Logf("RPC", "Running on tcp:localhost:%s", svr.Addr().String())
-		http.Serve(svr, nil)
-	}()
+	go serv.StartHttpServer()
 
 	v1.Banner()
 
@@ -178,68 +289,119 @@ func (serv *Server) Start() {
 }
 `
 
-const modelApi = `package v1
+const modelConfig = `package $1
 
 import (
-	"fmt"
-	"net"
-	"net/http"
-	"net/rpc"
-	"time"
-
-	"github.com/cgalvisleon/et/linq"
-	_ "github.com/cgalvisleon/et/lib/pg"
-	"github.com/cgalvisleon/et/utility"
-	"github.com/dimiro1/banner"
-	"github.com/go-chi/chi/v5"
-	"github.com/mattn/go-colorable"
-	pkg "$1/pkg/$2"	
+	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/jrpc"
+	"github.com/cgalvisleon/et/logs"
 )
 
-var db *linq.DB
+func LoadConfig() error {
+	StartRpcServer()
 
-func New() http.Handler {
-	r := chi.NewRouter()
+	stage := envar.GetStr("local", "STAGE")
+	return defaultConfig(stage)
+}
 
-	var err error
-	db, err = linq.Core()
+func defaultConfig(stage string) error {
+	name := "default"
+	result, err := jrpc.CallItem("Module.Services.GetConfig", et.Json{
+		"stage": stage,
+		"name":  name,
+	})
 	if err != nil {
-		panic(err)
-	}
-	
-	_pkg := &pkg.Router{
-		Repository: &pkg.Controller{
-			Origin: db,
-		},
+		return err
 	}
 
-	r.Mount(pkg.PackagePath, _pkg.Routes())
+	if !result.Ok {
+		return logs.NewErrorf(jrpc.MSG_NOT_LOAD_CONFIG, stage, name)
+	}
 
-	return r
+	cfg := result.Json("config")
+	return config.Load(cfg)
+}
+`
+
+const modelDbController = `package $1
+
+import (
+	"context"
+
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/jdb/jdb"
+)
+
+type Controller struct {
+	Db *jdb.DB
 }
 
-func Close() {
-	if db != nil {
-		db.Close()
+func (c *Controller) Version(ctx context.Context) (et.Json, error) {
+	company := envar.GetStr("", "COMPANY")
+	web := envar.GetStr("", "WEB")
+	version := envar.GetStr("", "VERSION")
+	service := et.Json{
+		"version": version,
+		"service": PackageName,
+		"host":    HostName,
+		"company": company,
+		"web":     web,
+		"help":    "",
 	}
+
+	return service, nil
 }
 
-func NewRpc(port int) net.Listener {
-	rpc.HandleHTTP()
-
-	result, err := net.Listen("tcp", utility.Address("0.0.0.0", port))
-	if err != nil {
-		panic(err)
-	}
-
-	return result
+func (c *Controller) Init(ctx context.Context) {
+	initModels(c.Db)
+	initEvents()
 }
 
-func Banner() {
-	time.Sleep(3 * time.Second)
-	templ := utility.BannerTitle(pkg.PackageName, pkg.PackageVersion, 4)
-	banner.InitString(colorable.NewColorableStdout(), true, true, templ)
-	fmt.Println()
+type Repository interface {
+	Version(ctx context.Context) (et.Json, error)
+	Init(ctx context.Context)
+}
+`
+
+const modelController = `package $1
+
+import (
+	"context"
+
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/linq"
+)
+
+type Controller struct {
+}
+
+func (c *Controller) Version(ctx context.Context) (et.Json, error) {
+	company := envar.GetStr("", "COMPANY")
+	web := envar.GetStr("", "WEB")
+	version := envar.GetStr("", "VERSION")
+  service := et.Json{
+		"version": version,
+		"service": PackageName,
+		"host":    HostName,
+		"company": company,
+		"web":     web,
+		"help":    "",
+	}
+
+	return service, nil
+}
+
+func (c *Controller) Init(ctx context.Context) {
+	initEvents()
+}
+
+type Repository interface {
+	Version(ctx context.Context) (et.Json, error)
+	Init(ctx context.Context)
 }
 `
 
@@ -248,7 +410,6 @@ const modelEvent = `package $1
 import (
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/message"
 )
 
 func initEvents() {
@@ -259,24 +420,451 @@ func initEvents() {
 
 }
 
-func eventAction(m message.Message) {
-	data, err := m.Json()
-	if err != nil {
-		logs.Alert(err)
-	}
+func eventAction(m event.EvenMessage) {
+	data := m.Data
 
 	logs.Log("eventAction", data)
 }
 `
 
+const modelDbHandler = `package $1
+
+import (
+	"net/http"
+
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/response"
+	"github.com/cgalvisleon/et/sesion"
+	"github.com/cgalvisleon/et/utility"
+	"github.com/cgalvisleon/jdb/jdb"
+	"github.com/go-chi/chi/v5"
+)
+
+var $2 *jdb.Model
+
+func Define$2(db *jdb.DB) error {
+	if err := defineSchema(db); err != nil {
+		return logs.Panic(err)
+	}
+
+	if $2 != nil {
+		return nil
+	}
+
+	$2 = jdb.NewModel(schema$4, "$3")
+	$2.DefineColumn(jdb.CreatedAtField, jdb.TypeDataTime)
+	$2.DefineColumn(jdb.UpdatedAtField, jdb.TypeDataTime)
+	$2.DefineColumn(jdb.ProjectField, jdb.TypeDataKey)
+	$2.DefineColumn(jdb.StateField, jdb.TypeDataKey)
+	$2.DefineColumn(jdb.DataField, jdb.TypeDataObject)
+	$2.DefineColumn(jdb.SystemKeyField, jdb.TypeDataKey)
+	$2.DefineColumn(jdb.IndexField, jdb.TypeDataInt)
+	$2.DefineKey("_id")
+	$2.DefineIndex(true,
+		"date_make",
+		"date_update",
+		"_state",
+		"project_id",
+		"name",
+		"index",
+	)
+	$2.DefineRequired("name")
+	$2.Integrity = true
+	$2.DefineTrigger(jdb.BeforeInsert, func(old et.Json, new *et.Json, data et.Json) error {
+		return nil
+	})
+	$2.DefineTrigger(jdb.AfterInsert, func(old et.Json, new *et.Json, data et.Json) error {
+		return nil
+	})
+	$2.DefineTrigger(jdb.BeforeUpdate, func(mold et.Json, new *et.Json, data et.Json) error {
+		return nil
+	})
+	$2.DefineTrigger(jdb.AfterUpdate, func(old et.Json, new *et.Json, data et.Json) error {
+		return nil
+	})
+	$2.DefineTrigger(jdb.BeforeDelete, func(old et.Json, new *et.Json, data et.Json) error {
+		return nil
+	})
+	$2.DefineTrigger(jdb.AfterDelete, func(old et.Json, new *et.Json, data et.Json) error {
+		return nil
+	})
+
+	if err := $2.Init(); err != nil {
+		return logs.Panic(err)
+	}
+
+	return nil
+}
+
+/**
+* Get$2ById
+* @param id string
+* @return et.Item
+* @return error
+**/
+func Get$2ById(id string) (et.Item, error) {
+	if !utility.ValidId(id) {
+		return et.Item{}, logs.NewErrorf(msg.MSG_ATRIB_REQUIRED, "_id")
+	}
+
+	item, err := jdb.From($2).
+		Where("_id").Eq(id).
+		Data().
+		One()
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	return item, nil
+}
+
+/**
+* Insert$2
+* @param project_id string
+* @param state string
+* @param id string
+* @param data et.Json
+* @return et.Item
+* @return error
+**/
+func Insert$2(project_id, state, id string, data et.Json, user_full_name string) (et.Item, error) {
+	if !utility.ValidId(project_id) {
+		return et.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "project_id")
+	}
+
+	if !utility.ValidId(id) {
+		return et.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "_id")
+	}
+
+	id = utility.GenKey(id)
+	current, err := jdb.From($2).
+		Where("_id").Eq(id).
+		Data("_state", "_id").
+		One()
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	if current.Ok {
+		return et.Item{Ok: false, Result: current.Result}, nil
+	}
+
+	now := utility.Now()
+	data["created_at"] = now
+	data["date_update"] = now
+	data["project_id"] = project_id
+	data["_state"] = state
+	data["_id"] = id
+	data["last_updated"] = et.Json{
+		"name": user_full_name,
+	}
+	return $2.Insert(data).
+		One()
+}
+
+/**
+* UpSert$2
+* @param project_id string
+* @param id string
+* @param data et.Json
+* @param user_id string
+* @return et.Item
+* @return error
+**/
+func UpSert$2(project_id, id string, data et.Json, user_full_name string) (et.Item, error) {
+	current, err := Insert$2(project_id, utility.ACTIVE, id, data, user_full_name)
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	if current.Ok {
+		return current, nil
+	}
+
+	current_state := current.Key("_state")
+	if current_state != utility.ACTIVE {
+		return et.Item{}, logs.Alertf(MSG_STATE_NOT_ACTIVE, current_state)
+	}
+
+	id = current.Key("_id")
+	now := utility.Now()
+	data["created_at"] = now
+	data["last_updated"] = et.Json{
+		"name": user_full_name,
+	}
+	return $2.Update(data).
+		Where("_id").Eq(id).
+		One()
+}
+
+/**
+* State$2
+* @param id string
+* @param state string
+* @return et.Item
+* @return error
+**/
+func State$2(id, state, user_full_name string) (et.Item, error) {
+	if !utility.ValidId(state) {
+		return et.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "state")
+	}
+
+	current, err := jdb.From($2).
+		Where("_id").Eq(id).
+		Data("_state").
+		One()
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	if !current.Ok {
+		return et.Item{}, logs.Alertm(msg.RECORD_NOT_FOUND)
+	}
+
+	current_state := current.Key("_state")
+	if current_state == state {
+		return et.Item{Ok: true, Result: et.Json{"message": msg.RECORD_NOT_UPDATE}}, nil
+	}
+
+	return $2.Update(et.Json{
+		"_state": state,
+	}).
+		Where("_id").Eq(id).
+		One()
+}
+
+/**
+* Delete$2
+* @param id, user_full_name string
+* @return et.Item
+* @return error
+**/
+func Delete$2(id, user_full_name string) (et.Item, error) {
+	return State$2(id, utility.FOR_DELETE, user_full_name)
+}
+
+/**
+* All$2
+* @param project_id string
+* @param state string
+* @param search string
+* @param page int
+* @param rows int
+* @param _select string
+* @return et.List
+* @return error
+**/
+func All$2(project_id, state, search string, page, rows int, _select string) (et.List, error) {
+	if state == "" {
+		state = utility.ACTIVE
+	}
+
+	auxState := state
+
+	if search != "" {
+		return jdb.From($2).
+			Where("project_id").In("-1", project_id).
+			And(jdb.Concatenate("NAME:", "asset.name", "DESCRIPTION:", "asset.description", "DATA:", "asset._data", ":")).Like("%"+search+"%").
+			OrderBy(true, $2.Col("name")).
+			Data(_select).
+			List(page, rows)
+	} else if auxState == "*" {
+		state = utility.FOR_DELETE
+
+		return jdb.From($2).
+			Where("_state").Neg(state).
+			And("project_id").In("-1", project_id).
+			OrderBy(true, "name").
+			Data(_select).
+			List(page, rows)
+	} else if auxState == "0" {
+		return jdb.From($2).
+			Where("_state").In("-1", state).
+			And("project_id").In("-1", project_id).
+			OrderBy(true, "name").
+			Data(_select).
+			List(page, rows)
+	} else {
+		return jdb.From($2).
+			Where("_state").Eq(state).
+			And("project_id").In("-1", project_id).
+			OrderBy(true, "name").
+			Data(_select).
+			List(page, rows)
+	}
+}
+
+/**
+* upSert$2
+* @param w http.ResponseWriter
+* @param r *http.Request
+**/
+func (rt *Router) upSert$2(w http.ResponseWriter, r *http.Request) {
+	body, _ := response.GetBody(r)
+	project_id := body.Str("project_id")
+	id := body.Str("id")
+	user_id := body.Str("user_id")
+
+	result, err := UpSert$2(project_id, id, body, user_id)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.ITEM(w, r, http.StatusOK, result)
+}
+
+/**
+* get$2ById
+* @param w http.ResponseWriter
+* @param r *http.Request
+**/
+func (rt *Router) get$2ById(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	result, err := Get$2ById(id)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.ITEM(w, r, http.StatusOK, result)
+}
+
+/**
+* state$2
+* @param w http.ResponseWriter
+* @param r *http.Request
+**/
+func (rt *Router) state$2(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	body, _ := response.GetBody(r)
+	state := body.Str("state")
+	user_name := sesion.GetClientName(r)
+
+	result, err := State$2(id, state, user_name)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.ITEM(w, r, http.StatusOK, result)
+}
+
+/**
+* delete$2
+* @param w http.ResponseWriter
+* @param r *http.Request
+**/
+func (rt *Router) delete$2(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	user_name := sesion.GetClientName(r)
+
+	result, err := Delete$2(id, user_name)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.ITEM(w, r, http.StatusOK, result)
+}
+
+/**
+* all$2
+* @param w http.ResponseWriter
+* @param r *http.Request
+**/
+func (rt *Router) all$2(w http.ResponseWriter, r *http.Request) {
+	query := response.GetQuery(r)
+	project_id := query.Str("project_id")
+	state := query.Str("state")
+	search := query.Str("search")
+	page := query.ValInt(1, "page")
+	rows := query.ValInt(30, "rows")
+	_select := query.Str("select")
+
+	result, err := All$2(project_id, state, search, page, rows, _select)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.JSON(w, r, http.StatusOK, result)
+}
+
+/** Copy this code to router.go
+	// $2
+	router.Protect(r, router.Get, "/assets/{id}", rt.get$2ById, PackageName, PackagePath, host)
+	router.Protect(r, router.Post, "/assets", rt.upSert$2, PackageName, PackagePath, host)
+	router.Protect(r, router.Put, "/assets/state/{id}", rt.state$2, PackageName, PackagePath, host)
+	router.Protect(r, router.Delete, "/assets/{id}", rt.delete$2, PackageName, PackagePath, host)
+	router.Protect(r, router.Get, "/assets/", rt.all$2, PackageName, PackagePath, host)
+**/
+
+/** Copy this code to func initModel in model.go
+	if err := Define$2(db); err != nil {
+		return logs.Panic(err)
+	}
+**/
+`
+
+const modelHandler = `package $1
+
+import (
+	"net/http"
+
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/response"
+	"github.com/go-chi/chi/v5"
+)
+
+
+/**
+* Get$2
+* @param id string
+* @return et.Item
+* @return error
+**/
+func Get$2(id string) (et.Item, error) {
+	
+	return et.item{}, nil
+}
+
+
+/**
+* get$2
+* @param w http.ResponseWriter
+* @param r *http.Request
+**/
+func (rt *Router) get$2(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	result, err := Get$2(id)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.ITEM(w, r, http.StatusOK, result)
+}
+
+/** Copy this code to router.go
+	// $2
+	router.Protect(r, router.Get, "/assets/{id}", rt.get$2, PackageName, PackagePath, host)	
+**/
+`
+
 const modelModel = `package $1
 
 import (
-	"github.com/cgalvisleon/et/linq"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/jdb/jdb"
 )
 
-func initModels(db *linq.DB) error {
+func initModels(db *jdb.DB) error {
 	if err := Define$2(db); err != nil {
 		return logs.Panic(err)
 	}
@@ -361,87 +949,6 @@ const (
 )
 `
 
-const modelDbController = `package $1
-
-import (
-	"context"
-
-	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/linq"
-)
-
-type Controller struct {
-	Origin *linq.DB
-}
-
-func (c *Controller) Version(ctx context.Context) (et.Json, error) {
-	company := envar.GetStr("", "COMPANY")
-	web := envar.GetStr("", "WEB")
-	version := envar.GetStr("", "VERSION")
-  service := et.Json{
-		"version": version,
-		"service": PackageName,
-		"host":    HostName,
-		"company": company,
-		"web":     web,
-		"help":    "",
-	}
-
-	return service, nil
-}
-
-func (c *Controller) Init(ctx context.Context) {
-	initModels(c.Origin)
-	initEvents()
-}
-
-type Repository interface {
-	Version(ctx context.Context) (et.Json, error)
-	Init(ctx context.Context)
-}
-`
-
-const modelController = `package $1
-
-import (
-	"context"
-
-	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/linq"
-)
-
-type Controller struct {
-	Origin *linq.DB
-}
-
-func (c *Controller) Version(ctx context.Context) (et.Json, error) {
-	company := envar.GetStr("", "COMPANY")
-	web := envar.GetStr("", "WEB")
-	version := envar.GetStr("", "VERSION")
-  service := et.Json{
-		"version": version,
-		"service": PackageName,
-		"host":    HostName,
-		"company": company,
-		"web":     web,
-		"help":    "",
-	}
-
-	return service, nil
-}
-
-func (c *Controller) Init(ctx context.Context) {
-	initEvents()
-}
-
-type Repository interface {
-	Version(ctx context.Context) (et.Json, error)
-	Init(ctx context.Context)
-}
-`
-
 const modelDbRouter = `package $1
 
 import (
@@ -449,8 +956,9 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/strs"
@@ -468,22 +976,26 @@ type Router struct {
 }
 
 func (rt *Router) Routes() http.Handler {
-	var host = strs.Format("%s:%d", envar.GetStr("http://localhost", "HOST"), envar.GetInt(3300, "PORT"))
+	defaultHost := strs.Format("http://%s", HostName)
+	var host = strs.Format("%s:%d", envar.EnvarStr(defaultHost, "HOST"), envar.EnvarInt(3300, "PORT"))
 
 	r := chi.NewRouter()
 
 	router.Public(r, router.Get, "/version", rt.version, PackageName, PackagePath, host)
+	router.Protect(r, er.Get, "/routes", rt.routes, PackageName, PackagePath, host)
 	// $2
 	router.Protect(r, router.Get, "/{id}", rt.get$2ById, PackageName, PackagePath, host)
 	router.Protect(r, router.Post, "/", rt.upSert$2, PackageName, PackagePath, host)
-	router.Protect(r, router.Put, "/state/{id}", rt.state$2, PackageName, PackagePath, host)
+	router.Protect(r, router.Put, "/{id}/state", rt.state$2, PackageName, PackagePath, host)
 	router.Protect(r, router.Delete, "/{id}", rt.delete$2, PackageName, PackagePath, host)
-	router.Protect(r, router.Get, "/all", rt.all$2, PackageName, PackagePath, host)
+	router.Protect(r, router.Get, "/", rt.all$2, PackageName, PackagePath, host)
 
 	ctx := context.Background()
 	rt.Repository.Init(ctx)
+	middleware.SetServiceName(PackageName)
 
 	logs.Logf(PackageName, "Router version:%s", PackageVersion)
+
 	return r
 }
 
@@ -496,6 +1008,25 @@ func (rt *Router) version(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.JSON(w, r, http.StatusOK, result)
+}
+
+func (rt *Router) routes(w http.ResponseWriter, r *http.Request) {
+	_routes := er.GetRoutes()
+	routes := []et.Json{}
+	for _, route := range _routes {
+		routes = append(routes, et.Json{
+			"method": route.Str("method"),
+			"path":   route.Str("path"),
+		})
+	}
+
+	result := et.Items{
+		Ok:     true,
+		Count:  len(routes),
+		Result: routes,
+	}
+
+	response.ITEMS(w, r, http.StatusOK, result)
 }
 `
 
@@ -525,18 +1056,22 @@ type Router struct {
 }
 
 func (rt *Router) Routes() http.Handler {
-	var host = strs.Format("%s:%d", envar.GetStr("http://localhost", "HOST"), envar.GetInt(3300, "PORT"))
+	defaultHost := strs.Format("http://%s", HostName)
+	var host = strs.Format("%s:%d", envar.EnvarStr(defaultHost, "HOST"), envar.EnvarInt(3300, "PORT"))
 
 	r := chi.NewRouter()
 
 	router.Public(r, router.Get, "/version", rt.version, PackageName, PackagePath, host)
+	router.Protect(r, er.Get, "/routes", rt.routes, PackageName, PackagePath, host)
 	// $2
-	router.Protect(r, router.Post, "/", rt.$2, PackageName, PackagePath, host)
+	router.Protect(r, router.Post, "/", rt.get$2, PackageName, PackagePath, host)
 	
 	ctx := context.Background()
 	rt.Repository.Init(ctx)
+	middleware.SetServiceName(PackageName)
 
 	logs.Logf(PackageName, "Router version:%s", PackageVersion)
+
 	return r
 }
 
@@ -549,6 +1084,71 @@ func (rt *Router) version(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.JSON(w, r, http.StatusOK, result)
+}
+
+func (rt *Router) routes(w http.ResponseWriter, r *http.Request) {
+	_routes := er.GetRoutes()
+	routes := []et.Json{}
+	for _, route := range _routes {
+		routes = append(routes, et.Json{
+			"method": route.Str("method"),
+			"path":   route.Str("path"),
+		})
+	}
+
+	result := et.Items{
+		Ok:     true,
+		Count:  len(routes),
+		Result: routes,
+	}
+
+	response.ITEMS(w, r, http.StatusOK, result)
+}
+`
+
+const modelRpc = `package $1
+
+import (
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/jrpc"
+	"github.com/cgalvisleon/et/logs"
+)
+
+type Services struct{}
+
+func StartRpcServer() {
+	pkg, err := jrpc.Load(PackageName)
+	if err != nil {
+		logs.Panic(err)
+	}
+
+	services := new(Services)
+	err = jrpc.Mount(services)
+	if err != nil {
+		logs.Fatal(err)
+	}
+
+	go pkg.Start()
+}
+
+func (c *Services) Version(require et.Json, response *et.Item) error {
+	company := envar.EnvarStr("", "COMPANY")
+	web := envar.EnvarStr("", "WEB")
+	version := envar.EnvarStr("", "VERSION")
+	help := envar.EnvarStr("", "RPC_HELP")
+	response.Ok = true
+	response.Result = et.Json{
+		"methos":  "RPC",
+		"version": version,
+		"service": PackageName,
+		"host":    HostName,
+		"company": company,
+		"web":     web,
+		"help":    help,
+	}
+
+	return logs.Rpc(response.ToString())
 }
 `
 
@@ -569,444 +1169,6 @@ Content-Length: 227
 
 {
 }
-`
-
-const modelDbHandler = `package $1
-
-import (
-	"net/http"
-
-	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/linq"
-	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/utility"
-	"github.com/go-chi/chi/v5"
-)
-
-var $2 *linq.Model
-
-func Define$2(db *linq.DB) error {
-	if err := defineSchema(); err != nil {
-		return logs.Panic(err)
-	}
-
-	if $2 != nil {
-		return nil
-	}
-
-	$2 = linq.NewModel($3, "$4", "Tabla", 1)
-	$2.DefineColumn("date_make", "", linq.TpDate, "NOW()")
-	$2.DefineColumn("date_update", "", linq.TpDate, "NOW()")
-	$2.DefineColumn("project_id", "", linq.TpKey, "-1")
-	$2.DefineColumn("_state", "", linq.TpStatus, utility.ACTIVE)
-	$2.DefineColumn("_id", "", linq.TpKey, "-1")	
-	$2.DefineColumn("name", "", linq.TpText, "")
-	$2.DefineColumn("description", "", linq.TpMemo, "")
-	$2.DefineColumn("_data", "", linq.TpSource, "{}")
-	$2.DefineColumn("index", "", linq.TpSerie, 0)
-	$2.DefinePrimaryKey([]string{"_id"})
-	$2.DefineIndex([]string{
-		"date_make",
-		"date_update",
-		"_state",
-		"project_id",
-		"name",
-		"index",
-	}, true)
-	$2.DefineRequired([]linq.ColRequired{
-		{
-			Name:    "name",
-			Message: "Atributo requerido - (name)",
-		},
-	})
-	$2.DefineIntegrity(true)
-	$2.DefineTrigger(linq.BeforeInsert, func(model *linq.Model, values *linq.Values) error {
-		return nil
-	})
-	$2.DefineTrigger(linq.AfterInsert, func(model *linq.Model, values *linq.Values) error {
-		return nil
-	})
-	$2.DefineTrigger(linq.BeforeUpdate, func(model *linq.Model, values *linq.Values) error {
-		return nil
-	})
-	$2.DefineTrigger(linq.AfterUpdate, func(model *linq.Model, values *linq.Values) error {
-		return nil
-	})
-	$2.DefineTrigger(linq.BeforeDelete, func(model *linq.Model, values *linq.Values) error {
-		return nil
-	})
-	$2.DefineTrigger(linq.AfterDelete, func(model *linq.Model, values *linq.Values) error {
-		return nil
-	})
-	$2.OnListener = func(data et.Json) {
-		logs.Debug(data.ToString())
-	}
-	
-	if err := $2.Init(db); err != nil {
-		return logs.Panic(err)
-	}
-
-	return nil
-}
-
-/**
-* Get$2ById
-* @param id string
-* @return et.Item
-* @return error
-**/
-func Get$2ById(id string) (et.Item, error) {	
-	if !utility.ValidId(id) {
-		return et.Item{}, logs.Nerrorf(msg.MSG_ATRIB_REQUIRED, "_id")
-	}
-
-	item, err := $2.Data().
-		Where($2.Col("_id").Eq(id)).
-		First()
-	if err != nil {
-		return et.Item{}, err
-	}
-	
-	return item, nil	
-}
-
-/**
-* Insert$2
-* @param project_id string
-* @param state string
-* @param id string
-* @param data et.Json
-* @return et.Item
-* @return error
-**/
-func Insert$2(project_id, state, id string, data et.Json, user_id string) (et.Item, error) {
-	if !utility.ValidId(project_id) {
-		return et.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "project_id")
-	}
-
-	if !utility.ValidId(id) {
-		return et.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "_id")
-	}
-
-	id = utility.GenId(id)
-	item, err := $2.Data("_state", "_id").
-		Where($2.Col("_id").Eq(id)).
-		First()
-	if err != nil {
-		return et.Item{}, err
-	}
-
-	if item.Ok {
-		return et.Item{
-			Ok: false,
-			Result: item.Result,
-		}, nil
-	}
-	
-	data["project_id"] = project_id
-	data["_state"] = state
-	data["_id"] = id
-	data["user_id"] = user_id
-	item, err = $2.Insert(data).		
-		Exec()
-	if err != nil {
-		return et.Item{}, err
-	}
-
-	return item, nil
-}
-
-/**
-* UpSert$2
-* @param project_id string
-* @param id string
-* @param data et.Json
-* @param user_id string
-* @return et.Item
-* @return error
-**/
-func UpSert$2(project_id, id string, data et.Json, user_id string) (et.Item, error) {
-	item, err := Insert$2(project_id, utility.ACTIVE, id, data, user_id)
-	if err != nil {
-		return et.Item{}, err
-	}
-
-	if item.Ok {
-		item, err = Get$2ById(id)
-		if err != nil {
-			return et.Item{}, err
-		}
-
-		return item, nil
-	}
-
-	current_state := item.Key("_state")
-	if current_state != utility.ACTIVE {
-		return et.Item{}, logs.Alertf(MSG_STATE_NOT_ACTIVE, current_state)
-	}
-	
-	data["user_id"] = user_id	
-	item, err = $2.Update(data).
-		Where($2.Col("_id").Eq(id)).
-		Exec()
-	if err != nil {
-		return et.Item{}, err
-	}
-
-	item, err = Get$2ById(id)
-	if err != nil {
-		return et.Item{}, err
-	}
-
-	return item, nil
-}
-
-/**
-* State$2
-* @param id string
-* @param state string
-* @return et.Item
-* @return error
-**/
-func State$2(id, state string) (et.Item, error) {
-	if !utility.ValidId(state) {
-		return et.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "state")
-	}
-
-	item, err := $2.Data("_state").
-		Where($2.Col("_id").Eq(id)).
-		First()
-	if err != nil {
-		return et.Item{}, err
-	}
-
-	if !item.Ok {
-		return et.Item{}, logs.Alertm(msg.RECORD_NOT_FOUND)
-	}
-
-	old_state := item.Key("_state")
-	if old_state == state {
-		return et.Item{
-			Ok: true,
-			Result: et.Json{
-				"message": msg.RECORD_NOT_UPDATE,
-			}}, nil
-	}
-
-	return $2.Update(et.Json{
-		"_state":   state,
-	}).
-		Where($2.Col("_id").Eq(id)).
-		Exec()	
-}
-
-/**
-* Delete$2
-* @param id string
-* @return et.Item
-* @return error
-**/
-func Delete$2(id string) (et.Item, error) {
-	return State$2(id, utility.FOR_DELETE)
-}
-
-/**
-* All$2
-* @param project_id string
-* @param state string
-* @param search string
-* @param page int
-* @param rows int
-* @param _select string
-* @return et.List
-* @return error
-**/
-func All$2(project_id, state, search string, page, rows int, _select string) (et.List, error) {	
-	if state == "" {
-		state = utility.ACTIVE
-	}
-
-	auxState := state
-
-	if search != "" {
-		return $2.Data(_select).
-			Where($2.Col("project_id").In("-1", project_id)).
-			And(linq.Concat("NAME:", $2.Col("name"), "DESCRIPTION:", $2.Col("description"), "DATA:", $2.Col("_data"), ":").Like("%"+search+"%")).
-			OrderBy(true, $2.Col("name")).
-			List(page, rows)
-	} else if auxState == "*" {
-		state = utility.FOR_DELETE
-
-		return $2.Data(_select).
-			Where($2.Col("_state").Neg(state)).
-			And($2.Col("project_id").In("-1", project_id)).
-			OrderBy(true, $2.Col("name")).
-			List(page, rows)
-	} else if auxState == "0" {
-		return $2.Data(_select).
-			Where($2.Col("_state").In("-1", state)).
-			And($2.Col("project_id").In("-1", project_id)).
-			OrderBy(true, $2.Col("name")).
-			List(page, rows)
-	} else {
-		return $2.Data(_select).
-			Where($2.Col("_state").Eq(state)).
-			And($2.Col("project_id").In("-1", project_id)).
-			OrderBy(true, $2.Col("name")).
-			List(page, rows)
-	}
-}
-
-/**
-* insert$2
-* @param w http.ResponseWriter
-* @param r *http.Request
-**/
-func (rt *Router) upSert$2(w http.ResponseWriter, r *http.Request) {
-	body, _ := response.GetBody(r)
-	project_id := body.Str("project_id")
-	id := body.Str("id")
-	user_id := body.Str("user_id")
-
-	result, err := UpSert$2(project_id, id, body, user_id)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	response.ITEM(w, r, http.StatusOK, result)
-}
-
-/**
-* get$2ById
-* @param w http.ResponseWriter
-* @param r *http.Request
-**/
-func (rt *Router) get$2ById(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-
-	result, err := Get$2ById(id)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	response.ITEM(w, r, http.StatusOK, result)
-}
-
-/**
-* state$2
-* @param w http.ResponseWriter
-* @param r *http.Request
-**/
-func (rt *Router) state$2(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	body, _ := response.GetBody(r)
-	state := body.Str("state")
-
-	result, err := State$2(id, state)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	response.ITEM(w, r, http.StatusOK, result)
-}
-
-/**
-* delete$2
-* @param w http.ResponseWriter
-* @param r *http.Request
-**/
-func (rt *Router) delete$2(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-
-	result, err := Delete$2(id)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	response.ITEM(w, r, http.StatusOK, result)
-}
-
-/**
-* all$2
-* @param w http.ResponseWriter
-* @param r *http.Request
-**/
-func (rt *Router) all$2(w http.ResponseWriter, r *http.Request) {
-	query := response.GetQuery(r)
-	project_id := query.Str("project_id")
-	state := query.Str("state")
-	search := query.Str("search")
-	page := query.ValInt(1, "page")
-	rows := query.ValInt(30, "rows")
-	_select := query.Str("select")
-
-	result, err := All$2(project_id, state, search, page, rows, _select)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	response.JSON(w, r, http.StatusOK, result)
-}
-
-/** Copy this code to router.go
-	// $2
-	router.Protect(r, router.Get, "/$5/{id}", rt.get$2ById, PackageName, PackagePath, host)
-	router.Protect(r, router.Post, "/$5", rt.upSert$2, PackageName, PackagePath, host)
-	router.Protect(r, router.Put, "/$5/state/{id}", rt.state$2, PackageName, PackagePath, host)
-	router.Protect(r, router.Delete, "/$5/{id}", rt.delete$2, PackageName, PackagePath, host)
-	router.Protect(r, router.Get, "/$5/all", rt.all$2, PackageName, PackagePath, host)
-**/
-
-/** Copy this code to func initModel in model.go
-	if err := Define$2(db); err != nil {
-		return logs.Panic(err)
-	}
-**/
-`
-
-const modelHandler = `package $1
-
-import (
-	"net/http"
-
-	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/response"
-)
-
-func $2(project_id, id string, params et.Json) (et.Item, error) {
-
-	return et.Item{}, nil
-}
-
-
-/**
-* Router
-**/
-func (rt *Router) $3(w http.ResponseWriter, r *http.Request) {
-	body, _ := response.GetBody(r)
-	project_id := body.Str("project_id")
-	id := body.Str("id")	
-
-	result, err := $2(project_id, id, body)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	response.ITEM(w, r, http.StatusOK, result)
-}
-
-/** Copy this code to router.go
-	// $2
-	router.Protect(r, router.Post, "/$3", rt.$2, PackageName, PackagePath, host)	
-**/
 `
 
 const modelReadme = `
@@ -1042,7 +1204,12 @@ PATH_URL=
 WEB=https://www.home.com
 PRODUCTION=false
 PATH_URL=/api/$1
-HOST=localhost
+HOST=http://localhost
+# HOST=http://host.docker.internal
+
+# RPC
+RPC_HOST=localhost
+RPC_PORT=4200
 
 # DB
 DB_DRIVE=postgres
@@ -1059,8 +1226,10 @@ REDIS_DB=0
 
 # NATS
 NATS_HOST=localhost:4222
+NATS_USER=
+NATS_PASSWORD=
 
-# CALM
+# SESSION
 SECRET=test
 `
 

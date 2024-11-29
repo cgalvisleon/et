@@ -1,4 +1,4 @@
-package token
+package sesion
 
 import (
 	"context"
@@ -241,11 +241,21 @@ func ClientId(r *http.Request) string {
 }
 
 /**
-* GetUser
+* GetClientName
+* @param r *http.Request
+* @return string
+**/
+func GetClientName(r *http.Request) string {
+	ctx := r.Context()
+	return NameKey.String(ctx, "Anonimo")
+}
+
+/**
+* GetClient
 * @param r *http.Request
 * @return et.Json
 **/
-func GetUser(r *http.Request) et.Json {
+func GetClient(r *http.Request) et.Json {
 	now := utility.Now()
 	ctx := r.Context()
 	username := ClientIdKey.String(ctx, "Anonimo")

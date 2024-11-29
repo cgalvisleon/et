@@ -40,7 +40,7 @@ func MkMicroservice(packageName, name, schema string) error {
 	}
 
 	ProgressNext(10)
-	err = MakeInternal(packageName, name)
+	err = MakeInternal(packageName, name, schema)
 	if err != nil {
 		return err
 	}

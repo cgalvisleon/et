@@ -5,7 +5,7 @@ import (
 
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/token"
+	"github.com/cgalvisleon/et/sesion"
 	"github.com/cgalvisleon/et/utility"
 )
 
@@ -32,8 +32,8 @@ func (h *Hub) HttpConnect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	clientId = token.ClientIdKey.String(ctx, clientId)
-	name = token.NameKey.String(ctx, name)
+	clientId = sesion.ClientIdKey.String(ctx, clientId)
+	name = sesion.NameKey.String(ctx, name)
 
 	_, err = h.connect(conn, clientId, name)
 	if err != nil {
@@ -64,8 +64,8 @@ func (h *Hub) HttpStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	clientId = token.ClientIdKey.String(ctx, clientId)
-	name = token.NameKey.String(ctx, name)
+	clientId = sesion.ClientIdKey.String(ctx, clientId)
+	name = sesion.NameKey.String(ctx, name)
 
 	_, err = h.streaming(conn, clientId, name)
 	if err != nil {

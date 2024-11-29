@@ -10,12 +10,12 @@ import (
 	"time"
 
 	lg "github.com/cgalvisleon/et/logs"
-	tk "github.com/cgalvisleon/et/token"
+	"github.com/cgalvisleon/et/sesion"
 )
 
 var (
 	// LogEntryCtxKey is the context.Context key to store the request log entry.
-	LogEntryCtxKey = tk.ContextKey("LogEntry")
+	LogEntryCtxKey = sesion.ContextKey("LogEntry")
 
 	// DefaultLogger is called by the Logger middleware handler to log each request.
 	// Its made a package-level variable so that it can be reconfigured for custom

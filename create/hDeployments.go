@@ -11,23 +11,9 @@ func MakeDeployments(name string) error {
 		return err
 	}
 
-	url := strs.Format("`/api/%s`", strs.Lowcase(name))
+	url := strs.Format("`/%s`", strs.Lowcase(name))
 	net := "proxy"
 	_, err = file.MakeFile(path, "local.yml", modelDeploy, name, url, net)
-	if err != nil {
-		return err
-	}
-
-	url = strs.Format("`/qa/api/%s`", strs.Lowcase(name))
-	net = "qa"
-	_, err = file.MakeFile(path, "qa.yml", modelDeploy, name, url, net)
-	if err != nil {
-		return err
-	}
-
-	url = strs.Format("`/api/%s`", strs.Lowcase(name))
-	net = "prd"
-	_, err = file.MakeFile(path, "prd.yml", modelDeploy, name, url, net)
 	if err != nil {
 		return err
 	}

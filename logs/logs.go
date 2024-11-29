@@ -263,3 +263,13 @@ func Debugf(format string, args ...any) {
 	message := fmt.Sprintf(format, args...)
 	log("Debug", "Cyan", message)
 }
+
+func Rpc(args ...any) error {
+	pc, _, _, _ := runtime.Caller(1)
+	fullFuncName := runtime.FuncForPC(pc).Name()
+	funcName := fullFuncName[strings.LastIndex(fullFuncName, "/")+1:]
+	message := append([]any{funcName, ":"}, args...)
+	log("Rpc", "Blue", message...)
+
+	return nil
+}

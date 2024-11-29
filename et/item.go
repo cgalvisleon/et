@@ -73,6 +73,17 @@ func (s Item) ToString() string {
 }
 
 /**
+* ToJson convert a json to a Json
+* @return Json
+**/
+func (s Item) ToJson() Json {
+	return Json{
+		"Ok":     s.Ok,
+		"Result": s.Result,
+	}
+}
+
+/**
 * ValAny return any value of the key
 * @param _default any
 * @param atribs ...string

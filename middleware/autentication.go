@@ -9,7 +9,7 @@ import (
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/response"
-	tk "github.com/cgalvisleon/et/token"
+	"github.com/cgalvisleon/et/sesion"
 	"github.com/cgalvisleon/et/utility"
 )
 
@@ -70,7 +70,7 @@ func Autentication(next http.Handler) http.Handler {
 			return
 		}
 
-		clm, err := tk.Valid(token)
+		clm, err := sesion.Valid(token)
 		if err != nil {
 			response.Unauthorized(w, r)
 			return
@@ -83,13 +83,13 @@ func Autentication(next http.Handler) http.Handler {
 
 		serviceId := utility.UUID()
 		ctx := r.Context()
-		ctx = context.WithValue(ctx, tk.ServiceIdKey, serviceId)
-		ctx = context.WithValue(ctx, tk.ClientIdKey, clm.ClientId)
-		ctx = context.WithValue(ctx, tk.NameKey, clm.Name)
-		ctx = context.WithValue(ctx, tk.AppKey, clm.App)
-		ctx = context.WithValue(ctx, tk.DeviceKey, clm.Device)
-		ctx = context.WithValue(ctx, tk.DuractionKey, clm.Duration)
-		ctx = context.WithValue(ctx, tk.TokenKey, token)
+		ctx = context.WithValue(ctx, sesion.ServiceIdKey, serviceId)
+		ctx = context.WithValue(ctx, sesion.ClientIdKey, clm.ClientId)
+		ctx = context.WithValue(ctx, sesion.NameKey, clm.Name)
+		ctx = context.WithValue(ctx, sesion.AppKey, clm.App)
+		ctx = context.WithValue(ctx, sesion.DeviceKey, clm.Device)
+		ctx = context.WithValue(ctx, sesion.DuractionKey, clm.Duration)
+		ctx = context.WithValue(ctx, sesion.TokenKey, token)
 
 		now := utility.Now()
 		data := et.Json{

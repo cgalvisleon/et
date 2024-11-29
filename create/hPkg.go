@@ -45,7 +45,8 @@ func MakePkg(name, schema string) error {
 		}
 
 		fileName := strs.Format(`h%s.go`, modelo)
-		_, err = file.MakeFile(path, fileName, modelDbHandler, name, modelo, schemaVar, strs.Uppcase(modelo), strs.Lowcase(modelo))
+		tableName := strs.Uppcase(name)
+		_, err = file.MakeFile(path, fileName, modelDbHandler, name, modelo, tableName, schemaVar)
 		if err != nil {
 			return err
 		}
@@ -63,12 +64,12 @@ func MakePkg(name, schema string) error {
 
 		modelo := strs.Titlecase(name)
 		fileName := strs.Format(`h%s.go`, modelo)
-		_, err = file.MakeFile(path, fileName, modelHandler, name, modelo, strs.Lowcase(modelo))
+		_, err = file.MakeFile(path, fileName, modelHandler, name, modelo)
 		if err != nil {
 			return err
 		}
 
-		_, err = file.MakeFile(path, "router.go", modelRouter, name, strs.Lowcase(name))
+		_, err = file.MakeFile(path, "router.go", modelRouter, name)
 		if err != nil {
 			return err
 		}

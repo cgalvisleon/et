@@ -2,7 +2,7 @@ package create
 
 import "github.com/cgalvisleon/et/file"
 
-func MakeInternal(packageName, name string) error {
+func MakeInternal(packageName, name, schema string) error {
 	_, err := file.MakeFolder("internal", "data")
 	if err != nil {
 		return err
@@ -23,9 +23,16 @@ func MakeInternal(packageName, name string) error {
 		return err
 	}
 
-	_, err = file.MakeFile(path, "api.go", modelApi, packageName, name)
-	if err != nil {
-		return err
+	if len(schema) > 0 {
+		_, err = file.MakeFile(path, "api.go", modelDbApi, packageName, name)
+		if err != nil {
+			return err
+		}
+	} else {
+		_, err = file.MakeFile(path, "api.go", modelApi, packageName, name)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

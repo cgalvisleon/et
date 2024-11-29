@@ -985,7 +985,7 @@ func (rt *Router) Routes() http.Handler {
 	r := chi.NewRouter()
 
 	router.Public(r, router.Get, "/version", rt.version, PackageName, PackagePath, host)
-	router.Protect(r, er.Get, "/routes", rt.routes, PackageName, PackagePath, host)
+	router.Protect(r, router.Get, "/routes", rt.routes, PackageName, PackagePath, host)
 	// $2
 	router.Protect(r, router.Get, "/{id}", rt.get$2ById, PackageName, PackagePath, host)
 	router.Protect(r, router.Post, "/", rt.upSert$2, PackageName, PackagePath, host)
@@ -1066,7 +1066,7 @@ func (rt *Router) Routes() http.Handler {
 	r := chi.NewRouter()
 
 	router.Public(r, router.Get, "/version", rt.version, PackageName, PackagePath, host)
-	router.Protect(r, er.Get, "/routes", rt.routes, PackageName, PackagePath, host)
+	router.Protect(r, router.Get, "/routes", rt.routes, PackageName, PackagePath, host)
 	// $2
 	router.Protect(r, router.Post, "/", rt.get$2, PackageName, PackagePath, host)
 	

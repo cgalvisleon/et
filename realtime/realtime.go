@@ -1,7 +1,6 @@
 package realtime
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/cgalvisleon/et/envar"
@@ -25,17 +24,17 @@ func Load(name string) (*ws.Client, error) {
 
 	url := envar.GetStr("", "RT_URL")
 	if url == "" {
-		return nil, errors.New(MSG_RT_URL_REQUIRED)
+		return nil, logs.Alertm(MSG_RT_URL_REQUIRED)
 	}
 
 	username := envar.GetStr("", "WS_USERNAME")
 	if username == "" {
-		return nil, utility.NewError(ERR_WS_USERNAME_REQUIRED)
+		return nil, logs.Alertm(ERR_WS_USERNAME_REQUIRED)
 	}
 
 	password := envar.GetStr("", "WS_PASSWORD")
 	if password == "" {
-		return nil, utility.NewError(ERR_WS_PASSWORD_REQUIRED)
+		return nil, logs.Alertm(ERR_WS_PASSWORD_REQUIRED)
 	}
 
 	client, err := ws.Login(&ws.ClientConfig{

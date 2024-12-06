@@ -2,10 +2,10 @@ package cache
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/redis/go-redis/v9"
 )
@@ -20,7 +20,7 @@ import (
 **/
 func SetCtx(ctx context.Context, key, val string, second time.Duration) error {
 	if conn == nil {
-		return errors.New(msg.ERR_NOT_CACHE_SERVICE)
+		return mistake.New(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
 	err := conn.Set(ctx, key, val, second).Err()
@@ -40,7 +40,7 @@ func SetCtx(ctx context.Context, key, val string, second time.Duration) error {
 **/
 func GetCtx(ctx context.Context, key, def string) (string, error) {
 	if conn == nil {
-		return def, errors.New(msg.ERR_NOT_CACHE_SERVICE)
+		return def, mistake.New(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
 	result, err := conn.Get(ctx, key).Result()
@@ -82,7 +82,7 @@ func ExistsCtx(ctx context.Context, key string) bool {
 **/
 func DeleteCtx(ctx context.Context, key string) (int64, error) {
 	if conn == nil {
-		return 0, errors.New(msg.ERR_NOT_CACHE_SERVICE)
+		return 0, mistake.New(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
 	intCmd := conn.Del(ctx, key)
@@ -99,7 +99,7 @@ func DeleteCtx(ctx context.Context, key string) (int64, error) {
 **/
 func HSetCtx(ctx context.Context, key string, val map[string]string) error {
 	if conn == nil {
-		return errors.New(msg.ERR_NOT_CACHE_SERVICE)
+		return mistake.New(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
 	err := conn.HSet(ctx, key, val).Err()
@@ -118,7 +118,7 @@ func HSetCtx(ctx context.Context, key string, val map[string]string) error {
 **/
 func HGetCtx(ctx context.Context, key string) (map[string]string, error) {
 	if conn == nil {
-		return map[string]string{}, errors.New(msg.ERR_NOT_CACHE_SERVICE)
+		return map[string]string{}, mistake.New(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
 	result := conn.HGetAll(ctx, key).Val()
@@ -135,7 +135,7 @@ func HGetCtx(ctx context.Context, key string) (map[string]string, error) {
 **/
 func HDeleteCtx(ctx context.Context, key, atr string) error {
 	if conn == nil {
-		return errors.New(msg.ERR_NOT_CACHE_SERVICE)
+		return mistake.New(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
 	err := conn.Do(ctx, "HDEL", key, atr).Err()

@@ -2,10 +2,10 @@ package middleware
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/sesion"
 )
@@ -94,7 +94,7 @@ func Authorization(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		if authorizationFunc == nil {
-			response.InternalServerError(w, r, errors.New("AuthorizationFunc not set"))
+			response.InternalServerError(w, r, mistake.New("AuthorizationFunc not set"))
 			return
 		}
 

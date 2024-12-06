@@ -1,7 +1,6 @@
 package utility
 
 import (
-	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -9,15 +8,6 @@ import (
 	"github.com/cgalvisleon/et/stdrout"
 	"golang.org/x/exp/slices"
 )
-
-func NewError(message string) error {
-	return errors.New(message)
-}
-
-func NewErrorf(format string, args ...any) error {
-	message := fmt.Sprintf(format, args...)
-	return NewError(message)
-}
 
 func PrintFunctionName() string {
 	pc, _, _, _ := runtime.Caller(2)

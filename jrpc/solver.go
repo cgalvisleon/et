@@ -1,13 +1,13 @@
 package jrpc
 
 import (
-	"errors"
 	"net/rpc"
 	"reflect"
 	"slices"
 	"strings"
 
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/strs"
 )
 
@@ -112,20 +112,20 @@ func GetSolver(method string) (*Solver, error) {
 
 	lst := strings.Split(method, ".")
 	if len(lst) != 3 {
-		return nil, logs.NewErrorf(ERR_METHOD_NOT_FOUND, method)
+		return nil, mistake.Newf(ERR_METHOD_NOT_FOUND, method)
 	}
 
 	packageName := lst[0]
 	idx := slices.IndexFunc(routers, func(e *Package) bool { return e.Name == packageName })
 	if idx == -1 {
-		return nil, errors.New(ERR_PACKAGE_NOT_FOUND)
+		return nil, mistake.New(ERR_PACKAGE_NOT_FOUND)
 	}
 
 	router := routers[idx]
 	solver := router.Solvers[method]
 
 	if solver == nil {
-		return nil, logs.NewErrorf(ERR_METHOD_NOT_FOUND, method)
+		return nil, mistake.Newf(ERR_METHOD_NOT_FOUND, method)
 	}
 
 	return solver, nil

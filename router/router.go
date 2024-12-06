@@ -1,7 +1,6 @@
 package router
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/cgalvisleon/et/cache"
@@ -10,6 +9,7 @@ import (
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrpc"
 	"github.com/cgalvisleon/et/middleware"
+	"github.com/cgalvisleon/et/mistake"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -266,7 +266,7 @@ func Authorization(r *chi.Mux, method, path string, h http.HandlerFunc, packageN
 func authorization(profile et.Json) (map[string]bool, error) {
 	method := envar.GetStr("Module.Services.GetPermissions", "AUTHORIZATION_METHOD")
 	if method == "" {
-		return map[string]bool{}, errors.New("Authorization method not found")
+		return map[string]bool{}, mistake.New("Authorization method not found")
 	}
 
 	result, err := jrpc.CallPermitios(method, profile)

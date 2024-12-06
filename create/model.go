@@ -510,7 +510,7 @@ func Define$2(db *jdb.DB) error {
 **/
 func Get$2ById(id string) (et.Item, error) {
 	if !utility.ValidId(id) {
-		return et.Item{}, logs.NewErrorf(msg.MSG_ATRIB_REQUIRED, "_id")
+		return et.Item{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "_id")
 	}
 
 	item, err := jdb.From($2).
@@ -535,11 +535,11 @@ func Get$2ById(id string) (et.Item, error) {
 **/
 func Insert$2(project_id, state, id string, data et.Json, user_full_name string) (et.Item, error) {
 	if !utility.ValidId(project_id) {
-		return et.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "project_id")
+		return et.Item{}, mistake.Newf(MSG_ATRIB_REQUIRED, "project_id")
 	}
 
 	if !utility.ValidId(id) {
-		return et.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "_id")
+		return et.Item{}, mistake.Newf(MSG_ATRIB_REQUIRED, "_id")
 	}
 
 	id = utility.GenKey(id)
@@ -612,7 +612,7 @@ func UpSert$2(project_id, id string, data et.Json, user_full_name string) (et.It
 **/
 func State$2(id, state, user_full_name string) (et.Item, error) {
 	if !utility.ValidId(state) {
-		return et.Item{}, logs.Alertf(MSG_ATRIB_REQUIRED, "state")
+		return et.Item{}, mistake.Newf(MSG_ATRIB_REQUIRED, "state")
 	}
 
 	current, err := jdb.From($2).

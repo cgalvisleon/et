@@ -1,12 +1,12 @@
 package ws
 
 import (
-	"errors"
 	"net/http"
 	"sync"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/gorilla/websocket"
 	"golang.org/x/exp/slices"
@@ -246,7 +246,7 @@ func (h *Hub) publish(channel, queue string, msg Message, ignored []string, from
 func (h *Hub) send(clientId string, msg Message) error {
 	client := h.getClient(clientId)
 	if client == nil {
-		return utility.NewError(ERR_CLIENT_NOT_FOUND)
+		return mistake.New(ERR_CLIENT_NOT_FOUND)
 	}
 
 	return client.send(msg)
@@ -263,7 +263,7 @@ func (h *Hub) JoinTo(master et.Json) error {
 
 	name := master.Str("adapter")
 	if _, ok := adapters[name]; !ok {
-		return errors.New(ERR_ADAPTER_NOT_FOUND)
+		return mistake.New(ERR_ADAPTER_NOT_FOUND)
 	}
 
 	adapter := adapters[name]()

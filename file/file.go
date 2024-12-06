@@ -1,10 +1,10 @@
 package file
 
 import (
-	"errors"
 	"os"
 	"strings"
 
+	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/strs"
 )
 
@@ -45,7 +45,7 @@ func MakeFile(folder, name, model string, args ...any) (string, error) {
 	path := strs.Format(`%s/%s`, folder, name)
 
 	if ExistPath(path) {
-		return "", errors.New("file found")
+		return "", mistake.New("file found")
 	}
 
 	_content := params(model, args...)

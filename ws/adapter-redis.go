@@ -3,7 +3,7 @@ package ws
 import (
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/utility"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -28,7 +28,7 @@ func (s *AdapterRedis) ConnectTo(hub *Hub, params et.Json) error {
 
 	host := params.Str("host")
 	if host == "" {
-		return utility.NewError("WS Adapter, Redis host is required")
+		return logs.Alertm("WS Adapter, Redis host is required")
 	}
 
 	password := params.Str("password")

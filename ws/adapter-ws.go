@@ -5,6 +5,7 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/utility"
 )
 
@@ -29,17 +30,17 @@ func (s *AdapterWS) ConnectTo(hub *Hub, params et.Json) error {
 
 	url := params.Str("url")
 	if url == "" {
-		return utility.NewError("WS Adapter, url is required")
+		return logs.Alertm("WS Adapter, url is required")
 	}
 
 	username := params.Str("username")
 	if username == "" {
-		return utility.NewError("WS Adapter, username is required")
+		return logs.Alertm("WS Adapter, username is required")
 	}
 
 	password := envar.GetStr("", "WS_PASSWORD")
 	if password == "" {
-		return utility.NewError("WS Adapter, password is required")
+		return logs.Alertm("WS Adapter, password is required")
 	}
 
 	name := params.ValStr("Anonime", "name")

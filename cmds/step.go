@@ -1,12 +1,12 @@
 package cmds
 
 import (
-	"errors"
 	"os/exec"
 	"slices"
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/utility"
 )
 
@@ -68,7 +68,7 @@ func (s *Step) AppendCmd(args string) *Step {
 **/
 func (s *Step) RunOS(idx int, args et.Json) ([]byte, error) {
 	if idx < 0 || idx >= len(s.Commands) {
-		return nil, errors.New(MSG_INDEX_NOT_FOUND)
+		return nil, mistake.New(MSG_INDEX_NOT_FOUND)
 	}
 
 	cmd := s.Commands[idx]
@@ -77,7 +77,7 @@ func (s *Step) RunOS(idx int, args et.Json) ([]byte, error) {
 		if idx != -1 {
 			s, ok := v.(string)
 			if !ok {
-				return nil, errors.New(MSG_INVALID_TYPE)
+				return nil, mistake.New(MSG_INVALID_TYPE)
 			}
 			cmd.Args[idx] = s
 		}
@@ -102,7 +102,7 @@ func (s *Step) RunOS(idx int, args et.Json) ([]byte, error) {
 **/
 func (s *Step) RunSSH(idx int, args et.Json) ([]byte, error) {
 	if idx < 0 || idx >= len(s.Commands) {
-		return nil, errors.New(MSG_INDEX_NOT_FOUND)
+		return nil, mistake.New(MSG_INDEX_NOT_FOUND)
 	}
 
 	cmd := s.Commands[idx]
@@ -111,7 +111,7 @@ func (s *Step) RunSSH(idx int, args et.Json) ([]byte, error) {
 		if idx != -1 {
 			s, ok := v.(string)
 			if !ok {
-				return nil, errors.New(MSG_INVALID_TYPE)
+				return nil, mistake.New(MSG_INVALID_TYPE)
 			}
 			cmd.Args[idx] = s
 		}

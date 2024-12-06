@@ -1,12 +1,13 @@
 package mem
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/cgalvisleon/et/mistake"
 )
 
 /**
@@ -78,7 +79,7 @@ func (c *Mem) Get(key string, def string) (string, error) {
 		return item.Str(), nil
 	}
 
-	return def, errors.New("IsNil")
+	return def, mistake.New("IsNil")
 }
 
 /**

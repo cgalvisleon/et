@@ -1,10 +1,10 @@
 package event
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
@@ -83,7 +83,7 @@ func Subscribe(channel string, f func(EvenMessage)) (err error) {
 **/
 func Queue(channel, queue string, f func(EvenMessage)) (err error) {
 	if conn == nil {
-		return errors.New(ERR_NOT_CONNECT)
+		return mistake.New(ERR_NOT_CONNECT)
 	}
 
 	if len(channel) == 0 {

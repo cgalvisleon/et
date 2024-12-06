@@ -5,7 +5,6 @@ package middleware
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -13,6 +12,7 @@ import (
 	"strings"
 
 	lg "github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/mistake"
 )
 
 // Recoverer is a middleware that recovers from panics, logs the panic (and a
@@ -116,7 +116,7 @@ func (s prettyStack) decorateLine(line string, num int) (string, error) {
 func (s prettyStack) decorateFuncCallLine(line string, num int) (string, error) {
 	idx := strings.LastIndex(line, "(")
 	if idx < 0 {
-		return "", errors.New("not a func call line")
+		return "", mistake.New("not a func call line")
 	}
 
 	buf := &bytes.Buffer{}
@@ -156,7 +156,7 @@ func (s prettyStack) decorateFuncCallLine(line string, num int) (string, error) 
 func (s prettyStack) decorateSourceLine(line string, num int) (string, error) {
 	idx := strings.LastIndex(line, ".go:")
 	if idx < 0 {
-		return "", errors.New("not a source line")
+		return "", mistake.New("not a source line")
 	}
 
 	buf := &bytes.Buffer{}

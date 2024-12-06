@@ -12,7 +12,7 @@ import (
 
 func ConnectTo(host, user, password string) (*Conn, error) {
 	if !utility.ValidStr(host, 0, []string{}) {
-		return nil, utility.NewErrorf(msg.MSG_ATRIB_REQUIRED, "nats_host")
+		return nil, logs.Alertf(msg.MSG_ATRIB_REQUIRED, "nats_host")
 	}
 
 	client, err := nats.Connect(host, nats.UserInfo(user, password))

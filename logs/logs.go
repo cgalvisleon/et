@@ -1,13 +1,13 @@
 package logs
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"runtime"
 	"slices"
 	"strings"
 
+	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -35,15 +35,6 @@ func init() {
 		White = ""
 		useColor = false
 	}
-}
-
-func NewError(message string) error {
-	return errors.New(message)
-}
-
-func NewErrorf(format string, args ...any) error {
-	message := fmt.Sprintf(format, args...)
-	return NewError(message)
 }
 
 func log(kind string, color string, args ...any) string {
@@ -120,8 +111,8 @@ func Traces(kind, color string, err error) error {
 }
 
 func errorTraces(err error) []string {
-	var n int = 1
-	var traces []string = []string{err.Error()}
+	var n = 1
+	var traces = []string{err.Error()}
 	for {
 		pc, file, line, more := runtime.Caller(n)
 		if !more {
@@ -165,26 +156,28 @@ func PrintFunctionName() string {
 }
 
 func Alert(err error) error {
-	functionName := PrintFunctionName()
 	if err != nil {
-		log("Alert", "Yellow", err.Error(), " - ", functionName)
+		log("Alert", "Yellow", err.Error())
 	}
 
 	return err
 }
 
 func Alertm(message string) error {
-	err := NewError(message)
-	functionName := PrintFunctionName()
+	err := mistake.New(message)
 	if err != nil {
-		log("Alert", "Yellow", err.Error(), " - ", functionName)
+		log("Alert", "Yellow", err.Error())
 	}
 
 	return err
 }
 
 func Alertf(format string, args ...any) error {
-	err := NewError(fmt.Sprintf(format, args...))
+	err := mistake.Newf(format, args...)
+	return Alert(err)
+}
+
+func AlertT(err error) error {
 	functionName := PrintFunctionName()
 	if err != nil {
 		log("Alert", "Yellow", err.Error(), " - ", functionName)
@@ -206,13 +199,13 @@ func Error(err error) error {
 }
 
 func Errorm(message string) error {
-	err := NewError(message)
+	err := mistake.New(message)
 	return Error(err)
 }
 
 func Errorf(format string, args ...any) error {
 	message := fmt.Sprintf(format, args...)
-	err := NewError(message)
+	err := mistake.New(message)
 	return Error(err)
 }
 
@@ -233,7 +226,7 @@ func Fatal(err error) error {
 }
 
 func Fatalm(message string) error {
-	err := NewError(message)
+	err := mistake.New(message)
 	return Fatal(err)
 }
 
@@ -246,7 +239,7 @@ func Panic(err error) error {
 
 func Panicf(format string, args ...any) error {
 	message := fmt.Sprintf(format, args...)
-	err := NewError(message)
+	err := mistake.New(message)
 	return Panic(err)
 }
 

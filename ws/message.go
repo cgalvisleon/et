@@ -58,6 +58,25 @@ func (s TpMessage) ToJson() et.Json {
 	}
 }
 
+func (s TpMessage) Int() int {
+	return int(s)
+}
+
+func TypeMessages() et.Json {
+	return et.Json{
+		"ping":        TpPing.Int(),
+		"set_from":    TpSetFrom.Int(),
+		"subscribe":   TpSubscribe.Int(),
+		"queue":       TpQueueSubscribe.Int(),
+		"stack":       TpStack.Int(),
+		"unsubscribe": TpUnsubscribe.Int(),
+		"publish":     TpPublish.Int(),
+		"direct":      TpDirect.Int(),
+		"connect":     TpConnect.Int(),
+		"disconnect":  TpDisconnect.Int(),
+	}
+}
+
 func ToTpMessage(s string) TpMessage {
 	switch s {
 	case "Ping":
@@ -86,12 +105,12 @@ type Message struct {
 	Id         string      `json:"id"`
 	From       et.Json     `json:"from"`
 	To         string      `json:"to"`
-	Ignored    []string    `json:"ignored"`
+	Ignored    []string    `json:"-"`
 	Data       interface{} `json:"data"`
 	Channel    string      `json:"channel"`
 	Queue      string      `json:"queue"`
-	Tp         et.Json     `json:"tp"`
-	tp         TpMessage
+	Type       et.Json     `json:"type"`
+	Tp         TpMessage   `json:"tp"`
 }
 
 /**
@@ -108,8 +127,8 @@ func NewMessage(from et.Json, message interface{}, tp TpMessage) Message {
 		From:       from,
 		Ignored:    []string{},
 		Data:       message,
-		Tp:         tp.ToJson(),
-		tp:         tp,
+		Type:       tp.ToJson(),
+		Tp:         tp,
 	}
 }
 
@@ -160,6 +179,7 @@ func DecodeMessage(data []byte) (Message, error) {
 	if err != nil {
 		return Message{}, err
 	}
+	m.Type = m.Tp.ToJson()
 
 	return m, nil
 }

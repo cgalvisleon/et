@@ -13,8 +13,17 @@ var conn *Conn
 
 type Conn struct {
 	*nats.Conn
+	_id             string
 	eventCreatedSub map[string]*nats.Subscription
 	mutex           *sync.RWMutex
+}
+
+/**
+* FromId return the id of the connection
+* @return string
+**/
+func FromId() string {
+	return conn._id
 }
 
 /**

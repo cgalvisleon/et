@@ -1,26 +1,32 @@
 package cache
 
 import (
-	"context"
-	"fmt"
-
-	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/et"
+	"github.com/redis/go-redis/v9"
 )
 
-/**
-* pubCtx
-* @params ctx context.Context
-* @params channel string
-* @params message interface{}
-* @return error
-**/
-func pubCtx(ctx context.Context, channel string, message interface{}) error {
-	if conn == nil {
-		return logs.Errorm(msg.ERR_NOT_CACHE_SERVICE)
+type Message struct {
+	ID      string `json:"id"`
+	Content string `json:"content"`
+}
+
+func (s Message) ToJson() (et.Json, error) {
+	result, err := et.Object(s)
+	if err != nil {
+		return et.Json{}, err
 	}
 
-	err := conn.Publish(ctx, channel, message).Err()
+	return result, nil
+}
+
+/**
+* Pub
+* @param channel string
+* @param message interface{}
+* @return error
+**/
+func (s *Conn) Pub(channel string, message []byte) error {
+	err := s.Publish(s.ctx, channel, message).Err()
 	if err != nil {
 		return err
 	}
@@ -29,44 +35,49 @@ func pubCtx(ctx context.Context, channel string, message interface{}) error {
 }
 
 /**
-* subCtx
-* @params ctx context.Context
-* @params channel string
-* @params f func(interface{})
+* Sub
+* @param channel string
+* @param f func(interface{})
 **/
-func subCtx(ctx context.Context, channel string, f func(interface{})) {
-	if conn == nil {
+func (s *Conn) Sub(channel string, f func(*redis.Message)) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	if s.channels[channel] {
 		return
 	}
 
-	pubsub := conn.Subscribe(ctx, channel)
-	defer pubsub.Close()
+	s.channels[channel] = true
 
-	ch := pubsub.Channel()
+	go func() {
+		sub := s.Subscribe(s.ctx, channel)
+		defer sub.Close()
 
-	for msg := range ch {
-		fmt.Println(msg.Channel, msg.Payload)
-		f(msg.Payload)
-	}
+		ch := sub.Channel()
+
+		for msg := range ch {
+			f(msg)
+		}
+
+		s.mutex.Lock()
+		delete(s.channels, channel)
+		s.mutex.Unlock()
+	}()
 }
 
 /**
-* Pub
-* @params channel string
-* @params message interface{}
+* Unsub
+* @param channel string
 * @return error
 **/
-func Pub(channel string, message interface{}) error {
-	ctx := context.Background()
-	return pubCtx(ctx, channel, message)
-}
+func (s *Conn) Unsub(channel string) error {
+	sub := s.Subscribe(s.ctx, channel)
+	defer sub.Close()
 
-/**
-* Sub
-* @params channel string
-* @params f func(interface{})
-**/
-func Sub(channel string, f func(interface{})) {
-	ctx := context.Background()
-	subCtx(ctx, channel, f)
+	err := sub.Unsubscribe(s.ctx, channel)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

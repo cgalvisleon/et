@@ -167,12 +167,16 @@ func (c *Queue) broadcast(msg Message, ignored []string) int {
 	msg.Channel = c.Name
 	client := c.nextTurn()
 	if client != nil && !slices.Contains(ignored, client.Id) {
-		err := client.sendMessage(msg)
+		err := client.send(msg)
 		if err != nil {
 			logs.Alert(err)
 		} else {
 			result++
 		}
+	}
+
+	if result != 0 {
+		logs.Logf(ServiceName, "Broadcast queue:%s sent to:%d", c.Name, result)
 	}
 
 	return result

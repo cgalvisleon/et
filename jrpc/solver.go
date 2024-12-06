@@ -1,6 +1,7 @@
 package jrpc
 
 import (
+	"errors"
 	"net/rpc"
 	"reflect"
 	"slices"
@@ -117,7 +118,7 @@ func GetSolver(method string) (*Solver, error) {
 	packageName := lst[0]
 	idx := slices.IndexFunc(routers, func(e *Package) bool { return e.Name == packageName })
 	if idx == -1 {
-		return nil, logs.NewError(ERR_PACKAGE_NOT_FOUND)
+		return nil, errors.New(ERR_PACKAGE_NOT_FOUND)
 	}
 
 	router := routers[idx]

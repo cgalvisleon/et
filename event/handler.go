@@ -1,10 +1,10 @@
 package event
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
@@ -83,7 +83,7 @@ func Subscribe(channel string, f func(EvenMessage)) (err error) {
 **/
 func Queue(channel, queue string, f func(EvenMessage)) (err error) {
 	if conn == nil {
-		return logs.NewError(ERR_NOT_CONNECT)
+		return errors.New(ERR_NOT_CONNECT)
 	}
 
 	if len(channel) == 0 {
@@ -132,6 +132,7 @@ func Work(event string, data et.Json) et.Json {
 	work := et.Json{
 		"created_at": timezone.Now(),
 		"_id":        utility.UUID(),
+		"from_id":    conn._id,
 		"event":      event,
 		"data":       data,
 	}
@@ -152,6 +153,7 @@ func WorkState(work_id string, status WorkStatus, data et.Json) {
 	work := et.Json{
 		"update_at": timezone.Now(),
 		"_id":       work_id,
+		"from_id":   conn._id,
 		"status":    status.String(),
 		"data":      data,
 	}
@@ -225,15 +227,14 @@ func TokenLastUse(data et.Json) {
 }
 
 /**
-* Test event, testing message broker
+* HttpEventWork
 * @param w http.ResponseWriter
 * @param r *http.Request
 **/
-func Test(w http.ResponseWriter, r *http.Request) {
+func HttpEventWork(w http.ResponseWriter, r *http.Request) {
 	body, _ := response.GetBody(r)
 	event := body.Str("event")
 	data := body.Json("data")
-
 	work := Work(event, data)
 
 	response.JSON(w, r, http.StatusOK, work)

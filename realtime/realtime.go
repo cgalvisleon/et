@@ -1,6 +1,7 @@
 package realtime
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/cgalvisleon/et/envar"
@@ -17,35 +18,43 @@ var conn *ws.Client
 * Load
 * @return erro
 **/
-func Load() (*ws.Client, error) {
+func Load(name string) (*ws.Client, error) {
 	if conn != nil {
 		return conn, nil
 	}
 
-	url := envar.GetStr("", "RT_HOST")
+	url := envar.GetStr("", "RT_URL")
 	if url == "" {
-		return nil, logs.NewError(MSG_RT_HOST_REQUIRED)
+		return nil, errors.New(MSG_RT_URL_REQUIRED)
 	}
 
-	token := envar.GetStr("", "RT_AUTH")
-	if token == "" {
-		return nil, logs.NewError(MSG_RT_AUTH_REQUIRED)
+	username := envar.GetStr("", "WS_USERNAME")
+	if username == "" {
+		return nil, utility.NewError(ERR_WS_USERNAME_REQUIRED)
 	}
 
-	client, err := ws.NewClient(&ws.ClientConfig{
-		ClientId: utility.UUID(),
-		Name:     envar.GetStr("RealTime", "RT_NAME"),
-		Url:      url,
-		Header: http.Header{
-			"Authorization": []string{"Bearer " + token},
-		},
+	password := envar.GetStr("", "WS_PASSWORD")
+	if password == "" {
+		return nil, utility.NewError(ERR_WS_PASSWORD_REQUIRED)
+	}
+
+	client, err := ws.Login(&ws.ClientConfig{
+		ClientId:  utility.PrefixId("RealTime"),
+		Name:      name,
+		Url:       url,
 		Reconnect: envar.GetInt(3, "RT_RECONCECT"),
+		Header: http.Header{
+			"username": []string{username},
+			"password": []string{password},
+		},
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	conn = client
+
+	logs.Logf(ServiceName, `Connected host:%s`, url)
 
 	return conn, nil
 }

@@ -43,9 +43,5 @@ func Load(name string) (*Package, error) {
 * Close
 **/
 func Close() {
-	if pkg != nil {
-		UnMount()
-	}
-
 	logs.Log("Rpc", `Shutting down server...`)
 }

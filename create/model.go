@@ -454,21 +454,25 @@ func Define$2(db *jdb.DB) error {
 	}
 
 	$2 = jdb.NewModel($4, "$3")
-	$2.DefineColumn(jdb.CreatedAtField, jdb.TypeDataTime)
-	$2.DefineColumn(jdb.UpdatedAtField, jdb.TypeDataTime)
-	$2.DefineColumn(jdb.ProjectField, jdb.TypeDataKey)
-	$2.DefineColumn(jdb.StateField, jdb.TypeDataKey)
-	$2.DefineColumn(jdb.DataField, jdb.TypeDataObject)
-	$2.DefineColumn(jdb.SystemKeyField, jdb.TypeDataKey)
-	$2.DefineColumn(jdb.IndexField, jdb.TypeDataInt)
-	$2.DefineKey("_id")
+	$2.DefineColumn(jdb.CreatedAtField.Str(), jdb.CreatedAtField.TypeData())
+	$2.DefineColumn(jdb.UpdatedAtField.Str(), jdb.CreatedAtField.TypeData())
+	$2.DefineColumn(jdb.ProjectField.Str(), jdb.CreatedAtField.TypeData())
+	$2.DefineColumn(jdb.StateField.Str(), jdb.CreatedAtField.TypeData())
+	$2.DefineColumn(jdb.KeyField.Str(), jdb.CreatedAtField.TypeData())
+	$2.DefineColumn("name", jdb.TypeDataText)
+	$2.DefineColumn(jdb.DataField.Str(), jdb.CreatedAtField.TypeData())
+	$2.DefineColumn(jdb.SystemKeyField.Str(), jdb.CreatedAtField.TypeData())
+	$2.DefineColumn(jdb.IndexField.Str(), jdb.CreatedAtField.TypeData())
+	$2.DefineKey(jdb.KeyField.Str())
 	$2.DefineIndex(true,
-		"date_make",
-		"date_update",
-		"_state",
-		"project_id",
-		"name",
-		"index",
+		jdb.CreatedAtField.Str(),
+		jdb.UpdatedAtField.Str(),
+		jdb.ProjectField.Str(),
+		jdb.StateField.Str(),
+		jdb.KeyField.Str(),
+		jdb.DataField.Str(),
+		jdb.SystemKeyField.Str(),
+		jdb.IndexField.Str(),
 	)
 	$2.DefineRequired("name")
 	$2.Integrity = true
@@ -1180,24 +1184,29 @@ const modelReadme = `
 
 ## Create project
 
-go mod init github.com/$1/api
+$2
+go mod init github.com/redist/$1
+$2
 
-### Dependencias
+## Dependencias
 
-go get -u github.com/joho/godotenv/autoload &&
-go get -u github.com/redis/go-redis/v9 &&
-go get -u github.com/google/uuid &&
-go get -u github.com/nats-io/nats.go &&
-go get -u golang.org/x/crypto/bcrypt &&
-go get -u golang.org/x/exp/slices &&
-go get -u github.com/manifoldco/promptui &&
-go get -u github.com/schollz/progressbar/v3 &&
-go get -u github.com/spf13/cobra &&
-go get -u github.com/cgalvisleon/et
+$2
+go get github.com/cgalvisleon/et@v0.0.8
+go get github.com/cgalvisleon/jdb@v1.0.3
+$2
 
-### Crear projecto, microservicios, modelos
+## Create
 
-go run github.com/cgalvisleon/et/cmd/create-go create
+$2
+go run github.com/cgalvisleon/et/cmd/create go
+$2
+
+## Run
+
+$2
+gofmt -w . && go run ./cmd/$1 -port 3600 -rpc 4600
+$2
+
 `
 
 const modelEnvar = `APP=

@@ -15,7 +15,6 @@ import (
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
-	"github.com/google/uuid"
 	"golang.org/x/exp/slices"
 )
 
@@ -66,65 +65,6 @@ func NowTime() time.Time {
 **/
 func Now() string {
 	return timezone.Now()
-}
-
-/**
-* GetOTP return a code verify
-* @param length int
-* @return string
-**/
-func GetOTP(length int) string {
-	const charset = "0123456789"
-	var seededRand *rand.Rand = rand.New(rand.NewSource(timezone.NowTime().UnixNano()))
-
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[seededRand.Intn(len(charset))]
-	}
-
-	return string(b)
-}
-
-/**
-* UUID return a new UUID
-* @return string
-**/
-func UUID() string {
-	return uuid.NewString()
-}
-
-/**
-* NewId return a new UUID
-* @return string
-**/
-func NewId() string {
-	return UUID()
-}
-
-/**
-* GenId return a new UUID
-* @param id string
-* @return string
-**/
-func GenId(id string) string {
-	if map[string]bool{"": true, "*": true, "new": true}[id] {
-		return NewId()
-	}
-
-	return id
-}
-
-/**
-* GenKey return a new UUID
-* @param id string
-* @return string
-**/
-func GenKey(id string) string {
-	if map[string]bool{"": true, "-1": true, "*": true, "new": true}[id] {
-		return UUID()
-	}
-
-	return id
 }
 
 /**

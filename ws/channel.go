@@ -141,13 +141,17 @@ func (c *Channel) broadcast(msg Message, ignored []string) int {
 	msg.Channel = c.Name
 	for _, client := range c.Subscribers {
 		if !slices.Contains(ignored, client.Id) {
-			err := client.sendMessage(msg)
+			err := client.send(msg)
 			if err != nil {
 				logs.Alert(err)
 			} else {
 				result++
 			}
 		}
+	}
+
+	if result != 0 {
+		logs.Logf(ServiceName, "Broadcast channel:%s sent to:%d", c.Name, result)
 	}
 
 	return result

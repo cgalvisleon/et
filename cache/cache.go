@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"sync"
 
 	"github.com/cgalvisleon/et/logs"
 	"github.com/redis/go-redis/v9"
@@ -9,13 +10,26 @@ import (
 
 const PackageName = "cache"
 
-var conn *Conn
+var (
+	conn *Conn
+)
 
 type Conn struct {
 	*redis.Client
-	ctx    context.Context
-	host   string
-	dbname int
+	_id      string
+	ctx      context.Context
+	host     string
+	dbname   int
+	channels map[string]bool
+	mutex    *sync.RWMutex
+}
+
+/**
+* FromId return the id of the connection
+* @return string
+**/
+func FromId() string {
+	return conn._id
 }
 
 func Load() (*Conn, error) {

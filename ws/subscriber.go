@@ -130,27 +130,6 @@ func (c *Subscriber) read() {
 }
 
 /**
-* stream
-**/
-func (c *Subscriber) stream() {
-	defer func() {
-		if c.hub != nil {
-			c.hub.unregister <- c
-			c.socket.Close()
-		}
-	}()
-
-	for {
-		_, message, err := c.socket.ReadMessage()
-		if err != nil {
-			break
-		}
-
-		c.streaming(message)
-	}
-}
-
-/**
 * write
 **/
 func (c *Subscriber) write() {
@@ -162,11 +141,11 @@ func (c *Subscriber) write() {
 }
 
 /**
-* sendMessage
+* send
 * @param message Message
 * @return error
 **/
-func (c *Subscriber) sendMessage(message Message) error {
+func (c *Subscriber) send(message Message) error {
 	message.To = c.Id
 	msg, err := message.Encode()
 	if err != nil {
@@ -197,7 +176,7 @@ func (c *Subscriber) listener(message []byte) {
 			"message": message,
 		}, TpDirect)
 
-		c.sendMessage(msg)
+		c.send(msg)
 	}
 
 	msg, err := DecodeMessage(message)
@@ -207,7 +186,7 @@ func (c *Subscriber) listener(message []byte) {
 	}
 
 	msg.From = c.From()
-	switch msg.tp {
+	switch msg.Tp {
 	case TpPing:
 		response(true, "pong")
 	case TpSetFrom:
@@ -292,9 +271,11 @@ func (c *Subscriber) listener(message []byte) {
 			msg.Queue = utility.QUEUE_STACK
 		}
 
-		go c.hub.Publish(msg.Channel, msg.Queue, msg, []string{c.Id}, c.From())
+		msg.Ignored = []string{c.Id}
+		go c.hub.Publish(msg.Channel, msg.Queue, msg, msg.Ignored, c.From())
 	case TpDirect:
 		msg.From = c.From()
+		msg.Ignored = []string{c.Id}
 		err := c.hub.SendMessage(msg.To, msg)
 		if err != nil {
 			response(false, err.Error())
@@ -304,9 +285,5 @@ func (c *Subscriber) listener(message []byte) {
 		response(false, ERR_MESSAGE_UNFORMATTED)
 	}
 
-	logs.Logf(ServiceName, "listener subscriber:%s message: %s", c.Id, msg.ToString())
-}
-
-func (c *Subscriber) streaming(message []byte) {
-	logs.Debug("streaming:", string(message))
+	logs.Logf(ServiceName, "Sender subscriber:%s message: %s", c.Id, msg.ToString())
 }

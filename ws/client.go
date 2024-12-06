@@ -37,7 +37,7 @@ type Client struct {
 	Channels          map[string]func(Message)
 	Attempts          *race.Value
 	Connected         *race.Value
-	clientId          string
+	ClientId          string
 	name              string
 	url               string
 	header            http.Header
@@ -59,7 +59,7 @@ func NewClient(config *ClientConfig) (*Client, error) {
 		Attempts:  race.NewValue(0),
 		Connected: race.NewValue(false),
 		mutex:     &sync.Mutex{},
-		clientId:  config.ClientId,
+		ClientId:  config.ClientId,
 		name:      config.Name,
 		url:       config.Url,
 		header:    config.Header,
@@ -67,6 +67,33 @@ func NewClient(config *ClientConfig) (*Client, error) {
 	}
 
 	err := result.Connect()
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+/**
+* NewNode
+* @config config ConectPatams
+* @return erro
+**/
+func Login(config *ClientConfig) (*Client, error) {
+	result := &Client{
+		Channels:  make(map[string]func(Message)),
+		Attempts:  race.NewValue(0),
+		Connected: race.NewValue(false),
+		mutex:     &sync.Mutex{},
+		ClientId:  config.ClientId,
+		name:      config.Name,
+		url:       config.Url,
+		header:    config.Header,
+		reconnect: config.Reconnect,
+	}
+
+	path := strs.Format(`%s`, result.url)
+	err := result.ConnectTo(path)
 	if err != nil {
 		return nil, err
 	}
@@ -100,13 +127,11 @@ func (c *Client) deleteChannel(channel string) {
 * Connect
 * @return error
 **/
-func (c *Client) Connect() error {
+func (c *Client) ConnectTo(path string) error {
 	if c.Connected.Bool() {
 		return nil
 	}
 
-	name := strings.ReplaceAll(c.name, " ", "_")
-	path := strs.Format(`%s?clientId=%s&name=%s`, c.url, c.clientId, name)
 	socket, _, err := websocket.DefaultDialer.Dial(path, c.header)
 	if err != nil {
 		return err
@@ -117,6 +142,21 @@ func (c *Client) Connect() error {
 	c.Attempts.Set(0)
 
 	go c.Listener()
+
+	return nil
+}
+
+/**
+* Connect
+* @return error
+**/
+func (c *Client) Connect() error {
+	name := strings.ReplaceAll(c.name, " ", "_")
+	path := strs.Format(`%s?clientId=%s&name=%s`, c.url, c.ClientId, name)
+	err := c.ConnectTo(path)
+	if err != nil {
+		return err
+	}
 
 	logs.Logf(ServiceName, `Connected host:%s`, c.url)
 
@@ -265,7 +305,7 @@ func (c *Client) send(message Message) error {
 **/
 func (c *Client) From() et.Json {
 	return et.Json{
-		"id":   c.clientId,
+		"id":   c.ClientId,
 		"name": c.name,
 	}
 }
@@ -350,12 +390,12 @@ func (c *Client) Unsubscribe(channel string) {
 * @param channel string
 * @param message interface{}
 **/
-func (c *Client) Publish(channel string, message interface{}) {
+func (c *Client) Publish(channel string, message interface{}) error {
 	msg := NewMessage(c.From(), message, TpPublish)
-	msg.Ignored = []string{c.clientId}
+	msg.Ignored = []string{c.ClientId}
 	msg.Channel = channel
 
-	c.send(msg)
+	return c.send(msg)
 }
 
 /**
@@ -366,7 +406,7 @@ func (c *Client) Publish(channel string, message interface{}) {
 **/
 func (c *Client) SendMessage(clientId string, message interface{}) error {
 	msg := NewMessage(c.From(), message, TpDirect)
-	msg.Ignored = []string{c.clientId}
+	msg.Ignored = []string{c.ClientId}
 	msg.To = clientId
 
 	return c.send(msg)

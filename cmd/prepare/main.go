@@ -1,8 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"os/exec"
+
+	"github.com/cgalvisleon/et/console"
 )
 
 func main() {
@@ -17,11 +18,8 @@ func main() {
 	installLibrary("github.com/manifoldco/promptui")
 	installLibrary("github.com/schollz/progressbar/v3")
 	installLibrary("github.com/spf13/cobra")
-	// installLibrary("")
-	// installLibrary("")
-	// installLibrary("")
-	// installLibrary("")
-	installLibrary("")
+
+	console.Log("Et", "All is ok.")
 }
 
 func installLibrary(library string) error {
@@ -31,6 +29,5 @@ func installLibrary(library string) error {
 		return err
 	}
 
-	println(fmt.Sprintf("Library %s installed successfully.\n", library))
 	return nil
 }

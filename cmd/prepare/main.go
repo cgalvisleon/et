@@ -2,8 +2,6 @@ package main
 
 import (
 	"os/exec"
-
-	"github.com/cgalvisleon/et/console"
 )
 
 func main() {
@@ -19,7 +17,7 @@ func main() {
 	installLibrary("github.com/schollz/progressbar/v3")
 	installLibrary("github.com/spf13/cobra")
 
-	console.Log("Et", "All is ok.")
+	println("All is ok.")
 }
 
 func installLibrary(library string) error {

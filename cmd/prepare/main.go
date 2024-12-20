@@ -22,10 +22,9 @@ var dependencies = []string{
 func main() {
 	total := len(dependencies)
 	for i, dep := range dependencies {
-		fmt.Printf("Installing %s... %s\r", dep, progressBar(i, total, 20))
+		fmt.Printf("Installing %s... \r[%-50s] %d%%", dep, progressBar(i, total, 20), i)
 		err := installLibrary(dep)
 		if err != nil {
-			fmt.Printf("Error installing %s: %s\n", dep, err)
 			return
 		}
 	}

@@ -11,10 +11,11 @@ func main() {
 	var rootCmd = &cobra.Command{Use: "go"}
 	rootCmd.AddCommand(create.Create)
 	rootCmd.Execute()
+	modTidy()
 }
 
-func installLibrary(library string) error {
-	cmd := exec.Command("go", "get", library)
+func modTidy() error {
+	cmd := exec.Command("go", "mod", "tidy")
 	_, err := cmd.CombinedOutput()
 	if err != nil {
 		return err

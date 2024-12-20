@@ -158,7 +158,6 @@ import (
 	"github.com/cgalvisleon/et/jrpc"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/utility"
-	"github.com/cgalvisleon/jdb/jdb"
 	"github.com/dimiro1/banner"
 	"github.com/go-chi/chi/v5"
 	"github.com/mattn/go-colorable"
@@ -183,14 +182,14 @@ func New() http.Handler {
 		logs.Panic(err)
 	}
 
-	db, err := jdb.Load()
-	if err != nil {
-		logs.Panic(err)
-	}
+	// db, err := jdb.Load()
+	// if err != nil {
+		// logs.Panic(err)
+	// }
 
 	_pkg := &pkg.Router{
 		Repository: &pkg.Controller{
-			Db: db,
+			// Db: db,
 		},
 	}
 
@@ -293,7 +292,7 @@ const modelConfig = `package $1
 
 import (
 	"github.com/cgalvisleon/et/config"
-	"github.com/cgalvisleon/et/envar"
+	// "github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jrpc"
 	"github.com/cgalvisleon/et/mistake"
@@ -302,8 +301,9 @@ import (
 func LoadConfig() error {
 	StartRpcServer()
 
-	stage := envar.GetStr("local", "STAGE")
-	return defaultConfig(stage)
+	// stage := envar.GetStr("local", "STAGE")
+	// return defaultConfig(stage)
+	return nil
 }
 
 func defaultConfig(stage string) error {
@@ -356,7 +356,7 @@ func (c *Controller) Version(ctx context.Context) (et.Json, error) {
 }
 
 func (c *Controller) Init(ctx context.Context) {
-	initModels(c.Db)
+	// initModels(c.Db)
 	initEvents()
 }
 
@@ -430,16 +430,17 @@ func eventAction(m event.EvenMessage) {
 const modelDbHandler = `package $1
 
 import (
-	"net/http"
+"net/http"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/sesion"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/cgalvisleon/jdb/jdb"
-	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5"	
 )
 
 var $2 *jdb.Model
@@ -455,22 +456,22 @@ func Define$2(db *jdb.DB) error {
 
 	$2 = jdb.NewModel($4, "$3")
 	$2.DefineColumn(jdb.CreatedAtField.Str(), jdb.CreatedAtField.TypeData())
-	$2.DefineColumn(jdb.UpdatedAtField.Str(), jdb.CreatedAtField.TypeData())
-	$2.DefineColumn(jdb.ProjectField.Str(), jdb.CreatedAtField.TypeData())
-	$2.DefineColumn(jdb.StateField.Str(), jdb.CreatedAtField.TypeData())
-	$2.DefineColumn(jdb.KeyField.Str(), jdb.CreatedAtField.TypeData())
+	$2.DefineColumn(jdb.UpdatedAtField.Str(), jdb.UpdatedAtField.TypeData())
+	$2.DefineColumn(jdb.ProjectField.Str(), jdb.ProjectField.TypeData())
+	$2.DefineColumn(jdb.StateField.Str(), jdb.StateField.TypeData())
+	$2.DefineColumn(jdb.SystemKeyField.Str(), jdb.SystemKeyField.TypeData())
 	$2.DefineColumn("name", jdb.TypeDataText)
-	$2.DefineColumn(jdb.DataField.Str(), jdb.CreatedAtField.TypeData())
-	$2.DefineColumn(jdb.SystemKeyField.Str(), jdb.CreatedAtField.TypeData())
-	$2.DefineColumn(jdb.IndexField.Str(), jdb.CreatedAtField.TypeData())
-	$2.DefineKey(jdb.KeyField.Str())
+	$2.DefineColumn(jdb.SourceField.Str(), jdb.SourceField.TypeData())
+	$2.DefineColumn(jdb.SystemKeyField.Str(), jdb.SystemKeyField.TypeData())
+	$2.DefineColumn(jdb.IndexField.Str(), jdb.IndexField.TypeData())
+	$2.DefineKey(jdb.SystemKeyField.Str())
 	$2.DefineIndex(true,
 		jdb.CreatedAtField.Str(),
 		jdb.UpdatedAtField.Str(),
 		jdb.ProjectField.Str(),
 		jdb.StateField.Str(),
-		jdb.KeyField.Str(),
-		jdb.DataField.Str(),
+		jdb.SystemKeyField.Str(),
+		jdb.SourceField.Str(),
 		jdb.SystemKeyField.Str(),
 		jdb.IndexField.Str(),
 	)
@@ -886,8 +887,14 @@ import (
 var $2 *jdb.Schema
 
 func defineSchema(db *jdb.DB) error {
-	if $2 == nil {
-		$2 = jdb.NewSchema(db, "$3")
+	if $2 != nil {
+		return nil
+	}
+
+	var err error
+	$2, err = jdb.NewSchema(db, "$3")
+	if err != nil {
+		return err
 	}
 
 	return nil

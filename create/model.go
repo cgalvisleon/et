@@ -296,7 +296,7 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jrpc"
-	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/mistake"
 )
 
 func LoadConfig() error {
@@ -317,7 +317,7 @@ func defaultConfig(stage string) error {
 	}
 
 	if !result.Ok {
-		return logs.NewErrorf(jrpc.MSG_NOT_LOAD_CONFIG, stage, name)
+		return mistake.Newf(jrpc.MSG_NOT_LOAD_CONFIG, stage, name)
 	}
 
 	cfg := result.Json("config")

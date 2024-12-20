@@ -1,4 +1,4 @@
-package logs
+package console
 
 import (
 	"fmt"
@@ -6,12 +6,19 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/stdrout"
 )
 
 func printLn(kind string, color string, args ...any) {
 	stdrout.Printl(kind, color, args...)
+
+	event.Publish("logs", et.Json{
+		"kind":    kind,
+		"message": fmt.Sprint(args...),
+	})
 }
 
 func Log(kind string, args ...any) error {
@@ -96,7 +103,10 @@ func Fatalm(message string) error {
 }
 
 func Panic(err error) error {
-	printLn("Panic", "Red", err)
+	functionName := stdrout.PrintFunctionName()
+	if err != nil {
+		printLn("Panic", "Red", err.Error(), " - ", functionName)
+	}
 	os.Exit(1)
 
 	return err

@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -222,15 +223,54 @@ func ExtractMencion(str string) []string {
 	return result
 }
 
+var quotedChar = `'`
+
 /**
-* QUote return a quoted value
+* SetQuotedChar
+* @param char string
+**/
+func SetQuotedChar(char string) {
+	quotedChar = strs.Format(`%s`, char)
+}
+
+/**
+* unquote
+* @param str string
+* @return string
+**/
+func unquote(str string) string {
+	str = strings.ReplaceAll(str, `'`, `"`)
+	result, err := strconv.Unquote(str)
+	if err != nil {
+		result = str
+	}
+
+	return result
+}
+
+/**
+* quote
+* @param str string
+* @return string
+**/
+func quote(str string) string {
+	result := strconv.Quote(str)
+	if quotedChar == `"` {
+		return result
+	}
+
+	return strings.ReplaceAll(result, `"`, `'`)
+}
+
+/**
+* Unquote
 * @param val interface{}
 * @return any
 **/
-func Quote(val interface{}) any {
+func Unquote(val interface{}) any {
 	switch v := val.(type) {
 	case string:
-		return strs.Format(`'%s'`, v)
+		return unquote(v)
 	case int:
 		return v
 	case float64:
@@ -246,44 +286,91 @@ func Quote(val interface{}) any {
 	case bool:
 		return v
 	case time.Time:
-		return strs.Format(`'%s'`, v.Format("2006-01-02 15:04:05"))
+		return strs.Format(`%s`, v.Format("2006-01-02 15:04:05"))
+	case []string:
+		var r string
+		for i, _v := range v {
+			if i == 0 {
+				r = strs.Format(`%s`, unquote(_v))
+			} else {
+				r = strs.Format(`%s, %s`, r, unquote(_v))
+			}
+		}
+		return strs.Format(`(%s)`, unquote(r))
 	case []interface{}:
 		var r string
-		for _, _v := range v {
-			q := Quote(_v).(string)
-			if len(r) == 0 {
-				r = q
+		for i, _v := range v {
+			q := Unquote(_v)
+			if i == 0 {
+				r = strs.Format(`%v`, q)
 			} else {
-				r = strs.Format(`%v, %v`, r, q)
+				r = strs.Format(`%s, %v`, r, q)
 			}
 		}
-		return strs.Format(`'[%s]'`, r)
-	case map[string]interface{}:
-		var r string
-		for k, _v := range v {
-			q := Quote(_v).(string)
-			if len(r) == 0 {
-				r = strs.Format(`"%v": %v`, k, q)
-			} else {
-				r = strs.Format(`%v, "%v": %v`, r, k, q)
-			}
-		}
-		return strs.Format(`'%s'`, r)
-	case []map[string]interface{}:
-		var r string
-		for _, _v := range v {
-			q := Quote(_v).(string)
-			if len(r) == 0 {
-				r = q
-			} else {
-				r = strs.Format(`%v, %v`, r, q)
-			}
-		}
-		return strs.Format(`'[%s]'`, r)
+		return strs.Format(`[%s]`, r)
 	case nil:
-		return "NULL"
+		return strs.Format(`%s`, "NULL")
 	default:
-		logs.Errorf("Not quote type:%v value:%v", reflect.TypeOf(v), v)
+		logs.Errorf("Not unquoted type:%v value:%v", reflect.TypeOf(v), v)
+		return val
+	}
+}
+
+/**
+* Quote
+* @param val interface{}
+* @return any
+**/
+func Quote(val interface{}) any {
+	fmt := `'%s'`
+	if quotedChar == `"` {
+		fmt = `"%s"`
+	}
+	switch v := val.(type) {
+	case string:
+		return quote(v)
+	case int:
+		return v
+	case float64:
+		return v
+	case float32:
+		return v
+	case int16:
+		return v
+	case int32:
+		return v
+	case int64:
+		return v
+	case bool:
+		return v
+	case time.Time:
+		return strs.Format(fmt, v.Format("2006-01-02 15:04:05"))
+	case []string:
+		var r string
+		for i, _v := range v {
+			if i == 0 {
+				r = strs.Format(fmt, unquote(_v))
+			} else {
+				s := strs.Format(fmt, unquote(_v))
+				r = strs.Format(`%s, %s`, r, s)
+			}
+		}
+		return strs.Format(`(%s)`, r)
+	case []interface{}:
+		var r string
+		for i, _v := range v {
+			q := Quote(_v)
+			if i == 0 {
+				r = strs.Format(`%v`, q)
+			} else {
+				r = strs.Format(`%s, %v`, r, q)
+			}
+		}
+		return strs.Format(`[%s]`, r)
+	case nil:
+		return strs.Format(`%s`, "NULL")
+	default:
+		logs.Errorf("Not quoted type:%v value:%v", reflect.TypeOf(v), v)
 		return val
 	}
 }

@@ -9,8 +9,8 @@ import (
 	"runtime"
 	"time"
 
-	lg "github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/sesion"
+	lg "github.com/cgalvisleon/et/stdrout"
 )
 
 var (

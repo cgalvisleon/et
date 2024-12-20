@@ -3,9 +3,11 @@ package event
 import (
 	"net/http"
 
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/response"
+	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/nats-io/nats.go"
@@ -19,13 +21,7 @@ const EVENT_LAT_TOKEN_USE = "telemetry.token.last_use"
 const EVENT_WORK = "event/worker"
 const EVENT_WORK_STATE = "event/worker/state"
 
-/**
-* Publish
-* @param channel string
-* @param data et.Json
-* @return error
-**/
-func Publish(channel string, data et.Json) error {
+func publish(channel string, data et.Json) error {
 	if conn == nil {
 		return nil
 	}
@@ -37,6 +33,27 @@ func Publish(channel string, data et.Json) error {
 	}
 
 	return conn.Publish(msg.Channel, dt)
+}
+
+/**
+* Publish
+* @param channel string
+* @param data et.Json
+* @return error
+**/
+func Publish(channel string, data et.Json) error {
+	stage := envar.GetStr("local", "STAGE")
+	pipe := et.Json{
+		"created_at": timezone.Now(),
+		"_id":        utility.UUID(),
+		"from_id":    FromId,
+		"stage":      stage,
+		"channel":    channel,
+		"data":       data,
+	}
+	publish(strs.Format(`pipe:%s`, stage), pipe)
+
+	return publish(channel, data)
 }
 
 /**

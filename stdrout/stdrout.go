@@ -3,6 +3,7 @@ package stdrout
 import (
 	"fmt"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/cgalvisleon/et/timezone"
@@ -66,4 +67,62 @@ func Printl(kind string, color string, args ...any) string {
 	println(result)
 
 	return result
+}
+
+func Traces(kind, color string, err error) error {
+	Printl(kind, color, err.Error())
+
+	var n int = 1
+	var traces []string = []string{err.Error()}
+	for {
+		pc, file, line, more := runtime.Caller(n)
+		if !more {
+			break
+		}
+		n++
+		function := runtime.FuncForPC(pc)
+		name := function.Name()
+		list := strings.Split(name, ".")
+		if len(list) > 0 {
+			name = list[len(list)-1]
+		}
+		if !slices.Contains([]string{"ErrorM", "ErrorF"}, name) {
+			trace := fmt.Sprintf("%s:%d func:%s", file, line, name)
+			traces = append(traces, trace)
+			Printl("TRACE", color, trace)
+		}
+	}
+
+	return err
+}
+
+func PrintFunctionName() string {
+	pc, _, _, _ := runtime.Caller(2)
+	fullFuncName := runtime.FuncForPC(pc).Name()
+
+	return fullFuncName
+}
+
+func ErrorTraces(err error) []string {
+	var n = 1
+	var traces = []string{err.Error()}
+	for {
+		pc, file, line, more := runtime.Caller(n)
+		if !more {
+			break
+		}
+		n++
+		function := runtime.FuncForPC(pc)
+		name := function.Name()
+		list := strings.Split(name, ".")
+		if len(list) > 0 {
+			name = list[len(list)-1]
+		}
+		if !slices.Contains([]string{"ErrorM", "ErrorF"}, name) {
+			trace := fmt.Sprintf("%s:%d func:%s", file, line, name)
+			traces = append(traces, trace)
+		}
+	}
+
+	return traces
 }

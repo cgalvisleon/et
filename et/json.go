@@ -120,39 +120,6 @@ func (s Json) ToString() string {
 }
 
 /**
-* ToUnquote convert a json to a unquote string
-* @return string
-**/
-func (s Json) ToUnquote() string {
-	str := s.ToString()
-	result := strs.Format(`'%v'`, str)
-
-	return result
-}
-
-/**
-* ToQuote convert a json to a quote string
-* @return string
-**/
-func (s Json) ToQuote() string {
-	for k, v := range s {
-		if str, ok := s["mensaje"].(string); ok {
-			ustr, err := strconv.Unquote(`"` + str + `"`)
-			if err != nil {
-				s[k] = v
-			} else {
-				s[k] = ustr
-			}
-		} else {
-			s[k] = v
-		}
-	}
-	str := s.ToString()
-
-	return str
-}
-
-/**
 * Empty return if the json is empty
 * @return bool
 **/

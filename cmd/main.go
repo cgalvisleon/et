@@ -4,6 +4,7 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
+	"github.com/cgalvisleon/et/utility"
 )
 
 func main() {
@@ -27,7 +28,7 @@ func QueryWhere(query []et.Json) string {
 		}
 
 		for op, v := range _condition {
-			val := et.Unquote(v)
+			val := utility.Unquote(v)
 			switch op {
 			case "eq":
 				return strs.Format(`%s = %v`, col, val)

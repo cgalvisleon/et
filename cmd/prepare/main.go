@@ -20,16 +20,17 @@ var dependencies = []string{
 }
 
 func main() {
-	total := len(dependencies)
+	total := 100
 	for i, dep := range dependencies {
-		fmt.Printf("Installing %s... \r[%-50s] %d%%", dep, progressBar(i, total, 20), i)
+		p := (i + 1) * 100 / len(dependencies)
+		fmt.Printf("\r[%-50s] %d%% Installing %s", progressBar(p, total, 50), p, dep)
 		err := installLibrary(dep)
 		if err != nil {
 			return
 		}
 	}
 
-	fmt.Println("\n¡Completado!")
+	fmt.Printf("\r[%-50s] %d%% ¡Completado!", progressBar(total, total, 50), total)
 }
 
 func installLibrary(library string) error {

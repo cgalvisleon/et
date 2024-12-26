@@ -1,4 +1,4 @@
-package sesion
+package claim
 
 const (
 	MSG_TOKEN_INVALID       = "Token invalido"

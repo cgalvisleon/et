@@ -1,7 +1,9 @@
 package utility
 
 import (
+	"bytes"
 	"encoding/base64"
+	"encoding/gob"
 	"fmt"
 	"math/rand"
 	"os"
@@ -122,10 +124,10 @@ func UUIndex(tag string) int64 {
 /**
 * Contains return true if the value is in the list
 * @param v interface{}
-* @param vals ...interface{}
+* @param vals ...any
 * @return bool
 **/
-func Contains(v interface{}, vals ...interface{}) bool {
+func Contains(v interface{}, vals ...any) bool {
 	for _, i := range vals {
 		if i == v {
 			return true
@@ -504,4 +506,20 @@ func PayloadDecoded(token string) (et.Json, error) {
 	}
 
 	return result, nil
+}
+
+/**
+* SerializeStruct
+* @param s interface{}
+* @return []byte
+* @return error
+**/
+func SerializeStruct(s interface{}) ([]byte, error) {
+	var buf bytes.Buffer
+	encoder := gob.NewEncoder(&buf)
+	err := encoder.Encode(s)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }

@@ -16,11 +16,6 @@ func MakePkg(name, schema string) error {
 		return err
 	}
 
-	_, err = file.MakeFile(path, "msg.go", modelMsg, name)
-	if err != nil {
-		return err
-	}
-
 	_, err = file.MakeFile(path, "config.go", modelConfig, name)
 	if err != nil {
 		return err
@@ -33,12 +28,6 @@ func MakePkg(name, schema string) error {
 
 	if len(schema) > 0 {
 		_, err = file.MakeFile(path, "controller.go", modelDbController, name)
-		if err != nil {
-			return err
-		}
-
-		schemaVar := strs.Append("schema", strs.Titlecase(schema), "")
-		_, err = file.MakeFile(path, "schema.go", modelSchema, name, schemaVar, schema)
 		if err != nil {
 			return err
 		}
@@ -56,7 +45,7 @@ func MakePkg(name, schema string) error {
 
 		fileName := strs.Format(`h%s.go`, modelo)
 		tableName := strs.Uppcase(name)
-		_, err = file.MakeFile(path, fileName, modelDbHandler, name, modelo, tableName, schemaVar)
+		_, err = file.MakeFile(path, fileName, modelDbHandler, name, modelo, tableName)
 		if err != nil {
 			return err
 		}

@@ -262,6 +262,15 @@ func (s Item) Bool(atribs ...string) bool {
 }
 
 /**
+* Byte return the value of the key
+* @param atribs ...string
+* @return []byte
+**/
+func (s Item) Byte(atribs ...string) ([]byte, error) {
+	return s.Result.Byte(atribs...)
+}
+
+/**
 * Time return the value of the key
 * @param atribs ...string
 * @return time.Time

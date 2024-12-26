@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/cgalvisleon/et/claim"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/sesion"
 	"github.com/cgalvisleon/et/utility"
 )
 
@@ -19,12 +19,12 @@ import (
 * @return string
 * @return error
 **/
-func tokenFromAuthorization(authorization string) (string, error) {
+func tokenFromAuthorization(authorization, prefix string) (string, error) {
 	if authorization == "" {
 		return "", logs.Alertm("Autorization is required")
 	}
 
-	if !strings.HasPrefix(authorization, "Bearer") {
+	if !strings.HasPrefix(authorization, prefix) {
 		return "", logs.Alertm("Invalid autorization format")
 	}
 
@@ -44,18 +44,23 @@ func tokenFromAuthorization(authorization string) (string, error) {
 * @return error
 **/
 func GetAuthorization(w http.ResponseWriter, r *http.Request) (string, error) {
-	cookie, err := r.Cookie("auth_token")
-	if err == nil {
-		return cookie.Value, nil
+	_, ok := r.Header["Authorization"]
+	if ok {
+		authorization := r.Header.Get("Authorization")
+		result, err := tokenFromAuthorization(authorization, "Bearer")
+		if err != nil {
+			return "", logs.Alert(err)
+		}
+
+		return result, nil
 	}
 
-	authorization := r.Header.Get("Authorization")
-	result, err := tokenFromAuthorization(authorization)
+	cookie, err := r.Cookie("auth_token")
 	if err != nil {
 		return "", logs.Alert(err)
 	}
 
-	return result, nil
+	return cookie.Value, nil
 }
 
 /**
@@ -70,7 +75,7 @@ func Autentication(next http.Handler) http.Handler {
 			return
 		}
 
-		clm, err := sesion.Valid(token)
+		clm, err := claim.ValidToken(token)
 		if err != nil {
 			response.Unauthorized(w, r)
 			return
@@ -83,18 +88,18 @@ func Autentication(next http.Handler) http.Handler {
 
 		serviceId := utility.UUID()
 		ctx := r.Context()
-		ctx = context.WithValue(ctx, sesion.ServiceIdKey, serviceId)
-		ctx = context.WithValue(ctx, sesion.ClientIdKey, clm.ClientId)
-		ctx = context.WithValue(ctx, sesion.NameKey, clm.Name)
-		ctx = context.WithValue(ctx, sesion.AppKey, clm.App)
-		ctx = context.WithValue(ctx, sesion.DeviceKey, clm.Device)
-		ctx = context.WithValue(ctx, sesion.DuractionKey, clm.Duration)
-		ctx = context.WithValue(ctx, sesion.TokenKey, token)
+		ctx = context.WithValue(ctx, claim.ServiceIdKey, serviceId)
+		ctx = context.WithValue(ctx, claim.ClientIdKey, clm.ID)
+		ctx = context.WithValue(ctx, claim.AppKey, clm.App)
+		ctx = context.WithValue(ctx, claim.NameKey, clm.Name)
+		ctx = context.WithValue(ctx, claim.SubjectKey, clm.Subject)
+		ctx = context.WithValue(ctx, claim.UsernameKey, clm.Username)
+		ctx = context.WithValue(ctx, claim.TokenKey, token)
 
 		now := utility.Now()
 		data := et.Json{
 			"serviceId": serviceId,
-			"clientId":  clm.ClientId,
+			"clientId":  clm.ID,
 			"last_use":  now,
 			"host_name": hostName,
 			"token":     token,

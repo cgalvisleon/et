@@ -144,3 +144,11 @@ func Rpc(args ...any) error {
 
 	return nil
 }
+
+func QueryError(err error, sql string) error {
+	if err != nil {
+		printLn("QueryError", "Red", err.Error(), " - SQL: ", sql)
+	}
+
+	return err
+}

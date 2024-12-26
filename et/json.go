@@ -440,6 +440,21 @@ func (s Json) Bool(atribs ...string) bool {
 }
 
 /**
+* Byte return the value of the key
+* @param atribs ...string
+* @return []byte
+**/
+func (s Json) Byte(atribs ...string) ([]byte, error) {
+	data := s.ValAny("", atribs...)
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return bytes, nil
+}
+
+/**
 * Time return the value of the key
 * @param atribs ...string
 * @return time.Time
@@ -475,7 +490,6 @@ func (s Json) Array(atrib string) []interface{} {
 func (s Json) ArrayStr(_default []string, atribs ...string) []string {
 	var result = _default
 	vals := s.ValArray([]interface{}{}, atribs...)
-
 	for i, val := range vals {
 		v, ok := val.(string)
 		if !ok {
@@ -486,7 +500,7 @@ func (s Json) ArrayStr(_default []string, atribs ...string) []string {
 			result = []string{}
 		}
 
-		result[i] = v
+		result = append(result, v)
 	}
 
 	return result
@@ -501,7 +515,6 @@ func (s Json) ArrayStr(_default []string, atribs ...string) []string {
 func (s Json) ArrayInt(_default []int, atribs ...string) []int {
 	var result = _default
 	vals := s.ValArray([]interface{}{}, atribs...)
-
 	for i, val := range vals {
 		v, ok := val.(int)
 		if !ok {
@@ -512,7 +525,7 @@ func (s Json) ArrayInt(_default []int, atribs ...string) []int {
 			result = []int{}
 		}
 
-		result[i] = v
+		result = append(result, v)
 	}
 
 	return result
@@ -527,7 +540,6 @@ func (s Json) ArrayInt(_default []int, atribs ...string) []int {
 func (s Json) ArrayInt64(_default []int64, atribs ...string) []int64 {
 	var result = _default
 	vals := s.ValArray([]interface{}{}, atribs...)
-
 	for i, val := range vals {
 		v, ok := val.(int64)
 		if !ok {
@@ -538,7 +550,7 @@ func (s Json) ArrayInt64(_default []int64, atribs ...string) []int64 {
 			result = []int64{}
 		}
 
-		result[i] = v
+		result = append(result, v)
 	}
 
 	return result
@@ -553,7 +565,6 @@ func (s Json) ArrayInt64(_default []int64, atribs ...string) []int64 {
 func (s Json) ArrayJson(_default []Json, atribs ...string) []Json {
 	var result = _default
 	vals := s.ValArray([]interface{}{}, atribs...)
-
 	for i, val := range vals {
 		v, err := Object(val)
 		if err != nil {
@@ -564,7 +575,7 @@ func (s Json) ArrayJson(_default []Json, atribs ...string) []Json {
 			result = []Json{}
 		}
 
-		result[i] = v
+		result = append(result, v)
 	}
 
 	return result

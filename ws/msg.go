@@ -24,6 +24,6 @@ const (
 	ERR_INVALID_ID              = "Invalid id"
 	ERR_INVALID_NAME            = "Invalid name"
 	ERR_ADAPTER_NOT_FOUND       = "Adapter not found"
-	ERR_NOT_SIGNATURE           = "Not signature"
+	ERR_NOT_SIGNATURE           = "not signature"
 	PARAMS_UPDATED              = "Params updated"
 )

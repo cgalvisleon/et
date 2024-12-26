@@ -55,21 +55,21 @@ func init() {
 }
 
 // colorWrite
-func CW(w io.Writer, color []byte, s string, args ...interface{}) {
+func CW(w io.Writer, color []byte, format string, args ...interface{}) {
 	if IsTTY && useColor {
 		w.Write(color)
 	}
-	fmt.Fprintf(w, s, args...)
+	fmt.Fprintf(w, format, args...)
 	if IsTTY && useColor {
 		w.Write(reset)
 	}
 }
 
-func Color(color []byte, s string, args ...interface{}) *bytes.Buffer {
+func Color(color []byte, format string, args ...interface{}) *bytes.Buffer {
 	var w *bytes.Buffer = new(bytes.Buffer)
 	now := timezone.Now()
-	CW(w, NWhite, now)
-	CW(w, color, s, args...)
+	CW(w, NWhite, "%s", now)
+	CW(w, color, format, args...)
 
 	return w
 }

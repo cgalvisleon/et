@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -241,20 +240,20 @@ func (m *Metrics) CallMetrics() Telemetry {
 * @return et.Json
 **/
 func (m *Metrics) println() et.Json {
-	w := lg.Color(lg.NMagenta, fmt.Sprintf(" [%s]: ", m.Method))
-	lg.CW(w, lg.NCyan, fmt.Sprintf("%s", m.Path))
-	lg.CW(w, lg.NWhite, fmt.Sprintf(" from:%s", m.ClientIP))
+	w := lg.Color(lg.NMagenta, " [%s]: ", m.Method)
+	lg.CW(w, lg.NCyan, "%s", m.Path)
+	lg.CW(w, lg.NWhite, " from:%s", m.ClientIP)
 	if m.StatusCode >= 500 {
-		lg.CW(w, lg.NRed, fmt.Sprintf(" - %s", http.StatusText(m.StatusCode)))
+		lg.CW(w, lg.NRed, " - %s", http.StatusText(m.StatusCode))
 	} else if m.StatusCode >= 400 {
-		lg.CW(w, lg.NYellow, fmt.Sprintf(" - %s", http.StatusText(m.StatusCode)))
+		lg.CW(w, lg.NYellow, " - %s", http.StatusText(m.StatusCode))
 	} else if m.StatusCode >= 300 {
-		lg.CW(w, lg.NCyan, fmt.Sprintf(" - %s", http.StatusText(m.StatusCode)))
+		lg.CW(w, lg.NCyan, " - %s", http.StatusText(m.StatusCode))
 	} else {
-		lg.CW(w, lg.NGreen, fmt.Sprintf(" - %s", http.StatusText(m.StatusCode)))
+		lg.CW(w, lg.NGreen, " - %s", http.StatusText(m.StatusCode))
 	}
 	size := float64(m.ResponseSize) / 1024
-	lg.CW(w, lg.NCyan, fmt.Sprintf(` Size:%.2f%s`, size, "KB"))
+	lg.CW(w, lg.NCyan, " Size:%.2f%s", size, "KB")
 	lg.CW(w, lg.NWhite, " in ")
 	limitLatency := time.Duration(envar.GetInt64(1000, "LIMIT_LATENCY")) * time.Millisecond
 	if m.Latency < limitLatency {

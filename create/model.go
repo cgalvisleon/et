@@ -154,10 +154,14 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrpc"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/utility"
+	_ "github.com/cgalvisleon/jdb/drivers/postgres"
+	"github.com/cgalvisleon/jdb/jdb"
 	"github.com/dimiro1/banner"
 	"github.com/go-chi/chi/v5"
 	"github.com/mattn/go-colorable"
@@ -182,14 +186,14 @@ func New() http.Handler {
 		logs.Panic(err)
 	}
 
-	// db, err := jdb.Load()
-	// if err != nil {
-		// logs.Panic(err)
-	// }
+	db, err := jdb.Load()
+	if err != nil {
+		logs.Panic(err)
+	}
 
 	_pkg := &pkg.Router{
 		Repository: &pkg.Controller{
-			// Db: db,
+			Db: db,
 		},
 	}
 
@@ -217,8 +221,8 @@ const modelService = `package $2
 import (
 	"net/http"
 
+	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/strs"
@@ -427,20 +431,15 @@ func eventAction(m event.EvenMessage) {
 }
 `
 
-const modelDbHandler = `package $1
+const modelData = `package $1
 
 import (
-"net/http"
-
+	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/sesion"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/cgalvisleon/jdb/jdb"
-	"github.com/go-chi/chi/v5"	
 )
 
 var $2 *jdb.Model
@@ -647,59 +646,56 @@ func State$2(id, state, user_full_name string) (et.Item, error) {
 * @return error
 **/
 func Delete$2(id, user_full_name string) (et.Item, error) {
-	return State$2(id, utility.FOR_DELETE, user_full_name)
+	if !utility.ValidId(id) {
+		return et.Item{}, console.Alertf(MSG_ATRIB_REQUIRED, "_id")
+	}
+
+	current, err := jdb.From($2).
+		Where("_id").Eq(id).
+		Data("_id").
+		One()
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	if !current.Ok {
+		return et.Item{}, console.Alertm(msg.RECORD_NOT_FOUND)
+	}
+
+	return $2.Delete().
+		Where("_id").Eq(id).
+		One()
 }
 
 /**
-* All$2
-* @param project_id string
-* @param state string
-* @param search string
+* Query$2
+* @param query []string
 * @param page int
 * @param rows int
 * @param _select string
 * @return et.List
 * @return error
 **/
-func All$2(project_id, state, search string, page, rows int, _select string) (et.List, error) {
-	if state == "" {
-		state = utility.ACTIVE
-	}
-
-	auxState := state
-
-	if search != "" {
-		return jdb.From($2).
-			Where("project_id").In("-1", project_id).
-			And(jdb.Concatenate("NAME:", "asset.name", "DESCRIPTION:", "asset.description", "DATA:", "asset._data", ":")).Like("%"+search+"%").
-			OrderBy(true, $2.Col("name")).
-			Data(_select).
-			List(page, rows)
-	} else if auxState == "*" {
-		state = utility.FOR_DELETE
-
-		return jdb.From($2).
-			Where("_state").Neg(state).
-			And("project_id").In("-1", project_id).
-			OrderBy(true, "name").
-			Data(_select).
-			List(page, rows)
-	} else if auxState == "0" {
-		return jdb.From($2).
-			Where("_state").In("-1", state).
-			And("project_id").In("-1", project_id).
-			OrderBy(true, "name").
-			Data(_select).
-			List(page, rows)
-	} else {
-		return jdb.From($2).
-			Where("_state").Eq(state).
-			And("project_id").In("-1", project_id).
-			OrderBy(true, "name").
-			Data(_select).
-			List(page, rows)
-	}
+func Query$2(query []string, page, rows int, _select string) (et.List, error) {
+	return jdb.From(Assets).
+		Where("project_id").In("-1", project_id).
+		Query(query).
+		OrderBy(true, Assets.Col("name")).
+		Data(_select).
+		List(page, rows)
 }
+`
+
+const modelDbHandler = `package $1
+
+import (
+	"net/http"
+
+	"github.com/cgalvisleon/et/response"
+	"github.com/cgalvisleon/et/claim"
+	"github.com/go-chi/chi/v5"
+	"github.com/redist/internal/data/assets"
+)
 
 /**
 * upSert$2
@@ -777,20 +773,18 @@ func (rt *Router) delete$2(w http.ResponseWriter, r *http.Request) {
 }
 
 /**
-* all$2
+* query$2
 * @param w http.ResponseWriter
 * @param r *http.Request
 **/
-func (rt *Router) all$2(w http.ResponseWriter, r *http.Request) {
-	query := response.GetQuery(r)
-	project_id := query.Str("project_id")
-	state := query.Str("state")
-	search := query.Str("search")
-	page := query.ValInt(1, "page")
-	rows := query.ValInt(30, "rows")
-	_select := query.Str("select")
+func (rt *Router) query$2(w http.ResponseWriter, r *http.Request) {
+	params := response.GetQuery(r)
+	query := params.ArrayStr([]string{}, "query")
+	page := params.ValInt(1, "page")
+	rows := params.ValInt(30, "rows")
+	_select := params.Str("select")
 
-	result, err := All$2(project_id, state, search, page, rows, _select)
+	result, err := Query$2(query, page, rows, _select)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -803,9 +797,9 @@ func (rt *Router) all$2(w http.ResponseWriter, r *http.Request) {
 	// $2
 	router.Protect(r, router.Get, "/assets/{id}", rt.get$2ById, PackageName, PackagePath, host)
 	router.Protect(r, router.Post, "/assets", rt.upSert$2, PackageName, PackagePath, host)
-	router.Protect(r, router.Put, "/assets/state/{id}", rt.state$2, PackageName, PackagePath, host)
+	router.Protect(r, router.Put, "/assets/{id}", rt.state$2, PackageName, PackagePath, host)
 	router.Protect(r, router.Delete, "/assets/{id}", rt.delete$2, PackageName, PackagePath, host)
-	router.Protect(r, router.Get, "/assets/", rt.all$2, PackageName, PackagePath, host)
+	router.Protect(r, router.Get, "/assets/", rt.query$2, PackageName, PackagePath, host)
 **/
 
 /** Copy this code to func initModel in model.go
@@ -1000,9 +994,9 @@ func (rt *Router) Routes() http.Handler {
 	// $2
 	router.Protect(r, router.Get, "/{id}", rt.get$2ById, PackageName, PackagePath, host)
 	router.Protect(r, router.Post, "/", rt.upSert$2, PackageName, PackagePath, host)
-	router.Protect(r, router.Put, "/{id}/state", rt.state$2, PackageName, PackagePath, host)
+	router.Protect(r, router.Put, "/{id}", rt.state$2, PackageName, PackagePath, host)
 	router.Protect(r, router.Delete, "/{id}", rt.delete$2, PackageName, PackagePath, host)
-	router.Protect(r, router.Get, "/", rt.all$2, PackageName, PackagePath, host)
+	router.Protect(r, router.Get, "/", rt.query$2, PackageName, PackagePath, host)
 
 	ctx := context.Background()
 	rt.Repository.Init(ctx)

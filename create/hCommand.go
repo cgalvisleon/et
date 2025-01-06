@@ -50,7 +50,7 @@ var CmdMicro = &cobra.Command{
 	Short: "Create project base type microservice.",
 	Long:  "Template project to microservice include folder cmd, deployments, pkg, rest, test and web, with files .go required for making a microservice.",
 	Run: func(cmd *cobra.Command, args []string) {
-		packageName, err := utility.GoMod("module")
+		projectName, err := utility.GoMod("module")
 		if err != nil {
 			fmt.Printf("Prompt failed %v\n", err)
 			return
@@ -68,7 +68,7 @@ var CmdMicro = &cobra.Command{
 			return
 		}
 
-		err = MkMicroservice(packageName, name, schema)
+		err = MkMicroservice(projectName, name, schema)
 		if err != nil {
 			fmt.Printf("Command failed %v\n", err)
 			return
@@ -77,10 +77,16 @@ var CmdMicro = &cobra.Command{
 }
 
 var CmdModelo = &cobra.Command{
-	Use:   "modelo [name modelo, schema]",
+	Use:   "modelo [name modelo schema]",
 	Short: "Create model to microservice.",
 	Long:  "Template model to microservice include function handler model.",
 	Run: func(cmd *cobra.Command, args []string) {
+		projectName, err := utility.GoMod("module")
+		if err != nil {
+			fmt.Printf("Prompt failed %v\n", err)
+			return
+		}
+
 		packageName, err := PrompStr("Package", true)
 		if err != nil {
 			fmt.Printf("Prompt failed %v\n", err)
@@ -99,7 +105,7 @@ var CmdModelo = &cobra.Command{
 			return
 		}
 
-		err = MkMolue(packageName, modelo, schema)
+		err = MkMolue(projectName, packageName, modelo, schema)
 		if err != nil {
 			fmt.Printf("Command failed %v\n", err)
 			return

@@ -57,8 +57,8 @@ import (
 	"os/signal"
 
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/logs"
-	serv "$1/internal/service/$2"	
+	"github.com/cgalvisleon/et/console"
+	serv "$1/internal/service/$2"
 )
 
 func main() {
@@ -73,7 +73,7 @@ func main() {
 
 	srv, err := serv.New()
 	if err != nil {
-		logs.Fatal(err)
+		console.Fatal(err)
 	}
 
 	go srv.Start()
@@ -96,7 +96,7 @@ import (
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrpc"
-	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/dimiro1/banner"
 	"github.com/go-chi/chi/v5"
@@ -109,17 +109,17 @@ func New() http.Handler {
 
 	err := pkg.LoadConfig()
 	if err != nil {
-		logs.Panic(err)
+		console.Alert(err)
 	}
 
 	_, err = cache.Load()
 	if err != nil {
-		logs.Panic(err)
+		console.Panic(err)
 	}
 
 	_, err = event.Load()
 	if err != nil {
-		logs.Panic(err)
+		console.Panic(err)
 	}
 
 	_pkg := &pkg.Router{
@@ -155,8 +155,6 @@ import (
 
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/console"
-	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrpc"
 	"github.com/cgalvisleon/et/utility"
@@ -173,22 +171,22 @@ func New() http.Handler {
 
 	err := pkg.LoadConfig()
 	if err != nil {
-		logs.Panic(err)
+		console.Alert(err)
 	}
 
 	_, err = cache.Load()
 	if err != nil {
-		logs.Panic(err)
+		console.Panic(err)
 	}
 
 	_, err = event.Load()
 	if err != nil {
-		logs.Panic(err)
+		console.Panic(err)
 	}
 
 	db, err := jdb.Load()
 	if err != nil {
-		logs.Panic(err)
+		console.Panic(err)
 	}
 
 	_pkg := &pkg.Router{
@@ -228,7 +226,7 @@ import (
 	"github.com/cgalvisleon/et/strs"
 	"github.com/go-chi/chi/v5"
 	v1 "$1/internal/service/$2/v1"
-	"github.com/rs/cors"	
+	"github.com/rs/cors"
 )
 
 type Server struct {
@@ -270,7 +268,7 @@ func New() (*Server, error) {
 func (serv *Server) Close() {
 	v1.Close()
 
-	logs.Log("Http", "Shutting down server...")
+	console.Log("Http", "Shutting down server...")
 }
 
 func (serv *Server) StartHttpServer() {
@@ -279,8 +277,8 @@ func (serv *Server) StartHttpServer() {
 	}
 
 	svr := serv.http
-	logs.Logf("Http", "Running on http://localhost%s", svr.Addr)
-	logs.Fatal(serv.http.ListenAndServe())
+	console.Logf("Http", "Running on http://localhost%s", svr.Addr)
+	console.Fatal(serv.http.ListenAndServe())
 }
 
 func (serv *Server) Start() {
@@ -413,13 +411,13 @@ const modelEvent = `package $1
 
 import (
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/console"
 )
 
 func initEvents() {
 	err := event.Stack("<channel>", eventAction)
 	if err != nil {
-		logs.Error(err)
+		console.Error(err)
 	}
 
 }
@@ -427,11 +425,11 @@ func initEvents() {
 func eventAction(m event.EvenMessage) {
 	data := m.Data
 
-	logs.Log("eventAction", data)
+	console.Log("eventAction", data)
 }
 `
 
-const modelData = `package $1
+const modelData = `package $4
 
 import (
 	"github.com/cgalvisleon/et/console"
@@ -446,14 +444,14 @@ var $2 *jdb.Model
 
 func Define$2(db *jdb.DB) error {
 	if err := defineSchema(db); err != nil {
-		return logs.Panic(err)
+		return console.Panic(err)
 	}
 
 	if $2 != nil {
 		return nil
 	}
 
-	$2 = jdb.NewModel($4, "$3")
+	$2 = jdb.NewModel(schema, "$3", 1)
 	$2.DefineColumn(jdb.CreatedAtField.Str(), jdb.CreatedAtField.TypeData())
 	$2.DefineColumn(jdb.UpdatedAtField.Str(), jdb.UpdatedAtField.TypeData())
 	$2.DefineColumn(jdb.ProjectField.Str(), jdb.ProjectField.TypeData())
@@ -496,7 +494,7 @@ func Define$2(db *jdb.DB) error {
 	})
 
 	if err := $2.Init(); err != nil {
-		return logs.Panic(err)
+		return console.Panic(err)
 	}
 
 	return nil
@@ -565,6 +563,7 @@ func Insert$2(project_id, state, id string, data et.Json, user_full_name string)
 		"name": user_full_name,
 	}
 	return $2.Insert(data).
+		Return().
 		One()
 }
 
@@ -589,7 +588,7 @@ func UpSert$2(project_id, id string, data et.Json, user_full_name string) (et.It
 
 	current_state := current.Key("_state")
 	if current_state != utility.ACTIVE {
-		return et.Item{}, logs.Alertf(MSG_STATE_NOT_ACTIVE, current_state)
+		return et.Item{}, console.Alertf(MSG_STATE_NOT_ACTIVE, current_state)
 	}
 
 	id = current.Key("_id")
@@ -600,6 +599,7 @@ func UpSert$2(project_id, id string, data et.Json, user_full_name string) (et.It
 	}
 	return $2.Update(data).
 		Where("_id").Eq(id).
+		Return().
 		One()
 }
 
@@ -624,7 +624,7 @@ func State$2(id, state, user_full_name string) (et.Item, error) {
 	}
 
 	if !current.Ok {
-		return et.Item{}, logs.Alertm(msg.RECORD_NOT_FOUND)
+		return et.Item{}, console.Alertm(msg.RECORD_NOT_FOUND)
 	}
 
 	current_state := current.Key("_state")
@@ -636,6 +636,7 @@ func State$2(id, state, user_full_name string) (et.Item, error) {
 		"_state": state,
 	}).
 		Where("_id").Eq(id).
+		Return().
 		One()
 }
 
@@ -664,25 +665,25 @@ func Delete$2(id, user_full_name string) (et.Item, error) {
 
 	return $2.Delete().
 		Where("_id").Eq(id).
+		Return().
 		One()
 }
 
 /**
 * Query$2
 * @param query []string
-* @param page int
-* @param rows int
-* @param _select string
-* @return et.List
+* @return et.Items
 * @return error
 **/
-func Query$2(query []string, page, rows int, _select string) (et.List, error) {
-	return jdb.From(Assets).
-		Where("project_id").In("-1", project_id).
-		Query(query).
-		OrderBy(true, Assets.Col("name")).
-		Data(_select).
-		List(page, rows)
+func Query$2(query et.Json) (et.Items, error) {
+	result, err := jdb.From($2).
+		Debug().
+		Query(query)
+	if err != nil {
+		return et.Items{}, err
+	}
+
+	return result, nil
 }
 `
 
@@ -691,10 +692,10 @@ const modelDbHandler = `package $1
 import (
 	"net/http"
 
-	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/claim"
+	"github.com/cgalvisleon/et/response"
 	"github.com/go-chi/chi/v5"
-	"github.com/redist/internal/data/assets"
+	"$3/internal/data/$4"
 )
 
 /**
@@ -708,7 +709,7 @@ func (rt *Router) upSert$2(w http.ResponseWriter, r *http.Request) {
 	id := body.Str("id")
 	user_id := body.Str("user_id")
 
-	result, err := UpSert$2(project_id, id, body, user_id)
+	result, err := $4.UpSert$2(project_id, id, body, user_id)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -725,7 +726,7 @@ func (rt *Router) upSert$2(w http.ResponseWriter, r *http.Request) {
 func (rt *Router) get$2ById(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	result, err := Get$2ById(id)
+	result, err := $4.Get$2ById(id)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -743,9 +744,9 @@ func (rt *Router) state$2(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	body, _ := response.GetBody(r)
 	state := body.Str("state")
-	user_name := sesion.GetClientName(r)
+	user_name := claim.GetClientName(r)
 
-	result, err := State$2(id, state, user_name)
+	result, err := $4.State$2(id, state, user_name)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -761,9 +762,9 @@ func (rt *Router) state$2(w http.ResponseWriter, r *http.Request) {
 **/
 func (rt *Router) delete$2(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	user_name := sesion.GetClientName(r)
+	user_name := claim.GetClientName(r)
 
-	result, err := Delete$2(id, user_name)
+	result, err := $4.Delete$2(id, user_name)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -778,13 +779,10 @@ func (rt *Router) delete$2(w http.ResponseWriter, r *http.Request) {
 * @param r *http.Request
 **/
 func (rt *Router) query$2(w http.ResponseWriter, r *http.Request) {
-	params := response.GetQuery(r)
-	query := params.ArrayStr([]string{}, "query")
-	page := params.ValInt(1, "page")
-	rows := params.ValInt(30, "rows")
-	_select := params.Str("select")
+	body, _ := response.GetBody(r)
+	query := body.Json("query")
 
-	result, err := Query$2(query, page, rows, _select)
+	result, err := $4.Query$2(query)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -804,7 +802,7 @@ func (rt *Router) query$2(w http.ResponseWriter, r *http.Request) {
 
 /** Copy this code to func initModel in model.go
 	if err := Define$2(db); err != nil {
-		return logs.Panic(err)
+		return console.Panic(err)
 	}
 **/
 `
@@ -859,13 +857,14 @@ func (rt *Router) get$2(w http.ResponseWriter, r *http.Request) {
 const modelModel = `package $1
 
 import (
-	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/jdb/jdb"
+	"$3/internal/data/$2"	
 )
 
 func initModels(db *jdb.DB) error {
-	if err := Define$2(db); err != nil {
-		return logs.Panic(err)
+	if err := $2.Define$4(db); err != nil {
+		return console.Panic(err)
 	}
 
 	return nil
@@ -878,15 +877,15 @@ import (
 	"github.com/cgalvisleon/jdb/jdb"
 )
 
-var $2 *jdb.Schema
+var schema *jdb.Schema
 
 func defineSchema(db *jdb.DB) error {
-	if $2 != nil {
+	if schema != nil {
 		return nil
 	}
 
 	var err error
-	$2, err = jdb.NewSchema(db, "$3")
+	schema, err = jdb.NewSchema(db, "$1")
 	if err != nil {
 		return err
 	}
@@ -900,7 +899,7 @@ const modelhRpc = `package $1
 import (
 	"net/rpc"
 
-	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -913,7 +912,7 @@ func InitRpc() error {
 
 	err := rpc.Register(service)
 	if err != nil {
-		return logs.Error(err)
+		return console.Error(err)
 	}
 
 	initRpc = true
@@ -965,7 +964,7 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/router"
@@ -1002,7 +1001,7 @@ func (rt *Router) Routes() http.Handler {
 	rt.Repository.Init(ctx)
 	middleware.SetServiceName(PackageName)
 
-	logs.Logf(PackageName, "Router version:%s", PackageVersion)
+	console.Logf(PackageName, "Router version:%s", PackageVersion)
 
 	return r
 }
@@ -1045,7 +1044,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/router"
@@ -1079,7 +1078,7 @@ func (rt *Router) Routes() http.Handler {
 	rt.Repository.Init(ctx)
 	middleware.SetServiceName(PackageName)
 
-	logs.Logf(PackageName, "Router version:%s", PackageVersion)
+	console.Logf(PackageName, "Router version:%s", PackageVersion)
 
 	return r
 }
@@ -1121,7 +1120,7 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jrpc"
-	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/console"
 )
 
 type Services struct{}
@@ -1129,13 +1128,13 @@ type Services struct{}
 func StartRpcServer() {
 	pkg, err := jrpc.Load(PackageName)
 	if err != nil {
-		logs.Panic(err)
+		console.Panic(err)
 	}
 
 	services := new(Services)
 	err = jrpc.Mount(services)
 	if err != nil {
-		logs.Fatal(err)
+		console.Fatal(err)
 	}
 
 	go pkg.Start()
@@ -1157,7 +1156,7 @@ func (c *Services) Version(require et.Json, response *et.Item) error {
 		"help":    help,
 	}
 
-	return logs.Rpc(response.ToString())
+	return console.Rpc(response.ToString())
 }
 `
 

@@ -26,9 +26,9 @@ func MkProject(packageName, name, author, schema string) error {
 	return nil
 }
 
-func MkMicroservice(packageName, name, schema string) error {
+func MkMicroservice(projectName, name, schema string) error {
 	ProgressNext(10)
-	err := MakeCmd(packageName, name)
+	err := MakeCmd(projectName, name)
 	if err != nil {
 		return err
 	}
@@ -40,13 +40,13 @@ func MkMicroservice(packageName, name, schema string) error {
 	}
 
 	ProgressNext(10)
-	err = MakeInternal(packageName, name, schema)
+	err = MakeInternal(projectName, name, schema)
 	if err != nil {
 		return err
 	}
 
 	ProgressNext(10)
-	err = MakePkg(name, schema)
+	err = MakePkg(projectName, name, schema)
 	if err != nil {
 		return err
 	}
@@ -68,14 +68,20 @@ func MkMicroservice(packageName, name, schema string) error {
 	return nil
 }
 
-func MkMolue(packageName, modelo, schema string) error {
+func MkMolue(projectName, packageName, modelo, schema string) error {
 	ProgressNext(10)
-	err := MakeModel(packageName, modelo, schema)
+	err := MakeInternalData(modelo, schema)
 	if err != nil {
 		return err
 	}
 
-	ProgressNext(90)
+	ProgressNext(10)
+	err = MakeModel(projectName, packageName, modelo, schema)
+	if err != nil {
+		return err
+	}
+
+	ProgressNext(80)
 
 	return nil
 }

@@ -5,70 +5,64 @@ import (
 	"github.com/cgalvisleon/et/strs"
 )
 
-func MakePkg(name, schema string) error {
-	path, err := file.MakeFolder("pkg", name)
+func MakePkg(projectName, name, schema string) error {
+	pathPkg, err := file.MakeFolder("pkg", name)
 	if err != nil {
 		return err
 	}
 
-	_, err = file.MakeFile(path, "event.go", modelEvent, name)
+	_, err = file.MakeFile(pathPkg, "event.go", modelEvent, name)
 	if err != nil {
 		return err
 	}
 
-	_, err = file.MakeFile(path, "config.go", modelConfig, name)
+	_, err = file.MakeFile(pathPkg, "config.go", modelConfig, name)
 	if err != nil {
 		return err
 	}
 
-	_, err = file.MakeFile(path, "rpc.go", modelRpc, name)
+	_, err = file.MakeFile(pathPkg, "rpc.go", modelRpc, name)
 	if err != nil {
 		return err
 	}
 
 	if len(schema) > 0 {
-		_, err = file.MakeFile(path, "controller.go", modelDbController, name)
+		_, err = file.MakeFile(pathPkg, "controller.go", modelDbController, name)
 		if err != nil {
 			return err
 		}
 
 		modelo := strs.Titlecase(name)
-		_, err = file.MakeFile(path, "model.go", modelModel, name, modelo)
-		if err != nil {
-			return err
-		}
-
-		path, err := file.MakeFolder("pkg", name)
+		_, err = file.MakeFile(pathPkg, "model.go", modelModel, name, schema, projectName, modelo)
 		if err != nil {
 			return err
 		}
 
 		fileName := strs.Format(`h%s.go`, modelo)
-		tableName := strs.Uppcase(name)
-		_, err = file.MakeFile(path, fileName, modelDbHandler, name, modelo, tableName)
+		_, err = file.MakeFile(pathPkg, fileName, modelDbHandler, name, modelo, projectName, schema)
 		if err != nil {
 			return err
 		}
 
 		title := strs.Titlecase(name)
-		_, err = file.MakeFile(path, "router.go", modelDbRouter, name, title)
+		_, err = file.MakeFile(pathPkg, "router.go", modelDbRouter, name, title)
 		if err != nil {
 			return err
 		}
 	} else {
-		_, err = file.MakeFile(path, "controller.go", modelController, name)
+		_, err = file.MakeFile(pathPkg, "controller.go", modelController, name)
 		if err != nil {
 			return err
 		}
 
 		modelo := strs.Titlecase(name)
 		fileName := strs.Format(`h%s.go`, modelo)
-		_, err = file.MakeFile(path, fileName, modelHandler, name, modelo)
+		_, err = file.MakeFile(pathPkg, fileName, modelHandler, name, toCamelCase(modelo))
 		if err != nil {
 			return err
 		}
 
-		_, err = file.MakeFile(path, "router.go", modelRouter, name)
+		_, err = file.MakeFile(pathPkg, "router.go", modelRouter, name)
 		if err != nil {
 			return err
 		}
@@ -77,26 +71,22 @@ func MakePkg(name, schema string) error {
 	return nil
 }
 
-func MakeModel(packageName, modelo, schema string) error {
-	path := strs.Format(`./pkg/%s`, packageName)
+func MakeModel(projectName, packageName, modelo, schema string) error {
+	pathPkg := strs.Format(`./pkg/%s`, packageName)
 
 	if len(schema) > 0 {
-		schemaVar := strs.Append("schema", strs.Titlecase(schema), "")
-		_, _ = file.MakeFile(path, "schema.go", modelSchema, packageName, schemaVar, schema)
-
 		modelo := strs.Titlecase(modelo)
-		_, _ = file.MakeFile(path, "model.go", modelModel, packageName, modelo)
+		_, _ = file.MakeFile(pathPkg, "model.go", modelModel, packageName, modelo, projectName)
 
-		modelo = strs.Titlecase(modelo)
 		fileName := strs.Format(`h%s.go`, modelo)
-		_, err := file.MakeFile(path, fileName, modelDbHandler, packageName, modelo, schemaVar, strs.Uppcase(modelo), strs.Lowcase(modelo))
+		_, err := file.MakeFile(pathPkg, fileName, modelDbHandler, packageName, toCamelCase(modelo), projectName, schema)
 		if err != nil {
 			return err
 		}
 	} else {
 		modelo = strs.Titlecase(modelo)
 		fileName := strs.Format(`h%s.go`, modelo)
-		_, err := file.MakeFile(path, fileName, modelHandler, packageName, modelo, strs.Lowcase(modelo))
+		_, err := file.MakeFile(pathPkg, fileName, modelHandler, packageName, toCamelCase(modelo), projectName)
 		if err != nil {
 			return err
 		}

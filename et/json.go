@@ -120,7 +120,7 @@ func (s Json) ToString() string {
 }
 
 /**
-* Empty return if the json is empty
+* IsEmpty return if the json is empty
 * @return bool
 **/
 func (s Json) IsEmpty() bool {
@@ -621,10 +621,9 @@ func (s *Json) Append(from Json) {
 }
 
 /**
-* IsDiferent return if the json is diferent
-* @param old Json
-* @param new Json
-* @return bool
+* Get
+* @param key string
+* @return interface{}
 **/
 func (s Json) Get(key string) interface{} {
 	v, ok := s[key]

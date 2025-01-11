@@ -640,8 +640,8 @@ func (s Json) Get(key string) interface{} {
 * @param val interface{}
 * @return bool
 **/
-func (s *Json) Set(key string, val interface{}) {
-	(*s)[key] = val
+func (s Json) Set(key string, val interface{}) {
+	s[key] = val
 }
 
 /**

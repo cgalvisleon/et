@@ -46,6 +46,16 @@ func (s *Items) Scan(src interface{}) error {
 }
 
 /**
+* Items methods
+* @param src interface{}
+* @return error
+**/
+func (s *Items) Add(item Json) {
+	(*s).Result = append((*s).Result, item)
+	(*s).Count = len((*s).Result)
+}
+
+/**
 * ToByte convert a json to a []byte
 * @return []byte
 **/

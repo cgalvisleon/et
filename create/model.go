@@ -563,7 +563,6 @@ func Insert$2(project_id, state, id string, data et.Json, user_full_name string)
 		"name": user_full_name,
 	}
 	return $2.Insert(data).
-		Return().
 		One()
 }
 
@@ -599,7 +598,6 @@ func UpSert$2(project_id, id string, data et.Json, user_full_name string) (et.It
 	}
 	return $2.Update(data).
 		Where("_id").Eq(id).
-		Return().
 		One()
 }
 
@@ -636,7 +634,6 @@ func State$2(id, state, user_full_name string) (et.Item, error) {
 		"_state": state,
 	}).
 		Where("_id").Eq(id).
-		Return().
 		One()
 }
 
@@ -665,7 +662,6 @@ func Delete$2(id, user_full_name string) (et.Item, error) {
 
 	return $2.Delete().
 		Where("_id").Eq(id).
-		Return().
 		One()
 }
 

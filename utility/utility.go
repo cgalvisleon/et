@@ -53,6 +53,7 @@ const QUEUE_STACK = "stack"
 
 var locks = make(map[string]*sync.RWMutex)
 var count = make(map[string]int64)
+var LIST_STATES = []string{ACTIVE, ARCHIVED, CANCELLED, IN_PROCESS, PENDING_APPROVAL, APPROVAL, REFUSED}
 
 /**
 * NowTime

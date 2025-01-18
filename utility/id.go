@@ -101,21 +101,13 @@ func PrefixId(prefix string) string {
 }
 
 /**
-* NewId return a new UUID
-* @return string
-**/
-func NewId() string {
-	return UUID()
-}
-
-/**
 * GenId return a new UUID
 * @param id string
 * @return string
 **/
 func GenId(id string) string {
 	if map[string]bool{"": true, "*": true, "new": true}[id] {
-		return NewId()
+		return UUID()
 	}
 
 	return id

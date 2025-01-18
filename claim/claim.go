@@ -224,7 +224,10 @@ func ParceToken(token string) (*Claim, error) {
 		Duration: duration,
 	}
 	if result.Duration != 0 {
-		result.ExpiresAt = int64(claim["exp"].(float64))
+		exp, ok := claim["exp"].(float64)
+		if ok {
+			result.ExpiresAt = int64(exp)
+		}
 	}
 
 	return result, nil

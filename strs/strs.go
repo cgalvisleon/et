@@ -104,6 +104,30 @@ func ReplaceAll(str string, olds []string, new string) string {
 }
 
 /**
+* Change
+* @param str string
+* @param olds []string
+* @param news []string
+* @return string
+**/
+func Change(str string, olds []string, news []string) string {
+	var result string = str
+	for i, str := range olds {
+		old := str
+		new := news[i]
+		result = strings.ReplaceAll(result, old, new)
+		old = Uppcase(str)
+		new = Uppcase(news[i])
+		result = strings.ReplaceAll(result, old, new)
+		old = Lowcase(str)
+		new = Lowcase(news[i])
+		result = strings.ReplaceAll(result, old, new)
+	}
+
+	return result
+}
+
+/**
 * Name
 * @param str string
 * @return string

@@ -184,30 +184,6 @@ func (s Item) Any(_default interface{}, atribs ...string) interface{} {
 }
 
 /**
-* Id return the value of the key
-* @return string
-**/
-func (s Item) Id() string {
-	return s.Result.Id()
-}
-
-/**
-* IdT return the value of the key
-* @return string
-**/
-func (s Item) IdT() string {
-	return s.Result.IdT()
-}
-
-/**
-* Index return the value of the key
-* @return int
-**/
-func (s Item) Index() int {
-	return s.Result.Index()
-}
-
-/**
 * Key return the value of the key
 * @param atribs ...string
 * @return string
@@ -299,42 +275,38 @@ func (s Item) Array(atrib string) []interface{} {
 
 /**
 * ArrayStr
-* @param _default []string
 * @param atribs ...string
 * @return []string
 **/
-func (s Item) ArrayStr(_default []string, atribs ...string) []string {
-	return s.Result.ArrayStr(_default, atribs...)
+func (s Item) ArrayStr(atribs ...string) []string {
+	return s.Result.ArrayStr(atribs...)
 }
 
 /**
 * ArrayInt
-* @param _default []int
 * @param atribs ...string
 * @return []int
 **/
-func (s Item) ArrayInt(_default []int, atribs ...string) []int {
-	return s.Result.ArrayInt(_default, atribs...)
+func (s Item) ArrayInt(atribs ...string) []int {
+	return s.Result.ArrayInt(atribs...)
 }
 
 /**
 * ArrayInt64
-* @param _default []int64
 * @param atribs ...string
 * @return []int64
 **/
-func (s Item) ArrayInt64(_default []int64, atribs ...string) []int64 {
-	return s.Result.ArrayInt64(_default, atribs...)
+func (s Item) ArrayInt64(atribs ...string) []int64 {
+	return s.Result.ArrayInt64(atribs...)
 }
 
 /**
 * ArrayJson
-* @param _default []Json
 * @param atribs ...string
 * @return []Json
 **/
-func (s Item) ArrayJson(_default []Json, atribs ...string) []Json {
-	return s.Result.ArrayJson(_default, atribs...)
+func (s Item) ArrayJson(atribs ...string) []Json {
+	return s.Result.ArrayJson(atribs...)
 }
 
 /**

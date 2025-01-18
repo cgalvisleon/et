@@ -34,7 +34,7 @@ func (s Status) ToString() string {
 * Body struct to convert the body response
 **/
 type Body struct {
-	data []byte
+	Data []byte
 }
 
 /**
@@ -43,7 +43,7 @@ type Body struct {
 **/
 func (b Body) ToJson() (et.Json, error) {
 	var result et.Json
-	err := json.Unmarshal(b.data, &result)
+	err := json.Unmarshal(b.Data, &result)
 	if err != nil {
 		return et.Json{}, err
 	}
@@ -57,7 +57,7 @@ func (b Body) ToJson() (et.Json, error) {
 **/
 func (b Body) ToArrayJson() ([]et.Json, error) {
 	var result []et.Json
-	err := json.Unmarshal(b.data, &result)
+	err := json.Unmarshal(b.Data, &result)
 	if err != nil {
 		return []et.Json{}, err
 	}
@@ -70,7 +70,7 @@ func (b Body) ToArrayJson() ([]et.Json, error) {
 * @return string
 **/
 func (b Body) ToString() string {
-	return string(b.data)
+	return string(b.Data)
 }
 
 /**
@@ -79,7 +79,7 @@ func (b Body) ToString() string {
 **/
 func (b Body) ToInt() (int, error) {
 	var result int
-	err := json.Unmarshal(b.data, &result)
+	err := json.Unmarshal(b.Data, &result)
 	if err != nil {
 		return 0, err
 	}
@@ -93,7 +93,7 @@ func (b Body) ToInt() (int, error) {
 **/
 func (b Body) ToInt64() (int64, error) {
 	var result int64
-	err := json.Unmarshal(b.data, &result)
+	err := json.Unmarshal(b.Data, &result)
 	if err != nil {
 		return 0, err
 	}
@@ -107,7 +107,7 @@ func (b Body) ToInt64() (int64, error) {
 **/
 func (b Body) ToFloat() (float64, error) {
 	var result float64
-	err := json.Unmarshal(b.data, &result)
+	err := json.Unmarshal(b.Data, &result)
 	if err != nil {
 		return 0, err
 	}
@@ -121,7 +121,7 @@ func (b Body) ToFloat() (float64, error) {
 **/
 func (b Body) ToBool() (bool, error) {
 	var result bool
-	err := json.Unmarshal(b.data, &result)
+	err := json.Unmarshal(b.Data, &result)
 	if err != nil {
 		return false, err
 	}
@@ -135,7 +135,7 @@ func (b Body) ToBool() (bool, error) {
 **/
 func (b Body) ToTime() (time.Time, error) {
 	var result time.Time
-	err := json.Unmarshal(b.data, &result)
+	err := json.Unmarshal(b.Data, &result)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -155,7 +155,7 @@ func ReadBody(body io.ReadCloser) (*Body, error) {
 		return nil, err
 	}
 
-	return &Body{data: bodyBytes}, nil
+	return &Body{Data: bodyBytes}, nil
 }
 
 // Return true if status code is ok

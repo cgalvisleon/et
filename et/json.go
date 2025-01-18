@@ -362,30 +362,6 @@ func (s Json) Any(_default interface{}, atribs ...string) interface{} {
 }
 
 /**
-* Id return the value of the key
-* @return string
-**/
-func (s Json) Id() string {
-	return s.ValStr("-1", "_id")
-}
-
-/**
-* IdT return the value of the key
-* @return string
-**/
-func (s Json) IdT() string {
-	return s.ValStr("-1", "_idT")
-}
-
-/**
-* Index return the value of the key
-* @return int
-**/
-func (s Json) Index() int {
-	return s.ValInt(-1, "index")
-}
-
-/**
 * Key return the value of the key
 * @param atribs ...string
 * @return string
@@ -483,17 +459,15 @@ func (s Json) Array(atrib string) []interface{} {
 
 /**
 * ArrayStr
-* @param _default []string
-* @param atribs ...string
 * @return []string
 **/
-func (s Json) ArrayStr(_default []string, atribs ...string) []string {
-	var result = _default
+func (s Json) ArrayStr(atribs ...string) []string {
+	var result = []string{}
 	vals := s.ValArray([]interface{}{}, atribs...)
 	for i, val := range vals {
 		v, ok := val.(string)
 		if !ok {
-			return _default
+			return result
 		}
 
 		if i == 0 {
@@ -508,17 +482,16 @@ func (s Json) ArrayStr(_default []string, atribs ...string) []string {
 
 /**
 * ArrayInt
-* @param _default []int
 * @param atribs ...string
 * @return []int
 **/
-func (s Json) ArrayInt(_default []int, atribs ...string) []int {
-	var result = _default
+func (s Json) ArrayInt(atribs ...string) []int {
+	var result = []int{}
 	vals := s.ValArray([]interface{}{}, atribs...)
 	for i, val := range vals {
 		v, ok := val.(int)
 		if !ok {
-			return _default
+			return result
 		}
 
 		if i == 0 {
@@ -533,17 +506,16 @@ func (s Json) ArrayInt(_default []int, atribs ...string) []int {
 
 /**
 * ArrayInt64
-* @param _default []int64
 * @param atribs ...string
 * @return []int64
 **/
-func (s Json) ArrayInt64(_default []int64, atribs ...string) []int64 {
-	var result = _default
+func (s Json) ArrayInt64(atribs ...string) []int64 {
+	var result = []int64{}
 	vals := s.ValArray([]interface{}{}, atribs...)
 	for i, val := range vals {
 		v, ok := val.(int64)
 		if !ok {
-			return _default
+			return result
 		}
 
 		if i == 0 {
@@ -558,17 +530,16 @@ func (s Json) ArrayInt64(_default []int64, atribs ...string) []int64 {
 
 /**
 * ArrayJson
-* @param _default []Json
 * @param atribs ...string
 * @return []Json
 **/
-func (s Json) ArrayJson(_default []Json, atribs ...string) []Json {
-	var result = _default
+func (s Json) ArrayJson(atribs ...string) []Json {
+	var result = []Json{}
 	vals := s.ValArray([]interface{}{}, atribs...)
 	for i, val := range vals {
 		v, err := Object(val)
 		if err != nil {
-			return _default
+			return result
 		}
 
 		if i == 0 {

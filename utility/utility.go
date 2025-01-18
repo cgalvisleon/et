@@ -23,6 +23,7 @@ import (
 
 const NOT_FOUND = "Not found"
 const FOUND = "Found"
+const SYSID = "-1"
 const FOR_DELETE = "-2"
 const OF_SYSTEM = "-1"
 const ACTIVE = "0"

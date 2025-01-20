@@ -41,7 +41,7 @@ git update &&
 git tag v0.0.3 &&
 git tags
 
-go get github.com/cgalvisleon/et@v0.0.18
+go get github.com/cgalvisleon/et@v1.0.0
 ```
 
 ## Condicion de carrera

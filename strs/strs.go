@@ -111,17 +111,20 @@ func ReplaceAll(str string, olds []string, new string) string {
 * @return string
 **/
 func Change(str string, olds []string, news []string) string {
-	var result string = str
-	for i, str := range olds {
-		old := str
+	var result = str
+	for i, s := range olds {
+		old := Format(`\b%s\b`, s)
 		new := news[i]
-		result = strings.ReplaceAll(result, old, new)
-		old = Uppcase(str)
+		re := regexp.MustCompile(old)
+		result = re.ReplaceAllString(result, new)
+		old = Format(`\b%s\b`, Uppcase(s))
 		new = Uppcase(news[i])
-		result = strings.ReplaceAll(result, old, new)
-		old = Lowcase(str)
+		re = regexp.MustCompile(old)
+		result = re.ReplaceAllString(result, new)
+		old = Format(`\b%s\b`, Lowcase(s))
 		new = Lowcase(news[i])
-		result = strings.ReplaceAll(result, old, new)
+		re = regexp.MustCompile(old)
+		result = re.ReplaceAllString(result, new)
 	}
 
 	return result

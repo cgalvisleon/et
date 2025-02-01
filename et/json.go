@@ -141,8 +141,14 @@ func (s Json) ValAny(_default interface{}, atribs ...string) interface{} {
 		switch v := current.(type) {
 		case Json:
 			current = v[atribs[i]]
+			if current == nil {
+				return _default
+			}
 		case map[string]interface{}:
 			current = v[atribs[i]]
+			if current == nil {
+				return _default
+			}
 		default:
 			return _default
 		}

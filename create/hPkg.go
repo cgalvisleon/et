@@ -38,7 +38,7 @@ func MakePkg(projectName, name, schema string) error {
 			return err
 		}
 
-		fileName := strs.Format(`h%s.go`, modelo)
+		fileName := strs.Format(`router-%s.go`, strs.Lowcase(name))
 		_, err = file.MakeFile(pathPkg, fileName, modelDbHandler, name, modelo, projectName, schema)
 		if err != nil {
 			return err
@@ -78,7 +78,7 @@ func MakeModel(projectName, packageName, modelo, schema string) error {
 		modelo := strs.Titlecase(modelo)
 		_, _ = file.MakeFile(pathPkg, "model.go", modelModel, packageName, modelo, projectName)
 
-		fileName := strs.Format(`h%s.go`, modelo)
+		fileName := strs.Format(`router-%s.go`, strs.Lowcase(modelo))
 		_, err := file.MakeFile(pathPkg, fileName, modelDbHandler, packageName, toCamelCase(modelo), projectName, schema)
 		if err != nil {
 			return err

@@ -70,7 +70,7 @@ func MkMicroservice(projectName, name, schema string) error {
 
 func MkMolue(projectName, packageName, modelo, schema string) error {
 	ProgressNext(10)
-	err := MakeInternalData(modelo, schema)
+	err := MakeInternalModel(modelo, schema)
 	if err != nil {
 		return err
 	}

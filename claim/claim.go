@@ -37,6 +37,7 @@ const (
 	ProjectIdKey ContextKey = "projectId"
 	ProfileTpKey ContextKey = "profileTp"
 	ModelKey     ContextKey = "model"
+	TagKey       ContextKey = "tag"
 )
 
 type Claim struct {
@@ -47,6 +48,7 @@ type Claim struct {
 	Username string        `json:"username"`
 	Device   string        `json:"device"`
 	Duration time.Duration `json:"duration"`
+	Tag      string        `json:"tag"`
 	jwt.StandardClaims
 }
 
@@ -63,6 +65,7 @@ func (c *Claim) ToJson() et.Json {
 		"device":    c.Device,
 		"subject":   c.Subject,
 		"duration":  c.Duration,
+		"tag":       c.Tag,
 		"expiresAt": time.Unix(c.ExpiresAt, 0).Format("2006-01-02 03:04:05 PM"),
 	}
 }
@@ -79,19 +82,16 @@ func GetTokenKey(app, device, id string) string {
 }
 
 /**
-* NewToken
+* newClaim
 * @param id string
 * @param app string
 * @param name string
 * @param username string
 * @param device string
 * @param duration time.Duration
-* @return token string
-* @return key string
-* @return err error
+* @return Claim
 **/
-func NewToken(id, app, name string, username, device string, duration time.Duration) (string, error) {
-	secret := envar.GetStr("1977", "SECRET")
+func newClaim(id, app, name string, username, device, tag string, duration time.Duration) Claim {
 	c := Claim{}
 	c.Salt = utility.GetOTP(6)
 	c.ID = id
@@ -100,9 +100,22 @@ func NewToken(id, app, name string, username, device string, duration time.Durat
 	c.Username = username
 	c.Device = device
 	c.Duration = duration
+	c.Tag = tag
 	if c.Duration != 0 {
 		c.ExpiresAt = timezone.Add(c.Duration).Unix()
 	}
+
+	return c
+}
+
+/**
+* newToken
+* @param c Claim
+* @return string
+* @return error
+**/
+func newToken(c Claim) (string, error) {
+	secret := envar.GetStr("1977", "SECRET")
 	_jwt := jwt.NewWithClaims(jwt.SigningMethodHS256, c)
 	token, err := _jwt.SignedString([]byte(secret))
 	if err != nil {
@@ -116,6 +129,40 @@ func NewToken(id, app, name string, username, device string, duration time.Durat
 	}
 
 	return token, nil
+}
+
+/**
+* NewToken
+* @param id string
+* @param app string
+* @param name string
+* @param username string
+* @param device string
+* @param duration time.Duration
+* @return token string
+* @return key string
+* @return err error
+**/
+func NewToken(id, app, name string, username, device string, duration time.Duration) (string, error) {
+	c := newClaim(id, app, name, username, device, "", duration)
+	return newToken(c)
+}
+
+/**
+* NewAutorization
+* @param id string
+* @param app string
+* @param name string
+* @param username string
+* @param device string
+* @param tag string
+* @param duration time.Duration
+* @return token string
+* @return err error
+**/
+func NewAutorization(id, app, name, username, device, tag string, duration time.Duration) (string, error) {
+	c := newClaim(id, app, name, username, device, tag, duration)
+	return newToken(c)
 }
 
 /**
@@ -298,19 +345,23 @@ func GetClientName(r *http.Request) string {
 }
 
 /**
-* GetUser
+* GetClient
 * @param r *http.Request
 * @return et.Json
 **/
-func GetUser(r *http.Request) et.Json {
+func GetClient(r *http.Request) et.Json {
 	now := utility.Now()
 	ctx := r.Context()
 	username := UsernameKey.String(ctx, "Anonimo")
 	fullName := NameKey.String(ctx, "Anonimo")
+	clientId := ClientIdKey.String(ctx, "-1")
+	tag := TagKey.String(ctx, "")
 
 	return et.Json{
 		"date_at":   now,
+		"client_id": clientId,
 		"username":  username,
 		"full_name": fullName,
+		"tag":       tag,
 	}
 }

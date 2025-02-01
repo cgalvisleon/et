@@ -25,8 +25,8 @@ func tableName(name string) string {
 	return result
 }
 
-func MakeInternalData(name, schema string) error {
-	path, _ := file.MakeFolder("internal", "data", schema)
+func MakeInternalModel(name, schema string) error {
+	path, _ := file.MakeFolder("internal", "models", schema)
 
 	_, _ = file.MakeFile(path, "schema.go", modelSchema, schema)
 
@@ -45,7 +45,7 @@ func MakeInternalData(name, schema string) error {
 
 func MakeInternal(projectName, name, schema string) error {
 	if len(schema) > 0 {
-		err := MakeInternalData(name, schema)
+		err := MakeInternalModel(name, schema)
 		if err != nil {
 			return err
 		}

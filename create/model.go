@@ -294,7 +294,6 @@ const modelConfig = `package $1
 
 import (
 	"github.com/cgalvisleon/et/config"
-	// "github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jrpc"
 	"github.com/cgalvisleon/et/mistake"
@@ -452,44 +451,18 @@ func Define$2(db *jdb.DB) error {
 	}
 
 	$2 = jdb.NewModel(schema, "$3", 1)
-	$2.DefineColumn(jdb.CreatedAtField.Str(), jdb.CreatedAtField.TypeData())
-	$2.DefineColumn(jdb.UpdatedAtField.Str(), jdb.UpdatedAtField.TypeData())
-	$2.DefineColumn(jdb.ProjectField.Str(), jdb.ProjectField.TypeData())
-	$2.DefineColumn(jdb.StateField.Str(), jdb.StateField.TypeData())
-	$2.DefineColumn(jdb.SystemKeyField.Str(), jdb.SystemKeyField.TypeData())
-	$2.DefineColumn("name", jdb.TypeDataText)
-	$2.DefineColumn(jdb.SourceField.Str(), jdb.SourceField.TypeData())
-	$2.DefineColumn(jdb.SystemKeyField.Str(), jdb.SystemKeyField.TypeData())
-	$2.DefineColumn(jdb.IndexField.Str(), jdb.IndexField.TypeData())
-	$2.DefineKey(jdb.SystemKeyField.Str())
+	$2.MakeCollection()
+	$2.DefineAtribute("name", jdb.TypeDataText)
 	$2.DefineIndex(true,
-		jdb.CreatedAtField.Str(),
-		jdb.UpdatedAtField.Str(),
-		jdb.ProjectField.Str(),
-		jdb.StateField.Str(),
-		jdb.SystemKeyField.Str(),
-		jdb.SourceField.Str(),
-		jdb.SystemKeyField.Str(),
-		jdb.IndexField.Str(),
+		"name",
 	)
-	$2.DefineRequired("name")
-	$2.Integrity = true
-	$2.DefineTrigger(jdb.BeforeInsert, func(old et.Json, new *et.Json, data et.Json) error {
+	$2.DefineEvent(jdb.EventInsert, func(model *jdb.Model, before et.Json, after et.Json) error {
 		return nil
 	})
-	$2.DefineTrigger(jdb.AfterInsert, func(old et.Json, new *et.Json, data et.Json) error {
+	$2.DefineEvent(jdb.EventUpdate, func(model *jdb.Model, before et.Json, after et.Json) error {
 		return nil
 	})
-	$2.DefineTrigger(jdb.BeforeUpdate, func(mold et.Json, new *et.Json, data et.Json) error {
-		return nil
-	})
-	$2.DefineTrigger(jdb.AfterUpdate, func(old et.Json, new *et.Json, data et.Json) error {
-		return nil
-	})
-	$2.DefineTrigger(jdb.BeforeDelete, func(old et.Json, new *et.Json, data et.Json) error {
-		return nil
-	})
-	$2.DefineTrigger(jdb.AfterDelete, func(old et.Json, new *et.Json, data et.Json) error {
+	$2.DefineEvent(jdb.EventDelete, func(model *jdb.Model, before et.Json, after et.Json) error {
 		return nil
 	})
 
@@ -507,43 +480,40 @@ func Define$2(db *jdb.DB) error {
 * @return error
 **/
 func Get$2ById(id string) (et.Item, error) {
-	if !utility.ValidId(id) {
-		return et.Item{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "_id")
-	}
-
-	item, err := jdb.From($2).
-		Where("_id").Eq(id).
+	result, err := $2.
+		Where(jdb.KEY).Eq(id).
 		Data().
 		One()
 	if err != nil {
 		return et.Item{}, err
 	}
 
-	return item, nil
+	return result, nil
 }
 
 /**
 * Insert$2
-* @param project_id string
+* @param project string
 * @param state string
 * @param id string
 * @param data et.Json
+* @param client string
 * @return et.Item
 * @return error
 **/
-func Insert$2(project_id, state, id string, data et.Json, user_full_name string) (et.Item, error) {
-	if !utility.ValidId(project_id) {
-		return et.Item{}, mistake.Newf(MSG_ATRIB_REQUIRED, "project_id")
+func Insert$2(project, state, id string, data et.Json, client string) (et.Item, error) {
+	if !utility.ValidStr(project, 0, []string{""}) {
+		return et.Item{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "project")
 	}
 
-	if !utility.ValidId(id) {
-		return et.Item{}, mistake.Newf(MSG_ATRIB_REQUIRED, "_id")
+	if !utility.ValidStr(id, 0, []string{""}) {
+		return et.Item{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, jdb.KEY)
 	}
 
-	id = utility.GenKey(id)
-	current, err := jdb.From($2).
-		Where("_id").Eq(id).
-		Data("_state", "_id").
+	id = $2.GenId(id)
+	current, err := $2.
+		Where(jdb.KEY).Eq(id).
+		Data().
 		One()
 	if err != nil {
 		return et.Item{}, err
@@ -554,29 +524,27 @@ func Insert$2(project_id, state, id string, data et.Json, user_full_name string)
 	}
 
 	now := utility.Now()
-	data["created_at"] = now
-	data["date_update"] = now
-	data["project_id"] = project_id
-	data["_state"] = state
-	data["_id"] = id
-	data["last_updated"] = et.Json{
-		"name": user_full_name,
-	}
+	data[jdb.CREATED_AT] = now
+	data[jdb.UPDATED_AT] = now	
+	data[jdb.STATUS] = state
+	data[jdb.KEY] = id
+	data["project"] = project
+	data["created_by"] = client
 	return $2.Insert(data).
 		One()
 }
 
 /**
 * UpSert$2
-* @param project_id string
+* @param project string
 * @param id string
 * @param data et.Json
-* @param user_id string
+* @param client string
 * @return et.Item
 * @return error
 **/
-func UpSert$2(project_id, id string, data et.Json, user_full_name string) (et.Item, error) {
-	current, err := Insert$2(project_id, utility.ACTIVE, id, data, user_full_name)
+func UpSert$2(project, id string, data et.Json, client string) (et.Item, error) {
+	current, err := Insert$2(project, utility.ACTIVE, id, data, client)
 	if err != nil {
 		return et.Item{}, err
 	}
@@ -585,19 +553,17 @@ func UpSert$2(project_id, id string, data et.Json, user_full_name string) (et.It
 		return current, nil
 	}
 
-	current_state := current.Key("_state")
+	current_state := current.Key(jdb.STATUS)
 	if current_state != utility.ACTIVE {
 		return et.Item{}, console.Alertf(MSG_STATE_NOT_ACTIVE, current_state)
 	}
 
-	id = current.Key("_id")
+	id = current.Key(jdb.KEY)
 	now := utility.Now()
-	data["created_at"] = now
-	data["last_updated"] = et.Json{
-		"name": user_full_name,
-	}
+	data[jdb.UPDATED_AT] = now
+	data["updated_by"] = client
 	return $2.Update(data).
-		Where("_id").Eq(id).
+		Where(jdb.KEY).Eq(id).
 		One()
 }
 
@@ -605,17 +571,18 @@ func UpSert$2(project_id, id string, data et.Json, user_full_name string) (et.It
 * State$2
 * @param id string
 * @param state string
+* @param client string
 * @return et.Item
 * @return error
 **/
-func State$2(id, state, user_full_name string) (et.Item, error) {
-	if !utility.ValidId(state) {
-		return et.Item{}, mistake.Newf(MSG_ATRIB_REQUIRED, "state")
+func State$2(id, state, client string) (et.Item, error) {
+	if !utility.ValidStr(state, 0, []string{""}) {
+		return et.Item{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, jdb.STATUS)
 	}
 
-	current, err := jdb.From($2).
-		Where("_id").Eq(id).
-		Data("_state").
+	current, err := $2.
+		Where(jdb.KEY).Eq(id).
+		Data(jdb.STATUS).
 		One()
 	if err != nil {
 		return et.Item{}, err
@@ -625,32 +592,34 @@ func State$2(id, state, user_full_name string) (et.Item, error) {
 		return et.Item{}, console.Alertm(msg.RECORD_NOT_FOUND)
 	}
 
-	current_state := current.Key("_state")
+	current_state := current.Key(jdb.STATUS)
 	if current_state == state {
 		return et.Item{Ok: true, Result: et.Json{"message": msg.RECORD_NOT_UPDATE}}, nil
 	}
 
 	return $2.Update(et.Json{
-		"_state": state,
+		jdb.UPDATED_AT: utility.Now(),
+		jdb.STATUS: state,
+		"updated_by": client,
 	}).
-		Where("_id").Eq(id).
+		Where(jdb.KEY).Eq(id).
 		One()
 }
 
 /**
 * Delete$2
-* @param id, user_full_name string
+* @param id string
 * @return et.Item
 * @return error
 **/
-func Delete$2(id, user_full_name string) (et.Item, error) {
-	if !utility.ValidId(id) {
-		return et.Item{}, console.Alertf(MSG_ATRIB_REQUIRED, "_id")
+func Delete$2(id string) (et.Item, error) {
+	if !utility.ValidStr(id, 0, []string{""}) {
+		return et.Item{}, console.Alertf(msg.MSG_ATRIB_REQUIRED, jdb.KEY)
 	}
 
-	current, err := jdb.From($2).
-		Where("_id").Eq(id).
-		Data("_id").
+	current, err := $2.
+		Where(jdb.KEY).Eq(id).
+		Data(jdb.KEY).
 		One()
 	if err != nil {
 		return et.Item{}, err
@@ -661,26 +630,10 @@ func Delete$2(id, user_full_name string) (et.Item, error) {
 	}
 
 	return $2.Delete().
-		Where("_id").Eq(id).
+		Where(jdb.KEY).Eq(id).
 		One()
 }
 
-/**
-* Query$2
-* @param query []string
-* @return et.Items
-* @return error
-**/
-func Query$2(query et.Json) (et.Items, error) {
-	result, err := jdb.From($2).
-		Debug().
-		Query(query)
-	if err != nil {
-		return et.Items{}, err
-	}
-
-	return result, nil
-}
 `
 
 const modelDbHandler = `package $1
@@ -690,8 +643,9 @@ import (
 
 	"github.com/cgalvisleon/et/claim"
 	"github.com/cgalvisleon/et/response"
+	"github.com/cgalvisleon/jdb/jdb"
 	"github.com/go-chi/chi/v5"
-	"$3/internal/data/$4"
+	"$3/internal/models/$4"
 )
 
 /**
@@ -701,11 +655,11 @@ import (
 **/
 func (rt *Router) upSert$2(w http.ResponseWriter, r *http.Request) {
 	body, _ := response.GetBody(r)
-	project_id := body.Str("project_id")
+	project := body.Str("project")
 	id := body.Str("id")
-	user_id := body.Str("user_id")
+	user := body.Str("user")
 
-	result, err := $4.UpSert$2(project_id, id, body, user_id)
+	result, err := $4.UpSert$2(project, id, body, user)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -739,10 +693,10 @@ func (rt *Router) get$2ById(w http.ResponseWriter, r *http.Request) {
 func (rt *Router) state$2(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	body, _ := response.GetBody(r)
-	state := body.Str("state")
-	user_name := claim.GetClientName(r)
+	state := body.Str(jdb.STATUS)
+	client := claim.GetClientName(r)
 
-	result, err := $4.State$2(id, state, user_name)
+	result, err := $4.State$2(id, state, client)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -758,33 +712,14 @@ func (rt *Router) state$2(w http.ResponseWriter, r *http.Request) {
 **/
 func (rt *Router) delete$2(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	user_name := claim.GetClientName(r)
 
-	result, err := $4.Delete$2(id, user_name)
+	result, err := $4.Delete$2(id)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	response.ITEM(w, r, http.StatusOK, result)
-}
-
-/**
-* query$2
-* @param w http.ResponseWriter
-* @param r *http.Request
-**/
-func (rt *Router) query$2(w http.ResponseWriter, r *http.Request) {
-	body, _ := response.GetBody(r)
-	query := body.Json("query")
-
-	result, err := $4.Query$2(query)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	response.JSON(w, r, http.StatusOK, result)
 }
 
 /** Copy this code to router.go
@@ -942,10 +877,8 @@ func (c *Service) Version(require []byte, response *[]byte) error {
 const modelMsg = `package $1
 
 const (
-	// MSG
-	MSG_ATRIB_REQUIRED   = "Atributo requerido (%s)"
 	MSG_VALUE_REQUIRED 	 = "Atributo requerido (%s) value:%s"
-	MSG_STATE_NOT_ACTIVE = "Estado no activo (%s)"
+	MSG_STATE_NOT_ACTIVE = "Estado no activo (%s)"  
 	RECORD_NOT_FOUND     = "Registro no encontrado"
 	RECORD_NOT_UPDATE    = "Registro no actualizado"
 )

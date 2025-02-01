@@ -289,6 +289,10 @@ func Unquote(val interface{}) any {
 		return v
 	case bool:
 		return v
+	case et.Json:
+		return strs.Format(`%s`, v.ToString())
+	case map[string]interface{}:
+		return strs.Format(`%s`, et.Json(v).ToString())
 	case time.Time:
 		return strs.Format(`%s`, v.Format("2006-01-02 15:04:05"))
 	case []string:
@@ -300,7 +304,7 @@ func Unquote(val interface{}) any {
 				r = strs.Format(`%s, %s`, r, unquote(_v))
 			}
 		}
-		return strs.Format(`(%s)`, unquote(r))
+		return strs.Format(`[%s]`, unquote(r))
 	case []interface{}:
 		var r string
 		for i, _v := range v {
@@ -312,6 +316,8 @@ func Unquote(val interface{}) any {
 			}
 		}
 		return strs.Format(`[%s]`, r)
+	case []uint8:
+		return strs.Format(`%s`, string(v))
 	case nil:
 		return strs.Format(`%s`, "NULL")
 	default:
@@ -349,6 +355,10 @@ func Quote(val interface{}) any {
 		return v
 	case time.Time:
 		return strs.Format(fmt, v.Format("2006-01-02 15:04:05"))
+	case et.Json:
+		return strs.Format(fmt, v.ToString())
+	case map[string]interface{}:
+		return strs.Format(fmt, et.Json(v).ToString())
 	case []string:
 		var r string
 		for i, _v := range v {
@@ -359,7 +369,8 @@ func Quote(val interface{}) any {
 				r = strs.Format(`%s, %s`, r, s)
 			}
 		}
-		return strs.Format(`(%s)`, r)
+		r = strs.Format(`[%s]`, r)
+		return strs.Format(fmt, r)
 	case []interface{}:
 		var r string
 		for i, _v := range v {
@@ -370,7 +381,10 @@ func Quote(val interface{}) any {
 				r = strs.Format(`%s, %v`, r, q)
 			}
 		}
-		return strs.Format(`[%s]`, r)
+		r = strs.Format(`[%s]`, r)
+		return strs.Format(fmt, r)
+	case []uint8:
+		return strs.Format(fmt, string(v))
 	case nil:
 		return strs.Format(`%s`, "NULL")
 	default:

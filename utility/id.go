@@ -3,14 +3,18 @@ package utility
 import (
 	cr "crypto/rand"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/bwmarrin/snowflake"
+	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/google/uuid"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/oklog/ulid"
 )
+
+var nodId int64 = 1
 
 /**
 * GetOTP return a code verify
@@ -66,8 +70,8 @@ func NanoId(n int) string {
 * ShortUUID return a new ShortUUID
 * @return string
 **/
-func ShortUUID() string {
-	node, err := snowflake.NewNode(1)
+func Snowflake() string {
+	node, err := snowflake.NewNode(nodId)
 	if err != nil {
 		panic(err)
 	}
@@ -77,17 +81,11 @@ func ShortUUID() string {
 }
 
 /**
-* SnowflakeID return a new SnowflakeID
-* @return string
+* SetSnowflakeNode
+* @param n int64
 **/
-func SnowflakeID() string {
-	node, err := snowflake.NewNode(1)
-	if err != nil {
-		panic(err)
-	}
-	id := node.Generate()
-
-	return id.String()
+func SetSnowflakeNode(n int64) {
+	nodId = n
 }
 
 /**
@@ -96,7 +94,7 @@ func SnowflakeID() string {
 * @return string
 **/
 func PrefixId(prefix string) string {
-	id := ShortUUID()
+	id := Snowflake()
 	return prefix + "-" + id
 }
 
@@ -124,4 +122,31 @@ func GenKey(id string) string {
 	}
 
 	return id
+}
+
+/**
+* RecordId return a new UUID
+* @param table string
+* @param id string
+* @return string
+**/
+func RecordId(table, id string) string {
+	if !map[string]bool{"": true, "*": true, "new": true}[id] {
+		split := strings.Split(id, ":")
+		if len(split) == 1 {
+			return strs.Format(`%s:%s`, table, id)
+		} else if len(split) == 2 && split[0] != table {
+			return strs.Format(`%s:%s`, table, split[1])
+		}
+
+		return id
+	}
+
+	id = Snowflake()
+	return strs.Format(`%s:%s`, table, id)
+}
+
+func init() {
+	epoch := time.Date(2020, 1, 1, 0, 0, 0, 0, NowTime().Location())
+	snowflake.Epoch = epoch.UnixNano() / 1e6
 }

@@ -130,20 +130,20 @@ func GenKey(id string) string {
 * @param id string
 * @return string
 **/
-func RecordId(table, id string) string {
+func RecordId(tag, id string) string {
 	if !map[string]bool{"": true, "*": true, "new": true}[id] {
 		split := strings.Split(id, ":")
 		if len(split) == 1 {
-			return strs.Format(`%s:%s`, table, id)
-		} else if len(split) == 2 && split[0] != table {
-			return strs.Format(`%s:%s`, table, split[1])
+			return strs.Format(`%s:%s`, tag, id)
+		} else if len(split) == 2 && split[0] != tag {
+			return strs.Format(`%s:%s`, tag, split[1])
 		}
 
 		return id
 	}
 
 	id = Snowflake()
-	return strs.Format(`%s:%s`, table, id)
+	return strs.Format(`%s:%s`, tag, id)
 }
 
 func init() {

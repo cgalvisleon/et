@@ -16,19 +16,19 @@ import (
 * @params key string
 * @params val string
 * @params second time.Duration
-* @return error
+* @return string
 **/
-func SetCtx(ctx context.Context, key, val string, second time.Duration) error {
+func SetCtx(ctx context.Context, key, val string, second time.Duration) string {
 	if conn == nil {
-		return mistake.New(msg.ERR_NOT_CACHE_SERVICE)
+		return val
 	}
 
 	err := conn.Set(ctx, key, val, second).Err()
 	if err != nil {
-		return err
+		return val
 	}
 
-	return nil
+	return val
 }
 
 /**

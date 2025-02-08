@@ -102,10 +102,7 @@ func setRoutes(routers []*Package) error {
 		return err
 	}
 
-	err = cache.Set(RPC_KEY, string(bt), 0)
-	if err != nil {
-		return err
-	}
+	cache.Set(RPC_KEY, string(bt), 0)
 
 	return nil
 }

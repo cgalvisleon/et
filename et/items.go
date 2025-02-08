@@ -400,6 +400,21 @@ func (s Items) ExistKey(dx int, key string) bool {
 }
 
 /**
+* First
+* @return Item
+**/
+func (s Items) First() Item {
+	if len(s.Result) == 0 {
+		return Item{}
+	}
+
+	return Item{
+		Ok:     true,
+		Result: s.Result[0],
+	}
+}
+
+/**
 * ToList return the value type List
 * @param all int
 * @param page int

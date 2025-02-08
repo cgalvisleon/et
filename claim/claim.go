@@ -123,10 +123,7 @@ func newToken(c Claim) (string, error) {
 	}
 
 	key := GetTokenKey(c.App, c.Device, c.ID)
-	err = cache.Set(key, token, c.Duration)
-	if err != nil {
-		return "", err
-	}
+	cache.Set(key, token, c.Duration)
 
 	return token, nil
 }
@@ -312,16 +309,12 @@ func ValidToken(token string) (*Claim, error) {
 * @param device string
 * @param id string
 * @param token string
-* @return error
 **/
-func SetToken(app, device, id, token string, duration time.Duration) error {
+func SetToken(app, device, id, token string, duration time.Duration) string {
 	key := GetTokenKey(app, device, id)
-	err := cache.Set(key, token, duration)
-	if err != nil {
-		return err
-	}
+	cache.Set(key, token, duration)
 
-	return nil
+	return key
 }
 
 /**

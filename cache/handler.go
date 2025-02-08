@@ -47,11 +47,11 @@ func GenKey(args ...interface{}) string {
 * @params key string
 * @params val interface{}
 * @params second time.Duration
-* @return error
+* @return interface{}
 **/
-func Set(key string, val interface{}, second time.Duration) error {
+func Set(key string, val interface{}, second time.Duration) interface{} {
 	if conn == nil {
-		return mistake.New(msg.ERR_NOT_CACHE_SERVICE)
+		return val
 	}
 
 	switch v := val.(type) {
@@ -147,10 +147,7 @@ func Count(key string, expiration time.Duration) int {
 	}
 
 	result++
-	err = Set(key, result, expiration)
-	if err != nil {
-		return 0
-	}
+	Set(key, result, expiration)
 
 	return result
 }
@@ -159,9 +156,9 @@ func Count(key string, expiration time.Duration) int {
 * SetH
 * @params key string
 * @params val interface{}
-* @return error
+* @return interface{}
 **/
-func SetH(key string, val interface{}) error {
+func SetH(key string, val interface{}) interface{} {
 	return Set(key, val, time.Hour*1)
 }
 
@@ -169,9 +166,9 @@ func SetH(key string, val interface{}) error {
 * SetD
 * @params key string
 * @params val interface{}
-* @return error
+* @return interface{}
 **/
-func SetD(key string, val interface{}) error {
+func SetD(key string, val interface{}) interface{} {
 	return Set(key, val, time.Hour*24)
 }
 
@@ -179,9 +176,9 @@ func SetD(key string, val interface{}) error {
 * SetW
 * @params key string
 * @params val interface{}
-* @return error
+* @return interface{}
 **/
-func SetW(key string, val interface{}) error {
+func SetW(key string, val interface{}) interface{} {
 	return Set(key, val, time.Hour*24*7)
 }
 
@@ -189,9 +186,9 @@ func SetW(key string, val interface{}) error {
 * SetM
 * @params key string
 * @params val interface{}
-* @return error
+* @return interface{}
 **/
-func SetM(key string, val interface{}) error {
+func SetM(key string, val interface{}) interface{} {
 	return Set(key, val, time.Hour*24*30)
 }
 
@@ -199,9 +196,9 @@ func SetM(key string, val interface{}) error {
 * SetY
 * @params key string
 * @params val interface{}
-* @return error
+* @return interface{}
 **/
-func SetY(key string, val interface{}) error {
+func SetY(key string, val interface{}) interface{} {
 	return Set(key, val, time.Hour*24*365)
 }
 
@@ -337,9 +334,9 @@ func HDelete(key, atr string) error {
 * @params key string
 * @params val string
 * @params duration time.Duration
-* @return error
+* @return interface{}
 **/
-func SetVerify(device, key, val string, duration time.Duration) error {
+func SetVerify(device, key, val string, duration time.Duration) interface{} {
 	key = GenKey("verify", device, key)
 	return Set(key, val, duration)
 }

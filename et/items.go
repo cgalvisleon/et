@@ -378,6 +378,10 @@ func (s Items) Get(dx int, key string) interface{} {
 * @return bool
 **/
 func (s *Items) Set(dx int, key string, val interface{}) {
+	if s.Result == nil {
+		(*s).Result = []Json{}
+	}
+
 	(*s).Result[dx].Set(key, val)
 }
 
@@ -404,7 +408,7 @@ func (s Items) ExistKey(dx int, key string) bool {
 * @return Item
 **/
 func (s Items) First() Item {
-	if len(s.Result) == 0 {
+	if s.Count == 0 {
 		return Item{}
 	}
 

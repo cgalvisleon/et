@@ -285,13 +285,13 @@ func (m *Metrics) telemetry() et.Json {
 	result := m.ToJson()
 	result["metric"] = m.metrics.ToJson()
 
-	go event.Telemetry(et.Json{
+	event.Telemetry(et.Json{
 		"response": m,
 		"metric":   m.metrics.ToJson(),
 	})
 
 	if m.metrics.RequestsPerSecond > m.metrics.RequestsLimit {
-		go event.Overflow(et.Json{
+		event.Overflow(et.Json{
 			"response": m,
 			"metric":   m.metrics.ToJson(),
 		})

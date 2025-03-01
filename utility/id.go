@@ -142,7 +142,7 @@ func RecordId(tag, id string) string {
 		return id
 	}
 
-	id = Snowflake()
+	id = UUID()
 	return strs.Format(`%s:%s`, tag, id)
 }
 

@@ -70,3 +70,8 @@ func ValidCode(val string) bool {
 	ok := len(val) >= 6 && pattern.MatchString(val)
 	return ok
 }
+
+func ValidWord(word string) bool {
+	re := regexp.MustCompile(`^[a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]+$`)
+	return re.MatchString(word)
+}

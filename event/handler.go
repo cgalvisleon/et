@@ -2,6 +2,7 @@ package event
 
 import (
 	"net/http"
+	"slices"
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
@@ -20,6 +21,8 @@ const EVENT_OVERFLOW = "requests/overflow"
 const EVENT_LAT_TOKEN_USE = "telemetry.token.last_use"
 const EVENT_WORK = "event/worker"
 const EVENT_WORK_STATE = "event/worker/state"
+
+var Events = []string{}
 
 func publish(channel string, data et.Json) error {
 	if conn == nil {
@@ -43,15 +46,8 @@ func publish(channel string, data et.Json) error {
 **/
 func Publish(channel string, data et.Json) error {
 	stage := envar.GetStr("local", "STAGE")
-	pipe := et.Json{
-		"created_at": timezone.Now(),
-		"_id":        utility.UUID(),
-		"from_id":    FromId,
-		"stage":      stage,
-		"channel":    channel,
-		"data":       data,
-	}
-	publish(strs.Format(`pipe:%s`, stage), pipe)
+	publish(strs.Format(`event:chanels:%s`, stage), et.Json{"channel": channel})
+	publish(strs.Format(`pipe:%s:%s`, stage, channel), data)
 
 	return publish(channel, data)
 }
@@ -69,6 +65,11 @@ func Subscribe(channel string, f func(EvenMessage)) (err error) {
 
 	if len(channel) == 0 {
 		return
+	}
+
+	idx := slices.IndexFunc(Events, func(e string) bool { return e == channel })
+	if idx != -1 {
+		Events = append(Events, channel)
 	}
 
 	subscribe, err := conn.Subscribe(channel,

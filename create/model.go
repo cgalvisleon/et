@@ -58,7 +58,7 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/console"
-	serv "$1/internal/service/$2"
+	serv "$1/internal/services/$2"
 )
 
 func main() {
@@ -225,7 +225,7 @@ import (
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/go-chi/chi/v5"
-	v1 "$1/internal/service/$2/v1"
+	v1 "$1/internal/services/$2/v1"
 	"github.com/rs/cors"
 )
 
@@ -279,6 +279,12 @@ func (serv *Server) StartHttpServer() {
 	svr := serv.http
 	console.Logf("Http", "Running on http://localhost%s", svr.Addr)
 	console.Fatal(serv.http.ListenAndServe())
+}
+
+func (serv *Server) Background() {
+	serv.StartHttpServer()
+
+	v1.Banner()
 }
 
 func (serv *Server) Start() {
@@ -432,6 +438,7 @@ const modelData = `package $4
 
 import (
 	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/dt"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/msg"
@@ -476,19 +483,32 @@ func Define$2(db *jdb.DB) error {
 /**
 * Get$2ById
 * @param id string
-* @return et.Item
-* @return error
+* @return dt.Object, error
 **/
-func Get$2ById(id string) (et.Item, error) {
-	result, err := $2.
+func Get$2ById(id string) (dt.Object, error) {
+	result := dt.Get(id)
+	if result.Ok {
+		return result, nil
+	}
+
+	return Up$2ById(id)
+}
+
+/**
+* Up$2ById
+* @param id string
+* @return dt.Object, error
+**/
+func Up$2ById(id string) (dt.Object, error) {
+	item, err := $2.
 		Where(jdb.KEY).Eq(id).
 		Data().
 		One()
 	if err != nil {
-		return et.Item{}, err
+		return dt.Object{}, err
 	}
 
-	return result, nil
+	return dt.Up(id, item.Result), nil
 }
 
 /**
@@ -498,16 +518,15 @@ func Get$2ById(id string) (et.Item, error) {
 * @param id string
 * @param data et.Json
 * @param client string
-* @return et.Item
-* @return error
+* @return dt.Object, error
 **/
-func Insert$2(project, state, id string, data et.Json, client string) (et.Item, error) {
+func Insert$2(project, state, id string, data et.Json, client string) (dt.Object, error) {
 	if !utility.ValidStr(project, 0, []string{""}) {
-		return et.Item{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "project")
+		return dt.Object{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "project")
 	}
 
 	if !utility.ValidStr(id, 0, []string{""}) {
-		return et.Item{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, jdb.KEY)
+		return dt.Object{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, jdb.KEY)
 	}
 
 	id = $2.GenId(id)
@@ -516,11 +535,14 @@ func Insert$2(project, state, id string, data et.Json, client string) (et.Item, 
 		Data().
 		One()
 	if err != nil {
-		return et.Item{}, err
+		return dt.Object{}, err
 	}
 
 	if current.Ok {
-		return et.Item{Ok: false, Result: current.Result}, nil
+		id := current.Str(jdb.KEY)
+		result := dt.Up(id, current.Result)
+		result.Ok = false
+		return result, nil
 	}
 
 	now := utility.Now()
@@ -530,8 +552,13 @@ func Insert$2(project, state, id string, data et.Json, client string) (et.Item, 
 	data[jdb.KEY] = id
 	data["project"] = project
 	data["created_by"] = client
-	return $2.Insert(data).
+	_, err = $2.Insert(data).
 		One()
+	if err != nil {
+		return dt.Object{}, err
+	}
+
+	return Get$2ById(id)
 }
 
 /**
@@ -540,31 +567,35 @@ func Insert$2(project, state, id string, data et.Json, client string) (et.Item, 
 * @param id string
 * @param data et.Json
 * @param client string
-* @return et.Item
-* @return error
+* @return dt.Object, error
 **/
-func UpSert$2(project, id string, data et.Json, client string) (et.Item, error) {
+func UpSert$2(project, id string, data et.Json, client string) (dt.Object, error) {
 	current, err := Insert$2(project, utility.ACTIVE, id, data, client)
 	if err != nil {
-		return et.Item{}, err
+		return dt.Object{}, err
 	}
 
 	if current.Ok {
 		return current, nil
 	}
 
-	current_state := current.Key(jdb.STATUS)
+	current_state := current.Str(jdb.STATUS)
 	if current_state != utility.ACTIVE {
-		return et.Item{}, console.Alertf(MSG_STATE_NOT_ACTIVE, current_state)
+		return dt.Object{}, console.Alertf(MSG_STATE_NOT_ACTIVE, current_state)
 	}
 
-	id = current.Key(jdb.KEY)
+	id = current.Str(jdb.KEY)
 	now := utility.Now()
 	data[jdb.UPDATED_AT] = now
 	data["updated_by"] = client
-	return $2.Update(data).
+	_, err = $2.Update(data).
 		Where(jdb.KEY).Eq(id).
 		One()
+	if err != nil {
+		return dt.Object{}, err
+	}
+
+	return Up$2ById(id)
 }
 
 /**
@@ -597,13 +628,25 @@ func State$2(id, state, client string) (et.Item, error) {
 		return et.Item{Ok: true, Result: et.Json{"message": msg.RECORD_NOT_UPDATE}}, nil
 	}
 
-	return $2.Update(et.Json{
+	result, err := $2.Update(et.Json{
 		jdb.UPDATED_AT: utility.Now(),
 		jdb.STATUS: state,
 		"updated_by": client,
 	}).
 		Where(jdb.KEY).Eq(id).
 		One()
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	dt.Put(id, jdb.STATUS, state)
+
+	return et.Item{
+		Ok: result.Ok,
+		Result: et.Json{
+			"message": msg.RECORD_UPDATE,
+		},
+	}, nil
 }
 
 /**
@@ -629,9 +672,37 @@ func Delete$2(id string) (et.Item, error) {
 		return et.Item{}, console.Alertm(msg.RECORD_NOT_FOUND)
 	}
 
-	return $2.Delete().
+	_, err = $2.Delete().
 		Where(jdb.KEY).Eq(id).
 		One()
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	dt.Drop(id)
+
+	return et.Item{
+		Ok: true,
+		Result: et.Json{
+			"message": msg.RECORD_DELETE,
+		},
+	}, nil
+}
+
+/**
+* Get$2
+* @param search et.Json, page, rows int
+* @return interface{}, error
+**/
+func Get$2(search et.Json, page, rows int) (interface{}, error) {
+	search.Set("limit", et.Json{"page": page, "rows": rows})
+	result, err := jdb.From($2).
+		Query(search)
+	if err != nil {
+		return et.List{}, err
+	}
+
+	return result, nil
 }
 
 `
@@ -665,7 +736,7 @@ func (rt *Router) upSert$2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.ITEM(w, r, http.StatusOK, result)
+	response.JSON(w, r, http.StatusOK, result)
 }
 
 /**
@@ -682,7 +753,7 @@ func (rt *Router) get$2ById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.ITEM(w, r, http.StatusOK, result)
+	response.JSON(w, r, http.StatusOK, result)
 }
 
 /**

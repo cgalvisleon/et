@@ -105,7 +105,7 @@ func Autentication(next http.Handler) http.Handler {
 			"token":     token,
 		}
 
-		go event.TokenLastUse(data)
+		event.TokenLastUse(data)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

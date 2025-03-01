@@ -51,11 +51,11 @@ func MakeInternal(projectName, name, schema string) error {
 		}
 	}
 
-	path, _ := file.MakeFolder("internal", "service", name)
+	path, _ := file.MakeFolder("internal", "services", name)
 
 	_, _ = file.MakeFile(path, "service.go", modelService, projectName, name)
 
-	path, _ = file.MakeFolder("internal", "service", name, "v1")
+	path, _ = file.MakeFolder("internal", "services", name, "v1")
 
 	if len(schema) > 0 {
 		_, _ = file.MakeFile(path, "api.go", modelDbApi, projectName, name)

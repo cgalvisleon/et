@@ -66,6 +66,16 @@ func (s *Json) ScanRows(rows *sql.Rows) error {
 		return err
 	}
 
+	byteVal := func(val interface{}) interface{} {
+		switch v := val.(type) {
+		case []uint8:
+			return string(v)
+		default:
+			logs.Debugf(`[]byte Type:%v Value:%v`, reflect.TypeOf(v), v)
+			return v
+		}
+	}
+
 	result := make(Json)
 	for i, col := range cols {
 		src := values[i]
@@ -75,12 +85,11 @@ func (s *Json) ScanRows(rows *sql.Rows) error {
 		case []byte:
 			var bt interface{}
 			err = json.Unmarshal(v, &bt)
-			if err == nil {
-				result[col] = bt
+			if err != nil {
+				result[col] = byteVal(v)
 				continue
 			}
-			result[col] = src
-			logs.Debugf(`[]byte Col:%s Type:%v Value:%v`, col, reflect.TypeOf(v), v)
+			result[col] = bt
 		default:
 			result[col] = src
 		}
@@ -386,6 +395,15 @@ func (s Json) Str(atribs ...string) string {
 }
 
 /**
+* String return the value of the key
+* @param atribs ...string
+* @return string
+**/
+func (s Json) String(atribs ...string) string {
+	return s.Str(atribs...)
+}
+
+/**
 * Int return the value of the key
 * @param atribs ...string
 * @return int
@@ -451,6 +469,15 @@ func (s Json) Time(atribs ...string) time.Time {
 * @return Json
 **/
 func (s Json) Json(atrib string) Json {
+	return s.ValJson(Json{}, atrib)
+}
+
+/**
+* J return the value of the key
+* @param atrib string
+* @return Json
+**/
+func (s Json) J(atrib string) Json {
 	return s.ValJson(Json{}, atrib)
 }
 
@@ -669,4 +696,18 @@ func (s Json) Clone() Json {
 	}
 
 	return result
+}
+
+/**
+* ArrayJsonToString
+* @param vals []Json
+* @return string
+**/
+func ArrayJsonToString(vals []Json) string {
+	result, err := json.Marshal(vals)
+	if err != nil {
+		return ""
+	}
+
+	return string(result)
 }

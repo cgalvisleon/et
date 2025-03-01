@@ -1,85 +1,31 @@
 package mem
 
-import (
-	"fmt"
-	"regexp"
-	"strconv"
-	"sync"
-	"time"
-
-	"github.com/cgalvisleon/et/mistake"
-)
-
-/**
-* lock return a lock
-* @param tag string
-* @return *sync.RWMutex
-**/
-func (c *Mem) lock(tag string) *sync.RWMutex {
-	if c.locks[tag] == nil {
-		c.locks[tag] = &sync.RWMutex{}
-	}
-
-	return c.locks[tag]
-}
-
-/**
-* Type
-* @return string
-**/
-func (c *Mem) Type() string {
-	return "mem"
-}
+import "time"
 
 /**
 * Set
-* @param key string
-* @param value string
-* @param expiration time.Duration
+* @param key, value string, expiration time.Duration
 * @return string
 **/
-func (c *Mem) Set(key string, value string, expiration time.Duration) string {
-	lock := c.lock(key)
-	lock.Lock()
-	defer lock.Unlock()
-
-	item, ok := c.items[key]
-	if ok {
-		item.Set(value)
-	} else {
-		item = New(key, value)
-		c.items[key] = item
+func Set(key, value string, expiration time.Duration) string {
+	if conn == nil {
+		return value
 	}
 
-	clean := func() {
-		c.Del(key)
-	}
-
-	duration := expiration * time.Second
-	if duration != 0 {
-		go time.AfterFunc(duration, clean)
-	}
-
-	return value
+	return conn.Set(key, value, expiration)
 }
 
 /**
 * Get
-* @param key string
-* @param def string
-* @return string
-* @return error
+* @param key, def string
+* @return string, error
 **/
-func (c *Mem) Get(key string, def string) (string, error) {
-	lock := c.lock(key)
-	lock.RLock()
-	defer lock.RUnlock()
-
-	if item, ok := c.items[key]; ok {
-		return item.Str(), nil
+func Get(key, def string) (string, error) {
+	if conn == nil {
+		return def, nil
 	}
 
-	return def, mistake.New("IsNil")
+	return conn.Get(key, def)
 }
 
 /**
@@ -87,98 +33,82 @@ func (c *Mem) Get(key string, def string) (string, error) {
 * @param key string
 * @return bool
 **/
-func (c *Mem) Del(key string) bool {
-	lock := c.lock(key)
-	lock.Lock()
-	defer lock.Unlock()
-
-	if _, ok := c.items[key]; !ok {
+func Del(key string) bool {
+	if conn == nil {
 		return false
 	}
 
-	delete(c.items, key)
-
-	return true
+	return conn.Del(key)
 }
 
 /**
 * More
 * @param key string
 * @param expiration time.Duration
-* @return int
 **/
-func (c *Mem) More(key string, expiration time.Duration) int64 {
-	item, ok := c.items[key]
-	if !ok {
-		c.Set(key, "0", expiration)
-		return 0
-	} else {
-		result := item.Int64() + 1
-		str := strconv.FormatInt(result, 10)
-		c.Set(key, str, expiration)
-		return result
+func More(key string, expiration time.Duration) {
+	if conn == nil {
+		return
 	}
+
+	conn.More(key, expiration)
 }
 
 /**
 * Clear
 * @param match string
 **/
-func (c *Mem) Clear(match string) {
-	matchPattern := func(substring, str string) bool {
-		pattern := fmt.Sprintf(".*%s.*", regexp.QuoteMeta(substring))
-		re, err := regexp.Compile(pattern)
-		if err != nil {
-			fmt.Println("Error compilando la expresión regular:", err)
-			return false
-		}
-		return re.MatchString(str)
+func Clear(match string) {
+	if conn == nil {
+		return
 	}
 
-	for key := range c.items {
-		if matchPattern(match, key) {
-			delete(c.items, key)
-		}
-	}
+	conn.Clear(match)
 }
 
-func (c *Mem) Empty() {
-	c.Clear("")
+/**
+* Empty
+**/
+func Empty() {
+	if conn == nil {
+		return
+	}
+
+	conn.Empty()
 }
 
 /**
 * Len
 * @return int
 **/
-func (c *Mem) Len() int {
-	return len(c.items)
+func Len() int {
+	if conn == nil {
+		return 0
+	}
+
+	return conn.Len()
 }
 
 /**
 * Keys
 * @return []string
 **/
-func (c *Mem) Keys() []string {
-	keys := make([]string, 0, len(c.items))
-
-	for key := range c.items {
-		keys = append(keys, key)
+func Keys() []string {
+	if conn == nil {
+		return []string{}
 	}
 
-	return keys
+	return conn.Keys()
 }
 
 /**
 * Values
 * @return []string
 **/
-func (c *Mem) Values() []string {
-	values := make([]string, 0, len(c.items))
-
-	for _, item := range c.items {
-		str := item.Str()
-		values = append(values, str)
+func Values() []string {
+	if conn == nil {
+		return []string{}
 	}
 
-	return values
+	return conn.Values()
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -24,7 +25,8 @@ func GenId(tag string, args ...interface{}) string {
 **/
 func NewObject(key string) *Object {
 	return &Object{
-		Key: key,
+		Json: et.Json{},
+		Key:  key,
 	}
 }
 
@@ -37,9 +39,65 @@ func Drop(key string) {
 }
 
 /**
+* Get
+* @param key string
+* @return Object
+**/
+func Get(key string) Object {
+	obj := NewObject(key)
+	obj.Load()
+
+	return *obj
+}
+
+/**
+* Up
+* @param key string, data et.Json
+* @return Object
+**/
+func Up(key string, data et.Json) Object {
+	obj := NewObject(key)
+	obj.Up(data)
+
+	return *obj
+}
+
+/**
+* UpItem
+* @param key string, data et.Item
+* @return Object
+**/
+func UpItem(key string, data et.Item) Object {
+	obj := NewObject(key)
+	if data.Ok {
+		obj.Up(data.Result)
+	} else {
+		cache.Delete(key)
+	}
+
+	return *obj
+}
+
+/**
+* Put
+* @param id, key string, value interface{}
+* @return Object
+**/
+func Put(id, key string, value interface{}) Object {
+	obj := NewObject(key)
+	if obj.Load() {
+		obj.Set(id, value)
+		obj.Save()
+	}
+
+	return *obj
+}
+
+/**
 * Load
 * @return error
-**/
+*
+ */
 func (s *Object) Load() bool {
 	val, err := cache.Get(s.Key, "")
 	if err != nil {
@@ -61,6 +119,11 @@ func (s *Object) Load() bool {
 * @return bool
 **/
 func (s *Object) Save() bool {
+	production := envar.GetBool(false, "PRODUCTION")
+	if !production {
+		return false
+	}
+
 	val := s.ToString()
 	cache.SetD(s.Key, val)
 
@@ -76,6 +139,7 @@ func (s *Object) ToLoad(data et.Json) {
 	for key, val := range data {
 		s.Set(key, val)
 	}
+
 	s.Ok = !s.IsEmpty()
 }
 
@@ -110,4 +174,15 @@ func (s *Object) Up(data et.Json) bool {
 **/
 func (s *Object) Down() {
 	cache.Delete(s.Key)
+}
+
+/**
+* Item
+* @return et.Json
+**/
+func (s *Object) Item() et.Item {
+	return et.Item{
+		Ok:     s.Ok,
+		Result: s.Json,
+	}
 }

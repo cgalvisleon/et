@@ -131,15 +131,38 @@ func WriteResponse(w http.ResponseWriter, statusCode int, e []byte) error {
 }
 
 /**
+* RJson
+* @param w http.ResponseWriter
+* @param r *http.Request
+* @param statusCode int
+* @param data interface{}
+* @return error
+**/
+func RESULT(w http.ResponseWriter, r *http.Request, statusCode int, data interface{}) error {
+	if data == nil {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(statusCode)
+		return nil
+	}
+
+	e, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	return WriteResponse(w, statusCode, e)
+}
+
+/**
 * JSON
 * @param w http.ResponseWriter
 * @param r *http.Request
 * @param statusCode int
-* @param dt interface{}
+* @param data interface{}
 * @return error
 **/
-func JSON(w http.ResponseWriter, r *http.Request, statusCode int, dt interface{}) error {
-	if dt == nil {
+func JSON(w http.ResponseWriter, r *http.Request, statusCode int, data interface{}) error {
+	if data == nil {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(statusCode)
 		return nil
@@ -147,7 +170,7 @@ func JSON(w http.ResponseWriter, r *http.Request, statusCode int, dt interface{}
 
 	result := Result{
 		Ok:     http.StatusOK == statusCode,
-		Result: dt,
+		Result: data,
 	}
 
 	e, err := json.Marshal(result)
@@ -163,17 +186,17 @@ func JSON(w http.ResponseWriter, r *http.Request, statusCode int, dt interface{}
 * @param w http.ResponseWriter
 * @param r *http.Request
 * @param statusCode int
-* @param dt et.Item
+* @param data et.Item
 * @return error
 **/
-func ITEM(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Item) error {
-	if &dt == (&et.Item{}) {
+func ITEM(w http.ResponseWriter, r *http.Request, statusCode int, data et.Item) error {
+	if &data == (&et.Item{}) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(statusCode)
 		return nil
 	}
 
-	e, err := json.Marshal(dt)
+	e, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}
@@ -186,22 +209,64 @@ func ITEM(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Item) er
 * @param w http.ResponseWriter
 * @param r *http.Request
 * @param statusCode int
-* @param dt et.Items
+* @param data et.Items
 * @return error
 **/
-func ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Items) error {
-	if &dt == (&et.Items{}) {
+func ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, data et.Items) error {
+	if &data == (&et.Items{}) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(statusCode)
 		return nil
 	}
 
-	e, err := json.Marshal(dt)
+	e, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}
 
 	return WriteResponse(w, statusCode, e)
+}
+
+/**
+* DATA
+* @param w http.ResponseWriter
+* @param r *http.Request
+* @param statusCode int
+* @param data et.Items
+* @return error
+**/
+func DATA(w http.ResponseWriter, r *http.Request, statusCode int, data et.Json) error {
+	if &data == (&et.Json{}) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(statusCode)
+		return nil
+	}
+
+	e, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	return WriteResponse(w, statusCode, e)
+}
+
+/**
+* ANY
+* @param w http.ResponseWriter
+* @param r *http.Request
+* @param statusCode int
+* @param data et.Items
+* @return error
+**/
+func ANY(w http.ResponseWriter, r *http.Request, statusCode int, result interface{}) error {
+	switch v := result.(type) {
+	case et.Item:
+		return ITEM(w, r, statusCode, v)
+	case et.Items:
+		return ITEMS(w, r, statusCode, v)
+	default:
+		return JSON(w, r, statusCode, result)
+	}
 }
 
 /**
@@ -241,17 +306,17 @@ func Forbidden(w http.ResponseWriter, r *http.Request) {
 * @param w http.ResponseWriter
 * @param r *http.Request
 * @param statusCode int
-* @param dt interface{}
+* @param data interface{}
 * @return error
 **/
-func Stream(w http.ResponseWriter, r *http.Request, statusCode int, dt interface{}) error {
-	if dt == nil {
+func Stream(w http.ResponseWriter, r *http.Request, statusCode int, data interface{}) error {
+	if data == nil {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(statusCode)
 		return nil
 	}
 
-	e, err := json.Marshal(dt)
+	e, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}

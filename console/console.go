@@ -90,6 +90,11 @@ func Infof(format string, args ...any) {
 	Info(message)
 }
 
+func Stop() {
+	Log("STOP")
+	os.Exit(0)
+}
+
 func Fatal(err error) error {
 	Tracer("Fatal", "Red", err)
 	os.Exit(1)

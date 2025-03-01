@@ -31,7 +31,7 @@ func DeleteCmd(packageName string) error {
 		return err
 	}
 
-	path = strs.Format(`./internal/service/%s`, packageName)
+	path = strs.Format(`./internal/services/%s`, packageName)
 	_, err = file.RemoveFile(path)
 	if err != nil {
 		return err

@@ -245,6 +245,17 @@ func TokenLastUse(data et.Json) {
 }
 
 /**
+* Error
+* @param event string
+* @param err error
+* @return error
+**/
+func Error(event string, err error) error {
+	go Publish(event, et.Json{"error": err.Error()})
+	return err
+}
+
+/**
 * HttpEventWork
 * @param w http.ResponseWriter
 * @param r *http.Request

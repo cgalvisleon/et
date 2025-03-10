@@ -458,7 +458,7 @@ func Define$2(db *jdb.DB) error {
 	}
 
 	$2 = jdb.NewModel(schema, "$3", 1)
-	$2.MakeCollection()
+	$2.DefineModel()
 	$2.DefineAtribute("name", jdb.TypeDataText)
 	$2.DefineIndex(true,
 		"name",

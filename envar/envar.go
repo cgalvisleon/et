@@ -207,3 +207,39 @@ func GetBool(_default bool, _var string) bool {
 
 	return val
 }
+
+/**
+* Int
+* @param string _var
+* @return int
+**/
+func Int(_var string) int {
+	return GetInt(0, _var)
+}
+
+/**
+* Int64
+* @param string _var
+* @return int64
+**/
+func Int64(_var string) int64 {
+	return GetInt64(0, _var)
+}
+
+/**
+* Bool
+* @param string _var
+* @return bool
+**/
+func Bool(_var string) bool {
+	return GetBool(false, _var)
+}
+
+/**
+* Str
+* @param string _var
+* @return string
+**/
+func Str(_var string) string {
+	return GetStr("", _var)
+}

@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/mistake"
@@ -132,6 +133,11 @@ func Pong() {
 }
 
 func Debug(v ...any) {
+	production := envar.Bool("PRODUCTION")
+	if production {
+		return
+	}
+
 	printLn("Debug", "Cyan", v...)
 }
 

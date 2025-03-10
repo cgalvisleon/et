@@ -625,6 +625,21 @@ func (s *Json) Append(from Json) {
 }
 
 /**
+* IsChanged: This method return true if the values in s are different to the values in from.
+* @param from Json
+* @return bool
+**/
+func (s *Json) IsChanged(from Json) bool {
+	for key, fromValue := range from {
+		if sValue, exists := (*s)[key]; !exists || sValue != fromValue {
+			return true
+		}
+	}
+
+	return false
+}
+
+/**
 * Get
 * @param key string
 * @return interface{}

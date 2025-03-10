@@ -9,6 +9,8 @@ import (
 	"github.com/cgalvisleon/et/logs"
 )
 
+var errorInterface = reflect.TypeOf((*error)(nil)).Elem()
+
 type TypeRun int
 
 const (
@@ -17,7 +19,7 @@ const (
 	Gocontext
 )
 
-type GoContext func(ctx Json) (Item, error)
+type GoContext func(ctx Item) (Item, error)
 
 type Fn struct {
 	owner    *Funcs
@@ -75,22 +77,36 @@ func getFunctionName(i interface{}) string {
 
 type Funcs []*Fn
 
-func Flow(fn interface{}, args []interface{}, tpRun TypeRun) *Fn {
+/**
+* Flow
+* @param fn interface{}, args []interface{}, tpRun ...TypeRun
+* @return *Fn
+**/
+func Flow(fn interface{}, args []interface{}, tpRun ...TypeRun) *Fn {
 	result := &Funcs{}
+	tp := Func
+	if len(tpRun) > 0 {
+		tp = tpRun[0]
+	}
 
-	return result.Add(fn, args, tpRun)
+	return result.Add(fn, args, tp)
 }
 
 /**
 * Add
 * @param fn interface{}, args []interface{}, tpRun TypeRun
 **/
-func (s *Funcs) Add(fn interface{}, args []interface{}, tpRun TypeRun) *Fn {
+func (s *Funcs) Add(fn interface{}, args []interface{}, tpRun ...TypeRun) *Fn {
+	tp := Func
+	if len(tpRun) > 0 {
+		tp = tpRun[0]
+	}
+
 	_fn := &Fn{
 		owner: s,
 		fn:    fn,
 		args:  args,
-		tpRun: tpRun,
+		tpRun: tp,
 	}
 
 	*s = append(*s, _fn)
@@ -103,58 +119,71 @@ func (s *Funcs) Add(fn interface{}, args []interface{}, tpRun TypeRun) *Fn {
 * @return Item, error
 **/
 func (s *Funcs) Run() (Item, error) {
-	var err error
 	var ctx = Item{Result: Json{}}
 	for i, f := range *s {
 		funcName := getFunctionName(f.fn)
-		logs.Logf("flow", "Execute func: %s step:%d - params:%s", funcName, i, fmt.Sprint(f.args))
+		fn := reflect.ValueOf(f.fn)
+		if fn.Kind() != reflect.Func {
+			return Item{}, fmt.Errorf(`error step:%d - %s is not a function`, i, funcName)
+		}
+		argsValues := make([]reflect.Value, len(f.args))
+		for j, arg := range f.args {
+			argsValues[j] = reflect.ValueOf(arg)
+		}
+
+		logs.Logf("flow", "Execute func:%s step:%d - params:%s", funcName, i, fmt.Sprint(f.args))
 		switch f.tpRun {
 		case Gocontext:
-			ctx, err = f.fn.(GoContext)(ctx.Result)
-			if err != nil {
-				result, rr := s.Rollback(i)
-				if rr != nil {
-					return Item{}, fmt.Errorf(`error step:%d - %s`, i, rr.Error())
+			if i == 0 {
+				if val, ok := argsValues[0].Interface().(Json); ok {
+					ctx = Item{Ok: true, Result: val}
 				}
-				return result, fmt.Errorf(`error step:%d - %s`, i, err.Error())
-			}
-			if !ctx.Ok {
-				_, rr := s.Rollback(i)
-				if rr != nil {
-					return Item{}, fmt.Errorf(`error step:%d - %s`, i, rr.Error())
-				}
-			}
-		default:
-			fn := reflect.ValueOf(f.fn)
-			if fn.Kind() != reflect.Func {
-				return Item{}, fmt.Errorf(`error step:%d - %s is not a function`, i, funcName)
-			}
-			argsValues := make([]reflect.Value, len(f.args))
-			for i, arg := range f.args {
-				argsValues[i] = reflect.ValueOf(arg)
 			}
 
+			result, err := f.fn.(GoContext)(ctx)
+			if err != nil {
+				result, _ := s.Rollback(i, ctx)
+				return result, fmt.Errorf(`error func:%s, step:%d - %s`, funcName, i, err.Error())
+			}
+			ctx = result
+		default:
 			if f.tpRun == Gorutine {
 				numArgs := fn.Type().NumIn()
 				if len(argsValues) != numArgs {
-					result, rr := s.Rollback(i)
-					if rr != nil {
-						return Item{}, fmt.Errorf(`error step:%d - %s`, i, rr.Error())
-					}
-					return result, fmt.Errorf(`error step:%d - %s`, i, "Call with too many input arguments")
+					result, _ := s.Rollback(i, ctx)
+					return result, fmt.Errorf(`error func:%s, step:%d - %s`, funcName, i, "Call with too many input arguments")
 				}
 				go func() {
 					fn.Call(argsValues)
 				}()
 				continue
 			} else {
-				fn.Call(argsValues)
+				result := fn.Call(argsValues)
+				if len(result) == 0 {
+					continue
+				}
+				for _, r := range result {
+					if r.Type().Implements(errorInterface) {
+						err, ok := r.Interface().(error)
+						if ok && err != nil {
+							result, _ := s.Rollback(i, ctx)
+							return result, fmt.Errorf(`error func:%s, step:%d - %s`, funcName, i, err.Error())
+						}
+					}
+				}
 			}
 		}
 	}
 
 	return ctx, nil
+}
 
+/**
+* Do
+* @return Item, error
+**/
+func (s *Funcs) Do() (Item, error) {
+	return s.Run()
 }
 
 /**
@@ -162,9 +191,7 @@ func (s *Funcs) Run() (Item, error) {
 * @param i int
 * @return Item, error
 **/
-func (s *Funcs) Rollback(i int) (Item, error) {
-	var err error
-	var ctx = Item{Result: Json{}}
+func (s *Funcs) Rollback(i int, ctx Item) (Item, error) {
 	for j := i; j >= 0; j-- {
 		f := (*s)[j]
 		if f.rollback.fn == nil {
@@ -172,24 +199,26 @@ func (s *Funcs) Rollback(i int) (Item, error) {
 		}
 
 		funcName := getFunctionName(f.fn)
-		logs.Logf("flow", "Rollback func: %s step:%d - params:%s", funcName, i, fmt.Sprint(f.args))
+		fn := reflect.ValueOf(f.fn)
+		if fn.Kind() != reflect.Func {
+			return Item{}, fmt.Errorf(`error step:%d - %s is not a function`, j, funcName)
+		}
+		argsValues := make([]reflect.Value, len(f.args))
+		for j, arg := range f.args {
+			argsValues[j] = reflect.ValueOf(arg)
+		}
+
+		logs.Logf("flow", "Rollback func: %s step:%d - params:%s", funcName, j, fmt.Sprint(f.args))
 		switch f.tpRun {
 		case Gocontext:
-			ctx, err = f.rollback.fn.(GoContext)(ctx.Result)
-			if err != nil {
-				return Item{}, fmt.Errorf(`error step:%d - %s`, i, err.Error())
-			}
-			if !ctx.Ok {
-				return ctx, nil
+			result, err := f.rollback.fn.(GoContext)(ctx)
+			if err == nil {
+				ctx = result
 			}
 		default:
 			fn := reflect.ValueOf(f.fn)
 			if fn.Kind() != reflect.Func {
-				return Item{}, fmt.Errorf(`error step:%d - %s is not a function`, i, funcName)
-			}
-			argsValues := make([]reflect.Value, len(f.args))
-			for i, arg := range f.args {
-				argsValues[i] = reflect.ValueOf(arg)
+				return Item{}, fmt.Errorf(`error step:%d - %s is not a function`, j, funcName)
 			}
 
 			if f.tpRun == Gorutine {

@@ -26,6 +26,36 @@ func NewObjects(key string) *Objects {
 }
 
 /**
+* Gets
+* @param key string
+* @return Object
+**/
+func Gets(key string) Objects {
+	obj := NewObjects(key)
+	obj.Load()
+
+	return *obj
+}
+
+/**
+* Ups
+* @param key string, data et.Json
+* @return Object
+**/
+func Ups(key, pK string, data []et.Json) Objects {
+	result := NewObjects(key)
+	for _, item := range data {
+		id := item.Str(pK)
+		obj := NewObject(id)
+		obj.ToLoad(item)
+		result.Add(*obj)
+	}
+	result.Save()
+
+	return *result
+}
+
+/**
 * Add
 * @param obj Object
 * @return bool
@@ -50,6 +80,7 @@ func (s *Objects) Up(tag, pK string, items et.Items) bool {
 		id := item.Str(pK)
 		key := GenId(tag, id)
 		obj := NewObject(key)
+		obj.Up(item)
 		s.Add(*obj)
 	}
 

@@ -53,11 +53,8 @@ ENTRYPOINT ["/$1"]
 const modelMain = `package main
 
 import (
-	"os"
-	"os/signal"
-
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/envar"
 	serv "$1/internal/services/$2"
 )
 
@@ -76,13 +73,7 @@ func main() {
 		console.Fatal(err)
 	}
 
-	go srv.Start()
-
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	<-c
-
-	srv.Close()
+	srv.Start()
 }
 `
 
@@ -136,13 +127,6 @@ func Close() {
 	jrpc.Close()
 	cache.Close()
 	event.Close()
-}
-
-func Banner() {
-	time.Sleep(3 * time.Second)
-	templ := utility.BannerTitle(pkg.PackageName, 4)
-	banner.InitString(colorable.NewColorableStdout(), true, true, templ)
-	fmt.Println()
 }
 `
 
@@ -205,94 +189,25 @@ func Close() {
 	cache.Close()
 	event.Close()
 }
-
-func Banner() {
-	time.Sleep(3 * time.Second)
-	templ := utility.BannerTitle(pkg.PackageName, 4)
-	banner.InitString(colorable.NewColorableStdout(), true, true, templ)
-	fmt.Println()
-}
 `
 
 const modelService = `package $2
 
 import (
-	"net/http"
-
-	"github.com/cgalvisleon/et/console"
-	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/middleware"
-	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/strs"
-	"github.com/go-chi/chi/v5"
+	"github.com/cgalvisleon/et/ettp"
 	v1 "$1/internal/services/$2/v1"
-	"github.com/rs/cors"
 )
 
-type Server struct {
-	http *http.Server
-}
-
-func New() (*Server, error) {
-	server := Server{}
-
-	port := envar.EnvarInt(3300, "PORT")
-	if port != 0 {
-		r := chi.NewRouter()
-
-		r.Use(middleware.Logger)
-		r.Use(middleware.Recoverer)
-
-		latest := v1.New()
-
-		r.NotFound(func(w http.ResponseWriter, r *http.Request) {
-			response.HTTPError(w, r, http.StatusNotFound, "404 Not Found")
-		})
-
-		r.Mount("/", latest)
-		r.Mount("/v1", latest)
-
-		handler := cors.AllowAll().Handler(r)
-		addr := strs.Format(":%d", port)
-		serv := &http.Server{
-			Addr:    addr,
-			Handler: handler,
-		}
-
-		server.http = serv
+func New() (*ettp.Server, error) {
+	result, err := ettp.New("assets")
+	if err != nil {
+		return nil, err
 	}
+	latest := v1.New()
+	result.Router.Mount("/", latest)
+	result.Router.Mount("/v1", latest)
 
-	return &server, nil
-}
-
-func (serv *Server) Close() {
-	v1.Close()
-
-	console.Log("Http", "Shutting down server...")
-}
-
-func (serv *Server) StartHttpServer() {
-	if serv.http == nil {
-		return
-	}
-
-	svr := serv.http
-	console.Logf("Http", "Running on http://localhost%s", svr.Addr)
-	console.Fatal(serv.http.ListenAndServe())
-}
-
-func (serv *Server) Background() {
-	serv.StartHttpServer()
-
-	v1.Banner()
-}
-
-func (serv *Server) Start() {
-	go serv.StartHttpServer()
-
-	v1.Banner()
-
-	<-make(chan struct{})
+	return result, nil
 }
 `
 

@@ -38,7 +38,7 @@ func Load(name string) (*ws.Client, error) {
 	}
 
 	client, err := ws.Login(&ws.ClientConfig{
-		ClientId:  utility.PrefixId("RealTime"),
+		ClientId:  utility.Snowflake(0, "RealTime"),
 		Name:      name,
 		Url:       url,
 		Reconnect: envar.GetInt(3, "RT_RECONCECT"),

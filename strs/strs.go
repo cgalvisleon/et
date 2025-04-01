@@ -187,6 +187,15 @@ func Lowcase(s string) string {
 }
 
 /**
+* Same
+* @param str1 string, str2 string
+* @return bool
+**/
+func Same(str1, str2 string) bool {
+	return strings.EqualFold(str1, str2)
+}
+
+/**
 * Titlecase
 * @param str string
 * @return string

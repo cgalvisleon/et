@@ -3,18 +3,17 @@ package utility
 import (
 	cr "crypto/rand"
 	"math/rand"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/bwmarrin/snowflake"
+	"github.com/cgalvisleon/et/mem"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/google/uuid"
-	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/oklog/ulid"
 )
-
-var nodId int64 = 1
 
 /**
 * GetOTP return a code verify
@@ -54,48 +53,24 @@ func ULID() string {
 }
 
 /**
-* NanoId return a new NanoID
-* @return string
-**/
-func NanoId(n int) string {
-	id, err := gonanoid.New(n)
-	if err != nil {
-		panic(err)
-	}
-
-	return id
-}
-
-/**
 * ShortUUID return a new ShortUUID
 * @return string
 **/
-func Snowflake() string {
-	node, err := snowflake.NewNode(nodId)
+func Snowflake(nodeId int64, tag string) string {
+	nano := strs.Format(`%d`, timezone.NowTime().UnixMilli())
+	ns, err := mem.Get(nano, "-1")
 	if err != nil {
-		panic(err)
+		return RecordId(tag, "")
 	}
-	id := node.Generate()
 
-	return id.String()
-}
+	n, err := strconv.ParseInt(ns, 10, 64)
+	if err != nil {
+		return RecordId(tag, "")
+	}
 
-/**
-* SetSnowflakeNode
-* @param n int64
-**/
-func SetSnowflakeNode(n int64) {
-	nodId = n
-}
-
-/**
-* PrefixId return a new UUID with prefix
-* @param prefix string
-* @return string
-**/
-func PrefixId(prefix string) string {
-	id := Snowflake()
-	return prefix + "-" + id
+	n++
+	mem.Set(nano, strconv.FormatInt(n, 10), 1)
+	return strs.Format(`%s:%s%d%08v`, tag, nano, nodeId, n)
 }
 
 /**

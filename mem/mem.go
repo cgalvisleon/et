@@ -24,8 +24,6 @@ func Load() (*Mem, error) {
 		locks: make(map[string]*sync.RWMutex),
 	}
 
-	logs.Logf("Mem", "Load memory cache")
-
 	return result, nil
 }
 
@@ -40,8 +38,6 @@ func init() {
 		logs.Alert(err)
 		return
 	}
-
-	logs.Logf("Mem", "Init memory cache")
 }
 
 /**

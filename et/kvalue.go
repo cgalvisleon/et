@@ -5,7 +5,20 @@ import "strconv"
 type KeyValue struct {
 	Ok    bool   `json:"ok"`
 	Value []byte `json:"value"`
-	Imdex int    `json:"index"`
+	Index int    `json:"index"`
+}
+
+/**
+* NewKeyValue
+* @param value interface{}
+* @return *KeyValue
+**/
+func NewKeyValue(value interface{}) *KeyValue {
+	return &KeyValue{
+		Ok:    true,
+		Value: []byte(value.(string)),
+		Index: 0,
+	}
 }
 
 /**

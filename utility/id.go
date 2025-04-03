@@ -87,6 +87,14 @@ func GenId(id string) string {
 }
 
 /**
+* GenIndex return a new index
+* @return int64
+**/
+func GenIndex() int64 {
+	return timezone.NowTime().UnixNano()
+}
+
+/**
 * GenKey return a new UUID
 * @param id string
 * @return string

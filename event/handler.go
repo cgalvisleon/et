@@ -17,10 +17,15 @@ import (
 const QUEUE_STACK = "stack"
 const EVENT_LOG = "log"
 const EVENT_TELEMETRY = "telemetry"
-const EVENT_OVERFLOW = "requests/overflow"
-const EVENT_LAT_TOKEN_USE = "telemetry.token.last_use"
-const EVENT_WORK = "event/worker"
-const EVENT_WORK_STATE = "event/worker/state"
+const EVENT_OVERFLOW = "requests:overflow"
+const EVENT_TELEMETRY_TOKEN_LAST_USE = "telemetry:token:last_use"
+const EVENT_WORK = "event:worker"
+const EVENT_WORK_STATE = "event:worker:state"
+const EVENT_WEBHOOK = "event:webhook"
+const EVENT_MODEL_ERROR = "model:error"
+const EVENT_MODEL_INSERT = "model:insert"
+const EVENT_MODEL_UPDATE = "model:update"
+const EVENT_MODEL_DELETE = "model:delete"
 
 var Events = []string{}
 
@@ -68,7 +73,7 @@ func Subscribe(channel string, f func(EvenMessage)) (err error) {
 	}
 
 	idx := slices.IndexFunc(Events, func(e string) bool { return e == channel })
-	if idx != -1 {
+	if idx == -1 {
 		Events = append(Events, channel)
 	}
 
@@ -241,7 +246,7 @@ func Overflow(data et.Json) {
 * @param data et.Json
 **/
 func TokenLastUse(data et.Json) {
-	go Publish(EVENT_LAT_TOKEN_USE, data)
+	go Publish(EVENT_TELEMETRY_TOKEN_LAST_USE, data)
 }
 
 /**

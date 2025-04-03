@@ -3,6 +3,7 @@ package et
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -631,7 +632,12 @@ func (s *Json) Append(from Json) {
 **/
 func (s *Json) IsChanged(from Json) bool {
 	for key, fromValue := range from {
-		if sValue, exists := (*s)[key]; !exists || sValue != fromValue {
+		logs.Debugf(`key: %s, fromValue: %v, s: %v`, key, fromValue, (*s)[key])
+		if (*s)[key] == nil {
+			return true
+		}
+
+		if strings.EqualFold(fmt.Sprintf(`%v`, (*s)[key]), fmt.Sprintf(`%v`, fromValue)) {
 			return true
 		}
 	}

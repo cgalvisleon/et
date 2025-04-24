@@ -11,7 +11,6 @@ var dependencies = []string{
 	"github.com/joho/godotenv/autoload",
 	"github.com/google/uuid",
 	"github.com/matoous/go-nanoid/v2",
-	"github.com/oklog/ulid",
 	"golang.org/x/crypto/bcrypt",
 	"golang.org/x/exp/slices",
 	"github.com/manifoldco/promptui",

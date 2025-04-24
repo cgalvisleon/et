@@ -15,7 +15,7 @@ go get github.com/dimiro1/banner
 go get github.com/go-chi/chi/v5
 go get github.com/shirou/gopsutil/v3/mem
 go get github.com/googollee/go-socket.io
-go get "github.com/satyakb/go-socket.io-redis"
+go get github.com/satyakb/go-socket.io-redis
 ```
 
 ## CDM
@@ -41,7 +41,7 @@ git update &&
 git tag v0.0.3 &&
 git tags
 
-go get github.com/cgalvisleon/et@v1.0.8
+go get github.com/cgalvisleon/et@v1.0.9
 ```
 
 ## Condicion de carrera

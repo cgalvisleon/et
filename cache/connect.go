@@ -13,10 +13,10 @@ import (
 
 /**
 * Connect to a host
-* @param host, password string, dbname int
+* @param host, password string, db int
 * @return *Conn, error
 **/
-func ConnectTo(host, password string, dbname int) (*Conn, error) {
+func ConnectTo(host, password string, db int) (*Conn, error) {
 	if !utility.ValidStr(host, 0, []string{}) {
 		return nil, logs.Alertf(msg.MSG_ATRIB_REQUIRED, "redist_host")
 	}
@@ -24,7 +24,7 @@ func ConnectTo(host, password string, dbname int) (*Conn, error) {
 	client := redis.NewClient(&redis.Options{
 		Addr:     host,
 		Password: password,
-		DB:       dbname,
+		DB:       db,
 	})
 
 	ctx := context.Background()
@@ -40,7 +40,7 @@ func ConnectTo(host, password string, dbname int) (*Conn, error) {
 		Id:       utility.UUID(),
 		ctx:      ctx,
 		host:     host,
-		dbname:   dbname,
+		dbname:   db,
 		channels: make(map[string]bool),
 		mutex:    &sync.RWMutex{},
 	}, nil

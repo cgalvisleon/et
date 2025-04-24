@@ -13,9 +13,7 @@ import (
 
 const PackageName = "cache"
 
-var (
-	conn *Conn
-)
+var conn *Conn
 
 type Conn struct {
 	*redis.Client
@@ -32,6 +30,10 @@ type Conn struct {
 * @return string
 **/
 func FromId() string {
+	if conn == nil {
+		return ""
+	}
+
 	return conn.Id
 }
 

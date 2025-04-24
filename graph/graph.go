@@ -6,9 +6,7 @@ import (
 
 const PackageName = "graph"
 
-var (
-	conn *Conn
-)
+var conn *Conn
 
 type Conn struct {
 	driver neo4j.DriverWithContext

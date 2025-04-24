@@ -39,7 +39,7 @@ func GetId(client_id, kind, description string) string {
 		"description": description,
 	}
 	event.Work("service/client", data)
-	cache.SetH(result, data)
+	cache.SetH(result, data, 1)
 
 	return result
 }
@@ -54,7 +54,7 @@ func SetStatus(serviceId string, status et.Json) {
 		"status":     status,
 	})
 
-	cache.SetH(serviceId, status)
+	cache.SetH(serviceId, status, 1)
 }
 
 /**

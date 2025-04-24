@@ -19,66 +19,40 @@ import (
 const IsNil = redis.Nil
 
 /**
-* GenId
-* @params args ...interface{}
-* @return string
-**/
-func GenId(args ...interface{}) string {
-	var keys []string
-	for _, arg := range args {
-		keys = append(keys, strs.Format(`%v`, arg))
-	}
-
-	return strings.Join(keys, ":")
-}
-
-/**
-* GenKey
-* @params args ...interface{}
-* @return string
-**/
-func GenKey(args ...interface{}) string {
-	result := GenId(args...)
-	return utility.ToBase64(result)
-}
-
-/**
-* Set
-* @params key string
-* @params val interface{}
-* @params second time.Duration
+* SetDuration
+* @params key string, val interface{}, millisecond time.Duration
 * @return interface{}
 **/
-func Set(key string, val interface{}, second time.Duration) interface{} {
+func SetDuration(key string, val interface{}, millisecond time.Duration) interface{} {
 	if conn == nil {
 		return val
 	}
 
 	switch v := val.(type) {
 	case et.Json:
-		return SetCtx(conn.ctx, key, v.ToString(), second)
+		return SetCtx(conn.ctx, key, v.ToString(), millisecond)
 	case et.Items:
-		return SetCtx(conn.ctx, key, v.ToString(), second)
+		return SetCtx(conn.ctx, key, v.ToString(), millisecond)
 	case et.Item:
-		return SetCtx(conn.ctx, key, v.ToString(), second)
+		return SetCtx(conn.ctx, key, v.ToString(), millisecond)
 	case int:
-		return SetCtx(conn.ctx, key, strs.Format(`%d`, v), second)
+		return SetCtx(conn.ctx, key, strs.Format(`%d`, v), millisecond)
 	case int64:
-		return SetCtx(conn.ctx, key, strs.Format(`%d`, v), second)
+		return SetCtx(conn.ctx, key, strs.Format(`%d`, v), millisecond)
 	case float64:
-		return SetCtx(conn.ctx, key, strs.Format(`%f`, v), second)
+		return SetCtx(conn.ctx, key, strs.Format(`%f`, v), millisecond)
 	case bool:
-		return SetCtx(conn.ctx, key, strs.Format(`%t`, v), second)
+		return SetCtx(conn.ctx, key, strs.Format(`%t`, v), millisecond)
 	case []byte:
-		return SetCtx(conn.ctx, key, string(v), second)
+		return SetCtx(conn.ctx, key, string(v), millisecond)
 	case time.Time:
-		return SetCtx(conn.ctx, key, v.Format(time.RFC3339), second)
+		return SetCtx(conn.ctx, key, v.Format(time.RFC3339), millisecond)
 	case time.Duration:
-		return SetCtx(conn.ctx, key, v.String(), second)
+		return SetCtx(conn.ctx, key, v.String(), millisecond)
 	default:
 		s, ok := v.(string)
 		if ok {
-			return SetCtx(conn.ctx, key, s, second)
+			return SetCtx(conn.ctx, key, s, millisecond)
 		}
 	}
 
@@ -86,9 +60,22 @@ func Set(key string, val interface{}, second time.Duration) interface{} {
 }
 
 /**
+* Set
+* @params key string, val interface{}, second time.Duration
+* @return interface{}
+**/
+func Set(key string, val interface{}, second time.Duration) interface{} {
+	if conn == nil {
+		return val
+	}
+
+	dur := second * time.Second / time.Millisecond
+	return SetDuration(key, val, dur)
+}
+
+/**
 * Get
-* @params key string
-* @params def string
+* @params key string, def string
 * @return string, error
 **/
 func Get(key, def string) (string, error) {
@@ -127,8 +114,7 @@ func Delete(key string) (int64, error) {
 
 /**
 * Count
-* @params key string
-* @params expiration time.Duration (second)
+* @params key string, expiration time.Duration (second)
 * @return int64
 **/
 func Count(key string, expiration time.Duration) int {
@@ -154,52 +140,47 @@ func Count(key string, expiration time.Duration) int {
 
 /**
 * SetH
-* @params key string
-* @params val interface{}
+* @params key string, val interface{}, expiration int64
 * @return interface{}
 **/
-func SetH(key string, val interface{}) interface{} {
-	return Set(key, val, time.Hour*1)
+func SetH(key string, val interface{}, expiration int64) interface{} {
+	return Set(key, val, time.Duration(expiration)*time.Hour)
 }
 
 /**
 * SetD
-* @params key string
-* @params val interface{}
+* @params key string, val interface{}, expiration int64
 * @return interface{}
 **/
-func SetD(key string, val interface{}) interface{} {
-	return Set(key, val, time.Hour*24)
+func SetD(key string, val interface{}, expiration int64) interface{} {
+	return Set(key, val, time.Duration(expiration)*time.Hour*24)
 }
 
 /**
 * SetW
-* @params key string
-* @params val interface{}
+* @params key string, val interface{}, expiration int64
 * @return interface{}
 **/
-func SetW(key string, val interface{}) interface{} {
-	return Set(key, val, time.Hour*24*7)
+func SetW(key string, val interface{}, expiration int64) interface{} {
+	return Set(key, val, time.Duration(expiration)*time.Hour*24*7)
 }
 
 /**
 * SetM
-* @params key string
-* @params val interface{}
+* @params key string, val interface{}, expiration int64
 * @return interface{}
 **/
-func SetM(key string, val interface{}) interface{} {
-	return Set(key, val, time.Hour*24*30)
+func SetM(key string, val interface{}, expiration int64) interface{} {
+	return Set(key, val, time.Duration(expiration)*time.Hour*24*30)
 }
 
 /**
 * SetY
-* @params key string
-* @params val interface{}
+* @params key string, val interface{}, expiration int64
 * @return interface{}
 **/
-func SetY(key string, val interface{}) interface{} {
-	return Set(key, val, time.Hour*24*365)
+func SetY(key string, val interface{}, expiration int64) interface{} {
+	return Set(key, val, time.Duration(expiration)*time.Hour*24*365)
 }
 
 /**
@@ -222,8 +203,7 @@ func Empty(match string) error {
 
 /**
 * More
-* @params key string
-* @params second time.Duration
+* @params key string, second time.Duration
 * @return int
 **/
 func More(key string, second time.Duration) int {
@@ -249,8 +229,7 @@ func More(key string, second time.Duration) int {
 
 /**
 * HSet
-* @params key string
-* @params val map[string]string
+* @params key string, val map[string]string
 * @return error
 **/
 func HSet(key string, val map[string]string) error {
@@ -276,9 +255,7 @@ func HGet(key string) (map[string]string, error) {
 
 /**
 * HSetAtrib
-* @params key string
-* @params atr string
-* @params val string
+* @params key string, atr string, val string
 * @return error
 **/
 func HSetAtrib(key, atr, val string) error {
@@ -291,8 +268,7 @@ func HSetAtrib(key, atr, val string) error {
 
 /**
 * HGetAtrib
-* @params key string
-* @params atr string
+* @params key string, atr string
 * @return string, error
 **/
 func HGetAtrib(key, atr string) (string, error) {
@@ -316,8 +292,7 @@ func HGetAtrib(key, atr string) (string, error) {
 
 /**
 * HDelete
-* @params key string
-* @params atr string
+* @params key string, atr string
 * @return error
 **/
 func HDelete(key, atr string) error {
@@ -329,11 +304,32 @@ func HDelete(key, atr string) error {
 }
 
 /**
+* GenId
+* @params args ...interface{}
+* @return string
+**/
+func GenId(args ...interface{}) string {
+	var keys []string
+	for _, arg := range args {
+		keys = append(keys, strs.Format(`%v`, arg))
+	}
+
+	return strings.Join(keys, ":")
+}
+
+/**
+* GenKey
+* @params args ...interface{}
+* @return string
+**/
+func GenKey(args ...interface{}) string {
+	result := GenId(args...)
+	return utility.ToBase64(result)
+}
+
+/**
 * SetVerify
-* @params device string
-* @params key string
-* @params val string
-* @params duration time.Duration
+* @params device string, key string, val string, duration time.Duration
 * @return interface{}
 **/
 func SetVerify(device, key, val string, duration time.Duration) interface{} {
@@ -343,8 +339,7 @@ func SetVerify(device, key, val string, duration time.Duration) interface{} {
 
 /**
 * GetVerify
-* @params device string
-* @params key string
+* @params device string, key string
 * @return string, error
 **/
 func GetVerify(device string, key string) (string, error) {
@@ -361,8 +356,7 @@ func GetVerify(device string, key string) (string, error) {
 
 /**
 * DeleteVerify
-* @params device string
-* @params key string
+* @params device string, key string
 * @return int64, error
 **/
 func DeleteVerify(device string, key string) (int64, error) {
@@ -372,9 +366,7 @@ func DeleteVerify(device string, key string) (int64, error) {
 
 /**
 * AllCache
-* @params device string
-* @params key string
-* @params val string
+* @params search string, page int, rows int
 * @return error
 **/
 func AllCache(search string, page, rows int) (et.List, error) {
@@ -491,8 +483,7 @@ func GetItems(key string) (et.Items, error) {
 
 /**
 * HandlerAll
-* @params w http.ResponseWriter
-* @params r *http.Request
+* @params w http.ResponseWriter, r *http.Request
 **/
 func HandlerAll(w http.ResponseWriter, r *http.Request) {
 	query := response.GetQuery(r)
@@ -511,8 +502,7 @@ func HandlerAll(w http.ResponseWriter, r *http.Request) {
 
 /**
 * HandlerGet
-* @params w http.ResponseWriter
-* @params r *http.Request
+* @params w http.ResponseWriter, r *http.Request
 **/
 func HandlerGet(w http.ResponseWriter, r *http.Request) {
 	query := response.GetQuery(r)
@@ -529,8 +519,7 @@ func HandlerGet(w http.ResponseWriter, r *http.Request) {
 
 /**
 * HandlerDelete
-* @params w http.ResponseWriter
-* @params r *http.Request
+* @params w http.ResponseWriter, r *http.Request
 **/
 func HandlerDelete(w http.ResponseWriter, r *http.Request) {
 	query := response.GetQuery(r)

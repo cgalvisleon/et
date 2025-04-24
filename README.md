@@ -41,7 +41,7 @@ git update &&
 git tag v0.0.3 &&
 git tags
 
-go get github.com/cgalvisleon/et@v1.0.7
+go get github.com/cgalvisleon/et@v1.0.8
 ```
 
 ## Condicion de carrera
@@ -56,6 +56,7 @@ go run github.com/cgalvisleon/et/cmd/create go
 go run github.com/cgalvisleon/et/cmd/cmd
 
 go run ./cmd/create go
+go run ./cmd
 ```
 
 ## Websocket message

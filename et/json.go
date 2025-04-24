@@ -632,7 +632,6 @@ func (s *Json) Append(from Json) {
 **/
 func (s *Json) IsChanged(from Json) bool {
 	for key, fromValue := range from {
-		logs.Debugf(`key: %s, fromValue: %v, s: %v`, key, fromValue, (*s)[key])
 		if (*s)[key] == nil {
 			return true
 		}

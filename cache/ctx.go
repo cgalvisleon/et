@@ -12,18 +12,16 @@ import (
 
 /**
 * SetCtx
-* @params ctx context.Context
-* @params key string
-* @params val string
-* @params second time.Duration
+* @params ctx context.Context, key string, val string, millisecond time.Duration
 * @return string
 **/
-func SetCtx(ctx context.Context, key, val string, second time.Duration) string {
+func SetCtx(ctx context.Context, key, val string, millisecond time.Duration) string {
 	if conn == nil {
 		return val
 	}
 
-	err := conn.Set(ctx, key, val, second).Err()
+	nanosecond := millisecond * time.Millisecond
+	err := conn.Set(ctx, key, val, nanosecond).Err()
 	if err != nil {
 		return val
 	}
@@ -33,9 +31,7 @@ func SetCtx(ctx context.Context, key, val string, second time.Duration) string {
 
 /**
 * GetCtx
-* @params ctx context.Context
-* @params key string
-* @params def string
+* @params ctx context.Context, key string, def string
 * @return string, error
 **/
 func GetCtx(ctx context.Context, key, def string) (string, error) {
@@ -55,8 +51,7 @@ func GetCtx(ctx context.Context, key, def string) (string, error) {
 
 /**
 * ExistsCtx
-* @params ctx context.Context
-* @params key string
+* @params ctx context.Context, key string
 * @return bool
 **/
 func ExistsCtx(ctx context.Context, key string) bool {
@@ -76,8 +71,7 @@ func ExistsCtx(ctx context.Context, key string) bool {
 
 /**
 * DeleteCtx
-* @params ctx context.Context
-* @params key string
+* @params ctx context.Context, key string
 * @return int64, error
 **/
 func DeleteCtx(ctx context.Context, key string) (int64, error) {
@@ -92,9 +86,7 @@ func DeleteCtx(ctx context.Context, key string) (int64, error) {
 
 /**
 * HSetCtx
-* @params ctx context.Context
-* @params key string
-* @params val map[string]string
+* @params ctx context.Context, key string, val map[string]string
 * @return error
 **/
 func HSetCtx(ctx context.Context, key string, val map[string]string) error {
@@ -112,8 +104,7 @@ func HSetCtx(ctx context.Context, key string, val map[string]string) error {
 
 /**
 * HGetCtx
-* @params ctx context.Context
-* @params key string
+* @params ctx context.Context, key string
 * @return map[string]string, error
 **/
 func HGetCtx(ctx context.Context, key string) (map[string]string, error) {
@@ -128,9 +119,7 @@ func HGetCtx(ctx context.Context, key string) (map[string]string, error) {
 
 /**
 * HDeleteCtx
-* @params ctx context.Context
-* @params key string
-* @params atr string
+* @params ctx context.Context, key string, atr string
 * @return error
 **/
 func HDeleteCtx(ctx context.Context, key, atr string) error {

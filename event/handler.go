@@ -7,6 +7,7 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/mistake"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
@@ -154,8 +155,8 @@ func Stack(channel string, f func(EvenMessage)) error {
 func Work(event string, data et.Json) et.Json {
 	work := et.Json{
 		"created_at": timezone.Now(),
-		"_id":        utility.UUID(),
-		"from_id":    conn._id,
+		"_id":        reg.Id("work"),
+		"from_id":    conn.Id,
 		"event":      event,
 		"data":       data,
 	}
@@ -176,7 +177,7 @@ func WorkState(work_id string, status WorkStatus, data et.Json) {
 	work := et.Json{
 		"update_at": timezone.Now(),
 		"_id":       work_id,
-		"from_id":   conn._id,
+		"from_id":   conn.Id,
 		"status":    status.String(),
 		"data":      data,
 	}

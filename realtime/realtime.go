@@ -5,7 +5,7 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/utility"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/ws"
 )
 
@@ -38,7 +38,7 @@ func Load(name string) (*ws.Client, error) {
 	}
 
 	client, err := ws.Login(&ws.ClientConfig{
-		ClientId:  utility.Snowflake(0, "RealTime"),
+		ClientId:  reg.Id("RealTime"),
 		Name:      name,
 		Url:       url,
 		Reconnect: envar.GetInt(3, "RT_RECONCECT"),

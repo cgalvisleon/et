@@ -109,13 +109,6 @@ func (h *Hub) getChannel(name string) *Channel {
 	return h.channels[idx]
 }
 
-func (h *Hub) addChannel(value *Channel) {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
-
-	h.channels = append(h.channels, value)
-}
-
 func (h *Hub) removeChannel(value *Channel) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
@@ -147,13 +140,6 @@ func (h *Hub) getQueue(name, queue string) *Queue {
 	}
 
 	return h.queues[idx]
-}
-
-func (h *Hub) addQueue(value *Queue) {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
-
-	h.queues = append(h.queues, value)
 }
 
 func (h *Hub) removeQueue(value *Queue) {

@@ -117,7 +117,7 @@ func (s *Objects) Save() bool {
 		return false
 	}
 
-	cache.SetD(s.Key, val.ToString())
+	cache.SetD(s.Key, val.ToString(), 1)
 
 	return true
 }

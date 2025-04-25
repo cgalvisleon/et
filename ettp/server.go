@@ -13,7 +13,6 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/file"
-	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
@@ -81,10 +80,9 @@ var Web = envar.GetStr("", "WEB")
 var Help = envar.GetStr("", "HELP")
 
 type Server struct {
-	Id      string
-	Name    string
-	Storage *file.SyncFile
-	// Db              *jdb.DB
+	Id              string
+	Name            string
+	Storage         *file.SyncFile
 	addr            string
 	mux             *http.ServeMux
 	svr             *http.Server
@@ -94,8 +92,8 @@ type Server struct {
 	middlewares     []func(http.Handler) http.Handler
 	authenticator   func(http.Handler) http.Handler
 	notFoundHandler http.HandlerFunc
-	solvers         []*Route
-	router          []*Route
+	solvers         []*Router
+	router          []*Router
 	packages        []*Package
 	handlers        map[string]http.HandlerFunc
 	mutex           *sync.RWMutex
@@ -141,8 +139,8 @@ func New() (*Server, error) {
 		cors:            CorsAllowAll([]string{}),
 		notFoundHandler: notFoundHandler,
 		middlewares:     make([]func(http.Handler) http.Handler, 0),
-		solvers:         []*Route{},
-		router:          []*Route{},
+		solvers:         []*Router{},
+		router:          []*Router{},
 		packages:        []*Package{},
 		handlers:        make(map[string]http.HandlerFunc),
 		mutex:           &sync.RWMutex{},
@@ -176,8 +174,8 @@ func (s *Server) Empty() []string {
 		result = append(result, pk.Name)
 	}
 
-	s.solvers = []*Route{}
-	s.router = []*Route{}
+	s.solvers = []*Router{}
+	s.router = []*Router{}
 	s.packages = []*Package{}
 
 	return result
@@ -251,7 +249,7 @@ func (s *Server) LoadWS() {
 		})
 	}
 
-	s.loadHandlerFuncWS()
+	s.mountHandlerFuncWS()
 }
 
 /**
@@ -320,8 +318,8 @@ func (s *Server) Use(middlewares ...func(http.Handler) http.Handler) {
 * With
 * @param middlewares ...func(http.HandlerFunc) http.HandlerFunc
 **/
-func (s *Server) With(middlewares ...func(http.Handler) http.Handler) *Route {
-	result := &Route{
+func (s *Server) With(middlewares ...func(http.Handler) http.Handler) *Router {
+	result := &Router{
 		server:      s,
 		middlewares: make([]func(http.Handler) http.Handler, 0),
 	}
@@ -343,99 +341,12 @@ func (s *Server) Authenticator(middleware func(http.Handler) http.Handler) *Serv
 }
 
 /**
-* Private
-* @return *Route
-**/
-func (s *Server) Private() *Route {
-	if s.authenticator == nil {
-		return s.NewRoute()
-	}
-
-	return s.With(s.authenticator)
-}
-
-/**
 * NewRoute
-* @return *Route
+* @return *Router
 **/
-func (s *Server) NewRoute() *Route {
-	return &Route{
+func (s *Server) NewRoute() *Router {
+	return &Router{
 		server:      s,
 		middlewares: s.middlewares,
-	}
-}
-
-/**
-* PublicRoute
-* @param method string
-* @param path string
-* @param h http.HandlerFunc
-* @param packageName string
-**/
-func (s *Server) PublicRoute(method, path string, h http.HandlerFunc, packageName string) {
-	switch method {
-	case "GET":
-		s.Get(path, h, packageName)
-	case "POST":
-		s.Post(path, h, packageName)
-	case "PUT":
-		s.Put(path, h, packageName)
-	case "PATCH":
-		s.Patch(path, h, packageName)
-	case "DELETE":
-		s.Delete(path, h, packageName)
-	case "HEAD":
-		s.Head(path, h, packageName)
-	case "OPTIONS":
-		s.Options(path, h, packageName)
-	}
-}
-
-/**
-* ProtectRoute
-* @param method string
-* @param path string
-* @param h http.HandlerFunc
-**/
-func (s *Server) ProtectRoute(method, path string, h http.HandlerFunc, packageName string) {
-	router := s.Private()
-	switch method {
-	case "GET":
-		router.Get(path, h, packageName)
-	case "POST":
-		router.Post(path, h, packageName)
-	case "PUT":
-		router.Put(path, h, packageName)
-	case "PATCH":
-		router.Patch(path, h, packageName)
-	case "DELETE":
-		router.Delete(path, h, packageName)
-	case "HEAD":
-		router.Head(path, h, packageName)
-	case "OPTIONS":
-		router.Options(path, h, packageName)
-	}
-}
-
-/**
-* AuthorizationRoute
-**/
-func (s *Server) AuthorizationRoute(method, path string, h http.HandlerFunc, packageName string) {
-	router := s.With(s.authenticator).With(middleware.Authorization)
-	switch method {
-	case "GET":
-		router.Get(path, h, packageName)
-	case "POST":
-		router.Post(path, h, packageName)
-	case "PUT":
-		router.Put(path, h, packageName)
-	case "PATCH":
-		router.Patch(path, h, packageName)
-	case "DELETE":
-		router.Delete(path, h, packageName)
-	case "HEAD":
-		router.Head(path, h, packageName)
-	case "OPTIONS":
-		router.Options(path, h, packageName)
 	}
 }

@@ -13,9 +13,9 @@ import (
 )
 
 /**
-* loadHandlerFunc
+* mountHandlerFunc
 **/
-func (s *Server) loadHandlerFunc() {
+func (s *Server) mountHandlerFunc() {
 	s.Get("/apigateway/version", s.version, ServiceName)
 	s.Get("/apigateway/test/{id}/test", s.version, ServiceName)
 	s.Private().Get("/apigateway/events", s.getEvents, ServiceName)

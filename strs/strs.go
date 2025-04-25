@@ -63,6 +63,18 @@ func FormatDateTime(format string, value time.Time) string {
 }
 
 /**
+* FormatSerie
+* @param format string, num int64
+* @return string
+**/
+func FormatSerie(format string, num int64) string {
+	re := regexp.MustCompile("0")
+	format = re.ReplaceAllString(format, "%0")
+
+	return Format(format, num)
+}
+
+/**
 * Contains
 * @param str string, substr string
 * @return bool

@@ -2,7 +2,7 @@
 
 ```
 go mod init github.com/cgalvisleon/et
-go get github.com/cgalvisleon/et
+go get github.com/cgalvisleon/et/@v1.0.9
 ```
 
 ## Dependencis

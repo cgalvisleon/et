@@ -9,17 +9,18 @@ import (
 )
 
 type Resolve struct {
-	Route   *Route
+	Route   *Router
 	Params  et.Json
 	Resolve string
 	Request *http.Request
 }
 
 /**
-* NewResolve
-* @return *Resolve, *http.Request
+* newResolve
+* @param route *Router, params et.Json, r *http.Request
+* @return *Resolve
 **/
-func NewResolve(route *Route, params et.Json, r *http.Request) *Resolve {
+func newResolve(route *Router, params et.Json, r *http.Request) *Resolve {
 	if route == nil {
 		return nil
 	}
@@ -93,16 +94,15 @@ func (r *Resolve) ToJson() et.Json {
 
 /**
 * findResolve
-* @param method string
-* @param path string
-* @return *Resolve, *http.Request
+* @param s *Server, r *http.Request
+* @return *Resolve
 **/
 func findResolve(s *Server, r *http.Request) *Resolve {
 	var params = et.Json{}
-	var route *Route
+	var route *Router
 	path := r.URL.Path
 	method := r.Method
-	idx := indexRoute(method, s.router)
+	idx := getRouteIndex(method, s.router)
 	if idx == -1 {
 		return nil
 	} else {
@@ -119,7 +119,7 @@ func findResolve(s *Server, r *http.Request) *Resolve {
 
 		find := route.find(tag)
 		if find == nil {
-			find, _ = route.getParamsRoute(0)
+			find, _ = route.getParams(0)
 			if find == nil {
 				route = nil
 				break
@@ -163,5 +163,5 @@ func findResolve(s *Server, r *http.Request) *Resolve {
 		}
 	}
 
-	return NewResolve(route, params, r)
+	return newResolve(route, params, r)
 }

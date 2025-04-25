@@ -8,32 +8,23 @@ import (
 )
 
 /**
-* loadRouter
-* @return error
+* Mount
+* @param route *Router
 **/
-func (s *Server) loadRoutes() error {
-	path, err := file.MakeFolder("data")
-	if err != nil {
-		return err
-	}
-
-	fileName := strs.Format("%s/%s.dt", path, strs.Lowcase(s.Name))
-	data := make([]*Route, 0)
-	s.Storage, err = file.NewSyncFile(fileName, data)
-	if err != nil {
-		return err
-	}
-
-	err = s.Storage.Unmarshal(&data)
-	if err != nil {
-		return err
-	}
-
-	for _, route := range data {
-		s.loadRoute(route)
-	}
-
-	return nil
+func (s *Server) Mount(route *Router) {
+	s.UpsetRoute(
+		route.Id,
+		route.Method,
+		route.Path,
+		route.Resolve,
+		route.Kind,
+		route.Header,
+		route.TpHeader,
+		route.ExcludeHeader,
+		route.Private,
+		route.PackageName,
+		false,
+	)
 }
 
 /**
@@ -57,12 +48,28 @@ func (s *Server) saveRouter() error {
 * @return error
 **/
 func (s *Server) Load() error {
-	err := s.loadRoutes()
+	path, err := file.MakeFolder("data")
 	if err != nil {
 		return err
 	}
 
-	s.loadHandlerFunc()
+	fileName := strs.Format("%s/%s.dt", path, strs.Lowcase(s.Name))
+	data := make([]*Router, 0)
+	s.Storage, err = file.NewSyncFile(fileName, data)
+	if err != nil {
+		return err
+	}
+
+	err = s.Storage.Unmarshal(&data)
+	if err != nil {
+		return err
+	}
+
+	for _, route := range data {
+		s.Mount(route)
+	}
+
+	s.mountHandlerFunc()
 
 	return nil
 }

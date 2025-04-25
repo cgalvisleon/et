@@ -23,8 +23,7 @@ const (
 
 /**
 * applyMiddlewares
-* @params handler http.Handler
-* @params middlewares []func(http.Handler) http.Handler
+* @params handler http.Handler, middlewares []func(http.Handler) http.Handler
 * @return http.Handler
 **/
 func (s *Server) applyMiddlewares(handler http.Handler, middlewares []func(http.Handler) http.Handler) http.Handler {
@@ -37,8 +36,7 @@ func (s *Server) applyMiddlewares(handler http.Handler, middlewares []func(http.
 
 /**
 * handlerResolve
-* @params w http.ResponseWriter
-* @params r *http.Request
+* @params w http.ResponseWriter, r *http.Request
 **/
 func (s *Server) handlerResolve(w http.ResponseWriter, r *http.Request) {
 	// Begin telemetry
@@ -48,11 +46,7 @@ func (s *Server) handlerResolve(w http.ResponseWriter, r *http.Request) {
 
 	// Get resolute
 	resolute, r := s.getResolute(r)
-
-	// If debug
-	if s.debug {
-		console.Debug("resolute:", resolute.ToString())
-	}
+	console.Log("solver", resolute.ToString())
 
 	// Call search time since begin
 	metric.CallSearchTime()
@@ -84,13 +78,13 @@ func (s *Server) handlerResolve(w http.ResponseWriter, r *http.Request) {
 	h := s.handlerRest
 	ctx = context.WithValue(ctx, ResoluteKey, resolute)
 	handler := s.applyMiddlewares(http.HandlerFunc(h), route.middlewares)
+
 	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
 /**
 * handlerRest
-* @params w http.ResponseWriter
-* @params r *http.Request
+* @params w http.ResponseWriter, r *http.Request
 **/
 func (s *Server) handlerRest(w http.ResponseWriter, r *http.Request) {
 	rw := &middleware.ResponseWriterWrapper{ResponseWriter: w}

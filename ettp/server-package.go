@@ -8,8 +8,7 @@ import (
 
 /**
 * getPakages
-* @params w http.ResponseWriter
-* @params r *http.Request
+* @params w http.ResponseWriter, r *http.Request
 **/
 func (s *Server) getPakages(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)

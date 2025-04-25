@@ -10,9 +10,9 @@ import (
 )
 
 /**
-* loadHandlerFuncWS
+* mountHandlerFuncWS
 **/
-func (s *Server) loadHandlerFuncWS() {
+func (s *Server) mountHandlerFuncWS() {
 	s.Get("/realtime", s.wsRealtime, "Websocket")
 	s.Private().Get("/ws", s.wsUpgrade, "Websocket")
 	s.Private().Get("/realtime/publications", s.wsChannels, "Websocket")
@@ -24,8 +24,7 @@ func (s *Server) loadHandlerFuncWS() {
 
 /**
 * wsUpgrade
-* @params w http.ResponseWriter
-* @params r *http.Request
+* @params w http.ResponseWriter, r *http.Request
 **/
 func (s *Server) wsUpgrade(w http.ResponseWriter, r *http.Request) {
 	if s.ws == nil {
@@ -38,8 +37,7 @@ func (s *Server) wsUpgrade(w http.ResponseWriter, r *http.Request) {
 
 /**
 * wsRealtime
-* @params w http.ResponseWriter
-* @params r *http.Request
+* @params w http.ResponseWriter, r *http.Request
 **/
 func (s *Server) wsRealtime(w http.ResponseWriter, r *http.Request) {
 	if s.ws == nil {
@@ -52,8 +50,7 @@ func (s *Server) wsRealtime(w http.ResponseWriter, r *http.Request) {
 
 /**
 * wsChannels
-* @params w http.ResponseWriter
-* @params r *http.Request
+* @params w http.ResponseWriter, r *http.Request
 **/
 func (s *Server) wsChannels(w http.ResponseWriter, r *http.Request) {
 	if s.ws == nil {
@@ -76,8 +73,7 @@ func (s *Server) wsChannels(w http.ResponseWriter, r *http.Request) {
 
 /**
 * wsClients
-* @params w http.ResponseWriter
-* @params r *http.Request
+* @params w http.ResponseWriter, r *http.Request
 **/
 func (s *Server) wsClients(w http.ResponseWriter, r *http.Request) {
 	if s.ws == nil {
@@ -99,8 +95,7 @@ func (s *Server) wsClients(w http.ResponseWriter, r *http.Request) {
 
 /**
 * wsPublish
-* @params w http.ResponseWriter
-* @params r *http.Request
+* @params w http.ResponseWriter, r *http.Request
 **/
 func (s *Server) wsPublish(w http.ResponseWriter, r *http.Request) {
 	if s.ws == nil {

@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"slices"
 
-	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/strs"
@@ -37,34 +36,34 @@ func (t TpParams) String() string {
 	}
 }
 
-type Route struct {
-	server        *Server
-	middlewares   []func(http.Handler) http.Handler
-	pkg           *Package
-	Id            string
-	Tag           string
-	TpParams      TpParams
-	Kind          TypeApi
-	Method        string
-	Resolve       string
-	Path          string
-	Header        et.Json
-	TpHeader      router.TpHeader
-	ExcludeHeader []string
-	Private       bool
-	PackageName   string
-	Routes        []*Route
+type Router struct {
+	server        *Server                           `json:"-"`
+	middlewares   []func(http.Handler) http.Handler `json:"-"`
+	pkg           *Package                          `json:"-"`
+	Id            string                            `json:"id"`
+	Tag           string                            `json:"tag"`
+	TpParams      TpParams                          `json:"tp_params"`
+	Kind          TypeApi                           `json:"kind"`
+	Method        string                            `json:"method"`
+	Resolve       string                            `json:"resolve"`
+	Path          string                            `json:"path"`
+	Header        et.Json                           `json:"header"`
+	TpHeader      router.TpHeader                   `json:"tp_header"`
+	ExcludeHeader []string                          `json:"exclude_header"`
+	Private       bool                              `json:"private"`
+	PackageName   string                            `json:"package_name"`
+	Routes        []*Router                         `json:"routes"`
 }
 
 /**
 * newRoute
-* @param server *Server, method string, routes []*Route, packageName s
-* @return *Route, []*Route
+* @param server *Server, method string, routes []*Router, packageName s
+* @return *Router, []*Router
 **/
-func newRoute(server *Server, method string, routes []*Route, packageName string) (*Route, []*Route) {
+func newRoute(server *Server, method string, routes []*Router, packageName string) (*Router, []*Router) {
 	pkg := findPakage(server, packageName)
 
-	result := &Route{
+	result := &Router{
 		server:        server,
 		middlewares:   make([]func(http.Handler) http.Handler, 0),
 		pkg:           pkg,
@@ -79,7 +78,7 @@ func newRoute(server *Server, method string, routes []*Route, packageName string
 		ExcludeHeader: []string{},
 		Private:       false,
 		PackageName:   packageName,
-		Routes:        []*Route{},
+		Routes:        []*Router{},
 	}
 
 	routes = append(routes, result)
@@ -88,28 +87,12 @@ func newRoute(server *Server, method string, routes []*Route, packageName string
 }
 
 /**
-* indexRoute
-* @param tag string
-* @param routes []*Route
+* getRouteIndex
+* @param tag string, routes []*Router
 * @return int
 **/
-func indexRoute(tag string, routes []*Route) int {
-	return slices.IndexFunc(routes, func(e *Route) bool { return strs.Lowcase(e.Tag) == strs.Lowcase(tag) })
-}
-
-/**
-* GetRoute
-* @param tag string
-* @param routes []*Route
-* @return []*Route
-**/
-func GetRoute(id string, routes []*Route) (*Route, error) {
-	idx := slices.IndexFunc(routes, func(e *Route) bool { return e.Id == id })
-	if idx == -1 {
-		return nil, console.Alertm(MSG_ROUTE_NOT_FOUND)
-	}
-
-	return routes[idx], nil
+func getRouteIndex(tag string, routes []*Router) int {
+	return slices.IndexFunc(routes, func(e *Router) bool { return strs.Lowcase(e.Tag) == strs.Lowcase(tag) })
 }
 
 /**
@@ -146,10 +129,11 @@ func getTpParams(tag string) TpParams {
 }
 
 /**
-* isHasParams
-* @return bool
+* getParams
+* @param n int
+* @return *Router, int
 **/
-func (r *Route) getParamsRoute(n int) (*Route, int) {
+func (r *Router) getParams(n int) (*Router, int) {
 	if len(r.Routes) == 0 {
 		return nil, -1
 	}
@@ -165,12 +149,12 @@ func (r *Route) getParamsRoute(n int) (*Route, int) {
 }
 
 /**
-* String
+* find
 * @param tag string
-* @return *Route
+* @return *Router
 **/
-func (r *Route) find(tag string) *Route {
-	idx := indexRoute(tag, r.Routes)
+func (r *Router) find(tag string) *Router {
+	idx := getRouteIndex(tag, r.Routes)
 	if idx == -1 {
 		return nil
 	}
@@ -179,22 +163,12 @@ func (r *Route) find(tag string) *Route {
 }
 
 /**
-* newRoute
-* @param id string
-* @param method string
-* @param tag string
-* @param resolve string
-* @param kind TypeApi
-* @param header et.Json
-* @param tpHeader router.TpHeader
-* @param excludeHeader map[string]bool
-* @param private bool
-* @param tpParams TpParams
-* @param packageName string
-* @return *Route
+* addRoute
+* @param id, method, tag string, kind TypeApi, header et.Json, tpHeader router.TpHeader, excludeHeader []string, private bool, tpParams TpParams
+* @return *Router
 **/
-func (r *Route) newRoute(id, method, tag string, kind TypeApi, header et.Json, tpHeader router.TpHeader, excludeHeader []string, private bool, tpParams TpParams) *Route {
-	result := &Route{
+func (r *Router) addRoute(id, method, tag string, kind TypeApi, header et.Json, tpHeader router.TpHeader, excludeHeader []string, private bool, tpParams TpParams) *Router {
+	result := &Router{
 		Id:            utility.GenKey(id),
 		server:        r.server,
 		middlewares:   r.server.middlewares,
@@ -207,7 +181,7 @@ func (r *Route) newRoute(id, method, tag string, kind TypeApi, header et.Json, t
 		TpHeader:      tpHeader,
 		ExcludeHeader: excludeHeader,
 		Private:       private,
-		Routes:        []*Route{},
+		Routes:        []*Router{},
 	}
 
 	if result.Private {
@@ -222,9 +196,9 @@ func (r *Route) newRoute(id, method, tag string, kind TypeApi, header et.Json, t
 /**
 * addMiddleware
 * @param middleware func(http.HandlerFunc) http.HandlerFunc
-* @return *Route
+* @return *Router
 **/
-func (r *Route) addMiddleware(middleware func(http.Handler) http.Handler) *Route {
+func (r *Router) addMiddleware(middleware func(http.Handler) http.Handler) *Router {
 	isAdded := false
 	for _, mw := range r.middlewares {
 		if fmt.Sprintf("%p", mw) == fmt.Sprintf("%p", middleware) {
@@ -242,9 +216,9 @@ func (r *Route) addMiddleware(middleware func(http.Handler) http.Handler) *Route
 /**
 * removeMiddleware
 * @param middleware func(http.HandlerFunc) http.HandlerFunc
-* @return *Route
+* @return *Router
 **/
-func (r *Route) removeMiddleware(middleware func(http.Handler) http.Handler) *Route {
+func (r *Router) removeMiddleware(middleware func(http.Handler) http.Handler) *Router {
 	var middlewares []func(http.Handler) http.Handler
 	for _, mw := range r.middlewares {
 		if fmt.Sprintf("%p", mw) != fmt.Sprintf("%p", middleware) {
@@ -261,7 +235,7 @@ func (r *Route) removeMiddleware(middleware func(http.Handler) http.Handler) *Ro
 * @param id string
 * @return bool
 **/
-func (r *Route) deleteById(id string, save bool) bool {
+func (r *Router) deleteById(id string, save bool) bool {
 	result := false
 	for i, route := range r.Routes {
 		if route.Id == id {
@@ -284,10 +258,10 @@ func (r *Route) deleteById(id string, save bool) bool {
 /**
 * addPakageRoute
 * @param packageName string
-* @param r *Route
+* @param r *Router
 * @return *Package
 **/
-func (r *Route) SetPakage(packageName string) *Route {
+func (r *Router) SetPakage(packageName string) *Router {
 	if len(packageName) == 0 {
 		return r
 	}
@@ -320,7 +294,7 @@ func (r *Route) SetPakage(packageName string) *Route {
 * ToJson
 * @return et.Json
 **/
-func (r *Route) ToJson() et.Json {
+func (r *Router) ToJson() et.Json {
 	var n int
 	routes := make([]et.Json, 0)
 	for _, route := range r.Routes {
@@ -350,19 +324,11 @@ func (r *Route) ToJson() et.Json {
 }
 
 /**
-* ToString
-* @return string
-**/
-func (r *Route) ToString() string {
-	result := r.ToJson()
-	return result.ToString()
-}
-
-/**
 * With
 * @param middlewares ...func(http.HandlerFunc) http.HandlerFunc
+* @return *Router
 **/
-func (r *Route) With(middlewares ...func(http.Handler) http.Handler) *Route {
+func (r *Router) With(middlewares ...func(http.Handler) http.Handler) *Router {
 	result := r.server.NewRoute()
 	result.middlewares = append(result.middlewares, r.middlewares...)
 	return result
@@ -370,99 +336,81 @@ func (r *Route) With(middlewares ...func(http.Handler) http.Handler) *Route {
 
 /**
 * Connect
-* @param path string
-* @param handlerFn http.HandlerFunc
-* @param packageName string
+* @param path string, handlerFn http.HandlerFunc, packageName string
 **/
-func (r *Route) Connect(path string, handlerFn http.HandlerFunc, packageName string) {
+func (r *Router) Connect(path string, handlerFn http.HandlerFunc, packageName string) {
 	result := r.server.setHandlerFunc(CONNECT, path, handlerFn, packageName)
 	result.middlewares = append(result.middlewares, r.middlewares...)
 }
 
 /**
 * Delete
-* @param path string
-* @param handlerFn http.HandlerFunc
-* @param packageName string
+* @param path string, handlerFn http.HandlerFunc, packageName string
 **/
-func (r *Route) Delete(path string, handlerFn http.HandlerFunc, packageName string) {
+func (r *Router) Delete(path string, handlerFn http.HandlerFunc, packageName string) {
 	result := r.server.setHandlerFunc(DELETE, path, handlerFn, packageName)
 	result.middlewares = append(result.middlewares, r.middlewares...)
 }
 
 /**
 * Get
-* @param path string
-* @param handlerFn http.HandlerFunc
-* @param packageName string
+* @param path string, handlerFn http.HandlerFunc, packageName string
 **/
-func (r *Route) Get(path string, handlerFn http.HandlerFunc, packageName string) {
+func (r *Router) Get(path string, handlerFn http.HandlerFunc, packageName string) {
 	result := r.server.setHandlerFunc(GET, path, handlerFn, packageName)
 	result.middlewares = append(result.middlewares, r.middlewares...)
 }
 
 /**
 * Head
-* @param path string
-* @param handlerFn http.HandlerFunc
-* @param packageName string
+* @param path string, handlerFn http.HandlerFunc, packageName string
 **/
-func (r *Route) Head(path string, handlerFn http.HandlerFunc, packageName string) {
+func (r *Router) Head(path string, handlerFn http.HandlerFunc, packageName string) {
 	result := r.server.setHandlerFunc(HEAD, path, handlerFn, packageName)
 	result.middlewares = append(result.middlewares, r.middlewares...)
 }
 
 /**
 * Options
-* @param path string
-* @param handlerFn http.HandlerFunc
-* @param packageName string
+* @param path string, handlerFn http.HandlerFunc, packageName string
 **/
-func (r *Route) Options(path string, handlerFn http.HandlerFunc, packageName string) {
+func (r *Router) Options(path string, handlerFn http.HandlerFunc, packageName string) {
 	result := r.server.setHandlerFunc(OPTIONS, path, handlerFn, packageName)
 	result.middlewares = append(result.middlewares, r.middlewares...)
 }
 
 /**
 * Patch
-* @param path string
-* @param handlerFn http.HandlerFunc
-* @param packageName string
+* @param path string, handlerFn http.HandlerFunc, packageName string
 **/
-func (r *Route) Patch(path string, handlerFn http.HandlerFunc, packageName string) {
+func (r *Router) Patch(path string, handlerFn http.HandlerFunc, packageName string) {
 	result := r.server.setHandlerFunc(PATCH, path, handlerFn, packageName)
 	result.middlewares = append(result.middlewares, r.middlewares...)
 }
 
 /**
 * Post
-* @param path string
-* @param handlerFn http.HandlerFunc
-* @param packageName string
+* @param path string, handlerFn http.HandlerFunc, packageName string
 **/
-func (r *Route) Post(path string, handlerFn http.HandlerFunc, packageName string) {
+func (r *Router) Post(path string, handlerFn http.HandlerFunc, packageName string) {
 	result := r.server.setHandlerFunc(POST, path, handlerFn, packageName)
 	result.middlewares = append(result.middlewares, r.middlewares...)
 }
 
 /**
 * Put
-* @param path string
-* @param handlerFn http.HandlerFunc
-* @param packageName string
+* @param path string, handlerFn http.HandlerFunc, packageName string
 **/
-func (r *Route) Put(path string, handlerFn http.HandlerFunc, packageName string) {
+func (r *Router) Put(path string, handlerFn http.HandlerFunc, packageName string) {
 	result := r.server.setHandlerFunc(PUT, path, handlerFn, packageName)
 	result.middlewares = append(result.middlewares, r.middlewares...)
 }
 
 /**
 * Trace
-* @param path string
-* @param handlerFn http.HandlerFunc
-* @param packageName string
+* @param path string, handlerFn http.HandlerFunc, packageName string
 **/
-func (r *Route) Trace(path string, handlerFn http.HandlerFunc, packageName string) {
+func (r *Router) Trace(path string, handlerFn http.HandlerFunc, packageName string) {
 	result := r.server.setHandlerFunc(TRACE, path, handlerFn, packageName)
 	result.middlewares = append(result.middlewares, r.middlewares...)
 }

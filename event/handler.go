@@ -7,11 +7,8 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/mistake"
-	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/strs"
-	"github.com/cgalvisleon/et/timezone"
-	"github.com/cgalvisleon/et/utility"
 	"github.com/nats-io/nats.go"
 )
 
@@ -22,11 +19,6 @@ const EVENT_OVERFLOW = "requests:overflow"
 const EVENT_TELEMETRY_TOKEN_LAST_USE = "telemetry:token:last_use"
 const EVENT_WORK = "event:worker"
 const EVENT_WORK_STATE = "event:worker:state"
-const EVENT_WEBHOOK = "event:webhook"
-const EVENT_MODEL_ERROR = "model:error"
-const EVENT_MODEL_INSERT = "model:insert"
-const EVENT_MODEL_UPDATE = "model:update"
-const EVENT_MODEL_DELETE = "model:delete"
 
 var Events = []string{}
 
@@ -145,66 +137,6 @@ func Queue(channel, queue string, f func(EvenMessage)) (err error) {
 **/
 func Stack(channel string, f func(EvenMessage)) error {
 	return Queue(channel, QUEUE_STACK, f)
-}
-
-/**
-* Work
-* @param event string
-* @param data et.Json
-**/
-func Work(event string, data et.Json) et.Json {
-	work := et.Json{
-		"created_at": timezone.Now(),
-		"_id":        reg.Id("work"),
-		"from_id":    conn.Id,
-		"event":      event,
-		"data":       data,
-	}
-
-	go Publish(EVENT_WORK, work)
-	go Publish(event, work)
-
-	return work
-}
-
-/**
-* WorkState
-* @param work_id string
-* @param status WorkStatus
-* @param data et.Json
-**/
-func WorkState(work_id string, status WorkStatus, data et.Json) {
-	work := et.Json{
-		"update_at": timezone.Now(),
-		"_id":       work_id,
-		"from_id":   conn.Id,
-		"status":    status.String(),
-		"data":      data,
-	}
-	switch status {
-	case WorkStatusPending:
-		work["pending_at"] = utility.Now()
-	case WorkStatusAccepted:
-		work["accepted_at"] = utility.Now()
-	case WorkStatusProcessing:
-		work["processing_at"] = utility.Now()
-	case WorkStatusCompleted:
-		work["completed_at"] = utility.Now()
-	case WorkStatusFailed:
-		work["failed_at"] = utility.Now()
-	}
-
-	go Publish(EVENT_WORK_STATE, work)
-}
-
-/**
-* Data
-* @param string channel
-* @param func(Message) reciveFn
-* @return error
-**/
-func Data(channel string, data et.Json) error {
-	return Publish(channel, data)
 }
 
 /**

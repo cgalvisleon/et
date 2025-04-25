@@ -19,13 +19,11 @@ func ValidIn(val string, min int, in []string) bool {
 }
 
 func ValidId(val string) bool {
-	ok := Contains(val, []string{"", "*", "new"})
-	return !ok
+	return ValidStr(val, 0, []string{"", "*", "new"})
 }
 
 func ValidKey(val string) bool {
-	ok := Contains(val, []string{"-1", "", "*", "new"})
-	return !ok
+	return ValidStr(val, 0, []string{"-1", "", "*", "new"})
 }
 
 func ValidInt(val int, notIn []int) bool {

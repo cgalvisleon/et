@@ -64,10 +64,10 @@ func (p *Package) ToJson() et.Json {
 * AddRoute
 * @param method string
 * @param path string
-* @param route *Route
+* @param route *Router
 * @return *Package
 **/
-func (p *Package) AddRoute(method, path string, route *Route) *Package {
+func (p *Package) AddRoute(method, path string, route *Router) *Package {
 	url := strs.Format(`[%s]:%s`, method, path)
 	if route.ExcludeHeader == nil {
 		route.ExcludeHeader = []string{}

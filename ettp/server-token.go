@@ -12,8 +12,7 @@ import (
 
 /**
 * handlerSetToken
-* @params w http.ResponseWriter
-* @params r *http.Request
+* @params w http.ResponseWriter, r *http.Request
 **/
 func (s *Server) setToken(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
@@ -41,8 +40,7 @@ func (s *Server) setToken(w http.ResponseWriter, r *http.Request) {
 
 /**
 * getToken
-* @params w http.ResponseWriter
-* @params r *http.Request
+* @params w http.ResponseWriter, r *http.Request
 **/
 func (s *Server) getToken(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
@@ -63,8 +61,7 @@ func (s *Server) getToken(w http.ResponseWriter, r *http.Request) {
 
 /**
 * deleteToken
-* @params w http.ResponseWriter
-* @params r *http.Request
+* @params w http.ResponseWriter, r *http.Request
 **/
 func (s *Server) deleteToken(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)

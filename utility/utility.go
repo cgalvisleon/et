@@ -57,6 +57,28 @@ var count = make(map[string]int64)
 var LIST_STATES = []string{ACTIVE, ARCHIVED, CANCELLED, IN_PROCESS, PENDING_APPROVAL, APPROVAL, REFUSED}
 
 /**
+* SetStatus
+* @param status string
+* @return bool
+**/
+func SetStatus(status string) bool {
+	LIST_STATES = append(LIST_STATES, status)
+
+	return slices.Contains(LIST_STATES, status)
+}
+
+/**
+* DeleteStatus
+* @param status string
+* @return bool
+**/
+func DeleteStatus(status string) bool {
+	LIST_STATES = slices.Delete(LIST_STATES, slices.Index(LIST_STATES, status), 1)
+
+	return !slices.Contains(LIST_STATES, status)
+}
+
+/**
 * NowTime
 * @return time.Time
 **/
@@ -130,13 +152,7 @@ func UUIndex(tag string) int64 {
 * @return bool
 **/
 func Contains(v interface{}, vals ...any) bool {
-	for _, i := range vals {
-		if i == v {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(vals, v)
 }
 
 /**
@@ -146,9 +162,7 @@ func Contains(v interface{}, vals ...any) bool {
 * @return bool
 **/
 func InStr(val string, in []string) bool {
-	ok := slices.Contains(in, val)
-
-	return ok
+	return slices.Contains(in, val)
 }
 
 /**

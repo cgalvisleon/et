@@ -10,8 +10,7 @@ import (
 
 /**
 * getRpcAll
-* @params w http.ResponseWriter
-* @params r *http.Request
+* @params w http.ResponseWriter, r *http.Request
 **/
 func (s *Server) listRpc(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
@@ -31,8 +30,7 @@ func (s *Server) listRpc(w http.ResponseWriter, r *http.Request) {
 
 /**
 * deletePrcPackage
-* @params w http.ResponseWriter
-* @params r *http.Request
+* @params w http.ResponseWriter, r *http.Request
 **/
 func (s *Server) deletePrcPackage(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
@@ -55,8 +53,7 @@ func (s *Server) deletePrcPackage(w http.ResponseWriter, r *http.Request) {
 
 /**
 * handlerTest
-* @params w http.ResponseWriter
-* @params r *http.Request
+* @params w http.ResponseWriter, r *http.Request
 **/
 func (s *Server) testRpc(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)

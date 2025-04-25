@@ -194,7 +194,7 @@ func Close() {
 const modelService = `package $2
 
 import (
-	"github.com/cgalvisleon/et/ettp"
+	"github.com/cgalvisleon/et/server"
 	v1 "$1/internal/services/$2/v1"
 )
 

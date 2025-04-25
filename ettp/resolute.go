@@ -83,7 +83,7 @@ func (s *Resolute) GetResolve() string {
 /**
 * getResolute
 * @params r *http.Request
-* @return *Resolute
+* @return *Resolute, *http.Request
 **/
 func (s *Server) getResolute(r *http.Request) (*Resolute, *http.Request) {
 	scheme := "http"

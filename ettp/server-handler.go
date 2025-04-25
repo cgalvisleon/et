@@ -63,10 +63,10 @@ func developToken() string {
 /**
 * GetRouteById
 * @param id string
-* @return *Route
+* @return *Router
 **/
-func (s *Server) GetRouteById(id string) *Route {
-	idx := slices.IndexFunc(s.solvers, func(e *Route) bool { return e.Id == id })
+func (s *Server) GetRouteById(id string) *Router {
+	idx := slices.IndexFunc(s.solvers, func(e *Router) bool { return e.Id == id })
 	if idx == -1 {
 		return nil
 	}
@@ -80,7 +80,7 @@ func (s *Server) GetRouteById(id string) *Route {
 * @return error
 **/
 func (s *Server) DeleteRouteById(id string, save bool) error {
-	idx := slices.IndexFunc(s.solvers, func(e *Route) bool { return e.Id == id })
+	idx := slices.IndexFunc(s.solvers, func(e *Router) bool { return e.Id == id })
 	if idx == -1 {
 		return mistake.New(MSG_ROUTE_NOT_FOUND)
 	}
@@ -168,12 +168,11 @@ func (s *Server) GetSolvers() et.Items {
 
 /**
 * deleteRoute
-* @param method string
-* @param id string
-* @return *Route
+* @param method, id string
+* @return error
 **/
 func (s *Server) deleteRoute(method, id string) error {
-	idx := slices.IndexFunc(s.router, func(e *Route) bool { return e.Tag == method })
+	idx := slices.IndexFunc(s.router, func(e *Router) bool { return e.Tag == method })
 	if idx == -1 {
 		return console.Alertm("Method route not found")
 	}

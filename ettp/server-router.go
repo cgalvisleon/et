@@ -1,7 +1,6 @@
 package ettp
 
 import (
-	"net/http"
 	"slices"
 	"strings"
 
@@ -9,15 +8,14 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/router"
-	"github.com/cgalvisleon/et/strs"
 )
 
 /**
 * UpsetRoute
 * @param id, method, path, resolve string, kind TypeApi, header et.Json, tpHeader router.TpHeader, excludeHeader []string, private bool, packageName string, save bool
-* @return *Route
+* @return *Router
 **/
-func (s *Server) UpsetRoute(id, method, path, resolve string, kind TypeApi, header et.Json, tpHeader router.TpHeader, excludeHeader []string, private bool, packageName string, save bool) *Route {
+func (s *Server) UpsetRoute(id, method, path, resolve string, kind TypeApi, header et.Json, tpHeader router.TpHeader, excludeHeader []string, private bool, packageName string, save bool) *Router {
 	if len(method) == 0 {
 		return nil
 	}
@@ -30,8 +28,8 @@ func (s *Server) UpsetRoute(id, method, path, resolve string, kind TypeApi, head
 		console.Logf(ServiceName, `[SET] %s:%s -> %s | TpHeader:%s | Private:%v | %s`, method, path, resolve, tpHeader.String(), private, packageName)
 	}
 
-	var router *Route
-	idx := slices.IndexFunc(s.solvers, func(e *Route) bool { return e.Method == method && e.Path == path })
+	var router *Router
+	idx := slices.IndexFunc(s.solvers, func(e *Router) bool { return e.Method == method && e.Path == path })
 	if idx != -1 {
 		router = s.solvers[idx]
 		router.Id = id
@@ -50,7 +48,7 @@ func (s *Server) UpsetRoute(id, method, path, resolve string, kind TypeApi, head
 
 		router.SetPakage(packageName)
 	} else {
-		idx = indexRoute(method, s.router)
+		idx = getRouteIndex(method, s.router)
 		if idx == -1 {
 			router, s.router = newRoute(s, method, s.router, packageName)
 		} else {
@@ -77,7 +75,7 @@ func (s *Server) UpsetRoute(id, method, path, resolve string, kind TypeApi, head
 					matrix := strings.Split(tag, ";")
 					tag = matrix[0]
 				}
-				router = router.newRoute(id, method, tag, kind, header, tpHeader, excludeHeader, private, tpParams)
+				router = router.addRoute(id, method, tag, kind, header, tpHeader, excludeHeader, private, tpParams)
 			} else {
 				router = find
 			}
@@ -101,67 +99,11 @@ func (s *Server) UpsetRoute(id, method, path, resolve string, kind TypeApi, head
 }
 
 /**
-* setHandlerFunc
-* @param method string
-* @param path string
-* @param handlerFn http.HandlerFunc
-* @param packageName string
-**/
-func (s *Server) setHandlerFunc(method, path string, handlerFn http.HandlerFunc, packageName string) *Route {
-	method = strs.Uppcase(method)
-	ok := methodMap[method]
-	if !ok {
-		console.Alertf(`'%s' http method is not supported.`, method)
-		return nil
-	}
-
-	url := strs.Format("%s%s", s.host, path)
-	url = strings.ReplaceAll(url, "//", "/")
-	id := strs.Format("%s:%s", method, url)
-
-	route := s.UpsetRoute(id, method, url, url, TpHandler, et.Json{}, router.TpReplaceHeader, []string{}, false, packageName, false)
-	if route != nil {
-		s.handlers[route.Id] = handlerFn
-	}
-
-	return route
-}
-
-/**
-* loadRoute
-* @param route *Route
-* @return *Route
-**/
-func (s *Server) loadRoute(route *Route) {
-	s.UpsetRoute(
-		route.Id,
-		route.Method,
-		route.Path,
-		route.Resolve,
-		route.Kind,
-		route.Header,
-		route.TpHeader,
-		route.ExcludeHeader,
-		route.Private,
-		route.PackageName,
-		false,
-	)
-}
-
-/**
 * SetResolve
-* @param private bool
-* @param id string
-* @param method string
-* @param path string
-* @param resolve string
-* @param header et.Json
-* @param tpHeader router.TpHeader
-* @param packageName string
-* @param saved bool
-* @return error
+* @param private bool, id, method, path, resolve string, header et.Json, tpHeader router.TpHeader, excludeHeader []string, packageName string, saved bool
+* @return *Router, error
 **/
-func (s *Server) SetResolve(private bool, id, method, path, resolve string, header et.Json, tpHeader router.TpHeader, excludeHeader []string, packageName string, saved bool) (*Route, error) {
+func (s *Server) SetResolve(private bool, id, method, path, resolve string, header et.Json, tpHeader router.TpHeader, excludeHeader []string, packageName string, saved bool) (*Router, error) {
 	method = strings.ToUpper(method)
 	ok := methodMap[method]
 	if !ok {

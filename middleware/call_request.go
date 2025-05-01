@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 )
@@ -31,7 +31,7 @@ func callRequests(tag string) Request {
 		Hour:    cache.More(strs.Format(`%s-%d`, tag, now/3600), 3600),
 		Minute:  cache.More(strs.Format(`%s-%d`, tag, now/60), 60),
 		Seccond: cache.More(strs.Format(`%s-%d`, tag, now/1), 1),
-		Limit:   envar.GetInt(400, "REQUESTS_LIMIT"),
+		Limit:   config.Int("REQUESTS_LIMIT", 400),
 	}
 }
 
@@ -50,7 +50,7 @@ func localRequests(tag string) Request {
 		Hour:    more(strs.Format(`%s-%d`, tag, now/3600), 3600),
 		Minute:  more(strs.Format(`%s-%d`, tag, now/60), 60),
 		Seccond: more(strs.Format(`%s-%d`, tag, now/1), 1),
-		Limit:   envar.GetInt(400, "REQUESTS_LIMIT"),
+		Limit:   config.Int("REQUESTS_LIMIT", 400),
 	}
 }
 

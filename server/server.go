@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/console"
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/strs"
@@ -41,13 +41,22 @@ type Ettp struct {
 * @return *Ettp, error
 **/
 func New(appName string) (*Ettp, error) {
+	err := config.Validate([]string{
+		"PORT",
+		"RPC_PORT",
+		"VERSION",
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	result := Ettp{
-		port:    envar.EnvarInt(3300, "PORT"),
-		rpc:     envar.EnvarInt(0, "RPC_PORT"),
-		stdout:  envar.EnvarBool(false, "STDOUT"),
+		port:    config.Int("PORT", 3000),
+		rpc:     config.Int("RPC_PORT", 4200),
+		stdout:  config.Bool("STDOUT", false),
 		pidFile: ".pid",
 		appName: appName,
-		version: envar.EnvarStr("0.0.1", "VERSION"),
+		version: config.String("VERSION", "0.0.1"),
 	}
 
 	if result.port != 0 {
@@ -197,8 +206,8 @@ func (s *Ettp) Cli() {
 		Use:   "start",
 		Short: "Inicia el servidor HTTP en background",
 		Run: func(cmd *cobra.Command, args []string) {
-			envar.UpSetInt("PORT", s.port)
-			envar.UpSetInt("RPC_PORT", s.rpc)
+			config.Set("PORT", s.port)
+			config.Set("RPC_PORT", s.rpc)
 
 			command := exec.Command(os.Args[0], "run-server")
 			if s.stdout {

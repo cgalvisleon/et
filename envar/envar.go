@@ -1,174 +1,178 @@
 package envar
 
 import (
+	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
-	"github.com/cgalvisleon/et/strs"
+	"github.com/cgalvisleon/et/arg"
 	_ "github.com/joho/godotenv/autoload"
 )
 
+var Envar = map[string]interface{}{}
+
 /**
-* MetaSet
-* @param string name
-* @param string _default
-* @param string description
-* @param string _var
+* setEnvar
+* @param name string, value interface{}
+* @return error
+**/
+func setEnvar(name string, value interface{}) {
+	name = strings.ToUpper(name)
+	fmt.Println("setEnvar:", name, ":", value)
+	val := fmt.Sprintf("%v", value)
+	Envar[name] = val
+	os.Setenv(name, val)
+}
+
+/**
+* SetStrByArg
+* @param name, varName, defaultVal string
 * @return string
 **/
-func MetaSet(name string, _default string, description, _var string) string {
-	for i, arg := range os.Args[1:] {
-		if arg == strs.Format("-%s", name) {
-			val := os.Args[i+2]
-			os.Setenv(_var, val)
-			return val
-		}
+func SetStrByArg(name, varName, defaultVal string) string {
+	val, ok := arg.Get(name, defaultVal)
+	if ok {
+		setEnvar(varName, val)
 	}
 
-	return _default
+	return val
+}
+
+/**
+* SetIntByArg
+* @param name, varName string, defaultVal int
+* @return int
+**/
+func SetIntByArg(name, varName string, defaultVal int) int {
+	val, ok := arg.GetInt(name, defaultVal)
+	if ok {
+		setEnvar(varName, strconv.Itoa(val))
+	}
+
+	return val
+}
+
+/**
+* SetInt64ByArg
+* @param name, varName string, defaultVal int64
+* @return int64
+**/
+func SetInt64ByArg(name, varName string, defaultVal int64) int64 {
+	val, ok := arg.GetInt64(name, defaultVal)
+	if ok {
+		setEnvar(varName, strconv.FormatInt(val, 10))
+	}
+
+	return val
+}
+
+/**
+* SetBoolByArg
+* @param name, varName string, defaultVal bool
+* @return bool
+**/
+func SetBoolByArg(name, varName string, defaultVal bool) bool {
+	val, ok := arg.GetBool(name, defaultVal)
+	if ok {
+		setEnvar(varName, strconv.FormatBool(val))
+	}
+
+	return val
+}
+
+/**
+* Set
+* @param name string, value interface{}
+* @return interface{}
+**/
+func Set(name string, value interface{}) interface{} {
+	s := fmt.Sprintf("%v", value)
+	setEnvar(name, s)
+	return value
 }
 
 /**
 * SetStr
-* @param string name
-* @param string _default
-* @param string usage
-* @param string _var
+* @param name, value string
 * @return string
 **/
-func SetStr(name string, _default string, usage, _var string) string {
-	return MetaSet(name, _default, usage, _var)
+func SetStr(name string, value string) string {
+	Set(name, value)
+	return value
 }
 
 /**
 * SetInt
-* @param string name
-* @param int _default
-* @param string usage
-* @param string _var
+* @param name string, value int
 * @return int
 **/
-func SetInt(name string, _default int, usage, _var string) int {
-	result := MetaSet(name, strconv.Itoa(_default), usage, _var)
-
-	val, err := strconv.Atoi(result)
-	if err != nil {
-		return _default
-	}
-
-	return val
+func SetInt(name string, value int) int {
+	Set(name, value)
+	return value
 }
 
 /**
-* SetInt64
-* @param string name
-* @param int64 _default
-* @param string usage
-* @param string _var
-* @return int64
+* SetFloat
+* @param name string, value float64
+* @return float64
 **/
-func SetIn64(name string, _default int64, usage, _var string) int64 {
-	result := MetaSet(name, strconv.FormatInt(_default, 10), usage, _var)
-
-	val, err := strconv.ParseInt(result, 10, 64)
-	if err != nil {
-		return _default
-	}
-
-	return val
+func SetFloat(name string, value float64) float64 {
+	Set(name, value)
+	return value
 }
 
 /**
 * SetBool
-* @param string name
-* @param bool _default
-* @param string usage
-* @param string _var
+* @param name string, value bool
 * @return bool
 **/
-func SetBool(name string, _default bool, usage, _var string) bool {
-	result := MetaSet(name, strconv.FormatBool(_default), usage, _var)
-
-	val, err := strconv.ParseBool(result)
-	if err != nil {
-		return _default
-	}
-
-	return val
-}
-
-/**
-* UpSetStr
-* @param string name
-* @param string value
-* @return string
-**/
-func UpSetStr(name string, value string) string {
-	os.Setenv(name, value)
+func SetBool(name string, value bool) bool {
+	Set(name, value)
 	return value
 }
 
 /**
-* SetInt
-* @param string name
-* @param int value
-* @return int
+* Get
+* @param name string, defaultVal interface{}
+* @return interface{}
 **/
-func UpSetInt(name string, value int) int {
-	os.Setenv(name, strconv.Itoa(value))
-	return value
-}
-
-/**
-* UpSetFloat
-* @param string name
-* @param int64 value
-* @return int64
-**/
-func UpSetFloat(name string, value float64) float64 {
-	os.Setenv(name, strconv.FormatFloat(float64(value), 'f', -1, 64))
-	return value
-}
-
-/**
-* UpSetBool
-* @param string name
-* @param bool value
-* @return bool
-**/
-func UpSetBool(name string, value bool) bool {
-	os.Setenv(name, strconv.FormatBool(value))
-	return value
-}
-
-/**
-* GetStr
-* @param string _default
-* @param string _var
-* @return string
-**/
-func GetStr(_default string, _var string) string {
-	result := os.Getenv(_var)
+func Get(name string, defaultVal interface{}) interface{} {
+	name = strings.ToUpper(name)
+	result := os.Getenv(name)
 
 	if result == "" {
-		return _default
+		return defaultVal
 	}
 
 	return result
 }
 
 /**
+* GetStr
+* @param varName, defaultVal string
+* @return string
+**/
+func GetStr(varName, defaultVal string) string {
+	result := Get(varName, defaultVal)
+
+	if result == "" {
+		return defaultVal
+	}
+
+	return fmt.Sprintf("%v", result)
+}
+
+/**
 * GetInt
-* @param int _default
-* @param string _var
+* @param varName string, defaultVal int
 * @return int
 **/
-func GetInt(_default int, _var string) int {
-	result := GetStr(strconv.Itoa(_default), _var)
-
+func GetInt(varName string, defaultVal int) int {
+	result := GetStr(varName, strconv.Itoa(defaultVal))
 	val, err := strconv.Atoi(result)
 	if err != nil {
-		return _default
+		return defaultVal
 	}
 
 	return val
@@ -176,16 +180,15 @@ func GetInt(_default int, _var string) int {
 
 /**
 * GetInt64
-* @param int64 _default
-* @param string _var
+* @param varName string, defaultVal int64
 * @return int64
 **/
-func GetInt64(_default int64, _var string) int64 {
-	result := GetStr(strconv.FormatInt(_default, 10), _var)
+func GetInt64(varName string, defaultVal int64) int64 {
+	result := GetStr(strconv.FormatInt(defaultVal, 10), varName)
 
 	val, err := strconv.ParseInt(result, 10, 64)
 	if err != nil {
-		return _default
+		return defaultVal
 	}
 
 	return val
@@ -193,16 +196,29 @@ func GetInt64(_default int64, _var string) int64 {
 
 /**
 * GetBool
-* @param bool _default
-* @param string _var
+* @param varName string, defaultVal bool
 * @return bool
 **/
-func GetBool(_default bool, _var string) bool {
-	result := GetStr(strconv.FormatBool(_default), _var)
-
+func GetBool(varName string, defaultVal bool) bool {
+	result := GetStr(strconv.FormatBool(defaultVal), varName)
 	val, err := strconv.ParseBool(result)
 	if err != nil {
-		return _default
+		return defaultVal
+	}
+
+	return val
+}
+
+/**
+* GetNumber
+* @param varName string, defaultVal float64
+* @return float64
+**/
+func GetNumber(varName string, defaultVal float64) float64 {
+	result := GetStr(strconv.FormatFloat(defaultVal, 'f', -1, 64), varName)
+	val, err := strconv.ParseFloat(result, 64)
+	if err != nil {
+		return defaultVal
 	}
 
 	return val
@@ -210,36 +226,45 @@ func GetBool(_default bool, _var string) bool {
 
 /**
 * Int
-* @param string _var
+* @param varName string
 * @return int
 **/
-func Int(_var string) int {
-	return GetInt(0, _var)
+func Int(varName string) int {
+	return GetInt(varName, 0)
 }
 
 /**
 * Int64
-* @param string _var
+* @param varName string
 * @return int64
 **/
-func Int64(_var string) int64 {
-	return GetInt64(0, _var)
+func Int64(varName string) int64 {
+	return GetInt64(varName, 0)
 }
 
 /**
 * Bool
-* @param string _var
+* @param varName string
 * @return bool
 **/
-func Bool(_var string) bool {
-	return GetBool(false, _var)
+func Bool(varName string) bool {
+	return GetBool(varName, false)
+}
+
+/**
+* Number
+* @param varName string
+* @return float64
+**/
+func Number(varName string) float64 {
+	return GetNumber(varName, 0)
 }
 
 /**
 * Str
-* @param string _var
+* @param varName string
 * @return string
 **/
-func Str(_var string) string {
-	return GetStr("", _var)
+func Str(varName string) string {
+	return GetStr(varName, "")
 }

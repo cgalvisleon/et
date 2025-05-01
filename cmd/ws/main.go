@@ -8,7 +8,7 @@ import (
 
 	"math/rand"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
@@ -23,16 +23,10 @@ func main() {
 		return
 	}
 
-	envar.SetInt("port", 3300, "Port server", "PORT")
-	envar.SetStr("mode", "", "Modo cluster: master or worker", "WS_MODE")
-	envar.SetStr("master-url", "", "Master host", "WS_MASTER_URL")
-
-	port := envar.GetInt(3300, "PORT")
-	mode := envar.GetStr("", "WS_MODE")
-	masterURL := envar.GetStr("", "WS_MASTER_URL")
-
+	port := config.SetIntByArg("port", 3300)
+	mode := config.SetStrByArg("mode", "")
+	masterURL := config.SetStrByArg("master-url", "")
 	conn = ws.ServerHttp(port, mode, masterURL)
-
 	test1(port)
 
 	sigs := make(chan os.Signal, 1)

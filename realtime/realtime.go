@@ -3,7 +3,7 @@ package realtime
 import (
 	"net/http"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/ws"
@@ -22,26 +22,24 @@ func Load(name string) (*ws.Client, error) {
 		return conn, nil
 	}
 
-	url := envar.GetStr("", "RT_URL")
-	if url == "" {
-		return nil, logs.Alertm(MSG_RT_URL_REQUIRED)
+	err := config.Validate([]string{
+		"RT_URL",
+		"RT_USERNAME",
+		"RT_PASSWORD",
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	username := envar.GetStr("", "WS_USERNAME")
-	if username == "" {
-		return nil, logs.Alertm(ERR_WS_USERNAME_REQUIRED)
-	}
-
-	password := envar.GetStr("", "WS_PASSWORD")
-	if password == "" {
-		return nil, logs.Alertm(ERR_WS_PASSWORD_REQUIRED)
-	}
-
+	url := config.String("RT_URL", "")
+	username := config.String("RT_USERNAME", "")
+	password := config.String("RT_PASSWORD", "")
+	reconnect := config.Int("RT_RECONNECT", 3)
 	client, err := ws.Login(&ws.ClientConfig{
-		ClientId:  reg.Id("RealTime"),
+		ClientId:  reg.GenId("RealTime"),
 		Name:      name,
 		Url:       url,
-		Reconnect: envar.GetInt(3, "RT_RECONCECT"),
+		Reconnect: reconnect,
 		Header: http.Header{
 			"username": []string{username},
 			"password": []string{password},

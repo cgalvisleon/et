@@ -89,160 +89,160 @@ func (s Items) ToString() string {
 **/
 func (s Items) ToJson() Json {
 	return Json{
-		"Ok":     s.Ok,
-		"Count":  s.Count,
-		"Result": s.Result,
+		"ok":     s.Ok,
+		"count":  s.Count,
+		"result": s.Result,
 	}
 }
 
 /**
 * ValAny return the value of the key
 * @param idx int
-* @param _default any
+* @param defaultVal any
 * @param atribs ...string
 * @return any
 **/
-func (s *Items) ValAny(idx int, _default any, atribs ...string) interface{} {
+func (s *Items) ValAny(idx int, defaultVal any, atribs ...string) interface{} {
 	if s.Result[idx] == nil {
-		return _default
+		return defaultVal
 	}
 
-	return s.Result[idx].ValAny(_default, atribs...)
+	return s.Result[idx].ValAny(defaultVal, atribs...)
 }
 
 /**
 * ValStr return the value of the key
 * @param idx int
-* @param _default string
+* @param defaultVal string
 * @param atribs ...string
 * @return string
 **/
-func (s *Items) ValStr(idx int, _default string, atribs ...string) string {
+func (s *Items) ValStr(idx int, defaultVal string, atribs ...string) string {
 	if s.Result[idx] == nil {
-		return _default
+		return defaultVal
 	}
 
-	return s.Result[idx].ValStr(_default, atribs...)
+	return s.Result[idx].ValStr(defaultVal, atribs...)
 }
 
 /**
 * ValInt return int value of the key
 * @param idx int
-* @param _default int
+* @param defaultVal int
 * @param atribs ...string
 * @return int
 **/
-func (s *Items) ValInt(idx int, _default int, atribs ...string) int {
+func (s *Items) ValInt(idx int, defaultVal int, atribs ...string) int {
 	if s.Result[idx] == nil {
-		return _default
+		return defaultVal
 	}
 
-	return s.Result[idx].ValInt(_default, atribs...)
+	return s.Result[idx].ValInt(defaultVal, atribs...)
 }
 
 /**
 * ValInt64 return int64 value of the key
 * @param idx int
-* @param _default int64
+* @param defaultVal int64
 * @param atribs ...string
 * @return int64
 **/
-func (s *Items) ValInt64(idx int64, _default int64, atribs ...string) int64 {
+func (s *Items) ValInt64(idx int64, defaultVal int64, atribs ...string) int64 {
 	if s.Result[idx] == nil {
-		return _default
+		return defaultVal
 	}
 
-	return s.Result[idx].ValInt64(_default, atribs...)
+	return s.Result[idx].ValInt64(defaultVal, atribs...)
 }
 
 /**
 * ValNum return float64 value of the key
 * @param idx int
-* @param _default float64
+* @param defaultVal float64
 * @param atribs ...string
 * @return float64
 **/
-func (s *Items) ValNum(idx int, _default float64, atribs ...string) float64 {
+func (s *Items) ValNum(idx int, defaultVal float64, atribs ...string) float64 {
 	if s.Result[idx] == nil {
-		return _default
+		return defaultVal
 	}
 
-	return s.Result[idx].ValNum(_default, atribs...)
+	return s.Result[idx].ValNum(defaultVal, atribs...)
 }
 
 /**
 * ValBool return bool value of the key
 * @param idx int
-* @param _default bool
+* @param defaultVal bool
 * @param atribs ...string
 * @return bool
 **/
-func (s *Items) ValBool(idx int, _default bool, atribs ...string) bool {
+func (s *Items) ValBool(idx int, defaultVal bool, atribs ...string) bool {
 	if s.Result[idx] == nil {
-		return _default
+		return defaultVal
 	}
 
-	return s.Result[idx].ValBool(_default, atribs...)
+	return s.Result[idx].ValBool(defaultVal, atribs...)
 }
 
 /**
 * ValTime return time.Time value of the key
 * @param idx int
-* @param _default time.Time
+* @param defaultVal time.Time
 * @param atribs ...string
 * @return time.Time
 **/
-func (s *Items) ValTime(idx int, _default time.Time, atribs ...string) time.Time {
+func (s *Items) ValTime(idx int, defaultVal time.Time, atribs ...string) time.Time {
 	if s.Result[idx] == nil {
-		return _default
+		return defaultVal
 	}
 
-	return s.Result[idx].ValTime(_default, atribs...)
+	return s.Result[idx].ValTime(defaultVal, atribs...)
 }
 
 /**
 * ValJson return the value of the key
 * @param idx int
-* @param _default Json
+* @param defaultVal Json
 * @param atribs ...string
 * @return Json
 **/
-func (s *Items) ValJson(idx int, _default Json, atribs ...string) Json {
+func (s *Items) ValJson(idx int, defaultVal Json, atribs ...string) Json {
 	if s.Result[idx] == nil {
-		return _default
+		return defaultVal
 	}
 
-	return s.Result[idx].ValJson(_default, atribs...)
+	return s.Result[idx].ValJson(defaultVal, atribs...)
 }
 
 /**
 * ValArray return the value of the key
 * @param idx int
-* @param _default []interface{}
+* @param defaultVal []interface{}
 * @param atribs ...string
 * @return []interface{}
 **/
-func (s *Items) ValArray(idx int, _default []interface{}, atribs ...string) []interface{} {
+func (s *Items) ValArray(idx int, defaultVal []interface{}, atribs ...string) []interface{} {
 	if s.Result[idx] == nil {
-		return _default
+		return defaultVal
 	}
 
-	return s.Result[idx].ValArray(_default, atribs...)
+	return s.Result[idx].ValArray(defaultVal, atribs...)
 }
 
 /**
 * Any return the value of the key
 * @param idx int
-* @param _default any
+* @param defaultVal any
 * @param atribs ...string
 * @return any
 **/
-func (s *Items) Any(idx int, _default interface{}, atribs ...string) interface{} {
+func (s *Items) Any(idx int, defaultVal interface{}, atribs ...string) interface{} {
 	if s.Result[idx] == nil {
-		return _default
+		return defaultVal
 	}
 
-	return s.Result[idx].Any(_default, atribs...)
+	return s.Result[idx].Any(defaultVal, atribs...)
 }
 
 /**

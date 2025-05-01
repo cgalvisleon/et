@@ -8,13 +8,14 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/console"
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/strs"
+	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/cgalvisleon/et/ws"
 	"github.com/rs/cors"
@@ -72,22 +73,38 @@ var methodMap = map[string]bool{
 	TRACE:   true,
 }
 
-var ServiceName = "Api Gateway"
-var Version = envar.GetStr("0.0.1", "VERSION")
-var HostName, _ = os.Hostname()
-var Company = envar.GetStr("", "COMPANY")
-var Web = envar.GetStr("", "WEB")
-var Help = envar.GetStr("", "HELP")
+type Config struct {
+	Name         string
+	Version      string
+	Company      string
+	Web          string
+	Help         string
+	Port         int
+	PathUrl      string
+	ReadTimeout  time.Duration
+	WriteTimeout time.Duration
+	IdleTimeout  time.Duration
+	TLS          bool
+	CertFile     string
+	KeyFile      string
+	Debug        bool
+}
 
 type Server struct {
+	CreatedAt       time.Time
 	Id              string
 	Name            string
+	Version         string
+	Company         string
+	Web             string
+	Help            string
+	HostName        string
 	Storage         *file.SyncFile
 	addr            string
 	mux             *http.ServeMux
 	svr             *http.Server
 	ws              *ws.Hub
-	host            string
+	pathUrl         string
 	cors            *cors.Cors
 	middlewares     []func(http.Handler) http.Handler
 	authenticator   func(http.Handler) http.Handler
@@ -106,36 +123,34 @@ type Server struct {
 	debug           bool
 }
 
-func New() (*Server, error) {
+func New(config Config) (*Server, error) {
 	// Cache
-	_, err := cache.Load()
+	err := cache.Load()
 	if err != nil {
 		return nil, err
 	}
 
 	// Event
-	_, err = event.Load()
+	err = event.Load()
 	if err != nil {
 		return nil, err
 	}
 
 	// Http ServeMux
+	hostName, _ := os.Hostname()
 	mux := http.NewServeMux()
-	port := envar.GetInt(3000, "PORT")
-	host := envar.GetStr("/", "HOST")
-	readTimeout := envar.GetInt(0, "READ_TIMEOUT")
-	writeTimeout := envar.GetInt(0, "WRITE_TIMEOUT")
-	idleTimeout := envar.GetInt(24, "IDLE_TIMEOUT")
-	tls := envar.GetBool(false, "TLS")
-	certFile := envar.GetStr("", "CERT_FILE")
-	keyFile := envar.GetStr("", "KEY_FILE")
-	debug := envar.GetBool(false, "DEBUG")
-
 	srv := &Server{
+		CreatedAt:       timezone.NowTime(),
 		Id:              utility.UUID(),
-		addr:            strs.Format(":%d", port),
+		Name:            config.Name,
+		Version:         config.Version,
+		Company:         config.Company,
+		Web:             config.Web,
+		Help:            config.Help,
+		HostName:        hostName,
+		addr:            strs.Format(":%d", config.Port),
 		mux:             mux,
-		host:            host,
+		pathUrl:         config.PathUrl,
 		cors:            CorsAllowAll([]string{}),
 		notFoundHandler: notFoundHandler,
 		middlewares:     make([]func(http.Handler) http.Handler, 0),
@@ -144,15 +159,15 @@ func New() (*Server, error) {
 		packages:        []*Package{},
 		handlers:        make(map[string]http.HandlerFunc),
 		mutex:           &sync.RWMutex{},
-		readTimeout:     time.Duration(readTimeout) * time.Second,
-		writeTimeout:    time.Duration(writeTimeout) * time.Second,
-		idleTimeout:     time.Duration(idleTimeout) * time.Hour,
-		tls:             tls,
-		certFile:        certFile,
-		keyFile:         keyFile,
-		debug:           debug,
+		readTimeout:     config.ReadTimeout,
+		writeTimeout:    config.WriteTimeout,
+		idleTimeout:     config.IdleTimeout,
+		tls:             config.TLS,
+		certFile:        config.CertFile,
+		keyFile:         config.KeyFile,
+		debug:           config.Debug,
 	}
-	srv.mux.HandleFunc(srv.host, srv.handlerResolve)
+	srv.mux.HandleFunc(srv.pathUrl, srv.handlerResolve)
 	srv.svr = &http.Server{
 		Addr:         srv.addr,
 		Handler:      srv.cors.Handler(srv.mux),
@@ -162,6 +177,24 @@ func New() (*Server, error) {
 	}
 
 	return srv, nil
+}
+
+/**
+* version
+* @return et.Json
+**/
+func (s *Server) version() et.Json {
+	result := et.Json{
+		"date_at": s.CreatedAt,
+		"version": s.Version,
+		"service": s.Name,
+		"host":    s.HostName,
+		"company": s.Company,
+		"web":     s.Web,
+		"help":    s.Help,
+	}
+
+	return result
 }
 
 /**
@@ -191,7 +224,7 @@ func (s *Server) Reset() {
 	s.Save()
 
 	for _, pk := range pks {
-		if pk == ServiceName {
+		if pk == s.Name {
 			continue
 		}
 
@@ -233,8 +266,16 @@ func (s *Server) Start() error {
 * StartWS
 **/
 func (s *Server) LoadWS() {
-	wsStart := envar.GetBool(false, "WS_START")
+	wsStart := config.Bool("WS_START", false)
 	if !wsStart {
+		return
+	}
+
+	if config.Validate([]string{
+		"REDIS_HOST",
+		"REDIS_PASSWORD",
+		"REDIS_DB",
+	}) != nil {
 		return
 	}
 
@@ -243,9 +284,9 @@ func (s *Server) LoadWS() {
 		s.ws.Start()
 		s.ws.JoinTo(et.Json{
 			"adapter":  "redis",
-			"host":     envar.GetStr("", "REDIS_HOST"),
-			"dbname":   envar.GetInt(0, "REDIS_DB"),
-			"password": envar.GetStr("", "REDIS_PASSWORD"),
+			"host":     config.String("REDIS_HOST", ""),
+			"dbname":   config.Int("REDIS_DB", 0),
+			"password": config.String("REDIS_PASSWORD", ""),
 		})
 	}
 

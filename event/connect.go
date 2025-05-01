@@ -28,7 +28,7 @@ func ConnectTo(host, user, password string) (*Conn, error) {
 	logs.Logf("NATS", `Connected host:%s`, host)
 
 	return &Conn{
-		Id:              reg.Id("nats"),
+		Id:              reg.GenId("nats"),
 		Conn:            client,
 		eventCreatedSub: map[string]*nats.Subscription{},
 		mutex:           &sync.RWMutex{},

@@ -86,7 +86,7 @@ func cryptoSHA512(value string) (string, error) {
 
 // CryptoAES return a string with the value encrypted in aes
 func cryptoAES(value string) (string, error) {
-	secret := envar.GetStr("", "SECRET")
+	secret := envar.GetStr("SECRET", "1977")
 	data := []byte(value)
 	key := []byte(secret)
 
@@ -126,7 +126,7 @@ func Encrypt(value string, cryptoType CryptoType) (string, error) {
 }
 
 func DecryptoAES(value string) (string, error) {
-	secret := envar.GetStr("", "SECRET")
+	secret := envar.GetStr("SECRET", "1977")
 	key := []byte(secret)
 	cipherText, err := base64.StdEncoding.DecodeString(value)
 	if err != nil {

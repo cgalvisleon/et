@@ -3,7 +3,7 @@ package ws
 import (
 	"net/http"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/utility"
@@ -38,17 +38,23 @@ func (s *AdapterWS) ConnectTo(hub *Hub, params et.Json) error {
 		return logs.Alertm("WS Adapter, username is required")
 	}
 
-	password := envar.GetStr("", "WS_PASSWORD")
-	if password == "" {
-		return logs.Alertm("WS Adapter, password is required")
+	err := config.Validate([]string{
+		"WS_USERNAME",
+		"WS_PASSWORD",
+		"WS_HOST",
+	})
+	if err != nil {
+		return err
 	}
 
+	password := config.String("WS_PASSWORD", "")
+	reconnect := config.Int("WS_RECONNECT", 3)
 	name := params.ValStr("Anonime", "name")
 	result, err := Login(&ClientConfig{
 		ClientId:  utility.UUID(),
 		Name:      name,
 		Url:       url,
-		Reconnect: envar.GetInt(3, "RT_RECONCECT"),
+		Reconnect: reconnect,
 		Header: http.Header{
 			"username": []string{username},
 			"password": []string{password},

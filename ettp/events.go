@@ -18,7 +18,7 @@ func (s *Server) initEvents() {
 	}
 }
 
-func (s *Server) eventSetResolve(m event.EvenMessage) {
+func (s *Server) eventSetResolve(m event.Message) {
 	data := m.Data
 	fromId := data.Str("from_id")
 	if fromId == s.Id {
@@ -36,11 +36,11 @@ func (s *Server) eventSetResolve(m event.EvenMessage) {
 	id := data.ValStr("-1", "_id")
 	_, err := s.SetResolve(private, id, method, path, resolve, header, tpHeader, excludeHeader, packageName, true)
 	if err != nil {
-		console.Alertf(`%s error:%s`, ServiceName, err.Error())
+		console.Alertf(`%s error:%s`, s.Name, err.Error())
 	}
 }
 
-func (s *Server) eventDeleteResolve(m event.EvenMessage) {
+func (s *Server) eventDeleteResolve(m event.Message) {
 	data := m.Data
 	fromId := data.Str("from_id")
 	if fromId == s.Id {
@@ -50,6 +50,6 @@ func (s *Server) eventDeleteResolve(m event.EvenMessage) {
 	id := data.Str("_id")
 	err := s.DeleteRouteById(id, true)
 	if err != nil {
-		console.Alertf(`%s error:%s`, ServiceName, err.Error())
+		console.Alertf(`%s error:%s`, s.Name, err.Error())
 	}
 }

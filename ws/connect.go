@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/cgalvisleon/et/claim"
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/utility"
@@ -20,12 +20,12 @@ func (h *Hub) HttpLogin(w http.ResponseWriter, r *http.Request) {
 	username := r.Header.Get("username")
 	password := r.Header.Get("password")
 
-	ws_username := envar.GetStr("", "WS_USERNAME")
+	ws_username := config.String("WS_USERNAME", "")
 	if !utility.ValidStr(ws_username, 0, []string{}) {
 		response.HTTPError(w, r, http.StatusInternalServerError, errors.New(ERR_NOT_SIGNATURE).Error())
 	}
 
-	ws_password := envar.GetStr("", "WS_PASSWORD")
+	ws_password := config.String("WS_PASSWORD", "")
 	if !utility.ValidStr(ws_password, 0, []string{}) {
 		response.HTTPError(w, r, http.StatusInternalServerError, errors.New(ERR_NOT_SIGNATURE).Error())
 	}

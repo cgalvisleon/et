@@ -7,13 +7,13 @@ import (
 )
 
 func main() {
-	_, err := cache.Load()
+	err := cache.Load()
 	if err != nil {
 		panic(err)
 	}
 
 	for i := 0; i < 10; i++ {
-		id := reg.Id("test")
+		id := reg.GenId("test")
 		logs.Debug(id)
 	}
 }

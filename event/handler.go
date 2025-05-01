@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/response"
@@ -43,7 +43,7 @@ func publish(channel string, data et.Json) error {
 * @return error
 **/
 func Publish(channel string, data et.Json) error {
-	stage := envar.GetStr("local", "STAGE")
+	stage := config.App.Stage
 	publish(strs.Format(`event:chanels:%s`, stage), et.Json{"channel": channel})
 	publish(strs.Format(`pipe:%s:%s`, stage, channel), data)
 
@@ -53,10 +53,10 @@ func Publish(channel string, data et.Json) error {
 /**
 * Subscribe
 * @param channel string
-* @param f func(EvenMessage)
+* @param f func(Message)
 * @return error
 **/
-func Subscribe(channel string, f func(EvenMessage)) (err error) {
+func Subscribe(channel string, f func(Message)) (err error) {
 	if conn == nil {
 		return
 	}
@@ -94,10 +94,10 @@ func Subscribe(channel string, f func(EvenMessage)) (err error) {
 /**
 * Queue
 * @param string channel
-* @param func(EvenMessage) f
+* @param func(Message) f
 * @return error
 **/
-func Queue(channel, queue string, f func(EvenMessage)) (err error) {
+func Queue(channel, queue string, f func(Message)) (err error) {
 	if conn == nil {
 		return mistake.New(ERR_NOT_CONNECT)
 	}
@@ -132,10 +132,10 @@ func Queue(channel, queue string, f func(EvenMessage)) (err error) {
 /**
 * Stack
 * @param channel string
-* @param f func(EvenMessage)
+* @param f func(Message)
 * @return error
 **/
-func Stack(channel string, f func(EvenMessage)) error {
+func Stack(channel string, f func(Message)) error {
 	return Queue(channel, QUEUE_STACK, f)
 }
 
@@ -145,7 +145,7 @@ func Stack(channel string, f func(EvenMessage)) error {
 * @param func(Message) reciveFn
 * @return error
 **/
-func Source(channel string, f func(EvenMessage)) error {
+func Source(channel string, f func(Message)) error {
 	return Subscribe(channel, f)
 }
 

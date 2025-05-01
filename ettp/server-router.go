@@ -25,7 +25,7 @@ func (s *Server) UpsetRoute(id, method, path, resolve string, kind TypeApi, head
 	}
 
 	confirm := func() {
-		console.Logf(ServiceName, `[SET] %s:%s -> %s | TpHeader:%s | Private:%v | %s`, method, path, resolve, tpHeader.String(), private, packageName)
+		console.Logf(s.Name, `[SET] %s:%s -> %s | TpHeader:%s | Private:%v | %s`, method, path, resolve, tpHeader.String(), private, packageName)
 	}
 
 	var router *Router

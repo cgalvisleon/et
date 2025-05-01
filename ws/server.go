@@ -4,21 +4,19 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 )
 
 /**
 * ServerHttp
-* @params port int
-* @params username string
-* @params password string
+* @params port int, username string, password string
 * @return *Hub
 **/
 func ServerHttp(port int, username, password string) *Hub {
-	envar.UpSetStr("WS_USERNAME", username)
-	envar.UpSetStr("WS_PASSWORD", password)
+	config.Set("WS_USERNAME", username)
+	config.Set("WS_PASSWORD", password)
 	result := NewHub()
 	result.Start()
 	go startHttp(result, port)

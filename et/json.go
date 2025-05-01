@@ -130,6 +130,30 @@ func (s Json) ToString() string {
 }
 
 /**
+* ToItem convert a json to a Item
+* @return Item
+**/
+func (s Json) ToItem() Item {
+	return Item{
+		Ok:     s.Bool("ok"),
+		Result: s.Json("result"),
+	}
+}
+
+/**
+* ToItems convert a json to a Items
+* @return Items
+**/
+func (s Json) ToItems() Items {
+	result := Items{}
+	result.Ok = s.Bool("ok")
+	result.Result = s.ArrayJson("result")
+	result.Count = len(result.Result)
+
+	return result
+}
+
+/**
 * IsEmpty return if the json is empty
 * @return bool
 **/
@@ -139,11 +163,11 @@ func (s Json) IsEmpty() bool {
 
 /**
 * ValAny
-* @param _default interface{}
+* @param defaultVal interface{}
 * @param atribs ...string
 * @return any
 **/
-func (s Json) ValAny(_default interface{}, atribs ...string) interface{} {
+func (s Json) ValAny(defaultVal interface{}, atribs ...string) interface{} {
 	var current interface{} = s
 
 	n := len(atribs)
@@ -152,15 +176,15 @@ func (s Json) ValAny(_default interface{}, atribs ...string) interface{} {
 		case Json:
 			current = v[atribs[i]]
 			if current == nil {
-				return _default
+				return defaultVal
 			}
 		case map[string]interface{}:
 			current = v[atribs[i]]
 			if current == nil {
-				return _default
+				return defaultVal
 			}
 		default:
-			return _default
+			return defaultVal
 		}
 
 		if i == n-1 {
@@ -173,12 +197,12 @@ func (s Json) ValAny(_default interface{}, atribs ...string) interface{} {
 
 /**
 * ValStr return string value of the key
-* @param _default string
+* @param defaultVal string
 * @param atribs ...string
 * @return string
 **/
-func (s Json) ValStr(_default string, atribs ...string) string {
-	val := s.ValAny(_default, atribs...)
+func (s Json) ValStr(defaultVal string, atribs ...string) string {
+	val := s.ValAny(defaultVal, atribs...)
 
 	switch v := val.(type) {
 	case string:
@@ -190,12 +214,12 @@ func (s Json) ValStr(_default string, atribs ...string) string {
 
 /**
 * ValInt return int value of the key
-* @param _default int
+* @param defaultVal int
 * @param atribs ...string
 * @return int
 **/
-func (s Json) ValInt(_default int, atribs ...string) int {
-	val := s.ValAny(_default, atribs...)
+func (s Json) ValInt(defaultVal int, atribs ...string) int {
+	val := s.ValAny(defaultVal, atribs...)
 
 	switch v := val.(type) {
 	case int:
@@ -213,16 +237,16 @@ func (s Json) ValInt(_default int, atribs ...string) int {
 	case string:
 		i, err := strconv.Atoi(v)
 		if err != nil {
-			return _default
+			return defaultVal
 		}
 		return i
 	default:
-		return _default
+		return defaultVal
 	}
 }
 
-func (s Json) ValInt64(_default int64, atribs ...string) int64 {
-	val := s.ValAny(_default, atribs...)
+func (s Json) ValInt64(defaultVal int64, atribs ...string) int64 {
+	val := s.ValAny(defaultVal, atribs...)
 
 	switch v := val.(type) {
 	case int:
@@ -240,22 +264,22 @@ func (s Json) ValInt64(_default int64, atribs ...string) int64 {
 	case string:
 		i, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
-			return _default
+			return defaultVal
 		}
 		return i
 	default:
-		return _default
+		return defaultVal
 	}
 }
 
 /**
 * ValNum return float64 value of the key
-* @param _default float64
+* @param defaultVal float64
 * @param atribs ...string
 * @return float64
 **/
-func (s Json) ValNum(_default float64, atribs ...string) float64 {
-	val := s.ValAny(_default, atribs...)
+func (s Json) ValNum(defaultVal float64, atribs ...string) float64 {
+	val := s.ValAny(defaultVal, atribs...)
 
 	switch v := val.(type) {
 	case int:
@@ -273,22 +297,22 @@ func (s Json) ValNum(_default float64, atribs ...string) float64 {
 	case string:
 		i, err := strconv.ParseFloat(v, 64)
 		if err != nil {
-			return _default
+			return defaultVal
 		}
 		return i
 	default:
-		return _default
+		return defaultVal
 	}
 }
 
 /**
 * ValBool return bool value of the key
-* @param _default bool
+* @param defaultVal bool
 * @param atribs ...string
 * @return bool
 **/
-func (s Json) ValBool(_default bool, atribs ...string) bool {
-	val := s.ValAny(_default, atribs...)
+func (s Json) ValBool(defaultVal bool, atribs ...string) bool {
+	val := s.ValAny(defaultVal, atribs...)
 
 	switch v := val.(type) {
 	case bool:
@@ -302,49 +326,49 @@ func (s Json) ValBool(_default bool, atribs ...string) bool {
 		case "FALSE":
 			return false
 		default:
-			return _default
+			return defaultVal
 		}
 	default:
-		return _default
+		return defaultVal
 	}
 }
 
 /**
 * ValTime return time value of the key
-* @param _default time.Time
+* @param defaultVal time.Time
 * @param atribs ...string
 * @return time.Time
 **/
-func (s Json) ValTime(_default time.Time, atribs ...string) time.Time {
-	val := s.ValAny(_default, atribs...)
+func (s Json) ValTime(defaultVal time.Time, atribs ...string) time.Time {
+	val := s.ValAny(defaultVal, atribs...)
 
 	switch v := val.(type) {
 	case string:
 		layout := "2006-01-02T15:04:05.000Z"
 		result, err := time.Parse(layout, v)
 		if err != nil {
-			return _default
+			return defaultVal
 		}
 		return result
 	case time.Time:
 		return v
 	default:
-		return _default
+		return defaultVal
 	}
 }
 
 /**
 * ValJson return Json value of the key
-* @param _default Json
+* @param defaultVal Json
 * @param atribs ...string
 * @return Json
 **/
-func (s Json) ValJson(_default Json, atribs ...string) Json {
-	val := s.ValAny(_default, atribs...)
+func (s Json) ValJson(defaultVal Json, atribs ...string) Json {
+	val := s.ValAny(defaultVal, atribs...)
 
 	result, err := Object(val)
 	if err != nil {
-		return _default
+		return defaultVal
 	}
 
 	return result
@@ -352,16 +376,16 @@ func (s Json) ValJson(_default Json, atribs ...string) Json {
 
 /**
 * ValJson return Json value of the key
-* @param _default []interface{}
+* @param defaultVal []interface{}
 * @param atribs ...string
 * @return []interface{}
 **/
-func (s Json) ValArray(_default []interface{}, atribs ...string) []interface{} {
-	val := s.ValAny(_default, atribs...)
+func (s Json) ValArray(defaultVal []interface{}, atribs ...string) []interface{} {
+	val := s.ValAny(defaultVal, atribs...)
 
 	result, err := Array(val)
 	if err != nil {
-		return _default
+		return defaultVal
 	}
 
 	return result
@@ -369,12 +393,12 @@ func (s Json) ValArray(_default []interface{}, atribs ...string) []interface{} {
 
 /**
 * Any return any value of the key
-* @param _default any
+* @param defaultVal any
 * @param atribs ...string
 * @return *Any
 **/
-func (s Json) Any(_default interface{}, atribs ...string) interface{} {
-	return s.ValAny(_default, atribs...)
+func (s Json) Any(defaultVal interface{}, atribs ...string) interface{} {
+	return s.ValAny(defaultVal, atribs...)
 }
 
 /**

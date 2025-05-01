@@ -6,8 +6,8 @@ import (
 
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/claim"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/console"
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/msg"
@@ -16,29 +16,11 @@ import (
 )
 
 /**
-* version
-* @return et.Json
-**/
-func version() et.Json {
-	result := et.Json{
-		"date_at": utility.Now(),
-		"version": Version,
-		"service": ServiceName,
-		"host":    HostName,
-		"company": Company,
-		"web":     Web,
-		"help":    Help,
-	}
-
-	return result
-}
-
-/**
 * developToken
 * @return string
 **/
 func developToken() string {
-	production := envar.GetBool(true, "PRODUCTION")
+	production := config.App.Production
 	if production {
 		return ""
 	}

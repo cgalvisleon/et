@@ -2,7 +2,7 @@ package jrpc
 
 import (
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 )
@@ -15,7 +15,7 @@ var pkg *Package
 * load
 **/
 func Load(name string) (*Package, error) {
-	_, err := cache.Load()
+	err := cache.Load()
 	if err != nil {
 		return nil, err
 	}
@@ -24,11 +24,16 @@ func Load(name string) (*Package, error) {
 		return pkg, nil
 	}
 
-	host := envar.GetStr("localhost", "HOST")
-	host = envar.GetStr(host, "RPC_HOST")
-	port := envar.GetInt(4200, "RPC_PORT")
-	name = strs.DaskSpace(name)
+	err = config.Validate([]string{
+		"RPC_PORT",
+	})
+	if err != nil {
+		return nil, err
+	}
 
+	host := config.String("RPC_HOST", "localhost")
+	port := config.Int("RPC_PORT", 4200)
+	name = strs.DaskSpace(name)
 	pkg = &Package{
 		Name:    name,
 		Host:    host,

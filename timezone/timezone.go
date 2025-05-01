@@ -7,7 +7,6 @@ import (
 )
 
 var loc *time.Location
-var timezone = envar.GetStr("America/Bogota", "ZONEINFO")
 
 /**
 * NowTime
@@ -15,6 +14,8 @@ var timezone = envar.GetStr("America/Bogota", "ZONEINFO")
 * Remember to this function use ZONEINFO variable
 **/
 func NowTime() time.Time {
+	timezone := envar.GetStr("TIMEZONE", "America/Bogota")
+
 	if loc == nil {
 		loc = time.FixedZone(timezone, -5*60*60)
 	}
@@ -30,6 +31,7 @@ func NowTime() time.Time {
 * @return time.Time
 **/
 func Add(d time.Duration) time.Time {
+	timezone := envar.GetStr("TIMEZONE", "America/Bogota")
 	if loc == nil {
 		loc = time.FixedZone(timezone, -5*60*60)
 	}

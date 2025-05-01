@@ -7,8 +7,8 @@ import "github.com/cgalvisleon/et/cache"
 * @params tag string
 * @return string
 **/
-func Id(tag string) string {
-	return cache.RecordId(tag)
+func GenId(tag string) string {
+	return cache.GenRecordId(tag)
 }
 
 /**
@@ -22,4 +22,12 @@ func GetId(tag, id string) string {
 	}
 
 	return cache.GetRecordId(tag, id)
+}
+
+/**
+* GenIndex
+* @return int64
+**/
+func GenIndex() int64 {
+	return cache.GenIndex()
 }

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	lg "github.com/cgalvisleon/et/stdrout"
@@ -231,7 +231,7 @@ func (m *Metrics) CallMetrics() Telemetry {
 		RequestsPerMinute: cache.Count(cache.GenKey(m.key, minute), 1*time.Minute+1*time.Second),
 		RequestsPerHour:   cache.Count(cache.GenKey(m.key, hour), 1*time.Hour+1*time.Second),
 		RequestsPerDay:    cache.Count(cache.GenKey(m.key, date), 24*time.Hour+1*time.Second),
-		RequestsLimit:     envar.GetInt(400, "LIMIT_REQUESTS"),
+		RequestsLimit:     config.Int("REQUESTS_LIMIT", 400),
 	}
 }
 
@@ -255,7 +255,7 @@ func (m *Metrics) println() et.Json {
 	size := float64(m.ResponseSize) / 1024
 	lg.CW(w, lg.NCyan, " Size:%.2f%s", size, "KB")
 	lg.CW(w, lg.NWhite, " in ")
-	limitLatency := time.Duration(envar.GetInt64(1000, "LIMIT_LATENCY")) * time.Millisecond
+	limitLatency := time.Duration(config.Int("LATENCY_LIMIT", 1000)) * time.Millisecond
 	if m.Latency < limitLatency {
 		lg.CW(w, lg.NGreen, " Latency:%s", m.Latency)
 	} else if m.Latency < 5*time.Second {

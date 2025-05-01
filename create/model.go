@@ -55,18 +55,20 @@ const modelMain = `package main
 import (
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	serv "$1/internal/services/$2"
 )
 
 func main() {
-	envar.SetInt("port", 3000, "Port server", "PORT")
-	envar.SetInt("rpc", 4200, "Port rpc server", "RPC_PORT")
-	envar.SetStr("dbhost", "localhost", "Database host", "DB_HOST")
-	envar.SetInt("dbport", 5432, "Database port", "DB_PORT")
-	envar.SetStr("dbname", "", "Database name", "DB_NAME")
-	envar.SetStr("dbuser", "", "Database user", "DB_USER")
-	envar.SetStr("dbpass", "", "Database password", "DB_PASSWORD")
-	envar.SetStr("dbapp", "Test", "Database app name", "DB_APP_NAME")
+	config.SetIntByArg("PORT", 3000)
+	config.SetIntByArg("RPC_PORT", 4200)
+	config.SetStrByArg("DB_HOST", "localhost")
+	config.SetIntByArg("DB_PORT", 5432)
+	config.SetStrByArg("DB_NAME", "")
+	config.SetStrByArg("DB_USER", "")
+	config.SetStrByArg("DB_PASSWORD", "")
+	config.SetStrByArg("DB_APP_NAME", "Test")
+	config.Reload()
 
 	srv, err := serv.New()
 	if err != nil {
@@ -223,9 +225,8 @@ import (
 func LoadConfig() error {
 	StartRpcServer()
 
-	// stage := envar.GetStr("local", "STAGE")
-	// return defaultConfig(stage)
-	return nil
+	// stage := config.String("STAGE", "local")
+	return defaultConfig(stage)
 }
 
 func defaultConfig(stage string) error {
@@ -252,7 +253,7 @@ const modelDbController = `package $1
 import (
 	"context"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/jdb/jdb"
 )
@@ -262,9 +263,9 @@ type Controller struct {
 }
 
 func (c *Controller) Version(ctx context.Context) (et.Json, error) {
-	company := envar.GetStr("", "COMPANY")
-	web := envar.GetStr("", "WEB")
-	version := envar.GetStr("", "VERSION")
+	company := config.App.Company
+	web := config.App.Web
+	version := config.App.Version
 	service := et.Json{
 		"version": version,
 		"service": PackageName,
@@ -293,7 +294,7 @@ const modelController = `package $1
 import (
 	"context"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/linq"
 )
@@ -302,9 +303,9 @@ type Controller struct {
 }
 
 func (c *Controller) Version(ctx context.Context) (et.Json, error) {
-	company := envar.GetStr("", "COMPANY")
-	web := envar.GetStr("", "WEB")
-	version := envar.GetStr("", "VERSION")
+	company := config.App.Company
+	web := config.App.Web
+	version := config.App.Version
   service := et.Json{
 		"version": version,
 		"service": PackageName,
@@ -342,7 +343,7 @@ func initEvents() {
 
 }
 
-func eventAction(m event.EvenMessage) {
+func eventAction(m event.EventMessage) {
 	data := m.Data
 
 	console.Log("eventAction", data)
@@ -877,7 +878,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/middleware"
@@ -889,8 +890,8 @@ import (
 
 var PackageName = "$1"
 var PackageTitle = "$1"
-var PackagePath = envar.GetStr("/api/$1", "PATH_URL")
-var PackageVersion = envar.GetStr("0.0.1", "VERSION")
+var PackagePath = config.App.PathUrl
+var PackageVersion = config.App.Version
 var HostName, _ = os.Hostname()
 
 type Router struct {
@@ -899,7 +900,7 @@ type Router struct {
 
 func (rt *Router) Routes() http.Handler {
 	defaultHost := strs.Format("http://%s", HostName)
-	var host = strs.Format("%s:%d", envar.EnvarStr(defaultHost, "HOST"), envar.EnvarInt(3300, "PORT"))
+	var host = strs.Format("%s:%d", config.String("HOST", defaultHost), config.Int("PORT", 3300))
 
 	r := chi.NewRouter()
 
@@ -960,7 +961,7 @@ import (
 	"os"
 
 	"github.com/cgalvisleon/et/console"
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/strs"
@@ -970,8 +971,8 @@ import (
 
 var PackageName = "$1"
 var PackageTitle = "$1"
-var PackagePath = envar.GetStr("/api/$1", "PATH_URL")
-var PackageVersion = envar.GetStr("0.0.1", "VERSION")
+var PackagePath = config.App.PathUrl
+var PackageVersion = config.App.Version
 var HostName, _ = os.Hostname()
 
 type Router struct {
@@ -980,7 +981,7 @@ type Router struct {
 
 func (rt *Router) Routes() http.Handler {
 	defaultHost := strs.Format("http://%s", HostName)
-	var host = strs.Format("%s:%d", envar.EnvarStr(defaultHost, "HOST"), envar.EnvarInt(3300, "PORT"))
+	var host = strs.Format("%s:%d", config.String("HOST", defaultHost), config.Int("PORT", 3300))
 
 	r := chi.NewRouter()
 
@@ -1056,10 +1057,10 @@ func StartRpcServer() {
 }
 
 func (c *Services) Version(require et.Json, response *et.Item) error {
-	company := envar.EnvarStr("", "COMPANY")
-	web := envar.EnvarStr("", "WEB")
-	version := envar.EnvarStr("", "VERSION")
-	help := envar.EnvarStr("", "RPC_HELP")
+	company := config.App.Company
+	web := config.App.Web
+	version := config.App.Version
+	help := config.String("RPC_HELP", "")
 	response.Ok = true
 	response.Result = et.Json{
 		"methos":  "RPC",
@@ -1128,7 +1129,6 @@ const modelEnvar = `APP=
 PORT=3300
 VERSION=0.0.0
 COMPANY=Company
-PATH_URL=
 WEB=https://www.home.com
 PRODUCTION=false
 PATH_URL=/api/$1

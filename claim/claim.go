@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/timezone"
@@ -31,12 +31,10 @@ const (
 	ClientIdKey  ContextKey = "clientId"
 	AppKey       ContextKey = "app"
 	NameKey      ContextKey = "name"
+	DeviceKey    ContextKey = "device"
 	SubjectKey   ContextKey = "subject"
 	UsernameKey  ContextKey = "username"
 	TokenKey     ContextKey = "token"
-	ProjectIdKey ContextKey = "projectId"
-	ProfileTpKey ContextKey = "profileTp"
-	ModelKey     ContextKey = "model"
 	TagKey       ContextKey = "tag"
 )
 
@@ -72,9 +70,7 @@ func (c *Claim) ToJson() et.Json {
 
 /**
 * GetTokenKey
-* @param app string
-* @param device string
-* @param id string
+* @param app, device, id string
 * @return string
 **/
 func GetTokenKey(app, device, id string) string {
@@ -83,15 +79,10 @@ func GetTokenKey(app, device, id string) string {
 
 /**
 * newClaim
-* @param id string
-* @param app string
-* @param name string
-* @param username string
-* @param device string
-* @param duration time.Duration
+* @param id, app, name, username, device, tag string, duration time.Duration
 * @return Claim
 **/
-func newClaim(id, app, name string, username, device, tag string, duration time.Duration) Claim {
+func newClaim(id, app, name, username, device, tag string, duration time.Duration) Claim {
 	c := Claim{}
 	c.Salt = utility.GetOTP(6)
 	c.ID = id
@@ -111,11 +102,10 @@ func newClaim(id, app, name string, username, device, tag string, duration time.
 /**
 * newToken
 * @param c Claim
-* @return string
-* @return error
+* @return string, error
 **/
 func newToken(c Claim) (string, error) {
-	secret := envar.GetStr("1977", "SECRET")
+	secret := config.String("SECRET", "1977")
 	_jwt := jwt.NewWithClaims(jwt.SigningMethodHS256, c)
 	token, err := _jwt.SignedString([]byte(secret))
 	if err != nil {
@@ -130,32 +120,18 @@ func newToken(c Claim) (string, error) {
 
 /**
 * NewToken
-* @param id string
-* @param app string
-* @param name string
-* @param username string
-* @param device string
-* @param duration time.Duration
-* @return token string
-* @return key string
-* @return err error
+* @param id, app, name, username, device string, duration time.Duration
+* @return string, error
 **/
-func NewToken(id, app, name string, username, device string, duration time.Duration) (string, error) {
-	c := newClaim(id, app, name, username, device, "", duration)
-	return newToken(c)
+func NewToken(id, app, name, username, device string, duration time.Duration) (string, error) {
+	result := newClaim(id, app, name, username, device, "", duration)
+	return newToken(result)
 }
 
 /**
 * NewAutorization
-* @param id string
-* @param app string
-* @param name string
-* @param username string
-* @param device string
-* @param tag string
-* @param duration time.Duration
-* @return token string
-* @return err error
+* @param id, app, name, username, device, tag string, duration time.Duration
+* @return string, error
 **/
 func NewAutorization(id, app, name, username, device, tag string, duration time.Duration) (string, error) {
 	c := newClaim(id, app, name, username, device, tag, duration)
@@ -165,8 +141,7 @@ func NewAutorization(id, app, name, username, device, tag string, duration time.
 /**
 * GetToken
 * @param key string
-* @return string
-* @return error
+* @return string, error
 **/
 func GetToken(key string) (string, error) {
 	return cache.Get(key, "")
@@ -174,9 +149,7 @@ func GetToken(key string) (string, error) {
 
 /**
 * DeleteToken
-* @param app string
-* @param device string
-* @param id string
+* @param app, device, id string
 * @return error
 **/
 func DeleteToken(app, device, id string) error {
@@ -206,11 +179,10 @@ func DeleteTokeByToken(token string) error {
 /**
 * ParceToken
 * @param token string
-* @return *Claim
-* @return error
+* @return *Claim, error
 **/
 func ParceToken(token string) (*Claim, error) {
-	secret := envar.GetStr("1977", "SECRET")
+	secret := config.String("SECRET", "1977")
 	jToken, err := jwt.Parse(token, func(*jwt.Token) (interface{}, error) {
 		return []byte(secret), nil
 	})
@@ -280,8 +252,7 @@ func ParceToken(token string) (*Claim, error) {
 /**
 * ValidToken
 * @param token string
-* @return *Claim
-* @return error
+* @return *Claim, error
 **/
 func ValidToken(token string) (*Claim, error) {
 	result, err := ParceToken(token)
@@ -305,10 +276,8 @@ func ValidToken(token string) (*Claim, error) {
 
 /**
 * SetToken
-* @param app string
-* @param device string
-* @param id string
-* @param token string
+* @param app, device, id string, token string, duration time.Duration
+* @return string
 **/
 func SetToken(app, device, id, token string, duration time.Duration) string {
 	key := GetTokenKey(app, device, id)
@@ -335,6 +304,16 @@ func ClientId(r *http.Request) string {
 func GetClientName(r *http.Request) string {
 	ctx := r.Context()
 	return NameKey.String(ctx, "Anonimo")
+}
+
+func GetUserName(r *http.Request) string {
+	ctx := r.Context()
+	return UsernameKey.String(ctx, "Anonimo")
+}
+
+func GetDevice(r *http.Request) string {
+	ctx := r.Context()
+	return DeviceKey.String(ctx, "Anonimo")
 }
 
 /**

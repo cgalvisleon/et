@@ -3,7 +3,7 @@ package ettp
 import (
 	"net/http"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/middleware"
@@ -16,48 +16,48 @@ import (
 * mountHandlerFunc
 **/
 func (s *Server) mountHandlerFunc() {
-	s.Get("/apigateway/version", s.version, ServiceName)
-	s.Get("/apigateway/test/{id}/test", s.version, ServiceName)
-	s.Private().Get("/apigateway/events", s.getEvents, ServiceName)
-	s.Private().Get("/apigateway/{id}", s.getRouteById, ServiceName)
-	s.Private().Post("/apigateway", s.setRouter, ServiceName)
-	s.Private().Delete("/apigateway/{id}", s.deleteRouteById, ServiceName)
-	s.Private().Get("/apigateway/solvers", s.getSolvers, ServiceName)
-	s.Private().Get("/apigateway/routers", s.getRouters, ServiceName)
-	s.Private().Get("/apigateway/packages", s.getPakages, ServiceName)
-	s.Private().Patch("/apigateway/reset", s.reset, ServiceName)
+	s.Get("/apigateway/version", s.getVersion, s.Name)
+	s.Get("/apigateway/test/{id}/test", s.getVersion, s.Name)
+	s.Private().Get("/apigateway/events", s.getEvents, s.Name)
+	s.Private().Get("/apigateway/{id}", s.getRouteById, s.Name)
+	s.Private().Post("/apigateway", s.setRouter, s.Name)
+	s.Private().Delete("/apigateway/{id}", s.deleteRouteById, s.Name)
+	s.Private().Get("/apigateway/solvers", s.getSolvers, s.Name)
+	s.Private().Get("/apigateway/routers", s.getRouters, s.Name)
+	s.Private().Get("/apigateway/packages", s.getPakages, s.Name)
+	s.Private().Patch("/apigateway/reset", s.reset, s.Name)
 	// RPC
-	s.Private().Get("/apigateway/rpc", s.listRpc, ServiceName)
-	s.Private().Delete("/apigateway/rpc", s.deletePrcPackage, ServiceName)
-	s.Private().Patch("/apigateway/rpc", s.testRpc, ServiceName)
+	s.Private().Get("/apigateway/rpc", s.listRpc, s.Name)
+	s.Private().Delete("/apigateway/rpc", s.deletePrcPackage, s.Name)
+	s.Private().Patch("/apigateway/rpc", s.testRpc, s.Name)
 	// Token
-	s.Private().Get("/apigateway/tokens/{key}", s.getToken, ServiceName)
-	s.Private().Post("/apigateway/tokens", s.setToken, ServiceName)
-	s.Private().Delete("/apigateway/tokens/{key}", s.deleteToken, ServiceName)
-	production := envar.GetBool(true, "PRODUCTION")
+	s.Private().Get("/apigateway/tokens/{key}", s.getToken, s.Name)
+	s.Private().Post("/apigateway/tokens", s.setToken, s.Name)
+	s.Private().Delete("/apigateway/tokens/{key}", s.deleteToken, s.Name)
+	production := config.App.Production
 	if !production {
-		s.Get("/apigateway/tokens/develop", s.handlerDevToken, ServiceName)
+		s.Get("/apigateway/tokens/develop", s.handlerDevToken, s.Name)
 	}
 	// Cache
-	s.Private().Get("/apigateway/cache", s.listCache, ServiceName)
-	s.Private().Delete("/apigateway/cache", s.emptyCache, ServiceName)
+	s.Private().Get("/apigateway/cache", s.listCache, s.Name)
+	s.Private().Delete("/apigateway/cache", s.emptyCache, s.Name)
 
 	s.Save()
 }
 
 /**
-* version
+* getVersion
 * @params w http.ResponseWriter
 * @params r *http.Request
 **/
-func (s *Server) version(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
 	if !ok {
 		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
 		return
 	}
 
-	result := version()
+	result := s.version()
 	metric.JSON(w, r, http.StatusOK, result)
 }
 
@@ -215,7 +215,7 @@ func (s *Server) reset(w http.ResponseWriter, r *http.Request) {
 
 	s.Reset()
 
-	metric.ITEM(w, r, http.StatusOK, et.Item{Ok: true, Result: et.Json{"message": strs.Format(MSG_APIGATEWAY_RESET, ServiceName)}})
+	metric.ITEM(w, r, http.StatusOK, et.Item{Ok: true, Result: et.Json{"message": strs.Format(MSG_APIGATEWAY_RESET, s.Name)}})
 }
 
 /**

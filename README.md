@@ -2,7 +2,7 @@
 
 ```
 go mod init github.com/cgalvisleon/et
-go get github.com/cgalvisleon/et/@v1.0.9
+go get github.com/cgalvisleon/et/@v1.0.10
 ```
 
 ## Dependencis
@@ -41,7 +41,7 @@ git update &&
 git tag v0.0.3 &&
 git tags
 
-go get github.com/cgalvisleon/et@v1.0.9
+go get github.com/cgalvisleon/et@v1.0.10
 ```
 
 ## Condicion de carrera

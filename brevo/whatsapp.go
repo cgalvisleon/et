@@ -3,7 +3,7 @@ package brevo
 import (
 	"slices"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/msg"
@@ -12,11 +12,11 @@ import (
 )
 
 /**
-* SendWhatsapp
+* sendWhatsapp
 * @param contactNumbers []string, templateId string, params []et.Json, tp string
 * @return et.Items, error
 **/
-func SendWhatsapp(contactNumbers []string, templateId string, params []et.Json, tp string) (et.Items, error) {
+func sendWhatsapp(contactNumbers []string, templateId string, params []et.Json, tp string) (et.Items, error) {
 	if len(contactNumbers) == 0 {
 		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "contactNumbers")
 	}
@@ -35,22 +35,18 @@ func SendWhatsapp(contactNumbers []string, templateId string, params []et.Json, 
 		tp = "transactional"
 	}
 
-	path := envar.EnvarStr("https://api.brevo.com/v3", "BREVO_SEND_PATH")
-	apiKey := envar.EnvarStr("", "BREVO_SEND_KEY")
-	sender := envar.EnvarStr("", "BREVO_SEND_SENDER")
-
-	if strs.IsEmpty(path) {
-		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "BREVO_SEND_PATH")
+	err := config.Validate([]string{
+		"BREVO_SEND_PATH",
+		"BREVO_SEND_KEY",
+		"BREVO_SENDER",
+	})
+	if err != nil {
+		return et.Items{}, err
 	}
 
-	if strs.IsEmpty(apiKey) {
-		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "BREVO_SEND_KEY")
-	}
-
-	if strs.IsEmpty(sender) {
-		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "BREVO_SEND_SENDER")
-	}
-
+	path := config.String("BREVO_SEND_PATH", "")
+	apiKey := config.String("BREVO_SEND_KEY", "")
+	sender := config.String("BREVO_SENDER", "")
 	url := strs.Format("%s/whatsapp/sendMessage", path)
 	header := et.Json{
 		"accept":       "application/json",
@@ -82,4 +78,22 @@ func SendWhatsapp(contactNumbers []string, templateId string, params []et.Json, 
 	}
 
 	return result, nil
+}
+
+/**
+* SendWhatsappTransactional
+* @param contactNumbers []string, templateId string, params []et.Json
+* @return et.Items, error
+**/
+func SendWhatsappTransactional(contactNumbers []string, templateId string, params []et.Json) (et.Items, error) {
+	return sendWhatsapp(contactNumbers, templateId, params, "Transactional")
+}
+
+/**
+* SendWhatsappPromotional
+* @param contactNumbers []string, templateId string, params []et.Json
+* @return et.Items, error
+**/
+func SendWhatsappPromotional(contactNumbers []string, templateId string, params []et.Json) (et.Items, error) {
+	return sendWhatsapp(contactNumbers, templateId, params, "Promotional")
 }

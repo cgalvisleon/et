@@ -4,10 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/utility"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -39,32 +37,31 @@ func FromId() string {
 
 /**
 * Load
-* @return *Conn, error
+* @return error
 **/
-func Load() (*Conn, error) {
+func Load() error {
 	if conn != nil {
-		return conn, nil
+		return nil
 	}
 
-	host := envar.GetStr("", "REDIS_HOST")
-	password := envar.GetStr("", "REDIS_PASSWORD")
-	dbname := envar.GetInt(0, "REDIS_DB")
-
-	if !utility.ValidStr(host, 0, []string{}) {
-		return nil, logs.Alertf(msg.ERR_ENV_REQUIRED, "REDIS_HOST")
+	err := config.Validate([]string{
+		"REDIS_HOST",
+		"REDIS_PASSWORD",
+		"REDIS_DB",
+	})
+	if err != nil {
+		return err
 	}
 
-	if !utility.ValidStr(password, 0, []string{}) {
-		return nil, logs.Alertf(msg.ERR_ENV_REQUIRED, "REDIS_PASSWORD")
-	}
-
-	var err error
+	host := config.String("REDIS_HOST", "")
+	password := config.String("REDIS_PASSWORD", "")
+	dbname := config.Int("REDIS_DB", 0)
 	conn, err = ConnectTo(host, password, dbname)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return conn, nil
+	return nil
 }
 
 /**

@@ -27,14 +27,6 @@ func GetOTP(length int) string {
 }
 
 /**
-* GenIndex
-* @return int64
-**/
-func GenIndex() int64 {
-	return timezone.NowTime().UnixNano()
-}
-
-/**
 * UUID
 * @return string
 **/

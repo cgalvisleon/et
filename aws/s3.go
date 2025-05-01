@@ -12,7 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/mistake"
@@ -73,17 +73,17 @@ func UploaderFile(r *http.Request, folder, name string) (et.Item, error) {
 		filename = strs.Format(`%s/%s`, folder, filename)
 	}
 
-	storageType := envar.EnvarStr("", "STORAGE_TYPE")
-	bucket := envar.EnvarStr("", "BUCKET")
-
-	if strs.IsEmpty(storageType) {
-		return et.Item{}, mistake.Newf(msg.ERR_ENV_REQUIRED, "STORAGE_TYPE")
+	err = config.Validate([]string{
+		"BUCKET",
+		"STORAGE_TYPE",
+		"HOSTNAME",
+	})
+	if err != nil {
+		return et.Item{}, err
 	}
 
-	if strs.IsEmpty(bucket) {
-		return et.Item{}, mistake.Newf(msg.ERR_ENV_REQUIRED, "BUCKET")
-	}
-
+	bucket := config.String("BUCKET", "")
+	storageType := config.String("STORAGE_TYPE", "")
 	if storageType == "S3" {
 		contentFile, err := io.ReadAll(fileparts)
 		if err != nil {
@@ -104,11 +104,6 @@ func UploaderFile(r *http.Request, folder, name string) (et.Item, error) {
 		}, nil
 	}
 
-	hostname := envar.EnvarStr("", "UPLOADFILE_HOST")
-	if strs.IsEmpty(hostname) {
-		return et.Item{}, mistake.Newf(msg.ERR_ENV_REQUIRED, "UPLOADFILE_HOST")
-	}
-
 	file.MakeFolder(bucket)
 	outputFile := strs.Format(`%s/%s`, bucket, filename)
 
@@ -123,6 +118,7 @@ func UploaderFile(r *http.Request, folder, name string) (et.Item, error) {
 		return et.Item{}, err
 	}
 
+	hostname := config.String("HOSTNAME", "")
 	url := strs.Format(`%s/%s`, hostname, outputFile)
 
 	return et.Item{
@@ -152,8 +148,17 @@ func UploaderB64(b64, filename, contentType string) (et.Item, error) {
 		return et.Item{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "content-type")
 	}
 
-	storageType := envar.EnvarStr("", "STORAGE_TYPE")
-	bucket := envar.EnvarStr("", "BUCKET")
+	err := config.Validate([]string{
+		"STORAGE_TYPE",
+		"BUCKET",
+		"HOSTNAME",
+	})
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	storageType := config.String("STORAGE_TYPE", "")
+	bucket := config.String("BUCKET", "")
 	if storageType == "S3" {
 		contentFile, err := base64.StdEncoding.DecodeString(b64)
 		if err != nil {
@@ -172,11 +177,6 @@ func UploaderB64(b64, filename, contentType string) (et.Item, error) {
 				"url":    output.Location,
 			},
 		}, nil
-	}
-
-	hostname := envar.EnvarStr("", "UPLOADFILE_HOST")
-	if strs.IsEmpty(hostname) {
-		return et.Item{}, mistake.Newf(msg.ERR_ENV_REQUIRED, "UPLOADFILE_HOST")
 	}
 
 	file.MakeFolder(bucket)
@@ -200,6 +200,7 @@ func UploaderB64(b64, filename, contentType string) (et.Item, error) {
 		return et.Item{}, err
 	}
 
+	hostname := config.String("HOSTNAME", "")
 	url := strs.Format(`%s/%s`, hostname, outputFile)
 
 	return et.Item{
@@ -266,9 +267,17 @@ func DownloadS3(bucket, key string) (*s3.GetObjectOutput, error) {
 * @return bool, error
 **/
 func DeleteFile(url string) (bool, error) {
-	storageType := envar.EnvarStr("", "STORAGE_TYPE")
+	err := config.Validate([]string{
+		"STORAGE_TYPE",
+		"BUCKET",
+	})
+	if err != nil {
+		return false, err
+	}
+
+	storageType := config.String("STORAGE_TYPE", "")
+	bucket := config.String("BUCKET", "")
 	if storageType == "S3" {
-		bucket := envar.EnvarStr("", "BUCKET")
 		key := strings.ReplaceAll(url, strs.Format(`https://%s.s3.amazonaws.com/`, bucket), ``)
 		_, err := DeleteS3(bucket, key)
 		if err != nil {
@@ -292,9 +301,17 @@ func DeleteFile(url string) (bool, error) {
 * @return string, error
 **/
 func DownloaderFile(url string) (string, error) {
-	storageType := envar.EnvarStr("", "STORAGE_TYPE")
+	err := config.Validate([]string{
+		"STORAGE_TYPE",
+		"BUCKET",
+	})
+	if err != nil {
+		return "", err
+	}
+
+	storageType := config.String("STORAGE_TYPE", "")
+	bucket := config.String("BUCKET", "")
 	if storageType == "S3" {
-		bucket := envar.EnvarStr("", "BUCKET")
 		key := strings.ReplaceAll(url, strs.Format(`https://%s.s3.amazonaws.com/`, bucket), ``)
 		_, err := DownloadS3(bucket, key)
 		if err != nil {

@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/mistake"
@@ -230,7 +230,7 @@ func Pong() {
 * @param v ...any
 **/
 func Debug(v ...any) {
-	production := envar.Bool("PRODUCTION")
+	production := config.App.Production
 	if production {
 		return
 	}

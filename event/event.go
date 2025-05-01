@@ -3,9 +3,8 @@ package event
 import (
 	"sync"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/msg"
 	"github.com/nats-io/nats.go"
 )
 
@@ -21,7 +20,7 @@ type Conn struct {
 }
 
 /**
-* FromId return the id of the connection
+* FromId
 * @return string
 **/
 func FromId() string {
@@ -29,29 +28,30 @@ func FromId() string {
 }
 
 /**
-* Load the connection to the service pubsub
-* @return *Conn, error
+* Load
+* @return error
 **/
-func Load() (*Conn, error) {
+func Load() error {
 	if conn != nil {
-		return conn, nil
+		return nil
 	}
 
-	host := envar.GetStr("", "NATS_HOST")
-	user := envar.GetStr("", "NATS_USER")
-	password := envar.GetStr("", "NATS_PASSWORD")
-
-	if host == "" {
-		return nil, logs.Alertf(msg.ERR_ENV_REQUIRED, "NATS_HOST")
+	err := config.Validate([]string{
+		"NATS_HOST",
+	})
+	if err != nil {
+		return err
 	}
 
-	var err error
+	host := config.String("NATS_HOST", "")
+	user := config.String("NATS_USER", "")
+	password := config.String("NATS_PASSWORD", "")
 	conn, err = ConnectTo(host, user, password)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return conn, nil
+	return nil
 }
 
 /**

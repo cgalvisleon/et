@@ -78,109 +78,109 @@ func (s Item) ToString() string {
 **/
 func (s Item) ToJson() Json {
 	return Json{
-		"Ok":     s.Ok,
-		"Result": s.Result,
+		"ok":     s.Ok,
+		"result": s.Result,
 	}
 }
 
 /**
 * ValAny return any value of the key
-* @param _default any
+* @param defaultVal any
 * @param atribs ...string
 * @return any
 **/
-func (s *Item) ValAny(_default interface{}, atribs ...string) interface{} {
-	return s.Result.ValAny(_default, atribs...)
+func (s *Item) ValAny(defaultVal interface{}, atribs ...string) interface{} {
+	return s.Result.ValAny(defaultVal, atribs...)
 }
 
 /**
 * ValStr return string value of the key
-* @param _default string
+* @param defaultVal string
 * @param atribs ...string
 * @return string
 **/
-func (s *Item) ValStr(_default string, atribs ...string) string {
-	return s.Result.ValStr(_default, atribs...)
+func (s *Item) ValStr(defaultVal string, atribs ...string) string {
+	return s.Result.ValStr(defaultVal, atribs...)
 }
 
 /**
 * ValInt return int value of the key
-* @param _default int
+* @param defaultVal int
 * @param atribs ...string
 * @return int
 **/
-func (s *Item) ValInt(_default int, atribs ...string) int {
-	return s.Result.ValInt(_default, atribs...)
+func (s *Item) ValInt(defaultVal int, atribs ...string) int {
+	return s.Result.ValInt(defaultVal, atribs...)
 }
 
 /**
 * ValInt64 return int64 value of the key
-* @param _default int64
+* @param defaultVal int64
 * @param atribs ...string
 * @return int64
 **/
-func (s Item) ValInt64(_default int64, atribs ...string) int64 {
-	return s.Result.ValInt64(_default, atribs...)
+func (s Item) ValInt64(defaultVal int64, atribs ...string) int64 {
+	return s.Result.ValInt64(defaultVal, atribs...)
 }
 
 /**
 * ValNum return float64 value of the key
-* @param _default float64
+* @param defaultVal float64
 * @param atribs ...string
 * @return float64
 **/
-func (s *Item) ValNum(_default float64, atribs ...string) float64 {
-	return s.Result.ValNum(_default, atribs...)
+func (s *Item) ValNum(defaultVal float64, atribs ...string) float64 {
+	return s.Result.ValNum(defaultVal, atribs...)
 }
 
 /**
 * ValBool return bool value of the key
-* @param _default bool
+* @param defaultVal bool
 * @param atribs ...string
 * @return bool
 **/
-func (s *Item) ValBool(_default bool, atribs ...string) bool {
-	return s.Result.ValBool(_default, atribs...)
+func (s *Item) ValBool(defaultVal bool, atribs ...string) bool {
+	return s.Result.ValBool(defaultVal, atribs...)
 }
 
 /**
 * ValTime return time.Time value of the key
-* @param _default time.Time
+* @param defaultVal time.Time
 * @param atribs ...string
 * @return time.Time
 **/
-func (s *Item) ValTime(_default time.Time, atribs ...string) time.Time {
-	return s.Result.ValTime(_default, atribs...)
+func (s *Item) ValTime(defaultVal time.Time, atribs ...string) time.Time {
+	return s.Result.ValTime(defaultVal, atribs...)
 }
 
 /**
 * ValJson return Json value of the key
-* @param _default Json
+* @param defaultVal Json
 * @param atribs ...string
 * @return Json
 **/
-func (s *Item) ValJson(_default Json, atribs ...string) Json {
-	return s.Result.ValJson(_default, atribs...)
+func (s *Item) ValJson(defaultVal Json, atribs ...string) Json {
+	return s.Result.ValJson(defaultVal, atribs...)
 }
 
 /**
 * ValArray return []interface{} value of the key
-* @param _default []interface{}
+* @param defaultVal []interface{}
 * @param atribs ...string
 * @return []interface{}
 **/
-func (s Item) ValArray(_default []interface{}, atribs ...string) []interface{} {
-	return s.Result.ValArray(_default, atribs...)
+func (s Item) ValArray(defaultVal []interface{}, atribs ...string) []interface{} {
+	return s.Result.ValArray(defaultVal, atribs...)
 }
 
 /**
 * Any return any value of the key
-* @param _default any
+* @param defaultVal any
 * @param atribs ...string
 * @return *Any
 **/
-func (s Item) Any(_default interface{}, atribs ...string) interface{} {
-	return s.Result.Any(_default, atribs...)
+func (s Item) Any(defaultVal interface{}, atribs ...string) interface{} {
+	return s.Result.Any(defaultVal, atribs...)
 }
 
 /**

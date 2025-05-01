@@ -3,7 +3,7 @@ package brevo
 import (
 	"slices"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/msg"
@@ -12,11 +12,11 @@ import (
 )
 
 /**
-* SendSMS
-* @param contactNumbers []string, content string, params []et.Json, tp string
+* sendSms
+* @param sender, organisation string, contactNumbers []string, content string, params []et.Json, tp string
 * @return et.Items, error
 **/
-func SendSMS(contactNumbers []string, content string, params []et.Json, tp string) (et.Items, error) {
+func sendSms(sender, organisation string, contactNumbers []string, content string, params []et.Json, tp string) (et.Items, error) {
 	if len(contactNumbers) == 0 {
 		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "contactNumbers")
 	}
@@ -35,27 +35,16 @@ func SendSMS(contactNumbers []string, content string, params []et.Json, tp strin
 		tp = "transactional"
 	}
 
-	apiKey := envar.EnvarStr("", "BREVO_API_KEY")
-	sender := envar.EnvarStr("MyCompany", "BREVO_SENDER")
-	organisationPrefix := envar.EnvarStr("", "BREVO_ORGANISATION_PREFIX")
-	path := envar.EnvarStr("https://api.brevo.com/v3", "BREVO_API")
-
-	if strs.IsEmpty(apiKey) {
-		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "BREVO_API_KEY")
+	err := config.Validate([]string{
+		"BREVO_SEND_PATH",
+		"BREVO_SEND_KEY",
+	})
+	if err != nil {
+		return et.Items{}, err
 	}
 
-	if strs.IsEmpty(sender) {
-		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "BREVO_SENDER")
-	}
-
-	if strs.IsEmpty(organisationPrefix) {
-		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "BREVO_ORGANISATION_PREFIX")
-	}
-
-	if strs.IsEmpty(path) {
-		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "BREVO_API")
-	}
-
+	apiKey := config.String("BREVO_SEND_KEY", "")
+	path := config.String("BREVO_SEND_PATH", "")
 	url := strs.Format("%s/transactionalSMS/sms", path)
 	header := et.Json{
 		"accept":       "application/json",
@@ -67,7 +56,7 @@ func SendSMS(contactNumbers []string, content string, params []et.Json, tp strin
 		"unicodeEnabled":     false,
 		"sender":             sender,
 		"tag":                "t1",
-		"organisationPrefix": organisationPrefix,
+		"organisationPrefix": organisation,
 	}
 
 	result := et.Items{}
@@ -90,12 +79,32 @@ func SendSMS(contactNumbers []string, content string, params []et.Json, tp strin
 
 		output, _ := res.ToJson()
 		result.Add(et.Json{
-			"phoneNumber": phoneNumber,
-			"type":        tp,
-			"sender":      "Brevo",
-			"status":      output,
+			"phoneNumber":  phoneNumber,
+			"type":         tp,
+			"agent":        "Brevo",
+			"sender":       sender,
+			"organisation": organisation,
+			"status":       output,
 		})
 	}
 
 	return result, nil
+}
+
+/**
+* SendSmsTransactional
+* @param sender, organisation string, contactNumbers []string, content string, params []et.Json
+* @return et.Items, error
+**/
+func SendSmsTransactional(sender, organisation string, contactNumbers []string, content string, params []et.Json) (et.Items, error) {
+	return sendSms(sender, organisation, contactNumbers, content, params, "Transactional")
+}
+
+/**
+* SendSmsPromotional
+* @param sender, organisation string, contactNumbers []string, content string, params []et.Json
+* @return et.Items, error
+**/
+func SendSmsPromotional(sender, organisation string, contactNumbers []string, content string, params []et.Json) (et.Items, error) {
+	return sendSms(sender, organisation, contactNumbers, content, params, "Promotional")
 }

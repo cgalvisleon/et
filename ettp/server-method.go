@@ -24,7 +24,7 @@ func (s *Server) setHandlerFunc(method, path string, handlerFn http.HandlerFunc,
 		return nil
 	}
 
-	url := strs.Format("%s%s", s.host, path)
+	url := strs.Format("%s%s", s.pathUrl, path)
 	url = strings.ReplaceAll(url, "//", "/")
 	id := strs.Format("%s:%s", method, url)
 

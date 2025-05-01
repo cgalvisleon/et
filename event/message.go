@@ -9,29 +9,25 @@ import (
 	"github.com/cgalvisleon/et/utility"
 )
 
-type Message interface {
-	Type() string
-}
-
-type EvenMessage struct {
-	Created_at time.Time `json:"created_at"`
-	Id         string    `json:"id"`
-	Channel    string    `json:"channel"`
-	Data       et.Json   `json:"data"`
+type Message struct {
+	CreatedAt time.Time `json:"created_at"`
+	Id        string    `json:"id"`
+	Channel   string    `json:"channel"`
+	Data      et.Json   `json:"data"`
 }
 
 /**
 * NewEvenMessage
 * @param string channel
 * @param et.Json data
-* @return EvenMessage
+* @return Message
 **/
-func NewEvenMessage(channel string, data et.Json) EvenMessage {
-	return EvenMessage{
-		Created_at: timezone.NowTime(),
-		Id:         utility.UUID(),
-		Channel:    channel,
-		Data:       data,
+func NewEvenMessage(channel string, data et.Json) Message {
+	return Message{
+		CreatedAt: timezone.NowTime(),
+		Id:        utility.UUID(),
+		Channel:   channel,
+		Data:      data,
 	}
 }
 
@@ -39,7 +35,7 @@ func NewEvenMessage(channel string, data et.Json) EvenMessage {
 * Encode
 * @return []byte, error
 **/
-func (m EvenMessage) Encode() ([]byte, error) {
+func (m Message) Encode() ([]byte, error) {
 	b, err := json.Marshal(m)
 	if err != nil {
 		return nil, err
@@ -52,7 +48,7 @@ func (m EvenMessage) Encode() ([]byte, error) {
 * ToString
 * @return string
 **/
-func (m EvenMessage) ToString() string {
+func (m Message) ToString() string {
 	j, err := json.Marshal(m)
 	if err != nil {
 		return ""
@@ -65,7 +61,7 @@ func (m EvenMessage) ToString() string {
 * ToJson
 * @return et.Json, error
 **/
-func (m EvenMessage) ToJson() (et.Json, error) {
+func (m Message) ToJson() (et.Json, error) {
 	j, err := et.Object(m)
 	if err != nil {
 		return et.Json{}, err
@@ -77,13 +73,13 @@ func (m EvenMessage) ToJson() (et.Json, error) {
 /**
 * DecodeMessage
 * @param []byte data
-* @return EvenMessage, error
+* @return Message, error
 **/
-func DecodeMessage(data []byte) (EvenMessage, error) {
-	var m EvenMessage
+func DecodeMessage(data []byte) (Message, error) {
+	var m Message
 	err := json.Unmarshal(data, &m)
 	if err != nil {
-		return EvenMessage{}, err
+		return Message{}, err
 	}
 
 	return m, nil

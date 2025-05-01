@@ -1,10 +1,9 @@
 package ws
 
 import (
-	"os"
 	"time"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/utility"
@@ -51,8 +50,7 @@ func (h *Hub) Start() {
 		return
 	}
 
-	host, _ := os.Hostname()
-	h.Host = envar.GetStr(host, "WS_HOST")
+	h.Host = config.String("WS_HOST", "")
 	h.run = true
 
 	go h.start()

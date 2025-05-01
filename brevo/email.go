@@ -3,7 +3,7 @@ package brevo
 import (
 	"slices"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/msg"
@@ -13,11 +13,11 @@ import (
 )
 
 /**
-* SendEmail
+* sendEmail
 * @param sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp string
 * @return et.Items, error
 **/
-func SendEmail(sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp string) (et.Items, error) {
+func sendEmail(sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp string) (et.Items, error) {
 	if len(to) == 0 {
 		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "to")
 	}
@@ -34,17 +34,16 @@ func SendEmail(sender et.Json, to []et.Json, subject string, htmlContent string,
 		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "type")
 	}
 
-	path := envar.EnvarStr("https://api.brevo.com/v3", "BREVO_SEND_PATH")
-	apiKey := envar.EnvarStr("", "BREVO_SEND_KEY")
-
-	if strs.IsEmpty(path) {
-		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "BREVO_SEND_PATH")
+	err := config.Validate([]string{
+		"BREVO_SEND_PATH",
+		"BREVO_SEND_KEY",
+	})
+	if err != nil {
+		return et.Items{}, err
 	}
 
-	if strs.IsEmpty(apiKey) {
-		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "BREVO_SEND_KEY")
-	}
-
+	path := config.String("BREVO_SEND_PATH", "")
+	apiKey := config.String("BREVO_SEND_KEY", "")
 	url := strs.Format("%s/smtp/email", path)
 	header := et.Json{
 		"accept":       "application/json",
@@ -80,4 +79,22 @@ func SendEmail(sender et.Json, to []et.Json, subject string, htmlContent string,
 	})
 
 	return result, nil
+}
+
+/**
+* SendEmailTransactional
+* @param sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json
+* @return et.Items, error
+**/
+func SendEmailTransactional(sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json) (et.Items, error) {
+	return sendEmail(sender, to, subject, htmlContent, params, "Transactional")
+}
+
+/**
+* SendEmailPromotional
+* @param sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json
+* @return et.Items, error
+**/
+func SendEmailPromotional(sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json) (et.Items, error) {
+	return sendEmail(sender, to, subject, htmlContent, params, "Promotional")
 }

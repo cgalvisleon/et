@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/console"
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrpc"
@@ -76,9 +76,9 @@ func initRouter(name string) {
 
 /**
 * eventAction
-* @param m event.EvenMessage
+* @param m event.Message
 **/
-func eventAction(m event.EvenMessage) {
+func eventAction(m event.Message) {
 	if router == nil {
 		return
 	}
@@ -336,7 +336,7 @@ func With(r *chi.Mux, method, path string, middlewares []func(http.Handler) http
 * @return map[string]bool, error
 **/
 func authorization(profile et.Json) (map[string]bool, error) {
-	method := envar.GetStr("Module.Services.GetPermissions", "AUTHORIZATION_METHOD")
+	method := config.String("AUTHORIZATION_METHOD", "Module.Services.GetPermissions")
 	if method == "" {
 		return map[string]bool{}, mistake.New("Authorization method not found")
 	}

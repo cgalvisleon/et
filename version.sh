@@ -94,7 +94,7 @@ if [ "$HELP" == true ]; then
   echo "  --v, --version  Incrementa la versión de la revisión"
   exit 0
 elif [ "$CURRENT_VERSION" == "v0.0.0" ]; then
-  NEW_VERSION="v1.0.0"
+  NEW_VERSION="v0.0.0"
   update_version
 elif [ "$VERSION" == true ]; then
   build_version

@@ -705,19 +705,19 @@ func (s *Json) Delete(keys []string) bool {
 	current := *s
 	for i := 0; i < len(keys)-1; i++ {
 		if next, ok := current[keys[i]].(Json); ok {
-			current = next // Nos movemos al siguiente nivel
+			current = next
 		} else {
-			return false // La clave no existe, no se puede eliminar
+			return false
 		}
 	}
 
 	lastKey := keys[len(keys)-1]
 	if _, exists := current[lastKey]; exists {
 		delete(current, lastKey)
-		return true // Se eliminó con éxito
+		return true
 	}
 
-	return false // La clave no existe
+	return false
 }
 
 /**

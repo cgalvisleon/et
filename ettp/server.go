@@ -124,19 +124,19 @@ type Server struct {
 }
 
 func New(config Config) (*Server, error) {
-	// Cache
+	/* Cache */
 	err := cache.Load()
 	if err != nil {
 		return nil, err
 	}
 
-	// Event
+	/* Event */
 	err = event.Load()
 	if err != nil {
 		return nil, err
 	}
 
-	// Http ServeMux
+	/* Http ServeMux */
 	hostName, _ := os.Hostname()
 	mux := http.NewServeMux()
 	srv := &Server{

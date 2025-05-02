@@ -8,13 +8,11 @@ import (
 )
 
 type Peticiones struct {
-	mutex sync.RWMutex
-	//
+	mutex      sync.RWMutex
 	Peticiones int
-	//
-	Capacity  int // Capacidad de peticiones del ACS
-	TimeWait  int // Tiempo de espera para la siguiente petición
-	SizeStack int // Tamaño de la pila de peticiones
+	Capacity   int /* Capacidad de peticiones del ACS */
+	TimeWait   int /* Tiempo de espera para la siguiente petición */
+	SizeStack  int /* Tamaño de la pila de peticiones */
 }
 
 func NewPeticiones(capacity, timeWait int) *Peticiones {

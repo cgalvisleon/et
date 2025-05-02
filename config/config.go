@@ -190,6 +190,15 @@ func String(key string, defaultValue string) string {
 }
 
 /**
+* Str
+* @param string key, defaultValue string
+* @return string
+**/
+func Str(key string, defaultValue string) string {
+	return String(key, defaultValue)
+}
+
+/**
 * Bool
 * @param string key, defaultValue bool
 * @return bool

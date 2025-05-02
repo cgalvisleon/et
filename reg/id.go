@@ -1,6 +1,10 @@
 package reg
 
-import "github.com/cgalvisleon/et/cache"
+import (
+	"github.com/cgalvisleon/et/strs"
+	"github.com/cgalvisleon/et/timezone"
+	"github.com/google/uuid"
+)
 
 /**
 * Id
@@ -8,7 +12,7 @@ import "github.com/cgalvisleon/et/cache"
 * @return string
 **/
 func GenId(tag string) string {
-	return cache.GenRecordId(tag)
+	return strs.Format(`%s:%s`, tag, uuid.NewString())
 }
 
 /**
@@ -21,7 +25,7 @@ func GetId(tag, id string) string {
 		return id
 	}
 
-	return cache.GetRecordId(tag, id)
+	return GenId(tag)
 }
 
 /**
@@ -29,5 +33,5 @@ func GetId(tag, id string) string {
 * @return int64
 **/
 func GenIndex() int64 {
-	return cache.GenIndex()
+	return timezone.NowTime().UnixNano()
 }

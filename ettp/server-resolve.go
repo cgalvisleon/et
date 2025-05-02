@@ -39,27 +39,27 @@ func (s *Server) applyMiddlewares(handler http.Handler, middlewares []func(http.
 * @params w http.ResponseWriter, r *http.Request
 **/
 func (s *Server) handlerResolve(w http.ResponseWriter, r *http.Request) {
-	// Begin telemetry
+	/* Begin telemetry */
 	metric := middleware.NewMetric(r)
 	w.Header().Set("Reqid", metric.ReqID)
 	ctx := context.WithValue(r.Context(), MetricKey, metric)
 
-	// Get resolute
+	/* Get resolute */
 	resolute, r := s.getResolute(r)
 	console.Log("solver", resolute.ToString())
 
-	// Call search time since begin
+	/* Call search time since begin */
 	metric.CallSearchTime()
 	metric.SetPath(resolute.GetResolve())
 
-	// If not found
+	/* If not found */
 	if resolute.Resolve == nil || resolute.URL == "" {
 		r.RequestURI = fmt.Sprintf(`%s://%s%s`, resolute.Scheme, resolute.Host, resolute.Path)
 		s.notFoundHandler.ServeHTTP(w, r.WithContext(ctx))
 		return
 	}
 
-	// If HandlerFunc is handler
+	/* If HandlerFunc is handler */
 	route := resolute.Resolve.Route
 	if route.Kind == TpHandler {
 		h := s.handlers[route.Id]
@@ -74,7 +74,7 @@ func (s *Server) handlerResolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If REST is handler
+	/* If REST is handler */
 	h := s.handlerRest
 	ctx = context.WithValue(ctx, ResoluteKey, resolute)
 	handler := s.applyMiddlewares(http.HandlerFunc(h), route.middlewares)

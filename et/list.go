@@ -1,6 +1,6 @@
 package et
 
-// List struct to use in et
+/* List struct to use in et */
 type List struct {
 	Rows   int    `json:"rows"`
 	All    int    `json:"all"`
@@ -11,7 +11,7 @@ type List struct {
 	Result []Json `json:"result"`
 }
 
-// ToJson return the value of the key
+/* ToJson return the value of the key */
 func (it *List) ToJson() Json {
 	return Json{
 		"rows":   it.Rows,

@@ -100,14 +100,14 @@ func (s *Server) getResolute(r *http.Request) (*Resolute, *http.Request) {
 			console.Alertf(`%s:%s:%s`, MSG_ROUTE_NOT_FOUND, r.Method, r.URL.Path)
 		} else {
 			switch resolve.Route.TpHeader {
-			case router.TpKeepHeader: // Keep header
+			case router.TpKeepHeader: /* Keep header */
 				for key := range resolve.Route.Header {
 					value := resolve.Route.Header.ArrayStr(key)
 					for _, v := range value {
 						header.Add(key, v)
 					}
 				}
-			case router.TpJoinHeader: // Join header
+			case router.TpJoinHeader: /* Join header */
 				for key := range resolve.Route.Header {
 					value := resolve.Route.Header.ArrayStr(key)
 					for _, v := range value {
@@ -125,7 +125,7 @@ func (s *Server) getResolute(r *http.Request) (*Resolute, *http.Request) {
 						}
 					}
 				}
-			case router.TpReplaceHeader: // Replace header
+			case router.TpReplaceHeader: /* Replace header */
 				for key, value := range r.Header {
 					if !slices.Contains(resolve.Route.ExcludeHeader, key) {
 						for i, v := range value {

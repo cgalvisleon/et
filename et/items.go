@@ -7,7 +7,6 @@ import (
 	"github.com/cgalvisleon/et/logs"
 )
 
-// Items struct to define a items
 type Items struct {
 	Ok     bool   `json:"ok"`
 	Count  int    `json:"count"`

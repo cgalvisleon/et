@@ -67,7 +67,7 @@ func main() {
 	config.SetStrByArg("DB_NAME", "")
 	config.SetStrByArg("DB_USER", "")
 	config.SetStrByArg("DB_PASSWORD", "")
-	config.SetStrByArg("DB_APP_NAME", "Test")
+	config.SetStrByArg("DB_APP", "Test")
 	config.Reload()
 
 	srv, err := serv.New()
@@ -262,17 +262,14 @@ type Controller struct {
 	Db *jdb.DB
 }
 
-func (c *Controller) Version(ctx context.Context) (et.Json, error) {
-	company := config.App.Company
-	web := config.App.Web
-	version := config.App.Version
+func (c *Controller) Version(ctx context.Context) (et.Json, error) {	
 	service := et.Json{
-		"version": version,
+		"version": config.App.Version,
 		"service": PackageName,
-		"host":    HostName,
-		"company": company,
-		"web":     web,
-		"help":    "",
+		"host":    config.App.Host,
+		"company": config.App.Company,
+		"web":     config.App.Web,
+		"help":    config.App.Help,
 	}
 
 	return service, nil
@@ -302,17 +299,14 @@ import (
 type Controller struct {
 }
 
-func (c *Controller) Version(ctx context.Context) (et.Json, error) {
-	company := config.App.Company
-	web := config.App.Web
-	version := config.App.Version
+func (c *Controller) Version(ctx context.Context) (et.Json, error) {	
   service := et.Json{
-		"version": version,
+		"version": config.App.Version,
 		"service": PackageName,
-		"host":    HostName,
-		"company": company,
-		"web":     web,
-		"help":    "",
+		"host":    config.App.Host,
+		"company": config.App.Company,
+		"web":     config.App.Web,
+		"help":    config.App.Help,
 	}
 
 	return service, nil
@@ -1056,20 +1050,16 @@ func StartRpcServer() {
 	go pkg.Start()
 }
 
-func (c *Services) Version(require et.Json, response *et.Item) error {
-	company := config.App.Company
-	web := config.App.Web
-	version := config.App.Version
-	help := config.String("RPC_HELP", "")
+func (c *Services) Version(require et.Json, response *et.Item) error {	
 	response.Ok = true
 	response.Result = et.Json{
 		"methos":  "RPC",
-		"version": version,
+		"version": config.App.Version,
 		"service": PackageName,
-		"host":    HostName,
-		"company": company,
-		"web":     web,
-		"help":    help,
+		"host":    config.App.Host,
+		"company": config.App.Company,
+		"web":     config.App.Web,
+		"help":    config.App.Help,
 	}
 
 	return console.Rpc(response.ToString())

@@ -6,7 +6,6 @@ import (
 	"time"
 )
 
-// Item struct to define a item
 type Item struct {
 	Ok     bool `json:"ok"`
 	Result Json `json:"result"`

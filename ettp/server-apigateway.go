@@ -26,11 +26,11 @@ func (s *Server) mountHandlerFunc() {
 	s.Private().Get("/apigateway/routers", s.getRouters, s.Name)
 	s.Private().Get("/apigateway/packages", s.getPakages, s.Name)
 	s.Private().Patch("/apigateway/reset", s.reset, s.Name)
-	// RPC
+	/* RPC */
 	s.Private().Get("/apigateway/rpc", s.listRpc, s.Name)
 	s.Private().Delete("/apigateway/rpc", s.deletePrcPackage, s.Name)
 	s.Private().Patch("/apigateway/rpc", s.testRpc, s.Name)
-	// Token
+	/* Token */
 	s.Private().Get("/apigateway/tokens/{key}", s.getToken, s.Name)
 	s.Private().Post("/apigateway/tokens", s.setToken, s.Name)
 	s.Private().Delete("/apigateway/tokens/{key}", s.deleteToken, s.Name)
@@ -38,7 +38,7 @@ func (s *Server) mountHandlerFunc() {
 	if !production {
 		s.Get("/apigateway/tokens/develop", s.handlerDevToken, s.Name)
 	}
-	// Cache
+	/* Cache */
 	s.Private().Get("/apigateway/cache", s.listCache, s.Name)
 	s.Private().Delete("/apigateway/cache", s.emptyCache, s.Name)
 

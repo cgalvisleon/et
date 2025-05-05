@@ -1,129 +1,70 @@
 package jrpc
 
 import (
-	"net/rpc"
-	"reflect"
 	"slices"
 	"strings"
 
-	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/mistake"
-	"github.com/cgalvisleon/et/strs"
 )
 
 type Solver struct {
 	PackageName string   `json:"packageName"`
 	Host        string   `json:"host"`
 	Port        int      `json:"port"`
+	StructName  string   `json:"structName"`
 	Method      string   `json:"method"`
-	Inputs      []string `json:"inputs"`
-	Output      []string `json:"outputs"`
+	Inputs      et.Json  `json:"inputs"`
+	Output      []string `json:"output"`
 }
 
 /**
-* Mount
-* @param host string
-* @param port int
-* @param service any
+* serialize
+* @return et.Json
 **/
-func Mount(services any) error {
-	if pkg == nil {
-		return logs.Alertm(ERR_PACKAGE_NOT_FOUND)
+func (s *Solver) serialize() et.Json {
+	return et.Json{
+		"packageName": s.PackageName,
+		"host":        s.Host,
+		"port":        s.Port,
+		"structName":  s.StructName,
+		"method":      s.Method,
+		"inputs":      s.Inputs,
+		"outputs":     s.Output,
 	}
-
-	tipoStruct := reflect.TypeOf(services)
-	structName := tipoStruct.String()
-	list := strings.Split(structName, ".")
-	structName = list[len(list)-1]
-	for i := 0; i < tipoStruct.NumMethod(); i++ {
-		metodo := tipoStruct.Method(i)
-		numInputs := metodo.Type.NumIn()
-		numOutputs := metodo.Type.NumOut()
-
-		inputs := []string{}
-		for i := 0; i < numInputs; i++ {
-			inputs = append(inputs, metodo.Type.In(i).String())
-		}
-
-		outputs := []string{}
-		for o := 0; o < numOutputs; o++ {
-			outputs = append(outputs, metodo.Type.Out(o).String())
-		}
-
-		structName = strs.DaskSpace(structName)
-		name := strs.DaskSpace(metodo.Name)
-		method := strs.Format(`%s.%s`, structName, name)
-		key := strs.Format(`%s.%s.%s`, pkg.Name, structName, name)
-		solver := &Solver{
-			PackageName: pkg.Name,
-			Host:        pkg.Host,
-			Port:        pkg.Port,
-			Method:      method,
-			Inputs:      inputs,
-			Output:      outputs,
-		}
-		pkg.Solvers[key] = solver
-	}
-
-	rpc.Register(services)
-
-	return pkg.Save()
 }
 
 /**
-* UnMount
-* @return error
-**/
-func UnMount() error {
-	if pkg == nil {
-		return logs.Alertm(ERR_PACKAGE_NOT_FOUND)
-	}
-
-	routers, err := getRouters()
-	if err != nil {
-		return logs.Alert(err)
-	}
-
-	idx := slices.IndexFunc(routers, func(e *Package) bool { return e.Name == pkg.Name })
-	if idx != -1 {
-		routers = append(routers[:idx], routers[idx+1:]...)
-	}
-
-	err = setRoutes(routers)
-	if err != nil {
-		return logs.Alert(err)
-	}
-
-	return nil
-}
-
-/**
-* GetSolver
+* getSolver
 * @param method string
 * @return *Solver
 * @return error
 **/
-func GetSolver(method string) (*Solver, error) {
-	method = strings.TrimSpace(method)
-	routers, err := getRouters()
-	if err != nil {
-		return nil, err
-	}
-
+func getSolver(method string) (*Solver, error) {
 	lst := strings.Split(method, ".")
-	if len(lst) != 3 {
+	if len(lst) != 2 {
 		return nil, mistake.Newf(ERR_METHOD_NOT_FOUND, method)
 	}
 
 	packageName := lst[0]
-	idx := slices.IndexFunc(routers, func(e *Package) bool { return e.Name == packageName })
-	if idx == -1 {
-		return nil, mistake.New(ERR_PACKAGE_NOT_FOUND)
+	methodName := lst[1]
+	packages, err := getPackages()
+	if err != nil {
+		return nil, err
 	}
 
-	router := routers[idx]
-	solver := router.Solvers[method]
+	idx := slices.IndexFunc(packages, func(p *Package) bool { return p.Name == packageName })
+	if idx == -1 {
+		return nil, mistake.Newf(ERR_PACKAGE_NOT_FOUND, packageName)
+	}
 
+	pkg := packages[idx]
+	idx = slices.IndexFunc(pkg.Solvers, func(s *Solver) bool { return s.Method == methodName })
+	if idx == -1 {
+		return nil, mistake.Newf(ERR_METHOD_NOT_FOUND, method)
+	}
+
+	solver := pkg.Solvers[idx]
 	if solver == nil {
 		return nil, mistake.Newf(ERR_METHOD_NOT_FOUND, method)
 	}

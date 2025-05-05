@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/response"
@@ -75,15 +74,15 @@ func Set(key string, val interface{}, second time.Duration) interface{} {
 
 /**
 * Get
-* @params key string, def string
+* @params key string, defaultvalue string
 * @return string, error
 **/
-func Get(key, def string) (string, error) {
+func Get(key, defaultvalue string) (string, error) {
 	if conn == nil {
-		return def, mistake.New(msg.ERR_NOT_CACHE_SERVICE)
+		return defaultvalue, mistake.New(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
-	return GetCtx(conn.ctx, key, def)
+	return GetCtx(conn.ctx, key, defaultvalue)
 }
 
 /**
@@ -492,7 +491,7 @@ func HandlerAll(w http.ResponseWriter, r *http.Request) {
 	rows := query.ValInt(30, "rows")
 
 	result, err := AllCache(search, page, rows)
-	if logs.Alert(err) != nil {
+	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -509,7 +508,7 @@ func HandlerGet(w http.ResponseWriter, r *http.Request) {
 	key := query.Str("key")
 
 	result, err := Get(key, "")
-	if logs.Alert(err) != nil {
+	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -526,7 +525,7 @@ func HandlerDelete(w http.ResponseWriter, r *http.Request) {
 	key := query.Str("key")
 
 	result, err := Delete(key)
-	if logs.Alert(err) != nil {
+	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}

@@ -11,15 +11,26 @@ type List struct {
 	Result []Json `json:"result"`
 }
 
-/* ToJson return the value of the key */
-func (it *List) ToJson() Json {
+/**
+* ToJson
+* @return Json
+**/
+func (s *List) ToJson() Json {
 	return Json{
-		"rows":   it.Rows,
-		"all":    it.All,
-		"count":  it.Count,
-		"page":   it.Page,
-		"start":  it.Start,
-		"end":    it.End,
-		"result": it.Result,
+		"rows":   s.Rows,
+		"all":    s.All,
+		"count":  s.Count,
+		"page":   s.Page,
+		"start":  s.Start,
+		"end":    s.End,
+		"result": s.Result,
 	}
+}
+
+/**
+* ToString
+* @return string
+**/
+func (s *List) ToString() string {
+	return s.ToJson().ToString()
 }

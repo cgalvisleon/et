@@ -203,9 +203,9 @@ func GetRoutes() map[string]et.Json {
 * @param method, path, packagePath, host, packageName string, private bool
 **/
 func pushApiGateway(method, path, packagePath, host, packageName string, private bool) {
+	id := cache.GenKey(method, path, packageName)
 	path = packagePath + path
 	resolve := host + path
-	id := cache.GenKey(method, path)
 
 	PushApiGateway(id, method, path, resolve, et.Json{}, TpReplaceHeader, []string{}, private, packageName)
 }

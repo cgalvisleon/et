@@ -8,96 +8,49 @@ import (
 	"github.com/cgalvisleon/et/utility"
 )
 
-type MiniRoute struct {
-	Id       string
-	Method   string
-	Path     string
-	URL      string
-	Header   et.Json
-	TpHeader string
-	Exclude  []string
-	Private  bool
-	Resolve  string
-}
-
-func (r *MiniRoute) ToJson() et.Json {
-	return et.Json{
-		"Id":       r.Id,
-		"Method":   r.Method,
-		"Path":     r.Path,
-		"URL":      r.URL,
-		"Header":   r.Header,
-		"TpHeader": r.TpHeader,
-		"Exclude":  r.Exclude,
-		"Private":  r.Private,
-		"Resolve":  r.Resolve,
-	}
-}
-
 type Package struct {
 	server *Server
 	Id     string
 	Name   string
-	Routes map[string]*MiniRoute
+	Routes map[string]*Router
 }
 
 /**
-* ToJson
+* Describe
 * @return et.Json
 **/
-func (p *Package) ToJson() et.Json {
-	var routes []et.Json
-	for _, route := range p.Routes {
-		routes = append(routes, route.ToJson())
-	}
-
+func (p *Package) Describe() et.Json {
 	result := et.Json{
 		"Id":     p.Id,
 		"Name":   p.Name,
-		"Count":  len(routes),
-		"Routes": routes,
+		"Count":  len(p.Routes),
+		"Routes": p.Routes,
 	}
 	return result
 }
 
 /**
-* AddRoute
-* @param method string
-* @param path string
+* addRouter
 * @param route *Router
 * @return *Package
 **/
-func (p *Package) AddRoute(method, path string, route *Router) *Package {
-	url := strs.Format(`[%s]:%s`, method, path)
+func (p *Package) addRouter(route *Router) *Package {
 	if route.ExcludeHeader == nil {
 		route.ExcludeHeader = []string{}
 	}
 
-	miniRoute := &MiniRoute{
-		Id:       route.Id,
-		Method:   method,
-		Path:     path,
-		URL:      url,
-		Resolve:  route.Resolve,
-		Header:   route.Header,
-		TpHeader: route.TpHeader.String(),
-		Exclude:  route.ExcludeHeader,
-		Private:  route.Private,
-	}
-	p.Routes[url] = miniRoute
+	p.Routes[route.key()] = route
 
 	return p
 }
 
 /**
-* DeleteRoute
-* @param method string
-* @param path string
+* deleteRoute
+* @param route *Router
 * @return bool
 **/
-func (p *Package) DeleteRoute(method, path string) bool {
-	key := strs.Format(`[%s]:%s`, method, path)
-	delete(p.Routes, key)
+func (p *Package) deleteRoute(route *Router) bool {
+	delete(p.Routes, route.key())
 
 	return true
 }
@@ -112,7 +65,7 @@ func (p *Package) deleteRouteById(id string) bool {
 	for _, route := range p.Routes {
 		if route.Id == id {
 			s := p.server
-			delete(p.Routes, route.URL)
+			p.deleteRoute(route)
 			if len(p.Routes) == 0 {
 				idx := slices.IndexFunc(s.packages, func(e *Package) bool { return strs.Lowcase(e.Name) == strs.Lowcase(p.Name) })
 				if idx != -1 {
@@ -127,11 +80,11 @@ func (p *Package) deleteRouteById(id string) bool {
 }
 
 /**
-* findPakage
+* getPackageByName
 * @param name string
 * @return *Package
 **/
-func findPakage(s *Server, name string) *Package {
+func getPackageByName(s *Server, name string) *Package {
 	idx := slices.IndexFunc(s.packages, func(e *Package) bool { return strs.Lowcase(e.Name) == strs.Lowcase(name) })
 	if idx == -1 {
 		return nil
@@ -142,8 +95,7 @@ func findPakage(s *Server, name string) *Package {
 
 /**
 * newPakage
-* @param server *Server
-* @param name string
+* @param server *Server, name string
 * @return *Package
 **/
 func newPakage(server *Server, name string) *Package {
@@ -151,7 +103,7 @@ func newPakage(server *Server, name string) *Package {
 		Id:     utility.UUID(),
 		server: server,
 		Name:   name,
-		Routes: make(map[string]*MiniRoute),
+		Routes: make(map[string]*Router),
 	}
 
 	server.packages = append(server.packages, result)

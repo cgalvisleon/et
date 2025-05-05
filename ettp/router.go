@@ -61,7 +61,7 @@ type Router struct {
 * @return *Router, []*Router
 **/
 func newRoute(server *Server, method string, routes []*Router, packageName string) (*Router, []*Router) {
-	pkg := findPakage(server, packageName)
+	pkg := getPackageByName(server, packageName)
 
 	result := &Router{
 		server:        server,
@@ -126,6 +126,14 @@ func getTpParams(tag string) TpParams {
 	}
 
 	return TpNotParams
+}
+
+/**
+* key
+* @return string
+**/
+func (r *Router) key() string {
+	return strs.Format(`[%s]:%s`, r.Method, r.Path)
 }
 
 /**
@@ -266,26 +274,23 @@ func (r *Router) SetPakage(packageName string) *Router {
 		return r
 	}
 
-	pkg := findPakage(r.server, packageName)
-	if pkg == nil {
-		pkg = newPakage(r.server, packageName)
-		r.PackageName = packageName
-		r.pkg = pkg
-		pkg.AddRoute(r.Method, r.Path, r)
-
+	if r.PackageName == packageName {
 		return r
 	}
 
-	if r.PackageName != packageName {
-		old := findPakage(r.server, r.PackageName)
-		if old != nil {
-			old.DeleteRoute(r.Method, r.Path)
-		}
+	old := getPackageByName(r.server, r.PackageName)
+	if old != nil {
+		old.deleteRoute(r)
+	}
+
+	pkg := getPackageByName(r.server, packageName)
+	if pkg == nil {
+		pkg = newPakage(r.server, packageName)
 	}
 
 	r.PackageName = packageName
 	r.pkg = pkg
-	pkg.AddRoute(r.Method, r.Path, r)
+	pkg.addRouter(r)
 
 	return r
 }

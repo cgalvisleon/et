@@ -6,6 +6,7 @@ import (
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/jrpc"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
 	rt "github.com/cgalvisleon/et/router"
@@ -27,9 +28,8 @@ func (s *Server) mountHandlerFunc() {
 	s.Private().Get("/apigateway/packages", s.getPakages, s.Name)
 	s.Private().Patch("/apigateway/reset", s.reset, s.Name)
 	/* RPC */
-	s.Private().Get("/apigateway/rpc", s.listRpc, s.Name)
-	s.Private().Delete("/apigateway/rpc", s.deletePrcPackage, s.Name)
-	s.Private().Patch("/apigateway/rpc", s.testRpc, s.Name)
+	s.Private().Get("/apigateway/rpc", jrpc.ListRouters, s.Name)
+	s.Private().Post("/apigateway/rpc", jrpc.HttpCalcItem, s.Name)
 	/* Token */
 	s.Private().Get("/apigateway/tokens/{key}", s.getToken, s.Name)
 	s.Private().Post("/apigateway/tokens", s.setToken, s.Name)

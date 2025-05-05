@@ -2,8 +2,10 @@ package middleware
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
@@ -336,12 +338,29 @@ func (m *Metrics) DoneHTTP(rw *ResponseWriterWrapper) et.Json {
 * @return et.Json
 **/
 func (m *Metrics) DoneRpc(r any) et.Json {
-	str, ok := r.(string)
-	if !ok {
-		m.ResponseSize = 0
-	} else {
-		m.ResponseSize = len(str)
+	switch v := r.(type) {
+	case string:
+		m.ResponseSize = len(v)
+	case et.Json:
+		m.ResponseSize = len(v.ToString())
+	case []byte:
+		m.ResponseSize = len(v)
+	case int:
+		m.ResponseSize = len(strconv.Itoa(v))
+	case float64:
+		m.ResponseSize = len(strconv.FormatFloat(v, 'f', -1, 64))
+	case bool:
+		m.ResponseSize = len(strconv.FormatBool(v))
+	case et.List:
+		m.ResponseSize = len(v.ToString())
+	case et.Items:
+		m.ResponseSize = len(v.ToString())
+	case et.Item:
+		m.ResponseSize = len(v.ToString())
+	default:
+		m.ResponseSize = len(fmt.Sprintf("%v", v))
 	}
+
 	m.StatusCode = http.StatusOK
 	m.CallResponseTime()
 	m.CallLatency()

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 
 	"github.com/cgalvisleon/et/file"
-	"github.com/cgalvisleon/et/strs"
 )
 
 /**
@@ -12,7 +11,7 @@ import (
 * @param route *Router
 **/
 func (s *Server) Mount(route *Router) {
-	s.UpsetRoute(
+	s.setRoute(
 		route.Id,
 		route.Method,
 		route.Path,
@@ -48,19 +47,14 @@ func (s *Server) saveRouter() error {
 * @return error
 **/
 func (s *Server) Load() error {
-	path, err := file.MakeFolder("data")
+	var err error
+	var data = make([]*Router, 0)
+	s.Storage, err = file.NewSyncFile("data", s.Name, data)
 	if err != nil {
 		return err
 	}
 
-	fileName := strs.Format("%s/%s.dt", path, strs.Lowcase(s.Name))
-	data := make([]*Router, 0)
-	s.Storage, err = file.NewSyncFile(fileName, data)
-	if err != nil {
-		return err
-	}
-
-	err = s.Storage.Unmarshal(&data)
+	err = s.Storage.Load(&data)
 	if err != nil {
 		return err
 	}

@@ -236,6 +236,8 @@ func setEnvar(key string, value interface{}) {
 			envar.SetStr(k, val)
 		case int:
 			envar.SetInt(k, val)
+		case int64:
+			envar.SetInt64(k, val)
 		case bool:
 			envar.SetBool(k, val)
 		case float64:
@@ -243,23 +245,24 @@ func setEnvar(key string, value interface{}) {
 		}
 	}
 
-	upsetArray := func(v map[string]interface{}, isPassword bool) {
-		for kk, vv := range v {
-			kk = strs.Uppcase(kk)
+	upsetArray := func(object map[string]interface{}, isPassword bool) {
+		for k, v := range object {
+			k := strs.Uppcase(k)
 			if isPassword {
-				vv = PasswordUnhash(vv.(string))
+				unHash := PasswordUnhash(v.(string))
+				upsetVal(k, unHash)
+			} else {
+				upsetVal(k, v)
 			}
-			upsetVal(kk, vv)
 		}
 	}
 
 	key = strs.Uppcase(key)
-
 	switch val := value.(type) {
 	case map[string]interface{}:
-		upsetArray(val, slices.Contains([]string{"PASSWORD", "PASSWORDS", "PASS"}, key))
+		upsetArray(val, slices.Contains([]string{"SECRETS", "PASSWORDS", "PASS"}, key))
 	case et.Json:
-		upsetArray(val, slices.Contains([]string{"PASSWORD", "PASSWORDS", "PASS"}, key))
+		upsetArray(val, slices.Contains([]string{"SECRETS", "PASSWORDS", "PASS"}, key))
 	default:
 		upsetVal(key, val)
 	}
@@ -288,22 +291,24 @@ func SetToConfig(config et.Json) error {
 		config.Set(k, v)
 	}
 
-	upsetArray := func(v map[string]interface{}, isPassword bool) {
-		for kk, vv := range v {
-			kk = strs.Uppcase(kk)
+	upsetArray := func(object map[string]interface{}, isPassword bool) {
+		for k, v := range object {
+			k = strs.Uppcase(k)
 			if isPassword {
-				vv = PasswordUnhash(vv.(string))
+				unHash := PasswordUnhash(v.(string))
+				upsetVal(k, unHash)
+			} else {
+				upsetVal(k, v)
 			}
-			upsetVal(kk, vv)
 		}
 	}
 
 	for key, value := range config {
 		switch val := value.(type) {
 		case map[string]interface{}:
-			upsetArray(val, slices.Contains([]string{"PASSWORD", "PASSWORDS", "PASS"}, key))
+			upsetArray(val, slices.Contains([]string{"SECRETS", "PASSWORDS", "PASS"}, key))
 		case et.Json:
-			upsetArray(val, slices.Contains([]string{"PASSWORD", "PASSWORDS", "PASS"}, key))
+			upsetArray(val, slices.Contains([]string{"SECRETS", "PASSWORDS", "PASS"}, key))
 		default:
 			upsetVal(key, val)
 		}

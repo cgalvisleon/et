@@ -249,14 +249,15 @@ func Debugf(format string, args ...any) {
 
 /**
 * Rpc
-* @param args ...any
+* @param packageName string, args string
 * @return error
 **/
-func Rpc(args ...any) error {
+func Rpc(packageName, args string) error {
 	pc, _, _, _ := runtime.Caller(1)
 	fullFuncName := runtime.FuncForPC(pc).Name()
 	funcName := fullFuncName[strings.LastIndex(fullFuncName, "/")+1:]
-	message := append([]any{funcName, ":"}, args...)
+	funcName = funcName[strings.LastIndex(funcName, ".")+1:]
+	message := append([]any{packageName, ".", funcName, ":"}, args)
 	printLn("Rpc", "Blue", message...)
 
 	return nil

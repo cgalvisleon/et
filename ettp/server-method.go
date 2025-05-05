@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/middleware"
@@ -24,11 +25,11 @@ func (s *Server) setHandlerFunc(method, path string, handlerFn http.HandlerFunc,
 		return nil
 	}
 
+	id := cache.GenKey(method, path, packageName)
 	url := strs.Format("%s%s", s.pathUrl, path)
 	url = strings.ReplaceAll(url, "//", "/")
-	id := strs.Format("%s:%s", method, url)
 
-	route := s.UpsetRoute(id, method, url, url, TpHandler, et.Json{}, router.TpReplaceHeader, []string{}, false, packageName, false)
+	route := s.setRoute(id, method, url, url, TpHandler, et.Json{}, router.TpReplaceHeader, []string{}, false, packageName, false)
 	if route != nil {
 		s.handlers[route.Id] = handlerFn
 	}

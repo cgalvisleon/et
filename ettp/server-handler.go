@@ -99,11 +99,11 @@ func (s *Server) GetPackages(name string) et.Items {
 		idx := slices.IndexFunc(s.packages, func(e *Package) bool { return strs.Lowcase(e.Name) == strs.Lowcase(name) })
 		if idx != -1 {
 			pakage := s.packages[idx]
-			result = append(result, pakage.ToJson())
+			result = append(result, pakage.Describe())
 		}
 	} else {
 		for _, pakage := range s.packages {
-			result = append(result, pakage.ToJson())
+			result = append(result, pakage.Describe())
 		}
 	}
 

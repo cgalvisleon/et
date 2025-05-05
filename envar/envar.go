@@ -19,7 +19,6 @@ var Envar = map[string]interface{}{}
 **/
 func setEnvar(name string, value interface{}) {
 	name = strings.ToUpper(name)
-	fmt.Println("setEnvar:", name, ":", value)
 	val := fmt.Sprintf("%v", value)
 	Envar[name] = val
 	os.Setenv(name, val)
@@ -108,6 +107,16 @@ func SetStr(name string, value string) string {
 * @return int
 **/
 func SetInt(name string, value int) int {
+	Set(name, value)
+	return value
+}
+
+/**
+* SetInt64
+* @param name string, value int64
+* @return int64
+**/
+func SetInt64(name string, value int64) int64 {
 	Set(name, value)
 	return value
 }

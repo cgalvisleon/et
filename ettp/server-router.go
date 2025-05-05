@@ -11,11 +11,11 @@ import (
 )
 
 /**
-* UpsetRoute
+* setRoute
 * @param id, method, path, resolve string, kind TypeApi, header et.Json, tpHeader router.TpHeader, excludeHeader []string, private bool, packageName string, save bool
 * @return *Router
 **/
-func (s *Server) UpsetRoute(id, method, path, resolve string, kind TypeApi, header et.Json, tpHeader router.TpHeader, excludeHeader []string, private bool, packageName string, save bool) *Router {
+func (s *Server) setRoute(id, method, path, resolve string, kind TypeApi, header et.Json, tpHeader router.TpHeader, excludeHeader []string, private bool, packageName string, save bool) *Router {
 	if len(method) == 0 {
 		return nil
 	}
@@ -24,12 +24,12 @@ func (s *Server) UpsetRoute(id, method, path, resolve string, kind TypeApi, head
 		return nil
 	}
 
-	confirm := func() {
-		console.Logf(s.Name, `[SET] %s:%s -> %s | TpHeader:%s | Private:%v | %s`, method, path, resolve, tpHeader.String(), private, packageName)
+	confirm := func(action string) {
+		console.Logf(s.Name, `[%s] %s:%s -> %s | TpHeader:%s | Private:%v | %s`, action, method, path, resolve, tpHeader.String(), private, packageName)
 	}
 
 	var router *Router
-	idx := slices.IndexFunc(s.solvers, func(e *Router) bool { return e.Method == method && e.Path == path })
+	idx := slices.IndexFunc(s.solvers, func(e *Router) bool { return e.Id == id })
 	if idx != -1 {
 		router = s.solvers[idx]
 		router.Id = id
@@ -47,6 +47,8 @@ func (s *Server) UpsetRoute(id, method, path, resolve string, kind TypeApi, head
 		}
 
 		router.SetPakage(packageName)
+
+		confirm("RESET")
 	} else {
 		idx = getRouteIndex(method, s.router)
 		if idx == -1 {
@@ -85,10 +87,10 @@ func (s *Server) UpsetRoute(id, method, path, resolve string, kind TypeApi, head
 				router.Resolve = resolve
 				router.SetPakage(packageName)
 				s.solvers = append(s.solvers, router)
-
-				confirm()
 			}
 		}
+
+		confirm("SET")
 	}
 
 	if save {
@@ -110,7 +112,7 @@ func (s *Server) SetResolve(private bool, id, method, path, resolve string, head
 		return nil, console.Alertf(MSG_METHOD_NOT_FOUND, method)
 	}
 
-	route := s.UpsetRoute(id, method, path, resolve, TpRest, header, tpHeader, excludeHeader, private, packageName, saved)
+	route := s.setRoute(id, method, path, resolve, TpRest, header, tpHeader, excludeHeader, private, packageName, saved)
 	if route == nil {
 		return nil, mistake.New(MSG_ROUTE_NOT_REGISTER)
 	}

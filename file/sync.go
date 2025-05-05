@@ -9,6 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cgalvisleon/et/mistake"
+	"github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 )
@@ -18,13 +21,24 @@ type SyncFile struct {
 	UpdatedAt time.Time
 	Id        string
 	Name      string
+	Dir       string
 	Path      string
 	Data      []byte
 	mutex     sync.Mutex
 }
 
-func NewSyncFile(name string, def any) (*SyncFile, error) {
-	path, err := filepath.Abs(name)
+func NewSyncFile(dataDirectory, name string, initialData any) (*SyncFile, error) {
+	if !utility.ValidStr(dataDirectory, 1, []string{"/", ""}) {
+		return nil, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "dataDirectory")
+	}
+
+	dir, err := MakeFolder(dataDirectory)
+	if err != nil {
+		return nil, err
+	}
+
+	fileName := strs.Format("%s/%s.dt", dir, strs.Lowcase(name))
+	path, err := filepath.Abs(fileName)
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +48,7 @@ func NewSyncFile(name string, def any) (*SyncFile, error) {
 		if os.IsNotExist(err) {
 			now := timezone.NowTime()
 			id := utility.UUID()
-			bt, err := json.Marshal(def)
+			bt, err := json.Marshal(initialData)
 			if err != nil {
 				return nil, err
 			}
@@ -43,6 +57,7 @@ func NewSyncFile(name string, def any) (*SyncFile, error) {
 				CreatedAt: now,
 				UpdatedAt: now,
 				Id:        id,
+				Dir:       dir,
 				Name:      filepath.Base(path),
 				Path:      path,
 				Data:      bt,
@@ -125,11 +140,11 @@ func (s *SyncFile) Get() ([]byte, error) {
 }
 
 /**
-* Unmarshal
+* Load
 * @param v any
 * @return error
 **/
-func (s *SyncFile) Unmarshal(v any) error {
+func (s *SyncFile) Load(v any) error {
 	return json.Unmarshal(s.Data, v)
 }
 

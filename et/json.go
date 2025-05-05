@@ -105,13 +105,13 @@ func (s *Json) ScanRows(rows *sql.Rows) error {
 * ToByte convert a json to a []byte
 * @return []byte
 **/
-func (s Json) ToByte() []byte {
+func (s Json) ToByte() ([]byte, error) {
 	result, err := json.Marshal(s)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
-	return result
+	return result, nil
 }
 
 /**

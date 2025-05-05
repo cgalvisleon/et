@@ -18,6 +18,10 @@ func (s *Server) initEvents() {
 	}
 }
 
+/**
+* eventSetResolve
+* @param m event.Message
+**/
 func (s *Server) eventSetResolve(m event.Message) {
 	data := m.Data
 	fromId := data.Str("from_id")
@@ -40,6 +44,10 @@ func (s *Server) eventSetResolve(m event.Message) {
 	}
 }
 
+/**
+* eventDeleteResolve
+* @param m event.Message
+**/
 func (s *Server) eventDeleteResolve(m event.Message) {
 	data := m.Data
 	fromId := data.Str("from_id")

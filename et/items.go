@@ -52,38 +52,11 @@ func (s *Items) Scan(src interface{}) error {
 func (s *Items) Add(item Json) {
 	(*s).Result = append((*s).Result, item)
 	(*s).Count = len((*s).Result)
+	(*s).Ok = (*s).Count > 0
 }
 
 /**
-* ToByte convert a json to a []byte
-* @return []byte
-**/
-func (s Items) ToByte() []byte {
-	result, err := json.Marshal(s)
-	if err != nil {
-		return nil
-	}
-
-	return result
-}
-
-/**
-* ToString convert a json to a string
-* @return string
-**/
-func (s Items) ToString() string {
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return ""
-	}
-
-	result := string(bt)
-
-	return result
-}
-
-/**
-* ToJson convert a json to a Json
+* ToJson convert a json
 * @return Json
 **/
 func (s Items) ToJson() Json {
@@ -92,6 +65,14 @@ func (s Items) ToJson() Json {
 		"count":  s.Count,
 		"result": s.Result,
 	}
+}
+
+/**
+* ToString convert a json to a string
+* @return string
+**/
+func (s Items) ToString() string {
+	return s.ToJson().ToString()
 }
 
 /**

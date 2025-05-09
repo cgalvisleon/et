@@ -373,13 +373,13 @@ func Define$2(db *jdb.DB) error {
 	$2.DefineIndex(true,
 		"name",
 	)
-	$2.DefineEvent(jdb.EventInsert, func(model *jdb.Model, before et.Json, after et.Json) error {
+	$2.DefineEvent(jdb.EventInsert, func(tx *jdb.Tx, model *jdb.Model, before et.Json, after et.Json) error {
 		return nil
 	})
-	$2.DefineEvent(jdb.EventUpdate, func(model *jdb.Model, before et.Json, after et.Json) error {
+	$2.DefineEvent(jdb.EventUpdate, func(tx *jdb.Tx, model *jdb.Model, before et.Json, after et.Json) error {
 		return nil
 	})
-	$2.DefineEvent(jdb.EventDelete, func(model *jdb.Model, before et.Json, after et.Json) error {
+	$2.DefineEvent(jdb.EventDelete, func(tx *jdb.Tx, model *jdb.Model, before et.Json, after et.Json) error {
 		return nil
 	})
 
@@ -401,155 +401,175 @@ func Get$2ById(id string) (dt.Object, error) {
 		return result, nil
 	}
 
-	return Up$2ById(id)
+	return up$2ById(id)
 }
 
 /**
-* Up$2ById
+* up$2ById
 * @param id string
 * @return dt.Object, error
 **/
-func Up$2ById(id string) (dt.Object, error) {
+func up$2ById(id string) (dt.Object, error) {
 	item, err := $2.
 		Where(jdb.KEY).Eq(id).
-		Data().
 		One()
 	if err != nil {
 		return dt.Object{}, err
 	}
 
-	return dt.Up(id, item.Result), nil
+	return dt.Up(id, item), nil
 }
 
 /**
-* Insert$2
-* @param project string
-* @param state string
-* @param id string
-* @param data et.Json
-* @param client string
+* insert$2
+* @param projectId, statusId, id, name, description string, data et.Json, createdBy string
 * @return dt.Object, error
 **/
-func Insert$2(project, state, id string, data et.Json, client string) (dt.Object, error) {
-	if !utility.ValidStr(project, 0, []string{""}) {
-		return dt.Object{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "project")
+func insert$2(projectId, statusId, id, name, description string, data et.Json, createdBy string) (dt.Object, error) {
+	if !utility.ValidStr(projectId, 0, []string{""}) {
+		return dt.Object{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, jdb.PROJECT_ID)
 	}
 
 	if !utility.ValidStr(id, 0, []string{""}) {
 		return dt.Object{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, jdb.KEY)
 	}
 
-	id = $2.GenId(id)
-	current, err := $2.
-		Where(jdb.KEY).Eq(id).
-		Data().
-		One()
-	if err != nil {
-		return dt.Object{}, err
+	if !utility.ValidStr(name, 0, []string{""}) {
+		return dt.Object{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
 
-	if current.Ok {
-		id := current.Str(jdb.KEY)
-		result := dt.Up(id, current.Result)
-		result.Ok = false
-		return result, nil
-	}
-
+	id = $2.GetId(id)
 	now := utility.Now()
-	data[jdb.CREATED_AT] = now
-	data[jdb.UPDATED_AT] = now	
-	data[jdb.STATUS] = state
 	data[jdb.KEY] = id
-	data["project"] = project
-	data["created_by"] = client
-	_, err = $2.Insert(data).
-		One()
+	data[jdb.PROJECT_ID] = projectId
+	_, err := $2.
+		Insert(data).
+		BeforeInsert(func(tx *jdb.Tx, data et.Json) error {
+			exists, err := $2.
+				Where(jdb.PROJECT_ID).Eq(projectId).
+				And("name").Eq(name).
+				And(jdb.KEY).Neg(id).
+				ItExistsTx(tx)
+			if err != nil {
+				return err
+			}
+
+			if exists {
+				return mistake.Newf(msg.RECORD_EXISTS, name)
+			}
+
+			data[jdb.CREATED_AT] = now
+			data[jdb.UPDATED_AT] = now
+			data[jdb.STATUS_ID] = statusId
+			data["created_by"] = createdBy
+			return nil
+		}).		
+		Exec()
 	if err != nil {
 		return dt.Object{}, err
 	}
 
-	return Get$2ById(id)
+	return up$2ById(id)
 }
 
 /**
 * UpSert$2
-* @param project string
-* @param id string
-* @param data et.Json
-* @param client string
+* @param projectId, id, name, description string, data et.Json, createdBy string
 * @return dt.Object, error
 **/
-func UpSert$2(project, id string, data et.Json, client string) (dt.Object, error) {
-	current, err := Insert$2(project, utility.ACTIVE, id, data, client)
-	if err != nil {
-		return dt.Object{}, err
+func UpSert$2(projectId, id, name, description string, data et.Json, createdBy string) (dt.Object, error) {
+	if !utility.ValidStr(projectId, 0, []string{""}) {
+		return dt.Object{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, jdb.PROJECT_ID)
 	}
 
-	if current.Ok {
-		return current, nil
+	if !utility.ValidStr(id, 0, []string{""}) {
+		return dt.Object{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, jdb.KEY)
 	}
 
-	current_state := current.Str(jdb.STATUS)
-	if current_state != utility.ACTIVE {
-		return dt.Object{}, console.Alertf(MSG_STATE_NOT_ACTIVE, current_state)
+	if !utility.ValidStr(name, 0, []string{""}) {
+		return dt.Object{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
 
-	id = current.Str(jdb.KEY)
+	id = $2.GetId(id)
 	now := utility.Now()
-	data[jdb.UPDATED_AT] = now
-	data["updated_by"] = client
-	_, err = $2.Update(data).
-		Where(jdb.KEY).Eq(id).
-		One()
+	data[jdb.KEY] = id
+	data[jdb.PROJECT_ID] = projectId
+	_, err := $2.
+		Upsert(data).
+		BeforeInsert(func(tx *jdb.Tx, data et.Json) error {
+			exists, err := $2.
+				Where(jdb.PROJECT_ID).Eq(projectId).
+				And("name").Eq(name).
+				And(jdb.KEY).Neg(id).
+				ItExistsTx(tx)
+			if err != nil {
+				return err
+			}
+
+			if exists {
+				return mistake.Newf(msg.RECORD_EXISTS, name)
+			}
+
+			data[jdb.CREATED_AT] = now
+			data[jdb.UPDATED_AT] = now
+			data[jdb.STATUS_ID] = utility.ACTIVE
+			data["created_by"] = createdBy
+			return nil
+		}).
+		BeforeUpdate(func(tx *jdb.Tx, data et.Json) error {
+			exists, err := $2.
+				Where(jdb.PROJECT_ID).Eq(projectId).
+				And("name").Eq(name).
+				And(jdb.KEY).Neg(id).
+				ItExistsTx(tx)
+			if err != nil {
+				return err
+			}
+
+			if exists {
+				return mistake.Newf(msg.RECORD_EXISTS, name)
+			}
+
+			data[jdb.UPDATED_AT] = now
+			data["updated_by"] = createdBy
+			return nil
+		}).
+		Where(jdb.STATUS_ID).Eq(utility.ACTIVE).
+		Exec()
 	if err != nil {
 		return dt.Object{}, err
 	}
 
-	return Up$2ById(id)
+	return up$2ById(id)
 }
 
 /**
 * State$2
-* @param id string
-* @param state string
-* @param client string
-* @return et.Item
-* @return error
+* @param id, stateId, createdBy string
+* @return et.Item, error
 **/
-func State$2(id, state, client string) (et.Item, error) {
-	if !utility.ValidStr(state, 0, []string{""}) {
-		return et.Item{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, jdb.STATUS)
+func State$2(id, stateId, createdBy string) (et.Item, error) {
+	if !utility.ValidStr(stateId, 0, []string{""}) {
+		return et.Item{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, jdb.STATUS_ID)
 	}
 
-	current, err := $2.
+	if !utility.ValidStr(id, 0, []string{""}) {
+		return et.Item{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, jdb.KEY)
+	}
+
+	result, err := $2.
+		Update(et.Json{
+			jdb.STATUS_ID: stateId,
+			"updated_by":  createdBy,
+		}).
 		Where(jdb.KEY).Eq(id).
-		Data(jdb.STATUS).
+		And(jdb.STATUS_ID).Neg(stateId).
 		One()
 	if err != nil {
 		return et.Item{}, err
 	}
 
-	if !current.Ok {
-		return et.Item{}, console.Alertm(msg.RECORD_NOT_FOUND)
-	}
-
-	current_state := current.Key(jdb.STATUS)
-	if current_state == state {
-		return et.Item{Ok: true, Result: et.Json{"message": msg.RECORD_NOT_UPDATE}}, nil
-	}
-
-	result, err := $2.Update(et.Json{
-		jdb.UPDATED_AT: utility.Now(),
-		jdb.STATUS: state,
-		"updated_by": client,
-	}).
-		Where(jdb.KEY).Eq(id).
-		One()
-	if err != nil {
-		return et.Item{}, err
-	}
-
-	dt.Put(id, jdb.STATUS, state)
+	dt.Drop(id)
 
 	return et.Item{
 		Ok: result.Ok,
@@ -560,56 +580,15 @@ func State$2(id, state, client string) (et.Item, error) {
 }
 
 /**
-* Delete$2
-* @param id string
-* @return et.Item
-* @return error
-**/
-func Delete$2(id string) (et.Item, error) {
-	if !utility.ValidStr(id, 0, []string{""}) {
-		return et.Item{}, console.Alertf(msg.MSG_ATRIB_REQUIRED, jdb.KEY)
-	}
-
-	current, err := $2.
-		Where(jdb.KEY).Eq(id).
-		Data(jdb.KEY).
-		One()
-	if err != nil {
-		return et.Item{}, err
-	}
-
-	if !current.Ok {
-		return et.Item{}, console.Alertm(msg.RECORD_NOT_FOUND)
-	}
-
-	_, err = $2.Delete().
-		Where(jdb.KEY).Eq(id).
-		One()
-	if err != nil {
-		return et.Item{}, err
-	}
-
-	dt.Drop(id)
-
-	return et.Item{
-		Ok: true,
-		Result: et.Json{
-			"message": msg.RECORD_DELETE,
-		},
-	}, nil
-}
-
-/**
-* Get$2
-* @param search et.Json, page, rows int
+* Query$2
+* @param query et.Json
 * @return interface{}, error
 **/
-func Get$2(search et.Json, page, rows int) (interface{}, error) {
-	search.Set("limit", et.Json{"page": page, "rows": rows})
+func Query$2(query et.Json) (interface{}, error) {
 	result, err := jdb.From($2).
-		Query(search)
+		Query(query)
 	if err != nil {
-		return et.List{}, err
+		return nil, err
 	}
 
 	return result, nil
@@ -624,23 +603,25 @@ import (
 
 	"github.com/cgalvisleon/et/claim"
 	"github.com/cgalvisleon/et/response"
+	"github.com/cgalvisleon/et/utility"
 	"github.com/cgalvisleon/jdb/jdb"
 	"github.com/go-chi/chi/v5"
 	"$3/internal/models/$4"
 )
 
 /**
-* upSert$2
+* upsert$2
 * @param w http.ResponseWriter
 * @param r *http.Request
 **/
-func (rt *Router) upSert$2(w http.ResponseWriter, r *http.Request) {
+func (rt *Router) upsert$2(w http.ResponseWriter, r *http.Request) {
 	body, _ := response.GetBody(r)
-	project := body.Str("project")
-	id := body.Str("id")
-	user := body.Str("user")
-
-	result, err := $4.UpSert$2(project, id, body, user)
+	projectId := body.Str(jdb.PROJECT_ID)
+	id := body.Str(jdb.KEY)
+	name := body.Str("name")
+	description := body.Str("description")
+	clientName := claim.GetClientName(r)
+	result, err := $4.UpSert$2(projectId, id, name, description, body, clientName)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -656,7 +637,6 @@ func (rt *Router) upSert$2(w http.ResponseWriter, r *http.Request) {
 **/
 func (rt *Router) get$2ById(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-
 	result, err := $4.Get$2ById(id)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
@@ -674,10 +654,9 @@ func (rt *Router) get$2ById(w http.ResponseWriter, r *http.Request) {
 func (rt *Router) state$2(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	body, _ := response.GetBody(r)
-	state := body.Str(jdb.STATUS)
-	client := claim.GetClientName(r)
-
-	result, err := $4.State$2(id, state, client)
+	statusId := body.Str(jdb.STATUS_ID)
+	clientName := claim.GetClientName(r)
+	result, err := $4.State$2(id, statusId, clientName)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -693,8 +672,8 @@ func (rt *Router) state$2(w http.ResponseWriter, r *http.Request) {
 **/
 func (rt *Router) delete$2(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-
-	result, err := $4.Delete$2(id)
+	clientName := claim.GetClientName(r)
+	result, err := $4.State$2(id, utility.FOR_DELETE, clientName)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -706,7 +685,7 @@ func (rt *Router) delete$2(w http.ResponseWriter, r *http.Request) {
 /** Copy this code to router.go
 	// $2
 	router.Protect(r, router.Get, "/assets/{id}", rt.get$2ById, PackageName, PackagePath, host)
-	router.Protect(r, router.Post, "/assets", rt.upSert$2, PackageName, PackagePath, host)
+	router.Protect(r, router.Post, "/assets", rt.upsert$2, PackageName, PackagePath, host)
 	router.Protect(r, router.Put, "/assets/{id}", rt.state$2, PackageName, PackagePath, host)
 	router.Protect(r, router.Delete, "/assets/{id}", rt.delete$2, PackageName, PackagePath, host)
 	router.Protect(r, router.Get, "/assets/", rt.query$2, PackageName, PackagePath, host)
@@ -796,10 +775,9 @@ func defineSchema(db *jdb.DB) error {
 		return nil
 	}
 
-	var err error
-	schema, err = jdb.NewSchema(db, "$1")
-	if err != nil {
-		return err
+	schema = jdb.NewSchema(db, "$1")
+	if schema == nil {
+		return mistake.Newf(jdb.MSG_SCHEMA_NOT_FOUND, "$1")
 	}
 
 	return nil
@@ -902,7 +880,7 @@ func (rt *Router) Routes() http.Handler {
 	router.Protect(r, router.Get, "/routes", rt.routes, PackageName, PackagePath, host)
 	// $2
 	router.Protect(r, router.Get, "/{id}", rt.get$2ById, PackageName, PackagePath, host)
-	router.Protect(r, router.Post, "/", rt.upSert$2, PackageName, PackagePath, host)
+	router.Protect(r, router.Post, "/", rt.upsert$2, PackageName, PackagePath, host)
 	router.Protect(r, router.Put, "/{id}", rt.state$2, PackageName, PackagePath, host)
 	router.Protect(r, router.Delete, "/{id}", rt.delete$2, PackageName, PackagePath, host)
 	router.Protect(r, router.Get, "/", rt.query$2, PackageName, PackagePath, host)

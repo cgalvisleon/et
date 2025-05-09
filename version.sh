@@ -26,10 +26,11 @@ done
 echo "Opciones elegidas:"
 [[ "$MAYOR" == true ]] && echo " - Major: Activado"
 [[ "$MINOR" == true ]] && echo " - Minor: Activado"
+[[ "$VERSION" == true ]] && echo " - Version: Activado"
 
 build_version() {
   # Obtiene la última etiqueta
-  latest_tag=$(git describe --tags --abbrev=0 2>/dev/null)
+  latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
 
   # Divide la etiqueta en componentes usando el punto como delimitador
   IFS='.' read -r -a version_parts <<< "${latest_tag#v}"
@@ -53,8 +54,6 @@ build_version() {
 
     # Reconstruye la nueva versión (X.Y.Z) y prepende la 'v' al principio
     NEW_VERSION="v${version_parts[0]}.${version_parts[1]}.${version_parts[2]}"
-
-    echo "Nueva versión: $NEW_VERSION"
   fi
 }
 
@@ -62,6 +61,7 @@ update_version() {
   echo "Versión actual: $CURRENT_VERSION"
   echo "Nueva versión: $NEW_VERSION"
   echo "Etiquetando con: $NEW_VERSION"
+
 
   sed -i "" "s/$CURRENT_VERSION/$NEW_VERSION/g" README.md
 
@@ -95,15 +95,12 @@ if [ "$HELP" == true ]; then
   echo "  --n, --minor    Incrementa la versión menor"
   echo "  --v, --version  Incrementa la versión de la revisión"
   exit 0
-elif [ "$CURRENT_VERSION" == "v0.0.0" ]; then
-  NEW_VERSION="v0.0.0"
-  update_version
 elif [ "$VERSION" == true ]; then
   build_version
   version
 else
   build_version
-  # update_version
+  update_version
 fi
 
 # Línea en blanco al final

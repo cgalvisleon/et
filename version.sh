@@ -52,7 +52,9 @@ build_version() {
     version_parts[2]=$((version_parts[2] + 1))
 
     # Reconstruye la nueva versión (X.Y.Z) y prepende la 'v' al principio
-    NEW_VERSION="v${version_parts[0]}.${version_parts[1]}.${version_parts[2]}"    
+    NEW_VERSION="v${version_parts[0]}.${version_parts[1]}.${version_parts[2]}"
+
+    echo "Nueva versión: $NEW_VERSION"
   fi
 }
 
@@ -101,7 +103,7 @@ elif [ "$VERSION" == true ]; then
   version
 else
   build_version
-  update_version
+  # update_version
 fi
 
 # Línea en blanco al final

@@ -50,9 +50,12 @@ type Routes struct {
 var router *Routes
 
 const (
-	APIGATEWAY_SET    = "apigateway/set/resolve"
-	APIGATEWAY_DELETE = "apigateway/delete/resolve"
-	APIGATEWAY_RESET  = "apigateway/reset"
+	APIGATEWAY_SET      = "apigateway/set"
+	APIGATEWAY_DELETE   = "apigateway/delete"
+	APIGATEWAY_RESET    = "apigateway/reset"
+	PROXYGATEWAY_SET    = "proxygateway/set"
+	PROXYGATEWAY_DELETE = "proxygateway/delete"
+	PROXYGATEWAY_RESET  = "proxygateway/reset"
 )
 
 /**
@@ -178,7 +181,6 @@ func PushApiGateway(id, method, path, resolve string, header et.Json, tpHeader T
 **/
 func DeleteApiGatewayById(id, method, path string) {
 	deleteRouter(id)
-
 	event.Publish(APIGATEWAY_DELETE, et.Json{
 		"_id":    id,
 		"method": method,

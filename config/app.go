@@ -14,7 +14,8 @@ type app struct {
 	Help       string
 	Production bool
 	Host       string
-	PathUrl    string
+	PathApi    string
+	PathApp    string
 	Port       int
 	Stage      string
 }
@@ -150,15 +151,27 @@ func (s *app) SetHost(host string) string {
 }
 
 /**
-* SetPathUrl
-* @param pathUrl string
+* SetPathApi
+* @param pathApi string
 * @return string
 **/
-func (s *app) SetPathUrl(pathUrl string) string {
-	s.PathUrl = pathUrl
-	Set("PATH_URL", pathUrl)
+func (s *app) SetPathApi(pathApi string) string {
+	s.PathApi = pathApi
+	Set("PATH_API", pathApi)
 
-	return s.PathUrl
+	return s.PathApi
+}
+
+/**
+* SetPathApp
+* @param pathApp string
+* @return string
+**/
+func (s *app) SetPathApp(pathApp string) string {
+	s.PathApp = pathApp
+	Set("PATH_APP", pathApp)
+
+	return s.PathApp
 }
 
 /**
@@ -195,7 +208,8 @@ func (s *app) Reload() {
 	s.Web = String("WEB", "https://et.com")
 	s.Help = String("HELP", "https://et.com/help")
 	s.Host = String("HOST", "localhost")
-	s.PathUrl = String("PATH_URL", "")
+	s.PathApi = String("PATH_API", "/api")
+	s.PathApp = String("PATH_APP", "/")
 	s.Production = Bool("PRODUCTION", false)
 	s.Port = Int("PORT", 3300)
 	s.Stage = String("STAGE", "local")

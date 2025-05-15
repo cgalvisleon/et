@@ -1,255 +1,205 @@
 package ettp
 
 import (
-	"slices"
-	"time"
+	"context"
+	"crypto/tls"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
 
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/claim"
-	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/mistake"
-	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/strs"
-	"github.com/cgalvisleon/et/utility"
+	"github.com/cgalvisleon/et/middleware"
+)
+
+type contextKey string
+
+var commonHeader = make(map[string]bool)
+
+const (
+	MetricKey   claim.ContextKey = "metric"
+	ResoluteKey claim.ContextKey = "resolute"
 )
 
 /**
-* developToken
-* @return string
+* applyMiddlewares
+* @params handler http.Handler, middlewares []func(http.Handler) http.Handler
+* @return http.Handler
 **/
-func developToken() string {
-	production := config.App.Production
-	if production {
-		return ""
+func (s *Server) applyMiddlewares(handler http.Handler, middlewares []func(http.Handler) http.Handler) http.Handler {
+	for _, middleware := range middlewares {
+		handler = middleware(handler)
 	}
 
-	device := "DevelopToken"
-	duration := time.Hour * 24 * 7
-	token, err := claim.NewToken(device, device, device, device, device, duration)
-	if err != nil {
-		console.Alert(err)
-		return ""
-	}
-
-	_, err = claim.ValidToken(token)
-	if err != nil {
-		console.Alertf("GetFromToken:%s", err.Error())
-		return ""
-	}
-
-	return token
+	return handler
 }
 
 /**
-* GetRouteById
-* @param id string
-* @return *Router
+* handlerApiRest
+* @params w http.ResponseWriter, r *http.Request
 **/
-func (s *Server) GetRouteById(id string) *Router {
-	idx := slices.IndexFunc(s.solvers, func(e *Router) bool { return e.Id == id })
-	if idx == -1 {
-		return nil
-	}
+func (s *Server) handlerApiRest(w http.ResponseWriter, r *http.Request) {
+	rw := &middleware.ResponseWriterWrapper{ResponseWriter: w}
 
-	return s.solvers[idx]
-}
-
-/**
-* DeleteRouteById
-* @param id string
-* @return error
-**/
-func (s *Server) DeleteRouteById(id string, save bool) error {
-	idx := slices.IndexFunc(s.solvers, func(e *Router) bool { return e.Id == id })
-	if idx == -1 {
-		return mistake.New(MSG_ROUTE_NOT_FOUND)
-	}
-
-	router := s.solvers[idx]
-	pkg := router.pkg
-	if pkg != nil {
-		pkg.deleteRouteById(id)
-	}
-
-	method := router.Method
-	err := s.deleteRoute(method, id)
-	if err != nil {
-		return err
-	}
-
-	console.Logf("Api gateway", `[DELETE] %s:%s -> %s`, router.Method, router.Path, router.Resolve)
-	s.solvers = append(s.solvers[:idx], s.solvers[idx+1:]...)
-
-	if save {
-		go s.Save()
-	}
-
-	return nil
-}
-
-/**
-* GetPackages
-* @return et.Items
-**/
-func (s *Server) GetPackages(name string) et.Items {
-	var result = []et.Json{}
-	if name != "" {
-		idx := slices.IndexFunc(s.packages, func(e *Package) bool { return strs.Lowcase(e.Name) == strs.Lowcase(name) })
-		if idx != -1 {
-			pakage := s.packages[idx]
-			result = append(result, pakage.Describe())
-		}
-	} else {
-		for _, pakage := range s.packages {
-			result = append(result, pakage.Describe())
-		}
-	}
-
-	return et.Items{
-		Ok:     len(result) > 0,
-		Count:  len(result),
-		Result: result,
-	}
-}
-
-/**
-* GetRoutes
-* @return et.Items
-**/
-func (s *Server) GetRoutes() et.Items {
-	var result = []et.Json{}
-	for _, route := range s.router {
-		result = append(result, route.ToJson())
-	}
-
-	return et.Items{
-		Result: result,
-		Count:  len(result),
-		Ok:     len(result) > 0,
-	}
-}
-
-/**
-* GetSolvers
-* @return et.Items
-**/
-func (s *Server) GetSolvers() et.Items {
-	var result = []et.Json{}
-	for _, route := range s.solvers {
-		result = append(result, route.ToJson())
-	}
-
-	return et.Items{
-		Result: result,
-		Count:  len(result),
-		Ok:     len(result) > 0,
-	}
-}
-
-/**
-* deleteRoute
-* @param method, id string
-* @return error
-**/
-func (s *Server) deleteRoute(method, id string) error {
-	idx := slices.IndexFunc(s.router, func(e *Router) bool { return e.Tag == method })
-	if idx == -1 {
-		return console.Alertm("Method route not found")
-	}
-
-	router := s.router[idx]
-	ok := router.deleteById(id, true)
+	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
 	if !ok {
-		return console.Alertm("Route not found")
+		metric.HTTPError(rw, r, http.StatusInternalServerError, "Metric not found")
+		return
 	}
 
-	return nil
-}
-
-/**
-* GetTokenByKey
-* @param key string
-* @return error
-**/
-func (s *Server) GetTokenByKey(key string) (et.Item, error) {
-	if !utility.ValidStr(key, 0, []string{}) {
-		return et.Item{}, console.Alertf(msg.MSG_ATRIB_REQUIRED, "key")
+	resolver, ok := r.Context().Value(ResoluteKey).(*Resolver)
+	if !ok {
+		metric.HTTPError(rw, r, http.StatusInternalServerError, "Resolute not found")
+		return
 	}
 
-	result, err := cache.Get(key, "")
+	proxyReq, err := http.NewRequest(resolver.Method, resolver.URL, r.Body)
 	if err != nil {
-		return et.Item{}, err
+		metric.HTTPError(rw, r, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	if result == "" {
-		return et.Item{}, console.Alertm(msg.RECORD_NOT_FOUND)
-	}
-
-	valid := MSG_TOKEN_VALID
-	_, err = claim.ValidToken(result)
-	if err != nil {
-		valid = err.Error()
-	}
-
-	return et.Item{
-		Ok: true,
-		Result: et.Json{
-			"key":   key,
-			"value": result,
-			"valid": valid,
+	proxyReq.Header = resolver.Header
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
 		},
-	}, nil
+	}
+
+	client := &http.Client{
+		Transport: transport,
+	}
+	res, err := client.Do(proxyReq)
+	if err != nil {
+		metric.HTTPError(rw, r, http.StatusBadGateway, err.Error())
+		return
+	}
+	defer res.Body.Close()
+
+	setHeader := func(header http.Header) {
+		for key, values := range header {
+			joinedValues := ""
+			for _, value := range values {
+				if commonHeader[key] {
+					continue
+				} else if len(value) > 255 {
+					continue
+				}
+				if len(joinedValues) > 0 {
+					joinedValues += ", "
+				}
+				joinedValues += value
+			}
+			rw.Header().Set(key, joinedValues)
+		}
+	}
+
+	setCookie := func(cookies []*http.Cookie) {
+		headers := rw.Header()
+		for _, cookie := range cookies {
+			_, ok := headers["Set-Cookie"]
+			if !ok {
+				rw.Header().Add("Set-Cookie", cookie.String())
+			} else {
+				rw.Header().Set("Set-Cookie", cookie.String())
+			}
+		}
+	}
+
+	setHeader(res.Header)
+	setCookie(res.Cookies())
+	rw.WriteHeader(res.StatusCode)
+
+	_, err = io.Copy(rw, res.Body)
+	if err != nil {
+		metric.HTTPError(rw, r, http.StatusInternalServerError, err.Error())
+	}
+
+	go metric.DoneFn(rw)
 }
 
 /**
-* handlerValidToken
-* @param key string
-* @return error
+* handlerResolve
+* @params w http.ResponseWriter, r *http.Request
 **/
-func (s *Server) HandlerValidToken(key string) (et.Item, error) {
-	if !utility.ValidStr(key, 0, []string{}) {
-		return et.Item{}, console.Alertf(msg.MSG_ATRIB_REQUIRED, "key")
+func (s *Server) handlerResolve(w http.ResponseWriter, r *http.Request) {
+	/* Begin telemetry */
+	metric := middleware.NewMetric(r)
+	w.Header().Set("Reqid", metric.ReqID)
+	ctx := context.WithValue(r.Context(), MetricKey, metric)
+
+	/* Get resolver */
+	resolver, r := s.getResolver(r)
+	console.Log("resolver", resolver.ToString())
+
+	/* Call search time since begin */
+	metric.CallSearchTime()
+	metric.SetPath(resolver.GetResolve())
+
+	/* If not found */
+	if resolver.Router == nil || resolver.URL == "" {
+		r.RequestURI = fmt.Sprintf(`%s://%s%s`, resolver.Scheme, resolver.Host, resolver.Path)
+		s.notFoundHandler.ServeHTTP(w, r.WithContext(ctx))
+		return
 	}
 
-	result, err := cache.Get(key, "")
-	if err != nil {
-		return et.Item{}, err
+	/* If HandlerFunc is handler */
+	router := resolver.Router
+	if router.Kind == TpHandler {
+		h := s.handlers[router.Id]
+		if h == nil {
+			r.RequestURI = fmt.Sprintf(`%s://%s%s`, resolver.Scheme, resolver.Host, resolver.Path)
+			s.notFoundHandler.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
+		handler := s.applyMiddlewares(http.HandlerFunc(h), router.middlewares)
+		handler.ServeHTTP(w, r.WithContext(ctx))
+		return
 	}
 
-	if result == "" {
-		return et.Item{}, console.Alertm(msg.RECORD_NOT_FOUND)
-	}
+	/* If REST is handler */
+	h := s.handlerApiRest
+	ctx = context.WithValue(ctx, ResoluteKey, resolver)
+	handler := s.applyMiddlewares(http.HandlerFunc(h), router.middlewares)
 
-	_, err = claim.ValidToken(result)
-	if err != nil {
-		return et.Item{}, err
-	}
-
-	return et.Item{
-		Ok: true,
-		Result: et.Json{
-			"key":   key,
-			"value": result,
-		},
-	}, nil
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
 /**
-* DeleteTokenByKey
-* @param id string
-* @return error
+* handlerReverseProxy
+* @params w http.ResponseWriter
+* @params r *http.Request
 **/
-func (s *Server) DeleteTokenByKey(key string) error {
-	if !utility.ValidStr(key, 0, []string{}) {
-		return console.Alertf(msg.MSG_ATRIB_REQUIRED, "key")
+func (s *Server) handlerReverseProxy(w http.ResponseWriter, r *http.Request) {
+	console.Debug(et.Json{
+		"Method":   r.Method,
+		"URL":      r.URL,
+		"Host":     r.Host,
+		"Path":     r.URL.Path,
+		"RawQuery": r.URL.RawQuery,
+		"Header":   r.Header,
+		"Body":     r.Body,
+	}.ToString())
+
+	proxy, ok := s.proxy[r.URL.Path]
+	if !ok {
+		target, _ := url.Parse("http://localhost:8081")
+		proxy = httputil.NewSingleHostReverseProxy(target)
+		s.proxy[r.URL.Path] = proxy
 	}
 
-	_, err := cache.Delete(key)
-	if err != nil {
-		return err
-	}
+	proxy.ServeHTTP(w, r)
+}
 
-	return nil
+func init() {
+	for _, v := range []string{
+		"Content-Security-Policy",
+		"Content-Length",
+	} {
+		commonHeader[v] = true
+	}
 }

@@ -440,8 +440,10 @@ func insert$2(projectId, statusId, id, name, description string, data et.Json, c
 
 	id = $2.GetId(id)
 	now := utility.Now()
-	data[jdb.KEY] = id
 	data[jdb.PROJECT_ID] = projectId
+	data[jdb.KEY] = id
+	data["name"] = name
+	data["description"] = description
 	_, err := $2.
 		Insert(data).
 		BeforeInsert(func(tx *jdb.Tx, data et.Json) error {
@@ -473,11 +475,11 @@ func insert$2(projectId, statusId, id, name, description string, data et.Json, c
 }
 
 /**
-* UpSert$2
+* Upsert$2
 * @param projectId, id, name, description string, data et.Json, createdBy string
 * @return dt.Object, error
 **/
-func UpSert$2(projectId, id, name, description string, data et.Json, createdBy string) (dt.Object, error) {
+func Upsert$2(projectId, id, name, description string, data et.Json, createdBy string) (dt.Object, error) {
 	if !utility.ValidStr(projectId, 0, []string{""}) {
 		return dt.Object{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, jdb.PROJECT_ID)
 	}
@@ -492,8 +494,10 @@ func UpSert$2(projectId, id, name, description string, data et.Json, createdBy s
 
 	id = $2.GetId(id)
 	now := utility.Now()
-	data[jdb.KEY] = id
 	data[jdb.PROJECT_ID] = projectId
+	data[jdb.KEY] = id
+	data["name"] = name
+	data["description"] = description
 	_, err := $2.
 		Upsert(data).
 		BeforeInsert(func(tx *jdb.Tx, data et.Json) error {
@@ -621,7 +625,7 @@ func (rt *Router) upsert$2(w http.ResponseWriter, r *http.Request) {
 	name := body.Str("name")
 	description := body.Str("description")
 	clientName := claim.GetClientName(r)
-	result, err := $4.UpSert$2(projectId, id, name, description, body, clientName)
+	result, err := $4.Upsert$2(projectId, id, name, description, body, clientName)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return

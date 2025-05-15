@@ -101,11 +101,78 @@ func (s *Server) setRoute(id, method, path, resolve string, kind TypeApi, header
 }
 
 /**
+* GetRouteById
+* @param id string
+* @return *Router
+**/
+func (s *Server) GetRouteById(id string) *Router {
+	idx := slices.IndexFunc(s.solvers, func(e *Router) bool { return e.Id == id })
+	if idx == -1 {
+		return nil
+	}
+
+	return s.solvers[idx]
+}
+
+/**
+* DeleteRouteById
+* @param id string
+* @return error
+**/
+func (s *Server) DeleteRouteById(id string, save bool) error {
+	idx := slices.IndexFunc(s.solvers, func(e *Router) bool { return e.Id == id })
+	if idx == -1 {
+		return mistake.New(MSG_ROUTE_NOT_FOUND)
+	}
+
+	router := s.solvers[idx]
+	pkg := router.pkg
+	if pkg != nil {
+		pkg.deleteRouteById(id)
+	}
+
+	method := router.Method
+	err := s.deleteRouteByMethod(method, id)
+	if err != nil {
+		return err
+	}
+
+	console.Logf("Api gateway", `[DELETE] %s:%s -> %s`, router.Method, router.Path, router.Resolve)
+	s.solvers = append(s.solvers[:idx], s.solvers[idx+1:]...)
+
+	if save {
+		go s.Save()
+	}
+
+	return nil
+}
+
+/**
+* deleteRouteByMethod
+* @param method, id string
+* @return error
+**/
+func (s *Server) deleteRouteByMethod(method, id string) error {
+	idx := slices.IndexFunc(s.router, func(e *Router) bool { return e.Tag == method })
+	if idx == -1 {
+		return console.Alertm("Method route not found")
+	}
+
+	router := s.router[idx]
+	ok := router.deleteById(id, true)
+	if !ok {
+		return console.Alertm("Route not found")
+	}
+
+	return nil
+}
+
+/**
 * SetResolve
 * @param private bool, id, method, path, resolve string, header et.Json, tpHeader router.TpHeader, excludeHeader []string, packageName string, saved bool
 * @return *Router, error
 **/
-func (s *Server) SetResolve(private bool, id, method, path, resolve string, header et.Json, tpHeader router.TpHeader, excludeHeader []string, packageName string, saved bool) (*Router, error) {
+func (s *Server) SetRouter(private bool, id, method, path, resolve string, header et.Json, tpHeader router.TpHeader, excludeHeader []string, packageName string, saved bool) (*Router, error) {
 	method = strings.ToUpper(method)
 	ok := methodMap[method]
 	if !ok {

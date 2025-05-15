@@ -3,7 +3,9 @@ package ettp
 import (
 	"fmt"
 	"net/http"
+	"net/http/httputil"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
@@ -80,7 +82,8 @@ type Config struct {
 	Web          string
 	Help         string
 	Port         int
-	PathUrl      string
+	PathApi      string
+	PathApp      string
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
 	IdleTimeout  time.Duration
@@ -104,7 +107,8 @@ type Server struct {
 	mux             *http.ServeMux
 	svr             *http.Server
 	ws              *ws.Hub
-	pathUrl         string
+	pathApi         string
+	pathApp         string
 	cors            *cors.Cors
 	middlewares     []func(http.Handler) http.Handler
 	authenticator   func(http.Handler) http.Handler
@@ -113,6 +117,7 @@ type Server struct {
 	router          []*Router
 	packages        []*Package
 	handlers        map[string]http.HandlerFunc
+	proxy           map[string]*httputil.ReverseProxy
 	mutex           *sync.RWMutex
 	readTimeout     time.Duration
 	writeTimeout    time.Duration
@@ -150,7 +155,8 @@ func New(config Config) (*Server, error) {
 		HostName:        hostName,
 		addr:            strs.Format(":%d", config.Port),
 		mux:             mux,
-		pathUrl:         config.PathUrl,
+		pathApi:         config.PathApi,
+		pathApp:         config.PathApp,
 		cors:            CorsAllowAll([]string{}),
 		notFoundHandler: notFoundHandler,
 		middlewares:     make([]func(http.Handler) http.Handler, 0),
@@ -158,6 +164,7 @@ func New(config Config) (*Server, error) {
 		router:          []*Router{},
 		packages:        []*Package{},
 		handlers:        make(map[string]http.HandlerFunc),
+		proxy:           make(map[string]*httputil.ReverseProxy),
 		mutex:           &sync.RWMutex{},
 		readTimeout:     config.ReadTimeout,
 		writeTimeout:    config.WriteTimeout,
@@ -167,7 +174,6 @@ func New(config Config) (*Server, error) {
 		keyFile:         config.KeyFile,
 		debug:           config.Debug,
 	}
-	srv.mux.HandleFunc(srv.pathUrl, srv.handlerResolve)
 	srv.svr = &http.Server{
 		Addr:         srv.addr,
 		Handler:      srv.cors.Handler(srv.mux),
@@ -175,6 +181,8 @@ func New(config Config) (*Server, error) {
 		WriteTimeout: srv.writeTimeout,
 		IdleTimeout:  srv.idleTimeout,
 	}
+	srv.mux.HandleFunc(srv.pathApi, srv.handlerResolve)
+	srv.mux.HandleFunc(srv.pathApp, srv.handlerReverseProxy)
 
 	return srv, nil
 }
@@ -389,5 +397,64 @@ func (s *Server) NewRoute() *Router {
 	return &Router{
 		server:      s,
 		middlewares: s.middlewares,
+	}
+}
+
+/**
+* GetPackages
+* @return et.Items
+**/
+func (s *Server) GetPackages(name string) et.Items {
+	var result = []et.Json{}
+	if name != "" {
+		idx := slices.IndexFunc(s.packages, func(e *Package) bool { return strs.Lowcase(e.Name) == strs.Lowcase(name) })
+		if idx != -1 {
+			pakage := s.packages[idx]
+			result = append(result, pakage.Describe())
+		}
+	} else {
+		for _, pakage := range s.packages {
+			result = append(result, pakage.Describe())
+		}
+	}
+
+	return et.Items{
+		Ok:     len(result) > 0,
+		Count:  len(result),
+		Result: result,
+	}
+}
+
+/**
+* GetRoutes
+* @return et.Items
+**/
+func (s *Server) GetRoutes() et.Items {
+	var result = []et.Json{}
+	for _, route := range s.router {
+		result = append(result, route.ToJson())
+	}
+
+	return et.Items{
+		Result: result,
+		Count:  len(result),
+		Ok:     len(result) > 0,
+	}
+}
+
+/**
+* GetSolvers
+* @return et.Items
+**/
+func (s *Server) GetSolvers() et.Items {
+	var result = []et.Json{}
+	for _, route := range s.solvers {
+		result = append(result, route.ToJson())
+	}
+
+	return et.Items{
+		Result: result,
+		Count:  len(result),
+		Ok:     len(result) > 0,
 	}
 }

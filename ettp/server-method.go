@@ -13,11 +13,11 @@ import (
 )
 
 /**
-* setHandlerFunc
+* setApiFunc
 * @param method, path string, handlerFn http.HandlerFunc, packageName string
 * @return *Router
 **/
-func (s *Server) setHandlerFunc(method, path string, handlerFn http.HandlerFunc, packageName string) *Router {
+func (s *Server) setApiFunc(method, path string, handlerFn http.HandlerFunc, packageName string) *Router {
 	method = strs.Uppcase(method)
 	ok := methodMap[method]
 	if !ok {
@@ -26,7 +26,7 @@ func (s *Server) setHandlerFunc(method, path string, handlerFn http.HandlerFunc,
 	}
 
 	id := cache.GenKey(method, path, packageName)
-	url := strs.Format("%s%s", s.pathUrl, path)
+	url := strs.Format("%s%s", s.pathApi, path)
 	url = strings.ReplaceAll(url, "//", "/")
 
 	route := s.setRoute(id, method, url, url, TpHandler, et.Json{}, router.TpReplaceHeader, []string{}, false, packageName, false)
@@ -54,7 +54,7 @@ func (s *Server) Private() *Router {
 * @param path string, handlerFn http.HandlerFunc, packageName string
 **/
 func (s *Server) Connect(path string, handlerFn http.HandlerFunc, packageName string) {
-	s.setHandlerFunc(CONNECT, path, handlerFn, packageName)
+	s.setApiFunc(CONNECT, path, handlerFn, packageName)
 }
 
 /**
@@ -62,7 +62,7 @@ func (s *Server) Connect(path string, handlerFn http.HandlerFunc, packageName st
 * @param path string, handlerFn http.HandlerFunc, packageName string
 **/
 func (s *Server) Delete(path string, handlerFn http.HandlerFunc, packageName string) {
-	s.setHandlerFunc(DELETE, path, handlerFn, packageName)
+	s.setApiFunc(DELETE, path, handlerFn, packageName)
 }
 
 /**
@@ -70,7 +70,7 @@ func (s *Server) Delete(path string, handlerFn http.HandlerFunc, packageName str
 * @param path string, handlerFn http.HandlerFunc, packageName string
 **/
 func (s *Server) Get(path string, handlerFn http.HandlerFunc, packageName string) {
-	s.setHandlerFunc(GET, path, handlerFn, packageName)
+	s.setApiFunc(GET, path, handlerFn, packageName)
 }
 
 /**
@@ -78,7 +78,7 @@ func (s *Server) Get(path string, handlerFn http.HandlerFunc, packageName string
 * @param path string, handlerFn http.HandlerFunc, packageName string
 **/
 func (s *Server) Head(path string, handlerFn http.HandlerFunc, packageName string) {
-	s.setHandlerFunc(HEAD, path, handlerFn, packageName)
+	s.setApiFunc(HEAD, path, handlerFn, packageName)
 }
 
 /**
@@ -86,7 +86,7 @@ func (s *Server) Head(path string, handlerFn http.HandlerFunc, packageName strin
 * @param path string, handlerFn http.HandlerFunc, packageName string
 **/
 func (s *Server) Options(path string, handlerFn http.HandlerFunc, packageName string) {
-	s.setHandlerFunc(OPTIONS, path, handlerFn, packageName)
+	s.setApiFunc(OPTIONS, path, handlerFn, packageName)
 }
 
 /**
@@ -94,7 +94,7 @@ func (s *Server) Options(path string, handlerFn http.HandlerFunc, packageName st
 * @param path string, handlerFn http.HandlerFunc, packageName string
 **/
 func (s *Server) Patch(path string, handlerFn http.HandlerFunc, packageName string) {
-	s.setHandlerFunc(PATCH, path, handlerFn, packageName)
+	s.setApiFunc(PATCH, path, handlerFn, packageName)
 }
 
 /**
@@ -102,7 +102,7 @@ func (s *Server) Patch(path string, handlerFn http.HandlerFunc, packageName stri
 * @param path string, handlerFn http.HandlerFunc, packageName string
 **/
 func (s *Server) Post(path string, handlerFn http.HandlerFunc, packageName string) {
-	s.setHandlerFunc(POST, path, handlerFn, packageName)
+	s.setApiFunc(POST, path, handlerFn, packageName)
 }
 
 /**
@@ -110,7 +110,7 @@ func (s *Server) Post(path string, handlerFn http.HandlerFunc, packageName strin
 * @param path string, handlerFn http.HandlerFunc, packageName string
 **/
 func (s *Server) Put(path string, handlerFn http.HandlerFunc, packageName string) {
-	s.setHandlerFunc(PUT, path, handlerFn, packageName)
+	s.setApiFunc(PUT, path, handlerFn, packageName)
 }
 
 /**
@@ -118,7 +118,7 @@ func (s *Server) Put(path string, handlerFn http.HandlerFunc, packageName string
 * @param path string, handlerFn http.HandlerFunc, packageName string
 **/
 func (s *Server) Trace(path string, handlerFn http.HandlerFunc, packageName string) {
-	s.setHandlerFunc(TRACE, path, handlerFn, packageName)
+	s.setApiFunc(TRACE, path, handlerFn, packageName)
 }
 
 /**

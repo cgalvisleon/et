@@ -134,7 +134,7 @@ func (s *Server) setRouter(w http.ResponseWriter, r *http.Request) {
 		excludeHeader := item.ArrayStr("exclude_header")
 		packageName := item.Str("package_name")
 		saved := i == n-1
-		router, err := s.SetResolve(private, id, method, path, resolve, header, tpHeader, excludeHeader, packageName, saved)
+		router, err := s.SetRouter(private, id, method, path, resolve, header, tpHeader, excludeHeader, packageName, saved)
 		if err != nil {
 			metric.HTTPError(w, r, http.StatusBadRequest, err.Error())
 			return

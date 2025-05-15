@@ -344,7 +344,7 @@ func (r *Router) With(middlewares ...func(http.Handler) http.Handler) *Router {
 * @param path string, handlerFn http.HandlerFunc, packageName string
 **/
 func (r *Router) Connect(path string, handlerFn http.HandlerFunc, packageName string) {
-	result := r.server.setHandlerFunc(CONNECT, path, handlerFn, packageName)
+	result := r.server.setApiFunc(CONNECT, path, handlerFn, packageName)
 	result.middlewares = append(result.middlewares, r.middlewares...)
 }
 
@@ -353,7 +353,7 @@ func (r *Router) Connect(path string, handlerFn http.HandlerFunc, packageName st
 * @param path string, handlerFn http.HandlerFunc, packageName string
 **/
 func (r *Router) Delete(path string, handlerFn http.HandlerFunc, packageName string) {
-	result := r.server.setHandlerFunc(DELETE, path, handlerFn, packageName)
+	result := r.server.setApiFunc(DELETE, path, handlerFn, packageName)
 	result.middlewares = append(result.middlewares, r.middlewares...)
 }
 
@@ -362,7 +362,7 @@ func (r *Router) Delete(path string, handlerFn http.HandlerFunc, packageName str
 * @param path string, handlerFn http.HandlerFunc, packageName string
 **/
 func (r *Router) Get(path string, handlerFn http.HandlerFunc, packageName string) {
-	result := r.server.setHandlerFunc(GET, path, handlerFn, packageName)
+	result := r.server.setApiFunc(GET, path, handlerFn, packageName)
 	result.middlewares = append(result.middlewares, r.middlewares...)
 }
 
@@ -371,7 +371,7 @@ func (r *Router) Get(path string, handlerFn http.HandlerFunc, packageName string
 * @param path string, handlerFn http.HandlerFunc, packageName string
 **/
 func (r *Router) Head(path string, handlerFn http.HandlerFunc, packageName string) {
-	result := r.server.setHandlerFunc(HEAD, path, handlerFn, packageName)
+	result := r.server.setApiFunc(HEAD, path, handlerFn, packageName)
 	result.middlewares = append(result.middlewares, r.middlewares...)
 }
 
@@ -380,7 +380,7 @@ func (r *Router) Head(path string, handlerFn http.HandlerFunc, packageName strin
 * @param path string, handlerFn http.HandlerFunc, packageName string
 **/
 func (r *Router) Options(path string, handlerFn http.HandlerFunc, packageName string) {
-	result := r.server.setHandlerFunc(OPTIONS, path, handlerFn, packageName)
+	result := r.server.setApiFunc(OPTIONS, path, handlerFn, packageName)
 	result.middlewares = append(result.middlewares, r.middlewares...)
 }
 
@@ -389,7 +389,7 @@ func (r *Router) Options(path string, handlerFn http.HandlerFunc, packageName st
 * @param path string, handlerFn http.HandlerFunc, packageName string
 **/
 func (r *Router) Patch(path string, handlerFn http.HandlerFunc, packageName string) {
-	result := r.server.setHandlerFunc(PATCH, path, handlerFn, packageName)
+	result := r.server.setApiFunc(PATCH, path, handlerFn, packageName)
 	result.middlewares = append(result.middlewares, r.middlewares...)
 }
 
@@ -398,7 +398,7 @@ func (r *Router) Patch(path string, handlerFn http.HandlerFunc, packageName stri
 * @param path string, handlerFn http.HandlerFunc, packageName string
 **/
 func (r *Router) Post(path string, handlerFn http.HandlerFunc, packageName string) {
-	result := r.server.setHandlerFunc(POST, path, handlerFn, packageName)
+	result := r.server.setApiFunc(POST, path, handlerFn, packageName)
 	result.middlewares = append(result.middlewares, r.middlewares...)
 }
 
@@ -407,7 +407,7 @@ func (r *Router) Post(path string, handlerFn http.HandlerFunc, packageName strin
 * @param path string, handlerFn http.HandlerFunc, packageName string
 **/
 func (r *Router) Put(path string, handlerFn http.HandlerFunc, packageName string) {
-	result := r.server.setHandlerFunc(PUT, path, handlerFn, packageName)
+	result := r.server.setApiFunc(PUT, path, handlerFn, packageName)
 	result.middlewares = append(result.middlewares, r.middlewares...)
 }
 
@@ -416,6 +416,6 @@ func (r *Router) Put(path string, handlerFn http.HandlerFunc, packageName string
 * @param path string, handlerFn http.HandlerFunc, packageName string
 **/
 func (r *Router) Trace(path string, handlerFn http.HandlerFunc, packageName string) {
-	result := r.server.setHandlerFunc(TRACE, path, handlerFn, packageName)
+	result := r.server.setApiFunc(TRACE, path, handlerFn, packageName)
 	result.middlewares = append(result.middlewares, r.middlewares...)
 }

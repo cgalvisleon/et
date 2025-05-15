@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -373,6 +374,12 @@ func Quote(val interface{}) any {
 		return strs.Format(fmt, v.ToString())
 	case map[string]interface{}:
 		return strs.Format(fmt, et.Json(v).ToString())
+	case []et.Json:
+		jsonbytes, err := json.Marshal(v)
+		if err != nil {
+			return strs.Format(fmt, `[]`)
+		}
+		return strs.Format(fmt, string(jsonbytes))
 	case []string:
 		var r string
 		for i, _v := range v {

@@ -7,22 +7,22 @@ import (
 )
 
 func (s *Server) initEvents() {
-	err := event.Subscribe(rt.APIGATEWAY_SET, s.eventSetResolve)
+	err := event.Subscribe(rt.APIGATEWAY_SET, s.eventSetRouter)
 	if err != nil {
 		console.Error(err)
 	}
 
-	err = event.Subscribe(rt.APIGATEWAY_DELETE, s.eventDeleteResolve)
+	err = event.Subscribe(rt.APIGATEWAY_DELETE, s.eventDeleteRouter)
 	if err != nil {
 		console.Error(err)
 	}
 }
 
 /**
-* eventSetResolve
+* eventSetRouter
 * @param m event.Message
 **/
-func (s *Server) eventSetResolve(m event.Message) {
+func (s *Server) eventSetRouter(m event.Message) {
 	data := m.Data
 	fromId := data.Str("from_id")
 	if fromId == s.Id {
@@ -38,17 +38,17 @@ func (s *Server) eventSetResolve(m event.Message) {
 	private := data.Bool("private")
 	packageName := data.Str("package_name")
 	id := data.ValStr("-1", "_id")
-	_, err := s.SetResolve(private, id, method, path, resolve, header, tpHeader, excludeHeader, packageName, true)
+	_, err := s.SetRouter(private, id, method, path, resolve, header, tpHeader, excludeHeader, packageName, true)
 	if err != nil {
 		console.Alertf(`%s error:%s`, s.Name, err.Error())
 	}
 }
 
 /**
-* eventDeleteResolve
+* eventDeleteRouter
 * @param m event.Message
 **/
-func (s *Server) eventDeleteResolve(m event.Message) {
+func (s *Server) eventDeleteRouter(m event.Message) {
 	data := m.Data
 	fromId := data.Str("from_id")
 	if fromId == s.Id {

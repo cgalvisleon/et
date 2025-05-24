@@ -11,7 +11,7 @@ import (
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/request"
-	"github.com/cgalvisleon/et/router"
+	rt "github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/strs"
 )
 
@@ -90,7 +90,7 @@ func findSolver(s *Server, r *http.Request) *solver {
 	var router *Router
 	path := r.URL.Path
 	method := r.Method
-	idx := getRouteIndex(method, s.router)
+	idx := getRouterIndexByTag(method, s.router)
 	if idx == -1 {
 		return nil
 	} else {
@@ -105,7 +105,7 @@ func findSolver(s *Server, r *http.Request) *solver {
 			continue
 		}
 
-		find := router.find(tag)
+		find := router.getRouterByTag(tag)
 		if find == nil {
 			find, _ = router.getParams(0)
 			if find == nil {
@@ -231,56 +231,6 @@ func (s *Server) getResolver(r *http.Request) (*Resolver, *http.Request) {
 		scheme = "https"
 	}
 
-	var header = http.Header{}
-	var url string
-	solver := findSolver(s, r)
-	if solver != nil {
-		url = strs.Append(solver.resolve, r.URL.RawQuery, "?")
-		if solver.router == nil {
-			console.Alertf(`%s:%s:%s`, MSG_ROUTE_NOT_FOUND, r.Method, r.URL.Path)
-		} else {
-			switch solver.router.TpHeader {
-			case router.TpKeepHeader: /* Keep header */
-				for key := range solver.router.Header {
-					value := solver.router.Header.ArrayStr(key)
-					for _, v := range value {
-						header.Add(key, v)
-					}
-				}
-			case router.TpJoinHeader: /* Join header */
-				for key := range solver.router.Header {
-					value := solver.router.Header.ArrayStr(key)
-					for _, v := range value {
-						header.Add(key, v)
-					}
-				}
-				for key, value := range r.Header {
-					if !slices.Contains(solver.router.ExcludeHeader, key) {
-						for i, v := range value {
-							if i == 0 {
-								header.Set(key, v)
-							} else {
-								header.Add(key, v)
-							}
-						}
-					}
-				}
-			case router.TpReplaceHeader: /* Replace header */
-				for key, value := range r.Header {
-					if !slices.Contains(solver.router.ExcludeHeader, key) {
-						for i, v := range value {
-							if i == 0 {
-								header.Set(key, v)
-							} else {
-								header.Add(key, v)
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
 	var body interface{}
 	requestBody, err := request.ReadBody(r.Body)
 	if err != nil {
@@ -296,7 +246,6 @@ func (s *Server) getResolver(r *http.Request) (*Resolver, *http.Request) {
 	}
 
 	r.Body = io.NopCloser(bytes.NewBuffer(requestBody.Data))
-
 	result := &Resolver{
 		Server:     s,
 		Method:     r.Method,
@@ -306,13 +255,70 @@ func (s *Server) getResolver(r *http.Request) (*Resolver, *http.Request) {
 		Query:      r.URL.Query(),
 		RequestURI: r.RequestURI,
 		RemoteAddr: r.RemoteAddr,
-		Header:     header,
 		Body:       body,
 		Host:       r.Host,
 		Scheme:     scheme,
-		URL:        url,
-		Router:     solver.router,
 	}
+
+	var header = http.Header{}
+	var url string
+	solver := findSolver(s, r)
+	if solver == nil {
+		result.Header = header
+		result.URL = url
+		result.Router = nil
+
+		return result, r
+	}
+
+	url = strs.Append(solver.resolve, r.URL.RawQuery, "?")
+	if solver.router == nil {
+		console.Alertf(`%s:%s:%s`, MSG_ROUTE_NOT_FOUND, r.Method, r.URL.Path)
+	} else {
+		switch solver.router.TpHeader {
+		case rt.TpKeepHeader: /* Keep header */
+			for key := range solver.router.Header {
+				value := solver.router.Header.ArrayStr(key)
+				for _, v := range value {
+					header.Add(key, v)
+				}
+			}
+		case rt.TpJoinHeader: /* Join header */
+			for key := range solver.router.Header {
+				value := solver.router.Header.ArrayStr(key)
+				for _, v := range value {
+					header.Add(key, v)
+				}
+			}
+			for key, value := range r.Header {
+				if !slices.Contains(solver.router.ExcludeHeader, key) {
+					for i, v := range value {
+						if i == 0 {
+							header.Set(key, v)
+						} else {
+							header.Add(key, v)
+						}
+					}
+				}
+			}
+		case rt.TpReplaceHeader: /* Replace header */
+			for key, value := range r.Header {
+				if !slices.Contains(solver.router.ExcludeHeader, key) {
+					for i, v := range value {
+						if i == 0 {
+							header.Set(key, v)
+						} else {
+							header.Add(key, v)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	result.Header = header
+	result.URL = url
+	result.Router = solver.router
 
 	return result, r
 }

@@ -11,9 +11,11 @@ import (
 
 type Message struct {
 	CreatedAt time.Time `json:"created_at"`
+	FromId    string    `json:"from_id"`
 	Id        string    `json:"id"`
 	Channel   string    `json:"channel"`
 	Data      et.Json   `json:"data"`
+	Myself    bool      `json:"myself"`
 }
 
 /**

@@ -5,7 +5,6 @@ import (
 
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/nats-io/nats.go"
 )
@@ -28,7 +27,7 @@ func ConnectTo(host, user, password string) (*Conn, error) {
 	logs.Logf("NATS", `Connected host:%s`, host)
 
 	return &Conn{
-		Id:              reg.GenId("nats"),
+		id:              utility.UUID(),
 		Conn:            client,
 		eventCreatedSub: map[string]*nats.Subscription{},
 		mutex:           &sync.RWMutex{},

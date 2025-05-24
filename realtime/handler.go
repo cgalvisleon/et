@@ -6,7 +6,6 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
@@ -145,7 +144,7 @@ func Stack(channel string, reciveFn func(ws.Message)) {
 func Work(event string, data et.Json) et.Json {
 	work := et.Json{
 		"created_at": timezone.Now(),
-		"_id":        reg.GenId("work"),
+		"_id":        utility.UUID(),
 		"from_id":    conn.ClientId,
 		"event":      event,
 		"data":       data,

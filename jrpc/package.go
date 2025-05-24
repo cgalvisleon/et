@@ -9,62 +9,18 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 )
 
 type Package struct {
-	Name     string    `json:"name"`
-	Host     string    `json:"host"`
-	Port     int       `json:"port"`
-	Solvers  []*Solver `json:"routes"`
-	Replicas int       `json:"replicas"`
-	started  bool      `json:"-"`
-}
-
-/**
-* getPackages
-* @return []*Package, error
-**/
-func getPackages() ([]*Package, error) {
-	var result []*Package
-	bt, err := json.Marshal(result)
-	if err != nil {
-		return nil, err
-	}
-
-	str, err := cache.Get(sourceKey, string(bt))
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal([]byte(str), &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-/**
-* serialize
-* @return et.Json
-**/
-func (s *Package) serialize() et.Json {
-	solvers := []et.Json{}
-	for _, solver := range s.Solvers {
-		solvers = append(solvers, solver.serialize())
-	}
-
-	return et.Json{
-		"name":     s.Name,
-		"host":     s.Host,
-		"port":     s.Port,
-		"solvers":  solvers,
-		"replicas": s.Replicas,
-	}
+	Name    string    `json:"name"`
+	Host    string    `json:"host"`
+	Port    int       `json:"port"`
+	Solvers []*Solver `json:"routes"`
+	started bool      `json:"-"`
 }
 
 /**
@@ -72,36 +28,18 @@ func (s *Package) serialize() et.Json {
 * @return et.Json
 **/
 func (s *Package) Describe() et.Json {
-	return s.serialize()
-}
-
-/**
-* Save
-* @return error
-**/
-func (s *Package) save() error {
-	packages, err := getPackages()
-	if err != nil {
-		return err
+	solvers := []et.Json{}
+	for _, solver := range s.Solvers {
+		solvers = append(solvers, solver.serialize())
 	}
 
-	idx := slices.IndexFunc(packages, func(p *Package) bool { return p.Name == s.Name })
-	if idx != -1 {
-		s.Replicas = packages[idx].Replicas + 1
-		packages[idx] = s
-	} else {
-		s.Replicas = 1
-		packages = append(packages, s)
+	return et.Json{
+		"name":    s.Name,
+		"host":    s.Host,
+		"port":    s.Port,
+		"count":   len(s.Solvers),
+		"solvers": solvers,
 	}
-
-	bt, err := json.Marshal(packages)
-	if err != nil {
-		return err
-	}
-
-	cache.Set(sourceKey, string(bt), 0)
-
-	return nil
 }
 
 /**
@@ -119,7 +57,7 @@ func (s *Package) start() error {
 	}
 
 	s.started = true
-	logs.Logf("Rpc", `Running on %s%s`, s.Host, listener.Addr())
+	logs.Logf("Rpc", `%s running on %s%s`, s.Name, s.Host, listener.Addr())
 
 	for {
 		conn, err := listener.Accept()
@@ -163,13 +101,12 @@ func (s *Package) mount(services any) error {
 		structName = strs.DaskSpace(structName)
 		name := strs.DaskSpace(metodo.Name)
 		solver := &Solver{
-			PackageName: s.Name,
-			Host:        s.Host,
-			Port:        s.Port,
-			StructName:  structName,
-			Method:      name,
-			Inputs:      inputs,
-			Output:      outputs,
+			Host:       s.Host,
+			Port:       s.Port,
+			StructName: structName,
+			Method:     name,
+			Inputs:     inputs,
+			Output:     outputs,
 		}
 		s.Solvers = append(s.Solvers, solver)
 	}
@@ -180,32 +117,36 @@ func (s *Package) mount(services any) error {
 }
 
 /**
-* UnMount
+* UnMountPackage
+* @param name string
 * @return error
 **/
-func (s *Package) unMount() error {
-	packages, err := getPackages()
-	if err != nil {
-		return logs.Alert(err)
+func UnMountPackage(name string) error {
+	var data = &Storage{
+		Packages: make([]*Package, 0),
 	}
-
-	idx := slices.IndexFunc(packages, func(p *Package) bool { return p.Name == s.Name })
-	if idx != -1 {
-		pkg := packages[idx]
-		pkg.Replicas = pkg.Replicas - 1
-		if pkg.Replicas == 0 {
-			packages = slices.Delete(packages, idx, idx+1)
-		} else {
-			packages[idx] = pkg
-		}
-	}
-
-	bt, err := json.Marshal(packages)
+	storage, err := file.NewSyncFile("data", "jrpc", data)
 	if err != nil {
 		return err
 	}
 
-	cache.Set(sourceKey, string(bt), 0)
+	err = storage.Load(&data)
+	if err != nil {
+		return err
+	}
+
+	idx := slices.IndexFunc(data.Packages, func(p *Package) bool { return p.Name == name })
+	if idx != -1 {
+		data.Packages = slices.Delete(data.Packages, idx, idx+1)
+	}
+
+	bt, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	storage.Data = bt
+	storage.Save()
 
 	return nil
 }

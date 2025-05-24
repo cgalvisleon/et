@@ -16,6 +16,11 @@ func (s *Server) initEvents() {
 	if err != nil {
 		console.Error(err)
 	}
+
+	err = event.Subscribe(rt.APIGATEWAY_RESET, s.eventReset)
+	if err != nil {
+		console.Error(err)
+	}
 }
 
 /**
@@ -23,12 +28,12 @@ func (s *Server) initEvents() {
 * @param m event.Message
 **/
 func (s *Server) eventSetRouter(m event.Message) {
-	data := m.Data
-	fromId := data.Str("from_id")
-	if fromId == s.Id {
+	if m.Myself {
 		return
 	}
 
+	data := m.Data
+	id := data.ValStr("", "id")
 	method := data.Str("method")
 	path := data.Str("path")
 	resolve := data.Str("resolve")
@@ -37,11 +42,7 @@ func (s *Server) eventSetRouter(m event.Message) {
 	excludeHeader := data.ArrayStr("exclude_header")
 	private := data.Bool("private")
 	packageName := data.Str("package_name")
-	id := data.ValStr("-1", "_id")
-	_, err := s.SetRouter(private, id, method, path, resolve, header, tpHeader, excludeHeader, packageName, true)
-	if err != nil {
-		console.Alertf(`%s error:%s`, s.Name, err.Error())
-	}
+	s.setRouter(id, method, path, resolve, TpApiRest, header, tpHeader, excludeHeader, private, packageName, true)
 }
 
 /**
@@ -49,15 +50,29 @@ func (s *Server) eventSetRouter(m event.Message) {
 * @param m event.Message
 **/
 func (s *Server) eventDeleteRouter(m event.Message) {
-	data := m.Data
-	fromId := data.Str("from_id")
-	if fromId == s.Id {
+	if m.Myself {
 		return
 	}
 
-	id := data.Str("_id")
+	data := m.Data
+	id := data.Str("id")
 	err := s.DeleteRouteById(id, true)
 	if err != nil {
 		console.Alertf(`%s error:%s`, s.Name, err.Error())
 	}
+}
+
+/**
+* eventReset
+* @param m event.Message
+**/
+func (s *Server) eventReset(m event.Message) {
+	if m.Myself {
+		return
+	}
+
+	data := m.Data
+	console.Debug("eventReset:", data.ToString())
+
+	s.Reset()
 }

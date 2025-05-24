@@ -25,13 +25,17 @@ func (s *Server) setApiFunc(method, path string, handlerFn http.HandlerFunc, pac
 		return nil
 	}
 
-	id := cache.GenKey(method, path, packageName)
+	id := cache.GenKey(method, path)
 	url := strs.Format("%s%s", s.pathApi, path)
 	url = strings.ReplaceAll(url, "//", "/")
+	route, err := s.setRouter(id, method, url, url, TpHandler, et.Json{}, router.TpReplaceHeader, []string{}, false, packageName, false)
+	if err != nil {
+		console.Alertf(err.Error())
+		return nil
+	}
 
-	route := s.setRoute(id, method, url, url, TpHandler, et.Json{}, router.TpReplaceHeader, []string{}, false, packageName, false)
 	if route != nil {
-		s.handlers[route.Id] = handlerFn
+		s.handlers[route.Id] = NewApiFunc(id, method, path, handlerFn, packageName)
 	}
 
 	return route
@@ -43,7 +47,10 @@ func (s *Server) setApiFunc(method, path string, handlerFn http.HandlerFunc, pac
 **/
 func (s *Server) Private() *Router {
 	if s.authenticator == nil {
-		return s.NewRoute()
+		return &Router{
+			server:      s,
+			middlewares: s.middlewares,
+		}
 	}
 
 	return s.With(s.authenticator)
@@ -145,10 +152,10 @@ func (s *Server) PublicRoute(method, path string, h http.HandlerFunc, packageNam
 }
 
 /**
-* ProtectRoute
+* PrivateRoute
 * @param method, path, handlerFn, packageName string
 **/
-func (s *Server) ProtectRoute(method, path string, h http.HandlerFunc, packageName string) {
+func (s *Server) PrivateRoute(method, path string, h http.HandlerFunc, packageName string) {
 	router := s.Private()
 	switch method {
 	case "GET":
@@ -169,11 +176,24 @@ func (s *Server) ProtectRoute(method, path string, h http.HandlerFunc, packageNa
 }
 
 /**
+* ProtectRoute
+* @param method, path, handlerFn, packageName string
+**/
+func (s *Server) ProtectRoute(method, path string, h http.HandlerFunc, packageName string) {
+	s.PrivateRoute(method, path, h, packageName)
+}
+
+/**
 * AuthorizationRoute
 * @param method, path, handlerFn, packageName string
 **/
 func (s *Server) AuthorizationRoute(method, path string, h http.HandlerFunc, packageName string) {
-	router := s.With(s.authenticator).With(middleware.Authorization)
+	if middleware.AuthorizationMiddleware == nil {
+		console.Alertm("AuthorizationMiddleware not set")
+		return
+	}
+
+	router := s.With(s.authenticator).With(middleware.AuthorizationMiddleware)
 	switch method {
 	case "GET":
 		router.Get(path, h, packageName)

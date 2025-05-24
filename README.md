@@ -38,10 +38,10 @@ go run ./cmd/ws/client
 go mod tidy &&
 gofmt -w . &&
 git update &&
-git tag v0.1.0 &&
+git tag v0.1.1 &&
 git tags
 
-go get github.com/cgalvisleon/et@v0.1.0
+go get github.com/cgalvisleon/et@v0.1.1
 ```
 
 ## Condicion de carrera

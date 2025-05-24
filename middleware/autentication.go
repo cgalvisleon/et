@@ -94,14 +94,20 @@ func Autentication(next http.Handler) http.Handler {
 		ctx = context.WithValue(ctx, claim.DeviceKey, clm.Device)
 		ctx = context.WithValue(ctx, claim.NameKey, clm.Name)
 		ctx = context.WithValue(ctx, claim.UsernameKey, clm.Username)
-		ctx = context.WithValue(ctx, claim.TagKey, clm.Tag)
-
+		ctx = context.WithValue(ctx, claim.DataKey, clm.Data)
+		ctx = context.WithValue(ctx, claim.DurationKey, clm.Duration)
 		now := utility.Now()
+		hostName := r.Host
 		data := et.Json{
+			"date_at":   now,
 			"serviceId": serviceId,
 			"clientId":  clm.ID,
-			"last_use":  now,
+			"app":       clm.App,
+			"device":    clm.Device,
+			"name":      clm.Name,
+			"username":  clm.Username,
 			"host_name": hostName,
+			"duration":  clm.Duration,
 			"token":     token,
 		}
 

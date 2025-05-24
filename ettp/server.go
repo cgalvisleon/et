@@ -3,19 +3,16 @@ package ettp
 import (
 	"fmt"
 	"net/http"
-	"net/http/httputil"
 	"os"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/file"
-	"github.com/cgalvisleon/et/router"
+	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
@@ -23,61 +20,8 @@ import (
 	"github.com/rs/cors"
 )
 
-type TypeApi int
-
-const (
-	TpHandler TypeApi = iota
-	TpRest
-)
-
-func (t TypeApi) String() string {
-	switch t {
-	case TpHandler:
-		return "Handler"
-	case TpRest:
-		return "Rest"
-	default:
-		return "Unknown"
-	}
-}
-
-func IntToTypeApi(i int) TypeApi {
-	switch i {
-	case 1:
-		return TpRest
-	default:
-		return TpHandler
-	}
-}
-
-const (
-	CONNECT    = "CONNECT"
-	DELETE     = "DELETE"
-	GET        = "GET"
-	HEAD       = "HEAD"
-	OPTIONS    = "OPTIONS"
-	PATCH      = "PATCH"
-	POST       = "POST"
-	PUT        = "PUT"
-	TRACE      = "TRACE"
-	ROUTER_KEY = "apigateway-router"
-)
-
-var methodMap = map[string]bool{
-	CONNECT: true,
-	DELETE:  true,
-	GET:     true,
-	HEAD:    true,
-	OPTIONS: true,
-	PATCH:   true,
-	POST:    true,
-	PUT:     true,
-	TRACE:   true,
-}
-
 type Config struct {
 	Name         string
-	Version      string
 	Company      string
 	Web          string
 	Help         string
@@ -102,7 +46,6 @@ type Server struct {
 	Web             string
 	Help            string
 	HostName        string
-	Storage         *file.SyncFile
 	addr            string
 	mux             *http.ServeMux
 	svr             *http.Server
@@ -113,11 +56,11 @@ type Server struct {
 	middlewares     []func(http.Handler) http.Handler
 	authenticator   func(http.Handler) http.Handler
 	notFoundHandler http.HandlerFunc
-	solvers         []*Router
 	router          []*Router
+	solvers         []*Router
 	packages        []*Package
-	handlers        map[string]http.HandlerFunc
-	proxy           map[string]*httputil.ReverseProxy
+	handlers        map[string]*ApiFunc
+	proxys          map[string]*Proxy
 	mutex           *sync.RWMutex
 	readTimeout     time.Duration
 	writeTimeout    time.Duration
@@ -125,6 +68,7 @@ type Server struct {
 	tls             bool
 	certFile        string
 	keyFile         string
+	storageKey      string
 	debug           bool
 }
 
@@ -142,13 +86,14 @@ func New(config Config) (*Server, error) {
 	}
 
 	/* Http ServeMux */
+	version := "v0.0.1"
 	hostName, _ := os.Hostname()
 	mux := http.NewServeMux()
 	srv := &Server{
 		CreatedAt:       timezone.NowTime(),
 		Id:              utility.UUID(),
 		Name:            config.Name,
-		Version:         config.Version,
+		Version:         version,
 		Company:         config.Company,
 		Web:             config.Web,
 		Help:            config.Help,
@@ -160,11 +105,11 @@ func New(config Config) (*Server, error) {
 		cors:            CorsAllowAll([]string{}),
 		notFoundHandler: notFoundHandler,
 		middlewares:     make([]func(http.Handler) http.Handler, 0),
-		solvers:         []*Router{},
 		router:          []*Router{},
+		solvers:         []*Router{},
 		packages:        []*Package{},
-		handlers:        make(map[string]http.HandlerFunc),
-		proxy:           make(map[string]*httputil.ReverseProxy),
+		handlers:        make(map[string]*ApiFunc),
+		proxys:          make(map[string]*Proxy),
 		mutex:           &sync.RWMutex{},
 		readTimeout:     config.ReadTimeout,
 		writeTimeout:    config.WriteTimeout,
@@ -172,6 +117,7 @@ func New(config Config) (*Server, error) {
 		tls:             config.TLS,
 		certFile:        config.CertFile,
 		keyFile:         config.KeyFile,
+		storageKey:      fmt.Sprintf("%s-%s", config.Name, version),
 		debug:           config.Debug,
 	}
 	srv.svr = &http.Server{
@@ -206,42 +152,6 @@ func (s *Server) version() et.Json {
 }
 
 /**
-* Empty
-**/
-func (s *Server) Empty() []string {
-	s.Storage.Empty()
-	result := []string{}
-	for _, pk := range s.packages {
-		result = append(result, pk.Name)
-	}
-
-	s.solvers = []*Router{}
-	s.router = []*Router{}
-	s.packages = []*Package{}
-
-	return result
-}
-
-/**
-* Reset
-**/
-func (s *Server) Reset() {
-	pks := s.Empty()
-	s.Load()
-	s.LoadWS()
-	s.Save()
-
-	for _, pk := range pks {
-		if pk == s.Name {
-			continue
-		}
-
-		channel := fmt.Sprintf(`%s/%s`, router.APIGATEWAY_RESET, pk)
-		event.Publish(channel, et.Json{})
-	}
-}
-
-/**
 * Start
 **/
 func (s *Server) Start() error {
@@ -259,46 +169,32 @@ func (s *Server) Start() error {
 		}
 	}()
 
-	err := s.Load()
-	if err != nil {
+	if err := s.load(); err != nil {
 		return err
 	}
 
 	s.initEvents()
-	s.LoadWS()
 
 	return nil
 }
 
 /**
-* StartWS
+* Reset
 **/
-func (s *Server) LoadWS() {
-	wsStart := config.Bool("WS_START", false)
-	if !wsStart {
-		return
+func (s *Server) Reset() error {
+	s.router = []*Router{}
+	s.solvers = []*Router{}
+	s.packages = []*Package{}
+
+	if err := s.Save(); err != nil {
+		return err
 	}
 
-	if config.Validate([]string{
-		"REDIS_HOST",
-		"REDIS_PASSWORD",
-		"REDIS_DB",
-	}) != nil {
-		return
+	for _, handler := range s.handlers {
+		s.setApiFunc(handler.Method, handler.Path, handler.HandlerFn, handler.PackageName)
 	}
 
-	if s.ws == nil {
-		s.ws = ws.NewHub()
-		s.ws.Start()
-		s.ws.JoinTo(et.Json{
-			"adapter":  "redis",
-			"host":     config.String("REDIS_HOST", ""),
-			"dbname":   config.Int("REDIS_DB", 0),
-			"password": config.String("REDIS_PASSWORD", ""),
-		})
-	}
-
-	s.mountHandlerFuncWS()
+	return nil
 }
 
 /**
@@ -390,17 +286,6 @@ func (s *Server) Authenticator(middleware func(http.Handler) http.Handler) *Serv
 }
 
 /**
-* NewRoute
-* @return *Router
-**/
-func (s *Server) NewRoute() *Router {
-	return &Router{
-		server:      s,
-		middlewares: s.middlewares,
-	}
-}
-
-/**
 * GetPackages
 * @return et.Items
 **/
@@ -426,10 +311,10 @@ func (s *Server) GetPackages(name string) et.Items {
 }
 
 /**
-* GetRoutes
+* GetRouter
 * @return et.Items
 **/
-func (s *Server) GetRoutes() et.Items {
+func (s *Server) GetRouter() et.Items {
 	var result = []et.Json{}
 	for _, route := range s.router {
 		result = append(result, route.ToJson())
@@ -443,18 +328,9 @@ func (s *Server) GetRoutes() et.Items {
 }
 
 /**
-* GetSolvers
-* @return et.Items
+* SetAuthorizationMiddleware
+* @param f middleware.AuthorizationMiddleware
 **/
-func (s *Server) GetSolvers() et.Items {
-	var result = []et.Json{}
-	for _, route := range s.solvers {
-		result = append(result, route.ToJson())
-	}
-
-	return et.Items{
-		Result: result,
-		Count:  len(result),
-		Ok:     len(result) > 0,
-	}
+func (s *Server) SetAuthorizationMiddleware(f func(next http.Handler) http.Handler) {
+	middleware.SetAuthorizationMiddleware(f)
 }

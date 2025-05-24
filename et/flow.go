@@ -131,7 +131,7 @@ func (s *Funcs) Run() (Item, error) {
 			argsValues[j] = reflect.ValueOf(arg)
 		}
 
-		logs.Logf("workflow", "Execute func:%s step:%d - params:%s", funcName, i, fmt.Sprint(f.args))
+		logs.Logf("workflow", "Execute func:%s step:%d", funcName, i)
 		switch f.tpRun {
 		case Gocontext:
 			if i == 0 {

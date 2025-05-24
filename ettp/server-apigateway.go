@@ -1,6 +1,7 @@
 package ettp
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/cgalvisleon/et/config"
@@ -14,19 +15,18 @@ import (
 )
 
 /**
-* mountHandlerFunc
+* mountApiGatewayFunc
 **/
-func (s *Server) mountHandlerFunc() {
+func (s *Server) mountApiGatewayFunc() {
 	s.Get("/apigateway/version", s.getVersion, s.Name)
 	s.Get("/apigateway/test/{id}/test", s.getVersion, s.Name)
 	s.Private().Get("/apigateway/events", s.getEvents, s.Name)
 	s.Private().Get("/apigateway/{id}", s.getRouteById, s.Name)
-	s.Private().Post("/apigateway", s.setRouter, s.Name)
+	s.Private().Post("/apigateway", s.upsetRouter, s.Name)
 	s.Private().Delete("/apigateway/{id}", s.deleteRouteById, s.Name)
-	s.Private().Get("/apigateway/solvers", s.getSolvers, s.Name)
-	s.Private().Get("/apigateway/routers", s.getRouters, s.Name)
+	s.Private().Get("/apigateway/router", s.getRouter, s.Name)
 	s.Private().Get("/apigateway/packages", s.getPakages, s.Name)
-	s.Private().Patch("/apigateway/reset", s.reset, s.Name)
+	s.Private().Post("/apigateway/reset", s.reset, s.Name)
 	/* RPC */
 	s.Private().Get("/apigateway/rpc", jrpc.ListRouters, s.Name)
 	s.Private().Post("/apigateway/rpc", jrpc.HttpCalcItem, s.Name)
@@ -108,11 +108,11 @@ func (s *Server) getRouteById(w http.ResponseWriter, r *http.Request) {
 }
 
 /**
-* setRouter
+* upsetRouter
 * @params w http.ResponseWriter
 * @params r *http.Request
 **/
-func (s *Server) setRouter(w http.ResponseWriter, r *http.Request) {
+func (s *Server) upsetRouter(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
 	if !ok {
 		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
@@ -125,7 +125,7 @@ func (s *Server) setRouter(w http.ResponseWriter, r *http.Request) {
 	for i := 0; i < n; i++ {
 		item := body[i]
 		private := item.Bool("private")
-		id := item.ValStr("-1", "_id")
+		id := item.ValStr("", "id")
 		method := item.Str("method")
 		path := item.Str("path")
 		resolve := item.Str("resolve")
@@ -140,8 +140,6 @@ func (s *Server) setRouter(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		item.Set("from_id", s.Id)
-		event.Publish(rt.APIGATEWAY_SET, item)
 		result.Add(router.ToJson())
 	}
 
@@ -167,35 +165,25 @@ func (s *Server) deleteRouteById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	event.Publish(rt.APIGATEWAY_DELETE, et.Json{"_id": id, "from_id": s.Id})
+	event.Publish(rt.APIGATEWAY_DELETE, et.Json{
+		"id": id,
+	})
 	metric.ITEM(w, r, http.StatusOK, et.Item{Ok: true, Result: et.Json{"message": MSG_ROUTE_DELETE}})
 }
 
 /**
-* getRouters
+* getRouter
 * @params w http.ResponseWriter
 * @params r *http.Request
 **/
-func (s *Server) getRouters(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getRouter(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
 	if !ok {
 		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
 		return
 	}
 
-	result := s.GetRoutes()
-
-	metric.ITEMS(w, r, http.StatusOK, result)
-}
-
-func (s *Server) getSolvers(w http.ResponseWriter, r *http.Request) {
-	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
-	if !ok {
-		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
-		return
-	}
-
-	result := s.GetSolvers()
+	result := s.GetRouter()
 
 	metric.ITEMS(w, r, http.StatusOK, result)
 }
@@ -213,7 +201,15 @@ func (s *Server) reset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.Reset()
+	if err := s.Reset(); err != nil {
+		metric.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	for _, pk := range s.packages {
+		channel := fmt.Sprintf(`%s/%s`, rt.APIGATEWAY_RESET, pk.Name)
+		event.Publish(channel, et.Json{})
+	}
 
 	metric.ITEM(w, r, http.StatusOK, et.Item{Ok: true, Result: et.Json{"message": strs.Format(MSG_APIGATEWAY_RESET, s.Name)}})
 }

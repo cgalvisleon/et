@@ -110,33 +110,16 @@ func (s *SyncFile) Save() error {
 
 /**
 * Set
-* @param data []byte
+* @param data []byte, saved bool
 * @return error
 **/
-func (s *SyncFile) Set(data []byte) error {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
+func (s *SyncFile) Set(data []byte, saved bool) error {
 	s.Data = data
-	s.UpdatedAt = timezone.NowTime()
-
-	return s.Save()
-}
-
-/**
-* Get
-* @return []byte, error
-**/
-func (s *SyncFile) Get() ([]byte, error) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	data, err := os.ReadFile(s.Path)
-	if err != nil {
-		return nil, err
+	if saved {
+		return s.Save()
 	}
 
-	return data, nil
+	return nil
 }
 
 /**
@@ -146,19 +129,6 @@ func (s *SyncFile) Get() ([]byte, error) {
 **/
 func (s *SyncFile) Load(v any) error {
 	return json.Unmarshal(s.Data, v)
-}
-
-/**
-* Empty
-* @return error
-**/
-func (s *SyncFile) Empty() error {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	s.Data = []byte("")
-	s.UpdatedAt = timezone.NowTime()
-	return s.Save()
 }
 
 /**

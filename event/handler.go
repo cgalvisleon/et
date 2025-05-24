@@ -32,6 +32,7 @@ func publish(channel string, data et.Json) error {
 	if err != nil {
 		return err
 	}
+	msg.FromId = conn.id
 
 	return conn.Publish(msg.Channel, dt)
 }
@@ -77,6 +78,7 @@ func Subscribe(channel string, f func(Message)) (err error) {
 				return
 			}
 
+			msg.Myself = msg.FromId == conn.id
 			f(msg)
 		},
 	)

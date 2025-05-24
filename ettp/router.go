@@ -12,6 +12,64 @@ import (
 	"github.com/cgalvisleon/et/utility"
 )
 
+type TypeApi int
+
+const (
+	TpHandler TypeApi = iota
+	TpApiRest
+	TpProxy
+	TpPortForward
+)
+
+func (t TypeApi) String() string {
+	switch t {
+	case TpHandler:
+		return "Handler"
+	case TpApiRest:
+		return "Api REST"
+	case TpProxy:
+		return "Proxy"
+	default:
+		return "Unknown"
+	}
+}
+
+func IntToTypeApi(i int) TypeApi {
+	switch i {
+	case 1:
+		return TpApiRest
+	case 2:
+		return TpProxy
+	default:
+		return TpHandler
+	}
+}
+
+const (
+	CONNECT    = "CONNECT"
+	DELETE     = "DELETE"
+	GET        = "GET"
+	HEAD       = "HEAD"
+	OPTIONS    = "OPTIONS"
+	PATCH      = "PATCH"
+	POST       = "POST"
+	PUT        = "PUT"
+	TRACE      = "TRACE"
+	ROUTER_KEY = "apigateway-router"
+)
+
+var methodMap = map[string]bool{
+	CONNECT: true,
+	DELETE:  true,
+	GET:     true,
+	HEAD:    true,
+	OPTIONS: true,
+	PATCH:   true,
+	POST:    true,
+	PUT:     true,
+	TRACE:   true,
+}
+
 const QP = "?"
 
 type TpParams int
@@ -40,6 +98,7 @@ type Router struct {
 	server        *Server                           `json:"-"`
 	middlewares   []func(http.Handler) http.Handler `json:"-"`
 	pkg           *Package                          `json:"-"`
+	main          *Router                           `json:"-"`
 	Id            string                            `json:"id"`
 	Tag           string                            `json:"tag"`
 	TpParams      TpParams                          `json:"tp_params"`
@@ -56,15 +115,14 @@ type Router struct {
 }
 
 /**
-* newRoute
-* @param server *Server, method string, routes []*Router, packageName s
-* @return *Router, []*Router
+* newMainRouter
+* @param server *Server, method string, packageName string
+* @return *Router
 **/
-func newRoute(server *Server, method string, routes []*Router, packageName string) (*Router, []*Router) {
-	pkg := getPackageByName(server, packageName)
-
+func (s *Server) newRouter(method string, packageName string) *Router {
+	pkg := getPackageByName(s, packageName)
 	result := &Router{
-		server:        server,
+		server:        s,
 		middlewares:   make([]func(http.Handler) http.Handler, 0),
 		pkg:           pkg,
 		Id:            utility.UUID(),
@@ -80,19 +138,27 @@ func newRoute(server *Server, method string, routes []*Router, packageName strin
 		PackageName:   packageName,
 		Routes:        []*Router{},
 	}
+	s.router = append(s.router, result)
 
-	routes = append(routes, result)
-
-	return result, routes
+	return result
 }
 
 /**
-* getRouteIndex
+* getRouterIndexByTag
 * @param tag string, routes []*Router
 * @return int
 **/
-func getRouteIndex(tag string, routes []*Router) int {
+func getRouterIndexByTag(tag string, routes []*Router) int {
 	return slices.IndexFunc(routes, func(e *Router) bool { return strs.Lowcase(e.Tag) == strs.Lowcase(tag) })
+}
+
+/**
+* getRouterIndexById
+* @param id string, routes []*Router
+* @return int
+**/
+func getRouterIndexById(id string, routes []*Router) int {
+	return slices.IndexFunc(routes, func(e *Router) bool { return e.Id == id })
 }
 
 /**
@@ -129,14 +195,6 @@ func getTpParams(tag string) TpParams {
 }
 
 /**
-* key
-* @return string
-**/
-func (r *Router) key() string {
-	return strs.Format(`[%s]:%s`, r.Method, r.Path)
-}
-
-/**
 * getParams
 * @param n int
 * @return *Router, int
@@ -157,17 +215,42 @@ func (r *Router) getParams(n int) (*Router, int) {
 }
 
 /**
-* find
+* getRouterByTag
 * @param tag string
 * @return *Router
 **/
-func (r *Router) find(tag string) *Router {
-	idx := getRouteIndex(tag, r.Routes)
+func (r *Router) getRouterByTag(tag string) *Router {
+	idx := getRouterIndexByTag(tag, r.Routes)
 	if idx == -1 {
 		return nil
 	}
 
 	return r.Routes[idx]
+}
+
+/**
+* getRouterIndexByTag
+* @param id string, routes []*Router
+* @return int
+**/
+func (r *Router) getRouterById(id string) *Router {
+	idx := getRouterIndexById(id, r.Routes)
+	if idx != -1 {
+		return r.Routes[idx]
+	}
+
+	if r.Id == id {
+		return nil
+	}
+
+	for _, route := range r.Routes {
+		find := route.getRouterById(id)
+		if find != nil {
+			return find
+		}
+	}
+
+	return nil
 }
 
 /**
@@ -177,9 +260,10 @@ func (r *Router) find(tag string) *Router {
 **/
 func (r *Router) addRoute(id, method, tag string, kind TypeApi, header et.Json, tpHeader router.TpHeader, excludeHeader []string, private bool, tpParams TpParams) *Router {
 	result := &Router{
-		Id:            utility.GenKey(id),
 		server:        r.server,
 		middlewares:   r.server.middlewares,
+		main:          r,
+		Id:            utility.GenKey(id),
 		Tag:           tag,
 		TpParams:      tpParams,
 		Kind:          kind,
@@ -239,48 +323,21 @@ func (r *Router) removeMiddleware(middleware func(http.Handler) http.Handler) *R
 }
 
 /**
-* deleteById
-* @param id string
-* @return bool
-**/
-func (r *Router) deleteById(id string, save bool) bool {
-	result := false
-	for i, route := range r.Routes {
-		if route.Id == id {
-			r.Routes = append(r.Routes[:i], r.Routes[i+1:]...)
-			result = true
-			break
-		} else if route.deleteById(id, save) {
-			result = true
-			break
-		}
-	}
-
-	if result && save {
-		go r.server.Save()
-	}
-
-	return result
-}
-
-/**
-* addPakageRoute
+* setPakage
 * @param packageName string
 * @param r *Router
 * @return *Package
 **/
-func (r *Router) SetPakage(packageName string) *Router {
+func (r *Router) setPakage(packageName string) *Router {
 	if len(packageName) == 0 {
 		return r
 	}
 
-	if r.PackageName == packageName {
-		return r
-	}
-
-	old := getPackageByName(r.server, r.PackageName)
-	if old != nil {
-		old.deleteRoute(r)
+	if r.PackageName != packageName {
+		old := getPackageByName(r.server, r.PackageName)
+		if old != nil {
+			old.deleteRoute(r)
+		}
 	}
 
 	pkg := getPackageByName(r.server, packageName)
@@ -334,7 +391,11 @@ func (r *Router) ToJson() et.Json {
 * @return *Router
 **/
 func (r *Router) With(middlewares ...func(http.Handler) http.Handler) *Router {
-	result := r.server.NewRoute()
+	result := &Router{
+		server:      r.server,
+		middlewares: r.server.middlewares,
+	}
+
 	result.middlewares = append(result.middlewares, r.middlewares...)
 	return result
 }

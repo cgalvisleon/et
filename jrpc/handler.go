@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/rpc"
 
+	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
@@ -48,7 +49,12 @@ func listRouters() (et.Items, error) {
 * @param method string, args et.Json, reply interface{}
 * @return error
 **/
-func call(method string, args et.Json, reply interface{}) error {
+func call(method string, args any, reply any) error {
+	err := cache.Load()
+	if err != nil {
+		return err
+	}
+
 	metric := middleware.NewRpcMetric(method)
 	solver, err := getSolver(method)
 	if err != nil {
@@ -128,21 +134,6 @@ func CallItems(method string, args et.Json) (et.Items, error) {
 **/
 func CallList(method string, args et.Json) (et.List, error) {
 	var result et.List
-	err := call(method, args, &result)
-	if err != nil {
-		return result, err
-	}
-
-	return result, nil
-}
-
-/**
-* CallPermitios
-* @param method string, args et.Json
-* @return map[string]bool, error
-**/
-func CallPermitios(method string, args et.Json) (map[string]bool, error) {
-	var result map[string]bool
 	err := call(method, args, &result)
 	if err != nil {
 		return result, err

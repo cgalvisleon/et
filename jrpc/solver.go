@@ -9,13 +9,12 @@ import (
 )
 
 type Solver struct {
-	PackageName string   `json:"packageName"`
-	Host        string   `json:"host"`
-	Port        int      `json:"port"`
-	StructName  string   `json:"structName"`
-	Method      string   `json:"method"`
-	Inputs      et.Json  `json:"inputs"`
-	Output      []string `json:"output"`
+	Host       string   `json:"host"`
+	Port       int      `json:"port"`
+	StructName string   `json:"structName"`
+	Method     string   `json:"method"`
+	Inputs     et.Json  `json:"inputs"`
+	Output     []string `json:"output"`
 }
 
 /**
@@ -24,13 +23,12 @@ type Solver struct {
 **/
 func (s *Solver) serialize() et.Json {
 	return et.Json{
-		"packageName": s.PackageName,
-		"host":        s.Host,
-		"port":        s.Port,
-		"structName":  s.StructName,
-		"method":      s.Method,
-		"inputs":      s.Inputs,
-		"outputs":     s.Output,
+		"host":       s.Host,
+		"port":       s.Port,
+		"structName": s.StructName,
+		"method":     s.Method,
+		"inputs":     s.Inputs,
+		"outputs":    s.Output,
 	}
 }
 

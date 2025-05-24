@@ -16,9 +16,59 @@ import (
 
 type ContextKey string
 
+/**
+* String
+* @param ctx context.Context, def string
+* @return string
+**/
 func (c ContextKey) String(ctx context.Context, def string) string {
 	val := ctx.Value(c)
 	result, ok := val.(string)
+	if !ok {
+		return def
+	}
+
+	return result
+}
+
+/**
+* Json
+* @param ctx context.Context, def et.Json
+* @return et.Json
+**/
+func (c ContextKey) Json(ctx context.Context, def et.Json) et.Json {
+	val := ctx.Value(c)
+	result, ok := val.(et.Json)
+	if !ok {
+		return def
+	}
+
+	return result
+}
+
+/**
+* Int
+* @param ctx context.Context, def int
+* @return int
+**/
+func (c ContextKey) Int(ctx context.Context, def int) int {
+	val := ctx.Value(c)
+	result, ok := val.(int)
+	if !ok {
+		return def
+	}
+
+	return result
+}
+
+/**
+* Num
+* @param ctx context.Context, def float64
+* @return float64
+**/
+func (c ContextKey) Num(ctx context.Context, def float64) float64 {
+	val := ctx.Value(c)
+	result, ok := val.(float64)
 	if !ok {
 		return def
 	}
@@ -32,10 +82,9 @@ const (
 	AppKey       ContextKey = "app"
 	NameKey      ContextKey = "name"
 	DeviceKey    ContextKey = "device"
-	SubjectKey   ContextKey = "subject"
 	UsernameKey  ContextKey = "username"
-	TokenKey     ContextKey = "token"
-	TagKey       ContextKey = "tag"
+	DataKey      ContextKey = "data"
+	DurationKey  ContextKey = "duration"
 )
 
 type Claim struct {
@@ -46,7 +95,7 @@ type Claim struct {
 	Username string        `json:"username"`
 	Device   string        `json:"device"`
 	Duration time.Duration `json:"duration"`
-	Tag      string        `json:"tag"`
+	Data     et.Json       `json:"data"`
 	jwt.StandardClaims
 }
 
@@ -63,7 +112,7 @@ func (c *Claim) ToJson() et.Json {
 		"device":    c.Device,
 		"subject":   c.Subject,
 		"duration":  c.Duration,
-		"tag":       c.Tag,
+		"data":      c.Data,
 		"expiresAt": time.Unix(c.ExpiresAt, 0).Format("2006-01-02 03:04:05 PM"),
 	}
 }
@@ -79,10 +128,10 @@ func GetTokenKey(app, device, id string) string {
 
 /**
 * newClaim
-* @param id, app, name, username, device, tag string, duration time.Duration
+* @param id, app, name, username, device, data et.Json, duration time.Duration
 * @return Claim
 **/
-func newClaim(id, app, name, username, device, tag string, duration time.Duration) Claim {
+func newClaim(id, app, name, username, device string, data et.Json, duration time.Duration) Claim {
 	c := Claim{}
 	c.Salt = utility.GetOTP(6)
 	c.ID = id
@@ -91,7 +140,7 @@ func newClaim(id, app, name, username, device, tag string, duration time.Duratio
 	c.Username = username
 	c.Device = device
 	c.Duration = duration
-	c.Tag = tag
+	c.Data = data
 	if c.Duration != 0 {
 		c.ExpiresAt = timezone.Add(c.Duration).Unix()
 	}
@@ -124,17 +173,17 @@ func newToken(c Claim) (string, error) {
 * @return string, error
 **/
 func NewToken(id, app, name, username, device string, duration time.Duration) (string, error) {
-	result := newClaim(id, app, name, username, device, "", duration)
+	result := newClaim(id, app, name, username, device, et.Json{}, duration)
 	return newToken(result)
 }
 
 /**
 * NewAutorization
-* @param id, app, name, username, device, tag string, duration time.Duration
+* @param id, app, name, username, device string, data et.Json, duration time.Duration
 * @return string, error
 **/
-func NewAutorization(id, app, name, username, device, tag string, duration time.Duration) (string, error) {
-	c := newClaim(id, app, name, username, device, tag, duration)
+func NewTokenData(id, app, name, username, device string, data et.Json, duration time.Duration) (string, error) {
+	c := newClaim(id, app, name, username, device, data, duration)
 	return newToken(c)
 }
 
@@ -199,24 +248,14 @@ func ParceToken(token string) (*Claim, error) {
 		return nil, logs.Alertm(MSG_REQUIRED_INVALID)
 	}
 
+	params := et.Json{}
+	for k, v := range claim {
+		params[k] = v
+	}
+
 	app, ok := claim["app"].(string)
 	if !ok {
 		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "app")
-	}
-
-	id, ok := claim["id"].(string)
-	if !ok {
-		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "id")
-	}
-
-	name, ok := claim["name"].(string)
-	if !ok {
-		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "name")
-	}
-
-	username, ok := claim["username"].(string)
-	if !ok {
-		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "username")
 	}
 
 	device, ok := claim["device"].(string)
@@ -224,20 +263,22 @@ func ParceToken(token string) (*Claim, error) {
 		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "device")
 	}
 
-	second, ok := claim["duration"].(float64)
+	id, ok := claim["id"].(string)
 	if !ok {
-		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "duration")
+		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "id")
 	}
 
+	second := params.Num("duration")
 	duration := time.Duration(second)
 
 	result := &Claim{
 		ID:       id,
 		App:      app,
-		Name:     name,
-		Username: username,
+		Name:     params.Str("name"),
+		Username: params.Str("username"),
 		Device:   device,
 		Duration: duration,
+		Data:     params.Json("data"),
 	}
 	if result.Duration != 0 {
 		exp, ok := claim["exp"].(float64)
@@ -287,6 +328,16 @@ func SetToken(app, device, id, token string, duration time.Duration) string {
 }
 
 /**
+* ServiceId
+* @param r *http.Request
+* @return string
+**/
+func ServiceId(r *http.Request) string {
+	ctx := r.Context()
+	return ServiceIdKey.String(ctx, "-1")
+}
+
+/**
 * ClientId
 * @param r *http.Request
 * @return et.Json
@@ -297,43 +348,80 @@ func ClientId(r *http.Request) string {
 }
 
 /**
-* GetClientName
+* ClientName
 * @param r *http.Request
-* @return et.Json
+* @return string
 **/
-func GetClientName(r *http.Request) string {
+func ClientName(r *http.Request) string {
 	ctx := r.Context()
 	return NameKey.String(ctx, "Anonimo")
 }
 
-func GetUserName(r *http.Request) string {
+/**
+* App
+* @param r *http.Request
+* @return string
+**/
+func App(r *http.Request) string {
+	ctx := r.Context()
+	return AppKey.String(ctx, "-1")
+}
+
+/**
+* Username
+* @param r *http.Request
+* @return string
+**/
+func Username(r *http.Request) string {
 	ctx := r.Context()
 	return UsernameKey.String(ctx, "Anonimo")
 }
 
-func GetDevice(r *http.Request) string {
+/**
+* Device
+* @param r *http.Request
+* @return string
+**/
+func Device(r *http.Request) string {
 	ctx := r.Context()
 	return DeviceKey.String(ctx, "Anonimo")
 }
 
 /**
-* GetClient
+* Data
 * @param r *http.Request
 * @return et.Json
 **/
-func GetClient(r *http.Request) et.Json {
+func Data(r *http.Request) et.Json {
+	ctx := r.Context()
+	return DataKey.Json(ctx, et.Json{})
+}
+
+/**
+* Duration
+* @param r *http.Request
+* @return time.Duration
+**/
+func Duration(r *http.Request) time.Duration {
+	ctx := r.Context()
+	return time.Duration(DurationKey.Num(ctx, 0))
+}
+
+/**
+* Client
+**/
+func Client(r *http.Request) et.Json {
 	now := utility.Now()
 	ctx := r.Context()
-	username := UsernameKey.String(ctx, "Anonimo")
-	fullName := NameKey.String(ctx, "Anonimo")
-	clientId := ClientIdKey.String(ctx, "-1")
-	tag := TagKey.String(ctx, "")
-
 	return et.Json{
-		"date_at":   now,
-		"client_id": clientId,
-		"username":  username,
-		"full_name": fullName,
-		"tag":       tag,
+		"date_at":    now,
+		"client_id":  ClientIdKey.String(ctx, "-1"),
+		"name":       NameKey.String(ctx, "Anonimo"),
+		"username":   UsernameKey.String(ctx, "Anonimo"),
+		"device":     DeviceKey.String(ctx, "Anonimo"),
+		"data":       DataKey.Json(ctx, et.Json{}),
+		"service_id": ServiceIdKey.String(ctx, "-1"),
+		"app":        AppKey.String(ctx, "-1"),
+		"duration":   DurationKey.Num(ctx, 0),
 	}
 }

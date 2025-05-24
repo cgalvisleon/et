@@ -3,12 +3,12 @@ package cache
 import (
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
@@ -303,26 +303,12 @@ func HDelete(key, atr string) error {
 }
 
 /**
-* GenId
-* @params args ...interface{}
-* @return string
-**/
-func GenId(args ...interface{}) string {
-	var keys []string
-	for _, arg := range args {
-		keys = append(keys, strs.Format(`%v`, arg))
-	}
-
-	return strings.Join(keys, ":")
-}
-
-/**
 * GenKey
 * @params args ...interface{}
 * @return string
 **/
 func GenKey(args ...interface{}) string {
-	result := GenId(args...)
+	result := reg.GenKey(args...)
 	return utility.ToBase64(result)
 }
 

@@ -10,20 +10,37 @@ import (
 )
 
 /**
-* GetOTP return a code verify
-* @param length int
+* GetRandom return a random string
+* @param charset string, length int
 * @return string
 **/
-func GetOTP(length int) string {
-	const charset = "0123456789"
+func GetRandom(charset string, length int) string {
 	var seededRand *rand.Rand = rand.New(rand.NewSource(timezone.NowTime().UnixNano()))
-
 	b := make([]byte, length)
 	for i := range b {
 		b[i] = charset[seededRand.Intn(len(charset))]
 	}
 
 	return string(b)
+}
+
+/**
+* GetOTP return a code verify
+* @param length int
+* @return string
+**/
+func GetOTP(length int) string {
+	const charset = "0123456789"
+	return GetRandom(charset, length)
+}
+
+/**
+* GetRandomString return a random string
+* @param length int
+* @return string
+**/
+func GetRandomString(length int) string {
+	return GetRandom("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", length)
 }
 
 /**

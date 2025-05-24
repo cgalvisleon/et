@@ -56,6 +56,16 @@ func (s *Items) Add(item Json) {
 }
 
 /**
+* AddMany add many items to the items
+* @param items []Json
+**/
+func (s *Items) AddMany(items []Json) {
+	(*s).Result = append((*s).Result, items...)
+	(*s).Count = len((*s).Result)
+	(*s).Ok = (*s).Count > 0
+}
+
+/**
 * ToJson convert a json
 * @return Json
 **/

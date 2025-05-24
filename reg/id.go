@@ -1,10 +1,26 @@
 package reg
 
 import (
+	"strings"
+
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/google/uuid"
 )
+
+/**
+* GenKey
+* @params args ...interface{}
+* @return string
+**/
+func GenKey(args ...interface{}) string {
+	var keys []string
+	for _, arg := range args {
+		keys = append(keys, strs.Format(`%v`, arg))
+	}
+
+	return strings.Join(keys, ":")
+}
 
 /**
 * Id

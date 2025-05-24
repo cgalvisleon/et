@@ -9,22 +9,48 @@ import (
 )
 
 type Package struct {
-	server *Server
-	Id     string
-	Name   string
-	Routes map[string]*Router
+	server  *Server   `json:"-"`
+	Id      string    `json:"id"`
+	Name    string    `json:"name"`
+	routes  []*Router `json:"-"`
+	proxies []*Proxy  `json:"-"`
+}
+
+/**
+* newPakage
+* @param server *Server, name string
+* @return *Package
+**/
+func newPakage(server *Server, name string) *Package {
+	result := &Package{
+		Id:      utility.UUID(),
+		server:  server,
+		Name:    name,
+		routes:  []*Router{},
+		proxies: []*Proxy{},
+	}
+
+	server.packages = append(server.packages, result)
+
+	return result
 }
 
 /**
 * Describe
 * @return et.Json
 **/
-func (p *Package) Describe() et.Json {
+func (s *Package) Describe() et.Json {
 	result := et.Json{
-		"Id":     p.Id,
-		"Name":   p.Name,
-		"Count":  len(p.Routes),
-		"Routes": p.Routes,
+		"id":   s.Id,
+		"name": s.Name,
+		"routes": et.Json{
+			"count": len(s.routes),
+			"items": s.routes,
+		},
+		"proxies": et.Json{
+			"count": len(s.proxies),
+			"items": s.proxies,
+		},
 	}
 	return result
 }
@@ -34,14 +60,35 @@ func (p *Package) Describe() et.Json {
 * @param route *Router
 * @return *Package
 **/
-func (p *Package) addRouter(route *Router) *Package {
+func (s *Package) addRouter(route *Router) *Package {
 	if route.ExcludeHeader == nil {
 		route.ExcludeHeader = []string{}
 	}
 
-	p.Routes[route.key()] = route
+	idx := slices.IndexFunc(s.routes, func(e *Router) bool { return e.Id == route.Id })
+	if idx != -1 {
+		s.routes[idx] = route
+	} else {
+		s.routes = append(s.routes, route)
+	}
 
-	return p
+	return s
+}
+
+/**
+* addProxy
+* @param proxy *Proxy
+* @return *Package
+**/
+func (s *Package) addProxy(proxy *Proxy) *Package {
+	idx := slices.IndexFunc(s.proxies, func(e *Proxy) bool { return e.Path == proxy.Path })
+	if idx != -1 {
+		s.proxies[idx] = proxy
+	} else {
+		s.proxies = append(s.proxies, proxy)
+	}
+
+	return s
 }
 
 /**
@@ -49,8 +96,25 @@ func (p *Package) addRouter(route *Router) *Package {
 * @param route *Router
 * @return bool
 **/
-func (p *Package) deleteRoute(route *Router) bool {
-	delete(p.Routes, route.key())
+func (s *Package) deleteRoute(route *Router) bool {
+	idx := slices.IndexFunc(s.routes, func(e *Router) bool { return e.Id == route.Id })
+	if idx != -1 {
+		s.routes = append(s.routes[:idx], s.routes[idx+1:]...)
+	}
+
+	return true
+}
+
+/**
+* deleteProxy
+* @param proxy *Proxy
+* @return bool
+**/
+func (s *Package) deleteProxy(proxy *Proxy) bool {
+	idx := slices.IndexFunc(s.proxies, func(e *Proxy) bool { return e.Path == proxy.Path })
+	if idx != -1 {
+		s.proxies = append(s.proxies[:idx], s.proxies[idx+1:]...)
+	}
 
 	return true
 }
@@ -60,23 +124,37 @@ func (p *Package) deleteRoute(route *Router) bool {
 * @param id string
 * @return bool
 **/
-func (p *Package) deleteRouteById(id string) bool {
-	result := false
-	for _, route := range p.Routes {
-		if route.Id == id {
-			s := p.server
-			p.deleteRoute(route)
-			if len(p.Routes) == 0 {
-				idx := slices.IndexFunc(s.packages, func(e *Package) bool { return strs.Lowcase(e.Name) == strs.Lowcase(p.Name) })
-				if idx != -1 {
-					s.packages = append(s.packages[:idx], s.packages[idx+1:]...)
-				}
-			}
-			break
+func (s *Package) deleteRouteById(id string) bool {
+	idx := slices.IndexFunc(s.routes, func(e *Router) bool { return e.Id == id })
+	if idx == -1 {
+		return false
+	}
+
+	s.routes = append(s.routes[:idx], s.routes[idx+1:]...)
+	if len(s.routes) == 0 {
+		idx := slices.IndexFunc(s.server.packages, func(e *Package) bool { return strs.Lowcase(e.Id) == strs.Lowcase(s.Id) })
+		if idx != -1 {
+			s.server.packages = append(s.server.packages[:idx], s.server.packages[idx+1:]...)
 		}
 	}
 
-	return result
+	return true
+}
+
+/**
+* deleteProxyById
+* @param id string
+* @return bool
+**/
+func (s *Package) deleteProxyById(id string) bool {
+	idx := slices.IndexFunc(s.proxies, func(e *Proxy) bool { return e.Id == id })
+	if idx == -1 {
+		return false
+	}
+
+	s.proxies = append(s.proxies[:idx], s.proxies[idx+1:]...)
+
+	return true
 }
 
 /**
@@ -91,22 +169,4 @@ func getPackageByName(s *Server, name string) *Package {
 	}
 
 	return s.packages[idx]
-}
-
-/**
-* newPakage
-* @param server *Server, name string
-* @return *Package
-**/
-func newPakage(server *Server, name string) *Package {
-	result := &Package{
-		Id:     utility.UUID(),
-		server: server,
-		Name:   name,
-		Routes: make(map[string]*Router),
-	}
-
-	server.packages = append(server.packages, result)
-
-	return result
 }

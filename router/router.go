@@ -5,14 +5,11 @@ import (
 	"net/http"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/jrpc"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
-	"github.com/cgalvisleon/et/mistake"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -86,22 +83,21 @@ func eventAction(m event.Message) {
 		return
 	}
 
-	for _, v := range router.Routes {
-		console.Logf("Api gateway", `[RESET] %s:%s`, v.Str("method"), v.Str("path"))
-		event.Publish(APIGATEWAY_SET, v)
-	}
+	ResetRouter()
 }
 
 /**
-* Delete
-* @param name string
+* ResetRouter
 **/
-func deleteRouter(id string) {
+func ResetRouter() {
 	if router == nil {
 		return
 	}
 
-	delete(router.Routes, id)
+	for _, v := range router.Routes {
+		console.Logf("Api gateway", `[RESET] %s:%s`, v.Str("method"), v.Str("path"))
+		event.Publish(APIGATEWAY_SET, v)
+	}
 }
 
 /**
@@ -176,19 +172,6 @@ func PushApiGateway(id, method, path, resolve string, header et.Json, tpHeader T
 }
 
 /**
-* DeleteApiGatewayById
-* @param id, method, path string
-**/
-func DeleteApiGatewayById(id, method, path string) {
-	deleteRouter(id)
-	event.Publish(APIGATEWAY_DELETE, et.Json{
-		"_id":    id,
-		"method": method,
-		"path":   path,
-	})
-}
-
-/**
 * GetRoutes
 * @return map[string]et.Json
 **/
@@ -243,11 +226,11 @@ func Public(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, pa
 }
 
 /**
-* Protect
+* Private
 * @param r *chi.Mux, method string, path string, h http.HandlerFunc, packageName string, packagePath string, host string
 * @return *chi.Mux
 **/
-func Protect(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, packagePath, host string) *chi.Mux {
+func Private(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, packagePath, host string) *chi.Mux {
 	switch method {
 	case "GET":
 		r.With(middleware.Autentication).Get(path, h)
@@ -273,28 +256,43 @@ func Protect(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, p
 }
 
 /**
+* Protect
+* @param r *chi.Mux, method string, path string, h http.HandlerFunc, packageName string, packagePath string, host string
+* @return *chi.Mux
+**/
+func Protect(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, packagePath, host string) *chi.Mux {
+	return Private(r, method, path, h, packageName, packagePath, host)
+}
+
+/**
 * Authorization
 * @param r *chi.Mux, method string, path string, h http.HandlerFunc, packageName string, packagePath string, host string
 * @return *chi.Mux
 **/
 func Authorization(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, packagePath, host string) *chi.Mux {
+	if middleware.AuthorizationMiddleware == nil {
+		logs.Alertm("AuthorizationMiddleware not set")
+		return r
+	}
+
+	router := r.With(middleware.Autentication).With(middleware.AuthorizationMiddleware)
 	switch method {
 	case "GET":
-		r.With(middleware.Autentication).With(middleware.Authorization).Get(path, h)
+		router.Get(path, h)
 	case "POST":
-		r.With(middleware.Autentication).With(middleware.Authorization).Post(path, h)
+		router.Post(path, h)
 	case "PUT":
-		r.With(middleware.Autentication).With(middleware.Authorization).Put(path, h)
+		router.Put(path, h)
 	case "PATCH":
-		r.With(middleware.Autentication).With(middleware.Authorization).Patch(path, h)
+		router.Patch(path, h)
 	case "DELETE":
-		r.With(middleware.Autentication).With(middleware.Authorization).Delete(path, h)
+		router.Delete(path, h)
 	case "HEAD":
-		r.With(middleware.Autentication).With(middleware.Authorization).Head(path, h)
+		router.Head(path, h)
 	case "OPTIONS":
-		r.With(middleware.Autentication).With(middleware.Authorization).Options(path, h)
+		router.Options(path, h)
 	case "HandlerFunc":
-		r.With(middleware.Autentication).With(middleware.Authorization).HandleFunc(path, h)
+		router.HandleFunc(path, h)
 	}
 
 	pushApiGateway(method, path, packagePath, host, packageName, true)
@@ -330,27 +328,4 @@ func With(r *chi.Mux, method, path string, middlewares []func(http.Handler) http
 	pushApiGateway(method, path, packagePath, host, packageName, true)
 
 	return r
-}
-
-/**
-* authorization
-* @param profile et.Json
-* @return map[string]bool, error
-**/
-func authorization(profile et.Json) (map[string]bool, error) {
-	method := config.String("AUTHORIZATION_METHOD", "Module.Services.GetPermissions")
-	if method == "" {
-		return map[string]bool{}, mistake.New("Authorization method not found")
-	}
-
-	result, err := jrpc.CallPermitios(method, profile)
-	if err != nil {
-		return map[string]bool{}, err
-	}
-
-	return result, nil
-}
-
-func init() {
-	middleware.SetAuthorizationFunc(authorization)
 }

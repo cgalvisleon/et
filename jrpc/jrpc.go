@@ -1,16 +1,17 @@
 package jrpc
 
 import (
+	"encoding/gob"
+
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
 )
-
-const sourceKey = "apigateway-rpc"
 
 var pkg *Package
 
@@ -25,11 +26,6 @@ func LoadTo(name, host string, port int) (*Package, error) {
 
 	if !utility.ValidInt(port, []int{1, 65535}) {
 		return nil, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "port")
-	}
-
-	err := cache.Load()
-	if err != nil {
-		return nil, err
 	}
 
 	name = strs.DaskSpace(name)
@@ -51,7 +47,12 @@ func Load(name string) error {
 		return nil
 	}
 
-	err := config.Validate([]string{
+	err := cache.Load()
+	if err != nil {
+		return err
+	}
+
+	err = config.Validate([]string{
 		"RPC_PORT",
 	})
 	if err != nil {
@@ -85,9 +86,13 @@ func Start() error {
 * Close
 **/
 func Close() {
-	if pkg != nil {
-		pkg.unMount()
-	}
-
 	logs.Log("Rpc", `Shutting down server...`)
+}
+
+func init() {
+	gob.Register(map[string]interface{}{})
+	gob.Register(et.Json{})
+	gob.Register(et.Item{})
+	gob.Register(et.Items{})
+	gob.Register(et.List{})
 }

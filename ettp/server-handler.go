@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 
 	"github.com/cgalvisleon/et/claim"
 	"github.com/cgalvisleon/et/console"
@@ -130,6 +128,7 @@ func (s *Server) handlerResolve(w http.ResponseWriter, r *http.Request) {
 	metric := middleware.NewMetric(r)
 	w.Header().Set("Reqid", metric.ReqID)
 	ctx := context.WithValue(r.Context(), MetricKey, metric)
+	r = r.WithContext(ctx)
 
 	/* Get resolver */
 	resolver, r := s.getResolver(r)
@@ -139,10 +138,11 @@ func (s *Server) handlerResolve(w http.ResponseWriter, r *http.Request) {
 	metric.CallSearchTime()
 	metric.SetPath(resolver.GetResolve())
 
+	url := fmt.Sprintf(`%s://%s%s`, resolver.Scheme, resolver.Host, resolver.Path)
 	/* If not found */
 	if resolver.Router == nil || resolver.URL == "" {
-		r.RequestURI = fmt.Sprintf(`%s://%s%s`, resolver.Scheme, resolver.Host, resolver.Path)
-		s.notFoundHandler.ServeHTTP(w, r.WithContext(ctx))
+		r.RequestURI = url
+		s.notFoundHandler.ServeHTTP(w, r)
 		return
 	}
 
@@ -151,13 +151,13 @@ func (s *Server) handlerResolve(w http.ResponseWriter, r *http.Request) {
 	if router.Kind == TpHandler {
 		h := s.handlers[router.Id]
 		if h == nil {
-			r.RequestURI = fmt.Sprintf(`%s://%s%s`, resolver.Scheme, resolver.Host, resolver.Path)
-			s.notFoundHandler.ServeHTTP(w, r.WithContext(ctx))
+			r.RequestURI = url
+			s.notFoundHandler.ServeHTTP(w, r)
 			return
 		}
 
-		handler := s.applyMiddlewares(http.HandlerFunc(h), router.middlewares)
-		handler.ServeHTTP(w, r.WithContext(ctx))
+		handler := s.applyMiddlewares(http.HandlerFunc(h.HandlerFn), router.middlewares)
+		handler.ServeHTTP(w, r)
 		return
 	}
 
@@ -175,23 +175,43 @@ func (s *Server) handlerResolve(w http.ResponseWriter, r *http.Request) {
 * @params r *http.Request
 **/
 func (s *Server) handlerReverseProxy(w http.ResponseWriter, r *http.Request) {
-	console.Debug(et.Json{
-		"Method":   r.Method,
-		"URL":      r.URL,
-		"Host":     r.Host,
-		"Path":     r.URL.Path,
-		"RawQuery": r.URL.RawQuery,
-		"Header":   r.Header,
-		"Body":     r.Body,
-	}.ToString())
+	/* Begin telemetry */
+	metric := middleware.NewMetric(r)
+	w.Header().Set("Reqid", metric.ReqID)
+	ctx := context.WithValue(r.Context(), MetricKey, metric)
+	r = r.WithContext(ctx)
 
-	proxy, ok := s.proxy[r.URL.Path]
-	if !ok {
-		target, _ := url.Parse("http://localhost:8081")
-		proxy = httputil.NewSingleHostReverseProxy(target)
-		s.proxy[r.URL.Path] = proxy
+	request := et.Json{
+		"method":   r.Method,
+		"url":      r.URL,
+		"host":     r.Host,
+		"path":     r.URL.Path,
+		"rawquery": r.URL.RawQuery,
+		"header":   r.Header,
+		"body":     r.Body,
 	}
 
+	proxy := s.getProxyByPath(r.URL.Path)
+	if proxy == nil {
+		request["proxy"] = "not found"
+		console.Debug("proxy:", request.ToString())
+		s.notFoundHandler.ServeHTTP(w, r)
+		return
+	}
+
+	if s.debug {
+		request["proxy"] = proxy.Solver
+		console.Debug("proxy:", request.ToString())
+	}
+
+	if proxy.Kind == TpPortForward {
+		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_IS_PORTFORWARD)
+		return
+	}
+
+	/* Call search time since begin */
+	metric.CallSearchTime()
+	metric.SetPath(proxy.Solver)
 	proxy.ServeHTTP(w, r)
 }
 

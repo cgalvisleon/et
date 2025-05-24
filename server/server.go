@@ -266,3 +266,11 @@ func (s *Ettp) Cli() {
 	rootCmd.AddCommand(startCmd, runServerCmd, stopCmd, deployCmd)
 	rootCmd.Execute()
 }
+
+/**
+* SetAuthorizationMiddleware
+* @param f middleware.AuthorizationMiddleware
+**/
+func (s *Ettp) SetAuthorizationMiddleware(f func(next http.Handler) http.Handler) {
+	middleware.SetAuthorizationMiddleware(f)
+}

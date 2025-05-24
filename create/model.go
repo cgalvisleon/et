@@ -624,7 +624,7 @@ func (rt *Router) upsert$2(w http.ResponseWriter, r *http.Request) {
 	id := body.Str(jdb.KEY)
 	name := body.Str("name")
 	description := body.Str("description")
-	clientName := claim.GetClientName(r)
+	clientName := claim.ClientName(r)
 	result, err := $4.Upsert$2(projectId, id, name, description, body, clientName)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
@@ -659,7 +659,7 @@ func (rt *Router) state$2(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	body, _ := response.GetBody(r)
 	statusId := body.Str(jdb.STATUS_ID)
-	clientName := claim.GetClientName(r)
+	clientName := claim.ClientName(r)
 	result, err := $4.State$2(id, statusId, clientName)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
@@ -676,7 +676,7 @@ func (rt *Router) state$2(w http.ResponseWriter, r *http.Request) {
 **/
 func (rt *Router) delete$2(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	clientName := claim.GetClientName(r)
+	clientName := claim.ClientName(r)
 	result, err := $4.State$2(id, utility.FOR_DELETE, clientName)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())

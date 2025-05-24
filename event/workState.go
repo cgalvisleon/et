@@ -2,7 +2,6 @@ package event
 
 import (
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 )
@@ -68,8 +67,7 @@ func ToWorkStatus(n int) WorkStatus {
 func Work(event string, data et.Json) et.Json {
 	work := et.Json{
 		"created_at": timezone.Now(),
-		"_id":        reg.GenId("work"),
-		"from_id":    conn.Id,
+		"id":         utility.UUID(),
 		"event":      event,
 		"data":       data,
 	}
@@ -89,8 +87,7 @@ func Work(event string, data et.Json) et.Json {
 func WorkState(work_id string, status WorkStatus, data et.Json) {
 	work := et.Json{
 		"update_at": timezone.Now(),
-		"_id":       work_id,
-		"from_id":   conn.Id,
+		"id":        work_id,
 		"status":    status.String(),
 		"data":      data,
 	}

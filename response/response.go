@@ -107,8 +107,7 @@ func GetQuery(r *http.Request) et.Json {
 
 /**
 * GetParam
-* @param r *http.Request
-* @param key string
+* @param r *http.Request, key string
 * @return string
 **/
 func GetParam(r *http.Request, key string) string {
@@ -117,9 +116,7 @@ func GetParam(r *http.Request, key string) string {
 
 /**
 * WriteResponse
-* @param w http.ResponseWriter
-* @param statusCode int
-* @param e []byte
+* @param w http.ResponseWriter, statusCode int, e []byte
 * @return error
 **/
 func WriteResponse(w http.ResponseWriter, statusCode int, e []byte) error {
@@ -131,11 +128,8 @@ func WriteResponse(w http.ResponseWriter, statusCode int, e []byte) error {
 }
 
 /**
-* RJson
-* @param w http.ResponseWriter
-* @param r *http.Request
-* @param statusCode int
-* @param data interface{}
+* RESULT
+* @param w http.ResponseWriter, r *http.Request, statusCode int, data interface{}
 * @return error
 **/
 func RESULT(w http.ResponseWriter, r *http.Request, statusCode int, data interface{}) error {
@@ -155,10 +149,7 @@ func RESULT(w http.ResponseWriter, r *http.Request, statusCode int, data interfa
 
 /**
 * JSON
-* @param w http.ResponseWriter
-* @param r *http.Request
-* @param statusCode int
-* @param data interface{}
+* @param w http.ResponseWriter, r *http.Request, statusCode int, data interface{}
 * @return error
 **/
 func JSON(w http.ResponseWriter, r *http.Request, statusCode int, data interface{}) error {
@@ -183,10 +174,7 @@ func JSON(w http.ResponseWriter, r *http.Request, statusCode int, data interface
 
 /**
 * ITEM
-* @param w http.ResponseWriter
-* @param r *http.Request
-* @param statusCode int
-* @param data et.Item
+* @param w http.ResponseWriter, r *http.Request, statusCode int, data et.Item
 * @return error
 **/
 func ITEM(w http.ResponseWriter, r *http.Request, statusCode int, data et.Item) error {
@@ -206,10 +194,7 @@ func ITEM(w http.ResponseWriter, r *http.Request, statusCode int, data et.Item) 
 
 /**
 * ITEMS
-* @param w http.ResponseWriter
-* @param r *http.Request
-* @param statusCode int
-* @param data et.Items
+* @param w http.ResponseWriter, r *http.Request, statusCode int, data et.Items
 * @return error
 **/
 func ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, data et.Items) error {
@@ -229,10 +214,7 @@ func ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, data et.Items
 
 /**
 * DATA
-* @param w http.ResponseWriter
-* @param r *http.Request
-* @param statusCode int
-* @param data et.Items
+* @param w http.ResponseWriter, r *http.Request, statusCode int, data et.Json
 * @return error
 **/
 func DATA(w http.ResponseWriter, r *http.Request, statusCode int, data et.Json) error {
@@ -252,10 +234,7 @@ func DATA(w http.ResponseWriter, r *http.Request, statusCode int, data et.Json) 
 
 /**
 * ANY
-* @param w http.ResponseWriter
-* @param r *http.Request
-* @param statusCode int
-* @param data et.Items
+* @param w http.ResponseWriter, r *http.Request, statusCode int, result interface{}
 * @return error
 **/
 func ANY(w http.ResponseWriter, r *http.Request, statusCode int, result interface{}) error {
@@ -271,10 +250,7 @@ func ANY(w http.ResponseWriter, r *http.Request, statusCode int, result interfac
 
 /**
 * HTTPError
-* @param w http.ResponseWriter
-* @param r *http.Request
-* @param statusCode int
-* @param message string
+* @param w http.ResponseWriter, r *http.Request, statusCode int, message string
 * @return error
 **/
 func HTTPError(w http.ResponseWriter, r *http.Request, statusCode int, message string) error {
@@ -285,28 +261,42 @@ func HTTPError(w http.ResponseWriter, r *http.Request, statusCode int, message s
 	return JSON(w, r, statusCode, msg)
 }
 
+/**
+* HTTPAlert
+* @param w http.ResponseWriter, r *http.Request, message string
+* @return error
+**/
 func HTTPAlert(w http.ResponseWriter, r *http.Request, message string) error {
 	return HTTPError(w, r, http.StatusBadRequest, message)
 }
 
+/**
+* Unauthorized
+* @param w http.ResponseWriter, r *http.Request
+**/
 func Unauthorized(w http.ResponseWriter, r *http.Request) {
 	HTTPError(w, r, http.StatusUnauthorized, "401 Unauthorized")
 }
 
+/**
+* InternalServerError
+* @param w http.ResponseWriter, r *http.Request, err error
+**/
 func InternalServerError(w http.ResponseWriter, r *http.Request, err error) {
 	HTTPError(w, r, http.StatusInternalServerError, "500 Autentication Server Error - "+err.Error())
 }
 
+/**
+* Forbidden
+* @param w http.ResponseWriter, r *http.Request
+**/
 func Forbidden(w http.ResponseWriter, r *http.Request) {
 	HTTPError(w, r, http.StatusForbidden, "403 Forbidden")
 }
 
 /**
 * Stream
-* @param w http.ResponseWriter
-* @param r *http.Request
-* @param statusCode int
-* @param data interface{}
+* @param w http.ResponseWriter, r *http.Request, statusCode int, data interface{}
 * @return error
 **/
 func Stream(w http.ResponseWriter, r *http.Request, statusCode int, data interface{}) error {
@@ -331,9 +321,7 @@ func Stream(w http.ResponseWriter, r *http.Request, statusCode int, data interfa
 
 /**
 * HTTPApp
-* @param r chi.Router
-* @param path string
-* @param root http.FileSystem
+* @param r chi.Router, path string, root http.FileSystem
 **/
 func HTTPApp(r chi.Router, path string, root http.FileSystem) {
 	if strings.ContainsAny(path, "{}*") {

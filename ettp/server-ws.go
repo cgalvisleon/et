@@ -3,6 +3,7 @@ package ettp
 import (
 	"net/http"
 
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
@@ -10,9 +11,9 @@ import (
 )
 
 /**
-* mountHandlerFuncWS
+* mountWSFunc
 **/
-func (s *Server) mountHandlerFuncWS() {
+func (s *Server) mountWSFunc() {
 	s.Get("/realtime", s.wsRealtime, "Websocket")
 	s.Private().Get("/ws", s.wsUpgrade, "Websocket")
 	s.Private().Get("/realtime/publications", s.wsChannels, "Websocket")
@@ -20,6 +21,34 @@ func (s *Server) mountHandlerFuncWS() {
 	s.Private().Post("/realtime", s.wsPublish, "Websocket")
 
 	s.Save()
+}
+
+/**
+* StartWS
+**/
+func (s *Server) StartWS() error {
+	if err := config.Validate([]string{
+		"REDIS_HOST",
+		"REDIS_PASSWORD",
+		"REDIS_DB",
+	}); err != nil {
+		return err
+	}
+
+	if s.ws == nil {
+		s.ws = ws.NewHub()
+		s.ws.Start()
+		s.ws.JoinTo(et.Json{
+			"adapter":  "redis",
+			"host":     config.String("REDIS_HOST", ""),
+			"dbname":   config.Int("REDIS_DB", 0),
+			"password": config.String("REDIS_PASSWORD", ""),
+		})
+	}
+
+	s.mountWSFunc()
+
+	return nil
 }
 
 /**

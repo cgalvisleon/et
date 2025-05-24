@@ -5,7 +5,7 @@ import (
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/reg"
+	"github.com/cgalvisleon/et/utility"
 	"github.com/cgalvisleon/et/ws"
 )
 
@@ -36,7 +36,7 @@ func Load(name string) (*ws.Client, error) {
 	password := config.String("RT_PASSWORD", "")
 	reconnect := config.Int("RT_RECONNECT", 3)
 	client, err := ws.Login(&ws.ClientConfig{
-		ClientId:  reg.GenId("RealTime"),
+		ClientId:  utility.UUID(),
 		Name:      name,
 		Url:       url,
 		Reconnect: reconnect,

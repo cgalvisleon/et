@@ -21,12 +21,25 @@ func Load() {
 * @param id, name, spec string, job func()
 * @return error
 **/
-func AddJob(id, name, spec string, job func()) error {
+func AddJob(id, name, spec, channel string, params et.Json) error {
 	if crontab == nil {
 		return errors.New("crontab not initialized")
 	}
 
-	return crontab.AddJob(id, name, spec, job)
+	return crontab.AddJob(id, name, spec, channel, params, nil)
+}
+
+/**
+* AddFnJob
+* @param id, name, spec string, fn func()
+* @return error
+**/
+func AddFnJob(id, name, spec string, fn func()) error {
+	if crontab == nil {
+		return errors.New("crontab not initialized")
+	}
+
+	return crontab.AddJob(id, name, spec, "", et.Json{}, fn)
 }
 
 /**

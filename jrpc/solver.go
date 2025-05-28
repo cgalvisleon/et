@@ -1,11 +1,11 @@
 package jrpc
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/mistake"
 )
 
 type Solver struct {
@@ -41,7 +41,7 @@ func (s *Solver) serialize() et.Json {
 func getSolver(method string) (*Solver, error) {
 	lst := strings.Split(method, ".")
 	if len(lst) != 2 {
-		return nil, mistake.Newf(ERR_METHOD_NOT_FOUND, method)
+		return nil, fmt.Errorf(ERR_METHOD_NOT_FOUND, method)
 	}
 
 	packageName := lst[0]
@@ -53,18 +53,18 @@ func getSolver(method string) (*Solver, error) {
 
 	idx := slices.IndexFunc(packages, func(p *Package) bool { return p.Name == packageName })
 	if idx == -1 {
-		return nil, mistake.Newf(ERR_PACKAGE_NOT_FOUND, packageName)
+		return nil, fmt.Errorf(ERR_PACKAGE_NOT_FOUND, packageName)
 	}
 
 	pkg := packages[idx]
 	idx = slices.IndexFunc(pkg.Solvers, func(s *Solver) bool { return s.Method == methodName })
 	if idx == -1 {
-		return nil, mistake.Newf(ERR_METHOD_NOT_FOUND, method)
+		return nil, fmt.Errorf(ERR_METHOD_NOT_FOUND, method)
 	}
 
 	solver := pkg.Solvers[idx]
 	if solver == nil {
-		return nil, mistake.Newf(ERR_METHOD_NOT_FOUND, method)
+		return nil, fmt.Errorf(ERR_METHOD_NOT_FOUND, method)
 	}
 
 	return solver, nil

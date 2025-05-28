@@ -1,6 +1,7 @@
 package mem
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -8,7 +9,6 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/mistake"
 )
 
 type Mem struct {
@@ -109,7 +109,7 @@ func (c *Mem) Get(key string, def string) (string, error) {
 		return item.Str(), nil
 	}
 
-	return def, mistake.New("IsNil")
+	return def, errors.New("IsNil")
 }
 
 /**

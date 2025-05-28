@@ -2,6 +2,8 @@ package cache
 
 import (
 	"context"
+	"runtime"
+	"slices"
 	"sync"
 
 	"github.com/cgalvisleon/et/config"
@@ -11,7 +13,14 @@ import (
 
 const PackageName = "cache"
 
-var conn *Conn
+var (
+	os   = ""
+	conn *Conn
+)
+
+func init() {
+	os = runtime.GOOS
+}
 
 type Conn struct {
 	*redis.Client
@@ -40,6 +49,10 @@ func FromId() string {
 * @return error
 **/
 func Load() error {
+	if !slices.Contains([]string{"linux", "darwin", "windows"}, os) {
+		return nil
+	}
+
 	if conn != nil {
 		return nil
 	}

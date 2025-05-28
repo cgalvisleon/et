@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -15,7 +16,6 @@ import (
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/file"
-	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
@@ -137,15 +137,15 @@ func UploaderFile(r *http.Request, folder, name string) (et.Item, error) {
 **/
 func UploaderB64(b64, filename, contentType string) (et.Item, error) {
 	if !utility.ValidStr(b64, 0, []string{""}) {
-		return et.Item{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "b64")
+		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "b64")
 	}
 
 	if !utility.ValidStr(filename, 0, []string{""}) {
-		return et.Item{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "filename")
+		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "filename")
 	}
 
 	if !utility.ValidStr(contentType, 0, []string{""}) {
-		return et.Item{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "content-type")
+		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "content-type")
 	}
 
 	err := config.Validate([]string{

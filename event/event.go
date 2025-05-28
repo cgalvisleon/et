@@ -1,6 +1,8 @@
 package event
 
 import (
+	"runtime"
+	"slices"
 	"sync"
 
 	"github.com/cgalvisleon/et/config"
@@ -10,7 +12,14 @@ import (
 
 const PackageName = "event"
 
-var conn *Conn
+var (
+	conn *Conn
+	os   = ""
+)
+
+func init() {
+	os = runtime.GOOS
+}
 
 type Conn struct {
 	*nats.Conn
@@ -24,6 +33,10 @@ type Conn struct {
 * @return error
 **/
 func Load() error {
+	if !slices.Contains([]string{"linux", "darwin", "windows"}, os) {
+		return nil
+	}
+
 	if conn != nil {
 		return nil
 	}

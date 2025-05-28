@@ -2,9 +2,8 @@ package et
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
-
-	"github.com/cgalvisleon/et/logs"
 )
 
 type Items struct {
@@ -26,7 +25,7 @@ func (s *Items) Scan(src interface{}) error {
 	case string:
 		ba = []byte(v)
 	default:
-		return logs.Errorf(`json/Scan - Failed to unmarshal JSON value:%s`, src)
+		return fmt.Errorf(`json/Scan - Failed to unmarshal JSON value:%s`, src)
 	}
 
 	var t []Json

@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
@@ -29,7 +29,7 @@ type SyncFile struct {
 
 func NewSyncFile(dataDirectory, name string, initialData any) (*SyncFile, error) {
 	if !utility.ValidStr(dataDirectory, 1, []string{"/", ""}) {
-		return nil, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "dataDirectory")
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "dataDirectory")
 	}
 
 	dir, err := MakeFolder(dataDirectory)

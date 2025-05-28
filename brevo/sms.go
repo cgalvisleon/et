@@ -1,11 +1,12 @@
 package brevo
 
 import (
+	"errors"
+	"fmt"
 	"slices"
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/strs"
@@ -18,15 +19,15 @@ import (
 **/
 func sendSms(sender, organisation string, contactNumbers []string, content string, params []et.Json, tp string) (et.Items, error) {
 	if len(contactNumbers) == 0 {
-		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "contactNumbers")
+		return et.Items{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "contactNumbers")
 	}
 
 	if strs.IsEmpty(content) {
-		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "content")
+		return et.Items{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "content")
 	}
 
 	if !slices.Contains([]string{"Transactional", "Promotional"}, tp) {
-		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "type")
+		return et.Items{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "type")
 	}
 
 	if tp == "Promotional" {
@@ -74,7 +75,7 @@ func sendSms(sender, organisation string, contactNumbers []string, content strin
 		body["content"] = message
 		res, status := request.Post(url, header, body)
 		if status.Code != 200 {
-			return result, mistake.New(status.Message)
+			return result, errors.New(status.Message)
 		}
 
 		output, _ := res.ToJson()

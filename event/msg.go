@@ -1,9 +1,9 @@
 package event
 
 const (
-	ERR_ENV_REQUIRED    = "Variables de entorno requerida (%s)"
-	ERR_NOT_CONNECT     = "Not connect nats"
-	ERR_PARAM_NOT_FOUND = "Param not found"
-	ERR_CLIENT_ID_EMPTY = "Client id is empty"
-	PARAMS_UPDATED      = "Params updated"
+	ERR_ENV_REQUIRED    = "variables de entorno requerida (%s)"
+	ERR_NOT_CONNECT     = "no se conecto a nats"
+	ERR_PARAM_NOT_FOUND = "parametro no encontrado"
+	ERR_CLIENT_ID_EMPTY = "id de cliente esta vacio"
+	PARAMS_UPDATED      = "parametros actualizados"
 )

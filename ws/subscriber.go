@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
 
@@ -190,7 +191,13 @@ func (c *Subscriber) listener(message []byte) {
 	case TpPing:
 		response(true, "pong")
 	case TpSetFrom:
-		data, err := et.Object(msg.Data)
+		src, err := json.Marshal(msg.Data)
+		if err != nil {
+			response(false, err.Error())
+			return
+		}
+
+		data, err := et.Object(string(src))
 		if err != nil {
 			response(false, err.Error())
 			return

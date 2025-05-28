@@ -1,9 +1,9 @@
-package atrib
+package et
 
 import (
 	"encoding/json"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/google/uuid"
 )
 
 type TypeAtrib int
@@ -19,9 +19,10 @@ const (
 )
 
 type Atrib struct {
+	Id           string      `json:"id"`
 	Name         string      `json:"name"`
 	Type         TypeAtrib   `json:"type"`
-	Definition   et.Json     `json:"definition"`
+	Definition   Json        `json:"definition"`
 	DefaultValue interface{} `json:"default_value"`
 }
 
@@ -33,25 +34,26 @@ type Atrib struct {
  */
 func NewAtrib(name string, typeAtrib TypeAtrib) *Atrib {
 	return &Atrib{
+		Id:           uuid.NewString(),
 		Name:         name,
 		Type:         typeAtrib,
-		Definition:   et.Json{},
+		Definition:   Json{},
 		DefaultValue: "",
 	}
 }
 
 /**
  * Json
- * @return et.Json, error
+ * @return Json, error
  */
-func (s *Atrib) Json() (et.Json, error) {
-	jsonBytes, err := json.Marshal(s)
+func (s *Atrib) Json() (Json, error) {
+	bt, err := json.Marshal(s)
 	if err != nil {
 		return nil, err
 	}
 
-	var result et.Json
-	err = json.Unmarshal(jsonBytes, &result)
+	var result Json
+	err = json.Unmarshal(bt, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -61,14 +63,9 @@ func (s *Atrib) Json() (et.Json, error) {
 
 /**
  * Load
- * @param data et.Json
+ * @param data string
  * @return error
  */
-func (s *Atrib) Load(data et.Json) error {
-	jsonBytes, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(jsonBytes, s)
+func (s *Atrib) Load(scr string) error {
+	return json.Unmarshal([]byte(scr), s)
 }

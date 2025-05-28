@@ -146,26 +146,48 @@ func (e Message) Encode() ([]byte, error) {
 }
 
 /**
-* ToJson return the message as et.Json
-* @return et.Json
+* serialize
+* @return []byte, error
 **/
-func (e Message) ToJson() et.Json {
-	result, err := et.Object(e)
+func (s Message) serialize() ([]byte, error) {
+	result, err := json.Marshal(s)
 	if err != nil {
-		return et.Json{}
+		return []byte{}, err
 	}
 
-	return result
+	return result, nil
 }
 
 /**
-* ToString return the message as string
+* ToJson
+* @return et.Json, error
+**/
+func (s Message) ToJson() (et.Json, error) {
+	definition, err := s.serialize()
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	result := et.Json{}
+	err = json.Unmarshal(definition, &result)
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	return result, nil
+}
+
+/**
+* ToString
 * @return string
 **/
-func (e Message) ToString() string {
-	result := e.ToJson()
+func (s Message) ToString() string {
+	j, err := s.ToJson()
+	if err != nil {
+		return et.Json{}.ToString()
+	}
 
-	return result.ToString()
+	return j.ToString()
 }
 
 /**

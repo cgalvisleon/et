@@ -2,23 +2,26 @@ package crontab
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/mistake"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/robfig/cron/v3"
 )
 
 type Job struct {
-	Id      string `json:"id"`
-	Name    string `json:"name"`
-	Spec    string `json:"spec"`
-	Started bool   `json:"started"`
-	Idx     int    `json:"idx"`
-	f       func() `json:"-"`
+	Id      string  `json:"id"`
+	Name    string  `json:"name"`
+	Channel string  `json:"channel"`
+	Params  et.Json `json:"params"`
+	Spec    string  `json:"spec"`
+	Started bool    `json:"started"`
+	Idx     int     `json:"idx"`
+	fn      func()  `json:"-"`
 }
 
 type Jobs struct {
@@ -66,7 +69,13 @@ func (s *Jobs) startJob(idx int) (int, error) {
 		return 0, errors.New("job already started")
 	}
 
-	id, err := s.crontab.AddFunc(job.Spec, job.f)
+	if job.fn == nil {
+		job.fn = func() {
+			event.Publish(job.Channel, job.Params)
+		}
+	}
+
+	id, err := s.crontab.AddFunc(job.Spec, job.fn)
 	if err != nil {
 		return 0, err
 	}
@@ -100,12 +109,12 @@ func (s *Jobs) stopJobs(idx int) error {
 
 /**
 * AddJob
-* @param id, name, spec string, job func()
+* @param id, name, spec, channel string, params et.Json
 * @return int, error
 **/
-func (s *Jobs) AddJob(id, name, spec string, job func()) error {
+func (s *Jobs) AddJob(id, name, spec, channel string, params et.Json, fn func()) error {
 	if !utility.ValidStr(name, 0, []string{"", " "}) {
-		return mistake.Newf(msg.MSG_ATRIB_REQUIRED, "name")
+		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
 
 	idx := slices.IndexFunc(s.jobs, func(j *Job) bool { return j.Name == name })
@@ -116,10 +125,12 @@ func (s *Jobs) AddJob(id, name, spec string, job func()) error {
 	s.jobs = append(s.jobs, &Job{
 		Id:      id,
 		Name:    name,
+		Channel: channel,
+		Params:  params,
 		Spec:    spec,
 		Started: false,
 		Idx:     len(s.jobs),
-		f:       job,
+		fn:      fn,
 	})
 
 	return nil

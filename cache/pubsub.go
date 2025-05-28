@@ -1,6 +1,8 @@
 package cache
 
 import (
+	"encoding/json"
+
 	"github.com/cgalvisleon/et/et"
 	"github.com/redis/go-redis/v9"
 )
@@ -10,13 +12,49 @@ type Message struct {
 	Content string `json:"content"`
 }
 
+/**
+* serialize
+* @return []byte, error
+**/
+func (s Message) serialize() ([]byte, error) {
+	result, err := json.Marshal(s)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	return result, nil
+}
+
+/**
+* ToJson
+* @return et.Json, error
+**/
 func (s Message) ToJson() (et.Json, error) {
-	result, err := et.Object(s)
+	definition, err := s.serialize()
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	result := et.Json{}
+	err = json.Unmarshal(definition, &result)
 	if err != nil {
 		return et.Json{}, err
 	}
 
 	return result, nil
+}
+
+/**
+* ToString
+* @return string
+**/
+func (s Message) ToString() string {
+	j, err := s.ToJson()
+	if err != nil {
+		return et.Json{}.ToString()
+	}
+
+	return j.ToString()
 }
 
 /**

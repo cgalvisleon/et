@@ -47,29 +47,48 @@ func (m Message) Encode() ([]byte, error) {
 }
 
 /**
-* ToString
-* @return string
+* serialize
+* @return []byte, error
 **/
-func (m Message) ToString() string {
-	j, err := json.Marshal(m)
+func (s Message) serialize() ([]byte, error) {
+	result, err := json.Marshal(s)
 	if err != nil {
-		return ""
+		return []byte{}, err
 	}
 
-	return string(j)
+	return result, nil
 }
 
 /**
 * ToJson
 * @return et.Json, error
 **/
-func (m Message) ToJson() (et.Json, error) {
-	j, err := et.Object(m)
+func (s Message) ToJson() (et.Json, error) {
+	definition, err := s.serialize()
 	if err != nil {
 		return et.Json{}, err
 	}
 
-	return j, nil
+	result := et.Json{}
+	err = json.Unmarshal(definition, &result)
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	return result, nil
+}
+
+/**
+* ToString
+* @return string
+**/
+func (s Message) ToString() string {
+	j, err := s.ToJson()
+	if err != nil {
+		return et.Json{}.ToString()
+	}
+
+	return j.ToString()
 }
 
 /**

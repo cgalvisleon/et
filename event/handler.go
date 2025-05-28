@@ -1,12 +1,12 @@
 package event
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/nats-io/nats.go"
@@ -101,7 +101,7 @@ func Subscribe(channel string, f func(Message)) (err error) {
 **/
 func Queue(channel, queue string, f func(Message)) (err error) {
 	if conn == nil {
-		return mistake.New(ERR_NOT_CONNECT)
+		return errors.New(ERR_NOT_CONNECT)
 	}
 
 	if len(channel) == 0 {

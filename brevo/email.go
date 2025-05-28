@@ -1,11 +1,12 @@
 package brevo
 
 import (
+	"errors"
+	"fmt"
 	"slices"
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/strs"
@@ -19,19 +20,19 @@ import (
 **/
 func sendEmail(sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp string) (et.Items, error) {
 	if len(to) == 0 {
-		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "to")
+		return et.Items{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "to")
 	}
 
 	if !utility.ValidStr(subject, 0, []string{""}) {
-		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "subject")
+		return et.Items{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "subject")
 	}
 
 	if !utility.ValidStr(htmlContent, 0, []string{""}) {
-		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "htmlContent")
+		return et.Items{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "htmlContent")
 	}
 
 	if !slices.Contains([]string{"Transactional", "Promotional"}, tp) {
-		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "type")
+		return et.Items{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "type")
 	}
 
 	err := config.Validate([]string{
@@ -67,7 +68,7 @@ func sendEmail(sender et.Json, to []et.Json, subject string, htmlContent string,
 	result := et.Items{}
 	res, status := request.Post(url, header, body)
 	if status.Code != 200 {
-		return result, mistake.New(status.Message)
+		return result, errors.New(status.Message)
 	}
 
 	output, _ := res.ToJson()

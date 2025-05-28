@@ -2,30 +2,35 @@ package jrpc
 
 import (
 	"encoding/gob"
+	"fmt"
+	"runtime"
+	"slices"
 
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
 )
 
-var pkg *Package
+var (
+	pkg *Package
+	os  = ""
+)
 
 func LoadTo(name, host string, port int) (*Package, error) {
 	if !utility.ValidStr(name, 1, []string{"", ""}) {
-		return nil, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "name")
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
 
 	if !utility.ValidStr(host, 1, []string{"", ""}) {
-		return nil, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "host")
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "host")
 	}
 
 	if !utility.ValidInt(port, []int{1, 65535}) {
-		return nil, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "port")
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "port")
 	}
 
 	name = strs.DaskSpace(name)
@@ -43,6 +48,10 @@ func LoadTo(name, host string, port int) (*Package, error) {
 * load
 **/
 func Load(name string) error {
+	if !slices.Contains([]string{"linux", "darwin", "windows"}, os) {
+		return nil
+	}
+
 	if pkg != nil {
 		return nil
 	}
@@ -90,6 +99,7 @@ func Close() {
 }
 
 func init() {
+	os = runtime.GOOS
 	gob.Register(map[string]interface{}{})
 	gob.Register(et.Json{})
 	gob.Register(et.Item{})

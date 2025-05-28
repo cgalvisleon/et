@@ -1,12 +1,11 @@
 package strs
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
-
-	"github.com/cgalvisleon/et/mistake"
 )
 
 /**
@@ -341,7 +340,7 @@ func StrToBool(val string) (bool, error) {
 		return false, nil
 	}
 
-	return false, mistake.New("invalid boolean value")
+	return false, errors.New("invalid boolean value")
 }
 
 /**

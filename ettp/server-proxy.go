@@ -2,6 +2,7 @@ package ettp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -14,7 +15,6 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/middleware"
-	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/response"
 	rt "github.com/cgalvisleon/et/router"
@@ -443,7 +443,7 @@ func (s *Server) DeleteProxyById(id string, save bool) error {
 
 	proxy, ok := s.proxys[path]
 	if !ok {
-		return mistake.New(MSG_ROUTE_NOT_FOUND)
+		return errors.New(MSG_ROUTE_NOT_FOUND)
 	}
 
 	pkg := proxy.pkg

@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/mistake"
 )
 
 type TypeUnity int
@@ -446,7 +445,7 @@ func (s *Quantity) To(un TypeUnity) error {
 		}
 	}
 
-	return mistake.Newf(`Invalid conversion from %s to %s`, s.Unity.Str(), un.Str())
+	return fmt.Errorf(`invalid conversion from %s to %s`, s.Unity.Str(), un.Str())
 }
 
 /**

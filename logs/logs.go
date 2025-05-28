@@ -1,12 +1,12 @@
 package logs
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
 	"strings"
 
-	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/stdrout"
 )
 
@@ -33,7 +33,7 @@ func Alert(err error) error {
 }
 
 func Alertm(message string) error {
-	err := mistake.New(message)
+	err := errors.New(message)
 	if err != nil {
 		Alert(err)
 	}
@@ -42,7 +42,7 @@ func Alertm(message string) error {
 }
 
 func Alertf(format string, args ...any) error {
-	err := mistake.Newf(format, args...)
+	err := fmt.Errorf(format, args...)
 	return Alert(err)
 }
 
@@ -64,13 +64,13 @@ func Error(err error) error {
 }
 
 func Errorm(message string) error {
-	err := mistake.New(message)
+	err := errors.New(message)
 	return Error(err)
 }
 
 func Errorf(format string, args ...any) error {
 	message := fmt.Sprintf(format, args...)
-	err := mistake.New(message)
+	err := errors.New(message)
 	return Error(err)
 }
 
@@ -91,7 +91,7 @@ func Fatal(err error) error {
 }
 
 func Fatalm(message string) error {
-	err := mistake.New(message)
+	err := errors.New(message)
 	return Fatal(err)
 }
 
@@ -104,7 +104,7 @@ func Panic(err error) error {
 
 func Panicf(format string, args ...any) error {
 	message := fmt.Sprintf(format, args...)
-	err := mistake.New(message)
+	err := errors.New(message)
 	return Panic(err)
 }
 

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -72,7 +71,7 @@ func (s *Json) ScanRows(rows *sql.Rows) error {
 		case []uint8:
 			return string(v)
 		default:
-			logs.Debugf(`[]byte Type:%v Value:%v`, reflect.TypeOf(v), v)
+			logs.Debugf(`ScanRows: []byte Type:%v Value:%v`, reflect.TypeOf(v), v)
 			return v
 		}
 	}
@@ -163,36 +162,11 @@ func (s Json) IsEmpty() bool {
 
 /**
 * ValAny
-* @param defaultVal interface{}
-* @param atribs ...string
+* @param defaultVal interface{}, atribs ...string
 * @return any
 **/
 func (s Json) ValAny(defaultVal interface{}, atribs ...string) interface{} {
-	var current interface{} = s
-
-	n := len(atribs)
-	for i := 0; i < n; i++ {
-		switch v := current.(type) {
-		case Json:
-			current = v[atribs[i]]
-			if current == nil {
-				return defaultVal
-			}
-		case map[string]interface{}:
-			current = v[atribs[i]]
-			if current == nil {
-				return defaultVal
-			}
-		default:
-			return defaultVal
-		}
-
-		if i == n-1 {
-			return current
-		}
-	}
-
-	return current
+	return valAny(s, defaultVal, atribs...)
 }
 
 /**
@@ -208,7 +182,7 @@ func (s Json) ValStr(defaultVal string, atribs ...string) string {
 	case string:
 		return v
 	default:
-		return strs.Format(`%v`, v)
+		return fmt.Sprintf(`%v`, v)
 	}
 }
 
@@ -320,10 +294,10 @@ func (s Json) ValBool(defaultVal bool, atribs ...string) bool {
 	case int:
 		return v == 1
 	case string:
-		switch strings.ToUpper(v) {
-		case "TRUE":
+		switch strings.ToLower(v) {
+		case "true":
 			return true
-		case "FALSE":
+		case "false":
 			return false
 		default:
 			return defaultVal
@@ -358,33 +332,14 @@ func (s Json) ValTime(defaultVal time.Time, atribs ...string) time.Time {
 }
 
 /**
-* ValJson return Json value of the key
-* @param defaultVal Json
-* @param atribs ...string
+* ValJson
+* @param defaultVal Json, atribs ...string
 * @return Json
 **/
 func (s Json) ValJson(defaultVal Json, atribs ...string) Json {
-	val := s.ValAny(defaultVal, atribs...)
-
-	result, err := Object(val)
+	result, err := valJson(s, defaultVal, atribs...)
 	if err != nil {
-		return defaultVal
-	}
-
-	return result
-}
-
-/**
-* ValJson return Json value of the key
-* @param defaultVal []interface{}
-* @param atribs ...string
-* @return []interface{}
-**/
-func (s Json) ValArray(defaultVal []interface{}, atribs ...string) []interface{} {
-	val := s.ValAny(defaultVal, atribs...)
-
-	result, err := Array(val)
-	if err != nil {
+		logs.Debugf(`ValJson: %v error:%v type:%T`, s, err.Error(), s)
 		return defaultVal
 	}
 
@@ -498,12 +453,75 @@ func (s Json) Json(atrib string) Json {
 }
 
 /**
-* J return the value of the key
-* @param atrib string
-* @return Json
+* ValArray
+* @param defaultVal []interface{}, atribs ...string
+* @return []interface{}
 **/
-func (s Json) J(atrib string) Json {
-	return s.ValJson(Json{}, atrib)
+func (s Json) ValArray(defaultVal []interface{}, atribs ...string) []interface{} {
+	var result []interface{}
+	val := s.ValAny(defaultVal, atribs...)
+
+	switch v := val.(type) {
+	case []interface{}:
+		return v
+	case []Json:
+		for _, item := range v {
+			result = append(result, item)
+		}
+
+		return result
+	case []map[string]interface{}:
+		for _, item := range v {
+			result = append(result, item)
+		}
+
+		return result
+	case []string:
+		for _, item := range v {
+			result = append(result, item)
+		}
+
+		return result
+	case []int:
+		for _, item := range v {
+			result = append(result, item)
+		}
+
+		return result
+	case []int64:
+		for _, item := range v {
+			result = append(result, item)
+		}
+
+		return result
+	case []float64:
+		for _, item := range v {
+			result = append(result, item)
+		}
+
+		return result
+	case []float32:
+		for _, item := range v {
+			result = append(result, item)
+		}
+
+		return result
+	case []bool:
+		for _, item := range v {
+			result = append(result, item)
+		}
+
+		return result
+	default:
+		src := fmt.Sprintf(`%v`, val)
+		err := json.Unmarshal([]byte(src), &result)
+		if err != nil {
+			logs.Debugf(`ValArray: %v error:%v type:%T`, val, err.Error(), val)
+			return defaultVal
+		}
+
+		return result
+	}
 }
 
 /**
@@ -511,8 +529,8 @@ func (s Json) J(atrib string) Json {
 * @param atrib string
 * @return []Json
 **/
-func (s Json) Array(atrib string) []interface{} {
-	return s.ValArray([]interface{}{}, atrib)
+func (s Json) Array(atrib ...string) []interface{} {
+	return s.ValArray([]interface{}{}, atrib...)
 }
 
 /**
@@ -521,18 +539,10 @@ func (s Json) Array(atrib string) []interface{} {
 **/
 func (s Json) ArrayStr(atribs ...string) []string {
 	var result = []string{}
-	vals := s.ValArray([]interface{}{}, atribs...)
-	for i, val := range vals {
-		v, ok := val.(string)
-		if !ok {
-			return result
-		}
-
-		if i == 0 {
-			result = []string{}
-		}
-
-		result = append(result, v)
+	vals := s.Array(atribs...)
+	for _, val := range vals {
+		src := fmt.Sprintf(`%v`, val)
+		result = append(result, src)
 	}
 
 	return result
@@ -545,18 +555,12 @@ func (s Json) ArrayStr(atribs ...string) []string {
 **/
 func (s Json) ArrayInt(atribs ...string) []int {
 	var result = []int{}
-	vals := s.ValArray([]interface{}{}, atribs...)
-	for i, val := range vals {
+	vals := s.Array(atribs...)
+	for _, val := range vals {
 		v, ok := val.(int)
-		if !ok {
-			return result
+		if ok {
+			result = append(result, v)
 		}
-
-		if i == 0 {
-			result = []int{}
-		}
-
-		result = append(result, v)
 	}
 
 	return result
@@ -569,18 +573,12 @@ func (s Json) ArrayInt(atribs ...string) []int {
 **/
 func (s Json) ArrayInt64(atribs ...string) []int64 {
 	var result = []int64{}
-	vals := s.ValArray([]interface{}{}, atribs...)
-	for i, val := range vals {
+	vals := s.Array(atribs...)
+	for _, val := range vals {
 		v, ok := val.(int64)
-		if !ok {
-			return result
+		if ok {
+			result = append(result, v)
 		}
-
-		if i == 0 {
-			result = []int64{}
-		}
-
-		result = append(result, v)
 	}
 
 	return result
@@ -593,18 +591,12 @@ func (s Json) ArrayInt64(atribs ...string) []int64 {
 **/
 func (s Json) ArrayJson(atribs ...string) []Json {
 	var result = []Json{}
-	vals := s.ValArray([]interface{}{}, atribs...)
-	for i, val := range vals {
-		v, err := Object(val)
-		if err != nil {
-			return result
+	vals := s.Array(atribs...)
+	for _, val := range vals {
+		v, ok := val.(Json)
+		if ok {
+			result = append(result, v)
 		}
-
-		if i == 0 {
-			result = []Json{}
-		}
-
-		result = append(result, v)
 	}
 
 	return result

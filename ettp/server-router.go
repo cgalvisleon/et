@@ -1,13 +1,14 @@
 package ettp
 
 import (
+	"errors"
+	"fmt"
 	"slices"
 	"strings"
 
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/msg"
 	rt "github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/utility"
@@ -20,15 +21,15 @@ import (
 **/
 func (s *Server) setRouter(id, method, path, resolve string, kind TypeApi, header et.Json, tpHeader rt.TpHeader, excludeHeader []string, private bool, packageName string, save bool) (*Router, error) {
 	if !utility.ValidStr(method, 0, []string{""}) {
-		return nil, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "method")
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "method")
 	}
 
 	if !utility.ValidStr(path, 0, []string{""}) {
-		return nil, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "path")
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "path")
 	}
 
 	if !utility.ValidStr(resolve, 0, []string{""}) {
-		return nil, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "resolve")
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "resolve")
 	}
 
 	if !utility.ValidStr(id, 0, []string{"", "new", "-1"}) {
@@ -135,7 +136,7 @@ func (s *Server) GetRouteById(id string) *Router {
 func (s *Server) DeleteRouteById(id string, save bool) error {
 	router := s.GetRouteById(id)
 	if router == nil {
-		return mistake.New(MSG_ROUTE_NOT_FOUND)
+		return errors.New(MSG_ROUTE_NOT_FOUND)
 	}
 
 	if router.pkg != nil {
@@ -176,7 +177,7 @@ func (s *Server) SetRouter(private bool, id, method, path, resolve string, heade
 
 	route, err := s.setRouter(id, method, path, resolve, TpApiRest, header, tpHeader, excludeHeader, private, packageName, saved)
 	if err != nil {
-		return nil, mistake.New(MSG_ROUTE_NOT_REGISTER)
+		return nil, errors.New(MSG_ROUTE_NOT_REGISTER)
 	}
 
 	event.Publish(rt.APIGATEWAY_SET, et.Json{

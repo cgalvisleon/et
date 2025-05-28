@@ -1,14 +1,26 @@
 package dt
 
 import (
+	"time"
+
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 )
 
+var duration = time.Duration(1) * time.Hour * 24
+
 type Object struct {
 	et.Item
 	Key string `json:"key"`
+}
+
+/**
+* SetDuration
+* @param d time.Duration
+**/
+func SetDuration(d time.Duration) {
+	duration = d
 }
 
 /**
@@ -59,7 +71,7 @@ func (s *Object) save() bool {
 	}
 
 	val := s.ToString()
-	cache.SetD(s.Key, val, 1)
+	cache.Set(s.Key, val, duration)
 
 	return true
 }

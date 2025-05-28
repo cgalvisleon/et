@@ -1,12 +1,12 @@
 package aws
 
 import (
+	"fmt"
 	"slices"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sns"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/strs"
 )
@@ -18,15 +18,15 @@ import (
 **/
 func SendSMS(contactNumbers []string, content string, params []et.Json, tp string) (et.Items, error) {
 	if len(contactNumbers) == 0 {
-		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "contactNumbers")
+		return et.Items{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "contactNumbers")
 	}
 
 	if content == "" {
-		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "content")
+		return et.Items{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "content")
 	}
 
 	if !slices.Contains([]string{"Transactional", "Promotional"}, tp) {
-		return et.Items{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "type")
+		return et.Items{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "type")
 	}
 
 	sess, err := newSession()

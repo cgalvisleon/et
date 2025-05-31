@@ -123,9 +123,7 @@ func (s Json) ToString() string {
 		return ""
 	}
 
-	result := string(bt)
-
-	return result
+	return string(bt)
 }
 
 /**
@@ -425,8 +423,8 @@ func (s Json) Bool(atribs ...string) bool {
 * @return []byte
 **/
 func (s Json) Byte(atribs ...string) ([]byte, error) {
-	data := s.ValAny("", atribs...)
-	bytes, err := json.Marshal(data)
+	value := s.ValAny("", atribs...)
+	bytes, err := json.Marshal(value)
 	if err != nil {
 		return nil, err
 	}
@@ -513,10 +511,11 @@ func (s Json) ValArray(defaultVal []interface{}, atribs ...string) []interface{}
 
 		return result
 	default:
-		src := fmt.Sprintf(`%v`, val)
+		src := fmt.Sprintf(`%v`, v)
 		err := json.Unmarshal([]byte(src), &result)
 		if err != nil {
-			logs.Debugf(`ValArray: %v error:%v type:%T`, val, err.Error(), val)
+			err := fmt.Errorf(`valor: %v error:%v type:%T`, val, err.Error(), val)
+			logs.Tracer("ValArray", err)
 			return defaultVal
 		}
 

@@ -35,6 +35,11 @@ func init() {
 	}
 }
 
+/**
+* Printl
+* @param kind string, color string, args ...any
+* @return string
+**/
 func Printl(kind string, color string, args ...any) string {
 	kind = strings.ToUpper(kind)
 	message := fmt.Sprint(args...)
@@ -69,6 +74,11 @@ func Printl(kind string, color string, args ...any) string {
 	return result
 }
 
+/**
+* Traces
+* @param kind string, color string, err error
+* @return error
+**/
 func Traces(kind, color string, err error) error {
 	Printl(kind, color, err.Error())
 
@@ -96,13 +106,20 @@ func Traces(kind, color string, err error) error {
 	return err
 }
 
-func PrintFunctionName() string {
-	pc, _, _, _ := runtime.Caller(2)
-	fullFuncName := runtime.FuncForPC(pc).Name()
-
-	return fullFuncName
+/**
+* GetFunctionName
+* @return string
+**/
+func GetFunctionName(idx int) string {
+	pc, _, _, _ := runtime.Caller(idx)
+	return runtime.FuncForPC(pc).Name()
 }
 
+/**
+* ErrorTraces
+* @param err error
+* @return []string
+**/
 func ErrorTraces(err error) []string {
 	var n = 1
 	var traces = []string{err.Error()}

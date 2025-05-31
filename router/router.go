@@ -67,10 +67,7 @@ func initRouter(name string) {
 		}
 
 		channel := fmt.Sprintf("%s/%s", APIGATEWAY_RESET, name)
-		err := event.Stack(channel, eventAction)
-		if err != nil {
-			logs.Error(err)
-		}
+		event.Stack(channel, eventAction)
 	}
 }
 

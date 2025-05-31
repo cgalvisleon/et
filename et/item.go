@@ -348,3 +348,18 @@ func (s *Item) Delete(keys []string) bool {
 func (s Item) ExistKey(key string) bool {
 	return s.Result.ExistKey(key)
 }
+
+/**
+* StrToItem convert a string to a Item
+* @param src string
+* @return Item
+**/
+func StrToItem(src string) (Item, error) {
+	var result Item
+	err := json.Unmarshal([]byte(src), &result)
+	if err != nil {
+		return Item{}, err
+	}
+
+	return result, nil
+}

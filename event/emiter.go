@@ -46,6 +46,7 @@ func (s *EventEmiter) eventEmiter(message Message) {
 	eventEmiter, ok := s.events[message.Channel]
 	if !ok {
 		logs.Alert(fmt.Errorf("event not found (%s)", message.Channel))
+		return
 	}
 
 	eventEmiter(message)

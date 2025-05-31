@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"runtime"
 	"strings"
 
 	"github.com/cgalvisleon/et/config"
@@ -98,7 +97,7 @@ func Tracer(kind, color string, err error) error {
 * @return error
 **/
 func Error(err error) error {
-	functionName := stdrout.PrintFunctionName()
+	functionName := stdrout.GetFunctionName(2)
 	if err != nil {
 		printLn("Error", "Yellow", err.Error(), " - ", functionName)
 	}
@@ -191,7 +190,7 @@ func Fatalm(message string) error {
 * @return error
 **/
 func Panic(err error) error {
-	functionName := stdrout.PrintFunctionName()
+	functionName := stdrout.GetFunctionName(2)
 	if err != nil {
 		printLn("Panic", "Red", err.Error(), " - ", functionName)
 	}
@@ -253,8 +252,7 @@ func Debugf(format string, args ...any) {
 * @return error
 **/
 func Rpc(packageName, args string) error {
-	pc, _, _, _ := runtime.Caller(1)
-	fullFuncName := runtime.FuncForPC(pc).Name()
+	fullFuncName := stdrout.GetFunctionName(1)
 	funcName := fullFuncName[strings.LastIndex(fullFuncName, "/")+1:]
 	funcName = funcName[strings.LastIndex(funcName, ".")+1:]
 	message := append([]any{packageName, ".", funcName, ":"}, args)

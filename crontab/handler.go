@@ -2,44 +2,57 @@ package crontab
 
 import (
 	"errors"
+	"net/http"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/response"
 )
 
 var crontab *Jobs
 
+/**
+* Load
+**/
 func Load() {
-	if crontab != nil {
+	crontab = New()
+	crontab.Load()
+}
+
+/**
+* Save
+**/
+func Save() {
+	if crontab == nil {
 		return
 	}
 
-	crontab = New()
+	crontab.Save()
 }
 
 /**
 * AddJob
-* @param id, name, spec string, job func()
-* @return error
+* @param name, spec, channel string, params et.Json
+* @return *Job, error
 **/
-func AddJob(id, name, spec, channel string, params et.Json) error {
+func AddJob(name, spec, channel string, params et.Json) (*Job, error) {
 	if crontab == nil {
-		return errors.New("crontab not initialized")
+		return nil, errors.New("crontab not initialized")
 	}
 
-	return crontab.AddJob(id, name, spec, channel, params, nil)
+	return crontab.AddJob(name, spec, channel, params, nil)
 }
 
 /**
 * AddFnJob
-* @param id, name, spec string, fn func()
-* @return error
+* @param name, spec, channel string, params et.Json
+* @return *Job, error
 **/
-func AddFnJob(id, name, spec string, fn func()) error {
+func AddFnJob(name, spec, channel string, params et.Json, fn func()) (*Job, error) {
 	if crontab == nil {
-		return errors.New("crontab not initialized")
+		return nil, errors.New("crontab not initialized")
 	}
 
-	return crontab.AddJob(id, name, spec, "", et.Json{}, fn)
+	return crontab.AddJob(name, spec, channel, params, fn)
 }
 
 /**
@@ -154,4 +167,25 @@ func Stop() error {
 	}
 
 	return crontab.Stop()
+}
+
+/**
+* HttpCrontabs
+* @param w http.ResponseWriter
+* @param r *http.Request
+**/
+func HttpCrontabs(w http.ResponseWriter, r *http.Request) {
+	if crontab == nil {
+		response.JSON(w, r, http.StatusInternalServerError, et.Json{
+			"message": "crontab not initialized",
+		})
+		return
+	}
+
+	result := et.Items{}
+	for _, job := range crontab.jobs {
+		result.Add(job.Json())
+	}
+
+	response.ITEMS(w, r, http.StatusOK, result)
 }

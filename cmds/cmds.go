@@ -7,8 +7,10 @@ import (
 )
 
 func Load(fileName string) (*Stage, error) {
-	exist := file.ExistPath(fileName)
-	if !exist {
+	info := file.ExistPath(fileName)
+	if info.Error != nil {
+		return nil, info.Error
+	} else if !info.Exist {
 		return nil, errors.New(MSG_FILE_NOT_FOUND)
 	}
 

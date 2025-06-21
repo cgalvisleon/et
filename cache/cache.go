@@ -89,3 +89,7 @@ func Close() {
 
 	logs.Log(PackageName, `Disconnect...`)
 }
+
+func IsLoad() bool {
+	return conn != nil
+}

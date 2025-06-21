@@ -1,6 +1,7 @@
 package utility
 
 import (
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -75,6 +76,15 @@ func GenKey(id string) string {
 	}
 
 	return id
+}
+
+/**
+* GenSnowflake
+* @return string
+**/
+func GenSnowflake() string {
+	ms := timezone.NowTime().UnixMilli()
+	return fmt.Sprintf("%d%03d", ms, rand.Intn(1000))
 }
 
 func init() {

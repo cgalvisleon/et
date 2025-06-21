@@ -10,7 +10,7 @@ import (
 
 type Package struct {
 	server  *Server   `json:"-"`
-	Id      string    `json:"id"`
+	ID      string    `json:"id"`
 	Name    string    `json:"name"`
 	routes  []*Router `json:"-"`
 	proxies []*Proxy  `json:"-"`
@@ -23,7 +23,7 @@ type Package struct {
 **/
 func newPakage(server *Server, name string) *Package {
 	result := &Package{
-		Id:      utility.UUID(),
+		ID:      utility.UUID(),
 		server:  server,
 		Name:    name,
 		routes:  []*Router{},
@@ -41,7 +41,7 @@ func newPakage(server *Server, name string) *Package {
 **/
 func (s *Package) Describe() et.Json {
 	result := et.Json{
-		"id":   s.Id,
+		"id":   s.ID,
 		"name": s.Name,
 		"routes": et.Json{
 			"count": len(s.routes),
@@ -132,7 +132,7 @@ func (s *Package) deleteRouteById(id string) bool {
 
 	s.routes = append(s.routes[:idx], s.routes[idx+1:]...)
 	if len(s.routes) == 0 {
-		idx := slices.IndexFunc(s.server.packages, func(e *Package) bool { return strs.Lowcase(e.Id) == strs.Lowcase(s.Id) })
+		idx := slices.IndexFunc(s.server.packages, func(e *Package) bool { return strs.Lowcase(e.ID) == strs.Lowcase(s.ID) })
 		if idx != -1 {
 			s.server.packages = append(s.server.packages[:idx], s.server.packages[idx+1:]...)
 		}

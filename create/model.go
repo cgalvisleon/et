@@ -102,7 +102,7 @@ func New() http.Handler {
 
 	err := pkg.LoadConfig()
 	if err != nil {
-		console.Alert(err)
+		console.Panic(err)
 	}
 
 	_, err = cache.Load()

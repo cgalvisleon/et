@@ -29,11 +29,11 @@ func Get(key, def string) (string, error) {
 }
 
 /**
-* Del
+* Delete
 * @param key string
 * @return bool
 **/
-func Del(key string) bool {
+func Delete(key string) bool {
 	if conn == nil {
 		return false
 	}

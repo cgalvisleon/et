@@ -71,7 +71,6 @@ func ExistPath(path string) FileInfo {
 		Info:  nil,
 		Error: nil,
 		IsDir: false,
-		Exist: true,
 	}
 
 	result.Path, result.Error = filepath.Abs(path)
@@ -87,6 +86,7 @@ func ExistPath(path string) FileInfo {
 		return result
 	}
 
+	result.Exist = true
 	result.IsDir = result.Exist && result.Info.IsDir()
 	if result.IsDir {
 		logs.Log("file", "exist path folder:", result.Path)

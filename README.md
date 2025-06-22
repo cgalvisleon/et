@@ -2,7 +2,7 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.23.0+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-v0.1.6-orange.svg)](https://github.com/cgalvisleon/et/releases)
+[![Version](https://img.shields.io/badge/Version-v0.1.7-orange.svg)](https://github.com/cgalvisleon/et/releases)
 
 ET es una biblioteca Go moderna y robusta que proporciona una amplia gama de funcionalidades para el desarrollo de aplicaciones empresariales. Diseñada para ser modular, eficiente y fácil de usar.
 
@@ -37,7 +37,7 @@ ET es una biblioteca Go moderna y robusta que proporciona una amplia gama de fun
 
 ```bash
 # Instalar la librería
-go get github.com/cgalvisleon/et@v0.1.6
+go get github.com/cgalvisleon/et@v0.1.7
 
 # O usar go mod
 go mod init myproject
@@ -357,19 +357,19 @@ gofmt -w .
 
 # Actualizar git y crear nueva versión
 git add .
-git commit -m "Release v0.1.6"
-git tag v0.1.6
+git commit -m "Release v0.1.7"
+git tag v0.1.7
 git push origin main --tags
 
 # Instalar la nueva versión
-go get github.com/cgalvisleon/et@v0.1.6
+go get github.com/cgalvisleon/et@v0.1.7
 ```
 
 ## 📋 Versiones y Releases
 
 ### Historial de Versiones
 
-#### v0.1.6
+#### v0.1.7
 
 - Mejoras en el sistema de WebSockets
 - Optimización del rendimiento del gateway
@@ -435,7 +435,7 @@ go build ./cmd/gateway/main.go
 ```bash
 # Ejecutar herramientas de creación
 go run github.com/cgalvisleon/et/cmd/create go
-go run github.com/cgalvisleon/et/cmd/cmd
+go run github.com/cgalvisleon/et/cmd/prepare go
 
 # Ejecutar comandos locales
 go run ./cmd/create go

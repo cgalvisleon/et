@@ -27,6 +27,11 @@ type SyncFile struct {
 	mutex     sync.Mutex
 }
 
+/**
+* NewSyncFile
+* @param dataDirectory, name string, initialData any
+* @return *SyncFile, error
+**/
 func NewSyncFile(dataDirectory, name string, initialData any) (*SyncFile, error) {
 	if !utility.ValidStr(dataDirectory, 1, []string{"/", ""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "dataDirectory")

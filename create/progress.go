@@ -1,30 +1,31 @@
 package create
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/schollz/progressbar/v3"
 )
 
 var bar *progressbar.ProgressBar
+var totalSteps int
+var currentStep int
 
-func ProgressInit() *progressbar.ProgressBar {
-	fmt.Println("")
-
+func ProgressAdd(step int) {
 	if bar == nil {
 		bar = progressbar.Default(100)
 	}
 
-	return bar
+	totalSteps += step
 }
 
-func ProgressNext(step int) *progressbar.ProgressBar {
+func ProgressNext() {
 	if bar == nil {
 		bar = progressbar.Default(100)
+		totalSteps = 100
+		currentStep = 0
 	}
-	bar.Add(step)
-	time.Sleep(40 * time.Millisecond)
 
-	return bar
+	currentStep++
+	bar.Add(100 / totalSteps * currentStep)
+	time.Sleep(40 * time.Millisecond)
 }

@@ -1,6 +1,7 @@
 package create
 
 import (
+	"github.com/cgalvisleon/et/create/template"
 	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/strs"
 )
@@ -11,58 +12,58 @@ func MakePkg(projectName, name, schema string) error {
 		return err
 	}
 
-	_, err = file.MakeFile(pathPkg, "event.go", modelEvent, name)
+	_, err = file.MakeFile(pathPkg, "event.go", template.ModelEvent, name)
 	if err != nil {
 		return err
 	}
 
-	_, err = file.MakeFile(pathPkg, "config.go", modelConfig, name)
+	_, err = file.MakeFile(pathPkg, "config.go", template.ModelConfig, name)
 	if err != nil {
 		return err
 	}
 
-	_, err = file.MakeFile(pathPkg, "rpc.go", modelRpc, name)
+	_, err = file.MakeFile(pathPkg, "rpc.go", template.ModelRpc, name)
 	if err != nil {
 		return err
 	}
 
 	if len(schema) > 0 {
-		_, err = file.MakeFile(pathPkg, "controller.go", modelDbController, name)
+		_, err = file.MakeFile(pathPkg, "controller.go", template.ModelDbController, name)
 		if err != nil {
 			return err
 		}
 
 		modelo := strs.Titlecase(name)
-		_, err = file.MakeFile(pathPkg, "model.go", modelModel, name, schema, projectName, modelo)
+		_, err = file.MakeFile(pathPkg, "model.go", template.ModelModel, name, schema, projectName, modelo)
 		if err != nil {
 			return err
 		}
 
 		fileName := strs.Format(`router-%s.go`, strs.Lowcase(name))
-		_, err = file.MakeFile(pathPkg, fileName, modelDbHandler, name, modelo, projectName, schema)
+		_, err = file.MakeFile(pathPkg, fileName, template.ModelDbHandler, name, modelo, projectName, schema)
 		if err != nil {
 			return err
 		}
 
 		title := strs.Titlecase(name)
-		_, err = file.MakeFile(pathPkg, "router.go", modelDbRouter, name, title)
+		_, err = file.MakeFile(pathPkg, "router.go", template.ModelDbRouter, name, title)
 		if err != nil {
 			return err
 		}
 	} else {
-		_, err = file.MakeFile(pathPkg, "controller.go", modelController, name)
+		_, err = file.MakeFile(pathPkg, "controller.go", template.ModelController, name)
 		if err != nil {
 			return err
 		}
 
 		modelo := strs.Titlecase(name)
 		fileName := strs.Format(`h%s.go`, modelo)
-		_, err = file.MakeFile(pathPkg, fileName, modelHandler, name, toCamelCase(modelo))
+		_, err = file.MakeFile(pathPkg, fileName, template.ModelHandler, name, toCamelCase(modelo))
 		if err != nil {
 			return err
 		}
 
-		_, err = file.MakeFile(pathPkg, "router.go", modelRouter, name)
+		_, err = file.MakeFile(pathPkg, "router.go", template.ModelRouter, name)
 		if err != nil {
 			return err
 		}
@@ -76,17 +77,17 @@ func MakeModel(projectName, packageName, modelo, schema string) error {
 
 	if len(schema) > 0 {
 		modelo := strs.Titlecase(modelo)
-		_, _ = file.MakeFile(pathPkg, "model.go", modelModel, packageName, modelo, projectName)
+		_, _ = file.MakeFile(pathPkg, "model.go", template.ModelModel, packageName, modelo, projectName)
 
 		fileName := strs.Format(`router-%s.go`, strs.Lowcase(modelo))
-		_, err := file.MakeFile(pathPkg, fileName, modelDbHandler, packageName, toCamelCase(modelo), projectName, schema)
+		_, err := file.MakeFile(pathPkg, fileName, template.ModelDbHandler, packageName, toCamelCase(modelo), projectName, schema)
 		if err != nil {
 			return err
 		}
 	} else {
 		modelo = strs.Titlecase(modelo)
 		fileName := strs.Format(`h%s.go`, modelo)
-		_, err := file.MakeFile(pathPkg, fileName, modelHandler, packageName, toCamelCase(modelo), projectName)
+		_, err := file.MakeFile(pathPkg, fileName, template.ModelHandler, packageName, toCamelCase(modelo), projectName)
 		if err != nil {
 			return err
 		}
@@ -101,7 +102,7 @@ func MakeRpc(name string) error {
 		return err
 	}
 
-	_, err = file.MakeFile(path, "hRpc.go", modelhRpc, name)
+	_, err = file.MakeFile(path, "hRpc.go", template.ModelhRpc, name)
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,7 @@
 package create
 
 import (
+	"github.com/cgalvisleon/et/create/template"
 	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/strs"
 )
@@ -11,12 +12,12 @@ func MakeCmd(packageName, name string) error {
 		return err
 	}
 
-	_, err = file.MakeFile(path, "Dockerfile", modelDockerfile, name)
+	_, err = file.MakeFile(path, "Dockerfile", template.ModelDockerfile, name)
 	if err != nil {
 		return err
 	}
 
-	_, err = file.MakeFile(path, "main.go", modelMain, packageName, name)
+	_, err = file.MakeFile(path, "main.go", template.ModelMain, packageName, name)
 	if err != nil {
 		return err
 	}

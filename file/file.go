@@ -82,13 +82,14 @@ func ExistPath(path string) FileInfo {
 	if os.IsNotExist(result.Error) {
 		result.Exist = false
 		result.Error = nil
+		return result
 	} else if result.Error != nil {
 		return result
 	}
 
 	result.Exist = true
-	result.IsDir = result.Exist && result.Info.IsDir()
-	if result.IsDir {
+	result.IsDir = result.Info != nil && result.Info.IsDir()
+	if result.Exist && result.IsDir {
 		logs.Log("file", "exist path folder:", result.Path)
 	} else if result.Exist {
 		logs.Log("file", "exist path file:", result.Path)
@@ -115,7 +116,7 @@ func MakeFolder(names ...string) (string, error) {
 		if info.Error != nil {
 			return info.Path, info.Error
 		} else if info.Exist {
-			return info.Path, nil
+			continue
 		} else {
 			err := os.MkdirAll(absPath, 0755)
 			if err != nil {

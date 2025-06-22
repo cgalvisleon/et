@@ -1,6 +1,6 @@
-package create
+package template
 
-const modelDockerfile = `# Versión de Go como argumento3
+const ModelDockerfile = `# Versión de Go como argumento3
 ARG GO_VERSION=1.23
 
 # Stage 1: Compilación (builder)
@@ -50,7 +50,7 @@ COPY --from=builder /$1 /$1
 ENTRYPOINT ["/$1"]
 `
 
-const modelMain = `package main
+const ModelMain = `package main
 
 import (
 	"github.com/cgalvisleon/et/console"
@@ -79,7 +79,7 @@ func main() {
 }
 `
 
-const modelApi = `package v1
+const ModelApi = `package v1
 
 import (
 	"fmt"
@@ -132,7 +132,7 @@ func Close() {
 }
 `
 
-const modelDbApi = `package v1
+const ModelDbApi = `package v1
 
 import (
 	"fmt"
@@ -193,7 +193,7 @@ func Close() {
 }
 `
 
-const modelService = `package $2
+const ModelService = `package $2
 
 import (
 	"github.com/cgalvisleon/et/server"
@@ -213,7 +213,7 @@ func New() (*ettp.Server, error) {
 }
 `
 
-const modelConfig = `package $1
+const ModelConfig = `package $1
 
 import (
 	"github.com/cgalvisleon/et/config"
@@ -248,7 +248,7 @@ func defaultConfig(stage string) error {
 }
 `
 
-const modelDbController = `package $1
+const ModelDbController = `package $1
 
 import (
 	"context"
@@ -286,7 +286,7 @@ type Repository interface {
 }
 `
 
-const modelController = `package $1
+const ModelController = `package $1
 
 import (
 	"context"
@@ -322,7 +322,7 @@ type Repository interface {
 }
 `
 
-const modelEvent = `package $1
+const ModelEvent = `package $1
 
 import (
 	"github.com/cgalvisleon/et/event"
@@ -344,7 +344,7 @@ func eventAction(m event.EventMessage) {
 }
 `
 
-const modelData = `package $4
+const ModelData = `package $4
 
 import (
 	"github.com/cgalvisleon/et/console"
@@ -600,7 +600,7 @@ func Query$2(query et.Json) (interface{}, error) {
 
 `
 
-const modelDbHandler = `package $1
+const ModelDbHandler = `package $1
 
 import (
 	"net/http"
@@ -702,7 +702,7 @@ func (rt *Router) delete$2(w http.ResponseWriter, r *http.Request) {
 **/
 `
 
-const modelHandler = `package $1
+const ModelHandler = `package $1
 
 import (
 	"net/http"
@@ -749,7 +749,7 @@ func (rt *Router) get$2(w http.ResponseWriter, r *http.Request) {
 **/
 `
 
-const modelModel = `package $1
+const ModelModel = `package $1
 
 import (
 	"github.com/cgalvisleon/et/console"
@@ -766,9 +766,10 @@ func initModels(db *jdb.DB) error {
 }
 `
 
-const modelSchema = `package $1
+const ModelSchema = `package $1
 
 import (
+	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/jdb/jdb"
 )
 
@@ -788,7 +789,7 @@ func defineSchema(db *jdb.DB) error {
 }
 `
 
-const modelhRpc = `package $1
+const ModelhRpc = `package $1
 
 import (
 	"net/rpc"
@@ -837,7 +838,7 @@ func (c *Service) Version(require []byte, response *[]byte) error {
 }
 `
 
-const modelMsg = `package $1
+const ModelMsg = `package $1
 
 const (
 	MSG_VALUE_REQUIRED 	 = "Atributo requerido (%s) value:%s"
@@ -847,7 +848,7 @@ const (
 )
 `
 
-const modelDbRouter = `package $1
+const ModelDbRouter = `package $1
 
 import (
 	"context"
@@ -929,7 +930,7 @@ func (rt *Router) routes(w http.ResponseWriter, r *http.Request) {
 }
 `
 
-const modelRouter = `package $1
+const ModelRouter = `package $1
 
 import (
 	"context"
@@ -1006,7 +1007,7 @@ func (rt *Router) routes(w http.ResponseWriter, r *http.Request) {
 }
 `
 
-const modelRpc = `package $1
+const ModelRpc = `package $1
 
 import (
 	"github.com/cgalvisleon/et/envar"
@@ -1048,7 +1049,7 @@ func (c *Services) Version(require et.Json, response *et.Item) error {
 }
 `
 
-const restHttp = `@host=localhost:3300
+const RestHttp = `@host=localhost:3300
 @token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IlVTRVIuQURNSU4iLCJhcHAiOiJEZXZvcHMtSW50ZXJuZXQiLCJuYW1lIjoiQ2VzYXIgR2FsdmlzIExlw7NuIiwia2luZCI6ImF1dGgiLCJ1c2VybmFtZSI6Iis1NzMxNjA0Nzk3MjQiLCJkZXZpY2UiOiJkZXZlbG9wIiwiZHVyYXRpb24iOjI1OTIwMDB9.dexIOute7r9o_P8U3t6l9RihN8BOnLl4xpoh9QbQI4k
 
 ###
@@ -1067,7 +1068,7 @@ Content-Length: 227
 }
 `
 
-const modelReadme = `
+const ModelReadme = `
 ## Project $1
 
 ## Create project
@@ -1097,7 +1098,7 @@ $2
 
 `
 
-const modelEnvar = `APP=
+const ModelEnvar = `APP=
 PORT=3300
 VERSION=0.0.0
 COMPANY=Company
@@ -1133,7 +1134,7 @@ NATS_PASSWORD=
 SECRET=test
 `
 
-const modelDeploy = `version: "3"
+const ModelDeploy = `version: "3"
 
 networks:
   $3:

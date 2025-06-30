@@ -1,11 +1,8 @@
 package utility
 
 import (
-	"fmt"
 	"math/rand"
-	"time"
 
-	"github.com/bwmarrin/snowflake"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/google/uuid"
 )
@@ -76,18 +73,4 @@ func GenKey(id string) string {
 	}
 
 	return id
-}
-
-/**
-* GenSnowflake
-* @return string
-**/
-func GenSnowflake() string {
-	ms := timezone.NowTime().UnixMilli()
-	return fmt.Sprintf("%d%03d", ms, rand.Intn(1000))
-}
-
-func init() {
-	epoch := time.Date(2020, 1, 1, 0, 0, 0, 0, NowTime().Location())
-	snowflake.Epoch = epoch.UnixNano() / 1e6
 }

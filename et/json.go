@@ -2,6 +2,7 @@ package et
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -379,6 +380,36 @@ func (s Json) Str(atribs ...string) string {
 **/
 func (s Json) String(atribs ...string) string {
 	return s.Str(atribs...)
+}
+
+/**
+* Decode return the value of the key
+* @param atribs ...string
+* @return string
+**/
+func (s Json) Decode(atribs ...string) string {
+	result := s.Str(atribs...)
+	bt, err := base64.StdEncoding.DecodeString(result)
+	if err != nil {
+		return result
+	}
+
+	return string(bt)
+}
+
+/**
+* Encode return the value of the key
+* @param atribs ...string
+* @return string
+**/
+func (s Json) Encode(atribs ...string) string {
+	result := s.Str(atribs...)
+	bt, err := json.Marshal(result)
+	if err != nil {
+		return result
+	}
+
+	return base64.StdEncoding.EncodeToString(bt)
 }
 
 /**

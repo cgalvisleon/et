@@ -201,6 +201,24 @@ func (s Item) Str(atribs ...string) string {
 }
 
 /**
+* Decode return the value of the key
+* @param atribs ...string
+* @return []string
+**/
+func (s Item) Decode(atribs ...string) string {
+	return s.Result.Decode(atribs...)
+}
+
+/**
+* Encode return the value of the key
+* @param atribs ...string
+* @return []string
+**/
+func (s Item) Encode(atribs ...string) string {
+	return s.Result.Encode(atribs...)
+}
+
+/**
 * Int return the value of the key
 * @param atribs ...string
 * @return int

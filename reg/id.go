@@ -10,7 +10,7 @@ import (
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/google/uuid"
-	"github.com/oklog/ulid"
+	"github.com/oklog/ulid/v2"
 	"github.com/rs/xid"
 )
 
@@ -43,6 +43,24 @@ func GenKey(args ...interface{}) string {
 **/
 func GenId(tag string) string {
 	return strs.Format(`%s:%s`, tag, UUID())
+}
+
+/**
+* GenUlId
+* @params tag string
+* @return string
+**/
+func GenUlId(tag string) string {
+	return strs.Format(`%s:%s`, tag, ULID())
+}
+
+/**
+* GenXid
+* @params tag string
+* @return string
+**/
+func GenXid(tag string) string {
+	return strs.Format(`%s:%s`, tag, XID())
 }
 
 /**

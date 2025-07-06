@@ -2,7 +2,7 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.23.0+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-v0.1.9-orange.svg)](https://github.com/cgalvisleon/et/releases)
+[![Version](https://img.shields.io/badge/Version-v0.1.10-orange.svg)](https://github.com/cgalvisleon/et/releases)
 
 ET es una biblioteca Go moderna y robusta que proporciona una amplia gama de funcionalidades para el desarrollo de aplicaciones empresariales. Diseñada para ser modular, eficiente y fácil de usar.
 
@@ -24,6 +24,12 @@ ET es una biblioteca Go moderna y robusta que proporciona una amplia gama de fun
 - **⚙️ Variables de Entorno**: Configuración flexible
 - **🔧 Utilidades**: Strings, rutas y más utilidades
 - **🏷️ Versionado**: Sistema de versionado automático
+- **📧 Brevo Integration**: Email, SMS y WhatsApp
+- **🔄 Data Transfer Objects**: Manejo de objetos de datos
+- **🎯 Argumentos**: Gestión de argumentos de línea de comandos
+- **🛡️ Resiliencia**: Patrones de resiliencia y circuit breakers
+- **📊 Métricas**: Sistema de métricas y monitoreo
+- **🔍 Búsqueda**: Funcionalidades de búsqueda avanzada
 
 ## 📋 Requisitos
 
@@ -32,12 +38,13 @@ ET es una biblioteca Go moderna y robusta que proporciona una amplia gama de fun
 - **NATS**: Para mensajería (opcional)
 - **Neo4j**: Para base de datos de grafos (opcional)
 - **AWS SDK**: Para servicios AWS (opcional)
+- **Brevo API**: Para servicios de comunicación (opcional)
 
 ## 🛠️ Instalación
 
 ```bash
 # Instalar la librería
-go get github.com/cgalvisleon/et@v0.1.9
+go get github.com/cgalvisleon/et@v0.1.10
 
 # O usar go mod
 go mod init myproject
@@ -84,6 +91,15 @@ WS_MODE=development
 # Resilience
 RESILIENCE_ATTEMPTS=3
 RESILIENCE_TIME_ATTEMPTS=30
+
+# Brevo (Email, SMS, WhatsApp)
+BREVO_API_KEY=your-brevo-api-key
+BREVO_SENDER_EMAIL=noreply@yourdomain.com
+BREVO_SENDER_NAME=Your App Name
+
+# Logging
+LOG_LEVEL=info
+LOG_FORMAT=json
 ```
 
 ## 📦 Gestión de Dependencias
@@ -93,8 +109,6 @@ RESILIENCE_TIME_ATTEMPTS=30
 ```bash
 # WebSocket y comunicación en tiempo real
 go get github.com/gorilla/websocket
-go get github.com/googollee/go-socket.io
-go get github.com/satyakb/go-socket.io-redis
 
 # Router HTTP
 go get github.com/go-chi/chi/v5
@@ -121,6 +135,13 @@ go get github.com/neo4j/neo4j-go-driver/v5
 
 # AWS
 go get github.com/aws/aws-sdk-go
+
+# Utilidades adicionales
+go get github.com/google/uuid
+go get github.com/bwmarrin/snowflake
+go get github.com/oklog/ulid/v2
+go get github.com/rs/xid
+go get github.com/robfig/cron/v3
 ```
 
 ## 🚀 Comandos de Ejecución
@@ -129,13 +150,16 @@ go get github.com/aws/aws-sdk-go
 
 ```bash
 # Ejecutar el servicio principal
-go run ./cmd/service/main.go
+go run ./cmd/et/main.go
 
-# Ejecutar el gateway con parámetros
-go run ./cmd/gateway/main.go -port 3300 -rpc 4200
+# Ejecutar el daemon
+go run ./cmd/daemon/main.go
+
+# Ejecutar con parámetros
+go run ./cmd/et/main.go -port 3300 -mode production
 
 # Ejecutar con variables de entorno
-PORT=8080 RPC_PORT=9090 go run ./cmd/gateway/main.go
+PORT=8080 MODE=production go run ./cmd/et/main.go
 ```
 
 ### WebSockets
@@ -149,6 +173,20 @@ go run ./cmd/ws/main.go -port 3300 -mode production
 
 # Ejecutar con URL master
 go run ./cmd/ws/main.go -port 3300 -master-url ws://master:3300/ws
+```
+
+### Herramientas de Creación
+
+```bash
+# Crear un nuevo proyecto
+go run ./cmd/create/main.go
+
+# Preparar un proyecto existente
+go run ./cmd/prepare/main.go
+
+# Ejecutar comandos específicos
+go run ./cmd/et/main.go create
+go run ./cmd/et/main.go prepare
 ```
 
 ## 💡 Ejemplos de Uso
@@ -290,17 +328,132 @@ func main() {
 }
 ```
 
-### Creación de Microservicios
+### Servicios de Comunicación con Brevo
 
-```bash
-# Crear un nuevo microservicio interactivamente
-go run ./cmd/create go
+```go
+package main
 
-# Opciones disponibles:
-# - Project: Crear un proyecto completo
-# - Microservice: Crear un microservicio
-# - Modelo: Crear un modelo de datos
-# - Rpc: Crear un servicio RPC
+import (
+    "github.com/cgalvisleon/et/brevo"
+    "github.com/cgalvisleon/et/logs"
+)
+
+func main() {
+    // Enviar email
+    emailData := brevo.EmailData{
+        To: []brevo.EmailContact{
+            {Email: "user@example.com", Name: "Usuario"},
+        },
+        Subject: "Bienvenido a nuestra aplicación",
+        HTMLContent: "<h1>¡Bienvenido!</h1><p>Gracias por registrarte.</p>",
+    }
+
+    err := brevo.SendEmail(emailData)
+    if err != nil {
+        logs.Error("Email", "Error sending email:", err)
+    } else {
+        logs.Log("Email", "Email sent successfully")
+    }
+
+    // Enviar SMS
+    smsData := brevo.SMSData{
+        To: "+1234567890",
+        Message: "Tu código de verificación es: 123456",
+    }
+
+    err = brevo.SendSMS(smsData)
+    if err != nil {
+        logs.Error("SMS", "Error sending SMS:", err)
+    } else {
+        logs.Log("SMS", "SMS sent successfully")
+    }
+
+    // Enviar WhatsApp
+    whatsappData := brevo.WhatsAppData{
+        To: "+1234567890",
+        Message: "¡Hola! Tu pedido ha sido confirmado.",
+    }
+
+    err = brevo.SendWhatsApp(whatsappData)
+    if err != nil {
+        logs.Error("WhatsApp", "Error sending WhatsApp:", err)
+    } else {
+        logs.Log("WhatsApp", "WhatsApp message sent successfully")
+    }
+}
+```
+
+### Data Transfer Objects (DTO)
+
+```go
+package main
+
+import (
+    "github.com/cgalvisleon/et/dt"
+    "github.com/cgalvisleon/et/logs"
+)
+
+func main() {
+    // Crear un objeto de datos
+    userDTO := dt.NewObject("user")
+    userDTO.Set("id", 123)
+    userDTO.Set("name", "Juan Pérez")
+    userDTO.Set("email", "juan@example.com")
+
+    // Validar el objeto
+    if userDTO.Valid() {
+        logs.Log("DTO", "User object is valid")
+
+        // Obtener datos
+        name := userDTO.Get("name")
+        logs.Log("DTO", "User name:", name)
+    } else {
+        logs.Error("DTO", "User object is invalid")
+    }
+
+    // Crear objeto con resiliencia
+    resilientDTO := dt.NewResilientObject("user", 3, 30)
+    resilientDTO.Set("id", 456)
+    resilientDTO.Set("name", "María García")
+
+    // El objeto maneja automáticamente reintentos y timeouts
+    if resilientDTO.Valid() {
+        logs.Log("DTO", "Resilient user object created successfully")
+    }
+}
+```
+
+### Manejo de Argumentos
+
+```go
+package main
+
+import (
+    "github.com/cgalvisleon/et/arg"
+    "github.com/cgalvisleon/et/logs"
+)
+
+func main() {
+    // Configurar argumentos
+    arg.Set("port", 3300, "Puerto del servidor")
+    arg.Set("mode", "development", "Modo de ejecución")
+    arg.Set("debug", false, "Modo debug")
+
+    // Parsear argumentos de línea de comandos
+    arg.Parse()
+
+    // Obtener valores
+    port := arg.GetInt("port")
+    mode := arg.GetStr("mode")
+    debug := arg.GetBool("debug")
+
+    logs.Log("Args", "Port:", port, "Mode:", mode, "Debug:", debug)
+
+    // Verificar si un argumento existe
+    if arg.Exists("custom-flag") {
+        logs.Log("Args", "Custom flag is set")
+    }
+}
 ```
 
 ### Sistema de Logs
@@ -357,23 +510,27 @@ gofmt -w .
 
 # Actualizar git y crear nueva versión
 git add .
-git commit -m "Release v0.1.9"
-git tag v0.1.9
+git commit -m "Release v0.1.10"
+git tag v0.1.10
 git push origin main --tags
 
 # Instalar la nueva versión
-go get github.com/cgalvisleon/et@v0.1.9
+go get github.com/cgalvisleon/et@v0.1.10
 ```
 
 ## 📋 Versiones y Releases
 
 ### Historial de Versiones
 
-#### v0.1.9
+#### v0.1.10
 
 - Mejoras en el sistema de WebSockets
 - Optimización del rendimiento del gateway
 - Corrección de condiciones de carrera
+- **Nuevo**: Integración con Brevo (Email, SMS, WhatsApp)
+- **Nuevo**: Data Transfer Objects (DTO)
+- **Nuevo**: Sistema de argumentos mejorado
+- **Nuevo**: Patrones de resiliencia
 - **Nuevo**: Documentación mejorada
 - **Nuevo**: Ejemplos de uso completos
 
@@ -423,23 +580,23 @@ go get github.com/cgalvisleon/et@v0.1.9
 
 ```bash
 # Compilar con detección de condiciones de carrera
-go build --race ./cmd/gateway/main.go
-go build --race ./cmd/service/main.go
+go build --race ./cmd/et/main.go
+go build --race ./cmd/ws/main.go
 
 # Compilación normal
-go build ./cmd/gateway/main.go
+go build ./cmd/et/main.go
 ```
 
 ### Herramientas de Desarrollo
 
 ```bash
 # Ejecutar herramientas de creación
-go run github.com/cgalvisleon/et/cmd/create go
-go run github.com/cgalvisleon/et/cmd/prepare go
+go run ./cmd/create/main.go
+go run ./cmd/prepare/main.go
 
-# Ejecutar comandos locales
-go run ./cmd/create go
-go run ./cmd
+# Ejecutar comandos específicos
+go run ./cmd/et/main.go create
+go run ./cmd/et/main.go prepare
 ```
 
 ### Testing
@@ -454,31 +611,56 @@ go test -cover ./...
 # Ejecutar tests específicos
 go test ./cache/...
 go test ./ws/...
+go test ./brevo/...
 ```
 
 ## 🏗️ Estructura del Proyecto
 
 ```
 et/
+├── arg/         # Gestión de argumentos
 ├── aws/         # Integración con AWS
+├── brevo/       # Servicios de comunicación (Email, SMS, WhatsApp)
 ├── cache/       # Sistema de caché con Redis
+├── claim/       # Sistema de claims y permisos
 ├── cmd/         # Comandos CLI y ejecutables
 │   ├── create/  # Generador de proyectos
-│   ├── ws/      # Servidor WebSocket
-│   └── daemon/  # Servicios en segundo plano
+│   ├── daemon/  # Servicios en segundo plano
+│   ├── et/      # Comando principal
+│   ├── prepare/ # Preparador de proyectos
+│   └── ws/      # Servidor WebSocket
 ├── config/      # Configuración y parámetros
+├── console/     # Consola interactiva
 ├── create/      # Templates y generadores
+├── crontab/     # Tareas programadas
+├── dt/          # Data Transfer Objects
+├── envar/       # Variables de entorno
+├── et/          # Utilidades principales
+├── ettp/        # Servidor HTTP
 ├── event/       # Sistema de eventos
+├── file/        # Manejo de archivos
 ├── graph/       # Soporte GraphQL
+├── jrpc/        # JSON-RPC
+├── logs/        # Sistema de logs
+├── mem/         # Memoria compartida
 ├── middleware/  # Middleware HTTP
+├── mistake/     # Manejo de errores
 ├── msg/         # Mensajes del sistema
+├── race/        # Detección de condiciones de carrera
 ├── realtime/    # Funcionalidades en tiempo real
+├── reg/         # Registro de servicios
+├── request/     # Manejo de requests
 ├── resilience/  # Sistema de resiliencia
+├── response/    # Manejo de responses
 ├── router/      # Enrutamiento HTTP
+├── server/      # Servidor HTTP
 ├── service/     # Servicios y utilidades
+├── stdrout/     # Rutas estándar
+├── strs/        # Utilidades de strings
+├── timezone/    # Gestión de zonas horarias
+├── units/       # Unidades de medida
 ├── utility/     # Utilidades generales
-├── ws/          # WebSocket y comunicación
-└── timezone/    # Gestión de zonas horarias
+└── ws/          # WebSocket y comunicación
 ```
 
 ## 🔧 API Reference
@@ -521,6 +703,62 @@ cache.Exists(key)
 // Pub/Sub
 cache.Publish(channel, message)
 cache.Subscribe(channel, handler)
+```
+
+### Brevo (Comunicación)
+
+```go
+// Email
+brevo.SendEmail(brevo.EmailData{
+    To: []brevo.EmailContact{{Email: "user@example.com"}},
+    Subject: "Asunto",
+    HTMLContent: "<p>Contenido</p>",
+})
+
+// SMS
+brevo.SendSMS(brevo.SMSData{
+    To: "+1234567890",
+    Message: "Mensaje SMS",
+})
+
+// WhatsApp
+brevo.SendWhatsApp(brevo.WhatsAppData{
+    To: "+1234567890",
+    Message: "Mensaje WhatsApp",
+})
+```
+
+### Data Transfer Objects
+
+```go
+// Crear objeto
+obj := dt.NewObject("name")
+
+// Establecer propiedades
+obj.Set("key", value)
+
+// Validar
+if obj.Valid() {
+    // Usar objeto
+}
+
+// Objeto con resiliencia
+resilientObj := dt.NewResilientObject("name", attempts, timeout)
+```
+
+### Argumentos
+
+```go
+// Configurar argumentos
+arg.Set("name", defaultValue, "description")
+
+// Parsear
+arg.Parse()
+
+// Obtener valores
+value := arg.GetStr("name")
+number := arg.GetInt("port")
+flag := arg.GetBool("debug")
 ```
 
 ### Logs
@@ -569,6 +807,17 @@ go mod tidy
 go version
 ```
 
+#### Error de Brevo API
+
+```bash
+# Verificar API key
+echo $BREVO_API_KEY
+
+# Verificar configuración
+echo $BREVO_SENDER_EMAIL
+echo $BREVO_SENDER_NAME
+```
+
 ## 🤝 Contribución
 
 Las contribuciones son bienvenidas. Por favor, sigue estos pasos:
@@ -585,6 +834,7 @@ Las contribuciones son bienvenidas. Por favor, sigue estos pasos:
 - Añade tests para nuevas funcionalidades
 - Sigue las convenciones de Go
 - Actualiza la documentación cuando sea necesario
+- Incluye ejemplos de uso para nuevas funcionalidades
 
 ## 📝 Licencia
 
@@ -601,6 +851,7 @@ Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más det
 - A todos los contribuidores que han ayudado a mejorar esta librería
 - A la comunidad de Go por las excelentes herramientas
 - A los mantenedores de las dependencias utilizadas
+- A Brevo por proporcionar excelentes servicios de comunicación
 
 ---
 

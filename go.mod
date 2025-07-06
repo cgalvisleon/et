@@ -17,7 +17,6 @@ require (
 	github.com/mattn/go-colorable v0.1.14
 	github.com/nats-io/nats.go v1.41.2
 	github.com/neo4j/neo4j-go-driver/v5 v5.28.0
-	github.com/oklog/ulid v1.3.1
 	github.com/redis/go-redis/v9 v9.7.3
 	github.com/rs/cors v1.11.1
 	github.com/schollz/progressbar/v3 v3.18.0
@@ -38,6 +37,7 @@ require (
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/nats-io/nkeys v0.4.11 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
+	github.com/oklog/ulid/v2 v2.1.1
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/rs/xid v1.6.0

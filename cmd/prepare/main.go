@@ -19,6 +19,7 @@ var dependencies = []string{
 	"github.com/cgalvisleon/jdb/jdb",
 	"github.com/mattn/go-colorable",
 	"github.com/dimiro1/banner",
+	"github.com/chzyer/readline",
 }
 
 func main() {

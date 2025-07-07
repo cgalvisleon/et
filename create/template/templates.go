@@ -53,9 +53,8 @@ ENTRYPOINT ["/$1"]
 const ModelMain = `package main
 
 import (
-	"github.com/cgalvisleon/et/console"
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/console"
 	serv "$1/internal/services/$2"
 )
 
@@ -82,18 +81,15 @@ func main() {
 const ModelApi = `package v1
 
 import (
-	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrpc"
-	"github.com/cgalvisleon/et/console"
-	"github.com/cgalvisleon/et/utility"
-	"github.com/dimiro1/banner"
+	_ "github.com/cgalvisleon/jdb/drivers/postgres"
+	"github.com/cgalvisleon/jdb/jdb"
 	"github.com/go-chi/chi/v5"
-	"github.com/mattn/go-colorable"
 	pkg "$1/pkg/$2"	
 )
 
@@ -105,12 +101,12 @@ func New() http.Handler {
 		console.Panic(err)
 	}
 
-	_, err = cache.Load()
+	err = cache.Load()
 	if err != nil {
 		console.Panic(err)
 	}
 
-	_, err = event.Load()
+	err = event.Load()
 	if err != nil {
 		console.Panic(err)
 	}
@@ -135,20 +131,15 @@ func Close() {
 const ModelDbApi = `package v1
 
 import (
-	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrpc"
-	"github.com/cgalvisleon/et/utility"
 	_ "github.com/cgalvisleon/jdb/drivers/postgres"
 	"github.com/cgalvisleon/jdb/jdb"
-	"github.com/dimiro1/banner"
 	"github.com/go-chi/chi/v5"
-	"github.com/mattn/go-colorable"
 	pkg "$1/pkg/$2"	
 )
 
@@ -160,12 +151,17 @@ func New() http.Handler {
 		console.Alert(err)
 	}
 
-	_, err = cache.Load()
+	err = pkg.StartRpcServer()
 	if err != nil {
 		console.Panic(err)
 	}
 
-	_, err = event.Load()
+	err = cache.Load()
+	if err != nil {
+		console.Panic(err)
+	}
+
+	err = event.Load()
 	if err != nil {
 		console.Panic(err)
 	}
@@ -200,14 +196,14 @@ import (
 	v1 "$1/internal/services/$2/v1"
 )
 
-func New() (*ettp.Server, error) {
-	result, err := ettp.New("assets")
+func New() (*server.Ettp, error) {
+	result, err := server.New("$2")
 	if err != nil {
 		return nil, err
 	}
 	latest := v1.New()
-	result.Router.Mount("/", latest)
-	result.Router.Mount("/v1", latest)
+	result.Mount("/", latest)
+	result.Mount("/v1", latest)
 
 	return result, nil
 }
@@ -223,17 +219,12 @@ import (
 )
 
 func LoadConfig() error {
-	StartRpcServer()
-
-	// stage := config.String("STAGE", "local")
-	return defaultConfig(stage)
-}
-
-func defaultConfig(stage string) error {
+	stage := config.String("STAGE", "local")
 	name := "default"
 	result, err := jrpc.CallItem("Module.Services.GetConfig", et.Json{
-		"stage": stage,
-		"name":  name,
+		"stage":  stage,
+		"name":   name,
+		"config": et.Json{},
 	})
 	if err != nil {
 		return err
@@ -244,7 +235,12 @@ func defaultConfig(stage string) error {
 	}
 
 	cfg := result.Json("config")
-	return config.Load(cfg)
+	err = config.SetToEnvar(cfg)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 `
 
@@ -276,7 +272,7 @@ func (c *Controller) Version(ctx context.Context) (et.Json, error) {
 }
 
 func (c *Controller) Init(ctx context.Context) {
-	// initModels(c.Db)
+	initModels(c.Db)
 	initEvents()
 }
 
@@ -337,7 +333,7 @@ func initEvents() {
 
 }
 
-func eventAction(m event.EventMessage) {
+func eventAction(m event.Message) {
 	data := m.Data
 
 	console.Log("eventAction", data)
@@ -686,6 +682,23 @@ func (rt *Router) delete$2(w http.ResponseWriter, r *http.Request) {
 	response.ITEM(w, r, http.StatusOK, result)
 }
 
+/**
+* query$2
+* @param w http.ResponseWriter
+* @param r *http.Request
+**/
+func (rt *Router) query$2(w http.ResponseWriter, r *http.Request) {
+	body, _ := response.GetBody(r)
+	query := body.Json("query")
+	result, err := $4.Query$2(query)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.JSON(w, r, http.StatusOK, result)
+}
+
 /** Copy this code to router.go
 	// $2
 	router.Protect(r, router.Get, "/assets/{id}", rt.get$2ById, PackageName, PackagePath, host)
@@ -754,7 +767,7 @@ const ModelModel = `package $1
 import (
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/jdb/jdb"
-	"$3/internal/data/$2"	
+	"$3/internal/models/$2"	
 )
 
 func initModels(db *jdb.DB) error {
@@ -867,7 +880,7 @@ import (
 
 var PackageName = "$1"
 var PackageTitle = "$1"
-var PackagePath = config.App.PathUrl
+var PackagePath = config.App.PathApi
 var PackageVersion = config.App.Version
 var HostName, _ = os.Hostname()
 
@@ -948,7 +961,7 @@ import (
 
 var PackageName = "$1"
 var PackageTitle = "$1"
-var PackagePath = config.App.PathUrl
+var PackagePath = config.App.PathApi
 var PackageVersion = config.App.Version
 var HostName, _ = os.Hostname()
 
@@ -1010,30 +1023,30 @@ func (rt *Router) routes(w http.ResponseWriter, r *http.Request) {
 const ModelRpc = `package $1
 
 import (
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jrpc"
-	"github.com/cgalvisleon/et/console"
 )
 
 type Services struct{}
 
-func StartRpcServer() {
-	pkg, err := jrpc.Load(PackageName)
+func StartRpcServer() error {
+	err := jrpc.Load(PackageName)
 	if err != nil {
-		console.Panic(err)
+		return err
 	}
 
 	services := new(Services)
 	err = jrpc.Mount(services)
 	if err != nil {
-		console.Fatal(err)
+		return err
 	}
 
-	go pkg.Start()
+	return jrpc.Start()
 }
 
-func (c *Services) Version(require et.Json, response *et.Item) error {	
+func (c *Services) Version(require et.Json, response *et.Item) error {
 	response.Ok = true
 	response.Result = et.Json{
 		"methos":  "RPC",
@@ -1045,7 +1058,7 @@ func (c *Services) Version(require et.Json, response *et.Item) error {
 		"help":    config.App.Help,
 	}
 
-	return console.Rpc(response.ToString())
+	return console.Rpc(PackageName, response.ToString())
 }
 `
 

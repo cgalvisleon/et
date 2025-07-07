@@ -10,7 +10,7 @@ var conn *Conn
 
 type Conn struct {
 	driver neo4j.DriverWithContext
-	_id    string
+	id     string
 	host   string
 }
 

@@ -44,9 +44,8 @@ type Routes struct {
 	Routes map[string]et.Json
 }
 
-var router *Routes
-
-const (
+var (
+	router              *Routes
 	APIGATEWAY_SET      = "apigateway/set"
 	APIGATEWAY_DELETE   = "apigateway/delete"
 	APIGATEWAY_RESET    = "apigateway/reset"
@@ -54,6 +53,44 @@ const (
 	PROXYGATEWAY_DELETE = "proxygateway/delete"
 	PROXYGATEWAY_RESET  = "proxygateway/reset"
 )
+
+/**
+* SetChannels
+* @param vars et.Json
+**/
+func SetChannels(vars et.Json) {
+	for k := range vars {
+		switch k {
+		case "APIGATEWAY_SET":
+			APIGATEWAY_SET = vars.Str(k)
+		case "APIGATEWAY_DELETE":
+			APIGATEWAY_DELETE = vars.Str(k)
+		case "APIGATEWAY_RESET":
+			APIGATEWAY_RESET = vars.Str(k)
+		case "PROXYGATEWAY_SET":
+			PROXYGATEWAY_SET = vars.Str(k)
+		case "PROXYGATEWAY_DELETE":
+			PROXYGATEWAY_DELETE = vars.Str(k)
+		case "PROXYGATEWAY_RESET":
+			PROXYGATEWAY_RESET = vars.Str(k)
+		}
+	}
+}
+
+/**
+* GetChannels
+* @return et.Json
+**/
+func GetChanels() et.Json {
+	return et.Json{
+		"APIGATEWAY_SET":      APIGATEWAY_SET,
+		"APIGATEWAY_DELETE":   APIGATEWAY_DELETE,
+		"APIGATEWAY_RESET":    APIGATEWAY_RESET,
+		"PROXYGATEWAY_SET":    PROXYGATEWAY_SET,
+		"PROXYGATEWAY_DELETE": PROXYGATEWAY_DELETE,
+		"PROXYGATEWAY_RESET":  PROXYGATEWAY_RESET,
+	}
+}
 
 /**
 * initRouter

@@ -144,7 +144,7 @@ func Stack(channel string, reciveFn func(ws.Message)) {
 func Work(event string, data et.Json) et.Json {
 	work := et.Json{
 		"created_at": timezone.Now(),
-		"_id":        utility.UUID(),
+		"id":         utility.UUID(),
 		"from_id":    conn.ClientId,
 		"event":      event,
 		"data":       data,
@@ -165,7 +165,7 @@ func Work(event string, data et.Json) et.Json {
 func WorkState(work_id string, status event.WorkStatus, data et.Json) {
 	work := et.Json{
 		"update_at": timezone.Now(),
-		"_id":       work_id,
+		"id":        work_id,
 		"status":    status.String(),
 		"data":      data,
 	}

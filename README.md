@@ -2,7 +2,7 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.23.0+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-v0.1.13-orange.svg)](https://github.com/cgalvisleon/et/releases)
+[![Version](https://img.shields.io/badge/Version-v0.1.14-orange.svg)](https://github.com/cgalvisleon/et/releases)
 
 ET es una biblioteca Go moderna y robusta que proporciona una amplia gama de funcionalidades para el desarrollo de aplicaciones empresariales. Diseñada para ser modular, eficiente y fácil de usar.
 
@@ -44,7 +44,7 @@ ET es una biblioteca Go moderna y robusta que proporciona una amplia gama de fun
 
 ```bash
 # Instalar la librería
-go get github.com/cgalvisleon/et@v0.1.13
+go get github.com/cgalvisleon/et@v0.1.14
 
 # O usar go mod
 go mod init myproject
@@ -510,19 +510,19 @@ gofmt -w .
 
 # Actualizar git y crear nueva versión
 git add .
-git commit -m "Release v0.1.13"
-git tag v0.1.13
+git commit -m "Release v0.1.14"
+git tag v0.1.14
 git push origin main --tags
 
 # Instalar la nueva versión
-go get github.com/cgalvisleon/et@v0.1.13
+go get github.com/cgalvisleon/et@v0.1.14
 ```
 
 ## 📋 Versiones y Releases
 
 ### Historial de Versiones
 
-#### v0.1.13
+#### v0.1.14
 
 - Mejoras en el sistema de WebSockets
 - Optimización del rendimiento del gateway

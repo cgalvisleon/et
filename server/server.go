@@ -6,9 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"runtime"
 	"strconv"
-	"syscall"
 	"time"
 
 	"github.com/cgalvisleon/et/config"
@@ -21,7 +19,6 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/mattn/go-colorable"
 	"github.com/rs/cors"
-	"github.com/spf13/cobra"
 )
 
 type Ettp struct {
@@ -195,81 +192,6 @@ func (s *Ettp) Start() {
 	<-stop
 
 	s.Close()
-}
-
-/**
-* Cli
-**/
-func (s *Ettp) Cli() {
-	if runtime.GOOS == "windows" {
-		return
-	}
-
-	var rootCmd = &cobra.Command{Use: s.appName}
-
-	var startCmd = &cobra.Command{
-		Use:   "start",
-		Short: "Inicia el servidor HTTP en background",
-		Run: func(cmd *cobra.Command, args []string) {
-			config.Set("PORT", s.port)
-			config.Set("RPC_PORT", s.rpc)
-
-			command := exec.Command(os.Args[0], "run-server")
-			if s.stdout {
-				command.Stdout = os.Stdout
-				command.Stderr = os.Stderr
-			}
-			command.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-
-			if err := command.Start(); err != nil {
-				console.Alertf("Error al iniciar el servidor: %s", err.Error())
-				return
-			}
-
-			pid := command.Process.Pid
-			console.Logf(s.appName, "Servidor iniciado en background PID:%d", pid)
-			s.savePID(pid)
-		},
-	}
-	startCmd.Flags().IntVarP(&s.port, "port", "p", 3000, "Puerto HTTP")
-	startCmd.Flags().IntVarP(&s.rpc, "rpc", "r", 4200, "Puerto RPC")
-
-	var runServerCmd = &cobra.Command{
-		Use:    "run-server",
-		Short:  "Ejecuta el servidor HTTP (interno, no ejecutar manualmente)",
-		Hidden: true,
-		Run: func(cmd *cobra.Command, args []string) {
-			s.Start()
-		},
-	}
-
-	var stopCmd = &cobra.Command{
-		Use:   "stop",
-		Short: "Detiene el servidor HTTP",
-		Run: func(cmd *cobra.Command, args []string) {
-			pid, err := s.getPID()
-			if err != nil {
-				console.Alertf("Error al obtener el PID del servidor: %s", err.Error())
-				return
-			}
-
-			s.stopServer(pid)
-		},
-	}
-
-	var deployCmd = &cobra.Command{
-		Use:   "deploy [parametros]",
-		Short: "Ejecuta un despliegue con parámetros",
-		Args:  cobra.MinimumNArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
-			console.Log("Ejecutando despliegue con parámetros:", args)
-			time.Sleep(2 * time.Second)
-			console.Log("Despliegue completado")
-		},
-	}
-
-	rootCmd.AddCommand(startCmd, runServerCmd, stopCmd, deployCmd)
-	rootCmd.Execute()
 }
 
 /**

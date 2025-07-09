@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"syscall"
 	"time"
@@ -200,6 +201,10 @@ func (s *Ettp) Start() {
 * Cli
 **/
 func (s *Ettp) Cli() {
+	if runtime.GOOS == "windows" {
+		return
+	}
+
 	var rootCmd = &cobra.Command{Use: s.appName}
 
 	var startCmd = &cobra.Command{

@@ -22,6 +22,8 @@ import (
 )
 
 type Proxy struct {
+	server      *Server                `json:"-"`
+	pkg         *Package               `json:"-"`
 	Id          string                 `json:"id"`
 	Name        string                 `json:"name"`
 	Description string                 `json:"description"`
@@ -29,8 +31,6 @@ type Proxy struct {
 	Solver      string                 `json:"solver"`
 	Kind        TypeApi                `json:"kind"`
 	PackageName string                 `json:"package_name"`
-	pkg         *Package               `json:"-"`
-	server      *Server                `json:"-"`
 	proxy       *httputil.ReverseProxy `json:"-"`
 	RemoteHost  string                 `json:"remote_host"`
 	RemotePort  int                    `json:"remote_port"`
@@ -165,6 +165,52 @@ func (s *Server) SetProxy(id, path, name, description, solver, packageName strin
 	}
 
 	return result, nil
+}
+
+/**
+* handlerReverseProxy
+* @params w http.ResponseWriter
+* @params r *http.Request
+**/
+func (s *Server) handlerReverseProxy(w http.ResponseWriter, r *http.Request) {
+	/* Begin telemetry */
+	metric := middleware.NewMetric(r)
+	w.Header().Set("Reqid", metric.ReqID)
+	ctx := context.WithValue(r.Context(), MetricKey, metric)
+	r = r.WithContext(ctx)
+
+	request := et.Json{
+		"method":   r.Method,
+		"url":      r.URL,
+		"host":     r.Host,
+		"path":     r.URL.Path,
+		"rawquery": r.URL.RawQuery,
+		"header":   r.Header,
+		"body":     r.Body,
+	}
+
+	proxy := s.getProxyByPath(r.URL.Path)
+	if proxy == nil {
+		request["proxy"] = "not found"
+		console.Debug("proxy:", request.ToString())
+		s.notFoundHandler.ServeHTTP(w, r)
+		return
+	}
+
+	if s.debug {
+		request["proxy"] = proxy.Solver
+		console.Debug("proxy:", request.ToString())
+	}
+
+	if proxy.Kind == TpPortForward {
+		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_IS_PORTFORWARD)
+		return
+	}
+
+	/* Call search time since begin */
+	metric.CallSearchTime()
+	metric.SetPath(proxy.Solver)
+	proxy.ServeHTTP(w, r)
 }
 
 /**

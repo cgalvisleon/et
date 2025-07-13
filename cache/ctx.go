@@ -12,21 +12,62 @@ import (
 
 /**
 * SetCtx
-* @params ctx context.Context, key string, val string, millisecond time.Duration
+* @params ctx context.Context, key string, val string, expMilisecond int64
 * @return string
 **/
-func SetCtx(ctx context.Context, key, val string, millisecond time.Duration) string {
+func SetCtx(ctx context.Context, key, val string, expMilisecond int64) string {
 	if conn == nil {
 		return val
 	}
 
-	nanosecond := millisecond * time.Millisecond
-	err := conn.Set(ctx, key, val, nanosecond).Err()
+	millisecond := time.Duration(expMilisecond) * time.Millisecond
+	err := conn.Set(ctx, key, val, millisecond).Err()
 	if err != nil {
 		return val
 	}
 
 	return val
+}
+
+/**
+* IncrCtx
+* @params ctx context.Context, key string, expMilisecond int64
+* @return int64
+**/
+func IncrCtx(ctx context.Context, key string, expMilisecond int64) int64 {
+	if conn == nil {
+		return 0
+	}
+
+	result, err := conn.Incr(ctx, key).Result()
+	if err != nil {
+		return 0
+	}
+
+	if result == 1 {
+		millisecond := time.Duration(expMilisecond) * time.Millisecond
+		conn.Expire(ctx, key, millisecond)
+	}
+
+	return result
+}
+
+/**
+* DecrCtx
+* @params ctx context.Context, key string
+* @return int64
+**/
+func DecrCtx(ctx context.Context, key string) int64 {
+	if conn == nil {
+		return 0
+	}
+
+	result, err := conn.Decr(ctx, key).Result()
+	if err != nil {
+		return 0
+	}
+
+	return result
 }
 
 /**

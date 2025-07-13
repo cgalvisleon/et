@@ -12,6 +12,7 @@ import (
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/reg"
 	lg "github.com/cgalvisleon/et/stdrout"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
@@ -229,10 +230,10 @@ func (m *Metrics) CallMetrics() Telemetry {
 		TimeStamp:         date,
 		ServiceName:       serviceName,
 		Key:               m.key,
-		RequestsPerSecond: cache.Count(cache.GenKey(m.key, second), 2*time.Second),
-		RequestsPerMinute: cache.Count(cache.GenKey(m.key, minute), 1*time.Minute+1*time.Second),
-		RequestsPerHour:   cache.Count(cache.GenKey(m.key, hour), 1*time.Hour+1*time.Second),
-		RequestsPerDay:    cache.Count(cache.GenKey(m.key, date), 24*time.Hour+1*time.Second),
+		RequestsPerSecond: cache.IncrInt(reg.GenHashKey(m.key, second), 2),
+		RequestsPerMinute: cache.IncrInt(reg.GenHashKey(m.key, minute), 60),
+		RequestsPerHour:   cache.IncrInt(reg.GenHashKey(m.key, hour), 3600),
+		RequestsPerDay:    cache.IncrInt(reg.GenHashKey(m.key, date), 86400),
 		RequestsLimit:     config.Int("REQUESTS_LIMIT", 400),
 	}
 }

@@ -3,7 +3,6 @@ package cache
 import (
 	"errors"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/cgalvisleon/et/et"
@@ -19,39 +18,39 @@ const IsNil = redis.Nil
 
 /**
 * SetDuration
-* @params key string, val interface{}, millisecond time.Duration
+* @params key string, val interface{}, expMilisecond int64
 * @return interface{}
 **/
-func SetDuration(key string, val interface{}, millisecond time.Duration) interface{} {
+func SetDuration(key string, val interface{}, expMilisecond int64) interface{} {
 	if conn == nil {
 		return val
 	}
 
 	switch v := val.(type) {
 	case et.Json:
-		return SetCtx(conn.ctx, key, v.ToString(), millisecond)
+		return SetCtx(conn.ctx, key, v.ToString(), expMilisecond)
 	case et.Items:
-		return SetCtx(conn.ctx, key, v.ToString(), millisecond)
+		return SetCtx(conn.ctx, key, v.ToString(), expMilisecond)
 	case et.Item:
-		return SetCtx(conn.ctx, key, v.ToString(), millisecond)
+		return SetCtx(conn.ctx, key, v.ToString(), expMilisecond)
 	case int:
-		return SetCtx(conn.ctx, key, strs.Format(`%d`, v), millisecond)
+		return SetCtx(conn.ctx, key, strs.Format(`%d`, v), expMilisecond)
 	case int64:
-		return SetCtx(conn.ctx, key, strs.Format(`%d`, v), millisecond)
+		return SetCtx(conn.ctx, key, strs.Format(`%d`, v), expMilisecond)
 	case float64:
-		return SetCtx(conn.ctx, key, strs.Format(`%f`, v), millisecond)
+		return SetCtx(conn.ctx, key, strs.Format(`%f`, v), expMilisecond)
 	case bool:
-		return SetCtx(conn.ctx, key, strs.Format(`%t`, v), millisecond)
+		return SetCtx(conn.ctx, key, strs.Format(`%t`, v), expMilisecond)
 	case []byte:
-		return SetCtx(conn.ctx, key, string(v), millisecond)
+		return SetCtx(conn.ctx, key, string(v), expMilisecond)
 	case time.Time:
-		return SetCtx(conn.ctx, key, v.Format(time.RFC3339), millisecond)
+		return SetCtx(conn.ctx, key, v.Format(time.RFC3339), expMilisecond)
 	case time.Duration:
-		return SetCtx(conn.ctx, key, v.String(), millisecond)
+		return SetCtx(conn.ctx, key, v.String(), expMilisecond)
 	default:
 		s, ok := v.(string)
 		if ok {
-			return SetCtx(conn.ctx, key, s, millisecond)
+			return SetCtx(conn.ctx, key, s, expMilisecond)
 		}
 	}
 
@@ -59,17 +58,62 @@ func SetDuration(key string, val interface{}, millisecond time.Duration) interfa
 }
 
 /**
+* Incr
+* @params key string, expMilisecond int64
+* @return int64
+**/
+func IncrDuration(key string, expMilisecond int64) int64 {
+	if conn == nil {
+		return 0
+	}
+
+	return IncrCtx(conn.ctx, key, expMilisecond)
+}
+
+/**
+* Incr
+* @params key string, expSecond int
+* @return int64
+**/
+func Incr(key string, expSecond int) int64 {
+	duration := time.Duration(expSecond) * time.Second
+	return IncrDuration(key, duration.Milliseconds())
+}
+
+/**
+* IncrInt
+* @params key string, expSecond int
+* @return int
+**/
+func IncrInt(key string, expSecond int) int {
+	return int(Incr(key, expSecond))
+}
+
+/**
+* Decr
+* @params key string
+* @return int64
+**/
+func Decr(key string) int64 {
+	if conn == nil {
+		return 0
+	}
+
+	return DecrCtx(conn.ctx, key)
+}
+
+/**
 * Set
-* @params key string, val interface{}, second time.Duration
+* @params key string, val interface{}, expSecond int
 * @return interface{}
 **/
-func Set(key string, val interface{}, second time.Duration) interface{} {
+func Set(key string, val interface{}, expSecond int) interface{} {
 	if conn == nil {
 		return val
 	}
 
-	dur := second * time.Second / time.Millisecond
-	return SetDuration(key, val, dur)
+	duration := time.Duration(expSecond) * time.Second
+	return SetDuration(key, val, duration.Milliseconds())
 }
 
 /**
@@ -112,38 +156,13 @@ func Delete(key string) (int64, error) {
 }
 
 /**
-* Count
-* @params key string, expiration time.Duration (second)
-* @return int64
-**/
-func Count(key string, expiration time.Duration) int {
-	if conn == nil {
-		return 0
-	}
-
-	val, err := Get(key, "0")
-	if err != nil {
-		return 0
-	}
-
-	result, err := strconv.Atoi(val)
-	if err != nil {
-		return 0
-	}
-
-	result++
-	Set(key, result, expiration)
-
-	return result
-}
-
-/**
 * SetH
-* @params key string, val interface{}, expiration int64
+* @params key string, val interface{}, expiration int
 * @return interface{}
 **/
-func SetH(key string, val interface{}, expiration int64) interface{} {
-	return Set(key, val, time.Duration(expiration)*time.Hour)
+func SetH(key string, val interface{}, expiration int) interface{} {
+	duration := time.Duration(expiration) * time.Hour
+	return Set(key, val, int(duration.Seconds()))
 }
 
 /**
@@ -151,8 +170,8 @@ func SetH(key string, val interface{}, expiration int64) interface{} {
 * @params key string, val interface{}, expiration int64
 * @return interface{}
 **/
-func SetD(key string, val interface{}, expiration int64) interface{} {
-	return Set(key, val, time.Duration(expiration)*time.Hour*24)
+func SetD(key string, val interface{}, expiration int) interface{} {
+	return SetH(key, val, expiration*24)
 }
 
 /**
@@ -160,8 +179,8 @@ func SetD(key string, val interface{}, expiration int64) interface{} {
 * @params key string, val interface{}, expiration int64
 * @return interface{}
 **/
-func SetW(key string, val interface{}, expiration int64) interface{} {
-	return Set(key, val, time.Duration(expiration)*time.Hour*24*7)
+func SetW(key string, val interface{}, expiration int) interface{} {
+	return SetH(key, val, expiration*24*7)
 }
 
 /**
@@ -169,8 +188,8 @@ func SetW(key string, val interface{}, expiration int64) interface{} {
 * @params key string, val interface{}, expiration int64
 * @return interface{}
 **/
-func SetM(key string, val interface{}, expiration int64) interface{} {
-	return Set(key, val, time.Duration(expiration)*time.Hour*24*30)
+func SetM(key string, val interface{}, expiration int) interface{} {
+	return SetH(key, val, expiration*24*30)
 }
 
 /**
@@ -178,8 +197,8 @@ func SetM(key string, val interface{}, expiration int64) interface{} {
 * @params key string, val interface{}, expiration int64
 * @return interface{}
 **/
-func SetY(key string, val interface{}, expiration int64) interface{} {
-	return Set(key, val, time.Duration(expiration)*time.Hour*24*365)
+func SetY(key string, val interface{}, expiration int) interface{} {
+	return SetH(key, val, expiration*24*365)
 }
 
 /**
@@ -198,32 +217,6 @@ func Empty(match string) error {
 	}
 
 	return nil
-}
-
-/**
-* More
-* @params key string, second time.Duration
-* @return int
-**/
-func More(key string, second time.Duration) int {
-	n, err := Get(key, "")
-	if err != nil {
-		n = "0"
-	}
-
-	if n == "" {
-		n = "0"
-	}
-
-	val, err := strconv.Atoi(n)
-	if err != nil {
-		return 0
-	}
-
-	val++
-	Set(key, strs.Format(`%d`, val), second)
-
-	return val
 }
 
 /**
@@ -303,23 +296,23 @@ func HDelete(key, atr string) error {
 }
 
 /**
-* GenKey
+* genKey
 * @params args ...interface{}
 * @return string
 **/
-func GenKey(args ...interface{}) string {
+func genKey(args ...interface{}) string {
 	result := reg.GenKey(args...)
 	return utility.ToBase64(result)
 }
 
 /**
 * SetVerify
-* @params device string, key string, val string, duration time.Duration
+* @params device string, key string, val string, expiration time.Duration
 * @return interface{}
 **/
-func SetVerify(device, key, val string, duration time.Duration) interface{} {
-	key = GenKey("verify", device, key)
-	return Set(key, val, duration)
+func SetVerify(device, key, val string, expiration int) interface{} {
+	key = genKey("verify", device, key)
+	return Set(key, val, expiration)
 }
 
 /**
@@ -328,7 +321,7 @@ func SetVerify(device, key, val string, duration time.Duration) interface{} {
 * @return string, error
 **/
 func GetVerify(device string, key string) (string, error) {
-	key = GenKey("verify", device, key)
+	key = genKey("verify", device, key)
 	result, err := Get(key, "")
 	if err != nil {
 		return "", err
@@ -345,7 +338,7 @@ func GetVerify(device string, key string) (string, error) {
 * @return int64, error
 **/
 func DeleteVerify(device string, key string) (int64, error) {
-	key = GenKey("verify", device, key)
+	key = genKey("verify", device, key)
 	return Delete(key)
 }
 

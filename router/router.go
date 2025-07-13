@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -222,7 +222,7 @@ func GetRoutes() map[string]et.Json {
 * @param method, path, packagePath, host, packageName string, private bool
 **/
 func pushApiGateway(method, path, packagePath, host, packageName string, private bool) {
-	id := cache.GenKey(method, path, packageName)
+	id := reg.GenHashKey(method, path, packageName)
 	path = packagePath + path
 	resolve := host + path
 

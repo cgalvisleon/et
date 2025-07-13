@@ -144,8 +144,7 @@ func (s *Server) setToken(w http.ResponseWriter, r *http.Request) {
 	device := body.Str("device")
 	id := body.Str("id")
 	token := body.Str("token")
-	second := body.Num("duration")
-	duration := time.Duration(second) * time.Second
+	duration := body.Int("duration")
 	key := claim.SetToken(app, device, id, token, duration)
 	result := et.Json{
 		"key":      key,

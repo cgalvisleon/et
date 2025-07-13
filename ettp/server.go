@@ -127,8 +127,7 @@ func New(config Config) (*Server, error) {
 		WriteTimeout: srv.writeTimeout,
 		IdleTimeout:  srv.idleTimeout,
 	}
-	srv.mux.HandleFunc(srv.pathApi, srv.handlerResolve)
-	srv.mux.HandleFunc(srv.pathApp, srv.handlerReverseProxy)
+	srv.mux.HandleFunc("/", srv.handlerResolve)
 
 	return srv, nil
 }

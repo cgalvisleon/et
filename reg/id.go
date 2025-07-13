@@ -9,6 +9,7 @@ import (
 	"github.com/bwmarrin/snowflake"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
+	"github.com/cgalvisleon/et/utility"
 	"github.com/google/uuid"
 	"github.com/oklog/ulid/v2"
 	"github.com/rs/xid"
@@ -91,6 +92,16 @@ func GenIndex() int64 {
 func GenSnowflake() string {
 	ms := timezone.NowTime().UnixMilli()
 	return fmt.Sprintf("%d%03d", ms, rand.Intn(1000))
+}
+
+/**
+* GenHashKey
+* @params args ...interface{}
+* @return string
+**/
+func GenHashKey(args ...interface{}) string {
+	key := GenKey(args...)
+	return utility.ToBase64(key)
 }
 
 /**

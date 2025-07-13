@@ -41,6 +41,7 @@ func (s *Server) mountApiGatewayFunc() {
 	/* Cache */
 	s.Private().Get("/apigateway/cache", s.listCache, s.Name)
 	s.Private().Delete("/apigateway/cache", s.emptyCache, s.Name)
+	s.Private().Get("/apigateway/cache/{key}", s.getCache, s.Name)
 
 	s.Save()
 }

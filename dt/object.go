@@ -8,7 +8,7 @@ import (
 	"github.com/cgalvisleon/et/et"
 )
 
-var duration = time.Duration(1) * time.Hour * 24
+var duration = 1 * time.Hour
 
 type Object struct {
 	et.Item
@@ -71,7 +71,8 @@ func (s *Object) save() bool {
 	}
 
 	val := s.ToString()
-	cache.Set(s.Key, val, duration)
+	expiration := int(duration.Seconds())
+	cache.Set(s.Key, val, expiration)
 
 	return true
 }

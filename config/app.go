@@ -209,7 +209,7 @@ func (s *app) Reload() {
 	s.Help = String("HELP", "https://et.com/help")
 	s.Host = String("HOST", "localhost")
 	s.PathApi = String("PATH_API", "/api")
-	s.PathApp = String("PATH_APP", "/")
+	s.PathApp = String("PATH_APP", "/app")
 	s.Production = Bool("PRODUCTION", false)
 	s.Port = Int("PORT", 3300)
 	s.Stage = String("STAGE", "local")

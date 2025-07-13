@@ -63,3 +63,27 @@ func (s *Server) emptyCache(w http.ResponseWriter, r *http.Request) {
 
 	metric.JSON(w, r, http.StatusOK, et.Json{"message": "Cache empty"})
 }
+
+/**
+* getCache
+* @params w http.ResponseWriter
+* @params r *http.Request
+**/
+func (s *Server) getCache(w http.ResponseWriter, r *http.Request) {
+	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
+	if !ok {
+		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
+		return
+	}
+
+	queryParams := r.URL.Query()
+	key := queryParams.Get("key")
+
+	result, err := cache.Get(key, "")
+	if err != nil {
+		metric.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	metric.JSON(w, r, http.StatusOK, result)
+}

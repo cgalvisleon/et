@@ -9,6 +9,7 @@ import (
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/golang-jwt/jwt/v4"
@@ -118,12 +119,13 @@ func (c *Claim) ToJson() et.Json {
 }
 
 /**
-* GetTokenKey
+* getTokenKey
 * @param app, device, id string
 * @return string
 **/
-func GetTokenKey(app, device, id string) string {
-	return cache.GenKey("token", app, device, id)
+func getTokenKey(app, device, id string) string {
+	result := reg.GenKey("token", app, device, id)
+	return utility.ToBase64(result)
 }
 
 /**
@@ -161,8 +163,9 @@ func newToken(c Claim) (string, error) {
 		return "", err
 	}
 
-	key := GetTokenKey(c.App, c.Device, c.ID)
-	cache.Set(key, token, c.Duration)
+	key := getTokenKey(c.App, c.Device, c.ID)
+	expiration := int(c.Duration.Seconds())
+	cache.Set(key, token, expiration)
 
 	return token, nil
 }
@@ -202,7 +205,7 @@ func GetToken(key string) (string, error) {
 * @return error
 **/
 func DeleteToken(app, device, id string) error {
-	key := GetTokenKey(app, device, id)
+	key := getTokenKey(app, device, id)
 	_, err := cache.Delete(key)
 	if err != nil {
 		return err
@@ -301,7 +304,7 @@ func ValidToken(token string) (*Claim, error) {
 		return nil, err
 	}
 
-	key := GetTokenKey(result.App, result.Device, result.ID)
+	key := getTokenKey(result.App, result.Device, result.ID)
 	val, err := cache.Get(key, "")
 	if err != nil {
 		return nil, err
@@ -317,11 +320,11 @@ func ValidToken(token string) (*Claim, error) {
 
 /**
 * SetToken
-* @param app, device, id string, token string, duration time.Duration
+* @param app, device, id string, token string, duration int
 * @return string
 **/
-func SetToken(app, device, id, token string, duration time.Duration) string {
-	key := GetTokenKey(app, device, id)
+func SetToken(app, device, id, token string, duration int) string {
+	key := getTokenKey(app, device, id)
 	cache.Set(key, token, duration)
 
 	return key

@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/middleware"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/strs"
 )
@@ -25,7 +25,7 @@ func (s *Server) setApiFunc(method, path string, handlerFn http.HandlerFunc, pac
 		return nil
 	}
 
-	id := cache.GenKey(method, path)
+	id := reg.GenKey(method, path)
 	url := strs.Format("%s%s", s.pathApi, path)
 	url = strings.ReplaceAll(url, "//", "/")
 	route, err := s.setRouter(id, method, url, url, TpHandler, et.Json{}, router.TpReplaceHeader, []string{}, false, packageName, false)

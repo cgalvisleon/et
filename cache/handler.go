@@ -21,36 +21,36 @@ const IsNil = redis.Nil
 * @params key string, val interface{}, expMilisecond int64
 * @return interface{}
 **/
-func SetDuration(key string, val interface{}, expMilisecond int64) interface{} {
+func SetDuration(key string, val interface{}, expiration time.Duration) interface{} {
 	if conn == nil {
 		return val
 	}
 
 	switch v := val.(type) {
 	case et.Json:
-		return SetCtx(conn.ctx, key, v.ToString(), expMilisecond)
+		return SetCtx(conn.ctx, key, v.ToString(), expiration)
 	case et.Items:
-		return SetCtx(conn.ctx, key, v.ToString(), expMilisecond)
+		return SetCtx(conn.ctx, key, v.ToString(), expiration)
 	case et.Item:
-		return SetCtx(conn.ctx, key, v.ToString(), expMilisecond)
+		return SetCtx(conn.ctx, key, v.ToString(), expiration)
 	case int:
-		return SetCtx(conn.ctx, key, strs.Format(`%d`, v), expMilisecond)
+		return SetCtx(conn.ctx, key, strs.Format(`%d`, v), expiration)
 	case int64:
-		return SetCtx(conn.ctx, key, strs.Format(`%d`, v), expMilisecond)
+		return SetCtx(conn.ctx, key, strs.Format(`%d`, v), expiration)
 	case float64:
-		return SetCtx(conn.ctx, key, strs.Format(`%f`, v), expMilisecond)
+		return SetCtx(conn.ctx, key, strs.Format(`%f`, v), expiration)
 	case bool:
-		return SetCtx(conn.ctx, key, strs.Format(`%t`, v), expMilisecond)
+		return SetCtx(conn.ctx, key, strs.Format(`%t`, v), expiration)
 	case []byte:
-		return SetCtx(conn.ctx, key, string(v), expMilisecond)
+		return SetCtx(conn.ctx, key, string(v), expiration)
 	case time.Time:
-		return SetCtx(conn.ctx, key, v.Format(time.RFC3339), expMilisecond)
+		return SetCtx(conn.ctx, key, v.Format(time.RFC3339), expiration)
 	case time.Duration:
-		return SetCtx(conn.ctx, key, v.String(), expMilisecond)
+		return SetCtx(conn.ctx, key, v.String(), expiration)
 	default:
 		s, ok := v.(string)
 		if ok {
-			return SetCtx(conn.ctx, key, s, expMilisecond)
+			return SetCtx(conn.ctx, key, s, expiration)
 		}
 	}
 
@@ -59,15 +59,15 @@ func SetDuration(key string, val interface{}, expMilisecond int64) interface{} {
 
 /**
 * Incr
-* @params key string, expMilisecond int64
+* @params key string, expiration time.Duration
 * @return int64
 **/
-func IncrDuration(key string, expMilisecond int64) int64 {
+func IncrDuration(key string, expiration time.Duration) int64 {
 	if conn == nil {
 		return 0
 	}
 
-	return IncrCtx(conn.ctx, key, expMilisecond)
+	return IncrCtx(conn.ctx, key, expiration)
 }
 
 /**
@@ -77,16 +77,7 @@ func IncrDuration(key string, expMilisecond int64) int64 {
 **/
 func Incr(key string, expSecond int) int64 {
 	duration := time.Duration(expSecond) * time.Second
-	return IncrDuration(key, duration.Milliseconds())
-}
-
-/**
-* IncrInt
-* @params key string, expSecond int
-* @return int
-**/
-func IncrInt(key string, expSecond int) int {
-	return int(Incr(key, expSecond))
+	return IncrDuration(key, duration)
 }
 
 /**
@@ -113,7 +104,7 @@ func Set(key string, val interface{}, expSecond int) interface{} {
 	}
 
 	duration := time.Duration(expSecond) * time.Second
-	return SetDuration(key, val, duration.Milliseconds())
+	return SetDuration(key, val, duration)
 }
 
 /**

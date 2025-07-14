@@ -68,6 +68,7 @@ func Subscribe(channel string, f func(Message)) (err error) {
 
 	idx := slices.IndexFunc(Events, func(e string) bool { return e == channel })
 	if idx == -1 {
+		publish("event:subscribed", et.Json{"channel": channel})
 		Events = append(Events, channel)
 	}
 

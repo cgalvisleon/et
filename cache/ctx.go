@@ -12,16 +12,15 @@ import (
 
 /**
 * SetCtx
-* @params ctx context.Context, key string, val string, expMilisecond int64
+* @params ctx context.Context, key string, val string, expiration time.Duration
 * @return string
 **/
-func SetCtx(ctx context.Context, key, val string, expMilisecond int64) string {
+func SetCtx(ctx context.Context, key, val string, expiration time.Duration) string {
 	if conn == nil {
 		return val
 	}
 
-	millisecond := time.Duration(expMilisecond) * time.Millisecond
-	err := conn.Set(ctx, key, val, millisecond).Err()
+	err := conn.Set(ctx, key, val, expiration).Err()
 	if err != nil {
 		return val
 	}
@@ -31,10 +30,10 @@ func SetCtx(ctx context.Context, key, val string, expMilisecond int64) string {
 
 /**
 * IncrCtx
-* @params ctx context.Context, key string, expMilisecond int64
+* @params ctx context.Context, key string, expiration time.Duration
 * @return int64
 **/
-func IncrCtx(ctx context.Context, key string, expMilisecond int64) int64 {
+func IncrCtx(ctx context.Context, key string, expiration time.Duration) int64 {
 	if conn == nil {
 		return 0
 	}
@@ -45,8 +44,7 @@ func IncrCtx(ctx context.Context, key string, expMilisecond int64) int64 {
 	}
 
 	if result == 1 {
-		millisecond := time.Duration(expMilisecond) * time.Millisecond
-		conn.Expire(ctx, key, millisecond)
+		conn.Expire(ctx, key, expiration)
 	}
 
 	return result

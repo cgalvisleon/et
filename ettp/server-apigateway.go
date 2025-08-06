@@ -18,8 +18,8 @@ import (
 * mountApiGatewayFunc
 **/
 func (s *Server) mountApiGatewayFunc() {
-	s.Get("/apigateway/version", s.getVersion, s.Name)
-	s.Get("/apigateway/test/{id}/test", s.getVersion, s.Name)
+	s.Get("/version", s.getVersion, s.Name)
+	s.Get("/test/{id}/test", s.getVersion, s.Name)
 	s.Private().Get("/apigateway/events", s.getEvents, s.Name)
 	s.Private().Get("/apigateway/{id}", s.getRouteById, s.Name)
 	s.Private().Post("/apigateway", s.upsetRouter, s.Name)

@@ -193,11 +193,3 @@ func (s *Ettp) Start() {
 
 	s.Close()
 }
-
-/**
-* SetAuthorizationMiddleware
-* @param f middleware.AuthorizationMiddleware
-**/
-func (s *Ettp) SetAuthorizationMiddleware(f func(next http.Handler) http.Handler) {
-	middleware.SetAuthorizationMiddleware(f)
-}

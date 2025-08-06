@@ -479,6 +479,272 @@ func main() {
 }
 ```
 
+### Tareas Programadas (Crontab)
+
+```go
+package main
+
+import (
+    "github.com/cgalvisleon/et/crontab"
+    "github.com/cgalvisleon/et/et"
+    "github.com/cgalvisleon/et/logs"
+)
+
+func main() {
+    // Crear un administrador de tareas
+    jobs := crontab.New()
+
+    // Agregar una tarea que se ejecute cada minuto
+    job, err := jobs.AddJob(
+        "notification-sender",                    // Nombre de la tarea
+        "0 * * * *",                            // Cada hora en punto (cron format)
+        "notifications",                         // Canal de eventos
+        et.Json{"type": "hourly", "action": "send"}, // Parámetros
+        nil,                                    // Función personalizada (opcional)
+    )
+
+    if err != nil {
+        logs.Error("Crontab", "Error adding job:", err)
+        return
+    }
+
+    // Cargar tareas guardadas
+    err = jobs.Load()
+    if err != nil {
+        logs.Error("Crontab", "Error loading jobs:", err)
+    }
+
+    // Iniciar el administrador de tareas
+    err = jobs.Start()
+    if err != nil {
+        logs.Error("Crontab", "Error starting crontab:", err)
+        return
+    }
+
+    // Iniciar una tarea específica
+    idx, err := jobs.StartJob("notification-sender")
+    if err != nil {
+        logs.Error("Crontab", "Error starting job:", err)
+    } else {
+        logs.Log("Crontab", "Job started with ID:", idx)
+    }
+
+    // Listar todas las tareas
+    jobsList := jobs.List()
+    logs.Log("Crontab", "Active jobs:", jobsList.Count)
+
+    // Guardar configuración
+    err = jobs.Save()
+    if err != nil {
+        logs.Error("Crontab", "Error saving jobs:", err)
+    }
+}
+```
+
+### Sistema de Eventos en Tiempo Real
+
+```go
+package main
+
+import (
+    "github.com/cgalvisleon/et/event"
+    "github.com/cgalvisleon/et/et"
+    "github.com/cgalvisleon/et/logs"
+)
+
+func main() {
+    // Conectar al sistema de eventos
+    err := event.Connect()
+    if err != nil {
+        logs.Error("Event", "Error connecting:", err)
+        return
+    }
+
+    // Suscribirse a un canal
+    event.Subscribe("user-actions", func(data et.Json) {
+        logs.Log("Event", "User action received:", data.ToString())
+
+        // Procesar el evento
+        action := data.Str("action")
+        userId := data.Str("user_id")
+
+        switch action {
+        case "login":
+            logs.Log("Event", "User logged in:", userId)
+        case "logout":
+            logs.Log("Event", "User logged out:", userId)
+        case "purchase":
+            amount := data.Float("amount")
+            logs.Log("Event", "Purchase made by", userId, "amount:", amount)
+        }
+    })
+
+    // Publicar eventos
+    event.Publish("user-actions", et.Json{
+        "action":    "login",
+        "user_id":   "user-123",
+        "timestamp": 1634567890,
+        "ip":        "192.168.1.1",
+    })
+
+    event.Publish("user-actions", et.Json{
+        "action":   "purchase",
+        "user_id":  "user-123",
+        "amount":   99.99,
+        "product":  "Premium Plan",
+        "currency": "USD",
+    })
+
+    // Mantener la aplicación activa
+    select {}
+}
+```
+
+### Daemon y Servicios del Sistema
+
+```go
+package main
+
+import (
+    "github.com/cgalvisleon/et/cmd/daemon"
+    "github.com/cgalvisleon/et/et"
+    "github.com/cgalvisleon/et/logs"
+)
+
+type MyService struct {
+    name    string
+    version string
+    status  string
+}
+
+func (s *MyService) Help(key string) {
+    logs.Log("Service", "Available commands: start, stop, restart, status, version")
+}
+
+func (s *MyService) Version() string {
+    version := s.version
+    logs.Log("Service", "Version:", version)
+    return version
+}
+
+func (s *MyService) SetConfig(cfg string) {
+    logs.Log("Service", "Setting config:", cfg)
+}
+
+func (s *MyService) Status() et.Json {
+    return et.Json{
+        "name":    s.name,
+        "version": s.version,
+        "status":  s.status,
+        "uptime":  "2h 30m",
+    }
+}
+
+func (s *MyService) Start() et.Item {
+    s.status = "running"
+    logs.Log("Service", "Service started")
+
+    return et.Item{
+        Ok: true,
+        Result: et.Json{
+            "status": "started",
+            "pid":    12345,
+        },
+    }
+}
+
+func (s *MyService) Stop() et.Item {
+    s.status = "stopped"
+    logs.Log("Service", "Service stopped")
+
+    return et.Item{
+        Ok: true,
+        Result: et.Json{
+            "status": "stopped",
+        },
+    }
+}
+
+func (s *MyService) Restart() et.Item {
+    s.Stop()
+    return s.Start()
+}
+
+func main() {
+    // Registrar el servicio
+    service := &MyService{
+        name:    "my-app",
+        version: "1.0.0",
+        status:  "stopped",
+    }
+
+    daemon.Registry("my-app", service)
+
+    // El daemon maneja automáticamente los comandos:
+    // go run main.go start
+    // go run main.go stop
+    // go run main.go status
+    // go run main.go restart
+}
+```
+
+### Middleware HTTP Avanzado
+
+```go
+package main
+
+import (
+    "net/http"
+
+    "github.com/cgalvisleon/et/middleware"
+    "github.com/cgalvisleon/et/ettp"
+    "github.com/cgalvisleon/et/logs"
+    "github.com/go-chi/chi/v5"
+)
+
+func main() {
+    // Crear router
+    r := chi.NewRouter()
+
+    // Aplicar middleware de ET
+    r.Use(middleware.Logger)           // Logging de requests
+    r.Use(middleware.Recoverer)        // Recovery de panics
+    r.Use(middleware.RequestID)        // Request ID único
+    r.Use(middleware.CORS)             // CORS headers
+    r.Use(middleware.WrapWrite)        // Response wrapper
+
+    // Middleware de autenticación
+    r.Use(middleware.Authentication)
+
+    // Middleware de autorización
+    r.Use(middleware.Authorization)
+
+    // Rutas protegidas
+    r.Route("/api/v1", func(r chi.Router) {
+        r.Get("/users", func(w http.ResponseWriter, r *http.Request) {
+            // Handler protegido
+            response := map[string]interface{}{
+                "users": []string{"user1", "user2"},
+            }
+
+            ettp.WriteJSON(w, http.StatusOK, response)
+        })
+
+        r.Post("/users", func(w http.ResponseWriter, r *http.Request) {
+            // Crear usuario
+            ettp.WriteJSON(w, http.StatusCreated, map[string]string{
+                "message": "User created successfully",
+            })
+        })
+    })
+
+    // Iniciar servidor
+    port := ":8080"
+    logs.Log("Server", "Starting on port", port)
+    http.ListenAndServe(port, r)
+}
+```
+
 ### Manejo de Variables de Entorno
 
 ```go
@@ -531,6 +797,13 @@ go get github.com/cgalvisleon/et@v0.1.15
 - **Nuevo**: Data Transfer Objects (DTO)
 - **Nuevo**: Sistema de argumentos mejorado
 - **Nuevo**: Patrones de resiliencia
+- **Nuevo**: Sistema de daemon/servicios
+- **Nuevo**: Crontab avanzado con persistencia
+- **Nuevo**: Sistema de eventos mejorado
+- **Nuevo**: Middleware HTTP completo
+- **Nuevo**: Servidor ETTP optimizado
+- **Nuevo**: Utilidades de archivos y sincronización
+- **Nuevo**: Sistema de validaciones y criptografía
 - **Nuevo**: Documentación mejorada
 - **Nuevo**: Ejemplos de uso completos
 
@@ -614,54 +887,106 @@ go test ./ws/...
 go test ./brevo/...
 ```
 
-## 🏗️ Estructura del Proyecto
+## 🏗️ Arquitectura y Estructura
+
+### Arquitectura de ET
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Aplicación Usuario                      │
+├─────────────────────────────────────────────────────────────┤
+│                    ET Library Layer                         │
+├─────────────────┬─────────────────┬─────────────────────────┤
+│   Comunicación  │   Persistencia  │       Utilidades        │
+│   - WebSockets  │   - Cache       │   - Logs                │
+│   - Events      │   - Storage     │   - Config              │
+│   - Brevo       │   - Redis       │   - Args                │
+│   - AWS         │                 │   - Crypto              │
+├─────────────────┼─────────────────┼─────────────────────────┤
+│    Servicios    │   Middleware    │       Core              │
+│   - HTTP/ETTP   │   - Auth        │   - et (JSON)           │
+│   - Daemon      │   - CORS        │   - dt (DTO)            │
+│   - Crontab     │   - Logger      │   - utility             │
+│   - Realtime    │   - Recovery    │   - mistake             │
+└─────────────────┴─────────────────┴─────────────────────────┘
+```
+
+### Estructura del Proyecto
 
 ```
 et/
-├── arg/         # Gestión de argumentos
-├── aws/         # Integración con AWS
+├── arg/         # Gestión de argumentos de línea de comandos
+├── aws/         # Integración con servicios AWS (S3, SES, SMS)
 ├── brevo/       # Servicios de comunicación (Email, SMS, WhatsApp)
-├── cache/       # Sistema de caché con Redis
-├── claim/       # Sistema de claims y permisos
+├── cache/       # Sistema de caché con Redis y Pub/Sub
+├── claim/       # Sistema de claims y permisos JWT
 ├── cmd/         # Comandos CLI y ejecutables
-│   ├── create/  # Generador de proyectos
-│   ├── daemon/  # Servicios en segundo plano
-│   ├── et/      # Comando principal
-│   ├── prepare/ # Preparador de proyectos
-│   └── ws/      # Servidor WebSocket
-├── config/      # Configuración y parámetros
-├── console/     # Consola interactiva
-├── create/      # Templates y generadores
-├── crontab/     # Tareas programadas
-├── dt/          # Data Transfer Objects
-├── envar/       # Variables de entorno
-├── et/          # Utilidades principales
-├── ettp/        # Servidor HTTP
-├── event/       # Sistema de eventos
-├── file/        # Manejo de archivos
-├── graph/       # Soporte GraphQL
-├── jrpc/        # JSON-RPC
-├── logs/        # Sistema de logs
-├── mem/         # Memoria compartida
-├── middleware/  # Middleware HTTP
-├── mistake/     # Manejo de errores
-├── msg/         # Mensajes del sistema
-├── race/        # Detección de condiciones de carrera
+│   ├── create/  # Generador de proyectos y plantillas
+│   ├── daemon/  # Servicios en segundo plano y systemd
+│   ├── et/      # Comando principal de la biblioteca
+│   ├── prepare/ # Preparador de proyectos existentes
+│   └── ws/      # Servidor WebSocket dedicado
+├── config/      # Configuración y parámetros de aplicación
+├── console/     # Consola interactiva y terminal
+├── create/      # Templates y generadores de código
+├── crontab/     # Sistema de tareas programadas con persistencia
+├── dt/          # Data Transfer Objects con validación
+├── envar/       # Variables de entorno y configuración
+├── et/          # Utilidades principales y tipos JSON
+├── ettp/        # Servidor HTTP optimizado con routing
+├── event/       # Sistema de eventos en tiempo real
+├── file/        # Manejo de archivos y sincronización
+├── graph/       # Soporte GraphQL y consultas de grafos
+├── jrpc/        # JSON-RPC para comunicación entre servicios
+├── logs/        # Sistema de logs estructurados y avanzados
+├── mem/         # Memoria compartida y sincronización
+├── middleware/  # Middleware HTTP (Auth, CORS, Logger, etc.)
+├── mistake/     # Manejo centralizado de errores
+├── msg/         # Mensajes del sistema y localización
+├── race/        # Detección y prevención de condiciones de carrera
 ├── realtime/    # Funcionalidades en tiempo real
-├── reg/         # Registro de servicios
-├── request/     # Manejo de requests
-├── resilience/  # Sistema de resiliencia
-├── response/    # Manejo de responses
-├── router/      # Enrutamiento HTTP
-├── server/      # Servidor HTTP
-├── service/     # Servicios y utilidades
-├── stdrout/     # Rutas estándar
-├── strs/        # Utilidades de strings
-├── timezone/    # Gestión de zonas horarias
-├── units/       # Unidades de medida
-├── utility/     # Utilidades generales
-└── ws/          # WebSocket y comunicación
+├── reg/         # Registro de servicios y discovery
+├── request/     # Manejo unificado de requests HTTP
+├── resilience/  # Patrones de resiliencia y circuit breakers
+├── response/    # Manejo unificado de responses HTTP
+├── router/      # Enrutamiento HTTP avanzado
+├── server/      # Servidor HTTP base
+├── service/     # Servicios y utilidades de negocio
+├── stdrout/     # Rutas estándar y endpoints comunes
+├── strs/        # Utilidades para manejo de strings
+├── timezone/    # Gestión avanzada de zonas horarias
+├── units/       # Unidades de medida y conversiones
+├── utility/     # Utilidades generales (crypto, validation, etc.)
+└── ws/          # WebSocket y comunicación bidireccional
 ```
+
+### Módulos Principales
+
+#### 🔌 Comunicación
+
+- **WebSockets**: Comunicación bidireccional en tiempo real
+- **Events**: Sistema de eventos pub/sub
+- **Brevo**: Email, SMS y WhatsApp
+- **AWS**: Integración con servicios AWS
+
+#### 💾 Persistencia y Caché
+
+- **Cache**: Redis con pub/sub
+- **File**: Sistema de archivos con watcher
+- **Storage**: Almacenamiento persistente
+
+#### 🛡️ Seguridad y Middleware
+
+- **Middleware**: Auth, CORS, Logger, Recovery
+- **Claim**: Sistema JWT avanzado
+- **Crypto**: Utilidades criptográficas
+
+#### ⚙️ Servicios y Utilidades
+
+- **Daemon**: Servicios del sistema
+- **Crontab**: Tareas programadas
+- **Config**: Configuración centralizada
+- **Logs**: Sistema de logging estructurado
 
 ## 🔧 API Reference
 
@@ -761,6 +1086,112 @@ number := arg.GetInt("port")
 flag := arg.GetBool("debug")
 ```
 
+### Crontab (Tareas Programadas)
+
+```go
+// Crear administrador de tareas
+jobs := crontab.New()
+
+// Agregar tarea
+job, err := jobs.AddJob(name, spec, channel, params, fn)
+
+// Gestión de tareas
+jobs.StartJob(name)
+jobs.StopJob(name)
+jobs.DeleteJob(name)
+
+// Operaciones del administrador
+jobs.Start()  // Iniciar crontab
+jobs.Stop()   // Detener crontab
+jobs.Load()   // Cargar desde cache
+jobs.Save()   // Guardar en cache
+jobs.List()   // Listar tareas
+```
+
+### Eventos
+
+```go
+// Conectar al sistema de eventos
+event.Connect()
+
+// Publicar evento
+event.Publish(channel, data)
+
+// Suscribirse a eventos
+event.Subscribe(channel, handler)
+
+// Emitir eventos
+event.Emit(eventName, data)
+```
+
+### Middleware
+
+```go
+// Middleware básico
+middleware.Logger           // Logging de requests
+middleware.Recoverer        // Recovery de panics
+middleware.RequestID        // Request ID único
+middleware.CORS             // CORS headers
+middleware.WrapWrite        // Response wrapper
+
+// Middleware de seguridad
+middleware.Authentication   // Autenticación JWT
+middleware.Authorization   // Autorización basada en roles
+middleware.Telemetry      // Métricas y telemetría
+```
+
+### ETTP (Servidor HTTP)
+
+```go
+// Respuestas JSON
+ettp.WriteJSON(w, statusCode, data)
+
+// Manejo de errores
+ettp.WriteError(w, err)
+
+// Servidor con configuración
+server := ettp.NewServer(config)
+server.Start()
+```
+
+### Utilidades
+
+```go
+// Generación de IDs
+utility.UUID()              // UUID v4
+utility.NewID()            // ID personalizado
+utility.GenId()            // ID generado
+
+// Validaciones
+utility.ValidStr(str, min, exclusions)
+utility.ValidEmail(email)
+utility.ValidUrl(url)
+
+// Criptografía
+utility.PasswordHash(password)
+utility.PasswordVerify(password, hash)
+utility.Encrypt(data, key)
+utility.Decrypt(data, key)
+```
+
+### Sistema de Archivos
+
+```go
+// Operaciones de archivos
+file.Exists(path)
+file.Read(path)
+file.Write(path, data)
+file.Delete(path)
+
+// Watcher de archivos
+watcher := file.NewWatcher()
+watcher.Add(path)
+watcher.Watch(handler)
+
+// Sincronización
+file.Sync(source, target)
+```
+
 ### Logs
 
 ```go
@@ -769,6 +1200,158 @@ logs.Log(component, message)
 logs.Debug(component, message)
 logs.Alert(component, message)
 logs.Error(component, message)
+```
+
+## 🎯 Mejores Prácticas
+
+### Configuración de Proyecto
+
+```go
+package main
+
+import (
+    "github.com/cgalvisleon/et/config"
+    "github.com/cgalvisleon/et/logs"
+    "github.com/cgalvisleon/et/cache"
+    "github.com/cgalvisleon/et/event"
+)
+
+func init() {
+    // Configurar logging
+    logs.SetLevel("info")
+
+    // Cargar configuración
+    config.Load()
+
+    // Conectar servicios
+    if err := cache.Connect(); err != nil {
+        logs.Alert("Cache connection failed:", err)
+    }
+
+    if err := event.Connect(); err != nil {
+        logs.Alert("Event system connection failed:", err)
+    }
+}
+
+func main() {
+    logs.Log("App", "Application started successfully")
+    // Tu aplicación aquí
+}
+```
+
+### Estructura de Microservicio Recomendada
+
+```
+mi-microservicio/
+├── cmd/
+│   └── main.go              # Punto de entrada
+├── internal/
+│   ├── handlers/            # Handlers HTTP
+│   ├── services/           # Lógica de negocio
+│   ├── models/             # Modelos de datos
+│   └── middleware/         # Middleware personalizado
+├── pkg/
+│   └── api/                # API pública
+├── configs/
+│   ├── .env.development
+│   ├── .env.production
+│   └── config.yaml
+├── scripts/
+│   ├── deploy.sh
+│   └── test.sh
+├── docker/
+│   └── Dockerfile
+├── go.mod
+├── go.sum
+└── README.md
+```
+
+### Patrón de Inicialización
+
+```go
+package main
+
+import (
+    "context"
+    "os"
+    "os/signal"
+    "syscall"
+    "time"
+
+    "github.com/cgalvisleon/et/ettp"
+    "github.com/cgalvisleon/et/logs"
+    "github.com/cgalvisleon/et/config"
+)
+
+func main() {
+    // Configuración inicial
+    cfg := config.New()
+
+    // Crear servidor
+    server := ettp.NewServer(cfg)
+
+    // Configurar rutas
+    setupRoutes(server)
+
+    // Iniciar servidor en goroutine
+    go func() {
+        if err := server.Start(); err != nil {
+            logs.Error("Server", "Failed to start:", err)
+            os.Exit(1)
+        }
+    }()
+
+    // Graceful shutdown
+    quit := make(chan os.Signal, 1)
+    signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+    <-quit
+
+    logs.Log("Server", "Shutting down server...")
+
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+
+    if err := server.Shutdown(ctx); err != nil {
+        logs.Error("Server", "Server forced to shutdown:", err)
+    }
+
+    logs.Log("Server", "Server exited")
+}
+```
+
+### Manejo de Errores
+
+```go
+package main
+
+import (
+    "github.com/cgalvisleon/et/mistake"
+    "github.com/cgalvisleon/et/logs"
+)
+
+func businessLogic() error {
+    // Crear error con contexto
+    if someCondition {
+        return mistake.New("BUSINESS_ERROR", "Something went wrong", "Additional context")
+    }
+
+    // Envolver error externo
+    if err := externalCall(); err != nil {
+        return mistake.Wrap(err, "EXTERNAL_CALL_FAILED", "Failed to call external service")
+    }
+
+    return nil
+}
+
+func handleError(err error) {
+    if mistake.Is(err, "BUSINESS_ERROR") {
+        logs.Alert("Business", "Business logic error:", err)
+        // Manejar error de negocio
+    } else {
+        logs.Error("System", "System error:", err)
+        // Manejar error del sistema
+    }
+}
 ```
 
 ## 🚨 Troubleshooting

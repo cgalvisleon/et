@@ -51,13 +51,6 @@ func (s *Server) setRouter(id, method, path, resolve string, kind TypeApi, heade
 		router.TpHeader = tpHeader
 		router.ExcludeHeader = excludeHeader
 		router.Private = private
-
-		if router.Private {
-			router.addMiddleware(router.server.authenticator)
-		} else {
-			router.removeMiddleware(router.server.authenticator)
-		}
-
 		router.setPakage(packageName)
 
 		confirm("RESET")

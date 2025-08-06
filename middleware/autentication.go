@@ -7,7 +7,6 @@ import (
 
 	"github.com/cgalvisleon/et/claim"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/utility"
@@ -55,12 +54,7 @@ func GetAuthorization(w http.ResponseWriter, r *http.Request) (string, error) {
 		return result, nil
 	}
 
-	cookie, err := r.Cookie("auth_token")
-	if err != nil {
-		return "", logs.Alert(err)
-	}
-
-	return cookie.Value, nil
+	return "", logs.Alertm("Autorization is required")
 }
 
 /**
@@ -111,7 +105,7 @@ func Autentication(next http.Handler) http.Handler {
 			"token":     token,
 		}
 
-		event.TokenLastUse(data)
+		PushTokenLastUse(data)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

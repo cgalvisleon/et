@@ -34,12 +34,7 @@ func LoadTo(name, host string, port int) (*Package, error) {
 	}
 
 	name = strs.DaskSpace(name)
-	result := &Package{
-		Name:    name,
-		Host:    host,
-		Port:    port,
-		Solvers: make([]*Solver, 0),
-	}
+	result := NewPackage(name, host, port)
 
 	return result, nil
 }

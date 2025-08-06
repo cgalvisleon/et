@@ -7,7 +7,6 @@ import (
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/go-chi/chi/v5"
@@ -296,42 +295,6 @@ func Private(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, p
 **/
 func Protect(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, packagePath, host string) *chi.Mux {
 	return Private(r, method, path, h, packageName, packagePath, host)
-}
-
-/**
-* Authorization
-* @param r *chi.Mux, method string, path string, h http.HandlerFunc, packageName string, packagePath string, host string
-* @return *chi.Mux
-**/
-func Authorization(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, packagePath, host string) *chi.Mux {
-	if middleware.AuthorizationMiddleware == nil {
-		logs.Alertm("AuthorizationMiddleware not set")
-		return r
-	}
-
-	router := r.With(middleware.Autentication).With(middleware.AuthorizationMiddleware)
-	switch method {
-	case "GET":
-		router.Get(path, h)
-	case "POST":
-		router.Post(path, h)
-	case "PUT":
-		router.Put(path, h)
-	case "PATCH":
-		router.Patch(path, h)
-	case "DELETE":
-		router.Delete(path, h)
-	case "HEAD":
-		router.Head(path, h)
-	case "OPTIONS":
-		router.Options(path, h)
-	case "HandlerFunc":
-		router.HandleFunc(path, h)
-	}
-
-	pushApiGateway(method, path, packagePath, host, packageName, true)
-
-	return r
 }
 
 /**

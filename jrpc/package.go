@@ -24,6 +24,19 @@ type Package struct {
 }
 
 /**
+* NewPackage
+* @param name string, host string, port int
+* @return *Package
+**/
+func NewPackage(name string, host string, port int) *Package {
+	return &Package{
+		Name: name,
+		Host: host,
+		Port: port,
+	}
+}
+
+/**
 * Describe
 * @return et.Json
 **/

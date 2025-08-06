@@ -14,9 +14,7 @@ import (
 
 const QUEUE_STACK = "stack"
 const EVENT_LOG = "log"
-const EVENT_TELEMETRY = "telemetry"
 const EVENT_OVERFLOW = "requests:overflow"
-const EVENT_TELEMETRY_TOKEN_LAST_USE = "telemetry:token:last_use"
 const EVENT_WORK = "event:worker"
 const EVENT_WORK_STATE = "event:worker:state"
 
@@ -162,14 +160,6 @@ func Log(event string, data et.Json) {
 }
 
 /**
-* Telemetry
-* @param data et.Json
-**/
-func Telemetry(data et.Json) {
-	go Publish(EVENT_TELEMETRY, data)
-}
-
-/**
 * Overflow
 * @param data et.Json
 **/
@@ -178,17 +168,8 @@ func Overflow(data et.Json) {
 }
 
 /**
-* TokenLastUse
-* @param data et.Json
-**/
-func TokenLastUse(data et.Json) {
-	go Publish(EVENT_TELEMETRY_TOKEN_LAST_USE, data)
-}
-
-/**
 * Error
-* @param event string
-* @param err error
+* @param event string,
 * @return error
 **/
 func Error(event string, err error) error {

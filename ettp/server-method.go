@@ -6,7 +6,6 @@ import (
 
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/strs"
@@ -181,33 +180,4 @@ func (s *Server) PrivateRoute(method, path string, h http.HandlerFunc, packageNa
 **/
 func (s *Server) ProtectRoute(method, path string, h http.HandlerFunc, packageName string) {
 	s.PrivateRoute(method, path, h, packageName)
-}
-
-/**
-* AuthorizationRoute
-* @param method, path, handlerFn, packageName string
-**/
-func (s *Server) AuthorizationRoute(method, path string, h http.HandlerFunc, packageName string) {
-	if middleware.AuthorizationMiddleware == nil {
-		console.Alertm("AuthorizationMiddleware not set")
-		return
-	}
-
-	router := s.With(s.authenticator).With(middleware.AuthorizationMiddleware)
-	switch method {
-	case "GET":
-		router.Get(path, h, packageName)
-	case "POST":
-		router.Post(path, h, packageName)
-	case "PUT":
-		router.Put(path, h, packageName)
-	case "PATCH":
-		router.Patch(path, h, packageName)
-	case "DELETE":
-		router.Delete(path, h, packageName)
-	case "HEAD":
-		router.Head(path, h, packageName)
-	case "OPTIONS":
-		router.Options(path, h, packageName)
-	}
 }

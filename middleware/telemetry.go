@@ -19,9 +19,18 @@ import (
 	"github.com/cgalvisleon/et/utility"
 )
 
-var hostName, _ = os.Hostname()
-var commonHeader = make(map[string]bool)
-var serviceName = "telemetry"
+var (
+	hostName, _  = os.Hostname()
+	commonHeader = make(map[string]bool)
+	serviceName  = "telemetry"
+)
+
+const (
+	TELEMETRY                = "telemetry"
+	TELEMETRY_SERVICE_STATUS = "telemetry:service:status"
+	TELEMETRY_TOKEN_LAST_USE = "telemetry:token:last_use"
+	TELEMETRY_OVERFLOW       = "telemetry:overflow"
+)
 
 type Result struct {
 	Ok     bool        `json:"ok"`
@@ -118,6 +127,38 @@ func (m *Telemetry) ToJson() et.Json {
 		"requests_per_day":    m.RequestsPerDay,
 		"requests_limit":      m.RequestsLimit,
 	}
+}
+
+/**
+* PushTelemetry
+* @param data et.Json
+**/
+func PushTelemetry(data et.Json) {
+	go event.Publish(TELEMETRY, data)
+}
+
+/**
+* PushTelemetryStatus
+* @param data et.Json
+**/
+func PushTelemetryStatus(data et.Json) {
+	go event.Publish(TELEMETRY_SERVICE_STATUS, data)
+}
+
+/**
+* PushTelemetryOverflow
+* @param data et.Json
+**/
+func PushTelemetryOverflow(data et.Json) {
+	go event.Publish(TELEMETRY_OVERFLOW, data)
+}
+
+/**
+* TokenLastUse
+* @param data et.Json
+**/
+func PushTokenLastUse(data et.Json) {
+	go event.Publish(TELEMETRY_TOKEN_LAST_USE, data)
 }
 
 /**
@@ -289,13 +330,13 @@ func (m *Metrics) telemetry() et.Json {
 	result := m.ToJson()
 	result["metric"] = m.metrics.ToJson()
 
-	event.Telemetry(et.Json{
+	PushTelemetry(et.Json{
 		"response": m,
 		"metric":   m.metrics.ToJson(),
 	})
 
 	if m.metrics.RequestsPerSecond > m.metrics.RequestsLimit {
-		event.Overflow(et.Json{
+		PushTelemetryOverflow(et.Json{
 			"response": m,
 			"metric":   m.metrics.ToJson(),
 		})

@@ -12,7 +12,6 @@ import (
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
@@ -324,12 +323,4 @@ func (s *Server) GetRouter() et.Items {
 		Count:  len(result),
 		Ok:     len(result) > 0,
 	}
-}
-
-/**
-* SetAuthorizationMiddleware
-* @param f middleware.AuthorizationMiddleware
-**/
-func (s *Server) SetAuthorizationMiddleware(f func(next http.Handler) http.Handler) {
-	middleware.SetAuthorizationMiddleware(f)
 }

@@ -1,7 +1,6 @@
 package ettp
 
 import (
-	"fmt"
 	"net/http"
 	"regexp"
 	"slices"
@@ -275,51 +274,9 @@ func (r *Router) addRoute(id, method, tag string, kind TypeApi, header et.Json, 
 		Private:       private,
 		Routes:        []*Router{},
 	}
-
-	if result.Private {
-		result.addMiddleware(r.server.authenticator)
-	}
-
 	r.Routes = append(r.Routes, result)
 
 	return result
-}
-
-/**
-* addMiddleware
-* @param middleware func(http.HandlerFunc) http.HandlerFunc
-* @return *Router
-**/
-func (r *Router) addMiddleware(middleware func(http.Handler) http.Handler) *Router {
-	isAdded := false
-	for _, mw := range r.middlewares {
-		if fmt.Sprintf("%p", mw) == fmt.Sprintf("%p", middleware) {
-			isAdded = true
-			break
-		}
-	}
-	if !isAdded {
-		r.middlewares = append(r.middlewares, middleware)
-	}
-
-	return r
-}
-
-/**
-* removeMiddleware
-* @param middleware func(http.HandlerFunc) http.HandlerFunc
-* @return *Router
-**/
-func (r *Router) removeMiddleware(middleware func(http.Handler) http.Handler) *Router {
-	var middlewares []func(http.Handler) http.Handler
-	for _, mw := range r.middlewares {
-		if fmt.Sprintf("%p", mw) != fmt.Sprintf("%p", middleware) {
-			middlewares = append(middlewares, mw)
-		}
-	}
-	r.middlewares = middlewares
-
-	return r
 }
 
 /**

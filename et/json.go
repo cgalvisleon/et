@@ -128,6 +128,14 @@ func (s Json) ToString() string {
 }
 
 /**
+* ToMap convert a json to a map
+* @return map[string]interface{}
+**/
+func (s Json) ToMap() map[string]interface{} {
+	return s
+}
+
+/**
 * ToItem convert a json to a Item
 * @return Item
 **/

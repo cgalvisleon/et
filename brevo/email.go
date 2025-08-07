@@ -14,11 +14,11 @@ import (
 )
 
 /**
-* sendEmail
+* SendEmail
 * @param sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp string
 * @return et.Items, error
 **/
-func sendEmail(sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp string) (et.Items, error) {
+func SendEmail(sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp string) (et.Items, error) {
 	if len(to) == 0 {
 		return et.Items{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "to")
 	}
@@ -88,7 +88,7 @@ func sendEmail(sender et.Json, to []et.Json, subject string, htmlContent string,
 * @return et.Items, error
 **/
 func SendEmailTransactional(sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json) (et.Items, error) {
-	return sendEmail(sender, to, subject, htmlContent, params, "Transactional")
+	return SendEmail(sender, to, subject, htmlContent, params, "Transactional")
 }
 
 /**
@@ -97,5 +97,5 @@ func SendEmailTransactional(sender et.Json, to []et.Json, subject string, htmlCo
 * @return et.Items, error
 **/
 func SendEmailPromotional(sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json) (et.Items, error) {
-	return sendEmail(sender, to, subject, htmlContent, params, "Promotional")
+	return SendEmail(sender, to, subject, htmlContent, params, "Promotional")
 }

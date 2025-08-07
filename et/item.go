@@ -83,6 +83,18 @@ func (s Item) ToJson() Json {
 }
 
 /**
+* ToMap convert a json to a map
+* @return map[string]interface{}
+**/
+func (s Item) ToMap() map[string]interface{} {
+	result := make(map[string]interface{})
+	result["ok"] = s.Ok
+	result["result"] = s.Result
+
+	return result
+}
+
+/**
 * ValAny return any value of the key
 * @param defaultVal any
 * @param atribs ...string

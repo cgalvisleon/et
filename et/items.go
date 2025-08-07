@@ -85,6 +85,19 @@ func (s Items) ToString() string {
 }
 
 /**
+* ToMap convert a json to a map
+* @return map[string]interface{}
+**/
+func (s *Items) ToMap() map[string]interface{} {
+	result := make(map[string]interface{})
+	result["ok"] = s.Ok
+	result["count"] = s.Count
+	result["result"] = s.Result
+
+	return result
+}
+
+/**
 * ValAny return the value of the key
 * @param idx int
 * @param defaultVal any

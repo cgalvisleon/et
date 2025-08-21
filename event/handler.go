@@ -26,11 +26,11 @@ func publish(channel string, data et.Json) error {
 	}
 
 	msg := NewEvenMessage(channel, data)
+	msg.FromId = conn.id
 	dt, err := msg.Encode()
 	if err != nil {
 		return err
 	}
-	msg.FromId = conn.id
 
 	return conn.Publish(msg.Channel, dt)
 }

@@ -12,14 +12,15 @@ import (
 
 type Request struct {
 	*http.Request
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	Id          string    `json:"id"`
-	Kind        TypeApi   `json:"kind"`
-	Path        string    `json:"path"`
-	URL         string    `json:"url"`
-	Version     int       `json:"version"`
-	PackageName string    `json:"package_name"`
+	CreatedAt   time.Time                         `json:"created_at"`
+	UpdatedAt   time.Time                         `json:"updated_at"`
+	Id          string                            `json:"id"`
+	Kind        TypeApi                           `json:"kind"`
+	Path        string                            `json:"path"`
+	URL         string                            `json:"url"`
+	Version     int                               `json:"version"`
+	PackageName string                            `json:"package_name"`
+	middlewares []func(http.Handler) http.Handler `json:"-"`
 }
 
 func NewRequest(r *http.Request, solver *Solver, params map[string]string) *Request {
@@ -71,6 +72,7 @@ func NewRequest(r *http.Request, solver *Solver, params map[string]string) *Requ
 		URL:         url,
 		Version:     solver.Version,
 		PackageName: solver.PackageName,
+		middlewares: solver.middlewares,
 	}
 
 	return result

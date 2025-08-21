@@ -82,11 +82,11 @@ func (s *Router) addRouter(tag string) *Router {
 }
 
 /**
-* AddSolvaer
+* setSolver
 * @param method, path, mainPath, solver string, header et.Json, excludeHeader []string, version int, packageName string
 * @return *Solver, error
 **/
-func (s *Router) addSolver(kind TypeApi, id, method, path, pathApi, solver string, header map[string]string, excludeHeader []string, version int, packageName string) (*Solver, error) {
+func (s *Router) setSolver(kind TypeApi, id, method, path, pathApi, solver string, header map[string]string, excludeHeader []string, version int, packageName string) (*Solver, error) {
 	url := pathApi + path
 	tags := strings.Split(url, "/")
 	if len(tags) == 0 {

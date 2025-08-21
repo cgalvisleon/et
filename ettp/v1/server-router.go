@@ -51,7 +51,6 @@ func (s *Server) setRouter(id, method, path, resolve string, kind TypeApi, heade
 		router.TpHeader = tpHeader
 		router.ExcludeHeader = excludeHeader
 		router.Private = private
-		router.setPakage(packageName)
 
 		confirm("RESET")
 	} else {
@@ -90,12 +89,15 @@ func (s *Server) setRouter(id, method, path, resolve string, kind TypeApi, heade
 			if i == n-1 && router != nil {
 				router.Path = path
 				router.Resolve = resolve
-				router.setPakage(packageName)
 				s.solvers = append(s.solvers, router)
 			}
 		}
 
 		confirm("SET")
+	}
+
+	if router != nil {
+		router.setPakage(packageName)
 	}
 
 	if save {
@@ -130,10 +132,6 @@ func (s *Server) DeleteRouteById(id string, save bool) error {
 	router := s.GetRouteById(id)
 	if router == nil {
 		return errors.New(MSG_ROUTE_NOT_FOUND)
-	}
-
-	if router.pkg != nil {
-		router.pkg.deleteRouteById(id)
 	}
 
 	idx := slices.IndexFunc(s.solvers, func(e *Router) bool { return e.Id == id })

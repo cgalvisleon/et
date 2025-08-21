@@ -36,20 +36,30 @@ func newPakage(server *Server, name string) *Package {
 }
 
 /**
-* Describe
+* ToJson
 * @return et.Json
 **/
-func (s *Package) Describe() et.Json {
+func (s *Package) ToJson() et.Json {
+	routes := make([]et.Json, 0)
+	for _, route := range s.routes {
+		routes = append(routes, route.ToJson())
+	}
+
+	proxies := make([]et.Json, 0)
+	for _, proxy := range s.proxies {
+		proxies = append(proxies, proxy.ToJson())
+	}
+
 	result := et.Json{
 		"id":   s.ID,
 		"name": s.Name,
 		"routes": et.Json{
 			"count": len(s.routes),
-			"items": s.routes,
+			"items": routes,
 		},
 		"proxies": et.Json{
 			"count": len(s.proxies),
-			"items": s.proxies,
+			"items": proxies,
 		},
 	}
 	return result
@@ -89,20 +99,6 @@ func (s *Package) addProxy(proxy *Proxy) *Package {
 	}
 
 	return s
-}
-
-/**
-* deleteRoute
-* @param route *Router
-* @return bool
-**/
-func (s *Package) deleteRoute(route *Router) bool {
-	idx := slices.IndexFunc(s.routes, func(e *Router) bool { return e.Id == route.Id })
-	if idx != -1 {
-		s.routes = append(s.routes[:idx], s.routes[idx+1:]...)
-	}
-
-	return true
 }
 
 /**

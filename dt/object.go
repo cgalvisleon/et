@@ -8,19 +8,10 @@ import (
 	"github.com/cgalvisleon/et/et"
 )
 
-var duration = 1 * time.Hour
-
 type Object struct {
 	et.Item
-	Key string `json:"key"`
-}
-
-/**
-* SetDuration
-* @param d time.Duration
-**/
-func SetDuration(d time.Duration) {
-	duration = d
+	Key      string        `json:"key"`
+	duration time.Duration `json:"-"`
 }
 
 /**
@@ -34,7 +25,8 @@ func newObject(key string) *Object {
 			Ok:     false,
 			Result: et.Json{},
 		},
-		Key: key,
+		Key:      key,
+		duration: 1 * time.Hour,
 	}
 }
 
@@ -71,8 +63,7 @@ func (s *Object) save() bool {
 	}
 
 	val := s.ToString()
-	expiration := int(duration.Seconds())
-	cache.Set(s.Key, val, expiration)
+	cache.Set(s.Key, val, s.duration)
 
 	return true
 }
@@ -100,6 +91,19 @@ func (s *Object) load() error {
 **/
 func Up(key string, data et.Item) Object {
 	obj := newObject(key)
+	obj.up(data, true)
+
+	return *obj
+}
+
+/**
+* UpWithDuration
+* @param key string, data et.Item, duration time.Duration
+* @return Object
+**/
+func UpWithDuration(key string, data et.Item, duration time.Duration) Object {
+	obj := newObject(key)
+	obj.duration = duration
 	obj.up(data, true)
 
 	return *obj

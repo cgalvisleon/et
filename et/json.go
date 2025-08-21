@@ -549,6 +549,12 @@ func (s Json) ValArray(defaultVal []interface{}, atribs ...string) []interface{}
 		}
 
 		return result
+	case []time.Time:
+		for _, item := range v {
+			result = append(result, item)
+		}
+
+		return result
 	default:
 		src := fmt.Sprintf(`%v`, v)
 		err := json.Unmarshal([]byte(src), &result)
@@ -628,16 +634,46 @@ func (s Json) ArrayInt64(atribs ...string) []int64 {
 * @return []Json
 **/
 func (s Json) ArrayJson(atribs ...string) []Json {
-	var result = []Json{}
-	vals := s.Array(atribs...)
-	for _, val := range vals {
-		v, ok := val.(Json)
-		if ok {
-			result = append(result, v)
-		}
+	value := s.ValAny("[]", atribs...)
+	if value == "[]" {
+		return []Json{}
 	}
 
-	return result
+	switch v := value.(type) {
+	case string:
+		bt, err := json.Marshal([]byte(v))
+		if err != nil {
+			logs.Errorf("ArrayJson: %v error:%v type:%T", value, err.Error(), value)
+			return []Json{}
+		}
+
+		var result []Json
+		if err := json.Unmarshal(bt, &result); err != nil {
+			logs.Errorf("ArrayJson: %v error:%v type:%T", value, err.Error(), value)
+			return []Json{}
+		}
+
+		return []Json{}
+	case []Json:
+		return v
+	case []interface{}, []map[string]interface{}:
+		bt, err := json.Marshal(v)
+		if err != nil {
+			logs.Errorf("ArrayJson: %v error:%v type:%T", value, err.Error(), value)
+			return []Json{}
+		}
+
+		var result []Json
+		if err := json.Unmarshal(bt, &result); err != nil {
+			logs.Errorf("ArrayJson: %v error:%v type:%T", value, err.Error(), value)
+			return []Json{}
+		}
+
+		return result
+	default:
+		logs.Errorf("ArrayJson: %v type:%T", value, value)
+		return []Json{}
+	}
 }
 
 /**

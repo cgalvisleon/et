@@ -78,6 +78,32 @@ func GetId(tag, id string) string {
 }
 
 /**
+* GetUlId
+* @params tag, id string
+* @return string
+**/
+func GetUlId(tag, id string) string {
+	if !map[string]bool{"": true, "*": true, "new": true}[id] {
+		return id
+	}
+
+	return GenUlId(tag)
+}
+
+/**
+* GetXid
+* @params tag, id string
+* @return string
+**/
+func GetXid(tag, id string) string {
+	if !map[string]bool{"": true, "*": true, "new": true}[id] {
+		return id
+	}
+
+	return GenXid(tag)
+}
+
+/**
 * GenIndex
 * @return int64
 **/

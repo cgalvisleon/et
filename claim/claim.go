@@ -124,8 +124,7 @@ func (c *Claim) ToJson() et.Json {
 * @return string
 **/
 func getTokenKey(app, device, id string) string {
-	result := reg.GenKey("token", app, device, id)
-	return utility.ToBase64(result)
+	return reg.GenKey("token", app, device, id)
 }
 
 /**
@@ -164,8 +163,7 @@ func newToken(c Claim) (string, error) {
 	}
 
 	key := getTokenKey(c.App, c.Device, c.ID)
-	expiration := int(c.Duration.Seconds())
-	cache.Set(key, token, expiration)
+	cache.Set(key, token, c.Duration)
 
 	return token, nil
 }
@@ -320,10 +318,10 @@ func ValidToken(token string) (*Claim, error) {
 
 /**
 * SetToken
-* @param app, device, id string, token string, duration int
+* @param app, device, id string, token string, duration time.Duration
 * @return string
 **/
-func SetToken(app, device, id, token string, duration int) string {
+func SetToken(app, device, id, token string, duration time.Duration) string {
 	key := getTokenKey(app, device, id)
 	cache.Set(key, token, duration)
 

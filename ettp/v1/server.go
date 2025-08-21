@@ -126,7 +126,7 @@ func New(config Config) (*Server, error) {
 		WriteTimeout: srv.writeTimeout,
 		IdleTimeout:  srv.idleTimeout,
 	}
-	srv.mux.HandleFunc("/", srv.handlerResolve)
+	srv.mux.HandleFunc("/", srv.handlerResolver)
 
 	return srv, nil
 }
@@ -293,11 +293,11 @@ func (s *Server) GetPackages(name string) et.Items {
 		idx := slices.IndexFunc(s.packages, func(e *Package) bool { return strs.Lowcase(e.Name) == strs.Lowcase(name) })
 		if idx != -1 {
 			pakage := s.packages[idx]
-			result = append(result, pakage.Describe())
+			result = append(result, pakage.ToJson())
 		}
 	} else {
 		for _, pakage := range s.packages {
-			result = append(result, pakage.Describe())
+			result = append(result, pakage.ToJson())
 		}
 	}
 
@@ -305,22 +305,5 @@ func (s *Server) GetPackages(name string) et.Items {
 		Ok:     len(result) > 0,
 		Count:  len(result),
 		Result: result,
-	}
-}
-
-/**
-* GetRouter
-* @return et.Items
-**/
-func (s *Server) GetRouter() et.Items {
-	var result = []et.Json{}
-	for _, route := range s.router {
-		result = append(result, route.ToJson())
-	}
-
-	return et.Items{
-		Result: result,
-		Count:  len(result),
-		Ok:     len(result) > 0,
 	}
 }

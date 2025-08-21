@@ -95,16 +95,15 @@ func Decr(key string) int64 {
 
 /**
 * Set
-* @params key string, val interface{}, expSecond int
+* @params key string, val interface{}, expiration time.Duration
 * @return interface{}
 **/
-func Set(key string, val interface{}, expSecond int) interface{} {
+func Set(key string, val interface{}, expiration time.Duration) interface{} {
 	if conn == nil {
 		return val
 	}
 
-	duration := time.Duration(expSecond) * time.Second
-	return SetDuration(key, val, duration)
+	return SetDuration(key, val, expiration)
 }
 
 /**
@@ -153,7 +152,7 @@ func Delete(key string) (int64, error) {
 **/
 func SetH(key string, val interface{}, expiration int) interface{} {
 	duration := time.Duration(expiration) * time.Hour
-	return Set(key, val, int(duration.Seconds()))
+	return Set(key, val, duration)
 }
 
 /**
@@ -301,7 +300,7 @@ func genKey(args ...interface{}) string {
 * @params device string, key string, val string, expiration time.Duration
 * @return interface{}
 **/
-func SetVerify(device, key, val string, expiration int) interface{} {
+func SetVerify(device, key, val string, expiration time.Duration) interface{} {
 	key = genKey("verify", device, key)
 	return Set(key, val, expiration)
 }

@@ -20,28 +20,26 @@ import (
 func (s *Server) mountApiGatewayFunc() {
 	s.Get("/version", s.getVersion, s.Name)
 	s.Get("/test/{id}/test", s.getVersion, s.Name)
-	s.Private().Get("/apigateway/events", s.getEvents, s.Name)
-	s.Private().Get("/apigateway/{id}", s.getRouteById, s.Name)
-	s.Private().Post("/apigateway", s.upsetRouter, s.Name)
-	s.Private().Delete("/apigateway/{id}", s.deleteRouteById, s.Name)
-	s.Private().Get("/apigateway/router", s.getRouter, s.Name)
-	s.Private().Get("/apigateway/packages", s.getPakages, s.Name)
-	s.Private().Post("/apigateway/reset", s.reset, s.Name)
+	s.Private().Get("/events", s.getEvents, s.Name)
+	s.Private().Post("/events", event.HttpEventPublish, s.Name)
+	s.Private().Put("/events/reset", s.resetEvents, s.Name)
+	s.Private().Get("/routes", s.getRoutes, s.Name)
+	s.Private().Post("/routes", s.upsetRouter, s.Name)
+	s.Private().Delete("/routes/{id}", s.deleteRouteById, s.Name)
+	s.Private().Get("/packages", s.getPakages, s.Name)
+	s.Private().Put("/reset", s.reset, s.Name)
 	/* RPC */
-	s.Private().Get("/apigateway/rpc", jrpc.ListRouters, s.Name)
-	s.Private().Post("/apigateway/rpc", jrpc.HttpCalcItem, s.Name)
+	s.Private().Get("/rpc", jrpc.ListRouters, s.Name)
+	s.Private().Post("/rpc", jrpc.HttpCalcItem, s.Name)
 	/* Token */
-	s.Private().Get("/apigateway/tokens/{key}", s.getToken, s.Name)
-	s.Private().Post("/apigateway/tokens", s.setToken, s.Name)
-	s.Private().Delete("/apigateway/tokens/{key}", s.deleteToken, s.Name)
 	production := config.App.Production
 	if !production {
-		s.Get("/apigateway/tokens/develop", s.handlerDevToken, s.Name)
+		s.Get("/develop/token", s.handlerDevToken, s.Name)
 	}
 	/* Cache */
-	s.Private().Get("/apigateway/cache", s.listCache, s.Name)
-	s.Private().Delete("/apigateway/cache", s.emptyCache, s.Name)
-	s.Private().Get("/apigateway/cache/{key}", s.getCache, s.Name)
+	s.Private().Get("/cache", s.listCache, s.Name)
+	s.Private().Delete("/cache", s.emptyCache, s.Name)
+	s.Private().Get("/cache/{key}", s.getCache, s.Name)
 
 	s.Save()
 }
@@ -74,12 +72,13 @@ func (s *Server) getEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	events := event.Events()
 	result := et.Items{
 		Ok:     true,
-		Count:  len(event.Events),
+		Count:  len(events),
 		Result: []et.Json{},
 	}
-	for _, event := range event.Events {
+	for _, event := range events {
 		result.Result = append(result.Result, et.Json{"event": event})
 	}
 
@@ -87,25 +86,28 @@ func (s *Server) getEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 /**
-* getRouteById
+* resetEvents
 * @params w http.ResponseWriter
 * @params r *http.Request
 **/
-func (s *Server) getRouteById(w http.ResponseWriter, r *http.Request) {
+func (s *Server) resetEvents(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
 	if !ok {
 		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
 		return
 	}
 
-	id := r.PathValue("id")
-	result := s.GetRouteById(id)
-	if result == nil {
-		metric.HTTPError(w, r, http.StatusNotFound, MSG_ROUTE_NOT_FOUND)
+	if err := event.Reset(); err != nil {
+		metric.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	metric.ITEM(w, r, http.StatusOK, et.Item{Ok: true, Result: result.ToJson()})
+	metric.ITEM(w, r, http.StatusOK, et.Item{
+		Ok: true,
+		Result: et.Json{
+			"message": "Events reset",
+		},
+	})
 }
 
 /**
@@ -173,20 +175,35 @@ func (s *Server) deleteRouteById(w http.ResponseWriter, r *http.Request) {
 }
 
 /**
-* getRouter
+* getRouters
 * @params w http.ResponseWriter
 * @params r *http.Request
 **/
-func (s *Server) getRouter(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getRoutes(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
 	if !ok {
 		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
 		return
 	}
 
-	result := s.GetRouter()
+	id := r.URL.Query().Get("id")
+	if len(id) == 0 {
+		name := r.URL.Query().Get("name")
+		result := s.GetPackages(name)
+		metric.ITEMS(w, r, http.StatusOK, result)
+		return
+	}
 
-	metric.ITEMS(w, r, http.StatusOK, result)
+	result := s.GetRouteById(id)
+	if result == nil {
+		metric.HTTPError(w, r, http.StatusNotFound, MSG_ROUTE_NOT_FOUND)
+		return
+	}
+
+	metric.ITEM(w, r, http.StatusOK, et.Item{
+		Ok:     true,
+		Result: result.ToJson(),
+	})
 }
 
 /**

@@ -23,26 +23,6 @@ func NewStorage() *Storage {
 }
 
 /**
-* mountRouter
-* @param route *Router
-**/
-func (s *Server) mountRouter(route *Router) {
-	s.setRouter(
-		route.Id,
-		route.Method,
-		route.Path,
-		route.Resolve,
-		route.Kind,
-		route.Header,
-		route.TpHeader,
-		route.ExcludeHeader,
-		route.Private,
-		route.PackageName,
-		false,
-	)
-}
-
-/**
 * migrate
 * @return error
 **/
@@ -141,7 +121,19 @@ func (s *Server) load() error {
 	}
 
 	for _, route := range storage.Router {
-		s.mountRouter(route)
+		s.setRouter(
+			route.Id,
+			route.Method,
+			route.Path,
+			route.Resolve,
+			route.Kind,
+			route.Header,
+			route.TpHeader,
+			route.ExcludeHeader,
+			route.Private,
+			route.PackageName,
+			false,
+		)
 	}
 
 	for _, proxy := range storage.Proxy {

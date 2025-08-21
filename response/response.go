@@ -8,7 +8,6 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/request"
-	"github.com/go-chi/chi/v5"
 )
 
 type Result struct {
@@ -111,7 +110,7 @@ func GetQuery(r *http.Request) et.Json {
 * @return string
 **/
 func GetParam(r *http.Request, key string) string {
-	return chi.URLParam(r, key)
+	return r.PathValue(key)
 }
 
 /**
@@ -317,28 +316,4 @@ func Stream(w http.ResponseWriter, r *http.Request, statusCode int, data interfa
 	}
 
 	return nil
-}
-
-/**
-* HTTPApp
-* @param r chi.Router, path string, root http.FileSystem
-**/
-func HTTPApp(r chi.Router, path string, root http.FileSystem) {
-	if strings.ContainsAny(path, "{}*") {
-		panic("FileServer does not permit any URL parameters.")
-	}
-
-	if path != "/" && path[len(path)-1] != '/' {
-		h := http.RedirectHandler(path+"/", http.StatusMovedPermanently).ServeHTTP
-		r.Get(path, h)
-		path += "/"
-	}
-	path += "*"
-
-	r.Get(path, func(w http.ResponseWriter, r *http.Request) {
-		rctx := chi.RouteContext(r.Context())
-		pathPrefix := strings.TrimSuffix(rctx.RoutePattern(), "/*")
-		fs := http.StripPrefix(pathPrefix, http.FileServer(root))
-		fs.ServeHTTP(w, r)
-	})
 }

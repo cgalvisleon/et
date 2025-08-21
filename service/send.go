@@ -46,6 +46,7 @@ func SendSms(projectId string, contactNumbers []string, content string, params [
 			"params":         params,
 			"type":           tp.String(),
 			"createdBy":      createdBy,
+			"sender":         "AWS SNS",
 			"result":         result,
 		},
 	})
@@ -77,6 +78,7 @@ func SendWhatsapp(projectId, templateId string, contactNumbers []string, params 
 			"params":         params,
 			"type":           tp.String(),
 			"createdBy":      createdBy,
+			"sender":         "Brevo",
 			"result":         result,
 		},
 	})
@@ -86,12 +88,12 @@ func SendWhatsapp(projectId, templateId string, contactNumbers []string, params 
 
 /**
 * SendEmail
-* @param projectId string, to []et.Json, subject string, htmlContent string, params []et.Json, tp TpMessage, createdBy string
+* @param projectId string, from et.Json, to []et.Json, subject string, htmlContent string, params []et.Json, tp TpMessage, createdBy string
 * @response et.Items, error
 **/
-func SendEmail(projectId string, sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp TpMessage, createdBy string) (et.Items, error) {
+func SendEmail(projectId string, from et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp TpMessage, createdBy string) (et.Items, error) {
 	serviceId := New(projectId, "email", "Send email message", createdBy)
-	result, err := brevo.SendEmail(sender, to, subject, htmlContent, params, tp.String())
+	result, err := brevo.SendEmail(from, to, subject, htmlContent, params, tp.String())
 	if err != nil {
 		SetStatus(serviceId, STATUS_ERROR, et.Json{
 			"error": err.Error(),
@@ -103,12 +105,14 @@ func SendEmail(projectId string, sender et.Json, to []et.Json, subject string, h
 		"context": et.Json{
 			"projectId":   projectId,
 			"serviceId":   serviceId,
+			"from":        from,
 			"to":          to,
 			"subject":     subject,
 			"htmlContent": htmlContent,
 			"params":      params,
 			"type":        tp.String(),
 			"createdBy":   createdBy,
+			"sender":      "Brevo",
 			"result":      result,
 		},
 	})

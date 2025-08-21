@@ -16,8 +16,8 @@ type TypeApi int
 const (
 	TpHandler TypeApi = iota
 	TpApiRest
-	TpProxy
 	TpPortForward
+	TpProxy
 )
 
 func (t TypeApi) String() string {
@@ -26,6 +26,8 @@ func (t TypeApi) String() string {
 		return "Handler"
 	case TpApiRest:
 		return "Api REST"
+	case TpPortForward:
+		return "Port Forward"
 	case TpProxy:
 		return "Proxy"
 	default:
@@ -96,7 +98,6 @@ func (t TpParams) String() string {
 type Router struct {
 	server        *Server                           `json:"-"`
 	middlewares   []func(http.Handler) http.Handler `json:"-"`
-	pkg           *Package                          `json:"-"`
 	main          *Router                           `json:"-"`
 	Id            string                            `json:"id"`
 	Tag           string                            `json:"tag"`
@@ -119,11 +120,9 @@ type Router struct {
 * @return *Router
 **/
 func (s *Server) newRouter(method string, packageName string) *Router {
-	pkg := getPackageByName(s, packageName)
 	result := &Router{
 		server:        s,
 		middlewares:   make([]func(http.Handler) http.Handler, 0),
-		pkg:           pkg,
 		Id:            utility.UUID(),
 		Tag:           method,
 		TpParams:      TpNotParams,
@@ -293,7 +292,7 @@ func (r *Router) setPakage(packageName string) *Router {
 	if r.PackageName != packageName {
 		old := getPackageByName(r.server, r.PackageName)
 		if old != nil {
-			old.deleteRoute(r)
+			old.deleteRouteById(r.Id)
 		}
 	}
 
@@ -303,7 +302,6 @@ func (r *Router) setPakage(packageName string) *Router {
 	}
 
 	r.PackageName = packageName
-	r.pkg = pkg
 	pkg.addRouter(r)
 
 	return r
@@ -326,19 +324,19 @@ func (r *Router) ToJson() et.Json {
 	}
 
 	return et.Json{
-		"Id":       r.Id,
-		"Method":   r.Method,
-		"Tag":      r.Tag,
-		"TpParams": r.TpParams.String(),
-		"Kind":     r.Kind.String(),
-		"Resolve":  r.Resolve,
-		"Header":   r.Header,
-		"TpHeader": r.TpHeader.String(),
-		"Exclude":  exlude,
-		"Private":  r.Private,
-		"Pakage":   r.PackageName,
-		"Routes":   routes,
-		"Count":    n,
+		"id":        r.Id,
+		"method":    r.Method,
+		"tag":       r.Tag,
+		"tp_params": r.TpParams.String(),
+		"kind":      r.Kind.String(),
+		"resolve":   r.Resolve,
+		"header":    r.Header,
+		"tp_header": r.TpHeader.String(),
+		"exclude":   exlude,
+		"private":   r.Private,
+		"package":   r.PackageName,
+		"routes":    routes,
+		"count":     n,
 	}
 }
 

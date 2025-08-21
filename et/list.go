@@ -34,3 +34,11 @@ func (s *List) ToJson() Json {
 func (s *List) ToString() string {
 	return s.ToJson().ToString()
 }
+
+/**
+* ToMap
+* @return map[string]interface{}
+**/
+func (s *List) ToMap() map[string]interface{} {
+	return s.ToJson().ToMap()
+}

@@ -1,7 +1,6 @@
 package ettp
 
 import (
-	"net/http"
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
@@ -9,9 +8,7 @@ import (
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/utility"
 )
 
@@ -26,7 +23,7 @@ func developToken() string {
 	}
 
 	device := "DevelopToken"
-	duration := time.Hour * 24 * 7
+	duration := time.Hour * 2
 	token, err := claim.NewToken(device, device, device, device, device, duration)
 	if err != nil {
 		console.Alert(err)
@@ -126,73 +123,4 @@ func (s *Server) DeleteTokenByKey(key string) error {
 	}
 
 	return nil
-}
-
-/**
-* handlerSetToken
-* @params w http.ResponseWriter, r *http.Request
-**/
-func (s *Server) setToken(w http.ResponseWriter, r *http.Request) {
-	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
-	if !ok {
-		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
-		return
-	}
-
-	body, _ := response.GetBody(r)
-	app := body.Str("app")
-	device := body.Str("device")
-	id := body.Str("id")
-	token := body.Str("token")
-	duration := body.Int("duration")
-	key := claim.SetToken(app, device, id, token, duration)
-	result := et.Json{
-		"key":      key,
-		"duration": duration,
-		"message":  "Token setted",
-	}
-
-	metric.ITEM(w, r, http.StatusOK, et.Item{Ok: true, Result: result})
-}
-
-/**
-* getToken
-* @params w http.ResponseWriter, r *http.Request
-**/
-func (s *Server) getToken(w http.ResponseWriter, r *http.Request) {
-	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
-	if !ok {
-		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
-		return
-	}
-
-	key := r.PathValue("key")
-	result, err := s.GetTokenByKey(key)
-	if err != nil {
-		metric.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	metric.ITEM(w, r, http.StatusOK, result)
-}
-
-/**
-* deleteToken
-* @params w http.ResponseWriter, r *http.Request
-**/
-func (s *Server) deleteToken(w http.ResponseWriter, r *http.Request) {
-	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
-	if !ok {
-		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
-		return
-	}
-
-	key := r.PathValue("key")
-	err := s.DeleteTokenByKey(key)
-	if err != nil {
-		metric.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	metric.ITEM(w, r, http.StatusOK, et.Item{Ok: true, Result: et.Json{"message": "Token deleted"}})
 }

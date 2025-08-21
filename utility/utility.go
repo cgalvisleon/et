@@ -374,42 +374,19 @@ func Quote(val interface{}) any {
 		return strs.Format(fmt, v.ToString())
 	case map[string]interface{}:
 		return strs.Format(fmt, et.Json(v).ToString())
-	case []et.Json:
-		jsonbytes, err := json.Marshal(v)
+	case []et.Json, []string, []interface{}, []map[string]interface{}:
+		bt, err := json.Marshal(v)
 		if err != nil {
+			logs.Errorf("Quote type:%v, value:%v, error marshalling array: %v", reflect.TypeOf(v), v, err)
 			return strs.Format(fmt, `[]`)
 		}
-		return strs.Format(fmt, string(jsonbytes))
-	case []string:
-		var r string
-		for i, _v := range v {
-			if i == 0 {
-				r = strs.Format(fmt, unquote(_v))
-			} else {
-				s := strs.Format(fmt, unquote(_v))
-				r = strs.Format(`%s, %s`, r, s)
-			}
-		}
-		r = strs.Format(`[%s]`, r)
-		return strs.Format(fmt, r)
-	case []interface{}:
-		var r string
-		for i, _v := range v {
-			q := Quote(_v)
-			if i == 0 {
-				r = strs.Format(`%v`, q)
-			} else {
-				r = strs.Format(`%s, %v`, r, q)
-			}
-		}
-		r = strs.Format(`[%s]`, r)
-		return strs.Format(fmt, r)
+		return strs.Format(fmt, string(bt))
 	case []uint8:
 		return strs.Format(fmt, string(v))
 	case nil:
 		return strs.Format(`%s`, "NULL")
 	default:
-		logs.Errorf("Not quoted type:%v value:%v", reflect.TypeOf(v), v)
+		logs.Errorf("Quote type:%v, value:%v", reflect.TypeOf(v), v)
 		return val
 	}
 }
@@ -421,7 +398,7 @@ func Quote(val interface{}) any {
 * @return string
 **/
 func Params(str string, args ...any) string {
-	var result string = str
+	var result = str
 	for i, v := range args {
 		p := strs.Format(`$%d`, i+1)
 		rp := strs.Format(`%v`, v)
@@ -510,13 +487,13 @@ func ToBase64(data string) string {
 * @param data string
 * @return string
 **/
-func FromBase64(data string) string {
+func FromBase64(data string) (string, error) {
 	result, err := base64.StdEncoding.DecodeString(data)
 	if err != nil {
-		return ""
+		return "", err
 	}
 
-	return string(result)
+	return string(result), nil
 }
 
 /**
@@ -536,7 +513,11 @@ func PayloadEncoded(data et.Json) string {
 * @return et.Json
 **/
 func PayloadDecoded(token string) (et.Json, error) {
-	data := FromBase64(token)
+	data, err := FromBase64(token)
+	if err != nil {
+		return et.Json{}, err
+	}
+
 	result, err := et.Object(data)
 	if err != nil {
 		return et.Json{}, err

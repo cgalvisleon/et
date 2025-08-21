@@ -1,10 +1,12 @@
 package event
 
 import (
+	"encoding/json"
 	"runtime"
 	"slices"
 	"sync"
 
+	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/nats-io/nats.go"
@@ -26,6 +28,89 @@ type Conn struct {
 	id              string
 	eventCreatedSub map[string]*nats.Subscription
 	mutex           *sync.RWMutex
+	storage         []string
+}
+
+/**
+* Save
+* @return error
+**/
+func (s *Conn) save() error {
+	bt, err := json.Marshal(s.storage)
+	if err != nil {
+		return err
+	}
+
+	cache.Set("event:storage", string(bt), 0)
+
+	return nil
+}
+
+/**
+* Storage
+* @return []string, error
+**/
+func (s *Conn) load() error {
+	bt, err := json.Marshal(s.storage)
+	if err != nil {
+		return err
+	}
+
+	scr, err := cache.Get("event:storage", string(bt))
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal([]byte(scr), &s.storage)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/**
+* Save
+* @return error
+**/
+func (s *Conn) Add(event string) (bool, error) {
+	err := s.load()
+	if err != nil {
+		return false, err
+	}
+
+	idx := slices.IndexFunc(s.storage, func(e string) bool { return e == event })
+	if idx == -1 {
+		s.storage = append(s.storage, event)
+	}
+
+	return idx == -1, s.save()
+}
+
+func (s *Conn) Reset() error {
+	s.storage = []string{}
+
+	return s.save()
+}
+
+/**
+* Remove
+* @return error
+**/
+func (s *Conn) Remove(event string) (bool, error) {
+	err := s.load()
+	if err != nil {
+		return false, err
+	}
+
+	idx := slices.IndexFunc(s.storage, func(e string) bool { return e == event })
+	if idx == -1 {
+		return false, nil
+	}
+
+	s.storage = slices.Delete(s.storage, idx, 1)
+
+	return true, s.save()
 }
 
 /**
@@ -76,6 +161,39 @@ func Close() {
 	logs.Log(PackageName, `Disconnect...`)
 }
 
+/**
+* Id
+* @return string
+**/
 func Id() string {
 	return conn.id
+}
+
+/**
+* Events
+* @return []string
+**/
+func Events() []string {
+	if conn == nil {
+		return []string{}
+	}
+
+	err := conn.load()
+	if err != nil {
+		return []string{}
+	}
+
+	return conn.storage
+}
+
+/**
+* Reset
+* @return error
+**/
+func Reset() error {
+	if conn == nil {
+		return nil
+	}
+
+	return conn.Reset()
 }

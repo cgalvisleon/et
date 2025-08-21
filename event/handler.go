@@ -3,7 +3,6 @@ package event
 import (
 	"errors"
 	"net/http"
-	"slices"
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
@@ -17,8 +16,9 @@ const EVENT_LOG = "log"
 const EVENT_OVERFLOW = "requests:overflow"
 const EVENT_WORK = "event:worker"
 const EVENT_WORK_STATE = "event:worker:state"
+const EVENT_SUBSCRIBED = "event:subscribed"
 
-var Events = []string{}
+// var Events = []string{}
 
 func publish(channel string, data et.Json) error {
 	if conn == nil {
@@ -42,9 +42,17 @@ func publish(channel string, data et.Json) error {
 * @return error
 **/
 func Publish(channel string, data et.Json) error {
+	if conn == nil {
+		return nil
+	}
+
 	stage := config.App.Stage
-	publish(strs.Format(`event:chanels:%s`, stage), et.Json{"channel": channel})
 	publish(strs.Format(`pipe:%s:%s`, stage, channel), data)
+
+	_, err := conn.Add(channel)
+	if err != nil {
+		return err
+	}
 
 	return publish(channel, data)
 }
@@ -64,10 +72,13 @@ func Subscribe(channel string, f func(Message)) (err error) {
 		return
 	}
 
-	idx := slices.IndexFunc(Events, func(e string) bool { return e == channel })
-	if idx == -1 {
-		publish("event:subscribed", et.Json{"channel": channel})
-		Events = append(Events, channel)
+	ok, err := conn.Add(channel)
+	if err != nil {
+		return err
+	}
+
+	if ok {
+		publish(EVENT_SUBSCRIBED, et.Json{"channel": channel})
 	}
 
 	subscribe, err := conn.Subscribe(channel,
@@ -105,6 +116,15 @@ func Queue(channel, queue string, f func(Message)) (err error) {
 
 	if len(channel) == 0 {
 		return nil
+	}
+
+	ok, err := conn.Add(channel)
+	if err != nil {
+		return err
+	}
+
+	if ok {
+		publish(EVENT_SUBSCRIBED, et.Json{"channel": channel})
 	}
 
 	subscribe, err := conn.QueueSubscribe(
@@ -178,15 +198,24 @@ func Error(event string, err error) error {
 }
 
 /**
-* HttpEventWork
+* HttpEventPublish
 * @param w http.ResponseWriter
 * @param r *http.Request
 **/
-func HttpEventWork(w http.ResponseWriter, r *http.Request) {
+func HttpEventPublish(w http.ResponseWriter, r *http.Request) {
 	body, _ := response.GetBody(r)
-	event := body.Str("event")
+	channel := body.Str("channel")
 	data := body.Json("data")
-	work := Work(event, data)
+	err := Publish(channel, data)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
 
-	response.JSON(w, r, http.StatusOK, work)
+	response.JSON(w, r, http.StatusOK, et.Item{
+		Ok: err == nil,
+		Result: et.Json{
+			"message": "Event published",
+		},
+	})
 }

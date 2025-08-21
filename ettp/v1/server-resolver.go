@@ -23,10 +23,10 @@ func (s *Server) applyMiddlewares(handler http.Handler, middlewares []func(http.
 }
 
 /**
-* handlerResolve
+* handlerResolvre
 * @params w http.ResponseWriter, r *http.Request
 **/
-func (s *Server) handlerResolve(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlerResolver(w http.ResponseWriter, r *http.Request) {
 	/* If proxy is found */
 	proxy := s.getProxyByPath(r.URL.Path)
 	if proxy != nil {

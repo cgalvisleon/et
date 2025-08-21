@@ -104,7 +104,6 @@ func Autentication(next http.Handler) http.Handler {
 			"duration":  clm.Duration,
 			"token":     token,
 		}
-
 		PushTokenLastUse(data)
 
 		next.ServeHTTP(w, r.WithContext(ctx))

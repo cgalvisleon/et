@@ -18,6 +18,7 @@ type app struct {
 	PathApp    string
 	Port       int
 	Stage      string
+	Debug      bool
 }
 
 var App *app
@@ -213,6 +214,7 @@ func (s *app) Reload() {
 	s.Production = Bool("PRODUCTION", false)
 	s.Port = Int("PORT", 3300)
 	s.Stage = String("STAGE", "local")
+	s.Debug = Bool("DEBUG", false)
 }
 
 /**

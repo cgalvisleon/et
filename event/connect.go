@@ -31,5 +31,6 @@ func ConnectTo(host, user, password string) (*Conn, error) {
 		Conn:            client,
 		eventCreatedSub: map[string]*nats.Subscription{},
 		mutex:           &sync.RWMutex{},
+		storage:         []string{},
 	}, nil
 }

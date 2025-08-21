@@ -66,12 +66,16 @@ func SendEmail(sender et.Json, to []et.Json, subject string, htmlContent string,
 	}
 
 	result := et.Items{}
-	res, status := request.Post(url, header, body)
-	if status.Code != 200 {
-		return result, errors.New(status.Message)
+	res, err := request.Fetch("POST", url, header, body)
+	if err != nil {
+		return result, err
 	}
 
-	output, _ := res.ToJson()
+	if !res.Status.Ok {
+		return result, errors.New(res.Status.Message)
+	}
+
+	output, _ := res.Body.ToJson()
 	result.Add(et.Json{
 		"to":     to,
 		"type":   tp,

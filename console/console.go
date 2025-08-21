@@ -48,7 +48,8 @@ func Logf(kind string, format string, args ...any) {
 **/
 func Alert(err error) error {
 	if err != nil {
-		printLn("Alert", "Yellow", err.Error())
+		errMsg := fmt.Sprintf("%v - %s", err.Error(), stdrout.GetFunctionName(2))
+		printLn("Alert", "Yellow", errMsg)
 	}
 
 	return err
@@ -99,7 +100,8 @@ func Tracer(kind, color string, err error) error {
 func Error(err error) error {
 	functionName := stdrout.GetFunctionName(2)
 	if err != nil {
-		printLn("Error", "Yellow", err.Error(), " - ", functionName)
+		errMsg := fmt.Sprintf("%v - %s", err.Error(), functionName)
+		printLn("Error", "Yellow", errMsg)
 	}
 
 	return err
@@ -192,7 +194,8 @@ func Fatalm(message string) error {
 func Panic(err error) error {
 	functionName := stdrout.GetFunctionName(2)
 	if err != nil {
-		printLn("Panic", "Red", err.Error(), " - ", functionName)
+		errMsg := fmt.Sprintf("%v - %s", err.Error(), functionName)
+		printLn("Panic", "Red", errMsg)
 	}
 	os.Exit(1)
 
@@ -268,7 +271,8 @@ func Rpc(packageName, args string) error {
 **/
 func QueryError(err error, sql string) error {
 	if err != nil {
-		printLn("QueryError", "Red", err.Error(), " - SQL: ", sql)
+		errMsg := fmt.Sprintf("%v - SQL: %s", err.Error(), sql)
+		printLn("QueryError", "Red", errMsg)
 	}
 
 	return err

@@ -43,12 +43,13 @@ func (s *Server) eventSetRouter(m event.Message) {
 	method := data.Str("method")
 	path := data.Str("path")
 	resolve := data.Str("resolve")
+	typeHeader := data.Int("type_header")
 	header := data.Json("header")
 	excludeHeader := data.ArrayStr("exclude_header")
 	version := data.Int("version")
 	private := data.Bool("private")
 	packageName := data.Str("package_name")
-	_, err := s.SetRouter(method, path, resolve, header, excludeHeader, version, private, packageName)
+	_, err := s.SetRouter(method, path, resolve, typeHeader, header, excludeHeader, version, private, packageName)
 	if err != nil {
 		console.Alertf(`eventSetRouter error:%s`, err.Error())
 	}

@@ -80,6 +80,7 @@ func NewServer(name string, config *Config) *Server {
 		Solvers:       make(map[string]*Solver),
 		Packages:      make(map[string]*Package),
 		Resolvers:     make(map[string]*Resolver),
+		Version:       "v0.0.2",
 		mux:           http.NewServeMux(),
 		middlewares:   make([]func(http.Handler) http.Handler, 0),
 		authenticator: middleware.Autentication,
@@ -132,7 +133,7 @@ func (s *Server) banner() {
 	fmt.Println()
 }
 
-func (s *Server) initHttpServer() {
+func (s *Server) initHttpServer() error {
 	go func() {
 		if s.tls {
 			console.Logf("Https", `Load server on https://localhost%s`, s.Addr)
@@ -147,6 +148,7 @@ func (s *Server) initHttpServer() {
 		}
 	}()
 
+	return nil
 }
 
 /**
@@ -154,9 +156,18 @@ func (s *Server) initHttpServer() {
 * @return error
 **/
 func (s *Server) Start() {
-	s.initRouteTable()
-	s.initEvents()
-	s.initHttpServer()
+	if err := s.load(); err != nil {
+		console.Fatal(err)
+	}
+	if err := s.initRouteTable(); err != nil {
+		console.Fatal(err)
+	}
+	if err := s.initEvents(); err != nil {
+		console.Fatal(err)
+	}
+	if err := s.initHttpServer(); err != nil {
+		console.Fatal(err)
+	}
 	s.banner()
 
 	stop := make(chan os.Signal, 1)
@@ -209,10 +220,10 @@ func (s *Server) Empty() error {
 
 /**
 * setRouter
-* @param kind TypeRouter, method, path, solver string, header et.Json, excludeHeader []string, version int, packageName string
+* @param kind TypeRouter, method, path, solver string, typeHeader TpHeader, header et.Json, excludeHeader []string, version int, packageName string
 * @return *Solver, error
 **/
-func (s *Server) setRouter(kind TypeRouter, method, path, solver string, header map[string]string, excludeHeader []string, version int, packageName string) (*Solver, error) {
+func (s *Server) setRouter(kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, packageName string) (*Solver, error) {
 	if !methodMap[method] {
 		return nil, fmt.Errorf("method %s not supported", method)
 	}
@@ -228,9 +239,15 @@ func (s *Server) setRouter(kind TypeRouter, method, path, solver string, header 
 		parentPath = s.PathApp
 	}
 
-	result, err := router.setRouter(kind, method, path, parentPath, solver, header, excludeHeader, version, packageName)
+	result, err := router.setRouter(kind, method, path, parentPath, solver, typeHeader, header, excludeHeader, version, packageName)
 	if err != nil {
 		return nil, err
+	}
+
+	if solver != "" {
+		console.Logf(s.Name, "Method:%s Path:%s Solver:%s Version:%d PackageName:%s", method, path, solver, version, packageName)
+	} else {
+		console.Logf(s.Name, "Method:%s Path:%s Version:%d PackageName:%s", method, path, version, packageName)
 	}
 
 	return result, nil
@@ -242,7 +259,7 @@ func (s *Server) setRouter(kind TypeRouter, method, path, solver string, header 
 * @return *Solver, error
 **/
 func (s *Server) setHandler(method, path string, handlerFn http.HandlerFunc, packageName string) (*Solver, error) {
-	result, err := s.setRouter(TpHandler, method, path, "", map[string]string{}, []string{}, 0, packageName)
+	result, err := s.setRouter(TpHandler, method, path, "", TpKeepHeader, map[string]string{}, []string{}, 0, packageName)
 	if err != nil {
 		return nil, err
 	}
@@ -252,17 +269,12 @@ func (s *Server) setHandler(method, path string, handlerFn http.HandlerFunc, pac
 }
 
 /**
-* SetRouter
-* @param method, path, solver string, header et.Json, excludeHeader []string, version int, private bool, packageName string
+* setSolver
+* @param kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, packageName string
 * @return *Solver, error
 **/
-func (s *Server) SetRouter(method, path, solver string, header et.Json, excludeHeader []string, version int, private bool, packageName string) (*Solver, error) {
-	headerMap := make(map[string]string)
-	for k, v := range header {
-		headerMap[k] = fmt.Sprintf("%v", v)
-	}
-
-	result, err := s.setRouter(TpApiRest, method, path, solver, headerMap, excludeHeader, version, packageName)
+func (s *Server) setSolver(kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, private bool, packageName string) (*Solver, error) {
+	result, err := s.setRouter(kind, method, path, solver, typeHeader, header, excludeHeader, version, packageName)
 	if err != nil {
 		return nil, err
 	}
@@ -270,6 +282,20 @@ func (s *Server) SetRouter(method, path, solver string, header et.Json, excludeH
 	result.Private = private
 	s.Solvers[result.Id] = result
 	return result, nil
+}
+
+/**
+* SetRouter
+* @param method, path, solver string, header et.Json, excludeHeader []string, version int, private bool, packageName string
+* @return *Solver, error
+**/
+func (s *Server) SetRouter(method, path, solver string, typeHeader int, header et.Json, excludeHeader []string, version int, private bool, packageName string) (*Solver, error) {
+	headerMap := make(map[string]string)
+	for k, v := range header {
+		headerMap[k] = fmt.Sprintf("%v", v)
+	}
+
+	return s.setSolver(TpApiRest, method, path, solver, TpHeader(typeHeader), headerMap, excludeHeader, version, private, packageName)
 }
 
 /**

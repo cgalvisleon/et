@@ -6,7 +6,6 @@ import (
 
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/ettp/v2"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/reg"
@@ -184,7 +183,7 @@ func PushApiGateway(id, method, path, resolve string, header et.Json, tpHeader T
 	initRouter(packageName)
 	router.Routes[id] = et.Json{
 		"_id":            id,
-		"kind":           ettp.TpApiRest,
+		"kind":           "api",
 		"method":         method,
 		"path":           path,
 		"resolve":        resolve,

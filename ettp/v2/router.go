@@ -83,10 +83,10 @@ func (s *Router) addRouter(tag string) *Router {
 
 /**
 * setRouter
-* @param kind, method, path, solver string, header et.Json, excludeHeader []string, version int, packageName string
+* @param kind, method, path, solver string, typeHeader TpHeader, header et.Json, excludeHeader []string, version int, packageName string
 * @return *Solver, error
 **/
-func (s *Router) setRouter(kind TypeRouter, method, path, parentPath, solver string, header map[string]string, excludeHeader []string, version int, packageName string) (*Solver, error) {
+func (s *Router) setRouter(kind TypeRouter, method, path, parentPath, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, packageName string) (*Solver, error) {
 	pkg := s.server.Packages[packageName]
 	if pkg == nil {
 		pkg = NewPackage(packageName, s.server)
@@ -98,6 +98,7 @@ func (s *Router) setRouter(kind TypeRouter, method, path, parentPath, solver str
 	result, ok := s.server.Solvers[key]
 	if ok {
 		result.Solver = solver
+		result.TypeHeader = typeHeader
 		result.Header = header
 		result.ExcludeHeader = excludeHeader
 		result.Version = version
@@ -136,6 +137,7 @@ func (s *Router) setRouter(kind TypeRouter, method, path, parentPath, solver str
 			target.solver = NewSolver(key, method, path)
 			target.solver.Kind = kind
 			target.solver.Solver = solver
+			target.solver.TypeHeader = typeHeader
 			target.solver.Header = header
 			target.solver.ExcludeHeader = excludeHeader
 			target.solver.Version = version

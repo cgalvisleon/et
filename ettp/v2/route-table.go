@@ -23,7 +23,7 @@ func (s *Server) initRouteTable() error {
 		s.Public(GET, "/develop/token", s.handlerDevToken, "Apigateway")
 	}
 
-	return s.Save()
+	return nil
 }
 
 /**

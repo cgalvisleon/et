@@ -10,28 +10,24 @@ import (
 )
 
 const (
-	CONNECT = "CONNECT"
-	DELETE  = "DELETE"
 	GET     = "GET"
-	HEAD    = "HEAD"
-	OPTIONS = "OPTIONS"
-	PATCH   = "PATCH"
 	POST    = "POST"
 	PUT     = "PUT"
-	TRACE   = "TRACE"
+	PATCH   = "PATCH"
+	DELETE  = "DELETE"
+	HEAD    = "HEAD"
+	OPTIONS = "OPTIONS"
 	RPC     = "RPC"
 )
 
 var methodMap = map[string]bool{
-	CONNECT: true,
-	DELETE:  true,
 	GET:     true,
-	HEAD:    true,
-	OPTIONS: true,
-	PATCH:   true,
 	POST:    true,
 	PUT:     true,
-	TRACE:   true,
+	PATCH:   true,
+	DELETE:  true,
+	HEAD:    true,
+	OPTIONS: true,
 	RPC:     true,
 }
 
@@ -214,4 +210,70 @@ func (s *Router) findRequest(req *http.Request) (*Request, error) {
 	}
 
 	return s.getRequest(req, target.solver, params)
+}
+
+/**
+* addHandler
+* @param method, path string, handlerFn http.HandlerFunc, packageName string
+**/
+func (s *Router) addHandler(method, path string, handlerFn http.HandlerFunc, packageName string) {
+	key := fmt.Sprintf("%s:%s", method, path)
+
+	s.server.handlers[key] = handlerFn
+}
+
+/**
+* Get
+* @param path string, handlerFn http.HandlerFunc, packageName string
+**/
+func (s *Router) Get(path string, handlerFn http.HandlerFunc, packageName string) {
+	s.addHandler(GET, path, handlerFn, packageName)
+}
+
+/**
+* Delete
+* @param path string, handlerFn http.HandlerFunc, packageName string
+**/
+func (s *Router) Post(path string, handlerFn http.HandlerFunc, packageName string) {
+	s.addHandler(POST, path, handlerFn, packageName)
+}
+
+/**
+* Put
+* @param path string, handlerFn http.HandlerFunc, packageName string
+**/
+func (s *Router) Put(path string, handlerFn http.HandlerFunc, packageName string) {
+	s.addHandler(PUT, path, handlerFn, packageName)
+}
+
+/**
+* Patch
+* @param path string, handlerFn http.HandlerFunc, packageName string
+**/
+func (s *Router) Patch(path string, handlerFn http.HandlerFunc, packageName string) {
+	s.addHandler(PATCH, path, handlerFn, packageName)
+}
+
+/**
+* Delete
+* @param path string, handlerFn http.HandlerFunc, packageName string
+**/
+func (s *Router) Delete(path string, handlerFn http.HandlerFunc, packageName string) {
+	s.addHandler(DELETE, path, handlerFn, packageName)
+}
+
+/**
+* Head
+* @param path string, handlerFn http.HandlerFunc, packageName string
+**/
+func (s *Router) Head(path string, handlerFn http.HandlerFunc, packageName string) {
+	s.addHandler(HEAD, path, handlerFn, packageName)
+}
+
+/**
+* Options
+* @param path string, handlerFn http.HandlerFunc, packageName string
+**/
+func (s *Router) Options(path string, handlerFn http.HandlerFunc, packageName string) {
+	s.addHandler(OPTIONS, path, handlerFn, packageName)
 }

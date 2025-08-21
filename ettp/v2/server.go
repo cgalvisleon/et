@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/cgalvisleon/et/console"
@@ -22,29 +23,32 @@ type Config struct {
 	TLS          bool
 	CertFile     string
 	KeyFile      string
+	Debug        bool
 }
 
 type Server struct {
-	Id           string                            `json:"id"`
-	Host         string                            `json:"host"`
-	Port         int                               `json:"port"`
-	Addr         string                            `json:"addr"`
-	PathApi      string                            `json:"path_api"`
-	PathApp      string                            `json:"path_app"`
-	Router       map[string]*Router                `json:"router"`
-	Solvers      map[string]*Solver                `json:"solvers"`
-	Packages     map[string]*Package               `json:"packages"`
-	Requests     map[string]*Request               `json:"requests"`
-	mux          *http.ServeMux                    `json:"-"`
-	svr          *http.Server                      `json:"-"`
-	middlewares  []func(http.Handler) http.Handler `json:"-"`
-	readTimeout  time.Duration                     `json:"-"`
-	writeTimeout time.Duration                     `json:"-"`
-	idleTimeout  time.Duration                     `json:"-"`
-	tls          bool                              `json:"-"`
-	certFile     string                            `json:"-"`
-	keyFile      string                            `json:"-"`
-	debug        bool                              `json:"-"`
+	Id            string                            `json:"id"`
+	Host          string                            `json:"host"`
+	Port          int                               `json:"port"`
+	Addr          string                            `json:"addr"`
+	PathApi       string                            `json:"path_api"`
+	PathApp       string                            `json:"path_app"`
+	Router        map[string]*Router                `json:"router"`
+	Solvers       map[string]*Solver                `json:"solvers"`
+	Packages      map[string]*Package               `json:"packages"`
+	Requests      map[string]*Request               `json:"requests"`
+	mux           *http.ServeMux                    `json:"-"`
+	svr           *http.Server                      `json:"-"`
+	middlewares   []func(http.Handler) http.Handler `json:"-"`
+	authenticator func(http.Handler) http.Handler   `json:"-"`
+	handlers      map[string]http.HandlerFunc       `json:"-"`
+	readTimeout   time.Duration                     `json:"-"`
+	writeTimeout  time.Duration                     `json:"-"`
+	idleTimeout   time.Duration                     `json:"-"`
+	tls           bool                              `json:"-"`
+	certFile      string                            `json:"-"`
+	keyFile       string                            `json:"-"`
+	debug         bool                              `json:"-"`
 }
 
 /**
@@ -67,12 +71,14 @@ func NewServer(port int, config *Config) *Server {
 		Requests:     make(map[string]*Request),
 		mux:          http.NewServeMux(),
 		middlewares:  make([]func(http.Handler) http.Handler, 0),
+		handlers:     make(map[string]http.HandlerFunc),
 		readTimeout:  config.ReadTimeout,
 		writeTimeout: config.WriteTimeout,
 		idleTimeout:  config.IdleTimeout,
 		tls:          config.TLS,
 		certFile:     config.CertFile,
 		keyFile:      config.KeyFile,
+		debug:        config.Debug,
 	}
 	result.svr = &http.Server{
 		Addr:         result.Addr,
@@ -141,14 +147,6 @@ func (s *Server) Close() {
 }
 
 /**
-* Use
-* @param middlewares ...func(http.Handler) http.Handler
-**/
-func (s *Server) Use(middlewares ...func(http.Handler) http.Handler) {
-	s.middlewares = append(s.middlewares, middlewares...)
-}
-
-/**
 * Save
 * @return error
 **/
@@ -190,11 +188,11 @@ func (s *Server) Empty() error {
 }
 
 /**
-* AddSolver
-* @param method, path, solver string, header et.Json, excludeHeader []string, version int, packageName string
+* addSolver
+* @param kind, method, path, solver string, header et.Json, excludeHeader []string, version int, packageName string
 * @return *Solver, error
 **/
-func (s *Server) AddSolver(kind TypeApi, method, path, solver string, header map[string]string, excludeHeader []string, version int, packageName string) (*Solver, error) {
+func (s *Server) addSolver(kind TypeApi, method, path, solver string, header map[string]string, excludeHeader []string, version int, packageName string) (*Solver, error) {
 	if !methodMap[method] {
 		return nil, fmt.Errorf("method %s not supported", method)
 	}
@@ -226,9 +224,81 @@ func (s *Server) AddSolver(kind TypeApi, method, path, solver string, header map
 		return nil, err
 	}
 
-	s.Solvers[key] = result
 	pkg.AddSolver(result)
 	return result, nil
+}
+
+/**
+* AddHandler
+* @param method, path string, handlerFn http.HandlerFunc, packageName string
+* @return *Solver, error
+**/
+func (s *Server) addHandler(method, path string, handlerFn http.HandlerFunc, packageName string) (*Solver, error) {
+	solver := fmt.Sprintf("%s/%s", s.PathApi, path)
+	solver = strings.ReplaceAll(solver, "//", "/")
+	result, err := s.addSolver(TpHandler, method, path, solver, map[string]string{}, []string{}, 0, packageName)
+	if err != nil {
+		return nil, err
+	}
+
+	s.handlers[result.Id] = handlerFn
+	return result, nil
+}
+
+/**
+* Solver
+* @param kind, method, path, solver string, header et.Json, excludeHeader []string, version int, packageName string
+* @return *Solver, error
+**/
+func (s *Server) Solver(method, path, solver string, header map[string]string, excludeHeader []string, version int, packageName string) (*Solver, error) {
+	result, err := s.addSolver(TpApiRest, method, path, solver, header, excludeHeader, version, packageName)
+	if err != nil {
+		return nil, err
+	}
+
+	s.Solvers[result.Id] = result
+	return result, nil
+}
+
+/**
+* Public
+* @param method, path string, handlerFn http.HandlerFunc, packageName string
+**/
+func (s *Server) Public(method, path string, handlerFn http.HandlerFunc, packageName string) (*Solver, error) {
+	return s.addHandler(method, path, handlerFn, packageName)
+}
+
+/**
+* Private
+* @param method, path string, handlerFn http.HandlerFunc, packageName string
+**/
+func (s *Server) Private(method, path string, handlerFn http.HandlerFunc, packageName string) (*Solver, error) {
+	result, err := s.addHandler(method, path, handlerFn, packageName)
+	if err != nil {
+		return nil, err
+	}
+
+	result.middlewares = append(result.middlewares, s.authenticator)
+	return result, nil
+}
+
+/**
+* Use
+* @param middlewares ...func(http.Handler) http.Handler
+**/
+func (s *Server) Use(middlewares ...func(http.Handler) http.Handler) {
+	s.middlewares = append(s.middlewares, middlewares...)
+}
+
+/**
+* Authenticator
+* @param middleware func(http.HandlerFunc) http.HandlerFunc
+* @return *Server
+**/
+func (s *Server) Authenticator(middleware func(http.Handler) http.Handler) *Server {
+	s.authenticator = middleware
+
+	return s
 }
 
 /**
@@ -276,13 +346,4 @@ func (s *Server) FindRequest(r *http.Request) (*Request, error) {
 
 	s.Requests[result.Id] = result
 	return result, nil
-}
-
-/**
-* Proxy
-* @param w http.ResponseWriter, r *http.Request
-* @return error
-**/
-func (s *Server) Proxy(w http.ResponseWriter, r *http.Request) {
-
 }

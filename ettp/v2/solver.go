@@ -1,6 +1,8 @@
 package ettp
 
 import (
+	"net/http"
+
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -61,17 +63,18 @@ func (t TpHeader) String() string {
 }
 
 type Solver struct {
-	Id            string            `json:"id"`
-	Kind          TypeApi           `json:"kind"`
-	Method        string            `json:"method"`
-	Path          string            `json:"path"`
-	Solver        string            `json:"solver"`
-	TypeHeader    TpHeader          `json:"type_header"`
-	Header        map[string]string `json:"header"`
-	ExcludeHeader []string          `json:"exclude"`
-	Version       int               `json:"version"`
-	PackageName   string            `json:"package_name"`
-	router        *Router           `json:"-"`
+	Id            string                            `json:"id"`
+	Kind          TypeApi                           `json:"kind"`
+	Method        string                            `json:"method"`
+	Path          string                            `json:"path"`
+	Solver        string                            `json:"solver"`
+	TypeHeader    TpHeader                          `json:"type_header"`
+	Header        map[string]string                 `json:"header"`
+	ExcludeHeader []string                          `json:"exclude"`
+	Version       int                               `json:"version"`
+	PackageName   string                            `json:"package_name"`
+	router        *Router                           `json:"-"`
+	middlewares   []func(http.Handler) http.Handler `json:"-"`
 }
 
 func (s *Solver) ToJson() et.Json {
@@ -96,8 +99,9 @@ func (s *Solver) ToJson() et.Json {
 **/
 func NewSolver(id string, method, path string) *Solver {
 	return &Solver{
-		Id:     id,
-		Method: method,
-		Path:   path,
+		Id:          id,
+		Method:      method,
+		Path:        path,
+		middlewares: make([]func(http.Handler) http.Handler, 0),
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/claim"
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
@@ -26,10 +27,11 @@ var (
 )
 
 const (
-	TELEMETRY                = "telemetry"
-	TELEMETRY_SERVICE_STATUS = "telemetry:service:status"
-	TELEMETRY_TOKEN_LAST_USE = "telemetry:token:last_use"
-	TELEMETRY_OVERFLOW       = "telemetry:overflow"
+	TELEMETRY                                 = "telemetry"
+	TELEMETRY_SERVICE_STATUS                  = "telemetry:service:status"
+	TELEMETRY_TOKEN_LAST_USE                  = "telemetry:token:last_use"
+	TELEMETRY_OVERFLOW                        = "telemetry:overflow"
+	MetricKey                claim.ContextKey = "metric"
 )
 
 type Result struct {
@@ -64,7 +66,7 @@ func SetServiceName(name string) {
 type Metrics struct {
 	TimeStamp    time.Time     `json:"timestamp"`
 	ServiceName  string        `json:"service_name"`
-	ReqID        string        `json:"req_id"`
+	ServiceId    string        `json:"service_id"`
 	ClientIP     string        `json:"client_ip"`
 	Scheme       string        `json:"scheme"`
 	Host         string        `json:"host"`
@@ -87,7 +89,7 @@ type Metrics struct {
 func (m *Metrics) ToJson() et.Json {
 	return et.Json{
 		"timestamp":     strs.FormatDateTime("02/01/2006 03:04:05 PM", m.TimeStamp),
-		"req_id":        m.ReqID,
+		"service_id":    m.ServiceId,
 		"client_ip":     m.ClientIP,
 		"scheme":        m.Scheme,
 		"host":          m.Host,
@@ -127,6 +129,20 @@ func (m *Telemetry) ToJson() et.Json {
 		"requests_per_day":    m.RequestsPerDay,
 		"requests_limit":      m.RequestsLimit,
 	}
+}
+
+/**
+* GetMetrics
+* @params r *http.Request
+* @return *Metrics
+**/
+func GetMetrics(r *http.Request) *Metrics {
+	metric, ok := r.Context().Value(MetricKey).(*Metrics)
+	if !ok {
+		return NewMetric(r)
+	}
+
+	return metric
 }
 
 /**
@@ -177,6 +193,10 @@ func NewMetric(r *http.Request) *Metrics {
 	if remoteAddr != "" {
 		remoteAddr = strs.Split(remoteAddr, ",")[0]
 	}
+	serviceId := r.Header.Get("serviceId")
+	if serviceId == "" {
+		serviceId = utility.UUID()
+	}
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"
@@ -185,7 +205,7 @@ func NewMetric(r *http.Request) *Metrics {
 	result := &Metrics{
 		TimeStamp:   timezone.NowTime(),
 		ServiceName: serviceName,
-		ReqID:       utility.UUID(),
+		ServiceId:   serviceId,
 		ClientIP:    remoteAddr,
 		Host:        hostName,
 		Method:      r.Method,
@@ -205,11 +225,10 @@ func NewMetric(r *http.Request) *Metrics {
 **/
 func NewRpcMetric(method string) *Metrics {
 	scheme := "rpc"
-
 	result := &Metrics{
 		TimeStamp:   timezone.NowTime(),
 		ServiceName: serviceName,
-		ReqID:       utility.UUID(),
+		ServiceId:   utility.UUID(),
 		Path:        method,
 		Method:      strs.Uppcase(scheme),
 		Scheme:      scheme,
@@ -317,6 +336,7 @@ func (m *Metrics) println() et.Json {
 	} else {
 		lg.CW(w, lg.NGreen, " - Request:S:%vM:%vH:%vD:%vL:%v", m.metrics.RequestsPerSecond, m.metrics.RequestsPerMinute, m.metrics.RequestsPerHour, m.metrics.RequestsPerDay, m.metrics.RequestsLimit)
 	}
+	lg.CW(w, lg.NCyan, " ServiceId:%s", m.ServiceId)
 	lg.Println(w)
 
 	return m.ToJson()

@@ -5,25 +5,29 @@ import (
 	"github.com/cgalvisleon/et/event"
 )
 
-const EVENT_SET_SOLVER = "event:set:solver"
-const EVENT_REMOVE_SOLVER = "event:remove:solver"
-const EVENT_RESET = "event:reset"
+const (
+	EVENT_SET_ROUTER    = "event:set:router"
+	EVENT_REMOVE_ROUTER = "event:remove:router"
+	EVENT_RESET         = "event:reset"
+)
 
-func (s *Server) initEvents() {
-	err := event.Subscribe(EVENT_SET_SOLVER, s.eventSetRouter)
+func (s *Server) initEvents() error {
+	err := event.Subscribe(EVENT_SET_ROUTER, s.eventSetRouter)
 	if err != nil {
-		console.Error(err)
+		return err
 	}
 
-	err = event.Subscribe(EVENT_REMOVE_SOLVER, s.eventRemoveSolverById)
+	err = event.Subscribe(EVENT_REMOVE_ROUTER, s.eventRemoveRouterById)
 	if err != nil {
-		console.Error(err)
+		return err
 	}
 
 	err = event.Subscribe(EVENT_RESET, s.eventReset)
 	if err != nil {
-		console.Error(err)
+		return err
 	}
+
+	return nil
 }
 
 /**
@@ -42,8 +46,9 @@ func (s *Server) eventSetRouter(m event.Message) {
 	header := data.Json("header")
 	excludeHeader := data.ArrayStr("exclude_header")
 	version := data.Int("version")
+	private := data.Bool("private")
 	packageName := data.Str("package_name")
-	_, err := s.SetSolver(method, path, resolve, header, excludeHeader, version, packageName)
+	_, err := s.SetRouter(method, path, resolve, header, excludeHeader, version, private, packageName)
 	if err != nil {
 		console.Alertf(`eventSetRouter error:%s`, err.Error())
 	}
@@ -52,19 +57,19 @@ func (s *Server) eventSetRouter(m event.Message) {
 }
 
 /**
-* eventRemoveSolverById
+* eventRemoveRouterById
 * @param m event.Message
 **/
-func (s *Server) eventRemoveSolverById(m event.Message) {
+func (s *Server) eventRemoveRouterById(m event.Message) {
 	if m.Myself {
 		return
 	}
 
 	data := m.Data
 	id := data.Str("id")
-	err := s.RemoveSolverById(id, true)
+	err := s.RemoveRouterById(id, true)
 	if err != nil {
-		console.Alertf(`eventRemoveSolverById error:%s`, err.Error())
+		console.Alertf(`eventRemoveRouterById error:%s`, err.Error())
 	}
 
 	console.Log("eventRemoveSolverById", data.ToString())

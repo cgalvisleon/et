@@ -7,15 +7,17 @@ import (
 )
 
 func main() {
-	srv := ettp.New(8080, &ettp.Config{
+	srv := ettp.New("Apigateway", &ettp.Config{
+		Port:         8080,
 		PathApi:      "/api",
-		PathApp:      "/app",
+		PathApp:      "/",
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  10 * time.Second,
 		TLS:          false,
 		CertFile:     "",
 		KeyFile:      "",
+		Debug:        true,
 	})
 
 	srv.Start()

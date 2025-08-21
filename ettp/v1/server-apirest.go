@@ -9,8 +9,6 @@ import (
 	"github.com/cgalvisleon/et/middleware"
 )
 
-type contextKey string
-
 var commonHeader = make(map[string]bool)
 
 const (

@@ -36,7 +36,7 @@ func (s *Server) handlerResolver(w http.ResponseWriter, r *http.Request) {
 
 	/* Begin telemetry */
 	metric := middleware.NewMetric(r)
-	w.Header().Set("Reqid", metric.ReqID)
+	w.Header().Set("serviceId", metric.ServiceId)
 	ctx := context.WithValue(r.Context(), MetricKey, metric)
 	r = r.WithContext(ctx)
 

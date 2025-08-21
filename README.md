@@ -155,6 +155,9 @@ go run ./cmd/et/main.go
 # Ejecutar el daemon
 go run ./cmd/daemon/main.go
 
+# Ejecutar el apigateway
+go run ./cmd/apigateway
+
 # Ejecutar con parámetros
 go run ./cmd/et/main.go -port 3300 -mode production
 

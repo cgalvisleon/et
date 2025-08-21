@@ -82,15 +82,32 @@ func (s *Router) addRouter(tag string) *Router {
 }
 
 /**
-* setSolver
-* @param method, path, mainPath, solver string, header et.Json, excludeHeader []string, version int, packageName string
+* setRouter
+* @param kind, method, path, solver string, header et.Json, excludeHeader []string, version int, packageName string
 * @return *Solver, error
 **/
-func (s *Router) setSolver(kind TypeApi, id, method, path, pathApi, solver string, header map[string]string, excludeHeader []string, version int, packageName string) (*Solver, error) {
-	url := pathApi + path
-	tags := strings.Split(url, "/")
+func (s *Router) setRouter(kind TypeRouter, method, path, parentPath, solver string, header map[string]string, excludeHeader []string, version int, packageName string) (*Solver, error) {
+	pkg := s.server.Packages[packageName]
+	if pkg == nil {
+		pkg = NewPackage(packageName, s.server)
+	}
+
+	path = fmt.Sprintf("%s/%s", parentPath, path)
+	path = strings.ReplaceAll(path, "//", "/")
+	key := fmt.Sprintf("%s:%s", method, path)
+	result, ok := s.server.Solvers[key]
+	if ok {
+		result.Solver = solver
+		result.Header = header
+		result.ExcludeHeader = excludeHeader
+		result.Version = version
+		pkg.AddSolver(result)
+		return result, nil
+	}
+
+	tags := strings.Split(path, "/")
 	if len(tags) == 0 {
-		return nil, fmt.Errorf("path %s is invalid", url)
+		return nil, fmt.Errorf("path %s is invalid", path)
 	}
 
 	regex := regexp.MustCompile(`^\{.*\}$`)
@@ -100,6 +117,10 @@ func (s *Router) setSolver(kind TypeApi, id, method, path, pathApi, solver strin
 
 	target := s
 	for i, tag := range tags {
+		if tag == "" {
+			continue
+		}
+
 		router, ok := target.Router[tag]
 		if ok {
 			target = router
@@ -108,11 +129,11 @@ func (s *Router) setSolver(kind TypeApi, id, method, path, pathApi, solver strin
 
 		target = target.addRouter(tag)
 		if isParam(tag) {
-			target.Param = tag
+			target.main.Param = tag
 		}
 
 		if i == len(tags)-1 {
-			target.solver = NewSolver(id, method, path)
+			target.solver = NewSolver(key, method, path)
 			target.solver.Kind = kind
 			target.solver.Solver = solver
 			target.solver.Header = header
@@ -127,40 +148,42 @@ func (s *Router) setSolver(kind TypeApi, id, method, path, pathApi, solver strin
 		return nil, fmt.Errorf("solver %s not build", path)
 	}
 
+	s.server.Solvers[target.solver.Id] = target.solver
+	pkg.AddSolver(target.solver)
 	return target.solver, nil
 }
 
 /**
-* getSolver
+* getResolver
 * @param id string, solver *Solver, url string
 * @return *Solver, error
 **/
-func (s *Router) getRequest(r *http.Request, solver *Solver, params map[string]string) (*Request, error) {
+func (s *Router) getResolver(r *http.Request, solver *Solver, params map[string]string) (*Resolver, error) {
 	if solver == nil {
 		return nil, fmt.Errorf("solver not found")
 	}
 
-	result := NewRequest(r, solver, params)
+	result := NewResolver(r, solver, params)
 	return result, nil
 }
 
 /**
-* findRequest
+* findResolver
 * @param r *http.Request
-* @return *Solver, error
+* @return *Resolver, error
 **/
-func (s *Router) findRequest(req *http.Request) (*Request, error) {
-	url := req.URL.Path
-	tags := strings.Split(url, "/")
+func (s *Router) findResolver(req *http.Request) (*Resolver, error) {
+	path := req.URL.Path
+	tags := strings.Split(path, "/")
 	if len(tags) == 0 {
-		return nil, fmt.Errorf("url %s is invalid", url)
+		return nil, fmt.Errorf("path:%s is invalid", path)
 	}
 
 	params := make(map[string]string)
 	target := s
 	for _, tag := range tags {
 		if len(tag) == 0 {
-			return nil, fmt.Errorf("tag %s is invalid", tag)
+			continue
 		}
 
 		router, ok := target.Router[tag]
@@ -193,23 +216,23 @@ func (s *Router) findRequest(req *http.Request) (*Request, error) {
 			}
 		}
 
-		if s.Param != "" {
-			router, ok := s.Router[s.Param]
+		if target.Param != "" {
+			router, ok := target.Router[target.Param]
 			if ok {
 				target = router
-				params[s.Param] = tag
+				params[target.Param] = tag
 				continue
 			}
 		}
 
-		return nil, fmt.Errorf("solver %s not found", url)
+		return nil, fmt.Errorf("solver:%s not found tag:%s", path, tag)
 	}
 
 	if target == nil {
-		return nil, fmt.Errorf("solver %s not found", url)
+		return nil, fmt.Errorf("solver:%s not found", path)
 	}
 
-	return s.getRequest(req, target.solver, params)
+	return s.getResolver(req, target.solver, params)
 }
 
 /**
@@ -217,9 +240,7 @@ func (s *Router) findRequest(req *http.Request) (*Request, error) {
 * @param method, path string, handlerFn http.HandlerFunc, packageName string
 **/
 func (s *Router) addHandler(method, path string, handlerFn http.HandlerFunc, packageName string) {
-	key := fmt.Sprintf("%s:%s", method, path)
-
-	s.server.handlers[key] = handlerFn
+	s.server.setHandler(method, path, handlerFn, packageName)
 }
 
 /**

@@ -2,11 +2,11 @@ package ettp
 
 /**
 * New
-* @param port int, config *Config
+* @param name string, config *Config
 * @return *Server
 **/
-func New(port int, config *Config) *Server {
-	result := NewServer(port, config)
+func New(name string, config *Config) *Server {
+	result := NewServer(name, config)
 
 	return result
 }

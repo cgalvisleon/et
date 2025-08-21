@@ -6,36 +6,38 @@ import (
 	"github.com/cgalvisleon/et/et"
 )
 
-type TypeApi int
+type TypeRouter int
 
 const (
-	TpHandler TypeApi = iota
+	TpHandler TypeRouter = iota + 1
 	TpApiRest
+	TpWepApp
 	TpPortForward
-	TpProxy
 )
 
-func (t TypeApi) String() string {
+func (t TypeRouter) String() string {
 	switch t {
 	case TpHandler:
-		return "Handler"
+		return "handler"
 	case TpApiRest:
-		return "Api REST"
+		return "app"
+	case TpWepApp:
+		return "webapp"
 	case TpPortForward:
-		return "Port Forward"
-	case TpProxy:
-		return "Proxy"
+		return "portforward"
 	default:
 		return "Unknown"
 	}
 }
 
-func IntToTypeApi(i int) TypeApi {
-	switch i {
-	case 1:
+func StringToTypeRouter(s string) TypeRouter {
+	switch s {
+	case "api":
 		return TpApiRest
-	case 2:
-		return TpProxy
+	case "webapp":
+		return TpWepApp
+	case "portforward":
+		return TpPortForward
 	default:
 		return TpHandler
 	}
@@ -64,14 +66,15 @@ func (t TpHeader) String() string {
 
 type Solver struct {
 	Id            string                            `json:"id"`
-	Kind          TypeApi                           `json:"kind"`
+	Kind          TypeRouter                        `json:"kind"`
 	Method        string                            `json:"method"`
 	Path          string                            `json:"path"`
 	Solver        string                            `json:"solver"`
 	TypeHeader    TpHeader                          `json:"type_header"`
 	Header        map[string]string                 `json:"header"`
-	ExcludeHeader []string                          `json:"exclude"`
+	ExcludeHeader []string                          `json:"exclude_header"`
 	Version       int                               `json:"version"`
+	Private       bool                              `json:"private"`
 	PackageName   string                            `json:"package_name"`
 	router        *Router                           `json:"-"`
 	middlewares   []func(http.Handler) http.Handler `json:"-"`
@@ -88,16 +91,17 @@ func (s *Solver) ToJson() et.Json {
 		"header":       s.Header,
 		"exclude":      s.ExcludeHeader,
 		"version":      s.Version,
+		"private":      s.Private,
 		"package_name": s.PackageName,
 	}
 }
 
 /**
 * NewSolver
-* @param id string, solver *Solver, url string
+* @param id, method, path string
 * @return *Solver
 **/
-func NewSolver(id string, method, path string) *Solver {
+func NewSolver(id, method, path string) *Solver {
 	return &Solver{
 		Id:          id,
 		Method:      method,

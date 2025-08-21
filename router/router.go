@@ -6,17 +6,11 @@ import (
 
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/ettp/v2"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/go-chi/chi/v5"
-)
-
-type TypeRoute int
-
-const (
-	HTTP TypeRoute = iota
-	REST
 )
 
 const (
@@ -190,7 +184,7 @@ func PushApiGateway(id, method, path, resolve string, header et.Json, tpHeader T
 	initRouter(packageName)
 	router.Routes[id] = et.Json{
 		"_id":            id,
-		"kind":           HTTP,
+		"kind":           ettp.TpApiRest,
 		"method":         method,
 		"path":           path,
 		"resolve":        resolve,

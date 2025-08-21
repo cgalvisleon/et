@@ -8,7 +8,7 @@ import (
 
 type Package struct {
 	Name    string    `json:"name"`
-	Solvers []*Solver `json:"routes"`
+	Solvers []*Solver `json:"solvers"`
 	server  *Server   `json:"-"`
 }
 

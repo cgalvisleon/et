@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/middleware"
+	"github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/dimiro1/banner"
 	"github.com/mattn/go-colorable"
@@ -19,8 +21,7 @@ import (
 
 type Config struct {
 	Port         int
-	PathApi      string
-	PathApp      string
+	Parent       string
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
 	IdleTimeout  time.Duration
@@ -38,18 +39,16 @@ type Server struct {
 	Host          string                            `json:"host"`
 	Port          int                               `json:"port"`
 	Addr          string                            `json:"addr"`
-	PathApi       string                            `json:"path_api"`
-	PathApp       string                            `json:"path_app"`
+	Parent        string                            `json:"parent"`
 	Router        map[string]*Router                `json:"router"`
 	Solvers       map[string]*Solver                `json:"solvers"`
 	Packages      map[string]*Package               `json:"packages"`
-	Resolvers     map[string]*Resolver              `json:"resolvers"`
+	Requests      map[string]*Resolver              `json:"requests"`
 	Version       string                            `json:"version"`
 	mux           *http.ServeMux                    `json:"-"`
 	svr           *http.Server                      `json:"-"`
 	middlewares   []func(http.Handler) http.Handler `json:"-"`
 	authenticator func(http.Handler) http.Handler   `json:"-"`
-	handlers      map[string]http.HandlerFunc       `json:"-"`
 	readTimeout   time.Duration                     `json:"-"`
 	writeTimeout  time.Duration                     `json:"-"`
 	idleTimeout   time.Duration                     `json:"-"`
@@ -74,17 +73,15 @@ func NewServer(name string, config *Config) *Server {
 		Host:          host,
 		Port:          config.Port,
 		Addr:          fmt.Sprintf(":%d", config.Port),
-		PathApi:       config.PathApi,
-		PathApp:       config.PathApp,
+		Parent:        config.Parent,
 		Router:        make(map[string]*Router),
 		Solvers:       make(map[string]*Solver),
 		Packages:      make(map[string]*Package),
-		Resolvers:     make(map[string]*Resolver),
+		Requests:      make(map[string]*Resolver),
 		Version:       "v0.0.2",
 		mux:           http.NewServeMux(),
 		middlewares:   make([]func(http.Handler) http.Handler, 0),
 		authenticator: middleware.Autentication,
-		handlers:      make(map[string]http.HandlerFunc),
 		readTimeout:   config.ReadTimeout,
 		writeTimeout:  config.WriteTimeout,
 		idleTimeout:   config.IdleTimeout,
@@ -116,9 +113,17 @@ func (s *Server) ToJson() et.Json {
 	}
 
 	return et.Json{
-		"host":     s.Host,
-		"port":     s.Port,
-		"packages": packages,
+		"created_at": s.CreatedAt,
+		"id":         s.Id,
+		"name":       s.Name,
+		"host":       s.Host,
+		"port":       s.Port,
+		"parent":     s.Parent,
+		"router":     s.Router,
+		"solvers":    s.Solvers,
+		"packages":   packages,
+		"requests":   s.Requests,
+		"version":    s.Version,
 	}
 }
 
@@ -170,6 +175,10 @@ func (s *Server) Start() {
 	}
 	s.banner()
 
+	if s.debug {
+		console.Debug(s.ToJson().ToString())
+	}
+
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
@@ -198,32 +207,22 @@ func (s *Server) Close() {
 * @return error
 **/
 func (s *Server) Reset() {
-	event.Publish(EVENT_RESET, et.Json{})
-}
-
-/**
-* Empty
-* @return error
-**/
-func (s *Server) Empty() error {
 	s.Router = make(map[string]*Router)
 	s.Solvers = make(map[string]*Solver)
 	s.Packages = make(map[string]*Package)
-	s.Resolvers = make(map[string]*Resolver)
-
-	if err := s.Save(); err != nil {
-		return err
+	if err := s.initRouteTable(); err != nil {
+		console.Fatal(err)
 	}
 
-	return nil
+	event.Publish(router.EVENT_RESET_ROUTER, et.Json{})
 }
 
 /**
 * setRouter
-* @param kind TypeRouter, method, path, solver string, typeHeader TpHeader, header et.Json, excludeHeader []string, version int, packageName string
+* @param kind TypeRouter, method, path, solver string, typeHeader TpHeader, header et.Json, excludeHeader []string, version int, packageName string, saved bool
 * @return *Solver, error
 **/
-func (s *Server) setRouter(kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, packageName string) (*Solver, error) {
+func (s *Server) setRouter(kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, packageName string, saved bool) (*Solver, error) {
 	if !methodMap[method] {
 		return nil, fmt.Errorf("method %s not supported", method)
 	}
@@ -232,28 +231,71 @@ func (s *Server) setRouter(kind TypeRouter, method, path, solver string, typeHea
 		return nil, fmt.Errorf("path %s is not valid", path)
 	}
 
+	log := func() {
+		if solver != "" {
+			console.Logf(s.Name, "Method:%s Path:%s Solver:%s Version:%d PackageName:%s", method, path, solver, version, packageName)
+		} else {
+			console.Logf(s.Name, "Method:%s Path:%s Version:%d PackageName:%s", method, path, version, packageName)
+		}
+	}
+
 	router, ok := s.Router[method]
 	if !ok {
-		router = NewRouter(s, method)
+		router = NewRouter(method)
 		s.Router[method] = router
 	}
 
-	parentPath := s.PathApi
-	if kind == TpWepApp {
-		parentPath = s.PathApp
+	pkg := s.Packages[packageName]
+	if pkg == nil {
+		pkg = NewPackage(packageName, s)
 	}
 
-	result, err := router.setRouter(kind, method, path, parentPath, solver, typeHeader, header, excludeHeader, version, packageName)
+	key := fmt.Sprintf("%s:%s", method, path)
+	result, ok := s.Solvers[key]
+	if ok {
+		result.Solver = solver
+		result.TypeHeader = typeHeader
+		result.Header = header
+		result.ExcludeHeader = excludeHeader
+		result.Version = version
+		pkg.AddSolver(result)
+		log()
+
+		if saved {
+			s.Save()
+		}
+
+		return result, nil
+	}
+
+	result, err := router.setRouter(kind, method, path, solver, typeHeader, header, excludeHeader, version, packageName)
 	if err != nil {
 		return nil, err
 	}
 
-	if solver != "" {
-		console.Logf(s.Name, "Method:%s Path:%s Solver:%s Version:%d PackageName:%s", method, path, solver, version, packageName)
-	} else {
-		console.Logf(s.Name, "Method:%s Path:%s Version:%d PackageName:%s", method, path, version, packageName)
+	s.Solvers[key] = result
+	pkg.AddSolver(result)
+	log()
+
+	if saved {
+		s.Save()
 	}
 
+	return result, nil
+}
+
+/**
+* setSolver
+* @param kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, packageName string, saved bool
+* @return *Solver, error
+**/
+func (s *Server) setSolver(kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, private bool, packageName string, saved bool) (*Solver, error) {
+	result, err := s.setRouter(kind, method, path, solver, typeHeader, header, excludeHeader, version, packageName, saved)
+	if err != nil {
+		return nil, err
+	}
+
+	result.Private = private
 	return result, nil
 }
 
@@ -263,43 +305,39 @@ func (s *Server) setRouter(kind TypeRouter, method, path, solver string, typeHea
 * @return *Solver, error
 **/
 func (s *Server) setHandler(method, path string, handlerFn http.HandlerFunc, packageName string) (*Solver, error) {
-	result, err := s.setRouter(TpHandler, method, path, "", TpKeepHeader, map[string]string{}, []string{}, 0, packageName)
+	path = fmt.Sprintf("%s/%s", s.Parent, path)
+	path = strings.ReplaceAll(path, "//", "/")
+	result, err := s.setRouter(TpHandler, method, path, "", TpKeepHeader, map[string]string{}, []string{}, 0, packageName, false)
 	if err != nil {
 		return nil, err
 	}
 
-	s.handlers[result.Id] = handlerFn
-	return result, nil
-}
+	result.handlerFn = handlerFn
 
-/**
-* setSolver
-* @param kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, packageName string
-* @return *Solver, error
-**/
-func (s *Server) setSolver(kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, private bool, packageName string) (*Solver, error) {
-	result, err := s.setRouter(kind, method, path, solver, typeHeader, header, excludeHeader, version, packageName)
-	if err != nil {
-		return nil, err
-	}
-
-	result.Private = private
-	s.Solvers[result.Id] = result
 	return result, nil
 }
 
 /**
 * SetRouter
-* @param method, path, solver string, header et.Json, excludeHeader []string, version int, private bool, packageName string
+* @param method, path, resolve string, header et.Json, excludeHeader []string, version int, private bool, packageName string, saved bool
 * @return *Solver, error
 **/
-func (s *Server) SetRouter(method, path, solver string, typeHeader int, header et.Json, excludeHeader []string, version int, private bool, packageName string) (*Solver, error) {
+func (s *Server) SetRouter(method, path, resolve string, typeHeader int, header et.Json, excludeHeader []string, version int, private bool, packageName string, saved bool) (*Solver, error) {
 	headerMap := make(map[string]string)
 	for k, v := range header {
 		headerMap[k] = fmt.Sprintf("%v", v)
 	}
 
-	return s.setSolver(TpApiRest, method, path, solver, TpHeader(typeHeader), headerMap, excludeHeader, version, private, packageName)
+	if !utility.ValidStr(resolve, 0, []string{""}) {
+		return nil, fmt.Errorf("resolve %s is not valid", resolve)
+	}
+
+	result, err := s.setSolver(TpApiRest, method, path, resolve, TpHeader(typeHeader), headerMap, excludeHeader, version, private, packageName, saved)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 /**
@@ -381,10 +419,10 @@ func (s *Server) FindResolver(r *http.Request) (*Resolver, error) {
 		return nil, err
 	}
 
-	s.Resolvers[result.Id] = result
+	s.Requests[result.Id] = result
 
 	clean := func() {
-		delete(s.Resolvers, result.Id)
+		delete(s.Requests, result.Id)
 	}
 
 	duration := 24 * time.Hour
@@ -412,7 +450,7 @@ func (s *Server) HTTPError(resolver *Resolver, metric *middleware.Metrics, w htt
 **/
 func (s *Server) HTTPSuccess(resolver *Resolver, metric *middleware.Metrics, rw *middleware.ResponseWriterWrapper) {
 	resolver.SetStatus(TpStatusSuccess)
-	delete(s.Resolvers, resolver.Id)
+	delete(s.Requests, resolver.Id)
 	metric.DoneFn(rw)
 
 	s.Save()

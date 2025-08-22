@@ -14,6 +14,7 @@ import (
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
+	"github.com/cgalvisleon/et/router"
 )
 
 /**
@@ -179,12 +180,7 @@ func (s *Server) getRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := et.Items{Result: []et.Json{}}
-	for _, solver := range s.Solvers {
-		result.Add(solver.ToJson())
-	}
-
-	metric.ITEMS(w, r, http.StatusOK, result)
+	metric.JSON(w, r, http.StatusOK, s.ToJson())
 }
 
 /**
@@ -209,7 +205,7 @@ func (s *Server) upsetRouter(w http.ResponseWriter, r *http.Request) {
 		version := item.Int("version")
 		private := item.Bool("private")
 		packageName := item.Str("package_name")
-		router, err := s.SetRouter(method, path, resolve, tpHeader, header, excludeHeader, version, private, packageName)
+		router, err := s.SetRouter(method, path, resolve, tpHeader, header, excludeHeader, version, private, packageName, true)
 		if err != nil {
 			metric.HTTPError(w, r, http.StatusBadRequest, err.Error())
 			return
@@ -236,9 +232,10 @@ func (s *Server) deleteRouteById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	event.Publish(EVENT_REMOVE_ROUTER, et.Json{
+	event.Publish(router.EVENT_REMOVE_ROUTER, et.Json{
 		"id": id,
 	})
+
 	metric.ITEM(w, r, http.StatusOK, et.Item{
 		Ok: true,
 		Result: et.Json{
@@ -316,7 +313,7 @@ func (s *Server) reset(w http.ResponseWriter, r *http.Request) {
 	s.Reset()
 
 	for _, pk := range s.Packages {
-		channel := fmt.Sprintf(`%s/%s`, EVENT_RESET, pk.Name)
+		channel := fmt.Sprintf(`%s:%s`, router.EVENT_RESET_ROUTER, pk.Name)
 		event.Publish(channel, et.Json{})
 	}
 

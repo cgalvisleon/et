@@ -9,8 +9,7 @@ import (
 func main() {
 	srv := ettp.New("Apigateway", &ettp.Config{
 		Port:         8080,
-		PathApi:      "/api",
-		PathApp:      "/",
+		Parent:       "/api",
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  10 * time.Second,

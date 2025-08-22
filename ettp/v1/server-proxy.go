@@ -592,7 +592,7 @@ func (s *Server) SetProxys(w http.ResponseWriter, r *http.Request) {
 		}
 
 		result.Add(proxy.ToJson())
-		event.Publish(rt.PROXYGATEWAY_SET, et.Json{
+		event.Publish(rt.EVENT_SET_ROUTER, et.Json{
 			"id":           proxy.Id,
 			"path":         proxy.Path,
 			"name":         proxy.Name,
@@ -636,7 +636,7 @@ func (s *Server) SetPortForwards(w http.ResponseWriter, r *http.Request) {
 		}
 
 		result.Add(portForward.ToJson())
-		event.Publish(rt.PROXYGATEWAY_SET, et.Json{
+		event.Publish(rt.EVENT_SET_ROUTER, et.Json{
 			"id":           portForward.Id,
 			"path":         portForward.Path,
 			"name":         portForward.Name,
@@ -668,7 +668,7 @@ func (s *Server) DeleteProxys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	event.Publish(rt.PROXYGATEWAY_DELETE, et.Json{
+	event.Publish(rt.EVENT_REMOVE_ROUTER, et.Json{
 		"id": id,
 	})
 	metric.ITEM(w, r, http.StatusOK, et.Item{

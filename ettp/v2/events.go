@@ -3,26 +3,21 @@ package ettp
 import (
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/event"
-)
-
-const (
-	EVENT_SET_ROUTER    = "event:set:router"
-	EVENT_REMOVE_ROUTER = "event:remove:router"
-	EVENT_RESET         = "event:reset"
+	"github.com/cgalvisleon/et/router"
 )
 
 func (s *Server) initEvents() error {
-	err := event.Subscribe(EVENT_SET_ROUTER, s.eventSetRouter)
+	err := event.Subscribe(router.EVENT_SET_ROUTER, s.eventSetRouter)
 	if err != nil {
 		return err
 	}
 
-	err = event.Subscribe(EVENT_REMOVE_ROUTER, s.eventRemoveRouterById)
+	err = event.Subscribe(router.EVENT_REMOVE_ROUTER, s.eventRemoveRouterById)
 	if err != nil {
 		return err
 	}
 
-	err = event.Subscribe(EVENT_RESET, s.eventReset)
+	err = event.Subscribe(router.EVENT_RESET_ROUTER, s.eventReset)
 	if err != nil {
 		return err
 	}
@@ -49,12 +44,10 @@ func (s *Server) eventSetRouter(m event.Message) {
 	version := data.Int("version")
 	private := data.Bool("private")
 	packageName := data.Str("package_name")
-	_, err := s.SetRouter(method, path, resolve, typeHeader, header, excludeHeader, version, private, packageName)
+	_, err := s.SetRouter(method, path, resolve, typeHeader, header, excludeHeader, version, private, packageName, true)
 	if err != nil {
 		console.Alertf(`eventSetRouter error:%s`, err.Error())
 	}
-
-	console.Log("eventSetRouter", data.ToString())
 }
 
 /**
@@ -72,8 +65,6 @@ func (s *Server) eventRemoveRouterById(m event.Message) {
 	if err != nil {
 		console.Alertf(`eventRemoveRouterById error:%s`, err.Error())
 	}
-
-	console.Log("eventRemoveSolverById", data.ToString())
 }
 
 /**
@@ -85,8 +76,5 @@ func (s *Server) eventReset(m event.Message) {
 		return
 	}
 
-	data := m.Data
 	s.Reset()
-
-	console.Log("eventReset", data.ToString())
 }

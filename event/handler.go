@@ -12,8 +12,8 @@ import (
 )
 
 const QUEUE_STACK = "stack"
-const EVENT_LOG = "log"
-const EVENT_OVERFLOW = "requests:overflow"
+const EVENT_LOG = "event:log"
+const EVENT_OVERFLOW = "event:overflow"
 const EVENT_WORK = "event:worker"
 const EVENT_WORK_STATE = "event:worker:state"
 const EVENT_SUBSCRIBED = "event:subscribed"

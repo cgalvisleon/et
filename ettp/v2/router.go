@@ -36,20 +36,18 @@ type Router struct {
 	Tag    string             `json:"tag"`
 	Param  string             `json:"param"`
 	solver *Solver            `json:"-"`
-	server *Server            `json:"-"`
 	main   *Router            `json:"-"`
 }
 
 /**
 * NewRouter
-* @param server *Server
+* @param tag string
 * @return *Router
 **/
-func NewRouter(server *Server, tag string) *Router {
+func NewRouter(tag string) *Router {
 	return &Router{
 		Router: make(map[string]*Router),
 		Tag:    tag,
-		server: server,
 	}
 }
 
@@ -77,7 +75,7 @@ func (s *Router) ToJson() et.Json {
 * @return *Router
 **/
 func (s *Router) addRouter(tag string) *Router {
-	router := NewRouter(s.server, tag)
+	router := NewRouter(tag)
 	s.Router[tag] = router
 	router.main = s
 	return router
@@ -88,29 +86,10 @@ func (s *Router) addRouter(tag string) *Router {
 * @param kind, method, path, solver string, typeHeader TpHeader, header et.Json, excludeHeader []string, version int, packageName string
 * @return *Solver, error
 **/
-func (s *Router) setRouter(kind TypeRouter, method, path, parentPath, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, packageName string) (*Solver, error) {
-	pkg := s.server.Packages[packageName]
-	if pkg == nil {
-		pkg = NewPackage(packageName, s.server)
-	}
-
-	url := fmt.Sprintf("%s/%s", parentPath, path)
-	url = strings.ReplaceAll(url, "//", "/")
-	key := fmt.Sprintf("%s:%s", method, path)
-	result, ok := s.server.Solvers[key]
-	if ok {
-		result.Solver = solver
-		result.TypeHeader = typeHeader
-		result.Header = header
-		result.ExcludeHeader = excludeHeader
-		result.Version = version
-		pkg.AddSolver(result)
-		return result, nil
-	}
-
-	tags := strings.Split(url, "/")
+func (s *Router) setRouter(kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, packageName string) (*Solver, error) {
+	tags := strings.Split(path, "/")
 	if len(tags) == 0 {
-		return nil, fmt.Errorf("url %s is invalid", url)
+		return nil, fmt.Errorf("path %s is invalid", path)
 	}
 
 	regex := regexp.MustCompile(`^\{.*\}$`)
@@ -136,7 +115,7 @@ func (s *Router) setRouter(kind TypeRouter, method, path, parentPath, solver str
 		}
 
 		if i == len(tags)-1 {
-			target.solver = NewSolver(key, method, path)
+			target.solver = NewSolver(method, path)
 			target.solver.Kind = kind
 			target.solver.Solver = solver
 			target.solver.TypeHeader = typeHeader
@@ -152,8 +131,6 @@ func (s *Router) setRouter(kind TypeRouter, method, path, parentPath, solver str
 		return nil, fmt.Errorf("solver %s not build", path)
 	}
 
-	s.server.Solvers[target.solver.Id] = target.solver
-	pkg.AddSolver(target.solver)
 	return target.solver, nil
 }
 
@@ -237,68 +214,4 @@ func (s *Router) findResolver(req *http.Request) (*Resolver, error) {
 	}
 
 	return s.getResolver(req, target.solver, params)
-}
-
-/**
-* addHandler
-* @param method, path string, handlerFn http.HandlerFunc, packageName string
-**/
-func (s *Router) addHandler(method, path string, handlerFn http.HandlerFunc, packageName string) {
-	s.server.setHandler(method, path, handlerFn, packageName)
-}
-
-/**
-* Get
-* @param path string, handlerFn http.HandlerFunc, packageName string
-**/
-func (s *Router) Get(path string, handlerFn http.HandlerFunc, packageName string) {
-	s.addHandler(GET, path, handlerFn, packageName)
-}
-
-/**
-* Delete
-* @param path string, handlerFn http.HandlerFunc, packageName string
-**/
-func (s *Router) Post(path string, handlerFn http.HandlerFunc, packageName string) {
-	s.addHandler(POST, path, handlerFn, packageName)
-}
-
-/**
-* Put
-* @param path string, handlerFn http.HandlerFunc, packageName string
-**/
-func (s *Router) Put(path string, handlerFn http.HandlerFunc, packageName string) {
-	s.addHandler(PUT, path, handlerFn, packageName)
-}
-
-/**
-* Patch
-* @param path string, handlerFn http.HandlerFunc, packageName string
-**/
-func (s *Router) Patch(path string, handlerFn http.HandlerFunc, packageName string) {
-	s.addHandler(PATCH, path, handlerFn, packageName)
-}
-
-/**
-* Delete
-* @param path string, handlerFn http.HandlerFunc, packageName string
-**/
-func (s *Router) Delete(path string, handlerFn http.HandlerFunc, packageName string) {
-	s.addHandler(DELETE, path, handlerFn, packageName)
-}
-
-/**
-* Head
-* @param path string, handlerFn http.HandlerFunc, packageName string
-**/
-func (s *Router) Head(path string, handlerFn http.HandlerFunc, packageName string) {
-	s.addHandler(HEAD, path, handlerFn, packageName)
-}
-
-/**
-* Options
-* @param path string, handlerFn http.HandlerFunc, packageName string
-**/
-func (s *Router) Options(path string, handlerFn http.HandlerFunc, packageName string) {
-	s.addHandler(OPTIONS, path, handlerFn, packageName)
 }

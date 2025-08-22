@@ -7,17 +7,17 @@ import (
 )
 
 func (s *Server) initEvents() {
-	err := event.Subscribe(rt.APIGATEWAY_SET, s.eventSetRouter)
+	err := event.Subscribe(rt.EVENT_SET_ROUTER, s.eventSetRouter)
 	if err != nil {
 		console.Error(err)
 	}
 
-	err = event.Subscribe(rt.APIGATEWAY_DELETE, s.eventDeleteRouter)
+	err = event.Subscribe(rt.EVENT_REMOVE_ROUTER, s.eventDeleteRouter)
 	if err != nil {
 		console.Error(err)
 	}
 
-	err = event.Subscribe(rt.APIGATEWAY_RESET, s.eventReset)
+	err = event.Subscribe(rt.EVENT_RESET_ROUTER, s.eventReset)
 	if err != nil {
 		console.Error(err)
 	}

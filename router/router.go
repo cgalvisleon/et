@@ -8,7 +8,6 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/middleware"
-	"github.com/cgalvisleon/et/reg"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -36,37 +35,27 @@ type Routes struct {
 	Routes map[string]et.Json
 }
 
+type Channels struct {
+	EVENT_SET_ROUTER    string
+	EVENT_REMOVE_ROUTER string
+	EVENT_RESET_ROUTER  string
+}
+
 var (
 	router              *Routes
-	APIGATEWAY_SET      = "apigateway/set"
-	APIGATEWAY_DELETE   = "apigateway/delete"
-	APIGATEWAY_RESET    = "apigateway/reset"
-	PROXYGATEWAY_SET    = "proxygateway/set"
-	PROXYGATEWAY_DELETE = "proxygateway/delete"
-	PROXYGATEWAY_RESET  = "proxygateway/reset"
+	EVENT_SET_ROUTER    = "event:set:router"
+	EVENT_REMOVE_ROUTER = "event:remove:router"
+	EVENT_RESET_ROUTER  = "event:reset:router"
 )
 
 /**
 * SetChannels
 * @param vars et.Json
 **/
-func SetChannels(vars et.Json) {
-	for k := range vars {
-		switch k {
-		case "APIGATEWAY_SET":
-			APIGATEWAY_SET = vars.Str(k)
-		case "APIGATEWAY_DELETE":
-			APIGATEWAY_DELETE = vars.Str(k)
-		case "APIGATEWAY_RESET":
-			APIGATEWAY_RESET = vars.Str(k)
-		case "PROXYGATEWAY_SET":
-			PROXYGATEWAY_SET = vars.Str(k)
-		case "PROXYGATEWAY_DELETE":
-			PROXYGATEWAY_DELETE = vars.Str(k)
-		case "PROXYGATEWAY_RESET":
-			PROXYGATEWAY_RESET = vars.Str(k)
-		}
-	}
+func SetChannels(channels *Channels) {
+	EVENT_SET_ROUTER = channels.EVENT_SET_ROUTER
+	EVENT_REMOVE_ROUTER = channels.EVENT_REMOVE_ROUTER
+	EVENT_RESET_ROUTER = channels.EVENT_RESET_ROUTER
 }
 
 /**
@@ -75,12 +64,9 @@ func SetChannels(vars et.Json) {
 **/
 func GetChanels() et.Json {
 	return et.Json{
-		"APIGATEWAY_SET":      APIGATEWAY_SET,
-		"APIGATEWAY_DELETE":   APIGATEWAY_DELETE,
-		"APIGATEWAY_RESET":    APIGATEWAY_RESET,
-		"PROXYGATEWAY_SET":    PROXYGATEWAY_SET,
-		"PROXYGATEWAY_DELETE": PROXYGATEWAY_DELETE,
-		"PROXYGATEWAY_RESET":  PROXYGATEWAY_RESET,
+		"EVENT_SET_ROUTER":    EVENT_SET_ROUTER,
+		"EVENT_REMOVE_ROUTER": EVENT_REMOVE_ROUTER,
+		"EVENT_RESET_ROUTER":  EVENT_RESET_ROUTER,
 	}
 }
 
@@ -95,34 +81,24 @@ func initRouter(name string) {
 			Routes: map[string]et.Json{},
 		}
 
-		channel := fmt.Sprintf("%s/%s", APIGATEWAY_RESET, name)
-		event.Stack(channel, eventAction)
+		channel := fmt.Sprintf(`%s:%s`, EVENT_RESET_ROUTER, name)
+		event.Stack(channel, eventActionReset)
+		event.Stack(EVENT_RESET_ROUTER, eventActionReset)
 	}
 }
 
 /**
-* eventAction
+* eventActionReset
 * @param m event.Message
 **/
-func eventAction(m event.Message) {
-	if router == nil {
-		return
-	}
-
-	ResetRouter()
-}
-
-/**
-* ResetRouter
-**/
-func ResetRouter() {
+func eventActionReset(m event.Message) {
 	if router == nil {
 		return
 	}
 
 	for _, v := range router.Routes {
 		console.Logf("Api gateway", `[RESET] %s:%s`, v.Str("method"), v.Str("path"))
-		event.Publish(APIGATEWAY_SET, v)
+		event.Publish(EVENT_SET_ROUTER, v)
 	}
 }
 
@@ -177,24 +153,40 @@ func ToTpHeader(tp int) TpHeader {
 
 /**
 * PushApiGateway
-* @param id, method, path, resolve string, header et.Json, tpHeader TpHeader, excludeHeader []string, private bool, packageName string
+* @param method, path, resolve string, header et.Json, tpHeader TpHeader, excludeHeader []string, private bool, version int, packageName string
 **/
-func PushApiGateway(id, method, path, resolve string, header et.Json, tpHeader TpHeader, excludeHeader []string, private bool, packageName string) {
+func PushApiGateway(method, path, resolve string, tpHeader TpHeader, header et.Json, excludeHeader []string, private bool, version int, packageName string) {
 	initRouter(packageName)
-	router.Routes[id] = et.Json{
-		"_id":            id,
+	key := fmt.Sprintf("%s:%s", method, path)
+	router.Routes[key] = et.Json{
 		"kind":           "api",
 		"method":         method,
 		"path":           path,
 		"resolve":        resolve,
-		"header":         header,
 		"tp_header":      tpHeader,
+		"header":         header,
 		"exclude_header": excludeHeader,
 		"private":        private,
+		"version":        version,
 		"package_name":   packageName,
 	}
 
-	event.Publish(APIGATEWAY_SET, router.Routes[id])
+	event.Publish(EVENT_SET_ROUTER, router.Routes[key])
+}
+
+/**
+* RemoveApiGateway
+* @param id string
+**/
+func RemoveApiGateway(id string) {
+	if router == nil {
+		return
+	}
+
+	delete(router.Routes, id)
+	event.Publish(EVENT_REMOVE_ROUTER, et.Json{
+		"id": id,
+	})
 }
 
 /**
@@ -214,11 +206,10 @@ func GetRoutes() map[string]et.Json {
 * @param method, path, packagePath, host, packageName string, private bool
 **/
 func pushApiGateway(method, path, packagePath, host, packageName string, private bool) {
-	id := reg.GenHashKey(method, path, packageName)
 	path = packagePath + path
 	resolve := host + path
 
-	PushApiGateway(id, method, path, resolve, et.Json{}, TpReplaceHeader, []string{}, private, packageName)
+	PushApiGateway(method, path, resolve, TpReplaceHeader, et.Json{}, []string{}, private, 0, packageName)
 }
 
 /**

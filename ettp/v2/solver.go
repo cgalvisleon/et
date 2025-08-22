@@ -1,6 +1,7 @@
 package ettp
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/cgalvisleon/et/et"
@@ -11,8 +12,6 @@ type TypeRouter int
 const (
 	TpHandler TypeRouter = iota + 1
 	TpApiRest
-	TpWepApp
-	TpPortForward
 )
 
 func (t TypeRouter) String() string {
@@ -21,10 +20,6 @@ func (t TypeRouter) String() string {
 		return "handler"
 	case TpApiRest:
 		return "app"
-	case TpWepApp:
-		return "webapp"
-	case TpPortForward:
-		return "portforward"
 	default:
 		return "Unknown"
 	}
@@ -34,10 +29,6 @@ func StringToTypeRouter(s string) TypeRouter {
 	switch s {
 	case "api":
 		return TpApiRest
-	case "webapp":
-		return TpWepApp
-	case "portforward":
-		return TpPortForward
 	default:
 		return TpHandler
 	}
@@ -78,6 +69,7 @@ type Solver struct {
 	PackageName   string                            `json:"package_name"`
 	router        *Router                           `json:"-"`
 	middlewares   []func(http.Handler) http.Handler `json:"-"`
+	handlerFn     http.HandlerFunc                  `json:"-"`
 }
 
 func (s *Solver) ToJson() et.Json {
@@ -101,9 +93,10 @@ func (s *Solver) ToJson() et.Json {
 * @param id, method, path string
 * @return *Solver
 **/
-func NewSolver(id, method, path string) *Solver {
+func NewSolver(method, path string) *Solver {
+	key := fmt.Sprintf("%s:%s", method, path)
 	return &Solver{
-		Id:          id,
+		Id:          key,
 		Method:      method,
 		Path:        path,
 		middlewares: make([]func(http.Handler) http.Handler, 0),

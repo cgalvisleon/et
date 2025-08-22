@@ -5,8 +5,6 @@ import (
 	"crypto/tls"
 	"io"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 
 	"github.com/cgalvisleon/et/claim"
 	"github.com/cgalvisleon/et/console"
@@ -70,7 +68,7 @@ func (s *Server) handlerRouteTable(w http.ResponseWriter, r *http.Request) {
 
 	/* If HandlerFunc is handler */
 	if resolver.solver.Kind == TpHandler {
-		h := s.handlers[resolver.solver.Id]
+		h := resolver.solver.handlerFn
 		if h == nil {
 			go s.HTTPError(resolver, metric, w, r, http.StatusNotFound, "Handler not found")
 			return
@@ -81,41 +79,11 @@ func (s *Server) handlerRouteTable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	/* If WebApp is handler */
-	if resolver.solver.Kind == TpWepApp {
-		h := s.handlerWebApp
-		ctx = context.WithValue(ctx, ResoluteKey, resolver)
-		handler := s.applyMiddlewares(http.HandlerFunc(h), resolver.solver.middlewares)
-		handler.ServeHTTP(w, r.WithContext(ctx))
-		return
-	}
-
 	/* If API REST is handler */
 	h := s.handlerApiRest
 	ctx = context.WithValue(ctx, ResoluteKey, resolver)
 	handler := s.applyMiddlewares(http.HandlerFunc(h), resolver.solver.middlewares)
 	handler.ServeHTTP(w, r.WithContext(ctx))
-}
-
-/**
-* handlerWebApp
-* @params w http.ResponseWriter, r *http.Request
-**/
-func (s *Server) handlerWebApp(w http.ResponseWriter, r *http.Request) {
-	rw := &middleware.ResponseWriterWrapper{ResponseWriter: w}
-	metric := middleware.GetMetrics(r)
-
-	resolver, ok := r.Context().Value(ResoluteKey).(*Resolver)
-	if !ok {
-		s.HTTPError(resolver, metric, rw, r, http.StatusInternalServerError, "Resolver not found")
-		return
-	}
-
-	frontendURL, _ := url.Parse(resolver.URL)
-	proxy := httputil.NewSingleHostReverseProxy(frontendURL)
-	proxy.ServeHTTP(w, r)
-
-	// http.Redirect(w, r, resolver.URL, http.StatusTemporaryRedirect)
 }
 
 /**

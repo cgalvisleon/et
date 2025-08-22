@@ -171,7 +171,7 @@ func (s *Server) SetRouter(private bool, id, method, path, resolve string, heade
 		return nil, errors.New(MSG_ROUTE_NOT_REGISTER)
 	}
 
-	event.Publish(rt.APIGATEWAY_SET, et.Json{
+	event.Publish(rt.EVENT_SET_ROUTER, et.Json{
 		"private":        private,
 		"id":             route.Id,
 		"method":         method,

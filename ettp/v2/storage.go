@@ -58,6 +58,7 @@ func (s *Server) migrate() error {
 			0,
 			route.Private,
 			route.PackageName,
+			false,
 		)
 	}
 
@@ -84,9 +85,6 @@ func (s *Server) Save() error {
 	}
 
 	cache.Set(storage.Key, string(bt), 0)
-	if s.debug {
-		console.Debug(string(bt))
-	}
 
 	return nil
 }
@@ -128,6 +126,7 @@ func (s *Server) load() error {
 			solver.Version,
 			solver.Private,
 			solver.PackageName,
+			false,
 		)
 	}
 

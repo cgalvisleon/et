@@ -77,6 +77,6 @@ func (p *Package) RemoveSolver(solver *Solver) {
 	})
 
 	if idx != -1 {
-		p.Solvers = slices.Delete(p.Solvers, idx, 1)
+		p.Solvers = append(p.Solvers[:idx], p.Solvers[idx+1:]...)
 	}
 }

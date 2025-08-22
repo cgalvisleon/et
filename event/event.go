@@ -70,10 +70,10 @@ func (s *Conn) load() error {
 }
 
 /**
-* Save
+* add
 * @return error
 **/
-func (s *Conn) Add(event string) (bool, error) {
+func (s *Conn) add(event string) (bool, error) {
 	err := s.load()
 	if err != nil {
 		return false, err
@@ -87,6 +87,10 @@ func (s *Conn) Add(event string) (bool, error) {
 	return idx == -1, s.save()
 }
 
+/**
+* Reset
+* @return error
+**/
 func (s *Conn) Reset() error {
 	s.storage = []string{}
 

@@ -40,6 +40,7 @@ func (p *Package) ToJson() et.Json {
 
 	return et.Json{
 		"name":    p.Name,
+		"count":   len(p.Solvers),
 		"solvers": solvers,
 	}
 }

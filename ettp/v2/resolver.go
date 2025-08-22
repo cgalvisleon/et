@@ -52,6 +52,8 @@ func NewResolver(r *http.Request, solver *Solver, params map[string]string) *Res
 	now := utility.NowTime()
 	url := solver.Solver
 	for k, v := range params {
+		name := strings.Trim(k, "{}")
+		r.SetPathValue(name, v)
 		url = strings.Replace(url, k, v, 1)
 	}
 

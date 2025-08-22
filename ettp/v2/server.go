@@ -228,6 +228,10 @@ func (s *Server) setRouter(kind TypeRouter, method, path, solver string, typeHea
 		return nil, fmt.Errorf("method %s not supported", method)
 	}
 
+	if !utility.ValidStr(path, 1, []string{""}) {
+		return nil, fmt.Errorf("path %s is not valid", path)
+	}
+
 	router, ok := s.Router[method]
 	if !ok {
 		router = NewRouter(s, method)
@@ -346,21 +350,11 @@ func (s *Server) Authenticator(middleware func(http.Handler) http.Handler) *Serv
 * @return error
 **/
 func (s *Server) RemoveRouterById(id string, save bool) error {
-	solver, ok := s.Solvers[id]
+	_, ok := s.Solvers[id]
 	if !ok {
 		return fmt.Errorf("solver %s not found", id)
 	}
 
-	pkg := s.Packages[solver.PackageName]
-	if pkg == nil {
-		return fmt.Errorf("package %s not found", solver.PackageName)
-	}
-
-	pkg.RemoveSolver(solver)
-
-	router := solver.router
-	router.solver = nil
-	delete(router.main.Router, router.Tag)
 	delete(s.Solvers, id)
 
 	if save {

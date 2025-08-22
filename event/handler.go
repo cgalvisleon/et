@@ -18,8 +18,6 @@ const EVENT_WORK = "event:worker"
 const EVENT_WORK_STATE = "event:worker:state"
 const EVENT_SUBSCRIBED = "event:subscribed"
 
-// var Events = []string{}
-
 func publish(channel string, data et.Json) error {
 	if conn == nil {
 		return nil
@@ -32,13 +30,17 @@ func publish(channel string, data et.Json) error {
 		return err
 	}
 
+	_, err = conn.add(channel)
+	if err != nil {
+		return err
+	}
+
 	return conn.Publish(msg.Channel, dt)
 }
 
 /**
 * Publish
-* @param channel string
-* @param data et.Json
+* @param channel string, data et.Json
 * @return error
 **/
 func Publish(channel string, data et.Json) error {
@@ -49,18 +51,12 @@ func Publish(channel string, data et.Json) error {
 	stage := config.App.Stage
 	publish(strs.Format(`pipe:%s:%s`, stage, channel), data)
 
-	_, err := conn.Add(channel)
-	if err != nil {
-		return err
-	}
-
 	return publish(channel, data)
 }
 
 /**
 * Subscribe
-* @param channel string
-* @param f func(Message)
+* @param channel string, f func(Message)
 * @return error
 **/
 func Subscribe(channel string, f func(Message)) (err error) {
@@ -72,7 +68,7 @@ func Subscribe(channel string, f func(Message)) (err error) {
 		return
 	}
 
-	ok, err := conn.Add(channel)
+	ok, err := conn.add(channel)
 	if err != nil {
 		return err
 	}
@@ -105,8 +101,7 @@ func Subscribe(channel string, f func(Message)) (err error) {
 
 /**
 * Queue
-* @param string channel
-* @param func(Message) f
+* @param channel string, queue string, f func(Message)
 * @return error
 **/
 func Queue(channel, queue string, f func(Message)) (err error) {
@@ -118,7 +113,7 @@ func Queue(channel, queue string, f func(Message)) (err error) {
 		return nil
 	}
 
-	ok, err := conn.Add(channel)
+	ok, err := conn.add(channel)
 	if err != nil {
 		return err
 	}
@@ -152,8 +147,7 @@ func Queue(channel, queue string, f func(Message)) (err error) {
 
 /**
 * Stack
-* @param channel string
-* @param f func(Message)
+* @param channel string, f func(Message)
 * @return error
 **/
 func Stack(channel string, f func(Message)) error {
@@ -162,8 +156,7 @@ func Stack(channel string, f func(Message)) error {
 
 /**
 * Source
-* @param string channel
-* @param func(Message) reciveFn
+* @param channel string, f func(Message)
 * @return error
 **/
 func Source(channel string, f func(Message)) error {
@@ -172,8 +165,7 @@ func Source(channel string, f func(Message)) error {
 
 /**
 * Log
-* @param event string
-* @param data et.Json
+* @param event string, data et.Json
 **/
 func Log(event string, data et.Json) {
 	go Publish(EVENT_LOG, data)
@@ -199,8 +191,7 @@ func Error(event string, err error) error {
 
 /**
 * HttpEventPublish
-* @param w http.ResponseWriter
-* @param r *http.Request
+* @param w http.ResponseWriter, r *http.Request
 **/
 func HttpEventPublish(w http.ResponseWriter, r *http.Request) {
 	body, _ := response.GetBody(r)

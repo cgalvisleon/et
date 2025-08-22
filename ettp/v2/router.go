@@ -65,6 +65,8 @@ func (s *Router) ToJson() et.Json {
 
 	return et.Json{
 		"router": s.Router,
+		"tag":    s.Tag,
+		"param":  s.Param,
 		"solver": solver,
 	}
 }
@@ -92,8 +94,8 @@ func (s *Router) setRouter(kind TypeRouter, method, path, parentPath, solver str
 		pkg = NewPackage(packageName, s.server)
 	}
 
-	path = fmt.Sprintf("%s/%s", parentPath, path)
-	path = strings.ReplaceAll(path, "//", "/")
+	url := fmt.Sprintf("%s/%s", parentPath, path)
+	url = strings.ReplaceAll(url, "//", "/")
 	key := fmt.Sprintf("%s:%s", method, path)
 	result, ok := s.server.Solvers[key]
 	if ok {
@@ -106,9 +108,9 @@ func (s *Router) setRouter(kind TypeRouter, method, path, parentPath, solver str
 		return result, nil
 	}
 
-	tags := strings.Split(path, "/")
+	tags := strings.Split(url, "/")
 	if len(tags) == 0 {
-		return nil, fmt.Errorf("path %s is invalid", path)
+		return nil, fmt.Errorf("url %s is invalid", url)
 	}
 
 	regex := regexp.MustCompile(`^\{.*\}$`)
@@ -221,8 +223,8 @@ func (s *Router) findResolver(req *http.Request) (*Resolver, error) {
 		if target.Param != "" {
 			router, ok := target.Router[target.Param]
 			if ok {
-				target = router
 				params[target.Param] = tag
+				target = router
 				continue
 			}
 		}

@@ -434,10 +434,8 @@ func (m *Metrics) DoneRpc(r any) et.Json {
 
 /**
 * WriteResponse
-* @params w http.ResponseWriter
-* @params r *http.Request
-* @params statusCode int
-* @params e []byte
+* @params w http.ResponseWriter, r *http.Request, statusCode int, e []byte
+* @return error
 **/
 func (m *Metrics) WriteResponse(w http.ResponseWriter, r *http.Request, statusCode int, e []byte) error {
 	rw := &ResponseWriterWrapper{ResponseWriter: w, StatusCode: statusCode}
@@ -451,11 +449,29 @@ func (m *Metrics) WriteResponse(w http.ResponseWriter, r *http.Request, statusCo
 }
 
 /**
+* RESULT
+* @param w http.ResponseWriter, r *http.Request, statusCode int, data interface{}
+* @return error
+**/
+func (m *Metrics) RESULT(w http.ResponseWriter, r *http.Request, statusCode int, data interface{}) error {
+	if data == nil {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(statusCode)
+		return nil
+	}
+
+	e, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	return m.WriteResponse(w, r, statusCode, e)
+}
+
+/**
 * JSON
-* @params w http.ResponseWriter
-* @params r *http.Request
-* @params statusCode int
-* @params dt interface{}
+* @params w http.ResponseWriter, r *http.Request, statusCode int, data interface{}
+* @return error
 **/
 func (m *Metrics) JSON(w http.ResponseWriter, r *http.Request, statusCode int, dt interface{}) error {
 	if dt == nil {
@@ -479,10 +495,8 @@ func (m *Metrics) JSON(w http.ResponseWriter, r *http.Request, statusCode int, d
 
 /**
 * ITEM
-* @params w http.ResponseWriter
-* @params r *http.Request
-* @params statusCode int
-* @params dt et.Item
+* @params w http.ResponseWriter, r *http.Request, statusCode int, dt et.Item
+* @return error
 **/
 func (m *Metrics) ITEM(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Item) error {
 	if &dt == (&et.Item{}) {
@@ -501,10 +515,8 @@ func (m *Metrics) ITEM(w http.ResponseWriter, r *http.Request, statusCode int, d
 
 /**
 * ITEMS
-* @params w http.ResponseWriter
-* @params r *http.Request
-* @params statusCode int
-* @params dt et.Items
+* @params w http.ResponseWriter, r *http.Request, statusCode int, dt et.Items
+* @return error
 **/
 func (m *Metrics) ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Items) error {
 	if &dt == (&et.Items{}) {
@@ -523,10 +535,8 @@ func (m *Metrics) ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, 
 
 /**
 * HTTPError
-* @params w http.ResponseWriter
-* @params r *http.Request
-* @params statusCode int
-* @params message string
+* @params w http.ResponseWriter, r *http.Request, statusCode int, message string
+* @return error
 **/
 func (m *Metrics) HTTPError(w http.ResponseWriter, r *http.Request, statusCode int, message string) error {
 	msg := et.Json{
@@ -538,8 +548,7 @@ func (m *Metrics) HTTPError(w http.ResponseWriter, r *http.Request, statusCode i
 
 /**
 * Unauthorized
-* @params w http.ResponseWriter
-* @params r *http.Request
+* @params w http.ResponseWriter, r *http.Request
 **/
 func (m *Metrics) Unauthorized(w http.ResponseWriter, r *http.Request) {
 	m.HTTPError(w, r, http.StatusUnauthorized, "401 Unauthorized")

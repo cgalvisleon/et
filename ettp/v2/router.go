@@ -104,16 +104,14 @@ func (s *Router) setRouter(kind TypeRouter, method, path, solver string, typeHea
 		}
 
 		router, ok := target.Router[tag]
-		if ok {
-			target = router
-			continue
+		if !ok {
+			if isParam(tag) {
+				target.Param = tag
+			}
+			router = target.addRouter(tag)
 		}
 
-		target = target.addRouter(tag)
-		if isParam(tag) {
-			target.main.Param = tag
-		}
-
+		target = router
 		if i == len(tags)-1 {
 			target.solver = NewSolver(method, path)
 			target.solver.Kind = kind

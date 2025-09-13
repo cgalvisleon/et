@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"os/signal"
 	"strconv"
 	"time"
 
@@ -187,9 +186,7 @@ func (s *Ettp) Start() {
 	go s.Background()
 	s.banner()
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt)
-	<-stop
+	utility.AppWait()
 
 	s.Close()
 }

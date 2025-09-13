@@ -97,3 +97,20 @@ func Close() {
 func IsLoad() bool {
 	return conn != nil
 }
+
+/**
+* HealthCheck
+* @return bool
+**/
+func HealthCheck() bool {
+	if conn == nil {
+		return false
+	}
+
+	err := conn.Ping(conn.ctx).Err()
+	if err != nil {
+		return false
+	}
+
+	return true
+}

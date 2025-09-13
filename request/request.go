@@ -3,10 +3,12 @@ package request
 import (
 	"bytes"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/cgalvisleon/et/et"
@@ -188,12 +190,11 @@ func statusOk(status int) bool {
 }
 
 /**
-* Fetch
-* @param method, url string, header, body et.Json
-* @return *Response
-* @return error
+* FetchWithTls
+* @param method, url string, header, body et.Json, tlsConfig *tls.Config
+* @return *Response, error
 **/
-func Fetch(method, url string, header, body et.Json) (*Response, error) {
+func FetchWithTls(method, url string, header, body et.Json, tlsConfig *tls.Config) (*Response, error) {
 	if map[string]string{
 		"GET":     "GET",
 		"POST":    "POST",
@@ -219,6 +220,12 @@ func Fetch(method, url string, header, body et.Json) (*Response, error) {
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
+	}
+
+	if tlsConfig != nil {
+		transport = &http.Transport{
+			TLSClientConfig: tlsConfig,
+		}
 	}
 
 	client := &http.Client{
@@ -249,5 +256,43 @@ func Fetch(method, url string, header, body et.Json) (*Response, error) {
 			Message: res.Status,
 		},
 		Header: headerResponse,
+	}, nil
+}
+
+/**
+* Fetch
+* @param method, url string, header, body et.Json
+* @return *Response, error
+**/
+func Fetch(method, url string, header, body et.Json) (*Response, error) {
+	return FetchWithTls(method, url, header, body, nil)
+}
+
+/**
+* NewTlsConfig
+* @param caPath, certPath, keyPath string
+* @return *tls.Config, error
+**/
+func NewTlsConfig(caPath, certPath, keyPath string) (*tls.Config, error) {
+	if caPath == "" {
+		return nil, fmt.Errorf("CA certificate path is required")
+	}
+
+	if _, err := os.Stat(caPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("CA certificate not found")
+	}
+
+	caCert, _ := os.ReadFile(caPath)
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+
+	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+	if err != nil {
+		panic(err)
+	}
+
+	return &tls.Config{
+		RootCAs:      caCertPool,
+		Certificates: []tls.Certificate{cert},
 	}, nil
 }

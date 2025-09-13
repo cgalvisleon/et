@@ -31,8 +31,11 @@ func (s *Json) Scan(src interface{}) error {
 		ba = v
 	case string:
 		ba = []byte(v)
+	case map[string]interface{}:
+		*s = Json(v)
+		return nil
 	default:
-		return logs.Errorf(`Json/Scan - Failed to unmarshal JSON value:%s`, src)
+		return logs.Errorf("Json/Scan", "Failed to unmarshal JSON value:%s", src)
 	}
 
 	t := map[string]interface{}{}
@@ -643,13 +646,13 @@ func (s Json) ArrayJson(atribs ...string) []Json {
 	case string:
 		bt, err := json.Marshal([]byte(v))
 		if err != nil {
-			logs.Errorf("ArrayJson: %v error:%v type:%T", value, err.Error(), value)
+			logs.Errorf("json.ArrayJson", "value: %v error:%v type:%T", value, err.Error(), value)
 			return []Json{}
 		}
 
 		var result []Json
 		if err := json.Unmarshal(bt, &result); err != nil {
-			logs.Errorf("ArrayJson: %v error:%v type:%T", value, err.Error(), value)
+			logs.Errorf("json.ArrayJson", "value: %v error:%v type:%T", value, err.Error(), value)
 			return []Json{}
 		}
 
@@ -659,19 +662,19 @@ func (s Json) ArrayJson(atribs ...string) []Json {
 	case []interface{}, []map[string]interface{}:
 		bt, err := json.Marshal(v)
 		if err != nil {
-			logs.Errorf("ArrayJson: %v error:%v type:%T", value, err.Error(), value)
+			logs.Errorf("json.ArrayJson", "value:%v error:%v type:%T", value, err.Error(), value)
 			return []Json{}
 		}
 
 		var result []Json
 		if err := json.Unmarshal(bt, &result); err != nil {
-			logs.Errorf("ArrayJson: %v error:%v type:%T", value, err.Error(), value)
+			logs.Errorf("json.ArrayJson", "value: %v error:%v type:%T", value, err.Error(), value)
 			return []Json{}
 		}
 
 		return result
 	default:
-		logs.Errorf("ArrayJson: %v type:%T", value, value)
+		logs.Errorf("json.ArrayJson", "value: %v type:%T", value, value)
 		return []Json{}
 	}
 }

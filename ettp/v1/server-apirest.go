@@ -97,5 +97,5 @@ func (s *Server) handlerApiRest(w http.ResponseWriter, r *http.Request) {
 		metric.HTTPError(rw, r, http.StatusInternalServerError, err.Error())
 	}
 
-	go metric.DoneFn(rw)
+	go metric.DoneHTTP(rw)
 }

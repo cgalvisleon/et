@@ -368,17 +368,7 @@ func Define$2(db *jdb.DB) error {
 	$2.DefineAtribute("name", jdb.TypeDataText)
 	$2.DefineIndex(true,
 		"name",
-	)
-	$2.DefineEvent(jdb.EventInsert, func(tx *jdb.Tx, model *jdb.Model, before et.Json, after et.Json) error {
-		return nil
-	})
-	$2.DefineEvent(jdb.EventUpdate, func(tx *jdb.Tx, model *jdb.Model, before et.Json, after et.Json) error {
-		return nil
-	})
-	$2.DefineEvent(jdb.EventDelete, func(tx *jdb.Tx, model *jdb.Model, before et.Json, after et.Json) error {
-		return nil
-	})
-
+	)	
 	if err := $2.Init(); err != nil {
 		return console.Panic(err)
 	}

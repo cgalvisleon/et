@@ -63,7 +63,7 @@ func call(method string, args any, reply any) error {
 
 	address := strs.Format(`%s:%d`, solver.Host, solver.Port)
 	metric.CallSearchTime()
-	metric.ClientIP = address
+	metric.RemoteAddr = address
 
 	client, err := rpc.Dial("tcp", address)
 	if err != nil {

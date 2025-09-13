@@ -29,6 +29,19 @@ func SetCtx(ctx context.Context, key, val string, expiration time.Duration) stri
 }
 
 /**
+* ExpireCtx
+* @params ctx context.Context, key string, second time.Duration
+* @return error
+**/
+func ExpireCtx(ctx context.Context, key string, second time.Duration) error {
+	if conn == nil {
+		return errors.New(msg.ERR_NOT_CACHE_SERVICE)
+	}
+
+	return conn.Expire(ctx, key, second).Err()
+}
+
+/**
 * IncrCtx
 * @params ctx context.Context, key string, expiration time.Duration
 * @return int64
@@ -121,6 +134,75 @@ func DeleteCtx(ctx context.Context, key string) (int64, error) {
 	intCmd := conn.Del(ctx, key)
 
 	return intCmd.Val(), intCmd.Err()
+}
+
+/**
+* LPushCtx
+* @params ctx context.Context, key string, val string
+* @return error
+**/
+func LPushCtx(ctx context.Context, key string, val string) error {
+	if conn == nil {
+		return errors.New(msg.ERR_NOT_CACHE_SERVICE)
+	}
+
+	err := conn.RPush(ctx, key, val).Err()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/**
+* LPushCtx
+* @params ctx context.Context, key string, val string
+* @return error
+**/
+func LRemCtx(ctx context.Context, key string, val string) error {
+	if conn == nil {
+		return errors.New(msg.ERR_NOT_CACHE_SERVICE)
+	}
+
+	err := conn.LRem(ctx, key, 1, val).Err()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/**
+* LRangeCtx
+* @params ctx context.Context, key string, start int64, stop int64
+* @return []string, error
+**/
+func LRangeCtx(ctx context.Context, key string, start int64, stop int64) ([]string, error) {
+	if conn == nil {
+		return []string{}, errors.New(msg.ERR_NOT_CACHE_SERVICE)
+	}
+
+	result, err := conn.LRange(ctx, key, start, stop).Result()
+
+	return result, err
+}
+
+/**
+* LTrimCtx
+* @params ctx context.Context, key string, start int64, stop int64
+* @return error
+**/
+func LTrimCtx(ctx context.Context, key string, start int64, stop int64) error {
+	if conn == nil {
+		return errors.New(msg.ERR_NOT_CACHE_SERVICE)
+	}
+
+	err := conn.LTrim(ctx, key, start, stop).Err()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 /**

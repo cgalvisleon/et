@@ -115,6 +115,10 @@ func (s *Server) load() error {
 	}
 
 	for _, solver := range storage.Solvers {
+		if solver.Kind == TpHandler {
+			continue
+		}
+
 		s.setSolver(
 			solver.Kind,
 			solver.Method,

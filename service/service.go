@@ -36,7 +36,7 @@ const (
 **/
 func New(projectId, kind, description, clientId string) string {
 	now := utility.Now()
-	result := reg.GenUlId("service")
+	result := reg.GenULIDI("service")
 	data := et.Json{
 		"created_at":  now,
 		"service_id":  result,

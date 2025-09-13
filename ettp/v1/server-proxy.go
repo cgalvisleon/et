@@ -175,7 +175,7 @@ func (s *Server) SetProxy(id, path, name, description, solver, packageName strin
 func (s *Server) handlerReverseProxy(w http.ResponseWriter, r *http.Request) {
 	/* Begin telemetry */
 	metric := middleware.NewMetric(r)
-	w.Header().Set("serviceId", metric.ServiceId)
+	w.Header().Set("ServiceId", metric.ServiceId)
 	ctx := context.WithValue(r.Context(), MetricKey, metric)
 	r = r.WithContext(ctx)
 

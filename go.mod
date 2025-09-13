@@ -25,6 +25,8 @@ require (
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0
 )
 
+require github.com/expr-lang/expr v1.17.6
+
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e // indirect

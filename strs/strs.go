@@ -372,3 +372,15 @@ func RemoveAcents(str string) string {
 	str = strings.ReplaceAll(str, "Ú", "U")
 	return str
 }
+
+/**
+* MaskToken
+* @param token string
+* @return string
+**/
+func MaskToken(token string, length int) string {
+	if len(token) <= (length * 2) {
+		return token
+	}
+	return token[:length] + "***" + token[len(token)-length:]
+}

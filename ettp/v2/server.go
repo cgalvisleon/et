@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/cgalvisleon/et/console"
@@ -176,12 +174,10 @@ func (s *Server) Start() {
 	s.banner()
 
 	if s.debug {
-		console.Debug(s.ToJson().ToString())
+		console.Debug("Start:", s.ToJson().ToString())
 	}
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-	<-stop
+	utility.AppWait()
 
 	s.Close()
 }
@@ -231,11 +227,11 @@ func (s *Server) setRouter(kind TypeRouter, method, path, solver string, typeHea
 		return nil, fmt.Errorf("path %s is not valid", path)
 	}
 
-	log := func() {
+	log := func(action string) {
 		if solver != "" {
-			console.Logf(s.Name, "Method:%s Path:%s Solver:%s Version:%d PackageName:%s", method, path, solver, version, packageName)
+			console.Logf(s.Name, "%s Method:%s Path:%s Solver:%s Version:%d PackageName:%s", action, method, path, solver, version, packageName)
 		} else {
-			console.Logf(s.Name, "Method:%s Path:%s Version:%d PackageName:%s", method, path, version, packageName)
+			console.Logf(s.Name, "%s Method:%s Path:%s Version:%d PackageName:%s", action, method, path, version, packageName)
 		}
 	}
 
@@ -250,22 +246,11 @@ func (s *Server) setRouter(kind TypeRouter, method, path, solver string, typeHea
 		pkg = NewPackage(packageName, s)
 	}
 
+	action := "Create"
 	key := fmt.Sprintf("%s:%s", method, path)
 	result, ok := s.Solvers[key]
 	if ok {
-		result.Solver = solver
-		result.TypeHeader = typeHeader
-		result.Header = header
-		result.ExcludeHeader = excludeHeader
-		result.Version = version
-		pkg.AddSolver(result)
-		log()
-
-		if saved {
-			s.Save()
-		}
-
-		return result, nil
+		action = "Update"
 	}
 
 	result, err := router.setRouter(kind, method, path, solver, typeHeader, header, excludeHeader, version, packageName)
@@ -275,7 +260,7 @@ func (s *Server) setRouter(kind TypeRouter, method, path, solver string, typeHea
 
 	s.Solvers[key] = result
 	pkg.AddSolver(result)
-	log()
+	log(action)
 
 	if saved {
 		s.Save()
@@ -451,7 +436,7 @@ func (s *Server) HTTPError(resolver *Resolver, metric *middleware.Metrics, w htt
 func (s *Server) HTTPSuccess(resolver *Resolver, metric *middleware.Metrics, rw *middleware.ResponseWriterWrapper) {
 	resolver.SetStatus(TpStatusSuccess)
 	delete(s.Requests, resolver.Id)
-	metric.DoneFn(rw)
+	metric.DoneHTTP(rw)
 
 	s.Save()
 }

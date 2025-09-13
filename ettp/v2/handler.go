@@ -62,7 +62,7 @@ func (s *Server) handlerRouteTable(w http.ResponseWriter, r *http.Request) {
 	}
 
 	/* Call search time since begin */
-	w.Header().Set("serviceId", resolver.Id)
+	w.Header().Set("ServiceId", resolver.Id)
 	metric.CallSearchTime()
 	metric.SetPath(resolver.solver.Path)
 

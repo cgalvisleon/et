@@ -92,8 +92,12 @@ func (s *Items) ToMap() map[string]interface{} {
 	result := make(map[string]interface{})
 	result["ok"] = s.Ok
 	result["count"] = s.Count
-	result["result"] = s.Result
+	items := make([]map[string]interface{}, 0)
+	for _, item := range s.Result {
+		items = append(items, item.ToMap())
+	}
 
+	result["result"] = items
 	return result
 }
 

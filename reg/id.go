@@ -24,6 +24,25 @@ func UUID() string {
 }
 
 /**
+* ULID
+* @return string
+**/
+func ULID() string {
+	t := timezone.NowTime()
+	entropy := ulid.Monotonic(rand.New(rand.NewSource(t.UnixNano())), 0)
+	return ulid.MustNew(ulid.Timestamp(t), entropy).String()
+}
+
+/**
+* XID
+* @return string
+**/
+func XID() string {
+	id := xid.New()
+	return id.String()
+}
+
+/**
 * GenKey
 * @params args ...interface{}
 * @return string
@@ -47,60 +66,60 @@ func GenId(tag string) string {
 }
 
 /**
-* GenUlId
+* GenULIDI
 * @params tag string
 * @return string
 **/
-func GenUlId(tag string) string {
+func GenULIDI(tag string) string {
 	return strs.Format(`%s:%s`, tag, ULID())
 }
 
 /**
-* GenXid
+* GenXIDI
 * @params tag string
 * @return string
 **/
-func GenXid(tag string) string {
+func GenXIDI(tag string) string {
 	return strs.Format(`%s:%s`, tag, XID())
 }
 
 /**
-* GetId
-* @params tag, id string
+* GetUUID
+* @params id string
 * @return string
 **/
-func GetId(tag, id string) string {
+func GetUUID(id string) string {
 	if !map[string]bool{"": true, "*": true, "new": true}[id] {
 		return id
 	}
 
-	return GenId(tag)
+	return UUID()
 }
 
 /**
-* GetUlId
-* @params tag, id string
+* GetULID
+* @params id string
 * @return string
 **/
-func GetUlId(tag, id string) string {
+func GetULID(id string) string {
 	if !map[string]bool{"": true, "*": true, "new": true}[id] {
 		return id
 	}
 
-	return GenUlId(tag)
+	return ULID()
 }
 
 /**
-* GetXid
-* @params tag, id string
+* GetXID
+* @params id string
 * @return string
 **/
-func GetXid(tag, id string) string {
+func GetXID(id string) string {
 	if !map[string]bool{"": true, "*": true, "new": true}[id] {
 		return id
 	}
 
-	return GenXid(tag)
+	return XID()
 }
 
 /**
@@ -128,25 +147,6 @@ func GenSnowflake() string {
 func GenHashKey(args ...interface{}) string {
 	key := GenKey(args...)
 	return utility.ToBase64(key)
-}
-
-/**
-* ULID
-* @return string
-**/
-func ULID() string {
-	t := timezone.NowTime()
-	entropy := ulid.Monotonic(rand.New(rand.NewSource(t.UnixNano())), 0)
-	return ulid.MustNew(ulid.Timestamp(t), entropy).String()
-}
-
-/**
-* XID
-* @return string
-**/
-func XID() string {
-	id := xid.New()
-	return id.String()
 }
 
 func init() {

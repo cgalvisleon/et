@@ -89,7 +89,7 @@ func (s Item) ToJson() Json {
 func (s Item) ToMap() map[string]interface{} {
 	result := make(map[string]interface{})
 	result["ok"] = s.Ok
-	result["result"] = s.Result
+	result["result"] = s.Result.ToMap()
 
 	return result
 }

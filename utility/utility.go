@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"os/signal"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/cgalvisleon/et/et"
@@ -56,6 +58,15 @@ const QUEUE_STACK = "stack"
 var locks = make(map[string]*sync.RWMutex)
 var count = make(map[string]int64)
 var LIST_STATES = []string{ACTIVE, ARCHIVED, CANCELLED, IN_PROCESS, PENDING_APPROVAL, APPROVAL, REFUSED}
+
+/**
+* AppWait
+**/
+func AppWait() {
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+}
 
 /**
 * SetStatus
@@ -336,7 +347,7 @@ func Unquote(val interface{}) any {
 	case nil:
 		return strs.Format(`%s`, "NULL")
 	default:
-		logs.Errorf("Not unquoted type:%v value:%v", reflect.TypeOf(v), v)
+		logs.Errorf("utility.Unquote", "Not unquoted type:%v value:%v", reflect.TypeOf(v), v)
 		return val
 	}
 }
@@ -377,7 +388,7 @@ func Quote(val interface{}) any {
 	case []et.Json, []string, []interface{}, []map[string]interface{}:
 		bt, err := json.Marshal(v)
 		if err != nil {
-			logs.Errorf("Quote type:%v, value:%v, error marshalling array: %v", reflect.TypeOf(v), v, err)
+			logs.Errorf("utility.Quote", "type:%v, value:%v, error marshalling array: %v", reflect.TypeOf(v), v, err)
 			return strs.Format(fmt, `[]`)
 		}
 		return strs.Format(fmt, string(bt))
@@ -386,7 +397,7 @@ func Quote(val interface{}) any {
 	case nil:
 		return strs.Format(`%s`, "NULL")
 	default:
-		logs.Errorf("Quote type:%v, value:%v", reflect.TypeOf(v), v)
+		logs.Errorf("utility.Quote", "type:%v, value:%v", reflect.TypeOf(v), v)
 		return val
 	}
 }
@@ -494,6 +505,29 @@ func FromBase64(data string) (string, error) {
 	}
 
 	return string(result), nil
+}
+
+/**
+* ToBase64Raw
+* @param data string
+* @return string
+**/
+func ToBase64Raw(data string) string {
+	return base64.RawStdEncoding.EncodeToString([]byte(data))
+}
+
+/**
+* FromBase64Raw
+* @param data string
+* @return string
+**/
+func FromBase64Raw(data string) string {
+	result, err := base64.RawStdEncoding.DecodeString(data)
+	if err != nil {
+		return ""
+	}
+
+	return string(result)
 }
 
 /**

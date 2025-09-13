@@ -201,3 +201,15 @@ func Reset() error {
 
 	return conn.Reset()
 }
+
+/**
+* HealthCheck
+* @return bool
+**/
+func HealthCheck() bool {
+	if conn == nil {
+		return false
+	}
+
+	return conn.IsConnected()
+}

@@ -28,9 +28,9 @@ var (
 
 const (
 	TELEMETRY                                 = "telemetry"
-	TELEMETRY_SERVICE_STATUS                  = "telemetry:service:status"
-	TELEMETRY_TOKEN_LAST_USE                  = "telemetry:token:last_use"
+	TELEMETRY_LOG                             = "telemetry:log"
 	TELEMETRY_OVERFLOW                        = "telemetry:overflow"
+	TELEMETRY_TOKEN_LAST_USE                  = "telemetry:token:last_use"
 	MetricKey                claim.ContextKey = "metric"
 )
 
@@ -67,7 +67,7 @@ type Metrics struct {
 	TimeStamp    time.Time     `json:"timestamp"`
 	ServiceName  string        `json:"service_name"`
 	ServiceId    string        `json:"service_id"`
-	ClientIP     string        `json:"client_ip"`
+	RemoteAddr   string        `json:"remote_addr"`
 	Scheme       string        `json:"scheme"`
 	Host         string        `json:"host"`
 	Method       string        `json:"method"`
@@ -90,7 +90,7 @@ func (m *Metrics) ToJson() et.Json {
 	return et.Json{
 		"timestamp":     strs.FormatDateTime("02/01/2006 03:04:05 PM", m.TimeStamp),
 		"service_id":    m.ServiceId,
-		"client_ip":     m.ClientIP,
+		"remote_addr":   m.RemoteAddr,
 		"scheme":        m.Scheme,
 		"host":          m.Host,
 		"method":        m.Method,
@@ -154,11 +154,13 @@ func PushTelemetry(data et.Json) {
 }
 
 /**
-* PushTelemetryStatus
-* @param data et.Json
+* PushTelemetryLog
+* @param data string
 **/
-func PushTelemetryStatus(data et.Json) {
-	go event.Publish(TELEMETRY_SERVICE_STATUS, data)
+func PushTelemetryLog(data string) {
+	go event.Publish(TELEMETRY_LOG, et.Json{
+		"log": data,
+	})
 }
 
 /**
@@ -193,9 +195,10 @@ func NewMetric(r *http.Request) *Metrics {
 	if remoteAddr != "" {
 		remoteAddr = strs.Split(remoteAddr, ",")[0]
 	}
-	serviceId := r.Header.Get("serviceId")
+	serviceId := r.Header.Get("ServiceId")
 	if serviceId == "" {
 		serviceId = utility.UUID()
+		r.Header.Set("ServiceId", serviceId)
 	}
 	scheme := "http"
 	if r.TLS != nil {
@@ -206,7 +209,7 @@ func NewMetric(r *http.Request) *Metrics {
 		TimeStamp:   timezone.NowTime(),
 		ServiceName: serviceName,
 		ServiceId:   serviceId,
-		ClientIP:    remoteAddr,
+		RemoteAddr:  remoteAddr,
 		Host:        hostName,
 		Method:      r.Method,
 		Path:        r.URL.Path,
@@ -240,6 +243,19 @@ func NewRpcMetric(method string) *Metrics {
 }
 
 /**
+* setRequest
+* @params remove bool
+**/
+func (m *Metrics) setRequest(remove bool) {
+	m.key = fmt.Sprintf(`%s:%s`, m.Method, m.Path)
+	if remove {
+		cache.LRem("telemetry:requests", m.key)
+	} else {
+		cache.LPush("telemetry:requests", m.key)
+	}
+}
+
+/**
 * SetPath
 * @params val string
 **/
@@ -249,7 +265,7 @@ func (m *Metrics) SetPath(val string) {
 	}
 
 	m.Path = val
-	m.key = strs.Format(`%s:%s`, m.Method, m.Path)
+	m.setRequest(false)
 }
 
 /**
@@ -305,7 +321,7 @@ func (m *Metrics) CallMetrics() Telemetry {
 func (m *Metrics) println() et.Json {
 	w := lg.Color(lg.NMagenta, " [%s]: ", m.Method)
 	lg.CW(w, lg.NCyan, "%s", m.Path)
-	lg.CW(w, lg.NWhite, " from:%s", m.ClientIP)
+	lg.CW(w, lg.NWhite, " from:%s", m.RemoteAddr)
 	if m.StatusCode >= 500 {
 		lg.CW(w, lg.NRed, " - %s", http.StatusText(m.StatusCode))
 	} else if m.StatusCode >= 400 {
@@ -339,6 +355,9 @@ func (m *Metrics) println() et.Json {
 	lg.CW(w, lg.NCyan, " ServiceId:%s", m.ServiceId)
 	lg.Println(w)
 
+	m.setRequest(true)
+	PushTelemetryLog(w.String())
+
 	return m.ToJson()
 }
 
@@ -366,22 +385,6 @@ func (m *Metrics) telemetry() et.Json {
 }
 
 /**
-* DoneFn
-* @params rw *ResponseWriterWrapper
-* @params r *http.Request
-* @return et.Json
-**/
-func (m *Metrics) DoneFn(rw *ResponseWriterWrapper) et.Json {
-	m.StatusCode = rw.StatusCode
-	m.ResponseSize = rw.Size
-	m.CallResponseTime()
-	m.CallLatency()
-	m.println()
-
-	return m.telemetry()
-}
-
-/**
 * DoneHTTP
 * @params rw *ResponseWriterWrapper
 * @return et.Json
@@ -391,8 +394,9 @@ func (m *Metrics) DoneHTTP(rw *ResponseWriterWrapper) et.Json {
 	m.ResponseSize = rw.Size
 	m.CallResponseTime()
 	m.CallLatency()
+	m.println()
 
-	return m.println()
+	return m.telemetry()
 }
 
 /**
@@ -444,7 +448,7 @@ func (m *Metrics) WriteResponse(w http.ResponseWriter, r *http.Request, statusCo
 	rw.WriteHeader(statusCode)
 	rw.Write(e)
 
-	m.DoneFn(rw)
+	m.DoneHTTP(rw)
 	return nil
 }
 

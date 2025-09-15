@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/snowflake"
-	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/google/uuid"
@@ -50,19 +49,19 @@ func XID() string {
 func GenKey(args ...interface{}) string {
 	var keys []string
 	for _, arg := range args {
-		keys = append(keys, strs.Format(`%v`, arg))
+		keys = append(keys, fmt.Sprintf(`%v`, arg))
 	}
 
 	return strings.Join(keys, ":")
 }
 
 /**
-* Id
+* GenUUId
 * @params tag string
 * @return string
 **/
-func GenId(tag string) string {
-	return strs.Format(`%s:%s`, tag, UUID())
+func GenUUId(tag string) string {
+	return fmt.Sprintf(`%s:%s`, tag, UUID())
 }
 
 /**
@@ -71,7 +70,7 @@ func GenId(tag string) string {
 * @return string
 **/
 func GenULIDI(tag string) string {
-	return strs.Format(`%s:%s`, tag, ULID())
+	return fmt.Sprintf(`%s:%s`, tag, ULID())
 }
 
 /**
@@ -80,7 +79,7 @@ func GenULIDI(tag string) string {
 * @return string
 **/
 func GenXIDI(tag string) string {
-	return strs.Format(`%s:%s`, tag, XID())
+	return fmt.Sprintf(`%s:%s`, tag, XID())
 }
 
 /**

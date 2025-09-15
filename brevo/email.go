@@ -45,7 +45,7 @@ func SendEmail(sender et.Json, to []et.Json, subject string, htmlContent string,
 
 	path := config.String("BREVO_SEND_PATH", "")
 	apiKey := config.String("BREVO_SEND_KEY", "")
-	url := strs.Format("%s/smtp/email", path)
+	url := fmt.Sprintf("%s/smtp/email", path)
 	header := et.Json{
 		"accept":       "application/json",
 		"content-type": "application/json",
@@ -53,8 +53,8 @@ func SendEmail(sender et.Json, to []et.Json, subject string, htmlContent string,
 	}
 
 	for k, v := range params {
-		k := strs.Format("{{%s}}", k)
-		s := strs.Format("%v", v)
+		k := fmt.Sprintf("{{%s}}", k)
+		s := fmt.Sprintf("%v", v)
 		htmlContent = strs.Replace(htmlContent, k, s)
 	}
 

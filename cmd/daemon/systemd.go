@@ -12,7 +12,6 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/strs"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -86,7 +85,7 @@ func (s *Systemd) Start() et.Item {
 	})
 
 	s.server = &http.Server{
-		Addr:    strs.Format(`:%d`, s.port),
+		Addr:    fmt.Sprintf(`:%d`, s.port),
 		Handler: r,
 	}
 

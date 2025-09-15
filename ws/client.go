@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -9,7 +10,6 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/race"
-	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/gorilla/websocket"
 )
@@ -92,7 +92,7 @@ func Login(config *ClientConfig) (*Client, error) {
 		reconnect: config.Reconnect,
 	}
 
-	path := strs.Format(`%s`, result.url)
+	path := fmt.Sprintf(`%s`, result.url)
 	err := result.ConnectTo(path)
 	if err != nil {
 		return nil, err
@@ -152,7 +152,7 @@ func (c *Client) ConnectTo(path string) error {
 **/
 func (c *Client) Connect() error {
 	name := strings.ReplaceAll(c.name, " ", "_")
-	path := strs.Format(`%s?clientId=%s&name=%s`, c.url, c.ClientId, name)
+	path := fmt.Sprintf(`%s?clientId=%s&name=%s`, c.url, c.ClientId, name)
 	err := c.ConnectTo(path)
 	if err != nil {
 		return err

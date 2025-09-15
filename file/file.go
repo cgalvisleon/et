@@ -1,13 +1,13 @@
 package file
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/strs"
 )
 
 type FileInfo struct {
@@ -36,8 +36,8 @@ func (s *FileInfo) Json() et.Json {
 func params(str string, args ...any) string {
 	var result string = str
 	for i, v := range args {
-		p := strs.Format(`$%d`, i+1)
-		rp := strs.Format(`%v`, v)
+		p := fmt.Sprintf(`$%d`, i+1)
+		rp := fmt.Sprintf(`%v`, v)
 		result = strings.ReplaceAll(result, p, rp)
 	}
 
@@ -57,7 +57,7 @@ func append(str1, str2, sp string) string {
 		return str1
 	}
 
-	return strs.Format(`%s%s%s`, str1, sp, str2)
+	return fmt.Sprintf(`%s%s%s`, str1, sp, str2)
 }
 
 /**
@@ -135,7 +135,7 @@ func MakeFolder(names ...string) (string, error) {
 * @return string, error
 **/
 func MakeFile(folder, name, model string, args ...any) (string, error) {
-	path := strs.Format(`%s/%s`, folder, name)
+	path := fmt.Sprintf(`%s/%s`, folder, name)
 	info := ExistPath(path)
 	if info.Error != nil {
 		return info.Path, info.Error

@@ -119,11 +119,11 @@ func (c *Claim) ToJson() et.Json {
 }
 
 /**
-* getTokenKey
+* GetTokenKey
 * @param app, device, id string
 * @return string
 **/
-func getTokenKey(app, device, id string) string {
+func GetTokenKey(app, device, id string) string {
 	return reg.GenKey("token", app, device, id)
 }
 
@@ -162,7 +162,7 @@ func newToken(c Claim) (string, error) {
 		return "", err
 	}
 
-	key := getTokenKey(c.App, c.Device, c.ID)
+	key := GetTokenKey(c.App, c.Device, c.ID)
 	cache.Set(key, token, c.Duration)
 
 	return token, nil
@@ -203,7 +203,7 @@ func GetToken(key string) (string, error) {
 * @return error
 **/
 func DeleteToken(app, device, id string) error {
-	key := getTokenKey(app, device, id)
+	key := GetTokenKey(app, device, id)
 	_, err := cache.Delete(key)
 	if err != nil {
 		return err
@@ -302,7 +302,7 @@ func ValidToken(token string) (*Claim, error) {
 		return nil, err
 	}
 
-	key := getTokenKey(result.App, result.Device, result.ID)
+	key := GetTokenKey(result.App, result.Device, result.ID)
 	val, err := cache.Get(key, "")
 	if err != nil {
 		return nil, err
@@ -322,7 +322,7 @@ func ValidToken(token string) (*Claim, error) {
 * @return string
 **/
 func SetToken(app, device, id, token string, duration time.Duration) string {
-	key := getTokenKey(app, device, id)
+	key := GetTokenKey(app, device, id)
 	cache.Set(key, token, duration)
 
 	return key

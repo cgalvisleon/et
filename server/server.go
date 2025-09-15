@@ -12,7 +12,6 @@ import (
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/dimiro1/banner"
 	"github.com/go-chi/chi"
@@ -64,7 +63,7 @@ func New(appName string) (*Ettp, error) {
 			response.HTTPError(w, r, http.StatusNotFound, "404 Not Found")
 		})
 
-		addr := strs.Format(":%d", result.port)
+		addr := fmt.Sprintf(":%d", result.port)
 		serv := &http.Server{
 			Addr:    addr,
 			Handler: cors.AllowAll().Handler(result.Mux),
@@ -107,7 +106,7 @@ func (s *Ettp) stopServer(pid int) {
 		return
 	}
 
-	_, err := exec.Command("kill", strs.Format("%d", pid)).CombinedOutput()
+	_, err := exec.Command("kill", fmt.Sprintf("%d", pid)).CombinedOutput()
 	if err != nil {
 		console.Alertf("Error al detener el servidor: %s", err.Error())
 	} else {

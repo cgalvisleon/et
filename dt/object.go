@@ -1,6 +1,7 @@
 package dt
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
@@ -39,7 +40,7 @@ func (s *Object) up(data et.Item, save bool) {
 	s.Ok = data.Ok
 	s.Result = et.Json{}
 	if !s.Ok {
-		cache.Delete(s.Key)
+		Drop(s.Key)
 		return
 	}
 
@@ -63,7 +64,8 @@ func (s *Object) save() bool {
 	}
 
 	val := s.ToString()
-	cache.Set(s.Key, val, s.duration)
+	key := fmt.Sprintf("object:%s", s.Key)
+	cache.Set(key, val, s.duration)
 
 	return true
 }
@@ -74,7 +76,8 @@ func (s *Object) save() bool {
 *
  */
 func (s *Object) load() error {
-	item, err := cache.GetItem(s.Key)
+	key := fmt.Sprintf("object:%s", s.Key)
+	item, err := cache.GetItem(key)
 	if err != nil {
 		return err
 	}
@@ -91,7 +94,7 @@ func (s *Object) load() error {
 **/
 func Up(key string, data et.Item) Object {
 	obj := newObject(key)
-	obj.up(data, true)
+	obj.up(data, data.Ok)
 
 	return *obj
 }
@@ -104,7 +107,7 @@ func Up(key string, data et.Item) Object {
 func UpWithDuration(key string, data et.Item, duration time.Duration) Object {
 	obj := newObject(key)
 	obj.duration = duration
-	obj.up(data, true)
+	obj.up(data, data.Ok)
 
 	return *obj
 }
@@ -126,5 +129,6 @@ func Get(key string) Object {
 * @param key string
 **/
 func Drop(key string) {
+	key = fmt.Sprintf("object:%s", key)
 	cache.Delete(key)
 }

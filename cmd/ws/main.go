@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -11,7 +12,6 @@ import (
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/ws"
 )
 
@@ -37,13 +37,13 @@ func main() {
 }
 
 func test1(port int) {
-	url := strs.Format(`ws://localhost:%d/ws`, port)
+	url := fmt.Sprintf(`ws://localhost:%d/ws`, port)
 
 	n := 10000
 	for i := 0; i < n; i++ {
 		client, err := ws.NewClient(&ws.ClientConfig{
-			ClientId:  strs.Format("client-%d", i),
-			Name:      strs.Format("Client%d", i),
+			ClientId:  fmt.Sprintf("client-%d", i),
+			Name:      fmt.Sprintf("Client%d", i),
 			Url:       url,
 			Reconnect: 3,
 		})
@@ -66,7 +66,7 @@ func test1(port int) {
 		client := clients[idx]
 		if client != nil {
 			client.Publish("Hola", et.Json{
-				"msg": strs.Format("Hola %d", idx),
+				"msg": fmt.Sprintf("Hola %d", idx),
 			})
 		}
 		time.Sleep(t * time.Millisecond)

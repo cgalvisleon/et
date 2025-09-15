@@ -26,17 +26,6 @@ import (
 
 const NOT_FOUND = "Not found"
 const FOUND = "Found"
-const SYSID = "-1"
-const FOR_DELETE = "-2"
-const OF_SYSTEM = "-1"
-const ACTIVE = "0"
-const ARCHIVED = "1"
-const CANCELLED = "2"
-const IN_PROCESS = "3"
-const PENDING_APPROVAL = "4"
-const APPROVAL = "5"
-const REFUSED = "6"
-const STOP = "Stop"
 const CACHE_TIME = 60 * 60 * 24 * 1
 const DAY_SECOND = 60 * 60 * 24 * 1
 const SELECt = "SELECT"
@@ -57,7 +46,6 @@ const QUEUE_STACK = "stack"
 
 var locks = make(map[string]*sync.RWMutex)
 var count = make(map[string]int64)
-var LIST_STATES = []string{ACTIVE, ARCHIVED, CANCELLED, IN_PROCESS, PENDING_APPROVAL, APPROVAL, REFUSED}
 
 /**
 * AppWait
@@ -66,28 +54,6 @@ func AppWait() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
-}
-
-/**
-* SetStatus
-* @param status string
-* @return bool
-**/
-func SetStatus(status string) bool {
-	LIST_STATES = append(LIST_STATES, status)
-
-	return slices.Contains(LIST_STATES, status)
-}
-
-/**
-* DeleteStatus
-* @param status string
-* @return bool
-**/
-func DeleteStatus(status string) bool {
-	LIST_STATES = slices.Delete(LIST_STATES, slices.Index(LIST_STATES, status), 1)
-
-	return !slices.Contains(LIST_STATES, status)
 }
 
 /**
@@ -260,7 +226,7 @@ var quotedChar = `'`
 * @param char string
 **/
 func SetQuotedChar(char string) {
-	quotedChar = strs.Format(`%s`, char)
+	quotedChar = fmt.Sprintf(`%s`, char)
 }
 
 /**
@@ -316,36 +282,36 @@ func Unquote(val interface{}) any {
 	case bool:
 		return v
 	case et.Json:
-		return strs.Format(`%s`, v.ToString())
+		return fmt.Sprintf(`%s`, v.ToString())
 	case map[string]interface{}:
-		return strs.Format(`%s`, et.Json(v).ToString())
+		return fmt.Sprintf(`%s`, et.Json(v).ToString())
 	case time.Time:
-		return strs.Format(`%s`, v.Format("2006-01-02 15:04:05"))
+		return fmt.Sprintf(`%s`, v.Format("2006-01-02 15:04:05"))
 	case []string:
 		var r string
 		for i, _v := range v {
 			if i == 0 {
-				r = strs.Format(`%s`, unquote(_v))
+				r = fmt.Sprintf(`%s`, unquote(_v))
 			} else {
-				r = strs.Format(`%s, %s`, r, unquote(_v))
+				r = fmt.Sprintf(`%s, %s`, r, unquote(_v))
 			}
 		}
-		return strs.Format(`[%s]`, unquote(r))
+		return fmt.Sprintf(`[%s]`, unquote(r))
 	case []interface{}:
 		var r string
 		for i, _v := range v {
 			q := Unquote(_v)
 			if i == 0 {
-				r = strs.Format(`%v`, q)
+				r = fmt.Sprintf(`%v`, q)
 			} else {
-				r = strs.Format(`%s, %v`, r, q)
+				r = fmt.Sprintf(`%s, %v`, r, q)
 			}
 		}
-		return strs.Format(`[%s]`, r)
+		return fmt.Sprintf(`[%s]`, r)
 	case []uint8:
-		return strs.Format(`%s`, string(v))
+		return fmt.Sprintf(`%s`, string(v))
 	case nil:
-		return strs.Format(`%s`, "NULL")
+		return fmt.Sprintf(`%s`, "NULL")
 	default:
 		logs.Errorf("utility.Unquote", "Not unquoted type:%v value:%v", reflect.TypeOf(v), v)
 		return val
@@ -358,9 +324,9 @@ func Unquote(val interface{}) any {
 * @return any
 **/
 func Quote(val interface{}) any {
-	fmt := `'%s'`
+	fm := `'%s'`
 	if quotedChar == `"` {
-		fmt = `"%s"`
+		fm = `"%s"`
 	}
 	switch v := val.(type) {
 	case string:
@@ -380,22 +346,22 @@ func Quote(val interface{}) any {
 	case bool:
 		return v
 	case time.Time:
-		return strs.Format(fmt, v.Format("2006-01-02 15:04:05"))
+		return fmt.Sprintf(fm, v.Format("2006-01-02 15:04:05"))
 	case et.Json:
-		return strs.Format(fmt, v.ToString())
+		return fmt.Sprintf(fm, v.ToString())
 	case map[string]interface{}:
-		return strs.Format(fmt, et.Json(v).ToString())
+		return fmt.Sprintf(fm, et.Json(v).ToString())
 	case []et.Json, []string, []interface{}, []map[string]interface{}:
 		bt, err := json.Marshal(v)
 		if err != nil {
 			logs.Errorf("utility.Quote", "type:%v, value:%v, error marshalling array: %v", reflect.TypeOf(v), v, err)
-			return strs.Format(fmt, `[]`)
+			return fmt.Sprintf(fm, `[]`)
 		}
-		return strs.Format(fmt, string(bt))
+		return fmt.Sprintf(fm, string(bt))
 	case []uint8:
-		return strs.Format(fmt, string(v))
+		return fmt.Sprintf(fm, string(v))
 	case nil:
-		return strs.Format(`%s`, "NULL")
+		return fmt.Sprintf(`%s`, "NULL")
 	default:
 		logs.Errorf("utility.Quote", "type:%v, value:%v", reflect.TypeOf(v), v)
 		return val
@@ -411,8 +377,8 @@ func Quote(val interface{}) any {
 func Params(str string, args ...any) string {
 	var result = str
 	for i, v := range args {
-		p := strs.Format(`$%d`, i+1)
-		rp := strs.Format(`%v`, v)
+		p := fmt.Sprintf(`$%d`, i+1)
+		rp := fmt.Sprintf(`%v`, v)
 		result = strs.Replace(result, p, rp)
 	}
 
@@ -427,8 +393,8 @@ func Params(str string, args ...any) string {
 **/
 func ParamQuote(str string, args ...any) string {
 	for i, arg := range args {
-		old := strs.Format(`$%d`, i+1)
-		new := strs.Format(`%v`, Quote(arg))
+		old := fmt.Sprintf(`$%d`, i+1)
+		new := fmt.Sprintf(`%v`, Quote(arg))
 		str = strings.ReplaceAll(str, old, new)
 	}
 
@@ -442,7 +408,7 @@ func ParamQuote(str string, args ...any) string {
 * @return string
 **/
 func Address(host string, port int) string {
-	return strs.Format("%s:%d", host, port)
+	return fmt.Sprintf("%s:%d", host, port)
 }
 
 /**
@@ -452,7 +418,7 @@ func Address(host string, port int) string {
 * @return string
 **/
 func BannerTitle(name string, size int) string {
-	return strs.Format(`{{ .Title "%s" "" %d }}`, name, size)
+	return fmt.Sprintf(`{{ .Title "%s" "" %d }}`, name, size)
 }
 
 /**

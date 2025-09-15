@@ -112,7 +112,7 @@ var CmdModelo = &cobra.Command{
 		}
 
 		title := strs.Titlecase(packageName)
-		message := strs.Format(`Remember, including the router, that it is on the bottom of the h%s.go, in routers section of the router.go file`, title)
+		message := fmt.Sprintf(`Remember, including the router, that it is on the bottom of the h%s.go, in routers section of the router.go file`, title)
 		fmt.Println(message)
 	},
 }

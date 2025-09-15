@@ -1,6 +1,7 @@
 package jrpc
 
 import (
+	"fmt"
 	"net/http"
 	"net/rpc"
 
@@ -9,7 +10,6 @@ import (
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/strs"
 )
 
 /**
@@ -61,7 +61,7 @@ func call(method string, args any, reply any) error {
 		return err
 	}
 
-	address := strs.Format(`%s:%d`, solver.Host, solver.Port)
+	address := fmt.Sprintf(`%s:%d`, solver.Host, solver.Port)
 	metric.CallSearchTime()
 	metric.RemoteAddr = address
 
@@ -71,7 +71,7 @@ func call(method string, args any, reply any) error {
 	}
 	defer client.Close()
 
-	methodName := strs.Format(`%s.%s`, solver.StructName, solver.Method)
+	methodName := fmt.Sprintf(`%s.%s`, solver.StructName, solver.Method)
 	err = client.Call(methodName, args, reply)
 	if err != nil {
 		return err

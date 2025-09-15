@@ -97,7 +97,7 @@ func New(config Config) (*Server, error) {
 		Web:             config.Web,
 		Help:            config.Help,
 		HostName:        hostName,
-		addr:            strs.Format(":%d", config.Port),
+		addr:            fmt.Sprintf(":%d", config.Port),
 		mux:             mux,
 		pathApi:         config.PathApi,
 		pathApp:         config.PathApp,
@@ -222,7 +222,7 @@ func (s *Server) Close() {
 * @param port int
 **/
 func (s *Server) SetAddr(port int) {
-	s.addr = strs.Format(":%d", port)
+	s.addr = fmt.Sprintf(":%d", port)
 }
 
 /**

@@ -63,7 +63,7 @@ func (s *Package) start() error {
 		return nil
 	}
 
-	address := strs.Format(`:%d`, s.Port)
+	address := fmt.Sprintf(`:%d`, s.Port)
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		logs.Fatal(err)

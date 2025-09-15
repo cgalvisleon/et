@@ -11,7 +11,6 @@ import (
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
 	rt "github.com/cgalvisleon/et/router"
-	"github.com/cgalvisleon/et/strs"
 )
 
 /**
@@ -229,7 +228,7 @@ func (s *Server) reset(w http.ResponseWriter, r *http.Request) {
 		event.Publish(channel, et.Json{})
 	}
 
-	metric.ITEM(w, r, http.StatusOK, et.Item{Ok: true, Result: et.Json{"message": strs.Format(MSG_APIGATEWAY_RESET, s.Name)}})
+	metric.ITEM(w, r, http.StatusOK, et.Item{Ok: true, Result: et.Json{"message": fmt.Sprintf(MSG_APIGATEWAY_RESET, s.Name)}})
 }
 
 /**

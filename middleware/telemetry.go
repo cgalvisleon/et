@@ -77,6 +77,7 @@ type Metrics struct {
 	SearchTime   time.Duration `json:"search_time"`
 	ResponseTime time.Duration `json:"response_time"`
 	Latency      time.Duration `json:"latency"`
+	AppName      string        `json:"app_name"`
 	key          string
 	mark         time.Time
 	metrics      Telemetry
@@ -100,6 +101,7 @@ func (m *Metrics) ToJson() et.Json {
 		"response_time": m.ResponseTime,
 		"latency":       m.Latency,
 		"response_size": m.ResponseSize,
+		"app_name":      m.AppName,
 	}
 }
 
@@ -200,6 +202,10 @@ func NewMetric(r *http.Request) *Metrics {
 		serviceId = utility.UUID()
 		r.Header.Set("ServiceId", serviceId)
 	}
+	appName := "Not Found"
+	if r.Header.Get("AppName") != "" {
+		appName = r.Header.Get("AppName")
+	}
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"
@@ -214,8 +220,9 @@ func NewMetric(r *http.Request) *Metrics {
 		Method:      r.Method,
 		Path:        r.URL.Path,
 		Scheme:      scheme,
+		AppName:     appName,
 		mark:        timezone.NowTime(),
-		key:         strs.Format(`%s:%s`, r.Method, r.URL.Path),
+		key:         fmt.Sprintf(`%s:%s`, r.Method, r.URL.Path),
 	}
 
 	return result
@@ -236,7 +243,7 @@ func NewRpcMetric(method string) *Metrics {
 		Method:      strs.Uppcase(scheme),
 		Scheme:      scheme,
 		mark:        timezone.NowTime(),
-		key:         strs.Format(`%s:%s`, strs.Uppcase(scheme), method),
+		key:         fmt.Sprintf(`%s:%s`, strs.Uppcase(scheme), method),
 	}
 
 	return result
@@ -352,7 +359,8 @@ func (m *Metrics) println() et.Json {
 	} else {
 		lg.CW(w, lg.NGreen, " - Request:S:%vM:%vH:%vD:%vL:%v", m.metrics.RequestsPerSecond, m.metrics.RequestsPerMinute, m.metrics.RequestsPerHour, m.metrics.RequestsPerDay, m.metrics.RequestsLimit)
 	}
-	lg.CW(w, lg.NCyan, " ServiceId:%s", m.ServiceId)
+	lg.CW(w, lg.NCyan, " [ServiceId]:%s", m.ServiceId)
+	lg.CW(w, lg.NCyan, " [AppName]:%s", m.AppName)
 	lg.Println(w)
 
 	m.setRequest(true)

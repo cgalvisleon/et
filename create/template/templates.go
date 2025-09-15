@@ -212,10 +212,11 @@ func New() (*server.Ettp, error) {
 const ModelConfig = `package $1
 
 import (
+  "fmt"
+
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jrpc"
-	"github.com/cgalvisleon/et/mistake"
 )
 
 func LoadConfig() error {
@@ -231,7 +232,7 @@ func LoadConfig() error {
 	}
 
 	if !result.Ok {
-		return mistake.Newf(jrpc.MSG_NOT_LOAD_CONFIG, stage, name)
+		return fmt.Errorf(jrpc.MSG_NOT_LOAD_CONFIG, stage, name)
 	}
 
 	cfg := result.Json("config")
@@ -343,11 +344,15 @@ func eventAction(m event.Message) {
 const ModelData = `package $4
 
 import (
+	"fmt"
+	"sync"
+
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/dt"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/mistake"
 	"github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/cgalvisleon/jdb/jdb"
 )
@@ -365,10 +370,45 @@ func Define$2(db *jdb.DB) error {
 
 	$2 = jdb.NewModel(schema, "$3", 1)
 	$2.DefineModel()
-	$2.DefineAtribute("name", jdb.TypeDataText)
+	$2.DefineColumn("name", jdb.TypeDataText)
 	$2.DefineIndex(true,
 		"name",
-	)	
+	)
+	$2.BeforeInsert(func(tx *jdb.Tx, data et.Json) error {
+		id := data.Str(jdb.KEY)
+		exists, err := $2.
+			Where(jdb.KEY).Neg(id).
+			ItExistsTx(tx)
+		if err != nil {
+			return err
+		}
+
+		if exists {
+			return fmt.Errorf(MSG_RECORD_EXISTS)
+		}
+		
+		return nil
+	})
+	$2.BeforeUpdate(func(tx *jdb.Tx, data et.Json) error {
+		projectId := data.Str(jdb.PROJECT_ID)
+		id := data.Str(jdb.KEY)
+		name := data.Str("name")
+		exists, err := $2.
+			Where(jdb.PROJECT_ID).Eq(projectId).
+			And("name").Eq(name).
+			And(jdb.KEY).Neg(id).
+			ItExistsTx(tx)
+		if err != nil {
+			return err
+		}
+
+		if exists {
+			return fmt.Errorf(MSG_RECORD_EXISTS)
+		}
+		
+		return nil
+	})
+	
 	if err := $2.Init(); err != nil {
 		return console.Panic(err)
 	}
@@ -387,15 +427,6 @@ func Get$2ById(id string) (dt.Object, error) {
 		return result, nil
 	}
 
-	return up$2ById(id)
-}
-
-/**
-* up$2ById
-* @param id string
-* @return dt.Object, error
-**/
-func up$2ById(id string) (dt.Object, error) {
 	item, err := $2.
 		Where(jdb.KEY).Eq(id).
 		One()
@@ -409,128 +440,101 @@ func up$2ById(id string) (dt.Object, error) {
 /**
 * insert$2
 * @param projectId, statusId, id, name, description string, data et.Json, createdBy string
-* @return dt.Object, error
+* @return et.Item, error
 **/
-func insert$2(projectId, statusId, id, name, description string, data et.Json, createdBy string) (dt.Object, error) {
+func insert$2(projectId, statusId, id, name, description string, data et.Json, createdBy string) (et.Item, error) {
 	if !utility.ValidStr(projectId, 0, []string{""}) {
-		return dt.Object{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, jdb.PROJECT_ID)
+		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, jdb.PROJECT_ID)
 	}
 
 	if !utility.ValidStr(id, 0, []string{""}) {
-		return dt.Object{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, jdb.KEY)
+		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, jdb.KEY)
 	}
 
 	if !utility.ValidStr(name, 0, []string{""}) {
-		return dt.Object{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "name")
+		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
 
 	id = $2.GetId(id)
-	now := utility.Now()
+	now := timezone.NowTime()
 	data[jdb.PROJECT_ID] = projectId
 	data[jdb.KEY] = id
 	data["name"] = name
 	data["description"] = description
 	_, err := $2.
 		Insert(data).
-		BeforeInsert(func(tx *jdb.Tx, data et.Json) error {
-			exists, err := $2.
-				Where(jdb.PROJECT_ID).Eq(projectId).
-				And("name").Eq(name).
-				And(jdb.KEY).Neg(id).
-				ItExistsTx(tx)
-			if err != nil {
-				return err
-			}
-
-			if exists {
-				return mistake.Newf(msg.RECORD_EXISTS, name)
-			}
-
+		BeforeInsert(func(tx *jdb.Tx, data et.Json) error {			
 			data[jdb.CREATED_AT] = now
 			data[jdb.UPDATED_AT] = now
 			data[jdb.STATUS_ID] = statusId
 			data["created_by"] = createdBy
 			return nil
-		}).		
+		}).
 		Exec()
 	if err != nil {
-		return dt.Object{}, err
+		return et.Item{}, err
 	}
 
-	return up$2ById(id)
+	dt.Drop(id)
+	return et.Item{
+		Ok: true,
+		Result: et.Json{
+			"message": MSG_RECORD_CREATED,
+		},
+	}, nil
 }
 
 /**
 * Upsert$2
 * @param projectId, id, name, description string, data et.Json, createdBy string
-* @return dt.Object, error
+* @return et.Item, error
 **/
-func Upsert$2(projectId, id, name, description string, data et.Json, createdBy string) (dt.Object, error) {
+func Upsert$2(projectId, id, name, description string, data et.Json, createdBy string) (et.Item, error) {
 	if !utility.ValidStr(projectId, 0, []string{""}) {
-		return dt.Object{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, jdb.PROJECT_ID)
+		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, jdb.PROJECT_ID)
 	}
 
 	if !utility.ValidStr(id, 0, []string{""}) {
-		return dt.Object{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, jdb.KEY)
+		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, jdb.KEY)
 	}
 
 	if !utility.ValidStr(name, 0, []string{""}) {
-		return dt.Object{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, "name")
+		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
 
 	id = $2.GetId(id)
-	now := utility.Now()
+	now := timezone.NowTime()
 	data[jdb.PROJECT_ID] = projectId
 	data[jdb.KEY] = id
 	data["name"] = name
 	data["description"] = description
 	_, err := $2.
 		Upsert(data).
-		BeforeInsert(func(tx *jdb.Tx, data et.Json) error {
-			exists, err := $2.
-				Where(jdb.PROJECT_ID).Eq(projectId).
-				And("name").Eq(name).
-				And(jdb.KEY).Neg(id).
-				ItExistsTx(tx)
-			if err != nil {
-				return err
-			}
-
-			if exists {
-				return mistake.Newf(msg.RECORD_EXISTS, name)
-			}
-
+		BeforeInsert(func(tx *jdb.Tx, data et.Json) error {			
 			data[jdb.CREATED_AT] = now
 			data[jdb.UPDATED_AT] = now
-			data[jdb.STATUS_ID] = utility.ACTIVE
+			data[jdb.STATUS_ID] = jdb.ACTIVE
 			data["created_by"] = createdBy
 			return nil
 		}).
-		BeforeUpdate(func(tx *jdb.Tx, data et.Json) error {
-			exists, err := $2.
-				Where(jdb.PROJECT_ID).Eq(projectId).
-				And("name").Eq(name).
-				And(jdb.KEY).Neg(id).
-				ItExistsTx(tx)
-			if err != nil {
-				return err
-			}
-
-			if exists {
-				return mistake.Newf(msg.RECORD_EXISTS, name)
-			}
-
+		BeforeUpdate(func(tx *jdb.Tx, data et.Json) error {			
 			data[jdb.UPDATED_AT] = now
 			data["updated_by"] = createdBy
 			return nil
 		}).
-		Where(jdb.STATUS_ID).Eq(utility.ACTIVE).
+		Where(jdb.STATUS_ID).Eq(jdb.ACTIVE).
 		Exec()
 	if err != nil {
-		return dt.Object{}, err
+		return et.Item{}, err
 	}
 
-	return up$2ById(id)
+	dt.Drop(id)
+	return et.Item{
+		Ok: true,
+		Result: et.Json{
+			"message": MSG_RECORD_CREATED,
+		},
+	}, nil
 }
 
 /**
@@ -540,17 +544,19 @@ func Upsert$2(projectId, id, name, description string, data et.Json, createdBy s
 **/
 func State$2(id, stateId, createdBy string) (et.Item, error) {
 	if !utility.ValidStr(stateId, 0, []string{""}) {
-		return et.Item{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, jdb.STATUS_ID)
+		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, jdb.STATUS_ID)
 	}
 
 	if !utility.ValidStr(id, 0, []string{""}) {
-		return et.Item{}, mistake.Newf(msg.MSG_ATRIB_REQUIRED, jdb.KEY)
+		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, jdb.KEY)
 	}
 
+	now := timezone.NowTime()
 	result, err := $2.
 		Update(et.Json{
-			jdb.STATUS_ID: stateId,
-			"updated_by":  createdBy,
+			jdb.UPDATED_AT: now,
+			jdb.STATUS_ID:  stateId,
+			"updated_by":   createdBy,
 		}).
 		Where(jdb.KEY).Eq(id).
 		And(jdb.STATUS_ID).Neg(stateId).
@@ -561,10 +567,14 @@ func State$2(id, stateId, createdBy string) (et.Item, error) {
 
 	dt.Drop(id)
 
+	if !result.Ok {
+		return et.Item{}, console.Alertm(MSG_RECORD_NOT_EXISTS)
+	}
+
 	return et.Item{
 		Ok: result.Ok,
 		Result: et.Json{
-			"message": msg.RECORD_UPDATE,
+			"message": MSG_RECORD_UPDATED,
 		},
 	}, nil
 }
@@ -583,7 +593,6 @@ func Query$2(query et.Json) (interface{}, error) {
 
 	return result, nil
 }
-
 `
 
 const ModelDbHandler = `package $1
@@ -772,7 +781,8 @@ func initModels(db *jdb.DB) error {
 const ModelSchema = `package $1
 
 import (
-	"github.com/cgalvisleon/et/mistake"
+	"fmt"
+
 	"github.com/cgalvisleon/jdb/jdb"
 )
 
@@ -785,7 +795,7 @@ func defineSchema(db *jdb.DB) error {
 
 	schema = jdb.NewSchema(db, "$1")
 	if schema == nil {
-		return mistake.Newf(jdb.MSG_SCHEMA_NOT_FOUND, "$1")
+		return fmt.Errorf(jdb.MSG_SCHEMA_NOT_FOUND, "$1")
 	}
 
 	return nil
@@ -857,6 +867,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"fmt"
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
@@ -879,8 +890,8 @@ type Router struct {
 }
 
 func (rt *Router) Routes() http.Handler {
-	defaultHost := strs.Format("http://%s", HostName)
-	var host = strs.Format("%s:%d", config.String("HOST", defaultHost), config.Int("PORT", 3300))
+	defaultHost := fmt.Sprintf("http://%s", HostName)
+	var host = fmt.Sprintf("%s:%d", config.String("HOST", defaultHost), config.Int("PORT", 3300))
 
 	r := chi.NewRouter()
 
@@ -939,6 +950,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"fmt"
 
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/config"
@@ -960,8 +972,8 @@ type Router struct {
 }
 
 func (rt *Router) Routes() http.Handler {
-	defaultHost := strs.Format("http://%s", HostName)
-	var host = strs.Format("%s:%d", config.String("HOST", defaultHost), config.Int("PORT", 3300))
+	defaultHost := fmt.Sprintf("http://%s", HostName)
+	var host = fmt.Sprintf("%s:%d", config.String("HOST", defaultHost), config.Int("PORT", 3300))
 
 	r := chi.NewRouter()
 

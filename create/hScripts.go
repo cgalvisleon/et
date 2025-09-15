@@ -1,9 +1,10 @@
 package create
 
 import (
+	"fmt"
+
 	"github.com/cgalvisleon/et/create/template"
 	"github.com/cgalvisleon/et/file"
-	"github.com/cgalvisleon/et/strs"
 )
 
 func MakeScripts(name string) error {
@@ -12,7 +13,7 @@ func MakeScripts(name string) error {
 		return err
 	}
 
-	_, err = file.MakeFile(path, strs.Format("%s.http", name), template.RestHttp, name)
+	_, err = file.MakeFile(path, fmt.Sprintf("%s.http", name), template.RestHttp, name)
 	if err != nil {
 		return err
 	}

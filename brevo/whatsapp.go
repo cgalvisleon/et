@@ -9,7 +9,6 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/request"
-	"github.com/cgalvisleon/et/strs"
 )
 
 /**
@@ -48,7 +47,7 @@ func SendWhatsapp(contactNumbers []string, templateId string, params []et.Json, 
 	path := config.String("BREVO_SEND_PATH", "")
 	apiKey := config.String("BREVO_SEND_KEY", "")
 	sender := config.String("BREVO_SENDER", "")
-	url := strs.Format("%s/whatsapp/sendMessage", path)
+	url := fmt.Sprintf("%s/whatsapp/sendMessage", path)
 	header := et.Json{
 		"accept":       "application/json",
 		"content-type": "application/json",

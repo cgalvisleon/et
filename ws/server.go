@@ -1,12 +1,12 @@
 package ws
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/strs"
 )
 
 /**
@@ -34,6 +34,6 @@ func startHttp(hub *Hub, port int) {
 	http.HandleFunc("/realtime", hub.HttpLogin)
 
 	logs.Logf("WebSocket", "Http server in http://localhost:%d/ws", port)
-	addr := strs.Format(`:%d`, port)
+	addr := fmt.Sprintf(`:%d`, port)
 	logs.Fatal(http.ListenAndServe(addr, nil))
 }

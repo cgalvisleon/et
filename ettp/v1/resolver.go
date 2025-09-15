@@ -2,6 +2,7 @@ package ettp
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -37,7 +38,7 @@ func newSolver(route *Router, params et.Json, r *http.Request) *solver {
 
 	resolve := route.Resolve
 	for k, v := range params {
-		v = strs.Format(`%v`, v)
+		v = fmt.Sprintf(`%v`, v)
 		resolve = strings.ReplaceAll(resolve, k, v.(string))
 		k = strings.ReplaceAll(k, "{", "")
 		k = strings.ReplaceAll(k, "}", "")

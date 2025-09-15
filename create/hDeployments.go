@@ -1,6 +1,8 @@
 package create
 
 import (
+	"fmt"
+
 	"github.com/cgalvisleon/et/create/template"
 	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/strs"
@@ -12,7 +14,7 @@ func MakeDeployments(name string) error {
 		return err
 	}
 
-	url := strs.Format("`/%s`", strs.Lowcase(name))
+	url := fmt.Sprintf("`/%s`", strs.Lowcase(name))
 	net := "proxy"
 	_, err = file.MakeFile(path, "local.yml", template.ModelDeploy, name, url, net)
 	if err != nil {

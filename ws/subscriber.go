@@ -2,6 +2,7 @@ package ws
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -239,7 +240,7 @@ func (c *Subscriber) listener(message []byte) {
 			return
 		}
 
-		response(true, strs.Format(`Subscribe to channel:%s queue:%s`, msg.Channel, msg.Queue))
+		response(true, fmt.Sprintf(`Subscribe to channel:%s queue:%s`, msg.Channel, msg.Queue))
 	case TpStack:
 		if msg.Channel == "" {
 			response(false, ERR_CHANNEL_EMPTY)

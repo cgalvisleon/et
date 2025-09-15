@@ -17,7 +17,6 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
 )
 
@@ -67,10 +66,10 @@ func UploaderFile(r *http.Request, folder, name string) (et.Item, error) {
 	ext := file.ExtencionFile(fileInfo.Filename)
 	filename := fileInfo.Filename
 	if len(name) > 0 {
-		filename = strs.Format(`%s.%s`, name, ext)
+		filename = fmt.Sprintf(`%s.%s`, name, ext)
 	}
 	if len(folder) > 0 {
-		filename = strs.Format(`%s/%s`, folder, filename)
+		filename = fmt.Sprintf(`%s/%s`, folder, filename)
 	}
 
 	err = config.Validate([]string{
@@ -105,7 +104,7 @@ func UploaderFile(r *http.Request, folder, name string) (et.Item, error) {
 	}
 
 	file.MakeFolder(bucket)
-	outputFile := strs.Format(`%s/%s`, bucket, filename)
+	outputFile := fmt.Sprintf(`%s/%s`, bucket, filename)
 
 	output, err := os.OpenFile(outputFile, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
@@ -119,7 +118,7 @@ func UploaderFile(r *http.Request, folder, name string) (et.Item, error) {
 	}
 
 	hostname := config.String("HOSTNAME", "")
-	url := strs.Format(`%s/%s`, hostname, outputFile)
+	url := fmt.Sprintf(`%s/%s`, hostname, outputFile)
 
 	return et.Item{
 		Ok: true,
@@ -180,7 +179,7 @@ func UploaderB64(b64, filename, contentType string) (et.Item, error) {
 	}
 
 	file.MakeFolder(bucket)
-	outputFile := strs.Format(`%s/%s`, bucket, filename)
+	outputFile := fmt.Sprintf(`%s/%s`, bucket, filename)
 	dec, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
 		return et.Item{}, err
@@ -201,7 +200,7 @@ func UploaderB64(b64, filename, contentType string) (et.Item, error) {
 	}
 
 	hostname := config.String("HOSTNAME", "")
-	url := strs.Format(`%s/%s`, hostname, outputFile)
+	url := fmt.Sprintf(`%s/%s`, hostname, outputFile)
 
 	return et.Item{
 		Ok:     true,
@@ -278,7 +277,7 @@ func DeleteFile(url string) (bool, error) {
 	storageType := config.String("STORAGE_TYPE", "")
 	bucket := config.String("BUCKET", "")
 	if storageType == "S3" {
-		key := strings.ReplaceAll(url, strs.Format(`https://%s.s3.amazonaws.com/`, bucket), ``)
+		key := strings.ReplaceAll(url, fmt.Sprintf(`https://%s.s3.amazonaws.com/`, bucket), ``)
 		_, err := DeleteS3(bucket, key)
 		if err != nil {
 			return false, err
@@ -312,7 +311,7 @@ func DownloaderFile(url string) (string, error) {
 	storageType := config.String("STORAGE_TYPE", "")
 	bucket := config.String("BUCKET", "")
 	if storageType == "S3" {
-		key := strings.ReplaceAll(url, strs.Format(`https://%s.s3.amazonaws.com/`, bucket), ``)
+		key := strings.ReplaceAll(url, fmt.Sprintf(`https://%s.s3.amazonaws.com/`, bucket), ``)
 		_, err := DownloadS3(bucket, key)
 		if err != nil {
 			return "", err

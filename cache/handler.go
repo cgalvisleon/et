@@ -2,6 +2,7 @@ package cache
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -9,7 +10,6 @@ import (
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/redis/go-redis/v9"
 )
@@ -34,13 +34,13 @@ func SetDuration(key string, val interface{}, expiration time.Duration) interfac
 	case et.Item:
 		return SetCtx(conn.ctx, key, v.ToString(), expiration)
 	case int:
-		return SetCtx(conn.ctx, key, strs.Format(`%d`, v), expiration)
+		return SetCtx(conn.ctx, key, fmt.Sprintf(`%d`, v), expiration)
 	case int64:
-		return SetCtx(conn.ctx, key, strs.Format(`%d`, v), expiration)
+		return SetCtx(conn.ctx, key, fmt.Sprintf(`%d`, v), expiration)
 	case float64:
-		return SetCtx(conn.ctx, key, strs.Format(`%f`, v), expiration)
+		return SetCtx(conn.ctx, key, fmt.Sprintf(`%f`, v), expiration)
 	case bool:
-		return SetCtx(conn.ctx, key, strs.Format(`%t`, v), expiration)
+		return SetCtx(conn.ctx, key, fmt.Sprintf(`%t`, v), expiration)
 	case []byte:
 		return SetCtx(conn.ctx, key, string(v), expiration)
 	case time.Time:

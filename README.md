@@ -944,7 +944,6 @@ et/
 ├── logs/        # Sistema de logs estructurados y avanzados
 ├── mem/         # Memoria compartida y sincronización
 ├── middleware/  # Middleware HTTP (Auth, CORS, Logger, etc.)
-├── mistake/     # Manejo centralizado de errores
 ├── msg/         # Mensajes del sistema y localización
 ├── race/        # Detección y prevención de condiciones de carrera
 ├── realtime/    # Funcionalidades en tiempo real
@@ -1335,19 +1334,19 @@ import (
 func businessLogic() error {
     // Crear error con contexto
     if someCondition {
-        return mistake.New("BUSINESS_ERROR", "Something went wrong", "Additional context")
+        return fmt.Errorf("BUSINESS_ERROR: Something went wrong")
     }
 
     // Envolver error externo
     if err := externalCall(); err != nil {
-        return mistake.Wrap(err, "EXTERNAL_CALL_FAILED", "Failed to call external service")
+        return fmt.Errorf("EXTERNAL_CALL_FAILED: %s", err.Error())
     }
 
     return nil
 }
 
 func handleError(err error) {
-    if mistake.Is(err, "BUSINESS_ERROR") {
+    if errors.Is(err, "BUSINESS_ERROR") {
         logs.Alert("Business", "Business logic error:", err)
         // Manejar error de negocio
     } else {

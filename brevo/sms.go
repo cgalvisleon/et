@@ -46,7 +46,7 @@ func sendSms(sender, organisation string, contactNumbers []string, content strin
 
 	apiKey := config.String("BREVO_SEND_KEY", "")
 	path := config.String("BREVO_SEND_PATH", "")
-	url := strs.Format("%s/transactionalSMS/sms", path)
+	url := fmt.Sprintf("%s/transactionalSMS/sms", path)
 	header := et.Json{
 		"accept":       "application/json",
 		"content-type": "application/json",
@@ -65,8 +65,8 @@ func sendSms(sender, organisation string, contactNumbers []string, content strin
 		message := content
 		for _, param := range params {
 			for k, v := range param {
-				k := strs.Format("{{%s}}", k)
-				s := strs.Format("%v", v)
+				k := fmt.Sprintf("{{%s}}", k)
+				s := fmt.Sprintf("%v", v)
 				message = strs.Replace(message, k, s)
 			}
 		}

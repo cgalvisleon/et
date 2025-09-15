@@ -39,8 +39,8 @@ func SendSMS(contactNumbers []string, content string, params []et.Json, tp strin
 		message := content
 		for _, param := range params {
 			for k, v := range param {
-				k := strs.Format("{{%s}}", k)
-				s := strs.Format("%v", v)
+				k := fmt.Sprintf("{{%s}}", k)
+				s := fmt.Sprintf("%v", v)
 				message = strs.Replace(message, k, s)
 			}
 		}

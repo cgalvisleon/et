@@ -2,12 +2,12 @@ package event
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/strs"
 	"github.com/nats-io/nats.go"
 )
 
@@ -49,7 +49,7 @@ func Publish(channel string, data et.Json) error {
 	}
 
 	stage := config.App.Stage
-	publish(strs.Format(`pipe:%s:%s`, stage, channel), data)
+	publish(fmt.Sprintf(`pipe:%s:%s`, stage, channel), data)
 
 	return publish(channel, data)
 }

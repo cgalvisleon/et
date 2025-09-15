@@ -42,7 +42,7 @@ func NewSyncFile(dataDirectory, name string, initialData any) (*SyncFile, error)
 		return nil, err
 	}
 
-	fileName := strs.Format("%s/%s.dt", dir, strs.Lowcase(name))
+	fileName := fmt.Sprintf("%s/%s.dt", dir, strs.Lowcase(name))
 	path, err := filepath.Abs(fileName)
 	if err != nil {
 		return nil, err

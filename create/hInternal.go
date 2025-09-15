@@ -1,6 +1,7 @@
 package create
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/cgalvisleon/et/create/template"
@@ -38,7 +39,7 @@ func MakeInternalModel(name, schema string) error {
 	_, _ = file.MakeFile(path, "msg.go", template.ModelMsg, schema)
 
 	modelo := strs.Titlecase(name)
-	fileName := strs.Format(`%s.go`, name)
+	fileName := fmt.Sprintf(`%s.go`, name)
 	tableName := tableName(name)
 	_, err := file.MakeFile(path, fileName, template.ModelData, name, toCamelCase(modelo), tableName, schema)
 	if err != nil {

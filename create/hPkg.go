@@ -1,6 +1,8 @@
 package create
 
 import (
+	"fmt"
+
 	"github.com/cgalvisleon/et/create/template"
 	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/strs"
@@ -39,7 +41,7 @@ func MakePkg(projectName, name, schema string) error {
 			return err
 		}
 
-		fileName := strs.Format(`router-%s.go`, strs.Lowcase(name))
+		fileName := fmt.Sprintf(`router-%s.go`, strs.Lowcase(name))
 		_, err = file.MakeFile(pathPkg, fileName, template.ModelDbHandler, name, modelo, projectName, schema)
 		if err != nil {
 			return err
@@ -57,7 +59,7 @@ func MakePkg(projectName, name, schema string) error {
 		}
 
 		modelo := strs.Titlecase(name)
-		fileName := strs.Format(`h%s.go`, modelo)
+		fileName := fmt.Sprintf(`h%s.go`, modelo)
 		_, err = file.MakeFile(pathPkg, fileName, template.ModelHandler, name, toCamelCase(modelo))
 		if err != nil {
 			return err
@@ -73,20 +75,20 @@ func MakePkg(projectName, name, schema string) error {
 }
 
 func MakeModel(projectName, packageName, modelo, schema string) error {
-	pathPkg := strs.Format(`./pkg/%s`, packageName)
+	pathPkg := fmt.Sprintf(`./pkg/%s`, packageName)
 
 	if len(schema) > 0 {
 		modelo := strs.Titlecase(modelo)
 		_, _ = file.MakeFile(pathPkg, "model.go", template.ModelModel, packageName, modelo, projectName)
 
-		fileName := strs.Format(`router-%s.go`, strs.Lowcase(modelo))
+		fileName := fmt.Sprintf(`router-%s.go`, strs.Lowcase(modelo))
 		_, err := file.MakeFile(pathPkg, fileName, template.ModelDbHandler, packageName, toCamelCase(modelo), projectName, schema)
 		if err != nil {
 			return err
 		}
 	} else {
 		modelo = strs.Titlecase(modelo)
-		fileName := strs.Format(`h%s.go`, modelo)
+		fileName := fmt.Sprintf(`h%s.go`, modelo)
 		_, err := file.MakeFile(pathPkg, fileName, template.ModelHandler, packageName, toCamelCase(modelo), projectName)
 		if err != nil {
 			return err

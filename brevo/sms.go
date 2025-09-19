@@ -73,16 +73,12 @@ func sendSms(sender, organisation string, contactNumbers []string, content strin
 
 		body["recipient"] = phoneNumber
 		body["content"] = message
-		res, err := request.Fetch("POST", url, header, body)
-		if err != nil {
-			return result, err
+		res, status := request.Fetch("POST", url, header, body)
+		if !status.Ok {
+			return result, errors.New(status.Message)
 		}
 
-		if !res.Status.Ok {
-			return result, errors.New(res.Status.Message)
-		}
-
-		output, _ := res.Body.ToJson()
+		output, _ := res.ToJson()
 		result.Add(et.Json{
 			"phoneNumber":  phoneNumber,
 			"type":         tp,

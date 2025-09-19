@@ -1,6 +1,7 @@
 package et
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
@@ -128,6 +129,22 @@ func (s Json) ToString() string {
 	}
 
 	return string(bt)
+}
+
+/**
+* ToEscapeHTML convert a json to a string without escape html
+* @return string
+**/
+func (s Json) ToEscapeHTML() string {
+	buf := &bytes.Buffer{}
+	encoder := json.NewEncoder(buf)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(s)
+	if err != nil {
+		panic(err)
+	}
+
+	return buf.String()
 }
 
 /**

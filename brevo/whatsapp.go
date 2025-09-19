@@ -63,16 +63,12 @@ func SendWhatsapp(contactNumbers []string, templateId string, params []et.Json, 
 	result := et.Items{}
 	for _, phoneNumber := range contactNumbers {
 		body["contactNumbers"] = []string{phoneNumber}
-		res, err := request.Fetch("POST", url, header, body)
-		if err != nil {
-			return result, err
+		res, status := request.Fetch("POST", url, header, body)
+		if !status.Ok {
+			return result, errors.New(status.Message)
 		}
 
-		if !res.Status.Ok {
-			return result, errors.New(res.Status.Message)
-		}
-
-		output, _ := res.Body.ToJson()
+		output, _ := res.ToJson()
 		result.Add(et.Json{
 			"phoneNumber": phoneNumber,
 			"type":        tp,

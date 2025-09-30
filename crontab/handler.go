@@ -1,58 +1,155 @@
 package crontab
 
 import (
-	"errors"
-	"net/http"
+	"fmt"
 
+	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/response"
+	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/logs"
 )
 
-var crontab *Jobs
+var (
+	crontab *Jobs
+)
 
 /**
 * Load
 **/
-func Load() {
+func Load() error {
+	if crontab != nil {
+		return nil
+	}
+
 	crontab = New()
-	crontab.Load()
+	err := crontab.load()
+	if err != nil {
+		return err
+	}
+
+	return crontab.start()
 }
 
 /**
-* Save
+* Server
+* @return error
 **/
-func Save() {
+func Server() error {
+	if crontab != nil {
+		return nil
+	}
+
+	crontab = New()
+	crontab.isServer = true
+	err := crontab.load()
+	if err != nil {
+		return err
+	}
+
+	err = crontab.start()
+	if err != nil {
+		return err
+	}
+
+	err = eventInit()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func Close() {
 	if crontab == nil {
 		return
 	}
 
-	crontab.Save()
+	cache.Delete("crontab:nodes")
+
+	logs.Log(packageName, `Disconnect...`)
+}
+
+/**
+* IsMaster
+* @return bool
+**/
+func IsMaster() bool {
+	return crontab.nodeId == 1
 }
 
 /**
 * AddJob
-* @param name, spec, channel string, params et.Json
+* Add job to crontab in execute local
+* @param id, name, spec, channel string, params et.Json, repetitions int, fn func()
 * @return *Job, error
 **/
-func AddJob(name, spec, channel string, params et.Json) (*Job, error) {
-	if crontab == nil {
-		return nil, errors.New("crontab not initialized")
+func AddJob(id, name, spec, channel string, params et.Json, repetitions int, fn func(job *Job)) (*Job, error) {
+	err := Load()
+	if err != nil {
+		return nil, err
 	}
 
-	return crontab.AddJob(name, spec, channel, params, nil)
+	if crontab.isServer {
+		return nil, fmt.Errorf("crontab is server")
+	}
+
+	result, err := crontab.addJob(id, name, spec, channel, params, repetitions, fn)
+	if err != nil {
+		return nil, err
+	}
+
+	err = result.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 /**
-* AddFnJob
-* @param name, spec, channel string, params et.Json
-* @return *Job, error
+* PushEventJob
+* Push job to crontab was notified by event workers
+* @param id, name, spec, channel string, started bool, params et.Json
+* @return error
 **/
-func AddFnJob(name, spec, channel string, params et.Json, fn func()) (*Job, error) {
-	if crontab == nil {
-		return nil, errors.New("crontab not initialized")
+func PushEventJob(id, name, spec, channel string, started bool, params et.Json) error {
+	err := Server()
+	if err != nil {
+		return err
 	}
 
-	return crontab.AddJob(name, spec, channel, params, fn)
+	return event.Publish(EVENT_CRONTAB_SET, et.Json{
+		"id":      id,
+		"name":    name,
+		"spec":    spec,
+		"channel": channel,
+		"started": started,
+		"params":  params,
+	})
+}
+
+/**
+* EventJob
+* Event job to crontab function execute was notified by event workers
+* @param id, name, spec, channel string, params et.Json
+* @return *Job, error
+**/
+func EventJob(id, name, spec, channel string, params et.Json, fn func(event.Message)) error {
+	event.Publish(EVENT_CRONTAB_SET, et.Json{
+		"id":      id,
+		"name":    name,
+		"spec":    spec,
+		"channel": channel,
+		"started": true,
+		"params":  params,
+	})
+
+	err := event.Stack(channel, fn)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 /**
@@ -61,11 +158,12 @@ func AddFnJob(name, spec, channel string, params et.Json, fn func()) (*Job, erro
 * @return error
 **/
 func DeleteJob(name string) error {
-	if crontab == nil {
-		return errors.New("crontab not initialized")
+	err := Load()
+	if err != nil {
+		return err
 	}
 
-	return crontab.DeleteJob(name)
+	return crontab.deleteJobByName(name)
 }
 
 /**
@@ -74,11 +172,12 @@ func DeleteJob(name string) error {
 * @return error
 **/
 func DeleteJobById(id string) error {
-	if crontab == nil {
-		return errors.New("crontab not initialized")
+	err := Load()
+	if err != nil {
+		return err
 	}
 
-	return crontab.DeleteJobById(id)
+	return crontab.deleteJobById(id)
 }
 
 /**
@@ -87,24 +186,26 @@ func DeleteJobById(id string) error {
 * @return int, error
 **/
 func StartJob(name string) (int, error) {
-	if crontab == nil {
-		return 0, errors.New("crontab not initialized")
+	err := Load()
+	if err != nil {
+		return 0, err
 	}
 
-	return crontab.StartJob(name)
+	return crontab.startJobByName(name)
 }
 
 /**
 * StartJobById
 * @param id string
-* @return int, error
+* @return error
 **/
-func StartJobById(id string) (int, error) {
-	if crontab == nil {
-		return 0, errors.New("crontab not initialized")
+func StartJobById(id string) error {
+	err := Load()
+	if err != nil {
+		return err
 	}
 
-	return crontab.StartJobById(id)
+	return crontab.startJobById(id)
 }
 
 /**
@@ -113,11 +214,12 @@ func StartJobById(id string) (int, error) {
 * @return error
 **/
 func StopJob(name string) error {
-	if crontab == nil {
-		return errors.New("crontab not initialized")
+	err := Load()
+	if err != nil {
+		return err
 	}
 
-	return crontab.StopJob(name)
+	return crontab.stopJobByName(name)
 }
 
 /**
@@ -126,11 +228,12 @@ func StopJob(name string) error {
 * @return error
 **/
 func StopJobById(id string) error {
-	if crontab == nil {
-		return errors.New("crontab not initialized")
+	err := Load()
+	if err != nil {
+		return err
 	}
 
-	return crontab.StopJobById(id)
+	return crontab.stopJobById(id)
 }
 
 /**
@@ -138,11 +241,12 @@ func StopJobById(id string) error {
 * @return et.Items, error
 **/
 func ListJobs() (et.Items, error) {
-	if crontab == nil {
-		return et.Items{}, errors.New("crontab not initialized")
+	err := Load()
+	if err != nil {
+		return et.Items{}, err
 	}
 
-	return crontab.List(), nil
+	return crontab.list(), nil
 }
 
 /**
@@ -150,11 +254,12 @@ func ListJobs() (et.Items, error) {
 * @return error
 **/
 func Start() error {
-	if crontab == nil {
-		return errors.New("crontab not initialized")
+	err := Load()
+	if err != nil {
+		return err
 	}
 
-	return crontab.Start()
+	return crontab.start()
 }
 
 /**
@@ -162,30 +267,40 @@ func Start() error {
 * @return error
 **/
 func Stop() error {
-	if crontab == nil {
-		return errors.New("crontab not initialized")
+	err := Load()
+	if err != nil {
+		return err
 	}
 
-	return crontab.Stop()
+	return crontab.stop()
 }
 
 /**
-* HttpCrontabs
-* @param w http.ResponseWriter
-* @param r *http.Request
+* EventStatusRunning
+* @param data et.Json
+* @return error
 **/
-func HttpCrontabs(w http.ResponseWriter, r *http.Request) {
-	if crontab == nil {
-		response.JSON(w, r, http.StatusInternalServerError, et.Json{
-			"message": "crontab not initialized",
-		})
-		return
-	}
+func EventStatusRunning(data et.Json) error {
+	data.Set("status", StatusRunning)
+	return event.Publish(EVENT_CRONTAB_STATUS, data)
+}
 
-	result := et.Items{}
-	for _, job := range crontab.jobs {
-		result.Add(job.Json())
-	}
+/**
+* EventStatusPending
+* @param data et.Json
+* @return error
+**/
+func EventStatusDone(data et.Json) error {
+	data.Set("status", StatusDone)
+	return event.Publish(EVENT_CRONTAB_STATUS, data)
+}
 
-	response.ITEMS(w, r, http.StatusOK, result)
+/**
+* EventStatusFailed
+* @param data et.Json
+* @return error
+**/
+func EventStatusFailed(data et.Json) error {
+	data.Set("status", StatusFailed)
+	return event.Publish(EVENT_CRONTAB_STATUS, data)
 }

@@ -100,6 +100,11 @@ func (s *Server) handlerApiRest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if resolver.URL == "" {
+		s.HTTPError(resolver, metric, rw, r, http.StatusNotFound, "Resolver not found")
+		return
+	}
+
 	proxyReq, err := http.NewRequest(resolver.Method, resolver.URL, r.Body)
 	if err != nil {
 		s.HTTPError(resolver, metric, rw, r, http.StatusInternalServerError, err.Error())

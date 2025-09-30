@@ -7,6 +7,7 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/jdb/jdb"
 )
 
 type TpConsistency string
@@ -69,7 +70,7 @@ func (s *Flow) ToJson() et.Json {
 	steps := make([]et.Json, len(s.Steps))
 	for i, step := range s.Steps {
 		j := step.ToJson()
-		j.Set("id", i)
+		j.Set(jdb.KEY, i)
 		steps[i] = j
 	}
 

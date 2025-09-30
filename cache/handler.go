@@ -80,12 +80,11 @@ func Expire(key string, expiration time.Duration) error {
 
 /**
 * Incr
-* @params key string, expSecond int
+* @params key string, expiration time.Duration
 * @return int64
 **/
-func Incr(key string, expSecond int) int64 {
-	duration := time.Duration(expSecond) * time.Second
-	return IncrDuration(key, duration)
+func Incr(key string, expiration time.Duration) int64 {
+	return IncrDuration(key, expiration)
 }
 
 /**

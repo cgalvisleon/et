@@ -49,7 +49,6 @@ type WorkFlows struct {
 	LimitRequests int                  `json:"limit_requests"`
 	AwaitingList  []*Awaiting          `json:"awaiting_list"`
 	Results       map[string]et.Json   `json:"results"`
-	RetentionTime time.Duration        `json:"retention_time"`
 	count         int                  `json:"-"`
 	mu            sync.Mutex           `json:"-"`
 }
@@ -59,14 +58,12 @@ type WorkFlows struct {
 * @return *WorkFlows
 **/
 func newWorkFlows() *WorkFlows {
-	retentionTime := envar.GetInt("WORKFLOW_RETENTION_TIME", 10)
 	result := &WorkFlows{
 		Flows:         make(map[string]*Flow),
 		Instances:     make(map[string]*Instance),
 		LimitRequests: envar.GetInt("WORKFLOW_LIMIT_REQUESTS", 0),
 		AwaitingList:  make([]*Awaiting, 0),
 		Results:       make(map[string]et.Json),
-		RetentionTime: time.Duration(retentionTime) * time.Minute,
 		count:         0,
 		mu:            sync.Mutex{},
 	}
@@ -198,6 +195,7 @@ func (s *WorkFlows) loadInstance(id string) (*Instance, error) {
 	}
 
 	result.Flow = flow
+	result.goTo = -1
 	result.setStatus(result.Status)
 	s.Instances[id] = result
 
@@ -232,9 +230,11 @@ func (s *WorkFlows) runNextInBackground() {
 	key := fmt.Sprintf("workflow:result:%s", req.Id)
 	src, err := res.Serialize()
 	if err != nil {
-		logs.Logf(packageName, "WorkFlows.done, Error serializing result:%s", err.Error())
+		logs.Errorf(packageName, "WorkFlows.done, Error serializing result:%s", err.Error())
 	}
-	cache.Set(key, src, s.RetentionTime)
+
+	retentionTime := 10 * time.Minute
+	cache.Set(key, src, retentionTime)
 	event.Publish(EVENT_WORKFLOW_RESULTS, res.ToJson())
 }
 
@@ -255,52 +255,49 @@ func (s *WorkFlows) getOrCreateInstance(id, tag string, startId int, tags et.Jso
 }
 
 /**
-* instanceRun
-* @param instanceId, tag string, startId int, tags, ctx et.Json, createdBy string
-* @return et.Json, error
+* getInstance
+* @param instanceId string
+* @return *Instance, error
 **/
-func (s *WorkFlows) instanceRun(instanceId, tag string, startId int, tags, ctx et.Json, createdBy string) (et.Json, error) {
-	s.instanceInc()
-	if instanceId != "" {
-		key := fmt.Sprintf("workflow:result:%s", instanceId)
-		if cache.Exists(key) {
-			scr, err := cache.Get(key, "")
-			if err != nil {
-				return et.Json{}, err
-			}
-
-			result, err := loadResultFn(scr)
-			if err != nil {
-				return et.Json{}, err
-			}
-
-			return result.Result, result.Error
-		}
+func (s *WorkFlows) getInstance(instanceId string) (*Instance, error) {
+	if instanceId == "" {
+		return nil, fmt.Errorf(MSG_INSTANCE_ID_REQUIRED)
 	}
 
-	instance, err := s.getOrCreateInstance(instanceId, tag, startId, tags, createdBy)
+	if s.Instances[instanceId] != nil {
+		return s.Instances[instanceId], nil
+	}
+
+	if !cache.Exists(instanceId) {
+		return nil, errorInstanceNotFound
+	}
+
+	result := &Instance{}
+	bt, err := json.Marshal(result)
 	if err != nil {
-		return et.Json{}, err
+		return nil, err
 	}
 
-	result, err := instance.run(ctx)
+	src, err := cache.Get(instanceId, string(bt))
 	if err != nil {
-		return et.Json{}, err
+		return nil, err
 	}
 
-	if instance.isDebug {
-		logs.Debugf("Flow instance:%s", instance.ToJson().ToString())
+	err = json.Unmarshal([]byte(src), &result)
+	if err != nil {
+		return nil, err
 	}
 
-	return result, err
+	return result, nil
 }
 
 /**
-* instanceGoOn
-* @param instanceId string, tags et.Json, ctx et.Json, createdBy string
+* instanceRun
+* Si el step es -1 se ejecuta el siguiente paso, si no se ejecuta el paso indicado
+* @param instanceId, tag string, step int, tags, ctx et.Json, createdBy string
 * @return et.Json, error
 **/
-func (s *WorkFlows) instanceGoOn(instanceId string, tags et.Json, ctx et.Json, createdBy string) (et.Json, error) {
+func (s *WorkFlows) instanceRun(instanceId, tag string, step int, tags, ctx et.Json, createdBy string) (et.Json, error) {
 	s.instanceInc()
 	if instanceId != "" {
 		key := fmt.Sprintf("workflow:result:%s", instanceId)
@@ -319,21 +316,25 @@ func (s *WorkFlows) instanceGoOn(instanceId string, tags et.Json, ctx et.Json, c
 		}
 	}
 
-	instance, err := s.loadInstance(instanceId)
+	instance, err := s.getOrCreateInstance(instanceId, tag, step, tags, createdBy)
 	if err != nil {
 		return et.Json{}, err
 	}
 
 	instance.setTags(tags)
-	instance.setCtx(ctx)
-	instance.CreatedBy = createdBy
+	if step != -1 {
+		currentCtx := instance.Ctxs[step]
+		instance.Current = step
+		instance.setCtx(currentCtx)
+	}
 	result, err := instance.run(ctx)
 	if err != nil {
 		return et.Json{}, err
 	}
 
+	instance.CreatedBy = createdBy
 	if instance.isDebug {
-		logs.Debugf("Flow instance:%s", instance.ToJson().ToString())
+		logs.Debugf("instanceRun:%s", instance.ToJson().ToString())
 	}
 
 	return result, err
@@ -398,30 +399,17 @@ func (s *WorkFlows) run(instanceId, tag string, startId int, tags, ctx et.Json, 
 }
 
 /**
-* GoOn
-* @param instanceId string, tags et.Json, ctx et.Json, createdBy string
-* @return et.Json, error
+* reset
+* @param instanceId string
+* @return error
 **/
-func (s *WorkFlows) goOn(instanceId string, tags et.Json, ctx et.Json, createdBy string) (et.Json, error) {
-	response := func(result et.Json, err error) (et.Json, error) {
-		s.instanceDec()
-		delete(s.Instances, instanceId)
-		logs.Logf(packageName, MSG_WORKFLOW_DONE_INSTANCE, instanceId)
-		go s.runNextInBackground()
+func (s *WorkFlows) reset(instanceId string) error {
+	key := fmt.Sprintf("workflow:result:%s", instanceId)
+	cache.Delete(instanceId)
+	cache.Delete(key)
+	delete(s.Instances, instanceId)
 
-		return result, err
-	}
-
-	if s.LimitRequests == 0 {
-		return response(s.instanceGoOn(instanceId, tags, ctx, createdBy))
-	}
-
-	totalInstances := s.instanceCount()
-	if totalInstances < s.LimitRequests {
-		return response(s.instanceGoOn(instanceId, tags, ctx, createdBy))
-	}
-
-	return s.newAwaiting(instanceId, []interface{}{instanceId, tags, ctx, createdBy})
+	return nil
 }
 
 /**

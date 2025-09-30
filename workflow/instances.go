@@ -11,6 +11,7 @@ import (
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/resilience"
 	"github.com/cgalvisleon/et/utility"
+	"github.com/cgalvisleon/jdb/jdb"
 )
 
 type FlowStatus string
@@ -38,6 +39,7 @@ type Instance struct {
 	DoneAt     time.Time            `json:"done_at"`
 	Tags       et.Json              `json:"tags"`
 	WorkerHost string               `json:"worker_host"`
+	Params     et.Json              `json:"params"`
 	done       bool                 `json:"-"`
 	goTo       int                  `json:"-"`
 	err        error                `json:"-"`
@@ -52,7 +54,7 @@ func (s *Instance) ToJson() et.Json {
 	steps := make([]et.Json, len(s.Steps))
 	for i, step := range s.Steps {
 		j := step.ToJson()
-		j.Set("id", i)
+		j.Set(jdb.KEY, i)
 		steps[i] = j
 	}
 
@@ -83,6 +85,7 @@ func (s *Instance) ToJson() et.Json {
 		"done_at":        s.DoneAt,
 		"status":         s.Status,
 		"worker_host":    s.WorkerHost,
+		"params":         s.Params,
 	}
 
 	for k, v := range s.Tags {
@@ -103,14 +106,11 @@ func (s *Instance) save() error {
 		return err
 	}
 
-	if s.RetentionTime == 0 {
-		s.RetentionTime = 10 * time.Minute
+	if s.RetentionTime <= 0 {
+		s.RetentionTime = 24 * time.Hour
 	}
-	cache.Set(s.Id, string(bt), s.RetentionTime)
 
-	if s.isDebug {
-		logs.Debugf(MSG_INSTANCE_DEBUG, s.Id, s.ToJson().ToString())
-	}
+	cache.Set(s.Id, string(bt), s.RetentionTime)
 
 	return nil
 }
@@ -122,7 +122,12 @@ func (s *Instance) save() error {
 **/
 func (s *Instance) setStatus(status FlowStatus) error {
 	if s.Status == status {
-		return s.save()
+		err := s.save()
+		if err != nil {
+			return fmt.Errorf("setStatus: error al guardar el estado de la instancia: %v", err)
+		}
+
+		return nil
 	}
 
 	s.Status = status
@@ -146,7 +151,12 @@ func (s *Instance) setStatus(status FlowStatus) error {
 		logs.Logf(packageName, MSG_INSTANCE_STATUS, s.Id, s.Tag, s.Status, s.Current)
 	}
 
-	return s.save()
+	err := s.save()
+	if err != nil {
+		return fmt.Errorf("setStatus: error al guardar el estado de la instancia: %v", err)
+	}
+
+	return nil
 }
 
 /**
@@ -189,6 +199,14 @@ func (s *Instance) setTags(tags et.Json) {
 }
 
 /**
+* SetParam
+* @param key string, value interface{}
+**/
+func (s *Instance) SetParam(key string, value interface{}) {
+	s.Params[key] = value
+}
+
+/**
 * setCtx
 * @param ctx et.Json
 **/
@@ -200,40 +218,6 @@ func (s *Instance) setCtx(ctx et.Json) et.Json {
 	s.Ctxs[s.Current] = ctx.Clone()
 
 	return s.Ctx
-}
-
-/**
-* setStop
-* @param result et.Json, err error
-* @return et.Json, error
-**/
-func (s *Instance) setStop(result et.Json, err error) (et.Json, error) {
-	s.setResult(result, err)
-	s.setStatus(s.Status)
-
-	return result, err
-}
-
-/**
-* setFailed
-* @param result et.Json, err error
-**/
-func (s *Instance) setFailed(result et.Json, err error) {
-	s.setResult(result, err)
-	s.setStatus(FlowStatusFailed)
-}
-
-/**
-* setGoto
-* @param step int, result et.Json, err error
-* @return et.Json, error
-**/
-func (s *Instance) setGoto(step int, message string, result et.Json, err error) {
-	s.setResult(result, err)
-	s.Current = step
-	s.goTo = -1
-	s.setStatus(s.Status)
-	logs.Logf(packageName, MSG_INSTANCE_GOTO, s.Id, s.Tag, step, message)
 }
 
 /**
@@ -249,6 +233,28 @@ func (s *Instance) setDone(result et.Json, err error) (et.Json, error) {
 }
 
 /**
+* setFailed
+* @param result et.Json, err error
+**/
+func (s *Instance) setFailed(result et.Json, err error) {
+	s.setResult(result, err)
+	s.setStatus(FlowStatusFailed)
+}
+
+/**
+* setStop
+* @param result et.Json, err error
+* @return et.Json, error
+**/
+func (s *Instance) setStop(result et.Json, err error) (et.Json, error) {
+	s.setResult(result, err)
+	s.Current++
+	s.setStatus(FlowStatusPending)
+
+	return result, err
+}
+
+/**
 * setNext
 * @return error
 **/
@@ -256,6 +262,19 @@ func (s *Instance) setNext(result et.Json, err error) {
 	s.setResult(result, err)
 	s.Current++
 	s.setStatus(s.Status)
+}
+
+/**
+* setGoto
+* @param step int, result et.Json, err error
+* @return et.Json, error
+**/
+func (s *Instance) setGoto(step int, message string, result et.Json, err error) {
+	s.setResult(result, err)
+	s.Current = step
+	s.goTo = -1
+	s.setStatus(s.Status)
+	logs.Logf(packageName, MSG_INSTANCE_GOTO, s.Id, s.Tag, step, message)
 }
 
 /**
@@ -291,7 +310,6 @@ func (s *Instance) run(ctx et.Json) (et.Json, error) {
 	var err error
 	for s.Current < len(s.Steps) {
 		ctx = s.setCtx(ctx)
-		s.setStatus(FlowStatusRunning)
 		step := s.Steps[s.Current]
 		ctx, err = step.run(s, ctx)
 		if err != nil {
@@ -299,11 +317,7 @@ func (s *Instance) run(ctx et.Json) (et.Json, error) {
 		}
 
 		if s.done {
-			return s.setStop(ctx, err)
-		}
-
-		if step.Stop {
-			return s.setStop(ctx, err)
+			return s.setDone(ctx, err)
 		}
 
 		if s.goTo != -1 {
@@ -311,24 +325,31 @@ func (s *Instance) run(ctx et.Json) (et.Json, error) {
 			continue
 		}
 
-		if step.Expression == "" {
-			s.setNext(ctx, err)
-			continue
+		if step.Stop {
+			return s.setStop(ctx, err)
 		}
 
-		ok, err := step.evaluate(ctx, s)
-		if err != nil {
-			return s.rollback(ctx, err)
+		if step.Expression != "" {
+			ok, err := step.evaluate(ctx, s)
+			if err != nil {
+				return s.rollback(ctx, err)
+			}
+
+			if ok {
+				s.setGoto(step.YesGoTo, MSG_INSTANCE_EXPRESSION_TRUE, ctx, err)
+			} else {
+				s.setGoto(step.NoGoTo, MSG_INSTANCE_EXPRESSION_FALSE, ctx, err)
+			}
 		}
 
-		if ok {
-			s.setGoto(step.YesGoTo, MSG_INSTANCE_EXPRESSION_TRUE, ctx, err)
-		} else {
-			s.setGoto(step.NoGoTo, MSG_INSTANCE_EXPRESSION_FALSE, ctx, err)
+		if s.Current == len(s.Steps)-1 {
+			return s.setDone(ctx, err)
 		}
+
+		s.setNext(ctx, err)
 	}
 
-	return s.setDone(ctx, err)
+	return ctx, err
 }
 
 /**
@@ -337,10 +358,6 @@ func (s *Instance) run(ctx et.Json) (et.Json, error) {
 * @return et.Json, error
 **/
 func (s *Instance) rollback(result et.Json, err error) (et.Json, error) {
-	if err != nil {
-		s.setFailed(result, err)
-	}
-
 	if s.startResilence() {
 		return result, err
 	}

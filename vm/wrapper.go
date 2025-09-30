@@ -153,8 +153,8 @@ func Cache(vm *Vm) {
 				panic(vm.NewGoError(fmt.Errorf(MSG_ARG_REQUIRED, "key, expiration (seconds)")))
 			}
 			key := args[0].String()
-			expSeconds := args[1].Export().(int)
-			result := cache.Incr(key, expSeconds)
+			expSeconds := args[1].Export().(int64)
+			result := cache.Incr(key, time.Duration(expSeconds)*time.Second)
 			return vm.ToValue(result)
 		},
 		"decr": func(call goja.FunctionCall) goja.Value {

@@ -70,16 +70,16 @@ func Run(instanceId, tag string, startId int, tags et.Json, ctx et.Json, created
 }
 
 /**
-* Continue
-* @param instanceId string, tags et.Json, ctx et.Json, createdBy string
-* @return et.Json, error
+* Reset
+* @param instanceId string
+* @return error
 **/
-func Continue(instanceId string, tags et.Json, ctx et.Json, createdBy string) (et.Json, error) {
+func Reset(instanceId string) error {
 	if err := Load(); err != nil {
-		return et.Json{}, err
+		return err
 	}
 
-	return workFlows.goOn(instanceId, tags, ctx, createdBy)
+	return workFlows.reset(instanceId)
 }
 
 /**
@@ -119,4 +119,17 @@ func DeleteFlow(tag string) (bool, error) {
 	}
 
 	return workFlows.deleteFlow(tag), nil
+}
+
+/**
+* GetInstance
+* @param instanceId string
+* @return (*Instance, error)
+**/
+func GetInstance(instanceId string) (*Instance, error) {
+	if err := Load(); err != nil {
+		return nil, err
+	}
+
+	return workFlows.getInstance(instanceId)
 }

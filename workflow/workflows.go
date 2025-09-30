@@ -19,7 +19,7 @@ import (
 )
 
 var (
-	errorInstanceNotFound = errors.New(MSG_INSTANCE_NOT_FOUND)
+	errorInstanceNotFound = fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
 )
 
 const packageName = "workflow"

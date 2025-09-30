@@ -293,27 +293,45 @@ func Forbidden(w http.ResponseWriter, r *http.Request) {
 	HTTPError(w, r, http.StatusForbidden, "403 Forbidden")
 }
 
+type DataFunction func(page, rows int) (et.Items, error)
+
 /**
 * Stream
-* @param w http.ResponseWriter, r *http.Request, statusCode int, data interface{}
-* @return error
+* @param w http.ResponseWriter, r *http.Request, rows int, getData DataFunction
 **/
-func Stream(w http.ResponseWriter, r *http.Request, statusCode int, data interface{}) error {
-	if data == nil {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(statusCode)
-		return nil
+func Stream(w http.ResponseWriter, r *http.Request, rows int, getData DataFunction) {
+	page := 1
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("["))
+
+	first := true
+	for {
+		items, err := getData(page, rows)
+		if err != nil {
+			HTTPError(w, r, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		if !items.Ok {
+			break
+		}
+
+		if page > 1 {
+			w.Write([]byte(","))
+		}
+
+		for _, item := range items.Result {
+			if !first {
+				w.Write([]byte(",")) // separador entre objetos
+			}
+			val := item.ToEscapeHTML()
+			w.Write([]byte(val))
+			first = false
+		}
+
+		page++
 	}
 
-	e, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-
-	WriteResponse(w, statusCode, e)
-	if f, ok := w.(http.Flusher); ok {
-		f.Flush()
-	}
-
-	return nil
+	w.Write([]byte("]"))
 }

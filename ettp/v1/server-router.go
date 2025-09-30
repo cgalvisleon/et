@@ -1,7 +1,6 @@
 package ettp
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -131,7 +130,7 @@ func (s *Server) GetRouteById(id string) *Router {
 func (s *Server) DeleteRouteById(id string, save bool) error {
 	router := s.GetRouteById(id)
 	if router == nil {
-		return errors.New(MSG_ROUTE_NOT_FOUND)
+		return fmt.Errorf(MSG_ROUTE_NOT_FOUND)
 	}
 
 	idx := slices.IndexFunc(s.solvers, func(e *Router) bool { return e.Id == id })
@@ -168,7 +167,7 @@ func (s *Server) SetRouter(private bool, id, method, path, resolve string, heade
 
 	route, err := s.setRouter(id, method, path, resolve, TpApiRest, header, tpHeader, excludeHeader, private, packageName, saved)
 	if err != nil {
-		return nil, errors.New(MSG_ROUTE_NOT_REGISTER)
+		return nil, fmt.Errorf(MSG_ROUTE_NOT_REGISTER)
 	}
 
 	event.Publish(rt.EVENT_SET_ROUTER, et.Json{

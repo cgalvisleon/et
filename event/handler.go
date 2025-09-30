@@ -1,7 +1,6 @@
 package event
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -100,13 +99,41 @@ func Subscribe(channel string, f func(Message)) (err error) {
 }
 
 /**
+* Unsubscribe
+* @param channel string
+* @return error
+**/
+func Unsubscribe(channel string) error {
+	if conn == nil {
+		return fmt.Errorf(ERR_NOT_CONNECT)
+	}
+
+	if len(channel) == 0 {
+		return fmt.Errorf(ERR_CHANNEL_REQUIRED)
+	}
+
+	conn.mutex.Lock()
+	defer conn.mutex.Unlock()
+
+	subscribe, ok := conn.eventCreatedSub[channel]
+	if !ok {
+		return fmt.Errorf("channel %s not found", channel)
+	}
+
+	subscribe.Unsubscribe()
+	delete(conn.eventCreatedSub, channel)
+
+	return nil
+}
+
+/**
 * Queue
 * @param channel string, queue string, f func(Message)
 * @return error
 **/
 func Queue(channel, queue string, f func(Message)) (err error) {
 	if conn == nil {
-		return errors.New(ERR_NOT_CONNECT)
+		return fmt.Errorf(ERR_NOT_CONNECT)
 	}
 
 	if len(channel) == 0 {

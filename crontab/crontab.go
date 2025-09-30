@@ -2,7 +2,6 @@ package crontab
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -83,7 +82,7 @@ func (s *Jobs) removeJob(idx int) error {
 func (s *Jobs) startJob(idx int) (int, error) {
 	job := s.jobs[idx]
 	if job.Started {
-		return 0, errors.New("job already started")
+		return 0, fmt.Errorf("job already started")
 	}
 
 	if job.fn == nil {
@@ -111,7 +110,7 @@ func (s *Jobs) startJob(idx int) (int, error) {
 func (s *Jobs) stopJobs(idx int) error {
 	job := s.jobs[idx]
 	if !job.Started {
-		return errors.New("job not started")
+		return fmt.Errorf("job not started")
 	}
 
 	time.AfterFunc(time.Second*3, func() {
@@ -195,7 +194,7 @@ func (s *Jobs) AddJob(name, spec, channel string, params et.Json, fn func()) (*J
 
 	idx := slices.IndexFunc(s.jobs, func(j *Job) bool { return j.Name == name })
 	if idx != -1 {
-		return nil, errors.New("job already exists")
+		return nil, fmt.Errorf("job already exists")
 	}
 
 	result := &Job{
@@ -221,7 +220,7 @@ func (s *Jobs) AddJob(name, spec, channel string, params et.Json, fn func()) (*J
 func (s *Jobs) DeleteJob(name string) error {
 	idx := slices.IndexFunc(s.jobs, func(j *Job) bool { return j.Name == name })
 	if idx == -1 {
-		return errors.New("job not found")
+		return fmt.Errorf("job not found")
 	}
 
 	return s.removeJob(idx)
@@ -235,7 +234,7 @@ func (s *Jobs) DeleteJob(name string) error {
 func (s *Jobs) DeleteJobById(id string) error {
 	idx := slices.IndexFunc(s.jobs, func(j *Job) bool { return j.ID == id })
 	if idx == -1 {
-		return errors.New("job not found")
+		return fmt.Errorf("job not found")
 	}
 
 	return s.removeJob(idx)
@@ -271,7 +270,7 @@ func (s *Jobs) List() et.Items {
 func (s *Jobs) StartJob(name string) (int, error) {
 	idx := slices.IndexFunc(s.jobs, func(j *Job) bool { return j.Name == name })
 	if idx == -1 {
-		return 0, errors.New("job not found")
+		return 0, fmt.Errorf("job not found")
 	}
 
 	return s.startJob(idx)
@@ -285,7 +284,7 @@ func (s *Jobs) StartJob(name string) (int, error) {
 func (s *Jobs) StartJobById(id string) (int, error) {
 	idx := slices.IndexFunc(s.jobs, func(j *Job) bool { return j.ID == id })
 	if idx == -1 {
-		return 0, errors.New("job not found")
+		return 0, fmt.Errorf("job not found")
 	}
 
 	return s.startJob(idx)
@@ -298,7 +297,7 @@ func (s *Jobs) StartJobById(id string) (int, error) {
 func (s *Jobs) StopJob(name string) error {
 	idx := slices.IndexFunc(s.jobs, func(j *Job) bool { return j.Name == name })
 	if idx == -1 {
-		return errors.New("job not found")
+		return fmt.Errorf("job not found")
 	}
 
 	return s.stopJobs(idx)
@@ -312,7 +311,7 @@ func (s *Jobs) StopJob(name string) error {
 func (s *Jobs) StopJobById(id string) error {
 	idx := slices.IndexFunc(s.jobs, func(j *Job) bool { return j.ID == id })
 	if idx == -1 {
-		return errors.New("job not found")
+		return fmt.Errorf("job not found")
 	}
 
 	return s.stopJobs(idx)
@@ -324,7 +323,7 @@ func (s *Jobs) StopJobById(id string) error {
 **/
 func (s *Jobs) Start() error {
 	if s.crontab == nil {
-		return errors.New("crontab not initialized")
+		return fmt.Errorf("crontab not initialized")
 	}
 
 	s.crontab.Start()
@@ -338,7 +337,7 @@ func (s *Jobs) Start() error {
 **/
 func (s *Jobs) Stop() error {
 	if s.crontab == nil {
-		return errors.New("crontab not initialized")
+		return fmt.Errorf("crontab not initialized")
 	}
 
 	s.crontab.Stop()

@@ -1,7 +1,6 @@
 package strs
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -340,7 +339,7 @@ func StrToBool(val string) (bool, error) {
 		return false, nil
 	}
 
-	return false, errors.New("invalid boolean value")
+	return false, fmt.Errorf("invalid boolean value")
 }
 
 /**

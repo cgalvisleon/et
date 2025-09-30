@@ -1,7 +1,6 @@
 package logs
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -57,7 +56,7 @@ func Alert(err error) error {
 * @return error
 **/
 func Alertm(message string) error {
-	err := errors.New(message)
+	err := fmt.Errorf(message)
 	if err != nil {
 		Alert(err)
 	}
@@ -108,7 +107,7 @@ func Error(kind string, err error) error {
 * @return error
 **/
 func Errorm(kind string, message string) error {
-	err := errors.New(message)
+	err := fmt.Errorf(message)
 	return Error(kind, err)
 }
 
@@ -119,7 +118,7 @@ func Errorm(kind string, message string) error {
 **/
 func Errorf(kind string, format string, args ...any) error {
 	message := fmt.Sprintf(format, args...)
-	err := errors.New(message)
+	err := fmt.Errorf(message)
 	return Error(kind, err)
 }
 
@@ -158,7 +157,7 @@ func Fatal(err error) error {
 * @return error
 **/
 func Fatalm(message string) error {
-	err := errors.New(message)
+	err := fmt.Errorf(message)
 	return Fatal(err)
 }
 
@@ -181,7 +180,7 @@ func Panic(err error) error {
 **/
 func Panicf(format string, args ...any) error {
 	message := fmt.Sprintf(format, args...)
-	err := errors.New(message)
+	err := fmt.Errorf(message)
 	return Panic(err)
 }
 

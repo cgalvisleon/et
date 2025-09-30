@@ -1,7 +1,6 @@
 package brevo
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 
@@ -75,7 +74,7 @@ func sendSms(sender, organisation string, contactNumbers []string, content strin
 		body["content"] = message
 		res, status := request.Fetch("POST", url, header, body)
 		if !status.Ok {
-			return result, errors.New(status.Message)
+			return result, fmt.Errorf(status.Message)
 		}
 
 		output, _ := res.ToJson()

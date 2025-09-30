@@ -2,7 +2,6 @@ package ettp
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -489,7 +488,7 @@ func (s *Server) DeleteProxyById(id string, save bool) error {
 
 	proxy, ok := s.proxys[path]
 	if !ok {
-		return errors.New(MSG_ROUTE_NOT_FOUND)
+		return fmt.Errorf(MSG_ROUTE_NOT_FOUND)
 	}
 
 	pkg := proxy.pkg

@@ -15,7 +15,6 @@ import (
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
-	"github.com/cgalvisleon/et/ws"
 	"github.com/rs/cors"
 )
 
@@ -48,7 +47,6 @@ type Server struct {
 	addr            string
 	mux             *http.ServeMux
 	svr             *http.Server
-	ws              *ws.Hub
 	pathApi         string
 	pathApp         string
 	cors            *cors.Cors
@@ -207,10 +205,6 @@ func (s *Server) Close() {
 		} else {
 			console.Log("Http", "Shutting down server...")
 		}
-	}
-
-	if s.ws != nil {
-		s.ws.Close()
 	}
 
 	cache.Close()

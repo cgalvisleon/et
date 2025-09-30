@@ -1,34 +1,62 @@
 package workflow
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/Knetic/govaluate"
 	"github.com/cgalvisleon/et/et"
 )
 
+type TpStep string
+
+const (
+	TpFn         TpStep = "function"
+	TpDefinition TpStep = "definition"
+)
+
 type Step struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
+	Type        TpStep    `json:"type"`
 	Stop        bool      `json:"stop"`
 	Expression  string    `json:"expression"`
 	YesGoTo     int       `json:"yes_go_to"`
 	NoGoTo      int       `json:"no_go_to"`
+	Definition  string    `json:"definition"`
 	fn          FnContext `json:"-"`
 	rollbacks   FnContext `json:"-"`
 }
 
 /**
-* newStep
+* newStepFn
 * @param name, description, expression string, nextIndex int, fn FnContext, stop bool
 * @return *Step
 **/
-func newStep(name, description string, fn FnContext, stop bool) (*Step, error) {
+func newStepFn(name, description string, fn FnContext, stop bool) (*Step, error) {
 	result := &Step{
-		fn:          fn,
 		Name:        name,
 		Description: description,
+		Type:        TpFn,
 		Stop:        stop,
+		fn:          fn,
+	}
+
+	return result, nil
+}
+
+/**
+* newStepDefinition
+* @param name, description, definition string, stop bool
+* @return *Step
+**/
+func newStepDefinition(name, description string, definition string, stop bool) (*Step, error) {
+	result := &Step{
+		Name:        name,
+		Description: description,
+		Type:        TpDefinition,
+		Stop:        stop,
+		Definition:  definition,
 	}
 
 	return result, nil
@@ -51,18 +79,35 @@ func (s *Step) run(flow *Instance, ctx et.Json) (et.Json, error) {
 }
 
 /**
+* Serialize
+* @return ([]byte, error)
+**/
+func (s *Step) serialize() ([]byte, error) {
+	bt, err := json.Marshal(s)
+	if err != nil {
+		return nil, err
+	}
+
+	return bt, nil
+}
+
+/**
 * ToJson
 * @return et.Json
 **/
 func (s *Step) ToJson() et.Json {
-	return et.Json{
-		"name":        s.Name,
-		"description": s.Description,
-		"stop":        s.Stop,
-		"expression":  s.Expression,
-		"yes_go_to":   s.YesGoTo,
-		"no_go_to":    s.NoGoTo,
+	bt, err := s.serialize()
+	if err != nil {
+		return et.Json{}
 	}
+
+	var result et.Json
+	err = json.Unmarshal(bt, &result)
+	if err != nil {
+		return et.Json{}
+	}
+
+	return result
 }
 
 /**

@@ -44,16 +44,29 @@ func HealthCheck() bool {
 }
 
 /**
-* New
+* NewFn
 * @param tag, version, name, description string, fn FnContext, createdBy string
 * @return *Flow
 **/
-func New(tag, version, name, description string, fn FnContext, stop bool, createdBy string) *Flow {
+func NewFn(tag, version, name, description string, fn FnContext, stop bool, createdBy string) *Flow {
 	if err := Load(); err != nil {
 		return nil
 	}
 
-	return workFlows.newFlow(tag, version, name, description, fn, stop, createdBy)
+	return workFlows.newFlowFn(tag, version, name, description, fn, stop, createdBy)
+}
+
+/**
+* NewDefinition
+* @param tag, version, name, description string, definition string, createdBy string
+* @return *Flow
+**/
+func NewDefinition(tag, version, name, description string, definition string, stop bool, createdBy string) *Flow {
+	if err := Load(); err != nil {
+		return nil
+	}
+
+	return workFlows.newFlowDefinition(tag, version, name, description, definition, stop, createdBy)
 }
 
 /**

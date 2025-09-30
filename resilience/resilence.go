@@ -142,7 +142,7 @@ func (s *Instance) ToJson() et.Json {
 * @param id string, bt []byte
 **/
 func (s *Instance) saveTo(id string, bt []byte) {
-	if s.RetentionTime == 0 {
+	if s.RetentionTime <= 0 {
 		s.RetentionTime = 10 * time.Minute
 	}
 

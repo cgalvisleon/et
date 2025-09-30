@@ -11,7 +11,7 @@ import (
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/resilience"
 	"github.com/cgalvisleon/et/utility"
-	"github.com/cgalvisleon/jdb/jdb"
+	"github.com/cgalvisleon/et/vm"
 )
 
 type FlowStatus string
@@ -40,6 +40,7 @@ type Instance struct {
 	Tags       et.Json              `json:"tags"`
 	WorkerHost string               `json:"worker_host"`
 	Params     et.Json              `json:"params"`
+	vm         *vm.Vm               `json:"-"`
 	done       bool                 `json:"-"`
 	goTo       int                  `json:"-"`
 	err        error                `json:"-"`
@@ -47,49 +48,32 @@ type Instance struct {
 }
 
 /**
+* Serialize
+* @return ([]byte, error)
+**/
+func (s *Instance) serialize() ([]byte, error) {
+	bt, err := json.Marshal(s)
+	if err != nil {
+		return nil, err
+	}
+
+	return bt, nil
+}
+
+/**
 * ToJson
 * @return et.Json
 **/
 func (s *Instance) ToJson() et.Json {
-	steps := make([]et.Json, len(s.Steps))
-	for i, step := range s.Steps {
-		j := step.ToJson()
-		j.Set(jdb.KEY, i)
-		steps[i] = j
+	bt, err := s.serialize()
+	if err != nil {
+		return et.Json{}
 	}
 
-	resilence := et.Json{}
-	if s.resilence != nil {
-		resilence = s.resilence.ToJson()
-	}
-
-	result := et.Json{
-		"id":             s.Id,
-		"tag":            s.Tag,
-		"version":        s.Version,
-		"name":           s.Name,
-		"description":    s.Description,
-		"current":        s.Current,
-		"total_attempts": s.TotalAttempts,
-		"time_attempts":  s.TimeAttempts,
-		"retention_time": s.RetentionTime,
-		"ctx":            s.Ctx,
-		"steps":          steps,
-		"ctxs":           s.Ctxs,
-		"results":        s.Results,
-		"rollbacks":      s.Rollbacks,
-		"resilence":      resilence,
-		"tp_consistency": s.TpConsistency,
-		"created_at":     s.CreatedAt,
-		"updated_at":     s.UpdatedAt,
-		"done_at":        s.DoneAt,
-		"status":         s.Status,
-		"worker_host":    s.WorkerHost,
-		"params":         s.Params,
-	}
-
-	for k, v := range s.Tags {
-		result.Set(k, v)
+	var result et.Json
+	err = json.Unmarshal(bt, &result)
+	if err != nil {
+		return et.Json{}
 	}
 
 	return result

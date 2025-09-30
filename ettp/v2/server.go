@@ -12,6 +12,7 @@ import (
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/router"
+	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/dimiro1/banner"
 	"github.com/mattn/go-colorable"
@@ -62,7 +63,7 @@ type Server struct {
 * @return *Server
 **/
 func NewServer(name string, config *Config) *Server {
-	now := time.Now()
+	now := timezone.NowTime()
 	host, _ := os.Hostname()
 	result := &Server{
 		CreatedAt:     now,

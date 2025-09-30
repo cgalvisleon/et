@@ -16,6 +16,7 @@ import (
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/resilience"
 	"github.com/cgalvisleon/et/timezone"
+	"github.com/cgalvisleon/et/vm"
 )
 
 var (
@@ -148,6 +149,7 @@ func (s *WorkFlows) newInstance(tag, id string, tags et.Json, startId int, creat
 		Tags:       tags,
 		goTo:       -1,
 		WorkerHost: workerHost,
+		vm:         vm.New(),
 	}
 	result.setStatus(FlowStatusPending)
 	s.Instances[id] = result
@@ -161,30 +163,7 @@ func (s *WorkFlows) newInstance(tag, id string, tags et.Json, startId int, creat
 * @return *Flow, error
 **/
 func (s *WorkFlows) loadInstance(id string) (*Instance, error) {
-	if id == "" {
-		return nil, fmt.Errorf(MSG_INSTANCE_ID_REQUIRED)
-	}
-
-	if s.Instances[id] != nil {
-		return s.Instances[id], nil
-	}
-
-	if !cache.Exists(id) {
-		return nil, errorInstanceNotFound
-	}
-
-	result := &Instance{}
-	bt, err := json.Marshal(result)
-	if err != nil {
-		return nil, err
-	}
-
-	src, err := cache.Get(id, string(bt))
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal([]byte(src), &result)
+	result, err := s.getInstance(id)
 	if err != nil {
 		return nil, err
 	}
@@ -259,16 +238,16 @@ func (s *WorkFlows) getOrCreateInstance(id, tag string, startId int, tags et.Jso
 * @param instanceId string
 * @return *Instance, error
 **/
-func (s *WorkFlows) getInstance(instanceId string) (*Instance, error) {
-	if instanceId == "" {
+func (s *WorkFlows) getInstance(id string) (*Instance, error) {
+	if id == "" {
 		return nil, fmt.Errorf(MSG_INSTANCE_ID_REQUIRED)
 	}
 
-	if s.Instances[instanceId] != nil {
-		return s.Instances[instanceId], nil
+	if s.Instances[id] != nil {
+		return s.Instances[id], nil
 	}
 
-	if !cache.Exists(instanceId) {
+	if !cache.Exists(id) {
 		return nil, errorInstanceNotFound
 	}
 
@@ -278,7 +257,7 @@ func (s *WorkFlows) getInstance(instanceId string) (*Instance, error) {
 		return nil, err
 	}
 
-	src, err := cache.Get(instanceId, string(bt))
+	src, err := cache.Get(id, string(bt))
 	if err != nil {
 		return nil, err
 	}
@@ -341,12 +320,24 @@ func (s *WorkFlows) instanceRun(instanceId, tag string, step int, tags, ctx et.J
 }
 
 /**
-* newFlow
+* newFlowFn
 * @param tag, version, name, description string, fn FnContext, stop bool, createdBy string
 * @return *Flow
 **/
-func (s *WorkFlows) newFlow(tag, version, name, description string, fn FnContext, stop bool, createdBy string) *Flow {
-	flow := newFlow(tag, version, name, description, fn, stop, createdBy)
+func (s *WorkFlows) newFlowFn(tag, version, name, description string, fn FnContext, stop bool, createdBy string) *Flow {
+	flow := newFlowFn(tag, version, name, description, fn, stop, createdBy)
+	s.Flows[tag] = flow
+
+	return flow
+}
+
+/**
+* newFlowDefinition
+* @param tag, version, name, description string, definition string, stop bool, createdBy string
+* @return *Flow
+**/
+func (s *WorkFlows) newFlowDefinition(tag, version, name, description string, definition string, stop bool, createdBy string) *Flow {
+	flow := newFlowDefinition(tag, version, name, description, definition, stop, createdBy)
 	s.Flows[tag] = flow
 
 	return flow
@@ -360,7 +351,7 @@ func (s *WorkFlows) newFlow(tag, version, name, description string, fn FnContext
 func (s *WorkFlows) newAwaiting(instanceId string, fnArgs ...interface{}) (et.Json, error) {
 	instanceId = reg.GetUUID(instanceId)
 	awaiting := &Awaiting{
-		CreatedAt: time.Now(),
+		CreatedAt: timezone.NowTime(),
 		Id:        instanceId,
 		fn:        s.run,
 		fnArgs:    fnArgs,

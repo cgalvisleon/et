@@ -3,6 +3,7 @@ package resilience
 import (
 	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/logs"
 )
 
 const (
@@ -18,41 +19,41 @@ const (
 func initEvents() {
 	err := event.Subscribe(EVENT_RESILIENCE_STOP, eventStop)
 	if err != nil {
-		console.Error(err)
+		logs.Error(packageName, err)
 	}
 
 	err = event.Subscribe(EVENT_RESILIENCE_RESTART, eventRestart)
 	if err != nil {
-		console.Error(err)
+		logs.Error(packageName, err)
 	}
 
 }
 
 /**
 * eventStop
-* @param m event.EvenMessage
+* @param m event.Message
 **/
 func eventStop(m event.Message) {
 	data := m.Data
 	id := data.Str("id")
 	if id == "" {
-		console.Errorm(MSG_ID_REQUIRED)
+		logs.Errorf(packageName, MSG_ID_REQUIRED)
 		return
 	}
 
 	Stop(id)
-	console.Log("eventStop:", data.ToString())
+	logs.Log(packageName, "eventStop:", data.ToString())
 }
 
 /**
 * eventRestart
-* @param m event.EvenMessage
+* @param m event.Message
 **/
 func eventRestart(m event.Message) {
 	data := m.Data
 	id := data.Str("id")
 	if id == "" {
-		console.Errorm(MSG_ID_REQUIRED)
+		logs.Errorf(packageName, MSG_ID_REQUIRED)
 		return
 	}
 

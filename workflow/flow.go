@@ -1,13 +1,13 @@
 package workflow
 
 import (
+	"encoding/json"
 	"os"
 	"time"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/jdb/jdb"
 )
 
 type TpConsistency string
@@ -43,11 +43,11 @@ type Flow struct {
 
 /**
 * newFlow
-* @param workFlows *WorkFlows, tag, version, name, description string, fn FnContext, totalAttempts int, timeAttempts, retentionTime time.Duration, createdBy string
+* @param tag, version, name, description string, createdBy string
 * @return *Flow
 **/
-func newFlow(tag, version, name, description string, fn FnContext, stop bool, createdBy string) *Flow {
-	flow := &Flow{
+func newFlow(tag, version, name, description string, createdBy string) *Flow {
+	return &Flow{
 		Tag:           tag,
 		Version:       version,
 		Name:          name,
@@ -56,10 +56,45 @@ func newFlow(tag, version, name, description string, fn FnContext, stop bool, cr
 		Steps:         make([]*Step, 0),
 		CreatedBy:     createdBy,
 	}
+}
+
+/**
+* newFlowFn
+* @param tag, version, name, description string, fn FnContext, stop bool, createdBy string
+* @return *Flow
+**/
+func newFlowFn(tag, version, name, description string, fn FnContext, stop bool, createdBy string) *Flow {
+	flow := newFlow(tag, version, name, description, createdBy)
 	logs.Logf(packageName, MSG_FLOW_CREATED, tag, version, name)
-	flow.Step("Start", MSG_START_WORKFLOW, fn, stop)
+	flow.StepFn("Start", MSG_START_WORKFLOW, fn, stop)
 
 	return flow
+}
+
+/**
+* newFlowDefinition
+* @param tag, version, name, description string, definition string, totalAttempts int, timeAttempts, retentionTime time.Duration, createdBy string
+* @return *Flow
+**/
+func newFlowDefinition(tag, version, name, description string, definition string, stop bool, createdBy string) *Flow {
+	flow := newFlow(tag, version, name, description, createdBy)
+	logs.Logf(packageName, MSG_FLOW_CREATED, tag, version, name)
+	flow.StepDefinition("Start", MSG_START_WORKFLOW, definition, stop)
+
+	return flow
+}
+
+/**
+* Serialize
+* @return ([]byte, error)
+**/
+func (s *Flow) serialize() ([]byte, error) {
+	bt, err := json.Marshal(s)
+	if err != nil {
+		return nil, err
+	}
+
+	return bt, nil
 }
 
 /**
@@ -67,23 +102,15 @@ func newFlow(tag, version, name, description string, fn FnContext, stop bool, cr
 * @return et.Json
 **/
 func (s *Flow) ToJson() et.Json {
-	steps := make([]et.Json, len(s.Steps))
-	for i, step := range s.Steps {
-		j := step.ToJson()
-		j.Set(jdb.KEY, i)
-		steps[i] = j
+	bt, err := s.serialize()
+	if err != nil {
+		return et.Json{}
 	}
 
-	result := et.Json{
-		"tag":            s.Tag,
-		"version":        s.Version,
-		"name":           s.Name,
-		"description":    s.Description,
-		"total_attempts": s.TotalAttempts,
-		"time_attempts":  s.TimeAttempts,
-		"retention_time": s.RetentionTime,
-		"steps":          steps,
-		"tp_consistency": s.TpConsistency,
+	var result et.Json
+	err = json.Unmarshal(bt, &result)
+	if err != nil {
+		return et.Json{}
 	}
 
 	return result
@@ -108,12 +135,25 @@ func (s *Flow) Debug() *Flow {
 }
 
 /**
-* Step
+* StepFn
 * @param name, description string, fn FnContext, retries, retryDelay int, stop bool
 * @return *Fn
 **/
-func (s *Flow) Step(name, description string, fn FnContext, stop bool) *Flow {
-	result, _ := newStep(name, description, fn, stop)
+func (s *Flow) StepFn(name, description string, fn FnContext, stop bool) *Flow {
+	result, _ := newStepFn(name, description, fn, stop)
+	s.Steps = append(s.Steps, result)
+	s.setConfig(MSG_INSTANCE_STEP_CREATED, len(s.Steps)-1, name, s.Tag)
+
+	return s
+}
+
+/**
+* StepDefinition
+* @param name, description string, definition string, stop bool
+* @return *Flow
+**/
+func (s *Flow) StepDefinition(name, description string, definition string, stop bool) *Flow {
+	result, _ := newStepDefinition(name, description, definition, stop)
 	s.Steps = append(s.Steps, result)
 	s.setConfig(MSG_INSTANCE_STEP_CREATED, len(s.Steps)-1, name, s.Tag)
 

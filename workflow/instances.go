@@ -33,13 +33,13 @@ type Instance struct {
 	Current    int                  `json:"current"`
 	Ctx        et.Json              `json:"ctx"`
 	Ctxs       map[int]et.Json      `json:"ctxs"`
+	PinnedData et.Json              `json:"pinned_data"`
 	Results    map[int]*Result      `json:"results"`
 	Rollbacks  map[int]*Result      `json:"rollbacks"`
 	Status     FlowStatus           `json:"status"`
 	DoneAt     time.Time            `json:"done_at"`
 	Tags       et.Json              `json:"tags"`
 	WorkerHost string               `json:"worker_host"`
-	Params     et.Json              `json:"params"`
 	vm         *vm.Vm               `json:"-"`
 	done       bool                 `json:"-"`
 	goTo       int                  `json:"-"`
@@ -105,17 +105,11 @@ func (s *Instance) save() error {
 * @return error
 **/
 func (s *Instance) setStatus(status FlowStatus) error {
-	if s.Status == status {
-		err := s.save()
-		if err != nil {
-			return fmt.Errorf("setStatus: error al guardar el estado de la instancia: %v", err)
-		}
-
-		return nil
+	if s.Status != status {
+		s.Status = status
+		s.UpdatedAt = utility.NowTime()
 	}
 
-	s.Status = status
-	s.UpdatedAt = utility.NowTime()
 	if s.Status == FlowStatusDone {
 		s.DoneAt = s.UpdatedAt
 		s.done = true
@@ -183,11 +177,11 @@ func (s *Instance) setTags(tags et.Json) {
 }
 
 /**
-* SetParam
+* SetPined
 * @param key string, value interface{}
 **/
-func (s *Instance) SetParam(key string, value interface{}) {
-	s.Params[key] = value
+func (s *Instance) SetPined(key string, value interface{}) {
+	s.PinnedData[key] = value
 }
 
 /**

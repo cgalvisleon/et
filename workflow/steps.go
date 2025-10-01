@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Knetic/govaluate"
+	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -57,6 +58,19 @@ func newStepDefinition(name, description string, definition string, stop bool) (
 		Type:        TpDefinition,
 		Stop:        stop,
 		Definition:  definition,
+	}
+	result.fn = func(flow *Instance, ctx et.Json) (et.Json, error) {
+		flow.vm.Set("flow", flow)
+		flow.vm.Set("ctx", ctx)
+		flow.vm.Set("pinned", flow.PinnedData)
+		result, err := flow.vm.RunString(definition)
+		if err != nil {
+			return et.Json{}, err
+		}
+
+		console.Debug(result)
+
+		return et.Json{}, nil
 	}
 
 	return result, nil

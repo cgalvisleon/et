@@ -144,11 +144,12 @@ func (s *WorkFlows) newInstance(tag, id string, tags et.Json, startId int, creat
 		Current:    startId,
 		Ctx:        et.Json{},
 		Ctxs:       make(map[int]et.Json),
+		PinnedData: et.Json{},
 		Results:    make(map[int]*Result),
 		Rollbacks:  make(map[int]*Result),
 		Tags:       tags,
-		goTo:       -1,
 		WorkerHost: workerHost,
+		goTo:       -1,
 		vm:         vm.New(),
 	}
 	result.setStatus(FlowStatusPending)

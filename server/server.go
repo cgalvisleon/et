@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/config"
-	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/utility"
@@ -18,6 +18,8 @@ import (
 	"github.com/mattn/go-colorable"
 	"github.com/rs/cors"
 )
+
+var packageName = "Ettp"
 
 type Ettp struct {
 	*chi.Mux
@@ -108,9 +110,9 @@ func (s *Ettp) stopServer(pid int) {
 
 	_, err := exec.Command("kill", fmt.Sprintf("%d", pid)).CombinedOutput()
 	if err != nil {
-		console.Alertf("Error al detener el servidor: %s", err.Error())
+		logs.Alertf("Error al detener el servidor: %s", err.Error())
 	} else {
-		console.Logf(s.appName, "Servidor detenido PID:%d", pid)
+		logs.Logf(s.appName, "Servidor detenido PID:%d", pid)
 		s.savePID(-1)
 	}
 }
@@ -133,7 +135,7 @@ func (s *Ettp) Close() {
 		s.onClose()
 	}
 
-	console.Log("Http", "Shutting down server...")
+	logs.Log("Http", "Shutting down server...")
 }
 
 /**
@@ -165,9 +167,9 @@ func (s *Ettp) StartHttpServer() {
 	}
 
 	svr := s.http
-	console.Logf("Http", "Running on http://localhost%s", svr.Addr)
+	logs.Logf(packageName, "Running on http://localhost%s", svr.Addr)
 	if err := s.http.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		console.Fatalf("Http error: %s", err)
+		logs.Logf(packageName, "Http error: %s", err)
 	}
 }
 

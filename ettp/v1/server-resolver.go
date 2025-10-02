@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
 )
 
@@ -42,7 +42,7 @@ func (s *Server) handlerResolver(w http.ResponseWriter, r *http.Request) {
 
 	/* Get resolver */
 	resolver, r := s.getResolver(r)
-	console.Log("resolver", resolver.ToString())
+	logs.Log("resolver", resolver.ToString())
 
 	/* Call search time since begin */
 	metric.CallSearchTime()

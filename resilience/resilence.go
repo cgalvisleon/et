@@ -90,12 +90,13 @@ func NewInstance(id, tag, description string, totalAttempts int, timeAttempts, r
 * @return *Instance, error
 **/
 func LoadById(id string) (*Instance, error) {
-	exists := cache.Exists(id)
+	key := fmt.Sprintf("resilience:%s", id)
+	exists := cache.Exists(key)
 	if !exists {
 		return nil, fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
 	}
 
-	bt, err := cache.Get(id, "")
+	bt, err := cache.Get(key, "")
 	if err != nil {
 		return nil, err
 	}
@@ -146,9 +147,10 @@ func (s *Instance) saveTo(id string, bt []byte) {
 		s.RetentionTime = 10 * time.Minute
 	}
 
-	err := cache.Set(id, string(bt), s.RetentionTime)
+	key := fmt.Sprintf("resilience:%s", id)
+	err := cache.Set(key, string(bt), s.RetentionTime)
 	if err != nil {
-		mem.Set(id, string(bt), s.RetentionTime)
+		mem.Set(key, string(bt), s.RetentionTime)
 		s.TpStore = TpStoreMemory
 	} else {
 		s.TpStore = TpStoreCache

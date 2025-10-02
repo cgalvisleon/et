@@ -3,9 +3,9 @@ package service
 import (
 	"github.com/cgalvisleon/et/aws"
 	"github.com/cgalvisleon/et/brevo"
-	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/logs"
 )
 
 /**
@@ -77,17 +77,17 @@ func EventSendEmail(projectId string, sender et.Json, to []et.Json, subject stri
 func LoadEventSend() {
 	err := event.Subscribe(EVENT_SEND_SMS, eventSendSms)
 	if err != nil {
-		console.Error(err)
+		logs.Errorf(packageName, err.Error())
 	}
 
 	err = event.Subscribe(EVENT_SEND_WHATSAPP, eventSendWhatsapp)
 	if err != nil {
-		console.Error(err)
+		logs.Errorf(packageName, err.Error())
 	}
 
 	err = event.Subscribe(EVENT_SEND_EMAIL, eventSendEmail)
 	if err != nil {
-		console.Error(err)
+		logs.Errorf(packageName, err.Error())
 	}
 }
 
@@ -126,7 +126,7 @@ func eventSendSms(m event.Message) {
 		},
 	})
 
-	console.Log("eventSendSms", data.ToString())
+	logs.Logf(packageName, "eventSendSms: %s", data.ToString())
 }
 
 /**
@@ -164,7 +164,7 @@ func eventSendWhatsapp(m event.Message) {
 		},
 	})
 
-	console.Log("eventSendWhatsapp", data.ToString())
+	logs.Logf(packageName, "eventSendWhatsapp: %s", data.ToString())
 }
 
 /**
@@ -206,5 +206,5 @@ func eventSendEmail(m event.Message) {
 		},
 	})
 
-	console.Log("eventSendEmail", data.ToString())
+	logs.Logf(packageName, "eventSendEmail: %s", data.ToString())
 }

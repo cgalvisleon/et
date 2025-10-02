@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/strs"
@@ -21,7 +21,7 @@ func (s *Server) setApiFunc(method, path string, handlerFn http.HandlerFunc, pac
 	method = strs.Uppcase(method)
 	ok := methodMap[method]
 	if !ok {
-		console.Alertf(`'%s' http method is not supported.`, method)
+		logs.Alertf(`'%s' http method is not supported.`, method)
 		return nil
 	}
 
@@ -30,7 +30,7 @@ func (s *Server) setApiFunc(method, path string, handlerFn http.HandlerFunc, pac
 	url = strings.ReplaceAll(url, "//", "/")
 	route, err := s.setRouter(id, method, url, url, TpHandler, et.Json{}, router.TpReplaceHeader, []string{}, false, packageName, false)
 	if err != nil {
-		console.Alertf(err.Error())
+		logs.Alertf(err.Error())
 		return nil
 	}
 

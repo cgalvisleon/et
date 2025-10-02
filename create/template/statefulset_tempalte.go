@@ -56,7 +56,7 @@ spec:
             - containerPort: $PORT # Puerto expuesto en el contenedor
           env:
             - name: APP
-              value: "Celsia Internet"
+              value: "$APP"
             - name: PORT
               value: "$PORT"
             - name: VERSION

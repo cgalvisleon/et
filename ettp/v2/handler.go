@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"github.com/cgalvisleon/et/claim"
-	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
 )
 
@@ -58,7 +58,7 @@ func (s *Server) handlerRouteTable(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if s.debug {
-		console.Log("Route Table", resolver.ToJson().ToString())
+		logs.Log("Route Table", resolver.ToJson().ToString())
 	}
 
 	/* Call search time since begin */

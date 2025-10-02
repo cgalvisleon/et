@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/Knetic/govaluate"
-	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 )
 
 type TpStep string
@@ -68,7 +68,7 @@ func newStepDefinition(name, description string, definition string, stop bool) (
 			return et.Json{}, err
 		}
 
-		console.Debug(result)
+		logs.Debug(packageName, "result", result)
 
 		return et.Json{}, nil
 	}

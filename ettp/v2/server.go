@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/timezone"
@@ -17,6 +17,8 @@ import (
 	"github.com/dimiro1/banner"
 	"github.com/mattn/go-colorable"
 )
+
+const packageName = "ettp"
 
 type Config struct {
 	Port         int
@@ -140,14 +142,14 @@ func (s *Server) banner() {
 func (s *Server) initHttpServer() error {
 	go func() {
 		if s.tls {
-			console.Logf("Https", `Load server on https://localhost%s`, s.Addr)
+			logs.Logf("Https", `Load server on https://localhost%s`, s.Addr)
 			if err := s.svr.ListenAndServeTLS(s.certFile, s.keyFile); err != nil && err != http.ErrServerClosed {
-				console.Fatal(err)
+				logs.Fatal(err)
 			}
 		} else {
-			console.Logf("Http", `Load server on http://localhost%s`, s.Addr)
+			logs.Logf("Http", `Load server on http://localhost%s`, s.Addr)
 			if err := s.svr.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				console.Fatal(err)
+				logs.Fatal(err)
 			}
 		}
 	}()
@@ -161,21 +163,21 @@ func (s *Server) initHttpServer() error {
 **/
 func (s *Server) Start() {
 	if err := s.load(); err != nil {
-		console.Fatal(err)
+		logs.Fatal(err)
 	}
 	if err := s.initRouteTable(); err != nil {
-		console.Fatal(err)
+		logs.Fatal(err)
 	}
 	if err := s.initEvents(); err != nil {
-		console.Fatal(err)
+		logs.Fatal(err)
 	}
 	if err := s.initHttpServer(); err != nil {
-		console.Fatal(err)
+		logs.Fatal(err)
 	}
 	s.banner()
 
 	if s.debug {
-		console.Debug("Start:", s.ToJson().ToString())
+		logs.Debug("Start:", s.ToJson().ToString())
 	}
 
 	utility.AppWait()
@@ -192,9 +194,9 @@ func (s *Server) Close() {
 		s.svr.Close()
 
 		if s.tls {
-			console.Log("Https", "Shutting down server...")
+			logs.Log("Https", "Shutting down server...")
 		} else {
-			console.Log("Http", "Shutting down server...")
+			logs.Log("Http", "Shutting down server...")
 		}
 	}
 }
@@ -208,7 +210,7 @@ func (s *Server) Reset() {
 	s.Solvers = make(map[string]*Solver)
 	s.Packages = make(map[string]*Package)
 	if err := s.initRouteTable(); err != nil {
-		console.Fatal(err)
+		logs.Fatal(err)
 	}
 
 	event.Publish(router.EVENT_RESET_ROUTER, et.Json{})
@@ -230,9 +232,9 @@ func (s *Server) setRouter(kind TypeRouter, method, path, solver string, typeHea
 
 	log := func(action string) {
 		if solver != "" {
-			console.Logf(s.Name, "%s Method:%s Path:%s Solver:%s Version:%d PackageName:%s", action, method, path, solver, version, packageName)
+			logs.Logf(s.Name, "%s Method:%s Path:%s Solver:%s Version:%d PackageName:%s", action, method, path, solver, version, packageName)
 		} else {
-			console.Logf(s.Name, "%s Method:%s Path:%s Version:%d PackageName:%s", action, method, path, version, packageName)
+			logs.Logf(s.Name, "%s Method:%s Path:%s Version:%d PackageName:%s", action, method, path, version, packageName)
 		}
 	}
 

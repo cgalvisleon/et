@@ -1,7 +1,6 @@
 package workflow
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -159,6 +158,23 @@ func (s *WorkFlows) newInstance(tag, id string, tags et.Json, startId int, creat
 }
 
 /**
+* getInstance
+* @param instanceId string
+* @return *Instance, error
+**/
+func (s *WorkFlows) getInstance(id string) (*Instance, error) {
+	if id == "" {
+		return nil, fmt.Errorf(MSG_INSTANCE_ID_REQUIRED)
+	}
+
+	if s.Instances[id] != nil {
+		return s.Instances[id], nil
+	}
+
+	return load(id)
+}
+
+/**
 * loadInstance
 * @param id string
 * @return *Flow, error
@@ -232,43 +248,6 @@ func (s *WorkFlows) getOrCreateInstance(id, tag string, startId int, tags et.Jso
 	}
 
 	return nil, fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
-}
-
-/**
-* getInstance
-* @param instanceId string
-* @return *Instance, error
-**/
-func (s *WorkFlows) getInstance(id string) (*Instance, error) {
-	if id == "" {
-		return nil, fmt.Errorf(MSG_INSTANCE_ID_REQUIRED)
-	}
-
-	if s.Instances[id] != nil {
-		return s.Instances[id], nil
-	}
-
-	if !cache.Exists(id) {
-		return nil, errorInstanceNotFound
-	}
-
-	result := &Instance{}
-	bt, err := json.Marshal(result)
-	if err != nil {
-		return nil, err
-	}
-
-	src, err := cache.Get(id, string(bt))
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal([]byte(src), &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
 }
 
 /**

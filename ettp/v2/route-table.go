@@ -9,9 +9,9 @@ import (
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/claim"
 	"github.com/cgalvisleon/et/config"
-	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/router"
@@ -87,13 +87,13 @@ func (s *Server) handlerDevToken(w http.ResponseWriter, r *http.Request) {
 		duration := 2 * time.Hour
 		token, err := claim.NewToken(device, device, device, device, device, duration)
 		if err != nil {
-			console.Alert(err)
+			logs.Alert(err)
 			return ""
 		}
 
 		_, err = claim.ValidToken(token)
 		if err != nil {
-			console.Alertf("GetFromToken:%s", err.Error())
+			logs.Alertf("GetFromToken:%s", err.Error())
 			return ""
 		}
 

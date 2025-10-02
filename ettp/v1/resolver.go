@@ -9,8 +9,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/request"
 	rt "github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/strs"
@@ -274,7 +274,7 @@ func (s *Server) getResolver(r *http.Request) (*Resolver, *http.Request) {
 
 	url = strs.Append(solver.resolve, r.URL.RawQuery, "?")
 	if solver.router == nil {
-		console.Alertf(`%s:%s:%s`, MSG_ROUTE_NOT_FOUND, r.Method, r.URL.Path)
+		logs.Alertf(`%s:%s:%s`, MSG_ROUTE_NOT_FOUND, r.Method, r.URL.Path)
 	} else {
 		switch solver.router.TpHeader {
 		case rt.TpKeepHeader: /* Keep header */

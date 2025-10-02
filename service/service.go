@@ -10,6 +10,7 @@ import (
 
 // Events
 const (
+	packageName                  = "Service"
 	EVENT_SEND_SMS               = "send:sms"
 	EVENT_SEND_WHATSAPP          = "send:whatsapp"
 	EVENT_SEND_EMAIL             = "send:email"

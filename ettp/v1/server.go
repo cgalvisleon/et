@@ -9,14 +9,16 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/rs/cors"
 )
+
+const packageName = "ettp"
 
 type Config struct {
 	Name         string
@@ -153,14 +155,14 @@ func (s *Server) version() et.Json {
 func (s *Server) Start() error {
 	go func() {
 		if s.tls {
-			console.Logf("Https", `Load server on https://localhost%s`, s.addr)
+			logs.Logf(packageName, `Load server on https://localhost%s`, s.addr)
 			if err := s.svr.ListenAndServeTLS(s.certFile, s.keyFile); err != nil && err != http.ErrServerClosed {
-				console.Fatal(err)
+				logs.Alertf(err.Error())
 			}
 		} else {
-			console.Logf("Http", `Load server on http://localhost%s`, s.addr)
+			logs.Logf(packageName, `Load server on http://localhost%s`, s.addr)
 			if err := s.svr.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				console.Fatal(err)
+				logs.Alertf(err.Error())
 			}
 		}
 	}()
@@ -201,9 +203,9 @@ func (s *Server) Close() {
 		s.svr.Close()
 
 		if s.tls {
-			console.Log("Https", "Shutting down server...")
+			logs.Logf(packageName, "Shutting down server...")
 		} else {
-			console.Log("Http", "Shutting down server...")
+			logs.Logf(packageName, "Shutting down server...")
 		}
 	}
 

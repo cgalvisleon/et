@@ -1,25 +1,25 @@
 package ettp
 
 import (
-	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/logs"
 	rt "github.com/cgalvisleon/et/router"
 )
 
 func (s *Server) initEvents() {
 	err := event.Subscribe(rt.EVENT_SET_ROUTER, s.eventSetRouter)
 	if err != nil {
-		console.Error(err)
+		logs.Error(packageName, err)
 	}
 
 	err = event.Subscribe(rt.EVENT_REMOVE_ROUTER, s.eventDeleteRouter)
 	if err != nil {
-		console.Error(err)
+		logs.Error(packageName, err)
 	}
 
 	err = event.Subscribe(rt.EVENT_RESET_ROUTER, s.eventReset)
 	if err != nil {
-		console.Error(err)
+		logs.Error(packageName, err)
 	}
 }
 
@@ -58,7 +58,7 @@ func (s *Server) eventDeleteRouter(m event.Message) {
 	id := data.Str("id")
 	err := s.DeleteRouteById(id, true)
 	if err != nil {
-		console.Alertf(`%s error:%s`, s.Name, err.Error())
+		logs.Error(packageName, err)
 	}
 }
 
@@ -72,7 +72,7 @@ func (s *Server) eventReset(m event.Message) {
 	}
 
 	data := m.Data
-	console.Debug("eventReset:", data.ToString())
+	logs.Debug(packageName, "eventReset:", data.ToString())
 
 	s.Reset()
 }

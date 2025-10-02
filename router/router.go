@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/go-chi/chi/v5"
 )
@@ -97,7 +97,7 @@ func eventActionReset(m event.Message) {
 	}
 
 	for _, v := range router.Routes {
-		console.Logf("Api gateway", `[RESET] %s:%s`, v.Str("method"), v.Str("path"))
+		logs.Logf("Api gateway", `[RESET] %s:%s`, v.Str("method"), v.Str("path"))
 		event.Publish(EVENT_SET_ROUTER, v)
 	}
 }

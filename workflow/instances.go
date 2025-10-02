@@ -76,7 +76,41 @@ func (s *Instance) ToJson() et.Json {
 		return et.Json{}
 	}
 
+	for k, v := range s.Tags {
+		result.Set(k, v)
+	}
+
 	return result
+}
+
+/**
+* load
+* @param id string
+* @return (*Instance, error)
+**/
+func load(id string) (*Instance, error) {
+	key := fmt.Sprintf("workflow:%s", id)
+	if !cache.Exists(key) {
+		return nil, errorInstanceNotFound
+	}
+
+	result := &Instance{}
+	bt, err := json.Marshal(result)
+	if err != nil {
+		return nil, err
+	}
+
+	src, err := cache.Get(key, string(bt))
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal([]byte(src), &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 /**
@@ -94,7 +128,8 @@ func (s *Instance) save() error {
 		s.RetentionTime = 24 * time.Hour
 	}
 
-	cache.Set(s.Id, string(bt), s.RetentionTime)
+	key := fmt.Sprintf("workflow:%s", s.Id)
+	cache.Set(key, string(bt), s.RetentionTime)
 
 	return nil
 }

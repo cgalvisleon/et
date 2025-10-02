@@ -2,8 +2,8 @@ package ettp
 
 import (
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/logs"
 )
 
 /**
@@ -14,12 +14,12 @@ import (
 func New(name string, config *Config) *Server {
 	err := cache.Load()
 	if err != nil {
-		console.Fatal(err)
+		logs.Fatal(err)
 	}
 
 	err = event.Load()
 	if err != nil {
-		console.Fatal(err)
+		logs.Fatal(err)
 	}
 
 	result := NewServer(name, config)

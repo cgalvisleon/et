@@ -6,8 +6,8 @@ import (
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/claim"
 	"github.com/cgalvisleon/et/config"
-	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/utility"
 )
@@ -26,13 +26,13 @@ func developToken() string {
 	duration := time.Hour * 2
 	token, err := claim.NewToken(device, device, device, device, device, duration)
 	if err != nil {
-		console.Alert(err)
+		logs.Alertf(err.Error())
 		return ""
 	}
 
 	_, err = claim.ValidToken(token)
 	if err != nil {
-		console.Alertf("GetFromToken:%s", err.Error())
+		logs.Alertf("GetFromToken:%s", err.Error())
 		return ""
 	}
 
@@ -46,7 +46,7 @@ func developToken() string {
 **/
 func (s *Server) GetTokenByKey(key string) (et.Item, error) {
 	if !utility.ValidStr(key, 0, []string{}) {
-		return et.Item{}, console.Alertf(msg.MSG_ATRIB_REQUIRED, "key")
+		return et.Item{}, logs.Alertf(msg.MSG_ATRIB_REQUIRED, "key")
 	}
 
 	result, err := cache.Get(key, "")
@@ -55,7 +55,7 @@ func (s *Server) GetTokenByKey(key string) (et.Item, error) {
 	}
 
 	if result == "" {
-		return et.Item{}, console.Alertm(msg.RECORD_NOT_FOUND)
+		return et.Item{}, logs.Alertf(msg.RECORD_NOT_FOUND)
 	}
 
 	valid := MSG_TOKEN_VALID
@@ -81,7 +81,7 @@ func (s *Server) GetTokenByKey(key string) (et.Item, error) {
 **/
 func (s *Server) HandlerValidToken(key string) (et.Item, error) {
 	if !utility.ValidStr(key, 0, []string{}) {
-		return et.Item{}, console.Alertf(msg.MSG_ATRIB_REQUIRED, "key")
+		return et.Item{}, logs.Alertf(msg.MSG_ATRIB_REQUIRED, "key")
 	}
 
 	result, err := cache.Get(key, "")
@@ -90,7 +90,7 @@ func (s *Server) HandlerValidToken(key string) (et.Item, error) {
 	}
 
 	if result == "" {
-		return et.Item{}, console.Alertm(msg.RECORD_NOT_FOUND)
+		return et.Item{}, logs.Alertf(msg.RECORD_NOT_FOUND)
 	}
 
 	_, err = claim.ValidToken(result)
@@ -114,7 +114,7 @@ func (s *Server) HandlerValidToken(key string) (et.Item, error) {
 **/
 func (s *Server) DeleteTokenByKey(key string) error {
 	if !utility.ValidStr(key, 0, []string{}) {
-		return console.Alertf(msg.MSG_ATRIB_REQUIRED, "key")
+		return logs.Alertf(msg.MSG_ATRIB_REQUIRED, "key")
 	}
 
 	_, err := cache.Delete(key)

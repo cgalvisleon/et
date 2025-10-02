@@ -5,9 +5,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	rt "github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/utility"
@@ -36,7 +36,7 @@ func (s *Server) setRouter(id, method, path, resolve string, kind TypeApi, heade
 	}
 
 	confirm := func(action string) {
-		console.Logf(s.Name, `[%s] %s:%s -> %s | TpHeader:%s | Private:%v | %s`, action, method, path, resolve, tpHeader.String(), private, packageName)
+		logs.Logf(s.Name, `[%s] %s:%s -> %s | TpHeader:%s | Private:%v | %s`, action, method, path, resolve, tpHeader.String(), private, packageName)
 	}
 
 	var router *Router
@@ -141,7 +141,7 @@ func (s *Server) DeleteRouteById(id string, save bool) error {
 	if router.main != nil {
 		idx := slices.IndexFunc(router.main.Routes, func(e *Router) bool { return e.Id == id })
 		if idx != -1 {
-			console.Logf("Api gateway", `[DELETE] %s:%s -> %s`, router.Method, router.Path, router.Resolve)
+			logs.Logf(packageName, `[DELETE] %s:%s -> %s`, router.Method, router.Path, router.Resolve)
 			router.main.Routes = append(router.main.Routes[:idx], router.main.Routes[idx+1:]...)
 		}
 	}
@@ -162,7 +162,7 @@ func (s *Server) SetRouter(private bool, id, method, path, resolve string, heade
 	method = strings.ToUpper(method)
 	ok := methodMap[method]
 	if !ok {
-		return nil, console.Alertf(MSG_METHOD_NOT_FOUND, method)
+		return nil, logs.Alertf(MSG_METHOD_NOT_FOUND, method)
 	}
 
 	route, err := s.setRouter(id, method, path, resolve, TpApiRest, header, tpHeader, excludeHeader, private, packageName, saved)

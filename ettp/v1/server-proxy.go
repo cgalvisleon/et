@@ -10,9 +10,9 @@ import (
 	"net/url"
 	"sync"
 
-	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/response"
@@ -94,7 +94,7 @@ func (p *Proxy) ToJson() et.Json {
 func (s *Proxy) handlerConnection(clientConn net.Conn) {
 	remoteConn, err := net.Dial("tcp", s.Solver)
 	if err != nil {
-		console.Alertf("Error conectando al destino: %s", err.Error())
+		logs.Alertf("Error conectando al destino: %s", err.Error())
 		clientConn.Close()
 		return
 	}
@@ -130,7 +130,7 @@ func (s *Server) SetProxy(id, path, name, description, solver, packageName strin
 	}
 
 	confirm := func(action string) {
-		console.Logf("proxy", `[%s] %s -> %s | %s | %s`, action, name, path, solver, description)
+		logs.Logf(packageName, `[%s] %s -> %s | %s | %s`, action, name, path, solver, description)
 	}
 
 	result, ok := s.proxys[path]
@@ -159,7 +159,7 @@ func (s *Server) SetProxy(id, path, name, description, solver, packageName strin
 
 	if save {
 		if err := s.save(); err != nil {
-			console.Alertf("Failed to save routes: %s", err.Error())
+			logs.Alertf("Failed to save routes: %s", err.Error())
 		}
 	}
 
@@ -191,14 +191,14 @@ func (s *Server) handlerReverseProxy(w http.ResponseWriter, r *http.Request) {
 	proxy := s.getProxyByPath(r.URL.Path)
 	if proxy == nil {
 		request["proxy"] = "not found"
-		console.Debug("proxy:", request.ToString())
+		logs.Debug(packageName, "proxy:", request.ToString())
 		s.notFoundHandler.ServeHTTP(w, r)
 		return
 	}
 
 	if s.debug {
 		request["proxy"] = proxy.Solver
-		console.Debug("proxy:", request.ToString())
+		logs.Debug(packageName, "proxy:", request.ToString())
 	}
 
 	if proxy.Kind == TpPortForward {
@@ -243,7 +243,7 @@ func (s *Server) SetPortForward(id, name, description, remoteHost string, remote
 	}
 
 	confirm := func(action string) {
-		console.Logf("portforward", `[%s] %s -> %d -> %s:%d`, action, name, localPort, remoteHost, remotePort)
+		logs.Logf(packageName, `[%s] %s -> %d -> %s:%d`, action, name, localPort, remoteHost, remotePort)
 	}
 
 	remoteAddr := fmt.Sprintf("%s:%d", remoteHost, remotePort)
@@ -273,7 +273,7 @@ func (s *Server) SetPortForward(id, name, description, remoteHost string, remote
 
 	if save {
 		if err := s.save(); err != nil {
-			console.Alertf("Failed to save routes: %s", err.Error())
+			logs.Alertf("Failed to save routes: %s", err.Error())
 		}
 	}
 
@@ -317,7 +317,7 @@ func (s *Proxy) StartPortForward() error {
 					case <-ctx.Done():
 						return // Se pidió detener
 					default:
-						console.Logf("portforward", "Error aceptando conexión: %s", err.Error())
+						logs.Logf(packageName, "Error aceptando conexión: %s", err.Error())
 						continue
 					}
 				}
@@ -328,7 +328,7 @@ func (s *Proxy) StartPortForward() error {
 	}()
 
 	s.started = true
-	console.Logf("portforward", "Port-forwarding iniciado: %s -> %s", s.Path, s.Solver)
+	logs.Logf(packageName, "Port-forwarding iniciado: %s -> %s", s.Path, s.Solver)
 	return nil
 }
 
@@ -345,12 +345,12 @@ func (s *Proxy) StopPortForward() error {
 		return nil
 	}
 
-	console.Logf("portforward", "Deteniendo port-forward...")
+	logs.Logf(packageName, "Deteniendo port-forward...")
 	s.cancel()
 	s.listener.Close()
 	s.wg.Wait()
 	s.started = false
-	console.Logf("portforward", "Port-forward detenido.")
+	logs.Logf(packageName, "Port-forward detenido.")
 	return nil
 }
 
@@ -499,7 +499,7 @@ func (s *Server) DeleteProxyById(id string, save bool) error {
 
 	if save {
 		if err := s.save(); err != nil {
-			console.Alertf("Failed to save routes: %s", err.Error())
+			logs.Alertf("Failed to save routes: %s", err.Error())
 		}
 	}
 

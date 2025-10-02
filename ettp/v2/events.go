@@ -1,8 +1,8 @@
 package ettp
 
 import (
-	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/router"
 )
 
@@ -46,7 +46,7 @@ func (s *Server) eventSetRouter(m event.Message) {
 	packageName := data.Str("package_name")
 	_, err := s.SetRouter(method, path, resolve, typeHeader, header, excludeHeader, version, private, packageName, true)
 	if err != nil {
-		console.Alertf(`eventSetRouter error:%s`, err.Error())
+		logs.Alertf(`eventSetRouter error:%s`, err.Error())
 	}
 }
 
@@ -63,7 +63,7 @@ func (s *Server) eventRemoveRouterById(m event.Message) {
 	id := data.Str("id")
 	err := s.RemoveRouterById(id, true)
 	if err != nil {
-		console.Alertf(`eventRemoveRouterById error:%s`, err.Error())
+		logs.Alertf(`eventRemoveRouterById error:%s`, err.Error())
 	}
 }
 

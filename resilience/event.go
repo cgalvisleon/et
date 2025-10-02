@@ -1,7 +1,6 @@
 package resilience
 
 import (
-	"github.com/cgalvisleon/et/console"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 )
@@ -58,5 +57,5 @@ func eventRestart(m event.Message) {
 	}
 
 	Restart(id)
-	console.Log("eventRestart:", data.ToString())
+	logs.Log(packageName, "eventRestart:", data.ToString())
 }

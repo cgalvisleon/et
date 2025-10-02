@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/logs"
 )
 
 type Storage struct {
@@ -27,7 +27,7 @@ func NewStorage() *Storage {
 * @return error
 **/
 func (s *Server) migrate() error {
-	console.Log("Migrating routes...")
+	logs.Logf(packageName, "Migrating routes...")
 	var storage = []*Router{}
 	bt, err := json.Marshal(storage)
 	if err != nil {
@@ -67,11 +67,11 @@ func (s *Server) migrate() error {
 	cache.SetW(storageKeyBackup, strs, 3)
 
 	if s.debug {
-		console.Log("Routes migrated:", len(s.router))
+		logs.Log(packageName, "Routes migrated:", len(s.router))
 	}
 
 	if err := s.save(); err != nil {
-		console.Alertf("Failed to save routes: %s", err.Error())
+		logs.Alertf("Failed to save routes: %s", err.Error())
 	}
 
 	return nil

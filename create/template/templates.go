@@ -54,7 +54,7 @@ const ModelMain = `package main
 
 import (
 	"github.com/cgalvisleon/et/config"
-	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/logs"
 	serv "$1/internal/services/$2"
 )
 
@@ -71,7 +71,7 @@ func main() {
 
 	srv, err := serv.New()
 	if err != nil {
-		console.Fatal(err)
+		logs.Fatal(err)
 	}
 
 	srv.Start()
@@ -84,7 +84,7 @@ import (
 	"net/http"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrpc"
 	_ "github.com/cgalvisleon/jdb/drivers/postgres"
@@ -98,17 +98,17 @@ func New() http.Handler {
 
 	err := pkg.LoadConfig()
 	if err != nil {
-		console.Panic(err)
+		logs.Panic(err)
 	}
 
 	err = cache.Load()
 	if err != nil {
-		console.Panic(err)
+		logs.Panic(err)
 	}
 
 	err = event.Load()
 	if err != nil {
-		console.Panic(err)
+		logs.Panic(err)
 	}
 
 	_pkg := &pkg.Router{
@@ -134,7 +134,7 @@ import (
 	"net/http"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrpc"
 	_ "github.com/cgalvisleon/jdb/drivers/postgres"
@@ -148,27 +148,27 @@ func New() http.Handler {
 
 	err := pkg.LoadConfig()
 	if err != nil {
-		console.Alert(err)
+		logs.Alert(err)
 	}
 
 	err = pkg.StartRpcServer()
 	if err != nil {
-		console.Panic(err)
+		logs.Panic(err)
 	}
 
 	err = cache.Load()
 	if err != nil {
-		console.Panic(err)
+		logs.Panic(err)
 	}
 
 	err = event.Load()
 	if err != nil {
-		console.Panic(err)
+		logs.Panic(err)
 	}
 
 	db, err := jdb.Load()
 	if err != nil {
-		console.Panic(err)
+		logs.Panic(err)
 	}
 
 	_pkg := &pkg.Router{
@@ -323,13 +323,13 @@ const ModelEvent = `package $1
 
 import (
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/logs"
 )
 
 func initEvents() {
 	err := event.Stack("<channel>", eventAction)
 	if err != nil {
-		console.Error(err)
+		logs.Error(err)
 	}
 
 }
@@ -337,7 +337,7 @@ func initEvents() {
 func eventAction(m event.Message) {
 	data := m.Data
 
-	console.Log("eventAction", data)
+	logs.Log("eventAction", data)
 }
 `
 
@@ -348,7 +348,7 @@ import (
 	"sync"
 
 	"github.com/cgalvisleon/et/config"
-	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/dt"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
@@ -361,7 +361,7 @@ var $2 *jdb.Model
 
 func Define$2(db *jdb.DB) error {
 	if err := defineSchema(db); err != nil {
-		return console.Panic(err)
+		return logs.Panic(err)
 	}
 
 	if $2 != nil {
@@ -410,7 +410,7 @@ func Define$2(db *jdb.DB) error {
 	})
 	
 	if err := $2.Init(); err != nil {
-		return console.Panic(err)
+		return logs.Panic(err)
 	}
 
 	return nil
@@ -568,7 +568,7 @@ func State$2(id, stateId, createdBy string) (et.Item, error) {
 	dt.Drop(id)
 
 	if !result.Ok {
-		return et.Item{}, console.Alertm(MSG_RECORD_NOT_EXISTS)
+		return et.Item{}, logs.Alertm(MSG_RECORD_NOT_EXISTS)
 	}
 
 	return et.Item{
@@ -709,7 +709,7 @@ func (rt *Router) query$2(w http.ResponseWriter, r *http.Request) {
 
 /** Copy this code to func initModel in model.go
 	if err := Define$2(db); err != nil {
-		return console.Panic(err)
+		return logs.Panic(err)
 	}
 **/
 `
@@ -764,14 +764,14 @@ func (rt *Router) get$2(w http.ResponseWriter, r *http.Request) {
 const ModelModel = `package $1
 
 import (
-	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/jdb/jdb"
 	"$3/internal/models/$2"	
 )
 
 func initModels(db *jdb.DB) error {
 	if err := $2.Define$4(db); err != nil {
-		return console.Panic(err)
+		return logs.Panic(err)
 	}
 
 	return nil
@@ -807,7 +807,7 @@ const ModelhRpc = `package $1
 import (
 	"net/rpc"
 
-	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -820,7 +820,7 @@ func InitRpc() error {
 
 	err := rpc.Register(service)
 	if err != nil {
-		return console.Error(err)
+		return logs.Error(err)
 	}
 
 	initRpc = true
@@ -871,7 +871,7 @@ import (
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/router"
@@ -908,7 +908,7 @@ func (rt *Router) Routes() http.Handler {
 	rt.Repository.Init(ctx)
 	middleware.SetServiceName(PackageName)
 
-	console.Logf(PackageName, "Router version:%s", PackageVersion)
+	logs.Logf(PackageName, "Router version:%s", PackageVersion)
 
 	return r
 }
@@ -952,7 +952,7 @@ import (
 	"os"
 	"fmt"
 
-	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/router"
@@ -986,7 +986,7 @@ func (rt *Router) Routes() http.Handler {
 	rt.Repository.Init(ctx)
 	middleware.SetServiceName(PackageName)
 
-	console.Logf(PackageName, "Router version:%s", PackageVersion)
+	logs.Logf(PackageName, "Router version:%s", PackageVersion)
 
 	return r
 }
@@ -1026,7 +1026,7 @@ const ModelRpc = `package $1
 
 import (
 	"github.com/cgalvisleon/et/config"
-	"github.com/cgalvisleon/et/console"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jrpc"
 )
@@ -1060,7 +1060,7 @@ func (c *Services) Version(require et.Json, response *et.Item) error {
 		"help":    config.App.Help,
 	}
 
-	return console.Rpc(PackageName, response.ToString())
+	return logs.Rpc(PackageName, response.ToString())
 }
 `
 
@@ -1172,11 +1172,11 @@ services:
     deploy:
       replicas: 1
     environment:
-      - "APP=Celsia Internet - Event Stack"
-      - "PORT=3300"
-      - "VERSION=1.0.1"
-      - "COMPANY=Celsia Internet"
-      - "WEB=https://www.home.com"
+      - "APP=$APP"
+      - "PORT=$PORT"
+      - "VERSION=$RELEASE"
+      - "COMPANY=$COMPANY"
+      - "WEB=$WEB"
       - "PATH_URL=/api/$1"
       - "PRODUCTION=true"
       - "HOST=stack"

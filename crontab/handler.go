@@ -80,10 +80,10 @@ func IsMaster() bool {
 /**
 * AddJob
 * Add job to crontab in execute local
-* @param id, name, spec, channel string, params et.Json, repetitions int, fn func()
+* @param id, name, spec, channel string, params et.Json, repetitions int, start bool, fn func()
 * @return *Job, error
 **/
-func AddJob(id, name, spec, channel string, params et.Json, repetitions int, fn func(job *Job)) (*Job, error) {
+func AddJob(id, name, spec, channel string, params et.Json, repetitions int, start bool, fn func(job *Job)) (*Job, error) {
 	err := Load()
 	if err != nil {
 		return nil, err
@@ -98,6 +98,10 @@ func AddJob(id, name, spec, channel string, params et.Json, repetitions int, fn 
 		return nil, err
 	}
 
+	if !start {
+		return result, nil
+	}
+
 	err = result.Start()
 	if err != nil {
 		return nil, err
@@ -109,39 +113,41 @@ func AddJob(id, name, spec, channel string, params et.Json, repetitions int, fn 
 /**
 * PushEventJob
 * Push job to crontab was notified by event workers
-* @param id, name, spec, channel string, started bool, params et.Json
+* @param id, name, spec, channel string, repetitions int, start bool, params et.Json
 * @return error
 **/
-func PushEventJob(id, name, spec, channel string, started bool, params et.Json) error {
+func PushEventJob(id, name, spec, channel string, repetitions int, start bool, params et.Json) error {
 	err := Server()
 	if err != nil {
 		return err
 	}
 
 	return event.Publish(EVENT_CRONTAB_SET, et.Json{
-		"id":      id,
-		"name":    name,
-		"spec":    spec,
-		"channel": channel,
-		"started": started,
-		"params":  params,
+		"id":          id,
+		"name":        name,
+		"spec":        spec,
+		"channel":     channel,
+		"repetitions": repetitions,
+		"start":       start,
+		"params":      params,
 	})
 }
 
 /**
 * EventJob
 * Event job to crontab function execute was notified by event workers
-* @param id, name, spec, channel string, params et.Json
+* @param id, name, spec, channel string, repetitions int, start bool, params et.Json, fn func(event.Message)
 * @return *Job, error
 **/
-func EventJob(id, name, spec, channel string, params et.Json, fn func(event.Message)) error {
+func EventJob(id, name, spec, channel string, repetitions int, start bool, params et.Json, fn func(event.Message)) error {
 	event.Publish(EVENT_CRONTAB_SET, et.Json{
-		"id":      id,
-		"name":    name,
-		"spec":    spec,
-		"channel": channel,
-		"started": true,
-		"params":  params,
+		"id":          id,
+		"name":        name,
+		"spec":        spec,
+		"channel":     channel,
+		"repetitions": repetitions,
+		"start":       start,
+		"params":      params,
 	})
 
 	err := event.Stack(channel, fn)

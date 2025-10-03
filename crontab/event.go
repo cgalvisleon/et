@@ -47,7 +47,7 @@ func eventInit() error {
 
 /**
 * eventSet
-* @param msg event.EvenMessage
+* @param msg event.Message
 * @return error
 **/
 func eventSet(msg event.Message) {
@@ -78,7 +78,7 @@ func eventSet(msg event.Message) {
 
 /**
 * eventDelete
-* @param msg event.EvenMessage
+* @param msg event.Message
 * @return error
 **/
 func eventDelete(msg event.Message) {
@@ -103,7 +103,7 @@ func eventDelete(msg event.Message) {
 
 /**
 * eventStop
-* @param msg event.EvenMessage
+* @param msg event.Message
 * @return error
 **/
 func eventStop(msg event.Message) {
@@ -128,7 +128,7 @@ func eventStop(msg event.Message) {
 
 /**
 * eventStart
-* @param msg event.EvenMessage
+* @param msg event.Message
 * @return error
 **/
 func eventStart(msg event.Message) {

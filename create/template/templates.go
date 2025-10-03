@@ -390,11 +390,11 @@ func Define$2(db *jdb.DB) error {
 		return nil
 	})
 	$2.BeforeUpdate(func(tx *jdb.Tx, data et.Json) error {
-		projectId := data.Str(jdb.PROJECT_ID)
+		tenantId := data.Str(jdb.TENANT_ID)
 		id := data.Str(jdb.KEY)
 		name := data.Str("name")
 		exists, err := $2.
-			Where(jdb.PROJECT_ID).Eq(projectId).
+			Where(jdb.TENANT_ID).Eq(tenantId).
 			And("name").Eq(name).
 			And(jdb.KEY).Neg(id).
 			ItExistsTx(tx)
@@ -439,12 +439,12 @@ func Get$2ById(id string) (dt.Object, error) {
 
 /**
 * insert$2
-* @param projectId, statusId, id, name, description string, data et.Json, createdBy string
+* @param tenantId, statusId, id, name, description string, data et.Json, createdBy string
 * @return et.Item, error
 **/
-func insert$2(projectId, statusId, id, name, description string, data et.Json, createdBy string) (et.Item, error) {
-	if !utility.ValidStr(projectId, 0, []string{""}) {
-		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, jdb.PROJECT_ID)
+func insert$2(tenantId, statusId, id, name, description string, data et.Json, createdBy string) (et.Item, error) {
+	if !utility.ValidStr(tenantId, 0, []string{""}) {
+		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, jdb.TENANT_ID)
 	}
 
 	if !utility.ValidStr(id, 0, []string{""}) {
@@ -457,7 +457,7 @@ func insert$2(projectId, statusId, id, name, description string, data et.Json, c
 
 	id = $2.GetId(id)
 	now := timezone.NowTime()
-	data[jdb.PROJECT_ID] = projectId
+	data[jdb.TENANT_ID] = tenantId
 	data[jdb.KEY] = id
 	data["name"] = name
 	data["description"] = description
@@ -486,12 +486,12 @@ func insert$2(projectId, statusId, id, name, description string, data et.Json, c
 
 /**
 * Upsert$2
-* @param projectId, id, name, description string, data et.Json, createdBy string
+* @param tenantId, id, name, description string, data et.Json, createdBy string
 * @return et.Item, error
 **/
-func Upsert$2(projectId, id, name, description string, data et.Json, createdBy string) (et.Item, error) {
-	if !utility.ValidStr(projectId, 0, []string{""}) {
-		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, jdb.PROJECT_ID)
+func Upsert$2(tenantId, id, name, description string, data et.Json, createdBy string) (et.Item, error) {
+	if !utility.ValidStr(tenantId, 0, []string{""}) {
+		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, jdb.TENANT_ID)
 	}
 
 	if !utility.ValidStr(id, 0, []string{""}) {
@@ -504,7 +504,7 @@ func Upsert$2(projectId, id, name, description string, data et.Json, createdBy s
 
 	id = $2.GetId(id)
 	now := timezone.NowTime()
-	data[jdb.PROJECT_ID] = projectId
+	data[jdb.TENANT_ID] = tenantId
 	data[jdb.KEY] = id
 	data["name"] = name
 	data["description"] = description
@@ -615,12 +615,12 @@ import (
 **/
 func (rt *Router) upsert$2(w http.ResponseWriter, r *http.Request) {
 	body, _ := response.GetBody(r)
-	projectId := body.Str(jdb.PROJECT_ID)
+	tenantId := body.Str(jdb.TENANT_ID)
 	id := body.Str(jdb.KEY)
 	name := body.Str("name")
 	description := body.Str("description")
 	clientName := claim.ClientName(r)
-	result, err := $4.Upsert$2(projectId, id, name, description, body, clientName)
+	result, err := $4.Upsert$2(tenantId, id, name, description, body, clientName)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return

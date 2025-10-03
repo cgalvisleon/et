@@ -93,6 +93,7 @@ func (s *Object) load() error {
 * @return Object
 **/
 func Up(key string, data et.Item) Object {
+
 	obj := newObject(key)
 	obj.up(data, data.Ok)
 

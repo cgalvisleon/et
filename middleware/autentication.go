@@ -88,7 +88,7 @@ func Autentication(next http.Handler) http.Handler {
 		ctx = context.WithValue(ctx, claim.DeviceKey, clm.Device)
 		ctx = context.WithValue(ctx, claim.NameKey, clm.Name)
 		ctx = context.WithValue(ctx, claim.UsernameKey, clm.Username)
-		ctx = context.WithValue(ctx, claim.ProjectIdKey, clm.ProjectId)
+		ctx = context.WithValue(ctx, claim.TenantIdKey, clm.TenantId)
 		ctx = context.WithValue(ctx, claim.ProfileTpKey, clm.ProfileTp)
 		ctx = context.WithValue(ctx, claim.TagKey, clm.Tag)
 		ctx = context.WithValue(ctx, claim.DurationKey, clm.Duration)
@@ -102,7 +102,7 @@ func Autentication(next http.Handler) http.Handler {
 			"device":     clm.Device,
 			"name":       clm.Name,
 			"username":   clm.Username,
-			"project_id": clm.ProjectId,
+			"tenant_id":  clm.TenantId,
 			"profile_tp": clm.ProfileTp,
 			"tag":        clm.Tag,
 			"host_name":  hostName,

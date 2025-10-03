@@ -67,11 +67,11 @@ spec:
               value: "$ROLE"
             - name: RPC_PORT
               value: "4200"
-            - name: PROJECT_ID
+            - name: TENANT_ID
               valueFrom:
                 configMapKeyRef:
                   name: config-$NS
-                  key: PROJECT_ID
+                  key: TENANT_ID
             - name: PROJECT_NAME
               valueFrom:
                 configMapKeyRef:

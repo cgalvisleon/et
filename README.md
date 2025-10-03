@@ -19,8 +19,6 @@ Para usar paquetes individuales, importa el módulo y el paquete correspondiente
 ```go
 import (
     "github.com/cgalvisleon/et/et"
-    // "github.com/cgalvisleon/et/ettp"
-    // "github.com/cgalvisleon/et/cache"
 )
 ```
 

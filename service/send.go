@@ -24,11 +24,11 @@ func IntToTpMessage(i int) TpMessage {
 
 /**
 * SendSms
-* @param projectId string, contactNumbers []string, content string, params []et.Json, tp TpMessage, createdBy string
+* @param tenantId string, contactNumbers []string, content string, params et.Json, tp TpMessage, createdBy string
 * @response et.Item, error
 **/
-func SendSms(projectId string, contactNumbers []string, content string, params []et.Json, tp TpMessage, createdBy string) (et.Items, error) {
-	serviceId := New(projectId, "sms", "Send SMS message", createdBy)
+func SendSms(tenantId string, contactNumbers []string, content string, params et.Json, tp TpMessage, createdBy string) (et.Items, error) {
+	serviceId := New(tenantId, "sms", MSG_SEND_SMS, createdBy)
 	result, err := aws.SendSMS(contactNumbers, content, params, tp.String())
 	if err != nil {
 		SetStatus(serviceId, STATUS_ERROR, et.Json{
@@ -39,7 +39,7 @@ func SendSms(projectId string, contactNumbers []string, content string, params [
 
 	SetStatus(serviceId, STATUS_SUCCESS, et.Json{
 		"context": et.Json{
-			"projectId":      projectId,
+			"tenantId":       tenantId,
 			"serviceId":      serviceId,
 			"contactNumbers": contactNumbers,
 			"content":        content,
@@ -56,11 +56,11 @@ func SendSms(projectId string, contactNumbers []string, content string, params [
 
 /**
 * SendWhatsapp
-* @param projectId, templateId string, contactNumbers []string, params []et.Json, tp TpMessage, createdBy string
+* @param tenantId, templateId string, contactNumbers []string, params []et.Json, tp TpMessage, createdBy string
 * @response et.Items, error
 **/
-func SendWhatsapp(projectId, templateId string, contactNumbers []string, params []et.Json, tp TpMessage, createdBy string) (et.Items, error) {
-	serviceId := New(projectId, "whatsapp", "Send Whatsapp message", createdBy)
+func SendWhatsapp(tenantId, templateId string, contactNumbers []string, params []et.Json, tp TpMessage, createdBy string) (et.Items, error) {
+	serviceId := New(tenantId, "whatsapp", MSG_SEND_WHATSAPP, createdBy)
 	result, err := brevo.SendWhatsapp(contactNumbers, templateId, params, tp.String())
 	if err != nil {
 		SetStatus(serviceId, STATUS_ERROR, et.Json{
@@ -71,7 +71,7 @@ func SendWhatsapp(projectId, templateId string, contactNumbers []string, params 
 
 	SetStatus(serviceId, STATUS_SUCCESS, et.Json{
 		"context": et.Json{
-			"projectId":      projectId,
+			"tenantId":       tenantId,
 			"serviceId":      serviceId,
 			"templateId":     templateId,
 			"contactNumbers": contactNumbers,
@@ -88,11 +88,11 @@ func SendWhatsapp(projectId, templateId string, contactNumbers []string, params 
 
 /**
 * SendEmail
-* @param projectId string, from et.Json, to []et.Json, subject string, htmlContent string, params []et.Json, tp TpMessage, createdBy string
+* @param tenantId string, from et.Json, to []et.Json, subject string, htmlContent string, params []et.Json, tp TpMessage, createdBy string
 * @response et.Items, error
 **/
-func SendEmail(projectId string, from et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp TpMessage, createdBy string) (et.Items, error) {
-	serviceId := New(projectId, "email", "Send email message", createdBy)
+func SendEmail(tenantId string, from et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp TpMessage, createdBy string) (et.Items, error) {
+	serviceId := New(tenantId, "email", MSG_SEND_EMAIL, createdBy)
 	result, err := brevo.SendEmail(from, to, subject, htmlContent, params, tp.String())
 	if err != nil {
 		SetStatus(serviceId, STATUS_ERROR, et.Json{
@@ -103,7 +103,7 @@ func SendEmail(projectId string, from et.Json, to []et.Json, subject string, htm
 
 	SetStatus(serviceId, STATUS_SUCCESS, et.Json{
 		"context": et.Json{
-			"projectId":   projectId,
+			"tenantId":    tenantId,
 			"serviceId":   serviceId,
 			"from":        from,
 			"to":          to,

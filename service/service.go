@@ -32,16 +32,16 @@ const (
 
 /**
 * New
-* @param projectId, kind, description, clientId string
+* @param tenantId, kind, description, clientId string
 * @response string
 **/
-func New(projectId, kind, description, clientId string) string {
+func New(tenantId, kind, description, clientId string) string {
 	now := utility.Now()
 	result := reg.GenULIDI("service")
 	data := et.Json{
 		"created_at":  now,
 		"service_id":  result,
-		"project_id":  projectId,
+		"tenant_id":   tenantId,
 		"client_id":   clientId,
 		"kind":        kind,
 		"description": description,

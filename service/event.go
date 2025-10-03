@@ -10,13 +10,13 @@ import (
 
 /**
 * EventSendSms
-* @param projectId string, contactNumbers []string, content string, params []et.Json, tp TpMessage, createdBy string
+* @param tenantId string, contactNumbers []string, content string, params []et.Json, tp TpMessage, createdBy string
 * @response string
 **/
-func EventSendSms(projectId string, contactNumbers []string, content string, params []et.Json, tp TpMessage, createdBy string) string {
-	serviceId := New(projectId, "sms", "Send SMS message", createdBy)
+func EventSendSms(tenantId string, contactNumbers []string, content string, params []et.Json, tp TpMessage, createdBy string) string {
+	serviceId := New(tenantId, "sms", "Send SMS message", createdBy)
 	event.Work(EVENT_SEND_SMS, et.Json{
-		"projectId":      projectId,
+		"tenantId":       tenantId,
 		"serviceId":      serviceId,
 		"contactNumbers": contactNumbers,
 		"content":        content,
@@ -30,13 +30,13 @@ func EventSendSms(projectId string, contactNumbers []string, content string, par
 
 /**
 * EventSendWhatsapp
-* @param projectId, templateId string, contactNumbers []string, params []et.Json, tp TpMessage, createdBy string
+* @param tenantId, templateId string, contactNumbers []string, params []et.Json, tp TpMessage, createdBy string
 * @response string
 **/
-func EventSendWhatsapp(projectId, templateId string, contactNumbers []string, params []et.Json, tp TpMessage, createdBy string) string {
-	serviceId := New(projectId, "whatsapp", "Send Whatsapp message", createdBy)
+func EventSendWhatsapp(tenantId, templateId string, contactNumbers []string, params []et.Json, tp TpMessage, createdBy string) string {
+	serviceId := New(tenantId, "whatsapp", "Send Whatsapp message", createdBy)
 	event.Work(EVENT_SEND_WHATSAPP, et.Json{
-		"projectId":      projectId,
+		"tenantId":       tenantId,
 		"serviceId":      serviceId,
 		"templateId":     templateId,
 		"contactNumbers": contactNumbers,
@@ -50,13 +50,13 @@ func EventSendWhatsapp(projectId, templateId string, contactNumbers []string, pa
 
 /**
 * EventSendEmail
-* @param projectId string, sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp TpMessage, createdBy string
+* @param tenantId string, sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp TpMessage, createdBy string
 * @response string
 **/
-func EventSendEmail(projectId string, sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp TpMessage, createdBy string) string {
-	serviceId := New(projectId, "email", "Send email message", createdBy)
+func EventSendEmail(tenantId string, sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp TpMessage, createdBy string) string {
+	serviceId := New(tenantId, "email", "Send email message", createdBy)
 	event.Work(EVENT_SEND_EMAIL, et.Json{
-		"projectId":   projectId,
+		"tenantId":    tenantId,
 		"serviceId":   serviceId,
 		"sender":      sender,
 		"to":          to,
@@ -97,11 +97,11 @@ func LoadEventSend() {
 **/
 func eventSendSms(m event.Message) {
 	data := m.Data
-	projectId := data.String("projectId")
+	tenantId := data.String("tenantId")
 	serviceId := data.String("serviceId")
 	contactNumbers := data.ArrayStr("contactNumbers")
 	content := data.String("content")
-	params := data.ArrayJson("params")
+	params := data.Json("params")
 	tp := data.String("type")
 	createdBy := data.String("createdBy")
 	result, err := aws.SendSMS(contactNumbers, content, params, tp)
@@ -114,7 +114,7 @@ func eventSendSms(m event.Message) {
 
 	SetStatus(serviceId, STATUS_SUCCESS, et.Json{
 		"context": et.Json{
-			"projectId":      projectId,
+			"tenantId":       tenantId,
 			"serviceId":      serviceId,
 			"contactNumbers": contactNumbers,
 			"content":        content,
@@ -135,7 +135,7 @@ func eventSendSms(m event.Message) {
 **/
 func eventSendWhatsapp(m event.Message) {
 	data := m.Data
-	projectId := data.String("projectId")
+	tenantId := data.String("tenantId")
 	serviceId := data.String("serviceId")
 	templateId := data.String("templateId")
 	contactNumbers := data.ArrayStr("contactNumbers")
@@ -152,7 +152,7 @@ func eventSendWhatsapp(m event.Message) {
 
 	SetStatus(serviceId, STATUS_SUCCESS, et.Json{
 		"context": et.Json{
-			"projectId":      projectId,
+			"tenantId":       tenantId,
 			"serviceId":      serviceId,
 			"templateId":     templateId,
 			"contactNumbers": contactNumbers,
@@ -173,7 +173,7 @@ func eventSendWhatsapp(m event.Message) {
 **/
 func eventSendEmail(m event.Message) {
 	data := m.Data
-	projectId := data.String("projectId")
+	tenantId := data.String("tenantId")
 	serviceId := data.String("serviceId")
 	from := data.Json("from")
 	to := data.ArrayJson("to")
@@ -192,7 +192,7 @@ func eventSendEmail(m event.Message) {
 
 	SetStatus(serviceId, STATUS_SUCCESS, et.Json{
 		"context": et.Json{
-			"projectId":   projectId,
+			"tenantId":    tenantId,
 			"serviceId":   serviceId,
 			"from":        from,
 			"to":          to,

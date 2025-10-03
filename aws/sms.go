@@ -13,10 +13,10 @@ import (
 
 /**
 * SendSMS
-* @param contactNumbers []string, content string, params []et.Json, tp string
+* @param contactNumbers []string, content string, params et.Json, tp string
 * @return et.Items, error
 **/
-func SendSMS(contactNumbers []string, content string, params []et.Json, tp string) (et.Items, error) {
+func SendSMS(contactNumbers []string, content string, params et.Json, tp string) (et.Items, error) {
 	if len(contactNumbers) == 0 {
 		return et.Items{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "contactNumbers")
 	}
@@ -37,12 +37,10 @@ func SendSMS(contactNumbers []string, content string, params []et.Json, tp strin
 	result := et.Items{}
 	for _, phoneNumber := range contactNumbers {
 		message := content
-		for _, param := range params {
-			for k, v := range param {
-				k := fmt.Sprintf("{{%s}}", k)
-				s := fmt.Sprintf("%v", v)
-				message = strs.Replace(message, k, s)
-			}
+		for k, v := range params {
+			k := fmt.Sprintf("{{%s}}", k)
+			s := fmt.Sprintf("%v", v)
+			message = strs.Replace(message, k, s)
 		}
 
 		svc := sns.New(sess)

@@ -37,7 +37,7 @@ const (
 	SubjectKey   ContextKey = "subject"
 	UsernameKey  ContextKey = "username"
 	TokenKey     ContextKey = "token"
-	ProjectIdKey ContextKey = "projectId"
+	TenantIdKey  ContextKey = "tenantId"
 	ProfileTpKey ContextKey = "profileTp"
 	ModelKey     ContextKey = "model"
 	TagKey       ContextKey = "tag"
@@ -51,7 +51,7 @@ type Claim struct {
 	Username  string        `json:"username"`
 	Device    string        `json:"device"`
 	Duration  time.Duration `json:"duration"`
-	ProjectId string        `json:"projectId"`
+	TenantId  string        `json:"tenantId"`
 	ProfileTp string        `json:"profileTp"`
 	Tag       string        `json:"tag"`
 	jwt.StandardClaims
@@ -70,7 +70,7 @@ func (c *Claim) ToJson() et.Json {
 		"device":     c.Device,
 		"subject":    c.Subject,
 		"duration":   c.Duration,
-		"project_id": c.ProjectId,
+		"tenant_id":  c.TenantId,
 		"profile_tp": c.ProfileTp,
 		"tag":        c.Tag,
 		"expiresAt":  time.Unix(c.ExpiresAt, 0).Format("2006-01-02 03:04:05 PM"),
@@ -88,10 +88,10 @@ func GetTokenKey(app, device, id string) string {
 
 /**
 * NewClaim
-* @param id, app, name, username, device, tag string, duration time.Duration, projectId, profileTp string
+* @param id, app, name, username, device, tag string, duration time.Duration, tenantId, profileTp string
 * @return Claim
 **/
-func NewClaim(id, app, name, username, device, projectId, profileTp, tag string, duration time.Duration) Claim {
+func NewClaim(id, app, name, username, device, tenantId, profileTp, tag string, duration time.Duration) Claim {
 	c := Claim{}
 	c.Salt = utility.GetOTP(6)
 	c.ID = id
@@ -100,7 +100,7 @@ func NewClaim(id, app, name, username, device, projectId, profileTp, tag string,
 	c.Username = username
 	c.Device = device
 	c.Duration = duration
-	c.ProjectId = projectId
+	c.TenantId = tenantId
 	c.ProfileTp = profileTp
 	c.Tag = tag
 	if c.Duration != 0 {
@@ -155,11 +155,11 @@ func NewToken(id, app, name, username, device string, duration time.Duration) (s
 
 /**
 * NewAuthorization
-* @param id, app, name, username, device string, projectId, profileTp string, duration time.Duration
+* @param id, app, name, username, device string, tenantId, profileTp string, duration time.Duration
 * @return string, error
 **/
-func NewAuthorization(id, app, name, username, device, projectId, profileTp string, duration time.Duration) (string, error) {
-	c := NewClaim(id, app, name, username, device, projectId, profileTp, "", duration)
+func NewAuthorization(id, app, name, username, device, tenantId, profileTp string, duration time.Duration) (string, error) {
+	c := NewClaim(id, app, name, username, device, tenantId, profileTp, "", duration)
 	return newTokenKey(c)
 }
 
@@ -272,9 +272,9 @@ func ParceToken(token string) (*Claim, error) {
 		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "duration")
 	}
 
-	projectId, ok := claim["projectId"].(string)
+	tenantId, ok := claim["tenantId"].(string)
 	if !ok {
-		projectId = ""
+		tenantId = ""
 	}
 
 	profileTp, ok := claim["profileTp"].(string)
@@ -296,7 +296,7 @@ func ParceToken(token string) (*Claim, error) {
 		Username:  username,
 		Device:    device,
 		Duration:  duration,
-		ProjectId: projectId,
+		TenantId:  tenantId,
 		ProfileTp: profileTp,
 		Tag:       tag,
 	}
@@ -403,13 +403,13 @@ func ProfileTp(r *http.Request) string {
 }
 
 /**
-* ProjectId
+* TenantId
 * @param r *http.Request
 * @return string
 **/
-func ProjectId(r *http.Request) string {
+func TenantId(r *http.Request) string {
 	ctx := r.Context()
-	return ProjectIdKey.String(ctx, "")
+	return TenantIdKey.String(ctx, "")
 }
 
 /**
@@ -447,7 +447,7 @@ func GetClient(r *http.Request) et.Json {
 	device := DeviceKey.String(ctx, "")
 	fullName := NameKey.String(ctx, "Anonimo")
 	profileTp := ProfileTpKey.String(ctx, "")
-	projectId := ProjectIdKey.String(ctx, "")
+	tenantId := TenantIdKey.String(ctx, "")
 	tag := TagKey.String(ctx, "")
 
 	return et.Json{
@@ -459,7 +459,7 @@ func GetClient(r *http.Request) et.Json {
 		"device":     device,
 		"full_name":  fullName,
 		"profile_tp": profileTp,
-		"project_id": projectId,
+		"tenant_id":  tenantId,
 		"tag":        tag,
 	}
 }

@@ -63,8 +63,8 @@ func Load(name string) error {
 		return err
 	}
 
-	host := config.String("RPC_HOST", "localhost")
-	port := config.Int("RPC_PORT", 4200)
+	host := config.GetStr("RPC_HOST", "localhost")
+	port := config.GetInt("RPC_PORT", 4200)
 	pkg, err = LoadTo(name, host, port)
 	if err != nil {
 		return err

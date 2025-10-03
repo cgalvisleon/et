@@ -2,23 +2,26 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
 )
 
 type app struct {
-	Name       string
-	Version    string
-	Company    string
-	Web        string
-	Help       string
-	Production bool
-	Host       string
-	PathApi    string
-	PathApp    string
-	Port       int
-	Stage      string
-	Debug      bool
+	*et.Json
+	Name       string `json:"name"`
+	Version    string `json:"version"`
+	Company    string `json:"company"`
+	Web        string `json:"web"`
+	Help       string `json:"help"`
+	Production bool   `json:"production"`
+	Host       string `json:"host"`
+	PathApi    string `json:"path_api"`
+	PathApp    string `json:"path_app"`
+	Port       int    `json:"port"`
+	Stage      string `json:"stage"`
+	Debug      bool   `json:"debug"`
 }
 
 var App *app
@@ -65,6 +68,38 @@ func (s *app) Valid() error {
 	}
 
 	return nil
+}
+
+/**
+* ToJson
+* @return et.Json
+**/
+func (s *app) ToJson() et.Json {
+	result := *s.Json
+	result.Set("name", s.Name)
+	result.Set("version", s.Version)
+	result.Set("company", s.Company)
+	result.Set("web", s.Web)
+	result.Set("help", s.Help)
+	result.Set("production", s.Production)
+	result.Set("host", s.Host)
+	result.Set("path_api", s.PathApi)
+	result.Set("path_app", s.PathApp)
+	result.Set("port", s.Port)
+	result.Set("stage", s.Stage)
+	result.Set("debug", s.Debug)
+	return result
+}
+
+/**
+* Set
+* @param key string, val interface{}
+* @return void
+**/
+func (s *app) Set(key string, val interface{}) {
+	key = strings.ToUpper(key)
+	s.Json.Set(key, val)
+	Set(key, val)
 }
 
 /**
@@ -200,21 +235,21 @@ func (s *app) SetPort(port int) int {
 }
 
 /**
-* Reload
+* load
 **/
-func (s *app) Reload() {
-	s.Name = String("NAME", "et")
-	s.Version = String("VERSION", "0.0.1")
-	s.Company = String("COMPANY", "et")
-	s.Web = String("WEB", "https://et.com")
-	s.Help = String("HELP", "https://et.com/help")
-	s.Host = String("HOST", "localhost")
-	s.PathApi = String("PATH_API", "/api")
-	s.PathApp = String("PATH_APP", "/app")
-	s.Production = Bool("PRODUCTION", false)
-	s.Port = Int("PORT", 3300)
-	s.Stage = String("STAGE", "local")
-	s.Debug = Bool("DEBUG", false)
+func (s *app) load() {
+	s.Name = GetStr("NAME", "et")
+	s.Version = GetStr("VERSION", "0.0.1")
+	s.Company = GetStr("COMPANY", "et")
+	s.Web = GetStr("WEB", "https://et.com")
+	s.Help = GetStr("HELP", "https://et.com/help")
+	s.Host = GetStr("HOST", "localhost")
+	s.PathApi = GetStr("PATH_API", "/api")
+	s.PathApp = GetStr("PATH_APP", "/app")
+	s.Production = GetBool("PRODUCTION", false)
+	s.Port = GetInt("PORT", 3300)
+	s.Stage = GetStr("STAGE", "local")
+	s.Debug = GetBool("DEBUG", false)
 }
 
 /**
@@ -223,7 +258,7 @@ func (s *app) Reload() {
 **/
 func newApp() *app {
 	result := &app{}
-	result.Reload()
+	result.load()
 
 	return result
 }

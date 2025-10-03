@@ -10,12 +10,15 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-const QUEUE_STACK = "stack"
-const EVENT_LOG = "event:log"
-const EVENT_OVERFLOW = "event:overflow"
-const EVENT_WORK = "event:worker"
-const EVENT_WORK_STATE = "event:worker:state"
-const EVENT_SUBSCRIBED = "event:subscribed"
+const (
+	QUEUE_STACK      = "stack"
+	EVENT            = "event"
+	EVENT_LOG        = "event:log"
+	EVENT_OVERFLOW   = "event:overflow"
+	EVENT_WORK       = "event:worker"
+	EVENT_WORK_STATE = "event:worker:state"
+	EVENT_SUBSCRIBED = "event:subscribed"
+)
 
 func publish(channel string, data et.Json) error {
 	if conn == nil {
@@ -48,6 +51,7 @@ func Publish(channel string, data et.Json) error {
 	}
 
 	stage := config.App.Stage
+	publish(EVENT, et.Json{"channel": channel, "data": data})
 	publish(fmt.Sprintf(`pipe:%s:%s`, stage, channel), data)
 
 	return publish(channel, data)

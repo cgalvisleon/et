@@ -25,6 +25,10 @@ func SetDuration(key string, val interface{}, expiration time.Duration) interfac
 		return val
 	}
 
+	if expiration < time.Second {
+		expiration = time.Second
+	}
+
 	switch v := val.(type) {
 	case et.Json:
 		return SetCtx(conn.ctx, key, v.ToString(), expiration)

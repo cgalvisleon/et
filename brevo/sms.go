@@ -43,8 +43,8 @@ func sendSms(sender, organisation string, contactNumbers []string, content strin
 		return et.Items{}, err
 	}
 
-	apiKey := config.String("BREVO_SEND_KEY", "")
-	path := config.String("BREVO_SEND_PATH", "")
+	apiKey := config.GetStr("BREVO_SEND_KEY", "")
+	path := config.GetStr("BREVO_SEND_PATH", "")
 	url := fmt.Sprintf("%s/transactionalSMS/sms", path)
 	header := et.Json{
 		"accept":       "application/json",

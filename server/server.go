@@ -49,12 +49,12 @@ func New(appName string) (*Ettp, error) {
 	}
 
 	result := Ettp{
-		port:    config.Int("PORT", 3000),
-		rpc:     config.Int("RPC_PORT", 4200),
-		stdout:  config.Bool("STDOUT", false),
+		port:    config.GetInt("PORT", 3000),
+		rpc:     config.GetInt("RPC_PORT", 4200),
+		stdout:  config.GetBool("STDOUT", false),
 		pidFile: ".pid",
 		appName: appName,
-		version: config.String("VERSION", "0.0.1"),
+		version: config.GetStr("VERSION", "0.0.1"),
 	}
 
 	if result.port != 0 {

@@ -66,9 +66,9 @@ func Load() error {
 		return err
 	}
 
-	host := config.String("REDIS_HOST", "")
-	password := config.String("REDIS_PASSWORD", "")
-	dbname := config.Int("REDIS_DB", 0)
+	host := config.GetStr("REDIS_HOST", "")
+	password := config.GetStr("REDIS_PASSWORD", "")
+	dbname := config.GetInt("REDIS_DB", 0)
 	conn, err = ConnectTo(host, password, dbname)
 	if err != nil {
 		return err

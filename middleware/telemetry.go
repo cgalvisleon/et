@@ -317,7 +317,7 @@ func (m *Metrics) CallMetrics() Telemetry {
 		RequestsPerMinute: cache.Incr(reg.GenHashKey(m.key, minute), 60),
 		RequestsPerHour:   cache.Incr(reg.GenHashKey(m.key, hour), 3600),
 		RequestsPerDay:    cache.Incr(reg.GenHashKey(m.key, date), 86400),
-		RequestsLimit:     int64(config.Int("REQUESTS_LIMIT", 400)),
+		RequestsLimit:     int64(config.GetInt("REQUESTS_LIMIT", 400)),
 	}
 }
 
@@ -341,7 +341,7 @@ func (m *Metrics) println() et.Json {
 	size := float64(m.ResponseSize) / 1024
 	lg.CW(w, lg.NCyan, " Size:%.2f%s", size, "KB")
 	lg.CW(w, lg.NWhite, " in ")
-	limitLatency := time.Duration(config.Int("LATENCY_LIMIT", 1000)) * time.Millisecond
+	limitLatency := time.Duration(config.GetInt("LATENCY_LIMIT", 1000)) * time.Millisecond
 	if m.Latency < limitLatency {
 		lg.CW(w, lg.NGreen, " Latency:%s", m.Latency)
 	} else if m.Latency < 5*time.Second {

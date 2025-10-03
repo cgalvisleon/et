@@ -22,10 +22,10 @@ func newSession() (*session.Session, error) {
 		return nil, err
 	}
 
-	region := config.String("AWS_REGION", "")
-	keyId := config.String("AWS_ACCESS_KEY_ID", "")
-	secret := config.String("AWS_SECRET_ACCESS_KEY", "")
-	token := config.String("AWS_SESSION_TOKEN", "")
+	region := config.GetStr("AWS_REGION", "")
+	keyId := config.GetStr("AWS_ACCESS_KEY_ID", "")
+	secret := config.GetStr("AWS_SECRET_ACCESS_KEY", "")
+	token := config.GetStr("AWS_SESSION_TOKEN", "")
 
 	return session.Must(session.NewSession(&aws.Config{
 		Region: aws.String(region),

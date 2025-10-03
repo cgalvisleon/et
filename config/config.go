@@ -2,227 +2,17 @@ package config
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"os"
-	"slices"
+	"strconv"
+	"strings"
+	"time"
 
-	"github.com/cgalvisleon/et/arg"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/strs"
 )
-
-type Config struct {
-	*et.Json
-	file string `json:"-"`
-}
-
-/**
-* Save
-* @return error
-**/
-func (s *Config) Save() error {
-	data, err := json.MarshalIndent(s, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(s.file, data, 0644)
-}
-
-/**
-* Load
-* @return error
-**/
-func (s *Config) Load() error {
-	data, err := os.ReadFile(s.file)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(data, s)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-var config *Config
-
-/**
-* Load
-* @return error
-**/
-func Load() {
-	config = &Config{
-		Json: &et.Json{},
-		file: ".config",
-	}
-
-	config.Load()
-}
-
-/**
-* Set
-* @param key string, value interface{}
-* @return interface{}
-**/
-func Set(key string, value interface{}) interface{} {
-	if config == nil {
-		return envar.Set(key, value)
-	}
-
-	config.Set(key, value)
-	config.Save()
-
-	return value
-}
-
-/**
-* SetStrByArg
-* @param name string, defaultVal string
-* @return string
-**/
-func SetStrByArg(name string, defaultVal string) string {
-	val, ok := arg.Get(name, defaultVal)
-	if ok {
-		Set(name, val)
-	}
-
-	return val
-}
-
-/**
-* SetIntByArg
-* @param name string, defaultVal int
-* @return int
-**/
-func SetIntByArg(name string, defaultVal int) int {
-	val, ok := arg.GetInt(name, defaultVal)
-	if ok {
-		Set(name, val)
-	}
-
-	return val
-}
-
-/**
-* SetInt64ByArg
-* @param name string, defaultVal int64
-* @return int64
-**/
-func SetInt64ByArg(name string, defaultVal int64) int64 {
-	val, ok := arg.GetInt64(name, defaultVal)
-	if ok {
-		Set(name, val)
-	}
-
-	return val
-}
-
-/**
-* SetBoolByArg
-* @param name string, defaultVal bool
-* @return bool
-**/
-func SetBoolByArg(name string, defaultVal bool) bool {
-	val, ok := arg.GetBool(name, defaultVal)
-	if ok {
-		Set(name, val)
-	}
-
-	return val
-}
-
-/**
-* Get
-* @param key string, interface{} defaultValue
-* @return interface{}
-**/
-func Get(key string, defaultValue interface{}) interface{} {
-	if config == nil {
-		return envar.Get(key, defaultValue)
-	}
-
-	return config.ValAny(defaultValue, key)
-}
-
-/**
-* Int
-* @param key string, defaultValue int
-* @return int
-**/
-func Int(key string, defaultValue int) int {
-	if config == nil {
-		return envar.GetInt(key, defaultValue)
-	}
-
-	return config.ValInt(defaultValue, key)
-}
-
-/**
-* Int64
-* @param key string, defaultValue int64
-* @return int64
-**/
-func Int64(key string, defaultValue int64) int64 {
-	if config == nil {
-		return envar.GetInt64(key, defaultValue)
-	}
-
-	return config.ValInt64(defaultValue, key)
-}
-
-/**
-* String
-* @param string key, defaultValue string
-* @return string
-**/
-func String(key string, defaultValue string) string {
-	if config == nil {
-		return envar.GetStr(key, defaultValue)
-	}
-
-	return config.ValStr(defaultValue, key)
-}
-
-/**
-* Str
-* @param string key, defaultValue string
-* @return string
-**/
-func Str(key string, defaultValue string) string {
-	return String(key, defaultValue)
-}
-
-/**
-* Bool
-* @param string key, defaultValue bool
-* @return bool
-**/
-func Bool(key string, defaultValue bool) bool {
-	if config == nil {
-		return envar.GetBool(key, defaultValue)
-	}
-
-	return config.ValBool(defaultValue, key)
-}
-
-/**
-* Number
-* @param string key, defaultValue float64
-* @return float64
-**/
-func Number(key string, defaultValue float64) float64 {
-	if config == nil {
-		return envar.GetNumber(key, defaultValue)
-	}
-
-	return config.ValNum(defaultValue, key)
-}
 
 /**
 * setEnvar
@@ -231,157 +21,279 @@ func Number(key string, defaultValue float64) float64 {
 **/
 func setEnvar(key string, value interface{}) {
 	upsetVal := func(k string, v interface{}) {
-		switch val := v.(type) {
-		case string:
-			envar.SetStr(k, val)
-		case int:
-			envar.SetInt(k, val)
-		case int64:
-			envar.SetInt64(k, val)
-		case bool:
-			envar.SetBool(k, val)
-		case float64:
-			envar.SetFloat(k, val)
-		}
-	}
-
-	upsetArray := func(object map[string]interface{}, isPassword bool) {
-		for k, v := range object {
-			k := strs.Uppcase(k)
-			if isPassword {
-				unHash := PasswordUnhash(v.(string))
-				upsetVal(k, unHash)
-			} else {
-				upsetVal(k, v)
-			}
+		envar.Set(k, v)
+		lower := strings.ToLower(k)
+		switch lower {
+		case "name":
+			App.Name = GetStr(k, "")
+		case "version":
+			App.Version = GetStr(k, "")
+		case "company":
+			App.Company = GetStr(k, "")
+		case "web":
+			App.Web = GetStr(k, "")
+		case "help":
+			App.Help = GetStr(k, "")
+		case "host":
+			App.Host = GetStr(k, "")
+		case "path_api":
+			App.PathApi = GetStr(k, "")
+		case "path_app":
+			App.PathApp = GetStr(k, "")
+		case "production":
+			App.Production = GetBool(k, false)
+		case "port":
+			App.Port = GetInt(k, 3300)
+		case "stage":
+			App.Stage = GetStr(k, "local")
+		case "debug":
+			App.Debug = GetBool(k, false)
 		}
 	}
 
 	key = strs.Uppcase(key)
-	switch val := value.(type) {
-	case map[string]interface{}:
-		upsetArray(val, slices.Contains([]string{"SECRETS", "PASSWORDS", "PASS"}, key))
-	case et.Json:
-		upsetArray(val, slices.Contains([]string{"SECRETS", "PASSWORDS", "PASS"}, key))
-	default:
-		upsetVal(key, val)
+	if map[string]bool{
+		"SECRETS":   true,
+		"PASSWORDS": true,
+		"PASS":      true,
+	}[key] {
+		str := fmt.Sprintf("%v", value)
+		encoded := base64.StdEncoding.EncodeToString([]byte(str))
+		upsetVal(key, encoded)
+	} else {
+		upsetVal(key, value)
 	}
 }
 
 /**
-* SetToEnvar
-* @param et.Json config
-* @return error
+* Set
+* @param key string, value interface{}
+* @return interface{}
 **/
-func SetToEnvar(config et.Json) error {
-	for k, v := range config {
-		setEnvar(k, v)
-	}
-
-	return nil
+func Set(key string, value interface{}) interface{} {
+	setEnvar(key, value)
+	return value
 }
 
 /**
-* SetToConfig
-* @param et.Json config
-* @return error
+* Get
+* @param key string, defaultValue interface{}
+* @return interface{}
 **/
-func SetToConfig(config et.Json) error {
-	upsetVal := func(k string, v interface{}) {
-		config.Set(k, v)
+func Get(key string, defaultValue interface{}) interface{} {
+	key = strs.Uppcase(key)
+	result := envar.Get(key, defaultValue)
+	if map[string]bool{
+		"SECRETS":   true,
+		"PASSWORDS": true,
+		"PASS":      true,
+	}[key] {
+		str := fmt.Sprintf("%v", result)
+		encoded, _ := base64.StdEncoding.DecodeString(str)
+		return string(encoded)
 	}
 
-	upsetArray := func(object map[string]interface{}, isPassword bool) {
-		for k, v := range object {
-			k = strs.Uppcase(k)
-			if isPassword {
-				unHash := PasswordUnhash(v.(string))
-				upsetVal(k, unHash)
-			} else {
-				upsetVal(k, v)
-			}
-		}
-	}
-
-	for key, value := range config {
-		switch val := value.(type) {
-		case map[string]interface{}:
-			upsetArray(val, slices.Contains([]string{"SECRETS", "PASSWORDS", "PASS"}, key))
-		case et.Json:
-			upsetArray(val, slices.Contains([]string{"SECRETS", "PASSWORDS", "PASS"}, key))
-		default:
-			upsetVal(key, val)
-		}
-	}
-
-	return nil
+	return result
 }
 
 /**
-* PasswordHash
-* @param string password
+* GetStr
+* @param key string, defaultValue string
 * @return string
 **/
-func PasswordHash(password string) string {
-	return base64.StdEncoding.EncodeToString([]byte(password))
+func GetStr(key string, defaultValue string) string {
+	val := Get(key, defaultValue)
+	return fmt.Sprintf("%v", val)
 }
 
 /**
-* PasswordUnhash
-* @param string password
-* @return string
+* GetInt
+* @param key string, defaultValue int
+* @return int
 **/
-func PasswordUnhash(password string) string {
-	result, err := base64.StdEncoding.DecodeString(password)
-	if err != nil {
-		return ""
+func GetInt(key string, defaultValue int) int {
+	v := Get(key, defaultValue)
+	scr := fmt.Sprintf("%v", v)
+	if val, err := strconv.Atoi(scr); err == nil {
+		return val
 	}
-
-	return string(result)
-}
-
-var definedVars = make(map[string]bool)
-
-/**
-* Define
-* @param vars []string
-**/
-func Define(vars []string) {
-	for _, k := range vars {
-		k = strs.Uppcase(k)
-		definedVars[k] = true
-	}
+	return defaultValue
 }
 
 /**
-* Valid
-* @return error
+* GetInt64
+* @param key string, defaultValuve int64
+* @return int64
 **/
-func Valid() error {
-	for k := range definedVars {
-		k = strs.Uppcase(k)
-		val := Get(k, "")
-		if val == "" {
-			return fmt.Errorf(msg.ERR_ENV_REQUIRED, k)
-		}
+func GetInt64(key string, defaultValue int64) int64 {
+	v := Get(key, defaultValue)
+	scr := fmt.Sprintf("%v", v)
+	if val, err := strconv.ParseInt(scr, 10, 64); err == nil {
+		return val
 	}
+	return defaultValue
+}
 
-	return nil
+/**
+* GetBool
+* @param key string, defaultValue bool
+* @return bool
+**/
+func GetBool(key string, defaultValue bool) bool {
+	v := Get(key, defaultValue)
+	str := fmt.Sprintf("%v", v)
+	if val, err := strconv.ParseBool(str); err == nil {
+		return val
+	}
+	return defaultValue
+}
+
+/**
+* GetFloat
+* @param key string, defaultValue float64
+* @return float64
+**/
+func GetFloat(key string, defaultValue float64) float64 {
+	v := Get(key, defaultValue)
+	scr := fmt.Sprintf("%v", v)
+	if val, err := strconv.ParseFloat(scr, 64); err == nil {
+		return val
+	}
+	return defaultValue
+}
+
+/**
+* GetTime
+* @param key string, defaultValue time.Time
+* @return time.Time
+**/
+func GetTime(key string, defaultValue time.Time) time.Time {
+	v := Get(key, defaultValue)
+	str := fmt.Sprintf("%v", v)
+	if val, err := time.Parse(time.RFC3339, str); err == nil {
+		return val
+	}
+	return defaultValue
 }
 
 /**
 * Validate
-* @param vars []string
+* @param keys []string
 * @return error
 **/
-func Validate(vars []string) error {
-	Define(vars)
-	return Valid()
+func Validate(keys []string) error {
+	for _, key := range keys {
+		if GetStr(key, "") == "" {
+			return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, key)
+		}
+	}
+	return nil
 }
 
 /**
-* Reload
+* SetEnvar
+* @param values et.Json
+* @return error
 **/
-func Reload() {
-	App.Reload()
+func SetEnvar(values et.Json) {
+	for k, v := range values {
+		setEnvar(k, v)
+	}
+}
+
+/**
+* param
+* @param key string, defaultValue interface{}
+* @return interface{}
+**/
+func param(key string, defaultValue interface{}) interface{} {
+	for i, arg := range os.Args[1:] {
+		upc := strs.Uppcase(key)
+		if strs.Uppcase(arg) == strs.Format("-%s", upc) {
+			val := os.Args[i+2]
+			setEnvar(key, val)
+			return val
+		} else if strs.Uppcase(arg) == strs.Format("--%s", upc) {
+			val := os.Args[i+2]
+			setEnvar(key, val)
+			return val
+		}
+	}
+
+	return defaultValue
+}
+
+/**
+* ParamStr
+* @param key string, defaultValue string
+* @return string
+**/
+func ParamStr(key string, defaultValue string) string {
+	val := param(key, defaultValue)
+	return fmt.Sprintf("%v", val)
+}
+
+/**
+* ParamInt
+* @param key string, defaultValue int
+* @return int
+**/
+func ParamInt(key string, defaultValue int) int {
+	val := param(key, defaultValue)
+	if val, ok := val.(int); ok {
+		return val
+	}
+	return defaultValue
+}
+
+/**
+* ParamInt64
+* @param key string, defaultValue int64
+* @return int64
+**/
+func ParamInt64(key string, defaultValue int64) int64 {
+	val := param(key, defaultValue)
+	if val, ok := val.(int64); ok {
+		return val
+	}
+	return defaultValue
+}
+
+/**
+* ParamBool
+* @param key string, defaultValue bool
+* @return bool
+**/
+func ParamBool(key string, defaultValue bool) bool {
+	val := param(key, defaultValue)
+	if val, ok := val.(bool); ok {
+		return val
+	}
+	return defaultValue
+}
+
+/**
+* ParamFloat
+* @param key string, defaultValue float64
+* @return float64
+**/
+func ParamFloat(key string, defaultValue float64) float64 {
+	val := param(key, defaultValue)
+	if val, ok := val.(float64); ok {
+		return val
+	}
+	return defaultValue
+}
+
+/**
+* ParamTime
+* @param key string, defaultValue time.Time
+* @return time.Time
+**/
+func ParamTime(key string, defaultValue time.Time) time.Time {
+	val := param(key, defaultValue)
+	if val, ok := val.(time.Time); ok {
+		return val
+	}
+	return defaultValue
 }

@@ -137,9 +137,9 @@ func Load() error {
 		return err
 	}
 
-	host := config.String("NATS_HOST", "")
-	user := config.String("NATS_USER", "")
-	password := config.String("NATS_PASSWORD", "")
+	host := config.GetStr("NATS_HOST", "")
+	user := config.GetStr("NATS_USER", "")
+	password := config.GetStr("NATS_PASSWORD", "")
 	conn, err = ConnectTo(host, user, password)
 	if err != nil {
 		return err

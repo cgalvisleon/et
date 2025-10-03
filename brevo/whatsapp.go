@@ -43,9 +43,9 @@ func SendWhatsapp(contactNumbers []string, templateId string, params []et.Json, 
 		return et.Items{}, err
 	}
 
-	path := config.String("BREVO_SEND_PATH", "")
-	apiKey := config.String("BREVO_SEND_KEY", "")
-	sender := config.String("BREVO_SENDER", "")
+	path := config.GetStr("BREVO_SEND_PATH", "")
+	apiKey := config.GetStr("BREVO_SEND_KEY", "")
+	sender := config.GetStr("BREVO_SENDER", "")
 	url := fmt.Sprintf("%s/whatsapp/sendMessage", path)
 	header := et.Json{
 		"accept":       "application/json",

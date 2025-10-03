@@ -42,8 +42,8 @@ func SendEmail(sender et.Json, to []et.Json, subject string, htmlContent string,
 		return et.Items{}, err
 	}
 
-	path := config.String("BREVO_SEND_PATH", "")
-	apiKey := config.String("BREVO_SEND_KEY", "")
+	path := config.GetStr("BREVO_SEND_PATH", "")
+	apiKey := config.GetStr("BREVO_SEND_KEY", "")
 	url := fmt.Sprintf("%s/smtp/email", path)
 	header := et.Json{
 		"accept":       "application/json",

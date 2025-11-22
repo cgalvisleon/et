@@ -9,11 +9,30 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/utility"
 	"github.com/cgalvisleon/et/workflow"
 )
 
 func main() {
+	flowDefinition()
+	// utility.AppWait()
+
+	logs.Logf("test", "Fin de flow")
+
+}
+
+func flowDefinition() {
+	workflow.NewByFile("report:set", "1.0.0", "Registro de reportes", "", "./step0.js", true, "test").
+		StepByFile("Step 1", "Step 1", "./step1.js", true)
+
+	result, err := workflow.Run("1234", "report:set", 0, et.Json{}, et.Json{}, "test")
+	if err != nil {
+		logs.Error(err)
+	} else {
+		logs.Logf("Result:", result.ToString())
+	}
+}
+
+func flowFn() {
 	workflow.NewFn("ventas", "1.0.0", "Flujo de ventas", "flujo de ventas", func(flow *workflow.Instance, ctx et.Json) (et.Json, error) {
 		logs.Logf("Respuesta desde step 0, contexto:", ctx.ToString())
 		atrib := fmt.Sprintf("step_%d", flow.Current)
@@ -30,7 +49,7 @@ func main() {
 			ctx.Set(atrib, "step1")
 
 			// flow.Done()
-			// flow.Stop()
+			flow.Stop()
 			// flow.Goto(2)
 
 			time.Sleep(3 * time.Second)
@@ -68,7 +87,7 @@ func main() {
 		"test": "test",
 	}, "test")
 	if err != nil {
-		logs.Error("test", err)
+		logs.Error(err)
 	} else {
 		logs.Logf("Result 1:", result.ToString())
 	}
@@ -109,11 +128,6 @@ func main() {
 	// 		console.Debug("Result:", result.ToString())
 	// 	}
 	// }()
-
-	utility.AppWait()
-
-	logs.Logf("test", "Fin de flow")
-
 }
 
 func HttpVenta(w http.ResponseWriter, r *http.Request) {

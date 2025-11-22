@@ -38,4 +38,5 @@ const (
 	MSG_INSTANCE_INSTANCE_DEC       = "WorkFlows.instanceDec totalInstances:%d limitRequests:%d"
 	MSG_INSTANCE_EVALUATE           = "error al evaluar expresion:%s, error:%s"
 	MSG_ARG_REQUIRED                = "argumento requerido:%s"
+	MSG_INSTANCE_DEFINITION_EMPTY   = "definition is empty"
 )

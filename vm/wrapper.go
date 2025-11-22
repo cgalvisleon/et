@@ -28,8 +28,7 @@ func Console(vm *Vm) {
 			logs.Info(args...)
 		},
 		"error": func(args string) {
-			kind := "Error"
-			logs.Error(kind, fmt.Errorf(args))
+			logs.Error(fmt.Errorf(args))
 		},
 	})
 }

@@ -67,6 +67,10 @@ func newStepDefinition(name, description string, definition string, stop bool) (
 		flow.vm.Set("ctx", flow.Ctx)
 		flow.vm.Set("ctxs", flow.Ctxs)
 		flow.vm.Set("pinnedData", flow.PinnedData)
+		if definition == "" {
+			return et.Json{}, fmt.Errorf(MSG_INSTANCE_DEFINITION_EMPTY)
+		}
+
 		value, err := flow.vm.Run(definition)
 		if err != nil {
 			return et.Json{}, err
@@ -78,6 +82,14 @@ func newStepDefinition(name, description string, definition string, stop bool) (
 
 		result := flow.vm.Get("result")
 		if result == goja.Undefined() {
+			return et.Json{}, nil
+		}
+
+		if result == goja.Null() {
+			return et.Json{}, nil
+		}
+
+		if result == nil {
 			return et.Json{}, nil
 		}
 
@@ -105,7 +117,6 @@ func (s *Step) run(flow *Instance, ctx et.Json) (et.Json, error) {
 	flow.SetStatus(FlowStatusRunning)
 	result, err := s.fn(flow, ctx)
 	if err != nil {
-		flow.setFailed(result, err)
 		return et.Json{}, err
 	}
 

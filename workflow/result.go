@@ -69,18 +69,3 @@ func (s *resultFn) Serialize() (string, error) {
 
 	return string(bt), nil
 }
-
-/**
-* loadResultFn
-* @param s string
-* @return *resultFn
-**/
-func loadResultFn(s string) (*resultFn, error) {
-	var result resultFn
-	err := json.Unmarshal([]byte(s), &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return &result, nil
-}

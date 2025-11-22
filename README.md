@@ -139,6 +139,10 @@ _ = config.App.ToJson() // et.Json con la configuración activa
 
 - Este README describe el mapa de paquetes y cambios recientes. Para ejemplos de uso, consulta READMEs locales por paquete o `create/` para plantillas.
 
+```bash
+gofmt -w . && go run ./cmd/flow
+```
+
 ## Contribuir
 
 - Issues y PRs son bienvenidos. Sigue el estilo del proyecto y añade pruebas cuando aplique.

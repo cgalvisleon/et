@@ -89,13 +89,13 @@ func Tracer(kind string, err error) error {
 
 /**
 * Error
-* @param kind string, err error
+* @param err error
 * @return error
 **/
-func Error(kind string, err error) error {
+func Error(err error) error {
 	functionName := stdrout.GetFunctionName(2)
 	if err != nil {
-		printLn("Error:"+kind, "Red", err.Error(), " - ", functionName)
+		printLn("Error", "Red", err.Error(), " - ", functionName)
 	}
 
 	return err
@@ -103,12 +103,12 @@ func Error(kind string, err error) error {
 
 /**
 * Errorm
-* @param kind string, message string
+* @param message string
 * @return error
 **/
-func Errorm(kind string, message string) error {
+func Errorm(message string) error {
 	err := fmt.Errorf(message)
-	return Error(kind, err)
+	return Error(err)
 }
 
 /**
@@ -116,10 +116,10 @@ func Errorm(kind string, message string) error {
 * @param format string, args ...any
 * @return error
 **/
-func Errorf(kind string, format string, args ...any) error {
+func Errorf(format string, args ...any) error {
 	message := fmt.Sprintf(format, args...)
 	err := fmt.Errorf(message)
-	return Error(kind, err)
+	return Error(err)
 }
 
 /**

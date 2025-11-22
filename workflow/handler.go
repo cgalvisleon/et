@@ -1,9 +1,12 @@
 package workflow
 
 import (
+	"os"
+
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/logs"
 )
 
 var workFlows *WorkFlows
@@ -54,6 +57,25 @@ func New(tag, version, name, description string, definition string, stop bool, c
 	}
 
 	return workFlows.newFlowDefinition(tag, version, name, description, definition, stop, createdBy)
+}
+
+/**
+* NewByFile
+* @param tag, version, name, description string, filePath string, stop bool, createdBy string
+* @return *Flow
+**/
+func NewByFile(tag, version, name, description string, filePath string, stop bool, createdBy string) *Flow {
+	if err := Load(); err != nil {
+		return nil
+	}
+
+	definition, err := os.ReadFile(filePath)
+	if err != nil {
+		logs.Error(err)
+		definition = []byte("")
+	}
+
+	return workFlows.newFlowDefinition(tag, version, name, description, string(definition), stop, createdBy)
 }
 
 /**
@@ -131,12 +153,12 @@ func Reset(instanceId, createdBy string) error {
 * @param instanceId string
 * @return et.Json, error
 **/
-func Rollback(instanceId, createdBy string) (et.Json, error) {
+func Rollback(instanceId string) (et.Json, error) {
 	if err := Load(); err != nil {
 		return et.Json{}, err
 	}
 
-	return workFlows.rollback(instanceId, createdBy)
+	return workFlows.rollback(instanceId)
 }
 
 /**

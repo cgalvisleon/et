@@ -218,10 +218,10 @@ func (s *WorkFlows) reset(instanceId, updatedBy string) error {
 
 /**
 * rollback
-* @param instanceId, updatedBy string
+* @param instanceId string
 * @return et.Json, error
 **/
-func (s *WorkFlows) rollback(instanceId, updatedBy string) (et.Json, error) {
+func (s *WorkFlows) rollback(instanceId string) (et.Json, error) {
 	instance, err := s.loadInstance(instanceId)
 	if err != nil {
 		return et.Json{}, err

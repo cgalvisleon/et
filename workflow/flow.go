@@ -173,6 +173,25 @@ func (s *Flow) Step(name, description string, definition string, stop bool) *Flo
 }
 
 /**
+* StepByFile
+* @param name, description string, filePath string, stop bool
+* @return *Flow
+**/
+func (s *Flow) StepByFile(name, description string, filePath string, stop bool) *Flow {
+	if err := Load(); err != nil {
+		return nil
+	}
+
+	definition, err := os.ReadFile(filePath)
+	if err != nil {
+		logs.Error(err)
+		definition = []byte("")
+	}
+
+	return s.Step(name, description, string(definition), stop)
+}
+
+/**
 * Rollback
 * @params fn FnContext
 * @return *Flow

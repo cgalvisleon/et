@@ -9,17 +9,17 @@ import (
 func (s *Server) initEvents() {
 	err := event.Subscribe(rt.EVENT_SET_ROUTER, s.eventSetRouter)
 	if err != nil {
-		logs.Error(packageName, err)
+		logs.Error(err)
 	}
 
 	err = event.Subscribe(rt.EVENT_REMOVE_ROUTER, s.eventDeleteRouter)
 	if err != nil {
-		logs.Error(packageName, err)
+		logs.Error(err)
 	}
 
 	err = event.Subscribe(rt.EVENT_RESET_ROUTER, s.eventReset)
 	if err != nil {
-		logs.Error(packageName, err)
+		logs.Error(err)
 	}
 }
 
@@ -58,7 +58,7 @@ func (s *Server) eventDeleteRouter(m event.Message) {
 	id := data.Str("id")
 	err := s.DeleteRouteById(id, true)
 	if err != nil {
-		logs.Error(packageName, err)
+		logs.Error(err)
 	}
 }
 

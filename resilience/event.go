@@ -18,12 +18,12 @@ const (
 func initEvents() {
 	err := event.Subscribe(EVENT_RESILIENCE_STOP, eventStop)
 	if err != nil {
-		logs.Error(packageName, err)
+		logs.Error(err)
 	}
 
 	err = event.Subscribe(EVENT_RESILIENCE_RESTART, eventRestart)
 	if err != nil {
-		logs.Error(packageName, err)
+		logs.Error(err)
 	}
 
 }
@@ -36,12 +36,12 @@ func eventStop(m event.Message) {
 	data := m.Data
 	id := data.Str("id")
 	if id == "" {
-		logs.Errorf(packageName, MSG_ID_REQUIRED)
+		logs.Errorf(MSG_ID_REQUIRED)
 		return
 	}
 
 	Stop(id)
-	logs.Log(packageName, "eventStop:", data.ToString())
+	logs.Log("eventStop:", data.ToString())
 }
 
 /**
@@ -52,10 +52,10 @@ func eventRestart(m event.Message) {
 	data := m.Data
 	id := data.Str("id")
 	if id == "" {
-		logs.Errorf(packageName, MSG_ID_REQUIRED)
+		logs.Errorf(MSG_ID_REQUIRED)
 		return
 	}
 
 	Restart(id)
-	logs.Log(packageName, "eventRestart:", data.ToString())
+	logs.Log("eventRestart:", data.ToString())
 }

@@ -437,11 +437,9 @@ func (s *Instance) rollback(result et.Json, err error) (et.Json, error) {
 
 /**
 * Stop
-* @param stoperBy string
 * @return error
 **/
-func (s *Instance) Stop(stoperBy string) error {
-	s.UpdatedBy = stoperBy
+func (s *Instance) Stop() error {
 	s.Steps[s.Current].Stop = true
 	s.SetStatus(s.Status)
 
@@ -450,11 +448,9 @@ func (s *Instance) Stop(stoperBy string) error {
 
 /**
 * Done
-* @param doneBy string
 * @return error
 **/
-func (s *Instance) Done(doneBy string) error {
-	s.UpdatedBy = doneBy
+func (s *Instance) Done() error {
 	s.SetStatus(FlowStatusDone)
 
 	return nil
@@ -462,12 +458,11 @@ func (s *Instance) Done(doneBy string) error {
 
 /**
 * Goto
-* @param step int, goBy string
+* @param step int
 * @return error
 **/
-func (s *Instance) Goto(step int, goBy string) error {
+func (s *Instance) Goto(step int) error {
 	s.goTo = step
-	s.UpdatedBy = goBy
 	s.SetStatus(s.Status)
 
 	return nil

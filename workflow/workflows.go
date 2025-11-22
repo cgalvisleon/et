@@ -237,16 +237,16 @@ func (s *WorkFlows) rollback(instanceId, updatedBy string) (et.Json, error) {
 
 /**
 * stop
-* @param instanceId, updatedBy string
+* @param instanceId string
 * @return error
 **/
-func (s *WorkFlows) stop(instanceId, updatedBy string) error {
+func (s *WorkFlows) stop(instanceId string) error {
 	instance, err := s.loadInstance(instanceId)
 	if err != nil {
 		return err
 	}
 
-	return instance.Stop(updatedBy)
+	return instance.Stop()
 }
 
 /**

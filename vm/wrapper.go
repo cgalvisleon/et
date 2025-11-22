@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/request"
@@ -20,34 +19,16 @@ func Console(vm *Vm) {
 	vm.Set("console", map[string]interface{}{
 		"log": func(args ...interface{}) {
 			kind := "Log"
-			vm.AddCtx("console", et.Json{
-				"kind": kind,
-				"args": args,
-			})
 			logs.Log(kind, args...)
 		},
 		"debug": func(args ...interface{}) {
-			kind := "Debug"
-			vm.AddCtx("console", et.Json{
-				"kind": kind,
-				"args": args,
-			})
 			logs.Debug(args...)
 		},
 		"info": func(args ...interface{}) {
-			kind := "Info"
-			vm.AddCtx("console", et.Json{
-				"kind": kind,
-				"args": args,
-			})
 			logs.Info(args...)
 		},
 		"error": func(args string) {
 			kind := "Error"
-			vm.AddCtx("console", et.Json{
-				"kind": kind,
-				"args": args,
-			})
 			logs.Error(kind, fmt.Errorf(args))
 		},
 	})

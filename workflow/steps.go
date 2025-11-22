@@ -64,7 +64,8 @@ func newStepDefinition(name, description string, definition string, stop bool) (
 	}
 	result.fn = func(flow *Instance, ctx et.Json) (et.Json, error) {
 		flow.vm.Set("instance", flow)
-		flow.vm.Set("ctx", ctx)
+		flow.vm.Set("ctx", flow.Ctx)
+		flow.vm.Set("ctxs", flow.Ctxs)
 		flow.vm.Set("pinnedData", flow.PinnedData)
 		value, err := flow.vm.Run(definition)
 		if err != nil {

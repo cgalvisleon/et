@@ -141,15 +141,15 @@ func Rollback(instanceId, createdBy string) (et.Json, error) {
 
 /**
 * Stop
-* @param instanceId, tag string
+* @param instanceId string
 * @return error
 **/
-func Stop(instanceId, createdBy string) error {
+func Stop(instanceId string) error {
 	if err := Load(); err != nil {
 		return err
 	}
 
-	return workFlows.stop(instanceId, createdBy)
+	return workFlows.stop(instanceId)
 }
 
 /**

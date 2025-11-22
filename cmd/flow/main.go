@@ -29,9 +29,9 @@ func main() {
 			atrib := fmt.Sprintf("step_%d", flow.Current)
 			ctx.Set(atrib, "step1")
 
-			// flow.Done()
+			flow.Done()
 			flow.Stop()
-			// flow.Goto(2)
+			flow.Goto(2)
 
 			time.Sleep(3 * time.Second)
 

@@ -7,8 +7,7 @@ import (
 
 type Vm struct {
 	*goja.Runtime
-	Ctx    et.Json
-	Result et.Json
+	Ctx et.Json
 }
 
 /**
@@ -19,7 +18,6 @@ func New() *Vm {
 	result := &Vm{
 		Runtime: goja.New(),
 		Ctx:     et.Json{},
-		Result:  et.Json{},
 	}
 
 	Console(result)
@@ -39,30 +37,4 @@ func (v *Vm) Run(script string) (goja.Value, error) {
 	}
 
 	return v.RunString(script)
-}
-
-/**
-* SetCtx
-* Set a context variable
-**/
-func (v *Vm) SetCtx(key string, value interface{}) {
-	v.Ctx[key] = value
-}
-
-/**
-* AddCtx
-* Add a context variable
-**/
-func (v *Vm) AddCtx(key string, value interface{}) {
-	val := v.Ctx.Array(key)
-	val = append(val, value)
-	v.Ctx[key] = val
-}
-
-/**
-* GetCtx
-* Get a context variable
-**/
-func (v *Vm) GetCtx(key string) interface{} {
-	return v.Ctx[key]
 }

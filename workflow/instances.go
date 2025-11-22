@@ -171,7 +171,7 @@ func (s *Instance) SetStatus(status FlowStatus) error {
 		if s.err != nil {
 			errMsg = s.err.Error()
 		}
-		logs.Errorf(packageName, MSG_INSTANCE_FAILED, s.Id, s.Tag, s.Status, s.Current, errMsg)
+		logs.Errorf(MSG_INSTANCE_FAILED, s.Id, s.Tag, s.Status, s.Current, errMsg)
 	} else {
 		logs.Logf(packageName, MSG_INSTANCE_STATUS, s.Id, s.Tag, s.Status, s.Current)
 	}
@@ -206,7 +206,7 @@ func (s *Instance) SetCtx(ctx et.Json) et.Json {
 * SetPinedData
 * @param key string, value interface{}
 **/
-func (s *Instance) SetPinedData(key string, value interface{}) {
+func (s *Instance) SetPinnedData(key string, value interface{}) {
 	s.PinnedData[key] = value
 }
 

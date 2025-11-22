@@ -76,7 +76,7 @@ version() {
 
   sed -i "" "s/$CURRENT_VERSION/$NEW_VERSION/g" README.md
   
-  git tag "$NEW_VERSION"
+  git tag -a "$NEW_VERSION" -m "$NEW_VERSION"
   git push -u origin --tags
   
   echo "Etiqueta creada y enviada a Git"

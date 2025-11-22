@@ -2,9 +2,11 @@ package workflow
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"time"
 
+	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -22,8 +24,6 @@ var workerHost string
 func init() {
 	workerHost, _ = os.Hostname()
 }
-
-type FnContext func(flow *Instance, ctx et.Json) (et.Json, error)
 
 type Flow struct {
 	Tag           string        `json:"tag"`
@@ -47,15 +47,35 @@ type Flow struct {
 * @return *Flow
 **/
 func newFlow(tag, version, name, description string, createdBy string) *Flow {
-	return &Flow{
+	result := &Flow{
 		Tag:           tag,
 		Version:       version,
 		Name:          name,
 		Description:   description,
 		TpConsistency: TpConsistencyEventual,
+		RetentionTime: 48 * time.Hour,
 		Steps:         make([]*Step, 0),
 		CreatedBy:     createdBy,
 	}
+
+	tagKey := fmt.Sprintf("workflow:%s", tag)
+	flows, err := cache.GetJson(tagKey)
+	if err != nil {
+		flows = et.Json{}
+	}
+
+	for k := range flows {
+		instance, err := load(k)
+		if err != nil {
+			continue
+		}
+
+		if instance.Status == FlowStatusRunning {
+			instance.setStatus(FlowStatusPending)
+		}
+	}
+
+	return result
 }
 
 /**
@@ -79,7 +99,7 @@ func newFlowFn(tag, version, name, description string, fn FnContext, stop bool, 
 func newFlowDefinition(tag, version, name, description string, definition string, stop bool, createdBy string) *Flow {
 	flow := newFlow(tag, version, name, description, createdBy)
 	logs.Logf(packageName, MSG_FLOW_CREATED, tag, version, name)
-	flow.StepDefinition("Start", MSG_START_WORKFLOW, definition, stop)
+	flow.Step("Start", MSG_START_WORKFLOW, definition, stop)
 
 	return flow
 }
@@ -148,11 +168,11 @@ func (s *Flow) StepFn(name, description string, fn FnContext, stop bool) *Flow {
 }
 
 /**
-* StepDefinition
+* Step
 * @param name, description string, definition string, stop bool
 * @return *Flow
 **/
-func (s *Flow) StepDefinition(name, description string, definition string, stop bool) *Flow {
+func (s *Flow) Step(name, description string, definition string, stop bool) *Flow {
 	result, _ := newStepDefinition(name, description, definition, stop)
 	s.Steps = append(s.Steps, result)
 	s.setConfig(MSG_INSTANCE_STEP_CREATED, len(s.Steps)-1, name, s.Tag)

@@ -155,7 +155,7 @@ func LPushCtx(ctx context.Context, key string, val string) error {
 }
 
 /**
-* LPushCtx
+* LRemCtx
 * @params ctx context.Context, key string, val string
 * @return error
 **/

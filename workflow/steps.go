@@ -16,6 +16,8 @@ const (
 	TpDefinition TpStep = "definition"
 )
 
+type FnContext func(flow *Instance, ctx et.Json) (et.Json, error)
+
 type Step struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
@@ -62,7 +64,7 @@ func newStepDefinition(name, description string, definition string, stop bool) (
 	result.fn = func(flow *Instance, ctx et.Json) (et.Json, error) {
 		flow.vm.Set("flow", flow)
 		flow.vm.Set("ctx", ctx)
-		flow.vm.Set("pinned", flow.PinnedData)
+		flow.vm.Set("pinnedData", flow.PinnedData)
 		result, err := flow.vm.RunString(definition)
 		if err != nil {
 			return et.Json{}, err

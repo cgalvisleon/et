@@ -26,7 +26,7 @@ import (
 
 Estructura actual de `et/` con una breve descripción por paquete:
 
-```
+````
 et/
 ├── arg/           # Gestión de argumentos de línea de comandos
 ├── aws/           # Integración con servicios AWS (S3, SES, SMS)
@@ -96,22 +96,53 @@ et/
 - Variables y carga de entorno: `envar/`, archivo `.env` y `config/`.
 - Recomendado: documentar las variables requeridas por cada paquete que las consuma.
 
+### API de configuración (nueva)
+Funciones principales en `config/`:
+- **Lectura**: `GetStr`, `GetInt`, `GetInt64`, `GetBool`, `GetFloat`, `GetTime`.
+- **Escritura**: `Set(key, val)` y `SetEnvar(values et.Json)`.
+- **Parámetros CLI**: `ParamStr`, `ParamInt`, `ParamInt64`, `ParamBool`, `ParamFloat`, `ParamTime`.
+- **App metadata**: `config.App` mantiene `name`, `version`, `company`, `host`, `port`, `stage`, etc. Puedes serializar con `App.ToJson()`.
+
+Ejemplo rápido:
+```go
+name := config.GetStr("NAME", "et")
+port := config.GetInt("PORT", 3300)
+config.Set("DEBUG", true)
+argsPort := config.ParamInt("port", port)
+_ = config.App.ToJson() // et.Json con la configuración activa
+````
+
 ## Integraciones
+
 - **AWS**: utilidades para S3, SES, SMS en `aws/` (depende de `github.com/aws/aws-sdk-go`).
 - **Brevo**: email/SMS/WhatsApp en `brevo/`.
 
+## Cambios recientes relevantes
+
+- **Claim (JWT)**: se renombra `projectId` a `tenantId` en `claim.Claim` y helpers (`TenantIdKey`, `TenantId(r)`), y en logs/contexto.
+- **Service (mensajería)**:
+  - Nuevos mensajes constantes en `service/msg.go` (`MSG_SEND_SMS`, `MSG_SEND_WHATSAPP`, `MSG_SEND_EMAIL`, `MSG_OTP`).
+  - Nuevos helpers OTP en `service/otp.go` (`SendOTPEmail`, `SendOTPSms`, `VerifyOTP`), con plantillas en `service/templates.go`.
+  - Firmas actualizadas para usar `tenantId` en `service/send.go` y `service/event.go`.
+- **Eventos**: se añade el canal global `event.EVENT` y publicación adicional del evento con `{channel, data}` en `event/handler.go`.
+- **Cache**: `cache.Set` asegura expiración mínima de 1s cuando se pasa un valor inferior.
+- **Config**: unificación de getters `Get*` y CLI `Param*`; `App.Set(key, val)` actualiza env y `config.App`.
+
 ## Desarrollo
+
 - Requisitos: Go 1.23+.
 - Dependencias: ver `go.mod` y `go.sum`.
 - Pruebas: usa `go test ./...` en la raíz del módulo.
 - Versionado: consulta `version.sh` si aplica a pipelines/builds.
 
 ## Ejemplos y guías
-- Este README describe el mapa de paquetes. Para ejemplos de uso, consulta los READMEs locales en cada paquete cuando existan o el directorio `create/` para plantillas.
+
+- Este README describe el mapa de paquetes y cambios recientes. Para ejemplos de uso, consulta READMEs locales por paquete o `create/` para plantillas.
 
 ## Contribuir
+
 - Issues y PRs son bienvenidos. Sigue el estilo del proyecto y añade pruebas cuando aplique.
 
 ## Licencia
+
 MIT. Ver `LICENSE`.
-```

@@ -65,7 +65,7 @@ func GenUUId(tag string) string {
 }
 
 /**
-* GenULIDI
+* GenULIDI (Universally locally identifier)
 * @params tag string
 * @return string
 **/

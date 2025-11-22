@@ -48,6 +48,36 @@ type Instance struct {
 }
 
 /**
+* load
+* @param id string
+* @return (*Instance, error)
+**/
+func load(id string) (*Instance, error) {
+	key := fmt.Sprintf("workflow:%s", id)
+	if !cache.Exists(key) {
+		return nil, errorInstanceNotFound
+	}
+
+	result := &Instance{}
+	bt, err := json.Marshal(result)
+	if err != nil {
+		return nil, err
+	}
+
+	src, err := cache.Get(key, string(bt))
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal([]byte(src), &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+/**
 * Serialize
 * @return ([]byte, error)
 **/
@@ -84,52 +114,28 @@ func (s *Instance) ToJson() et.Json {
 }
 
 /**
-* load
-* @param id string
-* @return (*Instance, error)
-**/
-func load(id string) (*Instance, error) {
-	key := fmt.Sprintf("workflow:%s", id)
-	if !cache.Exists(key) {
-		return nil, errorInstanceNotFound
-	}
-
-	result := &Instance{}
-	bt, err := json.Marshal(result)
-	if err != nil {
-		return nil, err
-	}
-
-	src, err := cache.Get(key, string(bt))
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal([]byte(src), &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-/**
 * save
 * @return error
 **/
 func (s *Instance) save() error {
 	event.Publish(EVENT_WORKFLOW_STATUS, s.ToJson())
-	bt, err := json.Marshal(s)
+	bt, err := s.serialize()
 	if err != nil {
 		return err
 	}
 
-	if s.RetentionTime <= 0 {
-		s.RetentionTime = 24 * time.Hour
+	scr := string(bt)
+	key := fmt.Sprintf("workflow:%s", s.Id)
+	cache.Set(key, scr, s.RetentionTime)
+
+	tagKey := fmt.Sprintf("workflow:%s", s.Tag)
+	flows, err := cache.GetJson(tagKey)
+	if err != nil {
+		flows = et.Json{}
 	}
 
-	key := fmt.Sprintf("workflow:%s", s.Id)
-	cache.Set(key, string(bt), s.RetentionTime)
+	flows[key] = scr
+	cache.Set(tagKey, flows.ToString(), s.RetentionTime)
 
 	return nil
 }

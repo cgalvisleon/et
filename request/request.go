@@ -217,8 +217,12 @@ func Http(method, url string, header, body et.Json, tlsConfig *tls.Config) (*Bod
 		}
 	}
 
-	bodyParams := bodyParams(header, body)
-	req, err := http.NewRequest(method, url, bytes.NewBuffer(bodyParams))
+	var ioBody io.Reader
+	if body != nil {
+		bodyParams := bodyParams(header, body)
+		ioBody = bytes.NewBuffer(bodyParams)
+	}
+	req, err := http.NewRequest(method, url, ioBody)
 	if err != nil {
 		return nil, Status{Ok: false, Code: http.StatusBadRequest, Message: err.Error()}
 	}
@@ -284,7 +288,7 @@ func Post(url string, header, body et.Json) (*Body, Status) {
 * @return *Body, Status
 **/
 func Get(url string, header et.Json) (*Body, Status) {
-	return Http("GET", url, header, et.Json{}, nil)
+	return Http("GET", url, header, nil, nil)
 }
 
 /**

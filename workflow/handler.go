@@ -57,11 +57,11 @@ func NewFn(tag, version, name, description string, fn FnContext, stop bool, crea
 }
 
 /**
-* NewDefinition
+* New
 * @param tag, version, name, description string, definition string, createdBy string
 * @return *Flow
 **/
-func NewDefinition(tag, version, name, description string, definition string, stop bool, createdBy string) *Flow {
+func New(tag, version, name, description string, definition string, stop bool, createdBy string) *Flow {
 	if err := Load(); err != nil {
 		return nil
 	}

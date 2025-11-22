@@ -12,10 +12,10 @@ import (
 
 /**
 * SendWhatsapp
-* @param contactNumbers []string, templateId string, params []et.Json, tp string
+* @param serviceId string, contactNumbers []string, templateId string, params []et.Json, tp string
 * @return et.Items, error
 **/
-func SendWhatsapp(contactNumbers []string, templateId string, params []et.Json, tp string) (et.Items, error) {
+func SendWhatsapp(serviceId string, contactNumbers []string, templateId string, params []et.Json, tp string) (et.Items, error) {
 	if len(contactNumbers) == 0 {
 		return et.Items{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "contactNumbers")
 	}
@@ -76,23 +76,34 @@ func SendWhatsapp(contactNumbers []string, templateId string, params []et.Json, 
 		})
 	}
 
+	if set != nil {
+		set(serviceId, et.Json{
+			"contactNumbers": contactNumbers,
+			"templateId":     templateId,
+			"params":         params,
+			"tp":             tp,
+			"supplier":       "Brevo",
+			"result":         result,
+		})
+	}
+
 	return result, nil
 }
 
 /**
 * SendWhatsappTransactional
-* @param contactNumbers []string, templateId string, params []et.Json
+* @param serviceId string, contactNumbers []string, templateId string, params []et.Json
 * @return et.Items, error
 **/
-func SendWhatsappTransactional(contactNumbers []string, templateId string, params []et.Json) (et.Items, error) {
-	return SendWhatsapp(contactNumbers, templateId, params, "Transactional")
+func SendWhatsappTransactional(serviceId string, contactNumbers []string, templateId string, params []et.Json) (et.Items, error) {
+	return SendWhatsapp(serviceId, contactNumbers, templateId, params, "Transactional")
 }
 
 /**
 * SendWhatsappPromotional
-* @param contactNumbers []string, templateId string, params []et.Json
+* @param serviceId string, contactNumbers []string, templateId string, params []et.Json
 * @return et.Items, error
 **/
-func SendWhatsappPromotional(contactNumbers []string, templateId string, params []et.Json) (et.Items, error) {
-	return SendWhatsapp(contactNumbers, templateId, params, "Promotional")
+func SendWhatsappPromotional(serviceId string, contactNumbers []string, templateId string, params []et.Json) (et.Items, error) {
+	return SendWhatsapp(serviceId, contactNumbers, templateId, params, "Promotional")
 }

@@ -21,17 +21,17 @@ func main() {
 
 		return ctx, nil
 	}, true, "test").
-		// Debug().
-		Retention(24*time.Hour).
+		Debug().
+		Retention(15*time.Minute).
 		Resilence(3, 3*time.Second, "test", "1").
 		StepFn("Step 1", "Step 1", func(flow *workflow.Instance, ctx et.Json) (et.Json, error) {
 			logs.Logf("Respuesta desde step 1, contexto:", ctx.ToString())
 			atrib := fmt.Sprintf("step_%d", flow.Current)
 			ctx.Set(atrib, "step1")
 
-			flow.Done()
-			flow.Stop()
-			flow.Goto(2)
+			// flow.Done()
+			// flow.Stop()
+			// flow.Goto(2)
 
 			time.Sleep(3 * time.Second)
 

@@ -71,8 +71,6 @@ et/
 ├── timezone/      # Zonas horarias
 ├── units/         # Unidades de medida y conversiones
 ├── utility/       # Utilidades generales (crypto, validación, etc.)
-├── vm/            # Máquinas virtuales / helpers de ejecución
-├── workflow/      # Flujos de Trabajo y procesos
 └── ws/            # WebSocket y comunicación bidireccional
 
 ## Paquetes clave (visión general)

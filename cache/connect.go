@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
@@ -22,9 +23,12 @@ func ConnectTo(host, password string, db int) (*Conn, error) {
 	}
 
 	client := redis.NewClient(&redis.Options{
-		Addr:     host,
-		Password: password,
-		DB:       db,
+		Addr:            host,
+		Password:        password,
+		DB:              db,
+		MaxRetries:      1000,
+		MinRetryBackoff: 1 * time.Second,
+		MaxRetryBackoff: 2 * time.Second,
 	})
 
 	ctx := context.Background()

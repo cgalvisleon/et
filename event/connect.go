@@ -2,6 +2,7 @@ package event
 
 import (
 	"sync"
+	"time"
 
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
@@ -19,7 +20,21 @@ func ConnectTo(host, user, password string) (*Conn, error) {
 		return nil, logs.Alertf(msg.MSG_ATRIB_REQUIRED, "nats_host")
 	}
 
-	client, err := nats.Connect(host, nats.UserInfo(user, password))
+	opts := []nats.Option{
+		nats.UserInfo(user, password),
+		nats.ReconnectWait(2 * time.Second),
+		nats.MaxReconnects(-1),
+		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
+			logs.Logf("NATS", `Disconnected host:%s`, host)
+		}),
+		nats.ReconnectHandler(func(nc *nats.Conn) {
+			logs.Logf("NATS", `Reconnected host:%s`, host)
+		}),
+		nats.ClosedHandler(func(nc *nats.Conn) {
+			logs.Logf("NATS", `Closed host:%s`, host)
+		}),
+	}
+	client, err := nats.Connect(host, opts...)
 	if err != nil {
 		return nil, err
 	}

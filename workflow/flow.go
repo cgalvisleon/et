@@ -2,11 +2,9 @@ package workflow
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"time"
 
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -39,69 +37,6 @@ type Flow struct {
 	Level         string        `json:"level"`
 	CreatedBy     string        `json:"created_by"`
 	isDebug       bool          `json:"-"`
-}
-
-/**
-* newFlow
-* @param tag, version, name, description string, createdBy string
-* @return *Flow
-**/
-func newFlow(tag, version, name, description string, createdBy string) *Flow {
-	result := &Flow{
-		Tag:           tag,
-		Version:       version,
-		Name:          name,
-		Description:   description,
-		TpConsistency: TpConsistencyEventual,
-		RetentionTime: 48 * time.Hour,
-		Steps:         make([]*Step, 0),
-		CreatedBy:     createdBy,
-	}
-
-	tagKey := fmt.Sprintf("workflow:%s", tag)
-	flows, err := cache.GetJson(tagKey)
-	if err != nil {
-		flows = et.Json{}
-	}
-
-	for k := range flows {
-		instance, err := load(k)
-		if err != nil {
-			continue
-		}
-
-		if instance.Status == FlowStatusRunning {
-			instance.setStatus(FlowStatusPending)
-		}
-	}
-
-	return result
-}
-
-/**
-* newFlowFn
-* @param tag, version, name, description string, fn FnContext, stop bool, createdBy string
-* @return *Flow
-**/
-func newFlowFn(tag, version, name, description string, fn FnContext, stop bool, createdBy string) *Flow {
-	flow := newFlow(tag, version, name, description, createdBy)
-	logs.Logf(packageName, MSG_FLOW_CREATED, tag, version, name)
-	flow.StepFn("Start", MSG_START_WORKFLOW, fn, stop)
-
-	return flow
-}
-
-/**
-* newFlowDefinition
-* @param tag, version, name, description string, definition string, totalAttempts int, timeAttempts, retentionTime time.Duration, createdBy string
-* @return *Flow
-**/
-func newFlowDefinition(tag, version, name, description string, definition string, stop bool, createdBy string) *Flow {
-	flow := newFlow(tag, version, name, description, createdBy)
-	logs.Logf(packageName, MSG_FLOW_CREATED, tag, version, name)
-	flow.Step("Start", MSG_START_WORKFLOW, definition, stop)
-
-	return flow
 }
 
 /**
@@ -249,4 +184,50 @@ func (s *Flow) IfElse(expression string, yesGoTo int, noGoTo int) *Flow {
 	s.setConfig(MSG_INSTANCE_IFELSE, n-1, step.Name, expression, yesGoTo, noGoTo, s.Tag)
 
 	return s
+}
+
+/**
+* newFlow
+* @param tag, version, name, description string, createdBy string
+* @return *Flow
+**/
+func newFlow(tag, version, name, description string, createdBy string) *Flow {
+	result := &Flow{
+		Tag:           tag,
+		Version:       version,
+		Name:          name,
+		Description:   description,
+		TpConsistency: TpConsistencyEventual,
+		RetentionTime: 1 * time.Hour,
+		Steps:         make([]*Step, 0),
+		CreatedBy:     createdBy,
+	}
+
+	return result
+}
+
+/**
+* newFlowFn
+* @param tag, version, name, description string, fn FnContext, stop bool, createdBy string
+* @return *Flow
+**/
+func newFlowFn(tag, version, name, description string, fn FnContext, stop bool, createdBy string) *Flow {
+	flow := newFlow(tag, version, name, description, createdBy)
+	logs.Logf(packageName, MSG_FLOW_CREATED, tag, version, name)
+	flow.StepFn("Start", MSG_START_WORKFLOW, fn, stop)
+
+	return flow
+}
+
+/**
+* newFlowDefinition
+* @param tag, version, name, description string, definition string, stop bool, createdBy string
+* @return *Flow
+**/
+func newFlowDefinition(tag, version, name, description string, definition string, stop bool, createdBy string) *Flow {
+	flow := newFlow(tag, version, name, description, createdBy)
+	logs.Logf(packageName, MSG_FLOW_CREATED, tag, version, name)
+	flow.Step("Start", MSG_START_WORKFLOW, definition, stop)
+
+	return flow
 }

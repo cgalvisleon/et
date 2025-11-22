@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"time"
 
@@ -21,6 +22,43 @@ var workerHost string
 
 func init() {
 	workerHost, _ = os.Hostname()
+}
+
+type LoadFlowFn func(tag string) (*Flow, error)
+type SaveFlowFn func(flow *Flow) error
+type DeleteFlowFn func(tag string) error
+
+var (
+	loadFlow LoadFlowFn
+	saveFlow SaveFlowFn
+	delFlow  DeleteFlowFn
+)
+
+/**
+* OnLoadFlow
+* @param f LoadFlowFn
+* @return void
+**/
+func OnLoadFlow(f LoadFlowFn) {
+	loadFlow = f
+}
+
+/**
+* OnSaveFlow
+* @param f SaveFlowFn
+* @return void
+**/
+func OnSaveFlow(f SaveFlowFn) {
+	saveFlow = f
+}
+
+/**
+* OnDeleteFlow
+* @param f DeleteFlowFn
+* @return void
+**/
+func OnDeleteFlow(f DeleteFlowFn) {
+	delFlow = f
 }
 
 type Flow struct {
@@ -72,12 +110,31 @@ func (s *Flow) ToJson() et.Json {
 }
 
 /**
+* Save
+* @return error
+**/
+func (s *Flow) Save() error {
+	if saveFlow != nil {
+		err := saveFlow(s)
+		if err != nil {
+			err = fmt.Errorf("saveFlow: error on save flow: %s, error: %v", s.Tag, err)
+			event.Publish(EVENT_ERROR, et.Json{
+				"message": err.Error(),
+			})
+			return err
+		}
+	}
+	event.Publish(EVENT_FLOW_SET, s.ToJson())
+	return nil
+}
+
+/**
 * setConfig
 * @return error
 **/
 func (s *Flow) setConfig(format string, args ...any) {
-	event.Publish(EVENT_WORKFLOW_SET, s.ToJson())
 	logs.Logf(packageName, format, args...)
+	s.Save()
 }
 
 /**
@@ -198,7 +255,7 @@ func newFlow(tag, version, name, description string, createdBy string) *Flow {
 		Name:          name,
 		Description:   description,
 		TpConsistency: TpConsistencyEventual,
-		RetentionTime: 1 * time.Hour,
+		RetentionTime: 15 * time.Minute,
 		Steps:         make([]*Step, 0),
 		CreatedBy:     createdBy,
 	}

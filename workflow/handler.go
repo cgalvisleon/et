@@ -44,19 +44,6 @@ func HealthCheck() bool {
 }
 
 /**
-* NewFn
-* @param tag, version, name, description string, fn FnContext, createdBy string
-* @return *Flow
-**/
-func NewFn(tag, version, name, description string, fn FnContext, stop bool, createdBy string) *Flow {
-	if err := Load(); err != nil {
-		return nil
-	}
-
-	return workFlows.newFlowFn(tag, version, name, description, fn, stop, createdBy)
-}
-
-/**
 * New
 * @param tag, version, name, description string, definition string, createdBy string
 * @return *Flow
@@ -67,6 +54,19 @@ func New(tag, version, name, description string, definition string, stop bool, c
 	}
 
 	return workFlows.newFlowDefinition(tag, version, name, description, definition, stop, createdBy)
+}
+
+/**
+* NewFn
+* @param tag, version, name, description string, fn FnContext, createdBy string
+* @return *Flow
+**/
+func NewFn(tag, version, name, description string, fn FnContext, stop bool, createdBy string) *Flow {
+	if err := Load(); err != nil {
+		return nil
+	}
+
+	return workFlows.newFlowFn(tag, version, name, description, fn, stop, createdBy)
 }
 
 /**
@@ -83,16 +83,29 @@ func Run(instanceId, tag string, startId int, tags et.Json, ctx et.Json, created
 }
 
 /**
+* Continue
+* @param instanceId string, tags et.Json, ctx et.Json, createdBy string
+* @return et.Json, error
+**/
+func Continue(instanceId string, tags et.Json, ctx et.Json, createdBy string) (et.Json, error) {
+	if err := Load(); err != nil {
+		return et.Json{}, err
+	}
+
+	return workFlows.continue(instanceId, tags, ctx, createdBy)
+}
+
+/**
 * Reset
 * @param instanceId string
 * @return error
 **/
-func Reset(instanceId string) error {
+func Reset(instanceId, createdBy string) error {
 	if err := Load(); err != nil {
 		return err
 	}
 
-	return workFlows.reset(instanceId)
+	return workFlows.reset(instanceId, createdBy)
 }
 
 /**
@@ -100,12 +113,12 @@ func Reset(instanceId string) error {
 * @param instanceId string
 * @return et.Json, error
 **/
-func Rollback(instanceId string) (et.Json, error) {
+func Rollback(instanceId, createdBy string) (et.Json, error) {
 	if err := Load(); err != nil {
 		return et.Json{}, err
 	}
 
-	return workFlows.rollback(instanceId)
+	return workFlows.rollback(instanceId, createdBy)
 }
 
 /**
@@ -113,12 +126,12 @@ func Rollback(instanceId string) (et.Json, error) {
 * @param instanceId, tag string
 * @return error
 **/
-func Stop(instanceId string) error {
+func Stop(instanceId, createdBy string) error {
 	if err := Load(); err != nil {
 		return err
 	}
 
-	return workFlows.stop(instanceId)
+	return workFlows.stop(instanceId, createdBy)
 }
 
 /**

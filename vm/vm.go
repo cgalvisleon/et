@@ -7,7 +7,8 @@ import (
 
 type Vm struct {
 	*goja.Runtime
-	Ctx et.Json
+	Ctx    et.Json
+	Result et.Json
 }
 
 /**
@@ -17,7 +18,8 @@ type Vm struct {
 func New() *Vm {
 	result := &Vm{
 		Runtime: goja.New(),
-		Ctx:     make(et.Json),
+		Ctx:     et.Json{},
+		Result:  et.Json{},
 	}
 
 	Console(result)

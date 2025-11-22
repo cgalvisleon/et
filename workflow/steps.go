@@ -7,6 +7,7 @@ import (
 	"github.com/Knetic/govaluate"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/dop251/goja"
 )
 
 type TpStep string
@@ -62,17 +63,33 @@ func newStepDefinition(name, description string, definition string, stop bool) (
 		Definition:  definition,
 	}
 	result.fn = func(flow *Instance, ctx et.Json) (et.Json, error) {
-		flow.vm.Set("flow", flow)
+		flow.vm.Set("instance", flow)
 		flow.vm.Set("ctx", ctx)
 		flow.vm.Set("pinnedData", flow.PinnedData)
-		result, err := flow.vm.RunString(definition)
+		value, err := flow.vm.Run(definition)
 		if err != nil {
 			return et.Json{}, err
 		}
 
-		logs.Debug(packageName, "result", result)
+		if flow.isDebug {
+			logs.Debugf("stepDefinition:%s", value.String())
+		}
 
-		return et.Json{}, nil
+		result := flow.vm.Get("result")
+		if result == goja.Undefined() {
+			return et.Json{}, nil
+		}
+
+		switch v := result.Export().(type) {
+		case map[string]interface{}:
+			return et.Json(v), nil
+		case et.Json:
+			return v, nil
+		default:
+			return et.Json{
+				"result": v,
+			}, nil
+		}
 	}
 
 	return result, nil
@@ -84,7 +101,7 @@ func newStepDefinition(name, description string, definition string, stop bool) (
 * @return et.Json, error
 **/
 func (s *Step) run(flow *Instance, ctx et.Json) (et.Json, error) {
-	flow.setStatus(FlowStatusRunning)
+	flow.SetStatus(FlowStatusRunning)
 	result, err := s.fn(flow, ctx)
 	if err != nil {
 		flow.setFailed(result, err)
@@ -151,7 +168,7 @@ func (s *Step) evaluate(ctx et.Json, instance *Instance) (bool, error) {
 		return false, fmt.Errorf(MSG_INSTANCE_EVALUATE, s.Expression, err.Error())
 	}
 
-	instance.setStatus(FlowStatusRunning)
+	instance.SetStatus(FlowStatusRunning)
 	evalueExpression, err := govaluate.NewEvaluableExpression(s.Expression)
 	if err != nil {
 		return resultError(err)

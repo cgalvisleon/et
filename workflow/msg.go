@@ -21,7 +21,7 @@ const (
 	MSG_INSTANCE_EXPRESSION_TRUE    = "Resultado de la expresion es true"
 	MSG_INSTANCE_EXPRESSION_FALSE   = "Resultado de la expresion es false"
 	MSG_INSTANCE_ROLLBACK           = "Esta intentando hacer rollback de un step que no existe"
-	MSG_INSTANCE_ROLLBACK_STEP      = "haciendo rollback del step:%d"
+	MSG_INSTANCE_ROLLBACK_STEP      = "Haciendo rollback del step:%d"
 	MSG_INSTANCE_STEP_CREATED       = "Definido step:%d name:%s Tag:%s"
 	MSG_INSTANCE_ROLLBACK_CREATED   = "Definido rollback step:%d name:%s Tag:%s"
 	MSG_INSTANCE_ROLLBACK_FAILED    = "Rollback Instance:%s Tag:%s status:%s, step:%d error:%s"

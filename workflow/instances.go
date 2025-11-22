@@ -23,22 +23,61 @@ const (
 	FlowStatusFailed  FlowStatus = "failed"
 )
 
+type LoadInstanceFn func(id string) (*Instance, error)
+type SaveInstanceFn func(instance *Instance) error
+type DeleteInstanceFn func(id string) error
+
+var (
+	loadInstance LoadInstanceFn
+	saveInstance SaveInstanceFn
+	delInstance  DeleteInstanceFn
+)
+
+/**
+* OnLoadInstance
+* @param f LoadInstanceFn
+* @return void
+**/
+func OnLoadInstance(f LoadInstanceFn) {
+	loadInstance = f
+}
+
+/**
+* OnSaveInstance
+* @param f SaveInstanceFn
+* @return void
+**/
+func OnSaveInstance(f SaveInstanceFn) {
+	saveInstance = f
+}
+
+/**
+* OnDeleteInstance
+* @param f DeleteInstanceFn
+* @return void
+**/
+func OnDeleteInstance(f DeleteInstanceFn) {
+	delInstance = f
+}
+
 type Instance struct {
 	*Flow
 	workFlows  *WorkFlows           `json:"-"`
 	CreatedAt  time.Time            `json:"created_at"`
 	UpdatedAt  time.Time            `json:"updated_at"`
+	Tag        string               `json:"tag"`
 	Id         string               `json:"id"`
 	CreatedBy  string               `json:"created_by"`
+	UpdatedBy  string               `json:"updated_by"`
+	Status     FlowStatus           `json:"status"`
+	DoneAt     time.Time            `json:"done_at"`
 	Current    int                  `json:"current"`
 	Ctx        et.Json              `json:"ctx"`
 	Ctxs       map[int]et.Json      `json:"ctxs"`
 	PinnedData et.Json              `json:"pinned_data"`
 	Results    map[int]*Result      `json:"results"`
-	Rollbacks  map[int]*Result      `json:"rollbacks"`
-	Status     FlowStatus           `json:"status"`
-	DoneAt     time.Time            `json:"done_at"`
 	Tags       et.Json              `json:"tags"`
+	Rollbacks  map[int]*Result      `json:"rollbacks"`
 	WorkerHost string               `json:"worker_host"`
 	vm         *vm.Vm               `json:"-"`
 	done       bool                 `json:"-"`
@@ -114,42 +153,40 @@ func (s *Instance) ToJson() et.Json {
 }
 
 /**
-* save
+* Save
 * @return error
 **/
-func (s *Instance) save() error {
-	event.Publish(EVENT_WORKFLOW_STATUS, s.ToJson())
-	bt, err := s.serialize()
-	if err != nil {
-		return err
+func (s *Instance) Save() error {
+	if saveInstance != nil {
+		err := saveInstance(s)
+		if err != nil {
+			err = fmt.Errorf("saveInstance: error on save instanceId: %s, error: %v", s.Id, err)
+			event.Publish(EVENT_ERROR, et.Json{
+				"message": err.Error(),
+			})
+			return err
+		}
 	}
-
-	scr := string(bt)
-	key := fmt.Sprintf("workflow:%s", s.Id)
-	cache.Set(key, scr, s.RetentionTime)
-
-	tagKey := fmt.Sprintf("workflow:%s", s.Tag)
-	flows, err := cache.GetJson(tagKey)
-	if err != nil {
-		flows = et.Json{}
-	}
-
-	flows[key] = scr
-	cache.Set(tagKey, flows.ToString(), s.RetentionTime)
-
+	event.Publish(EVENT_WORKFLOW_SET, s.ToJson())
 	return nil
 }
 
 /**
-* setStatus
+* SetStatus
 * @param status FlowStatus
 * @return error
 **/
-func (s *Instance) setStatus(status FlowStatus) error {
-	if s.Status != status {
-		s.Status = status
-		s.UpdatedAt = utility.NowTime()
+func (s *Instance) SetStatus(status FlowStatus) error {
+	save := func() error {
+		return s.Save()
 	}
+
+	if s.Status == status {
+		return save()
+	}
+
+	s.Status = status
+	s.UpdatedAt = utility.NowTime()
 
 	if s.Status == FlowStatusDone {
 		s.DoneAt = s.UpdatedAt
@@ -170,24 +207,50 @@ func (s *Instance) setStatus(status FlowStatus) error {
 		logs.Logf(packageName, MSG_INSTANCE_STATUS, s.Id, s.Tag, s.Status, s.Current)
 	}
 
-	err := s.save()
-	if err != nil {
-		return fmt.Errorf("setStatus: error al guardar el estado de la instancia: %v", err)
-	}
-
-	return nil
+	return save()
 }
 
 /**
-* setResult
+* SetStep
+* @param val int
+* @return error
+**/
+func (s *Instance) SetStep(val int) {
+	s.Current = val
+}
+
+/**
+* SetCtx
+* @param ctx et.Json
+**/
+func (s *Instance) SetCtx(ctx et.Json) et.Json {
+	for k, v := range ctx {
+		s.Ctx[k] = v
+	}
+
+	s.Ctxs[s.Current] = ctx.Clone()
+
+	return s.Ctx
+}
+
+/**
+* SetPinedData
+* @param key string, value interface{}
+**/
+func (s *Instance) SetPinedData(key string, value interface{}) {
+	s.PinnedData[key] = value
+}
+
+/**
+* SetResult
 * @param result et.Json, err error
 * @return et.Json, error
 **/
-func (s *Instance) setResult(result et.Json, err error) (et.Json, error) {
+func (s *Instance) SetResult(result et.Json, err error) (et.Json, error) {
 	s.err = err
 	errMessage := ""
-	if s.err != nil {
-		errMessage = s.err.Error()
+	if err != nil {
+		errMessage = err.Error()
 	}
 
 	attempt := 0
@@ -208,35 +271,13 @@ func (s *Instance) setResult(result et.Json, err error) (et.Json, error) {
 }
 
 /**
-* setTags
+* SetTags
 * @param tags et.Json
 **/
-func (s *Instance) setTags(tags et.Json) {
+func (s *Instance) SetTags(tags et.Json) {
 	for k, v := range tags {
 		s.Tags[k] = v
 	}
-}
-
-/**
-* SetPined
-* @param key string, value interface{}
-**/
-func (s *Instance) SetPined(key string, value interface{}) {
-	s.PinnedData[key] = value
-}
-
-/**
-* setCtx
-* @param ctx et.Json
-**/
-func (s *Instance) setCtx(ctx et.Json) et.Json {
-	for k, v := range ctx {
-		s.Ctx[k] = v
-	}
-
-	s.Ctxs[s.Current] = ctx.Clone()
-
-	return s.Ctx
 }
 
 /**
@@ -245,8 +286,8 @@ func (s *Instance) setCtx(ctx et.Json) et.Json {
 * @return et.Json, error
 **/
 func (s *Instance) setDone(result et.Json, err error) (et.Json, error) {
-	s.setResult(result, err)
-	s.setStatus(FlowStatusDone)
+	s.SetResult(result, err)
+	s.SetStatus(FlowStatusDone)
 
 	return result, err
 }
@@ -255,9 +296,11 @@ func (s *Instance) setDone(result et.Json, err error) (et.Json, error) {
 * setFailed
 * @param result et.Json, err error
 **/
-func (s *Instance) setFailed(result et.Json, err error) {
-	s.setResult(result, err)
-	s.setStatus(FlowStatusFailed)
+func (s *Instance) setFailed(result et.Json, err error) (et.Json, error) {
+	s.SetResult(result, err)
+	s.SetStatus(FlowStatusFailed)
+
+	return result, err
 }
 
 /**
@@ -266,9 +309,9 @@ func (s *Instance) setFailed(result et.Json, err error) {
 * @return et.Json, error
 **/
 func (s *Instance) setStop(result et.Json, err error) (et.Json, error) {
-	s.setResult(result, err)
-	s.Current++
-	s.setStatus(FlowStatusPending)
+	s.SetResult(result, err)
+	s.SetStep(s.Current + 1)
+	s.SetStatus(FlowStatusPending)
 
 	return result, err
 }
@@ -277,10 +320,12 @@ func (s *Instance) setStop(result et.Json, err error) (et.Json, error) {
 * setNext
 * @return error
 **/
-func (s *Instance) setNext(result et.Json, err error) {
-	s.setResult(result, err)
-	s.Current++
-	s.setStatus(s.Status)
+func (s *Instance) setNext(result et.Json, err error) (et.Json, error) {
+	s.SetResult(result, err)
+	s.SetStep(s.Current + 1)
+	s.SetStatus(s.Status)
+
+	return result, err
 }
 
 /**
@@ -288,47 +333,38 @@ func (s *Instance) setNext(result et.Json, err error) {
 * @param step int, result et.Json, err error
 * @return et.Json, error
 **/
-func (s *Instance) setGoto(step int, message string, result et.Json, err error) {
-	s.setResult(result, err)
-	s.Current = step
+func (s *Instance) setGoto(step int, message string, result et.Json, err error) (et.Json, error) {
+	s.SetResult(result, err)
+	s.SetStep(step)
 	s.goTo = -1
-	s.setStatus(s.Status)
+	s.SetStatus(s.Status)
 	logs.Logf(packageName, MSG_INSTANCE_GOTO, s.Id, s.Tag, step, message)
-}
 
-/**
-* startResilence
-* @return bool
-**/
-func (s *Instance) startResilence() bool {
-	if s.TotalAttempts == 0 {
-		return false
-	}
-
-	if s.resilence != nil {
-		return !s.resilence.IsFailed()
-	}
-
-	description := fmt.Sprintf("flow: %s,  %s", s.Name, s.Description)
-	s.resilence = resilience.AddCustom(s.Id, s.Tag, description, s.TotalAttempts, s.TimeAttempts, s.RetentionTime, s.Tags, s.Team, s.Level, s.run, s.Ctx)
-	return true
+	return result, err
 }
 
 /**
 * run
-* @param ctx et.Json
+* @param ctx et.Json, runerBy string
 * @return et.Json, error
 **/
-func (s *Instance) run(ctx et.Json) (et.Json, error) {
+func (s *Instance) run(ctx et.Json, runerBy string) (et.Json, error) {
 	if s.Status == FlowStatusDone {
 		return s.ToJson(), fmt.Errorf(MSG_INSTANCE_ALREADY_DONE)
 	} else if s.Status == FlowStatusRunning {
 		return s.ToJson(), fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING)
+	} else if s.Current >= len(s.Steps) {
+		return s.ToJson(), fmt.Errorf(MSG_INSTANCE_ALREADY_DONE)
+	} else if s.Current < 0 {
+		return s.ToJson(), fmt.Errorf(MSG_INSTANCE_ALREADY_DONE)
+	} else if s.done {
+		return s.ToJson(), fmt.Errorf(MSG_INSTANCE_ALREADY_DONE)
 	}
 
+	s.UpdatedBy = runerBy
 	var err error
 	for s.Current < len(s.Steps) {
-		ctx = s.setCtx(ctx)
+		ctx = s.SetCtx(ctx)
 		step := s.Steps[s.Current]
 		ctx, err = step.run(s, ctx)
 		if err != nil {
@@ -339,13 +375,13 @@ func (s *Instance) run(ctx et.Json) (et.Json, error) {
 			return s.setDone(ctx, err)
 		}
 
+		if step.Stop {
+			return s.setStop(ctx, err)
+		}
+
 		if s.goTo != -1 {
 			s.setGoto(s.goTo, MSG_INSTANCE_GOTO_USER_DECISION, ctx, err)
 			continue
-		}
-
-		if step.Stop {
-			return s.setStop(ctx, err)
 		}
 
 		if step.Expression != "" {
@@ -377,16 +413,18 @@ func (s *Instance) run(ctx et.Json) (et.Json, error) {
 * @return et.Json, error
 **/
 func (s *Instance) rollback(result et.Json, err error) (et.Json, error) {
-	if s.startResilence() {
+	s.setFailed(result, err)
+	if s.TotalAttempts == 0 {
 		return result, err
-	}
-
-	if s.Status == FlowStatusDone {
+	} else if s.Status == FlowStatusDone {
 		return result, fmt.Errorf(MSG_INSTANCE_ALREADY_DONE)
-	} else if s.Status == FlowStatusRunning {
-		return result, fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING)
 	} else if s.Status == FlowStatusPending {
 		return result, fmt.Errorf(MSG_INSTANCE_PENDING)
+	}
+
+	if s.resilence == nil {
+		description := fmt.Sprintf("flow: %s,  %s", s.Name, s.Description)
+		s.resilence = resilience.AddCustom(s.Id, s.Tag, description, s.TotalAttempts, s.TimeAttempts, s.RetentionTime, s.Tags, s.Team, s.Level, s.run, s.Ctx)
 	}
 
 	for i := s.Current - 1; i >= 0; i-- {
@@ -430,33 +468,38 @@ func (s *Instance) rollback(result et.Json, err error) (et.Json, error) {
 
 /**
 * Stop
+* @param stoperBy string
 * @return error
 **/
-func (s *Instance) Stop() error {
+func (s *Instance) Stop(stoperBy string) error {
+	s.UpdatedBy = stoperBy
 	s.Steps[s.Current].Stop = true
-	s.setStatus(s.Status)
+	s.SetStatus(s.Status)
 
 	return nil
 }
 
 /**
 * Done
+* @param doneBy string
 * @return error
 **/
-func (s *Instance) Done() error {
-	s.setStatus(FlowStatusDone)
+func (s *Instance) Done(doneBy string) error {
+	s.UpdatedBy = doneBy
+	s.SetStatus(FlowStatusDone)
 
 	return nil
 }
 
 /**
 * Goto
-* @param step int
+* @param step int, goBy string
 * @return error
 **/
-func (s *Instance) Goto(step int) error {
+func (s *Instance) Goto(step int, goBy string) error {
 	s.goTo = step
-	s.setStatus(s.Status)
+	s.UpdatedBy = goBy
+	s.SetStatus(s.Status)
 
 	return nil
 }

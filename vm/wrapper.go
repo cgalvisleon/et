@@ -147,6 +147,18 @@ func Cache(vm *Vm) {
 			}
 			return vm.ToValue(result)
 		},
+		"delete": func(call goja.FunctionCall) goja.Value {
+			args := call.Arguments
+			if len(args) != 1 {
+				panic(vm.NewGoError(fmt.Errorf(MSG_ARG_REQUIRED, "key")))
+			}
+			key := args[0].String()
+			result, err := cache.Delete(key)
+			if err != nil {
+				panic(vm.NewGoError(err))
+			}
+			return vm.ToValue(result)
+		},
 		"incr": func(call goja.FunctionCall) goja.Value {
 			args := call.Arguments
 			if len(args) != 2 {

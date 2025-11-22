@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -84,36 +83,6 @@ type Instance struct {
 	goTo       int                  `json:"-"`
 	err        error                `json:"-"`
 	resilence  *resilience.Instance `json:"-"`
-}
-
-/**
-* load
-* @param id string
-* @return (*Instance, error)
-**/
-func load(id string) (*Instance, error) {
-	key := fmt.Sprintf("workflow:%s", id)
-	if !cache.Exists(key) {
-		return nil, errorInstanceNotFound
-	}
-
-	result := &Instance{}
-	bt, err := json.Marshal(result)
-	if err != nil {
-		return nil, err
-	}
-
-	src, err := cache.Get(key, string(bt))
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal([]byte(src), &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
 }
 
 /**

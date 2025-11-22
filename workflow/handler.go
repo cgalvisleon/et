@@ -70,6 +70,19 @@ func NewFn(tag, version, name, description string, fn FnContext, stop bool, crea
 }
 
 /**
+* DeleteFlow
+* @param tag string
+* @return error
+**/
+func DeleteFlow(tag string) error {
+	if err := Load(); err != nil {
+		return err
+	}
+
+	return workFlows.deleteFlow(tag)
+}
+
+/**
 * Run
 * @param instanceId, tag string, startId int, tags et.Json, ctx et.Json, createdBy string
 * @return et.Json, error
@@ -92,7 +105,12 @@ func Continue(instanceId string, tags et.Json, ctx et.Json, createdBy string) (e
 		return et.Json{}, err
 	}
 
-	return workFlows.continue(instanceId, tags, ctx, createdBy)
+	instance, err := workFlows.loadInstance(instanceId)
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	return workFlows.run(instanceId, instance.Tag, instance.Current, tags, ctx, createdBy)
 }
 
 /**
@@ -135,19 +153,6 @@ func Stop(instanceId, createdBy string) error {
 }
 
 /**
-* DeleteFlow
-* @param tag string
-* @return (bool, error)
-**/
-func DeleteFlow(tag string) (bool, error) {
-	if err := Load(); err != nil {
-		return false, err
-	}
-
-	return workFlows.deleteFlow(tag), nil
-}
-
-/**
 * GetInstance
 * @param instanceId string
 * @return (*Instance, error)
@@ -157,5 +162,18 @@ func GetInstance(instanceId string) (*Instance, error) {
 		return nil, err
 	}
 
-	return workFlows.getInstance(instanceId)
+	return workFlows.loadInstance(instanceId)
+}
+
+/**
+* DeleteInstance
+* @param instanceId string
+* @return error
+**/
+func DeleteInstance(instanceId string) error {
+	if err := Load(); err != nil {
+		return err
+	}
+
+	return workFlows.delete(instanceId)
 }

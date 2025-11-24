@@ -13,10 +13,10 @@ import (
 
 /**
 * sendSms
-* @param serviceId string, sender, organisation string, contactNumbers []string, content string, params []et.Json, tp string
+* @param sender, organisation string, contactNumbers []string, content string, params []et.Json, tp string
 * @return et.Items, error
 **/
-func sendSms(serviceId string, sender, organisation string, contactNumbers []string, content string, params []et.Json, tp string) (et.Items, error) {
+func sendSms(sender, organisation string, contactNumbers []string, content string, params []et.Json, tp string) (et.Items, error) {
 	if len(contactNumbers) == 0 {
 		return et.Items{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "contactNumbers")
 	}
@@ -88,34 +88,23 @@ func sendSms(serviceId string, sender, organisation string, contactNumbers []str
 		})
 	}
 
-	if set != nil {
-		set(serviceId, et.Json{
-			"sender":         sender,
-			"contactNumbers": contactNumbers,
-			"content":        content,
-			"params":         params,
-			"tp":             tp,
-			"supplier":       "Brevo",
-			"result":         result,
-		})
-	}
 	return result, nil
 }
 
 /**
 * SendSmsTransactional
-* @param serviceId string, sender, organisation string, contactNumbers []string, content string, params []et.Json
+* @param sender, organisation string, contactNumbers []string, content string, params []et.Json
 * @return et.Items, error
 **/
-func SendSmsTransactional(serviceId string, sender, organisation string, contactNumbers []string, content string, params []et.Json) (et.Items, error) {
-	return sendSms(serviceId, sender, organisation, contactNumbers, content, params, "Transactional")
+func SendSmsTransactional(sender, organisation string, contactNumbers []string, content string, params []et.Json) (et.Items, error) {
+	return sendSms(sender, organisation, contactNumbers, content, params, "Transactional")
 }
 
 /**
 * SendSmsPromotional
-* @param serviceId string, sender, organisation string, contactNumbers []string, content string, params []et.Json
+* @param sender, organisation string, contactNumbers []string, content string, params []et.Json
 * @return et.Items, error
 **/
-func SendSmsPromotional(serviceId string, sender, organisation string, contactNumbers []string, content string, params []et.Json) (et.Items, error) {
-	return sendSms(serviceId, sender, organisation, contactNumbers, content, params, "Promotional")
+func SendSmsPromotional(sender, organisation string, contactNumbers []string, content string, params []et.Json) (et.Items, error) {
+	return sendSms(sender, organisation, contactNumbers, content, params, "Promotional")
 }

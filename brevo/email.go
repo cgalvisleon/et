@@ -14,10 +14,10 @@ import (
 
 /**
 * SendEmail
-* @param serviceId string, sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp string
+* @param sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp string
 * @return et.Items, error
 **/
-func SendEmail(serviceId string, sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp string) (et.Items, error) {
+func SendEmail(sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp string) (et.Items, error) {
 	if len(to) == 0 {
 		return et.Items{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "to")
 	}
@@ -78,36 +78,23 @@ func SendEmail(serviceId string, sender et.Json, to []et.Json, subject string, h
 		"status": output,
 	})
 
-	if set != nil {
-		set(serviceId, et.Json{
-			"sender":      sender,
-			"to":          to,
-			"subject":     subject,
-			"htmlContent": htmlContent,
-			"params":      params,
-			"tp":          tp,
-			"supplier":    "Brevo",
-			"result":      result,
-		})
-	}
-
 	return result, nil
 }
 
 /**
 * SendEmailTransactional
-* @param serviceId string, sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json
+* @param sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json
 * @return et.Items, error
 **/
-func SendEmailTransactional(serviceId string, sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json) (et.Items, error) {
-	return SendEmail(serviceId, sender, to, subject, htmlContent, params, "Transactional")
+func SendEmailTransactional(sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json) (et.Items, error) {
+	return SendEmail(sender, to, subject, htmlContent, params, "Transactional")
 }
 
 /**
 * SendEmailPromotional
-* @param serviceId string, sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json
+* @param sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json
 * @return et.Items, error
 **/
-func SendEmailPromotional(serviceId string, sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json) (et.Items, error) {
-	return SendEmail(serviceId, sender, to, subject, htmlContent, params, "Promotional")
+func SendEmailPromotional(sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json) (et.Items, error) {
+	return SendEmail(sender, to, subject, htmlContent, params, "Promotional")
 }

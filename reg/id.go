@@ -148,6 +148,60 @@ func GenHashKey(args ...interface{}) string {
 	return utility.ToBase64(key)
 }
 
+/**
+* TagUUID
+* @params tag, id string
+* @return string
+**/
+func TagUUID(tag, id string) string {
+	if !map[string]bool{"": true, "*": true, "new": true}[id] {
+		return fmt.Sprintf(`%s:%s`, tag, UUID())
+	}
+
+	list := strings.Split(id, ":")
+	if len(list) < 2 {
+		return fmt.Sprintf(`%s:%s`, tag, id)
+	}
+
+	return id
+}
+
+/**
+* TagULID
+* @params tag, id string
+* @return string
+**/
+func TagULID(tag, id string) string {
+	if !map[string]bool{"": true, "*": true, "new": true}[id] {
+		return fmt.Sprintf(`%s:%s`, tag, ULID())
+	}
+
+	list := strings.Split(id, ":")
+	if len(list) < 2 {
+		return fmt.Sprintf(`%s:%s`, tag, id)
+	}
+
+	return id
+}
+
+/**
+* TagXID
+* @params tag, id string
+* @return string
+**/
+func TagXID(tag, id string) string {
+	if !map[string]bool{"": true, "*": true, "new": true}[id] {
+		return fmt.Sprintf(`%s:%s`, tag, XID())
+	}
+
+	list := strings.Split(id, ":")
+	if len(list) < 2 {
+		return fmt.Sprintf(`%s:%s`, tag, id)
+	}
+
+	return id
+}
+
 func init() {
 	epoch := time.Date(2020, 1, 1, 0, 0, 0, 0, timezone.NowTime().Location())
 	snowflake.Epoch = epoch.UnixNano() / 1e6

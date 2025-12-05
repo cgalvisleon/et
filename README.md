@@ -78,7 +78,6 @@ et/
 - **Mensajería/IPC**: `event/`, `jrpc/`.
 - **Persistencia temporal**: `cache/`, `mem/`, `ephemeral/`.
 - **Planificación**: `crontab/`.
-- **Workflows**: `workflow/`.
 - **Seguridad**: `claim/` (JWT).
 - **Integraciones**: `aws/`, `brevo/`.
 - **Soporte de dominio**: `service/`, `dt/`.
@@ -125,6 +124,10 @@ _ = config.App.ToJson() // et.Json con la configuración activa
 - **Eventos**: se añade el canal global `event.EVENT` y publicación adicional del evento con `{channel, data}` en `event/handler.go`.
 - **Cache**: `cache.Set` asegura expiración mínima de 1s cuando se pasa un valor inferior.
 - **Config**: unificación de getters `Get*` y CLI `Param*`; `App.Set(key, val)` actualiza env y `config.App`.
+- **Crontab (tareas programadas)**:
+  - Nuevo orquestador `crontab.Jobs` con soporte para jobs tipo `cron` y `one-shot`.
+  - APIs de alto nivel: `Load`, `AddJob`, `AddOneShotJob`, `AddEventJob`, `AddOneShotEventJob`, `DeleteJob`, `StartJob`, `StopJob`, `Stop`.
+  - Integración con eventos (`event.Stack`, `event.Subscribe`, `event.Publish`) vía canales `EVENT_CRONTAB_*` para registrar, iniciar, detener y eliminar jobs por `tag`.
 
 ## Desarrollo
 
@@ -136,6 +139,60 @@ _ = config.App.ToJson() // et.Json con la configuración activa
 ## Ejemplos y guías
 
 - Este README describe el mapa de paquetes y cambios recientes. Para ejemplos de uso, consulta READMEs locales por paquete o `create/` para plantillas.
+
+### Ejemplo rápido: crontab
+
+```go
+package main
+
+import (
+    "log"
+
+    "github.com/cgalvisleon/et/crontab"
+    "github.com/cgalvisleon/et/et"
+    "github.com/cgalvisleon/et/event"
+)
+
+func main() {
+    // Inicializa crontab para una app/tag
+    if err := crontab.Load("mi-servicio"); err != nil {
+        log.Fatal(err)
+    }
+
+    // Job local tipo cron (cada minuto)
+    _, err := crontab.AddJob(
+        "job-local",
+        "0 * * * * *", // spec con segundos
+        et.Json{"message": "hola desde job local"},
+        0,      // 0 = infinito
+        true,   // started
+        func(job *crontab.Job) {
+            log.Printf("[cron] tag=%s params=%s", job.Tag, job.Params.ToString())
+        },
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Job basado en eventos: crontab dispara un evento a un canal
+    err = crontab.AddEventJob(
+        "job-event",
+        "@every 30s",
+        "channel:job-event",
+        0,
+        true,
+        et.Json{"foo": "bar"},
+        func(msg event.Message) {
+            log.Printf("[event] channel=%s data=%s", msg.Channel, msg.Data.ToString())
+        },
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    select {} // Mantener el proceso vivo
+}
+```
 
 ```bash
 gofmt -w . && go run ./cmd/flow

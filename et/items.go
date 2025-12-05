@@ -505,7 +505,7 @@ func (s Items) ExistKey(dx int, key string) bool {
 **/
 func (s Items) First() Item {
 	if s.Count == 0 {
-		return Item{}
+		return Item{Result: Json{}}
 	}
 
 	return Item{

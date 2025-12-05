@@ -24,9 +24,6 @@ func ConnectTo(host, user, password string) (*Conn, error) {
 		nats.UserInfo(user, password),
 		nats.ReconnectWait(2 * time.Second),
 		nats.MaxReconnects(-1),
-		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
-			logs.Logf("NATS", `Disconnected host:%s`, host)
-		}),
 		nats.ReconnectHandler(func(nc *nats.Conn) {
 			logs.Logf("NATS", `Reconnected host:%s`, host)
 		}),

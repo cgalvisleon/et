@@ -69,6 +69,34 @@ func (b Body) ToJson() (et.Json, error) {
 }
 
 /**
+* ToItem returns an Item object
+* @return et.Item
+**/
+func (b Body) ToItem() (et.Item, error) {
+	var result et.Item
+	err := json.Unmarshal(b.Data, &result)
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	return result, nil
+}
+
+/**
+* ToItems returns an Items object
+* @return et.Items
+**/
+func (b Body) ToItems() (et.Items, error) {
+	var result et.Items
+	err := json.Unmarshal(b.Data, &result)
+	if err != nil {
+		return et.Items{}, err
+	}
+
+	return result, nil
+}
+
+/**
 * ToArrayJson returns a Json array object
 * @return []et.Json
 **/

@@ -12,6 +12,11 @@ import (
 	"github.com/cgalvisleon/et/logs"
 )
 
+/**
+* GetPidByPort return the pid of a process by port
+* @param port int
+* @return int
+**/
 func GetPidByPort(port int) int {
 	oss := runtime.GOOS
 

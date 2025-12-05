@@ -70,17 +70,16 @@ func SendOTPSMS(tenantId, serviceId, sender, countryCode, phoneNumber string, le
 
 /**
 * SendOTPEmail
-* @param tenantId, serviceId, sender, from et.Json, name, email string, length int, duration time.Duration, createdBy string
+* @param tenantId, serviceId string, from et.Json, name, email string, length int, duration time.Duration, createdBy string
 * @response et.Items, error
 **/
-func SendOTPEmail(tenantId, serviceId, sender string, from et.Json, name, email string, length int, duration time.Duration, createdBy string) (et.Items, error) {
+func SendOTPEmail(tenantId, serviceId string, from et.Json, name, email string, length int, duration time.Duration, createdBy string) (et.Items, error) {
 	serviceId = reg.TagULID("service", serviceId)
 	otp := utility.GetOTP(length)
 	channel := email
 	key := fmt.Sprintf("service:otp:%s", channel)
-	msg := "<h1>{{sender}}</h1>: <p>Hola, tu código de verificación es {{otp}}. Recuerda que es válido por {{duration}} minutos</p>"
+	msg := "<h1>Hola</h1>: <p>Tu código de verificación es {{otp}}. Recuerda que es válido por {{duration}} minutos</p>"
 	params := et.Json{
-		"sender":   sender,
 		"otp":      otp,
 		"duration": duration.Minutes(),
 	}
@@ -96,7 +95,7 @@ func SendOTPEmail(tenantId, serviceId, sender string, from et.Json, name, email 
 			"tenantId":  tenantId,
 			"serviceId": serviceId,
 			"service":   SERVICE_OTP_EMAIL,
-			"from":      sender,
+			"from":      from,
 			"to":        to,
 			"content":   msg,
 			"params":    params,
@@ -110,15 +109,14 @@ func SendOTPEmail(tenantId, serviceId, sender string, from et.Json, name, email 
 
 /**
 * SendOTPByTemplateId
-* @param tenantId, serviceId, sender string, from et.Json, name, email string, length int, duration time.Duration, templateId string, createdBy string
+* @param tenantId, serviceId string, from et.Json, name, email string, length int, duration time.Duration, templateId string, createdBy string
 * @response et.Items, error
 **/
-func SendOTPByTemplateId(tenantId, serviceId, sender string, from et.Json, name, email string, length int, duration time.Duration, templateId string, createdBy string) (et.Items, error) {
+func SendOTPByTemplateId(tenantId, serviceId string, from et.Json, name, email string, length int, duration time.Duration, templateId string, createdBy string) (et.Items, error) {
 	serviceId = reg.TagULID("service", serviceId)
 	otp := utility.GetOTP(length)
 	key := fmt.Sprintf("service:otp:%s", email)
 	params := et.Json{
-		"sender":   sender,
 		"otp":      otp,
 		"duration": duration.Minutes(),
 	}
@@ -134,7 +132,7 @@ func SendOTPByTemplateId(tenantId, serviceId, sender string, from et.Json, name,
 			"tenantId":   tenantId,
 			"serviceId":  serviceId,
 			"service":    SERVICE_OTP_EMAIL,
-			"from":       sender,
+			"from":       from,
 			"to":         to,
 			"templateId": templateId,
 			"params":     params,

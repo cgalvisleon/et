@@ -83,6 +83,14 @@ func (s Item) ToJson() Json {
 }
 
 /**
+* IsEmpty return true if the json is empty
+* @return bool
+**/
+func (s *Item) IsEmpty() bool {
+	return s.Result.IsEmpty()
+}
+
+/**
 * ToMap convert a json to a map
 * @return map[string]interface{}
 **/

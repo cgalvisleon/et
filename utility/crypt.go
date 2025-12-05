@@ -26,7 +26,10 @@ const (
 	AES
 )
 
-// String return string of crypto type
+/**
+* String return string of crypto type
+* @return string
+**/
 func (c CryptoType) String() string {
 	switch c {
 	case MD5:
@@ -43,7 +46,11 @@ func (c CryptoType) String() string {
 	return ""
 }
 
-// Type return a crypto type from a string
+/**
+* GetCryptoType return a crypto type from a string
+* @param value string
+* @return CryptoType
+**/
 func GetCryptoType(value string) CryptoType {
 	switch value {
 	case "MD5":
@@ -60,31 +67,51 @@ func GetCryptoType(value string) CryptoType {
 	return MD5
 }
 
-// CryptoMD5 return a string with the value encrypted in md5
+/**
+* CryptoMD5 return a string with the value encrypted in md5
+* @param value string
+* @return string, error
+**/
 func cryptoMD5(value string) (string, error) {
 	hash := md5.Sum([]byte(value))
 	return hex.EncodeToString(hash[:]), nil
 }
 
-// CryptoSHA1 return a string with the value encrypted in sha1
+/**
+* CryptoSHA1 return a string with the value encrypted in sha1
+* @param value string
+* @return string, error
+**/
 func cryptoSHA1(value string) (string, error) {
 	hash := sha1.Sum([]byte(value))
 	return hex.EncodeToString(hash[:]), nil
 }
 
-// CryptoSHA256 return a string with the value encrypted in sha256
+/**
+* CryptoSHA256 return a string with the value encrypted in sha256
+* @param value string
+* @return string, error
+**/
 func cryptoSHA256(value string) (string, error) {
 	hash := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(hash[:]), nil
 }
 
-// CryptoSHA512 return a string with the value encrypted in sha512
+/**
+* CryptoSHA512 return a string with the value encrypted in sha512
+* @param value string
+* @return string, error
+**/
 func cryptoSHA512(value string) (string, error) {
 	hash := sha512.Sum512([]byte(value))
 	return hex.EncodeToString(hash[:]), nil
 }
 
-// CryptoAES return a string with the value encrypted in aes
+/**
+* CryptoAES return a string with the value encrypted in aes
+* @param value string
+* @return string, error
+**/
 func cryptoAES(value string) (string, error) {
 	secret := envar.GetStr("SECRET", "1977")
 	data := []byte(value)
@@ -108,6 +135,11 @@ func cryptoAES(value string) (string, error) {
 	return result, nil
 }
 
+/**
+* Encrypt return a string with the value encrypted in the crypto type
+* @param value string, cryptoType CryptoType
+* @return string, error
+**/
 func Encrypt(value string, cryptoType CryptoType) (string, error) {
 	switch cryptoType {
 	case MD5:
@@ -125,6 +157,11 @@ func Encrypt(value string, cryptoType CryptoType) (string, error) {
 
 }
 
+/**
+* DecryptoAES return a string with the value decrypted in aes
+* @param value string
+* @return string, error
+**/
 func DecryptoAES(value string) (string, error) {
 	secret := envar.GetStr("SECRET", "1977")
 	key := []byte(secret)

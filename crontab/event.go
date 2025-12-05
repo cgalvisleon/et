@@ -8,36 +8,38 @@ import (
 )
 
 var (
-	EVENT_CRONTAB_SERVER = "event:crontab:server"
 	EVENT_CRONTAB_SET    = "event:crontab:set"
-	EVENT_CRONTAB_STATUS = "event:crontab:status"
+	EVENT_CRONTAB_DELETE = "event:crontab:delete"
 	EVENT_CRONTAB_STOP   = "event:crontab:stop"
 	EVENT_CRONTAB_START  = "event:crontab:start"
-	EVENT_CRONTAB_DELETE = "event:crontab:delete"
-	EVENT_CRONTAB_FAILED = "event:crontab:failed"
 )
 
 /**
 * eventInit
 * @return error
 **/
-func eventInit() error {
+func eventInit(tag string) error {
+	EVENT_CRONTAB_SET = fmt.Sprintf("event:crontab:set:%s", tag)
+	EVENT_CRONTAB_DELETE = fmt.Sprintf("event:crontab:delete:%s", tag)
+	EVENT_CRONTAB_STOP = fmt.Sprintf("event:crontab:stop:%s", tag)
+	EVENT_CRONTAB_START = fmt.Sprintf("event:crontab:start:%s", tag)
+
 	err := event.Stack(EVENT_CRONTAB_SET, eventSet)
 	if err != nil {
 		return err
 	}
 
-	err = event.Stack(EVENT_CRONTAB_DELETE, eventDelete)
+	err = event.Subscribe(EVENT_CRONTAB_DELETE, eventDelete)
 	if err != nil {
 		return err
 	}
 
-	err = event.Stack(EVENT_CRONTAB_STOP, eventStop)
+	err = event.Subscribe(EVENT_CRONTAB_STOP, eventStop)
 	if err != nil {
 		return err
 	}
 
-	err = event.Stack(EVENT_CRONTAB_START, eventStart)
+	err = event.Subscribe(EVENT_CRONTAB_START, eventStart)
 	if err != nil {
 		return err
 	}
@@ -55,25 +57,22 @@ func eventSet(msg event.Message) {
 		return
 	}
 
-	if !crontab.isServer {
-		return
-	}
-
 	data := msg.Data
-	id := data.Str("id")
-	name := data.Str("name")
+	tpStr := data.Str("type")
+	tag := data.Str("tag")
 	spec := data.Str("spec")
 	channel := data.Str("channel")
 	started := data.Bool("started")
 	params := data.Json("params")
 	repetitions := data.Int("repetitions")
-	_, err := crontab.addEventJob(id, name, spec, channel, started, params, repetitions)
+	tp := TypeJob(tpStr)
+	_, err := crontab.addEventJob(tp, tag, spec, channel, started, params, repetitions, nil)
 	if err != nil {
-		logs.Logf(packageName, fmt.Sprintf("Error adding job %s", err))
+		logs.Logf(packageName, fmt.Sprintf("Crontab %s; Error adding job %s", tag, err))
 		return
 	}
 
-	logs.Logf(packageName, fmt.Sprintf("Crontab %s added", name))
+	logs.Logf(packageName, fmt.Sprintf("Crontab %s added", tag))
 }
 
 /**
@@ -86,19 +85,15 @@ func eventDelete(msg event.Message) {
 		return
 	}
 
-	if !crontab.isServer {
-		return
-	}
-
 	data := msg.Data
-	id := data.Str("id")
-	err := crontab.deleteJobById(id)
+	tag := data.Str("tag")
+	err := crontab.deleteJobByTag(tag)
 	if err != nil {
-		logs.Logf(packageName, fmt.Sprintf("Error deleting job %s", err))
+		logs.Logf(packageName, fmt.Sprintf("Crontab %s; Error deleting job %s", tag, err))
 		return
 	}
 
-	logs.Logf(packageName, fmt.Sprintf("Crontab %s deleted", id))
+	logs.Logf(packageName, fmt.Sprintf("Crontab %s deleted", tag))
 }
 
 /**
@@ -111,19 +106,15 @@ func eventStop(msg event.Message) {
 		return
 	}
 
-	if !crontab.isServer {
-		return
-	}
-
 	data := msg.Data
-	id := data.Str("id")
-	err := crontab.stopJobById(id)
+	tag := data.Str("tag")
+	err := crontab.stopJobByTag(tag)
 	if err != nil {
-		logs.Logf(packageName, fmt.Sprintf("Error stopping job %s", err))
+		logs.Logf(packageName, fmt.Sprintf("Crontab %s; Error stopping job %s", tag, err))
 		return
 	}
 
-	logs.Logf(packageName, fmt.Sprintf("Crontab %s stopped", id))
+	logs.Logf(packageName, fmt.Sprintf("Crontab %s stopped", tag))
 }
 
 /**
@@ -136,17 +127,13 @@ func eventStart(msg event.Message) {
 		return
 	}
 
-	if !crontab.isServer {
-		return
-	}
-
 	data := msg.Data
-	id := data.Str("id")
-	err := crontab.startJobById(id)
+	tag := data.Str("tag")
+	_, err := crontab.startJobByTag(tag)
 	if err != nil {
-		logs.Logf(packageName, fmt.Sprintf("Error starting job %s", err))
+		logs.Logf(packageName, fmt.Sprintf("Crontab %s; Error starting job %s", tag, err))
 		return
 	}
 
-	logs.Logf(packageName, fmt.Sprintf("Crontab %s started", id))
+	logs.Logf(packageName, fmt.Sprintf("Crontab %s started", tag))
 }

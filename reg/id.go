@@ -65,20 +65,20 @@ func GenUUId(tag string) string {
 }
 
 /**
-* GenULIDI (Universally locally identifier)
+* GenULID (Universally locally identifier)
 * @params tag string
 * @return string
 **/
-func GenULIDI(tag string) string {
+func GenULID(tag string) string {
 	return fmt.Sprintf(`%s:%s`, tag, ULID())
 }
 
 /**
-* GenXIDI
+* GenXID
 * @params tag string
 * @return string
 **/
-func GenXIDI(tag string) string {
+func GenXID(tag string) string {
 	return fmt.Sprintf(`%s:%s`, tag, XID())
 }
 
@@ -154,7 +154,7 @@ func GenHashKey(args ...interface{}) string {
 * @return string
 **/
 func TagUUID(tag, id string) string {
-	if !map[string]bool{"": true, "*": true, "new": true}[id] {
+	if map[string]bool{"": true, "*": true, "new": true}[id] {
 		return fmt.Sprintf(`%s:%s`, tag, UUID())
 	}
 
@@ -172,7 +172,7 @@ func TagUUID(tag, id string) string {
 * @return string
 **/
 func TagULID(tag, id string) string {
-	if !map[string]bool{"": true, "*": true, "new": true}[id] {
+	if map[string]bool{"": true, "*": true, "new": true}[id] {
 		return fmt.Sprintf(`%s:%s`, tag, ULID())
 	}
 
@@ -190,7 +190,7 @@ func TagULID(tag, id string) string {
 * @return string
 **/
 func TagXID(tag, id string) string {
-	if !map[string]bool{"": true, "*": true, "new": true}[id] {
+	if map[string]bool{"": true, "*": true, "new": true}[id] {
 		return fmt.Sprintf(`%s:%s`, tag, XID())
 	}
 

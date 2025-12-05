@@ -313,7 +313,7 @@ func Unquote(val interface{}) any {
 	case nil:
 		return fmt.Sprintf(`%s`, "NULL")
 	default:
-		logs.Errorf("utility.Unquote", "Not unquoted type:%v value:%v", reflect.TypeOf(v), v)
+		logs.Errorf("Not unquoted type:%v value:%v", reflect.TypeOf(v), v)
 		return val
 	}
 }
@@ -354,7 +354,7 @@ func Quote(val interface{}) any {
 	case []et.Json, []string, []interface{}, []map[string]interface{}:
 		bt, err := json.Marshal(v)
 		if err != nil {
-			logs.Errorf("utility.Quote", "type:%v, value:%v, error marshalling array: %v", reflect.TypeOf(v), v, err)
+			logs.Errorf("type:%v, value:%v, error marshalling array: %v", reflect.TypeOf(v), v, err)
 			return fmt.Sprintf(fm, `[]`)
 		}
 		return fmt.Sprintf(fm, string(bt))
@@ -363,7 +363,7 @@ func Quote(val interface{}) any {
 	case nil:
 		return fmt.Sprintf(`%s`, "NULL")
 	default:
-		logs.Errorf("utility.Quote", "type:%v, value:%v", reflect.TypeOf(v), v)
+		logs.Errorf("type:%v, value:%v", reflect.TypeOf(v), v)
 		return val
 	}
 }

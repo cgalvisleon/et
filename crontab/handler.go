@@ -2,6 +2,7 @@ package crontab
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
@@ -15,32 +16,17 @@ var (
 
 /**
 * Load
-**/
-func Load() error {
-	if crontab != nil {
-		return nil
-	}
-
-	crontab = New()
-	err := crontab.load()
-	if err != nil {
-		return err
-	}
-
-	return crontab.start()
-}
-
-/**
-* Server
+* @params tag string
 * @return error
 **/
-func Server() error {
+func Load(tag string) error {
 	if crontab != nil {
 		return nil
 	}
 
+	tag = strings.ReplaceAll(tag, " ", "_")
+	tag = strings.ToLower(tag)
 	crontab = New()
-	crontab.isServer = true
 	err := crontab.load()
 	if err != nil {
 		return err
@@ -51,7 +37,7 @@ func Server() error {
 		return err
 	}
 
-	err = eventInit()
+	err = eventInit(tag)
 	if err != nil {
 		return err
 	}
@@ -70,83 +56,51 @@ func Close() {
 }
 
 /**
-* IsMaster
-* @return bool
-**/
-func IsMaster() bool {
-	return crontab.nodeId == 1
-}
-
-/**
 * AddJob
 * Add job to crontab in execute local
-* @param id, name, spec, channel string, params et.Json, repetitions int, start bool, fn func()
+* @param tag, spec string, params et.Json, repetitions int, started bool, fn func(job *Job)
 * @return *Job, error
 **/
-func AddJob(id, name, spec, channel string, params et.Json, repetitions int, start bool, fn func(job *Job)) (*Job, error) {
-	err := Load()
-	if err != nil {
-		return nil, err
+func AddJob(tag, spec string, params et.Json, repetitions int, started bool, fn func(job *Job)) (*Job, error) {
+	if crontab == nil {
+		return nil, fmt.Errorf(MSG_CRONTAB_UNLOAD)
 	}
 
-	if crontab.isServer {
-		return nil, fmt.Errorf("crontab is server")
-	}
-
-	result, err := crontab.addJob(id, name, spec, channel, params, repetitions, fn)
-	if err != nil {
-		return nil, err
-	}
-
-	if !start {
-		return result, nil
-	}
-
-	err = result.Start()
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return crontab.addEventJob(TypeJobCron, tag, spec, "", started, params, repetitions, fn)
 }
 
 /**
-* PushEventJob
-* Push job to crontab was notified by event workers
-* @param id, name, spec, channel string, repetitions int, start bool, params et.Json
-* @return error
+* AddOneShotJob
+* Add job to crontab in execute local
+* @param tag, spec string, params et.Json, repetitions int, started bool, fn func(job *Job)
+* @return *Job, error
 **/
-func PushEventJob(id, name, spec, channel string, repetitions int, start bool, params et.Json) error {
-	err := Server()
-	if err != nil {
-		return err
+func AddOneShotJob(tag, spec string, params et.Json, repetitions int, started bool, fn func(job *Job)) (*Job, error) {
+	if crontab == nil {
+		return nil, fmt.Errorf(MSG_CRONTAB_UNLOAD)
 	}
 
-	return event.Publish(EVENT_CRONTAB_SET, et.Json{
-		"id":          id,
-		"name":        name,
-		"spec":        spec,
-		"channel":     channel,
-		"repetitions": repetitions,
-		"start":       start,
-		"params":      params,
-	})
+	return crontab.addEventJob(TypeJobOneShot, tag, spec, "", started, params, repetitions, fn)
 }
 
 /**
-* EventJob
+* AddEventJob
 * Event job to crontab function execute was notified by event workers
-* @param id, name, spec, channel string, repetitions int, start bool, params et.Json, fn func(event.Message)
+* @param tag, spec, channel string, repetitions int, started bool, params et.Json, fn func(event.Message)
 * @return *Job, error
 **/
-func EventJob(id, name, spec, channel string, repetitions int, start bool, params et.Json, fn func(event.Message)) error {
+func AddEventJob(tag, spec, channel string, repetitions int, started bool, params et.Json, fn func(event.Message)) error {
+	if crontab == nil {
+		return fmt.Errorf(MSG_CRONTAB_UNLOAD)
+	}
+
 	event.Publish(EVENT_CRONTAB_SET, et.Json{
-		"id":          id,
-		"name":        name,
+		"type":        TypeJobCron,
+		"tag":         tag,
 		"spec":        spec,
 		"channel":     channel,
 		"repetitions": repetitions,
-		"start":       start,
+		"started":     started,
 		"params":      params,
 	})
 
@@ -159,113 +113,85 @@ func EventJob(id, name, spec, channel string, repetitions int, start bool, param
 }
 
 /**
-* DeleteJob
-* @param name string
-* @return error
+* AddOneShotEventJob
+* Event job to crontab function execute was notified by event workers
+* @param tag, spec, channel string, repetitions int, started bool, params et.Json, fn func(event.Message)
+* @return *Job, error
 **/
-func DeleteJob(name string) error {
-	err := Load()
+func AddOneShotEventJob(tag, spec, channel string, started bool, params et.Json, fn func(event.Message)) error {
+	if crontab == nil {
+		return fmt.Errorf(MSG_CRONTAB_UNLOAD)
+	}
+
+	event.Publish(EVENT_CRONTAB_SET, et.Json{
+		"type":    TypeJobOneShot,
+		"tag":     tag,
+		"spec":    spec,
+		"channel": channel,
+		"started": started,
+		"params":  params,
+	})
+
+	err := event.Stack(channel, fn)
 	if err != nil {
 		return err
 	}
 
-	return crontab.deleteJobByName(name)
+	return nil
 }
 
 /**
-* DeleteJobById
-* @param id string
+* DeleteJob
+* @param tag string
 * @return error
 **/
-func DeleteJobById(id string) error {
-	err := Load()
+func DeleteJob(tag string) error {
+	if crontab == nil {
+		return fmt.Errorf(MSG_CRONTAB_UNLOAD)
+	}
+
+	err := event.Publish(EVENT_CRONTAB_DELETE, et.Json{"tag": tag})
 	if err != nil {
 		return err
 	}
 
-	return crontab.deleteJobById(id)
+	return nil
 }
 
 /**
 * StartJob
-* @param name string
+* @param tag string
 * @return int, error
 **/
-func StartJob(name string) (int, error) {
-	err := Load()
+func StartJob(tag string) (int, error) {
+	if crontab == nil {
+		return 0, fmt.Errorf(MSG_CRONTAB_UNLOAD)
+	}
+
+	err := event.Publish(EVENT_CRONTAB_START, et.Json{"tag": tag})
 	if err != nil {
 		return 0, err
 	}
 
-	return crontab.startJobByName(name)
-}
-
-/**
-* StartJobById
-* @param id string
-* @return error
-**/
-func StartJobById(id string) error {
-	err := Load()
-	if err != nil {
-		return err
-	}
-
-	return crontab.startJobById(id)
+	return 1, nil
 }
 
 /**
 * StopJob
-* @param name string
+* @param tag string
 * @return error
 **/
-func StopJob(name string) error {
-	err := Load()
+func StopJob(tag string) error {
+	if crontab == nil {
+		return fmt.Errorf(MSG_CRONTAB_UNLOAD)
+	}
+
+	err := event.Publish(EVENT_CRONTAB_STOP, et.Json{"tag": tag})
 	if err != nil {
 		return err
 	}
 
-	return crontab.stopJobByName(name)
-}
-
-/**
-* StopJobById
-* @param id string
-* @return error
-**/
-func StopJobById(id string) error {
-	err := Load()
-	if err != nil {
-		return err
-	}
-
-	return crontab.stopJobById(id)
-}
-
-/**
-* ListJobs
-* @return et.Items, error
-**/
-func ListJobs() (et.Items, error) {
-	err := Load()
-	if err != nil {
-		return et.Items{}, err
-	}
-
-	return crontab.list(), nil
-}
-
-/**
-* Start
-* @return error
-**/
-func Start() error {
-	err := Load()
-	if err != nil {
-		return err
-	}
-
-	return crontab.start()
+	return nil
 }
 
 /**
@@ -273,40 +199,9 @@ func Start() error {
 * @return error
 **/
 func Stop() error {
-	err := Load()
-	if err != nil {
-		return err
+	if crontab == nil {
+		return fmt.Errorf(MSG_CRONTAB_UNLOAD)
 	}
 
 	return crontab.stop()
-}
-
-/**
-* EventStatusRunning
-* @param data et.Json
-* @return error
-**/
-func EventStatusRunning(data et.Json) error {
-	data.Set("status", StatusRunning)
-	return event.Publish(EVENT_CRONTAB_STATUS, data)
-}
-
-/**
-* EventStatusPending
-* @param data et.Json
-* @return error
-**/
-func EventStatusDone(data et.Json) error {
-	data.Set("status", StatusDone)
-	return event.Publish(EVENT_CRONTAB_STATUS, data)
-}
-
-/**
-* EventStatusFailed
-* @param data et.Json
-* @return error
-**/
-func EventStatusFailed(data et.Json) error {
-	data.Set("status", StatusFailed)
-	return event.Publish(EVENT_CRONTAB_STATUS, data)
 }

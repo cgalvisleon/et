@@ -2,6 +2,11 @@ package utility
 
 import "math"
 
+/**
+* BinarySearch
+* @param arr []string, target string
+* @return int
+**/
 func BinarySearch(arr []string, target string) int {
 	left, right := 0, len(arr)-1
 
@@ -22,6 +27,11 @@ func BinarySearch(arr []string, target string) int {
 	return -1
 }
 
+/**
+* Dijkstra
+* @param graph [][]int, start int
+* @return []int
+**/
 func Dijkstra(graph [][]int, start int) []int {
 	numNodes := len(graph)
 	dist := make([]int, numNodes)
@@ -48,6 +58,11 @@ func Dijkstra(graph [][]int, start int) []int {
 	return dist
 }
 
+/**
+* MinDistance
+* @param dist []int, visited []bool
+* @return int
+**/
 func MinDistance(dist []int, visited []bool) int {
 	min := math.MaxInt32
 	minIndex := -1
@@ -62,6 +77,11 @@ func MinDistance(dist []int, visited []bool) int {
 	return minIndex
 }
 
+/**
+* QuickSort
+* @param arr []int
+* @return []int
+**/
 func QuickSort(arr []int) []int {
 	if len(arr) <= 1 {
 		return arr

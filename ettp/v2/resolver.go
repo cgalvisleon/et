@@ -48,7 +48,7 @@ type Resolver struct {
 }
 
 func NewResolver(r *http.Request, solver *Solver, params map[string]string) *Resolver {
-	id := reg.GenULIDI("resolver")
+	id := reg.GenULID("resolver")
 	now := utility.NowTime()
 	url := solver.Solver
 	for k, v := range params {

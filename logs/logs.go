@@ -207,6 +207,14 @@ func Debug(v ...any) {
 }
 
 /**
+* Debugger
+* @param v ...any
+**/
+func Debugger(v ...any) {
+	printLn("Debugger", "Cyan", v...)
+}
+
+/**
 * Debugf
 * @param format string, args ...any
 **/

@@ -2,6 +2,7 @@ package event
 
 import (
 	"encoding/json"
+	"os"
 	"runtime"
 	"slices"
 	"sync"
@@ -15,20 +16,22 @@ import (
 const PackageName = "event"
 
 var (
-	conn *Conn
-	os   = ""
+	conn     *Conn
+	oS       = ""
+	hostName string
 )
 
 func init() {
-	os = runtime.GOOS
+	oS = runtime.GOOS
+	hostName, _ = os.Hostname()
 }
 
 type Conn struct {
 	*nats.Conn
-	id              string
-	eventCreatedSub map[string]*nats.Subscription
-	mutex           *sync.RWMutex
-	storage         []string
+	id      string
+	events  map[string]*nats.Subscription
+	mutex   *sync.RWMutex
+	storage []string
 }
 
 /**
@@ -122,7 +125,7 @@ func (s *Conn) Remove(event string) (bool, error) {
 * @return error
 **/
 func Load() error {
-	if !slices.Contains([]string{"linux", "darwin", "windows"}, os) {
+	if !slices.Contains([]string{"linux", "darwin", "windows"}, oS) {
 		return nil
 	}
 
@@ -156,7 +159,7 @@ func Close() {
 		return
 	}
 
-	for _, sub := range conn.eventCreatedSub {
+	for _, sub := range conn.events {
 		sub.Unsubscribe()
 	}
 

@@ -3,6 +3,7 @@ package et
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 )
 
 /**
@@ -98,4 +99,45 @@ func Object(src string) (Json, error) {
 	}
 
 	return result, nil
+}
+
+/**
+* EqualJSON: This method return true if the values in s are equal to the values in from.
+* @param from Json
+* @return bool
+**/
+func EqualJSON(a, b interface{}) bool {
+	switch aVal := a.(type) {
+
+	case map[string]interface{}:
+		bVal, ok := b.(map[string]interface{})
+		if !ok || len(aVal) != len(bVal) {
+			return false
+		}
+		for k, v := range aVal {
+			if !EqualJSON(v, bVal[k]) {
+				return false
+			}
+		}
+		return true
+
+	case []interface{}:
+		bVal, ok := b.([]interface{})
+		if !ok || len(aVal) != len(bVal) {
+			return false
+		}
+		for i := range aVal {
+			if !EqualJSON(aVal[i], bVal[i]) {
+				return false
+			}
+		}
+		return true
+
+	case float64:
+		bVal, ok := b.(float64)
+		return ok && aVal == bVal
+
+	default:
+		return reflect.DeepEqual(a, b)
+	}
 }

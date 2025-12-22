@@ -1,6 +1,7 @@
 package ettp
 
 import (
+	"fmt"
 	"net/http"
 )
 
@@ -14,12 +15,13 @@ type ApiFunc struct {
 
 /**
 * NewApiFunc
-* @param id, method, path string, h http.HandlerFunc, packageName string
+* @param method, path string, h http.HandlerFunc, packageName string
 * @return *ApiFunc
 **/
-func NewApiFunc(id, method, path string, h http.HandlerFunc, packageName string) *ApiFunc {
+func NewApiFunc(method, path string, h http.HandlerFunc, packageName string) *ApiFunc {
+	key := fmt.Sprintf("%s:%s", method, path)
 	return &ApiFunc{
-		Id:          id,
+		Id:          key,
 		Method:      method,
 		Path:        path,
 		HandlerFn:   h,

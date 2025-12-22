@@ -3,9 +3,6 @@ package server
 import (
 	"fmt"
 	"net/http"
-	"os"
-	"os/exec"
-	"strconv"
 	"time"
 
 	"github.com/cgalvisleon/et/config"
@@ -75,46 +72,6 @@ func New(appName string) (*Ettp, error) {
 	}
 
 	return &result, nil
-}
-
-/**
-* savePID
-* @param pid int
-* @return error
-**/
-func (s *Ettp) savePID(pid int) error {
-	return os.WriteFile(s.pidFile, []byte(strconv.Itoa(pid)), 0644)
-}
-
-/**
-* getPID
-* @return int, error
-**/
-func (s *Ettp) getPID() (int, error) {
-	data, err := os.ReadFile(s.pidFile)
-	if err != nil {
-		return 0, err
-	}
-
-	return strconv.Atoi(string(data))
-}
-
-/**
-* stopServer
-* @param pid int
-**/
-func (s *Ettp) stopServer(pid int) {
-	if pid == -1 {
-		return
-	}
-
-	_, err := exec.Command("kill", fmt.Sprintf("%d", pid)).CombinedOutput()
-	if err != nil {
-		logs.Alertf("Error al detener el servidor: %s", err.Error())
-	} else {
-		logs.Logf(s.appName, "Servidor detenido PID:%d", pid)
-		s.savePID(-1)
-	}
 }
 
 /**

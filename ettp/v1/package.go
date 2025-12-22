@@ -1,11 +1,12 @@
 package ettp
 
 import (
+	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/strs"
-	"github.com/cgalvisleon/et/utility"
 )
 
 type Package struct {
@@ -22,8 +23,13 @@ type Package struct {
 * @return *Package
 **/
 func newPakage(server *Server, name string) *Package {
+	name = strings.TrimSpace(name)
+	key := fmt.Sprintf("%s:%s", server.Name, strs.Lowcase(name))
+	key = strs.Lowcase(key)
+	key = strs.ReplaceAll(key, []string{" "}, "-")
+	key = fmt.Sprintf("package:%s", key)
 	result := &Package{
-		ID:      utility.UUID(),
+		ID:      key,
 		server:  server,
 		Name:    name,
 		routes:  []*Router{},

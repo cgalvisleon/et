@@ -22,12 +22,12 @@ import (
 **/
 func (s *Server) initRouteTable() error {
 	s.Public(GET, "/version", s.getVersion, s.Name)
-	s.Public(GET, "/test/{id}/{test}", s.getVersion, s.Name)
+	s.Public(GET, "/test/{id}/{test}", s.getTest, s.Name)
 	s.Private(GET, "/reset", s.reset, s.Name)
 	// Develop Token
 	production := config.App.Production
 	if !production {
-		s.Public(GET, "/develop/token", s.handlerDevToken, s.Name)
+		s.Public(GET, "/tokens/develop", s.handlerDevToken, s.Name)
 	}
 	// Events
 	s.Private(GET, "/events", s.getEvents, s.Name)
@@ -57,13 +57,32 @@ func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 	metric := middleware.GetMetrics(r)
 
 	result := et.Json{
-		"created_at": s.CreatedAt,
+		"created_at": s.CreatedAt.Format("02/01/2006 3:04:05 PM"),
 		"version":    s.Version,
 		"service":    s.Name,
 		"host":       s.Host,
 		"company":    config.App.Company,
 		"web":        config.App.Web,
 		"help":       config.App.Help,
+	}
+
+	metric.JSON(w, r, http.StatusOK, result)
+}
+
+/**
+* getTest
+* @params w http.ResponseWriter
+* @params r *http.Request
+**/
+func (s *Server) getTest(w http.ResponseWriter, r *http.Request) {
+	metric := middleware.GetMetrics(r)
+	id := r.PathValue("id")
+	test := r.PathValue("test")
+
+	result := et.Json{
+		"created_at": s.CreatedAt.Format("02/01/2006 3:04:05 PM"),
+		"id":         id,
+		"test":       test,
 	}
 
 	metric.JSON(w, r, http.StatusOK, result)

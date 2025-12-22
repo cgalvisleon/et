@@ -15,10 +15,10 @@ import (
 
 /**
 * setRouter
-* @param id, method, path, resolve string, kind TypeApi, header et.Json, tpHeader rt.TpHeader, excludeHeader []string, private bool, packageName string, save bool
+* @param method, path, resolve string, kind TypeApi, header et.Json, tpHeader rt.TpHeader, excludeHeader []string, private bool, packageName string, save bool
 * @return *Router
 **/
-func (s *Server) setRouter(id, method, path, resolve string, kind TypeApi, header et.Json, tpHeader rt.TpHeader, excludeHeader []string, private bool, packageName string, save bool) (*Router, error) {
+func (s *Server) setRouter(method, path, resolve string, kind TypeApi, header et.Json, tpHeader rt.TpHeader, excludeHeader []string, private bool, packageName string, save bool) (*Router, error) {
 	if !utility.ValidStr(method, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "method")
 	}
@@ -31,19 +31,16 @@ func (s *Server) setRouter(id, method, path, resolve string, kind TypeApi, heade
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "resolve")
 	}
 
-	if !utility.ValidStr(id, 0, []string{"", "new", "-1"}) {
-		id = utility.UUID()
-	}
-
+	key := fmt.Sprintf("%s:%s", method, path)
 	confirm := func(action string) {
 		logs.Logf(s.Name, `[%s] %s:%s -> %s | TpHeader:%s | Private:%v | %s`, action, method, path, resolve, tpHeader.String(), private, packageName)
 	}
 
 	var router *Router
-	idx := slices.IndexFunc(s.solvers, func(e *Router) bool { return e.Id == id })
+	idx := slices.IndexFunc(s.solvers, func(e *Router) bool { return e.Id == key })
 	if idx != -1 {
 		router = s.solvers[idx]
-		router.Id = id
+		router.Id = key
 		router.Resolve = resolve
 		router.Kind = kind
 		router.Header = header
@@ -80,7 +77,7 @@ func (s *Server) setRouter(id, method, path, resolve string, kind TypeApi, heade
 					matrix := strings.Split(tag, ";")
 					tag = matrix[0]
 				}
-				router = router.addRoute(id, method, tag, kind, header, tpHeader, excludeHeader, private, tpParams)
+				router = router.addRoute(method, tag, kind, header, tpHeader, excludeHeader, private, tpParams)
 			} else {
 				router = find
 			}
@@ -155,17 +152,17 @@ func (s *Server) DeleteRouteById(id string, save bool) error {
 
 /**
 * SetRouter
-* @param private bool, id, method, path, resolve string, header et.Json, tpHeader rt.TpHeader, excludeHeader []string, packageName string, saved bool
+* @param private bool, method, path, resolve string, header et.Json, tpHeader rt.TpHeader, excludeHeader []string, packageName string, saved bool
 * @return *Router, error
 **/
-func (s *Server) SetRouter(private bool, id, method, path, resolve string, header et.Json, tpHeader rt.TpHeader, excludeHeader []string, packageName string, saved bool) (*Router, error) {
+func (s *Server) SetRouter(private bool, method, path, resolve string, header et.Json, tpHeader rt.TpHeader, excludeHeader []string, packageName string, saved bool) (*Router, error) {
 	method = strings.ToUpper(method)
 	ok := methodMap[method]
 	if !ok {
 		return nil, logs.Alertf(MSG_METHOD_NOT_FOUND, method)
 	}
 
-	route, err := s.setRouter(id, method, path, resolve, TpApiRest, header, tpHeader, excludeHeader, private, packageName, saved)
+	route, err := s.setRouter(method, path, resolve, TpApiRest, header, tpHeader, excludeHeader, private, packageName, saved)
 	if err != nil {
 		return nil, fmt.Errorf(MSG_ROUTE_NOT_REGISTER)
 	}

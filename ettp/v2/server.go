@@ -18,8 +18,6 @@ import (
 	"github.com/mattn/go-colorable"
 )
 
-const packageName = "ettp"
-
 type Config struct {
 	Port         int
 	Parent       string

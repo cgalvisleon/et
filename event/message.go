@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
-	"github.com/cgalvisleon/et/utility"
 )
 
 type Message struct {
@@ -25,9 +25,11 @@ type Message struct {
 * @return Message
 **/
 func NewEvenMessage(channel string, data et.Json) Message {
+	now := timezone.NowTime()
+	id := reg.GenULID("msg")
 	return Message{
-		CreatedAt: timezone.NowTime(),
-		Id:        utility.UUID(),
+		CreatedAt: now,
+		Id:        id,
 		Channel:   channel,
 		Data:      data,
 	}
@@ -47,10 +49,10 @@ func (m Message) Encode() ([]byte, error) {
 }
 
 /**
-* serialize
+* Serialize
 * @return []byte, error
 **/
-func (s Message) serialize() ([]byte, error) {
+func (s Message) Serialize() ([]byte, error) {
 	result, err := json.Marshal(s)
 	if err != nil {
 		return []byte{}, err
@@ -64,7 +66,7 @@ func (s Message) serialize() ([]byte, error) {
 * @return et.Json, error
 **/
 func (s Message) ToJson() (et.Json, error) {
-	definition, err := s.serialize()
+	definition, err := s.Serialize()
 	if err != nil {
 		return et.Json{}, err
 	}

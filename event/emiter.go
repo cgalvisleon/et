@@ -9,6 +9,13 @@ import (
 	"github.com/cgalvisleon/et/utility"
 )
 
+var emiter *EventEmiter
+
+func init() {
+	emiter = newEventEmiter()
+	emiter.start()
+}
+
 type Handler func(message Message)
 
 type EventEmiter struct {
@@ -16,18 +23,11 @@ type EventEmiter struct {
 	events  map[string]Handler `json:"-"`
 }
 
-var emiter *EventEmiter
-
-func init() {
-	emiter = NewEventEmiter()
-	emiter.Start()
-}
-
 /**
-* NewEventEmiter
+* newEventEmiter
 * @return *EventEmiter
 **/
-func NewEventEmiter() *EventEmiter {
+func newEventEmiter() *EventEmiter {
 	return &EventEmiter{
 		channel: make(chan Message),
 		events:  make(map[string]Handler),
@@ -35,39 +35,27 @@ func NewEventEmiter() *EventEmiter {
 }
 
 /**
-* EventEmiter
-* @param message Message
+* start
 **/
-func (s *EventEmiter) eventEmiter(message Message) {
-	if s.events == nil {
-		s.events = make(map[string]Handler)
-	}
-
-	eventEmiter, ok := s.events[message.Channel]
-	if !ok {
-		logs.Alert(fmt.Errorf("event not found (%s)", message.Channel))
-		return
-	}
-
-	eventEmiter(message)
-}
-
-/**
-* Start
-**/
-func (s *EventEmiter) Start() {
+func (s *EventEmiter) start() {
 	go func() {
 		for message := range s.channel {
-			s.eventEmiter(message)
+			fn, ok := s.events[message.Channel]
+			if !ok {
+				logs.Alert(fmt.Errorf("event not found (%s)", message.Channel))
+				return
+			}
+
+			fn(message)
 		}
 	}()
 }
 
 /**
-* On
+* on
 * @param channel string, handler Handler
 **/
-func (s *EventEmiter) On(channel string, handler Handler) {
+func (s *EventEmiter) on(channel string, handler Handler) {
 	if s.events == nil {
 		s.events = make(map[string]Handler)
 	}
@@ -76,10 +64,10 @@ func (s *EventEmiter) On(channel string, handler Handler) {
 }
 
 /**
-* Emit
+* emit
 * @param channel string, data et.Json
 **/
-func (s *EventEmiter) Emit(channel string, data et.Json) {
+func (s *EventEmiter) emiter(channel string, data et.Json) {
 	if s.channel == nil {
 		return
 	}
@@ -99,17 +87,13 @@ func (s *EventEmiter) Emit(channel string, data et.Json) {
 * @param channel string, handler Handler
 **/
 func On(channel string, handler Handler) {
-	if emiter == nil {
-		emiter = NewEventEmiter()
-	}
-
-	emiter.On(channel, handler)
+	emiter.on(channel, handler)
 }
 
 /**
-* Emit
+* emit
 * @param channel string, data et.Json
 **/
-func Emit(channel string, data et.Json) {
-	emiter.Emit(channel, data)
+func Emiter(channel string, data et.Json) {
+	emiter.emiter(channel, data)
 }

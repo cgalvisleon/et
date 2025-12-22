@@ -16,40 +16,38 @@ import (
 type JobStatus string
 
 const (
-	JobStatusPending  JobStatus = "pending"
-	JobStatusRunning  JobStatus = "running"
-	JobStatusDone     JobStatus = "done"
-	JobStatusFailed   JobStatus = "failed"
-	JobStatusStop     JobStatus = "stop"
-	JobStatusFinished JobStatus = "finished"
+	StatusPending  JobStatus = "pending"
+	StatusRunning  JobStatus = "running"
+	StatusDone     JobStatus = "done"
+	StatusFailed   JobStatus = "failed"
+	StatusStop     JobStatus = "stop"
+	StatusFinished JobStatus = "finished"
 )
 
 type TypeJob string
 
 const (
-	TypeJobCron    TypeJob = "cron"
-	TypeJobOneShot TypeJob = "one-shot"
+	TypeCronJob TypeJob = "cron-job"
+	TypeOneShot TypeJob = "one-shot"
 )
 
 type Job struct {
-	Type        TypeJob        `json:"type"`
-	Tag         string         `json:"tag"`
-	Channel     string         `json:"channel"`
-	Params      et.Json        `json:"params"`
-	Spec        string         `json:"spec"`
-	Started     bool           `json:"started"`
-	Status      JobStatus      `json:"status"`
-	Idx         int            `json:"idx"`
-	HostName    string         `json:"host_name"`
-	Attempts    int            `json:"attempts"`
-	Repetitions int            `json:"repetitions"`
-	Duration    time.Duration  `json:"duration"`
-	ShotTime    time.Time      `json:"shot_time"`
-	fn          func(job *Job) `json:"-"`
-	shot        *time.Timer    `json:"-"`
-	jobs        *Jobs          `json:"-"`
-	isEventUp   bool           `json:"-"`
-	mu          *sync.Mutex    `json:"-"`
+	Type        TypeJob       `json:"type"`
+	Tag         string        `json:"tag"`
+	Channel     string        `json:"channel"`
+	Params      et.Json       `json:"params"`
+	Spec        string        `json:"spec"`
+	Started     bool          `json:"started"`
+	Status      JobStatus     `json:"status"`
+	Idx         int           `json:"idx"`
+	HostName    string        `json:"host_name"`
+	Attempts    int           `json:"attempts"`
+	Repetitions int           `json:"repetitions"`
+	ShotTime    time.Time     `json:"shot_time"`
+	Duration    time.Duration `json:"duration"`
+	jobs        *Jobs         `json:"-"`
+	mu          *sync.Mutex   `json:"-"`
+	shot        *time.Timer   `json:"-"`
 }
 
 /**
@@ -88,12 +86,9 @@ func (s *Job) ToJson() et.Json {
 * save
 * @return error
 **/
-func (s *Job) save() error {
-	if set == nil {
-		return nil
-	}
-
-	return set(s)
+func (s *Job) save() {
+	logs.Logf(packageName, fmt.Sprintf("Job %s status:%s host:%s attempt:%d", s.Tag, s.Status, s.HostName, s.Attempts))
+	event.Publish(EVENT_CRONTAB_STATUS, s.ToJson())
 }
 
 /**
@@ -106,7 +101,6 @@ func (s *Job) setStatus(status JobStatus) {
 	defer s.mu.Unlock()
 
 	s.Status = status
-	logs.Logf(packageName, fmt.Sprintf("Job %s status:%s host:%s attempt:%d", s.Tag, s.Status, s.HostName, s.Attempts))
 	go s.save()
 }
 
@@ -115,33 +109,25 @@ func (s *Job) setStatus(status JobStatus) {
 * @return error
 **/
 func (s *Job) Start() error {
-	if s.fn == nil {
-		s.fn = func(job *Job) {
-			err := event.Publish(job.Channel, job.Params)
-			if err != nil {
-				s.setStatus(JobStatusFailed)
-			}
-		}
-	}
-
-	fn := func() {
-		if s.fn != nil && s.Started {
-			s.setStatus(JobStatusRunning)
-			s.Attempts++
-			s.fn(s)
-			if s.Repetitions != 0 && s.Attempts >= s.Repetitions {
-				s.Remove()
-			} else {
-				s.setStatus(JobStatusPending)
-			}
-		}
-	}
-
 	if s.Started {
 		return nil
 	}
 
-	if s.Type == TypeJobCron {
+	fn := func() {
+		s.setStatus(StatusRunning)
+		s.Attempts++
+		err := event.Publish(s.Channel, s.Params)
+		if err != nil {
+			s.setStatus(StatusFailed)
+		}
+		if s.Repetitions != 0 && s.Attempts >= s.Repetitions {
+			s.Stop()
+		} else {
+			s.setStatus(StatusPending)
+		}
+	}
+
+	if s.Type == TypeCronJob {
 		id, err := s.jobs.crontab.AddFunc(s.Spec, fn)
 		if err != nil {
 			return err
@@ -150,17 +136,14 @@ func (s *Job) Start() error {
 		s.Idx = int(id)
 	} else {
 		now := timezone.NowTime()
-		shotTime := s.ShotTime
-		if shotTime.After(now) {
-			duration := s.ShotTime.Sub(now)
-			s.Duration = duration
-			s.shot = time.AfterFunc(duration, fn)
-		} else if s.shot != nil {
-			s.shot.Stop()
+		if s.ShotTime.After(now) {
+			s.Duration = s.ShotTime.Sub(now)
+			s.shot = time.AfterFunc(s.Duration, fn)
 		}
 	}
 
 	s.Started = true
+	s.setStatus(StatusPending)
 
 	return nil
 }
@@ -176,26 +159,12 @@ func (s *Job) Stop() {
 
 	s.Started = false
 	time.AfterFunc(time.Second*1, func() {
-		if s.Type == TypeJobCron {
+		if s.Type == TypeCronJob {
 			s.jobs.crontab.Remove(cron.EntryID(s.Idx))
 			s.Idx = -1
 		} else if s.shot != nil {
 			s.shot.Stop()
 		}
-		s.setStatus(JobStatusStop)
+		s.setStatus(StatusStop)
 	})
-}
-
-/**
-* Remove
-* @return error
-**/
-func (s *Job) Remove() {
-	s.setStatus(JobStatusFinished)
-	idx := s.jobs.indexJobByTag(s.Tag)
-	if idx == -1 {
-		return
-	}
-
-	s.jobs.removeJob(idx)
 }

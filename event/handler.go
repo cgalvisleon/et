@@ -4,22 +4,34 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/response"
+	"github.com/cgalvisleon/et/timezone"
 	"github.com/nats-io/nats.go"
 )
 
+type EventStatus string
+
 const (
-	QUEUE_STACK      = "stack"
-	EVENT            = "event"
-	EVENT_LOG        = "event:log"
-	EVENT_OVERFLOW   = "event:overflow"
-	EVENT_WORK       = "event:worker"
-	EVENT_WORK_STATE = "event:worker:state"
-	EVENT_SUBSCRIBED = "event:subscribed"
+	EventPublished    EventStatus = "published"
+	EventSubscribed   EventStatus = "subscribed"
+	EventUnsubscribed EventStatus = "unsubscribed"
+	EventReceived     EventStatus = "received"
+	QUEUE_STACK                   = "stack"
+	EVENT_STATUS                  = "event:status"
+	EVENT_LOG                     = "event:log"
+	EVENT_OVERFLOW                = "event:overflow"
+	EVENT_WORK                    = "event:work"
+	EVENT_WORK_STATE              = "event:work:state"
 )
 
+/**
+* publish
+* @param channel string, data et.Json
+* @return error
+**/
 func publish(channel string, data et.Json) error {
 	if conn == nil {
 		return nil
@@ -41,6 +53,27 @@ func publish(channel string, data et.Json) error {
 }
 
 /**
+* eventState
+* @params channel string, status EventStatus, data interface{}
+**/
+func eventState(channel string, status EventStatus, data interface{}) {
+	msg := et.Json{
+		"created_at": timezone.NowTime(),
+		"channel":    channel,
+		"event":      status,
+		"host":       hostName,
+		"id":         reg.GenULID("event"),
+	}
+	if data != nil {
+		msg["msg"] = data
+	}
+
+	stage := envar.GetStr("STAGE", "DEV")
+	publish(EVENT_STATUS, msg)
+	publish(fmt.Sprintf(`pipe:%s:%s`, stage, channel), msg)
+}
+
+/**
 * Publish
 * @param channel string, data et.Json
 * @return error
@@ -50,11 +83,39 @@ func Publish(channel string, data et.Json) error {
 		return nil
 	}
 
-	stage := config.App.Stage
-	publish(EVENT, et.Json{"channel": channel, "data": data})
-	publish(fmt.Sprintf(`pipe:%s:%s`, stage, channel), data)
-
+	eventState(channel, EventPublished, data)
 	return publish(channel, data)
+}
+
+/**
+* Unsubscribe
+* @param channel string
+* @return error
+**/
+func Unsubscribe(channel string) error {
+	if conn == nil {
+		return fmt.Errorf(ERR_NOT_CONNECT)
+	}
+
+	if len(channel) == 0 {
+		return fmt.Errorf(ERR_CHANNEL_REQUIRED)
+	}
+
+	conn.mutex.Lock()
+	defer conn.mutex.Unlock()
+
+	subscribe, ok := conn.events[channel]
+	if !ok {
+		return nil
+	}
+
+	subscribe.Unsubscribe()
+	conn.mutex.Lock()
+	delete(conn.events, channel)
+	conn.mutex.Unlock()
+	eventState(channel, EventUnsubscribed, nil)
+
+	return nil
 }
 
 /**
@@ -77,7 +138,7 @@ func Subscribe(channel string, f func(Message)) (err error) {
 	}
 
 	if ok {
-		publish(EVENT_SUBSCRIBED, et.Json{"channel": channel})
+		eventState(channel, EventSubscribed, nil)
 	}
 
 	subscribe, err := conn.Subscribe(channel,
@@ -88,6 +149,13 @@ func Subscribe(channel string, f func(Message)) (err error) {
 			}
 
 			msg.Myself = msg.FromId == conn.id
+
+			data, err := msg.ToJson()
+			if err != nil {
+				data = et.Json{}
+			}
+
+			eventState(channel, EventReceived, data)
 			f(msg)
 		},
 	)
@@ -96,38 +164,10 @@ func Subscribe(channel string, f func(Message)) (err error) {
 	}
 
 	conn.mutex.Lock()
-	conn.eventCreatedSub[channel] = subscribe
+	conn.events[channel] = subscribe
 	conn.mutex.Unlock()
 
 	return err
-}
-
-/**
-* Unsubscribe
-* @param channel string
-* @return error
-**/
-func Unsubscribe(channel string) error {
-	if conn == nil {
-		return fmt.Errorf(ERR_NOT_CONNECT)
-	}
-
-	if len(channel) == 0 {
-		return fmt.Errorf(ERR_CHANNEL_REQUIRED)
-	}
-
-	conn.mutex.Lock()
-	defer conn.mutex.Unlock()
-
-	subscribe, ok := conn.eventCreatedSub[channel]
-	if !ok {
-		return fmt.Errorf("channel %s not found", channel)
-	}
-
-	subscribe.Unsubscribe()
-	delete(conn.eventCreatedSub, channel)
-
-	return nil
 }
 
 /**
@@ -150,7 +190,7 @@ func Queue(channel, queue string, f func(Message)) (err error) {
 	}
 
 	if ok {
-		publish(EVENT_SUBSCRIBED, et.Json{"channel": channel})
+		eventState(channel, EventSubscribed, nil)
 	}
 
 	subscribe, err := conn.QueueSubscribe(
@@ -162,6 +202,14 @@ func Queue(channel, queue string, f func(Message)) (err error) {
 				return
 			}
 
+			msg.Myself = msg.FromId == conn.id
+
+			data, err := msg.ToJson()
+			if err != nil {
+				data = et.Json{}
+			}
+
+			eventState(channel, EventReceived, data)
 			f(msg)
 		},
 	)
@@ -170,7 +218,7 @@ func Queue(channel, queue string, f func(Message)) (err error) {
 	}
 
 	conn.mutex.Lock()
-	conn.eventCreatedSub[channel] = subscribe
+	conn.events[channel] = subscribe
 	conn.mutex.Unlock()
 
 	return nil

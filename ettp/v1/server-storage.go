@@ -48,7 +48,6 @@ func (s *Server) migrate() error {
 	n := len(storage)
 	for i, route := range storage {
 		s.setRouter(
-			route.Id,
 			route.Method,
 			route.Path,
 			route.Resolve,
@@ -122,7 +121,6 @@ func (s *Server) load() error {
 
 	for _, route := range storage.Router {
 		s.setRouter(
-			route.Id,
 			route.Method,
 			route.Path,
 			route.Resolve,

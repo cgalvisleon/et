@@ -9,9 +9,10 @@ import (
 
 var (
 	EVENT_CRONTAB_SET    = "event:crontab:set"
-	EVENT_CRONTAB_DELETE = "event:crontab:delete"
+	EVENT_CRONTAB_REMOVE = "event:crontab:remove"
 	EVENT_CRONTAB_STOP   = "event:crontab:stop"
 	EVENT_CRONTAB_START  = "event:crontab:start"
+	EVENT_CRONTAB_STATUS = "event:crontab:status"
 )
 
 /**
@@ -20,7 +21,7 @@ var (
 **/
 func eventInit(tag string) error {
 	EVENT_CRONTAB_SET = fmt.Sprintf("event:crontab:set:%s", tag)
-	EVENT_CRONTAB_DELETE = fmt.Sprintf("event:crontab:delete:%s", tag)
+	EVENT_CRONTAB_REMOVE = fmt.Sprintf("event:crontab:remove:%s", tag)
 	EVENT_CRONTAB_STOP = fmt.Sprintf("event:crontab:stop:%s", tag)
 	EVENT_CRONTAB_START = fmt.Sprintf("event:crontab:start:%s", tag)
 
@@ -29,7 +30,7 @@ func eventInit(tag string) error {
 		return err
 	}
 
-	err = event.Subscribe(EVENT_CRONTAB_DELETE, eventDelete)
+	err = event.Subscribe(EVENT_CRONTAB_REMOVE, eventRemove)
 	if err != nil {
 		return err
 	}
@@ -62,11 +63,10 @@ func eventSet(msg event.Message) {
 	tag := data.Str("tag")
 	spec := data.Str("spec")
 	channel := data.Str("channel")
-	started := data.Bool("started")
 	params := data.Json("params")
 	repetitions := data.Int("repetitions")
 	tp := TypeJob(tpStr)
-	_, err := crontab.addEventJob(tp, tag, spec, channel, started, params, repetitions, nil)
+	_, err := crontab.addJob(tp, tag, spec, channel, params, repetitions)
 	if err != nil {
 		logs.Logf(packageName, fmt.Sprintf("Crontab %s; Error adding job %s", tag, err))
 		return
@@ -76,18 +76,18 @@ func eventSet(msg event.Message) {
 }
 
 /**
-* eventDelete
+* eventRemove
 * @param msg event.Message
 * @return error
 **/
-func eventDelete(msg event.Message) {
+func eventRemove(msg event.Message) {
 	if crontab == nil {
 		return
 	}
 
 	data := msg.Data
 	tag := data.Str("tag")
-	err := crontab.deleteJobByTag(tag)
+	err := crontab.removeJob(tag)
 	if err != nil {
 		logs.Logf(packageName, fmt.Sprintf("Crontab %s; Error deleting job %s", tag, err))
 		return
@@ -108,7 +108,7 @@ func eventStop(msg event.Message) {
 
 	data := msg.Data
 	tag := data.Str("tag")
-	err := crontab.stopJobByTag(tag)
+	err := crontab.stopJob(tag)
 	if err != nil {
 		logs.Logf(packageName, fmt.Sprintf("Crontab %s; Error stopping job %s", tag, err))
 		return
@@ -129,7 +129,7 @@ func eventStart(msg event.Message) {
 
 	data := msg.Data
 	tag := data.Str("tag")
-	_, err := crontab.startJobByTag(tag)
+	err := crontab.startJob(tag)
 	if err != nil {
 		logs.Logf(packageName, fmt.Sprintf("Crontab %s; Error starting job %s", tag, err))
 		return

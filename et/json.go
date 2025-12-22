@@ -740,18 +740,8 @@ func (s *Json) Append(from Json) {
 * @param from Json
 * @return bool
 **/
-func (s *Json) IsChanged(from Json) bool {
-	for key, fromValue := range from {
-		if (*s)[key] == nil {
-			return true
-		}
-
-		if strings.EqualFold(fmt.Sprintf(`%v`, (*s)[key]), fmt.Sprintf(`%v`, fromValue)) {
-			return true
-		}
-	}
-
-	return false
+func (s Json) IsChanged(from Json) bool {
+	return !EqualJSON(s, from)
 }
 
 /**

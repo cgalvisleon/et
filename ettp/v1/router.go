@@ -1,6 +1,7 @@
 package ettp
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"slices"
@@ -8,7 +9,6 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/strs"
-	"github.com/cgalvisleon/et/utility"
 )
 
 type TypeApi int
@@ -120,10 +120,11 @@ type Router struct {
 * @return *Router
 **/
 func (s *Server) newRouter(method string, packageName string) *Router {
+	key := fmt.Sprintf("%s", method)
 	result := &Router{
 		server:        s,
 		middlewares:   make([]func(http.Handler) http.Handler, 0),
-		Id:            utility.UUID(),
+		Id:            key,
 		Tag:           method,
 		TpParams:      TpNotParams,
 		Kind:          TpHandler,
@@ -253,15 +254,16 @@ func (r *Router) getRouterById(id string) *Router {
 
 /**
 * addRoute
-* @param id, method, tag string, kind TypeApi, header et.Json, tpHeader router.TpHeader, excludeHeader []string, private bool, tpParams TpParams
+* @param method, tag string, kind TypeApi, header et.Json, tpHeader router.TpHeader, excludeHeader []string, private bool, tpParams TpParams
 * @return *Router
 **/
-func (r *Router) addRoute(id, method, tag string, kind TypeApi, header et.Json, tpHeader router.TpHeader, excludeHeader []string, private bool, tpParams TpParams) *Router {
+func (r *Router) addRoute(method, tag string, kind TypeApi, header et.Json, tpHeader router.TpHeader, excludeHeader []string, private bool, tpParams TpParams) *Router {
+	key := fmt.Sprintf("%s:%s", method, tag)
 	result := &Router{
 		server:        r.server,
 		middlewares:   r.server.middlewares,
 		main:          r,
-		Id:            utility.GenKey(id),
+		Id:            key,
 		Tag:           tag,
 		TpParams:      tpParams,
 		Kind:          kind,

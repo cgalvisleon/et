@@ -143,11 +143,11 @@ func CallList(method string, args et.Json) (et.List, error) {
 }
 
 /**
-* ListRouters
+* HttpListRouters
 * @param w http.ResponseWriter
 * @param r *http.Request
 **/
-func ListRouters(w http.ResponseWriter, r *http.Request) {
+func HttpListRouters(w http.ResponseWriter, r *http.Request) {
 	result, err := listRouters()
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())

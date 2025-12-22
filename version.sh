@@ -5,7 +5,7 @@ set -e                                                        # Detener la ejecu
 HELP=false
 MAYOR=false
 MINOR=false
-VERSION=false
+REQUEST=false
 INDEX=2
 CURRENT_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0") # Obtener la versión actual de Git
 NEW_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0") # Obtener la versión actual de Git
@@ -16,7 +16,7 @@ while [[ "$#" -gt 0 ]]; do
         --h | --help) HELP=true ;;                             # Activar la bandera si se proporciona --help
         --m | --major) MAYOR=true ;;                          # Activar la bandera si se proporciona --major
         --n | --minor) MINOR=true ;;                          # Activar la bandera si se proporciona --minor
-        --v | --version) VERSION=true ;;                            # Activar la bandera si se proporciona --push
+        --r | --request) REQUEST=true ;;                            # Activar la bandera si se proporciona --push
         *) echo "Opción desconocida: $1"; exit 1 ;;
     esac
     shift
@@ -26,11 +26,10 @@ done
 echo "Opciones elegidas:"
 [[ "$MAYOR" == true ]] && echo " - Major: Activado"
 [[ "$MINOR" == true ]] && echo " - Minor: Activado"
-[[ "$VERSION" == true ]] && echo " - Version: Activado"
 
 build_version() {
   # Obtiene la última etiqueta
-  latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+  latest_tag=$(git describe --tags --abbrev=0 2>/dev/null)
 
   # Divide la etiqueta en componentes usando el punto como delimitador
   IFS='.' read -r -a version_parts <<< "${latest_tag#v}"
@@ -53,7 +52,7 @@ build_version() {
     version_parts[2]=$((version_parts[2] + 1))
 
     # Reconstruye la nueva versión (X.Y.Z) y prepende la 'v' al principio
-    NEW_VERSION="v${version_parts[0]}.${version_parts[1]}.${version_parts[2]}"
+    NEW_VERSION="v${version_parts[0]}.${version_parts[1]}.${version_parts[2]}"    
   fi
 }
 
@@ -62,27 +61,15 @@ update_version() {
   echo "Nueva versión: $NEW_VERSION"
   echo "Etiquetando con: $NEW_VERSION"
 
-
   sed -i "" "s/$CURRENT_VERSION/$NEW_VERSION/g" README.md
   
   git tag -a "$NEW_VERSION" -m "$NEW_VERSION"
-  git push origin --tags  
+  git push origin --tags
 
   echo "Etiqueta creada y enviada a Git"
 }
 
-version() {
-  echo "Etiquetando con: $NEW_VERSION"
-
-  sed -i "" "s/$CURRENT_VERSION/$NEW_VERSION/g" README.md
-  
-  git tag -a "$NEW_VERSION" -m "$NEW_VERSION"
-  git push -u origin --tags
-  
-  echo "Etiqueta creada y enviada a Git"
-}
-
-if [ "$HELP" == true ]; then
+help() {
   echo "Uso: ./version.sh [opciones]"
   echo "Incrementa la versión de la etiqueta de Git"
   echo ""
@@ -90,14 +77,20 @@ if [ "$HELP" == true ]; then
   echo "  --h, --help     Muestra este mensaje de ayuda"
   echo "  --m, --major    Incrementa la versión mayor"
   echo "  --n, --minor    Incrementa la versión menor"
-  echo "  --v, --version  Incrementa la versión de la revisión"
+  echo "  --r, --request  Incrementa la versión de la revisión"
   exit 0
-elif [ "$VERSION" == true ]; then
-  build_version
-  version
-else
+}
+
+if [ "$HELP" == true ]; then
+  help
+elif [ "$CURRENT_VERSION" == "v0.0.0" ]; then
+  NEW_VERSION="v1.0.0"
+  update_version
+elif [ "$REQUEST" == true ]; then
   build_version
   update_version
+else
+  help
 fi
 
 # Línea en blanco al final

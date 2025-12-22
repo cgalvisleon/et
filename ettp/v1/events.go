@@ -33,7 +33,6 @@ func (s *Server) eventSetRouter(m event.Message) {
 	}
 
 	data := m.Data
-	id := data.ValStr("", "id")
 	method := data.Str("method")
 	path := data.Str("path")
 	resolve := data.Str("resolve")
@@ -42,7 +41,7 @@ func (s *Server) eventSetRouter(m event.Message) {
 	excludeHeader := data.ArrayStr("exclude_header")
 	private := data.Bool("private")
 	packageName := data.Str("package_name")
-	s.setRouter(id, method, path, resolve, TpApiRest, header, tpHeader, excludeHeader, private, packageName, true)
+	s.setRouter(method, path, resolve, TpApiRest, header, tpHeader, excludeHeader, private, packageName, true)
 }
 
 /**

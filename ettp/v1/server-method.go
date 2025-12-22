@@ -7,7 +7,6 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/strs"
 )
@@ -25,17 +24,16 @@ func (s *Server) setApiFunc(method, path string, handlerFn http.HandlerFunc, pac
 		return nil
 	}
 
-	id := reg.GenKey(method, path)
 	url := fmt.Sprintf("%s%s", s.pathApi, path)
 	url = strings.ReplaceAll(url, "//", "/")
-	route, err := s.setRouter(id, method, url, url, TpHandler, et.Json{}, router.TpReplaceHeader, []string{}, false, packageName, false)
+	route, err := s.setRouter(method, url, url, TpHandler, et.Json{}, router.TpReplaceHeader, []string{}, false, packageName, false)
 	if err != nil {
 		logs.Alertf(err.Error())
 		return nil
 	}
 
 	if route != nil {
-		s.handlers[route.Id] = NewApiFunc(id, method, path, handlerFn, packageName)
+		s.handlers[route.Id] = NewApiFunc(method, path, handlerFn, packageName)
 	}
 
 	return route

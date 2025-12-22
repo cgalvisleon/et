@@ -2,72 +2,30 @@ package event
 
 import (
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
-	"github.com/cgalvisleon/et/utility"
 )
 
-type WorkStatus int
+type WorkStatus string
 
 const (
-	WorkStatusPending WorkStatus = iota
-	WorkStatusAccepted
-	WorkStatusProcessing
-	WorkStatusCompleted
-	WorkStatusFailed
+	StatusPending    WorkStatus = "pending"
+	StatusProcessing WorkStatus = "processing"
+	StatusCompleted  WorkStatus = "completed"
+	StatusFailed     WorkStatus = "failed"
 )
-
-/**
-* String
-* @return string
-**/
-func (s WorkStatus) String() string {
-	switch s {
-	case WorkStatusPending:
-		return "Pending"
-	case WorkStatusAccepted:
-		return "Accepted"
-	case WorkStatusProcessing:
-		return "Processing"
-	case WorkStatusCompleted:
-		return "Completed"
-	case WorkStatusFailed:
-		return "Failed"
-	default:
-		return "Unknown"
-	}
-}
-
-/**
-* ToWorkStatus
-* @param int n
-* @return WorkStatus
-**/
-func ToWorkStatus(n int) WorkStatus {
-	switch n {
-	case 0:
-		return WorkStatusPending
-	case 1:
-		return WorkStatusAccepted
-	case 2:
-		return WorkStatusProcessing
-	case 3:
-		return WorkStatusCompleted
-	case 4:
-		return WorkStatusFailed
-	default:
-		return WorkStatusPending
-	}
-}
 
 /**
 * Work
-* @param event string
-* @param data et.Json
+* @param event string, data et.Json
+* @return et.Json
 **/
 func Work(event string, data et.Json) et.Json {
+	id := reg.GenULID("work")
 	work := et.Json{
-		"created_at": timezone.Now(),
-		"id":         utility.UUID(),
+		"created_at": timezone.NowTime(),
+		"status":     StatusPending,
+		"id":         id,
 		"event":      event,
 		"data":       data,
 	}
@@ -79,30 +37,18 @@ func Work(event string, data et.Json) et.Json {
 }
 
 /**
-* WorkState
-* @param work_id string
-* @param status WorkStatus
-* @param data et.Json
+* State
+* @param id string, status WorkStatus
 **/
-func WorkState(work_id string, status WorkStatus, data et.Json) {
+func State(id string, status WorkStatus, data et.Json) {
+	now := timezone.Now()
 	work := et.Json{
-		"update_at": timezone.Now(),
-		"id":        work_id,
-		"status":    status.String(),
+		"update_at": now,
+		"id":        id,
+		"status":    status,
 		"data":      data,
-	}
-	switch status {
-	case WorkStatusPending:
-		work["pending_at"] = utility.Now()
-	case WorkStatusAccepted:
-		work["accepted_at"] = utility.Now()
-	case WorkStatusProcessing:
-		work["processing_at"] = utility.Now()
-	case WorkStatusCompleted:
-		work["completed_at"] = utility.Now()
-	case WorkStatusFailed:
-		work["failed_at"] = utility.Now()
 	}
 
 	go Publish(EVENT_WORK_STATE, work)
+	go Publish(id, work)
 }

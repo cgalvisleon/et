@@ -26,10 +26,6 @@ func SetDuration(key string, val interface{}, expiration time.Duration) interfac
 		return val
 	}
 
-	if expiration < time.Second {
-		expiration = time.Second
-	}
-
 	switch v := val.(type) {
 	case et.Json:
 		return SetCtx(conn.ctx, key, v.ToString(), expiration)
@@ -274,61 +270,74 @@ func Empty(match string) error {
 }
 
 /**
-* HSet
+* ColectionSet
 * @params key string, val map[string]string
 * @return error
 **/
-func HSet(key string, val map[string]string) error {
+func CollectionSet(name string, val map[string]string) error {
 	if conn == nil {
 		return fmt.Errorf(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
-	return HSetCtx(conn.ctx, key, val)
+	return HSetCtx(conn.ctx, name, val)
 }
 
 /**
-* HGet
-* @params key string
+* CollectionGet
+* @params name string
 * @return map[string]string, error
 **/
-func HGet(key string) (map[string]string, error) {
+func CollectionGet(name string) (map[string]string, error) {
 	if conn == nil {
 		return map[string]string{}, fmt.Errorf(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
-	return HGetCtx(conn.ctx, key)
+	return HGetCtx(conn.ctx, name)
 }
 
 /**
-* HSetAtrib
-* @params key string, atr string, val string
+* CollectionDelete
+* @params name string, key string
 * @return error
 **/
-func HSetAtrib(key, atr, val string) error {
+func CollectionDelete(name, key string) error {
 	if conn == nil {
 		return fmt.Errorf(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
-	return HSetCtx(conn.ctx, key, map[string]string{atr: val})
+	return HDeleteCtx(conn.ctx, name, key)
 }
 
 /**
-* HGetAtrib
-* @params key string, atr string
+* CollectionPut
+* @params name string, key string, val string
+* @return error
+**/
+func CollectionPut(name, key, val string) error {
+	if conn == nil {
+		return fmt.Errorf(msg.ERR_NOT_CACHE_SERVICE)
+	}
+
+	return HSetCtx(conn.ctx, name, map[string]string{key: val})
+}
+
+/**
+* CollectionFind
+* @params name string, key string
 * @return string, error
 **/
-func HGetAtrib(key, atr string) (string, error) {
+func CollectionFind(name, key string) (string, error) {
 	if conn == nil {
 		return "", fmt.Errorf(msg.ERR_NOT_CACHE_SERVICE)
 	}
 
-	atribs, err := HGetCtx(conn.ctx, key)
+	atribs, err := HGetCtx(conn.ctx, name)
 	if err != nil {
 		return "", err
 	}
 
 	for k, v := range atribs {
-		if k == atr {
+		if k == key {
 			return v, nil
 		}
 	}
@@ -337,16 +346,67 @@ func HGetAtrib(key, atr string) (string, error) {
 }
 
 /**
-* HDelete
-* @params key string, atr string
-* @return error
+* Objets
+* @params name string
+* @return []et.Json, error
 **/
-func HDelete(key, atr string) error {
-	if conn == nil {
-		return fmt.Errorf(msg.ERR_NOT_CACHE_SERVICE)
+func ObjetAll(name string) ([]et.Json, error) {
+	result := []et.Json{}
+	items, err := CollectionGet(name)
+	if err != nil {
+		return result, err
 	}
 
-	return HDeleteCtx(conn.ctx, key, atr)
+	for _, item := range items {
+		var obj et.Json
+		err = json.Unmarshal([]byte(item), &obj)
+		if err != nil {
+			return result, err
+		}
+
+		result = append(result, obj)
+	}
+
+	return result, nil
+}
+
+/**
+* ObjetSet
+* @params name string, key string, val []byte
+* @return error
+**/
+func ObjetSet(name string, key string, obj et.Json) error {
+	val := obj.ToString()
+	return CollectionPut(name, key, val)
+}
+
+/**
+* ObjetGet
+* @params name string, key string, v any
+* @return error
+**/
+func ObjetGet(name, key string) (et.Json, error) {
+	scr, err := CollectionFind(name, key)
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	var result et.Json
+	err = json.Unmarshal([]byte(scr), &result)
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	return result, nil
+}
+
+/**
+* ObjetDelete
+* @params name string, key string
+* @return error
+**/
+func ObjetDelete(name, key string) error {
+	return CollectionDelete(name, key)
 }
 
 /**
@@ -511,10 +571,10 @@ func GetItems(key string) (et.Items, error) {
 }
 
 /**
-* HandlerAll
+* HttpAll
 * @params w http.ResponseWriter, r *http.Request
 **/
-func HandlerAll(w http.ResponseWriter, r *http.Request) {
+func HttpAll(w http.ResponseWriter, r *http.Request) {
 	query := response.GetQuery(r)
 	search := query.Str("search")
 	page := query.ValInt(1, "page")
@@ -530,10 +590,10 @@ func HandlerAll(w http.ResponseWriter, r *http.Request) {
 }
 
 /**
-* HandlerGet
+* HttpGet
 * @params w http.ResponseWriter, r *http.Request
 **/
-func HandlerGet(w http.ResponseWriter, r *http.Request) {
+func HttpGet(w http.ResponseWriter, r *http.Request) {
 	query := response.GetQuery(r)
 	key := query.Str("key")
 
@@ -547,10 +607,10 @@ func HandlerGet(w http.ResponseWriter, r *http.Request) {
 }
 
 /**
-* HandlerDelete
+* HttpDelete
 * @params w http.ResponseWriter, r *http.Request
 **/
-func HandlerDelete(w http.ResponseWriter, r *http.Request) {
+func HttpDelete(w http.ResponseWriter, r *http.Request) {
 	query := response.GetQuery(r)
 	key := query.Str("key")
 

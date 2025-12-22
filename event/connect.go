@@ -39,10 +39,10 @@ func ConnectTo(host, user, password string) (*Conn, error) {
 	logs.Logf("NATS", `Connected host:%s`, host)
 
 	return &Conn{
-		id:              utility.UUID(),
-		Conn:            client,
-		eventCreatedSub: map[string]*nats.Subscription{},
-		mutex:           &sync.RWMutex{},
-		storage:         []string{},
+		id:      utility.UUID(),
+		Conn:    client,
+		events:  map[string]*nats.Subscription{},
+		mutex:   &sync.RWMutex{},
+		storage: []string{},
 	}, nil
 }

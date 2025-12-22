@@ -12,6 +12,7 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/strs"
+	"github.com/cgalvisleon/et/utility"
 )
 
 /**
@@ -83,16 +84,6 @@ func Set(key string, value interface{}) interface{} {
 func Get(key string, defaultValue interface{}) interface{} {
 	key = strs.Uppcase(key)
 	result := envar.Get(key, defaultValue)
-	if map[string]bool{
-		"SECRETS":   true,
-		"PASSWORDS": true,
-		"PASS":      true,
-	}[key] {
-		str := fmt.Sprintf("%v", result)
-		encoded, _ := base64.StdEncoding.DecodeString(str)
-		return string(encoded)
-	}
-
 	return result
 }
 
@@ -104,6 +95,22 @@ func Get(key string, defaultValue interface{}) interface{} {
 func GetStr(key string, defaultValue string) string {
 	val := Get(key, defaultValue)
 	return fmt.Sprintf("%v", val)
+}
+
+/**
+* GetPassword
+* @param key string, defaultValue string
+* @return string
+**/
+func GetPassword(key string, defaultValue string) (string, error) {
+	result := GetStr(key, defaultValue)
+	str := fmt.Sprintf("%v", result)
+	result, err := utility.FromBase64(str)
+	if err != nil {
+		return "", err
+	}
+
+	return result, nil
 }
 
 /**

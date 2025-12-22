@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/et"
 	v1 "github.com/cgalvisleon/et/ettp/v1"
 	"github.com/cgalvisleon/et/logs"
 )
@@ -15,12 +16,49 @@ type Storage struct {
 	Key     string
 }
 
+/**
+* NewStorage
+* @param s *Server
+* @return *Storage
+**/
 func NewStorage(s *Server) *Storage {
 	return &Storage{
 		Solvers: s.Solvers,
 		Version: s.Version,
 		Key:     fmt.Sprintf("%s-%s", s.Name, s.Version),
 	}
+}
+
+/**
+* Serialize
+* @return ([]byte, error)
+**/
+func (s *Storage) Serialize() ([]byte, error) {
+	bt, err := json.Marshal(s)
+	if err != nil {
+		return nil, err
+	}
+
+	return bt, nil
+}
+
+/**
+* ToJson
+* @return et.Json
+**/
+func (s *Storage) ToJson() et.Json {
+	bt, err := s.Serialize()
+	if err != nil {
+		return et.Json{}
+	}
+
+	var result et.Json
+	err = json.Unmarshal(bt, &result)
+	if err != nil {
+		return et.Json{}
+	}
+
+	return result
 }
 
 /**

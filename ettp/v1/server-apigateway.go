@@ -28,7 +28,7 @@ func (s *Server) mountApiGatewayFunc() {
 	s.Private().Get("/packages", s.getPakages, s.Name)
 	s.Private().Put("/reset", s.reset, s.Name)
 	/* RPC */
-	s.Private().Get("/rpc", jrpc.ListRouters, s.Name)
+	s.Private().Get("/rpc", jrpc.HttpListRouters, s.Name)
 	s.Private().Post("/rpc", jrpc.HttpCalcItem, s.Name)
 	/* Token */
 	production := config.App.Production
@@ -127,7 +127,6 @@ func (s *Server) upsetRouter(w http.ResponseWriter, r *http.Request) {
 	for i := 0; i < n; i++ {
 		item := body[i]
 		private := item.Bool("private")
-		id := item.ValStr("", "id")
 		method := item.Str("method")
 		path := item.Str("path")
 		resolve := item.Str("resolve")
@@ -136,7 +135,7 @@ func (s *Server) upsetRouter(w http.ResponseWriter, r *http.Request) {
 		excludeHeader := item.ArrayStr("exclude_header")
 		packageName := item.Str("package_name")
 		saved := i == n-1
-		router, err := s.SetRouter(private, id, method, path, resolve, header, tpHeader, excludeHeader, packageName, saved)
+		router, err := s.SetRouter(private, method, path, resolve, header, tpHeader, excludeHeader, packageName, saved)
 		if err != nil {
 			metric.HTTPError(w, r, http.StatusBadRequest, err.Error())
 			return

@@ -12,18 +12,18 @@ type Iterate struct {
 }
 
 /**
-* Start
+* start
 * @param tag string
 **/
-func (s *Iterate) Start(tag string) {
+func (s *Iterate) start(tag string) {
 	s.iterates[tag] = timezone.NowTime()
 }
 
 /**
-* Segment
+* segment
 * @param tag string, msg string, isDebug bool
 **/
-func (s *Iterate) Segment(tag, msg string, isDebug bool) {
+func (s *Iterate) segment(tag, msg string, isDebug bool) {
 	if isDebug {
 		return
 	}
@@ -44,18 +44,10 @@ func (s *Iterate) Segment(tag, msg string, isDebug bool) {
 }
 
 /**
-* End
+* end
 * @param tag string, msg string, isDebug bool
 **/
-func (s *Iterate) End(tag, msg string, isDebug bool) {
-	s.Segment(tag, msg, isDebug)
+func (s *Iterate) end(tag, msg string, isDebug bool) {
+	s.segment(tag, msg, isDebug)
 	delete(s.iterates, tag)
-}
-
-var iterate *Iterate
-
-func init() {
-	iterate = &Iterate{
-		iterates: make(map[string]time.Time),
-	}
 }

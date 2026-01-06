@@ -21,15 +21,17 @@ func Start(tag string) {
 /**
 * Segment
 * @param tag string, msg string, isDebug bool
+* @return time.Duration
 **/
-func Segment(tag, msg string, isDebug bool) {
-	iterate.segment(tag, msg, isDebug)
+func Segment(tag, msg string, isDebug bool) time.Duration {
+	return iterate.segment(tag, msg, isDebug)
 }
 
 /**
 * End
 * @param tag string, msg string, isDebug bool
+* @return time.Duration
 **/
-func End(tag, msg string, isDebug bool) {
-	iterate.end(tag, msg, isDebug)
+func End(tag, msg string, isDebug bool) time.Duration {
+	return iterate.end(tag, msg, isDebug)
 }

@@ -22,15 +22,16 @@ func (s *Iterate) start(tag string) {
 /**
 * segment
 * @param tag string, msg string, isDebug bool
+* @return time.Duration
 **/
-func (s *Iterate) segment(tag, msg string, isDebug bool) {
+func (s *Iterate) segment(tag, msg string, isDebug bool) time.Duration {
 	if isDebug {
-		return
+		return 0
 	}
 
 	start, ok := s.iterates[tag]
 	if !ok {
-		return
+		return 0
 	}
 
 	end := timezone.NowTime()
@@ -41,13 +42,17 @@ func (s *Iterate) segment(tag, msg string, isDebug bool) {
 	} else {
 		logs.Infof(`%s:elapsed: %d | %s`, tag, elapsed.Milliseconds(), msg)
 	}
+
+	return elapsed
 }
 
 /**
 * end
 * @param tag string, msg string, isDebug bool
+* @return time.Duration
 **/
-func (s *Iterate) end(tag, msg string, isDebug bool) {
-	s.segment(tag, msg, isDebug)
+func (s *Iterate) end(tag, msg string, isDebug bool) time.Duration {
+	result := s.segment(tag, msg, isDebug)
 	delete(s.iterates, tag)
+	return result
 }

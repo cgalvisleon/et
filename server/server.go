@@ -23,7 +23,6 @@ type Ettp struct {
 	http    *http.Server
 	port    int
 	rpc     int
-	stdout  bool
 	pidFile string
 	appName string
 	onClose func()
@@ -38,7 +37,6 @@ func New(appName string) (*Ettp, error) {
 	result := &Ettp{
 		port:    envar.GetInt("PORT", 3000),
 		rpc:     envar.GetInt("RPC_PORT", 4200),
-		stdout:  envar.GetBool("STDOUT", false),
 		pidFile: ".pid",
 		appName: appName,
 	}
@@ -93,6 +91,18 @@ func (s *Ettp) OnClose(onClose func()) {
 }
 
 /**
+* Use
+* @param middlewares ...func(http.Handler) http.Handler
+**/
+func (s *Ettp) Use(middlewares ...func(http.Handler) http.Handler) {
+	if s.Mux == nil {
+		return
+	}
+
+	s.Mux.Use(middlewares...)
+}
+
+/**
 * Mount
 * @param pattern string, handler http.Handler
 **/
@@ -105,9 +115,9 @@ func (s *Ettp) Mount(pattern string, handler http.Handler) {
 }
 
 /**
-* StartHttpServer
+* startHttpServer
 **/
-func (s *Ettp) StartHttpServer() {
+func (s *Ettp) startHttpServer() {
 	if s.http == nil {
 		return
 	}
@@ -122,15 +132,15 @@ func (s *Ettp) StartHttpServer() {
 /**
 * Background
 **/
-func (s *Ettp) Background() {
-	s.StartHttpServer()
+func (s *Ettp) background() {
+	s.startHttpServer()
 }
 
 /**
 * Start
 **/
 func (s *Ettp) Start() {
-	go s.Background()
+	go s.background()
 	s.banner()
 
 	utility.AppWait()

@@ -1,19 +1,35 @@
 package utility
 
 import (
+	"fmt"
 	"regexp"
 
+	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/strs"
 )
 
 /**
-* Validate
+* validate
 * @param expr, value string
 * @return bool
 **/
-func Validate(expr, val string) bool {
+func validate(expr, val string) bool {
 	re := regexp.MustCompile(expr)
 	return re.MatchString(val)
+}
+
+/**
+* Validate
+* @param keys []string
+* @return error
+**/
+func Validate(keys []string) error {
+	for _, key := range keys {
+		if key == "" {
+			return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, key)
+		}
+	}
+	return nil
 }
 
 /**
@@ -84,7 +100,7 @@ func ValidNum(val float64, notIn []float64) bool {
 * @return bool
 **/
 func ValidName(val string) bool {
-	return Validate(`^[a-zA-Z\s\']+`, val)
+	return validate(`^[a-zA-Z\s\']+`, val)
 }
 
 /**
@@ -93,7 +109,7 @@ func ValidName(val string) bool {
 * @return bool
 **/
 func ValidEmail(val string) bool {
-	return Validate(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`, val)
+	return validate(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`, val)
 }
 
 /**
@@ -102,7 +118,7 @@ func ValidEmail(val string) bool {
 * @return bool
 **/
 func ValidPhone(val string) bool {
-	return Validate(`^\d{10}$`, val)
+	return validate(`^\d{10}$`, val)
 }
 
 /**
@@ -111,7 +127,7 @@ func ValidPhone(val string) bool {
 * @return bool
 **/
 func ValidUUID(val string) bool {
-	return Validate(`^(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`, val)
+	return validate(`^(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`, val)
 }
 
 /**
@@ -121,7 +137,7 @@ func ValidUUID(val string) bool {
 **/
 
 func ValidCode(val string) bool {
-	return Validate(`^\d{6,}$`, val)
+	return validate(`^\d{6,}$`, val)
 }
 
 /**
@@ -130,5 +146,5 @@ func ValidCode(val string) bool {
 * @return bool
 **/
 func ValidWord(word string) bool {
-	return Validate(`^[a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]+$`, word)
+	return validate(`^[a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]+$`, word)
 }

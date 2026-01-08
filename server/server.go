@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
@@ -26,7 +26,6 @@ type Ettp struct {
 	stdout  bool
 	pidFile string
 	appName string
-	version string
 	onClose func()
 }
 
@@ -36,22 +35,12 @@ type Ettp struct {
 * @return *Ettp, error
 **/
 func New(appName string) (*Ettp, error) {
-	err := config.Validate([]string{
-		"PORT",
-		"RPC_PORT",
-		"VERSION",
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	result := Ettp{
-		port:    config.GetInt("PORT", 3000),
-		rpc:     config.GetInt("RPC_PORT", 4200),
-		stdout:  config.GetBool("STDOUT", false),
+	result := &Ettp{
+		port:    envar.GetInt("PORT", 3000),
+		rpc:     envar.GetInt("RPC_PORT", 4200),
+		stdout:  envar.GetBool("STDOUT", false),
 		pidFile: ".pid",
 		appName: appName,
-		version: config.GetStr("VERSION", "0.0.1"),
 	}
 
 	if result.port != 0 {
@@ -71,7 +60,7 @@ func New(appName string) (*Ettp, error) {
 		result.http = serv
 	}
 
-	return &result, nil
+	return result, nil
 }
 
 /**

@@ -2,6 +2,8 @@ package stdrout
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"runtime"
 	"slices"
 	"strings"
@@ -9,38 +11,52 @@ import (
 	"github.com/cgalvisleon/et/timezone"
 )
 
-var Reset = "\033[97m"
-var Black = "\033[30m"
-var Red = "\033[31m"
-var Green = "\033[32m"
-var Yellow = "\033[33m"
-var Blue = "\033[34m"
-var Purple = "\033[35m"
-var Cyan = "\033[36m"
-var Gray = "\033[37m"
-var White = "\033[97m"
-var colors = map[string]string{
-	"Reset":  Reset,
-	"Black":  Black,
-	"Red":    Red,
-	"Green":  Green,
-	"Yellow": Yellow,
-	"Blue":   Blue,
-	"Purple": Purple,
-	"Cyan":   Cyan,
-	"Gray":   Gray,
-	"White":  White,
-	Reset:    Reset,
-	Black:    Black,
-	Red:      Red,
-	Green:    Green,
-	Yellow:   Yellow,
-	Blue:     Blue,
-	Purple:   Purple,
-	Cyan:     Cyan,
-	Gray:     Gray,
-	White:    White,
-}
+var (
+	Reset  = "\033[97m"
+	Black  = "\033[30m"
+	Red    = "\033[31m"
+	Green  = "\033[32m"
+	Yellow = "\033[33m"
+	Blue   = "\033[34m"
+	Purple = "\033[35m"
+	Cyan   = "\033[36m"
+	Gray   = "\033[37m"
+	White  = "\033[97m"
+	// Bytes
+	BBlack   = []byte{'\033', '[', '3', '0', ';', '1', 'm'}
+	BRed     = []byte{'\033', '[', '3', '1', ';', '1', 'm'}
+	BGreen   = []byte{'\033', '[', '3', '2', ';', '1', 'm'}
+	BYellow  = []byte{'\033', '[', '3', '3', ';', '1', 'm'}
+	BBlue    = []byte{'\033', '[', '3', '4', ';', '1', 'm'}
+	BPurple  = []byte{'\033', '[', '3', '5', ';', '1', 'm'}
+	BCyan    = []byte{'\033', '[', '3', '6', ';', '1', 'm'}
+	BWhite   = []byte{'\033', '[', '3', '7', ';', '1', 'm'}
+	BReset   = []byte{'\033', '[', '9', '7', 'm'}
+	IsTTY    bool
+	useColor = true
+	colors   = map[string]string{
+		"Reset":  Reset,
+		"Black":  Black,
+		"Red":    Red,
+		"Green":  Green,
+		"Yellow": Yellow,
+		"Blue":   Blue,
+		"Purple": Purple,
+		"Cyan":   Cyan,
+		"Gray":   Gray,
+		"White":  White,
+		Reset:    Reset,
+		Black:    Black,
+		Red:      Red,
+		Green:    Green,
+		Yellow:   Yellow,
+		Blue:     Blue,
+		Purple:   Purple,
+		Cyan:     Cyan,
+		Gray:     Gray,
+		White:    White,
+	}
+)
 
 func init() {
 	if runtime.GOOS == "windows" {
@@ -54,6 +70,12 @@ func init() {
 		Cyan = ""
 		Gray = ""
 		White = ""
+	}
+
+	fi, err := os.Stdout.Stat()
+	if err == nil {
+		m := os.ModeDevice | os.ModeCharDevice
+		IsTTY = fi.Mode()&m == m
 	}
 }
 
@@ -82,6 +104,21 @@ func Color(s *string, color string, format string, args ...interface{}) *string 
 	}
 
 	return s
+}
+
+/**
+* CW
+* @param w io.Writer, color []byte, format string, args ...interface{}
+* @return string
+**/
+func CW(w io.Writer, color []byte, format string, args ...interface{}) {
+	if IsTTY && useColor {
+		w.Write(color)
+	}
+	fmt.Fprintf(w, format, args...)
+	if IsTTY && useColor {
+		w.Write([]byte(Reset))
+	}
 }
 
 /**

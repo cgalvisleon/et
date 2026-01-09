@@ -57,11 +57,12 @@ type prettyStack struct {
 
 func (s prettyStack) parse(debugStack []byte, rvr interface{}) ([]byte, error) {
 	var err error
-	var w *string
-	lg.Color(w, lg.Red, "\n")
-	lg.Color(w, lg.Cyan, " panic: ")
-	lg.Color(w, lg.Blue, "%v", rvr)
-	lg.Color(w, lg.White, "\n \n")
+	buf := &bytes.Buffer{}
+
+	lg.CW(buf, lg.BRed, "\n")
+	lg.CW(buf, lg.BCyan, " panic: ")
+	lg.CW(buf, lg.BBlue, "%v", rvr)
+	lg.CW(buf, lg.BWhite, "\n \n")
 
 	// process debug stack info
 	stack := strings.Split(string(debugStack), "\n")
@@ -91,9 +92,9 @@ func (s prettyStack) parse(debugStack []byte, rvr interface{}) ([]byte, error) {
 	}
 
 	for _, l := range lines {
-		fmt.Sprintf("%s %s", w, l)
+		fmt.Fprintf(buf, "%s", l)
 	}
-	return []byte(*w), nil
+	return buf.Bytes(), nil
 }
 
 func (s prettyStack) decorateLine(line string, num int) (string, error) {

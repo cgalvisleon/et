@@ -108,18 +108,19 @@ func (l *DefaultLogFormatter) NewLogEntry(r *http.Request) LogEntry {
 		buf:                 &bytes.Buffer{},
 	}
 
+	var w *string
 	reqID := GetReqID(r.Context())
 	if reqID != "" {
-		lg.CW(entry.buf, lg.NYellow, "[%s] ", reqID)
+		lg.Color(w, lg.Yellow, "[%s] ", reqID)
 	}
-	lg.CW(entry.buf, lg.NCyan, "")
-	lg.CW(entry.buf, lg.BMagenta, "[%s]: ", r.Method)
+	lg.Color(w, lg.Cyan, "")
+	lg.Color(w, lg.Purple, "[%s]: ", r.Method)
 
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"
 	}
-	lg.CW(entry.buf, lg.NCyan, "%s://%s%s %s ", scheme, r.Host, r.RequestURI, r.Proto)
+	lg.Color(w, lg.Cyan, "%s://%s%s %s ", scheme, r.Host, r.RequestURI, r.Proto)
 
 	entry.buf.WriteString("from ")
 	entry.buf.WriteString(r.RemoteAddr)
@@ -135,28 +136,29 @@ type defaultLogEntry struct {
 }
 
 func (l *defaultLogEntry) Write(status, bytes int, header http.Header, elapsed time.Duration, extra interface{}) {
+	var w *string
 	switch {
 	case status < 200:
-		lg.CW(l.buf, lg.BBlue, "%03d", status)
+		lg.Color(w, lg.Green, "%03d", status)
 	case status < 300:
-		lg.CW(l.buf, lg.BGreen, "%03d", status)
+		lg.Color(w, lg.Green, "%03d", status)
 	case status < 400:
-		lg.CW(l.buf, lg.BCyan, "%03d", status)
+		lg.Color(w, lg.Cyan, "%03d", status)
 	case status < 500:
-		lg.CW(l.buf, lg.BYellow, "%03d", status)
+		lg.Color(w, lg.Yellow, "%03d", status)
 	default:
-		lg.CW(l.buf, lg.BRed, "%03d", status)
+		lg.Color(w, lg.Red, "%03d", status)
 	}
 
-	lg.CW(l.buf, lg.BBlue, " %dB", bytes)
+	lg.Color(w, lg.Blue, " %dB", bytes)
 
 	l.buf.WriteString(" in ")
 	if elapsed < 500*time.Millisecond {
-		lg.CW(l.buf, lg.NGreen, "%s", elapsed)
+		lg.Color(w, lg.Green, "%s", elapsed)
 	} else if elapsed < 5*time.Second {
-		lg.CW(l.buf, lg.NYellow, "%s", elapsed)
+		lg.Color(w, lg.Yellow, "%s", elapsed)
 	} else {
-		lg.CW(l.buf, lg.NRed, "%s", elapsed)
+		lg.Color(w, lg.Red, "%s", elapsed)
 	}
 
 	l.Logger.Print(l.buf.String())

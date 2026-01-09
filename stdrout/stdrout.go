@@ -9,7 +9,8 @@ import (
 	"github.com/cgalvisleon/et/timezone"
 )
 
-var Reset = "\033[0m"
+var Reset = "\033[97m"
+var Black = "\033[30m"
 var Red = "\033[31m"
 var Green = "\033[32m"
 var Yellow = "\033[33m"
@@ -18,11 +19,33 @@ var Purple = "\033[35m"
 var Cyan = "\033[36m"
 var Gray = "\033[37m"
 var White = "\033[97m"
-var useColor = true
+var colors = map[string]string{
+	"Reset":  Reset,
+	"Black":  Black,
+	"Red":    Red,
+	"Green":  Green,
+	"Yellow": Yellow,
+	"Blue":   Blue,
+	"Purple": Purple,
+	"Cyan":   Cyan,
+	"Gray":   Gray,
+	"White":  White,
+	Reset:    Reset,
+	Black:    Black,
+	Red:      Red,
+	Green:    Green,
+	Yellow:   Yellow,
+	Blue:     Blue,
+	Purple:   Purple,
+	Cyan:     Cyan,
+	Gray:     Gray,
+	White:    White,
+}
 
 func init() {
 	if runtime.GOOS == "windows" {
 		Reset = ""
+		Black = ""
 		Red = ""
 		Green = ""
 		Yellow = ""
@@ -31,8 +54,34 @@ func init() {
 		Cyan = ""
 		Gray = ""
 		White = ""
-		useColor = false
 	}
+}
+
+/**
+* Color
+* @param s string, color string, format string, args ...interface{}
+* @return string
+**/
+func Color(s *string, color string, format string, args ...interface{}) *string {
+	result := ""
+	printColor := colors[color]
+	if printColor == Reset {
+		result = Reset + fmt.Sprintf(format, args...)
+	} else {
+		result = Reset + printColor + fmt.Sprintf(format, args...)
+	}
+
+	if s == nil {
+		return &result
+	}
+
+	if *s != "" {
+		*s += result + Reset
+	} else {
+		*s = result + Reset
+	}
+
+	return s
 }
 
 /**
@@ -46,27 +95,11 @@ func Printl(kind string, color string, args ...any) string {
 	now := timezone.Now()
 	var result string
 
-	switch color {
-	case "Reset":
-		result = now + Purple + fmt.Sprintf(" [%s]: ", kind) + Reset + message + Reset
-	case "Red":
-		result = now + Purple + fmt.Sprintf(" [%s]: ", kind) + Reset + Red + message + Reset
-	case "Green":
-		result = now + Purple + fmt.Sprintf(" [%s]: ", kind) + Reset + Green + message + Reset
-	case "Yellow":
-		result = now + Purple + fmt.Sprintf(" [%s]: ", kind) + Reset + Yellow + message + Reset
-	case "Blue":
-		result = now + Purple + fmt.Sprintf(" [%s]: ", kind) + Reset + Blue + message + Reset
-	case "Purple":
-		result = now + Purple + fmt.Sprintf(" [%s]: ", kind) + Reset + Purple + message + Reset
-	case "Cyan":
-		result = now + Purple + fmt.Sprintf(" [%s]: ", kind) + Reset + Cyan + message + Reset
-	case "Gray":
-		result = now + Purple + fmt.Sprintf(" [%s]: ", kind) + Reset + Gray + message + Reset
-	case "White":
-		result = now + Purple + fmt.Sprintf(" [%s]: ", kind) + Reset + White + message + Reset
-	default:
-		result = now + Purple + fmt.Sprintf(" [%s]: ", kind) + Reset + Green + message + Reset
+	printColor := colors[color]
+	if printColor == Reset {
+		result = Reset + now + Purple + fmt.Sprintf(" [%s]: ", kind) + Reset + message + Reset
+	} else {
+		result = Reset + now + Purple + fmt.Sprintf(" [%s]: ", kind) + Reset + printColor + message + Reset
 	}
 
 	println(result)

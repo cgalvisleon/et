@@ -11,7 +11,7 @@ import (
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/dimiro1/banner"
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/mattn/go-colorable"
 	"github.com/rs/cors"
 )
@@ -159,8 +159,20 @@ func (s *Ettp) background() {
 func (s *Ettp) Start() {
 	go s.background()
 	s.banner()
+	s.printRoutes()
 
 	utility.AppWait()
 
 	s.Close()
+}
+
+/**
+* printRoutes
+**/
+func (s *Ettp) printRoutes() {
+	logs.Log(packageName, "📌 Rutas cargadas:")
+	chi.Walk(s.Mux, func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+		logs.Logf(packageName, "%s:%s", method, route)
+		return nil
+	})
 }

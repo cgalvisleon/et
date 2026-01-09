@@ -326,45 +326,46 @@ func (m *Metrics) CallMetrics() Telemetry {
 * @return et.Json
 **/
 func (m *Metrics) println() et.Json {
-	w := lg.Color(lg.NMagenta, " [%s]: ", m.Method)
-	lg.CW(w, lg.NCyan, "%s", m.Path)
-	lg.CW(w, lg.NWhite, " from:%s", m.RemoteAddr)
+	w := lg.Color(nil, lg.Reset, timezone.Now())
+	lg.Color(w, lg.Purple, " [%s]: ", m.Method)
+	lg.Color(w, lg.Cyan, "%s", m.Path)
+	lg.Color(w, lg.White, " from:%s", m.RemoteAddr)
 	if m.StatusCode >= 500 {
-		lg.CW(w, lg.NRed, " - %s", http.StatusText(m.StatusCode))
+		lg.Color(w, lg.Red, " - %s", http.StatusText(m.StatusCode))
 	} else if m.StatusCode >= 400 {
-		lg.CW(w, lg.NYellow, " - %s", http.StatusText(m.StatusCode))
+		lg.Color(w, lg.Yellow, " - %s", http.StatusText(m.StatusCode))
 	} else if m.StatusCode >= 300 {
-		lg.CW(w, lg.NCyan, " - %s", http.StatusText(m.StatusCode))
+		lg.Color(w, lg.Cyan, " - %s", http.StatusText(m.StatusCode))
 	} else {
-		lg.CW(w, lg.NGreen, " - %s", http.StatusText(m.StatusCode))
+		lg.Color(w, lg.Green, " - %s", http.StatusText(m.StatusCode))
 	}
 	size := float64(m.ResponseSize) / 1024
-	lg.CW(w, lg.NCyan, " Size:%.2f%s", size, "KB")
-	lg.CW(w, lg.NWhite, " in ")
+	lg.Color(w, lg.Cyan, " Size:%.2f%s", size, "KB")
+	lg.Color(w, lg.White, " in ")
 	limitLatency := time.Duration(config.GetInt("LATENCY_LIMIT", 1000)) * time.Millisecond
 	if m.Latency < limitLatency {
-		lg.CW(w, lg.NGreen, " Latency:%s", m.Latency)
+		lg.Color(w, lg.Green, "Latency:%s", m.Latency)
 	} else if m.Latency < 5*time.Second {
-		lg.CW(w, lg.NYellow, " Latency:%s", m.Latency)
+		lg.Color(w, lg.Yellow, "Latency:%s", m.Latency)
 	} else {
-		lg.CW(w, lg.NRed, " Latency:%s", m.Latency)
+		lg.Color(w, lg.Red, "Latency:%s", m.Latency)
 	}
-	lg.CW(w, lg.NWhite, " Response:%s", m.ResponseTime)
+	lg.Color(w, lg.White, " Response:%s", m.ResponseTime)
 	m.metrics = m.CallMetrics()
 	requestsLimit := float64(m.metrics.RequestsLimit) * 0.6
 	if m.metrics.RequestsPerSecond > m.metrics.RequestsLimit {
-		lg.CW(w, lg.NRed, " - Request:S:%vM:%vH:%vD:%vL:%v", m.metrics.RequestsPerSecond, m.metrics.RequestsPerMinute, m.metrics.RequestsPerHour, m.metrics.RequestsPerDay, m.metrics.RequestsLimit)
+		lg.Color(w, lg.Red, " - Request:S:%vM:%vH:%vD:%vL:%v", m.metrics.RequestsPerSecond, m.metrics.RequestsPerMinute, m.metrics.RequestsPerHour, m.metrics.RequestsPerDay, m.metrics.RequestsLimit)
 	} else if m.metrics.RequestsPerSecond > int64(requestsLimit) {
-		lg.CW(w, lg.NYellow, " - Request:S:%vM:%vH:%vD:%vL:%v", m.metrics.RequestsPerSecond, m.metrics.RequestsPerMinute, m.metrics.RequestsPerHour, m.metrics.RequestsPerDay, m.metrics.RequestsLimit)
+		lg.Color(w, lg.Yellow, " - Request:S:%vM:%vH:%vD:%vL:%v", m.metrics.RequestsPerSecond, m.metrics.RequestsPerMinute, m.metrics.RequestsPerHour, m.metrics.RequestsPerDay, m.metrics.RequestsLimit)
 	} else {
-		lg.CW(w, lg.NGreen, " - Request:S:%vM:%vH:%vD:%vL:%v", m.metrics.RequestsPerSecond, m.metrics.RequestsPerMinute, m.metrics.RequestsPerHour, m.metrics.RequestsPerDay, m.metrics.RequestsLimit)
+		lg.Color(w, lg.Green, " - Request:S:%vM:%vH:%vD:%vL:%v", m.metrics.RequestsPerSecond, m.metrics.RequestsPerMinute, m.metrics.RequestsPerHour, m.metrics.RequestsPerDay, m.metrics.RequestsLimit)
 	}
-	lg.CW(w, lg.NCyan, " [ServiceId]:%s", m.ServiceId)
-	lg.CW(w, lg.NCyan, " [AppName]:%s", m.AppName)
-	lg.Println(w)
+	lg.Color(w, lg.Cyan, " [ServiceId]:%s", m.ServiceId)
+	lg.Color(w, lg.White, " [AppName]:%s", m.AppName)
+	println(*w)
 
 	m.setRequest(true)
-	PushTelemetryLog(w.String())
+	PushTelemetryLog(*w)
 
 	return m.ToJson()
 }

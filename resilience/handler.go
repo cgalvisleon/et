@@ -10,7 +10,7 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/response"
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 )
 
 var resilience map[string]*Instance

@@ -57,12 +57,11 @@ type prettyStack struct {
 
 func (s prettyStack) parse(debugStack []byte, rvr interface{}) ([]byte, error) {
 	var err error
-	buf := &bytes.Buffer{}
-
-	lg.CW(buf, lg.BRed, "\n")
-	lg.CW(buf, lg.BCyan, " panic: ")
-	lg.CW(buf, lg.BBlue, "%v", rvr)
-	lg.CW(buf, lg.BWhite, "\n \n")
+	var w *string
+	lg.Color(w, lg.Red, "\n")
+	lg.Color(w, lg.Cyan, " panic: ")
+	lg.Color(w, lg.Blue, "%v", rvr)
+	lg.Color(w, lg.White, "\n \n")
 
 	// process debug stack info
 	stack := strings.Split(string(debugStack), "\n")
@@ -92,9 +91,9 @@ func (s prettyStack) parse(debugStack []byte, rvr interface{}) ([]byte, error) {
 	}
 
 	for _, l := range lines {
-		fmt.Fprintf(buf, "%s", l)
+		fmt.Sprintf("%s %s", w, l)
 	}
-	return buf.Bytes(), nil
+	return []byte(*w), nil
 }
 
 func (s prettyStack) decorateLine(line string, num int) (string, error) {
@@ -135,19 +134,20 @@ func (s prettyStack) decorateFuncCallLine(line string, num int) (string, error) 
 		pkg += method[0:idx]
 		method = method[idx:]
 	}
-	pkgColor := lg.NYellow
-	methodColor := lg.BGreen
+	var w *string
+	pkgColor := lg.Yellow
+	methodColor := lg.Green
 
 	if num == 0 {
-		lg.CW(buf, lg.BRed, " -> ")
-		pkgColor = lg.BMagenta
-		methodColor = lg.BRed
+		lg.Color(w, lg.Red, " -> ")
+		pkgColor = lg.Purple
+		methodColor = lg.Red
 	} else {
-		lg.CW(buf, lg.BWhite, "    ")
+		lg.Color(w, lg.White, "    ")
 	}
-	lg.CW(buf, pkgColor, "%s", pkg)
-	lg.CW(buf, methodColor, "%s\n", method)
-	lg.CW(buf, lg.BBlack, "%s", addr)
+	lg.Color(w, pkgColor, "%s", pkg)
+	lg.Color(w, methodColor, "%s\n", method)
+	lg.Color(w, lg.Black, "%s", addr)
 
 	return buf.String(), nil
 }
@@ -170,23 +170,24 @@ func (s prettyStack) decorateSourceLine(line string, num int) (string, error) {
 	if idx > 0 {
 		lineno = lineno[0:idx]
 	}
-	fileColor := lg.BCyan
-	lineColor := lg.BGreen
+	var w *string
+	fileColor := lg.Cyan
+	lineColor := lg.Green
 
 	if num == 1 {
-		lg.CW(buf, lg.BRed, " ->   ")
-		fileColor = lg.BRed
-		lineColor = lg.BMagenta
+		lg.Color(w, lg.Red, " ->   ")
+		fileColor = lg.Red
+		lineColor = lg.Purple
 	} else {
-		lg.CW(buf, lg.BWhite, "      ")
+		lg.Color(w, lg.White, "      ")
 	}
-	lg.CW(buf, lg.BWhite, "%s", dir)
-	lg.CW(buf, fileColor, "%s", file)
-	lg.CW(buf, lineColor, "%s", lineno)
+	lg.Color(w, lg.White, "%s", dir)
+	lg.Color(w, fileColor, "%s", file)
+	lg.Color(w, lineColor, "%s", lineno)
 	if num == 1 {
-		lg.CW(buf, lg.BWhite, "\n")
+		lg.Color(w, lg.White, "\n")
 	}
-	lg.CW(buf, lg.BWhite, "\n")
+	lg.Color(w, lg.White, "\n")
 
 	return buf.String(), nil
 }

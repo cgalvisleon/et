@@ -9,10 +9,6 @@ import (
 
 var emiter *EventEmiter
 
-func init() {
-	emiter = newEventEmiter()
-}
-
 type Handler func(message Message)
 
 type EventEmiter struct {
@@ -86,7 +82,7 @@ func (s *EventEmiter) emiter(channel string, data et.Json) {
 **/
 func On(channel string, handler Handler) {
 	if emiter == nil {
-		return
+		emiter = newEventEmiter()
 	}
 
 	emiter.on(channel, handler)
@@ -98,7 +94,7 @@ func On(channel string, handler Handler) {
 **/
 func Emiter(channel string, data et.Json) {
 	if emiter == nil {
-		return
+		emiter = newEventEmiter()
 	}
 
 	emiter.emiter(channel, data)

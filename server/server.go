@@ -43,9 +43,9 @@ func New(appName string) (*Ettp, error) {
 
 	if result.port != 0 {
 		result.Mux = chi.NewRouter()
-		result.Mux.Use(middleware.Logger)
-		result.Mux.Use(middleware.Recoverer)
-		result.Mux.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		result.Use(middleware.Logger)
+		result.Use(middleware.Recoverer)
+		result.NotFound(func(w http.ResponseWriter, r *http.Request) {
 			response.HTTPError(w, r, http.StatusNotFound, "404 Not Found")
 		})
 
@@ -103,6 +103,18 @@ func (s *Ettp) Use(middlewares ...func(http.Handler) http.Handler) {
 }
 
 /**
+* NotFound
+* @param handlerFn http.HandlerFunc
+**/
+func (s *Ettp) NotFound(handlerFn http.HandlerFunc) {
+	if s.Mux == nil {
+		return
+	}
+
+	s.Mux.NotFound(handlerFn)
+}
+
+/**
 * Mount
 * @param pattern string, handler http.Handler
 **/
@@ -117,23 +129,28 @@ func (s *Ettp) Mount(pattern string, handler http.Handler) {
 /**
 * startHttpServer
 **/
-func (s *Ettp) startHttpServer() {
+func (s *Ettp) startHttpServer() error {
 	if s.http == nil {
-		return
+		return nil
 	}
 
 	svr := s.http
 	logs.Logf(packageName, "Running on http://localhost%s", svr.Addr)
 	if err := s.http.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		logs.Logf(packageName, "Http error: %s", err)
+		return err
 	}
+
+	return nil
 }
 
 /**
 * Background
 **/
 func (s *Ettp) background() {
-	s.startHttpServer()
+	if err := s.startHttpServer(); err != nil {
+		logs.Panic(err)
+	}
 }
 
 /**

@@ -30,9 +30,10 @@ type Package struct {
 **/
 func NewPackage(name string, host string, port int) *Package {
 	return &Package{
-		Name: name,
-		Host: host,
-		Port: port,
+		Name:    name,
+		Host:    host,
+		Port:    port,
+		Solvers: make([]*Solver, 0),
 	}
 }
 

@@ -819,6 +819,23 @@ func (s Json) Clone() Json {
 }
 
 /**
+* Select
+* @param keys []string
+* @return Json
+**/
+func (s Json) Select(keys []string) Json {
+	result := Json{}
+	for _, key := range keys {
+		val, ok := s[key]
+		if ok {
+			result[key] = val
+		}
+	}
+
+	return result
+}
+
+/**
 * ArrayJsonToString
 * @param vals []Json
 * @return string

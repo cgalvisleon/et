@@ -1,4 +1,4 @@
-package arg
+package envar
 
 import (
 	"os"
@@ -7,11 +7,11 @@ import (
 )
 
 /**
-* Get
+* ArgStr
 * @param name, defaultVal string
 * @return string, bool
 **/
-func Get(name, defaultVal string) (string, bool) {
+func ArgStr(name, defaultVal string) (string, bool) {
 	for i, arg := range os.Args[1:] {
 		arg = strings.ReplaceAll(arg, "-", "")
 		if arg == strings.ToLower(name) {
@@ -24,12 +24,12 @@ func Get(name, defaultVal string) (string, bool) {
 }
 
 /**
-* GetInt
+* ArgInt
 * @param name, defaultVal int
 * @return int, bool
 **/
-func GetInt(name string, defaultVal int) (int, bool) {
-	val, ok := Get(name, strconv.Itoa(defaultVal))
+func ArgInt(name string, defaultVal int) (int, bool) {
+	val, ok := ArgStr(name, strconv.Itoa(defaultVal))
 	if !ok {
 		return defaultVal, false
 	}
@@ -43,12 +43,13 @@ func GetInt(name string, defaultVal int) (int, bool) {
 }
 
 /**
-* GetInt64
+* ArgInt64
 * @param name, defaultVal int64
 * @return int64, bool
 **/
-func GetInt64(name string, defaultVal int64) (int64, bool) {
-	val, ok := Get(name, strconv.FormatInt(defaultVal, 10))
+func ArgInt64(name string, defaultVal int64) (int64, bool) {
+	s := strconv.FormatInt(defaultVal, 10)
+	val, ok := ArgStr(name, s)
 	if !ok {
 		return defaultVal, false
 	}
@@ -62,12 +63,13 @@ func GetInt64(name string, defaultVal int64) (int64, bool) {
 }
 
 /**
-* GetFloat64
+* ArgFloat64
 * @param name, defaultVal float64
 * @return float64, bool
 **/
-func GetFloat64(name string, defaultVal float64) (float64, bool) {
-	val, ok := Get(name, strconv.FormatFloat(defaultVal, 'f', -1, 64))
+func ArgFloat64(name string, defaultVal float64) (float64, bool) {
+	s := strconv.FormatFloat(defaultVal, 'f', -1, 64)
+	val, ok := ArgStr(name, s)
 	if !ok {
 		return defaultVal, false
 	}
@@ -81,12 +83,13 @@ func GetFloat64(name string, defaultVal float64) (float64, bool) {
 }
 
 /**
-* GetBool
+* ArgBool
 * @param name, defaultVal bool
 * @return bool, bool
 **/
-func GetBool(name string, defaultVal bool) (bool, bool) {
-	val, ok := Get(name, strconv.FormatBool(defaultVal))
+func ArgBool(name string, defaultVal bool) (bool, bool) {
+	s := strconv.FormatBool(defaultVal)
+	val, ok := ArgStr(name, s)
 	if !ok {
 		return defaultVal, false
 	}

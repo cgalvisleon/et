@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cgalvisleon/et/arg"
 	_ "github.com/joho/godotenv/autoload"
 )
 
@@ -30,7 +29,7 @@ func setEnvar(name string, value interface{}) {
 * @return string
 **/
 func SetStrByArg(name, varName, defaultVal string) string {
-	val, ok := arg.Get(name, defaultVal)
+	val, ok := ArgStr(name, defaultVal)
 	if ok {
 		setEnvar(varName, val)
 	}
@@ -44,7 +43,7 @@ func SetStrByArg(name, varName, defaultVal string) string {
 * @return int
 **/
 func SetIntByArg(name, varName string, defaultVal int) int {
-	val, ok := arg.GetInt(name, defaultVal)
+	val, ok := ArgInt(name, defaultVal)
 	if ok {
 		setEnvar(varName, strconv.Itoa(val))
 	}
@@ -58,7 +57,7 @@ func SetIntByArg(name, varName string, defaultVal int) int {
 * @return int64
 **/
 func SetInt64ByArg(name, varName string, defaultVal int64) int64 {
-	val, ok := arg.GetInt64(name, defaultVal)
+	val, ok := ArgInt64(name, defaultVal)
 	if ok {
 		setEnvar(varName, strconv.FormatInt(val, 10))
 	}
@@ -72,7 +71,7 @@ func SetInt64ByArg(name, varName string, defaultVal int64) int64 {
 * @return bool
 **/
 func SetBoolByArg(name, varName string, defaultVal bool) bool {
-	val, ok := arg.GetBool(name, defaultVal)
+	val, ok := ArgBool(name, defaultVal)
 	if ok {
 		setEnvar(varName, strconv.FormatBool(val))
 	}
@@ -122,11 +121,11 @@ func SetInt64(name string, value int64) int64 {
 }
 
 /**
-* SetFloat
+* SetNumber
 * @param name string, value float64
 * @return float64
 **/
-func SetFloat(name string, value float64) float64 {
+func SetNumber(name string, value float64) float64 {
 	Set(name, value)
 	return value
 }
@@ -202,13 +201,13 @@ func GetInt64(varName string, defaultVal int64) int64 {
 }
 
 /**
-* GetBool
-* @param varName string, defaultVal bool
-* @return bool
+* GetNumber
+* @param varName string, defaultVal float64
+* @return float64
 **/
-func GetBool(varName string, defaultVal bool) bool {
-	result := GetStr(varName, strconv.FormatBool(defaultVal))
-	val, err := strconv.ParseBool(result)
+func GetNumber(varName string, defaultVal float64) float64 {
+	result := GetStr(varName, strconv.FormatFloat(defaultVal, 'f', -1, 64))
+	val, err := strconv.ParseFloat(result, 64)
 	if err != nil {
 		return defaultVal
 	}
@@ -217,13 +216,13 @@ func GetBool(varName string, defaultVal bool) bool {
 }
 
 /**
-* GetNumber
-* @param varName string, defaultVal float64
-* @return float64
+* GetBool
+* @param varName string, defaultVal bool
+* @return bool
 **/
-func GetNumber(varName string, defaultVal float64) float64 {
-	result := GetStr(varName, strconv.FormatFloat(defaultVal, 'f', -1, 64))
-	val, err := strconv.ParseFloat(result, 64)
+func GetBool(varName string, defaultVal bool) bool {
+	result := GetStr(varName, strconv.FormatBool(defaultVal))
+	val, err := strconv.ParseBool(result)
 	if err != nil {
 		return defaultVal
 	}
@@ -259,19 +258,19 @@ func Int64(varName string) int64 {
 }
 
 /**
-* Bool
-* @param varName string
-* @return bool
-**/
-func Bool(varName string) bool {
-	return GetBool(varName, false)
-}
-
-/**
 * Number
 * @param varName string
 * @return float64
 **/
 func Number(varName string) float64 {
 	return GetNumber(varName, 0)
+}
+
+/**
+* Bool
+* @param varName string
+* @return bool
+**/
+func Bool(varName string) bool {
+	return GetBool(varName, false)
 }

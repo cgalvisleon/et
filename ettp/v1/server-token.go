@@ -22,9 +22,9 @@ func developToken() string {
 		return ""
 	}
 
-	device := "DevelopToken"
-	duration := time.Hour * 2
-	token, err := claim.NewToken(device, device, device, device, device, duration)
+	device := "develop"
+	duration := 1 * time.Hour
+	token, err := claim.NewToken(device, device, device, et.Json{}, duration)
 	if err != nil {
 		logs.Alertf(err.Error())
 		return ""

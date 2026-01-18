@@ -86,6 +86,7 @@ func Autentication(next http.Handler) http.Handler {
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, claim.ServiceIdKey, serviceId)
 		ctx = context.WithValue(ctx, claim.DurationKey, clm.Duration)
+		ctx = context.WithValue(ctx, claim.PayloadKey, clm.Payload)
 		data, err := clm.ToJson()
 		if err != nil {
 			response.Unauthorized(w, r)

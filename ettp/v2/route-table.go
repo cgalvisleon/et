@@ -105,9 +105,9 @@ func (s *Server) handlerDevToken(w http.ResponseWriter, r *http.Request) {
 			return ""
 		}
 
-		device := "DevelopToken"
-		duration := 2 * time.Hour
-		token, err := claim.NewToken(device, device, device, device, device, duration)
+		device := "develop"
+		duration := 1 * time.Hour
+		token, err := claim.NewToken(device, device, device, et.Json{}, duration)
 		if err != nil {
 			logs.Alert(err)
 			return ""

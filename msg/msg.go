@@ -19,6 +19,7 @@ var (
 	MSG_METHOD_NOT_FOUND               = "method not found"
 	MSG_ERR_PACKAGE_NOT_FOUND          = "package not found"
 	MSG_ERR_METHOD_NOT_FOUND           = "method not found"
+	MSG_KEY_REQUIRED                   = "key required"
 )
 
 func init() {
@@ -40,6 +41,6 @@ func init() {
 		MSG_PACKAGE_NOT_FOUND = "paquete no encontrado"
 		MSG_METHOD_NOT_FOUND = "metodo no encontrado"
 		MSG_ERR_PACKAGE_NOT_FOUND = "paquete no encontrado"
-		MSG_ERR_METHOD_NOT_FOUND = "metodo no encontrado"
+		MSG_KEY_REQUIRED = "key requerida"
 	}
 }

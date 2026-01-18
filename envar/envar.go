@@ -25,13 +25,13 @@ func setEnvar(name string, value interface{}) {
 
 /**
 * SetStrByArg
-* @param name, varName, def string
+* @param arg, name, def string
 * @return string
 **/
-func SetStrByArg(name, varName, def string) string {
-	val, ok := ArgStr(name, def)
+func SetStrByArg(arg, name, def string) string {
+	val, ok := ArgStr(arg, def)
 	if ok {
-		setEnvar(varName, val)
+		setEnvar(name, val)
 	}
 
 	return val
@@ -39,13 +39,13 @@ func SetStrByArg(name, varName, def string) string {
 
 /**
 * SetIntByArg
-* @param name, varName string, def int
+* @param arg, name string, def int
 * @return int
 **/
-func SetIntByArg(name, varName string, def int) int {
-	val, ok := ArgInt(name, def)
+func SetIntByArg(arg, name string, def int) int {
+	val, ok := ArgInt(arg, def)
 	if ok {
-		setEnvar(varName, strconv.Itoa(val))
+		setEnvar(name, strconv.Itoa(val))
 	}
 
 	return val
@@ -53,13 +53,13 @@ func SetIntByArg(name, varName string, def int) int {
 
 /**
 * SetInt64ByArg
-* @param name, varName string, def int64
+* @param arg, name string, def int64
 * @return int64
 **/
-func SetInt64ByArg(name, varName string, def int64) int64 {
-	val, ok := ArgInt64(name, def)
+func SetInt64ByArg(arg, name string, def int64) int64 {
+	val, ok := ArgInt64(arg, def)
 	if ok {
-		setEnvar(varName, strconv.FormatInt(val, 10))
+		setEnvar(name, strconv.FormatInt(val, 10))
 	}
 
 	return val
@@ -67,13 +67,13 @@ func SetInt64ByArg(name, varName string, def int64) int64 {
 
 /**
 * SetBoolByArg
-* @param name, varName string, def bool
+* @param arg, name string, def bool
 * @return bool
 **/
-func SetBoolByArg(name, varName string, def bool) bool {
-	val, ok := ArgBool(name, def)
+func SetBoolByArg(arg, name string, def bool) bool {
+	val, ok := ArgBool(arg, def)
 	if ok {
-		setEnvar(varName, strconv.FormatBool(val))
+		setEnvar(name, strconv.FormatBool(val))
 	}
 
 	return val
@@ -158,11 +158,11 @@ func Get(name string, def interface{}) interface{} {
 
 /**
 * GetStr
-* @param varName, def string
+* @param name, def string
 * @return string
 **/
-func GetStr(varName, def string) string {
-	result := Get(varName, def)
+func GetStr(name, def string) string {
+	result := Get(name, def)
 	if result == "" {
 		return def
 	}
@@ -172,11 +172,11 @@ func GetStr(varName, def string) string {
 
 /**
 * GetInt
-* @param varName string, def int
+* @param name string, def int
 * @return int
 **/
-func GetInt(varName string, def int) int {
-	result := GetStr(varName, strconv.Itoa(def))
+func GetInt(name string, def int) int {
+	result := GetStr(name, strconv.Itoa(def))
 	val, err := strconv.Atoi(result)
 	if err != nil {
 		return def
@@ -187,11 +187,11 @@ func GetInt(varName string, def int) int {
 
 /**
 * GetInt64
-* @param varName string, def int64
+* @param name string, def int64
 * @return int64
 **/
-func GetInt64(varName string, def int64) int64 {
-	result := GetStr(varName, strconv.FormatInt(def, 10))
+func GetInt64(name string, def int64) int64 {
+	result := GetStr(name, strconv.FormatInt(def, 10))
 	val, err := strconv.ParseInt(result, 10, 64)
 	if err != nil {
 		return def
@@ -202,11 +202,11 @@ func GetInt64(varName string, def int64) int64 {
 
 /**
 * GetNumber
-* @param varName string, def float64
+* @param name string, def float64
 * @return float64
 **/
-func GetNumber(varName string, def float64) float64 {
-	result := GetStr(varName, strconv.FormatFloat(def, 'f', -1, 64))
+func GetNumber(name string, def float64) float64 {
+	result := GetStr(name, strconv.FormatFloat(def, 'f', -1, 64))
 	val, err := strconv.ParseFloat(result, 64)
 	if err != nil {
 		return def
@@ -217,11 +217,11 @@ func GetNumber(varName string, def float64) float64 {
 
 /**
 * GetBool
-* @param varName string, def bool
+* @param name string, def bool
 * @return bool
 **/
-func GetBool(varName string, def bool) bool {
-	result := GetStr(varName, strconv.FormatBool(def))
+func GetBool(name string, def bool) bool {
+	result := GetStr(name, strconv.FormatBool(def))
 	val, err := strconv.ParseBool(result)
 	if err != nil {
 		return def
@@ -232,47 +232,47 @@ func GetBool(varName string, def bool) bool {
 
 /**
 * Str
-* @param varName string
+* @param name string
 * @return string
 **/
-func Str(varName string) string {
-	return GetStr(varName, "")
+func Str(name string) string {
+	return GetStr(name, "")
 }
 
 /**
 * Int
-* @param varName string
+* @param name string
 * @return int
 **/
-func Int(varName string) int {
-	return GetInt(varName, 0)
+func Int(name string) int {
+	return GetInt(name, 0)
 }
 
 /**
 * Int64
-* @param varName string
+* @param name string
 * @return int64
 **/
-func Int64(varName string) int64 {
-	return GetInt64(varName, 0)
+func Int64(name string) int64 {
+	return GetInt64(name, 0)
 }
 
 /**
 * Number
-* @param varName string
+* @param name string
 * @return float64
 **/
-func Number(varName string) float64 {
-	return GetNumber(varName, 0)
+func Number(name string) float64 {
+	return GetNumber(name, 0)
 }
 
 /**
 * Bool
-* @param varName string
+* @param name string
 * @return bool
 **/
-func Bool(varName string) bool {
-	return GetBool(varName, false)
+func Bool(name string) bool {
+	return GetBool(name, false)
 }
 
 /**

@@ -10,7 +10,7 @@ import (
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/golang-jwt/jwt/v4"
@@ -67,12 +67,18 @@ const (
 	DurationKey  ContextKey = "duration"
 	PayloadKey   ContextKey = "payload"
 	ServiceIdKey ContextKey = "service_id"
+	AppKey       ContextKey = "app"
+	DeviceKey    ContextKey = "device"
+	UsernameKey  ContextKey = "username"
 )
 
 type Claim struct {
 	jwt.StandardClaims
 	Salt     string        `json:"salt"`
 	Duration time.Duration `json:"duration"`
+	App      string        `json:"app"`
+	Device   string        `json:"device"`
+	Username string        `json:"username"`
 	Payload  et.Json       `json:"payload"`
 }
 
@@ -122,20 +128,11 @@ func NewClaim(duration time.Duration) *Claim {
 }
 
 /**
-* GetTokenKey
-* @param app, device, id string
-* @return string
-**/
-func GetTokenKey(app, device, id string) string {
-	return fmt.Sprintf("token:%s:%s:%s", app, device, id)
-}
-
-/**
 * GenToken
-* @param c Claim
+* @param c *Claim, secret string
 * @return string, error
 **/
-func GenToken(c Claim, secret string) (string, error) {
+func GenToken(c *Claim, secret string) (string, error) {
 	_jwt := jwt.NewWithClaims(jwt.SigningMethodHS256, c)
 	result, err := _jwt.SignedString([]byte(secret))
 	if err != nil {
@@ -146,59 +143,144 @@ func GenToken(c Claim, secret string) (string, error) {
 }
 
 /**
-* newTokenKey
-* @param c Claim
-* @return string, error
+* GetTokenKey
+* @param app, device, username string
+* @return string
 **/
-func newTokenKey(c Claim) (string, error) {
-	secret := envar.GetStr("1977", "SECRET")
+func GetTokenKey(app, device, username string) string {
+	return fmt.Sprintf("%s:%s:%s", app, device, username)
+}
+
+/**
+* NewToken
+* @param app, device, username string, payload et.Json, duration time.Duration
+* @return string, string, error
+**/
+func NewToken(app, device, username string, payload et.Json, duration time.Duration) (string, error) {
+	if app == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "app")
+	}
+	c := NewClaim(duration)
+	c.App = app
+	c.Device = device
+	c.Username = username
+	c.Payload = payload
+	secret := envar.GetStr("SECRET", "1977")
 	result, err := GenToken(c, secret)
 	if err != nil {
 		return "", err
 	}
 
-	key := GetTokenKey(c.App, c.Device, c.ID)
+	key := GetTokenKey(app, device, username)
 	cache.SetDuration(key, result, c.Duration)
 
 	return result, nil
 }
 
 /**
-* NewToken
-* @param id, app, name, username, device string, duration time.Duration
-* @return string, string, error
+* NewAuthentication
+* @param app, device, username string, duration time.Duration
+* @return string, error
 **/
-func NewToken(id, app, name, username, device string, duration time.Duration) (string, error) {
-	c := NewClaim(id, app, name, username, device, "", "", "", duration)
-	return newTokenKey(c)
+func NewAuthentication(app, device, username string, duration time.Duration) (string, error) {
+	if app == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "app")
+	}
+	if device == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "device")
+	}
+	if username == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "username")
+	}
+
+	return NewToken(app, device, username, et.Json{}, duration)
 }
 
 /**
 * NewAuthorization
-* @param id, app, name, username, device string, tenantId, profileTp string, duration time.Duration
+* @param app, device, username, tenantId, profileTp string, duration time.Duration
 * @return string, error
 **/
-func NewAuthorization(id, app, name, username, device, tenantId, profileTp string, duration time.Duration) (string, error) {
-	c := NewClaim(id, app, name, username, device, tenantId, profileTp, "", duration)
-	return newTokenKey(c)
+func NewAuthorization(app, device, username, tenantId, profileTp string, duration time.Duration) (string, error) {
+	if app == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "app")
+	}
+	if device == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "device")
+	}
+	if username == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "username")
+	}
+	if tenantId == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "tenantId")
+	}
+	if profileTp == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "profileTp")
+	}
+
+	return NewToken(app, device, username, et.Json{
+		"tenant_id":  tenantId,
+		"profile_tp": profileTp,
+	}, duration)
+}
+
+/**
+* NewAppToken
+* @param app, device string, duration time.Duration
+* @return string, error
+**/
+func NewAppToken(app, device string, duration time.Duration) (string, error) {
+	if app == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "app")
+	}
+	if device == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "device")
+	}
+
+	return NewToken(app, device, app, et.Json{}, duration)
+}
+
+/**
+* NewAppTagToken
+* @param app, device, tag string, duration time.Duration
+* @return string, error
+**/
+func NewAppTagToken(app, device, tag string, duration time.Duration) (string, error) {
+	if app == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "app")
+	}
+	if device == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "device")
+	}
+	if tag == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "tag")
+	}
+
+	return NewToken(app, device, app, et.Json{
+		"tag": tag,
+	}, duration)
 }
 
 /**
 * NewEphemeralToken
-* @param id, app, name, username, device, tag string, duration time.Duration
+* @param app, device, username string, duration time.Duration
 * @return string, error
 **/
-func NewEphemeralToken(id, app, name, username, device, tag string, duration time.Duration) (string, error) {
-	if tag == "" {
-		return "", logs.Alertm("Tag is required")
+func NewEphemeralToken(app, device, username string, payload et.Json, duration time.Duration) (string, error) {
+	if app == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "app")
 	}
-
+	if device == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "device")
+	}
+	if username == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "username")
+	}
 	if duration <= 0 {
-		return "", logs.Alertm("Duration is required")
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "duration")
 	}
 
-	c := NewClaim(id, app, name, username, device, "", "", tag, duration)
-	return newTokenKey(c)
+	return NewToken(app, device, username, payload, duration)
 }
 
 /**
@@ -212,11 +294,11 @@ func GetToken(key string) (string, error) {
 
 /**
 * DeleteToken
-* @param app, device, id string
+* @param app, device, username string
 * @return error
 **/
-func DeleteToken(app, device, id string) error {
-	key := GetTokenKey(app, device, id)
+func DeleteToken(app, device, username string) error {
+	key := GetTokenKey(app, device, username)
 	_, err := cache.Delete(key)
 	if err != nil {
 		return err
@@ -236,7 +318,10 @@ func DeleteTokeByToken(token string) error {
 		return err
 	}
 
-	return DeleteToken(claim.App, claim.Device, claim.ID)
+	app := claim.Payload.Str("app")
+	device := claim.Payload.Str("device")
+	username := claim.Payload.Str("username")
+	return DeleteToken(app, device, username)
 }
 
 /**
@@ -245,80 +330,37 @@ func DeleteTokeByToken(token string) error {
 * @return *Claim, error
 **/
 func ParceToken(token string) (*Claim, error) {
-	secret := envar.GetStr("1977", "SECRET")
+	secret := envar.GetStr("SECRET", "1977")
 	jToken, err := jwt.Parse(token, func(*jwt.Token) (interface{}, error) {
 		return []byte(secret), nil
 	})
 	if err != nil {
-		return nil, logs.Alert(err)
+		return nil, err
 	}
 
 	if !jToken.Valid {
-		return nil, logs.Alertm(MSG_TOKEN_INVALID)
+		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID)
 	}
 
 	claim, ok := jToken.Claims.(jwt.MapClaims)
 	if !ok {
-		return nil, logs.Alertm(MSG_REQUIRED_INVALID)
+		return nil, fmt.Errorf(msg.MSG_REQUIRED_INVALID)
 	}
 
-	app, ok := claim["app"].(string)
+	payload, ok := claim["payload"].(et.Json)
 	if !ok {
-		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "app")
-	}
-
-	id, ok := claim["id"].(string)
-	if !ok {
-		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "id")
-	}
-
-	name, ok := claim["name"].(string)
-	if !ok {
-		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "name")
-	}
-
-	username, ok := claim["username"].(string)
-	if !ok {
-		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "username")
-	}
-
-	device, ok := claim["device"].(string)
-	if !ok {
-		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "device")
+		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "payload")
 	}
 
 	second, ok := claim["duration"].(float64)
 	if !ok {
-		return nil, logs.Alertf(MSG_TOKEN_INVALID_ATRIB, "duration")
-	}
-
-	tenantId, ok := claim["tenantId"].(string)
-	if !ok {
-		tenantId = ""
-	}
-
-	profileTp, ok := claim["profileTp"].(string)
-	if !ok {
-		profileTp = ""
-	}
-
-	tag, ok := claim["tag"].(string)
-	if !ok {
-		tag = ""
+		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "duration")
 	}
 
 	duration := time.Duration(second)
-
 	result := &Claim{
-		ID:        id,
-		App:       app,
-		Name:      name,
-		Username:  username,
-		Device:    device,
-		Duration:  duration,
-		TenantId:  tenantId,
-		ProfileTp: profileTp,
-		Tag:       tag,
+		Duration: duration,
+		Payload:  payload,
 	}
 	if result.Duration != 0 {
 		exp, ok := claim["exp"].(float64)
@@ -341,7 +383,12 @@ func ValidToken(token string) (*Claim, error) {
 		return nil, err
 	}
 
-	key := GetTokenKey(result.App, result.Device, result.ID)
+	payload := result.Payload
+	app := payload.Str("app")
+	device := payload.Str("device")
+	username := payload.Str("username")
+
+	key := GetTokenKey(app, device, username)
 	val, err := cache.Get(key, "")
 	if err != nil {
 		return nil, err
@@ -357,14 +404,14 @@ func ValidToken(token string) (*Claim, error) {
 
 /**
 * SetToken
-* @param app, device, id, token string, duration time.Duration
+* @param app, device, username, token string, duration time.Duration
 * @return error
 **/
-func SetToken(app, device, id, token string, duration time.Duration) error {
-	key := GetTokenKey(app, device, id)
+func SetToken(app, device, username, token string, duration time.Duration) error {
+	key := GetTokenKey(app, device, username)
 	if duration < 0 {
 		cache.Delete(key)
-		return fmt.Errorf(MSG_TOKEN_EXPIRED)
+		return fmt.Errorf(msg.MSG_TOKEN_EXPIRED)
 	}
 
 	cache.Set(key, token, duration)

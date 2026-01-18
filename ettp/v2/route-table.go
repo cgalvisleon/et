@@ -115,7 +115,7 @@ func (s *Server) handlerDevToken(w http.ResponseWriter, r *http.Request) {
 
 		_, err = claim.ValidToken(token)
 		if err != nil {
-			logs.Alertf("GetFromToken:%s", err.Error())
+			logs.Alertf("handlerDevToken:%s", err.Error())
 			return ""
 		}
 

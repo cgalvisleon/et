@@ -32,7 +32,7 @@ func developToken() string {
 
 	_, err = claim.ValidToken(token)
 	if err != nil {
-		logs.Alertf("GetFromToken:%s", err.Error())
+		logs.Alertf("developToken:%s", err.Error())
 		return ""
 	}
 

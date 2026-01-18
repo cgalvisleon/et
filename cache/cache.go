@@ -6,7 +6,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/redis/go-redis/v9"
 )
@@ -57,7 +57,7 @@ func Load() error {
 		return nil
 	}
 
-	err := config.Validate([]string{
+	err := envar.Validate([]string{
 		"REDIS_HOST",
 		"REDIS_PASSWORD",
 		"REDIS_DB",
@@ -66,9 +66,9 @@ func Load() error {
 		return err
 	}
 
-	host := config.GetStr("REDIS_HOST", "")
-	password := config.GetStr("REDIS_PASSWORD", "")
-	dbname := config.GetInt("REDIS_DB", 0)
+	host := envar.GetStr("REDIS_HOST", "")
+	password := envar.GetStr("REDIS_PASSWORD", "")
+	dbname := envar.GetInt("REDIS_DB", 0)
 	conn, err = ConnectTo(host, password, dbname)
 	if err != nil {
 		return err

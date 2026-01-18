@@ -1,11 +1,8 @@
 package utility
 
 import (
-	"fmt"
 	"regexp"
 
-	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/strs"
 )
 
@@ -134,19 +131,4 @@ func ValidCode(val string) bool {
 **/
 func ValidWord(word string) bool {
 	return validate(`^[a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]+$`, word)
-}
-
-/**
-* Validate
-* @param keys []string
-* @return error
-**/
-func Validate(keys []string) error {
-	for _, key := range keys {
-		val := envar.Get(key, "")
-		if val == "" {
-			return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, key)
-		}
-	}
-	return nil
 }

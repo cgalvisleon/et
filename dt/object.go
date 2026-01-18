@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -58,7 +58,7 @@ func (s *Object) up(data et.Item, save bool) {
 * @return bool
 **/
 func (s *Object) save() bool {
-	production := config.App.Production
+	production := envar.GetBool("PRODUCTION", true)
 	if !production {
 		return false
 	}

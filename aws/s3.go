@@ -72,7 +72,7 @@ func UploaderFile(r *http.Request, folder, name string) (et.Item, error) {
 		filename = fmt.Sprintf(`%s/%s`, folder, filename)
 	}
 
-	err = utility.Validate([]string{
+	err = envar.Validate([]string{
 		"BUCKET",
 		"STORAGE_TYPE",
 		"HOSTNAME",
@@ -147,7 +147,7 @@ func UploaderB64(b64, filename, contentType string) (et.Item, error) {
 		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "content-type")
 	}
 
-	err := utility.Validate([]string{
+	err := envar.Validate([]string{
 		"STORAGE_TYPE",
 		"BUCKET",
 		"HOSTNAME",
@@ -266,7 +266,7 @@ func DownloadS3(bucket, key string) (*s3.GetObjectOutput, error) {
 * @return bool, error
 **/
 func DeleteFile(url string) (bool, error) {
-	err := utility.Validate([]string{
+	err := envar.Validate([]string{
 		"STORAGE_TYPE",
 		"BUCKET",
 	})
@@ -300,7 +300,7 @@ func DeleteFile(url string) (bool, error) {
 * @return string, error
 **/
 func DownloaderFile(url string) (string, error) {
-	err := utility.Validate([]string{
+	err := envar.Validate([]string{
 		"STORAGE_TYPE",
 		"BUCKET",
 	})

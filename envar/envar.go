@@ -274,3 +274,18 @@ func Number(varName string) float64 {
 func Bool(varName string) bool {
 	return GetBool(varName, false)
 }
+
+/**
+* Validate
+* @param keys []string
+* @return error
+**/
+func Validate(keys []string) error {
+	for _, key := range keys {
+		val := Get(key, "")
+		if val == "" {
+			return fmt.Errorf(MSG_ATRIB_REQUIRED, key)
+		}
+	}
+	return nil
+}

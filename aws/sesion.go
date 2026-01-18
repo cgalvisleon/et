@@ -5,7 +5,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/utility"
 )
 
 /**
@@ -13,7 +12,7 @@ import (
 * @return *session.Session
 **/
 func newSession() (*session.Session, error) {
-	err := utility.Validate([]string{
+	err := envar.Validate([]string{
 		"AWS_REGION",
 		"AWS_ACCESS_KEY_ID",
 		"AWS_SECRET_ACCESS_KEY",

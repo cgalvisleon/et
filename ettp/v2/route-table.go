@@ -8,7 +8,7 @@ import (
 
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/claim"
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -25,7 +25,7 @@ func (s *Server) initRouteTable() error {
 	s.Public(GET, "/test/{id}/{test}", s.getTest, s.Name)
 	s.Private(GET, "/reset", s.reset, s.Name)
 	// Develop Token
-	production := config.App.Production
+	production := envar.GetBool("PRODUCTION", true)
 	if !production {
 		s.Public(GET, "/tokens/develop", s.handlerDevToken, s.Name)
 	}
@@ -56,14 +56,17 @@ func (s *Server) initRouteTable() error {
 func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 	metric := middleware.GetMetrics(r)
 
+	company := envar.GetStr("COMPANY", "")
+	web := envar.GetStr("WEB", "")
+	help := envar.GetStr("HELP", "")
 	result := et.Json{
 		"created_at": s.CreatedAt.Format("02/01/2006 3:04:05 PM"),
 		"version":    s.Version,
 		"service":    s.Name,
 		"host":       s.Host,
-		"company":    config.App.Company,
-		"web":        config.App.Web,
-		"help":       config.App.Help,
+		"company":    company,
+		"web":        web,
+		"help":       help,
 	}
 
 	metric.JSON(w, r, http.StatusOK, result)
@@ -97,7 +100,7 @@ func (s *Server) handlerDevToken(w http.ResponseWriter, r *http.Request) {
 	metric := middleware.GetMetrics(r)
 
 	developToken := func() string {
-		production := config.App.Production
+		production := envar.GetBool("PRODUCTION", true)
 		if production {
 			return ""
 		}

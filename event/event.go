@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/nats-io/nats.go"
 )
@@ -133,16 +133,16 @@ func Load() error {
 		return nil
 	}
 
-	err := config.Validate([]string{
+	err := envar.Validate([]string{
 		"NATS_HOST",
 	})
 	if err != nil {
 		return err
 	}
 
-	host := config.GetStr("NATS_HOST", "")
-	user := config.GetStr("NATS_USER", "")
-	password := config.GetStr("NATS_PASSWORD", "")
+	host := envar.GetStr("NATS_HOST", "")
+	user := envar.GetStr("NATS_USER", "")
+	password := envar.GetStr("NATS_PASSWORD", "")
 	conn, err = ConnectTo(host, user, password)
 	if err != nil {
 		return err

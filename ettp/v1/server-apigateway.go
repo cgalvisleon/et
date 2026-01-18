@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrpc"
@@ -31,7 +31,7 @@ func (s *Server) mountApiGatewayFunc() {
 	s.Private().Get("/rpc", jrpc.HttpListRouters, s.Name)
 	s.Private().Post("/rpc", jrpc.HttpCalcItem, s.Name)
 	/* Token */
-	production := config.App.Production
+	production := envar.GetBool("PRODUCTION", true)
 	if !production {
 		s.Get("/develop/token", s.handlerDevToken, s.Name)
 	}

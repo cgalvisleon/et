@@ -854,10 +854,10 @@ func (c *Service) Version(require []byte, response *[]byte) error {
 const ModelMsg = `package $1
 
 const (
-	MSG_VALUE_REQUIRED 	 = "Atributo requerido (%s) value:%s"
-	MSG_STATE_NOT_ACTIVE = "Estado no activo (%s)"  
-	RECORD_NOT_FOUND     = "Registro no encontrado"
-	RECORD_NOT_UPDATE    = "Registro no actualizado"
+	MSG_VALUE_REQUIRED 	 = "atributo requerido (%s) value:%s"
+	MSG_STATE_NOT_ACTIVE = "estado no activo (%s)"  
+	MSG_RECORD_NOT_FOUND     = "registro no encontrado"
+	MSG_RECORD_NOT_UPDATE    = "registro no actualizado"
 )
 `
 

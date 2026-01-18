@@ -5,7 +5,7 @@ import (
 
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/claim"
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
@@ -17,7 +17,7 @@ import (
 * @return string
 **/
 func developToken() string {
-	production := config.App.Production
+	production := envar.GetBool("PRODUCTION", true)
 	if production {
 		return ""
 	}
@@ -55,7 +55,7 @@ func (s *Server) GetTokenByKey(key string) (et.Item, error) {
 	}
 
 	if result == "" {
-		return et.Item{}, logs.Alertf(msg.RECORD_NOT_FOUND)
+		return et.Item{}, logs.Alertf(msg.MSG_RECORD_NOT_FOUND)
 	}
 
 	valid := MSG_TOKEN_VALID
@@ -90,7 +90,7 @@ func (s *Server) HandlerValidToken(key string) (et.Item, error) {
 	}
 
 	if result == "" {
-		return et.Item{}, logs.Alertf(msg.RECORD_NOT_FOUND)
+		return et.Item{}, logs.Alertf(msg.MSG_RECORD_NOT_FOUND)
 	}
 
 	_, err = claim.ValidToken(result)

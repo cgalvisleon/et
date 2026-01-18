@@ -1,7 +1,6 @@
 package et
 
 import (
-	"database/sql"
 	"encoding/json"
 	"time"
 )
@@ -12,48 +11,35 @@ type Item struct {
 }
 
 /**
-* Scan load rows to a json
-* @param src interface{}
-* @return error
-**/
-func (s *Item) Scan(src interface{}) error {
-	err := s.Result.Scan(src)
-	if err != nil {
-		return err
-	}
-
-	(*s).Ok = len(s.Result) > 0
-
-	return nil
-}
-
-/**
-* ScanRows load rows to a json
-* @param rows *sql.Rows
-* @return error
-**/
-func (s *Item) ScanRows(rows *sql.Rows) error {
-	err := s.Result.ScanRows(rows)
-	if err != nil {
-		return err
-	}
-
-	(*s).Ok = len(s.Result) > 0
-
-	return nil
-}
-
-/**
 * ToByte convert a json to a []byte
-* @return []byte
+* @return []byte, error
 **/
-func (s Item) ToByte() []byte {
+func (s Item) ToByte() ([]byte, error) {
 	result, err := json.Marshal(s)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
-	return result
+	return result, nil
+}
+
+/**
+* ToJson convert a json to a Json
+* @return Json
+**/
+func (s Item) ToJson() (Json, error) {
+	src, err := s.ToByte()
+	if err != nil {
+		return nil, err
+	}
+
+	result := Json{}
+	err = json.Unmarshal(src, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 /**
@@ -69,17 +55,6 @@ func (s Item) ToString() string {
 	result := string(bt)
 
 	return result
-}
-
-/**
-* ToJson convert a json to a Json
-* @return Json
-**/
-func (s Item) ToJson() Json {
-	return Json{
-		"ok":     s.Ok,
-		"result": s.Result,
-	}
 }
 
 /**
@@ -104,9 +79,8 @@ func (s Item) ToMap() map[string]interface{} {
 
 /**
 * ValAny return any value of the key
-* @param defaultVal any
-* @param atribs ...string
-* @return any
+* @param defaultVal interface{}, atribs ...string
+* @return interface{}
 **/
 func (s *Item) ValAny(defaultVal interface{}, atribs ...string) interface{} {
 	return s.Result.ValAny(defaultVal, atribs...)
@@ -114,8 +88,7 @@ func (s *Item) ValAny(defaultVal interface{}, atribs ...string) interface{} {
 
 /**
 * ValStr return string value of the key
-* @param defaultVal string
-* @param atribs ...string
+* @param defaultVal string, atribs ...string
 * @return string
 **/
 func (s *Item) ValStr(defaultVal string, atribs ...string) string {
@@ -124,8 +97,7 @@ func (s *Item) ValStr(defaultVal string, atribs ...string) string {
 
 /**
 * ValInt return int value of the key
-* @param defaultVal int
-* @param atribs ...string
+* @param defaultVal int, atribs ...string
 * @return int
 **/
 func (s *Item) ValInt(defaultVal int, atribs ...string) int {
@@ -134,8 +106,7 @@ func (s *Item) ValInt(defaultVal int, atribs ...string) int {
 
 /**
 * ValInt64 return int64 value of the key
-* @param defaultVal int64
-* @param atribs ...string
+* @param defaultVal int64, atribs ...string
 * @return int64
 **/
 func (s Item) ValInt64(defaultVal int64, atribs ...string) int64 {
@@ -144,8 +115,7 @@ func (s Item) ValInt64(defaultVal int64, atribs ...string) int64 {
 
 /**
 * ValNum return float64 value of the key
-* @param defaultVal float64
-* @param atribs ...string
+* @param defaultVal float64, atribs ...string
 * @return float64
 **/
 func (s *Item) ValNum(defaultVal float64, atribs ...string) float64 {
@@ -154,8 +124,7 @@ func (s *Item) ValNum(defaultVal float64, atribs ...string) float64 {
 
 /**
 * ValBool return bool value of the key
-* @param defaultVal bool
-* @param atribs ...string
+* @param defaultVal bool, atribs ...string
 * @return bool
 **/
 func (s *Item) ValBool(defaultVal bool, atribs ...string) bool {
@@ -164,8 +133,7 @@ func (s *Item) ValBool(defaultVal bool, atribs ...string) bool {
 
 /**
 * ValTime return time.Time value of the key
-* @param defaultVal time.Time
-* @param atribs ...string
+* @param defaultVal time.Time, atribs ...string
 * @return time.Time
 **/
 func (s *Item) ValTime(defaultVal time.Time, atribs ...string) time.Time {
@@ -174,8 +142,7 @@ func (s *Item) ValTime(defaultVal time.Time, atribs ...string) time.Time {
 
 /**
 * ValJson return Json value of the key
-* @param defaultVal Json
-* @param atribs ...string
+* @param defaultVal Json, atribs ...string
 * @return Json
 **/
 func (s *Item) ValJson(defaultVal Json, atribs ...string) Json {
@@ -184,8 +151,7 @@ func (s *Item) ValJson(defaultVal Json, atribs ...string) Json {
 
 /**
 * ValArray return []interface{} value of the key
-* @param defaultVal []interface{}
-* @param atribs ...string
+* @param defaultVal []interface{}, atribs ...string
 * @return []interface{}
 **/
 func (s Item) ValArray(defaultVal []interface{}, atribs ...string) []interface{} {
@@ -194,21 +160,11 @@ func (s Item) ValArray(defaultVal []interface{}, atribs ...string) []interface{}
 
 /**
 * Any return any value of the key
-* @param defaultVal any
-* @param atribs ...string
-* @return *Any
+* @param defaultVal interface{}, atribs ...string
+* @return interface{}
 **/
 func (s Item) Any(defaultVal interface{}, atribs ...string) interface{} {
 	return s.Result.Any(defaultVal, atribs...)
-}
-
-/**
-* Key return the value of the key
-* @param atribs ...string
-* @return string
-**/
-func (s Item) Key(atribs ...string) string {
-	return s.Result.Key(atribs...)
 }
 
 /**
@@ -221,21 +177,21 @@ func (s Item) Str(atribs ...string) string {
 }
 
 /**
-* Decode return the value of the key
+* ToBase64 return the value of the key
 * @param atribs ...string
 * @return []string
 **/
-func (s Item) Decode(atribs ...string) string {
-	return s.Result.Decode(atribs...)
+func (s Item) ToBase64(atribs ...string) string {
+	return s.Result.ToBase64(atribs...)
 }
 
 /**
-* Encode return the value of the key
+* FromBase64 return the value of the key
 * @param atribs ...string
 * @return []string
 **/
-func (s Item) Encode(atribs ...string) string {
-	return s.Result.Encode(atribs...)
+func (s Item) FromBase64(atribs ...string) string {
+	return s.Result.FromBase64(atribs...)
 }
 
 /**
@@ -361,12 +317,12 @@ func (s Item) Get(key string) interface{} {
 * @param val interface{}
 * @return bool
 **/
-func (s *Item) Set(key string, val interface{}) {
-	if (*s).Result == nil {
-		(*s).Result = Json{}
+func (s Item) Set(key string, val interface{}) {
+	if s.Result == nil {
+		s.Result = Json{}
 	}
 
-	(*s).Result.Set(key, val)
+	s.Result.Set(key, val)
 }
 
 /**
@@ -374,8 +330,8 @@ func (s *Item) Set(key string, val interface{}) {
 * @param key string
 * @return bool
 **/
-func (s *Item) Delete(keys []string) bool {
-	return (*s).Result.Delete(keys)
+func (s Item) Delete(keys []string) bool {
+	return s.Result.Delete(keys)
 }
 
 /**
@@ -385,19 +341,4 @@ func (s *Item) Delete(keys []string) bool {
 **/
 func (s Item) ExistKey(key string) bool {
 	return s.Result.ExistKey(key)
-}
-
-/**
-* StrToItem convert a string to a Item
-* @param src string
-* @return Item
-**/
-func StrToItem(src string) (Item, error) {
-	var result Item
-	err := json.Unmarshal([]byte(src), &result)
-	if err != nil {
-		return Item{}, err
-	}
-
-	return result, nil
 }

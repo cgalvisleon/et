@@ -4,7 +4,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/utility"
 )
 
 /**
@@ -12,7 +13,7 @@ import (
 * @return *session.Session
 **/
 func newSession() (*session.Session, error) {
-	err := config.Validate([]string{
+	err := utility.Validate([]string{
 		"AWS_REGION",
 		"AWS_ACCESS_KEY_ID",
 		"AWS_SECRET_ACCESS_KEY",
@@ -22,10 +23,10 @@ func newSession() (*session.Session, error) {
 		return nil, err
 	}
 
-	region := config.GetStr("AWS_REGION", "")
-	keyId := config.GetStr("AWS_ACCESS_KEY_ID", "")
-	secret := config.GetStr("AWS_SECRET_ACCESS_KEY", "")
-	token := config.GetStr("AWS_SESSION_TOKEN", "")
+	region := envar.GetStr("AWS_REGION", "")
+	keyId := envar.GetStr("AWS_ACCESS_KEY_ID", "")
+	secret := envar.GetStr("AWS_SECRET_ACCESS_KEY", "")
+	token := envar.GetStr("AWS_SESSION_TOKEN", "")
 
 	return session.Must(session.NewSession(&aws.Config{
 		Region: aws.String(region),

@@ -36,7 +36,7 @@ func SetCtx(ctx context.Context, key, val string, expiration time.Duration) stri
 **/
 func ExpireCtx(ctx context.Context, key string, expiration time.Duration) error {
 	if conn == nil {
-		return fmt.Errorf(msg.ERR_NOT_CACHE_SERVICE)
+		return fmt.Errorf(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
 	expiration = expiration * time.Second
@@ -91,7 +91,7 @@ func DecrCtx(ctx context.Context, key string) int64 {
 **/
 func GetCtx(ctx context.Context, key, def string) (string, error) {
 	if conn == nil {
-		return def, fmt.Errorf(msg.ERR_NOT_CACHE_SERVICE)
+		return def, fmt.Errorf(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
 	result, err := conn.Get(ctx, key).Result()
@@ -111,13 +111,13 @@ func GetCtx(ctx context.Context, key, def string) (string, error) {
 **/
 func ExistsCtx(ctx context.Context, key string) bool {
 	if conn == nil {
-		logs.Alertm(msg.ERR_NOT_CACHE_SERVICE)
+		logs.Alertm(msg.MSG_NOT_CACHE_SERVICE)
 		return false
 	}
 
 	result, err := conn.Exists(ctx, key).Result()
 	if err != nil {
-		logs.Alertm(msg.ERR_NOT_CACHE_SERVICE)
+		logs.Alertm(msg.MSG_NOT_CACHE_SERVICE)
 		return false
 	}
 
@@ -131,7 +131,7 @@ func ExistsCtx(ctx context.Context, key string) bool {
 **/
 func DeleteCtx(ctx context.Context, key string) (int64, error) {
 	if conn == nil {
-		return 0, fmt.Errorf(msg.ERR_NOT_CACHE_SERVICE)
+		return 0, fmt.Errorf(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
 	intCmd := conn.Del(ctx, key)
@@ -146,7 +146,7 @@ func DeleteCtx(ctx context.Context, key string) (int64, error) {
 **/
 func LPushCtx(ctx context.Context, key string, val string) error {
 	if conn == nil {
-		return fmt.Errorf(msg.ERR_NOT_CACHE_SERVICE)
+		return fmt.Errorf(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
 	err := conn.RPush(ctx, key, val).Err()
@@ -164,7 +164,7 @@ func LPushCtx(ctx context.Context, key string, val string) error {
 **/
 func LRemCtx(ctx context.Context, key string, val string) error {
 	if conn == nil {
-		return fmt.Errorf(msg.ERR_NOT_CACHE_SERVICE)
+		return fmt.Errorf(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
 	err := conn.LRem(ctx, key, 1, val).Err()
@@ -182,7 +182,7 @@ func LRemCtx(ctx context.Context, key string, val string) error {
 **/
 func LRangeCtx(ctx context.Context, key string, start int64, stop int64) ([]string, error) {
 	if conn == nil {
-		return []string{}, fmt.Errorf(msg.ERR_NOT_CACHE_SERVICE)
+		return []string{}, fmt.Errorf(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
 	result, err := conn.LRange(ctx, key, start, stop).Result()
@@ -197,7 +197,7 @@ func LRangeCtx(ctx context.Context, key string, start int64, stop int64) ([]stri
 **/
 func LTrimCtx(ctx context.Context, key string, start int64, stop int64) error {
 	if conn == nil {
-		return fmt.Errorf(msg.ERR_NOT_CACHE_SERVICE)
+		return fmt.Errorf(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
 	err := conn.LTrim(ctx, key, start, stop).Err()
@@ -215,7 +215,7 @@ func LTrimCtx(ctx context.Context, key string, start int64, stop int64) error {
 **/
 func HSetCtx(ctx context.Context, key string, val map[string]string) error {
 	if conn == nil {
-		return fmt.Errorf(msg.ERR_NOT_CACHE_SERVICE)
+		return fmt.Errorf(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
 	err := conn.HSet(ctx, key, val).Err()
@@ -233,7 +233,7 @@ func HSetCtx(ctx context.Context, key string, val map[string]string) error {
 **/
 func HGetCtx(ctx context.Context, key string) (map[string]string, error) {
 	if conn == nil {
-		return map[string]string{}, fmt.Errorf(msg.ERR_NOT_CACHE_SERVICE)
+		return map[string]string{}, fmt.Errorf(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
 	result := conn.HGetAll(ctx, key).Val()
@@ -248,7 +248,7 @@ func HGetCtx(ctx context.Context, key string) (map[string]string, error) {
 **/
 func HDeleteCtx(ctx context.Context, key, atr string) error {
 	if conn == nil {
-		return fmt.Errorf(msg.ERR_NOT_CACHE_SERVICE)
+		return fmt.Errorf(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
 	err := conn.Do(ctx, "HDEL", key, atr).Err()

@@ -794,9 +794,9 @@ func (s Json) ArrayJson(atribs ...string) []Json {
 * @param fromJson Json
 * @return error
 **/
-func (s *Json) Update(from Json) {
+func (s Json) Update(from Json) {
 	for key, value := range from {
-		(*s)[key] = value
+		s[key] = value
 	}
 }
 
@@ -805,27 +805,29 @@ func (s *Json) Update(from Json) {
 * @param from Json
 * @return bool
 **/
-func (s *Json) Compare(from Json) Json {
-	diff := Json{}
-	for key, fromValue := range from {
-		if sValue, exists := (*s)[key]; !exists || sValue != fromValue {
-			diff[key] = fromValue
+func (s Json) Compare(from Json) Json {
+	result := Json{}
+	for key, value := range from {
+		if old, ok := s[key]; !ok || old != value {
+			result[key] = value
 		}
 	}
 
-	return diff
+	return result
 }
 
 /**
 * Append: This method append the values in from to s. If the key exist in s, the value is not replaced.
 * @param from Json
 **/
-func (s *Json) Append(from Json) {
+func (s Json) Append(from Json) Json {
 	for key, value := range from {
-		if _, exists := (*s)[key]; !exists {
-			(*s)[key] = value
+		if _, ok := s[key]; !ok {
+			s[key] = value
 		}
 	}
+
+	return s
 }
 
 /**
@@ -834,7 +836,26 @@ func (s *Json) Append(from Json) {
 * @return bool
 **/
 func (s Json) IsChanged(from Json) bool {
-	return !EqualJSON(s, from)
+	for key, vb := range from {
+		va, ok := s[key]
+		if !ok {
+			return true
+		}
+
+		switch v := va.(type) {
+		case map[string]interface{}:
+			return s.IsChanged(v)
+		case Json:
+			return s.IsChanged(v)
+		default:
+			ok := va == vb
+			if !ok {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 /**
@@ -866,27 +887,20 @@ func (s Json) Set(key string, val interface{}) {
 * @param key string
 * @return bool
 **/
-func (s *Json) Delete(keys []string) bool {
+func (s Json) Delete(keys []string) bool {
 	if len(keys) == 0 {
 		return false
 	}
 
-	current := *s
-	for i := 0; i < len(keys)-1; i++ {
-		if next, ok := current[keys[i]].(Json); ok {
-			current = next
-		} else {
-			return false
+	result := false
+	for _, key := range keys {
+		if _, ok := s[key]; ok {
+			delete(s, key)
+			result = true
 		}
 	}
 
-	lastKey := keys[len(keys)-1]
-	if _, exists := current[lastKey]; exists {
-		delete(current, lastKey)
-		return true
-	}
-
-	return false
+	return result
 }
 
 /**
@@ -895,7 +909,8 @@ func (s *Json) Delete(keys []string) bool {
 * @return bool
 **/
 func (s Json) ExistKey(key string) bool {
-	return s[key] != nil
+	_, ok := s[key]
+	return ok
 }
 
 /**
@@ -913,18 +928,4 @@ func (s Json) Select(keys []string) Json {
 	}
 
 	return result
-}
-
-/**
-* ArrayJsonToString
-* @param vals []Json
-* @return string
-**/
-func ArrayJsonToString(vals []Json) string {
-	result, err := json.Marshal(vals)
-	if err != nil {
-		return ""
-	}
-
-	return string(result)
 }

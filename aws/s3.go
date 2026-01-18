@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/msg"
@@ -71,7 +72,7 @@ func UploaderFile(r *http.Request, folder, name string) (et.Item, error) {
 		filename = fmt.Sprintf(`%s/%s`, folder, filename)
 	}
 
-	err = config.Validate([]string{
+	err = utility.Validate([]string{
 		"BUCKET",
 		"STORAGE_TYPE",
 		"HOSTNAME",
@@ -80,8 +81,8 @@ func UploaderFile(r *http.Request, folder, name string) (et.Item, error) {
 		return et.Item{}, err
 	}
 
-	bucket := config.GetStr("BUCKET", "")
-	storageType := config.GetStr("STORAGE_TYPE", "")
+	bucket := envar.GetStr("BUCKET", "")
+	storageType := envar.GetStr("STORAGE_TYPE", "")
 	if storageType == "S3" {
 		contentFile, err := io.ReadAll(fileparts)
 		if err != nil {
@@ -116,7 +117,7 @@ func UploaderFile(r *http.Request, folder, name string) (et.Item, error) {
 		return et.Item{}, err
 	}
 
-	hostname := config.GetStr("HOSTNAME", "")
+	hostname := envar.GetStr("HOSTNAME", "")
 	url := fmt.Sprintf(`%s/%s`, hostname, outputFile)
 
 	return et.Item{
@@ -146,7 +147,7 @@ func UploaderB64(b64, filename, contentType string) (et.Item, error) {
 		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "content-type")
 	}
 
-	err := config.Validate([]string{
+	err := utility.Validate([]string{
 		"STORAGE_TYPE",
 		"BUCKET",
 		"HOSTNAME",
@@ -155,8 +156,8 @@ func UploaderB64(b64, filename, contentType string) (et.Item, error) {
 		return et.Item{}, err
 	}
 
-	storageType := config.GetStr("STORAGE_TYPE", "")
-	bucket := config.GetStr("BUCKET", "")
+	storageType := envar.GetStr("STORAGE_TYPE", "")
+	bucket := envar.GetStr("BUCKET", "")
 	if storageType == "S3" {
 		contentFile, err := base64.StdEncoding.DecodeString(b64)
 		if err != nil {
@@ -198,7 +199,7 @@ func UploaderB64(b64, filename, contentType string) (et.Item, error) {
 		return et.Item{}, err
 	}
 
-	hostname := config.GetStr("HOSTNAME", "")
+	hostname := envar.GetStr("HOSTNAME", "")
 	url := fmt.Sprintf(`%s/%s`, hostname, outputFile)
 
 	return et.Item{
@@ -265,7 +266,7 @@ func DownloadS3(bucket, key string) (*s3.GetObjectOutput, error) {
 * @return bool, error
 **/
 func DeleteFile(url string) (bool, error) {
-	err := config.Validate([]string{
+	err := utility.Validate([]string{
 		"STORAGE_TYPE",
 		"BUCKET",
 	})
@@ -273,8 +274,8 @@ func DeleteFile(url string) (bool, error) {
 		return false, err
 	}
 
-	storageType := config.GetStr("STORAGE_TYPE", "")
-	bucket := config.GetStr("BUCKET", "")
+	storageType := envar.GetStr("STORAGE_TYPE", "")
+	bucket := envar.GetStr("BUCKET", "")
 	if storageType == "S3" {
 		key := strings.ReplaceAll(url, fmt.Sprintf(`https://%s.s3.amazonaws.com/`, bucket), ``)
 		_, err := DeleteS3(bucket, key)
@@ -299,7 +300,7 @@ func DeleteFile(url string) (bool, error) {
 * @return string, error
 **/
 func DownloaderFile(url string) (string, error) {
-	err := config.Validate([]string{
+	err := utility.Validate([]string{
 		"STORAGE_TYPE",
 		"BUCKET",
 	})
@@ -307,8 +308,8 @@ func DownloaderFile(url string) (string, error) {
 		return "", err
 	}
 
-	storageType := config.GetStr("STORAGE_TYPE", "")
-	bucket := config.GetStr("BUCKET", "")
+	storageType := envar.GetStr("STORAGE_TYPE", "")
+	bucket := envar.GetStr("BUCKET", "")
 	if storageType == "S3" {
 		key := strings.ReplaceAll(url, fmt.Sprintf(`https://%s.s3.amazonaws.com/`, bucket), ``)
 		_, err := DownloadS3(bucket, key)

@@ -64,8 +64,9 @@ func (s ContextKey) Json(ctx context.Context, def et.Json) et.Json {
 }
 
 const (
-	DurationKey ContextKey = "duration"
-	PayloadKey  ContextKey = "payload"
+	DurationKey  ContextKey = "duration"
+	PayloadKey   ContextKey = "payload"
+	ServiceIdKey ContextKey = "service_id"
 )
 
 type Claim struct {

@@ -15,6 +15,10 @@ var (
 	MSG_ERR_AUTORIZATION               = "invalid authorization"
 	MSG_ERR_NOT_CONNECT                = "not connect"
 	MSG_ERR_CHANNEL_REQUIRED           = "channel required"
+	MSG_PACKAGE_NOT_FOUND              = "package not found"
+	MSG_METHOD_NOT_FOUND               = "method not found"
+	MSG_ERR_PACKAGE_NOT_FOUND          = "package not found"
+	MSG_ERR_METHOD_NOT_FOUND           = "method not found"
 )
 
 func init() {
@@ -31,7 +35,11 @@ func init() {
 		MSG_REQUIRED_INVALID = "solicitud invalida"
 		MSG_ERR_INVALID_CLAIM = "formato token invalido"
 		MSG_ERR_AUTORIZATION = "invalid autorization"
-		MSG_ERR_NOT_CONNECT = "not connect"
-		MSG_ERR_CHANNEL_REQUIRED = "channel required"
+		MSG_ERR_NOT_CONNECT = "no se pudo conectar"
+		MSG_ERR_CHANNEL_REQUIRED = "canal requerido"
+		MSG_PACKAGE_NOT_FOUND = "paquete no encontrado"
+		MSG_METHOD_NOT_FOUND = "metodo no encontrado"
+		MSG_ERR_PACKAGE_NOT_FOUND = "paquete no encontrado"
+		MSG_ERR_METHOD_NOT_FOUND = "metodo no encontrado"
 	}
 }

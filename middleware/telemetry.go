@@ -10,7 +10,7 @@ import (
 
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/claim"
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/reg"
@@ -308,6 +308,7 @@ func (m *Metrics) CallMetrics() Telemetry {
 	hour := timeNow.Format("2006-01-02-15")
 	minute := timeNow.Format("2006-01-02-15:04")
 	second := timeNow.Format("2006-01-02-15:04:05")
+	requestsLimit := envar.GetInt("REQUESTS_LIMIT", 400)
 
 	return Telemetry{
 		TimeStamp:         date,
@@ -317,7 +318,7 @@ func (m *Metrics) CallMetrics() Telemetry {
 		RequestsPerMinute: cache.Incr(reg.GenHashKey(m.key, minute), 60),
 		RequestsPerHour:   cache.Incr(reg.GenHashKey(m.key, hour), 3600),
 		RequestsPerDay:    cache.Incr(reg.GenHashKey(m.key, date), 86400),
-		RequestsLimit:     int64(config.GetInt("REQUESTS_LIMIT", 400)),
+		RequestsLimit:     int64(requestsLimit),
 	}
 }
 
@@ -342,7 +343,7 @@ func (m *Metrics) println() et.Json {
 	size := float64(m.ResponseSize) / 1024
 	lg.Color(w, lg.Cyan, " Size:%.2f%s", size, "KB")
 	lg.Color(w, lg.White, " in ")
-	limitLatency := time.Duration(config.GetInt("LATENCY_LIMIT", 1000)) * time.Millisecond
+	limitLatency := time.Duration(envar.GetInt("LATENCY_LIMIT", 1000)) * time.Millisecond
 	if m.Latency < limitLatency {
 		lg.Color(w, lg.Green, "Latency:%s", m.Latency)
 	} else if m.Latency < 5*time.Second {

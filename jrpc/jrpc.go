@@ -78,7 +78,7 @@ func Load(name string) error {
 **/
 func Start() error {
 	if pkg == nil {
-		return logs.Alertm(ERR_PACKAGE_NOT_FOUND)
+		return logs.Alertm(msg.MSG_PACKAGE_NOT_FOUND)
 	}
 
 	go pkg.start()

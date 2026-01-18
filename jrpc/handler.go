@@ -9,6 +9,7 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
+	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/response"
 )
 
@@ -19,7 +20,7 @@ import (
 **/
 func Mount(services any) error {
 	if pkg == nil {
-		return logs.Alertm(ERR_PACKAGE_NOT_FOUND)
+		return logs.Alertm(msg.MSG_PACKAGE_NOT_FOUND)
 	}
 
 	return pkg.mount(services)

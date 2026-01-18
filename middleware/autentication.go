@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/cgalvisleon/et/claim"
-	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/utility"
@@ -80,35 +79,22 @@ func Autentication(next http.Handler) http.Handler {
 			return
 		}
 
-		serviceId := utility.UUID()
+		serviceId := r.Header.Get("ServiceId")
+		if serviceId == "" {
+			serviceId = utility.UUID()
+		}
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, claim.ServiceIdKey, serviceId)
-		ctx = context.WithValue(ctx, claim.ClientIdKey, clm.ID)
-		ctx = context.WithValue(ctx, claim.AppKey, clm.App)
-		ctx = context.WithValue(ctx, claim.DeviceKey, clm.Device)
-		ctx = context.WithValue(ctx, claim.NameKey, clm.Name)
-		ctx = context.WithValue(ctx, claim.UsernameKey, clm.Username)
-		ctx = context.WithValue(ctx, claim.TenantIdKey, clm.TenantId)
-		ctx = context.WithValue(ctx, claim.ProfileTpKey, clm.ProfileTp)
-		ctx = context.WithValue(ctx, claim.TagKey, clm.Tag)
 		ctx = context.WithValue(ctx, claim.DurationKey, clm.Duration)
-		now := utility.Now()
-		hostName := r.Host
-		data := et.Json{
-			"date_at":    now,
-			"serviceId":  serviceId,
-			"clientId":   clm.ID,
-			"app":        clm.App,
-			"device":     clm.Device,
-			"name":       clm.Name,
-			"username":   clm.Username,
-			"tenant_id":  clm.TenantId,
-			"profile_tp": clm.ProfileTp,
-			"tag":        clm.Tag,
-			"host_name":  hostName,
-			"duration":   clm.Duration,
-			"token":      token,
+		data, err := clm.ToJson()
+		if err != nil {
+			response.Unauthorized(w, r)
+			return
 		}
+		data.Set("service_id", serviceId)
+		data.Set("host_name", r.Host)
+		now := utility.Now()
+		data.Set("date_at", now)
 		PushTokenLastUse(data)
 
 		next.ServeHTTP(w, r.WithContext(ctx))

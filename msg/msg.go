@@ -7,6 +7,14 @@ var (
 	MSG_FAILED_TO_UNMARSHAL_JSON_VALUE = "failed to unmarshal JSON value:%s"
 	MSG_NOT_CACHE_SERVICE              = "caching service not available"
 	MSG_RECORD_NOT_FOUND               = "record not found"
+	MSG_TOKEN_INVALID                  = "token invalid"
+	MSG_TOKEN_INVALID_ATRIB            = "token invalid, attribute (%s)"
+	MSG_TOKEN_EXPIRED                  = "token expired"
+	MSG_REQUIRED_INVALID               = "request invalid"
+	MSG_ERR_INVALID_CLAIM              = "formato token invalid"
+	MSG_ERR_AUTORIZATION               = "invalid authorization"
+	MSG_ERR_NOT_CONNECT                = "not connect"
+	MSG_ERR_CHANNEL_REQUIRED           = "channel required"
 )
 
 func init() {
@@ -17,5 +25,13 @@ func init() {
 		MSG_FAILED_TO_UNMARSHAL_JSON_VALUE = "no se pudo deserializar el JSON value:%s"
 		MSG_NOT_CACHE_SERVICE = "no hay servicio de caching"
 		MSG_RECORD_NOT_FOUND = "registro no encontrado"
+		MSG_TOKEN_INVALID = "token invalido"
+		MSG_TOKEN_INVALID_ATRIB = "token invalido, atributo (%s)"
+		MSG_TOKEN_EXPIRED = "token expirado"
+		MSG_REQUIRED_INVALID = "solicitud invalida"
+		MSG_ERR_INVALID_CLAIM = "formato token invalido"
+		MSG_ERR_AUTORIZATION = "invalid autorization"
+		MSG_ERR_NOT_CONNECT = "not connect"
+		MSG_ERR_CHANNEL_REQUIRED = "channel required"
 	}
 }

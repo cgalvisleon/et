@@ -7,7 +7,7 @@ import (
 	"slices"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
@@ -56,15 +56,15 @@ func Load(name string) error {
 		return err
 	}
 
-	err = config.Validate([]string{
+	err = envar.Validate([]string{
 		"RPC_PORT",
 	})
 	if err != nil {
 		return err
 	}
 
-	host := config.GetStr("RPC_HOST", "localhost")
-	port := config.GetInt("RPC_PORT", 4200)
+	host := envar.GetStr("RPC_HOST", "localhost")
+	port := envar.GetInt("RPC_PORT", 4200)
 	pkg, err = LoadTo(name, host, port)
 	if err != nil {
 		return err

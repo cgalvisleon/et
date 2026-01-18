@@ -6,6 +6,7 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/timezone"
@@ -94,11 +95,11 @@ func Publish(channel string, data et.Json) error {
 **/
 func Unsubscribe(channel string) error {
 	if conn == nil {
-		return fmt.Errorf(ERR_NOT_CONNECT)
+		return fmt.Errorf(msg.MSG_ERR_NOT_CONNECT)
 	}
 
 	if len(channel) == 0 {
-		return fmt.Errorf(ERR_CHANNEL_REQUIRED)
+		return fmt.Errorf(msg.MSG_ERR_CHANNEL_REQUIRED)
 	}
 
 	conn.mutex.Lock()
@@ -177,7 +178,7 @@ func Subscribe(channel string, f func(Message)) (err error) {
 **/
 func Queue(channel, queue string, f func(Message)) (err error) {
 	if conn == nil {
-		return fmt.Errorf(ERR_NOT_CONNECT)
+		return fmt.Errorf(msg.MSG_ERR_NOT_CONNECT)
 	}
 
 	if len(channel) == 0 {

@@ -2,6 +2,7 @@ package claim
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -17,8 +18,13 @@ import (
 
 type ContextKey string
 
-func (c ContextKey) String(ctx context.Context, def string) string {
-	val := ctx.Value(c)
+/**
+* String
+* @param ctx context.Context, def string
+* @return string
+**/
+func (s ContextKey) String(ctx context.Context, def string) string {
+	val := ctx.Value(s)
 	result, ok := val.(string)
 	if !ok {
 		return def
@@ -27,54 +33,91 @@ func (c ContextKey) String(ctx context.Context, def string) string {
 	return result
 }
 
+/**
+* Duration
+* @param ctx context.Context, def time.Duration
+* @return time.Duration
+**/
+func (s ContextKey) Duration(ctx context.Context, def time.Duration) time.Duration {
+	val := ctx.Value(s)
+	result, ok := val.(time.Duration)
+	if !ok {
+		return def
+	}
+
+	return result
+}
+
+/**
+* Json
+* @param ctx context.Context, def et.Json
+* @return et.Json
+**/
+func (s ContextKey) Json(ctx context.Context, def et.Json) et.Json {
+	val := ctx.Value(s)
+	result, ok := val.(et.Json)
+	if !ok {
+		return def
+	}
+
+	return result
+}
+
 const (
-	ServiceIdKey ContextKey = "serviceId"
-	ClientIdKey  ContextKey = "clientId"
-	AppKey       ContextKey = "app"
-	DeviceKey    ContextKey = "device"
-	DurationKey  ContextKey = "duration"
-	NameKey      ContextKey = "name"
-	SubjectKey   ContextKey = "subject"
-	UsernameKey  ContextKey = "username"
-	TokenKey     ContextKey = "token"
-	TenantIdKey  ContextKey = "tenantId"
-	ProfileTpKey ContextKey = "profileTp"
-	ModelKey     ContextKey = "model"
-	TagKey       ContextKey = "tag"
+	DurationKey ContextKey = "duration"
+	PayloadKey  ContextKey = "payload"
 )
 
 type Claim struct {
-	Salt      string        `json:"salt"`
-	ID        string        `json:"id"`
-	App       string        `json:"app"`
-	Name      string        `json:"name"`
-	Username  string        `json:"username"`
-	Device    string        `json:"device"`
-	Duration  time.Duration `json:"duration"`
-	TenantId  string        `json:"tenantId"`
-	ProfileTp string        `json:"profileTp"`
-	Tag       string        `json:"tag"`
 	jwt.StandardClaims
+	Salt     string        `json:"salt"`
+	Duration time.Duration `json:"duration"`
+	Payload  et.Json       `json:"payload"`
 }
 
 /**
 * ToJson
 * @return et.Json
 **/
-func (c *Claim) ToJson() et.Json {
-	return et.Json{
-		"id":         c.ID,
-		"app":        c.App,
-		"name":       c.Name,
-		"username":   c.Username,
-		"device":     c.Device,
-		"subject":    c.Subject,
-		"duration":   c.Duration,
-		"tenant_id":  c.TenantId,
-		"profile_tp": c.ProfileTp,
-		"tag":        c.Tag,
-		"expiresAt":  time.Unix(c.ExpiresAt, 0).Format("2006-01-02 03:04:05 PM"),
+func (s *Claim) ToJson() (et.Json, error) {
+	bt, err := json.Marshal(s)
+	if err != nil {
+		return nil, err
 	}
+
+	result := et.Json{}
+	err = json.Unmarshal(bt, &result)
+	if err != nil {
+		return nil, err
+	}
+	expiresAt := time.Unix(s.ExpiresAt, 0).Format("2006-01-02 03:04:05 PM")
+	result.Set("expiresAt", expiresAt)
+
+	return result, nil
+}
+
+/**
+* SetPayload
+* @param payload et.Json
+**/
+func (s *Claim) SetPayload(payload et.Json) {
+	s.Payload = payload
+}
+
+/**
+* NewClaim
+* @param duration time.Duration
+* @return *Claim
+**/
+func NewClaim(duration time.Duration) *Claim {
+	result := &Claim{}
+	result.Salt = utility.GetOTP(6)
+	result.Duration = duration
+	if result.Duration != 0 {
+		result.ExpiresAt = timezone.Add(result.Duration).Unix()
+	}
+
+	return result
 }
 
 /**
@@ -84,30 +127,6 @@ func (c *Claim) ToJson() et.Json {
 **/
 func GetTokenKey(app, device, id string) string {
 	return fmt.Sprintf("token:%s:%s:%s", app, device, id)
-}
-
-/**
-* NewClaim
-* @param id, app, name, username, device, tag string, duration time.Duration, tenantId, profileTp string
-* @return Claim
-**/
-func NewClaim(id, app, name, username, device, tenantId, profileTp, tag string, duration time.Duration) Claim {
-	c := Claim{}
-	c.Salt = utility.GetOTP(6)
-	c.ID = id
-	c.App = app
-	c.Name = name
-	c.Username = username
-	c.Device = device
-	c.Duration = duration
-	c.TenantId = tenantId
-	c.ProfileTp = profileTp
-	c.Tag = tag
-	if c.Duration != 0 {
-		c.ExpiresAt = timezone.Add(c.Duration).Unix()
-	}
-
-	return c
 }
 
 /**

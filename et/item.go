@@ -27,19 +27,12 @@ func (s Item) ToByte() ([]byte, error) {
 * ToJson convert a json to a Json
 * @return Json
 **/
-func (s Item) ToJson() (Json, error) {
-	src, err := s.ToByte()
-	if err != nil {
-		return nil, err
+func (s Item) ToJson() Json {
+	result := Json{
+		"ok":     s.Ok,
+		"result": s.Result,
 	}
-
-	result := Json{}
-	err = json.Unmarshal(src, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return result
 }
 
 /**
@@ -47,14 +40,7 @@ func (s Item) ToJson() (Json, error) {
 * @return string
 **/
 func (s Item) ToString() string {
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return ""
-	}
-
-	result := string(bt)
-
-	return result
+	return s.ToJson().ToString()
 }
 
 /**
@@ -79,92 +65,92 @@ func (s Item) ToMap() map[string]interface{} {
 
 /**
 * ValAny return any value of the key
-* @param defaultVal interface{}, atribs ...string
+* @param def interface{}, atribs ...string
 * @return interface{}
 **/
-func (s *Item) ValAny(defaultVal interface{}, atribs ...string) interface{} {
-	return s.Result.ValAny(defaultVal, atribs...)
+func (s *Item) ValAny(def interface{}, atribs ...string) interface{} {
+	return s.Result.ValAny(def, atribs...)
 }
 
 /**
 * ValStr return string value of the key
-* @param defaultVal string, atribs ...string
+* @param def string, atribs ...string
 * @return string
 **/
-func (s *Item) ValStr(defaultVal string, atribs ...string) string {
-	return s.Result.ValStr(defaultVal, atribs...)
+func (s *Item) ValStr(def string, atribs ...string) string {
+	return s.Result.ValStr(def, atribs...)
 }
 
 /**
 * ValInt return int value of the key
-* @param defaultVal int, atribs ...string
+* @param def int, atribs ...string
 * @return int
 **/
-func (s *Item) ValInt(defaultVal int, atribs ...string) int {
-	return s.Result.ValInt(defaultVal, atribs...)
+func (s *Item) ValInt(def int, atribs ...string) int {
+	return s.Result.ValInt(def, atribs...)
 }
 
 /**
 * ValInt64 return int64 value of the key
-* @param defaultVal int64, atribs ...string
+* @param def int64, atribs ...string
 * @return int64
 **/
-func (s Item) ValInt64(defaultVal int64, atribs ...string) int64 {
-	return s.Result.ValInt64(defaultVal, atribs...)
+func (s Item) ValInt64(def int64, atribs ...string) int64 {
+	return s.Result.ValInt64(def, atribs...)
 }
 
 /**
 * ValNum return float64 value of the key
-* @param defaultVal float64, atribs ...string
+* @param def float64, atribs ...string
 * @return float64
 **/
-func (s *Item) ValNum(defaultVal float64, atribs ...string) float64 {
-	return s.Result.ValNum(defaultVal, atribs...)
+func (s *Item) ValNum(def float64, atribs ...string) float64 {
+	return s.Result.ValNum(def, atribs...)
 }
 
 /**
 * ValBool return bool value of the key
-* @param defaultVal bool, atribs ...string
+* @param def bool, atribs ...string
 * @return bool
 **/
-func (s *Item) ValBool(defaultVal bool, atribs ...string) bool {
-	return s.Result.ValBool(defaultVal, atribs...)
+func (s *Item) ValBool(def bool, atribs ...string) bool {
+	return s.Result.ValBool(def, atribs...)
 }
 
 /**
 * ValTime return time.Time value of the key
-* @param defaultVal time.Time, atribs ...string
+* @param def time.Time, atribs ...string
 * @return time.Time
 **/
-func (s *Item) ValTime(defaultVal time.Time, atribs ...string) time.Time {
-	return s.Result.ValTime(defaultVal, atribs...)
+func (s *Item) ValTime(def time.Time, atribs ...string) time.Time {
+	return s.Result.ValTime(def, atribs...)
 }
 
 /**
 * ValJson return Json value of the key
-* @param defaultVal Json, atribs ...string
+* @param def Json, atribs ...string
 * @return Json
 **/
-func (s *Item) ValJson(defaultVal Json, atribs ...string) Json {
-	return s.Result.ValJson(defaultVal, atribs...)
+func (s *Item) ValJson(def Json, atribs ...string) Json {
+	return s.Result.ValJson(def, atribs...)
 }
 
 /**
 * ValArray return []interface{} value of the key
-* @param defaultVal []interface{}, atribs ...string
+* @param def []interface{}, atribs ...string
 * @return []interface{}
 **/
-func (s Item) ValArray(defaultVal []interface{}, atribs ...string) []interface{} {
-	return s.Result.ValArray(defaultVal, atribs...)
+func (s Item) ValArray(def []interface{}, atribs ...string) []interface{} {
+	return s.Result.ValArray(def, atribs...)
 }
 
 /**
 * Any return any value of the key
-* @param defaultVal interface{}, atribs ...string
+* @param def interface{}, atribs ...string
 * @return interface{}
 **/
-func (s Item) Any(defaultVal interface{}, atribs ...string) interface{} {
-	return s.Result.Any(defaultVal, atribs...)
+func (s Item) Any(def interface{}, atribs ...string) interface{} {
+	return s.Result.Any(def, atribs...)
 }
 
 /**

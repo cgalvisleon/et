@@ -2,7 +2,6 @@ package et
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 )
 
@@ -13,55 +12,16 @@ type Items struct {
 }
 
 /**
-* Items methods
-* @param src interface{}
-* @return error
+* ToByte convert a json to a []byte
+* @return []byte, error
 **/
-func (s *Items) Scan(src interface{}) error {
-	var ba []byte
-	switch v := src.(type) {
-	case []byte:
-		ba = v
-	case string:
-		ba = []byte(v)
-	default:
-		return fmt.Errorf(`json/Scan - Failed to unmarshal JSON value:%s`, src)
-	}
-
-	var t []Json
-	err := json.Unmarshal(ba, &t)
+func (s Items) ToByte() ([]byte, error) {
+	result, err := json.Marshal(s)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	*s = Items{
-		Ok:     len(t) > 0,
-		Count:  len(t),
-		Result: t,
-	}
-
-	return nil
-}
-
-/**
-* Items methods
-* @param src interface{}
-* @return error
-**/
-func (s *Items) Add(item Json) {
-	(*s).Result = append((*s).Result, item)
-	(*s).Count = len((*s).Result)
-	(*s).Ok = (*s).Count > 0
-}
-
-/**
-* AddMany add many items to the items
-* @param items []Json
-**/
-func (s *Items) AddMany(items []Json) {
-	(*s).Result = append((*s).Result, items...)
-	(*s).Count = len((*s).Result)
-	(*s).Ok = (*s).Count > 0
+	return result, nil
 }
 
 /**
@@ -85,6 +45,16 @@ func (s Items) ToString() string {
 }
 
 /**
+* Add add an item to the items
+* @param item Json
+**/
+func (s Items) Add(item Json) {
+	s.Result = append(s.Result, item)
+	s.Count = len(s.Result)
+	s.Ok = s.Count > 0
+}
+
+/**
 * ToMap convert a json to a map
 * @return map[string]interface{}
 **/
@@ -103,180 +73,146 @@ func (s *Items) ToMap() map[string]interface{} {
 
 /**
 * ValAny return the value of the key
-* @param idx int
-* @param defaultVal any
-* @param atribs ...string
+* @param idx int, def any, atribs ...string
 * @return any
 **/
-func (s *Items) ValAny(idx int, defaultVal any, atribs ...string) interface{} {
+func (s *Items) ValAny(idx int, def any, atribs ...string) interface{} {
 	item := s.Result[idx]
 	if item == nil {
-		return defaultVal
+		return def
 	}
 
-	return item.ValAny(defaultVal, atribs...)
+	return item.ValAny(def, atribs...)
 }
 
 /**
 * ValStr return the value of the key
-* @param idx int
-* @param defaultVal string
-* @param atribs ...string
+* @param idx int, def string, atribs ...string
 * @return string
 **/
-func (s *Items) ValStr(idx int, defaultVal string, atribs ...string) string {
+func (s *Items) ValStr(idx int, def string, atribs ...string) string {
 	item := s.Result[idx]
 	if item == nil {
-		return defaultVal
+		return def
 	}
 
-	return item.ValStr(defaultVal, atribs...)
+	return item.ValStr(def, atribs...)
 }
 
 /**
 * ValInt return int value of the key
-* @param idx int
-* @param defaultVal int
-* @param atribs ...string
+* @param idx int, def int, atribs ...string
 * @return int
 **/
-func (s *Items) ValInt(idx int, defaultVal int, atribs ...string) int {
+func (s *Items) ValInt(idx int, def int, atribs ...string) int {
 	item := s.Result[idx]
 	if item == nil {
-		return defaultVal
+		return def
 	}
 
-	return item.ValInt(defaultVal, atribs...)
+	return item.ValInt(def, atribs...)
 }
 
 /**
 * ValInt64 return int64 value of the key
-* @param idx int
-* @param defaultVal int64
-* @param atribs ...string
+* @param idx int64, def int64, atribs ...string
 * @return int64
 **/
-func (s *Items) ValInt64(idx int64, defaultVal int64, atribs ...string) int64 {
+func (s *Items) ValInt64(idx int64, def int64, atribs ...string) int64 {
 	item := s.Result[idx]
 	if item == nil {
-		return defaultVal
+		return def
 	}
 
-	return item.ValInt64(defaultVal, atribs...)
+	return item.ValInt64(def, atribs...)
 }
 
 /**
 * ValNum return float64 value of the key
-* @param idx int
-* @param defaultVal float64
-* @param atribs ...string
+* @param idx int, def float64, atribs ...string
 * @return float64
 **/
-func (s *Items) ValNum(idx int, defaultVal float64, atribs ...string) float64 {
+func (s *Items) ValNum(idx int, def float64, atribs ...string) float64 {
 	item := s.Result[idx]
 	if item == nil {
-		return defaultVal
+		return def
 	}
 
-	return item.ValNum(defaultVal, atribs...)
+	return item.ValNum(def, atribs...)
 }
 
 /**
 * ValBool return bool value of the key
-* @param idx int
-* @param defaultVal bool
-* @param atribs ...string
+* @param idx int, def bool, atribs ...string
 * @return bool
 **/
-func (s *Items) ValBool(idx int, defaultVal bool, atribs ...string) bool {
+func (s *Items) ValBool(idx int, def bool, atribs ...string) bool {
 	item := s.Result[idx]
 	if item == nil {
-		return defaultVal
+		return def
 	}
 
-	return item.ValBool(defaultVal, atribs...)
+	return item.ValBool(def, atribs...)
 }
 
 /**
 * ValTime return time.Time value of the key
-* @param idx int
-* @param defaultVal time.Time
-* @param atribs ...string
+* @param idx int, def time.Time, atribs ...string
 * @return time.Time
 **/
-func (s *Items) ValTime(idx int, defaultVal time.Time, atribs ...string) time.Time {
+func (s *Items) ValTime(idx int, def time.Time, atribs ...string) time.Time {
 	item := s.Result[idx]
 	if item == nil {
-		return defaultVal
+		return def
 	}
 
-	return item.ValTime(defaultVal, atribs...)
+	return item.ValTime(def, atribs...)
 }
 
 /**
 * ValJson return the value of the key
-* @param idx int
-* @param defaultVal Json
-* @param atribs ...string
+* @param idx int, def Json, atribs ...string
 * @return Json
 **/
-func (s *Items) ValJson(idx int, defaultVal Json, atribs ...string) Json {
+func (s *Items) ValJson(idx int, def Json, atribs ...string) Json {
 	item := s.Result[idx]
 	if item == nil {
-		return defaultVal
+		return def
 	}
 
-	return item.ValJson(defaultVal, atribs...)
+	return item.ValJson(def, atribs...)
 }
 
 /**
 * ValArray return the value of the key
-* @param idx int
-* @param defaultVal []interface{}
-* @param atribs ...string
+* @param idx int, def []interface{}, atribs ...string
 * @return []interface{}
 **/
-func (s *Items) ValArray(idx int, defaultVal []interface{}, atribs ...string) []interface{} {
+func (s *Items) ValArray(idx int, def []interface{}, atribs ...string) []interface{} {
 	if s.Result[idx] == nil {
-		return defaultVal
+		return def
 	}
 
-	return s.Result[idx].ValArray(defaultVal, atribs...)
+	return s.Result[idx].ValArray(def, atribs...)
 }
 
 /**
 * Any return the value of the key
-* @param idx int
-* @param defaultVal any
-* @param atribs ...string
-* @return any
+* @param idx int, def interface{}, atribs ...string
+* @return interface{}
 **/
-func (s *Items) Any(idx int, defaultVal interface{}, atribs ...string) interface{} {
+func (s *Items) Any(idx int, def interface{}, atribs ...string) interface{} {
 	item := s.Result[idx]
 	if item == nil {
-		return defaultVal
+		return def
 	}
 
-	return item.Any(defaultVal, atribs...)
-}
-
-/**
-* Key return the value of the key
-* @param atribs ...string
-* @return string
-**/
-func (s Items) Key(dx int, atribs ...string) string {
-	item := s.Result[dx]
-	if item == nil {
-		return ""
-	}
-
-	return item.Key(atribs...)
+	return item.Any(def, atribs...)
 }
 
 /**
 * Str return the value of the key
-* @param atribs ...string
+* @param idx int, atribs ...string
 * @return string
 **/
 func (s Items) Str(dx int, atribs ...string) string {
@@ -290,11 +226,11 @@ func (s Items) Str(dx int, atribs ...string) string {
 
 /**
 * Int return the value of the key
-* @param atribs ...string
+* @param idx int, atribs ...string
 * @return int
 **/
-func (s Items) Int(dx int, atribs ...string) int {
-	item := s.Result[dx]
+func (s Items) Int(idx int, atribs ...string) int {
+	item := s.Result[idx]
 	if item == nil {
 		return 0
 	}
@@ -304,11 +240,11 @@ func (s Items) Int(dx int, atribs ...string) int {
 
 /**
 * Int64 return the value of the key
-* @param atribs ...string
+* @param idx int, atribs ...string
 * @return int64
 **/
-func (s Items) Int64(dx int, atribs ...string) int64 {
-	item := s.Result[dx]
+func (s Items) Int64(idx int, atribs ...string) int64 {
+	item := s.Result[idx]
 	if item == nil {
 		return 0
 	}
@@ -318,11 +254,11 @@ func (s Items) Int64(dx int, atribs ...string) int64 {
 
 /**
 * Num return the value of the key
-* @param atribs ...string
+* @param idx int, atribs ...string
 * @return float64
 **/
-func (s Items) Num(dx int, atribs ...string) float64 {
-	item := s.Result[dx]
+func (s Items) Num(idx int, atribs ...string) float64 {
+	item := s.Result[idx]
 	if item == nil {
 		return 0
 	}
@@ -332,11 +268,11 @@ func (s Items) Num(dx int, atribs ...string) float64 {
 
 /**
 * Bool return the value of the key
-* @param atribs ...string
+* @param idx int, atribs ...string
 * @return bool
 **/
-func (s Items) Bool(dx int, atribs ...string) bool {
-	item := s.Result[dx]
+func (s Items) Bool(idx int, atribs ...string) bool {
+	item := s.Result[idx]
 	if item == nil {
 		return false
 	}
@@ -346,11 +282,11 @@ func (s Items) Bool(dx int, atribs ...string) bool {
 
 /**
 * Time return the value of the key
-* @param atribs ...string
+* @param idx int, atribs ...string
 * @return time.Time
 **/
-func (s Items) Time(dx int, atribs ...string) time.Time {
-	item := s.Result[dx]
+func (s Items) Time(idx int, atribs ...string) time.Time {
+	item := s.Result[idx]
 	if item == nil {
 		return time.Time{}
 	}
@@ -360,11 +296,11 @@ func (s Items) Time(dx int, atribs ...string) time.Time {
 
 /**
 * Json return the value of the key
-* @param atrib string
+* @param idx int, atrib string
 * @return Json
 **/
-func (s Items) Json(dx int, atrib string) Json {
-	item := s.Result[dx]
+func (s Items) Json(idx int, atrib string) Json {
+	item := s.Result[idx]
 	if item == nil {
 		return Json{}
 	}
@@ -374,11 +310,11 @@ func (s Items) Json(dx int, atrib string) Json {
 
 /**
 * Array return the value of the key
-* @param atrib string
+* @param idx int, atrib string
 * @return []Json
 **/
-func (s Items) Array(dx int, atrib string) []interface{} {
-	item := s.Result[dx]
+func (s Items) Array(idx int, atrib string) []interface{} {
+	item := s.Result[idx]
 	if item == nil {
 		return []interface{}{}
 	}
@@ -388,11 +324,11 @@ func (s Items) Array(dx int, atrib string) []interface{} {
 
 /**
 * ArrayStr
-* @param atribs ...string
+* @param idx int, atribs ...string
 * @return []string
 **/
-func (s Items) ArrayStr(dx int, atribs ...string) []string {
-	item := s.Result[dx]
+func (s Items) ArrayStr(idx int, atribs ...string) []string {
+	item := s.Result[idx]
 	if item == nil {
 		return []string{}
 	}
@@ -402,11 +338,11 @@ func (s Items) ArrayStr(dx int, atribs ...string) []string {
 
 /**
 * ArrayInt
-* @param atribs ...string
+* @param idx int, atribs ...string
 * @return []int
 **/
-func (s Items) ArrayInt(dx int, atribs ...string) []int {
-	item := s.Result[dx]
+func (s Items) ArrayInt(idx int, atribs ...string) []int {
+	item := s.Result[idx]
 	if item == nil {
 		return []int{}
 	}
@@ -416,11 +352,11 @@ func (s Items) ArrayInt(dx int, atribs ...string) []int {
 
 /**
 * ArrayInt64
-* @param atribs ...string
+* @param idx int, atribs ...string
 * @return []int64
 **/
-func (s Items) ArrayInt64(dx int, atribs ...string) []int64 {
-	item := s.Result[dx]
+func (s Items) ArrayInt64(idx int, atribs ...string) []int64 {
+	item := s.Result[idx]
 	if item == nil {
 		return []int64{}
 	}
@@ -430,11 +366,11 @@ func (s Items) ArrayInt64(dx int, atribs ...string) []int64 {
 
 /**
 * ArrayJson
-* @param atribs ...string
+* @param idx int, atribs ...string
 * @return []Json
 **/
-func (s Items) ArrayJson(dx int, atribs ...string) []Json {
-	item := s.Result[dx]
+func (s Items) ArrayJson(idx int, atribs ...string) []Json {
+	item := s.Result[idx]
 	if item == nil {
 		return []Json{}
 	}
@@ -444,11 +380,11 @@ func (s Items) ArrayJson(dx int, atribs ...string) []Json {
 
 /**
 * Get
-* @param key string
+* @param idx int, key string
 * @return interface{}
 **/
-func (s Items) Get(dx int, key string) interface{} {
-	item := s.Result[dx]
+func (s Items) Get(idx int, key string) interface{} {
+	item := s.Result[idx]
 	if item == nil {
 		return nil
 	}
@@ -458,12 +394,11 @@ func (s Items) Get(dx int, key string) interface{} {
 
 /**
 * Set a value in the key
-* @param key string
-* @param val interface{}
+* @param idx int, key string, val interface{}
 * @return bool
 **/
-func (s *Items) Set(dx int, key string, val interface{}) {
-	item := s.Result[dx]
+func (s *Items) Set(idx int, key string, val interface{}) {
+	item := s.Result[idx]
 	if item == nil {
 		return
 	}
@@ -473,11 +408,11 @@ func (s *Items) Set(dx int, key string, val interface{}) {
 
 /**
 * Delete a value in the key
-* @param key string
+* @param idx int, keys []string
 * @return bool
 **/
-func (s *Items) Delete(dx int, keys []string) bool {
-	item := s.Result[dx]
+func (s *Items) Delete(idx int, keys []string) bool {
+	item := s.Result[idx]
 	if item == nil {
 		return false
 	}
@@ -487,11 +422,11 @@ func (s *Items) Delete(dx int, keys []string) bool {
 
 /**
 * ExistKey return if the key exist
-* @param key string
+* @param idx int, key string
 * @return bool
 **/
-func (s Items) ExistKey(dx int, key string) bool {
-	item := s.Result[dx]
+func (s Items) ExistKey(idx int, key string) bool {
+	item := s.Result[idx]
 	if item == nil {
 		return false
 	}
@@ -516,9 +451,7 @@ func (s Items) First() Item {
 
 /**
 * ToList return the value type List
-* @param all int
-* @param page int
-* @param rows int
+* @param all int, page int, rows int
 * @return List
 **/
 func (s *Items) ToList(all, page, rows int) List {

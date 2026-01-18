@@ -1,36 +1,60 @@
 package file
 
 import (
-	"log"
+	"os"
+	"path/filepath"
 
+	"github.com/cgalvisleon/et/logs"
 	"github.com/fsnotify/fsnotify"
 )
 
-func WatcherPath(path string) {
+func WatcherPath(root string) error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer watcher.Close()
 
-	err = watcher.Add(path)
+	// Registrar directorio raíz y subdirectorios
+	err = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			logs.Log("file:watcher", "Watching:", path)
+			return watcher.Add(path)
+		}
+		return nil
+	})
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
-	for {
-		select {
-		case event, ok := <-watcher.Events:
-			if !ok {
-				return
+	done := make(chan bool)
+
+	go func() {
+		for {
+			select {
+			case event := <-watcher.Events:
+				logs.Log("file:watcher", "Event:", event)
+
+				// Si se crea un nuevo directorio → empezar a observarlo
+				if event.Op&fsnotify.Create == fsnotify.Create {
+					info, err := os.Stat(event.Name)
+					if err == nil && info.IsDir() {
+						logs.Log("file:watcher", "New directory detected, watching:", event.Name)
+						watcher.Add(event.Name)
+					}
+				}
+
+			case err := <-watcher.Errors:
+				logs.Log("file:watcher", "Error:", err)
 			}
-			log.Println("Evento:", event)
-			// Aquí puedes manejar diferentes tipos de eventos, como creación, modificación o eliminación de archivos.
-		case err, ok := <-watcher.Errors:
-			if !ok {
-				return
-			}
-			log.Println("Error:", err)
 		}
-	}
+	}()
+
+	logs.Log("file:watcher", "Watching recursively:", root)
+	<-done
+
+	return nil
 }

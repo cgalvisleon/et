@@ -195,7 +195,8 @@ func main() {
 ```
 
 ```bash
-gofmt -w . && go run ./cmd/flow
+gofmt -w . && go run ./cmd/whatcher
+gofmt -w . && go run ./cmd/apigateway
 ```
 
 ## Contribuir

@@ -1,16 +1,13 @@
 package jrpc
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/rpc"
 	"reflect"
-	"slices"
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 )
@@ -128,39 +125,4 @@ func (s *Package) mount(services any) error {
 	rpc.Register(services)
 
 	return s.save()
-}
-
-/**
-* UnMountPackage
-* @param name string
-* @return error
-**/
-func UnMountPackage(name string) error {
-	var data = &Storage{
-		Packages: make([]*Package, 0),
-	}
-	storage, err := file.NewSyncFile("data", "jrpc", data)
-	if err != nil {
-		return err
-	}
-
-	err = storage.Load(&data)
-	if err != nil {
-		return err
-	}
-
-	idx := slices.IndexFunc(data.Packages, func(p *Package) bool { return p.Name == name })
-	if idx != -1 {
-		data.Packages = slices.Delete(data.Packages, idx, idx+1)
-	}
-
-	bt, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-
-	storage.Data = bt
-	storage.Save()
-
-	return nil
 }

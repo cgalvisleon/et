@@ -6,15 +6,15 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/cgalvisleon/et/claim"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
+	"github.com/cgalvisleon/et/request"
 )
 
 var commonHeader = make(map[string]bool)
 
 const (
-	ResoluteKey claim.ContextKey = "resolute"
+	ResoluteKey request.ContextKey = "resolute"
 )
 
 func init() {

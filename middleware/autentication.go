@@ -7,6 +7,7 @@ import (
 
 	"github.com/cgalvisleon/et/claim"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/utility"
 )
@@ -84,9 +85,9 @@ func Autentication(next http.Handler) http.Handler {
 			serviceId = utility.UUID()
 		}
 		ctx := r.Context()
-		ctx = context.WithValue(ctx, claim.ServiceIdKey, serviceId)
-		ctx = context.WithValue(ctx, claim.DurationKey, clm.Duration)
-		ctx = context.WithValue(ctx, claim.PayloadKey, clm.Payload)
+		ctx = context.WithValue(ctx, request.ServiceIdKey, serviceId)
+		ctx = context.WithValue(ctx, request.DurationKey, clm.Duration)
+		ctx = context.WithValue(ctx, request.PayloadKey, clm.Payload)
 		data, err := clm.ToJson()
 		if err != nil {
 			response.Unauthorized(w, r)

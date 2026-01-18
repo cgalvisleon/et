@@ -5,15 +5,15 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/cgalvisleon/et/claim"
 	"github.com/cgalvisleon/et/middleware"
+	"github.com/cgalvisleon/et/request"
 )
 
 var commonHeader = make(map[string]bool)
 
 const (
-	MetricKey   claim.ContextKey = "metric"
-	ResoluteKey claim.ContextKey = "resolute"
+	MetricKey   request.ContextKey = "metric"
+	ResoluteKey request.ContextKey = "resolute"
 )
 
 /**

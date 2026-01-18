@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/claim"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/reg"
+	"github.com/cgalvisleon/et/request"
 	lg "github.com/cgalvisleon/et/stdrout"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
@@ -27,11 +27,11 @@ var (
 )
 
 const (
-	TELEMETRY                                 = "telemetry"
-	TELEMETRY_LOG                             = "telemetry:log"
-	TELEMETRY_OVERFLOW                        = "telemetry:overflow"
-	TELEMETRY_TOKEN_LAST_USE                  = "telemetry:token:last_use"
-	MetricKey                claim.ContextKey = "metric"
+	TELEMETRY                                   = "telemetry"
+	TELEMETRY_LOG                               = "telemetry:log"
+	TELEMETRY_OVERFLOW                          = "telemetry:overflow"
+	TELEMETRY_TOKEN_LAST_USE                    = "telemetry:token:last_use"
+	MetricKey                request.ContextKey = "metric"
 )
 
 type Result struct {

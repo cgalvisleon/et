@@ -9,13 +9,13 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/cgalvisleon/et/claim"
+	"github.com/cgalvisleon/et/request"
 	lg "github.com/cgalvisleon/et/stdrout"
 )
 
 var (
 	// LogEntryCtxKey is the context.Context key to store the request log entry.
-	LogEntryCtxKey = claim.ContextKey("LogEntry")
+	LogEntryCtxKey = request.ContextKey("LogEntry")
 
 	// DefaultLogger is called by the Logger middleware handler to log each request.
 	// Its made a package-level variable so that it can be reconfigured for custom

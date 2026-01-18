@@ -1,10 +1,8 @@
 package claim
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
@@ -14,62 +12,6 @@ import (
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/golang-jwt/jwt/v4"
-)
-
-type ContextKey string
-
-/**
-* String
-* @param ctx context.Context, def string
-* @return string
-**/
-func (s ContextKey) String(ctx context.Context, def string) string {
-	val := ctx.Value(s)
-	result, ok := val.(string)
-	if !ok {
-		return def
-	}
-
-	return result
-}
-
-/**
-* Duration
-* @param ctx context.Context, def time.Duration
-* @return time.Duration
-**/
-func (s ContextKey) Duration(ctx context.Context, def time.Duration) time.Duration {
-	val := ctx.Value(s)
-	result, ok := val.(time.Duration)
-	if !ok {
-		return def
-	}
-
-	return result
-}
-
-/**
-* Json
-* @param ctx context.Context, def et.Json
-* @return et.Json
-**/
-func (s ContextKey) Json(ctx context.Context, def et.Json) et.Json {
-	val := ctx.Value(s)
-	result, ok := val.(et.Json)
-	if !ok {
-		return def
-	}
-
-	return result
-}
-
-const (
-	DurationKey  ContextKey = "duration"
-	PayloadKey   ContextKey = "payload"
-	ServiceIdKey ContextKey = "service_id"
-	AppKey       ContextKey = "app"
-	DeviceKey    ContextKey = "device"
-	UsernameKey  ContextKey = "username"
 )
 
 type Claim struct {
@@ -417,116 +359,4 @@ func SetToken(app, device, username, token string, duration time.Duration) error
 	cache.Set(key, token, duration)
 
 	return nil
-}
-
-/**
-* ServiceId
-* @param r *http.Request
-* @return string
-**/
-func ServiceId(r *http.Request) string {
-	ctx := r.Context()
-	return ServiceIdKey.String(ctx, "-1")
-}
-
-/**
-* ClientId
-* @param r *http.Request
-* @return string
-**/
-func ClientId(r *http.Request) string {
-	ctx := r.Context()
-	return ClientIdKey.String(ctx, "-1")
-}
-
-/**
-* ClientName
-* @param r *http.Request
-* @return string
-**/
-func ClientName(r *http.Request) string {
-	ctx := r.Context()
-	return NameKey.String(ctx, "Anonimo")
-}
-
-/**
-* Username
-* @param r *http.Request
-* @return string
-**/
-func Username(r *http.Request) string {
-	ctx := r.Context()
-	return UsernameKey.String(ctx, "Anonimo")
-}
-
-/**
-* ProfileTp
-* @param r *http.Request
-* @return string
-**/
-func ProfileTp(r *http.Request) string {
-	ctx := r.Context()
-	return ProfileTpKey.String(ctx, "")
-}
-
-/**
-* TenantId
-* @param r *http.Request
-* @return string
-**/
-func TenantId(r *http.Request) string {
-	ctx := r.Context()
-	return TenantIdKey.String(ctx, "")
-}
-
-/**
-* Tag
-* @param r *http.Request
-* @return string
-**/
-func Tag(r *http.Request) string {
-	ctx := r.Context()
-	return TagKey.String(ctx, "")
-}
-
-/**
-* Device
-* @param r *http.Request
-* @return string
-**/
-func Device(r *http.Request) string {
-	ctx := r.Context()
-	return DeviceKey.String(ctx, "")
-}
-
-/**
-* GetClient
-* @param r *http.Request
-* @return et.Json
-**/
-func GetClient(r *http.Request) et.Json {
-	now := timezone.NowTime()
-	ctx := r.Context()
-	clientId := ClientIdKey.String(ctx, "-1")
-	serviceId := ServiceIdKey.String(ctx, "-1")
-	app := AppKey.String(ctx, "")
-	username := UsernameKey.String(ctx, "Anonimo")
-	device := DeviceKey.String(ctx, "")
-	fullName := NameKey.String(ctx, "Anonimo")
-	profileTp := ProfileTpKey.String(ctx, "")
-	tenantId := TenantIdKey.String(ctx, "")
-	tag := TagKey.String(ctx, "")
-
-	return et.Json{
-		"date_at":    now,
-		"client_id":  clientId,
-		"service_id": serviceId,
-		"app":        app,
-		"username":   username,
-		"device":     device,
-		"full_name":  fullName,
-		"profile_tp": profileTp,
-		"tenant_id":  tenantId,
-		"tag":        tag,
-	}
 }

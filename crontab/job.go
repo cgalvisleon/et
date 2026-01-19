@@ -135,7 +135,7 @@ func (s *Job) Start() error {
 
 		s.Idx = int(id)
 	} else {
-		now := timezone.NowTime()
+		now := timezone.Now()
 		if s.ShotTime.After(now) {
 			s.Duration = s.ShotTime.Sub(now)
 			s.shot = time.AfterFunc(s.Duration, fn)

@@ -106,7 +106,7 @@ func (s *Value) Bool() bool {
 func (s *Value) Time() time.Time {
 	result, ok := s.Get().(time.Time)
 	if !ok {
-		return utility.NowTime()
+		return utility.Now()
 	}
 
 	return result

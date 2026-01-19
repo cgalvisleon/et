@@ -456,7 +456,7 @@ func insert$2(tenantId, statusId, id, name, description string, data et.Json, cr
 	}
 
 	id = $2.GetId(id)
-	now := timezone.NowTime()
+	now := timezone.Now()
 	data[jdb.TENANT_ID] = tenantId
 	data[jdb.KEY] = id
 	data["name"] = name
@@ -503,7 +503,7 @@ func Upsert$2(tenantId, id, name, description string, data et.Json, createdBy st
 	}
 
 	id = $2.GetId(id)
-	now := timezone.NowTime()
+	now := timezone.Now()
 	data[jdb.TENANT_ID] = tenantId
 	data[jdb.KEY] = id
 	data["name"] = name
@@ -551,7 +551,7 @@ func State$2(id, stateId, createdBy string) (et.Item, error) {
 		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, jdb.KEY)
 	}
 
-	now := timezone.NowTime()
+	now := timezone.Now()
 	result, err := $2.
 		Update(et.Json{
 			jdb.UPDATED_AT: now,

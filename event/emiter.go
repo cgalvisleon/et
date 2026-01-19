@@ -67,7 +67,7 @@ func (s *EventEmiter) emiter(channel string, data et.Json) {
 	}
 
 	message := Message{
-		CreatedAt: timezone.NowTime(),
+		CreatedAt: timezone.Now(),
 		Id:        utility.UUID(),
 		Channel:   channel,
 		Data:      data,

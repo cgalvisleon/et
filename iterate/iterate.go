@@ -16,7 +16,7 @@ type Iterate struct {
 * @param tag string
 **/
 func (s *Iterate) start(tag string) {
-	s.iterates[tag] = timezone.NowTime()
+	s.iterates[tag] = timezone.Now()
 }
 
 /**
@@ -34,7 +34,7 @@ func (s *Iterate) segment(tag, msg string, isDebug bool) time.Duration {
 		return 0
 	}
 
-	end := timezone.NowTime()
+	end := timezone.Now()
 	elapsed := end.Sub(start)
 	s.iterates[tag] = end
 	if msg == "" {

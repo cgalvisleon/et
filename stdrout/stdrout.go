@@ -129,7 +129,7 @@ func CW(w io.Writer, color []byte, format string, args ...interface{}) {
 func Printl(kind string, color string, args ...any) string {
 	kind = strings.ToUpper(kind)
 	message := fmt.Sprint(args...)
-	now := timezone.Now()
+	now := timezone.NowStr()
 	var result string
 
 	printColor := colors[color]

@@ -89,7 +89,7 @@ func New(config Config) (*Server, error) {
 	hostName, _ := os.Hostname()
 	mux := http.NewServeMux()
 	srv := &Server{
-		CreatedAt:       timezone.NowTime(),
+		CreatedAt:       timezone.Now(),
 		Id:              utility.UUID(),
 		Name:            config.Name,
 		Version:         version,

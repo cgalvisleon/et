@@ -58,16 +58,16 @@ func AppWait() {
 * NowTime
 * @return time.Time
 **/
-func NowTime() time.Time {
-	return timezone.NowTime()
+func Now() time.Time {
+	return timezone.Now()
 }
 
 /**
-* Now return the current date
+* NowStr return the current date
 * @return string
 **/
-func Now() string {
-	return timezone.Now()
+func NowStr() string {
+	return timezone.NowStr()
 }
 
 /**
@@ -112,7 +112,7 @@ func More(tag string, expiration time.Duration) int64 {
 * @return int64
 **/
 func UUIndex(tag string) int64 {
-	now := timezone.NowTime()
+	now := timezone.Now()
 	result := now.UnixMilli() * 10000
 	key := fmt.Sprintf("%s:%d", tag, result)
 	n := More(key, 1*time.Second)
@@ -187,7 +187,7 @@ func TimeDifference(dateInt, dateEnd any) time.Duration {
 * @return int
 **/
 func GeneratePortNumber() int {
-	rand.New(rand.NewSource(timezone.NowTime().UnixNano()))
+	rand.New(rand.NewSource(timezone.Now().UnixNano()))
 	min := 1000
 	max := 99999
 	port := rand.Intn(max-min+1) + min

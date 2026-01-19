@@ -63,7 +63,7 @@ type Server struct {
 * @return *Server
 **/
 func NewServer(name string, config *Config) *Server {
-	now := timezone.NowTime()
+	now := timezone.Now()
 	host, _ := os.Hostname()
 	result := &Server{
 		CreatedAt:     now,

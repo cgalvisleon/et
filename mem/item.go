@@ -23,7 +23,7 @@ type Item struct {
 * @return *Item
 **/
 func New(key string, value interface{}) *Item {
-	now := timezone.NowTime()
+	now := timezone.Now()
 	return &Item{
 		Datemake:   now,
 		Dateupdate: now,
@@ -42,7 +42,7 @@ func (i *Item) Set(value interface{}) interface{} {
 	i.lock.Lock()
 	defer i.lock.Unlock()
 
-	i.Dateupdate = timezone.NowTime()
+	i.Dateupdate = timezone.Now()
 	i.Value = value
 
 	return value

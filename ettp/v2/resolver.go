@@ -49,7 +49,7 @@ type Resolver struct {
 
 func NewResolver(r *http.Request, solver *Solver, params map[string]string) *Resolver {
 	id := reg.GenULID("resolver")
-	now := utility.NowTime()
+	now := utility.Now()
 	url := solver.Solver
 	for k, v := range params {
 		name := strings.Trim(k, "{}")
@@ -124,6 +124,6 @@ func (r *Resolver) ToJson() et.Json {
 **/
 func (r *Resolver) SetStatus(status Status) {
 	r.Status = status
-	r.UpdatedAt = utility.NowTime()
+	r.UpdatedAt = utility.Now()
 	event.Publish(EVENT_RESOLVER_STATUS, r.ToJson())
 }

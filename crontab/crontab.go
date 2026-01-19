@@ -75,7 +75,7 @@ func (s *Jobs) addJob(tp TypeJob, tag, spec, channel string, params et.Json, rep
 
 	shot, err := timezone.Parse("2006-01-02T15:04:05", spec)
 	if err != nil {
-		shot = timezone.NowTime()
+		shot = timezone.Now()
 	}
 
 	idx := s.indexJob(tag)

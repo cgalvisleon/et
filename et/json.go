@@ -668,7 +668,7 @@ func (s Json) Byte(atribs ...string) ([]byte, error) {
 * @return time.Time
 **/
 func (s Json) Time(atribs ...string) time.Time {
-	return s.ValTime(timezone.NowTime(), atribs...)
+	return s.ValTime(timezone.Now(), atribs...)
 }
 
 /**

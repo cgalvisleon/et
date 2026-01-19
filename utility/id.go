@@ -13,7 +13,7 @@ import (
 * @return string
 **/
 func GetRandom(charset string, length int) string {
-	var seededRand = rand.New(rand.NewSource(timezone.NowTime().UnixNano()))
+	var seededRand = rand.New(rand.NewSource(timezone.Now().UnixNano()))
 	b := make([]byte, length)
 	for i := range b {
 		b[i] = charset[seededRand.Intn(len(charset))]

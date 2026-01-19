@@ -184,7 +184,7 @@ func (s *Instance) setStatus(status Status) error {
 	}
 
 	s.Status = status
-	s.UpdatedAt = utility.NowTime()
+	s.UpdatedAt = utility.Now()
 	if s.Status == StatusDone {
 		s.DoneAt = s.UpdatedAt
 	}
@@ -274,7 +274,7 @@ func (s *Instance) run() ([]reflect.Value, error) {
 		})}, nil
 	}
 
-	s.LastAttemptAt = utility.NowTime()
+	s.LastAttemptAt = utility.Now()
 	s.Attempt++
 	s.setStatus(StatusRunning)
 

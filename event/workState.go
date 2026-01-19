@@ -23,7 +23,7 @@ const (
 func Work(event string, data et.Json) et.Json {
 	id := reg.GenULID("work")
 	work := et.Json{
-		"created_at": timezone.NowTime(),
+		"created_at": timezone.Now(),
 		"status":     StatusPending,
 		"id":         id,
 		"event":      event,
@@ -41,7 +41,7 @@ func Work(event string, data et.Json) et.Json {
 * @param id string, status WorkStatus
 **/
 func State(id string, status WorkStatus, data et.Json) {
-	now := timezone.Now()
+	now := timezone.NowStr()
 	work := et.Json{
 		"update_at": now,
 		"id":        id,

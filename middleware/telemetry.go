@@ -212,7 +212,7 @@ func NewMetric(r *http.Request) *Metrics {
 	}
 
 	result := &Metrics{
-		TimeStamp:   timezone.NowTime(),
+		TimeStamp:   timezone.Now(),
 		ServiceName: serviceName,
 		ServiceId:   serviceId,
 		RemoteAddr:  remoteAddr,
@@ -221,7 +221,7 @@ func NewMetric(r *http.Request) *Metrics {
 		Path:        r.URL.Path,
 		Scheme:      scheme,
 		AppName:     appName,
-		mark:        timezone.NowTime(),
+		mark:        timezone.Now(),
 		key:         fmt.Sprintf(`%s:%s`, r.Method, r.URL.Path),
 	}
 
@@ -236,13 +236,13 @@ func NewMetric(r *http.Request) *Metrics {
 func NewRpcMetric(method string) *Metrics {
 	scheme := "rpc"
 	result := &Metrics{
-		TimeStamp:   timezone.NowTime(),
+		TimeStamp:   timezone.Now(),
 		ServiceName: serviceName,
 		ServiceId:   utility.UUID(),
 		Path:        method,
 		Method:      strs.Uppcase(scheme),
 		Scheme:      scheme,
-		mark:        timezone.NowTime(),
+		mark:        timezone.Now(),
 		key:         fmt.Sprintf(`%s:%s`, strs.Uppcase(scheme), method),
 	}
 
@@ -280,7 +280,7 @@ func (m *Metrics) SetPath(val string) {
 **/
 func (m *Metrics) CallSearchTime() {
 	m.SearchTime = time.Since(m.mark)
-	m.mark = timezone.NowTime()
+	m.mark = timezone.Now()
 }
 
 /**
@@ -288,7 +288,7 @@ func (m *Metrics) CallSearchTime() {
 **/
 func (m *Metrics) CallResponseTime() {
 	m.ResponseTime = time.Since(m.mark)
-	m.mark = timezone.NowTime()
+	m.mark = timezone.Now()
 }
 
 /**
@@ -303,7 +303,7 @@ func (m *Metrics) CallLatency() {
 * @return Telemetry
 **/
 func (m *Metrics) CallMetrics() Telemetry {
-	timeNow := timezone.NowTime()
+	timeNow := timezone.Now()
 	date := timeNow.Format("2006-01-02")
 	hour := timeNow.Format("2006-01-02-15")
 	minute := timeNow.Format("2006-01-02-15:04")
@@ -327,7 +327,7 @@ func (m *Metrics) CallMetrics() Telemetry {
 * @return et.Json
 **/
 func (m *Metrics) println() et.Json {
-	w := lg.Color(nil, lg.Reset, timezone.Now())
+	w := lg.Color(nil, lg.Reset, timezone.NowStr())
 	lg.Color(w, lg.Purple, " [%s]: ", m.Method)
 	lg.Color(w, lg.Cyan, "%s", m.Path)
 	lg.Color(w, lg.White, " from:%s", m.RemoteAddr)

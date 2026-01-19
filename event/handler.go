@@ -59,7 +59,7 @@ func publish(channel string, data et.Json) error {
 **/
 func eventState(channel string, status EventStatus, data interface{}) {
 	msg := et.Json{
-		"created_at": timezone.NowTime(),
+		"created_at": timezone.Now(),
 		"channel":    channel,
 		"event":      status,
 		"host":       hostName,

@@ -27,7 +27,7 @@ func UUID() string {
 * @return string
 **/
 func ULID() string {
-	t := timezone.NowTime()
+	t := timezone.Now()
 	entropy := ulid.Monotonic(rand.New(rand.NewSource(t.UnixNano())), 0)
 	return ulid.MustNew(ulid.Timestamp(t), entropy).String()
 }
@@ -126,7 +126,7 @@ func GetXID(id string) string {
 * @return int64
 **/
 func GenIndex() int64 {
-	return timezone.NowTime().UnixNano()
+	return timezone.Now().UnixNano()
 }
 
 /**
@@ -134,7 +134,7 @@ func GenIndex() int64 {
 * @return string
 **/
 func GenSnowflake() string {
-	ms := timezone.NowTime().UnixMilli()
+	ms := timezone.Now().UnixMilli()
 	return fmt.Sprintf("%d%03d", ms, rand.Intn(1000))
 }
 
@@ -203,6 +203,6 @@ func TagXID(tag, id string) string {
 }
 
 func init() {
-	epoch := time.Date(2020, 1, 1, 0, 0, 0, 0, timezone.NowTime().Location())
+	epoch := time.Date(2020, 1, 1, 0, 0, 0, 0, timezone.Now().Location())
 	snowflake.Epoch = epoch.UnixNano() / 1e6
 }

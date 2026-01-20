@@ -15,6 +15,9 @@ func init() {
 * @param tag string
 **/
 func Start(tag string) {
+	if iterate == nil {
+		return
+	}
 	iterate.start(tag)
 }
 
@@ -24,6 +27,9 @@ func Start(tag string) {
 * @return time.Duration
 **/
 func Segment(tag, msg string, isDebug bool) time.Duration {
+	if iterate == nil {
+		return 0
+	}
 	return iterate.segment(tag, msg, isDebug)
 }
 
@@ -33,5 +39,8 @@ func Segment(tag, msg string, isDebug bool) time.Duration {
 * @return time.Duration
 **/
 func End(tag, msg string, isDebug bool) time.Duration {
+	if iterate == nil {
+		return 0
+	}
 	return iterate.end(tag, msg, isDebug)
 }

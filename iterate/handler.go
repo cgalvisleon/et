@@ -6,7 +6,7 @@ var iterate *Iterate
 
 func init() {
 	iterate = &Iterate{
-		iterates: make(map[string]time.Time),
+		iterates: make(map[string]time.Time, 0),
 	}
 }
 

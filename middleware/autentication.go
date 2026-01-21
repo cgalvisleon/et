@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cgalvisleon/et/claim"
+	"github.com/cgalvisleon/et/jwt"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
@@ -69,7 +69,7 @@ func Autentication(next http.Handler) http.Handler {
 			return
 		}
 
-		clm, err := claim.ValidToken(token)
+		clm, err := jwt.Validate(token)
 		if err != nil {
 			response.Unauthorized(w, r)
 			return

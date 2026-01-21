@@ -11,6 +11,7 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/jwt"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
@@ -113,7 +114,7 @@ func (s *Server) handlerDevToken(w http.ResponseWriter, r *http.Request) {
 			return ""
 		}
 
-		_, err = claim.ValidToken(token)
+		_, err = jwt.Validate(token)
 		if err != nil {
 			logs.Alertf("handlerDevToken:%s", err.Error())
 			return ""

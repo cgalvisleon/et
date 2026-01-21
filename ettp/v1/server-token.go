@@ -7,6 +7,7 @@ import (
 	"github.com/cgalvisleon/et/claim"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/jwt"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/utility"
@@ -30,7 +31,7 @@ func developToken() string {
 		return ""
 	}
 
-	_, err = claim.ValidToken(token)
+	_, err = jwt.Validate(token)
 	if err != nil {
 		logs.Alertf("developToken:%s", err.Error())
 		return ""
@@ -59,7 +60,7 @@ func (s *Server) GetTokenByKey(key string) (et.Item, error) {
 	}
 
 	valid := MSG_TOKEN_VALID
-	_, err = claim.ValidToken(result)
+	_, err = jwt.Validate(result)
 	if err != nil {
 		valid = err.Error()
 	}
@@ -93,7 +94,7 @@ func (s *Server) HandlerValidToken(key string) (et.Item, error) {
 		return et.Item{}, logs.Alertf(msg.MSG_RECORD_NOT_FOUND)
 	}
 
-	_, err = claim.ValidToken(result)
+	_, err = jwt.Validate(result)
 	if err != nil {
 		return et.Item{}, err
 	}

@@ -929,3 +929,20 @@ func (s Json) Select(keys []string) Json {
 
 	return result
 }
+
+/**
+* Hidden
+* @param keys []string
+* @return Json
+**/
+func (s Json) Hidden(keys []string) Json {
+	result := Json{}
+	for key, value := range s {
+		_, ok := s[key]
+		if !ok {
+			result[key] = value
+		}
+	}
+
+	return result
+}

@@ -46,6 +46,26 @@ func listRouters() (et.Items, error) {
 }
 
 /**
+* CallRpc: Calls a remote procedure
+* @param address string, method string, args any, reply any
+* @return error
+**/
+func CallRpc(address string, method string, args any, reply any) error {
+	client, err := rpc.Dial("tcp", address)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	err = client.Call(method, args, reply)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/**
 * call
 * @param method string, args et.Json, reply interface{}
 * @return error

@@ -1,6 +1,7 @@
 package jrpc
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/rpc"
@@ -11,6 +12,10 @@ import (
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/response"
+)
+
+var (
+	ErrorRpcNotConnected = errors.New("rpc not connected")
 )
 
 /**
@@ -53,7 +58,7 @@ func listRouters() (et.Items, error) {
 func CallRpc(address string, method string, args any, reply any) error {
 	client, err := rpc.Dial("tcp", address)
 	if err != nil {
-		return err
+		return ErrorRpcNotConnected
 	}
 	defer client.Close()
 

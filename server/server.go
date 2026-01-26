@@ -26,6 +26,7 @@ type Ettp struct {
 	pidFile string
 	appName string
 	onClose func()
+	onStart func()
 }
 
 /**
@@ -88,6 +89,14 @@ func (s *Ettp) Close() {
 **/
 func (s *Ettp) OnClose(onClose func()) {
 	s.onClose = onClose
+}
+
+/**
+* OnStart
+* @param onStart func()
+**/
+func (s *Ettp) OnStart(onStart func()) {
+	s.onStart = onStart
 }
 
 /**
@@ -160,6 +169,9 @@ func (s *Ettp) Start() {
 	go s.background()
 	s.banner()
 	s.printRoutes()
+	if s.onStart != nil {
+		s.onStart()
+	}
 
 	utility.AppWait()
 

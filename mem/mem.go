@@ -54,17 +54,22 @@ func (s *Mem) Type() string {
 * @return interface{}
 **/
 func (s *Mem) Set(key string, value interface{}, expiration time.Duration) *Item {
-	s.mu.RLock()
-	item, ok := s.items[key]
-	s.mu.RUnlock()
-	if ok {
-		item.Set(value)
-	} else {
-		item = New(key, value)
-		s.mu.Lock()
-		s.items[key] = item
-		s.mu.Unlock()
-	}
+	ch := make(chan *Item)
+	go func() {
+		s.mu.RLock()
+		item, ok := s.items[key]
+		s.mu.RUnlock()
+		if ok {
+			item.Set(value)
+		} else {
+			item = New(key, value)
+			s.mu.Lock()
+			s.items[key] = item
+			s.mu.Unlock()
+		}
+
+		ch <- item
+	}()
 
 	clean := func() {
 		s.Delete(key)
@@ -75,7 +80,8 @@ func (s *Mem) Set(key string, value interface{}, expiration time.Duration) *Item
 		go time.AfterFunc(duration, clean)
 	}
 
-	return item
+	result := <-ch
+	return result
 }
 
 /**
@@ -84,16 +90,21 @@ func (s *Mem) Set(key string, value interface{}, expiration time.Duration) *Item
 * @return bool
 **/
 func (s *Mem) Delete(key string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	ch := make(chan bool)
+	go func() {
+		s.mu.Lock()
+		_, ok := s.items[key]
+		s.mu.Unlock()
+		if !ok {
+			ch <- false
+			return
+		}
 
-	if _, ok := s.items[key]; !ok {
-		return false
-	}
+		delete(s.items, key)
+		ch <- true
+	}()
 
-	delete(s.items, key)
-
-	return true
+	return <-ch
 }
 
 /**
@@ -102,14 +113,32 @@ func (s *Mem) Delete(key string) bool {
 * @return *Item, error
 **/
 func (s *Mem) GetItem(key string) (*Item, error) {
-	s.mu.RLock()
-	item, ok := s.items[key]
-	s.mu.RUnlock()
-	if ok {
-		return item, nil
+	type Result struct {
+		result *Item
+		err    error
 	}
 
-	return nil, fmt.Errorf("NotExists")
+	ch := make(chan Result)
+	go func() {
+		s.mu.RLock()
+		item, ok := s.items[key]
+		s.mu.RUnlock()
+		if ok {
+			ch <- Result{
+				result: item,
+				err:    nil,
+			}
+			return
+		}
+
+		ch <- Result{
+			result: nil,
+			err:    fmt.Errorf("NotExists"),
+		}
+	}()
+
+	result := <-ch
+	return result.result, result.err
 }
 
 /**

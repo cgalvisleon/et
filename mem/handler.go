@@ -97,6 +97,11 @@ func GetFloat64(key string) (float64, error) {
 	return conn.GetFloat(key, 0)
 }
 
+/**
+* GetBool
+* @param key string
+* @return bool, error
+**/
 func GetBool(key string) (bool, error) {
 	if conn == nil {
 		return false, nil
@@ -131,6 +136,11 @@ func GetDuration(key string) (time.Duration, error) {
 	return conn.GetDuration(key, 0)
 }
 
+/**
+* GetJson
+* @param key string
+* @return et.Json, error
+**/
 func GetJson(key string) (et.Json, error) {
 	if conn == nil {
 		return et.Json{}, nil

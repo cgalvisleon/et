@@ -1,6 +1,10 @@
 package mem
 
-import "time"
+import (
+	"time"
+
+	"github.com/cgalvisleon/et/et"
+)
 
 /**
 * Set
@@ -26,6 +30,100 @@ func Get(key, def string) (string, error) {
 	}
 
 	return conn.Get(key, def)
+}
+
+/**
+* GetInt
+* @param key string
+* @return int, error
+**/
+func GetInt(key string) (int, error) {
+	if conn == nil {
+		return 0, nil
+	}
+
+	return conn.GetInt(key, 0)
+}
+
+/**
+* GetInt64
+* @param key string
+* @return int64, error
+**/
+func GetInt64(key string) (int64, error) {
+	if conn == nil {
+		return 0, nil
+	}
+
+	return conn.GetInt64(key, 0)
+}
+
+/**
+* GetFloat64
+* @param key string
+* @return float64, error
+**/
+func GetFloat64(key string) (float64, error) {
+	if conn == nil {
+		return 0, nil
+	}
+
+	return conn.GetFloat(key, 0)
+}
+
+func GetBool(key string) (bool, error) {
+	if conn == nil {
+		return false, nil
+	}
+
+	return conn.GetBool(key, false)
+}
+
+/**
+* GetTime
+* @param key string
+* @return time.Time, error
+**/
+func GetTime(key string) (time.Time, error) {
+	if conn == nil {
+		return time.Time{}, nil
+	}
+
+	return conn.GetTime(key, time.Time{})
+}
+
+/**
+* GetDuration
+* @param key string
+* @return time.Duration, error
+**/
+func GetDuration(key string) (time.Duration, error) {
+	if conn == nil {
+		return 0, nil
+	}
+
+	return conn.GetDuration(key, 0)
+}
+
+func GetJson(key string) (et.Json, error) {
+	if conn == nil {
+		return et.Json{}, nil
+	}
+
+	return conn.GetJson(key, et.Json{})
+}
+
+/**
+* GetArrayJson
+* @param key string
+* @return []et.Json, error
+**/
+func GetArrayJson(key string) ([]et.Json, error) {
+	if conn == nil {
+		return []et.Json{}, nil
+	}
+
+	return conn.GetArrayJson(key, []et.Json{})
 }
 
 /**

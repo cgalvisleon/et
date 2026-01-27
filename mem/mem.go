@@ -13,7 +13,7 @@ import (
 
 type Mem struct {
 	items map[string]*Item
-	locks map[string]*sync.RWMutex
+	mu    *sync.RWMutex
 }
 
 var conn *Mem
@@ -21,7 +21,7 @@ var conn *Mem
 func Load() (*Mem, error) {
 	result := &Mem{
 		items: make(map[string]*Item),
-		locks: make(map[string]*sync.RWMutex),
+		mu:    &sync.RWMutex{},
 	}
 
 	return result, nil
@@ -41,19 +41,6 @@ func init() {
 }
 
 /**
-* lock return a lock
-* @param tag string
-* @return *sync.RWMutex
-**/
-func (s *Mem) lock(tag string) *sync.RWMutex {
-	if s.locks[tag] == nil {
-		s.locks[tag] = &sync.RWMutex{}
-	}
-
-	return s.locks[tag]
-}
-
-/**
 * Type
 * @return string
 **/
@@ -67,20 +54,20 @@ func (s *Mem) Type() string {
 * @return interface{}
 **/
 func (s *Mem) Set(key string, value interface{}, expiration time.Duration) *Item {
-	lock := s.lock(key)
-	lock.Lock()
-	defer lock.Unlock()
-
+	s.mu.RLock()
 	item, ok := s.items[key]
+	s.mu.RUnlock()
 	if ok {
 		item.Set(value)
 	} else {
 		item = New(key, value)
+		s.mu.Lock()
 		s.items[key] = item
+		s.mu.Unlock()
 	}
 
 	clean := func() {
-		s.Del(key)
+		s.Delete(key)
 	}
 
 	duration := expiration * time.Second
@@ -92,16 +79,32 @@ func (s *Mem) Set(key string, value interface{}, expiration time.Duration) *Item
 }
 
 /**
+* Delete
+* @param key string
+* @return bool
+**/
+func (s *Mem) Delete(key string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.items[key]; !ok {
+		return false
+	}
+
+	delete(s.items, key)
+
+	return true
+}
+
+/**
 * GetItem
 * @param key string
 * @return *Item, error
 **/
 func (s *Mem) GetItem(key string) (*Item, error) {
-	lock := s.lock(key)
-	lock.RLock()
-	defer lock.RUnlock()
-
+	s.mu.RLock()
 	item, ok := s.items[key]
+	s.mu.RUnlock()
 	if ok {
 		return item, nil
 	}
@@ -289,25 +292,6 @@ func (s *Mem) GetArrayJson(key string, def []et.Json) ([]et.Json, error) {
 	}
 
 	return item.ArrayJson(), nil
-}
-
-/**
-* Del
-* @param key string
-* @return bool
-**/
-func (s *Mem) Del(key string) bool {
-	lock := s.lock(key)
-	lock.Lock()
-	defer lock.Unlock()
-
-	if _, ok := s.items[key]; !ok {
-		return false
-	}
-
-	delete(s.items, key)
-
-	return true
 }
 
 /**

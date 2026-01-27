@@ -129,9 +129,32 @@ func ParceToken(token string) (*Claim, error) {
 		return nil, fmt.Errorf(msg.MSG_REQUIRED_INVALID)
 	}
 
-	payload, ok := claim["payload"]
+	app, ok := claim["app"].(string)
+	if !ok {
+		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "app")
+	}
+
+	device, ok := claim["device"].(string)
+	if !ok {
+		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "device")
+	}
+
+	username, ok := claim["username"].(string)
+	if !ok {
+		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "username")
+	}
+
+	payloadItf, ok := claim["payload"]
 	if !ok {
 		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "payload")
+	}
+
+	payload := et.Json{}
+	switch v := payloadItf.(type) {
+	case map[string]interface{}:
+		payload = v
+	case et.Json:
+		payload = v
 	}
 
 	second, ok := claim["duration"].(float64)
@@ -141,8 +164,11 @@ func ParceToken(token string) (*Claim, error) {
 
 	duration := time.Duration(second)
 	result := &Claim{
+		App:      app,
+		Device:   device,
+		Username: username,
 		Duration: duration,
-		Payload:  payload.(et.Json),
+		Payload:  payload,
 	}
 	if result.Duration != 0 {
 		exp, ok := claim["exp"].(float64)

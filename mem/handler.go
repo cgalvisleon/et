@@ -172,7 +172,7 @@ func Delete(key string) bool {
 		return false
 	}
 
-	return conn.Del(key)
+	return conn.Delete(key)
 }
 
 /**

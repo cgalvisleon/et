@@ -129,7 +129,7 @@ func ParceToken(token string) (*Claim, error) {
 		return nil, fmt.Errorf(msg.MSG_REQUIRED_INVALID)
 	}
 
-	payload, ok := claim["payload"].(et.Json)
+	payload, ok := claim["payload"]
 	if !ok {
 		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "payload")
 	}
@@ -142,7 +142,7 @@ func ParceToken(token string) (*Claim, error) {
 	duration := time.Duration(second)
 	result := &Claim{
 		Duration: duration,
-		Payload:  payload,
+		Payload:  payload.(et.Json),
 	}
 	if result.Duration != 0 {
 		exp, ok := claim["exp"].(float64)

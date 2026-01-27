@@ -137,6 +137,10 @@ func (s *Server) banner() {
 	fmt.Println()
 }
 
+/**
+* initHttpServer
+* @return error
+**/
 func (s *Server) initHttpServer() error {
 	go func() {
 		if s.tls {

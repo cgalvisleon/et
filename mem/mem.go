@@ -92,11 +92,11 @@ func (s *Mem) Set(key string, value interface{}, expiration time.Duration) inter
 }
 
 /**
-* Get
+* GetItem
 * @param key string
 * @return *Item, error
 **/
-func (s *Mem) getItem(key string) (*Item, error) {
+func (s *Mem) GetItem(key string) (*Item, error) {
 	lock := s.lock(key)
 	lock.RLock()
 	defer lock.RUnlock()
@@ -115,7 +115,7 @@ func (s *Mem) getItem(key string) (*Item, error) {
 * @return interfase{}, error
 **/
 func (s *Mem) Get(key string) (interface{}, error) {
-	item, err := s.getItem(key)
+	item, err := s.GetItem(key)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +129,7 @@ func (s *Mem) Get(key string) (interface{}, error) {
 * @return string
 **/
 func (s *Mem) GetStr(key string) (string, error) {
-	item, err := s.getItem(key)
+	item, err := s.GetItem(key)
 	if err != nil {
 		return "", err
 	}
@@ -143,7 +143,7 @@ func (s *Mem) GetStr(key string) (string, error) {
 * @return int, error
 **/
 func (s *Mem) GetInt(key string, def int) (int, error) {
-	item, err := s.getItem(key)
+	item, err := s.GetItem(key)
 	if err != nil {
 		return def, err
 	}
@@ -157,7 +157,7 @@ func (s *Mem) GetInt(key string, def int) (int, error) {
 * @return int, error
 **/
 func (s *Mem) GetInt64(key string, def int64) (int64, error) {
-	item, err := s.getItem(key)
+	item, err := s.GetItem(key)
 	if err != nil {
 		return def, err
 	}
@@ -171,7 +171,7 @@ func (s *Mem) GetInt64(key string, def int64) (int64, error) {
 * @return float64, error
 **/
 func (s *Mem) GetFloat(key string, def float64) (float64, error) {
-	item, err := s.getItem(key)
+	item, err := s.GetItem(key)
 	if err != nil {
 		return def, err
 	}
@@ -185,7 +185,7 @@ func (s *Mem) GetFloat(key string, def float64) (float64, error) {
 * @return bool, error
 **/
 func (s *Mem) GetBool(key string, def bool) (bool, error) {
-	item, err := s.getItem(key)
+	item, err := s.GetItem(key)
 	if err != nil {
 		return def, err
 	}
@@ -199,7 +199,7 @@ func (s *Mem) GetBool(key string, def bool) (bool, error) {
 * @return time.Time, error
 **/
 func (s *Mem) GetTime(key string, def time.Time) (time.Time, error) {
-	item, err := s.getItem(key)
+	item, err := s.GetItem(key)
 	if err != nil {
 		return def, err
 	}
@@ -213,7 +213,7 @@ func (s *Mem) GetTime(key string, def time.Time) (time.Time, error) {
 * @return time.Duration, error
 **/
 func (s *Mem) GetDuration(key string, def time.Duration) (time.Duration, error) {
-	item, err := s.getItem(key)
+	item, err := s.GetItem(key)
 	if err != nil {
 		return def, err
 	}
@@ -227,7 +227,7 @@ func (s *Mem) GetDuration(key string, def time.Duration) (time.Duration, error) 
 * @return et.Json, error
 **/
 func (s *Mem) GetJson(key string, def et.Json) (et.Json, error) {
-	item, err := s.getItem(key)
+	item, err := s.GetItem(key)
 	if err != nil {
 		return def, err
 	}
@@ -241,7 +241,7 @@ func (s *Mem) GetJson(key string, def et.Json) (et.Json, error) {
 * @return []string, error
 **/
 func (s *Mem) GetArrayStr(key string, def []string) ([]string, error) {
-	item, err := s.getItem(key)
+	item, err := s.GetItem(key)
 	if err != nil {
 		return def, err
 	}
@@ -255,7 +255,7 @@ func (s *Mem) GetArrayStr(key string, def []string) ([]string, error) {
 * @return []int, error
 **/
 func (s *Mem) GetArrayInt(key string, def []int) ([]int, error) {
-	item, err := s.getItem(key)
+	item, err := s.GetItem(key)
 	if err != nil {
 		return def, err
 	}
@@ -269,7 +269,7 @@ func (s *Mem) GetArrayInt(key string, def []int) ([]int, error) {
 * @return []float64, error
 **/
 func (s *Mem) GetArrayFloat(key string, def []float64) ([]float64, error) {
-	item, err := s.getItem(key)
+	item, err := s.GetItem(key)
 	if err != nil {
 		return def, err
 	}
@@ -283,7 +283,7 @@ func (s *Mem) GetArrayFloat(key string, def []float64) ([]float64, error) {
 * @return []et.Json, error
 **/
 func (s *Mem) GetArrayJson(key string, def []et.Json) ([]et.Json, error) {
-	item, err := s.getItem(key)
+	item, err := s.GetItem(key)
 	if err != nil {
 		return def, err
 	}

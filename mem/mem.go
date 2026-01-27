@@ -106,7 +106,7 @@ func (s *Mem) GetItem(key string) (*Item, error) {
 		return item, nil
 	}
 
-	return nil, fmt.Errorf("IsNil")
+	return nil, fmt.Errorf("NotExists")
 }
 
 /**

@@ -20,6 +20,19 @@ func Set(key string, value interface{}, expiration time.Duration) interface{} {
 }
 
 /**
+* GetItem
+* @param key string
+* @return *Item, error
+**/
+func GetItem(key string) (*Item, error) {
+	if conn == nil {
+		return nil, nil
+	}
+
+	return conn.GetItem(key)
+}
+
+/**
 * Get
 * @param key, def string
 * @return string, error

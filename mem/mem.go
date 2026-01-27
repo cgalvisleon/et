@@ -93,20 +93,48 @@ func (s *Mem) Set(key string, value interface{}, expiration time.Duration) inter
 
 /**
 * Get
-* @param key string, def string
-* @return string, error
+* @param key string
+* @return *Item, error
 **/
-func (s *Mem) Get(key string, def string) (string, error) {
+func (s *Mem) getItem(key string) (*Item, error) {
 	lock := s.lock(key)
 	lock.RLock()
 	defer lock.RUnlock()
 
 	item, ok := s.items[key]
 	if ok {
-		return item.Str(), nil
+		return item, nil
 	}
 
-	return def, fmt.Errorf("IsNil")
+	return nil, fmt.Errorf("IsNil")
+}
+
+/**
+* Get
+* @param key string
+* @return interfase{}, error
+**/
+func (s *Mem) Get(key string) (interface{}, error) {
+	item, err := s.getItem(key)
+	if err != nil {
+		return nil, err
+	}
+
+	return item.Get(), nil
+}
+
+/**
+* GetStr
+* @param key string
+* @return string
+**/
+func (s *Mem) GetStr(key string) (string, error) {
+	item, err := s.getItem(key)
+	if err != nil {
+		return "", err
+	}
+
+	return item.Str(), nil
 }
 
 /**
@@ -115,16 +143,12 @@ func (s *Mem) Get(key string, def string) (string, error) {
 * @return int, error
 **/
 func (s *Mem) GetInt(key string, def int) (int, error) {
-	lock := s.lock(key)
-	lock.RLock()
-	defer lock.RUnlock()
-
-	item, ok := s.items[key]
-	if ok {
-		return item.Int(), nil
+	item, err := s.getItem(key)
+	if err != nil {
+		return def, err
 	}
 
-	return def, fmt.Errorf("IsNil")
+	return item.Int(), nil
 }
 
 /**
@@ -133,16 +157,12 @@ func (s *Mem) GetInt(key string, def int) (int, error) {
 * @return int, error
 **/
 func (s *Mem) GetInt64(key string, def int64) (int64, error) {
-	lock := s.lock(key)
-	lock.RLock()
-	defer lock.RUnlock()
-
-	item, ok := s.items[key]
-	if ok {
-		return item.Int64(), nil
+	item, err := s.getItem(key)
+	if err != nil {
+		return def, err
 	}
 
-	return def, fmt.Errorf("IsNil")
+	return item.Int64(), nil
 }
 
 /**
@@ -151,16 +171,12 @@ func (s *Mem) GetInt64(key string, def int64) (int64, error) {
 * @return float64, error
 **/
 func (s *Mem) GetFloat(key string, def float64) (float64, error) {
-	lock := s.lock(key)
-	lock.RLock()
-	defer lock.RUnlock()
-
-	item, ok := s.items[key]
-	if ok {
-		return item.Float(), nil
+	item, err := s.getItem(key)
+	if err != nil {
+		return def, err
 	}
 
-	return def, fmt.Errorf("IsNil")
+	return item.Float(), nil
 }
 
 /**
@@ -169,16 +185,12 @@ func (s *Mem) GetFloat(key string, def float64) (float64, error) {
 * @return bool, error
 **/
 func (s *Mem) GetBool(key string, def bool) (bool, error) {
-	lock := s.lock(key)
-	lock.RLock()
-	defer lock.RUnlock()
-
-	item, ok := s.items[key]
-	if ok {
-		return item.Bool(), nil
+	item, err := s.getItem(key)
+	if err != nil {
+		return def, err
 	}
 
-	return def, fmt.Errorf("IsNil")
+	return item.Bool(), nil
 }
 
 /**
@@ -187,16 +199,12 @@ func (s *Mem) GetBool(key string, def bool) (bool, error) {
 * @return time.Time, error
 **/
 func (s *Mem) GetTime(key string, def time.Time) (time.Time, error) {
-	lock := s.lock(key)
-	lock.RLock()
-	defer lock.RUnlock()
-
-	item, ok := s.items[key]
-	if ok {
-		return item.Time(), nil
+	item, err := s.getItem(key)
+	if err != nil {
+		return def, err
 	}
 
-	return def, fmt.Errorf("IsNil")
+	return item.Time(), nil
 }
 
 /**
@@ -205,16 +213,12 @@ func (s *Mem) GetTime(key string, def time.Time) (time.Time, error) {
 * @return time.Duration, error
 **/
 func (s *Mem) GetDuration(key string, def time.Duration) (time.Duration, error) {
-	lock := s.lock(key)
-	lock.RLock()
-	defer lock.RUnlock()
-
-	item, ok := s.items[key]
-	if ok {
-		return item.Duration(), nil
+	item, err := s.getItem(key)
+	if err != nil {
+		return def, err
 	}
 
-	return def, fmt.Errorf("IsNil")
+	return item.Duration(), nil
 }
 
 /**
@@ -223,52 +227,12 @@ func (s *Mem) GetDuration(key string, def time.Duration) (time.Duration, error) 
 * @return et.Json, error
 **/
 func (s *Mem) GetJson(key string, def et.Json) (et.Json, error) {
-	lock := s.lock(key)
-	lock.RLock()
-	defer lock.RUnlock()
-
-	item, ok := s.items[key]
-	if ok {
-		return item.Json(), nil
+	item, err := s.getItem(key)
+	if err != nil {
+		return def, err
 	}
 
-	return def, fmt.Errorf("IsNil")
-}
-
-/**
-* GetMap
-* @param key string, def map[string]interface{}
-* @return map[string]interface{}, error
-**/
-func (s *Mem) GetMap(key string, def map[string]interface{}) (map[string]interface{}, error) {
-	lock := s.lock(key)
-	lock.RLock()
-	defer lock.RUnlock()
-
-	item, ok := s.items[key]
-	if ok {
-		return item.Map(), nil
-	}
-
-	return def, fmt.Errorf("IsNil")
-}
-
-/**
-* GetArrayMap
-* @param key string, def []map[string]interface{}
-* @return []map[string]interface{}, error
-**/
-func (s *Mem) GetArrayMap(key string, def []map[string]interface{}) ([]map[string]interface{}, error) {
-	lock := s.lock(key)
-	lock.RLock()
-	defer lock.RUnlock()
-
-	item, ok := s.items[key]
-	if ok {
-		return item.ArrayMap(), nil
-	}
-
-	return def, fmt.Errorf("IsNil")
+	return item.Json(), nil
 }
 
 /**
@@ -277,16 +241,12 @@ func (s *Mem) GetArrayMap(key string, def []map[string]interface{}) ([]map[strin
 * @return []string, error
 **/
 func (s *Mem) GetArrayStr(key string, def []string) ([]string, error) {
-	lock := s.lock(key)
-	lock.RLock()
-	defer lock.RUnlock()
-
-	item, ok := s.items[key]
-	if ok {
-		return item.ArrayStr(), nil
+	item, err := s.getItem(key)
+	if err != nil {
+		return def, err
 	}
 
-	return def, fmt.Errorf("IsNil")
+	return item.ArrayStr(), nil
 }
 
 /**
@@ -295,16 +255,12 @@ func (s *Mem) GetArrayStr(key string, def []string) ([]string, error) {
 * @return []int, error
 **/
 func (s *Mem) GetArrayInt(key string, def []int) ([]int, error) {
-	lock := s.lock(key)
-	lock.RLock()
-	defer lock.RUnlock()
-
-	item, ok := s.items[key]
-	if ok {
-		return item.ArrayInt(), nil
+	item, err := s.getItem(key)
+	if err != nil {
+		return def, err
 	}
 
-	return def, fmt.Errorf("IsNil")
+	return item.ArrayInt(), nil
 }
 
 /**
@@ -313,52 +269,12 @@ func (s *Mem) GetArrayInt(key string, def []int) ([]int, error) {
 * @return []float64, error
 **/
 func (s *Mem) GetArrayFloat(key string, def []float64) ([]float64, error) {
-	lock := s.lock(key)
-	lock.RLock()
-	defer lock.RUnlock()
-
-	item, ok := s.items[key]
-	if ok {
-		return item.ArrayFloat(), nil
+	item, err := s.getItem(key)
+	if err != nil {
+		return def, err
 	}
 
-	return def, fmt.Errorf("IsNil")
-}
-
-/**
-* GetArrayTime
-* @param key string, def []time.Time
-* @return []time.Time, error
-**/
-func (s *Mem) GetArrayTime(key string, def []time.Time) ([]time.Time, error) {
-	lock := s.lock(key)
-	lock.RLock()
-	defer lock.RUnlock()
-
-	item, ok := s.items[key]
-	if ok {
-		return item.ArrayTime(), nil
-	}
-
-	return def, fmt.Errorf("IsNil")
-}
-
-/**
-* GetArrayDuration
-* @param key string, def []time.Duration
-* @return []time.Duration, error
-**/
-func (s *Mem) GetArrayDuration(key string, def []time.Duration) ([]time.Duration, error) {
-	lock := s.lock(key)
-	lock.RLock()
-	defer lock.RUnlock()
-
-	item, ok := s.items[key]
-	if ok {
-		return item.ArrayDuration(), nil
-	}
-
-	return def, fmt.Errorf("IsNil")
+	return item.ArrayFloat(), nil
 }
 
 /**
@@ -367,16 +283,12 @@ func (s *Mem) GetArrayDuration(key string, def []time.Duration) ([]time.Duration
 * @return []et.Json, error
 **/
 func (s *Mem) GetArrayJson(key string, def []et.Json) ([]et.Json, error) {
-	lock := s.lock(key)
-	lock.RLock()
-	defer lock.RUnlock()
-
-	item, ok := s.items[key]
-	if ok {
-		return item.ArrayJson(), nil
+	item, err := s.getItem(key)
+	if err != nil {
+		return def, err
 	}
 
-	return def, fmt.Errorf("IsNil")
+	return item.ArrayJson(), nil
 }
 
 /**

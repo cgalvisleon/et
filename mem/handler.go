@@ -24,12 +24,25 @@ func Set(key string, value interface{}, expiration time.Duration) interface{} {
 * @param key, def string
 * @return string, error
 **/
-func Get(key, def string) (string, error) {
+func Get(key string) (interface{}, error) {
 	if conn == nil {
-		return def, nil
+		return nil, nil
 	}
 
-	return conn.Get(key, def)
+	return conn.Get(key)
+}
+
+/**
+* GetStr
+* @param key string
+* @return string, error
+**/
+func GetStr(key string) (string, error) {
+	if conn == nil {
+		return "", nil
+	}
+
+	return conn.GetStr(key)
 }
 
 /**

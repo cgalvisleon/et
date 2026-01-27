@@ -242,20 +242,6 @@ func (i *Item) ArrayFloat() []float64 {
 }
 
 /**
-* ArrayBool return the value of item
-* @return []bool
-**/
-func (i *Item) ArrayBool() []bool {
-	result := i.Get()
-	val, ok := result.([]bool)
-	if !ok {
-		return []bool{}
-	}
-
-	return val
-}
-
-/**
 * ArrayTime return the value of item
 * @return []time.Time
 **/

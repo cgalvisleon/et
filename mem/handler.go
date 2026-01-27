@@ -4,10 +4,10 @@ import "time"
 
 /**
 * Set
-* @param key, value string, expiration time.Duration
-* @return string
+* @param key string, value interface{}, expiration time.Duration
+* @return interface{}
 **/
-func Set(key, value string, expiration time.Duration) string {
+func Set(key string, value interface{}, expiration time.Duration) interface{} {
 	if conn == nil {
 		return value
 	}

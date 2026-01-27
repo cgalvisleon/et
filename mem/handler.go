@@ -9,11 +9,11 @@ import (
 /**
 * Set
 * @param key string, value interface{}, expiration time.Duration
-* @return interface{}
+* @return *Item
 **/
-func Set(key string, value interface{}, expiration time.Duration) interface{} {
+func Set(key string, value interface{}, expiration time.Duration) *Item {
 	if conn == nil {
-		return value
+		return nil
 	}
 
 	return conn.Set(key, value, expiration)

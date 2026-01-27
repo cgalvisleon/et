@@ -66,7 +66,7 @@ func (s *Mem) Type() string {
 * @param key string, value interface{}, expiration time.Duration
 * @return interface{}
 **/
-func (s *Mem) Set(key string, value interface{}, expiration time.Duration) interface{} {
+func (s *Mem) Set(key string, value interface{}, expiration time.Duration) *Item {
 	lock := s.lock(key)
 	lock.Lock()
 	defer lock.Unlock()
@@ -88,7 +88,7 @@ func (s *Mem) Set(key string, value interface{}, expiration time.Duration) inter
 		go time.AfterFunc(duration, clean)
 	}
 
-	return value
+	return item
 }
 
 /**

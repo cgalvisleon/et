@@ -25,6 +25,8 @@ var (
 	MSG_PATH_INVALID                   = "path:%s is invalid"
 	MSG_SOLVER_NOT_FOUND_TAG           = "solver:%s not found tag:%s"
 	MSG_SOLVER_NOT_FOUND               = "solver:%s not found"
+	MSG_METHOD_NOT_SUPPORTED           = "method %s not supported"
+	MSG_RESOLVE_NOT_VALID              = "resolve %s is not valid"
 )
 
 func init() {
@@ -53,5 +55,7 @@ func init() {
 		MSG_PATH_INVALID = "path:%s invalido"
 		MSG_SOLVER_NOT_FOUND_TAG = "solver:%s no encontrado tag:%s"
 		MSG_SOLVER_NOT_FOUND = "solver:%s no encontrado"
+		MSG_METHOD_NOT_SUPPORTED = "metodo %s no soportado"
+		MSG_RESOLVE_NOT_VALID = "resolve %s no valido"
 	}
 }

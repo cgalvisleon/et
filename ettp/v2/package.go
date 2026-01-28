@@ -13,18 +13,17 @@ type Package struct {
 }
 
 /**
-* NewPackage
+* newPackage
 * @param name string, server *Server
 * @return *Package
 **/
-func NewPackage(name string, server *Server) *Package {
+func newPackage(name string, server *Server) *Package {
 	result := &Package{
 		Name:    name,
 		Solvers: make([]*Solver, 0),
 		server:  server,
 	}
 
-	server.Packages[name] = result
 	return result
 }
 
@@ -46,10 +45,10 @@ func (p *Package) ToJson() et.Json {
 }
 
 /**
-* AddSolver
+* addSolver
 * @param solver *Solver
 **/
-func (p *Package) AddSolver(solver *Solver) {
+func (p *Package) addSolver(solver *Solver) {
 	idx := slices.IndexFunc(p.Solvers, func(s *Solver) bool {
 		return s.Id == solver.Id
 	})
@@ -58,7 +57,7 @@ func (p *Package) AddSolver(solver *Solver) {
 		if solver.PackageName != p.Name {
 			oldPackage := p.server.Packages[solver.PackageName]
 			if oldPackage != nil {
-				oldPackage.RemoveSolver(solver)
+				oldPackage.removeSolver(solver)
 			}
 		}
 
@@ -68,10 +67,10 @@ func (p *Package) AddSolver(solver *Solver) {
 }
 
 /**
-* RemoveSolver
+* removeSolver
 * @param solver *Solver
 **/
-func (p *Package) RemoveSolver(solver *Solver) {
+func (p *Package) removeSolver(solver *Solver) {
 	idx := slices.IndexFunc(p.Solvers, func(s *Solver) bool {
 		return s.Id == solver.Id
 	})

@@ -11,11 +11,16 @@ import (
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
+	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/dimiro1/banner"
 	"github.com/mattn/go-colorable"
+)
+
+const (
+	Version = "v0.0.3"
 )
 
 type Config struct {
@@ -33,7 +38,6 @@ type Config struct {
 
 type Server struct {
 	CreatedAt     time.Time                         `json:"created_at"`
-	Id            string                            `json:"id"`
 	Name          string                            `json:"name"`
 	Host          string                            `json:"host"`
 	Port          int                               `json:"port"`
@@ -67,7 +71,6 @@ func NewServer(name string, config *Config) *Server {
 	host, _ := os.Hostname()
 	result := &Server{
 		CreatedAt:     now,
-		Id:            utility.UUID(),
 		Name:          name,
 		Host:          host,
 		Port:          config.Port,
@@ -77,7 +80,7 @@ func NewServer(name string, config *Config) *Server {
 		Solvers:       make(map[string]*Solver),
 		Packages:      make(map[string]*Package),
 		Requests:      make(map[string]*Resolver),
-		Version:       "v0.0.2",
+		Version:       Version,
 		mux:           http.NewServeMux(),
 		middlewares:   make([]func(http.Handler) http.Handler, 0),
 		authenticator: middleware.Autentication,
@@ -113,7 +116,6 @@ func (s *Server) ToJson() et.Json {
 
 	return et.Json{
 		"created_at": s.CreatedAt,
-		"id":         s.Id,
 		"name":       s.Name,
 		"host":       s.Host,
 		"port":       s.Port,
@@ -225,11 +227,11 @@ func (s *Server) Reset() {
 **/
 func (s *Server) setRouter(kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, packageName string, saved bool) (*Solver, error) {
 	if !methodMap[method] {
-		return nil, fmt.Errorf("method %s not supported", method)
+		return nil, fmt.Errorf(msg.MSG_METHOD_NOT_SUPPORTED, method)
 	}
 
 	if !utility.ValidStr(path, 1, []string{""}) {
-		return nil, fmt.Errorf("path %s is not valid", path)
+		return nil, fmt.Errorf(msg.MSG_PATH_INVALID, path)
 	}
 
 	log := func(action string) {
@@ -246,9 +248,10 @@ func (s *Server) setRouter(kind TypeRouter, method, path, solver string, typeHea
 		s.Router[method] = router
 	}
 
-	pkg := s.Packages[packageName]
-	if pkg == nil {
-		pkg = NewPackage(packageName, s)
+	pkg, ok := s.Packages[packageName]
+	if !ok {
+		pkg = newPackage(packageName, s)
+		s.Packages[packageName] = pkg
 	}
 
 	action := "Create"
@@ -264,7 +267,7 @@ func (s *Server) setRouter(kind TypeRouter, method, path, solver string, typeHea
 	}
 
 	s.Solvers[key] = result
-	pkg.AddSolver(result)
+	pkg.addSolver(result)
 	log(action)
 
 	if saved {
@@ -319,7 +322,7 @@ func (s *Server) SetRouter(method, path, resolve string, typeHeader int, header 
 	}
 
 	if !utility.ValidStr(resolve, 0, []string{""}) {
-		return nil, fmt.Errorf("resolve %s is not valid", resolve)
+		return nil, fmt.Errorf(msg.MSG_RESOLVE_NOT_VALID, resolve)
 	}
 
 	result, err := s.setSolver(TpApiRest, method, path, resolve, TpHeader(typeHeader), headerMap, excludeHeader, version, private, packageName, saved)

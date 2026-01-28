@@ -47,7 +47,12 @@ type Resolver struct {
 	solver    *Solver   `json:"-"`
 }
 
-func NewResolver(r *http.Request, solver *Solver, params map[string]string) *Resolver {
+/**
+* newResolver
+* @param r *http.Request, solver *Solver, params map[string]string
+* @return *Resolver
+**/
+func newResolver(r *http.Request, solver *Solver, params map[string]string) *Resolver {
 	id := reg.GenULID("resolver")
 	now := utility.Now()
 	url := solver.Solver
@@ -119,10 +124,10 @@ func (r *Resolver) ToJson() et.Json {
 }
 
 /**
-* SetStatus
+* setStatus
 * @param status Status
 **/
-func (r *Resolver) SetStatus(status Status) {
+func (r *Resolver) setStatus(status Status) {
 	r.Status = status
 	r.UpdatedAt = utility.Now()
 	event.Publish(EVENT_RESOLVER_STATUS, r.ToJson())

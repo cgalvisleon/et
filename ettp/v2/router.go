@@ -191,7 +191,7 @@ func (s *Router) findResolver(req *http.Request) (*Resolver, error) {
 		return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND_TAG, path, tag)
 	}
 
-	if target == nil {
+	if target.solver == nil {
 		return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
 	}
 
@@ -204,10 +204,6 @@ func (s *Router) findResolver(req *http.Request) (*Resolver, error) {
 * @return *Solver, error
 **/
 func (s *Router) getResolver(r *http.Request, solver *Solver, params map[string]string) (*Resolver, error) {
-	if solver == nil {
-		return nil, fmt.Errorf("solver not found")
-	}
-
-	result := NewResolver(r, solver, params)
+	result := newResolver(r, solver, params)
 	return result, nil
 }

@@ -428,7 +428,7 @@ func (s *Server) FindResolver(r *http.Request) (*Resolver, error) {
 * @param r *Resolver, status Status
 **/
 func (s *Server) HTTPError(resolver *Resolver, metric *middleware.Metrics, w http.ResponseWriter, r *http.Request, status int, message string) {
-	resolver.SetStatus(TpStatusFailed)
+	resolver.setStatus(TpStatusFailed)
 	metric.HTTPError(w, r, status, message)
 
 	s.Save()
@@ -439,7 +439,7 @@ func (s *Server) HTTPError(resolver *Resolver, metric *middleware.Metrics, w htt
 * @param resolver *Resolver, metric *middleware.Metrics, rw *middleware.ResponseWriterWrapper
 **/
 func (s *Server) HTTPSuccess(resolver *Resolver, metric *middleware.Metrics, rw *middleware.ResponseWriterWrapper) {
-	resolver.SetStatus(TpStatusSuccess)
+	resolver.setStatus(TpStatusSuccess)
 	delete(s.Requests, resolver.Id)
 	metric.DoneHTTP(rw)
 

@@ -193,7 +193,7 @@ func (s *Server) getRoutes(w http.ResponseWriter, r *http.Request) {
 
 	name := r.URL.Query().Get("name")
 	if len(name) != 0 {
-		result, ok := s.Packages[name]
+		result, ok := s.packages[name]
 		if !ok {
 			metric.HTTPError(w, r, http.StatusNotFound, MSG_ROUTE_NOT_FOUND)
 			return
@@ -277,7 +277,7 @@ func (s *Server) getPakages(w http.ResponseWriter, r *http.Request) {
 	name := queryParams.Get("name")
 	if len(name) == 0 {
 		result := et.Items{Result: []et.Json{}}
-		for _, pkg := range s.Packages {
+		for _, pkg := range s.packages {
 			result.Add(pkg.ToJson())
 		}
 
@@ -285,7 +285,7 @@ func (s *Server) getPakages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, ok := s.Packages[name]
+	result, ok := s.packages[name]
 	if !ok {
 		metric.HTTPError(w, r, http.StatusNotFound, MSG_ROUTE_NOT_FOUND)
 		return
@@ -302,7 +302,7 @@ func (s *Server) deletePackage(w http.ResponseWriter, r *http.Request) {
 	metric := middleware.GetMetrics(r)
 
 	name := r.PathValue("name")
-	result, ok := s.Packages[name]
+	result, ok := s.packages[name]
 	if !ok {
 		metric.HTTPError(w, r, http.StatusNotFound, MSG_ROUTE_NOT_FOUND)
 		return
@@ -312,7 +312,7 @@ func (s *Server) deletePackage(w http.ResponseWriter, r *http.Request) {
 		s.RemoveRouterById(solver.Id, false)
 	}
 
-	delete(s.Packages, name)
+	delete(s.packages, name)
 
 	s.Save()
 
@@ -335,7 +335,7 @@ func (s *Server) reset(w http.ResponseWriter, r *http.Request) {
 
 	s.Reset()
 
-	for _, pk := range s.Packages {
+	for _, pk := range s.packages {
 		channel := fmt.Sprintf(`%s:%s`, router.EVENT_RESET_ROUTER, pk.Name)
 		event.Publish(channel, et.Json{})
 	}

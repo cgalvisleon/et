@@ -55,7 +55,7 @@ func (p *Package) addSolver(solver *Solver) {
 
 	if idx == -1 {
 		if solver.PackageName != p.Name {
-			oldPackage := p.server.Packages[solver.PackageName]
+			oldPackage := p.server.packages[solver.PackageName]
 			if oldPackage != nil {
 				oldPackage.removeSolver(solver)
 			}

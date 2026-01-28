@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	Version = "v0.0.3"
+	Version = "v0.0.2"
 )
 
 type Config struct {
@@ -43,11 +43,11 @@ type Server struct {
 	Port          int                               `json:"port"`
 	Addr          string                            `json:"addr"`
 	Parent        string                            `json:"parent"`
-	Router        map[string]*Router                `json:"router"`
 	Solvers       map[string]*Solver                `json:"solvers"`
-	Packages      map[string]*Package               `json:"packages"`
-	Requests      map[string]*Resolver              `json:"requests"`
 	Version       string                            `json:"version"`
+	packages      map[string]*Package               `json:"-"`
+	router        map[string]*Router                `json:"-"`
+	requests      map[string]*Resolver              `json:"-"`
 	mux           *http.ServeMux                    `json:"-"`
 	svr           *http.Server                      `json:"-"`
 	middlewares   []func(http.Handler) http.Handler `json:"-"`
@@ -76,11 +76,11 @@ func NewServer(name string, config *Config) *Server {
 		Port:          config.Port,
 		Addr:          fmt.Sprintf(":%d", config.Port),
 		Parent:        config.Parent,
-		Router:        make(map[string]*Router),
 		Solvers:       make(map[string]*Solver),
-		Packages:      make(map[string]*Package),
-		Requests:      make(map[string]*Resolver),
 		Version:       Version,
+		packages:      make(map[string]*Package),
+		router:        make(map[string]*Router),
+		requests:      make(map[string]*Resolver),
 		mux:           http.NewServeMux(),
 		middlewares:   make([]func(http.Handler) http.Handler, 0),
 		authenticator: middleware.Autentication,
@@ -110,7 +110,7 @@ func NewServer(name string, config *Config) *Server {
 **/
 func (s *Server) ToJson() et.Json {
 	packages := make([]et.Json, 0)
-	for _, p := range s.Packages {
+	for _, p := range s.packages {
 		packages = append(packages, p.ToJson())
 	}
 
@@ -120,10 +120,10 @@ func (s *Server) ToJson() et.Json {
 		"host":       s.Host,
 		"port":       s.Port,
 		"parent":     s.Parent,
-		"router":     s.Router,
+		"router":     s.router,
 		"solvers":    s.Solvers,
 		"packages":   packages,
-		"requests":   s.Requests,
+		"requests":   s.requests,
 		"version":    s.Version,
 	}
 }
@@ -210,9 +210,9 @@ func (s *Server) Close() {
 * @return error
 **/
 func (s *Server) Reset() {
-	s.Router = make(map[string]*Router)
+	s.router = make(map[string]*Router)
 	s.Solvers = make(map[string]*Solver)
-	s.Packages = make(map[string]*Package)
+	s.packages = make(map[string]*Package)
 	if err := s.initRouteTable(); err != nil {
 		logs.Fatal(err)
 	}
@@ -242,16 +242,16 @@ func (s *Server) setRouter(kind TypeRouter, method, path, solver string, typeHea
 		}
 	}
 
-	router, ok := s.Router[method]
+	router, ok := s.router[method]
 	if !ok {
 		router = newRouter(method)
-		s.Router[method] = router
+		s.router[method] = router
 	}
 
-	pkg, ok := s.Packages[packageName]
+	pkg, ok := s.packages[packageName]
 	if !ok {
 		pkg = newPackage(packageName, s)
-		s.Packages[packageName] = pkg
+		s.packages[packageName] = pkg
 	}
 
 	action := "Create"
@@ -383,7 +383,7 @@ func (s *Server) Authenticator(middleware func(http.Handler) http.Handler) *Serv
 func (s *Server) RemoveRouterById(id string, save bool) error {
 	_, ok := s.Solvers[id]
 	if !ok {
-		return fmt.Errorf("solver %s not found", id)
+		return fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, id)
 	}
 
 	delete(s.Solvers, id)
@@ -402,7 +402,7 @@ func (s *Server) RemoveRouterById(id string, save bool) error {
 **/
 func (s *Server) FindResolver(r *http.Request) (*Resolver, error) {
 	method := r.Method
-	router, ok := s.Router[method]
+	router, ok := s.router[method]
 	if !ok {
 		return nil, fmt.Errorf("router %s not found", method)
 	}
@@ -412,10 +412,10 @@ func (s *Server) FindResolver(r *http.Request) (*Resolver, error) {
 		return nil, err
 	}
 
-	s.Requests[result.Id] = result
+	s.requests[result.Id] = result
 
 	clean := func() {
-		delete(s.Requests, result.Id)
+		delete(s.requests, result.Id)
 	}
 
 	duration := 24 * time.Hour
@@ -443,7 +443,7 @@ func (s *Server) HTTPError(resolver *Resolver, metric *middleware.Metrics, w htt
 **/
 func (s *Server) HTTPSuccess(resolver *Resolver, metric *middleware.Metrics, rw *middleware.ResponseWriterWrapper) {
 	resolver.setStatus(TpStatusSuccess)
-	delete(s.Requests, resolver.Id)
+	delete(s.requests, resolver.Id)
 	metric.DoneHTTP(rw)
 
 	s.Save()

@@ -101,7 +101,7 @@ func (s *Server) migrate() error {
 	}
 
 	if s.debug {
-		logs.Log("Routes migrated:", len(s.Router))
+		logs.Log("Routes migrated:", len(s.router))
 	}
 
 	if err := s.Save(); err != nil {

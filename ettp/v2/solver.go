@@ -96,11 +96,11 @@ func (s *Solver) ToJson() et.Json {
 }
 
 /**
-* NewSolver
-* @param id, method, path string
+* newSolver
+* @param method, path string
 * @return *Solver
 **/
-func NewSolver(method, path string) *Solver {
+func newSolver(method, path string) *Solver {
 	key := fmt.Sprintf("%s:%s", method, path)
 	return &Solver{
 		Id:          key,

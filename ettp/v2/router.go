@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/msg"
 )
 
 const (
@@ -111,7 +112,7 @@ func (s *Router) setRouter(kind TypeRouter, method, path, solver string, typeHea
 
 		target = router
 		if i == len(tags)-1 {
-			target.solver = NewSolver(method, path)
+			target.solver = newSolver(method, path)
 			target.solver.Kind = kind
 			target.solver.Solver = solver
 			target.solver.TypeHeader = typeHeader
@@ -123,24 +124,10 @@ func (s *Router) setRouter(kind TypeRouter, method, path, solver string, typeHea
 	}
 
 	if target.solver == nil {
-		return nil, fmt.Errorf("solver %s not build", path)
+		return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_BUILD, path)
 	}
 
 	return target.solver, nil
-}
-
-/**
-* getResolver
-* @param id string, solver *Solver, url string
-* @return *Solver, error
-**/
-func (s *Router) getResolver(r *http.Request, solver *Solver, params map[string]string) (*Resolver, error) {
-	if solver == nil {
-		return nil, fmt.Errorf("solver not found")
-	}
-
-	result := NewResolver(r, solver, params)
-	return result, nil
 }
 
 /**
@@ -152,7 +139,7 @@ func (s *Router) findResolver(req *http.Request) (*Resolver, error) {
 	path := req.URL.Path
 	tags := strings.Split(path, "/")
 	if len(tags) == 0 {
-		return nil, fmt.Errorf("path:%s is invalid", path)
+		return nil, fmt.Errorf(msg.MSG_PATH_INVALID, path)
 	}
 
 	params := make(map[string]string)
@@ -201,12 +188,26 @@ func (s *Router) findResolver(req *http.Request) (*Resolver, error) {
 			}
 		}
 
-		return nil, fmt.Errorf("solver:%s not found tag:%s", path, tag)
+		return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND_TAG, path, tag)
 	}
 
 	if target == nil {
-		return nil, fmt.Errorf("solver:%s not found", path)
+		return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
 	}
 
 	return s.getResolver(req, target.solver, params)
+}
+
+/**
+* getResolver
+* @param id string, solver *Solver, url string
+* @return *Solver, error
+**/
+func (s *Router) getResolver(r *http.Request, solver *Solver, params map[string]string) (*Resolver, error) {
+	if solver == nil {
+		return nil, fmt.Errorf("solver not found")
+	}
+
+	result := NewResolver(r, solver, params)
+	return result, nil
 }

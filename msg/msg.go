@@ -21,6 +21,10 @@ var (
 	MSG_ERR_METHOD_NOT_FOUND           = "method not found"
 	MSG_KEY_REQUIRED                   = "key required"
 	MSG_CACHE_NOT_LOAD                 = "caching service not available"
+	MSG_SOLVER_NOT_BUILD               = "solver not build path:%s"
+	MSG_PATH_INVALID                   = "path:%s is invalid"
+	MSG_SOLVER_NOT_FOUND_TAG           = "solver:%s not found tag:%s"
+	MSG_SOLVER_NOT_FOUND               = "solver:%s not found"
 )
 
 func init() {
@@ -45,5 +49,9 @@ func init() {
 		MSG_ERR_METHOD_NOT_FOUND = "metodo no encontrado"
 		MSG_KEY_REQUIRED = "key requerida"
 		MSG_CACHE_NOT_LOAD = "caching service not available"
+		MSG_SOLVER_NOT_BUILD = "solver no construido path:%s"
+		MSG_PATH_INVALID = "path:%s invalido"
+		MSG_SOLVER_NOT_FOUND_TAG = "solver:%s no encontrado tag:%s"
+		MSG_SOLVER_NOT_FOUND = "solver:%s no encontrado"
 	}
 }

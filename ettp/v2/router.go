@@ -36,15 +36,14 @@ type Router struct {
 	Tag    string             `json:"tag"`
 	Param  string             `json:"param"`
 	solver *Solver            `json:"-"`
-	main   *Router            `json:"-"`
 }
 
 /**
-* NewRouter
+* newRouter
 * @param tag string
 * @return *Router
 **/
-func NewRouter(tag string) *Router {
+func newRouter(tag string) *Router {
 	return &Router{
 		Router: make(map[string]*Router),
 		Tag:    tag,
@@ -70,20 +69,19 @@ func (s *Router) ToJson() et.Json {
 }
 
 /**
-* addRouter
+* add
 * @param tag string
 * @return *Router
 **/
-func (s *Router) addRouter(tag string) *Router {
-	router := NewRouter(tag)
+func (s *Router) add(tag string) *Router {
+	router := newRouter(tag)
 	s.Router[tag] = router
-	router.main = s
 	return router
 }
 
 /**
 * setRouter
-* @param kind, method, path, solver string, typeHeader TpHeader, header et.Json, excludeHeader []string, version int, packageName string
+* @param kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, packageName string
 * @return *Solver, error
 **/
 func (s *Router) setRouter(kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, packageName string) (*Solver, error) {
@@ -108,7 +106,7 @@ func (s *Router) setRouter(kind TypeRouter, method, path, solver string, typeHea
 			if isParam(tag) {
 				target.Param = tag
 			}
-			router = target.addRouter(tag)
+			router = target.add(tag)
 		}
 
 		target = router
@@ -121,7 +119,6 @@ func (s *Router) setRouter(kind TypeRouter, method, path, solver string, typeHea
 			target.solver.ExcludeHeader = excludeHeader
 			target.solver.Version = version
 			target.solver.PackageName = packageName
-			target.solver.router = target
 		}
 	}
 

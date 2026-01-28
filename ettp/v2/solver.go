@@ -42,6 +42,10 @@ const (
 	TpReplaceHeader
 )
 
+/**
+* String
+* @return string
+**/
 func (t TpHeader) String() string {
 	switch t {
 	case TpKeepHeader:
@@ -50,9 +54,9 @@ func (t TpHeader) String() string {
 		return "Join Header"
 	case TpReplaceHeader:
 		return "Replace Header"
+	default:
+		return "Keep Header"
 	}
-
-	return "Unknown"
 }
 
 type Solver struct {
@@ -67,11 +71,14 @@ type Solver struct {
 	Version       int                               `json:"version"`
 	Private       bool                              `json:"private"`
 	PackageName   string                            `json:"package_name"`
-	router        *Router                           `json:"-"`
 	middlewares   []func(http.Handler) http.Handler `json:"-"`
 	handlerFn     http.HandlerFunc                  `json:"-"`
 }
 
+/**
+* ToJson
+* @return et.Json
+**/
 func (s *Solver) ToJson() et.Json {
 	return et.Json{
 		"id":           s.Id,

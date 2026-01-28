@@ -242,7 +242,7 @@ func (s *Server) setRouter(kind TypeRouter, method, path, solver string, typeHea
 
 	router, ok := s.Router[method]
 	if !ok {
-		router = NewRouter(method)
+		router = newRouter(method)
 		s.Router[method] = router
 	}
 

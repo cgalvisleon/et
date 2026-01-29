@@ -202,7 +202,7 @@ func ExtencionFile(filename string) string {
 * @param path string
 * @return string, error
 **/
-func ReadFileToString(path string) (string, error) {
+func ReadFile(path string) (string, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
@@ -213,12 +213,12 @@ func ReadFileToString(path string) (string, error) {
 }
 
 /**
-* WriteFile
-* @param filename string, obj any
+* Write
+* @param filePath string, obj any
 * @return error
 **/
-func WriteFile(filename string, obj any) error {
-	f, err := os.Create(filename)
+func Write(filePath string, obj any) error {
+	f, err := os.Create(filePath)
 	if err != nil {
 		return err
 	}
@@ -230,13 +230,11 @@ func WriteFile(filename string, obj any) error {
 }
 
 /**
-* ReadFile
-* @param filename string, dest any
+* Read
+* @param filePath string, dest any
 * @return error
 **/
-func ReadFile(filename string, dest any) error {
-	filePath := filename
-
+func Read(filePath string, dest any) error {
 	// 1) Intentar abrir
 	f, err := os.Open(filePath)
 	if err != nil {

@@ -20,7 +20,6 @@ func HttpSet(w http.ResponseWriter, r *http.Request) {
 	resolve := body.String("resolve")
 	tpHeader := TpHeader(body.Int("header"))
 	excludeHeader := body.ArrayStr("exclude_header")
-	private := body.Bool("private")
 	version := body.Int("version")
 	packageName := body.String("package_name")
 	key := fmt.Sprintf("%s:%s", method, path)
@@ -33,7 +32,7 @@ func HttpSet(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	PushApiGateway(method, path, resolve, tpHeader, et.Json{}, excludeHeader, private, version, packageName)
+	PushApiGateway(method, path, resolve, tpHeader, et.Json{}, excludeHeader, version, packageName)
 	response.ITEM(w, r, http.StatusOK, et.Item{
 		Ok: true,
 		Result: et.Json{

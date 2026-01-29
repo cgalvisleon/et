@@ -7,7 +7,6 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/dimiro1/banner"
@@ -44,8 +43,6 @@ func New(appName string) (*Ettp, error) {
 
 	if result.port != 0 {
 		result.Mux = chi.NewRouter()
-		result.Use(middleware.Logger)
-		result.Use(middleware.Recoverer)
 		result.NotFound(func(w http.ResponseWriter, r *http.Request) {
 			response.HTTPError(w, r, http.StatusNotFound, "404 Not Found")
 		})
@@ -121,6 +118,18 @@ func (s *Ettp) NotFound(handlerFn http.HandlerFunc) {
 	}
 
 	s.Mux.NotFound(handlerFn)
+}
+
+/**
+* HandleFunc
+* @param pattern string, handlerFn http.HandlerFunc
+**/
+func (s *Ettp) HandleFunc(pattern string, handlerFn http.HandlerFunc) {
+	if s.Mux == nil {
+		return
+	}
+
+	s.Mux.HandleFunc(pattern, handlerFn)
 }
 
 /**

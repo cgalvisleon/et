@@ -87,6 +87,9 @@ func Autentication(next http.Handler) http.Handler {
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, request.ServiceIdKey, serviceId)
 		ctx = context.WithValue(ctx, request.DurationKey, clm.Duration)
+		ctx = context.WithValue(ctx, request.DeviceKey, clm.Device)
+		ctx = context.WithValue(ctx, request.AppKey, clm.App)
+		ctx = context.WithValue(ctx, request.UsernameKey, clm.Username)
 		ctx = context.WithValue(ctx, request.PayloadKey, clm.Payload)
 		data, err := clm.ToJson()
 		if err != nil {

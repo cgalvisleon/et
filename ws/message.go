@@ -9,15 +9,14 @@ import (
 )
 
 type Message struct {
-	Created_at time.Time `json:"created_at"`
-	Id         string    `json:"id"`
-	From       et.Json   `json:"from"`
-	Channel    string    `json:"channel"`
-	To         []string  `json:"to"`
-	Ignored    []string  `json:"-"`
-	Data       et.Json   `json:"data"`
-	Message    string    `json:"message"`
-	Verified   bool      `json:"verified"`
+	Created_at time.Time   `json:"created_at"`
+	Id         string      `json:"id"`
+	From       et.Json     `json:"from"`
+	Channel    string      `json:"channel"`
+	To         []string    `json:"to"`
+	Ignored    []string    `json:"-"`
+	Message    interface{} `json:"message"`
+	Verified   bool        `json:"verified"`
 }
 
 /**
@@ -74,7 +73,6 @@ func NewMessage(from et.Json, to []string) Message {
 		Channel:    "",
 		To:         to,
 		Ignored:    []string{},
-		Data:       et.Json{},
 		Message:    "",
 	}
 }

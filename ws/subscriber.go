@@ -113,7 +113,7 @@ func (s *Subscriber) listener(message []byte) {
 			s.error(err)
 			return
 		}
-		s.sendItem(et.Item{
+		s.sendMessage(et.Item{
 			Ok: true,
 			Result: et.Json{
 				"senders": result,
@@ -155,26 +155,13 @@ func (s *Subscriber) sendText(message string) {
 
 /**
 * SendObject
-* @param message et.Json
+* @param message interface{}
 **/
-func (s *Subscriber) sendObject(message et.Json) {
+func (s *Subscriber) sendMessage(message interface{}) {
 	bt, err := json.Marshal(message)
 	if err != nil {
 		return
 	}
-	s.send(BinaryMessage, bt)
-}
-
-/**
-* sendItem
-* @param message et.Item
-**/
-func (s *Subscriber) sendItem(message et.Item) {
-	bt, err := message.ToByte()
-	if err != nil {
-		return
-	}
-
 	s.send(TextMessage, bt)
 }
 
@@ -189,7 +176,7 @@ func (s *Subscriber) error(err error) {
 			"message": err.Error(),
 		},
 	}
-	s.sendItem(ms)
+	s.sendMessage(ms)
 }
 
 /**

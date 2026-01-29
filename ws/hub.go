@@ -7,7 +7,6 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/cgalvisleon/josefina/pkg/msg"
@@ -345,15 +344,8 @@ func (s *Hub) Unsubscribe(cache string, subscribe string) error {
 func (s *Hub) SendTo(to []string, message Message) ([]string, error) {
 	result := []string{}
 
-	sendObject := func(client *Subscriber, obj et.Json) {
-		client.sendObject(obj)
-		for _, fn := range s.onSend {
-			fn(client.Name, message)
-		}
-	}
-
-	sendTxt := func(client *Subscriber, txt string) {
-		client.sendText(txt)
+	sendObject := func(client *Subscriber, m interface{}) {
+		client.sendMessage(m)
 		for _, fn := range s.onSend {
 			fn(client.Name, message)
 		}
@@ -369,18 +361,10 @@ func (s *Hub) SendTo(to []string, message Message) ([]string, error) {
 				continue
 			}
 
-			if len(message.Data) > 0 {
-				if message.Verified {
-					sendObject(client, message.Data)
-				} else {
-					go sendObject(client, message.Data)
-				}
-			} else if len(message.Message) > 0 {
-				if message.Verified {
-					sendTxt(client, message.Message)
-				} else {
-					go sendTxt(client, message.Message)
-				}
+			if message.Verified {
+				sendObject(client, message.Message)
+			} else {
+				go sendObject(client, message.Message)
 			}
 
 			result = append(result, username)

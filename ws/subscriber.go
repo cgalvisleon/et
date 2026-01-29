@@ -146,14 +146,6 @@ func (s *Subscriber) send(tp int, bt []byte) {
 }
 
 /**
-* SendText
-* @param message string
-**/
-func (s *Subscriber) sendText(message string) {
-	s.send(TextMessage, []byte(message))
-}
-
-/**
 * SendObject
 * @param message interface{}
 **/

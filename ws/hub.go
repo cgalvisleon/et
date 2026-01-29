@@ -375,7 +375,6 @@ func (s *Hub) SendTo(to []string, message Message) ([]string, error) {
 				} else {
 					go sendObject(client, message.Data)
 				}
-
 			} else if len(message.Message) > 0 {
 				if message.Verified {
 					sendTxt(client, message.Message)

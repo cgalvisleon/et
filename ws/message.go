@@ -65,9 +65,9 @@ func (s *Message) ToString() string {
 * @param from et.Json, to []string, data et.Json
 * @return *Message
 **/
-func NewMessage(from et.Json, to []string) *Message {
+func NewMessage(from et.Json, to []string) Message {
 	id := reg.ULID()
-	return &Message{
+	return Message{
 		Created_at: time.Now(),
 		Id:         id,
 		From:       from,

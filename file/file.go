@@ -1,6 +1,7 @@
 package file
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -201,7 +202,7 @@ func ExtencionFile(filename string) string {
 * @param path string
 * @return string, error
 **/
-func ReadFile(path string) (string, error) {
+func ReadFileToString(path string) (string, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
@@ -209,4 +210,57 @@ func ReadFile(path string) (string, error) {
 
 	logs.Log("file", "read file:", path)
 	return string(content), nil
+}
+
+/**
+* WriteFile
+* @param filename string, obj any
+* @return error
+**/
+func WriteFile(filename string, obj any) error {
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	enc := json.NewEncoder(f)
+	enc.SetIndent("", "  ")
+	return enc.Encode(obj)
+}
+
+/**
+* ReadFile
+* @param filename string, dest any
+* @return error
+**/
+func ReadFile(filename string, dest any) error {
+	filePath := filename
+
+	// 1) Intentar abrir
+	f, err := os.Open(filePath)
+	if err != nil {
+		// Si no existe, crearlo con valores por defecto
+		if os.IsNotExist(err) {
+			b, err := json.MarshalIndent("", "", "  ")
+			if err != nil {
+				return err
+			}
+
+			if err := os.WriteFile(filePath, b, 0o644); err != nil {
+				return err
+			}
+
+			return nil
+		}
+		return err
+	}
+	defer f.Close()
+
+	// 2) Leer/parsear
+	if err := json.NewDecoder(f).Decode(&dest); err != nil {
+		return err
+	}
+
+	return nil
 }

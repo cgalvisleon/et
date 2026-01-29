@@ -300,10 +300,10 @@ func (s *Hub) Remove(channel string) error {
 * @param cache string, subscribe string
 * @return error
 **/
-func (s *Hub) Subscribe(cache string, subscribe string) error {
-	ch, ok := s.Channels[cache]
+func (s *Hub) Subscribe(channel string, subscribe string) error {
+	ch, ok := s.Channels[channel]
 	if !ok {
-		return fmt.Errorf(msg.MSG_CHANNEL_NOT_FOUND, cache)
+		return fmt.Errorf(msg.MSG_CHANNEL_NOT_FOUND, channel)
 	}
 
 	client, ok := s.Subscribers[subscribe]

@@ -576,3 +576,16 @@ func ToJson(v any) et.Json {
 
 	return result
 }
+
+/**
+* PrefixRemove
+* @param prefix string, token string
+* @return string
+**/
+func PrefixRemove(prefix, token string) string {
+	token = strings.ReplaceAll(token, " ", "")
+	if strings.HasPrefix(token, prefix) {
+		return strings.TrimPrefix(token, prefix)
+	}
+	return token
+}

@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"net/http"
-	"strings"
 
 	"github.com/cgalvisleon/et/jwt"
 	"github.com/cgalvisleon/et/logs"
@@ -11,29 +10,6 @@ import (
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/utility"
 )
-
-/**
-* tokenFromAuthorization
-* @param authorization string
-* @return string
-* @return error
-**/
-func tokenFromAuthorization(authorization, prefix string) (string, error) {
-	if authorization == "" {
-		return "", logs.Alertm("Autorization is required")
-	}
-
-	if !strings.HasPrefix(authorization, prefix) {
-		return "", logs.Alertm("Invalid autorization format")
-	}
-
-	l := strings.Split(authorization, " ")
-	if len(l) != 2 {
-		return "", logs.Alertm("Invalid autorization format")
-	}
-
-	return l[1], nil
-}
 
 /**
 * GetAuthorization
@@ -46,12 +22,12 @@ func GetAuthorization(w http.ResponseWriter, r *http.Request) (string, error) {
 	_, ok := r.Header["Authorization"]
 	if ok {
 		authorization := r.Header.Get("Authorization")
-		result, err := tokenFromAuthorization(authorization, "Bearer")
-		if err != nil {
-			return "", logs.Alert(err)
+		token := utility.PrefixRemove("Bearer ", authorization)
+		if token == "" {
+			return "", logs.Alertm("Autorization is required")
 		}
 
-		return result, nil
+		return token, nil
 	}
 
 	return "", logs.Alertm("Autorization is required")

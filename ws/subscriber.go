@@ -9,6 +9,7 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/josefina/pkg/msg"
 	"github.com/gorilla/websocket"
@@ -121,6 +122,9 @@ func (s *Subscriber) listener(message []byte) {
 		})
 	}
 
+	if ms.ID == "" {
+		ms.ID = reg.ULID()
+	}
 	if ms.Channel != "" {
 		result, err := s.hub.Publish(ms.Channel, ms)
 		notify(result, err)

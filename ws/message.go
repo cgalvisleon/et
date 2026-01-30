@@ -10,7 +10,7 @@ import (
 
 type Message struct {
 	Created_at time.Time   `json:"created_at"`
-	Id         string      `json:"id"`
+	ID         string      `json:"id"`
 	From       et.Json     `json:"from"`
 	Channel    string      `json:"channel"`
 	To         []string    `json:"to"`
@@ -68,7 +68,7 @@ func NewMessage(from et.Json, to []string) Message {
 	id := reg.ULID()
 	return Message{
 		Created_at: time.Now(),
-		Id:         id,
+		ID:         id,
 		From:       from,
 		Channel:    "",
 		To:         to,

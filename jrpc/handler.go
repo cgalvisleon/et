@@ -8,28 +8,13 @@ import (
 
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
-	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/response"
 )
 
 var (
 	ErrorRpcNotConnected = errors.New("rpc not connected")
 )
-
-/**
-* Mount
-* @param services any
-* @return error
-**/
-func Mount(services any) error {
-	if pkg == nil {
-		return logs.Alertm(msg.MSG_PACKAGE_NOT_FOUND)
-	}
-
-	return pkg.mount(services)
-}
 
 /**
 * listRouters

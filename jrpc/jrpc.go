@@ -3,8 +3,12 @@ package jrpc
 import (
 	"encoding/gob"
 	"fmt"
+	"net"
+	"net/rpc"
+	"reflect"
 	"runtime"
 	"slices"
+	"strings"
 
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/envar"
@@ -19,6 +23,72 @@ var (
 	pkg *Package
 	os  = ""
 )
+
+func Mount(host string, services any) (map[string]et.Json, error) {
+	result := make(map[string]et.Json)
+
+	tipoStruct := reflect.TypeOf(services)
+	structName := tipoStruct.String()
+	list := strings.Split(structName, ".")
+	structName = list[len(list)-1]
+	for i := 0; i < tipoStruct.NumMethod(); i++ {
+		metodo := tipoStruct.Method(i)
+		numInputs := metodo.Type.NumIn()
+		numOutputs := metodo.Type.NumOut()
+
+		inputs := []string{}
+		for i := 1; i < numInputs; i++ {
+			paramType := metodo.Type.In(i)
+			inputs = append(inputs, paramType.String())
+		}
+
+		outputs := []string{}
+		for i := 0; i < numOutputs; i++ {
+			paramType := metodo.Type.Out(i)
+			outputs = append(outputs, paramType.String())
+		}
+
+		name := fmt.Sprintf("%s.%s", structName, metodo.Name)
+		result[name] = et.Json{
+			"inputs":  inputs,
+			"outputs": outputs,
+		}
+
+		logs.Logf("rpc", "RPC:/%s/%s", host, name)
+	}
+
+	if err := rpc.Register(services); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+/**
+* Start
+* @param port int
+**/
+func Start(port int) error {
+	address := fmt.Sprintf(`:%d`, port)
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				logs.Error(err)
+				continue
+			}
+
+			go rpc.ServeConn(conn)
+		}
+	}()
+
+	return nil
+}
 
 func LoadTo(name, host string, port int) (*Package, error) {
 	if !utility.ValidStr(name, 1, []string{"", ""}) {
@@ -69,19 +139,6 @@ func Load(name string) error {
 	if err != nil {
 		return err
 	}
-
-	return nil
-}
-
-/**
-* Start
-**/
-func Start() error {
-	if pkg == nil {
-		return logs.Alertm(msg.MSG_PACKAGE_NOT_FOUND)
-	}
-
-	go pkg.start()
 
 	return nil
 }

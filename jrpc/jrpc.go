@@ -87,6 +87,7 @@ func Start(port int) error {
 		}
 	}()
 
+	logs.Logf("Rpc", "running on %d", port)
 	return nil
 }
 

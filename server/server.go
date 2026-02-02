@@ -163,9 +163,9 @@ func (s *Ettp) startHttpServer() error {
 }
 
 /**
-* Background
+* start
 **/
-func (s *Ettp) background() {
+func (s *Ettp) start() {
 	if err := s.startHttpServer(); err != nil {
 		logs.Panic(err)
 	}
@@ -175,7 +175,7 @@ func (s *Ettp) background() {
 * Start
 **/
 func (s *Ettp) Start() {
-	go s.background()
+	go s.start()
 	s.banner()
 	s.printRoutes()
 	if s.onStart != nil {

@@ -22,11 +22,11 @@ func Set(key string, value interface{}, expiration time.Duration) *Item {
 /**
 * GetItem
 * @param key string
-* @return *Item, error
+* @return *Item, bool
 **/
-func GetItem(key string) (*Item, error) {
+func GetItem(key string) (*Item, bool) {
 	if conn == nil {
-		return nil, nil
+		return nil, false
 	}
 
 	return conn.GetItem(key)
@@ -35,11 +35,11 @@ func GetItem(key string) (*Item, error) {
 /**
 * Get
 * @param key, def string
-* @return string, error
+* @return string, bool
 **/
-func Get(key string) (interface{}, error) {
+func Get(key string) (interface{}, bool) {
 	if conn == nil {
-		return nil, nil
+		return nil, false
 	}
 
 	return conn.Get(key)
@@ -48,11 +48,11 @@ func Get(key string) (interface{}, error) {
 /**
 * GetStr
 * @param key string
-* @return string, error
+* @return string, bool
 **/
-func GetStr(key string) (string, error) {
+func GetStr(key string) (string, bool) {
 	if conn == nil {
-		return "", nil
+		return "", false
 	}
 
 	return conn.GetStr(key)
@@ -61,11 +61,11 @@ func GetStr(key string) (string, error) {
 /**
 * GetInt
 * @param key string
-* @return int, error
+* @return int, bool
 **/
-func GetInt(key string) (int, error) {
+func GetInt(key string) (int, bool) {
 	if conn == nil {
-		return 0, nil
+		return 0, false
 	}
 
 	return conn.GetInt(key, 0)
@@ -74,11 +74,11 @@ func GetInt(key string) (int, error) {
 /**
 * GetInt64
 * @param key string
-* @return int64, error
+* @return int64, bool
 **/
-func GetInt64(key string) (int64, error) {
+func GetInt64(key string) (int64, bool) {
 	if conn == nil {
-		return 0, nil
+		return 0, false
 	}
 
 	return conn.GetInt64(key, 0)
@@ -87,11 +87,11 @@ func GetInt64(key string) (int64, error) {
 /**
 * GetFloat64
 * @param key string
-* @return float64, error
+* @return float64, bool
 **/
-func GetFloat64(key string) (float64, error) {
+func GetFloat64(key string) (float64, bool) {
 	if conn == nil {
-		return 0, nil
+		return 0, false
 	}
 
 	return conn.GetFloat(key, 0)
@@ -100,11 +100,11 @@ func GetFloat64(key string) (float64, error) {
 /**
 * GetBool
 * @param key string
-* @return bool, error
+* @return bool, bool
 **/
-func GetBool(key string) (bool, error) {
+func GetBool(key string) (bool, bool) {
 	if conn == nil {
-		return false, nil
+		return false, false
 	}
 
 	return conn.GetBool(key, false)
@@ -113,11 +113,11 @@ func GetBool(key string) (bool, error) {
 /**
 * GetTime
 * @param key string
-* @return time.Time, error
+* @return time.Time, bool
 **/
-func GetTime(key string) (time.Time, error) {
+func GetTime(key string) (time.Time, bool) {
 	if conn == nil {
-		return time.Time{}, nil
+		return time.Time{}, false
 	}
 
 	return conn.GetTime(key, time.Time{})
@@ -126,11 +126,11 @@ func GetTime(key string) (time.Time, error) {
 /**
 * GetDuration
 * @param key string
-* @return time.Duration, error
+* @return time.Duration, bool
 **/
-func GetDuration(key string) (time.Duration, error) {
+func GetDuration(key string) (time.Duration, bool) {
 	if conn == nil {
-		return 0, nil
+		return 0, false
 	}
 
 	return conn.GetDuration(key, 0)
@@ -139,11 +139,11 @@ func GetDuration(key string) (time.Duration, error) {
 /**
 * GetJson
 * @param key string
-* @return et.Json, error
+* @return et.Json, bool
 **/
-func GetJson(key string) (et.Json, error) {
+func GetJson(key string) (et.Json, bool) {
 	if conn == nil {
-		return et.Json{}, nil
+		return et.Json{}, false
 	}
 
 	return conn.GetJson(key, et.Json{})
@@ -152,11 +152,11 @@ func GetJson(key string) (et.Json, error) {
 /**
 * GetArrayJson
 * @param key string
-* @return []et.Json, error
+* @return []et.Json, bool
 **/
-func GetArrayJson(key string) ([]et.Json, error) {
+func GetArrayJson(key string) ([]et.Json, bool) {
 	if conn == nil {
-		return []et.Json{}, nil
+		return []et.Json{}, false
 	}
 
 	return conn.GetArrayJson(key, []et.Json{})

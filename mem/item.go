@@ -9,8 +9,8 @@ import (
 )
 
 type Item struct {
-	Datemake   time.Time
-	Dateupdate time.Time
+	LastUpdate time.Time
+	Expiration time.Duration
 	Key        string
 	Value      interface{}
 	lock       sync.RWMutex
@@ -22,11 +22,11 @@ type Item struct {
 * @param value interface{}
 * @return *Item
 **/
-func New(key string, value interface{}) *Item {
+func New(key string, value interface{}, expiration time.Duration) *Item {
 	now := timezone.Now()
 	return &Item{
-		Datemake:   now,
-		Dateupdate: now,
+		LastUpdate: now,
+		Expiration: expiration,
 		Key:        key,
 		Value:      value,
 		lock:       sync.RWMutex{},
@@ -38,11 +38,12 @@ func New(key string, value interface{}) *Item {
 * @param value interface{}
 * @return interface{}
 **/
-func (i *Item) Set(value interface{}) interface{} {
+func (i *Item) Set(value interface{}, expiration time.Duration) interface{} {
 	i.lock.Lock()
 	defer i.lock.Unlock()
 
-	i.Dateupdate = timezone.Now()
+	i.LastUpdate = timezone.Now()
+	i.Expiration = expiration
 	i.Value = value
 
 	return value

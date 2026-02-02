@@ -54,22 +54,17 @@ func (s *Mem) Type() string {
 * @return interface{}
 **/
 func (s *Mem) Set(key string, value interface{}, expiration time.Duration) *Item {
-	ch := make(chan *Item)
-	go func() {
-		s.mu.RLock()
-		item, ok := s.items[key]
-		s.mu.RUnlock()
-		if ok {
-			item.Set(value)
-		} else {
-			item = New(key, value)
-			s.mu.Lock()
-			s.items[key] = item
-			s.mu.Unlock()
-		}
-
-		ch <- item
-	}()
+	s.mu.RLock()
+	item, ok := s.items[key]
+	s.mu.RUnlock()
+	if ok {
+		item.Set(value, expiration)
+	} else {
+		item = New(key, value, expiration)
+		s.mu.Lock()
+		s.items[key] = item
+		s.mu.Unlock()
+	}
 
 	clean := func() {
 		s.Delete(key)
@@ -80,8 +75,7 @@ func (s *Mem) Set(key string, value interface{}, expiration time.Duration) *Item
 		go time.AfterFunc(duration, clean)
 	}
 
-	result := <-ch
-	return result
+	return item
 }
 
 /**
@@ -90,55 +84,33 @@ func (s *Mem) Set(key string, value interface{}, expiration time.Duration) *Item
 * @return bool
 **/
 func (s *Mem) Delete(key string) bool {
-	ch := make(chan bool)
-	go func() {
-		s.mu.Lock()
-		_, ok := s.items[key]
-		s.mu.Unlock()
-		if !ok {
-			ch <- false
-			return
-		}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-		delete(s.items, key)
-		ch <- true
-	}()
+	_, ok := s.items[key]
+	if !ok {
+		return false
+	}
 
-	return <-ch
+	delete(s.items, key)
+
+	return true
 }
 
 /**
 * GetItem
-* @param key string
-* @return *Item, error
+* @param key string, dest *Item
+* @return bool, error
 **/
-func (s *Mem) GetItem(key string) (*Item, error) {
-	type Result struct {
-		result *Item
-		err    error
+func (s *Mem) GetItem(key string) (*Item, bool) {
+	s.mu.RLock()
+	item, ok := s.items[key]
+	s.mu.RUnlock()
+	if ok {
+		return item, true
 	}
 
-	ch := make(chan Result)
-	go func() {
-		s.mu.RLock()
-		item, ok := s.items[key]
-		s.mu.RUnlock()
-		if ok {
-			ch <- Result{
-				result: item,
-				err:    nil,
-			}
-			return
-		}
-
-		ch <- Result{
-			result: nil,
-			err:    fmt.Errorf("NotExists"),
-		}
-	}()
-
-	result := <-ch
-	return result.result, result.err
+	return nil, false
 }
 
 /**
@@ -146,13 +118,13 @@ func (s *Mem) GetItem(key string) (*Item, error) {
 * @param key string
 * @return interfase{}, error
 **/
-func (s *Mem) Get(key string) (interface{}, error) {
-	item, err := s.GetItem(key)
-	if err != nil {
-		return nil, err
+func (s *Mem) Get(key string) (interface{}, bool) {
+	item, exists := s.GetItem(key)
+	if !exists {
+		return nil, false
 	}
 
-	return item.Get(), nil
+	return item.Get(), true
 }
 
 /**
@@ -160,27 +132,27 @@ func (s *Mem) Get(key string) (interface{}, error) {
 * @param key string
 * @return string
 **/
-func (s *Mem) GetStr(key string) (string, error) {
-	item, err := s.GetItem(key)
-	if err != nil {
-		return "", err
+func (s *Mem) GetStr(key string) (string, bool) {
+	item, exists := s.GetItem(key)
+	if !exists {
+		return "", false
 	}
 
-	return item.Str(), nil
+	return item.Str(), true
 }
 
 /**
 * GetInt
 * @param key string, def int
-* @return int, error
+* @return int, bool
 **/
-func (s *Mem) GetInt(key string, def int) (int, error) {
-	item, err := s.GetItem(key)
-	if err != nil {
-		return def, err
+func (s *Mem) GetInt(key string, def int) (int, bool) {
+	item, exists := s.GetItem(key)
+	if !exists {
+		return def, false
 	}
 
-	return item.Int(), nil
+	return item.Int(), true
 }
 
 /**
@@ -188,69 +160,69 @@ func (s *Mem) GetInt(key string, def int) (int, error) {
 * @param key string, def int
 * @return int, error
 **/
-func (s *Mem) GetInt64(key string, def int64) (int64, error) {
-	item, err := s.GetItem(key)
-	if err != nil {
-		return def, err
+func (s *Mem) GetInt64(key string, def int64) (int64, bool) {
+	item, exists := s.GetItem(key)
+	if !exists {
+		return def, false
 	}
 
-	return item.Int64(), nil
+	return item.Int64(), true
 }
 
 /**
 * GetFloat
 * @param key string, def float64
-* @return float64, error
+* @return float64, bool
 **/
-func (s *Mem) GetFloat(key string, def float64) (float64, error) {
-	item, err := s.GetItem(key)
-	if err != nil {
-		return def, err
+func (s *Mem) GetFloat(key string, def float64) (float64, bool) {
+	item, exists := s.GetItem(key)
+	if !exists {
+		return def, false
 	}
 
-	return item.Float(), nil
+	return item.Float(), true
 }
 
 /**
 * GetBool
 * @param key string, def bool
-* @return bool, error
+* @return bool, bool
 **/
-func (s *Mem) GetBool(key string, def bool) (bool, error) {
-	item, err := s.GetItem(key)
-	if err != nil {
-		return def, err
+func (s *Mem) GetBool(key string, def bool) (bool, bool) {
+	item, exists := s.GetItem(key)
+	if !exists {
+		return def, false
 	}
 
-	return item.Bool(), nil
+	return item.Bool(), true
 }
 
 /**
 * GetTime
 * @param key string, def time.Time
-* @return time.Time, error
+* @return time.Time, bool
 **/
-func (s *Mem) GetTime(key string, def time.Time) (time.Time, error) {
-	item, err := s.GetItem(key)
-	if err != nil {
-		return def, err
+func (s *Mem) GetTime(key string, def time.Time) (time.Time, bool) {
+	item, exists := s.GetItem(key)
+	if !exists {
+		return def, false
 	}
 
-	return item.Time(), nil
+	return item.Time(), true
 }
 
 /**
 * GetDuration
 * @param key string, def time.Duration
-* @return time.Duration, error
+* @return time.Duration, bool
 **/
-func (s *Mem) GetDuration(key string, def time.Duration) (time.Duration, error) {
-	item, err := s.GetItem(key)
-	if err != nil {
-		return def, err
+func (s *Mem) GetDuration(key string, def time.Duration) (time.Duration, bool) {
+	item, exists := s.GetItem(key)
+	if !exists {
+		return def, false
 	}
 
-	return item.Duration(), nil
+	return item.Duration(), true
 }
 
 /**
@@ -258,69 +230,69 @@ func (s *Mem) GetDuration(key string, def time.Duration) (time.Duration, error) 
 * @param key string, def et.Json
 * @return et.Json, error
 **/
-func (s *Mem) GetJson(key string, def et.Json) (et.Json, error) {
-	item, err := s.GetItem(key)
-	if err != nil {
-		return def, err
+func (s *Mem) GetJson(key string, def et.Json) (et.Json, bool) {
+	item, exists := s.GetItem(key)
+	if !exists {
+		return def, false
 	}
 
-	return item.Json(), nil
+	return item.Json(), true
 }
 
 /**
 * GetArrayStr
 * @param key string, def []string
-* @return []string, error
+* @return []string, bool
 **/
-func (s *Mem) GetArrayStr(key string, def []string) ([]string, error) {
-	item, err := s.GetItem(key)
-	if err != nil {
-		return def, err
+func (s *Mem) GetArrayStr(key string, def []string) ([]string, bool) {
+	item, exists := s.GetItem(key)
+	if !exists {
+		return def, false
 	}
 
-	return item.ArrayStr(), nil
+	return item.ArrayStr(), true
 }
 
 /**
 * GetArrayInt
 * @param key string, def []int
-* @return []int, error
+* @return []int, bool
 **/
-func (s *Mem) GetArrayInt(key string, def []int) ([]int, error) {
-	item, err := s.GetItem(key)
-	if err != nil {
-		return def, err
+func (s *Mem) GetArrayInt(key string, def []int) ([]int, bool) {
+	item, exists := s.GetItem(key)
+	if !exists {
+		return def, false
 	}
 
-	return item.ArrayInt(), nil
+	return item.ArrayInt(), true
 }
 
 /**
 * GetArrayFloat
 * @param key string, def []float64
-* @return []float64, error
+* @return []float64, bool
 **/
-func (s *Mem) GetArrayFloat(key string, def []float64) ([]float64, error) {
-	item, err := s.GetItem(key)
-	if err != nil {
-		return def, err
+func (s *Mem) GetArrayFloat(key string, def []float64) ([]float64, bool) {
+	item, exists := s.GetItem(key)
+	if !exists {
+		return def, false
 	}
 
-	return item.ArrayFloat(), nil
+	return item.ArrayFloat(), true
 }
 
 /**
 * GetArrayJson
 * @param key string, def []et.Json
-* @return []et.Json, error
+* @return []et.Json, bool
 **/
-func (s *Mem) GetArrayJson(key string, def []et.Json) ([]et.Json, error) {
-	item, err := s.GetItem(key)
-	if err != nil {
-		return def, err
+func (s *Mem) GetArrayJson(key string, def []et.Json) ([]et.Json, bool) {
+	item, exists := s.GetItem(key)
+	if !exists {
+		return def, false
 	}
 
-	return item.ArrayJson(), nil
+	return item.ArrayJson(), true
 }
 
 /**

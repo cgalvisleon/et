@@ -27,6 +27,10 @@ var (
 	MSG_SOLVER_NOT_FOUND               = "solver:%s not found"
 	MSG_METHOD_NOT_SUPPORTED           = "method %s not supported"
 	MSG_RESOLVE_NOT_VALID              = "resolve %s is not valid"
+	MSG_ARG_REQUIRED                   = "argument required (%s)"
+	MSG_CHANNEL_NOT_FOUND              = "channel not found (%s)"
+	MSG_USER_NOT_FOUND                 = "user not found (%s)"
+	MSG_HOLA                           = "Hello"
 )
 
 func init() {
@@ -57,5 +61,9 @@ func init() {
 		MSG_SOLVER_NOT_FOUND = "solver:%s no encontrado"
 		MSG_METHOD_NOT_SUPPORTED = "metodo %s no soportado"
 		MSG_RESOLVE_NOT_VALID = "resolve %s no valido"
+		MSG_ARG_REQUIRED = "argumento requerido (%s)"
+		MSG_CHANNEL_NOT_FOUND = "canal no encontrado (%s)"
+		MSG_USER_NOT_FOUND = "usuario no encontrado (%s)"
+		MSG_HOLA = "Hola"
 	}
 }

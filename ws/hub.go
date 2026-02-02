@@ -8,8 +8,8 @@ import (
 	"sync"
 
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/utility"
-	"github.com/cgalvisleon/josefina/pkg/msg"
 	"github.com/gorilla/websocket"
 )
 

@@ -57,7 +57,8 @@ func Mount(host string, services any) (map[string]et.Json, error) {
 		logs.Logf("rpc", "RPC:/%s/%s", host, name)
 	}
 
-	if err := rpc.Register(services); err != nil {
+	err := rpc.Register(services)
+	if err != nil {
 		return nil, err
 	}
 

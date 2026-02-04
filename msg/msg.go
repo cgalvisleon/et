@@ -32,6 +32,7 @@ var (
 	MSG_USER_NOT_FOUND                 = "user not found (%s)"
 	MSG_HOLA                           = "Hello"
 	MSG_TCP_LISTENING                  = "TCP listening on :%d"
+	MSG_HUB_NOT_STARTED                = "hub not started"
 )
 
 func init() {
@@ -67,5 +68,6 @@ func init() {
 		MSG_USER_NOT_FOUND = "usuario no encontrado (%s)"
 		MSG_HOLA = "Hola"
 		MSG_TCP_LISTENING = "TCP listening on:%d"
+		MSG_HUB_NOT_STARTED = "hub not started"
 	}
 }

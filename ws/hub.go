@@ -114,15 +114,18 @@ func (s *Hub) SetDebug(debug bool) {
 * @return *Subscriber, error
 **/
 func (s *Hub) Connect(socket *websocket.Conn, ctx context.Context) (*Subscriber, error) {
+	if !s.isStart {
+		return nil, fmt.Errorf(msg.MSG_HUB_NOT_STARTED)
+	}
+
 	username := ctx.Value("username").(string)
 	if !utility.ValidStr(username, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ARG_REQUIRED, "username")
 	}
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	client, ok := s.Subscribers[username]
+	s.mu.Unlock()
 	if ok {
 		client.Addr = socket.RemoteAddr().String()
 		client.socket = socket
@@ -242,11 +245,10 @@ func (s *Hub) Stack(channel string) *Channel {
 func (s *Hub) Remove(channel string) error {
 	s.mu.Lock()
 	ch, ok := s.Channels[channel]
+	s.mu.Unlock()
 	if !ok {
-		s.mu.Unlock()
 		return fmt.Errorf(msg.MSG_CHANNEL_NOT_FOUND, channel)
 	}
-	s.mu.Unlock()
 
 	for _, subscribe := range ch.Subscribers {
 		client, ok := s.Subscribers[subscribe]

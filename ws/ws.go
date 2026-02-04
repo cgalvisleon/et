@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/cgalvisleon/et/et"
 	"github.com/gorilla/websocket"
 )
 
@@ -36,4 +37,13 @@ func New() *Hub {
 **/
 func Upgrader(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
 	return upgrader.Upgrade(w, r, nil)
+}
+
+/**
+* SendMessage
+* @params socket *websocket.Conn, message et.Json
+* @return error
+**/
+func SendMessage(socket *websocket.Conn, message et.Json) error {
+	return socket.WriteJSON(message)
 }

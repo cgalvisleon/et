@@ -48,8 +48,10 @@ func (s Items) ToString() string {
 * Add add an item to the items
 * @param item Json
 **/
-func (s Items) Add(item Json) {
-	s.Result = append(s.Result, item)
+func (s *Items) Add(item ...Json) {
+	for _, i := range item {
+		s.Result = append(s.Result, i)
+	}
 	s.Count = len(s.Result)
 	s.Ok = s.Count > 0
 }

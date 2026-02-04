@@ -62,8 +62,18 @@ func (s *Hub) Start() {
 		return
 	}
 
+	logs.Logf(packageName, "Hub started")
 	s.isStart = true
 	go s.run()
+}
+
+/**
+* Close
+**/
+func (s *Hub) Close() {
+	s.isStart = false
+
+	logs.Log(packageName, "Shutting down server...")
 }
 
 /**

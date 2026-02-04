@@ -50,6 +50,21 @@ func ScanJson(value map[string]interface{}) (et.Json, error) {
 }
 
 /**
+* GetStr
+* @param r *http.Request
+* @return et.Json, error
+**/
+func GetStr(r *http.Request) (string, error) {
+	body, err := request.ReadBody(r.Body)
+	if err != nil {
+		return "", err
+	}
+
+	result := body.ToString()
+	return result, nil
+}
+
+/**
 * GetBody
 * @param r *http.Request
 * @return et.Json, error

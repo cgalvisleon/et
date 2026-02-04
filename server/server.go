@@ -77,7 +77,7 @@ func (s *Ettp) Close() {
 		s.onClose()
 	}
 
-	logs.Log("Http", "Shutting down server...")
+	logs.Log(packageName, "Shutting down server...")
 }
 
 /**
@@ -181,10 +181,6 @@ func (s *Ettp) Start() {
 	if s.onStart != nil {
 		s.onStart()
 	}
-
-	utility.AppWait()
-
-	s.Close()
 }
 
 /**

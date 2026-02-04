@@ -31,9 +31,9 @@ type Ettp struct {
 /**
 * New
 * @param appName string
-* @return *Ettp, error
+* @return *Ettp
 **/
-func New(appName string) (*Ettp, error) {
+func New(appName string) *Ettp {
 	result := &Ettp{
 		port:    envar.GetInt("PORT", 3000),
 		rpc:     envar.GetInt("RPC_PORT", 4200),
@@ -56,7 +56,7 @@ func New(appName string) (*Ettp, error) {
 		result.http = serv
 	}
 
-	return result, nil
+	return result
 }
 
 /**

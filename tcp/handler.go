@@ -29,7 +29,7 @@ func (s *Server) handleServer(conn net.Conn) {
 func (s *Server) handleBalancer(client net.Conn) {
 	defer client.Close()
 
-	node := s.b.Next()
+	node := s.b.next()
 	if node == nil {
 		return
 	}

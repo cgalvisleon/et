@@ -11,7 +11,7 @@ func NewBalancer(nodes []*Node) *Balancer {
 	return &Balancer{nodes: nodes}
 }
 
-func (b *Balancer) Next() *Node {
+func (b *Balancer) next() *Node {
 	n := uint64(len(b.nodes))
 	for i := uint64(0); i < n; i++ {
 		idx := (b.index.Add(1)) % n

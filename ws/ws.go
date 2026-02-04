@@ -47,3 +47,17 @@ func Upgrader(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
 func SendMessage(socket *websocket.Conn, message et.Json) error {
 	return socket.WriteJSON(message)
 }
+
+/**
+* SendError
+* @params socket *websocket.Conn, err error
+* @return error
+**/
+func SendError(socket *websocket.Conn, err error) error {
+	return socket.WriteJSON(et.Json{
+		"ok": false,
+		"result": et.Json{
+			"message": err.Error(),
+		},
+	})
+}

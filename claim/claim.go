@@ -8,6 +8,7 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/golang-jwt/jwt/v4"
@@ -15,6 +16,7 @@ import (
 
 type Claim struct {
 	jwt.StandardClaims
+	ID       string        `json:"id"`
 	Salt     string        `json:"salt"`
 	Duration time.Duration `json:"duration"`
 	App      string        `json:"app"`
@@ -59,6 +61,7 @@ func (s *Claim) SetPayload(payload et.Json) {
 **/
 func NewClaim(duration time.Duration) *Claim {
 	result := &Claim{}
+	result.ID = reg.ULID()
 	result.Salt = utility.GetOTP(6)
 	result.Duration = duration
 	if result.Duration != 0 {
@@ -129,6 +132,11 @@ func ParceToken(token string) (*Claim, error) {
 		return nil, fmt.Errorf(msg.MSG_REQUIRED_INVALID)
 	}
 
+	id, ok := claim["id"].(string)
+	if !ok {
+		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "id")
+	}
+
 	app, ok := claim["app"].(string)
 	if !ok {
 		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "app")
@@ -164,6 +172,7 @@ func ParceToken(token string) (*Claim, error) {
 
 	duration := time.Duration(second)
 	result := &Claim{
+		ID:       id,
 		App:      app,
 		Device:   device,
 		Username: username,

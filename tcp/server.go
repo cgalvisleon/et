@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/josefina/internal/msg"
+	"github.com/cgalvisleon/et/msg"
 )
 
 type Mode int

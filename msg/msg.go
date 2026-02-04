@@ -31,6 +31,7 @@ var (
 	MSG_CHANNEL_NOT_FOUND              = "channel not found (%s)"
 	MSG_USER_NOT_FOUND                 = "user not found (%s)"
 	MSG_HOLA                           = "Hello"
+	MSG_TCP_LISTENING                  = "Listening tcp on:%d"
 )
 
 func init() {
@@ -65,5 +66,6 @@ func init() {
 		MSG_CHANNEL_NOT_FOUND = "canal no encontrado (%s)"
 		MSG_USER_NOT_FOUND = "usuario no encontrado (%s)"
 		MSG_HOLA = "Hola"
+		MSG_TCP_LISTENING = "Listening tcp on:%d"
 	}
 }

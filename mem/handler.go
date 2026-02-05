@@ -20,6 +20,32 @@ func Set(key string, value interface{}, expiration time.Duration) *Item {
 }
 
 /**
+* Delete
+* @param key string
+* @return bool
+**/
+func Delete(key string) bool {
+	if conn == nil {
+		return false
+	}
+
+	return conn.Delete(key)
+}
+
+/**
+* Exists
+* @param key string
+* @return bool
+**/
+func Exists(key string) bool {
+	if conn == nil {
+		return false
+	}
+
+	return conn.Exists(key)
+}
+
+/**
 * GetItem
 * @param key string
 * @return *Item, bool
@@ -160,19 +186,6 @@ func GetArrayJson(key string) ([]et.Json, bool) {
 	}
 
 	return conn.GetArrayJson(key, []et.Json{})
-}
-
-/**
-* Delete
-* @param key string
-* @return bool
-**/
-func Delete(key string) bool {
-	if conn == nil {
-		return false
-	}
-
-	return conn.Delete(key)
 }
 
 /**

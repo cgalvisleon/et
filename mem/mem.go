@@ -98,6 +98,16 @@ func (s *Mem) Delete(key string) bool {
 }
 
 /**
+* Exists
+* @param key string
+* @return bool
+**/
+func (s *Mem) Exists(key string) bool {
+	_, ok := s.items[key]
+	return ok
+}
+
+/**
 * GetItem
 * @param key string, dest *Item
 * @return bool, error

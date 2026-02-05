@@ -9,13 +9,9 @@ import (
 /**
 * Set
 * @param key string, value interface{}, expiration time.Duration
-* @return *Item
+* @return *Entry
 **/
-func Set(key string, value interface{}, expiration time.Duration) *Item {
-	if conn == nil {
-		return nil
-	}
-
+func Set(key string, value interface{}, expiration time.Duration) (*Entry, error) {
 	return conn.Set(key, value, expiration)
 }
 
@@ -25,10 +21,6 @@ func Set(key string, value interface{}, expiration time.Duration) *Item {
 * @return bool
 **/
 func Delete(key string) bool {
-	if conn == nil {
-		return false
-	}
-
 	return conn.Delete(key)
 }
 
@@ -38,24 +30,16 @@ func Delete(key string) bool {
 * @return bool
 **/
 func Exists(key string) bool {
-	if conn == nil {
-		return false
-	}
-
 	return conn.Exists(key)
 }
 
 /**
-* GetItem
+* GetEntry
 * @param key string
-* @return *Item, bool
+* @return *Entry, bool
 **/
-func GetItem(key string) (*Item, bool) {
-	if conn == nil {
-		return nil, false
-	}
-
-	return conn.GetItem(key)
+func GetEntry(key string) (*Entry, bool) {
+	return conn.GetEntry(key)
 }
 
 /**
@@ -64,10 +48,6 @@ func GetItem(key string) (*Item, bool) {
 * @return string, bool
 **/
 func Get(key string) (interface{}, bool) {
-	if conn == nil {
-		return nil, false
-	}
-
 	return conn.Get(key)
 }
 
@@ -77,114 +57,78 @@ func Get(key string) (interface{}, bool) {
 * @return string, bool
 **/
 func GetStr(key string) (string, bool) {
-	if conn == nil {
-		return "", false
-	}
-
 	return conn.GetStr(key)
 }
 
 /**
 * GetInt
 * @param key string
-* @return int, bool
+* @return int, bool, error
 **/
-func GetInt(key string) (int, bool) {
-	if conn == nil {
-		return 0, false
-	}
-
+func GetInt(key string) (int, bool, error) {
 	return conn.GetInt(key, 0)
 }
 
 /**
 * GetInt64
 * @param key string
-* @return int64, bool
+* @return int64, bool, error
 **/
-func GetInt64(key string) (int64, bool) {
-	if conn == nil {
-		return 0, false
-	}
-
+func GetInt64(key string) (int64, bool, error) {
 	return conn.GetInt64(key, 0)
 }
 
 /**
 * GetFloat64
 * @param key string
-* @return float64, bool
+* @return float64, bool, error
 **/
-func GetFloat64(key string) (float64, bool) {
-	if conn == nil {
-		return 0, false
-	}
-
+func GetFloat64(key string) (float64, bool, error) {
 	return conn.GetFloat(key, 0)
 }
 
 /**
 * GetBool
 * @param key string
-* @return bool, bool
+* @return bool, bool, error
 **/
-func GetBool(key string) (bool, bool) {
-	if conn == nil {
-		return false, false
-	}
-
+func GetBool(key string) (bool, bool, error) {
 	return conn.GetBool(key, false)
 }
 
 /**
 * GetTime
 * @param key string
-* @return time.Time, bool
+* @return time.Time, bool, error
 **/
-func GetTime(key string) (time.Time, bool) {
-	if conn == nil {
-		return time.Time{}, false
-	}
-
+func GetTime(key string) (time.Time, bool, error) {
 	return conn.GetTime(key, time.Time{})
 }
 
 /**
 * GetDuration
 * @param key string
-* @return time.Duration, bool
+* @return time.Duration, bool, error
 **/
-func GetDuration(key string) (time.Duration, bool) {
-	if conn == nil {
-		return 0, false
-	}
-
+func GetDuration(key string) (time.Duration, bool, error) {
 	return conn.GetDuration(key, 0)
 }
 
 /**
 * GetJson
 * @param key string
-* @return et.Json, bool
+* @return et.Json, bool, error
 **/
-func GetJson(key string) (et.Json, bool) {
-	if conn == nil {
-		return et.Json{}, false
-	}
-
+func GetJson(key string) (et.Json, bool, error) {
 	return conn.GetJson(key, et.Json{})
 }
 
 /**
 * GetArrayJson
 * @param key string
-* @return []et.Json, bool
+* @return []et.Json, bool, error
 **/
-func GetArrayJson(key string) ([]et.Json, bool) {
-	if conn == nil {
-		return []et.Json{}, false
-	}
-
+func GetArrayJson(key string) ([]et.Json, bool, error) {
 	return conn.GetArrayJson(key, []et.Json{})
 }
 
@@ -193,12 +137,8 @@ func GetArrayJson(key string) ([]et.Json, bool) {
 * @param key string
 * @param expiration time.Duration
 **/
-func More(key string, expiration time.Duration) {
-	if conn == nil {
-		return
-	}
-
-	conn.More(key, expiration)
+func More(key string, expiration time.Duration) (int64, error) {
+	return conn.More(key, expiration)
 }
 
 /**
@@ -206,10 +146,6 @@ func More(key string, expiration time.Duration) {
 * @param match string
 **/
 func Clear(match string) {
-	if conn == nil {
-		return
-	}
-
 	conn.Clear(match)
 }
 

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/logs"
 )
 
 type Mem struct {
@@ -19,26 +18,17 @@ var (
 	conn *Mem
 )
 
-func Load() (*Mem, error) {
+func Load() *Mem {
 	result := &Mem{
 		items: make(map[string]*Entry),
 		mu:    &sync.RWMutex{},
 	}
 
-	return result, nil
+	return result
 }
 
 func init() {
-	if conn != nil {
-		return
-	}
-
-	var err error
-	conn, err = Load()
-	if err != nil {
-		logs.Alert(err)
-		return
-	}
+	conn = Load()
 }
 
 /**

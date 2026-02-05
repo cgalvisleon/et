@@ -194,16 +194,17 @@ func (s *Entry) Map() (map[string]interface{}, error) {
 
 /**
 * ArrayMap return the value of item
-* @return []interface{}
+* @return []interface{}, error
 **/
-func (s *Entry) ArrayMap() []map[string]interface{} {
-	result := i.Get()
-	val, ok := result.([]map[string]interface{})
-	if !ok {
-		return []map[string]interface{}{}
+func (s *Entry) ArrayMap() ([]map[string]interface{}, error) {
+	var result []map[string]interface{}
+	bt := s.Get()
+	err := json.Unmarshal(bt, &result)
+	if err != nil {
+		return []map[string]interface{}{}, err
 	}
 
-	return val
+	return result, nil
 }
 
 /**

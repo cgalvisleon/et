@@ -208,84 +208,90 @@ func (s *Entry) ArrayMap() []map[string]interface{} {
 
 /**
 * ArrayStr return the value of item
-* @return []string
+* @return []string, error
 **/
-func (s *Entry) ArrayStr() []string {
-	result := i.Get()
-	val, ok := result.([]string)
-	if !ok {
-		return []string{}
+func (s *Entry) ArrayStr() ([]string, error) {
+	var result []string
+	bt := s.Get()
+	err := json.Unmarshal(bt, &result)
+	if err != nil {
+		return []string{}, err
 	}
 
-	return val
+	return result, nil
 }
 
 /**
 * ArrayInt return the value of item
-* @return []int
+* @return []int, error
 **/
-func (s *Entry) ArrayInt() []int {
-	result := i.Get()
-	val, ok := result.([]int)
-	if !ok {
-		return []int{}
+func (s *Entry) ArrayInt() ([]int, error) {
+	var result []int
+	bt := s.Get()
+	err := json.Unmarshal(bt, &result)
+	if err != nil {
+		return []int{}, err
 	}
 
-	return val
+	return result, nil
 }
 
 /**
 * ArrayFloat return the value of item
-* @return []float64
+* @return []float64, error
 **/
-func (s *Entry) ArrayFloat() []float64 {
-	result := i.Get()
-	val, ok := result.([]float64)
-	if !ok {
-		return []float64{}
+func (s *Entry) ArrayFloat() ([]float64, error) {
+	var result []float64
+	bt := s.Get()
+	err := json.Unmarshal(bt, &result)
+	if err != nil {
+		return []float64{}, err
 	}
 
-	return val
+	return result, nil
 }
 
 /**
 * ArrayTime return the value of item
-* @return []time.Time
+* @return []time.Time, error
 **/
-func (s *Entry) ArrayTime() []time.Time {
-	result := i.Get()
-	val, ok := result.([]time.Time)
-	if !ok {
-		return []time.Time{}
+func (s *Entry) ArrayTime() ([]time.Time, error) {
+	var result []time.Time
+	bt := s.Get()
+	err := json.Unmarshal(bt, &result)
+	if err != nil {
+		return []time.Time{}, err
 	}
 
-	return val
+	return result, nil
 }
 
 /**
 * ArrayDuration return the value of item
-* @return []time.Duration
+* @return []time.Duration, error
 **/
-func (s *Entry) ArrayDuration() []time.Duration {
-	result := i.Get()
-	val, ok := result.([]time.Duration)
-	if !ok {
-		return []time.Duration{}
+func (s *Entry) ArrayDuration() ([]time.Duration, error) {
+	var result []time.Duration
+	bt := s.Get()
+	err := json.Unmarshal(bt, &result)
+	if err != nil {
+		return []time.Duration{}, err
 	}
 
-	return val
+	return result, nil
 }
 
 /**
 * ArrayJson return the value of item
-* @return []et.Json
+* @return []et.Json, error
 **/
-func (s *Entry) ArrayJson() []et.Json {
-	result := i.Get()
-	val, ok := result.([]et.Json)
-	if !ok {
-		return []et.Json{}
+func (s *Entry) ArrayJson() ([]et.Json, error) {
+	var result []et.Json
+	bt := s.Get()
+	err := json.Unmarshal(bt, &result)
+	if err != nil {
+		return []et.Json{}, err
 	}
 
-	return val
+	return result, nil
 }

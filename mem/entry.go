@@ -43,9 +43,13 @@ func New(key string, value interface{}, expiration time.Duration) (*Entry, error
 * @return *Entry, error
 **/
 func (s *Entry) Set(value interface{}, expiration time.Duration) (*Entry, error) {
-	bt, err := json.Marshal(value)
-	if err != nil {
-		return nil, err
+	bt, ok := value.([]byte)
+	if !ok {
+		var err error
+		bt, err = json.Marshal(value)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	s.LastUpdate = timezone.Now()

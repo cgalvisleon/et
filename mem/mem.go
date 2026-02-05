@@ -12,15 +12,17 @@ import (
 )
 
 type Mem struct {
-	items map[string]*Item
+	items map[string]*Entry
 	mu    *sync.RWMutex
 }
 
-var conn *Mem
+var (
+	conn *Mem
+)
 
 func Load() (*Mem, error) {
 	result := &Mem{
-		items: make(map[string]*Item),
+		items: make(map[string]*Entry),
 		mu:    &sync.RWMutex{},
 	}
 
@@ -53,7 +55,7 @@ func (s *Mem) Type() string {
 * @param key string, value interface{}, expiration time.Duration
 * @return interface{}
 **/
-func (s *Mem) Set(key string, value interface{}, expiration time.Duration) *Item {
+func (s *Mem) Set(key string, value interface{}, expiration time.Duration) *Entry {
 	s.mu.RLock()
 	item, ok := s.items[key]
 	s.mu.RUnlock()
@@ -109,10 +111,10 @@ func (s *Mem) Exists(key string) bool {
 
 /**
 * GetItem
-* @param key string, dest *Item
+* @param key string, dest *Entry
 * @return bool, error
 **/
-func (s *Mem) GetItem(key string) (*Item, bool) {
+func (s *Mem) GetItem(key string) (*Entry, bool) {
 	s.mu.RLock()
 	item, ok := s.items[key]
 	s.mu.RUnlock()

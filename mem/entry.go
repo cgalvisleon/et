@@ -51,6 +51,7 @@ func (s *Entry) Set(value interface{}, expiration time.Duration) (*Entry, error)
 	s.LastUpdate = timezone.Now()
 	s.Expiration = expiration
 	s.Value = bt
+	s.Version++
 
 	return s, nil
 }

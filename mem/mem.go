@@ -3,7 +3,6 @@ package mem
 import (
 	"fmt"
 	"regexp"
-	"strconv"
 	"sync"
 	"time"
 
@@ -53,20 +52,30 @@ func (s *Mem) Type() string {
 /**
 * Set
 * @param key string, value interface{}, expiration time.Duration
-* @return interface{}
+* @return *Entry, error
 **/
-func (s *Mem) Set(key string, value interface{}, expiration time.Duration) *Entry {
+func (s *Mem) Set(key string, value interface{}, expiration time.Duration) (*Entry, error) {
 	s.mu.RLock()
 	item, ok := s.items[key]
 	s.mu.RUnlock()
 	if ok {
-		item.Set(value, expiration)
-	} else {
-		item = New(key, value, expiration)
-		s.mu.Lock()
-		s.items[key] = item
-		s.mu.Unlock()
+		_, err := item.Set(value, expiration)
+		if err != nil {
+			return nil, err
+		}
+
+		return item, nil
 	}
+
+	var err error
+	item, err = New(key, value, expiration)
+	if err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	s.items[key] = item
+	s.mu.Unlock()
 
 	clean := func() {
 		s.Delete(key)
@@ -77,7 +86,7 @@ func (s *Mem) Set(key string, value interface{}, expiration time.Duration) *Entr
 		go time.AfterFunc(duration, clean)
 	}
 
-	return item
+	return item, nil
 }
 
 /**
@@ -105,16 +114,19 @@ func (s *Mem) Delete(key string) bool {
 * @return bool
 **/
 func (s *Mem) Exists(key string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	_, ok := s.items[key]
 	return ok
 }
 
 /**
-* GetItem
+* GetEntry
 * @param key string, dest *Entry
 * @return bool, error
 **/
-func (s *Mem) GetItem(key string) (*Entry, bool) {
+func (s *Mem) GetEntry(key string) (*Entry, bool) {
 	s.mu.RLock()
 	item, ok := s.items[key]
 	s.mu.RUnlock()
@@ -131,7 +143,7 @@ func (s *Mem) GetItem(key string) (*Entry, bool) {
 * @return interfase{}, error
 **/
 func (s *Mem) Get(key string) (interface{}, bool) {
-	item, exists := s.GetItem(key)
+	item, exists := s.GetEntry(key)
 	if !exists {
 		return nil, false
 	}
@@ -142,10 +154,10 @@ func (s *Mem) Get(key string) (interface{}, bool) {
 /**
 * GetStr
 * @param key string
-* @return string
+* @return string, bool
 **/
 func (s *Mem) GetStr(key string) (string, bool) {
-	item, exists := s.GetItem(key)
+	item, exists := s.GetEntry(key)
 	if !exists {
 		return "", false
 	}
@@ -156,155 +168,210 @@ func (s *Mem) GetStr(key string) (string, bool) {
 /**
 * GetInt
 * @param key string, def int
-* @return int, bool
+* @return int, bool, error
 **/
-func (s *Mem) GetInt(key string, def int) (int, bool) {
-	item, exists := s.GetItem(key)
+func (s *Mem) GetInt(key string, def int) (int, bool, error) {
+	item, exists := s.GetEntry(key)
 	if !exists {
-		return def, false
+		return def, false, nil
 	}
 
-	return item.Int(), true
+	result, err := item.Int()
+	if err != nil {
+		return def, false, err
+	}
+
+	return result, true, nil
 }
 
 /**
 * GetInt64
 * @param key string, def int
-* @return int, error
+* @return int, error, bool
 **/
-func (s *Mem) GetInt64(key string, def int64) (int64, bool) {
-	item, exists := s.GetItem(key)
+func (s *Mem) GetInt64(key string, def int64) (int64, bool, error) {
+	item, exists := s.GetEntry(key)
 	if !exists {
-		return def, false
+		return def, false, nil
 	}
 
-	return item.Int64(), true
+	result, err := item.Int64()
+	if err != nil {
+		return def, false, err
+	}
+
+	return result, true, nil
 }
 
 /**
 * GetFloat
 * @param key string, def float64
-* @return float64, bool
+* @return float64, bool, error
 **/
-func (s *Mem) GetFloat(key string, def float64) (float64, bool) {
-	item, exists := s.GetItem(key)
+func (s *Mem) GetFloat(key string, def float64) (float64, bool, error) {
+	item, exists := s.GetEntry(key)
 	if !exists {
-		return def, false
+		return def, false, nil
 	}
 
-	return item.Float(), true
+	result, err := item.Float()
+	if err != nil {
+		return def, false, err
+	}
+
+	return result, true, nil
 }
 
 /**
 * GetBool
 * @param key string, def bool
-* @return bool, bool
+* @return bool, bool, error
 **/
-func (s *Mem) GetBool(key string, def bool) (bool, bool) {
-	item, exists := s.GetItem(key)
+func (s *Mem) GetBool(key string, def bool) (bool, bool, error) {
+	item, exists := s.GetEntry(key)
 	if !exists {
-		return def, false
+		return def, false, nil
 	}
 
-	return item.Bool(), true
+	result, err := item.Bool()
+	if err != nil {
+		return def, false, err
+	}
+
+	return result, true, nil
 }
 
 /**
 * GetTime
 * @param key string, def time.Time
-* @return time.Time, bool
+* @return time.Time, bool, error
 **/
-func (s *Mem) GetTime(key string, def time.Time) (time.Time, bool) {
-	item, exists := s.GetItem(key)
+func (s *Mem) GetTime(key string, def time.Time) (time.Time, bool, error) {
+	item, exists := s.GetEntry(key)
 	if !exists {
-		return def, false
+		return def, false, nil
 	}
 
-	return item.Time(), true
+	result, err := item.Time()
+	if err != nil {
+		return def, false, err
+	}
+
+	return result, true, nil
 }
 
 /**
 * GetDuration
 * @param key string, def time.Duration
-* @return time.Duration, bool
+* @return time.Duration, bool, error
 **/
-func (s *Mem) GetDuration(key string, def time.Duration) (time.Duration, bool) {
-	item, exists := s.GetItem(key)
+func (s *Mem) GetDuration(key string, def time.Duration) (time.Duration, bool, error) {
+	item, exists := s.GetEntry(key)
 	if !exists {
-		return def, false
+		return def, false, nil
 	}
 
-	return item.Duration(), true
+	result, err := item.Duration()
+	if err != nil {
+		return def, false, err
+	}
+
+	return result, true, nil
 }
 
 /**
 * GetJson
 * @param key string, def et.Json
-* @return et.Json, error
+* @return et.Json, bool, error
 **/
-func (s *Mem) GetJson(key string, def et.Json) (et.Json, bool) {
-	item, exists := s.GetItem(key)
+func (s *Mem) GetJson(key string, def et.Json) (et.Json, bool, error) {
+	item, exists := s.GetEntry(key)
 	if !exists {
-		return def, false
+		return def, false, nil
 	}
 
-	return item.Json(), true
+	result, err := item.Json()
+	if err != nil {
+		return def, false, err
+	}
+
+	return result, true, nil
 }
 
 /**
 * GetArrayStr
 * @param key string, def []string
-* @return []string, bool
+* @return []string, bool, error
 **/
-func (s *Mem) GetArrayStr(key string, def []string) ([]string, bool) {
-	item, exists := s.GetItem(key)
+func (s *Mem) GetArrayStr(key string, def []string) ([]string, bool, error) {
+	item, exists := s.GetEntry(key)
 	if !exists {
-		return def, false
+		return def, false, nil
 	}
 
-	return item.ArrayStr(), true
+	result, err := item.ArrayStr()
+	if err != nil {
+		return def, false, err
+	}
+
+	return result, true, nil
 }
 
 /**
 * GetArrayInt
 * @param key string, def []int
-* @return []int, bool
+* @return []int, bool, error
 **/
-func (s *Mem) GetArrayInt(key string, def []int) ([]int, bool) {
-	item, exists := s.GetItem(key)
+func (s *Mem) GetArrayInt(key string, def []int) ([]int, bool, error) {
+	item, exists := s.GetEntry(key)
 	if !exists {
-		return def, false
+		return def, false, nil
 	}
 
-	return item.ArrayInt(), true
+	result, err := item.ArrayInt()
+	if err != nil {
+		return def, false, err
+	}
+
+	return result, true, nil
 }
 
 /**
 * GetArrayFloat
 * @param key string, def []float64
-* @return []float64, bool
+* @return []float64, bool, error
 **/
-func (s *Mem) GetArrayFloat(key string, def []float64) ([]float64, bool) {
-	item, exists := s.GetItem(key)
+func (s *Mem) GetArrayFloat(key string, def []float64) ([]float64, bool, error) {
+	item, exists := s.GetEntry(key)
 	if !exists {
-		return def, false
+		return def, false, nil
 	}
 
-	return item.ArrayFloat(), true
+	result, err := item.ArrayFloat()
+	if err != nil {
+		return def, false, err
+	}
+
+	return result, true, nil
 }
 
 /**
 * GetArrayJson
 * @param key string, def []et.Json
-* @return []et.Json, bool
+* @return []et.Json, bool, error
 **/
-func (s *Mem) GetArrayJson(key string, def []et.Json) ([]et.Json, bool) {
-	item, exists := s.GetItem(key)
+func (s *Mem) GetArrayJson(key string, def []et.Json) ([]et.Json, bool, error) {
+	item, exists := s.GetEntry(key)
 	if !exists {
-		return def, false
+		return def, false, nil
 	}
 
-	return item.ArrayJson(), true
+	result, err := item.ArrayJson()
+	if err != nil {
+		return def, false, err
+	}
+
+	return result, true, nil
 }
 
 /**
@@ -313,17 +380,25 @@ func (s *Mem) GetArrayJson(key string, def []et.Json) ([]et.Json, bool) {
 * @param expiration time.Duration
 * @return int
 **/
-func (s *Mem) More(key string, expiration time.Duration) int64 {
+func (s *Mem) More(key string, expiration time.Duration) (int64, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var err error
+	var result int64
 	item, ok := s.items[key]
 	if !ok {
-		s.Set(key, "0", expiration)
-		return 0
+		result = 1
 	} else {
-		result := item.Int64() + 1
-		str := strconv.FormatInt(result, 10)
-		s.Set(key, str, expiration)
-		return result
+		result, err = item.Int64()
+		if err != nil {
+			return 0, err
+		}
+		result++
 	}
+
+	s.Set(key, result, expiration)
+	return result, nil
 }
 
 /**

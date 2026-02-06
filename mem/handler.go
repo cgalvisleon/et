@@ -54,9 +54,9 @@ func Get(key string) (interface{}, bool) {
 /**
 * GetStr
 * @param key string
-* @return string, bool
+* @return string, bool, error
 **/
-func GetStr(key string) (string, bool) {
+func GetStr(key string) (string, bool, error) {
 	return conn.GetStr(key)
 }
 

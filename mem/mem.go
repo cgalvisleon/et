@@ -144,15 +144,20 @@ func (s *Mem) Get(key string) (interface{}, bool) {
 /**
 * GetStr
 * @param key string
-* @return string, bool
+* @return string, bool, error
 **/
-func (s *Mem) GetStr(key string) (string, bool) {
+func (s *Mem) GetStr(key string) (string, bool, error) {
 	item, exists := s.GetEntry(key)
 	if !exists {
-		return "", false
+		return "", false, nil
 	}
 
-	return item.Str(), true
+	result, err := item.Str()
+	if err != nil {
+		return "", false, err
+	}
+
+	return result, true, nil
 }
 
 /**
@@ -447,7 +452,11 @@ func (s *Mem) Values() []string {
 	values := make([]string, 0, len(s.items))
 
 	for _, item := range s.items {
-		str := item.Str()
+		str, err := item.Str()
+		if err != nil {
+			continue
+		}
+
 		values = append(values, str)
 	}
 

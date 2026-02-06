@@ -72,9 +72,15 @@ func (s *Entry) Get() []byte {
 * Str return the value of item
 * @return string
 **/
-func (s *Entry) Str() string {
-	result := s.Get()
-	return string(result)
+func (s *Entry) Str() (string, error) {
+	var result string
+	bt := s.Get()
+	err := json.Unmarshal(bt, &result)
+	if err != nil {
+		return "", err
+	}
+
+	return result, nil
 }
 
 /**

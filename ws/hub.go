@@ -223,6 +223,47 @@ func (s *Hub) addChannel(ch *Channel) {
 }
 
 /**
+* SendTo
+* @param to []string, message Message
+**/
+func (s *Hub) SendTo(to []string, message Message) ([]string, error) {
+	result := []string{}
+
+	sendObject := func(client *Subscriber, m interface{}) {
+		client.SendMessage(m)
+		for _, fn := range s.onSend {
+			fn(client.Name, message)
+		}
+	}
+
+	for _, username := range to {
+		client, ok := s.Subscribers[username]
+		if ok {
+			idx := slices.IndexFunc(message.Ignored, func(user string) bool {
+				return user == username
+			})
+			if idx != -1 {
+				continue
+			}
+
+			if message.Verified {
+				sendObject(client, message.Message)
+			} else {
+				go sendObject(client, message.Message)
+			}
+
+			result = append(result, username)
+		}
+	}
+
+	if len(result) == 0 {
+		return nil, fmt.Errorf(msg.MSG_USER_NOT_FOUND)
+	}
+
+	return result, nil
+}
+
+/**
 * Topic
 * @param channel string
 * @return *Channel
@@ -325,47 +366,6 @@ func (s *Hub) Unsubscribe(cache string, subscribe string) error {
 	ch.remove(client.Name)
 	client.removeChannel(ch.Name)
 	return nil
-}
-
-/**
-* SendTo
-* @param to []string, message Message
-**/
-func (s *Hub) SendTo(to []string, message Message) ([]string, error) {
-	result := []string{}
-
-	sendObject := func(client *Subscriber, m interface{}) {
-		client.SendMessage(m)
-		for _, fn := range s.onSend {
-			fn(client.Name, message)
-		}
-	}
-
-	for _, username := range to {
-		client, ok := s.Subscribers[username]
-		if ok {
-			idx := slices.IndexFunc(message.Ignored, func(user string) bool {
-				return user == username
-			})
-			if idx != -1 {
-				continue
-			}
-
-			if message.Verified {
-				sendObject(client, message.Message)
-			} else {
-				go sendObject(client, message.Message)
-			}
-
-			result = append(result, username)
-		}
-	}
-
-	if len(result) == 0 {
-		return nil, fmt.Errorf(msg.MSG_USER_NOT_FOUND)
-	}
-
-	return result, nil
 }
 
 /**

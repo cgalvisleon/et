@@ -8,9 +8,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/gorilla/websocket"
 )
@@ -103,43 +101,6 @@ func (s *Subscriber) listener(message []byte) {
 	for _, fn := range s.hub.onListener {
 		fn(s, message)
 	}
-
-	ms, err := DecodeMessage(message)
-	if err != nil {
-		s.error(err)
-		return
-	}
-
-	notify := func(result []string, err error) {
-		if !ms.Verified {
-			return
-		}
-		if err != nil {
-			s.error(err)
-			return
-		}
-		s.sendMessage(et.Item{
-			Ok: true,
-			Result: et.Json{
-				"senders": result,
-			},
-		})
-	}
-
-	if ms.ID == "" {
-		ms.ID = reg.ULID()
-	}
-	if ms.Channel != "" {
-		result, err := s.hub.Publish(ms.Channel, ms)
-		notify(result, err)
-	} else if len(ms.To) > 0 {
-		result, err := s.hub.SendTo(ms.To, ms)
-		notify(result, err)
-	}
-
-	if s.hub.isDebug {
-		logs.Info(ms.ToString())
-	}
 }
 
 /**
@@ -154,10 +115,10 @@ func (s *Subscriber) Send(tp int, bt []byte) {
 }
 
 /**
-* SendObject
+* SendMessage
 * @param message interface{}
 **/
-func (s *Subscriber) sendMessage(message interface{}) {
+func (s *Subscriber) SendMessage(message interface{}) {
 	bt, err := json.Marshal(message)
 	if err != nil {
 		return
@@ -166,23 +127,23 @@ func (s *Subscriber) sendMessage(message interface{}) {
 }
 
 /**
-* error
+* Error
 * @param err error
 **/
-func (s *Subscriber) error(err error) {
+func (s *Subscriber) SendError(err error) {
 	ms := et.Item{
 		Ok: false,
 		Result: et.Json{
 			"message": err.Error(),
 		},
 	}
-	s.sendMessage(ms)
+	s.SendMessage(ms)
 }
 
 /**
-* sendHola
+* SendHola
 **/
-func (s *Subscriber) sendHola() {
+func (s *Subscriber) SendHola() {
 	ms := et.Item{
 		Ok: true,
 		Result: et.Json{

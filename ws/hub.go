@@ -148,7 +148,7 @@ func (s *Hub) Connect(socket *websocket.Conn, ctx context.Context) (*Subscriber,
 
 	go client.write()
 	go client.read()
-	go client.sendHola()
+	go client.SendHola()
 
 	return client, nil
 }
@@ -335,7 +335,7 @@ func (s *Hub) SendTo(to []string, message Message) ([]string, error) {
 	result := []string{}
 
 	sendObject := func(client *Subscriber, m interface{}) {
-		client.sendMessage(m)
+		client.SendMessage(m)
 		for _, fn := range s.onSend {
 			fn(client.Name, message)
 		}

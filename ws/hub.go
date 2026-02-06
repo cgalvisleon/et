@@ -28,6 +28,7 @@ type Hub struct {
 	Subscribers     map[string]*Subscriber         `json:"subscribers"`
 	register        chan *Subscriber               `json:"-"`
 	unregister      chan *Subscriber               `json:"-"`
+	onListener      []func(*Subscriber, []byte)    `json:"-"`
 	onConnection    []func(*Subscriber)            `json:"-"`
 	onDisconnection []func(*Subscriber)            `json:"-"`
 	onChannel       []func(Channel)                `json:"-"`
@@ -150,6 +151,14 @@ func (s *Hub) Connect(socket *websocket.Conn, ctx context.Context) (*Subscriber,
 	go client.sendHola()
 
 	return client, nil
+}
+
+/**
+* OnListener
+* @param fn func(*Subscriber, []byte)
+**/
+func (s *Hub) OnListener(fn func(*Subscriber, []byte)) {
+	s.onListener = append(s.onListener, fn)
 }
 
 /**

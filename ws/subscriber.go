@@ -100,6 +100,10 @@ func (s *Subscriber) write() {
 * @param message []byte
 **/
 func (s *Subscriber) listener(message []byte) {
+	for _, fn := range s.hub.onListener {
+		fn(s, message)
+	}
+
 	ms, err := DecodeMessage(message)
 	if err != nil {
 		s.error(err)
@@ -142,7 +146,7 @@ func (s *Subscriber) listener(message []byte) {
 * send
 * @param tp int, bt []byte
 **/
-func (s *Subscriber) send(tp int, bt []byte) {
+func (s *Subscriber) Send(tp int, bt []byte) {
 	s.outbound <- Outbound{
 		messageType: tp,
 		message:     bt,
@@ -158,7 +162,7 @@ func (s *Subscriber) sendMessage(message interface{}) {
 	if err != nil {
 		return
 	}
-	s.send(TextMessage, bt)
+	s.Send(TextMessage, bt)
 }
 
 /**
@@ -190,7 +194,7 @@ func (s *Subscriber) sendHola() {
 		return
 	}
 
-	s.send(TextMessage, bt)
+	s.Send(TextMessage, bt)
 }
 
 /**

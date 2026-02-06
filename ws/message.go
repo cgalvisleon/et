@@ -79,8 +79,8 @@ func NewMessage(from et.Json, to []string) Message {
 
 /**
 * DecodeMessage
-* @param messageType int, data []byte
-* @return Message
+* @param data []byte
+* @return Message, error
 **/
 func DecodeMessage(data []byte) (Message, error) {
 	var result Message

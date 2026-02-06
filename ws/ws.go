@@ -18,6 +18,7 @@ func New() *Hub {
 		Subscribers:     make(map[string]*Subscriber),
 		register:        make(chan *Subscriber),
 		unregister:      make(chan *Subscriber),
+		onListener:      make([]func(*Subscriber, []byte), 0),
 		onConnection:    make([]func(*Subscriber), 0),
 		onDisconnection: make([]func(*Subscriber), 0),
 		onChannel:       make([]func(Channel), 0),

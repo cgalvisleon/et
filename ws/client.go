@@ -42,14 +42,14 @@ type Client struct {
 	Channels   []string        `json:"channels"`
 	socket     *websocket.Conn `json:"-"`
 	outbound   chan Outbound   `json:"-"`
-	mutex      sync.RWMutex    `json:"-"`
+	mu         sync.RWMutex    `json:"-"`
 	hub        *Hub            `json:"-"`
 	ctx        context.Context `json:"-"`
 }
 
 /**
 * newSubscriber
-* @param name string, socket *websocket.Conn
+* @param hub *Hub, ctx context.Context, username string, socket *websocket.Conn
 * @return *Client
 **/
 func newSubscriber(hub *Hub, ctx context.Context, username string, socket *websocket.Conn) *Client {
@@ -61,7 +61,7 @@ func newSubscriber(hub *Hub, ctx context.Context, username string, socket *webso
 		Channels:   []string{},
 		socket:     socket,
 		outbound:   make(chan Outbound),
-		mutex:      sync.RWMutex{},
+		mu:         sync.RWMutex{},
 		hub:        hub,
 		ctx:        ctx,
 	}

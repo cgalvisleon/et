@@ -1,15 +1,13 @@
 package jrpc
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/rpc"
-	"reflect"
-	"strings"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/strs"
 )
 
 type Package struct {
@@ -35,22 +33,22 @@ func NewPackage(name string, host string, port int) *Package {
 }
 
 /**
-* Describe
+* ToJson
 * @return et.Json
 **/
-func (s *Package) Describe() et.Json {
-	solvers := []et.Json{}
-	for _, solver := range s.Solvers {
-		solvers = append(solvers, solver.serialize())
+func (s *Package) ToJson() et.Json {
+	dt, err := json.Marshal(s)
+	if err != nil {
+		return et.Json{}
 	}
 
-	return et.Json{
-		"name":    s.Name,
-		"host":    s.Host,
-		"port":    s.Port,
-		"count":   len(s.Solvers),
-		"solvers": solvers,
+	var result et.Json
+	err = json.Unmarshal(dt, &result)
+	if err != nil {
+		return et.Json{}
 	}
+
+	return result
 }
 
 /**
@@ -86,43 +84,19 @@ func (s *Package) start() error {
 * @param services any
 * @return error
 **/
-func (s *Package) mount(services any) error {
-	tipoStruct := reflect.TypeOf(services)
-	structName := tipoStruct.String()
-	list := strings.Split(structName, ".")
-	structName = list[len(list)-1]
-	for i := 0; i < tipoStruct.NumMethod(); i++ {
-		metodo := tipoStruct.Method(i)
-		numInputs := metodo.Type.NumIn()
-		numOutputs := metodo.Type.NumOut()
-
-		inputs := et.Json{}
-		for i := 1; i < numInputs; i++ {
-			name := fmt.Sprintf(`param_%d`, i)
-			paramType := metodo.Type.In(i)
-			inputs[name] = paramType.String()
-		}
-
-		outputs := []string{}
-		for i := 0; i < numOutputs; i++ {
-			paramType := metodo.Type.Out(i)
-			outputs = append(outputs, paramType.String())
-		}
-
-		structName = strs.DaskSpace(structName)
-		name := strs.DaskSpace(metodo.Name)
-		solver := &Solver{
-			Host:       s.Host,
-			Port:       s.Port,
-			StructName: structName,
-			Method:     name,
-			Inputs:     inputs,
-			Output:     outputs,
-		}
-		s.Solvers = append(s.Solvers, solver)
+func (s *Package) Mount(services any) error {
+	solvers, err := Mount(s.Host, services)
+	if err != nil {
+		return err
 	}
 
-	rpc.Register(services)
+	for method, solver := range solvers {
+		s.Solvers = append(s.Solvers, &Solver{
+			Method: method,
+			Inputs: solver.ArrayStr("inputs"),
+			Output: solver.ArrayStr("output"),
+		})
+	}
 
-	return s.save()
+	return nil
 }

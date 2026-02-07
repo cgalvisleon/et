@@ -26,7 +26,7 @@ type Server struct {
 	mu      sync.Mutex
 }
 
-func NewServer(port int) *Server {
+func newServer(port int) *Server {
 	result := &Server{
 		port:    port,
 		nodes:   []*Node{},

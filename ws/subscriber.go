@@ -34,7 +34,7 @@ type Outbound struct {
 	message     []byte
 }
 
-type Subscriber struct {
+type Client struct {
 	Created_at time.Time       `json:"created_at"`
 	Name       string          `json:"name"`
 	Addr       string          `json:"addr"`
@@ -50,10 +50,10 @@ type Subscriber struct {
 /**
 * newSubscriber
 * @param name string, socket *websocket.Conn
-* @return *Subscriber
+* @return *Client
 **/
-func newSubscriber(hub *Hub, ctx context.Context, username string, socket *websocket.Conn) *Subscriber {
-	return &Subscriber{
+func newSubscriber(hub *Hub, ctx context.Context, username string, socket *websocket.Conn) *Client {
+	return &Client{
 		Created_at: timezone.Now(),
 		Status:     Pending,
 		Name:       username,
@@ -71,7 +71,7 @@ func newSubscriber(hub *Hub, ctx context.Context, username string, socket *webso
 * ToJson
 * @return et.Json
 **/
-func (s *Subscriber) ToJson() et.Json {
+func (s *Client) ToJson() et.Json {
 	return et.Json{
 		"created_at": s.Created_at,
 		"name":       s.Name,
@@ -84,7 +84,7 @@ func (s *Subscriber) ToJson() et.Json {
 /**
 * read
 **/
-func (s *Subscriber) read() {
+func (s *Client) read() {
 	for {
 		_, message, err := s.socket.ReadMessage()
 		if err != nil {
@@ -99,7 +99,7 @@ func (s *Subscriber) read() {
 /**
 * write
 **/
-func (s *Subscriber) write() {
+func (s *Client) write() {
 	for message := range s.outbound {
 		s.socket.WriteMessage(TextMessage, message.message)
 	}
@@ -111,7 +111,7 @@ func (s *Subscriber) write() {
 * listener
 * @param message []byte
 **/
-func (s *Subscriber) listener(message []byte) {
+func (s *Client) listener(message []byte) {
 	for _, fn := range s.hub.onListener {
 		fn(s, message)
 	}
@@ -121,7 +121,7 @@ func (s *Subscriber) listener(message []byte) {
 * send
 * @param tp int, bt []byte
 **/
-func (s *Subscriber) Send(tp int, bt []byte) {
+func (s *Client) Send(tp int, bt []byte) {
 	s.outbound <- Outbound{
 		messageType: tp,
 		message:     bt,
@@ -132,7 +132,7 @@ func (s *Subscriber) Send(tp int, bt []byte) {
 * SendMessage
 * @param message interface{}
 **/
-func (s *Subscriber) SendMessage(message interface{}) {
+func (s *Client) SendMessage(message interface{}) {
 	bt, err := json.Marshal(message)
 	if err != nil {
 		return
@@ -144,7 +144,7 @@ func (s *Subscriber) SendMessage(message interface{}) {
 * Error
 * @param err error
 **/
-func (s *Subscriber) SendError(err error) {
+func (s *Client) SendError(err error) {
 	ms := et.Item{
 		Ok: false,
 		Result: et.Json{
@@ -157,7 +157,7 @@ func (s *Subscriber) SendError(err error) {
 /**
 * SendHola
 **/
-func (s *Subscriber) SendHola() {
+func (s *Client) SendHola() {
 	ms := et.Item{
 		Ok: true,
 		Result: et.Json{
@@ -176,7 +176,7 @@ func (s *Subscriber) SendHola() {
 * addChannel
 * @param channel string
 **/
-func (s *Subscriber) addChannel(channel string) {
+func (s *Client) addChannel(channel string) {
 	idx := slices.IndexFunc(s.Channels, func(c string) bool {
 		return c == channel
 	})
@@ -190,7 +190,7 @@ func (s *Subscriber) addChannel(channel string) {
 * removeChannel
 * @param channel string
 **/
-func (s *Subscriber) removeChannel(channel string) {
+func (s *Client) removeChannel(channel string) {
 	idx := slices.IndexFunc(s.Channels, func(c string) bool {
 		return c == channel
 	})

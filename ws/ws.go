@@ -15,12 +15,12 @@ import (
 func New() *Hub {
 	result := &Hub{
 		Channels:        make(map[string]*Channel),
-		Subscribers:     make(map[string]*Subscriber),
-		register:        make(chan *Subscriber),
-		unregister:      make(chan *Subscriber),
-		onListener:      make([]func(*Subscriber, []byte), 0),
-		onConnection:    make([]func(*Subscriber), 0),
-		onDisconnection: make([]func(*Subscriber), 0),
+		Subscribers:     make(map[string]*Client),
+		register:        make(chan *Client),
+		unregister:      make(chan *Client),
+		onListener:      make([]func(*Client, []byte), 0),
+		onConnection:    make([]func(*Client), 0),
+		onDisconnection: make([]func(*Client), 0),
 		onChannel:       make([]func(Channel), 0),
 		onRemove:        make([]func(string), 0),
 		onPublish:       make([]func(ch Channel, ms Message), 0),

@@ -24,13 +24,13 @@ var upgrader = websocket.Upgrader{
 }
 
 type Hub struct {
-	Subscribers     map[string]*Subscriber         `json:"subscribers"`
+	Subscribers     map[string]*Client             `json:"subscribers"`
 	Channels        map[string]*Channel            `json:"channels"`
-	register        chan *Subscriber               `json:"-"`
-	unregister      chan *Subscriber               `json:"-"`
-	onListener      []func(*Subscriber, []byte)    `json:"-"`
-	onConnection    []func(*Subscriber)            `json:"-"`
-	onDisconnection []func(*Subscriber)            `json:"-"`
+	register        chan *Client                   `json:"-"`
+	unregister      chan *Client                   `json:"-"`
+	onListener      []func(*Client, []byte)        `json:"-"`
+	onConnection    []func(*Client)                `json:"-"`
+	onDisconnection []func(*Client)                `json:"-"`
 	onChannel       []func(Channel)                `json:"-"`
 	onRemove        []func(string)                 `json:"-"`
 	onPublish       []func(ch Channel, ms Message) `json:"-"`
@@ -79,9 +79,9 @@ func (s *Hub) Close() {
 
 /**
 * defOnConnect
-* @param *Subscriber client
+* @param *Client client
 **/
-func (s *Hub) onConnect(client *Subscriber) {
+func (s *Hub) onConnect(client *Client) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -94,9 +94,9 @@ func (s *Hub) onConnect(client *Subscriber) {
 
 /**
 * onDisconnect
-* @param *Subscriber client
+* @param *Client client
 **/
-func (s *Hub) onDisconnect(client *Subscriber) {
+func (s *Hub) onDisconnect(client *Client) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -122,9 +122,9 @@ func (s *Hub) SetDebug(debug bool) {
 /**
 * Connect
 * @param socket *websocket.Conn, context.Context
-* @return *Subscriber, error
+* @return *Client, error
 **/
-func (s *Hub) Connect(socket *websocket.Conn, ctx context.Context) (*Subscriber, error) {
+func (s *Hub) Connect(socket *websocket.Conn, ctx context.Context) (*Client, error) {
 	if !s.isStart {
 		return nil, fmt.Errorf(msg.MSG_HUB_NOT_STARTED)
 	}
@@ -155,25 +155,25 @@ func (s *Hub) Connect(socket *websocket.Conn, ctx context.Context) (*Subscriber,
 
 /**
 * OnListener
-* @param fn func(*Subscriber, []byte)
+* @param fn func(*Client, []byte)
 **/
-func (s *Hub) OnListener(fn func(*Subscriber, []byte)) {
+func (s *Hub) OnListener(fn func(*Client, []byte)) {
 	s.onListener = append(s.onListener, fn)
 }
 
 /**
 * OnConnection
-* @param fn func(*Subscriber)
+* @param fn func(*Client)
 **/
-func (s *Hub) OnConnection(fn func(*Subscriber)) {
+func (s *Hub) OnConnection(fn func(*Client)) {
 	s.onConnection = append(s.onConnection, fn)
 }
 
 /**
 * OnDisconnection
-* @param fn func(*Subscriber)
+* @param fn func(*Client)
 **/
-func (s *Hub) OnDisconnection(fn func(*Subscriber)) {
+func (s *Hub) OnDisconnection(fn func(*Client)) {
 	s.onDisconnection = append(s.onDisconnection, fn)
 }
 
@@ -229,7 +229,7 @@ func (s *Hub) addChannel(ch *Channel) {
 func (s *Hub) SendTo(to []string, message Message) ([]string, error) {
 	result := []string{}
 
-	sendObject := func(client *Subscriber, m interface{}) {
+	sendObject := func(client *Client, m interface{}) {
 		client.SendMessage(m)
 		for _, fn := range s.onSend {
 			fn(client.Name, message)

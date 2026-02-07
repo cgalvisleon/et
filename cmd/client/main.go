@@ -1,8 +1,14 @@
 package main
 
-import "github.com/cgalvisleon/et/tcp"
+import (
+	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/tcp"
+)
 
 func main() {
 	client := tcp.NewClient("client", "localhost:5050")
-	client.Connect()
+	err := client.Connect()
+	if err != nil {
+		logs.Panic(err)
+	}
 }

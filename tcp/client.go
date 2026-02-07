@@ -10,6 +10,7 @@ import (
 
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/timezone"
+	"github.com/cgalvisleon/et/utility"
 )
 
 type Status string
@@ -81,6 +82,8 @@ func (s *Client) Connect() error {
 
 	go s.read()
 	go s.write()
+
+	utility.AppWait()
 
 	return nil
 }

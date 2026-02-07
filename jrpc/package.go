@@ -10,6 +10,12 @@ import (
 	"github.com/cgalvisleon/et/logs"
 )
 
+type Solver struct {
+	Method string   `json:"method"`
+	Inputs []string `json:"inputs"`
+	Output []string `json:"output"`
+}
+
 type Package struct {
 	Name    string    `json:"name"`
 	Host    string    `json:"host"`

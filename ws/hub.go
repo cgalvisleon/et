@@ -24,8 +24,8 @@ var upgrader = websocket.Upgrader{
 }
 
 type Hub struct {
-	Channels        map[string]*Channel            `json:"channels"`
 	Subscribers     map[string]*Subscriber         `json:"subscribers"`
+	Channels        map[string]*Channel            `json:"channels"`
 	register        chan *Subscriber               `json:"-"`
 	unregister      chan *Subscriber               `json:"-"`
 	onListener      []func(*Subscriber, []byte)    `json:"-"`

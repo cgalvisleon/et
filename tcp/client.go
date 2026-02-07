@@ -93,7 +93,6 @@ func (c *Client) read() {
 
 	for {
 		c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
-
 		data, err := reader.ReadBytes('\n')
 		if err != nil {
 			c.handleDisconnect(err)

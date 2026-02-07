@@ -26,7 +26,7 @@ type Server struct {
 	mu      sync.Mutex
 }
 
-func newServer(port int) *Server {
+func NewServer(port int) *Server {
 	result := &Server{
 		port:    port,
 		nodes:   []*Node{},
@@ -70,10 +70,10 @@ func (s *Server) handle(conn net.Conn) {
 }
 
 /**
-* Listen
+* Start
 * @return error
 **/
-func (s *Server) Listen() error {
+func (s *Server) Start() error {
 	address := fmt.Sprintf(":%d", s.port)
 	ln, err := net.Listen("tcp", address)
 	if err != nil {

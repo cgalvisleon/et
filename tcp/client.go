@@ -45,7 +45,7 @@ type Client struct {
 	isDebug    bool            `json:"-"`
 }
 
-func newClient(name, addr string) *Client {
+func NewClient(name, addr string) *Client {
 	now := timezone.Now()
 	return &Client{
 		Created_at: now,
@@ -59,10 +59,10 @@ func newClient(name, addr string) *Client {
 }
 
 /**
-* connect
+* Connect
 * @return error
 **/
-func (s *Client) connect() error {
+func (s *Client) Connect() error {
 	conn, err := net.Dial("tcp", s.Addr)
 	if err != nil {
 		s.Status = Disconnected

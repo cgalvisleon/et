@@ -7,10 +7,6 @@ type Balancer struct {
 	index atomic.Uint64
 }
 
-func NewBalancer(nodes []*Node) *Balancer {
-	return &Balancer{nodes: nodes}
-}
-
 /**
 * next
 * @return *Node

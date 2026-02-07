@@ -19,7 +19,6 @@ const (
 
 type Server struct {
 	port    int
-	nodes   []*Node
 	clients []*Client
 	b       *Balancer
 	mode    atomic.Value
@@ -29,7 +28,6 @@ type Server struct {
 func NewServer(port int) *Server {
 	result := &Server{
 		port:    port,
-		nodes:   []*Node{},
 		clients: []*Client{},
 		mu:      sync.Mutex{},
 	}
@@ -51,7 +49,7 @@ func (s *Server) SetMode(m Mode) {
 **/
 func (s *Server) AddNode(address string) {
 	node := newNode(address)
-	s.nodes = append(s.nodes, node)
+	s.b.nodes = append(s.b.nodes, node)
 }
 
 /**

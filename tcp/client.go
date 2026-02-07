@@ -83,8 +83,9 @@ func (s *Client) Connect() error {
 	go s.read()
 	go s.write()
 
-	utility.AppWait()
+	logs.Logf("TCP", "Client connected: %s", s.Addr)
 
+	utility.AppWait()
 	return nil
 }
 

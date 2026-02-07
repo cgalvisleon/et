@@ -3,12 +3,12 @@ package tcp
 import (
 	"bufio"
 	"context"
-	"log"
 	"net"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -151,7 +151,7 @@ func (s *Client) listener(data []byte) {
 	msg := strings.TrimSpace(string(data))
 
 	if s.isDebug {
-		log.Println("⬇️ recv:", msg)
+		logs.Debug("recv:", msg)
 	}
 
 	switch msg {
@@ -162,7 +162,7 @@ func (s *Client) listener(data []byte) {
 		// heartbeat ok
 
 	default:
-		log.Println("📩 mensaje:", msg)
+		logs.Debug("mensaje:", msg)
 	}
 }
 
@@ -189,7 +189,9 @@ func (c *Client) handleDisconnect(err error) {
 		return
 	}
 
-	log.Println("❌ desconectado:", err)
+	if c.isDebug {
+		logs.Debug("desconectado:", err)
+	}
 
 	c.Status = Disconnected
 	if c.conn != nil {

@@ -11,6 +11,10 @@ func NewBalancer(nodes []*Node) *Balancer {
 	return &Balancer{nodes: nodes}
 }
 
+/**
+* next
+* @return *Node
+**/
 func (b *Balancer) next() *Node {
 	n := uint64(len(b.nodes))
 	for i := uint64(0); i < n; i++ {

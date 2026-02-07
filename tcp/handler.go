@@ -7,6 +7,10 @@ import (
 	"github.com/cgalvisleon/et/logs"
 )
 
+/**
+* handleServer
+* @param conn net.Conn
+**/
 func (s *Server) handleServer(conn net.Conn) {
 	defer conn.Close()
 
@@ -26,6 +30,10 @@ func (s *Server) handleServer(conn net.Conn) {
 	}
 }
 
+/**
+* handleBalancer
+* @param client net.Conn
+**/
 func (s *Server) handleBalancer(client net.Conn) {
 	defer client.Close()
 

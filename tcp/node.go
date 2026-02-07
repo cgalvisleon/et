@@ -8,6 +8,11 @@ type Node struct {
 	Conns   atomic.Int64
 }
 
+/**
+* newNode
+* @param addr string
+* @return *Node
+**/
 func newNode(addr string) *Node {
 	n := &Node{Address: addr}
 	n.Alive.Store(true)

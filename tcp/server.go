@@ -3,6 +3,7 @@ package tcp
 import (
 	"fmt"
 	"net"
+	"sync"
 	"sync/atomic"
 
 	"github.com/cgalvisleon/et/logs"
@@ -17,10 +18,23 @@ const (
 )
 
 type Server struct {
-	port  int
-	nodes []*Node
-	b     *Balancer
-	mode  atomic.Value
+	port    int
+	nodes   []*Node
+	clients []*Client
+	b       *Balancer
+	mode    atomic.Value
+	mu      sync.Mutex
+}
+
+func NewServer(port int) *Server {
+	result := &Server{
+		port:    port,
+		nodes:   []*Node{},
+		clients: []*Client{},
+		mu:      sync.Mutex{},
+	}
+	result.mode.Store(Follower)
+	return result
 }
 
 /**

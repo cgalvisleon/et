@@ -7,26 +7,34 @@ import (
 	"net/rpc"
 	"reflect"
 	"runtime"
-	"slices"
 	"strings"
 
-	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/strs"
-	"github.com/cgalvisleon/et/utility"
 )
 
 var (
-	pkg *Package
-	os  = ""
+	os   string
+	rpcs map[string]et.Json
 )
 
+func init() {
+	os = runtime.GOOS
+	rpcs = make(map[string]et.Json)
+	gob.Register(map[string]interface{}{})
+	gob.Register(et.Json{})
+	gob.Register(et.Item{})
+	gob.Register(et.Items{})
+	gob.Register(et.List{})
+}
+
+/**
+* Mount
+* @param host string, services any
+* @return (map[string]et.Json, error)
+**/
 func Mount(host string, services any) (map[string]et.Json, error) {
 	result := make(map[string]et.Json)
-
 	tipoStruct := reflect.TypeOf(services)
 	structName := tipoStruct.String()
 	list := strings.Split(structName, ".")
@@ -49,10 +57,12 @@ func Mount(host string, services any) (map[string]et.Json, error) {
 		}
 
 		name := fmt.Sprintf("%s.%s", structName, metodo.Name)
-		result[name] = et.Json{
+		description := et.Json{
 			"inputs":  inputs,
 			"outputs": outputs,
 		}
+		result[name] = description
+		rpcs[name] = description
 
 		logs.Logf("rpc", "RPC:/%s/%s", host, name)
 	}
@@ -92,52 +102,19 @@ func Start(port int) error {
 	return nil
 }
 
-func LoadTo(name, host string, port int) (*Package, error) {
-	if !utility.ValidStr(name, 1, []string{"", ""}) {
-		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
-	}
-
-	if !utility.ValidStr(host, 1, []string{"", ""}) {
-		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "host")
-	}
-
-	if !utility.ValidInt(port, []int{1, 65535}) {
-		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "port")
-	}
-
-	name = strs.DaskSpace(name)
-	result := NewPackage(name, host, port)
-
-	return result, nil
-}
-
 /**
-* load
+* CallRpc: Calls a remote procedure
+* @param address string, method string, args any, reply any
+* @return error
 **/
-func Load(name string) error {
-	if !slices.Contains([]string{"linux", "darwin", "windows"}, os) {
-		return nil
-	}
-
-	if pkg != nil {
-		return nil
-	}
-
-	err := cache.Load()
+func Call(address string, method string, args any, reply any) error {
+	client, err := rpc.Dial("tcp", address)
 	if err != nil {
-		return err
+		return ErrorRpcNotConnected
 	}
+	defer client.Close()
 
-	err = envar.Validate([]string{
-		"RPC_PORT",
-	})
-	if err != nil {
-		return err
-	}
-
-	host := envar.GetStr("RPC_HOST", "localhost")
-	port := envar.GetInt("RPC_PORT", 4200)
-	pkg, err = LoadTo(name, host, port)
+	err = client.Call(method, args, reply)
 	if err != nil {
 		return err
 	}
@@ -150,13 +127,4 @@ func Load(name string) error {
 **/
 func Close() {
 	logs.Log("Rpc", `Shutting down server...`)
-}
-
-func init() {
-	os = runtime.GOOS
-	gob.Register(map[string]interface{}{})
-	gob.Register(et.Json{})
-	gob.Register(et.Item{})
-	gob.Register(et.Items{})
-	gob.Register(et.List{})
 }

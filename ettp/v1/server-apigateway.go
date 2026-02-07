@@ -29,7 +29,6 @@ func (s *Server) mountApiGatewayFunc() {
 	s.Private().Put("/reset", s.reset, s.Name)
 	/* RPC */
 	s.Private().Get("/rpc", jrpc.HttpListRouters, s.Name)
-	s.Private().Post("/rpc", jrpc.HttpCalcItem, s.Name)
 	/* Token */
 	production := envar.GetBool("PRODUCTION", true)
 	if !production {

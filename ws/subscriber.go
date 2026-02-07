@@ -68,6 +68,20 @@ func newSubscriber(hub *Hub, ctx context.Context, username string, socket *webso
 }
 
 /**
+* ToJson
+* @return et.Json
+**/
+func (s *Subscriber) ToJson() et.Json {
+	return et.Json{
+		"created_at": s.Created_at,
+		"name":       s.Name,
+		"addr":       s.Addr,
+		"status":     s.Status,
+		"channels":   s.Channels,
+	}
+}
+
+/**
 * read
 **/
 func (s *Subscriber) read() {

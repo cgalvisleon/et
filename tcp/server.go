@@ -149,16 +149,11 @@ func (s *Server) read(c *Client) {
 			return
 		}
 
-		dt := buf[:n]
-		out, err := ToOutbound(dt)
-		if err != nil {
-			return
-		}
-
-		logs.Log(packageName, msg.MSG_TCP_RECEIVED, c.Addr, string(out.Message))
+		data := buf[:n]
+		logs.Log(packageName, msg.MSG_TCP_RECEIVED, c.Addr, string(data))
 
 		// ACK simple
-		c.Send(out.MessageType, out.Message)
+		c.Send(TextMessage, data)
 	}
 }
 
@@ -172,7 +167,7 @@ func (s *Server) write(c *Client) {
 			return
 		}
 
-		_, err := c.conn.Write(out.Message)
+		_, err := c.conn.Write(out.message)
 		if err != nil {
 			return
 		}

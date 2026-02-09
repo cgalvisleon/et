@@ -3,7 +3,6 @@ package tcp
 import (
 	"bufio"
 	"context"
-	"encoding/gob"
 	"encoding/json"
 	"net"
 	"strings"
@@ -34,35 +33,15 @@ const (
 )
 
 type Outbound struct {
-	MessageType int    `json:"message_type"`
-	Message     []byte `json:"message"`
+	messageType int    `json:"-"`
+	message     []byte `json:"-"`
 }
 
-func init() {
-	gob.Register(Outbound{})
-}
-
-/**
-* serialize
-* @return ([]byte, error)
-**/
-func (s Outbound) serialize() ([]byte, error) {
-	result, err := json.Marshal(s)
-	if err != nil {
-		return nil, err
+func (s *Outbound) ToJson() et.Json {
+	return et.Json{
+		"message_type": s.messageType,
+		"message":      string(s.message),
 	}
-	return result, nil
-}
-
-/**
-* ToOutbound
-* @param data []byte
-* @return Outbound
-**/
-func ToOutbound(data []byte) (Outbound, error) {
-	var result Outbound
-	err := json.Unmarshal(data, &result)
-	return result, err
 }
 
 type Client struct {
@@ -127,8 +106,10 @@ func (s *Client) Connect() error {
 	go s.read()
 	go s.write()
 
-	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
+	logs.Logf("TCP", "Client connected: %s", s.Addr)
+
 	s.SendHola()
+
 	utility.AppWait()
 	return nil
 }
@@ -162,22 +143,28 @@ func (c *Client) write() {
 		}
 
 		c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		switch out.MessageType {
+
+		var payload []byte
+
+		switch out.messageType {
+		case TextMessage:
+			payload = append(out.message, '\n')
+
 		case PingMessage:
-			out.Message = []byte("PING\n")
+			payload = []byte("PING\n")
+
 		case PongMessage:
-			out.Message = []byte("PONG\n")
+			payload = []byte("PONG\n")
+
 		case CloseMessage:
 			c.close()
 			return
+
+		default:
+			payload = out.message
 		}
 
-		payload, err := out.serialize()
-		if err != nil {
-			return
-		}
-
-		_, err = c.conn.Write(payload)
+		_, err := c.conn.Write(payload)
 		if err != nil {
 			c.handleDisconnect(err)
 			return
@@ -214,8 +201,8 @@ func (s *Client) listener(data []byte) {
 **/
 func (c *Client) Send(tp int, bt []byte) {
 	c.outbound <- Outbound{
-		MessageType: tp,
-		Message:     bt,
+		messageType: tp,
+		message:     bt,
 	}
 }
 

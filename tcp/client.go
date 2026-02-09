@@ -33,8 +33,8 @@ const (
 )
 
 type Outbound struct {
-	messageType int
-	message     []byte
+	messageType int    `json:"-"`
+	message     []byte `json:"-"`
 }
 
 type Client struct {

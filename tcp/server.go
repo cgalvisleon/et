@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -9,12 +10,14 @@ import (
 
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/timezone"
 )
 
 type Mode int
 
 const (
-	Follower Mode = iota
+	packageName      = "tcp"
+	Follower    Mode = iota
 	Leader
 )
 
@@ -84,7 +87,7 @@ func (s *Server) handleServer(conn net.Conn) {
 		}
 
 		data := buf[:n]
-		logs.Log("TCP", "Recibido:", string(data))
+		logs.Logf(packageName, msg.MSG_TCP_RECEIVED, string(data))
 
 		conn.Write([]byte("ACK: "))
 		conn.Write(data)
@@ -117,6 +120,22 @@ func (s *Server) handleBalancer(client net.Conn) {
 }
 
 /**
+* newClient
+* @param conn net.Conn
+* @return *Client
+**/
+func (s *Server) newClient(conn net.Conn) *Client {
+	return &Client{
+		Created_at: timezone.Now(),
+		Addr:       conn.RemoteAddr().String(),
+		Status:     Connected,
+		conn:       conn,
+		outbound:   make(chan Outbound, 128),
+		ctx:        context.Background(),
+	}
+}
+
+/**
 * Start
 * @return error
 **/
@@ -127,12 +146,22 @@ func (s *Server) Start() error {
 		return err
 	}
 
-	logs.Logf("TCP", msg.MSG_TCP_LISTENING, s.port)
+	logs.Logf(packageName, msg.MSG_TCP_LISTENING, s.port)
+
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
 			continue
 		}
+
+		client := s.newClient(conn)
+
+		s.mu.Lock()
+		s.clients = append(s.clients, client)
+		s.mu.Unlock()
+
+		logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, client.Addr)
+
 		go s.handle(conn)
 	}
 }

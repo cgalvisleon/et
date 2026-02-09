@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
@@ -67,16 +66,16 @@ func (s *Outbound) ToJson() (et.Json, error) {
 /**
 * ToOutbound
 * @param bt []byte
-* @return *Outbound, error
+* @return Outbound, error
 **/
-func ToOutbound(bt []byte) (*Outbound, error) {
+func ToOutbound(bt []byte) (Outbound, error) {
 	var result Outbound
 	err := json.Unmarshal(bt, &result)
 	if err != nil {
-		return nil, err
+		return Outbound{}, err
 	}
 
-	return &result, nil
+	return result, nil
 }
 
 type Client struct {
@@ -217,30 +216,42 @@ func (c *Client) write() {
 * @param data []byte
 **/
 func (s *Client) listener(data []byte) {
-	msg := strings.TrimSpace(string(data))
-
-	if s.isDebug {
-		logs.Debug("recv:", msg)
+	out, err := ToOutbound(data)
+	if err != nil {
+		return
 	}
 
-	switch msg {
-	case "PING":
+	// msg := strings.TrimSpace(string(out.Message))
+	// if s.isDebug {
+	// 	logs.Debug("recv:", msg)
+	// }
+
+	switch out.Type {
+	case PingMessage:
 		s.Send(PongMessage, nil)
 
-	case "PONG":
+	case PongMessage:
 		// heartbeat ok
 
 	default:
-		logs.Debug("listener message:", msg)
+		logs.Debug("listener message:", out.Message)
 	}
 }
 
 /**
 * send
+* @param out Outbound
+**/
+func (s *Client) send(out Outbound) {
+	s.outbound <- out
+}
+
+/**
+* Send
 * @param tp int, bt []byte
 * @return error
 **/
-func (c *Client) Send(tp int, value any) error {
+func (s *Client) Send(tp int, value any) error {
 	bt, ok := value.([]byte)
 	if !ok {
 		var err error
@@ -250,10 +261,10 @@ func (c *Client) Send(tp int, value any) error {
 		}
 	}
 
-	c.outbound <- Outbound{
+	s.send(Outbound{
 		Type:    tp,
 		Message: bt,
-	}
+	})
 	return nil
 }
 

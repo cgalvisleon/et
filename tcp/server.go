@@ -172,23 +172,6 @@ func (s *Server) handleClient(c *Client) {
 **/
 func (s *Server) disconnectClient(c *Client) {
 	s.unregister <- c
-	// c.mu.Lock()
-	// defer c.mu.Unlock()
-
-	// if c.Status == Disconnected {
-	// 	return
-	// }
-
-	// c.Status = Disconnected
-	// c.conn.Close()
-	// close(c.outbound)
-
-	// s.mu.Lock()
-	// defer s.mu.Unlock()
-
-	// delete(s.clients, c.Addr)
-
-	// logs.Log(packageName, msg.MSG_CLIENT_DISCONNECTED, c.Addr)
 }
 
 /**
@@ -210,7 +193,13 @@ func (s *Server) read(c *Client) {
 		}
 
 		data := buf[:n]
-		logs.Log(packageName, msg.MSG_TCP_RECEIVED, c.Addr, string(data))
+		out, err := ToOutbound(data)
+		if err != nil {
+			logs.Error(err)
+			return
+		}
+
+		logs.Log(packageName, msg.MSG_TCP_RECEIVED, c.Addr, out.Message)
 
 		// ACK simple
 		c.Send(TextMessage, data)

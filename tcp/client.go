@@ -239,7 +239,17 @@ func (s *Client) listener(data []byte) {
 * send
 * @param tp int, bt []byte
 **/
-func (c *Client) Send(tp int, bt []byte) {
+func (c *Client) Send(tp int, value any) {
+	bt, ok := value.([]byte)
+	if !ok {
+		var err error
+		bt, err = json.Marshal(value)
+		if err != nil {
+			logs.Error(err)
+			return
+		}
+	}
+
 	c.outbound <- Outbound{
 		Type:    tp,
 		Message: bt,
@@ -251,11 +261,7 @@ func (c *Client) Send(tp int, bt []byte) {
 * @param message interface{}
 **/
 func (s *Client) SendMessage(message interface{}) {
-	bt, err := json.Marshal(message)
-	if err != nil {
-		return
-	}
-	s.Send(TextMessage, bt)
+	s.Send(TextMessage, message)
 }
 
 /**
@@ -282,12 +288,8 @@ func (s *Client) SendHola() {
 			"message": msg.MSG_HOLA,
 		},
 	}
-	bt, err := ms.ToByte()
-	if err != nil {
-		return
-	}
 
-	s.Send(TextMessage, bt)
+	s.Send(TextMessage, ms)
 }
 
 /**

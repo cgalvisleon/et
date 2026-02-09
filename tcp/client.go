@@ -245,9 +245,18 @@ func (s *Client) listener(data []byte) {
 * @return error
 **/
 func (s *Client) Response(tp int, value any) error {
+	bt, ok := value.([]byte)
+	if !ok {
+		var err error
+		bt, err = json.Marshal(value)
+		if err != nil {
+			return err
+		}
+	}
+
 	return s.write(Outbound{
 		Type:    tp,
-		Message: value,
+		Message: bt,
 	})
 }
 

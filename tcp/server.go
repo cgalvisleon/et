@@ -210,6 +210,23 @@ func (s *Server) newClient(conn net.Conn) *Client {
 }
 
 /**
+* Broadcast
+* @param destination []string
+* @param msg []byte
+**/
+func (s *Server) Broadcast(destination []string, msg []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, addr := range destination {
+		client, ok := s.clients[addr]
+		if ok && client.Status == Connected {
+			client.Send(TextMessage, msg)
+		}
+	}
+}
+
+/**
 * Start
 * @return error
 **/

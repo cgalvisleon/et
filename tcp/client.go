@@ -63,6 +63,19 @@ func NewClient(name, addr string) *Client {
 }
 
 /**
+* ToJson
+* @return et.Json
+**/
+func (c *Client) ToJson() et.Json {
+	return et.Json{
+		"created_at": c.Created_at,
+		"name":       c.Name,
+		"addr":       c.Addr,
+		"status":     c.Status,
+	}
+}
+
+/**
 * Connect
 * @return error
 **/

@@ -19,11 +19,11 @@ const (
 )
 
 type Server struct {
-	port    int
-	clients []*Client
-	b       *Balancer
-	mode    atomic.Value
-	mu      sync.Mutex
+	port    int          `json:"-"`
+	clients []*Client    `json:"-"`
+	b       *Balancer    `json:"-"`
+	mode    atomic.Value `json:"-"`
+	mu      sync.Mutex   `json:"-"`
 }
 
 func NewServer(port int) *Server {

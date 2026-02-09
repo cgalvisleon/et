@@ -131,6 +131,30 @@ func (s *Server) handleClient(c *Client) {
 }
 
 /**
+* disconnectClient
+* @param c *Client
+**/
+func (s *Server) disconnectClient(c *Client) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.Status == Disconnected {
+		return
+	}
+
+	c.Status = Disconnected
+	c.conn.Close()
+	close(c.outbound)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	delete(s.clients, c.Addr)
+
+	logs.Log(packageName, msg.MSG_CLIENT_DISCONNECTED, c.Addr)
+}
+
+/**
 * readLoop
 * @param c *Client
 **/
@@ -140,15 +164,32 @@ func (s *Server) readLoop(c *Client) {
 	for {
 		n, err := c.conn.Read(buf)
 		if err != nil {
-			logs.Log("TCP", "🔴 cliente desconectado:", c.Addr)
+			logs.Log(packageName, msg.MSG_CLIENT_DISCONNECTED, c.Addr)
 			return
 		}
 
 		data := buf[:n]
-		logs.Log("TCP", "📩 recv", c.Addr, string(data))
+		logs.Log(packageName, msg.MSG_TCP_RECEIVED, c.Addr, string(data))
 
 		// ACK simple
 		c.Send(TextMessage, data)
+	}
+}
+
+/**
+* writeLoop
+* @param c *Client
+**/
+func (s *Server) writeLoop(c *Client) {
+	for out := range c.outbound {
+		if c.Status != Connected {
+			return
+		}
+
+		_, err := c.conn.Write(out.message)
+		if err != nil {
+			return
+		}
 	}
 }
 
@@ -190,7 +231,7 @@ func (s *Server) Start() error {
 		client := s.newClient(conn)
 
 		s.mu.Lock()
-		s.clients[client.Name] = client
+		s.clients[client.Addr] = client
 		s.mu.Unlock()
 
 		logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, client.Addr)

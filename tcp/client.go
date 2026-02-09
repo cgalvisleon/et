@@ -33,15 +33,50 @@ const (
 )
 
 type Outbound struct {
-	messageType int    `json:"-"`
-	message     []byte `json:"-"`
+	Type    int    `json:"type"`
+	Message []byte `json:"message"`
 }
 
-func (s *Outbound) ToJson() et.Json {
-	return et.Json{
-		"message_type": s.messageType,
-		"message":      string(s.message),
+/**
+* serialize
+* @return []byte, error
+**/
+func (s *Outbound) serialize() ([]byte, error) {
+	return json.Marshal(s)
+}
+
+/**
+* ToJson
+* @return et.Json
+**/
+func (s *Outbound) ToJson() (et.Json, error) {
+	bt, err := s.serialize()
+	if err != nil {
+		return nil, err
 	}
+
+	var result et.Json
+	err = json.Unmarshal(bt, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+/**
+* ToOutbound
+* @param bt []byte
+* @return *Outbound, error
+**/
+func ToOutbound(bt []byte) (*Outbound, error) {
+	var result Outbound
+	err := json.Unmarshal(bt, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
 }
 
 type Client struct {
@@ -106,7 +141,7 @@ func (s *Client) Connect() error {
 	go s.read()
 	go s.write()
 
-	logs.Logf(packageName, "Client connected: %s", s.Addr)
+	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
 	s.SendHola()
 
 	utility.AppWait()
@@ -145,9 +180,9 @@ func (c *Client) write() {
 
 		var payload []byte
 
-		switch out.messageType {
+		switch out.Type {
 		case TextMessage:
-			payload = append(out.message, '\n')
+			payload = append(out.Message, '\n')
 
 		case PingMessage:
 			payload = []byte("PING\n")
@@ -160,10 +195,16 @@ func (c *Client) write() {
 			return
 
 		default:
-			payload = out.message
+			payload = out.Message
 		}
 
-		_, err := c.conn.Write(payload)
+		var err error
+		payload, err = out.serialize()
+		if err != nil {
+			continue
+		}
+
+		_, err = c.conn.Write(payload)
 		if err != nil {
 			// c.handleDisconnect(err)
 			return
@@ -200,8 +241,8 @@ func (s *Client) listener(data []byte) {
 **/
 func (c *Client) Send(tp int, bt []byte) {
 	c.outbound <- Outbound{
-		messageType: tp,
-		message:     bt,
+		Type:    tp,
+		Message: bt,
 	}
 }
 

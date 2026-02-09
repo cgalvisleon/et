@@ -85,7 +85,7 @@ func (s *Server) onConnect(client *Client) {
 func (s *Server) onDisconnect(client *Client) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	logs.Logf(packageName, "Client connected: %s", client.Name)
+	logs.Logf(packageName, msg.MSG_CLIENT_DISCONNECTED, client.Addr)
 
 	_, ok := s.clients[client.Addr]
 	if ok {
@@ -227,7 +227,7 @@ func (s *Server) write(c *Client) {
 			return
 		}
 
-		_, err := c.conn.Write(out.message)
+		_, err := c.conn.Write(out.Message)
 		if err != nil {
 			return
 		}
@@ -277,6 +277,8 @@ func (s *Server) Start() error {
 	if err != nil {
 		return err
 	}
+
+	go s.run()
 
 	logs.Logf(packageName, msg.MSG_TCP_LISTENING, s.port)
 

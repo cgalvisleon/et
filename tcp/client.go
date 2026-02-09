@@ -106,8 +106,7 @@ func (s *Client) Connect() error {
 	go s.read()
 	go s.write()
 
-	logs.Logf("TCP", "Client connected: %s", s.Addr)
-
+	logs.Logf(packageName, "Client connected: %s", s.Addr)
 	s.SendHola()
 
 	utility.AppWait()
@@ -166,7 +165,7 @@ func (c *Client) write() {
 
 		_, err := c.conn.Write(payload)
 		if err != nil {
-			c.handleDisconnect(err)
+			// c.handleDisconnect(err)
 			return
 		}
 	}

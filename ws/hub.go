@@ -42,8 +42,7 @@ type Hub struct {
 
 /**
 * run
-*
- */
+**/
 func (s *Hub) run() {
 	for {
 		select {
@@ -53,28 +52,6 @@ func (s *Hub) run() {
 			s.onDisconnect(client)
 		}
 	}
-}
-
-/**
-* Start
-**/
-func (s *Hub) Start() {
-	if s.isStart {
-		return
-	}
-
-	logs.Logf(packageName, "Hub started")
-	s.isStart = true
-	go s.run()
-}
-
-/**
-* Close
-**/
-func (s *Hub) Close() {
-	s.isStart = false
-
-	logs.Log(packageName, "Shutting down server...")
 }
 
 /**
@@ -109,6 +86,28 @@ func (s *Hub) onDisconnect(client *Client) {
 
 		delete(s.Subscribers, client.Name)
 	}
+}
+
+/**
+* Start
+**/
+func (s *Hub) Start() {
+	if s.isStart {
+		return
+	}
+
+	logs.Logf(packageName, "Hub started")
+	s.isStart = true
+	go s.run()
+}
+
+/**
+* Close
+**/
+func (s *Hub) Close() {
+	s.isStart = false
+
+	logs.Log(packageName, "Shutting down server...")
 }
 
 /**

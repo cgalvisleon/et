@@ -22,21 +22,78 @@ const (
 )
 
 type Server struct {
-	port    int                `json:"-"`
-	clients map[string]*Client `json:"-"`
-	b       *Balancer          `json:"-"`
-	mode    atomic.Value       `json:"-"`
-	mu      sync.Mutex         `json:"-"`
+	port            int                `json:"-"`
+	clients         map[string]*Client `json:"-"`
+	register        chan *Client       `json:"-"`
+	unregister      chan *Client       `json:"-"`
+	onConnection    []func(*Client)    `json:"-"`
+	onDisconnection []func(*Client)    `json:"-"`
+	b               *Balancer          `json:"-"`
+	mode            atomic.Value       `json:"-"`
+	mu              sync.Mutex         `json:"-"`
 }
 
 func NewServer(port int) *Server {
 	result := &Server{
-		port:    port,
-		clients: make(map[string]*Client),
-		mu:      sync.Mutex{},
+		port:            port,
+		clients:         make(map[string]*Client),
+		register:        make(chan *Client),
+		unregister:      make(chan *Client),
+		onConnection:    make([]func(*Client), 0),
+		onDisconnection: make([]func(*Client), 0),
+		mu:              sync.Mutex{},
 	}
 	result.mode.Store(Follower)
 	return result
+}
+
+/**
+* run
+**/
+func (s *Server) run() {
+	for {
+		select {
+		case client := <-s.register:
+			s.onConnect(client)
+		case client := <-s.unregister:
+			s.onDisconnect(client)
+		}
+	}
+}
+
+/**
+* defOnConnect
+* @param *Client client
+**/
+func (s *Server) onConnect(client *Client) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.clients[client.Addr] = client
+	logs.Logf(packageName, "Client connected: %s", client.Name)
+	for _, fn := range s.onConnection {
+		fn(client)
+	}
+}
+
+/**
+* onDisconnect
+* @param *Client client
+**/
+func (s *Server) onDisconnect(client *Client) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	logs.Logf(packageName, "Client connected: %s", client.Name)
+
+	_, ok := s.clients[client.Addr]
+	if ok {
+		s.clients[client.Addr].Status = Disconnected
+		for _, fn := range s.onDisconnection {
+			fn(client)
+		}
+
+		delete(s.clients, client.Addr)
+	}
 }
 
 /**
@@ -227,7 +284,6 @@ func (s *Server) Start() error {
 		}
 
 		client := s.newClient(conn)
-
 		s.mu.Lock()
 		s.clients[client.Addr] = client
 		s.mu.Unlock()

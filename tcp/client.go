@@ -3,12 +3,15 @@ package tcp
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"net"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 )
@@ -84,6 +87,8 @@ func (s *Client) Connect() error {
 	go s.write()
 
 	logs.Logf("TCP", "Client connected: %s", s.Addr)
+
+	s.SendHola()
 
 	utility.AppWait()
 	return nil
@@ -178,6 +183,50 @@ func (c *Client) Send(tp int, bt []byte) {
 		messageType: tp,
 		message:     bt,
 	}
+}
+
+/**
+* SendMessage
+* @param message interface{}
+**/
+func (s *Client) SendMessage(message interface{}) {
+	bt, err := json.Marshal(message)
+	if err != nil {
+		return
+	}
+	s.Send(TextMessage, bt)
+}
+
+/**
+* Error
+* @param err error
+**/
+func (s *Client) SendError(err error) {
+	ms := et.Item{
+		Ok: false,
+		Result: et.Json{
+			"message": err.Error(),
+		},
+	}
+	s.SendMessage(ms)
+}
+
+/**
+* SendHola
+**/
+func (s *Client) SendHola() {
+	ms := et.Item{
+		Ok: true,
+		Result: et.Json{
+			"message": msg.MSG_HOLA,
+		},
+	}
+	bt, err := ms.ToByte()
+	if err != nil {
+		return
+	}
+
+	s.Send(TextMessage, bt)
 }
 
 /**

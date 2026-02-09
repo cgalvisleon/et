@@ -37,6 +37,18 @@ type Outbound struct {
 	message     []byte `json:"-"`
 }
 
+/**
+* serialize
+* @return ([]byte, error)
+**/
+func (s *Outbound) serialize() ([]byte, error) {
+	result, err := json.Marshal(s)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 type Client struct {
 	Created_at time.Time       `json:"created_at"`
 	Name       string          `json:"name"`
@@ -136,28 +148,22 @@ func (c *Client) write() {
 		}
 
 		c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-
-		var payload []byte
-
 		switch out.messageType {
-		case TextMessage:
-			payload = append(out.message, '\n')
-
 		case PingMessage:
-			payload = []byte("PING\n")
-
+			out.message = []byte("PING\n")
 		case PongMessage:
-			payload = []byte("PONG\n")
-
+			out.message = []byte("PONG\n")
 		case CloseMessage:
 			c.close()
 			return
-
-		default:
-			payload = out.message
 		}
 
-		_, err := c.conn.Write(payload)
+		payload, err := out.serialize()
+		if err != nil {
+			return
+		}
+
+		_, err = c.conn.Write(payload)
 		if err != nil {
 			c.handleDisconnect(err)
 			return

@@ -176,37 +176,28 @@ func (c *Client) write() {
 			return
 		}
 
-		c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-
-		var payload []byte
+		// c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 
 		switch out.Type {
-		case TextMessage:
-			payload = append(out.Message, '\n')
-
 		case PingMessage:
-			payload = []byte("PING\n")
-
+			out.Message = []byte("PING\n")
 		case PongMessage:
-			payload = []byte("PONG\n")
-
+			out.Message = []byte("PONG\n")
+		case ACKMessage:
+			out.Message = []byte("ACK\n")
 		case CloseMessage:
 			c.close()
 			return
-
-		default:
-			payload = out.Message
 		}
 
-		var err error
-		payload, err = out.serialize()
+		payload, err := out.serialize()
 		if err != nil {
 			continue
 		}
 
 		_, err = c.conn.Write(payload)
 		if err != nil {
-			// c.handleDisconnect(err)
+			logs.Error(err)
 			return
 		}
 	}

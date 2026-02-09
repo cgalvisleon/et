@@ -191,11 +191,11 @@ func (s *Server) newClient(conn net.Conn) *Client {
 }
 
 /**
-* Broadcast
+* broadcast
 * @param destination []string
 * @param msg []byte
 **/
-func (s *Server) Broadcast(destination []string, msg []byte) {
+func (s *Server) broadcast(destination []string, msg []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

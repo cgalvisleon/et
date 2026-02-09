@@ -183,7 +183,7 @@ func (s *Client) listener(data []byte) {
 		// heartbeat ok
 
 	default:
-		logs.Debug("mensaje:", msg)
+		logs.Debug("listener message:", msg)
 	}
 }
 
@@ -257,6 +257,8 @@ func (c *Client) handleDisconnect(err error) {
 	if c.isDebug {
 		logs.Debug("desconectado:", err)
 	}
+
+	logs.Debug("desconectado:", err)
 
 	c.Status = Disconnected
 	if c.conn != nil {

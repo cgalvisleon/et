@@ -251,8 +251,9 @@ func (s *Server) Start() error {
 		s.clients[client.Addr] = client
 		s.mu.Unlock()
 
-		logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, client.Addr)
+		logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, client.ToJson().ToString())
 
+		go s.handleClient(client)
 		go s.handle(conn)
 	}
 }

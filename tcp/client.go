@@ -26,6 +26,7 @@ const (
 const (
 	TextMessage   int = 1
 	BinaryMessage int = 2
+	ACKMessage    int = 3
 	CloseMessage  int = 8
 	PingMessage   int = 9
 	PongMessage   int = 10
@@ -239,14 +240,6 @@ func (s *Client) listener(data []byte) {
 }
 
 /**
-* send
-* @param out Outbound
-**/
-func (s *Client) send(out Outbound) {
-	s.outbound <- out
-}
-
-/**
 * Send
 * @param tp int, bt []byte
 * @return error
@@ -261,10 +254,10 @@ func (s *Client) Send(tp int, value any) error {
 		}
 	}
 
-	s.send(Outbound{
+	s.outbound <- Outbound{
 		Type:    tp,
 		Message: bt,
-	})
+	}
 	return nil
 }
 

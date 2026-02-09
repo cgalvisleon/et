@@ -3,6 +3,7 @@ package tcp
 import (
 	"bufio"
 	"context"
+	"encoding/gob"
 	"encoding/json"
 	"net"
 	"strings"
@@ -37,11 +38,15 @@ type Outbound struct {
 	Message     []byte `json:"message"`
 }
 
+func init() {
+	gob.Register(Outbound{})
+}
+
 /**
 * serialize
 * @return ([]byte, error)
 **/
-func (s *Outbound) serialize() ([]byte, error) {
+func (s Outbound) serialize() ([]byte, error) {
 	result, err := json.Marshal(s)
 	if err != nil {
 		return nil, err
@@ -122,10 +127,8 @@ func (s *Client) Connect() error {
 	go s.read()
 	go s.write()
 
-	logs.Logf("TCP", "Client connected: %s", s.Addr)
-
+	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
 	s.SendHola()
-
 	utility.AppWait()
 	return nil
 }
@@ -272,11 +275,9 @@ func (c *Client) handleDisconnect(err error) {
 		return
 	}
 
-	if c.isDebug {
-		logs.Debug("desconectado:", err)
+	if err != nil {
+		logs.Errorm("desconectado:" + err.Error())
 	}
-
-	logs.Debug("desconectado:", err)
 
 	c.Status = Disconnected
 	if c.conn != nil {

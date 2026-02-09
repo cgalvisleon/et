@@ -103,8 +103,8 @@ func (s *Server) handleBalancer(client net.Conn) {
 func (s *Server) handleClient(c *Client) {
 	defer s.disconnectClient(c)
 
-	go s.writeLoop(c)
-	s.readLoop(c)
+	go s.write(c)
+	s.read(c)
 }
 
 /**
@@ -132,10 +132,10 @@ func (s *Server) disconnectClient(c *Client) {
 }
 
 /**
-* readLoop
+* read
 * @param c *Client
 **/
-func (s *Server) readLoop(c *Client) {
+func (s *Server) read(c *Client) {
 	buf := make([]byte, 1024)
 
 	for {
@@ -158,10 +158,10 @@ func (s *Server) readLoop(c *Client) {
 }
 
 /**
-* writeLoop
+* write
 * @param c *Client
 **/
-func (s *Server) writeLoop(c *Client) {
+func (s *Server) write(c *Client) {
 	for out := range c.outbound {
 		if c.Status != Connected {
 			return

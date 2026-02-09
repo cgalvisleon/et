@@ -238,15 +238,15 @@ func (s *Client) listener(data []byte) {
 /**
 * send
 * @param tp int, bt []byte
+* @return error
 **/
-func (c *Client) Send(tp int, value any) {
+func (c *Client) Send(tp int, value any) error {
 	bt, ok := value.([]byte)
 	if !ok {
 		var err error
 		bt, err = json.Marshal(value)
 		if err != nil {
-			logs.Error(err)
-			return
+			return err
 		}
 	}
 
@@ -254,42 +254,43 @@ func (c *Client) Send(tp int, value any) {
 		Type:    tp,
 		Message: bt,
 	}
+	return nil
 }
 
 /**
 * SendMessage
 * @param message interface{}
+* @return error
 **/
-func (s *Client) SendMessage(message interface{}) {
-	s.Send(TextMessage, message)
+func (s *Client) SendMessage(message interface{}) error {
+	return s.Send(TextMessage, message)
 }
 
 /**
 * Error
 * @param err error
 **/
-func (s *Client) SendError(err error) {
+func (s *Client) SendError(err error) error {
 	ms := et.Item{
 		Ok: false,
 		Result: et.Json{
 			"message": err.Error(),
 		},
 	}
-	s.SendMessage(ms)
+	return s.SendMessage(ms)
 }
 
 /**
 * SendHola
 **/
-func (s *Client) SendHola() {
+func (s *Client) SendHola() error {
 	ms := et.Item{
 		Ok: true,
 		Result: et.Json{
 			"message": msg.MSG_HOLA,
 		},
 	}
-
-	s.Send(TextMessage, ms)
+	return s.SendMessage(ms)
 }
 
 /**

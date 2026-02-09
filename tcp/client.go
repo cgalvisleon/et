@@ -114,7 +114,8 @@ func (c *Client) read() {
 	reader := bufio.NewReader(c.conn)
 
 	for {
-		c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		// c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		c.conn.SetReadDeadline(time.Time{})
 		data, err := reader.ReadBytes('\n')
 		if err != nil {
 			c.handleDisconnect(err)

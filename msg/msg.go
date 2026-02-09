@@ -35,7 +35,7 @@ var (
 	MSG_TCP_LISTENING                  = "TCP listening on:%d"
 	MSG_CLIENT_CONNECTED               = "client connected:%s"
 	MSG_CLIENT_DISCONNECTED            = "client disconnected:%s"
-	MSG_TCP_RECEIVED                   = "Received: %s"
+	MSG_TCP_RECEIVED                   = "received:%s"
 )
 
 func init() {
@@ -74,6 +74,6 @@ func init() {
 		MSG_TCP_LISTENING = "TCP listening on:%d"
 		MSG_CLIENT_CONNECTED = "client connected:%s"
 		MSG_CLIENT_DISCONNECTED = "client disconnected:%s"
-		MSG_TCP_RECEIVED = "Recibido: %s"
+		MSG_TCP_RECEIVED = "recibido:%s"
 	}
 }

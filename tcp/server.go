@@ -60,37 +60,14 @@ func (s *Server) AddNode(address string) {
 * handle
 * @param conn net.Conn
 **/
-func (s *Server) handle(conn net.Conn) {
+func (s *Server) handle(c *Client) {
 	mode := s.mode.Load().(Mode)
 
 	switch mode {
 	case Leader:
-		s.handleBalancer(conn)
+		s.handleBalancer(c.conn)
 	default:
-		s.handleServer(conn)
-	}
-}
-
-/**
-* handleServer
-* @param conn net.Conn
-**/
-func (s *Server) handleServer(conn net.Conn) {
-	defer conn.Close()
-
-	buf := make([]byte, 1024)
-
-	for {
-		n, err := conn.Read(buf)
-		if err != nil {
-			return
-		}
-
-		data := buf[:n]
-		logs.Logf(packageName, msg.MSG_TCP_RECEIVED, string(data))
-
-		conn.Write([]byte("ACK: "))
-		conn.Write(data)
+		s.handleClient(c)
 	}
 }
 
@@ -164,7 +141,11 @@ func (s *Server) readLoop(c *Client) {
 	for {
 		n, err := c.conn.Read(buf)
 		if err != nil {
-			logs.Log(packageName, msg.MSG_CLIENT_DISCONNECTED, c.Addr)
+			if err == io.EOF {
+				logs.Info("cliente cerró la conexión")
+			} else {
+				logs.Error(err)
+			}
 			return
 		}
 
@@ -253,7 +234,6 @@ func (s *Server) Start() error {
 
 		logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, client.ToJson().ToString())
 
-		go s.handleClient(client)
-		go s.handle(conn)
+		go s.handle(client)
 	}
 }

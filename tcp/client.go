@@ -33,8 +33,8 @@ const (
 )
 
 type Outbound struct {
-	messageType int    `json:"-"`
-	message     []byte `json:"-"`
+	MessageType int    `json:"message_type"`
+	Message     []byte `json:"message"`
 }
 
 /**
@@ -47,6 +47,17 @@ func (s *Outbound) serialize() ([]byte, error) {
 		return nil, err
 	}
 	return result, nil
+}
+
+/**
+* ToOutbound
+* @param data []byte
+* @return Outbound
+**/
+func ToOutbound(data []byte) (Outbound, error) {
+	var result Outbound
+	err := json.Unmarshal(data, &result)
+	return result, err
 }
 
 type Client struct {
@@ -148,11 +159,11 @@ func (c *Client) write() {
 		}
 
 		c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		switch out.messageType {
+		switch out.MessageType {
 		case PingMessage:
-			out.message = []byte("PING\n")
+			out.Message = []byte("PING\n")
 		case PongMessage:
-			out.message = []byte("PONG\n")
+			out.Message = []byte("PONG\n")
 		case CloseMessage:
 			c.close()
 			return
@@ -200,8 +211,8 @@ func (s *Client) listener(data []byte) {
 **/
 func (c *Client) Send(tp int, bt []byte) {
 	c.outbound <- Outbound{
-		messageType: tp,
-		message:     bt,
+		MessageType: tp,
+		Message:     bt,
 	}
 }
 

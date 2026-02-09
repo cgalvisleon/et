@@ -22,17 +22,17 @@ const (
 )
 
 type Server struct {
-	port    int          `json:"-"`
-	clients []*Client    `json:"-"`
-	b       *Balancer    `json:"-"`
-	mode    atomic.Value `json:"-"`
-	mu      sync.Mutex   `json:"-"`
+	port    int                `json:"-"`
+	clients map[string]*Client `json:"-"`
+	b       *Balancer          `json:"-"`
+	mode    atomic.Value       `json:"-"`
+	mu      sync.Mutex         `json:"-"`
 }
 
 func NewServer(port int) *Server {
 	result := &Server{
 		port:    port,
-		clients: []*Client{},
+		clients: make(map[string]*Client),
 		mu:      sync.Mutex{},
 	}
 	result.mode.Store(Follower)
@@ -120,6 +120,39 @@ func (s *Server) handleBalancer(client net.Conn) {
 }
 
 /**
+* handleClient
+* @param c *Client
+**/
+func (s *Server) handleClient(c *Client) {
+	defer s.disconnectClient(c)
+
+	go s.writeLoop(c)
+	s.readLoop(c)
+}
+
+/**
+* readLoop
+* @param c *Client
+**/
+func (s *Server) readLoop(c *Client) {
+	buf := make([]byte, 1024)
+
+	for {
+		n, err := c.conn.Read(buf)
+		if err != nil {
+			logs.Log("TCP", "🔴 cliente desconectado:", c.Addr)
+			return
+		}
+
+		data := buf[:n]
+		logs.Log("TCP", "📩 recv", c.Addr, string(data))
+
+		// ACK simple
+		c.Send(TextMessage, data)
+	}
+}
+
+/**
 * newClient
 * @param conn net.Conn
 * @return *Client
@@ -157,7 +190,7 @@ func (s *Server) Start() error {
 		client := s.newClient(conn)
 
 		s.mu.Lock()
-		s.clients = append(s.clients, client)
+		s.clients[client.Name] = client
 		s.mu.Unlock()
 
 		logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, client.Addr)

@@ -202,7 +202,7 @@ func (s *Server) read(c *Client) {
 		logs.Logf(packageName, msg.MSG_TCP_RECEIVED, c.Addr+":"+string(out.Message))
 
 		// ACK simple
-		c.Send(ACKMessage, "")
+		c.Response(ACKMessage, "")
 	}
 }
 

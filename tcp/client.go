@@ -138,8 +138,8 @@ func (s *Client) Connect() error {
 		tcp.SetKeepAlivePeriod(10 * time.Second)
 	}
 
-	go s.read()
-	go s.write()
+	go s.readLoop()
+	go s.writeLoop()
 
 	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
 	s.SendHola()
@@ -149,9 +149,9 @@ func (s *Client) Connect() error {
 }
 
 /**
-* read
+* readLoop
 **/
-func (c *Client) read() {
+func (c *Client) readLoop() {
 	reader := bufio.NewReader(c.conn)
 
 	for {
@@ -168,39 +168,48 @@ func (c *Client) read() {
 }
 
 /**
-* write
+* writeLoop
 **/
-func (c *Client) write() {
+func (c *Client) writeLoop() {
 	for out := range c.outbound {
-		if c.Status != Connected {
-			return
-		}
-
-		// c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-
-		switch out.Type {
-		case PingMessage:
-			out.Message = []byte("PING\n")
-		case PongMessage:
-			out.Message = []byte("PONG\n")
-		case ACKMessage:
-			out.Message = []byte("ACK\n")
-		case CloseMessage:
-			c.close()
-			return
-		}
-
-		payload, err := out.serialize()
+		err := c.write(out)
 		if err != nil {
-			continue
-		}
-
-		_, err = c.conn.Write(payload)
-		if err != nil {
-			logs.Error(err)
 			return
 		}
 	}
+}
+
+/**
+* write
+**/
+func (c *Client) write(out Outbound) error {
+	if c.Status != Connected {
+		return nil
+	}
+
+	switch out.Type {
+	case PingMessage:
+		out.Message = []byte("PING\n")
+	case PongMessage:
+		out.Message = []byte("PONG\n")
+	case ACKMessage:
+		out.Message = []byte("ACK\n")
+	case CloseMessage:
+		c.close()
+		return nil
+	}
+
+	payload, err := out.serialize()
+	if err != nil {
+		return err
+	}
+
+	_, err = c.conn.Write(payload)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 /**
@@ -228,6 +237,18 @@ func (s *Client) listener(data []byte) {
 	default:
 		logs.Debug("listener message:", out.Message)
 	}
+}
+
+/**
+* Response
+* @param tp int, value any
+* @return error
+**/
+func (s *Client) Response(tp int, value any) error {
+	return s.write(Outbound{
+		Type:    tp,
+		Message: value,
+	})
 }
 
 /**

@@ -70,10 +70,12 @@ func (s *Server) onConnect(client *Client) {
 	defer s.mu.Unlock()
 
 	s.clients[client.Addr] = client
-	logs.Logf(packageName, "Client connected: %s", client.Name)
+	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, client.ToJson().ToString())
 	for _, fn := range s.onConnection {
 		fn(client)
 	}
+
+	go s.handle(client)
 }
 
 /**
@@ -169,23 +171,24 @@ func (s *Server) handleClient(c *Client) {
 * @param c *Client
 **/
 func (s *Server) disconnectClient(c *Client) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	s.unregister <- c
+	// c.mu.Lock()
+	// defer c.mu.Unlock()
 
-	if c.Status == Disconnected {
-		return
-	}
+	// if c.Status == Disconnected {
+	// 	return
+	// }
 
-	c.Status = Disconnected
-	c.conn.Close()
-	close(c.outbound)
+	// c.Status = Disconnected
+	// c.conn.Close()
+	// close(c.outbound)
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// s.mu.Lock()
+	// defer s.mu.Unlock()
 
-	delete(s.clients, c.Addr)
+	// delete(s.clients, c.Addr)
 
-	logs.Log(packageName, msg.MSG_CLIENT_DISCONNECTED, c.Addr)
+	// logs.Log(packageName, msg.MSG_CLIENT_DISCONNECTED, c.Addr)
 }
 
 /**
@@ -284,12 +287,6 @@ func (s *Server) Start() error {
 		}
 
 		client := s.newClient(conn)
-		s.mu.Lock()
-		s.clients[client.Addr] = client
-		s.mu.Unlock()
-
-		logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, client.ToJson().ToString())
-
-		go s.handle(client)
+		s.register <- client
 	}
 }

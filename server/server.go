@@ -21,11 +21,10 @@ type Ettp struct {
 	*chi.Mux
 	http    *http.Server
 	port    int
-	rpc     int
 	pidFile string
-	appName string
-	onClose func()
-	onStart func()
+	name    string
+	onClose []func()
+	onStart []func()
 }
 
 /**
@@ -33,12 +32,13 @@ type Ettp struct {
 * @param appName string
 * @return *Ettp
 **/
-func New(appName string) *Ettp {
+func New(name string) *Ettp {
 	result := &Ettp{
 		port:    envar.GetInt("PORT", 3000),
-		rpc:     envar.GetInt("RPC_PORT", 4200),
 		pidFile: ".pid",
-		appName: appName,
+		name:    name,
+		onClose: make([]func(), 0),
+		onStart: make([]func(), 0),
 	}
 
 	if result.port != 0 {
@@ -64,7 +64,7 @@ func New(appName string) *Ettp {
 **/
 func (s *Ettp) banner() {
 	time.Sleep(3 * time.Second)
-	templ := utility.BannerTitle(s.appName, 4)
+	templ := utility.BannerTitle(s.name, 4)
 	banner.InitString(colorable.NewColorableStdout(), true, true, templ)
 	fmt.Println()
 }
@@ -73,8 +73,8 @@ func (s *Ettp) banner() {
 * Close
 **/
 func (s *Ettp) Close() {
-	if s.onClose != nil {
-		s.onClose()
+	for _, fn := range s.onClose {
+		fn()
 	}
 
 	logs.Log(packageName, "Shutting down server...")
@@ -85,7 +85,7 @@ func (s *Ettp) Close() {
 * @param onClose func()
 **/
 func (s *Ettp) OnClose(onClose func()) {
-	s.onClose = onClose
+	s.onClose = append(s.onClose, onClose)
 }
 
 /**
@@ -93,7 +93,7 @@ func (s *Ettp) OnClose(onClose func()) {
 * @param onStart func()
 **/
 func (s *Ettp) OnStart(onStart func()) {
-	s.onStart = onStart
+	s.onStart = append(s.onStart, onStart)
 }
 
 /**
@@ -177,10 +177,18 @@ func (s *Ettp) start() {
 func (s *Ettp) Start() {
 	go s.start()
 	s.banner()
-	s.printRoutes()
-	if s.onStart != nil {
-		s.onStart()
+	for _, fn := range s.onStart {
+		fn()
 	}
+	s.printRoutes()
+}
+
+/**
+* StartAndWait
+**/
+func (s *Ettp) StartWait() {
+	s.Start()
+	utility.AppWait()
 }
 
 /**

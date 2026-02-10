@@ -18,6 +18,7 @@ type Mode int
 const (
 	packageName      = "tcp"
 	Follower    Mode = iota
+	Candidate
 	Leader
 )
 

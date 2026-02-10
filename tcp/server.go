@@ -186,7 +186,7 @@ func (s *Server) read(c *Client) {
 		n, err := c.conn.Read(buf)
 		if err != nil {
 			if err == io.EOF {
-				logs.Info("cliente cerró la conexión")
+				logs.Info(msg.MSG_TCP_CLIENT_CLOSED)
 			} else {
 				logs.Error(err)
 			}

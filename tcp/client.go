@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -331,7 +332,12 @@ func (c *Client) handleDisconnect(err error) {
 	}
 
 	if err != nil {
-		logs.Errorm("desconectado:" + err.Error())
+		if err != io.EOF {
+			logs.Info(msg.MSG_TCP_SERVER_CLOSED)
+		} else {
+			logs.Info(msg.MSG_TCP_CLIENT_CLOSED)
+		}
+		return
 	}
 
 	c.Status = Disconnected

@@ -36,6 +36,8 @@ var (
 	MSG_CLIENT_CONNECTED               = "client connected:%s"
 	MSG_CLIENT_DISCONNECTED            = "client disconnected:%s"
 	MSG_TCP_RECEIVED                   = "received:%s"
+	MSG_TCP_CLIENT_CLOSED              = "client close connection"
+	MSG_TCP_SERVER_CLOSED              = "server close connection"
 )
 
 func init() {
@@ -72,8 +74,10 @@ func init() {
 		MSG_HOLA = "Hola"
 		MSG_HUB_NOT_STARTED = "hub not started"
 		MSG_TCP_LISTENING = "TCP listening on:%d"
-		MSG_CLIENT_CONNECTED = "client connected:%s"
-		MSG_CLIENT_DISCONNECTED = "client disconnected:%s"
+		MSG_CLIENT_CONNECTED = "cliente conectado:%s"
+		MSG_CLIENT_DISCONNECTED = "cliente desconectado:%s"
 		MSG_TCP_RECEIVED = "recibido:%s"
+		MSG_TCP_CLIENT_CLOSED = "cliente cerró la conexión"
+		MSG_TCP_SERVER_CLOSED = "servidor cerró la conexión"
 	}
 }

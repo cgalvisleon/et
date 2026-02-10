@@ -7,8 +7,7 @@ import (
 )
 
 func main() {
-	client := tcp.NewClient("client", "localhost:5050")
-	err := client.Connect()
+	client, err := tcp.NewClient("localhost:5050")
 	if err != nil {
 		logs.Panic(err)
 	}

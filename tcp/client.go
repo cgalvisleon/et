@@ -25,216 +25,142 @@ const (
 
 type Client struct {
 	Created_at time.Time       `json:"created_at"`
-	Name       string          `json:"name"`
 	Addr       string          `json:"addr"`
 	Status     Status          `json:"status"`
 	conn       net.Conn        `json:"-"`
-	outbound   chan Outbound   `json:"-"`
+	inbox      chan string     `json:"-"`
+	done       chan struct{}   `json:"-"`
 	mu         sync.Mutex      `json:"-"`
 	ctx        context.Context `json:"-"`
 	isDebug    bool            `json:"-"`
 }
 
-func NewClient(name, addr string) *Client {
+/**
+* NewClient
+* @param addr string
+* @return *Client, error
+**/
+func NewClient(addr string) (*Client, error) {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+
 	now := timezone.Now()
-	return &Client{
+	result := &Client{
 		Created_at: now,
-		Name:       name,
 		Addr:       addr,
-		Status:     Pending,
-		outbound:   make(chan Outbound),
+		Status:     Connected,
+		conn:       conn,
+		inbox:      make(chan string),
+		done:       make(chan struct{}),
 		mu:         sync.Mutex{},
 		ctx:        context.Background(),
 	}
+
+	go result.read()
+	go result.write()
+	return result, nil
 }
 
 /**
 * ToJson
 * @return et.Json
 **/
-func (c *Client) ToJson() et.Json {
+func (s *Client) ToJson() et.Json {
 	return et.Json{
-		"created_at": c.Created_at,
-		"name":       c.Name,
-		"addr":       c.Addr,
-		"status":     c.Status,
+		"created_at": s.Created_at,
+		"addr":       s.Addr,
+		"status":     s.Status,
 	}
-}
-
-/**
-* Connect
-* @return error
-**/
-func (s *Client) Connect() error {
-	conn, err := net.Dial("tcp", s.Addr)
-	if err != nil {
-		s.Status = Disconnected
-		return err
-	}
-
-	s.mu.Lock()
-	s.conn = conn
-	s.Status = Connected
-	s.mu.Unlock()
-
-	if tcp, ok := conn.(*net.TCPConn); ok {
-		tcp.SetKeepAlive(true)
-		tcp.SetKeepAlivePeriod(10 * time.Second)
-	}
-
-	go s.read()
-	go s.write()
-
-	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
-
-	return nil
 }
 
 /**
 * read
 **/
-func (c *Client) read() {
-	reader := bufio.NewReader(c.conn)
+func (s *Client) read() {
+	reader := bufio.NewReader(s.conn)
 
 	for {
-		// c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
-		c.conn.SetReadDeadline(time.Time{})
-		data, err := reader.ReadBytes('\n')
-		if err != nil {
-			c.handleDisconnect(err)
+		select {
+		case <-s.done:
 			return
+		default:
+			msg, err := reader.ReadString('\n')
+			if err != nil {
+				close(s.done)
+				return
+			}
+			s.inbox <- msg
 		}
-
-		c.listener(data)
-	}
-}
-
-/**
-* listener
-* @param data []byte
-**/
-func (s *Client) listener(data []byte) {
-	out, err := ToOutbound(data)
-	if err != nil {
-		return
-	}
-
-	// msg := strings.TrimSpace(string(out.Message))
-	// if s.isDebug {
-	// 	logs.Debug("recv:", msg)
-	// }
-
-	switch out.Type {
-	case PingMessage:
-		s.Send(PongMessage, nil)
-
-	case PongMessage:
-		// heartbeat ok
-
-	default:
-		logs.Debug("listener message:", out.Message)
 	}
 }
 
 /**
 * write
 **/
-func (c *Client) write() {
-	for out := range c.outbound {
-		err := c.send(out)
-		if err != nil {
-			return
-		}
+func (s *Client) write() {
+	for msg := range s.inbox {
+		logs.Debugf(packageName, "recv: %s", msg)
 	}
-}
-
-/**
-* send
-**/
-func (c *Client) send(out Outbound) error {
-	if c.Status != Connected {
-		return nil
-	}
-
-	switch out.Type {
-	case PingMessage:
-		out.Message = []byte("PING\n")
-	case PongMessage:
-		out.Message = []byte("PONG\n")
-	case ACKMessage:
-		out.Message = []byte("ACK\n")
-	case CloseMessage:
-		c.close()
-		return nil
-	}
-
-	payload, err := out.serialize()
-	if err != nil {
-		return err
-	}
-
-	_, err = c.conn.Write(payload)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 /**
 * Send
-* @param tp int, bt []byte
-* @return error
 **/
-func (s *Client) Send(tp int, value any) error {
-	bt, ok := value.([]byte)
+func (s *Client) Send(tp int, message any) error {
+	if s.Status != Connected {
+		return nil
+	}
+
+	bt, ok := message.([]byte)
 	if !ok {
 		var err error
-		bt, err = json.Marshal(value)
+		bt, err = json.Marshal(message)
 		if err != nil {
 			return err
 		}
 	}
 
-	s.outbound <- Outbound{
+	m := Message{
 		Type:    tp,
 		Message: bt,
 	}
-	return nil
-}
 
-/**
-* SendMessage
-* @param message interface{}
-* @return error
-**/
-func (s *Client) SendMessage(message interface{}) error {
-	return s.Send(TextMessage, message)
-}
-
-/**
-* Error
-* @param err error
-**/
-func (s *Client) SendError(err error) error {
-	ms := et.Item{
-		Ok: false,
-		Result: et.Json{
-			"message": err.Error(),
-		},
+	switch tp {
+	case PingMessage:
+		m.Message = []byte("PING\n")
+	case PongMessage:
+		m.Message = []byte("PONG\n")
+	case ACKMessage:
+		m.Message = []byte("ACK\n")
+	case CloseMessage:
+		s.close()
+		return nil
 	}
-	return s.SendMessage(ms)
+
+	payload, err := m.serialize()
+	if err != nil {
+		return err
+	}
+
+	_, err = s.conn.Write(payload)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 /**
 * handleDisconnect
 * @param err error
 **/
-func (c *Client) handleDisconnect(err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func (s *Client) handleDisconnect(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	if c.Status == Disconnected {
+	if s.Status == Disconnected {
 		return
 	}
 
@@ -247,9 +173,9 @@ func (c *Client) handleDisconnect(err error) {
 		return
 	}
 
-	c.Status = Disconnected
-	if c.conn != nil {
-		c.conn.Close()
+	s.Status = Disconnected
+	if s.conn != nil {
+		s.conn.Close()
 	}
 }
 
@@ -265,7 +191,7 @@ func (s *Client) close() {
 	}
 
 	s.Status = Disconnected
-	close(s.outbound)
+	close(s.inbox)
 
 	if s.conn != nil {
 		s.conn.Close()

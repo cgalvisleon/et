@@ -169,11 +169,8 @@ func (s *Server) handleClient(c *Client) {
 * response
 * @param c *Client, tp int, msg string
 **/
-func (s *Server) response(c *Client, tp int, msg string) {
-	c.send(Outbound{
-		Type:    tp,
-		Message: []byte(msg),
-	})
+func (s *Server) response(c *Client, tp int, message any) {
+	c.Send(tp, message)
 }
 
 /**
@@ -217,7 +214,6 @@ func (s *Server) newClient(conn net.Conn) *Client {
 		Addr:       conn.RemoteAddr().String(),
 		Status:     Connected,
 		conn:       conn,
-		outbound:   make(chan Outbound, 128),
 		ctx:        context.Background(),
 	}
 }

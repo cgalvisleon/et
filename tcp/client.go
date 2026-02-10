@@ -23,62 +23,6 @@ const (
 	Disconnected Status = "disconnected"
 )
 
-const (
-	TextMessage   int = 1
-	BinaryMessage int = 2
-	ACKMessage    int = 3
-	CloseMessage  int = 8
-	PingMessage   int = 9
-	PongMessage   int = 10
-)
-
-type Outbound struct {
-	Type    int    `json:"type"`
-	Message []byte `json:"message"`
-}
-
-/**
-* serialize
-* @return []byte, error
-**/
-func (s *Outbound) serialize() ([]byte, error) {
-	return json.Marshal(s)
-}
-
-/**
-* ToJson
-* @return et.Json
-**/
-func (s *Outbound) ToJson() (et.Json, error) {
-	bt, err := s.serialize()
-	if err != nil {
-		return nil, err
-	}
-
-	var result et.Json
-	err = json.Unmarshal(bt, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-/**
-* ToOutbound
-* @param bt []byte
-* @return Outbound, error
-**/
-func ToOutbound(bt []byte) (Outbound, error) {
-	var result Outbound
-	err := json.Unmarshal(bt, &result)
-	if err != nil {
-		return Outbound{}, err
-	}
-
-	return result, nil
-}
-
 type Client struct {
 	Created_at time.Time       `json:"created_at"`
 	Name       string          `json:"name"`
@@ -142,7 +86,7 @@ func (s *Client) Connect() error {
 	go s.write()
 
 	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
-	s.SendHola()
+
 	return nil
 }
 
@@ -277,19 +221,6 @@ func (s *Client) SendError(err error) error {
 		Ok: false,
 		Result: et.Json{
 			"message": err.Error(),
-		},
-	}
-	return s.SendMessage(ms)
-}
-
-/**
-* SendHola
-**/
-func (s *Client) SendHola() error {
-	ms := et.Item{
-		Ok: true,
-		Result: et.Json{
-			"message": msg.MSG_HOLA,
 		},
 	}
 	return s.SendMessage(ms)

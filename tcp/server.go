@@ -96,6 +96,7 @@ func (s *Server) onDisconnect(client *Client) {
 		}
 
 		delete(s.clients, client.Addr)
+		logs.Infof(msg.MSG_TCP_CLIENT_CLOSED, client.Addr)
 	}
 }
 
@@ -161,18 +162,18 @@ func (s *Server) handleBalancer(client net.Conn) {
 * @param c *Client
 **/
 func (s *Server) handleClient(c *Client) {
-	defer s.disconnectClient(c)
-
 	go s.read(c)
-	go s.write(c)
 }
 
 /**
-* disconnectClient
-* @param c *Client
+* response
+* @param c *Client, tp int, msg string
 **/
-func (s *Server) disconnectClient(c *Client) {
-	s.unregister <- c
+func (s *Server) response(c *Client, tp int, msg string) {
+	c.send(Outbound{
+		Type:    tp,
+		Message: []byte(msg),
+	})
 }
 
 /**
@@ -186,7 +187,7 @@ func (s *Server) read(c *Client) {
 		n, err := c.conn.Read(buf)
 		if err != nil {
 			if err == io.EOF {
-				logs.Info(msg.MSG_TCP_CLIENT_CLOSED)
+				s.unregister <- c
 			} else {
 				logs.Error(err)
 			}
@@ -201,26 +202,7 @@ func (s *Server) read(c *Client) {
 		}
 
 		logs.Logf(packageName, msg.MSG_TCP_RECEIVED, c.Addr+":"+string(out.Message))
-
-		// ACK simple
-		c.Response(ACKMessage, "")
-	}
-}
-
-/**
-* write
-* @param c *Client
-**/
-func (s *Server) write(c *Client) {
-	for out := range c.outbound {
-		if c.Status != Connected {
-			return
-		}
-
-		_, err := c.conn.Write(out.Message)
-		if err != nil {
-			return
-		}
+		s.response(c, ACKMessage, "")
 	}
 }
 

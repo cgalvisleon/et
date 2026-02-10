@@ -36,7 +36,7 @@ var (
 	MSG_CLIENT_CONNECTED               = "client connected:%s"
 	MSG_CLIENT_DISCONNECTED            = "client disconnected:%s"
 	MSG_TCP_RECEIVED                   = "received:%s"
-	MSG_TCP_CLIENT_CLOSED              = "client close connection"
+	MSG_TCP_CLIENT_CLOSED              = "client close connection:%s"
 	MSG_TCP_SERVER_CLOSED              = "server close connection"
 )
 

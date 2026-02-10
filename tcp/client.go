@@ -181,7 +181,7 @@ func (c *Client) write() {
 }
 
 /**
-* write
+* send
 **/
 func (c *Client) send(out Outbound) error {
 	if c.Status != Connected {

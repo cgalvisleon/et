@@ -72,7 +72,6 @@ type Raft struct {
 	Address        string        `json:"-"`
 	Peers          []string      `json:"-"`
 	state          Mode          `json:"-"`
-	inCluster      bool          `json:"-"`
 	term           int           `json:"-"`
 	votedFor       string        `json:"-"`
 	leaderID       string        `json:"-"`
@@ -89,7 +88,7 @@ type Raft struct {
 **/
 func (s *Raft) getLeader() (string, bool) {
 	s.mu.Lock()
-	inCluster := s.inCluster
+	inCluster := len(s.Peers) > 1
 	result := s.leaderID
 	s.mu.Unlock()
 	if !inCluster {
@@ -104,7 +103,6 @@ func (s *Raft) getLeader() (string, bool) {
 func (s *Raft) electionLoop() {
 	s.mu.Lock()
 	s.state = Follower
-	s.inCluster = len(s.Peers) > 1
 	s.lastHeartbeat = timezone.Now()
 	s.mu.Unlock()
 
@@ -130,14 +128,12 @@ func (s *Raft) startElection() {
 	idx := slices.Index(s.Peers, s.Address)
 	if idx == -1 {
 		s.mu.Lock()
-		s.inCluster = false
 		s.becomeLeader()
 		s.mu.Unlock()
 		return
 	}
 
 	s.mu.Lock()
-	s.inCluster = true
 	s.state = Candidate
 	s.term++
 	term := s.term
@@ -198,7 +194,7 @@ func (s *Raft) becomeLeader() {
 * heartbeatLoop
 **/
 func (s *Raft) heartbeatLoop() {
-	if !s.inCluster {
+	if len(s.Peers) == 0 {
 		return
 	}
 

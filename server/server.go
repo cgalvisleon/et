@@ -176,11 +176,11 @@ func (s *Ettp) start() {
 **/
 func (s *Ettp) Start() {
 	go s.start()
-	s.banner()
 	for _, fn := range s.onStart {
 		fn()
 	}
 	s.printRoutes()
+	s.banner()
 }
 
 /**

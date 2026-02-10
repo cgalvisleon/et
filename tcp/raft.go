@@ -69,8 +69,8 @@ type HeartbeatReply struct {
 }
 
 type Raft struct {
-	address        string        `json:"-"`
-	peers          []string      `json:"-"`
+	Address        string        `json:"-"`
+	Peers          []string      `json:"-"`
 	state          Mode          `json:"-"`
 	inCluster      bool          `json:"-"`
 	term           int           `json:"-"`
@@ -95,7 +95,7 @@ func (s *Raft) getLeader() (string, bool) {
 	if !inCluster {
 		return result, true
 	}
-	return result, result != "" && result == s.address
+	return result, result != "" && result == s.Address
 }
 
 /**
@@ -104,7 +104,7 @@ func (s *Raft) getLeader() (string, bool) {
 func (s *Raft) electionLoop() {
 	s.mu.Lock()
 	s.state = Follower
-	s.inCluster = len(s.peers) > 1
+	s.inCluster = len(s.Peers) > 1
 	s.lastHeartbeat = timezone.Now()
 	s.mu.Unlock()
 
@@ -127,7 +127,7 @@ func (s *Raft) electionLoop() {
 * startElection
 **/
 func (s *Raft) startElection() {
-	idx := slices.Index(s.peers, s.address)
+	idx := slices.Index(s.Peers, s.Address)
 	if idx == -1 {
 		s.mu.Lock()
 		s.inCluster = false
@@ -141,14 +141,14 @@ func (s *Raft) startElection() {
 	s.state = Candidate
 	s.term++
 	term := s.term
-	s.votedFor = s.address
+	s.votedFor = s.Address
 	s.mu.Unlock()
 
 	votes := 1
-	total := len(s.peers)
-	for _, peer := range s.peers {
+	total := len(s.Peers)
+	for _, peer := range s.Peers {
 		go func(peer string) {
-			args := RequestVoteArgs{Term: term, CandidateID: s.address}
+			args := RequestVoteArgs{Term: term, CandidateID: s.Address}
 			var reply RequestVoteReply
 			res := requestVote(peer, &args, &reply)
 			if res.Error != nil {
@@ -183,9 +183,9 @@ func (s *Raft) startElection() {
 **/
 func (s *Raft) becomeLeader() {
 	s.state = Leader
-	s.leaderID = s.address
+	s.leaderID = s.Address
 	s.lastHeartbeat = timezone.Now()
-	logs.Logf(packageName, "I am leader %s", s.address)
+	logs.Logf(packageName, "I am leader %s", s.Address)
 
 	go s.heartbeatLoop()
 
@@ -214,13 +214,13 @@ func (s *Raft) heartbeatLoop() {
 			return
 		}
 
-		for _, peer := range s.peers {
-			if peer == s.address {
+		for _, peer := range s.Peers {
+			if peer == s.Address {
 				continue
 			}
 
 			go func(peer string) {
-				args := HeartbeatArgs{Term: term, LeaderID: s.address}
+				args := HeartbeatArgs{Term: term, LeaderID: s.Address}
 				var reply HeartbeatReply
 				res := heartbeat(peer, &args, &reply)
 				if res.Ok {

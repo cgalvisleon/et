@@ -7,6 +7,7 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
@@ -162,6 +163,18 @@ func (s *Server) handleBalancer(client net.Conn) {
 * @param c *Client
 **/
 func (s *Server) handleClient(c *Client) {
+	defer func() {
+		c.conn.Close()
+		logs.Logf(packageName, msg.MSG_CLIENT_DISCONNECTED, c.Addr)
+	}()
+
+	go func() {
+		for {
+			time.Sleep(5 * time.Second)
+			c.conn.Write([]byte("PING FROM SERVER\n"))
+		}
+	}()
+
 	go s.read(c)
 }
 

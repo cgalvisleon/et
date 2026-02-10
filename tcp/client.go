@@ -58,8 +58,8 @@ func NewClient(addr string) (*Client, error) {
 		ctx:        context.Background(),
 	}
 
+	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, addr)
 	go result.read()
-	go result.write()
 	return result, nil
 }
 
@@ -99,9 +99,9 @@ func (s *Client) read() {
 /**
 * write
 **/
-func (s *Client) write() {
+func (s *Client) Write() {
 	for msg := range s.inbox {
-		logs.Debugf(packageName, "recv: %s", msg)
+		logs.Debugf("recv: %s", msg)
 	}
 }
 

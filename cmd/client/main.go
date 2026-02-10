@@ -12,6 +12,8 @@ func main() {
 		logs.Panic(err)
 	}
 
+	go client.Write()
+
 	client.Send(tcp.TextMessage, "Hola")
 	utility.AppWait()
 }

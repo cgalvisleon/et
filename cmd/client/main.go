@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/tcp"
+	"github.com/cgalvisleon/et/utility"
 )
 
 func main() {
@@ -11,4 +12,6 @@ func main() {
 	if err != nil {
 		logs.Panic(err)
 	}
+
+	utility.AppWait()
 }

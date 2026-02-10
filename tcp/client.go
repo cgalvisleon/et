@@ -13,7 +13,6 @@ import (
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/timezone"
-	"github.com/cgalvisleon/et/utility"
 )
 
 type Status string
@@ -144,8 +143,6 @@ func (s *Client) Connect() error {
 
 	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
 	s.SendHola()
-
-	utility.AppWait()
 	return nil
 }
 
@@ -165,6 +162,33 @@ func (c *Client) read() {
 		}
 
 		c.listener(data)
+	}
+}
+
+/**
+* listener
+* @param data []byte
+**/
+func (s *Client) listener(data []byte) {
+	out, err := ToOutbound(data)
+	if err != nil {
+		return
+	}
+
+	// msg := strings.TrimSpace(string(out.Message))
+	// if s.isDebug {
+	// 	logs.Debug("recv:", msg)
+	// }
+
+	switch out.Type {
+	case PingMessage:
+		s.Send(PongMessage, nil)
+
+	case PongMessage:
+		// heartbeat ok
+
+	default:
+		logs.Debug("listener message:", out.Message)
 	}
 }
 
@@ -211,54 +235,6 @@ func (c *Client) send(out Outbound) error {
 	}
 
 	return nil
-}
-
-/**
-* listener
-* @param data []byte
-**/
-func (s *Client) listener(data []byte) {
-	out, err := ToOutbound(data)
-	if err != nil {
-		return
-	}
-
-	// msg := strings.TrimSpace(string(out.Message))
-	// if s.isDebug {
-	// 	logs.Debug("recv:", msg)
-	// }
-
-	switch out.Type {
-	case PingMessage:
-		s.Send(PongMessage, nil)
-
-	case PongMessage:
-		// heartbeat ok
-
-	default:
-		logs.Debug("listener message:", out.Message)
-	}
-}
-
-/**
-* Response
-* @param tp int, value any
-* @return error
-**/
-func (s *Client) Response(tp int, value any) error {
-	bt, ok := value.([]byte)
-	if !ok {
-		var err error
-		bt, err = json.Marshal(value)
-		if err != nil {
-			return err
-		}
-	}
-
-	return s.send(Outbound{
-		Type:    tp,
-		Message: bt,
-	})
 }
 
 /**

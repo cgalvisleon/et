@@ -138,8 +138,8 @@ func (s *Client) Connect() error {
 		tcp.SetKeepAlivePeriod(10 * time.Second)
 	}
 
-	go s.readLoop()
-	go s.writeLoop()
+	go s.read()
+	go s.write()
 
 	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
 	s.SendHola()
@@ -149,9 +149,9 @@ func (s *Client) Connect() error {
 }
 
 /**
-* readLoop
+* read
 **/
-func (c *Client) readLoop() {
+func (c *Client) read() {
 	reader := bufio.NewReader(c.conn)
 
 	for {
@@ -168,11 +168,11 @@ func (c *Client) readLoop() {
 }
 
 /**
-* writeLoop
+* write
 **/
-func (c *Client) writeLoop() {
+func (c *Client) write() {
 	for out := range c.outbound {
-		err := c.write(out)
+		err := c.send(out)
 		if err != nil {
 			return
 		}
@@ -182,7 +182,7 @@ func (c *Client) writeLoop() {
 /**
 * write
 **/
-func (c *Client) write(out Outbound) error {
+func (c *Client) send(out Outbound) error {
 	if c.Status != Connected {
 		return nil
 	}
@@ -254,7 +254,7 @@ func (s *Client) Response(tp int, value any) error {
 		}
 	}
 
-	return s.write(Outbound{
+	return s.send(Outbound{
 		Type:    tp,
 		Message: bt,
 	})

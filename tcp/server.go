@@ -163,8 +163,8 @@ func (s *Server) handleBalancer(client net.Conn) {
 func (s *Server) handleClient(c *Client) {
 	defer s.disconnectClient(c)
 
+	go s.read(c)
 	go s.write(c)
-	s.read(c)
 }
 
 /**

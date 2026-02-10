@@ -76,17 +76,16 @@ type Raft struct {
 	votedFor       string        `json:"-"`
 	leaderID       string        `json:"-"`
 	lastHeartbeat  time.Time     `json:"-"`
-	turn           int           `json:"-"`
 	mu             sync.Mutex    `json:"-"`
 	onBecomeLeader []func(*Raft) `json:"-"`
 	onChangeLeader []func(*Raft) `json:"-"`
 }
 
 /**
-* getLeader
+* GetLeader
 * @return string, error
 **/
-func (s *Raft) getLeader() (string, bool) {
+func (s *Raft) GetLeader() (string, bool) {
 	s.mu.Lock()
 	inCluster := len(s.Peers) > 1
 	result := s.leaderID
@@ -98,9 +97,9 @@ func (s *Raft) getLeader() (string, bool) {
 }
 
 /**
-* electionLoop
+* ElectionLoop
 **/
-func (s *Raft) electionLoop() {
+func (s *Raft) ElectionLoop() {
 	s.mu.Lock()
 	s.state = Follower
 	s.lastHeartbeat = timezone.Now()

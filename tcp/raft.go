@@ -82,6 +82,26 @@ type Raft struct {
 }
 
 /**
+* newRaft
+* @param address string
+* @return *Raft
+**/
+func newRaft(address string) *Raft {
+	return &Raft{
+		address:        address,
+		peers:          make([]string, 0),
+		state:          Follower,
+		term:           0,
+		votedFor:       "",
+		leaderID:       "",
+		lastHeartbeat:  timezone.Now(),
+		mu:             sync.Mutex{},
+		onBecomeLeader: make([]func(*Raft), 0),
+		onChangeLeader: make([]func(*Raft), 0),
+	}
+}
+
+/**
 * GetLeader
 * @return string, error
 **/

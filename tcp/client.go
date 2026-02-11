@@ -152,11 +152,6 @@ func (s *Client) Send(tp int, message any) error {
 		return nil
 	}
 
-	if tp == CloseMessage {
-		s.handleDisconnect()
-		return nil
-	}
-
 	msg, err := newMessage(tp, message)
 	if err != nil {
 		return err
@@ -171,6 +166,11 @@ func (s *Client) Send(tp int, message any) error {
 	if err != nil {
 		s.handleDisconnect()
 		return err
+	}
+
+	if tp == CloseMessage {
+		s.handleDisconnect()
+		return nil
 	}
 
 	return nil

@@ -33,6 +33,7 @@ type Server struct {
 	b               *Balancer          `json:"-"`
 	mode            atomic.Value       `json:"-"`
 	mu              sync.Mutex         `json:"-"`
+	isDebug         bool               `json:"-"`
 }
 
 func NewServer(port int) *Server {
@@ -231,13 +232,13 @@ func (s *Server) read(c *Client) {
 		}
 
 		data := buf[:n]
-		out, err := ToOutbound(data)
+		out, err := ToMessage(data)
 		if err != nil {
 			logs.Error(err)
 			return
 		}
 
-		logs.Logf(packageName, msg.MSG_TCP_RECEIVED, c.Addr+":"+string(out.Message))
+		logs.Logf(packageName, msg.MSG_TCP_RECEIVED, c.Addr+":"+out.ToJson().ToString())
 		s.response(c, ACKMessage, "")
 	}
 }

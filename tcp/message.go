@@ -32,27 +32,19 @@ func (s *Message) serialize() ([]byte, error) {
 * ToJson
 * @return et.Json
 **/
-func (s *Message) ToJson() (et.Json, error) {
-	bt, err := s.serialize()
-	if err != nil {
-		return nil, err
+func (s *Message) ToJson() et.Json {
+	return et.Json{
+		"type":    s.Type,
+		"message": s.Message,
 	}
-
-	var result et.Json
-	err = json.Unmarshal(bt, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
 }
 
 /**
-* ToOutbound
+* ToMessage
 * @param bt []byte
 * @return Message, error
 **/
-func ToOutbound(bt []byte) (Message, error) {
+func ToMessage(bt []byte) (Message, error) {
 	var result Message
 	err := json.Unmarshal(bt, &result)
 	if err != nil {

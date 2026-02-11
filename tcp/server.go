@@ -40,6 +40,7 @@ type Server struct {
 	unregister      chan *Client             `json:"-"`
 	onConnection    []func(*Client)          `json:"-"`
 	onDisconnection []func(*Client)          `json:"-"`
+	onStart         []func(*Server)          `json:"-"`
 	onError         []func(*Client, error)   `json:"-"`
 	onOutbound      []func(*Client, Message) `json:"-"`
 	onInbound       []func(*Client, Message) `json:"-"`
@@ -60,6 +61,7 @@ func NewServer(port int) *Server {
 		unregister:      make(chan *Client),
 		onConnection:    make([]func(*Client), 0),
 		onDisconnection: make([]func(*Client), 0),
+		onStart:         make([]func(*Server), 0),
 		onError:         make([]func(*Client, error), 0),
 		onOutbound:      make([]func(*Client, Message), 0),
 		onInbound:       make([]func(*Client, Message), 0),
@@ -204,6 +206,10 @@ func (s *Server) Start() error {
 	go s.send()
 
 	logs.Logf(packageName, msg.MSG_TCP_LISTENING, s.port)
+
+	for _, fn := range s.onStart {
+		fn(s)
+	}
 
 	for {
 		conn, err := ln.Accept()

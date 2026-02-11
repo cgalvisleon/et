@@ -106,6 +106,10 @@ func (s *Client) read() {
 		lenBuf := make([]byte, 4)
 		_, err := io.ReadFull(reader, lenBuf)
 		if err != nil {
+			if err != io.EOF {
+				s.disconnect()
+			}
+			s.error(err)
 			return
 		}
 
@@ -120,6 +124,7 @@ func (s *Client) read() {
 		data := make([]byte, length)
 		_, err = io.ReadFull(reader, data)
 		if err != nil {
+			s.error(err)
 			return
 		}
 

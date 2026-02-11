@@ -7,17 +7,16 @@ import (
 )
 
 const (
-	BinaryMessage int = 0
-	TextMessage   int = 1
-	ACKMessage    int = 3
-	CloseMessage  int = 8
-	PingMessage   int = 9
-	PongMessage   int = 10
+	TextMessage  int = 1
+	ACKMessage   int = 3
+	CloseMessage int = 8
+	PingMessage  int = 9
+	PongMessage  int = 10
 )
 
 type Message struct {
-	Type    int    `json:"type"`
-	Message []byte `json:"message"`
+	Type    int         `json:"type"`
+	Message interface{} `json:"message"`
 }
 
 /**

@@ -270,7 +270,6 @@ func (s *Server) broadcast(destination []string, msg []byte) {
 * @param c *Client
 **/
 func (s *Server) read(c *Client) {
-
 	reader := bufio.NewReader(c.conn)
 
 	for {
@@ -283,6 +282,11 @@ func (s *Server) read(c *Client) {
 		}
 
 		length := binary.BigEndian.Uint32(lenBuf)
+		limitReader := envar.GetInt("LIMIT_SIZE_MG", 10)
+		if length > uint32(limitReader*1024*1024) {
+			s.response(c, ErrorMessage, msg.MSG_TCP_MESSAGE_TOO_LARGE)
+			continue
+		}
 
 		// Leer payload completo
 		data := make([]byte, length)
@@ -301,5 +305,7 @@ func (s *Server) read(c *Client) {
 		if s.isDebug {
 			logs.Logf(packageName, msg.MSG_TCP_RECEIVED, c.Addr+":"+m.ToJson().ToString())
 		}
+
+		s.response(c, ACKMessage, "")
 	}
 }

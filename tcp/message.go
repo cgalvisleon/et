@@ -9,11 +9,14 @@ import (
 )
 
 const (
+	BytesMessage int = 0
 	TextMessage  int = 1
+	JSONMessage  int = 2
 	ACKMessage   int = 3
 	CloseMessage int = 8
 	PingMessage  int = 9
 	PongMessage  int = 10
+	ErrorMessage int = 11
 )
 
 type Message struct {

@@ -264,3 +264,43 @@ func (s *Client) Send(tp int, message any) error {
 
 	return nil
 }
+
+/**
+* OnConnect
+* @param fn func(*Client)
+**/
+func (s *Client) OnConnect(fn func(*Client)) {
+	s.onConnect = append(s.onConnect, fn)
+}
+
+/**
+* OnDisconnect
+* @param fn func(*Client)
+**/
+func (s *Client) OnDisconnect(fn func(*Client)) {
+	s.onDisconnect = append(s.onDisconnect, fn)
+}
+
+/**
+* OnError
+* @param fn func(*Client, error)
+**/
+func (s *Client) OnError(fn func(*Client, error)) {
+	s.onError = append(s.onError, fn)
+}
+
+/**
+* OnOutbound
+* @param fn func(*Client, []byte)
+**/
+func (s *Client) OnOutbound(fn func(*Client, []byte)) {
+	s.onOutbound = append(s.onOutbound, fn)
+}
+
+/**
+* OnInbound
+* @param fn func(*Client, []byte)
+**/
+func (s *Client) OnInbound(fn func(*Client, []byte)) {
+	s.onInbound = append(s.onInbound, fn)
+}

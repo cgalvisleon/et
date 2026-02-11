@@ -396,3 +396,51 @@ func (s *Server) Broadcast(destination []string, tp int, message any) {
 		}
 	}
 }
+
+/**
+* OnConnect
+* @param fn func(*Client)
+**/
+func (s *Server) OnConnect(fn func(*Client)) {
+	s.onConnection = append(s.onConnection, fn)
+}
+
+/**
+* OnDisconnect
+* @param fn func(*Client)
+**/
+func (s *Server) OnDisconnect(fn func(*Client)) {
+	s.onDisconnection = append(s.onDisconnection, fn)
+}
+
+/**
+* OnStart
+* @param fn func(*Server)
+**/
+func (s *Server) OnStart(fn func(*Server)) {
+	s.onStart = append(s.onStart, fn)
+}
+
+/**
+* OnError
+* @param fn func(*Client, error)
+**/
+func (s *Server) OnError(fn func(*Client, error)) {
+	s.onError = append(s.onError, fn)
+}
+
+/**
+* OnOutbound
+* @param fn func(*Client, Message)
+**/
+func (s *Server) OnOutbound(fn func(*Client, Message)) {
+	s.onOutbound = append(s.onOutbound, fn)
+}
+
+/**
+* OnInbound
+* @param fn func(*Client, Message)
+**/
+func (s *Server) OnInbound(fn func(*Client, Message)) {
+	s.onInbound = append(s.onInbound, fn)
+}

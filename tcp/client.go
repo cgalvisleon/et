@@ -29,7 +29,7 @@ type Client struct {
 	Addr       string          `json:"addr"`
 	Status     Status          `json:"status"`
 	conn       net.Conn        `json:"-"`
-	inbox      chan []byte     `json:"-"`
+	inbox      chan string     `json:"-"`
 	done       chan struct{}   `json:"-"`
 	mu         sync.Mutex      `json:"-"`
 	ctx        context.Context `json:"-"`
@@ -48,7 +48,7 @@ func NewClient(addr string) *Client {
 		Created_at: now,
 		Addr:       addr,
 		Status:     Connected,
-		inbox:      make(chan []byte),
+		inbox:      make(chan string),
 		done:       make(chan struct{}),
 		mu:         sync.Mutex{},
 		ctx:        context.Background(),
@@ -77,7 +77,7 @@ func (s *Client) read() {
 
 	for {
 		// s.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
-		read, err := reader.ReadBytes('\n')
+		read, err := reader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
 				logs.Log(packageName, msg.MSG_TCP_SERVER_CLOSED)

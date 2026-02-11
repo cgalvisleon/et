@@ -57,29 +57,20 @@ func toMessage(bt []byte) (Message, error) {
 * newMessage
 **/
 func newMessage(tp int, message any) (Message, error) {
-	bt, ok := message.([]byte)
-	if !ok {
-		var err error
-		bt, err = json.Marshal(message)
-		if err != nil {
-			return Message{}, err
-		}
-	}
-
 	result := Message{
 		Type:    tp,
-		Message: bt,
+		Message: message,
 	}
 
 	switch tp {
 	case PingMessage:
-		result.Message = []byte("PING\n")
+		result.Message = "PING\n"
 	case PongMessage:
-		result.Message = []byte("PONG\n")
+		result.Message = "PONG\n"
 	case ACKMessage:
-		result.Message = []byte("ACK\n")
+		result.Message = "ACK\n"
 	case CloseMessage:
-		result.Message = []byte("CLOSE\n")
+		result.Message = "CLOSE\n"
 	}
 
 	return result, nil

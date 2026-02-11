@@ -228,15 +228,21 @@ func (s *Server) handleClient(c *Client) {
 * @param c *Client, tp int, msg string
 **/
 func (s *Server) response(c *Client, tp int, message any) error {
-	c.conn.Write([]byte("PING FROM SERVER\n"))
-	// bt, err := newMessage(tp, message)
-	// if err != nil {
-	// 	return err
-	// }
-	// _, err = c.conn.Write(bt)
-	// if err != nil {
-	// 	return err
-	// }
+	// c.conn.Write([]byte("PING FROM SERVER\n"))
+	msg, err := newMessage(tp, message)
+	if err != nil {
+		return err
+	}
+
+	bt, err := msg.serialize()
+	if err != nil {
+		return err
+	}
+
+	_, err = c.conn.Write(bt)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

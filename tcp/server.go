@@ -47,10 +47,21 @@ type Server struct {
 	onError         []func(*Client, error)   `json:"-"`
 	onOutbound      []func(*Client, Message) `json:"-"`
 	onInbound       []func(*Client, Message) `json:"-"`
-	proxy           *Balancer                `json:"-"`
 	mode            atomic.Value             `json:"-"`
 	mu              sync.Mutex               `json:"-"`
 	isDebug         bool                     `json:"-"`
+	// Balancer
+	proxy *Balancer `json:"-"`
+	// Cluster
+	peers          []*Client     `json:"-"`
+	state          Mode          `json:"-"`
+	term           int           `json:"-"`
+	votedFor       string        `json:"-"`
+	leaderID       string        `json:"-"`
+	lastHeartbeat  time.Time     `json:"-"`
+	muCluster      sync.Mutex    `json:"-"`
+	onBecomeLeader []func(*Raft) `json:"-"`
+	onChangeLeader []func(*Raft) `json:"-"`
 }
 
 func NewServer(port int) *Server {
@@ -77,6 +88,16 @@ func NewServer(port int) *Server {
 		onInbound:       make([]func(*Client, Message), 0),
 		mu:              sync.Mutex{},
 		isDebug:         isDebug,
+		// Cluster
+		peers:          make([]*Client, 0),
+		state:          Follower,
+		term:           0,
+		votedFor:       "",
+		leaderID:       "",
+		lastHeartbeat:  timezone.Now(),
+		muCluster:      sync.Mutex{},
+		onBecomeLeader: make([]func(*Raft), 0),
+		onChangeLeader: make([]func(*Raft), 0),
 	}
 	result.mode.Store(Follower)
 	return result
@@ -213,38 +234,6 @@ func (s *Server) send() {
 }
 
 /**
-* Start
-* @return error
-**/
-func (s *Server) Start() error {
-	address := fmt.Sprintf(":%d", s.port)
-	ln, err := net.Listen("tcp", address)
-	if err != nil {
-		return err
-	}
-
-	go s.run()
-	go s.inbox()
-	go s.send()
-
-	logs.Logf(packageName, msg.MSG_TCP_LISTENING, s.port)
-
-	for _, fn := range s.onStart {
-		fn(s)
-	}
-
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			continue
-		}
-
-		client := s.newClient(conn)
-		s.register <- client
-	}
-}
-
-/**
 * newClient
 * @param conn net.Conn
 * @return *Client
@@ -268,7 +257,7 @@ func (s *Server) onConnect(client *Client) {
 	defer s.mu.Unlock()
 
 	s.clients[client.Addr] = client
-	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, client.ToJson().ToString())
+	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, client.toJson().ToString())
 	for _, fn := range s.onConnection {
 		fn(client)
 	}
@@ -297,11 +286,53 @@ func (s *Server) onDisconnect(client *Client) {
 }
 
 /**
-* SetMode
-* @param m Mode
+* Start
+* @return error
 **/
-func (s *Server) SetMode(m Mode) {
-	s.mode.Store(m)
+func (s *Server) Start() error {
+	address := fmt.Sprintf(":%d", s.port)
+	ln, err := net.Listen("tcp", address)
+	if err != nil {
+		return err
+	}
+
+	go s.run()
+	go s.inbox()
+	go s.send()
+
+	nodes, err := GetNodes()
+	if err != nil {
+		return err
+	}
+
+	for _, addr := range nodes {
+		s.AddNode(addr)
+	}
+
+	logs.Logf(packageName, msg.MSG_TCP_LISTENING, s.port)
+
+	for _, fn := range s.onStart {
+		fn(s)
+	}
+
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			continue
+		}
+
+		client := s.newClient(conn)
+		s.register <- client
+	}
+}
+
+/**
+* StartProxy
+* @return error
+**/
+func (s *Server) StartProxy() error {
+	s.mode.Store(Proxy)
+	return s.Start()
 }
 
 /**
@@ -309,12 +340,26 @@ func (s *Server) SetMode(m Mode) {
 * @param address string
 **/
 func (s *Server) AddNode(address string) {
-	if s.proxy == nil {
-		s.proxy = newBalancer()
-	}
+	if s.mode.Load() == Proxy {
+		if s.proxy == nil {
+			s.proxy = newBalancer()
+		}
 
-	node := newNode(address)
-	s.proxy.nodes = append(s.proxy.nodes, node)
+		node := newNode(address)
+		s.proxy.nodes = append(s.proxy.nodes, node)
+	} else {
+		if address == s.address {
+			return
+		}
+
+		node := NewClient(address)
+		err := node.Start()
+		if err != nil {
+			return
+		}
+
+		s.peers = append(s.peers, node)
+	}
 }
 
 /**

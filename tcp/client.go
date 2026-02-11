@@ -74,7 +74,7 @@ func NewClient(addr string) *Client {
 * ToJson
 * @return et.Json
 **/
-func (s *Client) ToJson() et.Json {
+func (s *Client) toJson() et.Json {
 	return et.Json{
 		"created_at": s.Created_at,
 		"addr":       s.Addr,

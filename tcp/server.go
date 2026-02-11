@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,6 +33,7 @@ type Msg struct {
 }
 
 type Server struct {
+	address         string                   `json:"-"`
 	port            int                      `json:"-"`
 	clients         map[string]*Client       `json:"-"`
 	inbound         chan *Msg                `json:"-"`
@@ -51,8 +53,14 @@ type Server struct {
 }
 
 func NewServer(port int) *Server {
+	host, err := os.Hostname()
+	if err != nil {
+		host = "localhost"
+	}
+
 	isDebug := envar.GetBool("IS_DEBUG", false)
 	result := &Server{
+		address:         host + ":" + fmt.Sprintf("%d", port),
 		port:            port,
 		clients:         make(map[string]*Client),
 		inbound:         make(chan *Msg),

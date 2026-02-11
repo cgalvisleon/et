@@ -110,12 +110,6 @@ func (s *Client) read() {
 			return
 		}
 
-		m, err := toMessage(data)
-		if err != nil {
-			logs.Error(err)
-			continue
-		}
-
 		s.inbox <- data
 	}
 }

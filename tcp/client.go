@@ -77,7 +77,7 @@ func (s *Client) read() {
 		s.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		read, err := reader.ReadString('\n')
 		if err != nil {
-			if err != io.EOF {
+			if err == io.EOF {
 				logs.Log(packageName, msg.MSG_TCP_SERVER_CLOSED)
 			} else {
 				logs.Logf(packageName, msg.MSG_TCP_ERROR_READ, err)

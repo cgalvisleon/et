@@ -32,7 +32,7 @@ var (
 	MSG_USER_NOT_FOUND                 = "user not found (%s)"
 	MSG_HOLA                           = "Hello"
 	MSG_HUB_NOT_STARTED                = "hub not started"
-	MSG_TCP_LISTENING                  = "TCP listening on:%d"
+	MSG_TCP_LISTENING                  = "tcp listening on:%d"
 	MSG_CLIENT_CONNECTED               = "client connected:%s"
 	MSG_CLIENT_DISCONNECTED            = "client disconnected:%s"
 	MSG_TCP_RECEIVED                   = "received:%s"

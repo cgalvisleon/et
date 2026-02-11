@@ -277,6 +277,9 @@ func (s *Server) read(c *Client) {
 		lenBuf := make([]byte, 4)
 		_, err := io.ReadFull(reader, lenBuf)
 		if err != nil {
+			if err != io.EOF {
+				logs.Logf(packageName, msg.MSG_TCP_ERROR_READ, err)
+			}
 			s.unregister <- c
 			return
 		}

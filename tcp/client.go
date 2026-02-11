@@ -3,6 +3,7 @@ package tcp
 import (
 	"bufio"
 	"context"
+	"encoding/binary"
 	"io"
 	"net"
 	"sync"
@@ -78,18 +79,44 @@ func (s *Client) read() {
 	for {
 		// s.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		// read, err := reader.ReadString('\n')
-		read, err := reader.ReadBytes('\n')
-		if err != nil {
-			if err == io.EOF {
-				logs.Log(packageName, msg.MSG_TCP_SERVER_CLOSED)
-			} else {
-				logs.Logf(packageName, msg.MSG_TCP_ERROR_READ, err)
-			}
+		// read, err := reader.ReadBytes('\n')
+		// if err != nil {
+		// 	if err == io.EOF {
+		// 		logs.Log(packageName, msg.MSG_TCP_SERVER_CLOSED)
+		// 	} else {
+		// 		logs.Logf(packageName, msg.MSG_TCP_ERROR_READ, err)
+		// 	}
 
-			s.handleDisconnect()
+		// 	s.handleDisconnect()
+		// 	return
+		// }
+
+		lenBuf := make([]byte, 4)
+		_, err := io.ReadFull(reader, lenBuf)
+		if err != nil {
 			return
 		}
-		s.inbox <- read
+
+		length := binary.BigEndian.Uint32(lenBuf)
+		limitReader := envar.GetInt("LIMIT_SIZE_MG", 10)
+		if length > uint32(limitReader*1024*1024) {
+			continue
+		}
+
+		// Leer payload completo
+		data := make([]byte, length)
+		_, err = io.ReadFull(reader, data)
+		if err != nil {
+			return
+		}
+
+		m, err := toMessage(data)
+		if err != nil {
+			logs.Error(err)
+			continue
+		}
+
+		s.inbox <- data
 	}
 }
 

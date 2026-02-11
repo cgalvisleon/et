@@ -226,7 +226,9 @@ func (s *Client) Start() error {
 	go s.inbox()
 	go s.send()
 	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
-	s.Send(TextMessage, "Hola")
+	if s.isDebug {
+		s.Send(PingMessage, "")
+	}
 
 	utility.AppWait()
 	return nil

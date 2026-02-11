@@ -25,6 +25,7 @@ const (
 	Follower    Mode = iota
 	Candidate
 	Leader
+	Proxy
 )
 
 type Msg struct {
@@ -46,7 +47,7 @@ type Server struct {
 	onError         []func(*Client, error)   `json:"-"`
 	onOutbound      []func(*Client, Message) `json:"-"`
 	onInbound       []func(*Client, Message) `json:"-"`
-	b               *Balancer                `json:"-"`
+	proxy           *Balancer                `json:"-"`
 	mode            atomic.Value             `json:"-"`
 	mu              sync.Mutex               `json:"-"`
 	isDebug         bool                     `json:"-"`
@@ -308,8 +309,12 @@ func (s *Server) SetMode(m Mode) {
 * @param address string
 **/
 func (s *Server) AddNode(address string) {
+	if s.proxy == nil {
+		s.proxy = newBalancer()
+	}
+
 	node := newNode(address)
-	s.b.nodes = append(s.b.nodes, node)
+	s.proxy.nodes = append(s.proxy.nodes, node)
 }
 
 /**
@@ -320,7 +325,7 @@ func (s *Server) handle(c *Client) {
 	mode := s.mode.Load().(Mode)
 
 	switch mode {
-	case Leader:
+	case Proxy:
 		s.handleBalancer(c.conn)
 	default:
 		s.handleClient(c)
@@ -334,7 +339,11 @@ func (s *Server) handle(c *Client) {
 func (s *Server) handleBalancer(client net.Conn) {
 	defer client.Close()
 
-	node := s.b.next()
+	if s.proxy == nil {
+		s.proxy = newBalancer()
+	}
+
+	node := s.proxy.next()
 	if node == nil {
 		return
 	}
@@ -357,12 +366,14 @@ func (s *Server) handleBalancer(client net.Conn) {
 * @param c *Client
 **/
 func (s *Server) handleClient(c *Client) {
-	go func() {
-		for {
-			time.Sleep(5 * time.Second)
-			s.Send(c, PongMessage, "")
-		}
-	}()
+	if s.isDebug {
+		go func() {
+			for {
+				time.Sleep(3 * time.Second)
+				s.Send(c, PongMessage, "")
+			}
+		}()
+	}
 
 	go s.read(c)
 }

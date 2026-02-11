@@ -2,9 +2,37 @@ package tcp
 
 import "sync/atomic"
 
+type Node struct {
+	Address string
+	Alive   atomic.Bool
+	Conns   atomic.Int64
+}
+
+/**
+* newNode
+* @param addr string
+* @return *Node
+**/
+func newNode(addr string) *Node {
+	n := &Node{Address: addr}
+	n.Alive.Store(true)
+	return n
+}
+
 type Balancer struct {
 	nodes []*Node
 	index atomic.Uint64
+}
+
+/**
+* newBalancer
+* @return *Balancer
+**/
+func newBalancer() *Balancer {
+	return &Balancer{
+		nodes: make([]*Node, 0),
+		index: atomic.Uint64{},
+	}
 }
 
 /**

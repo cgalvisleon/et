@@ -363,7 +363,8 @@ func (s *Server) handleClient(c *Client) {
 
 /**
 * Send
-* @param c *Client, tp int, msg string
+* @param c *Client, tp int, message any
+* @return error
 **/
 func (s *Server) Send(c *Client, tp int, message any) error {
 	msg, err := newMessage(tp, message)

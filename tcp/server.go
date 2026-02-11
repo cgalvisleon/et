@@ -58,9 +58,10 @@ func NewServer(port int) *Server {
 		host = "localhost"
 	}
 
+	address := fmt.Sprintf("%s:%d", host, port)
 	isDebug := envar.GetBool("IS_DEBUG", false)
 	result := &Server{
-		address:         host + ":" + fmt.Sprintf("%d", port),
+		address:         address,
 		port:            port,
 		clients:         make(map[string]*Client),
 		inbound:         make(chan *Msg),

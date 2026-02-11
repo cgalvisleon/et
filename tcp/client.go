@@ -74,17 +74,19 @@ func (s *Client) read() {
 	reader := bufio.NewReader(s.conn)
 
 	for {
-		select {
-		case <-s.done:
-			return
-		default:
-			msg, err := reader.ReadString('\n')
-			if err != nil {
-				close(s.done)
-				return
+		s.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		read, err := reader.ReadString('\n')
+		if err != nil {
+			if err != io.EOF {
+				logs.Log(packageName, msg.MSG_TCP_SERVER_CLOSED)
+			} else {
+				logs.Logf(packageName, msg.MSG_TCP_ERROR_READ, err)
 			}
-			s.inbox <- msg
+
+			s.handleDisconnect()
+			return
 		}
+		s.inbox <- read
 	}
 }
 
@@ -95,6 +97,29 @@ func (s *Client) write() {
 	for msg := range s.inbox {
 		logs.Debugf("recv: %s", msg)
 	}
+}
+
+/**
+* handleDisconnect
+**/
+func (s *Client) handleDisconnect() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.Status == Disconnected {
+		return
+	}
+
+	s.Status = Disconnected
+
+	logs.Logf(packageName, msg.MSG_CLIENT_DISCONNECTED, s.Addr)
+
+	if s.conn != nil {
+		s.conn.Close()
+	}
+
+	close(s.inbox)
+	close(s.done)
 }
 
 /**
@@ -146,7 +171,7 @@ func (s *Client) Send(tp int, message any) error {
 	case ACKMessage:
 		m.Message = []byte("ACK\n")
 	case CloseMessage:
-		s.close()
+		s.handleDisconnect()
 		return nil
 	}
 
@@ -157,54 +182,9 @@ func (s *Client) Send(tp int, message any) error {
 
 	_, err = s.conn.Write(payload)
 	if err != nil {
+		s.handleDisconnect()
 		return err
 	}
 
 	return nil
-}
-
-/**
-* handleDisconnect
-* @param err error
-**/
-func (s *Client) handleDisconnect(err error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.Status == Disconnected {
-		return
-	}
-
-	if err != nil {
-		if err != io.EOF {
-			logs.Info(msg.MSG_TCP_SERVER_CLOSED)
-		} else {
-			logs.Info(msg.MSG_TCP_CLIENT_CLOSED)
-		}
-		return
-	}
-
-	s.Status = Disconnected
-	if s.conn != nil {
-		s.conn.Close()
-	}
-}
-
-/**
-* close
-**/
-func (s *Client) close() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.Status == Disconnected {
-		return
-	}
-
-	s.Status = Disconnected
-	close(s.inbox)
-
-	if s.conn != nil {
-		s.conn.Close()
-	}
 }

@@ -168,6 +168,18 @@ func (s *Server) read(c *Client) {
 **/
 func (s *Server) send() {
 	for msg := range s.outbound {
+		s.mu.Lock()
+		c, ok := s.clients[msg.To.Addr]
+		if !ok {
+			s.mu.Unlock()
+			return
+		}
+		s.mu.Unlock()
+
+		if c.Status != Connected {
+			return
+		}
+
 		bt, err := msg.Msg.serialize()
 		if err != nil {
 			s.error(msg.To, err)
@@ -271,7 +283,6 @@ func (s *Server) onDisconnect(client *Client) {
 		}
 
 		delete(s.clients, client.Addr)
-		logs.Logf(packageName, msg.MSG_TCP_CLIENT_CLOSED, client.Addr)
 	}
 }
 

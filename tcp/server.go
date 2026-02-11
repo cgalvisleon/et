@@ -33,7 +33,7 @@ type Msg struct {
 }
 
 type Server struct {
-	*Raft
+	address         string                   `json:"-"`
 	port            int                      `json:"-"`
 	clients         map[string]*Client       `json:"-"`
 	inbound         chan *Msg                `json:"-"`
@@ -61,7 +61,7 @@ func NewServer(port int) *Server {
 	address := fmt.Sprintf("%s:%d", host, port)
 	isDebug := envar.GetBool("IS_DEBUG", false)
 	result := &Server{
-		Raft:            newRaft(address),
+		address:         address,
 		port:            port,
 		clients:         make(map[string]*Client),
 		inbound:         make(chan *Msg),
@@ -357,9 +357,6 @@ func (s *Server) handleBalancer(client net.Conn) {
 * @param c *Client
 **/
 func (s *Server) handleClient(c *Client) {
-	defer func() {
-	}()
-
 	go func() {
 		for {
 			time.Sleep(5 * time.Second)

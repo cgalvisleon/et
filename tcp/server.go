@@ -26,23 +26,27 @@ const (
 	Leader
 )
 
-type Inbox struct {
-	Addr string `json:"addr"`
-	Msg  []byte `json:"msg"`
+type Msg struct {
+	To  *Client `json:"to"`
+	Msg Message `json:"msg"`
 }
 
 type Server struct {
-	port            int                `json:"-"`
-	clients         map[string]*Client `json:"-"`
-	inbox           chan *Inbox        `json:"-"`
-	register        chan *Client       `json:"-"`
-	unregister      chan *Client       `json:"-"`
-	onConnection    []func(*Client)    `json:"-"`
-	onDisconnection []func(*Client)    `json:"-"`
-	b               *Balancer          `json:"-"`
-	mode            atomic.Value       `json:"-"`
-	mu              sync.Mutex         `json:"-"`
-	isDebug         bool               `json:"-"`
+	port            int                      `json:"-"`
+	clients         map[string]*Client       `json:"-"`
+	inbound         chan *Msg                `json:"-"`
+	outbound        chan *Msg                `json:"-"`
+	register        chan *Client             `json:"-"`
+	unregister      chan *Client             `json:"-"`
+	onConnection    []func(*Client)          `json:"-"`
+	onDisconnection []func(*Client)          `json:"-"`
+	onError         []func(*Client, error)   `json:"-"`
+	onOutbound      []func(*Client, Message) `json:"-"`
+	onInbound       []func(*Client, Message) `json:"-"`
+	b               *Balancer                `json:"-"`
+	mode            atomic.Value             `json:"-"`
+	mu              sync.Mutex               `json:"-"`
+	isDebug         bool                     `json:"-"`
 }
 
 func NewServer(port int) *Server {
@@ -50,16 +54,33 @@ func NewServer(port int) *Server {
 	result := &Server{
 		port:            port,
 		clients:         make(map[string]*Client),
-		inbox:           make(chan *Inbox),
+		inbound:         make(chan *Msg),
+		outbound:        make(chan *Msg),
 		register:        make(chan *Client),
 		unregister:      make(chan *Client),
 		onConnection:    make([]func(*Client), 0),
 		onDisconnection: make([]func(*Client), 0),
+		onError:         make([]func(*Client, error), 0),
+		onOutbound:      make([]func(*Client, Message), 0),
+		onInbound:       make([]func(*Client, Message), 0),
 		mu:              sync.Mutex{},
 		isDebug:         isDebug,
 	}
 	result.mode.Store(Follower)
 	return result
+}
+
+/**
+* error
+* @param c *Client, err error
+* @return error
+**/
+func (s *Server) error(c *Client, err error) error {
+	for _, fn := range s.onError {
+		fn(c, err)
+	}
+
+	return err
 }
 
 /**
@@ -77,6 +98,97 @@ func (s *Server) run() {
 }
 
 /**
+* inbox
+**/
+func (s *Server) inbox() {
+	for msg := range s.inbound {
+		for _, fn := range s.onInbound {
+			fn(msg.To, msg.Msg)
+		}
+
+		if s.isDebug {
+			logs.Debugf("recv: %s", msg.Msg.ToJson().ToString())
+		}
+	}
+}
+
+/**
+* read
+* @param c *Client
+**/
+func (s *Server) read(c *Client) {
+	reader := bufio.NewReader(c.conn)
+
+	for {
+		// Leer tamaño (4 bytes)
+		lenBuf := make([]byte, 4)
+		_, err := io.ReadFull(reader, lenBuf)
+		if err != nil {
+			if err != io.EOF {
+				logs.Logf(packageName, msg.MSG_TCP_ERROR_READ, err)
+			}
+			s.unregister <- c
+			return
+		}
+
+		// Leer tamaño payload
+		length := binary.BigEndian.Uint32(lenBuf)
+		limitReader := envar.GetInt("LIMIT_SIZE_MG", 10)
+		if length > uint32(limitReader*1024*1024) {
+			s.Send(c, ErrorMessage, msg.MSG_TCP_MESSAGE_TOO_LARGE)
+			continue
+		}
+
+		// Leer payload completo
+		data := make([]byte, length)
+		_, err = io.ReadFull(reader, data)
+		if err != nil {
+			s.unregister <- c
+			return
+		}
+
+		m, err := toMessage(data)
+		if err != nil {
+			logs.Error(err)
+			continue
+		}
+
+		s.inbound <- &Msg{
+			To:  c,
+			Msg: m,
+		}
+		s.Send(c, ACKMessage, "")
+	}
+}
+
+/**
+* send
+**/
+func (s *Server) send() {
+	for msg := range s.outbound {
+		bt, err := msg.Msg.serialize()
+		if err != nil {
+			s.error(msg.To, err)
+			return
+		}
+
+		_, err = msg.To.conn.Write(bt)
+		if err != nil {
+			s.error(msg.To, err)
+			return
+		}
+
+		for _, fn := range s.onOutbound {
+			fn(msg.To, msg.Msg)
+		}
+
+		if s.isDebug {
+			logs.Debugf("send: %s", msg.To.Addr+":"+msg.Msg.ToJson().ToString())
+		}
+	}
+}
+
+/**
 * Start
 * @return error
 **/
@@ -88,6 +200,8 @@ func (s *Server) Start() error {
 	}
 
 	go s.run()
+	go s.inbox()
+	go s.send()
 
 	logs.Logf(packageName, msg.MSG_TCP_LISTENING, s.port)
 
@@ -228,7 +342,6 @@ func (s *Server) handleClient(c *Client) {
 	}()
 
 	go s.read(c)
-	go s.write()
 }
 
 /**
@@ -241,15 +354,11 @@ func (s *Server) Send(c *Client, tp int, message any) error {
 		return err
 	}
 
-	bt, err := msg.serialize()
-	if err != nil {
-		return err
+	s.outbound <- &Msg{
+		To:  c,
+		Msg: msg,
 	}
 
-	_, err = c.conn.Write(bt)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -266,67 +375,6 @@ func (s *Server) Broadcast(destination []string, tp int, message any) {
 		client, ok := s.clients[addr]
 		if ok && client.Status == Connected {
 			s.Send(client, tp, message)
-		}
-	}
-}
-
-/**
-* read
-* @param c *Client
-**/
-func (s *Server) read(c *Client) {
-	reader := bufio.NewReader(c.conn)
-
-	for {
-		// Leer tamaño (4 bytes)
-		lenBuf := make([]byte, 4)
-		_, err := io.ReadFull(reader, lenBuf)
-		if err != nil {
-			if err != io.EOF {
-				logs.Logf(packageName, msg.MSG_TCP_ERROR_READ, err)
-			}
-			s.unregister <- c
-			return
-		}
-
-		// Leer tamaño payload
-		length := binary.BigEndian.Uint32(lenBuf)
-		limitReader := envar.GetInt("LIMIT_SIZE_MG", 10)
-		if length > uint32(limitReader*1024*1024) {
-			s.Send(c, ErrorMessage, msg.MSG_TCP_MESSAGE_TOO_LARGE)
-			continue
-		}
-
-		// Leer payload completo
-		data := make([]byte, length)
-		_, err = io.ReadFull(reader, data)
-		if err != nil {
-			s.unregister <- c
-			return
-		}
-
-		s.inbox <- &Inbox{
-			Addr: c.Addr,
-			Msg:  data,
-		}
-		s.Send(c, ACKMessage, "")
-	}
-}
-
-/**
-* write
-**/
-func (s *Server) write() {
-	for inbox := range s.inbox {
-		// Deserializar payload
-		m, err := toMessage(inbox.Msg)
-		if err != nil {
-			logs.Error(err)
-			continue
-		}
-
-		if s.isDebug {
-			logs.Logf(packageName, msg.MSG_TCP_RECEIVED, inbox.Addr+":"+m.ToJson().ToString())
 		}
 	}
 }

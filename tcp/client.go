@@ -83,6 +83,19 @@ func (s *Client) ToJson() et.Json {
 }
 
 /**
+* error
+* @param err error
+* @return error
+**/
+func (s *Client) error(err error) error {
+	for _, fn := range s.onError {
+		fn(s, err)
+	}
+
+	return err
+}
+
+/**
 * read
 **/
 func (s *Client) read() {
@@ -191,19 +204,6 @@ func (s *Client) connect() (net.Conn, error) {
 	}
 
 	return result, nil
-}
-
-/**
-* error
-* @param err error
-* @return error
-**/
-func (s *Client) error(err error) error {
-	for _, fn := range s.onError {
-		fn(s, err)
-	}
-
-	return err
 }
 
 /**

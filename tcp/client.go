@@ -3,7 +3,6 @@ package tcp
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"io"
 	"net"
 	"sync"
@@ -152,38 +151,17 @@ func (s *Client) Send(tp int, message any) error {
 		return nil
 	}
 
-	bt, ok := message.([]byte)
-	if !ok {
-		var err error
-		bt, err = json.Marshal(message)
-		if err != nil {
-			return err
-		}
-	}
-
-	m := Message{
-		Type:    tp,
-		Message: bt,
-	}
-
-	switch tp {
-	case PingMessage:
-		m.Message = []byte("PING\n")
-	case PongMessage:
-		m.Message = []byte("PONG\n")
-	case ACKMessage:
-		m.Message = []byte("ACK\n")
-	case CloseMessage:
+	if tp == CloseMessage {
 		s.handleDisconnect()
 		return nil
 	}
 
-	payload, err := m.serialize()
+	bt, err := newMessage(tp, message)
 	if err != nil {
 		return err
 	}
 
-	_, err = s.conn.Write(payload)
+	_, err = s.conn.Write(bt)
 	if err != nil {
 		s.handleDisconnect()
 		return err

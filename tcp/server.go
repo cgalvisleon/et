@@ -201,7 +201,7 @@ func (s *Server) handleClient(c *Client) {
 	go func() {
 		for {
 			time.Sleep(5 * time.Second)
-			c.conn.Write([]byte("PING FROM SERVER\n"))
+			s.response(c, PongMessage, "")
 		}
 	}()
 
@@ -213,7 +213,14 @@ func (s *Server) handleClient(c *Client) {
 * @param c *Client, tp int, msg string
 **/
 func (s *Server) response(c *Client, tp int, message any) {
-	c.Send(tp, message)
+	bt, err := newMessage(tp, message)
+	if err != nil {
+		logs.Error(err)
+		return
+	}
+	c.conn.Write(bt)
+	// c.Send(tp, message)
+	// c.conn.Write([]byte("PING FROM SERVER\n"))
 }
 
 /**
@@ -235,7 +242,7 @@ func (s *Server) read(c *Client) {
 		}
 
 		data := buf[:n]
-		out, err := ToMessage(data)
+		out, err := toMessage(data)
 		if err != nil {
 			logs.Error(err)
 			return
@@ -244,7 +251,7 @@ func (s *Server) read(c *Client) {
 		if s.isDebug {
 			logs.Logf(packageName, msg.MSG_TCP_RECEIVED, c.Addr+":"+out.ToJson().ToString())
 		}
-		s.response(c, ACKMessage, "")
+		// s.response(c, ACKMessage, "")
 	}
 }
 

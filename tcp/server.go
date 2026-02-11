@@ -94,6 +94,21 @@ func (s *Server) Start() error {
 }
 
 /**
+* newClient
+* @param conn net.Conn
+* @return *Client
+**/
+func (s *Server) newClient(conn net.Conn) *Client {
+	return &Client{
+		Created_at: timezone.Now(),
+		Addr:       conn.RemoteAddr().String(),
+		Status:     Connected,
+		conn:       conn,
+		ctx:        context.Background(),
+	}
+}
+
+/**
 * defOnConnect
 * @param *Client client
 **/
@@ -252,21 +267,6 @@ func (s *Server) read(c *Client) {
 			logs.Logf(packageName, msg.MSG_TCP_RECEIVED, c.Addr+":"+out.ToJson().ToString())
 		}
 		// s.response(c, ACKMessage, "")
-	}
-}
-
-/**
-* newClient
-* @param conn net.Conn
-* @return *Client
-**/
-func (s *Server) newClient(conn net.Conn) *Client {
-	return &Client{
-		Created_at: timezone.Now(),
-		Addr:       conn.RemoteAddr().String(),
-		Status:     Connected,
-		conn:       conn,
-		ctx:        context.Background(),
 	}
 }
 

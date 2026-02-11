@@ -77,26 +77,14 @@ func (s *Client) read() {
 	reader := bufio.NewReader(s.conn)
 
 	for {
-		// s.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
-		// read, err := reader.ReadString('\n')
-		// read, err := reader.ReadBytes('\n')
-		// if err != nil {
-		// 	if err == io.EOF {
-		// 		logs.Log(packageName, msg.MSG_TCP_SERVER_CLOSED)
-		// 	} else {
-		// 		logs.Logf(packageName, msg.MSG_TCP_ERROR_READ, err)
-		// 	}
-
-		// 	s.handleDisconnect()
-		// 	return
-		// }
-
+		// Leer tamaño (4 bytes)
 		lenBuf := make([]byte, 4)
 		_, err := io.ReadFull(reader, lenBuf)
 		if err != nil {
 			return
 		}
 
+		// Leer tamaño payload
 		length := binary.BigEndian.Uint32(lenBuf)
 		limitReader := envar.GetInt("LIMIT_SIZE_MG", 10)
 		if length > uint32(limitReader*1024*1024) {
@@ -135,7 +123,6 @@ func (s *Client) handleDisconnect() {
 	}
 
 	s.Status = Disconnected
-
 	logs.Logf(packageName, msg.MSG_CLIENT_DISCONNECTED, s.Addr)
 
 	if s.conn != nil {

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
@@ -42,6 +43,7 @@ type Client struct {
 * @return *Client, error
 **/
 func NewClient(addr string) *Client {
+	isDebug := envar.GetBool("IS_DEBUG", false)
 	now := timezone.Now()
 	result := &Client{
 		Created_at: now,
@@ -51,6 +53,7 @@ func NewClient(addr string) *Client {
 		done:       make(chan struct{}),
 		mu:         sync.Mutex{},
 		ctx:        context.Background(),
+		isDebug:    isDebug,
 	}
 	return result
 }

@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/timezone"
@@ -37,6 +38,7 @@ type Server struct {
 }
 
 func NewServer(port int) *Server {
+	isDebug := envar.GetBool("IS_DEBUG", false)
 	result := &Server{
 		port:            port,
 		clients:         make(map[string]*Client),
@@ -45,6 +47,7 @@ func NewServer(port int) *Server {
 		onConnection:    make([]func(*Client), 0),
 		onDisconnection: make([]func(*Client), 0),
 		mu:              sync.Mutex{},
+		isDebug:         isDebug,
 	}
 	result.mode.Store(Follower)
 	return result
@@ -238,7 +241,9 @@ func (s *Server) read(c *Client) {
 			return
 		}
 
-		logs.Logf(packageName, msg.MSG_TCP_RECEIVED, c.Addr+":"+out.ToJson().ToString())
+		if s.isDebug {
+			logs.Logf(packageName, msg.MSG_TCP_RECEIVED, c.Addr+":"+out.ToJson().ToString())
+		}
 		s.response(c, ACKMessage, "")
 	}
 }

@@ -7,8 +7,8 @@ import (
 )
 
 const (
+	BinaryMessage int = 0
 	TextMessage   int = 1
-	BinaryMessage int = 2
 	ACKMessage    int = 3
 	CloseMessage  int = 8
 	PingMessage   int = 9
@@ -57,35 +57,30 @@ func toMessage(bt []byte) (Message, error) {
 /**
 * newMessage
 **/
-func newMessage(tp int, message any) ([]byte, error) {
+func newMessage(tp int, message any) (Message, error) {
 	bt, ok := message.([]byte)
 	if !ok {
 		var err error
 		bt, err = json.Marshal(message)
 		if err != nil {
-			return nil, err
+			return Message{}, err
 		}
 	}
 
-	msg := Message{
+	result := Message{
 		Type:    tp,
 		Message: bt,
 	}
 
 	switch tp {
 	case PingMessage:
-		msg.Message = []byte("PING\n")
+		result.Message = []byte("PING\n")
 	case PongMessage:
-		msg.Message = []byte("PONG\n")
+		result.Message = []byte("PONG\n")
 	case ACKMessage:
-		msg.Message = []byte("ACK\n")
+		result.Message = []byte("ACK\n")
 	case CloseMessage:
-		msg.Message = []byte("CLOSE\n")
-	}
-
-	result, err := msg.serialize()
-	if err != nil {
-		return nil, err
+		result.Message = []byte("CLOSE\n")
 	}
 
 	return result, nil

@@ -29,7 +29,7 @@ type Client struct {
 	Addr       string          `json:"addr"`
 	Status     Status          `json:"status"`
 	conn       net.Conn        `json:"-"`
-	inbox      chan string     `json:"-"`
+	inbox      chan []byte     `json:"-"`
 	done       chan struct{}   `json:"-"`
 	mu         sync.Mutex      `json:"-"`
 	ctx        context.Context `json:"-"`
@@ -48,7 +48,7 @@ func NewClient(addr string) *Client {
 		Created_at: now,
 		Addr:       addr,
 		Status:     Connected,
-		inbox:      make(chan string),
+		inbox:      make(chan []byte),
 		done:       make(chan struct{}),
 		mu:         sync.Mutex{},
 		ctx:        context.Background(),
@@ -76,8 +76,8 @@ func (s *Client) read() {
 	reader := bufio.NewReader(s.conn)
 
 	for {
-		s.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
-		read, err := reader.ReadString('\n')
+		// s.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		read, err := reader.ReadBytes('\n')
 		if err != nil {
 			if err == io.EOF {
 				logs.Log(packageName, msg.MSG_TCP_SERVER_CLOSED)
@@ -156,7 +156,12 @@ func (s *Client) Send(tp int, message any) error {
 		return nil
 	}
 
-	bt, err := newMessage(tp, message)
+	msg, err := newMessage(tp, message)
+	if err != nil {
+		return err
+	}
+
+	bt, err := msg.serialize()
 	if err != nil {
 		return err
 	}

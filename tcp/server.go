@@ -227,15 +227,34 @@ func (s *Server) handleClient(c *Client) {
 * response
 * @param c *Client, tp int, msg string
 **/
-func (s *Server) response(c *Client, tp int, message any) {
-	bt, err := newMessage(tp, message)
-	if err != nil {
-		logs.Error(err)
-		return
+func (s *Server) response(c *Client, tp int, message any) error {
+	c.conn.Write([]byte("PING FROM SERVER\n"))
+	// bt, err := newMessage(tp, message)
+	// if err != nil {
+	// 	return err
+	// }
+	// _, err = c.conn.Write(bt)
+	// if err != nil {
+	// 	return err
+	// }
+	return nil
+}
+
+/**
+* broadcast
+* @param destination []string
+* @param msg []byte
+**/
+func (s *Server) broadcast(destination []string, msg []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, addr := range destination {
+		client, ok := s.clients[addr]
+		if ok && client.Status == Connected {
+			client.Send(TextMessage, msg)
+		}
 	}
-	c.conn.Write(bt)
-	// c.Send(tp, message)
-	// c.conn.Write([]byte("PING FROM SERVER\n"))
 }
 
 /**
@@ -257,32 +276,15 @@ func (s *Server) read(c *Client) {
 		}
 
 		data := buf[:n]
-		out, err := toMessage(data)
+		m, err := toMessage(data)
 		if err != nil {
 			logs.Error(err)
 			return
 		}
 
 		if s.isDebug {
-			logs.Logf(packageName, msg.MSG_TCP_RECEIVED, c.Addr+":"+out.ToJson().ToString())
+			logs.Logf(packageName, msg.MSG_TCP_RECEIVED, c.Addr+":"+m.ToJson().ToString())
 		}
 		// s.response(c, ACKMessage, "")
-	}
-}
-
-/**
-* broadcast
-* @param destination []string
-* @param msg []byte
-**/
-func (s *Server) broadcast(destination []string, msg []byte) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	for _, addr := range destination {
-		client, ok := s.clients[addr]
-		if ok && client.Status == Connected {
-			client.Send(TextMessage, msg)
-		}
 	}
 }

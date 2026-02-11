@@ -64,6 +64,32 @@ func (s *Server) run() {
 }
 
 /**
+* Start
+* @return error
+**/
+func (s *Server) Start() error {
+	address := fmt.Sprintf(":%d", s.port)
+	ln, err := net.Listen("tcp", address)
+	if err != nil {
+		return err
+	}
+
+	go s.run()
+
+	logs.Logf(packageName, msg.MSG_TCP_LISTENING, s.port)
+
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			continue
+		}
+
+		client := s.newClient(conn)
+		s.register <- client
+	}
+}
+
+/**
 * defOnConnect
 * @param *Client client
 **/
@@ -97,7 +123,7 @@ func (s *Server) onDisconnect(client *Client) {
 		}
 
 		delete(s.clients, client.Addr)
-		logs.Infof(msg.MSG_TCP_CLIENT_CLOSED, client.Addr)
+		logs.Logf(packageName, msg.MSG_TCP_CLIENT_CLOSED, client.Addr)
 	}
 }
 
@@ -164,8 +190,8 @@ func (s *Server) handleBalancer(client net.Conn) {
 **/
 func (s *Server) handleClient(c *Client) {
 	defer func() {
-		c.conn.Close()
-		logs.Logf(packageName, msg.MSG_CLIENT_DISCONNECTED, c.Addr)
+		// c.conn.Close()
+		// logs.Logf(packageName, msg.MSG_CLIENT_DISCONNECTED, c.Addr)
 	}()
 
 	go func() {
@@ -245,31 +271,5 @@ func (s *Server) broadcast(destination []string, msg []byte) {
 		if ok && client.Status == Connected {
 			client.Send(TextMessage, msg)
 		}
-	}
-}
-
-/**
-* Start
-* @return error
-**/
-func (s *Server) Start() error {
-	address := fmt.Sprintf(":%d", s.port)
-	ln, err := net.Listen("tcp", address)
-	if err != nil {
-		return err
-	}
-
-	go s.run()
-
-	logs.Logf(packageName, msg.MSG_TCP_LISTENING, s.port)
-
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			continue
-		}
-
-		client := s.newClient(conn)
-		s.register <- client
 	}
 }

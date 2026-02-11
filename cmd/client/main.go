@@ -3,17 +3,17 @@ package main
 import (
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/tcp"
-	"github.com/cgalvisleon/et/utility"
 )
 
 func main() {
-	client, err := tcp.NewClient("localhost:5050")
+	client := tcp.NewClient("localhost:5050")
+	err := client.Start()
 	if err != nil {
 		logs.Panic(err)
 	}
 
-	go client.Write()
+	// go client.Write()
 
-	client.Send(tcp.TextMessage, "Hola")
-	utility.AppWait()
+	// client.Send(tcp.TextMessage, "Hola")
+	// utility.AppWait()
 }

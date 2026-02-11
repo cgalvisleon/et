@@ -13,6 +13,7 @@ import (
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/timezone"
+	"github.com/cgalvisleon/et/utility"
 )
 
 type Status string
@@ -40,27 +41,18 @@ type Client struct {
 * @param addr string
 * @return *Client, error
 **/
-func NewClient(addr string) (*Client, error) {
-	conn, err := net.Dial("tcp", addr)
-	if err != nil {
-		return nil, err
-	}
-
+func NewClient(addr string) *Client {
 	now := timezone.Now()
 	result := &Client{
 		Created_at: now,
 		Addr:       addr,
 		Status:     Connected,
-		conn:       conn,
 		inbox:      make(chan string),
 		done:       make(chan struct{}),
 		mu:         sync.Mutex{},
 		ctx:        context.Background(),
 	}
-
-	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, addr)
-	go result.read()
-	return result, nil
+	return result
 }
 
 /**
@@ -99,10 +91,29 @@ func (s *Client) read() {
 /**
 * write
 **/
-func (s *Client) Write() {
+func (s *Client) write() {
 	for msg := range s.inbox {
 		logs.Debugf("recv: %s", msg)
 	}
+}
+
+/**
+* Start
+**/
+func (s *Client) Start() error {
+	conn, err := net.Dial("tcp", s.Addr)
+	if err != nil {
+		return err
+	}
+
+	s.conn = conn
+	go s.read()
+	go s.write()
+	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
+	s.Send(TextMessage, "Hola")
+
+	utility.AppWait()
+	return nil
 }
 
 /**

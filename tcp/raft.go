@@ -69,8 +69,8 @@ type HeartbeatReply struct {
 }
 
 type Raft struct {
-	Address        string        `json:"-"`
-	Peers          []string      `json:"-"`
+	address        string        `json:"-"`
+	peers          []string      `json:"-"`
 	state          Mode          `json:"-"`
 	term           int           `json:"-"`
 	votedFor       string        `json:"-"`
@@ -87,13 +87,13 @@ type Raft struct {
 **/
 func (s *Raft) GetLeader() (string, bool) {
 	s.mu.Lock()
-	inCluster := len(s.Peers) > 1
+	inCluster := len(s.peers) > 1
 	result := s.leaderID
 	s.mu.Unlock()
 	if !inCluster {
 		return result, true
 	}
-	return result, result != "" && result == s.Address
+	return result, result != "" && result == s.address
 }
 
 /**
@@ -124,7 +124,7 @@ func (s *Raft) ElectionLoop() {
 * startElection
 **/
 func (s *Raft) startElection() {
-	idx := slices.Index(s.Peers, s.Address)
+	idx := slices.Index(s.peers, s.address)
 	if idx == -1 {
 		s.mu.Lock()
 		s.becomeLeader()
@@ -136,14 +136,14 @@ func (s *Raft) startElection() {
 	s.state = Candidate
 	s.term++
 	term := s.term
-	s.votedFor = s.Address
+	s.votedFor = s.address
 	s.mu.Unlock()
 
 	votes := 1
-	total := len(s.Peers)
-	for _, peer := range s.Peers {
+	total := len(s.peers)
+	for _, peer := range s.peers {
 		go func(peer string) {
-			args := RequestVoteArgs{Term: term, CandidateID: s.Address}
+			args := RequestVoteArgs{Term: term, CandidateID: s.address}
 			var reply RequestVoteReply
 			res := requestVote(peer, &args, &reply)
 			if res.Error != nil {
@@ -178,9 +178,9 @@ func (s *Raft) startElection() {
 **/
 func (s *Raft) becomeLeader() {
 	s.state = Leader
-	s.leaderID = s.Address
+	s.leaderID = s.address
 	s.lastHeartbeat = timezone.Now()
-	logs.Logf(packageName, "I am leader %s", s.Address)
+	logs.Logf(packageName, "I am leader %s", s.address)
 
 	go s.heartbeatLoop()
 
@@ -193,7 +193,7 @@ func (s *Raft) becomeLeader() {
 * heartbeatLoop
 **/
 func (s *Raft) heartbeatLoop() {
-	if len(s.Peers) == 0 {
+	if len(s.peers) == 0 {
 		return
 	}
 
@@ -209,13 +209,13 @@ func (s *Raft) heartbeatLoop() {
 			return
 		}
 
-		for _, peer := range s.Peers {
-			if peer == s.Address {
+		for _, peer := range s.peers {
+			if peer == s.address {
 				continue
 			}
 
 			go func(peer string) {
-				args := HeartbeatArgs{Term: term, LeaderID: s.Address}
+				args := HeartbeatArgs{Term: term, LeaderID: s.address}
 				var reply HeartbeatReply
 				res := heartbeat(peer, &args, &reply)
 				if res.Ok {

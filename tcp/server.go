@@ -26,9 +26,15 @@ const (
 	Leader
 )
 
+type Inbox struct {
+	Addr string `json:"addr"`
+	Msg  []byte `json:"msg"`
+}
+
 type Server struct {
 	port            int                `json:"-"`
 	clients         map[string]*Client `json:"-"`
+	inbox           chan *Inbox        `json:"-"`
 	register        chan *Client       `json:"-"`
 	unregister      chan *Client       `json:"-"`
 	onConnection    []func(*Client)    `json:"-"`
@@ -44,6 +50,7 @@ func NewServer(port int) *Server {
 	result := &Server{
 		port:            port,
 		clients:         make(map[string]*Client),
+		inbox:           make(chan *Inbox),
 		register:        make(chan *Client),
 		unregister:      make(chan *Client),
 		onConnection:    make([]func(*Client), 0),
@@ -211,8 +218,6 @@ func (s *Server) handleBalancer(client net.Conn) {
 **/
 func (s *Server) handleClient(c *Client) {
 	defer func() {
-		// c.conn.Close()
-		// logs.Logf(packageName, msg.MSG_CLIENT_DISCONNECTED, c.Addr)
 	}()
 
 	go func() {
@@ -223,6 +228,7 @@ func (s *Server) handleClient(c *Client) {
 	}()
 
 	go s.read(c)
+	go s.write()
 }
 
 /**
@@ -299,16 +305,28 @@ func (s *Server) read(c *Client) {
 			return
 		}
 
-		m, err := toMessage(data)
+		s.inbox <- &Inbox{
+			Addr: c.Addr,
+			Msg:  data,
+		}
+		s.Send(c, ACKMessage, "")
+	}
+}
+
+/**
+* write
+**/
+func (s *Server) write() {
+	for inbox := range s.inbox {
+		// Deserializar payload
+		m, err := toMessage(inbox.Msg)
 		if err != nil {
 			logs.Error(err)
 			continue
 		}
 
 		if s.isDebug {
-			logs.Logf(packageName, msg.MSG_TCP_RECEIVED, c.Addr+":"+m.ToJson().ToString())
+			logs.Logf(packageName, msg.MSG_TCP_RECEIVED, inbox.Addr+":"+m.ToJson().ToString())
 		}
-
-		s.Send(c, ACKMessage, "")
 	}
 }

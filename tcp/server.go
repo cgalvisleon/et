@@ -283,6 +283,7 @@ func (s *Server) read(c *Client) {
 			return
 		}
 
+		// Leer tamaño payload
 		length := binary.BigEndian.Uint32(lenBuf)
 		limitReader := envar.GetInt("LIMIT_SIZE_MG", 10)
 		if length > uint32(limitReader*1024*1024) {

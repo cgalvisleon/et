@@ -1,7 +1,9 @@
 package tcp
 
 import (
+	"bufio"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
@@ -268,29 +270,36 @@ func (s *Server) broadcast(destination []string, msg []byte) {
 * @param c *Client
 **/
 func (s *Server) read(c *Client) {
-	buf := make([]byte, 1024)
+
+	reader := bufio.NewReader(c.conn)
 
 	for {
-		n, err := c.conn.Read(buf)
+		// Leer tamaño (4 bytes)
+		lenBuf := make([]byte, 4)
+		_, err := io.ReadFull(reader, lenBuf)
 		if err != nil {
-			if err == io.EOF {
-				s.unregister <- c
-			} else {
-				logs.Error(err)
-			}
+			s.unregister <- c
 			return
 		}
 
-		data := buf[:n]
+		length := binary.BigEndian.Uint32(lenBuf)
+
+		// Leer payload completo
+		data := make([]byte, length)
+		_, err = io.ReadFull(reader, data)
+		if err != nil {
+			s.unregister <- c
+			return
+		}
+
 		m, err := toMessage(data)
 		if err != nil {
 			logs.Error(err)
-			return
+			continue
 		}
 
 		if s.isDebug {
 			logs.Logf(packageName, msg.MSG_TCP_RECEIVED, c.Addr+":"+m.ToJson().ToString())
 		}
-		// s.response(c, ACKMessage, "")
 	}
 }

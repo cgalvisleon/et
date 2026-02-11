@@ -1,6 +1,8 @@
 package tcp
 
 import (
+	"bytes"
+	"encoding/binary"
 	"encoding/json"
 
 	"github.com/cgalvisleon/et/et"
@@ -15,8 +17,8 @@ const (
 )
 
 type Message struct {
-	Type    int         `json:"type"`
-	Message interface{} `json:"message"`
+	Type    int    `json:"type"`
+	Message []byte `json:"message"`
 }
 
 /**
@@ -24,7 +26,26 @@ type Message struct {
 * @return []byte, error
 **/
 func (s *Message) serialize() ([]byte, error) {
-	return json.Marshal(s)
+	// Create a payload []byte
+	payload, err := json.Marshal(s)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a buffer
+	var buf bytes.Buffer
+
+	// Write the length of the payload
+	err = binary.Write(&buf, binary.BigEndian, uint32(len(payload)))
+	if err != nil {
+		return nil, err
+	}
+
+	// Write the payload
+	buf.Write(payload)
+
+	// Return the buffer as []byte
+	return buf.Bytes(), nil
 }
 
 /**
@@ -57,20 +78,29 @@ func toMessage(bt []byte) (Message, error) {
 * newMessage
 **/
 func newMessage(tp int, message any) (Message, error) {
+	bt, ok := message.([]byte)
+	if !ok {
+		var err error
+		bt, err = json.Marshal(message)
+		if err != nil {
+			return Message{}, err
+		}
+	}
+
 	result := Message{
 		Type:    tp,
-		Message: message,
+		Message: bt,
 	}
 
 	switch tp {
 	case PingMessage:
-		result.Message = "PING\n"
+		result.Message = []byte("PING")
 	case PongMessage:
-		result.Message = "PONG\n"
+		result.Message = []byte("PONG")
 	case ACKMessage:
-		result.Message = "ACK\n"
+		result.Message = []byte("ACK")
 	case CloseMessage:
-		result.Message = "CLOSE\n"
+		result.Message = []byte("CLOSE")
 	}
 
 	return result, nil

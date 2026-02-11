@@ -1,3 +1,6 @@
 package tcp
 
-type Node struct{}
+type Node struct {
+	*Client
+	mode Mode
+}

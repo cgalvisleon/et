@@ -53,15 +53,15 @@ type Server struct {
 	// Balancer
 	proxy *Balancer `json:"-"`
 	// Cluster
-	peers          []*Client     `json:"-"`
-	state          Mode          `json:"-"`
-	term           int           `json:"-"`
-	votedFor       string        `json:"-"`
-	leaderID       string        `json:"-"`
-	lastHeartbeat  time.Time     `json:"-"`
-	muCluster      sync.Mutex    `json:"-"`
-	onBecomeLeader []func(*Raft) `json:"-"`
-	onChangeLeader []func(*Raft) `json:"-"`
+	peers          []*Client       `json:"-"`
+	state          Mode            `json:"-"`
+	term           int             `json:"-"`
+	votedFor       string          `json:"-"`
+	leaderID       string          `json:"-"`
+	lastHeartbeat  time.Time       `json:"-"`
+	muCluster      sync.Mutex      `json:"-"`
+	onBecomeLeader []func(*Server) `json:"-"`
+	onChangeLeader []func(*Server) `json:"-"`
 }
 
 func NewServer(port int) *Server {
@@ -96,8 +96,8 @@ func NewServer(port int) *Server {
 		leaderID:       "",
 		lastHeartbeat:  timezone.Now(),
 		muCluster:      sync.Mutex{},
-		onBecomeLeader: make([]func(*Raft), 0),
-		onChangeLeader: make([]func(*Raft), 0),
+		onBecomeLeader: make([]func(*Server), 0),
+		onChangeLeader: make([]func(*Server), 0),
 	}
 	result.mode.Store(Follower)
 	return result

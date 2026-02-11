@@ -2,7 +2,6 @@ package tcp
 
 import (
 	"math/rand"
-	"slices"
 	"sync"
 	"time"
 
@@ -68,44 +67,11 @@ type HeartbeatReply struct {
 	Ok   bool
 }
 
-type Raft struct {
-	address        string        `json:"-"`
-	peers          []string      `json:"-"`
-	state          Mode          `json:"-"`
-	term           int           `json:"-"`
-	votedFor       string        `json:"-"`
-	leaderID       string        `json:"-"`
-	lastHeartbeat  time.Time     `json:"-"`
-	mu             sync.Mutex    `json:"-"`
-	onBecomeLeader []func(*Raft) `json:"-"`
-	onChangeLeader []func(*Raft) `json:"-"`
-}
-
-/**
-* newRaft
-* @param address string
-* @return *Raft
-**/
-func newRaft(address string) *Raft {
-	return &Raft{
-		address:        address,
-		peers:          make([]string, 0),
-		state:          Follower,
-		term:           0,
-		votedFor:       "",
-		leaderID:       "",
-		lastHeartbeat:  timezone.Now(),
-		mu:             sync.Mutex{},
-		onBecomeLeader: make([]func(*Raft), 0),
-		onChangeLeader: make([]func(*Raft), 0),
-	}
-}
-
 /**
 * GetLeader
 * @return string, error
 **/
-func (s *Raft) GetLeader() (string, bool) {
+func (s *Server) GetLeader() (string, bool) {
 	s.mu.Lock()
 	inCluster := len(s.peers) > 1
 	result := s.leaderID
@@ -119,7 +85,7 @@ func (s *Raft) GetLeader() (string, bool) {
 /**
 * ElectionLoop
 **/
-func (s *Raft) ElectionLoop() {
+func (s *Server) ElectionLoop() {
 	s.mu.Lock()
 	s.state = Follower
 	s.lastHeartbeat = timezone.Now()
@@ -143,9 +109,8 @@ func (s *Raft) ElectionLoop() {
 /**
 * startElection
 **/
-func (s *Raft) startElection() {
-	idx := slices.Index(s.peers, s.address)
-	if idx == -1 {
+func (s *Server) startElection() {
+	if len(s.peers) == 0 {
 		s.mu.Lock()
 		s.becomeLeader()
 		s.mu.Unlock()
@@ -196,7 +161,7 @@ func (s *Raft) startElection() {
 /**
 * becomeLeader
 **/
-func (s *Raft) becomeLeader() {
+func (s *Server) becomeLeader() {
 	s.state = Leader
 	s.leaderID = s.address
 	s.lastHeartbeat = timezone.Now()
@@ -212,7 +177,7 @@ func (s *Raft) becomeLeader() {
 /**
 * heartbeatLoop
 **/
-func (s *Raft) heartbeatLoop() {
+func (s *Server) heartbeatLoop() {
 	if len(s.peers) == 0 {
 		return
 	}
@@ -258,7 +223,7 @@ func (s *Raft) heartbeatLoop() {
 * @param args *RequestVoteArgs, reply *RequestVoteReply
 * @return error
 **/
-func (s *Raft) requestVote(args *RequestVoteArgs, reply *RequestVoteReply) error {
+func (s *Server) requestVote(args *RequestVoteArgs, reply *RequestVoteReply) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -291,7 +256,7 @@ func (s *Raft) requestVote(args *RequestVoteArgs, reply *RequestVoteReply) error
 * @param args *HeartbeatArgs, reply *HeartbeatReply
 * @return error
 **/
-func (s *Raft) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
+func (s *Server) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 	changedLeader := false
 
 	s.mu.Lock()
@@ -331,7 +296,7 @@ func (s *Raft) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 /**
 * onChangeLeader
 **/
-func (s *Raft) OnChangeLeader(fn func(*Raft)) {
+func (s *Server) OnChangeLeader(fn func(*Raft)) {
 	s.onChangeLeader = append(s.onChangeLeader, fn)
 }
 
@@ -362,7 +327,7 @@ func requestVote(to string, require *RequestVoteArgs, response *RequestVoteReply
 * @param require *RequestVoteArgs, response *RequestVoteReply
 * @return error
 **/
-func (s *Raft) RequestVote(require *RequestVoteArgs, response *RequestVoteReply) error {
+func (s *Server) RequestVote(require *RequestVoteArgs, response *RequestVoteReply) error {
 	err := s.requestVote(require, response)
 	return err
 }
@@ -394,7 +359,7 @@ func heartbeat(to string, require *HeartbeatArgs, response *HeartbeatReply) *Res
 * @param require *HeartbeatArgs, response *HeartbeatReply
 * @return error
 **/
-func (s *Raft) Heartbeat(require *HeartbeatArgs, response *HeartbeatReply) error {
+func (s *Server) Heartbeat(require *HeartbeatArgs, response *HeartbeatReply) error {
 	err := s.heartbeat(require, response)
 	return err
 }

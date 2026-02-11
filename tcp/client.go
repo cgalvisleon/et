@@ -103,9 +103,9 @@ func (s *Client) read() {
 }
 
 /**
-* write
+* inbound
 **/
-func (s *Client) write() {
+func (s *Client) inbound() {
 	for msg := range s.inbox {
 		logs.Debugf("recv: %s", msg)
 	}
@@ -134,17 +134,24 @@ func (s *Client) handleDisconnect() {
 }
 
 /**
+* connect
+**/
+func (s *Client) connect() (net.Conn, error) {
+	return net.Dial("tcp", s.Addr)
+}
+
+/**
 * Start
 **/
 func (s *Client) Start() error {
-	conn, err := net.Dial("tcp", s.Addr)
+	conn, err := s.connect()
 	if err != nil {
 		return err
 	}
 
 	s.conn = conn
 	go s.read()
-	go s.write()
+	go s.inbound()
 	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
 	s.Send(TextMessage, "Hola")
 
@@ -157,7 +164,11 @@ func (s *Client) Start() error {
 **/
 func (s *Client) Send(tp int, message any) error {
 	if s.Status != Connected {
-		return nil
+		conn, err := s.connect()
+		if err != nil {
+			return err
+		}
+		s.conn = conn
 	}
 
 	msg, err := newMessage(tp, message)

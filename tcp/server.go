@@ -218,7 +218,7 @@ func (s *Server) handleClient(c *Client) {
 	go func() {
 		for {
 			time.Sleep(5 * time.Second)
-			s.send(c, PongMessage, "")
+			s.Send(c, PongMessage, "")
 		}
 	}()
 
@@ -226,10 +226,10 @@ func (s *Server) handleClient(c *Client) {
 }
 
 /**
-* send
+* Send
 * @param c *Client, tp int, msg string
 **/
-func (s *Server) send(c *Client, tp int, message any) error {
+func (s *Server) Send(c *Client, tp int, message any) error {
 	msg, err := newMessage(tp, message)
 	if err != nil {
 		return err
@@ -248,18 +248,18 @@ func (s *Server) send(c *Client, tp int, message any) error {
 }
 
 /**
-* broadcast
+* Broadcast
 * @param destination []string
 * @param msg []byte
 **/
-func (s *Server) broadcast(destination []string, tp int, message any) {
+func (s *Server) Broadcast(destination []string, tp int, message any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	for _, addr := range destination {
 		client, ok := s.clients[addr]
 		if ok && client.Status == Connected {
-			s.send(client, tp, message)
+			s.Send(client, tp, message)
 		}
 	}
 }
@@ -286,7 +286,7 @@ func (s *Server) read(c *Client) {
 		length := binary.BigEndian.Uint32(lenBuf)
 		limitReader := envar.GetInt("LIMIT_SIZE_MG", 10)
 		if length > uint32(limitReader*1024*1024) {
-			s.send(c, ErrorMessage, msg.MSG_TCP_MESSAGE_TOO_LARGE)
+			s.Send(c, ErrorMessage, msg.MSG_TCP_MESSAGE_TOO_LARGE)
 			continue
 		}
 
@@ -308,6 +308,6 @@ func (s *Server) read(c *Client) {
 			logs.Logf(packageName, msg.MSG_TCP_RECEIVED, c.Addr+":"+m.ToJson().ToString())
 		}
 
-		s.send(c, ACKMessage, "")
+		s.Send(c, ACKMessage, "")
 	}
 }

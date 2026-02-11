@@ -119,7 +119,13 @@ func (s *Client) read() {
 **/
 func (s *Client) inbox() {
 	for msg := range s.inbound {
-		logs.Debugf("recv: %s", msg)
+		for _, fn := range s.onInbound {
+			fn(s, msg)
+		}
+
+		if s.isDebug {
+			logs.Debugf("recv: %s", msg)
+		}
 	}
 }
 
@@ -130,18 +136,25 @@ func (s *Client) send() {
 	for msg := range s.outbound {
 		_, err := s.conn.Write(msg)
 		if err != nil {
-			s.handleDisconnect()
+			s.disconnect()
+			s.error(err)
 			return
 		}
 
-		logs.Debugf("send: %s", msg)
+		for _, fn := range s.onOutbound {
+			fn(s, msg)
+		}
+
+		if s.isDebug {
+			logs.Debugf("send: %s", msg)
+		}
 	}
 }
 
 /**
-* handleDisconnect
+* disconnect
 **/
-func (s *Client) handleDisconnect() {
+func (s *Client) disconnect() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -159,6 +172,9 @@ func (s *Client) handleDisconnect() {
 	close(s.inbound)
 	close(s.outbound)
 	close(s.done)
+	for _, fn := range s.onDisconnect {
+		fn(s)
+	}
 }
 
 /**
@@ -167,10 +183,27 @@ func (s *Client) handleDisconnect() {
 func (s *Client) connect() (net.Conn, error) {
 	result, err := net.Dial("tcp", s.Addr)
 	if err != nil {
-		return nil, err
+		return nil, s.error(err)
+	}
+
+	for _, fn := range s.onConnect {
+		fn(s)
 	}
 
 	return result, nil
+}
+
+/**
+* error
+* @param err error
+* @return error
+**/
+func (s *Client) error(err error) error {
+	for _, fn := range s.onError {
+		fn(s, err)
+	}
+
+	return err
 }
 
 /**
@@ -179,7 +212,7 @@ func (s *Client) connect() (net.Conn, error) {
 func (s *Client) Start() error {
 	conn, err := s.connect()
 	if err != nil {
-		return err
+		return s.error(err)
 	}
 
 	s.conn = conn
@@ -202,25 +235,25 @@ func (s *Client) Send(tp int, message any) error {
 	if s.Status != Connected {
 		conn, err := s.connect()
 		if err != nil {
-			return err
+			return s.error(err)
 		}
 		s.conn = conn
 	}
 
 	msg, err := newMessage(tp, message)
 	if err != nil {
-		return err
+		return s.error(err)
 	}
 
 	bt, err := msg.serialize()
 	if err != nil {
-		return err
+		return s.error(err)
 	}
 
 	s.outbound <- bt
+
 	if tp == CloseMessage {
-		s.handleDisconnect()
-		return nil
+		s.disconnect()
 	}
 
 	return nil

@@ -26,15 +26,21 @@ const (
 )
 
 type Client struct {
-	Created_at time.Time       `json:"created_at"`
-	Addr       string          `json:"addr"`
-	Status     Status          `json:"status"`
-	conn       net.Conn        `json:"-"`
-	inbox      chan []byte     `json:"-"`
-	done       chan struct{}   `json:"-"`
-	mu         sync.Mutex      `json:"-"`
-	ctx        context.Context `json:"-"`
-	isDebug    bool            `json:"-"`
+	Created_at   time.Time               `json:"created_at"`
+	Addr         string                  `json:"addr"`
+	Status       Status                  `json:"status"`
+	conn         net.Conn                `json:"-"`
+	inbound      chan []byte             `json:"-"`
+	outbound     chan []byte             `json:"-"`
+	done         chan struct{}           `json:"-"`
+	mu           sync.Mutex              `json:"-"`
+	ctx          context.Context         `json:"-"`
+	onConnect    []func(*Client)         `json:"-"`
+	onDisconnect []func(*Client)         `json:"-"`
+	onError      []func(*Client, error)  `json:"-"`
+	onOutbound   []func(*Client, []byte) `json:"-"`
+	onInbound    []func(*Client, []byte) `json:"-"`
+	isDebug      bool                    `json:"-"`
 }
 
 /**
@@ -46,14 +52,20 @@ func NewClient(addr string) *Client {
 	isDebug := envar.GetBool("IS_DEBUG", false)
 	now := timezone.Now()
 	result := &Client{
-		Created_at: now,
-		Addr:       addr,
-		Status:     Connected,
-		inbox:      make(chan []byte),
-		done:       make(chan struct{}),
-		mu:         sync.Mutex{},
-		ctx:        context.Background(),
-		isDebug:    isDebug,
+		Created_at:   now,
+		Addr:         addr,
+		Status:       Connected,
+		inbound:      make(chan []byte),
+		outbound:     make(chan []byte),
+		done:         make(chan struct{}),
+		mu:           sync.Mutex{},
+		ctx:          context.Background(),
+		onConnect:    make([]func(*Client), 0),
+		onDisconnect: make([]func(*Client), 0),
+		onError:      make([]func(*Client, error), 0),
+		onOutbound:   make([]func(*Client, []byte), 0),
+		onInbound:    make([]func(*Client, []byte), 0),
+		isDebug:      isDebug,
 	}
 	return result
 }
@@ -98,16 +110,31 @@ func (s *Client) read() {
 			return
 		}
 
-		s.inbox <- data
+		s.inbound <- data
 	}
 }
 
 /**
 * inbound
 **/
-func (s *Client) inbound() {
-	for msg := range s.inbox {
+func (s *Client) inbox() {
+	for msg := range s.inbound {
 		logs.Debugf("recv: %s", msg)
+	}
+}
+
+/**
+* send
+**/
+func (s *Client) send() {
+	for msg := range s.outbound {
+		_, err := s.conn.Write(msg)
+		if err != nil {
+			s.handleDisconnect()
+			return
+		}
+
+		logs.Debugf("send: %s", msg)
 	}
 }
 
@@ -129,7 +156,8 @@ func (s *Client) handleDisconnect() {
 		s.conn.Close()
 	}
 
-	close(s.inbox)
+	close(s.inbound)
+	close(s.outbound)
 	close(s.done)
 }
 
@@ -137,7 +165,12 @@ func (s *Client) handleDisconnect() {
 * connect
 **/
 func (s *Client) connect() (net.Conn, error) {
-	return net.Dial("tcp", s.Addr)
+	result, err := net.Dial("tcp", s.Addr)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 /**
@@ -151,7 +184,8 @@ func (s *Client) Start() error {
 
 	s.conn = conn
 	go s.read()
-	go s.inbound()
+	go s.inbox()
+	go s.send()
 	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
 	s.Send(TextMessage, "Hola")
 
@@ -161,6 +195,8 @@ func (s *Client) Start() error {
 
 /**
 * Send
+* @param tp int, message any
+* @return error
 **/
 func (s *Client) Send(tp int, message any) error {
 	if s.Status != Connected {
@@ -181,12 +217,7 @@ func (s *Client) Send(tp int, message any) error {
 		return err
 	}
 
-	_, err = s.conn.Write(bt)
-	if err != nil {
-		s.handleDisconnect()
-		return err
-	}
-
+	s.outbound <- bt
 	if tp == CloseMessage {
 		s.handleDisconnect()
 		return nil

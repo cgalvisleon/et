@@ -30,28 +30,28 @@ const (
 )
 
 type Msg struct {
-	To  *Client `json:"to"`
-	Msg Message `json:"msg"`
+	To  *Client  `json:"to"`
+	Msg *Message `json:"msg"`
 }
 
 type Server struct {
-	address         string                   `json:"-"`
-	port            int                      `json:"-"`
-	clients         map[string]*Client       `json:"-"`
-	inbound         chan *Msg                `json:"-"`
-	outbound        chan *Msg                `json:"-"`
-	pending         map[string]chan *Message `json:"-"`
-	register        chan *Client             `json:"-"`
-	unregister      chan *Client             `json:"-"`
-	onConnection    []func(*Client)          `json:"-"`
-	onDisconnection []func(*Client)          `json:"-"`
-	onStart         []func(*Server)          `json:"-"`
-	onError         []func(*Client, error)   `json:"-"`
-	onOutbound      []func(*Client, Message) `json:"-"`
-	onInbound       []func(*Client, Message) `json:"-"`
-	mode            atomic.Value             `json:"-"`
-	mu              sync.Mutex               `json:"-"`
-	isDebug         bool                     `json:"-"`
+	address         string                    `json:"-"`
+	port            int                       `json:"-"`
+	clients         map[string]*Client        `json:"-"`
+	inbound         chan *Msg                 `json:"-"`
+	outbound        chan *Msg                 `json:"-"`
+	pending         map[string]chan *Message  `json:"-"`
+	register        chan *Client              `json:"-"`
+	unregister      chan *Client              `json:"-"`
+	onConnection    []func(*Client)           `json:"-"`
+	onDisconnection []func(*Client)           `json:"-"`
+	onStart         []func(*Server)           `json:"-"`
+	onError         []func(*Client, error)    `json:"-"`
+	onOutbound      []func(*Client, *Message) `json:"-"`
+	onInbound       []func(*Client, *Message) `json:"-"`
+	mode            atomic.Value              `json:"-"`
+	mu              sync.Mutex                `json:"-"`
+	isDebug         bool                      `json:"-"`
 	// Balancer
 	proxy *Balancer `json:"-"`
 	// Cluster
@@ -87,8 +87,8 @@ func NewServer(port int) *Server {
 		onDisconnection: make([]func(*Client), 0),
 		onStart:         make([]func(*Server), 0),
 		onError:         make([]func(*Client, error), 0),
-		onOutbound:      make([]func(*Client, Message), 0),
-		onInbound:       make([]func(*Client, Message), 0),
+		onOutbound:      make([]func(*Client, *Message), 0),
+		onInbound:       make([]func(*Client, *Message), 0),
 		mu:              sync.Mutex{},
 		isDebug:         isDebug,
 		// Cluster
@@ -138,6 +138,15 @@ func (s *Server) run() {
 **/
 func (s *Server) inbox() {
 	for msg := range s.inbound {
+		s.mu.Lock()
+		ch, ok := s.pending[msg.Msg.ID]
+		s.mu.Unlock()
+
+		if ok {
+			ch <- msg.Msg
+			return
+		}
+
 		for _, fn := range s.onInbound {
 			fn(msg.To, msg.Msg)
 		}
@@ -499,16 +508,16 @@ func (s *Server) OnError(fn func(*Client, error)) {
 
 /**
 * OnOutbound
-* @param fn func(*Client, Message)
+* @param fn func(*Client, *Message)
 **/
-func (s *Server) OnOutbound(fn func(*Client, Message)) {
+func (s *Server) OnOutbound(fn func(*Client, *Message)) {
 	s.onOutbound = append(s.onOutbound, fn)
 }
 
 /**
 * OnInbound
-* @param fn func(*Client, Message)
+* @param fn func(*Client, *Message)
 **/
-func (s *Server) OnInbound(fn func(*Client, Message)) {
+func (s *Server) OnInbound(fn func(*Client, *Message)) {
 	s.onInbound = append(s.onInbound, fn)
 }

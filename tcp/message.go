@@ -71,11 +71,11 @@ func (s *Message) ToJson() et.Json {
 * @param bt []byte
 * @return Message, error
 **/
-func toMessage(bt []byte) (Message, error) {
-	var result Message
+func toMessage(bt []byte) (*Message, error) {
+	var result *Message
 	err := json.Unmarshal(bt, &result)
 	if err != nil {
-		return Message{}, err
+		return nil, err
 	}
 
 	return result, nil
@@ -84,17 +84,17 @@ func toMessage(bt []byte) (Message, error) {
 /**
 * newMessage
 **/
-func newMessage(tp int, message any) (Message, error) {
+func newMessage(tp int, message any) (*Message, error) {
 	bt, ok := message.([]byte)
 	if !ok {
 		var err error
 		bt, err = json.Marshal(message)
 		if err != nil {
-			return Message{}, err
+			return nil, err
 		}
 	}
 
-	result := Message{
+	result := &Message{
 		ID:      reg.ULID(),
 		Type:    tp,
 		Message: bt,

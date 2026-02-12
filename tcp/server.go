@@ -154,15 +154,19 @@ func (s *Server) inbox() {
 
 		switch msg.Msg.Type {
 		case RequestVote:
+			var args RequestVoteArgs
+			msg.Msg.Get(&args)
+
+			logs.Debugf("requestVote recv:%s", args.CandidateID)
 		case Heartbeat:
 		default:
 			for _, fn := range s.onInbound {
 				fn(msg.To, msg.Msg)
 			}
-		}
 
-		if s.isDebug {
-			logs.Debugf("inbox recv:%s", msg.Msg.ToJson().ToString())
+			if s.isDebug {
+				logs.Debugf("inbox recv:%s", msg.Msg.ToJson().ToString())
+			}
 		}
 	}
 }

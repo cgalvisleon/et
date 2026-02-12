@@ -201,10 +201,6 @@ func (s *Client) send() {
 		for _, fn := range s.onOutbound {
 			fn(s, msg)
 		}
-
-		if s.isDebug {
-			logs.Debugf("send: %s", msg)
-		}
 	}
 }
 
@@ -334,6 +330,10 @@ func (s *Client) Send(tp int, message any) error {
 		s.disconnect()
 	}
 
+	if s.isDebug {
+		logs.Debugf("send: %s", msg.ToJson().ToString())
+	}
+
 	return nil
 }
 
@@ -372,6 +372,9 @@ func (s *Client) Request(tp int, payload any, timeout time.Duration) (*Message, 
 	// Send
 	s.outbound <- bt
 
+	if s.isDebug {
+		logs.Debugf("Request: %s", m.ToJson().ToString())
+	}
 	// Wait response or timeout
 	select {
 	case resp := <-ch:

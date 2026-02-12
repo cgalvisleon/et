@@ -1,3 +1,7 @@
 {
-  "tcp": []
+  "tcp": [
+    "CSTCO500185.celsia.local:5050",
+    "CSTCO500186.celsia.local:5051",
+    "CSTCO500187.celsia.local:5052"
+  ]
 }

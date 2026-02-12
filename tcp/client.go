@@ -234,9 +234,9 @@ func (s *Client) connect() (net.Conn, error) {
 }
 
 /**
-* Start
+* Connect
 **/
-func (s *Client) Start() error {
+func (s *Client) Connect() error {
 	conn, err := s.connect()
 	if err != nil {
 		return s.error(err)
@@ -249,6 +249,18 @@ func (s *Client) Start() error {
 	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
 	if s.isDebug {
 		s.Send(PingMessage, "")
+	}
+
+	return nil
+}
+
+/**
+* Start
+**/
+func (s *Client) Start() error {
+	err := s.Connect()
+	if err != nil {
+		return err
 	}
 
 	utility.AppWait()

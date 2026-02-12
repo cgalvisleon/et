@@ -67,6 +67,14 @@ func (s *Message) ToJson() et.Json {
 }
 
 /**
+* Get
+* @return any, error
+**/
+func (s *Message) Get(dest any) error {
+	return json.Unmarshal(s.Message, dest)
+}
+
+/**
 * toMessage
 * @param bt []byte
 * @return Message, error

@@ -153,6 +153,8 @@ func (s *Server) inbox() {
 		}
 
 		switch msg.Msg.Type {
+		case RequestVote:
+		case Heartbeat:
 		default:
 			for _, fn := range s.onInbound {
 				fn(msg.To, msg.Msg)

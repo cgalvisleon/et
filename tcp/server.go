@@ -160,7 +160,7 @@ func (s *Server) inbox() {
 		}
 
 		if s.isDebug {
-			logs.Debugf("recv: %s", msg.Msg.ToJson().ToString())
+			logs.Debugf("inbox recv:%s", msg.Msg.ToJson().ToString())
 		}
 	}
 }
@@ -199,7 +199,7 @@ func (s *Server) send() {
 		}
 
 		if s.isDebug {
-			logs.Debugf("send: %s", msg.To.Addr+":"+msg.Msg.ToJson().ToString())
+			logs.Debugf("send:%s", msg.To.Addr+":"+msg.Msg.ToJson().ToString())
 		}
 	}
 }
@@ -366,9 +366,7 @@ func (s *Server) handleClient(c *Client) {
 				msg, err := s.Request(c, RequestVote, "", 10*time.Second)
 				if err != nil {
 					logs.Error(err)
-				}
-
-				if msg != nil {
+				} else if msg != nil {
 					logs.Debug("handleClient:" + msg.ToJson().ToString())
 				} else {
 					logs.Debug("handleClient send test")
@@ -453,7 +451,7 @@ func (s *Server) AddNode(address string) {
 
 		node := NewNode(address)
 		node.OnInbound(func(c *Client, msg *Message) {
-			logs.Debug("recv:", msg.ToJson().ToString())
+			logs.Debug("AddNode recv:", msg.ToJson().ToString())
 		})
 
 		s.peers = append(s.peers, node)

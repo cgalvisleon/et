@@ -143,23 +143,24 @@ func (s *Server) startElection() {
 			}
 
 			if res.Ok {
-				s.muCluster.Lock()
-				defer s.muCluster.Unlock()
+				logs.Debug("startElection:", votes)
+				// s.muCluster.Lock()
+				// defer s.muCluster.Unlock()
 
-				if reply.Term > s.term {
-					s.term = reply.Term
-					s.state = Follower
-					s.votedFor = ""
-					return
-				}
+				// if reply.Term > s.term {
+				// 	s.term = reply.Term
+				// 	s.state = Follower
+				// 	s.votedFor = ""
+				// 	return
+				// }
 
-				if s.state == Candidate && reply.VoteGranted && term == s.term {
-					votes++
-					needed := majority(total)
-					if votes >= needed {
-						s.becomeLeader()
-					}
-				}
+				// if s.state == Candidate && reply.VoteGranted && term == s.term {
+				// 	votes++
+				// 	needed := majority(total)
+				// 	if votes >= needed {
+				// 		s.becomeLeader()
+				// 	}
+				// }
 			}
 		}(peer)
 	}

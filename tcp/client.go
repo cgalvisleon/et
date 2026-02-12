@@ -101,9 +101,9 @@ func (s *Client) error(err error) error {
 }
 
 /**
-* read
+* incoming
 **/
-func (s *Client) read() {
+func (s *Client) incoming() {
 	reader := bufio.NewReader(s.conn)
 
 	for {
@@ -227,7 +227,7 @@ func (s *Client) Start() error {
 	}
 
 	s.conn = conn
-	go s.read()
+	go s.incoming()
 	go s.inbox()
 	go s.send()
 	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)

@@ -40,7 +40,7 @@ type Server struct {
 	clients         map[string]*Client       `json:"-"`
 	inbound         chan *Msg                `json:"-"`
 	outbound        chan *Msg                `json:"-"`
-	pending         map[string]*Message      `json:"-"`
+	pending         map[string]chan *Message `json:"-"`
 	register        chan *Client             `json:"-"`
 	unregister      chan *Client             `json:"-"`
 	onConnection    []func(*Client)          `json:"-"`
@@ -80,7 +80,7 @@ func NewServer(port int) *Server {
 		clients:         make(map[string]*Client),
 		inbound:         make(chan *Msg),
 		outbound:        make(chan *Msg),
-		pending:         make(map[string]*Message),
+		pending:         make(map[string]chan *Message),
 		register:        make(chan *Client),
 		unregister:      make(chan *Client),
 		onConnection:    make([]func(*Client), 0),
@@ -149,10 +149,10 @@ func (s *Server) inbox() {
 }
 
 /**
-* read
+* incoming
 * @param c *Client
 **/
-func (s *Server) read(c *Client) {
+func (s *Server) incoming(c *Client) {
 	reader := bufio.NewReader(c.conn)
 
 	for {
@@ -290,6 +290,67 @@ func (s *Server) onDisconnect(client *Client) {
 }
 
 /**
+* handle
+* @param conn net.Conn
+**/
+func (s *Server) handle(c *Client) {
+	mode := s.mode.Load().(Mode)
+
+	switch mode {
+	case Proxy:
+		s.handleBalancer(c.conn)
+	default:
+		s.handleClient(c)
+	}
+}
+
+/**
+* handleBalancer
+* @param client net.Conn
+**/
+func (s *Server) handleBalancer(client net.Conn) {
+	defer client.Close()
+
+	if s.proxy == nil {
+		s.proxy = newBalancer()
+	}
+
+	node := s.proxy.next()
+	if node == nil {
+		return
+	}
+
+	backend, err := net.Dial("tcp", node.Address)
+	if err != nil {
+		return
+	}
+	defer backend.Close()
+
+	node.Conns.Add(1)
+	defer node.Conns.Add(-1)
+
+	go io.Copy(backend, client)
+	io.Copy(client, backend)
+}
+
+/**
+* handleClient
+* @param c *Client
+**/
+func (s *Server) handleClient(c *Client) {
+	if s.isDebug {
+		go func() {
+			for {
+				time.Sleep(3 * time.Second)
+				s.Send(c, PongMessage, "")
+			}
+		}()
+	}
+
+	go s.incoming(c)
+}
+
+/**
 * Start
 * @return error
 **/
@@ -366,67 +427,6 @@ func (s *Server) AddNode(address string) {
 
 		s.peers = append(s.peers, node)
 	}
-}
-
-/**
-* handle
-* @param conn net.Conn
-**/
-func (s *Server) handle(c *Client) {
-	mode := s.mode.Load().(Mode)
-
-	switch mode {
-	case Proxy:
-		s.handleBalancer(c.conn)
-	default:
-		s.handleClient(c)
-	}
-}
-
-/**
-* handleBalancer
-* @param client net.Conn
-**/
-func (s *Server) handleBalancer(client net.Conn) {
-	defer client.Close()
-
-	if s.proxy == nil {
-		s.proxy = newBalancer()
-	}
-
-	node := s.proxy.next()
-	if node == nil {
-		return
-	}
-
-	backend, err := net.Dial("tcp", node.Address)
-	if err != nil {
-		return
-	}
-	defer backend.Close()
-
-	node.Conns.Add(1)
-	defer node.Conns.Add(-1)
-
-	go io.Copy(backend, client)
-	io.Copy(client, backend)
-}
-
-/**
-* handleClient
-* @param c *Client
-**/
-func (s *Server) handleClient(c *Client) {
-	if s.isDebug {
-		go func() {
-			for {
-				time.Sleep(3 * time.Second)
-				s.Send(c, PongMessage, "")
-			}
-		}()
-	}
-
-	go s.read(c)
 }
 
 /**

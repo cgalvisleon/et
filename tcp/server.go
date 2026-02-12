@@ -15,6 +15,7 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -39,6 +40,7 @@ type Server struct {
 	clients         map[string]*Client       `json:"-"`
 	inbound         chan *Msg                `json:"-"`
 	outbound        chan *Msg                `json:"-"`
+	pending         map[string]*Message      `json:"-"`
 	register        chan *Client             `json:"-"`
 	unregister      chan *Client             `json:"-"`
 	onConnection    []func(*Client)          `json:"-"`
@@ -78,6 +80,7 @@ func NewServer(port int) *Server {
 		clients:         make(map[string]*Client),
 		inbound:         make(chan *Msg),
 		outbound:        make(chan *Msg),
+		pending:         make(map[string]*Message),
 		register:        make(chan *Client),
 		unregister:      make(chan *Client),
 		onConnection:    make([]func(*Client), 0),
@@ -241,6 +244,7 @@ func (s *Server) send() {
 func (s *Server) newClient(conn net.Conn) *Client {
 	return &Client{
 		Created_at: timezone.Now(),
+		ID:         reg.ULID(),
 		Addr:       conn.RemoteAddr().String(),
 		Status:     Connected,
 		conn:       conn,

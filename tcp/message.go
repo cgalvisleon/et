@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/reg"
 )
 
 const (
@@ -21,6 +22,7 @@ const (
 )
 
 type Message struct {
+	ID      string `json:"id"`
 	Type    int    `json:"type"`
 	Message []byte `json:"message"`
 }
@@ -58,6 +60,7 @@ func (s *Message) serialize() ([]byte, error) {
 **/
 func (s *Message) ToJson() et.Json {
 	return et.Json{
+		"id":      s.ID,
 		"type":    s.Type,
 		"message": s.Message,
 	}
@@ -92,6 +95,7 @@ func newMessage(tp int, message any) (Message, error) {
 	}
 
 	result := Message{
+		ID:      reg.ULID(),
 		Type:    tp,
 		Message: bt,
 	}

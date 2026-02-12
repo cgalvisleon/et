@@ -195,11 +195,11 @@ func (s *Server) heartbeatLoop() {
 		}
 
 		for _, peer := range s.peers {
-			if peer == s.address {
+			if peer.Addr == s.address {
 				continue
 			}
 
-			go func(peer string) {
+			go func(peer *Client) {
 				args := HeartbeatArgs{Term: term, LeaderID: s.address}
 				var reply HeartbeatReply
 				res := heartbeat(peer, &args, &reply)

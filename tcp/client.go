@@ -13,6 +13,7 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 )
@@ -27,11 +28,13 @@ const (
 
 type Client struct {
 	Created_at   time.Time               `json:"created_at"`
+	ID           string                  `json:"id"`
 	Addr         string                  `json:"addr"`
 	Status       Status                  `json:"status"`
 	conn         net.Conn                `json:"-"`
 	inbound      chan []byte             `json:"-"`
 	outbound     chan []byte             `json:"-"`
+	pending      map[string]*Message     `json:"-"`
 	done         chan struct{}           `json:"-"`
 	mu           sync.Mutex              `json:"-"`
 	ctx          context.Context         `json:"-"`
@@ -53,10 +56,12 @@ func NewClient(addr string) *Client {
 	now := timezone.Now()
 	result := &Client{
 		Created_at:   now,
+		ID:           reg.ULID(),
 		Addr:         addr,
 		Status:       Connected,
 		inbound:      make(chan []byte),
 		outbound:     make(chan []byte),
+		pending:      make(map[string]*Message),
 		done:         make(chan struct{}),
 		mu:           sync.Mutex{},
 		ctx:          context.Background(),

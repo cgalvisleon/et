@@ -45,6 +45,7 @@ type Client struct {
 	onOutbound   []func(*Client, []byte)   `json:"-"`
 	onInbound    []func(*Client, *Message) `json:"-"`
 	isDebug      bool                      `json:"-"`
+	isNode       bool                      `json:"-"`
 }
 
 /**
@@ -73,6 +74,17 @@ func NewClient(addr string) *Client {
 		onInbound:    make([]func(*Client, *Message), 0),
 		isDebug:      isDebug,
 	}
+	return result
+}
+
+/**
+* NewNode
+* @param addr string
+* @return *Client
+**/
+func NewNode(addr string) *Client {
+	result := NewClient(addr)
+	result.isNode = true
 	return result
 }
 
@@ -252,7 +264,7 @@ func (s *Client) Connect() error {
 	go s.inbox()
 	go s.send()
 	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
-	if s.isDebug {
+	if !s.isNode && s.isDebug {
 		s.Send(PingMessage, "")
 	}
 

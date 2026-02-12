@@ -52,6 +52,7 @@ type Server struct {
 	mode            atomic.Value              `json:"-"`
 	mu              sync.Mutex                `json:"-"`
 	isDebug         bool                      `json:"-"`
+	isTesting       bool                      `json:"-"`
 	// Balancer
 	proxy *Balancer `json:"-"`
 	// Cluster
@@ -74,6 +75,7 @@ func NewServer(port int) *Server {
 
 	address := fmt.Sprintf("%s:%d", host, port)
 	isDebug := envar.GetBool("IS_DEBUG", false)
+	isTesting := envar.GetBool("IS_TESTING", false)
 	result := &Server{
 		address:         address,
 		port:            port,
@@ -91,6 +93,7 @@ func NewServer(port int) *Server {
 		onInbound:       make([]func(*Client, *Message), 0),
 		mu:              sync.Mutex{},
 		isDebug:         isDebug,
+		isTesting:       isTesting,
 		// Cluster
 		peers:          make([]*Client, 0),
 		state:          Follower,
@@ -351,11 +354,14 @@ func (s *Server) handleBalancer(client net.Conn) {
 * @param c *Client
 **/
 func (s *Server) handleClient(c *Client) {
-	if s.isDebug {
+	if s.isTesting {
 		go func() {
 			for {
 				time.Sleep(3 * time.Second)
-				s.Send(c, PongMessage, "")
+				err := s.Send(c, PongMessage, "")
+				if err != nil {
+					logs.Error(err)
+				}
 			}
 		}()
 	}
@@ -391,7 +397,7 @@ func (s *Server) Start() error {
 		go s.ElectionLoop()
 	}
 
-	logs.Logf(packageName, msg.MSG_TCP_LISTENING, s.address)
+	logs.Logf(packageName, msg.MSG_TCP_LISTENING, s.port, s.address)
 
 	for _, fn := range s.onStart {
 		fn(s)
@@ -434,7 +440,7 @@ func (s *Server) AddNode(address string) {
 			return
 		}
 
-		node := NewClient(address)
+		node := NewNode(address)
 		node.OnInbound(func(c *Client, msg *Message) {
 			logs.Debug("recv:", msg.ToJson().ToString())
 		})

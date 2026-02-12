@@ -71,10 +71,10 @@ type HeartbeatReply struct {
 * @return string, error
 **/
 func (s *Server) GetLeader() (string, bool) {
-	s.mu.Lock()
+	s.muCluster.Lock()
 	inCluster := len(s.peers) > 1
 	result := s.leaderID
-	s.mu.Unlock()
+	s.muCluster.Unlock()
 	if !inCluster {
 		return result, true
 	}
@@ -86,25 +86,25 @@ func (s *Server) GetLeader() (string, bool) {
 **/
 func (s *Server) ElectionLoop() {
 	if len(s.peers) == 0 {
-		s.mu.Lock()
+		s.muCluster.Lock()
 		s.becomeLeader()
-		s.mu.Unlock()
+		s.muCluster.Unlock()
 		return
 	}
 
-	s.mu.Lock()
+	s.muCluster.Lock()
 	s.state = Follower
 	s.lastHeartbeat = timezone.Now()
-	s.mu.Unlock()
+	s.muCluster.Unlock()
 
 	for {
 		timeout := randomBetween(1500, 3000)
 		time.Sleep(timeout)
 
-		s.mu.Lock()
+		s.muCluster.Lock()
 		elapsed := time.Since(s.lastHeartbeat)
 		state := s.state
-		s.mu.Unlock()
+		s.muCluster.Unlock()
 
 		if elapsed > heartbeatInterval && state != Leader {
 			s.startElection()
@@ -116,12 +116,12 @@ func (s *Server) ElectionLoop() {
 * startElection
 **/
 func (s *Server) startElection() {
-	s.mu.Lock()
+	s.muCluster.Lock()
 	s.state = Candidate
 	s.term++
 	term := s.term
 	s.votedFor = s.address
-	s.mu.Unlock()
+	s.muCluster.Unlock()
 
 	votes := 1
 	total := len(s.peers)
@@ -129,7 +129,7 @@ func (s *Server) startElection() {
 		if peer.Status != Connected {
 			err := peer.Connect()
 			if err != nil {
-				logs.Errorf("Error connecting to peer: %v", err)
+				s.error(peer, err)
 				continue
 			}
 		}
@@ -143,8 +143,8 @@ func (s *Server) startElection() {
 			}
 
 			if res.Ok {
-				s.mu.Lock()
-				defer s.mu.Unlock()
+				s.muCluster.Lock()
+				defer s.muCluster.Unlock()
 
 				if reply.Term > s.term {
 					s.term = reply.Term
@@ -193,10 +193,10 @@ func (s *Server) heartbeatLoop() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		s.mu.Lock()
+		s.muCluster.Lock()
 		state := s.state
 		term := s.term
-		s.mu.Unlock()
+		s.muCluster.Unlock()
 		if state != Leader {
 			return
 		}
@@ -211,8 +211,8 @@ func (s *Server) heartbeatLoop() {
 				var reply HeartbeatReply
 				res := heartbeat(peer, &args, &reply)
 				if res.Ok {
-					s.mu.Lock()
-					defer s.mu.Unlock()
+					s.muCluster.Lock()
+					defer s.muCluster.Unlock()
 
 					if reply.Term > s.term {
 						s.term = reply.Term
@@ -231,18 +231,18 @@ func (s *Server) heartbeatLoop() {
 * @return error
 **/
 func (s *Server) requestVote(to *Client, args *RequestVoteArgs, reply *RequestVoteReply) *ResponseBool {
-	msg, err := s.Request(to, RequestVote, args, 10*time.Second)
-	if err != nil {
-		return &ResponseBool{
-			Ok:    false,
-			Error: err,
-		}
-	}
+	logs.Debugf("RequestVote: %s", to.Addr)
 
-	logs.Debugf("RequestVote: %s", msg.ToJson().ToString())
+	// msg, err := s.Request(to, RequestVote, args, 10*time.Second)
+	// if err != nil {
+	// 	return &ResponseBool{
+	// 		Ok:    false,
+	// 		Error: err,
+	// 	}
+	// }
 
-	// s.mu.Lock()
-	// defer s.mu.Unlock()
+	// s.muCluster.Lock()
+	// defer s.muCluster.Unlock()
 
 	// if args.Term < s.term {
 	// 	reply.Term = s.term
@@ -279,11 +279,11 @@ func (s *Server) requestVote(to *Client, args *RequestVoteArgs, reply *RequestVo
 func (s *Server) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 	changedLeader := false
 
-	s.mu.Lock()
+	s.muCluster.Lock()
 	if args.Term < s.term {
 		reply.Term = s.term
 		reply.Ok = false
-		s.mu.Unlock()
+		s.muCluster.Unlock()
 		return nil
 	}
 
@@ -303,7 +303,7 @@ func (s *Server) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 
 	reply.Term = s.term
 	reply.Ok = true
-	s.mu.Unlock()
+	s.muCluster.Unlock()
 
 	if changedLeader {
 		for _, fn := range s.onChangeLeader {

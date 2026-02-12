@@ -158,6 +158,45 @@ func (s *Server) inbox() {
 }
 
 /**
+* send
+**/
+func (s *Server) send() {
+	for msg := range s.outbound {
+		s.mu.Lock()
+		c, ok := s.clients[msg.To.Addr]
+		if !ok {
+			s.mu.Unlock()
+			return
+		}
+		s.mu.Unlock()
+
+		if c.Status != Connected {
+			return
+		}
+
+		bt, err := msg.Msg.serialize()
+		if err != nil {
+			s.error(msg.To, err)
+			return
+		}
+
+		_, err = msg.To.conn.Write(bt)
+		if err != nil {
+			s.error(msg.To, err)
+			return
+		}
+
+		for _, fn := range s.onOutbound {
+			fn(msg.To, msg.Msg)
+		}
+
+		if s.isDebug {
+			logs.Debugf("send: %s", msg.To.Addr+":"+msg.Msg.ToJson().ToString())
+		}
+	}
+}
+
+/**
 * incoming
 * @param c *Client
 **/
@@ -203,45 +242,6 @@ func (s *Server) incoming(c *Client) {
 			Msg: m,
 		}
 		s.Send(c, ACKMessage, "")
-	}
-}
-
-/**
-* send
-**/
-func (s *Server) send() {
-	for msg := range s.outbound {
-		s.mu.Lock()
-		c, ok := s.clients[msg.To.Addr]
-		if !ok {
-			s.mu.Unlock()
-			return
-		}
-		s.mu.Unlock()
-
-		if c.Status != Connected {
-			return
-		}
-
-		bt, err := msg.Msg.serialize()
-		if err != nil {
-			s.error(msg.To, err)
-			return
-		}
-
-		_, err = msg.To.conn.Write(bt)
-		if err != nil {
-			s.error(msg.To, err)
-			return
-		}
-
-		for _, fn := range s.onOutbound {
-			fn(msg.To, msg.Msg)
-		}
-
-		if s.isDebug {
-			logs.Debugf("send: %s", msg.To.Addr+":"+msg.Msg.ToJson().ToString())
-		}
 	}
 }
 

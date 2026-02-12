@@ -164,7 +164,7 @@ func (s *Client) inbox() {
 		}
 
 		if s.isDebug {
-			logs.Debugf("recv: %s", msg)
+			logs.Debugf("recv: %s", msg.ToJson().ToString())
 		}
 	}
 }

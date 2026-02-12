@@ -429,6 +429,10 @@ func (s *Server) AddNode(address string) {
 		}
 
 		node := NewClient(address)
+		node.OnInbound(func(c *Client, msg *Message) {
+			logs.Debug("recv:", msg.ToJson().ToString())
+		})
+
 		s.peers = append(s.peers, node)
 	}
 }

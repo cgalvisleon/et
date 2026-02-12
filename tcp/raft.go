@@ -92,13 +92,6 @@ func (s *Server) ElectionLoop() {
 		return
 	}
 
-	for _, peer := range s.peers {
-		err := peer.Connect()
-		if err != nil {
-			return
-		}
-	}
-
 	s.mu.Lock()
 	s.state = Follower
 	s.lastHeartbeat = timezone.Now()
@@ -133,10 +126,17 @@ func (s *Server) startElection() {
 	votes := 1
 	total := len(s.peers)
 	for _, peer := range s.peers {
+		if peer.Status != Connected {
+			err := peer.Connect()
+			if err != nil {
+				continue
+			}
+		}
+
 		go func(peer *Client) {
 			args := RequestVoteArgs{Term: term, CandidateID: s.address}
 			var reply RequestVoteReply
-			res := requestVote(peer, &args, &reply)
+			res := s.requestVote(peer, &args, &reply)
 			if res.Error != nil {
 				total--
 			}
@@ -226,35 +226,38 @@ func (s *Server) heartbeatLoop() {
 
 /**
 * requestVote
-* @param args *RequestVoteArgs, reply *RequestVoteReply
+* @param to *Client, args *RequestVoteArgs, reply *RequestVoteReply
 * @return error
 **/
-func (s *Server) requestVote(args *RequestVoteArgs, reply *RequestVoteReply) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *Server) requestVote(to *Client, args *RequestVoteArgs, reply *RequestVoteReply) *ResponseBool {
+	// s.mu.Lock()
+	// defer s.mu.Unlock()
 
-	if args.Term < s.term {
-		reply.Term = s.term
-		reply.VoteGranted = false
-		return nil
+	// if args.Term < s.term {
+	// 	reply.Term = s.term
+	// 	reply.VoteGranted = false
+	// 	return nil
+	// }
+
+	// if args.Term > s.term {
+	// 	s.term = args.Term
+	// 	s.state = Follower
+	// 	s.votedFor = ""
+	// }
+
+	// if s.votedFor == "" || s.votedFor == args.CandidateID {
+	// 	s.votedFor = args.CandidateID
+	// 	reply.VoteGranted = true
+	// 	s.lastHeartbeat = timezone.Now()
+	// } else {
+	// 	reply.VoteGranted = false
+	// }
+
+	// reply.Term = s.term
+	return &ResponseBool{
+		Ok:    true,
+		Error: nil,
 	}
-
-	if args.Term > s.term {
-		s.term = args.Term
-		s.state = Follower
-		s.votedFor = ""
-	}
-
-	if s.votedFor == "" || s.votedFor == args.CandidateID {
-		s.votedFor = args.CandidateID
-		reply.VoteGranted = true
-		s.lastHeartbeat = timezone.Now()
-	} else {
-		reply.VoteGranted = false
-	}
-
-	reply.Term = s.term
-	return nil
 }
 
 /**
@@ -300,36 +303,14 @@ func (s *Server) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 }
 
 /**
-* requestVote
-* @param to *Client, require *RequestVoteArgs, response *RequestVoteReply
-* @return *ResponseBool
-**/
-func requestVote(to *Client, require *RequestVoteArgs, response *RequestVoteReply) *ResponseBool {
-	// var res RequestVoteReply
-	// err := jrpc.Call(to, "Node.RequestVote", require, &res)
-	// if err != nil {
-	// 	return &ResponseBool{
-	// 		Ok:    false,
-	// 		Error: err,
-	// 	}
-	// }
-
-	// *response = res
-	return &ResponseBool{
-		Ok:    true,
-		Error: nil,
-	}
-}
-
-/**
 * RequestVote: Requests a vote
 * @param require *RequestVoteArgs, response *RequestVoteReply
 * @return error
 **/
-func (s *Server) RequestVote(require *RequestVoteArgs, response *RequestVoteReply) error {
-	err := s.requestVote(require, response)
-	return err
-}
+// func (s *Server) RequestVote(require *RequestVoteArgs, response *RequestVoteReply) error {
+// 	err := s.requestVote(require, response)
+// 	return err
+// }
 
 /**
 * heartbeat: Sends a heartbeat

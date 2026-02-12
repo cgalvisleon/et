@@ -16,6 +16,8 @@ const (
 	ACKMessage   int = 12
 	CloseMessage int = 13
 	ErrorMessage int = 14
+	Heartbeat    int = 15
+	RequestVote  int = 16
 )
 
 type Message struct {

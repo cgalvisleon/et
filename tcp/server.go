@@ -309,6 +309,8 @@ func (s *Server) Start() error {
 		s.AddNode(addr)
 	}
 
+	go s.ElectionLoop()
+
 	logs.Logf(packageName, msg.MSG_TCP_LISTENING, s.port)
 
 	for _, fn := range s.onStart {

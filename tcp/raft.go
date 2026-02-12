@@ -86,6 +86,13 @@ func (s *Server) GetLeader() (string, bool) {
 * ElectionLoop
 **/
 func (s *Server) ElectionLoop() {
+	if len(s.peers) == 0 {
+		s.mu.Lock()
+		s.becomeLeader()
+		s.mu.Unlock()
+		return
+	}
+
 	s.mu.Lock()
 	s.state = Follower
 	s.lastHeartbeat = timezone.Now()
@@ -110,13 +117,6 @@ func (s *Server) ElectionLoop() {
 * startElection
 **/
 func (s *Server) startElection() {
-	if len(s.peers) == 0 {
-		s.mu.Lock()
-		s.becomeLeader()
-		s.mu.Unlock()
-		return
-	}
-
 	s.mu.Lock()
 	s.state = Candidate
 	s.term++
@@ -127,7 +127,7 @@ func (s *Server) startElection() {
 	votes := 1
 	total := len(s.peers)
 	for _, peer := range s.peers {
-		go func(peer string) {
+		go func(peer *Client) {
 			args := RequestVoteArgs{Term: term, CandidateID: s.address}
 			var reply RequestVoteReply
 			res := requestVote(peer, &args, &reply)
@@ -294,18 +294,11 @@ func (s *Server) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 }
 
 /**
-* onChangeLeader
-**/
-func (s *Server) OnChangeLeader(fn func(*Raft)) {
-	s.onChangeLeader = append(s.onChangeLeader, fn)
-}
-
-/**
 * requestVote
-* @param to string, require *RequestVoteArgs, response *RequestVoteReply
+* @param to *Client, require *RequestVoteArgs, response *RequestVoteReply
 * @return *ResponseBool
 **/
-func requestVote(to string, require *RequestVoteArgs, response *RequestVoteReply) *ResponseBool {
+func requestVote(to *Client, require *RequestVoteArgs, response *RequestVoteReply) *ResponseBool {
 	var res RequestVoteReply
 	err := jrpc.Call(to, "Node.RequestVote", require, &res)
 	if err != nil {
@@ -334,10 +327,10 @@ func (s *Server) RequestVote(require *RequestVoteArgs, response *RequestVoteRepl
 
 /**
 * heartbeat: Sends a heartbeat
-* @param require *HeartbeatArgs, response *HeartbeatReply
+* @param to *Client, require *HeartbeatArgs, response *HeartbeatReply
 * @return error
 **/
-func heartbeat(to string, require *HeartbeatArgs, response *HeartbeatReply) *ResponseBool {
+func heartbeat(to *Client, require *HeartbeatArgs, response *HeartbeatReply) *ResponseBool {
 	var res HeartbeatReply
 	err := jrpc.Call(to, "Node.Heartbeat", require, &res)
 	if err != nil {
@@ -362,4 +355,25 @@ func heartbeat(to string, require *HeartbeatArgs, response *HeartbeatReply) *Res
 func (s *Server) Heartbeat(require *HeartbeatArgs, response *HeartbeatReply) error {
 	err := s.heartbeat(require, response)
 	return err
+}
+
+/**
+* onChangeLeader
+**/
+func (s *Server) OnChangeLeader(fn func(*Server)) {
+	s.onChangeLeader = append(s.onChangeLeader, fn)
+}
+
+/**
+* OnBecomeLeader
+**/
+func (s *Server) OnBecomeLeader(fn func(*Server)) {
+	s.onBecomeLeader = append(s.onBecomeLeader, fn)
+}
+
+/**
+* OnBecomeFollower
+**/
+func (s *Server) OnBecomeFollower(fn func(*Server)) {
+	s.onBecomeLeader = append(s.onBecomeLeader, fn)
 }

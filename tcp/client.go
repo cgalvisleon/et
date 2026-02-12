@@ -268,11 +268,13 @@ func (s *Client) Connect() error {
 	go s.send()
 	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
 	if !s.isNode && s.isDebug {
-		msg, err := s.Request(RequestVote, "", 10*time.Second)
-		if err != nil {
-			s.error(err)
-		}
-		logs.Debug("send:", msg.ToJson().ToString())
+		// msg, err := s.Request(RequestVote, "", 10*time.Second)
+		// if err != nil {
+		// 	s.error(err)
+		// }
+		// if msg != nil {
+		// 	logs.Debug("send:", msg.ToJson().ToString())
+		// }
 	}
 
 	return nil

@@ -240,7 +240,9 @@ func (s *Server) requestVote(to *Client, args *RequestVoteArgs, reply *RequestVo
 		}
 	}
 
-	logs.Debug("requestVote:", msg.ToJson().ToString())
+	if msg != nil {
+		logs.Debug("requestVote:", msg.ToJson().ToString())
+	}
 	// s.muCluster.Lock()
 	// defer s.muCluster.Unlock()
 

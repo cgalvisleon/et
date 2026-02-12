@@ -51,6 +51,7 @@ type Server struct {
 	onInbound       []func(*Client, *Message) `json:"-"`
 	mode            atomic.Value              `json:"-"`
 	mu              sync.Mutex                `json:"-"`
+	muPending       sync.Mutex                `json:"-"`
 	isDebug         bool                      `json:"-"`
 	isTesting       bool                      `json:"-"`
 	// Balancer
@@ -92,6 +93,7 @@ func NewServer(port int) *Server {
 		onOutbound:      make([]func(*Client, *Message), 0),
 		onInbound:       make([]func(*Client, *Message), 0),
 		mu:              sync.Mutex{},
+		muPending:       sync.Mutex{},
 		isDebug:         isDebug,
 		isTesting:       isTesting,
 		// Cluster
@@ -361,10 +363,15 @@ func (s *Server) handleClient(c *Client) {
 		go func() {
 			for {
 				time.Sleep(3 * time.Second)
-				err := s.Send(c, PongMessage, "")
-				if err != nil {
-					logs.Error(err)
-				}
+				logs.Debug("handleClient send test")
+				// msg, err := s.Request(c, PongMessage, "", 10*time.Second)
+				// if err != nil {
+				// 	logs.Error(err)
+				// }
+
+				// if msg != nil {
+				// 	logs.Debug("handleClient:" + msg.ToJson().ToString())
+				// }
 			}
 		}()
 	}
@@ -501,9 +508,9 @@ func (s *Server) Request(to *Client, tp int, payload any, timeout time.Duration)
 
 	// Canal para respuesta
 	ch := make(chan *Message, 1)
-	s.mu.Lock()
+	s.muPending.Lock()
 	s.pending[m.ID] = ch
-	s.mu.Unlock()
+	s.muPending.Unlock()
 
 	// Enviar
 	s.outbound <- &Msg{
@@ -514,15 +521,15 @@ func (s *Server) Request(to *Client, tp int, payload any, timeout time.Duration)
 	// Esperar respuesta o timeout
 	select {
 	case resp := <-ch:
-		s.mu.Lock()
+		s.muPending.Lock()
 		delete(s.pending, m.ID)
-		s.mu.Unlock()
+		s.muPending.Unlock()
 		return resp, nil
 
 	case <-time.After(timeout):
-		s.mu.Lock()
+		s.muPending.Lock()
 		delete(s.pending, m.ID)
-		s.mu.Unlock()
+		s.muPending.Unlock()
 		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
 	}
 }

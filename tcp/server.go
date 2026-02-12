@@ -480,7 +480,7 @@ func (s *Server) Broadcast(destination []string, tp int, message any) {
 * @return *Message, error
 **/
 func (s *Server) Request(to *Client, tp int, payload any, timeout time.Duration) (*Message, error) {
-	msg, err := newMessage(tp, payload)
+	m, err := newMessage(tp, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -488,28 +488,28 @@ func (s *Server) Request(to *Client, tp int, payload any, timeout time.Duration)
 	// Canal para respuesta
 	ch := make(chan *Message, 1)
 	s.mu.Lock()
-	s.pending[msg.ID] = ch
+	s.pending[m.ID] = ch
 	s.mu.Unlock()
 
 	// Enviar
 	s.outbound <- &Msg{
 		To:  to,
-		Msg: msg,
+		Msg: m,
 	}
 
 	// Esperar respuesta o timeout
 	select {
 	case resp := <-ch:
 		s.mu.Lock()
-		delete(s.pending, msg.ID)
+		delete(s.pending, m.ID)
 		s.mu.Unlock()
 		return resp, nil
 
 	case <-time.After(timeout):
 		s.mu.Lock()
-		delete(s.pending, msg.ID)
+		delete(s.pending, m.ID)
 		s.mu.Unlock()
-		return nil, fmt.Errorf("timeout esperando respuesta")
+		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
 	}
 }
 

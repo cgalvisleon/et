@@ -266,7 +266,15 @@ func (s *Client) Connect() error {
 	go s.incoming()
 	go s.inbox()
 	go s.send()
-	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
+	logs.Debug(et.Json{
+		"localAddr":  s.conn.LocalAddr().String(),
+		"remoteAddr": s.conn.RemoteAddr().String(),
+	}.ToString())
+	if s.isNode {
+		logs.Logf(packageName, msg.MSG_NODE_CONNECTED, s.Addr)
+	} else {
+		logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
+	}
 	if !s.isNode && s.isDebug {
 		// msg, err := s.Request(RequestVote, "", 10*time.Second)
 		// if err != nil {

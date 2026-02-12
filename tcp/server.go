@@ -374,7 +374,6 @@ func (s *Server) handleClient(c *Client) {
 		// }()
 	}
 
-	logs.Debug("handleClient:", c.Addr)
 	go s.incoming(c)
 }
 
@@ -511,26 +510,32 @@ func (s *Server) Request(to *Client, tp int, payload any, timeout time.Duration)
 	s.pending[m.ID] = ch
 	s.muPending.Unlock()
 
-	// Enviar
-	s.outbound <- &Msg{
-		To:  to,
-		Msg: m,
+	for _, client := range s.clients {
+		if client.Addr == to.Addr {
+			logs.Debug("Request send:", m.ToJson().ToString())
+		}
 	}
+	// Enviar
+	// s.outbound <- &Msg{
+	// 	To:  to,
+	// 	Msg: m,
+	// }
 
 	// Esperar respuesta o timeout
-	select {
-	case resp := <-ch:
-		s.muPending.Lock()
-		delete(s.pending, m.ID)
-		s.muPending.Unlock()
-		return resp, nil
+	// select {
+	// case resp := <-ch:
+	// 	s.muPending.Lock()
+	delete(s.pending, m.ID)
+	// 	s.muPending.Unlock()
+	// 	return resp, nil
 
-	case <-time.After(timeout):
-		s.muPending.Lock()
-		delete(s.pending, m.ID)
-		s.muPending.Unlock()
-		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
-	}
+	// case <-time.After(timeout):
+	// 	s.muPending.Lock()
+	// 	delete(s.pending, m.ID)
+	// 	s.muPending.Unlock()
+	// 	return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
+	// }
+	return m, nil
 }
 
 /**

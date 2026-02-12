@@ -35,6 +35,7 @@ var (
 	MSG_TCP_LISTENING                  = "tcp listening on:%s"
 	MSG_CLIENT_CONNECTED               = "client connected to:%s"
 	MSG_CLIENT_CONNECTED_FROM          = "client connected from:%s"
+	MSG_NODE_CONNECTED                 = "node connected to:%s"
 	MSG_CLIENT_DISCONNECTED            = "client disconnected to:%s"
 	MSG_TCP_RECEIVED                   = "received:%s"
 	MSG_TCP_ERROR_READ                 = "error to read:%v"

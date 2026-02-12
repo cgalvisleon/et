@@ -134,7 +134,32 @@ func (s *Server) startElection() {
 			}
 		}
 
-		go func(peer *Client) {
+		logs.Debugf("startElection term:%d peer:%s votes:%d total:%d", term, peer.Addr, votes, total)
+
+		args := RequestVoteArgs{Term: term, CandidateID: s.address}
+		var reply RequestVoteReply
+		res := s.requestVote(peer, &args, &reply)
+		if res.Error != nil {
+			total--
+		}
+
+		if res.Ok {
+			logs.Debug("startElection Ok:", votes)
+		}
+
+	}
+	/*
+		votes := 1
+		total := len(s.peers)
+		for _, peer := range s.peers {
+			if peer.Status != Connected {
+				err := peer.Connect()
+				if err != nil {
+					s.error(peer, err)
+					continue
+				}
+			}
+
 			args := RequestVoteArgs{Term: term, CandidateID: s.address}
 			var reply RequestVoteReply
 			res := s.requestVote(peer, &args, &reply)
@@ -143,27 +168,33 @@ func (s *Server) startElection() {
 			}
 
 			if res.Ok {
-				logs.Debug("startElection:", votes)
-				// s.muCluster.Lock()
-				// defer s.muCluster.Unlock()
-
-				// if reply.Term > s.term {
-				// 	s.term = reply.Term
-				// 	s.state = Follower
-				// 	s.votedFor = ""
-				// 	return
-				// }
-
-				// if s.state == Candidate && reply.VoteGranted && term == s.term {
-				// 	votes++
-				// 	needed := majority(total)
-				// 	if votes >= needed {
-				// 		s.becomeLeader()
-				// 	}
-				// }
+				logs.Debug("startElection Ok:", votes)
 			}
-		}(peer)
-	}
+			/*
+				go func(peer *Client) {
+					if res.Ok {
+						logs.Debug("startElection Ok:", votes)
+						// s.muCluster.Lock()
+						// defer s.muCluster.Unlock()
+
+						// if reply.Term > s.term {
+						// 	s.term = reply.Term
+						// 	s.state = Follower
+						// 	s.votedFor = ""
+						// 	return
+						// }
+
+						// if s.state == Candidate && reply.VoteGranted && term == s.term {
+						// 	votes++
+						// 	needed := majority(total)
+						// 	if votes >= needed {
+						// 		s.becomeLeader()
+						// 	}
+						// }
+					}
+				}(peer)
+		}
+	*/
 }
 
 /**
@@ -232,19 +263,27 @@ func (s *Server) heartbeatLoop() {
 * @return error
 **/
 func (s *Server) requestVote(to *Client, args *RequestVoteArgs, reply *RequestVoteReply) *ResponseBool {
-	logs.Debug("startElection:", to.Addr)
-	msg, err := s.Request(to, RequestVote, args, 10*time.Second)
-	if err != nil {
-		logs.Errorm("requestVote error: " + err.Error())
-		return &ResponseBool{
-			Ok:    false,
-			Error: err,
-		}
-	} else if msg != nil {
-		logs.Debug("requestVote:", msg.ToJson().ToString())
-	} else {
-		logs.Debug("requestVote send test")
-	}
+	// msg, err := s.Request(to, RequestVote, "", 10*time.Second)
+	// if err != nil {
+	// 	logs.Error(err)
+	// } else if msg != nil {
+	// 	logs.Debug("requestVote:" + msg.ToJson().ToString())
+	// } else {
+	// 	logs.Debug("requestVote send message")
+	// }
+
+	// msg, err := s.Request(to, RequestVote, args, 10*time.Second)
+	// if err != nil {
+	// 	logs.Errorm("requestVote error: " + err.Error())
+	// 	return &ResponseBool{
+	// 		Ok:    false,
+	// 		Error: err,
+	// 	}
+	// } else if msg != nil {
+	// 	logs.Debug("requestVote:", msg.ToJson().ToString())
+	// } else {
+	// 	logs.Debug("requestVote send test")
+	// }
 	// s.muCluster.Lock()
 	// defer s.muCluster.Unlock()
 
@@ -270,7 +309,7 @@ func (s *Server) requestVote(to *Client, args *RequestVoteArgs, reply *RequestVo
 
 	// reply.Term = s.term
 	return &ResponseBool{
-		Ok:    true,
+		Ok:    false,
 		Error: nil,
 	}
 }

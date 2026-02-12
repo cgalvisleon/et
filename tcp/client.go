@@ -31,6 +31,8 @@ type Client struct {
 	Created_at   time.Time                 `json:"created_at"`
 	ID           string                    `json:"id"`
 	Addr         string                    `json:"addr"`
+	LocalAddr    string                    `json:"local_addr"`
+	RemoteAddr   string                    `json:"remote_addr"`
 	Status       Status                    `json:"status"`
 	conn         net.Conn                  `json:"-"`
 	inbound      chan []byte               `json:"-"`
@@ -261,15 +263,13 @@ func (s *Client) Connect() error {
 		return s.error(err)
 	}
 
+	s.LocalAddr = conn.LocalAddr().String()
+	s.RemoteAddr = conn.RemoteAddr().String()
 	s.Status = Connected
 	s.conn = conn
 	go s.incoming()
 	go s.inbox()
 	go s.send()
-	logs.Debug(et.Json{
-		"localAddr":  s.conn.LocalAddr().String(),
-		"remoteAddr": s.conn.RemoteAddr().String(),
-	}.ToString())
 	if s.isNode {
 		logs.Logf(packageName, msg.MSG_NODE_CONNECTED, s.Addr)
 	} else {

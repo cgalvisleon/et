@@ -463,6 +463,14 @@ func (s *Server) AddNode(address string) {
 * @return error
 **/
 func (s *Server) Send(to *Client, tp int, message any) error {
+	s.mu.Lock()
+	_, ok := s.clients[to.Addr]
+	s.mu.Unlock()
+
+	if !ok {
+		return fmt.Errorf(msg.MSG_TCP_CLIENT_NOT_FOUND, to.Addr)
+	}
+
 	msg, err := newMessage(tp, message)
 	if err != nil {
 		return err
@@ -482,9 +490,6 @@ func (s *Server) Send(to *Client, tp int, message any) error {
 * @param msg []byte
 **/
 func (s *Server) Broadcast(destination []string, tp int, message any) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	for _, addr := range destination {
 		client, ok := s.clients[addr]
 		if ok && client.Status == Connected {
@@ -499,43 +504,45 @@ func (s *Server) Broadcast(destination []string, tp int, message any) {
 * @return *Message, error
 **/
 func (s *Server) Request(to *Client, tp int, payload any, timeout time.Duration) (*Message, error) {
+	s.mu.Lock()
+	_, ok := s.clients[to.Addr]
+	s.mu.Unlock()
+
+	if !ok {
+		return nil, fmt.Errorf(msg.MSG_TCP_CLIENT_NOT_FOUND, to.Addr)
+	}
+
 	m, err := newMessage(tp, payload)
 	if err != nil {
 		return nil, err
 	}
 
-	// Canal para respuesta
+	// Channel for response
 	ch := make(chan *Message, 1)
 	s.muPending.Lock()
 	s.pending[m.ID] = ch
 	s.muPending.Unlock()
 
-	for _, client := range s.clients {
-		if client.Addr == to.Addr {
-			logs.Debug("Request send:", m.ToJson().ToString())
-		}
+	// Send
+	s.outbound <- &Msg{
+		To:  to,
+		Msg: m,
 	}
-	// Enviar
-	// s.outbound <- &Msg{
-	// 	To:  to,
-	// 	Msg: m,
-	// }
 
-	// Esperar respuesta o timeout
-	// select {
-	// case resp := <-ch:
-	// 	s.muPending.Lock()
-	delete(s.pending, m.ID)
-	// 	s.muPending.Unlock()
-	// 	return resp, nil
+	// Wait response or timeout
+	select {
+	case resp := <-ch:
+		s.muPending.Lock()
+		delete(s.pending, m.ID)
+		s.muPending.Unlock()
+		return resp, nil
 
-	// case <-time.After(timeout):
-	// 	s.muPending.Lock()
-	// 	delete(s.pending, m.ID)
-	// 	s.muPending.Unlock()
-	// 	return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
-	// }
-	return m, nil
+	case <-time.After(timeout):
+		s.muPending.Lock()
+		delete(s.pending, m.ID)
+		s.muPending.Unlock()
+		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
+	}
 }
 
 /**

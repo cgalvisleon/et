@@ -263,14 +263,14 @@ func (s *Server) heartbeatLoop() {
 * @return error
 **/
 func (s *Server) requestVote(to *Client, args *RequestVoteArgs, reply *RequestVoteReply) *ResponseBool {
-	// msg, err := s.Request(to, RequestVote, "", 10*time.Second)
-	// if err != nil {
-	// 	logs.Error(err)
-	// } else if msg != nil {
-	// 	logs.Debug("requestVote:" + msg.ToJson().ToString())
-	// } else {
-	// 	logs.Debug("requestVote send message")
-	// }
+	msg, err := to.Request(RequestVote, args, 10*time.Second)
+	if err != nil {
+		logs.Error(err)
+	} else if msg != nil {
+		logs.Debug("requestVote:" + msg.ToJson().ToString())
+	} else {
+		logs.Debug("requestVote send message")
+	}
 
 	// msg, err := s.Request(to, RequestVote, args, 10*time.Second)
 	// if err != nil {

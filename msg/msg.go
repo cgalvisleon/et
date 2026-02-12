@@ -40,6 +40,7 @@ var (
 	MSG_TCP_CLIENT_CLOSED              = "client close connection:%s"
 	MSG_TCP_SERVER_CLOSED              = "server close connection"
 	MSG_TCP_MESSAGE_TOO_LARGE          = "message too large"
+	MSG_TCP_TIMEOUT                    = "timeout waiting response"
 )
 
 func init() {
@@ -83,5 +84,6 @@ func init() {
 		MSG_TCP_CLIENT_CLOSED = "cliente cerró la conexión:%s"
 		MSG_TCP_SERVER_CLOSED = "servidor cerró la conexión"
 		MSG_TCP_MESSAGE_TOO_LARGE = "mensaje demasiado grande"
+		MSG_TCP_TIMEOUT = "timeout esperando respuesta"
 	}
 }

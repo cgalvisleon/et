@@ -440,17 +440,17 @@ func (s *Server) AddNode(address string) {
 
 /**
 * Send
-* @param c *Client, tp int, message any
+* @param to *Client, tp int, message any
 * @return error
 **/
-func (s *Server) Send(c *Client, tp int, message any) error {
+func (s *Server) Send(to *Client, tp int, message any) error {
 	msg, err := newMessage(tp, message)
 	if err != nil {
 		return err
 	}
 
 	s.outbound <- &Msg{
-		To:  c,
+		To:  to,
 		Msg: msg,
 	}
 
@@ -471,6 +471,45 @@ func (s *Server) Broadcast(destination []string, tp int, message any) {
 		if ok && client.Status == Connected {
 			s.Send(client, tp, message)
 		}
+	}
+}
+
+/**
+* Request
+* @param to *Client, tp int, payload any, timeout time.Duration
+* @return *Message, error
+**/
+func (s *Server) Request(to *Client, tp int, payload any, timeout time.Duration) (*Message, error) {
+	msg, err := newMessage(tp, payload)
+	if err != nil {
+		return nil, err
+	}
+
+	// Canal para respuesta
+	ch := make(chan *Message, 1)
+	s.mu.Lock()
+	s.pending[msg.ID] = ch
+	s.mu.Unlock()
+
+	// Enviar
+	s.outbound <- &Msg{
+		To:  to,
+		Msg: msg,
+	}
+
+	// Esperar respuesta o timeout
+	select {
+	case resp := <-ch:
+		s.mu.Lock()
+		delete(s.pending, msg.ID)
+		s.mu.Unlock()
+		return resp, nil
+
+	case <-time.After(timeout):
+		s.mu.Lock()
+		delete(s.pending, msg.ID)
+		s.mu.Unlock()
+		return nil, fmt.Errorf("timeout esperando respuesta")
 	}
 }
 

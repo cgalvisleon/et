@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/jrpc"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/timezone"
 )
@@ -299,16 +298,16 @@ func (s *Server) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 * @return *ResponseBool
 **/
 func requestVote(to *Client, require *RequestVoteArgs, response *RequestVoteReply) *ResponseBool {
-	var res RequestVoteReply
-	err := jrpc.Call(to, "Node.RequestVote", require, &res)
-	if err != nil {
-		return &ResponseBool{
-			Ok:    false,
-			Error: err,
-		}
-	}
+	// var res RequestVoteReply
+	// err := jrpc.Call(to, "Node.RequestVote", require, &res)
+	// if err != nil {
+	// 	return &ResponseBool{
+	// 		Ok:    false,
+	// 		Error: err,
+	// 	}
+	// }
 
-	*response = res
+	// *response = res
 	return &ResponseBool{
 		Ok:    true,
 		Error: nil,
@@ -331,16 +330,16 @@ func (s *Server) RequestVote(require *RequestVoteArgs, response *RequestVoteRepl
 * @return error
 **/
 func heartbeat(to *Client, require *HeartbeatArgs, response *HeartbeatReply) *ResponseBool {
-	var res HeartbeatReply
-	err := jrpc.Call(to, "Node.Heartbeat", require, &res)
-	if err != nil {
-		return &ResponseBool{
-			Ok:    false,
-			Error: err,
-		}
-	}
+	// // var res HeartbeatReply
+	// // err := jrpc.Call(to, "Node.Heartbeat", require, &res)
+	// // if err != nil {
+	// // 	return &ResponseBool{
+	// // 		Ok:    false,
+	// // 		Error: err,
+	// // 	}
+	// // }
 
-	*response = res
+	// *response = res
 	return &ResponseBool{
 		Ok:    true,
 		Error: nil,

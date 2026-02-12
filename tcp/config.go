@@ -21,7 +21,16 @@ func getConfig() (*Config, error) {
 	}
 
 	if result == nil {
-		return &Config{TCP: []string{}}, nil
+		result = &Config{
+			TCP: []string{},
+		}
+
+		err = file.Write(filePath, result)
+		if err != nil {
+			return nil, err
+		}
+
+		return result, nil
 	}
 
 	return result, nil

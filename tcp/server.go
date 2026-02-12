@@ -270,7 +270,7 @@ func (s *Server) onConnect(client *Client) {
 	defer s.mu.Unlock()
 
 	s.clients[client.Addr] = client
-	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, client.toJson().ToString())
+	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED_FROM, client.toJson().ToString())
 	for _, fn := range s.onConnection {
 		fn(client)
 	}
@@ -329,7 +329,11 @@ func (s *Server) handleBalancer(client net.Conn) {
 		return
 	}
 
-	backend, err := net.Dial("tcp", node.Address)
+	dialer := net.Dialer{
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+	backend, err := dialer.Dial("tcp", node.Address)
 	if err != nil {
 		return
 	}
@@ -383,9 +387,11 @@ func (s *Server) Start() error {
 		s.AddNode(addr)
 	}
 
-	go s.ElectionLoop()
+	if len(s.peers) > 0 {
+		go s.ElectionLoop()
+	}
 
-	logs.Logf(packageName, msg.MSG_TCP_LISTENING, s.port)
+	logs.Logf(packageName, msg.MSG_TCP_LISTENING, s.address)
 
 	for _, fn := range s.onStart {
 		fn(s)

@@ -9,6 +9,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"sync"
+	"time"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
@@ -92,7 +93,11 @@ func (p *Proxy) ToJson() et.Json {
 * @param clientConn *net.Conn
 **/
 func (s *Proxy) handlerConnection(clientConn net.Conn) {
-	remoteConn, err := net.Dial("tcp", s.Solver)
+	dialer := net.Dialer{
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+	remoteConn, err := dialer.Dial("tcp", s.Solver)
 	if err != nil {
 		logs.Alertf("Error conectando al destino: %s", err.Error())
 		clientConn.Close()

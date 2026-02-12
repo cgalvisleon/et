@@ -129,6 +129,7 @@ func (s *Server) startElection() {
 		if peer.Status != Connected {
 			err := peer.Connect()
 			if err != nil {
+				logs.Errorf("Error connecting to peer: %v", err)
 				continue
 			}
 		}
@@ -230,6 +231,16 @@ func (s *Server) heartbeatLoop() {
 * @return error
 **/
 func (s *Server) requestVote(to *Client, args *RequestVoteArgs, reply *RequestVoteReply) *ResponseBool {
+	msg, err := s.Request(to, RequestVote, args, 10*time.Second)
+	if err != nil {
+		return &ResponseBool{
+			Ok:    false,
+			Error: err,
+		}
+	}
+
+	logs.Debugf("RequestVote: %s", msg.ToJson().ToString())
+
 	// s.mu.Lock()
 	// defer s.mu.Unlock()
 

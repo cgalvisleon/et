@@ -59,7 +59,7 @@ func NewClient(addr string) *Client {
 		Created_at:   now,
 		ID:           reg.ULID(),
 		Addr:         addr,
-		Status:       Connected,
+		Status:       Pending,
 		inbound:      make(chan []byte),
 		outbound:     make(chan []byte),
 		pending:      make(map[string]chan *Message),
@@ -221,7 +221,11 @@ func (s *Client) disconnect() {
 * connect
 **/
 func (s *Client) connect() (net.Conn, error) {
-	result, err := net.Dial("tcp", s.Addr)
+	dialer := net.Dialer{
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+	result, err := dialer.Dial("tcp", s.Addr)
 	if err != nil {
 		return nil, s.error(err)
 	}
@@ -242,6 +246,7 @@ func (s *Client) Connect() error {
 		return s.error(err)
 	}
 
+	s.Status = Connected
 	s.conn = conn
 	go s.incoming()
 	go s.inbox()
@@ -278,6 +283,7 @@ func (s *Client) Send(tp int, message any) error {
 		if err != nil {
 			return s.error(err)
 		}
+		s.Status = Connected
 		s.conn = conn
 	}
 

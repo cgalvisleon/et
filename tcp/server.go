@@ -429,11 +429,6 @@ func (s *Server) AddNode(address string) {
 		}
 
 		node := NewClient(address)
-		err := node.Start()
-		if err != nil {
-			return
-		}
-
 		s.peers = append(s.peers, node)
 	}
 }

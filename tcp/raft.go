@@ -92,6 +92,13 @@ func (s *Server) ElectionLoop() {
 		return
 	}
 
+	for _, peer := range s.peers {
+		err := peer.Connect()
+		if err != nil {
+			return
+		}
+	}
+
 	s.mu.Lock()
 	s.state = Follower
 	s.lastHeartbeat = timezone.Now()

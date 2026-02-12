@@ -175,7 +175,7 @@ func (s *Client) inbox() {
 			fn(s, msg)
 		}
 
-		if s.isDebug {
+		if !s.isNode {
 			logs.Debugf("recv: %s", msg.ToJson().ToString())
 		}
 	}
@@ -265,7 +265,11 @@ func (s *Client) Connect() error {
 	go s.send()
 	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
 	if !s.isNode && s.isDebug {
-		s.Send(PingMessage, "")
+		msg, err := s.Request(PingMessage, "", 10*time.Second)
+		if err != nil {
+			s.error(err)
+		}
+		logs.Debug("send:", msg.ToJson().ToString())
 	}
 
 	return nil
@@ -290,15 +294,6 @@ func (s *Client) Start() error {
 * @return error
 **/
 func (s *Client) Send(tp int, message any) error {
-	if s.Status != Connected {
-		conn, err := s.connect()
-		if err != nil {
-			return s.error(err)
-		}
-		s.Status = Connected
-		s.conn = conn
-	}
-
 	msg, err := newMessage(tp, message)
 	if err != nil {
 		return s.error(err)
@@ -309,6 +304,17 @@ func (s *Client) Send(tp int, message any) error {
 		return s.error(err)
 	}
 
+	// Connect
+	if s.Status != Connected {
+		conn, err := s.connect()
+		if err != nil {
+			return s.error(err)
+		}
+		s.Status = Connected
+		s.conn = conn
+	}
+
+	// Send
 	s.outbound <- bt
 
 	if tp == CloseMessage {
@@ -320,16 +326,16 @@ func (s *Client) Send(tp int, message any) error {
 
 /**
 * Request
-* @param to *Client, tp int, payload any, timeout time.Duration
+* @param tp int, payload any, timeout time.Duration
 * @return *Message, error
 **/
-func (s *Client) Request(to *Client, tp int, payload any, timeout time.Duration) (*Message, error) {
+func (s *Client) Request(tp int, payload any, timeout time.Duration) (*Message, error) {
 	m, err := newMessage(tp, payload)
 	if err != nil {
 		return nil, err
 	}
 
-	// Canal para respuesta
+	// Channel for response
 	ch := make(chan *Message, 1)
 	s.mu.Lock()
 	s.pending[m.ID] = ch
@@ -340,10 +346,20 @@ func (s *Client) Request(to *Client, tp int, payload any, timeout time.Duration)
 		return nil, s.error(err)
 	}
 
-	// Enviar
+	// Connect
+	if s.Status != Connected {
+		conn, err := s.connect()
+		if err != nil {
+			return nil, s.error(err)
+		}
+		s.Status = Connected
+		s.conn = conn
+	}
+
+	// Send
 	s.outbound <- bt
 
-	// Esperar respuesta o timeout
+	// Wait response or timeout
 	select {
 	case resp := <-ch:
 		s.mu.Lock()
@@ -356,6 +372,8 @@ func (s *Client) Request(to *Client, tp int, payload any, timeout time.Duration)
 		delete(s.pending, m.ID)
 		s.mu.Unlock()
 		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
+	case <-s.done:
+		return nil, fmt.Errorf(msg.MSG_CLIENT_DISCONNECTED, s.Addr)
 	}
 }
 

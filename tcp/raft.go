@@ -231,16 +231,15 @@ func (s *Server) heartbeatLoop() {
 * @return error
 **/
 func (s *Server) requestVote(to *Client, args *RequestVoteArgs, reply *RequestVoteReply) *ResponseBool {
-	logs.Debugf("RequestVote: %s", to.Addr)
+	msg, err := s.Request(to, RequestVote, args, 3*time.Second)
+	if err != nil {
+		return &ResponseBool{
+			Ok:    false,
+			Error: err,
+		}
+	}
 
-	// msg, err := s.Request(to, RequestVote, args, 10*time.Second)
-	// if err != nil {
-	// 	return &ResponseBool{
-	// 		Ok:    false,
-	// 		Error: err,
-	// 	}
-	// }
-
+	logs.Debug("requestVote:", msg.ToJson().ToString())
 	// s.muCluster.Lock()
 	// defer s.muCluster.Unlock()
 

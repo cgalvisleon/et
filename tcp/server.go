@@ -397,7 +397,7 @@ func (s *Server) Start() error {
 		go s.ElectionLoop()
 	}
 
-	logs.Logf(packageName, msg.MSG_TCP_LISTENING, s.port, s.address)
+	logs.Logf(packageName, msg.MSG_TCP_LISTENING, s.address)
 
 	for _, fn := range s.onStart {
 		fn(s)

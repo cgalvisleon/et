@@ -249,7 +249,6 @@ func (s *Server) incoming(c *Client) {
 			To:  c,
 			Msg: m,
 		}
-		s.Send(c, ACKMessage, "")
 	}
 }
 
@@ -279,11 +278,10 @@ func (s *Server) onConnect(client *Client) {
 
 	s.clients[client.Addr] = client
 	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED_FROM, client.toJson().ToString())
+	go s.handle(client)
 	for _, fn := range s.onConnection {
 		fn(client)
 	}
-
-	go s.handle(client)
 }
 
 /**
@@ -297,6 +295,7 @@ func (s *Server) onDisconnect(client *Client) {
 
 	_, ok := s.clients[client.Addr]
 	if ok {
+		client.Status = Disconnected
 		s.clients[client.Addr].Status = Disconnected
 		for _, fn := range s.onDisconnection {
 			fn(client)
@@ -360,21 +359,22 @@ func (s *Server) handleBalancer(client net.Conn) {
 **/
 func (s *Server) handleClient(c *Client) {
 	if s.isTesting {
-		go func() {
-			for {
-				time.Sleep(3 * time.Second)
-				msg, err := s.Request(c, RequestVote, "", 10*time.Second)
-				if err != nil {
-					logs.Error(err)
-				} else if msg != nil {
-					logs.Debug("handleClient:" + msg.ToJson().ToString())
-				} else {
-					logs.Debug("handleClient send test")
-				}
-			}
-		}()
+		// go func() {
+		// 	for {
+		// 		time.Sleep(3 * time.Second)
+		// 		msg, err := s.Request(c, RequestVote, "", 10*time.Second)
+		// 		if err != nil {
+		// 			logs.Error(err)
+		// 		} else if msg != nil {
+		// 			logs.Debug("handleClient:" + msg.ToJson().ToString())
+		// 		} else {
+		// 			logs.Debug("handleClient send test")
+		// 		}
+		// 	}
+		// }()
 	}
 
+	logs.Debug("handleClient:", c.Addr)
 	go s.incoming(c)
 }
 

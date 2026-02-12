@@ -177,11 +177,15 @@ func Traces(kind, color string, err error) error {
 }
 
 /**
-* GetFunctionName
+* getFunctionName
 * @return string
 **/
 func GetFunctionName(idx int) string {
-	pc, _, _, _ := runtime.Caller(idx)
+	pc, _, _, ok := runtime.Caller(idx)
+	if !ok {
+		idx--
+		return GetFunctionName(idx)
+	}
 	return runtime.FuncForPC(pc).Name()
 }
 

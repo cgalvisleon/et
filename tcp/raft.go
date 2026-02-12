@@ -232,17 +232,18 @@ func (s *Server) heartbeatLoop() {
 * @return error
 **/
 func (s *Server) requestVote(to *Client, args *RequestVoteArgs, reply *RequestVoteReply) *ResponseBool {
+	logs.Debug("startElection:", to.Addr)
 	msg, err := s.Request(to, RequestVote, args, 10*time.Second)
 	if err != nil {
-		logs.Debugf("requestVote: %s | error: %s", msg.ToJson().ToString(), err.Error())
+		logs.Errorm("requestVote error: " + err.Error())
 		return &ResponseBool{
 			Ok:    false,
 			Error: err,
 		}
-	}
-
-	if msg != nil {
+	} else if msg != nil {
 		logs.Debug("requestVote:", msg.ToJson().ToString())
+	} else {
+		logs.Debug("requestVote send test")
 	}
 	// s.muCluster.Lock()
 	// defer s.muCluster.Unlock()

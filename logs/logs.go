@@ -93,7 +93,7 @@ func Tracer(kind string, err error) error {
 * @return error
 **/
 func Error(err error) error {
-	functionName := stdrout.GetFunctionName(2)
+	functionName := stdrout.GetFunctionName(3)
 	if err != nil {
 		printLn("Error", "Red", err.Error(), " - ", functionName)
 	}

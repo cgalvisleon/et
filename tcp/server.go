@@ -150,8 +150,11 @@ func (s *Server) inbox() {
 			return
 		}
 
-		for _, fn := range s.onInbound {
-			fn(msg.To, msg.Msg)
+		switch msg.Msg.Type {
+		default:
+			for _, fn := range s.onInbound {
+				fn(msg.To, msg.Msg)
+			}
 		}
 
 		if s.isDebug {

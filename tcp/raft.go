@@ -231,8 +231,9 @@ func (s *Server) heartbeatLoop() {
 * @return error
 **/
 func (s *Server) requestVote(to *Client, args *RequestVoteArgs, reply *RequestVoteReply) *ResponseBool {
-	msg, err := s.Request(to, RequestVote, args, 3*time.Second)
+	msg, err := s.Request(to, RequestVote, args, 10*time.Second)
 	if err != nil {
+		logs.Debugf("requestVote: %s | error: %s", msg.ToJson().ToString(), err.Error())
 		return &ResponseBool{
 			Ok:    false,
 			Error: err,

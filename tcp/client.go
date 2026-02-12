@@ -171,8 +171,11 @@ func (s *Client) inbox() {
 			return
 		}
 
-		for _, fn := range s.onInbound {
-			fn(s, msg)
+		switch msg.Type {
+		default:
+			for _, fn := range s.onInbound {
+				fn(s, msg)
+			}
 		}
 
 		if !s.isNode {
@@ -265,7 +268,7 @@ func (s *Client) Connect() error {
 	go s.send()
 	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
 	if !s.isNode && s.isDebug {
-		msg, err := s.Request(PingMessage, "", 10*time.Second)
+		msg, err := s.Request(RequestVote, "", 10*time.Second)
 		if err != nil {
 			s.error(err)
 		}

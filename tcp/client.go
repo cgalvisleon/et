@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -27,23 +28,23 @@ const (
 )
 
 type Client struct {
-	Created_at   time.Time               `json:"created_at"`
-	ID           string                  `json:"id"`
-	Addr         string                  `json:"addr"`
-	Status       Status                  `json:"status"`
-	conn         net.Conn                `json:"-"`
-	inbound      chan []byte             `json:"-"`
-	outbound     chan []byte             `json:"-"`
-	pending      map[string]*Message     `json:"-"`
-	done         chan struct{}           `json:"-"`
-	mu           sync.Mutex              `json:"-"`
-	ctx          context.Context         `json:"-"`
-	onConnect    []func(*Client)         `json:"-"`
-	onDisconnect []func(*Client)         `json:"-"`
-	onError      []func(*Client, error)  `json:"-"`
-	onOutbound   []func(*Client, []byte) `json:"-"`
-	onInbound    []func(*Client, []byte) `json:"-"`
-	isDebug      bool                    `json:"-"`
+	Created_at   time.Time                 `json:"created_at"`
+	ID           string                    `json:"id"`
+	Addr         string                    `json:"addr"`
+	Status       Status                    `json:"status"`
+	conn         net.Conn                  `json:"-"`
+	inbound      chan []byte               `json:"-"`
+	outbound     chan []byte               `json:"-"`
+	pending      map[string]chan *Message  `json:"-"`
+	done         chan struct{}             `json:"-"`
+	mu           sync.Mutex                `json:"-"`
+	ctx          context.Context           `json:"-"`
+	onConnect    []func(*Client)           `json:"-"`
+	onDisconnect []func(*Client)           `json:"-"`
+	onError      []func(*Client, error)    `json:"-"`
+	onOutbound   []func(*Client, []byte)   `json:"-"`
+	onInbound    []func(*Client, *Message) `json:"-"`
+	isDebug      bool                      `json:"-"`
 }
 
 /**
@@ -61,7 +62,7 @@ func NewClient(addr string) *Client {
 		Status:       Connected,
 		inbound:      make(chan []byte),
 		outbound:     make(chan []byte),
-		pending:      make(map[string]*Message),
+		pending:      make(map[string]chan *Message),
 		done:         make(chan struct{}),
 		mu:           sync.Mutex{},
 		ctx:          context.Background(),
@@ -69,7 +70,7 @@ func NewClient(addr string) *Client {
 		onDisconnect: make([]func(*Client), 0),
 		onError:      make([]func(*Client, error), 0),
 		onOutbound:   make([]func(*Client, []byte), 0),
-		onInbound:    make([]func(*Client, []byte), 0),
+		onInbound:    make([]func(*Client, *Message), 0),
 		isDebug:      isDebug,
 	}
 	return result
@@ -142,7 +143,22 @@ func (s *Client) incoming() {
 * inbound
 **/
 func (s *Client) inbox() {
-	for msg := range s.inbound {
+	for bt := range s.inbound {
+		msg, err := toMessage(bt)
+		if err != nil {
+			s.error(err)
+			return
+		}
+
+		s.mu.Lock()
+		ch, ok := s.pending[msg.ID]
+		s.mu.Unlock()
+
+		if ok {
+			ch <- msg
+			return
+		}
+
 		for _, fn := range s.onInbound {
 			fn(s, msg)
 		}
@@ -273,6 +289,47 @@ func (s *Client) Send(tp int, message any) error {
 }
 
 /**
+* Request
+* @param to *Client, tp int, payload any, timeout time.Duration
+* @return *Message, error
+**/
+func (s *Client) Request(to *Client, tp int, payload any, timeout time.Duration) (*Message, error) {
+	m, err := newMessage(tp, payload)
+	if err != nil {
+		return nil, err
+	}
+
+	// Canal para respuesta
+	ch := make(chan *Message, 1)
+	s.mu.Lock()
+	s.pending[m.ID] = ch
+	s.mu.Unlock()
+
+	bt, err := m.serialize()
+	if err != nil {
+		return nil, s.error(err)
+	}
+
+	// Enviar
+	s.outbound <- bt
+
+	// Esperar respuesta o timeout
+	select {
+	case resp := <-ch:
+		s.mu.Lock()
+		delete(s.pending, m.ID)
+		s.mu.Unlock()
+		return resp, nil
+
+	case <-time.After(timeout):
+		s.mu.Lock()
+		delete(s.pending, m.ID)
+		s.mu.Unlock()
+		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
+	}
+}
+
+/**
 * OnConnect
 * @param fn func(*Client)
 **/
@@ -306,8 +363,8 @@ func (s *Client) OnOutbound(fn func(*Client, []byte)) {
 
 /**
 * OnInbound
-* @param fn func(*Client, []byte)
+* @param fn func(*Client, *Message)
 **/
-func (s *Client) OnInbound(fn func(*Client, []byte)) {
+func (s *Client) OnInbound(fn func(*Client, *Message)) {
 	s.onInbound = append(s.onInbound, fn)
 }

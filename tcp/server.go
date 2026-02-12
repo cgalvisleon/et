@@ -363,15 +363,16 @@ func (s *Server) handleClient(c *Client) {
 		go func() {
 			for {
 				time.Sleep(3 * time.Second)
-				logs.Debug("handleClient send test")
-				// msg, err := s.Request(c, PongMessage, "", 10*time.Second)
-				// if err != nil {
-				// 	logs.Error(err)
-				// }
+				msg, err := s.Request(c, RequestVote, "", 10*time.Second)
+				if err != nil {
+					logs.Error(err)
+				}
 
-				// if msg != nil {
-				// 	logs.Debug("handleClient:" + msg.ToJson().ToString())
-				// }
+				if msg != nil {
+					logs.Debug("handleClient:" + msg.ToJson().ToString())
+				} else {
+					logs.Debug("handleClient send test")
+				}
 			}
 		}()
 	}

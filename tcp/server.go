@@ -155,7 +155,11 @@ func (s *Server) inbox() {
 		switch msg.Msg.Type {
 		case RequestVote:
 			var args RequestVoteArgs
-			msg.Msg.Get(&args)
+			err := msg.Msg.Get(&args)
+			if err != nil {
+				s.SendError(msg.To, err)
+				return
+			}
 
 			logs.Debugf("requestVote recv:%s", args.CandidateID)
 		case Heartbeat:
@@ -488,6 +492,15 @@ func (s *Server) Send(to *Client, tp int, message any) error {
 	}
 
 	return nil
+}
+
+/**
+* SendError
+* @param to *Client, err error
+* @return error
+**/
+func (s *Server) SendError(to *Client, err error) error {
+	return s.Send(to, ErrorMessage, err.Error())
 }
 
 /**

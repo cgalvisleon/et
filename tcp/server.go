@@ -179,13 +179,13 @@ func (s *Server) newClient(conn net.Conn) *Client {
 		timeout = 10 * time.Second
 	}
 	return &Client{
-		Created_at: timezone.Now(),
-		ID:         reg.ULID(),
-		Addr:       conn.RemoteAddr().String(),
-		Status:     Connected,
-		conn:       conn,
-		ctx:        context.Background(),
-		timeout:    timeout,
+		CreatedAt: timezone.Now(),
+		ID:        reg.ULID(),
+		Addr:      conn.RemoteAddr().String(),
+		Status:    Connected,
+		conn:      conn,
+		ctx:       context.Background(),
+		timeout:   timeout,
 	}
 }
 

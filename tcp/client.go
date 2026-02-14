@@ -28,7 +28,7 @@ const (
 )
 
 type Client struct {
-	Created_at   time.Time                 `json:"created_at"`
+	CreatedAt    time.Time                 `json:"created_at"`
 	ID           string                    `json:"id"`
 	Addr         string                    `json:"addr"`
 	LocalAddr    string                    `json:"local_addr"`
@@ -63,7 +63,7 @@ func NewClient(addr string) *Client {
 		timeout = 10 * time.Second
 	}
 	result := &Client{
-		Created_at:   timezone.Now(),
+		CreatedAt:    timezone.Now(),
 		ID:           reg.ULID(),
 		Addr:         addr,
 		Status:       Pending,
@@ -101,7 +101,7 @@ func NewNode(addr string) *Client {
 **/
 func (s *Client) toJson() et.Json {
 	return et.Json{
-		"created_at":  s.Created_at,
+		"created_at":  s.CreatedAt,
 		"addr":        s.Addr,
 		"local_addr":  s.LocalAddr,
 		"remote_addr": s.RemoteAddr,

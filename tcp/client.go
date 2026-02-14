@@ -304,12 +304,7 @@ func (s *Client) Start() error {
 * @return error
 **/
 func (s *Client) Console() error {
-	err := s.Connect()
-	if err != nil {
-		return err
-	}
-
-	go StartConsole(s)
+	go startConsole(s)
 
 	utility.AppWait()
 	return nil

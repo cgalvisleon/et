@@ -7,7 +7,20 @@ import (
 	"strings"
 )
 
-func StartConsole(s *Client) {
+type Console struct {
+	addr   string
+	client *Client
+}
+
+var console *Console
+
+func startConsole(client *Client) {
+	if console == nil {
+		console = &Console{
+			client: client,
+		}
+	}
+
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Println("===================================")
@@ -25,11 +38,11 @@ func StartConsole(s *Client) {
 		}
 
 		input = strings.TrimSpace(input)
-		handleCommand(s, input)
+		console.handleCommand(input)
 	}
 }
 
-func handleCommand(s *Client, cmd string) {
+func (s *Console) handleCommand(cmd string) {
 	args := strings.Split(cmd, " ")
 
 	switch args[0] {
@@ -48,19 +61,19 @@ func handleCommand(s *Client, cmd string) {
 
 	case "clients":
 		fmt.Println("Clientes:")
-		fmt.Println("  ", s.Addr)
+		fmt.Println("  ", s.addr)
 	case "leader":
-		fmt.Println("Leader:", s.Addr)
+		fmt.Println("Leader:", s.addr)
 
 	case "stats":
 		fmt.Println("Estadísticas:")
 		fmt.Println("  Nodos:", 0)
 		fmt.Println("  Clientes:", 1)
-		fmt.Println("  Líder:", s.Addr)
+		fmt.Println("  Líder:", s.addr)
 
 	case "stop":
 		fmt.Println("Deteniendo cliente...")
-		s.Close()
+		s.client.Close()
 		os.Exit(0)
 
 	default:

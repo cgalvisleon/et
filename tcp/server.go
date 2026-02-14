@@ -332,14 +332,14 @@ func (s *Server) inbox() {
 			err = s.Response(msg.To, msg.ID(), Heartbeat, res)
 			if err != nil {
 				logs.Error(err)
-			}		
+			}
 		default:
 			for _, fn := range s.onInbound {
 				fn(msg.To, msg.Msg)
 			}
 
 			if s.isDebug {
-				logs.Debugf("inbox recv:%s", msg.Msg.ToJson().ToString())
+				logs.Debugf("inbox: %s", msg.Msg.ToJson().ToString())
 			}
 		}
 	}

@@ -61,6 +61,7 @@ type Server struct {
 	mode            atomic.Value              `json:"-"`
 	mu              sync.Mutex                `json:"-"`
 	muPending       sync.Mutex                `json:"-"`
+	timeout         time.Duration             `json:"-"`
 	isDebug         bool                      `json:"-"`
 	isTesting       bool                      `json:"-"`
 	// Balancer
@@ -77,6 +78,11 @@ type Server struct {
 	onChangeLeader []func(*Server) `json:"-"`
 }
 
+/**
+* NewServer
+* @param port int
+* @return *Server
+**/
 func NewServer(port int) *Server {
 	host, err := os.Hostname()
 	if err != nil {
@@ -86,6 +92,10 @@ func NewServer(port int) *Server {
 	addr := fmt.Sprintf("%s:%d", host, port)
 	isDebug := envar.GetBool("IS_DEBUG", false)
 	isTesting := envar.GetBool("IS_TESTING", false)
+	timeout, err := time.ParseDuration(envar.GetStr("TIMEOUT", "10s"))
+	if err != nil {
+		timeout = 10 * time.Second
+	}
 	result := &Server{
 		addr:            addr,
 		port:            port,
@@ -103,6 +113,7 @@ func NewServer(port int) *Server {
 		onInbound:       make([]func(*Client, *Message), 0),
 		mu:              sync.Mutex{},
 		muPending:       sync.Mutex{},
+		timeout:         timeout,
 		isDebug:         isDebug,
 		isTesting:       isTesting,
 		// Cluster
@@ -145,6 +156,131 @@ func (s *Server) run() {
 			s.onDisconnect(client)
 		}
 	}
+}
+
+/**
+* newClient
+* @param conn net.Conn
+* @return *Client
+**/
+func (s *Server) newClient(conn net.Conn) *Client {
+	return &Client{
+		Created_at: timezone.Now(),
+		ID:         reg.ULID(),
+		Addr:       conn.RemoteAddr().String(),
+		Status:     Connected,
+		conn:       conn,
+		ctx:        context.Background(),
+	}
+}
+
+/**
+* defOnConnect
+* @param *Client client
+**/
+func (s *Server) onConnect(client *Client) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.clients[client.Addr] = client
+	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED_FROM, client.toJson().ToString())
+	go s.handle(client)
+	for _, fn := range s.onConnection {
+		fn(client)
+	}
+}
+
+/**
+* onDisconnect
+* @param *Client client
+**/
+func (s *Server) onDisconnect(client *Client) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	logs.Logf(packageName, msg.MSG_CLIENT_DISCONNECTED, client.Addr)
+
+	_, ok := s.clients[client.Addr]
+	if ok {
+		client.Status = Disconnected
+		s.clients[client.Addr].Status = Disconnected
+		for _, fn := range s.onDisconnection {
+			fn(client)
+		}
+
+		delete(s.clients, client.Addr)
+	}
+}
+
+/**
+* handle
+* @param conn net.Conn
+**/
+func (s *Server) handle(c *Client) {
+	mode := s.mode.Load().(Mode)
+
+	switch mode {
+	case Proxy:
+		s.handleBalancer(c.conn)
+	default:
+		s.handleClient(c)
+	}
+}
+
+/**
+* handleBalancer
+* @param client net.Conn
+**/
+func (s *Server) handleBalancer(client net.Conn) {
+	defer client.Close()
+
+	if s.proxy == nil {
+		s.proxy = newBalancer()
+	}
+
+	node := s.proxy.next()
+	if node == nil {
+		return
+	}
+
+	dialer := net.Dialer{
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+	backend, err := dialer.Dial("tcp", node.Address)
+	if err != nil {
+		return
+	}
+	defer backend.Close()
+
+	node.Conns.Add(1)
+	defer node.Conns.Add(-1)
+
+	go io.Copy(backend, client)
+	io.Copy(client, backend)
+}
+
+/**
+* handleClient
+* @param c *Client
+**/
+func (s *Server) handleClient(c *Client) {
+	if s.isTesting {
+		// go func() {
+		// 	for {
+		// 		time.Sleep(3 * time.Second)
+		// 		msg, err := s.Request(c, RequestVote, "", 10*time.Second)
+		// 		if err != nil {
+		// 			logs.Error(err)
+		// 		} else if msg != nil {
+		// 			logs.Debug("handleClient:" + msg.ToJson().ToString())
+		// 		} else {
+		// 			logs.Debug("handleClient send test")
+		// 		}
+		// 	}
+		// }()
+	}
+
+	go s.incoming(c)
 }
 
 /**
@@ -282,131 +418,6 @@ func (s *Server) incoming(c *Client) {
 }
 
 /**
-* newClient
-* @param conn net.Conn
-* @return *Client
-**/
-func (s *Server) newClient(conn net.Conn) *Client {
-	return &Client{
-		Created_at: timezone.Now(),
-		ID:         reg.ULID(),
-		Addr:       conn.RemoteAddr().String(),
-		Status:     Connected,
-		conn:       conn,
-		ctx:        context.Background(),
-	}
-}
-
-/**
-* defOnConnect
-* @param *Client client
-**/
-func (s *Server) onConnect(client *Client) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.clients[client.Addr] = client
-	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED_FROM, client.toJson().ToString())
-	go s.handle(client)
-	for _, fn := range s.onConnection {
-		fn(client)
-	}
-}
-
-/**
-* onDisconnect
-* @param *Client client
-**/
-func (s *Server) onDisconnect(client *Client) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	logs.Logf(packageName, msg.MSG_CLIENT_DISCONNECTED, client.Addr)
-
-	_, ok := s.clients[client.Addr]
-	if ok {
-		client.Status = Disconnected
-		s.clients[client.Addr].Status = Disconnected
-		for _, fn := range s.onDisconnection {
-			fn(client)
-		}
-
-		delete(s.clients, client.Addr)
-	}
-}
-
-/**
-* handle
-* @param conn net.Conn
-**/
-func (s *Server) handle(c *Client) {
-	mode := s.mode.Load().(Mode)
-
-	switch mode {
-	case Proxy:
-		s.handleBalancer(c.conn)
-	default:
-		s.handleClient(c)
-	}
-}
-
-/**
-* handleBalancer
-* @param client net.Conn
-**/
-func (s *Server) handleBalancer(client net.Conn) {
-	defer client.Close()
-
-	if s.proxy == nil {
-		s.proxy = newBalancer()
-	}
-
-	node := s.proxy.next()
-	if node == nil {
-		return
-	}
-
-	dialer := net.Dialer{
-		Timeout:   10 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}
-	backend, err := dialer.Dial("tcp", node.Address)
-	if err != nil {
-		return
-	}
-	defer backend.Close()
-
-	node.Conns.Add(1)
-	defer node.Conns.Add(-1)
-
-	go io.Copy(backend, client)
-	io.Copy(client, backend)
-}
-
-/**
-* handleClient
-* @param c *Client
-**/
-func (s *Server) handleClient(c *Client) {
-	if s.isTesting {
-		// go func() {
-		// 	for {
-		// 		time.Sleep(3 * time.Second)
-		// 		msg, err := s.Request(c, RequestVote, "", 10*time.Second)
-		// 		if err != nil {
-		// 			logs.Error(err)
-		// 		} else if msg != nil {
-		// 			logs.Debug("handleClient:" + msg.ToJson().ToString())
-		// 		} else {
-		// 			logs.Debug("handleClient send test")
-		// 		}
-		// 	}
-		// }()
-	}
-
-	go s.incoming(c)
-}
-
-/**
 * Start
 * @return error
 **/
@@ -487,11 +498,11 @@ func (s *Server) AddNode(addr string) {
 }
 
 /**
-* Send
-* @param to *Client, tp int, message any
+* Response
+* @params to *Client, id string, tp int, message any
 * @return error
 **/
-func (s *Server) Send(to *Client, tp int, message any) error {
+func (s *Server) Response(to *Client, id string, tp int, message any) error {
 	s.mu.Lock()
 	_, ok := s.clients[to.Addr]
 	s.mu.Unlock()
@@ -505,12 +516,25 @@ func (s *Server) Send(to *Client, tp int, message any) error {
 		return err
 	}
 
+	if id != "" {
+		msg.ID = id
+	}
+
 	s.outbound <- &Msg{
 		To:  to,
 		Msg: msg,
 	}
 
 	return nil
+}
+
+/**
+* Send
+* @param to *Client, tp int, message any
+* @return error
+**/
+func (s *Server) Send(to *Client, tp int, message any) error {
+	return s.Response(to, "", tp, message)
 }
 
 /**
@@ -541,7 +565,7 @@ func (s *Server) Broadcast(destination []string, tp int, message any) {
 * @param to *Client, tp int, payload any, timeout time.Duration
 * @return *Message, error
 **/
-func (s *Server) Request(to *Client, tp int, payload any, timeout time.Duration) (*Message, error) {
+func (s *Server) Request(to *Client, tp int, payload any) (*Message, error) {
 	s.mu.Lock()
 	_, ok := s.clients[to.Addr]
 	s.mu.Unlock()
@@ -575,7 +599,7 @@ func (s *Server) Request(to *Client, tp int, payload any, timeout time.Duration)
 		s.muPending.Unlock()
 		return resp, nil
 
-	case <-time.After(timeout):
+	case <-time.After(s.timeout):
 		s.muPending.Lock()
 		delete(s.pending, m.ID)
 		s.muPending.Unlock()

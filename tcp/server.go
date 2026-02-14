@@ -315,6 +315,24 @@ func (s *Server) inbox() {
 				logs.Error(err)
 			}
 		case Heartbeat:
+			var args HeartbeatArgs
+			err := msg.Get(&args)
+			if err != nil {
+				s.SendError(msg.To, err)
+				return
+			}
+
+			var res HeartbeatReply
+			err = s.heartbeat(&args, &res)
+			if err != nil {
+				s.SendError(msg.To, err)
+				return
+			}
+
+			err = s.Response(msg.To, msg.ID(), Heartbeat, res)
+			if err != nil {
+				logs.Error(err)
+			}
 		default:
 			for _, fn := range s.onInbound {
 				fn(msg.To, msg.Msg)

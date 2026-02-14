@@ -159,8 +159,6 @@ func (s *Server) startElection() {
 						s.becomeLeader()
 					}
 				}
-
-				logs.Debug("startElection Ok:", votes)
 			}
 		}(peer)
 	}
@@ -306,8 +304,8 @@ func (s *Server) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 * @param to *Client, require *RequestVoteArgs, response *RequestVoteReply
 * @return *ResponseBool
 **/
-func requestVote(to *Client, args *RequestVoteArgs, response *RequestVoteReply) *ResponseBool {
-	msg, err := to.Request(RequestVote, args)
+func requestVote(to *Client, require *RequestVoteArgs, response *RequestVoteReply) *ResponseBool {
+	msg, err := to.Request(RequestVote, require)
 	if err != nil {
 		return &ResponseBool{
 			Ok:    false,
@@ -335,30 +333,26 @@ func requestVote(to *Client, args *RequestVoteArgs, response *RequestVoteReply) 
 * @return error
 **/
 func heartbeat(to *Client, require *HeartbeatArgs, response *HeartbeatReply) *ResponseBool {
-	// // var res HeartbeatReply
-	// // err := jrpc.Call(to, "Node.Heartbeat", require, &res)
-	// // if err != nil {
-	// // 	return &ResponseBool{
-	// // 		Ok:    false,
-	// // 		Error: err,
-	// // 	}
-	// // }
+	msg, err := to.Request(Heartbeat, require)
+	if err != nil {
+		return &ResponseBool{
+			Ok:    false,
+			Error: err,
+		}
+	}
 
-	// *response = res
+	err = msg.Get(&response)
+	if err != nil {
+		return &ResponseBool{
+			Ok:    false,
+			Error: err,
+		}
+	}
+
 	return &ResponseBool{
 		Ok:    true,
 		Error: nil,
 	}
-}
-
-/**
-* Heartbeat: Sends a heartbeat
-* @param require *HeartbeatArgs, response *HeartbeatReply
-* @return error
-**/
-func (s *Server) Heartbeat(require *HeartbeatArgs, response *HeartbeatReply) error {
-	err := s.heartbeat(require, response)
-	return err
 }
 
 /**

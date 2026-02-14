@@ -341,7 +341,7 @@ func requestVote(to *Client, require *RequestVoteArgs, response *RequestVoteRepl
 * @return error
 **/
 func heartbeat(to *Client, require *HeartbeatArgs, response *HeartbeatReply) *ResponseBool {
-	m, err := NewMessage(RequestVote, require)
+	m, err := NewMessage(Heartbeat, require)
 	if err != nil {
 		return &ResponseBool{
 			Ok:    false,

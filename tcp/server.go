@@ -54,6 +54,7 @@ func (s *Msg) Get(dest any) error {
 type Server struct {
 	addr            string                    `json:"-"`
 	port            int                       `json:"-"`
+	ln              net.Listener              `json:"-"`
 	clients         map[string]*Client        `json:"-"`
 	inbound         chan *Msg                 `json:"-"`
 	outbound        chan *Msg                 `json:"-"`
@@ -438,7 +439,8 @@ func (s *Server) incoming(c *Client) {
 **/
 func (s *Server) Start() error {
 	addr := fmt.Sprintf(":%d", s.port)
-	ln, err := net.Listen("tcp", addr)
+	var err error
+	s.ln, err = net.Listen("tcp", addr)
 	if err != nil {
 		return err
 	}
@@ -468,7 +470,7 @@ func (s *Server) Start() error {
 
 	go func() {
 		for {
-			conn, err := ln.Accept()
+			conn, err := s.ln.Accept()
 			if err != nil {
 				continue
 			}
@@ -479,6 +481,14 @@ func (s *Server) Start() error {
 	}()
 
 	return nil
+}
+
+/**
+* Close
+* @return error
+**/
+func (s *Server) Close() error {
+	return s.ln.Close()
 }
 
 /**

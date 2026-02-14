@@ -361,7 +361,7 @@ func (s *Server) send() {
 		}
 
 		if s.isDebug {
-			logs.Debugf("send:%s", msg.To.Addr+":"+msg.Msg.ToJson().ToString())
+			logs.Debugf("send: %s", msg.To.Addr+":"+msg.Msg.ToJson().ToString())
 		}
 	}
 }

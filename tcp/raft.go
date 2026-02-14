@@ -72,10 +72,9 @@ type HeartbeatReply struct {
 **/
 func (s *Server) GetLeader() (string, bool) {
 	s.muRaft.Lock()
-	inCluster := len(s.peers) > 1
 	result := s.leaderID
 	s.muRaft.Unlock()
-	if !inCluster {
+	if len(s.peers) < 1 {
 		return result, true
 	}
 	return result, result != "" && result == s.addr

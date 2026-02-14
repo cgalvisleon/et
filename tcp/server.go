@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -55,6 +56,7 @@ type Server struct {
 	addr            string                    `json:"-"`
 	port            int                       `json:"-"`
 	ln              net.Listener              `json:"-"`
+	nodes           []string                  `json:"-"`
 	clients         map[string]*Client        `json:"-"`
 	inbound         chan *Msg                 `json:"-"`
 	outbound        chan *Msg                 `json:"-"`
@@ -108,6 +110,7 @@ func NewServer(port int) *Server {
 	result := &Server{
 		addr:            addr,
 		port:            port,
+		nodes:           make([]string, 0),
 		clients:         make(map[string]*Client),
 		inbound:         make(chan *Msg),
 		outbound:        make(chan *Msg),
@@ -434,6 +437,25 @@ func (s *Server) incoming(c *Client) {
 }
 
 /**
+* AddNode
+* @param addr string
+**/
+func (s *Server) AddNode(addr string) {
+	s.nodes = append(s.nodes, addr)
+}
+
+/**
+* RemoveNode
+* @param addr string
+**/
+func (s *Server) RemoveNode(addr string) {
+	idx := slices.IndexFunc(s.nodes, func(e string) bool { return e == addr })
+	if idx != -1 {
+		s.nodes = append(s.nodes[:idx], s.nodes[idx+1:]...)
+	}
+}
+
+/**
 * Start
 * @return error
 **/
@@ -449,13 +471,8 @@ func (s *Server) Start() error {
 	go s.inbox()
 	go s.send()
 
-	nodes, err := GetNodes()
-	if err != nil {
-		return err
-	}
-
-	for _, addr := range nodes {
-		s.AddNode(addr)
+	for _, addr := range s.nodes {
+		s.addNode(addr)
 	}
 
 	if len(s.peers) > 0 {
@@ -504,7 +521,7 @@ func (s *Server) StartProxy() error {
 * AddNode
 * @param addr string
 **/
-func (s *Server) AddNode(addr string) {
+func (s *Server) addNode(addr string) {
 	if s.mode.Load() == Proxy {
 		if s.proxy == nil {
 			s.proxy = newBalancer()

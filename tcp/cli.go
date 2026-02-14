@@ -5,12 +5,9 @@ import (
 	"fmt"
 	"os"
 	"strings"
-
-	"github.com/cgalvisleon/et/logs"
 )
 
 type Console struct {
-	*Config
 	addr   string
 	client *Client
 }
@@ -18,14 +15,8 @@ type Console struct {
 var console *Console
 
 func startConsole(client *Client) {
-	config, err := getConfig()
-	if err != nil {
-		logs.Panic(err)
-	}
-
 	if console == nil {
 		console = &Console{
-			Config: config,
 			client: client,
 		}
 	}

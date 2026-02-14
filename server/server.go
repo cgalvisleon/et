@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/utility"
@@ -32,9 +31,9 @@ type Ettp struct {
 * @param appName string
 * @return *Ettp
 **/
-func New(name string) *Ettp {
+func New(name string, port int) *Ettp {
 	result := &Ettp{
-		port:    envar.GetInt("PORT", 3000),
+		port:    port,
 		pidFile: ".pid",
 		name:    name,
 		onClose: make([]func(), 0),

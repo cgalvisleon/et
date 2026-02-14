@@ -621,6 +621,22 @@ func (s *Server) LeaderID() (string, bool) {
 }
 
 /**
+* Address
+* @return string, error
+**/
+func (s *Server) Address() string {
+	return s.addr
+}
+
+/**
+* Port
+* @return int
+**/
+func (s *Server) Port() int {
+	return s.port
+}
+
+/**
 * Send
 * @param to *Client, tp int, message any
 * @return error

@@ -24,7 +24,7 @@ const (
 type Message struct {
 	ID      string `json:"id"`
 	Type    int    `json:"type"`
-	Message []byte `json:"message"`
+	Payload []byte `json:"payload"`
 }
 
 /**
@@ -62,7 +62,7 @@ func (s *Message) ToJson() et.Json {
 	return et.Json{
 		"id":      s.ID,
 		"type":    s.Type,
-		"message": s.Message,
+		"payload": s.Payload,
 	}
 }
 
@@ -71,7 +71,7 @@ func (s *Message) ToJson() et.Json {
 * @return any, error
 **/
 func (s *Message) Get(dest any) error {
-	return json.Unmarshal(s.Message, dest)
+	return json.Unmarshal(s.Payload, dest)
 }
 
 /**
@@ -105,18 +105,18 @@ func newMessage(tp int, message any) (*Message, error) {
 	result := &Message{
 		ID:      reg.ULID(),
 		Type:    tp,
-		Message: bt,
+		Payload: bt,
 	}
 
 	switch tp {
 	case PingMessage:
-		result.Message = []byte("PING")
+		result.Payload = []byte("PING")
 	case PongMessage:
-		result.Message = []byte("PONG")
+		result.Payload = []byte("PONG")
 	case ACKMessage:
-		result.Message = []byte("ACK")
+		result.Payload = []byte("ACK")
 	case CloseMessage:
-		result.Message = []byte("CLOSE")
+		result.Payload = []byte("CLOSE")
 	}
 
 	return result, nil

@@ -19,6 +19,7 @@ const (
 	ErrorMessage int = 14
 	Heartbeat    int = 15
 	RequestVote  int = 16
+	AuthMessage  int = 17
 )
 
 type Message struct {

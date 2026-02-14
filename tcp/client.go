@@ -278,8 +278,9 @@ func (s *Client) Connect() error {
 	} else {
 		logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
 	}
+
 	if s.isDebug {
-		logs.Debugf("client: %s", s.toJson().ToString())
+		logs.Debugf("connected: %s", s.toJson().ToString())
 	}
 
 	return nil
@@ -332,7 +333,7 @@ func (s *Client) Send(tp int, message any) error {
 	}
 
 	if s.isDebug {
-		logs.Debugf("send: %s", msg.ToJson().ToString())
+		logs.Debugf("send: %s to:%s", msg.ToJson().ToString(), s.RemoteAddr)
 	}
 
 	return nil
@@ -373,16 +374,16 @@ func (s *Client) Request(tp int, payload any) (*Message, error) {
 	// Send
 	s.outbound <- bt
 
-	if s.isDebug {
-		logs.Debugf("request: %s", m.ToJson().ToString())
-	}
-
 	// Wait response or timeout
 	select {
 	case resp := <-ch:
 		s.mu.Lock()
 		delete(s.request, m.ID)
 		s.mu.Unlock()
+
+		if s.isDebug {
+			logs.Debugf("response: %s", resp.ToJson().ToString())
+		}
 		return resp, nil
 
 	case <-time.After(s.timeout):

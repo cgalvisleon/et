@@ -332,7 +332,7 @@ func (s *Server) inbox() {
 			err = s.Response(msg.To, msg.ID(), Heartbeat, res)
 			if err != nil {
 				logs.Error(err)
-			}
+			}		
 		default:
 			for _, fn := range s.onInbound {
 				fn(msg.To, msg.Msg)
@@ -379,7 +379,7 @@ func (s *Server) send() {
 		}
 
 		if s.isDebug {
-			logs.Debugf("send: %s", msg.To.Addr+":"+msg.Msg.ToJson().ToString())
+			logs.Debugf("send: %s to %s", msg.Msg.ToJson().ToString(), msg.To.Addr)
 		}
 	}
 }
@@ -504,10 +504,6 @@ func (s *Server) AddNode(addr string) {
 		}
 
 		node := NewNode(addr)
-		node.OnInbound(func(c *Client, msg *Message) {
-			logs.Debug("AddNode recv:", msg.ToJson().ToString())
-		})
-
 		s.peers = append(s.peers, node)
 	}
 }

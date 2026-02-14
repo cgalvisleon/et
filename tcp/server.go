@@ -59,9 +59,9 @@ type Server struct {
 	onOutbound      []func(*Client, *Message) `json:"-"`
 	onInbound       []func(*Client, *Message) `json:"-"`
 	mode            atomic.Value              `json:"-"`
+	timeout         time.Duration             `json:"-"`
 	mu              sync.Mutex                `json:"-"`
 	muPending       sync.Mutex                `json:"-"`
-	timeout         time.Duration             `json:"-"`
 	isDebug         bool                      `json:"-"`
 	isTesting       bool                      `json:"-"`
 	// Balancer
@@ -164,6 +164,10 @@ func (s *Server) run() {
 * @return *Client
 **/
 func (s *Server) newClient(conn net.Conn) *Client {
+	timeout, err := time.ParseDuration(envar.GetStr("TIMEOUT", "10s"))
+	if err != nil {
+		timeout = 10 * time.Second
+	}
 	return &Client{
 		Created_at: timezone.Now(),
 		ID:         reg.ULID(),
@@ -171,6 +175,7 @@ func (s *Server) newClient(conn net.Conn) *Client {
 		Status:     Connected,
 		conn:       conn,
 		ctx:        context.Background(),
+		timeout:    timeout,
 	}
 }
 
@@ -562,7 +567,7 @@ func (s *Server) Broadcast(destination []string, tp int, message any) {
 
 /**
 * Request
-* @param to *Client, tp int, payload any, timeout time.Duration
+* @param to *Client, tp int, payload any
 * @return *Message, error
 **/
 func (s *Server) Request(to *Client, tp int, payload any) (*Message, error) {

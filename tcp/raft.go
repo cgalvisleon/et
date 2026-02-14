@@ -313,7 +313,7 @@ func (s *Server) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 **/
 func requestVote(to *Client, args *RequestVoteArgs, response *RequestVoteReply) *ResponseBool {
 	var res RequestVoteReply
-	msg, err := to.Request(RequestVote, args, 10*time.Second)
+	msg, err := to.Request(RequestVote, args)
 	if err != nil {
 		logs.Error(err)
 	} else if msg != nil {

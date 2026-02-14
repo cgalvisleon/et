@@ -39,6 +39,7 @@ type Client struct {
 	outbound     chan []byte               `json:"-"`
 	pending      map[string]chan *Message  `json:"-"`
 	done         chan struct{}             `json:"-"`
+	timeout      time.Duration             `json:"-"`
 	mu           sync.Mutex                `json:"-"`
 	ctx          context.Context           `json:"-"`
 	onConnect    []func(*Client)           `json:"-"`
@@ -57,9 +58,12 @@ type Client struct {
 **/
 func NewClient(addr string) *Client {
 	isDebug := envar.GetBool("IS_DEBUG", false)
-	now := timezone.Now()
+	timeout, err := time.ParseDuration(envar.GetStr("TIMEOUT", "10s"))
+	if err != nil {
+		timeout = 10 * time.Second
+	}
 	result := &Client{
-		Created_at:   now,
+		Created_at:   timezone.Now(),
 		ID:           reg.ULID(),
 		Addr:         addr,
 		Status:       Pending,
@@ -67,6 +71,7 @@ func NewClient(addr string) *Client {
 		outbound:     make(chan []byte),
 		pending:      make(map[string]chan *Message),
 		done:         make(chan struct{}),
+		timeout:      timeout,
 		mu:           sync.Mutex{},
 		ctx:          context.Background(),
 		onConnect:    make([]func(*Client), 0),
@@ -339,10 +344,10 @@ func (s *Client) Send(tp int, message any) error {
 
 /**
 * Request
-* @param tp int, payload any, timeout time.Duration
+* @param tp int, payload any
 * @return *Message, error
 **/
-func (s *Client) Request(tp int, payload any, timeout time.Duration) (*Message, error) {
+func (s *Client) Request(tp int, payload any) (*Message, error) {
 	m, err := newMessage(tp, payload)
 	if err != nil {
 		return nil, err
@@ -375,6 +380,7 @@ func (s *Client) Request(tp int, payload any, timeout time.Duration) (*Message, 
 	if s.isDebug {
 		logs.Debugf("Request: %s", m.ToJson().ToString())
 	}
+
 	// Wait response or timeout
 	select {
 	case resp := <-ch:
@@ -383,11 +389,12 @@ func (s *Client) Request(tp int, payload any, timeout time.Duration) (*Message, 
 		s.mu.Unlock()
 		return resp, nil
 
-	case <-time.After(timeout):
+	case <-time.After(s.timeout):
 		s.mu.Lock()
 		delete(s.pending, m.ID)
 		s.mu.Unlock()
 		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
+
 	case <-s.done:
 		return nil, fmt.Errorf(msg.MSG_CLIENT_DISCONNECTED, s.Addr)
 	}

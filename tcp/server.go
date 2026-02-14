@@ -312,7 +312,7 @@ func (s *Server) inbox() {
 				return
 			}
 
-			err = s.Response(msg.To, msg.ID(), RequestVote, res)
+			err = s.response(msg.To, msg.ID(), RequestVote, res)
 			if err != nil {
 				logs.Error(err)
 			}
@@ -331,7 +331,7 @@ func (s *Server) inbox() {
 				return
 			}
 
-			err = s.Response(msg.To, msg.ID(), Heartbeat, res)
+			err = s.response(msg.To, msg.ID(), Heartbeat, res)
 			if err != nil {
 				logs.Error(err)
 			}
@@ -526,11 +526,11 @@ func (s *Server) StartProxy() error {
 }
 
 /**
-* Response
+* response
 * @params to *Client, id string, tp int, message any
 * @return error
 **/
-func (s *Server) Response(to *Client, id string, tp int, message any) error {
+func (s *Server) response(to *Client, id string, tp int, message any) error {
 	s.mu.Lock()
 	_, ok := s.clients[to.Addr]
 	s.mu.Unlock()
@@ -554,38 +554,6 @@ func (s *Server) Response(to *Client, id string, tp int, message any) error {
 	}
 
 	return nil
-}
-
-/**
-* Send
-* @param to *Client, tp int, message any
-* @return error
-**/
-func (s *Server) Send(to *Client, tp int, message any) error {
-	return s.Response(to, "", tp, message)
-}
-
-/**
-* SendError
-* @param to *Client, err error
-* @return error
-**/
-func (s *Server) SendError(to *Client, err error) error {
-	return s.Send(to, ErrorMessage, err.Error())
-}
-
-/**
-* Broadcast
-* @param destination []string
-* @param msg []byte
-**/
-func (s *Server) Broadcast(destination []string, tp int, message any) {
-	for _, addr := range destination {
-		client, ok := s.clients[addr]
-		if ok && client.Status == Connected {
-			s.Send(client, tp, message)
-		}
-	}
 }
 
 /**
@@ -632,6 +600,38 @@ func (s *Server) request(to *Client, tp int, payload any) (*Message, error) {
 		delete(s.messages, m.ID)
 		s.muMessages.Unlock()
 		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
+	}
+}
+
+/**
+* Send
+* @param to *Client, tp int, message any
+* @return error
+**/
+func (s *Server) Send(to *Client, tp int, message any) error {
+	return s.response(to, "", tp, message)
+}
+
+/**
+* SendError
+* @param to *Client, err error
+* @return error
+**/
+func (s *Server) SendError(to *Client, err error) error {
+	return s.Send(to, ErrorMessage, err.Error())
+}
+
+/**
+* Broadcast
+* @param destination []string
+* @param msg []byte
+**/
+func (s *Server) Broadcast(destination []string, tp int, message any) {
+	for _, addr := range destination {
+		client, ok := s.clients[addr]
+		if ok && client.Status == Connected {
+			s.Send(client, tp, message)
+		}
 	}
 }
 

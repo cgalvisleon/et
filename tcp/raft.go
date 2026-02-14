@@ -305,7 +305,15 @@ func (s *Server) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 * @return *ResponseBool
 **/
 func requestVote(to *Client, require *RequestVoteArgs, response *RequestVoteReply) *ResponseBool {
-	msg, err := to.Request(RequestVote, require)
+	m, err := NewMessage(RequestVote, require)
+	if err != nil {
+		return &ResponseBool{
+			Ok:    false,
+			Error: err,
+		}
+	}
+
+	msg, err := to.request(m)
 	if err != nil {
 		return &ResponseBool{
 			Ok:    false,
@@ -333,7 +341,15 @@ func requestVote(to *Client, require *RequestVoteArgs, response *RequestVoteRepl
 * @return error
 **/
 func heartbeat(to *Client, require *HeartbeatArgs, response *HeartbeatReply) *ResponseBool {
-	msg, err := to.Request(Heartbeat, require)
+	m, err := NewMessage(RequestVote, require)
+	if err != nil {
+		return &ResponseBool{
+			Ok:    false,
+			Error: err,
+		}
+	}
+
+	msg, err := to.request(m)
 	if err != nil {
 		return &ResponseBool{
 			Ok:    false,

@@ -37,7 +37,7 @@ type Client struct {
 	conn         net.Conn                  `json:"-"`
 	inbound      chan []byte               `json:"-"`
 	outbound     chan []byte               `json:"-"`
-	request      map[string]chan *Message  `json:"-"`
+	messages     map[string]chan *Message  `json:"-"`
 	done         chan struct{}             `json:"-"`
 	timeout      time.Duration             `json:"-"`
 	mu           sync.Mutex                `json:"-"`
@@ -69,7 +69,7 @@ func NewClient(addr string) *Client {
 		Status:       Pending,
 		inbound:      make(chan []byte),
 		outbound:     make(chan []byte),
-		request:      make(map[string]chan *Message),
+		messages:     make(map[string]chan *Message),
 		done:         make(chan struct{}),
 		timeout:      timeout,
 		mu:           sync.Mutex{},
@@ -172,7 +172,7 @@ func (s *Client) inbox() {
 		}
 
 		s.mu.Lock()
-		ch, ok := s.request[msg.ID]
+		ch, ok := s.messages[msg.ID]
 		s.mu.Unlock()
 
 		if ok {
@@ -325,7 +325,7 @@ func (s *Client) Close() error {
 * @return error
 **/
 func (s *Client) Send(tp int, message any) error {
-	msg, err := newMessage(tp, message)
+	msg, err := NewMessage(tp, message)
 	if err != nil {
 		return s.error(err)
 	}
@@ -361,19 +361,14 @@ func (s *Client) Send(tp int, message any) error {
 
 /**
 * Request
-* @param tp int, payload any
+* @param m *Message
 * @return *Message, error
 **/
-func (s *Client) Request(tp int, payload any) (*Message, error) {
-	m, err := newMessage(tp, payload)
-	if err != nil {
-		return nil, err
-	}
-
+func (s *Client) request(m *Message) (*Message, error) {
 	// Channel for response
 	ch := make(chan *Message, 1)
 	s.mu.Lock()
-	s.request[m.ID] = ch
+	s.messages[m.ID] = ch
 	s.mu.Unlock()
 
 	bt, err := m.serialize()
@@ -398,7 +393,7 @@ func (s *Client) Request(tp int, payload any) (*Message, error) {
 	select {
 	case resp := <-ch:
 		s.mu.Lock()
-		delete(s.request, m.ID)
+		delete(s.messages, m.ID)
 		s.mu.Unlock()
 
 		if s.isDebug {
@@ -408,7 +403,7 @@ func (s *Client) Request(tp int, payload any) (*Message, error) {
 
 	case <-time.After(s.timeout):
 		s.mu.Lock()
-		delete(s.request, m.ID)
+		delete(s.messages, m.ID)
 		s.mu.Unlock()
 		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
 

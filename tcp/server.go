@@ -35,6 +35,14 @@ type Msg struct {
 }
 
 /**
+* ID
+* @return string
+**/
+func (s *Msg) ID() string {
+	return s.Msg.ID
+}
+
+/**
 * Get
 * @param dest any
 * @return error
@@ -49,7 +57,7 @@ type Server struct {
 	clients         map[string]*Client        `json:"-"`
 	inbound         chan *Msg                 `json:"-"`
 	outbound        chan *Msg                 `json:"-"`
-	pending         map[string]chan *Message  `json:"-"`
+	request         map[string]chan *Message  `json:"-"`
 	register        chan *Client              `json:"-"`
 	unregister      chan *Client              `json:"-"`
 	onConnection    []func(*Client)           `json:"-"`
@@ -102,7 +110,7 @@ func NewServer(port int) *Server {
 		clients:         make(map[string]*Client),
 		inbound:         make(chan *Msg),
 		outbound:        make(chan *Msg),
-		pending:         make(map[string]chan *Message),
+		request:         make(map[string]chan *Message),
 		register:        make(chan *Client),
 		unregister:      make(chan *Client),
 		onConnection:    make([]func(*Client), 0),
@@ -269,22 +277,6 @@ func (s *Server) handleBalancer(client net.Conn) {
 * @param c *Client
 **/
 func (s *Server) handleClient(c *Client) {
-	if s.isTesting {
-		// go func() {
-		// 	for {
-		// 		time.Sleep(3 * time.Second)
-		// 		msg, err := s.Request(c, RequestVote, "", 10*time.Second)
-		// 		if err != nil {
-		// 			logs.Error(err)
-		// 		} else if msg != nil {
-		// 			logs.Debug("handleClient:" + msg.ToJson().ToString())
-		// 		} else {
-		// 			logs.Debug("handleClient send test")
-		// 		}
-		// 	}
-		// }()
-	}
-
 	go s.incoming(c)
 }
 
@@ -294,7 +286,7 @@ func (s *Server) handleClient(c *Client) {
 func (s *Server) inbox() {
 	for msg := range s.inbound {
 		s.mu.Lock()
-		ch, ok := s.pending[msg.Msg.ID]
+		ch, ok := s.request[msg.Msg.ID]
 		s.mu.Unlock()
 
 		if ok {
@@ -318,7 +310,7 @@ func (s *Server) inbox() {
 				return
 			}
 
-			err = s.Send(msg.To, RequestVote, res)
+			err = s.Response(msg.To, msg.ID(), RequestVote, res)
 			if err != nil {
 				logs.Error(err)
 			}
@@ -587,7 +579,7 @@ func (s *Server) Request(to *Client, tp int, payload any) (*Message, error) {
 	// Channel for response
 	ch := make(chan *Message, 1)
 	s.muPending.Lock()
-	s.pending[m.ID] = ch
+	s.request[m.ID] = ch
 	s.muPending.Unlock()
 
 	// Send
@@ -600,13 +592,13 @@ func (s *Server) Request(to *Client, tp int, payload any) (*Message, error) {
 	select {
 	case resp := <-ch:
 		s.muPending.Lock()
-		delete(s.pending, m.ID)
+		delete(s.request, m.ID)
 		s.muPending.Unlock()
 		return resp, nil
 
 	case <-time.After(s.timeout):
 		s.muPending.Lock()
-		delete(s.pending, m.ID)
+		delete(s.request, m.ID)
 		s.muPending.Unlock()
 		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
 	}

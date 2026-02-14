@@ -37,7 +37,7 @@ type Client struct {
 	conn         net.Conn                  `json:"-"`
 	inbound      chan []byte               `json:"-"`
 	outbound     chan []byte               `json:"-"`
-	pending      map[string]chan *Message  `json:"-"`
+	request      map[string]chan *Message  `json:"-"`
 	done         chan struct{}             `json:"-"`
 	timeout      time.Duration             `json:"-"`
 	mu           sync.Mutex                `json:"-"`
@@ -69,7 +69,7 @@ func NewClient(addr string) *Client {
 		Status:       Pending,
 		inbound:      make(chan []byte),
 		outbound:     make(chan []byte),
-		pending:      make(map[string]chan *Message),
+		request:      make(map[string]chan *Message),
 		done:         make(chan struct{}),
 		timeout:      timeout,
 		mu:           sync.Mutex{},
@@ -170,7 +170,7 @@ func (s *Client) inbox() {
 		}
 
 		s.mu.Lock()
-		ch, ok := s.pending[msg.ID]
+		ch, ok := s.request[msg.ID]
 		s.mu.Unlock()
 
 		if ok {
@@ -356,7 +356,7 @@ func (s *Client) Request(tp int, payload any) (*Message, error) {
 	// Channel for response
 	ch := make(chan *Message, 1)
 	s.mu.Lock()
-	s.pending[m.ID] = ch
+	s.request[m.ID] = ch
 	s.mu.Unlock()
 
 	bt, err := m.serialize()
@@ -385,13 +385,13 @@ func (s *Client) Request(tp int, payload any) (*Message, error) {
 	select {
 	case resp := <-ch:
 		s.mu.Lock()
-		delete(s.pending, m.ID)
+		delete(s.request, m.ID)
 		s.mu.Unlock()
 		return resp, nil
 
 	case <-time.After(s.timeout):
 		s.mu.Lock()
-		delete(s.pending, m.ID)
+		delete(s.request, m.ID)
 		s.mu.Unlock()
 		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
 

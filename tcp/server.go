@@ -56,11 +56,10 @@ type Server struct {
 	addr            string                    `json:"-"`
 	port            int                       `json:"-"`
 	ln              net.Listener              `json:"-"`
-	nodes           []string                  `json:"-"`
 	clients         map[string]*Client        `json:"-"`
 	inbound         chan *Msg                 `json:"-"`
 	outbound        chan *Msg                 `json:"-"`
-	request         map[string]chan *Message  `json:"-"`
+	messages        map[string]chan *Message  `json:"-"`
 	register        chan *Client              `json:"-"`
 	unregister      chan *Client              `json:"-"`
 	onConnection    []func(*Client)           `json:"-"`
@@ -72,7 +71,7 @@ type Server struct {
 	mode            atomic.Value              `json:"-"`
 	timeout         time.Duration             `json:"-"`
 	mu              sync.Mutex                `json:"-"`
-	muPending       sync.Mutex                `json:"-"`
+	muMessages      sync.Mutex                `json:"-"`
 	isDebug         bool                      `json:"-"`
 	isTesting       bool                      `json:"-"`
 	// Balancer
@@ -110,11 +109,10 @@ func NewServer(port int) *Server {
 	result := &Server{
 		addr:            addr,
 		port:            port,
-		nodes:           make([]string, 0),
 		clients:         make(map[string]*Client),
 		inbound:         make(chan *Msg),
 		outbound:        make(chan *Msg),
-		request:         make(map[string]chan *Message),
+		messages:        make(map[string]chan *Message),
 		register:        make(chan *Client),
 		unregister:      make(chan *Client),
 		onConnection:    make([]func(*Client), 0),
@@ -124,7 +122,7 @@ func NewServer(port int) *Server {
 		onOutbound:      make([]func(*Client, *Message), 0),
 		onInbound:       make([]func(*Client, *Message), 0),
 		mu:              sync.Mutex{},
-		muPending:       sync.Mutex{},
+		muMessages:      sync.Mutex{},
 		timeout:         timeout,
 		isDebug:         isDebug,
 		isTesting:       isTesting,
@@ -290,7 +288,7 @@ func (s *Server) handleClient(c *Client) {
 func (s *Server) inbox() {
 	for msg := range s.inbound {
 		s.mu.Lock()
-		ch, ok := s.request[msg.Msg.ID]
+		ch, ok := s.messages[msg.Msg.ID]
 		s.mu.Unlock()
 
 		if ok {
@@ -440,7 +438,7 @@ func (s *Server) incoming(c *Client) {
 * AddNode
 * @param addr string
 **/
-func (s *Server) addNode(addr string) {
+func (s *Server) AddNode(addr string) {
 	if s.mode.Load() == Proxy {
 		if s.proxy == nil {
 			s.proxy = newBalancer()
@@ -459,21 +457,13 @@ func (s *Server) addNode(addr string) {
 }
 
 /**
-* AddNode
-* @param addr string
-**/
-func (s *Server) AddNode(addr string) {
-	s.nodes = append(s.nodes, addr)
-}
-
-/**
 * RemoveNode
 * @param addr string
 **/
 func (s *Server) RemoveNode(addr string) {
-	idx := slices.IndexFunc(s.nodes, func(e string) bool { return e == addr })
+	idx := slices.IndexFunc(s.Peers, func(e *Client) bool { return e.Addr == addr })
 	if idx != -1 {
-		s.nodes = append(s.nodes[:idx], s.nodes[idx+1:]...)
+		s.Peers = append(s.Peers[:idx], s.Peers[idx+1:]...)
 	}
 }
 
@@ -492,10 +482,6 @@ func (s *Server) Start() error {
 	go s.run()
 	go s.inbox()
 	go s.send()
-
-	for _, addr := range s.nodes {
-		s.addNode(addr)
-	}
 
 	if len(s.Peers) > 0 {
 		go s.ElectionLoop()
@@ -603,11 +589,11 @@ func (s *Server) Broadcast(destination []string, tp int, message any) {
 }
 
 /**
-* Request
+* request
 * @param to *Client, tp int, payload any
 * @return *Message, error
 **/
-func (s *Server) Request(to *Client, tp int, payload any) (*Message, error) {
+func (s *Server) request(to *Client, tp int, payload any) (*Message, error) {
 	s.mu.Lock()
 	_, ok := s.clients[to.Addr]
 	s.mu.Unlock()
@@ -623,9 +609,9 @@ func (s *Server) Request(to *Client, tp int, payload any) (*Message, error) {
 
 	// Channel for response
 	ch := make(chan *Message, 1)
-	s.muPending.Lock()
-	s.request[m.ID] = ch
-	s.muPending.Unlock()
+	s.muMessages.Lock()
+	s.messages[m.ID] = ch
+	s.muMessages.Unlock()
 
 	// Send
 	s.outbound <- &Msg{
@@ -636,15 +622,15 @@ func (s *Server) Request(to *Client, tp int, payload any) (*Message, error) {
 	// Wait response or timeout
 	select {
 	case resp := <-ch:
-		s.muPending.Lock()
-		delete(s.request, m.ID)
-		s.muPending.Unlock()
+		s.muMessages.Lock()
+		delete(s.messages, m.ID)
+		s.muMessages.Unlock()
 		return resp, nil
 
 	case <-time.After(s.timeout):
-		s.muPending.Lock()
-		delete(s.request, m.ID)
-		s.muPending.Unlock()
+		s.muMessages.Lock()
+		delete(s.messages, m.ID)
+		s.muMessages.Unlock()
 		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
 	}
 }

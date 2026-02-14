@@ -297,6 +297,18 @@ func (s *Server) inbox() {
 		}
 
 		switch msg.Msg.Type {
+		case PingMessage:
+			var args string
+			err := msg.Get(&args)
+			if err != nil {
+				s.SendError(msg.To, err)
+				return
+			}
+
+			err = s.response(msg.To, msg.ID(), PingMessage, "PONG")
+			if err != nil {
+				logs.Error(err)
+			}
 		case RequestVote:
 			var args RequestVoteArgs
 			err := msg.Get(&args)
@@ -599,6 +611,16 @@ func (s *Server) StartProxy() error {
 }
 
 /**
+* LeaderID
+* @return string, bool
+**/
+func (s *Server) LeaderID() (string, bool) {
+	s.muRaft.Lock()
+	defer s.muRaft.Unlock()
+	return s.leaderID, s.state == Leader
+}
+
+/**
 * Send
 * @param to *Client, tp int, message any
 * @return error
@@ -648,16 +670,6 @@ func (s *Server) Request(to *Client, method string, request any, response any) e
 	}
 
 	return res.Get(response)
-}
-
-/**
-* LeaderID
-* @return string, bool
-**/
-func (s *Server) LeaderID() (string, bool) {
-	s.muRaft.Lock()
-	defer s.muRaft.Unlock()
-	return s.leaderID, s.state == Leader
 }
 
 /**

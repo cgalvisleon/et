@@ -13,13 +13,12 @@ const (
 	BytesMessage int = 0
 	TextMessage  int = 1
 	PingMessage  int = 10
-	PongMessage  int = 11
-	ACKMessage   int = 12
-	CloseMessage int = 13
-	ErrorMessage int = 14
-	Heartbeat    int = 15
-	RequestVote  int = 16
-	Method       int = 17
+	ACKMessage   int = 11
+	CloseMessage int = 12
+	ErrorMessage int = 13
+	Heartbeat    int = 14
+	RequestVote  int = 15
+	Method       int = 16
 )
 
 type Message struct {
@@ -120,10 +119,8 @@ func NewMessage(tp int, message any) (*Message, error) {
 	switch tp {
 	case PingMessage:
 		result.Payload = []byte("PING")
-	case PongMessage:
-		result.Payload = []byte("PONG")
 	case ACKMessage:
-		result.Payload = []byte("ACK")
+		result.Payload = []byte("\n")
 	case CloseMessage:
 		result.Payload = []byte("CLOSE")
 	}

@@ -59,11 +59,18 @@ func (s *Message) serialize() ([]byte, error) {
 * @return et.Json
 **/
 func (s *Message) ToJson() et.Json {
-	return et.Json{
-		"id":      s.ID,
-		"type":    s.Type,
-		"payload": s.Payload,
+	bt, err := json.Marshal(s)
+	if err != nil {
+		return et.Json{}
 	}
+
+	result := et.Json{}
+	err = json.Unmarshal(bt, &result)
+	if err != nil {
+		return et.Json{}
+	}
+
+	return result
 }
 
 /**

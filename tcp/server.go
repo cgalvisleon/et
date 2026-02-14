@@ -34,8 +34,17 @@ type Msg struct {
 	Msg *Message `json:"msg"`
 }
 
+/**
+* Get
+* @param dest any
+* @return error
+**/
+func (s *Msg) Get(dest any) error {
+	return s.Msg.Get(dest)
+}
+
 type Server struct {
-	address         string                    `json:"-"`
+	addr            string                    `json:"-"`
 	port            int                       `json:"-"`
 	clients         map[string]*Client        `json:"-"`
 	inbound         chan *Msg                 `json:"-"`
@@ -63,7 +72,7 @@ type Server struct {
 	votedFor       string          `json:"-"`
 	leaderID       string          `json:"-"`
 	lastHeartbeat  time.Time       `json:"-"`
-	muCluster      sync.Mutex      `json:"-"`
+	muRaft         sync.Mutex      `json:"-"`
 	onBecomeLeader []func(*Server) `json:"-"`
 	onChangeLeader []func(*Server) `json:"-"`
 }
@@ -74,11 +83,11 @@ func NewServer(port int) *Server {
 		host = "localhost"
 	}
 
-	address := fmt.Sprintf("%s:%d", host, port)
+	addr := fmt.Sprintf("%s:%d", host, port)
 	isDebug := envar.GetBool("IS_DEBUG", false)
 	isTesting := envar.GetBool("IS_TESTING", false)
 	result := &Server{
-		address:         address,
+		addr:            addr,
 		port:            port,
 		clients:         make(map[string]*Client),
 		inbound:         make(chan *Msg),
@@ -103,7 +112,7 @@ func NewServer(port int) *Server {
 		votedFor:       "",
 		leaderID:       "",
 		lastHeartbeat:  timezone.Now(),
-		muCluster:      sync.Mutex{},
+		muRaft:         sync.Mutex{},
 		onBecomeLeader: make([]func(*Server), 0),
 		onChangeLeader: make([]func(*Server), 0),
 	}
@@ -155,13 +164,23 @@ func (s *Server) inbox() {
 		switch msg.Msg.Type {
 		case RequestVote:
 			var args RequestVoteArgs
-			err := msg.Msg.Get(&args)
+			err := msg.Get(&args)
 			if err != nil {
 				s.SendError(msg.To, err)
 				return
 			}
 
-			logs.Debugf("requestVote recv:%s", args.CandidateID)
+			var res RequestVoteReply
+			err = s.requestVote(&args, &res)
+			if err != nil {
+				s.SendError(msg.To, err)
+				return
+			}
+
+			err = s.Send(msg.To, RequestVote, res)
+			if err != nil {
+				logs.Error(err)
+			}
 		case Heartbeat:
 		default:
 			for _, fn := range s.onInbound {
@@ -392,8 +411,8 @@ func (s *Server) handleClient(c *Client) {
 * @return error
 **/
 func (s *Server) Start() error {
-	address := fmt.Sprintf(":%d", s.port)
-	ln, err := net.Listen("tcp", address)
+	addr := fmt.Sprintf(":%d", s.port)
+	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
 	}
@@ -415,7 +434,7 @@ func (s *Server) Start() error {
 		go s.ElectionLoop()
 	}
 
-	logs.Logf(packageName, msg.MSG_TCP_LISTENING, s.address)
+	logs.Logf(packageName, msg.MSG_TCP_LISTENING, s.addr)
 
 	for _, fn := range s.onStart {
 		fn(s)
@@ -443,22 +462,22 @@ func (s *Server) StartProxy() error {
 
 /**
 * AddNode
-* @param address string
+* @param addr string
 **/
-func (s *Server) AddNode(address string) {
+func (s *Server) AddNode(addr string) {
 	if s.mode.Load() == Proxy {
 		if s.proxy == nil {
 			s.proxy = newBalancer()
 		}
 
-		node := newNode(address)
+		node := newNode(addr)
 		s.proxy.nodes = append(s.proxy.nodes, node)
 	} else {
-		if address == s.address {
+		if addr == s.addr {
 			return
 		}
 
-		node := NewNode(address)
+		node := NewNode(addr)
 		node.OnInbound(func(c *Client, msg *Message) {
 			logs.Debug("AddNode recv:", msg.ToJson().ToString())
 		})

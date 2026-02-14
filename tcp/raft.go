@@ -71,14 +71,14 @@ type HeartbeatReply struct {
 * @return string, error
 **/
 func (s *Server) GetLeader() (string, bool) {
-	s.muCluster.Lock()
+	s.muRaft.Lock()
 	inCluster := len(s.peers) > 1
 	result := s.leaderID
-	s.muCluster.Unlock()
+	s.muRaft.Unlock()
 	if !inCluster {
 		return result, true
 	}
-	return result, result != "" && result == s.address
+	return result, result != "" && result == s.addr
 }
 
 /**
@@ -86,25 +86,25 @@ func (s *Server) GetLeader() (string, bool) {
 **/
 func (s *Server) ElectionLoop() {
 	if len(s.peers) == 0 {
-		s.muCluster.Lock()
+		s.muRaft.Lock()
 		s.becomeLeader()
-		s.muCluster.Unlock()
+		s.muRaft.Unlock()
 		return
 	}
 
-	s.muCluster.Lock()
+	s.muRaft.Lock()
 	s.state = Follower
 	s.lastHeartbeat = timezone.Now()
-	s.muCluster.Unlock()
+	s.muRaft.Unlock()
 
 	for {
 		timeout := randomBetween(1500, 3000)
 		time.Sleep(timeout)
 
-		s.muCluster.Lock()
+		s.muRaft.Lock()
 		elapsed := time.Since(s.lastHeartbeat)
 		state := s.state
-		s.muCluster.Unlock()
+		s.muRaft.Unlock()
 
 		if elapsed > heartbeatInterval && state != Leader {
 			s.startElection()
@@ -116,12 +116,12 @@ func (s *Server) ElectionLoop() {
 * startElection
 **/
 func (s *Server) startElection() {
-	s.muCluster.Lock()
+	s.muRaft.Lock()
 	s.state = Candidate
 	s.term++
 	term := s.term
-	s.votedFor = s.address
-	s.muCluster.Unlock()
+	s.votedFor = s.addr
+	s.muRaft.Unlock()
 
 	votes := 1
 	total := len(s.peers)
@@ -134,11 +134,9 @@ func (s *Server) startElection() {
 			}
 		}
 
-		logs.Debugf("startElection term:%d peer:%s votes:%d total:%d", term, peer.Addr, votes, total)
-
-		args := RequestVoteArgs{Term: term, CandidateID: s.address}
+		args := RequestVoteArgs{Term: term, CandidateID: s.addr}
 		var reply RequestVoteReply
-		res := s.requestVote(peer, &args, &reply)
+		res := requestVote(peer, &args, &reply)
 		if res.Error != nil {
 			total--
 		}
@@ -146,55 +144,31 @@ func (s *Server) startElection() {
 		if res.Ok {
 			logs.Debug("startElection Ok:", votes)
 		}
+		/*
+			go func(peer *Client) {
+				if res.Ok {
+					logs.Debug("startElection Ok:", votes)
+					// s.muRaft.Lock()
+					// defer s.muRaft.Unlock()
 
-	}
-	/*
-		votes := 1
-		total := len(s.peers)
-		for _, peer := range s.peers {
-			if peer.Status != Connected {
-				err := peer.Connect()
-				if err != nil {
-					s.error(peer, err)
-					continue
+					// if reply.Term > s.term {
+					// 	s.term = reply.Term
+					// 	s.state = Follower
+					// 	s.votedFor = ""
+					// 	return
+					// }
+
+					// if s.state == Candidate && reply.VoteGranted && term == s.term {
+					// 	votes++
+					// 	needed := majority(total)
+					// 	if votes >= needed {
+					// 		s.becomeLeader()
+					// 	}
+					// }
 				}
-			}
-
-			args := RequestVoteArgs{Term: term, CandidateID: s.address}
-			var reply RequestVoteReply
-			res := s.requestVote(peer, &args, &reply)
-			if res.Error != nil {
-				total--
-			}
-
-			if res.Ok {
-				logs.Debug("startElection Ok:", votes)
-			}
-			/*
-				go func(peer *Client) {
-					if res.Ok {
-						logs.Debug("startElection Ok:", votes)
-						// s.muCluster.Lock()
-						// defer s.muCluster.Unlock()
-
-						// if reply.Term > s.term {
-						// 	s.term = reply.Term
-						// 	s.state = Follower
-						// 	s.votedFor = ""
-						// 	return
-						// }
-
-						// if s.state == Candidate && reply.VoteGranted && term == s.term {
-						// 	votes++
-						// 	needed := majority(total)
-						// 	if votes >= needed {
-						// 		s.becomeLeader()
-						// 	}
-						// }
-					}
-				}(peer)
-		}
-	*/
+			}(peer)
+		*/
+	}
 }
 
 /**
@@ -202,9 +176,9 @@ func (s *Server) startElection() {
 **/
 func (s *Server) becomeLeader() {
 	s.state = Leader
-	s.leaderID = s.address
+	s.leaderID = s.addr
 	s.lastHeartbeat = timezone.Now()
-	logs.Logf(packageName, "I am leader %s", s.address)
+	logs.Logf(packageName, "I am leader %s", s.addr)
 
 	go s.heartbeatLoop()
 
@@ -225,26 +199,26 @@ func (s *Server) heartbeatLoop() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		s.muCluster.Lock()
+		s.muRaft.Lock()
 		state := s.state
 		term := s.term
-		s.muCluster.Unlock()
+		s.muRaft.Unlock()
 		if state != Leader {
 			return
 		}
 
 		for _, peer := range s.peers {
-			if peer.Addr == s.address {
+			if peer.Addr == s.addr {
 				continue
 			}
 
 			go func(peer *Client) {
-				args := HeartbeatArgs{Term: term, LeaderID: s.address}
+				args := HeartbeatArgs{Term: term, LeaderID: s.addr}
 				var reply HeartbeatReply
 				res := heartbeat(peer, &args, &reply)
 				if res.Ok {
-					s.muCluster.Lock()
-					defer s.muCluster.Unlock()
+					s.muRaft.Lock()
+					defer s.muRaft.Unlock()
 
 					if reply.Term > s.term {
 						s.term = reply.Term
@@ -262,56 +236,32 @@ func (s *Server) heartbeatLoop() {
 * @param to *Client, args *RequestVoteArgs, reply *RequestVoteReply
 * @return error
 **/
-func (s *Server) requestVote(to *Client, args *RequestVoteArgs, reply *RequestVoteReply) *ResponseBool {
-	msg, err := to.Request(RequestVote, args, 10*time.Second)
-	if err != nil {
-		logs.Error(err)
-	} else if msg != nil {
-		logs.Debug("requestVote:" + msg.ToJson().ToString())
+func (s *Server) requestVote(args *RequestVoteArgs, reply *RequestVoteReply) error {
+	s.muRaft.Lock()
+	defer s.muRaft.Unlock()
+
+	if args.Term < s.term {
+		reply.Term = s.term
+		reply.VoteGranted = false
+		return nil
+	}
+
+	if args.Term > s.term {
+		s.term = args.Term
+		s.state = Follower
+		s.votedFor = ""
+	}
+
+	if s.votedFor == "" || s.votedFor == args.CandidateID {
+		s.votedFor = args.CandidateID
+		reply.VoteGranted = true
+		s.lastHeartbeat = timezone.Now()
 	} else {
-		logs.Debug("requestVote send message")
+		reply.VoteGranted = false
 	}
 
-	// msg, err := s.Request(to, RequestVote, args, 10*time.Second)
-	// if err != nil {
-	// 	logs.Errorm("requestVote error: " + err.Error())
-	// 	return &ResponseBool{
-	// 		Ok:    false,
-	// 		Error: err,
-	// 	}
-	// } else if msg != nil {
-	// 	logs.Debug("requestVote:", msg.ToJson().ToString())
-	// } else {
-	// 	logs.Debug("requestVote send test")
-	// }
-	// s.muCluster.Lock()
-	// defer s.muCluster.Unlock()
-
-	// if args.Term < s.term {
-	// 	reply.Term = s.term
-	// 	reply.VoteGranted = false
-	// 	return nil
-	// }
-
-	// if args.Term > s.term {
-	// 	s.term = args.Term
-	// 	s.state = Follower
-	// 	s.votedFor = ""
-	// }
-
-	// if s.votedFor == "" || s.votedFor == args.CandidateID {
-	// 	s.votedFor = args.CandidateID
-	// 	reply.VoteGranted = true
-	// 	s.lastHeartbeat = timezone.Now()
-	// } else {
-	// 	reply.VoteGranted = false
-	// }
-
-	// reply.Term = s.term
-	return &ResponseBool{
-		Ok:    false,
-		Error: nil,
-	}
+	reply.Term = s.term
+	return nil
 }
 
 /**
@@ -322,11 +272,11 @@ func (s *Server) requestVote(to *Client, args *RequestVoteArgs, reply *RequestVo
 func (s *Server) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 	changedLeader := false
 
-	s.muCluster.Lock()
+	s.muRaft.Lock()
 	if args.Term < s.term {
 		reply.Term = s.term
 		reply.Ok = false
-		s.muCluster.Unlock()
+		s.muRaft.Unlock()
 		return nil
 	}
 
@@ -346,7 +296,7 @@ func (s *Server) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 
 	reply.Term = s.term
 	reply.Ok = true
-	s.muCluster.Unlock()
+	s.muRaft.Unlock()
 
 	if changedLeader {
 		for _, fn := range s.onChangeLeader {
@@ -357,14 +307,27 @@ func (s *Server) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 }
 
 /**
-* RequestVote: Requests a vote
-* @param require *RequestVoteArgs, response *RequestVoteReply
-* @return error
+* requestVote
+* @param to *Client, require *RequestVoteArgs, response *RequestVoteReply
+* @return *ResponseBool
 **/
-// func (s *Server) RequestVote(require *RequestVoteArgs, response *RequestVoteReply) error {
-// 	err := s.requestVote(require, response)
-// 	return err
-// }
+func requestVote(to *Client, args *RequestVoteArgs, response *RequestVoteReply) *ResponseBool {
+	var res RequestVoteReply
+	msg, err := to.Request(RequestVote, args, 10*time.Second)
+	if err != nil {
+		logs.Error(err)
+	} else if msg != nil {
+		logs.Debug("requestVote:" + msg.ToJson().ToString())
+	} else {
+		logs.Debug("requestVote send message")
+	}
+
+	*response = res
+	return &ResponseBool{
+		Ok:    true,
+		Error: nil,
+	}
+}
 
 /**
 * heartbeat: Sends a heartbeat

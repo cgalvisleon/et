@@ -5,7 +5,8 @@ import (
 )
 
 type Config struct {
-	TCP []string `json:"tcp"`
+	TCP  []string `json:"tcp"`
+	Prom string   `json:"prom"`
 }
 
 /**
@@ -22,7 +23,8 @@ func getConfig() (*Config, error) {
 
 	if result == nil {
 		result = &Config{
-			TCP: []string{},
+			TCP:  []string{},
+			Prom: "> ",
 		}
 
 		err = file.Write(filePath, result)

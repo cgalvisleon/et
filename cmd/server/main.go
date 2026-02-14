@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	port := envar.SetIntByArg("-port", "PORT", 5050)
+	port := envar.SetIntByArg("-port", "PORT", 1377)
 
 	server := tcp.NewServer(port)
 	err := server.Start()

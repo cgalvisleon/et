@@ -141,33 +141,29 @@ func (s *Server) startElection() {
 			total--
 		}
 
-		if res.Ok {
-			logs.Debug("startElection Ok:", votes)
-		}
-		/*
-			go func(peer *Client) {
-				if res.Ok {
-					logs.Debug("startElection Ok:", votes)
-					// s.muRaft.Lock()
-					// defer s.muRaft.Unlock()
+		go func(peer *Client) {
+			if res.Ok {
+				s.muRaft.Lock()
+				defer s.muRaft.Unlock()
 
-					// if reply.Term > s.term {
-					// 	s.term = reply.Term
-					// 	s.state = Follower
-					// 	s.votedFor = ""
-					// 	return
-					// }
-
-					// if s.state == Candidate && reply.VoteGranted && term == s.term {
-					// 	votes++
-					// 	needed := majority(total)
-					// 	if votes >= needed {
-					// 		s.becomeLeader()
-					// 	}
-					// }
+				if reply.Term > s.term {
+					s.term = reply.Term
+					s.state = Follower
+					s.votedFor = ""
+					return
 				}
-			}(peer)
-		*/
+
+				if s.state == Candidate && reply.VoteGranted && term == s.term {
+					votes++
+					needed := majority(total)
+					if votes >= needed {
+						s.becomeLeader()
+					}
+				}
+
+				logs.Debug("startElection Ok:", votes)
+			}
+		}(peer)
 	}
 }
 
@@ -312,17 +308,22 @@ func (s *Server) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 * @return *ResponseBool
 **/
 func requestVote(to *Client, args *RequestVoteArgs, response *RequestVoteReply) *ResponseBool {
-	var res RequestVoteReply
 	msg, err := to.Request(RequestVote, args)
 	if err != nil {
-		logs.Error(err)
-	} else if msg != nil {
-		logs.Debug("requestVote:" + msg.ToJson().ToString())
-	} else {
-		logs.Debug("requestVote send message")
+		return &ResponseBool{
+			Ok:    false,
+			Error: err,
+		}
 	}
 
-	*response = res
+	err = msg.Get(&response)
+	if err != nil {
+		return &ResponseBool{
+			Ok:    false,
+			Error: err,
+		}
+	}
+
 	return &ResponseBool{
 		Ok:    true,
 		Error: nil,

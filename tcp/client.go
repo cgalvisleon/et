@@ -101,9 +101,11 @@ func NewNode(addr string) *Client {
 **/
 func (s *Client) toJson() et.Json {
 	return et.Json{
-		"created_at": s.Created_at,
-		"addr":       s.Addr,
-		"status":     s.Status,
+		"created_at":  s.Created_at,
+		"addr":        s.Addr,
+		"local_addr":  s.LocalAddr,
+		"remote_addr": s.RemoteAddr,
+		"status":      s.Status,
 	}
 }
 
@@ -276,14 +278,8 @@ func (s *Client) Connect() error {
 	} else {
 		logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
 	}
-	if !s.isNode && s.isDebug {
-		// msg, err := s.Request(RequestVote, "", 10*time.Second)
-		// if err != nil {
-		// 	s.error(err)
-		// }
-		// if msg != nil {
-		// 	logs.Debug("send:", msg.ToJson().ToString())
-		// }
+	if s.isDebug {
+		logs.Debugf("client: %s", s.toJson().ToString())
 	}
 
 	return nil
@@ -378,7 +374,7 @@ func (s *Client) Request(tp int, payload any) (*Message, error) {
 	s.outbound <- bt
 
 	if s.isDebug {
-		logs.Debugf("Request: %s", m.ToJson().ToString())
+		logs.Debugf("request: %s", m.ToJson().ToString())
 	}
 
 	// Wait response or timeout

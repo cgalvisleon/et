@@ -440,6 +440,28 @@ func (s *Server) incoming(c *Client) {
 * AddNode
 * @param addr string
 **/
+func (s *Server) addNode(addr string) {
+	if s.mode.Load() == Proxy {
+		if s.proxy == nil {
+			s.proxy = newBalancer()
+		}
+
+		node := newNode(addr)
+		s.proxy.nodes = append(s.proxy.nodes, node)
+	} else {
+		if addr == s.addr {
+			return
+		}
+
+		node := NewNode(addr)
+		s.peers = append(s.peers, node)
+	}
+}
+
+/**
+* AddNode
+* @param addr string
+**/
 func (s *Server) AddNode(addr string) {
 	s.nodes = append(s.nodes, addr)
 }
@@ -515,28 +537,6 @@ func (s *Server) Close() error {
 func (s *Server) StartProxy() error {
 	s.mode.Store(Proxy)
 	return s.Start()
-}
-
-/**
-* AddNode
-* @param addr string
-**/
-func (s *Server) addNode(addr string) {
-	if s.mode.Load() == Proxy {
-		if s.proxy == nil {
-			s.proxy = newBalancer()
-		}
-
-		node := newNode(addr)
-		s.proxy.nodes = append(s.proxy.nodes, node)
-	} else {
-		if addr == s.addr {
-			return
-		}
-
-		node := NewNode(addr)
-		s.peers = append(s.peers, node)
-	}
 }
 
 /**
@@ -647,6 +647,16 @@ func (s *Server) Request(to *Client, tp int, payload any) (*Message, error) {
 		s.muPending.Unlock()
 		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
 	}
+}
+
+/**
+* LeaderID
+* @return string, bool
+**/
+func (s *Server) LeaderID() (string, bool) {
+	s.muRaft.Lock()
+	defer s.muRaft.Unlock()
+	return s.leaderID, s.state == Leader
 }
 
 /**

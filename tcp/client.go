@@ -258,6 +258,59 @@ func (s *Client) connect() (net.Conn, error) {
 }
 
 /**
+* Request
+* @param m *Message
+* @return *Message, error
+**/
+func (s *Client) request(m *Message) (*Message, error) {
+	// Channel for response
+	ch := make(chan *Message, 1)
+	s.mu.Lock()
+	s.messages[m.ID] = ch
+	s.mu.Unlock()
+
+	bt, err := m.serialize()
+	if err != nil {
+		return nil, s.error(err)
+	}
+
+	// Connect
+	if s.Status != Connected {
+		conn, err := s.connect()
+		if err != nil {
+			return nil, s.error(err)
+		}
+		s.Status = Connected
+		s.conn = conn
+	}
+
+	// Send
+	s.outbound <- bt
+
+	// Wait response or timeout
+	select {
+	case resp := <-ch:
+		s.mu.Lock()
+		delete(s.messages, m.ID)
+		s.mu.Unlock()
+
+		if s.isDebug {
+			logs.Debugf("response: %s", resp.ToJson().ToString())
+		}
+		return resp, nil
+
+	case <-time.After(s.timeout):
+		s.mu.Lock()
+		delete(s.messages, m.ID)
+		s.mu.Unlock()
+		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
+
+	case <-s.done:
+		return nil, fmt.Errorf(msg.MSG_CLIENT_DISCONNECTED, s.Addr)
+	}
+}
+
+/**
 * Connect
 **/
 func (s *Client) Connect() error {
@@ -361,55 +414,22 @@ func (s *Client) Send(tp int, message any) error {
 
 /**
 * Request
-* @param m *Message
-* @return *Message, error
+* @param method string, request any, response any
+* @return error
 **/
-func (s *Client) request(m *Message) (*Message, error) {
-	// Channel for response
-	ch := make(chan *Message, 1)
-	s.mu.Lock()
-	s.messages[m.ID] = ch
-	s.mu.Unlock()
-
-	bt, err := m.serialize()
+func (s *Client) Request(method string, request any, response any) error {
+	m, err := NewMessage(Method, request)
 	if err != nil {
-		return nil, s.error(err)
+		return err
+	}
+	m.Method = method
+
+	res, err := s.request(m)
+	if err != nil {
+		return err
 	}
 
-	// Connect
-	if s.Status != Connected {
-		conn, err := s.connect()
-		if err != nil {
-			return nil, s.error(err)
-		}
-		s.Status = Connected
-		s.conn = conn
-	}
-
-	// Send
-	s.outbound <- bt
-
-	// Wait response or timeout
-	select {
-	case resp := <-ch:
-		s.mu.Lock()
-		delete(s.messages, m.ID)
-		s.mu.Unlock()
-
-		if s.isDebug {
-			logs.Debugf("response: %s", resp.ToJson().ToString())
-		}
-		return resp, nil
-
-	case <-time.After(s.timeout):
-		s.mu.Lock()
-		delete(s.messages, m.ID)
-		s.mu.Unlock()
-		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
-
-	case <-s.done:
-		return nil, fmt.Errorf(msg.MSG_CLIENT_DISCONNECTED, s.Addr)
-	}
+	return res.Get(response)
 }
 
 /**

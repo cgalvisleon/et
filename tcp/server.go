@@ -636,7 +636,7 @@ func (s *Server) Broadcast(destination []string, tp int, message any) {
 * @return error
 **/
 func (s *Server) Request(to *Client, method string, request any, response any) error {
-	m, err := NewMessage(Method, method)
+	m, err := NewMessage(Method, request)
 	if err != nil {
 		return err
 	}

@@ -466,15 +466,19 @@ func (s *Server) Start() error {
 		fn(s)
 	}
 
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			continue
-		}
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				continue
+			}
 
-		client := s.newClient(conn)
-		s.register <- client
-	}
+			client := s.newClient(conn)
+			s.register <- client
+		}
+	}()
+
+	return nil
 }
 
 /**

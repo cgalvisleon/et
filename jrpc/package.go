@@ -2,12 +2,8 @@ package jrpc
 
 import (
 	"encoding/json"
-	"fmt"
-	"net"
-	"net/rpc"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/logs"
 )
 
 type Solver struct {
@@ -21,7 +17,6 @@ type Package struct {
 	Host    string    `json:"host"`
 	Port    int       `json:"port"`
 	Solvers []*Solver `json:"routes"`
-	started bool      `json:"-"`
 }
 
 /**
@@ -55,34 +50,6 @@ func (s *Package) ToJson() et.Json {
 	}
 
 	return result
-}
-
-/**
-* Start
-**/
-func (s *Package) start() error {
-	if s.started {
-		return nil
-	}
-
-	address := fmt.Sprintf(`:%d`, s.Port)
-	listener, err := net.Listen("tcp", address)
-	if err != nil {
-		logs.Fatal(err)
-	}
-
-	s.started = true
-	logs.Logf("Rpc", `%s running on %s%s`, s.Name, s.Host, listener.Addr())
-
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			logs.Panic(err)
-			continue
-		}
-
-		go rpc.ServeConn(conn)
-	}
 }
 
 /**

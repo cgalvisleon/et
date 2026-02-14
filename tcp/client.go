@@ -300,6 +300,31 @@ func (s *Client) Start() error {
 }
 
 /**
+* Console
+* @return error
+**/
+func (s *Client) Console() error {
+	err := s.Connect()
+	if err != nil {
+		return err
+	}
+
+	go StartConsole(s)
+
+	utility.AppWait()
+	return nil
+}
+
+/**
+* Close
+* @return error
+**/
+func (s *Client) Close() error {
+	s.disconnect()
+	return nil
+}
+
+/**
 * Send
 * @param tp int, message any
 * @return error

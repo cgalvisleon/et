@@ -197,6 +197,8 @@ func main() {
 ```bash
 gofmt -w . && go run ./cmd/whatcher
 gofmt -w . && go run ./cmd/apigateway
+gofmt -w . && go run ./cmd/server
+gofmt -w . && go run ./cmd/client
 ```
 
 ## Contribuir

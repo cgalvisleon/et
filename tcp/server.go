@@ -435,6 +435,79 @@ func (s *Server) incoming(c *Client) {
 }
 
 /**
+* response
+* @params to *Client, id string, tp int, message any
+* @return error
+**/
+func (s *Server) response(to *Client, id string, tp int, message any) error {
+	s.mu.Lock()
+	_, ok := s.clients[to.Addr]
+	s.mu.Unlock()
+
+	if !ok {
+		return fmt.Errorf(msg.MSG_TCP_CLIENT_NOT_FOUND, to.Addr)
+	}
+
+	msg, err := NewMessage(tp, message)
+	if err != nil {
+		return err
+	}
+
+	if id != "" {
+		msg.ID = id
+	}
+
+	s.outbound <- &Msg{
+		To:  to,
+		Msg: msg,
+	}
+
+	return nil
+}
+
+/**
+* request
+* @param to *Client, tp int, payload any
+* @return *Message, error
+**/
+func (s *Server) request(to *Client, m *Message) (*Message, error) {
+	s.mu.Lock()
+	_, ok := s.clients[to.Addr]
+	s.mu.Unlock()
+
+	if !ok {
+		return nil, fmt.Errorf(msg.MSG_TCP_CLIENT_NOT_FOUND, to.Addr)
+	}
+
+	// Channel for response
+	ch := make(chan *Message, 1)
+	s.muMessages.Lock()
+	s.messages[m.ID] = ch
+	s.muMessages.Unlock()
+
+	// Send
+	s.outbound <- &Msg{
+		To:  to,
+		Msg: m,
+	}
+
+	// Wait response or timeout
+	select {
+	case resp := <-ch:
+		s.muMessages.Lock()
+		delete(s.messages, m.ID)
+		s.muMessages.Unlock()
+		return resp, nil
+
+	case <-time.After(s.timeout):
+		s.muMessages.Lock()
+		delete(s.messages, m.ID)
+		s.muMessages.Unlock()
+		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
+	}
+}
+
+/**
 * AddNode
 * @param addr string
 **/
@@ -526,84 +599,6 @@ func (s *Server) StartProxy() error {
 }
 
 /**
-* response
-* @params to *Client, id string, tp int, message any
-* @return error
-**/
-func (s *Server) response(to *Client, id string, tp int, message any) error {
-	s.mu.Lock()
-	_, ok := s.clients[to.Addr]
-	s.mu.Unlock()
-
-	if !ok {
-		return fmt.Errorf(msg.MSG_TCP_CLIENT_NOT_FOUND, to.Addr)
-	}
-
-	msg, err := newMessage(tp, message)
-	if err != nil {
-		return err
-	}
-
-	if id != "" {
-		msg.ID = id
-	}
-
-	s.outbound <- &Msg{
-		To:  to,
-		Msg: msg,
-	}
-
-	return nil
-}
-
-/**
-* request
-* @param to *Client, tp int, payload any
-* @return *Message, error
-**/
-func (s *Server) request(to *Client, tp int, payload any) (*Message, error) {
-	s.mu.Lock()
-	_, ok := s.clients[to.Addr]
-	s.mu.Unlock()
-
-	if !ok {
-		return nil, fmt.Errorf(msg.MSG_TCP_CLIENT_NOT_FOUND, to.Addr)
-	}
-
-	m, err := newMessage(tp, payload)
-	if err != nil {
-		return nil, err
-	}
-
-	// Channel for response
-	ch := make(chan *Message, 1)
-	s.muMessages.Lock()
-	s.messages[m.ID] = ch
-	s.muMessages.Unlock()
-
-	// Send
-	s.outbound <- &Msg{
-		To:  to,
-		Msg: m,
-	}
-
-	// Wait response or timeout
-	select {
-	case resp := <-ch:
-		s.muMessages.Lock()
-		delete(s.messages, m.ID)
-		s.muMessages.Unlock()
-		return resp, nil
-
-	case <-time.After(s.timeout):
-		s.muMessages.Lock()
-		delete(s.messages, m.ID)
-		s.muMessages.Unlock()
-		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
-	}
-}
-
-/**
 * Send
 * @param to *Client, tp int, message any
 * @return error
@@ -633,6 +628,26 @@ func (s *Server) Broadcast(destination []string, tp int, message any) {
 			s.Send(client, tp, message)
 		}
 	}
+}
+
+/**
+* Request
+* @param to *Client, method string, request any, response any
+* @return error
+**/
+func (s *Server) Request(to *Client, method string, request any, response any) error {
+	m, err := NewMessage(Method, method)
+	if err != nil {
+		return err
+	}
+	m.Method = method
+
+	res, err := s.request(to, m)
+	if err != nil {
+		return err
+	}
+
+	return res.Get(response)
 }
 
 /**

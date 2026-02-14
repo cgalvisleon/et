@@ -19,11 +19,13 @@ const (
 	ErrorMessage int = 14
 	Heartbeat    int = 15
 	RequestVote  int = 16
+	Method       int = 17
 )
 
 type Message struct {
 	ID      string `json:"id"`
 	Type    int    `json:"type"`
+	Method  string `json:"method"`
 	Payload []byte `json:"payload"`
 }
 
@@ -97,9 +99,9 @@ func toMessage(bt []byte) (*Message, error) {
 }
 
 /**
-* newMessage
+* NewMessage
 **/
-func newMessage(tp int, message any) (*Message, error) {
+func NewMessage(tp int, message any) (*Message, error) {
 	bt, ok := message.([]byte)
 	if !ok {
 		var err error

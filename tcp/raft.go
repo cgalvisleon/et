@@ -74,7 +74,7 @@ func (s *Server) GetLeader() (string, bool) {
 	s.muRaft.Lock()
 	result := s.leaderID
 	s.muRaft.Unlock()
-	if len(s.peers) < 1 {
+	if len(s.Peers) < 1 {
 		return result, true
 	}
 	return result, result != "" && result == s.addr
@@ -84,7 +84,7 @@ func (s *Server) GetLeader() (string, bool) {
 * ElectionLoop
 **/
 func (s *Server) ElectionLoop() {
-	if len(s.peers) == 0 {
+	if len(s.Peers) == 0 {
 		s.muRaft.Lock()
 		s.becomeLeader()
 		s.muRaft.Unlock()
@@ -123,8 +123,8 @@ func (s *Server) startElection() {
 	s.muRaft.Unlock()
 
 	votes := 1
-	total := len(s.peers)
-	for _, peer := range s.peers {
+	total := len(s.Peers)
+	for _, peer := range s.Peers {
 		if peer.Status != Connected {
 			err := peer.Connect()
 			if err != nil {
@@ -184,7 +184,7 @@ func (s *Server) becomeLeader() {
 * heartbeatLoop
 **/
 func (s *Server) heartbeatLoop() {
-	if len(s.peers) == 0 {
+	if len(s.Peers) == 0 {
 		return
 	}
 
@@ -200,7 +200,7 @@ func (s *Server) heartbeatLoop() {
 			return
 		}
 
-		for _, peer := range s.peers {
+		for _, peer := range s.Peers {
 			if peer.Addr == s.addr {
 				continue
 			}

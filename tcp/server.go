@@ -78,7 +78,7 @@ type Server struct {
 	// Balancer
 	proxy *Balancer `json:"-"`
 	// Cluster
-	peers          []*Client       `json:"-"`
+	Peers          []*Client       `json:"-"`
 	state          Mode            `json:"-"`
 	term           int             `json:"-"`
 	votedFor       string          `json:"-"`
@@ -129,7 +129,7 @@ func NewServer(port int) *Server {
 		isDebug:         isDebug,
 		isTesting:       isTesting,
 		// Cluster
-		peers:          make([]*Client, 0),
+		Peers:          make([]*Client, 0),
 		state:          Follower,
 		term:           0,
 		votedFor:       "",
@@ -454,7 +454,7 @@ func (s *Server) addNode(addr string) {
 		}
 
 		node := NewNode(addr)
-		s.peers = append(s.peers, node)
+		s.Peers = append(s.Peers, node)
 	}
 }
 
@@ -497,7 +497,7 @@ func (s *Server) Start() error {
 		s.addNode(addr)
 	}
 
-	if len(s.peers) > 0 {
+	if len(s.Peers) > 0 {
 		go s.ElectionLoop()
 	}
 

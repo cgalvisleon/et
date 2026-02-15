@@ -4,18 +4,21 @@ import (
 	"bufio"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
+	"reflect"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/msg"
+	mg "github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 )
@@ -86,6 +89,8 @@ type Server struct {
 	muRaft         sync.Mutex      `json:"-"`
 	onBecomeLeader []func(*Server) `json:"-"`
 	onChangeLeader []func(*Server) `json:"-"`
+	// Call
+	method map[string]interface{} `json:"-"`
 }
 
 /**
@@ -136,6 +141,8 @@ func NewServer(port int) *Server {
 		muRaft:         sync.Mutex{},
 		onBecomeLeader: make([]func(*Server), 0),
 		onChangeLeader: make([]func(*Server), 0),
+		// Call
+		method: make(map[string]interface{}),
 	}
 	result.mode.Store(Follower)
 	return result
@@ -198,7 +205,7 @@ func (s *Server) onConnect(client *Client) {
 	defer s.mu.Unlock()
 
 	s.clients[client.Addr] = client
-	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED_FROM, client.toJson().ToString())
+	logs.Logf(packageName, mg.MSG_CLIENT_CONNECTED_FROM, client.toJson().ToString())
 	go s.handle(client)
 	for _, fn := range s.onConnection {
 		fn(client)
@@ -212,7 +219,7 @@ func (s *Server) onConnect(client *Client) {
 func (s *Server) onDisconnect(client *Client) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	logs.Logf(packageName, msg.MSG_CLIENT_DISCONNECTED, client.Addr)
+	logs.Logf(packageName, mg.MSG_CLIENT_DISCONNECTED, client.Addr)
 
 	_, ok := s.clients[client.Addr]
 	if ok {
@@ -347,6 +354,38 @@ func (s *Server) inbox() {
 			if err != nil {
 				logs.Error(err)
 			}
+		case Method:
+			method := msg.Msg.Method
+
+			split := strings.Split(method, ".")
+			if len(split) != 2 {
+				s.SendError(msg.To, fmt.Errorf(mg.MSG_INVALID_METHOD, method))
+				return
+			}
+
+			name := split[1]
+			pkg, ok := s.method[split[0]]
+			if !ok {
+				s.SendError(msg.To, fmt.Errorf(mg.MSG_INVALID_METHOD, split[0]))
+				return
+			}
+
+			v := reflect.ValueOf(pkg)
+			m := v.MethodByName(name)
+			if !m.IsValid() {
+				s.SendError(msg.To, fmt.Errorf(mg.MSG_INVALID_METHOD, name))
+			}
+
+			argsValues := make([]reflect.Value, len(msg.Msg.Args))
+			for i, arg := range msg.Msg.Args {
+				argsValues[i] = reflect.ValueOf(arg)
+			}
+
+			res := m.Call(argsValues)
+			err := s.response(msg.To, msg.ID(), Method, res)
+			if err != nil {
+				logs.Error(err)
+			}
 		default:
 			for _, fn := range s.onInbound {
 				fn(msg.To, msg.Msg)
@@ -411,7 +450,7 @@ func (s *Server) incoming(c *Client) {
 		_, err := io.ReadFull(reader, lenBuf)
 		if err != nil {
 			if err != io.EOF {
-				logs.Logf(packageName, msg.MSG_TCP_ERROR_READ, err)
+				logs.Logf(packageName, mg.MSG_TCP_ERROR_READ, err)
 			}
 			s.unregister <- c
 			return
@@ -421,7 +460,7 @@ func (s *Server) incoming(c *Client) {
 		length := binary.BigEndian.Uint32(lenBuf)
 		limitReader := envar.GetInt("LIMIT_SIZE_MG", 10)
 		if length > uint32(limitReader*1024*1024) {
-			s.Send(c, ErrorMessage, msg.MSG_TCP_MESSAGE_TOO_LARGE)
+			s.Send(c, ErrorMessage, mg.MSG_TCP_MESSAGE_TOO_LARGE)
 			continue
 		}
 
@@ -457,7 +496,7 @@ func (s *Server) response(to *Client, id string, tp int, message any) error {
 	s.mu.Unlock()
 
 	if !ok {
-		return fmt.Errorf(msg.MSG_TCP_CLIENT_NOT_FOUND, to.Addr)
+		return fmt.Errorf(mg.MSG_TCP_CLIENT_NOT_FOUND, to.Addr)
 	}
 
 	msg, err := NewMessage(tp, message)
@@ -488,7 +527,7 @@ func (s *Server) request(to *Client, m *Message) (*Message, error) {
 	s.mu.Unlock()
 
 	if !ok {
-		return nil, fmt.Errorf(msg.MSG_TCP_CLIENT_NOT_FOUND, to.Addr)
+		return nil, fmt.Errorf(mg.MSG_TCP_CLIENT_NOT_FOUND, to.Addr)
 	}
 
 	// Channel for response
@@ -515,7 +554,7 @@ func (s *Server) request(to *Client, m *Message) (*Message, error) {
 		s.muMessages.Lock()
 		delete(s.messages, m.ID)
 		s.muMessages.Unlock()
-		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
+		return nil, fmt.Errorf(mg.MSG_TCP_TIMEOUT)
 	}
 }
 
@@ -572,7 +611,7 @@ func (s *Server) Start() error {
 		go s.ElectionLoop()
 	}
 
-	logs.Logf(packageName, msg.MSG_TCP_LISTENING, s.addr)
+	logs.Logf(packageName, mg.MSG_TCP_LISTENING, s.addr)
 
 	for _, fn := range s.onStart {
 		fn(s)
@@ -670,15 +709,16 @@ func (s *Server) Broadcast(destination []string, tp int, message any) {
 
 /**
 * Request
-* @param to *Client, method string, request any, response any
+* @param to *Client, method string, request []interface{}, response []interface{}
 * @return error
 **/
-func (s *Server) Request(to *Client, method string, request any, response any) error {
-	m, err := NewMessage(Method, request)
+func (s *Server) Request(to *Client, method string, request []interface{}, response []interface{}) error {
+	m, err := NewMessage(Method, "")
 	if err != nil {
 		return err
 	}
 	m.Method = method
+	m.Args = request
 
 	res, err := s.request(to, m)
 	if err != nil {
@@ -686,6 +726,23 @@ func (s *Server) Request(to *Client, method string, request any, response any) e
 	}
 
 	return res.Get(response)
+}
+
+/**
+* Mount
+* @param services any
+**/
+func (s *Server) Mount(services any) error {
+	if services == nil {
+		return errors.New(mg.MSG_SERVICE_REQUIRED)
+	}
+	tipoStruct := reflect.TypeOf(services)
+	structName := tipoStruct.String()
+	list := strings.Split(structName, ".")
+	structName = list[len(list)-1]
+	name := structName
+	s.method[name] = services
+	return nil
 }
 
 /**

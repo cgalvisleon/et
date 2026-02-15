@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
-	"reflect"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/reg"
@@ -22,7 +21,22 @@ const (
 	Method       int = 16
 )
 
-var errorInterface = reflect.TypeOf((*error)(nil)).Elem()
+type Result struct {
+	Response []any `json:"response"`
+	Error    error `json:"error"`
+}
+
+/**
+* newResult
+* @param res []any, err error
+* @return *Result
+**/
+func newResult(res []any, err error) *Result {
+	return &Result{
+		Response: res,
+		Error:    err,
+	}
+}
 
 type Message struct {
 	ID       string `json:"id"`

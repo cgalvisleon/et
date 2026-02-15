@@ -757,27 +757,27 @@ func (s *Server) Broadcast(destination []string, tp int, message any) {
 /**
 * Request
 * @param to *Client, method string, request ...any
-* @return []any, error
+* @return *Result
 **/
-func (s *Server) Request(to *Client, method string, request ...any) ([]any, error) {
+func (s *Server) Request(to *Client, method string, request ...any) *Result {
 	m, err := NewMessage(Method, "")
 	if err != nil {
-		return nil, err
+		return newResult(nil, err)
 	}
 	m.Method = method
 	m.Args = request
 
 	res, err := s.request(to, m)
 	if err != nil {
-		return nil, err
+		return newResult(nil, err)
 	}
 
 	response, err := res.Result()
 	if err != nil {
-		return nil, err
+		return newResult(nil, err)
 	}
 
-	return response, nil
+	return newResult(response, nil)
 }
 
 /**

@@ -28,8 +28,8 @@ func Ping(to *Client) (string, error) {
 /**
 * Request
 * @param from *Server, to *Client, method string, request ...interface{}
-* @return *Result
+* @return *Response
 **/
-func Request(from *Server, to *Client, method string, request ...interface{}) *Result {
+func Request(from *Server, to *Client, method string, request ...interface{}) *Response {
 	return from.Request(to, method, request)
 }

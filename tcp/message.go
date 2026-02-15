@@ -23,7 +23,7 @@ const (
 	Method       int = 16
 )
 
-type Result struct {
+type Response struct {
 	Response []any `json:"response"`
 	Error    error `json:"error"`
 }
@@ -31,10 +31,10 @@ type Result struct {
 /**
 * newResult
 * @param res []any, err error
-* @return *Result
+* @return *Response
 **/
-func newResult(res []any, err error) *Result {
-	return &Result{
+func newResponse(res []any, err error) *Response {
+	return &Response{
 		Response: res,
 		Error:    err,
 	}
@@ -45,7 +45,7 @@ func newResult(res []any, err error) *Result {
 * @param idx int, dest any
 * @return error
 **/
-func (s *Result) Get(idx int, dest any) error {
+func (s *Response) Get(idx int, dest any) error {
 	if idx >= len(s.Response) {
 		return errors.New(msg.MSG_INDEX_OUT_OF_RANGE)
 	}

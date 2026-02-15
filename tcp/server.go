@@ -726,23 +726,29 @@ func (s *Server) Broadcast(destination []string, tp int, message any) {
 
 /**
 * Request
-* @param to *Client, method string, request []interface{}, response []interface{}
-* @return error
+* @param to *Client, method string, request []interface{}
+* @return []interface{}, error
 **/
-func (s *Server) Request(to *Client, method string, request []interface{}, response []interface{}) error {
+func (s *Server) Request(to *Client, method string, request []interface{}) ([]interface{}, error) {
 	m, err := NewMessage(Method, "")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	m.Method = method
 	m.Args = request
 
 	res, err := s.request(to, m)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return res.Get(response)
+	var response []interface{}
+	err = res.Get(&response)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
 }
 
 /**

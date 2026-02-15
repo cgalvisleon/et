@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"reflect"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/reg"
@@ -21,12 +22,15 @@ const (
 	Method       int = 16
 )
 
+var errorInterface = reflect.TypeOf((*error)(nil)).Elem()
+
 type Message struct {
-	ID      string        `json:"id"`
-	Type    int           `json:"type"`
-	Method  string        `json:"method"`
-	Payload []byte        `json:"payload"`
-	Args    []interface{} `json:"args"`
+	ID       string `json:"id"`
+	Type     int    `json:"type"`
+	Method   string `json:"method"`
+	Payload  []byte `json:"payload"`
+	Args     []any  `json:"args"`
+	Response []any  `json:"response"`
 }
 
 /**
@@ -84,6 +88,24 @@ func (s *Message) Get(dest any) error {
 }
 
 /**
+* Result
+* @return []any, error
+**/
+func (s *Message) Result() ([]any, error) {
+	result := make([]any, 0)
+	err := error(nil)
+	for i, v := range s.Response {
+		_, ok := v.(error)
+		if ok {
+			err = v.(error)
+			continue
+		}
+		result = append(result, v)
+	}
+	return result, err
+}
+
+/**
 * toMessage
 * @param bt []byte
 * @return Message, error
@@ -112,10 +134,11 @@ func NewMessage(tp int, message any) (*Message, error) {
 	}
 
 	result := &Message{
-		ID:      reg.ULID(),
-		Type:    tp,
-		Payload: bt,
-		Args:    []interface{}{},
+		ID:       reg.ULID(),
+		Type:     tp,
+		Payload:  bt,
+		Args:     []any{},
+		Response: []any{},
 	}
 
 	switch tp {

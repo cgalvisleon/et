@@ -312,7 +312,13 @@ func (s *Server) inbox() {
 				return
 			}
 
-			err = s.response(msg.To, msg.ID(), PingMessage, "PONG")
+			rsp, err := NewMessage(PingMessage, "PONG")
+			if err != nil {
+				logs.Error(err)
+				return
+			}
+
+			err = s.response(msg.To, msg.ID(), rsp)
 			if err != nil {
 				logs.Error(err)
 			}
@@ -331,7 +337,13 @@ func (s *Server) inbox() {
 				return
 			}
 
-			err = s.response(msg.To, msg.ID(), RequestVote, res)
+			rsp, err := NewMessage(RequestVote, res)
+			if err != nil {
+				logs.Error(err)
+				return
+			}
+
+			err = s.response(msg.To, msg.ID(), rsp)
 			if err != nil {
 				logs.Error(err)
 			}
@@ -350,7 +362,13 @@ func (s *Server) inbox() {
 				return
 			}
 
-			err = s.response(msg.To, msg.ID(), Heartbeat, res)
+			rsp, err := NewMessage(Heartbeat, res)
+			if err != nil {
+				logs.Error(err)
+				return
+			}
+
+			err = s.response(msg.To, msg.ID(), rsp)
 			if err != nil {
 				logs.Error(err)
 			}
@@ -382,7 +400,19 @@ func (s *Server) inbox() {
 			}
 
 			res := m.Call(argsValues)
-			err := s.response(msg.To, msg.ID(), Method, res)
+			rsp, err := NewMessage(Method, "")
+			if err != nil {
+				logs.Error(err)
+				return
+			}
+
+			for _, v := range res {
+				if v.IsValid() && v.CanInterface() {
+					rsp.Response = append(rsp.Response, v.Interface())
+				}
+			}
+
+			err = s.response(msg.To, msg.ID(), rsp)
 			if err != nil {
 				logs.Error(err)
 			}
@@ -490,18 +520,13 @@ func (s *Server) incoming(c *Client) {
 * @params to *Client, id string, tp int, message any
 * @return error
 **/
-func (s *Server) response(to *Client, id string, tp int, message any) error {
+func (s *Server) response(to *Client, id string, msg *Message) error {
 	s.mu.Lock()
 	_, ok := s.clients[to.Addr]
 	s.mu.Unlock()
 
 	if !ok {
 		return fmt.Errorf(mg.MSG_TCP_CLIENT_NOT_FOUND, to.Addr)
-	}
-
-	msg, err := NewMessage(tp, message)
-	if err != nil {
-		return err
 	}
 
 	if id != "" {
@@ -698,7 +723,12 @@ func (s *Server) Port() int {
 * @return error
 **/
 func (s *Server) Send(to *Client, tp int, message any) error {
-	return s.response(to, "", tp, message)
+	msg, err := NewMessage(tp, message)
+	if err != nil {
+		return err
+	}
+
+	return s.response(to, "", msg)
 }
 
 /**
@@ -726,10 +756,10 @@ func (s *Server) Broadcast(destination []string, tp int, message any) {
 
 /**
 * Request
-* @param to *Client, method string, request ...interface{}
+* @param to *Client, method string, request ...any
 * @return []interface{}, error
 **/
-func (s *Server) Request(to *Client, method string, request ...interface{}) ([]interface{}, error) {
+func (s *Server) Request(to *Client, method string, request ...any) ([]interface{}, error) {
 	m, err := NewMessage(Method, "")
 	if err != nil {
 		return nil, err

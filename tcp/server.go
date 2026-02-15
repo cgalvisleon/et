@@ -757,9 +757,9 @@ func (s *Server) Broadcast(destination []string, tp int, message any) {
 /**
 * Request
 * @param to *Client, method string, request ...any
-* @return []interface{}, error
+* @return []any, error
 **/
-func (s *Server) Request(to *Client, method string, request ...any) ([]interface{}, error) {
+func (s *Server) Request(to *Client, method string, request ...any) ([]any, error) {
 	m, err := NewMessage(Method, "")
 	if err != nil {
 		return nil, err
@@ -772,8 +772,7 @@ func (s *Server) Request(to *Client, method string, request ...any) ([]interface
 		return nil, err
 	}
 
-	var response []interface{}
-	err = res.Get(&response)
+	response, err := res.Result()
 	if err != nil {
 		return nil, err
 	}

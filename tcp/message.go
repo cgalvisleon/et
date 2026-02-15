@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
 )
 
@@ -36,6 +38,23 @@ func newResult(res []any, err error) *Result {
 		Response: res,
 		Error:    err,
 	}
+}
+
+/**
+* Get
+* @param idx int, dest any
+* @return error
+**/
+func (s *Result) Get(idx int, dest any) error {
+	if idx >= len(s.Response) {
+		return errors.New(msg.MSG_INDEX_OUT_OF_RANGE)
+	}
+
+	bt, err := json.Marshal(s.Response[idx])
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(bt, dest)
 }
 
 type Message struct {

@@ -46,6 +46,7 @@ var (
 	MSG_TCP_TIMEOUT                    = "timeout waiting response"
 	MSG_SERVICE_REQUIRED               = "service required"
 	MSG_INVALID_METHOD                 = "invalid method: %s"
+	MSG_INDEX_OUT_OF_RANGE             = "index out of range"
 )
 
 func init() {
@@ -94,5 +95,6 @@ func init() {
 		MSG_TCP_TIMEOUT = "timeout esperando respuesta"
 		MSG_SERVICE_REQUIRED = "servicio requerido"
 		MSG_INVALID_METHOD = "invalid method: %s"
+		MSG_INDEX_OUT_OF_RANGE = "index out of range"
 	}
 }

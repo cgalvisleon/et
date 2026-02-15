@@ -67,20 +67,6 @@ type HeartbeatReply struct {
 }
 
 /**
-* GetLeader
-* @return string, error
-**/
-func (s *Server) GetLeader() (string, bool) {
-	s.muRaft.Lock()
-	result := s.leaderID
-	s.muRaft.Unlock()
-	if len(s.Peers) < 1 {
-		return result, true
-	}
-	return result, result != "" && result == s.addr
-}
-
-/**
 * ElectionLoop
 **/
 func (s *Server) ElectionLoop() {

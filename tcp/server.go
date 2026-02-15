@@ -660,6 +660,23 @@ func (s *Server) LeaderID() (string, bool) {
 }
 
 /**
+* GetLeader
+* @return *Client, bool
+**/
+func (s *Server) GetLeader() (*Client, bool) {
+	leader, imLeader := s.LeaderID()
+	if imLeader {
+		return nil, true
+	}
+
+	idx := slices.IndexFunc(s.Peers, func(e *Client) bool { return e.Addr == leader })
+	if idx == -1 {
+		return nil, false
+	}
+	return s.Peers[idx], false
+}
+
+/**
 * Address
 * @return string, error
 **/

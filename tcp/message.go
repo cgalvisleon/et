@@ -42,19 +42,27 @@ func newResponse(res []any, err error) *Response {
 
 /**
 * Get
-* @param idx int, dest any
+* @param dest ...any
 * @return error
 **/
-func (s *Response) Get(idx int, dest any) error {
-	if idx >= len(s.Response) {
+func (s *Response) Get(dest ...any) error {
+	l := len(dest)
+	if l > len(s.Response) {
 		return errors.New(msg.MSG_INDEX_OUT_OF_RANGE)
 	}
 
-	bt, err := json.Marshal(s.Response[idx])
-	if err != nil {
-		return err
+	for i, d := range dest {
+		bt, err := json.Marshal(s.Response[i])
+		if err != nil {
+			return err
+		}
+		err = json.Unmarshal(bt, d)
+		if err != nil {
+			return err
+		}
 	}
-	return json.Unmarshal(bt, dest)
+
+	return nil
 }
 
 type Message struct {

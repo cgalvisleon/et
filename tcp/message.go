@@ -22,10 +22,11 @@ const (
 )
 
 type Message struct {
-	ID      string `json:"id"`
-	Type    int    `json:"type"`
-	Method  string `json:"method"`
-	Payload []byte `json:"payload"`
+	ID      string        `json:"id"`
+	Type    int           `json:"type"`
+	Method  string        `json:"method"`
+	Payload []byte        `json:"payload"`
+	Args    []interface{} `json:"args"`
 }
 
 /**
@@ -114,6 +115,7 @@ func NewMessage(tp int, message any) (*Message, error) {
 		ID:      reg.ULID(),
 		Type:    tp,
 		Payload: bt,
+		Args:    []interface{}{},
 	}
 
 	switch tp {

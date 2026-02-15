@@ -24,3 +24,12 @@ func Ping(to *Client) (string, error) {
 
 	return response, nil
 }
+
+/**
+* Request
+* @param from *Server, to *Client, method string, request []interface{}, response []interface{}
+* @return error
+**/
+func Request(from *Server, to *Client, method string, request []interface{}, response []interface{}) error {
+	return from.Request(to, method, request, response)
+}

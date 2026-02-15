@@ -94,7 +94,7 @@ func (s *Message) Get(dest any) error {
 func (s *Message) Result() ([]any, error) {
 	result := make([]any, 0)
 	err := error(nil)
-	for i, v := range s.Response {
+	for _, v := range s.Response {
 		_, ok := v.(error)
 		if ok {
 			err = v.(error)

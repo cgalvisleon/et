@@ -726,10 +726,10 @@ func (s *Server) Broadcast(destination []string, tp int, message any) {
 
 /**
 * Request
-* @param to *Client, method string, request []interface{}
+* @param to *Client, method string, request ...interface{}
 * @return []interface{}, error
 **/
-func (s *Server) Request(to *Client, method string, request []interface{}) ([]interface{}, error) {
+func (s *Server) Request(to *Client, method string, request ...interface{}) ([]interface{}, error) {
 	m, err := NewMessage(Method, "")
 	if err != nil {
 		return nil, err

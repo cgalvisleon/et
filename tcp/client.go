@@ -27,6 +27,7 @@ const (
 )
 
 type Client struct {
+	et.Json
 	CreatedAt    time.Time                 `json:"created_at"`
 	ID           string                    `json:"id"`
 	Addr         string                    `json:"addr"`
@@ -40,7 +41,6 @@ type Client struct {
 	done         chan struct{}             `json:"-"`
 	timeout      time.Duration             `json:"-"`
 	mu           sync.Mutex                `json:"-"`
-	Ctx          et.Json                   `json:"-"`
 	onConnect    []func(*Client)           `json:"-"`
 	onDisconnect []func(*Client)           `json:"-"`
 	onError      []func(*Client, error)    `json:"-"`
@@ -62,6 +62,7 @@ func NewClient(addr string) *Client {
 		timeout = 10 * time.Second
 	}
 	result := &Client{
+		Json:         et.Json{},
 		CreatedAt:    timezone.Now(),
 		ID:           reg.ULID(),
 		Addr:         addr,
@@ -72,7 +73,6 @@ func NewClient(addr string) *Client {
 		done:         make(chan struct{}),
 		timeout:      timeout,
 		mu:           sync.Mutex{},
-		Ctx:          et.Json{},
 		onConnect:    make([]func(*Client), 0),
 		onDisconnect: make([]func(*Client), 0),
 		onError:      make([]func(*Client, error), 0),

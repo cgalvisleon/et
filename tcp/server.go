@@ -188,12 +188,12 @@ func (s *Server) newClient(conn net.Conn) *Client {
 		timeout = 10 * time.Second
 	}
 	return &Client{
+		Json:      et.Json{},
 		CreatedAt: timezone.Now(),
 		ID:        reg.ULID(),
 		Addr:      conn.RemoteAddr().String(),
 		Status:    Connected,
 		conn:      conn,
-		Ctx:       et.Json{},
 		timeout:   timeout,
 	}
 }

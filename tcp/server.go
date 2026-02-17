@@ -86,7 +86,9 @@ type Server struct {
 	votedFor       string          `json:"-"`
 	leaderID       string          `json:"-"`
 	lastHeartbeat  time.Time       `json:"-"`
+	turn           int             `json:"-"`
 	muRaft         sync.Mutex      `json:"-"`
+	muTurn         sync.Mutex      `json:"-"`
 	onBecomeLeader []func(*Server) `json:"-"`
 	onChangeLeader []func(*Server) `json:"-"`
 	// Call
@@ -699,6 +701,18 @@ func (s *Server) GetLeader() (*Client, bool) {
 		return nil, false
 	}
 	return s.Peers[idx], false
+}
+
+/**
+* Next
+* @return *Client
+**/
+func (s *Server) Next() *Client {
+	s.muTurn.Lock()
+	defer s.muTurn.Unlock()
+	result := s.Peers[s.turn]
+	s.turn++
+	return result
 }
 
 /**

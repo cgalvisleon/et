@@ -412,19 +412,25 @@ func (s *Client) Send(tp int, message any) error {
 * @param method string, request any, response any
 * @return error
 **/
-func (s *Client) Request(method string, request any, response any) error {
-	m, err := NewMessage(Method, request)
+func (s *Client) Request(method string, request ...any) *Response {
+	m, err := NewMessage(Method, "")
 	if err != nil {
-		return err
+		return newResponse(nil, err)
 	}
 	m.Method = method
+	m.Args = request
 
 	res, err := s.request(m)
 	if err != nil {
-		return err
+		return newResponse(nil, err)
 	}
 
-	return res.Get(response)
+	response, err := res.Result()
+	if err != nil {
+		return newResponse(nil, err)
+	}
+
+	return newResponse(response, nil)
 }
 
 /**

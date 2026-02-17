@@ -2,7 +2,6 @@ package tcp
 
 import (
 	"bufio"
-	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -41,7 +40,7 @@ type Client struct {
 	done         chan struct{}             `json:"-"`
 	timeout      time.Duration             `json:"-"`
 	mu           sync.Mutex                `json:"-"`
-	ctx          context.Context           `json:"-"`
+	Ctx          et.Json                   `json:"-"`
 	onConnect    []func(*Client)           `json:"-"`
 	onDisconnect []func(*Client)           `json:"-"`
 	onError      []func(*Client, error)    `json:"-"`
@@ -73,7 +72,7 @@ func NewClient(addr string) *Client {
 		done:         make(chan struct{}),
 		timeout:      timeout,
 		mu:           sync.Mutex{},
-		ctx:          context.Background(),
+		Ctx:          et.Json{},
 		onConnect:    make([]func(*Client), 0),
 		onDisconnect: make([]func(*Client), 0),
 		onError:      make([]func(*Client, error), 0),

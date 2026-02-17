@@ -2,7 +2,6 @@ package tcp
 
 import (
 	"bufio"
-	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -17,6 +16,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	mg "github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
@@ -193,7 +193,7 @@ func (s *Server) newClient(conn net.Conn) *Client {
 		Addr:      conn.RemoteAddr().String(),
 		Status:    Connected,
 		conn:      conn,
-		ctx:       context.Background(),
+		Ctx:       et.Json{},
 		timeout:   timeout,
 	}
 }

@@ -11,6 +11,15 @@ type Items struct {
 	Result []Json `json:"result"`
 }
 
+func NewItems(data []Json) Items {
+	result := Items{
+		Count:  len(data),
+		Result: data,
+	}
+	result.Ok = result.Count > 0
+	return result
+}
+
 /**
 * ToByte convert a json to a []byte
 * @return []byte, error

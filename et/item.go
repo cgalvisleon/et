@@ -11,6 +11,18 @@ type Item struct {
 }
 
 /**
+* NewItem
+* @param data Json
+* @return Item
+**/
+func NewItem(data Json) Item {
+	return Item{
+		Ok:     true,
+		Result: data,
+	}
+}
+
+/**
 * ToByte convert a json to a []byte
 * @return []byte, error
 **/

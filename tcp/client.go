@@ -27,7 +27,6 @@ const (
 )
 
 type Client struct {
-	et.Json
 	CreatedAt    time.Time                 `json:"created_at"`
 	ID           string                    `json:"id"`
 	Addr         string                    `json:"addr"`
@@ -41,6 +40,7 @@ type Client struct {
 	done         chan struct{}             `json:"-"`
 	timeout      time.Duration             `json:"-"`
 	mu           sync.Mutex                `json:"-"`
+	Ctx          et.Json                   `json:"-"`
 	onConnect    []func(*Client)           `json:"-"`
 	onDisconnect []func(*Client)           `json:"-"`
 	onError      []func(*Client, error)    `json:"-"`
@@ -62,7 +62,6 @@ func NewClient(addr string) *Client {
 		timeout = 10 * time.Second
 	}
 	result := &Client{
-		Json:         et.Json{},
 		CreatedAt:    timezone.Now(),
 		ID:           reg.ULID(),
 		Addr:         addr,
@@ -73,6 +72,7 @@ func NewClient(addr string) *Client {
 		done:         make(chan struct{}),
 		timeout:      timeout,
 		mu:           sync.Mutex{},
+		Ctx:          et.Json{},
 		onConnect:    make([]func(*Client), 0),
 		onDisconnect: make([]func(*Client), 0),
 		onError:      make([]func(*Client, error), 0),
@@ -239,21 +239,23 @@ func (s *Client) disconnect() {
 /**
 * connect
 **/
-func (s *Client) connect() (net.Conn, error) {
+func (s *Client) connect() error {
 	dialer := net.Dialer{
 		Timeout:   10 * time.Second,
 		KeepAlive: 30 * time.Second,
 	}
 	result, err := dialer.Dial("tcp", s.Addr)
 	if err != nil {
-		return nil, s.error(err)
+		return s.error(err)
 	}
 
+	s.conn = result
+	s.Status = Connected
 	for _, fn := range s.onConnect {
 		fn(s)
 	}
 
-	return result, nil
+	return nil
 }
 
 /**
@@ -275,12 +277,10 @@ func (s *Client) request(m *Message) (*Message, error) {
 
 	// Connect
 	if s.Status != Connected {
-		conn, err := s.connect()
+		err := s.connect()
 		if err != nil {
 			return nil, s.error(err)
 		}
-		s.Status = Connected
-		s.conn = conn
 	}
 
 	// Send
@@ -313,15 +313,13 @@ func (s *Client) request(m *Message) (*Message, error) {
 * Connect
 **/
 func (s *Client) Connect() error {
-	conn, err := s.connect()
+	err := s.connect()
 	if err != nil {
 		return s.error(err)
 	}
 
-	s.LocalAddr = conn.LocalAddr().String()
-	s.RemoteAddr = conn.RemoteAddr().String()
-	s.Status = Connected
-	s.conn = conn
+	s.LocalAddr = s.conn.LocalAddr().String()
+	s.RemoteAddr = s.conn.RemoteAddr().String()
 	go s.incoming()
 	go s.inbox()
 	go s.send()
@@ -389,12 +387,10 @@ func (s *Client) Send(tp int, message any) error {
 
 	// Connect
 	if s.Status != Connected {
-		conn, err := s.connect()
+		err := s.connect()
 		if err != nil {
 			return s.error(err)
 		}
-		s.Status = Connected
-		s.conn = conn
 	}
 
 	// Send

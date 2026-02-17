@@ -704,10 +704,10 @@ func (s *Server) GetLeader() (*Client, bool) {
 }
 
 /**
-* Next
+* NextTurn
 * @return *Client
 **/
-func (s *Server) Next() *Client {
+func (s *Server) NextTurn() *Client {
 	s.muTurn.Lock()
 	defer s.muTurn.Unlock()
 	result := s.Peers[s.turn]

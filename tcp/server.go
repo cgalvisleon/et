@@ -56,9 +56,10 @@ func (s *Msg) Get(dest any) error {
 }
 
 type Mtd struct {
-	Name     string   `json:"name"`
-	Args     []string `json:"args"`
-	Response []string `json:"response"`
+	Name     string         `json:"name"`
+	Args     []string       `json:"args"`
+	Response []string       `json:"response"`
+	Handler  reflect.Method `json:"-"`
 }
 
 type Server struct {
@@ -790,29 +791,42 @@ func (s *Server) Mount(services any) error {
 	pkgName = list[len(list)-1]
 	s.method[pkgName] = make(map[string]*Mtd)
 	for i := 0; i < tipoStruct.NumMethod(); i++ {
-		metodo := tipoStruct.Method(i)
-		numInputs := metodo.Type.NumIn()
-		numOutputs := metodo.Type.NumOut()
+		method := tipoStruct.Method(i)
+		numInputs := method.Type.NumIn()
+		numOutputs := method.Type.NumOut()
 
 		args := []string{}
 		for i := 1; i < numInputs; i++ {
-			paramType := metodo.Type.In(i)
+			paramType := method.Type.In(i)
 			args = append(args, paramType.String())
 		}
 
 		response := []string{}
 		for i := 0; i < numOutputs; i++ {
-			paramType := metodo.Type.Out(i)
+			paramType := method.Type.Out(i)
 			response = append(response, paramType.String())
 		}
 
-		s.method[pkgName][metodo.Name] = &Mtd{
-			Name:     metodo.Name,
+		s.method[pkgName][method.Name] = &Mtd{
+			Name:     method.Name,
 			Args:     args,
 			Response: response,
+			Handler:  method,
 		}
 	}
 	return nil
+}
+
+/**
+* GetMethod
+* @return map[string]map[string]*Mtd
+**/
+func (s *Server) GetMethod() et.Json {
+	result := et.Json{}
+	for pkg, mt := range s.method {
+		result[pkg] = mt
+	}
+	return result
 }
 
 /**

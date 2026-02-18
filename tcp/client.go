@@ -412,13 +412,15 @@ func (s *Client) Send(tp int, message any) error {
 * @param method string, request any, response any
 * @return error
 **/
-func (s *Client) Request(method string, request ...any) *Response {
+func (s *Client) Request(method string, args ...any) *Response {
 	m, err := NewMessage(Method, "")
 	if err != nil {
 		return NewResponse(nil, err)
 	}
 	m.Method = method
-	m.Args = request
+	for _, arg := range args {
+		m.Args = append(m.Args, arg)
+	}
 
 	res, err := s.request(m)
 	if err != nil {

@@ -55,10 +55,10 @@ func (s *Msg) Get(dest any) error {
 	return s.Msg.Get(dest)
 }
 
-type HandlerFunc func(request ...any) *Response
+type HandlerFunc func(request []any) *Response
 
 type Service interface {
-	Execute(name string, request ...any) *Response
+	Execute(name string, request []any) *Response
 }
 
 type Server struct {
@@ -395,7 +395,7 @@ func (s *Server) inbox() {
 				return
 			}
 
-			res := service.Execute(methodName, msg.Msg.Args...)
+			res := service.Execute(methodName, msg.Msg.Args)
 			if res.Error != nil {
 				s.ResponseError(msg.To, msg.ID(), res.Error)
 				return
@@ -782,16 +782,18 @@ func (s *Server) Broadcast(destination []string, tp int, message any) {
 
 /**
 * Request
-* @param to *Client, method string, request ...any
+* @param to *Client, method string, args ...any
 * @return *Response
 **/
-func (s *Server) Request(to *Client, method string, request ...any) *Response {
+func (s *Server) Request(to *Client, method string, args ...any) *Response {
 	m, err := NewMessage(Method, "")
 	if err != nil {
 		return NewResponse(nil, err)
 	}
 	m.Method = method
-	m.Args = request
+	for _, arg := range args {
+		m.Args = append(m.Args, arg)
+	}
 
 	res, err := s.request(to, m)
 	if err != nil {

@@ -55,11 +55,11 @@ func (s *Msg) Get(dest any) error {
 	return s.Msg.Get(dest)
 }
 
+type HandlerFunc func(request ...any) Response
+
 type Service interface {
 	Execute(name string, request ...any) Response
 }
-
-type HandlerFunc func(request ...any) Response
 
 type Server struct {
 	addr            string                    `json:"-"`
@@ -788,22 +788,22 @@ func (s *Server) Broadcast(destination []string, tp int, message any) {
 func (s *Server) Request(to *Client, method string, request ...any) *Response {
 	m, err := NewMessage(Method, "")
 	if err != nil {
-		return newResponse(nil, err)
+		return NewResponse(nil, err)
 	}
 	m.Method = method
 	m.Args = request
 
 	res, err := s.request(to, m)
 	if err != nil {
-		return newResponse(nil, err)
+		return NewResponse(nil, err)
 	}
 
 	response, err := res.Result()
 	if err != nil {
-		return newResponse(nil, err)
+		return NewResponse(nil, err)
 	}
 
-	return newResponse(response, nil)
+	return NewResponse(response, nil)
 }
 
 /**

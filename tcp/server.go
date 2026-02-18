@@ -71,7 +71,6 @@ type Server struct {
 	onError         []func(*Client, error)    `json:"-"`
 	onOutbound      []func(*Client, *Message) `json:"-"`
 	onInbound       []func(*Client, *Message) `json:"-"`
-	onMethod        []func(*Client, *Message) `json:"-"`
 	mode            atomic.Value              `json:"-"`
 	timeout         time.Duration             `json:"-"`
 	mu              sync.Mutex                `json:"-"`
@@ -129,7 +128,6 @@ func NewServer(port int) *Server {
 		onError:         make([]func(*Client, error), 0),
 		onOutbound:      make([]func(*Client, *Message), 0),
 		onInbound:       make([]func(*Client, *Message), 0),
-		onMethod:        make([]func(*Client, *Message), 0),
 		mu:              sync.Mutex{},
 		muMessages:      sync.Mutex{},
 		timeout:         timeout,
@@ -375,10 +373,6 @@ func (s *Server) inbox() {
 			err = s.response(msg.To, msg.ID(), rsp)
 			if err != nil {
 				logs.Error(err)
-			}
-		case Method:
-			for _, fn := range s.onMethod {
-				fn(msg.To, msg.Msg)
 			}
 		default:
 			for _, fn := range s.onInbound {

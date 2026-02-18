@@ -210,9 +210,9 @@ func (s *Server) newClient(conn net.Conn) *Client {
 **/
 func (s *Server) onConnect(client *Client) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	s.clients[client.Addr] = client
+	s.mu.Unlock()
+
 	logs.Logf(packageName, mg.MSG_CLIENT_CONNECTED_FROM, client.toJson().ToString())
 	go s.handle(client)
 	for _, fn := range s.onConnection {
@@ -225,19 +225,18 @@ func (s *Server) onConnect(client *Client) {
 * @param *Client client
 **/
 func (s *Server) onDisconnect(client *Client) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	logs.Logf(packageName, mg.MSG_CLIENT_DISCONNECTED, client.Addr)
 
 	_, ok := s.clients[client.Addr]
 	if ok {
 		client.Status = Disconnected
-		s.clients[client.Addr].Status = Disconnected
 		for _, fn := range s.onDisconnection {
 			fn(client)
 		}
 
+		s.mu.Lock()
 		delete(s.clients, client.Addr)
+		s.mu.Unlock()
 	}
 }
 
@@ -774,7 +773,10 @@ func (s *Server) ResponseError(to *Client, id string, err error) error {
 func (s *Server) Broadcast(destination []string, tp int, message any) {
 	for _, addr := range destination {
 		client, ok := s.clients[addr]
-		if ok && client.Status == Connected {
+		s.mu.Lock()
+		status := client.Status
+		s.mu.Unlock()
+		if ok && status == Connected {
 			s.Send(client, tp, message)
 		}
 	}

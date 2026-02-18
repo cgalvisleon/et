@@ -55,10 +55,10 @@ func (s *Msg) Get(dest any) error {
 	return s.Msg.Get(dest)
 }
 
-type HandlerFunc func(request ...any) Response
+type HandlerFunc func(request ...any) *Response
 
 type Service interface {
-	Execute(name string, request ...any) Response
+	Execute(name string, request ...any) *Response
 }
 
 type Server struct {

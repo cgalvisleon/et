@@ -212,3 +212,17 @@ func NewMessage(tp int, message any) (*Message, error) {
 
 	return result, nil
 }
+
+/**
+* NewResponse
+* @param args ...any
+* @return *Message, error
+**/
+func NewResponse(args ...any) (*Message, error) {
+	result, err := NewMessage(Method, "")
+	if err != nil {
+		return nil, err
+	}
+	result.Response = args
+	return result, nil
+}

@@ -55,12 +55,11 @@ func (s *Msg) Get(dest any) error {
 	return s.Msg.Get(dest)
 }
 
-type Mtd struct {
-	Name     string         `json:"name"`
-	Args     []string       `json:"args"`
-	Response []string       `json:"response"`
-	Handler  reflect.Method `json:"-"`
+type Service interface {
+	Execute(name string, request ...any) Response
 }
+
+type HandlerFunc func(request ...any) Response
 
 type Server struct {
 	addr            string                    `json:"-"`
@@ -99,7 +98,7 @@ type Server struct {
 	onBecomeLeader []func(*Server) `json:"-"`
 	onChangeLeader []func(*Server) `json:"-"`
 	// Call
-	method map[string]map[string]*Mtd `json:"-"`
+	method map[string]Service `json:"-"`
 }
 
 /**
@@ -151,7 +150,7 @@ func NewServer(port int) *Server {
 		onBecomeLeader: make([]func(*Server), 0),
 		onChangeLeader: make([]func(*Server), 0),
 		// Call
-		method: make(map[string]map[string]*Mtd),
+		method: make(map[string]Service),
 	}
 	result.mode.Store(Follower)
 	return result
@@ -368,6 +367,37 @@ func (s *Server) inbox() {
 			err = s.heartbeat(&args, &res)
 			if err != nil {
 				s.ResponseError(msg.To, msg.ID(), err)
+				return
+			}
+
+			rsp, err := NewMessage(Heartbeat, res)
+			if err != nil {
+				logs.Error(err)
+				return
+			}
+
+			err = s.response(msg.To, msg.ID(), rsp)
+			if err != nil {
+				logs.Error(err)
+			}
+		case Method:
+			list := strings.Split(msg.Msg.Method, ".")
+			if len(list) < 2 {
+				s.ResponseError(msg.To, msg.ID(), errors.New(mg.MSG_METHOD_NOT_FOUND))
+				return
+			}
+
+			serviceName := list[0]
+			methodName := list[1]
+			service, ok := s.method[serviceName]
+			if !ok {
+				s.ResponseError(msg.To, msg.ID(), errors.New(mg.MSG_METHOD_NOT_FOUND))
+				return
+			}
+
+			res := service.Execute(methodName, msg.Msg.Args...)
+			if res.Error != nil {
+				s.ResponseError(msg.To, msg.ID(), res.Error)
 				return
 			}
 
@@ -780,40 +810,16 @@ func (s *Server) Request(to *Client, method string, request ...any) *Response {
 * Mount
 * @param services any
 **/
-func (s *Server) Mount(services any) error {
-	if services == nil {
+func (s *Server) Mount(service Service) error {
+	if service == nil {
 		return errors.New(mg.MSG_SERVICE_REQUIRED)
 	}
 
-	tipoStruct := reflect.TypeOf(services)
+	tipoStruct := reflect.TypeOf(service)
 	pkgName := tipoStruct.String()
 	list := strings.Split(pkgName, ".")
 	pkgName = list[len(list)-1]
-	s.method[pkgName] = make(map[string]*Mtd)
-	for i := 0; i < tipoStruct.NumMethod(); i++ {
-		method := tipoStruct.Method(i)
-		numInputs := method.Type.NumIn()
-		numOutputs := method.Type.NumOut()
-
-		args := []string{}
-		for i := 1; i < numInputs; i++ {
-			paramType := method.Type.In(i)
-			args = append(args, paramType.String())
-		}
-
-		response := []string{}
-		for i := 0; i < numOutputs; i++ {
-			paramType := method.Type.Out(i)
-			response = append(response, paramType.String())
-		}
-
-		s.method[pkgName][method.Name] = &Mtd{
-			Name:     method.Name,
-			Args:     args,
-			Response: response,
-			Handler:  method,
-		}
-	}
+	s.method[pkgName] = service
 	return nil
 }
 

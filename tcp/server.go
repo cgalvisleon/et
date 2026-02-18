@@ -71,6 +71,7 @@ type Server struct {
 	onError         []func(*Client, error)    `json:"-"`
 	onOutbound      []func(*Client, *Message) `json:"-"`
 	onInbound       []func(*Client, *Message) `json:"-"`
+	onMethod        []func(*Client, *Message) `json:"-"`
 	mode            atomic.Value              `json:"-"`
 	timeout         time.Duration             `json:"-"`
 	mu              sync.Mutex                `json:"-"`
@@ -128,6 +129,7 @@ func NewServer(port int) *Server {
 		onError:         make([]func(*Client, error), 0),
 		onOutbound:      make([]func(*Client, *Message), 0),
 		onInbound:       make([]func(*Client, *Message), 0),
+		onMethod:        make([]func(*Client, *Message), 0),
 		mu:              sync.Mutex{},
 		muMessages:      sync.Mutex{},
 		timeout:         timeout,
@@ -310,7 +312,7 @@ func (s *Server) inbox() {
 			var args string
 			err := msg.Get(&args)
 			if err != nil {
-				s.SendError(msg.To, err)
+				s.ResponseError(msg.To, msg.ID(), err)
 				return
 			}
 
@@ -328,14 +330,14 @@ func (s *Server) inbox() {
 			var args RequestVoteArgs
 			err := msg.Get(&args)
 			if err != nil {
-				s.SendError(msg.To, err)
+				s.ResponseError(msg.To, msg.ID(), err)
 				return
 			}
 
 			var res RequestVoteReply
 			err = s.requestVote(&args, &res)
 			if err != nil {
-				s.SendError(msg.To, err)
+				s.ResponseError(msg.To, msg.ID(), err)
 				return
 			}
 
@@ -353,14 +355,14 @@ func (s *Server) inbox() {
 			var args HeartbeatArgs
 			err := msg.Get(&args)
 			if err != nil {
-				s.SendError(msg.To, err)
+				s.ResponseError(msg.To, msg.ID(), err)
 				return
 			}
 
 			var res HeartbeatReply
 			err = s.heartbeat(&args, &res)
 			if err != nil {
-				s.SendError(msg.To, err)
+				s.ResponseError(msg.To, msg.ID(), err)
 				return
 			}
 
@@ -375,48 +377,8 @@ func (s *Server) inbox() {
 				logs.Error(err)
 			}
 		case Method:
-			method := msg.Msg.Method
-
-			split := strings.Split(method, ".")
-			if len(split) != 2 {
-				s.SendError(msg.To, fmt.Errorf(mg.MSG_INVALID_METHOD, method))
-				return
-			}
-
-			name := split[1]
-			pkg, ok := s.method[split[0]]
-			if !ok {
-				s.SendError(msg.To, fmt.Errorf(mg.MSG_INVALID_METHOD, split[0]))
-				return
-			}
-
-			v := reflect.ValueOf(pkg)
-			m := v.MethodByName(name)
-			if !m.IsValid() {
-				s.SendError(msg.To, fmt.Errorf(mg.MSG_INVALID_METHOD, name))
-			}
-
-			argsValues := make([]reflect.Value, len(msg.Msg.Args))
-			for i, arg := range msg.Msg.Args {
-				argsValues[i] = reflect.ValueOf(arg)
-			}
-
-			res := m.Call(argsValues)
-			rsp, err := NewMessage(Method, "")
-			if err != nil {
-				logs.Error(err)
-				return
-			}
-
-			for _, v := range res {
-				if v.IsValid() && v.CanInterface() {
-					rsp.Response = append(rsp.Response, v.Interface())
-				}
-			}
-
-			err = s.response(msg.To, msg.ID(), rsp)
-			if err != nil {
-				logs.Error(err)
+			for _, fn := range s.onMethod {
+				fn(msg.To, msg.Msg)
 			}
 		default:
 			for _, fn := range s.onInbound {
@@ -751,7 +713,26 @@ func (s *Server) Send(to *Client, tp int, message any) error {
 * @return error
 **/
 func (s *Server) SendError(to *Client, err error) error {
-	return s.Send(to, ErrorMessage, err.Error())
+	msg, err := NewMessage(ErrorMessage, err.Error())
+	if err != nil {
+		return err
+	}
+
+	return s.response(to, "", msg)
+}
+
+/**
+* ResponseError
+* @param to *Client, id string, err error
+* @return error
+**/
+func (s *Server) ResponseError(to *Client, id string, err error) error {
+	msg, err := NewMessage(ErrorMessage, err.Error())
+	if err != nil {
+		return err
+	}
+
+	return s.response(to, id, msg)
 }
 
 /**

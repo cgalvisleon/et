@@ -55,6 +55,12 @@ func (s *Msg) Get(dest any) error {
 	return s.Msg.Get(dest)
 }
 
+type Mtd struct {
+	Name     string   `json:"name"`
+	Args     []string `json:"args"`
+	Response []string `json:"response"`
+}
+
 type Server struct {
 	addr            string                    `json:"-"`
 	port            int                       `json:"-"`
@@ -92,7 +98,7 @@ type Server struct {
 	onBecomeLeader []func(*Server) `json:"-"`
 	onChangeLeader []func(*Server) `json:"-"`
 	// Call
-	method map[string]interface{} `json:"-"`
+	method map[string]map[string]*Mtd `json:"-"`
 }
 
 /**
@@ -144,7 +150,7 @@ func NewServer(port int) *Server {
 		onBecomeLeader: make([]func(*Server), 0),
 		onChangeLeader: make([]func(*Server), 0),
 		// Call
-		method: make(map[string]interface{}),
+		method: make(map[string]map[string]*Mtd),
 	}
 	result.mode.Store(Follower)
 	return result
@@ -777,12 +783,35 @@ func (s *Server) Mount(services any) error {
 	if services == nil {
 		return errors.New(mg.MSG_SERVICE_REQUIRED)
 	}
+
 	tipoStruct := reflect.TypeOf(services)
-	structName := tipoStruct.String()
-	list := strings.Split(structName, ".")
-	structName = list[len(list)-1]
-	name := structName
-	s.method[name] = services
+	pkgName := tipoStruct.String()
+	list := strings.Split(pkgName, ".")
+	pkgName = list[len(list)-1]
+	s.method[pkgName] = make(map[string]*Mtd)
+	for i := 0; i < tipoStruct.NumMethod(); i++ {
+		metodo := tipoStruct.Method(i)
+		numInputs := metodo.Type.NumIn()
+		numOutputs := metodo.Type.NumOut()
+
+		args := []string{}
+		for i := 1; i < numInputs; i++ {
+			paramType := metodo.Type.In(i)
+			args = append(args, paramType.String())
+		}
+
+		response := []string{}
+		for i := 0; i < numOutputs; i++ {
+			paramType := metodo.Type.Out(i)
+			response = append(response, paramType.String())
+		}
+
+		s.method[pkgName][metodo.Name] = &Mtd{
+			Name:     metodo.Name,
+			Args:     args,
+			Response: response,
+		}
+	}
 	return nil
 }
 

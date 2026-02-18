@@ -29,6 +29,25 @@ type Response struct {
 }
 
 /**
+* ToJson
+* @return et.Json, error
+**/
+func (s *Response) ToJson() (et.Json, error) {
+	bt, err := json.Marshal(s)
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	var result et.Json
+	err = json.Unmarshal(bt, &result)
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	return result, nil
+}
+
+/**
 * newResult
 * @param res []any, err error
 * @return *Response

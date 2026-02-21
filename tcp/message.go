@@ -166,21 +166,6 @@ func (s *Message) Result() ([]any, error) {
 }
 
 /**
-* toMessage
-* @param bt []byte
-* @return Message, error
-**/
-func toMessage(bt []byte) (*Message, error) {
-	var result *Message
-	err := json.Unmarshal(bt, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-/**
 * NewMessage
 **/
 func NewMessage(tp int, message any) (*Message, error) {
@@ -208,6 +193,21 @@ func NewMessage(tp int, message any) (*Message, error) {
 		result.Payload = []byte("\n")
 	case CloseMessage:
 		result.Payload = []byte("CLOSE")
+	}
+
+	return result, nil
+}
+
+/**
+* ToMessage
+* @param bt []byte
+* @return Message, error
+**/
+func ToMessage(bt []byte) (*Message, error) {
+	var result *Message
+	err := json.Unmarshal(bt, &result)
+	if err != nil {
+		return nil, err
 	}
 
 	return result, nil

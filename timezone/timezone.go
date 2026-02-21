@@ -4,11 +4,21 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/cgalvisleon/et/envar"
 )
 
 var loc *time.Location
+
+func init() {
+	timezone := envar.GetStr("TIMEZONE", "America/Bogota")
+	var err error
+	loc, err = time.LoadLocation(timezone)
+	if err != nil {
+		panic(err)
+	}
+}
 
 /**
 * Now
@@ -16,15 +26,24 @@ var loc *time.Location
 * Remember to this function use ZONEINFO variable
 **/
 func Now() time.Time {
-	timezone := envar.GetStr("TIMEZONE", "America/Bogota")
+	return time.Now().In(loc)
+}
 
-	if loc == nil {
-		loc = time.FixedZone(timezone, -5*60*60)
-	}
+/**
+* NowStr
+* @return string
+**/
+func NowStr() string {
+	return Now().Format("2006/01/02 15:04:05")
+}
 
-	now := time.Now().UTC()
-
-	return now.In(loc)
+/**
+* Add
+* @param d time.Duration
+* @return time.Time
+**/
+func Add(d time.Duration) time.Time {
+	return time.Now().In(loc).Add(d)
 }
 
 /**
@@ -83,28 +102,4 @@ func FormatMDYYYY(value string) string {
 	}
 
 	return fmt.Sprintf("%s %02d %d", months[t.Month()], t.Day(), t.Year())
-}
-
-/**
-* Add
-* @param d time.Duration
-* @return time.Time
-**/
-func Add(d time.Duration) time.Time {
-	timezone := envar.GetStr("TIMEZONE", "America/Bogota")
-	if loc == nil {
-		loc = time.FixedZone(timezone, -5*60*60)
-	}
-
-	now := time.Now().UTC().Add(d)
-
-	return now.In(loc)
-}
-
-/**
-* NowStr
-* @return string
-**/
-func NowStr() string {
-	return Now().Format("2006/01/02 15:04:05")
 }

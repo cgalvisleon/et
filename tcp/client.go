@@ -33,6 +33,7 @@ type Client struct {
 	LocalAddr    string                    `json:"local_addr"`
 	RemoteAddr   string                    `json:"remote_addr"`
 	Status       Status                    `json:"status"`
+	Ctx          et.Json                   `json:"-"`
 	conn         net.Conn                  `json:"-"`
 	inbound      chan []byte               `json:"-"`
 	outbound     chan []byte               `json:"-"`
@@ -40,7 +41,6 @@ type Client struct {
 	done         chan struct{}             `json:"-"`
 	timeout      time.Duration             `json:"-"`
 	mu           sync.Mutex                `json:"-"`
-	Ctx          et.Json                   `json:"-"`
 	onConnect    []func(*Client)           `json:"-"`
 	onDisconnect []func(*Client)           `json:"-"`
 	onError      []func(*Client, error)    `json:"-"`
@@ -164,7 +164,7 @@ func (s *Client) incoming() {
 **/
 func (s *Client) inbox() {
 	for bt := range s.inbound {
-		msg, err := toMessage(bt)
+		msg, err := ToMessage(bt)
 		if err != nil {
 			s.error(err)
 			return
@@ -231,6 +231,7 @@ func (s *Client) disconnect() {
 	close(s.inbound)
 	close(s.outbound)
 	close(s.done)
+
 	for _, fn := range s.onDisconnect {
 		fn(s)
 	}
@@ -323,12 +324,8 @@ func (s *Client) Connect() error {
 	go s.incoming()
 	go s.inbox()
 	go s.send()
-	if s.isNode {
-		logs.Logf(packageName, msg.MSG_NODE_CONNECTED, s.Addr)
-	} else {
-		logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
-	}
 
+	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
 	if s.isDebug {
 		logs.Debugf("connected: %s", s.toJson().ToString())
 	}
@@ -344,17 +341,6 @@ func (s *Client) Start() error {
 	if err != nil {
 		return err
 	}
-
-	utility.AppWait()
-	return nil
-}
-
-/**
-* Console
-* @return error
-**/
-func (s *Client) Console() error {
-	go startConsole(s)
 
 	utility.AppWait()
 	return nil

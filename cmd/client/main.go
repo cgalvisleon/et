@@ -10,7 +10,8 @@ func main() {
 	addr := envar.SetStrByArg("-addr", "ADDR", "localhost:5050")
 
 	client := tcp.NewClient(addr)
-	err := client.Console()
+	err := client.Start()
+	// err := client.Console()
 	if err != nil {
 		logs.Panic(err)
 	}

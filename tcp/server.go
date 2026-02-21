@@ -496,7 +496,7 @@ func (s *Server) incoming(c *Client) {
 			return
 		}
 
-		m, err := toMessage(data)
+		m, err := ToMessage(data)
 		if err != nil {
 			logs.Error(err)
 			continue
@@ -625,10 +625,7 @@ func (s *Server) Start() error {
 	go s.run()
 	go s.inbox()
 	go s.send()
-
-	if len(s.Peers) > 0 {
-		go s.ElectionLoop()
-	}
+	go s.ElectionLoop()
 
 	logs.Logf(packageName, mg.MSG_TCP_LISTENING, s.addr)
 

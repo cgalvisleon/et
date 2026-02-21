@@ -147,7 +147,7 @@ func NewServer(port int) *Server {
 		method: make(map[string]Service),
 	}
 	result.mode.Store(Follower)
-	result.Mount(NewAuthService())
+	result.Mount(newTcpService())
 
 	return result
 }

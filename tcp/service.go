@@ -48,10 +48,10 @@ func (s *Tcp) Execute(name string, request *Message) *Response {
 }
 
 /**
-* NewTcpService
+* newTcpService
 * @return *Tcp
 **/
-func NewTcpService() *Tcp {
+func newTcpService() *Tcp {
 	this := &Tcp{}
 	this.Ping = func(request *Message) *Response {
 		var id string

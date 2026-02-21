@@ -15,7 +15,6 @@ import (
 const (
 	BytesMessage int = 0
 	TextMessage  int = 1
-	PingMessage  int = 9
 	ACKMessage   int = 13
 	CloseMessage int = 15
 	ErrorMessage int = 17
@@ -208,8 +207,6 @@ func NewMessage(tp int, message any) (*Message, error) {
 	}
 
 	switch tp {
-	case PingMessage:
-		result.Payload = []byte("PING")
 	case ACKMessage:
 		result.Payload = []byte("\n")
 	case CloseMessage:

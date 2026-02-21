@@ -13,10 +13,10 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
+	mg "github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
-	mg "github.com/cgalvisleon/et/msg"
 )
 
 type Status string
@@ -326,12 +326,12 @@ func (s *Client) Connect() error {
 		logs.Debugf("connected: %s", s.toJson().ToString())
 	}
 
-	res := s.Request(AuthMethod, s.ID, s.Ctx)
+	res := s.Request(PingMehtod, s.ID, s.Ctx)
 	if res.Error != nil {
 		return s.error(res.Error)
 	}
 
-	logs.Debugf("Respuesta auth: %s", res.Response)
+	logs.Debugf("respuesta: %s", res.Response)
 
 	return nil
 }

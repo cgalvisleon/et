@@ -280,24 +280,6 @@ func (s *Server) inboundLoop() {
 		}
 
 		switch msg.Msg.Type {
-		case PingMessage:
-			var args string
-			err := msg.Get(&args)
-			if err != nil {
-				s.ResponseError(msg.To, msg.ID(), err)
-				return
-			}
-
-			rsp, err := NewMessage(PingMessage, "PONG")
-			if err != nil {
-				logs.Error(err)
-				return
-			}
-
-			err = s.response(msg.To, msg.ID(), rsp)
-			if err != nil {
-				logs.Error(err)
-			}
 		case RequestVote:
 			var args RequestVoteArgs
 			err := msg.Get(&args)

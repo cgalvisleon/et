@@ -404,7 +404,7 @@ func (s *Client) Send(tp int, message any) error {
 func (s *Client) Request(method string, args ...any) *Response {
 	m, err := NewMessage(Method, "")
 	if err != nil {
-		return NewResponse(nil, err)
+		return TcpError(err)
 	}
 	m.Method = method
 	for _, arg := range args {
@@ -413,12 +413,12 @@ func (s *Client) Request(method string, args ...any) *Response {
 
 	res, err := s.request(m)
 	if err != nil {
-		return NewResponse(nil, err)
+		return TcpError(err)
 	}
 
 	result, err := res.Response()
 	if err != nil {
-		return NewResponse(nil, err)
+		return TcpError(err)
 	}
 
 	return result

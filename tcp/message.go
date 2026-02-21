@@ -29,13 +29,42 @@ type Response struct {
 }
 
 /**
-* newResult
-* @param res []any, err error
+* TcpResponse
+* @param res ...any
 * @return *Response
 **/
-func NewResponse(res []any, err error) *Response {
-	return &Response{
+func TcpResponse(res ...any) *Response {
+	result := &Response{
 		Response: res,
+		Error:    nil,
+	}
+
+	for _, r := range res {
+		result.Response = append(result.Response, r)
+	}
+
+	return result
+}
+
+/**
+* TcpError
+* @param msg any
+* @return *Response
+**/
+func TcpError(msg any) *Response {
+	var err error
+
+	switch v := msg.(type) {
+	case error:
+		err = v
+	case string:
+		err = errors.New(v)
+	default:
+		panic("TcpError only accepts error or string")
+	}
+
+	return &Response{
+		Response: []any{},
 		Error:    err,
 	}
 }

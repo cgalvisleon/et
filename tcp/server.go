@@ -147,7 +147,7 @@ func NewServer(port int) *Server {
 		method: make(map[string]Service),
 	}
 	result.mode.Store(Follower)
-	result.Mount(newTcpService())
+	result.Mount(newTcpService(result))
 
 	return result
 }
@@ -764,7 +764,7 @@ func (s *Server) Broadcast(destination []string, tp int, message any) {
 func (s *Server) Request(to *Client, method string, args ...any) *Response {
 	m, err := NewMessage(Method, "")
 	if err != nil {
-		return NewResponse(nil, err)
+		return TcpError(err)
 	}
 	m.Method = method
 	for _, arg := range args {
@@ -773,12 +773,12 @@ func (s *Server) Request(to *Client, method string, args ...any) *Response {
 
 	res, err := s.request(to, m)
 	if err != nil {
-		return NewResponse(nil, err)
+		return TcpError(err)
 	}
 
 	result, err := res.Response()
 	if err != nil {
-		return NewResponse(nil, err)
+		return TcpError(err)
 	}
 
 	return result

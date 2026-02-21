@@ -1,7 +1,7 @@
 package tcp
 
 import (
-	"errors"
+	"fmt"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
@@ -19,6 +19,7 @@ type Service interface {
 
 type Tcp struct {
 	registry map[string]HandlerFunc
+	srv      *Server
 	Ping     HandlerFunc
 }
 
@@ -41,7 +42,7 @@ func (s *Tcp) build() map[string]HandlerFunc {
 func (s *Tcp) Execute(name string, request *Message) *Response {
 	handler, ok := s.registry[name]
 	if !ok {
-		return NewResponse(nil, errors.New(msg.MSG_METHOD_NOT_FOUND))
+		return TcpError(msg.MSG_METHOD_NOT_FOUND)
 	}
 
 	return handler(request)
@@ -51,17 +52,19 @@ func (s *Tcp) Execute(name string, request *Message) *Response {
 * newTcpService
 * @return *Tcp
 **/
-func newTcpService() *Tcp {
-	this := &Tcp{}
+func newTcpService(srv *Server) *Tcp {
+	this := &Tcp{
+		srv: srv,
+	}
 	this.Ping = func(request *Message) *Response {
 		var id string
 		var ctx et.Json
 		err := request.GetArgs(&id, &ctx)
 		if err != nil {
-			return NewResponse(nil, err)
+			return TcpError(err)
 		}
 
-		return NewResponse([]any{"Pong", id, ctx}, nil)
+		return TcpResponse(fmt.Sprintf("Pong to:%s", this.srv.addr))
 	}
 
 	this.build()

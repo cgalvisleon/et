@@ -152,7 +152,7 @@ func (s *Message) Get(dest any) error {
 * @param args []any, dest ...any
 * @return error
 **/
-func (s *Message) GetArgs(dest []any) error {
+func (s *Message) GetArgs(dest ...any) error {
 	l := len(dest)
 	if len(s.Args) < l {
 		return fmt.Errorf(msg.MSG_ARG_REQUIRED, "args")

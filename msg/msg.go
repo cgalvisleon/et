@@ -46,6 +46,7 @@ var (
 	MSG_SERVICE_REQUIRED               = "service required"
 	MSG_INVALID_METHOD                 = "invalid method: %s"
 	MSG_INDEX_OUT_OF_RANGE             = "index out of range"
+	MSG_SEND_TO                        = "send: %s to:%s"
 )
 
 func init() {

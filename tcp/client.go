@@ -16,6 +16,7 @@ import (
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
+	mg "github.com/cgalvisleon/et/msg"
 )
 
 type Status string
@@ -330,7 +331,7 @@ func (s *Client) Connect() error {
 		return s.error(res.Error)
 	}
 
-	logs.Debugf("auth: %s", res.Response)
+	logs.Debugf("Respuesta auth: %s", res.Response)
 
 	return nil
 }
@@ -389,7 +390,7 @@ func (s *Client) Send(tp int, message any) error {
 	}
 
 	if s.isDebug {
-		logs.Debugf("send: %s to:%s", msg.ToJson().ToString(), s.RemoteAddr)
+		logs.Debugf(mg.MSG_SEND_TO, msg.ToJson().ToString(), s.RemoteAddr)
 	}
 
 	return nil

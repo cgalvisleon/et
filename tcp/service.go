@@ -31,7 +31,7 @@ func NewAuthService() *Auth {
 	this.Auth = func(request *Message) *Response {
 		var id string
 		var ctx et.Json
-		err := request.GetArgs([]any{id, ctx})
+		err := request.GetArgs(&id, &ctx)
 		if err != nil {
 			return NewResponse(nil, err)
 		}

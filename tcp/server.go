@@ -180,122 +180,95 @@ func (s *Server) run() {
 }
 
 /**
-* newClient
-* @param conn net.Conn
-* @return *Client
-**/
-func (s *Server) newClient(conn net.Conn) *Client {
-	timeout, err := time.ParseDuration(envar.GetStr("TIMEOUT", "10s"))
-	if err != nil {
-		timeout = 10 * time.Second
-	}
-	return &Client{
-		CreatedAt: timezone.Now(),
-		ID:        reg.ULID(),
-		Addr:      conn.RemoteAddr().String(),
-		Status:    Connected,
-		Ctx:       et.Json{},
-		conn:      conn,
-		timeout:   timeout,
-	}
-}
-
-/**
-* defOnConnect
-* @param *Client client
-**/
-func (s *Server) onConnect(client *Client) {
-	s.mu.Lock()
-	s.clients[client.Addr] = client
-	s.mu.Unlock()
-
-	logs.Logf(packageName, mg.MSG_TCP_CONNECTED_FROM, client.toJson().ToString())
-	go s.handle(client)
-	for _, fn := range s.onConnection {
-		fn(client)
-	}
-}
-
-/**
-* onDisconnect
-* @param *Client client
-**/
-func (s *Server) onDisconnect(client *Client) {
-	logs.Logf(packageName, mg.MSG_TCP_DISCONNECTED, client.Addr)
-
-	_, ok := s.clients[client.Addr]
-	if ok {
-		client.Status = Disconnected
-		for _, fn := range s.onDisconnection {
-			fn(client)
-		}
-
-		s.mu.Lock()
-		delete(s.clients, client.Addr)
-		s.mu.Unlock()
-	}
-}
-
-/**
-* handle
-* @param conn net.Conn
-**/
-func (s *Server) handle(c *Client) {
-	mode := s.mode.Load().(Mode)
-
-	switch mode {
-	case Proxy:
-		s.handleBalancer(c.conn)
-	default:
-		s.handleClient(c)
-	}
-}
-
-/**
-* handleBalancer
-* @param client net.Conn
-**/
-func (s *Server) handleBalancer(client net.Conn) {
-	defer client.Close()
-
-	if s.proxy == nil {
-		s.proxy = newBalancer()
-	}
-
-	node := s.proxy.next()
-	if node == nil {
-		return
-	}
-
-	dialer := net.Dialer{
-		Timeout:   10 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}
-	backend, err := dialer.Dial("tcp", node.Address)
-	if err != nil {
-		return
-	}
-	defer backend.Close()
-
-	node.Conns.Add(1)
-	defer node.Conns.Add(-1)
-
-	go io.Copy(backend, client)
-	io.Copy(client, backend)
-}
-
-/**
-* handleClient
+* readLoop
 * @param c *Client
 **/
-func (s *Server) handleClient(c *Client) {
-	go s.incoming(c)
+func (s *Server) readLoop(c *Client) {
+	reader := bufio.NewReader(c.conn)
+
+	for {
+		// Leer tamaño (4 bytes)
+		lenBuf := make([]byte, 4)
+		_, err := io.ReadFull(reader, lenBuf)
+		if err != nil {
+			if err != io.EOF {
+				logs.Logf(packageName, mg.MSG_TCP_ERROR_READ, err)
+			}
+			s.unregister <- c
+			return
+		}
+
+		// Leer tamaño payload
+		length := binary.BigEndian.Uint32(lenBuf)
+		limitReader := envar.GetInt("LIMIT_SIZE_MG", 10)
+		if length > uint32(limitReader*1024*1024) {
+			s.Send(c, ErrorMessage, mg.MSG_TCP_MESSAGE_TOO_LARGE)
+			continue
+		}
+
+		// Leer payload completo
+		data := make([]byte, length)
+		_, err = io.ReadFull(reader, data)
+		if err != nil {
+			s.unregister <- c
+			return
+		}
+
+		m, err := ToMessage(data)
+		if err != nil {
+			logs.Error(err)
+			continue
+		}
+
+		s.inbound <- &Msg{
+			To:  c,
+			Msg: m,
+		}
+	}
 }
 
 /**
-* inbox
+* writeLoop
 **/
-func (s *Server) inbox() {
+func (s *Server) writeLoop() {
+	for msg := range s.outbound {
+		s.mu.Lock()
+		c, ok := s.clients[msg.To.Addr]
+		s.mu.Unlock()
+		if !ok {
+			return
+		}
+
+		if c.Status != Connected {
+			return
+		}
+
+		bt, err := msg.Msg.serialize()
+		if err != nil {
+			s.error(msg.To, err)
+			return
+		}
+
+		_, err = msg.To.conn.Write(bt)
+		if err != nil {
+			s.error(msg.To, err)
+			return
+		}
+
+		for _, fn := range s.onOutbound {
+			fn(msg.To, msg.Msg)
+		}
+
+		if s.isDebug {
+			logs.Debugf(mg.MSG_SEND_TO, msg.Msg.ToJson().ToString(), msg.To.Addr)
+		}
+	}
+}
+
+/**
+* inboundLoop
+**/
+func (s *Server) inboundLoop() {
 	for msg := range s.inbound {
 		s.mu.Lock()
 		ch, ok := s.messages[msg.Msg.ID]
@@ -419,95 +392,121 @@ func (s *Server) inbox() {
 }
 
 /**
-* send
+* newClient
+* @param conn net.Conn
+* @return *Client
 **/
-func (s *Server) send() {
-	for msg := range s.outbound {
-		s.mu.Lock()
-		c, ok := s.clients[msg.To.Addr]
-		if !ok {
-			s.mu.Unlock()
-			return
-		}
-		s.mu.Unlock()
-
-		if c.Status != Connected {
-			return
-		}
-
-		bt, err := msg.Msg.serialize()
-		if err != nil {
-			s.error(msg.To, err)
-			return
-		}
-
-		_, err = msg.To.conn.Write(bt)
-		if err != nil {
-			s.error(msg.To, err)
-			return
-		}
-
-		for _, fn := range s.onOutbound {
-			fn(msg.To, msg.Msg)
-		}
-
-		if s.isDebug {
-			logs.Debugf("send: %s to %s", msg.Msg.ToJson().ToString(), msg.To.Addr)
-		}
+func (s *Server) newClient(conn net.Conn) *Client {
+	timeout, err := time.ParseDuration(envar.GetStr("TIMEOUT", "10s"))
+	if err != nil {
+		timeout = 10 * time.Second
+	}
+	return &Client{
+		CreatedAt: timezone.Now(),
+		ID:        reg.ULID(),
+		Addr:      conn.RemoteAddr().String(),
+		Status:    Connected,
+		Ctx:       et.Json{},
+		conn:      conn,
+		timeout:   timeout,
 	}
 }
 
 /**
-* incoming
+* defOnConnect
+* @param *Client client
+**/
+func (s *Server) onConnect(client *Client) {
+	s.mu.Lock()
+	s.clients[client.Addr] = client
+	s.mu.Unlock()
+
+	logs.Logf(packageName, mg.MSG_TCP_CONNECTED_FROM, client.toJson().ToString())
+	go s.handle(client)
+	for _, fn := range s.onConnection {
+		fn(client)
+	}
+}
+
+/**
+* onDisconnect
+* @param *Client client
+**/
+func (s *Server) onDisconnect(client *Client) {
+	logs.Logf(packageName, mg.MSG_TCP_DISCONNECTED, client.Addr)
+
+	_, ok := s.clients[client.Addr]
+	if ok {
+		client.Status = Disconnected
+		for _, fn := range s.onDisconnection {
+			fn(client)
+		}
+
+		s.mu.Lock()
+		delete(s.clients, client.Addr)
+		s.mu.Unlock()
+	}
+}
+
+/**
+* handle
+* @param conn net.Conn
+**/
+func (s *Server) handle(c *Client) {
+	mode := s.mode.Load().(Mode)
+
+	switch mode {
+	case Proxy:
+		s.handleBalancer(c.conn)
+	default:
+		s.handleClient(c)
+	}
+}
+
+/**
+* handleBalancer
+* @param client net.Conn
+**/
+func (s *Server) handleBalancer(client net.Conn) {
+	defer client.Close()
+
+	if s.proxy == nil {
+		s.proxy = newBalancer()
+	}
+
+	node := s.proxy.next()
+	if node == nil {
+		return
+	}
+
+	dialer := net.Dialer{
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+	backend, err := dialer.Dial("tcp", node.Address)
+	if err != nil {
+		return
+	}
+	defer backend.Close()
+
+	node.Conns.Add(1)
+	defer node.Conns.Add(-1)
+
+	go io.Copy(backend, client)
+	io.Copy(client, backend)
+}
+
+/**
+* handleClient
 * @param c *Client
 **/
-func (s *Server) incoming(c *Client) {
-	reader := bufio.NewReader(c.conn)
-
-	for {
-		// Leer tamaño (4 bytes)
-		lenBuf := make([]byte, 4)
-		_, err := io.ReadFull(reader, lenBuf)
-		if err != nil {
-			if err != io.EOF {
-				logs.Logf(packageName, mg.MSG_TCP_ERROR_READ, err)
-			}
-			s.unregister <- c
-			return
-		}
-
-		// Leer tamaño payload
-		length := binary.BigEndian.Uint32(lenBuf)
-		limitReader := envar.GetInt("LIMIT_SIZE_MG", 10)
-		if length > uint32(limitReader*1024*1024) {
-			s.Send(c, ErrorMessage, mg.MSG_TCP_MESSAGE_TOO_LARGE)
-			continue
-		}
-
-		// Leer payload completo
-		data := make([]byte, length)
-		_, err = io.ReadFull(reader, data)
-		if err != nil {
-			s.unregister <- c
-			return
-		}
-
-		m, err := ToMessage(data)
-		if err != nil {
-			logs.Error(err)
-			continue
-		}
-
-		s.inbound <- &Msg{
-			To:  c,
-			Msg: m,
-		}
-	}
+func (s *Server) handleClient(c *Client) {
+	go s.readLoop(c)
 }
 
 /**
 * response
-* @params to *Client, id string, tp int, message any
+* @params to *Client, id string, msg *Message
 * @return error
 **/
 func (s *Server) response(to *Client, id string, msg *Message) error {
@@ -619,8 +618,8 @@ func (s *Server) Start() error {
 	}
 
 	go s.run()
-	go s.inbox()
-	go s.send()
+	go s.inboundLoop()
+	go s.writeLoop()
 	go s.ElectionLoop()
 
 	logs.Logf(packageName, mg.MSG_TCP_LISTENING, s.addr)

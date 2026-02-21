@@ -55,12 +55,6 @@ func (s *Msg) Get(dest any) error {
 	return s.Msg.Get(dest)
 }
 
-type HandlerFunc func(request []any) *Response
-
-type Service interface {
-	Execute(name string, request []any) *Response
-}
-
 type Server struct {
 	addr            string                    `json:"-"`
 	port            int                       `json:"-"`
@@ -153,6 +147,8 @@ func NewServer(port int) *Server {
 		method: make(map[string]Service),
 	}
 	result.mode.Store(Follower)
+	result.Mount(NewAuthService())
+
 	return result
 }
 
@@ -213,7 +209,7 @@ func (s *Server) onConnect(client *Client) {
 	s.clients[client.Addr] = client
 	s.mu.Unlock()
 
-	logs.Logf(packageName, mg.MSG_CLIENT_CONNECTED_FROM, client.toJson().ToString())
+	logs.Logf(packageName, mg.MSG_TCP_CONNECTED_FROM, client.toJson().ToString())
 	go s.handle(client)
 	for _, fn := range s.onConnection {
 		fn(client)
@@ -225,7 +221,7 @@ func (s *Server) onConnect(client *Client) {
 * @param *Client client
 **/
 func (s *Server) onDisconnect(client *Client) {
-	logs.Logf(packageName, mg.MSG_CLIENT_DISCONNECTED, client.Addr)
+	logs.Logf(packageName, mg.MSG_TCP_DISCONNECTED, client.Addr)
 
 	_, ok := s.clients[client.Addr]
 	if ok {
@@ -394,7 +390,7 @@ func (s *Server) inbox() {
 				return
 			}
 
-			res := service.Execute(methodName, msg.Msg.Args)
+			res := service.Execute(methodName, msg.Msg)
 			if res.Error != nil {
 				s.ResponseError(msg.To, msg.ID(), res.Error)
 				return

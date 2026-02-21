@@ -122,9 +122,68 @@ func (s *Client) error(err error) error {
 }
 
 /**
+* connect
+**/
+func (s *Client) connect() error {
+	dialer := net.Dialer{
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+	conn, err := dialer.Dial("tcp", s.Addr)
+	if err != nil {
+		return s.error(err)
+	}
+
+	res := s.Request(AuthMethod, s.ID, s.Ctx)
+	if res.Error != nil {
+		return s.error(res.Error)
+	}
+
+	logs.Debugf("auth: %s", res.Response)
+
+	s.conn = conn
+	s.Status = Connected
+	for _, fn := range s.onConnect {
+		fn(s)
+	}
+
+	return nil
+}
+
+/**
+* disconnect
+**/
+func (s *Client) disconnect() {
+	s.mu.Lock()
+	status := s.Status
+	s.mu.Unlock()
+
+	if status == Disconnected {
+		return
+	}
+
+	s.mu.Lock()
+	s.Status = Disconnected
+	s.mu.Unlock()
+	logs.Logf(packageName, msg.MSG_TCP_DISCONNECTED, s.Addr)
+
+	if s.conn != nil {
+		s.conn.Close()
+	}
+
+	close(s.inbound)
+	close(s.outbound)
+	close(s.done)
+
+	for _, fn := range s.onDisconnect {
+		fn(s)
+	}
+}
+
+/**
 * incoming
 **/
-func (s *Client) incoming() {
+func (s *Client) readLoop() {
 	reader := bufio.NewReader(s.conn)
 
 	for {
@@ -160,9 +219,27 @@ func (s *Client) incoming() {
 }
 
 /**
-* inbound
+* writeLoop
 **/
-func (s *Client) inbox() {
+func (s *Client) writeLoop() {
+	for msg := range s.outbound {
+		_, err := s.conn.Write(msg)
+		if err != nil {
+			s.disconnect()
+			s.error(err)
+			return
+		}
+
+		for _, fn := range s.onOutbound {
+			fn(s, msg)
+		}
+	}
+}
+
+/**
+* inboundLoop
+**/
+func (s *Client) inboundLoop() {
 	for bt := range s.inbound {
 		msg, err := ToMessage(bt)
 		if err != nil {
@@ -179,84 +256,14 @@ func (s *Client) inbox() {
 			return
 		}
 
-		switch msg.Type {
-		default:
-			for _, fn := range s.onInbound {
-				fn(s, msg)
-			}
+		for _, fn := range s.onInbound {
+			fn(s, msg)
 		}
 
 		if !s.isNode {
 			logs.Debugf("recv: %s", msg.ToJson().ToString())
 		}
 	}
-}
-
-/**
-* send
-**/
-func (s *Client) send() {
-	for msg := range s.outbound {
-		_, err := s.conn.Write(msg)
-		if err != nil {
-			s.disconnect()
-			s.error(err)
-			return
-		}
-
-		for _, fn := range s.onOutbound {
-			fn(s, msg)
-		}
-	}
-}
-
-/**
-* disconnect
-**/
-func (s *Client) disconnect() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.Status == Disconnected {
-		return
-	}
-
-	s.Status = Disconnected
-	logs.Logf(packageName, msg.MSG_CLIENT_DISCONNECTED, s.Addr)
-
-	if s.conn != nil {
-		s.conn.Close()
-	}
-
-	close(s.inbound)
-	close(s.outbound)
-	close(s.done)
-
-	for _, fn := range s.onDisconnect {
-		fn(s)
-	}
-}
-
-/**
-* connect
-**/
-func (s *Client) connect() error {
-	dialer := net.Dialer{
-		Timeout:   10 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}
-	result, err := dialer.Dial("tcp", s.Addr)
-	if err != nil {
-		return s.error(err)
-	}
-
-	s.conn = result
-	s.Status = Connected
-	for _, fn := range s.onConnect {
-		fn(s)
-	}
-
-	return nil
 }
 
 /**
@@ -306,7 +313,7 @@ func (s *Client) request(m *Message) (*Message, error) {
 		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
 
 	case <-s.done:
-		return nil, fmt.Errorf(msg.MSG_CLIENT_DISCONNECTED, s.Addr)
+		return nil, fmt.Errorf(msg.MSG_TCP_DISCONNECTED, s.Addr)
 	}
 }
 
@@ -321,11 +328,11 @@ func (s *Client) Connect() error {
 
 	s.LocalAddr = s.conn.LocalAddr().String()
 	s.RemoteAddr = s.conn.RemoteAddr().String()
-	go s.incoming()
-	go s.inbox()
-	go s.send()
+	go s.readLoop()
+	go s.inboundLoop()
+	go s.writeLoop()
 
-	logs.Logf(packageName, msg.MSG_CLIENT_CONNECTED, s.Addr)
+	logs.Logf(packageName, msg.MSG_TCP_CONNECTED_TO, s.Addr)
 	if s.isDebug {
 		logs.Debugf("connected: %s", s.toJson().ToString())
 	}

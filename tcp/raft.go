@@ -70,17 +70,6 @@ type HeartbeatReply struct {
 * ElectionLoop
 **/
 func (s *Server) ElectionLoop() {
-	for _, peer := range s.Peers {
-		if peer.Status != Connected {
-			err := peer.Connect()
-			if err != nil {
-				s.error(peer, err)
-				continue
-			}
-		}
-	}
-
-	return
 	if len(s.Peers) == 0 {
 		s.muRaft.Lock()
 		s.becomeLeader()

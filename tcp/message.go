@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
@@ -12,20 +13,34 @@ import (
 )
 
 const (
+	AuthMethod string = "auth"
+	// Messages
 	BytesMessage int = 0
 	TextMessage  int = 1
-	PingMessage  int = 10
-	ACKMessage   int = 11
-	CloseMessage int = 12
-	ErrorMessage int = 13
-	Heartbeat    int = 14
-	RequestVote  int = 15
-	Method       int = 16
+	PingMessage  int = 9
+	ACKMessage   int = 13
+	CloseMessage int = 15
+	ErrorMessage int = 17
+	Heartbeat    int = 19
+	RequestVote  int = 21
+	Method       int = 23
 )
 
 type Response struct {
 	Response []any `json:"response"`
 	Error    error `json:"error"`
+}
+
+/**
+* newResult
+* @param res []any, err error
+* @return *Response
+**/
+func NewResponse(res []any, err error) *Response {
+	return &Response{
+		Response: res,
+		Error:    err,
+	}
 }
 
 /**
@@ -45,18 +60,6 @@ func (s *Response) ToJson() (et.Json, error) {
 	}
 
 	return result, nil
-}
-
-/**
-* newResult
-* @param res []any, err error
-* @return *Response
-**/
-func NewResponse(res []any, err error) *Response {
-	return &Response{
-		Response: res,
-		Error:    err,
-	}
 }
 
 /**
@@ -145,6 +148,32 @@ func (s *Message) ToJson() et.Json {
 **/
 func (s *Message) Get(dest any) error {
 	return json.Unmarshal(s.Payload, dest)
+}
+
+/**
+* AnyGet: Gets a value from an array
+* @param args []any, dest ...any
+* @return error
+**/
+func (s *Message) GetArgs(dest []any) error {
+	l := len(dest)
+	if len(s.Args) < l {
+		return fmt.Errorf(msg.MSG_ARG_REQUIRED, "args")
+	}
+
+	for i, d := range dest {
+		bt, err := json.Marshal(s.Args[i])
+		if err != nil {
+			return err
+		}
+
+		err = json.Unmarshal(bt, d)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 /**

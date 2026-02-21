@@ -38,7 +38,6 @@ type Client struct {
 	inbound      chan []byte               `json:"-"`
 	outbound     chan []byte               `json:"-"`
 	messages     map[string]chan *Message  `json:"-"`
-	done         chan struct{}             `json:"-"`
 	timeout      time.Duration             `json:"-"`
 	mu           sync.Mutex                `json:"-"`
 	onConnect    []func(*Client)           `json:"-"`
@@ -69,7 +68,6 @@ func NewClient(addr string) *Client {
 		inbound:      make(chan []byte),
 		outbound:     make(chan []byte),
 		messages:     make(map[string]chan *Message),
-		done:         make(chan struct{}),
 		timeout:      timeout,
 		mu:           sync.Mutex{},
 		Ctx:          et.Json{},
@@ -134,15 +132,10 @@ func (s *Client) connect() error {
 		return s.error(err)
 	}
 
-	res := s.Request(AuthMethod, s.ID, s.Ctx)
-	if res.Error != nil {
-		return s.error(res.Error)
-	}
-
-	logs.Debugf("auth: %s", res.Response)
-
 	s.conn = conn
 	s.Status = Connected
+	s.LocalAddr = s.conn.LocalAddr().String()
+	s.RemoteAddr = s.conn.RemoteAddr().String()
 	for _, fn := range s.onConnect {
 		fn(s)
 	}
@@ -171,13 +164,12 @@ func (s *Client) disconnect() {
 		s.conn.Close()
 	}
 
-	close(s.inbound)
-	close(s.outbound)
-	close(s.done)
-
 	for _, fn := range s.onDisconnect {
 		fn(s)
 	}
+
+	close(s.inbound)
+	close(s.outbound)
 }
 
 /**
@@ -312,8 +304,6 @@ func (s *Client) request(m *Message) (*Message, error) {
 		s.mu.Unlock()
 		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
 
-	case <-s.done:
-		return nil, fmt.Errorf(msg.MSG_TCP_DISCONNECTED, s.Addr)
 	}
 }
 
@@ -326,8 +316,6 @@ func (s *Client) Connect() error {
 		return s.error(err)
 	}
 
-	s.LocalAddr = s.conn.LocalAddr().String()
-	s.RemoteAddr = s.conn.RemoteAddr().String()
 	go s.readLoop()
 	go s.inboundLoop()
 	go s.writeLoop()
@@ -336,6 +324,13 @@ func (s *Client) Connect() error {
 	if s.isDebug {
 		logs.Debugf("connected: %s", s.toJson().ToString())
 	}
+
+	res := s.Request(AuthMethod, s.ID, s.Ctx)
+	if res.Error != nil {
+		return s.error(res.Error)
+	}
+
+	logs.Debugf("auth: %s", res.Response)
 
 	return nil
 }
@@ -420,12 +415,12 @@ func (s *Client) Request(method string, args ...any) *Response {
 		return NewResponse(nil, err)
 	}
 
-	response, err := res.Result()
+	result, err := res.Response()
 	if err != nil {
 		return NewResponse(nil, err)
 	}
 
-	return NewResponse(response, nil)
+	return result
 }
 
 /**

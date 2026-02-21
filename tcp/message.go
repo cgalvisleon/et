@@ -13,8 +13,6 @@ import (
 )
 
 const (
-	AuthMethod string = "auth"
-	// Messages
 	BytesMessage int = 0
 	TextMessage  int = 1
 	PingMessage  int = 9
@@ -88,12 +86,11 @@ func (s *Response) Get(dest ...any) error {
 }
 
 type Message struct {
-	ID       string `json:"id"`
-	Type     int    `json:"type"`
-	Method   string `json:"method"`
-	Payload  []byte `json:"payload"`
-	Args     []any  `json:"args"`
-	Response []any  `json:"response"`
+	ID      string `json:"id"`
+	Type    int    `json:"type"`
+	Method  string `json:"method"`
+	Payload []byte `json:"payload"`
+	Args    []any  `json:"args"`
 }
 
 /**
@@ -177,21 +174,17 @@ func (s *Message) GetArgs(dest []any) error {
 }
 
 /**
-* Result
-* @return []any, error
+* Response
+* @return *Response
 **/
-func (s *Message) Result() ([]any, error) {
-	result := make([]any, 0)
-	err := error(nil)
-	for _, v := range s.Response {
-		_, ok := v.(error)
-		if ok {
-			err = v.(error)
-			continue
-		}
-		result = append(result, v)
+func (s *Message) Response() (*Response, error) {
+	var result *Response
+	err := s.Get(&result)
+	if err != nil {
+		return nil, err
 	}
-	return result, err
+
+	return result, nil
 }
 
 /**
@@ -208,11 +201,10 @@ func NewMessage(tp int, message any) (*Message, error) {
 	}
 
 	result := &Message{
-		ID:       reg.ULID(),
-		Type:     tp,
-		Payload:  bt,
-		Args:     []any{},
-		Response: []any{},
+		ID:      reg.ULID(),
+		Type:    tp,
+		Payload: bt,
+		Args:    []any{},
 	}
 
 	switch tp {

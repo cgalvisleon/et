@@ -3,7 +3,12 @@ package tcp
 import (
 	"errors"
 
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
+)
+
+const (
+	AuthMethod string = "Auth.Auth"
 )
 
 type HandlerFunc func(request *Message) *Response
@@ -24,8 +29,14 @@ type Auth struct {
 func NewAuthService() *Auth {
 	this := &Auth{}
 	this.Auth = func(request *Message) *Response {
+		var id string
+		var ctx et.Json
+		err := request.GetArgs([]any{id, ctx})
+		if err != nil {
+			return NewResponse(nil, err)
+		}
 
-		return NewResponse([]any{}, nil)
+		return NewResponse([]any{"Hola", id, ctx}, nil)
 	}
 
 	this.build()

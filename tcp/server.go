@@ -396,7 +396,7 @@ func (s *Server) inbox() {
 				return
 			}
 
-			rsp, err := NewMessage(Heartbeat, res)
+			rsp, err := NewMessage(Method, res)
 			if err != nil {
 				logs.Error(err)
 				return
@@ -795,12 +795,12 @@ func (s *Server) Request(to *Client, method string, args ...any) *Response {
 		return NewResponse(nil, err)
 	}
 
-	response, err := res.Result()
+	result, err := res.Response()
 	if err != nil {
 		return NewResponse(nil, err)
 	}
 
-	return NewResponse(response, nil)
+	return result
 }
 
 /**

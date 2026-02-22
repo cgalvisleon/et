@@ -71,28 +71,17 @@ type Server struct {
 	onError         []func(*Client, error)    `json:"-"`
 	onOutbound      []func(*Client, *Message) `json:"-"`
 	onInbound       []func(*Client, *Message) `json:"-"`
+	onBecomeLeader  []func(*Server)           `json:"-"`
+	onChangeLeader  []func(*Server)           `json:"-"`
 	mode            atomic.Value              `json:"-"`
 	timeout         time.Duration             `json:"-"`
 	mu              sync.Mutex                `json:"-"`
 	muMessages      sync.Mutex                `json:"-"`
 	isDebug         bool                      `json:"-"`
 	isTesting       bool                      `json:"-"`
-	// Balancer
-	proxy *Balancer `json:"-"`
-	// Cluster
-	Peers          []*Client       `json:"-"`
-	state          Mode            `json:"-"`
-	term           int             `json:"-"`
-	votedFor       string          `json:"-"`
-	leaderID       string          `json:"-"`
-	lastHeartbeat  time.Time       `json:"-"`
-	turn           int             `json:"-"`
-	muRaft         sync.Mutex      `json:"-"`
-	muTurn         sync.Mutex      `json:"-"`
-	onBecomeLeader []func(*Server) `json:"-"`
-	onChangeLeader []func(*Server) `json:"-"`
-	// Call
-	method map[string]Service `json:"-"`
+	method          map[string]Service        `json:"-"`
+	raft            *Raft                     `json:"-"`
+	proxy           *Balancer                 `json:"-"`
 }
 
 /**
@@ -128,24 +117,16 @@ func NewServer(port int) *Server {
 		onError:         make([]func(*Client, error), 0),
 		onOutbound:      make([]func(*Client, *Message), 0),
 		onInbound:       make([]func(*Client, *Message), 0),
+		onBecomeLeader:  make([]func(*Server), 0),
+		onChangeLeader:  make([]func(*Server), 0),
 		mu:              sync.Mutex{},
 		muMessages:      sync.Mutex{},
 		timeout:         timeout,
 		isDebug:         isDebug,
 		isTesting:       isTesting,
-		// Cluster
-		Peers:          make([]*Client, 0),
-		state:          Follower,
-		term:           0,
-		votedFor:       "",
-		leaderID:       "",
-		lastHeartbeat:  timezone.Now(),
-		muRaft:         sync.Mutex{},
-		onBecomeLeader: make([]func(*Server), 0),
-		onChangeLeader: make([]func(*Server), 0),
-		// Call
-		method: make(map[string]Service),
+		method:          make(map[string]Service),
 	}
+	result.raft = newRaft(result)
 	result.mode.Store(Follower)
 	result.Mount(newTcpService(result))
 
@@ -293,7 +274,7 @@ func (s *Server) inboundLoop() {
 			}
 
 			var res RequestVoteReply
-			err = s.requestVote(&args, &res)
+			err = s.raft.requestVote(&args, &res)
 			if err != nil {
 				s.ResponseError(msg.To, msg.ID(), err)
 				return
@@ -318,7 +299,7 @@ func (s *Server) inboundLoop() {
 			}
 
 			var res HeartbeatReply
-			err = s.heartbeat(&args, &res)
+			err = s.raft.heartbeat(&args, &res)
 			if err != nil {
 				s.ResponseError(msg.To, msg.ID(), err)
 				return
@@ -560,25 +541,51 @@ func (s *Server) request(to *Client, m *Message) (*Message, error) {
 }
 
 /**
+* Address
+* @return string, error
+**/
+func (s *Server) Address() string {
+	return s.addr
+}
+
+/**
+* AddBackend
+* @param addr string
+**/
+func (s *Server) AddBackend(addr string) {
+	if s.addr == addr {
+		return
+	}
+
+	if s.proxy == nil {
+		s.proxy = newBalancer()
+	}
+
+	node := newNode(addr)
+	s.proxy.nodes = append(s.proxy.nodes, node)
+}
+
+/**
+* RemoveBackend
+* @param addr string
+**/
+func (s *Server) RemoveBackend(addr string) {
+	if s.proxy == nil {
+		return
+	}
+
+	idx := slices.IndexFunc(s.proxy.nodes, func(e *node) bool { return e.Address == addr })
+	if idx != -1 {
+		s.proxy.nodes = append(s.proxy.nodes[:idx], s.proxy.nodes[idx+1:]...)
+	}
+}
+
+/**
 * AddNode
 * @param addr string
 **/
 func (s *Server) AddNode(addr string) {
-	if s.mode.Load() == Proxy {
-		if s.proxy == nil {
-			s.proxy = newBalancer()
-		}
-
-		node := newNode(addr)
-		s.proxy.nodes = append(s.proxy.nodes, node)
-	} else {
-		if addr == s.addr {
-			return
-		}
-
-		node := NewNode(addr)
-		s.Peers = append(s.Peers, node)
-	}
+	s.raft.addNode(addr)
 }
 
 /**
@@ -586,10 +593,7 @@ func (s *Server) AddNode(addr string) {
 * @param addr string
 **/
 func (s *Server) RemoveNode(addr string) {
-	idx := slices.IndexFunc(s.Peers, func(e *Client) bool { return e.Addr == addr })
-	if idx != -1 {
-		s.Peers = append(s.Peers[:idx], s.Peers[idx+1:]...)
-	}
+	s.raft.removeNode(addr)
 }
 
 /**
@@ -607,7 +611,7 @@ func (s *Server) Start() error {
 	go s.run()
 	go s.inboundLoop()
 	go s.writeLoop()
-	go s.ElectionLoop()
+	go s.electionLoop()
 
 	logs.Logf(packageName, mg.MSG_TCP_LISTENING, s.addr)
 
@@ -628,6 +632,23 @@ func (s *Server) Start() error {
 	}()
 
 	return nil
+}
+
+/**
+* electionLoop
+**/
+func (s *Server) electionLoop() {
+	for _, peer := range s.raft.peers {
+		if peer.Status != Connected {
+			err := peer.Connect()
+			if err != nil {
+				s.error(peer, err)
+				continue
+			}
+		}
+	}
+
+	s.raft.electionLoop()
 }
 
 /**
@@ -652,9 +673,7 @@ func (s *Server) StartProxy() error {
 * @return string, bool
 **/
 func (s *Server) LeaderID() (string, bool) {
-	s.muRaft.Lock()
-	defer s.muRaft.Unlock()
-	return s.leaderID, s.state == Leader
+	return s.raft.LeaderID()
 }
 
 /**
@@ -662,16 +681,7 @@ func (s *Server) LeaderID() (string, bool) {
 * @return *Client, bool
 **/
 func (s *Server) GetLeader() (*Client, bool) {
-	leader, imLeader := s.LeaderID()
-	if imLeader {
-		return nil, true
-	}
-
-	idx := slices.IndexFunc(s.Peers, func(e *Client) bool { return e.Addr == leader })
-	if idx == -1 {
-		return nil, false
-	}
-	return s.Peers[idx], false
+	return s.raft.getLeader()
 }
 
 /**
@@ -679,19 +689,7 @@ func (s *Server) GetLeader() (*Client, bool) {
 * @return *Client
 **/
 func (s *Server) NextTurn() *Client {
-	s.muTurn.Lock()
-	defer s.muTurn.Unlock()
-	result := s.Peers[s.turn]
-	s.turn++
-	return result
-}
-
-/**
-* Address
-* @return string, error
-**/
-func (s *Server) Address() string {
-	return s.addr
+	return s.raft.nextTurn()
 }
 
 /**
@@ -864,4 +862,18 @@ func (s *Server) OnOutbound(fn func(*Client, *Message)) {
 **/
 func (s *Server) OnInbound(fn func(*Client, *Message)) {
 	s.onInbound = append(s.onInbound, fn)
+}
+
+/**
+* onChangeLeader
+**/
+func (s *Server) OnChangeLeader(fn func(*Server)) {
+	s.onChangeLeader = append(s.onChangeLeader, fn)
+}
+
+/**
+* OnBecomeLeader
+**/
+func (s *Server) OnBecomeLeader(fn func(*Server)) {
+	s.onBecomeLeader = append(s.onBecomeLeader, fn)
 }

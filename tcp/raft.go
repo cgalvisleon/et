@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"math/rand"
+	"slices"
 	"sync"
 	"time"
 
@@ -66,22 +67,108 @@ type HeartbeatReply struct {
 	Ok   bool
 }
 
+type Raft struct {
+	server        *Server                `json:"-"`
+	addr          string                 `json:"-"`
+	registry      map[string]HandlerFunc `json:"-"`
+	peers         []*Client              `json:"-"`
+	state         Mode                   `json:"-"`
+	term          int                    `json:"-"`
+	votedFor      string                 `json:"-"`
+	leaderID      string                 `json:"-"`
+	lastHeartbeat time.Time              `json:"-"`
+	turn          int                    `json:"-"`
+	muRaft        sync.Mutex             `json:"-"`
+	muTurn        sync.Mutex             `json:"-"`
+	RequestVote   HandlerFunc
+	Heartbeat     HandlerFunc
+}
+
 /**
-* ElectionLoop
+* build
+* @return map[string]HandlerFunc
 **/
-func (s *Server) ElectionLoop() {
-	for _, peer := range s.Peers {
-		if peer.Status != Connected {
-			err := peer.Connect()
-			if err != nil {
-				s.error(peer, err)
-				continue
-			}
-		}
+func (s *Raft) build() map[string]HandlerFunc {
+	s.registry = map[string]HandlerFunc{
+		"RequestVote": s.RequestVote,
+		"Heartbeat":   s.Heartbeat,
+	}
+	return s.registry
+}
+
+/**
+* addNode
+* @param addr string
+**/
+func (s *Raft) addNode(addr string) {
+	if s.addr == addr {
+		return
 	}
 
+	node := NewNode(addr)
+	s.peers = append(s.peers, node)
+}
+
+/**
+* removeNode
+* @param addr string
+**/
+func (s *Raft) removeNode(addr string) {
+	idx := slices.IndexFunc(s.peers, func(e *Client) bool { return e.Addr == addr })
+	if idx != -1 {
+		s.peers = append(s.peers[:idx], s.peers[idx+1:]...)
+	}
+}
+
+/**
+* LeaderID
+* @return string, bool
+**/
+func (s *Raft) LeaderID() (leader string, imLeader bool) {
+	s.muRaft.Lock()
+	leader = s.leaderID
+	state := s.state
+	s.muRaft.Unlock()
+	imLeader = state == Leader
 	return
-	if len(s.Peers) == 0 {
+}
+
+/**
+* getLeader
+* @return *Client, bool
+**/
+func (s *Raft) getLeader() (*Client, bool) {
+	leader, imLeader := s.LeaderID()
+	if imLeader {
+		return nil, true
+	}
+
+	idx := slices.IndexFunc(s.peers, func(e *Client) bool { return e.Addr == leader })
+	if idx == -1 {
+		return nil, false
+	}
+
+	return s.peers[idx], false
+}
+
+/**
+* nextTurn
+* @return *Client
+**/
+func (s *Raft) nextTurn() *Client {
+	s.muTurn.Lock()
+	result := s.peers[s.turn]
+	s.turn++
+	s.muTurn.Unlock()
+
+	return result
+}
+
+/**
+* electionLoop
+**/
+func (s *Raft) electionLoop() {
+	if len(s.peers) == 0 {
 		s.muRaft.Lock()
 		s.becomeLeader()
 		s.muRaft.Unlock()
@@ -111,7 +198,7 @@ func (s *Server) ElectionLoop() {
 /**
 * startElection
 **/
-func (s *Server) startElection() {
+func (s *Raft) startElection() {
 	s.muRaft.Lock()
 	s.state = Candidate
 	s.term++
@@ -120,12 +207,11 @@ func (s *Server) startElection() {
 	s.muRaft.Unlock()
 
 	votes := 1
-	total := len(s.Peers)
-	for _, peer := range s.Peers {
+	total := len(s.peers)
+	for _, peer := range s.peers {
 		if peer.Status != Connected {
 			err := peer.Connect()
 			if err != nil {
-				s.error(peer, err)
 				continue
 			}
 		}
@@ -164,7 +250,7 @@ func (s *Server) startElection() {
 /**
 * becomeLeader
 **/
-func (s *Server) becomeLeader() {
+func (s *Raft) becomeLeader() {
 	s.state = Leader
 	s.leaderID = s.addr
 	s.lastHeartbeat = timezone.Now()
@@ -172,16 +258,16 @@ func (s *Server) becomeLeader() {
 
 	go s.heartbeatLoop()
 
-	for _, fn := range s.onBecomeLeader {
-		fn(s)
+	for _, fn := range s.server.onBecomeLeader {
+		fn(s.server)
 	}
 }
 
 /**
 * heartbeatLoop
 **/
-func (s *Server) heartbeatLoop() {
-	if len(s.Peers) == 0 {
+func (s *Raft) heartbeatLoop() {
+	if len(s.peers) == 0 {
 		return
 	}
 
@@ -197,7 +283,7 @@ func (s *Server) heartbeatLoop() {
 			return
 		}
 
-		for _, peer := range s.Peers {
+		for _, peer := range s.peers {
 			if peer.Addr == s.addr {
 				continue
 			}
@@ -226,7 +312,7 @@ func (s *Server) heartbeatLoop() {
 * @param to *Client, args *RequestVoteArgs, reply *RequestVoteReply
 * @return error
 **/
-func (s *Server) requestVote(args *RequestVoteArgs, reply *RequestVoteReply) error {
+func (s *Raft) requestVote(args *RequestVoteArgs, reply *RequestVoteReply) error {
 	s.muRaft.Lock()
 	defer s.muRaft.Unlock()
 
@@ -259,7 +345,7 @@ func (s *Server) requestVote(args *RequestVoteArgs, reply *RequestVoteReply) err
 * @param args *HeartbeatArgs, reply *HeartbeatReply
 * @return error
 **/
-func (s *Server) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
+func (s *Raft) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 	changedLeader := false
 
 	s.muRaft.Lock()
@@ -289,8 +375,8 @@ func (s *Server) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 	s.muRaft.Unlock()
 
 	if changedLeader {
-		for _, fn := range s.onChangeLeader {
-			fn(s)
+		for _, fn := range s.server.onChangeLeader {
+			fn(s.server)
 		}
 	}
 	return nil
@@ -369,22 +455,57 @@ func heartbeat(to *Client, require *HeartbeatArgs, response *HeartbeatReply) *Re
 }
 
 /**
-* onChangeLeader
+* newRaft
+* @param srv *Server
+* @return *Raft
 **/
-func (s *Server) OnChangeLeader(fn func(*Server)) {
-	s.onChangeLeader = append(s.onChangeLeader, fn)
-}
+func newRaft(srv *Server) *Raft {
+	this := &Raft{
+		server:        srv,
+		addr:          srv.addr,
+		peers:         make([]*Client, 0),
+		state:         Follower,
+		term:          0,
+		votedFor:      "",
+		leaderID:      "",
+		lastHeartbeat: time.Now(),
+		turn:          0,
+		muRaft:        sync.Mutex{},
+		muTurn:        sync.Mutex{},
+	}
 
-/**
-* OnBecomeLeader
-**/
-func (s *Server) OnBecomeLeader(fn func(*Server)) {
-	s.onBecomeLeader = append(s.onBecomeLeader, fn)
-}
+	this.RequestVote = func(request *Message) *Response {
+		var args RequestVoteArgs
+		err := request.GetArgs(&args)
+		if err != nil {
+			return TcpError(err)
+		}
 
-/**
-* OnBecomeFollower
-**/
-func (s *Server) OnBecomeFollower(fn func(*Server)) {
-	s.onBecomeLeader = append(s.onBecomeLeader, fn)
+		var response RequestVoteReply
+		err = this.requestVote(&args, &response)
+		if err != nil {
+			return TcpError(err)
+		}
+
+		return TcpResponse(response)
+	}
+
+	this.Heartbeat = func(request *Message) *Response {
+		var args HeartbeatArgs
+		err := request.GetArgs(&args)
+		if err != nil {
+			return TcpError(err)
+		}
+
+		var response HeartbeatReply
+		err = this.heartbeat(&args, &response)
+		if err != nil {
+			return TcpError(err)
+		}
+
+		return TcpResponse(response)
+	}
+
+	this.build()
+	return this
 }

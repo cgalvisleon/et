@@ -80,8 +80,6 @@ type Raft struct {
 	turn          int                    `json:"-"`
 	muRaft        sync.Mutex             `json:"-"`
 	muTurn        sync.Mutex             `json:"-"`
-	RequestVote   HandlerFunc
-	Heartbeat     HandlerFunc
 }
 
 /**
@@ -89,10 +87,7 @@ type Raft struct {
 * @return map[string]HandlerFunc
 **/
 func (s *Raft) build() map[string]HandlerFunc {
-	s.registry = map[string]HandlerFunc{
-		"RequestVote": s.RequestVote,
-		"Heartbeat":   s.Heartbeat,
-	}
+	s.registry = map[string]HandlerFunc{}
 	return s.registry
 }
 
@@ -212,6 +207,7 @@ func (s *Raft) startElection() {
 		if peer.Status != Connected {
 			err := peer.Connect()
 			if err != nil {
+				total--
 				continue
 			}
 		}
@@ -221,6 +217,7 @@ func (s *Raft) startElection() {
 		res := requestVote(peer, &args, &reply)
 		if res.Error != nil {
 			total--
+			continue
 		}
 
 		go func(peer *Client) {
@@ -388,6 +385,22 @@ func (s *Raft) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 * @return *ResponseBool
 **/
 func requestVote(to *Client, require *RequestVoteArgs, response *RequestVoteReply) *ResponseBool {
+	// res := to.Request("Raft.RequestVote", require)
+	// if res.Error != nil {
+	// 	return &ResponseBool{
+	// 		Ok:    false,
+	// 		Error: res.Error,
+	// 	}
+	// }
+
+	// err := res.Get(&response)
+	// if err != nil {
+	// 	return &ResponseBool{
+	// 		Ok:    false,
+	// 		Error: err,
+	// 	}
+	// }
+
 	m, err := NewMessage(RequestVote, require)
 	if err != nil {
 		return &ResponseBool{
@@ -473,39 +486,6 @@ func newRaft(srv *Server) *Raft {
 		muRaft:        sync.Mutex{},
 		muTurn:        sync.Mutex{},
 	}
-
-	this.RequestVote = func(request *Message) *Response {
-		var args RequestVoteArgs
-		err := request.GetArgs(&args)
-		if err != nil {
-			return TcpError(err)
-		}
-
-		var response RequestVoteReply
-		err = this.requestVote(&args, &response)
-		if err != nil {
-			return TcpError(err)
-		}
-
-		return TcpResponse(response)
-	}
-
-	this.Heartbeat = func(request *Message) *Response {
-		var args HeartbeatArgs
-		err := request.GetArgs(&args)
-		if err != nil {
-			return TcpError(err)
-		}
-
-		var response HeartbeatReply
-		err = this.heartbeat(&args, &response)
-		if err != nil {
-			return TcpError(err)
-		}
-
-		return TcpResponse(response)
-	}
-
 	this.build()
 	return this
 }

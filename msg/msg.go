@@ -47,6 +47,7 @@ var (
 	MSG_INVALID_METHOD                 = "invalid method: %s"
 	MSG_INDEX_OUT_OF_RANGE             = "index out of range"
 	MSG_SEND_TO                        = "send: %s to:%s"
+	MSG_RESPONSE_TO                    = "response: %s to:%s"
 )
 
 func init() {
@@ -94,7 +95,9 @@ func init() {
 		MSG_TCP_MESSAGE_TOO_LARGE = "mensaje demasiado grande"
 		MSG_TCP_TIMEOUT = "timeout esperando respuesta"
 		MSG_SERVICE_REQUIRED = "servicio requerido"
-		MSG_INVALID_METHOD = "invalid method: %s"
+		MSG_INVALID_METHOD = "metodo invalido: %s"
 		MSG_INDEX_OUT_OF_RANGE = "index fuera de rango"
+		MSG_SEND_TO = "enviado: %s a:%s"
+		MSG_RESPONSE_TO = "respuesta: %s a:%s"
 	}
 }

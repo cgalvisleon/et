@@ -260,7 +260,11 @@ func (s *Server) writeLoop() {
 		}
 
 		if s.isDebug {
-			logs.Debugf(mg.MSG_SEND_TO, msg.Msg.ToJson().ToString(), msg.To.Addr)
+			if msg.Msg.IsResponse {
+				logs.Debugf(mg.MSG_RESPONSE_TO, msg.Msg.ToJson().ToString(), msg.To.Addr)
+			} else {
+				logs.Debugf(mg.MSG_SEND_TO, msg.Msg.ToJson().ToString(), msg.To.Addr)
+			}
 		}
 	}
 }
@@ -502,6 +506,7 @@ func (s *Server) response(to *Client, id string, msg *Message) error {
 
 	if id != "" {
 		msg.ID = id
+		msg.IsResponse = true
 	}
 
 	s.outbound <- &Msg{

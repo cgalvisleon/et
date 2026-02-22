@@ -114,11 +114,12 @@ func (s *Response) Get(dest ...any) error {
 }
 
 type Message struct {
-	ID      string `json:"id"`
-	Type    int    `json:"type"`
-	Method  string `json:"method"`
-	Payload []byte `json:"payload"`
-	Args    []any  `json:"args"`
+	ID         string `json:"id"`
+	Type       int    `json:"type"`
+	Method     string `json:"method"`
+	Payload    []byte `json:"payload"`
+	Args       []any  `json:"args"`
+	IsResponse bool   `json:"is_response"`
 }
 
 /**

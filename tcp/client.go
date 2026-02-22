@@ -324,14 +324,14 @@ func (s *Client) Connect() error {
 	logs.Logf(packageName, msg.MSG_TCP_CONNECTED_TO, s.Addr)
 	if s.isDebug {
 		logs.Debugf("connected: %s", s.toJson().ToString())
-	}
 
-	res := s.Request(PingMehtod, s.ID, s.Ctx)
-	if res.Error != nil {
-		return s.error(res.Error)
-	}
+		res := s.Request(PingMehtod, s.ID, s.Ctx)
+		if res.Error != nil {
+			return s.error(res.Error)
+		}
 
-	logs.Debugf("respuesta: %s", res.Response)
+		logs.Debugf("respuesta: %s", res.Response)
+	}
 
 	return nil
 }

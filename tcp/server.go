@@ -638,16 +638,6 @@ func (s *Server) Start() error {
 * electionLoop
 **/
 func (s *Server) electionLoop() {
-	for _, peer := range s.raft.peers {
-		if peer.Status != Connected {
-			err := peer.Connect()
-			if err != nil {
-				s.error(peer, err)
-				continue
-			}
-		}
-	}
-
 	s.raft.electionLoop()
 }
 

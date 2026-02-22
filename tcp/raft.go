@@ -78,7 +78,7 @@ type Raft struct {
 	leaderID      string                 `json:"-"`
 	lastHeartbeat time.Time              `json:"-"`
 	turn          int                    `json:"-"`
-	muRaft        sync.Mutex             `json:"-"`
+	mu            sync.Mutex             `json:"-"`
 	muTurn        sync.Mutex             `json:"-"`
 }
 
@@ -101,7 +101,9 @@ func (s *Raft) addNode(addr string) {
 	}
 
 	node := NewNode(addr)
+	s.mu.Lock()
 	s.peers = append(s.peers, node)
+	s.mu.Unlock()
 }
 
 /**
@@ -109,6 +111,9 @@ func (s *Raft) addNode(addr string) {
 * @param addr string
 **/
 func (s *Raft) removeNode(addr string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	idx := slices.IndexFunc(s.peers, func(e *Client) bool { return e.Addr == addr })
 	if idx != -1 {
 		s.peers = append(s.peers[:idx], s.peers[idx+1:]...)
@@ -120,10 +125,10 @@ func (s *Raft) removeNode(addr string) {
 * @return string, bool
 **/
 func (s *Raft) LeaderID() (leader string, imLeader bool) {
-	s.muRaft.Lock()
+	// s.mu.Lock()
 	leader = s.leaderID
 	state := s.state
-	s.muRaft.Unlock()
+	// s.mu.Unlock()
 	imLeader = state == Leader
 	return
 }
@@ -143,7 +148,11 @@ func (s *Raft) getLeader() (*Client, bool) {
 		return nil, false
 	}
 
-	return s.peers[idx], false
+	// s.mu.Lock()
+	result := s.peers[idx]
+	// s.mu.Unlock()
+
+	return result, false
 }
 
 /**
@@ -151,10 +160,10 @@ func (s *Raft) getLeader() (*Client, bool) {
 * @return *Client
 **/
 func (s *Raft) nextTurn() *Client {
-	s.muTurn.Lock()
+	// s.muTurn.Lock()
 	result := s.peers[s.turn]
 	s.turn++
-	s.muTurn.Unlock()
+	// s.muTurn.Unlock()
 
 	return result
 }
@@ -164,25 +173,25 @@ func (s *Raft) nextTurn() *Client {
 **/
 func (s *Raft) electionLoop() {
 	if len(s.peers) == 0 {
-		s.muRaft.Lock()
+		s.mu.Lock()
 		s.becomeLeader()
-		s.muRaft.Unlock()
+		s.mu.Unlock()
 		return
 	}
 
-	s.muRaft.Lock()
+	s.mu.Lock()
 	s.state = Follower
 	s.lastHeartbeat = timezone.Now()
-	s.muRaft.Unlock()
+	s.mu.Unlock()
 
 	for {
 		timeout := randomBetween(1500, 3000)
 		time.Sleep(timeout)
 
-		s.muRaft.Lock()
+		s.mu.Lock()
 		elapsed := time.Since(s.lastHeartbeat)
 		state := s.state
-		s.muRaft.Unlock()
+		s.mu.Unlock()
 
 		if elapsed > heartbeatInterval && state != Leader {
 			s.startElection()
@@ -194,15 +203,20 @@ func (s *Raft) electionLoop() {
 * startElection
 **/
 func (s *Raft) startElection() {
-	s.muRaft.Lock()
+	// s.mu.Lock()
 	s.state = Candidate
 	s.term++
 	term := s.term
 	s.votedFor = s.addr
-	s.muRaft.Unlock()
+	// s.mu.Unlock()
 
 	votes := 1
 	total := len(s.peers)
+
+	defer func() {
+		logs.Debugf("startElection:%s total:%d", s.addr, total)
+	}()
+
 	for _, peer := range s.peers {
 		if peer.Status != Connected {
 			err := peer.Connect()
@@ -222,8 +236,8 @@ func (s *Raft) startElection() {
 
 		go func(peer *Client) {
 			if res.Ok {
-				s.muRaft.Lock()
-				defer s.muRaft.Unlock()
+				// s.mu.Lock()
+				// defer s.mu.Unlock()
 
 				if reply.Term > s.term {
 					s.term = reply.Term
@@ -251,9 +265,10 @@ func (s *Raft) becomeLeader() {
 	s.state = Leader
 	s.leaderID = s.addr
 	s.lastHeartbeat = timezone.Now()
+
 	logs.Logf(packageName, "I am leader %s", s.addr)
 
-	go s.heartbeatLoop()
+	// go s.heartbeatLoop()
 
 	for _, fn := range s.server.onBecomeLeader {
 		fn(s.server)
@@ -264,18 +279,16 @@ func (s *Raft) becomeLeader() {
 * heartbeatLoop
 **/
 func (s *Raft) heartbeatLoop() {
-	if len(s.peers) == 0 {
-		return
-	}
+	logs.Debug("heartbeatLoop")
 
 	ticker := time.NewTicker(heartbeatInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		s.muRaft.Lock()
+		// s.mu.Lock()
 		state := s.state
 		term := s.term
-		s.muRaft.Unlock()
+		// s.mu.Unlock()
 		if state != Leader {
 			return
 		}
@@ -285,13 +298,17 @@ func (s *Raft) heartbeatLoop() {
 				continue
 			}
 
+			if peer.Status != Connected {
+				continue
+			}
+
 			go func(peer *Client) {
 				args := HeartbeatArgs{Term: term, LeaderID: s.addr}
 				var reply HeartbeatReply
 				res := heartbeat(peer, &args, &reply)
 				if res.Ok {
-					s.muRaft.Lock()
-					defer s.muRaft.Unlock()
+					// s.mu.Lock()
+					// defer s.mu.Unlock()
 
 					if reply.Term > s.term {
 						s.term = reply.Term
@@ -310,8 +327,8 @@ func (s *Raft) heartbeatLoop() {
 * @return error
 **/
 func (s *Raft) requestVote(args *RequestVoteArgs, reply *RequestVoteReply) error {
-	s.muRaft.Lock()
-	defer s.muRaft.Unlock()
+	// s.mu.Lock()
+	// defer s.mu.Unlock()
 
 	if args.Term < s.term {
 		reply.Term = s.term
@@ -345,11 +362,11 @@ func (s *Raft) requestVote(args *RequestVoteArgs, reply *RequestVoteReply) error
 func (s *Raft) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 	changedLeader := false
 
-	s.muRaft.Lock()
+	// s.mu.Lock()
 	if args.Term < s.term {
 		reply.Term = s.term
 		reply.Ok = false
-		s.muRaft.Unlock()
+		// s.mu.Unlock()
 		return nil
 	}
 
@@ -369,7 +386,7 @@ func (s *Raft) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 
 	reply.Term = s.term
 	reply.Ok = true
-	s.muRaft.Unlock()
+	// s.mu.Unlock()
 
 	if changedLeader {
 		for _, fn := range s.server.onChangeLeader {
@@ -385,22 +402,6 @@ func (s *Raft) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 * @return *ResponseBool
 **/
 func requestVote(to *Client, require *RequestVoteArgs, response *RequestVoteReply) *ResponseBool {
-	// res := to.Request("Raft.RequestVote", require)
-	// if res.Error != nil {
-	// 	return &ResponseBool{
-	// 		Ok:    false,
-	// 		Error: res.Error,
-	// 	}
-	// }
-
-	// err := res.Get(&response)
-	// if err != nil {
-	// 	return &ResponseBool{
-	// 		Ok:    false,
-	// 		Error: err,
-	// 	}
-	// }
-
 	m, err := NewMessage(RequestVote, require)
 	if err != nil {
 		return &ResponseBool{
@@ -483,7 +484,7 @@ func newRaft(srv *Server) *Raft {
 		leaderID:      "",
 		lastHeartbeat: time.Now(),
 		turn:          0,
-		muRaft:        sync.Mutex{},
+		mu:            sync.Mutex{},
 		muTurn:        sync.Mutex{},
 	}
 	this.build()

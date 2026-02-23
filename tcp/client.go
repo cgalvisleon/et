@@ -175,6 +175,11 @@ func (s *Client) disconnect() {
 	close(s.outbound)
 }
 
+
+func (s *Client) run() {
+	
+}
+
 /**
 * incoming
 **/
@@ -291,9 +296,7 @@ func (s *Client) request(m *Message) (*Message, error) {
 	}
 
 	// Send
-	if s.outbound != nil {
-		s.outbound <- bt
-	}
+	s.outbound <- bt
 
 	// Wait response or timeout
 	select {
@@ -372,12 +375,7 @@ func (s *Client) Close() error {
 * @param tp int, message any
 * @return error
 **/
-func (s *Client) Send(tp int, message any) error {
-	msg, err := NewMessage(tp, message)
-	if err != nil {
-		return s.error(err)
-	}
-
+func (s *Client) Send(msg *Message) error {
 	bt, err := msg.serialize()
 	if err != nil {
 		return s.error(err)
@@ -394,7 +392,7 @@ func (s *Client) Send(tp int, message any) error {
 	// Send
 	s.outbound <- bt
 
-	if tp == CloseMessage {
+	if msg.Type == CloseMessage {
 		s.disconnect()
 	}
 

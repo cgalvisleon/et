@@ -165,15 +165,57 @@ func (s *Server) run() {
 }
 
 /**
+* connect
+* @param *Client client
+**/
+func (s *Server) connect(client *Client) {
+	s.mu.Lock()
+	s.clients[client.Addr] = client
+	s.mu.Unlock()
+
+	logs.Logf(packageName, mg.MSG_TCP_CONNECTED_CLIENT, client.toJson().ToString())
+	go s.handle(client)
+
+	err := s.Send(client, TextMessage, "Hola")
+	if err != nil {
+		logs.Errorf("Error sending message: %v", err)
+	}
+
+	for _, fn := range s.onConnect {
+		fn(client)
+	}
+}
+
+/**
+* disconnect
+* @param *Client client
+**/
+func (s *Server) disconnect(client *Client) {
+	logs.Logf(packageName, mg.MSG_TCP_DISCONNECTED_CLIENT, client.Addr)
+
+	_, ok := s.clients[client.Addr]
+	if ok {
+		client.Status = Disconnected
+		for _, fn := range s.onDisconnect {
+			fn(client)
+		}
+
+		s.mu.Lock()
+		delete(s.clients, client.Addr)
+		s.mu.Unlock()
+	}
+}
+
+/**
 * inbox
 * @param msg *Msg
 **/
 func (s *Server) inbox(msg *Msg) {
-	logs.Debug("onInbound:", msg.ID())
+	logs.Debug("inbox:", msg.ID())
 
-	s.mu.Lock()
+	s.muMessages.Lock()
 	ch, ok := s.messages[msg.ID()]
-	s.mu.Unlock()
+	s.muMessages.Unlock()
 
 	if ok {
 		if ch != nil {
@@ -330,42 +372,6 @@ func (s *Server) newClient(conn net.Conn) *Client {
 }
 
 /**
-* connect
-* @param *Client client
-**/
-func (s *Server) connect(client *Client) {
-	s.mu.Lock()
-	s.clients[client.Addr] = client
-	s.mu.Unlock()
-
-	logs.Logf(packageName, mg.MSG_TCP_CONNECTED_FROM, client.toJson().ToString())
-	go s.handle(client)
-	for _, fn := range s.onConnect {
-		fn(client)
-	}
-}
-
-/**
-* disconnect
-* @param *Client client
-**/
-func (s *Server) disconnect(client *Client) {
-	logs.Logf(packageName, mg.MSG_TCP_DISCONNECTED, client.Addr)
-
-	_, ok := s.clients[client.Addr]
-	if ok {
-		client.Status = Disconnected
-		for _, fn := range s.onDisconnect {
-			fn(client)
-		}
-
-		s.mu.Lock()
-		delete(s.clients, client.Addr)
-		s.mu.Unlock()
-	}
-}
-
-/**
 * handle
 * @param conn net.Conn
 **/
@@ -376,7 +382,7 @@ func (s *Server) handle(c *Client) {
 	case Proxy:
 		s.handleBalancer(c.conn)
 	default:
-		go s.handleClient(c)
+		s.handleClient(c)
 	}
 }
 
@@ -462,6 +468,58 @@ func (s *Server) handleClient(c *Client) {
 }
 
 /**
+* request
+* @param to *Client, tp int, payload any
+* @return *Message, error
+**/
+func (s *Server) request(to *Client, m *Message) (*Message, error) {
+	s.mu.Lock()
+	_, ok := s.clients[to.Addr]
+	s.mu.Unlock()
+
+	if !ok {
+		return nil, fmt.Errorf(mg.MSG_TCP_CLIENT_NOT_FOUND, to.Addr)
+	}
+
+	// Channel for response
+	ch := make(chan *Message, 1)
+	s.muMessages.Lock()
+	s.messages[m.ID] = ch
+	s.muMessages.Unlock()
+
+	// Send
+	err := to.Send(m)
+	if err != nil {
+		return nil, err
+	}
+	// s.outbound <- &Msg{
+	// 	To:  to,
+	// 	Msg: m,
+	// }
+
+	// Wait response or timeout
+	select {
+	case resp := <-ch:
+		s.muMessages.Lock()
+		delete(s.messages, m.ID)
+		s.muMessages.Unlock()
+		// if s.isDebug {
+		logs.Debugf("response: %s", resp.ID)
+		// }
+		return resp, nil
+
+	case <-time.After(s.timeout):
+		s.muMessages.Lock()
+		delete(s.messages, m.ID)
+		s.muMessages.Unlock()
+		// if s.isDebug {
+		logs.Debugf("timeout: %s", m.ID)
+		// }
+		return nil, fmt.Errorf(mg.MSG_TCP_TIMEOUT)
+	}
+}
+
+/**
 * response
 * @params to *Client, id string, msg *Message
 * @return error
@@ -489,51 +547,10 @@ func (s *Server) response(to *Client, id string, msg *Message) error {
 }
 
 /**
-* request
-* @param to *Client, tp int, payload any
-* @return *Message, error
+* electionLoop
 **/
-func (s *Server) request(to *Client, m *Message) (*Message, error) {
-	s.mu.Lock()
-	_, ok := s.clients[to.Addr]
-	s.mu.Unlock()
-
-	if !ok {
-		return nil, fmt.Errorf(mg.MSG_TCP_CLIENT_NOT_FOUND, to.Addr)
-	}
-
-	// Channel for response
-	ch := make(chan *Message, 1)
-	s.muMessages.Lock()
-	s.messages[m.ID] = ch
-	s.muMessages.Unlock()
-
-	// Send
-	s.outbound <- &Msg{
-		To:  to,
-		Msg: m,
-	}
-
-	// Wait response or timeout
-	select {
-	case resp := <-ch:
-		s.muMessages.Lock()
-		delete(s.messages, m.ID)
-		s.muMessages.Unlock()
-		// if s.isDebug {
-		logs.Debugf("response: %s", resp.ID)
-		// }
-		return resp, nil
-
-	case <-time.After(s.timeout):
-		s.muMessages.Lock()
-		delete(s.messages, m.ID)
-		s.muMessages.Unlock()
-		// if s.isDebug {
-		logs.Debugf("timeout: %s", m.ID)
-		// }
-		return nil, fmt.Errorf(mg.MSG_TCP_TIMEOUT)
-	}
+func (s *Server) electionLoop() {
+	s.raft.electionLoop()
 }
 
 /**
@@ -542,6 +559,86 @@ func (s *Server) request(to *Client, m *Message) (*Message, error) {
 **/
 func (s *Server) Address() string {
 	return s.addr
+}
+
+/**
+* Start
+* @return error
+**/
+func (s *Server) Start() error {
+	addr := fmt.Sprintf(":%d", s.port)
+	var err error
+	s.ln, err = net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+
+	go s.run()
+	if s.port == 1378 {
+		go test(s)
+	}
+	// go s.electionLoop()
+
+	logs.Logf(packageName, mg.MSG_TCP_LISTENING, s.addr)
+
+	for _, fn := range s.onStart {
+		fn(s)
+	}
+
+	go func() {
+		for {
+			conn, err := s.ln.Accept()
+			if err != nil {
+				continue
+			}
+
+			client := s.newClient(conn)
+			s.register <- client
+		}
+	}()
+
+	return nil
+}
+
+/**
+* Close
+* @return error
+**/
+func (s *Server) Close() error {
+	return s.ln.Close()
+}
+
+/**
+* StartProxy
+* @return error
+**/
+func (s *Server) StartProxy() error {
+	s.mode.Store(Proxy)
+	return s.Start()
+}
+
+/**
+* LeaderID
+* @return string, bool
+**/
+func (s *Server) LeaderID() (string, bool) {
+	return s.raft.LeaderID()
+}
+
+/**
+* GetLeader
+* @return *Client, bool
+**/
+func (s *Server) GetLeader() (*Client, bool) {
+	return s.raft.getLeader()
+}
+
+/**
+* NextTurn
+* @return *Client
+**/
+func (s *Server) NextTurn() *Client {
+	return s.raft.nextTurn()
 }
 
 /**
@@ -590,90 +687,6 @@ func (s *Server) AddNode(addr string) {
 **/
 func (s *Server) RemoveNode(addr string) {
 	s.raft.removeNode(addr)
-}
-
-/**
-* Start
-* @return error
-**/
-func (s *Server) Start() error {
-	addr := fmt.Sprintf(":%d", s.port)
-	var err error
-	s.ln, err = net.Listen("tcp", addr)
-	if err != nil {
-		return err
-	}
-
-	go s.run()
-	// go s.electionLoop()
-
-	logs.Logf(packageName, mg.MSG_TCP_LISTENING, s.addr)
-
-	for _, fn := range s.onStart {
-		fn(s)
-	}
-
-	go func() {
-		for {
-			conn, err := s.ln.Accept()
-			if err != nil {
-				continue
-			}
-
-			client := s.newClient(conn)
-			s.register <- client
-		}
-	}()
-
-	return nil
-}
-
-/**
-* electionLoop
-**/
-func (s *Server) electionLoop() {
-	s.raft.electionLoop()
-}
-
-/**
-* Close
-* @return error
-**/
-func (s *Server) Close() error {
-	return s.ln.Close()
-}
-
-/**
-* StartProxy
-* @return error
-**/
-func (s *Server) StartProxy() error {
-	s.mode.Store(Proxy)
-	return s.Start()
-}
-
-/**
-* LeaderID
-* @return string, bool
-**/
-func (s *Server) LeaderID() (string, bool) {
-	return s.raft.LeaderID()
-}
-
-/**
-* GetLeader
-* @return *Client, bool
-**/
-func (s *Server) GetLeader() (*Client, bool) {
-	return s.raft.getLeader()
-}
-
-/**
-* NextTurn
-* @return *Client
-**/
-func (s *Server) NextTurn() *Client {
-	return s.raft.nextTurn()
 }
 
 /**

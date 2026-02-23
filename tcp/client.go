@@ -133,10 +133,12 @@ func (s *Client) connect() error {
 		return s.error(err)
 	}
 
+	s.mu.Lock()
 	s.conn = conn
 	s.Status = Connected
 	s.LocalAddr = s.conn.LocalAddr().String()
 	s.RemoteAddr = s.conn.RemoteAddr().String()
+	s.mu.Unlock()
 	for _, fn := range s.onConnect {
 		fn(s)
 	}

@@ -56,32 +56,32 @@ func (s *Msg) Get(dest any) error {
 }
 
 type Server struct {
-	addr            string                    `json:"-"`
-	port            int                       `json:"-"`
-	ln              net.Listener              `json:"-"`
-	register        chan *Client              `json:"-"`
-	unregister      chan *Client              `json:"-"`
-	clients         map[string]*Client        `json:"-"`
-	inbound         chan *Msg                 `json:"-"`
-	outbound        chan *Msg                 `json:"-"`
-	messages        map[string]chan *Message  `json:"-"`
-	onConnection    []func(*Client)           `json:"-"`
-	onDisconnection []func(*Client)           `json:"-"`
-	onStart         []func(*Server)           `json:"-"`
-	onError         []func(*Client, error)    `json:"-"`
-	onOutbound      []func(*Client, *Message) `json:"-"`
-	onInbound       []func(*Client, *Message) `json:"-"`
-	onBecomeLeader  []func(*Server)           `json:"-"`
-	onChangeLeader  []func(*Server)           `json:"-"`
-	mode            atomic.Value              `json:"-"`
-	timeout         time.Duration             `json:"-"`
-	mu              sync.Mutex                `json:"-"`
-	muMessages      sync.Mutex                `json:"-"`
-	isDebug         bool                      `json:"-"`
-	isTesting       bool                      `json:"-"`
-	method          map[string]Service        `json:"-"`
-	raft            *Raft                     `json:"-"`
-	proxy           *Balancer                 `json:"-"`
+	addr           string                    `json:"-"`
+	port           int                       `json:"-"`
+	ln             net.Listener              `json:"-"`
+	register       chan *Client              `json:"-"`
+	unregister     chan *Client              `json:"-"`
+	clients        map[string]*Client        `json:"-"`
+	inbound        chan *Msg                 `json:"-"`
+	outbound       chan *Msg                 `json:"-"`
+	messages       map[string]chan *Message  `json:"-"`
+	onConnect      []func(*Client)           `json:"-"`
+	onDisconnect   []func(*Client)           `json:"-"`
+	onStart        []func(*Server)           `json:"-"`
+	onError        []func(*Client, error)    `json:"-"`
+	onOutbound     []func(*Client, *Message) `json:"-"`
+	onInbound      []func(*Client, *Message) `json:"-"`
+	onBecomeLeader []func(*Server)           `json:"-"`
+	onChangeLeader []func(*Server)           `json:"-"`
+	mode           atomic.Value              `json:"-"`
+	timeout        time.Duration             `json:"-"`
+	mu             sync.Mutex                `json:"-"`
+	muMessages     sync.Mutex                `json:"-"`
+	isDebug        bool                      `json:"-"`
+	isTesting      bool                      `json:"-"`
+	method         map[string]Service        `json:"-"`
+	raft           *Raft                     `json:"-"`
+	proxy          *Balancer                 `json:"-"`
 }
 
 /**
@@ -103,28 +103,28 @@ func NewServer(port int) *Server {
 		timeout = 10 * time.Second
 	}
 	result := &Server{
-		addr:            addr,
-		port:            port,
-		clients:         make(map[string]*Client),
-		inbound:         make(chan *Msg),
-		outbound:        make(chan *Msg),
-		messages:        make(map[string]chan *Message),
-		register:        make(chan *Client),
-		unregister:      make(chan *Client),
-		onConnection:    make([]func(*Client), 0),
-		onDisconnection: make([]func(*Client), 0),
-		onStart:         make([]func(*Server), 0),
-		onError:         make([]func(*Client, error), 0),
-		onOutbound:      make([]func(*Client, *Message), 0),
-		onInbound:       make([]func(*Client, *Message), 0),
-		onBecomeLeader:  make([]func(*Server), 0),
-		onChangeLeader:  make([]func(*Server), 0),
-		mu:              sync.Mutex{},
-		muMessages:      sync.Mutex{},
-		timeout:         timeout,
-		isDebug:         isDebug,
-		isTesting:       isTesting,
-		method:          make(map[string]Service),
+		addr:           addr,
+		port:           port,
+		clients:        make(map[string]*Client),
+		register:       make(chan *Client),
+		unregister:     make(chan *Client),
+		messages:       make(map[string]chan *Message),
+		inbound:        make(chan *Msg),
+		outbound:       make(chan *Msg),
+		onConnect:      make([]func(*Client), 0),
+		onDisconnect:   make([]func(*Client), 0),
+		onStart:        make([]func(*Server), 0),
+		onError:        make([]func(*Client, error), 0),
+		onOutbound:     make([]func(*Client, *Message), 0),
+		onInbound:      make([]func(*Client, *Message), 0),
+		onBecomeLeader: make([]func(*Server), 0),
+		onChangeLeader: make([]func(*Server), 0),
+		mu:             sync.Mutex{},
+		muMessages:     sync.Mutex{},
+		timeout:        timeout,
+		isDebug:        isDebug,
+		isTesting:      isTesting,
+		method:         make(map[string]Service),
 	}
 	result.raft = newRaft(result)
 	result.mode.Store(Follower)
@@ -153,205 +153,159 @@ func (s *Server) run() {
 	for {
 		select {
 		case client := <-s.register:
-			s.onConnect(client)
+			s.connect(client)
 		case client := <-s.unregister:
-			s.onDisconnect(client)
+			s.disconnect(client)
+		case msg := <-s.inbound:
+			s.inbox(msg)
+		case msg := <-s.outbound:
+			s.send(msg)
 		}
 	}
 }
 
 /**
-* readLoop
-* @param c *Client
+* inbox
+* @param msg *Msg
 **/
-func (s *Server) readLoop(c *Client) {
-	reader := bufio.NewReader(c.conn)
+func (s *Server) inbox(msg *Msg) {
+	logs.Debug("onInbound:", msg.ID())
 
-	for {
-		// Leer tamaño (4 bytes)
-		lenBuf := make([]byte, 4)
-		_, err := io.ReadFull(reader, lenBuf)
+	s.mu.Lock()
+	ch, ok := s.messages[msg.ID()]
+	s.mu.Unlock()
+
+	if ok {
+		if ch != nil {
+			ch <- msg.Msg
+		}
+		return
+	}
+
+	switch msg.Msg.Type {
+	case RequestVote:
+		var args RequestVoteArgs
+		err := msg.Get(&args)
 		if err != nil {
-			if err != io.EOF {
-				logs.Logf(packageName, mg.MSG_TCP_ERROR_READ, err)
-			}
-			s.unregister <- c
+			s.ResponseError(msg.To, msg.ID(), err)
 			return
 		}
 
-		// Leer tamaño payload
-		length := binary.BigEndian.Uint32(lenBuf)
-		limitReader := envar.GetInt("LIMIT_SIZE_MG", 10)
-		if length > uint32(limitReader*1024*1024) {
-			s.Send(c, ErrorMessage, mg.MSG_TCP_MESSAGE_TOO_LARGE)
-			continue
-		}
+		var res RequestVoteReply
+		s.raft.requestVote(&args, &res)
 
-		// Leer payload completo
-		data := make([]byte, length)
-		_, err = io.ReadFull(reader, data)
+		rsp, err := NewMessage(RequestVote, res)
 		if err != nil {
-			s.unregister <- c
+			s.error(msg.To, err)
 			return
 		}
 
-		m, err := ToMessage(data)
+		err = s.response(msg.To, msg.ID(), rsp)
+		if err != nil {
+			s.error(msg.To, err)
+		}
+	case Heartbeat:
+		var args HeartbeatArgs
+		err := msg.Get(&args)
+		if err != nil {
+			s.ResponseError(msg.To, msg.ID(), err)
+			return
+		}
+
+		var res HeartbeatReply
+		s.raft.heartbeat(&args, &res)
+
+		rsp, err := NewMessage(Heartbeat, res)
+		if err != nil {
+			s.error(msg.To, err)
+			return
+		}
+
+		err = s.response(msg.To, msg.ID(), rsp)
+		if err != nil {
+			s.error(msg.To, err)
+		}
+	case Method:
+		list := strings.Split(msg.Msg.Method, ".")
+		if len(list) < 2 {
+			s.ResponseError(msg.To, msg.ID(), errors.New(mg.MSG_METHOD_NOT_FOUND))
+			return
+		}
+
+		serviceName := list[0]
+		methodName := list[1]
+		service, ok := s.method[serviceName]
+		if !ok {
+			s.ResponseError(msg.To, msg.ID(), errors.New(mg.MSG_METHOD_NOT_FOUND))
+			return
+		}
+
+		res := service.Execute(methodName, msg.Msg)
+		if res.Error != nil {
+			s.ResponseError(msg.To, msg.ID(), res.Error)
+			return
+		}
+
+		rsp, err := NewMessage(Method, res)
 		if err != nil {
 			logs.Error(err)
-			continue
-		}
-
-		s.inbound <- &Msg{
-			To:  c,
-			Msg: m,
-		}
-	}
-}
-
-/**
-* writeLoop
-**/
-func (s *Server) writeLoop() {
-	for msg := range s.outbound {
-		s.mu.Lock()
-		c, ok := s.clients[msg.To.Addr]
-		s.mu.Unlock()
-		if !ok {
 			return
 		}
 
-		if c.Status != Connected {
-			return
-		}
-
-		bt, err := msg.Msg.serialize()
+		err = s.response(msg.To, msg.ID(), rsp)
 		if err != nil {
-			s.error(msg.To, err)
-			return
+			logs.Error(err)
 		}
-
-		_, err = msg.To.conn.Write(bt)
-		if err != nil {
-			s.error(msg.To, err)
-			return
-		}
-
-		for _, fn := range s.onOutbound {
+	default:
+		for _, fn := range s.onInbound {
 			fn(msg.To, msg.Msg)
 		}
 
-		// if s.isDebug {
-		if msg.Msg.IsResponse {
-			logs.Debugf(mg.MSG_RESPONSE_TO, msg.ID(), msg.To.Addr)
-		} else {
-			logs.Debugf(mg.MSG_SEND_TO, msg.ID(), msg.To.Addr)
+		if s.isDebug {
+			logs.Debugf("inbox: %s", msg.Msg.ToJson().ToString())
 		}
-		// }
 	}
 }
 
 /**
-* inboundLoop
+* send
+* @param msg *Msg
 **/
-func (s *Server) inboundLoop() {
-	for msg := range s.inbound {
-		logs.Debug("inboundLoop:", msg.ID())
-
-		s.mu.Lock()
-		ch, ok := s.messages[msg.ID()]
-		s.mu.Unlock()
-
-		if ok {
-			if ch != nil {
-				ch <- msg.Msg
-			}
-			return
-		}
-
-		switch msg.Msg.Type {
-		case RequestVote:
-			var args RequestVoteArgs
-			err := msg.Get(&args)
-			if err != nil {
-				s.ResponseError(msg.To, msg.ID(), err)
-				return
-			}
-
-			var res RequestVoteReply
-			s.raft.requestVote(&args, &res)
-
-			rsp, err := NewMessage(RequestVote, res)
-			if err != nil {
-				s.error(msg.To, err)
-				return
-			}
-
-			err = s.response(msg.To, msg.ID(), rsp)
-			if err != nil {
-				s.error(msg.To, err)
-			}
-		case Heartbeat:
-			var args HeartbeatArgs
-			err := msg.Get(&args)
-			if err != nil {
-				s.ResponseError(msg.To, msg.ID(), err)
-				return
-			}
-
-			var res HeartbeatReply
-			s.raft.heartbeat(&args, &res)
-
-			rsp, err := NewMessage(Heartbeat, res)
-			if err != nil {
-				s.error(msg.To, err)
-				return
-			}
-
-			err = s.response(msg.To, msg.ID(), rsp)
-			if err != nil {
-				s.error(msg.To, err)
-			}
-		case Method:
-			list := strings.Split(msg.Msg.Method, ".")
-			if len(list) < 2 {
-				s.ResponseError(msg.To, msg.ID(), errors.New(mg.MSG_METHOD_NOT_FOUND))
-				return
-			}
-
-			serviceName := list[0]
-			methodName := list[1]
-			service, ok := s.method[serviceName]
-			if !ok {
-				s.ResponseError(msg.To, msg.ID(), errors.New(mg.MSG_METHOD_NOT_FOUND))
-				return
-			}
-
-			res := service.Execute(methodName, msg.Msg)
-			if res.Error != nil {
-				s.ResponseError(msg.To, msg.ID(), res.Error)
-				return
-			}
-
-			rsp, err := NewMessage(Method, res)
-			if err != nil {
-				logs.Error(err)
-				return
-			}
-
-			err = s.response(msg.To, msg.ID(), rsp)
-			if err != nil {
-				logs.Error(err)
-			}
-		default:
-			for _, fn := range s.onInbound {
-				fn(msg.To, msg.Msg)
-			}
-
-			if s.isDebug {
-				logs.Debugf("inbox: %s", msg.Msg.ToJson().ToString())
-			}
-		}
+func (s *Server) send(msg *Msg) {
+	s.mu.Lock()
+	c, ok := s.clients[msg.To.Addr]
+	s.mu.Unlock()
+	if !ok {
+		return
 	}
+
+	if c.Status != Connected {
+		return
+	}
+
+	bt, err := msg.Msg.serialize()
+	if err != nil {
+		s.error(msg.To, err)
+		return
+	}
+
+	_, err = msg.To.conn.Write(bt)
+	if err != nil {
+		s.error(msg.To, err)
+		return
+	}
+
+	for _, fn := range s.onOutbound {
+		fn(msg.To, msg.Msg)
+	}
+
+	// if s.isDebug {
+	if msg.Msg.IsResponse {
+		logs.Debugf(mg.MSG_RESPONSE_TO, msg.ID(), msg.To.Addr)
+	} else {
+		logs.Debugf(mg.MSG_SEND_TO, msg.ID(), msg.To.Addr)
+	}
+	// }
 }
 
 /**
@@ -376,32 +330,32 @@ func (s *Server) newClient(conn net.Conn) *Client {
 }
 
 /**
-* defOnConnect
+* connect
 * @param *Client client
 **/
-func (s *Server) onConnect(client *Client) {
+func (s *Server) connect(client *Client) {
 	s.mu.Lock()
 	s.clients[client.Addr] = client
 	s.mu.Unlock()
 
 	logs.Logf(packageName, mg.MSG_TCP_CONNECTED_FROM, client.toJson().ToString())
 	go s.handle(client)
-	for _, fn := range s.onConnection {
+	for _, fn := range s.onConnect {
 		fn(client)
 	}
 }
 
 /**
-* onDisconnect
+* disconnect
 * @param *Client client
 **/
-func (s *Server) onDisconnect(client *Client) {
+func (s *Server) disconnect(client *Client) {
 	logs.Logf(packageName, mg.MSG_TCP_DISCONNECTED, client.Addr)
 
 	_, ok := s.clients[client.Addr]
 	if ok {
 		client.Status = Disconnected
-		for _, fn := range s.onDisconnection {
+		for _, fn := range s.onDisconnect {
 			fn(client)
 		}
 
@@ -422,7 +376,7 @@ func (s *Server) handle(c *Client) {
 	case Proxy:
 		s.handleBalancer(c.conn)
 	default:
-		s.handleClient(c)
+		go s.handleClient(c)
 	}
 }
 
@@ -464,7 +418,47 @@ func (s *Server) handleBalancer(client net.Conn) {
 * @param c *Client
 **/
 func (s *Server) handleClient(c *Client) {
-	go s.readLoop(c)
+	reader := bufio.NewReader(c.conn)
+
+	for {
+		// Leer tamaño (4 bytes)
+		lenBuf := make([]byte, 4)
+		_, err := io.ReadFull(reader, lenBuf)
+		if err != nil {
+			if err != io.EOF {
+				logs.Logf(packageName, mg.MSG_TCP_ERROR_READ, err)
+			}
+			s.unregister <- c
+			return
+		}
+
+		// Leer tamaño payload
+		length := binary.BigEndian.Uint32(lenBuf)
+		limitReader := envar.GetInt("LIMIT_SIZE_MG", 10)
+		if length > uint32(limitReader*1024*1024) {
+			s.Send(c, ErrorMessage, mg.MSG_TCP_MESSAGE_TOO_LARGE)
+			continue
+		}
+
+		// Leer payload completo
+		data := make([]byte, length)
+		_, err = io.ReadFull(reader, data)
+		if err != nil {
+			s.unregister <- c
+			return
+		}
+
+		m, err := ToMessage(data)
+		if err != nil {
+			logs.Error(err)
+			continue
+		}
+
+		s.inbound <- &Msg{
+			To:  c,
+			Msg: m,
+		}
+	}
 }
 
 /**
@@ -611,9 +605,7 @@ func (s *Server) Start() error {
 	}
 
 	go s.run()
-	go s.inboundLoop()
-	go s.writeLoop()
-	go s.electionLoop()
+	// go s.electionLoop()
 
 	logs.Logf(packageName, mg.MSG_TCP_LISTENING, s.addr)
 
@@ -813,7 +805,7 @@ func (s *Server) GetMethod() et.Json {
 * @param fn func(*Client)
 **/
 func (s *Server) OnConnect(fn func(*Client)) {
-	s.onConnection = append(s.onConnection, fn)
+	s.onConnect = append(s.onConnect, fn)
 }
 
 /**
@@ -821,7 +813,7 @@ func (s *Server) OnConnect(fn func(*Client)) {
 * @param fn func(*Client)
 **/
 func (s *Server) OnDisconnect(fn func(*Client)) {
-	s.onDisconnection = append(s.onDisconnection, fn)
+	s.onDisconnect = append(s.onDisconnect, fn)
 }
 
 /**

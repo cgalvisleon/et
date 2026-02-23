@@ -59,12 +59,12 @@ type Server struct {
 	addr            string                    `json:"-"`
 	port            int                       `json:"-"`
 	ln              net.Listener              `json:"-"`
+	register        chan *Client              `json:"-"`
+	unregister      chan *Client              `json:"-"`
 	clients         map[string]*Client        `json:"-"`
 	inbound         chan *Msg                 `json:"-"`
 	outbound        chan *Msg                 `json:"-"`
 	messages        map[string]chan *Message  `json:"-"`
-	register        chan *Client              `json:"-"`
-	unregister      chan *Client              `json:"-"`
 	onConnection    []func(*Client)           `json:"-"`
 	onDisconnection []func(*Client)           `json:"-"`
 	onStart         []func(*Server)           `json:"-"`
@@ -240,13 +240,13 @@ func (s *Server) writeLoop() {
 			fn(msg.To, msg.Msg)
 		}
 
-		if s.isDebug {
-			if msg.Msg.IsResponse {
-				logs.Debugf(mg.MSG_RESPONSE_TO, msg.Msg.ToJson().ToString(), msg.To.Addr)
-			} else {
-				logs.Debugf(mg.MSG_SEND_TO, msg.Msg.ToJson().ToString(), msg.To.Addr)
-			}
+		// if s.isDebug {
+		if msg.Msg.IsResponse {
+			logs.Debugf(mg.MSG_RESPONSE_TO, msg.ID(), msg.To.Addr)
+		} else {
+			logs.Debugf(mg.MSG_SEND_TO, msg.ID(), msg.To.Addr)
 		}
+		// }
 	}
 }
 
@@ -255,12 +255,16 @@ func (s *Server) writeLoop() {
 **/
 func (s *Server) inboundLoop() {
 	for msg := range s.inbound {
+		logs.Debug("inboundLoop:", msg.ID())
+
 		s.mu.Lock()
-		ch, ok := s.messages[msg.Msg.ID]
+		ch, ok := s.messages[msg.ID()]
 		s.mu.Unlock()
 
 		if ok {
-			ch <- msg.Msg
+			if ch != nil {
+				ch <- msg.Msg
+			}
 			return
 		}
 
@@ -274,21 +278,17 @@ func (s *Server) inboundLoop() {
 			}
 
 			var res RequestVoteReply
-			err = s.raft.requestVote(&args, &res)
-			if err != nil {
-				s.ResponseError(msg.To, msg.ID(), err)
-				return
-			}
+			s.raft.requestVote(&args, &res)
 
 			rsp, err := NewMessage(RequestVote, res)
 			if err != nil {
-				logs.Error(err)
+				s.error(msg.To, err)
 				return
 			}
 
 			err = s.response(msg.To, msg.ID(), rsp)
 			if err != nil {
-				logs.Error(err)
+				s.error(msg.To, err)
 			}
 		case Heartbeat:
 			var args HeartbeatArgs
@@ -299,21 +299,17 @@ func (s *Server) inboundLoop() {
 			}
 
 			var res HeartbeatReply
-			err = s.raft.heartbeat(&args, &res)
-			if err != nil {
-				s.ResponseError(msg.To, msg.ID(), err)
-				return
-			}
+			s.raft.heartbeat(&args, &res)
 
 			rsp, err := NewMessage(Heartbeat, res)
 			if err != nil {
-				logs.Error(err)
+				s.error(msg.To, err)
 				return
 			}
 
 			err = s.response(msg.To, msg.ID(), rsp)
 			if err != nil {
-				logs.Error(err)
+				s.error(msg.To, err)
 			}
 		case Method:
 			list := strings.Split(msg.Msg.Method, ".")
@@ -530,12 +526,18 @@ func (s *Server) request(to *Client, m *Message) (*Message, error) {
 		s.muMessages.Lock()
 		delete(s.messages, m.ID)
 		s.muMessages.Unlock()
+		// if s.isDebug {
+		logs.Debugf("response: %s", resp.ID)
+		// }
 		return resp, nil
 
 	case <-time.After(s.timeout):
 		s.muMessages.Lock()
 		delete(s.messages, m.ID)
 		s.muMessages.Unlock()
+		// if s.isDebug {
+		logs.Debugf("timeout: %s", m.ID)
+		// }
 		return nil, fmt.Errorf(mg.MSG_TCP_TIMEOUT)
 	}
 }
@@ -612,7 +614,6 @@ func (s *Server) Start() error {
 	go s.inboundLoop()
 	go s.writeLoop()
 	go s.electionLoop()
-	go s.raft.heartbeatLoop()
 
 	logs.Logf(packageName, mg.MSG_TCP_LISTENING, s.addr)
 

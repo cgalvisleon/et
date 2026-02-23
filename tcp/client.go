@@ -209,7 +209,9 @@ func (s *Client) readLoop() {
 			return
 		}
 
-		s.inbound <- data
+		if s.inbound != nil {
+			s.inbound <- data
+		}
 	}
 }
 
@@ -247,7 +249,9 @@ func (s *Client) inboundLoop() {
 		s.mu.Unlock()
 
 		if ok {
-			ch <- msg
+			if ch != nil {
+				ch <- msg
+			}
 			return
 		}
 
@@ -267,6 +271,14 @@ func (s *Client) inboundLoop() {
 * @return *Message, error
 **/
 func (s *Client) request(m *Message) (*Message, error) {
+	// Connect
+	if s.Status != Connected {
+		err := s.connect()
+		if err != nil {
+			return nil, s.error(err)
+		}
+	}
+
 	// Channel for response
 	ch := make(chan *Message, 1)
 	s.mu.Lock()
@@ -278,16 +290,10 @@ func (s *Client) request(m *Message) (*Message, error) {
 		return nil, s.error(err)
 	}
 
-	// Connect
-	if s.Status != Connected {
-		err := s.connect()
-		if err != nil {
-			return nil, s.error(err)
-		}
-	}
-
 	// Send
-	s.outbound <- bt
+	if s.outbound != nil {
+		s.outbound <- bt
+	}
 
 	// Wait response or timeout
 	select {
@@ -295,18 +301,19 @@ func (s *Client) request(m *Message) (*Message, error) {
 		s.mu.Lock()
 		delete(s.messages, m.ID)
 		s.mu.Unlock()
-
-		if s.isDebug {
-			logs.Debugf("response: %s", resp.ToJson().ToString())
-		}
+		// if s.isDebug {
+		logs.Debugf("response: %s", resp.ID)
+		// }
 		return resp, nil
 
 	case <-time.After(s.timeout):
 		s.mu.Lock()
 		delete(s.messages, m.ID)
 		s.mu.Unlock()
+		// if s.isDebug {
+		logs.Debugf("timeout: %s", m.ID)
+		// }
 		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
-
 	}
 }
 

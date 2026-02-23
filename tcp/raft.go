@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cgalvisleon/et/color"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/timezone"
 )
@@ -125,10 +126,10 @@ func (s *Raft) removeNode(addr string) {
 * @return string, bool
 **/
 func (s *Raft) LeaderID() (leader string, imLeader bool) {
-	// s.mu.Lock()
+	s.mu.Lock()
 	leader = s.leaderID
 	state := s.state
-	// s.mu.Unlock()
+	s.mu.Unlock()
 	imLeader = state == Leader
 	return
 }
@@ -148,9 +149,9 @@ func (s *Raft) getLeader() (*Client, bool) {
 		return nil, false
 	}
 
-	// s.mu.Lock()
+	s.mu.Lock()
 	result := s.peers[idx]
-	// s.mu.Unlock()
+	s.mu.Unlock()
 
 	return result, false
 }
@@ -160,10 +161,10 @@ func (s *Raft) getLeader() (*Client, bool) {
 * @return *Client
 **/
 func (s *Raft) nextTurn() *Client {
-	// s.muTurn.Lock()
+	s.muTurn.Lock()
 	result := s.peers[s.turn]
 	s.turn++
-	// s.muTurn.Unlock()
+	s.muTurn.Unlock()
 
 	return result
 }
@@ -173,9 +174,7 @@ func (s *Raft) nextTurn() *Client {
 **/
 func (s *Raft) electionLoop() {
 	if len(s.peers) == 0 {
-		s.mu.Lock()
 		s.becomeLeader()
-		s.mu.Unlock()
 		return
 	}
 
@@ -226,35 +225,35 @@ func (s *Raft) startElection() {
 			}
 		}
 
-		// args := RequestVoteArgs{Term: term, CandidateID: s.addr}
-		// var reply RequestVoteReply
-		// res := requestVote(peer, &args, &reply)
-		// if res.Error != nil {
-		// 	total--
-		// 	continue
-		// }
+		args := RequestVoteArgs{Term: term, CandidateID: s.addr}
+		var reply RequestVoteReply
+		res := requestVote(peer, &args, &reply)
+		if res.Error != nil {
+			total--
+			continue
+		}
 
-		// go func(peer *Client) {
-		// 	if res.Ok {
-		// 		s.mu.Lock()
-		// 		defer s.mu.Unlock()
+		go func(peer *Client) {
+			if res.Ok {
+				s.mu.Lock()
+				defer s.mu.Unlock()
 
-		// 		if reply.Term > s.term {
-		// 			s.term = reply.Term
-		// 			s.state = Follower
-		// 			s.votedFor = ""
-		// 			return
-		// 		}
+				if reply.Term > s.term {
+					s.term = reply.Term
+					s.state = Follower
+					s.votedFor = ""
+					return
+				}
 
-		// 		if s.state == Candidate && reply.VoteGranted && term == s.term {
-		// 			votes++
-		// 			needed := majority(total)
-		// 			if votes >= needed {
-		// 				s.becomeLeader()
-		// 			}
-		// 		}
-		// 	}
-		// }(peer)
+				if s.state == Candidate && reply.VoteGranted && term == s.term {
+					votes++
+					needed := majority(total)
+					if votes >= needed {
+						s.becomeLeader()
+					}
+				}
+			}
+		}(peer)
 	}
 }
 
@@ -262,17 +261,19 @@ func (s *Raft) startElection() {
 * becomeLeader
 **/
 func (s *Raft) becomeLeader() {
-	s.state = Leader
-	s.leaderID = s.addr
-	s.lastHeartbeat = timezone.Now()
+	// s.mu.Lock()
+	// s.state = Leader
+	// s.leaderID = s.addr
+	// s.lastHeartbeat = timezone.Now()
+	// s.mu.Unlock()
 
-	logs.Logf(packageName, "I am leader %s", s.addr)
+	logs.Logf(packageName, color.Purple("I am leader %s"), s.addr)
 
-	go s.heartbeatLoop()
+	// go s.heartbeatLoop()
 
-	for _, fn := range s.server.onBecomeLeader {
-		fn(s.server)
-	}
+	// for _, fn := range s.server.onBecomeLeader {
+	// 	fn(s.server)
+	// }
 }
 
 /**
@@ -326,40 +327,39 @@ func (s *Raft) heartbeatLoop() {
 * @param to *Client, args *RequestVoteArgs, reply *RequestVoteReply
 * @return error
 **/
-func (s *Raft) requestVote(args *RequestVoteArgs, reply *RequestVoteReply) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *Raft) requestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
+	// s.mu.Lock()
+	// defer s.mu.Unlock()
 
-	if args.Term < s.term {
-		reply.Term = s.term
-		reply.VoteGranted = false
-		return nil
-	}
+	// logs.Debugf(color.Red("requestVote:%d from %s"), args.Term, args.CandidateID)
 
-	if args.Term > s.term {
-		s.term = args.Term
-		s.state = Follower
-		s.votedFor = ""
-	}
+	// if args.Term < s.term {
+	// 	reply.Term = s.term
+	// 	reply.VoteGranted = false
+	// 	return nil
+	// }
 
-	s.lastHeartbeat = timezone.Now()
-	reply.Term = s.term
-	if s.votedFor == "" || s.votedFor == args.CandidateID {
-		s.votedFor = args.CandidateID
-		reply.VoteGranted = true
-	} else {
-		reply.VoteGranted = false
-	}
+	// if args.Term > s.term {
+	// 	s.term = args.Term
+	// 	s.state = Follower
+	// 	s.votedFor = ""
+	// }
 
-	return nil
+	// s.lastHeartbeat = timezone.Now()
+	// reply.Term = s.term
+	// if s.votedFor == "" || s.votedFor == args.CandidateID {
+	// 	s.votedFor = args.CandidateID
+	// 	reply.VoteGranted = true
+	// } else {
+	// 	reply.VoteGranted = false
+	// }
 }
 
 /**
 * heartbeat
 * @param args *HeartbeatArgs, reply *HeartbeatReply
-* @return error
 **/
-func (s *Raft) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
+func (s *Raft) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -367,7 +367,7 @@ func (s *Raft) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 	if args.Term < s.term {
 		reply.Term = s.term
 		reply.Ok = false
-		return nil
+		return
 	}
 
 	if args.Term > s.term {
@@ -387,8 +387,6 @@ func (s *Raft) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 			fn(s.server)
 		}
 	}
-
-	return nil
 }
 
 /**

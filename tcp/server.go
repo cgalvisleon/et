@@ -63,7 +63,6 @@ type Server struct {
 	unregister     chan *Client              `json:"-"`
 	clients        map[string]*Client        `json:"-"`
 	inbound        chan *Msg                 `json:"-"`
-	outbound       chan *Msg                 `json:"-"`
 	messages       map[string]chan *Message  `json:"-"`
 	onConnect      []func(*Client)           `json:"-"`
 	onDisconnect   []func(*Client)           `json:"-"`
@@ -110,7 +109,6 @@ func NewServer(port int) *Server {
 		unregister:     make(chan *Client),
 		messages:       make(map[string]chan *Message),
 		inbound:        make(chan *Msg),
-		outbound:       make(chan *Msg),
 		onConnect:      make([]func(*Client), 0),
 		onDisconnect:   make([]func(*Client), 0),
 		onStart:        make([]func(*Server), 0),
@@ -158,8 +156,6 @@ func (s *Server) run() {
 			s.disconnect(client)
 		case msg := <-s.inbound:
 			s.inbox(msg)
-		case msg := <-s.outbound:
-			s.send(msg)
 		}
 	}
 }
@@ -211,7 +207,7 @@ func (s *Server) disconnect(client *Client) {
 * @param msg *Msg
 **/
 func (s *Server) inbox(msg *Msg) {
-	logs.Debug("inbox:", msg.ID())
+	logs.Debug("inbox: ", msg.ID())
 
 	s.muMessages.Lock()
 	ch, ok := s.messages[msg.ID()]
@@ -312,29 +308,28 @@ func (s *Server) inbox(msg *Msg) {
 /**
 * send
 * @param msg *Msg
+* @return error
 **/
-func (s *Server) send(msg *Msg) {
+func (s *Server) send(msg *Msg) error {
 	s.mu.Lock()
 	c, ok := s.clients[msg.To.Addr]
 	s.mu.Unlock()
 	if !ok {
-		return
+		return fmt.Errorf(mg.MSG_TCP_CLIENT_NOT_FOUND, msg.To.Addr)
 	}
 
 	if c.Status != Connected {
-		return
+		return fmt.Errorf(mg.MSG_TCP_CLIENT_NOT_CONNECTED, msg.To.Addr)
 	}
 
 	bt, err := msg.Msg.serialize()
 	if err != nil {
-		s.error(msg.To, err)
-		return
+		return err
 	}
 
-	_, err = msg.To.conn.Write(bt)
+	err = msg.To.send(bt)
 	if err != nil {
-		s.error(msg.To, err)
-		return
+		return err
 	}
 
 	for _, fn := range s.onOutbound {
@@ -348,6 +343,7 @@ func (s *Server) send(msg *Msg) {
 		logs.Debugf(mg.MSG_SEND_TO, msg.ID(), msg.To.Addr)
 	}
 	// }
+	return nil
 }
 
 /**
@@ -488,14 +484,13 @@ func (s *Server) request(to *Client, m *Message) (*Message, error) {
 	s.muMessages.Unlock()
 
 	// Send
-	err := to.Send(m)
+	err := s.send(&Msg{
+		To:  to,
+		Msg: m,
+	})
 	if err != nil {
 		return nil, err
 	}
-	// s.outbound <- &Msg{
-	// 	To:  to,
-	// 	Msg: m,
-	// }
 
 	// Wait response or timeout
 	select {
@@ -504,7 +499,7 @@ func (s *Server) request(to *Client, m *Message) (*Message, error) {
 		delete(s.messages, m.ID)
 		s.muMessages.Unlock()
 		// if s.isDebug {
-		logs.Debugf("response: %s", resp.ID)
+		logs.Debugf("response: %s type:%d", resp.ID, resp.Type)
 		// }
 		return resp, nil
 
@@ -538,12 +533,10 @@ func (s *Server) response(to *Client, id string, msg *Message) error {
 		msg.IsResponse = true
 	}
 
-	s.outbound <- &Msg{
+	return s.send(&Msg{
 		To:  to,
 		Msg: msg,
-	}
-
-	return nil
+	})
 }
 
 /**

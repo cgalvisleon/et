@@ -60,7 +60,7 @@ func TcpError(msg any) *Response {
 	case string:
 		err = errors.New(v)
 	default:
-		panic("TcpError only accepts error or string")
+		err = fmt.Errorf("TcpError only accepts error or string, got %T", msg)
 	}
 
 	return &Response{

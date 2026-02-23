@@ -175,13 +175,22 @@ func (s *Client) disconnect() {
 	close(s.outbound)
 }
 
-
+/**
+* run
+**/
 func (s *Client) run() {
-	
+	for {
+		select {
+		case msg := <-s.inbound:
+			s.inbox(msg)
+		case msg := <-s.outbound:
+			s.send(msg)
+		}
+	}
 }
 
 /**
-* incoming
+* readLoop
 **/
 func (s *Client) readLoop() {
 	reader := bufio.NewReader(s.conn)
@@ -214,60 +223,51 @@ func (s *Client) readLoop() {
 			return
 		}
 
-		if s.inbound != nil {
-			s.inbound <- data
-		}
+		s.inbound <- data
 	}
 }
 
 /**
 * writeLoop
 **/
-func (s *Client) writeLoop() {
-	for msg := range s.outbound {
-		_, err := s.conn.Write(msg)
-		if err != nil {
-			s.disconnect()
-			s.error(err)
-			return
-		}
-
-		for _, fn := range s.onOutbound {
-			fn(s, msg)
-		}
+func (s *Client) send(bt []byte) error {
+	_, err := s.conn.Write(bt)
+	if err != nil {
+		s.disconnect()
+		return err
 	}
+
+	for _, fn := range s.onOutbound {
+		fn(s, bt)
+	}
+
+	return nil
 }
 
 /**
-* inboundLoop
+* inbox
 **/
-func (s *Client) inboundLoop() {
-	for bt := range s.inbound {
-		msg, err := ToMessage(bt)
-		if err != nil {
-			s.error(err)
-			return
-		}
-
-		s.mu.Lock()
-		ch, ok := s.messages[msg.ID]
-		s.mu.Unlock()
-
-		if ok {
-			if ch != nil {
-				ch <- msg
-			}
-			return
-		}
-
-		for _, fn := range s.onInbound {
-			fn(s, msg)
-		}
-
-		if !s.isNode {
-			logs.Debugf("recv: %s", msg.ToJson().ToString())
-		}
+func (s *Client) inbox(bt []byte) {
+	msg, err := ToMessage(bt)
+	if err != nil {
+		s.error(err)
+		return
 	}
+
+	s.mu.Lock()
+	ch, ok := s.messages[msg.ID]
+	s.mu.Unlock()
+
+	if ok {
+		ch <- msg
+		return
+	}
+
+	for _, fn := range s.onInbound {
+		fn(s, msg)
+	}
+
+	logs.Debugf("inbox :%s", msg.ID)
 }
 
 /**
@@ -305,7 +305,7 @@ func (s *Client) request(m *Message) (*Message, error) {
 		delete(s.messages, m.ID)
 		s.mu.Unlock()
 		// if s.isDebug {
-		logs.Debugf("response: %s", resp.ID)
+		logs.Debugf("response: %s type:%d", resp.ID, resp.Type)
 		// }
 		return resp, nil
 
@@ -330,8 +330,7 @@ func (s *Client) Connect() error {
 	}
 
 	go s.readLoop()
-	go s.inboundLoop()
-	go s.writeLoop()
+	go s.run()
 
 	logs.Logf(packageName, msg.MSG_TCP_CONNECTED_TO, s.Addr)
 	if s.isDebug {
@@ -405,8 +404,8 @@ func (s *Client) Send(msg *Message) error {
 
 /**
 * Request
-* @param method string, request any, response any
-* @return error
+* @param method string, args ...any
+* @return *Response
 **/
 func (s *Client) Request(method string, args ...any) *Response {
 	m, err := NewMessage(Method, "")

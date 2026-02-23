@@ -203,18 +203,18 @@ func (s *Raft) electionLoop() {
 * startElection
 **/
 func (s *Raft) startElection() {
-	// s.mu.Lock()
+	s.mu.Lock()
 	s.state = Candidate
 	s.term++
 	term := s.term
 	s.votedFor = s.addr
-	// s.mu.Unlock()
+	s.mu.Unlock()
 
 	votes := 1
 	total := len(s.peers)
 
 	defer func() {
-		logs.Debugf("startElection:%s total:%d", s.addr, total)
+		logs.Debugf("startElection:%d state:%v votos:%d de %d", term, s.state, votes, total)
 	}()
 
 	for _, peer := range s.peers {
@@ -226,35 +226,35 @@ func (s *Raft) startElection() {
 			}
 		}
 
-		args := RequestVoteArgs{Term: term, CandidateID: s.addr}
-		var reply RequestVoteReply
-		res := requestVote(peer, &args, &reply)
-		if res.Error != nil {
-			total--
-			continue
-		}
+		// args := RequestVoteArgs{Term: term, CandidateID: s.addr}
+		// var reply RequestVoteReply
+		// res := requestVote(peer, &args, &reply)
+		// if res.Error != nil {
+		// 	total--
+		// 	continue
+		// }
 
-		go func(peer *Client) {
-			if res.Ok {
-				// s.mu.Lock()
-				// defer s.mu.Unlock()
+		// go func(peer *Client) {
+		// 	if res.Ok {
+		// 		s.mu.Lock()
+		// 		defer s.mu.Unlock()
 
-				if reply.Term > s.term {
-					s.term = reply.Term
-					s.state = Follower
-					s.votedFor = ""
-					return
-				}
+		// 		if reply.Term > s.term {
+		// 			s.term = reply.Term
+		// 			s.state = Follower
+		// 			s.votedFor = ""
+		// 			return
+		// 		}
 
-				if s.state == Candidate && reply.VoteGranted && term == s.term {
-					votes++
-					needed := majority(total)
-					if votes >= needed {
-						s.becomeLeader()
-					}
-				}
-			}
-		}(peer)
+		// 		if s.state == Candidate && reply.VoteGranted && term == s.term {
+		// 			votes++
+		// 			needed := majority(total)
+		// 			if votes >= needed {
+		// 				s.becomeLeader()
+		// 			}
+		// 		}
+		// 	}
+		// }(peer)
 	}
 }
 
@@ -268,7 +268,7 @@ func (s *Raft) becomeLeader() {
 
 	logs.Logf(packageName, "I am leader %s", s.addr)
 
-	// go s.heartbeatLoop()
+	go s.heartbeatLoop()
 
 	for _, fn := range s.server.onBecomeLeader {
 		fn(s.server)
@@ -279,16 +279,14 @@ func (s *Raft) becomeLeader() {
 * heartbeatLoop
 **/
 func (s *Raft) heartbeatLoop() {
-	logs.Debug("heartbeatLoop")
-
 	ticker := time.NewTicker(heartbeatInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		// s.mu.Lock()
+		s.mu.Lock()
 		state := s.state
 		term := s.term
-		// s.mu.Unlock()
+		s.mu.Unlock()
 		if state != Leader {
 			return
 		}
@@ -303,12 +301,14 @@ func (s *Raft) heartbeatLoop() {
 			}
 
 			go func(peer *Client) {
+				logs.Debugf("heartbeatLoop:%d sending to %s", term, peer.Addr)
+
 				args := HeartbeatArgs{Term: term, LeaderID: s.addr}
 				var reply HeartbeatReply
 				res := heartbeat(peer, &args, &reply)
 				if res.Ok {
-					// s.mu.Lock()
-					// defer s.mu.Unlock()
+					s.mu.Lock()
+					defer s.mu.Unlock()
 
 					if reply.Term > s.term {
 						s.term = reply.Term
@@ -327,8 +327,8 @@ func (s *Raft) heartbeatLoop() {
 * @return error
 **/
 func (s *Raft) requestVote(args *RequestVoteArgs, reply *RequestVoteReply) error {
-	// s.mu.Lock()
-	// defer s.mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if args.Term < s.term {
 		reply.Term = s.term
@@ -342,15 +342,15 @@ func (s *Raft) requestVote(args *RequestVoteArgs, reply *RequestVoteReply) error
 		s.votedFor = ""
 	}
 
+	s.lastHeartbeat = timezone.Now()
+	reply.Term = s.term
 	if s.votedFor == "" || s.votedFor == args.CandidateID {
 		s.votedFor = args.CandidateID
 		reply.VoteGranted = true
-		s.lastHeartbeat = timezone.Now()
 	} else {
 		reply.VoteGranted = false
 	}
 
-	reply.Term = s.term
 	return nil
 }
 
@@ -360,13 +360,13 @@ func (s *Raft) requestVote(args *RequestVoteArgs, reply *RequestVoteReply) error
 * @return error
 **/
 func (s *Raft) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
-	changedLeader := false
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	// s.mu.Lock()
+	oldLeader := s.leaderID
 	if args.Term < s.term {
 		reply.Term = s.term
 		reply.Ok = false
-		// s.mu.Unlock()
 		return nil
 	}
 
@@ -375,24 +375,19 @@ func (s *Raft) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 		s.votedFor = ""
 	}
 
-	oldLeader := s.leaderID
 	s.state = Follower
 	s.leaderID = args.LeaderID
 	s.lastHeartbeat = timezone.Now()
 
-	if oldLeader != args.LeaderID {
-		changedLeader = true
-	}
-
 	reply.Term = s.term
 	reply.Ok = true
-	// s.mu.Unlock()
 
-	if changedLeader {
+	if oldLeader != args.LeaderID {
 		for _, fn := range s.server.onChangeLeader {
 			fn(s.server)
 		}
 	}
+
 	return nil
 }
 

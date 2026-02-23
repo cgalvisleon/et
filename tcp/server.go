@@ -612,6 +612,7 @@ func (s *Server) Start() error {
 	go s.inboundLoop()
 	go s.writeLoop()
 	go s.electionLoop()
+	go s.raft.heartbeatLoop()
 
 	logs.Logf(packageName, mg.MSG_TCP_LISTENING, s.addr)
 

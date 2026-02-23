@@ -20,6 +20,8 @@ web
 .vscode
 /web
 acs.md
+/cmd/server/__debug_bin*
+/cmd/client/__debug_bin*
 
 # Test binary, built with `go test -c`
 *.test

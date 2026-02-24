@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cgalvisleon/et/color"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
@@ -276,6 +277,7 @@ func (s *Server) inbox(msg *Msg) {
 
 		res := service.Execute(methodName, msg.Msg)
 		if res.Error != nil {
+			logs.Debug(color.Red(res.Error.Error()))
 			s.ResponseError(msg.To, msg.ID(), res.Error)
 			return
 		}
@@ -710,7 +712,7 @@ func (s *Server) SendError(to *Client, err error) error {
 	if errM != nil {
 		return errM
 	}
-	msg.Error = err
+	msg.Error = err.Error()
 
 	return s.response(to, "", msg)
 }
@@ -721,13 +723,13 @@ func (s *Server) SendError(to *Client, err error) error {
 * @return error
 **/
 func (s *Server) ResponseError(to *Client, id string, err error) error {
-	msg, errM := NewMessage(ErrorMessage, "")
+	rsp, errM := NewMessage(ErrorMessage, "")
 	if errM != nil {
 		return errM
 	}
-	msg.Error = err
+	rsp.Error = err.Error()
 
-	return s.response(to, id, msg)
+	return s.response(to, id, rsp)
 }
 
 /**

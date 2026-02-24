@@ -37,7 +37,6 @@ type Client struct {
 	Ctx          et.Json                   `json:"-"`
 	conn         net.Conn                  `json:"-"`
 	inbound      chan []byte               `json:"-"`
-	outbound     chan []byte               `json:"-"`
 	messages     map[string]chan *Message  `json:"-"`
 	timeout      time.Duration             `json:"-"`
 	mu           sync.Mutex                `json:"-"`
@@ -67,7 +66,6 @@ func NewClient(addr string) *Client {
 		Addr:         addr,
 		Status:       Pending,
 		inbound:      make(chan []byte),
-		outbound:     make(chan []byte),
 		messages:     make(map[string]chan *Message),
 		timeout:      timeout,
 		mu:           sync.Mutex{},
@@ -116,6 +114,8 @@ func (s *Client) error(err error) error {
 	for _, fn := range s.onError {
 		fn(s, err)
 	}
+
+	logs.Error(err)
 
 	return err
 }
@@ -172,7 +172,6 @@ func (s *Client) disconnect() {
 	}
 
 	close(s.inbound)
-	close(s.outbound)
 }
 
 /**
@@ -183,8 +182,6 @@ func (s *Client) run() {
 		select {
 		case msg := <-s.inbound:
 			s.inbox(msg)
-		case msg := <-s.outbound:
-			s.send(msg)
 		}
 	}
 }
@@ -271,7 +268,7 @@ func (s *Client) inbox(bt []byte) {
 }
 
 /**
-* Request
+* request
 * @param m *Message
 * @return *Message, error
 **/
@@ -296,7 +293,10 @@ func (s *Client) request(m *Message) (*Message, error) {
 	}
 
 	// Send
-	s.outbound <- bt
+	err = s.send(bt)
+	if err != nil {
+		return nil, s.error(err)
+	}
 
 	// Wait response or timeout
 	select {
@@ -389,7 +389,10 @@ func (s *Client) Send(msg *Message) error {
 	}
 
 	// Send
-	s.outbound <- bt
+	err = s.send(bt)
+	if err != nil {
+		return s.error(err)
+	}
 
 	if msg.Type == CloseMessage {
 		s.disconnect()
@@ -420,6 +423,10 @@ func (s *Client) Request(method string, args ...any) *Response {
 	res, err := s.request(m)
 	if err != nil {
 		return TcpError(err)
+	}
+
+	if res.Error != "" {
+		return TcpError(res.Error)
 	}
 
 	result, err := res.Response()

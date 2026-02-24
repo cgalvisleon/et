@@ -131,7 +131,7 @@ type Message struct {
 	Type       int    `json:"type"`
 	Method     string `json:"method"`
 	Payload    []byte `json:"payload"`
-	Error      error  `json:"error"`
+	Error      string `json:"error"`
 	Args       []any  `json:"args"`
 	IsResponse bool   `json:"is_response"`
 }

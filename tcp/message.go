@@ -35,7 +35,7 @@ type Response struct {
 **/
 func TcpResponse(res ...any) *Response {
 	result := &Response{
-		Response: res,
+		Response: make([]any, 0),
 		Error:    nil,
 	}
 
@@ -64,7 +64,7 @@ func TcpError(msg any) *Response {
 	}
 
 	return &Response{
-		Response: []any{},
+		Response: make([]any, 0),
 		Error:    err,
 	}
 }
@@ -86,6 +86,19 @@ func (s *Response) ToJson() (et.Json, error) {
 	}
 
 	return result, nil
+}
+
+/**
+* ToString
+* @return string
+**/
+func (s *Response) ToString() string {
+	bt, err := s.ToJson()
+	if err != nil {
+		return ""
+	}
+
+	return bt.ToString()
 }
 
 /**
@@ -118,6 +131,7 @@ type Message struct {
 	Type       int    `json:"type"`
 	Method     string `json:"method"`
 	Payload    []byte `json:"payload"`
+	Error      error  `json:"error"`
 	Args       []any  `json:"args"`
 	IsResponse bool   `json:"is_response"`
 }

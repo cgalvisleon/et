@@ -172,11 +172,6 @@ func (s *Server) connect(client *Client) {
 	logs.Logf(packageName, mg.MSG_TCP_CONNECTED_CLIENT, client.toJson().ToString())
 	go s.handle(client)
 
-	err := s.Send(client, TextMessage, "Hola")
-	if err != nil {
-		logs.Errorf("Error sending message: %v", err)
-	}
-
 	for _, fn := range s.onConnect {
 		fn(client)
 	}
@@ -187,19 +182,20 @@ func (s *Server) connect(client *Client) {
 * @param *Client client
 **/
 func (s *Server) disconnect(client *Client) {
-	logs.Logf(packageName, mg.MSG_TCP_DISCONNECTED_CLIENT, client.Addr)
-
 	_, ok := s.clients[client.Addr]
-	if ok {
-		client.Status = Disconnected
-		for _, fn := range s.onDisconnect {
-			fn(client)
-		}
-
-		s.mu.Lock()
-		delete(s.clients, client.Addr)
-		s.mu.Unlock()
+	if !ok {
+		return
 	}
+
+	logs.Logf(packageName, mg.MSG_TCP_DISCONNECTED_CLIENT, client.Addr)
+	client.Status = Disconnected
+	for _, fn := range s.onDisconnect {
+		fn(client)
+	}
+
+	s.mu.Lock()
+	delete(s.clients, client.Addr)
+	s.mu.Unlock()
 }
 
 /**
@@ -465,7 +461,7 @@ func (s *Server) handleClient(c *Client) {
 
 /**
 * request
-* @param to *Client, tp int, payload any
+* @param to *Client, m *Message
 * @return *Message, error
 **/
 func (s *Server) request(to *Client, m *Message) (*Message, error) {
@@ -567,7 +563,7 @@ func (s *Server) Start() error {
 	}
 
 	go s.run()
-	if s.port == 1378 {
+	if s.port != 1377 {
 		go test(s)
 	}
 	// go s.electionLoop()
@@ -710,10 +706,11 @@ func (s *Server) Send(to *Client, tp int, message any) error {
 * @return error
 **/
 func (s *Server) SendError(to *Client, err error) error {
-	msg, err := NewMessage(ErrorMessage, err.Error())
-	if err != nil {
-		return err
+	msg, errM := NewMessage(ErrorMessage, "")
+	if errM != nil {
+		return errM
 	}
+	msg.Error = err
 
 	return s.response(to, "", msg)
 }
@@ -724,10 +721,11 @@ func (s *Server) SendError(to *Client, err error) error {
 * @return error
 **/
 func (s *Server) ResponseError(to *Client, id string, err error) error {
-	msg, err := NewMessage(ErrorMessage, err.Error())
-	if err != nil {
-		return err
+	msg, errM := NewMessage(ErrorMessage, "")
+	if errM != nil {
+		return errM
 	}
+	msg.Error = err
 
 	return s.response(to, id, msg)
 }

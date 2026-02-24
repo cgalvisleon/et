@@ -12,8 +12,8 @@ func main() {
 
 	server := tcp.NewServer(port)
 	server.AddNode("Cesars-MacBook-Pro.local:1377")
-	server.AddNode("Cesars-MacBook-Pro.local:1378")
-	server.AddNode("Cesars-MacBook-Pro.local:1379")
+	// server.AddNode("Cesars-MacBook-Pro.local:1378")
+	// server.AddNode("Cesars-MacBook-Pro.local:1379")
 	err := server.Start()
 	if err != nil {
 		logs.Panic(err)

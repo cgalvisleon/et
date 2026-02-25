@@ -183,11 +183,15 @@ func (s *Raft) startElection() {
 	var votes atomic.Int32
 	votes.Store(1)
 
+	logs.Debugf("startElection term: %d", term)
+
 	for _, peer := range peers {
 		go func(peer *Client) {
-
 			if peer.Status != Connected {
-				return
+				err := peer.Connect()
+				if err != nil {
+					return
+				}
 			}
 
 			args := RequestVoteArgs{

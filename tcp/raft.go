@@ -171,8 +171,6 @@ func (s *Raft) startElection() {
 	s.lastHeartbeat = timezone.Now()
 	s.mu.Unlock()
 
-	logs.Debugf("Node %s starting election term=%d", s.addr, term)
-
 	peers := s.getPeers()
 	var votes atomic.Int32
 	votes.Store(1)

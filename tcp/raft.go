@@ -7,7 +7,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cgalvisleon/et/color"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/timezone"
 )
@@ -98,11 +97,6 @@ func newRaft(node *Node) *Raft {
 	}
 }
 
-func (s *Raft) start() {
-	s.waitForMajority()
-	go s.raftLoop()
-}
-
 /**
 * getPeers
 * @return []*Client
@@ -134,128 +128,31 @@ func (s *Raft) LeaderID() (leader string, imLeader bool) {
 **/
 func (s *Raft) electionLoop() {
 	for {
-		select {
-		case <-s.ctx.Done():
-			return
-		default:
-		}
-
 		timeout := randomBetween(1500, 3000)
 
-		s.mu.Lock()
-		last := s.lastHeartbeat
-		s.mu.Unlock()
-
-		timer := time.NewTimer(timeout)
-
 		select {
-		case <-timer.C:
-		case <-s.ctx.Done():
-			timer.Stop()
-			return
-		}
-
-		s.mu.Lock()
-		elapsed := time.Since(last)
-		currentState := s.state
-		s.mu.Unlock()
-
-		// Solo si seguimos siendo follower o candidate
-		if elapsed >= timeout && currentState != Leader {
-			s.startElection()
-		}
-	}
-}
-
-/**
-* raftLoop
-**/
-func (s *Raft) raftLoop() {
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
+		case <-time.After(timeout):
 		case <-s.ctx.Done():
 			return
 		}
 
 		s.mu.Lock()
-		state := s.state
-		last := s.lastHeartbeat
+
+		// Si soy líder, no hago nada
+		if s.state == Leader {
+			s.mu.Unlock()
+			continue
+		}
+
+		// Si ya recibí heartbeat reciente, no hago elección
+		if time.Since(s.lastHeartbeat) < timeout {
+			s.mu.Unlock()
+			continue
+		}
+
 		s.mu.Unlock()
 
-		switch state {
-
-		case Leader:
-			s.sendHeartbeats()
-
-		case Follower, Candidate:
-			timeout := randomBetween(1500, 3000)
-			if time.Since(last) >= timeout {
-				s.startElection()
-			}
-		}
-	}
-}
-
-/**
-* sendHeartbeats
-**/
-func (s *Raft) sendHeartbeats() {
-	s.mu.Lock()
-	term := s.term
-	s.mu.Unlock()
-
-	peers := s.getPeers()
-
-	for _, peer := range peers {
-		go func(peer *Client) {
-			args := HeartbeatArgs{
-				Term:     term,
-				LeaderID: s.addr,
-			}
-
-			var reply HeartbeatReply
-			res := heartbeat(peer, &args, &reply)
-			if !res.Ok {
-				return
-			}
-
-			s.mu.Lock()
-			defer s.mu.Unlock()
-
-			if reply.Term > s.term {
-				s.term = reply.Term
-				s.state = Follower
-				s.votedFor = ""
-			}
-
-		}(peer)
-	}
-}
-
-/**
-* waitForMajority
-**/
-func (s *Raft) waitForMajority() {
-	for {
-		peers := s.getPeers()
-
-		connected := 1 // yo mismo
-
-		for _, p := range peers {
-			if p.Status == Connected {
-				connected++
-			}
-		}
-
-		if connected >= majority(len(peers)+1) {
-			return
-		}
-
-		time.Sleep(300 * time.Millisecond)
+		s.startElection()
 	}
 }
 
@@ -264,7 +161,11 @@ func (s *Raft) waitForMajority() {
 **/
 func (s *Raft) startElection() {
 	s.mu.Lock()
-	s.state = Candidate
+	if s.state == Leader {
+		s.mu.Unlock()
+		return
+	}
+
 	s.term++
 	term := s.term
 	s.votedFor = s.addr
@@ -278,7 +179,7 @@ func (s *Raft) startElection() {
 	var votes atomic.Int32
 	votes.Store(1)
 
-	logs.Debugf("startElection term: %d", term)
+	logs.Debugf("Node %s starting election term=%d", s.addr, term)
 
 	for _, peer := range peers {
 		go func(peer *Client) {
@@ -325,11 +226,18 @@ func (s *Raft) startElection() {
 * becomeLeader
 **/
 func (s *Raft) becomeLeader() {
+	s.mu.Lock()
+	if s.state == Leader {
+		s.mu.Unlock()
+		return
+	}
+
 	s.state = Leader
 	s.leaderID = s.addr
-	s.lastHeartbeat = timezone.Now()
+	s.lastHeartbeat = time.Now()
+	s.mu.Unlock()
 
-	logs.Logf(packageName, color.Purple("I am leader %s"), s.addr)
+	logs.Debugf("Node %s became leader term=%d", s.addr, s.term)
 
 	go s.heartbeatLoop()
 
@@ -366,6 +274,8 @@ func (s *Raft) heartbeatLoop() {
 			if peer.Status != Connected {
 				continue
 			}
+
+			logs.Debugf("heartbeat term: %d", term)
 
 			go func(peer *Client) {
 				args := HeartbeatArgs{

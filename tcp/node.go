@@ -16,7 +16,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cgalvisleon/et/color"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
@@ -48,24 +47,29 @@ func init() {
 }
 
 type Node struct {
-	ctx        context.Context          `json:"-"`
-	cancel     context.CancelFunc       `json:"-"`
-	addr       string                   `json:"-"`
-	port       int                      `json:"-"`
-	mode       atomic.Value             `json:"-"`
-	timeout    time.Duration            `json:"-"`
-	ln         net.Listener             `json:"-"`
-	register   chan *Client             `json:"-"`
-	unregister chan *Client             `json:"-"`
-	clients    map[string]*Client       `json:"-"`
-	muClients  sync.Mutex               `json:"-"`
-	inbound    chan *Msg                `json:"-"`
-	requests   map[string]chan *Message `json:"-"`
-	muRequests sync.Mutex               `json:"-"`
-	proxy      *Balancer                `json:"-"`
-	peers      []*Client                `json:"-"`
-	muPeers    sync.Mutex               `json:"-"`
-	method     map[string]Service       `json:"-"`
+	ctx          context.Context          `json:"-"`
+	cancel       context.CancelFunc       `json:"-"`
+	addr         string                   `json:"-"`
+	port         int                      `json:"-"`
+	mode         atomic.Value             `json:"-"`
+	timeout      time.Duration            `json:"-"`
+	ln           net.Listener             `json:"-"`
+	register     chan *Client             `json:"-"`
+	unregister   chan *Client             `json:"-"`
+	clients      map[string]*Client       `json:"-"`
+	muClients    sync.Mutex               `json:"-"`
+	inbound      chan *Msg                `json:"-"`
+	requests     map[string]chan *Message `json:"-"`
+	muRequests   sync.Mutex               `json:"-"`
+	proxy        *Balancer                `json:"-"`
+	peers        []*Client                `json:"-"`
+	muPeers      sync.Mutex               `json:"-"`
+	method       map[string]Service       `json:"-"`
+	onConnect    []func(*Client)          `json:"-"`
+	onDisconnect []func(*Client)          `json:"-"`
+	onError      []func(*Client, error)   `json:"-"`
+	onInbox      []func(*Msg)             `json:"-"`
+	onSend       []func(*Msg)             `json:"-"`
 }
 
 /**
@@ -113,8 +117,7 @@ func (s *Node) run() {
 			select {
 			case <-s.ctx.Done():
 				logs.Logf(packageName, mg.MSG_TCP_SHUTTING_DOWN)
-				s.ln.Close()
-				s.closeAllClients()
+				s.Close()
 				return
 			case client := <-s.register:
 				s.connect(client)
@@ -164,6 +167,20 @@ func (s *Node) run() {
 }
 
 /**
+* Error
+* @param c *Client, err error
+* @return error
+**/
+func (s *Node) Error(c *Client, err error) error {
+	for _, fn := range s.onError {
+		fn(c, err)
+	}
+
+	logs.Error(err)
+	return err
+}
+
+/**
 * connect
 * @param client *Client
 **/
@@ -174,6 +191,10 @@ func (s *Node) connect(client *Client) {
 
 	s.handle(client)
 	logs.Logf(packageName, mg.MSG_TCP_CONNECTED_CLIENT, client.Addr)
+
+	for _, fn := range s.onConnect {
+		fn(client)
+	}
 }
 
 /**
@@ -186,6 +207,10 @@ func (s *Node) disconnect(client *Client) {
 	s.muClients.Unlock()
 
 	logs.Logf(packageName, mg.MSG_TCP_DISCONNECTED_CLIENT, client.Addr)
+
+	for _, fn := range s.onDisconnect {
+		fn(client)
+	}
 }
 
 /**
@@ -220,13 +245,12 @@ func (s *Node) inbox(msg *Msg) {
 		select {
 		case ch <- msg.Msg:
 		default:
-			// Evita bloqueo si nadie espera
 		}
 		return
 	}
 
 	switch msg.Msg.Type {
-	case Method:
+	default:
 		list := strings.Split(msg.Msg.Method, ".")
 		if len(list) < 2 {
 			s.ResponseError(msg, errors.New(mg.MSG_METHOD_NOT_FOUND))
@@ -243,21 +267,24 @@ func (s *Node) inbox(msg *Msg) {
 
 		res := service.Execute(methodName, msg.Msg)
 		if res.Error != nil {
-			logs.Debug(color.Red(res.Error.Error()))
 			s.ResponseError(msg, res.Error)
 			return
 		}
 
 		rsp, err := NewMessage(Method, res)
 		if err != nil {
-			logs.Error(err)
+			s.ResponseError(msg, err)
 			return
 		}
 
 		err = s.response(msg.To, msg.ID(), rsp)
 		if err != nil {
-			logs.Error(err)
+			s.Error(msg.To, err)
 		}
+	}
+
+	for _, fn := range s.onInbox {
+		fn(msg)
 	}
 }
 
@@ -277,7 +304,11 @@ func (s *Node) send(msg *Msg) error {
 
 	err := c.send(msg.Msg)
 	if err != nil {
-		return err
+		return s.Error(c, err)
+	}
+
+	for _, fn := range s.onSend {
+		fn(msg)
 	}
 
 	return nil
@@ -461,8 +492,16 @@ func (s *Node) Start() (err error) {
 	return nil
 }
 
-func (n *Node) Shutdown() {
-	n.cancel() // Cancela todo el árbol
+/**
+* Close
+**/
+func (s *Node) Close() {
+	s.ln.Close()
+	close(s.register)
+	close(s.unregister)
+	close(s.inbound)
+	s.closeAllClients()
+	s.cancel()
 }
 
 /**

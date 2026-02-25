@@ -279,14 +279,6 @@ func (s *Client) inbox(bt []byte) {
 * @return *Message, error
 **/
 func (s *Client) request(m *Message) (*Message, error) {
-	// Connect
-	if s.Status != Connected {
-		err := s.connect()
-		if err != nil {
-			return nil, s.error(err)
-		}
-	}
-
 	// Channel for response
 	ch := make(chan *Message, 1)
 	s.mu.Lock()
@@ -305,18 +297,14 @@ func (s *Client) request(m *Message) (*Message, error) {
 		s.mu.Lock()
 		delete(s.messages, m.ID)
 		s.mu.Unlock()
-		// if s.isDebug {
 		logs.Debugf("response: %s type:%d", resp.ID, resp.Type)
-		// }
 		return resp, nil
 
 	case <-time.After(s.timeout):
 		s.mu.Lock()
 		delete(s.messages, m.ID)
 		s.mu.Unlock()
-		// if s.isDebug {
-		logs.Debugf("timeout: %s", m.ID)
-		// }
+		logs.Debugf("response timeout: %s", m.ID)
 		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
 	}
 }

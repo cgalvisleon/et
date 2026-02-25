@@ -356,7 +356,7 @@ func (s *Raft) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) {
 	reply.Ok = true
 
 	if oldLeader != args.LeaderID {
-		logs.Logf(packageName, mg.MSG_TCP_CHANGED_LEADER, s.term, args.LeaderID)
+		logs.Logf(packageName, color.Yellow(mg.MSG_TCP_CHANGED_LEADER), s.term, args.LeaderID)
 		go func() {
 			for _, fn := range s.node.onChangeLeader {
 				fn(s.node)

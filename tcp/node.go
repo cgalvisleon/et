@@ -75,6 +75,7 @@ type Node struct {
 	onBecomeLeader []func(*Node)            `json:"-"`
 	onChangeLeader []func(*Node)            `json:"-"`
 	index          atomic.Uint64            `json:"-"`
+	total          atomic.Int64             `json:"-"`
 }
 
 /**
@@ -107,6 +108,7 @@ func NewNode(port int) *Node {
 		muPeers:    sync.Mutex{},
 		method:     make(map[string]Service),
 		index:      atomic.Uint64{},
+		total:      atomic.Int64{},
 	}
 	result.mode.Store(Follower)
 	result.Mount(newTcpService(result))
@@ -277,8 +279,6 @@ func (s *Node) inbox(msg *Msg) {
 	ch, ok := s.requests[msg.ID()]
 	s.muRequests.Unlock()
 
-	logs.Logf(packageName, mg.MSG_TCP_INBOX, msg.ID())
-
 	if ok {
 		select {
 		case ch <- msg.Msg:
@@ -363,9 +363,11 @@ func (s *Node) inbox(msg *Msg) {
 		}
 	}
 
-	for _, fn := range s.onInbox {
-		fn(msg)
-	}
+	go func() {
+		for _, fn := range s.onInbox {
+			fn(msg)
+		}
+	}()
 }
 
 /**
@@ -386,9 +388,11 @@ func (s *Node) send(msg *Msg) error {
 		return s.Error(c, err)
 	}
 
-	for _, fn := range s.onSend {
-		fn(msg)
-	}
+	go func() {
+		for _, fn := range s.onSend {
+			fn(msg)
+		}
+	}()
 
 	return nil
 }
@@ -580,7 +584,7 @@ func (s *Node) electionLoop() error {
 	}
 
 	for _, node := range config.Nodes {
-		go s.AddNode(node)
+		s.AddNode(node)
 	}
 
 	go s.raft.electionLoop()
@@ -757,27 +761,25 @@ func (s *Node) GetMethod() et.Json {
 * AddNode
 * @param addr string
 **/
-func (s *Node) AddNode(addr string) error {
+func (s *Node) AddNode(addr string) {
 	if addr == s.addr {
-		return nil
+		return
 	}
 
 	node := NewClient(addr)
 	node.isNode = true
-	err := node.Connect()
-	if err != nil {
-		return err
-	}
-
-	node.onDisconnect = append(node.onDisconnect, func(c *Client) {
-		s.RemoveNode(c.Addr)
+	node.onConnect = append(node.onConnect, func(c *Client) {
+		s.total.Add(1)
 	})
+	node.onDisconnect = append(node.onDisconnect, func(c *Client) {
+		s.total.Add(-1)
+	})
+
+	node.Connect()
 
 	s.muPeers.Lock()
 	s.peers = append(s.peers, node)
 	s.muPeers.Unlock()
-
-	return nil
 }
 
 /**

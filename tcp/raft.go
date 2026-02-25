@@ -7,7 +7,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cgalvisleon/et/color"
 	"github.com/cgalvisleon/et/logs"
+	mg "github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -173,14 +175,18 @@ func (s *Raft) startElection() {
 	logs.Debugf("Node %s starting election term=%d", s.addr, term)
 
 	peers := s.getPeers()
-	total := len(peers) + 1
-	needed := majority(total)
-
 	var votes atomic.Int32
 	votes.Store(1)
 
 	for _, peer := range peers {
 		go func(peer *Client) {
+			if peer.Status != Connected {
+				err := peer.Connect()
+				if err != nil {
+					return
+				}
+			}
+
 			args := RequestVoteArgs{
 				Term:        term,
 				CandidateID: s.addr,
@@ -205,6 +211,7 @@ func (s *Raft) startElection() {
 			if s.state == Candidate && term == s.term && reply.VoteGranted {
 				newVotes := votes.Add(1)
 
+				needed := majority(int(s.node.total.Load()))
 				if int(newVotes) >= needed && s.state == Candidate {
 					s.becomeLeader()
 				}
@@ -225,7 +232,7 @@ func (s *Raft) becomeLeader() {
 	s.leaderID = s.addr
 	s.lastHeartbeat = time.Now()
 
-	logs.Debugf("Node %s became leader term=%d", s.addr, s.term)
+	logs.Logf(packageName, color.Yellow(mg.MSG_TCP_BECAME_LEADER), s.addr, s.term)
 
 	go s.heartbeatLoop()
 

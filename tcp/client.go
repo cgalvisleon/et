@@ -90,7 +90,7 @@ func NewClient(addr string) *Client {
 * ToJson
 * @return et.Json
 **/
-func (s *Client) toJson() et.Json {
+func (s *Client) ToJson() et.Json {
 	return et.Json{
 		"created_at":  s.CreatedAt,
 		"addr":        s.Addr,
@@ -134,6 +134,7 @@ func (s *Client) connect() error {
 	s.LocalAddr = s.conn.LocalAddr().String()
 	s.RemoteAddr = s.conn.RemoteAddr().String()
 	s.mu.Unlock()
+
 	for _, fn := range s.onConnect {
 		fn(s)
 	}

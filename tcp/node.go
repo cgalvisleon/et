@@ -400,6 +400,18 @@ func (s *Node) Start() (err error) {
 }
 
 /**
+* Close
+**/
+func (s *Node) Close() {
+	close(s.inbound)
+	close(s.register)
+	close(s.unregister)
+	if s.ln != nil {
+		s.ln.Close()
+	}
+}
+
+/**
 * Send
 * @param to *Client, tp int, message any
 * @return error

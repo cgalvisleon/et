@@ -74,6 +74,7 @@ type Node struct {
 	onSend         []func(*Msg)             `json:"-"`
 	onBecomeLeader []func(*Node)            `json:"-"`
 	onChangeLeader []func(*Node)            `json:"-"`
+	index          atomic.Uint64            `json:"-"`
 }
 
 /**
@@ -105,6 +106,7 @@ func NewNode(port int) *Node {
 		peers:      make([]*Client, 0),
 		muPeers:    sync.Mutex{},
 		method:     make(map[string]Service),
+		index:      atomic.Uint64{},
 	}
 	result.mode.Store(Follower)
 	result.Mount(newTcpService(result))
@@ -552,6 +554,22 @@ func (s *Node) newClient(conn net.Conn) *Client {
 }
 
 /**
+* next
+* @return *Client
+**/
+func (s *Node) next() *Client {
+	n := uint64(len(s.peers))
+	for i := uint64(0); i < n; i++ {
+		idx := (s.index.Add(1)) % n
+		node := s.peers[idx]
+		if node.alive.Load() {
+			return node
+		}
+	}
+	return nil
+}
+
+/**
 * electionLoop
 **/
 func (s *Node) electionLoop() {
@@ -569,9 +587,9 @@ func (s *Node) Start() (err error) {
 	}
 
 	s.run()
-	if s.port != 1377 {
-		go test(s)
-	}
+	// if s.port != 1377 {
+	// 	go test(s)
+	// }
 
 	go s.electionLoop()
 

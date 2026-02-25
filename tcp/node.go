@@ -205,33 +205,6 @@ func (s *Node) run() {
 }
 
 /**
-* connectToPeersLoop
-**/
-func (n *Node) connectToPeersLoop() {
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-n.ctx.Done():
-			return
-		case <-ticker.C:
-		}
-
-		n.muPeers.Lock()
-		peers := make([]*Client, len(n.peers))
-		copy(peers, n.peers)
-		n.muPeers.Unlock()
-
-		for _, peer := range peers {
-			if peer.Status != Connected && peer.Addr != n.addr {
-				_ = peer.Connect()
-			}
-		}
-	}
-}
-
-/**
 * Error
 * @param c *Client, err error
 * @return error
@@ -599,8 +572,20 @@ func (s *Node) Next() *Client {
 /**
 * electionLoop
 **/
-func (s *Node) electionLoop() {
-	s.raft.electionLoop()
+func (s *Node) electionLoop() error {
+	time.Sleep(300 * time.Millisecond)
+	config, err := getConfig()
+	if err != nil {
+		return err
+	}
+
+	for _, node := range config.Nodes {
+		go s.AddNode(node)
+	}
+
+	go s.raft.electionLoop()
+
+	return nil
 }
 
 /**
@@ -614,9 +599,10 @@ func (s *Node) Start() (err error) {
 	}
 
 	s.run()
-	go s.connectToPeersLoop()
-	go s.electionLoop()
-	// go s.raft.start()
+	err = s.electionLoop()
+	if err != nil {
+		return
+	}
 
 	logs.Logf(packageName, mg.MSG_TCP_LISTENING, s.addr)
 
@@ -771,12 +757,27 @@ func (s *Node) GetMethod() et.Json {
 * AddNode
 * @param addr string
 **/
-func (s *Node) AddNode(addr string) {
+func (s *Node) AddNode(addr string) error {
+	if addr == s.addr {
+		return nil
+	}
+
 	node := NewClient(addr)
 	node.isNode = true
+	err := node.Connect()
+	if err != nil {
+		return err
+	}
+
+	node.onDisconnect = append(node.onDisconnect, func(c *Client) {
+		s.RemoveNode(c.Addr)
+	})
+
 	s.muPeers.Lock()
 	s.peers = append(s.peers, node)
 	s.muPeers.Unlock()
+
+	return nil
 }
 
 /**
@@ -789,23 +790,20 @@ func (s *Node) RemoveNode(addr string) {
 
 	idx := slices.IndexFunc(s.peers, func(e *Client) bool { return e.Addr == addr })
 	if idx != -1 {
+		s.peers[idx].Close()
 		s.peers = append(s.peers[:idx], s.peers[idx+1:]...)
 	}
 }
 
 /**
-* GetPeer
-* @return *Client
+* GetPeers
+* @return []*Client
 **/
-func (s *Node) GetPeer(addr string) *Client {
+func (s *Node) GetPeers() []*Client {
 	s.muPeers.Lock()
 	defer s.muPeers.Unlock()
 
-	idx := slices.IndexFunc(s.peers, func(e *Client) bool { return e.Addr == addr })
-	if idx != -1 {
-		return s.peers[idx]
-	}
-	return nil
+	return s.peers
 }
 
 /**

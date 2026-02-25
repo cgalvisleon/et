@@ -102,12 +102,7 @@ func newRaft(node *Node) *Raft {
 * @return []*Client
 **/
 func (s *Raft) getPeers() []*Client {
-	s.node.muPeers.Lock()
-	defer s.node.muPeers.Unlock()
-
-	peers := make([]*Client, len(s.node.peers))
-	copy(peers, s.node.peers)
-	return peers
+	return s.node.GetPeers()
 }
 
 /**
@@ -127,6 +122,10 @@ func (s *Raft) LeaderID() (leader string, imLeader bool) {
 * electionLoop
 **/
 func (s *Raft) electionLoop() {
+	s.mu.Lock()
+	s.lastHeartbeat = timezone.Now()
+	s.mu.Unlock()
+
 	for {
 		timeout := randomBetween(1500, 3000)
 
@@ -137,8 +136,6 @@ func (s *Raft) electionLoop() {
 		}
 
 		s.mu.Lock()
-
-		// Si soy líder, no hago nada
 		if s.state == Leader {
 			s.mu.Unlock()
 			continue
@@ -151,7 +148,6 @@ func (s *Raft) electionLoop() {
 		}
 
 		s.mu.Unlock()
-
 		s.startElection()
 	}
 }
@@ -166,11 +162,15 @@ func (s *Raft) startElection() {
 		return
 	}
 
+	s.state = Candidate
 	s.term++
 	term := s.term
 	s.votedFor = s.addr
+	s.leaderID = ""
 	s.lastHeartbeat = timezone.Now()
 	s.mu.Unlock()
+
+	logs.Debugf("Node %s starting election term=%d", s.addr, term)
 
 	peers := s.getPeers()
 	total := len(peers) + 1
@@ -179,17 +179,8 @@ func (s *Raft) startElection() {
 	var votes atomic.Int32
 	votes.Store(1)
 
-	logs.Debugf("Node %s starting election term=%d", s.addr, term)
-
 	for _, peer := range peers {
 		go func(peer *Client) {
-			if peer.Status != Connected {
-				err := peer.Connect()
-				if err != nil {
-					return
-				}
-			}
-
 			args := RequestVoteArgs{
 				Term:        term,
 				CandidateID: s.addr,
@@ -226,24 +217,23 @@ func (s *Raft) startElection() {
 * becomeLeader
 **/
 func (s *Raft) becomeLeader() {
-	s.mu.Lock()
 	if s.state == Leader {
-		s.mu.Unlock()
 		return
 	}
 
 	s.state = Leader
 	s.leaderID = s.addr
 	s.lastHeartbeat = time.Now()
-	s.mu.Unlock()
 
 	logs.Debugf("Node %s became leader term=%d", s.addr, s.term)
 
 	go s.heartbeatLoop()
 
-	for _, fn := range s.node.onBecomeLeader {
-		fn(s.node)
-	}
+	go func() {
+		for _, fn := range s.node.onBecomeLeader {
+			fn(s.node)
+		}
+	}()
 }
 
 /**
@@ -364,9 +354,11 @@ func (s *Raft) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) {
 	reply.Ok = true
 
 	if oldLeader != args.LeaderID {
-		for _, fn := range s.node.onChangeLeader {
-			fn(s.node)
-		}
+		go func() {
+			for _, fn := range s.node.onChangeLeader {
+				fn(s.node)
+			}
+		}()
 	}
 }
 

@@ -110,8 +110,6 @@ func (s *Client) error(err error) error {
 		fn(s, err)
 	}
 
-	logs.Error(err)
-
 	return err
 }
 

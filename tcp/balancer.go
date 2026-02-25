@@ -1,6 +1,11 @@
 package tcp
 
-import "sync/atomic"
+import (
+	"io"
+	"net"
+	"sync/atomic"
+	"time"
+)
 
 type node struct {
 	Address string
@@ -24,6 +29,8 @@ type Balancer struct {
 	index atomic.Uint64
 }
 
+var proxy *Balancer
+
 /**
 * newBalancer
 * @return *Balancer
@@ -33,6 +40,39 @@ func newBalancer() *Balancer {
 		nodes: make([]*node, 0),
 		index: atomic.Uint64{},
 	}
+}
+
+/**
+* handleBalancer
+* @param client net.Conn
+**/
+func handleBalancer(client net.Conn) {
+	defer client.Close()
+
+	if proxy == nil {
+		proxy = newBalancer()
+	}
+
+	node := proxy.next()
+	if node == nil {
+		return
+	}
+
+	dialer := net.Dialer{
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+	backend, err := dialer.Dial("tcp", node.Address)
+	if err != nil {
+		return
+	}
+	defer backend.Close()
+
+	node.Conns.Add(1)
+	defer node.Conns.Add(-1)
+
+	go io.Copy(backend, client)
+	io.Copy(client, backend)
 }
 
 /**

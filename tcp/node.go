@@ -3,6 +3,7 @@ package tcp
 import (
 	"bufio"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -12,8 +13,11 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	mg "github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/reg"
+	"github.com/cgalvisleon/et/timezone"
 )
 
 type Mode int
@@ -103,6 +107,18 @@ func (s *Node) run() {
 			s.inbox(msg)
 		}
 	}()
+
+	go func() {
+		for {
+			conn, err := s.ln.Accept()
+			if err != nil {
+				continue
+			}
+
+			client := s.newClient(conn)
+			s.register <- client
+		}
+	}()
 }
 
 /**
@@ -114,6 +130,7 @@ func (s *Node) connect(client *Client) {
 	s.clients[client.Addr] = client
 	s.muClients.Unlock()
 
+	s.handle(client)
 	logs.Logf(packageName, mg.MSG_TCP_CONNECTED_CLIENT, client.Addr)
 }
 
@@ -172,6 +189,74 @@ func (s *Node) send(msg *Msg) error {
 }
 
 /**
+* response
+* @params to *Client, id string, msg *Message
+* @return error
+**/
+func (s *Node) response(to *Client, id string, msg *Message) error {
+	if id != "" {
+		msg.ID = id
+		msg.IsResponse = true
+	}
+
+	return s.send(&Msg{
+		To:  to,
+		Msg: msg,
+	})
+}
+
+/**
+* request
+* @param to *Client, m *Message
+* @return *Message, error
+**/
+func (s *Node) request(to *Client, m *Message) (*Message, error) {
+	s.muClients.Lock()
+	_, ok := s.clients[to.Addr]
+	s.muClients.Unlock()
+
+	if !ok {
+		return nil, fmt.Errorf(mg.MSG_TCP_CLIENT_NOT_FOUND, to.Addr)
+	}
+
+	// Channel for response
+	ch := make(chan *Message, 1)
+	s.muRequests.Lock()
+	s.requests[m.ID] = ch
+	s.muRequests.Unlock()
+
+	// Send
+	err := s.send(&Msg{
+		To:  to,
+		Msg: m,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Wait response or timeout
+	select {
+	case resp := <-ch:
+		s.muRequests.Lock()
+		delete(s.requests, m.ID)
+		s.muRequests.Unlock()
+		// if s.isDebug {
+		logs.Debugf("response: %s type:%d", resp.ID, resp.Type)
+		// }
+		return resp, nil
+
+	case <-time.After(s.timeout):
+		s.muRequests.Lock()
+		delete(s.requests, m.ID)
+		s.muRequests.Unlock()
+		// if s.isDebug {
+		logs.Debugf("timeout: %s", m.ID)
+		// }
+		return nil, fmt.Errorf(mg.MSG_TCP_TIMEOUT)
+	}
+}
+
+/**
 * handle
 * @param conn net.Conn
 **/
@@ -180,43 +265,10 @@ func (s *Node) handle(c *Client) {
 
 	switch mode {
 	case Proxy:
-		s.handleBalancer(c.conn)
+		go handleBalancer(c.conn)
 	default:
-		s.handleClient(c)
+		go s.handleClient(c)
 	}
-}
-
-/**
-* handleBalancer
-* @param client net.Conn
-**/
-func (s *Node) handleBalancer(client net.Conn) {
-	defer client.Close()
-
-	if s.proxy == nil {
-		s.proxy = newBalancer()
-	}
-
-	node := s.proxy.next()
-	if node == nil {
-		return
-	}
-
-	dialer := net.Dialer{
-		Timeout:   10 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}
-	backend, err := dialer.Dial("tcp", node.Address)
-	if err != nil {
-		return
-	}
-	defer backend.Close()
-
-	node.Conns.Add(1)
-	defer node.Conns.Add(-1)
-
-	go io.Copy(backend, client)
-	io.Copy(client, backend)
 }
 
 /**
@@ -242,7 +294,7 @@ func (s *Node) handleClient(c *Client) {
 		length := binary.BigEndian.Uint32(lenBuf)
 		limitReader := envar.GetInt("LIMIT_SIZE_MG", 10)
 		if length > uint32(limitReader*1024*1024) {
-			s.Send(c, ErrorMessage, mg.MSG_TCP_MESSAGE_TOO_LARGE)
+			s.SendError(c, errors.New(mg.MSG_TCP_MESSAGE_TOO_LARGE))
 			continue
 		}
 
@@ -256,7 +308,7 @@ func (s *Node) handleClient(c *Client) {
 
 		m, err := ToMessage(data)
 		if err != nil {
-			logs.Error(err)
+			s.SendError(c, err)
 			continue
 		}
 
@@ -264,6 +316,27 @@ func (s *Node) handleClient(c *Client) {
 			To:  c,
 			Msg: m,
 		}
+	}
+}
+
+/**
+* newClient
+* @param conn net.Conn
+* @return *Client
+**/
+func (s *Node) newClient(conn net.Conn) *Client {
+	timeout, err := time.ParseDuration(envar.GetStr("TIMEOUT", "10s"))
+	if err != nil {
+		timeout = 10 * time.Second
+	}
+	return &Client{
+		CreatedAt: timezone.Now(),
+		ID:        reg.ULID(),
+		Addr:      conn.RemoteAddr().String(),
+		Status:    Connected,
+		Ctx:       et.Json{},
+		conn:      conn,
+		timeout:   timeout,
 	}
 }
 
@@ -278,5 +351,101 @@ func (s *Node) Start() (err error) {
 	}
 
 	s.run()
+
+	logs.Logf(packageName, mg.MSG_TCP_LISTENING, s.addr)
+
 	return nil
+}
+
+/**
+* Send
+* @param to *Client, tp int, message any
+* @return error
+**/
+func (s *Node) Send(to *Client, tp int, message any) error {
+	msg, err := NewMessage(tp, message)
+	if err != nil {
+		return err
+	}
+
+	return s.send(&Msg{
+		To:  to,
+		Msg: msg,
+	})
+}
+
+/**
+* SendError
+* @param to *Client, err error
+* @return error
+**/
+func (s *Node) SendError(to *Client, err error) error {
+	msg, errM := NewMessage(ErrorMessage, "")
+	if errM != nil {
+		return errM
+	}
+	msg.Error = err.Error()
+
+	return s.send(&Msg{
+		To:  to,
+		Msg: msg,
+	})
+}
+
+/**
+* Request
+* @param to *Client, method string, args ...any
+* @return *Response
+**/
+func (s *Node) Request(to *Client, method string, args ...any) *Response {
+	msg, err := NewMessage(Method, "")
+	if err != nil {
+		return TcpError(err)
+	}
+	msg.Method = method
+	for _, arg := range args {
+		msg.Args = append(msg.Args, arg)
+	}
+
+	res, err := s.request(to, msg)
+	if err != nil {
+		return TcpError(err)
+	}
+
+	result, err := res.Response()
+	if err != nil {
+		return TcpError(err)
+	}
+
+	return result
+}
+
+/**
+* ResponseError
+* @param to *Client, id string, err error
+* @return error
+**/
+func (s *Node) ResponseError(to *Client, id string, err error) error {
+	msg, _ := NewMessage(ErrorMessage, "")
+	msg.Error = err.Error()
+
+	return s.response(to, id, msg)
+}
+
+/**
+* Broadcast
+* @param destination []string
+* @param msg []byte
+**/
+func (s *Node) Broadcast(destination []string, tp int, message any) {
+	for _, addr := range destination {
+		s.muClients.Lock()
+		client, ok := s.clients[addr]
+		s.muClients.Unlock()
+
+		status := client.Status
+		if ok && status == Connected {
+			s.Send(client, tp, message)
+		}
+	}
 }

@@ -281,13 +281,8 @@ func (s *Client) request(m *Message) (*Message, error) {
 	s.messages[m.ID] = ch
 	s.mu.Unlock()
 
-	bt, err := m.serialize()
-	if err != nil {
-		return nil, s.error(err)
-	}
-
 	// Send
-	err = s.send(bt)
+	err := s.send(m)
 	if err != nil {
 		return nil, s.error(err)
 	}
@@ -369,21 +364,8 @@ func (s *Client) Close() error {
 * @return error
 **/
 func (s *Client) Send(msg *Message) error {
-	bt, err := msg.serialize()
-	if err != nil {
-		return s.error(err)
-	}
-
-	// Connect
-	if s.Status != Connected {
-		err := s.connect()
-		if err != nil {
-			return s.error(err)
-		}
-	}
-
 	// Send
-	err = s.send(bt)
+	err := s.send(msg)
 	if err != nil {
 		return s.error(err)
 	}

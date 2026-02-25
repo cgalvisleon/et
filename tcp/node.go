@@ -587,11 +587,11 @@ func (s *Node) Start() (err error) {
 	}
 
 	s.run()
-	// if s.port != 1377 {
-	// 	go test(s)
-	// }
+	if s.port != 1377 {
+		go test(s)
+	}
 
-	go s.electionLoop()
+	// go s.electionLoop()
 
 	logs.Logf(packageName, mg.MSG_TCP_LISTENING, s.addr)
 

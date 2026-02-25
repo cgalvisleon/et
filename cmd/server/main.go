@@ -12,8 +12,8 @@ func main() {
 
 	node := tcp.NewNode(port)
 	node.AddNode("Cesars-MacBook-Pro.local:1377")
-	// server.AddNode("Cesars-MacBook-Pro.local:1378")
-	// server.AddNode("Cesars-MacBook-Pro.local:1379")
+	node.AddNode("Cesars-MacBook-Pro.local:1378")
+	node.AddNode("Cesars-MacBook-Pro.local:1379")
 	err := node.Start()
 	if err != nil {
 		logs.Panic(err)

@@ -70,17 +70,16 @@ type HeartbeatReply struct {
 }
 
 type Raft struct {
-	ctx           context.Context        `json:"-"`
-	cancel        context.CancelFunc     `json:"-"`
-	node          *Node                  `json:"-"`
-	addr          string                 `json:"-"`
-	registry      map[string]HandlerFunc `json:"-"`
-	state         Mode                   `json:"-"`
-	term          int                    `json:"-"`
-	votedFor      string                 `json:"-"`
-	leaderID      string                 `json:"-"`
-	lastHeartbeat time.Time              `json:"-"`
-	mu            sync.Mutex             `json:"-"`
+	ctx           context.Context    `json:"-"`
+	cancel        context.CancelFunc `json:"-"`
+	node          *Node              `json:"-"`
+	addr          string             `json:"-"`
+	state         Mode               `json:"-"`
+	term          int                `json:"-"`
+	votedFor      string             `json:"-"`
+	leaderID      string             `json:"-"`
+	lastHeartbeat time.Time          `json:"-"`
+	mu            sync.Mutex         `json:"-"`
 }
 
 func newRaft(node *Node) *Raft {
@@ -97,15 +96,6 @@ func newRaft(node *Node) *Raft {
 		ctx:           ctx,
 		cancel:        cancel,
 	}
-}
-
-/**
-* build
-* @return map[string]HandlerFunc
-**/
-func (s *Raft) build() map[string]HandlerFunc {
-	s.registry = map[string]HandlerFunc{}
-	return s.registry
 }
 
 /**

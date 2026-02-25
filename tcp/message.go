@@ -37,14 +37,6 @@ func (s *Msg) ID() string {
 }
 
 /**
-* TO
-* @return string
-**/
-func (s *Msg) TO() string {
-	return s.To.Addr
-}
-
-/**
 * Get
 * @param dest any
 * @return error

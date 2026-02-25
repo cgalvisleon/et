@@ -215,13 +215,16 @@ func (s *Client) run() {
 
 /**
 * send
-* @param bt []byte
+* @param msg *Message
 * @return error
 **/
-func (s *Client) send(bt []byte) error {
-	_, err := s.conn.Write(bt)
+func (s *Client) send(msg *Message) error {
+	bt, err := msg.serialize()
 	if err != nil {
-		s.disconnect()
+		return err
+	}
+	_, err = s.conn.Write(bt)
+	if err != nil {
 		return err
 	}
 

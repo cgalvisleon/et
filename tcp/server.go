@@ -286,12 +286,7 @@ func (s *Server) send(msg *Msg) error {
 		return fmt.Errorf(mg.MSG_TCP_CLIENT_NOT_CONNECTED, msg.To.Addr)
 	}
 
-	bt, err := msg.Msg.serialize()
-	if err != nil {
-		return err
-	}
-
-	err = msg.To.send(bt)
+	err := msg.To.send(msg.Msg)
 	if err != nil {
 		return err
 	}

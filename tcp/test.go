@@ -6,9 +6,9 @@ import (
 	"github.com/cgalvisleon/et/logs"
 )
 
-func test(srv *Server) {
+func test(srv *Node) {
 	var node *Client
-	for _, peer := range srv.raft.peers {
+	for _, peer := range srv.peers {
 		if peer.Status != Connected {
 			err := peer.Connect()
 			if err != nil {

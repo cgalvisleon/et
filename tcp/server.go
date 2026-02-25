@@ -95,7 +95,7 @@ func NewServer(port int) *Server {
 	}
 	result.raft = newRaft(result)
 	result.mode.Store(Follower)
-	result.Mount(newTcpService(result))
+	// result.Mount(newTcpService(result))
 
 	return result
 }
@@ -527,7 +527,7 @@ func (s *Server) Start() error {
 
 	go s.run()
 	if s.port != 1377 {
-		go test(s)
+		// go test(s)
 	}
 	// go s.electionLoop()
 

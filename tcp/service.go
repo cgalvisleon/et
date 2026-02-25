@@ -19,7 +19,7 @@ type Service interface {
 
 type Tcp struct {
 	registry map[string]HandlerFunc
-	srv      *Server
+	node     *Node
 	Ping     HandlerFunc
 }
 
@@ -50,11 +50,12 @@ func (s *Tcp) Execute(name string, request *Message) *Response {
 
 /**
 * newTcpService
+* @param node *Node
 * @return *Tcp
 **/
-func newTcpService(srv *Server) *Tcp {
+func newTcpService(node *Node) *Tcp {
 	this := &Tcp{
-		srv: srv,
+		node: node,
 	}
 	this.Ping = func(request *Message) *Response {
 		var id string
@@ -64,7 +65,7 @@ func newTcpService(srv *Server) *Tcp {
 			return TcpError(err)
 		}
 
-		return TcpResponse(fmt.Sprintf("Pong to:%s", this.srv.addr))
+		return TcpResponse(fmt.Sprintf("Pong to:%s", this.node.addr))
 	}
 
 	this.build()

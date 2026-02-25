@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -58,6 +59,8 @@ type Node struct {
 	requests   map[string]chan *Message `json:"-"`
 	muRequests sync.Mutex               `json:"-"`
 	proxy      *Balancer                `json:"-"`
+	peers      []*Client                `json:"-"`
+	muPeers    sync.Mutex               `json:"-"`
 	method     map[string]Service       `json:"-"`
 }
 
@@ -84,9 +87,12 @@ func NewNode(port int) *Node {
 		inbound:    make(chan *Msg),
 		requests:   make(map[string]chan *Message),
 		muRequests: sync.Mutex{},
+		peers:      make([]*Client, 0),
+		muPeers:    sync.Mutex{},
 		method:     make(map[string]Service),
 	}
 	result.mode.Store(Follower)
+	result.Mount(newTcpService(result))
 
 	return result
 }
@@ -244,18 +250,14 @@ func (s *Node) request(to *Client, m *Message) (*Message, error) {
 		s.muRequests.Lock()
 		delete(s.requests, m.ID)
 		s.muRequests.Unlock()
-		// if s.isDebug {
 		logs.Debugf("response: %s type:%d", resp.ID, resp.Type)
-		// }
 		return resp, nil
 
 	case <-time.After(s.timeout):
 		s.muRequests.Lock()
 		delete(s.requests, m.ID)
 		s.muRequests.Unlock()
-		// if s.isDebug {
-		logs.Debugf("timeout: %s", m.ID)
-		// }
+		logs.Debugf("response timeout: %s", m.ID)
 		return nil, fmt.Errorf(mg.MSG_TCP_TIMEOUT)
 	}
 }
@@ -355,6 +357,9 @@ func (s *Node) Start() (err error) {
 	}
 
 	s.run()
+	if s.port != 1377 {
+		go test(s)
+	}
 
 	logs.Logf(packageName, mg.MSG_TCP_LISTENING, s.addr)
 
@@ -481,4 +486,30 @@ func (s *Node) GetMethod() et.Json {
 		result[pkg] = mt
 	}
 	return result
+}
+
+/**
+* AddNode
+* @param addr string
+**/
+func (s *Node) AddNode(addr string) {
+	node := NewClient(addr)
+	node.isNode = true
+	s.muPeers.Lock()
+	s.peers = append(s.peers, node)
+	s.muPeers.Unlock()
+}
+
+/**
+* RemoveNode
+* @param addr string
+**/
+func (s *Node) RemoveNode(addr string) {
+	s.muPeers.Lock()
+	defer s.muPeers.Unlock()
+
+	idx := slices.IndexFunc(s.peers, func(e *Client) bool { return e.Addr == addr })
+	if idx != -1 {
+		s.peers = append(s.peers[:idx], s.peers[idx+1:]...)
+	}
 }

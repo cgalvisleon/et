@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -28,6 +29,8 @@ const (
 )
 
 type Client struct {
+	ctx          context.Context           `json:"-"`
+	cancel       context.CancelFunc        `json:"-"`
 	CreatedAt    time.Time                 `json:"created_at"`
 	ID           string                    `json:"id"`
 	Addr         string                    `json:"addr"`
@@ -60,7 +63,11 @@ func NewClient(addr string) *Client {
 	if err != nil {
 		timeout = 10 * time.Second
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
 	result := &Client{
+		ctx:          ctx,
+		cancel:       cancel,
 		CreatedAt:    timezone.Now(),
 		ID:           reg.ULID(),
 		Addr:         addr,
@@ -207,7 +214,12 @@ func (s *Client) readLoop() {
 func (s *Client) run() {
 	for {
 		select {
-		case msg := <-s.inbound:
+		case <-s.ctx.Done():
+			logs.Logf(packageName, msg.MSG_TCP_DISCONNECTED, s.Addr)
+			s.conn.Close()
+			return
+		default:
+			msg := <-s.inbound
 			s.inbox(msg)
 		}
 	}
@@ -355,6 +367,7 @@ func (s *Client) Start() error {
 **/
 func (s *Client) Close() error {
 	s.disconnect()
+	s.cancel()
 	return nil
 }
 

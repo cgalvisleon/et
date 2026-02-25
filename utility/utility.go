@@ -1,6 +1,7 @@
 package utility
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -44,6 +45,20 @@ const QUEUE_STACK = "stack"
 
 var locks = make(map[string]*sync.RWMutex)
 var count = make(map[string]int64)
+
+/**
+* App
+* @return context.Context
+**/
+func App() context.Context {
+	parent := context.Background()
+	ctx, _ := signal.NotifyContext(
+		parent,
+		os.Interrupt,
+		syscall.SIGTERM,
+	)
+	return ctx
+}
 
 /**
 * AppWait

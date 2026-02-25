@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -47,6 +48,8 @@ func init() {
 }
 
 type Node struct {
+	ctx        context.Context          `json:"-"`
+	cancel     context.CancelFunc       `json:"-"`
 	addr       string                   `json:"-"`
 	port       int                      `json:"-"`
 	mode       atomic.Value             `json:"-"`
@@ -77,15 +80,18 @@ func NewNode(port int) *Node {
 		timeout = 10 * time.Second
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	result := &Node{
+		ctx:        ctx,
+		cancel:     cancel,
 		addr:       addr,
 		port:       port,
 		timeout:    timeout,
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
+		register:   make(chan *Client, 64),
+		unregister: make(chan *Client, 64),
 		clients:    make(map[string]*Client),
 		muClients:  sync.Mutex{},
-		inbound:    make(chan *Msg),
+		inbound:    make(chan *Msg, 256),
 		requests:   make(map[string]chan *Message),
 		muRequests: sync.Mutex{},
 		peers:      make([]*Client, 0),
@@ -105,6 +111,11 @@ func (s *Node) run() {
 	go func() {
 		for {
 			select {
+			case <-s.ctx.Done():
+				logs.Logf(packageName, mg.MSG_TCP_SHUTTING_DOWN)
+				s.ln.Close()
+				s.closeAllClients()
+				return
 			case client := <-s.register:
 				s.connect(client)
 			case client := <-s.unregister:
@@ -114,8 +125,15 @@ func (s *Node) run() {
 	}()
 
 	go func() {
-		for msg := range s.inbound {
-			s.inbox(msg)
+		for {
+			select {
+			case <-s.ctx.Done():
+				return
+			case msg := <-s.inbound:
+				if msg != nil {
+					s.inbox(msg)
+				}
+			}
 		}
 	}()
 
@@ -123,11 +141,24 @@ func (s *Node) run() {
 		for {
 			conn, err := s.ln.Accept()
 			if err != nil {
+				select {
+				case <-s.ctx.Done():
+					return
+				default:
+				}
+				if errors.Is(err, net.ErrClosed) {
+					return
+				}
 				continue
 			}
 
 			client := s.newClient(conn)
-			s.register <- client
+			select {
+			case s.register <- client:
+			case <-s.ctx.Done():
+				_ = conn.Close()
+				return
+			}
 		}
 	}()
 }
@@ -158,6 +189,23 @@ func (s *Node) disconnect(client *Client) {
 }
 
 /**
+* closeAllClients
+**/
+func (s *Node) closeAllClients() {
+	s.muClients.Lock()
+	clients := make([]*Client, 0, len(s.clients))
+	for _, c := range s.clients {
+		clients = append(clients, c)
+	}
+	s.clients = make(map[string]*Client)
+	s.muClients.Unlock()
+
+	for _, c := range clients {
+		c.Close()
+	}
+}
+
+/**
 * inbox
 * @param msg *Message
 **/
@@ -169,7 +217,11 @@ func (s *Node) inbox(msg *Msg) {
 	logs.Logf(packageName, mg.MSG_TCP_INBOX, msg.ID())
 
 	if ok {
-		ch <- msg.Msg
+		select {
+		case ch <- msg.Msg:
+		default:
+			// Evita bloqueo si nadie espera
+		}
 		return
 	}
 
@@ -325,7 +377,10 @@ func (s *Node) handleClient(c *Client) {
 			if err != io.EOF {
 				logs.Logf(packageName, mg.MSG_TCP_ERROR_READ, err)
 			}
-			s.unregister <- c
+			select {
+			case s.unregister <- c:
+			case <-s.ctx.Done():
+			}
 			return
 		}
 
@@ -341,7 +396,10 @@ func (s *Node) handleClient(c *Client) {
 		data := make([]byte, length)
 		_, err = io.ReadFull(reader, data)
 		if err != nil {
-			s.unregister <- c
+			select {
+			case s.unregister <- c:
+			case <-s.ctx.Done():
+			}
 			return
 		}
 
@@ -351,9 +409,13 @@ func (s *Node) handleClient(c *Client) {
 			continue
 		}
 
-		s.inbound <- &Msg{
+		select {
+		case s.inbound <- &Msg{
 			To:  c,
 			Msg: m,
+		}:
+		case <-s.ctx.Done():
+			return
 		}
 	}
 }
@@ -399,16 +461,8 @@ func (s *Node) Start() (err error) {
 	return nil
 }
 
-/**
-* Close
-**/
-func (s *Node) Close() {
-	close(s.inbound)
-	close(s.register)
-	close(s.unregister)
-	if s.ln != nil {
-		s.ln.Close()
-	}
+func (n *Node) Shutdown() {
+	n.cancel() // Cancela todo el árbol
 }
 
 /**

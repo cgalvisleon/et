@@ -66,6 +66,7 @@ type Node struct {
 	muPeers        sync.Mutex               `json:"-"`
 	method         map[string]Service       `json:"-"`
 	raft           *Raft                    `json:"-"`
+	closed         atomic.Bool              `json:"-"`
 	onConnect      []func(*Client)          `json:"-"`
 	onDisconnect   []func(*Client)          `json:"-"`
 	onError        []func(*Client, error)   `json:"-"`
@@ -116,26 +117,37 @@ func NewNode(port int) *Node {
 * run
 **/
 func (s *Node) run() {
+	// ===============================
+	// Loop principal (register/unregister)
+	// ===============================
 	go func() {
 		for {
 			select {
 			case <-s.ctx.Done():
-				logs.Logf(packageName, mg.MSG_TCP_SHUTTING_DOWN)
-				s.Close()
 				return
+
 			case client := <-s.register:
-				s.connect(client)
+				if client != nil {
+					s.connect(client)
+				}
+
 			case client := <-s.unregister:
-				s.disconnect(client)
+				if client != nil {
+					s.disconnect(client)
+				}
 			}
 		}
 	}()
 
+	// ===============================
+	// Loop de inbound messages
+	// ===============================
 	go func() {
 		for {
 			select {
 			case <-s.ctx.Done():
 				return
+
 			case msg := <-s.inbound:
 				if msg != nil {
 					s.inbox(msg)
@@ -144,27 +156,47 @@ func (s *Node) run() {
 		}
 	}()
 
+	// ===============================
+	// Accept loop
+	// ===============================
 	go func() {
 		for {
 			conn, err := s.ln.Accept()
 			if err != nil {
-				select {
-				case <-s.ctx.Done():
+
+				// Si estamos cerrando, salir limpio
+				if s.ctx.Err() != nil || s.closed.Load() {
 					return
-				default:
 				}
+
+				// Listener cerrado
 				if errors.Is(err, net.ErrClosed) {
 					return
 				}
+
+				// Error transitorio → continuar
 				continue
 			}
 
+			// Si el nodo ya está cerrado
+			if s.closed.Load() {
+				_ = conn.Close()
+				return
+			}
+
 			client := s.newClient(conn)
+
 			select {
 			case s.register <- client:
+				// OK
+
 			case <-s.ctx.Done():
 				_ = conn.Close()
 				return
+
+			default:
+				// Si el canal está lleno evitamos bloquear
+				_ = conn.Close()
 			}
 		}
 	}()
@@ -344,12 +376,11 @@ func (s *Node) send(msg *Msg) error {
 	c, ok := s.clients[msg.To.Addr]
 	s.muClients.Unlock()
 
-	if !ok {
+	if !ok || c == nil {
 		return fmt.Errorf(mg.MSG_TCP_CLIENT_NOT_FOUND, msg.To.Addr)
 	}
 
-	err := c.send(msg.Msg)
-	if err != nil {
+	if err := c.send(msg.Msg); err != nil {
 		return s.Error(c, err)
 	}
 
@@ -391,35 +422,34 @@ func (s *Node) request(to *Client, m *Message) (*Message, error) {
 		return nil, fmt.Errorf(mg.MSG_TCP_CLIENT_NOT_FOUND, to.Addr)
 	}
 
-	// Channel for response
 	ch := make(chan *Message, 1)
+
 	s.muRequests.Lock()
 	s.requests[m.ID] = ch
 	s.muRequests.Unlock()
 
-	// Send
 	err := s.send(&Msg{
 		To:  to,
 		Msg: m,
 	})
 	if err != nil {
+		s.muRequests.Lock()
+		delete(s.requests, m.ID) // 🔥 cleanup correcto
+		s.muRequests.Unlock()
 		return nil, err
 	}
 
-	// Wait response or timeout
 	select {
 	case resp := <-ch:
 		s.muRequests.Lock()
 		delete(s.requests, m.ID)
 		s.muRequests.Unlock()
-		logs.Debugf("response: %s type:%d", resp.ID, resp.Type)
 		return resp, nil
 
 	case <-time.After(s.timeout):
 		s.muRequests.Lock()
 		delete(s.requests, m.ID)
 		s.muRequests.Unlock()
-		logs.Debugf("response timeout: %s", m.ID)
 		return nil, fmt.Errorf(mg.MSG_TCP_TIMEOUT)
 	}
 }
@@ -554,12 +584,19 @@ func (s *Node) Start() (err error) {
 * Close
 **/
 func (s *Node) Close() {
-	s.ln.Close()
-	close(s.register)
-	close(s.unregister)
-	close(s.inbound)
-	s.closeAllClients()
+	if !s.closed.CompareAndSwap(false, true) {
+		return
+	}
+
+	logs.Logf(packageName, mg.MSG_TCP_SHUTTING_DOWN)
+
 	s.cancel()
+
+	if s.ln != nil {
+		_ = s.ln.Close()
+	}
+
+	s.closeAllClients()
 }
 
 /**
@@ -648,9 +685,12 @@ func (s *Node) Broadcast(destination []string, tp int, message any) {
 		client, ok := s.clients[addr]
 		s.muClients.Unlock()
 
-		status := client.Status
-		if ok && status == Connected {
-			s.Send(client, tp, message)
+		if !ok || client == nil {
+			continue
+		}
+
+		if client.Status == Connected {
+			_ = s.Send(client, tp, message)
 		}
 	}
 }

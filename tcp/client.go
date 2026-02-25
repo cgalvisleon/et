@@ -15,7 +15,6 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
-	mg "github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
@@ -49,9 +48,9 @@ type Client struct {
 	onError      []func(*Client, error)    `json:"-"`
 	onOutbound   []func(*Client, []byte)   `json:"-"`
 	onInbound    []func(*Client, *Message) `json:"-"`
-	isDebug      bool                      `json:"-"`
 	isNode       bool                      `json:"-"`
 	alive        atomic.Bool               `json:"-"`
+	closed       atomic.Bool               `json:"-"`
 }
 
 /**
@@ -60,7 +59,6 @@ type Client struct {
 * @return *Client, error
 **/
 func NewClient(addr string) *Client {
-	isDebug := envar.GetBool("IS_DEBUG", false)
 	timeout, err := time.ParseDuration(envar.GetStr("TIMEOUT", "10s"))
 	if err != nil {
 		timeout = 10 * time.Second
@@ -74,7 +72,7 @@ func NewClient(addr string) *Client {
 		ID:           reg.ULID(),
 		Addr:         addr,
 		Status:       Pending,
-		inbound:      make(chan []byte),
+		inbound:      make(chan []byte, 128),
 		messages:     make(map[string]chan *Message),
 		timeout:      timeout,
 		mu:           sync.Mutex{},
@@ -84,7 +82,6 @@ func NewClient(addr string) *Client {
 		onError:      make([]func(*Client, error), 0),
 		onOutbound:   make([]func(*Client, []byte), 0),
 		onInbound:    make([]func(*Client, *Message), 0),
-		isDebug:      isDebug,
 	}
 	return result
 }
@@ -148,28 +145,30 @@ func (s *Client) connect() error {
 * disconnect
 **/
 func (s *Client) disconnect() {
-	s.mu.Lock()
-	status := s.Status
-	s.mu.Unlock()
-
-	if status == Disconnected {
+	if !s.closed.CompareAndSwap(false, true) {
 		return
 	}
 
 	s.mu.Lock()
+	if s.Status == Disconnected {
+		s.mu.Unlock()
+		return
+	}
 	s.Status = Disconnected
+	conn := s.conn
 	s.mu.Unlock()
+
 	logs.Logf(packageName, msg.MSG_TCP_DISCONNECTED, s.Addr)
 
-	if s.conn != nil {
-		s.conn.Close()
+	if conn != nil {
+		_ = conn.Close()
 	}
+
+	s.cancel()
 
 	for _, fn := range s.onDisconnect {
 		fn(s)
 	}
-
-	close(s.inbound)
 }
 
 /**
@@ -179,34 +178,38 @@ func (s *Client) readLoop() {
 	reader := bufio.NewReader(s.conn)
 
 	for {
-		// Leer tamaño (4 bytes)
+		select {
+		case <-s.ctx.Done():
+			return
+		default:
+		}
+
 		lenBuf := make([]byte, 4)
 		_, err := io.ReadFull(reader, lenBuf)
 		if err != nil {
-			if err == io.EOF {
-				s.disconnect()
-			} else {
-				s.error(err)
-			}
+			s.disconnect()
 			return
 		}
 
-		// Leer tamaño payload
 		length := binary.BigEndian.Uint32(lenBuf)
 		limitReader := envar.GetInt("LIMIT_SIZE_MG", 10)
 		if length > uint32(limitReader*1024*1024) {
 			continue
 		}
 
-		// Leer payload completo
 		data := make([]byte, length)
 		_, err = io.ReadFull(reader, data)
 		if err != nil {
-			s.error(err)
+			s.disconnect()
 			return
 		}
 
-		s.inbound <- data
+		select {
+		case s.inbound <- data:
+		case <-s.ctx.Done():
+			return
+		default:
+		}
 	}
 }
 
@@ -217,12 +220,12 @@ func (s *Client) run() {
 	for {
 		select {
 		case <-s.ctx.Done():
-			logs.Logf(packageName, msg.MSG_TCP_DISCONNECTED, s.Addr)
-			s.conn.Close()
 			return
-		default:
-			msg := <-s.inbound
-			s.inbox(msg)
+
+		case bt := <-s.inbound:
+			if bt != nil {
+				s.inbox(bt)
+			}
 		}
 	}
 }
@@ -233,12 +236,24 @@ func (s *Client) run() {
 * @return error
 **/
 func (s *Client) send(msg *Message) error {
+	s.mu.Lock()
+	conn := s.conn
+	s.mu.Unlock()
+
+	if conn == nil {
+		return fmt.Errorf("connection not established")
+	}
+
 	bt, err := msg.serialize()
 	if err != nil {
 		return err
 	}
-	_, err = s.conn.Write(bt)
+
+	conn.SetWriteDeadline(time.Now().Add(s.timeout))
+
+	_, err = conn.Write(bt)
 	if err != nil {
+		s.disconnect()
 		return err
 	}
 
@@ -264,15 +279,16 @@ func (s *Client) inbox(bt []byte) {
 	s.mu.Unlock()
 
 	if ok {
-		ch <- msg
+		select {
+		case ch <- msg:
+		default:
+		}
 		return
 	}
 
 	for _, fn := range s.onInbound {
 		fn(s, msg)
 	}
-
-	logs.Debugf("inbox :%s", msg.ID)
 }
 
 /**
@@ -281,32 +297,31 @@ func (s *Client) inbox(bt []byte) {
 * @return *Message, error
 **/
 func (s *Client) request(m *Message) (*Message, error) {
-	// Channel for response
 	ch := make(chan *Message, 1)
+
 	s.mu.Lock()
 	s.messages[m.ID] = ch
 	s.mu.Unlock()
 
-	// Send
 	err := s.send(m)
 	if err != nil {
+		s.mu.Lock()
+		delete(s.messages, m.ID)
+		s.mu.Unlock()
 		return nil, s.error(err)
 	}
 
-	// Wait response or timeout
 	select {
 	case resp := <-ch:
 		s.mu.Lock()
 		delete(s.messages, m.ID)
 		s.mu.Unlock()
-		logs.Debugf("response: %s type:%d", resp.ID, resp.Type)
 		return resp, nil
 
 	case <-time.After(s.timeout):
 		s.mu.Lock()
 		delete(s.messages, m.ID)
 		s.mu.Unlock()
-		logs.Debugf("response timeout: %s", m.ID)
 		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
 	}
 }
@@ -315,25 +330,19 @@ func (s *Client) request(m *Message) (*Message, error) {
 * Connect
 **/
 func (s *Client) Connect() error {
+	if s.closed.Load() {
+		return fmt.Errorf("client already closed")
+	}
+
 	err := s.connect()
 	if err != nil {
-		return s.error(err)
+		return err
 	}
 
 	go s.readLoop()
 	go s.run()
 
 	logs.Logf(packageName, msg.MSG_TCP_CONNECTED_TO, s.Addr)
-	if s.isDebug {
-		logs.Debugf("connected: %s", s.toJson().ToString())
-
-		res := s.Request(PingMehtod, s.ID, s.Ctx)
-		if res.Error != nil {
-			return s.error(res.Error)
-		}
-
-		logs.Debugf("respuesta: %s", res.Response)
-	}
 
 	return nil
 }
@@ -357,7 +366,6 @@ func (s *Client) Start() error {
 **/
 func (s *Client) Close() error {
 	s.disconnect()
-	s.cancel()
 	return nil
 }
 
@@ -375,10 +383,6 @@ func (s *Client) Send(msg *Message) error {
 
 	if msg.Type == CloseMessage {
 		s.disconnect()
-	}
-
-	if s.isDebug {
-		logs.Debugf(mg.MSG_SEND_TO, msg.ToJson().ToString(), s.RemoteAddr)
 	}
 
 	return nil

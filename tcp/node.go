@@ -205,6 +205,33 @@ func (s *Node) run() {
 }
 
 /**
+* connectToPeersLoop
+**/
+func (n *Node) connectToPeersLoop() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-n.ctx.Done():
+			return
+		case <-ticker.C:
+		}
+
+		n.muPeers.Lock()
+		peers := make([]*Client, len(n.peers))
+		copy(peers, n.peers)
+		n.muPeers.Unlock()
+
+		for _, peer := range peers {
+			if peer.Status != Connected && peer.Addr != n.addr {
+				_ = peer.Connect()
+			}
+		}
+	}
+}
+
+/**
 * Error
 * @param c *Client, err error
 * @return error
@@ -554,10 +581,10 @@ func (s *Node) newClient(conn net.Conn) *Client {
 }
 
 /**
-* next
+* Next
 * @return *Client
 **/
-func (s *Node) next() *Client {
+func (s *Node) Next() *Client {
 	n := uint64(len(s.peers))
 	for i := uint64(0); i < n; i++ {
 		idx := (s.index.Add(1)) % n
@@ -587,11 +614,9 @@ func (s *Node) Start() (err error) {
 	}
 
 	s.run()
-	// if s.port != 1377 {
-	// 	go test(s)
-	// }
-
+	go s.connectToPeersLoop()
 	go s.electionLoop()
+	// go s.raft.start()
 
 	logs.Logf(packageName, mg.MSG_TCP_LISTENING, s.addr)
 

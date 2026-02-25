@@ -98,6 +98,11 @@ func newRaft(node *Node) *Raft {
 	}
 }
 
+func (s *Raft) start() {
+	s.waitForMajority()
+	go s.raftLoop()
+}
+
 /**
 * getPeers
 * @return []*Client
@@ -128,16 +133,6 @@ func (s *Raft) LeaderID() (leader string, imLeader bool) {
 * electionLoop
 **/
 func (s *Raft) electionLoop() {
-	if len(s.getPeers()) == 0 {
-		s.becomeLeader()
-		return
-	}
-
-	s.mu.Lock()
-	s.state = Follower
-	s.lastHeartbeat = timezone.Now()
-	s.mu.Unlock()
-
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -147,20 +142,120 @@ func (s *Raft) electionLoop() {
 
 		timeout := randomBetween(1500, 3000)
 
+		s.mu.Lock()
+		last := s.lastHeartbeat
+		s.mu.Unlock()
+
+		timer := time.NewTimer(timeout)
+
 		select {
-		case <-time.After(timeout):
+		case <-timer.C:
+		case <-s.ctx.Done():
+			timer.Stop()
+			return
+		}
+
+		s.mu.Lock()
+		elapsed := time.Since(last)
+		currentState := s.state
+		s.mu.Unlock()
+
+		// Solo si seguimos siendo follower o candidate
+		if elapsed >= timeout && currentState != Leader {
+			s.startElection()
+		}
+	}
+}
+
+/**
+* raftLoop
+**/
+func (s *Raft) raftLoop() {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
 		case <-s.ctx.Done():
 			return
 		}
 
 		s.mu.Lock()
-		elapsed := time.Since(s.lastHeartbeat)
 		state := s.state
+		last := s.lastHeartbeat
 		s.mu.Unlock()
 
-		if elapsed > heartbeatInterval && state != Leader {
-			s.startElection()
+		switch state {
+
+		case Leader:
+			s.sendHeartbeats()
+
+		case Follower, Candidate:
+			timeout := randomBetween(1500, 3000)
+			if time.Since(last) >= timeout {
+				s.startElection()
+			}
 		}
+	}
+}
+
+/**
+* sendHeartbeats
+**/
+func (s *Raft) sendHeartbeats() {
+	s.mu.Lock()
+	term := s.term
+	s.mu.Unlock()
+
+	peers := s.getPeers()
+
+	for _, peer := range peers {
+		go func(peer *Client) {
+			args := HeartbeatArgs{
+				Term:     term,
+				LeaderID: s.addr,
+			}
+
+			var reply HeartbeatReply
+			res := heartbeat(peer, &args, &reply)
+			if !res.Ok {
+				return
+			}
+
+			s.mu.Lock()
+			defer s.mu.Unlock()
+
+			if reply.Term > s.term {
+				s.term = reply.Term
+				s.state = Follower
+				s.votedFor = ""
+			}
+
+		}(peer)
+	}
+}
+
+/**
+* waitForMajority
+**/
+func (s *Raft) waitForMajority() {
+	for {
+		peers := s.getPeers()
+
+		connected := 1 // yo mismo
+
+		for _, p := range peers {
+			if p.Status == Connected {
+				connected++
+			}
+		}
+
+		if connected >= majority(len(peers)+1) {
+			return
+		}
+
+		time.Sleep(300 * time.Millisecond)
 	}
 }
 
@@ -217,11 +312,11 @@ func (s *Raft) startElection() {
 
 			if s.state == Candidate && term == s.term && reply.VoteGranted {
 				newVotes := votes.Add(1)
-				if int(newVotes) >= needed {
+
+				if int(newVotes) >= needed && s.state == Candidate {
 					s.becomeLeader()
 				}
 			}
-
 		}(peer)
 	}
 }
@@ -230,11 +325,9 @@ func (s *Raft) startElection() {
 * becomeLeader
 **/
 func (s *Raft) becomeLeader() {
-	s.mu.Lock()
 	s.state = Leader
 	s.leaderID = s.addr
 	s.lastHeartbeat = timezone.Now()
-	s.mu.Unlock()
 
 	logs.Logf(packageName, color.Purple("I am leader %s"), s.addr)
 
@@ -262,7 +355,7 @@ func (s *Raft) heartbeatLoop() {
 		s.mu.Lock()
 		if s.state != Leader {
 			s.mu.Unlock()
-			return
+			continue
 		}
 		term := s.term
 		s.mu.Unlock()

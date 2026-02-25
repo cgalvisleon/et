@@ -8,6 +8,8 @@ import (
 	"io"
 	"net"
 	"os"
+	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -56,6 +58,7 @@ type Node struct {
 	requests   map[string]chan *Message `json:"-"`
 	muRequests sync.Mutex               `json:"-"`
 	proxy      *Balancer                `json:"-"`
+	method     map[string]Service       `json:"-"`
 }
 
 /**
@@ -81,6 +84,7 @@ func NewNode(port int) *Node {
 		inbound:    make(chan *Msg),
 		requests:   make(map[string]chan *Message),
 		muRequests: sync.Mutex{},
+		method:     make(map[string]Service),
 	}
 	result.mode.Store(Follower)
 
@@ -448,4 +452,33 @@ func (s *Node) Broadcast(destination []string, tp int, message any) {
 			s.Send(client, tp, message)
 		}
 	}
+}
+
+/**
+* Mount
+* @param services any
+**/
+func (s *Node) Mount(service Service) error {
+	if service == nil {
+		return errors.New(mg.MSG_SERVICE_REQUIRED)
+	}
+
+	tipoStruct := reflect.TypeOf(service)
+	pkgName := tipoStruct.String()
+	list := strings.Split(pkgName, ".")
+	pkgName = list[len(list)-1]
+	s.method[pkgName] = service
+	return nil
+}
+
+/**
+* GetMethod
+* @return map[string]map[string]*Mtd
+**/
+func (s *Node) GetMethod() et.Json {
+	result := et.Json{}
+	for pkg, mt := range s.method {
+		result[pkg] = mt
+	}
+	return result
 }

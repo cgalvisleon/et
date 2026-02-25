@@ -522,6 +522,13 @@ func (s *Node) newClient(conn net.Conn) *Client {
 }
 
 /**
+* electionLoop
+**/
+func (s *Node) electionLoop() {
+	s.raft.electionLoop()
+}
+
+/**
 * Start
 * @return error
 **/
@@ -535,6 +542,8 @@ func (s *Node) Start() (err error) {
 	if s.port != 1377 {
 		go test(s)
 	}
+
+	go s.electionLoop()
 
 	logs.Logf(packageName, mg.MSG_TCP_LISTENING, s.addr)
 

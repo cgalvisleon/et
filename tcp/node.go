@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cgalvisleon/et/color"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
@@ -173,6 +174,38 @@ func (s *Node) inbox(msg *Msg) {
 	}
 
 	switch msg.Msg.Type {
+	case Method:
+		list := strings.Split(msg.Msg.Method, ".")
+		if len(list) < 2 {
+			s.ResponseError(msg, errors.New(mg.MSG_METHOD_NOT_FOUND))
+			return
+		}
+
+		serviceName := list[0]
+		methodName := list[1]
+		service, ok := s.method[serviceName]
+		if !ok {
+			s.ResponseError(msg, errors.New(mg.MSG_METHOD_NOT_FOUND))
+			return
+		}
+
+		res := service.Execute(methodName, msg.Msg)
+		if res.Error != nil {
+			logs.Debug(color.Red(res.Error.Error()))
+			s.ResponseError(msg, res.Error)
+			return
+		}
+
+		rsp, err := NewMessage(Method, res)
+		if err != nil {
+			logs.Error(err)
+			return
+		}
+
+		err = s.response(msg.To, msg.ID(), rsp)
+		if err != nil {
+			logs.Error(err)
+		}
 	}
 }
 
@@ -434,11 +467,11 @@ func (s *Node) Request(to *Client, method string, args ...any) *Response {
 * @param to *Client, id string, err error
 * @return error
 **/
-func (s *Node) ResponseError(to *Client, id string, err error) error {
-	msg, _ := NewMessage(ErrorMessage, "")
-	msg.Error = err.Error()
+func (s *Node) ResponseError(msg *Msg, err error) error {
+	res, _ := NewMessage(ErrorMessage, "")
+	res.Error = err.Error()
 
-	return s.response(to, id, msg)
+	return s.response(msg.To, msg.ID(), res)
 }
 
 /**

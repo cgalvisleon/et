@@ -24,38 +24,6 @@ import (
 	"github.com/cgalvisleon/et/timezone"
 )
 
-type Mode int
-
-const (
-	packageName      = "tcp"
-	Follower    Mode = iota
-	Candidate
-	Leader
-	Proxy
-)
-
-type Msg struct {
-	To  *Client  `json:"to"`
-	Msg *Message `json:"msg"`
-}
-
-/**
-* ID
-* @return string
-**/
-func (s *Msg) ID() string {
-	return s.Msg.ID
-}
-
-/**
-* Get
-* @param dest any
-* @return error
-**/
-func (s *Msg) Get(dest any) error {
-	return s.Msg.Get(dest)
-}
-
 type Server struct {
 	addr           string                    `json:"-"`
 	port           int                       `json:"-"`
@@ -211,9 +179,7 @@ func (s *Server) inbox(msg *Msg) {
 	s.muMessages.Unlock()
 
 	if ok {
-		if ch != nil {
-			ch <- msg.Msg
-		}
+		ch <- msg.Msg
 		return
 	}
 

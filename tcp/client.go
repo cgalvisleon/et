@@ -81,17 +81,6 @@ func NewClient(addr string) *Client {
 }
 
 /**
-* NewNode
-* @param addr string
-* @return *Client
-**/
-func NewNode(addr string) *Client {
-	result := NewClient(addr)
-	result.isNode = true
-	return result
-}
-
-/**
 * ToJson
 * @return et.Json
 **/
@@ -175,18 +164,6 @@ func (s *Client) disconnect() {
 }
 
 /**
-* run
-**/
-func (s *Client) run() {
-	for {
-		select {
-		case msg := <-s.inbound:
-			s.inbox(msg)
-		}
-	}
-}
-
-/**
 * readLoop
 **/
 func (s *Client) readLoop() {
@@ -225,7 +202,21 @@ func (s *Client) readLoop() {
 }
 
 /**
-* writeLoop
+* run
+**/
+func (s *Client) run() {
+	for {
+		select {
+		case msg := <-s.inbound:
+			s.inbox(msg)
+		}
+	}
+}
+
+/**
+* send
+* @param bt []byte
+* @return error
 **/
 func (s *Client) send(bt []byte) error {
 	_, err := s.conn.Write(bt)

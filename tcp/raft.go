@@ -101,7 +101,8 @@ func (s *Raft) addNode(addr string) {
 		return
 	}
 
-	node := NewNode(addr)
+	node := NewClient(addr)
+	node.isNode = true
 	s.mu.Lock()
 	s.peers = append(s.peers, node)
 	s.mu.Unlock()

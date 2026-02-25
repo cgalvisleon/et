@@ -23,6 +23,36 @@ const (
 	Method       int = 23
 )
 
+type Msg struct {
+	To  *Client  `json:"to"`
+	Msg *Message `json:"msg"`
+}
+
+/**
+* ID
+* @return string
+**/
+func (s *Msg) ID() string {
+	return s.Msg.ID
+}
+
+/**
+* TO
+* @return string
+**/
+func (s *Msg) TO() string {
+	return s.To.Addr
+}
+
+/**
+* Get
+* @param dest any
+* @return error
+**/
+func (s *Msg) Get(dest any) error {
+	return s.Msg.Get(dest)
+}
+
 type Response struct {
 	Response []any `json:"response"`
 	Error    error `json:"error"`

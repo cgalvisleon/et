@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cgalvisleon/et/envar"
@@ -50,6 +51,7 @@ type Client struct {
 	onInbound    []func(*Client, *Message) `json:"-"`
 	isDebug      bool                      `json:"-"`
 	isNode       bool                      `json:"-"`
+	alive        atomic.Bool               `json:"-"`
 }
 
 /**

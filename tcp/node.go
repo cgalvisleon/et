@@ -47,29 +47,32 @@ func init() {
 }
 
 type Node struct {
-	ctx          context.Context          `json:"-"`
-	cancel       context.CancelFunc       `json:"-"`
-	addr         string                   `json:"-"`
-	port         int                      `json:"-"`
-	mode         atomic.Value             `json:"-"`
-	timeout      time.Duration            `json:"-"`
-	ln           net.Listener             `json:"-"`
-	register     chan *Client             `json:"-"`
-	unregister   chan *Client             `json:"-"`
-	clients      map[string]*Client       `json:"-"`
-	muClients    sync.Mutex               `json:"-"`
-	inbound      chan *Msg                `json:"-"`
-	requests     map[string]chan *Message `json:"-"`
-	muRequests   sync.Mutex               `json:"-"`
-	proxy        *Balancer                `json:"-"`
-	peers        []*Client                `json:"-"`
-	muPeers      sync.Mutex               `json:"-"`
-	method       map[string]Service       `json:"-"`
-	onConnect    []func(*Client)          `json:"-"`
-	onDisconnect []func(*Client)          `json:"-"`
-	onError      []func(*Client, error)   `json:"-"`
-	onInbox      []func(*Msg)             `json:"-"`
-	onSend       []func(*Msg)             `json:"-"`
+	ctx            context.Context          `json:"-"`
+	cancel         context.CancelFunc       `json:"-"`
+	addr           string                   `json:"-"`
+	port           int                      `json:"-"`
+	mode           atomic.Value             `json:"-"`
+	timeout        time.Duration            `json:"-"`
+	ln             net.Listener             `json:"-"`
+	register       chan *Client             `json:"-"`
+	unregister     chan *Client             `json:"-"`
+	clients        map[string]*Client       `json:"-"`
+	muClients      sync.Mutex               `json:"-"`
+	inbound        chan *Msg                `json:"-"`
+	requests       map[string]chan *Message `json:"-"`
+	muRequests     sync.Mutex               `json:"-"`
+	proxy          *Balancer                `json:"-"`
+	peers          []*Client                `json:"-"`
+	muPeers        sync.Mutex               `json:"-"`
+	method         map[string]Service       `json:"-"`
+	raft           *Raft                    `json:"-"`
+	onConnect      []func(*Client)          `json:"-"`
+	onDisconnect   []func(*Client)          `json:"-"`
+	onError        []func(*Client, error)   `json:"-"`
+	onInbox        []func(*Msg)             `json:"-"`
+	onSend         []func(*Msg)             `json:"-"`
+	onBecomeLeader []func(*Node)            `json:"-"`
+	onChangeLeader []func(*Node)            `json:"-"`
 }
 
 /**
@@ -104,6 +107,7 @@ func NewNode(port int) *Node {
 	}
 	result.mode.Store(Follower)
 	result.Mount(newTcpService(result))
+	result.raft = newRaft(result)
 
 	return result
 }
@@ -250,6 +254,48 @@ func (s *Node) inbox(msg *Msg) {
 	}
 
 	switch msg.Msg.Type {
+	case RequestVote:
+		var args RequestVoteArgs
+		err := msg.Get(&args)
+		if err != nil {
+			s.ResponseError(msg, err)
+			return
+		}
+
+		var res RequestVoteReply
+		s.raft.requestVote(&args, &res)
+
+		rsp, err := NewMessage(RequestVote, res)
+		if err != nil {
+			s.ResponseError(msg, err)
+			return
+		}
+
+		err = s.response(msg.To, msg.ID(), rsp)
+		if err != nil {
+			s.ResponseError(msg, err)
+		}
+	case Heartbeat:
+		var args HeartbeatArgs
+		err := msg.Get(&args)
+		if err != nil {
+			s.ResponseError(msg, err)
+			return
+		}
+
+		var res HeartbeatReply
+		s.raft.heartbeat(&args, &res)
+
+		rsp, err := NewMessage(Heartbeat, res)
+		if err != nil {
+			s.ResponseError(msg, err)
+			return
+		}
+
+		err = s.response(msg.To, msg.ID(), rsp)
+		if err != nil {
+			s.ResponseError(msg, err)
+		}
 	default:
 		list := strings.Split(msg.Msg.Method, ".")
 		if len(list) < 2 {
@@ -461,7 +507,8 @@ func (s *Node) newClient(conn net.Conn) *Client {
 	if err != nil {
 		timeout = 10 * time.Second
 	}
-	return &Client{
+
+	result := &Client{
 		CreatedAt: timezone.Now(),
 		ID:        reg.ULID(),
 		Addr:      conn.RemoteAddr().String(),
@@ -470,6 +517,8 @@ func (s *Node) newClient(conn net.Conn) *Client {
 		conn:      conn,
 		timeout:   timeout,
 	}
+	result.alive.Store(true)
+	return result
 }
 
 /**
@@ -650,4 +699,75 @@ func (s *Node) RemoveNode(addr string) {
 	if idx != -1 {
 		s.peers = append(s.peers[:idx], s.peers[idx+1:]...)
 	}
+}
+
+/**
+* GetPeer
+* @return *Client
+**/
+func (s *Node) GetPeer(addr string) *Client {
+	s.muPeers.Lock()
+	defer s.muPeers.Unlock()
+
+	idx := slices.IndexFunc(s.peers, func(e *Client) bool { return e.Addr == addr })
+	if idx != -1 {
+		return s.peers[idx]
+	}
+	return nil
+}
+
+/**
+* OnConnect
+* @param fn func(*Client)
+**/
+func (s *Node) OnConnect(fn func(*Client)) {
+	s.onConnect = append(s.onConnect, fn)
+}
+
+/**
+* OnDisconnect
+* @param fn func(*Client)
+**/
+func (s *Node) OnDisconnect(fn func(*Client)) {
+	s.onDisconnect = append(s.onDisconnect, fn)
+}
+
+/**
+* OnError
+* @param fn func(*Client, error)
+**/
+func (s *Node) OnError(fn func(*Client, error)) {
+	s.onError = append(s.onError, fn)
+}
+
+/**
+* OnInbox
+* @param fn func(*Msg)
+**/
+func (s *Node) OnInbox(fn func(*Msg)) {
+	s.onInbox = append(s.onInbox, fn)
+}
+
+/**
+* OnSend
+* @param fn func(*Msg)
+**/
+func (s *Node) OnSend(fn func(*Msg)) {
+	s.onSend = append(s.onSend, fn)
+}
+
+/**
+* OnBecomeLeader
+* @param fn func(*Node)
+**/
+func (s *Node) OnBecomeLeader(fn func(*Node)) {
+	s.onBecomeLeader = append(s.onBecomeLeader, fn)
+}
+
+/**
+* OnChangeLeader
+* @param fn func(*Node)
+**/
+func (s *Node) OnChangeLeader(fn func(*Node)) {
+	s.onChangeLeader = append(s.onChangeLeader, fn)
 }

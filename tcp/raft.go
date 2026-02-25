@@ -2,8 +2,8 @@ package tcp
 
 import (
 	"math/rand"
-	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cgalvisleon/et/color"
@@ -69,18 +69,16 @@ type HeartbeatReply struct {
 }
 
 type Raft struct {
-	server        *Server                `json:"-"`
+	node          *Node                  `json:"-"`
 	addr          string                 `json:"-"`
 	registry      map[string]HandlerFunc `json:"-"`
-	peers         []*Client              `json:"-"`
 	state         Mode                   `json:"-"`
 	term          int                    `json:"-"`
 	votedFor      string                 `json:"-"`
 	leaderID      string                 `json:"-"`
 	lastHeartbeat time.Time              `json:"-"`
-	turn          int                    `json:"-"`
+	index         atomic.Uint64          `json:"-"`
 	mu            sync.Mutex             `json:"-"`
-	muTurn        sync.Mutex             `json:"-"`
 }
 
 /**
@@ -90,36 +88,6 @@ type Raft struct {
 func (s *Raft) build() map[string]HandlerFunc {
 	s.registry = map[string]HandlerFunc{}
 	return s.registry
-}
-
-/**
-* addNode
-* @param addr string
-**/
-func (s *Raft) addNode(addr string) {
-	if s.addr == addr {
-		return
-	}
-
-	node := NewClient(addr)
-	node.isNode = true
-	s.mu.Lock()
-	s.peers = append(s.peers, node)
-	s.mu.Unlock()
-}
-
-/**
-* removeNode
-* @param addr string
-**/
-func (s *Raft) removeNode(addr string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	idx := slices.IndexFunc(s.peers, func(e *Client) bool { return e.Addr == addr })
-	if idx != -1 {
-		s.peers = append(s.peers[:idx], s.peers[idx+1:]...)
-	}
 }
 
 /**
@@ -136,45 +104,26 @@ func (s *Raft) LeaderID() (leader string, imLeader bool) {
 }
 
 /**
-* getLeader
-* @return *Client, bool
-**/
-func (s *Raft) getLeader() (*Client, bool) {
-	leader, imLeader := s.LeaderID()
-	if imLeader {
-		return nil, true
-	}
-
-	idx := slices.IndexFunc(s.peers, func(e *Client) bool { return e.Addr == leader })
-	if idx == -1 {
-		return nil, false
-	}
-
-	s.mu.Lock()
-	result := s.peers[idx]
-	s.mu.Unlock()
-
-	return result, false
-}
-
-/**
-* nextTurn
+* next
 * @return *Client
 **/
-func (s *Raft) nextTurn() *Client {
-	s.muTurn.Lock()
-	result := s.peers[s.turn]
-	s.turn++
-	s.muTurn.Unlock()
-
-	return result
+func (s *Raft) next() *Client {
+	n := uint64(len(s.node.peers))
+	for i := uint64(0); i < n; i++ {
+		idx := (s.index.Add(1)) % n
+		node := s.node.peers[idx]
+		if node.alive.Load() {
+			return node
+		}
+	}
+	return nil
 }
 
 /**
 * electionLoop
 **/
 func (s *Raft) electionLoop() {
-	if len(s.peers) == 0 {
+	if len(s.node.peers) == 0 {
 		s.becomeLeader()
 		return
 	}
@@ -211,13 +160,13 @@ func (s *Raft) startElection() {
 	s.mu.Unlock()
 
 	votes := 1
-	total := len(s.peers)
+	total := len(s.node.peers)
 
 	defer func() {
 		logs.Debugf("startElection:%d state:%v votos:%d de %d", term, s.state, votes, total)
 	}()
 
-	for _, peer := range s.peers {
+	for _, peer := range s.node.peers {
 		if peer.Status != Connected {
 			err := peer.Connect()
 			if err != nil {
@@ -262,19 +211,19 @@ func (s *Raft) startElection() {
 * becomeLeader
 **/
 func (s *Raft) becomeLeader() {
-	// s.mu.Lock()
-	// s.state = Leader
-	// s.leaderID = s.addr
-	// s.lastHeartbeat = timezone.Now()
-	// s.mu.Unlock()
+	s.mu.Lock()
+	s.state = Leader
+	s.leaderID = s.addr
+	s.lastHeartbeat = timezone.Now()
+	s.mu.Unlock()
 
 	logs.Logf(packageName, color.Purple("I am leader %s"), s.addr)
 
-	// go s.heartbeatLoop()
+	go s.heartbeatLoop()
 
-	// for _, fn := range s.server.onBecomeLeader {
-	// 	fn(s.server)
-	// }
+	for _, fn := range s.node.onBecomeLeader {
+		fn(s.node)
+	}
 }
 
 /**
@@ -293,7 +242,7 @@ func (s *Raft) heartbeatLoop() {
 			return
 		}
 
-		for _, peer := range s.peers {
+		for _, peer := range s.node.peers {
 			if peer.Addr == s.addr {
 				continue
 			}
@@ -384,8 +333,8 @@ func (s *Raft) heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) {
 	reply.Ok = true
 
 	if oldLeader != args.LeaderID {
-		for _, fn := range s.server.onChangeLeader {
-			fn(s.server)
+		for _, fn := range s.node.onChangeLeader {
+			fn(s.node)
 		}
 	}
 }
@@ -464,22 +413,19 @@ func heartbeat(to *Client, require *HeartbeatArgs, response *HeartbeatReply) *Re
 
 /**
 * newRaft
-* @param srv *Server
+* @param node *Node
 * @return *Raft
 **/
-func newRaft(srv *Server) *Raft {
+func newRaft(node *Node) *Raft {
 	this := &Raft{
-		server:        srv,
-		addr:          srv.addr,
-		peers:         make([]*Client, 0),
+		node:          node,
+		addr:          node.addr,
 		state:         Follower,
 		term:          0,
 		votedFor:      "",
 		leaderID:      "",
 		lastHeartbeat: time.Now(),
-		turn:          0,
 		mu:            sync.Mutex{},
-		muTurn:        sync.Mutex{},
 	}
 	this.build()
 	return this

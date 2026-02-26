@@ -1,5 +1,0 @@
-package where
-
-func main() {
-
-}

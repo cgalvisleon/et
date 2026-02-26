@@ -56,6 +56,7 @@ var (
 	MSG_SEND_TO                        = "send: %s to:%s"
 	MSG_RESPONSE_TO                    = "response: %s to:%s"
 	MSG_FIELD_NOT_FOUND                = "field not found"
+	MSG_DATA_NOT_FOUND                 = "data not found"
 	MSG_TRANSACTION_NOT_FOUND          = "transaction not found"
 	MSG_MODEL_NOT_FOUND                = "model not found"
 )
@@ -117,6 +118,7 @@ func init() {
 		MSG_SEND_TO = "enviado: %s a:%s"
 		MSG_RESPONSE_TO = "respuesta: %s a:%s"
 		MSG_FIELD_NOT_FOUND = "field not found"
+		MSG_DATA_NOT_FOUND = "data not found"
 		MSG_TRANSACTION_NOT_FOUND = "transacción no encontrada"
 		MSG_MODEL_NOT_FOUND = "modelo no encontrado"
 	}

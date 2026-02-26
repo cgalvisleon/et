@@ -6,12 +6,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/timezone"
 )
@@ -77,7 +75,6 @@ func (s *Json) ScanRows(rows *sql.Rows) error {
 		case []uint8:
 			return string(v)
 		default:
-			logs.Debugf(`ScanRows: []byte Type:%v Value:%v`, reflect.TypeOf(v), v)
 			return v
 		}
 	}
@@ -440,7 +437,6 @@ func (s Json) ValJson(def Json, atribs ...string) Json {
 		var result Json
 		err := json.Unmarshal([]byte(v), &result)
 		if err != nil {
-			logs.Error(fmt.Errorf("ValJson:%s", err.Error()))
 			return def
 		}
 
@@ -448,14 +444,12 @@ func (s Json) ValJson(def Json, atribs ...string) Json {
 	default:
 		src, err := json.Marshal(v)
 		if err != nil {
-			logs.Error(fmt.Errorf("ValJson:%s", err.Error()))
 			return def
 		}
 
 		var result Json
 		err = json.Unmarshal(src, &result)
 		if err != nil {
-			logs.Error(fmt.Errorf("ValJson:%s", err.Error()))
 			return def
 		}
 
@@ -545,7 +539,6 @@ func (s Json) ValArray(def []interface{}, atribs ...string) []interface{} {
 		src := fmt.Sprintf(`%v`, v)
 		err := json.Unmarshal([]byte(src), &result)
 		if err != nil {
-			logs.Error(fmt.Errorf("ValJson:%s", err.Error()))
 			return def
 		}
 
@@ -775,14 +768,14 @@ func (s Json) ArrayJson(atribs ...string) []Json {
 		case string:
 			bt, err := json.Marshal([]byte(v))
 			if err != nil {
-				logs.Error(fmt.Errorf("ArrayJson: %s", err.Error()))
+				return result
 			}
 
 			if err := json.Unmarshal(bt, &result); err != nil {
-				logs.Error(fmt.Errorf("ArrayJson: %s", err.Error()))
+				return result
 			}
 		default:
-			logs.Error(fmt.Errorf("ArrayJson: value: %v type:%T", v, v))
+			return result
 		}
 	}
 

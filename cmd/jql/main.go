@@ -19,7 +19,7 @@ func main() {
 	}
 	result := sql.From(items).
 		// Where(sql.NotNull("citas")).
-		Where(sql.NotNull("citas->0")).
+		Where(sql.NotNull("citas->1")).
 		// Where(sql.Eq("identity->type", "CC")).
 		// And(sql.Eq("identity->number", "123456")).
 		Order("name", true).

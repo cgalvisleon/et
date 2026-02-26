@@ -23,7 +23,7 @@ func main() {
 		// Where(sql.Eq("identity->type", "CC")).
 		// And(sql.Eq("identity->number", "123456")).
 		Order("name", true).
-		Select("citas").
+		Join("name", "citas", "age").
 		Run(nil)
 
 	logs.Log("JQL:", et.ToString(result))

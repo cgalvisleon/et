@@ -18,13 +18,13 @@ func main() {
 		}},
 	}
 	result := sql.From(items).
-		Where(sql.NotNull("citas")).
-		// Where(sql.Eq("citas->0->code", "CITA-003")).
+		// Where(sql.NotNull("citas")).
+		Where(sql.NotNull("citas->0")).
 		// Where(sql.Eq("identity->type", "CC")).
 		// And(sql.Eq("identity->number", "123456")).
 		Order("name", true).
-		Select().
+		Select("cities").
 		Run(nil)
 
-	logs.Log("JQL:", result.ToString())
+	logs.Log("JQL:", et.ToString(result))
 }

@@ -17,13 +17,20 @@ func main() {
 			{"date": "2022-01-03", "time": "12:00:00", "code": "CITA-003"},
 		}},
 	}
+
+	// result := sql.From(sql.From(items).
+	// 	Where(sql.NotNull("citas->1")).
+	// 	Order("name", true).
+	// 	Join("name", "citas", "age").
+	// 	Run(nil)).
+	// 	// Where(sql.Eq("age", 25)).
+	// 	Run(nil)
+
 	result := sql.From(items).
-		// Where(sql.NotNull("citas")).
-		Where(sql.NotNull("citas->1")).
-		// Where(sql.Eq("identity->type", "CC")).
-		// And(sql.Eq("identity->number", "123456")).
+		Where(sql.Null("citas")).
 		Order("name", true).
-		Join("name", "citas", "age").
+		// Join("citas").
+		Select("name", "age", "identity->type", "identity->number").
 		Run(nil)
 
 	logs.Log("JQL:", et.ToString(result))

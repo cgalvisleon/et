@@ -1,6 +1,7 @@
 package et
 
 import (
+	"bytes"
 	"encoding/json"
 )
 
@@ -38,10 +39,13 @@ func Object(src string) (Json, error) {
 * @return string
 **/
 func ToString(vals interface{}) string {
-	result, err := json.Marshal(vals)
-	if err != nil {
-		return ""
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false) // 🔥 clave
+
+	if err := encoder.Encode(vals); err != nil {
+		panic(err)
 	}
 
-	return string(result)
+	return buf.String()
 }

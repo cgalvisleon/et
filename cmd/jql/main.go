@@ -27,11 +27,18 @@ func main() {
 	// 	Run(nil)
 
 	result := sql.From(items).
-		Where(sql.Null("citas")).
+		Where(sql.NotNull("citas")).
 		Order("name", true).
-		// Join("citas").
-		Select("name", "age", "identity->type", "identity->number").
+		Join("citas", "age", "name").
+		// Select("name", "age", "identity->type", "identity->number").
 		Run(nil)
+
+	// result := sql.JoinToArray(sql.JoinToKeyValue([]et.Json{
+	// 	{"name": "cesasr"},
+	// }, "age", 30), []et.Json{
+	// 	{"date": "2022-01-01", "time": "10:00:00", "code": "CITA-001"},
+	// 	{"date": "2022-01-02", "time": "11:00:00", "code": "CITA-002"},
+	// })
 
 	logs.Log("JQL:", et.ToString(result))
 }

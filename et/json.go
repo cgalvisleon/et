@@ -189,52 +189,37 @@ func (s Json) Clone() Json {
 * @param def interface{}, atribs ...string
 * @return any
 **/
-func (s Json) ValAny(def interface{}, atribs ...string) interface{} {
+func (s Json) ValAny(def interface{}, atribs ...string) (result interface{}) {
+	result = def
 	if len(atribs) == 0 {
-		return def
+		return
 	}
 
-	src := s.Clone()
-	result := def
-	array := []Json{}
-	n := len(atribs) - 1
-	for i, atrib := range atribs {
-		idx, err := strconv.Atoi(atrib)
-		if err == nil && len(array) > idx {
-			result = array[idx]
-			array = []Json{}
-			if i == n {
-				return result
-			} else {
-				continue
-			}
-		}
-
-		val, ok := src[atrib]
-		if !ok {
-			return nil
-		}
-
-		result = val
-		switch v := val.(type) {
+	var src interface{} = s.Clone()
+	var ok bool
+	for _, atrib := range atribs {
+		switch v := src.(type) {
 		case Json:
-			src = v
-		case map[string]interface{}:
-			src = v
-		case []Json:
-			array = v
-		case []map[string]interface{}:
-			for _, item := range v {
-				array = append(array, item)
+			result, ok = v[atrib]
+			if !ok {
+				result = def
+				return
 			}
-		}
-
-		if i == n {
-			return result
+			src = result
+		case map[string]interface{}:
+			result, ok = v[atrib]
+			if !ok {
+				result = def
+				return
+			}
+			src = result
+		default:
+			result = def
+			return
 		}
 	}
 
-	return result
+	return
 }
 
 /**
@@ -853,16 +838,38 @@ func (s Json) IsChanged(from Json) bool {
 
 /**
 * Get
-* @param key string
+* @param keys ...string
 * @return interface{}
 **/
-func (s Json) Get(key string) interface{} {
-	v, ok := s[key]
-	if !ok {
+func (s Json) Get(keys ...string) (result interface{}) {
+	if len(keys) == 0 {
 		return nil
 	}
 
-	return v
+	var val interface{} = s.Clone()
+	var ok bool
+	for _, key := range keys {
+		switch v := val.(type) {
+		case Json:
+			val, ok = v[key]
+			if !ok {
+				result = nil
+				return
+			}
+			result = val
+		case map[string]interface{}:
+			val, ok := v[key]
+			if !ok {
+				result = nil
+				return
+			}
+			result = val
+		default:
+			result = nil
+		}
+	}
+
+	return
 }
 
 /**

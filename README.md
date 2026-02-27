@@ -12,6 +12,7 @@ ET es una librería modular en Go para construir servicios, CLIs y aplicaciones 
 
 ```bash
 go get github.com/cgalvisleon/et@latest
+go get github.com/cgalvisleon/et@v1.0.16
 ```
 
 Para usar paquetes individuales, importa el módulo y el paquete correspondiente, por ejemplo:

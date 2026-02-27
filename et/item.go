@@ -175,6 +175,15 @@ func (s Item) Str(atribs ...string) string {
 }
 
 /**
+* String return the value of the key
+* @param atribs ...string
+* @return string
+**/
+func (s Item) String(atribs ...string) string {
+	return s.Result.String(atribs...)
+}
+
+/**
 * ToBase64 return the value of the key
 * @param atribs ...string
 * @return []string

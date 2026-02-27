@@ -236,6 +236,15 @@ func (s Items) Str(dx int, atribs ...string) string {
 }
 
 /**
+* String return the value of the key
+* @param idx int, atribs ...string
+* @return string
+**/
+func (s Items) String(idx int, atribs ...string) string {
+	return s.Str(idx, atribs...)
+}
+
+/**
 * Int return the value of the key
 * @param idx int, atribs ...string
 * @return int

@@ -213,6 +213,7 @@ const ModelConfig = `package $1
 
 import (
   "fmt"
+	"errors"
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
@@ -384,7 +385,7 @@ func Define$2(db *jdb.DB) error {
 		}
 
 		if exists {
-			return fmt.Errorf(MSG_RECORD_EXISTS)
+			return errors.New(MSG_RECORD_EXISTS)
 		}
 		
 		return nil

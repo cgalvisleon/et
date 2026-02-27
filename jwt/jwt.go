@@ -1,6 +1,7 @@
 package jwt
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -26,7 +27,7 @@ func GetKey(app, device, username string) string {
 **/
 func New(app, device, username string, payload et.Json, duration time.Duration) (string, error) {
 	if !cache.IsLoad() {
-		return "", fmt.Errorf(msg.MSG_CACHE_NOT_LOAD)
+		return "", errors.New(msg.MSG_CACHE_NOT_LOAD)
 	}
 
 	result, err := claim.NewToken(app, device, username, payload, duration)
@@ -226,7 +227,7 @@ func SetToken(app, device, username, token string, duration time.Duration) error
 	key := GetKey(app, device, username)
 	if duration < 0 {
 		cache.Delete(key)
-		return fmt.Errorf(msg.MSG_TOKEN_EXPIRED)
+		return errors.New(msg.MSG_TOKEN_EXPIRED)
 	}
 
 	cache.Set(key, token, duration)

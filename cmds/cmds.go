@@ -1,7 +1,7 @@
 package cmds
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/cgalvisleon/et/file"
 )
@@ -11,7 +11,7 @@ func Load(fileName string) (*Stage, error) {
 	if info.Error != nil {
 		return nil, info.Error
 	} else if !info.Exist {
-		return nil, fmt.Errorf(MSG_FILE_NOT_FOUND)
+		return nil, errors.New(MSG_FILE_NOT_FOUND)
 	}
 
 	return nil, nil

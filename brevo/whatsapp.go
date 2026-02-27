@@ -1,6 +1,7 @@
 package brevo
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 
@@ -64,7 +65,7 @@ func SendWhatsapp(contactNumbers []string, templateId string, params []et.Json, 
 		body["contactNumbers"] = []string{phoneNumber}
 		res, status := request.Fetch("POST", url, header, body)
 		if !status.Ok {
-			return result, fmt.Errorf(status.Message)
+			return result, errors.New(status.Message)
 		}
 
 		output, _ := res.ToJson()

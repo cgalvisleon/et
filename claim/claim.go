@@ -2,6 +2,7 @@ package claim
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -124,12 +125,12 @@ func ParceToken(token string) (*Claim, error) {
 	}
 
 	if !jToken.Valid {
-		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID)
+		return nil, errors.New(msg.MSG_TOKEN_INVALID)
 	}
 
 	claim, ok := jToken.Claims.(jwt.MapClaims)
 	if !ok {
-		return nil, fmt.Errorf(msg.MSG_REQUIRED_INVALID)
+		return nil, errors.New(msg.MSG_REQUIRED_INVALID)
 	}
 
 	id, ok := claim["id"].(string)

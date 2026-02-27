@@ -1,6 +1,7 @@
 package brevo
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 
@@ -67,7 +68,7 @@ func SendEmail(sender et.Json, to []et.Json, subject string, htmlContent string,
 	result := et.Items{}
 	res, status := request.Fetch("POST", url, header, body)
 	if !status.Ok {
-		return result, fmt.Errorf(status.Message)
+		return result, errors.New(status.Message)
 	}
 
 	output, _ := res.ToJson()

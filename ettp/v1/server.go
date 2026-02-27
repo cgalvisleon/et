@@ -157,12 +157,12 @@ func (s *Server) Start() error {
 		if s.tls {
 			logs.Logf(packageName, `Load server on https://localhost%s`, s.addr)
 			if err := s.svr.ListenAndServeTLS(s.certFile, s.keyFile); err != nil && err != http.ErrServerClosed {
-				logs.Alertf(err.Error())
+				logs.Alert(err)
 			}
 		} else {
 			logs.Logf(packageName, `Load server on http://localhost%s`, s.addr)
 			if err := s.svr.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				logs.Alertf(err.Error())
+				logs.Alert(err)
 			}
 		}
 	}()

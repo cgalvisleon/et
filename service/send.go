@@ -1,7 +1,7 @@
 package service
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/cgalvisleon/et/aws"
 	"github.com/cgalvisleon/et/brevo"
@@ -124,7 +124,7 @@ func SendEmail(tenantId, serviceId string, from et.Json, to []et.Json, subject s
 **/
 func SendEmailByTemplateId(tenantId, serviceId string, from et.Json, to []et.Json, subject string, templateId string, params et.Json, tp TpMessage, createdBy string) (et.Items, error) {
 	if getTemplate == nil {
-		return et.Items{}, fmt.Errorf("get template is nil")
+		return et.Items{}, errors.New("get template is nil")
 	}
 
 	template, err := getTemplate(templateId)

@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -416,11 +416,11 @@ func OptionsWithTls(url string, header et.Json, tlsConfig *tls.Config) (*Body, S
 **/
 func NewTlsConfig(caFile, certFile, keyFile string) (*tls.Config, error) {
 	if certFile == "" {
-		return nil, fmt.Errorf("CRT certificate path is required")
+		return nil, errors.New("CRT certificate path is required")
 	}
 
 	if _, err := os.Stat(certFile); os.IsNotExist(err) {
-		return nil, fmt.Errorf("CRT certificate not found")
+		return nil, errors.New("CRT certificate not found")
 	}
 
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)

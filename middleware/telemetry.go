@@ -327,7 +327,7 @@ func (m *Metrics) CallMetrics() Telemetry {
 * @return et.Json
 **/
 func (m *Metrics) println() et.Json {
-	w := lg.Color(nil, lg.Reset, timezone.NowStr())
+	w := lg.Color(nil, lg.Reset, "%s", timezone.NowStr())
 	lg.Color(w, lg.Purple, " [%s]: ", m.Method)
 	lg.Color(w, lg.Cyan, "%s", m.Path)
 	lg.Color(w, lg.White, " from:%s", m.RemoteAddr)

@@ -347,6 +347,7 @@ const ModelData = `package $4
 import (
 	"fmt"
 	"sync"
+	"errors"
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/logs"
@@ -404,7 +405,7 @@ func Define$2(db *jdb.DB) error {
 		}
 
 		if exists {
-			return fmt.Errorf(MSG_RECORD_EXISTS)
+			return errors.New(MSG_RECORD_EXISTS)
 		}
 		
 		return nil

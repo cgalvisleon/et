@@ -2,6 +2,7 @@ package ws
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -125,7 +126,7 @@ func (s *Hub) SetDebug(debug bool) {
 **/
 func (s *Hub) Connect(socket *websocket.Conn, ctx context.Context) (*Client, error) {
 	if !s.isStart {
-		return nil, fmt.Errorf(msg.MSG_HUB_NOT_STARTED)
+		return nil, errors.New(msg.MSG_HUB_NOT_STARTED)
 	}
 
 	username := ctx.Value("username").(string)
@@ -256,7 +257,7 @@ func (s *Hub) SendTo(to []string, message Message) ([]string, error) {
 	}
 
 	if len(result) == 0 {
-		return nil, fmt.Errorf(msg.MSG_USER_NOT_FOUND)
+		return nil, errors.New(msg.MSG_USER_NOT_FOUND)
 	}
 
 	return result, nil
@@ -387,7 +388,7 @@ func (s *Hub) Publish(channel string, message Message) ([]string, error) {
 	case TpQueue:
 		n := len(ch.Subscribers)
 		if n == 0 {
-			return []string{}, fmt.Errorf(msg.MSG_USER_NOT_FOUND)
+			return []string{}, errors.New(msg.MSG_USER_NOT_FOUND)
 		}
 		if ch.Turn >= n {
 			ch.Turn = 0
@@ -398,7 +399,7 @@ func (s *Hub) Publish(channel string, message Message) ([]string, error) {
 	case TpStack:
 		n := len(ch.Subscribers)
 		if n == 0 {
-			return []string{}, fmt.Errorf(msg.MSG_USER_NOT_FOUND)
+			return []string{}, errors.New(msg.MSG_USER_NOT_FOUND)
 		}
 		if ch.Turn < 0 {
 			ch.Turn = n - 1
@@ -410,5 +411,5 @@ func (s *Hub) Publish(channel string, message Message) ([]string, error) {
 		return s.SendTo(ch.Subscribers, message)
 	}
 
-	return []string{}, fmt.Errorf(msg.MSG_USER_NOT_FOUND)
+	return []string{}, errors.New(msg.MSG_USER_NOT_FOUND)
 }

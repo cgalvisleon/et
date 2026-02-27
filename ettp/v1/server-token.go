@@ -1,6 +1,7 @@
 package ettp
 
 import (
+	"errors"
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
@@ -27,7 +28,7 @@ func developToken() string {
 	duration := 1 * time.Hour
 	token, err := claim.NewToken(device, device, device, et.Json{}, duration)
 	if err != nil {
-		logs.Alertf(err.Error())
+		logs.Alert(err)
 		return ""
 	}
 
@@ -56,7 +57,7 @@ func (s *Server) GetTokenByKey(key string) (et.Item, error) {
 	}
 
 	if result == "" {
-		return et.Item{}, logs.Alertf(msg.MSG_RECORD_NOT_FOUND)
+		return et.Item{}, errors.New(msg.MSG_RECORD_NOT_FOUND)
 	}
 
 	valid := MSG_TOKEN_VALID
@@ -91,7 +92,7 @@ func (s *Server) HandlerValidToken(key string) (et.Item, error) {
 	}
 
 	if result == "" {
-		return et.Item{}, logs.Alertf(msg.MSG_RECORD_NOT_FOUND)
+		return et.Item{}, errors.New(msg.MSG_RECORD_NOT_FOUND)
 	}
 
 	_, err = jwt.Validate(result)

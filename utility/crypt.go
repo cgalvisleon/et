@@ -10,6 +10,7 @@ import (
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 
@@ -153,7 +154,7 @@ func Encrypt(value string, cryptoType CryptoType) (string, error) {
 	case AES:
 		return cryptoAES(value)
 	}
-	return "", fmt.Errorf("crypto type not found")
+	return "", errors.New("crypto type not found")
 
 }
 

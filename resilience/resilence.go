@@ -2,6 +2,7 @@ package resilience
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -93,7 +94,7 @@ func LoadById(id string) (*Instance, error) {
 	key := fmt.Sprintf("resilience:%s", id)
 	exists := cache.Exists(key)
 	if !exists {
-		return nil, fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
+		return nil, errors.New(MSG_INSTANCE_NOT_FOUND)
 	}
 
 	bt, err := cache.Get(key, "")
@@ -201,7 +202,7 @@ func (s *Instance) setStatus(status Status) error {
 			data.Set("level", s.Level)
 			message := fmt.Sprintf(MSG_RESILIENCE_FINISHED_ERROR, s.Attempt, s.TotalAttempts, s.Id, s.Tag, s.Status, errMsg)
 			event.Publish(EVENT_RESILIENCE_FAILED, data)
-			logs.Logf(packageName, message)
+			logs.Log(packageName, message)
 		} else {
 			logs.Logf(packageName, MSG_RESILIENCE_ERROR, s.Attempt, s.TotalAttempts, s.Id, s.Tag, s.Status, errMsg)
 		}

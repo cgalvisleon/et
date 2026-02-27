@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/binary"
-	"fmt"
+	"errors"
 	"io"
 	"net"
 	"sync"
@@ -240,7 +240,7 @@ func (s *Client) send(msg *Message) error {
 	s.mu.Unlock()
 
 	if conn == nil {
-		return fmt.Errorf("connection not established")
+		return errors.New("connection not established")
 	}
 
 	bt, err := msg.serialize()
@@ -321,7 +321,7 @@ func (s *Client) request(m *Message) (*Message, error) {
 		s.mu.Lock()
 		delete(s.messages, m.ID)
 		s.mu.Unlock()
-		return nil, fmt.Errorf(msg.MSG_TCP_TIMEOUT)
+		return nil, errors.New(msg.MSG_TCP_TIMEOUT)
 	}
 }
 
@@ -330,7 +330,7 @@ func (s *Client) request(m *Message) (*Message, error) {
 **/
 func (s *Client) Connect() error {
 	if s.closed.Load() {
-		return fmt.Errorf("client already closed")
+		return errors.New("client already closed")
 	}
 
 	err := s.connect()

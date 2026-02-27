@@ -28,7 +28,7 @@ func (s *Server) setApiFunc(method, path string, handlerFn http.HandlerFunc, pac
 	url = strings.ReplaceAll(url, "//", "/")
 	route, err := s.setRouter(method, url, url, TpHandler, et.Json{}, router.TpReplaceHeader, []string{}, false, packageName, false)
 	if err != nil {
-		logs.Alertf(err.Error())
+		logs.Alertf(`%s`, err.Error())
 		return nil
 	}
 

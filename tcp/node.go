@@ -456,7 +456,7 @@ func (s *Node) request(to *Client, m *Message) (*Message, error) {
 		s.muRequests.Lock()
 		delete(s.requests, m.ID)
 		s.muRequests.Unlock()
-		return nil, fmt.Errorf(mg.MSG_TCP_TIMEOUT)
+		return nil, errors.New(mg.MSG_TCP_TIMEOUT)
 	}
 }
 
@@ -621,7 +621,7 @@ func (s *Node) Close() {
 		return
 	}
 
-	logs.Logf(packageName, mg.MSG_TCP_SHUTTING_DOWN)
+	logs.Log(packageName, mg.MSG_TCP_SHUTTING_DOWN)
 
 	s.cancel()
 

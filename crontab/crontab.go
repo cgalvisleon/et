@@ -1,6 +1,7 @@
 package crontab
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -22,7 +23,7 @@ const (
 
 var (
 	hostName, _  = os.Hostname()
-	ErrJobExists = fmt.Errorf("job already exists")
+	ErrJobExists = errors.New("job already exists")
 )
 
 type Jobs struct {
@@ -165,7 +166,7 @@ func (s *Jobs) stopJob(tag string) error {
 func (s *Jobs) startJob(tag string) error {
 	idx := s.indexJob(tag)
 	if idx == -1 {
-		return fmt.Errorf("job not found")
+		return errors.New("job not found")
 	}
 
 	job := s.jobs[idx]
@@ -183,7 +184,7 @@ func (s *Jobs) startJob(tag string) error {
 **/
 func (s *Jobs) start() error {
 	if s.crontab == nil {
-		return fmt.Errorf("crontab not initialized")
+		return errors.New("crontab not initialized")
 	}
 
 	for _, job := range s.jobs {
@@ -200,7 +201,7 @@ func (s *Jobs) start() error {
 **/
 func (s *Jobs) stop() error {
 	if s.crontab == nil {
-		return fmt.Errorf("crontab not initialized")
+		return errors.New("crontab not initialized")
 	}
 
 	for _, job := range s.jobs {

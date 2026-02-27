@@ -1,6 +1,7 @@
 package ettp
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -127,7 +128,7 @@ func (s *Server) GetRouteById(id string) *Router {
 func (s *Server) DeleteRouteById(id string, save bool) error {
 	router := s.GetRouteById(id)
 	if router == nil {
-		return fmt.Errorf(MSG_ROUTE_NOT_FOUND)
+		return errors.New(MSG_ROUTE_NOT_FOUND)
 	}
 
 	idx := slices.IndexFunc(s.solvers, func(e *Router) bool { return e.Id == id })

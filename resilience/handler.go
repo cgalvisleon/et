@@ -1,7 +1,7 @@
 package resilience
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
 	"time"
 
@@ -102,7 +102,7 @@ func Stop(id string) error {
 	}
 
 	if _, ok := resilience[id]; !ok {
-		return fmt.Errorf(MSG_ID_NOT_FOUND)
+		return errors.New(MSG_ID_NOT_FOUND)
 	}
 
 	resilience[id].setStop()
@@ -121,7 +121,7 @@ func Restart(id string) error {
 	}
 
 	if _, ok := resilience[id]; !ok {
-		return fmt.Errorf(MSG_ID_NOT_FOUND)
+		return errors.New(MSG_ID_NOT_FOUND)
 	}
 
 	resilience[id].setRestart()

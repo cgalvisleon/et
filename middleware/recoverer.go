@@ -5,6 +5,7 @@ package middleware
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -115,7 +116,7 @@ func (s prettyStack) decorateLine(line string, num int) (string, error) {
 func (s prettyStack) decorateFuncCallLine(line string, num int) (string, error) {
 	idx := strings.LastIndex(line, "(")
 	if idx < 0 {
-		return "", fmt.Errorf("not a func call line")
+		return "", errors.New("not a func call line")
 	}
 
 	buf := &bytes.Buffer{}
@@ -156,7 +157,7 @@ func (s prettyStack) decorateFuncCallLine(line string, num int) (string, error) 
 func (s prettyStack) decorateSourceLine(line string, num int) (string, error) {
 	idx := strings.LastIndex(line, ".go:")
 	if idx < 0 {
-		return "", fmt.Errorf("not a source line")
+		return "", errors.New("not a source line")
 	}
 
 	buf := &bytes.Buffer{}

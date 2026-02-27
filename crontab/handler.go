@@ -1,7 +1,7 @@
 package crontab
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
@@ -55,7 +55,7 @@ func Close() {
 **/
 func Add(tp TypeJob, tag, spec string, params et.Json, repetitions int, fn func(event.Message)) error {
 	if crontab == nil {
-		return fmt.Errorf(MSG_CRONTAB_UNLOAD)
+		return errors.New(MSG_CRONTAB_UNLOAD)
 	}
 
 	event.Publish(EVENT_CRONTAB_SET, et.Json{
@@ -100,7 +100,7 @@ func AddOneShot(tag, spec string, params et.Json, repetitions int, fn func(event
 **/
 func Remove(tag string) error {
 	if crontab == nil {
-		return fmt.Errorf(MSG_CRONTAB_UNLOAD)
+		return errors.New(MSG_CRONTAB_UNLOAD)
 	}
 
 	err := event.Publish(EVENT_CRONTAB_REMOVE, et.Json{"tag": tag})
@@ -118,7 +118,7 @@ func Remove(tag string) error {
 **/
 func Start(tag string) (int, error) {
 	if crontab == nil {
-		return 0, fmt.Errorf(MSG_CRONTAB_UNLOAD)
+		return 0, errors.New(MSG_CRONTAB_UNLOAD)
 	}
 
 	err := event.Publish(EVENT_CRONTAB_START, et.Json{"tag": tag})
@@ -136,7 +136,7 @@ func Start(tag string) (int, error) {
 **/
 func Stop(tag string) error {
 	if crontab == nil {
-		return fmt.Errorf(MSG_CRONTAB_UNLOAD)
+		return errors.New(MSG_CRONTAB_UNLOAD)
 	}
 
 	err := event.Publish(EVENT_CRONTAB_STOP, et.Json{"tag": tag})
@@ -153,7 +153,7 @@ func Stop(tag string) error {
 **/
 func StartCrontab() error {
 	if crontab == nil {
-		return fmt.Errorf(MSG_CRONTAB_UNLOAD)
+		return errors.New(MSG_CRONTAB_UNLOAD)
 	}
 
 	return crontab.start()
@@ -165,7 +165,7 @@ func StartCrontab() error {
 **/
 func StopCrontab() error {
 	if crontab == nil {
-		return fmt.Errorf(MSG_CRONTAB_UNLOAD)
+		return errors.New(MSG_CRONTAB_UNLOAD)
 	}
 
 	return crontab.stop()

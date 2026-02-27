@@ -2,7 +2,6 @@ package crontab
 
 import (
 	"encoding/json"
-	"fmt"
 	"sync"
 	"time"
 
@@ -87,7 +86,7 @@ func (s *Job) ToJson() et.Json {
 * @return error
 **/
 func (s *Job) save() {
-	logs.Logf(packageName, fmt.Sprintf("Job %s status:%s host:%s attempt:%d", s.Tag, s.Status, s.HostName, s.Attempts))
+	logs.Logf(packageName, "Job %s status:%s host:%s attempt:%d", s.Tag, s.Status, s.HostName, s.Attempts)
 	event.Publish(EVENT_CRONTAB_STATUS, s.ToJson())
 }
 

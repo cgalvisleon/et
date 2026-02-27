@@ -1,6 +1,7 @@
 package event
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -95,11 +96,11 @@ func Publish(channel string, data et.Json) error {
 **/
 func Unsubscribe(channel string) error {
 	if conn == nil {
-		return fmt.Errorf(msg.MSG_ERR_NOT_CONNECT)
+		return errors.New(msg.MSG_ERR_NOT_CONNECT)
 	}
 
 	if len(channel) == 0 {
-		return fmt.Errorf(msg.MSG_ERR_CHANNEL_REQUIRED)
+		return errors.New(msg.MSG_ERR_CHANNEL_REQUIRED)
 	}
 
 	conn.mutex.Lock()
@@ -178,7 +179,7 @@ func Subscribe(channel string, f func(Message)) (err error) {
 **/
 func Queue(channel, queue string, f func(Message)) (err error) {
 	if conn == nil {
-		return fmt.Errorf(msg.MSG_ERR_NOT_CONNECT)
+		return errors.New(msg.MSG_ERR_NOT_CONNECT)
 	}
 
 	if len(channel) == 0 {

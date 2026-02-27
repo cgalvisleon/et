@@ -9,11 +9,11 @@ import (
 
 var emiter *EventEmiter
 
-type Handler func(message Message)
+type Handler func(message *Message)
 
 type EventEmiter struct {
 	events map[string]Handler `json:"-"`
-	ch     chan Message       `json:"-"`
+	ch     chan *Message      `json:"-"`
 }
 
 /**
@@ -23,7 +23,7 @@ type EventEmiter struct {
 func newEventEmiter() *EventEmiter {
 	result := &EventEmiter{
 		events: make(map[string]Handler),
-		ch:     make(chan Message),
+		ch:     make(chan *Message),
 	}
 
 	logs.Log("event", "Event emitter initialized")
@@ -35,13 +35,18 @@ func newEventEmiter() *EventEmiter {
 * start
 **/
 func (s *EventEmiter) loop() {
-	for message := range s.ch {
-		fn, ok := s.events[message.Channel]
-		if !ok {
-			return
-		}
+	for {
+		select {
+		case message := <-s.ch:
+			if message != nil {
+				fn, ok := s.events[message.Channel]
+				if !ok {
+					continue
+				}
 
-		fn(message)
+				fn(message)
+			}
+		}
 	}
 }
 
@@ -66,7 +71,7 @@ func (s *EventEmiter) emiter(channel string, data et.Json) {
 		return
 	}
 
-	message := Message{
+	message := &Message{
 		CreatedAt: timezone.Now(),
 		Id:        utility.UUID(),
 		Channel:   channel,

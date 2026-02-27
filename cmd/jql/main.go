@@ -18,20 +18,20 @@ func main() {
 		}},
 	}
 
-	// result := sql.From(sql.From(items).
-	// 	Where(sql.NotNull("citas->1")).
-	// 	Order("name", true).
-	// 	Join("name", "citas", "age").
-	// 	Run(nil)).
-	// 	// Where(sql.Eq("age", 25)).
-	// 	Run(nil)
-
-	result := sql.From(items).
+	result := sql.From(sql.From(items).
 		Where(sql.NotNull("citas")).
 		Order("name", true).
-		Join("citas", "age", "name").
-		// Select("name", "age", "identity->type", "identity->number").
+		Join("name", "citas", "age").
+		Run(nil)).
+		Where(sql.Eq("age", 25)).
 		Run(nil)
+
+	// result := sql.From(items).
+	// 	Where(sql.NotNull("citas")).
+	// 	Order("name", true).
+	// 	Join("citas", "age", "name").
+	// 	// Select("name", "age", "identity->type", "identity->number").
+	// 	Run(nil)
 
 	// result := sql.JoinToArray(sql.JoinToKeyValue([]et.Json{
 	// 	{"name": "cesasr"},

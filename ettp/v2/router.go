@@ -1,6 +1,7 @@
 package ettp
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -36,7 +37,7 @@ type Router struct {
 	Router map[string]*Router `json:"router"`
 	Tag    string             `json:"tag"`
 	Param  string             `json:"param"`
-	solver *Solver            `json:"-"`
+	Solver *Solver            `json:"solver"`
 }
 
 /**
@@ -56,17 +57,18 @@ func newRouter(tag string) *Router {
 * @return et.Json
 **/
 func (s *Router) ToJson() et.Json {
-	solver := et.Json{}
-	if s.solver != nil {
-		solver = s.solver.ToJson()
+	bt, err := json.Marshal(s)
+	if err != nil {
+		return et.Json{}
 	}
 
-	return et.Json{
-		"router": s.Router,
-		"tag":    s.Tag,
-		"param":  s.Param,
-		"solver": solver,
+	var result et.Json
+	err = json.Unmarshal(bt, &result)
+	if err != nil {
+		return et.Json{}
 	}
+
+	return result
 }
 
 /**
@@ -112,22 +114,22 @@ func (s *Router) setRouter(kind TypeRouter, method, path, solver string, typeHea
 
 		target = router
 		if i == len(tags)-1 {
-			target.solver = newSolver(method, path)
-			target.solver.Kind = kind
-			target.solver.Solver = solver
-			target.solver.TypeHeader = typeHeader
-			target.solver.Header = header
-			target.solver.ExcludeHeader = excludeHeader
-			target.solver.Version = version
-			target.solver.PackageName = packageName
+			target.Solver = newSolver(method, path)
+			target.Solver.Kind = kind
+			target.Solver.Solver = solver
+			target.Solver.TypeHeader = typeHeader
+			target.Solver.Header = header
+			target.Solver.ExcludeHeader = excludeHeader
+			target.Solver.Version = version
+			target.Solver.PackageName = packageName
 		}
 	}
 
-	if target.solver == nil {
+	if target.Solver == nil {
 		return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_BUILD, path)
 	}
 
-	return target.solver, nil
+	return target.Solver, nil
 }
 
 /**
@@ -191,11 +193,11 @@ func (s *Router) findResolver(req *http.Request) (*Resolver, error) {
 		return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND_TAG, path, tag)
 	}
 
-	if target.solver == nil {
+	if target.Solver == nil {
 		return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
 	}
 
-	return s.getResolver(req, target.solver, params)
+	return s.getResolver(req, target.Solver, params)
 }
 
 /**

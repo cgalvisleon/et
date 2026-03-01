@@ -1,6 +1,7 @@
 package ettp
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -80,19 +81,18 @@ type Solver struct {
 * @return et.Json
 **/
 func (s *Solver) ToJson() et.Json {
-	return et.Json{
-		"id":           s.Id,
-		"kind":         s.Kind.String(),
-		"method":       s.Method,
-		"path":         s.Path,
-		"solver":       s.Solver,
-		"type_header":  s.TypeHeader.String(),
-		"header":       s.Header,
-		"exclude":      s.ExcludeHeader,
-		"version":      s.Version,
-		"private":      s.Private,
-		"package_name": s.PackageName,
+	bt, err := json.Marshal(s)
+	if err != nil {
+		return et.Json{}
 	}
+
+	var result et.Json
+	err = json.Unmarshal(bt, &result)
+	if err != nil {
+		return et.Json{}
+	}
+
+	return result
 }
 
 /**

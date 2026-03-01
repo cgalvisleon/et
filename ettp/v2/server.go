@@ -226,7 +226,7 @@ func (s *Server) Reset() {
 * @return *Solver, error
 **/
 func (s *Server) setRouter(kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, packageName string, saved bool) (*Solver, error) {
-	if !methodMap[method] {
+	if !methods[method] {
 		return nil, fmt.Errorf(msg.MSG_METHOD_NOT_SUPPORTED, method)
 	}
 

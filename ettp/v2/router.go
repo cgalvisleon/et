@@ -21,7 +21,7 @@ const (
 	RPC     = "RPC"
 )
 
-var methodMap = map[string]bool{
+var methods = map[string]bool{
 	GET:     true,
 	POST:    true,
 	PUT:     true,

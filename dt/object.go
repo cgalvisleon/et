@@ -11,7 +11,7 @@ import (
 
 type Object struct {
 	et.Item
-	Key      string        `json:"key"`
+	key      string        `json:"-"`
 	duration time.Duration `json:"-"`
 }
 
@@ -26,7 +26,7 @@ func newObject(key string) *Object {
 			Ok:     false,
 			Result: et.Json{},
 		},
-		Key:      key,
+		key:      key,
 		duration: 1 * time.Hour,
 	}
 }
@@ -40,7 +40,7 @@ func (s *Object) up(data et.Item, save bool) {
 	s.Ok = data.Ok
 	s.Result = et.Json{}
 	if !s.Ok {
-		Drop(s.Key)
+		Drop(s.key)
 		return
 	}
 
@@ -64,7 +64,7 @@ func (s *Object) save() bool {
 	}
 
 	val := s.ToString()
-	key := fmt.Sprintf("object:%s", s.Key)
+	key := fmt.Sprintf("object:%s", s.key)
 	cache.Set(key, val, s.duration)
 
 	return true
@@ -76,7 +76,7 @@ func (s *Object) save() bool {
 *
  */
 func (s *Object) load() error {
-	key := fmt.Sprintf("object:%s", s.Key)
+	key := fmt.Sprintf("object:%s", s.key)
 	item, err := cache.GetItem(key)
 	if err != nil {
 		return err
@@ -92,12 +92,11 @@ func (s *Object) load() error {
 * @param key string, data et.Item
 * @return Object
 **/
-func Up(key string, data et.Item) Object {
-
+func Up(key string, data et.Item) et.Item {
 	obj := newObject(key)
 	obj.up(data, data.Ok)
 
-	return *obj
+	return obj.Item
 }
 
 /**
@@ -118,11 +117,11 @@ func UpWithDuration(key string, data et.Item, duration time.Duration) Object {
 * @param key string
 * @return Object
 **/
-func Get(key string) Object {
+func Get(key string) et.Item {
 	obj := newObject(key)
 	obj.load()
 
-	return *obj
+	return obj.Item
 }
 
 /**

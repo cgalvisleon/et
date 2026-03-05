@@ -19,9 +19,7 @@ import (
 func (s *Server) mountApiGatewayFunc() {
 	s.Get("/version", s.getVersion, s.Name)
 	s.Get("/test/{id}/test", s.getVersion, s.Name)
-	s.Private().Get("/events", s.getEvents, s.Name)
 	s.Private().Post("/events", event.HttpEventPublish, s.Name)
-	s.Private().Put("/events/reset", s.resetEvents, s.Name)
 	s.Private().Get("/routes", s.getRoutes, s.Name)
 	s.Private().Post("/routes", s.upsetRouter, s.Name)
 	s.Private().Delete("/routes/{id}", s.deleteRouteById, s.Name)
@@ -56,56 +54,6 @@ func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 
 	result := s.version()
 	metric.JSON(w, r, http.StatusOK, result)
-}
-
-/**
-* getEvents
-* @params w http.ResponseWriter
-* @params r *http.Request
-**/
-func (s *Server) getEvents(w http.ResponseWriter, r *http.Request) {
-	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
-	if !ok {
-		metric.HTTPError(w, r, http.StatusInternalServerError, "Metric not found")
-		return
-	}
-
-	events := event.Events()
-	result := et.Items{
-		Ok:     true,
-		Count:  len(events),
-		Result: []et.Json{},
-	}
-	for _, event := range events {
-		result.Result = append(result.Result, et.Json{"event": event})
-	}
-
-	metric.ITEMS(w, r, http.StatusOK, result)
-}
-
-/**
-* resetEvents
-* @params w http.ResponseWriter
-* @params r *http.Request
-**/
-func (s *Server) resetEvents(w http.ResponseWriter, r *http.Request) {
-	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
-	if !ok {
-		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
-		return
-	}
-
-	if err := event.Reset(); err != nil {
-		metric.HTTPError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	metric.ITEM(w, r, http.StatusOK, et.Item{
-		Ok: true,
-		Result: et.Json{
-			"message": "Events reset",
-		},
-	})
 }
 
 /**

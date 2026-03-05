@@ -31,9 +31,7 @@ func (s *Server) initRouteTable() error {
 		s.Public(GET, "/tokens/develop", s.handlerDevToken, s.Name)
 	}
 	// Events
-	s.Private(GET, "/events", s.getEvents, s.Name)
 	s.Private(POST, "/events", event.HttpEventPublish, s.Name)
-	s.Private(PUT, "/events/reset", s.resetEvents, s.Name)
 	// Routes
 	s.Private(GET, "/routes", s.getRoutes, s.Name)
 	s.Private(POST, "/routes", s.upsetRouter, s.Name)
@@ -126,48 +124,6 @@ func (s *Server) handlerDevToken(w http.ResponseWriter, r *http.Request) {
 
 	metric.JSON(w, r, http.StatusOK, et.Json{
 		"token": token,
-	})
-}
-
-/**
-* getEvents
-* @params w http.ResponseWriter
-* @params r *http.Request
-**/
-func (s *Server) getEvents(w http.ResponseWriter, r *http.Request) {
-	metric := middleware.GetMetrics(r)
-
-	events := event.Events()
-	result := et.Items{
-		Ok:     true,
-		Count:  len(events),
-		Result: []et.Json{},
-	}
-	for _, event := range events {
-		result.Result = append(result.Result, et.Json{"event": event})
-	}
-
-	metric.ITEMS(w, r, http.StatusOK, result)
-}
-
-/**
-* resetEvents
-* @params w http.ResponseWriter
-* @params r *http.Request
-**/
-func (s *Server) resetEvents(w http.ResponseWriter, r *http.Request) {
-	metric := middleware.GetMetrics(r)
-
-	if err := event.Reset(); err != nil {
-		metric.HTTPError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	metric.ITEM(w, r, http.StatusOK, et.Item{
-		Ok: true,
-		Result: et.Json{
-			"message": "Events reset",
-		},
 	})
 }
 

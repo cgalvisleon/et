@@ -46,19 +46,14 @@ func publish(channel string, data et.Json) error {
 		return err
 	}
 
-	_, err = conn.add(channel)
-	if err != nil {
-		return err
-	}
-
 	return conn.Publish(msg.Channel, dt)
 }
 
 /**
 * eventState
-* @params channel string, status EventStatus, data interface{}
+* @params channel string, status EventStatus, data any
 **/
-func eventState(channel string, status EventStatus, data interface{}) {
+func eventState(channel string, status EventStatus, data any) {
 	msg := et.Json{
 		"created_at": timezone.Now(),
 		"channel":    channel,
@@ -134,14 +129,7 @@ func Subscribe(channel string, f func(Message)) (err error) {
 		return
 	}
 
-	ok, err := conn.add(channel)
-	if err != nil {
-		return err
-	}
-
-	if ok {
-		eventState(channel, EventSubscribed, nil)
-	}
+	eventState(channel, EventSubscribed, nil)
 
 	subscribe, err := conn.Subscribe(channel,
 		func(m *nats.Msg) {
@@ -186,14 +174,7 @@ func Queue(channel, queue string, f func(Message)) (err error) {
 		return nil
 	}
 
-	ok, err := conn.add(channel)
-	if err != nil {
-		return err
-	}
-
-	if ok {
-		eventState(channel, EventSubscribed, nil)
-	}
+	eventState(channel, EventSubscribed, nil)
 
 	subscribe, err := conn.QueueSubscribe(
 		channel,

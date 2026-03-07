@@ -6,20 +6,20 @@ import (
 )
 
 var dependencies = []string{
-	"github.com/fsnotify/fsnotify",
-	"github.com/bwmarrin/snowflake",
-	"github.com/joho/godotenv/autoload",
-	"github.com/google/uuid",
-	"github.com/matoous/go-nanoid/v2",
-	"golang.org/x/crypto/bcrypt",
-	"golang.org/x/exp/slices",
-	"github.com/manifoldco/promptui",
-	"github.com/schollz/progressbar/v3",
-	"github.com/spf13/cobra",
-	"github.com/cgalvisleon/jdb/jdb",
-	"github.com/mattn/go-colorable",
-	"github.com/dimiro1/banner",
-	"github.com/chzyer/readline",
+	"github.com/fsnotify/fsnotify@v1.9.0",
+	"github.com/bwmarrin/snowflake@v0.3.0",
+	"github.com/joho/godotenv/autoload@v1.5.1",
+	"github.com/google/uuid@v1.6.0",
+	"github.com/matoous/go-nanoid/v2@latest",
+	"golang.org/x/crypto/bcrypt@v0.37.0",
+	"golang.org/x/exp/slices@v0.0.0-20250408133849-7e4ce0ab07d0",
+	"github.com/manifoldco/promptui@v0.9.0",
+	"github.com/schollz/progressbar/v3@v3.18.0",
+	"github.com/spf13/cobra@v1.9.1",
+	"github.com/cgalvisleon/jdb/jdb@latest",
+	"github.com/mattn/go-colorable@v0.1.14",
+	"github.com/dimiro1/banner@v1.1.0",
+	"github.com/chzyer/readline@v0.0.0-20180603132655-2972be24d48e",
 }
 
 func main() {

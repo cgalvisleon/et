@@ -57,7 +57,6 @@ func (s *Jobs) eventInit() error {
 func (s *Jobs) eventSet(msg event.Message) {
 	n := cache.Incr(msg.Channel, 3*time.Minute)
 	if n != 1 {
-		logs.Errorf(packageName, "eventSet: %s", "job already exists")
 		return
 	}
 

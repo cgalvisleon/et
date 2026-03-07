@@ -2,6 +2,7 @@ package crontab
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -9,28 +10,31 @@ import (
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/timezone"
+	"github.com/cgalvisleon/et/utility"
 	"github.com/robfig/cron/v3"
 )
 
 type JobStatus string
 
 const (
-	StatusPending  JobStatus = "pending"
-	StatusRunning  JobStatus = "running"
-	StatusDone     JobStatus = "done"
-	StatusFailed   JobStatus = "failed"
-	StatusStop     JobStatus = "stop"
-	StatusFinished JobStatus = "finished"
+	Pending  JobStatus = "pending"
+	Prepared JobStatus = "prepared"
+	Running  JobStatus = "running"
+	Done     JobStatus = "done"
+	Failed   JobStatus = "failed"
+	Finished JobStatus = "finished"
 )
 
 type TypeJob string
 
 const (
-	TypeCronJob TypeJob = "cron-job"
-	TypeOneShot TypeJob = "one-shot"
+	CronJob     TypeJob = "cronJob"
+	ScheduleJob TypeJob = "scheduleJob"
 )
 
 type Job struct {
+	ID          string        `json:"id"`
+	ExecuteAt   time.Time     `json:"execute_at"`
 	Type        TypeJob       `json:"type"`
 	Tag         string        `json:"tag"`
 	Channel     string        `json:"channel"`
@@ -38,15 +42,14 @@ type Job struct {
 	Spec        string        `json:"spec"`
 	Started     bool          `json:"started"`
 	Status      JobStatus     `json:"status"`
-	Idx         int           `json:"idx"`
 	HostName    string        `json:"host_name"`
 	Attempts    int           `json:"attempts"`
 	Repetitions int           `json:"repetitions"`
-	ShotTime    time.Time     `json:"shot_time"`
 	Duration    time.Duration `json:"duration"`
+	idx         cron.EntryID  `json:"-"`
+	shot        *time.Timer   `json:"-"`
 	jobs        *Jobs         `json:"-"`
 	mu          *sync.Mutex   `json:"-"`
-	shot        *time.Timer   `json:"-"`
 }
 
 /**
@@ -82,12 +85,17 @@ func (s *Job) ToJson() et.Json {
 }
 
 /**
-* save
+* Save
 * @return error
 **/
-func (s *Job) save() {
-	logs.Logf(packageName, "Job %s status:%s host:%s attempt:%d", s.Tag, s.Status, s.HostName, s.Attempts)
-	event.Publish(EVENT_CRONTAB_STATUS, s.ToJson())
+func (s *Job) Save() error {
+	if setInstance == nil {
+		return nil
+	}
+
+	s.ID = utility.UUID()
+	s.ExecuteAt = timezone.Now()
+	return setInstance(s.ID, s.Tag, s)
 }
 
 /**
@@ -100,7 +108,8 @@ func (s *Job) setStatus(status JobStatus) {
 	defer s.mu.Unlock()
 
 	s.Status = status
-	go s.save()
+	logs.Logf(packageName, fmt.Sprintf("Status: %s | job: %s | host: %s | attempt: %d", status, s.Tag, s.HostName, s.Attempts))
+	go s.Save()
 }
 
 /**
@@ -108,43 +117,46 @@ func (s *Job) setStatus(status JobStatus) {
 * @return error
 **/
 func (s *Job) Start() error {
-	if s.Started {
-		return nil
-	}
-
 	fn := func() {
-		s.setStatus(StatusRunning)
 		s.Attempts++
 		err := event.Publish(s.Channel, s.Params)
 		if err != nil {
-			s.setStatus(StatusFailed)
+			s.setStatus(Failed)
+		} else {
+			s.setStatus(Running)
 		}
 		if s.Repetitions != 0 && s.Attempts >= s.Repetitions {
-			s.Stop()
+			s.Finish()
 		} else {
-			s.setStatus(StatusPending)
+			s.setStatus(Pending)
 		}
 	}
 
-	if s.Type == TypeCronJob {
-		id, err := s.jobs.crontab.AddFunc(s.Spec, fn)
+	if s.Type == CronJob {
+		id, err := s.jobs.cronJobs.AddFunc(s.Spec, fn)
 		if err != nil {
 			return err
 		}
 
-		s.Idx = int(id)
+		s.idx = id
 	} else {
 		now := timezone.Now()
-		if s.ShotTime.After(now) {
-			s.Duration = s.ShotTime.Sub(now)
-			s.shot = time.AfterFunc(s.Duration, fn)
+		shotTime, err := timezone.Parse("2006-01-02T15:04:05", s.Spec)
+		if err != nil {
+			return err
+		}
+		if shotTime.After(now) {
+			duration := shotTime.Sub(now)
+			s.Duration = duration
+			s.shot = time.AfterFunc(duration, fn)
+		} else if s.shot != nil {
+			s.Stop()
 		}
 	}
 
 	s.Started = true
-	s.setStatus(StatusPending)
 
-	return nil
+	return s.Save()
 }
 
 /**
@@ -157,13 +169,24 @@ func (s *Job) Stop() {
 	}
 
 	s.Started = false
-	time.AfterFunc(time.Second*1, func() {
-		if s.Type == TypeCronJob {
-			s.jobs.crontab.Remove(cron.EntryID(s.Idx))
-			s.Idx = -1
+	time.AfterFunc(1*time.Second, func() {
+		if s.Type == CronJob {
+			s.jobs.cronJobs.Remove(s.idx)
+			s.idx = -1
 		} else if s.shot != nil {
 			s.shot.Stop()
 		}
-		s.setStatus(StatusStop)
+		s.setStatus(Pending)
+	})
+}
+
+/**
+* Finish
+* @return error
+**/
+func (s *Job) Finish() {
+	s.Stop()
+	time.AfterFunc(1*time.Second, func() {
+		s.setStatus(Finished)
 	})
 }

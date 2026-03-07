@@ -946,3 +946,31 @@ func (s Json) Hidden(keys []string) Json {
 
 	return result
 }
+
+/**
+* SetNested
+* @param keys []string, value interface{}
+**/
+func (j Json) SetNested(keys []string, value interface{}) {
+	m := map[string]interface{}(j)
+
+	for i := 0; i < len(keys)-1; i++ {
+		k := keys[i]
+
+		// si no existe lo creamos
+		if _, ok := m[k]; !ok {
+			m[k] = map[string]interface{}{}
+		}
+
+		// aseguramos que sea map
+		next, ok := m[k].(map[string]interface{})
+		if !ok {
+			next = map[string]interface{}{}
+			m[k] = next
+		}
+
+		m = next
+	}
+
+	m[keys[len(keys)-1]] = value
+}

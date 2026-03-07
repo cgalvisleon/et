@@ -59,6 +59,7 @@ var (
 	MSG_DATA_NOT_FOUND                 = "data not found"
 	MSG_TRANSACTION_NOT_FOUND          = "transaction not found"
 	MSG_MODEL_NOT_FOUND                = "model not found"
+	MSG_CRONTAB_UNLOAD                 = "crontab unloaded"
 )
 
 func init() {
@@ -121,5 +122,6 @@ func init() {
 		MSG_DATA_NOT_FOUND = "data not found"
 		MSG_TRANSACTION_NOT_FOUND = "transacción no encontrada"
 		MSG_MODEL_NOT_FOUND = "modelo no encontrado"
+		MSG_CRONTAB_UNLOAD = "crontab unloaded"
 	}
 }

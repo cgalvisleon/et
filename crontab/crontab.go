@@ -1,17 +1,13 @@
 package crontab
 
 import (
-	"errors"
 	"fmt"
 	"os"
-	"slices"
 	"sync"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/robfig/cron/v3"
@@ -23,94 +19,80 @@ const (
 
 var (
 	hostName, _  = os.Hostname()
-	ErrJobExists = errors.New("job already exists")
+	ErrJobExists = fmt.Errorf("job already exists")
 )
 
 type Jobs struct {
-	Tag     string     `json:"tag"`
-	Version int        `json:"version"`
-	jobs    []*Job     `json:"-"`
-	crontab *cron.Cron `json:"-"`
+	Id       string          `json:"id"`
+	Tag      string          `json:"tag"`
+	HostName string          `json:"host_name"`
+	Jobs     map[string]*Job `json:"jobs"`
+	cronJobs *cron.Cron      `json:"-"`
+	running  bool            `json:"-"`
+	mu       *sync.Mutex     `json:"-"`
 }
 
-/**
-* newCrontab
-* @param tag string
-* @return *Jobs, error
-**/
-func newCrontab(tag string) (*Jobs, error) {
-	err := event.Load()
-	if err != nil {
-		return nil, err
-	}
-
-	if tag == "" {
-		tag = reg.GenULID(packageName)
-	}
-
+func New(tag string) *Jobs {
+	loc := timezone.Location()
 	return &Jobs{
-		Tag:     tag,
-		jobs:    make([]*Job, 0),
-		crontab: cron.New(cron.WithSeconds()),
-	}, nil
-}
-
-/**
-* indexJob
-* @param tag string
-* @return int
-**/
-func (s *Jobs) indexJob(tag string) int {
-	return slices.IndexFunc(s.jobs, func(s *Job) bool { return s.Tag == tag })
+		Id:       utility.UUID(),
+		Tag:      tag,
+		HostName: hostName,
+		Jobs:     make(map[string]*Job),
+		cronJobs: cron.New(
+			cron.WithSeconds(),
+			cron.WithLocation(loc),
+		),
+		mu: &sync.Mutex{},
+	}
 }
 
 /**
 * addJob
-* @param tp TypeJob, tag, spec, channel string, params et.Json, repetitions int
+* @param tp TypeJob, tag, spec, channel string, started bool, params et.Json, repetitions int
 * @return *Job, error
 **/
-func (s *Jobs) addJob(tp TypeJob, tag, spec, channel string, params et.Json, repetitions int) (*Job, error) {
+func (s *Jobs) addJob(tp TypeJob, tag, spec, channel string, started bool, params et.Json, repetitions int) (*Job, error) {
 	if !utility.ValidStr(tag, 0, []string{"", " "}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "tag")
 	}
 
-	shot, err := timezone.Parse("2006-01-02T15:04:05", spec)
-	if err != nil {
-		shot = timezone.Now()
-	}
-
-	idx := s.indexJob(tag)
-	if idx != -1 {
-		result := s.jobs[idx]
-		if result.Spec != spec {
+	s.mu.Lock()
+	result, ok := s.Jobs[tag]
+	s.mu.Unlock()
+	if ok {
+		if !result.Started {
 			result.Spec = spec
-			result.ShotTime = shot
 			result.Stop()
 		}
-
-		return result, nil
+	} else {
+		result = &Job{
+			Type:        tp,
+			Tag:         tag,
+			Channel:     channel,
+			Params:      params,
+			Spec:        spec,
+			Started:     false,
+			Status:      Pending,
+			HostName:    hostName,
+			Attempts:    0,
+			Repetitions: repetitions,
+			idx:         -1,
+			jobs:        s,
+			mu:          &sync.Mutex{},
+		}
 	}
 
-	result := &Job{
-		Type:        tp,
-		Tag:         tag,
-		Channel:     channel,
-		Params:      params,
-		Spec:        spec,
-		ShotTime:    shot,
-		Started:     false,
-		Idx:         len(s.jobs),
-		HostName:    hostName,
-		Repetitions: repetitions,
-		jobs:        s,
-		mu:          &sync.Mutex{},
-	}
-	s.jobs = append(s.jobs, result)
-	result.setStatus(StatusPending)
-
-	err = result.Start()
-	if err != nil {
-		return nil, err
+	s.mu.Lock()
+	s.Jobs[tag] = result
+	s.mu.Unlock()
+	if started {
+		err := result.Start()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		result.setStatus(Pending)
 	}
 
 	return result, nil
@@ -118,25 +100,43 @@ func (s *Jobs) addJob(tp TypeJob, tag, spec, channel string, params et.Json, rep
 
 /**
 * removeJob
-* @param idx int
+* @param tag string
 * @return error
 **/
 func (s *Jobs) removeJob(tag string) error {
-	idx := s.indexJob(tag)
-	if idx == -1 {
-		return nil
+	s.mu.Lock()
+	job, exists := s.Jobs[tag]
+	s.mu.Unlock()
+	if !exists {
+		return fmt.Errorf("job not found")
 	}
 
-	job := s.jobs[idx]
-	if job == nil {
-		return nil
+	job.Stop()
+
+	s.mu.Lock()
+	delete(s.Jobs, tag)
+	s.mu.Unlock()
+
+	return nil
+}
+
+/**
+* startJob
+* @param tag string
+* @return error
+**/
+func (s *Jobs) startJob(tag string) error {
+	s.mu.Lock()
+	job, exists := s.Jobs[tag]
+	s.mu.Unlock()
+	if !exists {
+		return fmt.Errorf("job not found")
 	}
 
-	if job.Started {
-		job.Stop()
+	err := job.Start()
+	if err != nil {
+		return err
 	}
-
-	s.jobs = append(s.jobs[:idx], s.jobs[idx+1:]...)
 
 	return nil
 }
@@ -147,34 +147,14 @@ func (s *Jobs) removeJob(tag string) error {
 * @return error
 **/
 func (s *Jobs) stopJob(tag string) error {
-	idx := s.indexJob(tag)
-	if idx == -1 {
-		return nil
+	s.mu.Lock()
+	job, exists := s.Jobs[tag]
+	s.mu.Unlock()
+	if !exists {
+		return fmt.Errorf("job not found")
 	}
 
-	job := s.jobs[idx]
 	job.Stop()
-
-	return nil
-}
-
-/**
-* startJob
-* @param tag string
-* @return int, error
-**/
-func (s *Jobs) startJob(tag string) error {
-	idx := s.indexJob(tag)
-	if idx == -1 {
-		return errors.New("job not found")
-	}
-
-	job := s.jobs[idx]
-	err := job.Start()
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -183,13 +163,22 @@ func (s *Jobs) startJob(tag string) error {
 * @return error
 **/
 func (s *Jobs) start() error {
-	if s.crontab == nil {
-		return errors.New("crontab not initialized")
+	if s.cronJobs == nil {
+		return fmt.Errorf("crontab not initialized")
 	}
 
-	for _, job := range s.jobs {
-		job.Start()
+	if s.running {
+		return nil
 	}
+
+	err := s.eventInit()
+	if err != nil {
+		return err
+	}
+
+	s.cronJobs.Start()
+	s.running = true
+
 	logs.Logf(packageName, `Crontab started`)
 
 	return nil
@@ -200,13 +189,13 @@ func (s *Jobs) start() error {
 * @return error
 **/
 func (s *Jobs) stop() error {
-	if s.crontab == nil {
-		return errors.New("crontab not initialized")
+	if s.cronJobs == nil {
+		return fmt.Errorf("crontab not initialized")
 	}
 
-	for _, job := range s.jobs {
-		job.Stop()
-	}
+	s.cronJobs.Stop()
+	s.running = false
+
 	logs.Logf(packageName, `Crontab stopped`)
 
 	return nil

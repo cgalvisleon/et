@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"fmt"
 	"maps"
 	"reflect"
 	"slices"
@@ -289,6 +290,19 @@ func getBetweenRange(v any) (min any, max any, ok bool) {
 }
 
 /**
+* getField
+* @param field string
+* @return keys []string, as string
+**/
+func getField(field string) ([]string, string) {
+	if strings.Contains(field, ":") {
+		parts := strings.Split(field, ":")
+		return strs.Split(parts[0], "->"), parts[1]
+	}
+	return strs.Split(field, "->"), field
+}
+
+/**
 * selects
 * @param fields []string, object et.Json
 * @return et.Json
@@ -296,10 +310,10 @@ func getBetweenRange(v any) (min any, max any, ok bool) {
 func selects(fields []string, object et.Json) et.Json {
 	result := et.Json{}
 	for _, field := range fields {
-		keys := strs.Split(field, "->")
+		keys, as := getField(field)
 		val := object.Get(keys...)
 		if val != nil {
-			result[field] = val
+			result[as] = val
 		}
 	}
 
@@ -324,11 +338,11 @@ func hidden(fields []string, object et.Json) et.Json {
 }
 
 /**
-* JoinToKeyValue
+* MergeToKeyValue
 * @params left []et.Json, key string, value any
 * @return []et.Json
 **/
-func JoinToKeyValue(left []et.Json, key string, value any) []et.Json {
+func MergeToKeyValue(left []et.Json, key string, value any) []et.Json {
 	if len(left) == 0 {
 		return []et.Json{
 			{key: value},
@@ -345,16 +359,125 @@ func JoinToKeyValue(left []et.Json, key string, value any) []et.Json {
 }
 
 /**
-* JoinToMap
+* MergeToMap
 * @params left, right []et.Json
 * @return []et.Json
 **/
-func JoinToMap(left, right []et.Json) []et.Json {
+func MergeToMap(left, right []et.Json) []et.Json {
 	result := []et.Json{}
 	for _, itemL := range left {
 		for _, itemR := range right {
 			maps.Copy(itemR, itemL)
 			result = append(result, itemR)
+		}
+	}
+
+	return result
+}
+
+/**
+* merge
+* @params left, right et.Json, as string
+* @return et.Json
+**/
+func merge(left et.Json, right et.Json, as string) et.Json {
+	out := et.Json{}
+
+	if left != nil {
+		maps.Copy(out, left)
+	}
+
+	if right != nil {
+		for k, v := range right {
+
+			if _, exists := out[k]; exists {
+				out[as+"."+k] = v
+			} else {
+				out[k] = v
+			}
+
+		}
+	}
+
+	return out
+}
+
+/**
+* buildKey
+* @params j et.Json, keys map[string]string, fromLeft bool
+* @return string
+**/
+func buildKey(j et.Json, keys map[string]string, fromLeft bool) string {
+	key := ""
+
+	for lk, rk := range keys {
+
+		field := rk
+		if fromLeft {
+			field = lk
+		}
+
+		if v, ok := j[field]; ok {
+			key += "|" + fmt.Sprintf("%v", v)
+		} else {
+			key += "|NULL"
+		}
+	}
+
+	return key
+}
+
+/**
+* Joingy
+* @params left, right []et.Json, as string, keys map[string]string, joinType JoinType
+* @return []et.Json
+**/
+func Joingy(left, right []et.Json, as string, keys map[string]string, joinType JoinType) []et.Json {
+	result := []et.Json{}
+
+	rightIndex := map[string][]int{}
+	matchedRight := map[int]bool{}
+
+	// indexar RIGHT
+	for i, r := range right {
+		key := buildKey(r, keys, false)
+		rightIndex[key] = append(rightIndex[key], i)
+	}
+
+	// recorrer LEFT
+	for _, l := range left {
+
+		key := buildKey(l, keys, true)
+		ridxs, ok := rightIndex[key]
+
+		if ok {
+
+			for _, ri := range ridxs {
+
+				r := right[ri]
+				matchedRight[ri] = true
+
+				result = append(result, merge(l, r, as))
+			}
+
+		} else {
+
+			if joinType == LeftJoin || joinType == FullJoin {
+				result = append(result, merge(l, nil, as))
+			}
+
+		}
+	}
+
+	// RIGHT JOIN o FULL JOIN
+	if joinType == RightJoin || joinType == FullJoin {
+
+		for i, r := range right {
+
+			if !matchedRight[i] {
+				result = append(result, merge(nil, r, as))
+			}
+
 		}
 	}
 

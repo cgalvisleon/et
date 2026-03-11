@@ -49,26 +49,3 @@ func ToString(vals interface{}) string {
 
 	return buf.String()
 }
-
-/**
-* SetNested
-* @param data Json, keys []string, value interface{}
-* @return Json
-**/
-func SetNested(data Json, keys []string, value interface{}) Json {
-	result := data.Clone()
-	for i, key := range keys {
-		_, ok := result[key]
-		if !ok {
-			return Json{}
-		}
-
-		if i == len(keys)-1 {
-			result[key] = value
-		} else {
-			result = result.Json(key)
-		}
-	}
-
-	return result
-}

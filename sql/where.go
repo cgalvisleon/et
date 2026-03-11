@@ -7,6 +7,41 @@ import (
 	"github.com/cgalvisleon/et/et"
 )
 
+type JoinType int
+
+const (
+	InnerJoin JoinType = iota
+	LeftJoin
+	RightJoin
+	FullJoin
+)
+
+/**
+* String
+* @return string
+**/
+func (j JoinType) String() string {
+	switch j {
+	case InnerJoin:
+		return "inner"
+	case LeftJoin:
+		return "left"
+	case RightJoin:
+		return "right"
+	case FullJoin:
+		return "full"
+	default:
+		return ""
+	}
+}
+
+type Join struct {
+	To   []et.Json         `json:"to"`
+	As   string            `json:"as"`
+	Keys map[string]string `json:"keys"`
+	Type JoinType          `json:"type"`
+}
+
 /**
 * Where
 **/
@@ -14,7 +49,7 @@ type Where struct {
 	From       []et.Json       `json:"from"`
 	Conditions []*Condition    `json:"conditions"`
 	Selects    []string        `json:"selects"`
-	Joins      []string        `json:"joins"`
+	Joins      []*Join         `json:"joins"`
 	Hiddens    []string        `json:"hiddens"`
 	OrderBy    map[string]bool `json:"order_by"`
 	Offset     int             `json:"offset"`
@@ -35,7 +70,7 @@ func newWhere(from []et.Json) *Where {
 		From:       from,
 		Conditions: make([]*Condition, 0),
 		Selects:    make([]string, 0),
-		Joins:      make([]string, 0),
+		Joins:      make([]*Join, 0),
 		Hiddens:    make([]string, 0),
 		OrderBy:    make(map[string]bool, 0),
 		Offset:     0,
@@ -136,20 +171,60 @@ func (s *Where) Select(fields ...string) *Where {
 }
 
 /**
-* Join
-* @param fields ...string
+* join
+* @param to []et.Json, as string, keys map[string]string, joinType JoinType
 * @return *Where
 **/
-func (s *Where) Join(fields ...string) *Where {
-	if len(fields) == 0 {
+func (s *Where) join(to []et.Json, as string, keys map[string]string, joinType JoinType) *Where {
+	if len(to) == 0 {
 		return s
 	}
 
-	for _, field := range fields {
-		s.Joins = append(s.Joins, field)
+	join := &Join{
+		To:   to,
+		As:   as,
+		Keys: keys,
+		Type: joinType,
 	}
+	s.Joins = append(s.Joins, join)
 
 	return s
+}
+
+/**
+* Join
+* @param to []et.Json, as string, keys map[string]string
+* @return *Where
+**/
+func (s *Where) Join(to []et.Json, as string, keys map[string]string) *Where {
+	return s.join(to, as, keys, InnerJoin)
+}
+
+/**
+* LeftJoin
+* @param to []et.Json, as string, keys map[string]string
+* @return *Where
+**/
+func (s *Where) LeftJoin(to []et.Json, as string, keys map[string]string) *Where {
+	return s.join(to, as, keys, LeftJoin)
+}
+
+/**
+* RightJoin
+* @param to []et.Json, as string, keys map[string]string
+* @return *Where
+**/
+func (s *Where) RightJoin(to []et.Json, as string, keys map[string]string) *Where {
+	return s.join(to, as, keys, RightJoin)
+}
+
+/**
+* FullJoin
+* @param to []et.Json, as string, keys map[string]string
+* @return *Where
+**/
+func (s *Where) FullJoin(to []et.Json, as string, keys map[string]string) *Where {
+	return s.join(to, as, keys, FullJoin)
 }
 
 /**
@@ -218,28 +293,25 @@ func (s *Where) Limit(page int, rows int) *Where {
 * @return next bool
 **/
 func (s *Where) AdddResult(item et.Json) (next bool) {
-	if len(s.Joins) > 0 {
-		item = selects(s.Joins, item)
+	if len(s.Selects) == 0 {
+		item = hidden(s.Hiddens, item)
+		s.Result = append(s.Result, item)
+	} else {
+		item = hidden(s.Hiddens, item)
+		item = selects(s.Selects, item)
 		items := []et.Json{}
 		for key, val := range item {
 			vals := item.ArrayJson(key)
 			if len(vals) == 0 {
-				items = JoinToKeyValue(items, key, val)
+				items = MergeToKeyValue(items, key, val)
 			} else if len(items) == 0 {
 				items = vals
 			} else {
-				items = JoinToMap(items, vals)
+				items = MergeToMap(items, vals)
 			}
 		}
 
 		s.Result = append(s.Result, items...)
-	} else if len(s.Selects) == 0 {
-		item = hidden(s.Hiddens, item)
-		s.Result = append(s.Result, item)
-	} else {
-		item = selects(s.Selects, item)
-		item = hidden(s.Hiddens, item)
-		s.Result = append(s.Result, item)
 	}
 
 	if s.Limits == 0 {
@@ -259,7 +331,12 @@ func (s *Where) AdddResult(item et.Json) (next bool) {
 func (s *Where) Run(tx *Tx) []et.Json {
 	tx, _ = GetTx(tx)
 
-	for _, item := range s.From {
+	from := s.From
+	for _, join := range s.Joins {
+		from = Joingy(from, join.To, join.As, join.Keys, join.Type)
+	}
+
+	for _, item := range from {
 		ok := Validate(item, s.Conditions)
 		if !ok {
 			continue

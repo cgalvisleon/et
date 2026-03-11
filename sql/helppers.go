@@ -376,26 +376,110 @@ func MergeToMap(left, right []et.Json) []et.Json {
 }
 
 /**
-* merge
-* @params left, right et.Json, as string
-* @return et.Json
+* Prefixer
+* @param from *Source
+* @return *Source
 **/
-func merge(left et.Json, right et.Json, as string) et.Json {
-	out := et.Json{}
-
-	if left != nil {
-		maps.Copy(out, left)
-	}
-
-	if right != nil {
-		for k, v := range right {
-
-			if _, exists := out[k]; exists {
+func Prefixer(from *Source) *Source {
+	result := []et.Json{}
+	for _, item := range from.Data {
+		out := et.Json{}
+		for k, v := range item {
+			k = strings.ToLower(k)
+			as := strings.ToLower(from.As)
+			if as != "" {
 				out[as+"."+k] = v
 			} else {
 				out[k] = v
 			}
+		}
+		result = append(result, out)
+	}
 
+	return &Source{
+		Data: result,
+		As:   from.As,
+	}
+}
+
+/**
+* Joingy
+* @params left, right *Source, keys map[string]string, joinType JoinType
+* @return *Source
+**/
+func Joingy(left, right *Source, keys map[string]string, joinType JoinType) *Source {
+	result := []et.Json{}
+	rightIndex := map[string][]int{}
+	matchedRight := map[int]bool{}
+
+	// indexar RIGHT
+	for i, r := range right.Data {
+		key := buildKey(r, keys, false)
+		rightIndex[key] = append(rightIndex[key], i)
+	}
+
+	// recorrer LEFT
+	for _, l := range left.Data {
+		key := buildKey(l, keys, true)
+		ridxs, ok := rightIndex[key]
+		if ok {
+			for _, ri := range ridxs {
+				r := right.Data[ri]
+				matchedRight[ri] = true
+
+				result = append(result, merge(&item{Item: l, As: left.As}, &item{Item: r, As: right.As}))
+			}
+		} else {
+			if joinType == LeftJoin || joinType == FullJoin {
+				result = append(result, merge(&item{Item: l, As: left.As}, nil))
+			}
+		}
+	}
+
+	// RIGHT JOIN o FULL JOIN
+	if joinType == RightJoin || joinType == FullJoin {
+		for i, r := range right.Data {
+			if !matchedRight[i] {
+				result = append(result, merge(nil, &item{Item: r, As: right.As}))
+			}
+		}
+	}
+
+	return &Source{
+		Data: result,
+		As:   left.As,
+	}
+}
+
+/**
+* merge
+* @params left, right et.Json, as string
+* @return et.Json
+**/
+func merge(left, right *item) et.Json {
+	out := et.Json{}
+
+	if left != nil {
+		for k, v := range left.Item {
+			k = strings.ToLower(k)
+			as := strings.ToLower(left.As)
+			if as != "" {
+				out[as+"."+k] = v
+			} else {
+				out[k] = v
+			}
+		}
+	}
+
+	if right != nil {
+		for k, v := range right.Item {
+			k = strings.ToLower(k)
+			as := strings.ToLower(right.As)
+			if as != "" {
+				out[as+"."+k] = v
+			} else {
+				out[k] = v
+			}
 		}
 	}
 
@@ -411,7 +495,6 @@ func buildKey(j et.Json, keys map[string]string, fromLeft bool) string {
 	key := ""
 
 	for lk, rk := range keys {
-
 		field := rk
 		if fromLeft {
 			field = lk
@@ -425,61 +508,4 @@ func buildKey(j et.Json, keys map[string]string, fromLeft bool) string {
 	}
 
 	return key
-}
-
-/**
-* Joingy
-* @params left, right []et.Json, as string, keys map[string]string, joinType JoinType
-* @return []et.Json
-**/
-func Joingy(left, right []et.Json, as string, keys map[string]string, joinType JoinType) []et.Json {
-	result := []et.Json{}
-
-	rightIndex := map[string][]int{}
-	matchedRight := map[int]bool{}
-
-	// indexar RIGHT
-	for i, r := range right {
-		key := buildKey(r, keys, false)
-		rightIndex[key] = append(rightIndex[key], i)
-	}
-
-	// recorrer LEFT
-	for _, l := range left {
-
-		key := buildKey(l, keys, true)
-		ridxs, ok := rightIndex[key]
-
-		if ok {
-
-			for _, ri := range ridxs {
-
-				r := right[ri]
-				matchedRight[ri] = true
-
-				result = append(result, merge(l, r, as))
-			}
-
-		} else {
-
-			if joinType == LeftJoin || joinType == FullJoin {
-				result = append(result, merge(l, nil, as))
-			}
-
-		}
-	}
-
-	// RIGHT JOIN o FULL JOIN
-	if joinType == RightJoin || joinType == FullJoin {
-
-		for i, r := range right {
-
-			if !matchedRight[i] {
-				result = append(result, merge(nil, r, as))
-			}
-
-		}
-	}
-
-	return result
 }

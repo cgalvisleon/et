@@ -7,6 +7,16 @@ import (
 	"github.com/cgalvisleon/et/et"
 )
 
+type item = struct {
+	Item et.Json `json:"item"`
+	As   string  `json:"as"`
+}
+
+type Source struct {
+	Data []et.Json `json:"data"`
+	As   string    `json:"as"`
+}
+
 type JoinType int
 
 const (
@@ -36,8 +46,7 @@ func (j JoinType) String() string {
 }
 
 type Join struct {
-	To   []et.Json         `json:"to"`
-	As   string            `json:"as"`
+	To   *Source           `json:"to"`
 	Keys map[string]string `json:"keys"`
 	Type JoinType          `json:"type"`
 }
@@ -46,7 +55,7 @@ type Join struct {
 * Where
 **/
 type Where struct {
-	From       []et.Json       `json:"from"`
+	From       *Source         `json:"from"`
 	Conditions []*Condition    `json:"conditions"`
 	Selects    []string        `json:"selects"`
 	Joins      []*Join         `json:"joins"`
@@ -61,13 +70,16 @@ type Where struct {
 
 /**
 * newWhere
-* @param owner *From
+* @param from []et.Json, as string
 * @return *Where
 **/
-func newWhere(from []et.Json) *Where {
+func newWhere(from []et.Json, as string) *Where {
 	limitRows := envar.GetInt("LIMIT_ROWS", 1000)
 	result := &Where{
-		From:       from,
+		From: &Source{
+			Data: from,
+			As:   as,
+		},
 		Conditions: make([]*Condition, 0),
 		Selects:    make([]string, 0),
 		Joins:      make([]*Join, 0),
@@ -181,8 +193,10 @@ func (s *Where) join(to []et.Json, as string, keys map[string]string, joinType J
 	}
 
 	join := &Join{
-		To:   to,
-		As:   as,
+		To: &Source{
+			Data: to,
+			As:   as,
+		},
 		Keys: keys,
 		Type: joinType,
 	}
@@ -332,11 +346,15 @@ func (s *Where) Run(tx *Tx) []et.Json {
 	tx, _ = GetTx(tx)
 
 	from := s.From
-	for _, join := range s.Joins {
-		from = Joingy(from, join.To, join.As, join.Keys, join.Type)
+	if len(s.Joins) == 0 {
+		from = Prefixer(from)
+	} else {
+		for _, join := range s.Joins {
+			from = Joingy(from, join.To, join.Keys, join.Type)
+		}
 	}
 
-	for _, item := range from {
+	for _, item := range from.Data {
 		ok := Validate(item, s.Conditions)
 		if !ok {
 			continue

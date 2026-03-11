@@ -12,7 +12,7 @@ const (
 	FROM   Command = "from"
 )
 
-func From(itmes []et.Json) *Where {
-	result := newWhere(itmes)
+func From(itmes []et.Json, as string) *Where {
+	result := newWhere(itmes, as)
 	return result
 }

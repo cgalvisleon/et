@@ -33,12 +33,12 @@ func main() {
 	// 	Where(sql.Eq("age", 25)).
 	// 	Run(nil)
 
-	result := sql.From(itemA).
+	result := sql.From(itemA, "a").
 		// Where(sql.NotNull("citas")).
 		Order("name", true).
 		Join(itemB, "b", map[string]string{"age": "age"}).
 		// Select("citas", "age", "name", "identity->type:tipo").
-		// Select("name", "age", "identity->type", "identity->number").
+		// Select("name", "age", "b.identity->number:number").
 		Run(nil)
 
 	// result := sql.JoinToArray(sql.JoinToKeyValue([]et.Json{

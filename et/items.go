@@ -445,13 +445,13 @@ func (s *Items) Delete(idx int, keys []string) bool {
 * @param idx int, key string
 * @return bool
 **/
-func (s Items) ExistKey(idx int, key string) bool {
+func (s Items) Exist(idx int, key string) bool {
 	item := s.Result[idx]
 	if item == nil {
 		return false
 	}
 
-	return item.ExistKey(key)
+	return item.Exist(key)
 }
 
 /**

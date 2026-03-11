@@ -879,7 +879,45 @@ func (s Json) Get(keys ...string) (result interface{}) {
 * @return bool
 **/
 func (s Json) Set(key string, val interface{}) {
-	s[key] = val
+	if key == "" {
+		return
+	}
+
+	keys := strings.Split(key, "->")
+	if len(keys) == 1 {
+		s[key] = val
+		return
+	}
+
+	s.SetNested(keys, val)
+}
+
+/**
+* SetNested
+* @param keys []string, value interface{}
+**/
+func (j Json) SetNested(keys []string, value interface{}) {
+	m := map[string]interface{}(j)
+
+	for i := 0; i < len(keys)-1; i++ {
+		k := keys[i]
+
+		// si no existe lo creamos
+		if _, ok := m[k]; !ok {
+			m[k] = map[string]interface{}{}
+		}
+
+		// aseguramos que sea map
+		next, ok := m[k].(map[string]interface{})
+		if !ok {
+			next = map[string]interface{}{}
+			m[k] = next
+		}
+
+		m = next
+	}
+
+	m[keys[len(keys)-1]] = value
 }
 
 /**
@@ -904,11 +942,11 @@ func (s Json) Delete(keys []string) bool {
 }
 
 /**
-* ExistKey return if the key exist
+* Exist return if the key exist
 * @param key string
 * @return bool
 **/
-func (s Json) ExistKey(key string) bool {
+func (s Json) Exist(key string) bool {
 	_, ok := s[key]
 	return ok
 }
@@ -945,32 +983,4 @@ func (s Json) Hidden(keys []string) Json {
 	}
 
 	return result
-}
-
-/**
-* SetNested
-* @param keys []string, value interface{}
-**/
-func (j Json) SetNested(keys []string, value interface{}) {
-	m := map[string]interface{}(j)
-
-	for i := 0; i < len(keys)-1; i++ {
-		k := keys[i]
-
-		// si no existe lo creamos
-		if _, ok := m[k]; !ok {
-			m[k] = map[string]interface{}{}
-		}
-
-		// aseguramos que sea map
-		next, ok := m[k].(map[string]interface{})
-		if !ok {
-			next = map[string]interface{}{}
-			m[k] = next
-		}
-
-		m = next
-	}
-
-	m[keys[len(keys)-1]] = value
 }

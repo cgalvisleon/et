@@ -342,10 +342,10 @@ func (s Item) Delete(keys []string) bool {
 }
 
 /**
-* ExistKey return if the key exist
+* Exist return if the key exist
 * @param key string
 * @return bool
 **/
-func (s Item) ExistKey(key string) bool {
-	return s.Result.ExistKey(key)
+func (s Item) Exist(key string) bool {
+	return s.Result.Exist(key)
 }

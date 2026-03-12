@@ -7,14 +7,57 @@ import (
 	"github.com/cgalvisleon/et/et"
 )
 
-type item = struct {
-	Item et.Json `json:"item"`
-	As   string  `json:"as"`
+type Iterator interface {
+	Next() (et.Json, bool)
+	As() string
+	Add(item et.Json)
+	Data(int) et.Json
 }
 
 type Source struct {
-	Data []et.Json `json:"data"`
-	As   string    `json:"as"`
+	data []et.Json
+	as   string
+}
+
+/**
+* Next
+* @return (et.Json, bool)
+**/
+func (s *Source) Next() (et.Json, bool) {
+	if len(s.data) == 0 {
+		return et.Json{}, false
+	}
+	item := s.data[0]
+	s.data = s.data[1:]
+	return item, true
+}
+
+/**
+* As
+* @return string
+**/
+func (s *Source) As() string {
+	return s.as
+}
+
+/**
+* Add
+* @param item et.Json
+**/
+func (s *Source) Add(item et.Json) {
+	s.data = append(s.data, item)
+}
+
+/**
+* Data
+* @param index int
+* @return et.Json
+**/
+func (s *Source) Data(index int) et.Json {
+	if index < 0 || index >= len(s.data) {
+		return et.Json{}
+	}
+	return s.data[index]
 }
 
 type JoinType int
@@ -46,7 +89,7 @@ func (j JoinType) String() string {
 }
 
 type Join struct {
-	To   *Source           `json:"to"`
+	To   Iterator          `json:"to"`
 	Keys map[string]string `json:"keys"`
 	Type JoinType          `json:"type"`
 }
@@ -55,7 +98,7 @@ type Join struct {
 * Where
 **/
 type Where struct {
-	From       *Source         `json:"from"`
+	From       Iterator        `json:"from"`
 	Conditions []*Condition    `json:"conditions"`
 	Selects    []string        `json:"selects"`
 	Joins      []*Join         `json:"joins"`
@@ -77,8 +120,8 @@ func newWhere(from []et.Json, as string) *Where {
 	limitRows := envar.GetInt("LIMIT_ROWS", 1000)
 	result := &Where{
 		From: &Source{
-			Data: from,
-			As:   as,
+			data: from,
+			as:   as,
 		},
 		Conditions: make([]*Condition, 0),
 		Selects:    make([]string, 0),
@@ -194,8 +237,8 @@ func (s *Where) join(to []et.Json, as string, keys map[string]string, joinType J
 
 	join := &Join{
 		To: &Source{
-			Data: to,
-			As:   as,
+			data: to,
+			as:   as,
 		},
 		Keys: keys,
 		Type: joinType,
@@ -346,15 +389,20 @@ func (s *Where) Run(tx *Tx) []et.Json {
 	tx, _ = GetTx(tx)
 
 	from := s.From
-	if len(s.Joins) == 0 && s.From.As != "" {
+	if len(s.Joins) == 0 && s.From.As() != "" {
 		from = &Source{
-			Data: []et.Json{},
-			As:   s.From.As,
+			data: []et.Json{},
+			as:   s.From.As(),
 		}
 
-		for _, item := range s.From.Data {
-			item = Prefixer(item, s.From.As)
-			from.Data = append(from.Data, item)
+		for {
+			item, ok := s.From.Next()
+			if !ok {
+				break
+			}
+
+			item = Prefixer(item, s.From.As())
+			from.Add(item)
 		}
 	} else {
 		for _, join := range s.Joins {
@@ -362,8 +410,12 @@ func (s *Where) Run(tx *Tx) []et.Json {
 		}
 	}
 
-	for _, item := range from.Data {
-		ok := Validate(item, s.Conditions)
+	for {
+		item, ok := from.Next()
+		if !ok {
+			break
+		}
+		ok = Validate(item, s.Conditions)
 		if !ok {
 			continue
 		}

@@ -397,30 +397,41 @@ func Prefixer(item et.Json, as string) et.Json {
 
 /**
 * Joingy
-* @params left, right *Source, keys map[string]string, joinType JoinType
-* @return *Source
+* @params left, right Iterator, keys map[string]string, joinType JoinType
+* @return Iterator
 **/
-func Joingy(left, right *Source, keys map[string]string, joinType JoinType) *Source {
+func Joingy(left, right Iterator, keys map[string]string, joinType JoinType) Iterator {
 	result := []et.Json{}
 	rightIndex := map[string][]int{}
 	matchedRight := map[int]bool{}
 
 	// indexar RIGHT
-	for i, r := range right.Data {
-		r = Prefixer(r, right.As)
+	i := 0
+	for {
+		r, ok := right.Next()
+		if !ok {
+			break
+		}
+		r = Prefixer(r, right.As())
 		key := buildKey(r, keys, false)
 		rightIndex[key] = append(rightIndex[key], i)
+		i++
 	}
 
 	// recorrer LEFT
-	for _, l := range left.Data {
-		l = Prefixer(l, left.As)
+	for {
+		l, ok := left.Next()
+		if !ok {
+			break
+		}
+
+		l = Prefixer(l, left.As())
 		key := buildKey(l, keys, true)
 		ridxs, ok := rightIndex[key]
 		if ok {
 			for _, ri := range ridxs {
-				r := right.Data[ri]
-				r = Prefixer(r, right.As)
+				r := right.Data(ri)
+				r = Prefixer(r, right.As())
 				matchedRight[ri] = true
 
 				result = append(result, merge(l, r))
@@ -434,17 +445,23 @@ func Joingy(left, right *Source, keys map[string]string, joinType JoinType) *Sou
 
 	// RIGHT JOIN o FULL JOIN
 	if joinType == RightJoin || joinType == FullJoin {
-		for i, r := range right.Data {
-			r = Prefixer(r, right.As)
+		i := 0
+		for {
+			r, ok := right.Next()
+			if !ok {
+				break
+			}
+			r = Prefixer(r, right.As())
 			if !matchedRight[i] {
 				result = append(result, merge(nil, r))
 			}
+			i++
 		}
 	}
 
 	return &Source{
-		Data: result,
-		As:   left.As,
+		data: result,
+		as:   left.As(),
 	}
 }
 

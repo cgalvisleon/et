@@ -13,6 +13,9 @@ const (
 )
 
 func From(itmes []et.Json, as string) *Where {
-	result := newWhere(itmes, as)
+	result := newWhere(&Source{
+		data: itmes,
+		as:   as,
+	})
 	return result
 }

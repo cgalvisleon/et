@@ -14,52 +14,6 @@ type Iterator interface {
 	Data(int) et.Json
 }
 
-type Source struct {
-	data []et.Json
-	as   string
-}
-
-/**
-* Next
-* @return (et.Json, bool)
-**/
-func (s *Source) Next() (et.Json, bool) {
-	if len(s.data) == 0 {
-		return et.Json{}, false
-	}
-	item := s.data[0]
-	s.data = s.data[1:]
-	return item, true
-}
-
-/**
-* As
-* @return string
-**/
-func (s *Source) As() string {
-	return s.as
-}
-
-/**
-* Add
-* @param item et.Json
-**/
-func (s *Source) Add(item et.Json) {
-	s.data = append(s.data, item)
-}
-
-/**
-* Data
-* @param index int
-* @return et.Json
-**/
-func (s *Source) Data(index int) et.Json {
-	if index < 0 || index >= len(s.data) {
-		return et.Json{}
-	}
-	return s.data[index]
-}
-
 type JoinType int
 
 const (
@@ -116,13 +70,10 @@ type Where struct {
 * @param from []et.Json, as string
 * @return *Where
 **/
-func newWhere(from []et.Json, as string) *Where {
+func newWhere(from Iterator) *Where {
 	limitRows := envar.GetInt("LIMIT_ROWS", 1000)
 	result := &Where{
-		From: &Source{
-			data: from,
-			as:   as,
-		},
+		From:       from,
 		Conditions: make([]*Condition, 0),
 		Selects:    make([]string, 0),
 		Joins:      make([]*Join, 0),

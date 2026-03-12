@@ -22,7 +22,7 @@ func main() {
 
 	itemB := []et.Json{
 		{"name": "pedro", "age": 30, "identity": et.Json{"type": "CC", "number": "123458"}},
-		{"name": "ana", "age": 25, "identity": et.Json{"type": "CC", "number": "123459"}},
+		{"name": "ana", "age": 2, "identity": et.Json{"type": "CC", "number": "123459"}},
 		{"name": "juan", "age": 35, "identity": et.Json{"type": "CC", "number": "123460"}},
 	}
 

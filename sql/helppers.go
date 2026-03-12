@@ -380,26 +380,19 @@ func MergeToMap(left, right []et.Json) []et.Json {
 * @param from *Source
 * @return *Source
 **/
-func Prefixer(from *Source) *Source {
-	result := []et.Json{}
-	for _, item := range from.Data {
-		out := et.Json{}
-		for k, v := range item {
-			k = strings.ToLower(k)
-			as := strings.ToLower(from.As)
-			if as != "" {
-				out[as+"."+k] = v
-			} else {
-				out[k] = v
-			}
+func Prefixer(item et.Json, as string) et.Json {
+	result := et.Json{}
+	for k, v := range item {
+		k = strings.ToLower(k)
+		as := strings.ToLower(as)
+		if as != "" {
+			result[as+"."+k] = v
+		} else {
+			result[k] = v
 		}
-		result = append(result, out)
 	}
 
-	return &Source{
-		Data: result,
-		As:   from.As,
-	}
+	return result
 }
 
 /**
@@ -414,24 +407,27 @@ func Joingy(left, right *Source, keys map[string]string, joinType JoinType) *Sou
 
 	// indexar RIGHT
 	for i, r := range right.Data {
+		r = Prefixer(r, right.As)
 		key := buildKey(r, keys, false)
 		rightIndex[key] = append(rightIndex[key], i)
 	}
 
 	// recorrer LEFT
 	for _, l := range left.Data {
+		l = Prefixer(l, left.As)
 		key := buildKey(l, keys, true)
 		ridxs, ok := rightIndex[key]
 		if ok {
 			for _, ri := range ridxs {
 				r := right.Data[ri]
+				r = Prefixer(r, right.As)
 				matchedRight[ri] = true
 
-				result = append(result, merge(&item{Item: l, As: left.As}, &item{Item: r, As: right.As}))
+				result = append(result, merge(l, r))
 			}
 		} else {
 			if joinType == LeftJoin || joinType == FullJoin {
-				result = append(result, merge(&item{Item: l, As: left.As}, nil))
+				result = append(result, merge(l, nil))
 			}
 		}
 	}
@@ -439,8 +435,9 @@ func Joingy(left, right *Source, keys map[string]string, joinType JoinType) *Sou
 	// RIGHT JOIN o FULL JOIN
 	if joinType == RightJoin || joinType == FullJoin {
 		for i, r := range right.Data {
+			r = Prefixer(r, right.As)
 			if !matchedRight[i] {
-				result = append(result, merge(nil, &item{Item: r, As: right.As}))
+				result = append(result, merge(nil, r))
 			}
 		}
 	}
@@ -456,30 +453,21 @@ func Joingy(left, right *Source, keys map[string]string, joinType JoinType) *Sou
 * @params left, right et.Json, as string
 * @return et.Json
 **/
-func merge(left, right *item) et.Json {
+func merge(left, right et.Json) et.Json {
 	out := et.Json{}
 
 	if left != nil {
-		for k, v := range left.Item {
-			k = strings.ToLower(k)
-			as := strings.ToLower(left.As)
-			if as != "" {
-				out[as+"."+k] = v
-			} else {
-				out[k] = v
-			}
-		}
+		maps.Copy(out, left)
 	}
 
 	if right != nil {
-		for k, v := range right.Item {
+		for k, v := range right {
 			k = strings.ToLower(k)
-			as := strings.ToLower(right.As)
-			if as != "" {
-				out[as+"."+k] = v
-			} else {
-				out[k] = v
+			if _, exists := out[k]; exists {
+				continue
 			}
+
+			out[k] = v
 		}
 	}
 

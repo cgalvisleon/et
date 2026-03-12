@@ -346,8 +346,16 @@ func (s *Where) Run(tx *Tx) []et.Json {
 	tx, _ = GetTx(tx)
 
 	from := s.From
-	if len(s.Joins) == 0 {
-		from = Prefixer(from)
+	if len(s.Joins) == 0 && s.From.As != "" {
+		from = &Source{
+			Data: []et.Json{},
+			As:   s.From.As,
+		}
+
+		for _, item := range s.From.Data {
+			item = Prefixer(item, s.From.As)
+			from.Data = append(from.Data, item)
+		}
 	} else {
 		for _, join := range s.Joins {
 			from = Joingy(from, join.To, join.Keys, join.Type)

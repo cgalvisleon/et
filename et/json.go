@@ -952,6 +952,20 @@ func (s Json) Exist(key string) bool {
 }
 
 /**
+* Require
+* @param rules ...Rule
+* @return error
+**/
+func (s Json) Require(rules ...Rule) error {
+	for _, r := range rules {
+		if err := r.Validate(s); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+/**
 * Select
 * @param keys []string
 * @return Json

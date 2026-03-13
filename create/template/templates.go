@@ -603,6 +603,7 @@ import (
 	"net/http"
 
 	"github.com/cgalvisleon/et/claim"
+	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/cgalvisleon/jdb/jdb"
@@ -616,7 +617,7 @@ import (
 * @param r *http.Request
 **/
 func (rt *Router) upsert$2(w http.ResponseWriter, r *http.Request) {
-	body, _ := response.GetBody(r)
+	body, _ := request.GetBody(r)
 	tenantId := body.Str(jdb.TENANT_ID)
 	id := body.Str(jdb.KEY)
 	name := body.Str("name")
@@ -654,7 +655,7 @@ func (rt *Router) get$2ById(w http.ResponseWriter, r *http.Request) {
 **/
 func (rt *Router) state$2(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	body, _ := response.GetBody(r)
+	body, _ := request.GetBody(r)
 	statusId := body.Str(jdb.STATUS_ID)
 	clientName := claim.ClientName(r)
 	result, err := $4.State$2(id, statusId, clientName)
@@ -689,7 +690,7 @@ func (rt *Router) delete$2(w http.ResponseWriter, r *http.Request) {
 * @param r *http.Request
 **/
 func (rt *Router) query$2(w http.ResponseWriter, r *http.Request) {
-	body, _ := response.GetBody(r)
+	body, _ := request.GetBody(r)
 	query := body.Json("query")
 	result, err := $4.Query$2(query)
 	if err != nil {

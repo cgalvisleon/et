@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
 	"github.com/go-chi/chi/v5"
 )
@@ -14,7 +15,7 @@ import (
 * @param w http.ResponseWriter, r *http.Request
 **/
 func HttpSet(w http.ResponseWriter, r *http.Request) {
-	body, _ := response.GetBody(r)
+	body, _ := request.GetBody(r)
 	method := body.String("method")
 	path := body.String("path")
 	resolve := body.String("resolve")

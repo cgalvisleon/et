@@ -9,6 +9,7 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
+	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/nats-io/nats.go"
@@ -256,7 +257,7 @@ func Error(event string, err error) error {
 * @param w http.ResponseWriter, r *http.Request
 **/
 func HttpEventPublish(w http.ResponseWriter, r *http.Request) {
-	body, _ := response.GetBody(r)
+	body, _ := request.GetBody(r)
 	channel := body.Str("channel")
 	data := body.Json("data")
 	err := Publish(channel, data)

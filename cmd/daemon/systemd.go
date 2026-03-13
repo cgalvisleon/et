@@ -58,7 +58,7 @@ func (s *Systemd) SetConfig(cfg string) {
 		return
 	}
 
-	config, err := et.Object(cfg)
+	config, err := et.ToJson(cfg)
 	if err != nil {
 		logs.Alert(err)
 		return

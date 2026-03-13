@@ -20,11 +20,11 @@ func Serialize(src any) ([]byte, error) {
 }
 
 /**
-* Object convert a interface to a json
-* @param src interface{}
+* ToJson convert a string to a json
+* @param src string
 * @return Json, error
 **/
-func Object(src string) (Json, error) {
+func ToJson(src string) (Json, error) {
 	var result map[string]interface{}
 	if err := json.Unmarshal([]byte(src), &result); err != nil {
 		return result, err

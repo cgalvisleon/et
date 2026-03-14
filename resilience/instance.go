@@ -2,18 +2,14 @@ package resilience
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"reflect"
 	"time"
 
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/mem"
-	"github.com/cgalvisleon/et/reg"
-	"github.com/cgalvisleon/et/utility"
+	"github.com/cgalvisleon/et/timezone"
 )
 
 var errorInterface = reflect.TypeOf((*error)(nil)).Elem()
@@ -23,14 +19,12 @@ type TpStore string
 type Status string
 
 const (
-	packageName           = "resilience"
-	TpStoreCache  TpStore = "cache"
-	TpStoreMemory TpStore = "memory"
-	StatusPending Status  = "pending"
-	StatusRunning Status  = "running"
-	StatusDone    Status  = "done"
-	StatusStop    Status  = "stop"
-	StatusFailed  Status  = "failed"
+	packageName          = "resilience"
+	StatusPending Status = "pending"
+	StatusRunning Status = "running"
+	StatusDone    Status = "done"
+	StatusStop    Status = "stop"
+	StatusFailed  Status = "failed"
 )
 
 type Instance struct {
@@ -46,7 +40,6 @@ type Instance struct {
 	Attempt       int             `json:"attempt"`
 	TotalAttempts int             `json:"total_attempts"`
 	TimeAttempts  time.Duration   `json:"time_attempts"`
-	RetentionTime time.Duration   `json:"retention_time"`
 	Tags          et.Json         `json:"tags"`
 	Team          string          `json:"team"`
 	Level         string          `json:"level"`
@@ -58,57 +51,16 @@ type Instance struct {
 }
 
 /**
-* Instance
-* @param id, tag, description string, totalAttempts int, timeAttempts, retentionTime time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}
-* @return Instance
- */
-func NewInstance(id, tag, description string, totalAttempts int, timeAttempts, retentionTime time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
-	id = reg.GetUUID(id)
-	result := &Instance{
-		CreatedAt:     time.Now(),
-		Id:            id,
-		Tag:           tag,
-		Description:   description,
-		fn:            fn,
-		fnArgs:        fnArgs,
-		fnResult:      []reflect.Value{},
-		TotalAttempts: totalAttempts,
-		TimeAttempts:  timeAttempts,
-		RetentionTime: retentionTime,
-		Tags:          tags,
-		Team:          team,
-		Level:         level,
-		stop:          false,
-	}
-	result.setStatus(StatusPending)
-
-	return result
-}
-
-/**
-* LoadById
-* @param id string
-* @return *Instance, error
+* Serialize
+* @return ([]byte, error)
 **/
-func LoadById(id string) (*Instance, error) {
-	key := fmt.Sprintf("resilience:%s", id)
-	exists := cache.Exists(key)
-	if !exists {
-		return nil, errors.New(MSG_INSTANCE_NOT_FOUND)
-	}
-
-	bt, err := cache.Get(key, "")
+func (s *Instance) Serialize() ([]byte, error) {
+	bt, err := json.Marshal(s)
 	if err != nil {
 		return nil, err
 	}
 
-	var result Instance
-	err = json.Unmarshal([]byte(bt), &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return &result, nil
+	return bt, nil
 }
 
 /**
@@ -116,66 +68,41 @@ func LoadById(id string) (*Instance, error) {
 * @return et.Json
 **/
 func (s *Instance) ToJson() et.Json {
-	result := et.Json{
-		"created_at":      s.CreatedAt,
-		"updated_at":      s.UpdatedAt,
-		"last_attempt_at": s.LastAttemptAt,
-		"done_at":         s.DoneAt,
-		"id":              s.Id,
-		"tag":             s.Tag,
-		"description":     s.Description,
-		"status":          s.Status,
-		"tp_store":        s.TpStore,
-		"attempt":         s.Attempt,
-		"total_attempts":  s.TotalAttempts,
-		"time_attempts":   s.TimeAttempts,
-		"retention_time":  s.RetentionTime,
+	bt, err := s.Serialize()
+	if err != nil {
+		return et.Json{}
+	}
+
+	var result et.Json
+	err = json.Unmarshal(bt, &result)
+	if err != nil {
+		return et.Json{}
 	}
 
 	for k, v := range s.Tags {
-		result[k] = v
+		result.Set(k, v)
 	}
 
 	return result
 }
 
 /**
-* saveTo
-* @param id string, bt []byte
-**/
-func (s *Instance) saveTo(id string, bt []byte) {
-	if s.RetentionTime <= 0 {
-		s.RetentionTime = 10 * time.Minute
-	}
-
-	key := fmt.Sprintf("resilience:%s", id)
-	err := cache.Set(key, string(bt), s.RetentionTime)
-	if err != nil {
-		mem.Set(key, string(bt), s.RetentionTime)
-		s.TpStore = TpStoreMemory
-	} else {
-		s.TpStore = TpStoreCache
-	}
-}
-
-/**
-* save
+* Save
 * @return error
 **/
-func (s *Instance) save() error {
-	event.Publish(EVENT_RESILIENCE_STATUS, s.ToJson())
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return err
+func (s *Instance) Save() error {
+	data := s.ToJson()
+	event.Publish(EVENT_RESILIENCE_STATUS, data)
+
+	if saveInstance != nil {
+		return saveInstance(s)
 	}
 
-	s.saveTo(s.Id, bt)
-
-	return nil
+	return fmt.Errorf("Save: saveInstance is nil")
 }
 
 /**
-* SetStatus
+* setStatus
 * @param status Status
 * @return error
 **/
@@ -185,7 +112,7 @@ func (s *Instance) setStatus(status Status) error {
 	}
 
 	s.Status = status
-	s.UpdatedAt = utility.Now()
+	s.UpdatedAt = timezone.Now()
 	if s.Status == StatusDone {
 		s.DoneAt = s.UpdatedAt
 	}
@@ -202,7 +129,7 @@ func (s *Instance) setStatus(status Status) error {
 			data.Set("level", s.Level)
 			message := fmt.Sprintf(MSG_RESILIENCE_FINISHED_ERROR, s.Attempt, s.TotalAttempts, s.Id, s.Tag, s.Status, errMsg)
 			event.Publish(EVENT_RESILIENCE_FAILED, data)
-			logs.Log(packageName, message)
+			logs.Logf(packageName, message)
 		} else {
 			logs.Logf(packageName, MSG_RESILIENCE_ERROR, s.Attempt, s.TotalAttempts, s.Id, s.Tag, s.Status, errMsg)
 		}
@@ -214,7 +141,7 @@ func (s *Instance) setStatus(status Status) error {
 		}
 	}
 
-	return s.save()
+	return s.Save()
 }
 
 /**
@@ -275,7 +202,7 @@ func (s *Instance) run() ([]reflect.Value, error) {
 		})}, nil
 	}
 
-	s.LastAttemptAt = utility.Now()
+	s.LastAttemptAt = timezone.Now()
 	s.Attempt++
 	s.setStatus(StatusRunning)
 

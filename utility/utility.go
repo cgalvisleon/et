@@ -400,8 +400,7 @@ func Params(str string, args ...any) string {
 
 /**
 * ParamQuote return a string with the values replaced
-* @param str string
-* @param args ...any
+* @param str string, args ...any
 * @return string
 **/
 func ParamQuote(str string, args ...any) string {
@@ -416,8 +415,7 @@ func ParamQuote(str string, args ...any) string {
 
 /**
 * Address return a string with the host and port
-* @param host string
-* @param port int
+* @param host string, port int
 * @return string
 **/
 func Address(host string, port int) string {
@@ -426,8 +424,7 @@ func Address(host string, port int) string {
 
 /**
 * BannerTitle return the value in a string format
-* @param name string
-* @param size int
+* @param name string, size int
 * @return string
 **/
 func BannerTitle(name string, size int) string {
@@ -435,12 +432,11 @@ func BannerTitle(name string, size int) string {
 }
 
 /**
-* GoMod return the value of a go.mod attribute
+* GetGoMod return the value of a go.mod attribute
 * @param atrib string
-* @return string
-* @return error
+* @return string, error
 **/
-func GoMod(atrib string) (string, error) {
+func GetGoMod(atrib string) (string, error) {
 	var result string
 	rutaArchivoGoMod := "./go.mod"
 

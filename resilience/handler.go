@@ -1,16 +1,15 @@
 package resilience
 
 import (
-	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/response"
-	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi"
 )
 
 var resilience map[string]*Instance
@@ -24,12 +23,7 @@ func load() error {
 		return nil
 	}
 
-	err := cache.Load()
-	if err != nil {
-		return err
-	}
-
-	err = event.Load()
+	err := event.Load()
 	if err != nil {
 		return err
 	}
@@ -50,10 +44,6 @@ func HealthCheck() bool {
 		return false
 	}
 
-	if !cache.HealthCheck() {
-		return false
-	}
-
 	if !event.HealthCheck() {
 		return false
 	}
@@ -63,15 +53,15 @@ func HealthCheck() bool {
 
 /**
 * AddCustom
-* @param id, tag, description string, totalAttempts int, timeAttempts, retentionTime time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}
+* @param id, tag, description string, totalAttempts int, timeAttempts time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}
 * @return *Instance
  */
-func AddCustom(id, tag, description string, totalAttempts int, timeAttempts, retentionTime time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
+func AddCustom(id, tag, description string, totalAttempts int, timeAttempts time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
 	if err := load(); err != nil {
 		return nil
 	}
 
-	result := NewInstance(id, tag, description, totalAttempts, timeAttempts, retentionTime, tags, team, level, fn, fnArgs...)
+	result := NewInstance(id, tag, description, totalAttempts, timeAttempts, tags, team, level, fn, fnArgs...)
 	resilience[id] = result
 	result.runAttempt()
 
@@ -86,9 +76,8 @@ func AddCustom(id, tag, description string, totalAttempts int, timeAttempts, ret
 func Add(id, tag, description string, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
 	totalAttempts := envar.GetInt("RESILIENCE_TOTAL_ATTEMPTS", 3)
 	timeAttempts := envar.GetInt("RESILIENCE_TIME_ATTEMPTS", 30)
-	retentionTime := envar.GetInt("RESILIENCE_RETENTION_TIME", 10)
 
-	return AddCustom(id, tag, description, totalAttempts, time.Duration(timeAttempts)*time.Second, time.Duration(retentionTime)*time.Minute, tags, team, level, fn, fnArgs...)
+	return AddCustom(id, tag, description, totalAttempts, time.Duration(timeAttempts)*time.Second, tags, team, level, fn, fnArgs...)
 }
 
 /**
@@ -102,7 +91,7 @@ func Stop(id string) error {
 	}
 
 	if _, ok := resilience[id]; !ok {
-		return errors.New(MSG_ID_NOT_FOUND)
+		return fmt.Errorf(MSG_ID_NOT_FOUND)
 	}
 
 	resilience[id].setStop()
@@ -121,7 +110,7 @@ func Restart(id string) error {
 	}
 
 	if _, ok := resilience[id]; !ok {
-		return errors.New(MSG_ID_NOT_FOUND)
+		return fmt.Errorf(MSG_ID_NOT_FOUND)
 	}
 
 	resilience[id].setRestart()

@@ -12,6 +12,7 @@ ET es una librería modular en Go para construir servicios, CLIs y aplicaciones 
 
 ```bash
 go get github.com/cgalvisleon/et@latest
+go get github.com/cgalvisleon/et@v1.0.20
 ```
 
 Para usar paquetes individuales, importa el paquete correspondiente:
@@ -128,12 +129,12 @@ envar.Validate([]string{"NATS_HOST", "REDIS_HOST"}) // retorna error si falta al
 
 ### Variables de entorno requeridas
 
-| Paquete  | Variable          | Descripción                     |
-|----------|-------------------|---------------------------------|
-| `cache`  | `REDIS_HOST`      | Conexión a Redis                |
-| `event`  | `NATS_HOST`       | Conexión a NATS                 |
-| `event`  | `NATS_USER`       | Usuario NATS (opcional)         |
-| `event`  | `NATS_PASSWORD`   | Contraseña NATS (opcional)      |
+| Paquete | Variable        | Descripción                |
+| ------- | --------------- | -------------------------- |
+| `cache` | `REDIS_HOST`    | Conexión a Redis           |
+| `event` | `NATS_HOST`     | Conexión a NATS            |
+| `event` | `NATS_USER`     | Usuario NATS (opcional)    |
+| `event` | `NATS_PASSWORD` | Contraseña NATS (opcional) |
 
 ## Crontab
 

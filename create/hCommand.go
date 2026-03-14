@@ -13,7 +13,7 @@ var CmdProject = &cobra.Command{
 	Short: "Create project base type microservice.",
 	Long:  "Template project to microservice include folder cmd, deployments, pkg, rest, test and web, with files .go required for making a microservice.",
 	Run: func(cmd *cobra.Command, args []string) {
-		packageName, err := utility.GoMod("module")
+		packageName, err := utility.GetGoMod("module")
 		if err != nil {
 			fmt.Printf("Prompt failed %v\n", err)
 			return
@@ -50,7 +50,7 @@ var CmdMicro = &cobra.Command{
 	Short: "Create project base type microservice.",
 	Long:  "Template project to microservice include folder cmd, deployments, pkg, rest, test and web, with files .go required for making a microservice.",
 	Run: func(cmd *cobra.Command, args []string) {
-		projectName, err := utility.GoMod("module")
+		projectName, err := utility.GetGoMod("module")
 		if err != nil {
 			fmt.Printf("Prompt failed %v\n", err)
 			return
@@ -81,7 +81,7 @@ var CmdModelo = &cobra.Command{
 	Short: "Create model to microservice.",
 	Long:  "Template model to microservice include function handler model.",
 	Run: func(cmd *cobra.Command, args []string) {
-		projectName, err := utility.GoMod("module")
+		projectName, err := utility.GetGoMod("module")
 		if err != nil {
 			fmt.Printf("Prompt failed %v\n", err)
 			return

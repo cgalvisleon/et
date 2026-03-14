@@ -30,18 +30,18 @@ func initEvents() {
 
 /**
 * eventStop
-* @param m event.Message
+* @param m event.EvenMessage
 **/
 func eventStop(m event.Message) {
 	data := m.Data
 	id := data.Str("id")
 	if id == "" {
-		logs.Errorf(MSG_ID_REQUIRED)
+		logs.Errorm(MSG_ID_REQUIRED)
 		return
 	}
 
 	Stop(id)
-	logs.Log("eventStop:", data.ToString())
+	logs.Log(packagePath, "eventStop", data.ToString())
 }
 
 /**
@@ -52,10 +52,10 @@ func eventRestart(m event.Message) {
 	data := m.Data
 	id := data.Str("id")
 	if id == "" {
-		logs.Errorf(MSG_ID_REQUIRED)
+		logs.Errorm(MSG_ID_REQUIRED)
 		return
 	}
 
 	Restart(id)
-	logs.Log("eventRestart:", data.ToString())
+	logs.Log(packagePath, "eventRestart", data.ToString())
 }

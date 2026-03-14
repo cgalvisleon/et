@@ -510,36 +510,6 @@ func FromBase64Raw(data string) string {
 }
 
 /**
-* PayloadEncoded
-* @param data et.Json
-* @return string
-**/
-func PayloadEncoded(data et.Json) string {
-	result := ToBase64(data.ToString())
-
-	return result
-}
-
-/**
-* PayloadDecoded
-* @param token string
-* @return et.Json
-**/
-func PayloadDecoded(token string) (et.Json, error) {
-	data, err := FromBase64(token)
-	if err != nil {
-		return et.Json{}, err
-	}
-
-	result, err := et.Object(data)
-	if err != nil {
-		return et.Json{}, err
-	}
-
-	return result, nil
-}
-
-/**
 * Normalize
 * @param input string
 * @return string

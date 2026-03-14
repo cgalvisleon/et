@@ -2,26 +2,26 @@ package resilience
 
 import "github.com/cgalvisleon/et/logs"
 
-type LoadInstanceFn func(id string) (*Instance, error)
-type SaveInstanceFn func(*Instance) error
+type GetInstanceFn func(id string, dest any) (bool, error)
+type SetInstanceFn func(id, tag string, obj any) error
 
-var loadInstance LoadInstanceFn
-var saveInstance SaveInstanceFn
+var getInstance GetInstanceFn
+var setInstance SetInstanceFn
 
-func SetLoadInstance(fn LoadInstanceFn) {
+func SetGetInstance(fn GetInstanceFn) {
 	if fn == nil {
 		return
 	}
 
-	logs.Log("workflow", "SetLoadInstance")
-	loadInstance = fn
+	logs.Log(packageName, "SetLoadInstance")
+	getInstance = fn
 }
 
-func SetSaveInstance(fn SaveInstanceFn) {
+func SetSetInstance(fn SetInstanceFn) {
 	if fn == nil {
 		return
 	}
 
-	logs.Log("workflow", "SetSaveInstance")
-	saveInstance = fn
+	logs.Log(packageName, "SetSaveInstance")
+	setInstance = fn
 }

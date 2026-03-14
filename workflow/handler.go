@@ -12,6 +12,7 @@ import (
 	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/request"
+	"github.com/cgalvisleon/et/resilience"
 	"github.com/cgalvisleon/et/response"
 	"github.com/go-chi/chi/v5"
 )
@@ -36,7 +37,7 @@ func Load(store instances.Store) error {
 		SetSetInstance(store.Set)
 	}
 
-	return nil
+	return resilience.Load(store)
 }
 
 /**

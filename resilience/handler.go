@@ -8,6 +8,7 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/response"
 	"github.com/go-chi/chi"
 )
@@ -15,10 +16,10 @@ import (
 var resilience map[string]*Instance
 
 /**
-* load
+* Load
 * @return error
  */
-func load() error {
+func Load(store instances.Store) error {
 	if resilience != nil {
 		return nil
 	}
@@ -28,9 +29,14 @@ func load() error {
 		return err
 	}
 
-	initEvents()
+	err = initEvents()
+	if err != nil {
+		return err
+	}
 
 	resilience = make(map[string]*Instance)
+	SetGetInstance(store.Get)
+	SetSetInstance(store.Set)
 
 	return nil
 }
@@ -38,13 +44,9 @@ func load() error {
 /**
 * HealthCheck
 * @return bool
-**/
+ */
 func HealthCheck() bool {
-	if err := load(); err != nil {
-		return false
-	}
-
-	if !event.HealthCheck() {
+	if resilience == nil {
 		return false
 	}
 
@@ -57,7 +59,7 @@ func HealthCheck() bool {
 * @return *Instance
  */
 func AddCustom(id, tag, description string, totalAttempts int, timeAttempts time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
-	if err := load(); err != nil {
+	if resilience == nil {
 		return nil
 	}
 
@@ -86,8 +88,8 @@ func Add(id, tag, description string, tags et.Json, team string, level string, f
 * @return error
  */
 func Stop(id string) error {
-	if err := load(); err != nil {
-		return err
+	if resilience == nil {
+		return fmt.Errorf(MSG_ID_NOT_FOUND)
 	}
 
 	if _, ok := resilience[id]; !ok {
@@ -105,8 +107,8 @@ func Stop(id string) error {
 * @return error
  */
 func Restart(id string) error {
-	if err := load(); err != nil {
-		return err
+	if resilience == nil {
+		return fmt.Errorf(MSG_ID_NOT_FOUND)
 	}
 
 	if _, ok := resilience[id]; !ok {
@@ -123,7 +125,7 @@ func Restart(id string) error {
 * @param w http.ResponseWriter, r *http.Request
 **/
 func HttpGetResilienceById(w http.ResponseWriter, r *http.Request) {
-	if err := load(); err != nil {
+	if resilience == nil {
 		response.HTTPError(w, r, http.StatusBadRequest, MSG_RESILIENCE_NOT_INITIALIZED)
 		return
 	}
@@ -134,9 +136,9 @@ func HttpGetResilienceById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := LoadById(id)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusNotFound, err.Error())
+	res, exist := LoadById(id)
+	if !exist {
+		response.HTTPError(w, r, http.StatusNotFound, MSG_ID_NOT_FOUND)
 		return
 	}
 
@@ -151,7 +153,7 @@ func HttpGetResilienceById(w http.ResponseWriter, r *http.Request) {
 * @param w http.ResponseWriter, r *http.Request
 **/
 func HttpGetResilienceStop(w http.ResponseWriter, r *http.Request) {
-	if err := load(); err != nil {
+	if resilience == nil {
 		response.HTTPError(w, r, http.StatusBadRequest, MSG_RESILIENCE_NOT_INITIALIZED)
 		return
 	}
@@ -177,7 +179,7 @@ func HttpGetResilienceStop(w http.ResponseWriter, r *http.Request) {
 * @param w http.ResponseWriter, r *http.Request
 **/
 func HttpGetResilienceRestart(w http.ResponseWriter, r *http.Request) {
-	if err := load(); err != nil {
+	if resilience == nil {
 		response.HTTPError(w, r, http.StatusBadRequest, MSG_RESILIENCE_NOT_INITIALIZED)
 		return
 	}

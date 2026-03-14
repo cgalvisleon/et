@@ -48,6 +48,7 @@ type Instance struct {
 	fn            interface{}     `json:"-"`
 	fnArgs        []interface{}   `json:"-"`
 	fnResult      []reflect.Value `json:"-"`
+	isDebug       bool            `json:"-"`
 }
 
 /**
@@ -94,11 +95,15 @@ func (s *Instance) Save() error {
 	data := s.ToJson()
 	event.Publish(EVENT_RESILIENCE_STATUS, data)
 
-	if saveInstance != nil {
-		return saveInstance(s)
+	if s.isDebug {
+		logs.Log("Resilience", "save:", data.ToString())
 	}
 
-	return fmt.Errorf("Save: saveInstance is nil")
+	if setInstance != nil {
+		return setInstance(s.Id, s.Tag, s)
+	}
+
+	return nil
 }
 
 /**

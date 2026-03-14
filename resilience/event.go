@@ -15,17 +15,18 @@ const (
 /**
 * initEvents
 **/
-func initEvents() {
+func initEvents() error {
 	err := event.Subscribe(EVENT_RESILIENCE_STOP, eventStop)
 	if err != nil {
-		logs.Error(err)
+		return err
 	}
 
 	err = event.Subscribe(EVENT_RESILIENCE_RESTART, eventRestart)
 	if err != nil {
-		logs.Error(err)
+		return err
 	}
 
+	return nil
 }
 
 /**

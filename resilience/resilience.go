@@ -1,7 +1,6 @@
 package resilience
 
 import (
-	"fmt"
 	"reflect"
 	"time"
 
@@ -41,17 +40,31 @@ func NewInstance(id, tag, description string, totalAttempts int, timeAttempts ti
 /**
 * LoadById
 * @param id string
-* @return *Instance, error
+* @return *Instance, bool
 **/
-func LoadById(id string) (*Instance, error) {
-	if loadInstance == nil {
-		return nil, fmt.Errorf("loadInstance function not set")
+func LoadById(id string) (*Instance, bool) {
+	if id == "" {
+		return nil, false
 	}
 
-	result, err := loadInstance(id)
-	if err != nil {
-		return nil, err
+	result, ok := resilience[id]
+	if ok {
+		return result, true
 	}
 
-	return result, nil
+	if getInstance != nil {
+		var result Instance
+		ok, err := getInstance(id, &result)
+		if err != nil {
+			return nil, false
+		}
+
+		if !ok {
+			return nil, false
+		}
+
+		return &result, true
+	}
+
+	return nil, false
 }

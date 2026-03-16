@@ -35,8 +35,10 @@ func Load(store instances.Store) error {
 	}
 
 	resilience = make(map[string]*Instance)
-	SetGetInstance(store.Get)
-	SetSetInstance(store.Set)
+	if store != nil {
+		SetGetInstance(store.Get)
+		SetSetInstance(store.Set)
+	}
 
 	return nil
 }

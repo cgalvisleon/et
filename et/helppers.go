@@ -41,7 +41,7 @@ func ToJson(src string) (Json, error) {
 func ToString(vals interface{}) string {
 	var buf bytes.Buffer
 	encoder := json.NewEncoder(&buf)
-	encoder.SetEscapeHTML(false) // 🔥 clave
+	encoder.SetEscapeHTML(false)
 
 	if err := encoder.Encode(vals); err != nil {
 		panic(err)

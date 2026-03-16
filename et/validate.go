@@ -377,6 +377,11 @@ type BetweenRule struct {
 	max  float64
 }
 
+/**
+* Between
+* @param name string, min, max float64
+* @return *BetweenRule
+**/
 func Between(name string, min, max float64) *BetweenRule {
 	return &BetweenRule{name, min, max}
 }

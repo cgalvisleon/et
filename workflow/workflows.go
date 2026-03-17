@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/resilience"
@@ -18,35 +18,24 @@ var (
 	ErrorInstanceNotFound = fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
 )
 
-type WorkFlows struct {
-	Flows     map[string]*Flow     `json:"flows"`
-	Instances map[string]*Instance `json:"instances"`
-	Results   map[string]et.Json   `json:"results"`
-	mu        sync.Mutex           `json:"-"`
-	isDebug   bool                 `json:"-"`
-}
+type GetInstanceFn func(id string, dest any) (bool, error)
+type SetInstanceFn func(id, tag string, obj any) error
 
-/**
-* newWorkFlows
-* @return *WorkFlows
-**/
-func newWorkFlows() *WorkFlows {
-	result := &WorkFlows{
-		Flows:     make(map[string]*Flow),
-		Instances: make(map[string]*Instance),
-		Results:   make(map[string]et.Json),
-		mu:        sync.Mutex{},
-		isDebug:   envar.GetBool("DEBUG", false),
-	}
-
-	return result
+type WorkFlow struct {
+	Flows       map[string]*Flow     `json:"flows"`
+	Instances   map[string]*Instance `json:"instances"`
+	Results     map[string]et.Json   `json:"results"`
+	mu          sync.Mutex           `json:"-"`
+	getInstance GetInstanceFn        `json:"-"`
+	setInstance SetInstanceFn        `json:"-"`
+	isDebug     bool                 `json:"-"`
 }
 
 /**
 * healthCheck
 * @return bool
 **/
-func (s *WorkFlows) healthCheck() bool {
+func (s *WorkFlow) healthCheck() bool {
 	ok := resilience.HealthCheck()
 	if !ok {
 		return false
@@ -59,7 +48,7 @@ func (s *WorkFlows) healthCheck() bool {
 * Add
 * @param instance *Instance
 **/
-func (s *WorkFlows) Add(instance *Instance) {
+func (s *WorkFlow) Add(instance *Instance) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -70,7 +59,7 @@ func (s *WorkFlows) Add(instance *Instance) {
 * Remove
 * @param instance *Instance
 **/
-func (s *WorkFlows) Remove(instance *Instance) {
+func (s *WorkFlow) Remove(instance *Instance) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -81,7 +70,7 @@ func (s *WorkFlows) Remove(instance *Instance) {
 * Count
 * @return int
 **/
-func (s *WorkFlows) Count() int {
+func (s *WorkFlow) Count() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -93,7 +82,7 @@ func (s *WorkFlows) Count() int {
 * @param tag, id string, tags et.Json, step int, createdBy string
 * @return *Instance, error
 **/
-func (s *WorkFlows) newInstance(tag, id string, tags et.Json, step int, createdBy string) (*Instance, error) {
+func (s *WorkFlow) newInstance(tag, id string, tags et.Json, step int, createdBy string) (*Instance, error) {
 	if id == "" {
 		return nil, fmt.Errorf(MSG_INSTANCE_ID_REQUIRED)
 	}
@@ -138,7 +127,7 @@ func (s *WorkFlows) newInstance(tag, id string, tags et.Json, step int, createdB
 * @param id string
 * @return *Flow, error
 **/
-func (s *WorkFlows) loadInstance(id string) (*Instance, bool) {
+func (s *WorkFlow) loadInstance(id string) (*Instance, bool) {
 	if id == "" {
 		return nil, false
 	}
@@ -148,8 +137,8 @@ func (s *WorkFlows) loadInstance(id string) (*Instance, bool) {
 		return result, true
 	}
 
-	if getInstance != nil {
-		exists, err := getInstance(id, &result)
+	if s.getInstance != nil {
+		exists, err := s.getInstance(id, &result)
 		if err != nil {
 			return nil, false
 		}
@@ -168,7 +157,7 @@ func (s *WorkFlows) loadInstance(id string) (*Instance, bool) {
 		s.Add(result)
 
 		if s.isDebug {
-			logs.Log("WorkFlows", "loadInstance:", result.ToJson().ToString())
+			logs.Log("WorkFlow", "loadInstance:", result.ToJson().ToString())
 		}
 
 		return result, true
@@ -182,7 +171,7 @@ func (s *WorkFlows) loadInstance(id string) (*Instance, bool) {
 * @param id, tag string, step int, tags et.Json, createdBy string
 * @return *Instance, error
 **/
-func (s *WorkFlows) getOrCreateInstance(id, tag string, step int, tags et.Json, createdBy string) (*Instance, error) {
+func (s *WorkFlow) getOrCreateInstance(id, tag string, step int, tags et.Json, createdBy string) (*Instance, error) {
 	id = reg.GetUUID(id)
 	result, exists := s.loadInstance(id)
 	if !exists {
@@ -198,7 +187,7 @@ func (s *WorkFlows) getOrCreateInstance(id, tag string, step int, tags et.Json, 
 * @param instanceId, tag string, step int, ctx, tags et.Json, createdBy string
 * @return et.Json, error
 **/
-func (s *WorkFlows) runInstance(instanceId, tag string, step int, ctx, tags et.Json, createdBy string) (et.Json, error) {
+func (s *WorkFlow) runInstance(instanceId, tag string, step int, ctx, tags et.Json, createdBy string) (et.Json, error) {
 	instance, err := s.getOrCreateInstance(instanceId, tag, step, tags, createdBy)
 	if err != nil {
 		return et.Json{}, err
@@ -229,13 +218,14 @@ func (s *WorkFlows) runInstance(instanceId, tag string, step int, ctx, tags et.J
 * @param instanceId string
 * @return error
 **/
-func (s *WorkFlows) resetInstance(instanceId, updatedBy string) error {
+func (s *WorkFlow) resetInstance(instanceId, updatedBy string) error {
 	instance, exists := s.loadInstance(instanceId)
 	if !exists {
 		return fmt.Errorf("instance not found")
 	}
 
 	instance.UpdatedBy = updatedBy
+	instance.Current = 0
 	instance.setStatus(FlowStatusPending)
 
 	return nil
@@ -246,7 +236,7 @@ func (s *WorkFlows) resetInstance(instanceId, updatedBy string) error {
 * @param instanceId string, updatedBy string
 * @return et.Json, error
 **/
-func (s *WorkFlows) rollback(instanceId, updatedBy string) (et.Json, error) {
+func (s *WorkFlow) rollback(instanceId, updatedBy string) (et.Json, error) {
 	instance, exists := s.loadInstance(instanceId)
 	if !exists {
 		return et.Json{}, fmt.Errorf("instance not found")
@@ -266,7 +256,7 @@ func (s *WorkFlows) rollback(instanceId, updatedBy string) (et.Json, error) {
 * @param instanceId string, updatedBy string
 * @return error
 **/
-func (s *WorkFlows) stop(instanceId, updatedBy string) error {
+func (s *WorkFlow) stop(instanceId, updatedBy string) error {
 	instance, exists := s.loadInstance(instanceId)
 	if !exists {
 		return fmt.Errorf("instance not found")
@@ -281,7 +271,7 @@ func (s *WorkFlows) stop(instanceId, updatedBy string) error {
 * @param tag, version, name, description string, fn FnContext, stop bool, createdBy string
 * @return *Flow
 **/
-func (s *WorkFlows) newFlow(tag, version, name, description string, fn FnContext, stop bool, createdBy string) *Flow {
+func (s *WorkFlow) newFlow(tag, version, name, description string, fn FnContext, stop bool, createdBy string) *Flow {
 	flow := newFlow(tag, version, name, description, fn, stop, createdBy)
 	s.Flows[tag] = flow
 
@@ -293,7 +283,7 @@ func (s *WorkFlows) newFlow(tag, version, name, description string, fn FnContext
 * @param tag string
 * @return bool
 **/
-func (s *WorkFlows) deleteFlow(tag string) bool {
+func (s *WorkFlow) deleteFlow(tag string) bool {
 	if s.Flows[tag] == nil {
 		return false
 	}
@@ -303,4 +293,112 @@ func (s *WorkFlows) deleteFlow(tag string) bool {
 	delete(s.Flows, tag)
 
 	return true
+}
+
+/**
+* Load
+* @return error
+ */
+func (s *WorkFlow) Load(store instances.Store) error {
+	if store != nil {
+		s.getInstance = store.Get
+		s.setInstance = store.Set
+	}
+
+	return resilience.Load(store)
+}
+
+/**
+* HealthCheck
+* @return bool
+**/
+func (s *WorkFlow) HealthCheck() bool {
+	return s.healthCheck()
+}
+
+/**
+* New
+* @param tag, version, name, description string, fn FnContext, createdBy string
+* @return *Flow
+**/
+func (s *WorkFlow) New(tag, version, name, description string, fn FnContext, stop bool, createdBy string) *Flow {
+	return s.newFlow(tag, version, name, description, fn, stop, createdBy)
+}
+
+/**
+* Run
+* @param instanceId, tag string, step int, ctx, tags et.Json, createdBy string
+* @return et.Json, error
+**/
+func (s *WorkFlow) Run(instanceId, tag string, step int, ctx, tags et.Json, createdBy string) (et.Json, error) {
+	return s.runInstance(instanceId, tag, step, ctx, tags, createdBy)
+}
+
+/**
+* Reset
+* @param instanceId, updatedBy string
+* @return error
+**/
+func (s *WorkFlow) Reset(instanceId, updatedBy string) error {
+	return s.resetInstance(instanceId, updatedBy)
+}
+
+/**
+* Rollback
+* @param instanceId, updatedBy string
+* @return et.Json, error
+**/
+func (s *WorkFlow) Rollback(instanceId, updatedBy string) (et.Json, error) {
+	return s.rollback(instanceId, updatedBy)
+}
+
+/**
+* Stop
+* @param instanceId, updatedBy string
+* @return error
+**/
+func (s *WorkFlow) Stop(instanceId, updatedBy string) error {
+	return s.stop(instanceId, updatedBy)
+}
+
+/**
+* SetStatus
+* @param instanceId, status, updatedBy string
+* @return FlowStatus, error
+**/
+func (s *WorkFlow) Status(instanceId, status, updatedBy string) (FlowStatus, error) {
+	if _, ok := FlowStatusList[FlowStatus(status)]; !ok {
+		return "", fmt.Errorf("status %s no es valido", status)
+	}
+
+	instance, exists := s.loadInstance(instanceId)
+	if !exists {
+		return "", fmt.Errorf("instance not found")
+	}
+
+	instance.setStatus(FlowStatus(status))
+	return instance.Status, nil
+}
+
+/**
+* DeleteFlow
+* @param tag string
+* @return (bool, error)
+**/
+func (s *WorkFlow) DeleteFlow(tag string) (bool, error) {
+	return s.deleteFlow(tag), nil
+}
+
+/**
+* GetInstance
+* @param instanceId string
+* @return (*Instance, error)
+**/
+func (s *WorkFlow) GetInstance(instanceId string) (*Instance, error) {
+	instance, exists := s.loadInstance(instanceId)
+	if !exists {
+		return nil, fmt.Errorf("instance not found")
+	}
+
+	return instance, nil
 }

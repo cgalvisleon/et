@@ -35,7 +35,7 @@ var FlowStatusList map[FlowStatus]bool = map[FlowStatus]bool{
 
 type Instance struct {
 	*Flow
-	workFlows  *WorkFlows           `json:"-"`
+	workFlows  *WorkFlow            `json:"-"`
 	CreatedAt  time.Time            `json:"created_at"`
 	UpdatedAt  time.Time            `json:"updated_at"`
 	Tag        string               `json:"tag"`
@@ -117,8 +117,8 @@ func (s *Instance) Save() error {
 		logs.Log("WorkFlows", "save:", data.ToString())
 	}
 
-	if setInstance != nil {
-		return setInstance(s.Id, s.Tag, s)
+	if s.workFlows != nil && s.workFlows.setInstance != nil {
+		return s.workFlows.setInstance(s.Id, s.Tag, s)
 	}
 
 	return nil

@@ -2,184 +2,47 @@ package workflow
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/instances"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/request"
-	"github.com/cgalvisleon/et/resilience"
 	"github.com/cgalvisleon/et/response"
 	"github.com/go-chi/chi/v5"
 )
 
-var workFlows *WorkFlows
-
-func init() {
-	workFlows = newWorkFlows()
-	err := event.Load()
-	if err != nil {
-		panic(err)
-	}
-}
-
-/**
-* Load
-* @return error
- */
-func Load(store instances.Store) error {
-	if store != nil {
-		SetGetInstance(store.Get)
-		SetSetInstance(store.Set)
-	}
-
-	return resilience.Load(store)
-}
-
-/**
-* HealthCheck
-* @return bool
-**/
-func HealthCheck() bool {
-	if workFlows == nil {
-		return false
-	}
-
-	return workFlows.healthCheck()
-}
-
 /**
 * New
-* @param tag, version, name, description string, fn FnContext, createdBy string
-* @return *Flow
+* @return (*WorkFlow, error)
 **/
-func New(tag, version, name, description string, fn FnContext, stop bool, createdBy string) *Flow {
-	if workFlows == nil {
-		logs.Panic(errors.New(MSG_WORKFLOWS_NOT_LOAD))
-		return nil
+func New() (*WorkFlow, error) {
+	err := event.Load()
+	if err != nil {
+		return nil, err
 	}
 
-	return workFlows.newFlow(tag, version, name, description, fn, stop, createdBy)
-}
-
-/**
-* Run
-* @param instanceId, tag string, step int, ctx, tags et.Json, createdBy string
-* @return et.Json, error
-**/
-func Run(instanceId, tag string, step int, ctx, tags et.Json, createdBy string) (et.Json, error) {
-	if workFlows == nil {
-		return et.Json{}, errors.New(MSG_WORKFLOWS_NOT_LOAD)
+	result := &WorkFlow{
+		Flows:     make(map[string]*Flow),
+		Instances: make(map[string]*Instance),
+		Results:   make(map[string]et.Json),
+		mu:        sync.Mutex{},
+		isDebug:   envar.GetBool("DEBUG", false),
 	}
 
-	return workFlows.runInstance(instanceId, tag, step, ctx, tags, createdBy)
-}
-
-/**
-* Reset
-* @param instanceId, updatedBy string
-* @return error
-**/
-func Reset(instanceId, updatedBy string) error {
-	if workFlows == nil {
-		return errors.New(MSG_WORKFLOWS_NOT_LOAD)
-	}
-
-	return workFlows.resetInstance(instanceId, updatedBy)
-}
-
-/**
-* Rollback
-* @param instanceId, updatedBy string
-* @return et.Json, error
-**/
-func Rollback(instanceId, updatedBy string) (et.Json, error) {
-	if workFlows == nil {
-		return et.Json{}, errors.New(MSG_WORKFLOWS_NOT_LOAD)
-	}
-
-	return workFlows.rollback(instanceId, updatedBy)
-}
-
-/**
-* Stop
-* @param instanceId, updatedBy string
-* @return error
-**/
-func Stop(instanceId, updatedBy string) error {
-	if workFlows == nil {
-		return errors.New(MSG_WORKFLOWS_NOT_LOAD)
-	}
-
-	return workFlows.stop(instanceId, updatedBy)
-}
-
-/**
-* SetStatus
-* @param instanceId, status, updatedBy string
-* @return FlowStatus, error
-**/
-func Status(instanceId, status, updatedBy string) (FlowStatus, error) {
-	if workFlows == nil {
-		return "", errors.New(MSG_WORKFLOWS_NOT_LOAD)
-	}
-
-	if _, ok := FlowStatusList[FlowStatus(status)]; !ok {
-		return "", fmt.Errorf("status %s no es valido", status)
-	}
-
-	instance, exists := workFlows.loadInstance(instanceId)
-	if !exists {
-		return "", fmt.Errorf("instance not found")
-	}
-
-	instance.setStatus(FlowStatus(status))
-	return instance.Status, nil
-}
-
-/**
-* DeleteFlow
-* @param tag string
-* @return (bool, error)
-**/
-func DeleteFlow(tag string) (bool, error) {
-	if workFlows == nil {
-		return false, errors.New(MSG_WORKFLOWS_NOT_LOAD)
-	}
-
-	return workFlows.deleteFlow(tag), nil
-}
-
-/**
-* GetInstance
-* @param instanceId string
-* @return (*Instance, error)
-**/
-func GetInstance(instanceId string) (*Instance, error) {
-	if workFlows == nil {
-		return nil, errors.New(MSG_WORKFLOWS_NOT_LOAD)
-	}
-
-	instance, exists := workFlows.loadInstance(instanceId)
-	if !exists {
-		return nil, fmt.Errorf("instance not found")
-	}
-
-	return instance, nil
+	return result, nil
 }
 
 /**
 * HttpGet
 * @params w http.ResponseWriter, r *http.Request
 **/
-func HttpGet(w http.ResponseWriter, r *http.Request) {
+func (s *WorkFlow) HttpGet(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var instance Instance
-	exists, err := getInstance(id, &instance)
+	exists, err := s.getInstance(id, &instance)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -203,10 +66,10 @@ func HttpGet(w http.ResponseWriter, r *http.Request) {
 * HttpGetInstance
 * @params w http.ResponseWriter, r *http.Request
 **/
-func HttpState(w http.ResponseWriter, r *http.Request) {
+func (s *WorkFlow) HttpState(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var instance Instance
-	exists, err := getInstance(id, &instance)
+	exists, err := s.getInstance(id, &instance)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -243,10 +106,10 @@ func HttpState(w http.ResponseWriter, r *http.Request) {
 * HttpGetInstance
 * @params w http.ResponseWriter, r *http.Request
 **/
-func HttpSetParams(w http.ResponseWriter, r *http.Request) {
+func (s *WorkFlow) HttpSetParams(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var instance Instance
-	exists, err := getInstance(id, &instance)
+	exists, err := s.getInstance(id, &instance)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return

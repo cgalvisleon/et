@@ -195,10 +195,10 @@ func (s *WorkFlows) getOrCreateInstance(id, tag string, step int, tags et.Json, 
 /**
 * runInstance
 * Si el step es -1 se ejecuta el siguiente paso, si no se ejecuta el paso indicado
-* @param instanceId, tag string, step int, tags, ctx et.Json, createdBy string
+* @param instanceId, tag string, step int, ctx, tags et.Json, createdBy string
 * @return et.Json, error
 **/
-func (s *WorkFlows) runInstance(instanceId, tag string, step int, tags, ctx et.Json, createdBy string) (et.Json, error) {
+func (s *WorkFlows) runInstance(instanceId, tag string, step int, ctx, tags et.Json, createdBy string) (et.Json, error) {
 	instance, err := s.getOrCreateInstance(instanceId, tag, step, tags, createdBy)
 	if err != nil {
 		return et.Json{}, err

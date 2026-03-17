@@ -3,10 +3,13 @@ package et
 import (
 	"fmt"
 	"net/mail"
+	"regexp"
 	"time"
 
 	"github.com/cgalvisleon/et/msg"
 )
+
+var rePhone = regexp.MustCompile(`^\+[1-9]\d{6,14}$`)
 
 type Rule interface {
 	Validate(Json) error
@@ -365,6 +368,57 @@ func (r *ObjectRule) Validate(j Json) error {
 	for _, rule := range r.rules {
 		if err := rule.Validate(js); err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+// PhoneRule validates that a field contains a valid mobile phone number.
+// By default it enforces E.164 format: + followed by 7–15 digits (e.g. +573001234567).
+// Use CountryCode to restrict to a specific country calling code prefix (e.g. "+57").
+type PhoneRule struct {
+	name        string
+	countryCode string
+}
+
+func Phone(name string) *PhoneRule {
+	return &PhoneRule{name: name}
+}
+
+/**
+* CountryCode restricts the phone number to a given country calling code prefix.
+* @param code string — e.g. "+57", "+1", "+34"
+* @return *PhoneRule
+**/
+func (r *PhoneRule) CountryCode(code string) *PhoneRule {
+	r.countryCode = code
+	return r
+}
+
+/**
+* Validate
+* @param j Json
+* @return error
+**/
+func (r *PhoneRule) Validate(j Json) error {
+	v, ok := j[r.name]
+	if !ok {
+		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, r.name)
+	}
+
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf(msg.MSG_STRING_REQUIRED, r.name)
+	}
+
+	if !rePhone.MatchString(str) {
+		return fmt.Errorf(msg.MSG_PHONE_INVALID, r.name)
+	}
+
+	if r.countryCode != "" {
+		if len(str) < len(r.countryCode) || str[:len(r.countryCode)] != r.countryCode {
+			return fmt.Errorf(msg.MSG_PHONE_INVALID, r.name)
 		}
 	}
 

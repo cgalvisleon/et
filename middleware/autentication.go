@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/cgalvisleon/et/jwt"
 	"github.com/cgalvisleon/et/logs"
@@ -12,34 +13,36 @@ import (
 )
 
 /**
-* GetAuthorization
-* @param w http.ResponseWriter
+* getBearerToken
 * @param r *http.Request
-* @return string
-* @return error
+* @return string, error
 **/
-func GetAuthorization(w http.ResponseWriter, r *http.Request) (string, error) {
+func getBearerToken(r *http.Request) (string, error) {
 	_, ok := r.Header["Authorization"]
-	if ok {
-		authorization := r.Header.Get("Authorization")
-		token := utility.PrefixRemove("Bearer ", authorization)
-		if token == "" {
-			return "", logs.Alertm("Autorization is required")
-		}
-
-		return token, nil
+	if !ok {
+		return "", logs.Alertm("Autorization is required")
 	}
 
-	return "", logs.Alertm("Autorization is required")
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		return "", logs.Alertm("Autorization is required")
+	}
+
+	if !strings.HasPrefix(token, "Bearer ") {
+		return "", logs.Alertm("Autorization is required")
+	}
+
+	token = strings.TrimPrefix(token, "Bearer ")
+	return token, nil
 }
 
 /**
-* Autentication
+* BearerToken
 * @param next http.Handler
 **/
-func Autentication(next http.Handler) http.Handler {
+func BearerToken(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token, err := GetAuthorization(w, r)
+		token, err := getBearerToken(r)
 		if err != nil {
 			response.Unauthorized(w, r)
 			return
@@ -65,6 +68,7 @@ func Autentication(next http.Handler) http.Handler {
 		ctx = context.WithValue(ctx, request.DurationKey, clm.Duration)
 		ctx = context.WithValue(ctx, request.DeviceKey, clm.Device)
 		ctx = context.WithValue(ctx, request.AppKey, clm.App)
+		ctx = context.WithValue(ctx, request.UserIdKey, clm.UserId)
 		ctx = context.WithValue(ctx, request.UsernameKey, clm.Username)
 		ctx = context.WithValue(ctx, request.PayloadKey, clm.Payload)
 		data, err := clm.ToJson()

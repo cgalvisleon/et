@@ -458,15 +458,12 @@ func (s Items) Exist(idx int, key string) bool {
 * First
 * @return Item
 **/
-func (s Items) First() Item {
+func (s Items) First() Json {
 	if s.Count == 0 {
-		return Item{Result: Json{}}
+		return Json{}
 	}
 
-	return Item{
-		Ok:     true,
-		Result: s.Result[0],
-	}
+	return s.Result[0]
 }
 
 /**

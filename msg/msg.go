@@ -76,6 +76,7 @@ var (
 	MSG_NUMBER_REQUIRED                = "atributo %s debe ser numérico"
 	MSG_NUMBER_BETWEEN                 = "atributo %s debe estar entre %v y %v"
 	MSG_OBJECT_REQUIRED                = "atributo %s debe ser object"
+	MSG_PHONE_INVALID                  = "atributo %s debe ser un número de teléfono móvil válido (formato E.164, ej: +573001234567)"
 )
 
 func init() {
@@ -155,5 +156,6 @@ func init() {
 		MSG_NUMBER_REQUIRED = "atributo %s debe ser numérico"
 		MSG_NUMBER_BETWEEN = "atributo %s debe estar entre %v y %v"
 		MSG_OBJECT_REQUIRED = "atributo %s debe ser object"
+		MSG_PHONE_INVALID = "atributo %s debe ser un número de teléfono móvil válido (formato E.164, ej: +573001234567)"
 	}
 }

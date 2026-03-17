@@ -21,9 +21,8 @@ import (
 )
 
 var (
-	hostName, _  = os.Hostname()
-	commonHeader = make(map[string]bool)
-	serviceName  = "telemetry"
+	hostName, _ = os.Hostname()
+	serviceName = "telemetry"
 )
 
 const (
@@ -34,225 +33,225 @@ const (
 	MetricKey                request.ContextKey = "metric"
 )
 
-type Result struct {
-	Ok     bool        `json:"ok"`
-	Result interface{} `json:"result"`
-}
-
+// ResponseWriterWrapper wraps http.ResponseWriter to capture status code and response size.
 type ResponseWriterWrapper struct {
 	http.ResponseWriter
-	Size       int
 	StatusCode int
+	Size       int
 }
 
-/**
-* Write
-* @params b []byte
-**/
+// WriteHeader intercepts the status code before delegating to the underlying writer.
+func (rw *ResponseWriterWrapper) WriteHeader(code int) {
+	rw.StatusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+// Write delegates to the underlying writer and accumulates the bytes written.
 func (rw *ResponseWriterWrapper) Write(b []byte) (int, error) {
 	size, err := rw.ResponseWriter.Write(b)
 	rw.Size += size
 	return size, err
 }
 
-/**
-* SetServiceName
-* @params name string
-**/
+// SetServiceName sets the global service name included in all telemetry events.
 func SetServiceName(name string) {
 	serviceName = name
 }
 
+// Metrics holds observability data for a single HTTP or RPC request.
+// Field names and semantics follow OpenTelemetry semantic conventions for HTTP:
+// https://opentelemetry.io/docs/specs/semconv/http/
 type Metrics struct {
-	TimeStamp    time.Time     `json:"timestamp"`
-	ServiceName  string        `json:"service_name"`
-	ServiceId    string        `json:"service_id"`
-	RemoteAddr   string        `json:"remote_addr"`
-	Scheme       string        `json:"scheme"`
-	Host         string        `json:"host"`
-	Method       string        `json:"method"`
-	Path         string        `json:"path"`
-	StatusCode   int           `json:"status_code"`
-	ResponseSize int           `json:"response_size"`
-	SearchTime   time.Duration `json:"search_time"`
-	ResponseTime time.Duration `json:"response_time"`
-	Latency      time.Duration `json:"latency"`
-	AppName      string        `json:"app_name"`
-	key          string
-	mark         time.Time
-	metrics      Telemetry
+	// timestamp — request start time (RFC3339)
+	TimeStamp time.Time `json:"timestamp"`
+	// service.name
+	ServiceName string `json:"service_name"`
+	// Internal correlation ID propagated via ServiceId header
+	ServiceId string `json:"service_id"`
+	// client.address — originating client IP (X-Forwarded-For > X-Real-IP > RemoteAddr)
+	ClientAddress string `json:"client_address"`
+	// url.scheme — "http" or "https"
+	Scheme string `json:"scheme"`
+	// server.address — hostname of this server
+	ServerAddress string `json:"server_address"`
+	// http.request.method
+	Method string `json:"method"`
+	// url.path
+	Path string `json:"path"`
+	// url.query — raw query string
+	Query string `json:"query"`
+	// http.response.status_code
+	StatusCode int `json:"status_code"`
+	// http.request.body.size — bytes received
+	RequestSize int `json:"request_size"`
+	// http.response.body.size — bytes sent
+	ResponseSize int `json:"response_size"`
+	// user_agent.original
+	UserAgent string `json:"user_agent"`
+	// trace_id — from X-Trace-ID or X-Request-ID header
+	TraceID string `json:"trace_id"`
+	// app_name — client application identifier (AppName header)
+	AppName string `json:"app_name"`
+	// Search/query phase duration in milliseconds
+	SearchTime float64 `json:"search_time_ms"`
+	// Handler processing duration in milliseconds
+	ResponseTime float64 `json:"response_time_ms"`
+	// http.server.request.duration — total request latency in milliseconds
+	Latency float64 `json:"latency_ms"`
+
+	key     string
+	mark    time.Time
+	metrics Telemetry
 }
 
-/**
-* ToJson
-* @return et.Json
-**/
+// ToJson returns a JSON-serializable representation of the metrics.
 func (m *Metrics) ToJson() et.Json {
 	return et.Json{
-		"timestamp":     strs.FormatDateTime("02/01/2006 03:04:05 PM", m.TimeStamp),
-		"service_id":    m.ServiceId,
-		"remote_addr":   m.RemoteAddr,
-		"scheme":        m.Scheme,
-		"host":          m.Host,
-		"method":        m.Method,
-		"path":          m.Path,
-		"status_code":   m.StatusCode,
-		"search_time":   m.SearchTime,
-		"response_time": m.ResponseTime,
-		"latency":       m.Latency,
-		"response_size": m.ResponseSize,
-		"app_name":      m.AppName,
+		"timestamp":        m.TimeStamp.Format(time.RFC3339),
+		"service_name":     m.ServiceName,
+		"service_id":       m.ServiceId,
+		"client_address":   m.ClientAddress,
+		"scheme":           m.Scheme,
+		"server_address":   m.ServerAddress,
+		"method":           m.Method,
+		"path":             m.Path,
+		"query":            m.Query,
+		"status_code":      m.StatusCode,
+		"request_size":     m.RequestSize,
+		"response_size":    m.ResponseSize,
+		"user_agent":       m.UserAgent,
+		"trace_id":         m.TraceID,
+		"app_name":         m.AppName,
+		"search_time_ms":   m.SearchTime,
+		"response_time_ms": m.ResponseTime,
+		"latency_ms":       m.Latency,
 	}
 }
 
+// Telemetry holds rate-based request counters for a specific endpoint key.
 type Telemetry struct {
-	TimeStamp         string
-	ServiceName       string
-	Key               string
-	RequestsPerSecond int64
-	RequestsPerMinute int64
-	RequestsPerHour   int64
-	RequestsPerDay    int64
-	RequestsLimit     int64
+	TimeStamp         string `json:"timestamp"`
+	ServiceName       string `json:"service_name"`
+	Key               string `json:"key"`
+	RequestsPerSecond int64  `json:"requests_per_second"`
+	RequestsPerMinute int64  `json:"requests_per_minute"`
+	RequestsPerHour   int64  `json:"requests_per_hour"`
+	RequestsPerDay    int64  `json:"requests_per_day"`
+	RequestsLimit     int64  `json:"requests_limit"`
 }
 
-/**
-* ToJson
-* @return et.Json
-**/
-func (m *Telemetry) ToJson() et.Json {
+// ToJson returns a JSON-serializable representation of the telemetry counters.
+func (t *Telemetry) ToJson() et.Json {
 	return et.Json{
-		"timestamp":           m.TimeStamp,
-		"key":                 m.Key,
-		"service_name":        m.ServiceName,
-		"requests_per_second": m.RequestsPerSecond,
-		"requests_per_minute": m.RequestsPerMinute,
-		"requests_per_hour":   m.RequestsPerHour,
-		"requests_per_day":    m.RequestsPerDay,
-		"requests_limit":      m.RequestsLimit,
+		"timestamp":           t.TimeStamp,
+		"service_name":        t.ServiceName,
+		"key":                 t.Key,
+		"requests_per_second": t.RequestsPerSecond,
+		"requests_per_minute": t.RequestsPerMinute,
+		"requests_per_hour":   t.RequestsPerHour,
+		"requests_per_day":    t.RequestsPerDay,
+		"requests_limit":      t.RequestsLimit,
 	}
 }
 
-/**
-* GetMetrics
-* @params r *http.Request
-* @return *Metrics
-**/
+// GetMetrics retrieves the Metrics stored in the request context, or creates a new one.
 func GetMetrics(r *http.Request) *Metrics {
 	metric, ok := r.Context().Value(MetricKey).(*Metrics)
 	if !ok {
 		return NewMetric(r)
 	}
-
 	return metric
 }
 
-/**
-* PushTelemetry
-* @param data et.Json
-**/
+// PushTelemetry publishes a telemetry event asynchronously.
 func PushTelemetry(data et.Json) {
 	go event.Publish(TELEMETRY, data)
 }
 
-/**
-* PushTelemetryLog
-* @param data string
-**/
+// PushTelemetryLog publishes a log line as a telemetry event asynchronously.
 func PushTelemetryLog(data string) {
-	go event.Publish(TELEMETRY_LOG, et.Json{
-		"log": data,
-	})
+	go event.Publish(TELEMETRY_LOG, et.Json{"log": data})
 }
 
-/**
-* PushTelemetryOverflow
-* @param data et.Json
-**/
+// PushTelemetryOverflow publishes a rate-limit overflow event asynchronously.
 func PushTelemetryOverflow(data et.Json) {
 	go event.Publish(TELEMETRY_OVERFLOW, data)
 }
 
-/**
-* TokenLastUse
-* @param data et.Json
-**/
+// PushTokenLastUse publishes a token last-use event asynchronously.
 func PushTokenLastUse(data et.Json) {
 	go event.Publish(TELEMETRY_TOKEN_LAST_USE, data)
 }
 
-/**
-* NewMetric
-* @params r *http.Request
-* @return *Metrics
-**/
+// NewMetric creates a Metrics instance populated from the incoming HTTP request.
+// Client IP resolution order: X-Forwarded-For → X-Real-IP → RemoteAddr.
 func NewMetric(r *http.Request) *Metrics {
-	remoteAddr := r.RemoteAddr
-	if remoteAddr == "" {
-		remoteAddr = r.Header.Get("X-Forwarded-For")
+	clientAddr := r.Header.Get("X-Forwarded-For")
+	if clientAddr == "" {
+		clientAddr = r.Header.Get("X-Real-IP")
 	}
-	if remoteAddr == "" {
-		remoteAddr = r.Header.Get("X-Real-IP")
+	if clientAddr == "" {
+		clientAddr = r.RemoteAddr
 	}
-	if remoteAddr != "" {
-		remoteAddr = strs.Split(remoteAddr, ",")[0]
-	}
+	clientAddr = strs.Split(clientAddr, ",")[0]
+
 	serviceId := r.Header.Get("ServiceId")
 	if serviceId == "" {
-		serviceId = utility.UUID()
+		serviceId = reg.GenULID("service")
 		r.Header.Set("ServiceId", serviceId)
 	}
-	appName := "Not Found"
-	if r.Header.Get("AppName") != "" {
-		appName = r.Header.Get("AppName")
+
+	traceID := r.Header.Get("X-Trace-ID")
+	if traceID == "" {
+		traceID = r.Header.Get("X-Request-ID")
 	}
+
+	appName := r.Header.Get("AppName")
+	if appName == "" {
+		appName = "Not Found"
+	}
+
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"
 	}
 
-	result := &Metrics{
-		TimeStamp:   timezone.Now(),
-		ServiceName: serviceName,
-		ServiceId:   serviceId,
-		RemoteAddr:  remoteAddr,
-		Host:        hostName,
-		Method:      r.Method,
-		Path:        r.URL.Path,
-		Scheme:      scheme,
-		AppName:     appName,
-		mark:        timezone.Now(),
-		key:         fmt.Sprintf(`%s:%s`, r.Method, r.URL.Path),
+	now := timezone.Now()
+	return &Metrics{
+		TimeStamp:     now,
+		ServiceName:   serviceName,
+		ServiceId:     serviceId,
+		ClientAddress: clientAddr,
+		Scheme:        scheme,
+		ServerAddress: hostName,
+		Method:        r.Method,
+		Path:          r.URL.Path,
+		Query:         r.URL.RawQuery,
+		UserAgent:     r.UserAgent(),
+		TraceID:       traceID,
+		AppName:       appName,
+		RequestSize:   int(r.ContentLength),
+		mark:          now,
+		key:           fmt.Sprintf(`%s:%s`, r.Method, r.URL.Path),
 	}
-
-	return result
 }
 
-/**
-* NewRpcMetric
-* @params method string
-* @return *Metrics
-**/
+// NewRpcMetric creates a Metrics instance for a JSON-RPC call.
 func NewRpcMetric(method string) *Metrics {
-	scheme := "rpc"
-	result := &Metrics{
-		TimeStamp:   timezone.Now(),
+	now := timezone.Now()
+	return &Metrics{
+		TimeStamp:   now,
 		ServiceName: serviceName,
 		ServiceId:   utility.UUID(),
+		Scheme:      "rpc",
+		Method:      "RPC",
 		Path:        method,
-		Method:      strs.Uppcase(scheme),
-		Scheme:      scheme,
-		mark:        timezone.Now(),
-		key:         fmt.Sprintf(`%s:%s`, strs.Uppcase(scheme), method),
+		mark:        now,
+		key:         fmt.Sprintf(`RPC:%s`, method),
 	}
-
-	return result
 }
 
-/**
-* setRequest
-* @params remove bool
-**/
+// setRequest adds or removes the request key from the in-flight tracking list.
 func (m *Metrics) setRequest(remove bool) {
 	m.key = fmt.Sprintf(`%s:%s`, m.Method, m.Path)
 	if remove {
@@ -262,46 +261,33 @@ func (m *Metrics) setRequest(remove bool) {
 	}
 }
 
-/**
-* SetPath
-* @params val string
-**/
+// SetPath updates the matched route path and registers the request key.
 func (m *Metrics) SetPath(val string) {
 	if val == "" {
 		return
 	}
-
 	m.Path = val
 	m.setRequest(false)
 }
 
-/**
-* CallSearchTime
-**/
+// CallSearchTime records the duration of the search/query phase in milliseconds.
 func (m *Metrics) CallSearchTime() {
-	m.SearchTime = time.Since(m.mark)
+	m.SearchTime = float64(time.Since(m.mark).Milliseconds())
 	m.mark = timezone.Now()
 }
 
-/**
-* CallResponseTime
-**/
+// CallResponseTime records the handler processing duration in milliseconds.
 func (m *Metrics) CallResponseTime() {
-	m.ResponseTime = time.Since(m.mark)
+	m.ResponseTime = float64(time.Since(m.mark).Milliseconds())
 	m.mark = timezone.Now()
 }
 
-/**
-* CallLatency
-**/
+// CallLatency records the total end-to-end latency in milliseconds.
 func (m *Metrics) CallLatency() {
-	m.Latency = time.Since(m.TimeStamp)
+	m.Latency = float64(time.Since(m.TimeStamp).Milliseconds())
 }
 
-/**
-* CallMetrics
-* @return Telemetry
-**/
+// CallMetrics computes rolling request-rate counters for the current endpoint key.
 func (m *Metrics) CallMetrics() Telemetry {
 	timeNow := timezone.Now()
 	date := timeNow.Format("2006-01-02")
@@ -322,47 +308,63 @@ func (m *Metrics) CallMetrics() Telemetry {
 	}
 }
 
-/**
-* println
-* @return et.Json
-**/
-func (m *Metrics) println() et.Json {
+// logRequest prints a color-coded summary line to stdout and publishes the log event.
+func (m *Metrics) logRequest() et.Json {
 	w := lg.Color(nil, lg.Reset, "%s", timezone.NowStr())
 	lg.Color(w, lg.Purple, " [%s]: ", m.Method)
 	lg.Color(w, lg.Cyan, "%s", m.Path)
-	lg.Color(w, lg.White, " from:%s", m.RemoteAddr)
-	if m.StatusCode >= 500 {
+	if m.Query != "" {
+		lg.Color(w, lg.White, "?%s", m.Query)
+	}
+	lg.Color(w, lg.White, " from:%s", m.ClientAddress)
+
+	switch {
+	case m.StatusCode >= 500:
 		lg.Color(w, lg.Red, " - %s", http.StatusText(m.StatusCode))
-	} else if m.StatusCode >= 400 {
+	case m.StatusCode >= 400:
 		lg.Color(w, lg.Yellow, " - %s", http.StatusText(m.StatusCode))
-	} else if m.StatusCode >= 300 {
+	case m.StatusCode >= 300:
 		lg.Color(w, lg.Cyan, " - %s", http.StatusText(m.StatusCode))
-	} else {
+	default:
 		lg.Color(w, lg.Green, " - %s", http.StatusText(m.StatusCode))
 	}
+
 	size := float64(m.ResponseSize) / 1024
-	lg.Color(w, lg.Cyan, " Size:%.2f%s", size, "KB")
-	lg.Color(w, lg.White, " in ")
+	lg.Color(w, lg.Cyan, " Size:%.2fKB", size)
+
 	limitLatency := time.Duration(envar.GetInt("LATENCY_LIMIT", 1000)) * time.Millisecond
-	if m.Latency < limitLatency {
-		lg.Color(w, lg.Green, "Latency:%s", m.Latency)
-	} else if m.Latency < 5*time.Second {
-		lg.Color(w, lg.Yellow, "Latency:%s", m.Latency)
-	} else {
-		lg.Color(w, lg.Red, "Latency:%s", m.Latency)
+	latencyDur := time.Duration(m.Latency * float64(time.Millisecond))
+	switch {
+	case latencyDur >= 5*time.Second:
+		lg.Color(w, lg.Red, " Latency:%.2fms", m.Latency)
+	case latencyDur >= limitLatency:
+		lg.Color(w, lg.Yellow, " Latency:%.2fms", m.Latency)
+	default:
+		lg.Color(w, lg.Green, " Latency:%.2fms", m.Latency)
 	}
-	lg.Color(w, lg.White, " Response:%s", m.ResponseTime)
+
+	lg.Color(w, lg.White, " Response:%.2fms", m.ResponseTime)
+
 	m.metrics = m.CallMetrics()
-	requestsLimit := float64(m.metrics.RequestsLimit) * 0.6
-	if m.metrics.RequestsPerSecond > m.metrics.RequestsLimit {
-		lg.Color(w, lg.Red, " - Request:S:%vM:%vH:%vD:%vL:%v", m.metrics.RequestsPerSecond, m.metrics.RequestsPerMinute, m.metrics.RequestsPerHour, m.metrics.RequestsPerDay, m.metrics.RequestsLimit)
-	} else if m.metrics.RequestsPerSecond > int64(requestsLimit) {
-		lg.Color(w, lg.Yellow, " - Request:S:%vM:%vH:%vD:%vL:%v", m.metrics.RequestsPerSecond, m.metrics.RequestsPerMinute, m.metrics.RequestsPerHour, m.metrics.RequestsPerDay, m.metrics.RequestsLimit)
-	} else {
-		lg.Color(w, lg.Green, " - Request:S:%vM:%vH:%vD:%vL:%v", m.metrics.RequestsPerSecond, m.metrics.RequestsPerMinute, m.metrics.RequestsPerHour, m.metrics.RequestsPerDay, m.metrics.RequestsLimit)
+	threshold := float64(m.metrics.RequestsLimit) * 0.6
+	rps := m.metrics.RequestsPerSecond
+	switch {
+	case rps > m.metrics.RequestsLimit:
+		lg.Color(w, lg.Red, " Req S:%v M:%v H:%v D:%v L:%v",
+			rps, m.metrics.RequestsPerMinute, m.metrics.RequestsPerHour, m.metrics.RequestsPerDay, m.metrics.RequestsLimit)
+	case rps > int64(threshold):
+		lg.Color(w, lg.Yellow, " Req S:%v M:%v H:%v D:%v L:%v",
+			rps, m.metrics.RequestsPerMinute, m.metrics.RequestsPerHour, m.metrics.RequestsPerDay, m.metrics.RequestsLimit)
+	default:
+		lg.Color(w, lg.Green, " Req S:%v M:%v H:%v D:%v L:%v",
+			rps, m.metrics.RequestsPerMinute, m.metrics.RequestsPerHour, m.metrics.RequestsPerDay, m.metrics.RequestsLimit)
 	}
+
 	lg.Color(w, lg.Cyan, " [ServiceId]:%s", m.ServiceId)
-	lg.Color(w, lg.White, " [AppName]:%s", m.AppName)
+	if m.TraceID != "" {
+		lg.Color(w, lg.Cyan, " [TraceId]:%s", m.TraceID)
+	}
+	lg.Color(w, lg.White, " [App]:%s", m.AppName)
 	println(*w)
 
 	m.setRequest(true)
@@ -371,49 +373,35 @@ func (m *Metrics) println() et.Json {
 	return m.ToJson()
 }
 
-/**
-* telemetry
-* @return et.Json
-**/
+// telemetry emits the final telemetry events and returns the combined result.
 func (m *Metrics) telemetry() et.Json {
 	result := m.ToJson()
 	result["metric"] = m.metrics.ToJson()
 
-	PushTelemetry(et.Json{
-		"response": m,
+	payload := et.Json{
+		"response": m.ToJson(),
 		"metric":   m.metrics.ToJson(),
-	})
+	}
+	PushTelemetry(payload)
 
 	if m.metrics.RequestsPerSecond > m.metrics.RequestsLimit {
-		PushTelemetryOverflow(et.Json{
-			"response": m,
-			"metric":   m.metrics.ToJson(),
-		})
+		PushTelemetryOverflow(payload)
 	}
 
 	return result
 }
 
-/**
-* DoneHTTP
-* @params rw *ResponseWriterWrapper
-* @return et.Json
-**/
+// DoneHTTP finalizes metrics after an HTTP response has been written.
 func (m *Metrics) DoneHTTP(rw *ResponseWriterWrapper) et.Json {
 	m.StatusCode = rw.StatusCode
 	m.ResponseSize = rw.Size
 	m.CallResponseTime()
 	m.CallLatency()
-	m.println()
-
+	m.logRequest()
 	return m.telemetry()
 }
 
-/**
-* DoneRpc
-* @params r et.Json
-* @return et.Json
-**/
+// DoneRpc finalizes metrics after an RPC call has returned.
 func (m *Metrics) DoneRpc(r any) et.Json {
 	switch v := r.(type) {
 	case string:
@@ -441,138 +429,84 @@ func (m *Metrics) DoneRpc(r any) et.Json {
 	m.StatusCode = http.StatusOK
 	m.CallResponseTime()
 	m.CallLatency()
-	m.println()
-
+	m.logRequest()
 	return m.telemetry()
 }
 
-/**
-* WriteResponse
-* @params w http.ResponseWriter, r *http.Request, statusCode int, e []byte
-* @return error
-**/
+// WriteResponse writes a raw JSON byte response, records metrics, and returns nil on success.
 func (m *Metrics) WriteResponse(w http.ResponseWriter, r *http.Request, statusCode int, e []byte) error {
 	rw := &ResponseWriterWrapper{ResponseWriter: w, StatusCode: statusCode}
-
 	rw.Header().Set("Content-Type", "application/json; charset=utf-8")
 	rw.WriteHeader(statusCode)
 	rw.Write(e)
-
 	m.DoneHTTP(rw)
 	return nil
 }
 
-/**
-* RESULT
-* @param w http.ResponseWriter, r *http.Request, statusCode int, data interface{}
-* @return error
-**/
+// RESULT serializes data as JSON and writes the response.
 func (m *Metrics) RESULT(w http.ResponseWriter, r *http.Request, statusCode int, data interface{}) error {
 	if data == nil {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(statusCode)
 		return nil
 	}
-
 	e, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}
-
 	return m.WriteResponse(w, r, statusCode, e)
 }
 
-/**
-* JSON
-* @params w http.ResponseWriter, r *http.Request, statusCode int, data interface{}
-* @return error
-**/
+// JSON wraps data in a standard {ok, result} envelope and writes the response.
 func (m *Metrics) JSON(w http.ResponseWriter, r *http.Request, statusCode int, dt interface{}) error {
 	if dt == nil {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(statusCode)
 		return nil
 	}
-
-	result := Result{
-		Ok:     http.StatusOK == statusCode,
+	result := struct {
+		Ok     bool        `json:"ok"`
+		Result interface{} `json:"result"`
+	}{
+		Ok:     statusCode == http.StatusOK,
 		Result: dt,
 	}
-
 	e, err := json.Marshal(result)
 	if err != nil {
 		return err
 	}
-
 	return m.WriteResponse(w, r, statusCode, e)
 }
 
-/**
-* ITEM
-* @params w http.ResponseWriter, r *http.Request, statusCode int, dt et.Item
-* @return error
-**/
+// ITEM serializes an et.Item and writes the response.
 func (m *Metrics) ITEM(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Item) error {
 	if &dt == (&et.Item{}) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(statusCode)
 		return nil
 	}
-
 	e, err := json.Marshal(dt)
 	if err != nil {
 		return err
 	}
-
 	return m.WriteResponse(w, r, statusCode, e)
 }
 
-/**
-* ITEMS
-* @params w http.ResponseWriter, r *http.Request, statusCode int, dt et.Items
-* @return error
-**/
+// ITEMS serializes an et.Items and writes the response.
 func (m *Metrics) ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Items) error {
 	if &dt == (&et.Items{}) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(statusCode)
 		return nil
 	}
-
 	e, err := json.Marshal(dt)
 	if err != nil {
 		return err
 	}
-
 	return m.WriteResponse(w, r, statusCode, e)
 }
 
-/**
-* HTTPError
-* @params w http.ResponseWriter, r *http.Request, statusCode int, message string
-* @return error
-**/
+// HTTPError writes a JSON error response with the given status code and message.
 func (m *Metrics) HTTPError(w http.ResponseWriter, r *http.Request, statusCode int, message string) error {
-	msg := et.Json{
-		"message": message,
-	}
-
-	return m.JSON(w, r, statusCode, msg)
-}
-
-/**
-* Unauthorized
-* @params w http.ResponseWriter, r *http.Request
-**/
-func (m *Metrics) Unauthorized(w http.ResponseWriter, r *http.Request) {
-	m.HTTPError(w, r, http.StatusUnauthorized, "401 Unauthorized")
-}
-
-func init() {
-	for _, v := range []string{
-		"Content-Security-Policy",
-		"Content-Length",
-	} {
-		commonHeader[v] = true
-	}
+	return m.JSON(w, r, statusCode, et.Json{"message": message})
 }

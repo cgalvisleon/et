@@ -68,15 +68,15 @@ func New(tag, version, name, description string, fn FnContext, stop bool, create
 
 /**
 * Run
-* @param instanceId, tag string, step int, tags et.Json, ctx et.Json, createdBy string
+* @param instanceId, tag string, step int, ctx, tags et.Json, createdBy string
 * @return et.Json, error
 **/
-func Run(instanceId, tag string, step int, tags et.Json, ctx et.Json, createdBy string) (et.Json, error) {
+func Run(instanceId, tag string, step int, ctx, tags et.Json, createdBy string) (et.Json, error) {
 	if workFlows == nil {
 		return et.Json{}, errors.New(MSG_WORKFLOWS_NOT_LOAD)
 	}
 
-	return workFlows.runInstance(instanceId, tag, step, tags, ctx, createdBy)
+	return workFlows.runInstance(instanceId, tag, step, ctx, tags, createdBy)
 }
 
 /**

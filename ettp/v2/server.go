@@ -83,7 +83,7 @@ func NewServer(name string, config *Config) *Server {
 		requests:      make(map[string]*Resolver),
 		mux:           http.NewServeMux(),
 		middlewares:   make([]func(http.Handler) http.Handler, 0),
-		authenticator: middleware.Autentication,
+		authenticator: middleware.BearerToken,
 		readTimeout:   config.ReadTimeout,
 		writeTimeout:  config.WriteTimeout,
 		idleTimeout:   config.IdleTimeout,

@@ -384,3 +384,20 @@ func MaskToken(token string, length int) string {
 	}
 	return token[:length] + "***" + token[len(token)-length:]
 }
+
+/**
+* JoinQuoted
+* @param items []string, sep string
+* @return string
+**/
+func JoinQuoted(items []string, sep string) string {
+	result := ""
+	for _, item := range items {
+		if len(result) == 0 {
+			result = fmt.Sprintf(`'%s'`, item)
+		} else {
+			result = fmt.Sprintf(`%s%s'%s'`, result, sep, item)
+		}
+	}
+	return result
+}

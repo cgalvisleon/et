@@ -56,15 +56,15 @@ func (s ContextKey) Json(ctx context.Context, def et.Json) et.Json {
 }
 
 const (
-	DurationKey   ContextKey = "duration"
-	PayloadKey    ContextKey = "payload"
-	ServiceIdKey  ContextKey = "service_id"
-	AppKey        ContextKey = "app"
-	DeviceKey     ContextKey = "device"
-	UsernameIdKey ContextKey = "username_id"
-	UsernameKey   ContextKey = "username"
-	TenantIdKey   ContextKey = "tenant_id"
-	ProfileIdKey  ContextKey = "profile_id"
+	DurationKey  ContextKey = "duration"
+	PayloadKey   ContextKey = "payload"
+	ServiceIdKey ContextKey = "service_id"
+	AppKey       ContextKey = "app"
+	DeviceKey    ContextKey = "device"
+	UserIdKey    ContextKey = "user_id"
+	UsernameKey  ContextKey = "username"
+	TenantIdKey  ContextKey = "tenant_id"
+	ProfileIdKey ContextKey = "profile_id"
 )
 
 /**
@@ -128,13 +128,13 @@ func Username(r *http.Request) string {
 }
 
 /**
-* UsernameId
+* UserId
 * @param r *http.Request
 * @return string
 **/
-func UsernameId(r *http.Request) string {
+func UserId(r *http.Request) string {
 	ctx := r.Context()
-	return UsernameIdKey.String(ctx, "")
+	return UserIdKey.String(ctx, "")
 }
 
 /**
@@ -203,12 +203,12 @@ func SetDevice(ctx context.Context, device string) context.Context {
 }
 
 /**
-* SetUsernameId
-* @param ctx context.Context, usernameId string
+* SetUserId
+* @param ctx context.Context, userId string
 * @return context.Context
 **/
-func SetUsernameId(ctx context.Context, usernameId string) context.Context {
-	return context.WithValue(ctx, UsernameIdKey, usernameId)
+func SetUserId(ctx context.Context, userId string) context.Context {
+	return context.WithValue(ctx, UserIdKey, userId)
 }
 
 /**

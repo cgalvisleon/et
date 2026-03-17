@@ -22,6 +22,7 @@ type Claim struct {
 	Duration time.Duration `json:"duration"`
 	App      string        `json:"app"`
 	Device   string        `json:"device"`
+	UserId   string        `json:"userId"`
 	Username string        `json:"username"`
 	Payload  et.Json       `json:"payload"`
 }
@@ -89,16 +90,17 @@ func GenToken(c *Claim, secret string) (string, error) {
 
 /**
 * NewToken
-* @param app, device, username string, payload et.Json, duration time.Duration
+* @param app, device, userId, username string, payload et.Json, duration time.Duration
 * @return string, error
 **/
-func NewToken(app, device, username string, payload et.Json, duration time.Duration) (string, error) {
+func NewToken(app, device, userId, username string, payload et.Json, duration time.Duration) (string, error) {
 	if app == "" {
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "app")
 	}
 	c := NewClaim(duration)
 	c.App = app
 	c.Device = device
+	c.UserId = userId
 	c.Username = username
 	c.Payload = payload
 	secret := envar.GetStr("SECRET", "1977")
@@ -148,9 +150,19 @@ func ParceToken(token string) (*Claim, error) {
 		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "device")
 	}
 
+	userId, ok := claim["userId"].(string)
+	if !ok {
+		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "userId")
+	}
+
 	username, ok := claim["username"].(string)
 	if !ok {
 		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "username")
+	}
+
+	second, ok := claim["duration"].(float64)
+	if !ok {
+		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "duration")
 	}
 
 	payloadItf, ok := claim["payload"]
@@ -166,16 +178,12 @@ func ParceToken(token string) (*Claim, error) {
 		payload = v
 	}
 
-	second, ok := claim["duration"].(float64)
-	if !ok {
-		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "duration")
-	}
-
 	duration := time.Duration(second)
 	result := &Claim{
 		ID:       id,
 		App:      app,
 		Device:   device,
+		UserId:   userId,
 		Username: username,
 		Duration: duration,
 		Payload:  payload,

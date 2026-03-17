@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -64,6 +65,7 @@ func newFlow(tag, version, name, description string, fn FnContext, stop bool, cr
 		Steps:         make([]*Step, 0),
 		CheckList:     make([]*CheckList, 0),
 		CreatedBy:     createdBy,
+		isDebug:       envar.GetBool("DEBUG", false),
 	}
 	logs.Logf(packageName, MSG_FLOW_CREATED, tag, version, name)
 	flow.Step("Start", MSG_START_WORKFLOW, fn, stop)
@@ -109,7 +111,9 @@ func (s *Flow) ToJson() et.Json {
 **/
 func (s *Flow) setConfig(format string, args ...any) {
 	event.Publish(EVENT_WORKFLOW_SET, s.ToJson())
-	logs.Logf(packageName, format, args...)
+	if s.isDebug {
+		logs.Logf(packageName, format, args...)
+	}
 }
 
 /**

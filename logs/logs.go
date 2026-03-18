@@ -15,7 +15,7 @@ import (
 * @return string
 **/
 func printLn(kind string, color string, args ...any) {
-	stdrout.Printl(kind, color, args...)
+	go stdrout.Printl(kind, color, args...)
 }
 
 /**

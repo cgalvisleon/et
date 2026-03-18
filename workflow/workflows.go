@@ -52,7 +52,7 @@ func (s *WorkFlow) Add(instance *Instance) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.Instances[instance.Id] = instance
+	s.Instances[instance.ID] = instance
 }
 
 /**
@@ -63,7 +63,7 @@ func (s *WorkFlow) Remove(instance *Instance) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	delete(s.Instances, instance.Id)
+	delete(s.Instances, instance.ID)
 }
 
 /**
@@ -103,7 +103,7 @@ func (s *WorkFlow) newInstance(tag, id string, tags et.Json, step int, createdBy
 		Tag:        tag,
 		CreatedAt:  now,
 		UpdatedAt:  now,
-		Id:         id,
+		ID:         id,
 		CreatedBy:  createdBy,
 		UpdatedBy:  createdBy,
 		Current:    step,

@@ -39,7 +39,7 @@ type Instance struct {
 	CreatedAt  time.Time            `json:"created_at"`
 	UpdatedAt  time.Time            `json:"updated_at"`
 	Tag        string               `json:"tag"`
-	Id         string               `json:"id"`
+	ID         string               `json:"id"`
 	CreatedBy  string               `json:"created_by"`
 	UpdatedBy  string               `json:"updated_by"`
 	Current    int                  `json:"current"`
@@ -118,7 +118,7 @@ func (s *Instance) Save() error {
 	}
 
 	if s.workFlows != nil && s.workFlows.setInstance != nil {
-		return s.workFlows.setInstance(s.Id, s.Tag, s)
+		return s.workFlows.setInstance(s.ID, s.Tag, s)
 	}
 
 	return nil
@@ -145,9 +145,9 @@ func (s *Instance) setStatus(status FlowStatus) error {
 		if s.err != nil {
 			errMsg = s.err.Error()
 		}
-		logs.Errorf(packageName, MSG_INSTANCE_FAILED, s.Id, s.Tag, s.Status, s.Current, errMsg)
+		logs.Errorf(packageName, MSG_INSTANCE_FAILED, s.ID, s.Tag, s.Status, s.Current, errMsg)
 	default:
-		logs.Logf(packageName, MSG_INSTANCE_STATUS, s.Id, s.Tag, s.Status, s.Current)
+		logs.Logf(packageName, MSG_INSTANCE_STATUS, s.ID, s.Tag, s.Status, s.Current)
 	}
 
 	err := s.Save()
@@ -367,7 +367,6 @@ func (s *Instance) SetCtx(ctx et.Json) error {
 * @return et.Json, error
 **/
 func (s *Instance) setDone(result et.Json, err error) (et.Json, error) {
-	s.setCtx(result)
 	s.setResult(result, err)
 	errStatus := s.setStatus(FlowStatusDone)
 	if errStatus != nil {
@@ -397,7 +396,6 @@ func (s *Instance) setFailed(result et.Json, err error) error {
 * @return et.Json, error
 **/
 func (s *Instance) setStop(result et.Json, err error) (et.Json, error) {
-	s.setCtx(result)
 	s.setResult(result, err)
 	s.Current++
 	errStatus := s.setStatus(FlowStatusPending)
@@ -433,7 +431,6 @@ func (s *Instance) setGoto(step int, message string, result et.Json, err error) 
 		return nil
 	}
 
-	s.setCtx(result)
 	s.setResult(result, err)
 	s.Current = step
 	s.goTo = -1
@@ -442,7 +439,7 @@ func (s *Instance) setGoto(step int, message string, result et.Json, err error) 
 		return errStatus
 	}
 
-	logs.Logf(packageName, MSG_INSTANCE_GOTO, s.Id, s.Tag, step, message)
+	logs.Logf(packageName, MSG_INSTANCE_GOTO, s.ID, s.Tag, step, message)
 	return nil
 }
 
@@ -460,7 +457,7 @@ func (s *Instance) startResilence() bool {
 	}
 
 	description := fmt.Sprintf("flow: %s,  %s", s.Name, s.Description)
-	s.resilence = resilience.AddCustom(s.Id, s.Tag, description, s.TotalAttempts, s.TimeAttempts, s.Tags, s.Team, s.Level, s.run, s.Ctx)
+	s.resilence = resilience.AddCustom(s.ID, s.Tag, description, s.TotalAttempts, s.TimeAttempts, s.Tags, s.Team, s.Level, s.run, s.Ctx)
 	return true
 }
 
@@ -476,16 +473,16 @@ func (s *Instance) run(ctx et.Json) (et.Json, error) {
 	}()
 
 	if s.Status == FlowStatusDone {
-		err = fmt.Errorf(MSG_INSTANCE_ALREADY_DONE, s.Id)
+		err = fmt.Errorf(MSG_INSTANCE_ALREADY_DONE, s.ID)
 		return et.Json{}, err
 	} else if s.Status == FlowStatusRunning && s.isNew {
-		err = fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING, s.Id)
+		err = fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING, s.ID)
 		return et.Json{}, err
 	} else if s.Status == FlowStatusCancel {
-		err = fmt.Errorf(MSG_INSTANCE_CANCEL, s.Id)
+		err = fmt.Errorf(MSG_INSTANCE_CANCEL, s.ID)
 		return et.Json{}, err
 	} else if s.Status == FlowStatusLoss {
-		err = fmt.Errorf(MSG_INSTANCE_LOSS, s.Id)
+		err = fmt.Errorf(MSG_INSTANCE_LOSS, s.ID)
 		return et.Json{}, err
 	}
 
@@ -545,11 +542,11 @@ func (s *Instance) rollback(result et.Json, err error) (et.Json, error) {
 	}
 
 	if s.Status == FlowStatusDone {
-		return result, fmt.Errorf(MSG_INSTANCE_ALREADY_DONE, s.Id)
+		return result, fmt.Errorf(MSG_INSTANCE_ALREADY_DONE, s.ID)
 	} else if s.Status == FlowStatusRunning {
-		return result, fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING, s.Id)
+		return result, fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING, s.ID)
 	} else if s.Status == FlowStatusPending {
-		return result, fmt.Errorf(MSG_INSTANCE_PENDING, s.Id)
+		return result, fmt.Errorf(MSG_INSTANCE_PENDING, s.ID)
 	}
 
 	for i := s.Current - 1; i >= 0; i-- {

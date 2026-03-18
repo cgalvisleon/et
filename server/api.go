@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/go-chi/chi/v5"
@@ -34,7 +33,6 @@ func NewApi(name, path, host string, port int, version string) *Api {
 		Version:  version,
 	}
 	result.addr = strs.Format("%s:%d", result.host, result.port)
-	middleware.SetServiceName(result.Name)
 
 	return result
 }

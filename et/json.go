@@ -966,6 +966,16 @@ func (s Json) Require(rules ...Rule) error {
 }
 
 /**
+* Remove
+* @param keys ...string
+**/
+func (s Json) Remove(keys ...string) {
+	for _, key := range keys {
+		delete(s, key)
+	}
+}
+
+/**
 * Select
 * @param keys []string
 * @return Json

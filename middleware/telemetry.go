@@ -22,7 +22,7 @@ import (
 
 var (
 	hostName, _ = os.Hostname()
-	serviceName = "telemetry"
+	appName     = ""
 )
 
 const (
@@ -53,19 +53,12 @@ func (rw *ResponseWriterWrapper) Write(b []byte) (int, error) {
 	return size, err
 }
 
-// SetServiceName sets the global service name included in all telemetry events.
-func SetServiceName(name string) {
-	serviceName = name
-}
-
 // Metrics holds observability data for a single HTTP or RPC request.
 // Field names and semantics follow OpenTelemetry semantic conventions for HTTP:
 // https://opentelemetry.io/docs/specs/semconv/http/
 type Metrics struct {
 	// timestamp — request start time (RFC3339)
 	TimeStamp time.Time `json:"timestamp"`
-	// service.name
-	ServiceName string `json:"service_name"`
 	// Internal correlation ID propagated via ServiceId header
 	ServiceId string `json:"service_id"`
 	// client.address — originating client IP (X-Forwarded-For > X-Real-IP > RemoteAddr)
@@ -108,7 +101,6 @@ type Metrics struct {
 func (m *Metrics) ToJson() et.Json {
 	return et.Json{
 		"timestamp":        m.TimeStamp.Format(time.RFC3339),
-		"service_name":     m.ServiceName,
 		"service_id":       m.ServiceId,
 		"client_address":   m.ClientAddress,
 		"scheme":           m.Scheme,
@@ -131,7 +123,7 @@ func (m *Metrics) ToJson() et.Json {
 // Telemetry holds rate-based request counters for a specific endpoint key.
 type Telemetry struct {
 	TimeStamp         string `json:"timestamp"`
-	ServiceName       string `json:"service_name"`
+	AppName           string `json:"service_name"`
 	Key               string `json:"key"`
 	RequestsPerSecond int64  `json:"requests_per_second"`
 	RequestsPerMinute int64  `json:"requests_per_minute"`
@@ -144,7 +136,7 @@ type Telemetry struct {
 func (t *Telemetry) ToJson() et.Json {
 	return et.Json{
 		"timestamp":           t.TimeStamp,
-		"service_name":        t.ServiceName,
+		"app_name":            t.AppName,
 		"key":                 t.Key,
 		"requests_per_second": t.RequestsPerSecond,
 		"requests_per_minute": t.RequestsPerMinute,
@@ -219,7 +211,6 @@ func NewMetric(r *http.Request) *Metrics {
 	now := timezone.Now()
 	return &Metrics{
 		TimeStamp:     now,
-		ServiceName:   serviceName,
 		ServiceId:     serviceId,
 		ClientAddress: clientAddr,
 		Scheme:        scheme,
@@ -240,14 +231,13 @@ func NewMetric(r *http.Request) *Metrics {
 func NewRpcMetric(method string) *Metrics {
 	now := timezone.Now()
 	return &Metrics{
-		TimeStamp:   now,
-		ServiceName: serviceName,
-		ServiceId:   utility.UUID(),
-		Scheme:      "rpc",
-		Method:      "RPC",
-		Path:        method,
-		mark:        now,
-		key:         fmt.Sprintf(`RPC:%s`, method),
+		TimeStamp: now,
+		ServiceId: utility.UUID(),
+		Scheme:    "rpc",
+		Method:    "RPC",
+		Path:      method,
+		mark:      now,
+		key:       fmt.Sprintf(`RPC:%s`, method),
 	}
 }
 
@@ -298,7 +288,6 @@ func (m *Metrics) CallMetrics() Telemetry {
 
 	return Telemetry{
 		TimeStamp:         date,
-		ServiceName:       serviceName,
 		Key:               m.key,
 		RequestsPerSecond: cache.Incr(reg.GenHashKey(m.key, second), 2),
 		RequestsPerMinute: cache.Incr(reg.GenHashKey(m.key, minute), 60),

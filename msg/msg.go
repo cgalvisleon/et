@@ -77,6 +77,7 @@ var (
 	MSG_NUMBER_BETWEEN                 = "atribute %s must be between %v and %v"
 	MSG_OBJECT_REQUIRED                = "atribute %s must be object"
 	MSG_PHONE_INVALID                  = "atribute %s must be a valid mobile phone number (E.164 format, e.g., +573001234567)"
+	MSG_AGENT_NOT_FOUND                = "agent %s not found"
 )
 
 func init() {
@@ -157,5 +158,6 @@ func init() {
 		MSG_NUMBER_BETWEEN = "atributo %s debe estar entre %v y %v"
 		MSG_OBJECT_REQUIRED = "atributo %s debe ser object"
 		MSG_PHONE_INVALID = "atributo %s debe ser un número de teléfono móvil válido (formato E.164, ej: +573001234567)"
+		MSG_AGENT_NOT_FOUND = "agente %s no encontrado"
 	}
 }

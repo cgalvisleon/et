@@ -8,7 +8,6 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 )
@@ -22,16 +21,6 @@ type Resilience struct {
 	getInstance GetInstanceFn        `json:"-"`
 	setInstance SetInstanceFn        `json:"-"`
 	isDebug     bool                 `json:"-"`
-}
-
-/**
-* Load
- */
-func (s *Resilience) Load(store instances.Store) {
-	if store != nil {
-		s.getInstance = store.Get
-		s.setInstance = store.Set
-	}
 }
 
 /**

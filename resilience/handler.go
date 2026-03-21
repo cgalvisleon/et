@@ -9,6 +9,7 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
 	"github.com/go-chi/chi"
@@ -18,7 +19,7 @@ import (
 * New
 * @return *Resilience, error
  */
-func New() (*Resilience, error) {
+func New(store instances.Store) (*Resilience, error) {
 	err := event.Load()
 	if err != nil {
 		return nil, err
@@ -28,6 +29,10 @@ func New() (*Resilience, error) {
 		instances: make(map[string]*Instance),
 		mu:        sync.Mutex{},
 		isDebug:   envar.GetBool("DEBUG", false),
+	}
+	if store != nil {
+		result.getInstance = store.Get
+		result.setInstance = store.Set
 	}
 
 	return result, nil

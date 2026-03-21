@@ -2,6 +2,7 @@ package request
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -40,6 +41,35 @@ func (s Status) ToJson() et.Json {
 // ToString returns a string
 func (s Status) ToString() string {
 	return s.ToJson().ToString()
+}
+
+/**
+* statusOk
+* @param status int
+* @return bool
+**/
+func statusOk(status int) bool {
+	return status < http.StatusBadRequest
+}
+
+/**
+* bodyParams
+* @param header, body et.Json
+* @return []byte
+**/
+func bodyParams(header, body et.Json) []byte {
+	contentType := header.Get("Content-Type")
+	if contentType == "application/x-www-form-urlencoded" {
+		data := url.Values{}
+		for k, v := range body {
+			data.Set(k, v.(string))
+		}
+		return []byte(data.Encode())
+	} else if contentType == "application/json" {
+		return []byte(body.ToString())
+	} else {
+		return []byte(body.ToString())
+	}
 }
 
 /**
@@ -198,35 +228,6 @@ func ReadBody(body io.ReadCloser) (*Body, error) {
 }
 
 /**
-* statusOk
-* @param status int
-* @return bool
-**/
-func statusOk(status int) bool {
-	return status < http.StatusBadRequest
-}
-
-/**
-* bodyParams
-* @param header, body et.Json
-* @return []byte
-**/
-func bodyParams(header, body et.Json) []byte {
-	contentType := header.Get("Content-Type")
-	if contentType == "application/x-www-form-urlencoded" {
-		data := url.Values{}
-		for k, v := range body {
-			data.Set(k, v.(string))
-		}
-		return []byte(data.Encode())
-	} else if contentType == "application/json" {
-		return []byte(body.ToString())
-	} else {
-		return []byte(body.ToString())
-	}
-}
-
-/**
 * GetStr
 * @param r *http.Request
 * @return et.Json, error
@@ -260,22 +261,156 @@ func GetBody(r *http.Request) (et.Json, error) {
 	return result, nil
 }
 
+type Value struct {
+	value any
+}
+
 /**
-* URLParam
-* @param r *http.Request, key string
+* Str returns a string
 * @return string
 **/
-func URLParam(r *http.Request, key string) string {
-	result := chi.URLParam(r, key)
+func (s *Value) Str() string {
+	return fmt.Sprintf("%v", s.value)
+}
+
+/**
+* Int returns an integer
+* @return int
+**/
+func (s *Value) Int() int {
+	value, ok := s.value.(float64)
+	if !ok {
+		return 0
+	}
+	return int(value)
+}
+
+/**
+* Float returns a float
+* @return float64
+**/
+func (s *Value) Float() float64 {
+	value, ok := s.value.(float64)
+	if !ok {
+		return 0
+	}
+	return value
+}
+
+/**
+* Bool returns a boolean
+* @return bool
+**/
+func (s *Value) Bool() bool {
+	value, ok := s.value.(bool)
+	if !ok {
+		return false
+	}
+	return value
+}
+
+/**
+* DateTime returns a time.Time
+* @return time.Time
+**/
+func (s *Value) DateTime() time.Time {
+	value, ok := s.value.(time.Time)
+	if !ok {
+		return time.Time{}
+	}
+	return value
+}
+
+/**
+* Object returns an et.Json
+* @return et.Json
+**/
+func (s *Value) Object() et.Json {
+	value, ok := s.value.(et.Json)
+	if !ok {
+		return et.Json{}
+	}
+	return value
+}
+
+/**
+* Array returns an array
+* @return []any
+**/
+func (s *Value) Array() []any {
+	value, ok := s.value.([]any)
+	if !ok {
+		return []any{}
+	}
+	return value
+}
+
+/**
+* ArrayString returns an array of strings
+* @return []string
+**/
+func (s *Value) ArrayString() []string {
+	result, ok := s.value.([]string)
+	if !ok {
+		return []string{}
+	}
 	return result
+}
+
+/**
+* ArrayInt returns an array of integers
+* @return []int
+**/
+func (s *Value) ArrayInt() []int {
+	result, ok := s.value.([]int)
+	if !ok {
+		return []int{}
+	}
+	return result
+}
+
+/**
+* ArrayFloat returns an array of floats
+* @return []float64
+**/
+func (s *Value) ArrayFloat() []float64 {
+	result, ok := s.value.([]float64)
+	if !ok {
+		return []float64{}
+	}
+	return result
+}
+
+/**
+* ArrayJson returns an array of et.Json
+* @return []et.Json
+**/
+func (s *Value) ArrayJson() []et.Json {
+	result, ok := s.value.([]et.Json)
+	if !ok {
+		return []et.Json{}
+	}
+	return result
+}
+
+/**
+* Param
+* @param r *http.Request, key string
+* @return *Value
+**/
+func URLParam(r *http.Request, key string) *Value {
+	return &Value{
+		value: chi.URLParam(r, key),
+	}
 }
 
 /**
 * Query
 * @param r *http.Request, key string
-* @return string
+* @return *Value
 **/
-func Query(r *http.Request, key string) string {
-	result := r.URL.Query().Get(key)
-	return result
+func Query(r *http.Request, key string) *Value {
+	return &Value{
+		value: r.URL.Query().Get(key),
+	}
 }

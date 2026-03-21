@@ -33,15 +33,13 @@ type WorkFlow struct {
 }
 
 /**
-* Load
+* load
  */
-func (s *WorkFlow) Load(store instances.Store) {
+func (s *WorkFlow) load(store instances.Store) {
 	if store != nil {
 		s.getInstance = store.Get
 		s.setInstance = store.Set
 	}
-
-	s.resilience.Load(store)
 }
 
 /**

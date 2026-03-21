@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/go-chi/chi/v5"
 )
 
 var (
@@ -257,4 +258,24 @@ func GetBody(r *http.Request) (et.Json, error) {
 	}
 
 	return result, nil
+}
+
+/**
+* URLParam
+* @param r *http.Request, key string
+* @return string
+**/
+func URLParam(r *http.Request, key string) string {
+	result := chi.URLParam(r, key)
+	return result
+}
+
+/**
+* Query
+* @param r *http.Request, key string
+* @return string
+**/
+func Query(r *http.Request, key string) string {
+	result := r.URL.Query().Get(key)
+	return result
 }

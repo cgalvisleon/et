@@ -10,6 +10,7 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/request"
+	"github.com/cgalvisleon/et/resilience"
 	"github.com/cgalvisleon/et/response"
 	"github.com/go-chi/chi/v5"
 )
@@ -24,12 +25,18 @@ func New() (*WorkFlow, error) {
 		return nil, err
 	}
 
+	resetInstance, err := resilience.New()
+	if err != nil {
+		return nil, err
+	}
+
 	result := &WorkFlow{
-		Flows:     make(map[string]*Flow),
-		Instances: make(map[string]*Instance),
-		Results:   make(map[string]et.Json),
-		mu:        sync.Mutex{},
-		isDebug:   envar.GetBool("DEBUG", false),
+		Flows:      make(map[string]*Flow),
+		Instances:  make(map[string]*Instance),
+		Results:    make(map[string]et.Json),
+		mu:         sync.Mutex{},
+		resilience: resetInstance,
+		isDebug:    envar.GetBool("DEBUG", false),
 	}
 
 	return result, nil
@@ -63,7 +70,7 @@ func (s *WorkFlow) HttpGet(w http.ResponseWriter, r *http.Request) {
 }
 
 /**
-* HttpGetInstance
+* HttpState
 * @params w http.ResponseWriter, r *http.Request
 **/
 func (s *WorkFlow) HttpState(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +97,7 @@ func (s *WorkFlow) HttpState(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := body.Str("status")
-	err = instance.setStatus(FlowStatus(status))
+	err = instance.setStatus(Status(status))
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -103,7 +110,7 @@ func (s *WorkFlow) HttpState(w http.ResponseWriter, r *http.Request) {
 }
 
 /**
-* HttpGetInstance
+* HttpSetParams
 * @params w http.ResponseWriter, r *http.Request
 **/
 func (s *WorkFlow) HttpSetParams(w http.ResponseWriter, r *http.Request) {

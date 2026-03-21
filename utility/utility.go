@@ -557,3 +557,23 @@ func ToJson(v any) et.Json {
 
 	return result
 }
+
+/**
+* Add
+* @param slice []T, item T
+* @return []T
+**/
+func Add[T any](slice []T, item T) []T {
+	if slice == nil {
+		slice = []T{}
+	}
+
+	idx := slices.IndexFunc(slice, func(t T) bool {
+		return fmt.Sprintf("%v", t) == fmt.Sprintf("%v", item)
+	})
+	if idx == -1 {
+		return append(slice, item)
+	}
+
+	return slice
+}

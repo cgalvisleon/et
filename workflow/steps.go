@@ -45,7 +45,7 @@ func (s *Step) run(flow *Instance, ctx et.Json) (et.Json, error) {
 		return ctx, fmt.Errorf("step function is nil for step: %s at index %d", s.Name, flow.Current)
 	}
 
-	flow.setStatus(FlowStatusRunning)
+	flow.setStatus(Running)
 	result, err := s.fn(flow, ctx)
 	if err != nil {
 		return et.Json{}, err
@@ -111,7 +111,7 @@ func (s *Step) evaluate(ctx et.Json, instance *Instance) (bool, error) {
 		return false, fmt.Errorf(MSG_INSTANCE_EVALUATE, s.Expression, err.Error())
 	}
 
-	instance.setStatus(FlowStatusRunning)
+	instance.setStatus(Running)
 	evalueExpression, err := govaluate.NewEvaluableExpression(s.Expression)
 	if err != nil {
 		return resultError(err)

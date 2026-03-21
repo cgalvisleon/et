@@ -22,33 +22,33 @@ type GetInstanceFn func(id string, dest any) (bool, error)
 type SetInstanceFn func(id, tag string, obj any) error
 
 type WorkFlow struct {
-	Flows       map[string]*Flow     `json:"flows"`
-	Instances   map[string]*Instance `json:"instances"`
-	Results     map[string]et.Json   `json:"results"`
-	mu          sync.Mutex           `json:"-"`
-	getInstance GetInstanceFn        `json:"-"`
-	setInstance SetInstanceFn        `json:"-"`
-	isDebug     bool                 `json:"-"`
+	Flows       map[string]*Flow       `json:"flows"`
+	Instances   map[string]*Instance   `json:"instances"`
+	Results     map[string]et.Json     `json:"results"`
+	mu          sync.Mutex             `json:"-"`
+	getInstance GetInstanceFn          `json:"-"`
+	setInstance SetInstanceFn          `json:"-"`
+	resilience  *resilience.Resilience `json:"-"`
+	isDebug     bool                   `json:"-"`
 }
 
 /**
-* healthCheck
-* @return bool
-**/
-func (s *WorkFlow) healthCheck() bool {
-	ok := resilience.HealthCheck()
-	if !ok {
-		return false
+* Load
+ */
+func (s *WorkFlow) Load(store instances.Store) {
+	if store != nil {
+		s.getInstance = store.Get
+		s.setInstance = store.Set
 	}
 
-	return true
+	s.resilience.Load(store)
 }
 
 /**
-* Add
+* add
 * @param instance *Instance
 **/
-func (s *WorkFlow) Add(instance *Instance) {
+func (s *WorkFlow) add(instance *Instance) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -56,10 +56,23 @@ func (s *WorkFlow) Add(instance *Instance) {
 }
 
 /**
-* Remove
+* Get
+* @param id string
+* @return *Instance, bool
+**/
+func (s *WorkFlow) Get(id string) (*Instance, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	instance, ok := s.Instances[id]
+	return instance, ok
+}
+
+/**
+* remove
 * @param instance *Instance
 **/
-func (s *WorkFlow) Remove(instance *Instance) {
+func (s *WorkFlow) remove(instance *Instance) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -99,7 +112,7 @@ func (s *WorkFlow) newInstance(tag, id string, tags et.Json, step int, createdBy
 	now := timezone.Now()
 	result := &Instance{
 		Flow:       flow,
-		workFlows:  s,
+		owner:      s,
 		Tag:        tag,
 		CreatedAt:  now,
 		UpdatedAt:  now,
@@ -112,12 +125,14 @@ func (s *WorkFlow) newInstance(tag, id string, tags et.Json, step int, createdBy
 		Results:    make(map[int]*Result),
 		Rollbacks:  make(map[int]*Result),
 		Tags:       tags,
+		Resilence:  make(map[string]*resilience.Instance),
 		goTo:       -1,
 		WorkerHost: workerHost,
 		Params:     et.Json{},
 		isNew:      true,
 	}
-	result.setStatus(FlowStatusPending)
+	result.setStatus(Pending)
+	s.add(result)
 
 	return result, nil
 }
@@ -132,8 +147,8 @@ func (s *WorkFlow) loadInstance(id string) (*Instance, bool) {
 		return nil, false
 	}
 
-	result, ok := s.Instances[id]
-	if ok {
+	result, exists := s.Get(id)
+	if exists {
 		return result, true
 	}
 
@@ -154,10 +169,10 @@ func (s *WorkFlow) loadInstance(id string) (*Instance, bool) {
 
 		result.Flow = flow
 		result.goTo = -1
-		s.Add(result)
+		s.add(result)
 
 		if s.isDebug {
-			logs.Log("WorkFlow", "loadInstance:", result.ToJson().ToString())
+			logs.Log(packageName, "loadInstance:", result.ToString())
 		}
 
 		return result, true
@@ -204,7 +219,7 @@ func (s *WorkFlow) runInstance(instanceId, tag string, step int, ctx, tags et.Js
 		return et.Json{}, err
 	}
 
-	s.Remove(instance)
+	s.remove(instance)
 	logs.Logf(packageName, "runInstance: %s", tag)
 	if s.isDebug {
 		logs.Debugf("instance: %s", instance.ToString())
@@ -226,7 +241,7 @@ func (s *WorkFlow) resetInstance(instanceId, updatedBy string) error {
 
 	instance.UpdatedBy = updatedBy
 	instance.Current = 0
-	instance.setStatus(FlowStatusPending)
+	instance.setStatus(Pending)
 
 	return nil
 }
@@ -296,27 +311,6 @@ func (s *WorkFlow) deleteFlow(tag string) bool {
 }
 
 /**
-* Load
-* @return error
- */
-func (s *WorkFlow) Load(store instances.Store) error {
-	if store != nil {
-		s.getInstance = store.Get
-		s.setInstance = store.Set
-	}
-
-	return resilience.Load(store)
-}
-
-/**
-* HealthCheck
-* @return bool
-**/
-func (s *WorkFlow) HealthCheck() bool {
-	return s.healthCheck()
-}
-
-/**
 * New
 * @param tag, version, name, description string, fn FnContext, createdBy string
 * @return *Flow
@@ -366,8 +360,8 @@ func (s *WorkFlow) Stop(instanceId, updatedBy string) error {
 * @param instanceId, status, updatedBy string
 * @return FlowStatus, error
 **/
-func (s *WorkFlow) Status(instanceId, status, updatedBy string) (FlowStatus, error) {
-	if _, ok := FlowStatusList[FlowStatus(status)]; !ok {
+func (s *WorkFlow) Status(instanceId, status, updatedBy string) (Status, error) {
+	if _, ok := FlowStatusList[Status(status)]; !ok {
 		return "", fmt.Errorf("status %s no es valido", status)
 	}
 
@@ -376,7 +370,7 @@ func (s *WorkFlow) Status(instanceId, status, updatedBy string) (FlowStatus, err
 		return "", fmt.Errorf("instance not found")
 	}
 
-	instance.setStatus(FlowStatus(status))
+	instance.setStatus(Status(status))
 	return instance.Status, nil
 }
 

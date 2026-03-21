@@ -1,203 +1,152 @@
 package resilience
 
 import (
-	"fmt"
+	"encoding/json"
 	"net/http"
-	"time"
+	"strings"
+	"sync"
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/instances"
+	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
 	"github.com/go-chi/chi"
 )
 
-var resilience map[string]*Instance
-
 /**
-* Load
-* @return error
+* New
+* @return *Resilience, error
  */
-func Load(store instances.Store) error {
-	if resilience != nil {
-		return nil
-	}
-
+func New() (*Resilience, error) {
 	err := event.Load()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	err = initEvents()
-	if err != nil {
-		return err
+	result := &Resilience{
+		instances: make(map[string]*Instance),
+		mu:        sync.Mutex{},
+		isDebug:   envar.GetBool("DEBUG", false),
 	}
 
-	resilience = make(map[string]*Instance)
-	if store != nil {
-		SetGetInstance(store.Get)
-		SetSetInstance(store.Set)
-	}
-
-	return nil
+	return result, nil
 }
 
 /**
-* HealthCheck
-* @return bool
- */
-func HealthCheck() bool {
-	if resilience == nil {
-		return false
-	}
-
-	return true
-}
-
-/**
-* AddCustom
-* @param id, tag, description string, totalAttempts int, timeAttempts time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}
-* @return *Instance
- */
-func AddCustom(id, tag, description string, totalAttempts int, timeAttempts time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
-	if resilience == nil {
-		return nil
-	}
-
-	result := NewInstance(id, tag, description, totalAttempts, timeAttempts, tags, team, level, fn, fnArgs...)
-	resilience[id] = result
-	result.runAttempt()
-
-	return result
-}
-
-/**
-* Add
-* @param tag, description string, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}
-* @return *Instance
- */
-func Add(id, tag, description string, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
-	totalAttempts := envar.GetInt("RESILIENCE_TOTAL_ATTEMPTS", 3)
-	timeAttempts := envar.GetInt("RESILIENCE_TIME_ATTEMPTS", 30)
-
-	return AddCustom(id, tag, description, totalAttempts, time.Duration(timeAttempts)*time.Second, tags, team, level, fn, fnArgs...)
-}
-
-/**
-* Stop
-* @param id string
-* @return error
- */
-func Stop(id string) error {
-	if resilience == nil {
-		return fmt.Errorf(MSG_ID_NOT_FOUND)
-	}
-
-	if _, ok := resilience[id]; !ok {
-		return fmt.Errorf(MSG_ID_NOT_FOUND)
-	}
-
-	resilience[id].setStop()
-
-	return nil
-}
-
-/**
-* Restart
-* @param id string
-* @return error
- */
-func Restart(id string) error {
-	if resilience == nil {
-		return fmt.Errorf(MSG_ID_NOT_FOUND)
-	}
-
-	if _, ok := resilience[id]; !ok {
-		return fmt.Errorf(MSG_ID_NOT_FOUND)
-	}
-
-	resilience[id].setRestart()
-
-	return nil
-}
-
-/**
-* HttpGetResilienceById
-* @param w http.ResponseWriter, r *http.Request
+* HttpGet
+* @params w http.ResponseWriter, r *http.Request
 **/
-func HttpGetResilienceById(w http.ResponseWriter, r *http.Request) {
-	if resilience == nil {
-		response.HTTPError(w, r, http.StatusBadRequest, MSG_RESILIENCE_NOT_INITIALIZED)
-		return
-	}
-
+func (s *Resilience) HttpGet(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if id == "" {
-		response.HTTPError(w, r, http.StatusBadRequest, MSG_ID_REQUIRED)
+	var instance Instance
+	exists, err := s.getInstance(id, &instance)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	res, exist := LoadById(id)
-	if !exist {
-		response.HTTPError(w, r, http.StatusNotFound, MSG_ID_NOT_FOUND)
+	if !exists {
+		response.ITEM(w, r, http.StatusNotFound, et.Item{
+			Ok:     true,
+			Result: et.Json{"message": "instance not found"},
+		})
 		return
 	}
 
 	response.ITEM(w, r, http.StatusOK, et.Item{
 		Ok:     true,
-		Result: res.ToJson(),
+		Result: instance.ToJson(),
 	})
 }
 
 /**
-* HttpGetResilienceStop
-* @param w http.ResponseWriter, r *http.Request
+* HttpState
+* @params w http.ResponseWriter, r *http.Request
 **/
-func HttpGetResilienceStop(w http.ResponseWriter, r *http.Request) {
-	if resilience == nil {
-		response.HTTPError(w, r, http.StatusBadRequest, MSG_RESILIENCE_NOT_INITIALIZED)
-		return
-	}
-
+func (s *Resilience) HttpState(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if id == "" {
-		response.HTTPError(w, r, http.StatusBadRequest, MSG_ID_REQUIRED)
+	var instance Instance
+	exists, err := s.getInstance(id, &instance)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	res, ok := resilience[id]
-	if !ok {
-		response.HTTPError(w, r, http.StatusNotFound, MSG_ID_NOT_FOUND)
+	if !exists {
+		response.ITEM(w, r, http.StatusNotFound, et.Item{
+			Ok:     true,
+			Result: et.Json{"message": "instance not found"},
+		})
 		return
 	}
 
-	result := res.setStop()
-	response.ITEM(w, r, http.StatusOK, result)
+	body, err := request.GetBody(r)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	status := body.Str("status")
+	err = instance.setStatus(Status(status))
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.ITEM(w, r, http.StatusOK, et.Item{
+		Ok:     true,
+		Result: instance.ToJson(),
+	})
 }
 
 /**
-* HttpGetResilienceRestart
-* @param w http.ResponseWriter, r *http.Request
+* HttpSetParams
+* @params w http.ResponseWriter, r *http.Request
 **/
-func HttpGetResilienceRestart(w http.ResponseWriter, r *http.Request) {
-	if resilience == nil {
-		response.HTTPError(w, r, http.StatusBadRequest, MSG_RESILIENCE_NOT_INITIALIZED)
-		return
-	}
-
+func (s *Resilience) HttpSetParams(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if id == "" {
-		response.HTTPError(w, r, http.StatusBadRequest, MSG_ID_REQUIRED)
+	var instance Instance
+	exists, err := s.getInstance(id, &instance)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	res, ok := resilience[id]
-	if !ok {
-		response.HTTPError(w, r, http.StatusNotFound, MSG_ID_NOT_FOUND)
+	if !exists {
+		response.ITEM(w, r, http.StatusNotFound, et.Item{
+			Ok:     true,
+			Result: et.Json{"message": "instance not found"},
+		})
 		return
 	}
 
-	result := res.setRestart()
-	response.ITEM(w, r, http.StatusOK, result)
+	body, err := request.GetBody(r)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	jsonData := instance.ToJson()
+	for k, v := range body {
+		keys := strings.Split(k, "->")
+		jsonData.SetNested(keys, v)
+	}
+
+	bt, err := jsonData.ToByte()
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	err = json.Unmarshal(bt, &instance)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.ITEM(w, r, http.StatusOK, et.Item{
+		Ok:     true,
+		Result: instance.ToJson(),
+	})
 }

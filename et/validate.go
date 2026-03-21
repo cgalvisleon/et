@@ -9,10 +9,11 @@ import (
 	"github.com/cgalvisleon/et/msg"
 )
 
-var rePhone = regexp.MustCompile(`^\+[1-9]\d{6,14}$`)
+var rePhone = regexp.MustCompile(`^\+?[1-9]\d{6,14}$`)
 
 type Rule interface {
 	Validate(Json) error
+	Name() string
 }
 
 type StringRule struct {
@@ -27,6 +28,14 @@ type StringRule struct {
 **/
 func Str(name string) *StringRule {
 	return &StringRule{name: name}
+}
+
+/**
+* Name
+* @return string
+**/
+func (r *StringRule) Name() string {
+	return r.name
 }
 
 /**
@@ -69,6 +78,14 @@ type IntRule struct {
 
 func Int(name string) *IntRule {
 	return &IntRule{name: name}
+}
+
+/**
+* Name
+* @return string
+**/
+func (r *IntRule) Name() string {
+	return r.name
 }
 
 /**
@@ -135,6 +152,14 @@ func Float(name string) *FloatRule {
 }
 
 /**
+* Name
+* @return string
+**/
+func (r *FloatRule) Name() string {
+	return r.name
+}
+
+/**
 * Min
 * @param v float64
 * @return *FloatRule
@@ -191,6 +216,14 @@ func Array(name string) *ArrayRule {
 }
 
 /**
+* Name
+* @return string
+**/
+func (r *ArrayRule) Name() string {
+	return r.name
+}
+
+/**
 * NotEmpty
 * @return *ArrayRule
 **/
@@ -231,6 +264,14 @@ func Email(name string) *EmailRule {
 }
 
 /**
+* Name
+* @return string
+**/
+func (r *EmailRule) Name() string {
+	return r.name
+}
+
+/**
 * Validate
 * @param j Json
 * @return error
@@ -264,6 +305,14 @@ func Date(name string) *DateRule {
 		name:   name,
 		layout: "2006-01-02",
 	}
+}
+
+/**
+* Name
+* @return string
+**/
+func (r *DateRule) Name() string {
+	return r.name
 }
 
 /**
@@ -318,6 +367,14 @@ func Enum(name string, vals ...string) *EnumRule {
 }
 
 /**
+* Name
+* @return string
+**/
+func (r *EnumRule) Name() string {
+	return r.name
+}
+
+/**
 * Validate
 * @param j Json
 * @return error
@@ -352,6 +409,19 @@ func Object(name string, rules ...Rule) *ObjectRule {
 	}
 }
 
+/**
+* Name
+* @return string
+**/
+func (r *ObjectRule) Name() string {
+	return r.name
+}
+
+/**
+* Validate
+* @param j Json
+* @return error
+**/
 func (r *ObjectRule) Validate(j Json) error {
 	v, ok := j[r.name]
 	if !ok {
@@ -380,10 +450,19 @@ func (r *ObjectRule) Validate(j Json) error {
 type PhoneRule struct {
 	name        string
 	countryCode string
+	length      int
 }
 
 func Phone(name string) *PhoneRule {
 	return &PhoneRule{name: name}
+}
+
+/**
+* Name
+* @return string
+**/
+func (r *PhoneRule) Name() string {
+	return r.name
 }
 
 /**
@@ -393,6 +472,16 @@ func Phone(name string) *PhoneRule {
 **/
 func (r *PhoneRule) CountryCode(code string) *PhoneRule {
 	r.countryCode = code
+	return r
+}
+
+/**
+* Length
+* @param length int
+* @return *PhoneRule
+**/
+func (r *PhoneRule) Length(length int) *PhoneRule {
+	r.length = length
 	return r
 }
 
@@ -414,6 +503,12 @@ func (r *PhoneRule) Validate(j Json) error {
 
 	if !rePhone.MatchString(str) {
 		return fmt.Errorf(msg.MSG_PHONE_INVALID, r.name)
+	}
+
+	if r.length > 0 {
+		if len(str) != r.length {
+			return fmt.Errorf(msg.MSG_PHONE_INVALID, r.name)
+		}
 	}
 
 	if r.countryCode != "" {
@@ -438,6 +533,14 @@ type BetweenRule struct {
 **/
 func Between(name string, min, max float64) *BetweenRule {
 	return &BetweenRule{name, min, max}
+}
+
+/**
+* Name
+* @return string
+**/
+func (r *BetweenRule) Name() string {
+	return r.name
 }
 
 /**

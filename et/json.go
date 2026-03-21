@@ -966,6 +966,25 @@ func (s Json) Require(rules ...Rule) error {
 }
 
 /**
+* Maybe
+* @param rules ...Rule
+* @return error
+**/
+func (s Json) Maybe(rules ...Rule) error {
+	for _, r := range rules {
+		_, ok := s[r.Name()]
+		if !ok {
+			return nil
+		}
+
+		if err := r.Validate(s); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+/**
 * Remove
 * @param keys ...string
 **/

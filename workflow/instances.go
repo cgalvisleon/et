@@ -13,52 +13,52 @@ import (
 	"github.com/cgalvisleon/et/timezone"
 )
 
-type FlowStatus string
+type Status string
 
 const (
-	FlowStatusPending FlowStatus = "pending"
-	FlowStatusRunning FlowStatus = "running"
-	FlowStatusDone    FlowStatus = "done"
-	FlowStatusFailed  FlowStatus = "failed"
-	FlowStatusLoss    FlowStatus = "loss"
-	FlowStatusCancel  FlowStatus = "cancel"
+	Pending Status = "pending"
+	Running Status = "running"
+	Done    Status = "done"
+	Failed  Status = "failed"
+	Loss    Status = "loss"
+	Cancel  Status = "cancel"
 )
 
-var FlowStatusList map[FlowStatus]bool = map[FlowStatus]bool{
-	FlowStatusPending: true,
-	FlowStatusRunning: true,
-	FlowStatusDone:    true,
-	FlowStatusFailed:  true,
-	FlowStatusLoss:    true,
-	FlowStatusCancel:  true,
+var FlowStatusList map[Status]bool = map[Status]bool{
+	Pending: true,
+	Running: true,
+	Done:    true,
+	Failed:  true,
+	Loss:    true,
+	Cancel:  true,
 }
 
 type Instance struct {
 	*Flow
-	workFlows  *WorkFlow            `json:"-"`
-	CreatedAt  time.Time            `json:"created_at"`
-	UpdatedAt  time.Time            `json:"updated_at"`
-	Tag        string               `json:"tag"`
-	ID         string               `json:"id"`
-	CreatedBy  string               `json:"created_by"`
-	UpdatedBy  string               `json:"updated_by"`
-	Current    int                  `json:"current"`
-	Ctx        et.Json              `json:"ctx"`
-	Ctxs       map[int]et.Json      `json:"ctxs"`
-	Results    map[int]*Result      `json:"results"`
-	Rollbacks  map[int]*Result      `json:"rollbacks"`
-	Params     et.Json              `json:"params"`
-	Traces     []et.Json            `json:"traces"`
-	Status     FlowStatus           `json:"status"`
-	DoneAt     time.Time            `json:"done_at"`
-	Tags       et.Json              `json:"tags"`
-	WorkerHost string               `json:"worker_host"`
-	done       bool                 `json:"-"`
-	goTo       int                  `json:"-"`
-	err        error                `json:"-"`
-	resilence  *resilience.Instance `json:"-"`
-	isNew      bool                 `json:"-"`
-	isDebug    bool                 `json:"-"`
+	CreatedAt  time.Time                       `json:"created_at"`
+	UpdatedAt  time.Time                       `json:"updated_at"`
+	Tag        string                          `json:"tag"`
+	ID         string                          `json:"id"`
+	CreatedBy  string                          `json:"created_by"`
+	UpdatedBy  string                          `json:"updated_by"`
+	Current    int                             `json:"current"`
+	Ctx        et.Json                         `json:"ctx"`
+	Ctxs       map[int]et.Json                 `json:"ctxs"`
+	Results    map[int]*Result                 `json:"results"`
+	Rollbacks  map[int]*Result                 `json:"rollbacks"`
+	Params     et.Json                         `json:"params"`
+	Traces     []et.Json                       `json:"traces"`
+	Status     Status                          `json:"status"`
+	DoneAt     time.Time                       `json:"done_at"`
+	Tags       et.Json                         `json:"tags"`
+	WorkerHost string                          `json:"worker_host"`
+	Resilence  map[string]*resilience.Instance `json:"resilence"`
+	owner      *WorkFlow                       `json:"-"`
+	done       bool                            `json:"-"`
+	goTo       int                             `json:"-"`
+	err        error                           `json:"-"`
+	isNew      bool                            `json:"-"`
+	isDebug    bool                            `json:"-"`
 }
 
 /**
@@ -114,11 +114,11 @@ func (s *Instance) Save() error {
 	event.Publish(EVENT_WORKFLOW_STATUS, data)
 
 	if s.isDebug {
-		logs.Log("WorkFlows", "save:", data.ToString())
+		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	if s.workFlows != nil && s.workFlows.setInstance != nil {
-		return s.workFlows.setInstance(s.ID, s.Tag, s)
+	if s.owner != nil && s.owner.setInstance != nil {
+		return s.owner.setInstance(s.ID, s.Tag, s)
 	}
 
 	return nil
@@ -129,18 +129,14 @@ func (s *Instance) Save() error {
 * @param status FlowStatus
 * @return error
 **/
-func (s *Instance) setStatus(status FlowStatus) error {
+func (s *Instance) setStatus(status Status) error {
 	s.Status = status
 	s.UpdatedAt = timezone.Now()
 	switch s.Status {
-	case FlowStatusDone:
+	case Done:
 		s.DoneAt = s.UpdatedAt
 		s.done = true
-	case FlowStatusFailed:
-		if s.resilence != nil && s.resilence.IsEnd() {
-			s.done = true
-		}
-
+	case Failed:
 		errMsg := ""
 		if s.err != nil {
 			errMsg = s.err.Error()
@@ -152,7 +148,7 @@ func (s *Instance) setStatus(status FlowStatus) error {
 
 	err := s.Save()
 	if err != nil {
-		return fmt.Errorf("setStatus: error al guardar el estado de la instancia: %v", err)
+		return err
 	}
 
 	return nil
@@ -170,11 +166,7 @@ func (s *Instance) setResult(result et.Json, err error) (et.Json, error) {
 		errMessage = s.err.Error()
 	}
 
-	attempt := 0
-	if s.resilence != nil {
-		attempt = s.resilence.Attempt
-	}
-
+	attempt := len(s.Resilence)
 	res := &Result{
 		Step:    s.Current,
 		Ctx:     s.Ctx.Clone(),
@@ -368,7 +360,7 @@ func (s *Instance) SetCtx(ctx et.Json) error {
 **/
 func (s *Instance) setDone(result et.Json, err error) (et.Json, error) {
 	s.setResult(result, err)
-	errStatus := s.setStatus(FlowStatusDone)
+	errStatus := s.setStatus(Done)
 	if errStatus != nil {
 		return result, errStatus
 	}
@@ -382,7 +374,7 @@ func (s *Instance) setDone(result et.Json, err error) (et.Json, error) {
 **/
 func (s *Instance) setFailed(result et.Json, err error) error {
 	s.setResult(result, err)
-	errStatus := s.setStatus(FlowStatusFailed)
+	errStatus := s.setStatus(Failed)
 	if errStatus != nil {
 		return errStatus
 	}
@@ -398,7 +390,7 @@ func (s *Instance) setFailed(result et.Json, err error) error {
 func (s *Instance) setStop(result et.Json, err error) (et.Json, error) {
 	s.setResult(result, err)
 	s.Current++
-	errStatus := s.setStatus(FlowStatusPending)
+	errStatus := s.setStatus(Pending)
 	if errStatus != nil {
 		return result, errStatus
 	}
@@ -452,12 +444,9 @@ func (s *Instance) startResilence() bool {
 		return false
 	}
 
-	if s.resilence != nil {
-		return !s.resilence.IsFailed()
-	}
-
 	description := fmt.Sprintf("flow: %s,  %s", s.Name, s.Description)
-	s.resilence = resilience.AddCustom(s.ID, s.Tag, description, s.TotalAttempts, s.TimeAttempts, s.Tags, s.Team, s.Level, s.run, s.Ctx)
+	instance := s.owner.resilience.Run(s.Tag, description, s.TotalAttempts, s.TimeAttempts, s.Tags, s.Team, s.Level, s.run, s.Ctx)
+	s.Resilence[instance.ID] = instance
 	return true
 }
 
@@ -472,16 +461,16 @@ func (s *Instance) run(ctx et.Json) (et.Json, error) {
 		s.setTrace(s.Current, ctx, err)
 	}()
 
-	if s.Status == FlowStatusDone {
+	if s.Status == Done {
 		err = fmt.Errorf(MSG_INSTANCE_ALREADY_DONE, s.ID)
 		return et.Json{}, err
-	} else if s.Status == FlowStatusRunning && s.isNew {
+	} else if s.Status == Running && s.isNew {
 		err = fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING, s.ID)
 		return et.Json{}, err
-	} else if s.Status == FlowStatusCancel {
+	} else if s.Status == Cancel {
 		err = fmt.Errorf(MSG_INSTANCE_CANCEL, s.ID)
 		return et.Json{}, err
-	} else if s.Status == FlowStatusLoss {
+	} else if s.Status == Loss {
 		err = fmt.Errorf(MSG_INSTANCE_LOSS, s.ID)
 		return et.Json{}, err
 	}
@@ -541,11 +530,11 @@ func (s *Instance) rollback(result et.Json, err error) (et.Json, error) {
 		return result, err
 	}
 
-	if s.Status == FlowStatusDone {
+	if s.Status == Done {
 		return result, fmt.Errorf(MSG_INSTANCE_ALREADY_DONE, s.ID)
-	} else if s.Status == FlowStatusRunning {
+	} else if s.Status == Running {
 		return result, fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING, s.ID)
-	} else if s.Status == FlowStatusPending {
+	} else if s.Status == Pending {
 		return result, fmt.Errorf(MSG_INSTANCE_PENDING, s.ID)
 	}
 
@@ -567,10 +556,7 @@ func (s *Instance) rollback(result et.Json, err error) (et.Json, error) {
 		ctx := s.Ctxs[i].Clone()
 		result, err = step.rollbacks(s, ctx)
 		if err != nil {
-			attempt := 0
-			if s.resilence != nil {
-				attempt = s.resilence.Attempt
-			}
+			attempt := len(s.Resilence)
 			s.Rollbacks[i] = &Result{
 				Step:    i,
 				Ctx:     ctx,
@@ -602,7 +588,7 @@ func (s *Instance) Stop() error {
 * @return error
 **/
 func (s *Instance) Done() error {
-	return s.setStatus(FlowStatusDone)
+	return s.setStatus(Done)
 }
 
 /**
@@ -617,9 +603,9 @@ func (s *Instance) Goto(step int) error {
 
 /**
 * SetStatus
-* @param status FlowStatus
+* @param status Status
 * @return error
 **/
-func (s *Instance) SetStatus(status FlowStatus) error {
+func (s *Instance) SetStatus(status Status) error {
 	return s.setStatus(status)
 }

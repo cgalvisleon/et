@@ -6,7 +6,6 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/resilience"
@@ -30,16 +29,6 @@ type WorkFlow struct {
 	setInstance SetInstanceFn          `json:"-"`
 	resilience  *resilience.Resilience `json:"-"`
 	isDebug     bool                   `json:"-"`
-}
-
-/**
-* load
- */
-func (s *WorkFlow) load(store instances.Store) {
-	if store != nil {
-		s.getInstance = store.Get
-		s.setInstance = store.Set
-	}
 }
 
 /**
@@ -89,11 +78,11 @@ func (s *WorkFlow) Count() int {
 }
 
 /**
-* newInstance
+* new
 * @param tag, id string, tags et.Json, step int, createdBy string
 * @return *Instance, error
 **/
-func (s *WorkFlow) newInstance(tag, id string, tags et.Json, step int, createdBy string) (*Instance, error) {
+func (s *WorkFlow) new(tag, id string, tags et.Json, step int, createdBy string) (*Instance, error) {
 	if id == "" {
 		return nil, fmt.Errorf(MSG_INSTANCE_ID_REQUIRED)
 	}
@@ -136,11 +125,11 @@ func (s *WorkFlow) newInstance(tag, id string, tags et.Json, step int, createdBy
 }
 
 /**
-* loadInstance
+* load
 * @param id string
 * @return *Flow, error
 **/
-func (s *WorkFlow) loadInstance(id string) (*Instance, bool) {
+func (s *WorkFlow) load(id string) (*Instance, bool) {
 	if id == "" {
 		return nil, false
 	}
@@ -170,7 +159,7 @@ func (s *WorkFlow) loadInstance(id string) (*Instance, bool) {
 		s.add(result)
 
 		if s.isDebug {
-			logs.Log(packageName, "loadInstance:", result.ToString())
+			logs.Log(packageName, "load:", result.ToString())
 		}
 
 		return result, true
@@ -186,9 +175,9 @@ func (s *WorkFlow) loadInstance(id string) (*Instance, bool) {
 **/
 func (s *WorkFlow) getOrCreateInstance(id, tag string, step int, tags et.Json, createdBy string) (*Instance, error) {
 	id = reg.GetUUID(id)
-	result, exists := s.loadInstance(id)
+	result, exists := s.load(id)
 	if !exists {
-		return s.newInstance(tag, id, tags, step, createdBy)
+		return s.new(tag, id, tags, step, createdBy)
 	}
 
 	return result, nil
@@ -232,7 +221,7 @@ func (s *WorkFlow) runInstance(instanceId, tag string, step int, ctx, tags et.Js
 * @return error
 **/
 func (s *WorkFlow) resetInstance(instanceId, updatedBy string) error {
-	instance, exists := s.loadInstance(instanceId)
+	instance, exists := s.load(instanceId)
 	if !exists {
 		return fmt.Errorf("instance not found")
 	}
@@ -250,7 +239,7 @@ func (s *WorkFlow) resetInstance(instanceId, updatedBy string) error {
 * @return et.Json, error
 **/
 func (s *WorkFlow) rollback(instanceId, updatedBy string) (et.Json, error) {
-	instance, exists := s.loadInstance(instanceId)
+	instance, exists := s.load(instanceId)
 	if !exists {
 		return et.Json{}, fmt.Errorf("instance not found")
 	}
@@ -270,7 +259,7 @@ func (s *WorkFlow) rollback(instanceId, updatedBy string) (et.Json, error) {
 * @return error
 **/
 func (s *WorkFlow) stop(instanceId, updatedBy string) error {
-	instance, exists := s.loadInstance(instanceId)
+	instance, exists := s.load(instanceId)
 	if !exists {
 		return fmt.Errorf("instance not found")
 	}
@@ -363,7 +352,7 @@ func (s *WorkFlow) Status(instanceId, status, updatedBy string) (Status, error) 
 		return "", fmt.Errorf("status %s no es valido", status)
 	}
 
-	instance, exists := s.loadInstance(instanceId)
+	instance, exists := s.load(instanceId)
 	if !exists {
 		return "", fmt.Errorf("instance not found")
 	}
@@ -387,7 +376,7 @@ func (s *WorkFlow) DeleteFlow(tag string) (bool, error) {
 * @return (*Instance, error)
 **/
 func (s *WorkFlow) GetInstance(instanceId string) (*Instance, error) {
-	instance, exists := s.loadInstance(instanceId)
+	instance, exists := s.load(instanceId)
 	if !exists {
 		return nil, fmt.Errorf("instance not found")
 	}

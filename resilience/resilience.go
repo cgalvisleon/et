@@ -72,11 +72,11 @@ func (s *Resilience) Count() int {
 }
 
 /**
-* newInstance
+* new
 * @param tag, description string, totalAttempts int, interval time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}
 * @return Instance
  */
-func (s *Resilience) newInstance(tag, description string, totalAttempts int, interval time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
+func (s *Resilience) new(tag, description string, totalAttempts int, interval time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
 	id := reg.UUID()
 	result := &Instance{
 		CreatedAt:     time.Now(),
@@ -100,11 +100,11 @@ func (s *Resilience) newInstance(tag, description string, totalAttempts int, int
 }
 
 /**
-* LoadById
+* Load
 * @param id string
 * @return *Instance, bool
 **/
-func (s *Resilience) loadInstance(id string) (*Instance, bool) {
+func (s *Resilience) load(id string) (*Instance, bool) {
 	if id == "" {
 		return nil, false
 	}
@@ -127,7 +127,7 @@ func (s *Resilience) loadInstance(id string) (*Instance, bool) {
 		s.add(result)
 
 		if s.isDebug {
-			logs.Log(packageName, "loadInstance:", result.ToString())
+			logs.Log(packageName, "load:", result.ToString())
 		}
 
 		return result, true
@@ -150,7 +150,7 @@ func (s *Resilience) Run(tag, description string, totalAttempts int, interval ti
 		interval = 30 * time.Second
 	}
 
-	result := s.newInstance(tag, description, totalAttempts, interval, tags, team, level, fn, fnArgs...)
+	result := s.new(tag, description, totalAttempts, interval, tags, team, level, fn, fnArgs...)
 	result.Run()
 
 	return result
@@ -175,7 +175,7 @@ func (s *Resilience) RunCustom(tag, description string, tags et.Json, team strin
 * @return error
  */
 func (s *Resilience) Stop(id string) error {
-	result, exist := s.loadInstance(id)
+	result, exist := s.load(id)
 	if !exist {
 		return fmt.Errorf(MSG_ID_NOT_FOUND)
 	}
@@ -191,7 +191,7 @@ func (s *Resilience) Stop(id string) error {
 * @return error
  */
 func (s *Resilience) Restart(id string) error {
-	result, exist := s.loadInstance(id)
+	result, exist := s.load(id)
 	if !exist {
 		return fmt.Errorf(MSG_ID_NOT_FOUND)
 	}

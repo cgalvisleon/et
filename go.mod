@@ -15,12 +15,20 @@ require (
 	github.com/mattn/go-colorable v0.1.14
 	github.com/nats-io/nats.go v1.41.2
 	github.com/neo4j/neo4j-go-driver/v5 v5.28.0
+	github.com/openai/openai-go/v3 v3.29.0
 	github.com/redis/go-redis/v9 v9.7.3
 	github.com/rs/cors v1.11.1
 	github.com/schollz/progressbar/v3 v3.18.0
 	github.com/spf13/cobra v1.9.1
 	golang.org/x/crypto v0.37.0
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0
+)
+
+require (
+	github.com/tidwall/gjson v1.18.0 // indirect
+	github.com/tidwall/match v1.2.0 // indirect
+	github.com/tidwall/pretty v1.2.1 // indirect
+	github.com/tidwall/sjson v1.2.5 // indirect
 )
 
 require (

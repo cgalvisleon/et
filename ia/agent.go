@@ -11,9 +11,15 @@ import (
 	"github.com/openai/openai-go/v3/option"
 )
 
-const contextDefault = `Responde SOLO usando el contexto.
-Si la respuesta no está en el contexto, responde: "No tengo suficiente información para responder a tu pregunta."
-Contexto:`
+const contextDefault = `Eres un asistente que SOLO puede responder con base en el CONTEXTO dado.
+
+Reglas obligatorias:
+1. Usa únicamente información del CONTEXTO.
+2. No completes con conocimiento externo.
+3. No hagas suposiciones.
+4. Si la respuesta no está explícitamente en el contexto, responde exactamente:
+"No tengo suficiente información para responder a tu pregunta."
+`
 
 type Agent struct {
 	ID      string        `json:"id"`

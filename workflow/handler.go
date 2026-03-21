@@ -42,6 +42,7 @@ func New(store instances.Store) (*WorkFlow, error) {
 	if store != nil {
 		result.getInstance = store.Get
 		result.setInstance = store.Set
+		result.queryInstance = store.Query
 	}
 
 	return result, nil
@@ -163,4 +164,25 @@ func (s *WorkFlow) HttpSetParams(w http.ResponseWriter, r *http.Request) {
 		Ok:     true,
 		Result: instance.ToJson(),
 	})
+}
+
+/**
+* HttpQuery
+* @params w http.ResponseWriter, r *http.Request
+**/
+func (s *WorkFlow) HttpQuery(w http.ResponseWriter, r *http.Request) {
+	body, err := request.GetBody(r)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	query := body.Json("query")
+	result, err := s.queryInstance(query)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.ITEMS(w, r, http.StatusOK, result)
 }

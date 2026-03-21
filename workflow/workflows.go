@@ -6,6 +6,7 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/resilience"
@@ -17,18 +18,16 @@ var (
 	ErrorInstanceNotFound = fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
 )
 
-type GetInstanceFn func(id string, dest any) (bool, error)
-type SetInstanceFn func(id, tag string, obj any) error
-
 type WorkFlow struct {
-	Flows       map[string]*Flow       `json:"flows"`
-	Instances   map[string]*Instance   `json:"instances"`
-	Results     map[string]et.Json     `json:"results"`
-	mu          sync.Mutex             `json:"-"`
-	getInstance GetInstanceFn          `json:"-"`
-	setInstance SetInstanceFn          `json:"-"`
-	resilience  *resilience.Resilience `json:"-"`
-	isDebug     bool                   `json:"-"`
+	Flows         map[string]*Flow          `json:"flows"`
+	Instances     map[string]*Instance      `json:"instances"`
+	Results       map[string]et.Json        `json:"results"`
+	mu            sync.Mutex                `json:"-"`
+	getInstance   instances.GetInstanceFn   `json:"-"`
+	setInstance   instances.SetInstanceFn   `json:"-"`
+	queryInstance instances.QueryInstanceFn `json:"-"`
+	resilience    *resilience.Resilience    `json:"-"`
+	isDebug       bool                      `json:"-"`
 }
 
 /**

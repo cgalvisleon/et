@@ -8,19 +8,18 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 )
 
-type GetInstanceFn func(id string, dest any) (bool, error)
-type SetInstanceFn func(id, tag string, obj any) error
-
 type Resilience struct {
-	instances   map[string]*Instance `json:"-"`
-	mu          sync.Mutex           `json:"-"`
-	getInstance GetInstanceFn        `json:"-"`
-	setInstance SetInstanceFn        `json:"-"`
-	isDebug     bool                 `json:"-"`
+	instances     map[string]*Instance      `json:"-"`
+	mu            sync.Mutex                `json:"-"`
+	getInstance   instances.GetInstanceFn   `json:"-"`
+	setInstance   instances.SetInstanceFn   `json:"-"`
+	queryInstance instances.QueryInstanceFn `json:"-"`
+	isDebug       bool                      `json:"-"`
 }
 
 /**

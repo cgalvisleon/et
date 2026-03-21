@@ -5,22 +5,23 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/strs"
+	"github.com/cgalvisleon/et/reg"
+	"github.com/cgalvisleon/et/utility"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/conversations"
+	"github.com/openai/openai-go/v3/responses"
 )
 
-type GetInstanceFn func(id string, dest any) (bool, error)
-type SetInstanceFn func(id, tag string, obj any) error
-
 type Agents struct {
-	agents      map[string]*Agent
-	mu          sync.RWMutex
-	getInstance GetInstanceFn
-	setInstance SetInstanceFn
-	isDebug     bool
+	agents        map[string]*Agent
+	mu            sync.RWMutex
+	getInstance   instances.GetInstanceFn
+	setInstance   instances.SetInstanceFn
+	queryInstance instances.QueryInstanceFn
+	isDebug       bool
 }
 
 /**
@@ -31,7 +32,7 @@ func (s *Agents) add(agent *Agent) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.agents[agent.Tag] = agent
+	s.agents[agent.ID] = agent
 }
 
 /**
@@ -48,10 +49,10 @@ func (s *Agents) Get(tag string) (*Agent, bool) {
 }
 
 /**
-* remove
+* Remove
 * @param instance *Agent
 **/
-func (s *Agents) remove(instance *Agent) {
+func (s *Agents) Remove(instance *Agent) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -71,12 +72,15 @@ func (s *Agents) Count() int {
 
 /**
 * new
-* @param tag string, context string, model string
+* @param id string
 * @return *Agent
 **/
-func (s *Agents) new(tag string) *Agent {
+func (s *Agents) new(id string) *Agent {
+	if id == "" {
+		id = reg.ULID()
+	}
 	result := &Agent{
-		ID:      fmt.Sprintf("agent:%s", strs.Lowcase(tag)),
+		ID:      id,
 		Tag:     "ia:agent",
 		Context: contextDefault,
 		Model:   openai.ChatModelGPT4oMini,
@@ -84,7 +88,6 @@ func (s *Agents) new(tag string) *Agent {
 		owner:   s,
 	}
 	result.Up()
-	s.add(result)
 
 	return result
 }
@@ -111,7 +114,6 @@ func (s *Agents) load(tag string) (*Agent, bool) {
 		}
 
 		result.Up()
-		s.add(result)
 
 		if s.isDebug {
 			logs.Log(packageName, "load:", result.ToString())
@@ -130,13 +132,19 @@ func (s *Agents) load(tag string) (*Agent, bool) {
 **/
 func (s *Agents) Load(agents []string) error {
 	if s.setInstance != nil {
-		for _, tag := range agents {
-			_, exist := s.load(tag)
+		for _, name := range agents {
+			ag, exist := s.load(name)
 			if exist {
+				s.add(ag)
 				continue
 			}
 
-			s.new(tag)
+			ag = s.new(name)
+			err := ag.Save()
+			if err != nil {
+				return err
+			}
+			s.add(ag)
 		}
 	}
 
@@ -176,32 +184,58 @@ func (s *Agents) SetModel(tag, model string) error {
 * @param tag string, convID string, prompt string
 * @return (string, error)
 **/
-func (s *Agents) Ask(tag, convID, prompt string) (string, string, error) {
-	agent, ok := s.agents[tag]
+func (s *Agents) Ask(agent, convID, prompt string) (string, string, error) {
+	if !utility.ValidStr(agent, 1, []string{}) {
+		return "", "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "agent")
+	}
+
+	if !utility.ValidStr(prompt, 1, []string{}) {
+		return "", "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "prompt")
+	}
+
+	instance, ok := s.agents[agent]
 	if !ok {
-		return "", "", fmt.Errorf(msg.MSG_AGENT_NOT_FOUND, tag)
+		return "", "", fmt.Errorf(msg.MSG_AGENT_NOT_FOUND, agent)
 	}
 
 	ctx := context.Background()
-	client := agent.client
+	client := instance.client
 
 	if convID == "" {
 		conv, _ := client.Conversations.New(ctx, conversations.ConversationNewParams{})
 		convID = conv.ID
+
+		response, err := client.Responses.New(ctx, responses.ResponseNewParams{
+			Model: instance.Model,
+			Input: responses.ResponseNewParamsInputUnion{
+				OfString: openai.String(instance.Context),
+			},
+			Conversation: responses.ResponseNewParamsConversationUnion{
+				OfConversationObject: &responses.ResponseConversationParam{
+					ID: convID,
+				},
+			},
+		})
+		if err != nil {
+			return "", convID, err
+		}
+		logs.Log(packageName, "response:", response.OutputText())
 	}
 
-	messages := []openai.ChatCompletionMessageParamUnion{
-		openai.SystemMessage(agent.Context),
-		openai.UserMessage(prompt),
-	}
-
-	result, err := agent.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
-		Model:    agent.Model,
-		Messages: messages,
+	result, err := client.Responses.New(ctx, responses.ResponseNewParams{
+		Model: instance.Model,
+		Input: responses.ResponseNewParamsInputUnion{
+			OfString: openai.String(prompt),
+		},
+		Conversation: responses.ResponseNewParamsConversationUnion{
+			OfConversationObject: &responses.ResponseConversationParam{
+				ID: convID,
+			},
+		},
 	})
 	if err != nil {
-		return "", "", err
+		return "", convID, err
 	}
 
-	return result.Choices[0].Message.Content, convID, nil
+	return result.OutputText(), convID, nil
 }

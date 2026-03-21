@@ -58,46 +58,6 @@ func (s *Agents) HttpGet(w http.ResponseWriter, r *http.Request) {
 }
 
 /**
-* HttpState
-* @params w http.ResponseWriter, r *http.Request
-**/
-func (s *Agents) HttpState(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	var instance Agent
-	exists, err := s.getInstance(id, &instance)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	if !exists {
-		response.ITEM(w, r, http.StatusNotFound, et.Item{
-			Ok:     true,
-			Result: et.Json{"message": "instance not found"},
-		})
-		return
-	}
-
-	body, err := request.GetBody(r)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	status := body.Str("status")
-	err = instance.setStatus(Status(status))
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	response.ITEM(w, r, http.StatusOK, et.Item{
-		Ok:     true,
-		Result: instance.ToJson(),
-	})
-}
-
-/**
 * HttpSetParams
 * @params w http.ResponseWriter, r *http.Request
 **/

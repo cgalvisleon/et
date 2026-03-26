@@ -22,13 +22,13 @@ Reglas obligatorias:
 `
 
 type Agent struct {
-	ID      string        `json:"id"`
-	Tag     string        `json:"tag"`
-	Context string        `json:"context"`
-	Model   string        `json:"model"`
-	client  openai.Client `json:"-"`
-	owner   *Agents       `json:"-"`
-	isDebug bool          `json:"-"`
+	ID      string            `json:"id"`
+	Tag     string            `json:"tag"`
+	Context map[string]string `json:"context"`
+	Model   map[string]string `json:"model"`
+	client  openai.Client     `json:"-"`
+	owner   *Agents           `json:"-"`
+	isDebug bool              `json:"-"`
 }
 
 /**

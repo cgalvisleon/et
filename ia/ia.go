@@ -82,11 +82,13 @@ func (s *Agents) new(id string) *Agent {
 	result := &Agent{
 		ID:      id,
 		Tag:     "ia:agent",
-		Context: contextDefault,
-		Model:   openai.ChatModelGPT4oMini,
+		Context: make(map[string]string),
+		Model:   make(map[string]string),
 		isDebug: s.isDebug,
 		owner:   s,
 	}
+	result.Context["default"] = contextDefault
+	result.Model["default"] = openai.ChatModelGPT4oMini
 	result.Up()
 
 	return result
@@ -156,12 +158,12 @@ func (s *Agents) Load(agents []string) error {
 * @param tag string, context string
 * @return error
 **/
-func (s *Agents) SetContext(tag, context string) error {
+func (s *Agents) SetContext(tag, key, context string) error {
 	result, ok := s.agents[tag]
 	if !ok {
 		return fmt.Errorf(msg.MSG_AGENT_NOT_FOUND, tag)
 	}
-	result.Context = context
+	result.Context[key] = context
 	return result.Save()
 }
 
@@ -170,21 +172,48 @@ func (s *Agents) SetContext(tag, context string) error {
 * @param tag string, model string
 * @return error
 **/
-func (s *Agents) SetModel(tag, model string) error {
+func (s *Agents) SetModel(tag, key, model string) error {
 	result, ok := s.agents[tag]
 	if !ok {
 		return fmt.Errorf(msg.MSG_AGENT_NOT_FOUND, tag)
 	}
-	result.Model = model
+	result.Model[key] = model
 	return result.Save()
 }
 
 /**
-* Ask - Pregunta al agente
-* @param tag string, convID string, prompt string
+* Embed - Genera un embedding
+* @param tag string, text string
+* @return ([]float64, error)
+**/
+func (s *Agents) Embed(tag string, text string) ([]float64, error) {
+	result, ok := s.agents[tag]
+	if !ok {
+		return nil, fmt.Errorf(msg.MSG_AGENT_NOT_FOUND, tag)
+	}
+
+	ctx := context.Background()
+	client := result.client
+
+	resp, err := client.Embeddings.New(ctx, openai.EmbeddingNewParams{
+		Model: openai.EmbeddingModelTextEmbedding3Small,
+		Input: openai.EmbeddingNewParamsInputUnion{
+			OfString: openai.String(text),
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Data[0].Embedding, nil
+}
+
+/**
+* Conversations - Obtiene las conversaciones del agente
+* @param agent string, tag string, convID string, prompt string
 * @return (string, error)
 **/
-func (s *Agents) Ask(agent, convID, prompt string) (string, string, error) {
+func (s *Agents) Conversations(agent, tag, convID, prompt string) (string, string, error) {
 	if !utility.ValidStr(agent, 1, []string{}) {
 		return "", "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "agent")
 	}
@@ -198,17 +227,31 @@ func (s *Agents) Ask(agent, convID, prompt string) (string, string, error) {
 		return "", "", fmt.Errorf(msg.MSG_AGENT_NOT_FOUND, agent)
 	}
 
+	model, ok := instance.Model["default"]
+	if !ok {
+		return "", "", fmt.Errorf(msg.MSG_MODEL_NOT_FOUND, "default")
+	}
+
+	if tag == "" {
+		tag = "default"
+	}
+
+	if _, ok := instance.Model[tag]; ok {
+		model = instance.Model[tag]
+	}
+
 	ctx := context.Background()
 	client := instance.client
+	ask := prompt
 
 	if convID == "" {
 		conv, _ := client.Conversations.New(ctx, conversations.ConversationNewParams{})
 		convID = conv.ID
 
 		response, err := client.Responses.New(ctx, responses.ResponseNewParams{
-			Model: instance.Model,
+			Model: model,
 			Input: responses.ResponseNewParamsInputUnion{
-				OfString: openai.String(instance.Context),
+				OfString: openai.String(instance.Context[tag]),
 			},
 			Conversation: responses.ResponseNewParamsConversationUnion{
 				OfConversationObject: &responses.ResponseConversationParam{
@@ -220,12 +263,16 @@ func (s *Agents) Ask(agent, convID, prompt string) (string, string, error) {
 			return "", convID, err
 		}
 		logs.Log(packageName, "response:", response.OutputText())
+	} else {
+		if _, ok := instance.Context[tag]; ok {
+			ask = fmt.Sprintf(instance.Context[tag], ask)
+		}
 	}
 
 	result, err := client.Responses.New(ctx, responses.ResponseNewParams{
-		Model: instance.Model,
+		Model: model,
 		Input: responses.ResponseNewParamsInputUnion{
-			OfString: openai.String(prompt),
+			OfString: openai.String(ask),
 		},
 		Conversation: responses.ResponseNewParamsConversationUnion{
 			OfConversationObject: &responses.ResponseConversationParam{

@@ -14,11 +14,11 @@ func newLoader(baseDir string) *Loader {
 }
 
 /**
-* LoadFile - Carga un archivo
+* ReadFile - Lee un archivo
 * @param string path
 * @return (string, error)
 **/
-func (l *Loader) LoadFile(path string) (string, error) {
+func (l *Loader) ReadFile(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
@@ -27,11 +27,11 @@ func (l *Loader) LoadFile(path string) (string, error) {
 }
 
 /**
-* Load - Carga un archivo
+* Read - Lee un archivo
 * @param string path
 * @return (string, error)
 **/
-func (l *Loader) Load(path string) (string, error) {
+func (l *Loader) Read(path string) (string, error) {
 	fullPath := filepath.Join(l.baseDir, path)
-	return l.LoadFile(fullPath)
+	return l.ReadFile(fullPath)
 }

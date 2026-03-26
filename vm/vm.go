@@ -1,8 +1,6 @@
 package vm
 
 import (
-	"os"
-
 	"github.com/dop251/goja"
 )
 
@@ -19,7 +17,7 @@ func New(baseDir string) (*VM, error) {
 	result.vm.Set("os", nil)
 	result.vm.Set("exec", nil)
 	err := result.vm.Set("__loadModule", func(path string) (string, error) {
-		code, err := result.loader.Load(path)
+		code, err := result.loader.Read(path)
 		if err != nil {
 			return "", err
 		}
@@ -64,12 +62,12 @@ func (s *VM) RunString(str string) (goja.Value, error) {
 * @return goja.Value, error
 **/
 func (s *VM) RunFile(path string) (goja.Value, error) {
-	data, err := os.ReadFile(path)
+	data, err := s.loader.Read(path)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := s.vm.RunString(string(data))
+	result, err := s.vm.RunString(data)
 	if err != nil {
 		return nil, err
 	}

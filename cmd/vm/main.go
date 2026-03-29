@@ -13,6 +13,6 @@ func main() {
 
 	_, err = v.RunFile("/test.js")
 	if err != nil {
-		logs.Panic(err)
+		logs.Error(err)
 	}
 }

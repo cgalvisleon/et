@@ -188,6 +188,13 @@ gofmt -w .
 go build ./...
 ```
 
+## VM
+
+```bash
+# Ejecutar el VM
+gofmt -w . && go run ./cmd/vm
+```
+
 ## Contribuir
 
 Issues y PRs son bienvenidos. Sigue el estilo del proyecto y añade pruebas cuando aplique.

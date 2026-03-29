@@ -1,37 +1,73 @@
 package vm
 
 import (
+	"os"
+	"path/filepath"
+
+	"github.com/cgalvisleon/et/et"
 	"github.com/dop251/goja"
 )
 
 type VM struct {
 	vm     *goja.Runtime
+	ctx    et.Json
 	loader *Loader
 }
 
 func New(baseDir string) (*VM, error) {
 	result := &VM{
 		vm:     goja.New(),
+		ctx:    et.Json{},
 		loader: newLoader(baseDir),
 	}
-	result.vm.Set("os", nil)
-	result.vm.Set("exec", nil)
-	err := result.vm.Set("__loadModule", func(path string) (string, error) {
-		code, err := result.loader.Read(path)
-		if err != nil {
-			return "", err
-		}
-		return code, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	_, err = result.vm.RunString(requireRuntime)
+	err := result.wrap()
 	if err != nil {
 		return nil, err
 	}
 
 	return result, nil
+}
+
+func (s *VM) wrap() error {
+	s.Set("os", nil)
+	s.Set("exec", nil)
+	s.Set("__rootDir", s.loader.baseDir)
+	s.Set("__resolve", func(module, currentDir string) string {
+		p, err := s.loader.Resolve(module, currentDir)
+		if err != nil {
+			panic(s.Error(err))
+		}
+		return p
+	})
+	s.Set("__load", func(path string) string {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			panic(s.Error(err))
+		}
+		return string(data)
+	})
+	wrapperConsole(s)
+	wrapperFetch(s)
+
+	return nil
+}
+
+/**
+* Value
+* @param value interface{}
+* @return goja.Value
+**/
+func (s *VM) Value(value interface{}) goja.Value {
+	return s.vm.ToValue(value)
+}
+
+/**
+* Error
+* @param err error
+* @return *goja.Object
+**/
+func (s *VM) Error(err error) *goja.Object {
+	return s.vm.NewGoError(err)
 }
 
 /**
@@ -44,12 +80,30 @@ func (s *VM) Set(name string, value interface{}) error {
 }
 
 /**
+* runString
+* @param str string
+* @return (goja.Value, error)
+**/
+func (s *VM) runString(str string) (goja.Value, error) {
+	result, err := s.vm.RunString(str)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+/**
 * RunString
 * @params str string
 * @return goja.Value, error
 **/
 func (s *VM) RunString(str string) (goja.Value, error) {
-	result, err := s.vm.RunString(str)
+	_, err := s.runString(requireRuntime)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := s.runString(str)
 	if err != nil {
 		return nil, err
 	}
@@ -62,12 +116,17 @@ func (s *VM) RunString(str string) (goja.Value, error) {
 * @return goja.Value, error
 **/
 func (s *VM) RunFile(path string) (goja.Value, error) {
-	data, err := s.loader.Read(path)
+	path = filepath.Join(s.loader.baseDir, path)
+	_, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := s.vm.RunString(data)
+	result, err := s.RunString(string(data))
 	if err != nil {
 		return nil, err
 	}

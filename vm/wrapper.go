@@ -3,12 +3,37 @@ package vm
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/request"
 	"github.com/dop251/goja"
 )
+
+/**
+* wrapperRunTime: Wraps the runtime
+* @param vm *VM
+**/
+func wrapperRunTime(vm *VM) {
+	vm.Set("os", nil)
+	vm.Set("exec", nil)
+	vm.Set("__rootDir", vm.loader.baseDir)
+	vm.Set("__resolve", func(module, currentDir string) string {
+		p, err := vm.loader.Resolve(module, currentDir)
+		if err != nil {
+			panic(vm.Error(err))
+		}
+		return p
+	})
+	vm.Set("__load", func(path string) string {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			panic(vm.Error(err))
+		}
+		return string(data)
+	})
+}
 
 /**
 * wrapperConsole: Wraps the console
@@ -53,7 +78,6 @@ func wrapperFetch(vm *VM) {
 		if !status.Ok {
 			panic(vm.Error(fmt.Errorf("error al hacer la peticion: %s", status.Message)))
 		}
-
 		return vm.Value(result)
 	})
 }

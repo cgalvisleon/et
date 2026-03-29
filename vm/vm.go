@@ -29,26 +29,9 @@ func New(baseDir string) (*VM, error) {
 }
 
 func (s *VM) wrap() error {
-	s.Set("os", nil)
-	s.Set("exec", nil)
-	s.Set("__rootDir", s.loader.baseDir)
-	s.Set("__resolve", func(module, currentDir string) string {
-		p, err := s.loader.Resolve(module, currentDir)
-		if err != nil {
-			panic(s.Error(err))
-		}
-		return p
-	})
-	s.Set("__load", func(path string) string {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			panic(s.Error(err))
-		}
-		return string(data)
-	})
+	wrapperRunTime(s)
 	wrapperConsole(s)
 	wrapperFetch(s)
-
 	return nil
 }
 
@@ -80,30 +63,17 @@ func (s *VM) Set(name string, value interface{}) error {
 }
 
 /**
-* runString
-* @param str string
-* @return (goja.Value, error)
-**/
-func (s *VM) runString(str string) (goja.Value, error) {
-	result, err := s.vm.RunString(str)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-/**
 * RunString
 * @params str string
 * @return goja.Value, error
 **/
 func (s *VM) RunString(str string) (goja.Value, error) {
-	_, err := s.runString(requireRuntime)
+	_, err := s.vm.RunString(requireRuntime)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := s.runString(str)
+	result, err := s.vm.RunString(str)
 	if err != nil {
 		return nil, err
 	}

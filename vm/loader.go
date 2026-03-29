@@ -30,7 +30,7 @@ func (l *Loader) Resolve(modulePath string, currentDir string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		logs.Log("loader", "Resolve: ", result)
+		logs.Log("Resolve", result)
 		return result, nil
 	}
 
@@ -40,7 +40,7 @@ func (l *Loader) Resolve(modulePath string, currentDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	logs.Log("loader", "Resolve: ", result)
+	logs.Log("Resolve", result)
 	return result, nil
 }
 

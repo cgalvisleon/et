@@ -29,6 +29,18 @@ func main() {
 	err = watch.
 		Debug().
 		OnEvent(func(event fsnotify.Event) {
+			switch event.Op {
+			case fsnotify.Create:
+				logs.Debug("Create")
+			case fsnotify.Write:
+				logs.Debug("Write")
+			case fsnotify.Remove:
+				logs.Debug("Remove")
+			case fsnotify.Rename:
+				logs.Debug("Rename")
+			case fsnotify.Chmod:
+				logs.Debug("Chmod")
+			}
 			logs.Debug(et.Json{
 				"name": event.Name,
 				"op":   event.Op.String(),

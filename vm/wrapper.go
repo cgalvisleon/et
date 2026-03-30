@@ -12,6 +12,16 @@ import (
 )
 
 /**
+* wrap: Wraps the runtime
+* @param vm *VM
+**/
+func wrap(vm *VM) {
+	wrapperRunTime(vm)
+	wrapperConsole(vm)
+	wrapperFetch(vm)
+}
+
+/**
 * wrapperRunTime: Wraps the runtime
 * @param vm *VM
 **/

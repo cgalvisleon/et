@@ -1,4 +1,7 @@
 const pricing = require("./pricing");
 
-var result = pricing.calcular(100, 19);
+result = pricing.calcular(100, 19);
+console.log(result);
+
+result = pricing.calcular(130, 19);
 console.log(result);

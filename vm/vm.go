@@ -20,19 +20,9 @@ func New(baseDir string) (*VM, error) {
 		ctx:    et.Json{},
 		loader: newLoader(baseDir),
 	}
-	err := result.wrap()
-	if err != nil {
-		return nil, err
-	}
+	wrap(result)
 
 	return result, nil
-}
-
-func (s *VM) wrap() error {
-	wrapperRunTime(s)
-	wrapperConsole(s)
-	wrapperFetch(s)
-	return nil
 }
 
 /**

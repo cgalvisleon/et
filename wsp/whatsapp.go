@@ -17,14 +17,14 @@ type Whatsapp struct {
 
 /**
 * NewWhatsapp
-* @param token string, phone_number_id string
+* @param token string, phoneNumberId string
 * @return *Whatsapp
 **/
-func NewWhatsapp(token, phone_number_id string) *Whatsapp {
+func NewWhatsapp(token, phoneNumberId string) *Whatsapp {
 	return &Whatsapp{
 		path:            envar.GetStr("WHATSAPP_API_URL", "https://graph.facebook.com/v22.0"),
 		token:           token,
-		phone_number_id: phone_number_id,
+		phone_number_id: phoneNumberId,
 	}
 }
 

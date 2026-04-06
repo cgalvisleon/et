@@ -9,43 +9,107 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/msg"
 )
 
 type Pkg struct {
-	Name        string  `json:"name"`
-	Version     string  `json:"version"`
-	Description string  `json:"description"`
-	Main        string  `json:"main"`
-	Scripts     et.Json `json:"scripts"`
-	Author      string  `json:"author"`
-	License     string  `json:"license"`
+	ID              string  `json:"id"`
+	Name            string  `json:"name"`
+	Version         string  `json:"version"`
+	Description     string  `json:"description"`
+	Main            string  `json:"main"`
+	Scripts         et.Json `json:"scripts"`
+	Dependencies    et.Json `json:"dependencies"`
+	DevDependencies et.Json `json:"devDependencies"`
+	Author          string  `json:"author"`
+	License         string  `json:"license"`
 }
+
+type Mode string
+
+const (
+	Develop    Mode = "develop"
+	Production Mode = "production"
+	Building   Mode = "building"
+)
 
 type Loader struct {
 	*Pkg
+	mode    Mode   `json:"-"`
 	BaseDir string `json:"-"`
+	store   Store  `json:"-"`
 }
 
 /**
 * newLoader
-* @param baseDir string
+* @param baseDir, name, version string
 * @return *Loader
 **/
-func newLoader(baseDir string) *Loader {
+func newLoader(baseDir, name, version string) *Loader {
 	absPath, err := filepath.Abs(baseDir)
 	if err != nil {
 		panic(err)
 	}
-	result := &Loader{BaseDir: absPath}
-	result.Init()
+	id := fmt.Sprintf(`pkg:%s:%s`, name, version)
+	result := &Loader{
+		Pkg: &Pkg{
+			ID:              id,
+			Name:            name,
+			Version:         version,
+			Scripts:         et.Json{},
+			Dependencies:    et.Json{},
+			DevDependencies: et.Json{},
+		},
+		BaseDir: absPath,
+	}
 	return result
 }
 
 /**
-* Init
+* get
+* @param module string, dest any
+* @return (bool, error)
+**/
+func (s *Loader) get(module string, dest any) (bool, error) {
+	return s.store.Get(module, dest)
+}
+
+/**
+* set
+* @param module string, source any
 * @return error
 **/
-func (s *Loader) Init() error {
+func (s *Loader) set(module string, source any) error {
+	return s.store.Set(module, source)
+}
+
+/**
+* init
+* @return error
+**/
+func (s *Loader) init() error {
+	if s.mode == Production {
+		if s.store == nil {
+			return fmt.Errorf(msg.MSG_STORE_REQUIRED)
+		}
+
+		err := s.store.Connected()
+		if err != nil {
+			return err
+		}
+
+		var pkg Pkg
+		ok, err := s.get(s.ID, &pkg)
+		if err != nil {
+			return err
+		}
+		if ok {
+			s.Pkg = &pkg
+		}
+
+		return nil
+	}
+
 	pkgFile := filepath.Join(s.BaseDir, "package.json")
 	if !exists(pkgFile) {
 		file, err := os.Create(pkgFile)
@@ -58,18 +122,23 @@ func (s *Loader) Init() error {
 		encoder.SetIndent("", "  ") // bonito (pretty)
 
 		name := filepath.Base(s.BaseDir)
-		s.Pkg = &Pkg{
-			Name:        name,
-			Version:     "0.0.1",
-			Description: name,
-			Main:        "index.js",
-			Scripts:     et.Json{},
-			Author:      "",
-			License:     "",
-		}
+		s.Pkg.Description = name
+		s.Pkg.Main = "index.js"
+		s.Pkg.Scripts = et.Json{}
+		s.Pkg.Dependencies = et.Json{}
+		s.Pkg.DevDependencies = et.Json{}
+		s.Pkg.Author = ""
+		s.Pkg.License = ""
 
 		if err := encoder.Encode(s.Pkg); err != nil {
 			return err
+		}
+
+		if s.store != nil {
+			err := s.store.Connected()
+			if err != nil {
+				return err
+			}
 		}
 	} else {
 		data, _ := os.ReadFile(pkgFile)

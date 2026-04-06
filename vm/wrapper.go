@@ -64,6 +64,13 @@ func wrapperCtx(vm *VM) {
 		"get": func(key string) interface{} {
 			return vm.Ctx.Get(key)
 		},
+		"delete": func(keys []string) interface{} {
+			vm.Ctx.Delete(keys)
+			return vm.Ctx
+		},
+		"exist": func(key string) bool {
+			return vm.Ctx.Exist(key)
+		},
 	})
 }
 

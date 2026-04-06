@@ -6,19 +6,9 @@ import (
 )
 
 func main() {
-	v, err := vm.New("./cmd/vm")
+	_, err := vm.Dev("./cmd/vm", "vm", "0.0.1")
 	if err != nil {
 		logs.Panic(err)
 	}
 
-	_, err = v.RunFile(v.Main)
-	if err != nil {
-		logs.Error(err)
-	}
-
-	err = v.HotReload()
-	if err != nil {
-		logs.Error(err)
-		return
-	}
 }

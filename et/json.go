@@ -873,26 +873,6 @@ func (s Json) Get(keys ...string) (result interface{}) {
 }
 
 /**
-* Set a value in the key
-* @param key string
-* @param val interface{}
-* @return bool
-**/
-func (s Json) Set(key string, val interface{}) {
-	if key == "" {
-		return
-	}
-
-	keys := strings.Split(key, "->")
-	if len(keys) == 1 {
-		s[key] = val
-		return
-	}
-
-	s.SetNested(keys, val)
-}
-
-/**
 * SetNested
 * @param keys []string, value interface{}
 **/
@@ -918,6 +898,26 @@ func (j Json) SetNested(keys []string, value interface{}) {
 	}
 
 	m[keys[len(keys)-1]] = value
+}
+
+/**
+* Set a value in the key
+* @param key string
+* @param val interface{}
+* @return bool
+**/
+func (s Json) Set(key string, val interface{}) {
+	if key == "" {
+		return
+	}
+
+	keys := strings.Split(key, "->")
+	if len(keys) == 1 {
+		s[key] = val
+		return
+	}
+
+	s.SetNested(keys, val)
 }
 
 /**

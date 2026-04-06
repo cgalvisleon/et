@@ -197,7 +197,7 @@ func (s *WorkFlow) runInstance(instanceId, tag string, step int, ctx, tags et.Js
 	instance.isDebug = s.isDebug
 	instance.UpdatedBy = createdBy
 	instance.PutTag(tags)
-	if step != instance.Current {
+	if step != instance.Current && step != 0 {
 		instance.Current = step
 	}
 	result, err := instance.run(ctx)

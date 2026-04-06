@@ -3,6 +3,7 @@ package file
 import (
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/cgalvisleon/et/logs"
 	"github.com/fsnotify/fsnotify"
@@ -18,7 +19,14 @@ type Watcher struct {
 	watcher      *fsnotify.Watcher
 	onWatching   OnWatching
 	onEvent      OnEvent
+	onCreate     func(FileInfo, fsnotify.Event)
+	onWrite      func(FileInfo, fsnotify.Event)
+	onRemove     func(FileInfo, fsnotify.Event)
+	onRename     func(FileInfo, fsnotify.Event)
+	onChmod      func(FileInfo, fsnotify.Event)
+	onReload     func(FileInfo, fsnotify.Event)
 	onEventError func(err error)
+	reloadFile   map[string]fsnotify.Op
 	isDebug      bool
 }
 
@@ -32,11 +40,51 @@ func NewWatcher(root string) (*Watcher, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	result := &Watcher{
-		root:    root,
-		watcher: watcher,
+		root:       root,
+		watcher:    watcher,
+		reloadFile: make(map[string]fsnotify.Op),
 	}
+	result.onEvent = func(event fsnotify.Event) {
+		inf := ExistPath(event.Name)
+		if !inf.IsDir {
+			op, ok := result.reloadFile[event.Name]
+			if ok {
+				if op == fsnotify.Write && event.Op == fsnotify.Chmod {
+					if result.onReload != nil {
+						result.onReload(inf, event)
+					}
+				}
+			}
+			result.reloadFile[event.Name] = event.Op
+			time.AfterFunc(3*time.Second, func() {
+				delete(result.reloadFile, event.Name)
+			})
+		}
+		switch event.Op {
+		case fsnotify.Create:
+			if result.onCreate != nil {
+				result.onCreate(inf, event)
+			}
+		case fsnotify.Write:
+			if result.onWrite != nil {
+				result.onWrite(inf, event)
+			}
+		case fsnotify.Remove:
+			if result.onRemove != nil {
+				result.onRemove(inf, event)
+			}
+		case fsnotify.Rename:
+			if result.onRename != nil {
+				result.onRename(inf, event)
+			}
+		case fsnotify.Chmod:
+			if result.onChmod != nil {
+				result.onChmod(inf, event)
+			}
+		}
+	}
+
 	return result, nil
 }
 
@@ -68,12 +116,62 @@ func (s *Watcher) OnWatching(fn OnWatching) *Watcher {
 }
 
 /**
-* OnEvent
-* @param fn OnEvent
+* OnCreate
+* @param fn func(FileInfo, fsnotify.Event)
 * @return *Watcher
 **/
-func (s *Watcher) OnEvent(fn OnEvent) *Watcher {
-	s.onEvent = fn
+func (s *Watcher) OnCreate(fn func(FileInfo, fsnotify.Event)) *Watcher {
+	s.onCreate = fn
+	return s
+}
+
+/**
+* OnWrite
+* @param fn func(FileInfo, fsnotify.Event)
+* @return *Watcher
+**/
+func (s *Watcher) OnWrite(fn func(FileInfo, fsnotify.Event)) *Watcher {
+	s.onWrite = fn
+	return s
+}
+
+/**
+* OnRemove
+* @param fn func(FileInfo, fsnotify.Event)
+* @return *Watcher
+**/
+func (s *Watcher) OnRemove(fn func(FileInfo, fsnotify.Event)) *Watcher {
+	s.onRemove = fn
+	return s
+}
+
+/**
+* OnRename
+* @param fn func(FileInfo, fsnotify.Event)
+* @return *Watcher
+**/
+func (s *Watcher) OnRename(fn func(FileInfo, fsnotify.Event)) *Watcher {
+	s.onRename = fn
+	return s
+}
+
+/**
+* OnChmod
+* @param fn func(FileInfo, fsnotify.Event)
+* @return *Watcher
+**/
+func (s *Watcher) OnChmod(fn func(FileInfo, fsnotify.Event)) *Watcher {
+	s.onChmod = fn
+	return s
+}
+
+/**
+* OnReload
+* @param fn func(FileInfo, fsnotify.Event)
+* @return *Watcher
+**/
+func (s *Watcher) OnReload(fn func(FileInfo, fsnotify.Event)) *Watcher {
+	s.onReload = fn
 	return s
 }
 

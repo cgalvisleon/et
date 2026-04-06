@@ -232,47 +232,27 @@ func (s *Agents) Conversations(agent, tag, convID, prompt string) (string, strin
 		return "", "", fmt.Errorf(msg.MSG_MODEL_NOT_FOUND, "default")
 	}
 
-	if tag == "" {
-		tag = "default"
-	}
-
 	if _, ok := instance.Model[tag]; ok {
 		model = instance.Model[tag]
 	}
 
 	ctx := context.Background()
 	client := instance.client
-	ask := prompt
 
 	if convID == "" {
 		conv, _ := client.Conversations.New(ctx, conversations.ConversationNewParams{})
 		convID = conv.ID
+	}
 
-		response, err := client.Responses.New(ctx, responses.ResponseNewParams{
-			Model: model,
-			Input: responses.ResponseNewParamsInputUnion{
-				OfString: openai.String(instance.Context[tag]),
-			},
-			Conversation: responses.ResponseNewParamsConversationUnion{
-				OfConversationObject: &responses.ResponseConversationParam{
-					ID: convID,
-				},
-			},
-		})
-		if err != nil {
-			return "", convID, err
-		}
-		logs.Log(packageName, "response:", response.OutputText())
-	} else {
-		if _, ok := instance.Context[tag]; ok {
-			ask = fmt.Sprintf(instance.Context[tag], ask)
-		}
+	context, ok := instance.Context[tag]
+	if ok {
+		prompt = fmt.Sprintf(context, prompt)
 	}
 
 	result, err := client.Responses.New(ctx, responses.ResponseNewParams{
 		Model: model,
 		Input: responses.ResponseNewParamsInputUnion{
-			OfString: openai.String(ask),
+			OfString: openai.String(prompt),
 		},
 		Conversation: responses.ResponseNewParamsConversationUnion{
 			OfConversationObject: &responses.ResponseConversationParam{

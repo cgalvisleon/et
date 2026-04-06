@@ -383,6 +383,21 @@ func (s *Instance) setFailed(result et.Json, err error) error {
 }
 
 /**
+* SetNextStep
+* @param step int
+* @return error
+**/
+func (s *Instance) SetNextStep(step int) error {
+	s.Current = step
+	err := s.setStatus(s.Status)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/**
 * setStop
 * @param result et.Json, err error
 * @return et.Json, error

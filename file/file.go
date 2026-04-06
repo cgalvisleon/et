@@ -90,11 +90,6 @@ func ExistPath(path string) FileInfo {
 
 	result.Exist = true
 	result.IsDir = result.Info != nil && result.Info.IsDir()
-	if result.Exist && result.IsDir {
-		logs.Log("file", "exist path folder:", result.Path)
-	} else if result.Exist {
-		logs.Log("file", "exist path file:", result.Path)
-	}
 
 	return result
 }

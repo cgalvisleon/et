@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/cgalvisleon/et/et"
 )
 
 /**
@@ -400,4 +402,19 @@ func JoinQuoted(items []string, sep string) string {
 		}
 	}
 	return result
+}
+
+/**
+* Parse
+* @param str string, vars et.Json
+* @return string
+**/
+func Parse(str string, vars et.Json) string {
+	for k, v := range vars {
+		old := fmt.Sprintf(`{{%s}}`, k)
+		new := fmt.Sprintf(`%v`, v)
+		str = strings.ReplaceAll(str, old, new)
+	}
+
+	return str
 }

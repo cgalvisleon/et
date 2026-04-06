@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/request"
@@ -17,6 +18,7 @@ import (
 **/
 func wrap(vm *VM) {
 	wrapperRunTime(vm)
+	wrapperCtx(vm)
 	wrapperConsole(vm)
 	wrapperFetch(vm)
 }
@@ -28,20 +30,40 @@ func wrap(vm *VM) {
 func wrapperRunTime(vm *VM) {
 	vm.Set("os", nil)
 	vm.Set("exec", nil)
-	vm.Set("__rootDir", vm.loader.baseDir)
+	vm.Set("__rootDir", vm.Loader.BaseDir)
 	vm.Set("__resolve", func(module, currentDir string) string {
-		p, err := vm.loader.Resolve(module, currentDir)
+		p, err := vm.Loader.Resolve(module, currentDir)
 		if err != nil {
 			panic(vm.Error(err))
 		}
 		return p
 	})
 	vm.Set("__load", func(path string) string {
+		inf := file.ExistPath(path)
+		if inf.IsDir {
+			return ""
+		}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			panic(vm.Error(err))
 		}
 		return string(data)
+	})
+}
+
+/**
+* wrapperCtx: Wraps the ctx
+* @param vm *VM
+**/
+func wrapperCtx(vm *VM) {
+	vm.Set("ctx", map[string]interface{}{
+		"set": func(key string, value interface{}) interface{} {
+			vm.Ctx.Set(key, value)
+			return vm.Ctx
+		},
+		"get": func(key string) interface{} {
+			return vm.Ctx.Get(key)
+		},
 	})
 }
 

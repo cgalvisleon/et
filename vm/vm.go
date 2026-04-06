@@ -5,24 +5,50 @@ import (
 	"path/filepath"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/file"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/dop251/goja"
+	"github.com/fsnotify/fsnotify"
 )
 
 type VM struct {
-	vm     *goja.Runtime
-	ctx    et.Json
-	loader *Loader
+	*Loader `json:"-"`
+	Ctx     et.Json       `json:"ctx"`
+	vm      *goja.Runtime `json:"-"`
+	watch   *file.Watcher `json:"-"`
 }
 
 func New(baseDir string) (*VM, error) {
 	result := &VM{
-		vm:     goja.New(),
-		ctx:    et.Json{},
-		loader: newLoader(baseDir),
+		Loader: newLoader(baseDir),
+		Ctx:    et.Json{},
 	}
-	wrap(result)
 
 	return result, nil
+}
+
+/**
+* HotReload
+* @return error
+**/
+func (s *VM) HotReload() error {
+	watch, err := file.NewWatcher(s.BaseDir)
+	if err != nil {
+		return err
+	}
+	s.watch = watch
+	err = s.watch.OnReload(func(info file.FileInfo, event fsnotify.Event) {
+		_, err := s.RunFile(s.Main)
+		if err != nil {
+			logs.Error(err)
+		} else {
+			logs.Log("Hot Reloaded:", s.Ctx.ToString())
+		}
+	}).Load()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 /**
@@ -58,6 +84,9 @@ func (s *VM) Set(name string, value interface{}) error {
 * @return goja.Value, error
 **/
 func (s *VM) RunString(str string) (goja.Value, error) {
+	s.vm = goja.New()
+	wrap(s)
+
 	_, err := s.vm.RunString(requireRuntime)
 	if err != nil {
 		return nil, err
@@ -76,7 +105,7 @@ func (s *VM) RunString(str string) (goja.Value, error) {
 * @return goja.Value, error
 **/
 func (s *VM) RunFile(path string) (goja.Value, error) {
-	path = filepath.Join(s.loader.baseDir, path)
+	path = filepath.Join(s.Loader.BaseDir, path)
 	_, err := os.Stat(path)
 	if err != nil {
 		return nil, err

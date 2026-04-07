@@ -14,6 +14,11 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
+type Script struct {
+	ID      string `json:"id"`
+	Scripts string `json:"scripts"`
+}
+
 type VM struct {
 	*Loader `json:"-"`
 	Ctx     et.Json       `json:"ctx"`
@@ -22,11 +27,11 @@ type VM struct {
 }
 
 /**
-* Dev
+* New
 * @param baseDir, name, version string
 * @return *VM, error
 **/
-func Dev(baseDir, name, version string) (*VM, error) {
+func New(name, version string) (*VM, error) {
 	if !utility.ValidStr(name, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
@@ -35,34 +40,78 @@ func Dev(baseDir, name, version string) (*VM, error) {
 	}
 
 	result := &VM{
-		Loader: newLoader(baseDir, name, version),
+		Loader: newLoader(name, version),
 		Ctx:    et.Json{},
 	}
-	result.mode = Develop
-	err := result.init()
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = result.RunByFile(result.Main)
-	if err != nil {
-		return nil, err
-	}
-
-	err = result.HotReload()
-	if err != nil {
-		return nil, err
-	}
-
 	return result, nil
 }
 
 /**
-* Prod
-* @param name, version string, store Store
+* RunDev
+* @param baseDir string
+* @return error
+**/
+func (s *VM) RunDev(baseDir string) error {
+	if !utility.ValidStr(baseDir, 0, []string{""}) {
+		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "baseDir")
+	}
+
+	absPath, err := filepath.Abs(baseDir)
+	if err != nil {
+		return err
+	}
+
+	s.BaseDir = absPath
+	s.mode = Develop
+	err = s.init()
+	if err != nil {
+		return err
+	}
+
+	_, err = s.RunByFile(s.Main)
+	if err != nil {
+		return err
+	}
+
+	err = s.HotReload()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/**
+* RunProd
+* @param store Store
+* @return error
+**/
+func (s *VM) RunProd(store Store) error {
+	if store == nil {
+		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "store")
+	}
+
+	s.store = store
+	s.mode = Production
+	err := s.init()
+	if err != nil {
+		return err
+	}
+
+	_, err = s.RunBySource(s.Main)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/**
+* Build
+* @param baseDir, name, version string, store Store
 * @return *VM, error
 **/
-func Prod(name, version string, store Store) (*VM, error) {
+func Build(baseDir, name, version string, store Store) (*VM, error) {
 	if !utility.ValidStr(name, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
@@ -73,38 +122,62 @@ func Prod(name, version string, store Store) (*VM, error) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "store")
 	}
 
-	result := &VM{
-		Loader: newLoader("", name, version),
-		Ctx:    et.Json{},
-	}
-	result.store = store
-	result.mode = Production
-	err := result.init()
+	result, err := New(name, version)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = result.RunBySource(result.Main)
+	absPath, err := filepath.Abs(baseDir)
 	if err != nil {
 		return nil, err
+	}
+
+	result.BaseDir = absPath
+	result.store = store
+	result.mode = Building
+	err = result.init()
+	if err != nil {
+		return nil, err
+	}
+
+	if result.store != nil {
+		err := result.store.Connected()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err = result.save()
+	if err != nil {
+		return nil, err
+	}
+
+	for module, path := range result.Pkg.Scripts {
+		id := fmt.Sprintf("%s:%s", result.ID, module)
+		inf := file.ExistPath(path)
+		if inf.IsDir {
+			continue
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+
+		result.store.Set(id, &Script{
+			ID:      id,
+			Scripts: string(data),
+		})
 	}
 
 	return result, nil
 }
 
 /**
-* Build
-* @param baseDir, name, version string, store Store
-* @return *VM, error
+* save
+* @return error
 **/
-func Build(baseDir, name, version string, store Store) (*VM, error) {
-	result, err := Dev(baseDir, name, version)
-	if err != nil {
-		return nil, err
-	}
-	result.store = store
-	result.mode = Building
-	return result, nil
+func (s *VM) save() error {
+	return s.set(s.ID, s)
 }
 
 /**
@@ -132,6 +205,18 @@ func (s *VM) Error(err error) *goja.Object {
 **/
 func (s *VM) Set(name string, value interface{}) error {
 	return s.vm.Set(name, value)
+}
+
+/**
+* SetScript
+* @params module string, path string
+**/
+func (s *VM) SetScript(module string, path string) {
+	_, ok := s.Scripts[module]
+	s.Scripts[module] = path
+	if !ok {
+		s.save()
+	}
 }
 
 /**
@@ -184,7 +269,16 @@ func (s *VM) RunByFile(path string) (goja.Value, error) {
 * @return (goja.Value, error)
 **/
 func (s *VM) RunBySource(path string) (goja.Value, error) {
-	return s.RunByFile(path)
+	var scr Script
+	exists, err := s.get(path, &scr)
+	if err != nil {
+		panic(s.Error(err))
+	}
+
+	if !exists {
+		panic(s.Error(fmt.Errorf("script not found: %s", path)))
+	}
+	return s.Run(scr.Scripts)
 }
 
 /**

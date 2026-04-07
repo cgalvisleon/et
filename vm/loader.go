@@ -7,22 +7,21 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 )
 
 type Pkg struct {
-	ID              string  `json:"id"`
-	Name            string  `json:"name"`
-	Version         string  `json:"version"`
-	Description     string  `json:"description"`
-	Main            string  `json:"main"`
-	Scripts         et.Json `json:"scripts"`
-	Dependencies    et.Json `json:"dependencies"`
-	DevDependencies et.Json `json:"devDependencies"`
-	Author          string  `json:"author"`
-	License         string  `json:"license"`
+	ID              string            `json:"id"`
+	Name            string            `json:"name"`
+	Version         string            `json:"version"`
+	Description     string            `json:"description"`
+	Main            string            `json:"main"`
+	Scripts         map[string]string `json:"scripts"`
+	Dependencies    map[string]string `json:"dependencies"`
+	DevDependencies map[string]string `json:"devDependencies"`
+	Author          string            `json:"author"`
+	License         string            `json:"license"`
 }
 
 type Mode string
@@ -45,42 +44,19 @@ type Loader struct {
 * @param baseDir, name, version string
 * @return *Loader
 **/
-func newLoader(baseDir, name, version string) *Loader {
-	absPath, err := filepath.Abs(baseDir)
-	if err != nil {
-		panic(err)
-	}
+func newLoader(name, version string) *Loader {
 	id := fmt.Sprintf(`pkg:%s:%s`, name, version)
 	result := &Loader{
 		Pkg: &Pkg{
 			ID:              id,
 			Name:            name,
 			Version:         version,
-			Scripts:         et.Json{},
-			Dependencies:    et.Json{},
-			DevDependencies: et.Json{},
+			Scripts:         make(map[string]string),
+			Dependencies:    make(map[string]string),
+			DevDependencies: make(map[string]string),
 		},
-		BaseDir: absPath,
 	}
 	return result
-}
-
-/**
-* get
-* @param module string, dest any
-* @return (bool, error)
-**/
-func (s *Loader) get(module string, dest any) (bool, error) {
-	return s.store.Get(module, dest)
-}
-
-/**
-* set
-* @param module string, source any
-* @return error
-**/
-func (s *Loader) set(module string, source any) error {
-	return s.store.Set(module, source)
 }
 
 /**
@@ -111,44 +87,72 @@ func (s *Loader) init() error {
 	}
 
 	pkgFile := filepath.Join(s.BaseDir, "package.json")
-	if !exists(pkgFile) {
-		file, err := os.Create(pkgFile)
-		if err != nil {
-			panic(err)
-		}
-		defer file.Close()
-
-		encoder := json.NewEncoder(file)
-		encoder.SetIndent("", "  ") // bonito (pretty)
-
-		name := filepath.Base(s.BaseDir)
-		s.Pkg.Description = name
-		s.Pkg.Main = "index.js"
-		s.Pkg.Scripts = et.Json{}
-		s.Pkg.Dependencies = et.Json{}
-		s.Pkg.DevDependencies = et.Json{}
-		s.Pkg.Author = ""
-		s.Pkg.License = ""
-
-		if err := encoder.Encode(s.Pkg); err != nil {
-			return err
-		}
-
-		if s.store != nil {
-			err := s.store.Connected()
-			if err != nil {
-				return err
-			}
-		}
-	} else {
+	if exists(pkgFile) {
 		data, _ := os.ReadFile(pkgFile)
 		err := json.Unmarshal(data, &s.Pkg)
 		if err != nil {
 			return err
 		}
+	} else {
+		s.Pkg.Description = ""
+		s.Pkg.Main = "index.js"
+		s.Pkg.Scripts = make(map[string]string)
+		s.Pkg.Dependencies = make(map[string]string)
+		s.Pkg.DevDependencies = make(map[string]string)
+		s.Pkg.Author = ""
+		s.Pkg.License = ""
+		if err := s.save(); err != nil {
+			return err
+		}
 	}
 
 	return nil
+}
+
+/**
+* save
+* @return error
+**/
+func (s *Loader) save() error {
+	pkgFile := filepath.Join(s.BaseDir, "package.json")
+	file, err := os.Create(pkgFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ") // bonito (pretty)
+
+	if err := encoder.Encode(s.Pkg); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/**
+* get
+* @param module string, dest any
+* @return (bool, error)
+**/
+func (s *Loader) get(module string, dest any) (bool, error) {
+	if s.store == nil {
+		return false, nil
+	}
+	return s.store.Get(module, dest)
+}
+
+/**
+* set
+* @param module string, source any
+* @return error
+**/
+func (s *Loader) set(module string, source any) error {
+	if s.store == nil {
+		return nil
+	}
+	return s.store.Set(module, source)
 }
 
 /**

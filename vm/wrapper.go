@@ -32,13 +32,34 @@ func wrapperRunTime(vm *VM) {
 	vm.Set("exec", nil)
 	vm.Set("__rootDir", vm.Loader.BaseDir)
 	vm.Set("__resolve", func(module, currentDir string) string {
+		id := fmt.Sprintf("%s:%s", vm.ID, module)
+		if vm.mode == Production {
+			return id
+		}
+
 		p, err := vm.Loader.Resolve(module, currentDir)
 		if err != nil {
 			panic(vm.Error(err))
 		}
+
+		vm.SetScript(module, p)
 		return p
 	})
 	vm.Set("__load", func(path string) string {
+		if vm.mode == Production {
+			var scr Script
+			exists, err := vm.get(path, &scr)
+			if err != nil {
+				panic(vm.Error(err))
+			}
+
+			if !exists {
+				panic(vm.Error(fmt.Errorf("script not found: %s", path)))
+			}
+
+			return scr.Scripts
+		}
+
 		inf := file.ExistPath(path)
 		if inf.IsDir {
 			return ""

@@ -32,9 +32,8 @@ func wrapperRunTime(vm *VM) {
 	vm.Set("exec", nil)
 	vm.Set("__rootDir", vm.Loader.BaseDir)
 	vm.Set("__resolve", func(module, currentDir string) string {
-		id := fmt.Sprintf("%s:%s", vm.ID, module)
 		if vm.mode == Production {
-			return id
+			return fmt.Sprintf("pkg:%s:%s:%s", vm.Name, vm.Version, module)
 		}
 
 		p, err := vm.Loader.Resolve(module, currentDir)
@@ -47,7 +46,7 @@ func wrapperRunTime(vm *VM) {
 	})
 	vm.Set("__load", func(path string) string {
 		if vm.mode == Production {
-			var scr Script
+			var scr Module
 			exists, err := vm.get(path, &scr)
 			if err != nil {
 				panic(vm.Error(err))

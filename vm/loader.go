@@ -5,14 +5,22 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 )
 
+type Part string
+
+const (
+	Major   Part = "major"
+	Minor   Part = "minor"
+	Release Part = "release"
+)
+
 type Pkg struct {
-	ID              string            `json:"id"`
 	Name            string            `json:"name"`
 	Version         string            `json:"version"`
 	Description     string            `json:"description"`
@@ -44,13 +52,10 @@ type Loader struct {
 * @param baseDir, name, version string
 * @return *Loader
 **/
-func newLoader(name, version string) *Loader {
-	id := fmt.Sprintf(`pkg:%s:%s`, name, version)
+func newLoader(name string) *Loader {
 	result := &Loader{
 		Pkg: &Pkg{
-			ID:              id,
 			Name:            name,
-			Version:         version,
 			Scripts:         make(map[string]string),
 			Dependencies:    make(map[string]string),
 			DevDependencies: make(map[string]string),
@@ -75,7 +80,8 @@ func (s *Loader) init() error {
 		}
 
 		var pkg Pkg
-		ok, err := s.get(s.ID, &pkg)
+		id := fmt.Sprintf("pkg:%s:%s", s.Name, s.Version)
+		ok, err := s.get(id, &pkg)
 		if err != nil {
 			return err
 		}
@@ -94,19 +100,51 @@ func (s *Loader) init() error {
 			return err
 		}
 	} else {
-		s.Pkg.Description = ""
-		s.Pkg.Main = "index.js"
-		s.Pkg.Scripts = make(map[string]string)
-		s.Pkg.Dependencies = make(map[string]string)
-		s.Pkg.DevDependencies = make(map[string]string)
-		s.Pkg.Author = ""
-		s.Pkg.License = ""
+		s.Version = "0.0.1"
+		s.Description = ""
+		s.Main = "index.js"
+		s.Scripts = make(map[string]string)
+		s.Dependencies = make(map[string]string)
+		s.DevDependencies = make(map[string]string)
+		s.Author = ""
+		s.License = ""
 		if err := s.save(); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+/**
+* BumpVersion
+* @param part Part
+* @return string
+**/
+func (s *Loader) BumpVersion(part Part) string {
+	parts := strings.Split(s.Version, ".")
+	if len(parts) != 3 {
+		return s.Version
+	}
+
+	major, _ := strconv.Atoi(parts[0])
+	minor, _ := strconv.Atoi(parts[1])
+	patch, _ := strconv.Atoi(parts[2])
+
+	switch part {
+	case "major":
+		major++
+		minor = 0
+		patch = 0
+	case "minor":
+		minor++
+		patch = 0
+	case "release":
+		patch++
+	}
+
+	s.Version = fmt.Sprintf("%d.%d.%d", major, minor, patch)
+	return s.Version
 }
 
 /**

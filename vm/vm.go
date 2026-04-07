@@ -138,13 +138,25 @@ func (s *VM) Set(name string, value interface{}) error {
 /**
 * SetScript
 * @params module string, path string
+* @return error
 **/
-func (s *VM) SetScript(module string, path string) {
+func (s *VM) SetScript(module string, path string) error {
 	_, ok := s.Scripts[module]
 	s.Scripts[module] = path
 	if !ok {
-		s.save()
+		return s.save()
 	}
+	return nil
+}
+
+/**
+* SetDescription
+* @params description string
+* @return error
+**/
+func (s *VM) SetDescription(description string) error {
+	s.Description = description
+	return s.save()
 }
 
 /**

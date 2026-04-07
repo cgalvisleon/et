@@ -13,10 +13,10 @@ import (
 
 /**
 * Build
-* @param baseDir, name, version string, store Store
+* @param store Store, part Part
 * @return *VM, error
 **/
-func Build(store Store) (*VM, error) {
+func Build(store Store, part Part) (*VM, error) {
 	if store == nil {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "store")
 	}
@@ -55,9 +55,7 @@ func Build(store Store) (*VM, error) {
 		}
 	}
 
-	result.BumpVersion(Release)
-
-	err = result.save()
+	_, err = result.BumpVersion(part)
 	if err != nil {
 		return nil, err
 	}

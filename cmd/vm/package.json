@@ -1,13 +1,9 @@
 {
-  "id": "pkg:vm:0.0.1",
   "name": "vm",
   "version": "0.0.1",
-  "description": "vm",
+  "description": "",
   "main": "index.js",
-  "scripts": {
-    "./math": "/Users/cesargalvisleon/Projects/cgalvisleon/et/cmd/vm/src/math.js",
-    "./src/pricing": "/Users/cesargalvisleon/Projects/cgalvisleon/et/cmd/vm/src/pricing.js"
-  },
+  "scripts": {},
   "dependencies": {},
   "devDependencies": {},
   "author": "",

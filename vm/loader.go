@@ -121,10 +121,10 @@ func (s *Loader) init() error {
 * @param part Part
 * @return string
 **/
-func (s *Loader) BumpVersion(part Part) string {
+func (s *Loader) BumpVersion(part Part) (string, error) {
 	parts := strings.Split(s.Version, ".")
 	if len(parts) != 3 {
-		return s.Version
+		return s.Version, nil
 	}
 
 	major, _ := strconv.Atoi(parts[0])
@@ -144,7 +144,7 @@ func (s *Loader) BumpVersion(part Part) string {
 	}
 
 	s.Version = fmt.Sprintf("%d.%d.%d", major, minor, patch)
-	return s.Version
+	return s.Version, s.save()
 }
 
 /**

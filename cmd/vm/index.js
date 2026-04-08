@@ -1,3 +1,6 @@
+author("César Galvis León");
+description("Pruebas de vm");
+
 const pricing = require("./src/pricing");
 
 // Test 1

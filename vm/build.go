@@ -60,7 +60,12 @@ func Build(store Store, part Part) (*VM, error) {
 		return nil, err
 	}
 
-	for module, path := range result.Pkg.Scripts {
+	err = result.uppToStore()
+	if err != nil {
+		return nil, err
+	}
+
+	for module, path := range result.Pkg.Models {
 		inf := file.ExistPath(path)
 		if inf.IsDir {
 			continue

@@ -25,6 +25,7 @@ type Pkg struct {
 	Version         string            `json:"version"`
 	Description     string            `json:"description"`
 	Main            string            `json:"main"`
+	Models          map[string]string `json:"models"`
 	Scripts         map[string]string `json:"scripts"`
 	Dependencies    map[string]string `json:"dependencies"`
 	DevDependencies map[string]string `json:"devDependencies"`
@@ -56,6 +57,7 @@ func newLoader(name string) *Loader {
 	result := &Loader{
 		Pkg: &Pkg{
 			Name:            name,
+			Models:          make(map[string]string),
 			Scripts:         make(map[string]string),
 			Dependencies:    make(map[string]string),
 			DevDependencies: make(map[string]string),
@@ -103,17 +105,17 @@ func (s *Loader) init() error {
 		s.Version = "0.0.1"
 		s.Description = ""
 		s.Main = "index.js"
-		s.Scripts = make(map[string]string)
-		s.Dependencies = make(map[string]string)
-		s.DevDependencies = make(map[string]string)
-		s.Author = ""
-		s.License = ""
 		if err := s.save(); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func (s *Loader) SetVersion(version string) error {
+	s.Version = version
+	return s.save()
 }
 
 /**
@@ -143,8 +145,8 @@ func (s *Loader) BumpVersion(part Part) (string, error) {
 		patch++
 	}
 
-	s.Version = fmt.Sprintf("%d.%d.%d", major, minor, patch)
-	return s.Version, s.save()
+	result := fmt.Sprintf("%d.%d.%d", major, minor, patch)
+	return result, s.SetVersion(result)
 }
 
 /**

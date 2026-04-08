@@ -100,10 +100,10 @@ func (s *VM) RunProd(store Store) error {
 }
 
 /**
-* save
+* uppToStore
 * @return error
 **/
-func (s *VM) save() error {
+func (s *VM) uppToStore() error {
 	id := fmt.Sprintf("pkg:%s:%s", s.Name, s.Version)
 	return s.set(id, s)
 }
@@ -136,13 +136,13 @@ func (s *VM) Set(name string, value interface{}) error {
 }
 
 /**
-* SetScript
+* SetModel
 * @params module string, path string
 * @return error
 **/
-func (s *VM) SetScript(module string, path string) error {
-	_, ok := s.Scripts[module]
-	s.Scripts[module] = path
+func (s *VM) SetModel(module string, path string) error {
+	_, ok := s.Models[module]
+	s.Models[module] = path
 	if !ok {
 		return s.save()
 	}
@@ -156,6 +156,26 @@ func (s *VM) SetScript(module string, path string) error {
 **/
 func (s *VM) SetDescription(description string) error {
 	s.Description = description
+	return s.save()
+}
+
+/**
+* SetAuthor
+* @params author string
+* @return error
+**/
+func (s *VM) SetAuthor(author string) error {
+	s.Author = author
+	return s.save()
+}
+
+/**
+* SetLicense
+* @params license string
+* @return error
+**/
+func (s *VM) SetLicense(license string) error {
+	s.License = license
 	return s.save()
 }
 

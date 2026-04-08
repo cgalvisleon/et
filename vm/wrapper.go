@@ -41,7 +41,7 @@ func wrapperRunTime(vm *VM) {
 			panic(vm.Error(err))
 		}
 
-		vm.SetScript(module, p)
+		vm.SetModel(module, p)
 		return p
 	})
 	vm.Set("__load", func(path string) string {
@@ -68,6 +68,34 @@ func wrapperRunTime(vm *VM) {
 			panic(vm.Error(err))
 		}
 		return string(data)
+	})
+	vm.Set("version", func(value string) string {
+		err := vm.SetVersion(value)
+		if err != nil {
+			panic(vm.Error(err))
+		}
+		return value
+	})
+	vm.Set("description", func(value string) string {
+		err := vm.SetDescription(value)
+		if err != nil {
+			panic(vm.Error(err))
+		}
+		return value
+	})
+	vm.Set("author", func(value string) string {
+		err := vm.SetAuthor(value)
+		if err != nil {
+			panic(vm.Error(err))
+		}
+		return value
+	})
+	vm.Set("license", func(value string) string {
+		err := vm.SetLicense(value)
+		if err != nil {
+			panic(vm.Error(err))
+		}
+		return value
 	})
 }
 

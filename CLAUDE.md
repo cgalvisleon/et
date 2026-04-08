@@ -60,6 +60,24 @@ This is a **modular utility library** for building Go microservices. Each direct
 - **`response/`** — Unified HTTP response helpers.
 - **`ws/`** — WebSocket support via `gorilla/websocket`.
 
+### Application-layer packages
+
+- **`vm/`** — Embeds a JavaScript runtime (`dop251/goja`) for executing JS from Go. Three modes: `Develop` (reads files directly, hot-reloads via `file.Watcher`), `Production` (loads from a `Store`), `Building` (compiles + stores with semver bumping). Global wrappers provide `console.*`, `ctx.*`, `fetch()`, and CommonJS-style `require()`. `RunDev(baseDir)` and `RunProd(store)` are the entry points.
+- **`ia/`** — OpenAI agent integration (`openai-go/v3`). Manages agents with conversation tracking, event handlers, and instance state via a caller-provided `instances.Store`.
+- **`workflow/`** — Workflow orchestration with multi-step execution, instance state, and resilience patterns. Integrates with `resilience/`, `instances/`, and `event/` (NATS) for async state sync.
+- **`graph/`** — Neo4j connectivity (`neo4j-go-driver/v5`). `graph.Load()` returns a `*Conn` with the Neo4j driver.
+- **`wsp/`** — WhatsApp Business API client. `NewWhatsapp(token, phoneNumberId)` produces a message builder; uses Facebook Graph API (configurable via `WHATSAPP_API_URL`).
+- **`instances/`** — `Store` interface (`Set`, `Get`, `Delete`, `Query`) used by `ia` and `workflow` for state persistence. Implementations are caller-provided.
+- **`resilience/`** — Resilience patterns (circuit breaker, etc.) used by `workflow`.
+- **`reg/`** — Service registration/discovery used by `ia` and `workflow`.
+- **`file/`** — File operations and watching (`FileInfo`, `Watcher`, `ExistPath()`); used by `vm` for hot-reload.
+- **`mem/`** — Shared memory and sync primitives.
+- **`ephemeral/`** — Ephemeral/temporary data structures.
+- **`iterate/`** — Iteration control with time support.
+- **`race/`** — Race condition detection helpers.
+- **`cmds/`** — Command/stage execution system (distinct from the `cmd/` CLI binaries).
+- **`timezone/`**, **`units/`**, **`color/`** — Timezone handling, unit conversions, terminal color utilities.
+
 ### CLI (`cmd/`)
 
 Each subdirectory under `cmd/` is a standalone binary:
@@ -67,6 +85,7 @@ Each subdirectory under `cmd/` is a standalone binary:
 - `cmd/apigateway/` — API Gateway/proxy
 - `cmd/daemon/` — Background service with systemd integration
 - `cmd/create/` — Project/code scaffolding
+- `cmd/vm/` — JavaScript VM runner; `go run ./cmd/vm` starts `vm.RunDev("./cmd/vm")` with hot-reload
 
 ### Code generation (`create/`)
 
@@ -78,6 +97,7 @@ Templates and generators for new microservices, projects, and deployments (Kuber
 - **Error handling**: `logs.Fatal(err)` calls `os.Exit(1)`. Use `logs.Alert` / `logs.Error` for non-fatal errors.
 - **Event-driven coordination**: `ettp/v2` server syncs router state across replicas via NATS (`router.EVENT_SET_ROUTER`, `EVENT_REMOVE_ROUTER`, `EVENT_RESET_ROUTER`). The `m.Myself` flag prevents self-processing.
 - **`msg/` packages**: Each package has a local `msg/` or `msg.go` file with error message constants — use these instead of hardcoded strings.
+- **Store interface pattern**: `vm`, `workflow`, and `ia` accept a caller-provided `instances.Store` for persistence — the library defines the interface, consumers implement it.
 
 ## Required environment variables
 
@@ -86,3 +106,4 @@ Templates and generators for new microservices, projects, and deployments (Kuber
 | `cache` | `REDIS_HOST` | Redis connection |
 | `event` | `NATS_HOST` | NATS connection |
 | `event` | `NATS_USER`, `NATS_PASSWORD` | NATS auth (optional) |
+| `wsp` | `WHATSAPP_API_URL` | WhatsApp Graph API base URL (optional) |

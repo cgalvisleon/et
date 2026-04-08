@@ -207,7 +207,6 @@ func (s *Client) readLoop() {
 		case s.inbound <- data:
 		case <-s.ctx.Done():
 			return
-		default:
 		}
 	}
 }

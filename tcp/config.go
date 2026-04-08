@@ -5,18 +5,16 @@ import (
 )
 
 type Config struct {
-	Nodes    []string `json:"nodes"`
-	filePath string   `json:"-"`
+	Nodes []string `json:"nodes"`
 }
 
 /**
 * getConfig: Returns the config
 * @return *Config, error
 **/
-func getConfig() (*Config, error) {
-	filePath := "./config.json"
+func getConfig(path string) (*Config, error) {
 	var result *Config
-	err := file.Read(filePath, &result)
+	err := file.Read(path, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -26,10 +24,8 @@ func getConfig() (*Config, error) {
 			Nodes: []string{},
 		}
 
-		file.Write(filePath, result)
+		file.Write(path, result)
 	}
-
-	result.filePath = filePath
 
 	return result, nil
 }

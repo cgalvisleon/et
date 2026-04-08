@@ -67,6 +67,7 @@ type Node struct {
 	method         map[string]Service       `json:"-"`
 	raft           *Raft                    `json:"-"`
 	closed         atomic.Bool              `json:"-"`
+	configFile     string                   `json:"-"`
 	onConnect      []func(*Client)          `json:"-"`
 	onDisconnect   []func(*Client)          `json:"-"`
 	onError        []func(*Client, error)   `json:"-"`
@@ -109,6 +110,7 @@ func NewNode(port int) *Node {
 		method:     make(map[string]Service),
 		index:      atomic.Uint64{},
 		total:      atomic.Int64{},
+		configFile: envar.GetStr("CONFIG_FILE", "./config.json"),
 	}
 	result.mode.Store(Follower)
 	result.Mount(newTcpService(result))
@@ -562,6 +564,9 @@ func (s *Node) newClient(conn net.Conn) *Client {
 * @return *Client
 **/
 func (s *Node) Next() *Client {
+	s.muPeers.Lock()
+	defer s.muPeers.Unlock()
+
 	n := uint64(len(s.peers))
 	for i := uint64(0); i < n; i++ {
 		idx := (s.index.Add(1)) % n
@@ -578,7 +583,7 @@ func (s *Node) Next() *Client {
 **/
 func (s *Node) electionLoop() error {
 	time.Sleep(300 * time.Millisecond)
-	config, err := getConfig()
+	config, err := getConfig(s.configFile)
 	if err != nil {
 		return err
 	}
@@ -630,6 +635,14 @@ func (s *Node) Close() {
 	}
 
 	s.closeAllClients()
+}
+
+/**
+* LeaderID
+* @return string, bool
+**/
+func (s *Node) LeaderID() (string, bool) {
+	return s.raft.LeaderID()
 }
 
 /**
@@ -805,7 +818,9 @@ func (s *Node) GetPeers() []*Client {
 	s.muPeers.Lock()
 	defer s.muPeers.Unlock()
 
-	return s.peers
+	result := make([]*Client, len(s.peers))
+	copy(result, s.peers)
+	return result
 }
 
 /**

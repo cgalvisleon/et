@@ -79,14 +79,23 @@ func handleBalancer(client net.Conn) {
 * next
 * @return *node
 **/
-func (b *Balancer) next() *node {
-	n := uint64(len(b.nodes))
+func (s *Balancer) next() *node {
+	n := uint64(len(s.nodes))
 	for i := uint64(0); i < n; i++ {
-		idx := (b.index.Add(1)) % n
-		node := b.nodes[idx]
+		idx := (s.index.Add(1)) % n
+		node := s.nodes[idx]
 		if node.Alive.Load() {
 			return node
 		}
 	}
 	return nil
+}
+
+/**
+* AddNode
+* @param addr string
+**/
+func (s *Balancer) AddNode(addr string) {
+	node := newNode(addr)
+	s.nodes = append(s.nodes, node)
 }

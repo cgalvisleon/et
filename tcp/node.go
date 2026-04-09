@@ -680,6 +680,35 @@ func (s *Node) SendError(to *Client, err error) error {
 }
 
 /**
+* Mount
+* @param services any
+**/
+func (s *Node) Mount(service Service) error {
+	if service == nil {
+		return errors.New(mg.MSG_SERVICE_REQUIRED)
+	}
+
+	tipoStruct := reflect.TypeOf(service)
+	pkgName := tipoStruct.String()
+	list := strings.Split(pkgName, ".")
+	pkgName = list[len(list)-1]
+	s.method[pkgName] = service
+	return nil
+}
+
+/**
+* GetMethods
+* @return et.Json
+**/
+func (s *Node) GetMethods() et.Json {
+	result := et.Json{}
+	for pkg, mt := range s.method {
+		result[pkg] = mt
+	}
+	return result
+}
+
+/**
 * Request
 * @param to *Client, method string, args ...any
 * @return *Response
@@ -738,35 +767,6 @@ func (s *Node) Broadcast(destination []string, tp int, message any) {
 			_ = s.Send(client, tp, message)
 		}
 	}
-}
-
-/**
-* Mount
-* @param services any
-**/
-func (s *Node) Mount(service Service) error {
-	if service == nil {
-		return errors.New(mg.MSG_SERVICE_REQUIRED)
-	}
-
-	tipoStruct := reflect.TypeOf(service)
-	pkgName := tipoStruct.String()
-	list := strings.Split(pkgName, ".")
-	pkgName = list[len(list)-1]
-	s.method[pkgName] = service
-	return nil
-}
-
-/**
-* GetMethod
-* @return map[string]map[string]*Mtd
-**/
-func (s *Node) GetMethod() et.Json {
-	result := et.Json{}
-	for pkg, mt := range s.method {
-		result[pkg] = mt
-	}
-	return result
 }
 
 /**

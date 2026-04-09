@@ -81,10 +81,10 @@ type Node struct {
 
 /**
 * NewNode
-* @param port int
+* @param port int, mode Mode
 * @return *Node
 **/
-func NewNode(port int) *Node {
+func NewNode(port int, mode Mode) *Node {
 	addr := fmt.Sprintf("%s:%d", hostName, port)
 	timeout, err := time.ParseDuration(envar.GetStr("TIMEOUT", "10s"))
 	if err != nil {
@@ -112,7 +112,7 @@ func NewNode(port int) *Node {
 		total:      atomic.Int64{},
 		configFile: envar.GetStr("CONFIG_FILE", "./config.json"),
 	}
-	result.mode.Store(Follower)
+	result.mode.Store(mode)
 	result.Mount(newTcpService(result))
 	result.raft = newRaft(result)
 

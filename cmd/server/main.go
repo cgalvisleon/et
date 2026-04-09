@@ -10,7 +10,7 @@ import (
 func main() {
 	port := envar.SetIntByArg("-port", "PORT", 1377)
 
-	node := tcp.NewNode(port)
+	node := tcp.NewNode(port, tcp.Follower)
 	err := node.Start()
 	if err != nil {
 		logs.Panic(err)

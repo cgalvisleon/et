@@ -56,7 +56,7 @@ type Node struct {
 	unregister     chan *Client             `json:"-"`
 	clients        map[string]*Client       `json:"-"`
 	muClients      sync.Mutex               `json:"-"`
-	inbound        chan *Msg                `json:"-"`
+	workerPool     chan struct{}            `json:"-"`
 	requests       map[string]chan *Message `json:"-"`
 	muRequests     sync.Mutex               `json:"-"`
 	proxy          *Balancer                `json:"-"`
@@ -89,6 +89,7 @@ func NewNode(port int) *Node {
 		timeout = 10 * time.Second
 	}
 
+	workerCount := envar.GetInt("WORKER_COUNT", 1000)
 	ctx, cancel := context.WithCancel(context.Background())
 	result := &Node{
 		ctx:        ctx,
@@ -100,7 +101,7 @@ func NewNode(port int) *Node {
 		unregister: make(chan *Client, 64),
 		clients:    make(map[string]*Client),
 		muClients:  sync.Mutex{},
-		inbound:    make(chan *Msg, 256),
+		workerPool: make(chan struct{}, workerCount), // 🚀 máximo 100 workers concurrentes
 		requests:   make(map[string]chan *Message),
 		muRequests: sync.Mutex{},
 		peers:      make([]*Client, 0),
@@ -138,23 +139,6 @@ func (s *Node) run() {
 			case client := <-s.unregister:
 				if client != nil {
 					s.disconnect(client)
-				}
-			}
-		}
-	}()
-
-	// ===============================
-	// Loop de inbound messages
-	// ===============================
-	go func() {
-		for {
-			select {
-			case <-s.ctx.Done():
-				return
-
-			case msg := <-s.inbound:
-				if msg != nil {
-					s.inbox(msg)
 				}
 			}
 		}
@@ -482,26 +466,23 @@ func (s *Node) handle(c *Client) {
 **/
 func (s *Node) handleClient(c *Client) {
 	reader := bufio.NewReader(c.conn)
+	lenBuf := make([]byte, 4)
+	limit := envar.GetInt("LIMIT_SIZE_MG", 10)
+	maxSize := uint32(limit * 1024 * 1024)
 
 	for {
 		// Leer tamaño (4 bytes)
-		lenBuf := make([]byte, 4)
 		_, err := io.ReadFull(reader, lenBuf)
 		if err != nil {
-			if err != io.EOF {
-				logs.Logf(packageName, mg.MSG_TCP_ERROR_READ, err)
-			}
-			select {
-			case s.unregister <- c:
-			case <-s.ctx.Done():
-			}
+			s.unregisterClient(c, err)
 			return
 		}
 
 		// Leer tamaño payload
 		length := binary.BigEndian.Uint32(lenBuf)
-		limitReader := envar.GetInt("LIMIT_SIZE_MG", 10)
-		if length > uint32(limitReader*1024*1024) {
+
+		if length > maxSize {
+			io.CopyN(io.Discard, reader, int64(length))
 			s.SendError(c, errors.New(mg.MSG_TCP_MESSAGE_TOO_LARGE))
 			continue
 		}
@@ -510,10 +491,7 @@ func (s *Node) handleClient(c *Client) {
 		data := make([]byte, length)
 		_, err = io.ReadFull(reader, data)
 		if err != nil {
-			select {
-			case s.unregister <- c:
-			case <-s.ctx.Done():
-			}
+			s.unregisterClient(c, err)
 			return
 		}
 
@@ -523,14 +501,45 @@ func (s *Node) handleClient(c *Client) {
 			continue
 		}
 
-		select {
-		case s.inbound <- &Msg{
+		msg := &Msg{
 			To:  c,
 			Msg: m,
-		}:
-		case <-s.ctx.Done():
-			return
 		}
+
+		// 🔥 NUNCA BLOQUEAR EL READER
+		s.dispatch(msg)
+	}
+}
+
+/**
+* unregisterClient
+* @param c *Client, err error
+**/
+func (s *Node) unregisterClient(c *Client, err error) {
+	if err != io.EOF {
+		logs.Logf(packageName, mg.MSG_TCP_ERROR_READ, err)
+	}
+
+	select {
+	case s.unregister <- c:
+	case <-s.ctx.Done():
+	}
+}
+
+/**
+* dispatch
+* @param msg *Msg
+**/
+func (s *Node) dispatch(msg *Msg) {
+	select {
+	case s.workerPool <- struct{}{}:
+		go func() {
+			defer func() { <-s.workerPool }()
+			s.inbox(msg)
+		}()
+	default:
+		// 🔥 backpressure: sistema saturado
+		logs.Warn("worker pool full, dropping message")
 	}
 }
 

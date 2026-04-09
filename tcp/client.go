@@ -53,9 +53,9 @@ type Client struct {
 }
 
 func newClient() *Client {
-	timeout, err := time.ParseDuration(envar.GetStr("TIMEOUT", "10m"))
+	timeout, err := time.ParseDuration(envar.GetStr("TIMEOUT", "10s"))
 	if err != nil {
-		timeout = 10 * time.Minute
+		timeout = 10 * time.Second
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -165,13 +165,21 @@ func (s *Client) disconnect() {
 	conn := s.conn
 	s.mu["conn"].Unlock()
 
-	logs.Logf(packageName, msg.MSG_TCP_DISCONNECTED, s.Addr)
-
 	if conn != nil {
 		_ = conn.Close()
 	}
 
+	// 🔥 limpiar requests pendientes
+	s.mu["messages"].Lock()
+	for id, ch := range s.messages {
+		close(ch)
+		delete(s.messages, id)
+	}
+	s.mu["messages"].Unlock()
+
 	s.cancel()
+
+	logs.Logf(packageName, msg.MSG_TCP_DISCONNECTED, s.Addr)
 
 	for _, fn := range s.onDisconnect {
 		fn(s)
@@ -183,6 +191,9 @@ func (s *Client) disconnect() {
 **/
 func (s *Client) readLoop() {
 	reader := bufio.NewReader(s.conn)
+	lenBuf := make([]byte, 4)
+	limit := envar.GetInt("LIMIT_SIZE_MG", 10)
+	maxSize := uint32(limit * 1024 * 1024)
 
 	for {
 		select {
@@ -191,7 +202,6 @@ func (s *Client) readLoop() {
 		default:
 		}
 
-		lenBuf := make([]byte, 4)
 		_, err := io.ReadFull(reader, lenBuf)
 		if err != nil {
 			s.disconnect()
@@ -199,8 +209,13 @@ func (s *Client) readLoop() {
 		}
 
 		length := binary.BigEndian.Uint32(lenBuf)
-		limitReader := envar.GetInt("LIMIT_SIZE_MG", 10)
-		if length > uint32(limitReader*1024*1024) {
+
+		if length > maxSize {
+			_, err := io.CopyN(io.Discard, reader, int64(length))
+			if err != nil {
+				s.disconnect()
+				return
+			}
 			continue
 		}
 
@@ -213,8 +228,8 @@ func (s *Client) readLoop() {
 
 		select {
 		case s.inbound <- data:
-		case <-s.ctx.Done():
-			return
+		default:
+			logs.Warn("inbound full, dropping message")
 		}
 	}
 }
@@ -230,7 +245,7 @@ func (s *Client) run() {
 
 		case bt := <-s.inbound:
 			if bt != nil {
-				s.inbox(bt)
+				go s.inbox(bt)
 			}
 		}
 	}
@@ -255,7 +270,14 @@ func (s *Client) send(ms *Message) error {
 		return err
 	}
 
-	conn.SetWriteDeadline(time.Now().Add(ms.Timeout))
+	timeout := ms.Timeout
+	if timeout == 0 {
+		timeout = s.timeout
+	}
+	if timeout == 0 {
+		timeout = 10 * time.Second
+	}
+	conn.SetWriteDeadline(time.Now().Add(timeout))
 
 	_, err = conn.Write(bt)
 	if err != nil {
@@ -285,7 +307,10 @@ func (s *Client) inbox(bt []byte) {
 	s.mu["messages"].Unlock()
 
 	if ok {
-		ch <- ms
+		select {
+		case ch <- ms:
+		default:
+		}
 	}
 
 	for _, fn := range s.onInbound {
@@ -317,12 +342,15 @@ func (s *Client) request(ms *Message) (*Message, error) {
 		return nil, s.error(err)
 	}
 
+	timer := time.NewTimer(ms.Timeout)
+	defer timer.Stop()
+
 	select {
 	case resp := <-ch:
 		deleteMessage()
 		return resp, nil
 
-	case <-time.After(ms.Timeout):
+	case <-timer.C:
 		deleteMessage()
 		return nil, errors.New(msg.MSG_TCP_TIMEOUT)
 	}
@@ -385,7 +413,6 @@ func (s *Client) SetTimeOut(timeout time.Duration) {
 * @return error
 **/
 func (s *Client) Send(ms *Message) error {
-	// Send
 	err := s.send(ms)
 	if err != nil {
 		return s.error(err)

@@ -89,6 +89,14 @@ func Tracer(kind string, err error) error {
 }
 
 /**
+* Warn
+* @param message string
+**/
+func Warn(message string) {
+	printLn("Warn", "Yellow", message)
+}
+
+/**
 * Error
 * @param err error
 * @return error

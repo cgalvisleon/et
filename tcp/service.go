@@ -7,14 +7,10 @@ import (
 	"github.com/cgalvisleon/et/msg"
 )
 
-const (
-	PingMehtod string = "Tcp.Ping"
-)
-
 type HandlerFunc func(request *Message) *Response
 
 type Service interface {
-	Execute(name string, request *Message) *Response
+	Execute(method string, request *Message) *Response
 }
 
 type Tcp struct {
@@ -29,7 +25,7 @@ type Tcp struct {
 **/
 func (s *Tcp) build() map[string]HandlerFunc {
 	s.registry = map[string]HandlerFunc{
-		"Ping": s.Ping,
+		"Ping": s.ping,
 	}
 	return s.registry
 }
@@ -39,13 +35,29 @@ func (s *Tcp) build() map[string]HandlerFunc {
 * @param name string, request *Message
 * @return *tcp.Response
 **/
-func (s *Tcp) Execute(name string, request *Message) *Response {
-	handler, ok := s.registry[name]
+func (s *Tcp) Execute(method string, request *Message) *Response {
+	handler, ok := s.registry[method]
 	if !ok {
 		return TcpError(msg.MSG_METHOD_NOT_FOUND)
 	}
 
 	return handler(request)
+}
+
+/**
+* ping
+* @param request *Message
+* @return *Response
+**/
+func (s *Tcp) ping(request *Message) *Response {
+	var id string
+	var ctx et.Json
+	err := request.GetArgs(&id, &ctx)
+	if err != nil {
+		return TcpError(err)
+	}
+
+	return TcpResponse(fmt.Sprintf("Pong to:%s", s.node.addr))
 }
 
 /**

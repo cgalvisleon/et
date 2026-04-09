@@ -20,8 +20,6 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	mg "github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/reg"
-	"github.com/cgalvisleon/et/timezone"
 )
 
 type Mode int
@@ -81,10 +79,10 @@ type Node struct {
 
 /**
 * NewNode
-* @param port int, mode Mode
+* @param port int
 * @return *Node
 **/
-func NewNode(port int, mode Mode) *Node {
+func NewNode(port int) *Node {
 	addr := fmt.Sprintf("%s:%d", hostName, port)
 	timeout, err := time.ParseDuration(envar.GetStr("TIMEOUT", "10s"))
 	if err != nil {
@@ -112,7 +110,7 @@ func NewNode(port int, mode Mode) *Node {
 		total:      atomic.Int64{},
 		configFile: envar.GetStr("CONFIG_FILE", "./config.json"),
 	}
-	result.mode.Store(mode)
+	result.mode.Store(Follower)
 	result.Mount(newTcpService(result))
 	result.raft = newRaft(result)
 
@@ -273,6 +271,34 @@ func (s *Node) closeAllClients() {
 }
 
 /**
+* send
+* @param msg *Msg
+* @return error
+**/
+func (s *Node) send(msg *Msg) error {
+	s.muClients.Lock()
+	c, ok := s.clients[msg.To.Addr]
+	s.muClients.Unlock()
+
+	if !ok || c == nil {
+		return fmt.Errorf(mg.MSG_TCP_CLIENT_NOT_FOUND, msg.To.Addr)
+	}
+
+	err := c.send(msg.Msg)
+	if err != nil {
+		return s.Error(c, err)
+	}
+
+	go func() {
+		for _, fn := range s.onSend {
+			fn(msg)
+		}
+	}()
+
+	return nil
+}
+
+/**
 * inbox
 * @param msg *Message
 **/
@@ -370,33 +396,6 @@ func (s *Node) inbox(msg *Msg) {
 			fn(msg)
 		}
 	}()
-}
-
-/**
-* send
-* @param msg *Msg
-* @return error
-**/
-func (s *Node) send(msg *Msg) error {
-	s.muClients.Lock()
-	c, ok := s.clients[msg.To.Addr]
-	s.muClients.Unlock()
-
-	if !ok || c == nil {
-		return fmt.Errorf(mg.MSG_TCP_CLIENT_NOT_FOUND, msg.To.Addr)
-	}
-
-	if err := c.send(msg.Msg); err != nil {
-		return s.Error(c, err)
-	}
-
-	go func() {
-		for _, fn := range s.onSend {
-			fn(msg)
-		}
-	}()
-
-	return nil
 }
 
 /**
@@ -541,21 +540,11 @@ func (s *Node) handleClient(c *Client) {
 * @return *Client
 **/
 func (s *Node) newClient(conn net.Conn) *Client {
-	timeout, err := time.ParseDuration(envar.GetStr("TIMEOUT", "10s"))
-	if err != nil {
-		timeout = 10 * time.Second
-	}
-
-	result := &Client{
-		CreatedAt: timezone.Now(),
-		ID:        reg.ULID(),
-		Addr:      conn.RemoteAddr().String(),
-		Status:    Connected,
-		Ctx:       et.Json{},
-		conn:      conn,
-		timeout:   timeout,
-	}
+	result := newClient()
+	result.Addr = conn.RemoteAddr().String()
+	result.conn = conn
 	result.alive.Store(true)
+
 	return result
 }
 
@@ -671,10 +660,10 @@ func (s *Node) AddNode(addr string) {
 
 /**
 * Send
-* @param to *Client, tp int, message any
+* @param to *Client, tp TpMessage, message any
 * @return error
 **/
-func (s *Node) Send(to *Client, tp int, message any) error {
+func (s *Node) Send(to *Client, tp TpMessage, message any) error {
 	msg, err := NewMessage(tp, message)
 	if err != nil {
 		return err
@@ -778,7 +767,7 @@ func (s *Node) ResponseError(msg *Msg, err error) error {
 * @param destination []string
 * @param msg []byte
 **/
-func (s *Node) Broadcast(destination []string, tp int, message any) {
+func (s *Node) Broadcast(destination []string, tp TpMessage, message any) {
 	for _, addr := range destination {
 		s.muClients.Lock()
 		client, ok := s.clients[addr]

@@ -6,21 +6,22 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
 )
 
+type TpMessage int
+
 const (
-	BytesMessage int = 0
-	TextMessage  int = 1
-	ACKMessage   int = 13
-	CloseMessage int = 15
-	ErrorMessage int = 17
-	Heartbeat    int = 19
-	RequestVote  int = 21
-	Method       int = 23
+	ACKMessage   TpMessage = 13
+	CloseMessage TpMessage = 15
+	ErrorMessage TpMessage = 17
+	Heartbeat    TpMessage = 19
+	RequestVote  TpMessage = 21
+	Method       TpMessage = 23
 )
 
 type Msg struct {
@@ -149,13 +150,14 @@ func (s *Response) Get(dest ...any) error {
 }
 
 type Message struct {
-	ID         string `json:"id"`
-	Type       int    `json:"type"`
-	Method     string `json:"method"`
-	Payload    []byte `json:"payload"`
-	Error      string `json:"error"`
-	Args       []any  `json:"args"`
-	IsResponse bool   `json:"is_response"`
+	ID         string        `json:"id"`
+	Type       TpMessage     `json:"type"`
+	Method     string        `json:"method"`
+	Payload    []byte        `json:"payload"`
+	Error      string        `json:"error"`
+	Args       []any         `json:"args"`
+	IsResponse bool          `json:"is_response"`
+	Timeout    time.Duration `json:"timeout"`
 }
 
 /**
@@ -255,7 +257,7 @@ func (s *Message) Response() (*Response, error) {
 /**
 * NewMessage
 **/
-func NewMessage(tp int, message any) (*Message, error) {
+func NewMessage(tp TpMessage, message any) (*Message, error) {
 	bt, ok := message.([]byte)
 	if !ok {
 		var err error

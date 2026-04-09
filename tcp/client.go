@@ -17,7 +17,6 @@ import (
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
-	"github.com/cgalvisleon/et/utility"
 )
 
 type Status string
@@ -42,7 +41,7 @@ type Client struct {
 	inbound      chan []byte               `json:"-"`
 	messages     map[string]chan *Message  `json:"-"`
 	timeout      time.Duration             `json:"-"`
-	mu           sync.Mutex                `json:"-"`
+	mu           map[string]*sync.Mutex    `json:"-"`
 	onConnect    []func(*Client)           `json:"-"`
 	onDisconnect []func(*Client)           `json:"-"`
 	onError      []func(*Client, error)    `json:"-"`
@@ -53,15 +52,10 @@ type Client struct {
 	closed       atomic.Bool               `json:"-"`
 }
 
-/**
-* NewClient
-* @param addr string
-* @return *Client, error
-**/
-func NewClient(addr string) *Client {
-	timeout, err := time.ParseDuration(envar.GetStr("TIMEOUT", "10s"))
+func newClient() *Client {
+	timeout, err := time.ParseDuration(envar.GetStr("TIMEOUT", "10m"))
 	if err != nil {
-		timeout = 10 * time.Second
+		timeout = 10 * time.Minute
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -70,12 +64,11 @@ func NewClient(addr string) *Client {
 		cancel:       cancel,
 		CreatedAt:    timezone.Now(),
 		ID:           reg.ULID(),
-		Addr:         addr,
 		Status:       Pending,
 		inbound:      make(chan []byte, 128),
 		messages:     make(map[string]chan *Message),
 		timeout:      timeout,
-		mu:           sync.Mutex{},
+		mu:           make(map[string]*sync.Mutex),
 		Ctx:          et.Json{},
 		onConnect:    make([]func(*Client), 0),
 		onDisconnect: make([]func(*Client), 0),
@@ -83,6 +76,21 @@ func NewClient(addr string) *Client {
 		onOutbound:   make([]func(*Client, []byte), 0),
 		onInbound:    make([]func(*Client, *Message), 0),
 	}
+	result.mu["conn"] = &sync.Mutex{}
+	result.mu["messages"] = &sync.Mutex{}
+
+	return result
+}
+
+/**
+* NewClient
+* @param addr string
+* @return *Client, error
+**/
+func NewClient(addr string) *Client {
+	result := newClient()
+	result.Addr = addr
+
 	return result
 }
 
@@ -126,12 +134,12 @@ func (s *Client) connect() error {
 		return s.error(err)
 	}
 
-	s.mu.Lock()
+	s.mu["conn"].Lock()
 	s.conn = conn
 	s.Status = Connected
 	s.LocalAddr = s.conn.LocalAddr().String()
 	s.RemoteAddr = s.conn.RemoteAddr().String()
-	s.mu.Unlock()
+	s.mu["conn"].Unlock()
 
 	for _, fn := range s.onConnect {
 		fn(s)
@@ -148,14 +156,14 @@ func (s *Client) disconnect() {
 		return
 	}
 
-	s.mu.Lock()
+	s.mu["conn"].Lock()
 	if s.Status == Disconnected {
-		s.mu.Unlock()
+		s.mu["conn"].Unlock()
 		return
 	}
 	s.Status = Disconnected
 	conn := s.conn
-	s.mu.Unlock()
+	s.mu["conn"].Unlock()
 
 	logs.Logf(packageName, msg.MSG_TCP_DISCONNECTED, s.Addr)
 
@@ -230,24 +238,24 @@ func (s *Client) run() {
 
 /**
 * send
-* @param msg *Message
+* @param ms *Message
 * @return error
 **/
-func (s *Client) send(msg *Message) error {
-	s.mu.Lock()
+func (s *Client) send(ms *Message) error {
+	s.mu["conn"].Lock()
 	conn := s.conn
-	s.mu.Unlock()
+	s.mu["conn"].Unlock()
 
 	if conn == nil {
-		return errors.New("connection not established")
+		return errors.New(msg.MSG_CONNECTION_NOT_ESTABLISHED)
 	}
 
-	bt, err := msg.serialize()
+	bt, err := ms.serialize()
 	if err != nil {
 		return err
 	}
 
-	conn.SetWriteDeadline(time.Now().Add(s.timeout))
+	conn.SetWriteDeadline(time.Now().Add(ms.Timeout))
 
 	_, err = conn.Write(bt)
 	if err != nil {
@@ -266,60 +274,56 @@ func (s *Client) send(msg *Message) error {
 * inbox
 **/
 func (s *Client) inbox(bt []byte) {
-	msg, err := ToMessage(bt)
+	ms, err := ToMessage(bt)
 	if err != nil {
 		s.error(err)
 		return
 	}
 
-	s.mu.Lock()
-	ch, ok := s.messages[msg.ID]
-	s.mu.Unlock()
+	s.mu["messages"].Lock()
+	ch, ok := s.messages[ms.ID]
+	s.mu["messages"].Unlock()
 
 	if ok {
-		select {
-		case ch <- msg:
-		default:
-		}
-		return
+		ch <- ms
 	}
 
 	for _, fn := range s.onInbound {
-		fn(s, msg)
+		fn(s, ms)
 	}
 }
 
 /**
 * request
-* @param m *Message
+* @param ms *Message
 * @return *Message, error
 **/
-func (s *Client) request(m *Message) (*Message, error) {
+func (s *Client) request(ms *Message) (*Message, error) {
 	ch := make(chan *Message, 1)
 
-	s.mu.Lock()
-	s.messages[m.ID] = ch
-	s.mu.Unlock()
+	s.mu["messages"].Lock()
+	s.messages[ms.ID] = ch
+	s.mu["messages"].Unlock()
 
-	err := s.send(m)
+	deleteMessage := func() {
+		s.mu["messages"].Lock()
+		delete(s.messages, ms.ID)
+		s.mu["messages"].Unlock()
+	}
+
+	err := s.send(ms)
 	if err != nil {
-		s.mu.Lock()
-		delete(s.messages, m.ID)
-		s.mu.Unlock()
+		deleteMessage()
 		return nil, s.error(err)
 	}
 
 	select {
 	case resp := <-ch:
-		s.mu.Lock()
-		delete(s.messages, m.ID)
-		s.mu.Unlock()
+		deleteMessage()
 		return resp, nil
 
-	case <-time.After(s.timeout):
-		s.mu.Lock()
-		delete(s.messages, m.ID)
-		s.mu.Unlock()
+	case <-time.After(ms.Timeout):
+		deleteMessage()
 		return nil, errors.New(msg.MSG_TCP_TIMEOUT)
 	}
 }
@@ -354,7 +358,7 @@ func (s *Client) Start() error {
 		return err
 	}
 
-	utility.AppWait()
+	// utility.AppWait()
 	return nil
 }
 
@@ -368,18 +372,26 @@ func (s *Client) Close() error {
 }
 
 /**
+* SetTimeOut
+* @param timeout time.Duration
+**/
+func (s *Client) SetTimeOut(timeout time.Duration) {
+	s.timeout = timeout
+}
+
+/**
 * Send
-* @param tp int, message any
+* @param ms *Message
 * @return error
 **/
-func (s *Client) Send(msg *Message) error {
+func (s *Client) Send(ms *Message) error {
 	// Send
-	err := s.send(msg)
+	err := s.send(ms)
 	if err != nil {
 		return s.error(err)
 	}
 
-	if msg.Type == CloseMessage {
+	if ms.Type == CloseMessage {
 		s.disconnect()
 	}
 
@@ -397,6 +409,7 @@ func (s *Client) Request(method string, args ...any) *Response {
 		return TcpError(err)
 	}
 	m.Method = method
+	m.Timeout = s.timeout
 	for _, arg := range args {
 		m.Args = append(m.Args, arg)
 	}

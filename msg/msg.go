@@ -80,6 +80,7 @@ var (
 	MSG_PHONE_INVALID                  = "atribute %s must be a valid mobile phone number (E.164 format, e.g., +573001234567)"
 	MSG_AGENT_NOT_FOUND                = "agent %s not found"
 	MSG_STORE_REQUIRED                 = "store is required in production mode"
+	MSG_CONNECTION_NOT_ESTABLISHED     = "connection not established"
 )
 
 func init() {
@@ -163,5 +164,6 @@ func init() {
 		MSG_PHONE_INVALID = "atributo %s debe ser un número de teléfono móvil válido (formato E.164, ej: +573001234567)"
 		MSG_AGENT_NOT_FOUND = "agente %s no encontrado"
 		MSG_STORE_REQUIRED = "store es requerido en modo producción"
+		MSG_CONNECTION_NOT_ESTABLISHED = "connection not established"
 	}
 }

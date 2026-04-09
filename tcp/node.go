@@ -645,6 +645,31 @@ func (s *Node) LeaderID() (string, bool) {
 }
 
 /**
+* AddNode
+* @param addr string
+**/
+func (s *Node) AddNode(addr string) {
+	if addr == s.addr {
+		return
+	}
+
+	node := NewClient(addr)
+	node.isNode = true
+	node.onConnect = append(node.onConnect, func(c *Client) {
+		s.total.Add(1)
+	})
+	node.onDisconnect = append(node.onDisconnect, func(c *Client) {
+		s.total.Add(-1)
+	})
+
+	node.Connect()
+
+	s.muPeers.Lock()
+	s.peers = append(s.peers, node)
+	s.muPeers.Unlock()
+}
+
+/**
 * Send
 * @param to *Client, tp int, message any
 * @return error
@@ -767,31 +792,6 @@ func (s *Node) Broadcast(destination []string, tp int, message any) {
 			_ = s.Send(client, tp, message)
 		}
 	}
-}
-
-/**
-* AddNode
-* @param addr string
-**/
-func (s *Node) AddNode(addr string) {
-	if addr == s.addr {
-		return
-	}
-
-	node := NewClient(addr)
-	node.isNode = true
-	node.onConnect = append(node.onConnect, func(c *Client) {
-		s.total.Add(1)
-	})
-	node.onDisconnect = append(node.onDisconnect, func(c *Client) {
-		s.total.Add(-1)
-	})
-
-	node.Connect()
-
-	s.muPeers.Lock()
-	s.peers = append(s.peers, node)
-	s.muPeers.Unlock()
 }
 
 /**

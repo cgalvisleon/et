@@ -627,7 +627,6 @@ func (s *Node) Close() {
 	}
 
 	logs.Log(packageName, mg.MSG_TCP_SHUTTING_DOWN)
-
 	s.cancel()
 
 	if s.ln != nil {

@@ -2,7 +2,6 @@ package ia
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
@@ -55,13 +54,46 @@ type Participant struct {
 	Role           Role      `json:"role"`
 }
 
+type MessageStatus struct {
+	CreatedAt time.Time     `json:"read_at"`
+	MessageID string        `json:"message_id"`
+	UserID    string        `json:"user_id"`
+	Status    StatusMessage `json:"status"`
+}
+
 type Message struct {
-	CreatedAt      time.Time   `json:"created_at"`
-	ID             string      `json:"id"`
-	ConversationID string      `json:"conversation_id"`
-	SenderID       string      `json:"sender_id"`
-	Type           TypeMessage `json:"type"`
-	Content        string      `json:"content"`
+	CreatedAt       time.Time                 `json:"created_at"`
+	ID              string                    `json:"id"`
+	ConversationID  string                    `json:"conversation_id"`
+	SenderID        string                    `json:"sender_id"`
+	Type            TypeMessage               `json:"type"`
+	Content         string                    `json:"content"`
+	MessageStatuses map[string]*MessageStatus `json:"message_statuses"`
+}
+
+func newMessage(conversationID, senderID string, tp TypeMessage, content string) *Message {
+	return &Message{
+		CreatedAt:       time.Now(),
+		ID:              utility.UUID(),
+		ConversationID:  conversationID,
+		SenderID:        senderID,
+		Type:            tp,
+		Content:         content,
+		MessageStatuses: map[string]*MessageStatus{},
+	}
+}
+
+/**
+* setStatus
+* @param userID string, status StatusMessage
+**/
+func (s *Message) setStatus(userID string, status StatusMessage) {
+	s.MessageStatuses[userID] = &MessageStatus{
+		CreatedAt: timezone.Now(),
+		MessageID: s.ID,
+		UserID:    userID,
+		Status:    status,
+	}
 }
 
 /**
@@ -83,23 +115,15 @@ func (s *Message) ToJson() (et.Json, error) {
 	return result, nil
 }
 
-type MessageStatus struct {
-	CreatedAt time.Time     `json:"read_at"`
-	MessageID string        `json:"message_id"`
-	UserID    string        `json:"user_id"`
-	Status    StatusMessage `json:"status"`
-}
-
 type Conversation struct {
-	CreatedAt       time.Time               `json:"created_at"`
-	UpdatedAt       time.Time               `json:"updated_at"`
-	ID              string                  `json:"id"`
-	Type            TypeConversation        `json:"type"`
-	Participants    map[string]*Participant `json:"participants"`
-	Messages        []*Message              `json:"messages"`
-	MessageStatuses []*MessageStatus        `json:"message_statuses"`
-	LastMessage     *Message                `json:"last_message"`
-	owner           *Conversations          `json:"-"`
+	CreatedAt    time.Time               `json:"created_at"`
+	UpdatedAt    time.Time               `json:"updated_at"`
+	ID           string                  `json:"id"`
+	Type         TypeConversation        `json:"type"`
+	Participants map[string]*Participant `json:"participants"`
+	Messages     []*Message              `json:"messages"`
+	LastMessage  *Message                `json:"last_message"`
+	owner        *Conversations          `json:"-"`
 }
 
 /**
@@ -142,18 +166,11 @@ func (s *Conversation) setMessage(to string, tp TypeMessage, content string) (et
 		s.Participants[userId] = participant
 	}
 
-	now := timezone.Now()
-	ms := &Message{
-		CreatedAt:      now,
-		ID:             reg.GenULID("message"),
-		ConversationID: s.ID,
-		SenderID:       to,
-		Type:           tp,
-		Content:        content,
-	}
+	ms := newMessage(s.ID, userId, tp, content)
+	ms.setStatus(userId, Sent)
 	s.Messages = append(s.Messages, ms)
 	s.LastMessage = ms
-	err := s.statusMessage(ms.ID, userId, Sent)
+	err := s.owner.setInstance(ms.ID, "messages", ms)
 	if err != nil {
 		return et.Item{}, err
 	}
@@ -169,28 +186,6 @@ func (s *Conversation) setMessage(to string, tp TypeMessage, content string) (et
 	}, nil
 }
 
-/**
-* statusMessage
-* @param messageId string, userId string, status StatusMessage
-* @return error
-**/
-func (s *Conversation) statusMessage(messageId string, userId string, status StatusMessage) error {
-	_, exists := s.Participants[userId]
-	if !exists {
-		return errors.New(msg.MSG_PARTICIPANT_NOT_FOUND)
-	}
-
-	now := timezone.Now()
-	messageStatus := &MessageStatus{
-		CreatedAt: now,
-		MessageID: messageId,
-		UserID:    userId,
-		Status:    status,
-	}
-	s.MessageStatuses = append(s.MessageStatuses, messageStatus)
-	return s.save()
-}
-
 type Conversations struct {
 	participantPrefix string                    `json:"-"`
 	getInstance       instances.GetInstanceFn   `json:"-"`
@@ -199,24 +194,26 @@ type Conversations struct {
 }
 
 /**
-* NewConversation
+* NewConversations
 * @param participantPrefix string, store instances.Store
 * @return (*Conversations, error)
 **/
-func NewConversation(participantPrefix string, store instances.Store) (*Conversations, error) {
+func NewConversations(participantPrefix string, store instances.Store) (*Conversations, error) {
 	if !utility.ValidStr(participantPrefix, 4, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ARG_REQUIRED, "participant_prefix")
+	}
+
+	if store == nil {
+		return nil, fmt.Errorf(msg.MSG_ARG_REQUIRED, "store")
 	}
 
 	result := &Conversations{
 		participantPrefix: participantPrefix,
 	}
 
-	if store != nil {
-		result.getInstance = store.Get
-		result.setInstance = store.Set
-		result.queryInstance = store.Query
-	}
+	result.getInstance = store.Get
+	result.setInstance = store.Set
+	result.queryInstance = store.Query
 
 	return result, nil
 }
@@ -244,15 +241,14 @@ func (s *Conversations) getConversation(id string, tp TypeConversation) (*Conver
 
 	now := timezone.Now()
 	resut := &Conversation{
-		CreatedAt:       now,
-		UpdatedAt:       now,
-		ID:              id,
-		Type:            tp,
-		Participants:    map[string]*Participant{},
-		Messages:        []*Message{},
-		MessageStatuses: []*MessageStatus{},
-		LastMessage:     &Message{},
-		owner:           s,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+		ID:           id,
+		Type:         tp,
+		Participants: map[string]*Participant{},
+		Messages:     []*Message{},
+		LastMessage:  &Message{},
+		owner:        s,
 	}
 
 	err = s.setInstance(id, "conversations", resut)
@@ -297,15 +293,35 @@ func (s *Conversations) getParticipant(phone string) (et.Json, error) {
 }
 
 /**
-* SendMessage
+* SetMessage
 * @param convID string, to string, tpContent TypeMessage, content string
-* @return *Conversation, error
+* @return et.Item, error
 **/
-func (s *Conversations) SendMessage(convID, to string, tpContent TypeMessage, content string) (et.Item, error) {
+func (s *Conversations) SetMessage(convID, to string, tpContent TypeMessage, content string) (et.Item, error) {
 	result, err := s.getConversation(convID, Direct)
 	if err != nil {
 		return et.Item{}, err
 	}
 
 	return result.setMessage(to, tpContent, content)
+}
+
+/**
+* StatusMessage
+* @param messageId string, userId string, status StatusMessage
+* @return error
+**/
+func (s *Conversations) StatusMessage(messageId string, userId string, status StatusMessage) error {
+	var ms *Message
+	exists, err := s.getInstance(messageId, &ms)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		return fmt.Errorf("message not found")
+	}
+
+	ms.setStatus(userId, status)
+	return s.setInstance(messageId, "messages", ms)
 }

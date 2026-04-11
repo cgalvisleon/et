@@ -6,6 +6,8 @@ import (
 	"sync"
 
 	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
@@ -16,26 +18,37 @@ import (
 type Agents struct {
 	agents        map[string]*Agent         `json:"-"`
 	mu            sync.RWMutex              `json:"-"`
+	conversations *Conversations            `json:"-"`
 	getInstance   instances.GetInstanceFn   `json:"-"`
 	setInstance   instances.SetInstanceFn   `json:"-"`
 	queryInstance instances.QueryInstanceFn `json:"-"`
 	isDebug       bool                      `json:"-"`
 }
 
-func New(store instances.Store) *Agents {
+func New(store instances.Store) (*Agents, error) {
+	err := event.Load()
+	if err != nil {
+		return nil, err
+	}
+
+	conversations, err := NewConversations("contacts", store)
+	if err != nil {
+		return nil, err
+	}
+
 	result := &Agents{
-		agents:  make(map[string]*Agent),
-		mu:      sync.RWMutex{},
-		isDebug: envar.GetBool("DEBUG", false),
+		agents:        make(map[string]*Agent),
+		mu:            sync.RWMutex{},
+		conversations: conversations,
+		isDebug:       envar.GetBool("DEBUG", false),
 	}
 
-	if store != nil {
-		result.getInstance = store.Get
-		result.setInstance = store.Set
-		result.queryInstance = store.Query
-	}
+	result.getInstance = store.Get
+	result.setInstance = store.Set
+	result.queryInstance = store.Query
+	result.eventInit()
 
-	return result
+	return result, nil
 }
 
 /**
@@ -75,8 +88,8 @@ func (s *Agents) newAgent(tag string) *Agent {
 
 	id := fmt.Sprintf("ia:%s", tag)
 	result = newAgent(s, id, tag)
-	result.Up()
-	result.Save()
+	result.up()
+	result.save()
 	s.addAgent(result)
 
 	return result
@@ -100,7 +113,7 @@ func (s *Agents) loadAgent(tag string) (*Agent, error) {
 		}
 
 		if exists {
-			result.Up()
+			result.up()
 			s.addAgent(result)
 			if s.isDebug {
 				logs.Log(packageName, "load:", result.ToString())
@@ -111,6 +124,48 @@ func (s *Agents) loadAgent(tag string) (*Agent, error) {
 	}
 
 	result = s.newAgent(tag)
+	return result, nil
+}
+
+/**
+* setModel
+* @param tag string, model string
+* @return (*Agent, error)
+**/
+func (s *Agents) setModel(tag string, model string) (*Agent, error) {
+	if !utility.ValidStr(tag, 0, []string{""}) {
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "tag")
+	}
+	if !utility.ValidStr(model, 0, []string{""}) {
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "model")
+	}
+
+	result, ok := s.agents[tag]
+	if !ok {
+		return nil, fmt.Errorf(msg.MSG_AGENT_NOT_FOUND, tag)
+	}
+	result.Model = model
+	return result, nil
+}
+
+/**
+* setContext
+* @param tag string, context string
+* @return (*Agent, error)
+**/
+func (s *Agents) setContext(tag string, context string) (*Agent, error) {
+	if !utility.ValidStr(tag, 0, []string{""}) {
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "tag")
+	}
+	if !utility.ValidStr(context, 0, []string{""}) {
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "context")
+	}
+
+	result, ok := s.agents[tag]
+	if !ok {
+		return nil, fmt.Errorf(msg.MSG_AGENT_NOT_FOUND, tag)
+	}
+	result.Context = context
 	return result, nil
 }
 
@@ -171,12 +226,16 @@ func (s *Agents) Load(agents []string) error {
 * @return error
 **/
 func (s *Agents) SetContext(tag, context string) error {
-	result, ok := s.agents[tag]
-	if !ok {
-		return fmt.Errorf(msg.MSG_AGENT_NOT_FOUND, tag)
+	result, err := s.setContext(tag, context)
+	if err != nil {
+		return err
 	}
-	result.Context = context
-	return result.Save()
+
+	event.Publish(EVENT_AGENT_SET_CONTEXT, et.Json{
+		"tag":     tag,
+		"context": context,
+	})
+	return result.save()
 }
 
 /**
@@ -185,12 +244,16 @@ func (s *Agents) SetContext(tag, context string) error {
 * @return error
 **/
 func (s *Agents) SetModel(tag, model string) error {
-	result, ok := s.agents[tag]
-	if !ok {
-		return fmt.Errorf(msg.MSG_AGENT_NOT_FOUND, tag)
+	result, err := s.setModel(tag, model)
+	if err != nil {
+		return err
 	}
-	result.Model = model
-	return result.Save()
+
+	event.Publish(EVENT_AGENT_SET_MODEL, et.Json{
+		"tag":   tag,
+		"model": model,
+	})
+	return result.save()
 }
 
 /**
@@ -239,7 +302,7 @@ func (s *Agents) Conversations(agent, convID, prompt string) (string, string, er
 		return "", "", fmt.Errorf(msg.MSG_AGENT_NOT_FOUND, agent)
 	}
 
-	response, convID, err := ag.Conversations(convID, prompt)
+	response, convID, err := ag.conversations(convID, prompt)
 	if err != nil {
 		return "", "", err
 	}

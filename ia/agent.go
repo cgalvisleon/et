@@ -7,7 +7,6 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/openai/openai-go/v3"
@@ -102,13 +101,11 @@ func (s *Agent) ToString() string {
 }
 
 /**
-* Save
+* save
 * @return error
 **/
-func (s *Agent) Save() error {
+func (s *Agent) save() error {
 	data := s.ToJson()
-	event.Publish(EVENT_AGENT_STATUS, data)
-
 	if s.isDebug {
 		logs.Log(packageName, "save:", data.ToString())
 	}
@@ -117,9 +114,9 @@ func (s *Agent) Save() error {
 }
 
 /**
-* Up
+* up
 **/
-func (s *Agent) Up() {
+func (s *Agent) up() {
 	key := envar.GetStr("OPENAI_API_KEY", "")
 	s.client = openai.NewClient(
 		option.WithAPIKey(key),
@@ -127,11 +124,11 @@ func (s *Agent) Up() {
 }
 
 /**
-* Conversations
+* conversations
 * @param convID, prompt string
 * @return (string, string, error)
 **/
-func (s *Agent) Conversations(convID, prompt string) (string, string, error) {
+func (s *Agent) conversations(convID, prompt string) (string, string, error) {
 	if convID == "" {
 		conv, _ := s.client.Conversations.New(s.ctx, conversations.ConversationNewParams{})
 		convID = conv.ID

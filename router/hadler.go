@@ -7,7 +7,6 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
-	"github.com/go-chi/chi/v5"
 )
 
 /**

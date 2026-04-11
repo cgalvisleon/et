@@ -1,17 +1,23 @@
 package ia
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/conversations"
 	"github.com/openai/openai-go/v3/option"
+	"github.com/openai/openai-go/v3/responses"
 )
 
 const contextDefault = `Eres un asistente que SOLO puede responder con base en el CONTEXTO dado.
+{{contexto}}
 
 Reglas obligatorias:
 1. Usa únicamente información del CONTEXTO.
@@ -21,14 +27,38 @@ Reglas obligatorias:
 "No tengo suficiente información para responder a tu pregunta."
 `
 
+const modelDefault = openai.ChatModelGPT4oMini
+
 type Agent struct {
-	ID      string            `json:"id"`
-	Tag     string            `json:"tag"`
-	Context map[string]string `json:"context"`
-	Model   map[string]string `json:"model"`
-	client  openai.Client     `json:"-"`
-	owner   *Agents           `json:"-"`
-	isDebug bool              `json:"-"`
+	ID      string          `json:"id"`
+	Tag     string          `json:"tag"`
+	Context string          `json:"context"`
+	Model   string          `json:"model"`
+	client  openai.Client   `json:"-"`
+	owner   *Agents         `json:"-"`
+	ctx     context.Context `json:"-"`
+	isDebug bool            `json:"-"`
+}
+
+/**
+* newAgent
+* @param owner *Agents, id, tag string
+* @return *Agent
+**/
+func newAgent(owner *Agents, id, tag string) *Agent {
+	if id == "" {
+		id = reg.ULID()
+	}
+
+	return &Agent{
+		ID:      id,
+		Tag:     tag,
+		Context: contextDefault,
+		Model:   modelDefault,
+		owner:   owner,
+		ctx:     context.Background(),
+		isDebug: owner.isDebug,
+	}
 }
 
 /**
@@ -83,11 +113,7 @@ func (s *Agent) Save() error {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	if s.owner != nil && s.owner.setInstance != nil {
-		return s.owner.setInstance(s.ID, s.Tag, s)
-	}
-
-	return nil
+	return s.owner.saveAgent(s)
 }
 
 /**
@@ -95,8 +121,37 @@ func (s *Agent) Save() error {
 **/
 func (s *Agent) Up() {
 	key := envar.GetStr("OPENAI_API_KEY", "")
-	client := openai.NewClient(
+	s.client = openai.NewClient(
 		option.WithAPIKey(key),
 	)
-	s.client = client
+}
+
+/**
+* Conversations
+* @param convID, prompt string
+* @return (string, string, error)
+**/
+func (s *Agent) Conversations(convID, prompt string) (string, string, error) {
+	if convID == "" {
+		conv, _ := s.client.Conversations.New(s.ctx, conversations.ConversationNewParams{})
+		convID = conv.ID
+	}
+
+	prompt = fmt.Sprintf(s.Context, prompt)
+	result, err := s.client.Responses.New(s.ctx, responses.ResponseNewParams{
+		Model: s.Model,
+		Input: responses.ResponseNewParamsInputUnion{
+			OfString: openai.String(prompt),
+		},
+		Conversation: responses.ResponseNewParamsConversationUnion{
+			OfConversationObject: &responses.ResponseConversationParam{
+				ID: convID,
+			},
+		},
+	})
+	if err != nil {
+		return "", convID, err
+	}
+
+	return result.OutputText(), convID, nil
 }

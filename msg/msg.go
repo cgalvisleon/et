@@ -81,6 +81,7 @@ var (
 	MSG_AGENT_NOT_FOUND                = "agent %s not found"
 	MSG_STORE_REQUIRED                 = "store is required in production mode"
 	MSG_CONNECTION_NOT_ESTABLISHED     = "connection not established"
+	MSG_PARTICIPANT_NOT_FOUND          = "participant not found"
 )
 
 func init() {
@@ -165,5 +166,6 @@ func init() {
 		MSG_AGENT_NOT_FOUND = "agente %s no encontrado"
 		MSG_STORE_REQUIRED = "store es requerido en modo producción"
 		MSG_CONNECTION_NOT_ESTABLISHED = "connection not established"
+		MSG_PARTICIPANT_NOT_FOUND = "participant not found"
 	}
 }

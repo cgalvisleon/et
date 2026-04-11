@@ -4,31 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-	"sync"
 
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
-	"github.com/go-chi/chi"
 )
-
-func New(store instances.Store) *Agents {
-	result := &Agents{
-		agents:  make(map[string]*Agent),
-		mu:      sync.RWMutex{},
-		isDebug: envar.GetBool("DEBUG", false),
-	}
-
-	if store != nil {
-		result.getInstance = store.Get
-		result.setInstance = store.Set
-		result.queryInstance = store.Query
-	}
-
-	return result
-}
 
 /**
 * HttpGet

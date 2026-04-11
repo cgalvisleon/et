@@ -5,34 +5,113 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/conversations"
-	"github.com/openai/openai-go/v3/responses"
 )
 
 type Agents struct {
-	agents        map[string]*Agent
-	mu            sync.RWMutex
-	getInstance   instances.GetInstanceFn
-	setInstance   instances.SetInstanceFn
-	queryInstance instances.QueryInstanceFn
-	isDebug       bool
+	agents        map[string]*Agent         `json:"-"`
+	mu            sync.RWMutex              `json:"-"`
+	getInstance   instances.GetInstanceFn   `json:"-"`
+	setInstance   instances.SetInstanceFn   `json:"-"`
+	queryInstance instances.QueryInstanceFn `json:"-"`
+	isDebug       bool                      `json:"-"`
+}
+
+func New(store instances.Store) *Agents {
+	result := &Agents{
+		agents:  make(map[string]*Agent),
+		mu:      sync.RWMutex{},
+		isDebug: envar.GetBool("DEBUG", false),
+	}
+
+	if store != nil {
+		result.getInstance = store.Get
+		result.setInstance = store.Set
+		result.queryInstance = store.Query
+	}
+
+	return result
 }
 
 /**
-* add - Agrega un agente
+* addAgent
 * @param agent *Agent
 **/
-func (s *Agents) add(agent *Agent) {
+func (s *Agents) addAgent(agent *Agent) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.agents[agent.ID] = agent
+	s.agents[agent.Tag] = agent
+}
+
+/**
+* saveAgent
+* @param agent *Agent
+* @return error
+**/
+func (s *Agents) saveAgent(agent *Agent) error {
+	if s.setInstance != nil {
+		return s.setInstance(agent.ID, agent.Tag, agent)
+	}
+
+	return nil
+}
+
+/**
+* newAgent
+* @param tag string
+* @return *Agent
+**/
+func (s *Agents) newAgent(tag string) *Agent {
+	result, exists := s.Get(tag)
+	if exists {
+		return result
+	}
+
+	id := fmt.Sprintf("ia:%s", tag)
+	result = newAgent(s, id, tag)
+	result.Up()
+	result.Save()
+	s.addAgent(result)
+
+	return result
+}
+
+/**
+* loadAgent
+* @param tag string
+* @return (*Agent, error)
+**/
+func (s *Agents) loadAgent(tag string) (*Agent, error) {
+	result, exists := s.Get(tag)
+	if exists {
+		return result, nil
+	}
+
+	if s.getInstance != nil {
+		exists, err := s.getInstance(tag, &result)
+		if err != nil {
+			return nil, err
+		}
+
+		if exists {
+			result.Up()
+			s.addAgent(result)
+			if s.isDebug {
+				logs.Log(packageName, "load:", result.ToString())
+			}
+
+			return result, nil
+		}
+	}
+
+	result = s.newAgent(tag)
+	return result, nil
 }
 
 /**
@@ -41,11 +120,11 @@ func (s *Agents) add(agent *Agent) {
 * @return *Agent, bool
 **/
 func (s *Agents) Get(tag string) (*Agent, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	result, ok := s.agents[tag]
-	return result, ok
+	result, exists := s.agents[tag]
+	return result, exists
 }
 
 /**
@@ -71,82 +150,15 @@ func (s *Agents) Count() int {
 }
 
 /**
-* new
-* @param id string
-* @return *Agent
-**/
-func (s *Agents) new(id string) *Agent {
-	if id == "" {
-		id = reg.ULID()
-	}
-	result := &Agent{
-		ID:      id,
-		Tag:     "ia:agent",
-		Context: make(map[string]string),
-		Model:   make(map[string]string),
-		isDebug: s.isDebug,
-		owner:   s,
-	}
-	result.Context["default"] = contextDefault
-	result.Model["default"] = openai.ChatModelGPT4oMini
-	result.Up()
-
-	return result
-}
-
-/**
-* load
-* @param tag string
-* @return (*Agent, bool)
-**/
-func (s *Agents) load(tag string) (*Agent, bool) {
-	result, exists := s.Get(tag)
-	if exists {
-		return result, true
-	}
-
-	if s.getInstance != nil {
-		exists, err := s.getInstance(tag, &result)
-		if err != nil {
-			return nil, false
-		}
-
-		if !exists {
-			return nil, false
-		}
-
-		result.Up()
-
-		if s.isDebug {
-			logs.Log(packageName, "load:", result.ToString())
-		}
-
-		return result, true
-	}
-
-	return nil, false
-}
-
-/**
 * Load - Carga los agentes
 * @param agents []string
 * @return error
 **/
 func (s *Agents) Load(agents []string) error {
-	if s.setInstance != nil {
-		for _, name := range agents {
-			ag, exist := s.load(name)
-			if exist {
-				s.add(ag)
-				continue
-			}
-
-			ag = s.new(name)
-			err := ag.Save()
-			if err != nil {
-				return err
-			}
-			s.add(ag)
+	for _, name := range agents {
+		_, err := s.loadAgent(name)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -158,12 +170,12 @@ func (s *Agents) Load(agents []string) error {
 * @param tag string, context string
 * @return error
 **/
-func (s *Agents) SetContext(tag, key, context string) error {
+func (s *Agents) SetContext(tag, context string) error {
 	result, ok := s.agents[tag]
 	if !ok {
 		return fmt.Errorf(msg.MSG_AGENT_NOT_FOUND, tag)
 	}
-	result.Context[key] = context
+	result.Context = context
 	return result.Save()
 }
 
@@ -172,12 +184,12 @@ func (s *Agents) SetContext(tag, key, context string) error {
 * @param tag string, model string
 * @return error
 **/
-func (s *Agents) SetModel(tag, key, model string) error {
+func (s *Agents) SetModel(tag, model string) error {
 	result, ok := s.agents[tag]
 	if !ok {
 		return fmt.Errorf(msg.MSG_AGENT_NOT_FOUND, tag)
 	}
-	result.Model[key] = model
+	result.Model = model
 	return result.Save()
 }
 
@@ -209,11 +221,11 @@ func (s *Agents) Embed(tag string, text string) ([]float64, error) {
 }
 
 /**
-* Conversations - Obtiene las conversaciones del agente
-* @param agent string, tag string, convID string, prompt string
+* Conversations
+* @param agent string, convID string, prompt string
 * @return (string, error)
 **/
-func (s *Agents) Conversations(agent, tag, convID, prompt string) (string, string, error) {
+func (s *Agents) Conversations(agent, convID, prompt string) (string, string, error) {
 	if !utility.ValidStr(agent, 1, []string{}) {
 		return "", "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "agent")
 	}
@@ -222,47 +234,16 @@ func (s *Agents) Conversations(agent, tag, convID, prompt string) (string, strin
 		return "", "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "prompt")
 	}
 
-	instance, ok := s.agents[agent]
+	ag, ok := s.agents[agent]
 	if !ok {
 		return "", "", fmt.Errorf(msg.MSG_AGENT_NOT_FOUND, agent)
 	}
 
-	model, ok := instance.Model["default"]
-	if !ok {
-		return "", "", fmt.Errorf(msg.MSG_MODEL_NOT_FOUND, "default")
-	}
-
-	if _, ok := instance.Model[tag]; ok {
-		model = instance.Model[tag]
-	}
-
-	ctx := context.Background()
-	client := instance.client
-
-	if convID == "" {
-		conv, _ := client.Conversations.New(ctx, conversations.ConversationNewParams{})
-		convID = conv.ID
-	}
-
-	context, ok := instance.Context[tag]
-	if ok {
-		prompt = fmt.Sprintf(context, prompt)
-	}
-
-	result, err := client.Responses.New(ctx, responses.ResponseNewParams{
-		Model: model,
-		Input: responses.ResponseNewParamsInputUnion{
-			OfString: openai.String(prompt),
-		},
-		Conversation: responses.ResponseNewParamsConversationUnion{
-			OfConversationObject: &responses.ResponseConversationParam{
-				ID: convID,
-			},
-		},
-	})
+	response, convID, err := ag.Conversations(convID, prompt)
 	if err != nil {
-		return "", convID, err
+		return "", "", err
 	}
 
-	return result.OutputText(), convID, nil
+	return response, convID, nil
+
 }

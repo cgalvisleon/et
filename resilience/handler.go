@@ -12,7 +12,6 @@ import (
 	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
-	"github.com/go-chi/chi"
 )
 
 /**

@@ -44,7 +44,7 @@ func New(store instances.Store) (*Resilience, error) {
 * @params w http.ResponseWriter, r *http.Request
 **/
 func (s *Resilience) HttpGet(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id := request.URLParam(r, "id").Str()
 	var instance Instance
 	exists, err := s.getInstance(id, &instance)
 	if err != nil {
@@ -71,7 +71,7 @@ func (s *Resilience) HttpGet(w http.ResponseWriter, r *http.Request) {
 * @params w http.ResponseWriter, r *http.Request
 **/
 func (s *Resilience) HttpState(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id := request.URLParam(r, "id").Str()
 	var instance Instance
 	exists, err := s.getInstance(id, &instance)
 	if err != nil {
@@ -111,7 +111,7 @@ func (s *Resilience) HttpState(w http.ResponseWriter, r *http.Request) {
 * @params w http.ResponseWriter, r *http.Request
 **/
 func (s *Resilience) HttpSetParams(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id := request.URLParam(r, "id").Str()
 	var instance Instance
 	exists, err := s.getInstance(id, &instance)
 	if err != nil {

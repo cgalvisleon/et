@@ -48,7 +48,7 @@ func HttpSet(w http.ResponseWriter, r *http.Request) {
 * @param w http.ResponseWriter, r *http.Request
 **/
 func HttpGet(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id := request.URLParam(r, "id").Str()
 	if getFn == nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, "get function not defined")
 		return
@@ -71,7 +71,7 @@ func HttpGet(w http.ResponseWriter, r *http.Request) {
 * @param w http.ResponseWriter, r *http.Request
 **/
 func HttpDelete(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id := request.URLParam(r, "id").Str()
 	RemoveApiGateway(id)
 	if deleteFn == nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, "delete function not defined")

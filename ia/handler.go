@@ -35,7 +35,7 @@ func New(store instances.Store) *Agents {
 * @params w http.ResponseWriter, r *http.Request
 **/
 func (s *Agents) HttpGet(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id := request.URLParam(r, "id").Str()
 	var instance Agent
 	exists, err := s.getInstance(id, &instance)
 	if err != nil {
@@ -62,7 +62,7 @@ func (s *Agents) HttpGet(w http.ResponseWriter, r *http.Request) {
 * @params w http.ResponseWriter, r *http.Request
 **/
 func (s *Agents) HttpSetParams(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id := request.URLParam(r, "id").Str()
 	var instance Agent
 	exists, err := s.getInstance(id, &instance)
 	if err != nil {

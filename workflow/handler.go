@@ -13,7 +13,6 @@ import (
 	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/resilience"
 	"github.com/cgalvisleon/et/response"
-	"github.com/go-chi/chi/v5"
 )
 
 /**
@@ -53,7 +52,7 @@ func New(store instances.Store) (*WorkFlow, error) {
 * @params w http.ResponseWriter, r *http.Request
 **/
 func (s *WorkFlow) HttpGet(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id := request.URLParam(r, "id").Str()
 	var instance Instance
 	exists, err := s.getInstance(id, &instance)
 	if err != nil {
@@ -80,7 +79,7 @@ func (s *WorkFlow) HttpGet(w http.ResponseWriter, r *http.Request) {
 * @params w http.ResponseWriter, r *http.Request
 **/
 func (s *WorkFlow) HttpState(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id := request.URLParam(r, "id").Str()
 	var instance Instance
 	exists, err := s.getInstance(id, &instance)
 	if err != nil {
@@ -120,7 +119,7 @@ func (s *WorkFlow) HttpState(w http.ResponseWriter, r *http.Request) {
 * @params w http.ResponseWriter, r *http.Request
 **/
 func (s *WorkFlow) HttpSetParams(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id := request.URLParam(r, "id").Str()
 	var instance Instance
 	exists, err := s.getInstance(id, &instance)
 	if err != nil {

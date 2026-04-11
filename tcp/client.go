@@ -172,7 +172,11 @@ func (s *Client) disconnect() {
 	// 🔥 limpiar requests pendientes
 	s.mu["messages"].Lock()
 	for id, ch := range s.messages {
-		close(ch)
+		select {
+		case <-ch:
+		default:
+			close(ch)
+		}
 		delete(s.messages, id)
 	}
 	s.mu["messages"].Unlock()
@@ -310,6 +314,7 @@ func (s *Client) inbox(bt []byte) {
 		select {
 		case ch <- ms:
 		default:
+		case <-s.ctx.Done():
 		}
 	}
 
@@ -342,7 +347,14 @@ func (s *Client) request(ms *Message) (*Message, error) {
 		return nil, s.error(err)
 	}
 
-	timer := time.NewTimer(ms.Timeout)
+	timeout := ms.Timeout
+	if timeout <= 0 {
+		timeout = s.timeout
+	}
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 
 	select {

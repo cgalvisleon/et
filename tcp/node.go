@@ -18,6 +18,7 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/logs"
 	mg "github.com/cgalvisleon/et/msg"
 )
@@ -44,6 +45,10 @@ func init() {
 	}
 }
 
+type Config struct {
+	Nodes []string `json:"nodes"`
+}
+
 type Node struct {
 	ctx            context.Context          `json:"-"`
 	cancel         context.CancelFunc       `json:"-"`
@@ -55,17 +60,15 @@ type Node struct {
 	register       chan *Client             `json:"-"`
 	unregister     chan *Client             `json:"-"`
 	clients        map[string]*Client       `json:"-"`
-	muClients      sync.Mutex               `json:"-"`
 	workerPool     chan struct{}            `json:"-"`
 	requests       map[string]chan *Message `json:"-"`
-	muRequests     sync.Mutex               `json:"-"`
 	proxy          *Balancer                `json:"-"`
 	peers          []*Client                `json:"-"`
-	muPeers        sync.Mutex               `json:"-"`
 	method         map[string]Service       `json:"-"`
 	raft           *Raft                    `json:"-"`
 	closed         atomic.Bool              `json:"-"`
 	configFile     string                   `json:"-"`
+	mu             map[string]*sync.Mutex   `json:"-"`
 	onConnect      []func(*Client)          `json:"-"`
 	onDisconnect   []func(*Client)          `json:"-"`
 	onError        []func(*Client, error)   `json:"-"`
@@ -92,28 +95,36 @@ func NewNode(port int) *Node {
 	workerCount := envar.GetInt("WORKER_COUNT", 1000)
 	ctx, cancel := context.WithCancel(context.Background())
 	result := &Node{
-		ctx:        ctx,
-		cancel:     cancel,
-		addr:       addr,
-		port:       port,
-		timeout:    timeout,
-		register:   make(chan *Client, 64),
-		unregister: make(chan *Client, 64),
-		clients:    make(map[string]*Client),
-		muClients:  sync.Mutex{},
-		workerPool: make(chan struct{}, workerCount), // 🚀 máximo 100 workers concurrentes
-		requests:   make(map[string]chan *Message),
-		muRequests: sync.Mutex{},
-		peers:      make([]*Client, 0),
-		muPeers:    sync.Mutex{},
-		method:     make(map[string]Service),
-		index:      atomic.Uint64{},
-		total:      atomic.Int64{},
-		configFile: envar.GetStr("CONFIG_FILE", "./config.json"),
+		ctx:            ctx,
+		cancel:         cancel,
+		addr:           addr,
+		port:           port,
+		timeout:        timeout,
+		register:       make(chan *Client, 64),
+		unregister:     make(chan *Client, 64),
+		clients:        make(map[string]*Client),
+		workerPool:     make(chan struct{}, workerCount), // 🚀 máximo 100 workers concurrentes
+		requests:       make(map[string]chan *Message),
+		peers:          make([]*Client, 0),
+		method:         make(map[string]Service),
+		index:          atomic.Uint64{},
+		total:          atomic.Int64{},
+		configFile:     envar.GetStr("CONFIG_FILE", "./config.json"),
+		mu:             make(map[string]*sync.Mutex),
+		onConnect:      make([]func(*Client), 0),
+		onDisconnect:   make([]func(*Client), 0),
+		onError:        make([]func(*Client, error), 0),
+		onInbox:        make([]func(*Msg), 0),
+		onSend:         make([]func(*Msg), 0),
+		onBecomeLeader: make([]func(*Node), 0),
+		onChangeLeader: make([]func(*Node), 0),
 	}
 	result.mode.Store(Follower)
 	result.Mount(newTcpService(result))
 	result.raft = newRaft(result)
+	result.mu["clients"] = &sync.Mutex{}
+	result.mu["requests"] = &sync.Mutex{}
+	result.mu["peers"] = &sync.Mutex{}
 
 	return result
 }
@@ -151,18 +162,12 @@ func (s *Node) run() {
 		for {
 			conn, err := s.ln.Accept()
 			if err != nil {
-
-				// Si estamos cerrando, salir limpio
 				if s.ctx.Err() != nil || s.closed.Load() {
 					return
 				}
-
-				// Listener cerrado
 				if errors.Is(err, net.ErrClosed) {
 					return
 				}
-
-				// Error transitorio → continuar
 				continue
 			}
 
@@ -176,14 +181,10 @@ func (s *Node) run() {
 
 			select {
 			case s.register <- client:
-				// OK
-
 			case <-s.ctx.Done():
 				_ = conn.Close()
 				return
-
 			default:
-				// Si el canal está lleno evitamos bloquear
 				_ = conn.Close()
 			}
 		}
@@ -209,9 +210,9 @@ func (s *Node) Error(c *Client, err error) error {
 * @param client *Client
 **/
 func (s *Node) connect(client *Client) {
-	s.muClients.Lock()
+	s.mu["clients"].Lock()
 	s.clients[client.Addr] = client
-	s.muClients.Unlock()
+	s.mu["clients"].Unlock()
 
 	s.handle(client)
 	logs.Logf(packageName, mg.MSG_TCP_CONNECTED_CLIENT, client.Addr)
@@ -226,9 +227,9 @@ func (s *Node) connect(client *Client) {
 * @param client *Client
 **/
 func (s *Node) disconnect(client *Client) {
-	s.muClients.Lock()
+	s.mu["clients"].Lock()
 	delete(s.clients, client.Addr)
-	s.muClients.Unlock()
+	s.mu["clients"].Unlock()
 
 	logs.Logf(packageName, mg.MSG_TCP_DISCONNECTED_CLIENT, client.Addr)
 
@@ -241,13 +242,13 @@ func (s *Node) disconnect(client *Client) {
 * closeAllClients
 **/
 func (s *Node) closeAllClients() {
-	s.muClients.Lock()
+	s.mu["clients"].Lock()
 	clients := make([]*Client, 0, len(s.clients))
 	for _, c := range s.clients {
 		clients = append(clients, c)
 	}
 	s.clients = make(map[string]*Client)
-	s.muClients.Unlock()
+	s.mu["clients"].Unlock()
 
 	for _, c := range clients {
 		c.Close()
@@ -260,9 +261,9 @@ func (s *Node) closeAllClients() {
 * @return error
 **/
 func (s *Node) send(msg *Msg) error {
-	s.muClients.Lock()
+	s.mu["clients"].Lock()
 	c, ok := s.clients[msg.To.Addr]
-	s.muClients.Unlock()
+	s.mu["clients"].Unlock()
 
 	if !ok || c == nil {
 		return fmt.Errorf(mg.MSG_TCP_CLIENT_NOT_FOUND, msg.To.Addr)
@@ -287,9 +288,9 @@ func (s *Node) send(msg *Msg) error {
 * @param msg *Message
 **/
 func (s *Node) inbox(msg *Msg) {
-	s.muRequests.Lock()
+	s.mu["requests"].Lock()
 	ch, ok := s.requests[msg.ID()]
-	s.muRequests.Unlock()
+	s.mu["requests"].Unlock()
 
 	if ok {
 		select {
@@ -405,9 +406,9 @@ func (s *Node) response(to *Client, id string, msg *Message) error {
 * @return *Message, error
 **/
 func (s *Node) request(to *Client, m *Message) (*Message, error) {
-	s.muClients.Lock()
+	s.mu["clients"].Lock()
 	_, ok := s.clients[to.Addr]
-	s.muClients.Unlock()
+	s.mu["clients"].Unlock()
 
 	if !ok {
 		return nil, fmt.Errorf(mg.MSG_TCP_CLIENT_NOT_FOUND, to.Addr)
@@ -415,32 +416,32 @@ func (s *Node) request(to *Client, m *Message) (*Message, error) {
 
 	ch := make(chan *Message, 1)
 
-	s.muRequests.Lock()
+	s.mu["requests"].Lock()
 	s.requests[m.ID] = ch
-	s.muRequests.Unlock()
+	s.mu["requests"].Unlock()
 
 	err := s.send(&Msg{
 		To:  to,
 		Msg: m,
 	})
 	if err != nil {
-		s.muRequests.Lock()
+		s.mu["requests"].Lock()
 		delete(s.requests, m.ID) // 🔥 cleanup correcto
-		s.muRequests.Unlock()
+		s.mu["requests"].Unlock()
 		return nil, err
 	}
 
 	select {
 	case resp := <-ch:
-		s.muRequests.Lock()
+		s.mu["requests"].Lock()
 		delete(s.requests, m.ID)
-		s.muRequests.Unlock()
+		s.mu["requests"].Unlock()
 		return resp, nil
 
 	case <-time.After(s.timeout):
-		s.muRequests.Lock()
+		s.mu["requests"].Lock()
 		delete(s.requests, m.ID)
-		s.muRequests.Unlock()
+		s.mu["requests"].Unlock()
 		return nil, errors.New(mg.MSG_TCP_TIMEOUT)
 	}
 }
@@ -562,8 +563,8 @@ func (s *Node) newClient(conn net.Conn) *Client {
 * @return *Client
 **/
 func (s *Node) Next() *Client {
-	s.muPeers.Lock()
-	defer s.muPeers.Unlock()
+	s.mu["peers"].Lock()
+	defer s.mu["peers"].Unlock()
 
 	n := uint64(len(s.peers))
 	for i := uint64(0); i < n; i++ {
@@ -581,9 +582,18 @@ func (s *Node) Next() *Client {
 **/
 func (s *Node) electionLoop() error {
 	time.Sleep(300 * time.Millisecond)
-	config, err := getConfig(s.configFile)
+	var config *Config
+	err := file.Read(s.configFile, &config)
 	if err != nil {
 		return err
+	}
+
+	if config == nil {
+		config = &Config{
+			Nodes: []string{},
+		}
+
+		file.Write(s.configFile, config)
 	}
 
 	for _, node := range config.Nodes {
@@ -662,9 +672,9 @@ func (s *Node) AddNode(addr string) {
 
 	node.Connect()
 
-	s.muPeers.Lock()
+	s.mu["peers"].Lock()
 	s.peers = append(s.peers, node)
-	s.muPeers.Unlock()
+	s.mu["peers"].Unlock()
 }
 
 /**
@@ -778,9 +788,9 @@ func (s *Node) ResponseError(msg *Msg, err error) error {
 **/
 func (s *Node) Broadcast(destination []string, tp TpMessage, message any) {
 	for _, addr := range destination {
-		s.muClients.Lock()
+		s.mu["clients"].Lock()
 		client, ok := s.clients[addr]
-		s.muClients.Unlock()
+		s.mu["clients"].Unlock()
 
 		if !ok || client == nil {
 			continue
@@ -797,8 +807,8 @@ func (s *Node) Broadcast(destination []string, tp TpMessage, message any) {
 * @param addr string
 **/
 func (s *Node) RemoveNode(addr string) {
-	s.muPeers.Lock()
-	defer s.muPeers.Unlock()
+	s.mu["peers"].Lock()
+	defer s.mu["peers"].Unlock()
 
 	idx := slices.IndexFunc(s.peers, func(e *Client) bool { return e.Addr == addr })
 	if idx != -1 {
@@ -812,8 +822,8 @@ func (s *Node) RemoveNode(addr string) {
 * @return []*Client
 **/
 func (s *Node) GetPeers() []*Client {
-	s.muPeers.Lock()
-	defer s.muPeers.Unlock()
+	s.mu["peers"].Lock()
+	defer s.mu["peers"].Unlock()
 
 	result := make([]*Client, len(s.peers))
 	copy(result, s.peers)

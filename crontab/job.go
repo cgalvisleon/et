@@ -9,6 +9,7 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/robfig/cron/v3"
@@ -18,7 +19,7 @@ type JobStatus string
 
 const (
 	Pending  JobStatus = "pending"
-	Prepared JobStatus = "prepared"
+	Awaiting JobStatus = "awaiting"
 	Running  JobStatus = "running"
 	Done     JobStatus = "done"
 	Failed   JobStatus = "failed"
@@ -48,8 +49,34 @@ type Job struct {
 	Duration    time.Duration `json:"duration"`
 	idx         cron.EntryID  `json:"-"`
 	shot        *time.Timer   `json:"-"`
-	jobs        *Jobs         `json:"-"`
+	owner       *Crontab      `json:"-"`
 	mu          *sync.Mutex   `json:"-"`
+}
+
+/**
+* newJob
+* @param owner *Crontab, tp TypeJob, tag string, spec string, channel string, params et.Json, repetitions int
+* @return *Job
+**/
+func newJob(owner *Crontab, tp TypeJob, tag, spec, channel string, params et.Json, repetitions int) *Job {
+	result := &Job{
+		ID:          reg.UUID(),
+		Type:        tp,
+		Tag:         tag,
+		Channel:     channel,
+		Params:      params,
+		Spec:        spec,
+		Started:     false,
+		Status:      Pending,
+		HostName:    hostName,
+		Attempts:    0,
+		Repetitions: repetitions,
+		idx:         -1,
+		owner:       owner,
+		mu:          &sync.Mutex{},
+	}
+
+	return result
 }
 
 /**
@@ -101,45 +128,59 @@ func (s *Job) Save() error {
 /**
 * setStatus
 * @param status JobStatus
-* @return void
+* @return error
 **/
-func (s *Job) setStatus(status JobStatus) {
+func (s *Job) setStatus(status JobStatus) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.Status = status
-	logs.Logf(packageName, fmt.Sprintf("Status: %s | job: %s | host: %s | attempt: %d", status, s.Tag, s.HostName, s.Attempts))
-	go s.Save()
+	logs.Logf(packageName, fmt.Sprintf("job:%s | status:%s | host:%s | attempt:%d | repetitions:%d", s.Tag, status, s.HostName, s.Attempts, s.Repetitions))
+	return s.Save()
 }
 
 /**
-* Start
+* trigger
+* @return void
+**/
+func (s *Job) trigger() {
+	s.Attempts++
+	err := event.Publish(s.Channel, s.Params)
+	if err != nil {
+		s.setStatus(Failed)
+	} else {
+		s.setStatus(Running)
+	}
+	if s.Repetitions != 0 && s.Attempts >= s.Repetitions {
+		s.Finish()
+	} else if s.Type != CronJob {
+		s.Finish()
+	} else {
+		s.setStatus(Awaiting)
+	}
+}
+
+/**
+* start
 * @return error
 **/
-func (s *Job) Start() error {
-	fn := func() {
-		s.Attempts++
-		err := event.Publish(s.Channel, s.Params)
-		if err != nil {
-			s.setStatus(Failed)
-		} else {
-			s.setStatus(Running)
-		}
-		if s.Repetitions != 0 && s.Attempts >= s.Repetitions {
-			s.Finish()
-		} else {
-			s.setStatus(Pending)
-		}
-	}
-
+func (s *Job) start() error {
 	if s.Type == CronJob {
-		id, err := s.jobs.cronJobs.AddFunc(s.Spec, fn)
+		if s.idx != -1 {
+			s.owner.cronJobs.Remove(s.idx)
+		}
+
+		idx, err := s.owner.cronJobs.AddFunc(s.Spec, s.trigger)
 		if err != nil {
 			return err
 		}
 
-		s.idx = id
+		s.idx = idx
 	} else {
+		if s.shot != nil {
+			s.shot.Stop()
+		}
+
 		now := timezone.Now()
 		shotTime, err := timezone.Parse("2006-01-02T15:04:05", s.Spec)
 		if err != nil {
@@ -148,15 +189,42 @@ func (s *Job) Start() error {
 		if shotTime.After(now) {
 			duration := shotTime.Sub(now)
 			s.Duration = duration
-			s.shot = time.AfterFunc(duration, fn)
-		} else if s.shot != nil {
-			s.Stop()
+			s.shot = time.AfterFunc(duration, s.trigger)
 		}
 	}
 
-	s.Started = true
+	return nil
+}
 
-	return s.Save()
+/**
+* stop
+* @return void
+**/
+func (s *Job) stop() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.Type == CronJob {
+		if s.idx != -1 {
+			s.owner.cronJobs.Remove(s.idx)
+			s.idx = -1
+		}
+	} else if s.shot != nil {
+		s.shot.Stop()
+	}
+}
+
+/**
+* Start
+* @return error
+**/
+func (s *Job) Start() error {
+	s.Started = true
+	time.AfterFunc(100*time.Millisecond, func() {
+		s.start()
+	})
+
+	return s.setStatus(Awaiting)
 }
 
 /**
@@ -169,15 +237,8 @@ func (s *Job) Stop() {
 	}
 
 	s.Started = false
-	time.AfterFunc(1*time.Second, func() {
-		if s.Type == CronJob {
-			s.jobs.cronJobs.Remove(s.idx)
-			s.idx = -1
-		} else if s.shot != nil {
-			s.shot.Stop()
-		}
-		s.setStatus(Pending)
-	})
+	s.stop()
+	s.setStatus(Awaiting)
 }
 
 /**
@@ -185,8 +246,27 @@ func (s *Job) Stop() {
 * @return error
 **/
 func (s *Job) Finish() {
-	s.Stop()
-	time.AfterFunc(1*time.Second, func() {
-		s.setStatus(Finished)
+	s.Started = false
+	s.stop()
+	s.setStatus(Finished)
+	time.AfterFunc(300*time.Millisecond, func() {
+		delete(s.owner.Jobs, s.Tag)
 	})
+}
+
+/**
+* SetSpec
+* @param spec string
+* @return void
+**/
+func (s *Job) SetSpec(spec string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	isStarted := s.Started
+	s.stop()
+	s.Spec = spec
+	if isStarted {
+		s.start()
+	}
 }

@@ -3,32 +3,18 @@ package crontab
 import (
 	"fmt"
 	"net/http"
+	"time"
 
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/strs"
-	"github.com/go-chi/chi/v5"
 )
 
-var crontab *Jobs
-
-func init() {
-	crontab = New("crontab")
-	err := cache.Load()
-	if err != nil {
-		panic(err)
-	}
-
-	err = event.Load()
-	if err != nil {
-		panic(err)
-	}
-}
+var crontab *Crontab
 
 /**
 * Load
@@ -36,9 +22,13 @@ func init() {
 * @return error
 **/
 func Load(tag string, store instances.Store) error {
-	tag = strs.Name(tag)
-	crontab = New(tag)
-	err := crontab.start()
+	var err error
+	crontab, err = New(tag)
+	if err != nil {
+		return err
+	}
+
+	err = crontab.start()
 	if err != nil {
 		return err
 	}
@@ -47,6 +37,8 @@ func Load(tag string, store instances.Store) error {
 		SetGetInstance(store.Get)
 		SetSetInstance(store.Set)
 	}
+
+	time.Sleep(1 * time.Second)
 
 	return nil
 }
@@ -60,41 +52,19 @@ func Close() {
 		return
 	}
 
-	cache.Delete("crontab:nodes")
-
 	logs.Log(packageName, `Disconnect...`)
 }
 
 /**
-* addJob
-* @param jobType TypeJob, tag, spec, channel string, started bool, params et.Json, repetitions int, fn func(event.Message)
+* Stop
 * @return error
 **/
-func addJob(jobType TypeJob, tag, spec, channel string, started bool, params et.Json, repetitions int, fn func(event.Message)) error {
+func Stop() error {
 	if crontab == nil {
 		return fmt.Errorf(msg.MSG_CRONTAB_UNLOAD)
 	}
 
-	tag = strs.Name(tag)
-	data := et.Json{
-		"type":        jobType,
-		"tag":         tag,
-		"spec":        spec,
-		"channel":     channel,
-		"started":     started,
-		"params":      params,
-		"repetitions": repetitions,
-	}
-
-	event.Publish(EVENT_CRONTAB_SET, data)
-	err := event.Stack(channel, fn)
-	if err != nil {
-		return err
-	}
-
-	logs.Logf(packageName, "Add EventJob: %s", data.ToString())
-
-	return nil
+	return crontab.stop()
 }
 
 /**
@@ -103,9 +73,12 @@ func addJob(jobType TypeJob, tag, spec, channel string, started bool, params et.
 * @return error
 **/
 func AddEventJob(tag, spec string, repetitions int, started bool, params et.Json, fn func(event.Message)) error {
-	tag = strs.Name(tag)
+	if crontab == nil {
+		return fmt.Errorf(msg.MSG_CRONTAB_UNLOAD)
+	}
+
 	channel := fmt.Sprintf("cronjob:%s", tag)
-	return addJob(CronJob, tag, spec, channel, started, params, repetitions, fn)
+	return crontab.addEventJob(CronJob, tag, spec, channel, started, params, repetitions, fn)
 }
 
 /**
@@ -124,9 +97,12 @@ func AddCronJob(tag, spec string, repetitions int, started bool, params et.Json,
 * @return error
 **/
 func AddScheduleJob(tag, schedule string, started bool, params et.Json, fn func(event.Message)) error {
-	tag = strs.Name(tag)
+	if crontab == nil {
+		return fmt.Errorf(msg.MSG_CRONTAB_UNLOAD)
+	}
+
 	channel := fmt.Sprintf("schedule:%s", tag)
-	return addJob(ScheduleJob, tag, schedule, channel, started, params, 0, fn)
+	return crontab.addEventJob(ScheduleJob, tag, schedule, channel, started, params, 0, fn)
 }
 
 /**
@@ -184,15 +160,54 @@ func StopJob(tag string) error {
 }
 
 /**
-* Stop
-* @return error
+* HttpSet
+* @params w http.ResponseWriter, r *http.Request
 **/
-func Stop() error {
+func HttpSet(w http.ResponseWriter, r *http.Request) {
 	if crontab == nil {
-		return fmt.Errorf(msg.MSG_CRONTAB_UNLOAD)
+		response.HTTPError(w, r, http.StatusBadRequest, msg.MSG_CRONTAB_UNLOAD)
+		return
 	}
 
-	return crontab.stop()
+	body, err := request.GetBody(r)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	typeJob := body.Str("type")
+	tag := body.Str("tag")
+	spec := body.Str("spec")
+	started := body.Bool("started")
+	params := body.Json("params")
+	repetitions := body.Int("repetitions")
+	channel := fmt.Sprintf("cronjob:%s", tag)
+	err = crontab.addEventJob(TypeJob(typeJob), tag, spec, channel, started, params, repetitions, nil)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	id := request.URLParam(r, "id").Str()
+	var instance Job
+	exists, err := getInstance(id, &instance)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if !exists {
+		response.ITEM(w, r, http.StatusNotFound, et.Item{
+			Ok:     true,
+			Result: et.Json{"message": "instance not found"},
+		})
+		return
+	}
+
+	response.ITEM(w, r, http.StatusOK, et.Item{
+		Ok:     true,
+		Result: instance.ToJson(),
+	})
 }
 
 /**
@@ -205,7 +220,7 @@ func HttpGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := chi.URLParam(r, "id")
+	id := request.URLParam(r, "id").Str()
 	var instance Job
 	exists, err := getInstance(id, &instance)
 	if err != nil {
@@ -237,7 +252,7 @@ func HttpStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := chi.URLParam(r, "id")
+	id := request.URLParam(r, "id").Str()
 	var instance Job
 	exists, err := getInstance(id, &instance)
 	if err != nil {
@@ -275,7 +290,7 @@ func HttpStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := chi.URLParam(r, "id")
+	id := request.URLParam(r, "id").Str()
 	var instance Job
 	exists, err := getInstance(id, &instance)
 	if err != nil {

@@ -188,25 +188,9 @@ func HttpSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := request.URLParam(r, "id").Str()
-	var instance Job
-	exists, err := getInstance(id, &instance)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	if !exists {
-		response.ITEM(w, r, http.StatusNotFound, et.Item{
-			Ok:     true,
-			Result: et.Json{"message": "instance not found"},
-		})
-		return
-	}
-
 	response.ITEM(w, r, http.StatusOK, et.Item{
 		Ok:     true,
-		Result: instance.ToJson(),
+		Result: et.Json{"message": "job set successfully"},
 	})
 }
 

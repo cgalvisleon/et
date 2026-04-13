@@ -25,6 +25,11 @@ type Agents struct {
 	isDebug       bool                      `json:"-"`
 }
 
+/**
+* New
+* @param store instances.Store
+* @return (*Agents, error)
+**/
 func New(store instances.Store) (*Agents, error) {
 	err := event.Load()
 	if err != nil {
@@ -286,27 +291,27 @@ func (s *Agents) Embed(tag string, text string) ([]float64, error) {
 /**
 * Conversations
 * @param agent string, convID string, prompt string
-* @return (string, error)
+* @return (et.Json, error)
 **/
-func (s *Agents) Conversations(agent, convID, prompt string) (string, string, error) {
+func (s *Agents) Conversations(agent, convID, prompt string) (et.Json, error) {
 	if !utility.ValidStr(agent, 1, []string{}) {
-		return "", "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "agent")
+		return et.Json{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "agent")
 	}
 
 	if !utility.ValidStr(prompt, 1, []string{}) {
-		return "", "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "prompt")
+		return et.Json{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "prompt")
 	}
 
 	ag, ok := s.agents[agent]
 	if !ok {
-		return "", "", fmt.Errorf(msg.MSG_AGENT_NOT_FOUND, agent)
+		return et.Json{}, fmt.Errorf(msg.MSG_AGENT_NOT_FOUND, agent)
 	}
 
-	response, convID, err := ag.conversations(convID, prompt)
+	response, err := ag.conversations(convID, prompt)
 	if err != nil {
-		return "", "", err
+		return response, err
 	}
 
-	return response, convID, nil
+	return response, nil
 
 }

@@ -3,20 +3,34 @@ package workflow
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/Knetic/govaluate"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/timezone"
+)
+
+type StepKind string
+
+const (
+	StepNormal StepKind = "normal"
+	StepWait   StepKind = "wait"
 )
 
 type Step struct {
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Stop        bool      `json:"stop"`
-	Expression  string    `json:"expression"`
-	YesGoTo     int       `json:"yes_go_to"`
-	NoGoTo      int       `json:"no_go_to"`
-	fn          FnContext `json:"-"`
-	rollbacks   FnContext `json:"-"`
+	Kind        StepKind      `json:"kind"`
+	Name        string        `json:"name"`
+	Description string        `json:"description"`
+	Stop        bool          `json:"stop"`
+	Expression  string        `json:"expression"`
+	YesGoTo     int           `json:"yes_go_to"`
+	NoGoTo      int           `json:"no_go_to"`
+	Spec        string        `json:"spec"`
+	fn          FnContext     `json:"-"`
+	rollbacks   FnContext     `json:"-"`
+	duration    time.Duration `json:"-"`
+	shot        *time.Timer   `json:"-"`
 }
 
 /**
@@ -26,10 +40,11 @@ type Step struct {
 **/
 func newStep(name, description string, fn FnContext, stop bool) (*Step, error) {
 	result := &Step{
-		fn:          fn,
+		Kind:        StepNormal,
 		Name:        name,
 		Description: description,
 		Stop:        stop,
+		fn:          fn,
 	}
 
 	return result, nil
@@ -42,7 +57,24 @@ func newStep(name, description string, fn FnContext, stop bool) (*Step, error) {
 **/
 func (s *Step) run(flow *Instance, ctx et.Json) (et.Json, error) {
 	if s.fn == nil {
-		return ctx, fmt.Errorf("step function is nil for step: %s at index %d", s.Name, flow.Current)
+		return ctx, fmt.Errorf(msg.MSG_STEP_FUNCTION_IS_NIL, s.Name, flow.Current)
+	}
+
+	if s.Kind == StepWait {
+		now := timezone.Now()
+		shotTime, err := timezone.Parse("2006-01-02T15:04:05", s.Spec)
+		if err != nil {
+			return et.Json{}, err
+		}
+		if shotTime.After(now) {
+			duration := shotTime.Sub(now)
+			s.duration = duration
+			s.shot = time.AfterFunc(duration, func() {
+				s.fn(flow, ctx)
+			})
+		}
+
+		return ctx, nil
 	}
 
 	flow.setStatus(Running)

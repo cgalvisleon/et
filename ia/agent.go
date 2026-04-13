@@ -128,7 +128,7 @@ func (s *Agent) up() {
 * @param convID, prompt string
 * @return (string, string, error)
 **/
-func (s *Agent) conversations(convID, prompt string) (string, string, error) {
+func (s *Agent) conversations(convID, prompt string) (et.Json, error) {
 	if convID == "" {
 		conv, _ := s.client.Conversations.New(s.ctx, conversations.ConversationNewParams{})
 		convID = conv.ID
@@ -147,8 +147,13 @@ func (s *Agent) conversations(convID, prompt string) (string, string, error) {
 		},
 	})
 	if err != nil {
-		return "", convID, err
+		return et.Json{
+			"conv_id": convID,
+		}, err
 	}
 
-	return result.OutputText(), convID, nil
+	return et.Json{
+		"conv_id":  convID,
+		"response": result.OutputText(),
+	}, nil
 }

@@ -35,19 +35,20 @@ type CheckList struct {
 type FnContext func(flow *Instance, ctx et.Json) (et.Json, error)
 
 type Flow struct {
-	Tag           string        `json:"tag"`
-	Version       string        `json:"version"`
-	Name          string        `json:"name"`
-	Description   string        `json:"description"`
-	TotalAttempts int           `json:"total_attempts"`
-	TimeAttempts  time.Duration `json:"time_attempts"`
-	Steps         []*Step       `json:"steps"`
-	TpConsistency TpConsistency `json:"tp_consistency"`
-	CheckList     []*CheckList  `json:"check_list"`
-	Team          string        `json:"team"`
-	Level         string        `json:"level"`
-	CreatedBy     string        `json:"created_by"`
-	isDebug       bool          `json:"-"`
+	Tag           string          `json:"tag"`
+	Version       string          `json:"version"`
+	Name          string          `json:"name"`
+	Description   string          `json:"description"`
+	TotalAttempts int             `json:"total_attempts"`
+	TimeAttempts  time.Duration   `json:"time_attempts"`
+	Steps         []*Step         `json:"steps"`
+	TpConsistency TpConsistency   `json:"tp_consistency"`
+	CheckList     []*CheckList    `json:"check_list"`
+	Team          string          `json:"team"`
+	Level         string          `json:"level"`
+	CreatedBy     string          `json:"created_by"`
+	onDone        func(*Instance) `json:"-"`
+	isDebug       bool            `json:"-"`
 }
 
 /**
@@ -126,15 +127,46 @@ func (s *Flow) Debug() *Flow {
 }
 
 /**
+* OnDone
+* @param fn func(*Instance)
+* @return *Flow
+**/
+func (s *Flow) OnDone(fn func(*Instance)) *Flow {
+	s.onDone = fn
+	return s
+}
+
+/**
+* newStep
+* @param name, description string, fn FnContext, stop bool
+* @return *Step
+**/
+func (s *Flow) newStep(name, description string, fn FnContext, stop bool) *Step {
+	step, _ := newStep(name, description, fn, stop)
+	s.Steps = append(s.Steps, step)
+	s.setConfig(MSG_INSTANCE_STEP_CREATED, len(s.Steps)-1, name, s.Tag)
+	return step
+}
+
+/**
 * Step
-* @param name, description string, fn FnContext, retries, retryDelay int, stop bool
-* @return *Fn
+* @param name, description string, fn FnContext, stop bool
+* @return *Flow
 **/
 func (s *Flow) Step(name, description string, fn FnContext, stop bool) *Flow {
-	result, _ := newStep(name, description, fn, stop)
-	s.Steps = append(s.Steps, result)
-	s.setConfig(MSG_INSTANCE_STEP_CREATED, len(s.Steps)-1, name, s.Tag)
+	s.newStep(name, description, fn, stop)
+	return s
+}
 
+/**
+* StepWait
+* @param name, description string, fn FnContext, timeAwait string, stop bool
+* @return *Flow
+**/
+func (s *Flow) StepWait(name, description string, fn FnContext, timeAwait string, stop bool) *Flow {
+	step := s.newStep(name, description, fn, stop)
+	step.Kind = StepWait
+	step.Spec = timeAwait
 	return s
 }
 

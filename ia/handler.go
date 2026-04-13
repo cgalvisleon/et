@@ -3,7 +3,6 @@ package ia
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/request"
@@ -64,13 +63,12 @@ func (s *Agents) HttpSetParams(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonData := instance.ToJson()
+	dt := instance.ToJson()
 	for k, v := range body {
-		keys := strings.Split(k, "->")
-		jsonData.SetNested(keys, v)
+		dt.Set(k, v)
 	}
 
-	bt, err := jsonData.ToByte()
+	bt, err := dt.ToByte()
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return

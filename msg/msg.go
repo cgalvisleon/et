@@ -82,6 +82,8 @@ var (
 	MSG_STORE_REQUIRED                 = "store is required in production mode"
 	MSG_CONNECTION_NOT_ESTABLISHED     = "connection not established"
 	MSG_PARTICIPANT_NOT_FOUND          = "participant not found"
+	MSG_METHOD_NOT_ALLOWED             = "method not allowed"
+	MSG_STEP_FUNCTION_IS_NIL           = "step function is nil for step:%s at index:%d"
 )
 
 func init() {
@@ -166,6 +168,8 @@ func init() {
 		MSG_AGENT_NOT_FOUND = "agente %s no encontrado"
 		MSG_STORE_REQUIRED = "store es requerido en modo producción"
 		MSG_CONNECTION_NOT_ESTABLISHED = "connection not established"
-		MSG_PARTICIPANT_NOT_FOUND = "participant not found"
+		MSG_PARTICIPANT_NOT_FOUND = "participante no encontrado"
+		MSG_METHOD_NOT_ALLOWED = "metodo no permitido"
+		MSG_STEP_FUNCTION_IS_NIL = "función del paso:%s es nula para en el índice:%d"
 	}
 }

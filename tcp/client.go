@@ -28,28 +28,30 @@ const (
 )
 
 type Client struct {
-	ctx          context.Context           `json:"-"`
-	cancel       context.CancelFunc        `json:"-"`
-	CreatedAt    time.Time                 `json:"created_at"`
-	ID           string                    `json:"id"`
-	Addr         string                    `json:"addr"`
-	LocalAddr    string                    `json:"local_addr"`
-	RemoteAddr   string                    `json:"remote_addr"`
-	Status       Status                    `json:"status"`
-	Ctx          et.Json                   `json:"-"`
-	conn         net.Conn                  `json:"-"`
-	inbound      chan []byte               `json:"-"`
-	messages     map[string]chan *Message  `json:"-"`
-	timeout      time.Duration             `json:"-"`
-	mu           map[string]*sync.Mutex    `json:"-"`
-	onConnect    []func(*Client)           `json:"-"`
-	onDisconnect []func(*Client)           `json:"-"`
-	onError      []func(*Client, error)    `json:"-"`
-	onOutbound   []func(*Client, []byte)   `json:"-"`
-	onInbound    []func(*Client, *Message) `json:"-"`
-	isNode       bool                      `json:"-"`
-	alive        atomic.Bool               `json:"-"`
-	closed       atomic.Bool               `json:"-"`
+	ctx           context.Context           `json:"-"`
+	cancel        context.CancelFunc        `json:"-"`
+	CreatedAt     time.Time                 `json:"created_at"`
+	ID            string                    `json:"id"`
+	Addr          string                    `json:"addr"`
+	LocalAddr     string                    `json:"local_addr"`
+	RemoteAddr    string                    `json:"remote_addr"`
+	Status        Status                    `json:"status"`
+	Ctx           et.Json                   `json:"-"`
+	conn          net.Conn                  `json:"-"`
+	inbound       chan []byte               `json:"-"`
+	messages      map[string]chan *Message  `json:"-"`
+	timeout       time.Duration             `json:"-"`
+	mu            map[string]*sync.Mutex    `json:"-"`
+	onConnect     []func(*Client)           `json:"-"`
+	onDisconnect  []func(*Client)           `json:"-"`
+	onError       []func(*Client, error)    `json:"-"`
+	onSend        []func(*Client, []byte)   `json:"-"`
+	onInbox       []func(*Client, *Message) `json:"-"`
+	onInboundFull []func(*Client, []byte)   `json:"-"`
+	isNode        bool                      `json:"-"`
+	isDebug       bool                      `json:"-"`
+	alive         atomic.Bool               `json:"-"`
+	closed        atomic.Bool               `json:"-"`
 }
 
 func newClient() *Client {
@@ -60,21 +62,22 @@ func newClient() *Client {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	result := &Client{
-		ctx:          ctx,
-		cancel:       cancel,
-		CreatedAt:    timezone.Now(),
-		ID:           reg.ULID(),
-		Status:       Pending,
-		inbound:      make(chan []byte, 128),
-		messages:     make(map[string]chan *Message),
-		timeout:      timeout,
-		mu:           make(map[string]*sync.Mutex),
-		Ctx:          et.Json{},
-		onConnect:    make([]func(*Client), 0),
-		onDisconnect: make([]func(*Client), 0),
-		onError:      make([]func(*Client, error), 0),
-		onOutbound:   make([]func(*Client, []byte), 0),
-		onInbound:    make([]func(*Client, *Message), 0),
+		ctx:           ctx,
+		cancel:        cancel,
+		CreatedAt:     timezone.Now(),
+		ID:            reg.ULID(),
+		Status:        Pending,
+		inbound:       make(chan []byte, 128),
+		messages:      make(map[string]chan *Message),
+		timeout:       timeout,
+		mu:            make(map[string]*sync.Mutex),
+		Ctx:           et.Json{},
+		onConnect:     make([]func(*Client), 0),
+		onDisconnect:  make([]func(*Client), 0),
+		onError:       make([]func(*Client, error), 0),
+		onSend:        make([]func(*Client, []byte), 0),
+		onInbox:       make([]func(*Client, *Message), 0),
+		onInboundFull: make([]func(*Client, []byte), 0),
 	}
 	result.mu["conn"] = &sync.Mutex{}
 	result.mu["messages"] = &sync.Mutex{}
@@ -106,6 +109,14 @@ func (s *Client) ToJson() et.Json {
 		"remote_addr": s.RemoteAddr,
 		"status":      s.Status,
 	}
+}
+
+/**
+* SetDebug
+* @param debug bool
+**/
+func (s *Client) SetDebug(debug bool) {
+	s.isDebug = debug
 }
 
 /**
@@ -183,7 +194,9 @@ func (s *Client) disconnect() {
 
 	s.cancel()
 
-	logs.Logf(packageName, msg.MSG_TCP_DISCONNECTED, s.Addr)
+	if s.isDebug {
+		logs.Logf(packageName, msg.MSG_TCP_DISCONNECTED, s.Addr)
+	}
 
 	for _, fn := range s.onDisconnect {
 		fn(s)
@@ -233,7 +246,13 @@ func (s *Client) readLoop() {
 		select {
 		case s.inbound <- data:
 		default:
-			logs.Warn("inbound full, dropping message")
+			if len(s.onInboundFull) == 0 {
+				logs.Warn(msg.MSG_INBOUND_FULL_DROPPING)
+			} else {
+				for _, fn := range s.onInboundFull {
+					fn(s, data)
+				}
+			}
 		}
 	}
 }
@@ -289,7 +308,7 @@ func (s *Client) send(ms *Message) error {
 		return err
 	}
 
-	for _, fn := range s.onOutbound {
+	for _, fn := range s.onSend {
 		fn(s, bt)
 	}
 
@@ -318,7 +337,7 @@ func (s *Client) inbox(bt []byte) {
 		}
 	}
 
-	for _, fn := range s.onInbound {
+	for _, fn := range s.onInbox {
 		fn(s, ms)
 	}
 }
@@ -495,17 +514,17 @@ func (s *Client) OnError(fn func(*Client, error)) {
 }
 
 /**
-* OnOutbound
+* OnSend
 * @param fn func(*Client, []byte)
 **/
-func (s *Client) OnOutbound(fn func(*Client, []byte)) {
-	s.onOutbound = append(s.onOutbound, fn)
+func (s *Client) OnSend(fn func(*Client, []byte)) {
+	s.onSend = append(s.onSend, fn)
 }
 
 /**
-* OnInbound
+* OnInbox
 * @param fn func(*Client, *Message)
 **/
-func (s *Client) OnInbound(fn func(*Client, *Message)) {
-	s.onInbound = append(s.onInbound, fn)
+func (s *Client) OnInbox(fn func(*Client, *Message)) {
+	s.onInbox = append(s.onInbox, fn)
 }

@@ -84,6 +84,7 @@ var (
 	MSG_PARTICIPANT_NOT_FOUND          = "participant not found"
 	MSG_METHOD_NOT_ALLOWED             = "method not allowed"
 	MSG_STEP_FUNCTION_IS_NIL           = "step function is nil for step:%s at index:%d"
+	MSG_INBOUND_FULL_DROPPING          = "inbound full, dropping message"
 )
 
 func init() {
@@ -171,5 +172,6 @@ func init() {
 		MSG_PARTICIPANT_NOT_FOUND = "participante no encontrado"
 		MSG_METHOD_NOT_ALLOWED = "metodo no permitido"
 		MSG_STEP_FUNCTION_IS_NIL = "función del paso:%s es nula para en el índice:%d"
+		MSG_INBOUND_FULL_DROPPING = "inbound full, dropping message"
 	}
 }

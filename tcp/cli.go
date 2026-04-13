@@ -2,30 +2,29 @@ package tcp
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 )
 
 type Console struct {
-	addr   string
 	client *Client
 }
 
-var console *Console
-
-func startConsole(client *Client) {
-	if console == nil {
-		console = &Console{
-			client: client,
-		}
-	}
+/**
+* StartConsole: Starts an interactive CLI for the given client.
+* @param client *Client
+**/
+func StartConsole(client *Client) {
+	c := &Console{client: client}
 
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Println("===================================")
 	fmt.Println("  TCP Client Console")
-	fmt.Println("  Escribe 'help' para comandos")
+	fmt.Printf("  Addr: %s\n", client.Addr)
+	fmt.Println("  Type 'help' for commands")
 	fmt.Println("===================================")
 
 	for {
@@ -33,50 +32,113 @@ func startConsole(client *Client) {
 
 		input, err := reader.ReadString('\n')
 		if err != nil {
-			fmt.Println("Error leyendo comando:", err)
+			fmt.Println("Error reading input:", err)
 			continue
 		}
 
 		input = strings.TrimSpace(input)
-		console.handleCommand(input)
+		if input == "" {
+			continue
+		}
+
+		if c.handleCommand(input) {
+			return
+		}
 	}
 }
 
-func (s *Console) handleCommand(cmd string) {
-	args := strings.Split(cmd, " ")
+/**
+* handleCommand: Parses and executes a command. Returns true to exit.
+* @param line string
+* @return bool
+**/
+func (s *Console) handleCommand(line string) bool {
+	parts := strings.Fields(line)
+	if len(parts) == 0 {
+		return false
+	}
 
-	switch args[0] {
+	cmd := parts[0]
+	args := parts[1:]
+
+	switch cmd {
 
 	case "help":
-		fmt.Println("Comandos disponibles:")
-		fmt.Println("  help        - mostrar comandos")
-		fmt.Println("  nodes       - listar nodos")
-		fmt.Println("  clients     - listar clientes")
-		fmt.Println("  leader      - mostrar líder")
-		fmt.Println("  stats       - estadísticas")
-		fmt.Println("  stop        - detener servidor")
+		fmt.Println("Commands:")
+		fmt.Println("  help                     - show this help")
+		fmt.Println("  status                   - show connection status")
+		fmt.Println("  ping                     - ping the server")
+		fmt.Println("  request <Method> [args]  - call a server method and print response")
+		fmt.Println("  send <payload>           - send a message without waiting for response")
+		fmt.Println("  quit / exit              - close and exit")
 
-	case "nodes":
-		fmt.Println("Nodos:")
+	case "status":
+		fmt.Printf("  Addr:   %s\n", s.client.Addr)
+		fmt.Printf("  Status: %s\n", s.client.Status)
 
-	case "clients":
-		fmt.Println("Clientes:")
-		fmt.Println("  ", s.addr)
-	case "leader":
-		fmt.Println("Leader:", s.addr)
+	case "ping":
+		res := s.client.Request("Tcp.Ping", s.client.ID)
+		if res.Error != nil {
+			fmt.Println("Error:", res.Error)
+		} else {
+			printResponse(res)
+		}
 
-	case "stats":
-		fmt.Println("Estadísticas:")
-		fmt.Println("  Nodos:", 0)
-		fmt.Println("  Clientes:", 1)
-		fmt.Println("  Líder:", s.addr)
+	case "request":
+		if len(args) == 0 {
+			fmt.Println("Usage: request <Method.Name> [arg1] [arg2] ...")
+			return false
+		}
+		method := args[0]
+		iargs := make([]any, len(args)-1)
+		for i, a := range args[1:] {
+			iargs[i] = a
+		}
+		res := s.client.Request(method, iargs...)
+		if res.Error != nil {
+			fmt.Println("Error:", res.Error)
+		} else {
+			printResponse(res)
+		}
 
-	case "stop":
-		fmt.Println("Deteniendo cliente...")
+	case "send":
+		if len(args) == 0 {
+			fmt.Println("Usage: send <payload>")
+			return false
+		}
+		payload := strings.Join(args, " ")
+		ms, err := NewMessage(Method, payload)
+		if err != nil {
+			fmt.Println("Error creating message:", err)
+			return false
+		}
+		if err = s.client.Send(ms); err != nil {
+			fmt.Println("Error:", err)
+		} else {
+			fmt.Println("Sent.")
+		}
+
+	case "quit", "exit":
+		fmt.Println("Closing...")
 		s.client.Close()
 		os.Exit(0)
 
 	default:
-		fmt.Println("Comando no reconocido:", cmd)
+		fmt.Printf("Unknown command: %q — type 'help' for available commands\n", cmd)
 	}
+
+	return false
+}
+
+/**
+* printResponse: Prints a Response as formatted JSON.
+* @param res *Response
+**/
+func printResponse(res *Response) {
+	bt, err := json.MarshalIndent(res.Response, "", "  ")
+	if err != nil {
+		fmt.Println(res.Response)
+		return
+	}
+	fmt.Println(string(bt))
 }

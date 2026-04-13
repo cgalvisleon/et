@@ -193,6 +193,8 @@ go build ./...
 ```bash
 # Ejecutar el VM
 gofmt -w . && go run ./cmd/vm
+gofmt -w . && go run ./cmd/server
+gofmt -w . && go run ./cmd/client -addr localhost:1377
 ```
 
 ## Contribuir

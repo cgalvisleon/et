@@ -50,14 +50,14 @@ func (s *Tcp) Execute(method string, request *Message) *Response {
 * @return *Response
 **/
 func (s *Tcp) ping(request *Message) *Response {
-	var id string
-	var ctx et.Json
-	err := request.GetArgs(&id, &ctx)
-	if err != nil {
-		return TcpError(err)
-	}
+	// var id string
+	// var ctx et.Json
+	// err := request.GetArgs(&id, &ctx)
+	// if err != nil {
+	// 	return TcpError(err)
+	// }
 
-	return TcpResponse(fmt.Sprintf("Pong to:%s", s.node.addr))
+	return TcpResponse(fmt.Sprintf("Tcp.Ping hello:%s", s.node.addr))
 }
 
 /**

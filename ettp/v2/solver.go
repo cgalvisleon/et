@@ -61,7 +61,7 @@ func (t TpHeader) String() string {
 }
 
 type Solver struct {
-	Id            string                            `json:"id"`
+	ID            string                            `json:"id"`
 	Kind          TypeRouter                        `json:"kind"`
 	Method        string                            `json:"method"`
 	Path          string                            `json:"path"`
@@ -102,7 +102,7 @@ func (s *Solver) ToJson() et.Json {
 func newSolver(method, path string) *Solver {
 	key := fmt.Sprintf("%s:%s", method, path)
 	return &Solver{
-		Id:          key,
+		ID:          key,
 		Method:      method,
 		Path:        path,
 		middlewares: make([]func(http.Handler) http.Handler, 0),

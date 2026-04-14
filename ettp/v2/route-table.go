@@ -155,11 +155,17 @@ func (s *Server) getRoutes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		metric.JSON(w, r, http.StatusOK, result.ToJson())
+		json, err := result.ToJson()
+		if err != nil {
+			metric.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+			return
+		}
+		metric.JSON(w, r, http.StatusOK, json)
 		return
 	}
 
-	metric.JSON(w, r, http.StatusOK, s.ToJson())
+	json := s.ToJson()
+	metric.JSON(w, r, http.StatusOK, json)
 }
 
 /**
@@ -233,7 +239,11 @@ func (s *Server) getPakages(w http.ResponseWriter, r *http.Request) {
 	if len(name) == 0 {
 		result := et.Items{Result: []et.Json{}}
 		for _, pkg := range s.packages {
-			result.Add(pkg.ToJson())
+			json, err := pkg.ToJson()
+			if err != nil {
+				continue
+			}
+			result.Add(json)
 		}
 
 		metric.ITEMS(w, r, http.StatusOK, result)
@@ -246,7 +256,12 @@ func (s *Server) getPakages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	metric.JSON(w, r, http.StatusOK, result.ToJson())
+	json, err := result.ToJson()
+	if err != nil {
+		metric.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	metric.JSON(w, r, http.StatusOK, json)
 }
 
 /**
@@ -264,7 +279,7 @@ func (s *Server) deletePackage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, solver := range result.Solvers {
-		s.RemoveRouterById(solver.Id, false)
+		s.RemoveRouterById(solver.ID, false)
 	}
 
 	delete(s.packages, name)

@@ -111,7 +111,11 @@ func NewServer(name string, config *Config) *Server {
 func (s *Server) ToJson() et.Json {
 	packages := make([]et.Json, 0)
 	for _, p := range s.packages {
-		packages = append(packages, p.ToJson())
+		json, err := p.ToJson()
+		if err != nil {
+			continue
+		}
+		packages = append(packages, json)
 	}
 
 	return et.Json{

@@ -1,15 +1,15 @@
 package ettp
 
 import (
-	"slices"
+	"encoding/json"
 
 	"github.com/cgalvisleon/et/et"
 )
 
 type Package struct {
-	Name    string    `json:"name"`
-	Solvers []*Solver `json:"solvers"`
-	server  *Server   `json:"-"`
+	Name    string             `json:"name"`
+	Solvers map[string]*Solver `json:"solvers"`
+	server  *Server            `json:"-"`
 }
 
 /**
@@ -20,7 +20,7 @@ type Package struct {
 func newPackage(name string, server *Server) *Package {
 	result := &Package{
 		Name:    name,
-		Solvers: make([]*Solver, 0),
+		Solvers: make(map[string]*Solver),
 		server:  server,
 	}
 
@@ -29,53 +29,54 @@ func newPackage(name string, server *Server) *Package {
 
 /**
 * ToJson
-* @return et.Json
+* @return (et.Json, error)
 **/
-func (p *Package) ToJson() et.Json {
-	solvers := make([]et.Json, 0)
-	for _, solver := range p.Solvers {
-		solvers = append(solvers, solver.ToJson())
+func (s *Package) ToJson() (et.Json, error) {
+	bt, err := json.Marshal(s)
+	if err != nil {
+		return nil, err
 	}
 
-	return et.Json{
-		"name":    p.Name,
-		"count":   len(p.Solvers),
-		"solvers": solvers,
+	var result et.Json
+	err = json.Unmarshal(bt, &result)
+	if err != nil {
+		return nil, err
 	}
+
+	return result, nil
 }
 
 /**
 * addSolver
 * @param solver *Solver
 **/
-func (p *Package) addSolver(solver *Solver) {
-	idx := slices.IndexFunc(p.Solvers, func(s *Solver) bool {
-		return s.Id == solver.Id
-	})
-
-	if idx == -1 {
-		if solver.PackageName != p.Name {
-			oldPackage := p.server.packages[solver.PackageName]
-			if oldPackage != nil {
-				oldPackage.removeSolver(solver)
-			}
-		}
-
-		solver.PackageName = p.Name
-		p.Solvers = append(p.Solvers, solver)
+func (s *Package) addSolver(solver *Solver) {
+	_, exists := s.Solvers[solver.ID]
+	if exists {
+		s.Solvers[solver.ID] = solver
+		return
 	}
+
+	s.Solvers[solver.ID] = solver
+	if solver.PackageName != s.Name {
+		oldPackage := s.server.packages[solver.PackageName]
+		if oldPackage != nil {
+			oldPackage.removeSolver(solver)
+		}
+	}
+
+	solver.PackageName = s.Name
 }
 
 /**
 * removeSolver
 * @param solver *Solver
 **/
-func (p *Package) removeSolver(solver *Solver) {
-	idx := slices.IndexFunc(p.Solvers, func(s *Solver) bool {
-		return s.Id == solver.Id
-	})
-
-	if idx != -1 {
-		p.Solvers = append(p.Solvers[:idx], p.Solvers[idx+1:]...)
+func (s *Package) removeSolver(solver *Solver) {
+	_, exists := s.Solvers[solver.ID]
+	if !exists {
+		return
 	}
+
+	delete(s.Solvers, solver.ID)
 }

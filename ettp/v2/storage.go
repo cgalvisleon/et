@@ -94,7 +94,6 @@ func (s *Server) migrate() error {
 			route.Header,
 			route.ExcludeHeader,
 			0,
-			route.Private,
 			route.PackageName,
 			false,
 		)
@@ -166,7 +165,6 @@ func (s *Server) load() error {
 			solver.Header,
 			solver.ExcludeHeader,
 			solver.Version,
-			solver.Private,
 			solver.PackageName,
 			false,
 		)

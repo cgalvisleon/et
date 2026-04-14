@@ -6,8 +6,17 @@ import (
 	"github.com/cgalvisleon/et/router"
 )
 
+const (
+	APIGATEWAY_SET_RESOLVE = "apigateway/set/resolve"
+)
+
 func (s *Server) initEvents() error {
-	err := event.Subscribe(router.EVENT_SET_ROUTER, s.eventSetRouter)
+	err := event.Subscribe(APIGATEWAY_SET_RESOLVE, s.eventSetResolve)
+	if err != nil {
+		return err
+	}
+
+	err = event.Subscribe(router.EVENT_SET_ROUTER, s.eventSetRouter)
 	if err != nil {
 		return err
 	}
@@ -23,6 +32,30 @@ func (s *Server) initEvents() error {
 	}
 
 	return nil
+}
+
+/**
+* eventSetResolve
+* @param m event.Message
+**/
+func (s *Server) eventSetResolve(m event.Message) {
+	if m.Myself {
+		return
+	}
+
+	data := m.Data
+	method := data.Str("method")
+	path := data.Str("path")
+	resolve := data.Str("resolve")
+	header := data.Json("header")
+	typeHeader := data.Int("tp_header")
+	excludeHeader := data.ArrayStr("exclude_header")
+	version := data.Int("version")
+	packageName := data.Str("package_name")
+	_, err := s.SetRouter(method, path, resolve, typeHeader, header, excludeHeader, version, packageName, true)
+	if err != nil {
+		logs.Alertf(`eventSetRouter error:%s`, err.Error())
+	}
 }
 
 /**
@@ -42,9 +75,8 @@ func (s *Server) eventSetRouter(m event.Message) {
 	header := data.Json("header")
 	excludeHeader := data.ArrayStr("exclude_header")
 	version := data.Int("version")
-	private := data.Bool("private")
 	packageName := data.Str("package_name")
-	_, err := s.SetRouter(method, path, resolve, typeHeader, header, excludeHeader, version, private, packageName, true)
+	_, err := s.SetRouter(method, path, resolve, typeHeader, header, excludeHeader, version, packageName, true)
 	if err != nil {
 		logs.Alertf(`eventSetRouter error:%s`, err.Error())
 	}

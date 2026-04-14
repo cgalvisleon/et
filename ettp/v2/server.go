@@ -282,13 +282,12 @@ func (s *Server) setRouter(kind TypeRouter, method, path, solver string, typeHea
 * @param kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, packageName string, saved bool
 * @return *Solver, error
 **/
-func (s *Server) setSolver(kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, private bool, packageName string, saved bool) (*Solver, error) {
+func (s *Server) setSolver(kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, packageName string, saved bool) (*Solver, error) {
 	result, err := s.setRouter(kind, method, path, solver, typeHeader, header, excludeHeader, version, packageName, saved)
 	if err != nil {
 		return nil, err
 	}
 
-	result.Private = private
 	return result, nil
 }
 
@@ -312,10 +311,10 @@ func (s *Server) setHandler(method, path string, handlerFn http.HandlerFunc, pac
 
 /**
 * SetRouter
-* @param method, path, resolve string, header et.Json, excludeHeader []string, version int, private bool, packageName string, saved bool
+* @param method, path, resolve string, header et.Json, excludeHeader []string, version int, packageName string, saved bool
 * @return *Solver, error
 **/
-func (s *Server) SetRouter(method, path, resolve string, typeHeader int, header et.Json, excludeHeader []string, version int, private bool, packageName string, saved bool) (*Solver, error) {
+func (s *Server) SetRouter(method, path, resolve string, typeHeader int, header et.Json, excludeHeader []string, version int, packageName string, saved bool) (*Solver, error) {
 	headerMap := make(map[string]string)
 	for k, v := range header {
 		headerMap[k] = fmt.Sprintf("%v", v)
@@ -325,7 +324,7 @@ func (s *Server) SetRouter(method, path, resolve string, typeHeader int, header 
 		return nil, fmt.Errorf(msg.MSG_RESOLVE_NOT_VALID, resolve)
 	}
 
-	result, err := s.setSolver(TpApiRest, method, path, resolve, TpHeader(typeHeader), headerMap, excludeHeader, version, private, packageName, saved)
+	result, err := s.setSolver(TpApiRest, method, path, resolve, TpHeader(typeHeader), headerMap, excludeHeader, version, packageName, saved)
 	if err != nil {
 		return nil, err
 	}
@@ -351,7 +350,6 @@ func (s *Server) Private(method, path string, handlerFn http.HandlerFunc, packag
 		return nil, err
 	}
 
-	result.Private = true
 	result.middlewares = append(result.middlewares, s.authenticator)
 	return result, nil
 }

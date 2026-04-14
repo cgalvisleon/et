@@ -182,9 +182,8 @@ func (s *Server) upsetRouter(w http.ResponseWriter, r *http.Request) {
 		tpHeader := item.Int("tp_header")
 		excludeHeader := item.ArrayStr("exclude_header")
 		version := item.Int("version")
-		private := item.Bool("private")
 		packageName := item.Str("package_name")
-		router, err := s.SetRouter(method, path, resolve, tpHeader, header, excludeHeader, version, private, packageName, true)
+		router, err := s.SetRouter(method, path, resolve, tpHeader, header, excludeHeader, version, packageName, true)
 		if err != nil {
 			metric.HTTPError(w, r, http.StatusBadRequest, err.Error())
 			return

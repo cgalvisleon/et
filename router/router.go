@@ -43,9 +43,9 @@ type Channels struct {
 var (
 	router              *Routes
 	autentication       func(http.Handler) http.Handler
-	EVENT_SET_ROUTER    = "event:set:router"
-	EVENT_REMOVE_ROUTER = "event:remove:router"
-	EVENT_RESET_ROUTER  = "event:reset:router"
+	EVENT_SET_ROUTER    = "event:apigateway:set:router"
+	EVENT_REMOVE_ROUTER = "event:apigateway:remove:router"
+	EVENT_RESET_ROUTER  = "event:apigateway:reset:router"
 )
 
 /**

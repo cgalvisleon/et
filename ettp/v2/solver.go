@@ -70,7 +70,6 @@ type Solver struct {
 	Header        map[string]string                 `json:"header"`
 	ExcludeHeader []string                          `json:"exclude_header"`
 	Version       int                               `json:"version"`
-	Private       bool                              `json:"private"`
 	PackageName   string                            `json:"package_name"`
 	middlewares   []func(http.Handler) http.Handler `json:"-"`
 	handlerFn     http.HandlerFunc                  `json:"-"`

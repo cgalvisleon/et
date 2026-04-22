@@ -26,6 +26,34 @@ func init() {
 }
 
 /**
+* StatusResolver
+* @param r *Resolver, status Status
+**/
+func (s *Server) HTTPError(resolver *Resolver, metric *middleware.Metrics, w http.ResponseWriter, r *http.Request, status int, message string) {
+	if resolver != nil {
+		resolver.setStatus(TpStatusFailed)
+		s.deleteRequest(resolver.ID)
+	}
+	metric.HTTPError(w, r, status, message)
+
+	s.Save()
+}
+
+/**
+* HTTPSuccess
+* @param resolver *Resolver, metric *middleware.Metrics, rw *middleware.ResponseWriterWrapper
+**/
+func (s *Server) HTTPSuccess(resolver *Resolver, metric *middleware.Metrics, rw *middleware.ResponseWriterWrapper) {
+	if resolver != nil {
+		resolver.setStatus(TpStatusSuccess)
+		s.deleteRequest(resolver.ID)
+	}
+	metric.DoneHTTP(rw)
+
+	s.Save()
+}
+
+/**
 * applyMiddlewares
 * @params handler http.Handler, middlewares []func(http.Handler) http.Handler
 * @return http.Handler
@@ -52,7 +80,7 @@ func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 	/* Get resolver */
 	resolver, err := s.FindResolver(r)
 	if err != nil {
-		metric.HTTPError(w, r, http.StatusNotFound, err.Error())
+		s.HTTPError(resolver, metric, w, r, http.StatusNotFound, http.StatusText(http.StatusNotFound))
 		return
 	}
 
@@ -69,7 +97,7 @@ func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 	if resolver.Kind == TpHandler {
 		h := resolver.handlerFn
 		if h == nil {
-			go s.HTTPError(resolver, metric, w, r, http.StatusNotFound, "Handler not found")
+			s.HTTPError(resolver, metric, w, r, http.StatusNotFound, "Handler not found")
 			return
 		}
 
@@ -95,12 +123,12 @@ func (s *Server) handlerApi(w http.ResponseWriter, r *http.Request) {
 
 	resolver, ok := r.Context().Value(ResoluteKey).(*Resolver)
 	if !ok {
-		s.HTTPError(resolver, metric, rw, r, http.StatusInternalServerError, "Resolver not found")
+		s.HTTPError(resolver, metric, rw, r, http.StatusInternalServerError, "resolver not found")
 		return
 	}
 
 	if resolver.URL == "" {
-		s.HTTPError(resolver, metric, rw, r, http.StatusNotFound, "Resolver not found")
+		s.HTTPError(resolver, metric, rw, r, http.StatusNotFound, "resolver not found")
 		return
 	}
 
@@ -157,5 +185,5 @@ func (s *Server) handlerApi(w http.ResponseWriter, r *http.Request) {
 		s.HTTPError(resolver, metric, rw, r, http.StatusInternalServerError, err.Error())
 	}
 
-	go s.HTTPSuccess(resolver, metric, rw)
+	s.HTTPSuccess(resolver, metric, rw)
 }

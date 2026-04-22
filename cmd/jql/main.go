@@ -2,8 +2,8 @@ package main
 
 import (
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/jql"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/sql"
 )
 
 func main() {
@@ -34,7 +34,7 @@ func main() {
 	// 	Where(sql.Eq("age", 25)).
 	// 	Run(nil)
 
-	result := sql.From(itemA, "a").
+	result := jql.From(itemA, "a").
 		// Where(sql.NotNull("citas")).
 		Order("name", true).
 		Join(itemB, "b", map[string]string{"a.age": "b.age"}).

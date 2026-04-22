@@ -3,10 +3,12 @@ package ettp
 import (
 	"encoding/json"
 	"fmt"
+	"path"
 
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
 	v1 "github.com/cgalvisleon/et/ettp/v1"
+	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/logs"
 )
 
@@ -25,7 +27,7 @@ func NewStorage(s *Server) *Storage {
 	return &Storage{
 		Solvers: s.Solvers,
 		Version: s.Version,
-		Key:     fmt.Sprintf("%s-%s", s.Name, s.Version),
+		Key:     fmt.Sprintf("%s:%s", s.Name, s.Version),
 	}
 }
 
@@ -121,7 +123,15 @@ func (s *Server) Save() error {
 		return err
 	}
 
-	cache.Set(storage.Key, string(bt), 0)
+	if s.useCache {
+		cache.Set(storage.Key, string(bt), 0)
+	} else {
+		path := path.Join("./", "apigateway.json")
+		err = file.Write(path, string(bt))
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
@@ -131,24 +141,39 @@ func (s *Server) Save() error {
 * @return error
 **/
 func (s *Server) load() error {
-	storage := NewStorage(s)
-	if !cache.Exists(storage.Key) {
+	key := fmt.Sprintf("%s:%s", s.Name, s.Version)
+	if s.useCache && !cache.Exists(key) {
 		return s.migrate()
 	}
 
-	bt, err := json.Marshal(storage)
-	if err != nil {
-		return err
-	}
+	var storage *Storage
+	if s.useCache {
+		storage = NewStorage(s)
+		bt, err := json.Marshal(storage)
+		if err != nil {
+			return err
+		}
 
-	strs, err := cache.Get(storage.Key, string(bt))
-	if err != nil {
-		return err
-	}
+		strs, err := cache.Get(key, string(bt))
+		if err != nil {
+			return err
+		}
 
-	err = json.Unmarshal([]byte(strs), &storage)
-	if err != nil {
-		return err
+		err = json.Unmarshal([]byte(strs), &storage)
+		if err != nil {
+			return err
+		}
+	} else {
+		path := path.Join("./", "apigateway.json")
+		err := file.Read(path, &storage)
+		if err != nil {
+			return err
+		}
+
+		if storage == nil {
+			storage = NewStorage(s)
+			file.Write(path, storage)
+		}
 	}
 
 	for _, solver := range storage.Solvers {

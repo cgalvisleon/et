@@ -204,7 +204,7 @@ func (s *Router) find(path string) (*Router, error) {
 			}
 		}
 
-		return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND_TAG, path, tag)
+		return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
 	}
 
 	if result.Solver == nil {

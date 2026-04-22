@@ -62,7 +62,12 @@ func newResolver(r *http.Request, solver *Solver, params map[string]string) (*Re
 		return nil, errors.New(msg.MSG_SOLVER_REQUIRED)
 	}
 
-	id := reg.ULID()
+	serviceId := r.Header.Get("ServiceId")
+	if serviceId == "" {
+		serviceId = reg.ULID()
+		r.Header.Set("ServiceId", serviceId)
+	}
+
 	now := utility.Now()
 	url := solver.Solver
 	for k, v := range params {
@@ -107,7 +112,7 @@ func newResolver(r *http.Request, solver *Solver, params map[string]string) (*Re
 		CreatedAt:   now,
 		UpdatedAt:   now,
 		Status:      TpStatusPending,
-		ID:          id,
+		ID:          serviceId,
 		URL:         url,
 		Path:        solver.Path,
 		Kind:        solver.Kind,

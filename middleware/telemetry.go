@@ -22,7 +22,6 @@ import (
 
 var (
 	hostName, _ = os.Hostname()
-	appName     = ""
 )
 
 const (
@@ -98,25 +97,25 @@ type Metrics struct {
 }
 
 // ToJson returns a JSON-serializable representation of the metrics.
-func (m *Metrics) ToJson() et.Json {
+func (s *Metrics) ToJson() et.Json {
 	return et.Json{
-		"timestamp":        m.TimeStamp.Format(time.RFC3339),
-		"service_id":       m.ServiceId,
-		"client_address":   m.ClientAddress,
-		"scheme":           m.Scheme,
-		"server_address":   m.ServerAddress,
-		"method":           m.Method,
-		"path":             m.Path,
-		"query":            m.Query,
-		"status_code":      m.StatusCode,
-		"request_size":     m.RequestSize,
-		"response_size":    m.ResponseSize,
-		"user_agent":       m.UserAgent,
-		"trace_id":         m.TraceID,
-		"app_name":         m.AppName,
-		"search_time_ms":   m.SearchTime,
-		"response_time_ms": m.ResponseTime,
-		"latency_ms":       m.Latency,
+		"timestamp":        s.TimeStamp.Format(time.RFC3339),
+		"service_id":       s.ServiceId,
+		"client_address":   s.ClientAddress,
+		"scheme":           s.Scheme,
+		"server_address":   s.ServerAddress,
+		"method":           s.Method,
+		"path":             s.Path,
+		"query":            s.Query,
+		"status_code":      s.StatusCode,
+		"request_size":     s.RequestSize,
+		"response_size":    s.ResponseSize,
+		"user_agent":       s.UserAgent,
+		"trace_id":         s.TraceID,
+		"app_name":         s.AppName,
+		"search_time_ms":   s.SearchTime,
+		"response_time_ms": s.ResponseTime,
+		"latency_ms":       s.Latency,
 	}
 }
 
@@ -242,43 +241,43 @@ func NewRpcMetric(method string) *Metrics {
 }
 
 // setRequest adds or removes the request key from the in-flight tracking list.
-func (m *Metrics) setRequest(remove bool) {
-	m.key = fmt.Sprintf(`%s:%s`, m.Method, m.Path)
+func (s *Metrics) setRequest(remove bool) {
+	s.key = fmt.Sprintf(`%s:%s`, s.Method, s.Path)
 	if remove {
-		cache.LRem("telemetry:requests", m.key)
+		cache.LRem("telemetry:requests", s.key)
 	} else {
-		cache.LPush("telemetry:requests", m.key)
+		cache.LPush("telemetry:requests", s.key)
 	}
 }
 
 // SetPath updates the matched route path and registers the request key.
-func (m *Metrics) SetPath(val string) {
+func (s *Metrics) SetPath(val string) {
 	if val == "" {
 		return
 	}
-	m.Path = val
-	m.setRequest(false)
+	s.Path = val
+	s.setRequest(false)
 }
 
 // CallSearchTime records the duration of the search/query phase in milliseconds.
-func (m *Metrics) CallSearchTime() {
-	m.SearchTime = float64(time.Since(m.mark).Milliseconds())
-	m.mark = timezone.Now()
+func (s *Metrics) CallSearchTime() {
+	s.SearchTime = float64(time.Since(s.mark).Milliseconds())
+	s.mark = timezone.Now()
 }
 
 // CallResponseTime records the handler processing duration in milliseconds.
-func (m *Metrics) CallResponseTime() {
-	m.ResponseTime = float64(time.Since(m.mark).Milliseconds())
-	m.mark = timezone.Now()
+func (s *Metrics) CallResponseTime() {
+	s.ResponseTime = float64(time.Since(s.mark).Milliseconds())
+	s.mark = timezone.Now()
 }
 
 // CallLatency records the total end-to-end latency in milliseconds.
-func (m *Metrics) CallLatency() {
-	m.Latency = float64(time.Since(m.TimeStamp).Milliseconds())
+func (s *Metrics) CallLatency() {
+	s.Latency = float64(time.Since(s.TimeStamp).Milliseconds())
 }
 
 // CallMetrics computes rolling request-rate counters for the current endpoint key.
-func (m *Metrics) CallMetrics() Telemetry {
+func (s *Metrics) CallMetrics() Telemetry {
 	timeNow := timezone.Now()
 	date := timeNow.Format("2006-01-02")
 	hour := timeNow.Format("2006-01-02-15")
@@ -288,92 +287,92 @@ func (m *Metrics) CallMetrics() Telemetry {
 
 	return Telemetry{
 		TimeStamp:         date,
-		Key:               m.key,
-		RequestsPerSecond: cache.Incr(reg.GenHashKey(m.key, second), 2),
-		RequestsPerMinute: cache.Incr(reg.GenHashKey(m.key, minute), 60),
-		RequestsPerHour:   cache.Incr(reg.GenHashKey(m.key, hour), 3600),
-		RequestsPerDay:    cache.Incr(reg.GenHashKey(m.key, date), 86400),
+		Key:               s.key,
+		RequestsPerSecond: cache.Incr(reg.GenHashKey(s.key, second), 2),
+		RequestsPerMinute: cache.Incr(reg.GenHashKey(s.key, minute), 60),
+		RequestsPerHour:   cache.Incr(reg.GenHashKey(s.key, hour), 3600),
+		RequestsPerDay:    cache.Incr(reg.GenHashKey(s.key, date), 86400),
 		RequestsLimit:     int64(requestsLimit),
 	}
 }
 
 // logRequest prints a color-coded summary line to stdout and publishes the log event.
-func (m *Metrics) logRequest() et.Json {
+func (s *Metrics) logRequest() et.Json {
 	w := lg.Color(nil, lg.Reset, "%s", timezone.NowStr())
-	lg.Color(w, lg.Purple, " [%s]: ", m.Method)
-	lg.Color(w, lg.Cyan, "%s", m.Path)
-	if m.Query != "" {
-		lg.Color(w, lg.White, "?%s", m.Query)
+	lg.Color(w, lg.Purple, " [%s]: ", s.Method)
+	lg.Color(w, lg.Cyan, "%s", s.Path)
+	if s.Query != "" {
+		lg.Color(w, lg.White, "?%s", s.Query)
 	}
-	lg.Color(w, lg.White, " from:%s", m.ClientAddress)
+	lg.Color(w, lg.White, " from:%s", s.ClientAddress)
 
 	switch {
-	case m.StatusCode >= 500:
-		lg.Color(w, lg.Red, " - %s", http.StatusText(m.StatusCode))
-	case m.StatusCode >= 400:
-		lg.Color(w, lg.Yellow, " - %s", http.StatusText(m.StatusCode))
-	case m.StatusCode >= 300:
-		lg.Color(w, lg.Cyan, " - %s", http.StatusText(m.StatusCode))
+	case s.StatusCode >= 500:
+		lg.Color(w, lg.Red, " - %s", http.StatusText(s.StatusCode))
+	case s.StatusCode >= 400:
+		lg.Color(w, lg.Yellow, " - %s", http.StatusText(s.StatusCode))
+	case s.StatusCode >= 300:
+		lg.Color(w, lg.Cyan, " - %s", http.StatusText(s.StatusCode))
 	default:
-		lg.Color(w, lg.Green, " - %s", http.StatusText(m.StatusCode))
+		lg.Color(w, lg.Green, " - %s", http.StatusText(s.StatusCode))
 	}
 
-	size := float64(m.ResponseSize) / 1024
+	size := float64(s.ResponseSize) / 1024
 	lg.Color(w, lg.Cyan, " Size:%.2fKB", size)
 
 	limitLatency := time.Duration(envar.GetInt("LATENCY_LIMIT", 1000)) * time.Millisecond
-	latencyDur := time.Duration(m.Latency * float64(time.Millisecond))
+	latencyDur := time.Duration(s.Latency * float64(time.Millisecond))
 	switch {
 	case latencyDur >= 5*time.Second:
-		lg.Color(w, lg.Red, " Latency:%.2fms", m.Latency)
+		lg.Color(w, lg.Red, " Latency:%.2fms", s.Latency)
 	case latencyDur >= limitLatency:
-		lg.Color(w, lg.Yellow, " Latency:%.2fms", m.Latency)
+		lg.Color(w, lg.Yellow, " Latency:%.2fms", s.Latency)
 	default:
-		lg.Color(w, lg.Green, " Latency:%.2fms", m.Latency)
+		lg.Color(w, lg.Green, " Latency:%.2fms", s.Latency)
 	}
 
-	lg.Color(w, lg.White, " Response:%.2fms", m.ResponseTime)
+	lg.Color(w, lg.White, " Response:%.2fms", s.ResponseTime)
 
-	m.metrics = m.CallMetrics()
-	threshold := float64(m.metrics.RequestsLimit) * 0.6
-	rps := m.metrics.RequestsPerSecond
+	s.metrics = s.CallMetrics()
+	threshold := float64(s.metrics.RequestsLimit) * 0.6
+	rps := s.metrics.RequestsPerSecond
 	switch {
-	case rps > m.metrics.RequestsLimit:
+	case rps > s.metrics.RequestsLimit:
 		lg.Color(w, lg.Red, " Req S:%v M:%v H:%v D:%v L:%v",
-			rps, m.metrics.RequestsPerMinute, m.metrics.RequestsPerHour, m.metrics.RequestsPerDay, m.metrics.RequestsLimit)
+			rps, s.metrics.RequestsPerMinute, s.metrics.RequestsPerHour, s.metrics.RequestsPerDay, s.metrics.RequestsLimit)
 	case rps > int64(threshold):
 		lg.Color(w, lg.Yellow, " Req S:%v M:%v H:%v D:%v L:%v",
-			rps, m.metrics.RequestsPerMinute, m.metrics.RequestsPerHour, m.metrics.RequestsPerDay, m.metrics.RequestsLimit)
+			rps, s.metrics.RequestsPerMinute, s.metrics.RequestsPerHour, s.metrics.RequestsPerDay, s.metrics.RequestsLimit)
 	default:
 		lg.Color(w, lg.Green, " Req S:%v M:%v H:%v D:%v L:%v",
-			rps, m.metrics.RequestsPerMinute, m.metrics.RequestsPerHour, m.metrics.RequestsPerDay, m.metrics.RequestsLimit)
+			rps, s.metrics.RequestsPerMinute, s.metrics.RequestsPerHour, s.metrics.RequestsPerDay, s.metrics.RequestsLimit)
 	}
 
-	lg.Color(w, lg.Cyan, " [ServiceId]:%s", m.ServiceId)
-	if m.TraceID != "" {
-		lg.Color(w, lg.Cyan, " [TraceId]:%s", m.TraceID)
+	lg.Color(w, lg.Cyan, " [ServiceId]:%s", s.ServiceId)
+	if s.TraceID != "" {
+		lg.Color(w, lg.Cyan, " [TraceId]:%s", s.TraceID)
 	}
-	lg.Color(w, lg.White, " [App]:%s", m.AppName)
+	lg.Color(w, lg.White, " [App]:%s", s.AppName)
 	println(*w)
 
-	m.setRequest(true)
+	s.setRequest(true)
 	PushTelemetryLog(*w)
 
-	return m.ToJson()
+	return s.ToJson()
 }
 
 // telemetry emits the final telemetry events and returns the combined result.
-func (m *Metrics) telemetry() et.Json {
-	result := m.ToJson()
-	result["metric"] = m.metrics.ToJson()
+func (s *Metrics) telemetry() et.Json {
+	result := s.ToJson()
+	result["metric"] = s.metrics.ToJson()
 
 	payload := et.Json{
-		"response": m.ToJson(),
-		"metric":   m.metrics.ToJson(),
+		"response": s.ToJson(),
+		"metric":   s.metrics.ToJson(),
 	}
 	PushTelemetry(payload)
 
-	if m.metrics.RequestsPerSecond > m.metrics.RequestsLimit {
+	if s.metrics.RequestsPerSecond > s.metrics.RequestsLimit {
 		PushTelemetryOverflow(payload)
 	}
 
@@ -381,59 +380,59 @@ func (m *Metrics) telemetry() et.Json {
 }
 
 // DoneHTTP finalizes metrics after an HTTP response has been written.
-func (m *Metrics) DoneHTTP(rw *ResponseWriterWrapper) et.Json {
-	m.StatusCode = rw.StatusCode
-	m.ResponseSize = rw.Size
-	m.CallResponseTime()
-	m.CallLatency()
-	m.logRequest()
-	return m.telemetry()
+func (s *Metrics) DoneHTTP(rw *ResponseWriterWrapper) et.Json {
+	s.StatusCode = rw.StatusCode
+	s.ResponseSize = rw.Size
+	s.CallResponseTime()
+	s.CallLatency()
+	s.logRequest()
+	return s.telemetry()
 }
 
 // DoneRpc finalizes metrics after an RPC call has returned.
-func (m *Metrics) DoneRpc(r any) et.Json {
+func (s *Metrics) DoneRpc(r any) et.Json {
 	switch v := r.(type) {
 	case string:
-		m.ResponseSize = len(v)
+		s.ResponseSize = len(v)
 	case et.Json:
-		m.ResponseSize = len(v.ToString())
+		s.ResponseSize = len(v.ToString())
 	case []byte:
-		m.ResponseSize = len(v)
+		s.ResponseSize = len(v)
 	case int:
-		m.ResponseSize = len(strconv.Itoa(v))
+		s.ResponseSize = len(strconv.Itoa(v))
 	case float64:
-		m.ResponseSize = len(strconv.FormatFloat(v, 'f', -1, 64))
+		s.ResponseSize = len(strconv.FormatFloat(v, 'f', -1, 64))
 	case bool:
-		m.ResponseSize = len(strconv.FormatBool(v))
+		s.ResponseSize = len(strconv.FormatBool(v))
 	case et.List:
-		m.ResponseSize = len(v.ToString())
+		s.ResponseSize = len(v.ToString())
 	case et.Items:
-		m.ResponseSize = len(v.ToString())
+		s.ResponseSize = len(v.ToString())
 	case et.Item:
-		m.ResponseSize = len(v.ToString())
+		s.ResponseSize = len(v.ToString())
 	default:
-		m.ResponseSize = len(fmt.Sprintf("%v", v))
+		s.ResponseSize = len(fmt.Sprintf("%v", v))
 	}
 
-	m.StatusCode = http.StatusOK
-	m.CallResponseTime()
-	m.CallLatency()
-	m.logRequest()
-	return m.telemetry()
+	s.StatusCode = http.StatusOK
+	s.CallResponseTime()
+	s.CallLatency()
+	s.logRequest()
+	return s.telemetry()
 }
 
 // WriteResponse writes a raw JSON byte response, records metrics, and returns nil on success.
-func (m *Metrics) WriteResponse(w http.ResponseWriter, r *http.Request, statusCode int, e []byte) error {
+func (s *Metrics) WriteResponse(w http.ResponseWriter, r *http.Request, statusCode int, e []byte) error {
 	rw := &ResponseWriterWrapper{ResponseWriter: w, StatusCode: statusCode}
 	rw.Header().Set("Content-Type", "application/json; charset=utf-8")
 	rw.WriteHeader(statusCode)
 	rw.Write(e)
-	m.DoneHTTP(rw)
+	s.DoneHTTP(rw)
 	return nil
 }
 
 // RESULT serializes data as JSON and writes the response.
-func (m *Metrics) RESULT(w http.ResponseWriter, r *http.Request, statusCode int, data interface{}) error {
+func (s *Metrics) RESULT(w http.ResponseWriter, r *http.Request, statusCode int, data interface{}) error {
 	if data == nil {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(statusCode)
@@ -443,11 +442,11 @@ func (m *Metrics) RESULT(w http.ResponseWriter, r *http.Request, statusCode int,
 	if err != nil {
 		return err
 	}
-	return m.WriteResponse(w, r, statusCode, e)
+	return s.WriteResponse(w, r, statusCode, e)
 }
 
 // JSON wraps data in a standard {ok, result} envelope and writes the response.
-func (m *Metrics) JSON(w http.ResponseWriter, r *http.Request, statusCode int, dt interface{}) error {
+func (s *Metrics) JSON(w http.ResponseWriter, r *http.Request, statusCode int, dt interface{}) error {
 	if dt == nil {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(statusCode)
@@ -464,11 +463,11 @@ func (m *Metrics) JSON(w http.ResponseWriter, r *http.Request, statusCode int, d
 	if err != nil {
 		return err
 	}
-	return m.WriteResponse(w, r, statusCode, e)
+	return s.WriteResponse(w, r, statusCode, e)
 }
 
 // ITEM serializes an et.Item and writes the response.
-func (m *Metrics) ITEM(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Item) error {
+func (s *Metrics) ITEM(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Item) error {
 	if &dt == (&et.Item{}) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(statusCode)
@@ -478,11 +477,11 @@ func (m *Metrics) ITEM(w http.ResponseWriter, r *http.Request, statusCode int, d
 	if err != nil {
 		return err
 	}
-	return m.WriteResponse(w, r, statusCode, e)
+	return s.WriteResponse(w, r, statusCode, e)
 }
 
 // ITEMS serializes an et.Items and writes the response.
-func (m *Metrics) ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Items) error {
+func (s *Metrics) ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Items) error {
 	if &dt == (&et.Items{}) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(statusCode)
@@ -492,10 +491,10 @@ func (m *Metrics) ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, 
 	if err != nil {
 		return err
 	}
-	return m.WriteResponse(w, r, statusCode, e)
+	return s.WriteResponse(w, r, statusCode, e)
 }
 
 // HTTPError writes a JSON error response with the given status code and message.
-func (m *Metrics) HTTPError(w http.ResponseWriter, r *http.Request, statusCode int, message string) error {
-	return m.JSON(w, r, statusCode, et.Json{"message": message})
+func (s *Metrics) HTTPError(w http.ResponseWriter, r *http.Request, statusCode int, message string) error {
+	return s.JSON(w, r, statusCode, et.Json{"message": message})
 }

@@ -3,12 +3,15 @@ package ettp
 import (
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -47,6 +50,8 @@ type Config struct {
 	CertFile     string           `json:"cert_file"`
 	KeyFile      string           `json:"key_file"`
 	Transport    *TransportConfig `json:"transport"`
+	UseCache     bool             `json:"use_cache"`
+	UseEvent     bool             `json:"use_event"`
 	Debug        bool             `json:"debug"`
 }
 
@@ -61,7 +66,8 @@ type Server struct {
 	Solvers       map[string]*Solver                `json:"solvers"`
 	Packages      map[string]*Package               `json:"packages"`
 	router        map[string]*Router                `json:"-"`
-	requests      map[string]*Resolver              `json:"-"`
+	Requests      map[string]*Resolver              `json:"requests"`
+	mu            map[string]*sync.Mutex            `json:"-"`
 	mux           *http.ServeMux                    `json:"-"`
 	svr           *http.Server                      `json:"-"`
 	client        *http.Client                      `json:"-"`
@@ -73,15 +79,17 @@ type Server struct {
 	istls         bool                              `json:"-"`
 	certFile      string                            `json:"-"`
 	keyFile       string                            `json:"-"`
+	useCache      bool                              `json:"-"`
+	useEvent      bool                              `json:"-"`
 	debug         bool                              `json:"-"`
 }
 
 /**
-* NewServer
+* New
 * @param name string
-* @return *Server
+* @return (*Server, error)
 **/
-func NewServer(name string, config *Config) *Server {
+func New(name string, config *Config) (*Server, error) {
 	now := timezone.Now()
 	host, _ := os.Hostname()
 	result := &Server{
@@ -94,7 +102,8 @@ func NewServer(name string, config *Config) *Server {
 		Solvers:       make(map[string]*Solver),
 		Packages:      make(map[string]*Package),
 		router:        make(map[string]*Router),
-		requests:      make(map[string]*Resolver),
+		Requests:      make(map[string]*Resolver),
+		mu:            make(map[string]*sync.Mutex),
 		Version:       Version,
 		mux:           http.NewServeMux(),
 		middlewares:   make([]func(http.Handler) http.Handler, 0),
@@ -105,8 +114,15 @@ func NewServer(name string, config *Config) *Server {
 		istls:         config.IsTLS,
 		certFile:      config.CertFile,
 		keyFile:       config.KeyFile,
+		useCache:      config.UseCache,
+		useEvent:      config.UseEvent,
 		debug:         config.Debug,
 	}
+
+	result.mu = map[string]*sync.Mutex{
+		"requests": &sync.Mutex{},
+	}
+
 	result.svr = &http.Server{
 		Addr:         result.Addr,
 		Handler:      CorsAllowAll(config.AllowOrigin).Handler(result.mux),
@@ -148,7 +164,18 @@ func NewServer(name string, config *Config) *Server {
 
 	result.mux.HandleFunc("/", result.handler)
 
-	return result
+	if config.UseCache {
+		if err := cache.Load(); err != nil {
+			return nil, err
+		}
+	}
+	if config.UseEvent {
+		if err := event.Load(); err != nil {
+			return nil, err
+		}
+	}
+
+	return result, nil
 }
 
 /**
@@ -285,6 +312,59 @@ func (s *Server) setHandler(method, path string, handlerFn http.HandlerFunc, pac
 }
 
 /**
+* setRequest
+* @param key string, resolver *Resolver
+* @return void
+**/
+func (s *Server) setRequest(key string, resolver *Resolver) {
+	s.mu["requests"].Lock()
+	defer s.mu["requests"].Unlock()
+
+	s.Requests[key] = resolver
+}
+
+/**
+* getRequest
+* @param key string
+* @return (*Resolver, bool)
+**/
+func (s *Server) getRequest(key string) (*Resolver, bool) {
+	s.mu["requests"].Lock()
+	defer s.mu["requests"].Unlock()
+
+	resolver, ok := s.Requests[key]
+	return resolver, ok
+}
+
+/**
+* deleteRequest
+* @param key string
+* @return void
+**/
+func (s *Server) deleteRequest(key string) {
+	s.mu["requests"].Lock()
+	defer s.mu["requests"].Unlock()
+
+	delete(s.Requests, key)
+}
+
+/**
+* listRequests
+* @return map[string]*Resolver
+**/
+func (s *Server) listRequests() map[string]*Resolver {
+	s.mu["requests"].Lock()
+	defer s.mu["requests"].Unlock()
+
+	result := make(map[string]*Resolver)
+	for k, v := range s.Requests {
+		result[k] = v
+	}
+
+	return result
+}
+
+/**
 * SetRouter
 * @param method, path, resolve string, header et.Json, excludeHeader []string, version int, packageName string, saved bool
 * @return *Solver, error
@@ -349,6 +429,57 @@ func (s *Server) Authenticator(middleware func(http.Handler) http.Handler) *Serv
 }
 
 /**
+* RemoveRouterById
+* @param id string
+* @return error
+**/
+func (s *Server) RemoveRouterById(id string, save bool) error {
+	_, ok := s.Solvers[id]
+	if !ok {
+		return fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, id)
+	}
+
+	delete(s.Solvers, id)
+
+	if save {
+		s.Save()
+	}
+
+	return nil
+}
+
+/**
+* FindResolver
+* @param r *http.Request
+* @return *Request, error
+**/
+func (s *Server) FindResolver(r *http.Request) (*Resolver, error) {
+	method := r.Method
+	router, ok := s.router[method]
+	if !ok {
+		return nil, errors.New("router not found")
+	}
+
+	result, err := router.findResolver(r)
+	if err != nil {
+		return nil, err
+	}
+
+	s.setRequest(result.ID, result)
+
+	clean := func() {
+		s.deleteRequest(result.ID)
+	}
+
+	duration := s.idleTimeout + (300 * time.Microsecond)
+	if duration != 0 {
+		go time.AfterFunc(duration, clean)
+	}
+
+	return result, nil
+}
+
+/**
 * Start
 * @return error
 **/
@@ -409,78 +540,4 @@ func (s *Server) Reset() {
 	}
 
 	event.Publish(router.EVENT_RESET_ROUTER, et.Json{})
-}
-
-/**
-* RemoveRouterById
-* @param id string
-* @return error
-**/
-func (s *Server) RemoveRouterById(id string, save bool) error {
-	_, ok := s.Solvers[id]
-	if !ok {
-		return fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, id)
-	}
-
-	delete(s.Solvers, id)
-
-	if save {
-		s.Save()
-	}
-
-	return nil
-}
-
-/**
-* FindResolver
-* @param r *http.Request
-* @return *Request, error
-**/
-func (s *Server) FindResolver(r *http.Request) (*Resolver, error) {
-	method := r.Method
-	router, ok := s.router[method]
-	if !ok {
-		return nil, fmt.Errorf("router %s not found", method)
-	}
-
-	result, err := router.findResolver(r)
-	if err != nil {
-		return nil, err
-	}
-
-	s.requests[result.ID] = result
-
-	clean := func() {
-		delete(s.requests, result.ID)
-	}
-
-	duration := 24 * time.Hour
-	if duration != 0 {
-		go time.AfterFunc(duration, clean)
-	}
-
-	return result, nil
-}
-
-/**
-* StatusResolver
-* @param r *Resolver, status Status
-**/
-func (s *Server) HTTPError(resolver *Resolver, metric *middleware.Metrics, w http.ResponseWriter, r *http.Request, status int, message string) {
-	resolver.setStatus(TpStatusFailed)
-	metric.HTTPError(w, r, status, message)
-
-	s.Save()
-}
-
-/**
-* HTTPSuccess
-* @param resolver *Resolver, metric *middleware.Metrics, rw *middleware.ResponseWriterWrapper
-**/
-func (s *Server) HTTPSuccess(resolver *Resolver, metric *middleware.Metrics, rw *middleware.ResponseWriterWrapper) {
-	resolver.setStatus(TpStatusSuccess)
-	delete(s.requests, resolver.ID)
-	metric.DoneHTTP(rw)
-
-	s.Save()
 }

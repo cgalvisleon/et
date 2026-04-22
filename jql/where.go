@@ -1,4 +1,4 @@
-package sql
+package jql
 
 import (
 	"encoding/json"

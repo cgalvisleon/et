@@ -2,7 +2,6 @@ package ettp
 
 import (
 	"context"
-	"crypto/tls"
 	"io"
 	"net/http"
 
@@ -40,11 +39,11 @@ func (s *Server) applyMiddlewares(handler http.Handler, middlewares []func(http.
 }
 
 /**
-* handlerRouteTable
+* handler
 * @param w http.ResponseWriter
 * @param r *http.Request
 **/
-func (s *Server) handlerRouteTable(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 	/* Begin telemetry */
 	metric := middleware.GetMetrics(r)
 	ctx := context.WithValue(r.Context(), middleware.MetricKey, metric)
@@ -62,35 +61,35 @@ func (s *Server) handlerRouteTable(w http.ResponseWriter, r *http.Request) {
 	}
 
 	/* Call search time since begin */
-	w.Header().Set("ServiceId", resolver.Id)
+	w.Header().Set("ServiceId", resolver.ID)
 	metric.CallSearchTime()
-	metric.SetPath(resolver.solver.Path)
+	metric.SetPath(resolver.Path)
 
 	/* If HandlerFunc is handler */
-	if resolver.solver.Kind == TpHandler {
-		h := resolver.solver.handlerFn
+	if resolver.Kind == TpHandler {
+		h := resolver.handlerFn
 		if h == nil {
 			go s.HTTPError(resolver, metric, w, r, http.StatusNotFound, "Handler not found")
 			return
 		}
 
-		handler := s.applyMiddlewares(http.HandlerFunc(h), resolver.solver.middlewares)
+		handler := s.applyMiddlewares(http.HandlerFunc(h), resolver.middlewares)
 		handler.ServeHTTP(w, r)
 		return
 	}
 
 	/* If API REST is handler */
-	h := s.handlerApiRest
+	h := s.handlerApi
 	ctx = context.WithValue(ctx, ResoluteKey, resolver)
-	handler := s.applyMiddlewares(http.HandlerFunc(h), resolver.solver.middlewares)
+	handler := s.applyMiddlewares(http.HandlerFunc(h), resolver.middlewares)
 	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
 /**
-* handlerApiRest
+* handlerApi
 * @params w http.ResponseWriter, r *http.Request
 **/
-func (s *Server) handlerApiRest(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlerApi(w http.ResponseWriter, r *http.Request) {
 	rw := &middleware.ResponseWriterWrapper{ResponseWriter: w}
 	metric := middleware.GetMetrics(r)
 
@@ -112,16 +111,7 @@ func (s *Server) handlerApiRest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	proxyReq.Header = resolver.Header
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-	}
-
-	client := &http.Client{
-		Transport: transport,
-	}
-	res, err := client.Do(proxyReq)
+	res, err := s.client.Do(proxyReq)
 	if err != nil {
 		s.HTTPError(resolver, metric, rw, r, http.StatusBadGateway, err.Error())
 		return

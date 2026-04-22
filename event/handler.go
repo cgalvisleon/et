@@ -60,7 +60,7 @@ func eventState(channel string, status EventStatus, data any) {
 		"channel":    channel,
 		"event":      status,
 		"host":       hostName,
-		"id":         reg.GenULID("event"),
+		"id":         reg.ULID(),
 	}
 	if data != nil {
 		msg["msg"] = data

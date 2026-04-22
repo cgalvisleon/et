@@ -25,6 +25,7 @@ var (
 	MSG_PATH_INVALID                   = "path:%s is invalid"
 	MSG_SOLVER_NOT_FOUND_TAG           = "solver:%s not found tag:%s"
 	MSG_SOLVER_NOT_FOUND               = "solver:%s not found"
+	MSG_SOLVER_REQUIRED                = "solver required"
 	MSG_METHOD_NOT_SUPPORTED           = "method %s not supported"
 	MSG_RESOLVE_NOT_VALID              = "resolve %s is not valid"
 	MSG_ARG_REQUIRED                   = "argument required (%s)"

@@ -1,7 +1,6 @@
 package ettp
 
 import (
-	"crypto/tls"
 	"io"
 	"net/http"
 
@@ -42,16 +41,7 @@ func (s *Server) handlerApiRest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	proxyReq.Header = resolver.Header
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-	}
-
-	client := &http.Client{
-		Transport: transport,
-	}
-	res, err := client.Do(proxyReq)
+	res, err := s.client.Do(proxyReq)
 	if err != nil {
 		metric.HTTPError(rw, r, http.StatusBadGateway, err.Error())
 		return

@@ -151,7 +151,7 @@ func (s *Conversation) setMessage(to string, tp TypeMessage, content string) (et
 		now := timezone.Now()
 		participant := &Participant{
 			JoinedAt:       now,
-			ID:             reg.GenULID("participant"),
+			ID:             reg.ULID(),
 			ConversationID: s.ID,
 			UserID:         userId,
 			To:             to,
@@ -225,7 +225,7 @@ func NewConversations(participantPrefix string, store instances.Store) (*Convers
 **/
 func (s *Conversations) getConversation(id string, tp TypeConversation) (*Conversation, error) {
 	if id == "" {
-		id = reg.GenULID("conversation")
+		id = reg.ULID()
 	}
 
 	var result *Conversation

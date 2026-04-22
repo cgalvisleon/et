@@ -1,6 +1,7 @@
 package ettp
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/utility"
 )
@@ -39,21 +41,28 @@ func (s Status) String() string {
 
 type Resolver struct {
 	*http.Request
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Status    Status    `json:"status"`
-	Id        string    `json:"id"`
-	URL       string    `json:"url"`
-	solver    *Solver   `json:"-"`
+	CreatedAt   time.Time                         `json:"created_at"`
+	UpdatedAt   time.Time                         `json:"updated_at"`
+	Status      Status                            `json:"status"`
+	ID          string                            `json:"id"`
+	URL         string                            `json:"url"`
+	Path        string                            `json:"path"`
+	Kind        TypeRouter                        `json:"kind"`
+	middlewares []func(http.Handler) http.Handler `json:"-"`
+	handlerFn   http.HandlerFunc                  `json:"-"`
 }
 
 /**
 * newResolver
 * @param r *http.Request, solver *Solver, params map[string]string
-* @return *Resolver
+* @return *Resolver, error
 **/
-func newResolver(r *http.Request, solver *Solver, params map[string]string) *Resolver {
-	id := reg.GenULID("resolver")
+func newResolver(r *http.Request, solver *Solver, params map[string]string) (*Resolver, error) {
+	if solver == nil {
+		return nil, errors.New(msg.MSG_SOLVER_REQUIRED)
+	}
+
+	id := reg.ULID()
 	now := utility.Now()
 	url := solver.Solver
 	for k, v := range params {
@@ -94,18 +103,20 @@ func newResolver(r *http.Request, solver *Solver, params map[string]string) *Res
 	}
 
 	result := &Resolver{
-		Request:   r,
-		CreatedAt: now,
-		UpdatedAt: now,
-		Status:    TpStatusPending,
-		Id:        id,
-		URL:       url,
-		solver:    solver,
+		Request:     r,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		Status:      TpStatusPending,
+		ID:          id,
+		URL:         url,
+		Path:        solver.Path,
+		Kind:        solver.Kind,
+		middlewares: solver.middlewares,
+		handlerFn:   solver.handlerFn,
 	}
+	result.setStatus(TpStatusPending)
 
-	event.Publish(EVENT_RESOLVER_STATUS, result.ToJson())
-
-	return result
+	return result, nil
 }
 
 /**
@@ -117,9 +128,9 @@ func (r *Resolver) ToJson() et.Json {
 		"created_at": r.CreatedAt,
 		"updated_at": r.UpdatedAt,
 		"status":     r.Status.String(),
-		"id":         r.Id,
+		"id":         r.ID,
 		"url":        r.URL,
-		"solver":     r.solver.ToJson(),
+		"kind":       r.Kind.String(),
 	}
 }
 

@@ -81,7 +81,7 @@ func GetTx(tx *Tx) (*Tx, bool) {
 	}
 
 	now := timezone.Now()
-	id := reg.GenULID("transaction")
+	id := reg.ULID()
 	tx = &Tx{
 		StartedAt:    now,
 		LastUpdateAt: now,

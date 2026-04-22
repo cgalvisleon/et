@@ -21,7 +21,7 @@ const (
 * @return et.Json
 **/
 func Work(event string, data et.Json) et.Json {
-	id := reg.GenULID("work")
+	id := reg.ULID()
 	work := et.Json{
 		"created_at": timezone.Now(),
 		"status":     StatusPending,

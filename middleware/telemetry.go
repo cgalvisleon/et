@@ -189,7 +189,7 @@ func NewMetric(r *http.Request) *Metrics {
 
 	serviceId := r.Header.Get("ServiceId")
 	if serviceId == "" {
-		serviceId = reg.GenULID("service")
+		serviceId = reg.ULID()
 		r.Header.Set("ServiceId", serviceId)
 	}
 

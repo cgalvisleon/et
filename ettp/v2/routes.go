@@ -19,9 +19,9 @@ import (
 )
 
 /**
-* initRouteTable
+* basicRoutes
 **/
-func (s *Server) initRouteTable() error {
+func (s *Server) basicRoutes() error {
 	s.Public(GET, "/version", s.getVersion, s.Name)
 	s.Public(GET, "/test/{id}/{test}", s.getTest, s.Name)
 	s.Private(GET, "/reset", s.reset, s.Name)
@@ -33,7 +33,7 @@ func (s *Server) initRouteTable() error {
 	// Events
 	s.Private(POST, "/events", event.HttpEventPublish, s.Name)
 	// Routes
-	s.Private(GET, "/routes", s.getRoutes, s.Name)
+	s.Private(GET, "/routes", s.getRouter, s.Name)
 	s.Private(POST, "/routes", s.upsetRouter, s.Name)
 	s.Private(DELETE, "/routes/{id}", s.deleteRouteById, s.Name)
 	// Packages
@@ -41,8 +41,8 @@ func (s *Server) initRouteTable() error {
 	s.Private(DELETE, "/packages/{name}", s.deletePackage, s.Name)
 	// Cache
 	s.Private(GET, "/cache", s.listCache, s.Name)
-	s.Private(DELETE, "/cache", s.emptyCache, s.Name)
 	s.Private(GET, "/cache/{key}", s.getCache, s.Name)
+	s.Private(DELETE, "/cache", s.emptyCache, s.Name)
 
 	return nil
 }
@@ -128,14 +128,15 @@ func (s *Server) handlerDevToken(w http.ResponseWriter, r *http.Request) {
 }
 
 /**
-* getRouters
+* getRouter
 * @params w http.ResponseWriter
 * @params r *http.Request
 **/
-func (s *Server) getRoutes(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getRouter(w http.ResponseWriter, r *http.Request) {
 	metric := middleware.GetMetrics(r)
 
-	id := r.URL.Query().Get("id")
+	values := r.URL.Query()
+	id := values.Get("id")
 	if len(id) != 0 {
 		result, ok := s.Solvers[id]
 		if !ok {
@@ -149,7 +150,7 @@ func (s *Server) getRoutes(w http.ResponseWriter, r *http.Request) {
 
 	name := r.URL.Query().Get("name")
 	if len(name) != 0 {
-		result, ok := s.packages[name]
+		result, ok := s.Packages[name]
 		if !ok {
 			metric.HTTPError(w, r, http.StatusNotFound, MSG_ROUTE_NOT_FOUND)
 			return
@@ -164,7 +165,11 @@ func (s *Server) getRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json := s.ToJson()
+	json, err := s.ToJson()
+	if err != nil {
+		metric.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
 	metric.JSON(w, r, http.StatusOK, json)
 }
 
@@ -238,7 +243,7 @@ func (s *Server) getPakages(w http.ResponseWriter, r *http.Request) {
 	name := queryParams.Get("name")
 	if len(name) == 0 {
 		result := et.Items{Result: []et.Json{}}
-		for _, pkg := range s.packages {
+		for _, pkg := range s.Packages {
 			json, err := pkg.ToJson()
 			if err != nil {
 				continue
@@ -250,7 +255,7 @@ func (s *Server) getPakages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, ok := s.packages[name]
+	result, ok := s.Packages[name]
 	if !ok {
 		metric.HTTPError(w, r, http.StatusNotFound, MSG_ROUTE_NOT_FOUND)
 		return
@@ -272,17 +277,17 @@ func (s *Server) deletePackage(w http.ResponseWriter, r *http.Request) {
 	metric := middleware.GetMetrics(r)
 
 	name := r.PathValue("name")
-	result, ok := s.packages[name]
+	result, ok := s.Packages[name]
 	if !ok {
 		metric.HTTPError(w, r, http.StatusNotFound, MSG_ROUTE_NOT_FOUND)
 		return
 	}
 
-	for _, solver := range result.Solvers {
-		s.RemoveRouterById(solver.ID, false)
+	for id := range result.Routes {
+		s.RemoveRouterById(id, false)
 	}
 
-	delete(s.packages, name)
+	delete(s.Packages, name)
 
 	s.Save()
 
@@ -305,7 +310,7 @@ func (s *Server) reset(w http.ResponseWriter, r *http.Request) {
 
 	s.Reset()
 
-	for _, pk := range s.packages {
+	for _, pk := range s.Packages {
 		channel := fmt.Sprintf(`%s:%s`, router.EVENT_RESET_ROUTER, pk.Name)
 		event.Publish(channel, et.Json{})
 	}

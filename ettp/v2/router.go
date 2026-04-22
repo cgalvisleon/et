@@ -34,10 +34,11 @@ var methods = map[string]bool{
 }
 
 type Router struct {
-	Router map[string]*Router `json:"router"`
 	Tag    string             `json:"tag"`
 	Param  string             `json:"param"`
 	Solver *Solver            `json:"solver"`
+	Router map[string]*Router `json:"router"`
+	owner  *Router            `json:"-"`
 }
 
 /**
@@ -47,8 +48,8 @@ type Router struct {
 **/
 func newRouter(tag string) *Router {
 	return &Router{
-		Router: make(map[string]*Router),
 		Tag:    tag,
+		Router: make(map[string]*Router),
 	}
 }
 
@@ -78,16 +79,17 @@ func (s *Router) ToJson() et.Json {
 **/
 func (s *Router) add(tag string) *Router {
 	router := newRouter(tag)
-	s.Router[tag] = router
+	router.owner = s
+	s.Router[router.Tag] = router
 	return router
 }
 
 /**
-* setRouter
-* @param kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, packageName string
+* set
+* @param kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int
 * @return *Solver, error
 **/
-func (s *Router) setRouter(kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int, packageName string) (*Solver, error) {
+func (s *Router) set(kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int) (*Solver, error) {
 	tags := strings.Split(path, "/")
 	if len(tags) == 0 {
 		return nil, fmt.Errorf("path %s is invalid", path)
@@ -121,7 +123,6 @@ func (s *Router) setRouter(kind TypeRouter, method, path, solver string, typeHea
 			target.Solver.Header = header
 			target.Solver.ExcludeHeader = excludeHeader
 			target.Solver.Version = version
-			target.Solver.PackageName = packageName
 		}
 	}
 
@@ -133,59 +134,72 @@ func (s *Router) setRouter(kind TypeRouter, method, path, solver string, typeHea
 }
 
 /**
-* findResolver
-* @param r *http.Request
-* @return *Resolver, error
+* find
+* @param path string
+* @return *Router, error
 **/
-func (s *Router) findResolver(req *http.Request) (*Resolver, error) {
-	path := req.URL.Path
+func (s *Router) find(path string) (*Router, error) {
 	tags := strings.Split(path, "/")
 	if len(tags) == 0 {
 		return nil, fmt.Errorf(msg.MSG_PATH_INVALID, path)
 	}
 
 	params := make(map[string]string)
-	target := s
+	result := s
 	for _, tag := range tags {
 		if len(tag) == 0 {
 			continue
 		}
 
-		router, ok := target.Router[tag]
+		router, ok := result.Router[tag]
 		if ok {
-			target = router
+			result = router
 			continue
 		}
 
-		if tag[0] == '?' {
+		querys := strings.Split(tag, "?")
+		if len(querys) > 0 {
+			query := querys[0]
+			router, ok := result.Router[query]
+			if ok {
+				result = router
+			}
+
+			if result.Solver == nil {
+				return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
+			}
+
+			if result.Solver.Method != GET {
+				return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
+			}
+
 			break
 		}
 
-		querys := strings.Split(tag, "?")
-		if len(querys) > 1 {
-			query := querys[1]
-			router, ok := s.Router[query]
-			if ok {
-				target = router
-				break
-			}
-		}
-
 		matrix := strings.Split(tag, ";")
-		if len(matrix) > 1 {
-			matrix := matrix[1]
-			router, ok := s.Router[matrix]
+		if len(matrix) > 0 {
+			matrix := matrix[0]
+			router, ok := result.Router[matrix]
 			if ok {
-				target = router
-				break
+				result = router
 			}
+
+			if result.Solver == nil {
+				return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
+			}
+
+			if result.Solver.Method != GET {
+				return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
+			}
+
+			break
 		}
 
-		if target.Param != "" {
-			router, ok := target.Router[target.Param]
+		if result.Param != "" {
+			router, ok := result.Router[result.Param]
 			if ok {
-				params[target.Param] = tag
-				target = router
+				result = router
+				params[result.Param] = tag
 				continue
 			}
 		}
@@ -193,19 +207,49 @@ func (s *Router) findResolver(req *http.Request) (*Resolver, error) {
 		return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND_TAG, path, tag)
 	}
 
-	if target.Solver == nil {
+	if result.Solver == nil {
 		return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
 	}
 
-	return s.getResolver(req, target.Solver, params)
+	return result, nil
 }
 
 /**
-* getResolver
-* @param id string, solver *Solver, url string
-* @return *Solver, error
+* findResolver
+* @param r *http.Request
+* @return *Resolver, error
 **/
-func (s *Router) getResolver(r *http.Request, solver *Solver, params map[string]string) (*Resolver, error) {
-	result := newResolver(r, solver, params)
-	return result, nil
+func (s *Router) findResolver(req *http.Request) (*Resolver, error) {
+	path := req.URL.Path
+	target, err := s.find(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return newResolver(req, target.Solver, nil)
+}
+
+/**
+* delete
+* @param path string
+* @return bool, error
+**/
+func (s *Router) delete(path string) (bool, error) {
+	target, err := s.find(path)
+	if err != nil {
+		return false, err
+	}
+
+	ok := target.owner != nil
+	for ok {
+		owner := target.owner
+		delete(owner.Router, target.Tag)
+		if len(owner.Router) > 0 {
+			break
+		}
+		target = owner
+		ok = target.owner != nil
+	}
+
+	return true, nil
 }

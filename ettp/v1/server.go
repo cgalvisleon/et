@@ -1,6 +1,7 @@
 package ettp
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"os"
@@ -20,55 +21,68 @@ import (
 
 const packageName = "ettp"
 
+type TransportConfig struct {
+	InsecureSkipVerify  bool `json:"insecure_skip_verify"`
+	MaxIdleConns        int  `json:"max_idle_conns"`
+	MaxIdleConnsPerHost int  `json:"max_idle_conns_per_host"`
+	MaxConnsPerHost     int  `json:"max_conns_per_host"`
+	IdleConnTimeout     int  `json:"idle_conn_timeout"`
+	TLSHandshakeTimeout int  `json:"tls_handshake_timeout"`
+	ForceAttemptHTTP2   bool `json:"force_attempt_http2"`
+}
+
 type Config struct {
-	Name         string
-	Company      string
-	Web          string
-	Help         string
-	Port         int
-	PathApi      string
-	PathApp      string
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
-	IdleTimeout  time.Duration
-	TLS          bool
-	CertFile     string
-	KeyFile      string
-	Debug        bool
+	Name         string           `json:"name"`
+	Company      string           `json:"company"`
+	Web          string           `json:"web"`
+	Help         string           `json:"help"`
+	Port         int              `json:"port"`
+	PathApi      string           `json:"path_api"`
+	PathApp      string           `json:"path_app"`
+	ReadTimeout  time.Duration    `json:"read_timeout"`
+	WriteTimeout time.Duration    `json:"write_timeout"`
+	IdleTimeout  time.Duration    `json:"idle_timeout"`
+	IsTLS        bool             `json:"is_tls"`
+	CertFile     string           `json:"cert_file"`
+	KeyFile      string           `json:"key_file"`
+	Transport    *TransportConfig `json:"transport"`
+	Timeout      time.Duration    `json:"timeout"`
+	Debug        bool             `json:"debug"`
 }
 
 type Server struct {
-	CreatedAt       time.Time
-	Id              string
-	Name            string
-	Version         string
-	Company         string
-	Web             string
-	Help            string
-	HostName        string
-	addr            string
-	mux             *http.ServeMux
-	svr             *http.Server
-	pathApi         string
-	pathApp         string
-	cors            *cors.Cors
-	middlewares     []func(http.Handler) http.Handler
-	authenticator   func(http.Handler) http.Handler
-	notFoundHandler http.HandlerFunc
-	router          []*Router
-	solvers         []*Router
-	packages        []*Package
-	handlers        map[string]*ApiFunc
-	proxys          map[string]*Proxy
-	mutex           *sync.RWMutex
-	readTimeout     time.Duration
-	writeTimeout    time.Duration
-	idleTimeout     time.Duration
-	tls             bool
-	certFile        string
-	keyFile         string
-	storageKey      string
-	debug           bool
+	CreatedAt       time.Time                         `json:"created_at"`
+	Id              string                            `json:"id"`
+	Name            string                            `json:"name"`
+	Version         string                            `json:"version"`
+	Company         string                            `json:"company"`
+	Web             string                            `json:"web"`
+	Help            string                            `json:"help"`
+	HostName        string                            `json:"host_name"`
+	addr            string                            `json:"-"`
+	mux             *http.ServeMux                    `json:"-"`
+	svr             *http.Server                      `json:"-"`
+	client          *http.Client                      `json:"-"`
+	pathApi         string                            `json:"-"`
+	pathApp         string                            `json:"-"`
+	cors            *cors.Cors                        `json:"-"`
+	middlewares     []func(http.Handler) http.Handler `json:"-"`
+	authenticator   func(http.Handler) http.Handler   `json:"-"`
+	notFoundHandler http.HandlerFunc                  `json:"-"`
+	router          []*Router                         `json:"-"`
+	solvers         []*Router                         `json:"-"`
+	packages        []*Package                        `json:"-"`
+	handlers        map[string]*ApiFunc               `json:"-"`
+	proxys          map[string]*Proxy                 `json:"-"`
+	mutex           *sync.RWMutex                     `json:"-"`
+	readTimeout     time.Duration                     `json:"-"`
+	writeTimeout    time.Duration                     `json:"-"`
+	idleTimeout     time.Duration                     `json:"-"`
+	isTls           bool                              `json:"-"`
+	certFile        string                            `json:"-"`
+	keyFile         string                            `json:"-"`
+	storageKey      string                            `json:"-"`
+	debug           bool                              `json:"-"`
 }
 
 func New(config Config) (*Server, error) {
@@ -113,12 +127,13 @@ func New(config Config) (*Server, error) {
 		readTimeout:     config.ReadTimeout,
 		writeTimeout:    config.WriteTimeout,
 		idleTimeout:     config.IdleTimeout,
-		tls:             config.TLS,
+		isTls:           config.IsTLS,
 		certFile:        config.CertFile,
 		keyFile:         config.KeyFile,
 		storageKey:      fmt.Sprintf("%s-%s", config.Name, version),
 		debug:           config.Debug,
 	}
+
 	srv.svr = &http.Server{
 		Addr:         srv.addr,
 		Handler:      srv.cors.Handler(srv.mux),
@@ -126,6 +141,38 @@ func New(config Config) (*Server, error) {
 		WriteTimeout: srv.writeTimeout,
 		IdleTimeout:  srv.idleTimeout,
 	}
+
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: !config.IsTLS,
+		},
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 100,
+		MaxConnsPerHost:     100,
+		IdleConnTimeout:     90 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second,
+		ForceAttemptHTTP2:   true,
+	}
+
+	if config.Transport != nil {
+		transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: !config.IsTLS,
+			},
+			MaxIdleConns:        config.Transport.MaxIdleConns,
+			MaxIdleConnsPerHost: config.Transport.MaxIdleConnsPerHost,
+			MaxConnsPerHost:     config.Transport.MaxConnsPerHost,
+			IdleConnTimeout:     time.Duration(config.Transport.IdleConnTimeout) * time.Second,
+			TLSHandshakeTimeout: time.Duration(config.Transport.TLSHandshakeTimeout) * time.Second,
+			ForceAttemptHTTP2:   config.Transport.ForceAttemptHTTP2,
+		}
+	}
+
+	srv.client = &http.Client{
+		Timeout:   config.Timeout,
+		Transport: transport,
+	}
+
 	srv.mux.HandleFunc("/", srv.handlerResolver)
 
 	return srv, nil
@@ -154,7 +201,7 @@ func (s *Server) version() et.Json {
 **/
 func (s *Server) Start() error {
 	go func() {
-		if s.tls {
+		if s.isTls {
 			logs.Logf(packageName, `Load server on https://localhost%s`, s.addr)
 			if err := s.svr.ListenAndServeTLS(s.certFile, s.keyFile); err != nil && err != http.ErrServerClosed {
 				logs.Alert(err)
@@ -202,7 +249,7 @@ func (s *Server) Close() {
 	if s.svr != nil {
 		s.svr.Close()
 
-		if s.tls {
+		if s.isTls {
 			logs.Logf(packageName, "Shutting down server...")
 		} else {
 			logs.Logf(packageName, "Shutting down server...")

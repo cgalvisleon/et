@@ -28,6 +28,20 @@ go run ./cmd/daemon
 go build ./...
 ```
 
+## Code style
+
+### Comments
+
+All doc comments for functions, methods, and types must use this block style:
+
+```go
+/**
+* FunctionName: Brief description.
+* @param paramName type
+* @return type
+**/
+```
+
 ## Architecture
 
 This is a **modular utility library** for building Go microservices. Each directory is an independent package imported separately. There is no central entry point — consumers import only the packages they need.
@@ -81,6 +95,7 @@ This is a **modular utility library** for building Go microservices. Each direct
 ### CLI (`cmd/`)
 
 Each subdirectory under `cmd/` is a standalone binary:
+
 - `cmd/et/` — Main CLI using `cobra`
 - `cmd/apigateway/` — API Gateway/proxy
 - `cmd/daemon/` — Background service with systemd integration
@@ -101,9 +116,9 @@ Templates and generators for new microservices, projects, and deployments (Kuber
 
 ## Required environment variables
 
-| Package | Variable | Purpose |
-|---------|----------|---------|
-| `cache` | `REDIS_HOST` | Redis connection |
-| `event` | `NATS_HOST` | NATS connection |
-| `event` | `NATS_USER`, `NATS_PASSWORD` | NATS auth (optional) |
-| `wsp` | `WHATSAPP_API_URL` | WhatsApp Graph API base URL (optional) |
+| Package | Variable                     | Purpose                                |
+| ------- | ---------------------------- | -------------------------------------- |
+| `cache` | `REDIS_HOST`                 | Redis connection                       |
+| `event` | `NATS_HOST`                  | NATS connection                        |
+| `event` | `NATS_USER`, `NATS_PASSWORD` | NATS auth (optional)                   |
+| `wsp`   | `WHATSAPP_API_URL`           | WhatsApp Graph API base URL (optional) |

@@ -104,22 +104,7 @@ func wrapperRunTime(vm *VM) {
 * @param vm *VM
 **/
 func wrapperCtx(vm *VM) {
-	vm.Set("ctx", map[string]interface{}{
-		"set": func(key string, value interface{}) interface{} {
-			vm.Ctx.Set(key, value)
-			return vm.Ctx
-		},
-		"get": func(key string) interface{} {
-			return vm.Ctx.Get(key)
-		},
-		"delete": func(keys []string) interface{} {
-			vm.Ctx.Delete(keys)
-			return vm.Ctx
-		},
-		"exist": func(key string) bool {
-			return vm.Ctx.Exist(key)
-		},
-	})
+	vm.Set("Ctx", vm.Ctx)
 }
 
 /**

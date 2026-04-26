@@ -2,6 +2,7 @@ package js
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 
@@ -41,62 +42,6 @@ func New(name string) (*VM, error) {
 		Ctx:    et.Json{},
 	}
 	return result, nil
-}
-
-/**
-* RunDev
-* @param baseDir string
-* @return error
-**/
-func (s *VM) RunDev(baseDir string) error {
-	absPath, err := filepath.Abs(baseDir)
-	if err != nil {
-		return err
-	}
-
-	s.BaseDir = absPath
-	s.mode = Develop
-	err = s.init()
-	if err != nil {
-		return err
-	}
-
-	_, err = s.RunByFile(s.Main)
-	if err != nil {
-		return err
-	}
-
-	err = s.HotReload()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-/**
-* RunProd
-* @param store Store
-* @return error
-**/
-func (s *VM) RunProd(store Store) error {
-	if store == nil {
-		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "store")
-	}
-
-	s.store = store
-	s.mode = Production
-	err := s.init()
-	if err != nil {
-		return err
-	}
-
-	_, err = s.RunBySource(s.Main)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 /**
@@ -180,6 +125,14 @@ func (s *VM) SetLicense(license string) error {
 }
 
 /**
+* SetCtx
+* @params ctx et.Json
+**/
+func (s *VM) SetCtx(ctx et.Json) {
+	maps.Copy(s.Ctx, ctx)
+}
+
+/**
 * Run
 * @params str string
 * @return goja.Value, error
@@ -239,6 +192,62 @@ func (s *VM) RunBySource(path string) (goja.Value, error) {
 		panic(s.Error(fmt.Errorf("script not found: %s", path)))
 	}
 	return s.Run(scr.Scripts)
+}
+
+/**
+* RunDev
+* @param baseDir string
+* @return error
+**/
+func (s *VM) RunDev(baseDir string) error {
+	absPath, err := filepath.Abs(baseDir)
+	if err != nil {
+		return err
+	}
+
+	s.BaseDir = absPath
+	s.mode = Develop
+	err = s.init()
+	if err != nil {
+		return err
+	}
+
+	_, err = s.RunByFile(s.Main)
+	if err != nil {
+		return err
+	}
+
+	err = s.HotReload()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/**
+* RunProd
+* @param store Store
+* @return error
+**/
+func (s *VM) RunProd(store Store) error {
+	if store == nil {
+		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "store")
+	}
+
+	s.store = store
+	s.mode = Production
+	err := s.init()
+	if err != nil {
+		return err
+	}
+
+	_, err = s.RunBySource(s.Main)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 /**

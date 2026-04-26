@@ -37,14 +37,15 @@ type Section struct {
 }
 
 type Message struct {
-	to       string    `json:"-"`
-	kind     string    `json:"-"`
-	Text     string    `json:"text"`
-	Buttons  []Button  `json:"buttons"`
-	Header   Header    `json:"header"`
-	Footer   Footer    `json:"footer"`
-	Button   string    `json:"button"`
-	Sections []Section `json:"sections"`
+	to            string    `json:"-"`
+	kind          string    `json:"-"`
+	Text          string    `json:"text"`
+	Buttons       []Button  `json:"buttons"`
+	Header        Header    `json:"header"`
+	Footer        Footer    `json:"footer"`
+	Button        string    `json:"button"`
+	Sections      []Section `json:"sections"`
+	ImageObjectID string    `json:"image_object_id"`
 }
 
 /**
@@ -95,8 +96,8 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"type":              "interactive",
 			"to":                s.to,
+			"type":              "interactive",
 			"interactive": et.Json{
 				"type": "button",
 				"body": et.Json{
@@ -111,8 +112,8 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"type":              "interactive",
 			"to":                s.to,
+			"type":              "interactive",
 			"interactive": et.Json{
 				"type":   "list",
 				"header": s.Header.body(),
@@ -128,6 +129,10 @@ func (s *Message) body() et.Json {
 				},
 			},
 		}
+	case "reply":
+		return et.Json{}
+	case "text_with_preview":
+		return et.Json{}
 	default:
 		return et.Json{
 			"messaging_product": "whatsapp",

@@ -132,8 +132,8 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"type":              "text",
 			"to":                s.to,
+			"type":              "text",
 			"text": et.Json{
 				"preview_url": false,
 				"body":        s.Text,

@@ -402,7 +402,7 @@ type ObjectRule struct {
 	rules []Rule
 }
 
-func Object(name string, rules ...Rule) *ObjectRule {
+func Validate(name string, rules ...Rule) *ObjectRule {
 	return &ObjectRule{
 		name:  name,
 		rules: rules,

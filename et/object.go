@@ -1,18 +1,34 @@
-package dt
+package et
 
 import (
 	"fmt"
 	"time"
 
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/msg"
 )
 
+type Store interface {
+	Set(key string, val interface{}, expiration time.Duration) interface{}
+	GetItem(key string) (Item, error)
+	Delete(key string) (int64, error)
+}
+
+var store Store
+
+/**
+* SetStore
+* @param s Store
+**/
+func SetStore(s Store) {
+	store = s
+}
+
 type Object struct {
-	et.Item
+	Item
 	key      string        `json:"-"`
 	duration time.Duration `json:"-"`
+	store    Store         `json:"-"`
 }
 
 /**
@@ -22,23 +38,24 @@ type Object struct {
 **/
 func newObject(key string) *Object {
 	return &Object{
-		Item: et.Item{
+		Item: Item{
 			Ok:     false,
-			Result: et.Json{},
+			Result: Json{},
 		},
 		key:      key,
 		duration: 1 * time.Hour,
+		store:    store,
 	}
 }
 
 /**
 * up
-* @param data et.Json
+* @param data Json
 * @return bool
 **/
-func (s *Object) up(data et.Item, save bool) {
+func (s *Object) up(data Item, save bool) {
 	s.Ok = data.Ok
-	s.Result = et.Json{}
+	s.Result = Json{}
 	if !s.Ok {
 		Drop(s.key)
 		return
@@ -63,9 +80,13 @@ func (s *Object) save() bool {
 		return false
 	}
 
+	if s.store == nil {
+		return false
+	}
+
 	val := s.ToString()
 	key := fmt.Sprintf("object:%s", s.key)
-	cache.Set(key, val, s.duration)
+	s.store.Set(key, val, s.duration)
 
 	return true
 }
@@ -76,8 +97,12 @@ func (s *Object) save() bool {
 *
  */
 func (s *Object) load() error {
+	if s.store == nil {
+		return fmt.Errorf(msg.MSG_STORE_NOT_INITIALIZED)
+	}
+
 	key := fmt.Sprintf("object:%s", s.key)
-	item, err := cache.GetItem(key)
+	item, err := s.store.GetItem(key)
 	if err != nil {
 		return err
 	}
@@ -89,10 +114,10 @@ func (s *Object) load() error {
 
 /**
 * Up
-* @param key string, data et.Item
+* @param key string, data Item
 * @return Object
 **/
-func Up(key string, data et.Item) et.Item {
+func Up(key string, data Item) Item {
 	obj := newObject(key)
 	obj.up(data, data.Ok)
 
@@ -101,10 +126,10 @@ func Up(key string, data et.Item) et.Item {
 
 /**
 * UpWithDuration
-* @param key string, data et.Item, duration time.Duration
+* @param key string, data Item, duration time.Duration
 * @return Object
 **/
-func UpWithDuration(key string, data et.Item, duration time.Duration) Object {
+func UpWithDuration(key string, data Item, duration time.Duration) Object {
 	obj := newObject(key)
 	obj.duration = duration
 	obj.up(data, data.Ok)
@@ -117,7 +142,7 @@ func UpWithDuration(key string, data et.Item, duration time.Duration) Object {
 * @param key string
 * @return Object
 **/
-func Get(key string) et.Item {
+func Get(key string) Item {
 	obj := newObject(key)
 	obj.load()
 
@@ -127,8 +152,14 @@ func Get(key string) et.Item {
 /**
 * Drop
 * @param key string
+* @return error
 **/
-func Drop(key string) {
+func Drop(key string) error {
+	if store == nil {
+		return fmt.Errorf(msg.MSG_STORE_NOT_INITIALIZED)
+	}
+
 	key = fmt.Sprintf("object:%s", key)
-	cache.Delete(key)
+	_, err := store.Delete(key)
+	return err
 }

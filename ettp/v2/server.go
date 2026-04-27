@@ -169,6 +169,7 @@ func New(name string, config *Config) (*Server, error) {
 			return nil, err
 		}
 	}
+
 	if config.UseEvent {
 		if err := event.Load(); err != nil {
 			return nil, err

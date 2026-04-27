@@ -85,6 +85,7 @@ var (
 	MSG_METHOD_NOT_ALLOWED             = "method not allowed"
 	MSG_STEP_FUNCTION_IS_NIL           = "step function is nil for step:%s at index:%d"
 	MSG_INBOUND_FULL_DROPPING          = "inbound full, dropping message"
+	MSG_STORE_NOT_INITIALIZED          = "store is not initialized"
 )
 
 func init() {
@@ -172,5 +173,6 @@ func init() {
 		MSG_METHOD_NOT_ALLOWED = "metodo no permitido"
 		MSG_STEP_FUNCTION_IS_NIL = "función del paso:%s es nula para en el índice:%d"
 		MSG_INBOUND_FULL_DROPPING = "inbound full, dropping message"
+		MSG_STORE_NOT_INITIALIZED = "store no está inicializado"
 	}
 }

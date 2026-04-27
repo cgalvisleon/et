@@ -1,4 +1,4 @@
-package et
+package jval
 
 import (
 	"fmt"
@@ -6,13 +6,14 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
 )
 
 var rePhone = regexp.MustCompile(`^\+?[1-9]\d{6,14}$`)
 
 type Rule interface {
-	Validate(Json) error
+	Validate(et.Json) error
 	Name() string
 }
 
@@ -49,10 +50,10 @@ func (r *StringRule) NotEmpty() *StringRule {
 
 /**
 * Validate
-* @param j Json
+* @param j et.Json
 * @return error
 **/
-func (r *StringRule) Validate(j Json) error {
+func (r *StringRule) Validate(j et.Json) error {
 	v, ok := j[r.name]
 	if !ok {
 		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, r.name)
@@ -110,10 +111,10 @@ func (r *IntRule) Max(v int) *IntRule {
 
 /**
 * Validate
-* @param j Json
+* @param j et.Json
 * @return error
 **/
-func (r *IntRule) Validate(j Json) error {
+func (r *IntRule) Validate(j et.Json) error {
 	v, ok := j[r.name]
 	if !ok {
 		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, r.name)
@@ -181,10 +182,10 @@ func (r *FloatRule) Max(v float64) *FloatRule {
 
 /**
 * Validate
-* @param j Json
+* @param j et.Json
 * @return error
 **/
-func (r *FloatRule) Validate(j Json) error {
+func (r *FloatRule) Validate(j et.Json) error {
 	v, ok := j[r.name]
 	if !ok {
 		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, r.name)
@@ -234,10 +235,10 @@ func (r *ArrayRule) NotEmpty() *ArrayRule {
 
 /**
 * Validate
-* @param j Json
+* @param j et.Json
 * @return error
 **/
-func (r *ArrayRule) Validate(j Json) error {
+func (r *ArrayRule) Validate(j et.Json) error {
 	v, ok := j[r.name]
 	if !ok {
 		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, r.name)
@@ -273,10 +274,10 @@ func (r *EmailRule) Name() string {
 
 /**
 * Validate
-* @param j Json
+* @param j et.Json
 * @return error
 **/
-func (r *EmailRule) Validate(j Json) error {
+func (r *EmailRule) Validate(j et.Json) error {
 	v, ok := j[r.name]
 	if !ok {
 		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, r.name)
@@ -327,10 +328,10 @@ func (r *DateRule) Layout(layout string) *DateRule {
 
 /**
 * Validate
-* @param j Json
+* @param j et.Json
 * @return error
 **/
-func (r *DateRule) Validate(j Json) error {
+func (r *DateRule) Validate(j et.Json) error {
 	v, ok := j[r.name]
 	if !ok {
 		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, r.name)
@@ -376,10 +377,10 @@ func (r *EnumRule) Name() string {
 
 /**
 * Validate
-* @param j Json
+* @param j et.Json
 * @return error
 **/
-func (r *EnumRule) Validate(j Json) error {
+func (r *EnumRule) Validate(j et.Json) error {
 	v, ok := j[r.name]
 	if !ok {
 		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, r.name)
@@ -419,10 +420,10 @@ func (r *ObjectRule) Name() string {
 
 /**
 * Validate
-* @param j Json
+* @param j et.Json
 * @return error
 **/
-func (r *ObjectRule) Validate(j Json) error {
+func (r *ObjectRule) Validate(j et.Json) error {
 	v, ok := j[r.name]
 	if !ok {
 		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, r.name)
@@ -433,7 +434,7 @@ func (r *ObjectRule) Validate(j Json) error {
 		return fmt.Errorf(msg.MSG_OBJECT_REQUIRED, r.name)
 	}
 
-	js := Json(obj)
+	js := et.Json(obj)
 
 	for _, rule := range r.rules {
 		if err := rule.Validate(js); err != nil {
@@ -487,10 +488,10 @@ func (r *PhoneRule) Length(length int) *PhoneRule {
 
 /**
 * Validate
-* @param j Json
+* @param j et.Json
 * @return error
 **/
-func (r *PhoneRule) Validate(j Json) error {
+func (r *PhoneRule) Validate(j et.Json) error {
 	v, ok := j[r.name]
 	if !ok {
 		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, r.name)
@@ -545,10 +546,10 @@ func (r *BetweenRule) Name() string {
 
 /**
 * Validate
-* @param j Json
+* @param j et.Json
 * @return error
 **/
-func (r *BetweenRule) Validate(j Json) error {
+func (r *BetweenRule) Validate(j et.Json) error {
 	v, ok := j[r.name]
 	if !ok {
 		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, r.name)
@@ -569,5 +570,38 @@ func (r *BetweenRule) Validate(j Json) error {
 		return fmt.Errorf(msg.MSG_NUMBER_BETWEEN, r.name, r.min, r.max)
 	}
 
+	return nil
+}
+
+/**
+* Require
+* @param data et.Json, rules ...Rule
+* @return error
+**/
+func Require(data et.Json, rules ...Rule) error {
+	for _, r := range rules {
+		if err := r.Validate(data); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+/**
+* Maybe
+* @param data et.Json, rules ...Rule
+* @return error
+**/
+func Maybe(data et.Json, rules ...Rule) error {
+	for _, r := range rules {
+		_, ok := data[r.Name()]
+		if !ok {
+			return nil
+		}
+
+		if err := r.Validate(data); err != nil {
+			return err
+		}
+	}
 	return nil
 }

@@ -56,3 +56,12 @@ func (s *List) ToMap() map[string]interface{} {
 		"result": s.Result,
 	}
 }
+
+/**
+* From
+* @param as string
+* @return *Where
+**/
+func (s List) From(as string) *Where {
+	return From(s.Result, as)
+}

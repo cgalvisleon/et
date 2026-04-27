@@ -505,3 +505,12 @@ func (s *Items) ToList(all, page, rows int) List {
 		Result: s.Result,
 	}
 }
+
+/**
+* From
+* @param as string
+* @return *Where
+**/
+func (s Items) From(as string) *Where {
+	return From(s.Result, as)
+}

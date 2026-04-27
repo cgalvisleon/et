@@ -951,39 +951,6 @@ func (s Json) Exist(key string) bool {
 }
 
 /**
-* Require
-* @param rules ...Rule
-* @return error
-**/
-func (s Json) Require(rules ...Rule) error {
-	for _, r := range rules {
-		if err := r.Validate(s); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-/**
-* Maybe
-* @param rules ...Rule
-* @return error
-**/
-func (s Json) Maybe(rules ...Rule) error {
-	for _, r := range rules {
-		_, ok := s[r.Name()]
-		if !ok {
-			return nil
-		}
-
-		if err := r.Validate(s); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-/**
 * Remove
 * @param keys ...string
 **/
@@ -1029,4 +996,13 @@ func (s Json) Hidden(keys []string) Json {
 	}
 
 	return result
+}
+
+/**
+* From
+* @param as string
+* @return *Where
+**/
+func (s Json) From(as string) *Where {
+	return From([]Json{s}, as)
 }

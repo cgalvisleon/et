@@ -353,3 +353,12 @@ func (s Item) Delete(keys []string) bool {
 func (s Item) Exist(key string) bool {
 	return s.Result.Exist(key)
 }
+
+/**
+* From
+* @param as string
+* @return *Where
+**/
+func (s Item) From(as string) *Where {
+	return From([]Json{s.Result}, as)
+}

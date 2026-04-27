@@ -1,6 +1,4 @@
-package jql
-
-import "github.com/cgalvisleon/et/et"
+package et
 
 type Command string
 
@@ -11,7 +9,12 @@ const (
 	UPSERT Command = "upsert"
 )
 
-func From(itmes []et.Json, as string) *Where {
+/**
+* From
+* @param itmes []Json, as string
+* @return *Where
+**/
+func From(itmes []Json, as string) *Where {
 	result := newWhere(&Source{
 		data: itmes,
 		as:   as,

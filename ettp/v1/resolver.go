@@ -87,6 +87,9 @@ func newSolver(route *Router, params et.Json, r *http.Request) *solver {
 * @return *solver
 **/
 func findSolver(s *Server, r *http.Request) *solver {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	var params = et.Json{}
 	var router *Router
 	path := r.URL.Path

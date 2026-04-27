@@ -37,6 +37,7 @@ func (s *Server) setRouter(method, path, resolve string, kind TypeApi, header et
 		logs.Logf(s.Name, `[%s] %s:%s -> %s | TpHeader:%s | Private:%v | %s`, action, method, path, resolve, tpHeader.String(), private, packageName)
 	}
 
+	s.mu.Lock()
 	var router *Router
 	idx := slices.IndexFunc(s.solvers, func(e *Router) bool { return e.Id == key })
 	if idx != -1 {
@@ -96,6 +97,7 @@ func (s *Server) setRouter(method, path, resolve string, kind TypeApi, header et
 	if router != nil {
 		router.setPakage(packageName)
 	}
+	s.mu.Unlock()
 
 	if save {
 		go s.Save()
@@ -126,8 +128,10 @@ func (s *Server) GetRouteById(id string) *Router {
 * @return error
 **/
 func (s *Server) DeleteRouteById(id string, save bool) error {
+	s.mu.Lock()
 	router := s.GetRouteById(id)
 	if router == nil {
+		s.mu.Unlock()
 		return errors.New(MSG_ROUTE_NOT_FOUND)
 	}
 
@@ -143,6 +147,7 @@ func (s *Server) DeleteRouteById(id string, save bool) error {
 			router.main.Routes = append(router.main.Routes[:idx], router.main.Routes[idx+1:]...)
 		}
 	}
+	s.mu.Unlock()
 
 	if save {
 		go s.Save()

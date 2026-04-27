@@ -74,7 +74,7 @@ type Server struct {
 	packages        []*Package                        `json:"-"`
 	handlers        map[string]*ApiFunc               `json:"-"`
 	proxys          map[string]*Proxy                 `json:"-"`
-	mutex           *sync.RWMutex                     `json:"-"`
+	mu              sync.RWMutex                      `json:"-"`
 	readTimeout     time.Duration                     `json:"-"`
 	writeTimeout    time.Duration                     `json:"-"`
 	idleTimeout     time.Duration                     `json:"-"`
@@ -123,7 +123,6 @@ func New(config Config) (*Server, error) {
 		packages:        []*Package{},
 		handlers:        make(map[string]*ApiFunc),
 		proxys:          make(map[string]*Proxy),
-		mutex:           &sync.RWMutex{},
 		readTimeout:     config.ReadTimeout,
 		writeTimeout:    config.WriteTimeout,
 		idleTimeout:     config.IdleTimeout,
@@ -227,9 +226,11 @@ func (s *Server) Start() error {
 * Reset
 **/
 func (s *Server) Reset() error {
+	s.mu.Lock()
 	s.router = []*Router{}
 	s.solvers = []*Router{}
 	s.packages = []*Package{}
+	s.mu.Unlock()
 
 	if err := s.Save(); err != nil {
 		return err

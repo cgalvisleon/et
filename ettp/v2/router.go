@@ -137,12 +137,12 @@ func (s *Router) set(kind TypeRouter, method, path, solver string, typeHeader Tp
 /**
 * find
 * @param path string
-* @return *Router, error
+* @return *Router, map[string]string, error
 **/
-func (s *Router) find(path string) (*Router, error) {
+func (s *Router) find(path string) (*Router, map[string]string, error) {
 	tags := strings.Split(path, "/")
 	if len(tags) == 0 {
-		return nil, fmt.Errorf(msg.MSG_PATH_INVALID, path)
+		return nil, nil, fmt.Errorf(msg.MSG_PATH_INVALID, path)
 	}
 
 	params := make(map[string]string)
@@ -159,7 +159,7 @@ func (s *Router) find(path string) (*Router, error) {
 		}
 
 		querys := strings.Split(tag, "?")
-		if len(querys) > 0 {
+		if len(querys) > 1 {
 			query := querys[0]
 			router, ok := result.Router[query]
 			if ok {
@@ -167,52 +167,53 @@ func (s *Router) find(path string) (*Router, error) {
 			}
 
 			if result.Solver == nil {
-				return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
+				return nil, nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
 			}
 
 			if result.Solver.Method != GET {
-				return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
+				return nil, nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
 			}
 
 			break
 		}
 
 		matrix := strings.Split(tag, ";")
-		if len(matrix) > 0 {
-			matrix := matrix[0]
-			router, ok := result.Router[matrix]
+		if len(matrix) > 1 {
+			segment := matrix[0]
+			router, ok := result.Router[segment]
 			if ok {
 				result = router
 			}
 
 			if result.Solver == nil {
-				return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
+				return nil, nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
 			}
 
 			if result.Solver.Method != GET {
-				return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
+				return nil, nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
 			}
 
 			break
 		}
 
 		if result.Param != "" {
-			router, ok := result.Router[result.Param]
+			paramKey := result.Param
+			router, ok := result.Router[paramKey]
 			if ok {
 				result = router
-				params[result.Param] = tag
+				params[paramKey] = tag
 				continue
 			}
 		}
 
-		return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
+		return nil, nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
 	}
 
 	if result.Solver == nil {
-		return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
+		return nil, nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
 	}
 
-	return result, nil
+	return result, params, nil
 }
 
 /**
@@ -222,12 +223,12 @@ func (s *Router) find(path string) (*Router, error) {
 **/
 func (s *Router) findResolver(req *http.Request) (*Resolver, error) {
 	path := req.URL.Path
-	target, err := s.find(path)
+	target, params, err := s.find(path)
 	if err != nil {
 		return nil, err
 	}
 
-	return newResolver(req, target.Solver, nil)
+	return newResolver(req, target.Solver, params)
 }
 
 /**
@@ -236,7 +237,7 @@ func (s *Router) findResolver(req *http.Request) (*Resolver, error) {
 * @return bool, error
 **/
 func (s *Router) delete(path string) (bool, error) {
-	target, err := s.find(path)
+	target, _, err := s.find(path)
 	if err != nil {
 		return false, err
 	}

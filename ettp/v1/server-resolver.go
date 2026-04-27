@@ -42,7 +42,9 @@ func (s *Server) handlerResolver(w http.ResponseWriter, r *http.Request) {
 
 	/* Get resolver */
 	resolver, r := s.getResolver(r)
-	logs.Log("resolver", resolver.ToString())
+	if s.debug {
+		logs.Log("resolver", resolver.ToString())
+	}
 
 	/* Call search time since begin */
 	metric.CallSearchTime()

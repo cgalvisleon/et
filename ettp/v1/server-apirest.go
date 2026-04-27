@@ -67,14 +67,8 @@ func (s *Server) handlerApiRest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	setCookie := func(cookies []*http.Cookie) {
-		headers := rw.Header()
 		for _, cookie := range cookies {
-			_, ok := headers["Set-Cookie"]
-			if !ok {
-				rw.Header().Add("Set-Cookie", cookie.String())
-			} else {
-				rw.Header().Set("Set-Cookie", cookie.String())
-			}
+			rw.Header().Add("Set-Cookie", cookie.String())
 		}
 	}
 

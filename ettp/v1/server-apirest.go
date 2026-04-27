@@ -34,7 +34,7 @@ func (s *Server) handlerApiRest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	proxyReq, err := http.NewRequest(resolver.Method, resolver.URL, r.Body)
+	proxyReq, err := http.NewRequestWithContext(r.Context(), resolver.Method, resolver.URL, r.Body)
 	if err != nil {
 		metric.HTTPError(rw, r, http.StatusInternalServerError, err.Error())
 		return
@@ -62,7 +62,9 @@ func (s *Server) handlerApiRest(w http.ResponseWriter, r *http.Request) {
 				}
 				joinedValues += value
 			}
-			rw.Header().Set(key, joinedValues)
+			if joinedValues != "" {
+				rw.Header().Set(key, joinedValues)
+			}
 		}
 	}
 
@@ -81,5 +83,5 @@ func (s *Server) handlerApiRest(w http.ResponseWriter, r *http.Request) {
 		metric.HTTPError(rw, r, http.StatusInternalServerError, err.Error())
 	}
 
-	go metric.DoneHTTP(rw)
+	metric.DoneHTTP(rw)
 }

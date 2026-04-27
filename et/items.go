@@ -50,7 +50,11 @@ func (s Items) ToJson() Json {
 * @return string
 **/
 func (s Items) ToString() string {
-	return s.ToJson().ToString()
+	bt, err := json.Marshal(s)
+	if err != nil {
+		return ""
+	}
+	return string(bt)
 }
 
 /**
@@ -126,10 +130,10 @@ func (s *Items) ValInt(idx int, def int, atribs ...string) int {
 
 /**
 * ValInt64 return int64 value of the key
-* @param idx int64, def int64, atribs ...string
+* @param idx int, def int64, atribs ...string
 * @return int64
 **/
-func (s *Items) ValInt64(idx int64, def int64, atribs ...string) int64 {
+func (s *Items) ValInt64(idx int, def int64, atribs ...string) int64 {
 	item := s.Result[idx]
 	if item == nil {
 		return def

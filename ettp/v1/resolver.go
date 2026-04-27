@@ -38,11 +38,11 @@ func newSolver(route *Router, params et.Json, r *http.Request) *solver {
 
 	resolve := route.Resolve
 	for k, v := range params {
-		v = fmt.Sprintf(`%v`, v)
-		resolve = strings.ReplaceAll(resolve, k, v.(string))
+		str := fmt.Sprintf(`%v`, v)
+		resolve = strings.ReplaceAll(resolve, k, str)
 		k = strings.ReplaceAll(k, "{", "")
 		k = strings.ReplaceAll(k, "}", "")
-		r.SetPathValue(k, v.(string))
+		r.SetPathValue(k, str)
 	}
 
 	switch route.TpParams {
@@ -91,14 +91,11 @@ func findSolver(s *Server, r *http.Request) *solver {
 	defer s.mu.RUnlock()
 
 	var params = et.Json{}
-	var router *Router
 	path := r.URL.Path
 	method := r.Method
-	idx := getRouterIndexByTag(method, s.router)
-	if idx == -1 {
+	router, ok := s.router[method]
+	if !ok {
 		return nil
-	} else {
-		router = s.router[idx]
 	}
 
 	tags := strings.Split(path, "/")
@@ -236,20 +233,20 @@ func (s *Server) getResolver(r *http.Request) (*Resolver, *http.Request) {
 	}
 
 	var body interface{}
-	requestBody, err := request.ReadBody(r.Body)
-	if err != nil {
-		body = et.Json{
-			"result": []byte(err.Error()),
-		}
-	} else {
-		jbody, err := requestBody.ToJson()
+	if s.debug {
+		requestBody, err := request.ReadBody(r.Body)
 		if err != nil {
-			body = requestBody.ToString()
+			body = et.Json{"result": []byte(err.Error())}
+		} else {
+			jbody, err := requestBody.ToJson()
+			if err != nil {
+				body = requestBody.ToString()
+			} else {
+				body = jbody
+			}
 		}
-		body = jbody
+		r.Body = io.NopCloser(bytes.NewBuffer(requestBody.Data))
 	}
-
-	r.Body = io.NopCloser(bytes.NewBuffer(requestBody.Data))
 	result := &Resolver{
 		Server:     s,
 		Method:     r.Method,

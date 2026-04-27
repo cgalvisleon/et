@@ -417,13 +417,7 @@ func (s *Server) getProxyByPath(path string) *Proxy {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	for _, proxy := range s.proxys {
-		if proxy.Path == path {
-			return proxy
-		}
-	}
-
-	return nil
+	return s.proxys[path]
 }
 
 /**
@@ -493,25 +487,23 @@ func (s *Server) mountProxy(proxy *Proxy) {
 **/
 func (s *Server) DeleteProxyById(id string, save bool) error {
 	s.mu.Lock()
-	path := ""
+	var found *Proxy
 	for _, proxy := range s.proxys {
 		if proxy.Id == id {
-			path = proxy.Path
+			found = proxy
 			break
 		}
 	}
 
-	proxy, ok := s.proxys[path]
-	if !ok {
+	if found == nil {
 		s.mu.Unlock()
 		return errors.New(MSG_ROUTE_NOT_FOUND)
 	}
 
-	pkg := proxy.pkg
-	if pkg != nil {
-		pkg.deleteProxyById(id)
+	if found.pkg != nil {
+		found.pkg.deleteProxyById(id)
 	}
-	delete(s.proxys, path)
+	delete(s.proxys, found.Path)
 	s.mu.Unlock()
 
 	if save {

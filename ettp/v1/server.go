@@ -69,7 +69,7 @@ type Server struct {
 	middlewares     []func(http.Handler) http.Handler `json:"-"`
 	authenticator   func(http.Handler) http.Handler   `json:"-"`
 	notFoundHandler http.HandlerFunc                  `json:"-"`
-	router          []*Router                         `json:"-"`
+	router          map[string]*Router                `json:"-"`
 	solvers         []*Router                         `json:"-"`
 	packages        []*Package                        `json:"-"`
 	handlers        map[string]*ApiFunc               `json:"-"`
@@ -118,7 +118,7 @@ func New(config Config) (*Server, error) {
 		cors:            CorsAllowAll([]string{}),
 		notFoundHandler: notFoundHandler,
 		middlewares:     make([]func(http.Handler) http.Handler, 0),
-		router:          []*Router{},
+		router:          make(map[string]*Router),
 		solvers:         []*Router{},
 		packages:        []*Package{},
 		handlers:        make(map[string]*ApiFunc),
@@ -227,7 +227,7 @@ func (s *Server) Start() error {
 **/
 func (s *Server) Reset() error {
 	s.mu.Lock()
-	s.router = []*Router{}
+	s.router = make(map[string]*Router)
 	s.solvers = []*Router{}
 	s.packages = []*Package{}
 	s.mu.Unlock()

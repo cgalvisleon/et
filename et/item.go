@@ -52,7 +52,11 @@ func (s Item) ToJson() Json {
 * @return string
 **/
 func (s Item) ToString() string {
-	return s.ToJson().ToString()
+	bt, err := json.Marshal(s)
+	if err != nil {
+		return ""
+	}
+	return string(bt)
 }
 
 /**

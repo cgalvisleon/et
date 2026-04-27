@@ -3,6 +3,7 @@ package et
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 )
 
 /**
@@ -47,5 +48,5 @@ func ToString(vals interface{}) string {
 		panic(err)
 	}
 
-	return buf.String()
+	return strings.TrimSuffix(buf.String(), "\n")
 }

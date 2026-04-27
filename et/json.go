@@ -142,7 +142,7 @@ func (s Json) ToEscapeHTML() string {
 		panic(err)
 	}
 
-	return buf.String()
+	return strings.TrimSuffix(buf.String(), "\n")
 }
 
 /**
@@ -195,7 +195,7 @@ func (s Json) ValAny(def interface{}, atribs ...string) (result interface{}) {
 		return
 	}
 
-	var src interface{} = s.Clone()
+	var src interface{} = s
 	var ok bool
 	for _, atrib := range atribs {
 		switch v := src.(type) {
@@ -457,67 +457,58 @@ func (s Json) ValArray(def []interface{}, atribs ...string) []interface{} {
 	case []interface{}:
 		return v
 	case []Json:
-		result := []interface{}{}
-		for _, item := range v {
-			result = append(result, item)
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = item
 		}
-
 		return result
 	case []map[string]interface{}:
-		result := []interface{}{}
-		for _, item := range v {
-			result = append(result, item)
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = item
 		}
-
 		return result
 	case []string:
-		result := []interface{}{}
-		for _, item := range v {
-			result = append(result, item)
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = item
 		}
-
 		return result
 	case []int:
-		result := []interface{}{}
-		for _, item := range v {
-			result = append(result, item)
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = item
 		}
-
 		return result
 	case []int64:
-		result := []interface{}{}
-		for _, item := range v {
-			result = append(result, item)
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = item
 		}
-
 		return result
 	case []float32:
-		result := []interface{}{}
-		for _, item := range v {
-			result = append(result, item)
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = item
 		}
-
 		return result
 	case []float64:
-		result := []interface{}{}
-		for _, item := range v {
-			result = append(result, item)
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = item
 		}
-
 		return result
 	case []bool:
-		result := []interface{}{}
-		for _, item := range v {
-			result = append(result, item)
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = item
 		}
-
 		return result
 	case []time.Time:
-		result := []interface{}{}
-		for _, item := range v {
-			result = append(result, item)
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = item
 		}
-
 		return result
 	default:
 		result := []interface{}{}
@@ -675,8 +666,12 @@ func (s Json) ArrayStr(atribs ...string) []string {
 	var result = []string{}
 	vals := s.Array(atribs...)
 	for _, val := range vals {
-		src := fmt.Sprintf(`%v`, val)
-		result = append(result, src)
+		switch v := val.(type) {
+		case string:
+			result = append(result, v)
+		default:
+			result = append(result, fmt.Sprintf(`%v`, v))
+		}
 	}
 
 	return result
@@ -751,13 +746,17 @@ func (s Json) ArrayJson(atribs ...string) []Json {
 		case map[string]interface{}:
 			result = append(result, v)
 		case string:
-			bt, err := json.Marshal([]byte(v))
-			if err != nil {
-				return result
+			var item Json
+			err := json.Unmarshal([]byte(v), &item)
+			if err == nil {
+				result = append(result, item)
+				continue
 			}
-
-			if err := json.Unmarshal(bt, &result); err != nil {
-				return result
+			var items []Json
+			err = json.Unmarshal([]byte(v), &items)
+			if err == nil {
+				result = append(result, items...)
+				continue
 			}
 		default:
 			return result
@@ -846,7 +845,7 @@ func (s Json) Get(keys ...string) (result interface{}) {
 		return nil
 	}
 
-	var val interface{} = s.Clone()
+	var val interface{} = s
 	var ok bool
 	for _, key := range keys {
 		switch v := val.(type) {
@@ -1017,10 +1016,14 @@ func (s Json) Select(keys []string) Json {
 * @return Json
 **/
 func (s Json) Hidden(keys []string) Json {
+	hidden := make(map[string]struct{}, len(keys))
+	for _, k := range keys {
+		hidden[k] = struct{}{}
+	}
+
 	result := Json{}
 	for key, value := range s {
-		_, ok := s[key]
-		if !ok {
+		if _, ok := hidden[key]; !ok {
 			result[key] = value
 		}
 	}

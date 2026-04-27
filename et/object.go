@@ -15,6 +15,7 @@ type Store interface {
 }
 
 var store Store
+var isProduction = envar.GetBool("PRODUCTION", true)
 
 /**
 * SetStore
@@ -75,8 +76,7 @@ func (s *Object) up(data Item, save bool) {
 * @return bool
 **/
 func (s *Object) save() bool {
-	production := envar.GetBool("PRODUCTION", true)
-	if !production {
+	if !isProduction {
 		return false
 	}
 

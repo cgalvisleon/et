@@ -52,11 +52,10 @@ func (s *Server) setRouter(method, path, resolve string, kind TypeApi, header et
 
 		confirm("RESET")
 	} else {
-		idx = getRouterIndexByTag(method, s.router)
-		if idx == -1 {
+		var methodOk bool
+		router, methodOk = s.router[method]
+		if !methodOk {
 			router = s.newRouter(method, packageName)
-		} else {
-			router = s.router[idx]
 		}
 
 		path = strings.TrimSuffix(path, "/")
@@ -100,7 +99,7 @@ func (s *Server) setRouter(method, path, resolve string, kind TypeApi, header et
 	s.mu.Unlock()
 
 	if save {
-		go s.Save()
+		s.Save()
 	}
 
 	return router, nil
@@ -150,7 +149,7 @@ func (s *Server) DeleteRouteById(id string, save bool) error {
 	s.mu.Unlock()
 
 	if save {
-		go s.Save()
+		s.Save()
 	}
 
 	return nil

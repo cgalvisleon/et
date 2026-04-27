@@ -50,6 +50,7 @@ type Resolver struct {
 	Kind        TypeRouter                        `json:"kind"`
 	middlewares []func(http.Handler) http.Handler `json:"-"`
 	handlerFn   http.HandlerFunc                  `json:"-"`
+	timer       *time.Timer                       `json:"-"`
 }
 
 /**

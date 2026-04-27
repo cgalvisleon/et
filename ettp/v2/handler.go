@@ -35,8 +35,6 @@ func (s *Server) HTTPError(resolver *Resolver, metric *middleware.Metrics, w htt
 		s.deleteRequest(resolver.ID)
 	}
 	metric.HTTPError(w, r, status, message)
-
-	s.Save()
 }
 
 /**
@@ -49,8 +47,6 @@ func (s *Server) HTTPSuccess(resolver *Resolver, metric *middleware.Metrics, rw 
 		s.deleteRequest(resolver.ID)
 	}
 	metric.DoneHTTP(rw)
-
-	s.Save()
 }
 
 /**
@@ -132,7 +128,7 @@ func (s *Server) handlerApi(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	proxyReq, err := http.NewRequest(resolver.Method, resolver.URL, r.Body)
+	proxyReq, err := http.NewRequestWithContext(r.Context(), resolver.Method, resolver.URL, r.Body)
 	if err != nil {
 		s.HTTPError(resolver, metric, rw, r, http.StatusInternalServerError, err.Error())
 		return
@@ -160,19 +156,15 @@ func (s *Server) handlerApi(w http.ResponseWriter, r *http.Request) {
 				}
 				joinedValues += value
 			}
-			rw.Header().Set(key, joinedValues)
+			if joinedValues != "" {
+				rw.Header().Set(key, joinedValues)
+			}
 		}
 	}
 
 	setCookie := func(cookies []*http.Cookie) {
-		headers := rw.Header()
 		for _, cookie := range cookies {
-			_, ok := headers["Set-Cookie"]
-			if !ok {
-				rw.Header().Add("Set-Cookie", cookie.String())
-			} else {
-				rw.Header().Set("Set-Cookie", cookie.String())
-			}
+			rw.Header().Add("Set-Cookie", cookie.String())
 		}
 	}
 

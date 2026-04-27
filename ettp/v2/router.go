@@ -22,6 +22,8 @@ const (
 	RPC     = "RPC"
 )
 
+var paramRegex = regexp.MustCompile(`^\{.*\}$`)
+
 var methods = map[string]bool{
 	GET:     true,
 	POST:    true,
@@ -95,9 +97,8 @@ func (s *Router) set(kind TypeRouter, method, path, solver string, typeHeader Tp
 		return nil, fmt.Errorf("path %s is invalid", path)
 	}
 
-	regex := regexp.MustCompile(`^\{.*\}$`)
 	isParam := func(tag string) bool {
-		return regex.MatchString(tag)
+		return paramRegex.MatchString(tag)
 	}
 
 	target := s

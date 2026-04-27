@@ -67,7 +67,8 @@ type Server struct {
 	Packages      map[string]*Package               `json:"packages"`
 	router        map[string]*Router                `json:"-"`
 	Requests      map[string]*Resolver              `json:"requests"`
-	mu            map[string]*sync.Mutex            `json:"-"`
+	muRequests    sync.RWMutex                      `json:"-"`
+	muRoutes      sync.RWMutex                      `json:"-"`
 	mux           *http.ServeMux                    `json:"-"`
 	svr           *http.Server                      `json:"-"`
 	client        *http.Client                      `json:"-"`
@@ -103,7 +104,6 @@ func New(name string, config *Config) (*Server, error) {
 		Packages:      make(map[string]*Package),
 		router:        make(map[string]*Router),
 		Requests:      make(map[string]*Resolver),
-		mu:            make(map[string]*sync.Mutex),
 		Version:       Version,
 		mux:           http.NewServeMux(),
 		middlewares:   make([]func(http.Handler) http.Handler, 0),
@@ -117,10 +117,6 @@ func New(name string, config *Config) (*Server, error) {
 		useCache:      config.UseCache,
 		useEvent:      config.UseEvent,
 		debug:         config.Debug,
-	}
-
-	result.mu = map[string]*sync.Mutex{
-		"requests": &sync.Mutex{},
 	}
 
 	result.svr = &http.Server{
@@ -203,7 +199,6 @@ func (s *Server) ToJson() (et.Json, error) {
 * @return void
 **/
 func (s *Server) banner() {
-	time.Sleep(3 * time.Second)
 	templ := utility.BannerTitle(s.Name, 4)
 	banner.InitString(colorable.NewColorableStdout(), true, true, templ)
 	fmt.Println()
@@ -253,6 +248,8 @@ func (s *Server) setSolver(kind TypeRouter, method, path, solver string, typeHea
 		}
 	}
 
+	s.muRoutes.Lock()
+
 	router, ok := s.router[method]
 	if !ok {
 		router = newRouter(method)
@@ -273,6 +270,7 @@ func (s *Server) setSolver(kind TypeRouter, method, path, solver string, typeHea
 
 	result, err := router.set(kind, method, path, solver, typeHeader, header, excludeHeader, version)
 	if err != nil {
+		s.muRoutes.Unlock()
 		return nil, err
 	}
 
@@ -285,6 +283,9 @@ func (s *Server) setSolver(kind TypeRouter, method, path, solver string, typeHea
 
 	result = pkg.addSolver(result)
 	s.Solvers[key] = result
+
+	s.muRoutes.Unlock()
+
 	log(action)
 
 	if saved {
@@ -318,8 +319,8 @@ func (s *Server) setHandler(method, path string, handlerFn http.HandlerFunc, pac
 * @return void
 **/
 func (s *Server) setRequest(key string, resolver *Resolver) {
-	s.mu["requests"].Lock()
-	defer s.mu["requests"].Unlock()
+	s.muRequests.Lock()
+	defer s.muRequests.Unlock()
 
 	s.Requests[key] = resolver
 }
@@ -330,8 +331,8 @@ func (s *Server) setRequest(key string, resolver *Resolver) {
 * @return (*Resolver, bool)
 **/
 func (s *Server) getRequest(key string) (*Resolver, bool) {
-	s.mu["requests"].Lock()
-	defer s.mu["requests"].Unlock()
+	s.muRequests.RLock()
+	defer s.muRequests.RUnlock()
 
 	resolver, ok := s.Requests[key]
 	return resolver, ok
@@ -343,9 +344,13 @@ func (s *Server) getRequest(key string) (*Resolver, bool) {
 * @return void
 **/
 func (s *Server) deleteRequest(key string) {
-	s.mu["requests"].Lock()
-	defer s.mu["requests"].Unlock()
+	s.muRequests.Lock()
+	defer s.muRequests.Unlock()
 
+	if r, ok := s.Requests[key]; ok && r.timer != nil {
+		r.timer.Stop()
+		r.timer = nil
+	}
 	delete(s.Requests, key)
 }
 
@@ -354,8 +359,8 @@ func (s *Server) deleteRequest(key string) {
 * @return map[string]*Resolver
 **/
 func (s *Server) listRequests() map[string]*Resolver {
-	s.mu["requests"].Lock()
-	defer s.mu["requests"].Unlock()
+	s.muRequests.RLock()
+	defer s.muRequests.RUnlock()
 
 	result := make(map[string]*Resolver)
 	for k, v := range s.Requests {
@@ -435,12 +440,14 @@ func (s *Server) Authenticator(middleware func(http.Handler) http.Handler) *Serv
 * @return error
 **/
 func (s *Server) RemoveRouterById(id string, save bool) error {
+	s.muRoutes.Lock()
 	_, ok := s.Solvers[id]
 	if !ok {
+		s.muRoutes.Unlock()
 		return fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, id)
 	}
-
 	delete(s.Solvers, id)
+	s.muRoutes.Unlock()
 
 	if save {
 		s.Save()
@@ -456,7 +463,11 @@ func (s *Server) RemoveRouterById(id string, save bool) error {
 **/
 func (s *Server) FindResolver(r *http.Request) (*Resolver, error) {
 	method := r.Method
+
+	s.muRoutes.RLock()
 	router, ok := s.router[method]
+	s.muRoutes.RUnlock()
+
 	if !ok {
 		return nil, errors.New("router not found")
 	}
@@ -466,16 +477,13 @@ func (s *Server) FindResolver(r *http.Request) (*Resolver, error) {
 		return nil, err
 	}
 
+	if duration := s.idleTimeout + 300*time.Millisecond; duration > 0 {
+		result.timer = time.AfterFunc(duration, func() {
+			s.deleteRequest(result.ID)
+		})
+	}
+
 	s.setRequest(result.ID, result)
-
-	clean := func() {
-		s.deleteRequest(result.ID)
-	}
-
-	duration := s.idleTimeout + (300 * time.Microsecond)
-	if duration != 0 {
-		go time.AfterFunc(duration, clean)
-	}
 
 	return result, nil
 }
@@ -533,9 +541,12 @@ func (s *Server) Close() {
 * @return error
 **/
 func (s *Server) Reset() {
+	s.muRoutes.Lock()
 	s.router = make(map[string]*Router)
 	s.Solvers = make(map[string]*Solver)
 	s.Packages = make(map[string]*Package)
+	s.muRoutes.Unlock()
+
 	if err := s.basicRoutes(); err != nil {
 		logs.Fatal(err)
 	}

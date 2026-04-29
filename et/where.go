@@ -332,9 +332,9 @@ func (s *Where) AdddResult(item Json) (next bool) {
 
 /**
 * All
-* @return ([]Json, bool)
+* @return []Json
 **/
-func (s *Where) All() ([]Json, bool) {
+func (s *Where) All() []Json {
 	from := s.From
 	if len(s.Joins) == 0 && s.From.As() != "" {
 		from = &Source{
@@ -372,18 +372,18 @@ func (s *Where) All() ([]Json, bool) {
 		}
 	}
 
-	return s.Result, len(s.Result) > 0
+	return s.Result
 }
 
 /**
 * One
 * @param idx int
-* @return Json, bool
+* @return Json
 **/
-func (s *Where) One(idx int) (Json, bool) {
-	rows, ok := s.All()
-	if !ok {
-		return Json{}, false
+func (s *Where) One(idx int) Json {
+	rows := s.All()
+	if len(rows) == 0 {
+		return Json{}
 	}
 
 	n := len(rows)
@@ -392,24 +392,24 @@ func (s *Where) One(idx int) (Json, bool) {
 	}
 
 	if idx >= n {
-		return Json{}, false
+		return Json{}
 	}
 
-	return rows[idx], true
+	return rows[idx]
 }
 
 /**
 * First
-* @return Json, bool
+* @return Json
 **/
-func (s *Where) First() (Json, bool) {
+func (s *Where) First() Json {
 	return s.One(0)
 }
 
 /**
 * Last
-* @return Json, bool
+* @return Json
 **/
-func (s *Where) Last() (Json, bool) {
+func (s *Where) Last() Json {
 	return s.One(-1)
 }

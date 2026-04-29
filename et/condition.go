@@ -160,12 +160,20 @@ func (s *Condition) applyOpEq(val any) bool {
 	case []Json:
 		for _, item := range bv {
 			for _, value := range item {
-				return val == value
+				ok, err := equalsAny(val, value)
+				if err != nil {
+					return false
+				}
+				return ok
 			}
 		}
 		return false
 	default:
-		return val == bv
+		ok, err := equalsAny(val, bv)
+		if err != nil {
+			return false
+		}
+		return ok
 	}
 }
 
@@ -175,12 +183,7 @@ func (s *Condition) applyOpEq(val any) bool {
 * @return bool
 **/
 func (s *Condition) applyOpNeg(val any) bool {
-	result := s.applyOpEq(val)
-	if result {
-		return false
-	}
-
-	return !result
+	return !s.applyOpEq(val)
 }
 
 /**
@@ -236,15 +239,17 @@ func (s *Condition) applyOpLess(val any) bool {
 	case []Json:
 		for _, item := range bv {
 			for _, value := range item {
-				s.Value = value
-				return s.applyOpLess(val)
+				tmp := *s
+				tmp.Value = value
+				return tmp.applyOpLess(val)
 			}
 		}
 		return invalidType()
 	case []interface{}:
 		for _, value := range bv {
-			s.Value = value
-			return s.applyOpLess(val)
+			tmp := *s
+			tmp.Value = value
+			return tmp.applyOpLess(val)
 		}
 		return invalidType()
 	default:
@@ -305,15 +310,17 @@ func (s *Condition) applyOpLessEq(val any) bool {
 	case []Json:
 		for _, item := range bv {
 			for _, value := range item {
-				s.Value = value
-				return s.applyOpLessEq(val)
+				tmp := *s
+				tmp.Value = value
+				return tmp.applyOpLessEq(val)
 			}
 		}
 		return invalidType()
 	case []interface{}:
 		for _, value := range bv {
-			s.Value = value
-			return s.applyOpLessEq(val)
+			tmp := *s
+			tmp.Value = value
+			return tmp.applyOpLessEq(val)
 		}
 		return invalidType()
 	default:
@@ -374,15 +381,17 @@ func (s *Condition) applyOpMore(val any) bool {
 	case []Json:
 		for _, item := range bv {
 			for _, value := range item {
-				s.Value = value
-				return s.applyOpMore(val)
+				tmp := *s
+				tmp.Value = value
+				return tmp.applyOpMore(val)
 			}
 		}
 		return invalidType()
 	case []interface{}:
 		for _, value := range bv {
-			s.Value = value
-			return s.applyOpMore(val)
+			tmp := *s
+			tmp.Value = value
+			return tmp.applyOpMore(val)
 		}
 		return invalidType()
 	default:
@@ -443,15 +452,17 @@ func (s *Condition) applyOpMoreEq(val any) bool {
 	case []Json:
 		for _, item := range bv {
 			for _, value := range item {
-				s.Value = value
-				return s.applyOpMoreEq(val)
+				tmp := *s
+				tmp.Value = value
+				return tmp.applyOpMoreEq(val)
 			}
 		}
 		return invalidType()
 	case []interface{}:
 		for _, value := range bv {
-			s.Value = value
-			return s.applyOpMoreEq(val)
+			tmp := *s
+			tmp.Value = value
+			return tmp.applyOpMoreEq(val)
 		}
 		return invalidType()
 	default:
@@ -482,28 +493,32 @@ func (s *Condition) applyOpLike(val any) bool {
 		return matchLikeStar(av, bv)
 	case Json:
 		for _, value := range bv {
-			s.Value = value
-			return s.applyOpLike(val)
+			tmp := *s
+			tmp.Value = value
+			return tmp.applyOpLike(val)
 		}
 		return invalidType()
 	case map[string]interface{}:
 		for _, value := range bv {
-			s.Value = value
-			return s.applyOpLike(val)
+			tmp := *s
+			tmp.Value = value
+			return tmp.applyOpLike(val)
 		}
 		return invalidType()
 	case []Json:
 		for _, item := range bv {
 			for _, value := range item {
-				s.Value = value
-				return s.applyOpLike(val)
+				tmp := *s
+				tmp.Value = value
+				return tmp.applyOpLike(val)
 			}
 		}
 		return invalidType()
 	case []interface{}:
 		for _, value := range bv {
-			s.Value = value
-			return s.applyOpLike(val)
+			tmp := *s
+			tmp.Value = value
+			return tmp.applyOpLike(val)
 		}
 		return invalidType()
 	default:
@@ -668,6 +683,8 @@ func (s *Condition) ApplyToValue(val any) bool {
 		return s.applyOpNotIn(val)
 	case OpIs:
 		return s.applyOpIs(val)
+	case OpIsNot:
+		return !s.applyOpIs(val)
 	case OpNull:
 		return s.applyOpNull(val)
 	case OpNotNull:

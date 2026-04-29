@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 	"time"
@@ -177,10 +178,7 @@ func (s Json) IsExist(key string) bool {
 **/
 func (s Json) Clone() Json {
 	result := Json{}
-	for k, v := range s {
-		result[k] = v
-	}
-
+	maps.Copy(result, s)
 	return result
 }
 
@@ -663,8 +661,8 @@ func (s Json) Array(atrib ...string) []interface{} {
 * @return []string
 **/
 func (s Json) ArrayStr(atribs ...string) []string {
-	var result = []string{}
 	vals := s.Array(atribs...)
+	result := make([]string, 0, len(vals))
 	for _, val := range vals {
 		switch v := val.(type) {
 		case string:
@@ -683,8 +681,8 @@ func (s Json) ArrayStr(atribs ...string) []string {
 * @return []int
 **/
 func (s Json) ArrayInt(atribs ...string) []int {
-	var result = []int{}
 	vals := s.Array(atribs...)
+	result := make([]int, 0, len(vals))
 	for _, val := range vals {
 		v, ok := val.(int)
 		if ok {
@@ -701,8 +699,8 @@ func (s Json) ArrayInt(atribs ...string) []int {
 * @return []int64
 **/
 func (s Json) ArrayInt64(atribs ...string) []int64 {
-	var result = []int64{}
 	vals := s.Array(atribs...)
+	result := make([]int64, 0, len(vals))
 	for _, val := range vals {
 		v, ok := val.(int64)
 		if ok {
@@ -719,8 +717,8 @@ func (s Json) ArrayInt64(atribs ...string) []int64 {
 * @return []float64
 **/
 func (s Json) ArrayNumber(atribs ...string) []float64 {
-	var result = []float64{}
 	vals := s.Array(atribs...)
+	result := make([]float64, 0, len(vals))
 	for _, val := range vals {
 		v, ok := val.(float64)
 		if ok {
@@ -772,9 +770,7 @@ func (s Json) ArrayJson(atribs ...string) []Json {
 * @return error
 **/
 func (s Json) Update(from Json) {
-	for key, value := range from {
-		s[key] = value
-	}
+	maps.Copy(s, from)
 }
 
 /**
@@ -857,7 +853,7 @@ func (s Json) Get(keys ...string) (result interface{}) {
 			}
 			result = val
 		case map[string]interface{}:
-			val, ok := v[key]
+			val, ok = v[key]
 			if !ok {
 				result = nil
 				return
@@ -1005,4 +1001,13 @@ func (s Json) Hidden(keys []string) Json {
 **/
 func (s Json) From(as string) *Where {
 	return From([]Json{s}, as)
+}
+
+/**
+* ApplyCondition
+* @param condition *Condition
+* @return bool
+**/
+func (s Json) ApplyCondition(condition *Condition) bool {
+	return condition.ApplyToObject(s)
 }

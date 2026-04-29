@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	"reflect"
-	"slices"
 	"strings"
 	"time"
 )
@@ -370,9 +369,14 @@ func selects(fields []string, object Json) Json {
 * @return Json
 **/
 func hidden(fields []string, object Json) Json {
+	hide := make(map[string]struct{}, len(fields))
+	for _, f := range fields {
+		hide[f] = struct{}{}
+	}
+
 	result := Json{}
 	for key, value := range object {
-		if slices.Contains(fields, key) {
+		if _, ok := hide[key]; ok {
 			continue
 		}
 		result[key] = value
@@ -393,7 +397,7 @@ func MergeToKeyValue(left []Json, key string, value any) []Json {
 		}
 	}
 
-	result := []Json{}
+	result := make([]Json, 0, len(left))
 	for _, item := range left {
 		item[key] = value
 		result = append(result, item)
@@ -408,7 +412,7 @@ func MergeToKeyValue(left []Json, key string, value any) []Json {
 * @return []Json
 **/
 func MergeToMap(left, right []Json) []Json {
-	result := []Json{}
+	result := make([]Json, 0, len(left)*len(right))
 	for _, itemL := range left {
 		for _, itemR := range right {
 			maps.Copy(itemR, itemL)
@@ -425,12 +429,12 @@ func MergeToMap(left, right []Json) []Json {
 * @return *Source
 **/
 func Prefixer(item Json, as string) Json {
+	prefix := strings.ToLower(as)
 	result := Json{}
 	for k, v := range item {
 		k = strings.ToLower(k)
-		as := strings.ToLower(as)
-		if as != "" {
-			result[as+"."+k] = v
+		if prefix != "" {
+			result[prefix+"."+k] = v
 		} else {
 			result[k] = v
 		}
@@ -541,20 +545,18 @@ func merge(left, right Json) Json {
 * @return string
 **/
 func buildKey(j Json, keys map[string]string, fromLeft bool) string {
-	key := ""
-
+	var sb strings.Builder
 	for lk, rk := range keys {
 		field := rk
 		if fromLeft {
 			field = lk
 		}
-
 		if v, ok := j[field]; ok {
-			key += "|" + fmt.Sprintf("%v", v)
+			sb.WriteByte('|')
+			fmt.Fprintf(&sb, "%v", v)
 		} else {
-			key += "|NULL"
+			sb.WriteString("|NULL")
 		}
 	}
-
-	return key
+	return sb.String()
 }

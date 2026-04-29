@@ -77,7 +77,7 @@ func (s *Items) ToMap() map[string]interface{} {
 	result := make(map[string]interface{})
 	result["ok"] = s.Ok
 	result["count"] = s.Count
-	items := make([]map[string]interface{}, 0)
+	items := make([]map[string]interface{}, 0, len(s.Result))
 	for _, item := range s.Result {
 		items = append(items, item.ToMap())
 	}

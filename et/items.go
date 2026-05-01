@@ -2,7 +2,10 @@ package et
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
+
+	"github.com/cgalvisleon/et/msg"
 )
 
 type Items struct {
@@ -62,6 +65,9 @@ func (s Items) ToString() string {
 * @param item Json
 **/
 func (s *Items) Add(item ...Json) {
+	if s.Result == nil {
+		s.Result = make([]Json, 0)
+	}
 	for _, i := range item {
 		s.Result = append(s.Result, i)
 	}
@@ -459,15 +465,37 @@ func (s Items) Exist(idx int, key string) bool {
 }
 
 /**
-* First
-* @return Item
+* One
+* @param idx int
+* @return Item, error
 **/
-func (s Items) First() Json {
-	if s.Count == 0 {
-		return Json{}
+func (s Items) One(idx int) (Item, error) {
+	n := s.Count
+	if idx < 0 {
+		idx = n + idx
 	}
 
-	return s.Result[0]
+	if idx >= n {
+		return Item{}, errors.New(msg.MSG_INDEX_OUT_OF_RANGE)
+	}
+
+	return NewItem(s.Result[idx]), nil
+}
+
+/**
+* First
+* @return Item, error
+**/
+func (s *Items) First() (Item, error) {
+	return s.One(0)
+}
+
+/**
+* Last
+* @return Item, error
+**/
+func (s *Items) Last() (Item, error) {
+	return s.One(-1)
 }
 
 /**

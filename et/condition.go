@@ -17,21 +17,21 @@ var (
 type Operator string
 
 const (
-	OpEq         Operator = "eq"
-	OpNeg        Operator = "neg"
-	OpLess       Operator = "less"
-	OpLessEq     Operator = "less_eq"
-	OpMore       Operator = "more"
-	OpMoreEq     Operator = "more_eq"
-	OpLike       Operator = "like"
-	OpIn         Operator = "in"
-	OpNotIn      Operator = "not_in"
-	OpIs         Operator = "is"
-	OpIsNot      Operator = "is_not"
-	OpNull       Operator = "null"
-	OpNotNull    Operator = "not_null"
-	OpBetween    Operator = "between"
-	OpNotBetween Operator = "not_between"
+	EQ          Operator = "eq"
+	NEG         Operator = "neg"
+	LESS        Operator = "less"
+	LESS_EQ     Operator = "less_eq"
+	MORE        Operator = "more"
+	MORE_EQ     Operator = "more_eq"
+	LIKE        Operator = "like"
+	IN          Operator = "in"
+	NOT_IN      Operator = "not_in"
+	IS          Operator = "is"
+	IS_NOT      Operator = "is_not"
+	NULL        Operator = "null"
+	NOT_NULL    Operator = "not_null"
+	BETWEEN     Operator = "between"
+	NOT_BETWEEN Operator = "not_between"
 )
 
 func (s Operator) Str() string {
@@ -40,26 +40,26 @@ func (s Operator) Str() string {
 
 func ToOperator(s string) Operator {
 	values := map[string]Operator{
-		"eq":          OpEq,
-		"neg":         OpNeg,
-		"less":        OpLess,
-		"less_eq":     OpLessEq,
-		"more":        OpMore,
-		"more_eq":     OpMoreEq,
-		"like":        OpLike,
-		"in":          OpIn,
-		"not_in":      OpNotIn,
-		"is":          OpIs,
-		"is_not":      OpIsNot,
-		"null":        OpNull,
-		"not_null":    OpNotNull,
-		"between":     OpBetween,
-		"not_between": OpNotBetween,
+		"eq":          EQ,
+		"neg":         NEG,
+		"less":        LESS,
+		"less_eq":     LESS_EQ,
+		"more":        MORE,
+		"more_eq":     MORE_EQ,
+		"like":        LIKE,
+		"in":          IN,
+		"not_in":      NOT_IN,
+		"is":          IS,
+		"is_not":      IS_NOT,
+		"null":        NULL,
+		"not_null":    NOT_NULL,
+		"between":     BETWEEN,
+		"not_between": NOT_BETWEEN,
 	}
 
 	result, ok := values[s]
 	if !ok {
-		return OpEq
+		return EQ
 	}
 
 	return result
@@ -663,35 +663,35 @@ func (s *Condition) applyOpNotBetween(val any) bool {
 **/
 func (s *Condition) ApplyToValue(val any) bool {
 	switch s.Operator {
-	case OpEq:
+	case EQ:
 		return s.applyOpEq(val)
-	case OpNeg:
+	case NEG:
 		return s.applyOpNeg(val)
-	case OpLess:
+	case LESS:
 		return s.applyOpLess(val)
-	case OpLessEq:
+	case LESS_EQ:
 		return s.applyOpLessEq(val)
-	case OpMore:
+	case MORE:
 		return s.applyOpMore(val)
-	case OpMoreEq:
+	case MORE_EQ:
 		return s.applyOpMoreEq(val)
-	case OpLike:
+	case LIKE:
 		return s.applyOpLike(val)
-	case OpIn:
+	case IN:
 		return s.applyOpIn(val)
-	case OpNotIn:
+	case NOT_IN:
 		return s.applyOpNotIn(val)
-	case OpIs:
+	case IS:
 		return s.applyOpIs(val)
-	case OpIsNot:
+	case IS_NOT:
 		return !s.applyOpIs(val)
-	case OpNull:
+	case NULL:
 		return s.applyOpNull(val)
-	case OpNotNull:
+	case NOT_NULL:
 		return s.applyOpNotNull(val)
-	case OpBetween:
+	case BETWEEN:
 		return s.applyOpBetween(val)
-	case OpNotBetween:
+	case NOT_BETWEEN:
 		return s.applyOpNotBetween(val)
 	default:
 		return false
@@ -799,7 +799,7 @@ func condition(field string, value interface{}, op Operator) *Condition {
 * @return Condition
 **/
 func Eq(field string, value interface{}) *Condition {
-	return condition(field, value, OpEq)
+	return condition(field, value, EQ)
 }
 
 /**
@@ -808,7 +808,7 @@ func Eq(field string, value interface{}) *Condition {
 * @return Condition
 **/
 func Neg(field string, value interface{}) *Condition {
-	return condition(field, value, OpNeg)
+	return condition(field, value, NEG)
 }
 
 /**
@@ -817,7 +817,7 @@ func Neg(field string, value interface{}) *Condition {
 * @return Condition
 **/
 func Less(field string, value interface{}) *Condition {
-	return condition(field, value, OpLess)
+	return condition(field, value, LESS)
 }
 
 /**
@@ -826,7 +826,7 @@ func Less(field string, value interface{}) *Condition {
 * @return Condition
 **/
 func LessEq(field string, value interface{}) *Condition {
-	return condition(field, value, OpLessEq)
+	return condition(field, value, LESS_EQ)
 }
 
 /**
@@ -835,7 +835,7 @@ func LessEq(field string, value interface{}) *Condition {
 * @return Condition
 **/
 func More(field string, value interface{}) *Condition {
-	return condition(field, value, OpMore)
+	return condition(field, value, MORE)
 }
 
 /**
@@ -844,7 +844,7 @@ func More(field string, value interface{}) *Condition {
 * @return Condition
 **/
 func MoreEq(field string, value interface{}) *Condition {
-	return condition(field, value, OpMoreEq)
+	return condition(field, value, MORE_EQ)
 }
 
 /**
@@ -853,7 +853,7 @@ func MoreEq(field string, value interface{}) *Condition {
 * @return Condition
 **/
 func Like(field string, value interface{}) *Condition {
-	return condition(field, value, OpLike)
+	return condition(field, value, LIKE)
 }
 
 /**
@@ -862,7 +862,7 @@ func Like(field string, value interface{}) *Condition {
 * @return Condition
 **/
 func In(field string, value []interface{}) *Condition {
-	return condition(field, value, OpIn)
+	return condition(field, value, IN)
 }
 
 /**
@@ -871,7 +871,7 @@ func In(field string, value []interface{}) *Condition {
 * @return Condition
 **/
 func NotIn(field string, value []interface{}) *Condition {
-	return condition(field, value, OpNotIn)
+	return condition(field, value, NOT_IN)
 }
 
 /**
@@ -880,7 +880,7 @@ func NotIn(field string, value []interface{}) *Condition {
 * @return Condition
 **/
 func Is(field string, value interface{}) *Condition {
-	return condition(field, value, OpIs)
+	return condition(field, value, IS)
 }
 
 /**
@@ -889,7 +889,7 @@ func Is(field string, value interface{}) *Condition {
 * @return Condition
 **/
 func IsNot(field string, value interface{}) *Condition {
-	return condition(field, value, OpIsNot)
+	return condition(field, value, IS_NOT)
 }
 
 /**
@@ -898,7 +898,7 @@ func IsNot(field string, value interface{}) *Condition {
 * @return Condition
 **/
 func Null(field string) *Condition {
-	return condition(field, nil, OpNull)
+	return condition(field, nil, NULL)
 }
 
 /**
@@ -907,7 +907,7 @@ func Null(field string) *Condition {
 * @return Condition
 **/
 func NotNull(field string) *Condition {
-	return condition(field, nil, OpNotNull)
+	return condition(field, nil, NOT_NULL)
 }
 
 /**
@@ -916,7 +916,7 @@ func NotNull(field string) *Condition {
 * @return Condition
 **/
 func Between(field string, min, max any) *Condition {
-	return condition(field, BetweenValue{Min: min, Max: max}, OpBetween)
+	return condition(field, BetweenValue{Min: min, Max: max}, BETWEEN)
 }
 
 /**
@@ -925,7 +925,7 @@ func Between(field string, min, max any) *Condition {
 * @return Condition
 **/
 func NotBetween(field string, min, max any) *Condition {
-	return condition(field, BetweenValue{Min: min, Max: max}, OpNotBetween)
+	return condition(field, BetweenValue{Min: min, Max: max}, NOT_BETWEEN)
 }
 
 /**

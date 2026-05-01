@@ -648,6 +648,54 @@ func (s Json) Json(atrib string) Json {
 }
 
 /**
+* MapStr return the value of the key as a map[string]string
+* @param atrib string
+* @return map[string]string
+**/
+func (s Json) MapStr(atrib string) map[string]string {
+	result := map[string]string{}
+	jsonValue := s.ValJson(Json{}, atrib)
+	for k, v := range jsonValue {
+		result[k] = fmt.Sprintf("%v", v)
+	}
+	return result
+}
+
+/**
+* MapInt return the value of the key as a map[string]int
+* @param atrib string
+* @return map[string]int
+**/
+func (s Json) MapInt(atrib string) map[string]int {
+	result := map[string]int{}
+	jsonValue := s.ValJson(Json{}, atrib)
+	for k, v := range jsonValue {
+		val, err := strconv.Atoi(fmt.Sprintf("%v", v))
+		if err == nil {
+			result[k] = val
+		}
+	}
+	return result
+}
+
+/**
+* MapFloat return the value of the key as a map[string]float64
+* @param atrib string
+* @return map[string]float64
+**/
+func (s Json) MapFloat(atrib string) map[string]float64 {
+	result := map[string]float64{}
+	jsonValue := s.ValJson(Json{}, atrib)
+	for k, v := range jsonValue {
+		val, err := strconv.ParseFloat(fmt.Sprintf("%v", v), 64)
+		if err == nil {
+			result[k] = val
+		}
+	}
+	return result
+}
+
+/**
 * Array return the value of the key
 * @param atrib string
 * @return []Json

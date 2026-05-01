@@ -14,14 +14,14 @@ const (
 * @param itmes []Json, as ...string
 * @return *Where
 **/
-func From(itmes []Json, as ...string) *Where {
+func From(items []Json, as ...string) *Where {
 	asStr := "A"
 	if len(as) == 1 {
 		asStr = as[0]
 	}
 
 	return newWhere(&Source{
-		data: itmes,
+		data: items,
 		as:   asStr,
 	})
 }

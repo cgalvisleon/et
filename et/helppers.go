@@ -369,6 +369,10 @@ func selects(fields []string, object Json) Json {
 * @return Json
 **/
 func hidden(fields []string, object Json) Json {
+	if len(fields) == 0 {
+		return object
+	}
+
 	hide := make(map[string]struct{}, len(fields))
 	for _, f := range fields {
 		hide[f] = struct{}{}
@@ -424,12 +428,11 @@ func MergeToMap(left, right []Json) []Json {
 }
 
 /**
-* Prefixer
-* @param from *Source
-* @return *Source
+* applyPrefix: Builds a new Json with lowercased keys and an already-lowercase prefix.
+* @param item Json, prefix string
+* @return Json
 **/
-func Prefixer(item Json, as string) Json {
-	prefix := strings.ToLower(as)
+func applyPrefix(item Json, prefix string) Json {
 	result := Json{}
 	for k, v := range item {
 		k = strings.ToLower(k)
@@ -439,8 +442,16 @@ func Prefixer(item Json, as string) Json {
 			result[k] = v
 		}
 	}
-
 	return result
+}
+
+/**
+* Prefixer
+* @param item Json, as string
+* @return Json
+**/
+func Prefixer(item Json, as string) Json {
+	return applyPrefix(item, strings.ToLower(as))
 }
 
 /**
@@ -452,18 +463,23 @@ func Joingy(left, right Iterator, keys map[string]string, joinType JoinType) Ite
 	result := []Json{}
 	rightIndex := map[string][]int{}
 	matchedRight := map[int]bool{}
+	rightItems := []Json{}
 
-	// indexar RIGHT
-	i := 0
+	rightAs := strings.ToLower(right.As())
+	leftAs := strings.ToLower(left.As())
+
+	// indexar RIGHT: prefijamos y guardamos cada ítem en rightItems para
+	// no depender del estado del iterador después de consumirlo.
 	for {
 		r, ok := right.Next()
 		if !ok {
 			break
 		}
-		r = Prefixer(r, right.As())
+		r = applyPrefix(r, rightAs)
+		i := len(rightItems)
+		rightItems = append(rightItems, r)
 		key := buildKey(r, keys, false)
 		rightIndex[key] = append(rightIndex[key], i)
-		i++
 	}
 
 	// recorrer LEFT
@@ -473,16 +489,13 @@ func Joingy(left, right Iterator, keys map[string]string, joinType JoinType) Ite
 			break
 		}
 
-		l = Prefixer(l, left.As())
+		l = applyPrefix(l, leftAs)
 		key := buildKey(l, keys, true)
 		ridxs, ok := rightIndex[key]
 		if ok {
 			for _, ri := range ridxs {
-				r := right.Data(ri)
-				r = Prefixer(r, right.As())
 				matchedRight[ri] = true
-
-				result = append(result, merge(l, r))
+				result = append(result, merge(l, rightItems[ri]))
 			}
 		} else {
 			if joinType == LeftJoin || joinType == FullJoin {
@@ -491,25 +504,18 @@ func Joingy(left, right Iterator, keys map[string]string, joinType JoinType) Ite
 		}
 	}
 
-	// RIGHT JOIN o FULL JOIN
+	// RIGHT JOIN o FULL JOIN: filas del lado derecho sin emparejamiento
 	if joinType == RightJoin || joinType == FullJoin {
-		i := 0
-		for {
-			r, ok := right.Next()
-			if !ok {
-				break
-			}
-			r = Prefixer(r, right.As())
+		for i, r := range rightItems {
 			if !matchedRight[i] {
 				result = append(result, merge(nil, r))
 			}
-			i++
 		}
 	}
 
 	return &Source{
 		data: result,
-		as:   left.As(),
+		as:   leftAs,
 	}
 }
 
@@ -527,7 +533,6 @@ func merge(left, right Json) Json {
 
 	if right != nil {
 		for k, v := range right {
-			k = strings.ToLower(k)
 			if _, exists := out[k]; exists {
 				continue
 			}

@@ -2,6 +2,8 @@ package et
 
 import (
 	"encoding/json"
+	"sort"
+	"strings"
 
 	"github.com/cgalvisleon/et/envar"
 )
@@ -10,7 +12,6 @@ type Iterator interface {
 	Next() (Json, bool)
 	As() string
 	Add(item Json)
-	Data(int) Json
 }
 
 type JoinType int
@@ -47,21 +48,26 @@ type Join struct {
 	Type JoinType          `json:"type"`
 }
 
+type OrderField struct {
+	Field string
+	Asc   bool
+}
+
 /**
 * Where
 **/
 type Where struct {
-	From       Iterator        `json:"from"`
-	Conditions []*Condition    `json:"conditions"`
-	Selects    []string        `json:"selects"`
-	Joins      []*Join         `json:"joins"`
-	Hiddens    []string        `json:"hiddens"`
-	OrderBy    map[string]bool `json:"order_by"`
-	Offset     int             `json:"offset"`
-	Limits     int             `json:"limits"`
-	Workers    int             `json:"workers"`
-	Result     []Json          `json:"result"`
-	isDebug    bool            `json:"-"`
+	From       Iterator     `json:"from"`
+	Conditions []*Condition `json:"conditions"`
+	Selects    []string     `json:"selects"`
+	Joins      []*Join      `json:"joins"`
+	Hiddens    []string     `json:"hiddens"`
+	OrderBy    []OrderField `json:"order_by"`
+	Offset     int          `json:"offset"`
+	Limits     int          `json:"limits"`
+	Workers    int          `json:"workers"`
+	Result     []Json       `json:"result"`
+	isDebug    bool         `json:"-"`
 }
 
 /**
@@ -73,15 +79,15 @@ func newWhere(from Iterator) *Where {
 	limitRows := envar.GetInt("LIMIT_ROWS", 1000)
 	result := &Where{
 		From:       from,
-		Conditions: make([]*Condition, 0),
-		Selects:    make([]string, 0),
-		Joins:      make([]*Join, 0),
-		Hiddens:    make([]string, 0),
-		OrderBy:    make(map[string]bool, 0),
+		Conditions: make([]*Condition, 0, 4),
+		Selects:    make([]string, 0, 4),
+		Joins:      make([]*Join, 0, 2),
+		Hiddens:    make([]string, 0, 4),
+		OrderBy:    make([]OrderField, 0, 2),
 		Offset:     0,
 		Limits:     limitRows,
 		Workers:    1,
-		Result:     make([]Json, 0),
+		Result:     make([]Json, 0, limitRows),
 	}
 
 	return result
@@ -257,7 +263,7 @@ func (s *Where) Hidden(fields ...string) *Where {
 * @return *Where
 **/
 func (s *Where) Asc(field string) *Where {
-	s.OrderBy[field] = true
+	s.OrderBy = append(s.OrderBy, OrderField{Field: field, Asc: true})
 	return s
 }
 
@@ -267,7 +273,7 @@ func (s *Where) Asc(field string) *Where {
 * @return *Where
 **/
 func (s *Where) Desc(field string) *Where {
-	s.OrderBy[field] = false
+	s.OrderBy = append(s.OrderBy, OrderField{Field: field, Asc: false})
 	return s
 }
 
@@ -296,17 +302,17 @@ func (s *Where) Limit(page int, rows int) *Where {
 }
 
 /**
-* AdddResult
-* @return next bool
+* addItem: Applies select/hidden transforms and appends item to Result without limit check.
+* @param item Json
 **/
-func (s *Where) AdddResult(item Json) (next bool) {
+func (s *Where) addItem(item Json) {
 	if len(s.Selects) == 0 {
 		item = hidden(s.Hiddens, item)
 		s.Result = append(s.Result, item)
 	} else {
 		item = hidden(s.Hiddens, item)
 		item = selects(s.Selects, item)
-		items := []Json{}
+		items := make([]Json, 0, len(item))
 		for key, val := range item {
 			vals := item.ArrayJson(key)
 			if len(vals) == 0 {
@@ -317,9 +323,17 @@ func (s *Where) AdddResult(item Json) (next bool) {
 				items = MergeToMap(items, vals)
 			}
 		}
-
 		s.Result = append(s.Result, items...)
 	}
+}
+
+/**
+* AdddResult
+* @param item Json
+* @return next bool
+**/
+func (s *Where) AdddResult(item Json) (next bool) {
+	s.addItem(item)
 
 	if s.Limits == 0 {
 		next = true
@@ -331,15 +345,41 @@ func (s *Where) AdddResult(item Json) (next bool) {
 }
 
 /**
+* sortResult: Sorts Result in-place using OrderBy fields.
+**/
+func (s *Where) sortResult() {
+	if len(s.OrderBy) == 0 || len(s.Result) == 0 {
+		return
+	}
+
+	sort.SliceStable(s.Result, func(i, j int) bool {
+		for _, of := range s.OrderBy {
+			a := s.Result[i][of.Field]
+			b := s.Result[j][of.Field]
+			cmp, ok := compareAnyOrdered(a, b)
+			if !ok || cmp == 0 {
+				continue
+			}
+			if of.Asc {
+				return cmp < 0
+			}
+			return cmp > 0
+		}
+		return false
+	})
+}
+
+/**
 * All
 * @return []Json
 **/
 func (s *Where) All() []Json {
 	from := s.From
 	if len(s.Joins) == 0 && s.From.As() != "" {
+		fromAs := strings.ToLower(s.From.As())
 		from = &Source{
 			data: []Json{},
-			as:   s.From.As(),
+			as:   fromAs,
 		}
 
 		for {
@@ -348,7 +388,7 @@ func (s *Where) All() []Json {
 				break
 			}
 
-			item = Prefixer(item, s.From.As())
+			item = applyPrefix(item, fromAs)
 			from.Add(item)
 		}
 	} else {
@@ -356,6 +396,9 @@ func (s *Where) All() []Json {
 			from = Joingy(from, join.To, join.Keys, join.Type)
 		}
 	}
+
+	hasOrder := len(s.OrderBy) > 0
+	skipped := 0
 
 	for {
 		item, ok := from.Next()
@@ -366,9 +409,30 @@ func (s *Where) All() []Json {
 		if !ok {
 			continue
 		}
-		next := s.AdddResult(item)
-		if !next {
-			break
+		if hasOrder {
+			// Collect all matching items before sorting; offset+limit applied after.
+			s.addItem(item)
+		} else {
+			if skipped < s.Offset {
+				skipped++
+				continue
+			}
+			next := s.AdddResult(item)
+			if !next {
+				break
+			}
+		}
+	}
+
+	if hasOrder {
+		s.sortResult()
+		start := s.Offset
+		if start > len(s.Result) {
+			start = len(s.Result)
+		}
+		s.Result = s.Result[start:]
+		if s.Limits > 0 && len(s.Result) > s.Limits {
+			s.Result = s.Result[:s.Limits]
 		}
 	}
 

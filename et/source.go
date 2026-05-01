@@ -3,6 +3,7 @@ package et
 type Source struct {
 	data []Json
 	as   string
+	pos  int
 }
 
 /**
@@ -10,11 +11,11 @@ type Source struct {
 * @return (Json, bool)
 **/
 func (s *Source) Next() (Json, bool) {
-	if len(s.data) == 0 {
+	if s.pos >= len(s.data) {
 		return Json{}, false
 	}
-	item := s.data[0]
-	s.data = s.data[1:]
+	item := s.data[s.pos]
+	s.pos++
 	return item, true
 }
 

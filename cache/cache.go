@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/logs"
@@ -14,8 +15,10 @@ import (
 const PackageName = "cache"
 
 var (
-	os   = ""
-	conn *Conn
+	os     = ""
+	conn   *Conn
+	// loadMu serializes concurrent Load() calls to prevent double initialization.
+	loadMu sync.Mutex
 )
 
 func init() {
@@ -53,6 +56,9 @@ func Load() error {
 		return nil
 	}
 
+	loadMu.Lock()
+	defer loadMu.Unlock()
+
 	if conn != nil {
 		return nil
 	}
@@ -78,7 +84,7 @@ func Load() error {
 }
 
 /**
-* Close
+* Close terminates the Redis connection.
 **/
 func Close() {
 	if conn == nil {
@@ -107,10 +113,8 @@ func HealthCheck() bool {
 		return false
 	}
 
-	err := conn.Ping(conn.ctx).Err()
-	if err != nil {
-		return false
-	}
+	ctx, cancel := context.WithTimeout(conn.ctx, 2*time.Second)
+	defer cancel()
 
-	return true
+	return conn.Ping(ctx).Err() == nil
 }

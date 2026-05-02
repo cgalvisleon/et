@@ -7,21 +7,41 @@ import (
 	"sync"
 
 	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/nats-io/nats.go"
 )
 
 const PackageName = "event"
 
+/**
+* asyncMsg holds a channel name and payload for non-blocking publish operations.
+**/
+type asyncMsg struct {
+	channel string
+	data    et.Json
+}
+
+// asyncPublishBufSize is the capacity of the fire-and-forget publish channel.
+const asyncPublishBufSize = 256
+
 var (
-	conn     *Conn
-	oS       = ""
-	hostName string
+	conn           *Conn
+	oS             = ""
+	hostName       string
+	loadMu         sync.Mutex
+	// asyncPublishCh is consumed by a single background worker started in init().
+	asyncPublishCh = make(chan asyncMsg, asyncPublishBufSize)
 )
 
 func init() {
 	oS = runtime.GOOS
 	hostName, _ = os.Hostname()
+	go func() {
+		for m := range asyncPublishCh {
+			publish(m.channel, m.data)
+		}
+	}()
 }
 
 type Conn struct {
@@ -39,6 +59,9 @@ func Load() error {
 	if !slices.Contains([]string{"linux", "darwin", "windows"}, oS) {
 		return nil
 	}
+
+	loadMu.Lock()
+	defer loadMu.Unlock()
 
 	if conn != nil {
 		return nil
@@ -63,7 +86,7 @@ func Load() error {
 }
 
 /**
-* Close the connection to the service pubsub
+* Close unsubscribes all active subscriptions and closes the NATS connection.
 **/
 func Close() {
 	if conn == nil {

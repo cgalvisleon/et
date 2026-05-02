@@ -7,45 +7,48 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/cgalvisleon/et/request"
 	lg "github.com/cgalvisleon/et/stdrout"
 )
 
+/**
+* logBufPool reuses bytes.Buffer instances across requests to reduce GC pressure.
+**/
+var logBufPool = sync.Pool{
+	New: func() interface{} { return &bytes.Buffer{} },
+}
+
 var (
-	// LogEntryCtxKey is the context.Context key to store the request log entry.
+	/**
+	* LogEntryCtxKey is the context key used to store the LogEntry for a request.
+	**/
 	LogEntryCtxKey = request.ContextKey("LogEntry")
 
-	// DefaultLogger is called by the Logger middleware handler to log each request.
-	// Its made a package-level variable so that it can be reconfigured for custom
-	// logging configurations.
+	/**
+	* DefaultLogger is the package-level Logger middleware. Replace to customize logging.
+	**/
 	DefaultLogger func(next http.Handler) http.Handler
 )
 
-// Logger is a middleware that logs the start and end of each request, along
-// with some useful data about what was requested, what the response status was,
-// and how long it took to return. When standard output is a TTY, Logger will
-// print in color, otherwise it will print in black and white. Logger prints a
-// request ID if one is provided.
-//
-// Alternatively, look at https://github.com/goware/httplog for a more in-depth
-// http logger with structured logging support.
-//
-// IMPORTANT NOTE: Logger should go before any other middleware that may change
-// the response, such as `middleware.Recoverer`. Example:
-//
-// ```go
-// r := chi.NewRouter()
-// r.Use(middleware.Logger)        // <--<< Logger should come before Recoverer
-// r.Use(middleware.Recoverer)
-// r.Get("/", handler)
-// ```
+/**
+* Logger middleware logs the start and end of each request with method, path,
+* status, size, and elapsed time. Outputs color when stdout is a TTY.
+* Must be registered before Recoverer in the middleware chain.
+* @param next http.Handler
+* @return http.Handler
+**/
 func Logger(next http.Handler) http.Handler {
 	return DefaultLogger(next)
 }
 
-// RequestLogger returns a logger handler using a custom LogFormatter.
+/**
+* RequestLogger returns a middleware that logs requests using the given LogFormatter.
+* @param f LogFormatter
+* @return func(next http.Handler) http.Handler
+**/
 func RequestLogger(f LogFormatter) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
@@ -64,48 +67,68 @@ func RequestLogger(f LogFormatter) func(next http.Handler) http.Handler {
 	}
 }
 
-// LogFormatter initiates the beginning of a new LogEntry per request.
-// See DefaultLogFormatter for an example implementation.
+/**
+* LogFormatter creates a new LogEntry at the start of each request.
+**/
 type LogFormatter interface {
 	NewLogEntry(r *http.Request) LogEntry
 }
 
-// LogEntry records the final log when a request completes.
-// See defaultLogEntry for an example implementation.
+/**
+* LogEntry writes the final log line when a request completes.
+**/
 type LogEntry interface {
 	Write(status, bytes int, header http.Header, elapsed time.Duration, extra interface{})
 	Panic(v interface{}, stack []byte)
 }
 
-// GetLogEntry returns the in-context LogEntry for a request.
+/**
+* GetLogEntry retrieves the LogEntry stored in the request context.
+* @param r *http.Request
+* @return LogEntry
+**/
 func GetLogEntry(r *http.Request) LogEntry {
 	entry, _ := r.Context().Value(LogEntryCtxKey).(LogEntry)
 	return entry
 }
 
-// WithLogEntry sets the in-context LogEntry for a request.
+/**
+* WithLogEntry stores a LogEntry in the request context.
+* @param r *http.Request, entry LogEntry
+* @return *http.Request
+**/
 func WithLogEntry(r *http.Request, entry LogEntry) *http.Request {
 	r = r.WithContext(context.WithValue(r.Context(), LogEntryCtxKey, entry))
 	return r
 }
 
-// LoggerInterface accepts printing to stdlib logger or compatible logger.
+/**
+* LoggerInterface is satisfied by stdlib log.Logger and compatible loggers.
+**/
 type LoggerInterface interface {
 	Print(v ...interface{})
 }
 
-// DefaultLogFormatter is a simple logger that implements a LogFormatter.
+/**
+* DefaultLogFormatter is the default LogFormatter implementation.
+**/
 type DefaultLogFormatter struct {
 	Logger  LoggerInterface
 	NoColor bool
 }
 
-// NewLogEntry creates a new LogEntry for the request.
+/**
+* NewLogEntry creates a LogEntry for the request, reusing a pooled buffer.
+* @param r *http.Request
+* @return LogEntry
+**/
 func (l *DefaultLogFormatter) NewLogEntry(r *http.Request) LogEntry {
+	buf := logBufPool.Get().(*bytes.Buffer)
+	buf.Reset()
 	entry := &defaultLogEntry{
 		DefaultLogFormatter: l,
 		request:             r,
-		buf:                 &bytes.Buffer{},
+		buf:                 buf,
 	}
 
 	var w *string
@@ -129,12 +152,20 @@ func (l *DefaultLogFormatter) NewLogEntry(r *http.Request) LogEntry {
 	return entry
 }
 
+/**
+* defaultLogEntry holds per-request log state. buf is returned to logBufPool after Write.
+**/
 type defaultLogEntry struct {
 	*DefaultLogFormatter
 	request *http.Request
 	buf     *bytes.Buffer
 }
 
+/**
+* Write logs the completed request: status, size, and elapsed time.
+* Returns buf to the pool after printing.
+* @param status int, bytes int, header http.Header, elapsed time.Duration, extra interface{}
+**/
 func (l *defaultLogEntry) Write(status, bytes int, header http.Header, elapsed time.Duration, extra interface{}) {
 	var w *string
 	switch {
@@ -162,8 +193,14 @@ func (l *defaultLogEntry) Write(status, bytes int, header http.Header, elapsed t
 	}
 
 	l.Logger.Print(l.buf.String())
+	logBufPool.Put(l.buf)
+	l.buf = nil
 }
 
+/**
+* Panic prints a formatted stack trace for a recovered panic.
+* @param v interface{}, stack []byte
+**/
 func (l *defaultLogEntry) Panic(v interface{}, stack []byte) {
 	PrintPrettyStack(v)
 }

@@ -9,11 +9,16 @@ import (
 	"maps"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/timezone"
 )
+
+var escapeHTMLPool = sync.Pool{
+	New: func() interface{} { return &bytes.Buffer{} },
+}
 
 /**
 * Json type
@@ -135,7 +140,10 @@ func (s Json) ToString() string {
 * @return string
 **/
 func (s Json) ToEscapeHTML() string {
-	buf := &bytes.Buffer{}
+	buf := escapeHTMLPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer escapeHTMLPool.Put(buf)
+
 	encoder := json.NewEncoder(buf)
 	encoder.SetEscapeHTML(false)
 	err := encoder.Encode(s)
@@ -510,12 +518,13 @@ func (s Json) ValArray(def []interface{}, atribs ...string) []interface{} {
 		return result
 	default:
 		result := []interface{}{}
-		src := fmt.Sprintf(`%v`, v)
-		err := json.Unmarshal([]byte(src), &result)
+		bt, err := json.Marshal(v)
 		if err != nil {
 			return def
 		}
-
+		if err := json.Unmarshal(bt, &result); err != nil {
+			return def
+		}
 		return result
 	}
 }

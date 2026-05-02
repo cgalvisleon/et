@@ -145,6 +145,11 @@ func Printl(kind string, color string, args ...any) string {
 }
 
 /**
+* maxTraceDepth caps the number of stack frames printed by Traces.
+**/
+const maxTraceDepth = 32
+
+/**
 * Traces
 * @param kind string, color string, err error
 * @return error
@@ -152,14 +157,11 @@ func Printl(kind string, color string, args ...any) string {
 func Traces(kind, color string, err error) error {
 	Printl(kind, color, err.Error())
 
-	var n int = 1
-	var traces []string = []string{err.Error()}
-	for {
+	for n := 1; n <= maxTraceDepth; n++ {
 		pc, file, line, more := runtime.Caller(n)
 		if !more {
 			break
 		}
-		n++
 		function := runtime.FuncForPC(pc)
 		name := function.Name()
 		list := strings.Split(name, ".")
@@ -167,9 +169,7 @@ func Traces(kind, color string, err error) error {
 			name = list[len(list)-1]
 		}
 		if !slices.Contains([]string{"ErrorM", "ErrorF"}, name) {
-			trace := fmt.Sprintf("%s:%d func:%s", file, line, name)
-			traces = append(traces, trace)
-			Printl("TRACE", color, trace)
+			Printl("TRACE", color, fmt.Sprintf("%s:%d func:%s", file, line, name))
 		}
 	}
 
@@ -177,7 +177,8 @@ func Traces(kind, color string, err error) error {
 }
 
 /**
-* getFunctionName
+* GetFunctionName returns the name of the caller at stack depth idx.
+* @param idx int
 * @return string
 **/
 func GetFunctionName(idx int) string {

@@ -1,205 +1,173 @@
 # ET: Librería para servicios y herramientas en Go
 
-ET es una librería modular en Go para construir servicios, CLIs y aplicaciones web con componentes reutilizables: servidor HTTP y routing, caché, eventos, jobs, WebSockets, seguridad (JWT), utilidades, y más.
+Librería modular en Go para microservicios, CLIs y aplicaciones web. Importa solo los paquetes que necesitas — no hay punto de entrada central.
 
-## Estado del proyecto
-
-- Módulo: `github.com/cgalvisleon/et`
-- Go: 1.23+
-- Licencia: MIT
+- Módulo: `github.com/cgalvisleon/et` — Go 1.23+ — MIT
 
 ## Instalación
 
 ```bash
 go get github.com/cgalvisleon/et@latest
-go get github.com/cgalvisleon/et@v1.0.21
 ```
-
-Para usar paquetes individuales, importa el paquete correspondiente:
 
 ```go
 import (
     "github.com/cgalvisleon/et/et"
-    "github.com/cgalvisleon/et/logs"
+    "github.com/cgalvisleon/et/cache"
 )
 ```
 
-## Estructura del repositorio
+## Estructura
 
-```
-et/
-├── aws/           # Integración con servicios AWS (S3, SES, SMS)
-├── brevo/         # Servicios de comunicación (Email, SMS, WhatsApp)
-├── cache/         # Caché (Redis) y Pub/Sub
-├── claim/         # Claims y permisos (JWT)
-├── cmd/           # Comandos CLI y ejecutables
-│   ├── apigateway/  # API Gateway y proxy inverso
-│   ├── client/      # Cliente de prueba
-│   ├── create/      # Generación de proyectos y plantillas
-│   ├── daemon/      # Servicio en segundo plano con soporte systemd
-│   ├── et/          # Comando principal de la CLI
-│   ├── install/     # Instalador
-│   ├── jql/         # Cliente JQL
-│   ├── server/      # Servidor HTTP de ejemplo
-│   └── whatcher/    # Observador de cambios
-├── cmds/          # Sistema de comandos y etapas de ejecución
-├── color/         # Utilidades de color para terminal
-├── create/        # Templates y generadores de código (microservicios, K8s)
-├── crontab/       # Tareas programadas (cron y one-shot)
-├── dt/            # Data Transfer Objects (DTOs) y validación
-├── envar/         # Variables de entorno, argumentos CLI y configuración
-├── ephemeral/     # Datos temporales y efímeros
-├── et/            # Tipos principales: Json, List, Item, Items
-├── ettp/          # Servidor HTTP y routing (v1 y v2, basado en go-chi)
-├── event/         # Sistema de eventos pub/sub (NATS)
-├── file/          # Manejo de archivos y sincronización
-├── graph/         # Soporte GraphQL / Graph
-├── iterate/       # Control de iteraciones con tiempo
-├── jrpc/          # JSON-RPC entre servicios vía NATS
-├── jwt/           # Generación y validación de tokens JWT (usa claim + cache)
-├── logs/          # Logs estructurados con niveles y colores
-├── mem/           # Memoria compartida y sincronización
-├── middleware/    # Middleware HTTP (auth, CORS, logger, request ID)
-├── msg/           # Mensajes del sistema y constantes de error
-├── race/          # Detección de condiciones de carrera
-├── reg/           # Registro de servicios y service discovery
-├── request/       # Cliente HTTP unificado
-├── resilience/    # Patrones de resiliencia (circuit breaker, etc.)
-├── response/      # Respuestas HTTP unificadas
-├── router/        # Enrutamiento HTTP con sincronización entre instancias
-├── server/        # Servidor HTTP base
-├── service/       # Servicios de negocio (OTP, envío de mensajes)
-├── sql/           # Constructor de queries SQL (INSERT, UPDATE, DELETE, WHERE)
-├── stdrout/       # Salida estándar con formato y colores
-├── strs/          # Utilidades de strings
-├── tcp/           # Comunicación TCP con balanceo y Raft
-├── timezone/      # Zonas horarias
-├── units/         # Unidades de medida y conversiones
-├── utility/       # Utilidades generales (crypto, hashing, validación)
-└── ws/            # WebSocket bidireccional (gorilla/websocket)
-```
-
-## Paquetes clave
-
-- **HTTP**: `ettp/`, `router/`, `middleware/`, `server/`, `stdrout/`, `request/`, `response/`.
-- **Mensajería/IPC**: `event/` (NATS), `jrpc/`, `tcp/`.
-- **Persistencia temporal**: `cache/` (Redis), `mem/`, `ephemeral/`.
-- **Planificación**: `crontab/`.
-- **Seguridad**: `claim/` (claims JWT), `jwt/` (tokens, usa `claim` + `cache`).
-- **Integraciones externas**: `aws/`, `brevo/`.
-- **Soporte de dominio**: `service/`, `dt/`, `sql/`.
-- **Utilidades**: `utility/`, `strs/`, `color/`, `timezone/`, `units/`, `logs/`.
-- **CLI**: `cmd/`, `cmds/`, `envar/` (argumentos CLI y env vars).
+| Paquete | Descripción |
+|---------|-------------|
+| `et/` | Tipos centrales: `Json`, `List`, `Item`, `Items` |
+| `cache/` | Cliente Redis con Pub/Sub. Init: `cache.Load()` |
+| `event/` | Pub/Sub sobre NATS. Init: `event.Load()` |
+| `ettp/v2/` | Servidor HTTP (go-chi). Init: `ettp.New(name, config)` |
+| `jrpc/` | JSON-RPC entre servicios vía NATS |
+| `jwt/` | Generación de tokens JWT (usa `claim` + `cache`) |
+| `claim/` | Claims JWT con campo `tenantId` |
+| `crontab/` | Scheduler cron con soporte de segundos. Init: `crontab.New(tag)` |
+| `middleware/` | CORS, auth, logger, request ID, telemetría |
+| `response/` | Respuestas HTTP unificadas |
+| `request/` | Cliente HTTP para peticiones salientes |
+| `router/` | Routing HTTP con sincronización entre instancias vía NATS |
+| `ws/` | WebSocket bidireccional (gorilla/websocket) |
+| `logs/` | Logging estructurado por niveles con colores |
+| `strs/` | Utilidades de strings |
+| `utility/` | Crypto, hashing, generación de IDs (UUID, ULID, Snowflake) |
+| `envar/` | Lectura de variables de entorno y argumentos CLI |
+| `config/` | Configuración de aplicación (`GetStr`, `GetInt`, `GetBool`, …) |
+| `service/` | OTP (`SendOTPEmail`, `SendOTPSms`, `VerifyOTP`) y envío de mensajes |
+| `sql/` | Constructor de queries SQL (INSERT, UPDATE, DELETE, WHERE) |
+| `jql/` | Lenguaje de consulta sobre `et.Json` (filter, join, order) |
+| `mem/` | Caché en memoria con expiración y sincronización |
+| `ephemeral/` | Datos temporales de corta vida |
+| `js/` | Runtime JavaScript embebido (goja) con hot-reload |
+| `ia/` | Agentes IA sobre OpenAI (`openai-go/v3`) |
+| `workflow/` | Orquestación de flujos multi-paso con resiliencia y estado |
+| `graph/` | Conectividad Neo4j (`neo4j-go-driver/v5`) |
+| `instances/` | Interfaz `Store` para persistencia de estado (`ia`, `workflow`, `js`) |
+| `resilience/` | Circuit breaker y patrones de resiliencia |
+| `reg/` | Registro de servicios y generación de IDs |
+| `aws/` | S3, SES, SMS vía AWS SDK |
+| `brevo/` | Email, SMS y WhatsApp vía Brevo API |
+| `wsp/` | Cliente WhatsApp Business API |
+| `tcp/` | Nodo TCP con balanceo y Raft |
+| `file/` | Operaciones de archivo y watcher de cambios |
+| `color/` | Colores ANSI para terminal |
+| `stdrout/` | Salida estándar formateada con colores |
+| `timezone/` | Helpers de zona horaria |
+| `units/` | Conversiones de unidades |
+| `race/` | Detección de condiciones de carrera |
+| `cmds/` | Sistema de comandos y etapas de ejecución |
+| `iterate/` | Control de iteraciones con tiempo |
+| `create/` | Templates de código (microservicios, K8s) |
+| `cmd/` | Binarios CLI (`et`, `apigateway`, `daemon`, `server`, `vm`, …) |
 
 ## Tipo central: `et.Json`
 
-`et.Json` (`map[string]interface{}`) es el tipo de datos principal usado en toda la librería. Ofrece accesores tipados con valor por defecto y traversal anidado:
+`et.Json` (`map[string]interface{}`) es el tipo transversal de la librería. Accesores tipados con valor por defecto y traversal anidado:
 
 ```go
 data := et.Json{"user": et.Json{"name": "Ana", "age": 30}}
-
-name := data.Str("user", "name")       // "Ana"
-age  := data.Int("user", "age")        // 30
+name := data.Str("user", "name")   // "Ana"
+age  := data.Int("user", "age")    // 30
 data.Set("active", true)
-data.Update(et.Json{"role": "admin"})
 ```
 
-Tipos de respuesta estándar: `et.List` (paginado), `et.Item`, `et.Items`.
+`et.List` — resultado paginado (`Rows`, `All`, `Count`, `Page`, `Start`, `End`, `Result []Json`).  
+`et.Item` / `et.Items` — wrappers de resultado individual y múltiple.  
+`items.AddMany([]Json)` — bulk insert con capacidad pre-alocada.
 
 ## Patrón de inicialización
 
-Los paquetes de infraestructura exponen una función `Load()` que lee variables de entorno y establece la conexión. Las llamadas siguientes son no-op:
+`Load()` es idempotente y thread-safe (usa mutex interno). Llama una vez al arrancar:
 
 ```go
 cache.Load()  // Requiere REDIS_HOST
 event.Load()  // Requiere NATS_HOST
 ```
 
-`ettp.New(name, config)` llama internamente a `cache.Load()` y `event.Load()`.
+`ettp.New(name, config)` llama a `cache.Load()` y `event.Load()` internamente.
 
-## Configuración y entorno
+## Variables de entorno requeridas
 
-Variables de entorno y argumentos CLI se gestionan desde `envar/`:
-
-```go
-host := envar.GetStr("REDIS_HOST", "localhost")
-port := envar.GetInt("PORT", 3300)
-envar.Validate([]string{"NATS_HOST", "REDIS_HOST"}) // retorna error si falta alguna
-```
-
-### Variables de entorno requeridas
-
-| Paquete | Variable        | Descripción                |
-| ------- | --------------- | -------------------------- |
-| `cache` | `REDIS_HOST`    | Conexión a Redis           |
-| `event` | `NATS_HOST`     | Conexión a NATS            |
-| `event` | `NATS_USER`     | Usuario NATS (opcional)    |
-| `event` | `NATS_PASSWORD` | Contraseña NATS (opcional) |
+| Paquete | Variable | Descripción |
+|---------|----------|-------------|
+| `cache` | `REDIS_HOST` | Host Redis |
+| `cache` | `REDIS_PASSWORD`, `REDIS_DB` | Auth y base (opcionales) |
+| `event` | `NATS_HOST` | Host NATS |
+| `event` | `NATS_USER`, `NATS_PASSWORD` | Auth NATS (opcionales) |
+| `claim` | `SECRET` | Clave de firma JWT (default: `"1977"`) |
+| `graph` | `NEO4J_HOST`, `NEO4J_USER`, `NEO4J_PASSWORD` | Conexión Neo4j |
+| `ia` | `OPENAI_API_KEY` | API key de OpenAI |
+| `wsp` | `WHATSAPP_API_URL` | URL base WhatsApp Graph API (opcional) |
 
 ## Crontab
 
 ```go
-crontab.Load("mi-servicio")
+ct := crontab.New("mi-servicio")
 
-// Job recurrente (spec con segundos)
-crontab.AddJob("job-1", "0 * * * * *", et.Json{"msg": "hola"}, 0, true,
-    func(job *crontab.Job) {
-        logs.Infof("[cron] %s", job.Params.ToString())
-    },
+ct.AddJob("job-1", "0 * * * * *", et.Json{"msg": "hola"}, 0, true,
+    func(job *crontab.Job) { logs.Infof("[cron] %s", job.Params.ToString()) },
 )
 
-// Job basado en evento
-crontab.AddEventJob("job-2", "@every 30s", "canal:mi-evento", 0, true,
+ct.AddEventJob("job-2", "@every 30s", "mi-canal", 0, true,
     et.Json{"foo": "bar"},
-    func(msg event.Message) {
-        logs.Infof("[event] %s", msg.Data.ToString())
-    },
+    func(msg event.Message) { logs.Infof("[event] %s", msg.Data.ToString()) },
 )
 ```
 
-APIs disponibles: `Load`, `AddJob`, `AddOneShotJob`, `AddEventJob`, `AddOneShotEventJob`, `DeleteJob`, `StartJob`, `StopJob`, `Stop`.
+API: `New`, `AddJob`, `AddOneShotJob`, `AddEventJob`, `AddOneShotEventJob`, `DeleteJob`, `StartJob`, `StopJob`, `Stop`.
 
-## Integraciones
+## JavaScript embebido (`js/`)
 
-- **AWS**: S3, SES, SMS en `aws/` (depende de `github.com/aws/aws-sdk-go`).
-- **Brevo**: email, SMS y WhatsApp en `brevo/`.
+Runtime goja con tres modos: `Develop` (hot-reload), `Production` (desde Store), `Building` (compila + semver).  
+Expone `console.*`, `ctx.*`, `fetch()`, `require()`.
 
-## Cambios recientes relevantes
+```go
+v := js.New("mi-vm")
+v.RunDev("./cmd/vm")
+```
 
-- **Claim (JWT)**: `projectId` renombrado a `tenantId` en `claim.Claim`, helpers `TenantIdKey` y `TenantId(r)`.
-- **Service**: nuevos helpers OTP en `service/otp.go` (`SendOTPEmail`, `SendOTPSms`, `VerifyOTP`); firmas actualizadas para usar `tenantId`.
-- **Eventos**: canal global `event.EVENT`; publicación adicional con `{channel, data}` en `event/handler.go`.
-- **Cache**: `cache.Set` garantiza expiración mínima de 1s.
-- **Crontab**: nuevo orquestador `crontab.Jobs` con integración de eventos vía canales `EVENT_CRONTAB_*`.
+## Agentes IA (`ia/`)
+
+```go
+agent := ia.New(name, myStore) // myStore implementa instances.Store
+```
+
+Seguimiento de conversación, event handlers y estado por instancia. Requiere `OPENAI_API_KEY`.
+
+## Logging
+
+```go
+logs.Info("mensaje")
+logs.Errorf("falló: %v", err)
+logs.Fatal(err)              // os.Exit(1)
+logs.EnableCallerInfo = false // desactiva runtime.Callers en Error() — recomendado en producción
+```
 
 ## Desarrollo
 
 ```bash
-# Ejecutar todas las pruebas
-go test ./...
-
-# Ejecutar pruebas de un paquete específico
-go test ./et/...
-
-# Formatear código
-gofmt -w .
-
-# Construir todos los paquetes
-go build ./...
+gofmt -w .           # formatear
+go build ./...       # compilar
+go test ./...        # pruebas
+./version.sh --minor # bump de versión semántica
 ```
 
-## VM
+## Binarios CLI
 
 ```bash
-# Ejecutar el VM
-gofmt -w . && go run ./cmd/vm
-gofmt -w . && go run ./cmd/server
-gofmt -w . && go run ./cmd/client -addr localhost:1377
+go run ./cmd/et                          # CLI principal
+go run ./cmd/apigateway                  # API Gateway
+go run ./cmd/daemon                      # Servicio systemd
+go run ./cmd/server                      # Nodo TCP (:1377)
+go run ./cmd/vm                          # VM JS con hot-reload
+go run ./cmd/client -addr localhost:1377 # Cliente TCP de prueba
 ```
-
-## Contribuir
-
-Issues y PRs son bienvenidos. Sigue el estilo del proyecto y añade pruebas cuando aplique.
 
 ## Licencia
 

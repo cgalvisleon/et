@@ -5,10 +5,33 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
+	"unicode"
 
 	"github.com/cgalvisleon/et/et"
 )
+
+var (
+	reZero     = regexp.MustCompile(`0`)
+	reName     = regexp.MustCompile(`[0-9\s]+`)
+	reHTML     = regexp.MustCompile(`<[^>]*>`)
+	regexCache sync.Map
+)
+
+/**
+* cachedRegexp returns a compiled *regexp.Regexp for pattern, compiling it only once.
+* @param pattern string
+* @return *regexp.Regexp
+**/
+func cachedRegexp(pattern string) *regexp.Regexp {
+	if v, ok := regexCache.Load(pattern); ok {
+		return v.(*regexp.Regexp)
+	}
+	re := regexp.MustCompile(pattern)
+	regexCache.Store(pattern, re)
+	return re
+}
 
 /**
 * Format
@@ -69,8 +92,7 @@ func FormatDateTime(format string, value time.Time) string {
 * @return string
 **/
 func FormatSerie(format string, num int64) string {
-	re := regexp.MustCompile("0")
-	format = re.ReplaceAllString(format, "%0")
+	format = reZero.ReplaceAllString(format, "%0")
 
 	return Format(format, num)
 }
@@ -115,18 +137,9 @@ func ReplaceAll(str string, olds []string, new string) string {
 func Change(str string, olds []string, news []string) string {
 	var result = str
 	for i, s := range olds {
-		old := Format(`\b%s\b`, s)
-		new := news[i]
-		re := regexp.MustCompile(old)
-		result = re.ReplaceAllString(result, new)
-		old = Format(`\b%s\b`, Uppcase(s))
-		new = Uppcase(news[i])
-		re = regexp.MustCompile(old)
-		result = re.ReplaceAllString(result, new)
-		old = Format(`\b%s\b`, Lowcase(s))
-		new = Lowcase(news[i])
-		re = regexp.MustCompile(old)
-		result = re.ReplaceAllString(result, new)
+		result = cachedRegexp(Format(`\b%s\b`, s)).ReplaceAllString(result, news[i])
+		result = cachedRegexp(Format(`\b%s\b`, Uppcase(s))).ReplaceAllString(result, Uppcase(news[i]))
+		result = cachedRegexp(Format(`\b%s\b`, Lowcase(s))).ReplaceAllString(result, Lowcase(news[i]))
 	}
 
 	return result
@@ -138,9 +151,7 @@ func Change(str string, olds []string, news []string) string {
 * @return string
 **/
 func Name(str string) string {
-	regex := `[0-9\s]+`
-	pattern := regexp.MustCompile(regex)
-	return pattern.ReplaceAllString(str, "_")
+	return reName.ReplaceAllString(str, "_")
 }
 
 /**
@@ -203,23 +214,20 @@ func Same(str1, str2 string) bool {
 * @return string
 **/
 func Titlecase(str string) string {
-	var result string
-	var ok bool
+	var b strings.Builder
+	b.Grow(len(str))
+	capitalize := false
 	for i, char := range str {
-		s := fmt.Sprintf("%c", char)
 		if i == 0 {
-			s = strings.ToUpper(s)
-		} else if s == "" {
-			ok = true
-		} else if ok {
-			ok = false
-			s = strings.ToUpper(s)
+			b.WriteRune(unicode.ToUpper(char))
+		} else if capitalize {
+			capitalize = false
+			b.WriteRune(unicode.ToUpper(char))
+		} else {
+			b.WriteRune(char)
 		}
-
-		result = Append(result, s, "")
 	}
-
-	return result
+	return b.String()
 }
 
 /**
@@ -299,14 +307,17 @@ func GetSplitIndex(str, sep string, idx int) string {
 * @return string
 **/
 func ApendAny(space string, args ...any) string {
-	var result string = ""
+	var result string
 	for i, a := range args {
+		s := fmt.Sprint(a)
 		if i == 0 {
-			result = fmt.Sprintf(`%v`, a)
-		} else if len(result) == 0 && len(fmt.Sprint(a)) > 0 {
-			result = fmt.Sprintf(`%v`, a)
-		} else if len(result) > 0 && len(fmt.Sprint(a)) > 0 {
-			result = fmt.Sprintf(`%s%v%v`, result, space, a)
+			result = s
+		} else if len(s) > 0 {
+			if len(result) == 0 {
+				result = s
+			} else {
+				result = result + space + s
+			}
 		}
 	}
 
@@ -351,8 +362,7 @@ func StrToBool(val string) (bool, error) {
 * @return string
 **/
 func HtmlToText(html string) string {
-	re := regexp.MustCompile(`<[^>]*>`)
-	return re.ReplaceAllString(html, "")
+	return reHTML.ReplaceAllString(html, "")
 }
 
 /**
@@ -393,15 +403,16 @@ func MaskToken(token string, length int) string {
 * @return string
 **/
 func JoinQuoted(items []string, sep string) string {
-	result := ""
-	for _, item := range items {
-		if len(result) == 0 {
-			result = fmt.Sprintf(`'%s'`, item)
-		} else {
-			result = fmt.Sprintf(`%s%s'%s'`, result, sep, item)
+	var b strings.Builder
+	for i, item := range items {
+		if i > 0 {
+			b.WriteString(sep)
 		}
+		b.WriteByte('\'')
+		b.WriteString(item)
+		b.WriteByte('\'')
 	}
-	return result
+	return b.String()
 }
 
 /**

@@ -76,6 +76,22 @@ func (s *Items) Add(item ...Json) {
 }
 
 /**
+* AddMany add a slice of items with pre-allocated capacity
+* @param items []Json
+**/
+func (s *Items) AddMany(items []Json) {
+	if len(items) == 0 {
+		return
+	}
+	if s.Result == nil {
+		s.Result = make([]Json, 0, len(items))
+	}
+	s.Result = append(s.Result, items...)
+	s.Count = len(s.Result)
+	s.Ok = s.Count > 0
+}
+
+/**
 * ToMap convert a json to a map
 * @return map[string]interface{}
 **/

@@ -17,6 +17,8 @@ type Mem struct {
 
 var (
 	conn *Mem
+	// clearReCache caches compiled *regexp.Regexp instances keyed by pattern for Clear().
+	clearReCache sync.Map
 )
 
 func Load() *Mem {
@@ -423,10 +425,18 @@ func (s *Mem) More(key string, expiration time.Duration) (int64, error) {
 * @param match string
 **/
 func (s *Mem) Clear(match string) {
-	re, err := regexp.Compile(fmt.Sprintf(".*%s.*", regexp.QuoteMeta(match)))
-	if err != nil {
-		logs.Alertf("Error compilando expresión regular: %s", err.Error())
-		return
+	pattern := fmt.Sprintf(".*%s.*", regexp.QuoteMeta(match))
+	var re *regexp.Regexp
+	if v, ok := clearReCache.Load(pattern); ok {
+		re = v.(*regexp.Regexp)
+	} else {
+		var err error
+		re, err = regexp.Compile(pattern)
+		if err != nil {
+			logs.Alertf("Error compilando expresión regular: %s", err.Error())
+			return
+		}
+		clearReCache.Store(pattern, re)
 	}
 
 	s.mu.Lock()

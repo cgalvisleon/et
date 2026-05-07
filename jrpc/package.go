@@ -7,6 +7,8 @@ import (
 )
 
 type Solver struct {
+	Host   string   `json:"host"`
+	Port   int      `json:"port"`
 	Method string   `json:"method"`
 	Inputs []string `json:"inputs"`
 	Output []string `json:"output"`

@@ -3,6 +3,7 @@ package tcp
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -48,6 +49,7 @@ type Client struct {
 	onSend        []func(*Client, []byte)   `json:"-"`
 	onInbox       []func(*Client, *Message) `json:"-"`
 	onInboundFull []func(*Client, []byte)   `json:"-"`
+	tlsConfig     *tls.Config               `json:"-"`
 	isNode        bool                      `json:"-"`
 	isDebug       bool                      `json:"-"`
 	alive         atomic.Bool               `json:"-"`
@@ -136,11 +138,25 @@ func (s *Client) error(err error) error {
 * connect
 **/
 func (s *Client) connect() error {
-	dialer := net.Dialer{
-		Timeout:   10 * time.Second,
-		KeepAlive: 30 * time.Second,
+	var conn net.Conn
+	var err error
+
+	if s.tlsConfig != nil {
+		dialer := &tls.Dialer{
+			NetDialer: &net.Dialer{
+				Timeout:   10 * time.Second,
+				KeepAlive: 30 * time.Second,
+			},
+			Config: s.tlsConfig,
+		}
+		conn, err = dialer.DialContext(s.ctx, "tcp", s.Addr)
+	} else {
+		dialer := net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}
+		conn, err = dialer.Dial("tcp", s.Addr)
 	}
-	conn, err := dialer.Dial("tcp", s.Addr)
 	if err != nil {
 		return s.error(err)
 	}

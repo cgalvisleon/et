@@ -3,6 +3,7 @@ package tcp
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -66,6 +67,7 @@ type Node struct {
 	peers          []*Client                `json:"-"`
 	method         map[string]Service       `json:"-"`
 	raft           *Raft                    `json:"-"`
+	tlsConfig      *tls.Config              `json:"-"`
 	closed         atomic.Bool              `json:"-"`
 	configFile     string                   `json:"-"`
 	mu             map[string]*sync.Mutex   `json:"-"`
@@ -610,7 +612,11 @@ func (s *Node) electionLoop() error {
 * @return error
 **/
 func (s *Node) Start() (err error) {
-	s.ln, err = net.Listen("tcp", s.addr)
+	if s.tlsConfig != nil {
+		s.ln, err = tls.Listen("tcp", s.addr, s.tlsConfig)
+	} else {
+		s.ln, err = net.Listen("tcp", s.addr)
+	}
 	if err != nil {
 		return
 	}
@@ -662,6 +668,7 @@ func (s *Node) AddNode(addr string) {
 	}
 
 	node := NewClient(addr)
+	node.tlsConfig = s.tlsConfig
 	node.isNode = true
 	node.onConnect = append(node.onConnect, func(c *Client) {
 		s.total.Add(1)

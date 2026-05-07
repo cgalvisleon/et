@@ -103,11 +103,11 @@ func Start(port int) error {
 }
 
 /**
-* CallRpc: Calls a remote procedure
+* call: Calls a remote procedure
 * @param address string, method string, args any, reply any
 * @return error
 **/
-func Call(address string, method string, args any, reply any) error {
+func call(address string, method string, args any, reply any) error {
 	client, err := rpc.Dial("tcp", address)
 	if err != nil {
 		return ErrorRpcNotConnected
@@ -120,6 +120,22 @@ func Call(address string, method string, args any, reply any) error {
 	}
 
 	return nil
+}
+
+/**
+* Call
+* @param method string, args any
+* @return (any, error)
+**/
+func Call(method string, args any) (any, error) {
+	solver, err := GetSolver(method)
+	if err != nil {
+		return nil, err
+	}
+
+	var reply any
+	err := call(method, args, &reply)
+	return reply, err
 }
 
 /**

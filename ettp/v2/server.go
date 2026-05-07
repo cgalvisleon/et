@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -72,6 +74,7 @@ type Server struct {
 	mux           *http.ServeMux                    `json:"-"`
 	svr           *http.Server                      `json:"-"`
 	client        *http.Client                      `json:"-"`
+	pipe          net.Listener                      `json:"-"`
 	middlewares   []func(http.Handler) http.Handler `json:"-"`
 	authenticator func(http.Handler) http.Handler   `json:"-"`
 	readTimeout   time.Duration                     `json:"-"`
@@ -171,6 +174,14 @@ func New(name string, config *Config) (*Server, error) {
 			return nil, err
 		}
 	}
+
+	rpcPort := envar.GetInt("RPC_PORT", 4200)
+	// tlsConfig := &tls.Config{}
+	pipe, err := net.Listen("tcp", fmt.Sprintf(":%d", rpcPort))
+	if err != nil {
+		return nil, err
+	}
+	result.pipe = pipe
 
 	return result, nil
 }

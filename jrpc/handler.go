@@ -5,12 +5,34 @@ import (
 	"net/http"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/response"
 )
 
 var (
 	ErrorRpcNotConnected = errors.New("rpc not connected")
+	pkg                  *Package
 )
+
+/**
+* GetSolver
+* @param method string
+* @return (*Solver, error)
+**/
+func GetSolver(method string) (*Solver, error) {
+	solver, ok := pkg.Solvers[method]
+	if !ok {
+		return nil, errors.New("solver not found")
+	}
+	return solver, nil
+}
+
+/**
+* Close
+**/
+func Close() {
+	logs.Log("Rpc", `Shutting down server...`)
+}
 
 /**
 * listRouters

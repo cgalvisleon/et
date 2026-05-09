@@ -90,11 +90,15 @@ func newClient() *Client {
 /**
 * NewClient
 * @param addr string
-* @return *Client, error
+* @param tlsConfig ...*tls.Config
+* @return *Client
 **/
-func NewClient(addr string) *Client {
+func NewClient(addr string, tlsConfig ...*tls.Config) *Client {
 	result := newClient()
 	result.Addr = addr
+	if len(tlsConfig) > 0 {
+		result.tlsConfig = tlsConfig[0]
+	}
 
 	return result
 }

@@ -85,9 +85,10 @@ type Node struct {
 /**
 * NewNode
 * @param port int
+* @param tlsConfig ...*tls.Config
 * @return *Node
 **/
-func NewNode(port int) *Node {
+func NewNode(port int, tlsConfig ...*tls.Config) *Node {
 	addr := fmt.Sprintf("%s:%d", hostName, port)
 	timeout, err := time.ParseDuration(envar.GetStr("TIMEOUT", "10s"))
 	if err != nil {
@@ -127,6 +128,9 @@ func NewNode(port int) *Node {
 	result.mu["clients"] = &sync.Mutex{}
 	result.mu["requests"] = &sync.Mutex{}
 	result.mu["peers"] = &sync.Mutex{}
+	if len(tlsConfig) > 0 {
+		result.tlsConfig = tlsConfig[0]
+	}
 
 	return result
 }

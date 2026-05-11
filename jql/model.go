@@ -125,7 +125,7 @@ func (s *Model) Init() error {
 		return nil
 	}
 
-	err := s.db.Load(s)
+	err := s.db.load(s)
 	if err != nil {
 		return err
 	}

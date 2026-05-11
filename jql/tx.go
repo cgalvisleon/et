@@ -8,46 +8,49 @@ import (
 	"github.com/cgalvisleon/et/timezone"
 )
 
+type TxStatus string
+
+const (
+	TxStatusPending    TxStatus = "pending"
+	TxStatusCommitted  TxStatus = "committed"
+	TxStatusRolledBack TxStatus = "rolled_back"
+)
+
 type Tx struct {
-	CreatedAt time.Time `json:"created_at"`
-	EndAt     time.Time `json:"end_at"`
-	Id        string    `json:"id"`
-	Committed bool      `json:"committed"`
-	Tx        *sql.Tx   `json:"-"`
+	CreatedAt    time.Time `json:"created_at"`
+	LastUpdateAt time.Time `json:"last_update_at"`
+	Id           string    `json:"id"`
+	Status       string    `json:"status"`
+	Tx           *sql.Tx   `json:"-"`
 }
 
 /**
-* newTx
-* @return *Tx
-**/
-func newTx() *Tx {
-	now := timezone.Now()
-	return &Tx{
-		CreatedAt: now,
-		EndAt:     now,
-		Id:        reg.TagULID("tx", ""),
-	}
-}
-
-/**
-* GetTx
+* getTx
 * @param tx *Tx
-* @return *Tx
+* @return *Tx, bool
 **/
-func GetTx(tx *Tx) *Tx {
-	if tx.Tx == nil {
-		tx = newTx()
+func getTx(tx *Tx) (*Tx, bool) {
+	isCommitted := false
+	if tx == nil {
+		now := timezone.Now()
+		tx = &Tx{
+			CreatedAt:    now,
+			LastUpdateAt: now,
+			Id:           reg.TagULID("tx", ""),
+			Status:       string(TxStatusPending),
+		}
+		isCommitted = true
 	}
 
-	return tx
+	return tx, isCommitted
 }
 
 /**
-* Begin
+* begin
 * @param db *sql.DB
 * @return error
 **/
-func (s *Tx) Begin(db *sql.DB) error {
+func (s *Tx) begin(db *sql.DB) error {
 	if s.Tx != nil {
 		return nil
 	}
@@ -63,41 +66,48 @@ func (s *Tx) Begin(db *sql.DB) error {
 }
 
 /**
-* Commit
+* setStatus
+* @param status TxStatus
+**/
+func (s *Tx) setStatus(status TxStatus) {
+	s.Status = string(status)
+	s.LastUpdateAt = timezone.Now()
+}
+
+/**
+* commit
 * @return error
 **/
-func (s *Tx) Commit() error {
+func (s *Tx) commit() error {
 	if s.Tx == nil {
-		return nil
-	}
-
-	if s.Committed {
 		return nil
 	}
 
 	err := s.Tx.Commit()
-	s.Committed = true
-	s.EndAt = timezone.Now()
+	if err != nil {
+		return err
+	}
 
-	return err
+	s.setStatus(TxStatusCommitted)
+
+	return nil
 }
 
 /**
-* Rollback
+* rollback
 * @return error
 **/
-func (s *Tx) Rollback() error {
+func (s *Tx) rollback() error {
 	if s.Tx == nil {
 		return nil
 	}
 
-	if s.Committed {
-		return nil
+	err := s.Tx.Rollback()
+	if err != nil {
+		return err
 	}
 
-	err := s.Tx.Rollback()
-	s.Committed = true
-	s.EndAt = timezone.Now()
+	s.setStatus(TxStatusRolledBack)
 
-	return err
+	return nil
 }

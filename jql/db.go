@@ -139,41 +139,6 @@ func (s *DB) Debug() {
 }
 
 /**
-* sqlTx
-* @param tx *Tx, sql string, arg ...any
-* @return et.Items, error
-*
- */
-func (s *DB) sqlTx(tx *Tx, query string, arg ...any) (et.Items, error) {
-	query = SQLParse(query, arg...)
-	if tx != nil {
-		err := tx.Begin(s.db)
-		if err != nil {
-			return et.Items{}, err
-		}
-
-		rows, err := tx.Tx.Query(query)
-		if err != nil {
-			errR := tx.Rollback()
-			if errR != nil {
-				err = fmt.Errorf(msg.MSG_ROLLBACK_ERROR, errR)
-			}
-			return et.Items{}, err
-		}
-		result := RowsToItems(rows)
-		return result, nil
-	}
-
-	rows, err := s.db.Query(query)
-	if err != nil {
-		return et.Items{}, err
-	}
-
-	result := RowsToItems(rows)
-	return result, nil
-}
-
-/**
 * getSchema
 * @param name string
 * @return (*Schema, error)
@@ -207,11 +172,46 @@ func (s *DB) GetModel(schema string, name string) (*Model, error) {
 }
 
 /**
+* sqlTx
+* @param tx *Tx, sql string, arg ...any
+* @return et.Items, error
+*
+ */
+func (s *DB) sqlTx(tx *Tx, query string, arg ...any) (et.Items, error) {
+	query = SQLParse(query, arg...)
+	if tx != nil {
+		err := tx.begin(s.db)
+		if err != nil {
+			return et.Items{}, err
+		}
+
+		rows, err := tx.Tx.Query(query)
+		if err != nil {
+			errR := tx.rollback()
+			if errR != nil {
+				err = fmt.Errorf(msg.MSG_ROLLBACK_ERROR, errR)
+			}
+			return et.Items{}, err
+		}
+		result := RowsToItems(rows)
+		return result, nil
+	}
+
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return et.Items{}, err
+	}
+
+	result := RowsToItems(rows)
+	return result, nil
+}
+
+/**
 * Load
 * @param model *Model
 * @return error
 **/
-func (s *DB) Load(model *Model) error {
+func (s *DB) load(model *Model) error {
 	if s.driver == nil {
 		return errors.New(msg.MSG_DRIVER_NOT_FOUND)
 	}
@@ -234,7 +234,7 @@ func (s *DB) Load(model *Model) error {
 * @param command *Command
 * @return string, error
 **/
-func (s *DB) Command(command *Command) (string, error) {
+func (s *DB) command(command *Command) (string, error) {
 	if s.driver == nil {
 		return "", errors.New(msg.MSG_DRIVER_NOT_FOUND)
 	}
@@ -251,7 +251,7 @@ func (s *DB) Command(command *Command) (string, error) {
 * @param query *Query
 * @return string, error
 **/
-func (s *DB) Query(query *Query) (string, error) {
+func (s *DB) query(query *Query) (string, error) {
 	if s.driver == nil {
 		return "", errors.New(msg.MSG_DRIVER_NOT_FOUND)
 	}

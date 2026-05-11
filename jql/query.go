@@ -3,6 +3,7 @@ package jql
 import (
 	"encoding/json"
 
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -85,7 +86,11 @@ type Query struct {
 	GroupsBy   []string        `json:"group_by"`
 	OrdersBy   []*Index        `json:"order_by"`
 	Havings    []*et.Condition `json:"havings"`
+	Offset     int             `json:"offset"`
+	Rows       int             `json:"rows"`
 	section    QuerySection    `json:"-"`
+	maxRows    int             `json:"-"`
+	db         *DB             `json:"-"`
 }
 
 /**
@@ -107,6 +112,8 @@ func newQuery(model *Model, as ...string) *Query {
 		OrdersBy:   make([]*Index, 0),
 		Havings:    make([]*et.Condition, 0),
 		section:    whereSection,
+		maxRows:    envar.GetInt("MAX_ROWS", 1000),
+		db:         model.db,
 	}
 	result.addFrom(model, as[0])
 	return result
@@ -271,4 +278,96 @@ func (s *Query) Having(cond *et.Condition) *Query {
 	s.Havings = append(s.Havings, cond)
 	s.section = havingSection
 	return s
+}
+
+/**
+* Page
+* @param page int
+* @return *Query
+**/
+func (s *Query) Page(page int) *Query {
+	s.Offset = (page - 1) * s.Rows
+	return s
+}
+
+/**
+* Limit
+* @param rows int
+* @return *Query
+**/
+func (s *Query) Limit(rows int) *Query {
+	s.Rows = rows
+	return s
+}
+
+/**
+* AllTx
+* @param tx *Tx
+* @return (et.Items, error)
+**/
+func (s *Query) AllTx(tx *Tx) (et.Items, error) {
+	tx, isCommitted := getTx(tx)
+	if s.Rows == 0 {
+		s.Rows = s.maxRows
+	}
+
+	sql, err := s.db.query(s)
+	if err != nil {
+		return et.Items{}, err
+	}
+
+	result, err := s.db.sqlTx(tx, sql)
+	if err != nil {
+		return et.Items{}, err
+	}
+
+	if isCommitted {
+		err = tx.commit()
+		if err != nil {
+			return et.Items{}, err
+		}
+	}
+
+	return result, nil
+}
+
+/**
+* All
+* @return (et.Items, error)
+**/
+func (s *Query) All() (et.Items, error) {
+	result, err := s.AllTx(nil)
+	if err != nil {
+		return et.Items{}, err
+	}
+
+	return result, nil
+}
+
+/**
+* OneTx
+* @param tx *Tx
+* @return (et.Item, error)
+**/
+func (s *Query) OneTx(tx *Tx) (et.Item, error) {
+	s.Offset = 0
+	s.Rows = 1
+	result, err := s.AllTx(tx)
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	if result.Ok {
+		return result.One(1)
+	}
+
+	return et.Item{Result: et.Json{}}, nil
+}
+
+/**
+* One
+* @return (et.Item, error)
+**/
+func (s *Query) One() (et.Item, error) {
+	return s.OneTx(nil)
 }

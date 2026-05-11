@@ -12,8 +12,15 @@ const (
 	UPDATED_AT string = "updated_at"
 )
 
+/**
+* TypeColumn: Classifies how a column is stored (real column, JSONB attribute, relation, etc.).
+**/
 type TypeColumn string
 
+/**
+* Str: Returns the string representation of the TypeColumn.
+* @return string
+**/
 func (s TypeColumn) Str() string {
 	return string(s)
 }
@@ -27,8 +34,15 @@ const (
 	AGG      TypeColumn = "agg"
 )
 
+/**
+* TypeData: Specifies the logical data type of a column value.
+**/
 type TypeData string
 
+/**
+* Str: Returns the string representation of the TypeData.
+* @return string
+**/
 func (s TypeData) Str() string {
 	return string(s)
 }
@@ -59,34 +73,33 @@ const (
 	REJECTED   string = "rejected"
 )
 
+/**
+* Column: Describes a single field in a Model, including its storage type, data type, and default.
+**/
 type Column struct {
-	Name       string      `json:"name"`
-	TypeColumn TypeColumn  `json:"type_column"`
-	TypeData   TypeData    `json:"type_data"`
-	Default    interface{} `json:"default"`
-	Definition []byte      `json:"definition"`
-	model      *Model      `json:"-"`
+	Name       string     `json:"name"`
+	TypeColumn TypeColumn `json:"type_column"`
+	TypeData   TypeData   `json:"type_data"`
+	Default    any        `json:"default"`
+	Definition []byte     `json:"definition"`
+	model      *Model     `json:"-"`
 }
 
-/*
-*
-SetModel sets the model of the column
-@param model *Model
-@return *Column
-*
-*/
+/**
+* SetModel: Associates the column with the given model and returns the column for chaining.
+* @param model *Model
+* @return *Column
+**/
 func (s *Column) SetModel(model *Model) *Column {
 	s.model = model
 	return s
 }
 
-/*
-*
-SetDefinition sets the definition of the column
-@param definition []byte
-@return *Column
-*
-*/
+/**
+* SetDefinition: Sets the raw definition bytes on the column and returns it for chaining.
+* @param definition []byte
+* @return *Column
+**/
 func (s *Column) SetDefinition(definition []byte) *Column {
 	s.Definition = definition
 	return s

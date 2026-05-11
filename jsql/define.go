@@ -1,60 +1,42 @@
 package jsql
 
 import (
-	"errors"
+	"fmt"
+	"slices"
 
-	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/utility"
+	"github.com/cgalvisleon/et/et"
 )
 
 type Define struct {
-	Schema  string   `json:"schema"`
-	Name    string   `json:"name"`
-	Version int      `json:"version"`
-	Columns []Column `json:"columns"`
+	Schema      string   `json:"schema"`
+	Name        string   `json:"name"`
+	Version     int      `json:"version"`
+	Columns     []Column `json:"columns"`
+	SourceField string   `json:"source_field"`
+	IdxField    string   `json:"idx_field"`
 }
 
 /**
-* DefineModel: Creates a new model from a declarative Define struct.
-* @param define Define
-* @return *Model, error
+* indexColumn: Returns the index of the column with the given name.
+* @param name string
+* @return int
 **/
-func (s *DB) DefineModel(define Define) (*Model, error) {
-	if !utility.ValidStr(define.Schema, 0, []string{}) {
-		return nil, errors.New(msg.MSG_SCHEMA_REQUIRED)
-	}
-	if !utility.ValidStr(define.Name, 0, []string{}) {
-		return nil, errors.New(msg.MSG_NAME_REQUIRED)
-	}
-	if define.Version <= 0 {
-		define.Version = 1
-	}
-
-	result, err := s.NewModel(define.Schema, define.Name, define.Version)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, column := range define.Columns {
-		_, err := result.defineColumn(column.Name, column.TypeColumn, column.TypeData, column.Default, column.Definition)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return result, nil
+func (s *Model) indexColumn(name string) int {
+	result := slices.IndexFunc(s.Columns, func(col *Column) bool { return col.Name == name })
+	return result
 }
 
 /**
 * defineColumn: Appends a new column definition to the model.
-* @param name string
-* @param tpColumn TypeColumn
-* @param tpData TypeData
-* @param def interface{}
-* @param definition []byte
+* @param name string, tpColumn TypeColumn, tpData TypeData, def any, definition []byte
 * @return *Column, error
 **/
-func (s *Model) defineColumn(name string, tpColumn TypeColumn, tpData TypeData, def interface{}, definition []byte) (*Column, error) {
+func (s *Model) defineColumn(name string, tpColumn TypeColumn, tpData TypeData, def any, definition []byte) *Column {
+	idx := s.indexColumn(name)
+	if idx != -1 {
+		return s.Columns[idx]
+	}
+
 	result := &Column{
 		Name:       name,
 		TypeColumn: tpColumn,
@@ -64,5 +46,200 @@ func (s *Model) defineColumn(name string, tpColumn TypeColumn, tpData TypeData, 
 		model:      s,
 	}
 	s.Columns = append(s.Columns, result)
-	return result, nil
+	return result
+}
+
+/**
+* defineSource: Defines the source column for the model.
+* @return *Column
+**/
+func (s *Model) defineSource() *Column {
+	s.SourceField = SOURCE
+	return s.defineColumn(SOURCE, COLUMN, JSON, et.Json{}, []byte{})
+}
+
+/**
+* defineIdxField: Defines the idx field column for the model.
+* @return *Column
+**/
+func (s *Model) defineIdxField() *Column {
+	s.IdxField = IDX
+	return s.defineColumn(IDX, COLUMN, KEY, "", []byte{})
+}
+
+/**
+* DefineIndex: Defines a new index column for the model.
+* @param name string, tp TypeData, def any
+* @return *Index
+**/
+func (s *Model) DefineIndex(name string, tp TypeData, def any) *Index {
+	s.defineColumn(name, COLUMN, tp, def, []byte{})
+	idx := slices.IndexFunc(s.Indexes, func(idx *Index) bool { return idx.Name == name })
+	if idx != -1 {
+		return s.Indexes[idx]
+	}
+	index := &Index{
+		Name:   name,
+		Sorted: true,
+	}
+	s.Indexes = append(s.Indexes, index)
+	return index
+}
+
+/**
+* DefinePrimaryKey: Defines a new primary key column for the model.
+* @param name string, tp TypeData, def any
+* @return *Index
+**/
+func (s *Model) DefinePrimaryKey(name string, tp TypeData, def any) *Index {
+	s.defineColumn(name, COLUMN, tp, def, []byte{})
+	idx := slices.IndexFunc(s.PrimaryKeys, func(idx *Index) bool { return idx.Name == name })
+	if idx != -1 {
+		return s.PrimaryKeys[idx]
+	}
+	index := &Index{
+		Name:   name,
+		Sorted: true,
+	}
+	s.PrimaryKeys = append(s.PrimaryKeys, index)
+	return index
+}
+
+/**
+* DefineForeignKeys: Defines a new foreign key column for the model.
+* @param to *Model, keys map[string]string, onDeleteCascade bool, onUpdateCascade bool
+* @return *Detail
+**/
+func (s *Model) DefineForeignKeys(to *Model, keys map[string]string, onDeleteCascade, onUpdateCascade bool) *Detail {
+	idx := slices.IndexFunc(s.ForeignKeys, func(idx *Detail) bool { return idx.To.Name == to.Name })
+	if idx != -1 {
+		return s.ForeignKeys[idx]
+	}
+	detail := newDetail(to, keys, []interface{}{}, onDeleteCascade, onUpdateCascade)
+	s.ForeignKeys = append(s.ForeignKeys, detail)
+	return detail
+}
+
+/**
+* DefineUnique: Defines a new unique index for the model.
+* @param name string, tp TypeData, def any
+* @return *Index
+**/
+func (s *Model) DefineUnique(name string, tp TypeData, def any) *Index {
+	s.defineColumn(name, COLUMN, tp, def, []byte{})
+	idx := slices.IndexFunc(s.Unique, func(idx *Index) bool { return idx.Name == name })
+	if idx != -1 {
+		return s.Unique[idx]
+	}
+	index := &Index{
+		Name:   name,
+		Sorted: true,
+	}
+	s.Unique = append(s.Unique, index)
+	return index
+}
+
+/**
+* DefineRequired: Defines a new required column for the model.
+* @param name string, tp TypeData, def any
+* @return *Index
+**/
+func (s *Model) DefineRequired(name string, tp TypeData, def any) *Index {
+	s.defineColumn(name, COLUMN, tp, def, []byte{})
+	idx := slices.IndexFunc(s.Required, func(idx *Index) bool { return idx.Name == name })
+	if idx != -1 {
+		return s.Required[idx]
+	}
+	index := &Index{
+		Name:   name,
+		Sorted: true,
+	}
+	s.Required = append(s.Required, index)
+	return index
+}
+
+/**
+* DefineHidden: Defines a new hidden column for the model.
+* @param name ...string
+**/
+func (s *Model) DefineHidden(name ...string) {
+	s.Hidden = append(s.Hidden, name...)
+}
+
+/**
+* DefineColumn: Defines a new column for the model.
+* @param name string, tp TypeData, def any
+* @return *Column
+**/
+func (s *Model) DefineColumn(name string, tp TypeData, def any) *Column {
+	return s.defineColumn(name, COLUMN, tp, def, []byte{})
+}
+
+/**
+* DefineAttrib: Defines a new attribute for the model.
+* @param name string, tp TypeData, def any
+* @return *Column
+**/
+func (s *Model) DefineAttrib(name string, tp TypeData, def any) *Column {
+	return s.defineColumn(name, ATTRIB, tp, def, []byte{})
+}
+
+/**
+* DefineDetail: Defines a new detail for the model.
+* @param name string, keys map[string]string
+* @return *Detail
+**/
+func (s *Model) DefineDetail(name string, keys map[string]string) *Detail {
+	result, ok := s.Details[name]
+	if ok {
+		return result
+	}
+
+	detailName := fmt.Sprintf("%s_%s", s.Name, name)
+	to, err := s.db.NewModel(s.Schema, detailName, 1)
+	if err != nil {
+		return nil
+	}
+	for fk, k := range keys {
+		s.defineColumn(fk, COLUMN, KEY, "", []byte{})
+		to.defineColumn(k, COLUMN, KEY, "", []byte{})
+	}
+	s.defineColumn(name, DETAIL, ANY, nil, []byte{})
+	detail := newDetail(to, keys, []any{}, true, true)
+	s.Details[name] = detail
+	return detail
+}
+
+/**
+* DefineRollup: Defines a new rollup for the model.
+* @param name string, to *Model, keys map[string]string, selects []any
+* @return *Detail
+**/
+func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, selects []any) *Detail {
+	result, ok := s.Details[name]
+	if ok {
+		return result
+	}
+
+	s.defineColumn(name, ROLLUP, ANY, nil, []byte{})
+	detail := newDetail(to, keys, selects, false, false)
+	s.Details[name] = detail
+	return detail
+}
+
+/**
+* DefineRelation: Defines a new relation for the model.
+* @param name string, to *Model, keys map[string]string
+* @return *Detail
+**/
+func (s *Model) DefineRelation(name string, to *Model, keys map[string]string) *Detail {
+	result, ok := s.Relations[name]
+	if ok {
+		return result
+	}
+
+	s.defineColumn(name, RELATION, ANY, nil, []byte{})
+	detail := newDetail(to, keys, []any{}, false, false)
+	s.Relations[name] = detail
+	return detail
 }

@@ -320,6 +320,33 @@ func (s *DB) query(query *Query) (string, error) {
 * @param definition Define
 * @return *Model, error
 **/
-func (s *DB) Define(definition Define) (*Model, error) {
-	return nil, nil
+func (s *DB) Define(define Define) (*Model, error) {
+	if !utility.ValidStr(define.Schema, 0, []string{}) {
+		return nil, errors.New(msg.MSG_SCHEMA_REQUIRED)
+	}
+	if !utility.ValidStr(define.Name, 0, []string{}) {
+		return nil, errors.New(msg.MSG_NAME_REQUIRED)
+	}
+	if define.Version <= 0 {
+		define.Version = 1
+	}
+
+	result, err := s.NewModel(define.Schema, define.Name, define.Version)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, column := range define.Columns {
+		result.defineColumn(column.Name, column.TypeColumn, column.TypeData, column.Default, column.Definition)
+	}
+
+	if define.SourceField != "" {
+		result.defineSource()
+	}
+
+	if define.IdxField != "" {
+		result.defineIdxField()
+	}
+
+	return result, nil
 }

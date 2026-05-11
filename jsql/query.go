@@ -276,6 +276,26 @@ func (s *Query) addCondition(conds []*et.Condition) *Query {
 }
 
 /**
+* Select: Appends fields to the SELECT clause.
+* @param fields ...string
+* @return *Query
+**/
+func (s *Query) Select(fields ...string) *Query {
+	s.Selects = append(s.Selects, fields...)
+	return s
+}
+
+/**
+* Hidden: Appends fields to the HIDDEN clause.
+* @param fields ...string
+* @return *Query
+**/
+func (s *Query) Hidden(fields ...string) *Query {
+	s.Hiddens = append(s.Hiddens, fields...)
+	return s
+}
+
+/**
 * Where: Appends a condition to the WHERE clause and sets the active section to where.
 * @param cond *et.Condition
 * @return *Query

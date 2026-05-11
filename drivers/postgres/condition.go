@@ -9,44 +9,78 @@ import (
 )
 
 /**
-* resolveField: Returns the SQL expression for a field, mapping ATTRIB columns
-* to their JSONB path expression (_source->>'field') and COLUMN columns to
-* their qualified name (alias.field).
+* resolveField: Translates a field name (possibly a nested JSONB path using "->"
+* as separator) to its PostgreSQL SQL expression.
+*
+* Rules:
+*   - "field"              → alias.field                        (COLUMN)
+*   - "field"              → (alias._source->>'field')::T        (ATTRIB, with cast if typed)
+*   - "field->a->b"        → alias.field->'a'->>'b'              (COLUMN with JSON path)
+*   - "field->a->b"        → alias._source->'field'->'a'->>'b'   (ATTRIB with JSON path)
+*
+* Intermediate segments use ->, the leaf segment uses ->>.
+* A type cast is applied only when the root is a typed ATTRIB and has no sub-path
+* (i.e. the direct value is read and its TypeData is numeric, bool or datetime).
+*
 * @param field string
 * @param model *jsql.Model
 * @param alias string
 * @return string
 **/
 func resolveField(field string, model *jsql.Model, alias string) string {
-	col := model.FindColumn(field)
-	if col == nil || col.TypeColumn == jsql.COLUMN {
-		if alias != "" && !strings.Contains(field, ".") {
-			return fmt.Sprintf("%s.%s", alias, field)
-		}
-		return field
-	}
+	parts := strings.Split(field, "->")
+	root := parts[0]
+	path := parts[1:]
 
-	if col.TypeColumn == jsql.ATTRIB {
+	col := model.FindColumn(root)
+	isAttrib := col != nil && col.TypeColumn == jsql.ATTRIB
+
+	var base string
+	var pathSegs []string
+
+	if isAttrib {
 		src := model.SourceField
 		if alias != "" {
 			src = fmt.Sprintf("%s.%s", alias, src)
 		}
-		cast := pgAttribCast(col.TypeData)
-		if cast != "" {
-			return fmt.Sprintf("(%s->>'%s')::%s", src, field, cast)
+		base = src
+		pathSegs = append([]string{root}, path...)
+	} else {
+		if alias != "" && !strings.Contains(root, ".") {
+			base = fmt.Sprintf("%s.%s", alias, root)
+		} else {
+			base = root
 		}
-		return fmt.Sprintf("%s->>'%s'", src, field)
+		pathSegs = path
 	}
 
-	if alias != "" {
-		return fmt.Sprintf("%s.%s", alias, field)
+	if len(pathSegs) == 0 {
+		return base
 	}
-	return field
+
+	var sb strings.Builder
+	sb.WriteString(base)
+	for i, seg := range pathSegs {
+		if i == len(pathSegs)-1 {
+			sb.WriteString(fmt.Sprintf("->>'%s'", seg))
+		} else {
+			sb.WriteString(fmt.Sprintf("->'%s'", seg))
+		}
+	}
+	expr := sb.String()
+
+	if isAttrib && len(path) == 0 {
+		if cast := pgAttribCast(col.TypeData); cast != "" {
+			return fmt.Sprintf("(%s)::%s", expr, cast)
+		}
+	}
+
+	return expr
 }
 
 /**
-* pgAttribCast: Returns the PostgreSQL cast suffix for a JSONB text extraction
-* when the target TypeData requires a non-text comparison.
+* pgAttribCast: Returns the PostgreSQL cast type for JSONB text extraction
+* when the ATTRIB TypeData requires a non-text comparison.
 * Returns empty string for text types (no cast needed).
 * @param tp jsql.TypeData
 * @return string
@@ -64,6 +98,29 @@ func pgAttribCast(tp jsql.TypeData) string {
 	default:
 		return ""
 	}
+}
+
+/**
+* BuildSelectField: Returns the SQL expression for a SELECT list entry.
+* For simple fields it returns the qualified column name.
+* For nested paths (e.g. "data->address->city") it returns the JSONB path
+* expression followed by AS <last_segment> so the result column is named
+* after the leaf key.
+* @param field string
+* @param model *jsql.Model
+* @param alias string
+* @return string
+**/
+func BuildSelectField(field string, model *jsql.Model, alias string) string {
+	parts := strings.Split(field, "->")
+	expr := resolveField(field, model, alias)
+
+	if len(parts) == 1 {
+		return expr
+	}
+
+	leaf := parts[len(parts)-1]
+	return fmt.Sprintf("%s AS %s", expr, leaf)
 }
 
 /**
@@ -109,7 +166,7 @@ func buildInList(val any) string {
 }
 
 /**
-* buildCondition: Converts a single et.Condition to a SQL fragment.
+* buildCondition: Converts a single et.Condition to a SQL predicate fragment.
 * @param cond *et.Condition
 * @param model *jsql.Model
 * @param alias string
@@ -165,7 +222,7 @@ func buildCondition(cond *et.Condition, model *jsql.Model, alias string) string 
 /**
 * BuildConditions: Translates a slice of et.Condition to a SQL predicate string
 * (without the WHERE keyword). Consecutive conditions are joined with AND/OR
-* based on each condition's Connector field.
+* according to each condition's Connector field.
 * @param conds []*et.Condition
 * @param model *jsql.Model
 * @param alias string

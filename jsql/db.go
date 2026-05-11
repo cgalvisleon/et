@@ -130,6 +130,14 @@ func (s *DB) init() error {
 }
 
 /**
+* Close
+* @return error
+**/
+func (s *DB) Close() error {
+	return s.db.Close()
+}
+
+/**
 * NewModel
 * @param schema, name string, version int
 * @return *Model

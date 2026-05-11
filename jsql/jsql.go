@@ -12,6 +12,11 @@ func init() {
 	dbs = make(map[string]*DB)
 }
 
+/**
+* LoadTo: Returns an existing DB by name, or creates and initialises a new one from params.
+* @param params utility.Config
+* @return *DB, error
+**/
 func LoadTo(params utility.Config) (*DB, error) {
 	name := params.GetStr("DB_NAME", "test")
 	result, ok := dbs[name]
@@ -34,9 +39,9 @@ func LoadTo(params utility.Config) (*DB, error) {
 }
 
 /**
-* Load loads the default database
-* @return (*DB, error)
- */
+* Load: Connects to the default database reading configuration from environment variables.
+* @return *DB, error
+**/
 func Load() (*DB, error) {
 	config := utility.NewConfig(et.Json{
 		"DB_DRIVER":       envar.GetStr("DB_DRIVER", "postgres"),

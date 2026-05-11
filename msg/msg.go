@@ -99,6 +99,9 @@ var (
 	MSG_SCHEMA_NOT_FOUND               = "schema %s not found"
 	MSG_TRANSACTION_IS_NIL             = "transaction is nil"
 	MSG_MULTIPLE_ROWS_FOUND            = "multiple rows found"
+	MSG_SCHEMA_REQUIRED                = "schema is required"
+	MSG_NAME_REQUIRED                  = "name is required"
+	MSG_VERSION_REQUIRED               = "version is required"
 )
 
 func init() {
@@ -201,5 +204,8 @@ func init() {
 		MSG_SCHEMA_NOT_FOUND = "esquema %s no encontrado"
 		MSG_TRANSACTION_IS_NIL = "transacción es nula"
 		MSG_MULTIPLE_ROWS_FOUND = "múltiples filas encontradas"
+		MSG_SCHEMA_REQUIRED = "esquema es requerido"
+		MSG_NAME_REQUIRED = "nombre es requerido"
+		MSG_VERSION_REQUIRED = "versión es requerida"
 	}
 }

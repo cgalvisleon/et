@@ -40,8 +40,9 @@ type Command struct {
 }
 
 /**
-* newCommand
-* @param model *Model, tp CommandType
+* newCommand: Constructs a Command of the given type, copying the model's trigger slices.
+* @param model *Model
+* @param tp CommandType
 * @return *Command
 **/
 func newCommand(model *Model, tp CommandType) *Command {
@@ -89,7 +90,7 @@ func newCommand(model *Model, tp CommandType) *Command {
 }
 
 /**
-* serialize
+* serialize: Marshals the command metadata to JSON bytes.
 * @return []byte, error
 **/
 func (s *Command) serialize() ([]byte, error) {
@@ -102,7 +103,7 @@ func (s *Command) serialize() ([]byte, error) {
 }
 
 /**
-* ToJson
+* ToJson: Returns the command metadata as an et.Json map.
 * @return et.Json
 **/
 func (s *Command) ToJson() et.Json {
@@ -121,7 +122,7 @@ func (s *Command) ToJson() et.Json {
 }
 
 /**
-* Test
+* Test: Enables test mode — SQL is generated but not executed.
 * @return *Command
 **/
 func (s *Command) Test() *Command {
@@ -130,7 +131,7 @@ func (s *Command) Test() *Command {
 }
 
 /**
-* addCondition
+* addCondition: Appends a condition to the command's WHERE clause list.
 * @param cond *et.Condition
 * @return *Command
 **/
@@ -140,7 +141,7 @@ func (s *Command) addCondition(cond *et.Condition) *Command {
 }
 
 /**
-* Where
+* Where: Sets the first WHERE condition and returns the command for chaining.
 * @param cond *et.Condition
 * @return *Command
 **/
@@ -149,7 +150,7 @@ func (s *Command) Where(cond *et.Condition) *Command {
 }
 
 /**
-* And
+* And: Appends a condition joined with AND to the WHERE clause.
 * @param cond *et.Condition
 * @return *Command
 **/
@@ -159,7 +160,7 @@ func (s *Command) And(cond *et.Condition) *Command {
 }
 
 /**
-* Or
+* Or: Appends a condition joined with OR to the WHERE clause.
 * @param cond *et.Condition
 * @return *Command
 **/
@@ -169,7 +170,7 @@ func (s *Command) Or(cond *et.Condition) *Command {
 }
 
 /**
-* BeforeInsert
+* BeforeInsert: Registers a trigger function to run before each INSERT execution.
 * @param fn TriggerFunction
 * @return *Command
 **/
@@ -179,7 +180,7 @@ func (s *Command) BeforeInsert(fn TriggerFunction) *Command {
 }
 
 /**
-* BeforeUpdate
+* BeforeUpdate: Registers a trigger function to run before each UPDATE execution.
 * @param fn TriggerFunction
 * @return *Command
 **/
@@ -189,7 +190,7 @@ func (s *Command) BeforeUpdate(fn TriggerFunction) *Command {
 }
 
 /**
-* BeforeDelete
+* BeforeDelete: Registers a trigger function to run before each DELETE execution.
 * @param fn TriggerFunction
 * @return *Command
 **/
@@ -199,9 +200,9 @@ func (s *Command) BeforeDelete(fn TriggerFunction) *Command {
 }
 
 /**
-* BeforeInsertOrUpdate
+* BeforeInsertOrUpdate: Registers a trigger function to run before INSERT and UPDATE.
 * @param fn TriggerFunction
-* @return *Model
+* @return *Command
 **/
 func (s *Command) BeforeInsertOrUpdate(fn TriggerFunction) *Command {
 	s.beforeInserts = append(s.beforeInserts, fn)
@@ -210,7 +211,7 @@ func (s *Command) BeforeInsertOrUpdate(fn TriggerFunction) *Command {
 }
 
 /**
-* AfterInsert
+* AfterInsert: Registers a trigger function to run after each INSERT execution.
 * @param fn TriggerFunction
 * @return *Command
 **/
@@ -220,7 +221,7 @@ func (s *Command) AfterInsert(fn TriggerFunction) *Command {
 }
 
 /**
-* AfterUpdate
+* AfterUpdate: Registers a trigger function to run after each UPDATE execution.
 * @param fn TriggerFunction
 * @return *Command
 **/
@@ -230,7 +231,7 @@ func (s *Command) AfterUpdate(fn TriggerFunction) *Command {
 }
 
 /**
-* AfterInsertOrUpdate
+* AfterInsertOrUpdate: Registers a trigger function to run after INSERT and UPDATE.
 * @param fn TriggerFunction
 * @return *Command
 **/
@@ -241,7 +242,7 @@ func (s *Command) AfterInsertOrUpdate(fn TriggerFunction) *Command {
 }
 
 /**
-* AfterDelete
+* AfterDelete: Registers a trigger function to run after each DELETE execution.
 * @param fn TriggerFunction
 * @return *Command
 **/
@@ -251,9 +252,9 @@ func (s *Command) AfterDelete(fn TriggerFunction) *Command {
 }
 
 /**
-* insert
+* insert: Executes INSERT for each row in Data, running before/after triggers per row.
 * @param tx *Tx
-* @return (et.Items, error)
+* @return et.Items, error
 **/
 func (s *Command) insert(tx *Tx) (et.Items, error) {
 	if len(s.Data) == 0 {
@@ -299,9 +300,9 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 }
 
 /**
-* update
+* update: Fetches matching rows, merges Data[0] into each, and executes UPDATE with triggers.
 * @param tx *Tx
-* @return (et.Items, error)
+* @return et.Items, error
 **/
 func (s *Command) update(tx *Tx) (et.Items, error) {
 	if len(s.Data) == 0 {
@@ -357,9 +358,9 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 }
 
 /**
-* delete
+* delete: Fetches matching rows and executes DELETE for each with before/after triggers.
 * @param tx *Tx
-* @return (et.Items, error)
+* @return et.Items, error
 **/
 func (s *Command) delete(tx *Tx) (et.Items, error) {
 	result := et.NewItems([]et.Json{})
@@ -411,9 +412,9 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 }
 
 /**
-* upsert
+* upsert: Resolves to INSERT when no row matches the conditions, or UPDATE when exactly one does.
 * @param tx *Tx
-* @return (et.Items, error)
+* @return et.Items, error
 **/
 func (s *Command) upsert(tx *Tx) (et.Items, error) {
 	model := s.model
@@ -436,9 +437,9 @@ func (s *Command) upsert(tx *Tx) (et.Items, error) {
 }
 
 /**
-* ExecTx
+* ExecTx: Dispatches the command to the appropriate handler and commits if no external Tx was given.
 * @param tx *Tx
-* @return (et.Items, error)
+* @return et.Items, error
 **/
 func (s *Command) ExecTx(tx *Tx) (et.Items, error) {
 	tx, isCommitted := getTx(tx)

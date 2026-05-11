@@ -10,13 +10,22 @@ import (
 	"github.com/cgalvisleon/et/strs"
 )
 
+/**
+* Trigger: Stores a named trigger definition as raw bytes.
+**/
 type Trigger struct {
 	Name       string `json:"name"`
 	Definition []byte `json:"definition"`
 }
 
+/**
+* TriggerFunction: Callback invoked before or after a data-mutation command.
+**/
 type TriggerFunction func(tx *Tx, old, new et.Json) error
 
+/**
+* Index: Represents a named index or primary-key field; Sorted selects BTREE over HASH.
+**/
 type Index struct {
 	Name   string `json:"name"`
 	Sorted bool   `json:"sorted"`
@@ -45,6 +54,7 @@ type Model struct {
 	IsDebug       bool               `json:"-"`
 	IsChanged     bool               `json:"-"`
 	isInit        bool               `json:"-"`
+	isTest        bool               `json:"-"`
 	beforeInserts []TriggerFunction  `json:"-"`
 	beforeUpdates []TriggerFunction  `json:"-"`
 	beforeDeletes []TriggerFunction  `json:"-"`
@@ -55,7 +65,7 @@ type Model struct {
 }
 
 /**
-* serialize
+* serialize: Marshals the model metadata to JSON bytes.
 * @return []byte, error
 **/
 func (s *Model) serialize() ([]byte, error) {
@@ -68,7 +78,7 @@ func (s *Model) serialize() ([]byte, error) {
 }
 
 /**
-* ToJson
+* ToJson: Returns the model metadata as an et.Json map.
 * @return et.Json
 **/
 func (s *Model) ToJson() et.Json {
@@ -87,7 +97,7 @@ func (s *Model) ToJson() et.Json {
 }
 
 /**
-* Key
+* Key: Returns the fully-qualified model identifier (database.schema.name).
 * @return string
 **/
 func (s *Model) Key() string {
@@ -98,7 +108,7 @@ func (s *Model) Key() string {
 }
 
 /**
-* save
+* save: Persists model metadata changes (stub — no-op until storage is wired).
 * @return error
 **/
 func (s *Model) save() error {
@@ -110,14 +120,25 @@ func (s *Model) save() error {
 }
 
 /**
-* Debug
+* Debug: Enables debug logging and returns the model for chaining.
+* @return *Model
 **/
-func (s *Model) Debug() {
+func (s *Model) Debug() *Model {
 	s.IsDebug = true
+	return s
 }
 
 /**
-* Init
+* Test: Enables test mode (DDL and DML are logged but not executed) and returns the model.
+* @return *Model
+**/
+func (s *Model) Test() *Model {
+	s.isTest = true
+	return s
+}
+
+/**
+* Init: Runs DDL for the model the first time it is called; subsequent calls are no-ops.
 * @return error
 **/
 func (s *Model) Init() error {
@@ -143,15 +164,14 @@ func (s *Model) Init() error {
 }
 
 /**
-* Stricted
-* @return error
+* Stricted: Enables strict mode — unknown field names are not treated as ATTRIBs.
 **/
 func (s *Model) Stricted() {
 	s.IsStrict = true
 }
 
 /**
-* Db
+* Db: Returns the underlying *sql.DB connection pool.
 * @return *sql.DB
 **/
 func (s *Model) Db() *sql.DB {
@@ -159,8 +179,12 @@ func (s *Model) Db() *sql.DB {
 }
 
 /**
-* newColumn
-* @param model *Model, name string, tpColumn TypeColumn, tpData TypeData, defaultValue interface{}, definition []byte
+* newColumn: Constructs a Column bound to this model without adding it to the Columns slice.
+* @param name string
+* @param tpColumn TypeColumn
+* @param tpData TypeData
+* @param defaultValue interface{}
+* @param definition []byte
 * @return *Column
 **/
 func (s *Model) newColumn(name string, tpColumn TypeColumn, tpData TypeData, defaultValue interface{}, definition []byte) *Column {
@@ -175,7 +199,7 @@ func (s *Model) newColumn(name string, tpColumn TypeColumn, tpData TypeData, def
 }
 
 /**
-* idxColumn
+* idxColumn: Returns the slice index of the column with the given name, or -1 if not found.
 * @param name string
 * @return int
 **/
@@ -184,7 +208,8 @@ func (s *Model) idxColumn(name string) int {
 }
 
 /**
-* FindColumn
+* FindColumn: Returns the Column for the given name. For non-strict models with a SourceField,
+* unknown names are returned as synthetic ATTRIB columns.
 * @param name string
 * @return *Column
 **/
@@ -206,7 +231,7 @@ func (s *Model) FindColumn(name string) *Column {
 }
 
 /**
-* GetId
+* GetId: Returns a ULID tagged with the model name, used as a stable record identifier.
 * @param id string
 * @return string
 **/
@@ -215,7 +240,7 @@ func (s *Model) GetId(id string) string {
 }
 
 /**
-* BeforeInsert
+* BeforeInsert: Registers a trigger function to run before each INSERT.
 * @param fn TriggerFunction
 * @return *Model
 **/
@@ -225,7 +250,7 @@ func (s *Model) BeforeInsert(fn TriggerFunction) *Model {
 }
 
 /**
-* BeforeUpdate
+* BeforeUpdate: Registers a trigger function to run before each UPDATE.
 * @param fn TriggerFunction
 * @return *Model
 **/
@@ -235,7 +260,7 @@ func (s *Model) BeforeUpdate(fn TriggerFunction) *Model {
 }
 
 /**
-* BeforeDelete
+* BeforeDelete: Registers a trigger function to run before each DELETE.
 * @param fn TriggerFunction
 * @return *Model
 **/
@@ -245,7 +270,7 @@ func (s *Model) BeforeDelete(fn TriggerFunction) *Model {
 }
 
 /**
-* BeforeInsertOrUpdate
+* BeforeInsertOrUpdate: Registers a trigger function to run before INSERT and UPDATE.
 * @param fn TriggerFunction
 * @return *Model
 **/
@@ -256,7 +281,7 @@ func (s *Model) BeforeInsertOrUpdate(fn TriggerFunction) *Model {
 }
 
 /**
-* AfterInsert
+* AfterInsert: Registers a trigger function to run after each INSERT.
 * @param fn TriggerFunction
 * @return *Model
 **/
@@ -266,7 +291,7 @@ func (s *Model) AfterInsert(fn TriggerFunction) *Model {
 }
 
 /**
-* AfterUpdate
+* AfterUpdate: Registers a trigger function to run after each UPDATE.
 * @param fn TriggerFunction
 * @return *Model
 **/
@@ -276,7 +301,7 @@ func (s *Model) AfterUpdate(fn TriggerFunction) *Model {
 }
 
 /**
-* AfterDelete
+* AfterDelete: Registers a trigger function to run after each DELETE.
 * @param fn TriggerFunction
 * @return *Model
 **/
@@ -286,7 +311,7 @@ func (s *Model) AfterDelete(fn TriggerFunction) *Model {
 }
 
 /**
-* AfterInsertOrUpdate
+* AfterInsertOrUpdate: Registers a trigger function to run after INSERT and UPDATE.
 * @param fn TriggerFunction
 * @return *Model
 **/
@@ -297,7 +322,7 @@ func (s *Model) AfterInsertOrUpdate(fn TriggerFunction) *Model {
 }
 
 /**
-* Where
+* Where: Creates a new Query for this model with the given condition as the first WHERE clause.
 * @param cond *et.Condition
 * @return *Query
 **/
@@ -308,7 +333,7 @@ func (s *Model) Where(cond *et.Condition) *Query {
 }
 
 /**
-* Insert
+* Insert: Creates a Command of type INSERT pre-loaded with the given data row.
 * @param data et.Json
 * @return *Command
 **/
@@ -319,7 +344,7 @@ func (s *Model) Insert(data et.Json) *Command {
 }
 
 /**
-* Bulk
+* Bulk: Creates a Command of type BULK pre-loaded with multiple data rows.
 * @param data []et.Json
 * @return *Command
 **/
@@ -330,7 +355,7 @@ func (s *Model) Bulk(data []et.Json) *Command {
 }
 
 /**
-* Update
+* Update: Creates a Command of type UPDATE pre-loaded with the given data row.
 * @param data et.Json
 * @return *Command
 **/
@@ -341,7 +366,7 @@ func (s *Model) Update(data et.Json) *Command {
 }
 
 /**
-* Delete
+* Delete: Creates a Command of type DELETE (conditions must be added with Where/And).
 * @return *Command
 **/
 func (s *Model) Delete() *Command {
@@ -350,7 +375,7 @@ func (s *Model) Delete() *Command {
 }
 
 /**
-* Upsert
+* Upsert: Creates a Command of type UPSERT pre-loaded with data and primary-key conditions.
 * @param data et.Json
 * @return *Command
 **/

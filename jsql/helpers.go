@@ -15,7 +15,7 @@ import (
 )
 
 /**
-* SQLParse
+* SQLParse: Replaces $N positional placeholders in sql with their quoted argument values.
 * @param sql string
 * @param args ...any
 * @return string
@@ -37,7 +37,7 @@ func SQLParse(sql string, args ...any) string {
 }
 
 /**
-* Quote
+* Quoted: Returns val formatted as a SQL literal (quoted string, bare number, NULL, etc.).
 * @param val any
 * @return any
 **/
@@ -85,7 +85,7 @@ func Quoted(val any) any {
 }
 
 /**
-* RowsToItems
+* RowsToItems: Scans all rows from a *sql.Rows result set into an et.Items collection.
 * @param rows *sql.Rows
 * @return et.Items
 **/

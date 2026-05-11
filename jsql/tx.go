@@ -25,7 +25,8 @@ type Tx struct {
 }
 
 /**
-* getTx
+* getTx: Returns the given Tx unchanged, or creates a new auto-commit Tx when nil.
+* The second return value is true when the caller must commit after the operation.
 * @param tx *Tx
 * @return *Tx, bool
 **/
@@ -46,7 +47,7 @@ func getTx(tx *Tx) (*Tx, bool) {
 }
 
 /**
-* begin
+* begin: Opens a database transaction on the underlying *sql.DB if not already open.
 * @param db *sql.DB
 * @return error
 **/
@@ -66,7 +67,7 @@ func (s *Tx) begin(db *sql.DB) error {
 }
 
 /**
-* setStatus
+* setStatus: Updates the transaction status and records the change time.
 * @param status TxStatus
 **/
 func (s *Tx) setStatus(status TxStatus) {
@@ -75,7 +76,7 @@ func (s *Tx) setStatus(status TxStatus) {
 }
 
 /**
-* commit
+* commit: Commits the transaction and marks it as committed.
 * @return error
 **/
 func (s *Tx) commit() error {
@@ -94,7 +95,7 @@ func (s *Tx) commit() error {
 }
 
 /**
-* rollback
+* rollback: Rolls back the transaction and marks it as rolled back.
 * @return error
 **/
 func (s *Tx) rollback() error {

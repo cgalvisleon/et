@@ -27,9 +27,9 @@ type DB struct {
 }
 
 /**
-* newDB
-* @param params utility.Config, useCore bool
-* @return (*DB, error)
+* newDB: Constructs a DB instance from the given config, resolving the driver by name.
+* @param params utility.Config
+* @return *DB, error
 **/
 func newDB(params utility.Config) (*DB, error) {
 	driverName := params.GetStr("DB_DRIVER", DriverPostgres)
@@ -57,7 +57,7 @@ func newDB(params utility.Config) (*DB, error) {
 }
 
 /**
-* serialize
+* serialize: Marshals the DB metadata to JSON bytes.
 * @return []byte, error
 **/
 func (s *DB) serialize() ([]byte, error) {
@@ -70,7 +70,7 @@ func (s *DB) serialize() ([]byte, error) {
 }
 
 /**
-* ToJson
+* ToJson: Returns the DB metadata as an et.Json map.
 * @return et.Json
 **/
 func (s *DB) ToJson() et.Json {
@@ -89,7 +89,7 @@ func (s *DB) ToJson() et.Json {
 }
 
 /**
-* save
+* save: Persists DB metadata changes (stub — no-op until storage is wired).
 * @return error
 **/
 func (s *DB) save() error {
@@ -97,7 +97,7 @@ func (s *DB) save() error {
 }
 
 /**
-* init
+* init: Opens the driver connection and, when UseCore is set, initializes core tables.
 * @return error
 **/
 func (s *DB) init() error {
@@ -130,7 +130,7 @@ func (s *DB) init() error {
 }
 
 /**
-* Close
+* Close: Closes the underlying *sql.DB connection pool.
 * @return error
 **/
 func (s *DB) Close() error {
@@ -138,9 +138,11 @@ func (s *DB) Close() error {
 }
 
 /**
-* NewModel
-* @param schema, name string, version int
-* @return *Model
+* NewModel: Returns (or creates) a Model under the given schema name.
+* @param schema string
+* @param name string
+* @param version int
+* @return *Model, error
 **/
 func (s *DB) NewModel(schema, name string, version int) (*Model, error) {
 	schema = utility.Normalize(schema)
@@ -165,7 +167,7 @@ func (s *DB) NewModel(schema, name string, version int) (*Model, error) {
 }
 
 /**
-* SetDebug
+* SetDebug: Sets the debug flag to the given value.
 * @param debug bool
 **/
 func (s *DB) SetDebug(debug bool) {
@@ -173,16 +175,16 @@ func (s *DB) SetDebug(debug bool) {
 }
 
 /**
-* Debug
+* Debug: Enables debug logging for all queries and commands.
 **/
 func (s *DB) Debug() {
 	s.IsDebug = true
 }
 
 /**
-* getSchema
+* getSchema: Returns the named Schema or an error if it does not exist.
 * @param name string
-* @return (*Schema, error)
+* @return *Schema, error
 **/
 func (s *DB) getSchema(name string) (*Schema, error) {
 	result, ok := s.Schemas[name]
@@ -194,9 +196,10 @@ func (s *DB) getSchema(name string) (*Schema, error) {
 }
 
 /**
-* GetModel
-* @param schema string, name string
-* @return *Model
+* GetModel: Looks up a model by schema and name, returning an error if not found.
+* @param schema string
+* @param name string
+* @return *Model, error
 **/
 func (s *DB) GetModel(schema string, name string) (*Model, error) {
 	sch, err := s.getSchema(schema)
@@ -213,11 +216,12 @@ func (s *DB) GetModel(schema string, name string) (*Model, error) {
 }
 
 /**
-* sqlTx
-* @param tx *Tx, sql string, arg ...any
+* sqlTx: Executes a SQL query inside the given transaction (or directly on the pool if nil).
+* @param tx *Tx
+* @param query string
+* @param arg ...any
 * @return et.Items, error
-*
- */
+**/
 func (s *DB) sqlTx(tx *Tx, query string, arg ...any) (et.Items, error) {
 	query = SQLParse(query, arg...)
 	if tx != nil {
@@ -248,7 +252,7 @@ func (s *DB) sqlTx(tx *Tx, query string, arg ...any) (et.Items, error) {
 }
 
 /**
-* Load
+* load: Generates DDL for the model via the driver and executes it against the DB.
 * @param model *Model
 * @return error
 **/
@@ -262,16 +266,23 @@ func (s *DB) load(model *Model) error {
 		return err
 	}
 
-	_, err = s.sqlTx(nil, sql)
-	if err != nil {
-		return err
+	if model.IsDebug {
+		logs.Debug("DDL:\n", sql)
+		return nil
+	}
+
+	if !model.isTest {
+		_, err = s.sqlTx(nil, sql)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
 /**
-* Command
+* command: Asks the driver to render a Command as SQL and returns the SQL string.
 * @param command *Command
 * @return string, error
 **/
@@ -288,7 +299,7 @@ func (s *DB) command(command *Command) (string, error) {
 }
 
 /**
-* Query
+* query: Asks the driver to render a Query as SQL and returns the SQL string.
 * @param query *Query
 * @return string, error
 **/
@@ -305,7 +316,7 @@ func (s *DB) query(query *Query) (string, error) {
 }
 
 /**
-* Define
+* Define: Creates a model from a declarative definition (delegates to DefineModel).
 * @param definition Define
 * @return *Model, error
 **/

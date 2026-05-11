@@ -44,10 +44,12 @@ All doc comments for functions, methods, and types must use this block style:
 ```go
 /**
 * FunctionName: Brief description.
-* @param paramName type
-* @return type
+* @param paramName type, description
+* @return type, description
 **/
 ```
+
+its @params and @return must be only one line each.
 
 ## Architecture
 
@@ -137,11 +139,11 @@ Templates and generators for new microservices, projects, and Kubernetes deploym
 
 ## Required environment variables
 
-| Package    | Variable                     | Purpose                                |
-| ---------- | ---------------------------- | -------------------------------------- |
-| `cache`    | `REDIS_HOST`                 | Redis connection                       |
-| `event`    | `NATS_HOST`                  | NATS connection                        |
-| `event`    | `NATS_USER`, `NATS_PASSWORD` | NATS auth (optional)                   |
-| `graph`    | `NEO4J_HOST`, `NEO4J_USER`, `NEO4J_PASSWORD` | Neo4j connection        |
-| `ia`       | `OPENAI_API_KEY`             | OpenAI agent integration               |
-| `wsp`      | `WHATSAPP_API_URL`           | WhatsApp Graph API base URL (optional) |
+| Package | Variable                                     | Purpose                                |
+| ------- | -------------------------------------------- | -------------------------------------- |
+| `cache` | `REDIS_HOST`                                 | Redis connection                       |
+| `event` | `NATS_HOST`                                  | NATS connection                        |
+| `event` | `NATS_USER`, `NATS_PASSWORD`                 | NATS auth (optional)                   |
+| `graph` | `NEO4J_HOST`, `NEO4J_USER`, `NEO4J_PASSWORD` | Neo4j connection                       |
+| `ia`    | `OPENAI_API_KEY`                             | OpenAI agent integration               |
+| `wsp`   | `WHATSAPP_API_URL`                           | WhatsApp Graph API base URL (optional) |

@@ -67,3 +67,27 @@ type Column struct {
 	Definition []byte      `json:"definition"`
 	model      *Model      `json:"-"`
 }
+
+/*
+*
+SetModel sets the model of the column
+@param model *Model
+@return *Column
+*
+*/
+func (s *Column) SetModel(model *Model) *Column {
+	s.model = model
+	return s
+}
+
+/*
+*
+SetDefinition sets the definition of the column
+@param definition []byte
+@return *Column
+*
+*/
+func (s *Column) SetDefinition(definition []byte) *Column {
+	s.Definition = definition
+	return s
+}

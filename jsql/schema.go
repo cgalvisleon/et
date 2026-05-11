@@ -11,18 +11,18 @@ import (
 )
 
 /**
-* Schema: Represents a schema in the database
+* Schema: Represents a database schema that owns a set of models.
 **/
 type Schema struct {
-	Database string            `json:"database"` // Database name
-	Name     string            `json:"name"`     // Schema name
-	models   map[string]*Model `json:"-"`        // Models
-	db       *DB               `json:"-"`        // Database
-	mu       *sync.RWMutex     `json:"-"`        // Mutex
+	Database string            `json:"database"`
+	Name     string            `json:"name"`
+	models   map[string]*Model `json:"-"`
+	db       *DB               `json:"-"`
+	mu       *sync.RWMutex     `json:"-"`
 }
 
 /**
-* serialize
+* serialize: Marshals the schema metadata to JSON bytes.
 * @return []byte, error
 **/
 func (s *Schema) serialize() ([]byte, error) {
@@ -35,7 +35,7 @@ func (s *Schema) serialize() ([]byte, error) {
 }
 
 /**
-* ToJson
+* ToJson: Returns the schema metadata as an et.Json map.
 * @return et.Json
 **/
 func (s *Schema) ToJson() et.Json {
@@ -54,7 +54,7 @@ func (s *Schema) ToJson() et.Json {
 }
 
 /**
-* save: Save schema data
+* save: Persists schema metadata changes (stub — no-op until storage is wired).
 * @return error
 **/
 func (s *Schema) save() error {
@@ -65,9 +65,10 @@ func (s *Schema) save() error {
 }
 
 /**
-* newModel
-* @param schema, name string, version int
-* @return *Model
+* newModel: Returns an existing model by name or creates and registers a new one.
+* @param name string
+* @param version int
+* @return *Model, error
 **/
 func (s *Schema) newModel(name string, version int) (*Model, error) {
 	name = utility.Normalize(name)
@@ -112,8 +113,8 @@ func (s *Schema) newModel(name string, version int) (*Model, error) {
 }
 
 /**
-* GetModel: Returns a model
-* @param string name
+* GetModel: Returns the named model or an error if it does not exist in this schema.
+* @param name string
 * @return *Model, error
 **/
 func (s *Schema) GetModel(name string) (*Model, error) {

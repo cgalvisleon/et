@@ -1,10 +1,9 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/cgalvisleon/et/jsql"
 	_ "github.com/cgalvisleon/et/jsql/drivers/postgres"
+	"github.com/cgalvisleon/et/logs"
 )
 
 // demoDBConnect attempts a live connection using env vars
@@ -16,9 +15,15 @@ func demoDBConnect() error {
 	}
 	defer db.Close()
 
-	fmt.Println("  connected:", db.Name)
+	logs.Debug("connected:", db.Name)
 
 	model, err := db.NewModel("public", "users", 1)
+	if err != nil {
+		return err
+	}
+
+	model.Debug()
+	err = model.Init()
 	if err != nil {
 		return err
 	}
@@ -26,12 +31,13 @@ func demoDBConnect() error {
 	result, err := model.
 		Where(jsql.Eq("id", 1)).
 		Test().
+		Debug().
 		All()
 	if err != nil {
 		return err
 	}
 
-	fmt.Println("  result:", result)
+	logs.Debug("result:", result)
 
 	return nil
 }

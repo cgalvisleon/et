@@ -7,6 +7,9 @@ import (
 	"github.com/cgalvisleon/et/logs"
 )
 
+/**
+* From: Identifies a table source with its fully-qualified name and SQL alias.
+**/
 type From struct {
 	Database string `json:"database"`
 	Schema   string `json:"schema"`
@@ -16,8 +19,9 @@ type From struct {
 }
 
 /**
-* getFrom
-* @param model *Model, as string
+* getFrom: Builds a From descriptor from a model, using as as the SQL alias (defaults to table name).
+* @param model *Model
+* @param as string
 * @return *From
 **/
 func getFrom(model *Model, as string) *From {
@@ -33,12 +37,18 @@ func getFrom(model *Model, as string) *From {
 	}
 }
 
+/**
+* Field: Represents a SELECT list entry with an optional alias and source table reference.
+**/
 type Field struct {
 	Name string `json:"name"`
 	As   string `json:"as"`
 	From *From  `json:"from"`
 }
 
+/**
+* JoinType: Specifies the SQL join strategy for a Join clause.
+**/
 type JoinType string
 
 const (
@@ -48,6 +58,9 @@ const (
 	FULL_JOIN  JoinType = "full"
 )
 
+/**
+* Join: Represents a JOIN clause with its type, target table, and ON conditions.
+**/
 type Join struct {
 	Type      JoinType        `json:"type"`
 	To        *From           `json:"to"`
@@ -56,8 +69,11 @@ type Join struct {
 }
 
 /**
-* newJoin
-* @param query *Query, typ JoinType, to *From, condition *et.Condition
+* newJoin: Constructs a Join entry linked to its parent query.
+* @param query *Query
+* @param typ JoinType
+* @param to *From
+* @param condition *et.Condition
 * @return *Join
 **/
 func newJoin(query *Query, typ JoinType, to *From, condition *et.Condition) *Join {
@@ -69,6 +85,9 @@ func newJoin(query *Query, typ JoinType, to *From, condition *et.Condition) *Joi
 	}
 }
 
+/**
+* QuerySection: Tracks which clause is currently active for And/Or routing.
+**/
 type QuerySection int
 
 const (
@@ -77,6 +96,9 @@ const (
 	havingSection
 )
 
+/**
+* Query: Holds all clauses needed to build a SELECT statement.
+**/
 type Query struct {
 	Froms      []*From         `json:"froms"`
 	Joins      []*Join         `json:"joins"`
@@ -96,8 +118,9 @@ type Query struct {
 }
 
 /**
-* newQuery
-* @param model *Model, as ...string
+* newQuery: Creates a Query with the model as the primary FROM source.
+* @param model *Model
+* @param as ...string
 * @return *Query
 **/
 func newQuery(model *Model, as ...string) *Query {
@@ -122,7 +145,7 @@ func newQuery(model *Model, as ...string) *Query {
 }
 
 /**
-* serialize
+* serialize: Marshals the query metadata to JSON bytes.
 * @return []byte, error
 **/
 func (s *Query) serialize() ([]byte, error) {
@@ -135,7 +158,7 @@ func (s *Query) serialize() ([]byte, error) {
 }
 
 /**
-* ToJson
+* ToJson: Returns the query metadata as an et.Json map.
 * @return et.Json
 **/
 func (s *Query) ToJson() et.Json {
@@ -154,7 +177,7 @@ func (s *Query) ToJson() et.Json {
 }
 
 /**
-* Debug
+* Debug: Enables SQL logging for this query and returns it for chaining.
 * @return *Query
 **/
 func (s *Query) Debug() *Query {
@@ -163,7 +186,7 @@ func (s *Query) Debug() *Query {
 }
 
 /**
-* Test
+* Test: Enables test mode — SQL is generated but not executed.
 * @return *Query
 **/
 func (s *Query) Test() *Query {
@@ -172,8 +195,9 @@ func (s *Query) Test() *Query {
 }
 
 /**
-* addFrom
-* @param model *Model, as string
+* addFrom: Appends a FROM entry for the given model with the specified alias.
+* @param model *Model
+* @param as string
 * @return *Query
 **/
 func (s *Query) addFrom(model *Model, as string) *Query {
@@ -183,8 +207,11 @@ func (s *Query) addFrom(model *Model, as string) *Query {
 }
 
 /**
-* join
-* @param model *Model, as string, tp JoinType, on *et.Condition
+* join: Appends a JOIN clause of the given type with its ON condition.
+* @param model *Model
+* @param as string
+* @param tp JoinType
+* @param on *et.Condition
 * @return *Query
 **/
 func (s *Query) join(model *Model, as string, tp JoinType, on *et.Condition) *Query {
@@ -195,8 +222,10 @@ func (s *Query) join(model *Model, as string, tp JoinType, on *et.Condition) *Qu
 }
 
 /**
-* Join
-* @param model *Model, as string, on *et.Condition
+* Join: Appends an INNER JOIN clause.
+* @param model *Model
+* @param as string
+* @param on *et.Condition
 * @return *Query
 **/
 func (s *Query) Join(model *Model, as string, on *et.Condition) *Query {
@@ -204,8 +233,10 @@ func (s *Query) Join(model *Model, as string, on *et.Condition) *Query {
 }
 
 /**
-* LeftJoin
-* @param model *Model, as string, on *et.Condition
+* LeftJoin: Appends a LEFT JOIN clause.
+* @param model *Model
+* @param as string
+* @param on *et.Condition
 * @return *Query
 **/
 func (s *Query) LeftJoin(model *Model, as string, on *et.Condition) *Query {
@@ -213,8 +244,10 @@ func (s *Query) LeftJoin(model *Model, as string, on *et.Condition) *Query {
 }
 
 /**
-* RightJoin
-* @param model *Model, as string, on *et.Condition
+* RightJoin: Appends a RIGHT JOIN clause.
+* @param model *Model
+* @param as string
+* @param on *et.Condition
 * @return *Query
 **/
 func (s *Query) RightJoin(model *Model, as string, on *et.Condition) *Query {
@@ -222,8 +255,10 @@ func (s *Query) RightJoin(model *Model, as string, on *et.Condition) *Query {
 }
 
 /**
-* FullJoin
-* @param model *Model, as string, on *et.Condition
+* FullJoin: Appends a FULL JOIN clause.
+* @param model *Model
+* @param as string
+* @param on *et.Condition
 * @return *Query
 **/
 func (s *Query) FullJoin(model *Model, as string, on *et.Condition) *Query {
@@ -231,8 +266,8 @@ func (s *Query) FullJoin(model *Model, as string, on *et.Condition) *Query {
 }
 
 /**
-* addCondition
-* @param cond *et.Condition
+* addCondition: Appends a slice of conditions directly to the WHERE clause list.
+* @param conds []*et.Condition
 * @return *Query
 **/
 func (s *Query) addCondition(conds []*et.Condition) *Query {
@@ -241,7 +276,7 @@ func (s *Query) addCondition(conds []*et.Condition) *Query {
 }
 
 /**
-* Where
+* Where: Appends a condition to the WHERE clause and sets the active section to where.
 * @param cond *et.Condition
 * @return *Query
 **/
@@ -252,7 +287,7 @@ func (s *Query) Where(cond *et.Condition) *Query {
 }
 
 /**
-* And
+* And: Appends an AND condition to the active clause section (WHERE, JOIN ON, or HAVING).
 * @param cond *et.Condition
 * @return *Query
 **/
@@ -271,7 +306,7 @@ func (s *Query) And(cond *et.Condition) *Query {
 }
 
 /**
-* Or
+* Or: Appends an OR condition to the active clause section (WHERE, JOIN ON, or HAVING).
 * @param cond *et.Condition
 * @return *Query
 **/
@@ -290,7 +325,7 @@ func (s *Query) Or(cond *et.Condition) *Query {
 }
 
 /**
-* GroupBy
+* GroupBy: Adds one or more fields to the GROUP BY clause.
 * @param fields ...string
 * @return *Query
 **/
@@ -300,7 +335,7 @@ func (s *Query) GroupBy(fields ...string) *Query {
 }
 
 /**
-* Having
+* Having: Appends a condition to the HAVING clause and sets the active section to having.
 * @param cond *et.Condition
 * @return *Query
 **/
@@ -311,7 +346,7 @@ func (s *Query) Having(cond *et.Condition) *Query {
 }
 
 /**
-* Page
+* Page: Sets the result offset based on the 1-based page number and current Rows limit.
 * @param page int
 * @return *Query
 **/
@@ -321,7 +356,7 @@ func (s *Query) Page(page int) *Query {
 }
 
 /**
-* Limit
+* Limit: Sets the maximum number of rows to return.
 * @param rows int
 * @return *Query
 **/
@@ -331,9 +366,9 @@ func (s *Query) Limit(rows int) *Query {
 }
 
 /**
-* AllTx
+* AllTx: Generates and executes a SELECT query inside the given transaction.
 * @param tx *Tx
-* @return (et.Items, error)
+* @return et.Items, error
 **/
 func (s *Query) AllTx(tx *Tx) (et.Items, error) {
 	if s.Rows == 0 {
@@ -361,8 +396,8 @@ func (s *Query) AllTx(tx *Tx) (et.Items, error) {
 }
 
 /**
-* All
-* @return (et.Items, error)
+* All: Generates and executes a SELECT query without an explicit transaction.
+* @return et.Items, error
 **/
 func (s *Query) All() (et.Items, error) {
 	result, err := s.AllTx(nil)
@@ -374,9 +409,9 @@ func (s *Query) All() (et.Items, error) {
 }
 
 /**
-* OneTx
+* OneTx: Executes the query limited to one row inside the given transaction.
 * @param tx *Tx
-* @return (et.Item, error)
+* @return et.Item, error
 **/
 func (s *Query) OneTx(tx *Tx) (et.Item, error) {
 	s.Offset = 0
@@ -394,8 +429,8 @@ func (s *Query) OneTx(tx *Tx) (et.Item, error) {
 }
 
 /**
-* One
-* @return (et.Item, error)
+* One: Executes the query limited to one row without an explicit transaction.
+* @return et.Item, error
 **/
 func (s *Query) One() (et.Item, error) {
 	return s.OneTx(nil)

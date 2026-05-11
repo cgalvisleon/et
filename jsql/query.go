@@ -3,7 +3,6 @@ package jsql
 import (
 	"encoding/json"
 
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -112,7 +111,7 @@ func newQuery(model *Model, as ...string) *Query {
 		OrdersBy:   make([]*Index, 0),
 		Havings:    make([]*et.Condition, 0),
 		section:    whereSection,
-		maxRows:    envar.GetInt("DB_RECORD_LIMIT", 1000),
+		maxRows:    model.db.RecordLimit,
 		db:         model.db,
 	}
 	result.addFrom(model, as[0])

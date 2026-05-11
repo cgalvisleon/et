@@ -14,15 +14,16 @@ import (
 )
 
 type DB struct {
-	Name      string             `json:"name"`
-	Schemas   map[string]*Schema `json:"schemas"`
-	Driver    string             `json:"driver"`
-	Params    utility.Config     `json:"params"`
-	UseCore   bool               `json:"use_core"`
-	IsDebug   bool               `json:"-"`
-	IsChanged bool               `json:"-"`
-	driver    Driver             `json:"-"`
-	db        *sql.DB            `json:"-"`
+	Name        string             `json:"name"`
+	Schemas     map[string]*Schema `json:"schemas"`
+	Driver      string             `json:"driver"`
+	Params      utility.Config     `json:"params"`
+	UseCore     bool               `json:"use_core"`
+	RecordLimit int                `json:"record_limit"`
+	IsDebug     bool               `json:"-"`
+	IsChanged   bool               `json:"-"`
+	driver      Driver             `json:"-"`
+	db          *sql.DB            `json:"-"`
 }
 
 /**
@@ -42,13 +43,15 @@ func newDB(params utility.Config) (*DB, error) {
 
 	name := params.GetStr("DB_NAME", "test")
 	useCore := params.GetBool("DB_USE_CORE", false)
+	recordLimit := params.GetInt("DB_RECORD_LIMIT", 1000)
 	result := &DB{
-		Name:    name,
-		Schemas: make(map[string]*Schema),
-		Driver:  driverName,
-		Params:  params,
-		UseCore: useCore,
-		driver:  driver,
+		Name:        name,
+		Schemas:     make(map[string]*Schema),
+		Driver:      driverName,
+		Params:      params,
+		UseCore:     useCore,
+		RecordLimit: recordLimit,
+		driver:      driver,
 	}
 	return result, nil
 }

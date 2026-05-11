@@ -39,7 +39,7 @@ func (s *Postgres) Connect(db *jsql.DB) (*sql.DB, error) {
 		return nil, err
 	}
 
-	maxOpen := params.GetInt("DB_POOL_MAX_OPEN", 25)
+	maxOpen := params.GetInt("DB_POOL_MAX_OPEN", 50)
 	maxIdle := params.GetInt("DB_POOL_MAX_IDLE", 5)
 	connLifetime := params.GetInt("DB_POOL_CONN_LIFETIME", 900)
 	connIdleTime := params.GetInt("DB_POOL_CONN_IDLE_TIME", 300)

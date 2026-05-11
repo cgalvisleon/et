@@ -15,26 +15,9 @@ const (
 	UPSERT CommandType = "upsert"
 )
 
-type JoinType string
-
-const (
-	INNER_JOIN JoinType = "inner"
-	LEFT_JOIN  JoinType = "left"
-	RIGHT_JOIN JoinType = "right"
-	FULL_JOIN  JoinType = "full"
-)
-
-type Join struct {
-	Type JoinType `json:"type"`
-	From *From    `json:"from"`
-	To   *From    `json:"to"`
-	Keys []string `json:"keys"`
-}
-
 type Command struct {
 	Type          CommandType       `json:"type"`
 	From          *From             `json:"from"`
-	Joins         []Join            `json:"joins"`
 	Data          []et.Json         `json:"data"`
 	Conditions    []*et.Condition   `json:"conditions"`
 	beforeInserts []TriggerFunction `json:"-"`

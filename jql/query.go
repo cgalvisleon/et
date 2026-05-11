@@ -2,7 +2,6 @@ package jql
 
 import (
 	"encoding/json"
-	"regexp"
 
 	"github.com/cgalvisleon/et/et"
 )
@@ -39,10 +38,54 @@ type Field struct {
 	From *From  `json:"from"`
 }
 
+type JoinType string
+
+const (
+	INNER_JOIN JoinType = "inner"
+	LEFT_JOIN  JoinType = "left"
+	RIGHT_JOIN JoinType = "right"
+	FULL_JOIN  JoinType = "full"
+)
+
+type Join struct {
+	Type      JoinType        `json:"type"`
+	To        *From           `json:"to"`
+	Condition []*et.Condition `json:"condition"`
+	query     *Query          `json:"-"`
+}
+
+/**
+* newJoin
+* @param query *Query, typ JoinType, to *From, condition *et.Condition
+* @return *Join
+**/
+func newJoin(query *Query, typ JoinType, to *From, condition *et.Condition) *Join {
+	return &Join{
+		Type:      typ,
+		To:        to,
+		Condition: []*et.Condition{condition},
+		query:     query,
+	}
+}
+
+type QuerySection int
+
+const (
+	whereSection QuerySection = iota
+	joinSection
+	havingSection
+)
+
 type Query struct {
 	Froms      []*From         `json:"froms"`
+	Joins      []*Join         `json:"joins"`
 	Selects    []string        `json:"selects"`
 	Conditions []*et.Condition `json:"conditions"`
+	Hiddens    []string        `json:"hidden"`
+	GroupsBy   []string        `json:"group_by"`
+	OrdersBy   []*Index        `json:"order_by"`
+	Havings    []*et.Condition `json:"havings"`
+	section    QuerySection    `json:"-"`
 }
 
 /**
@@ -56,8 +99,14 @@ func newQuery(model *Model, as ...string) *Query {
 	}
 	result := &Query{
 		Froms:      make([]*From, 0),
+		Joins:      make([]*Join, 0),
 		Selects:    make([]string, 0),
 		Conditions: make([]*et.Condition, 0),
+		Hiddens:    make([]string, 0),
+		GroupsBy:   make([]string, 0),
+		OrdersBy:   make([]*Index, 0),
+		Havings:    make([]*et.Condition, 0),
+		section:    whereSection,
 	}
 	result.addFrom(model, as[0])
 	return result
@@ -107,35 +156,51 @@ func (q *Query) addFrom(model *Model, as string) *Query {
 }
 
 /**
-* GetField
-* @param name string
-* @return *Field
+* join
+* @param model *Model, as string, tp JoinType, on *et.Condition
+* @return *Query
 **/
-func (s *Query) GetField(name string) *Field {
-	pattern1 := regexp.MustCompile(`^([A-Za-z0-9>]+):([A-Za-z0-9]+)$`) // name:as
-	pattern2 := regexp.MustCompile(`^([A-Za-z0-9>]+)$`)                // name
+func (s *Query) join(model *Model, as string, tp JoinType, on *et.Condition) *Query {
+	result := newJoin(s, tp, getFrom(model, as), on)
+	s.Joins = append(s.Joins, result)
+	s.section = joinSection
+	return s
+}
 
-	if pattern1.MatchString(name) {
-		matches := pattern1.FindStringSubmatch(name)
-		if len(matches) == 3 {
-			name = matches[1]
-			as := matches[2]
-			column := s.FindColumn(name)
-			if column != nil {
-				result := column.Field()
-				result.As = as
-				return result
-			}
-		}
-	} else if pattern2.MatchString(name) {
-		column := s.FindColumn(name)
-		if column != nil {
-			result := column.Field()
-			return result
-		}
-	}
+/**
+* Join
+* @param model *Model, as string, on *et.Condition
+* @return *Query
+**/
+func (s *Query) Join(model *Model, as string, on *et.Condition) *Query {
+	return s.join(model, as, INNER_JOIN, on)
+}
 
-	return nil
+/**
+* LeftJoin
+* @param model *Model, as string, on *et.Condition
+* @return *Query
+**/
+func (s *Query) LeftJoin(model *Model, as string, on *et.Condition) *Query {
+	return s.join(model, as, LEFT_JOIN, on)
+}
+
+/**
+* RightJoin
+* @param model *Model, as string, on *et.Condition
+* @return *Query
+**/
+func (s *Query) RightJoin(model *Model, as string, on *et.Condition) *Query {
+	return s.join(model, as, RIGHT_JOIN, on)
+}
+
+/**
+* FullJoin
+* @param model *Model, as string, on *et.Condition
+* @return *Query
+**/
+func (s *Query) FullJoin(model *Model, as string, on *et.Condition) *Query {
+	return s.join(model, as, FULL_JOIN, on)
 }
 
 /**
@@ -145,6 +210,7 @@ func (s *Query) GetField(name string) *Field {
 **/
 func (s *Query) Where(cond *et.Condition) *Query {
 	s.Conditions = append(s.Conditions, cond)
+	s.section = whereSection
 	return s
 }
 
@@ -155,7 +221,15 @@ func (s *Query) Where(cond *et.Condition) *Query {
 **/
 func (s *Query) And(cond *et.Condition) *Query {
 	cond.Connector = et.And
-	s.Conditions = append(s.Conditions, cond)
+	switch s.section {
+	case joinSection:
+		n := len(s.Joins)
+		s.Joins[n-1].Condition = append(s.Joins[n-1].Condition, cond)
+	case havingSection:
+		s.Havings = append(s.Havings, cond)
+	default:
+		s.Conditions = append(s.Conditions, cond)
+	}
 	return s
 }
 
@@ -166,6 +240,35 @@ func (s *Query) And(cond *et.Condition) *Query {
 **/
 func (s *Query) Or(cond *et.Condition) *Query {
 	cond.Connector = et.Or
-	s.Conditions = append(s.Conditions, cond)
+	switch s.section {
+	case joinSection:
+		n := len(s.Joins)
+		s.Joins[n-1].Condition = append(s.Joins[n-1].Condition, cond)
+	case havingSection:
+		s.Havings = append(s.Havings, cond)
+	default:
+		s.Conditions = append(s.Conditions, cond)
+	}
+	return s
+}
+
+/**
+* GroupBy
+* @param fields ...string
+* @return *Query
+**/
+func (s *Query) GroupBy(fields ...string) *Query {
+	s.GroupsBy = append(s.GroupsBy, fields...)
+	return s
+}
+
+/**
+* Having
+* @param cond *et.Condition
+* @return *Query
+**/
+func (s *Query) Having(cond *et.Condition) *Query {
+	s.Havings = append(s.Havings, cond)
+	s.section = havingSection
 	return s
 }

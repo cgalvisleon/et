@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 )
 
 type From struct {
@@ -90,6 +91,8 @@ type Query struct {
 	section    QuerySection    `json:"-"`
 	maxRows    int             `json:"-"`
 	db         *DB             `json:"-"`
+	isDebug    bool            `json:"-"`
+	isTest     bool            `json:"-"`
 }
 
 /**
@@ -151,14 +154,32 @@ func (s *Query) ToJson() et.Json {
 }
 
 /**
+* Debug
+* @return *Query
+**/
+func (s *Query) Debug() *Query {
+	s.isDebug = true
+	return s
+}
+
+/**
+* Test
+* @return *Query
+**/
+func (s *Query) Test() *Query {
+	s.isTest = true
+	return s
+}
+
+/**
 * addFrom
 * @param model *Model, as string
 * @return *Query
 **/
-func (q *Query) addFrom(model *Model, as string) *Query {
+func (s *Query) addFrom(model *Model, as string) *Query {
 	from := getFrom(model, as)
-	q.Froms = append(q.Froms, from)
-	return q
+	s.Froms = append(s.Froms, from)
+	return s
 }
 
 /**
@@ -324,12 +345,19 @@ func (s *Query) AllTx(tx *Tx) (et.Items, error) {
 		return et.Items{}, err
 	}
 
-	result, err := s.db.sqlTx(tx, sql)
-	if err != nil {
-		return et.Items{}, err
+	if s.isDebug {
+		logs.Debug("SQL:", sql)
 	}
 
-	return result, nil
+	if !s.isTest {
+		result, err := s.db.sqlTx(tx, sql)
+		if err != nil {
+			return et.Items{}, err
+		}
+		return result, nil
+	}
+
+	return et.Items{}, nil
 }
 
 /**

@@ -43,8 +43,9 @@ func Load() (*DB, error) {
 		"DB_NAME":         envar.GetStr("DB_NAME", "test"),
 		"DB_HOST":         envar.GetStr("DB_HOST", "localhost"),
 		"DB_PORT":         envar.GetInt("DB_PORT", 5432),
-		"DB_USER":         envar.GetStr("DB_USER", "postgres"),
-		"DB_PASSWORD":     envar.GetStr("DB_PASSWORD", "postgres"),
+		"DB_USER":         envar.GetStr("DB_USER", "test"),
+		"DB_PASSWORD":     envar.GetStr("DB_PASSWORD", "test"),
+		"DB_USE_CORE":     envar.GetBool("DB_USE_CORE", true),
 		"DB_RECORD_LIMIT": envar.GetInt("DB_RECORD_LIMIT", 1000),
 	})
 	return LoadTo(config)

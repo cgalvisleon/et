@@ -18,7 +18,7 @@ func pgType(tp jsql.TypeData) string {
 	case jsql.FLOAT:
 		return "DOUBLE PRECISION"
 	case jsql.KEY:
-		return "TEXT"
+		return "VARCHAR(80)"
 	case jsql.TEXT:
 		return "VARCHAR(255)"
 	case jsql.MEMO:
@@ -32,7 +32,7 @@ func pgType(tp jsql.TypeData) string {
 	case jsql.BYTES:
 		return "BYTEA"
 	case jsql.GEOMETRY:
-		return "GEOMETRY"
+		return "JSONB"
 	case jsql.EMBEDDING:
 		return "VECTOR"
 	default: // ANY

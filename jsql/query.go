@@ -210,6 +210,16 @@ func (s *Query) FullJoin(model *Model, as string, on *et.Condition) *Query {
 }
 
 /**
+* addCondition
+* @param cond *et.Condition
+* @return *Query
+**/
+func (s *Query) addCondition(conds []*et.Condition) *Query {
+	s.Conditions = append(s.Conditions, conds...)
+	return s
+}
+
+/**
 * Where
 * @param cond *et.Condition
 * @return *Query

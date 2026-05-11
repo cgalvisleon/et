@@ -98,6 +98,7 @@ var (
 	MSG_ROLLBACK_ERROR                 = "error rolling back transaction: %v"
 	MSG_SCHEMA_NOT_FOUND               = "schema %s not found"
 	MSG_TRANSACTION_IS_NIL             = "transaction is nil"
+	MSG_MULTIPLE_ROWS_FOUND            = "multiple rows found"
 )
 
 func init() {
@@ -199,5 +200,6 @@ func init() {
 		MSG_ROLLBACK_ERROR = "error al hacer rollback de la transacción: %v"
 		MSG_SCHEMA_NOT_FOUND = "esquema %s no encontrado"
 		MSG_TRANSACTION_IS_NIL = "transacción es nula"
+		MSG_MULTIPLE_ROWS_FOUND = "múltiples filas encontradas"
 	}
 }

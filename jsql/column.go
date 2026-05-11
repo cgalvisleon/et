@@ -24,7 +24,6 @@ const (
 	DETAIL   TypeColumn = "detail"
 	ROLLUP   TypeColumn = "rollup"
 	RELATION TypeColumn = "relation"
-	CALC     TypeColumn = "calc"
 	AGG      TypeColumn = "agg"
 )
 

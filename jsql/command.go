@@ -2,9 +2,11 @@ package jsql
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
+	"maps"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 )
 
@@ -22,6 +24,8 @@ type Command struct {
 	Type          CommandType       `json:"type"`
 	From          *From             `json:"from"`
 	Data          []et.Json         `json:"data"`
+	New           et.Json           `json:"new"`
+	Old           et.Json           `json:"old"`
 	Conditions    []*et.Condition   `json:"conditions"`
 	beforeInserts []TriggerFunction `json:"-"`
 	beforeUpdates []TriggerFunction `json:"-"`
@@ -29,6 +33,10 @@ type Command struct {
 	afterInserts  []TriggerFunction `json:"-"`
 	afterUpdates  []TriggerFunction `json:"-"`
 	afterDeletes  []TriggerFunction `json:"-"`
+	db            *DB               `json:"-"`
+	model         *Model            `json:"-"`
+	isDebug       bool              `json:"-"`
+	isTest        bool              `json:"-"`
 }
 
 /**
@@ -37,10 +45,12 @@ type Command struct {
 * @return *Command
 **/
 func newCommand(model *Model, tp CommandType) *Command {
-	return &Command{
+	result := &Command{
 		Type:          tp,
 		From:          getFrom(model, ""),
 		Data:          []et.Json{},
+		New:           et.Json{},
+		Old:           et.Json{},
 		Conditions:    []*et.Condition{},
 		beforeInserts: []TriggerFunction{},
 		beforeUpdates: []TriggerFunction{},
@@ -48,7 +58,34 @@ func newCommand(model *Model, tp CommandType) *Command {
 		afterInserts:  []TriggerFunction{},
 		afterUpdates:  []TriggerFunction{},
 		afterDeletes:  []TriggerFunction{},
+		db:            model.db,
+		model:         model,
 	}
+	if map[CommandType]bool{INSERT: true, BULK: true, UPSERT: true}[tp] {
+		for _, fn := range model.beforeInserts {
+			result.beforeInserts = append(result.beforeInserts, fn)
+		}
+		for _, fn := range model.afterInserts {
+			result.afterInserts = append(result.afterInserts, fn)
+		}
+	}
+	if map[CommandType]bool{UPDATE: true, UPSERT: true}[tp] {
+		for _, fn := range model.beforeUpdates {
+			result.beforeUpdates = append(result.beforeUpdates, fn)
+		}
+		for _, fn := range model.afterUpdates {
+			result.afterUpdates = append(result.afterUpdates, fn)
+		}
+	}
+	if map[CommandType]bool{DELETE: true}[tp] {
+		for _, fn := range model.beforeDeletes {
+			result.beforeDeletes = append(result.beforeDeletes, fn)
+		}
+		for _, fn := range model.afterDeletes {
+			result.afterDeletes = append(result.afterDeletes, fn)
+		}
+	}
+	return result
 }
 
 /**
@@ -84,13 +121,31 @@ func (s *Command) ToJson() et.Json {
 }
 
 /**
+* Test
+* @return *Command
+**/
+func (s *Command) Test() *Command {
+	s.isTest = true
+	return s
+}
+
+/**
+* addCondition
+* @param cond *et.Condition
+* @return *Command
+**/
+func (s *Command) addCondition(cond *et.Condition) *Command {
+	s.Conditions = append(s.Conditions, cond)
+	return s
+}
+
+/**
 * Where
 * @param cond *et.Condition
 * @return *Command
 **/
 func (s *Command) Where(cond *et.Condition) *Command {
-	s.Conditions = append(s.Conditions, cond)
-	return s
+	return s.addCondition(cond)
 }
 
 /**
@@ -100,8 +155,7 @@ func (s *Command) Where(cond *et.Condition) *Command {
 **/
 func (s *Command) And(cond *et.Condition) *Command {
 	cond.Connector = et.And
-	s.Conditions = append(s.Conditions, cond)
-	return s
+	return s.addCondition(cond)
 }
 
 /**
@@ -111,8 +165,7 @@ func (s *Command) And(cond *et.Condition) *Command {
 **/
 func (s *Command) Or(cond *et.Condition) *Command {
 	cond.Connector = et.Or
-	s.Conditions = append(s.Conditions, cond)
-	return s
+	return s.addCondition(cond)
 }
 
 /**
@@ -203,11 +256,46 @@ func (s *Command) AfterDelete(fn TriggerFunction) *Command {
 * @return (et.Items, error)
 **/
 func (s *Command) insert(tx *Tx) (et.Items, error) {
-	if tx == nil {
-		return et.Items{}, errors.New(msg.MSG_TRANSACTION_IS_NIL)
+	if len(s.Data) == 0 {
+		return et.Items{}, nil
 	}
 
-	return et.Items{}, nil
+	result := et.NewItems([]et.Json{})
+	items := s.Data
+	for _, new := range items {
+		s.New = new
+		for _, tg := range s.beforeInserts {
+			if err := tg(tx, s.Old, s.New); err != nil {
+				return et.Items{}, err
+			}
+		}
+
+		sql, err := s.db.command(s)
+		if err != nil {
+			return et.Items{}, err
+		}
+
+		if s.isDebug {
+			logs.Debug("INSERT:", sql)
+		}
+
+		if !s.isTest {
+			_, err = s.db.sqlTx(tx, sql)
+			if err != nil {
+				return et.Items{}, err
+			}
+		}
+
+		for _, tg := range s.afterInserts {
+			if err := tg(tx, s.Old, s.New); err != nil {
+				return et.Items{}, err
+			}
+		}
+
+		result.Add(s.New)
+	}
+
+	return result, nil
 }
 
 /**
@@ -216,11 +304,56 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 * @return (et.Items, error)
 **/
 func (s *Command) update(tx *Tx) (et.Items, error) {
-	if tx == nil {
-		return et.Items{}, errors.New(msg.MSG_TRANSACTION_IS_NIL)
+	if len(s.Data) == 0 {
+		return et.Items{}, nil
 	}
 
-	return et.Items{}, nil
+	result := et.NewItems([]et.Json{})
+	model := s.model
+	items, err := newQuery(model).
+		addCondition(s.Conditions).
+		All()
+	if err != nil {
+		return et.Items{}, err
+	}
+
+	data := s.Data[0]
+	for _, old := range items.Result {
+		s.Old = old
+		s.New = s.Old.Clone()
+		maps.Copy(s.New, data)
+		for _, tg := range s.beforeUpdates {
+			if err := tg(tx, s.Old, s.New); err != nil {
+				return et.Items{}, err
+			}
+		}
+
+		sql, err := s.db.command(s)
+		if err != nil {
+			return et.Items{}, err
+		}
+
+		if s.isDebug {
+			logs.Debug("UPDATE:", sql)
+		}
+
+		if !s.isTest {
+			_, err = s.db.sqlTx(tx, sql)
+			if err != nil {
+				return et.Items{}, err
+			}
+		}
+
+		for _, tg := range s.afterUpdates {
+			if err := tg(tx, s.Old, s.New); err != nil {
+				return et.Items{}, err
+			}
+		}
+
+		result.Add(s.New)
+	}
+
+	return result, nil
 }
 
 /**
@@ -229,11 +362,52 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 * @return (et.Items, error)
 **/
 func (s *Command) delete(tx *Tx) (et.Items, error) {
-	if tx == nil {
-		return et.Items{}, errors.New(msg.MSG_TRANSACTION_IS_NIL)
+	result := et.NewItems([]et.Json{})
+	model := s.model
+	items, err := newQuery(model).
+		addCondition(s.Conditions).
+		All()
+	if err != nil {
+		return et.Items{}, err
 	}
 
-	return et.Items{}, nil
+	data := s.Data[0]
+	for _, old := range items.Result {
+		s.Old = old
+		s.New = et.Json{}
+		maps.Copy(s.New, data)
+		for _, tg := range s.beforeDeletes {
+			if err := tg(tx, s.Old, s.New); err != nil {
+				return et.Items{}, err
+			}
+		}
+
+		sql, err := s.db.command(s)
+		if err != nil {
+			return et.Items{}, err
+		}
+
+		if s.isDebug {
+			logs.Debug("DELETE:", sql)
+		}
+
+		if !s.isTest {
+			_, err = s.db.sqlTx(tx, sql)
+			if err != nil {
+				return et.Items{}, err
+			}
+		}
+
+		for _, tg := range s.afterDeletes {
+			if err := tg(tx, s.Old, s.New); err != nil {
+				return et.Items{}, err
+			}
+		}
+
+		result.Add(s.Old)
+	}
+
+	return result, nil
 }
 
 /**
@@ -242,11 +416,23 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 * @return (et.Items, error)
 **/
 func (s *Command) upsert(tx *Tx) (et.Items, error) {
-	if tx == nil {
-		return et.Items{}, errors.New(msg.MSG_TRANSACTION_IS_NIL)
+	model := s.model
+	current, err := newQuery(model).
+		addCondition(s.Conditions).
+		All()
+	if err != nil {
+		return et.Items{}, err
 	}
 
-	return et.Items{}, nil
+	if current.Count == 1 {
+		s.Type = UPDATE
+		return s.update(tx)
+	} else if current.Count == 0 {
+		s.Type = INSERT
+		return s.insert(tx)
+	} else {
+		return et.Items{}, fmt.Errorf(msg.MSG_MULTIPLE_ROWS_FOUND)
+	}
 }
 
 /**

@@ -7,12 +7,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/utility"
 	"github.com/redis/go-redis/v9"
 )
 
-const PackageName = "cache"
+const packageName = "cache"
 
 var (
 	os     = ""
@@ -47,6 +48,21 @@ func FromId() string {
 }
 
 /**
+* LoadTo: Initializes the Redis connection from a Config struct.
+* @param params utility.Config
+* @return error
+**/
+func LoadTo(params utility.Config) error {
+	host := params.GetStr("REDIS_HOST", "")
+	password := params.GetStr("REDIS_PASSWORD", "")
+	dbname := params.GetInt("REDIS_DB", 0)
+
+	var err error
+	conn, err = connectTo(host, password, dbname)
+	return err
+}
+
+/**
 * Load
 * @return error
 **/
@@ -62,19 +78,12 @@ func Load() error {
 		return nil
 	}
 
-	err := envar.Validate([]string{
-		"REDIS_HOST",
-		"REDIS_PASSWORD",
-		"REDIS_DB",
+	params := utility.NewConfig(et.Json{
+		"REDIS_HOST":     "",
+		"REDIS_PASSWORD": "",
+		"REDIS_DB":       0,
 	})
-	if err != nil {
-		return err
-	}
-
-	host := envar.GetStr("REDIS_HOST", "")
-	password := envar.GetStr("REDIS_PASSWORD", "")
-	dbname := envar.GetInt("REDIS_DB", 0)
-	conn, err = ConnectTo(host, password, dbname)
+	err := LoadTo(params)
 	if err != nil {
 		return err
 	}
@@ -92,7 +101,7 @@ func Close() {
 
 	conn.Close()
 
-	logs.Log(PackageName, `Disconnect...`)
+	logs.Log(packageName, `Disconnect...`)
 }
 
 /**

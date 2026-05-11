@@ -12,13 +12,13 @@ import (
 )
 
 /**
-* Connect to a host
+* connectTo to a host
 * @param host, password string, db int
 * @return *Conn, error
 **/
-func ConnectTo(host, password string, db int) (*Conn, error) {
+func connectTo(host, password string, db int) (*Conn, error) {
 	if !utility.ValidStr(host, 0, []string{}) {
-		return nil, logs.Alertf(msg.MSG_ATRIB_REQUIRED, "redist_host")
+		return nil, logs.Alertf(msg.MSG_ATRIB_REQUIRED, "host")
 	}
 
 	client := redis.NewClient(&redis.Options{

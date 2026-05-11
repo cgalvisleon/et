@@ -1,4 +1,4 @@
-package jql
+package jsql
 
 import (
 	"database/sql"
@@ -16,11 +16,41 @@ import (
 type DB struct {
 	Name      string             `json:"name"`
 	Schemas   map[string]*Schema `json:"schemas"`
+	Driver    string             `json:"driver"`
+	Params    utility.Config     `json:"params"`
 	UseCore   bool               `json:"use_core"`
 	IsDebug   bool               `json:"-"`
 	IsChanged bool               `json:"-"`
 	driver    Driver             `json:"-"`
 	db        *sql.DB            `json:"-"`
+}
+
+/**
+* newDB
+* @param params utility.Config, useCore bool
+* @return (*DB, error)
+**/
+func newDB(params utility.Config) (*DB, error) {
+	driverName := params.GetStr("DB_DRIVER", DriverPostgres)
+	if !utility.ValidStr(driverName, 2, []string{""}) {
+		return nil, errors.New(msg.MSG_DRIVER_NOT_FOUND)
+	}
+	driver, ok := drivers[driverName]
+	if !ok {
+		return nil, errors.New(msg.MSG_DRIVER_NOT_FOUND)
+	}
+
+	name := params.GetStr("DB_NAME", "test")
+	useCore := params.GetBool("DB_USE_CORE", false)
+	result := &DB{
+		Name:    name,
+		Schemas: make(map[string]*Schema),
+		Driver:  driverName,
+		Params:  params,
+		UseCore: useCore,
+		driver:  driver,
+	}
+	return result, nil
 }
 
 /**
@@ -56,10 +86,10 @@ func (s *DB) ToJson() et.Json {
 }
 
 /**
-* Save
+* save
 * @return error
 **/
-func (s *DB) Save() error {
+func (s *DB) save() error {
 	return nil
 }
 
@@ -90,7 +120,7 @@ func (s *DB) init() error {
 	}
 
 	if s.IsChanged {
-		return s.Save()
+		return s.save()
 	}
 
 	return nil

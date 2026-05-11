@@ -1,4 +1,4 @@
-package jql
+package jsql
 
 import (
 	"encoding/json"
@@ -112,7 +112,7 @@ func newQuery(model *Model, as ...string) *Query {
 		OrdersBy:   make([]*Index, 0),
 		Havings:    make([]*et.Condition, 0),
 		section:    whereSection,
-		maxRows:    envar.GetInt("MAX_ROWS", 1000),
+		maxRows:    envar.GetInt("DB_RECORD_LIMIT", 1000),
 		db:         model.db,
 	}
 	result.addFrom(model, as[0])

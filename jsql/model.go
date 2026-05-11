@@ -1,4 +1,4 @@
-package jql
+package jsql
 
 import (
 	"database/sql"
@@ -98,10 +98,10 @@ func (s *Model) Key() string {
 }
 
 /**
-* Save
+* save
 * @return error
 **/
-func (s *Model) Save() error {
+func (s *Model) save() error {
 	if s.IsCore {
 		return nil
 	}
@@ -136,7 +136,7 @@ func (s *Model) Init() error {
 	}
 
 	if s.IsChanged {
-		return s.Save()
+		return s.save()
 	}
 
 	return nil

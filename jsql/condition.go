@@ -1,4 +1,4 @@
-package jql
+package jsql
 
 import "github.com/cgalvisleon/et/et"
 

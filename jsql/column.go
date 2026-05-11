@@ -1,4 +1,4 @@
-package jql
+package jsql
 
 const (
 	SOURCE     string = "_source"

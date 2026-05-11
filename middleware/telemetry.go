@@ -345,10 +345,10 @@ func (s *Metrics) CallMetrics() Telemetry {
 	return Telemetry{
 		TimeStamp:         date,
 		Key:               s.key,
-		RequestsPerSecond: cache.Incr(reg.GenHashKey(s.key, second), 2),
-		RequestsPerMinute: cache.Incr(reg.GenHashKey(s.key, minute), 60),
-		RequestsPerHour:   cache.Incr(reg.GenHashKey(s.key, hour), 3600),
-		RequestsPerDay:    cache.Incr(reg.GenHashKey(s.key, date), 86400),
+		RequestsPerSecond: cache.Incr(reg.GenHashKey(s.key, second), 2*time.Second),
+		RequestsPerMinute: cache.Incr(reg.GenHashKey(s.key, minute), time.Minute),
+		RequestsPerHour:   cache.Incr(reg.GenHashKey(s.key, hour), time.Hour),
+		RequestsPerDay:    cache.Incr(reg.GenHashKey(s.key, date), 24*time.Hour),
 		RequestsLimit:     int64(requestsLimit),
 	}
 }

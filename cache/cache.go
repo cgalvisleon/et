@@ -17,7 +17,6 @@ const PackageName = "cache"
 var (
 	os     = ""
 	conn   *Conn
-	// loadMu serializes concurrent Load() calls to prevent double initialization.
 	loadMu sync.Mutex
 )
 
@@ -31,7 +30,7 @@ type Conn struct {
 	ctx      context.Context
 	host     string
 	dbname   int
-	channels map[string]bool
+	channels map[string]*redis.PubSub
 	mutex    *sync.RWMutex
 }
 

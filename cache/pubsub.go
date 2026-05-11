@@ -73,30 +73,27 @@ func (s *Conn) Pub(channel string, message []byte) error {
 }
 
 /**
-* Sub
+* Sub: Subscribes to a channel and dispatches messages to f in a goroutine.
+* A second call for the same channel is a no-op while the subscription is active.
 * @param channel string
-* @param f func(interface{})
+* @param f func(*redis.Message)
 **/
 func (s *Conn) Sub(channel string, f func(*redis.Message)) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	if s.channels[channel] {
+	if s.channels[channel] != nil {
 		return
 	}
 
-	s.channels[channel] = true
+	sub := s.Subscribe(s.ctx, channel)
+	s.channels[channel] = sub
 
 	go func() {
-		sub := s.Subscribe(s.ctx, channel)
-		defer sub.Close()
-
 		ch := sub.Channel()
-
 		for msg := range ch {
 			f(msg)
 		}
-
 		s.mutex.Lock()
 		delete(s.channels, channel)
 		s.mutex.Unlock()
@@ -104,18 +101,21 @@ func (s *Conn) Sub(channel string, f func(*redis.Message)) {
 }
 
 /**
-* Unsub
+* Unsub: Closes the active subscription for channel and removes it from the registry.
 * @param channel string
 * @return error
 **/
 func (s *Conn) Unsub(channel string) error {
-	sub := s.Subscribe(s.ctx, channel)
-	defer sub.Close()
+	s.mutex.Lock()
+	sub, ok := s.channels[channel]
+	if ok {
+		delete(s.channels, channel)
+	}
+	s.mutex.Unlock()
 
-	err := sub.Unsubscribe(s.ctx, channel)
-	if err != nil {
-		return err
+	if !ok || sub == nil {
+		return nil
 	}
 
-	return nil
+	return sub.Close()
 }

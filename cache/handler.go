@@ -458,9 +458,12 @@ func DeleteVerify(device string, key string) (int64, error) {
 }
 
 /**
-* AllCache
-* @params search string, page int, rows int
-* @return error
+* AllCache: Scans all keys matching search and returns the requested page.
+* Redis SCAN cursor is opaque — offset-based pagination is done in memory after a full scan.
+* @param search string
+* @param page int
+* @param rows int
+* @return et.List, error
 **/
 func AllCache(search string, page, rows int) (et.List, error) {
 	if conn == nil {
@@ -468,20 +471,37 @@ func AllCache(search string, page, rows int) (et.List, error) {
 	}
 
 	var cursor uint64
-	var count int64
-	var items et.Items = et.Items{}
-	offset := (page - 1) * rows
-	cursor = uint64(offset)
-	count = int64(rows)
+	var keys []string
+	for {
+		var batch []string
+		var err error
+		batch, cursor, err = conn.Scan(conn.ctx, cursor, search, 100).Result()
+		if err != nil {
+			return et.List{}, err
+		}
+		keys = append(keys, batch...)
+		if cursor == 0 {
+			break
+		}
+	}
 
-	iter := conn.Scan(conn.ctx, cursor, search, count).Iterator()
-	for iter.Next(conn.ctx) {
-		key := iter.Val()
+	total := len(keys)
+	offset := (page - 1) * rows
+	end := offset + rows
+	if offset > total {
+		offset = total
+	}
+	if end > total {
+		end = total
+	}
+
+	var items et.Items
+	for _, key := range keys[offset:end] {
 		items.Result = append(items.Result, et.Json{"key": key})
 		items.Count++
 	}
 
-	return items.ToList(items.Count, page, rows), nil
+	return items.ToList(total, page, rows), nil
 }
 
 /**

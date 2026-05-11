@@ -2,7 +2,6 @@ package cache
 
 import (
 	"context"
-	"log"
 	"sync"
 	"time"
 
@@ -34,7 +33,7 @@ func ConnectTo(host, password string, db int) (*Conn, error) {
 	ctx := context.Background()
 	_, err := client.Ping(ctx).Result()
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	logs.Logf("Redis", "Connected host:%s", host)
@@ -45,7 +44,7 @@ func ConnectTo(host, password string, db int) (*Conn, error) {
 		ctx:      ctx,
 		host:     host,
 		dbname:   db,
-		channels: make(map[string]bool),
+		channels: make(map[string]*redis.PubSub),
 		mutex:    &sync.RWMutex{},
 	}, nil
 }

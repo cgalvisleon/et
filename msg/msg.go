@@ -93,6 +93,10 @@ var (
 	MSG_KEY_NOT_INT                    = "key %s is not an int"
 	MSG_KEY_NOT_FLOAT                  = "key %s is not a float"
 	MSG_KEY_NOT_BOOL                   = "key %s is not a bool"
+	MSG_DRIVER_NOT_FOUND               = "driver not found"
+	MSG_DB_IS_NIL                      = "database is nil"
+	MSG_ROLLBACK_ERROR                 = "error rolling back transaction: %v"
+	MSG_SCHEMA_NOT_FOUND               = "schema %s not found"
 )
 
 func init() {
@@ -189,5 +193,9 @@ func init() {
 		MSG_KEY_NOT_INT = "clave %s no es int"
 		MSG_KEY_NOT_FLOAT = "clave %s no es float"
 		MSG_KEY_NOT_BOOL = "clave %s no es bool"
+		MSG_DRIVER_NOT_FOUND = "driver no encontrado"
+		MSG_DB_IS_NIL = "base de datos es nula"
+		MSG_ROLLBACK_ERROR = "error al hacer rollback de la transacción: %v"
+		MSG_SCHEMA_NOT_FOUND = "esquema %s no encontrado"
 	}
 }

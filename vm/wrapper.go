@@ -1,4 +1,4 @@
-package script
+package vm
 
 import (
 	"errors"

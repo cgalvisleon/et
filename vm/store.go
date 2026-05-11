@@ -1,4 +1,4 @@
-package script
+package vm
 
 type Store interface {
 	Set(module string, source any) error

@@ -2,11 +2,11 @@ package main
 
 import (
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/script"
+	"github.com/cgalvisleon/et/vm"
 )
 
 func main() {
-	v, err := script.New("vm")
+	v, err := vm.New("vm")
 	if err != nil {
 		logs.Panic(err)
 	}

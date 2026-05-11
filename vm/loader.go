@@ -1,4 +1,4 @@
-package script
+package vm
 
 import (
 	"encoding/json"

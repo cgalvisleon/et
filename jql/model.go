@@ -319,6 +319,17 @@ func (s *Model) Insert(data et.Json) *Command {
 }
 
 /**
+* Bulk
+* @param data []et.Json
+* @return *Command
+**/
+func (s *Model) Bulk(data []et.Json) *Command {
+	result := newCommand(s, BULK)
+	result.Data = data
+	return result
+}
+
+/**
 * Update
 * @param data et.Json
 * @return *Command

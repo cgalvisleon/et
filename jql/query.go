@@ -306,7 +306,6 @@ func (s *Query) Limit(rows int) *Query {
 * @return (et.Items, error)
 **/
 func (s *Query) AllTx(tx *Tx) (et.Items, error) {
-	tx, isCommitted := getTx(tx)
 	if s.Rows == 0 {
 		s.Rows = s.maxRows
 	}
@@ -319,13 +318,6 @@ func (s *Query) AllTx(tx *Tx) (et.Items, error) {
 	result, err := s.db.sqlTx(tx, sql)
 	if err != nil {
 		return et.Items{}, err
-	}
-
-	if isCommitted {
-		err = tx.commit()
-		if err != nil {
-			return et.Items{}, err
-		}
 	}
 
 	return result, nil

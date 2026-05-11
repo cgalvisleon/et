@@ -97,6 +97,7 @@ var (
 	MSG_DB_IS_NIL                      = "database is nil"
 	MSG_ROLLBACK_ERROR                 = "error rolling back transaction: %v"
 	MSG_SCHEMA_NOT_FOUND               = "schema %s not found"
+	MSG_TRANSACTION_IS_NIL             = "transaction is nil"
 )
 
 func init() {
@@ -197,5 +198,6 @@ func init() {
 		MSG_DB_IS_NIL = "base de datos es nula"
 		MSG_ROLLBACK_ERROR = "error al hacer rollback de la transacción: %v"
 		MSG_SCHEMA_NOT_FOUND = "esquema %s no encontrado"
+		MSG_TRANSACTION_IS_NIL = "transacción es nula"
 	}
 }

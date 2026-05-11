@@ -2,8 +2,10 @@ package jql
 
 import (
 	"encoding/json"
+	"errors"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/msg"
 )
 
 type CommandType string
@@ -13,6 +15,7 @@ const (
 	UPDATE CommandType = "update"
 	DELETE CommandType = "delete"
 	UPSERT CommandType = "upsert"
+	BULK   CommandType = "bulk"
 )
 
 type Command struct {
@@ -85,9 +88,9 @@ func (s *Command) ToJson() et.Json {
 * @param cond *et.Condition
 * @return *Command
 **/
-func (c *Command) Where(cond *et.Condition) *Command {
-	c.Conditions = append(c.Conditions, cond)
-	return c
+func (s *Command) Where(cond *et.Condition) *Command {
+	s.Conditions = append(s.Conditions, cond)
+	return s
 }
 
 /**
@@ -95,10 +98,10 @@ func (c *Command) Where(cond *et.Condition) *Command {
 * @param cond *et.Condition
 * @return *Command
 **/
-func (c *Command) And(cond *et.Condition) *Command {
+func (s *Command) And(cond *et.Condition) *Command {
 	cond.Connector = et.And
-	c.Conditions = append(c.Conditions, cond)
-	return c
+	s.Conditions = append(s.Conditions, cond)
+	return s
 }
 
 /**
@@ -106,10 +109,10 @@ func (c *Command) And(cond *et.Condition) *Command {
 * @param cond *et.Condition
 * @return *Command
 **/
-func (c *Command) Or(cond *et.Condition) *Command {
+func (s *Command) Or(cond *et.Condition) *Command {
 	cond.Connector = et.Or
-	c.Conditions = append(c.Conditions, cond)
-	return c
+	s.Conditions = append(s.Conditions, cond)
+	return s
 }
 
 /**
@@ -117,9 +120,9 @@ func (c *Command) Or(cond *et.Condition) *Command {
 * @param fn TriggerFunction
 * @return *Command
 **/
-func (c *Command) BeforeInsert(fn TriggerFunction) *Command {
-	c.beforeInserts = append(c.beforeInserts, fn)
-	return c
+func (s *Command) BeforeInsert(fn TriggerFunction) *Command {
+	s.beforeInserts = append(s.beforeInserts, fn)
+	return s
 }
 
 /**
@@ -127,9 +130,9 @@ func (c *Command) BeforeInsert(fn TriggerFunction) *Command {
 * @param fn TriggerFunction
 * @return *Command
 **/
-func (c *Command) BeforeUpdate(fn TriggerFunction) *Command {
-	c.beforeUpdates = append(c.beforeUpdates, fn)
-	return c
+func (s *Command) BeforeUpdate(fn TriggerFunction) *Command {
+	s.beforeUpdates = append(s.beforeUpdates, fn)
+	return s
 }
 
 /**
@@ -137,9 +140,9 @@ func (c *Command) BeforeUpdate(fn TriggerFunction) *Command {
 * @param fn TriggerFunction
 * @return *Command
 **/
-func (c *Command) BeforeDelete(fn TriggerFunction) *Command {
-	c.beforeDeletes = append(c.beforeDeletes, fn)
-	return c
+func (s *Command) BeforeDelete(fn TriggerFunction) *Command {
+	s.beforeDeletes = append(s.beforeDeletes, fn)
+	return s
 }
 
 /**
@@ -147,10 +150,10 @@ func (c *Command) BeforeDelete(fn TriggerFunction) *Command {
 * @param fn TriggerFunction
 * @return *Model
 **/
-func (c *Command) BeforeInsertOrUpdate(fn TriggerFunction) *Command {
-	c.beforeInserts = append(c.beforeInserts, fn)
-	c.beforeUpdates = append(c.beforeUpdates, fn)
-	return c
+func (s *Command) BeforeInsertOrUpdate(fn TriggerFunction) *Command {
+	s.beforeInserts = append(s.beforeInserts, fn)
+	s.beforeUpdates = append(s.beforeUpdates, fn)
+	return s
 }
 
 /**
@@ -158,9 +161,9 @@ func (c *Command) BeforeInsertOrUpdate(fn TriggerFunction) *Command {
 * @param fn TriggerFunction
 * @return *Command
 **/
-func (c *Command) AfterInsert(fn TriggerFunction) *Command {
-	c.afterInserts = append(c.afterInserts, fn)
-	return c
+func (s *Command) AfterInsert(fn TriggerFunction) *Command {
+	s.afterInserts = append(s.afterInserts, fn)
+	return s
 }
 
 /**
@@ -168,9 +171,9 @@ func (c *Command) AfterInsert(fn TriggerFunction) *Command {
 * @param fn TriggerFunction
 * @return *Command
 **/
-func (c *Command) AfterUpdate(fn TriggerFunction) *Command {
-	c.afterUpdates = append(c.afterUpdates, fn)
-	return c
+func (s *Command) AfterUpdate(fn TriggerFunction) *Command {
+	s.afterUpdates = append(s.afterUpdates, fn)
+	return s
 }
 
 /**
@@ -178,10 +181,10 @@ func (c *Command) AfterUpdate(fn TriggerFunction) *Command {
 * @param fn TriggerFunction
 * @return *Command
 **/
-func (c *Command) AfterInsertOrUpdate(fn TriggerFunction) *Command {
-	c.afterInserts = append(c.afterInserts, fn)
-	c.afterUpdates = append(c.afterUpdates, fn)
-	return c
+func (s *Command) AfterInsertOrUpdate(fn TriggerFunction) *Command {
+	s.afterInserts = append(s.afterInserts, fn)
+	s.afterUpdates = append(s.afterUpdates, fn)
+	return s
 }
 
 /**
@@ -189,7 +192,89 @@ func (c *Command) AfterInsertOrUpdate(fn TriggerFunction) *Command {
 * @param fn TriggerFunction
 * @return *Command
 **/
-func (c *Command) AfterDelete(fn TriggerFunction) *Command {
-	c.afterDeletes = append(c.afterDeletes, fn)
-	return c
+func (s *Command) AfterDelete(fn TriggerFunction) *Command {
+	s.afterDeletes = append(s.afterDeletes, fn)
+	return s
+}
+
+/**
+* insert
+* @param tx *Tx
+* @return (et.Items, error)
+**/
+func (s *Command) insert(tx *Tx) (et.Items, error) {
+	if tx == nil {
+		return et.Items{}, errors.New(msg.MSG_TRANSACTION_IS_NIL)
+	}
+
+	return et.Items{}, nil
+}
+
+/**
+* update
+* @param tx *Tx
+* @return (et.Items, error)
+**/
+func (s *Command) update(tx *Tx) (et.Items, error) {
+	if tx == nil {
+		return et.Items{}, errors.New(msg.MSG_TRANSACTION_IS_NIL)
+	}
+
+	return et.Items{}, nil
+}
+
+/**
+* delete
+* @param tx *Tx
+* @return (et.Items, error)
+**/
+func (s *Command) delete(tx *Tx) (et.Items, error) {
+	if tx == nil {
+		return et.Items{}, errors.New(msg.MSG_TRANSACTION_IS_NIL)
+	}
+
+	return et.Items{}, nil
+}
+
+/**
+* upsert
+* @param tx *Tx
+* @return (et.Items, error)
+**/
+func (s *Command) upsert(tx *Tx) (et.Items, error) {
+	if tx == nil {
+		return et.Items{}, errors.New(msg.MSG_TRANSACTION_IS_NIL)
+	}
+
+	return et.Items{}, nil
+}
+
+/**
+* ExecTx
+* @param tx *Tx
+* @return (et.Items, error)
+**/
+func (s *Command) ExecTx(tx *Tx) (et.Items, error) {
+	tx, isCommitted := getTx(tx)
+	switch s.Type {
+	case INSERT:
+		return s.insert(tx)
+	case BULK:
+		return s.insert(tx)
+	case UPDATE:
+		return s.update(tx)
+	case DELETE:
+		return s.delete(tx)
+	case UPSERT:
+		return s.upsert(tx)
+	}
+
+	if isCommitted {
+		err := tx.commit()
+		if err != nil {
+			return et.Items{}, err
+		}
+	}
+
+	return et.Items{}, nil
 }

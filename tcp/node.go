@@ -638,20 +638,25 @@ func (s *Node) Start() (err error) {
 
 /**
 * Close
+* @return error
 **/
-func (s *Node) Close() {
+func (s *Node) Close() error {
 	if !s.closed.CompareAndSwap(false, true) {
-		return
+		return nil
 	}
 
 	logs.Log(packageName, mg.MSG_TCP_SHUTTING_DOWN)
 	s.cancel()
 
 	if s.ln != nil {
-		_ = s.ln.Close()
+		err := s.ln.Close()
+		if err != nil {
+			return err
+		}
 	}
 
 	s.closeAllClients()
+	return nil
 }
 
 /**

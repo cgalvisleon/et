@@ -1,4 +1,4 @@
-package js
+package script
 
 const requireRuntime = `
 const __cache = {};

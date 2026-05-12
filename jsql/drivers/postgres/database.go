@@ -9,8 +9,9 @@ import (
 )
 
 /**
-* ExistDatabase
-* @param db *DB, name string
+* ExistDatabase: Returns true when a database with the given name exists in the PostgreSQL instance.
+* @param db *sql.DB
+* @param name string
 * @return bool, error
 **/
 func ExistDatabase(db *sql.DB, name string) (bool, error) {
@@ -34,8 +35,9 @@ func ExistDatabase(db *sql.DB, name string) (bool, error) {
 }
 
 /**
-* CreateDatabase
-* @param db *sql.DB, name string
+* CreateDatabase: Creates a PostgreSQL database with the given name if it does not already exist.
+* @param db *sql.DB
+* @param name string
 * @return error
 **/
 func CreateDatabase(db *sql.DB, name string) error {
@@ -60,8 +62,9 @@ func CreateDatabase(db *sql.DB, name string) error {
 }
 
 /**
-* DropDatabase
-* @param db *sql.DB, name string
+* DropDatabase: Drops the PostgreSQL database with the given name.
+* @param db *sql.DB
+* @param name string
 * @return error
 **/
 func DropDatabase(db *sql.DB, name string) error {

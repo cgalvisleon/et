@@ -42,8 +42,7 @@ func pgType(tp jsql.TypeData) string {
 
 /**
 * pgDefault: Returns the SQL DEFAULT expression for a given TypeData and value.
-* @param tp jsql.TypeData
-* @param val any
+* @param tp jsql.TypeData, val any
 * @return string
 **/
 func pgDefault(tp jsql.TypeData, val any) string {

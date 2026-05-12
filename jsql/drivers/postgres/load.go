@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/cgalvisleon/et/jsql"
@@ -26,7 +27,9 @@ func ddlSchema(model *jsql.Model) string {
 **/
 func ddlTable(model *jsql.Model) string {
 	if model.Schema != "" {
-		return fmt.Sprintf("%s.%s", model.Schema, model.Table)
+		model.Table = fmt.Sprintf("%s.%s", model.Schema, model.Name)
+	} else {
+		model.Table = fmt.Sprintf("%s", model.Name)
 	}
 	return model.Table
 }
@@ -43,22 +46,18 @@ func ddlTable(model *jsql.Model) string {
 func ddlColumns(model *jsql.Model) []string {
 	var cols []string
 
-	if model.IdxField != "" {
-		cols = append(cols, fmt.Sprintf("  %s VARCHAR(80) DEFAULT ''", model.IdxField))
-	}
-
 	for _, col := range model.Columns {
 		if col.TypeColumn != jsql.COLUMN {
+			continue
+		}
+		if col.Name == model.SourceField {
+			cols = append(cols, fmt.Sprintf("  %s JSONB DEFAULT '{}'", model.SourceField))
 			continue
 		}
 		tp := pgType(col.TypeData)
 		def := pgDefault(col.TypeData, col.Default)
 		line := fmt.Sprintf("  %s %s DEFAULT %s", col.Name, tp, def)
 		cols = append(cols, line)
-	}
-
-	if model.SourceField != "" {
-		cols = append(cols, fmt.Sprintf("  %s JSONB DEFAULT '{}'", model.SourceField))
 	}
 
 	return cols
@@ -124,8 +123,59 @@ func ddlIndexes(model *jsql.Model, table string) []string {
 }
 
 /**
+* ddlForeignKeys: Builds ALTER TABLE … ADD CONSTRAINT … FOREIGN KEY statements for each FK.
+* Keys map entries are sorted for deterministic output.
+* ON DELETE / ON UPDATE CASCADE clauses are added when the respective flag is set.
+* @param model *jsql.Model
+* @param table string
+* @return []string
+**/
+func ddlForeignKeys(model *jsql.Model, table string) []string {
+	base := strings.ReplaceAll(table, ".", "_")
+	stmts := make([]string, 0, len(model.ForeignKeys))
+	for _, fk := range model.ForeignKeys {
+		if fk.To == nil || len(fk.Keys) == 0 {
+			continue
+		}
+
+		foreignTable := fk.To.Name
+		if fk.To.Schema != "" {
+			foreignTable = fmt.Sprintf("%s.%s", fk.To.Schema, fk.To.Name)
+		}
+		foreignBase := strings.ReplaceAll(foreignTable, ".", "_")
+
+		localCols := make([]string, 0, len(fk.Keys))
+		for local := range fk.Keys {
+			localCols = append(localCols, local)
+		}
+		sort.Strings(localCols)
+
+		foreignCols := make([]string, len(localCols))
+		for i, local := range localCols {
+			foreignCols[i] = fk.Keys[local]
+		}
+
+		constraintName := fmt.Sprintf("fk_%s_%s", base, foreignBase)
+
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("ALTER TABLE %s ADD CONSTRAINT %s\n", table, constraintName))
+		sb.WriteString(fmt.Sprintf("  FOREIGN KEY (%s)\n", strings.Join(localCols, ", ")))
+		sb.WriteString(fmt.Sprintf("  REFERENCES %s (%s)", foreignTable, strings.Join(foreignCols, ", ")))
+		if fk.OnDeleteCascade {
+			sb.WriteString("\n  ON DELETE CASCADE")
+		}
+		if fk.OnUpdateCascade {
+			sb.WriteString("\n  ON UPDATE CASCADE")
+		}
+		sb.WriteString(";")
+		stmts = append(stmts, sb.String())
+	}
+	return stmts
+}
+
+/**
 * Load: Generates the DDL SQL to create the schema, table, primary key,
-* unique indexes, and regular indexes for the given model.
+* unique indexes, regular indexes, and foreign key constraints for the given model.
 * Returns the complete DDL as a single string with statements separated by newlines.
 * @param model *jsql.Model
 * @return string, error
@@ -158,6 +208,12 @@ func (s *Postgres) Load(model *jsql.Model) (string, error) {
 	}
 
 	for _, stmt := range ddlIndexes(model, table) {
+		sb.WriteString("\n")
+		sb.WriteString(stmt)
+		sb.WriteString("\n")
+	}
+
+	for _, stmt := range ddlForeignKeys(model, table) {
 		sb.WriteString("\n")
 		sb.WriteString(stmt)
 		sb.WriteString("\n")

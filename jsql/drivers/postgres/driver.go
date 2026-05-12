@@ -4,6 +4,9 @@ import (
 	"github.com/cgalvisleon/et/jsql"
 )
 
+/**
+* Postgres: Driver implementation for PostgreSQL databases.
+**/
 type Postgres struct {
 }
 

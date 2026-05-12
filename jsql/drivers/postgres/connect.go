@@ -33,7 +33,7 @@ func (s *Postgres) defaultChain(params utility.Config) string {
 }
 
 /**
-* chain: Returns the default connection string for PostgreSQL
+* chain: Returns the connection string for the named database specified in DB_NAME.
 * @param params utility.Config
 * @return string
 **/

@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/reg"
 )
 
 type Define struct {
@@ -60,11 +61,17 @@ func (s *Model) defineSource() *Column {
 
 /**
 * defineIdxField: Defines the idx field column for the model.
-* @return *Column
+* @return *Index
 **/
-func (s *Model) defineIdxField() *Column {
+func (s *Model) defineIdxField() *Index {
 	s.IdxField = IDX
-	return s.defineColumn(IDX, COLUMN, KEY, "", []byte{})
+	result := s.DefineIndex(IDX, KEY, "")
+	s.BeforeInsert(func(tx *Tx, old, new et.Json) error {
+		new[s.IdxField] = reg.GetULID("")
+		return nil
+	})
+
+	return result
 }
 
 /**
@@ -242,4 +249,60 @@ func (s *Model) DefineRelation(name string, to *Model, keys map[string]string) *
 	detail := newDetail(to, keys, []any{}, false, false)
 	s.Relations[name] = detail
 	return detail
+}
+
+/**
+* DefineModel: Defines a new model for the database.
+* @param schema string, name string, version int
+* @return (*Model, error)
+**/
+func (s *DB) DefineModel(schema, name string, version int) (*Model, error) {
+	result, err := s.NewModel(schema, name, version)
+	if err != nil {
+		return nil, err
+	}
+	result.DefineColumn(CREATED_AT, DATETIME, nil)
+	result.DefineColumn(UPDATED_AT, DATETIME, nil)
+	result.DefinePrimaryKey(ID, KEY, "")
+	result.defineSource()
+	result.defineIdxField()
+	return result, nil
+}
+
+/**
+* DefineTenantModel: Defines a new tenant model for the database.
+* @param schema string, name string, version int
+* @return (*Model, error)
+**/
+func (s *DB) DefineTenantModel(schema, name string, version int) (*Model, error) {
+	result, err := s.NewModel(schema, name, version)
+	if err != nil {
+		return nil, err
+	}
+	result.DefineColumn(CREATED_AT, DATETIME, nil)
+	result.DefineColumn(UPDATED_AT, DATETIME, nil)
+	result.DefineIndex(TENANT_ID, KEY, "")
+	result.DefinePrimaryKey(ID, KEY, "")
+	result.defineSource()
+	result.defineIdxField()
+	return result, nil
+}
+
+/**
+* DefineProjectModel: Defines a new project model for the database.
+* @param schema string, name string, version int
+* @return (*Model, error)
+**/
+func (s *DB) DefineProjectModel(schema, name string, version int) (*Model, error) {
+	result, err := s.NewModel(schema, name, version)
+	if err != nil {
+		return nil, err
+	}
+	result.DefineColumn(CREATED_AT, DATETIME, nil)
+	result.DefineColumn(UPDATED_AT, DATETIME, nil)
+	result.DefineIndex(PROJECT_ID, KEY, "")
+	result.DefinePrimaryKey(ID, KEY, "")
+	result.defineSource()
+	result.defineIdxField()
+	return result, nil
 }

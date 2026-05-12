@@ -209,21 +209,40 @@ func (s *Model) idxColumn(name string) int {
 * @param name string
 * @return *Column
 **/
-func (s *Model) FindColumn(name string) *Column {
+func (s *Model) GetColumn(name string) (*Column, bool) {
 	idx := s.idxColumn(name)
 	if idx != -1 {
-		return s.Columns[idx]
+		return s.Columns[idx], true
 	}
 
 	if s.IsStrict {
-		return nil
+		return nil, false
 	}
 
 	if s.SourceField == "" {
-		return nil
+		return nil, false
 	}
 
-	return s.newColumn(name, ATTRIB, ANY, "", []byte{})
+	return s.newColumn(name, ATTRIB, ANY, "", []byte{}), true
+}
+
+/**
+* GetField: Returns the Field for the given name.
+* @param name string
+* @return *Field, bool
+**/
+func (s *Model) GetField(name string) (*Field, bool) {
+	col, ok := s.GetColumn(name)
+	if !ok {
+		return nil, false
+	}
+	return &Field{
+		TypeColumn: col.TypeColumn,
+		TypeData:   col.TypeData,
+		Name:       name,
+		As:         "",
+		From:       getFrom(s, ""),
+	}, true
 }
 
 /**
@@ -318,12 +337,22 @@ func (s *Model) AfterInsertOrUpdate(fn TriggerFunction) *Model {
 }
 
 /**
+* From: Creates a new Query for this model with the given alias.
+* @param as ...string
+* @return *Query
+**/
+func (s *Model) From(as ...string) *Query {
+	result := newQuery(s, as...)
+	return result
+}
+
+/**
 * Where: Creates a new Query for this model with the given condition as the first WHERE clause.
 * @param cond *et.Condition
 * @return *Query
 **/
 func (s *Model) Where(cond *et.Condition) *Query {
-	result := newQuery(s)
+	result := s.From()
 	result.Where(cond)
 	return result
 }

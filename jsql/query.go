@@ -17,7 +17,7 @@ type From struct {
 	Name     string `json:"name"`
 	Table    string `json:"table"`
 	As       string `json:"as"`
-	Model    *Model `json:"model"`
+	Model    *Model `json:"-"`
 }
 
 /**
@@ -44,10 +44,12 @@ func getFrom(model *Model, as string) *From {
 * Field: Represents a SELECT list entry with an optional alias and source table reference.
 **/
 type Field struct {
-	Name string `json:"name"`
-	As   string `json:"as"`
-	From *From  `json:"from"`
-	Agg  string `json:"agg"`
+	TypeColumn TypeColumn `json:"type_column"`
+	TypeData   TypeData   `json:"type_data"`
+	Name       string     `json:"name"`
+	As         string     `json:"as"`
+	From       *From      `json:"from"`
+	Agg        string     `json:"agg"`
 }
 
 /**
@@ -104,21 +106,22 @@ const (
 * Query: Holds all clauses needed to build a SELECT statement.
 **/
 type Query struct {
-	Froms      []*From         `json:"froms"`
-	Joins      []*Join         `json:"joins"`
-	Selects    []string        `json:"selects"`
-	Conditions []*et.Condition `json:"conditions"`
-	Hiddens    []string        `json:"hidden"`
-	GroupsBy   []string        `json:"group_by"`
-	OrdersBy   []*Index        `json:"order_by"`
-	Havings    []*et.Condition `json:"havings"`
-	Offset     int             `json:"offset"`
-	Rows       int             `json:"rows"`
-	section    QuerySection    `json:"-"`
-	maxRows    int             `json:"-"`
-	db         *DB             `json:"-"`
-	isDebug    bool            `json:"-"`
-	isTest     bool            `json:"-"`
+	Froms          []*From         `json:"froms"`
+	Joins          []*Join         `json:"joins"`
+	Selects        []string        `json:"selects"`
+	Conditions     []*et.Condition `json:"conditions"`
+	Hiddens        []string        `json:"hidden"`
+	GroupsBy       []string        `json:"group_by"`
+	OrdersBy       []*Index        `json:"order_by"`
+	Havings        []*et.Condition `json:"havings"`
+	Offset         int             `json:"offset"`
+	Rows           int             `json:"rows"`
+	UseSourceField bool            `json:"use_source_field"`
+	section        QuerySection    `json:"-"`
+	maxRows        int             `json:"-"`
+	db             *DB             `json:"-"`
+	isDebug        bool            `json:"-"`
+	isTest         bool            `json:"-"`
 }
 
 /**
@@ -238,10 +241,16 @@ func (s *Query) GetField(field string) (*Field, bool) {
 			if from == nil {
 				return nil, false
 			}
+			col, ok := from.Model.GetColumn(columnName)
+			if !ok {
+				return nil, false
+			}
 			return &Field{
-				Name: columnName,
-				As:   as,
-				From: from,
+				TypeColumn: col.TypeColumn,
+				TypeData:   col.TypeData,
+				Name:       columnName,
+				As:         as,
+				From:       from,
 			}, true
 		}
 	} else if pattern2.MatchString(field) {
@@ -253,9 +262,16 @@ func (s *Query) GetField(field string) (*Field, bool) {
 			if from == nil {
 				return nil, false
 			}
+			col, ok := from.Model.GetColumn(columnName)
+			if !ok {
+				return nil, false
+			}
 			return &Field{
-				Name: columnName,
-				From: from,
+				TypeColumn: col.TypeColumn,
+				TypeData:   col.TypeData,
+				Name:       columnName,
+				As:         columnName,
+				From:       from,
 			}, true
 		}
 	} else if pattern3.MatchString(field) {
@@ -267,10 +283,16 @@ func (s *Query) GetField(field string) (*Field, bool) {
 			if from == nil {
 				return nil, false
 			}
+			col, ok := from.Model.GetColumn(columnName)
+			if !ok {
+				return nil, false
+			}
 			return &Field{
-				Name: columnName,
-				As:   as,
-				From: from,
+				TypeColumn: col.TypeColumn,
+				TypeData:   col.TypeData,
+				Name:       columnName,
+				As:         as,
+				From:       from,
 			}, true
 		}
 	} else if pattern4.MatchString(field) {
@@ -281,10 +303,16 @@ func (s *Query) GetField(field string) (*Field, bool) {
 			if from == nil {
 				return nil, false
 			}
+			col, ok := from.Model.GetColumn(columnName)
+			if !ok {
+				return nil, false
+			}
 			return &Field{
-				Name: columnName,
-				As:   columnName,
-				From: from,
+				TypeColumn: col.TypeColumn,
+				TypeData:   col.TypeData,
+				Name:       columnName,
+				As:         columnName,
+				From:       from,
 			}, true
 		}
 	} else if pattern5.MatchString(field) {
@@ -329,6 +357,9 @@ func (s *Query) GetField(field string) (*Field, bool) {
 func (s *Query) addFrom(model *Model, as string) *Query {
 	from := getFrom(model, as)
 	s.Froms = append(s.Froms, from)
+	if !s.UseSourceField {
+		s.UseSourceField = model.SourceField != ""
+	}
 	return s
 }
 

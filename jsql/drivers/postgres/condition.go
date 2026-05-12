@@ -32,8 +32,8 @@ func resolveField(field string, model *jsql.Model, alias string) string {
 	root := parts[0]
 	path := parts[1:]
 
-	col := model.FindColumn(root)
-	isAttrib := col != nil && col.TypeColumn == jsql.ATTRIB
+	col, ok := model.GetColumn(root)
+	isAttrib := ok && col.TypeColumn == jsql.ATTRIB
 
 	var base string
 	var pathSegs []string

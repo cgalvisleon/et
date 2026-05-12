@@ -33,8 +33,8 @@ func pgColsVals(model *jsql.Model, data et.Json, excludePKs bool) (cols, vals []
 		if key == model.SourceField {
 			continue
 		}
-		col := model.FindColumn(key)
-		if col == nil {
+		col, ok := model.GetColumn(key)
+		if !ok {
 			continue
 		}
 		switch col.TypeColumn {
@@ -230,7 +230,7 @@ func pgUpdateSQL(command *jsql.Command) (string, error) {
 		whereSQL = pgPKWhere(model, command.New)
 	}
 	if whereSQL == "" && len(command.Conditions) > 0 {
-		whereSQL = pgCondsSQL(command.Conditions, "")
+		whereSQL = pgCondsSQL(model.GetField, model.SourceField != "", command.Conditions, "")
 	}
 	if whereSQL != "" {
 		sb.WriteString("\nWHERE " + whereSQL)
@@ -259,7 +259,7 @@ func pgDeleteSQL(command *jsql.Command) (string, error) {
 		whereSQL = pgPKWhere(model, command.Old)
 	}
 	if whereSQL == "" && len(command.Conditions) > 0 {
-		whereSQL = pgCondsSQL(command.Conditions, "")
+		whereSQL = pgCondsSQL(model.GetField, model.SourceField != "", command.Conditions, "")
 	}
 	if whereSQL != "" {
 		sb.WriteString("\nWHERE " + whereSQL)

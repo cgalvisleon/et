@@ -29,7 +29,9 @@ func demoDBConnect() error {
 	}
 
 	result, err := model.
-		Where(jsql.Eq("id", 1)).
+		From("u").
+		Where(jsql.Eq("u.id", 1)).
+		Select("u.id", "u.name", "u.email", "u.full_name").
 		Test().
 		Debug().
 		One()

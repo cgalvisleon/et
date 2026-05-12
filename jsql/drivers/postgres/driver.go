@@ -7,8 +7,7 @@ import (
 /**
 * Postgres: Driver implementation for PostgreSQL databases.
 **/
-type Postgres struct {
-}
+type Postgres struct{}
 
 func init() {
 	jsql.Register(jsql.DriverPostgres, &Postgres{})

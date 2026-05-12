@@ -207,12 +207,12 @@ func (s *Query) Test() *Query {
 * @return (*Field, bool)
 **/
 func (s *Query) GetField(field string) (*Field, bool) {
-	pattern1 := regexp.MustCompile(`^([A-Za-z0-9]+)\.([A-Za-z0-9]+):([A-Za-z0-9]+)$`) // from.name:as
-	pattern2 := regexp.MustCompile(`^([A-Za-z0-9]+)\.([A-Za-z0-9]+)$`)                // from.name
-	pattern3 := regexp.MustCompile(`^([A-Za-z0-9>]+):([A-Za-z0-9]+)$`)                // name:as
-	pattern4 := regexp.MustCompile(`^([A-Za-z0-9>]+)$`)                               // name
-	pattern5 := regexp.MustCompile(`^([A-Za-z]+)\((.+)\):([A-Za-z0-9]+)$`)            // agg(field):as
-	pattern6 := regexp.MustCompile(`^([A-Za-z]+)\((.+)\)`)                            // agg(field)
+	pattern1 := regexp.MustCompile(`^([A-Za-z0-9_]+)\.([A-Za-z0-9_>-]+):([A-Za-z0-9_]+)$`) // from.field:as
+	pattern2 := regexp.MustCompile(`^([A-Za-z0-9_]+)\.([A-Za-z0-9_>-]+)$`)                 // from.field
+	pattern3 := regexp.MustCompile(`^([A-Za-z0-9_>-]+):([A-Za-z0-9_]+)$`)                  // field:as
+	pattern4 := regexp.MustCompile(`^([A-Za-z0-9_>-]+)$`)                                  // field
+	pattern5 := regexp.MustCompile(`^([A-Za-z0-9_]+)\((.+)\):([A-Za-z0-9_]+)$`)            // agg(field):as
+	pattern6 := regexp.MustCompile(`^([A-Za-z0-9_]+)\((.+)\)`)                             // agg(field)
 
 	getForm := func(name string) *From {
 		if len(s.Froms) == 0 {

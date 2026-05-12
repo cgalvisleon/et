@@ -29,8 +29,12 @@ func (s *Model) indexColumn(name string) int {
 
 /**
 * defineColumn: Appends a new column definition to the model.
-* @param name string, tpColumn TypeColumn, tpData TypeData, def any, definition []byte
-* @return *Column, error
+* @param name string
+* @param tpColumn TypeColumn
+* @param tpData TypeData
+* @param def any
+* @param definition []byte
+* @return *Column
 **/
 func (s *Model) defineColumn(name string, tpColumn TypeColumn, tpData TypeData, def any, definition []byte) *Column {
 	idx := s.indexColumn(name)
@@ -76,7 +80,9 @@ func (s *Model) defineIdxField() *Index {
 
 /**
 * DefineIndex: Defines a new index column for the model.
-* @param name string, tp TypeData, def any
+* @param name string
+* @param tp TypeData
+* @param def any
 * @return *Index
 **/
 func (s *Model) DefineIndex(name string, tp TypeData, def any) *Index {
@@ -95,7 +101,9 @@ func (s *Model) DefineIndex(name string, tp TypeData, def any) *Index {
 
 /**
 * DefinePrimaryKey: Defines a new primary key column for the model.
-* @param name string, tp TypeData, def any
+* @param name string
+* @param tp TypeData
+* @param def any
 * @return *Index
 **/
 func (s *Model) DefinePrimaryKey(name string, tp TypeData, def any) *Index {
@@ -114,7 +122,10 @@ func (s *Model) DefinePrimaryKey(name string, tp TypeData, def any) *Index {
 
 /**
 * DefineForeignKeys: Defines a new foreign key column for the model.
-* @param to *Model, keys map[string]string, onDeleteCascade bool, onUpdateCascade bool
+* @param to *Model
+* @param keys map[string]string
+* @param onDeleteCascade bool
+* @param onUpdateCascade bool
 * @return *Detail
 **/
 func (s *Model) DefineForeignKeys(to *Model, keys map[string]string, onDeleteCascade, onUpdateCascade bool) *Detail {
@@ -129,7 +140,9 @@ func (s *Model) DefineForeignKeys(to *Model, keys map[string]string, onDeleteCas
 
 /**
 * DefineUnique: Defines a new unique index for the model.
-* @param name string, tp TypeData, def any
+* @param name string
+* @param tp TypeData
+* @param def any
 * @return *Index
 **/
 func (s *Model) DefineUnique(name string, tp TypeData, def any) *Index {
@@ -148,7 +161,9 @@ func (s *Model) DefineUnique(name string, tp TypeData, def any) *Index {
 
 /**
 * DefineRequired: Defines a new required column for the model.
-* @param name string, tp TypeData, def any
+* @param name string
+* @param tp TypeData
+* @param def any
 * @return *Index
 **/
 func (s *Model) DefineRequired(name string, tp TypeData, def any) *Index {
@@ -175,7 +190,9 @@ func (s *Model) DefineHidden(name ...string) {
 
 /**
 * DefineColumn: Defines a new column for the model.
-* @param name string, tp TypeData, def any
+* @param name string
+* @param tp TypeData
+* @param def any
 * @return *Column
 **/
 func (s *Model) DefineColumn(name string, tp TypeData, def any) *Column {
@@ -184,7 +201,9 @@ func (s *Model) DefineColumn(name string, tp TypeData, def any) *Column {
 
 /**
 * DefineAttrib: Defines a new attribute for the model.
-* @param name string, tp TypeData, def any
+* @param name string
+* @param tp TypeData
+* @param def any
 * @return *Column
 **/
 func (s *Model) DefineAttrib(name string, tp TypeData, def any) *Column {
@@ -193,7 +212,8 @@ func (s *Model) DefineAttrib(name string, tp TypeData, def any) *Column {
 
 /**
 * DefineDetail: Defines a new detail for the model.
-* @param name string, keys map[string]string
+* @param name string
+* @param keys map[string]string
 * @return *Detail
 **/
 func (s *Model) DefineDetail(name string, keys map[string]string) *Detail {
@@ -219,7 +239,10 @@ func (s *Model) DefineDetail(name string, keys map[string]string) *Detail {
 
 /**
 * DefineRollup: Defines a new rollup for the model.
-* @param name string, to *Model, keys map[string]string, selects []any
+* @param name string
+* @param to *Model
+* @param keys map[string]string
+* @param selects []any
 * @return *Detail
 **/
 func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, selects []any) *Detail {
@@ -236,7 +259,9 @@ func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, sel
 
 /**
 * DefineRelation: Defines a new relation for the model.
-* @param name string, to *Model, keys map[string]string
+* @param name string
+* @param to *Model
+* @param keys map[string]string
 * @return *Detail
 **/
 func (s *Model) DefineRelation(name string, to *Model, keys map[string]string) *Detail {
@@ -253,8 +278,10 @@ func (s *Model) DefineRelation(name string, to *Model, keys map[string]string) *
 
 /**
 * DefineModel: Defines a new model for the database.
-* @param schema string, name string, version int
-* @return (*Model, error)
+* @param schema string
+* @param name string
+* @param version int
+* @return *Model, error
 **/
 func (s *DB) DefineModel(schema, name string, version int) (*Model, error) {
 	result, err := s.NewModel(schema, name, version)
@@ -271,8 +298,10 @@ func (s *DB) DefineModel(schema, name string, version int) (*Model, error) {
 
 /**
 * DefineTenantModel: Defines a new tenant model for the database.
-* @param schema string, name string, version int
-* @return (*Model, error)
+* @param schema string
+* @param name string
+* @param version int
+* @return *Model, error
 **/
 func (s *DB) DefineTenantModel(schema, name string, version int) (*Model, error) {
 	result, err := s.NewModel(schema, name, version)
@@ -290,8 +319,10 @@ func (s *DB) DefineTenantModel(schema, name string, version int) (*Model, error)
 
 /**
 * DefineProjectModel: Defines a new project model for the database.
-* @param schema string, name string, version int
-* @return (*Model, error)
+* @param schema string
+* @param name string
+* @param version int
+* @return *Model, error
 **/
 func (s *DB) DefineProjectModel(schema, name string, version int) (*Model, error) {
 	result, err := s.NewModel(schema, name, version)

@@ -16,7 +16,7 @@ import (
 * @param params utility.Config
 * @return string
 **/
-func (s *Postgres) defaultChain(params utility.Config) string {
+func defaultChain(params utility.Config) string {
 	host := params.GetStr("DB_HOST", "localhost")
 	port := params.GetInt("DB_PORT", 5432)
 	user := params.GetStr("DB_USER", "postgres")
@@ -37,7 +37,7 @@ func (s *Postgres) defaultChain(params utility.Config) string {
 * @param params utility.Config
 * @return string
 **/
-func (s *Postgres) chain(params utility.Config) string {
+func chain(params utility.Config) string {
 	host := params.GetStr("DB_HOST", "localhost")
 	port := params.GetInt("DB_PORT", 5432)
 	user := params.GetStr("DB_USER", "postgres")
@@ -58,7 +58,7 @@ func (s *Postgres) chain(params utility.Config) string {
 * @param chain string
 * @return *sql.DB, error
 **/
-func (s *Postgres) connectTo(chain string) (*sql.DB, error) {
+func connectTo(chain string) (*sql.DB, error) {
 	result, err := sql.Open("postgres", chain)
 	if err != nil {
 		return nil, err
@@ -73,6 +73,77 @@ func (s *Postgres) connectTo(chain string) (*sql.DB, error) {
 }
 
 /**
+* ExistDatabase: Returns true when a database with the given name exists in the PostgreSQL instance.
+* @param db *sql.DB
+* @param name string
+* @return bool, error
+**/
+func ExistDatabase(db *sql.DB, name string) (bool, error) {
+	sql := `
+	SELECT EXISTS(
+	SELECT 1
+	FROM pg_database
+	WHERE UPPER(datname) = UPPER($1));`
+	rows, err := db.Query(sql, name)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	items := jsql.RowsToItems(rows)
+	if items.Count == 0 {
+		return false, nil
+	}
+
+	return items.Bool(0, "exists"), nil
+}
+
+/**
+* CreateDatabase: Creates a PostgreSQL database with the given name if it does not already exist.
+* @param db *sql.DB
+* @param name string
+* @return error
+**/
+func CreateDatabase(db *sql.DB, name string) error {
+	exist, err := ExistDatabase(db, name)
+	if err != nil {
+		return err
+	}
+
+	if exist {
+		return nil
+	}
+
+	sql := fmt.Sprintf(`CREATE DATABASE %s;`, name)
+	_, err = db.Exec(sql)
+	if err != nil {
+		return err
+	}
+
+	logs.Logf("Postgres", `Database %s created`, name)
+
+	return nil
+}
+
+/**
+* DropDatabase: Drops the PostgreSQL database with the given name.
+* @param db *sql.DB
+* @param name string
+* @return error
+**/
+func DropDatabase(db *sql.DB, name string) error {
+	sql := fmt.Sprintf(`DROP DATABASE %s;`, name)
+	_, err := db.Exec(sql)
+	if err != nil {
+		return err
+	}
+
+	logs.Logf("Postgres", `Database %s droped`, name)
+
+	return nil
+}
+
+/**
 * Connect: Establishes a PostgreSQL connection using the parameters stored in db.
 * Reads DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME and DB_SSL_MODE from db.Params.
 * @param db *jsql.DB
@@ -80,8 +151,8 @@ func (s *Postgres) connectTo(chain string) (*sql.DB, error) {
 **/
 func (s *Postgres) Connect(db *jsql.DB) (*sql.DB, error) {
 	params := db.Params
-	dsn := s.defaultChain(params)
-	result, err := s.connectTo(dsn)
+	dsn := defaultChain(params)
+	result, err := connectTo(dsn)
 	if err != nil {
 		return nil, err
 	}
@@ -92,8 +163,8 @@ func (s *Postgres) Connect(db *jsql.DB) (*sql.DB, error) {
 		return nil, err
 	}
 
-	dsn = s.chain(params)
-	result, err = s.connectTo(dsn)
+	dsn = chain(params)
+	result, err = connectTo(dsn)
 	if err != nil {
 		return nil, err
 	}

@@ -8,7 +8,6 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
-	"github.com/cgalvisleon/et/strs"
 )
 
 /**
@@ -67,8 +66,8 @@ func pgJsonbPath(field string) string {
 /**
 * pgSelectExpr: Resolves a logical field name to a SQL expression, prefixing unqualified
 * names with alias and expanding '->' JSONB paths.
-* @param alias string
-* @param field string
+* @param field *jsql.Field
+* @param useSource bool
 * @return string
 **/
 func pgSelectExpr(field *jsql.Field, useSource bool) string {
@@ -79,7 +78,11 @@ func pgSelectExpr(field *jsql.Field, useSource bool) string {
 		return ""
 	}
 	if field.TypeColumn == jsql.ATTRIB {
-		return pgAttribExpr(field.From.As, jsql.SOURCE, field.Name, field.TypeData)
+		sourceField := jsql.SOURCE
+		if field.From.Model != nil && field.From.Model.SourceField != "" {
+			sourceField = field.From.Model.SourceField
+		}
+		return pgAttribExpr(field.From.As, sourceField, field.Name, field.TypeData)
 	} else if field.TypeColumn == jsql.COLUMN {
 		if useSource {
 			return fmt.Sprintf("'%s', %s.%s", field.As, field.From.As, field.Name)
@@ -93,8 +96,8 @@ func pgSelectExpr(field *jsql.Field, useSource bool) string {
 /**
 * pgFieldExpr: Resolves a logical field name to a SQL expression, prefixing unqualified
 * names with alias and expanding '->' JSONB paths.
-* @param alias string
-* @param field string
+* @param field *jsql.Field
+* @param useSource bool
 * @return string
 **/
 func pgFieldExpr(field *jsql.Field, useSource bool) string {
@@ -104,12 +107,23 @@ func pgFieldExpr(field *jsql.Field, useSource bool) string {
 	if field.From == nil {
 		return ""
 	}
+	alias := field.From.As
 	if field.TypeColumn == jsql.COLUMN {
-		return fmt.Sprintf("%s.%s", field.From.As, field.Name)
+		if alias == "" {
+			return field.Name
+		}
+		return fmt.Sprintf("%s.%s", alias, field.Name)
 	} else if field.TypeColumn == jsql.ATTRIB {
 		if useSource {
-			fld := pgJsonbPath(field.Name)
-			path := fmt.Sprintf("%s.%s->>'%s'", field.From.As, jsql.SOURCE, fld)
+			sourceField := jsql.SOURCE
+			if field.From.Model != nil && field.From.Model.SourceField != "" {
+				sourceField = field.From.Model.SourceField
+			}
+			fullPath := pgJsonbPath(sourceField + "->" + field.Name)
+			path := fullPath
+			if alias != "" {
+				path = alias + "." + fullPath
+			}
 			switch field.TypeData {
 			case jsql.INT:
 				return fmt.Sprintf("(%s)::bigint", path)
@@ -123,7 +137,10 @@ func pgFieldExpr(field *jsql.Field, useSource bool) string {
 				return path
 			}
 		} else {
-			return fmt.Sprintf("%s.%s", field.From.As, field.Name)
+			if alias == "" {
+				return field.Name
+			}
+			return fmt.Sprintf("%s.%s", alias, field.Name)
 		}
 	}
 	return ""
@@ -132,23 +149,33 @@ func pgFieldExpr(field *jsql.Field, useSource bool) string {
 /**
 * pgAttribExpr: Builds a _source JSONB extraction expression for an ATTRIB column
 * with an optional type cast based on the column's TypeData.
-* @param alias string, sourceField string, field string, tp jsql.TypeData
+* @param alias string
+* @param sourceField string
+* @param field string
+* @param tp jsql.TypeData
 * @return string
 **/
 func pgAttribExpr(alias, sourceField, field string, tp jsql.TypeData) string {
-	field = pgJsonbPath(field)
-	path := fmt.Sprintf("%s.%s->>'%s'", alias, sourceField, field)
+	displayName := field
+	if idx := strings.LastIndex(field, "->"); idx != -1 {
+		displayName = field[idx+2:]
+	}
+	fullPath := pgJsonbPath(sourceField + "->" + field)
+	path := fullPath
+	if alias != "" {
+		path = alias + "." + fullPath
+	}
 	switch tp {
 	case jsql.INT:
-		return fmt.Sprintf("'%s', (%s)::bigint", field, path)
+		return fmt.Sprintf("'%s', (%s)::bigint", displayName, path)
 	case jsql.FLOAT:
-		return fmt.Sprintf("'%s', (%s)::double precision", field, path)
+		return fmt.Sprintf("'%s', (%s)::double precision", displayName, path)
 	case jsql.BOOLEAN:
-		return fmt.Sprintf("'%s', (%s)::boolean", field, path)
+		return fmt.Sprintf("'%s', (%s)::boolean", displayName, path)
 	case jsql.DATETIME:
-		return fmt.Sprintf("'%s', (%s)::timestamptz", field, path)
+		return fmt.Sprintf("'%s', (%s)::timestamptz", displayName, path)
 	default:
-		return fmt.Sprintf("'%s', %s", field, path)
+		return fmt.Sprintf("'%s', %s", displayName, path)
 	}
 }
 
@@ -173,7 +200,8 @@ func findField(query *jsql.Query, field string) (*jsql.Field, bool) {
 * autoSelectFrom: Builds the SELECT expression list from a From's Model columns.
 * Skips the SourceField JSONB blob itself; expands ATTRIB columns inline.
 * Excludes any field listed in hiddens.
-* @param from *jsql.From, hiddens []string
+* @param from *jsql.From
+* @param hiddens []string
 * @return []string
 **/
 func autoSelectFrom(from *jsql.From, hiddens []string) []string {
@@ -182,22 +210,27 @@ func autoSelectFrom(from *jsql.From, hiddens []string) []string {
 		return []string{fmt.Sprintf("%s.*", from.As)}
 	}
 	useSourceField := model.SourceField != ""
-	columns := make([]string, 0)
 	exprs := make([]string, 0, len(model.Columns))
 	for _, col := range model.Columns {
 		if slices.Contains(hiddens, col.Name) {
 			continue
 		}
-		if col.TypeColumn == jsql.COLUMN {
+		switch col.TypeColumn {
+		case jsql.COLUMN:
 			if col.Name == model.SourceField {
 				continue
 			}
-			exprs = append(exprs, fmt.Sprintf("%s.%s AS %s", from.As, col.Name, col.Name))
-			columns = append(columns, col.Name)
+			if useSourceField {
+				exprs = append(exprs, fmt.Sprintf("'%s', %s.%s", col.Name, from.As, col.Name))
+			} else {
+				exprs = append(exprs, fmt.Sprintf("%s.%s AS %s", from.As, col.Name, col.Name))
+			}
+		case jsql.ATTRIB:
+			if !useSourceField {
+				continue
+			}
+			exprs = append(exprs, pgAttribExpr(from.As, model.SourceField, col.Name, col.TypeData))
 		}
-	}
-	if useSourceField {
-		exprs = append([]string{}, fmt.Sprintf("to_jsonb(%s) - ARRAY[%s]", from.As, strs.JoinQuoted(columns, ", ")))
 	}
 	return exprs
 }
@@ -205,8 +238,9 @@ func autoSelectFrom(from *jsql.From, hiddens []string) []string {
 /**
 * resolveSelectField: Resolves an explicit field name from query.Selects into a SQL expression.
 * Detects ATTRIB columns and emits the appropriate _source extraction.
-* @param from *jsql.From, field string
-* @return string
+* @param query *jsql.Query
+* @param field string
+* @return string, bool
 **/
 func resolveSelectField(query *jsql.Query, field string) (string, bool) {
 	if fld, ok := findField(query, field); ok {
@@ -235,15 +269,24 @@ func pgInValues(val any) string {
 
 /**
 * pgCondExpr: Renders a single Condition as a SQL fragment using alias to qualify the field.
-* @param getField func(string), useSourceField bool, cond *et.Condition, alias string
+* @param getField func(string) (*jsql.Field, bool)
+* @param useSourceField bool
+* @param cond *et.Condition
+* @param alias string
 * @return string
 **/
 func pgCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bool, cond *et.Condition, alias string) string {
-	fld, ok := getField(cond.Field)
-	if !ok {
-		return ""
+	var fieldExpr string
+	if fld, ok := getField(cond.Field); ok {
+		fieldExpr = pgFieldExpr(fld, useSourceField)
 	}
-	fieldExpr := pgFieldExpr(fld, useSourceField)
+	if fieldExpr == "" {
+		f := pgJsonbPath(cond.Field)
+		if alias != "" && !strings.Contains(f, ".") {
+			f = fmt.Sprintf("%s.%s", alias, f)
+		}
+		fieldExpr = f
+	}
 	switch cond.Operator {
 	case et.NULL:
 		return fmt.Sprintf("%s IS NULL", fieldExpr)
@@ -288,18 +331,23 @@ func pgCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bool, 
 
 /**
 * pgCondsSQL: Renders a Condition slice as a SQL clause body joined by AND/OR connectors.
-* @param getField func(string) (*jsql.Field, bool), useSourceField bool, conds []*et.Condition, alias string
+* @param getField func(string) (*jsql.Field, bool)
+* @param useSourceField bool
+* @param conds []*et.Condition
+* @param alias string
 * @return string
 **/
 func pgCondsSQL(getField func(string) (*jsql.Field, bool), useSourceField bool, conds []*et.Condition, alias string) string {
 	var parts []string
-	for i, cond := range conds {
+	first := true
+	for _, cond := range conds {
 		expr := pgCondExpr(getField, useSourceField, cond, alias)
 		if expr == "" {
 			continue
 		}
-		if i == 0 || cond.Connector == et.NaC {
+		if first || cond.Connector == et.NaC {
 			parts = append(parts, expr)
+			first = false
 		} else if cond.Connector == et.And {
 			parts = append(parts, "AND "+expr)
 		} else {

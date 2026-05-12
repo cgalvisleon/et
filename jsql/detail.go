@@ -35,7 +35,7 @@ func (s *Detail) setLimit(page, rows int) *Detail {
 * newDetail: Constructs a Detail linking to the given model with join keys and cascade flags.
 * @param to *Model
 * @param keys map[string]string
-* @param selecs []interface{}
+* @param selects []interface{}
 * @param onDeleteCascade bool
 * @param onUpdateCascade bool
 * @return *Detail

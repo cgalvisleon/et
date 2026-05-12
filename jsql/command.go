@@ -21,23 +21,24 @@ const (
 )
 
 type Command struct {
-	Type          CommandType       `json:"type"`
-	From          *From             `json:"from"`
-	Data          []et.Json         `json:"data"`
-	New           et.Json           `json:"new"`
-	Old           et.Json           `json:"old"`
-	Conditions    []*et.Condition   `json:"conditions"`
-	Returns       []string          `json:"returns"`
-	beforeInserts []TriggerFunction `json:"-"`
-	beforeUpdates []TriggerFunction `json:"-"`
-	beforeDeletes []TriggerFunction `json:"-"`
-	afterInserts  []TriggerFunction `json:"-"`
-	afterUpdates  []TriggerFunction `json:"-"`
-	afterDeletes  []TriggerFunction `json:"-"`
-	db            *DB               `json:"-"`
-	model         *Model            `json:"-"`
-	isDebug       bool              `json:"-"`
-	isTest        bool              `json:"-"`
+	Type           CommandType       `json:"type"`
+	From           *From             `json:"from"`
+	Data           []et.Json         `json:"data"`
+	New            et.Json           `json:"new"`
+	Old            et.Json           `json:"old"`
+	Conditions     []*et.Condition   `json:"conditions"`
+	Returns        []string          `json:"returns"`
+	UseSourceField bool              `json:"use_source_field"`
+	beforeInserts  []TriggerFunction `json:"-"`
+	beforeUpdates  []TriggerFunction `json:"-"`
+	beforeDeletes  []TriggerFunction `json:"-"`
+	afterInserts   []TriggerFunction `json:"-"`
+	afterUpdates   []TriggerFunction `json:"-"`
+	afterDeletes   []TriggerFunction `json:"-"`
+	db             *DB               `json:"-"`
+	model          *Model            `json:"-"`
+	isDebug        bool              `json:"-"`
+	isTest         bool              `json:"-"`
 }
 
 /**
@@ -48,21 +49,22 @@ type Command struct {
 **/
 func newCommand(model *Model, tp CommandType) *Command {
 	result := &Command{
-		Type:          tp,
-		From:          getFrom(model, ""),
-		Data:          []et.Json{},
-		New:           et.Json{},
-		Old:           et.Json{},
-		Conditions:    []*et.Condition{},
-		Returns:       []string{},
-		beforeInserts: []TriggerFunction{},
-		beforeUpdates: []TriggerFunction{},
-		beforeDeletes: []TriggerFunction{},
-		afterInserts:  []TriggerFunction{},
-		afterUpdates:  []TriggerFunction{},
-		afterDeletes:  []TriggerFunction{},
-		db:            model.db,
-		model:         model,
+		Type:           tp,
+		From:           getFrom(model, ""),
+		Data:           []et.Json{},
+		New:            et.Json{},
+		Old:            et.Json{},
+		Conditions:     []*et.Condition{},
+		Returns:        []string{},
+		UseSourceField: model.SourceField != "",
+		beforeInserts:  []TriggerFunction{},
+		beforeUpdates:  []TriggerFunction{},
+		beforeDeletes:  []TriggerFunction{},
+		afterInserts:   []TriggerFunction{},
+		afterUpdates:   []TriggerFunction{},
+		afterDeletes:   []TriggerFunction{},
+		db:             model.db,
+		model:          model,
 	}
 	if map[CommandType]bool{INSERT: true, BULK: true, UPSERT: true}[tp] {
 		for _, fn := range model.beforeInserts {

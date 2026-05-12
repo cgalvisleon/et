@@ -13,9 +13,7 @@ import (
 * pgColsVals: Separates data into sorted parallel (column names, quoted value strings) slices
 * and a source et.Json for ATTRIB fields destined for the _source JSONB column.
 * When excludePKs is true, primary key columns are omitted from the column lists (for SET clauses).
-* @param model *jsql.Model
-* @param data et.Json
-* @param excludePKs bool
+* @param model *jsql.Model, data et.Json, excludePKs bool
 * @return []string, []string, et.Json
 **/
 func pgColsVals(model *jsql.Model, data et.Json, excludePKs bool) (cols, vals []string, source et.Json) {
@@ -64,9 +62,7 @@ func pgColsVals(model *jsql.Model, data et.Json, excludePKs bool) (cols, vals []
 
 /**
 * pgAttribReturn: Builds a _source JSONB extraction expression for RETURNING clauses (no table alias).
-* @param sourceField string
-* @param field string
-* @param tp jsql.TypeData
+* @param sourceField string, field string, tp jsql.TypeData
 * @return string
 **/
 func pgAttribReturn(sourceField, field string, tp jsql.TypeData) string {
@@ -125,8 +121,7 @@ func pgReturningClause(command *jsql.Command) string {
 
 /**
 * pgPKWhere: Builds a WHERE clause using primary key values from data.
-* @param model *jsql.Model
-* @param data et.Json
+* @param model *jsql.Model, data et.Json
 * @return string
 **/
 func pgPKWhere(model *jsql.Model, data et.Json) string {

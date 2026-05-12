@@ -76,19 +76,21 @@ func pgSelectExpr(field *jsql.Field, useSource bool) string {
 	if field.From == nil {
 		return ""
 	}
-	if field.TypeColumn == jsql.ATTRIB {
-		sourceField := jsql.SOURCE
-		if field.From.Model != nil && field.From.Model.SourceField != "" {
-			sourceField = field.From.Model.SourceField
-		}
-		return pgAttribExpr(field.From.As, sourceField, field.Name, field.TypeData)
-	} else if field.TypeColumn == jsql.COLUMN {
+	if field.TypeColumn == jsql.COLUMN {
 		if useSource {
 			return fmt.Sprintf("'%s', %s.%s", field.As, field.From.As, field.Name)
 		} else {
 			return fmt.Sprintf("%s.%s AS %s", field.From.As, field.Name, field.As)
 		}
 	}
+	if field.TypeColumn == jsql.ATTRIB {
+		sourceField := jsql.SOURCE
+		if field.From.Model != nil && field.From.Model.SourceField != "" {
+			sourceField = field.From.Model.SourceField
+		}
+		return pgAttribExpr(field.From.As, sourceField, field.Name, field.TypeData)
+	}
+
 	return ""
 }
 

@@ -22,9 +22,7 @@ import (
 * A type cast is applied only when the root is a typed ATTRIB and has no sub-path
 * (i.e. the direct value is read and its TypeData is numeric, bool or datetime).
 *
-* @param field string
-* @param model *jsql.Model
-* @param alias string
+* @param field string, model *jsql.Model, alias string
 * @return string
 **/
 func resolveField(field string, model *jsql.Model, alias string) string {
@@ -106,9 +104,7 @@ func pgAttribCast(tp jsql.TypeData) string {
 * For nested paths (e.g. "data->address->city") it returns the JSONB path
 * expression followed by AS <last_segment> so the result column is named
 * after the leaf key.
-* @param field string
-* @param model *jsql.Model
-* @param alias string
+* @param field string, model *jsql.Model, alias string
 * @return string
 **/
 func BuildSelectField(field string, model *jsql.Model, alias string) string {
@@ -167,9 +163,7 @@ func buildInList(val any) string {
 
 /**
 * buildCondition: Converts a single et.Condition to a SQL predicate fragment.
-* @param cond *et.Condition
-* @param model *jsql.Model
-* @param alias string
+* @param cond *et.Condition, model *jsql.Model, alias string
 * @return string
 **/
 func buildCondition(cond *et.Condition, model *jsql.Model, alias string) string {
@@ -223,9 +217,7 @@ func buildCondition(cond *et.Condition, model *jsql.Model, alias string) string 
 * BuildConditions: Translates a slice of et.Condition to a SQL predicate string
 * (without the WHERE keyword). Consecutive conditions are joined with AND/OR
 * according to each condition's Connector field.
-* @param conds []*et.Condition
-* @param model *jsql.Model
-* @param alias string
+* @param conds []*et.Condition, model *jsql.Model, alias string
 * @return string
 **/
 func BuildConditions(conds []*et.Condition, model *jsql.Model, alias string) string {
@@ -243,9 +235,9 @@ func BuildConditions(conds []*et.Condition, model *jsql.Model, alias string) str
 		if written > 0 {
 			switch cond.Connector {
 			case et.Or:
-				sb.WriteString("\n   OR ")
+				sb.WriteString("\n OR ")
 			default:
-				sb.WriteString("\n  AND ")
+				sb.WriteString("\n AND ")
 			}
 		}
 		sb.WriteString(fragment)

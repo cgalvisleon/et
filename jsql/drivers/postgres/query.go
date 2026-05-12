@@ -66,8 +66,7 @@ func pgJsonbPath(field string) string {
 /**
 * pgSelectExpr: Resolves a logical field name to a SQL expression, prefixing unqualified
 * names with alias and expanding '->' JSONB paths.
-* @param field *jsql.Field
-* @param useSource bool
+* @param field *jsql.Field, useSource bool
 * @return string
 **/
 func pgSelectExpr(field *jsql.Field, useSource bool) string {
@@ -96,8 +95,7 @@ func pgSelectExpr(field *jsql.Field, useSource bool) string {
 /**
 * pgFieldExpr: Resolves a logical field name to a SQL expression, prefixing unqualified
 * names with alias and expanding '->' JSONB paths.
-* @param field *jsql.Field
-* @param useSource bool
+* @param field *jsql.Field, useSource bool
 * @return string
 **/
 func pgFieldExpr(field *jsql.Field, useSource bool) string {
@@ -149,10 +147,7 @@ func pgFieldExpr(field *jsql.Field, useSource bool) string {
 /**
 * pgAttribExpr: Builds a _source JSONB extraction expression for an ATTRIB column
 * with an optional type cast based on the column's TypeData.
-* @param alias string
-* @param sourceField string
-* @param field string
-* @param tp jsql.TypeData
+* @param alias string, sourceField string, field string, tp jsql.TypeData
 * @return string
 **/
 func pgAttribExpr(alias, sourceField, field string, tp jsql.TypeData) string {
@@ -200,8 +195,7 @@ func findField(query *jsql.Query, field string) (*jsql.Field, bool) {
 * autoSelectFrom: Builds the SELECT expression list from a From's Model columns.
 * Skips the SourceField JSONB blob itself; expands ATTRIB columns inline.
 * Excludes any field listed in hiddens.
-* @param from *jsql.From
-* @param hiddens []string
+* @param from *jsql.From, hiddens []string
 * @return []string
 **/
 func autoSelectFrom(from *jsql.From, hiddens []string) []string {
@@ -238,8 +232,7 @@ func autoSelectFrom(from *jsql.From, hiddens []string) []string {
 /**
 * resolveSelectField: Resolves an explicit field name from query.Selects into a SQL expression.
 * Detects ATTRIB columns and emits the appropriate _source extraction.
-* @param query *jsql.Query
-* @param field string
+* @param query *jsql.Query, field string
 * @return string, bool
 **/
 func resolveSelectField(query *jsql.Query, field string) (string, bool) {
@@ -269,10 +262,7 @@ func pgInValues(val any) string {
 
 /**
 * pgCondExpr: Renders a single Condition as a SQL fragment using alias to qualify the field.
-* @param getField func(string) (*jsql.Field, bool)
-* @param useSourceField bool
-* @param cond *et.Condition
-* @param alias string
+* @param getField func(string) (*jsql.Field, bool), useSourceField bool, cond *et.Condition, alias string
 * @return string
 **/
 func pgCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bool, cond *et.Condition, alias string) string {
@@ -331,10 +321,7 @@ func pgCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bool, 
 
 /**
 * pgCondsSQL: Renders a Condition slice as a SQL clause body joined by AND/OR connectors.
-* @param getField func(string) (*jsql.Field, bool)
-* @param useSourceField bool
-* @param conds []*et.Condition
-* @param alias string
+* @param getField func(string) (*jsql.Field, bool), useSourceField bool, conds []*et.Condition, alias string
 * @return string
 **/
 func pgCondsSQL(getField func(string) (*jsql.Field, bool), useSourceField bool, conds []*et.Condition, alias string) string {

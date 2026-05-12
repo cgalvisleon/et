@@ -32,7 +32,7 @@ func demoDBConnect() error {
 		Where(jsql.Eq("id", 1)).
 		Test().
 		Debug().
-		All()
+		One()
 	if err != nil {
 		return err
 	}

@@ -25,6 +25,7 @@ go run ./cmd/apigateway
 go run ./cmd/daemon
 go run ./cmd/server          # TCP node server (default port 1377, use -port flag)
 go run ./cmd/vm              # JS VM with hot-reload from ./cmd/vm/
+go run ./cmd/jsql            # jsql driver test/demo
 
 # Build all binaries
 go build ./...
@@ -44,12 +45,12 @@ All doc comments for functions, methods, and types must use this block style:
 ```go
 /**
 * FunctionName: Brief description.
-* @param paramName type, description
-* @return type, description
+* @param paramName type
+* @return type
 **/
 ```
 
-its @params and @return must be only one line each.
+Each `@param` and `@return` must be its own single line. For types and interfaces use only the first line (no `@param`/`@return`).
 
 ## Architecture
 
@@ -62,6 +63,67 @@ This is a **modular utility library** for building Go microservices. Each direct
 `et/list.go` defines `List` — the standard paginated result type (`Rows`, `All`, `Count`, `Page`, `Start`, `End`, `Result []Json`).
 
 `et/item.go` and `et/items.go` define single-item and multi-item result wrappers.
+
+### SQL builder: `jsql/`
+
+`jsql/` is a database-agnostic SQL builder and lightweight ORM. Entry points: `jsql.Load()` (reads env vars) and `jsql.LoadTo(config)`.
+
+**Model definition:**
+
+```go
+// Full-featured model (adds id, created_at, updated_at, _source JSONB, _idx VARCHAR(80)):
+model, _ := db.DefineModel("public", "users", 1)
+
+// Manual model (add every column yourself):
+model, _ := db.NewModel("public", "users", 1)
+model.DefineColumn("email", jsql.TEXT, "")
+model.DefinePrimaryKey("id", jsql.KEY, "")
+model.DefineUnique("email", jsql.TEXT, "")
+model.DefineAttrib("name", jsql.TEXT, "")   // stored inside _source JSONB
+model.DefineForeignKeys(orders, map[string]string{"order_id": "id"}, true, false)
+model.Init()  // executes DDL (CREATE TABLE, indexes, FK constraints)
+```
+
+**Key column types:**
+
+| `TypeColumn` | Meaning |
+|---|---|
+| `COLUMN` | Real SQL column |
+| `ATTRIB` | Key inside `_source` JSONB — accessed via `_source->>'field'` or with cast for numeric/bool/datetime |
+| `DETAIL` / `ROLLUP` / `RELATION` | Virtual relationship fields, not stored as columns |
+
+`IdxField` (`_idx`) is `VARCHAR(80)` (`KEY` type); its value is a `reg.ULID()` set by an auto-registered `BeforeInsert` trigger — **not** a database serial/sequence.
+
+**Query / Command API (fluent):**
+
+```go
+items, _ := model.Where(jsql.Eq("status", jsql.ACTIVE)).
+    And(jsql.More("age", 18)).
+    Limit(20).Page(1).All()
+
+item, _ := model.Where(jsql.Eq("id", id)).One()
+
+_, _ = model.Insert(et.Json{"email": "a@b.com"}).ExecTx(nil)
+_, _ = model.Update(et.Json{"status": "archived"}).Where(jsql.Eq("id", id)).ExecTx(nil)
+_, _ = model.Upsert(et.Json{"id": id, "email": "a@b.com"}).ExecTx(nil)
+```
+
+**Nested JSONB paths:** field names use `->` as a path separator (e.g. `"ventas->detalle->precio"`). The condition builder and `BuildSelectField` translate these to the correct PostgreSQL `->`/`->>` chain automatically, with type casts for ATTRIB leaves.
+
+**Driver interface (`jsql/driver.go`):**
+
+```go
+type Driver interface {
+    Connect(db *DB) (*sql.DB, error)
+    Load(model *Model) (string, error)        // DDL generation
+    Query(query *Query) (string, error)       // SELECT generation
+    Command(command *Command) (string, error) // DML generation
+}
+```
+
+Implementations live in `jsql/drivers/<name>/` and self-register via `init()`. Import as a side-effect: `import _ "github.com/cgalvisleon/et/jsql/drivers/postgres"`.
+
+**Debug / Test mode:** both `Model`, `Query`, and `Command` support `.Debug()` (logs SQL, skips execution) and `.Test()` (generates SQL, skips execution). Both return the receiver for chaining.
 
 ### Infrastructure packages (require external services)
 
@@ -121,6 +183,7 @@ Each subdirectory under `cmd/` is a standalone binary:
 - `cmd/create/` — Project/code scaffolding
 - `cmd/server/` — TCP node server (`tcp.NewNode(port)`)
 - `cmd/vm/` — JavaScript VM runner; `go run ./cmd/vm` starts `js.RunDev("./cmd/vm")` with hot-reload
+- `cmd/jsql/` — jsql driver demo: DDL generation, condition building, SELECT field resolution, live DB connection
 - `cmd/client/` — Test client
 - `cmd/install/` — Installation utility
 - `cmd/whatcher/` — Filesystem change watcher
@@ -141,6 +204,9 @@ Templates and generators for new microservices, projects, and Kubernetes deploym
 
 | Package | Variable                                     | Purpose                                |
 | ------- | -------------------------------------------- | -------------------------------------- |
+| `jsql`  | `DB_DRIVER`                                  | Driver name (`postgres`, `sqlite`, …)  |
+| `jsql`  | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Database connection       |
+| `jsql`  | `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_CONN_LIFETIME`, `DB_POOL_CONN_IDLE_TIME` | Connection pool (optional) |
 | `cache` | `REDIS_HOST`                                 | Redis connection                       |
 | `event` | `NATS_HOST`                                  | NATS connection                        |
 | `event` | `NATS_USER`, `NATS_PASSWORD`                 | NATS auth (optional)                   |

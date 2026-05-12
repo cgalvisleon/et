@@ -2,6 +2,7 @@ package jsql
 
 import (
 	"encoding/json"
+	"regexp"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
@@ -16,6 +17,7 @@ type From struct {
 	Name     string `json:"name"`
 	Table    string `json:"table"`
 	As       string `json:"as"`
+	Model    *Model `json:"model"`
 }
 
 /**
@@ -34,6 +36,7 @@ func getFrom(model *Model, as string) *From {
 		Name:     model.Name,
 		Table:    model.Table,
 		As:       as,
+		Model:    model,
 	}
 }
 
@@ -44,6 +47,7 @@ type Field struct {
 	Name string `json:"name"`
 	As   string `json:"as"`
 	From *From  `json:"from"`
+	Agg  string `json:"agg"`
 }
 
 /**
@@ -192,6 +196,128 @@ func (s *Query) Debug() *Query {
 func (s *Query) Test() *Query {
 	s.isTest = true
 	return s
+}
+
+/**
+* GetField: Creates a Field from a Column, using the Column's name and attaching the provided From.
+* @param field string
+* @return (*Field, bool)
+**/
+func (s *Query) GetField(field string) (*Field, bool) {
+	pattern1 := regexp.MustCompile(`^([A-Za-z0-9]+)\.([A-Za-z0-9]+):([A-Za-z0-9]+)$`) // from.name:as
+	pattern2 := regexp.MustCompile(`^([A-Za-z0-9]+)\.([A-Za-z0-9]+)$`)                // from.name
+	pattern3 := regexp.MustCompile(`^([A-Za-z0-9>]+):([A-Za-z0-9]+)$`)                // name:as
+	pattern4 := regexp.MustCompile(`^([A-Za-z0-9>]+)$`)                               // name
+	pattern5 := regexp.MustCompile(`^([A-Za-z]+)\((.+)\):([A-Za-z0-9]+)$`)            // agg(field):as
+	pattern6 := regexp.MustCompile(`^([A-Za-z]+)\((.+)\)`)                            // agg(field)
+
+	getForm := func(name string) *From {
+		if len(s.Froms) == 0 {
+			return nil
+		}
+		if name == "" {
+			return s.Froms[0]
+		}
+		for _, from := range s.Froms {
+			if from.Name == name {
+				return from
+			} else if from.As == name {
+				return from
+			}
+		}
+		return nil
+	}
+
+	if pattern1.MatchString(field) {
+		matches := pattern1.FindStringSubmatch(field)
+		if len(matches) == 4 {
+			fromName := matches[1]
+			columnName := matches[2]
+			as := matches[3]
+			from := getForm(fromName)
+			if from == nil {
+				return nil, false
+			}
+			return &Field{
+				Name: columnName,
+				As:   as,
+				From: from,
+			}, true
+		}
+	} else if pattern2.MatchString(field) {
+		matches := pattern2.FindStringSubmatch(field)
+		if len(matches) == 3 {
+			fromName := matches[1]
+			columnName := matches[2]
+			from := getForm(fromName)
+			if from == nil {
+				return nil, false
+			}
+			return &Field{
+				Name: columnName,
+				From: from,
+			}, true
+		}
+	} else if pattern3.MatchString(field) {
+		matches := pattern3.FindStringSubmatch(field)
+		if len(matches) == 3 {
+			columnName := matches[1]
+			as := matches[2]
+			from := getForm("")
+			if from == nil {
+				return nil, false
+			}
+			return &Field{
+				Name: columnName,
+				As:   as,
+				From: from,
+			}, true
+		}
+	} else if pattern4.MatchString(field) {
+		matches := pattern4.FindStringSubmatch(field)
+		if len(matches) == 2 {
+			columnName := matches[1]
+			from := getForm("")
+			if from == nil {
+				return nil, false
+			}
+			return &Field{
+				Name: columnName,
+				As:   columnName,
+				From: from,
+			}, true
+		}
+	} else if pattern5.MatchString(field) {
+		matches := pattern5.FindStringSubmatch(field)
+		if len(matches) == 4 {
+			agg := matches[1]
+			columnName := matches[2]
+			as := matches[3]
+			result, ok := s.GetField(columnName)
+			if !ok {
+				return nil, false
+			}
+			result.As = as
+			result.Agg = agg
+			return result, true
+		}
+	} else if pattern6.MatchString(field) {
+		matches := pattern6.FindStringSubmatch(field)
+		if len(matches) == 3 {
+			agg := matches[1]
+			columnName := matches[2]
+			as := matches[1]
+			result, ok := s.GetField(columnName)
+			if !ok {
+				return nil, false
+			}
+			result.As = as
+			result.Agg = agg
+			return result, true
+		}
+	}
+
+	return nil, false
 }
 
 /**
@@ -401,7 +527,7 @@ func (s *Query) AllTx(tx *Tx) (et.Items, error) {
 	}
 
 	if s.isDebug {
-		logs.Debug("SQL:", sql)
+		logs.Debug("SQL:\n", sql)
 	}
 
 	if !s.isTest {
@@ -454,4 +580,31 @@ func (s *Query) OneTx(tx *Tx) (et.Item, error) {
 **/
 func (s *Query) One() (et.Item, error) {
 	return s.OneTx(nil)
+}
+
+/**
+* OrderBy: Appends a field to the ORDER BY clause; sorted=true means ASC, false means DESC.
+* @param field string
+* @param sorted bool
+* @return *Query
+**/
+func (s *Query) OrderBy(field string, sorted bool) *Query {
+	s.OrdersBy = append(s.OrdersBy, &Index{Name: field, Sorted: sorted})
+	return s
+}
+
+/**
+* PrimaryModel: Returns the Model for the primary FROM source, or nil if not found.
+* @return *Model
+**/
+func (s *Query) PrimaryModel() *Model {
+	if len(s.Froms) == 0 || s.db == nil {
+		return nil
+	}
+	f := s.Froms[0]
+	model, err := s.db.GetModel(f.Schema, f.Name)
+	if err != nil {
+		return nil
+	}
+	return model
 }

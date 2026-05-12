@@ -27,6 +27,7 @@ type Command struct {
 	New           et.Json           `json:"new"`
 	Old           et.Json           `json:"old"`
 	Conditions    []*et.Condition   `json:"conditions"`
+	Returns       []string          `json:"returns"`
 	beforeInserts []TriggerFunction `json:"-"`
 	beforeUpdates []TriggerFunction `json:"-"`
 	beforeDeletes []TriggerFunction `json:"-"`
@@ -53,6 +54,7 @@ func newCommand(model *Model, tp CommandType) *Command {
 		New:           et.Json{},
 		Old:           et.Json{},
 		Conditions:    []*et.Condition{},
+		Returns:       []string{},
 		beforeInserts: []TriggerFunction{},
 		beforeUpdates: []TriggerFunction{},
 		beforeDeletes: []TriggerFunction{},
@@ -167,6 +169,16 @@ func (s *Command) And(cond *et.Condition) *Command {
 func (s *Command) Or(cond *et.Condition) *Command {
 	cond.Connector = et.Or
 	return s.addCondition(cond)
+}
+
+/**
+* Return: Sets the fields to return in the result.
+* @param fields ...string
+* @return *Command
+**/
+func (s *Command) Return(fields ...string) *Command {
+	s.Returns = fields
+	return s
 }
 
 /**

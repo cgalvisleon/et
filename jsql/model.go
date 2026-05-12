@@ -180,11 +180,7 @@ func (s *Model) Db() *sql.DB {
 
 /**
 * newColumn: Constructs a Column bound to this model without adding it to the Columns slice.
-* @param name string
-* @param tpColumn TypeColumn
-* @param tpData TypeData
-* @param defaultValue interface{}
-* @param definition []byte
+* @param name string, tpColumn TypeColumn, tpData TypeData, defaultValue interface{}, definition []byte
 * @return *Column
 **/
 func (s *Model) newColumn(name string, tpColumn TypeColumn, tpData TypeData, defaultValue interface{}, definition []byte) *Column {

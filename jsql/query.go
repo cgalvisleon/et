@@ -106,22 +106,25 @@ const (
 * Query: Holds all clauses needed to build a SELECT statement.
 **/
 type Query struct {
-	Froms          []*From         `json:"froms"`
-	Joins          []*Join         `json:"joins"`
-	Selects        []string        `json:"selects"`
-	Conditions     []*et.Condition `json:"conditions"`
-	Hiddens        []string        `json:"hidden"`
-	GroupsBy       []string        `json:"group_by"`
-	OrdersBy       []*Index        `json:"order_by"`
-	Havings        []*et.Condition `json:"havings"`
-	Offset         int             `json:"offset"`
-	Rows           int             `json:"rows"`
-	UseSourceField bool            `json:"use_source_field"`
-	section        QuerySection    `json:"-"`
-	maxRows        int             `json:"-"`
-	db             *DB             `json:"-"`
-	isDebug        bool            `json:"-"`
-	isTest         bool            `json:"-"`
+	Froms          []*From            `json:"froms"`
+	Joins          []*Join            `json:"joins"`
+	Selects        []string           `json:"selects"`
+	Conditions     []*et.Condition    `json:"conditions"`
+	Hiddens        []string           `json:"hidden"`
+	GroupsBy       []string           `json:"group_by"`
+	OrdersBy       []*Index           `json:"order_by"`
+	Havings        []*et.Condition    `json:"havings"`
+	Offset         int                `json:"offset"`
+	Rows           int                `json:"rows"`
+	UseSourceField bool               `json:"use_source_field"`
+	Details        map[string]*Detail `json:"details"`
+	Rollups        map[string]*Detail `json:"rollups"`
+	Relations      map[string]*Detail `json:"relations"`
+	section        QuerySection       `json:"-"`
+	maxRows        int                `json:"-"`
+	db             *DB                `json:"-"`
+	isDebug        bool               `json:"-"`
+	isTest         bool               `json:"-"`
 }
 
 /**
@@ -143,6 +146,9 @@ func newQuery(model *Model, as ...string) *Query {
 		GroupsBy:   make([]string, 0),
 		OrdersBy:   make([]*Index, 0),
 		Havings:    make([]*et.Condition, 0),
+		Details:    make(map[string]*Detail, 0),
+		Rollups:    make(map[string]*Detail, 0),
+		Relations:  make(map[string]*Detail, 0),
 		section:    whereSection,
 		maxRows:    model.db.RecordLimit,
 		db:         model.db,

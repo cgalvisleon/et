@@ -8,18 +8,59 @@ import (
 	"github.com/cgalvisleon/et/reg"
 )
 
+type DefIndex struct {
+	Name     string   `json:"name"`
+	TypeData TypeData `json:"type_data"`
+	Default  any      `json:"default"`
+}
+
+type DefTo struct {
+	Schema string `json:"schema"`
+	Name   string `json:"name"`
+}
+
+type DefForeignKeys struct {
+	To              DefTo             `json:"to"`
+	Keys            map[string]string `json:"keys"`
+	OnDeleteCascade bool              `json:"on_delete_cascade"`
+	OnUpdateCascade bool              `json:"on_update_cascade"`
+}
+
+type DefDetail struct {
+	Name string            `json:"name"`
+	Keys map[string]string `json:"keys"`
+}
+
+type DefRollup struct {
+	Name   string            `json:"name"`
+	To     DefTo             `json:"to"`
+	Keys   map[string]string `json:"keys"`
+	Select []any             `json:"select"`
+}
+
+type DefRelation struct {
+	Name string            `json:"name"`
+	Keys map[string]string `json:"keys"`
+}
+
 type Define struct {
-	Schema      string   `json:"schema"`
-	Name        string   `json:"name"`
-	Version     int      `json:"version"`
-	Columns     []Column `json:"columns"`
-	SourceField string   `json:"source_field"`
-	IdxField    string   `json:"idx_field"`
-	PrimaryKeys []Index  `json:"primary_keys"`
-	ForeignKeys []Detail `json:"foreign_keys"`
-	Indexes     []Index  `json:"indexes"`
-	Unique      []Index  `json:"unique"`
-	Required    []Index  `json:"required"`
+	Schema      string                 `json:"schema"`
+	Name        string                 `json:"name"`
+	Version     int                    `json:"version"`
+	Columns     []Column               `json:"columns"`
+	SourceField string                 `json:"source_field"`
+	IdxField    string                 `json:"idx_field"`
+	PrimaryKeys []DefIndex             `json:"primary_keys"`
+	ForeignKeys []DefForeignKeys       `json:"foreign_keys"`
+	Indexes     []DefIndex             `json:"indexes"`
+	Unique      []DefIndex             `json:"unique"`
+	Required    []DefIndex             `json:"required"`
+	Hiddens     []string               `json:"hiddens"`
+	Details     map[string]DefDetail   `json:"details"`
+	Rollups     map[string]DefRollup   `json:"rollups"`
+	Relations   map[string]DefRelation `json:"relations"`
+	IsDebug     bool                   `json:"is_debug"`
+	IsTest      bool                   `json:"is_test"`
 }
 
 /**

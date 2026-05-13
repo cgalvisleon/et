@@ -5,6 +5,10 @@ package jsql
 * @return error
 **/
 func (s *DB) initCore() error {
+	err := defineCatalog(s)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -12,13 +16,18 @@ var (
 	catalog *Model
 )
 
-func (s *DB) defineCatalog() error {
+/**
+* defineCatalog: Defines the catalog table.
+* @param db *DB
+* @return error
+**/
+func defineCatalog(db *DB) error {
 	if catalog != nil {
 		return nil
 	}
 
 	var err error
-	catalog, err = s.Define(Define{
+	catalog, err = db.Define(Define{
 		Schema:  "core",
 		Name:    "catalog",
 		Version: 1,
@@ -27,17 +36,19 @@ func (s *DB) defineCatalog() error {
 			{Name: "name", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
 			{Name: "version", TypeColumn: COLUMN, TypeData: INT, Default: 0},
 			{Name: "kind", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-			{Name: "definition", TypeColumn: COLUMN, TypeData: JSON, Default: ""},
+			{Name: "definition", TypeColumn: COLUMN, TypeData: BYTES, Default: []byte{}},
 		},
 		IdxField: IDX,
-		PrimaryKeys: []Index{
-			{Name: ID, Sorted: true},
+		PrimaryKeys: []DefIndex{
+			{Name: ID},
 		},
-		Indexes: []Index{
-			{Name: "name", Sorted: true},
-			{Name: "kind", Sorted: true},
-			{Name: "version", Sorted: true},
+		Indexes: []DefIndex{
+			{Name: "name"},
+			{Name: "kind"},
+			{Name: "version"},
 		},
+		IsDebug: true,
+		IsTest:  true,
 	})
 	if err != nil {
 		return err

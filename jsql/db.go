@@ -347,6 +347,41 @@ func (s *DB) Define(define Define) (*Model, error) {
 	if define.IdxField != "" {
 		result.defineIdxField()
 	}
+	for _, primaryKey := range define.PrimaryKeys {
+		result.DefinePrimaryKey(primaryKey.Name, primaryKey.TypeData, primaryKey.Default)
+	}
+	for _, foreignKey := range define.ForeignKeys {
+		to, err := s.GetModel(foreignKey.To.Schema, foreignKey.To.Name)
+		if err != nil {
+			return nil, err
+		}
+		result.DefineForeignKeys(to, foreignKey.Keys, foreignKey.OnDeleteCascade, foreignKey.OnUpdateCascade)
+	}
+	for _, index := range define.Indexes {
+		result.DefineIndex(index.Name, index.TypeData, index.Default)
+	}
+	for _, unique := range define.Unique {
+		result.DefineUnique(unique.Name, unique.TypeData, unique.Default)
+	}
+	for _, required := range define.Required {
+		result.DefineRequired(required.Name, required.TypeData, required.Default)
+	}
+	for _, hidden := range define.Hiddens {
+		result.DefineHidden(hidden)
+	}
+	for _, detail := range define.Details {
+		result.DefineDetail(detail.Name, detail.Keys)
+	}
+	for _, rollup := range define.Rollups {
+		to, err := s.GetModel(rollup.To.Schema, rollup.To.Name)
+		if err != nil {
+			return nil, err
+		}
+		result.DefineRollup(rollup.Name, to, rollup.Keys, rollup.Select)
+	}
+	for _, relation := range define.Relations {
+		result.DefineRelation(relation.Name, nil, relation.Keys)
+	}
 
 	return result, nil
 }

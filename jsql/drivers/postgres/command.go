@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -8,6 +9,49 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
 )
+
+/**
+* pgJsonbValue: Serializes a Go value as a PostgreSQL jsonb literal ('...'::jsonb).
+* @param val any
+* @return string
+**/
+func pgJsonbValue(val any) string {
+	bt, err := json.Marshal(val)
+	if err != nil {
+		return "'null'::jsonb"
+	}
+	return fmt.Sprintf("'%s'::jsonb", string(bt))
+}
+
+/**
+* pgJsonbSetPath: Converts a '->' separated field path into a PostgreSQL jsonb path array ('{a,b,c}').
+* @param field string
+* @return string
+**/
+func pgJsonbSetPath(field string) string {
+	parts := strings.Split(field, "->")
+	return fmt.Sprintf("'{%s}'", strings.Join(parts, ","))
+}
+
+/**
+* pgJsonbSet: Builds a chained jsonb_set expression to patch individual ATTRIB keys into sourceField.
+* Each key in source becomes jsonb_set(expr, '{key}', value::jsonb, true).
+* @param sourceField string, source et.Json
+* @return string
+**/
+func pgJsonbSet(sourceField string, source et.Json) string {
+	keys := make([]string, 0, len(source))
+	for k := range source {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	expr := sourceField
+	for _, k := range keys {
+		expr = fmt.Sprintf("jsonb_set(%s, %s, %s, true)", expr, pgJsonbSetPath(k), pgJsonbValue(source[k]))
+	}
+	return expr
+}
 
 /**
 * pgColsVals: Separates data into sorted parallel (column names, quoted value strings) slices
@@ -199,7 +243,7 @@ func pgUpdateSQL(command *jsql.Command) (string, error) {
 			setCols = append(setCols, fmt.Sprintf("%s = %s", col, vals[i]))
 		}
 		if model.SourceField != "" && len(source) > 0 {
-			setCols = append(setCols, fmt.Sprintf("%s = %v::jsonb", model.SourceField, jsql.Quoted(source)))
+			setCols = append(setCols, fmt.Sprintf("%s = %s", model.SourceField, pgJsonbSet(model.SourceField, source)))
 		}
 	} else {
 		keys := make([]string, 0, len(command.New))

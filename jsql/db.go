@@ -382,6 +382,12 @@ func (s *DB) Define(define Define) (*Model, error) {
 	for _, relation := range define.Relations {
 		result.DefineRelation(relation.Name, nil, relation.Keys)
 	}
+	if define.IsDebug {
+		result.IsDebug = true
+	}
+	if define.IsTest {
+		result.isTest = true
+	}
 
 	return result, nil
 }

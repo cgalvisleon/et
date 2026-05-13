@@ -207,19 +207,16 @@ func (s *MSSQL) Load(model *jsql.Model) (string, error) {
 	for _, stmt := range msDDLUnique(model, table) {
 		sb.WriteString("\n")
 		sb.WriteString(stmt)
-		sb.WriteString("\n")
 	}
 
 	for _, stmt := range msDDLIndexes(model, table) {
 		sb.WriteString("\n")
 		sb.WriteString(stmt)
-		sb.WriteString("\n")
 	}
 
 	for _, stmt := range msDDLForeignKeys(model, table) {
 		sb.WriteString("\n")
 		sb.WriteString(stmt)
-		sb.WriteString("\n")
 	}
 
 	return sb.String(), nil

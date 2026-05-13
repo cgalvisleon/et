@@ -158,13 +158,11 @@ func (s *Sqlite) Load(model *jsql.Model) (string, error) {
 	for _, stmt := range sqDDLUnique(model, table) {
 		sb.WriteString("\n")
 		sb.WriteString(stmt)
-		sb.WriteString("\n")
 	}
 
 	for _, stmt := range sqDDLIndexes(model, table) {
 		sb.WriteString("\n")
 		sb.WriteString(stmt)
-		sb.WriteString("\n")
 	}
 
 	return sb.String(), nil

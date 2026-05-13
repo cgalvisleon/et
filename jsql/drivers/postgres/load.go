@@ -198,25 +198,21 @@ func (s *Postgres) Load(model *jsql.Model) (string, error) {
 	if pk := ddlPrimaryKey(model, table); pk != "" {
 		sb.WriteString("\n")
 		sb.WriteString(pk)
-		sb.WriteString("\n")
 	}
 
 	for _, stmt := range ddlUnique(model, table) {
 		sb.WriteString("\n")
 		sb.WriteString(stmt)
-		sb.WriteString("\n")
 	}
 
 	for _, stmt := range ddlIndexes(model, table) {
 		sb.WriteString("\n")
 		sb.WriteString(stmt)
-		sb.WriteString("\n")
 	}
 
 	for _, stmt := range ddlForeignKeys(model, table) {
 		sb.WriteString("\n")
 		sb.WriteString(stmt)
-		sb.WriteString("\n")
 	}
 
 	return sb.String(), nil

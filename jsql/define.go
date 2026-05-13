@@ -15,6 +15,11 @@ type Define struct {
 	Columns     []Column `json:"columns"`
 	SourceField string   `json:"source_field"`
 	IdxField    string   `json:"idx_field"`
+	PrimaryKeys []Index  `json:"primary_keys"`
+	ForeignKeys []Detail `json:"foreign_keys"`
+	Indexes     []Index  `json:"indexes"`
+	Unique      []Index  `json:"unique"`
+	Required    []Index  `json:"required"`
 }
 
 /**

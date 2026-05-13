@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/microsoft/go-mssqldb"
-
 	"github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/utility"
+	_ "github.com/microsoft/go-mssqldb"
 )
 
 /**

@@ -1,6 +1,7 @@
 package jsql
 
 const (
+	RESULT     string = "result"
 	SOURCE     string = "_source"
 	IDX        string = "_idx"
 	ID         string = "id"

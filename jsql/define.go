@@ -66,6 +66,7 @@ func (s *Model) defineSource() *Column {
 func (s *Model) defineIdxField() *Index {
 	s.IdxField = IDX
 	result := s.DefineIndex(IDX, KEY, "")
+	s.Hiddens = append(s.Hiddens, IDX)
 	s.BeforeInsert(func(tx *Tx, old, new et.Json) error {
 		new[s.IdxField] = reg.GetULID("")
 		return nil
@@ -170,7 +171,7 @@ func (s *Model) DefineRequired(name string, tp TypeData, def any) *Index {
 * @param name ...string
 **/
 func (s *Model) DefineHidden(name ...string) {
-	s.Hidden = append(s.Hidden, name...)
+	s.Hiddens = append(s.Hiddens, name...)
 }
 
 /**

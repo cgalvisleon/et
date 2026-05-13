@@ -91,7 +91,7 @@ func (s *Schema) newModel(name string, version int) (*Model, error) {
 		ForeignKeys:   make([]*Detail, 0),
 		Unique:        make([]*Index, 0),
 		Required:      make([]*Index, 0),
-		Hidden:        make([]string, 0),
+		Hiddens:       make([]string, 0),
 		Details:       make(map[string]*Detail, 0),
 		Rollups:       make(map[string]*Detail, 0),
 		Relations:     make(map[string]*Detail, 0),

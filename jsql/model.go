@@ -44,7 +44,7 @@ type Model struct {
 	ForeignKeys   []*Detail          `json:"foreign_keys"`
 	Unique        []*Index           `json:"unique"`
 	Required      []*Index           `json:"required"`
-	Hidden        []string           `json:"hidden"`
+	Hiddens       []string           `json:"hiddens"`
 	Details       map[string]*Detail `json:"details"`
 	Rollups       map[string]*Detail `json:"rollups"`
 	Relations     map[string]*Detail `json:"relations"`

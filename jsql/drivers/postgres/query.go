@@ -240,39 +240,79 @@ func pgCondsSQL(getField func(string) (*jsql.Field, bool), useSourceField bool, 
 * @return string, bool
 **/
 func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
-	if fld, ok := findField(query, field); ok {
-		alias := fld.From.As
-		if fld.TypeColumn == jsql.COLUMN {
-			if query.UseSourceField {
-				return fmt.Sprintf("'%s', %s.%s", fld.As, alias, fld.Name), true
-			} else {
-				return fmt.Sprintf("%s.%s AS %s", alias, fld.Name, fld.As), true
-			}
+	fld, ok := findField(query, field)
+	if !ok {
+		return "", false
+	}
+	alias := fld.From.As
+	if fld.TypeColumn == jsql.COLUMN {
+		if query.UseSourceField {
+			return fmt.Sprintf("'%s', %s.%s", fld.As, alias, fld.Name), true
+		} else {
+			return fmt.Sprintf("%s.%s AS %s", alias, fld.Name, fld.As), true
 		}
-		if fld.TypeColumn == jsql.ATTRIB {
-			sourceField := jsql.SOURCE
-			fullPath := pgJsonbPath(sourceField + "->" + fld.Name)
-			path := fullPath
-			if alias != "" {
-				path = alias + "." + fullPath
-			}
-			switch fld.TypeData {
-			case jsql.INT:
-				return fmt.Sprintf("'%s', (%s)::bigint", fld.As, path), true
-			case jsql.FLOAT:
-				return fmt.Sprintf("'%s', (%s)::double precision", fld.As, path), true
-			case jsql.BOOLEAN:
-				return fmt.Sprintf("'%s', (%s)::boolean", fld.As, path), true
-			case jsql.DATETIME:
-				return fmt.Sprintf("'%s', (%s)::timestamptz", fld.As, path), true
-			default:
-				return fmt.Sprintf("'%s', %s", fld.As, path), true
-			}
+	}
+	if fld.TypeColumn == jsql.ATTRIB {
+		sourceField := jsql.SOURCE
+		fullPath := pgJsonbPath(sourceField + "->" + fld.Name)
+		path := fullPath
+		if alias != "" {
+			path = alias + "." + fullPath
 		}
-
+		switch fld.TypeData {
+		case jsql.INT:
+			return fmt.Sprintf("'%s', (%s)::bigint", fld.As, path), true
+		case jsql.FLOAT:
+			return fmt.Sprintf("'%s', (%s)::double precision", fld.As, path), true
+		case jsql.BOOLEAN:
+			return fmt.Sprintf("'%s', (%s)::boolean", fld.As, path), true
+		case jsql.DATETIME:
+			return fmt.Sprintf("'%s', (%s)::timestamptz", fld.As, path), true
+		default:
+			return fmt.Sprintf("'%s', %s", fld.As, path), true
+		}
+	}
+	if fld.TypeColumn == jsql.DETAIL {
+		if fld.From == nil {
+			return "", false
+		}
+		if fld.From.Model == nil {
+			return "", false
+		}
+		detail, ok := fld.From.Model.Details[fld.Name]
+		if !ok {
+			return "", false
+		}
+		query.Details[fld.Name] = detail
+	}
+	if fld.TypeColumn == jsql.ROLLUP {
+		if fld.From == nil {
+			return "", false
+		}
+		if fld.From.Model == nil {
+			return "", false
+		}
+		rollup, ok := fld.From.Model.Rollups[fld.Name]
+		if !ok {
+			return "", false
+		}
+		query.Rollups[fld.Name] = rollup
+	}
+	if fld.TypeColumn == jsql.RELATION {
+		if fld.From == nil {
+			return "", false
+		}
+		if fld.From.Model == nil {
+			return "", false
+		}
+		relation, ok := fld.From.Model.Relations[fld.Name]
+		if !ok {
+			return "", false
+		}
+		query.Relations[fld.Name] = relation
 	}
 
-	return field, false
+	return "", false
 }
 
 /**

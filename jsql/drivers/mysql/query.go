@@ -211,28 +211,70 @@ func myCondsSQL(getField func(string) (*jsql.Field, bool), useSourceField bool, 
 * @return string, bool
 **/
 func mySelectExpr(query *jsql.Query, field string) (string, bool) {
-	if fld, ok := findField(query, field); ok {
-		alias := fld.From.As
-		if fld.TypeColumn == jsql.COLUMN {
-			if query.UseSourceField {
-				return fmt.Sprintf("'%s', `%s`.`%s`", fld.As, alias, fld.Name), true
-			}
-			return fmt.Sprintf("`%s`.`%s` AS `%s`", alias, fld.Name, fld.As), true
-		}
-		if fld.TypeColumn == jsql.ATTRIB {
-			sourceField := jsql.SOURCE
-			col := fmt.Sprintf("`%s`", sourceField)
-			if alias != "" {
-				col = fmt.Sprintf("`%s`.`%s`", alias, sourceField)
-			}
-			expr := myJsonExtract(col, fld.Name, fld.TypeData)
-			if query.UseSourceField {
-				return fmt.Sprintf("'%s', %s", fld.As, expr), true
-			}
-			return fmt.Sprintf("%s AS `%s`", expr, fld.As), true
-		}
+	fld, ok := findField(query, field)
+	if !ok {
+		return "", false
 	}
-	return field, false
+	alias := fld.From.As
+	if fld.TypeColumn == jsql.COLUMN {
+		if query.UseSourceField {
+			return fmt.Sprintf("'%s', `%s`.`%s`", fld.As, alias, fld.Name), true
+		}
+		return fmt.Sprintf("`%s`.`%s` AS `%s`", alias, fld.Name, fld.As), true
+	}
+	if fld.TypeColumn == jsql.ATTRIB {
+		sourceField := jsql.SOURCE
+		col := fmt.Sprintf("`%s`", sourceField)
+		if alias != "" {
+			col = fmt.Sprintf("`%s`.`%s`", alias, sourceField)
+		}
+		expr := myJsonExtract(col, fld.Name, fld.TypeData)
+		if query.UseSourceField {
+			return fmt.Sprintf("'%s', %s", fld.As, expr), true
+		}
+		return fmt.Sprintf("%s AS `%s`", expr, fld.As), true
+	}
+	if fld.TypeColumn == jsql.DETAIL {
+		if fld.From == nil {
+			return "", false
+		}
+		if fld.From.Model == nil {
+			return "", false
+		}
+		detail, ok := fld.From.Model.Details[fld.Name]
+		if !ok {
+			return "", false
+		}
+		query.Details[fld.Name] = detail
+	}
+	if fld.TypeColumn == jsql.ROLLUP {
+		if fld.From == nil {
+			return "", false
+		}
+		if fld.From.Model == nil {
+			return "", false
+		}
+		rollup, ok := fld.From.Model.Rollups[fld.Name]
+		if !ok {
+			return "", false
+		}
+		query.Rollups[fld.Name] = rollup
+	}
+	if fld.TypeColumn == jsql.RELATION {
+		if fld.From == nil {
+			return "", false
+		}
+		if fld.From.Model == nil {
+			return "", false
+		}
+		relation, ok := fld.From.Model.Relations[fld.Name]
+		if !ok {
+			return "", false
+		}
+		query.Relations[fld.Name] = relation
+	}
+
+	return "", false
 }
 
 /**

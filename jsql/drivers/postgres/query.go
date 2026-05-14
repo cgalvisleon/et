@@ -288,7 +288,7 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 			Keys:   detail.Keys,
 			Select: detail.Select,
 			Page:   fld.Page,
-			Rows:   fld.Rows,
+			Rows:   detail.Rows,
 		}
 	}
 	if fld.TypeColumn == jsql.ROLLUP {
@@ -307,7 +307,7 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 			Keys:   rollup.Keys,
 			Select: rollup.Select,
 			Page:   fld.Page,
-			Rows:   fld.Rows,
+			Rows:   rollup.Rows,
 		}
 	}
 

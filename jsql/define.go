@@ -292,6 +292,7 @@ func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, sel
 
 	s.defineColumn(name, ROLLUP, ANY, nil, []byte{})
 	detail := newDetail(to, keys, selects, false, false)
+	detail.Rows = 1
 	s.Details[name] = detail
 	return detail, nil
 }

@@ -52,7 +52,6 @@ type Field struct {
 	From       *From      `json:"from"`
 	Agg        string     `json:"agg"`
 	Page       int        `json:"page"`
-	Rows       int        `json:"rows"`
 }
 
 /**
@@ -251,7 +250,7 @@ func (s *Query) GetField(field string) (*Field, bool) {
 	pattern4 := regexp.MustCompile(`^([A-Za-z0-9_>-]+)$`)                                  // field
 	pattern5 := regexp.MustCompile(`^([A-Za-z0-9_]+)\((.+)\):([A-Za-z0-9_]+)$`)            // agg(field):as
 	pattern6 := regexp.MustCompile(`^([A-Za-z0-9_]+)\((.+)\)`)                             // agg(field)
-	pattern7 := regexp.MustCompile(`^([^|]+)\|(\d+):(\d+)$`)                               // field|page|rows
+	pattern7 := regexp.MustCompile(`^([^|]+)\|page:(\d+)$`)                                // field|page:1
 
 	getForm := func(name string) *From {
 		if len(s.Froms) == 0 {
@@ -281,14 +280,12 @@ func (s *Query) GetField(field string) (*Field, bool) {
 		return i
 	}
 
-	page := 0
-	rows := 0
+	page := 1
 	if pattern7.MatchString(field) {
 		matches := pattern7.FindStringSubmatch(field)
-		if len(matches) == 4 {
+		if len(matches) == 3 {
 			field = matches[1]
-			page = parseInt(matches[2], 0)
-			rows = parseInt(matches[3], 0)
+			page = parseInt(matches[2], 1)
 			return nil, false
 		}
 	}
@@ -314,7 +311,6 @@ func (s *Query) GetField(field string) (*Field, bool) {
 				As:         as,
 				From:       from,
 				Page:       page,
-				Rows:       rows,
 			}, true
 		}
 	} else if pattern2.MatchString(field) {
@@ -337,7 +333,6 @@ func (s *Query) GetField(field string) (*Field, bool) {
 				As:         columnName,
 				From:       from,
 				Page:       page,
-				Rows:       rows,
 			}, true
 		}
 	} else if pattern3.MatchString(field) {
@@ -360,7 +355,6 @@ func (s *Query) GetField(field string) (*Field, bool) {
 				As:         as,
 				From:       from,
 				Page:       page,
-				Rows:       rows,
 			}, true
 		}
 	} else if pattern4.MatchString(field) {
@@ -382,7 +376,6 @@ func (s *Query) GetField(field string) (*Field, bool) {
 				As:         columnName,
 				From:       from,
 				Page:       page,
-				Rows:       rows,
 			}, true
 		}
 	} else if pattern5.MatchString(field) {
@@ -611,8 +604,56 @@ func (s *Query) Page(page int) *Query {
 * @return *Query
 **/
 func (s *Query) Limit(rows int) *Query {
+	if rows > s.maxRows {
+		rows = s.maxRows
+	}
 	s.Rows = rows
 	return s
+}
+
+/**
+* setDetails: Sets the details for the query.
+* @param tx *Tx
+* @param item et.Json
+* @return et.Json
+**/
+func (s *Query) setDetails(tx *Tx, item et.Json) et.Json {
+	for name, detail := range s.Details {
+		qry := detail.GetQuery(item)
+		detailResult, err := qry.AllTx(tx)
+		if err != nil {
+			return item
+		}
+		item[name] = detailResult.Result
+	}
+	return item
+}
+
+/**
+* setRollup: Sets the rollup for the query.
+* @param tx *Tx
+* @param item et.Json
+* @return et.Json
+**/
+func (s *Query) setRollup(tx *Tx, item et.Json) et.Json {
+	for name, detail := range s.Rollups {
+		qry := detail.GetQuery(item)
+		detailResult, err := qry.AllTx(tx)
+		if err != nil {
+			return item
+		}
+		if !detailResult.Ok {
+			continue
+		}
+		if len(detail.Select) == 1 {
+			att := detail.Select[0]
+			val := detailResult.Get(0, att)
+			item[att] = val
+			continue
+		}
+		item[name] = detailResult.Result[0]
+	}
+	return item
 }
 
 /**
@@ -643,18 +684,10 @@ func (s *Query) AllTx(tx *Tx) (et.Items, error) {
 		return et.Items{}, err
 	}
 
-	for _, item := range result.Result {
-		for name, detail := range s.Details {
-			qry := detail.GetQuery(item)
-			detailResult, err := qry.AllTx(tx)
-			if err != nil {
-				return et.Items{}, err
-			}
-			item[name] = detailResult
-		}
-		for name, detail := range s.Rollups {
-			item[name] = detail
-		}
+	for i, item := range result.Result {
+		item = s.setDetails(tx, item)
+		item = s.setRollup(tx, item)
+		result.Result[i] = item
 	}
 
 	return result, nil

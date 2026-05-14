@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -14,10 +15,11 @@ import (
 * Connect: Establishes a SQLite connection using the file path stored in DB_NAME.
 * Enables foreign key enforcement via PRAGMA and configures the connection pool.
 * SQLite is single-writer; DB_POOL_MAX_OPEN defaults to 1.
+* @param ctx context.Context
 * @param db *jsql.DB
 * @return *sql.DB, error
 **/
-func (s *Sqlite) Connect(db *jsql.DB) (*sql.DB, error) {
+func (s *Sqlite) Connect(ctx context.Context, db *jsql.DB) (*sql.DB, error) {
 	params := db.Params
 	name := params.GetStr("DB_NAME", "")
 	if name == "" {
@@ -29,12 +31,12 @@ func (s *Sqlite) Connect(db *jsql.DB) (*sql.DB, error) {
 		return nil, err
 	}
 
-	if err := result.Ping(); err != nil {
+	if err := result.PingContext(ctx); err != nil {
 		result.Close()
 		return nil, err
 	}
 
-	if _, err := result.Exec("PRAGMA foreign_keys = ON;"); err != nil {
+	if _, err := result.ExecContext(ctx, "PRAGMA foreign_keys = ON;"); err != nil {
 		result.Close()
 		return nil, err
 	}

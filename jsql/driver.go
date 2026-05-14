@@ -1,6 +1,9 @@
 package jsql
 
-import "database/sql"
+import (
+	"context"
+	"database/sql"
+)
 
 const (
 	DriverPostgres = "postgres"
@@ -15,7 +18,7 @@ const (
 * Driver: Interface that every database backend must implement to generate SQL and manage connections.
 **/
 type Driver interface {
-	Connect(db *DB) (*sql.DB, error)
+	Connect(ctx context.Context, db *DB) (*sql.DB, error)
 	Load(model *Model) (string, error)
 	Query(query *Query) (string, error)
 	Command(command *Command) (string, error)

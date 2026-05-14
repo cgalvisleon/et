@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -8,7 +9,7 @@ import (
 	"github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/utility"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 )
 
 /**
@@ -55,20 +56,103 @@ func chain(params utility.Config) string {
 
 /**
 * connectTo: Establishes a PostgreSQL connection using the provided connection string.
+* @param ctx context.Context
 * @param chain string
 * @return *sql.DB, error
 **/
-func connectTo(chain string) (*sql.DB, error) {
+func connectTo(ctx context.Context, chain string) (*sql.DB, error) {
 	result, err := sql.Open("postgres", chain)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := result.Ping(); err != nil {
+	if err := result.PingContext(ctx); err != nil {
 		result.Close()
 		return nil, err
 	}
 
+	return result, nil
+}
+
+/**
+* connectWithRetry: Retries connectTo up to maxRetries times with exponential backoff.
+* @param ctx context.Context
+* @param dsn string
+* @param maxRetries int
+* @return *sql.DB, error
+**/
+func connectWithRetry(ctx context.Context, dsn string, maxRetries int) (*sql.DB, error) {
+	delay := 500 * time.Millisecond
+	var err error
+	for i := 0; i <= maxRetries; i++ {
+		var db *sql.DB
+		db, err = connectTo(ctx, dsn)
+		if err == nil {
+			return db, nil
+		}
+		if i == maxRetries {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(delay):
+		}
+		delay *= 2
+		if delay > 16*time.Second {
+			delay = 16 * time.Second
+		}
+	}
+	return nil, err
+}
+
+/**
+* Connect: Establishes a PostgreSQL connection using the parameters stored in db.
+* Reads DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME and DB_SSL_MODE from db.Params.
+* @param ctx context.Context
+* @param db *jsql.DB
+* @return *sql.DB, error
+**/
+func (s *Postgres) Connect(ctx context.Context, db *jsql.DB) (*sql.DB, error) {
+	params := db.Params
+	dsn := defaultChain(params)
+	result, err := connectWithRetry(ctx, dsn, 5)
+	if err != nil {
+		return nil, err
+	}
+
+	database := params.GetStr("DB_NAME", "")
+	if database == "" {
+		result.Close()
+		return nil, fmt.Errorf("DB_NAME is required")
+	}
+
+	err = CreateDatabase(result, database)
+	result.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	dsn = chain(params)
+	result, err = connectWithRetry(ctx, dsn, 5)
+	if err != nil {
+		return nil, err
+	}
+
+	maxOpen := params.GetInt("DB_POOL_MAX_OPEN", 50)
+	maxIdle := params.GetInt("DB_POOL_MAX_IDLE", 25)
+	connLifetime := params.GetInt("DB_POOL_CONN_LIFETIME", 900)
+	connIdleTime := params.GetInt("DB_POOL_CONN_IDLE_TIME", 300)
+
+	result.SetMaxOpenConns(maxOpen)
+	result.SetMaxIdleConns(maxIdle)
+	result.SetConnMaxLifetime(time.Duration(connLifetime) * time.Second)
+	result.SetConnMaxIdleTime(time.Duration(connIdleTime) * time.Second)
+
+	host := params.GetStr("DB_HOST", "")
+	port := params.GetInt("DB_PORT", 5432)
+	name := params.GetStr("DB_NAME", "")
+	logs.Logf("Postgres", "Connected host:%s:%d db:%s", host, port, name)
 	return result, nil
 }
 
@@ -79,12 +163,12 @@ func connectTo(chain string) (*sql.DB, error) {
 * @return bool, error
 **/
 func ExistDatabase(db *sql.DB, name string) (bool, error) {
-	sql := `
+	query := `
 	SELECT EXISTS(
 	SELECT 1
 	FROM pg_database
 	WHERE UPPER(datname) = UPPER($1));`
-	rows, err := db.Query(sql, name)
+	rows, err := db.Query(query, name)
 	if err != nil {
 		return false, err
 	}
@@ -114,7 +198,7 @@ func CreateDatabase(db *sql.DB, name string) error {
 		return nil
 	}
 
-	sql := fmt.Sprintf(`CREATE DATABASE %s;`, name)
+	sql := fmt.Sprintf(`CREATE DATABASE %s;`, pq.QuoteIdentifier(name))
 	_, err = db.Exec(sql)
 	if err != nil {
 		return err
@@ -138,50 +222,7 @@ func DropDatabase(db *sql.DB, name string) error {
 		return err
 	}
 
-	logs.Logf("Postgres", `Database %s droped`, name)
+	logs.Logf("Postgres", `Database %s dropped`, name)
 
 	return nil
-}
-
-/**
-* Connect: Establishes a PostgreSQL connection using the parameters stored in db.
-* Reads DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME and DB_SSL_MODE from db.Params.
-* @param db *jsql.DB
-* @return *sql.DB, error
-**/
-func (s *Postgres) Connect(db *jsql.DB) (*sql.DB, error) {
-	params := db.Params
-	dsn := defaultChain(params)
-	result, err := connectTo(dsn)
-	if err != nil {
-		return nil, err
-	}
-
-	database := params.GetStr("DB_NAME", "")
-	err = CreateDatabase(result, database)
-	if err != nil {
-		return nil, err
-	}
-
-	dsn = chain(params)
-	result, err = connectTo(dsn)
-	if err != nil {
-		return nil, err
-	}
-
-	maxOpen := params.GetInt("DB_POOL_MAX_OPEN", 50)
-	maxIdle := params.GetInt("DB_POOL_MAX_IDLE", 5)
-	connLifetime := params.GetInt("DB_POOL_CONN_LIFETIME", 900)
-	connIdleTime := params.GetInt("DB_POOL_CONN_IDLE_TIME", 300)
-
-	result.SetMaxOpenConns(maxOpen)
-	result.SetMaxIdleConns(maxIdle)
-	result.SetConnMaxLifetime(time.Duration(connLifetime) * time.Second)
-	result.SetConnMaxIdleTime(time.Duration(connIdleTime) * time.Second)
-
-	host := params.GetStr("DB_HOST", "")
-	port := params.GetInt("DB_PORT", 5432)
-	name := params.GetStr("DB_NAME", "")
-	logs.Logf("Postgres", "Connected host:%s:%d db:%s", host, port, name)
-	return result, nil
 }

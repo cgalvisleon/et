@@ -1,6 +1,7 @@
 package jsql
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -109,7 +110,7 @@ func (s *DB) init() error {
 		return errors.New(msg.MSG_DRIVER_NOT_FOUND)
 	}
 
-	db, err := s.driver.Connect(s)
+	db, err := s.driver.Connect(context.Background(), s)
 	if err != nil {
 		return err
 	}

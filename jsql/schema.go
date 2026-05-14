@@ -94,7 +94,6 @@ func (s *Schema) newModel(name string, version int) (*Model, error) {
 		Hiddens:       make([]string, 0),
 		Details:       make(map[string]*Detail, 0),
 		Rollups:       make(map[string]*Detail, 0),
-		Relations:     make(map[string]*Detail, 0),
 		Version:       version,
 		beforeInserts: make([]TriggerFunction, 0),
 		beforeUpdates: make([]TriggerFunction, 0),

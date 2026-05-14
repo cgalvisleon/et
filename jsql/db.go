@@ -389,9 +389,6 @@ func (s *DB) Define(define Define) (*Model, error) {
 		}
 		result.DefineRollup(rollup.Name, to, rollup.Keys, rollup.Select)
 	}
-	for _, relation := range define.Relations {
-		result.DefineRelation(relation.Name, nil, relation.Keys)
-	}
 	if define.IsDebug {
 		result.IsDebug = true
 	}

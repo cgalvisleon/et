@@ -35,32 +35,26 @@ type DefRollup struct {
 	Name   string            `json:"name"`
 	To     DefTo             `json:"to"`
 	Keys   map[string]string `json:"keys"`
-	Select []any             `json:"select"`
-}
-
-type DefRelation struct {
-	Name string            `json:"name"`
-	Keys map[string]string `json:"keys"`
+	Select []string          `json:"select"`
 }
 
 type Define struct {
-	Schema      string                 `json:"schema"`
-	Name        string                 `json:"name"`
-	Version     int                    `json:"version"`
-	Columns     []Column               `json:"columns"`
-	SourceField string                 `json:"source_field"`
-	IdxField    string                 `json:"idx_field"`
-	PrimaryKeys []DefIndex             `json:"primary_keys"`
-	ForeignKeys []DefForeignKeys       `json:"foreign_keys"`
-	Indexes     []DefIndex             `json:"indexes"`
-	Unique      []DefIndex             `json:"unique"`
-	Required    []DefIndex             `json:"required"`
-	Hiddens     []string               `json:"hiddens"`
-	Details     map[string]DefDetail   `json:"details"`
-	Rollups     map[string]DefRollup   `json:"rollups"`
-	Relations   map[string]DefRelation `json:"relations"`
-	IsDebug     bool                   `json:"is_debug"`
-	IsTest      bool                   `json:"is_test"`
+	Schema      string               `json:"schema"`
+	Name        string               `json:"name"`
+	Version     int                  `json:"version"`
+	Columns     []Column             `json:"columns"`
+	SourceField string               `json:"source_field"`
+	IdxField    string               `json:"idx_field"`
+	PrimaryKeys []DefIndex           `json:"primary_keys"`
+	ForeignKeys []DefForeignKeys     `json:"foreign_keys"`
+	Indexes     []DefIndex           `json:"indexes"`
+	Unique      []DefIndex           `json:"unique"`
+	Required    []DefIndex           `json:"required"`
+	Hiddens     []string             `json:"hiddens"`
+	Details     map[string]DefDetail `json:"details"`
+	Rollups     map[string]DefRollup `json:"rollups"`
+	IsDebug     bool                 `json:"is_debug"`
+	IsTest      bool                 `json:"is_test"`
 }
 
 /**
@@ -169,7 +163,7 @@ func (s *Model) DefineForeignKeys(to *Model, keys map[string]string, onDeleteCas
 	if idx != -1 {
 		return s.ForeignKeys[idx]
 	}
-	detail := newDetail(to, keys, []interface{}{}, onDeleteCascade, onUpdateCascade)
+	detail := newDetail(to, keys, []string{}, onDeleteCascade, onUpdateCascade)
 	s.ForeignKeys = append(s.ForeignKeys, detail)
 	return detail
 }
@@ -259,17 +253,17 @@ func (s *Model) DefineDetail(name string, keys map[string]string) *Detail {
 		to.defineColumn(k, COLUMN, KEY, "", []byte{})
 	}
 	s.defineColumn(name, DETAIL, ANY, nil, []byte{})
-	detail := newDetail(to, keys, []any{}, true, true)
+	detail := newDetail(to, keys, []string{}, true, true)
 	s.Details[name] = detail
 	return detail
 }
 
 /**
 * DefineRollup: Defines a new rollup for the model.
-* @param name string, to *Model, keys map[string]string, selects []any
+* @param name string, to *Model, keys map[string]string, selects []string
 * @return *Detail
 **/
-func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, selects []any) *Detail {
+func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, selects []string) *Detail {
 	result, ok := s.Details[name]
 	if ok {
 		return result
@@ -278,23 +272,6 @@ func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, sel
 	s.defineColumn(name, ROLLUP, ANY, nil, []byte{})
 	detail := newDetail(to, keys, selects, false, false)
 	s.Details[name] = detail
-	return detail
-}
-
-/**
-* DefineRelation: Defines a new relation for the model.
-* @param name string, to *Model, keys map[string]string
-* @return *Detail
-**/
-func (s *Model) DefineRelation(name string, to *Model, keys map[string]string) *Detail {
-	result, ok := s.Relations[name]
-	if ok {
-		return result
-	}
-
-	s.defineColumn(name, RELATION, ANY, nil, []byte{})
-	detail := newDetail(to, keys, []any{}, false, false)
-	s.Relations[name] = detail
 	return detail
 }
 

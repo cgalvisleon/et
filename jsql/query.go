@@ -119,7 +119,6 @@ type Query struct {
 	UseSourceField bool               `json:"use_source_field"`
 	Details        map[string]*Detail `json:"details"`
 	Rollups        map[string]*Detail `json:"rollups"`
-	Relations      map[string]*Detail `json:"relations"`
 	section        QuerySection       `json:"-"`
 	maxRows        int                `json:"-"`
 	db             *DB                `json:"-"`
@@ -148,7 +147,6 @@ func newQuery(model *Model, as ...string) *Query {
 		Havings:    make([]*et.Condition, 0),
 		Details:    make(map[string]*Detail, 0),
 		Rollups:    make(map[string]*Detail, 0),
-		Relations:  make(map[string]*Detail, 0),
 		section:    whereSection,
 		maxRows:    model.db.RecordLimit,
 		db:         model.db,
@@ -567,15 +565,28 @@ func (s *Query) AllTx(tx *Tx) (et.Items, error) {
 		logs.Debug("SQL:\n", sql)
 	}
 
-	if !s.isTest {
-		result, err := s.db.SqlTx(tx, sql)
-		if err != nil {
-			return et.Items{}, err
-		}
-		return result, nil
+	if s.isTest {
+		return et.Items{}, nil
 	}
 
-	return et.Items{}, nil
+	result, err := s.db.SqlTx(tx, sql)
+	if err != nil {
+		return et.Items{}, err
+	}
+
+	for _, item := range result.Result {
+		for name, detail := range s.Details {
+			item[name] = detail
+		}
+		for name, detail := range s.Rollups {
+			item[name] = detail
+		}
+		for name, detail := range s.Rollups {
+			item[name] = detail
+		}
+	}
+
+	return result, nil
 }
 
 /**

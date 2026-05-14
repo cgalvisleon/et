@@ -27,12 +27,11 @@ func (s TypeColumn) Str() string {
 }
 
 const (
-	COLUMN   TypeColumn = "column"
-	ATTRIB   TypeColumn = "atrib"
-	DETAIL   TypeColumn = "detail"
-	ROLLUP   TypeColumn = "rollup"
-	RELATION TypeColumn = "relation"
-	AGG      TypeColumn = "agg"
+	COLUMN TypeColumn = "column"
+	ATTRIB TypeColumn = "atrib"
+	DETAIL TypeColumn = "detail"
+	ROLLUP TypeColumn = "rollup"
+	AGG    TypeColumn = "agg"
 )
 
 /**

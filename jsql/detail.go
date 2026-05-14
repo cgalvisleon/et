@@ -6,7 +6,7 @@ package jsql
 type Detail struct {
 	To              *From             `json:"to"`
 	Keys            map[string]string `json:"keys"`
-	Select          []interface{}     `json:"select"`
+	Select          []string          `json:"select"`
 	OnDeleteCascade bool              `json:"on_delete_cascade"`
 	OnUpdateCascade bool              `json:"on_update_cascade"`
 	Page            int               `json:"page"`
@@ -15,8 +15,7 @@ type Detail struct {
 
 /**
 * setLimit: Returns a copy of the Detail with Page and Rows overridden.
-* @param page int
-* @param rows int
+* @param page int, rows int
 * @return *Detail
 **/
 func (s *Detail) setLimit(page, rows int) *Detail {
@@ -34,13 +33,10 @@ func (s *Detail) setLimit(page, rows int) *Detail {
 /**
 * newDetail: Constructs a Detail linking to the given model with join keys and cascade flags.
 * @param to *Model
-* @param keys map[string]string
-* @param selects []interface{}
-* @param onDeleteCascade bool
-* @param onUpdateCascade bool
+* @param keys map[string]string, selects []string, onDeleteCascade bool, onUpdateCascade bool
 * @return *Detail
 **/
-func newDetail(to *Model, keys map[string]string, selecs []interface{}, onDeleteCascade, onUpdateCascade bool) *Detail {
+func newDetail(to *Model, keys map[string]string, selecs []string, onDeleteCascade, onUpdateCascade bool) *Detail {
 	return &Detail{
 		To:              getFrom(to, ""),
 		Keys:            keys,
@@ -73,9 +69,7 @@ type Joins struct {
 
 /**
 * newJoins: Constructs a Joins entry for the given type, From, and key mapping.
-* @param tp TypeJoin
-* @param from *From
-* @param keys map[string]string
+* @param tp TypeJoin, from *From, keys map[string]string
 * @return *Joins
 **/
 func newJoins(tp TypeJoin, from *From, keys map[string]string) *Joins {

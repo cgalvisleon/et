@@ -279,19 +279,6 @@ func sqSelectExpr(query *jsql.Query, field string) (string, bool) {
 		}
 		query.Rollups[fld.Name] = rollup
 	}
-	if fld.TypeColumn == jsql.RELATION {
-		if fld.From == nil {
-			return "", false
-		}
-		if fld.From.Model == nil {
-			return "", false
-		}
-		relation, ok := fld.From.Model.Relations[fld.Name]
-		if !ok {
-			return "", false
-		}
-		query.Relations[fld.Name] = relation
-	}
 
 	return "", false
 }

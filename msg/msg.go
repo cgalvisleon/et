@@ -102,6 +102,9 @@ var (
 	MSG_SCHEMA_REQUIRED                = "schema is required"
 	MSG_NAME_REQUIRED                  = "name is required"
 	MSG_VERSION_REQUIRED               = "version is required"
+	MSG_TO_MODEL_REQUIRED              = "to model is required"
+	MSG_KEYS_REQUIRED                  = "keys is required"
+	MSG_SELECTS_REQUIRED               = "selects is required"
 )
 
 func init() {
@@ -207,5 +210,8 @@ func init() {
 		MSG_SCHEMA_REQUIRED = "esquema es requerido"
 		MSG_NAME_REQUIRED = "nombre es requerido"
 		MSG_VERSION_REQUIRED = "versión es requerida"
+		MSG_TO_MODEL_REQUIRED = "modelo destino es requerido"
+		MSG_KEYS_REQUIRED = "claves son requeridas"
+		MSG_SELECTS_REQUIRED = "selecciones son requeridas"
 	}
 }

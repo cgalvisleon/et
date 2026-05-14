@@ -380,14 +380,20 @@ func (s *DB) Define(define Define) (*Model, error) {
 		result.DefineHidden(hidden)
 	}
 	for _, detail := range define.Details {
-		result.DefineDetail(detail.Name, detail.Keys)
+		_, err := result.DefineDetail(detail.Name, detail.Keys, detail.Rows)
+		if err != nil {
+			return nil, err
+		}
 	}
 	for _, rollup := range define.Rollups {
 		to, err := s.GetModel(rollup.To.Schema, rollup.To.Name)
 		if err != nil {
 			return nil, err
 		}
-		result.DefineRollup(rollup.Name, to, rollup.Keys, rollup.Select)
+		_, err = result.DefineRollup(rollup.Name, to, rollup.Keys, rollup.Select)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if define.IsDebug {
 		result.IsDebug = true

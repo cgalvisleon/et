@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
 )
 
@@ -29,6 +30,7 @@ type DefForeignKeys struct {
 type DefDetail struct {
 	Name string            `json:"name"`
 	Keys map[string]string `json:"keys"`
+	Rows int               `json:"rows"`
 }
 
 type DefRollup struct {
@@ -234,45 +236,64 @@ func (s *Model) DefineAttrib(name string, tp TypeData, def any) *Column {
 
 /**
 * DefineDetail: Defines a new detail for the model.
-* @param name string, keys map[string]string
-* @return *Detail
+* @param name string, keys map[string]string, rows int
+* @return (*Detail, error)
 **/
-func (s *Model) DefineDetail(name string, keys map[string]string) *Detail {
+func (s *Model) DefineDetail(name string, keys map[string]string, rows int) (*Detail, error) {
 	result, ok := s.Details[name]
 	if ok {
-		return result
+		return result, nil
+	}
+
+	if len(keys) == 0 {
+		return nil, fmt.Errorf(msg.MSG_KEYS_REQUIRED)
 	}
 
 	detailName := fmt.Sprintf("%s_%s", s.Name, name)
 	to, err := s.db.NewModel(s.Schema, detailName, 1)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	for fk, k := range keys {
-		s.defineColumn(fk, COLUMN, KEY, "", []byte{})
-		to.defineColumn(k, COLUMN, KEY, "", []byte{})
+	for k, fk := range keys {
+		s.defineColumn(k, COLUMN, KEY, "", []byte{})
+		to.defineColumn(fk, COLUMN, KEY, "", []byte{})
 	}
 	s.defineColumn(name, DETAIL, ANY, nil, []byte{})
 	detail := newDetail(to, keys, []string{}, true, true)
+	detail.Rows = rows
 	s.Details[name] = detail
-	return detail
+	return detail, nil
 }
 
 /**
 * DefineRollup: Defines a new rollup for the model.
-* @param name string, to *Model, keys map[string]string, selects []string
-* @return *Detail
+* @param name string, to *Model,
+* @param keys map[string]string is primary key and foreign key,
+* @param selects []string
+* @return (*Detail, error)
 **/
-func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, selects []string) *Detail {
+func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, selects []string) (*Detail, error) {
 	result, ok := s.Details[name]
 	if ok {
-		return result
+		return result, nil
+	}
+
+	if to == nil {
+		return nil, fmt.Errorf(msg.MSG_TO_MODEL_REQUIRED)
+	}
+
+	if len(keys) == 0 {
+		return nil, fmt.Errorf(msg.MSG_KEYS_REQUIRED)
+	}
+
+	if len(selects) == 0 {
+		return nil, fmt.Errorf(msg.MSG_SELECTS_REQUIRED)
 	}
 
 	s.defineColumn(name, ROLLUP, ANY, nil, []byte{})
 	detail := newDetail(to, keys, selects, false, false)
 	s.Details[name] = detail
-	return detail
+	return detail, nil
 }
 
 /**

@@ -1,5 +1,7 @@
 package jsql
 
+import "github.com/cgalvisleon/et/et"
+
 /**
 * Detail: Defines a relationship to another model, including join keys and cascade rules.
 **/
@@ -9,31 +11,32 @@ type Detail struct {
 	Select          []string          `json:"select"`
 	OnDeleteCascade bool              `json:"on_delete_cascade"`
 	OnUpdateCascade bool              `json:"on_update_cascade"`
-	Page            int               `json:"page"`
 	Rows            int               `json:"rows"`
 }
 
 /**
-* setLimit: Returns a copy of the Detail with Page and Rows overridden.
-* @param page int, rows int
-* @return *Detail
+* GetQuery: Returns the query for the detail.
+* @param item et.Json
+* @return *Query
 **/
-func (s *Detail) setLimit(page, rows int) *Detail {
-	return &Detail{
-		To:              s.To,
-		Keys:            s.Keys,
-		Select:          s.Select,
-		OnDeleteCascade: s.OnDeleteCascade,
-		OnUpdateCascade: s.OnUpdateCascade,
-		Page:            page,
-		Rows:            rows,
+func (s *Detail) GetQuery(item et.Json, page, rows int) *Query {
+	q := newQuery(s.To.Model, "A")
+	for k, fk := range s.Keys {
+		v, exists := item[k]
+		if !exists {
+			continue
+		}
+		q.Where(Eq(fk, v))
 	}
+	q.Select(s.Select...)
+	q.Limit(rows)
+	q.Page(page)
+	return q
 }
 
 /**
 * newDetail: Constructs a Detail linking to the given model with join keys and cascade flags.
-* @param to *Model
-* @param keys map[string]string, selects []string, onDeleteCascade bool, onUpdateCascade bool
+* @param to *Model, keys map[string]string, selecs []string, onDeleteCascade bool, onUpdateCascade bool
 * @return *Detail
 **/
 func newDetail(to *Model, keys map[string]string, selecs []string, onDeleteCascade, onUpdateCascade bool) *Detail {

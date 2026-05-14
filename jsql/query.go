@@ -3,6 +3,7 @@ package jsql
 import (
 	"encoding/json"
 	"regexp"
+	"strconv"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
@@ -50,6 +51,8 @@ type Field struct {
 	As         string     `json:"as"`
 	From       *From      `json:"from"`
 	Agg        string     `json:"agg"`
+	Page       int        `json:"page"`
+	Rows       int        `json:"rows"`
 }
 
 /**
@@ -103,27 +106,58 @@ const (
 )
 
 /**
+* QueryDetail: Defines a relationship to another model, including join keys and cascade rules.
+**/
+type QueryDetail struct {
+	To     *From             `json:"to"`
+	Keys   map[string]string `json:"keys"`
+	Select []string          `json:"select"`
+	Page   int               `json:"page"`
+	Rows   int               `json:"rows"`
+}
+
+/**
+* GetQuery: Returns the query for the detail.
+* @param item et.Json
+* @return *Query
+**/
+func (s *QueryDetail) GetQuery(item et.Json) *Query {
+	q := newQuery(s.To.Model, "A")
+	for k, fk := range s.Keys {
+		v, exists := item[k]
+		if !exists {
+			continue
+		}
+		q.Where(Eq(fk, v))
+	}
+	q.Select(s.Select...)
+	q.Limit(s.Rows)
+	q.Page(s.Page)
+	return q
+}
+
+/**
 * Query: Holds all clauses needed to build a SELECT statement.
 **/
 type Query struct {
-	Froms          []*From            `json:"froms"`
-	Joins          []*Join            `json:"joins"`
-	Selects        []string           `json:"selects"`
-	Conditions     []*et.Condition    `json:"conditions"`
-	Hiddens        []string           `json:"hidden"`
-	GroupsBy       []string           `json:"group_by"`
-	OrdersBy       []*Index           `json:"order_by"`
-	Havings        []*et.Condition    `json:"havings"`
-	Offset         int                `json:"offset"`
-	Rows           int                `json:"rows"`
-	UseSourceField bool               `json:"use_source_field"`
-	Details        map[string]*Detail `json:"details"`
-	Rollups        map[string]*Detail `json:"rollups"`
-	section        QuerySection       `json:"-"`
-	maxRows        int                `json:"-"`
-	db             *DB                `json:"-"`
-	isDebug        bool               `json:"-"`
-	isTest         bool               `json:"-"`
+	Froms          []*From                 `json:"froms"`
+	Joins          []*Join                 `json:"joins"`
+	Selects        []string                `json:"selects"`
+	Conditions     []*et.Condition         `json:"conditions"`
+	Hiddens        []string                `json:"hidden"`
+	GroupsBy       []string                `json:"group_by"`
+	OrdersBy       []*Index                `json:"order_by"`
+	Havings        []*et.Condition         `json:"havings"`
+	Offset         int                     `json:"offset"`
+	Rows           int                     `json:"rows"`
+	UseSourceField bool                    `json:"use_source_field"`
+	Details        map[string]*QueryDetail `json:"details"`
+	Rollups        map[string]*QueryDetail `json:"rollups"`
+	section        QuerySection            `json:"-"`
+	maxRows        int                     `json:"-"`
+	db             *DB                     `json:"-"`
+	isDebug        bool                    `json:"-"`
+	isTest         bool                    `json:"-"`
 }
 
 /**
@@ -145,8 +179,8 @@ func newQuery(model *Model, as ...string) *Query {
 		GroupsBy:   make([]string, 0),
 		OrdersBy:   make([]*Index, 0),
 		Havings:    make([]*et.Condition, 0),
-		Details:    make(map[string]*Detail, 0),
-		Rollups:    make(map[string]*Detail, 0),
+		Details:    make(map[string]*QueryDetail, 0),
+		Rollups:    make(map[string]*QueryDetail, 0),
 		section:    whereSection,
 		maxRows:    model.db.RecordLimit,
 		db:         model.db,
@@ -217,6 +251,7 @@ func (s *Query) GetField(field string) (*Field, bool) {
 	pattern4 := regexp.MustCompile(`^([A-Za-z0-9_>-]+)$`)                                  // field
 	pattern5 := regexp.MustCompile(`^([A-Za-z0-9_]+)\((.+)\):([A-Za-z0-9_]+)$`)            // agg(field):as
 	pattern6 := regexp.MustCompile(`^([A-Za-z0-9_]+)\((.+)\)`)                             // agg(field)
+	pattern7 := regexp.MustCompile(`^([^|]+)\|(\d+):(\d+)$`)                               // field|page|rows
 
 	getForm := func(name string) *From {
 		if len(s.Froms) == 0 {
@@ -233,6 +268,29 @@ func (s *Query) GetField(field string) (*Field, bool) {
 			}
 		}
 		return nil
+	}
+
+	parseInt := func(s string, defaultValue int) int {
+		if s == "" {
+			return defaultValue
+		}
+		i, err := strconv.Atoi(s)
+		if err != nil {
+			return defaultValue
+		}
+		return i
+	}
+
+	page := 0
+	rows := 0
+	if pattern7.MatchString(field) {
+		matches := pattern7.FindStringSubmatch(field)
+		if len(matches) == 4 {
+			field = matches[1]
+			page = parseInt(matches[2], 0)
+			rows = parseInt(matches[3], 0)
+			return nil, false
+		}
 	}
 
 	if pattern1.MatchString(field) {
@@ -255,6 +313,8 @@ func (s *Query) GetField(field string) (*Field, bool) {
 				Name:       columnName,
 				As:         as,
 				From:       from,
+				Page:       page,
+				Rows:       rows,
 			}, true
 		}
 	} else if pattern2.MatchString(field) {
@@ -276,6 +336,8 @@ func (s *Query) GetField(field string) (*Field, bool) {
 				Name:       columnName,
 				As:         columnName,
 				From:       from,
+				Page:       page,
+				Rows:       rows,
 			}, true
 		}
 	} else if pattern3.MatchString(field) {
@@ -297,6 +359,8 @@ func (s *Query) GetField(field string) (*Field, bool) {
 				Name:       columnName,
 				As:         as,
 				From:       from,
+				Page:       page,
+				Rows:       rows,
 			}, true
 		}
 	} else if pattern4.MatchString(field) {
@@ -317,6 +381,8 @@ func (s *Query) GetField(field string) (*Field, bool) {
 				Name:       columnName,
 				As:         columnName,
 				From:       from,
+				Page:       page,
+				Rows:       rows,
 			}, true
 		}
 	} else if pattern5.MatchString(field) {
@@ -462,6 +528,9 @@ func (s *Query) Hidden(fields ...string) *Query {
 * @return *Query
 **/
 func (s *Query) Where(cond *et.Condition) *Query {
+	if len(s.Conditions) > 0 {
+		return s.And(cond)
+	}
 	s.Conditions = append(s.Conditions, cond)
 	s.section = whereSection
 	return s
@@ -576,10 +645,12 @@ func (s *Query) AllTx(tx *Tx) (et.Items, error) {
 
 	for _, item := range result.Result {
 		for name, detail := range s.Details {
-			item[name] = detail
-		}
-		for name, detail := range s.Rollups {
-			item[name] = detail
+			qry := detail.GetQuery(item)
+			detailResult, err := qry.AllTx(tx)
+			if err != nil {
+				return et.Items{}, err
+			}
+			item[name] = detailResult
 		}
 		for name, detail := range s.Rollups {
 			item[name] = detail

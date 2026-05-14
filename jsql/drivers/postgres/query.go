@@ -283,7 +283,13 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 		if !ok {
 			return "", false
 		}
-		query.Details[fld.Name] = detail
+		query.Details[fld.Name] = &jsql.QueryDetail{
+			To:     detail.To,
+			Keys:   detail.Keys,
+			Select: detail.Select,
+			Page:   fld.Page,
+			Rows:   fld.Rows,
+		}
 	}
 	if fld.TypeColumn == jsql.ROLLUP {
 		if fld.From == nil {
@@ -296,7 +302,13 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 		if !ok {
 			return "", false
 		}
-		query.Rollups[fld.Name] = rollup
+		query.Rollups[fld.Name] = &jsql.QueryDetail{
+			To:     rollup.To,
+			Keys:   rollup.Keys,
+			Select: rollup.Select,
+			Page:   fld.Page,
+			Rows:   fld.Rows,
+		}
 	}
 
 	return "", false

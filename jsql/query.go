@@ -568,7 +568,7 @@ func (s *Query) AllTx(tx *Tx) (et.Items, error) {
 	}
 
 	if !s.isTest {
-		result, err := s.db.sqlTx(tx, sql)
+		result, err := s.db.SqlTx(tx, sql)
 		if err != nil {
 			return et.Items{}, err
 		}

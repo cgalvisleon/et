@@ -216,13 +216,13 @@ func (s *DB) GetModel(schema string, name string) (*Model, error) {
 }
 
 /**
-* sqlTx: Executes a SQL query inside the given transaction (or directly on the pool if nil).
+* SqlTx: Executes a SQL query inside the given transaction (or directly on the pool if nil).
 * @param tx *Tx
 * @param query string
 * @param arg ...any
 * @return et.Items, error
 **/
-func (s *DB) sqlTx(tx *Tx, query string, arg ...any) (et.Items, error) {
+func (s *DB) SqlTx(tx *Tx, query string, arg ...any) (et.Items, error) {
 	query = SQLParse(query, arg...)
 	if tx != nil {
 		err := tx.begin(s.db)
@@ -252,6 +252,16 @@ func (s *DB) sqlTx(tx *Tx, query string, arg ...any) (et.Items, error) {
 }
 
 /**
+* Sql: Executes a SQL query directly on the DB (no transaction).
+* @param query string
+* @param args ...any
+* @return et.Items, error
+**/
+func (s *DB) Sql(query string, args ...any) (et.Items, error) {
+	return s.SqlTx(nil, query, args...)
+}
+
+/**
 * load: Generates DDL for the model via the driver and executes it against the DB.
 * @param model *Model
 * @return error
@@ -272,7 +282,7 @@ func (s *DB) load(model *Model) error {
 	}
 
 	if !model.isTest {
-		_, err = s.sqlTx(nil, sql)
+		_, err = s.SqlTx(nil, sql)
 		if err != nil {
 			return err
 		}

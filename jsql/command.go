@@ -295,7 +295,7 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 		}
 
 		if !s.isTest {
-			_, err = s.db.sqlTx(tx, sql)
+			_, err = s.db.SqlTx(tx, sql)
 			if err != nil {
 				return et.Items{}, err
 			}
@@ -353,7 +353,7 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 		}
 
 		if !s.isTest {
-			_, err = s.db.sqlTx(tx, sql)
+			_, err = s.db.SqlTx(tx, sql)
 			if err != nil {
 				return et.Items{}, err
 			}
@@ -407,7 +407,7 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 		}
 
 		if !s.isTest {
-			_, err = s.db.sqlTx(tx, sql)
+			_, err = s.db.SqlTx(tx, sql)
 			if err != nil {
 				return et.Items{}, err
 			}

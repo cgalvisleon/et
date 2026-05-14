@@ -328,14 +328,14 @@ func orSelects(query *jsql.Query) []string {
 				if slices.Contains(model.Hiddens, col.Name) {
 					continue
 				}
-				if col.TypeColumn != jsql.COLUMN || col.Name == jsql.SOURCE {
+				if col.Name == jsql.SOURCE {
 					continue
 				}
-				fld, exists := query.GetField(col.Name)
-				if !exists {
+				selectExpr, ok := orSelectExpr(query, col.Name)
+				if !ok {
 					continue
 				}
-				pairs = append(pairs, fmt.Sprintf("'%s', \"%s\".\"%s\"", fld.As, fld.From.As, col.Name))
+				pairs = append(pairs, selectExpr)
 			}
 			src := fmt.Sprintf("\"%s\".\"%s\"", from.As, jsql.SOURCE)
 			if len(pairs) > 0 {

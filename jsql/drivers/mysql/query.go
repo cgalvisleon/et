@@ -314,14 +314,14 @@ func mySelects(query *jsql.Query) []string {
 					if slices.Contains(model.Hiddens, col.Name) {
 						continue
 					}
-					if col.TypeColumn != jsql.COLUMN || col.Name == jsql.SOURCE {
+					if col.Name == jsql.SOURCE {
 						continue
 					}
-					fld, exists := query.GetField(col.Name)
-					if !exists {
+					selectExpr, ok := mySelectExpr(query, col.Name)
+					if !ok {
 						continue
 					}
-					columnExprs = append(columnExprs, fmt.Sprintf("'%s', `%s`.`%s`", fld.As, fld.From.As, col.Name))
+					columnExprs = append(columnExprs, selectExpr)
 				}
 				selectExprs = append(selectExprs, fmt.Sprintf("JSON_MERGE_PATCH(`%s`.`%s`, JSON_OBJECT(%s))", from.As, jsql.SOURCE, strings.Join(columnExprs, ", ")))
 			}

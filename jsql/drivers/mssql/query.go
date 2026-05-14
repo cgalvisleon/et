@@ -321,14 +321,14 @@ func msSelects(query *jsql.Query) []string {
 					if slices.Contains(model.Hiddens, col.Name) {
 						continue
 					}
-					if col.TypeColumn != jsql.COLUMN || col.Name == jsql.SOURCE {
+					if col.Name == jsql.SOURCE {
 						continue
 					}
-					fld, exists := query.GetField(col.Name)
-					if !exists {
+					selectExpr, ok := msSelectExpr(query, col.Name)
+					if !ok {
 						continue
 					}
-					columnExprs = append(columnExprs, fmt.Sprintf("[%s].[%s] AS [%s]", fld.From.As, col.Name, fld.As))
+					columnExprs = append(columnExprs, selectExpr)
 				}
 				// Merge _source with regular columns using JSON_MODIFY chain
 				expr := fmt.Sprintf("[%s].[%s]", from.As, jsql.SOURCE)

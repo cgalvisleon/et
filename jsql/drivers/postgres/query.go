@@ -327,47 +327,41 @@ func pgSelects(query *jsql.Query) []string {
 			if slices.Contains(query.Hiddens, field) {
 				continue
 			}
+			if field == jsql.SOURCE {
+				continue
+			}
 			selectExpr, ok := pgSelectExpr(query, field)
 			if !ok {
 				continue
 			}
 			selectExprs = append(selectExprs, selectExpr)
 		}
+		selectExprs = append([]string{}, fmt.Sprintf("jsonb_build_object(\n%s\n)", strings.Join(selectExprs, ",\n")))
+	} else {
+		for _, from := range query.Froms {
+			model := from.Model
+			var columnExprs []string
+			for _, col := range model.Columns {
+				if slices.Contains(query.Hiddens, col.Name) {
+					continue
+				}
+				if slices.Contains(model.Hiddens, col.Name) {
+					continue
+				}
+				if col.TypeColumn != jsql.COLUMN && col.Name == jsql.SOURCE {
+					continue
+				}
+				columnExpr, ok := pgSelectExpr(query, col.Name)
+				if !ok {
+					continue
+				}
+				columnExprs = append(columnExprs, columnExpr)
+			}
+			selectExprs = append(selectExprs, fmt.Sprintf("%s.%s ||\njsonb_build_object(\n%s)", from.As, jsql.SOURCE, strings.Join(columnExprs, ",\n")))
+		}
 	}
 
-	if query.UseSourceField {
-		if len(query.Selects) > 0 {
-			selectExprs = append([]string{}, fmt.Sprintf("jsonb_build_object(\n%s\n) AS %s", strings.Join(selectExprs, ",\n"), jsql.RESULT))
-		} else {
-			for _, from := range query.Froms {
-				model := from.Model
-				var columnExprs []string
-				for _, col := range model.Columns {
-					if slices.Contains(query.Hiddens, col.Name) {
-						continue
-					}
-					if slices.Contains(model.Hiddens, col.Name) {
-						continue
-					}
-					if col.TypeColumn != jsql.COLUMN || col.Name == jsql.SOURCE {
-						continue
-					}
-					fld, exists := query.GetField(col.Name)
-					if !exists {
-						continue
-					}
-					columnExprs = append(columnExprs, fmt.Sprintf("'%s', %s.%s", fld.As, fld.From.As, col.Name))
-				}
-				selectExprs = append(selectExprs, fmt.Sprintf("%s.%s ||\njsonb_build_object(\n%s)", from.As, jsql.SOURCE, strings.Join(columnExprs, ",\n")))
-			}
-			selectExprs = append([]string{}, fmt.Sprintf("%s AS %s", strings.Join(selectExprs, ",\n"), jsql.RESULT))
-		}
-	} else {
-		if len(query.Selects) == 0 {
-			selectExprs = append(selectExprs, "*")
-		}
-	}
-	return selectExprs
+	return append([]string{}, fmt.Sprintf("%s AS %s", strings.Join(selectExprs, ",\n"), jsql.RESULT))
 }
 
 /**

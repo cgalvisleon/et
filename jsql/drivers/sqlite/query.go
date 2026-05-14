@@ -332,14 +332,14 @@ func sqSelects(query *jsql.Query) []string {
 					if slices.Contains(model.Hiddens, col.Name) {
 						continue
 					}
-					if col.TypeColumn != jsql.COLUMN || col.Name == jsql.SOURCE {
+					if col.Name == jsql.SOURCE {
 						continue
 					}
-					fld, exists := query.GetField(col.Name)
-					if !exists {
+					columnExpr, ok := sqSelectExpr(query, col.Name)
+					if !ok {
 						continue
 					}
-					columnExprs = append(columnExprs, fmt.Sprintf("'%s', %s.%s", fld.As, fld.From.As, col.Name))
+					columnExprs = append(columnExprs, columnExpr)
 				}
 				selectExprs = append(selectExprs, fmt.Sprintf("json_patch(%s.%s, json_object(%s))", from.As, jsql.SOURCE, strings.Join(columnExprs, ", ")))
 			}

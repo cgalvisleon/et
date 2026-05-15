@@ -8,31 +8,25 @@ require (
 	github.com/dimiro1/banner v1.1.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-chi/chi/v5 v5.2.1
-	github.com/go-sql-driver/mysql v1.8.1
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/manifoldco/promptui v0.9.0
 	github.com/mattn/go-colorable v0.1.14
-	github.com/microsoft/go-mssqldb v1.7.2
 	github.com/nats-io/nats.go v1.41.2
 	github.com/neo4j/neo4j-go-driver/v5 v5.28.0
 	github.com/openai/openai-go/v3 v3.29.0
 	github.com/redis/go-redis/v9 v9.7.3
 	github.com/rs/cors v1.11.1
 	github.com/schollz/progressbar/v3 v3.18.0
-	github.com/sijms/go-ora/v2 v2.9.0
 	github.com/spf13/cobra v1.9.1
 	golang.org/x/crypto v0.37.0
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0
 )
 
 require (
-	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/dlclark/regexp2 v1.11.4 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
-	github.com/golang-sql/civil v0.0.0-20220223132316-b832511892a9 // indirect
-	github.com/golang-sql/sqlexp v0.1.0 // indirect
 	github.com/google/pprof v0.0.0-20230207041349-798e818bf904 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.2.0 // indirect

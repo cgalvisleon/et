@@ -11,6 +11,23 @@ import (
 )
 
 /**
+* minExpiration: Minimum TTL Redis accepts (1 millisecond via PEXPIRE).
+**/
+const minExpiration = time.Millisecond
+
+/**
+* clampExpiration: Returns d clamped to the Redis minimum TTL.
+* @param d time.Duration
+* @return time.Duration
+**/
+func clampExpiration(d time.Duration) time.Duration {
+	if d < minExpiration {
+		return minExpiration
+	}
+	return d
+}
+
+/**
 * SetCtx
 * @params ctx context.Context, key string, val string, expiration time.Duration
 * @return string
@@ -20,8 +37,7 @@ func SetCtx(ctx context.Context, key, val string, expiration time.Duration) stri
 		return val
 	}
 
-	expiration = expiration * time.Second
-	err := conn.Set(ctx, key, val, expiration).Err()
+	err := conn.Set(ctx, key, val, clampExpiration(expiration)).Err()
 	if err != nil {
 		return val
 	}
@@ -39,8 +55,7 @@ func ExpireCtx(ctx context.Context, key string, expiration time.Duration) error 
 		return errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
-	expiration = expiration * time.Second
-	return conn.Expire(ctx, key, expiration).Err()
+	return conn.Expire(ctx, key, clampExpiration(expiration)).Err()
 }
 
 /**
@@ -59,8 +74,7 @@ func IncrCtx(ctx context.Context, key string, expiration time.Duration) int64 {
 	}
 
 	if result == 1 {
-		expiration = expiration * time.Second
-		conn.Expire(ctx, key, expiration)
+		conn.Expire(ctx, key, clampExpiration(expiration))
 	}
 
 	return result

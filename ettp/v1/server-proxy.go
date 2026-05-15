@@ -139,10 +139,17 @@ func (s *Server) SetProxy(id, path, name, description, solver, packageName strin
 		logs.Logf(packageName, `[%s] %s -> %s | %s | %s`, action, name, path, solver, description)
 	}
 
+	target, err := url.Parse(solver)
+	if err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
 	result, ok := s.proxys[path]
 	if !ok {
 		result = NewProxy(id, path, name, description, solver, packageName, s)
 		result.Kind = TpProxy
+		result.proxy = httputil.NewSingleHostReverseProxy(target)
 		s.proxys[path] = result
 		confirm("SET")
 	} else {
@@ -152,16 +159,11 @@ func (s *Server) SetProxy(id, path, name, description, solver, packageName strin
 		result.Kind = TpProxy
 		result.Solver = solver
 		result.PackageName = packageName
+		result.proxy = httputil.NewSingleHostReverseProxy(target)
 		confirm("RESET")
 	}
-
-	target, err := url.Parse(solver)
-	if err != nil {
-		return nil, err
-	}
-
-	result.proxy = httputil.NewSingleHostReverseProxy(target)
 	result.setPakage(packageName)
+	s.mu.Unlock()
 
 	if save {
 		if err := s.save(); err != nil {
@@ -254,6 +256,8 @@ func (s *Server) SetPortForward(id, name, description, remoteHost string, remote
 
 	remoteAddr := fmt.Sprintf("%s:%d", remoteHost, remotePort)
 	port := fmt.Sprintf(":%d", localPort)
+
+	s.mu.Lock()
 	result, ok := s.proxys[port]
 	if !ok {
 		result = NewProxy(id, port, name, description, remoteAddr, packageName, s)
@@ -274,6 +278,7 @@ func (s *Server) SetPortForward(id, name, description, remoteHost string, remote
 		result.PackageName = packageName
 		confirm("RESET")
 	}
+	s.mu.Unlock()
 
 	result.StartPortForward()
 
@@ -409,13 +414,10 @@ func (s *Server) getProxyById(id string) *Proxy {
 * @return *Proxy
 **/
 func (s *Server) getProxyByPath(path string) *Proxy {
-	for _, proxy := range s.proxys {
-		if proxy.Path == path {
-			return proxy
-		}
-	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	return nil
+	return s.proxys[path]
 }
 
 /**
@@ -484,24 +486,25 @@ func (s *Server) mountProxy(proxy *Proxy) {
 * @return error
 **/
 func (s *Server) DeleteProxyById(id string, save bool) error {
-	path := ""
+	s.mu.Lock()
+	var found *Proxy
 	for _, proxy := range s.proxys {
 		if proxy.Id == id {
-			path = proxy.Path
+			found = proxy
 			break
 		}
 	}
 
-	proxy, ok := s.proxys[path]
-	if !ok {
+	if found == nil {
+		s.mu.Unlock()
 		return errors.New(MSG_ROUTE_NOT_FOUND)
 	}
 
-	pkg := proxy.pkg
-	if pkg != nil {
-		pkg.deleteProxyById(id)
+	if found.pkg != nil {
+		found.pkg.deleteProxyById(id)
 	}
-	delete(s.proxys, path)
+	delete(s.proxys, found.Path)
+	s.mu.Unlock()
 
 	if save {
 		if err := s.save(); err != nil {

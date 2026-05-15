@@ -34,7 +34,7 @@ func (s *Server) handlerApiRest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	proxyReq, err := http.NewRequest(resolver.Method, resolver.URL, r.Body)
+	proxyReq, err := http.NewRequestWithContext(r.Context(), resolver.Method, resolver.URL, r.Body)
 	if err != nil {
 		metric.HTTPError(rw, r, http.StatusInternalServerError, err.Error())
 		return
@@ -62,19 +62,15 @@ func (s *Server) handlerApiRest(w http.ResponseWriter, r *http.Request) {
 				}
 				joinedValues += value
 			}
-			rw.Header().Set(key, joinedValues)
+			if joinedValues != "" {
+				rw.Header().Set(key, joinedValues)
+			}
 		}
 	}
 
 	setCookie := func(cookies []*http.Cookie) {
-		headers := rw.Header()
 		for _, cookie := range cookies {
-			_, ok := headers["Set-Cookie"]
-			if !ok {
-				rw.Header().Add("Set-Cookie", cookie.String())
-			} else {
-				rw.Header().Set("Set-Cookie", cookie.String())
-			}
+			rw.Header().Add("Set-Cookie", cookie.String())
 		}
 	}
 
@@ -87,5 +83,5 @@ func (s *Server) handlerApiRest(w http.ResponseWriter, r *http.Request) {
 		metric.HTTPError(rw, r, http.StatusInternalServerError, err.Error())
 	}
 
-	go metric.DoneHTTP(rw)
+	metric.DoneHTTP(rw)
 }

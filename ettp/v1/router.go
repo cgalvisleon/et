@@ -59,6 +59,8 @@ const (
 	ROUTER_KEY = "apigateway-router"
 )
 
+var pathParamRegex = regexp.MustCompile(`^\{.*\}$`)
+
 var methodMap = map[string]bool{
 	CONNECT: true,
 	DELETE:  true,
@@ -120,11 +122,10 @@ type Router struct {
 * @return *Router
 **/
 func (s *Server) newRouter(method string, packageName string) *Router {
-	key := fmt.Sprintf("%s", method)
 	result := &Router{
 		server:        s,
 		middlewares:   make([]func(http.Handler) http.Handler, 0),
-		Id:            key,
+		Id:            method,
 		Tag:           method,
 		TpParams:      TpNotParams,
 		Kind:          TpHandler,
@@ -137,7 +138,7 @@ func (s *Server) newRouter(method string, packageName string) *Router {
 		PackageName:   packageName,
 		Routes:        []*Router{},
 	}
-	s.router = append(s.router, result)
+	s.router[method] = result
 
 	return result
 }
@@ -148,7 +149,8 @@ func (s *Server) newRouter(method string, packageName string) *Router {
 * @return int
 **/
 func getRouterIndexByTag(tag string, routes []*Router) int {
-	return slices.IndexFunc(routes, func(e *Router) bool { return strs.Lowcase(e.Tag) == strs.Lowcase(tag) })
+	lower := strs.Lowcase(tag)
+	return slices.IndexFunc(routes, func(e *Router) bool { return strs.Lowcase(e.Tag) == lower })
 }
 
 /**
@@ -166,12 +168,7 @@ func getRouterIndexById(id string, routes []*Router) int {
 * @return TpParams
 **/
 func getTpParams(tag string) TpParams {
-	/**
-	* Path parameters
-	* Example: /{id}
-	**/
-	regex := regexp.MustCompile(`^\{.*\}$`)
-	if regex.MatchString(tag) {
+	if pathParamRegex.MatchString(tag) {
 		return TpPathParams
 	}
 

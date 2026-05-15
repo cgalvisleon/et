@@ -58,18 +58,15 @@ func statusOk(status int) bool {
 * @return []byte
 **/
 func bodyParams(header, body et.Json) []byte {
-	contentType := header.Get("Content-Type")
-	if contentType == "application/x-www-form-urlencoded" {
+	if header.Get("Content-Type") == "application/x-www-form-urlencoded" {
 		data := url.Values{}
 		for k, v := range body {
-			data.Set(k, v.(string))
+			data.Set(k, fmt.Sprintf("%v", v))
 		}
 		return []byte(data.Encode())
-	} else if contentType == "application/json" {
-		return []byte(body.ToString())
-	} else {
-		return []byte(body.ToString())
 	}
+	b, _ := json.Marshal(body)
+	return b
 }
 
 /**
@@ -410,6 +407,9 @@ func URLParam(r *http.Request, key string) *Value {
 * @return *Value
 **/
 func Query(r *http.Request, key string) *Value {
+	if r.URL.RawQuery == "" {
+		return &Value{value: ""}
+	}
 	return &Value{
 		value: r.URL.Query().Get(key),
 	}

@@ -3,6 +3,7 @@ package tcp
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -48,6 +49,7 @@ type Client struct {
 	onSend        []func(*Client, []byte)   `json:"-"`
 	onInbox       []func(*Client, *Message) `json:"-"`
 	onInboundFull []func(*Client, []byte)   `json:"-"`
+	tlsConfig     *tls.Config               `json:"-"`
 	isNode        bool                      `json:"-"`
 	isDebug       bool                      `json:"-"`
 	alive         atomic.Bool               `json:"-"`
@@ -88,11 +90,15 @@ func newClient() *Client {
 /**
 * NewClient
 * @param addr string
-* @return *Client, error
+* @param tlsConfig ...*tls.Config
+* @return *Client
 **/
-func NewClient(addr string) *Client {
+func NewClient(addr string, tlsConfig ...*tls.Config) *Client {
 	result := newClient()
 	result.Addr = addr
+	if len(tlsConfig) > 0 {
+		result.tlsConfig = tlsConfig[0]
+	}
 
 	return result
 }
@@ -136,11 +142,25 @@ func (s *Client) error(err error) error {
 * connect
 **/
 func (s *Client) connect() error {
-	dialer := net.Dialer{
-		Timeout:   10 * time.Second,
-		KeepAlive: 30 * time.Second,
+	var conn net.Conn
+	var err error
+
+	if s.tlsConfig != nil {
+		dialer := &tls.Dialer{
+			NetDialer: &net.Dialer{
+				Timeout:   10 * time.Second,
+				KeepAlive: 30 * time.Second,
+			},
+			Config: s.tlsConfig,
+		}
+		conn, err = dialer.DialContext(s.ctx, "tcp", s.Addr)
+	} else {
+		dialer := net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}
+		conn, err = dialer.Dial("tcp", s.Addr)
 	}
-	conn, err := dialer.Dial("tcp", s.Addr)
 	if err != nil {
 		return s.error(err)
 	}

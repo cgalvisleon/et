@@ -52,7 +52,11 @@ func (s Item) ToJson() Json {
 * @return string
 **/
 func (s Item) ToString() string {
-	return s.ToJson().ToString()
+	bt, err := json.Marshal(s)
+	if err != nil {
+		return ""
+	}
+	return string(bt)
 }
 
 /**
@@ -348,4 +352,13 @@ func (s Item) Delete(keys []string) bool {
 **/
 func (s Item) Exist(key string) bool {
 	return s.Result.Exist(key)
+}
+
+/**
+* From
+* @param as string
+* @return *Where
+**/
+func (s Item) From(as string) *Where {
+	return From([]Json{s.Result}, as)
 }

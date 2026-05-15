@@ -7,29 +7,30 @@ import (
 )
 
 type Solver struct {
-	Method string   `json:"method"`
+	Host   string   `json:"host"`
+	Port   int      `json:"port"`
 	Inputs []string `json:"inputs"`
 	Output []string `json:"output"`
 }
 
 type Package struct {
-	Name    string    `json:"name"`
-	Host    string    `json:"host"`
-	Port    int       `json:"port"`
-	Solvers []*Solver `json:"routes"`
+	Name    string             `json:"name"`
+	Host    string             `json:"host"`
+	Port    int                `json:"port"`
+	Solvers map[string]*Solver `json:"routes"`
 }
 
 /**
-* NewPackage
+* newPackage
 * @param name string, host string, port int
 * @return *Package
 **/
-func NewPackage(name string, host string, port int) *Package {
+func newPackage(name, host string, port int) *Package {
 	return &Package{
 		Name:    name,
 		Host:    host,
 		Port:    port,
-		Solvers: make([]*Solver, 0),
+		Solvers: make(map[string]*Solver),
 	}
 }
 
@@ -53,23 +54,17 @@ func (s *Package) ToJson() et.Json {
 }
 
 /**
-* Mount
-* @param services any
-* @return error
+* Add
+* @param method string, imputs []string, output []string
+* @return *Solver
 **/
-func (s *Package) Mount(services any) error {
-	solvers, err := Mount(s.Host, services)
-	if err != nil {
-		return err
+func (s *Package) Add(method string, imputs []string, output []string) *Solver {
+	result := &Solver{
+		Host:   s.Host,
+		Port:   s.Port,
+		Inputs: imputs,
+		Output: output,
 	}
-
-	for method, solver := range solvers {
-		s.Solvers = append(s.Solvers, &Solver{
-			Method: method,
-			Inputs: solver.ArrayStr("inputs"),
-			Output: solver.ArrayStr("output"),
-		})
-	}
-
-	return nil
+	s.Solvers[method] = result
+	return result
 }

@@ -32,29 +32,39 @@ const (
 	MetricKey                request.ContextKey = "metric"
 )
 
-// ResponseWriterWrapper wraps http.ResponseWriter to capture status code and response size.
+/**
+* ResponseWriterWrapper: Wraps http.ResponseWriter to capture status code and response size.
+**/
 type ResponseWriterWrapper struct {
 	http.ResponseWriter
 	StatusCode int
 	Size       int
 }
 
-// WriteHeader intercepts the status code before delegating to the underlying writer.
+/**
+* WriteHeader: Intercepts the status code before delegating to the underlying writer.
+* @param code int
+**/
 func (rw *ResponseWriterWrapper) WriteHeader(code int) {
 	rw.StatusCode = code
 	rw.ResponseWriter.WriteHeader(code)
 }
 
-// Write delegates to the underlying writer and accumulates the bytes written.
+/**
+* Write: Delegates to the underlying writer and accumulates the bytes written.
+* @param b []byte
+* @return int, error
+**/
 func (rw *ResponseWriterWrapper) Write(b []byte) (int, error) {
 	size, err := rw.ResponseWriter.Write(b)
 	rw.Size += size
 	return size, err
 }
 
-// Metrics holds observability data for a single HTTP or RPC request.
-// Field names and semantics follow OpenTelemetry semantic conventions for HTTP:
-// https://opentelemetry.io/docs/specs/semconv/http/
+/**
+* Metrics: Holds observability data for a single HTTP or RPC request.
+* Field names follow OpenTelemetry semantic conventions for HTTP.
+**/
 type Metrics struct {
 	// timestamp — request start time (RFC3339)
 	TimeStamp time.Time `json:"timestamp"`
@@ -96,7 +106,10 @@ type Metrics struct {
 	metrics Telemetry
 }
 
-// ToJson returns a JSON-serializable representation of the metrics.
+/**
+* ToJson: Returns a JSON-serializable representation of the metrics.
+* @return et.Json
+**/
 func (s *Metrics) ToJson() et.Json {
 	return et.Json{
 		"timestamp":        s.TimeStamp.Format(time.RFC3339),
@@ -119,7 +132,9 @@ func (s *Metrics) ToJson() et.Json {
 	}
 }
 
-// Telemetry holds rate-based request counters for a specific endpoint key.
+/**
+* Telemetry: Holds rate-based request counters for a specific endpoint key.
+**/
 type Telemetry struct {
 	TimeStamp         string `json:"timestamp"`
 	AppName           string `json:"service_name"`
@@ -131,7 +146,10 @@ type Telemetry struct {
 	RequestsLimit     int64  `json:"requests_limit"`
 }
 
-// ToJson returns a JSON-serializable representation of the telemetry counters.
+/**
+* ToJson: Returns a JSON-serializable representation of the telemetry counters.
+* @return et.Json
+**/
 func (t *Telemetry) ToJson() et.Json {
 	return et.Json{
 		"timestamp":           t.TimeStamp,
@@ -145,7 +163,11 @@ func (t *Telemetry) ToJson() et.Json {
 	}
 }
 
-// GetMetrics retrieves the Metrics stored in the request context, or creates a new one.
+/**
+* GetMetrics: Retrieves the Metrics stored in the request context, or creates a new one.
+* @param r *http.Request
+* @return *Metrics
+**/
 func GetMetrics(r *http.Request) *Metrics {
 	metric, ok := r.Context().Value(MetricKey).(*Metrics)
 	if !ok {
@@ -154,28 +176,44 @@ func GetMetrics(r *http.Request) *Metrics {
 	return metric
 }
 
-// PushTelemetry publishes a telemetry event asynchronously.
+/**
+* PushTelemetry: Publishes a telemetry event asynchronously.
+* @param data et.Json
+**/
 func PushTelemetry(data et.Json) {
 	go event.Publish(TELEMETRY, data)
 }
 
-// PushTelemetryLog publishes a log line as a telemetry event asynchronously.
+/**
+* PushTelemetryLog: Publishes a log line as a telemetry event asynchronously.
+* @param data string
+**/
 func PushTelemetryLog(data string) {
 	go event.Publish(TELEMETRY_LOG, et.Json{"log": data})
 }
 
-// PushTelemetryOverflow publishes a rate-limit overflow event asynchronously.
+/**
+* PushTelemetryOverflow: Publishes a rate-limit overflow event asynchronously.
+* @param data et.Json
+**/
 func PushTelemetryOverflow(data et.Json) {
 	go event.Publish(TELEMETRY_OVERFLOW, data)
 }
 
-// PushTokenLastUse publishes a token last-use event asynchronously.
+/**
+* PushTokenLastUse: Publishes a token last-use event asynchronously.
+* @param data et.Json
+**/
 func PushTokenLastUse(data et.Json) {
 	go event.Publish(TELEMETRY_TOKEN_LAST_USE, data)
 }
 
-// NewMetric creates a Metrics instance populated from the incoming HTTP request.
-// Client IP resolution order: X-Forwarded-For → X-Real-IP → RemoteAddr.
+/**
+* NewMetric: Creates a Metrics instance populated from the incoming HTTP request.
+* Client IP resolution order: X-Forwarded-For → X-Real-IP → RemoteAddr.
+* @param r *http.Request
+* @return *Metrics
+**/
 func NewMetric(r *http.Request) *Metrics {
 	clientAddr := r.Header.Get("X-Forwarded-For")
 	if clientAddr == "" {
@@ -226,7 +264,11 @@ func NewMetric(r *http.Request) *Metrics {
 	}
 }
 
-// NewRpcMetric creates a Metrics instance for a JSON-RPC call.
+/**
+* NewRpcMetric: Creates a Metrics instance for a JSON-RPC call.
+* @param method string
+* @return *Metrics
+**/
 func NewRpcMetric(method string) *Metrics {
 	now := timezone.Now()
 	return &Metrics{
@@ -240,7 +282,10 @@ func NewRpcMetric(method string) *Metrics {
 	}
 }
 
-// setRequest adds or removes the request key from the in-flight tracking list.
+/**
+* setRequest: Adds or removes the request key from the in-flight tracking list.
+* @param remove bool
+**/
 func (s *Metrics) setRequest(remove bool) {
 	s.key = fmt.Sprintf(`%s:%s`, s.Method, s.Path)
 	if remove {
@@ -250,7 +295,10 @@ func (s *Metrics) setRequest(remove bool) {
 	}
 }
 
-// SetPath updates the matched route path and registers the request key.
+/**
+* SetPath: Updates the matched route path and registers the request key.
+* @param val string
+**/
 func (s *Metrics) SetPath(val string) {
 	if val == "" {
 		return
@@ -259,24 +307,33 @@ func (s *Metrics) SetPath(val string) {
 	s.setRequest(false)
 }
 
-// CallSearchTime records the duration of the search/query phase in milliseconds.
+/**
+* CallSearchTime: Records the duration of the search/query phase in milliseconds.
+**/
 func (s *Metrics) CallSearchTime() {
 	s.SearchTime = float64(time.Since(s.mark).Milliseconds())
 	s.mark = timezone.Now()
 }
 
-// CallResponseTime records the handler processing duration in milliseconds.
+/**
+* CallResponseTime: Records the handler processing duration in milliseconds.
+**/
 func (s *Metrics) CallResponseTime() {
 	s.ResponseTime = float64(time.Since(s.mark).Milliseconds())
 	s.mark = timezone.Now()
 }
 
-// CallLatency records the total end-to-end latency in milliseconds.
+/**
+* CallLatency: Records the total end-to-end latency in milliseconds.
+**/
 func (s *Metrics) CallLatency() {
 	s.Latency = float64(time.Since(s.TimeStamp).Milliseconds())
 }
 
-// CallMetrics computes rolling request-rate counters for the current endpoint key.
+/**
+* CallMetrics: Computes rolling request-rate counters for the current endpoint key.
+* @return Telemetry
+**/
 func (s *Metrics) CallMetrics() Telemetry {
 	timeNow := timezone.Now()
 	date := timeNow.Format("2006-01-02")
@@ -288,15 +345,18 @@ func (s *Metrics) CallMetrics() Telemetry {
 	return Telemetry{
 		TimeStamp:         date,
 		Key:               s.key,
-		RequestsPerSecond: cache.Incr(reg.GenHashKey(s.key, second), 2),
-		RequestsPerMinute: cache.Incr(reg.GenHashKey(s.key, minute), 60),
-		RequestsPerHour:   cache.Incr(reg.GenHashKey(s.key, hour), 3600),
-		RequestsPerDay:    cache.Incr(reg.GenHashKey(s.key, date), 86400),
+		RequestsPerSecond: cache.Incr(reg.GenHashKey(s.key, second), 2*time.Second),
+		RequestsPerMinute: cache.Incr(reg.GenHashKey(s.key, minute), time.Minute),
+		RequestsPerHour:   cache.Incr(reg.GenHashKey(s.key, hour), time.Hour),
+		RequestsPerDay:    cache.Incr(reg.GenHashKey(s.key, date), 24*time.Hour),
 		RequestsLimit:     int64(requestsLimit),
 	}
 }
 
-// logRequest prints a color-coded summary line to stdout and publishes the log event.
+/**
+* logRequest: Prints a color-coded summary line to stdout and publishes the log event.
+* @return et.Json
+**/
 func (s *Metrics) logRequest() et.Json {
 	w := lg.Color(nil, lg.Reset, "%s", timezone.NowStr())
 	lg.Color(w, lg.Purple, " [%s]: ", s.Method)
@@ -361,7 +421,10 @@ func (s *Metrics) logRequest() et.Json {
 	return s.ToJson()
 }
 
-// telemetry emits the final telemetry events and returns the combined result.
+/**
+* telemetry: Emits the final telemetry events and returns the combined result.
+* @return et.Json
+**/
 func (s *Metrics) telemetry() et.Json {
 	result := s.ToJson()
 	result["metric"] = s.metrics.ToJson()
@@ -379,7 +442,11 @@ func (s *Metrics) telemetry() et.Json {
 	return result
 }
 
-// DoneHTTP finalizes metrics after an HTTP response has been written.
+/**
+* DoneHTTP: Finalizes metrics after an HTTP response has been written.
+* @param rw *ResponseWriterWrapper
+* @return et.Json
+**/
 func (s *Metrics) DoneHTTP(rw *ResponseWriterWrapper) et.Json {
 	s.StatusCode = rw.StatusCode
 	s.ResponseSize = rw.Size
@@ -389,7 +456,11 @@ func (s *Metrics) DoneHTTP(rw *ResponseWriterWrapper) et.Json {
 	return s.telemetry()
 }
 
-// DoneRpc finalizes metrics after an RPC call has returned.
+/**
+* DoneRpc: Finalizes metrics after an RPC call has returned.
+* @param r any
+* @return et.Json
+**/
 func (s *Metrics) DoneRpc(r any) et.Json {
 	switch v := r.(type) {
 	case string:
@@ -421,7 +492,14 @@ func (s *Metrics) DoneRpc(r any) et.Json {
 	return s.telemetry()
 }
 
-// WriteResponse writes a raw JSON byte response, records metrics, and returns nil on success.
+/**
+* WriteResponse: Writes a raw JSON byte response, records metrics, and returns nil on success.
+* @param w http.ResponseWriter
+* @param r *http.Request
+* @param statusCode int
+* @param e []byte
+* @return error
+**/
 func (s *Metrics) WriteResponse(w http.ResponseWriter, r *http.Request, statusCode int, e []byte) error {
 	rw := &ResponseWriterWrapper{ResponseWriter: w, StatusCode: statusCode}
 	rw.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -431,7 +509,14 @@ func (s *Metrics) WriteResponse(w http.ResponseWriter, r *http.Request, statusCo
 	return nil
 }
 
-// RESULT serializes data as JSON and writes the response.
+/**
+* RESULT: Serializes data as JSON and writes the response.
+* @param w http.ResponseWriter
+* @param r *http.Request
+* @param statusCode int
+* @param data interface{}
+* @return error
+**/
 func (s *Metrics) RESULT(w http.ResponseWriter, r *http.Request, statusCode int, data interface{}) error {
 	if data == nil {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -445,7 +530,14 @@ func (s *Metrics) RESULT(w http.ResponseWriter, r *http.Request, statusCode int,
 	return s.WriteResponse(w, r, statusCode, e)
 }
 
-// JSON wraps data in a standard {ok, result} envelope and writes the response.
+/**
+* JSON: Wraps data in a standard {ok, result} envelope and writes the response.
+* @param w http.ResponseWriter
+* @param r *http.Request
+* @param statusCode int
+* @param dt interface{}
+* @return error
+**/
 func (s *Metrics) JSON(w http.ResponseWriter, r *http.Request, statusCode int, dt interface{}) error {
 	if dt == nil {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -466,7 +558,14 @@ func (s *Metrics) JSON(w http.ResponseWriter, r *http.Request, statusCode int, d
 	return s.WriteResponse(w, r, statusCode, e)
 }
 
-// ITEM serializes an et.Item and writes the response.
+/**
+* ITEM: Serializes an et.Item and writes the response.
+* @param w http.ResponseWriter
+* @param r *http.Request
+* @param statusCode int
+* @param dt et.Item
+* @return error
+**/
 func (s *Metrics) ITEM(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Item) error {
 	if &dt == (&et.Item{}) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -480,7 +579,14 @@ func (s *Metrics) ITEM(w http.ResponseWriter, r *http.Request, statusCode int, d
 	return s.WriteResponse(w, r, statusCode, e)
 }
 
-// ITEMS serializes an et.Items and writes the response.
+/**
+* ITEMS: Serializes an et.Items and writes the response.
+* @param w http.ResponseWriter
+* @param r *http.Request
+* @param statusCode int
+* @param dt et.Items
+* @return error
+**/
 func (s *Metrics) ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Items) error {
 	if &dt == (&et.Items{}) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -494,7 +600,14 @@ func (s *Metrics) ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, 
 	return s.WriteResponse(w, r, statusCode, e)
 }
 
-// HTTPError writes a JSON error response with the given status code and message.
+/**
+* HTTPError: Writes a JSON error response with the given status code and message.
+* @param w http.ResponseWriter
+* @param r *http.Request
+* @param statusCode int
+* @param message string
+* @return error
+**/
 func (s *Metrics) HTTPError(w http.ResponseWriter, r *http.Request, statusCode int, message string) error {
 	return s.JSON(w, r, statusCode, et.Json{"message": message})
 }

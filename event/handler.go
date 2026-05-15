@@ -108,9 +108,7 @@ func Unsubscribe(channel string) error {
 	}
 
 	subscribe.Unsubscribe()
-	conn.mutex.Lock()
 	delete(conn.events, channel)
-	conn.mutex.Unlock()
 	eventState(channel, EventUnsubscribed, nil)
 
 	return nil
@@ -231,7 +229,10 @@ func Source(channel string, f func(Message)) error {
 * @param event string, data et.Json
 **/
 func Log(event string, data et.Json) {
-	go Publish(EVENT_LOG, data)
+	select {
+	case asyncPublishCh <- asyncMsg{EVENT_LOG, data}:
+	default:
+	}
 }
 
 /**
@@ -239,7 +240,10 @@ func Log(event string, data et.Json) {
 * @param data et.Json
 **/
 func Overflow(data et.Json) {
-	go Publish(EVENT_OVERFLOW, data)
+	select {
+	case asyncPublishCh <- asyncMsg{EVENT_OVERFLOW, data}:
+	default:
+	}
 }
 
 /**
@@ -248,7 +252,10 @@ func Overflow(data et.Json) {
 * @return error
 **/
 func Error(event string, err error) error {
-	go Publish(event, et.Json{"error": err.Error()})
+	select {
+	case asyncPublishCh <- asyncMsg{event, et.Json{"error": err.Error()}}:
+	default:
+	}
 	return err
 }
 

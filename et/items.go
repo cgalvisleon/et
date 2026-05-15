@@ -2,7 +2,10 @@ package et
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
+
+	"github.com/cgalvisleon/et/msg"
 )
 
 type Items struct {
@@ -50,7 +53,11 @@ func (s Items) ToJson() Json {
 * @return string
 **/
 func (s Items) ToString() string {
-	return s.ToJson().ToString()
+	bt, err := json.Marshal(s)
+	if err != nil {
+		return ""
+	}
+	return string(bt)
 }
 
 /**
@@ -58,9 +65,28 @@ func (s Items) ToString() string {
 * @param item Json
 **/
 func (s *Items) Add(item ...Json) {
+	if s.Result == nil {
+		s.Result = make([]Json, 0)
+	}
 	for _, i := range item {
 		s.Result = append(s.Result, i)
 	}
+	s.Count = len(s.Result)
+	s.Ok = s.Count > 0
+}
+
+/**
+* AddMany add a slice of items with pre-allocated capacity
+* @param items []Json
+**/
+func (s *Items) AddMany(items []Json) {
+	if len(items) == 0 {
+		return
+	}
+	if s.Result == nil {
+		s.Result = make([]Json, 0, len(items))
+	}
+	s.Result = append(s.Result, items...)
 	s.Count = len(s.Result)
 	s.Ok = s.Count > 0
 }
@@ -73,7 +99,7 @@ func (s *Items) ToMap() map[string]interface{} {
 	result := make(map[string]interface{})
 	result["ok"] = s.Ok
 	result["count"] = s.Count
-	items := make([]map[string]interface{}, 0)
+	items := make([]map[string]interface{}, 0, len(s.Result))
 	for _, item := range s.Result {
 		items = append(items, item.ToMap())
 	}
@@ -126,10 +152,10 @@ func (s *Items) ValInt(idx int, def int, atribs ...string) int {
 
 /**
 * ValInt64 return int64 value of the key
-* @param idx int64, def int64, atribs ...string
+* @param idx int, def int64, atribs ...string
 * @return int64
 **/
-func (s *Items) ValInt64(idx int64, def int64, atribs ...string) int64 {
+func (s *Items) ValInt64(idx int, def int64, atribs ...string) int64 {
 	item := s.Result[idx]
 	if item == nil {
 		return def
@@ -455,15 +481,37 @@ func (s Items) Exist(idx int, key string) bool {
 }
 
 /**
-* First
-* @return Item
+* One
+* @param idx int
+* @return Item, error
 **/
-func (s Items) First() Json {
-	if s.Count == 0 {
-		return Json{}
+func (s Items) One(idx int) (Item, error) {
+	n := s.Count
+	if idx < 0 {
+		idx = n + idx
 	}
 
-	return s.Result[0]
+	if idx >= n {
+		return Item{}, errors.New(msg.MSG_INDEX_OUT_OF_RANGE)
+	}
+
+	return NewItem(s.Result[idx]), nil
+}
+
+/**
+* First
+* @return Item, error
+**/
+func (s *Items) First() (Item, error) {
+	return s.One(0)
+}
+
+/**
+* Last
+* @return Item, error
+**/
+func (s *Items) Last() (Item, error) {
+	return s.One(-1)
 }
 
 /**
@@ -500,4 +548,13 @@ func (s *Items) ToList(all, page, rows int) List {
 		End:    end,
 		Result: s.Result,
 	}
+}
+
+/**
+* From
+* @param as string
+* @return *Where
+**/
+func (s Items) From(as string) *Where {
+	return From(s.Result, as)
 }

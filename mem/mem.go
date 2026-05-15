@@ -7,24 +7,24 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 )
 
 type Mem struct {
 	items map[string]*Entry
-	mu    *sync.RWMutex
+	mu    sync.RWMutex
 }
 
 var (
 	conn *Mem
+	// clearReCache caches compiled *regexp.Regexp instances keyed by pattern for Clear().
+	clearReCache sync.Map
 )
 
 func Load() *Mem {
-	result := &Mem{
+	return &Mem{
 		items: make(map[string]*Entry),
-		mu:    &sync.RWMutex{},
 	}
-
-	return result
 }
 
 func init() {
@@ -45,37 +45,36 @@ func (s *Mem) Type() string {
 * @return *Entry, error
 **/
 func (s *Mem) Set(key string, value interface{}, expiration time.Duration) (*Entry, error) {
-	s.mu.RLock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	item, ok := s.items[key]
-	s.mu.RUnlock()
 	if ok {
-		_, err := item.Set(value, expiration)
-		if err != nil {
+		if item.timer != nil {
+			item.timer.Stop()
+			item.timer = nil
+		}
+		if _, err := item.Set(value, expiration); err != nil {
 			return nil, err
 		}
-
+		if expiration != 0 {
+			item.timer = time.AfterFunc(expiration, func() {
+				s.Delete(key)
+			})
+		}
 		return item, nil
 	}
 
-	var err error
-	item, err = New(key, value, expiration)
+	item, err := New(key, value, expiration)
 	if err != nil {
 		return nil, err
 	}
-
-	s.mu.Lock()
 	s.items[key] = item
-	s.mu.Unlock()
-
-	clean := func() {
-		s.Delete(key)
+	if expiration != 0 {
+		item.timer = time.AfterFunc(expiration, func() {
+			s.Delete(key)
+		})
 	}
-
-	duration := expiration * time.Second
-	if duration != 0 {
-		go time.AfterFunc(duration, clean)
-	}
-
 	return item, nil
 }
 
@@ -88,11 +87,15 @@ func (s *Mem) Delete(key string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	_, ok := s.items[key]
+	item, ok := s.items[key]
 	if !ok {
 		return false
 	}
 
+	if item.timer != nil {
+		item.timer.Stop()
+		item.timer = nil
+	}
 	delete(s.items, key)
 
 	return true
@@ -104,8 +107,8 @@ func (s *Mem) Delete(key string) bool {
 * @return bool
 **/
 func (s *Mem) Exists(key string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	_, ok := s.items[key]
 	return ok
@@ -376,23 +379,44 @@ func (s *Mem) GetArrayJson(key string, def []et.Json) ([]et.Json, bool, error) {
 * @return int
 **/
 func (s *Mem) More(key string, expiration time.Duration) (int64, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	var err error
 	var result int64
 	item, ok := s.items[key]
 	if !ok {
 		result = 1
-	} else {
-		result, err = item.Int64()
+		newItem, err := New(key, result, expiration)
 		if err != nil {
 			return 0, err
 		}
-		result++
+		s.items[key] = newItem
+		if expiration != 0 {
+			newItem.timer = time.AfterFunc(expiration, func() {
+				s.Delete(key)
+			})
+		}
+		return result, nil
 	}
 
-	s.Set(key, result, expiration)
+	var err error
+	result, err = item.Int64()
+	if err != nil {
+		return 0, err
+	}
+	result++
+	if _, err = item.Set(result, expiration); err != nil {
+		return 0, err
+	}
+	if item.timer != nil {
+		item.timer.Stop()
+		item.timer = nil
+	}
+	if expiration != 0 {
+		item.timer = time.AfterFunc(expiration, func() {
+			s.Delete(key)
+		})
+	}
 	return result, nil
 }
 
@@ -401,25 +425,43 @@ func (s *Mem) More(key string, expiration time.Duration) (int64, error) {
 * @param match string
 **/
 func (s *Mem) Clear(match string) {
-	matchPattern := func(substring, str string) bool {
-		pattern := fmt.Sprintf(".*%s.*", regexp.QuoteMeta(substring))
-		re, err := regexp.Compile(pattern)
+	pattern := fmt.Sprintf(".*%s.*", regexp.QuoteMeta(match))
+	var re *regexp.Regexp
+	if v, ok := clearReCache.Load(pattern); ok {
+		re = v.(*regexp.Regexp)
+	} else {
+		var err error
+		re, err = regexp.Compile(pattern)
 		if err != nil {
-			fmt.Println("Error compilando la expresión regular:", err)
-			return false
+			logs.Alertf("Error compilando expresión regular: %s", err.Error())
+			return
 		}
-		return re.MatchString(str)
+		clearReCache.Store(pattern, re)
 	}
 
-	for key := range s.items {
-		if matchPattern(match, key) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for key, item := range s.items {
+		if re.MatchString(key) {
+			if item.timer != nil {
+				item.timer.Stop()
+			}
 			delete(s.items, key)
 		}
 	}
 }
 
 func (s *Mem) Empty() {
-	s.Clear("")
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, item := range s.items {
+		if item.timer != nil {
+			item.timer.Stop()
+		}
+	}
+	s.items = make(map[string]*Entry)
 }
 
 /**
@@ -427,6 +469,9 @@ func (s *Mem) Empty() {
 * @return int
 **/
 func (s *Mem) Len() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	return len(s.items)
 }
 
@@ -435,11 +480,12 @@ func (s *Mem) Len() int {
 * @return []string
 **/
 func (s *Mem) Keys() []string {
+	s.mu.RLock()
 	keys := make([]string, 0, len(s.items))
-
 	for key := range s.items {
 		keys = append(keys, key)
 	}
+	s.mu.RUnlock()
 
 	return keys
 }
@@ -449,16 +495,16 @@ func (s *Mem) Keys() []string {
 * @return []string
 **/
 func (s *Mem) Values() []string {
+	s.mu.RLock()
 	values := make([]string, 0, len(s.items))
-
 	for _, item := range s.items {
 		str, err := item.Str()
 		if err != nil {
 			continue
 		}
-
 		values = append(values, str)
 	}
+	s.mu.RUnlock()
 
 	return values
 }

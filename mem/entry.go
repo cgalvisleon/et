@@ -14,6 +14,7 @@ type Entry struct {
 	Version    int
 	LastUpdate time.Time
 	Expiration time.Duration
+	timer      *time.Timer
 }
 
 /**
@@ -74,7 +75,7 @@ func (s *Entry) Get() []byte {
 **/
 func (s *Entry) Str() (string, error) {
 	var result string
-	bt := s.Get()
+	bt := s.Value
 	err := json.Unmarshal(bt, &result)
 	if err != nil {
 		return "", err
@@ -89,7 +90,7 @@ func (s *Entry) Str() (string, error) {
 **/
 func (s *Entry) Int() (int, error) {
 	var result int
-	bt := s.Get()
+	bt := s.Value
 	err := json.Unmarshal(bt, &result)
 	if err != nil {
 		return 0, err
@@ -104,7 +105,7 @@ func (s *Entry) Int() (int, error) {
 **/
 func (s *Entry) Int64() (int64, error) {
 	var result int64
-	bt := s.Get()
+	bt := s.Value
 	err := json.Unmarshal(bt, &result)
 	if err != nil {
 		return 0, err
@@ -119,7 +120,7 @@ func (s *Entry) Int64() (int64, error) {
 **/
 func (s *Entry) Float() (float64, error) {
 	var result float64
-	bt := s.Get()
+	bt := s.Value
 	err := json.Unmarshal(bt, &result)
 	if err != nil {
 		return 0, err
@@ -134,7 +135,7 @@ func (s *Entry) Float() (float64, error) {
 **/
 func (s *Entry) Bool() (bool, error) {
 	var result bool
-	bt := s.Get()
+	bt := s.Value
 	err := json.Unmarshal(bt, &result)
 	if err != nil {
 		return false, err
@@ -149,7 +150,7 @@ func (s *Entry) Bool() (bool, error) {
 **/
 func (s *Entry) Time() (time.Time, error) {
 	var result time.Time
-	bt := s.Get()
+	bt := s.Value
 	err := json.Unmarshal(bt, &result)
 	if err != nil {
 		return time.Time{}, err
@@ -164,7 +165,7 @@ func (s *Entry) Time() (time.Time, error) {
 **/
 func (s *Entry) Duration() (time.Duration, error) {
 	var result time.Duration
-	bt := s.Get()
+	bt := s.Value
 	err := json.Unmarshal(bt, &result)
 	if err != nil {
 		return time.Duration(0), err
@@ -179,7 +180,7 @@ func (s *Entry) Duration() (time.Duration, error) {
 **/
 func (s *Entry) Json() (et.Json, error) {
 	var result et.Json
-	bt := s.Get()
+	bt := s.Value
 	err := json.Unmarshal(bt, &result)
 	if err != nil {
 		return et.Json{}, err
@@ -194,7 +195,7 @@ func (s *Entry) Json() (et.Json, error) {
 **/
 func (s *Entry) Map() (map[string]interface{}, error) {
 	var result map[string]interface{}
-	bt := s.Get()
+	bt := s.Value
 	err := json.Unmarshal(bt, &result)
 	if err != nil {
 		return map[string]interface{}{}, err
@@ -209,7 +210,7 @@ func (s *Entry) Map() (map[string]interface{}, error) {
 **/
 func (s *Entry) ArrayMap() ([]map[string]interface{}, error) {
 	var result []map[string]interface{}
-	bt := s.Get()
+	bt := s.Value
 	err := json.Unmarshal(bt, &result)
 	if err != nil {
 		return []map[string]interface{}{}, err
@@ -224,7 +225,7 @@ func (s *Entry) ArrayMap() ([]map[string]interface{}, error) {
 **/
 func (s *Entry) ArrayStr() ([]string, error) {
 	var result []string
-	bt := s.Get()
+	bt := s.Value
 	err := json.Unmarshal(bt, &result)
 	if err != nil {
 		return []string{}, err
@@ -239,7 +240,7 @@ func (s *Entry) ArrayStr() ([]string, error) {
 **/
 func (s *Entry) ArrayInt() ([]int, error) {
 	var result []int
-	bt := s.Get()
+	bt := s.Value
 	err := json.Unmarshal(bt, &result)
 	if err != nil {
 		return []int{}, err
@@ -254,7 +255,7 @@ func (s *Entry) ArrayInt() ([]int, error) {
 **/
 func (s *Entry) ArrayFloat() ([]float64, error) {
 	var result []float64
-	bt := s.Get()
+	bt := s.Value
 	err := json.Unmarshal(bt, &result)
 	if err != nil {
 		return []float64{}, err
@@ -269,7 +270,7 @@ func (s *Entry) ArrayFloat() ([]float64, error) {
 **/
 func (s *Entry) ArrayTime() ([]time.Time, error) {
 	var result []time.Time
-	bt := s.Get()
+	bt := s.Value
 	err := json.Unmarshal(bt, &result)
 	if err != nil {
 		return []time.Time{}, err
@@ -284,7 +285,7 @@ func (s *Entry) ArrayTime() ([]time.Time, error) {
 **/
 func (s *Entry) ArrayDuration() ([]time.Duration, error) {
 	var result []time.Duration
-	bt := s.Get()
+	bt := s.Value
 	err := json.Unmarshal(bt, &result)
 	if err != nil {
 		return []time.Duration{}, err
@@ -299,7 +300,7 @@ func (s *Entry) ArrayDuration() ([]time.Duration, error) {
 **/
 func (s *Entry) ArrayJson() ([]et.Json, error) {
 	var result []et.Json
-	bt := s.Get()
+	bt := s.Value
 	err := json.Unmarshal(bt, &result)
 	if err != nil {
 		return []et.Json{}, err

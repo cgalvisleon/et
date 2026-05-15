@@ -3,6 +3,7 @@ package tcp
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -66,6 +67,7 @@ type Node struct {
 	peers          []*Client                `json:"-"`
 	method         map[string]Service       `json:"-"`
 	raft           *Raft                    `json:"-"`
+	tlsConfig      *tls.Config              `json:"-"`
 	closed         atomic.Bool              `json:"-"`
 	configFile     string                   `json:"-"`
 	mu             map[string]*sync.Mutex   `json:"-"`
@@ -83,9 +85,10 @@ type Node struct {
 /**
 * NewNode
 * @param port int
+* @param tlsConfig ...*tls.Config
 * @return *Node
 **/
-func NewNode(port int) *Node {
+func NewNode(port int, tlsConfig ...*tls.Config) *Node {
 	addr := fmt.Sprintf("%s:%d", hostName, port)
 	timeout, err := time.ParseDuration(envar.GetStr("TIMEOUT", "10s"))
 	if err != nil {
@@ -125,6 +128,9 @@ func NewNode(port int) *Node {
 	result.mu["clients"] = &sync.Mutex{}
 	result.mu["requests"] = &sync.Mutex{}
 	result.mu["peers"] = &sync.Mutex{}
+	if len(tlsConfig) > 0 {
+		result.tlsConfig = tlsConfig[0]
+	}
 
 	return result
 }
@@ -610,7 +616,11 @@ func (s *Node) electionLoop() error {
 * @return error
 **/
 func (s *Node) Start() (err error) {
-	s.ln, err = net.Listen("tcp", s.addr)
+	if s.tlsConfig != nil {
+		s.ln, err = tls.Listen("tcp", s.addr, s.tlsConfig)
+	} else {
+		s.ln, err = net.Listen("tcp", s.addr)
+	}
 	if err != nil {
 		return
 	}
@@ -628,20 +638,25 @@ func (s *Node) Start() (err error) {
 
 /**
 * Close
+* @return error
 **/
-func (s *Node) Close() {
+func (s *Node) Close() error {
 	if !s.closed.CompareAndSwap(false, true) {
-		return
+		return nil
 	}
 
 	logs.Log(packageName, mg.MSG_TCP_SHUTTING_DOWN)
 	s.cancel()
 
 	if s.ln != nil {
-		_ = s.ln.Close()
+		err := s.ln.Close()
+		if err != nil {
+			return err
+		}
 	}
 
 	s.closeAllClients()
+	return nil
 }
 
 /**
@@ -662,6 +677,7 @@ func (s *Node) AddNode(addr string) {
 	}
 
 	node := NewClient(addr)
+	node.tlsConfig = s.tlsConfig
 	node.isNode = true
 	node.onConnect = append(node.onConnect, func(c *Client) {
 		s.total.Add(1)

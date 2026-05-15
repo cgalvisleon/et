@@ -172,7 +172,9 @@ func (s *Server) load() error {
 
 		if storage == nil {
 			storage = NewStorage(s)
-			file.Write(path, storage)
+			if err := file.Write(path, storage); err != nil {
+				logs.Alertf("Failed to initialize storage file: %s", err.Error())
+			}
 		}
 	}
 

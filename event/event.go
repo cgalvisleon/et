@@ -6,22 +6,42 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/utility"
 	"github.com/nats-io/nats.go"
 )
 
-const PackageName = "event"
+const packageName = "event"
+
+/**
+* asyncMsg holds a channel name and payload for non-blocking publish operations.
+**/
+type asyncMsg struct {
+	channel string
+	data    et.Json
+}
+
+// asyncPublishBufSize is the capacity of the fire-and-forget publish channel.
+const asyncPublishBufSize = 256
 
 var (
 	conn     *Conn
 	oS       = ""
 	hostName string
+	loadMu   sync.Mutex
+	// asyncPublishCh is consumed by a single background worker started in init().
+	asyncPublishCh = make(chan asyncMsg, asyncPublishBufSize)
 )
 
 func init() {
 	oS = runtime.GOOS
 	hostName, _ = os.Hostname()
+	go func() {
+		for m := range asyncPublishCh {
+			publish(m.channel, m.data)
+		}
+	}()
 }
 
 type Conn struct {
@@ -29,6 +49,25 @@ type Conn struct {
 	id     string
 	events map[string]*nats.Subscription
 	mutex  *sync.RWMutex
+}
+
+/**
+* LoadTo loads the event connection from a Config struct.
+* @param params utility.Config
+* @return error
+**/
+func LoadTo(params utility.Config) error {
+	host := params.GetStr("NATS_HOST", "")
+	user := params.GetStr("NATS_USER", "")
+	password := params.GetStr("NATS_PASSWORD", "")
+
+	var err error
+	conn, err = connectTo(host, user, password)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 /**
@@ -40,21 +79,19 @@ func Load() error {
 		return nil
 	}
 
+	loadMu.Lock()
+	defer loadMu.Unlock()
+
 	if conn != nil {
 		return nil
 	}
 
-	err := envar.Validate([]string{
-		"NATS_HOST",
+	params := utility.NewConfig(et.Json{
+		"NATS_HOST":     "",
+		"NATS_USER":     "",
+		"NATS_PASSWORD": "",
 	})
-	if err != nil {
-		return err
-	}
-
-	host := envar.GetStr("NATS_HOST", "")
-	user := envar.GetStr("NATS_USER", "")
-	password := envar.GetStr("NATS_PASSWORD", "")
-	conn, err = ConnectTo(host, user, password)
+	err := LoadTo(params)
 	if err != nil {
 		return err
 	}
@@ -63,7 +100,7 @@ func Load() error {
 }
 
 /**
-* Close the connection to the service pubsub
+* Close unsubscribes all active subscriptions and closes the NATS connection.
 **/
 func Close() {
 	if conn == nil {
@@ -76,15 +113,15 @@ func Close() {
 
 	conn.Close()
 
-	logs.Log(PackageName, `Disconnect...`)
+	logs.Log(packageName, `Disconnect...`)
 }
 
 /**
-* Id
-* @return string
+* IsLoad
+* @return bool
 **/
-func Id() string {
-	return conn.id
+func IsLoad() bool {
+	return conn != nil
 }
 
 /**

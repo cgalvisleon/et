@@ -31,10 +31,13 @@ func init() {
 /**
 * Mount
 * @param host string, services any
-* @return (map[string]et.Json, error)
+* @return (*Package, error)
 **/
-func Mount(host string, services any) (map[string]et.Json, error) {
-	result := make(map[string]et.Json)
+func Mount(host string, port int, services any, packageName string) (*Package, error) {
+	if pkg == nil {
+		pkg = newPackage(packageName, host, port)
+	}
+
 	tipoStruct := reflect.TypeOf(services)
 	structName := tipoStruct.String()
 	list := strings.Split(structName, ".")
@@ -56,15 +59,9 @@ func Mount(host string, services any) (map[string]et.Json, error) {
 			outputs = append(outputs, paramType.String())
 		}
 
-		name := fmt.Sprintf("%s.%s", structName, metodo.Name)
-		description := et.Json{
-			"inputs":  inputs,
-			"outputs": outputs,
-		}
-		result[name] = description
-		rpcs[name] = description
-
-		logs.Logf("rpc", "RPC:/%s/%s", host, name)
+		methodName := fmt.Sprintf("%s.%s", structName, metodo.Name)
+		pkg.Add(methodName, inputs, outputs)
+		logs.Logf("rpc", "RPC:/%s/%s", host, methodName)
 	}
 
 	err := rpc.Register(services)
@@ -72,7 +69,7 @@ func Mount(host string, services any) (map[string]et.Json, error) {
 		return nil, err
 	}
 
-	return result, nil
+	return pkg, nil
 }
 
 /**
@@ -103,11 +100,12 @@ func Start(port int) error {
 }
 
 /**
-* CallRpc: Calls a remote procedure
-* @param address string, method string, args any, reply any
+* call: Calls a remote procedure
+* @param host string, port int, method string, args any, reply any
 * @return error
 **/
-func Call(address string, method string, args any, reply any) error {
+func call(host string, port int, method string, args any, reply any) error {
+	address := fmt.Sprintf("%s:%d", host, port)
 	client, err := rpc.Dial("tcp", address)
 	if err != nil {
 		return ErrorRpcNotConnected
@@ -123,8 +121,81 @@ func Call(address string, method string, args any, reply any) error {
 }
 
 /**
-* Close
+* Call
+* @param method string, args any
+* @return (any, error)
 **/
-func Close() {
-	logs.Log("Rpc", `Shutting down server...`)
+func Call(method string, args any) (any, error) {
+	solver, err := GetSolver(method)
+	if err != nil {
+		return nil, err
+	}
+
+	var reply any
+	err = call(solver.Host, solver.Port, method, args, &reply)
+	if err != nil {
+		return nil, err
+	}
+
+	return reply, nil
+}
+
+/**
+* CallJson
+* @param method string, args et.Json
+* @return (et.Json, error)
+**/
+func CallJson(method string, args et.Json) (et.Json, error) {
+	solver, err := GetSolver(method)
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	var reply et.Json
+	err = call(solver.Host, solver.Port, method, args, &reply)
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	return reply, nil
+}
+
+/**
+* CallItems
+* @param method string, args et.Json
+* @return (et.Items, error)
+**/
+func CallItems(method string, args et.Json) (et.Items, error) {
+	solver, err := GetSolver(method)
+	if err != nil {
+		return et.Items{}, err
+	}
+
+	var reply et.Items
+	err = call(solver.Host, solver.Port, method, args, &reply)
+	if err != nil {
+		return et.Items{}, err
+	}
+
+	return reply, nil
+}
+
+/**
+* CallItem
+* @param method string, args et.Json
+* @return (et.Item, error)
+**/
+func CallItem(method string, args et.Json) (et.Item, error) {
+	solver, err := GetSolver(method)
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	var reply et.Item
+	err = call(solver.Host, solver.Port, method, args, &reply)
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	return reply, nil
 }

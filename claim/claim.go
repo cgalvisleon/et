@@ -1,9 +1,9 @@
 package claim
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/cgalvisleon/et/envar"
@@ -15,6 +15,26 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
+var (
+	jwtSecret     string
+	jwtSecretOnce sync.Once
+)
+
+/**
+* getSecret returns the JWT signing secret, reading the SECRET env var only once.
+* @return string
+**/
+func getSecret() string {
+	jwtSecretOnce.Do(func() {
+		jwtSecret = envar.GetStr("SECRET", "1977")
+	})
+	return jwtSecret
+}
+
+/**
+* Claim JWT payload with standard claims and application-specific fields.
+* tenantId is stored inside Payload; use claim.TenantId(r) to extract it.
+**/
 type Claim struct {
 	jwt.StandardClaims
 	ID       string        `json:"id"`
@@ -32,19 +52,38 @@ type Claim struct {
 * @return et.Json
 **/
 func (s *Claim) ToJson() (et.Json, error) {
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return nil, err
+	result := et.Json{
+		"id":        s.ID,
+		"salt":      s.Salt,
+		"duration":  s.Duration,
+		"app":       s.App,
+		"device":    s.Device,
+		"userId":    s.UserId,
+		"username":  s.Username,
+		"payload":   s.Payload,
+		"expiresAt": time.Unix(s.ExpiresAt, 0).Format("2006-01-02 03:04:05 PM"),
 	}
-
-	result := et.Json{}
-	err = json.Unmarshal(bt, &result)
-	if err != nil {
-		return nil, err
+	if s.ExpiresAt != 0 {
+		result["exp"] = s.ExpiresAt
 	}
-	expiresAt := time.Unix(s.ExpiresAt, 0).Format("2006-01-02 03:04:05 PM")
-	result.Set("expiresAt", expiresAt)
-
+	if s.Issuer != "" {
+		result["iss"] = s.Issuer
+	}
+	if s.Subject != "" {
+		result["sub"] = s.Subject
+	}
+	if s.Audience != "" {
+		result["aud"] = s.Audience
+	}
+	if s.IssuedAt != 0 {
+		result["iat"] = s.IssuedAt
+	}
+	if s.NotBefore != 0 {
+		result["nbf"] = s.NotBefore
+	}
+	if s.Id != "" {
+		result["jti"] = s.Id
+	}
 	return result, nil
 }
 
@@ -103,8 +142,7 @@ func NewToken(app, device, userId, username string, payload et.Json, duration ti
 	c.UserId = userId
 	c.Username = username
 	c.Payload = payload
-	secret := envar.GetStr("SECRET", "1977")
-	result, err := GenToken(c, secret)
+	result, err := GenToken(c, getSecret())
 	if err != nil {
 		return "", err
 	}
@@ -118,7 +156,7 @@ func NewToken(app, device, userId, username string, payload et.Json, duration ti
 * @return *Claim, error
 **/
 func ParceToken(token string) (*Claim, error) {
-	secret := envar.GetStr("SECRET", "1977")
+	secret := getSecret()
 	jToken, err := jwt.Parse(token, func(*jwt.Token) (interface{}, error) {
 		return []byte(secret), nil
 	})

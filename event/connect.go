@@ -11,13 +11,13 @@ import (
 )
 
 /**
-* Connect to a host
+* connectTo to a host
 * @param host, user, password string
 * @return *Conn, error
 **/
-func ConnectTo(host, user, password string) (*Conn, error) {
+func connectTo(host, user, password string) (*Conn, error) {
 	if !utility.ValidStr(host, 0, []string{}) {
-		return nil, logs.Alertf(msg.MSG_ATRIB_REQUIRED, "nats_host")
+		return nil, logs.Alertf(msg.MSG_ATRIB_REQUIRED, "host")
 	}
 
 	opts := []nats.Option{
@@ -25,10 +25,10 @@ func ConnectTo(host, user, password string) (*Conn, error) {
 		nats.ReconnectWait(2 * time.Second),
 		nats.MaxReconnects(-1),
 		nats.ReconnectHandler(func(nc *nats.Conn) {
-			logs.Logf("NATS", `Reconnected host:%s`, host)
+			logs.Logf(packageName, `Reconnected host:%s`, host)
 		}),
 		nats.ClosedHandler(func(nc *nats.Conn) {
-			logs.Logf("NATS", `Closed host:%s`, host)
+			logs.Logf(packageName, `Closed host:%s`, host)
 		}),
 	}
 	client, err := nats.Connect(host, opts...)
@@ -36,7 +36,7 @@ func ConnectTo(host, user, password string) (*Conn, error) {
 		return nil, err
 	}
 
-	logs.Logf("NATS", `Connected host:%s`, host)
+	logs.Logf(packageName, `Connected host:%s`, host)
 
 	return &Conn{
 		id:     utility.UUID(),

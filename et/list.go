@@ -1,5 +1,7 @@
 package et
 
+import "encoding/json"
+
 /* List struct to use in et */
 type List struct {
 	Rows   int    `json:"rows"`
@@ -32,7 +34,11 @@ func (s *List) ToJson() Json {
 * @return string
 **/
 func (s *List) ToString() string {
-	return s.ToJson().ToString()
+	bt, err := json.Marshal(s)
+	if err != nil {
+		return ""
+	}
+	return string(bt)
 }
 
 /**
@@ -40,5 +46,22 @@ func (s *List) ToString() string {
 * @return map[string]interface{}
 **/
 func (s *List) ToMap() map[string]interface{} {
-	return s.ToJson().ToMap()
+	return map[string]interface{}{
+		"rows":   s.Rows,
+		"all":    s.All,
+		"count":  s.Count,
+		"page":   s.Page,
+		"start":  s.Start,
+		"end":    s.End,
+		"result": s.Result,
+	}
+}
+
+/**
+* From
+* @param as string
+* @return *Where
+**/
+func (s List) From(as string) *Where {
+	return From(s.Result, as)
 }

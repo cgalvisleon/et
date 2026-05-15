@@ -6,13 +6,19 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/timezone"
 )
+
+var escapeHTMLPool = sync.Pool{
+	New: func() interface{} { return &bytes.Buffer{} },
+}
 
 /**
 * Json type
@@ -134,7 +140,10 @@ func (s Json) ToString() string {
 * @return string
 **/
 func (s Json) ToEscapeHTML() string {
-	buf := &bytes.Buffer{}
+	buf := escapeHTMLPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer escapeHTMLPool.Put(buf)
+
 	encoder := json.NewEncoder(buf)
 	encoder.SetEscapeHTML(false)
 	err := encoder.Encode(s)
@@ -142,7 +151,7 @@ func (s Json) ToEscapeHTML() string {
 		panic(err)
 	}
 
-	return buf.String()
+	return strings.TrimSuffix(buf.String(), "\n")
 }
 
 /**
@@ -177,10 +186,7 @@ func (s Json) IsExist(key string) bool {
 **/
 func (s Json) Clone() Json {
 	result := Json{}
-	for k, v := range s {
-		result[k] = v
-	}
-
+	maps.Copy(result, s)
 	return result
 }
 
@@ -195,7 +201,7 @@ func (s Json) ValAny(def interface{}, atribs ...string) (result interface{}) {
 		return
 	}
 
-	var src interface{} = s.Clone()
+	var src interface{} = s
 	var ok bool
 	for _, atrib := range atribs {
 		switch v := src.(type) {
@@ -457,76 +463,68 @@ func (s Json) ValArray(def []interface{}, atribs ...string) []interface{} {
 	case []interface{}:
 		return v
 	case []Json:
-		result := []interface{}{}
-		for _, item := range v {
-			result = append(result, item)
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = item
 		}
-
 		return result
 	case []map[string]interface{}:
-		result := []interface{}{}
-		for _, item := range v {
-			result = append(result, item)
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = item
 		}
-
 		return result
 	case []string:
-		result := []interface{}{}
-		for _, item := range v {
-			result = append(result, item)
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = item
 		}
-
 		return result
 	case []int:
-		result := []interface{}{}
-		for _, item := range v {
-			result = append(result, item)
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = item
 		}
-
 		return result
 	case []int64:
-		result := []interface{}{}
-		for _, item := range v {
-			result = append(result, item)
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = item
 		}
-
 		return result
 	case []float32:
-		result := []interface{}{}
-		for _, item := range v {
-			result = append(result, item)
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = item
 		}
-
 		return result
 	case []float64:
-		result := []interface{}{}
-		for _, item := range v {
-			result = append(result, item)
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = item
 		}
-
 		return result
 	case []bool:
-		result := []interface{}{}
-		for _, item := range v {
-			result = append(result, item)
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = item
 		}
-
 		return result
 	case []time.Time:
-		result := []interface{}{}
-		for _, item := range v {
-			result = append(result, item)
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = item
 		}
-
 		return result
 	default:
 		result := []interface{}{}
-		src := fmt.Sprintf(`%v`, v)
-		err := json.Unmarshal([]byte(src), &result)
+		bt, err := json.Marshal(v)
 		if err != nil {
 			return def
 		}
-
+		if err := json.Unmarshal(bt, &result); err != nil {
+			return def
+		}
 		return result
 	}
 }
@@ -659,6 +657,54 @@ func (s Json) Json(atrib string) Json {
 }
 
 /**
+* MapStr return the value of the key as a map[string]string
+* @param atrib string
+* @return map[string]string
+**/
+func (s Json) MapStr(atrib string) map[string]string {
+	result := map[string]string{}
+	jsonValue := s.ValJson(Json{}, atrib)
+	for k, v := range jsonValue {
+		result[k] = fmt.Sprintf("%v", v)
+	}
+	return result
+}
+
+/**
+* MapInt return the value of the key as a map[string]int
+* @param atrib string
+* @return map[string]int
+**/
+func (s Json) MapInt(atrib string) map[string]int {
+	result := map[string]int{}
+	jsonValue := s.ValJson(Json{}, atrib)
+	for k, v := range jsonValue {
+		val, err := strconv.Atoi(fmt.Sprintf("%v", v))
+		if err == nil {
+			result[k] = val
+		}
+	}
+	return result
+}
+
+/**
+* MapFloat return the value of the key as a map[string]float64
+* @param atrib string
+* @return map[string]float64
+**/
+func (s Json) MapFloat(atrib string) map[string]float64 {
+	result := map[string]float64{}
+	jsonValue := s.ValJson(Json{}, atrib)
+	for k, v := range jsonValue {
+		val, err := strconv.ParseFloat(fmt.Sprintf("%v", v), 64)
+		if err == nil {
+			result[k] = val
+		}
+	}
+	return result
+}
+
+/**
 * Array return the value of the key
 * @param atrib string
 * @return []Json
@@ -672,11 +718,15 @@ func (s Json) Array(atrib ...string) []interface{} {
 * @return []string
 **/
 func (s Json) ArrayStr(atribs ...string) []string {
-	var result = []string{}
 	vals := s.Array(atribs...)
+	result := make([]string, 0, len(vals))
 	for _, val := range vals {
-		src := fmt.Sprintf(`%v`, val)
-		result = append(result, src)
+		switch v := val.(type) {
+		case string:
+			result = append(result, v)
+		default:
+			result = append(result, fmt.Sprintf(`%v`, v))
+		}
 	}
 
 	return result
@@ -688,8 +738,8 @@ func (s Json) ArrayStr(atribs ...string) []string {
 * @return []int
 **/
 func (s Json) ArrayInt(atribs ...string) []int {
-	var result = []int{}
 	vals := s.Array(atribs...)
+	result := make([]int, 0, len(vals))
 	for _, val := range vals {
 		v, ok := val.(int)
 		if ok {
@@ -706,8 +756,8 @@ func (s Json) ArrayInt(atribs ...string) []int {
 * @return []int64
 **/
 func (s Json) ArrayInt64(atribs ...string) []int64 {
-	var result = []int64{}
 	vals := s.Array(atribs...)
+	result := make([]int64, 0, len(vals))
 	for _, val := range vals {
 		v, ok := val.(int64)
 		if ok {
@@ -724,8 +774,8 @@ func (s Json) ArrayInt64(atribs ...string) []int64 {
 * @return []float64
 **/
 func (s Json) ArrayNumber(atribs ...string) []float64 {
-	var result = []float64{}
 	vals := s.Array(atribs...)
+	result := make([]float64, 0, len(vals))
 	for _, val := range vals {
 		v, ok := val.(float64)
 		if ok {
@@ -751,13 +801,17 @@ func (s Json) ArrayJson(atribs ...string) []Json {
 		case map[string]interface{}:
 			result = append(result, v)
 		case string:
-			bt, err := json.Marshal([]byte(v))
-			if err != nil {
-				return result
+			var item Json
+			err := json.Unmarshal([]byte(v), &item)
+			if err == nil {
+				result = append(result, item)
+				continue
 			}
-
-			if err := json.Unmarshal(bt, &result); err != nil {
-				return result
+			var items []Json
+			err = json.Unmarshal([]byte(v), &items)
+			if err == nil {
+				result = append(result, items...)
+				continue
 			}
 		default:
 			return result
@@ -773,9 +827,7 @@ func (s Json) ArrayJson(atribs ...string) []Json {
 * @return error
 **/
 func (s Json) Update(from Json) {
-	for key, value := range from {
-		s[key] = value
-	}
+	maps.Copy(s, from)
 }
 
 /**
@@ -846,7 +898,7 @@ func (s Json) Get(keys ...string) (result interface{}) {
 		return nil
 	}
 
-	var val interface{} = s.Clone()
+	var val interface{} = s
 	var ok bool
 	for _, key := range keys {
 		switch v := val.(type) {
@@ -858,7 +910,7 @@ func (s Json) Get(keys ...string) (result interface{}) {
 			}
 			result = val
 		case map[string]interface{}:
-			val, ok := v[key]
+			val, ok = v[key]
 			if !ok {
 				result = nil
 				return
@@ -952,39 +1004,6 @@ func (s Json) Exist(key string) bool {
 }
 
 /**
-* Require
-* @param rules ...Rule
-* @return error
-**/
-func (s Json) Require(rules ...Rule) error {
-	for _, r := range rules {
-		if err := r.Validate(s); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-/**
-* Maybe
-* @param rules ...Rule
-* @return error
-**/
-func (s Json) Maybe(rules ...Rule) error {
-	for _, r := range rules {
-		_, ok := s[r.Name()]
-		if !ok {
-			return nil
-		}
-
-		if err := r.Validate(s); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-/**
 * Remove
 * @param keys ...string
 **/
@@ -1017,13 +1036,35 @@ func (s Json) Select(keys []string) Json {
 * @return Json
 **/
 func (s Json) Hidden(keys []string) Json {
+	hidden := make(map[string]struct{}, len(keys))
+	for _, k := range keys {
+		hidden[k] = struct{}{}
+	}
+
 	result := Json{}
 	for key, value := range s {
-		_, ok := s[key]
-		if !ok {
+		if _, ok := hidden[key]; !ok {
 			result[key] = value
 		}
 	}
 
 	return result
+}
+
+/**
+* From
+* @param as string
+* @return *Where
+**/
+func (s Json) From(as string) *Where {
+	return From([]Json{s}, as)
+}
+
+/**
+* ApplyCondition
+* @param condition *Condition
+* @return bool
+**/
+func (s Json) ApplyCondition(condition *Condition) bool {
+	return condition.ApplyToObject(s)
 }

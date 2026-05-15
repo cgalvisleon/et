@@ -10,6 +10,13 @@ import (
 )
 
 /**
+* EnableCallerInfo controls whether Error() captures the caller function name via
+* runtime stack inspection. Set to false in production to avoid the overhead of
+* runtime.Callers on every error log.
+**/
+var EnableCallerInfo = true
+
+/**
 * printLn
 * @param kind string, color string, args ...any
 * @return string
@@ -102,9 +109,13 @@ func Warn(message string) {
 * @return error
 **/
 func Error(err error) error {
-	functionName := stdrout.GetFunctionName(3)
 	if err != nil {
-		printLn("Error", "Red", err.Error(), " - ", functionName)
+		if EnableCallerInfo {
+			functionName := stdrout.GetFunctionName(3)
+			printLn("Error", "Red", err.Error(), " - ", functionName)
+		} else {
+			printLn("Error", "Red", err.Error())
+		}
 	}
 
 	return err

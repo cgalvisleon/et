@@ -37,7 +37,7 @@ func (s *Server) basicRoutes() error {
 	s.Private(POST, "/routes", s.upsetRouter, s.Name)
 	s.Private(DELETE, "/routes/{id}", s.deleteRouteById, s.Name)
 	// Packages
-	s.Private(GET, "/packages", s.getPakages, s.Name)
+	s.Private(GET, "/packages", s.getPackages, s.Name)
 	s.Private(DELETE, "/packages/{name}", s.deletePackage, s.Name)
 	// Cache
 	s.Private(GET, "/cache", s.listCache, s.Name)
@@ -138,7 +138,9 @@ func (s *Server) getRouter(w http.ResponseWriter, r *http.Request) {
 	values := r.URL.Query()
 	id := values.Get("id")
 	if len(id) != 0 {
+		s.muRoutes.RLock()
 		result, ok := s.Solvers[id]
+		s.muRoutes.RUnlock()
 		if !ok {
 			metric.HTTPError(w, r, http.StatusNotFound, MSG_ROUTE_NOT_FOUND)
 			return
@@ -148,9 +150,11 @@ func (s *Server) getRouter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name := r.URL.Query().Get("name")
+	name := values.Get("name")
 	if len(name) != 0 {
+		s.muRoutes.RLock()
 		result, ok := s.Packages[name]
+		s.muRoutes.RUnlock()
 		if !ok {
 			metric.HTTPError(w, r, http.StatusNotFound, MSG_ROUTE_NOT_FOUND)
 			return
@@ -181,7 +185,8 @@ func (s *Server) getRouter(w http.ResponseWriter, r *http.Request) {
 func (s *Server) upsetRouter(w http.ResponseWriter, r *http.Request) {
 	metric := middleware.GetMetrics(r)
 
-	result := et.Items{Result: []et.Json{}}
+	succeeded := et.Items{Result: []et.Json{}}
+	var failed []et.Json
 	body, _ := response.GetArray(r)
 	n := len(body)
 	for i := 0; i < n; i++ {
@@ -196,14 +201,26 @@ func (s *Server) upsetRouter(w http.ResponseWriter, r *http.Request) {
 		packageName := item.Str("package_name")
 		router, err := s.SetRouter(method, path, resolve, tpHeader, header, excludeHeader, version, packageName, true)
 		if err != nil {
-			metric.HTTPError(w, r, http.StatusBadRequest, err.Error())
-			return
+			failed = append(failed, et.Json{
+				"method":  method,
+				"path":    path,
+				"error":   err.Error(),
+			})
+			continue
 		}
 
-		result.Add(router.ToJson())
+		succeeded.Add(router.ToJson())
 	}
 
-	metric.ITEMS(w, r, http.StatusOK, result)
+	if len(failed) > 0 {
+		metric.JSON(w, r, http.StatusMultiStatus, et.Json{
+			"succeeded": succeeded,
+			"failed":    failed,
+		})
+		return
+	}
+
+	metric.ITEMS(w, r, http.StatusOK, succeeded)
 }
 
 /**
@@ -233,16 +250,17 @@ func (s *Server) deleteRouteById(w http.ResponseWriter, r *http.Request) {
 }
 
 /**
-* getPakages
+* getPackages
 * @params w http.ResponseWriter, r *http.Request
 **/
-func (s *Server) getPakages(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getPackages(w http.ResponseWriter, r *http.Request) {
 	metric := middleware.GetMetrics(r)
 
 	queryParams := r.URL.Query()
 	name := queryParams.Get("name")
 	if len(name) == 0 {
 		result := et.Items{Result: []et.Json{}}
+		s.muRoutes.RLock()
 		for _, pkg := range s.Packages {
 			json, err := pkg.ToJson()
 			if err != nil {
@@ -250,12 +268,15 @@ func (s *Server) getPakages(w http.ResponseWriter, r *http.Request) {
 			}
 			result.Add(json)
 		}
+		s.muRoutes.RUnlock()
 
 		metric.ITEMS(w, r, http.StatusOK, result)
 		return
 	}
 
+	s.muRoutes.RLock()
 	result, ok := s.Packages[name]
+	s.muRoutes.RUnlock()
 	if !ok {
 		metric.HTTPError(w, r, http.StatusNotFound, MSG_ROUTE_NOT_FOUND)
 		return
@@ -277,17 +298,19 @@ func (s *Server) deletePackage(w http.ResponseWriter, r *http.Request) {
 	metric := middleware.GetMetrics(r)
 
 	name := r.PathValue("name")
+
+	s.muRoutes.Lock()
 	result, ok := s.Packages[name]
 	if !ok {
+		s.muRoutes.Unlock()
 		metric.HTTPError(w, r, http.StatusNotFound, MSG_ROUTE_NOT_FOUND)
 		return
 	}
-
 	for id := range result.Routes {
-		s.RemoveRouterById(id, false)
+		delete(s.Solvers, id)
 	}
-
 	delete(s.Packages, name)
+	s.muRoutes.Unlock()
 
 	s.Save()
 

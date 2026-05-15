@@ -514,9 +514,9 @@ func (s *Message) body() et.Json {
 			"messaging_product": "whatsapp",
 			"to":                s.to,
 			"type":              "contacts",
-			"contacts": [
-				 {
-					"addresses": [
+			"contacts": []et.Json{
+				{
+					"addresses": []et.Json{
 						{
 							"street": Address.street,
 							"city": Address.city,
@@ -525,16 +525,16 @@ func (s *Message) body() et.Json {
 							"country": Address.country,
 							"country_code": Address.CountryCode,
 							"type": Address.Type,
-						}
-					],
+						},
+					},
 					"birthday": contact.Birthday,
-					"emails": [
+					"emails": []et.Json{
 						{
 							"email": emails.Email,
 							"type": emails.Type,
-						}
-					],
-					"name": {
+						},
+					},
+					"name": et.Json{
 						"formatted_name": contact.FormatedName,
 						"first_name": contact.FirstName,
 						"last_name": contact.LastName,
@@ -542,26 +542,26 @@ func (s *Message) body() et.Json {
 						"suffix": contact.Suffix,
 						"prefix": contact.Prefix,
 					},
-					"org": {
+					"org": et.Json{
 						"company": contact.OrgCompany,
 						"department": contact.OrgDepartment,
 						"title": contact.OrgTitle,
 					},
-					"phones": [
+					"phones": []et.Json{
 						{
 							"phone": phones.Phone,
 							"wa_id": phones.WaID,
 							"type": phones.Type,
-						}
-					],
-					"urls": [
+						},
+					},
+					"urls": []et.Json{
 						{
 							"url": Urls.Url,
 							"type": Urls.Type,
-						}
-					]
-				}
-			]
+						},
+					},
+				},
+			},
 		}
 	
 	case "reply_to_contact":
@@ -573,9 +573,9 @@ func (s *Message) body() et.Json {
 				"message_id": s.MessageID,
 			},
 			"type":              "contacts",
-			"contacts": [
-				 {
-					"addresses": [
+			"contacts": []et.Json{
+				{
+					"addresses": []et.Json{
 						{
 							"street": Address.street,
 							"city": Address.city,
@@ -584,16 +584,16 @@ func (s *Message) body() et.Json {
 							"country": Address.country,
 							"country_code": Address.CountryCode,
 							"type": Address.Type,
-						}
-					],
+						},
+					},
 					"birthday": contact.Birthday,
-					"emails": [
+					"emails": []et.Json{
 						{
 							"email": emails.Email,
 							"type": emails.Type,
-						}
-					],
-					"name": {
+						},
+					},
+					"name": et.Json{
 						"formatted_name": contact.FormatedName,
 						"first_name": contact.FirstName,	
 						"last_name": contact.LastName,
@@ -601,27 +601,27 @@ func (s *Message) body() et.Json {
 						"suffix": contact.Suffix,
 						"prefix": contact.Prefix,
 					},
-					"org": {
+					"org": et.Json{
 						"company": contact.OrgCompany,
 						"department": contact.OrgDepartment,
 						"title": contact.OrgTitle,
 					},
-					"phones": [
+					"phones": []et.Json{
 						{
 							"phone": phones.Phone,
 							"wa_id": phones.WaID,
 							"type": phones.Type,
-						}
-					],
-					"urls": [
+						},
+					},
+					"urls": []et.Json{
 						{
 							"url": Urls.Url,
 							"type": Urls.Type,
-						}
-					]
-				}
-			]
-		},
+						},
+					},
+				},
+			},
+		}
 	
 	case "send_location":
 		return et.Json{
@@ -661,20 +661,20 @@ func (s *Message) body() et.Json {
 			"type":              "template",
 			"template": et.Json{
 				"name": Template.Name,
-				"language": {
-					"code": Template.Language,Template.Code,
+				"language": et.Json{
+					"code": Template.Language,
 				},
-				"components":, [
+				"components": []et.Json{
 					{
 						"type": components.Body,
-						"parameters": [
+						"parameters": []et.Json{
 							{
 								"type": parameters.Text,
 								"text": parameters.Text,
 							},
 							{
 								"type": parameters.Currency,
-								"currency":{
+								"currency": et.Json{
 									"fallback_value": parameters.FallbackValue,
 									"code": parameters.Code,
 									"amount_1000": parameters.Amount1000,
@@ -690,15 +690,15 @@ func (s *Message) body() et.Json {
 									"hour": parameters.Hour,
 									"minute": parameters.Minute,
 									"calendar": parameters.Calendar,
-							}
-						}
-					]
-
-				}
-			]
-		},
-	}
-case "send_template_media":
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	
+	case "send_template_media":
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -706,27 +706,27 @@ case "send_template_media":
 			"type":              "template",
 			"template": et.Json{
 				"name": Template.Name,
-				"language": {
-					"code": Template.Language,Template.Code,
+				"language": et.Json{
+					"code": Template.Language,
 				},
-				"components":, [
+				"components": []et.Json{
 					{
 						"type": components.Header,
-						"parameters": [
+						"parameters": []et.Json{
 							{
 								"type": parameters.Image,
-								"image": {
+								"image": et.Json{
 									"link": parameters.ImageUrl,
 								},
-							}
-						]
-					}
-				]
-			}
+							},
+						},
+					},
+				},
+			},
 		},
 		{
 			"type": parameter.Body,
-			"parameters": [
+			"parameters": []et.Json{
 				{
 					"type": parameters.Text,
 					"text": parameters.String,

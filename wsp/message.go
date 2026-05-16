@@ -86,6 +86,25 @@ type Contact struct {
 	Urls          []Url     `json:"urls"`
 }
 
+type Action struct {
+	Button   string        `json:"button"`
+	Sections ActionSection `json:"sections"`
+}
+
+type ActionSection struct {
+	Title                      string    `json:"title"`
+	Rows                       ActionRow `json:"rows"`
+	CatalogID                  string    `json:"catalog_id"`
+	ProductRetailerID          string    `json:"product_retailer_id"`
+	ThumbnailProductRetailerID string    `json:"thumbnail_product_retailer_id"`
+}
+
+type ActionRow struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
 type Parameter struct {
 	Header        string `json:"header"`
 	Body          string `json:"body"`
@@ -109,6 +128,7 @@ type Parameter struct {
 	Payload       string `json:"payload"`
 	Button        string `json:"button"`
 	Type          string `json:"type"`
+	Index         string `json:"index"`
 }
 
 type Component struct {
@@ -156,6 +176,7 @@ type Message struct {
 	Url                 Url       `json:"url"`
 	Location            Location  `json:"location"`
 	Template            Template  `json:"template"`
+	Action              Action    `json:"action"`
 	Component           Component `json:"component"`
 }
 
@@ -240,6 +261,56 @@ func (s *Message) body() et.Json {
 				},
 			},
 		}
+
+	case "reply_list":
+		return et.Json{
+			"messaging_product": "whatsapp",
+			"recipient_type":    "individual",
+			"to":                s.to,
+			"context": et.Json{
+				"message_id": s.MessageID,
+			},
+			"type": "interactive",
+			"interactive": et.Json{
+				"type":   "list",
+				"header": s.Header.body(),
+				"body": et.Json{
+					"text": s.Text,
+				},
+				"footer": et.Json{
+					"text": s.Footer.Text,
+				},
+				"action": et.Json{
+					"button":   s.Button,
+					"sections": s.sections(),
+				},
+			},
+		}
+
+	case "reply_button":
+		Button := s.Buttons[0]
+		return et.Json{
+			"messaging_product": "whatsapp",
+			"recipient_type":    "individual",
+			"to":                s.to,
+			"type":              "interactive",
+			"interactive": et.Json{
+				"type": "button",
+				"body": et.Json{
+					"text": s.Text,
+				},
+				"action": et.Json{
+					"buttons": et.Json{
+						"type": "reply",
+						"reply": et.Json{
+							"id":    Button.ID,
+							"title": Button.Text,
+						},
+					},
+				},
+			},
+		}
+
 	case "reply":
 		return et.Json{
 			"messaging_product": "whatsapp",
@@ -688,14 +759,14 @@ func (s *Message) body() et.Json {
 				},
 				"components": []et.Json{
 					{
-						"type": component.Type,
+						"type": "body",
 						"parameters": []et.Json{
 							{
-								"type": parameter.Type,
+								"type": "text",
 								"text": parameter.Text,
 							},
 							{
-								"type": parameter.Currency,
+								"type": "currency",
 								"currency": et.Json{
 									"fallback_value": parameter.FallbackValue,
 									"code":           parameter.Code,
@@ -703,7 +774,7 @@ func (s *Message) body() et.Json {
 								},
 							},
 							{
-								"type": parameter.DateTime,
+								"type": "date_time",
 								"date_time": et.Json{
 									"day_of_week":  parameter.DayOfWeek,
 									"year":         parameter.Year,
@@ -736,12 +807,42 @@ func (s *Message) body() et.Json {
 				},
 				"components": []et.Json{
 					{
-						"type": component.Type,
+						"type": "header",
 						"parameters": []et.Json{
 							{
-								"type": parameter.Type,
+								"type": "image",
 								"image": et.Json{
 									"link": parameter.ImageUrl,
+								},
+							},
+							{
+								"type": "body",
+								"parameters": []et.Json{
+									{
+										"type": "text",
+										"text": parameter.Text,
+									},
+									{
+										"type": "currency",
+										"currency": et.Json{
+											"fallback_value": parameter.FallbackValue,
+											"code":           parameter.Code,
+											"amount_1000":    parameter.Amount1000,
+										},
+									},
+									{
+										"type": "date_time",
+										"date_time": et.Json{
+											"fallback_value": parameter.FallbackValue,
+											"day_of_week":    parameter.DayOfWeek,
+											"year":           parameter.Year,
+											"month":          parameter.Month,
+											"day_of_month":   parameter.DayOfMonth,
+											"hour":           parameter.Hour,
+											"minute":         parameter.Minute,
+											"calendar":       parameter.Calendar,
+										},
+									},
 								},
 							},
 						},
@@ -750,6 +851,228 @@ func (s *Message) body() et.Json {
 			},
 		}
 
+	case "send_template_interactive":
+		template := s.Template
+		component := s.Component
+		parameter := component.Parameter
+		return et.Json{
+			"messaging_product": "whatsapp",
+			"recipient_type":    "individual",
+			"to":                s.to,
+			"type":              "template",
+			"template": et.Json{
+				"name": template.Name,
+				"language": et.Json{
+					"code": template.Language,
+				},
+				"components": []et.Json{
+					{
+						"type": "header",
+						"parameters": []et.Json{
+							{
+								"type": "image",
+								"image": et.Json{
+									"link": parameter.ImageUrl,
+								},
+							},
+							{
+								"type": "body",
+								"parameters": []et.Json{
+									{
+										"type": "text",
+										"text": parameter.Text,
+									},
+									{
+										"type": "currency",
+										"currency": et.Json{
+											"fallback_value": parameter.FallbackValue,
+											"code":           parameter.Code,
+											"amount_1000":    parameter.Amount1000,
+										},
+									},
+									{
+										"type": "date_time",
+										"date_time": et.Json{
+											"fallback_value": parameter.FallbackValue,
+											"day_of_week":    parameter.DayOfWeek,
+											"year":           parameter.Year,
+											"month":          parameter.Month,
+											"day_of_month":   parameter.DayOfMonth,
+											"hour":           parameter.Hour,
+											"minute":         parameter.Minute,
+											"calendar":       parameter.Calendar,
+										},
+									},
+									{
+										"type":     "button",
+										"sub_type": "quick_reply",
+										"index":    parameter.Index,
+										"parameters": []et.Json{
+											{
+												"type":    "payload",
+												"payload": parameter.Payload,
+											},
+										},
+									},
+									{
+										"type":     "button",
+										"sub_type": "quick_reply",
+										"index":    parameter.Index,
+										"parameters": []et.Json{
+											{
+												"type":    "payload",
+												"payload": parameter.Payload,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+	case "single_product":
+		sections := s.Action.Sections
+		return et.Json{
+			"messaging_product": "whatsapp",
+			"recipient_type":    "individual",
+			"to":                s.to,
+			"type":              "interactive",
+			"interactive": et.Json{
+				"type": "product",
+				"body": et.Json{
+					"text": s.Text,
+				},
+				"footer": et.Json{
+					"text": s.Footer,
+				},
+				"action": et.Json{
+					"catalog_id":          sections.CatalogID,
+					"product_retailer_id": sections.ProductRetailerID,
+				},
+			},
+		}
+	case "multi_product":
+		sections := s.Action.Sections
+		return et.Json{
+			"messaging_product": "whatsapp",
+			"recipient_type":    "individual",
+			"to":                s.to,
+			"type":              "interactive",
+			"interactive": et.Json{
+				"type": "product_list",
+				"header": et.Json{
+					"type": "text",
+					"text": s.Header,
+				},
+				"body": et.Json{
+					"text": s.Text,
+				},
+				"footer": et.Json{
+					"text": s.Footer,
+				},
+				"action": et.Json{
+					"catalog_id": sections.CatalogID,
+					"sections": []et.Json{
+						{
+							"title": sections.Title,
+							"product_items": []et.Json{
+								{
+									"product_retailer_id": sections.ProductRetailerID,
+								},
+								{
+									"product_retailer_id": sections.ProductRetailerID,
+								},
+							},
+						},
+						{
+							"title": sections.Title,
+							"product_items": []et.Json{
+								{
+									"product_retailer_id": sections.ProductRetailerID,
+								},
+								{
+									"product_retailer_id": sections.ProductRetailerID,
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	case "catalog":
+		sections := s.Action.Sections
+		return et.Json{
+			"messaging_product": "whatsapp",
+			"recipient_type":    "individual",
+			"to":                s.to,
+			"type":              "interactive",
+			"interactive": et.Json{
+				"type": "catalog_message",
+				"body": et.Json{
+					"text": s.Text,
+				},
+				"action": et.Json{
+					"type": "catalog_message",
+					"parameters": et.Json{
+						"thumbnail_product_retailer_id": sections.ThumbnailProductRetailerID,
+					},
+				},
+				"footer": et.Json{
+					"text": s.Footer,
+				},
+			},
+		}
+	case "catalog_template":
+		sections := s.Action.Sections
+		template := s.Template
+		parameter := s.Component.Parameter
+		return et.Json{
+			"messaging_product": "whatsapp",
+			"recipient_type":    "individual",
+			"to":                s.to,
+			"type":              "template",
+			"template": et.Json{
+				"name": template.Name,
+				"language": et.Json{
+					"code": template.Language,
+				},
+				"components": []et.Json{
+					{
+						"type": "body",
+						"parameters": []et.Json{
+							{
+								"type": "text",
+								"text": s.Text,
+							},
+							{
+								"type": "text",
+								"text": s.Text,
+							},
+							{
+								"type": "text",
+								"text": s.Text,
+							},
+						},
+					},
+					{
+						"type":     "button",
+						"sub_type": "CATALOG",
+						"index":    parameter.Index,
+						"parameters": []et.Json{
+							{
+								"type": "action",
+								"action": et.Json{
+									"tumbnail_product_retailer_id": sections.ThumbnailProductRetailerID,
+								},
+							},
+						},
+					},
+				},
+			},
+		}
 	default:
 		return et.Json{
 			"messaging_product": "whatsapp",

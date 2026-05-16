@@ -9,7 +9,10 @@ import (
 	"github.com/cgalvisleon/et/utility"
 )
 
-var dbs map[string]*DB
+var (
+	dbs                    map[string]*DB
+	ErrRecordAlreadyExists = errors.New("record already exists")
+)
 
 func init() {
 	dbs = make(map[string]*DB)
@@ -88,6 +91,19 @@ func GetModel(db string, schema string, name string) (*Model, error) {
 		return nil, err
 	}
 	return model, nil
+}
+
+/**
+* NewModel: Creates a new Model by name.
+* @param dbName string, schema string, name string
+* @return *Model, error
+**/
+func NewModel(dbName string, schema string, name string, version int) (*Model, error) {
+	db, err := GetDb(dbName)
+	if err != nil {
+		return nil, err
+	}
+	return db.NewModel(schema, name, version)
 }
 
 /**

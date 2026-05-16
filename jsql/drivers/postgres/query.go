@@ -377,10 +377,15 @@ func (s *Postgres) Query(query *jsql.Query) (string, error) {
 	primary := query.Froms[0]
 
 	var sb strings.Builder
-	// SELECT
-	selects := pgSelects(query)
-	sb.WriteString("SELECT\n")
-	sb.WriteString(strings.Join(selects, ",\n"))
+	if query.IsExists {
+		// EXISTS
+		sb.WriteString("SELECT 1")
+	} else {
+		// SELECT
+		selects := pgSelects(query)
+		sb.WriteString("SELECT\n")
+		sb.WriteString(strings.Join(selects, ",\n"))
+	}
 
 	// FROM
 	sb.WriteString(fmt.Sprintf("\nFROM %s AS %s", pgFromRef(primary), primary.As))
@@ -451,6 +456,13 @@ func (s *Postgres) Query(query *jsql.Query) (string, error) {
 	}
 	if query.Offset > 0 {
 		sb.WriteString(fmt.Sprintf("\nOFFSET %d", query.Offset))
+	}
+
+	if query.IsExists {
+		// For EXISTS queries, we only need a dummy select
+		sql := fmt.Sprintf("\nSELECT EXISTS(%s)", sb.String())
+		sb.Reset()
+		sb.WriteString(sql)
 	}
 
 	sb.WriteString(";")

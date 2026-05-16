@@ -237,12 +237,12 @@ func (s *Model) DefineAttrib(name string, tp TypeData, def any) *Column {
 /**
 * DefineDetail: Defines a new detail for the model.
 * @param name string, keys map[string]string, rows int
-* @return (*Detail, error)
+* @return (*Model, error)
 **/
-func (s *Model) DefineDetail(name string, keys map[string]string, rows int) (*Detail, error) {
+func (s *Model) DefineDetail(name string, keys map[string]string, rows int) (*Model, error) {
 	result, ok := s.Details[name]
 	if ok {
-		return result, nil
+		return result.To.Model, nil
 	}
 
 	if len(keys) == 0 {
@@ -263,7 +263,7 @@ func (s *Model) DefineDetail(name string, keys map[string]string, rows int) (*De
 	detail := newDetail(to, keys, []string{}, true, true)
 	detail.Rows = rows
 	s.Details[name] = detail
-	return detail, nil
+	return to, nil
 }
 
 /**

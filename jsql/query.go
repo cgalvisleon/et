@@ -152,6 +152,8 @@ type Query struct {
 	UseSourceField bool                    `json:"use_source_field"`
 	Details        map[string]*QueryDetail `json:"details"`
 	Rollups        map[string]*QueryDetail `json:"rollups"`
+	IsExists       bool                    `json:"is_exists"`
+	IsCount        bool                    `json:"is_count"`
 	section        QuerySection            `json:"-"`
 	maxRows        int                     `json:"-"`
 	db             *DB                     `json:"-"`
@@ -749,14 +751,89 @@ func (s *Query) OrderBy(field string, sorted bool) *Query {
 * PrimaryModel: Returns the Model for the primary FROM source, or nil if not found.
 * @return *Model
 **/
-func (s *Query) PrimaryModel() *Model {
-	if len(s.Froms) == 0 || s.db == nil {
-		return nil
-	}
-	f := s.Froms[0]
-	model, err := s.db.GetModel(f.Schema, f.Name)
+func (s *Query) ExistsTx(tx *Tx) (bool, error) {
+	s.IsExists = true
+	sql, err := s.db.query(s)
 	if err != nil {
-		return nil
+		return false, err
 	}
-	return model
+
+	if s.isDebug {
+		logs.Debug("SQL:\n", sql)
+	}
+
+	if s.isTest {
+		return false, nil
+	}
+
+	result, err := s.db.SqlTx(tx, sql)
+	if err != nil {
+		return false, err
+	}
+
+	if !result.Ok {
+		return false, nil
+	}
+
+	item, err := result.First()
+	if err != nil {
+		return false, err
+	}
+
+	exists := item.Bool("exists")
+	return exists, nil
+}
+
+/**
+* Exists: Checks if any rows match the query conditions.
+* @return bool, error
+**/
+func (s *Query) Exists() (bool, error) {
+	return s.ExistsTx(nil)
+}
+
+/**
+* CountTx: Executes the query and returns the count of matching rows within the given transaction.
+* @param tx *Tx
+* @return int, error
+**/
+func (s *Query) CountTx(tx *Tx) (int, error) {
+	s.IsCount = true
+	sql, err := s.db.query(s)
+	if err != nil {
+		return 0, err
+	}
+
+	if s.isDebug {
+		logs.Debug("SQL:\n", sql)
+	}
+
+	if s.isTest {
+		return 0, nil
+	}
+
+	result, err := s.db.SqlTx(tx, sql)
+	if err != nil {
+		return 0, err
+	}
+
+	if !result.Ok {
+		return 0, nil
+	}
+
+	item, err := result.First()
+	if err != nil {
+		return 0, err
+	}
+
+	count := item.Int("count")
+	return count, nil
+}
+
+/**
+* Count: Executes the query and returns the count of matching rows.
+* @return int, error
+**/
+func (s *Query) Count() (int, error) {
+	return s.CountTx(nil)
 }

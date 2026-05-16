@@ -366,10 +366,14 @@ func (s *Sqlite) Query(query *jsql.Query) (string, error) {
 	primary := query.Froms[0]
 
 	var sb strings.Builder
-
-	selects := sqSelects(query)
-	sb.WriteString("SELECT\n")
-	sb.WriteString(strings.Join(selects, ",\n"))
+	if query.IsExists {
+		// EXISTS
+		sb.WriteString("SELECT 1")
+	} else {
+		selects := sqSelects(query)
+		sb.WriteString("SELECT\n")
+		sb.WriteString(strings.Join(selects, ",\n"))
+	}
 
 	sb.WriteString(fmt.Sprintf("\nFROM %s AS %s", sqFromRef(primary), primary.As))
 	for _, from := range query.Froms[1:] {
@@ -433,6 +437,13 @@ func (s *Sqlite) Query(query *jsql.Query) (string, error) {
 	}
 	if query.Offset > 0 {
 		sb.WriteString(fmt.Sprintf("\nOFFSET %d", query.Offset))
+	}
+
+	if query.IsExists {
+		// For EXISTS queries, we only need a dummy select
+		sql := fmt.Sprintf("\nSELECT EXISTS(%s)", sb.String())
+		sb.Reset()
+		sb.WriteString(sql)
 	}
 
 	sb.WriteString(";")

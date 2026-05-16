@@ -2,12 +2,10 @@ package jsql
 
 import (
 	"encoding/json"
-	"fmt"
 	"maps"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/msg"
 )
 
 type CommandType string
@@ -432,22 +430,20 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 **/
 func (s *Command) upsert(tx *Tx) (et.Items, error) {
 	model := s.model
-	current, err := newQuery(model).
+	isExists, err := newQuery(model).
 		addCondition(s.Conditions).
-		All()
+		ExistsTx(tx)
 	if err != nil {
 		return et.Items{}, err
 	}
 
-	if current.Count == 1 {
+	if isExists {
 		s.Type = UPDATE
 		return s.update(tx)
-	} else if current.Count == 0 {
-		s.Type = INSERT
-		return s.insert(tx)
-	} else {
-		return et.Items{}, fmt.Errorf(msg.MSG_MULTIPLE_ROWS_FOUND)
 	}
+
+	s.Type = INSERT
+	return s.insert(tx)
 }
 
 /**
@@ -478,4 +474,34 @@ func (s *Command) ExecTx(tx *Tx) (et.Items, error) {
 	}
 
 	return et.Items{}, nil
+}
+
+/**
+* Exec: Executes the command without an explicit transaction.
+* @return et.Items, error
+**/
+func (s *Command) Exec() (et.Items, error) {
+	return s.ExecTx(nil)
+}
+
+/**
+* OneTx: Executes the command and returns the first result within the given transaction.
+* @param tx *Tx
+* @return et.Item, error
+**/
+func (s *Command) OneTx(tx *Tx) (et.Item, error) {
+	items, err := s.ExecTx(tx)
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	return items.First()
+}
+
+/**
+* One: Executes the command and returns the first result without an explicit transaction.
+* @return et.Item, error
+**/
+func (s *Command) One() (et.Item, error) {
+	return s.OneTx(nil)
 }

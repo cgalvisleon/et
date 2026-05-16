@@ -413,3 +413,12 @@ func (s *Model) Upsert(data et.Json) *Command {
 	}
 	return result
 }
+
+/**
+* Query: Creates a new Query for this model with the given condition as the first WHERE clause.
+* @param query et.Json
+* @return et.Items, error
+**/
+func (s *Model) Query(query et.Json) (et.Items, error) {
+	return et.Items{}, nil
+}

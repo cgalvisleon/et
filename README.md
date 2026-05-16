@@ -173,3 +173,6 @@ go run ./cmd/client -addr localhost:1377 # Cliente TCP de prueba
 ## Licencia
 
 MIT. Ver `LICENSE`.
+
+A
+

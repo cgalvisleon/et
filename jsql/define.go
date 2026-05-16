@@ -40,7 +40,7 @@ type DefRollup struct {
 	Select []string          `json:"select"`
 }
 
-type Define struct {
+type Def struct {
 	Schema      string               `json:"schema"`
 	Name        string               `json:"name"`
 	Version     int                  `json:"version"`
@@ -93,10 +93,10 @@ func (s *Model) defineColumn(name string, tpColumn TypeColumn, tpData TypeData, 
 }
 
 /**
-* defineSource: Defines the source column for the model.
+* DefineSource: Defines the source column for the model.
 * @return *Column
 **/
-func (s *Model) defineSource() *Column {
+func (s *Model) DefineSource() *Column {
 	s.SourceField = SOURCE
 	return s.defineColumn(SOURCE, COLUMN, JSON, et.Json{}, []byte{})
 }
@@ -254,9 +254,10 @@ func (s *Model) DefineDetail(name string, keys map[string]string, rows int) (*De
 	if err != nil {
 		return nil, err
 	}
+	to.defineIdxField()
 	for k, fk := range keys {
 		s.defineColumn(k, COLUMN, KEY, "", []byte{})
-		to.defineColumn(fk, COLUMN, KEY, "", []byte{})
+		to.DefinePrimaryKey(fk, KEY, "")
 	}
 	s.defineColumn(name, DETAIL, ANY, nil, []byte{})
 	detail := newDetail(to, keys, []string{}, true, true)
@@ -307,11 +308,11 @@ func (s *DB) DefineModel(schema, name string, version int) (*Model, error) {
 	if err != nil {
 		return nil, err
 	}
+	result.defineIdxField()
 	result.DefineColumn(CREATED_AT, DATETIME, nil)
 	result.DefineColumn(UPDATED_AT, DATETIME, nil)
 	result.DefinePrimaryKey(ID, KEY, "")
-	result.defineSource()
-	result.defineIdxField()
+	result.DefineSource()
 	return result, nil
 }
 
@@ -325,12 +326,12 @@ func (s *DB) DefineTenantModel(schema, name string, version int) (*Model, error)
 	if err != nil {
 		return nil, err
 	}
+	result.defineIdxField()
 	result.DefineColumn(CREATED_AT, DATETIME, nil)
 	result.DefineColumn(UPDATED_AT, DATETIME, nil)
 	result.DefineIndex(TENANT_ID, KEY, "")
 	result.DefinePrimaryKey(ID, KEY, "")
-	result.defineSource()
-	result.defineIdxField()
+	result.DefineSource()
 	return result, nil
 }
 
@@ -344,11 +345,11 @@ func (s *DB) DefineProjectModel(schema, name string, version int) (*Model, error
 	if err != nil {
 		return nil, err
 	}
+	result.defineIdxField()
 	result.DefineColumn(CREATED_AT, DATETIME, nil)
 	result.DefineColumn(UPDATED_AT, DATETIME, nil)
 	result.DefineIndex(PROJECT_ID, KEY, "")
 	result.DefinePrimaryKey(ID, KEY, "")
-	result.defineSource()
-	result.defineIdxField()
+	result.DefineSource()
 	return result, nil
 }

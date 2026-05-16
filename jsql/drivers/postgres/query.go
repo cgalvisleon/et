@@ -12,10 +12,10 @@ import (
 
 /**
 * pgFromRef: Returns the qualified table reference (schema.name) for FROM/JOIN clauses.
-* @param f *jsql.From
+* @param f *jsql.F
 * @return string
 **/
-func pgFromRef(f *jsql.From) string {
+func pgFromRef(f *jsql.F) string {
 	if f.Schema != "" {
 		return fmt.Sprintf("%s.%s", f.Schema, f.Name)
 	}

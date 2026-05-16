@@ -13,10 +13,10 @@ import (
 /**
 * sqFromRef: Returns the table name for FROM/JOIN clauses.
 * SQLite does not support schemas — only the table name is used.
-* @param f *jsql.From
+* @param f *jsql.F
 * @return string
 **/
-func sqFromRef(f *jsql.From) string {
+func sqFromRef(f *jsql.F) string {
 	return f.Name
 }
 

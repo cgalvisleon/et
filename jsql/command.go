@@ -22,7 +22,7 @@ const (
 
 type Command struct {
 	Type           CommandType       `json:"type"`
-	From           *From             `json:"from"`
+	From           *F                `json:"from"`
 	Data           []et.Json         `json:"data"`
 	New            et.Json           `json:"new"`
 	Old            et.Json           `json:"old"`

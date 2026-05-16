@@ -41,15 +41,15 @@ func (s *Sqlite) Connect(ctx context.Context, db *jsql.DB) (*sql.DB, error) {
 		return nil, err
 	}
 
-	maxOpen := params.GetInt("DB_POOL_MAX_OPEN", 1)
+	maxOpen := params.GetInt("DB_POOL_MAX_OPEN", 3)
 	maxIdle := params.GetInt("DB_POOL_MAX_IDLE", 1)
-	connLifetime := params.GetInt("DB_POOL_CONN_LIFETIME", 900)
-	connIdleTime := params.GetInt("DB_POOL_CONN_IDLE_TIME", 300)
+	connLifetime := params.GetInt("DB_POOL_CONN_LIFETIME", 30)
+	connIdleTime := params.GetInt("DB_POOL_CONN_IDLE_TIME", 2)
 
 	result.SetMaxOpenConns(maxOpen)
 	result.SetMaxIdleConns(maxIdle)
-	result.SetConnMaxLifetime(time.Duration(connLifetime) * time.Second)
-	result.SetConnMaxIdleTime(time.Duration(connIdleTime) * time.Second)
+	result.SetConnMaxLifetime(time.Duration(connLifetime) * time.Minute)
+	result.SetConnMaxIdleTime(time.Duration(connIdleTime) * time.Minute)
 
 	logs.Logf("Sqlite", "Connected file:%s", name)
 	return result, nil

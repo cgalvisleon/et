@@ -8,7 +8,7 @@ Librería modular en Go para microservicios, CLIs y aplicaciones web. Importa so
 
 ```bash
 go get github.com/cgalvisleon/et@latest
-go get github.com/cgalvisleon/et@v0.0.1
+go get github.com/cgalvisleon/et@v1.0.23
 ```
 
 ```go

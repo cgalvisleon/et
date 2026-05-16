@@ -27,7 +27,7 @@ func defineCatalog(db *DB) error {
 	}
 
 	var err error
-	catalog, err = db.Define(Define{
+	catalog, err = db.Define(Def{
 		Schema:  "core",
 		Name:    "catalog",
 		Version: 1,

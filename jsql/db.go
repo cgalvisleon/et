@@ -328,10 +328,10 @@ func (s *DB) query(query *Query) (string, error) {
 
 /**
 * Define: Creates a model from a declarative definition (delegates to DefineModel).
-* @param definition Define
+* @param definition Def
 * @return *Model, error
 **/
-func (s *DB) Define(define Define) (*Model, error) {
+func (s *DB) Define(define Def) (*Model, error) {
 	if !utility.ValidStr(define.Schema, 0, []string{}) {
 		return nil, errors.New(msg.MSG_SCHEMA_REQUIRED)
 	}
@@ -352,7 +352,7 @@ func (s *DB) Define(define Define) (*Model, error) {
 	}
 
 	if define.SourceField != "" {
-		result.defineSource()
+		result.DefineSource()
 	}
 
 	if define.IdxField != "" {

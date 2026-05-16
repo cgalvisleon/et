@@ -44,14 +44,14 @@ type Def struct {
 	Schema      string               `json:"schema"`
 	Name        string               `json:"name"`
 	Version     int                  `json:"version"`
-	Columns     []Column             `json:"columns"`
-	SourceField string               `json:"source_field"`
 	IdxField    string               `json:"idx_field"`
 	PrimaryKeys []DefIndex           `json:"primary_keys"`
 	ForeignKeys []DefForeignKeys     `json:"foreign_keys"`
 	Indexes     []DefIndex           `json:"indexes"`
 	Unique      []DefIndex           `json:"unique"`
 	Required    []DefIndex           `json:"required"`
+	Columns     []Column             `json:"columns"`
+	SourceField string               `json:"source_field"`
 	Hiddens     []string             `json:"hiddens"`
 	Details     map[string]DefDetail `json:"details"`
 	Rollups     map[string]DefRollup `json:"rollups"`

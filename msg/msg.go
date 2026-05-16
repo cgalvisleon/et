@@ -106,6 +106,7 @@ var (
 	MSG_TO_MODEL_REQUIRED              = "to model is required"
 	MSG_KEYS_REQUIRED                  = "keys is required"
 	MSG_SELECTS_REQUIRED               = "selects is required"
+	MSG_CATALOG_NOT_FOUND              = "catalog %s not found"
 )
 
 func init() {
@@ -215,5 +216,6 @@ func init() {
 		MSG_TO_MODEL_REQUIRED = "modelo destino es requerido"
 		MSG_KEYS_REQUIRED = "claves son requeridas"
 		MSG_SELECTS_REQUIRED = "selecciones son requeridas"
+		MSG_CATALOG_NOT_FOUND = "catálogo %s no encontrado"
 	}
 }

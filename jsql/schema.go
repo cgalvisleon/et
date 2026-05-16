@@ -16,7 +16,7 @@ import (
 type Schema struct {
 	Database string            `json:"database"`
 	Name     string            `json:"name"`
-	models   map[string]*Model `json:"-"`
+	Models   map[string]*Model `json:"-"`
 	db       *DB               `json:"-"`
 	mu       *sync.RWMutex     `json:"-"`
 }
@@ -74,7 +74,7 @@ func (s *Schema) newModel(name string, version int) (*Model, error) {
 	name = utility.Normalize(name)
 
 	s.mu.Lock()
-	result, ok := s.models[name]
+	result, ok := s.Models[name]
 	s.mu.Unlock()
 	if ok {
 		return result, nil
@@ -105,7 +105,7 @@ func (s *Schema) newModel(name string, version int) (*Model, error) {
 		IsDebug:       s.db.IsDebug,
 	}
 	s.mu.Lock()
-	s.models[name] = result
+	s.Models[name] = result
 	s.mu.Unlock()
 
 	return result, nil
@@ -121,7 +121,9 @@ func (s *Schema) GetModel(name string) (*Model, error) {
 	defer s.mu.RUnlock()
 
 	name = utility.Normalize(name)
-	result, exists := s.models[name]
+	s.mu.RUnlock()
+	result, exists := s.Models[name]
+	s.mu.RLock()
 	if !exists {
 		return nil, errors.New(msg.MSG_MODEL_NOT_FOUND)
 	}

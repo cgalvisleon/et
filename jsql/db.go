@@ -25,6 +25,8 @@ type DB struct {
 	IsChanged   bool               `json:"-"`
 	driver      Driver             `json:"-"`
 	db          *sql.DB            `json:"-"`
+	catalog     *Model             `json:"-"`
+	series      *Model             `json:"-"`
 }
 
 /**
@@ -94,7 +96,7 @@ func (s *DB) ToJson() et.Json {
 * @return error
 **/
 func (s *DB) save() error {
-	return nil
+	return s.setCatalog(s.Name, "db", 1, s)
 }
 
 /**
@@ -152,7 +154,7 @@ func (s *DB) NewModel(schema, name string, version int) (*Model, error) {
 		sch = &Schema{
 			Database: s.Name,
 			Name:     schema,
-			models:   make(map[string]*Model),
+			Models:   make(map[string]*Model),
 			db:       s,
 			mu:       &sync.RWMutex{},
 		}
@@ -347,17 +349,10 @@ func (s *DB) Define(define Def) (*Model, error) {
 		return nil, err
 	}
 
-	for _, column := range define.Columns {
-		result.defineColumn(column.Name, column.TypeColumn, column.TypeData, column.Default, column.Definition)
-	}
-
-	if define.SourceField != "" {
-		result.DefineSource()
-	}
-
 	if define.IdxField != "" {
 		result.defineIdxField()
 	}
+
 	for _, primaryKey := range define.PrimaryKeys {
 		result.DefinePrimaryKey(primaryKey.Name, primaryKey.TypeData, primaryKey.Default)
 	}
@@ -379,6 +374,12 @@ func (s *DB) Define(define Def) (*Model, error) {
 	}
 	for _, hidden := range define.Hiddens {
 		result.DefineHidden(hidden)
+	}
+	for _, column := range define.Columns {
+		result.defineColumn(column.Name, column.TypeColumn, column.TypeData, column.Default, column.Definition)
+	}
+	if define.SourceField != "" {
+		result.DefineSource()
 	}
 	for _, detail := range define.Details {
 		_, err := result.DefineDetail(detail.Name, detail.Keys, detail.Rows)

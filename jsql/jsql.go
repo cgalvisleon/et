@@ -95,14 +95,10 @@ func GetModel(db string, schema string, name string) (*Model, error) {
 
 /**
 * NewModel: Creates a new Model by name.
-* @param dbName string, schema string, name string
+* @param db *DB, schema string, name string, version int
 * @return *Model, error
 **/
-func NewModel(dbName string, schema string, name string, version int) (*Model, error) {
-	db, err := GetDb(dbName)
-	if err != nil {
-		return nil, err
-	}
+func NewModel(db *DB, schema string, name string, version int) (*Model, error) {
 	return db.NewModel(schema, name, version)
 }
 

@@ -152,6 +152,7 @@ type Query struct {
 	UseSourceField bool                    `json:"use_source_field"`
 	Details        map[string]*QueryDetail `json:"details"`
 	Rollups        map[string]*QueryDetail `json:"rollups"`
+	Calcs          map[string]CalcFunction `json:"calcs"`
 	IsExists       bool                    `json:"is_exists"`
 	IsCount        bool                    `json:"is_count"`
 	section        QuerySection            `json:"-"`
@@ -182,6 +183,7 @@ func newQuery(model *Model, as ...string) *Query {
 		Havings:    make([]*et.Condition, 0),
 		Details:    make(map[string]*QueryDetail, 0),
 		Rollups:    make(map[string]*QueryDetail, 0),
+		Calcs:      make(map[string]CalcFunction, 0),
 		section:    whereSection,
 		maxRows:    model.db.RecordLimit,
 		db:         model.db,
@@ -659,6 +661,18 @@ func (s *Query) setRollup(tx *Tx, item et.Json) et.Json {
 }
 
 /**
+* setCalcs: Sets the calculations for the query.
+* @param tx *Tx, item et.Json
+* @return et.Json
+**/
+func (s *Query) setCalcs(tx *Tx, item et.Json) et.Json {
+	for _, calc := range s.Calcs {
+		calc(tx, item)
+	}
+	return item
+}
+
+/**
 * AllTx: Generates and executes a SELECT query inside the given transaction.
 * @param tx *Tx
 * @return et.Items, error
@@ -689,6 +703,7 @@ func (s *Query) AllTx(tx *Tx) (et.Items, error) {
 	for i, item := range result.Result {
 		item = s.setDetails(tx, item)
 		item = s.setRollup(tx, item)
+		s.setCalcs(tx, item)
 		result.Result[i] = item
 	}
 

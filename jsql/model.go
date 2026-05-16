@@ -22,6 +22,7 @@ type Trigger struct {
 * TriggerFunction: Callback invoked before or after a data-mutation command.
 **/
 type TriggerFunction func(tx *Tx, old, new et.Json) error
+type CalcFunction func(tx *Tx, data et.Json) error
 
 /**
 * Index: Represents a named index or primary-key field; Sorted selects BTREE over HASH.
@@ -32,35 +33,36 @@ type Index struct {
 }
 
 type Model struct {
-	Database      string             `json:"database"`
-	Schema        string             `json:"schema"`
-	Name          string             `json:"name"`
-	Table         string             `json:"table"`
-	Columns       []*Column          `json:"columns"`
-	SourceField   string             `json:"source_field"`
-	IdxField      string             `json:"idx_field"`
-	Indexes       []*Index           `json:"indexes"`
-	PrimaryKeys   []*Index           `json:"primary_keys"`
-	ForeignKeys   []*Detail          `json:"foreign_keys"`
-	Unique        []*Index           `json:"unique"`
-	Required      []*Index           `json:"required"`
-	Hiddens       []string           `json:"hiddens"`
-	Details       map[string]*Detail `json:"details"`
-	Rollups       map[string]*Detail `json:"rollups"`
-	IsStrict      bool               `json:"is_strict"`
-	Version       int                `json:"version"`
-	IsCore        bool               `json:"is_core"`
-	IsDebug       bool               `json:"-"`
-	IsChanged     bool               `json:"-"`
-	isInit        bool               `json:"-"`
-	isTest        bool               `json:"-"`
-	beforeInserts []TriggerFunction  `json:"-"`
-	beforeUpdates []TriggerFunction  `json:"-"`
-	beforeDeletes []TriggerFunction  `json:"-"`
-	afterInserts  []TriggerFunction  `json:"-"`
-	afterUpdates  []TriggerFunction  `json:"-"`
-	afterDeletes  []TriggerFunction  `json:"-"`
-	db            *DB                `json:"-"`
+	Database      string                  `json:"database"`
+	Schema        string                  `json:"schema"`
+	Name          string                  `json:"name"`
+	Table         string                  `json:"table"`
+	Columns       []*Column               `json:"columns"`
+	SourceField   string                  `json:"source_field"`
+	IdxField      string                  `json:"idx_field"`
+	Indexes       []*Index                `json:"indexes"`
+	PrimaryKeys   []*Index                `json:"primary_keys"`
+	ForeignKeys   []*Detail               `json:"foreign_keys"`
+	Unique        []*Index                `json:"unique"`
+	Required      []*Index                `json:"required"`
+	Hiddens       []string                `json:"hiddens"`
+	Details       map[string]*Detail      `json:"details"`
+	Rollups       map[string]*Detail      `json:"rollups"`
+	Calcs         map[string]CalcFunction `json:"calcs"`
+	IsStrict      bool                    `json:"is_strict"`
+	Version       int                     `json:"version"`
+	IsCore        bool                    `json:"is_core"`
+	IsDebug       bool                    `json:"-"`
+	IsChanged     bool                    `json:"-"`
+	isInit        bool                    `json:"-"`
+	isTest        bool                    `json:"-"`
+	beforeInserts []TriggerFunction       `json:"-"`
+	beforeUpdates []TriggerFunction       `json:"-"`
+	beforeDeletes []TriggerFunction       `json:"-"`
+	afterInserts  []TriggerFunction       `json:"-"`
+	afterUpdates  []TriggerFunction       `json:"-"`
+	afterDeletes  []TriggerFunction       `json:"-"`
+	db            *DB                     `json:"-"`
 }
 
 /**

@@ -31,6 +31,7 @@ const (
 	ATTRIB TypeColumn = "atrib"
 	DETAIL TypeColumn = "detail"
 	ROLLUP TypeColumn = "rollup"
+	CALC   TypeColumn = "calc"
 	AGG    TypeColumn = "agg"
 )
 

@@ -299,6 +299,17 @@ func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, sel
 }
 
 /**
+* DefineCalc: Defines a new calculation for the model.
+* @param name string, calc CalcFunction
+* @return *Model
+**/
+func (s *Model) DefineCalc(name string, calc CalcFunction) *Model {
+	s.defineColumn(name, CALC, ANY, nil, []byte{})
+	s.Calcs[name] = calc
+	return s
+}
+
+/**
 * DefineModel: Defines a new model for the database.
 * @param schema string, name string, version int
 * @return *Model, error

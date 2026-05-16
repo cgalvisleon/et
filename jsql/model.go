@@ -22,7 +22,7 @@ type Trigger struct {
 * TriggerFunction: Callback invoked before or after a data-mutation command.
 **/
 type TriggerFunction func(tx *Tx, old, new et.Json) error
-type CalcFunction func(tx *Tx, data et.Json) error
+type CalcFunction func(tx *Tx, data et.Json)
 
 /**
 * Index: Represents a named index or primary-key field; Sorted selects BTREE over HASH.

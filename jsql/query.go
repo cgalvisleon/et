@@ -130,8 +130,8 @@ func (s *QueryDetail) GetQuery(item et.Json) *Query {
 		q.Where(Eq(fk, v))
 	}
 	q.Select(s.Select...)
-	q.Limit(s.Rows)
-	q.Page(s.Page)
+	q.Rows = s.Rows
+	q.setPage(s.Page)
 	return q
 }
 
@@ -593,25 +593,36 @@ func (s *Query) Having(cond *et.Condition) *Query {
 }
 
 /**
-* Page: Sets the result offset based on the 1-based page number and current Rows limit.
+* setPage: Sets the result offset based on the 1-based page number and current Rows limit.
 * @param page int
 * @return *Query
 **/
-func (s *Query) Page(page int) *Query {
+func (s *Query) setPage(page int) *Query {
 	s.Offset = (page - 1) * s.Rows
 	return s
 }
 
 /**
-* Limit: Sets the maximum number of rows to return.
-* @param rows int
+* Page: Sets the result offset based on the 1-based page number and current Rows limit.
+* @param page int
 * @return *Query
 **/
-func (s *Query) Limit(rows int) *Query {
-	if rows > s.maxRows {
-		rows = s.maxRows
+func (s *Query) Page(page int) *Query {
+	return s.setPage(page)
+}
+
+/**
+* OrderBy: Appends a field to the ORDER BY clause; sorted=true means ASC, false means DESC.
+* @param field string
+* @param sorted bool
+* @return *Query
+**/
+func (s *Query) OrderBy(field string, sorted ...bool) *Query {
+	sortedValue := true
+	if len(sorted) > 0 {
+		sortedValue = sorted[0]
 	}
-	s.Rows = rows
+	s.OrdersBy = append(s.OrdersBy, &Index{Name: field, Sorted: sortedValue})
 	return s
 }
 
@@ -752,14 +763,26 @@ func (s *Query) One() (et.Item, error) {
 }
 
 /**
-* OrderBy: Appends a field to the ORDER BY clause; sorted=true means ASC, false means DESC.
-* @param field string
-* @param sorted bool
-* @return *Query
+* Limit: Sets the maximum number of rows to return.
+* @param tx *Tx, page int, rows int
+* @return et.Items, error
 **/
-func (s *Query) OrderBy(field string, sorted bool) *Query {
-	s.OrdersBy = append(s.OrdersBy, &Index{Name: field, Sorted: sorted})
-	return s
+func (s *Query) LimitTx(tx *Tx, page, rows int) (et.Items, error) {
+	if rows > s.maxRows {
+		rows = s.maxRows
+	}
+	s.Rows = rows
+	s.setPage(page)
+	return s.AllTx(tx)
+}
+
+/**
+* Limit: Sets the maximum number of rows to return.
+* @param page int, rows int
+* @return et.Items, error
+**/
+func (s *Query) Limit(page, rows int) (et.Items, error) {
+	return s.LimitTx(nil, page, rows)
 }
 
 /**

@@ -29,8 +29,8 @@ func (s *Detail) GetQuery(item et.Json, page, rows int) *Query {
 		q.Where(Eq(fk, v))
 	}
 	q.Select(s.Select...)
-	q.Limit(rows)
-	q.Page(page)
+	q.Rows = rows
+	q.setPage(page)
 	return q
 }
 

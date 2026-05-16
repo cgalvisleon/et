@@ -6,7 +6,6 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/utility"
 )
 
 var (
@@ -23,8 +22,9 @@ func init() {
 * @param params utility.Config
 * @return *DB, error
 **/
-func LoadTo(params utility.Config) (*DB, error) {
-	name := params.GetStr("DB_NAME", "test")
+func LoadTo(connect Connection) (*DB, error) {
+	params := connect.getParams()
+	name := params.Str("database")
 	result, ok := dbs[name]
 	if ok {
 		return result, nil
@@ -49,17 +49,16 @@ func LoadTo(params utility.Config) (*DB, error) {
 * @return *DB, error
 **/
 func Load() (*DB, error) {
-	config := utility.NewConfig(et.Json{
-		"DB_DRIVER":       envar.GetStr("DB_DRIVER", "postgres"),
-		"DB_NAME":         envar.GetStr("DB_NAME", "test"),
-		"DB_HOST":         envar.GetStr("DB_HOST", "localhost"),
-		"DB_PORT":         envar.GetInt("DB_PORT", 5432),
-		"DB_USER":         envar.GetStr("DB_USER", "test"),
-		"DB_PASSWORD":     envar.GetStr("DB_PASSWORD", "test"),
-		"DB_USE_CORE":     envar.GetBool("DB_USE_CORE", true),
-		"DB_RECORD_LIMIT": envar.GetInt("DB_RECORD_LIMIT", 1000),
-	})
-	return LoadTo(config)
+	config := PgConection{
+		Database:    envar.GetStr("DB_NAME", "test"),
+		Host:        envar.GetStr("DB_HOST", "localhost"),
+		Port:        envar.GetInt("DB_PORT", 5432),
+		User:        envar.GetStr("DB_USER", "test"),
+		Password:    envar.GetStr("DB_PASSWORD", "test"),
+		UserCore:    envar.GetBool("DB_USER_CORE", false),
+		RecordLimit: envar.GetInt("DB_RECORD_LIMIT", 1000),
+	}
+	return LoadTo(&config)
 }
 
 /**

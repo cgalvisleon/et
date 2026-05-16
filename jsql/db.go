@@ -18,7 +18,7 @@ type DB struct {
 	Name        string             `json:"name"`
 	Schemas     map[string]*Schema `json:"schemas"`
 	Driver      string             `json:"driver"`
-	Params      utility.Config     `json:"params"`
+	Params      et.Json            `json:"params"`
 	UseCore     bool               `json:"use_core"`
 	RecordLimit int                `json:"record_limit"`
 	IsDebug     bool               `json:"-"`
@@ -31,11 +31,11 @@ type DB struct {
 
 /**
 * newDB: Constructs a DB instance from the given config, resolving the driver by name.
-* @param params utility.Config
+* @param params et.Json
 * @return *DB, error
 **/
-func newDB(params utility.Config) (*DB, error) {
-	driverName := params.GetStr("DB_DRIVER", DriverPostgres)
+func newDB(params et.Json) (*DB, error) {
+	driverName := params.Str("driver")
 	if !utility.ValidStr(driverName, 2, []string{""}) {
 		return nil, errors.New(msg.MSG_DRIVER_NOT_FOUND)
 	}
@@ -44,9 +44,9 @@ func newDB(params utility.Config) (*DB, error) {
 		return nil, errors.New(msg.MSG_DRIVER_NOT_FOUND)
 	}
 
-	name := params.GetStr("DB_NAME", "test")
-	useCore := params.GetBool("DB_USE_CORE", false)
-	recordLimit := params.GetInt("DB_RECORD_LIMIT", 1000)
+	name := params.Str("database")
+	useCore := params.Bool("user_core")
+	recordLimit := params.Int("record_limit")
 	result := &DB{
 		Name:        name,
 		Schemas:     make(map[string]*Schema),

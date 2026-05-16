@@ -15,15 +15,14 @@ import (
 * Connect: Establishes a SQLite connection using the file path stored in DB_NAME.
 * Enables foreign key enforcement via PRAGMA and configures the connection pool.
 * SQLite is single-writer; DB_POOL_MAX_OPEN defaults to 1.
-* @param ctx context.Context
-* @param db *jsql.DB
+* @param ctx context.Context, db *jsql.DB
 * @return *sql.DB, error
 **/
 func (s *Sqlite) Connect(ctx context.Context, db *jsql.DB) (*sql.DB, error) {
 	params := db.Params
-	name := params.GetStr("DB_NAME", "")
+	name := params.ValStr("", "name")
 	if name == "" {
-		return nil, fmt.Errorf("DB_NAME is required for sqlite driver")
+		return nil, fmt.Errorf("name is required for sqlite driver")
 	}
 
 	result, err := sql.Open("sqlite3", name)
@@ -41,10 +40,10 @@ func (s *Sqlite) Connect(ctx context.Context, db *jsql.DB) (*sql.DB, error) {
 		return nil, err
 	}
 
-	maxOpen := params.GetInt("DB_POOL_MAX_OPEN", 3)
-	maxIdle := params.GetInt("DB_POOL_MAX_IDLE", 1)
-	connLifetime := params.GetInt("DB_POOL_CONN_LIFETIME", 30)
-	connIdleTime := params.GetInt("DB_POOL_CONN_IDLE_TIME", 2)
+	maxOpen := params.ValInt(3, "pool_max_open")
+	maxIdle := params.ValInt(1, "pool_max_idle")
+	connLifetime := params.ValInt(30, "pool_lifetime")
+	connIdleTime := params.ValInt(2, "pool_idle_time")
 
 	result.SetMaxOpenConns(maxOpen)
 	result.SetMaxIdleConns(maxIdle)

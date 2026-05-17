@@ -13,7 +13,7 @@ type PgConection struct {
 	User         string
 	Password     string
 	Sslmode      string
-	UserCore     bool
+	UseCore      bool
 	RecordLimit  int
 	PoolMaxOpen  int
 	PoolMaxIdle  int
@@ -31,7 +31,7 @@ func (c *PgConection) getParams() et.Json {
 		"user":           c.User,
 		"password":       c.Password,
 		"sslmode":        c.Sslmode,
-		"user_core":      c.UserCore,
+		"use_core":       c.UseCore,
 		"record_limit":   c.RecordLimit,
 		"pool_max_open":  c.PoolMaxOpen,
 		"pool_max_idle":  c.PoolMaxIdle,

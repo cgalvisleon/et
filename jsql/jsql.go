@@ -19,7 +19,7 @@ func init() {
 
 /**
 * LoadTo: Returns an existing DB by name, or creates and initialises a new one from params.
-* @param params utility.Config
+* @param connect Connection
 * @return *DB, error
 **/
 func LoadTo(connect Connection) (*DB, error) {
@@ -55,7 +55,7 @@ func Load() (*DB, error) {
 		Port:        envar.GetInt("DB_PORT", 5432),
 		User:        envar.GetStr("DB_USER", "test"),
 		Password:    envar.GetStr("DB_PASSWORD", "test"),
-		UserCore:    envar.GetBool("DB_USER_CORE", false),
+		UseCore:     envar.GetBool("DB_USE_CORE", false),
 		RecordLimit: envar.GetInt("DB_RECORD_LIMIT", 1000),
 	}
 	return LoadTo(&config)

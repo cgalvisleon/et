@@ -55,6 +55,7 @@ type Def struct {
 	Hiddens     []string             `json:"hiddens"`
 	Details     map[string]DefDetail `json:"details"`
 	Rollups     map[string]DefRollup `json:"rollups"`
+	IsCore      bool                 `json:"is_core"`
 	IsDebug     bool                 `json:"is_debug"`
 	IsTest      bool                 `json:"is_test"`
 }

@@ -20,10 +20,13 @@ import (
 func defaultChain(params et.Json) string {
 	host := params.ValStr("localhost", "host")
 	port := params.ValInt(5432, "port")
-	user := params.ValStr("postgres", "user")
+	user := params.ValStr("", "user")
 	password := params.ValStr("", "password")
 	name := "postgres"
 	sslMode := params.ValStr("disable", "sslmode")
+	if sslMode == "" {
+		sslMode = "disable"
+	}
 	appName := params.ValStr("et", "app_name")
 
 	dsn := fmt.Sprintf(
@@ -45,6 +48,9 @@ func chain(params et.Json) string {
 	password := params.ValStr("", "password")
 	name := params.ValStr("", "name")
 	sslMode := params.ValStr("disable", "sslmode")
+	if sslMode == "" {
+		sslMode = "disable"
+	}
 	appName := params.ValStr("et", "app_name")
 
 	dsn := fmt.Sprintf(

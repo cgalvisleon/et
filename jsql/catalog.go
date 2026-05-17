@@ -34,8 +34,8 @@ func defineCatalog(db *DB) error {
 		Columns: []Column{
 			{Name: "definition", TypeColumn: COLUMN, TypeData: BYTES, Default: []byte{}},
 		},
+		IsCore:  true,
 		IsDebug: true,
-		IsTest:  true,
 	})
 	if err != nil {
 		return err

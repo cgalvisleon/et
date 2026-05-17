@@ -25,8 +25,8 @@ func defineSeries(db *DB) error {
 			{Name: "value", TypeColumn: COLUMN, TypeData: INT, Default: ""},
 		},
 		IdxField: IDX,
+		IsCore:   true,
 		IsDebug:  true,
-		IsTest:   true,
 	})
 	if err != nil {
 		return err

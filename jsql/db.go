@@ -45,7 +45,7 @@ func newDB(params et.Json) (*DB, error) {
 	}
 
 	name := params.Str("database")
-	useCore := params.Bool("user_core")
+	useCore := params.Bool("use_core")
 	recordLimit := params.Int("record_limit")
 	result := &DB{
 		Name:        name,
@@ -281,14 +281,15 @@ func (s *DB) load(model *Model) error {
 
 	if model.IsDebug {
 		logs.Debug("DDL:\n", sql)
+	}
+
+	if model.isTest {
 		return nil
 	}
 
-	if !model.isTest {
-		_, err = s.SqlTx(nil, sql)
-		if err != nil {
-			return err
-		}
+	_, err = s.SqlTx(nil, sql)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -397,12 +398,9 @@ func (s *DB) Define(define Def) (*Model, error) {
 			return nil, err
 		}
 	}
-	if define.IsDebug {
-		result.IsDebug = true
-	}
-	if define.IsTest {
-		result.isTest = true
-	}
+	result.IsCore = define.IsCore
+	result.IsDebug = define.IsDebug
+	result.isTest = define.IsTest
 
 	return result, nil
 }

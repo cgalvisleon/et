@@ -187,6 +187,7 @@ func newQuery(model *Model, as ...string) *Query {
 		section:    whereSection,
 		maxRows:    model.db.RecordLimit,
 		db:         model.db,
+		isDebug:    model.db.IsDebug,
 	}
 	result.addFrom(model, as[0])
 	return result

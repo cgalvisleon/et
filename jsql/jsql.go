@@ -23,7 +23,7 @@ func init() {
 * @return *DB, error
 **/
 func LoadTo(connect Connection) (*DB, error) {
-	params := connect.getParams()
+	params := connect.GetParams()
 	name := params.Str("database")
 	result, ok := dbs[name]
 	if ok {

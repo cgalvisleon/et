@@ -3,7 +3,7 @@ package jsql
 import "github.com/cgalvisleon/et/et"
 
 type Connection interface {
-	getParams() et.Json
+	GetParams() et.Json
 }
 
 type PgConection struct {
@@ -22,7 +22,11 @@ type PgConection struct {
 	AppName      string
 }
 
-func (c *PgConection) getParams() et.Json {
+/**
+* GetParams: Returns the connection parameters as a JSON object.
+* @return et.Json
+**/
+func (c *PgConection) GetParams() et.Json {
 	return et.Json{
 		"driver":         DriverPostgres,
 		"database":       c.Database,
@@ -51,7 +55,11 @@ type SqliteConection struct {
 	AppName      string
 }
 
-func (c *SqliteConection) getParams() et.Json {
+/**
+* GetParams: Returns the connection parameters as a JSON object.
+* @return et.Json
+**/
+func (c *SqliteConection) GetParams() et.Json {
 	return et.Json{
 		"driver":         DriverSqlite,
 		"name":           c.Name,

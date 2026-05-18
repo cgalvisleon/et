@@ -359,6 +359,16 @@ func (s *Model) Where(cond *et.Condition) *Query {
 }
 
 /**
+* Count: Returns the count of records in the model.
+* @return (int, error)
+**/
+func (s *Model) Count() (int, error) {
+	return s.
+		From().
+		Count()
+}
+
+/**
 * Insert: Creates a Command of type INSERT pre-loaded with the given data row.
 * @param data et.Json
 * @return *Command

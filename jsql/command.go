@@ -2,10 +2,12 @@ package jsql
 
 import (
 	"encoding/json"
+	"fmt"
 	"maps"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/msg"
 )
 
 type CommandType string
@@ -63,6 +65,7 @@ func newCommand(model *Model, tp CommandType) *Command {
 		afterDeletes:   []TriggerFunction{},
 		db:             model.db,
 		model:          model,
+		isDebug:        model.db.IsDebug,
 	}
 	if map[CommandType]bool{INSERT: true, BULK: true, UPSERT: true}[tp] {
 		for _, fn := range model.beforeInserts {
@@ -275,8 +278,16 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 
 	result := et.NewItems([]et.Json{})
 	items := s.Data
+	model := s.model
 	for _, new := range items {
 		s.New = new
+
+		for _, col := range model.Required {
+			if _, ok := new[col.Name]; !ok {
+				return et.Items{}, fmt.Errorf(msg.MSG_REQUIRED_FIELD, col.Name)
+			}
+		}
+
 		for _, tg := range s.beforeInserts {
 			if err := tg(tx, s.Old, s.New); err != nil {
 				return et.Items{}, err

@@ -71,7 +71,7 @@ func (s *Server) eventReset(m event.Message) {
 	}
 
 	data := m.Data
-	logs.Debug(packageName, "eventReset:", data.ToString())
+	logs.Log(packageName, "eventReset:", data.ToString())
 
 	s.Reset()
 }

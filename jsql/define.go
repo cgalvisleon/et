@@ -323,6 +323,7 @@ func (s *DB) DefineModel(schema, name string, version int) (*Model, error) {
 	result.defineIdxField()
 	result.DefineColumn(CREATED_AT, DATETIME, nil)
 	result.DefineColumn(UPDATED_AT, DATETIME, nil)
+	result.DefineIndex(STATUS, TEXT, ACTIVE)
 	result.DefinePrimaryKey(ID, KEY, "")
 	result.DefineSource()
 	return result, nil

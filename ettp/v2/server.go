@@ -526,7 +526,7 @@ func (s *Server) Start() {
 		if err != nil {
 			logs.Fatal(err)
 		}
-		logs.Debug("Start:", json.ToString())
+		logs.Log("Start:", json.ToString())
 	}
 
 	utility.AppWait()

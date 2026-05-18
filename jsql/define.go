@@ -89,7 +89,17 @@ func (s *Model) defineColumn(name string, tpColumn TypeColumn, tpData TypeData, 
 		Definition: definition,
 		model:      s,
 	}
-	s.Columns = append(s.Columns, result)
+
+	if s.IdxField != "" {
+		pos := s.indexColumn(s.IdxField)
+		if pos != -1 {
+			s.Columns = append(s.Columns[:pos], append([]*Column{result}, s.Columns[pos:]...)...)
+		} else {
+			s.Columns = append(s.Columns, result)
+		}
+	} else {
+		s.Columns = append(s.Columns, result)
+	}
 	return result
 }
 
@@ -255,10 +265,10 @@ func (s *Model) DefineDetail(name string, keys map[string]string, rows int) (*Mo
 	if err != nil {
 		return nil, err
 	}
-	to.defineIdxField()
 	for k, fk := range keys {
 		s.defineColumn(k, COLUMN, KEY, "", []byte{})
 		to.DefinePrimaryKey(fk, KEY, "")
+		to.DefineHidden(fk)
 	}
 	s.defineColumn(name, DETAIL, ANY, nil, []byte{})
 	detail := newDetail(to, keys, []string{}, true, true)
@@ -311,6 +321,20 @@ func (s *Model) DefineCalc(name string, calc CalcFunction) *Model {
 }
 
 /**
+* DefineModel: Defines the standard columns for the model.
+* @return *Model
+**/
+func (s *Model) DefineModel() *Model {
+	s.DefineColumn(CREATED_AT, DATETIME, nil)
+	s.DefineColumn(UPDATED_AT, DATETIME, nil)
+	s.DefineIndex(STATUS, TEXT, ACTIVE)
+	s.DefinePrimaryKey(ID, KEY, "")
+	s.DefineSource()
+	s.defineIdxField()
+	return s
+}
+
+/**
 * DefineModel: Defines a new model for the database.
 * @param schema string, name string, version int
 * @return *Model, error
@@ -320,12 +344,7 @@ func (s *DB) DefineModel(schema, name string, version int) (*Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	result.defineIdxField()
-	result.DefineColumn(CREATED_AT, DATETIME, nil)
-	result.DefineColumn(UPDATED_AT, DATETIME, nil)
-	result.DefineIndex(STATUS, TEXT, ACTIVE)
-	result.DefinePrimaryKey(ID, KEY, "")
-	result.DefineSource()
+	result.DefineModel()
 	return result, nil
 }
 
@@ -339,11 +358,8 @@ func (s *DB) DefineTenantModel(schema, name string, version int) (*Model, error)
 	if err != nil {
 		return nil, err
 	}
-	result.defineIdxField()
-	result.DefineColumn(CREATED_AT, DATETIME, nil)
-	result.DefineColumn(UPDATED_AT, DATETIME, nil)
+	result.DefineModel()
 	result.DefineIndex(TENANT_ID, KEY, "")
-	result.DefinePrimaryKey(ID, KEY, "")
 	result.DefineSource()
 	return result, nil
 }
@@ -358,11 +374,8 @@ func (s *DB) DefineProjectModel(schema, name string, version int) (*Model, error
 	if err != nil {
 		return nil, err
 	}
-	result.defineIdxField()
-	result.DefineColumn(CREATED_AT, DATETIME, nil)
-	result.DefineColumn(UPDATED_AT, DATETIME, nil)
+	result.DefineModel()
 	result.DefineIndex(PROJECT_ID, KEY, "")
-	result.DefinePrimaryKey(ID, KEY, "")
 	result.DefineSource()
 	return result, nil
 }

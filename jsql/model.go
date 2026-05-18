@@ -48,7 +48,7 @@ type Model struct {
 	Hiddens       []string                `json:"hiddens"`
 	Details       map[string]*Detail      `json:"details"`
 	Rollups       map[string]*Detail      `json:"rollups"`
-	Calcs         map[string]CalcFunction `json:"calcs"`
+	Calcs         map[string]CalcFunction `json:"-"`
 	IsStrict      bool                    `json:"is_strict"`
 	Version       int                     `json:"version"`
 	IsCore        bool                    `json:"is_core"`
@@ -147,20 +147,26 @@ func (s *Model) Init() error {
 		return nil
 	}
 
-	err := s.db.load(s)
+	exist, err := s.db.existModel(s.Schema, s.Name)
 	if err != nil {
 		return err
 	}
 
+	if !exist {
+		err = s.db.load(s)
+		if err != nil {
+			return err
+		}
+
+		if !s.IsCore {
+			err := s.save()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	s.isInit = true
-	if s.IsCore {
-		return nil
-	}
-
-	if s.IsChanged {
-		return s.save()
-	}
-
 	return nil
 }
 

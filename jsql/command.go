@@ -127,6 +127,15 @@ func (s *Command) ToJson() et.Json {
 }
 
 /**
+* Debug: Enables debug mode — SQL is logged to stdout.
+* @return *Command
+**/
+func (s *Command) Debug() *Command {
+	s.isDebug = true
+	return s
+}
+
+/**
 * Test: Enables test mode — SQL is generated but not executed.
 * @return *Command
 **/

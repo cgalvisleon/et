@@ -23,6 +23,7 @@ type DB struct {
 	RecordLimit int                `json:"record_limit"`
 	IsDebug     bool               `json:"-"`
 	IsChanged   bool               `json:"-"`
+	isInit      bool               `json:"-"`
 	driver      Driver             `json:"-"`
 	db          *sql.DB            `json:"-"`
 	catalog     *Model             `json:"-"`
@@ -104,6 +105,10 @@ func (s *DB) save() error {
 * @return error
 **/
 func (s *DB) init() error {
+	if s.isInit {
+		return nil
+	}
+
 	if s.db != nil {
 		return nil
 	}
@@ -125,6 +130,7 @@ func (s *DB) init() error {
 		}
 	}
 
+	s.isInit = true
 	if s.IsChanged {
 		return s.save()
 	}
@@ -262,6 +268,19 @@ func (s *DB) SqlTx(tx *Tx, query string, arg ...any) (et.Items, error) {
 **/
 func (s *DB) Sql(query string, args ...any) (et.Items, error) {
 	return s.SqlTx(nil, query, args...)
+}
+
+/**
+* existModel: Checks if a table exists in the database.
+* @param schema string, name string
+* @return bool, error
+**/
+func (s *DB) existModel(schema string, name string) (bool, error) {
+	if s.driver == nil {
+		return false, errors.New(msg.MSG_DRIVER_NOT_FOUND)
+	}
+
+	return s.driver.ExistModel(s.db, schema, name)
 }
 
 /**

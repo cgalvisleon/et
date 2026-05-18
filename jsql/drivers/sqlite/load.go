@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"database/sql"
 	"fmt"
 	"sort"
 	"strings"
@@ -130,6 +131,35 @@ func sqDDLIndexes(model *jsql.Model, table string) []string {
 			idxName, table, idx.Name))
 	}
 	return stmts
+}
+
+/**
+* ExistModel: Returns true when a table with the given name exists in the SQLite database.
+* The schema parameter is ignored — SQLite does not support named schemas.
+* @param db *sql.DB
+* @param schema string
+* @param name string
+* @return bool, error
+**/
+func (s *Sqlite) ExistModel(db *sql.DB, schema, name string) (bool, error) {
+	query := `
+	SELECT EXISTS(
+	SELECT 1
+	FROM sqlite_master
+	WHERE type='table'
+	AND UPPER(name) = UPPER(?));`
+	rows, err := db.Query(query, name)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	items := jsql.RowsToItems(rows)
+	if items.Count == 0 {
+		return false, nil
+	}
+
+	return items.Bool(0, "exists"), nil
 }
 
 /**

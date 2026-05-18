@@ -74,6 +74,7 @@ func (db *DB) setCatalog(name, kind string, version int, obj any) error {
 			"version":    version,
 			"definition": bt,
 		}).
+		Debug().
 		Exec()
 	if err != nil {
 		return err

@@ -87,6 +87,7 @@ func Load() error {
 	if err != nil {
 		return err
 	}
+	et.SetCacheStore(LoadStore())
 
 	return nil
 }

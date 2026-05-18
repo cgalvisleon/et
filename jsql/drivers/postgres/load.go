@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"database/sql"
 	"fmt"
 	"sort"
 	"strings"
@@ -171,6 +172,32 @@ func ddlForeignKeys(model *jsql.Model, table string) []string {
 		stmts = append(stmts, sb.String())
 	}
 	return stmts
+}
+
+/**
+* ExistModel: Returns true when a table with the given schema and name exists in the database.
+* @param db *sql.DB @param schema string @param name string
+* @return bool, error
+**/
+func (s *Postgres) ExistModel(db *sql.DB, schema, name string) (bool, error) {
+	query := `
+	SELECT EXISTS(
+	SELECT 1
+	FROM information_schema.tables
+	WHERE UPPER(table_schema) = UPPER($1)
+	AND UPPER(table_name) = UPPER($2));`
+	rows, err := db.Query(query, schema, name)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	items := jsql.RowsToItems(rows)
+	if items.Count == 0 {
+		return false, nil
+	}
+
+	return items.Bool(0, "exists"), nil
 }
 
 /**

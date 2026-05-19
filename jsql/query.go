@@ -226,12 +226,21 @@ func (s *Query) ToJson() et.Json {
 }
 
 /**
+* setDebug: Sets the debug flag for the query.
+* @param debug bool
+* @return *Query
+**/
+func (s *Query) setDebug(debug bool) *Query {
+	s.isDebug = debug
+	return s
+}
+
+/**
 * Debug: Enables SQL logging for this query and returns it for chaining.
 * @return *Query
 **/
 func (s *Query) Debug() *Query {
-	s.isDebug = true
-	return s
+	return s.setDebug(true)
 }
 
 /**

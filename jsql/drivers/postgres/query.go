@@ -377,6 +377,32 @@ func pgSelects(query *jsql.Query) []string {
 }
 
 /**
+* pgFrom: Generates the SQL FROM string for the given Query descriptor.
+* @param query *jsql.Query
+* @return strings.Builder
+**/
+func pgFrom(query *jsql.Query) []string {
+	result := []string{}
+	primary := query.Froms[0]
+	ref := pgFromRef(primary)
+	if ref == primary.As {
+		result = append(result, fmt.Sprintf("\nFROM %s", ref))
+	} else {
+		result = append(result, fmt.Sprintf("\nFROM %s AS %s", ref, primary.As))
+	}
+	for _, from := range query.Froms[1:] {
+		ref := pgFromRef(from)
+		if ref == from.As {
+			result = append(result, fmt.Sprintf(",\n%s", ref))
+		} else {
+			result = append(result, fmt.Sprintf(",\n%s AS %s", ref, from.As))
+		}
+	}
+
+	return result
+}
+
+/**
 * Query: Generates the SQL SELECT string for the given Query descriptor.
 * @param query *jsql.Query
 * @return string, error
@@ -401,10 +427,8 @@ func (s *Postgres) Query(query *jsql.Query) (string, error) {
 	}
 
 	// FROM
-	sb.WriteString(fmt.Sprintf("\nFROM %s AS %s", pgFromRef(primary), primary.As))
-	for _, from := range query.Froms[1:] {
-		sb.WriteString(fmt.Sprintf(", %s AS %s", pgFromRef(from), from.As))
-	}
+	from := pgFrom(query)
+	sb.WriteString(strings.Join(from, ",\n"))
 
 	// JOINs
 	for _, join := range query.Joins {
@@ -473,7 +497,7 @@ func (s *Postgres) Query(query *jsql.Query) (string, error) {
 
 	if query.IsExists {
 		// For EXISTS queries, we only need a dummy select
-		sql := fmt.Sprintf("\nSELECT EXISTS(%s)", sb.String())
+		sql := fmt.Sprintf("SELECT EXISTS(%s)", sb.String())
 		sb.Reset()
 		sb.WriteString(sql)
 	}

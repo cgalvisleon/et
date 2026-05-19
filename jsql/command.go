@@ -127,12 +127,21 @@ func (s *Command) ToJson() et.Json {
 }
 
 /**
+* setDebug: Sets the debug flag for the query.
+* @param debug bool
+* @return *Query
+**/
+func (s *Command) setDebug(debug bool) *Command {
+	s.isDebug = debug
+	return s
+}
+
+/**
 * Debug: Enables debug mode — SQL is logged to stdout.
 * @return *Command
 **/
 func (s *Command) Debug() *Command {
-	s.isDebug = true
-	return s
+	return s.setDebug(true)
 }
 
 /**
@@ -452,6 +461,7 @@ func (s *Command) upsert(tx *Tx) (et.Items, error) {
 	model := s.model
 	isExists, err := newQuery(model).
 		addCondition(s.Conditions).
+		setDebug(s.isDebug).
 		ExistsTx(tx)
 	if err != nil {
 		return et.Items{}, err
@@ -472,28 +482,33 @@ func (s *Command) upsert(tx *Tx) (et.Items, error) {
 * @return et.Items, error
 **/
 func (s *Command) ExecTx(tx *Tx) (et.Items, error) {
+	var err error
+	var result et.Items
 	tx, isCommitted := getTx(tx)
 	switch s.Type {
 	case INSERT:
-		return s.insert(tx)
+		result, err = s.insert(tx)
 	case BULK:
-		return s.insert(tx)
+		result, err = s.insert(tx)
 	case UPDATE:
-		return s.update(tx)
+		result, err = s.update(tx)
 	case DELETE:
-		return s.delete(tx)
+		result, err = s.delete(tx)
 	case UPSERT:
-		return s.upsert(tx)
+		result, err = s.upsert(tx)
+	}
+	if err != nil {
+		return et.Items{}, err
 	}
 
 	if isCommitted {
-		err := tx.commit()
+		err = tx.commit()
 		if err != nil {
 			return et.Items{}, err
 		}
 	}
 
-	return et.Items{}, nil
+	return result, nil
 }
 
 /**

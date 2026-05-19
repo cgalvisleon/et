@@ -180,13 +180,6 @@ func (s *Ettp) Start() {
 	}
 	s.printRoutes()
 	s.banner()
-}
-
-/**
-* StartAndWait
-**/
-func (s *Ettp) StartWait() {
-	s.Start()
 	utility.AppWait()
 }
 

@@ -4,39 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-	"sync"
 
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
 )
-
-/**
-* New
-* @return *Resilience, error
- */
-func New(store instances.Store) (*Resilience, error) {
-	err := event.Load()
-	if err != nil {
-		return nil, err
-	}
-
-	result := &Resilience{
-		instances: make(map[string]*Instance),
-		mu:        sync.Mutex{},
-		isDebug:   envar.GetBool("DEBUG", false),
-	}
-	if store != nil {
-		result.getInstance = store.Get
-		result.setInstance = store.Set
-		result.queryInstance = store.Query
-	}
-
-	return result, nil
-}
 
 /**
 * HttpGet
@@ -44,24 +16,21 @@ func New(store instances.Store) (*Resilience, error) {
 **/
 func (s *Resilience) HttpGet(w http.ResponseWriter, r *http.Request) {
 	id := request.URLParam(r, "id").Str()
-	var instance Instance
-	exists, err := s.getInstance(id, &instance)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+	instance, exists := s.Get(id)
+	if !exists {
+		response.HTTPError(w, r, http.StatusNotFound, "instance not found")
 		return
 	}
 
-	if !exists {
-		response.ITEM(w, r, http.StatusNotFound, et.Item{
-			Ok:     true,
-			Result: et.Json{"message": "instance not found"},
-		})
+	jsonData, err := instance.ToJson()
+	if err != nil {
+		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	response.ITEM(w, r, http.StatusOK, et.Item{
 		Ok:     true,
-		Result: instance.ToJson(),
+		Result: jsonData,
 	})
 }
 
@@ -71,18 +40,9 @@ func (s *Resilience) HttpGet(w http.ResponseWriter, r *http.Request) {
 **/
 func (s *Resilience) HttpState(w http.ResponseWriter, r *http.Request) {
 	id := request.URLParam(r, "id").Str()
-	var instance Instance
-	exists, err := s.getInstance(id, &instance)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
+	instance, exists := s.Get(id)
 	if !exists {
-		response.ITEM(w, r, http.StatusNotFound, et.Item{
-			Ok:     true,
-			Result: et.Json{"message": "instance not found"},
-		})
+		response.HTTPError(w, r, http.StatusNotFound, "instance not found")
 		return
 	}
 
@@ -99,9 +59,15 @@ func (s *Resilience) HttpState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	jsonData, err := instance.ToJson()
+	if err != nil {
+		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	response.ITEM(w, r, http.StatusOK, et.Item{
 		Ok:     true,
-		Result: instance.ToJson(),
+		Result: jsonData,
 	})
 }
 
@@ -111,18 +77,9 @@ func (s *Resilience) HttpState(w http.ResponseWriter, r *http.Request) {
 **/
 func (s *Resilience) HttpSetParams(w http.ResponseWriter, r *http.Request) {
 	id := request.URLParam(r, "id").Str()
-	var instance Instance
-	exists, err := s.getInstance(id, &instance)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
+	instance, exists := s.Get(id)
 	if !exists {
-		response.ITEM(w, r, http.StatusNotFound, et.Item{
-			Ok:     true,
-			Result: et.Json{"message": "instance not found"},
-		})
+		response.HTTPError(w, r, http.StatusNotFound, "instance not found")
 		return
 	}
 
@@ -132,7 +89,12 @@ func (s *Resilience) HttpSetParams(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonData := instance.ToJson()
+	jsonData, err := instance.ToJson()
+	if err != nil {
+		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	for k, v := range body {
 		keys := strings.Split(k, "->")
 		jsonData.SetNested(keys, v)
@@ -150,9 +112,21 @@ func (s *Resilience) HttpSetParams(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = instance.save()
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	jsonDataStr, err := instance.ToJson()
+	if err != nil {
+		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	response.ITEM(w, r, http.StatusOK, et.Item{
 		Ok:     true,
-		Result: instance.ToJson(),
+		Result: jsonDataStr,
 	})
 }
 
@@ -168,7 +142,7 @@ func (s *Resilience) HttpQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := body.Json("query")
-	result, err := s.queryInstance(query)
+	result, err := s.Query(query)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return

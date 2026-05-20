@@ -4,48 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-	"sync"
 
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/request"
-	"github.com/cgalvisleon/et/resilience"
 	"github.com/cgalvisleon/et/response"
 )
-
-/**
-* New
-* @return (*WorkFlow, error)
-**/
-func New(store instances.Store) (*WorkFlow, error) {
-	err := event.Load()
-	if err != nil {
-		return nil, err
-	}
-
-	resetInstance, err := resilience.New(store)
-	if err != nil {
-		return nil, err
-	}
-
-	result := &WorkFlow{
-		Flows:      make(map[string]*Flow),
-		Instances:  make(map[string]*Instance),
-		Results:    make(map[string]et.Json),
-		mu:         sync.Mutex{},
-		resilience: resetInstance,
-		isDebug:    envar.GetBool("DEBUG", false),
-	}
-	if store != nil {
-		result.getInstance = store.Get
-		result.setInstance = store.Set
-		result.queryInstance = store.Query
-	}
-
-	return result, nil
-}
 
 /**
 * HttpGet

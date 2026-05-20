@@ -15,84 +15,82 @@ import (
 	"github.com/openai/openai-go/v3"
 )
 
-type Agents struct {
-	agents        map[string]*Agent         `json:"-"`
-	mu            sync.RWMutex              `json:"-"`
-	conversations *Conversations            `json:"-"`
-	getInstance   instances.GetInstanceFn   `json:"-"`
-	setInstance   instances.SetInstanceFn   `json:"-"`
-	queryInstance instances.QueryInstanceFn `json:"-"`
-	isDebug       bool                      `json:"-"`
+type Ia struct {
+	agents          map[string]*Agent `json:"-"`
+	conversations   []*Conversation   `json:"-"`
+	muAgents        sync.RWMutex      `json:"-"`
+	muConversations sync.RWMutex      `json:"-"`
+	store           instances.Store   `json:"-"`
+	isDebug         bool              `json:"-"`
 }
+
+var ia *Ia
 
 /**
 * New
 * @param store instances.Store
-* @return (*Agents, error)
-**/
-func New(store instances.Store) (*Agents, error) {
-	err := event.Load()
-	if err != nil {
-		return nil, err
-	}
-
-	conversations, err := NewConversations("contacts", store)
-	if err != nil {
-		return nil, err
-	}
-
-	result := &Agents{
-		agents:        make(map[string]*Agent),
-		mu:            sync.RWMutex{},
-		conversations: conversations,
-		isDebug:       envar.GetBool("DEBUG", false),
-	}
-
-	result.getInstance = store.Get
-	result.setInstance = store.Set
-	result.queryInstance = store.Query
-	result.eventInit()
-
-	return result, nil
-}
-
-/**
-* addAgent
-* @param agent *Agent
-**/
-func (s *Agents) addAgent(agent *Agent) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.agents[agent.Tag] = agent
-}
-
-/**
-* saveAgent
-* @param agent *Agent
 * @return error
 **/
-func (s *Agents) saveAgent(agent *Agent) error {
-	if s.setInstance != nil {
-		return s.setInstance(agent.ID, agent.Tag, agent)
+func Load(store instances.Store) error {
+	if ia != nil {
+		return nil
+	}
+
+	err := event.Load()
+	if err != nil {
+		return err
+	}
+
+	ia = &Ia{
+		agents:          make(map[string]*Agent, 0),
+		conversations:   make([]*Conversation, 0),
+		muAgents:        sync.RWMutex{},
+		muConversations: sync.RWMutex{},
+		isDebug:         envar.GetBool("DEBUG", false),
+		store:           store,
 	}
 
 	return nil
 }
 
 /**
-* newAgent
-* @param tag string
-* @return *Agent
+* addAgent
+* @param agent *Agent
 **/
-func (s *Agents) newAgent(tag string) *Agent {
-	result, exists := s.Get(tag)
+func (s *Ia) addAgent(agent *Agent) {
+	s.muAgents.Lock()
+	defer s.muAgents.Unlock()
+
+	s.agents[agent.Name] = agent
+}
+
+/**
+* getAgent
+* @param name string
+* @return (*Agent, error)
+**/
+func (s *Ia) getAgent(name string) (*Agent, error) {
+	s.muAgents.RLock()
+	result, exists := s.agents[name]
+	s.muAgents.RUnlock()
+
 	if exists {
-		return result
+		return result, nil
 	}
 
-	id := fmt.Sprintf("ia:%s", tag)
-	result = newAgent(s, id, tag)
+	if s.store != nil {
+		exists, err := s.store.Get(name, &result)
+		if err != nil {
+			return nil, err
+		}
+
+		if exists {
+			return result, nil
+		}
+	}
+
+	id := fmt.Sprintf("ia:%s", name)
+	result = newAgent(s, id, name)
 	result.up()
 	result.save()
 	s.addAgent(result)
@@ -101,18 +99,18 @@ func (s *Agents) newAgent(tag string) *Agent {
 }
 
 /**
-* loadAgent
+* removeAgent
 * @param tag string
 * @return (*Agent, error)
 **/
-func (s *Agents) loadAgent(tag string) (*Agent, error) {
+func (s *Ia) removeAgent(name string) (*Agent, error) {
 	result, exists := s.Get(tag)
 	if exists {
 		return result, nil
 	}
 
-	if s.getInstance != nil {
-		exists, err := s.getInstance(tag, &result)
+	if s.store != nil {
+		exists, err := s.store.Get(tag, &result)
 		if err != nil {
 			return nil, err
 		}
@@ -137,7 +135,7 @@ func (s *Agents) loadAgent(tag string) (*Agent, error) {
 * @param tag string, model string
 * @return (*Agent, error)
 **/
-func (s *Agents) setModel(tag string, model string) (*Agent, error) {
+func (s *Ia) setModel(tag string, model string) (*Agent, error) {
 	if !utility.ValidStr(tag, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "tag")
 	}
@@ -158,7 +156,7 @@ func (s *Agents) setModel(tag string, model string) (*Agent, error) {
 * @param tag string, context string
 * @return (*Agent, error)
 **/
-func (s *Agents) setContext(tag string, context string) (*Agent, error) {
+func (s *Ia) setContext(tag string, context string) (*Agent, error) {
 	if !utility.ValidStr(tag, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "tag")
 	}
@@ -179,9 +177,9 @@ func (s *Agents) setContext(tag string, context string) (*Agent, error) {
 * @param tag string
 * @return *Agent, bool
 **/
-func (s *Agents) Get(tag string) (*Agent, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (s *Ia) Get(tag string) (*Agent, bool) {
+	s.muAgents.RLock()
+	defer s.muAgents.RUnlock()
 
 	result, exists := s.agents[tag]
 	return result, exists
@@ -191,20 +189,20 @@ func (s *Agents) Get(tag string) (*Agent, bool) {
 * Remove
 * @param instance *Agent
 **/
-func (s *Agents) Remove(instance *Agent) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *Ia) Remove(instance *Agent) {
+	s.muAgents.Lock()
+	defer s.muAgents.Unlock()
 
-	delete(s.agents, instance.Tag)
+	delete(s.agents, instance.Name)
 }
 
 /**
 * Count
 * @return int
 **/
-func (s *Agents) Count() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *Ia) Count() int {
+	s.muAgents.Lock()
+	defer s.muAgents.Unlock()
 
 	return len(s.agents)
 }
@@ -214,7 +212,7 @@ func (s *Agents) Count() int {
 * @param agents []string
 * @return error
 **/
-func (s *Agents) Load(agents []string) error {
+func (s *Ia) Load(agents []string) error {
 	for _, name := range agents {
 		_, err := s.loadAgent(name)
 		if err != nil {
@@ -230,7 +228,7 @@ func (s *Agents) Load(agents []string) error {
 * @param tag string, context string
 * @return error
 **/
-func (s *Agents) SetContext(tag, context string) error {
+func (s *Ia) SetContext(tag, context string) error {
 	result, err := s.setContext(tag, context)
 	if err != nil {
 		return err
@@ -248,7 +246,7 @@ func (s *Agents) SetContext(tag, context string) error {
 * @param tag string, model string
 * @return error
 **/
-func (s *Agents) SetModel(tag, model string) error {
+func (s *Ia) SetModel(tag, model string) error {
 	result, err := s.setModel(tag, model)
 	if err != nil {
 		return err
@@ -266,7 +264,7 @@ func (s *Agents) SetModel(tag, model string) error {
 * @param tag string, text string
 * @return ([]float64, error)
 **/
-func (s *Agents) Embed(tag string, text string) ([]float64, error) {
+func (s *Ia) Embed(tag string, text string) ([]float64, error) {
 	result, ok := s.agents[tag]
 	if !ok {
 		return nil, fmt.Errorf(msg.MSG_AGENT_NOT_FOUND, tag)
@@ -293,7 +291,7 @@ func (s *Agents) Embed(tag string, text string) ([]float64, error) {
 * @param agent string, convID string, prompt string
 * @return (et.Json, error)
 **/
-func (s *Agents) Conversations(agent, convID, prompt string) (et.Json, error) {
+func (s *Ia) Conversations(agent, convID, prompt string) (et.Json, error) {
 	if !utility.ValidStr(agent, 1, []string{}) {
 		return et.Json{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "agent")
 	}

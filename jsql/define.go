@@ -10,9 +10,8 @@ import (
 )
 
 type DefIndex struct {
-	Name     string   `json:"name"`
-	TypeData TypeData `json:"type_data"`
-	Default  any      `json:"default"`
+	Name   string `json:"name"`
+	Sorted bool   `json:"sorted"`
 }
 
 type DefTo struct {

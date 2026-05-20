@@ -16,13 +16,15 @@ func defineSeries(db *DB) error {
 		Schema:  "core",
 		Name:    "series",
 		Version: 1,
-		PrimaryKeys: []DefIndex{
+		Columns: []Column{
 			{Name: "tag", TypeData: KEY, Default: ""},
 			{Name: "owner_id", TypeData: KEY, Default: ""},
-		},
-		Columns: []Column{
 			{Name: "format", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
 			{Name: "value", TypeColumn: COLUMN, TypeData: INT, Default: ""},
+		},
+		PrimaryKeys: []DefIndex{
+			{Name: "tag", Sorted: true},
+			{Name: "owner_id", Sorted: true},
 		},
 		IdxField: IDX,
 		IsCore:   true,

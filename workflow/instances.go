@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/resilience"
 	"github.com/cgalvisleon/et/timezone"
@@ -62,39 +61,26 @@ type Instance struct {
 }
 
 /**
-* Serialize
-* @return ([]byte, error)
+* ToJson
+* @return (et.Json, error)
 **/
-func (s *Instance) Serialize() ([]byte, error) {
+func (s *Instance) ToJson() (et.Json, error) {
 	bt, err := json.Marshal(s)
 	if err != nil {
 		return nil, err
 	}
 
-	return bt, nil
-}
-
-/**
-* ToJson
-* @return et.Json
-**/
-func (s *Instance) ToJson() et.Json {
-	bt, err := s.Serialize()
-	if err != nil {
-		return et.Json{}
-	}
-
 	var result et.Json
 	err = json.Unmarshal(bt, &result)
 	if err != nil {
-		return et.Json{}
+		return nil, err
 	}
 
 	for k, v := range s.Tags {
 		result.Set(k, v)
 	}
 
-	return result
+	return result, nil
 }
 
 /**
@@ -102,7 +88,12 @@ func (s *Instance) ToJson() et.Json {
 * @return string
 **/
 func (s *Instance) ToString() string {
-	return s.ToJson().ToString()
+	result, err := s.ToJson()
+	if err != nil {
+		return ""
+	}
+
+	return result.ToString()
 }
 
 /**
@@ -110,18 +101,102 @@ func (s *Instance) ToString() string {
 * @return error
 **/
 func (s *Instance) Save() error {
-	data := s.ToJson()
-	event.Publish(EVENT_WORKFLOW_STATUS, data)
+	data, err := s.ToJson()
+	if err != nil {
+		return err
+	}
 
 	if s.isDebug {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	if s.owner != nil && s.owner.setInstance != nil {
-		return s.owner.setInstance(s.ID, s.Tag, s)
+	if s.owner != nil && s.owner.store != nil {
+		return s.owner.store.Set(s.ID, s.Tag, s)
 	}
 
 	return nil
+}
+
+/**
+* SetTag
+* @param key string, value interface{}
+* @return (et.Json, error)
+**/
+func (s *Instance) SetTag(key string, value interface{}) (et.Json, error) {
+	s.Tags[key] = value
+	err := s.Save()
+	if err != nil {
+		return s.Tags, err
+	}
+	return s.Tags, nil
+}
+
+/**
+* PutTag
+* @param tags et.Json
+* @return error
+**/
+func (s *Instance) PutTag(tags et.Json) error {
+	for k, v := range tags {
+		s.Tags[k] = v
+	}
+	return s.Save()
+}
+
+/**
+* SetParam
+* @param key string, value interface{}
+**/
+func (s *Instance) SetParam(key string, value interface{}) (et.Json, error) {
+	s.Params[key] = value
+	err := s.Save()
+	if err != nil {
+		return s.Params, err
+	}
+	return s.Params, nil
+}
+
+/**
+* PutParam
+* @param value et.Json
+* @return error
+**/
+func (s *Instance) PutParam(value et.Json) error {
+	for k, v := range value {
+		s.Params[k] = v
+	}
+	return s.Save()
+}
+
+/**
+* setTrace
+* @param step int, result et.Json, err error
+* @return error
+**/
+func (s *Instance) setTrace(step int, result et.Json, err error) error {
+	s.Traces = append(s.Traces, et.Json{
+		"step":   step,
+		"ctx":    s.Ctx.Clone(),
+		"result": result,
+		"error":  err,
+	})
+	return s.Save()
+}
+
+/**
+* SetCheckList
+* @param tag string, ok bool, data et.Json
+* @return error
+**/
+func (s *Instance) SetCheckList(tag string, ok bool, data et.Json) error {
+	idx := slices.IndexFunc(s.CheckList, func(check *CheckList) bool { return check.Tag == tag })
+	if idx != -1 {
+		s.CheckList[idx].Ok = ok
+		s.CheckList[idx].Data = data
+		return s.Save()
+	}
+
+	return fmt.Errorf("check list not found")
 }
 
 /**
@@ -130,6 +205,10 @@ func (s *Instance) Save() error {
 * @return error
 **/
 func (s *Instance) setStatus(status Status) error {
+	if s.Status == status {
+		return nil
+	}
+
 	s.Status = status
 	s.UpdatedAt = timezone.Now()
 	switch s.Status {
@@ -180,145 +259,23 @@ func (s *Instance) setResult(result et.Json, err error) (et.Json, error) {
 }
 
 /**
-* SetTag
-* @param key string, value interface{}
-* @return error
+* setCtx
+* @param ctx et.Json, step int
+* @return et.Json
 **/
-func (s *Instance) SetTag(key string, value interface{}) error {
-	s.Tags[key] = value
-	return s.Save()
-}
-
-/**
-* PutTag
-* @param tags et.Json
-* @return error
-**/
-func (s *Instance) PutTag(tags et.Json) error {
-	for k, v := range tags {
-		s.Tags[k] = v
-	}
-	return s.Save()
-}
-
-/**
-* GetTag
-* @param key string
-* @return interface{}
-**/
-func (s *Instance) GetTag(key string) interface{} {
-	return s.Tags[key]
-}
-
-/**
-* SetParam
-* @param key string, value interface{}
-**/
-func (s *Instance) SetParam(key string, value interface{}) (et.Json, error) {
-	s.Params[key] = value
-	err := s.Save()
-	if err != nil {
-		return s.Params, err
+func (s *Instance) setCtx(ctx et.Json, step int) et.Json {
+	for k, v := range ctx {
+		s.Ctx[k] = v
 	}
 
-	return s.Params, nil
+	s.Ctxs[step] = s.Ctx.Clone()
+	return s.Ctx
 }
 
 /**
-* PutParam
-* @param value et.Json
-* @return et.Json, error
-**/
-func (s *Instance) PutParam(value et.Json) (et.Json, error) {
-	for k, v := range value {
-		s.Params[k] = v
-	}
-	err := s.Save()
-	if err != nil {
-		return s.Params, err
-	}
-
-	return s.Params, nil
-}
-
-/**
-* GetParam
-* @param key string
-* @return interface{}
-**/
-func (s *Instance) GetParam(key string) interface{} {
-	return s.Params[key]
-}
-
-/**
-* setTrace
-* @param step int, ctx et.Json, err error
-* @return error
-**/
-func (s *Instance) setTrace(step int, result et.Json, err error) error {
-	ctx := s.getCtx(step)
-	s.Traces = append(s.Traces, et.Json{
-		"step":   step,
-		"ctx":    ctx,
-		"result": result,
-		"error":  err,
-	})
-	er := s.Save()
-	if er != nil {
-		return er
-	}
-
-	return err
-}
-
-/**
-* GetTraces
+* getCtx
 * @param idx int
-* @return (et.Json, error)
-**/
-func (s *Instance) GetTraces(idx int) (et.Json, error) {
-	if idx < 0 || idx >= len(s.Traces) {
-		return et.Json{}, fmt.Errorf("trace not found")
-	}
-
-	return s.Traces[idx], nil
-}
-
-/**
-* GetTraceByStep
-* @params step int
-* @return []et.Json
-**/
-func (s *Instance) GetTraceByStep(step int) []et.Json {
-	result := []et.Json{}
-	for _, trace := range s.Traces {
-		if trace["step"] == step {
-			result = append(result, trace)
-		}
-	}
-
-	return result
-}
-
-/**
-* SetCheckList
-* @param tag string, ok bool, data et.Json
-* @return error
-**/
-func (s *Instance) SetCheckList(tag string, ok bool, data et.Json) error {
-	idx := slices.IndexFunc(s.CheckList, func(check *CheckList) bool { return check.Tag == tag })
-	if idx != -1 {
-		s.CheckList[idx].Ok = ok
-		s.CheckList[idx].Data = data
-		return s.Save()
-	}
-
-	return fmt.Errorf("check list not found")
-}
-
-/**
-* @param ctx et.Json
-* @return error
+* @return et.Json
 **/
 func (s *Instance) getCtx(idx int) et.Json {
 	result, ok := s.Ctxs[idx]
@@ -330,66 +287,27 @@ func (s *Instance) getCtx(idx int) et.Json {
 }
 
 /**
-* setCtx
-* @param ctx et.Json
-**/
-func (s *Instance) setCtx(ctx et.Json) et.Json {
-	for k, v := range ctx {
-		s.Ctx[k] = v
-	}
-
-	s.Ctxs[s.Current] = ctx.Clone()
-
-	return s.Ctx
-}
-
-/**
-* SetCtx
-* @param ctx et.Json
-* @return error
-**/
-func (s *Instance) SetCtx(ctx et.Json) error {
-	s.setCtx(ctx)
-	return s.Save()
-}
-
-/**
 * setDone
-* @param result et.Json, err error
+* @param result et.Json
 * @return et.Json, error
 **/
-func (s *Instance) setDone(result et.Json, err error) (et.Json, error) {
-	s.setResult(result, err)
-	errStatus := s.setStatus(Done)
-	if errStatus != nil {
-		return result, errStatus
+func (s *Instance) setDone(result et.Json) (et.Json, error) {
+	s.setResult(result, nil)
+	err := s.setStatus(Done)
+	if err != nil {
+		return result, err
 	}
 
-	return result, err
+	return result, nil
 }
 
 /**
 * setFailed
-* @param result et.Json, err error
+* @param err error
 **/
-func (s *Instance) setFailed(result et.Json, err error) error {
-	s.setResult(result, err)
-	errStatus := s.setStatus(Failed)
-	if errStatus != nil {
-		return errStatus
-	}
-
-	return nil
-}
-
-/**
-* SetNextStep
-* @param step int
-* @return error
-**/
-func (s *Instance) SetNextStep(step int) error {
-	s.Current = step
-	err := s.setStatus(s.Status)
+func (s *Instance) setFailed(err error) error {
+	s.setResult(et.Json{}, err)
+	err = s.setStatus(Failed)
 	if err != nil {
 		return err
 	}
@@ -399,30 +317,30 @@ func (s *Instance) SetNextStep(step int) error {
 
 /**
 * setStop
-* @param result et.Json, err error
-* @return et.Json, error
+* @param result et.Json
+* @return (et.Json, error)
 **/
-func (s *Instance) setStop(result et.Json, err error) (et.Json, error) {
-	s.setResult(result, err)
+func (s *Instance) setStop(result et.Json) (et.Json, error) {
+	s.setResult(result, nil)
 	s.Current++
-	errStatus := s.setStatus(Pending)
-	if errStatus != nil {
-		return result, errStatus
+	err := s.setStatus(Pending)
+	if err != nil {
+		return result, err
 	}
 
-	return result, err
+	return result, nil
 }
 
 /**
 * setNext
 * @return error
 **/
-func (s *Instance) setNext(result et.Json, err error) error {
-	s.setResult(result, err)
+func (s *Instance) setNext(result et.Json) error {
+	s.setResult(result, nil)
 	s.Current++
-	errStatus := s.setStatus(s.Status)
-	if errStatus != nil {
-		return errStatus
+	err := s.setStatus(Running)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -430,24 +348,24 @@ func (s *Instance) setNext(result et.Json, err error) error {
 
 /**
 * setGoto
-* @param step int, result et.Json, err error
+* @param step int, message string, result et.Json
 * @return et.Json, error
 **/
-func (s *Instance) setGoto(step int, message string, result et.Json, err error) error {
+func (s *Instance) setGoto(step int, message string, result et.Json) (et.Json, error) {
 	if step == -1 {
-		return nil
+		return result, nil
 	}
 
-	s.setResult(result, err)
+	s.setResult(result, nil)
 	s.Current = step
 	s.goTo = -1
-	errStatus := s.setStatus(s.Status)
-	if errStatus != nil {
-		return errStatus
+	err := s.setStatus(Running)
+	if err != nil {
+		return result, err
 	}
 
 	logs.Logf(packageName, MSG_INSTANCE_GOTO, s.ID, s.Tag, step, message)
-	return nil
+	return result, nil
 }
 
 /**
@@ -492,43 +410,53 @@ func (s *Instance) run(ctx et.Json) (et.Json, error) {
 
 	for s.Current < len(s.Steps) {
 		step := s.Steps[s.Current]
-		ctx = s.setCtx(ctx)
-		ctx, err = step.run(s, ctx)
+		ctx = s.setCtx(ctx, s.Current)
+		result, err := step.run(s, ctx)
 		if err != nil {
 			return s.rollback(ctx, err)
 		}
 
 		if s.done {
-			return s.setDone(ctx, err)
-		}
-
-		if s.goTo != -1 {
-			s.setGoto(s.goTo, MSG_INSTANCE_GOTO_USER_DECISION, ctx, err)
-			continue
+			return s.setDone(result)
 		}
 
 		if step.Stop {
-			return s.setStop(ctx, err)
+			return s.setStop(result)
 		}
 
-		if step.Expression != "" {
-			ok, err := step.evaluate(ctx, s)
+		if s.goTo != -1 {
+			ctx, err = s.setGoto(s.goTo, MSG_INSTANCE_GOTO_USER_DECISION, result)
 			if err != nil {
-				return s.rollback(ctx, err)
+				return result, err
+			}
+			continue
+		}
+
+		if step.Condition != nil {
+			ok, err := step.evaluate(result, s)
+			if err != nil {
+				return et.Json{}, err
 			}
 
 			if ok {
-				s.setGoto(step.YesGoTo, MSG_INSTANCE_EXPRESSION_TRUE, ctx, err)
+				ctx, err = s.setGoto(step.Condition.YesTo, MSG_INSTANCE_EXPRESSION_TRUE, result)
+				if err != nil {
+					return result, err
+				}
 			} else {
-				s.setGoto(step.NoGoTo, MSG_INSTANCE_EXPRESSION_FALSE, ctx, err)
+				ctx, err = s.setGoto(step.Condition.NoTo, MSG_INSTANCE_EXPRESSION_FALSE, result)
+				if err != nil {
+					return result, err
+				}
 			}
+			continue
 		}
 
 		if s.Current == len(s.Steps)-1 {
-			return s.setDone(ctx, err)
+			return s.setDone(result)
 		}
 
-		s.setNext(ctx, err)
+		s.setNext(result)
 	}
 
 	return ctx, err
@@ -536,21 +464,21 @@ func (s *Instance) run(ctx et.Json) (et.Json, error) {
 
 /**
 * rollback
-* @param result et.Json, err error
+* @param ctx et.Json, err error
 * @return et.Json, error
 **/
-func (s *Instance) rollback(result et.Json, err error) (et.Json, error) {
-	s.setFailed(result, err)
+func (s *Instance) rollback(ctx et.Json, err error) (et.Json, error) {
+	s.setFailed(err)
 	if s.startResilence() {
-		return result, err
+		return ctx, err
 	}
 
 	if s.Status == Done {
-		return result, fmt.Errorf(MSG_INSTANCE_ALREADY_DONE, s.ID)
+		return ctx, fmt.Errorf(MSG_INSTANCE_ALREADY_DONE, s.ID)
 	} else if s.Status == Running {
-		return result, fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING, s.ID)
+		return ctx, fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING, s.ID)
 	} else if s.Status == Pending {
-		return result, fmt.Errorf(MSG_INSTANCE_PENDING, s.ID)
+		return ctx, fmt.Errorf(MSG_INSTANCE_PENDING, s.ID)
 	}
 
 	for i := s.Current - 1; i >= 0; i-- {
@@ -569,7 +497,7 @@ func (s *Instance) rollback(result et.Json, err error) (et.Json, error) {
 		}
 
 		ctx := s.Ctxs[i].Clone()
-		result, err = step.rollbacks(s, ctx)
+		result, err := step.rollbacks(s, ctx)
 		if err != nil {
 			attempt := len(s.Resilence)
 			s.Rollbacks[i] = &Result{
@@ -581,12 +509,12 @@ func (s *Instance) rollback(result et.Json, err error) (et.Json, error) {
 			}
 
 			if s.TpConsistency == TpConsistencyStrong {
-				return result, err
+				return ctx, err
 			}
 		}
 	}
 
-	return result, err
+	return ctx, err
 }
 
 /**

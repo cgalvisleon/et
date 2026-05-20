@@ -108,6 +108,10 @@ var (
 	MSG_REQUIRED_FIELD                 = "required field %s"
 	MSG_SELECTS_REQUIRED               = "selects is required"
 	MSG_CATALOG_NOT_FOUND              = "catalog %s not found"
+	MSG_INSTANCE_REQUIRED_ID           = "instance required id"
+	MSG_INSTANCE_STOPPED               = "Instance stopped"
+	MSG_INSTANCE_RESTARTED             = "Instance restarted"
+	MSG_STORE_IS_REQUIRED              = "store is required"
 )
 
 func init() {
@@ -219,5 +223,9 @@ func init() {
 		MSG_REQUIRED_FIELD = "campo requerido %s"
 		MSG_SELECTS_REQUIRED = "selecciones son requeridas"
 		MSG_CATALOG_NOT_FOUND = "catálogo %s no encontrado"
+		MSG_INSTANCE_REQUIRED_ID = "instancia requiere id"
+		MSG_INSTANCE_STOPPED = "Instancia detenida"
+		MSG_INSTANCE_RESTARTED = "Instancia reiniciada"
+		MSG_STORE_IS_REQUIRED = "store es requerido"
 	}
 }

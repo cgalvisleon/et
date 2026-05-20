@@ -8,29 +8,32 @@ import (
 	"github.com/Knetic/govaluate"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/timezone"
 )
 
 type StepKind string
 
 const (
-	StepNormal StepKind = "normal"
-	StepWait   StepKind = "wait"
+	StepFn     StepKind = "fn"
+	StepDefine StepKind = "define"
 )
 
+type Condition struct {
+	Expression string `json:"expression"`
+	YesTo      int    `json:"yes_to"`
+	NoTo       int    `json:"no_to"`
+}
+
 type Step struct {
-	Kind        StepKind      `json:"kind"`
-	Name        string        `json:"name"`
-	Description string        `json:"description"`
-	Stop        bool          `json:"stop"`
-	Expression  string        `json:"expression"`
-	YesGoTo     int           `json:"yes_go_to"`
-	NoGoTo      int           `json:"no_go_to"`
-	Spec        string        `json:"spec"`
-	fn          FnContext     `json:"-"`
-	rollbacks   FnContext     `json:"-"`
-	duration    time.Duration `json:"-"`
-	shot        *time.Timer   `json:"-"`
+	Kind        StepKind    `json:"kind"`
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	Stop        bool        `json:"stop"`
+	Condition   *Condition  `json:"condition"`
+	Definition  []byte      `json:"definition"`
+	Steps       []*Step     `json:"steps"`
+	fn          FnContext   `json:"-"`
+	rollbacks   FnContext   `json:"-"`
+	shot        *time.Timer `json:"-"`
 }
 
 /**
@@ -40,10 +43,13 @@ type Step struct {
 **/
 func newStep(name, description string, fn FnContext, stop bool) (*Step, error) {
 	result := &Step{
-		Kind:        StepNormal,
+		Kind:        StepFn,
 		Name:        name,
 		Description: description,
 		Stop:        stop,
+		Definition:  []byte{},
+		Condition:   &Condition{},
+		Steps:       make([]*Step, 0),
 		fn:          fn,
 	}
 
@@ -56,25 +62,12 @@ func newStep(name, description string, fn FnContext, stop bool) (*Step, error) {
 * @return et.Json, error
 **/
 func (s *Step) run(flow *Instance, ctx et.Json) (et.Json, error) {
-	if s.fn == nil {
-		return ctx, fmt.Errorf(msg.MSG_STEP_FUNCTION_IS_NIL, s.Name, flow.Current)
+	if s.Kind == StepDefine {
+		return ctx, nil
 	}
 
-	if s.Kind == StepWait {
-		now := timezone.Now()
-		shotTime, err := timezone.Parse("2006-01-02T15:04:05", s.Spec)
-		if err != nil {
-			return et.Json{}, err
-		}
-		if shotTime.After(now) {
-			duration := shotTime.Sub(now)
-			s.duration = duration
-			s.shot = time.AfterFunc(duration, func() {
-				s.fn(flow, ctx)
-			})
-		}
-
-		return ctx, nil
+	if s.fn == nil {
+		return ctx, fmt.Errorf(msg.MSG_STEP_FUNCTION_IS_NIL, s.Name, flow.Current)
 	}
 
 	flow.setStatus(Running)
@@ -120,14 +113,14 @@ func (s *Step) ToJson() et.Json {
 
 /**
 * ifElse
-* @param expression string, yesGoTo int, noGoTo int
+* @param expression string, yesTo int, noTo int
 * @return *Step, error
 **/
-func (s *Step) ifElse(expression string, yesGoTo int, noGoTo int) *Step {
-	s.YesGoTo = yesGoTo
-	s.NoGoTo = noGoTo
-	if expression != "" {
-		s.Expression = expression
+func (s *Step) ifElse(expression string, yesTo int, noTo int) *Step {
+	s.Condition = &Condition{
+		Expression: expression,
+		YesTo:      yesTo,
+		NoTo:       noTo,
 	}
 
 	return s
@@ -140,11 +133,11 @@ func (s *Step) ifElse(expression string, yesGoTo int, noGoTo int) *Step {
 **/
 func (s *Step) evaluate(ctx et.Json, instance *Instance) (bool, error) {
 	resultError := func(err error) (bool, error) {
-		return false, fmt.Errorf(MSG_INSTANCE_EVALUATE, s.Expression, err.Error())
+		return false, fmt.Errorf(MSG_INSTANCE_EVALUATE, s.Condition.Expression, err.Error())
 	}
 
 	instance.setStatus(Running)
-	evalueExpression, err := govaluate.NewEvaluableExpression(s.Expression)
+	evalueExpression, err := govaluate.NewEvaluableExpression(s.Condition.Expression)
 	if err != nil {
 		return resultError(err)
 	}

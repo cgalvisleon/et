@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/instances"
@@ -13,21 +14,52 @@ import (
 	"github.com/cgalvisleon/et/timezone"
 )
 
+type WorkFlow struct {
+	Flows      map[string]*Flow       `json:"flows"`
+	Instances  map[string]*Instance   `json:"instances"`
+	Results    map[string]et.Json     `json:"results"`
+	mu         sync.Mutex             `json:"-"`
+	store      instances.Store        `json:"-"`
+	resilience *resilience.Resilience `json:"-"`
+	isDebug    bool                   `json:"-"`
+}
+
 var (
 	packageName           = "workflow"
 	ErrorInstanceNotFound = fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
+	workflow              *WorkFlow
 )
 
-type WorkFlow struct {
-	Flows         map[string]*Flow          `json:"flows"`
-	Instances     map[string]*Instance      `json:"instances"`
-	Results       map[string]et.Json        `json:"results"`
-	mu            sync.Mutex                `json:"-"`
-	getInstance   instances.GetInstanceFn   `json:"-"`
-	setInstance   instances.SetInstanceFn   `json:"-"`
-	queryInstance instances.QueryInstanceFn `json:"-"`
-	resilience    *resilience.Resilience    `json:"-"`
-	isDebug       bool                      `json:"-"`
+/**
+* Load
+* @return error
+**/
+func Load(store instances.Store) error {
+	if workflow != nil {
+		return nil
+	}
+
+	err := event.Load()
+	if err != nil {
+		return err
+	}
+
+	resetInstance, err := resilience.New(store)
+	if err != nil {
+		return err
+	}
+
+	workflow = &WorkFlow{
+		Flows:      make(map[string]*Flow),
+		Instances:  make(map[string]*Instance),
+		Results:    make(map[string]et.Json),
+		mu:         sync.Mutex{},
+		store:      store,
+		resilience: resetInstance,
+		isDebug:    envar.GetBool("DEBUG", false),
+	}
+
+	return nil
 }
 
 /**
@@ -42,16 +74,32 @@ func (s *WorkFlow) add(instance *Instance) {
 }
 
 /**
-* Get
+* get
 * @param id string
 * @return *Instance, bool
 **/
-func (s *WorkFlow) Get(id string) (*Instance, bool) {
+func (s *WorkFlow) get(id string) (*Instance, bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	result, exists := s.Instances[id]
+	s.mu.Unlock()
 
-	instance, ok := s.Instances[id]
-	return instance, ok
+	if exists {
+		return result, true
+	}
+
+	if s.store != nil {
+		exists, err := s.store.Get(id, &result)
+		if err != nil {
+			return nil, false
+		}
+
+		result.up(s)
+		if exists {
+			return result, true
+		}
+	}
+
+	return nil, false
 }
 
 /**
@@ -124,22 +172,22 @@ func (s *WorkFlow) new(tag, id string, tags et.Json, step int, createdBy string)
 }
 
 /**
-* load
+* get
 * @param id string
-* @return *Flow, error
+* @return *Instance, bool
 **/
-func (s *WorkFlow) load(id string) (*Instance, bool) {
+func (s *WorkFlow) Get(id string) (*Instance, bool) {
 	if id == "" {
 		return nil, false
 	}
 
-	result, exists := s.Get(id)
+	result, exists := s.get(id)
 	if exists {
 		return result, true
 	}
 
-	if s.getInstance != nil {
-		exists, err := s.getInstance(id, &result)
+	if s.store != nil {
+		exists, err := s.store.Get(id, &result)
 		if err != nil {
 			return nil, false
 		}

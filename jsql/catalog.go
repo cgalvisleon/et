@@ -23,16 +23,21 @@ func defineCatalog(db *DB) error {
 		Schema:  "core",
 		Name:    "catalog",
 		Version: 1,
-		PrimaryKeys: []DefIndex{
+		Columns: []Column{
+			{Name: CREATED_AT, TypeData: DATETIME, Default: ""},
+			{Name: UPDATED_AT, TypeData: DATETIME, Default: ""},
 			{Name: "name", TypeData: TEXT, Default: ""},
+			{Name: "kind", TypeData: KEY, Default: ""},
+			{Name: "version", TypeData: INT, Default: 0},
+			{Name: "definition", TypeColumn: COLUMN, TypeData: BYTES, Default: []byte{}},
+		},
+		PrimaryKeys: []DefIndex{
+			{Name: "name", Sorted: true},
 		},
 		IdxField: IDX,
 		Indexes: []DefIndex{
-			{Name: "kind", TypeData: KEY, Default: ""},
-			{Name: "version", TypeData: INT, Default: 0},
-		},
-		Columns: []Column{
-			{Name: "definition", TypeColumn: COLUMN, TypeData: BYTES, Default: []byte{}},
+			{Name: "kind", Sorted: true},
+			{Name: "version", Sorted: true},
 		},
 		IsCore:  true,
 		IsDebug: true,

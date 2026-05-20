@@ -8,7 +8,6 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/reg"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/conversations"
 	"github.com/openai/openai-go/v3/option"
@@ -30,32 +29,28 @@ const modelDefault = openai.ChatModelGPT4oMini
 
 type Agent struct {
 	ID      string          `json:"id"`
-	Tag     string          `json:"tag"`
+	Name    string          `json:"name"`
 	Context string          `json:"context"`
 	Model   string          `json:"model"`
 	client  openai.Client   `json:"-"`
-	owner   *Agents         `json:"-"`
 	ctx     context.Context `json:"-"`
+	owner   *Ia             `json:"-"`
 	isDebug bool            `json:"-"`
 }
 
 /**
 * newAgent
-* @param owner *Agents, id, tag string
+* @param ctx context.Context, owner *Ia, name string
 * @return *Agent
 **/
-func newAgent(owner *Agents, id, tag string) *Agent {
-	if id == "" {
-		id = reg.ULID()
-	}
-
+func newAgent(ctx context.Context, owner *Ia, name string) *Agent {
 	return &Agent{
-		ID:      id,
-		Tag:     tag,
+		ID:      fmt.Sprintf("agent:%s", name),
+		Name:    name,
 		Context: contextDefault,
 		Model:   modelDefault,
+		ctx:     ctx,
 		owner:   owner,
-		ctx:     context.Background(),
 		isDebug: owner.isDebug,
 	}
 }
@@ -75,21 +70,21 @@ func (s *Agent) Serialize() ([]byte, error) {
 
 /**
 * ToJson
-* @return et.Json
+* @return (et.Json, error)
 **/
-func (s *Agent) ToJson() et.Json {
+func (s *Agent) ToJson() (et.Json, error) {
 	bt, err := s.Serialize()
 	if err != nil {
-		return et.Json{}
+		return et.Json{}, err
 	}
 
 	var result et.Json
 	err = json.Unmarshal(bt, &result)
 	if err != nil {
-		return et.Json{}
+		return et.Json{}, err
 	}
 
-	return result
+	return result, nil
 }
 
 /**
@@ -97,7 +92,12 @@ func (s *Agent) ToJson() et.Json {
 * @return string
 **/
 func (s *Agent) ToString() string {
-	return s.ToJson().ToString()
+	result, err := s.ToJson()
+	if err != nil {
+		return ""
+	}
+
+	return result.ToString()
 }
 
 /**
@@ -105,22 +105,32 @@ func (s *Agent) ToString() string {
 * @return error
 **/
 func (s *Agent) save() error {
-	data := s.ToJson()
+	data, err := s.ToJson()
+	if err != nil {
+		return err
+	}
+
 	if s.isDebug {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	return s.owner.saveAgent(s)
+	if s.owner != nil && s.owner.store != nil {
+		return s.owner.store.Set(s.ID, "agent", s)
+	}
+
+	return nil
 }
 
 /**
 * up
+* @param ia *Ia
 **/
-func (s *Agent) up() {
+func (s *Agent) up(ia *Ia) {
 	key := envar.GetStr("OPENAI_API_KEY", "")
 	s.client = openai.NewClient(
 		option.WithAPIKey(key),
 	)
+	s.owner = ia
 }
 
 /**

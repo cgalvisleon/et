@@ -373,8 +373,32 @@ func (s *DB) Define(define Def) (*Model, error) {
 		result.defineIdxField()
 	}
 
+	for _, column := range define.Columns {
+		result.defineColumn(column.Name, column.TypeColumn, column.TypeData, column.Default, column.Definition)
+	}
 	for _, primaryKey := range define.PrimaryKeys {
-		result.DefinePrimaryKey(primaryKey.Name, primaryKey.TypeData, primaryKey.Default)
+		result.PrimaryKeys = append(result.PrimaryKeys, &Index{
+			Name:   primaryKey.Name,
+			Sorted: primaryKey.Sorted,
+		})
+	}
+	for _, index := range define.Indexes {
+		result.Indexes = append(result.Indexes, &Index{
+			Name:   index.Name,
+			Sorted: index.Sorted,
+		})
+	}
+	for _, unique := range define.Unique {
+		result.Unique = append(result.Unique, &Index{
+			Name:   unique.Name,
+			Sorted: unique.Sorted,
+		})
+	}
+	for _, required := range define.Required {
+		result.Required = append(result.Required, &Index{
+			Name:   required.Name,
+			Sorted: required.Sorted,
+		})
 	}
 	for _, foreignKey := range define.ForeignKeys {
 		to, err := s.GetModel(foreignKey.To.Schema, foreignKey.To.Name)
@@ -383,20 +407,8 @@ func (s *DB) Define(define Def) (*Model, error) {
 		}
 		result.DefineForeignKeys(to, foreignKey.Keys, foreignKey.OnDeleteCascade, foreignKey.OnUpdateCascade)
 	}
-	for _, index := range define.Indexes {
-		result.DefineIndex(index.Name, index.TypeData, index.Default)
-	}
-	for _, unique := range define.Unique {
-		result.DefineUnique(unique.Name, unique.TypeData, unique.Default)
-	}
-	for _, required := range define.Required {
-		result.DefineRequired(required.Name, required.TypeData, required.Default)
-	}
 	for _, hidden := range define.Hiddens {
 		result.DefineHidden(hidden)
-	}
-	for _, column := range define.Columns {
-		result.defineColumn(column.Name, column.TypeColumn, column.TypeData, column.Default, column.Definition)
 	}
 	if define.SourceField != "" {
 		result.DefineSource()

@@ -148,11 +148,11 @@ There are two HTTP server packages at different abstraction levels:
 - **`claim/`** — JWT claims struct with `tenantId` (not `projectId`). `GenToken` signs with HS256. Note the field is `tenantId`, not `projectId`.
 - **`crontab/`** — Job scheduler. `crontab.New(tag)` creates a scheduler (calls `event.Load()` internally); `AddJob`, `AddOneShotJob`, `AddEventJob` register jobs. Supports `robfig/cron` spec format including seconds (`"0 * * * * *"`).
 - **`jval/`** — Fluent validation rules for `et.Json`. Implements `Rule` interface with typed validators (`Str`, `Int`, `Float`, `Bool`, `Email`, `Phone`, `Time`, etc.); chainable constraints (`.NotEmpty()`, `.Min()`, `.Max()`, etc.).
-- **`request/`** — HTTP client utilities for outbound requests.
+- **`request/`** — Both inbound helpers (`URLParam`, `GetBody`) and outbound HTTP client utilities. `URLParam(r, "key").Str()` reads chi route params; `GetBody(r)` parses the JSON body into `et.Json`.
 - **`strs/`** — String utilities.
 - **`utility/`** — Crypto, validation, ID generation (UUID, Snowflake, ULID), general helpers.
 - **`middleware/`** — HTTP middleware (CORS, request ID, logger, auth, telemetry, panic recovery).
-- **`response/`** — Unified HTTP response helpers.
+- **`response/`** — Unified HTTP response helpers. Key functions: `ITEM(w, r, status, et.Item{})`, `ITEMS(w, r, status, items)`, `HTTPError(w, r, status, message)`.
 - **`ws/`** — WebSocket support via `gorilla/websocket`.
 - **`service/`** — OTP helpers (`SendOTPEmail`, `SendOTPSms`, `VerifyOTP`) and messaging integration; uses `tenantId`.
 - **`stdrout/`** — Low-level colorized stdout routing used by `logs/`.
@@ -167,7 +167,7 @@ There are two HTTP server packages at different abstraction levels:
 
 - **`vm/`** — JavaScript runtime package (`dop251/goja`). `vm.New(name)` is the entry point; three modes: `Develop` (reads files, hot-reloads via `file.Watcher`), `Production` (loads from a `Store`), `Building` (compiles + stores with semver bumping). Global wrappers provide `console.*`, `ctx.*`, `fetch()`, and CommonJS-style `require()`. The `cmd/vm` binary runs this in dev mode via `js.RunDev("./cmd/vm")`.
 - **`ia/`** — OpenAI agent integration (`openai-go/v3`). Manages agents with conversation tracking, event handlers, and instance state via a caller-provided `instances.Store`.
-- **`workflow/`** — Workflow orchestration with multi-step execution, instance state, and resilience patterns. Integrates with `resilience/`, `instances/`, and `event/` (NATS) for async state sync.
+- **`workflow/`** — Workflow orchestration with multi-step execution, instance state, and resilience patterns. Integrates with `resilience/`, `instances/`, and `event/` (NATS) for async state sync. See detail below.
 - **`graph/`** — Neo4j connectivity (`neo4j-go-driver/v5`). `graph.Load()` returns a `*Conn` with the Neo4j driver.
 - **`instances/`** — `Store` interface (`Set`, `Get`, `Delete`, `Query`) used by `ia` and `workflow` for state persistence. Implementations are caller-provided.
 - **`resilience/`** — Resilience patterns (circuit breaker, etc.) used by `workflow`.
@@ -202,6 +202,75 @@ Each subdirectory under `cmd/` is a standalone binary:
 ### Code generation (`create/`)
 
 Templates and generators for new microservices, projects, and Kubernetes deployments. Used by the `cmd/create` CLI.
+
+### `workflow/` package detail
+
+`workflow.Load(store instances.Store)` initializes the singleton and calls `event.Load()` internally.
+
+**Type hierarchy:**
+
+```
+Flow (definition)
+  └── Steper (named path/lane, identified by tag)
+        └── Steps []int  (indexes into Flow.Steps)
+  └── Steps []*Step  (all step definitions, shared pool)
+
+Instance (runtime)
+  └── runs one Steper of a Flow for a specific entity ID
+```
+
+- **`Flow`** — top-level definition (`tag`, `version`, `name`, `description`). Created via `NewFlow(tag, version, name, description, username)`.
+- **`Steper`** — a named ordered path through steps within a flow. Multiple stepers can share steps from the same pool.
+- **`Step`** — individual unit: `Definition` (executable), `Undo` (rollback), `Stop bool`.
+- **`Instance`** — runtime execution. `ToJson()` returns `(et.Json, error)` (two values). `GetInstance(id string)` takes only `id`.
+
+**Instance lifecycle methods on `*WorkFlow`:**
+
+| Method | Purpose |
+|---|---|
+| `RunInstance(id, tag, step, ctx, tags, username)` | Start or resume an instance |
+| `GetInstance(id)` | Fetch instance by ID |
+| `ResetInstance(id, username)` | Reset to step 0, status PENDING |
+| `RollbackInstance(id, username)` | Execute undo chain |
+| `StopInstance(id, username)` | Halt execution |
+
+**HTTP handlers in `handler.go`** (all on `*WorkFlow`):
+
+Flow: `HttpGetFlow`, `HttpNewFlow`, `HttpDeleteFlow`
+Step: `HttpNewStep`, `HttpSetStep`, `HttpDeleteStep`
+Steper: `HttpNewSteper`, `HttpSetSteper`, `HttpDeleteSteper`
+Steper↔Step wiring: `HttpAddStepFromSteper`, `HttpRemoveStepFromSteper`, `HttpMoveStepFromSteper`
+Instance: `HttpGetInstance`, `HttpRunInstance`, `HttpResetInstance`, `HttpRollbackInstance`, `HttpStopInstance`
+
+### HTTP handler pattern
+
+All `handler.go` files across packages follow this pattern:
+
+```go
+func (s *T) HttpFoo(w http.ResponseWriter, r *http.Request) {
+    // URL path params (chi router)
+    id := request.URLParam(r, "id").Str()
+    index := request.URLParam(r, "index").Int()
+
+    // JSON body
+    body, err := request.GetBody(r)
+    if err != nil {
+        response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+        return
+    }
+    tag  := body.Str("tag")
+    idx  := body.Int("index")
+    stop := body.Bool("stop")
+    ctx  := body.Json("ctx")   // nested object
+    tags := body.Json("tags")  // nested object
+
+    // Responses
+    response.ITEM(w, r, http.StatusOK, et.Item{Ok: true, Result: data})
+    response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+}
+```
+
+Use `http.StatusCreated` for POST handlers that create new resources, `http.StatusOK` for queries and mutations.
 
 ## Key patterns
 

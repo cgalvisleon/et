@@ -151,8 +151,8 @@ type Template struct {
 }
 
 type Message struct {
-	to                  string    `json:"-"`
 	kind                string    `json:"-"`
+	To                  string    `json:"to"`
 	Text                string    `json:"text"`
 	Buttons             []Button  `json:"buttons"`
 	Header              Header    `json:"header"`
@@ -178,15 +178,6 @@ type Message struct {
 	Template            Template  `json:"template"`
 	Action              Action    `json:"action"`
 	Component           Component `json:"component"`
-}
-
-/**
-* setTo
-* @param to string
-* @return
-**/
-func (m *Message) setTo(to string) {
-	m.to = to
 }
 
 /**
@@ -228,7 +219,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "interactive",
 			"interactive": et.Json{
 				"type": "button",
@@ -244,7 +235,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "interactive",
 			"interactive": et.Json{
 				"type":   "list",
@@ -266,7 +257,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"context": et.Json{
 				"message_id": s.MessageID,
 			},
@@ -292,7 +283,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "interactive",
 			"interactive": et.Json{
 				"type": "button",
@@ -315,7 +306,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"context": et.Json{
 				"message_id": s.MessageID,
 			},
@@ -328,7 +319,7 @@ func (s *Message) body() et.Json {
 	case "text_with_preview_URL":
 		return et.Json{
 			"messaging_product": "whatsapp",
-			"to":                s.to,
+			"to":                s.To,
 			"text": et.Json{
 				"preview_url": true,
 				"body":        s.Url,
@@ -338,7 +329,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "reaction",
 			"reaction": et.Json{
 				"message_id": s.MessageID,
@@ -349,7 +340,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "image",
 			"image": et.Json{
 				"id": s.ImageObjectID,
@@ -359,7 +350,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"context": et.Json{
 				"message_id": s.MessageID,
 			},
@@ -372,7 +363,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "image",
 			"image": et.Json{
 				"link": s.Url,
@@ -382,7 +373,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"context": et.Json{
 				"message_id": s.MessageID,
 			},
@@ -395,7 +386,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "audio",
 			"audio": et.Json{
 				"id": s.AudioObjectID,
@@ -405,7 +396,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"context": et.Json{
 				"message_id": s.MessageID,
 			},
@@ -418,7 +409,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "audio",
 			"audio": et.Json{
 				"link": s.Url,
@@ -428,7 +419,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"context": et.Json{
 				"message_id": s.MessageID,
 			},
@@ -442,7 +433,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "document",
 			"document": et.Json{
 				"id":       s.DocumentObjectID,
@@ -454,7 +445,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"context": et.Json{
 				"message_id": s.MessageID,
 			},
@@ -469,7 +460,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "document",
 			"document": et.Json{
 				"link":    s.Url,
@@ -480,7 +471,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"context": et.Json{
 				"message_id": s.MessageID,
 			},
@@ -494,7 +485,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "sticker",
 			"sticker": et.Json{
 				"id": s.MediaObjectID,
@@ -504,7 +495,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"context": et.Json{
 				"message_id": s.MessageID,
 			},
@@ -518,7 +509,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "sticker",
 			"sticker": et.Json{
 				"link": s.Url,
@@ -528,7 +519,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"context": et.Json{
 				"message_id": s.MessageID,
 			},
@@ -541,7 +532,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "video",
 			"video": et.Json{
 				"caption": s.VideoCaptionText,
@@ -552,7 +543,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"context": et.Json{
 				"message_id": s.MessageID,
 			},
@@ -566,7 +557,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "video",
 			"video": et.Json{
 				"link":    s.Url,
@@ -577,7 +568,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"context": et.Json{
 				"message_id": s.MessageID,
 			},
@@ -595,7 +586,7 @@ func (s *Message) body() et.Json {
 		url := s.Url
 		return et.Json{
 			"messaging_product": "whatsapp",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "contacts",
 			"contacts": []et.Json{
 				{
@@ -656,7 +647,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"context": et.Json{
 				"message_id": s.MessageID,
 			},
@@ -716,7 +707,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "location",
 			"location": et.Json{
 				"latitude":  location.Latitude,
@@ -731,7 +722,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"context": et.Json{
 				"message_id": s.MessageID,
 			},
@@ -750,7 +741,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "template",
 			"template": et.Json{
 				"name": template.Name,
@@ -798,7 +789,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "template",
 			"template": et.Json{
 				"name": template.Name,
@@ -858,7 +849,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "template",
 			"template": et.Json{
 				"name": template.Name,
@@ -938,7 +929,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "interactive",
 			"interactive": et.Json{
 				"type": "product",
@@ -959,7 +950,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "interactive",
 			"interactive": et.Json{
 				"type": "product_list",
@@ -1007,7 +998,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "interactive",
 			"interactive": et.Json{
 				"type": "catalog_message",
@@ -1032,7 +1023,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "template",
 			"template": et.Json{
 				"name": template.Name,
@@ -1077,7 +1068,7 @@ func (s *Message) body() et.Json {
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
-			"to":                s.to,
+			"to":                s.To,
 			"type":              "text",
 			"text": et.Json{
 				"preview_url": false,

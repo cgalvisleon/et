@@ -1,7 +1,6 @@
 package workflow
 
 import (
-	"encoding/json"
 	"fmt"
 	"slices"
 	"time"
@@ -154,11 +153,7 @@ func newFlow(tag, version, name, description string, username string) *Flow {
 * @return error
 **/
 func (s *Flow) save() error {
-	data, err := s.ToJson()
-	if err != nil {
-		return err
-	}
-
+	data := s.ToJson()
 	if s.isDebug {
 		logs.Log(packageName, "save:", data.ToString())
 	}
@@ -198,21 +193,23 @@ func (s *Flow) up(workflow *WorkFlow) {
 
 /**
 * ToJson
-* @return (et.Json, error)
+* @return et.Json
 **/
-func (s *Flow) ToJson() (et.Json, error) {
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return nil, err
+func (s *Flow) ToJson() et.Json {
+	return et.Json{
+		"tag":            s.Tag,
+		"version":        s.Version,
+		"name":           s.Name,
+		"description":    s.Description,
+		"steps":          s.Steps,
+		"steper":         s.Steper,
+		"checklist":      s.CheckList,
+		"total_attempts": s.TotalAttempts,
+		"time_attempts":  s.TimeAttempts.String(),
+		"team":           s.Team,
+		"level":          s.Level,
+		"created_by":     s.CreatedBy,
 	}
-
-	var result et.Json
-	err = json.Unmarshal(bt, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
 }
 
 /**

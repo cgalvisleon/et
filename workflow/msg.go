@@ -48,6 +48,7 @@ var (
 	MSG_STATUS_INVALID              = "status %s no es valido"
 	MSG_STEPPER_NOT_FOUND           = "steper not found"
 	MSG_STEP_NOT_FOUND              = "step not found"
+	MSG_INVALID_TO_POSITION         = "invalid to position"
 )
 
 func init() {
@@ -96,5 +97,6 @@ func init() {
 		MSG_STATUS_INVALID = "status %s no es valido"
 		MSG_STEPPER_NOT_FOUND = "steper not found"
 		MSG_STEP_NOT_FOUND = "step not found"
+		MSG_INVALID_TO_POSITION = "invalid to position"
 	}
 }

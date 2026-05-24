@@ -10,7 +10,6 @@ import (
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/resilience"
 )
 
@@ -227,16 +226,16 @@ func (s *WorkFlow) newInstance(tag, id string, tags et.Json, step int, username 
 
 /**
 * GetInstance
-* @param id string, tag string, tags et.Json
+* @param id string
 * @return *Instance, error
 **/
-func (s *WorkFlow) GetInstance(id, tag string, tags et.Json) (*Instance, error) {
+func (s *WorkFlow) GetInstance(id string) (*Instance, error) {
 	result, exist := s.getInstance(id)
 	if exist {
 		return result, nil
 	}
 
-	return result, nil
+	return nil, ErrorInstanceNotFound
 }
 
 /**
@@ -281,7 +280,7 @@ func (s *WorkFlow) RunInstance(id, tag string, step int, ctx, tags et.Json, user
 func (s *WorkFlow) ResetInstance(id, username string) (et.Json, error) {
 	instance, exists := s.getInstance(id)
 	if !exists {
-		return et.Json{}, fmt.Errorf(msg.MSG_INSTANCE_NOT_FOUND)
+		return et.Json{}, fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
 	}
 
 	instance.UpdatedBy = username
@@ -298,7 +297,7 @@ func (s *WorkFlow) ResetInstance(id, username string) (et.Json, error) {
 func (s *WorkFlow) RollbackInstance(id, username string) (et.Json, error) {
 	instance, exists := s.getInstance(id)
 	if !exists {
-		return et.Json{}, fmt.Errorf(msg.MSG_INSTANCE_NOT_FOUND)
+		return et.Json{}, fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
 	}
 
 	instance.UpdatedBy = username
@@ -453,6 +452,72 @@ func (s *WorkFlow) DeleteSteper(flowTag, tag string) error {
 }
 
 /**
+* AddStepFromSteper
+* @param flowTag, tag string, index int
+* @return *Flow, bool
+**/
+func (s *WorkFlow) AddStepFromSteper(flowTag, tag string, index int) (*Flow, bool) {
+	flow, exists := s.Flows[flowTag]
+	if !exists {
+		return nil, false
+	}
+
+	steper, exist := flow.Steper[tag]
+	if !exist {
+		return nil, false
+	}
+
+	steper.Steps = append(steper.Steps, index)
+	return flow, true
+}
+
+/**
+* RemoveStepFromSteper
+* @param flowTag, tag string, index int
+* @return *Flow, bool
+**/
+func (s *WorkFlow) RemoveStepFromSteper(flowTag, tag string, index int) (*Flow, bool) {
+	flow, exists := s.Flows[flowTag]
+	if !exists {
+		return nil, false
+	}
+
+	steper, exist := flow.Steper[tag]
+	if !exist {
+		return nil, false
+	}
+
+	steper.Steps = append(steper.Steps[:index], steper.Steps[index+1:]...)
+	return flow, true
+}
+
+/**
+* MoveStepFromSteper
+* @param flowTag, tag string, index, to int
+* @return et.Json, error
+**/
+func (s *WorkFlow) MoveStepFromSteper(flowTag, tag string, index, to int) (et.Json, error) {
+	flow, exists := s.getFlow(flowTag)
+	if !exists {
+		return et.Json{}, errors.New(MSG_FLOW_NOT_FOUND)
+	}
+
+	step, exist := flow.Steper[tag]
+	if !exist {
+		return et.Json{}, errors.New(MSG_STEP_NOT_FOUND)
+	}
+
+	if to < 0 || to >= len(step.Steps) {
+		return et.Json{}, errors.New(MSG_INVALID_TO_POSITION)
+	}
+
+	step.Steps = append(step.Steps[:index], step.Steps[index+1:]...)
+	step.Steps = append(step.Steps[:to], append([]int{index}, step.Steps[to:]...)...)
+
+	return step.ToJson(), nil
+}
+
+/**
 * NewStep
 * @param flowTag, steperTag, name, description, definition, undo string, stop bool
 * @return et.Json, error
@@ -494,4 +559,19 @@ func (s *WorkFlow) SetStep(flowTag string, index int, name, description, definit
 	}
 
 	return step.ToJson(), nil
+}
+
+/**
+* DeleteStep
+* @param flowTag string, index int
+* @return et.Json, error
+**/
+func (s *WorkFlow) DeleteStep(flowTag string, index int) (et.Json, error) {
+	flow, exists := s.getFlow(flowTag)
+	if !exists {
+		return et.Json{}, errors.New(MSG_FLOW_NOT_FOUND)
+	}
+
+	flow.Steps = append(flow.Steps[:index], flow.Steps[index+1:]...)
+	return et.Json{}, nil
 }

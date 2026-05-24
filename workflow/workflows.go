@@ -393,7 +393,13 @@ func (s *WorkFlow) DeleteFlow(tag string) error {
 		return errors.New(MSG_FLOW_NOT_FOUND)
 	}
 
-	return flow.delete()
+	err := flow.delete()
+	if err != nil {
+		return err
+	}
+
+	s.removeFlow(tag)
+	return nil
 }
 
 /**

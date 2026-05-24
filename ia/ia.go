@@ -9,14 +9,20 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/instances"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/openai/openai-go/v3"
 )
 
+const (
+	packageName = "ia"
+)
+
 type Ia struct {
+	ID              string                   `json:"id"`
 	Agents          map[string]*Agent        `json:"agents"`
-	Conversations   map[string]*Conversation `json:"conversations"`
+	Conversations   map[string]*Conversation `json:"-"`
 	muAgents        sync.RWMutex             `json:"-"`
 	muConversations sync.RWMutex             `json:"-"`
 	key             string                   `json:"-"`
@@ -43,6 +49,7 @@ func Load(store instances.Store) error {
 
 	key := envar.GetStr("OPENAI_API_KEY", "")
 	ia = &Ia{
+		ID:              "ia:agents",
 		Agents:          make(map[string]*Agent, 0),
 		Conversations:   make(map[string]*Conversation, 0),
 		muAgents:        sync.RWMutex{},
@@ -55,7 +62,62 @@ func Load(store instances.Store) error {
 	return nil
 }
 
+/**
+* ToJson
+* @return et.Json
+**/
+func (s *Ia) ToJson() et.Json {
+	return et.Json{
+		"id":            s.ID,
+		"agents":        s.Agents,
+		"conversations": s.Conversations,
+	}
+}
+
+/**
+* save
+* @return error
+**/
+func (s *Ia) save() error {
+	data := s.ToJson()
+	if s.isDebug {
+		logs.Log(packageName, "save:", data.ToString())
+	}
+
+	if s.store != nil {
+		err := s.store.Set(s.ID, packageName, s)
+		if err != nil {
+			return err
+		}
+	}
+
+	event.Publish(EVENT_IA_SET, data)
+	return nil
+}
+
+/**
+* delete
+* @return error
+**/
+func (s *Ia) delete() error {
+	if s.store != nil {
+		err := s.store.Delete(s.ID)
+		if err != nil {
+			return err
+		}
+	}
+
+	event.Publish(EVENT_IA_DELETE, et.Json{
+		"id": s.ID,
+	})
+	return nil
+}
+
+/**
+* up
+**/
 func (s *Ia) up() error {
+
 	return nil
 }
 
@@ -101,6 +163,18 @@ func (s *Ia) getAgent(name string) (*Agent, bool) {
 }
 
 /**
+* removeAgent
+* @param tag string
+**/
+func (s *Ia) removeAgent(name string) {
+	id := agendId(name)
+	s.muAgents.Lock()
+	defer s.muAgents.Unlock()
+
+	delete(s.Agents, id)
+}
+
+/**
 * newAgent
 * @param name, description, context, model string
 * @return (*Agent, error)
@@ -114,18 +188,6 @@ func (s *Ia) newAgent(name, description, context, model string) (*Agent, error) 
 	result := newAgent(s, name, description, context, model)
 	s.addAgent(result)
 	return result, nil
-}
-
-/**
-* removeAgent
-* @param tag string
-**/
-func (s *Ia) removeAgent(name string) {
-	id := agendId(name)
-	s.muAgents.Lock()
-	defer s.muAgents.Unlock()
-
-	delete(s.Agents, id)
 }
 
 /**
@@ -145,8 +207,8 @@ func (s *Ia) setModel(agentName string, model string) (*Agent, error) {
 	if !exists {
 		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, agentName)
 	}
-	result.Model = model
-	return result, nil
+	result.setModel(model)
+	return result, result.save()
 }
 
 /**
@@ -166,59 +228,29 @@ func (s *Ia) setContext(agentName string, context string) (*Agent, error) {
 	if !exists {
 		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, agentName)
 	}
-	result.Context = []byte(context)
-	return result, nil
+	result.setContext(context)
+	return result, result.save()
 }
 
 /**
-* Get
-* @param tag string
-* @return *Agent, bool
+* setSkill
+* @param agentName string, skill Skill
+* @return (*Agent, error)
 **/
-func (s *Ia) Get(tag string) (*Agent, bool) {
-	s.muAgents.RLock()
-	defer s.muAgents.RUnlock()
-
-	result, exists := s.agents[tag]
-	return result, exists
-}
-
-/**
-* Remove
-* @param instance *Agent
-**/
-func (s *Ia) Remove(instance *Agent) {
-	s.muAgents.Lock()
-	defer s.muAgents.Unlock()
-
-	delete(s.agents, instance.Name)
-}
-
-/**
-* Count
-* @return int
-**/
-func (s *Ia) Count() int {
-	s.muAgents.Lock()
-	defer s.muAgents.Unlock()
-
-	return len(s.agents)
-}
-
-/**
-* Load - Carga los agentes
-* @param agents []string
-* @return error
-**/
-func (s *Ia) Load(agents []string) error {
-	for _, name := range agents {
-		_, err := s.loadAgent(name)
-		if err != nil {
-			return err
-		}
+func (s *Ia) setSkill(agentName string, skill Skill) (*Agent, error) {
+	if !utility.ValidStr(agentName, 0, []string{""}) {
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "agentName")
+	}
+	if !utility.ValidStr(skill.Tag(), 0, []string{""}) {
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "skill")
 	}
 
-	return nil
+	result, exists := s.getAgent(agentName)
+	if !exists {
+		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, agentName)
+	}
+	result.addSkill(skill)
+	return result, result.save()
 }
 
 /**
@@ -262,7 +294,7 @@ func (s *Ia) SetModel(tag, model string) error {
 * @param tag string, text string
 * @return ([]float64, error)
 **/
-func (s *Ia) Embed(tag string, text string) ([]float64, error) {
+func (s *Ia) Embed(agent string, text string) ([]float64, error) {
 	result, ok := s.agents[tag]
 	if !ok {
 		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, tag)

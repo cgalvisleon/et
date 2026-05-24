@@ -4,16 +4,10 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
-)
-
-type TypeConversation string
-
-const (
-	Direct TypeConversation = "direct"
-	Group  TypeConversation = "group"
 )
 
 type StatusMessage string
@@ -33,22 +27,6 @@ const (
 	Audio TypeMessage = "audio"
 	File  TypeMessage = "file"
 )
-
-type Role string
-
-const (
-	Admin  Role = "admin"
-	Member Role = "member"
-)
-
-type Participant struct {
-	JoinedAt       time.Time `json:"joined_at"`
-	ID             string    `json:"id"`
-	ConversationID string    `json:"conversation_id"`
-	UserID         string    `json:"user_id"`
-	To             string    `json:"to"`
-	Role           Role      `json:"role"`
-}
 
 type MessageStatus struct {
 	CreatedAt time.Time     `json:"read_at"`
@@ -110,13 +88,38 @@ func (s *Message) ToJson() et.Json {
 * @return error
 **/
 func (s *Message) save() error {
+	data := s.ToJson()
 	if s.isDebug {
-		logs.Log(packageName, "save:", s.ToJson().ToString())
+		logs.Log(packageName, "save:", data.ToString())
 	}
 
 	if s.ia != nil && s.ia.store != nil {
-		return s.ia.store.Set(s.ID, "message", s)
+		err := s.ia.store.Set(s.ID, "message", s)
+		if err != nil {
+			return err
+		}
 	}
+
+	event.Publish(EVENT_MESSAGE_SET, data)
+
+	return nil
+}
+
+/**
+* delete
+* @return error
+**/
+func (s *Message) delete() error {
+	if s.ia != nil && s.ia.store != nil {
+		err := s.ia.store.Delete(s.ID)
+		if err != nil {
+			return err
+		}
+	}
+
+	event.Publish(EVENT_MESSAGE_DELETE, et.Json{
+		"id": s.ID,
+	})
 
 	return nil
 }

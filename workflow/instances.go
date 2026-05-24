@@ -114,11 +114,14 @@ func (s *Instance) save() error {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	event.Publish(EVENT_INSTANCE_SET, data)
-
 	if s.workflow != nil && s.workflow.store != nil {
-		return s.workflow.store.Set(s.ID, s.Tag, s)
+		err := s.workflow.store.Set(s.ID, s.Tag, s)
+		if err != nil {
+			return err
+		}
 	}
+
+	event.Publish(EVENT_INSTANCE_SET, data)
 
 	return nil
 }
@@ -128,15 +131,16 @@ func (s *Instance) save() error {
 * @return error
 **/
 func (s *Instance) delete() error {
+	if s.workflow != nil && s.workflow.store != nil {
+		err := s.workflow.store.Delete(s.Tag)
+		if err != nil {
+			return err
+		}
+	}
+
 	event.Publish(EVENT_INSTANCE_DELETE, et.Json{
 		"id": s.ID,
 	})
-
-	if s.workflow != nil && s.workflow.store != nil {
-		return s.workflow.store.Delete(s.Tag)
-	}
-
-	s.workflow.removeInstance(s.ID)
 
 	return nil
 }
@@ -148,6 +152,7 @@ func (s *Instance) delete() error {
 func (s *Instance) up(flow *Flow) {
 	s.flow = flow
 	s.workflow = flow.workflow
+	s.isDebug = flow.workflow.isDebug
 }
 
 /**

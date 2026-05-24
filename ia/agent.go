@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/openai/openai-go/v3"
@@ -95,8 +96,13 @@ func (s *Agent) save() error {
 	}
 
 	if s.ia != nil && s.ia.store != nil {
-		return s.ia.store.Set(s.ID, "agent", s)
+		err := s.ia.store.Set(s.ID, "agent", s)
+		if err != nil {
+			return err
+		}
 	}
+
+	event.Publish(EVENT_AGENT_SET, data)
 
 	return nil
 }
@@ -107,8 +113,15 @@ func (s *Agent) save() error {
 **/
 func (s *Agent) delete() error {
 	if s.ia != nil && s.ia.store != nil {
-		return s.ia.store.Delete(s.ID)
+		err := s.ia.store.Delete(s.ID)
+		if err != nil {
+			return err
+		}
 	}
+
+	event.Publish(EVENT_AGENT_DELETE, et.Json{
+		"id": s.ID,
+	})
 
 	return nil
 }
@@ -122,6 +135,7 @@ func (s *Agent) up(ia *Ia) {
 		option.WithAPIKey(ia.key),
 	)
 	s.ia = ia
+	s.isDebug = ia.isDebug
 }
 
 /**
@@ -152,6 +166,16 @@ func (s *Agent) ToString() string {
 **/
 func (s *Agent) Debug() {
 	s.isDebug = true
+}
+
+/**
+* setModel
+* @param model string
+* @return *Agent
+**/
+func (s *Agent) setModel(model string) *Agent {
+	s.Model = model
+	return s
 }
 
 /**

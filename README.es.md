@@ -1,5 +1,7 @@
 # ET: Librería de servicios y herramientas en Go
 
+> [English version](README.md)
+
 Librería modular en Go para microservicios, CLIs y aplicaciones web. Importa solo los paquetes que necesitas — no hay punto de entrada central.
 
 - Módulo: `github.com/cgalvisleon/et` — Go 1.23+ — MIT

@@ -1,5 +1,7 @@
 # ET: Go Services and Tools Library
 
+> [Versión en español](README.es.md)
+
 Modular Go library for microservices, CLIs, and web applications. Import only the packages you need — there is no central entry point.
 
 - Module: `github.com/cgalvisleon/et` — Go 1.23+ — MIT

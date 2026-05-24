@@ -56,26 +56,13 @@ func newAgent(ctx context.Context, owner *Ia, name string) *Agent {
 }
 
 /**
-* Serialize
-* @return ([]byte, error)
-**/
-func (s *Agent) Serialize() ([]byte, error) {
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return nil, err
-	}
-
-	return bt, nil
-}
-
-/**
 * ToJson
 * @return (et.Json, error)
 **/
 func (s *Agent) ToJson() (et.Json, error) {
-	bt, err := s.Serialize()
+	bt, err := json.Marshal(s)
 	if err != nil {
-		return et.Json{}, err
+		return nil, err
 	}
 
 	var result et.Json

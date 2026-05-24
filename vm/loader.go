@@ -50,7 +50,7 @@ type Loader struct {
 
 /**
 * newLoader
-* @param baseDir, name, version string
+* @param name string
 * @return *Loader
 **/
 func newLoader(name string) *Loader {

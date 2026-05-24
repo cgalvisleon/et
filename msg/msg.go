@@ -111,6 +111,7 @@ var (
 	MSG_INSTANCE_REQUIRED_ID           = "instance required id"
 	MSG_INSTANCE_STOPPED               = "Instance stopped"
 	MSG_INSTANCE_RESTARTED             = "Instance restarted"
+	MSG_INSTANCE_NOT_FOUND             = "instance not found"
 	MSG_STORE_IS_REQUIRED              = "store is required"
 )
 
@@ -226,6 +227,7 @@ func init() {
 		MSG_INSTANCE_REQUIRED_ID = "instancia requiere id"
 		MSG_INSTANCE_STOPPED = "Instancia detenida"
 		MSG_INSTANCE_RESTARTED = "Instancia reiniciada"
+		MSG_INSTANCE_NOT_FOUND = "instancia no encontrada"
 		MSG_STORE_IS_REQUIRED = "store es requerido"
 	}
 }

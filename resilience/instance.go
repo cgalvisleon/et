@@ -41,6 +41,9 @@ type Instance struct {
 	Tags          et.Json         `json:"tags"`
 	Team          string          `json:"team"`
 	Level         string          `json:"level"`
+	Error         string          `json:"error"`
+	Response      map[string]any  `json:"response"`
+	Result        any             `json:"result"`
 	owner         *Resilience     `json:"-"`
 	stop          bool            `json:"-"`
 	err           error           `json:"-"`
@@ -164,11 +167,11 @@ func (s *Instance) setStatus(status Status) error {
 }
 
 /**
-* Error
+* SetError
 * @param err error
-* @return error
 **/
-func (s *Instance) Error(err error) {
+func (s *Instance) SetError(err error) {
+	s.Error = err.Error()
 	s.err = err
 	s.setStatus(StatusFailed)
 }
@@ -211,6 +214,13 @@ func (s *Instance) Restart() et.Item {
 * @return error
 **/
 func (s *Instance) Done() {
+	if s.Response != nil && len(s.Response) > 0 {
+		v := reflect.ValueOf(s.Response)
+		s.Result = v.Interface()
+	} else {
+		s.Result = et.Json{}
+	}
+
 	s.setStatus(StatusDone)
 
 	time.AfterFunc(3*time.Second, func() {
@@ -258,7 +268,7 @@ func (s *Instance) runAttempt() ([]reflect.Value, error) {
 		if r.Type().Implements(errorInterface) {
 			err, failed = r.Interface().(error)
 			if failed {
-				s.Error(err)
+				s.SetError(err)
 			} else {
 				s.Done()
 			}

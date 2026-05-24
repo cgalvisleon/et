@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
@@ -9,19 +10,19 @@ import (
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/reg"
+	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/resilience"
-	"github.com/cgalvisleon/et/timezone"
 )
 
 type WorkFlow struct {
-	Flows      map[string]*Flow       `json:"flows"`
-	Instances  map[string]*Instance   `json:"instances"`
-	Results    map[string]et.Json     `json:"results"`
-	mu         sync.Mutex             `json:"-"`
-	store      instances.Store        `json:"-"`
-	resilience *resilience.Resilience `json:"-"`
-	isDebug    bool                   `json:"-"`
+	Flows       map[string]*Flow       `json:"flows"`
+	Instances   map[string]*Instance   `json:"instances"`
+	Results     map[string]et.Json     `json:"results"`
+	muFlows     sync.Mutex             `json:"-"`
+	muInstances sync.Mutex             `json:"-"`
+	store       instances.Store        `json:"-"`
+	resilience  *resilience.Resilience `json:"-"`
+	isDebug     bool                   `json:"-"`
 }
 
 var (
@@ -50,51 +51,53 @@ func Load(store instances.Store) error {
 	}
 
 	workflow = &WorkFlow{
-		Flows:      make(map[string]*Flow),
-		Instances:  make(map[string]*Instance),
-		Results:    make(map[string]et.Json),
-		mu:         sync.Mutex{},
-		store:      store,
-		resilience: resetInstance,
-		isDebug:    envar.GetBool("DEBUG", false),
+		Flows:       make(map[string]*Flow),
+		Instances:   make(map[string]*Instance),
+		Results:     make(map[string]et.Json),
+		muFlows:     sync.Mutex{},
+		muInstances: sync.Mutex{},
+		store:       store,
+		resilience:  resetInstance,
+		isDebug:     envar.GetBool("DEBUG", false),
 	}
 
 	return nil
 }
 
 /**
-* add
-* @param instance *Instance
+* addFlow
+* @param flow *Flow
 **/
-func (s *WorkFlow) add(instance *Instance) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *WorkFlow) addFlow(flow *Flow) {
+	s.muFlows.Lock()
+	defer s.muFlows.Unlock()
 
-	s.Instances[instance.ID] = instance
+	s.Flows[flow.Tag] = flow
 }
 
 /**
-* get
-* @param id string
-* @return *Instance, bool
+* getFlow
+* @param tag string
+* @return *Flow, bool
 **/
-func (s *WorkFlow) get(id string) (*Instance, bool) {
-	s.mu.Lock()
-	result, exists := s.Instances[id]
-	s.mu.Unlock()
+func (s *WorkFlow) getFlow(tag string) (*Flow, bool) {
+	s.muFlows.Lock()
+	defer s.muFlows.Unlock()
 
+	result, exists := s.Flows[tag]
 	if exists {
 		return result, true
 	}
 
 	if s.store != nil {
-		exists, err := s.store.Get(id, &result)
+		exists, err := s.store.Get(tag, result)
 		if err != nil {
 			return nil, false
 		}
 
-		result.up(s)
 		if exists {
+			result.up(s)
+			s.addFlow(result)
 			return result, true
 		}
 	}
@@ -103,33 +106,103 @@ func (s *WorkFlow) get(id string) (*Instance, bool) {
 }
 
 /**
-* remove
-* @param instance *Instance
+* removeFlow
+* @param tag string
+* @return bool
 **/
-func (s *WorkFlow) remove(instance *Instance) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *WorkFlow) removeFlow(tag string) {
+	s.muFlows.Lock()
+	defer s.muFlows.Unlock()
 
-	delete(s.Instances, instance.ID)
+	delete(s.Flows, tag)
 }
 
 /**
-* Count
+* CountFlows
 * @return int
 **/
-func (s *WorkFlow) Count() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *WorkFlow) CountFlows() int {
+	s.muFlows.Lock()
+	defer s.muFlows.Unlock()
+
+	return len(s.Flows)
+}
+
+/**
+* addInstance
+* @param instance *Instance
+**/
+func (s *WorkFlow) addInstance(instance *Instance) {
+	s.muInstances.Lock()
+	defer s.muInstances.Unlock()
+
+	s.Instances[instance.ID] = instance
+}
+
+/**
+* getInstance
+* @param id string
+* @return *Instance, bool
+**/
+func (s *WorkFlow) getInstance(id string) (*Instance, bool) {
+	s.muInstances.Lock()
+	result, exists := s.Instances[id]
+	s.muInstances.Unlock()
+
+	if exists {
+		return result, true
+	}
+
+	if s.store != nil {
+		exists, err := s.store.Get(id, result)
+		if err != nil {
+			return nil, false
+		}
+
+		flow, ok := s.getFlow(result.Tag)
+		if !ok {
+			return nil, false
+		}
+
+		if exists {
+			result.up(flow)
+			result.isDebug = s.isDebug
+			s.addInstance(result)
+			return result, true
+		}
+	}
+
+	return nil, false
+}
+
+/**
+* removeInstance
+* @param id string
+**/
+func (s *WorkFlow) removeInstance(id string) {
+	s.muInstances.Lock()
+	defer s.muInstances.Unlock()
+
+	delete(s.Instances, id)
+}
+
+/**
+* CountInstances
+* @return int
+**/
+func (s *WorkFlow) CountInstances() int {
+	s.muInstances.Lock()
+	defer s.muInstances.Unlock()
 
 	return len(s.Instances)
 }
 
 /**
-* new
-* @param tag, id string, tags et.Json, step int, createdBy string
+* newInstance
+* @param tag, id string, tags et.Json, step int, username string
 * @return *Instance, error
 **/
-func (s *WorkFlow) new(tag, id string, tags et.Json, step int, createdBy string) (*Instance, error) {
+func (s *WorkFlow) newInstance(tag, id string, tags et.Json, step int, username string) (*Instance, error) {
 	if id == "" {
 		return nil, fmt.Errorf(MSG_INSTANCE_ID_REQUIRED)
 	}
@@ -139,122 +212,60 @@ func (s *WorkFlow) new(tag, id string, tags et.Json, step int, createdBy string)
 		return nil, fmt.Errorf(MSG_FLOW_NOT_FOUND)
 	}
 
-	if step == -1 {
-		step = 0
+	steper, ok := flow.Steper[tag]
+	if !ok {
+		return nil, fmt.Errorf(MSG_INVALID_STEPER_TAG, tag)
 	}
 
-	now := timezone.Now()
-	result := &Instance{
-		Flow:       flow,
-		owner:      s,
-		Tag:        tag,
-		CreatedAt:  now,
-		UpdatedAt:  now,
-		ID:         id,
-		CreatedBy:  createdBy,
-		UpdatedBy:  createdBy,
-		Current:    step,
-		Ctx:        et.Json{},
-		Ctxs:       make(map[int]et.Json),
-		Results:    make(map[int]*Result),
-		Rollbacks:  make(map[int]*Result),
-		Tags:       tags,
-		Resilence:  make(map[string]*resilience.Instance),
-		goTo:       -1,
-		WorkerHost: workerHost,
-		Params:     et.Json{},
-		isNew:      true,
-	}
-	result.setStatus(Pending)
-	s.add(result)
+	result := newInstance(steper, id, username)
+	result.SetCurrentStep(step)
+	result.putTag(tags)
+	s.addInstance(result)
 
 	return result, nil
 }
 
 /**
-* get
-* @param id string
-* @return *Instance, bool
-**/
-func (s *WorkFlow) Get(id string) (*Instance, bool) {
-	if id == "" {
-		return nil, false
-	}
-
-	result, exists := s.get(id)
-	if exists {
-		return result, true
-	}
-
-	if s.store != nil {
-		exists, err := s.store.Get(id, &result)
-		if err != nil {
-			return nil, false
-		}
-
-		if !exists {
-			return nil, false
-		}
-
-		flow := s.Flows[result.Tag]
-		if flow == nil {
-			return nil, false
-		}
-
-		result.Flow = flow
-		result.goTo = -1
-		s.add(result)
-
-		if s.isDebug {
-			logs.Log(packageName, "load:", result.ToString())
-		}
-
-		return result, true
-	}
-
-	return nil, false
-}
-
-/**
-* getOrCreateInstance
-* @param id, tag string, step int, tags et.Json, createdBy string
+* GetInstance
+* @param id string, tag string, tags et.Json
 * @return *Instance, error
 **/
-func (s *WorkFlow) getOrCreateInstance(id, tag string, step int, tags et.Json, createdBy string) (*Instance, error) {
-	id = reg.GetUUID(id)
-	result, exists := s.load(id)
-	if !exists {
-		return s.new(tag, id, tags, step, createdBy)
+func (s *WorkFlow) GetInstance(id, tag string, tags et.Json) (*Instance, error) {
+	result, exist := s.getInstance(id)
+	if exist {
+		return result, nil
 	}
 
 	return result, nil
 }
 
 /**
-* runInstance
-* Si el step es -1 se ejecuta el siguiente paso, si no se ejecuta el paso indicado
-* @param instanceId, tag string, step int, ctx, tags et.Json, createdBy string
+* RunInstance
+* @param id, tag string, step int, ctx, tags et.Json, username string
 * @return et.Json, error
 **/
-func (s *WorkFlow) runInstance(instanceId, tag string, step int, ctx, tags et.Json, createdBy string) (et.Json, error) {
-	instance, err := s.getOrCreateInstance(instanceId, tag, step, tags, createdBy)
+func (s *WorkFlow) RunInstance(id, tag string, step int, ctx, tags et.Json, username string) (et.Json, error) {
+	var err error
+	instance, exist := s.getInstance(id)
+	if !exist {
+		instance, err = s.newInstance(tag, id, tags, step, username)
+		if err != nil {
+			return et.Json{}, err
+		}
+	} else {
+		instance.putTag(tags)
+	}
+
+	instance.UpdatedBy = username
+	instance.SetCurrentStep(step)
+	instance.Stop(false)
+	var result et.Json
+	result, err = instance.run(ctx)
 	if err != nil {
 		return et.Json{}, err
 	}
 
-	instance.isDebug = s.isDebug
-	instance.UpdatedBy = createdBy
-	instance.PutTag(tags)
-	if step != instance.Current && step != 0 {
-		instance.Current = step
-	}
-	result, err := instance.run(ctx)
-	if err != nil {
-		return et.Json{}, err
-	}
-
-	s.remove(instance)
-	logs.Logf(packageName, "runInstance: %s", tag)
+	s.removeInstance(instance.ID)
 	if s.isDebug {
 		logs.Debugf("instance: %s", instance.ToString())
 	}
@@ -263,36 +274,35 @@ func (s *WorkFlow) runInstance(instanceId, tag string, step int, ctx, tags et.Js
 }
 
 /**
-* resetInstance
-* @param instanceId string
-* @return error
+* ResetInstance
+* @param id string, username string
+* @return et.Json, error
 **/
-func (s *WorkFlow) resetInstance(instanceId, updatedBy string) error {
-	instance, exists := s.load(instanceId)
+func (s *WorkFlow) ResetInstance(id, username string) (et.Json, error) {
+	instance, exists := s.getInstance(id)
 	if !exists {
-		return fmt.Errorf("instance not found")
+		return et.Json{}, fmt.Errorf(msg.MSG_INSTANCE_NOT_FOUND)
 	}
 
-	instance.UpdatedBy = updatedBy
-	instance.Current = 0
-	instance.setStatus(Pending)
-
-	return nil
+	instance.UpdatedBy = username
+	instance.SetCurrentStep(0)
+	instance.setStatus(PENDING)
+	return instance.ToJson()
 }
 
 /**
-* Rollback
-* @param instanceId string, updatedBy string
+* RollbackInstance
+* @param id string, username string
 * @return et.Json, error
 **/
-func (s *WorkFlow) rollback(instanceId, updatedBy string) (et.Json, error) {
-	instance, exists := s.load(instanceId)
+func (s *WorkFlow) RollbackInstance(id, username string) (et.Json, error) {
+	instance, exists := s.getInstance(id)
 	if !exists {
-		return et.Json{}, fmt.Errorf("instance not found")
+		return et.Json{}, fmt.Errorf(msg.MSG_INSTANCE_NOT_FOUND)
 	}
 
-	instance.UpdatedBy = updatedBy
-	result, err := instance.rollback(et.Json{}, nil)
+	instance.UpdatedBy = username
+	result, err := instance.rollback(instance.Ctx)
 	if err != nil {
 		return et.Json{}, err
 	}
@@ -301,132 +311,187 @@ func (s *WorkFlow) rollback(instanceId, updatedBy string) (et.Json, error) {
 }
 
 /**
-* stop
-* @param instanceId string, updatedBy string
-* @return error
+* StopInstance
+* @param instanceId string, username string
+* @return et.Json, error
 **/
-func (s *WorkFlow) stop(instanceId, updatedBy string) error {
-	instance, exists := s.load(instanceId)
+func (s *WorkFlow) StopInstance(instanceId, username string) (et.Json, error) {
+	instance, exists := s.getInstance(instanceId)
 	if !exists {
-		return fmt.Errorf("instance not found")
+		return et.Json{}, fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
 	}
 
-	instance.UpdatedBy = updatedBy
-	return instance.Stop()
-}
-
-/**
-* newFlow
-* @param tag, version, name, description string, fn FnContext, stop bool, createdBy string
-* @return *Flow
-**/
-func (s *WorkFlow) newFlow(tag, version, name, description string, fn FnContext, stop bool, createdBy string) *Flow {
-	flow := newFlow(tag, version, name, description, fn, stop, createdBy)
-	s.Flows[tag] = flow
-
-	return flow
-}
-
-/**
-* deleteFlow
-* @param tag string
-* @return bool
-**/
-func (s *WorkFlow) deleteFlow(tag string) bool {
-	if s.Flows[tag] == nil {
-		return false
+	instance.UpdatedBy = username
+	err := instance.Stop(true)
+	if err != nil {
+		return et.Json{}, err
 	}
-
-	flow := s.Flows[tag]
-	event.Publish(EVENT_WORKFLOW_DELETE, flow.ToJson())
-	delete(s.Flows, tag)
-
-	return true
+	return instance.ToJson()
 }
 
 /**
-* New
-* @param tag, version, name, description string, fn FnContext, createdBy string
-* @return *Flow
-**/
-func (s *WorkFlow) New(tag, version, name, description string, fn FnContext, stop bool, createdBy string) *Flow {
-	return s.newFlow(tag, version, name, description, fn, stop, createdBy)
-}
-
-/**
-* Run
-* @param instanceId, tag string, step int, ctx, tags et.Json, createdBy string
+* StatusInstance
+* @param id, status, username string
 * @return et.Json, error
 **/
-func (s *WorkFlow) Run(instanceId, tag string, step int, ctx, tags et.Json, createdBy string) (et.Json, error) {
-	return s.runInstance(instanceId, tag, step, ctx, tags, createdBy)
-}
-
-/**
-* Reset
-* @param instanceId, updatedBy string
-* @return error
-**/
-func (s *WorkFlow) Reset(instanceId, updatedBy string) error {
-	return s.resetInstance(instanceId, updatedBy)
-}
-
-/**
-* Rollback
-* @param instanceId, updatedBy string
-* @return et.Json, error
-**/
-func (s *WorkFlow) Rollback(instanceId, updatedBy string) (et.Json, error) {
-	return s.rollback(instanceId, updatedBy)
-}
-
-/**
-* Stop
-* @param instanceId, updatedBy string
-* @return error
-**/
-func (s *WorkFlow) Stop(instanceId, updatedBy string) error {
-	return s.stop(instanceId, updatedBy)
-}
-
-/**
-* SetStatus
-* @param instanceId, status, updatedBy string
-* @return FlowStatus, error
-**/
-func (s *WorkFlow) Status(instanceId, status, updatedBy string) (Status, error) {
+func (s *WorkFlow) StatusInstance(id, status, username string) (et.Json, error) {
 	if _, ok := FlowStatusList[Status(status)]; !ok {
-		return "", fmt.Errorf("status %s no es valido", status)
+		return et.Json{}, fmt.Errorf(MSG_STATUS_INVALID, status)
 	}
 
-	instance, exists := s.load(instanceId)
+	instance, exists := s.getInstance(id)
 	if !exists {
-		return "", fmt.Errorf("instance not found")
+		return et.Json{}, fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
 	}
 
-	instance.setStatus(Status(status))
-	return instance.Status, nil
+	instance.UpdatedBy = username
+	instance.SetStatus(Status(status))
+	return instance.ToJson()
+}
+
+/**
+* NewFlow
+* @param tag, version, name, description, username string
+* @return *Flow, error
+**/
+func (s *WorkFlow) NewFlow(tag, version, name, description, username string) (*Flow, error) {
+	_, exists := s.getFlow(tag)
+	if exists {
+		return nil, errors.New(MSG_FLOW_ALREADY_EXISTS)
+	}
+
+	result := newFlow(tag, version, name, description, username)
+	s.Flows[tag] = result
+	return result, nil
 }
 
 /**
 * DeleteFlow
 * @param tag string
-* @return (bool, error)
+* @return error
 **/
-func (s *WorkFlow) DeleteFlow(tag string) (bool, error) {
-	return s.deleteFlow(tag), nil
+func (s *WorkFlow) DeleteFlow(tag string) error {
+	flow, exists := s.getFlow(tag)
+	if !exists {
+		return errors.New(MSG_FLOW_NOT_FOUND)
+	}
+
+	err := flow.delete()
+	if err != nil {
+		return err
+	}
+
+	event.Publish(EVENT_WORKFLOW_DELETE, et.Json{
+		"tag": flow.Tag,
+	})
+	delete(s.Flows, tag)
+	return nil
 }
 
 /**
-* GetInstance
-* @param instanceId string
-* @return (*Instance, error)
+* NewSteper
+* @param tag, name, description strin
+* @return et.Json, error
 **/
-func (s *WorkFlow) GetInstance(instanceId string) (*Instance, error) {
-	instance, exists := s.load(instanceId)
+func (s *WorkFlow) NewSteper(flowTag, tag, name, description string) (et.Json, error) {
+	flow, exists := s.getFlow(flowTag)
 	if !exists {
-		return nil, fmt.Errorf("instance not found")
+		return et.Json{}, errors.New(MSG_FLOW_NOT_FOUND)
 	}
 
-	return instance, nil
+	steper, err := flow.NewSteper(tag, name, description)
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	return steper.ToJson(), nil
+}
+
+/**
+* SetSteper
+* @param flowTag, tag, name, description string
+* @return et.Json, error
+**/
+func (s *WorkFlow) SetSteper(flowTag, tag, name, description string) (et.Json, error) {
+	flow, exists := s.getFlow(flowTag)
+	if !exists {
+		return et.Json{}, errors.New(MSG_FLOW_NOT_FOUND)
+	}
+
+	steper, exist := flow.Steper[tag]
+	if !exist {
+		return et.Json{}, errors.New(MSG_STEPPER_NOT_FOUND)
+	}
+
+	steper.Name = name
+	steper.Description = description
+	err := flow.save()
+	if err != nil {
+		return et.Json{}, err
+	}
+	return steper.ToJson(), nil
+}
+
+/**
+* DeleteSteper
+* @param flowTag, tag string
+* @return error
+**/
+func (s *WorkFlow) DeleteSteper(flowTag, tag string) error {
+	flow, exists := s.getFlow(flowTag)
+	if !exists {
+		return errors.New(MSG_FLOW_NOT_FOUND)
+	}
+
+	_, exist := flow.Steper[tag]
+	if !exist {
+		return errors.New(MSG_STEPPER_NOT_FOUND)
+	}
+
+	delete(flow.Steper, tag)
+	return flow.save()
+}
+
+/**
+* NewStep
+* @param flowTag, steperTag, name, description, definition, undo string, stop bool
+* @return et.Json, error
+**/
+func (s *WorkFlow) NewStep(flowTag, name, description, definition, undo string, stop bool) (et.Json, error) {
+	flow, exists := s.getFlow(flowTag)
+	if !exists {
+		return et.Json{}, errors.New(MSG_FLOW_NOT_FOUND)
+	}
+
+	result, err := flow.NewStep(Def{
+		Name:        name,
+		Description: description,
+		Definition:  definition,
+		Undo:        undo,
+		Stop:        stop,
+	})
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	return result.ToJson(), nil
+}
+
+/**
+* SetStep
+* @param flowTag, steperTag string, index int, name, description, definition, undo string, stop bool
+* @return et.Json, error
+**/
+func (s *WorkFlow) SetStep(flowTag string, index int, name, description, definition, undo string, stop bool) (et.Json, error) {
+	flow, exists := s.getFlow(flowTag)
+	if !exists {
+		return et.Json{}, errors.New(MSG_FLOW_NOT_FOUND)
+	}
+
+	step, err := flow.SetStep(index, name, description, definition, undo, stop)
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	return step.ToJson(), nil
 }

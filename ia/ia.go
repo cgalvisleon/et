@@ -16,12 +16,12 @@ import (
 )
 
 type Ia struct {
-	agents          map[string]*Agent `json:"-"`
-	conversations   []*Conversation   `json:"-"`
-	muAgents        sync.RWMutex      `json:"-"`
-	muConversations sync.RWMutex      `json:"-"`
-	store           instances.Store   `json:"-"`
-	isDebug         bool              `json:"-"`
+	agents          map[string]*Agent        `json:"-"`
+	conversations   map[string]*Conversation `json:"-"`
+	muAgents        sync.RWMutex             `json:"-"`
+	muConversations sync.RWMutex             `json:"-"`
+	store           instances.Store          `json:"-"`
+	isDebug         bool                     `json:"-"`
 }
 
 var ia *Ia
@@ -43,7 +43,7 @@ func Load(store instances.Store) error {
 
 	ia = &Ia{
 		agents:          make(map[string]*Agent, 0),
-		conversations:   make([]*Conversation, 0),
+		conversations:   make(map[string]*Conversation, 0),
 		muAgents:        sync.RWMutex{},
 		muConversations: sync.RWMutex{},
 		isDebug:         envar.GetBool("DEBUG", false),

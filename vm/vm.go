@@ -29,7 +29,7 @@ type VM struct {
 
 /**
 * New
-* @param baseDir, name, version string
+* @param name string
 * @return *VM, error
 **/
 func New(name string) (*VM, error) {
@@ -151,6 +151,15 @@ func (s *VM) Run(str string) (goja.Value, error) {
 		return nil, err
 	}
 	return result, nil
+}
+
+/**
+* RunCode
+* @params code []byte
+* @return goja.Value, error
+**/
+func (s *VM) RunByBt(code []byte) (goja.Value, error) {
+	return s.Run(string(code))
 }
 
 /**

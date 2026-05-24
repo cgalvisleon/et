@@ -7,19 +7,15 @@ type Connection interface {
 }
 
 type PgConection struct {
-	Database     string
-	Host         string
-	Port         int
-	User         string
-	Password     string
-	Sslmode      string
-	UseCore      bool
-	RecordLimit  int
-	PoolMaxOpen  int
-	PoolMaxIdle  int
-	PoolLifetime int
-	PoolIdleTime int
-	AppName      string
+	Database    string
+	Host        string
+	Port        int
+	User        string
+	Password    string
+	Sslmode     string
+	UseCore     bool
+	AppName     string
+	RecordLimit int
 }
 
 /**
@@ -28,20 +24,16 @@ type PgConection struct {
 **/
 func (c *PgConection) GetParams() et.Json {
 	return et.Json{
-		"driver":         DriverPostgres,
-		"database":       c.Database,
-		"host":           c.Host,
-		"port":           c.Port,
-		"user":           c.User,
-		"password":       c.Password,
-		"sslmode":        c.Sslmode,
-		"use_core":       c.UseCore,
-		"record_limit":   c.RecordLimit,
-		"pool_max_open":  c.PoolMaxOpen,
-		"pool_max_idle":  c.PoolMaxIdle,
-		"pool_lifetime":  c.PoolLifetime,
-		"pool_idle_time": c.PoolIdleTime,
-		"app_name":       c.AppName,
+		"driver":       DriverPostgres,
+		"database":     c.Database,
+		"host":         c.Host,
+		"port":         c.Port,
+		"user":         c.User,
+		"password":     c.Password,
+		"sslmode":      c.Sslmode,
+		"use_core":     c.UseCore,
+		"app_name":     c.AppName,
+		"record_limit": c.RecordLimit,
 	}
 }
 

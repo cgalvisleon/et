@@ -81,9 +81,8 @@ func (s *WorkFlow) addFlow(flow *Flow) {
 **/
 func (s *WorkFlow) getFlow(tag string) (*Flow, bool) {
 	s.muFlows.Lock()
-	defer s.muFlows.Unlock()
-
 	result, exists := s.Flows[tag]
+	s.muFlows.Unlock()
 	if exists {
 		return result, true
 	}
@@ -107,7 +106,6 @@ func (s *WorkFlow) getFlow(tag string) (*Flow, bool) {
 /**
 * removeFlow
 * @param tag string
-* @return bool
 **/
 func (s *WorkFlow) removeFlow(tag string) {
 	s.muFlows.Lock()
@@ -206,8 +204,8 @@ func (s *WorkFlow) newInstance(tag, id string, tags et.Json, step int, username 
 		return nil, fmt.Errorf(MSG_INSTANCE_ID_REQUIRED)
 	}
 
-	flow := s.Flows[tag]
-	if flow == nil {
+	flow, exists := s.getFlow(tag)
+	if !exists {
 		return nil, fmt.Errorf(MSG_FLOW_NOT_FOUND)
 	}
 
@@ -236,6 +234,26 @@ func (s *WorkFlow) GetInstance(id string) (*Instance, error) {
 	}
 
 	return nil, ErrorInstanceNotFound
+}
+
+/**
+* DeleteInstance
+* @param id string
+* @return error
+**/
+func (s *WorkFlow) DeleteInstance(id string) error {
+	instance, exists := s.getInstance(id)
+	if !exists {
+		return fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
+	}
+
+	err := instance.delete()
+	if err != nil {
+		return err
+	}
+
+	s.removeInstance(id)
+	return nil
 }
 
 /**
@@ -286,7 +304,7 @@ func (s *WorkFlow) ResetInstance(id, username string) (et.Json, error) {
 	instance.UpdatedBy = username
 	instance.SetCurrentStep(0)
 	instance.setStatus(PENDING)
-	return instance.ToJson()
+	return instance.ToJson(), nil
 }
 
 /**
@@ -325,7 +343,7 @@ func (s *WorkFlow) StopInstance(instanceId, username string) (et.Json, error) {
 	if err != nil {
 		return et.Json{}, err
 	}
-	return instance.ToJson()
+	return instance.ToJson(), nil
 }
 
 /**
@@ -345,7 +363,7 @@ func (s *WorkFlow) StatusInstance(id, status, username string) (et.Json, error) 
 
 	instance.UpdatedBy = username
 	instance.SetStatus(Status(status))
-	return instance.ToJson()
+	return instance.ToJson(), nil
 }
 
 /**
@@ -360,7 +378,7 @@ func (s *WorkFlow) NewFlow(tag, version, name, description, username string) (*F
 	}
 
 	result := newFlow(tag, version, name, description, username)
-	s.Flows[tag] = result
+	s.addFlow(result)
 	return result, nil
 }
 
@@ -375,16 +393,7 @@ func (s *WorkFlow) DeleteFlow(tag string) error {
 		return errors.New(MSG_FLOW_NOT_FOUND)
 	}
 
-	err := flow.delete()
-	if err != nil {
-		return err
-	}
-
-	event.Publish(EVENT_WORKFLOW_DELETE, et.Json{
-		"tag": flow.Tag,
-	})
-	delete(s.Flows, tag)
-	return nil
+	return flow.delete()
 }
 
 /**
@@ -457,7 +466,7 @@ func (s *WorkFlow) DeleteSteper(flowTag, tag string) error {
 * @return *Flow, bool
 **/
 func (s *WorkFlow) AddStepFromSteper(flowTag, tag string, index int) (*Flow, bool) {
-	flow, exists := s.Flows[flowTag]
+	flow, exists := s.getFlow(flowTag)
 	if !exists {
 		return nil, false
 	}
@@ -477,7 +486,7 @@ func (s *WorkFlow) AddStepFromSteper(flowTag, tag string, index int) (*Flow, boo
 * @return *Flow, bool
 **/
 func (s *WorkFlow) RemoveStepFromSteper(flowTag, tag string, index int) (*Flow, bool) {
-	flow, exists := s.Flows[flowTag]
+	flow, exists := s.getFlow(flowTag)
 	if !exists {
 		return nil, false
 	}

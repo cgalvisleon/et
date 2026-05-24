@@ -1,7 +1,6 @@
 package workflow
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -10,6 +9,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/resilience"
@@ -109,18 +109,34 @@ func newInstance(steper *Steper, id, userName string) *Instance {
 * @return error
 **/
 func (s *Instance) save() error {
-	data, err := s.ToJson()
-	if err != nil {
-		return err
-	}
-
+	data := s.ToJson()
 	if s.isDebug {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
+	event.Publish(EVENT_INSTANCE_SET, data)
+
 	if s.workflow != nil && s.workflow.store != nil {
 		return s.workflow.store.Set(s.ID, s.Tag, s)
 	}
+
+	return nil
+}
+
+/**
+* delete
+* @return error
+**/
+func (s *Instance) delete() error {
+	event.Publish(EVENT_INSTANCE_DELETE, et.Json{
+		"id": s.ID,
+	})
+
+	if s.workflow != nil && s.workflow.store != nil {
+		return s.workflow.store.Delete(s.Tag)
+	}
+
+	s.workflow.removeInstance(s.ID)
 
 	return nil
 }
@@ -136,25 +152,36 @@ func (s *Instance) up(flow *Flow) {
 
 /**
 * ToJson
-* @return (et.Json, error)
+* @return et.Json
 **/
-func (s *Instance) ToJson() (et.Json, error) {
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return nil, err
-	}
-
-	var result et.Json
-	err = json.Unmarshal(bt, &result)
-	if err != nil {
-		return nil, err
+func (s *Instance) ToJson() et.Json {
+	result := et.Json{
+		"created_at":   s.CreatedAt,
+		"updated_at":   s.UpdatedAt,
+		"id":           s.ID,
+		"tag":          s.Tag,
+		"created_by":   s.CreatedBy,
+		"updated_by":   s.UpdatedBy,
+		"ctx":          s.Ctx,
+		"ctxs":         s.Ctxs,
+		"results":      s.Results,
+		"rollbacks":    s.Rollbacks,
+		"params":       s.Params,
+		"traces":       s.Traces,
+		"check_list":   s.CheckList,
+		"status":       s.Status,
+		"tags":         s.Tags,
+		"steper":       s.Steper,
+		"current_step": s.CurrentStep,
+		"is_done":      s.IsDone,
+		"is_stop":      s.IsStop,
 	}
 
 	for k, v := range s.Tags {
 		result.Set(k, v)
 	}
 
-	return result, nil
+	return result
 }
 
 /**
@@ -162,12 +189,7 @@ func (s *Instance) ToJson() (et.Json, error) {
 * @return string
 **/
 func (s *Instance) ToString() string {
-	result, err := s.ToJson()
-	if err != nil {
-		return ""
-	}
-
-	return result.ToString()
+	return s.ToJson().ToString()
 }
 
 /**
@@ -175,7 +197,7 @@ func (s *Instance) ToString() string {
 * @param key string, value interface{}
 * @return et.Json
 **/
-func (s *Instance) setTag(key string, value interface{}) et.Json {
+func (s *Instance) SetTag(key string, value interface{}) et.Json {
 	s.Tags[key] = value
 	return s.Tags
 }

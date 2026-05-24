@@ -98,15 +98,28 @@ func (s *WorkFlow) HttpGetInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item, err := result.ToJson()
+	item := result.ToJson()
+	response.ITEM(w, r, http.StatusOK, et.Item{
+		Ok:     true,
+		Result: item,
+	})
+}
+
+/**
+* HttpDeleteInstance
+* @params w http.ResponseWriter, r *http.Request
+**/
+func (s *WorkFlow) HttpDeleteInstance(w http.ResponseWriter, r *http.Request) {
+	id := request.URLParam(r, "id").Str()
+	err := s.DeleteInstance(id)
 	if err != nil {
-		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	response.ITEM(w, r, http.StatusOK, et.Item{
 		Ok:     true,
-		Result: item,
+		Result: et.Json{"message": fmt.Sprintf(MSG_INSTANCE_DELETE, id)},
 	})
 }
 

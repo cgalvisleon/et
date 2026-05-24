@@ -7,6 +7,7 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 )
 
@@ -149,49 +150,6 @@ func newFlow(tag, version, name, description string, username string) *Flow {
 }
 
 /**
-* save
-* @return error
-**/
-func (s *Flow) save() error {
-	data := s.ToJson()
-	if s.isDebug {
-		logs.Log(packageName, "save:", data.ToString())
-	}
-
-	if s.workflow != nil && s.workflow.store != nil {
-		return s.workflow.store.Set(s.Tag, "flow", s)
-	}
-
-	return nil
-}
-
-/**
-* delete
-* @return error
-**/
-func (s *Flow) delete() error {
-	if s.workflow != nil && s.workflow.store != nil {
-		return s.workflow.store.Delete(s.Tag)
-	}
-
-	return nil
-}
-
-/**
-* up
-* @param workflow *WorkFlow
-**/
-func (s *Flow) up(workflow *WorkFlow) {
-	s.workflow = workflow
-	for _, step := range s.Steps {
-		step.up(s)
-	}
-	for _, steper := range s.Steper {
-		steper.up(s)
-	}
-}
-
-/**
 * ToJson
 * @return et.Json
 **/
@@ -209,6 +167,57 @@ func (s *Flow) ToJson() et.Json {
 		"team":           s.Team,
 		"level":          s.Level,
 		"created_by":     s.CreatedBy,
+	}
+}
+
+/**
+* save
+* @return error
+**/
+func (s *Flow) save() error {
+	data := s.ToJson()
+	if s.isDebug {
+		logs.Log(packageName, "save:", data.ToString())
+	}
+
+	event.Publish(EVENT_FLOW_SET, data)
+
+	if s.workflow != nil && s.workflow.store != nil {
+		return s.workflow.store.Set(s.Tag, "flow", s)
+	}
+
+	return nil
+}
+
+/**
+* delete
+* @return error
+**/
+func (s *Flow) delete() error {
+	event.Publish(EVENT_FLOW_DELETE, et.Json{
+		"tag": s.Tag,
+	})
+
+	if s.workflow != nil && s.workflow.store != nil {
+		return s.workflow.store.Delete(s.Tag)
+	}
+
+	s.workflow.removeFlow(s.Tag)
+
+	return nil
+}
+
+/**
+* up
+* @param workflow *WorkFlow
+**/
+func (s *Flow) up(workflow *WorkFlow) {
+	s.workflow = workflow
+	for _, step := range s.Steps {
+		step.up(s)
+	}
+	for _, steper := range s.Steper {
+		steper.up(s)
 	}
 }
 

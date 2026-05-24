@@ -2,12 +2,11 @@ package ia
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/utility"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/conversations"
 	"github.com/openai/openai-go/v3/option"
@@ -27,64 +26,62 @@ Reglas obligatorias:
 
 const modelDefault = openai.ChatModelGPT4oMini
 
+type Skill interface {
+	Tag() string
+	Name() string
+	Description() string
+	Execute(
+		ctx context.Context,
+		input map[string]any,
+	) (*SkillResult, error)
+}
+
+type SkillResult struct {
+	Success bool
+	Data    any
+	Error   string
+}
+
 type Agent struct {
-	ID      string          `json:"id"`
-	Name    string          `json:"name"`
-	Context string          `json:"context"`
-	Model   string          `json:"model"`
-	client  openai.Client   `json:"-"`
-	ctx     context.Context `json:"-"`
-	owner   *Ia             `json:"-"`
-	isDebug bool            `json:"-"`
+	ID          string           `json:"id"`
+	Name        string           `json:"name"`
+	Description string           `json:"description"`
+	Context     []byte           `json:"context"`
+	Model       string           `json:"model"`
+	Skills      map[string]Skill `json:"skills"`
+	client      openai.Client    `json:"-"`
+	ia          *Ia              `json:"-"`
+	isDebug     bool             `json:"-"`
+}
+
+/**
+* agendId
+* @param name string
+* @return string
+**/
+func agendId(name string) string {
+	name = utility.Normalize(name)
+	return fmt.Sprintf("agent:%s", name)
 }
 
 /**
 * newAgent
-* @param ctx context.Context, owner *Ia, name string
+* @param owner *Ia, name string, description string, context string, model string
 * @return *Agent
 **/
-func newAgent(ctx context.Context, owner *Ia, name string) *Agent {
-	return &Agent{
-		ID:      fmt.Sprintf("agent:%s", name),
-		Name:    name,
-		Context: contextDefault,
-		Model:   modelDefault,
-		ctx:     ctx,
-		owner:   owner,
-		isDebug: owner.isDebug,
+func newAgent(ia *Ia, name, description, context, model string) *Agent {
+	result := &Agent{
+		ID:          agendId(name),
+		Name:        name,
+		Description: description,
+		Context:     []byte(context),
+		Skills:      make(map[string]Skill),
+		Model:       model,
+		ia:          ia,
+		isDebug:     ia.isDebug,
 	}
-}
-
-/**
-* ToJson
-* @return (et.Json, error)
-**/
-func (s *Agent) ToJson() (et.Json, error) {
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return nil, err
-	}
-
-	var result et.Json
-	err = json.Unmarshal(bt, &result)
-	if err != nil {
-		return et.Json{}, err
-	}
-
-	return result, nil
-}
-
-/**
-* ToString
-* @return string
-**/
-func (s *Agent) ToString() string {
-	result, err := s.ToJson()
-	if err != nil {
-		return ""
-	}
-
-	return result.ToString()
+	ia.addAgent(result)
+	return result
 }
 
 /**
@@ -92,17 +89,25 @@ func (s *Agent) ToString() string {
 * @return error
 **/
 func (s *Agent) save() error {
-	data, err := s.ToJson()
-	if err != nil {
-		return err
-	}
-
+	data := s.ToJson()
 	if s.isDebug {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	if s.owner != nil && s.owner.store != nil {
-		return s.owner.store.Set(s.ID, "agent", s)
+	if s.ia != nil && s.ia.store != nil {
+		return s.ia.store.Set(s.ID, "agent", s)
+	}
+
+	return nil
+}
+
+/**
+* delete
+* @return error
+**/
+func (s *Agent) delete() error {
+	if s.ia != nil && s.ia.store != nil {
+		return s.ia.store.Delete(s.ID)
 	}
 
 	return nil
@@ -113,26 +118,76 @@ func (s *Agent) save() error {
 * @param ia *Ia
 **/
 func (s *Agent) up(ia *Ia) {
-	key := envar.GetStr("OPENAI_API_KEY", "")
 	s.client = openai.NewClient(
-		option.WithAPIKey(key),
+		option.WithAPIKey(ia.key),
 	)
-	s.owner = ia
+	s.ia = ia
+}
+
+/**
+* ToJson
+* @return et.Json
+**/
+func (s *Agent) ToJson() et.Json {
+	return et.Json{
+		"id":          s.ID,
+		"name":        s.Name,
+		"description": s.Description,
+		"context":     s.Context,
+		"model":       s.Model,
+		"skills":      s.Skills,
+	}
+}
+
+/**
+* ToString
+* @return string
+**/
+func (s *Agent) ToString() string {
+	return s.ToJson().ToString()
+}
+
+/**
+* Debug
+**/
+func (s *Agent) Debug() {
+	s.isDebug = true
+}
+
+/**
+* setContext
+* @param context string
+* @return *Agent
+**/
+func (s *Agent) setContext(context string) *Agent {
+	s.Context = []byte(context)
+	return s
+}
+
+/**
+* addSkill
+* @param skill Skill
+* @return *Agent
+**/
+func (s *Agent) addSkill(skill Skill) *Agent {
+	s.Skills[skill.Tag()] = skill
+	return s
 }
 
 /**
 * conversations
-* @param convID, prompt string
+* @param ctx context.Context, convID, prompt string
 * @return (string, string, error)
 **/
-func (s *Agent) conversations(convID, prompt string) (et.Json, error) {
+func (s *Agent) conversations(ctx context.Context, convID, prompt string) (et.Json, error) {
 	if convID == "" {
-		conv, _ := s.client.Conversations.New(s.ctx, conversations.ConversationNewParams{})
+		conv, _ := s.client.Conversations.New(ctx, conversations.ConversationNewParams{})
 		convID = conv.ID
 	}
 
-	prompt = fmt.Sprintf(s.Context, prompt)
-	result, err := s.client.Responses.New(s.ctx, responses.ResponseNewParams{
+	contextStr := string(s.Context)
+	prompt = fmt.Sprintf(contextStr, prompt)
+	result, err := s.client.Responses.New(ctx, responses.ResponseNewParams{
 		Model: s.Model,
 		Input: responses.ResponseNewParamsInputUnion{
 			OfString: openai.String(prompt),

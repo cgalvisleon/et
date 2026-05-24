@@ -1,119 +1,17 @@
 package ia
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/instances"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 )
-
-type TypeConversation string
-
-const (
-	Direct TypeConversation = "direct"
-	Group  TypeConversation = "group"
-)
-
-type StatusMessage string
-
-const (
-	Sent      StatusMessage = "sent"
-	Delivered StatusMessage = "delivered"
-	Read      StatusMessage = "read"
-)
-
-type TypeMessage string
-
-const (
-	Text  TypeMessage = "text"
-	Image TypeMessage = "image"
-	Video TypeMessage = "video"
-	Audio TypeMessage = "audio"
-	File  TypeMessage = "file"
-)
-
-type Role string
-
-const (
-	Admin  Role = "admin"
-	Member Role = "member"
-)
-
-type Participant struct {
-	JoinedAt       time.Time `json:"joined_at"`
-	ID             string    `json:"id"`
-	ConversationID string    `json:"conversation_id"`
-	UserID         string    `json:"user_id"`
-	To             string    `json:"to"`
-	Role           Role      `json:"role"`
-}
-
-type MessageStatus struct {
-	CreatedAt time.Time     `json:"read_at"`
-	MessageID string        `json:"message_id"`
-	UserID    string        `json:"user_id"`
-	Status    StatusMessage `json:"status"`
-}
-
-type Message struct {
-	CreatedAt       time.Time                 `json:"created_at"`
-	ID              string                    `json:"id"`
-	ConversationID  string                    `json:"conversation_id"`
-	SenderID        string                    `json:"sender_id"`
-	Type            TypeMessage               `json:"type"`
-	Content         string                    `json:"content"`
-	MessageStatuses map[string]*MessageStatus `json:"message_statuses"`
-}
-
-func newMessage(conversationID, senderID string, tp TypeMessage, content string) *Message {
-	return &Message{
-		CreatedAt:       time.Now(),
-		ID:              utility.UUID(),
-		ConversationID:  conversationID,
-		SenderID:        senderID,
-		Type:            tp,
-		Content:         content,
-		MessageStatuses: map[string]*MessageStatus{},
-	}
-}
-
-/**
-* setStatus
-* @param userID string, status StatusMessage
-**/
-func (s *Message) setStatus(userID string, status StatusMessage) {
-	s.MessageStatuses[userID] = &MessageStatus{
-		CreatedAt: timezone.Now(),
-		MessageID: s.ID,
-		UserID:    userID,
-		Status:    status,
-	}
-}
-
-/**
-* ToJson
-* @return (et.Json, error)
-**/
-func (s *Message) ToJson() (et.Json, error) {
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return nil, err
-	}
-
-	var result et.Json
-	err = json.Unmarshal(bt, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
 
 type Conversation struct {
 	CreatedAt    time.Time               `json:"created_at"`
@@ -123,7 +21,20 @@ type Conversation struct {
 	Participants map[string]*Participant `json:"participants"`
 	Messages     []*Message              `json:"messages"`
 	LastMessage  *Message                `json:"last_message"`
-	owner        *Conversations          `json:"-"`
+	owner        *Ia                     `json:"-"`
+	isDebug      bool                    `json:"-"`
+}
+
+func (s *Conversation) ToJson() et.Json {
+	return et.Json{
+		"id":           s.ID,
+		"type":         s.Type,
+		"participants": s.Participants,
+		"messages":     s.Messages,
+		"last_message": s.LastMessage,
+		"created_at":   s.CreatedAt,
+		"updated_at":   s.UpdatedAt,
+	}
 }
 
 /**
@@ -131,10 +42,16 @@ type Conversation struct {
 * @return error
 **/
 func (s *Conversation) save() error {
-	if s.owner.store == nil {
-		return nil
+	data := s.ToJson()
+	if s.isDebug {
+		logs.Log(packageName, "save:", data.ToString())
 	}
-	return s.owner.store.Set(s.ID, "conversations", s)
+
+	if s.owner.store != nil {
+		return s.owner.store.Set(s.ID, "conversations", s)
+	}
+
+	return nil
 }
 
 /**

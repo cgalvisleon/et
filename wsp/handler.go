@@ -78,6 +78,7 @@ func (s *Whatsapp) getHeader() et.Json {
 **/
 func (s *Whatsapp) SendMessage(message *Message) (et.Json, error) {
 	url := fmt.Sprintf("%s/%s/messages", s.Path, s.PhoneNumberId)
+	message.kind = MessageTypeText
 	body := message.body()
 	if s.isDebug {
 		logs.Debug("body:", body.ToString())

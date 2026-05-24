@@ -150,34 +150,40 @@ type Template struct {
 	Components []Component `json:"components"`
 }
 
+type MessageType string
+
+const (
+	MessageTypeText MessageType = "text"
+)
+
 type Message struct {
-	kind                string    `json:"-"`
-	To                  string    `json:"to"`
-	Text                string    `json:"text"`
-	Buttons             []Button  `json:"buttons"`
-	Header              Header    `json:"header"`
-	Footer              Footer    `json:"footer"`
-	Button              string    `json:"button"`
-	Sections            []Section `json:"sections"`
-	ImageObjectID       string    `json:"image_object_id"`
-	MessageID           string    `json:"message_id"`
-	Emoji               string    `json:"emoji"`
-	AudioObjectID       string    `json:"audio_object_id"`
-	DocumentObjectID    string    `json:"document_object_id"`
-	DocumentCaptionText string    `json:"document_caption_text"`
-	DocumentFilename    string    `json:"document_filename"`
-	MediaObjectID       string    `json:"media_object_id"`
-	VideoObjectID       string    `json:"video_object_id"`
-	VideoCaptionText    string    `json:"video_caption_text"`
-	Address             Address   `json:"address"`
-	Contact             Contact   `json:"contact"`
-	Email               Email     `json:"email"`
-	Phone               Phone     `json:"phone"`
-	Url                 Url       `json:"url"`
-	Location            Location  `json:"location"`
-	Template            Template  `json:"template"`
-	Action              Action    `json:"action"`
-	Component           Component `json:"component"`
+	kind                MessageType `json:"-"`
+	To                  string      `json:"to"`
+	Text                string      `json:"text"`
+	Buttons             []Button    `json:"buttons"`
+	Header              Header      `json:"header"`
+	Footer              Footer      `json:"footer"`
+	Button              string      `json:"button"`
+	Sections            []Section   `json:"sections"`
+	ImageObjectID       string      `json:"image_object_id"`
+	MessageID           string      `json:"message_id"`
+	Emoji               string      `json:"emoji"`
+	AudioObjectID       string      `json:"audio_object_id"`
+	DocumentObjectID    string      `json:"document_object_id"`
+	DocumentCaptionText string      `json:"document_caption_text"`
+	DocumentFilename    string      `json:"document_filename"`
+	MediaObjectID       string      `json:"media_object_id"`
+	VideoObjectID       string      `json:"video_object_id"`
+	VideoCaptionText    string      `json:"video_caption_text"`
+	Address             Address     `json:"address"`
+	Contact             Contact     `json:"contact"`
+	Email               Email       `json:"email"`
+	Phone               Phone       `json:"phone"`
+	Url                 Url         `json:"url"`
+	Location            Location    `json:"location"`
+	Template            Template    `json:"template"`
+	Action              Action      `json:"action"`
+	Component           Component   `json:"component"`
 }
 
 /**

@@ -14,6 +14,7 @@ type Whatsapp struct {
 	EventHandler      func(et.Json)   `json:"-"`
 	EventHandlerError func(error)     `json:"-"`
 	store             instances.Store `json:"-"`
+	isTest            bool            `json:"-"`
 	isDebug           bool            `json:"-"`
 }
 
@@ -33,33 +34,50 @@ func NewSender(token, phoneNumberId string) *Whatsapp {
 }
 
 /**
-* SetDebug
-* @param isDebug bool
+* Debug
+* @return *Whatsapp
 **/
-func (w *Whatsapp) SetDebug(isDebug bool) {
-	w.isDebug = isDebug
+func (s *Whatsapp) Debug() *Whatsapp {
+	s.isDebug = true
+	return s
+}
+
+/**
+* IsTest
+* @param isTest bool
+* @return *Whatsapp
+**/
+func (s *Whatsapp) IsTest(isTest bool) *Whatsapp {
+	s.isTest = isTest
+	return s
 }
 
 /**
 * SetVerifyToken
 * @param verifyToken string
+* @return *Whatsapp
 **/
-func (w *Whatsapp) SetVerifyToken(verifyToken string) {
-	w.VerifyToken = verifyToken
+func (s *Whatsapp) SetVerifyToken(verifyToken string) *Whatsapp {
+	s.VerifyToken = verifyToken
+	return s
 }
 
 /**
 * SetEventHandler
 * @param handler func(*Event)
+* @return *Whatsapp
 **/
-func (w *Whatsapp) SetEventHandler(fn func(et.Json)) {
-	w.EventHandler = fn
+func (s *Whatsapp) SetEventHandler(fn func(et.Json)) *Whatsapp {
+	s.EventHandler = fn
+	return s
 }
 
 /**
 * SetEventHandlerError
 * @param handler func(error)
+* @return *Whatsapp
 **/
-func (w *Whatsapp) SetEventHandlerError(fn func(error)) {
-	w.EventHandlerError = fn
+func (s *Whatsapp) SetEventHandlerError(fn func(error)) *Whatsapp {
+	s.EventHandlerError = fn
+	return s
 }

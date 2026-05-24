@@ -168,6 +168,7 @@ go run ./cmd/daemon                      # Servicio systemd
 go run ./cmd/server                      # Nodo TCP (:1377)
 go run ./cmd/vm                          # VM JS con hot-reload
 go run ./cmd/client -addr localhost:1377 # Cliente TCP de prueba
+go run ./cmd/wsp             # WhatsApp
 ```
 
 ## Licencia
@@ -175,4 +176,3 @@ go run ./cmd/client -addr localhost:1377 # Cliente TCP de prueba
 MIT. Ver `LICENSE`.
 
 A
-

@@ -72,20 +72,18 @@ func (s *Whatsapp) getHeader() et.Json {
 }
 
 /**
-* SendMessage
+* sendRequest
 * @param message *Message
 * @return et.Json, error
 **/
-func (s *Whatsapp) SendMessage(message *Message) (et.Json, error) {
+func (s *Whatsapp) sendRequest(message *Message) (et.Json, error) {
 	url := fmt.Sprintf("%s/%s/messages", s.Path, s.PhoneNumberId)
-	message.kind = MessageTypeText
 	body := message.body()
 	if s.isDebug {
 		logs.Debug("body:", body.ToString())
 	}
 
-	notSend := body.Bool("not_send")
-	if notSend {
+	if s.isTest {
 		return body, nil
 	}
 
@@ -100,4 +98,66 @@ func (s *Whatsapp) SendMessage(message *Message) (et.Json, error) {
 	}
 
 	return result, nil
+}
+
+/**
+* SendTextMessage
+* @param to, text string
+* @return et.Json, error
+**/
+func (s *Whatsapp) SendTextMessage(to, text string) (et.Json, error) {
+	message := &Message{
+		To:   to,
+		Text: text,
+	}
+	message.kind = MessageTypeText
+
+	return s.sendRequest(message)
+}
+
+/**
+* SendReplyTextMessage
+* @param to, message_id, text string
+* @return et.Json, error
+**/
+func (s *Whatsapp) SendReplyTextMessage(to, message_id, text string) (et.Json, error) {
+	message := &Message{
+		To:        to,
+		Text:      text,
+		MessageID: message_id,
+	}
+	message.kind = MessageTypeReplyText
+
+	return s.sendRequest(message)
+}
+
+/**
+* SendTextMessageWithPreviewURL
+* @param to, url, text string
+* @return et.Json, error
+**/
+func (s *Whatsapp) SendTextMessageWithPreviewURL(to, url string) (et.Json, error) {
+	message := &Message{
+		To:  to,
+		Url: Url{Url: url},
+	}
+	message.kind = MessageTypeTextWithPreviewURL
+
+	return s.sendRequest(message)
+}
+
+/**
+* SendReplyWithReactionMessage
+* @param to, message_id, emoji string
+* @return et.Json, error
+**/
+func (s *Whatsapp) SendReplyWithReactionMessage(to, messageId, emoji string) (et.Json, error) {
+	message := &Message{
+		To:        to,
+		MessageID: messageId,
+		Emoji:     emoji,
+	}
+	message.kind = MessageTypeReplyWithReaction
+
+	return s.sendRequest(message)
 }

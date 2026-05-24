@@ -153,7 +153,10 @@ type Template struct {
 type MessageType string
 
 const (
-	MessageTypeText MessageType = "text"
+	MessageTypeText               MessageType = "text"
+	MessageTypeReplyText          MessageType = "reply_text"
+	MessageTypeTextWithPreviewURL MessageType = "text_with_preview_url"
+	MessageTypeReplyWithReaction  MessageType = "reply_with_reaction"
 )
 
 type Message struct {
@@ -308,7 +311,7 @@ func (s *Message) body() et.Json {
 			},
 		}
 
-	case "reply":
+	case MessageTypeReplyText:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -322,16 +325,16 @@ func (s *Message) body() et.Json {
 				"body":        s.Text,
 			}}
 
-	case "text_with_preview_URL":
+	case MessageTypeTextWithPreviewURL:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"to":                s.To,
 			"text": et.Json{
 				"preview_url": true,
-				"body":        s.Url,
+				"body":        s.Url.Url,
 			}}
 
-	case "reply_with_reaction":
+	case MessageTypeReplyWithReaction:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",

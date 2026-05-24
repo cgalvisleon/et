@@ -44,11 +44,10 @@ func (s *Whatsapp) Debug() *Whatsapp {
 
 /**
 * IsTest
-* @param isTest bool
 * @return *Whatsapp
 **/
-func (s *Whatsapp) IsTest(isTest bool) *Whatsapp {
-	s.isTest = isTest
+func (s *Whatsapp) IsTest() *Whatsapp {
+	s.isTest = true
 	return s
 }
 

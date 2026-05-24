@@ -16,6 +16,7 @@ const (
 	Sent      StatusMessage = "sent"
 	Delivered StatusMessage = "delivered"
 	Read      StatusMessage = "read"
+	Failed    StatusMessage = "failed"
 )
 
 type TypeMessage string
@@ -36,35 +37,39 @@ type MessageStatus struct {
 }
 
 type Message struct {
-	CreatedAt       time.Time                 `json:"created_at"`
-	ID              string                    `json:"id"`
-	ConversationID  string                    `json:"conversation_id"`
-	SenderID        string                    `json:"sender_id"`
-	Type            TypeMessage               `json:"type"`
-	Content         string                    `json:"content"`
-	MessageStatuses map[string]*MessageStatus `json:"message_statuses"`
-	ia              *Ia                       `json:"-"`
-	isDebug         bool                      `json:"-"`
+	CreatedAt       time.Time        `json:"created_at"`
+	ID              string           `json:"id"`
+	ConversationID  string           `json:"conversation_id"`
+	Type            TypeMessage      `json:"type"`
+	UserID          string           `json:"user_id"`
+	To              string           `json:"to"`
+	Content         string           `json:"content"`
+	LastStatus      *MessageStatus   `json:"last_status"`
+	MessageStatuses []*MessageStatus `json:"message_statuses"`
+	ia              *Ia              `json:"-"`
+	isDebug         bool             `json:"-"`
 }
 
 /**
 * newMessage
-* @param ia *Ia, conversationID, senderID string, tp TypeMessage, content string
+* @param ia *Ia, conversationID, userID, to string, tp TypeMessage, content string
 * @return *Message
 **/
-func newMessage(ia *Ia, conversationID, senderID string, tp TypeMessage, content string) *Message {
+func newMessage(ia *Ia, conversationID, userID, to string, tp TypeMessage, content string) *Message {
 	id := reg.GenUUId("message")
-	return &Message{
+	result := &Message{
 		CreatedAt:       time.Now(),
 		ID:              id,
 		ConversationID:  conversationID,
-		SenderID:        senderID,
+		UserID:          userID,
+		To:              to,
 		Type:            tp,
 		Content:         content,
-		MessageStatuses: map[string]*MessageStatus{},
+		MessageStatuses: make([]*MessageStatus, 0),
 		ia:              ia,
 		isDebug:         ia.isDebug,
 	}
+	return result
 }
 
 /**
@@ -76,7 +81,8 @@ func (s *Message) ToJson() et.Json {
 		"created_at":       s.CreatedAt,
 		"id":               s.ID,
 		"conversation_id":  s.ConversationID,
-		"sender_id":        s.SenderID,
+		"user_id":          s.UserID,
+		"to":               s.To,
 		"type":             s.Type,
 		"content":          s.Content,
 		"message_statuses": s.MessageStatuses,
@@ -93,8 +99,8 @@ func (s *Message) save() error {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	if s.ia != nil && s.ia.store != nil {
-		err := s.ia.store.Set(s.ID, "message", s)
+	if s.ia != nil && s.ia.messageStore != nil {
+		err := s.ia.messageStore.Set(s.ID, "message", s)
 		if err != nil {
 			return err
 		}
@@ -110,8 +116,8 @@ func (s *Message) save() error {
 * @return error
 **/
 func (s *Message) delete() error {
-	if s.ia != nil && s.ia.store != nil {
-		err := s.ia.store.Delete(s.ID)
+	if s.ia != nil && s.ia.messageStore != nil {
+		err := s.ia.messageStore.Delete(s.ID)
 		if err != nil {
 			return err
 		}
@@ -126,15 +132,16 @@ func (s *Message) delete() error {
 
 /**
 * setStatus
-* @param userID string, status StatusMessage
+* @param status StatusMessage
 * @return error
 **/
-func (s *Message) setStatus(userID string, status StatusMessage) error {
-	s.MessageStatuses[userID] = &MessageStatus{
+func (s *Message) setStatus(status StatusMessage) error {
+	s.LastStatus = &MessageStatus{
 		CreatedAt: timezone.Now(),
 		MessageID: s.ID,
-		UserID:    userID,
+		UserID:    s.UserID,
 		Status:    status,
 	}
+	s.MessageStatuses = append(s.MessageStatuses, s.LastStatus)
 	return s.save()
 }

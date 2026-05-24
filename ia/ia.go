@@ -20,14 +20,17 @@ const (
 )
 
 type Ia struct {
-	ID              string                   `json:"id"`
-	Agents          map[string]*Agent        `json:"agents"`
-	Conversations   map[string]*Conversation `json:"-"`
-	muAgents        sync.RWMutex             `json:"-"`
-	muConversations sync.RWMutex             `json:"-"`
-	key             string                   `json:"-"`
-	store           instances.Store          `json:"-"`
-	isDebug         bool                     `json:"-"`
+	ID                string                   `json:"id"`
+	Agents            map[string]*Agent        `json:"agents"`
+	Conversations     map[string]*Conversation `json:"-"`
+	sender            Sender                   `json:"-"`
+	muAgents          sync.RWMutex             `json:"-"`
+	muConversations   sync.RWMutex             `json:"-"`
+	key               string                   `json:"-"`
+	store             instances.Store          `json:"-"`
+	conversationStore instances.Store          `json:"-"`
+	messageStore      instances.Store          `json:"-"`
+	isDebug           bool                     `json:"-"`
 }
 
 var ia *Ia
@@ -254,55 +257,51 @@ func (s *Ia) setSkill(agentName string, skill Skill) (*Agent, error) {
 }
 
 /**
-* SetContext - Establece el contexto del agente
-* @param tag string, context string
-* @return error
+* addConversation
+* @param conversation *Conversation
 **/
-func (s *Ia) SetContext(tag, context string) error {
-	result, err := s.setContext(tag, context)
-	if err != nil {
-		return err
-	}
+func (s *Ia) addConversation(conversation *Conversation) {
+	s.muConversations.Lock()
+	defer s.muConversations.Unlock()
 
-	event.Publish(EVENT_AGENT_SET_CONTEXT, et.Json{
-		"tag":     tag,
-		"context": context,
-	})
-	return result.save()
+	s.Conversations[conversation.ID] = conversation
 }
 
 /**
-* SetModel - Establece el modelo del agente
-* @param tag string, model string
-* @return error
+* getConversation
+* @param convID string
+* @return (*Conversation, bool)
 **/
-func (s *Ia) SetModel(tag, model string) error {
-	result, err := s.setModel(tag, model)
-	if err != nil {
-		return err
+func (s *Ia) getConversation(convID string) (*Conversation, bool) {
+	s.muConversations.RLock()
+	conversation, exists := s.Conversations[convID]
+	s.muConversations.RUnlock()
+	if !exists {
+		return nil, false
 	}
 
-	event.Publish(EVENT_AGENT_SET_MODEL, et.Json{
-		"tag":   tag,
-		"model": model,
-	})
-	return result.save()
+	return conversation, true
 }
 
 /**
 * Embed - Genera un embedding
-* @param tag string, text string
+* @param ctx context.Context, agentName string, text string
 * @return ([]float64, error)
 **/
-func (s *Ia) Embed(agent string, text string) ([]float64, error) {
-	result, ok := s.agents[tag]
-	if !ok {
-		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, tag)
+func (s *Ia) Embed(ctx context.Context, agentName string, text string) ([]float64, error) {
+	if !utility.ValidStr(agentName, 0, []string{""}) {
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "agentName")
+	}
+	if !utility.ValidStr(text, 1, []string{}) {
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "text")
 	}
 
-	ctx := context.Background()
-	client := result.client
+	result, exists := s.getAgent(agentName)
+	if !exists {
+		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, agentName)
+	}
 
+	client := result.client
 	resp, err := client.Embeddings.New(ctx, openai.EmbeddingNewParams{
 		Model: openai.EmbeddingModelTextEmbedding3Small,
 		Input: openai.EmbeddingNewParamsInputUnion{
@@ -317,29 +316,32 @@ func (s *Ia) Embed(agent string, text string) ([]float64, error) {
 }
 
 /**
-* Conversations
-* @param agent string, convID string, prompt string
+* Conversation
+* @param ctx context.Context, agentName string, convID string, prompt string
 * @return (et.Json, error)
 **/
-func (s *Ia) Conversations(agent, convID, prompt string) (et.Json, error) {
-	if !utility.ValidStr(agent, 1, []string{}) {
-		return et.Json{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "agent")
+func (s *Ia) Conversation(ctx context.Context, agentName, convID, prompt string) (et.Json, error) {
+	if !utility.ValidStr(agentName, 0, []string{""}) {
+		return et.Json{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "agentName")
 	}
-
 	if !utility.ValidStr(prompt, 1, []string{}) {
 		return et.Json{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "prompt")
 	}
 
-	ag, ok := s.agents[agent]
-	if !ok {
-		return et.Json{}, fmt.Errorf(MSG_AGENT_NOT_FOUND, agent)
+	result, exists := s.getAgent(agentName)
+	if !exists {
+		return et.Json{}, fmt.Errorf(MSG_AGENT_NOT_FOUND, agentName)
 	}
 
-	response, err := ag.conversations(convID, prompt)
+	response, err := result.conversation(ctx, convID, prompt)
 	if err != nil {
-		return response, err
+		return et.Json{}, err
 	}
 
-	return response, nil
+	conversation, exists := s.getConversation(response.ConvID)
+	if !exists {
+		return et.Json{}, fmt.Errorf("conversation not found")
+	}
 
+	return conversation, nil
 }

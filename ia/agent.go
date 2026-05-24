@@ -198,12 +198,30 @@ func (s *Agent) addSkill(skill Skill) *Agent {
 	return s
 }
 
+type ConversationResult struct {
+	ConvID string `json:"conv_id"`
+	Text   string `json:"text"`
+	Error  string `json:"error"`
+}
+
 /**
-* conversations
-* @param ctx context.Context, convID, prompt string
-* @return (string, string, error)
+* ToJson
+* @return et.Json
 **/
-func (s *Agent) conversations(ctx context.Context, convID, prompt string) (et.Json, error) {
+func (s *ConversationResult) ToJson() et.Json {
+	return et.Json{
+		"conv_id": s.ConvID,
+		"text":    s.Text,
+		"error":   s.Error,
+	}
+}
+
+/**
+* conversation
+* @param ctx context.Context, convID, prompt string
+* @return (ConversationResult, error)
+**/
+func (s *Agent) conversation(ctx context.Context, convID, prompt string) (ConversationResult, error) {
 	if convID == "" {
 		conv, _ := s.client.Conversations.New(ctx, conversations.ConversationNewParams{})
 		convID = conv.ID
@@ -223,13 +241,14 @@ func (s *Agent) conversations(ctx context.Context, convID, prompt string) (et.Js
 		},
 	})
 	if err != nil {
-		return et.Json{
-			"conv_id": convID,
+		return ConversationResult{
+			ConvID: convID,
+			Error:  err.Error(),
 		}, err
 	}
 
-	return et.Json{
-		"conv_id":  convID,
-		"response": result.OutputText(),
+	return ConversationResult{
+		ConvID: convID,
+		Text:   result.OutputText(),
 	}, nil
 }

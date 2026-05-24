@@ -6,6 +6,7 @@ var (
 	MSG_AGENT_NOT_FOUND       = "agente %s no encontrado"
 	MSG_AGENT_ALREADY_EXISTS  = "agente %s ya existe"
 	MSG_PARTICIPANT_NOT_FOUND = "participant not found"
+	MSG_SENDER_NOT_FOUND      = "sender not found"
 )
 
 func init() {
@@ -15,5 +16,6 @@ func init() {
 		MSG_AGENT_NOT_FOUND = "agente %s no encontrado"
 		MSG_AGENT_ALREADY_EXISTS = "agente %s ya existe"
 		MSG_PARTICIPANT_NOT_FOUND = "participant not found"
+		MSG_SENDER_NOT_FOUND = "sender not found"
 	}
 }

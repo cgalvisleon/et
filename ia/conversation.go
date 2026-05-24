@@ -199,8 +199,8 @@ func (s *Conversation) save() error {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	if s.ia.store != nil {
-		err := s.ia.store.Set(s.ID, "conversations", s)
+	if s.ia.conversationStore != nil {
+		err := s.ia.conversationStore.Set(s.ID, "conversations", s)
 		if err != nil {
 			return err
 		}
@@ -216,8 +216,8 @@ func (s *Conversation) save() error {
 * @return error
 **/
 func (s *Conversation) delete() error {
-	if s.ia != nil && s.ia.store != nil {
-		err := s.ia.store.Delete(s.ID)
+	if s.ia != nil && s.ia.conversationStore != nil {
+		err := s.ia.conversationStore.Delete(s.ID)
 		if err != nil {
 			return err
 		}
@@ -308,148 +308,34 @@ func (s *Conversation) getParticipant(to string) (*Participant, bool) {
 }
 
 /**
-* setMessage
-* @param to string, tp TypeMessage, content string
-* @return error
+* SetTextMessage
+* @param to string, content string
+* @return (*Message, error)
 **/
-func (s *Conversation) setMessage(to string, tp TypeMessage, content string) (et.Item, error) {
+func (s *Conversation) SetTextMessage(to, content string) (*Message, error) {
+	if s.ia.sender == nil {
+		return nil, fmt.Errorf(MSG_SENDER_NOT_FOUND)
+	}
+
 	participant, exists := s.getParticipant(to)
 	if !exists {
-		return et.Item{}, fmt.Errorf(MSG_PARTICIPANT_NOT_FOUND)
+		return nil, fmt.Errorf(MSG_PARTICIPANT_NOT_FOUND)
 	}
 
-	ms := newMessage(s.ia, s.ID, participant.UserID, tp, content)
-	ms.setStatus(participant.UserID, Sent)
+	ms := newMessage(s.ia, s.ID, participant.UserID, participant.To, Text, content)
+	ms.setStatus(Sent)
 	s.Messages = append(s.Messages, ms)
 	s.LastMessage = ms
-	if s.ia.store != nil {
-		err := s.ia.store.Set(ms.ID, "messages", ms)
-		if err != nil {
-			return et.Item{}, err
-		}
-	}
-
-	result, err := ms.ToJson()
+	_, err := s.ia.sender.SendTextMessage(ms.To, ms.Content)
 	if err != nil {
-		return et.Item{}, err
+		ms.setStatus(Failed)
+		return nil, err
 	}
 
-	return et.Item{
-		Ok:     true,
-		Result: result,
-	}, nil
-}
-
-/**
-* getConversation
-* @param id string, tp TypeConversation
-* @return (*Conversation, error)
-**/
-func (s *Conversations) getConversation(id string, tp TypeConversation) (*Conversation, error) {
-	if id == "" {
-		id = reg.ULID()
-	}
-
-	var result *Conversation
-	if s.store != nil {
-		exists, err := s.store.Get(id, &result)
-		if err != nil {
-			return nil, err
-		}
-		if exists {
-			result.owner = s
-			return result, nil
-		}
-	}
-
-	now := timezone.Now()
-	resut := &Conversation{
-		CreatedAt:    now,
-		UpdatedAt:    now,
-		ID:           id,
-		Type:         tp,
-		Participants: map[string]*Participant{},
-		Messages:     []*Message{},
-		LastMessage:  &Message{},
-		owner:        s,
-	}
-
-	if s.store != nil {
-		err := s.store.Set(id, "conversations", resut)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return resut, nil
-}
-
-/**
-* getParticipant
-* @param phone string
-* @return (et.Json, error)
-**/
-func (s *Conversations) getParticipant(phone string) (et.Json, error) {
-	var result et.Json
-	id := fmt.Sprintf("%s:%s", s.participantPrefix, phone)
-	if s.store != nil {
-		exists, err := s.store.Get(id, &result)
-		if err != nil {
-			return result, err
-		}
-		if exists {
-			return result, nil
-		}
-	}
-
-	now := timezone.Now()
-	result = et.Json{
-		"created_at": now,
-		"updated_at": now,
-		"id":         id,
-		"phone":      phone,
-	}
-
-	err := s.store.Set(id, s.participantPrefix, result)
+	err = ms.setStatus(Delivered)
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 
-	return result, nil
-}
-
-/**
-* SetMessage
-* @param convID string, to string, tpContent TypeMessage, content string
-* @return et.Item, error
-**/
-func (s *Conversations) SetMessage(convID, to string, tpContent TypeMessage, content string) (et.Item, error) {
-	result, err := s.getConversation(convID, Direct)
-	if err != nil {
-		return et.Item{}, err
-	}
-
-	return result.setMessage(to, tpContent, content)
-}
-
-/**
-* StatusMessage
-* @param messageId string, userId string, status StatusMessage
-* @return error
-**/
-func (s *Conversations) StatusMessage(messageId string, userId string, status StatusMessage) error {
-	var ms *Message
-
-	if s.store != nil {
-		exists, err := s.store.Get(messageId, &ms)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			return fmt.Errorf("message not found")
-		}
-	}
-
-	ms.setStatus(userId, status)
-	return s.store.Set(messageId, "messages", ms)
+	return ms, nil
 }

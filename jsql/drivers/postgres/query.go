@@ -12,10 +12,10 @@ import (
 
 /**
 * pgFromRef: Returns the qualified table reference (schema.name) for FROM/JOIN clauses.
-* @param f *jsql.From
+* @param f *jsql.F
 * @return string
 **/
-func pgFromRef(f *jsql.From) string {
+func pgFromRef(f *jsql.F) string {
 	if f.Schema != "" {
 		return fmt.Sprintf("%s.%s", f.Schema, f.Name)
 	}
@@ -310,6 +310,19 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 			Rows:   rollup.Rows,
 		}
 	}
+	if fld.TypeColumn == jsql.CALC {
+		if fld.From == nil {
+			return "", false
+		}
+		if fld.From.Model == nil {
+			return "", false
+		}
+		calc, ok := fld.From.Model.Calcs[fld.Name]
+		if !ok {
+			return "", false
+		}
+		query.Calcs[fld.Name] = calc
+	}
 
 	return "", false
 }
@@ -364,6 +377,32 @@ func pgSelects(query *jsql.Query) []string {
 }
 
 /**
+* pgFrom: Generates the SQL FROM string for the given Query descriptor.
+* @param query *jsql.Query
+* @return strings.Builder
+**/
+func pgFrom(query *jsql.Query) []string {
+	result := []string{}
+	primary := query.Froms[0]
+	ref := pgFromRef(primary)
+	if ref == primary.As {
+		result = append(result, fmt.Sprintf("\nFROM %s", ref))
+	} else {
+		result = append(result, fmt.Sprintf("\nFROM %s AS %s", ref, primary.As))
+	}
+	for _, from := range query.Froms[1:] {
+		ref := pgFromRef(from)
+		if ref == from.As {
+			result = append(result, fmt.Sprintf(",\n%s", ref))
+		} else {
+			result = append(result, fmt.Sprintf(",\n%s AS %s", ref, from.As))
+		}
+	}
+
+	return result
+}
+
+/**
 * Query: Generates the SQL SELECT string for the given Query descriptor.
 * @param query *jsql.Query
 * @return string, error
@@ -377,16 +416,19 @@ func (s *Postgres) Query(query *jsql.Query) (string, error) {
 	primary := query.Froms[0]
 
 	var sb strings.Builder
-	// SELECT
-	selects := pgSelects(query)
-	sb.WriteString("SELECT\n")
-	sb.WriteString(strings.Join(selects, ",\n"))
+	if query.IsExists {
+		// EXISTS
+		sb.WriteString("SELECT 1")
+	} else {
+		// SELECT
+		selects := pgSelects(query)
+		sb.WriteString("SELECT\n")
+		sb.WriteString(strings.Join(selects, ",\n"))
+	}
 
 	// FROM
-	sb.WriteString(fmt.Sprintf("\nFROM %s AS %s", pgFromRef(primary), primary.As))
-	for _, from := range query.Froms[1:] {
-		sb.WriteString(fmt.Sprintf(", %s AS %s", pgFromRef(from), from.As))
-	}
+	from := pgFrom(query)
+	sb.WriteString(strings.Join(from, ",\n"))
 
 	// JOINs
 	for _, join := range query.Joins {
@@ -451,6 +493,13 @@ func (s *Postgres) Query(query *jsql.Query) (string, error) {
 	}
 	if query.Offset > 0 {
 		sb.WriteString(fmt.Sprintf("\nOFFSET %d", query.Offset))
+	}
+
+	if query.IsExists {
+		// For EXISTS queries, we only need a dummy select
+		sql := fmt.Sprintf("SELECT EXISTS(%s)", sb.String())
+		sb.Reset()
+		sb.WriteString(sql)
 	}
 
 	sb.WriteString(";")

@@ -1,14 +1,17 @@
 package workflow
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
+	"maps"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/resilience"
 	"github.com/cgalvisleon/et/timezone"
 )
@@ -16,62 +19,140 @@ import (
 type Status string
 
 const (
-	Pending Status = "pending"
-	Running Status = "running"
-	Done    Status = "done"
-	Failed  Status = "failed"
-	Loss    Status = "loss"
-	Cancel  Status = "cancel"
+	PENDING  Status = "pending"
+	RUNNING  Status = "running"
+	ROLLBACK Status = "rollback"
+	DONE     Status = "done"
+	FAILED   Status = "failed"
+	CANCEL   Status = "cancel"
 )
 
 var FlowStatusList map[Status]bool = map[Status]bool{
-	Pending: true,
-	Running: true,
-	Done:    true,
-	Failed:  true,
-	Loss:    true,
-	Cancel:  true,
+	PENDING:  true,
+	RUNNING:  true,
+	ROLLBACK: true,
+	DONE:     true,
+	FAILED:   true,
+	CANCEL:   true,
 }
 
 type Instance struct {
-	*Flow
-	CreatedAt  time.Time                       `json:"created_at"`
-	UpdatedAt  time.Time                       `json:"updated_at"`
-	Tag        string                          `json:"tag"`
-	ID         string                          `json:"id"`
-	CreatedBy  string                          `json:"created_by"`
-	UpdatedBy  string                          `json:"updated_by"`
-	Current    int                             `json:"current"`
-	Ctx        et.Json                         `json:"ctx"`
-	Ctxs       map[int]et.Json                 `json:"ctxs"`
-	Results    map[int]*Result                 `json:"results"`
-	Rollbacks  map[int]*Result                 `json:"rollbacks"`
-	Params     et.Json                         `json:"params"`
-	Traces     []et.Json                       `json:"traces"`
-	Status     Status                          `json:"status"`
-	DoneAt     time.Time                       `json:"done_at"`
-	Tags       et.Json                         `json:"tags"`
-	WorkerHost string                          `json:"worker_host"`
-	Resilence  map[string]*resilience.Instance `json:"resilence"`
-	owner      *WorkFlow                       `json:"-"`
-	done       bool                            `json:"-"`
-	goTo       int                             `json:"-"`
-	err        error                           `json:"-"`
-	isNew      bool                            `json:"-"`
-	isDebug    bool                            `json:"-"`
+	CreatedAt   time.Time            `json:"created_at"`
+	UpdatedAt   time.Time            `json:"updated_at"`
+	ID          string               `json:"id"`
+	Tag         string               `json:"tag"`
+	CreatedBy   string               `json:"created_by"`
+	UpdatedBy   string               `json:"updated_by"`
+	Ctx         et.Json              `json:"ctx"`
+	Ctxs        map[int]et.Json      `json:"ctxs"`
+	Results     map[int]*Result      `json:"results"`
+	Rollbacks   map[int]*Result      `json:"rollbacks"`
+	Params      et.Json              `json:"params"`
+	Traces      []et.Json            `json:"traces"`
+	CheckList   []*CheckList         `json:"check_list"`
+	Status      Status               `json:"status"`
+	DoneAt      time.Time            `json:"done_at"`
+	Tags        et.Json              `json:"tags"`
+	Resilence   *resilience.Instance `json:"resilence"`
+	Steper      *Steper              `json:"steeper"`
+	CurrentStep int                  `json:"current_step"`
+	IsDone      bool                 `json:"is_done"`
+	IsStop      bool                 `json:"is_stop"`
+	step        *Step                `json:"-"`
+	goToStep    bool                 `json:"-"`
+	flow        *Flow                `json:"-"`
+	workflow    *WorkFlow            `json:"-"`
+	isDebug     bool                 `json:"-"`
+	mu          sync.Mutex           `json:"-"`
 }
 
 /**
-* Serialize
-* @return ([]byte, error)
+* newInstance
+* @param steper *Steper, userName string
+* @return *Instance
+ */
+func newInstance(steper *Steper, id, userName string) *Instance {
+	if id == "" {
+		id = reg.GenUUId(steper.Tag)
+	}
+	now := timezone.Now()
+	return &Instance{
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		ID:          id,
+		Tag:         steper.flow.Tag,
+		CreatedBy:   userName,
+		UpdatedBy:   userName,
+		Ctx:         et.Json{},
+		Ctxs:        make(map[int]et.Json),
+		Results:     make(map[int]*Result),
+		Rollbacks:   make(map[int]*Result),
+		Params:      et.Json{},
+		Traces:      []et.Json{},
+		CheckList:   []*CheckList{},
+		Status:      PENDING,
+		Tags:        et.Json{},
+		Steper:      steper,
+		CurrentStep: -1,
+		IsDone:      false,
+		IsStop:      false,
+		goToStep:    false,
+		flow:        steper.flow,
+		workflow:    steper.flow.workflow,
+		isDebug:     steper.flow.workflow.isDebug,
+		mu:          sync.Mutex{},
+	}
+}
+
+/**
+* save
+* @return error
 **/
-func (s *Instance) Serialize() ([]byte, error) {
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return nil, err
+func (s *Instance) save() error {
+	data := s.ToJson()
+	if s.isDebug {
+		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	return bt, nil
+	if s.workflow != nil && s.workflow.store != nil {
+		err := s.workflow.store.Set(s.ID, s.Tag, s)
+		if err != nil {
+			return err
+		}
+	}
+
+	event.Publish(EVENT_INSTANCE_SET, data)
+
+	return nil
+}
+
+/**
+* delete
+* @return error
+**/
+func (s *Instance) delete() error {
+	if s.workflow != nil && s.workflow.store != nil {
+		err := s.workflow.store.Delete(s.Tag)
+		if err != nil {
+			return err
+		}
+	}
+
+	event.Publish(EVENT_INSTANCE_DELETE, et.Json{
+		"id": s.ID,
+	})
+
+	return nil
+}
+
+/**
+* up
+* @param flow *Flow
+**/
+func (s *Instance) up(flow *Flow) {
+	s.flow = flow
+	s.workflow = flow.workflow
+	s.isDebug = flow.workflow.isDebug
 }
 
 /**
@@ -79,15 +160,26 @@ func (s *Instance) Serialize() ([]byte, error) {
 * @return et.Json
 **/
 func (s *Instance) ToJson() et.Json {
-	bt, err := s.Serialize()
-	if err != nil {
-		return et.Json{}
-	}
-
-	var result et.Json
-	err = json.Unmarshal(bt, &result)
-	if err != nil {
-		return et.Json{}
+	result := et.Json{
+		"created_at":   s.CreatedAt,
+		"updated_at":   s.UpdatedAt,
+		"id":           s.ID,
+		"tag":          s.Tag,
+		"created_by":   s.CreatedBy,
+		"updated_by":   s.UpdatedBy,
+		"ctx":          s.Ctx,
+		"ctxs":         s.Ctxs,
+		"results":      s.Results,
+		"rollbacks":    s.Rollbacks,
+		"params":       s.Params,
+		"traces":       s.Traces,
+		"check_list":   s.CheckList,
+		"status":       s.Status,
+		"tags":         s.Tags,
+		"steper":       s.Steper,
+		"current_step": s.CurrentStep,
+		"is_done":      s.IsDone,
+		"is_stop":      s.IsStop,
 	}
 
 	for k, v := range s.Tags {
@@ -106,108 +198,38 @@ func (s *Instance) ToString() string {
 }
 
 /**
-* Save
-* @return error
-**/
-func (s *Instance) Save() error {
-	data := s.ToJson()
-	event.Publish(EVENT_WORKFLOW_STATUS, data)
-
-	if s.isDebug {
-		logs.Log(packageName, "save:", data.ToString())
-	}
-
-	if s.owner != nil && s.owner.setInstance != nil {
-		return s.owner.setInstance(s.ID, s.Tag, s)
-	}
-
-	return nil
-}
-
-/**
-* setStatus
-* @param status FlowStatus
-* @return error
-**/
-func (s *Instance) setStatus(status Status) error {
-	s.Status = status
-	s.UpdatedAt = timezone.Now()
-	switch s.Status {
-	case Done:
-		s.DoneAt = s.UpdatedAt
-		s.done = true
-	case Failed:
-		errMsg := ""
-		if s.err != nil {
-			errMsg = s.err.Error()
-		}
-		logs.Errorf(packageName, MSG_INSTANCE_FAILED, s.ID, s.Tag, s.Status, s.Current, errMsg)
-	default:
-		logs.Logf(packageName, MSG_INSTANCE_STATUS, s.ID, s.Tag, s.Status, s.Current)
-	}
-
-	err := s.Save()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-/**
-* setResult
-* @param result et.Json, err error
-* @return et.Json, error
-**/
-func (s *Instance) setResult(result et.Json, err error) (et.Json, error) {
-	s.err = err
-	errMessage := ""
-	if s.err != nil {
-		errMessage = s.err.Error()
-	}
-
-	attempt := len(s.Resilence)
-	res := &Result{
-		Step:    s.Current,
-		Ctx:     s.Ctx.Clone(),
-		Attempt: attempt,
-		Result:  result,
-		Error:   errMessage,
-	}
-	s.Results[s.Current] = res
-
-	return result, err
-}
-
-/**
-* SetTag
+* setTag
 * @param key string, value interface{}
-* @return error
+* @return et.Json
 **/
-func (s *Instance) SetTag(key string, value interface{}) error {
+func (s *Instance) SetTag(key string, value interface{}) et.Json {
 	s.Tags[key] = value
-	return s.Save()
+	return s.Tags
 }
 
 /**
-* PutTag
+* putTag
 * @param tags et.Json
+* @return et.Json
+**/
+func (s *Instance) putTag(tags et.Json) et.Json {
+	maps.Copy(s.Tags, tags)
+	return s.Tags
+}
+
+/**
+* setTrace
+* @param step int, result et.Json, err error
 * @return error
 **/
-func (s *Instance) PutTag(tags et.Json) error {
-	for k, v := range tags {
-		s.Tags[k] = v
-	}
-	return s.Save()
-}
-
-/**
-* GetTag
-* @param key string
-* @return interface{}
-**/
-func (s *Instance) GetTag(key string) interface{} {
-	return s.Tags[key]
+func (s *Instance) setTrace(step int, result et.Json, err error) error {
+	s.Traces = append(s.Traces, et.Json{
+		"step":   step,
+		"ctx":    s.Ctx,
+		"result": result,
+		"error":  err,
+	})
+	return s.save()
 }
 
 /**
@@ -216,88 +238,17 @@ func (s *Instance) GetTag(key string) interface{} {
 **/
 func (s *Instance) SetParam(key string, value interface{}) (et.Json, error) {
 	s.Params[key] = value
-	err := s.Save()
-	if err != nil {
-		return s.Params, err
-	}
-
-	return s.Params, nil
+	return s.Params, s.save()
 }
 
 /**
 * PutParam
 * @param value et.Json
-* @return et.Json, error
-**/
-func (s *Instance) PutParam(value et.Json) (et.Json, error) {
-	for k, v := range value {
-		s.Params[k] = v
-	}
-	err := s.Save()
-	if err != nil {
-		return s.Params, err
-	}
-
-	return s.Params, nil
-}
-
-/**
-* GetParam
-* @param key string
-* @return interface{}
-**/
-func (s *Instance) GetParam(key string) interface{} {
-	return s.Params[key]
-}
-
-/**
-* setTrace
-* @param step int, ctx et.Json, err error
 * @return error
 **/
-func (s *Instance) setTrace(step int, result et.Json, err error) error {
-	ctx := s.getCtx(step)
-	s.Traces = append(s.Traces, et.Json{
-		"step":   step,
-		"ctx":    ctx,
-		"result": result,
-		"error":  err,
-	})
-	er := s.Save()
-	if er != nil {
-		return er
-	}
-
-	return err
-}
-
-/**
-* GetTraces
-* @param idx int
-* @return (et.Json, error)
-**/
-func (s *Instance) GetTraces(idx int) (et.Json, error) {
-	if idx < 0 || idx >= len(s.Traces) {
-		return et.Json{}, fmt.Errorf("trace not found")
-	}
-
-	return s.Traces[idx], nil
-}
-
-/**
-* GetTraceByStep
-* @params step int
-* @return []et.Json
-**/
-func (s *Instance) GetTraceByStep(step int) []et.Json {
-	result := []et.Json{}
-	for _, trace := range s.Traces {
-		if trace["step"] == step {
-			result = append(result, trace)
-		}
-	}
-
-	return result
+func (s *Instance) PutParam(value et.Json) error {
+	maps.Copy(s.Params, value)
+	return s.save()
 }
 
 /**
@@ -306,19 +257,120 @@ func (s *Instance) GetTraceByStep(step int) []et.Json {
 * @return error
 **/
 func (s *Instance) SetCheckList(tag string, ok bool, data et.Json) error {
-	idx := slices.IndexFunc(s.CheckList, func(check *CheckList) bool { return check.Tag == tag })
+	idx := slices.IndexFunc(s.flow.CheckList, func(check *CheckList) bool { return check.Tag == tag })
 	if idx != -1 {
-		s.CheckList[idx].Ok = ok
-		s.CheckList[idx].Data = data
-		return s.Save()
+		check := s.flow.CheckList[idx]
+		s.CheckList = append(s.CheckList, &CheckList{
+			Tag:         check.Tag,
+			Description: check.Description,
+			Ok:          ok,
+			Data:        data,
+		})
+		return s.save()
 	}
-
-	return fmt.Errorf("check list not found")
+	return fmt.Errorf(MSG_CHECK_LIST_NOT_FOUND)
 }
 
 /**
-* @param ctx et.Json
+* setStatus
+* @param status FlowStatus
 * @return error
+**/
+func (s *Instance) setStatus(status Status) error {
+	if s.Status == status {
+		return nil
+	}
+
+	s.Status = status
+	s.UpdatedAt = timezone.Now()
+	switch s.Status {
+	case DONE:
+		s.DoneAt = s.UpdatedAt
+		s.IsDone = true
+	default:
+		logs.Logf(packageName, MSG_INSTANCE_STATUS, s.ID, s.Tag, s.Status, s.CurrentStep)
+	}
+
+	return s.save()
+}
+
+/**
+* setResult
+* @param result et.Json, err error
+* @return et.Json, error
+**/
+func (s *Instance) setResult(result et.Json, err error) (et.Json, error) {
+	errMessage := ""
+	if err != nil {
+		errMessage = err.Error()
+	}
+
+	attempt := 0
+	if s.Resilence != nil {
+		attempt = s.Resilence.Attempt
+	}
+	res := &Result{
+		Step:    s.CurrentStep,
+		Ctx:     s.Ctx,
+		Attempt: attempt,
+		Result:  result,
+		Error:   errMessage,
+	}
+	s.Results[s.CurrentStep] = res
+	if err != nil {
+		s.setStatus(FAILED)
+		logs.Logf(packageName, MSG_INSTANCE_ERROR, s.ID, s.Tag, s.CurrentStep, err.Error())
+	}
+
+	return result, err
+}
+
+/**
+* setRollback
+* @param result et.Json, err error
+* @return et.Json, error
+**/
+func (s *Instance) setRollback(result et.Json, err error) (et.Json, error) {
+	errMessage := ""
+	if err != nil {
+		errMessage = err.Error()
+	}
+
+	attempt := 0
+	if s.Resilence != nil {
+		attempt = s.Resilence.Attempt
+	}
+	res := &Result{
+		Step:    s.CurrentStep,
+		Ctx:     s.Ctx,
+		Attempt: attempt,
+		Result:  result,
+		Error:   errMessage,
+	}
+	s.Rollbacks[s.CurrentStep] = res
+	if err != nil {
+		s.setStatus(FAILED)
+		logs.Logf(packageName, MSG_INSTANCE_ROLLBACK_ERROR, s.ID, s.Tag, s.CurrentStep, err.Error())
+	}
+
+	return result, err
+}
+
+/**
+* SetCtx
+* @param ctx et.Json, step int
+* @return et.Json
+**/
+func (s *Instance) SetCtx(ctx et.Json, step int) et.Json {
+	maps.Copy(s.Ctx, ctx)
+	s.Ctxs[step] = s.Ctx.Clone()
+	return s.Ctx
+}
+
+/**
+* getCtx
+* @param idx int
+* @return et.Json
 **/
 func (s *Instance) getCtx(idx int) et.Json {
 	result, ok := s.Ctxs[idx]
@@ -330,139 +382,69 @@ func (s *Instance) getCtx(idx int) et.Json {
 }
 
 /**
-* setCtx
-* @param ctx et.Json
-**/
-func (s *Instance) setCtx(ctx et.Json) et.Json {
-	for k, v := range ctx {
-		s.Ctx[k] = v
-	}
-
-	s.Ctxs[s.Current] = ctx.Clone()
-
-	return s.Ctx
-}
-
-/**
-* SetCtx
-* @param ctx et.Json
-* @return error
-**/
-func (s *Instance) SetCtx(ctx et.Json) error {
-	s.setCtx(ctx)
-	return s.Save()
-}
-
-/**
-* setDone
-* @param result et.Json, err error
-* @return et.Json, error
-**/
-func (s *Instance) setDone(result et.Json, err error) (et.Json, error) {
-	s.setResult(result, err)
-	errStatus := s.setStatus(Done)
-	if errStatus != nil {
-		return result, errStatus
-	}
-
-	return result, err
-}
-
-/**
-* setFailed
-* @param result et.Json, err error
-**/
-func (s *Instance) setFailed(result et.Json, err error) error {
-	s.setResult(result, err)
-	errStatus := s.setStatus(Failed)
-	if errStatus != nil {
-		return errStatus
-	}
-
-	return nil
-}
-
-/**
-* SetNextStep
-* @param step int
-* @return error
-**/
-func (s *Instance) SetNextStep(step int) error {
-	s.Current = step
-	err := s.setStatus(s.Status)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-/**
 * setStop
-* @param result et.Json, err error
-* @return et.Json, error
+* @param result et.Json
+* @return (et.Json, error)
 **/
-func (s *Instance) setStop(result et.Json, err error) (et.Json, error) {
-	s.setResult(result, err)
-	s.Current++
-	errStatus := s.setStatus(Pending)
-	if errStatus != nil {
-		return result, errStatus
+func (s *Instance) setStop(result et.Json) (et.Json, error) {
+	err := s.setStatus(PENDING)
+	if err != nil {
+		return result, err
 	}
 
-	return result, err
-}
-
-/**
-* setNext
-* @return error
-**/
-func (s *Instance) setNext(result et.Json, err error) error {
-	s.setResult(result, err)
-	s.Current++
-	errStatus := s.setStatus(s.Status)
-	if errStatus != nil {
-		return errStatus
-	}
-
-	return nil
-}
-
-/**
-* setGoto
-* @param step int, result et.Json, err error
-* @return et.Json, error
-**/
-func (s *Instance) setGoto(step int, message string, result et.Json, err error) error {
-	if step == -1 {
-		return nil
-	}
-
-	s.setResult(result, err)
-	s.Current = step
-	s.goTo = -1
-	errStatus := s.setStatus(s.Status)
-	if errStatus != nil {
-		return errStatus
-	}
-
-	logs.Logf(packageName, MSG_INSTANCE_GOTO, s.ID, s.Tag, step, message)
-	return nil
+	return result, nil
 }
 
 /**
 * startResilence
+* @return (bool, error)
+**/
+func (s *Instance) startResilence() (et.Json, error) {
+	if s.flow.TotalAttempts == 0 {
+		return et.Json{}, nil
+	}
+
+	description := fmt.Sprintf("flow: %s,  %s", s.flow.Name, s.flow.Description)
+	s.Resilence = s.workflow.resilience.Run(s.Tag, description, s.flow.TotalAttempts, s.flow.TimeAttempts, s.Tags, s.flow.Team, s.flow.Level, s.run, s.Ctx)
+	if s.Resilence.Error != "" {
+		return et.Json{}, errors.New(s.Resilence.Error)
+	}
+	result, ok := s.Resilence.Result.(et.Json)
+	if !ok {
+		return et.Json{}, nil
+	}
+
+	return result, nil
+}
+
+/**
+* SetCurrentStep
+* @param step int
+**/
+func (s *Instance) SetCurrentStep(step int) {
+	if step < 0 {
+		step = 0
+	}
+	s.CurrentStep = step - 1
+}
+
+/**
+* Next
 * @return bool
 **/
-func (s *Instance) startResilence() bool {
-	if s.TotalAttempts == 0 {
+func (s *Instance) Next() bool {
+	if s.isStop() {
 		return false
 	}
 
-	description := fmt.Sprintf("flow: %s,  %s", s.Name, s.Description)
-	instance := s.owner.resilience.Run(s.Tag, description, s.TotalAttempts, s.TimeAttempts, s.Tags, s.Team, s.Level, s.run, s.Ctx)
-	s.Resilence[instance.ID] = instance
-	return true
+	s.CurrentStep++
+	step, ok := s.Steper.GetStep(s.CurrentStep)
+	if !ok {
+		return false
+	}
+
+	s.step = step
+	return s.step != nil
 }
 
 /**
@@ -473,116 +455,48 @@ func (s *Instance) startResilence() bool {
 func (s *Instance) run(ctx et.Json) (et.Json, error) {
 	var err error
 	defer func() {
-		s.setTrace(s.Current, ctx, err)
+		s.setTrace(s.CurrentStep, ctx, err)
 	}()
 
-	if s.Status == Done {
+	if s.Status == DONE {
 		err = fmt.Errorf(MSG_INSTANCE_ALREADY_DONE, s.ID)
 		return et.Json{}, err
-	} else if s.Status == Running && s.isNew {
+	} else if s.Status == RUNNING {
 		err = fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING, s.ID)
 		return et.Json{}, err
-	} else if s.Status == Cancel {
+	} else if s.Status == ROLLBACK {
+		err = fmt.Errorf(MSG_INSTANCE_ROLLBACK, s.ID)
+		return et.Json{}, err
+	} else if s.Status == CANCEL {
 		err = fmt.Errorf(MSG_INSTANCE_CANCEL, s.ID)
 		return et.Json{}, err
-	} else if s.Status == Loss {
-		err = fmt.Errorf(MSG_INSTANCE_LOSS, s.ID)
-		return et.Json{}, err
 	}
 
-	for s.Current < len(s.Steps) {
-		step := s.Steps[s.Current]
-		ctx = s.setCtx(ctx)
-		ctx, err = step.run(s, ctx)
+	var result et.Json
+	for s.Next() {
+		ctx = s.SetCtx(ctx, s.CurrentStep)
+		result, err = s.step.Run(s, ctx)
 		if err != nil {
-			return s.rollback(ctx, err)
-		}
-
-		if s.done {
-			return s.setDone(ctx, err)
-		}
-
-		if s.goTo != -1 {
-			s.setGoto(s.goTo, MSG_INSTANCE_GOTO_USER_DECISION, ctx, err)
-			continue
-		}
-
-		if step.Stop {
-			return s.setStop(ctx, err)
-		}
-
-		if step.Expression != "" {
-			ok, err := step.evaluate(ctx, s)
-			if err != nil {
-				return s.rollback(ctx, err)
+			if s.flow.TotalAttempts != 0 {
+				result, err = s.startResilence()
+				if err == nil {
+					return result, nil
+				}
 			}
-
-			if ok {
-				s.setGoto(step.YesGoTo, MSG_INSTANCE_EXPRESSION_TRUE, ctx, err)
-			} else {
-				s.setGoto(step.NoGoTo, MSG_INSTANCE_EXPRESSION_FALSE, ctx, err)
-			}
+			return s.rollback(ctx)
 		}
 
-		if s.Current == len(s.Steps)-1 {
-			return s.setDone(ctx, err)
+		if s.IsDone {
+			return result, nil
 		}
 
-		s.setNext(ctx, err)
-	}
+		if s.isStop() || s.step.Stop {
+			return s.setStop(result)
+		}
 
-	return ctx, err
-}
-
-/**
-* rollback
-* @param result et.Json, err error
-* @return et.Json, error
-**/
-func (s *Instance) rollback(result et.Json, err error) (et.Json, error) {
-	s.setFailed(result, err)
-	if s.startResilence() {
-		return result, err
-	}
-
-	if s.Status == Done {
-		return result, fmt.Errorf(MSG_INSTANCE_ALREADY_DONE, s.ID)
-	} else if s.Status == Running {
-		return result, fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING, s.ID)
-	} else if s.Status == Pending {
-		return result, fmt.Errorf(MSG_INSTANCE_PENDING, s.ID)
-	}
-
-	for i := s.Current - 1; i >= 0; i-- {
-		logs.Logf(packageName, MSG_INSTANCE_ROLLBACK_STEP, i)
-		step := s.Steps[i]
-		if step == nil {
+		if s.goToStep {
+			s.goToStep = false
 			continue
-		}
-
-		if step.rollbacks == nil {
-			continue
-		}
-
-		if s.Ctxs[i] == nil {
-			continue
-		}
-
-		ctx := s.Ctxs[i].Clone()
-		result, err = step.rollbacks(s, ctx)
-		if err != nil {
-			attempt := len(s.Resilence)
-			s.Rollbacks[i] = &Result{
-				Step:    i,
-				Ctx:     ctx,
-				Attempt: attempt,
-				Result:  result,
-				Error:   err.Error(),
-			}
-
-			if s.TpConsistency == TpConsistencyStrong {
-				return result, err
-			}
 		}
 	}
 
@@ -590,12 +504,34 @@ func (s *Instance) rollback(result et.Json, err error) (et.Json, error) {
 }
 
 /**
-* Stop
-* @return error
+* rollback
+* @param step *Step, ctx et.Json
+* @return et.Json, error
 **/
-func (s *Instance) Stop() error {
-	s.Steps[s.Current].Stop = true
-	return s.setStatus(s.Status)
+func (s *Instance) rollback(ctx et.Json) (et.Json, error) {
+	if s.Status == DONE {
+		return ctx, fmt.Errorf(MSG_INSTANCE_ALREADY_DONE, s.ID)
+	} else if s.Status == RUNNING {
+		return ctx, fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING, s.ID)
+	} else if s.Status == PENDING {
+		return ctx, fmt.Errorf(MSG_INSTANCE_PENDING, s.ID)
+	}
+
+	var err error
+	var result et.Json
+	for i := s.CurrentStep - 1; i >= 0; i-- {
+		step, exists := s.Steper.GetStep(i)
+		if !exists {
+			continue
+		}
+		logs.Logf(packageName, MSG_INSTANCE_ROLLBACK_STEP, i)
+		result, err = step.RunRollback(s, ctx)
+		if err != nil {
+			return et.Json{}, err
+		}
+	}
+
+	return result, nil
 }
 
 /**
@@ -603,17 +539,53 @@ func (s *Instance) Stop() error {
 * @return error
 **/
 func (s *Instance) Done() error {
-	return s.setStatus(Done)
+	return s.setStatus(DONE)
 }
 
 /**
-* Goto
-* @param step int
+* Stop
+* @param stop bool
 * @return error
 **/
-func (s *Instance) Goto(step int) error {
-	s.goTo = step
-	return s.setStatus(s.Status)
+func (s *Instance) Stop(stop bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.IsStop = stop
+	return nil
+}
+
+/**
+* isStop
+* @return bool
+**/
+func (s *Instance) isStop() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.IsStop
+}
+
+/**
+* GoToStep
+* @param step int, message string, ctx et.Json
+* @return error
+**/
+func (s *Instance) GoToStep(step int, message string, ctx et.Json) error {
+	if step < 0 || step >= len(s.Steper.Steps) {
+		return nil
+	}
+
+	s.goToStep = true
+	s.SetCurrentStep(step)
+	s.SetCtx(ctx, step)
+	err := s.setStatus(RUNNING)
+	if err != nil {
+		return err
+	}
+
+	logs.Logf(packageName, MSG_INSTANCE_GOTO, s.ID, s.Tag, step, message)
+	return nil
 }
 
 /**

@@ -2,16 +2,13 @@ package event
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/timezone"
 	"github.com/nats-io/nats.go"
 )
 
@@ -51,27 +48,6 @@ func publish(channel string, data et.Json) error {
 }
 
 /**
-* eventState
-* @params channel string, status EventStatus, data any
-**/
-func eventState(channel string, status EventStatus, data any) {
-	msg := et.Json{
-		"created_at": timezone.Now(),
-		"channel":    channel,
-		"event":      status,
-		"host":       hostName,
-		"id":         reg.ULID(),
-	}
-	if data != nil {
-		msg["msg"] = data
-	}
-
-	stage := envar.GetStr("STAGE", "DEV")
-	publish(EVENT_STATUS, msg)
-	publish(fmt.Sprintf(`pipe:%s:%s`, stage, channel), msg)
-}
-
-/**
 * Publish
 * @param channel string, data et.Json
 * @return error
@@ -81,7 +57,6 @@ func Publish(channel string, data et.Json) error {
 		return nil
 	}
 
-	eventState(channel, EventPublished, data)
 	return publish(channel, data)
 }
 
@@ -109,7 +84,6 @@ func Unsubscribe(channel string) error {
 
 	subscribe.Unsubscribe()
 	delete(conn.events, channel)
-	eventState(channel, EventUnsubscribed, nil)
 
 	return nil
 }
@@ -128,23 +102,24 @@ func Subscribe(channel string, f func(Message)) (err error) {
 		return
 	}
 
-	eventState(channel, EventSubscribed, nil)
-
 	subscribe, err := conn.Subscribe(channel,
 		func(m *nats.Msg) {
+			defer func() {
+				if r := recover(); r != nil {
+					logs.Errorf("panic in Subscribe channel:%s err:%v", channel, r)
+				}
+			}()
+
+			if m == nil {
+				return
+			}
+
 			msg, err := DecodeMessage(m.Data)
 			if err != nil {
 				return
 			}
 
 			msg.Myself = msg.FromId == conn.id
-
-			data, err := msg.ToJson()
-			if err != nil {
-				data = et.Json{}
-			}
-
-			eventState(channel, EventReceived, data)
 			f(msg)
 		},
 	)
@@ -173,12 +148,20 @@ func Queue(channel, queue string, f func(Message)) (err error) {
 		return nil
 	}
 
-	eventState(channel, EventSubscribed, nil)
-
 	subscribe, err := conn.QueueSubscribe(
 		channel,
 		queue,
 		func(m *nats.Msg) {
+			defer func() {
+				if r := recover(); r != nil {
+					logs.Errorf("panic in Queue channel:%s err:%v", channel, r)
+				}
+			}()
+
+			if m == nil {
+				return
+			}
+
 			msg, err := DecodeMessage(m.Data)
 			if err != nil {
 				return
@@ -186,12 +169,6 @@ func Queue(channel, queue string, f func(Message)) (err error) {
 
 			msg.Myself = msg.FromId == conn.id
 
-			data, err := msg.ToJson()
-			if err != nil {
-				data = et.Json{}
-			}
-
-			eventState(channel, EventReceived, data)
 			f(msg)
 		},
 	)

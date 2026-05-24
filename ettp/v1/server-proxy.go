@@ -199,14 +199,14 @@ func (s *Server) handlerReverseProxy(w http.ResponseWriter, r *http.Request) {
 	proxy := s.getProxyByPath(r.URL.Path)
 	if proxy == nil {
 		request["proxy"] = "not found"
-		logs.Debug(packageName, "proxy:", request.ToString())
+		logs.Log(packageName, "proxy:", request.ToString())
 		s.notFoundHandler.ServeHTTP(w, r)
 		return
 	}
 
 	if s.debug {
 		request["proxy"] = proxy.Solver
-		logs.Debug(packageName, "proxy:", request.ToString())
+		logs.Log(packageName, "proxy:", request.ToString())
 	}
 
 	if proxy.Kind == TpPortForward {

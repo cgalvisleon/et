@@ -16,7 +16,7 @@ import (
 func (s *Agents) HttpGet(w http.ResponseWriter, r *http.Request) {
 	id := request.URLParam(r, "id").Str()
 	var instance Agent
-	exists, err := s.getInstance(id, &instance)
+	exists, err := s.store.Get(id, &instance)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -43,7 +43,7 @@ func (s *Agents) HttpGet(w http.ResponseWriter, r *http.Request) {
 func (s *Agents) HttpSetParams(w http.ResponseWriter, r *http.Request) {
 	id := request.URLParam(r, "id").Str()
 	var instance Agent
-	exists, err := s.getInstance(id, &instance)
+	exists, err := s.store.Get(id, &instance)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -98,7 +98,7 @@ func (s *Agents) HttpQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := body.Json("query")
-	result, err := s.queryInstance(query)
+	result, err := s.store.Query(query)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return

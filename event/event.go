@@ -63,11 +63,7 @@ func LoadTo(params utility.Config) error {
 
 	var err error
 	conn, err = connectTo(host, user, password)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 /**

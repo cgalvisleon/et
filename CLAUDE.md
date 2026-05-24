@@ -121,16 +121,23 @@ type Driver interface {
 }
 ```
 
-Implementations live in `jsql/drivers/<name>/` and self-register via `init()`. Import as a side-effect: `import _ "github.com/cgalvisleon/et/jsql/drivers/postgres"`.
+Implementations live in `jsql/drivers/<name>/` and self-register via `init()`. Active drivers: `postgres` (`lib/pq`), `sqlite` (`mattn/go-sqlite3`). Import as a side-effect: `import _ "github.com/cgalvisleon/et/jsql/drivers/postgres"`. The `josefina` driver directory is an empty placeholder.
 
 **Debug / Test mode:** both `Model`, `Query`, and `Command` support `.Debug()` (logs SQL, skips execution) and `.Test()` (generates SQL, skips execution). Both return the receiver for chaining.
+
+### HTTP server packages
+
+There are two HTTP server packages at different abstraction levels:
+
+- **`server/`** — Lightweight HTTP server (`Ettp` struct wrapping `chi.Mux`). No external service dependencies. Use when Redis/NATS are not needed.
+- **`ettp/v2/`** — Full-featured HTTP server. `ettp.New(name, config)` calls `cache.Load()` + `event.Load()` internally. Router state is synchronized across instances via NATS events (`EVENT_SET_ROUTER`, `EVENT_REMOVE_ROUTER`, `EVENT_RESET_ROUTER`). The `m.Myself` flag prevents self-processing. `ettp/v1/` is the older version; prefer `v2`.
+- **`router/`** — Standalone router package (used internally by `ettp/v2`). Can be imported directly for custom HTTP routing without the full server setup.
 
 ### Infrastructure packages (require external services)
 
 - **`cache/`** — Redis client (requires `REDIS_HOST`, optionally `REDIS_PASSWORD`, `REDIS_DB`). `cache.Load()` initializes; provides `Set`, `Get`, `Delete`, `Pub`, `Sub`.
 - **`event/`** — NATS pub/sub (requires `NATS_HOST`, optionally `NATS_USER`, `NATS_PASSWORD`). `event.Load()` initializes; provides `Subscribe`, `Publish`, `Stack`.
-- **`ettp/v2/`** — HTTP server built on `go-chi/chi`. `ettp.New(name, config)` calls `cache.Load()` + `event.Load()` internally. Router state is synchronized across instances via NATS events.
-- **`jrpc/`** — JSON-RPC inter-service communication over NATS.
+- **`jrpc/`** — Go `net/rpc` over TCP (not NATS). `jrpc.Mount(host, port, services, packageName)` registers a service; includes load balancing (`balancer.go`) and Raft consensus (`raft.go`).
 
 ### Self-contained utility packages
 
@@ -140,15 +147,15 @@ Implementations live in `jsql/drivers/<name>/` and self-register via `init()`. I
 - **`jwt/`** — High-level token creation: `New`, `NewAuthentication`, `NewAuthorization`, `NewAppToken`. Stores tokens in `cache`. Built on top of `claim/`.
 - **`claim/`** — JWT claims struct with `tenantId` (not `projectId`). `GenToken` signs with HS256. Note the field is `tenantId`, not `projectId`.
 - **`crontab/`** — Job scheduler. `crontab.New(tag)` creates a scheduler (calls `event.Load()` internally); `AddJob`, `AddOneShotJob`, `AddEventJob` register jobs. Supports `robfig/cron` spec format including seconds (`"0 * * * * *"`).
-- **`request/`** — HTTP client utilities for outbound requests.
-- **`jql/`** — Query language for data manipulation (filter, join, order on `et.Json` slices).
-- **`sql/`** — SQL query builders.
+- **`jval/`** — Fluent validation rules for `et.Json`. Implements `Rule` interface with typed validators (`Str`, `Int`, `Float`, `Bool`, `Email`, `Phone`, `Time`, etc.); chainable constraints (`.NotEmpty()`, `.Min()`, `.Max()`, etc.).
+- **`request/`** — Both inbound helpers (`URLParam`, `GetBody`) and outbound HTTP client utilities. `URLParam(r, "key").Str()` reads chi route params; `GetBody(r)` parses the JSON body into `et.Json`.
 - **`strs/`** — String utilities.
 - **`utility/`** — Crypto, validation, ID generation (UUID, Snowflake, ULID), general helpers.
 - **`middleware/`** — HTTP middleware (CORS, request ID, logger, auth, telemetry, panic recovery).
-- **`response/`** — Unified HTTP response helpers.
+- **`response/`** — Unified HTTP response helpers. Key functions: `ITEM(w, r, status, et.Item{})`, `ITEMS(w, r, status, items)`, `HTTPError(w, r, status, message)`.
 - **`ws/`** — WebSocket support via `gorilla/websocket`.
 - **`service/`** — OTP helpers (`SendOTPEmail`, `SendOTPSms`, `VerifyOTP`) and messaging integration; uses `tenantId`.
+- **`stdrout/`** — Low-level colorized stdout routing used by `logs/`.
 
 ### Integration packages
 
@@ -158,20 +165,24 @@ Implementations live in `jsql/drivers/<name>/` and self-register via `init()`. I
 
 ### Application-layer packages
 
-- **`js/`** — Embeds a JavaScript runtime (`dop251/goja`) for executing JS from Go. `js.New(name)` is the entry point. Three modes: `Develop` (reads files directly, hot-reloads via `file.Watcher`), `Production` (loads from a `Store`), `Building` (compiles + stores with semver bumping). Global wrappers provide `console.*`, `ctx.*`, `fetch()`, and CommonJS-style `require()`. `RunDev(baseDir)` and `RunProd(store)` are the entry points. The `cmd/vm` binary runs this in dev mode.
+- **`vm/`** — JavaScript runtime package (`dop251/goja`). `vm.New(name)` is the entry point; three modes: `Develop` (reads files, hot-reloads via `file.Watcher`), `Production` (loads from a `Store`), `Building` (compiles + stores with semver bumping). Global wrappers provide `console.*`, `ctx.*`, `fetch()`, and CommonJS-style `require()`. The `cmd/vm` binary runs this in dev mode via `js.RunDev("./cmd/vm")`.
 - **`ia/`** — OpenAI agent integration (`openai-go/v3`). Manages agents with conversation tracking, event handlers, and instance state via a caller-provided `instances.Store`.
-- **`workflow/`** — Workflow orchestration with multi-step execution, instance state, and resilience patterns. Integrates with `resilience/`, `instances/`, and `event/` (NATS) for async state sync.
+- **`workflow/`** — Workflow orchestration with multi-step execution, instance state, and resilience patterns. Integrates with `resilience/`, `instances/`, and `event/` (NATS) for async state sync. See detail below.
 - **`graph/`** — Neo4j connectivity (`neo4j-go-driver/v5`). `graph.Load()` returns a `*Conn` with the Neo4j driver.
 - **`instances/`** — `Store` interface (`Set`, `Get`, `Delete`, `Query`) used by `ia` and `workflow` for state persistence. Implementations are caller-provided.
 - **`resilience/`** — Resilience patterns (circuit breaker, etc.) used by `workflow`.
 - **`reg/`** — Service registration/discovery; provides ID generation helpers (ULID, etc.) used by `claim` and others.
-- **`file/`** — File operations and watching (`FileInfo`, `Watcher`, `ExistPath()`); used by `js` for hot-reload.
+- **`file/`** — File operations and watching (`FileInfo`, `Watcher`, `ExistPath()`); used by `vm` for hot-reload.
 - **`mem/`** — Shared memory and sync primitives.
 - **`ephemeral/`** — Ephemeral/temporary data structures.
 - **`iterate/`** — Iteration control with time support.
 - **`race/`** — Race condition detection helpers.
 - **`cmds/`** — Command/stage execution system (distinct from the `cmd/` CLI binaries).
 - **`timezone/`**, **`units/`**, **`color/`** — Timezone handling, unit conversions, terminal color utilities.
+
+### TCP cluster: `tcp/`
+
+`tcp/` implements a distributed TCP node with Raft-style leader election. Modes: `Follower`, `Candidate`, `Leader`, `Proxy`. `tcp.NewNode(port)` is used by `cmd/server`.
 
 ### CLI (`cmd/`)
 
@@ -182,7 +193,7 @@ Each subdirectory under `cmd/` is a standalone binary:
 - `cmd/daemon/` — Background service with systemd integration (start/stop/restart/status/conf/version)
 - `cmd/create/` — Project/code scaffolding
 - `cmd/server/` — TCP node server (`tcp.NewNode(port)`)
-- `cmd/vm/` — JavaScript VM runner; `go run ./cmd/vm` starts `js.RunDev("./cmd/vm")` with hot-reload
+- `cmd/vm/` — JavaScript VM runner; `go run ./cmd/vm` starts `vm.RunDev("./cmd/vm")` with hot-reload
 - `cmd/jsql/` — jsql driver demo: DDL generation, condition building, SELECT field resolution, live DB connection
 - `cmd/client/` — Test client
 - `cmd/install/` — Installation utility
@@ -192,13 +203,82 @@ Each subdirectory under `cmd/` is a standalone binary:
 
 Templates and generators for new microservices, projects, and Kubernetes deployments. Used by the `cmd/create` CLI.
 
+### `workflow/` package detail
+
+`workflow.Load(store instances.Store)` initializes the singleton and calls `event.Load()` internally.
+
+**Type hierarchy:**
+
+```
+Flow (definition)
+  └── Steper (named path/lane, identified by tag)
+        └── Steps []int  (indexes into Flow.Steps)
+  └── Steps []*Step  (all step definitions, shared pool)
+
+Instance (runtime)
+  └── runs one Steper of a Flow for a specific entity ID
+```
+
+- **`Flow`** — top-level definition (`tag`, `version`, `name`, `description`). Created via `NewFlow(tag, version, name, description, username)`.
+- **`Steper`** — a named ordered path through steps within a flow. Multiple stepers can share steps from the same pool.
+- **`Step`** — individual unit: `Definition` (executable), `Undo` (rollback), `Stop bool`.
+- **`Instance`** — runtime execution. `ToJson()` returns `(et.Json, error)` (two values). `GetInstance(id string)` takes only `id`.
+
+**Instance lifecycle methods on `*WorkFlow`:**
+
+| Method | Purpose |
+|---|---|
+| `RunInstance(id, tag, step, ctx, tags, username)` | Start or resume an instance |
+| `GetInstance(id)` | Fetch instance by ID |
+| `ResetInstance(id, username)` | Reset to step 0, status PENDING |
+| `RollbackInstance(id, username)` | Execute undo chain |
+| `StopInstance(id, username)` | Halt execution |
+
+**HTTP handlers in `handler.go`** (all on `*WorkFlow`):
+
+Flow: `HttpGetFlow`, `HttpNewFlow`, `HttpDeleteFlow`
+Step: `HttpNewStep`, `HttpSetStep`, `HttpDeleteStep`
+Steper: `HttpNewSteper`, `HttpSetSteper`, `HttpDeleteSteper`
+Steper↔Step wiring: `HttpAddStepFromSteper`, `HttpRemoveStepFromSteper`, `HttpMoveStepFromSteper`
+Instance: `HttpGetInstance`, `HttpRunInstance`, `HttpResetInstance`, `HttpRollbackInstance`, `HttpStopInstance`
+
+### HTTP handler pattern
+
+All `handler.go` files across packages follow this pattern:
+
+```go
+func (s *T) HttpFoo(w http.ResponseWriter, r *http.Request) {
+    // URL path params (chi router)
+    id := request.URLParam(r, "id").Str()
+    index := request.URLParam(r, "index").Int()
+
+    // JSON body
+    body, err := request.GetBody(r)
+    if err != nil {
+        response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+        return
+    }
+    tag  := body.Str("tag")
+    idx  := body.Int("index")
+    stop := body.Bool("stop")
+    ctx  := body.Json("ctx")   // nested object
+    tags := body.Json("tags")  // nested object
+
+    // Responses
+    response.ITEM(w, r, http.StatusOK, et.Item{Ok: true, Result: data})
+    response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+}
+```
+
+Use `http.StatusCreated` for POST handlers that create new resources, `http.StatusOK` for queries and mutations.
+
 ## Key patterns
 
 - **Initialization pattern**: Infrastructure packages expose a `Load()` function that reads env vars via `envar` and establishes connections. Call `Load()` once at startup; subsequent calls are no-ops.
 - **Error handling**: `logs.Fatal(err)` calls `os.Exit(1)`. Use `logs.Alert` / `logs.Error` for non-fatal errors.
-- **Event-driven coordination**: `ettp/v2` server syncs router state across replicas via NATS (`router.EVENT_SET_ROUTER`, `EVENT_REMOVE_ROUTER`, `EVENT_RESET_ROUTER`). The `m.Myself` flag prevents self-processing.
+- **Event-driven coordination**: `ettp/v2` server syncs router state across replicas via NATS. The `m.Myself` flag prevents self-processing.
 - **`msg/` packages**: Each package has a local `msg/` or `msg.go` file with error message constants — use these instead of hardcoded strings.
-- **Store interface pattern**: `js`, `workflow`, and `ia` accept a caller-provided `instances.Store` for persistence — the library defines the interface, consumers implement it.
+- **Store interface pattern**: `vm`, `workflow`, and `ia` accept a caller-provided `instances.Store` for persistence — the library defines the interface, consumers implement it.
 
 ## Required environment variables
 

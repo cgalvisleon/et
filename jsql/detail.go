@@ -6,7 +6,7 @@ import "github.com/cgalvisleon/et/et"
 * Detail: Defines a relationship to another model, including join keys and cascade rules.
 **/
 type Detail struct {
-	To              *From             `json:"to"`
+	To              *F                `json:"to"`
 	Keys            map[string]string `json:"keys"`
 	Select          []string          `json:"select"`
 	OnDeleteCascade bool              `json:"on_delete_cascade"`
@@ -29,8 +29,8 @@ func (s *Detail) GetQuery(item et.Json, page, rows int) *Query {
 		q.Where(Eq(fk, v))
 	}
 	q.Select(s.Select...)
-	q.Limit(rows)
-	q.Page(page)
+	q.Rows = rows
+	q.setPage(page)
 	return q
 }
 
@@ -66,16 +66,16 @@ const (
 **/
 type Joins struct {
 	Type TypeJoin
-	To   *From
+	To   *F
 	Keys map[string]string
 }
 
 /**
-* newJoins: Constructs a Joins entry for the given type, From, and key mapping.
-* @param tp TypeJoin, from *From, keys map[string]string
+* newJoins: Constructs a Joins entry for the given type, F, and key mapping.
+* @param tp TypeJoin, from *F, keys map[string]string
 * @return *Joins
 **/
-func newJoins(tp TypeJoin, from *From, keys map[string]string) *Joins {
+func newJoins(tp TypeJoin, from *F, keys map[string]string) *Joins {
 	return &Joins{
 		Type: tp,
 		To:   from,

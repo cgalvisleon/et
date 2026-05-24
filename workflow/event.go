@@ -1,9 +1,8 @@
 package workflow
 
 const (
-	EVENT_WORKFLOW_SET      = "workflow:set"
-	EVENT_WORKFLOW_DELETE   = "workflow:delete"
-	EVENT_WORKFLOW_STATUS   = "workflow:status"
-	EVENT_WORKFLOW_AWAITING = "workflow:awaiting"
-	EVENT_WORKFLOW_RESULTS  = "workflow:results"
+	EVENT_FLOW_SET        = "workflow:flow:set"
+	EVENT_FLOW_DELETE     = "workflow:flow:delete"
+	EVENT_INSTANCE_SET    = "workflow:instance:set"
+	EVENT_INSTANCE_DELETE = "workflow:instance:delete"
 )

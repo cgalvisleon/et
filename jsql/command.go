@@ -22,7 +22,7 @@ const (
 
 type Command struct {
 	Type           CommandType       `json:"type"`
-	From           *From             `json:"from"`
+	From           *F                `json:"from"`
 	Data           []et.Json         `json:"data"`
 	New            et.Json           `json:"new"`
 	Old            et.Json           `json:"old"`
@@ -65,6 +65,7 @@ func newCommand(model *Model, tp CommandType) *Command {
 		afterDeletes:   []TriggerFunction{},
 		db:             model.db,
 		model:          model,
+		isDebug:        model.db.IsDebug,
 	}
 	if map[CommandType]bool{INSERT: true, BULK: true, UPSERT: true}[tp] {
 		for _, fn := range model.beforeInserts {
@@ -123,6 +124,24 @@ func (s *Command) ToJson() et.Json {
 	}
 
 	return result
+}
+
+/**
+* setDebug: Sets the debug flag for the query.
+* @param debug bool
+* @return *Query
+**/
+func (s *Command) setDebug(debug bool) *Command {
+	s.isDebug = debug
+	return s
+}
+
+/**
+* Debug: Enables debug mode — SQL is logged to stdout.
+* @return *Command
+**/
+func (s *Command) Debug() *Command {
+	return s.setDebug(true)
 }
 
 /**
@@ -277,8 +296,16 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 
 	result := et.NewItems([]et.Json{})
 	items := s.Data
+	model := s.model
 	for _, new := range items {
 		s.New = new
+
+		for _, col := range model.Required {
+			if _, ok := new[col.Name]; !ok {
+				return et.Items{}, fmt.Errorf(msg.MSG_REQUIRED_FIELD, col.Name)
+			}
+		}
+
 		for _, tg := range s.beforeInserts {
 			if err := tg(tx, s.Old, s.New); err != nil {
 				return et.Items{}, err
@@ -432,22 +459,21 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 **/
 func (s *Command) upsert(tx *Tx) (et.Items, error) {
 	model := s.model
-	current, err := newQuery(model).
+	isExists, err := newQuery(model).
 		addCondition(s.Conditions).
-		All()
+		setDebug(s.isDebug).
+		ExistsTx(tx)
 	if err != nil {
 		return et.Items{}, err
 	}
 
-	if current.Count == 1 {
+	if isExists {
 		s.Type = UPDATE
 		return s.update(tx)
-	} else if current.Count == 0 {
-		s.Type = INSERT
-		return s.insert(tx)
-	} else {
-		return et.Items{}, fmt.Errorf(msg.MSG_MULTIPLE_ROWS_FOUND)
 	}
+
+	s.Type = INSERT
+	return s.insert(tx)
 }
 
 /**
@@ -456,26 +482,61 @@ func (s *Command) upsert(tx *Tx) (et.Items, error) {
 * @return et.Items, error
 **/
 func (s *Command) ExecTx(tx *Tx) (et.Items, error) {
+	var err error
+	var result et.Items
 	tx, isCommitted := getTx(tx)
 	switch s.Type {
 	case INSERT:
-		return s.insert(tx)
+		result, err = s.insert(tx)
 	case BULK:
-		return s.insert(tx)
+		result, err = s.insert(tx)
 	case UPDATE:
-		return s.update(tx)
+		result, err = s.update(tx)
 	case DELETE:
-		return s.delete(tx)
+		result, err = s.delete(tx)
 	case UPSERT:
-		return s.upsert(tx)
+		result, err = s.upsert(tx)
+	}
+	if err != nil {
+		return et.Items{}, err
 	}
 
 	if isCommitted {
-		err := tx.commit()
+		err = tx.commit()
 		if err != nil {
 			return et.Items{}, err
 		}
 	}
 
-	return et.Items{}, nil
+	return result, nil
+}
+
+/**
+* Exec: Executes the command without an explicit transaction.
+* @return et.Items, error
+**/
+func (s *Command) Exec() (et.Items, error) {
+	return s.ExecTx(nil)
+}
+
+/**
+* OneTx: Executes the command and returns the first result within the given transaction.
+* @param tx *Tx
+* @return et.Item, error
+**/
+func (s *Command) OneTx(tx *Tx) (et.Item, error) {
+	items, err := s.ExecTx(tx)
+	if err != nil {
+		return et.Item{}, err
+	}
+
+	return items.First()
+}
+
+/**
+* One: Executes the command and returns the first result without an explicit transaction.
+* @return et.Item, error
+**/
+func (s *Command) One() (et.Item, error) {
+	return s.OneTx(nil)
 }

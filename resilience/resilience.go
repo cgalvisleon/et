@@ -1,6 +1,7 @@
 package resilience
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -8,18 +9,38 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
 )
 
 type Resilience struct {
-	instances     map[string]*Instance      `json:"-"`
-	mu            sync.Mutex                `json:"-"`
-	getInstance   instances.GetInstanceFn   `json:"-"`
-	setInstance   instances.SetInstanceFn   `json:"-"`
-	queryInstance instances.QueryInstanceFn `json:"-"`
-	isDebug       bool                      `json:"-"`
+	instances map[string]*Instance `json:"-"`
+	mu        sync.Mutex           `json:"-"`
+	store     instances.Store      `json:"-"`
+	isDebug   bool                 `json:"-"`
+}
+
+/**
+* New
+* @return *Resilience, error
+ */
+func New(store instances.Store) (*Resilience, error) {
+	err := event.Load()
+	if err != nil {
+		return nil, err
+	}
+
+	result := &Resilience{
+		instances: make(map[string]*Instance),
+		mu:        sync.Mutex{},
+		isDebug:   envar.GetBool("DEBUG", false),
+		store:     store,
+	}
+
+	return result, nil
 }
 
 /**
@@ -35,11 +56,11 @@ func (s *Resilience) add(instance *Instance) {
 }
 
 /**
-* Get
+* get
 * @param id string
 * @return *Instance, bool
  */
-func (s *Resilience) Get(id string) (*Instance, bool) {
+func (s *Resilience) get(id string) (*Instance, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -99,22 +120,22 @@ func (s *Resilience) new(tag, description string, totalAttempts int, interval ti
 }
 
 /**
-* Load
+* Get
 * @param id string
 * @return *Instance, bool
 **/
-func (s *Resilience) load(id string) (*Instance, bool) {
+func (s *Resilience) Get(id string) (*Instance, bool) {
 	if id == "" {
 		return nil, false
 	}
 
-	result, exist := s.Get(id)
+	result, exist := s.get(id)
 	if exist {
 		return result, true
 	}
 
-	if s.getInstance != nil {
-		exist, err := s.getInstance(id, &result)
+	if s.store != nil {
+		exist, err := s.store.Get(id, &result)
 		if err != nil {
 			return nil, false
 		}
@@ -123,6 +144,7 @@ func (s *Resilience) load(id string) (*Instance, bool) {
 			return nil, false
 		}
 
+		result.up(s)
 		s.add(result)
 
 		if s.isDebug {
@@ -174,7 +196,7 @@ func (s *Resilience) RunCustom(tag, description string, tags et.Json, team strin
 * @return error
  */
 func (s *Resilience) Stop(id string) error {
-	result, exist := s.load(id)
+	result, exist := s.Get(id)
 	if !exist {
 		return fmt.Errorf(MSG_ID_NOT_FOUND)
 	}
@@ -190,7 +212,7 @@ func (s *Resilience) Stop(id string) error {
 * @return error
  */
 func (s *Resilience) Restart(id string) error {
-	result, exist := s.load(id)
+	result, exist := s.Get(id)
 	if !exist {
 		return fmt.Errorf(MSG_ID_NOT_FOUND)
 	}
@@ -198,4 +220,17 @@ func (s *Resilience) Restart(id string) error {
 	result.Restart()
 
 	return nil
+}
+
+/**
+* Query
+* @param query et.Json
+* @return (et.Items, error)
+ */
+func (s *Resilience) Query(query et.Json) (et.Items, error) {
+	if s.store == nil {
+		return et.Items{}, errors.New(msg.MSG_STORE_IS_REQUIRED)
+	}
+
+	return s.store.Query(query)
 }

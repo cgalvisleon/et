@@ -10,9 +10,8 @@ import (
 )
 
 type DefIndex struct {
-	Name     string   `json:"name"`
-	TypeData TypeData `json:"type_data"`
-	Default  any      `json:"default"`
+	Name   string `json:"name"`
+	Sorted bool   `json:"sorted"`
 }
 
 type DefTo struct {
@@ -40,21 +39,22 @@ type DefRollup struct {
 	Select []string          `json:"select"`
 }
 
-type Define struct {
+type Def struct {
 	Schema      string               `json:"schema"`
 	Name        string               `json:"name"`
 	Version     int                  `json:"version"`
-	Columns     []Column             `json:"columns"`
-	SourceField string               `json:"source_field"`
 	IdxField    string               `json:"idx_field"`
 	PrimaryKeys []DefIndex           `json:"primary_keys"`
 	ForeignKeys []DefForeignKeys     `json:"foreign_keys"`
 	Indexes     []DefIndex           `json:"indexes"`
 	Unique      []DefIndex           `json:"unique"`
 	Required    []DefIndex           `json:"required"`
+	Columns     []Column             `json:"columns"`
+	SourceField string               `json:"source_field"`
 	Hiddens     []string             `json:"hiddens"`
 	Details     map[string]DefDetail `json:"details"`
 	Rollups     map[string]DefRollup `json:"rollups"`
+	IsCore      bool                 `json:"is_core"`
 	IsDebug     bool                 `json:"is_debug"`
 	IsTest      bool                 `json:"is_test"`
 }
@@ -88,15 +88,25 @@ func (s *Model) defineColumn(name string, tpColumn TypeColumn, tpData TypeData, 
 		Definition: definition,
 		model:      s,
 	}
-	s.Columns = append(s.Columns, result)
+
+	if s.IdxField != "" {
+		pos := s.indexColumn(s.IdxField)
+		if pos != -1 {
+			s.Columns = append(s.Columns[:pos], append([]*Column{result}, s.Columns[pos:]...)...)
+		} else {
+			s.Columns = append(s.Columns, result)
+		}
+	} else {
+		s.Columns = append(s.Columns, result)
+	}
 	return result
 }
 
 /**
-* defineSource: Defines the source column for the model.
+* DefineSource: Defines the source column for the model.
 * @return *Column
 **/
-func (s *Model) defineSource() *Column {
+func (s *Model) DefineSource() *Column {
 	s.SourceField = SOURCE
 	return s.defineColumn(SOURCE, COLUMN, JSON, et.Json{}, []byte{})
 }
@@ -237,12 +247,12 @@ func (s *Model) DefineAttrib(name string, tp TypeData, def any) *Column {
 /**
 * DefineDetail: Defines a new detail for the model.
 * @param name string, keys map[string]string, rows int
-* @return (*Detail, error)
+* @return (*Model, error)
 **/
-func (s *Model) DefineDetail(name string, keys map[string]string, rows int) (*Detail, error) {
+func (s *Model) DefineDetail(name string, keys map[string]string, rows int) (*Model, error) {
 	result, ok := s.Details[name]
 	if ok {
-		return result, nil
+		return result.To.Model, nil
 	}
 
 	if len(keys) == 0 {
@@ -256,13 +266,14 @@ func (s *Model) DefineDetail(name string, keys map[string]string, rows int) (*De
 	}
 	for k, fk := range keys {
 		s.defineColumn(k, COLUMN, KEY, "", []byte{})
-		to.defineColumn(fk, COLUMN, KEY, "", []byte{})
+		to.DefinePrimaryKey(fk, KEY, "")
+		to.DefineHidden(fk)
 	}
 	s.defineColumn(name, DETAIL, ANY, nil, []byte{})
 	detail := newDetail(to, keys, []string{}, true, true)
 	detail.Rows = rows
 	s.Details[name] = detail
-	return detail, nil
+	return to, nil
 }
 
 /**
@@ -298,6 +309,31 @@ func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, sel
 }
 
 /**
+* DefineCalc: Defines a new calculation for the model.
+* @param name string, calc CalcFunction
+* @return *Model
+**/
+func (s *Model) DefineCalc(name string, calc CalcFunction) *Model {
+	s.defineColumn(name, CALC, ANY, nil, []byte{})
+	s.Calcs[name] = calc
+	return s
+}
+
+/**
+* DefineModel: Defines the standard columns for the model.
+* @return *Model
+**/
+func (s *Model) DefineModel() *Model {
+	s.DefineColumn(CREATED_AT, DATETIME, nil)
+	s.DefineColumn(UPDATED_AT, DATETIME, nil)
+	s.DefineIndex(STATUS, TEXT, ACTIVE)
+	s.DefinePrimaryKey(ID, KEY, "")
+	s.DefineSource()
+	s.defineIdxField()
+	return s
+}
+
+/**
 * DefineModel: Defines a new model for the database.
 * @param schema string, name string, version int
 * @return *Model, error
@@ -307,11 +343,7 @@ func (s *DB) DefineModel(schema, name string, version int) (*Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	result.DefineColumn(CREATED_AT, DATETIME, nil)
-	result.DefineColumn(UPDATED_AT, DATETIME, nil)
-	result.DefinePrimaryKey(ID, KEY, "")
-	result.defineSource()
-	result.defineIdxField()
+	result.DefineModel()
 	return result, nil
 }
 
@@ -325,12 +357,9 @@ func (s *DB) DefineTenantModel(schema, name string, version int) (*Model, error)
 	if err != nil {
 		return nil, err
 	}
-	result.DefineColumn(CREATED_AT, DATETIME, nil)
-	result.DefineColumn(UPDATED_AT, DATETIME, nil)
+	result.DefineModel()
 	result.DefineIndex(TENANT_ID, KEY, "")
-	result.DefinePrimaryKey(ID, KEY, "")
-	result.defineSource()
-	result.defineIdxField()
+	result.DefineSource()
 	return result, nil
 }
 
@@ -344,11 +373,8 @@ func (s *DB) DefineProjectModel(schema, name string, version int) (*Model, error
 	if err != nil {
 		return nil, err
 	}
-	result.DefineColumn(CREATED_AT, DATETIME, nil)
-	result.DefineColumn(UPDATED_AT, DATETIME, nil)
+	result.DefineModel()
 	result.DefineIndex(PROJECT_ID, KEY, "")
-	result.DefinePrimaryKey(ID, KEY, "")
-	result.defineSource()
-	result.defineIdxField()
+	result.DefineSource()
 	return result, nil
 }

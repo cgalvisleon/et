@@ -22,6 +22,7 @@ type Trigger struct {
 * TriggerFunction: Callback invoked before or after a data-mutation command.
 **/
 type TriggerFunction func(tx *Tx, old, new et.Json) error
+type CalcFunction func(tx *Tx, data et.Json)
 
 /**
 * Index: Represents a named index or primary-key field; Sorted selects BTREE over HASH.
@@ -32,35 +33,36 @@ type Index struct {
 }
 
 type Model struct {
-	Database      string             `json:"database"`
-	Schema        string             `json:"schema"`
-	Name          string             `json:"name"`
-	Table         string             `json:"table"`
-	Columns       []*Column          `json:"columns"`
-	SourceField   string             `json:"source_field"`
-	IdxField      string             `json:"idx_field"`
-	Indexes       []*Index           `json:"indexes"`
-	PrimaryKeys   []*Index           `json:"primary_keys"`
-	ForeignKeys   []*Detail          `json:"foreign_keys"`
-	Unique        []*Index           `json:"unique"`
-	Required      []*Index           `json:"required"`
-	Hiddens       []string           `json:"hiddens"`
-	Details       map[string]*Detail `json:"details"`
-	Rollups       map[string]*Detail `json:"rollups"`
-	IsStrict      bool               `json:"is_strict"`
-	Version       int                `json:"version"`
-	IsCore        bool               `json:"is_core"`
-	IsDebug       bool               `json:"-"`
-	IsChanged     bool               `json:"-"`
-	isInit        bool               `json:"-"`
-	isTest        bool               `json:"-"`
-	beforeInserts []TriggerFunction  `json:"-"`
-	beforeUpdates []TriggerFunction  `json:"-"`
-	beforeDeletes []TriggerFunction  `json:"-"`
-	afterInserts  []TriggerFunction  `json:"-"`
-	afterUpdates  []TriggerFunction  `json:"-"`
-	afterDeletes  []TriggerFunction  `json:"-"`
-	db            *DB                `json:"-"`
+	Database      string                  `json:"database"`
+	Schema        string                  `json:"schema"`
+	Name          string                  `json:"name"`
+	Table         string                  `json:"table"`
+	Columns       []*Column               `json:"columns"`
+	SourceField   string                  `json:"source_field"`
+	IdxField      string                  `json:"idx_field"`
+	Indexes       []*Index                `json:"indexes"`
+	PrimaryKeys   []*Index                `json:"primary_keys"`
+	ForeignKeys   []*Detail               `json:"foreign_keys"`
+	Unique        []*Index                `json:"unique"`
+	Required      []*Index                `json:"required"`
+	Hiddens       []string                `json:"hiddens"`
+	Details       map[string]*Detail      `json:"details"`
+	Rollups       map[string]*Detail      `json:"rollups"`
+	Calcs         map[string]CalcFunction `json:"-"`
+	IsStrict      bool                    `json:"is_strict"`
+	Version       int                     `json:"version"`
+	IsCore        bool                    `json:"is_core"`
+	IsDebug       bool                    `json:"-"`
+	IsChanged     bool                    `json:"-"`
+	isInit        bool                    `json:"-"`
+	isTest        bool                    `json:"-"`
+	beforeInserts []TriggerFunction       `json:"-"`
+	beforeUpdates []TriggerFunction       `json:"-"`
+	beforeDeletes []TriggerFunction       `json:"-"`
+	afterInserts  []TriggerFunction       `json:"-"`
+	afterUpdates  []TriggerFunction       `json:"-"`
+	afterDeletes  []TriggerFunction       `json:"-"`
+	db            *DB                     `json:"-"`
 }
 
 /**
@@ -115,7 +117,7 @@ func (s *Model) save() error {
 		return nil
 	}
 
-	return nil
+	return s.db.setCatalog(s.Name, "model", s.Version, s)
 }
 
 /**
@@ -145,20 +147,26 @@ func (s *Model) Init() error {
 		return nil
 	}
 
-	err := s.db.load(s)
+	exist, err := s.db.existModel(s.Schema, s.Name)
 	if err != nil {
 		return err
 	}
 
+	if !exist {
+		err = s.db.load(s)
+		if err != nil {
+			return err
+		}
+
+		if !s.IsCore {
+			err := s.save()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	s.isInit = true
-	if s.IsCore {
-		return nil
-	}
-
-	if s.IsChanged {
-		return s.save()
-	}
-
 	return nil
 }
 
@@ -357,6 +365,16 @@ func (s *Model) Where(cond *et.Condition) *Query {
 }
 
 /**
+* Count: Returns the count of records in the model.
+* @return (int, error)
+**/
+func (s *Model) Count() (int, error) {
+	return s.
+		From().
+		Count()
+}
+
+/**
 * Insert: Creates a Command of type INSERT pre-loaded with the given data row.
 * @param data et.Json
 * @return *Command
@@ -412,4 +430,58 @@ func (s *Model) Upsert(data et.Json) *Command {
 		}
 	}
 	return result
+}
+
+/**
+* Query: Creates a new Query for this model with the given condition as the first WHERE clause.
+* @param query et.Json
+* @return et.Items, error
+**/
+func (s *Model) Query(query et.Json) (et.Items, error) {
+	return et.Items{}, nil
+}
+
+/**
+* SetSeries: Creates a Command of type SET_SERIES pre-loaded with the given data.
+* @param tag, ownerId, format string, val int
+* @return error
+**/
+func (s *Model) SetSeries(tag, ownerId, format string, val int) error {
+	return s.db.SetSeries(tag, ownerId, format, val)
+}
+
+/**
+* GetSeries: Returns the series data for the given tag and owner.
+* @param tag, ownerId string
+* @return (et.Item, error)
+**/
+func (s *Model) GetSeries(tag, ownerId string) (et.Item, error) {
+	return s.db.GetSeries(tag, ownerId)
+}
+
+/**
+* DeleteSeries: Deletes the series data for the given tag and owner.
+* @param tag, ownerId string
+* @return error
+**/
+func (s *Model) DeleteSeries(tag, ownerId string) error {
+	return s.db.DeleteSeries(tag, ownerId)
+}
+
+/**
+* NextSeries: Returns the next series value for the given tag and owner.
+* @param tag, ownerId string
+* @return (string, error)
+**/
+func (s *Model) NextSeries(tag, ownerId string) (string, error) {
+	return s.db.NextSeries(tag, ownerId)
+}
+
+/**
+* NextValue: Returns the next value for the given tag and owner.
+* @param tag, ownerId string
+* @return (int, error)
+**/
+func (s *Model) NextValue(tag, ownerId string) (int, error) {
+	return s.db.NextValue(tag, ownerId)
 }

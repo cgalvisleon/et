@@ -16,7 +16,7 @@ import (
 type Schema struct {
 	Database string            `json:"database"`
 	Name     string            `json:"name"`
-	models   map[string]*Model `json:"-"`
+	Models   map[string]*Model `json:"-"`
 	db       *DB               `json:"-"`
 	mu       *sync.RWMutex     `json:"-"`
 }
@@ -74,7 +74,7 @@ func (s *Schema) newModel(name string, version int) (*Model, error) {
 	name = utility.Normalize(name)
 
 	s.mu.Lock()
-	result, ok := s.models[name]
+	result, ok := s.Models[name]
 	s.mu.Unlock()
 	if ok {
 		return result, nil
@@ -94,6 +94,7 @@ func (s *Schema) newModel(name string, version int) (*Model, error) {
 		Hiddens:       make([]string, 0),
 		Details:       make(map[string]*Detail, 0),
 		Rollups:       make(map[string]*Detail, 0),
+		Calcs:         make(map[string]CalcFunction, 0),
 		Version:       version,
 		beforeInserts: make([]TriggerFunction, 0),
 		beforeUpdates: make([]TriggerFunction, 0),
@@ -105,8 +106,95 @@ func (s *Schema) newModel(name string, version int) (*Model, error) {
 		IsDebug:       s.db.IsDebug,
 	}
 	s.mu.Lock()
-	s.models[name] = result
+	s.Models[name] = result
 	s.mu.Unlock()
+
+	result.BeforeInsert(func(tx *Tx, old, new et.Json) error {
+		var results sync.Map
+		var hasError error
+		var wg sync.WaitGroup
+		for _, validate := range result.Unique {
+			wg.Add(1)
+			go func(field string) {
+				defer wg.Done()
+
+				if hasError != nil {
+					return
+				}
+
+				val := new.Str(field)
+				if len(val) == 0 {
+					results.Store(field, false)
+					return
+				}
+
+				exists, err := result.
+					Where(Eq(field, val)).
+					Exists()
+				if err != nil {
+					hasError = err
+					return
+				}
+				results.Store(field, exists)
+			}(validate.Name)
+		}
+		wg.Wait()
+
+		results.Range(func(key, value interface{}) bool {
+			if ok, _ := value.(bool); ok {
+				return false
+			}
+			return true
+		})
+
+		return hasError
+	})
+
+	result.BeforeUpdate(func(tx *Tx, old, new et.Json) error {
+		var results sync.Map
+		var hasError error
+		var wg sync.WaitGroup
+		for _, validate := range result.Unique {
+			wg.Add(1)
+			go func(field string) {
+				defer wg.Done()
+
+				if hasError != nil {
+					return
+				}
+
+				newVal := new[field]
+				chage := old.IsDeferent(field, newVal)
+				if !chage {
+					results.Store(field, false)
+					return
+				}
+
+				ql := result.Where(Eq(field, newVal))
+				for _, pk := range result.PrimaryKeys {
+					val := old[pk.Name]
+					ql = ql.And(Neg(pk.Name, val))
+				}
+
+				exists, err := ql.Exists()
+				if err != nil {
+					hasError = err
+					return
+				}
+				results.Store(field, exists)
+			}(validate.Name)
+		}
+		wg.Wait()
+
+		results.Range(func(key, value interface{}) bool {
+			if ok, _ := value.(bool); ok {
+				return false
+			}
+			return true
+		})
+
+		return hasError
+	})
 
 	return result, nil
 }
@@ -121,7 +209,9 @@ func (s *Schema) GetModel(name string) (*Model, error) {
 	defer s.mu.RUnlock()
 
 	name = utility.Normalize(name)
-	result, exists := s.models[name]
+	s.mu.RUnlock()
+	result, exists := s.Models[name]
+	s.mu.RLock()
 	if !exists {
 		return nil, errors.New(msg.MSG_MODEL_NOT_FOUND)
 	}

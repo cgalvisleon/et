@@ -19,6 +19,7 @@ const (
 **/
 type Driver interface {
 	Connect(ctx context.Context, db *DB) (*sql.DB, error)
+	ExistModel(db *sql.DB, schema, name string) (bool, error)
 	Load(model *Model) (string, error)
 	Query(query *Query) (string, error)
 	Command(command *Command) (string, error)

@@ -889,6 +889,20 @@ func (s Json) IsChanged(from Json) bool {
 }
 
 /**
+* IsDeferent return true if the attribute does not exist or its value differs from val
+* @param atrib string
+* @param val interface{}
+* @return bool
+**/
+func (s Json) IsDeferent(atrib string, val interface{}) bool {
+	current, ok := s[atrib]
+	if !ok {
+		return true
+	}
+	return current != val
+}
+
+/**
 * Get
 * @param keys ...string
 * @return interface{}

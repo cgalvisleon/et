@@ -110,7 +110,7 @@ func New(name string, config *Config) (*Server, error) {
 		Version:       Version,
 		mux:           http.NewServeMux(),
 		middlewares:   make([]func(http.Handler) http.Handler, 0),
-		authenticator: middleware.BearerToken,
+		authenticator: middleware.Authenticate,
 		readTimeout:   config.ReadTimeout,
 		writeTimeout:  config.WriteTimeout,
 		idleTimeout:   config.IdleTimeout,
@@ -422,7 +422,10 @@ func (s *Server) Private(method, path string, handlerFn http.HandlerFunc, packag
 		return nil, err
 	}
 
-	result.middlewares = append(result.middlewares, s.authenticator)
+	if s.authenticator != nil {
+		result.middlewares = append(result.middlewares, s.authenticator)
+	}
+
 	return result, nil
 }
 
@@ -523,7 +526,7 @@ func (s *Server) Start() {
 		if err != nil {
 			logs.Fatal(err)
 		}
-		logs.Debug("Start:", json.ToString())
+		logs.Log("Start:", json.ToString())
 	}
 
 	utility.AppWait()

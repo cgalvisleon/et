@@ -31,6 +31,7 @@ const (
 	ATTRIB TypeColumn = "atrib"
 	DETAIL TypeColumn = "detail"
 	ROLLUP TypeColumn = "rollup"
+	CALC   TypeColumn = "calc"
 	AGG    TypeColumn = "agg"
 )
 
@@ -72,6 +73,24 @@ const (
 	APPROVED   string = "approved"
 	REJECTED   string = "rejected"
 )
+
+var Status = map[string]bool{
+	ARCHIVED:   true,
+	CANCELED:   true,
+	OF_SYSTEM:  true,
+	FOR_DELETE: true,
+	PENDING:    true,
+	APPROVED:   true,
+	REJECTED:   true,
+}
+
+/**
+* SetStatus: Adds a new status to the Status map.
+* @param status string
+**/
+func SetStatus(status string) {
+	Status[status] = true
+}
 
 /**
 * Column: Describes a single field in a Model, including its storage type, data type, and default.

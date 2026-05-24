@@ -1,8 +1,7 @@
 package workflow
 
 import (
-	"encoding/json"
-	"os"
+	"fmt"
 	"slices"
 	"time"
 
@@ -12,19 +11,6 @@ import (
 	"github.com/cgalvisleon/et/logs"
 )
 
-type TpConsistency string
-
-const (
-	TpConsistencyStrong   TpConsistency = "strong"
-	TpConsistencyEventual TpConsistency = "eventual"
-)
-
-var workerHost string
-
-func init() {
-	workerHost, _ = os.Hostname()
-}
-
 type CheckList struct {
 	Tag         string  `json:"tag"`
 	Description string  `json:"description"`
@@ -32,59 +18,135 @@ type CheckList struct {
 	Data        et.Json `json:"data"`
 }
 
-type FnContext func(flow *Instance, ctx et.Json) (et.Json, error)
+type Steper struct {
+	Index       int    `json:"index"`
+	Tag         string `json:"tag"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Steps       []int  `json:"steps"`
+	flow        *Flow  `json:"-"`
+}
+
+/**
+* newSteper
+* @param flow *Flow, tag, name, description string
+* @return *Steper
+**/
+func newSteper(flow *Flow, tag, name, description string) *Steper {
+	result := &Steper{
+		Tag:         tag,
+		Name:        name,
+		Description: description,
+		Steps:       make([]int, 0),
+		flow:        flow,
+	}
+	flow.Steper[tag] = result
+	result.Index = len(flow.Steper) - 1
+	return result
+}
+
+/**
+* up
+* @param flow *Flow
+* @return void
+**/
+func (s *Steper) up(flow *Flow) {
+	s.flow = flow
+}
+
+/**
+* ToJson
+* @return et.Json
+**/
+func (s *Steper) ToJson() et.Json {
+	return et.Json{
+		"index":       s.Index,
+		"tag":         s.Tag,
+		"name":        s.Name,
+		"description": s.Description,
+		"steps":       s.Steps,
+	}
+}
+
+/**
+* Step
+* @param def Def
+* @return *Step
+**/
+func (s *Steper) Step(def Def) *Step {
+	result := newStep(s.flow, def)
+	s.Steps = append(s.Steps, result.Index)
+	return result
+}
+
+/**
+* Rollback
+* @param def RefRollback
+* @return *Steper
+**/
+func (s *Steper) Rollback(def RefRollback) *Steper {
+	idx := len(s.Steps)
+	index := s.Steps[idx-1]
+	step := s.flow.Steps[index]
+	if step == nil {
+		return nil
+	}
+	step.Rollback(def)
+	return s
+}
+
+/**
+* GetStep
+* @param idx int
+* @return (*Step, bool)
+**/
+func (s *Steper) GetStep(idx int) (*Step, bool) {
+	if idx < 0 || idx >= len(s.Steps) {
+		return nil, false
+	}
+
+	index := s.Steps[idx]
+	result := s.flow.Steps[index]
+	return result, result != nil
+}
 
 type Flow struct {
-	Tag           string          `json:"tag"`
-	Version       string          `json:"version"`
-	Name          string          `json:"name"`
-	Description   string          `json:"description"`
-	TotalAttempts int             `json:"total_attempts"`
-	TimeAttempts  time.Duration   `json:"time_attempts"`
-	Steps         []*Step         `json:"steps"`
-	TpConsistency TpConsistency   `json:"tp_consistency"`
-	CheckList     []*CheckList    `json:"check_list"`
-	Team          string          `json:"team"`
-	Level         string          `json:"level"`
-	CreatedBy     string          `json:"created_by"`
-	onDone        func(*Instance) `json:"-"`
-	isDebug       bool            `json:"-"`
+	Tag           string             `json:"tag"`
+	Version       string             `json:"version"`
+	Name          string             `json:"name"`
+	Description   string             `json:"description"`
+	Steps         []*Step            `json:"steps"`
+	Steper        map[string]*Steper `json:"steeper"`
+	CheckList     []*CheckList       `json:"check_list"`
+	TotalAttempts int                `json:"total_attempts"`
+	TimeAttempts  time.Duration      `json:"time_attempts"`
+	Team          string             `json:"team"`
+	Level         string             `json:"level"`
+	CreatedBy     string             `json:"created_by"`
+	workflow      *WorkFlow          `json:"-"`
+	isDebug       bool               `json:"-"`
 }
 
 /**
 * newFlow
-* @param workFlows *WorkFlows, tag, version, name, description string, fn FnContext, totalAttempts int, timeAttempts, retentionTime time.Duration, createdBy string
+* @param tag, version, name, description string, username string
 * @return *Flow
 **/
-func newFlow(tag, version, name, description string, fn FnContext, stop bool, createdBy string) *Flow {
+func newFlow(tag, version, name, description string, username string) *Flow {
 	flow := &Flow{
-		Tag:           tag,
-		Version:       version,
-		Name:          name,
-		Description:   description,
-		TpConsistency: TpConsistencyEventual,
-		Steps:         make([]*Step, 0),
-		CheckList:     make([]*CheckList, 0),
-		CreatedBy:     createdBy,
-		isDebug:       envar.GetBool("DEBUG", false),
+		Tag:         tag,
+		Version:     version,
+		Name:        name,
+		Description: description,
+		Steps:       make([]*Step, 0),
+		Steper:      make(map[string]*Steper),
+		CheckList:   make([]*CheckList, 0),
+		CreatedBy:   username,
+		isDebug:     envar.GetBool("DEBUG", false),
 	}
 	logs.Logf(packageName, MSG_FLOW_CREATED, tag, version, name)
-	flow.Step("Start", MSG_START_WORKFLOW, fn, stop)
 
 	return flow
-}
-
-/**
-* Serialize
-* @return ([]byte, error)
-**/
-func (s *Flow) serialize() ([]byte, error) {
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return nil, err
-	}
-
-	return bt, nil
 }
 
 /**
@@ -92,108 +154,190 @@ func (s *Flow) serialize() ([]byte, error) {
 * @return et.Json
 **/
 func (s *Flow) ToJson() et.Json {
-	bt, err := s.serialize()
-	if err != nil {
-		return et.Json{}
+	return et.Json{
+		"tag":            s.Tag,
+		"version":        s.Version,
+		"name":           s.Name,
+		"description":    s.Description,
+		"steps":          s.Steps,
+		"steper":         s.Steper,
+		"checklist":      s.CheckList,
+		"total_attempts": s.TotalAttempts,
+		"time_attempts":  s.TimeAttempts.String(),
+		"team":           s.Team,
+		"level":          s.Level,
+		"created_by":     s.CreatedBy,
 	}
-
-	var result et.Json
-	err = json.Unmarshal(bt, &result)
-	if err != nil {
-		return et.Json{}
-	}
-
-	return result
 }
 
 /**
-* setConfig
+* save
 * @return error
 **/
-func (s *Flow) setConfig(format string, args ...any) {
-	event.Publish(EVENT_WORKFLOW_SET, s.ToJson())
+func (s *Flow) save() error {
+	data := s.ToJson()
 	if s.isDebug {
-		logs.Logf(packageName, format, args...)
+		logs.Log(packageName, "save:", data.ToString())
+	}
+
+	if s.workflow != nil && s.workflow.store != nil {
+		err := s.workflow.store.Set(s.Tag, "flow", s)
+		if err != nil {
+			return err
+		}
+	}
+
+	event.Publish(EVENT_FLOW_SET, data)
+
+	return nil
+}
+
+/**
+* delete
+* @return error
+**/
+func (s *Flow) delete() error {
+	if s.workflow != nil && s.workflow.store != nil {
+		err := s.workflow.store.Delete(s.Tag)
+		if err != nil {
+			return err
+		}
+	}
+
+	event.Publish(EVENT_FLOW_DELETE, et.Json{
+		"tag": s.Tag,
+	})
+
+	return nil
+}
+
+/**
+* up
+* @param workflow *WorkFlow
+**/
+func (s *Flow) up(workflow *WorkFlow) {
+	s.workflow = workflow
+	s.isDebug = workflow.isDebug
+	for _, step := range s.Steps {
+		step.up(s)
+	}
+	for _, steper := range s.Steper {
+		steper.up(s)
 	}
 }
 
 /**
 * Debug
-* @return *Flow
 **/
-func (s *Flow) Debug() *Flow {
+func (s *Flow) Debug() {
 	s.isDebug = true
-	return s
 }
 
 /**
-* OnDone
-* @param fn func(*Instance)
-* @return *Flow
+* AddStep
+* @param step *Step
 **/
-func (s *Flow) OnDone(fn func(*Instance)) *Flow {
-	s.onDone = fn
-	return s
-}
-
-/**
-* newStep
-* @param name, description string, fn FnContext, stop bool
-* @return *Step
-**/
-func (s *Flow) newStep(name, description string, fn FnContext, stop bool) *Step {
-	step, _ := newStep(name, description, fn, stop)
+func (s *Flow) AddStep(step *Step) {
 	s.Steps = append(s.Steps, step)
-	s.setConfig(MSG_INSTANCE_STEP_CREATED, len(s.Steps)-1, name, s.Tag)
-	return step
+	step.Index = len(s.Steps) - 1
+	logs.Logf(packageName, MSG_INSTANCE_STEP_CREATED, step.Index, step.Name, s.Tag)
+}
+
+/**
+* NewSteper
+* @param tag, name, description string
+* @return (*Steper, error)
+**/
+func (s *Flow) NewSteper(tag, name, description string) (*Steper, error) {
+	_, ok := s.Steper[tag]
+	if ok {
+		return nil, fmt.Errorf(MSG_STEPER_ALREADY_EXISTS, tag)
+	}
+
+	result := newSteper(s, tag, name, description)
+	return result, s.save()
+}
+
+/**
+* GetSteper
+* @param tag string
+* @return (*Steper, error)
+**/
+func (s *Flow) GetSteper(tag string) (*Steper, error) {
+	steper, ok := s.Steper[tag]
+	if !ok {
+		return nil, fmt.Errorf(MSG_INVALID_STEPER_TAG, tag)
+	}
+
+	return steper, nil
+}
+
+/**
+* SetSteper
+* @param tag, name, description string
+* @return (*Steper, error)
+**/
+func (s *Flow) SetSteper(tag, name, description string) (*Steper, error) {
+	if tag == "" {
+		return nil, fmt.Errorf(MSG_INVALID_STEPER_TAG, tag)
+	}
+
+	steper, ok := s.Steper[tag]
+	if !ok {
+		return nil, fmt.Errorf(MSG_INVALID_STEPER_TAG, tag)
+	}
+
+	steper.Name = name
+	steper.Description = description
+	return steper, s.save()
+}
+
+/**
+* NewStep
+* @param def Def
+* @return (*Step, error)
+**/
+func (s *Flow) NewStep(def Def) (*Step, error) {
+	step := &Step{
+		Index:       len(s.Steps),
+		Name:        def.Name,
+		Description: def.Description,
+		Definition:  []byte(def.Definition),
+		Undo:        []byte(def.Undo),
+		Stop:        def.Stop,
+	}
+	s.Steps = append(s.Steps, step)
+	return step, s.save()
+}
+
+/**
+* SetStep
+* @param index int, name, description, definition, undo string, stop bool
+* @return (*Step, error)
+**/
+func (s *Flow) SetStep(index int, name, description, definition, undo string, stop bool) (*Step, error) {
+	step := s.Steps[index]
+	if step == nil {
+		return nil, fmt.Errorf(MSG_STEP_NOT_FOUND)
+	}
+
+	step.Name = name
+	step.Description = description
+	step.Definition = []byte(definition)
+	step.Undo = []byte(undo)
+	step.Stop = stop
+	return step, s.save()
 }
 
 /**
 * Step
-* @param name, description string, fn FnContext, stop bool
-* @return *Flow
+* @param def Def
+* @return *Steper
 **/
-func (s *Flow) Step(name, description string, fn FnContext, stop bool) *Flow {
-	s.newStep(name, description, fn, stop)
-	return s
-}
-
-/**
-* StepWait
-* @param name, description string, fn FnContext, timeAwait string, stop bool
-* @return *Flow
-**/
-func (s *Flow) StepWait(name, description string, fn FnContext, timeAwait string, stop bool) *Flow {
-	step := s.newStep(name, description, fn, stop)
-	step.Kind = StepWait
-	step.Spec = timeAwait
-	return s
-}
-
-/**
-* Rollback
-* @params fn FnContext
-* @return *Flow
-**/
-func (s *Flow) Rollback(fn FnContext) *Flow {
-	n := len(s.Steps)
-	step := s.Steps[n-1]
-	step.rollbacks = fn
-	s.setConfig(MSG_INSTANCE_ROLLBACK_CREATED, n-1, step.Name, s.Tag)
-
-	return s
-}
-
-/**
-* Consistency
-* @param consistency TpConsistency
-* @return *Flow
-**/
-func (s *Flow) Consistency(consistency TpConsistency) *Flow {
-	s.TpConsistency = consistency
-	s.setConfig(MSG_INSTANCE_CONSISTENCY, s.Tag, s.TpConsistency)
-
-	return s
+func (s *Flow) Step(def Def) *Steper {
+	result := newSteper(s, s.Tag, s.Name, s.Description)
+	result.Step(def)
+	return result
 }
 
 /**
@@ -206,22 +350,7 @@ func (s *Flow) Resilence(totalAttempts int, timeAttempts time.Duration, team str
 	s.TimeAttempts = timeAttempts
 	s.Team = team
 	s.Level = level
-	s.setConfig(MSG_INSTANCE_RESILIENCE, s.Tag, totalAttempts, timeAttempts)
-
-	return s
-}
-
-/**
-* IfElse
-* @param expression string, yesGoTo int, noGoTo int
-* @return *Flow, error
-**/
-func (s *Flow) IfElse(expression string, yesGoTo int, noGoTo int) *Flow {
-	n := len(s.Steps)
-	step := s.Steps[n-1]
-	step.ifElse(expression, yesGoTo, noGoTo)
-	s.setConfig(MSG_INSTANCE_IFELSE, n-1, step.Name, expression, yesGoTo, noGoTo, s.Tag)
-
+	logs.Logf(packageName, MSG_INSTANCE_RESILIENCE, s.Tag, totalAttempts, timeAttempts)
 	return s
 }
 
@@ -250,6 +379,5 @@ func (s *Flow) RemoveCheckList(tag string) *Flow {
 	if idx != -1 {
 		s.CheckList = append(s.CheckList[:idx], s.CheckList[idx+1:]...)
 	}
-
 	return s
 }

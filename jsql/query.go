@@ -10,9 +10,9 @@ import (
 )
 
 /**
-* From: Identifies a table source with its fully-qualified name and SQL alias.
+* F: Identifies a table source with its fully-qualified name and SQL alias.
 **/
-type From struct {
+type F struct {
 	Database string `json:"database"`
 	Schema   string `json:"schema"`
 	Name     string `json:"name"`
@@ -22,16 +22,16 @@ type From struct {
 }
 
 /**
-* getFrom: Builds a From descriptor from a model, using as as the SQL alias (defaults to table name).
+* getFrom: Builds a F descriptor from a model, using as as the SQL alias (defaults to table name).
 * @param model *Model
 * @param as string
-* @return *From
+* @return *F
 **/
-func getFrom(model *Model, as string) *From {
+func getFrom(model *Model, as string) *F {
 	if as == "" {
 		as = model.Table
 	}
-	return &From{
+	return &F{
 		Database: model.Database,
 		Schema:   model.Schema,
 		Name:     model.Name,
@@ -49,7 +49,7 @@ type Field struct {
 	TypeData   TypeData   `json:"type_data"`
 	Name       string     `json:"name"`
 	As         string     `json:"as"`
-	From       *From      `json:"from"`
+	From       *F         `json:"from"`
 	Agg        string     `json:"agg"`
 	Page       int        `json:"page"`
 }
@@ -71,7 +71,7 @@ const (
 **/
 type Join struct {
 	Type      JoinType        `json:"type"`
-	To        *From           `json:"to"`
+	To        *F              `json:"to"`
 	Condition []*et.Condition `json:"condition"`
 	query     *Query          `json:"-"`
 }
@@ -80,11 +80,11 @@ type Join struct {
 * newJoin: Constructs a Join entry linked to its parent query.
 * @param query *Query
 * @param typ JoinType
-* @param to *From
+* @param to *F
 * @param condition *et.Condition
 * @return *Join
 **/
-func newJoin(query *Query, typ JoinType, to *From, condition *et.Condition) *Join {
+func newJoin(query *Query, typ JoinType, to *F, condition *et.Condition) *Join {
 	return &Join{
 		Type:      typ,
 		To:        to,
@@ -108,7 +108,7 @@ const (
 * QueryDetail: Defines a relationship to another model, including join keys and cascade rules.
 **/
 type QueryDetail struct {
-	To     *From             `json:"to"`
+	To     *F                `json:"to"`
 	Keys   map[string]string `json:"keys"`
 	Select []string          `json:"select"`
 	Page   int               `json:"page"`
@@ -130,8 +130,8 @@ func (s *QueryDetail) GetQuery(item et.Json) *Query {
 		q.Where(Eq(fk, v))
 	}
 	q.Select(s.Select...)
-	q.Limit(s.Rows)
-	q.Page(s.Page)
+	q.Rows = s.Rows
+	q.setPage(s.Page)
 	return q
 }
 
@@ -139,7 +139,7 @@ func (s *QueryDetail) GetQuery(item et.Json) *Query {
 * Query: Holds all clauses needed to build a SELECT statement.
 **/
 type Query struct {
-	Froms          []*From                 `json:"froms"`
+	Froms          []*F                    `json:"froms"`
 	Joins          []*Join                 `json:"joins"`
 	Selects        []string                `json:"selects"`
 	Conditions     []*et.Condition         `json:"conditions"`
@@ -152,6 +152,9 @@ type Query struct {
 	UseSourceField bool                    `json:"use_source_field"`
 	Details        map[string]*QueryDetail `json:"details"`
 	Rollups        map[string]*QueryDetail `json:"rollups"`
+	Calcs          map[string]CalcFunction `json:"calcs"`
+	IsExists       bool                    `json:"is_exists"`
+	IsCount        bool                    `json:"is_count"`
 	section        QuerySection            `json:"-"`
 	maxRows        int                     `json:"-"`
 	db             *DB                     `json:"-"`
@@ -170,7 +173,7 @@ func newQuery(model *Model, as ...string) *Query {
 		as = []string{model.Table}
 	}
 	result := &Query{
-		Froms:      make([]*From, 0),
+		Froms:      make([]*F, 0),
 		Joins:      make([]*Join, 0),
 		Selects:    make([]string, 0),
 		Conditions: make([]*et.Condition, 0),
@@ -180,9 +183,11 @@ func newQuery(model *Model, as ...string) *Query {
 		Havings:    make([]*et.Condition, 0),
 		Details:    make(map[string]*QueryDetail, 0),
 		Rollups:    make(map[string]*QueryDetail, 0),
+		Calcs:      make(map[string]CalcFunction, 0),
 		section:    whereSection,
 		maxRows:    model.db.RecordLimit,
 		db:         model.db,
+		isDebug:    model.db.IsDebug,
 	}
 	result.addFrom(model, as[0])
 	return result
@@ -221,12 +226,21 @@ func (s *Query) ToJson() et.Json {
 }
 
 /**
+* setDebug: Sets the debug flag for the query.
+* @param debug bool
+* @return *Query
+**/
+func (s *Query) setDebug(debug bool) *Query {
+	s.isDebug = debug
+	return s
+}
+
+/**
 * Debug: Enables SQL logging for this query and returns it for chaining.
 * @return *Query
 **/
 func (s *Query) Debug() *Query {
-	s.isDebug = true
-	return s
+	return s.setDebug(true)
 }
 
 /**
@@ -239,7 +253,7 @@ func (s *Query) Test() *Query {
 }
 
 /**
-* GetField: Creates a Field from a Column, using the Column's name and attaching the provided From.
+* GetField: Creates a Field from a Column, using the Column's name and attaching the provided F.
 * @param field string
 * @return (*Field, bool)
 **/
@@ -252,7 +266,7 @@ func (s *Query) GetField(field string) (*Field, bool) {
 	pattern6 := regexp.MustCompile(`^([A-Za-z0-9_]+)\((.+)\)`)                             // agg(field)
 	pattern7 := regexp.MustCompile(`^([^|]+)\|page:(\d+)$`)                                // field|page:1
 
-	getForm := func(name string) *From {
+	getForm := func(name string) *F {
 		if len(s.Froms) == 0 {
 			return nil
 		}
@@ -589,25 +603,36 @@ func (s *Query) Having(cond *et.Condition) *Query {
 }
 
 /**
-* Page: Sets the result offset based on the 1-based page number and current Rows limit.
+* setPage: Sets the result offset based on the 1-based page number and current Rows limit.
 * @param page int
 * @return *Query
 **/
-func (s *Query) Page(page int) *Query {
+func (s *Query) setPage(page int) *Query {
 	s.Offset = (page - 1) * s.Rows
 	return s
 }
 
 /**
-* Limit: Sets the maximum number of rows to return.
-* @param rows int
+* Page: Sets the result offset based on the 1-based page number and current Rows limit.
+* @param page int
 * @return *Query
 **/
-func (s *Query) Limit(rows int) *Query {
-	if rows > s.maxRows {
-		rows = s.maxRows
+func (s *Query) Page(page int) *Query {
+	return s.setPage(page)
+}
+
+/**
+* OrderBy: Appends a field to the ORDER BY clause; sorted=true means ASC, false means DESC.
+* @param field string
+* @param sorted bool
+* @return *Query
+**/
+func (s *Query) OrderBy(field string, sorted ...bool) *Query {
+	sortedValue := true
+	if len(sorted) > 0 {
+		sortedValue = sorted[0]
 	}
-	s.Rows = rows
+	s.OrdersBy = append(s.OrdersBy, &Index{Name: field, Sorted: sortedValue})
 	return s
 }
 
@@ -657,6 +682,18 @@ func (s *Query) setRollup(tx *Tx, item et.Json) et.Json {
 }
 
 /**
+* setCalcs: Sets the calculations for the query.
+* @param tx *Tx, item et.Json
+* @return et.Json
+**/
+func (s *Query) setCalcs(tx *Tx, item et.Json) et.Json {
+	for _, calc := range s.Calcs {
+		calc(tx, item)
+	}
+	return item
+}
+
+/**
 * AllTx: Generates and executes a SELECT query inside the given transaction.
 * @param tx *Tx
 * @return et.Items, error
@@ -687,6 +724,7 @@ func (s *Query) AllTx(tx *Tx) (et.Items, error) {
 	for i, item := range result.Result {
 		item = s.setDetails(tx, item)
 		item = s.setRollup(tx, item)
+		s.setCalcs(tx, item)
 		result.Result[i] = item
 	}
 
@@ -735,28 +773,115 @@ func (s *Query) One() (et.Item, error) {
 }
 
 /**
-* OrderBy: Appends a field to the ORDER BY clause; sorted=true means ASC, false means DESC.
-* @param field string
-* @param sorted bool
-* @return *Query
+* Limit: Sets the maximum number of rows to return.
+* @param tx *Tx, page int, rows int
+* @return et.Items, error
 **/
-func (s *Query) OrderBy(field string, sorted bool) *Query {
-	s.OrdersBy = append(s.OrdersBy, &Index{Name: field, Sorted: sorted})
-	return s
+func (s *Query) LimitTx(tx *Tx, page, rows int) (et.Items, error) {
+	if rows > s.maxRows {
+		rows = s.maxRows
+	}
+	s.Rows = rows
+	s.setPage(page)
+	return s.AllTx(tx)
+}
+
+/**
+* Limit: Sets the maximum number of rows to return.
+* @param page int, rows int
+* @return et.Items, error
+**/
+func (s *Query) Limit(page, rows int) (et.Items, error) {
+	return s.LimitTx(nil, page, rows)
 }
 
 /**
 * PrimaryModel: Returns the Model for the primary FROM source, or nil if not found.
 * @return *Model
 **/
-func (s *Query) PrimaryModel() *Model {
-	if len(s.Froms) == 0 || s.db == nil {
-		return nil
-	}
-	f := s.Froms[0]
-	model, err := s.db.GetModel(f.Schema, f.Name)
+func (s *Query) ExistsTx(tx *Tx) (bool, error) {
+	s.IsExists = true
+	sql, err := s.db.query(s)
 	if err != nil {
-		return nil
+		return false, err
 	}
-	return model
+
+	if s.isDebug {
+		logs.Debug("SQL:\n", sql)
+	}
+
+	if s.isTest {
+		return false, nil
+	}
+
+	result, err := s.db.SqlTx(tx, sql)
+	if err != nil {
+		return false, err
+	}
+
+	if !result.Ok {
+		return false, nil
+	}
+
+	item, err := result.First()
+	if err != nil {
+		return false, err
+	}
+
+	exists := item.Bool("exists")
+	return exists, nil
+}
+
+/**
+* Exists: Checks if any rows match the query conditions.
+* @return bool, error
+**/
+func (s *Query) Exists() (bool, error) {
+	return s.ExistsTx(nil)
+}
+
+/**
+* CountTx: Executes the query and returns the count of matching rows within the given transaction.
+* @param tx *Tx
+* @return int, error
+**/
+func (s *Query) CountTx(tx *Tx) (int, error) {
+	s.IsCount = true
+	sql, err := s.db.query(s)
+	if err != nil {
+		return 0, err
+	}
+
+	if s.isDebug {
+		logs.Debug("SQL:\n", sql)
+	}
+
+	if s.isTest {
+		return 0, nil
+	}
+
+	result, err := s.db.SqlTx(tx, sql)
+	if err != nil {
+		return 0, err
+	}
+
+	if !result.Ok {
+		return 0, nil
+	}
+
+	item, err := result.First()
+	if err != nil {
+		return 0, err
+	}
+
+	count := item.Int("count")
+	return count, nil
+}
+
+/**
+* Count: Executes the query and returns the count of matching rows.
+* @return int, error
+**/
+func (s *Query) Count() (int, error) {
+	return s.CountTx(nil)
 }

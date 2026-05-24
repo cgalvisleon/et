@@ -9,6 +9,7 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -40,6 +41,9 @@ type Instance struct {
 	Tags          et.Json         `json:"tags"`
 	Team          string          `json:"team"`
 	Level         string          `json:"level"`
+	Error         string          `json:"error"`
+	Response      map[string]any  `json:"response"`
+	Result        any             `json:"result"`
 	owner         *Resilience     `json:"-"`
 	stop          bool            `json:"-"`
 	err           error           `json:"-"`
@@ -50,39 +54,26 @@ type Instance struct {
 }
 
 /**
-* Serialize
-* @return ([]byte, error)
+* ToJson
+* @return (et.Json, error)
 **/
-func (s *Instance) Serialize() ([]byte, error) {
+func (s *Instance) ToJson() (et.Json, error) {
 	bt, err := json.Marshal(s)
 	if err != nil {
 		return nil, err
 	}
 
-	return bt, nil
-}
-
-/**
-* ToJson
-* @return et.Json
-**/
-func (s *Instance) ToJson() et.Json {
-	bt, err := s.Serialize()
-	if err != nil {
-		return et.Json{}
-	}
-
 	var result et.Json
 	err = json.Unmarshal(bt, &result)
 	if err != nil {
-		return et.Json{}
+		return nil, err
 	}
 
 	for k, v := range s.Tags {
 		result.Set(k, v)
 	}
 
-	return result
+	return result, nil
 }
 
 /**
@@ -90,26 +81,43 @@ func (s *Instance) ToJson() et.Json {
 * @return string
 **/
 func (s *Instance) ToString() string {
-	return s.ToJson().ToString()
+	result, err := s.ToJson()
+	if err != nil {
+		return ""
+	}
+
+	return result.ToString()
 }
 
 /**
-* Save
+* save
 * @return error
 **/
-func (s *Instance) Save() error {
-	data := s.ToJson()
-	event.Publish(EVENT_RESILIENCE_STATUS, data)
+func (s *Instance) save() error {
+	data, err := s.ToJson()
+	if err != nil {
+		return err
+	}
 
 	if s.isDebug {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	if s.owner != nil && s.owner.setInstance != nil {
-		return s.owner.setInstance(s.ID, s.Tag, s)
+	if s.owner != nil && s.owner.store != nil {
+		return s.owner.store.Set(s.ID, s.Tag, s)
 	}
 
 	return nil
+}
+
+/**
+* up
+* @param owner *Resilience
+* @return *Instance
+**/
+func (s *Instance) up(owner *Resilience) *Instance {
+	s.owner = owner
+	return s
 }
 
 /**
@@ -135,7 +143,10 @@ func (s *Instance) setStatus(status Status) error {
 			errMsg = s.err.Error()
 		}
 		if s.Attempt == s.TotalAttempts {
-			data := s.ToJson().Clone()
+			data, err := s.ToJson()
+			if err != nil {
+				return err
+			}
 			data.Set("team", s.Team)
 			data.Set("level", s.Level)
 			message := fmt.Sprintf(MSG_RESILIENCE_FINISHED_ERROR, s.Attempt, s.TotalAttempts, s.ID, s.Tag, s.Status, errMsg)
@@ -152,15 +163,15 @@ func (s *Instance) setStatus(status Status) error {
 		}
 	}
 
-	return s.Save()
+	return s.save()
 }
 
 /**
-* Error
+* SetError
 * @param err error
-* @return error
 **/
-func (s *Instance) Error(err error) {
+func (s *Instance) SetError(err error) {
+	s.Error = err.Error()
 	s.err = err
 	s.setStatus(StatusFailed)
 }
@@ -174,8 +185,10 @@ func (s *Instance) Stop() et.Item {
 	s.setStatus(StatusStop)
 
 	return et.Item{
-		Ok:     true,
-		Result: s.ToJson(),
+		Ok: true,
+		Result: et.Json{
+			"message": msg.MSG_INSTANCE_STOPPED,
+		},
 	}
 }
 
@@ -189,8 +202,10 @@ func (s *Instance) Restart() et.Item {
 	go s.Run()
 
 	return et.Item{
-		Ok:     true,
-		Result: s.ToJson(),
+		Ok: true,
+		Result: et.Json{
+			"message": msg.MSG_INSTANCE_RESTARTED,
+		},
 	}
 }
 
@@ -199,6 +214,13 @@ func (s *Instance) Restart() et.Item {
 * @return error
 **/
 func (s *Instance) Done() {
+	if s.Response != nil && len(s.Response) > 0 {
+		v := reflect.ValueOf(s.Response)
+		s.Result = v.Interface()
+	} else {
+		s.Result = et.Json{}
+	}
+
 	s.setStatus(StatusDone)
 
 	time.AfterFunc(3*time.Second, func() {
@@ -211,17 +233,22 @@ func (s *Instance) Done() {
 * @return []reflect.Value, error
 **/
 func (s *Instance) runAttempt() ([]reflect.Value, error) {
+	jsonData, err := s.ToJson()
+	if err != nil {
+		return nil, err
+	}
+
 	if s.Status == StatusDone {
 		return []reflect.Value{reflect.ValueOf(et.Item{
 			Ok:     true,
-			Result: s.ToJson(),
+			Result: jsonData,
 		})}, nil
 	}
 
 	if s.stop {
 		return []reflect.Value{reflect.ValueOf(et.Item{
 			Ok:     false,
-			Result: s.ToJson(),
+			Result: jsonData,
 		})}, nil
 	}
 
@@ -234,7 +261,6 @@ func (s *Instance) runAttempt() ([]reflect.Value, error) {
 		argsValues[i] = reflect.ValueOf(arg)
 	}
 
-	var err error
 	var failed bool
 	fn := reflect.ValueOf(s.fn)
 	s.fnResult = fn.Call(argsValues)
@@ -242,7 +268,7 @@ func (s *Instance) runAttempt() ([]reflect.Value, error) {
 		if r.Type().Implements(errorInterface) {
 			err, failed = r.Interface().(error)
 			if failed {
-				s.Error(err)
+				s.SetError(err)
 			} else {
 				s.Done()
 			}

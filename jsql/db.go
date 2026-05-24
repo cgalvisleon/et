@@ -18,22 +18,25 @@ type DB struct {
 	Name        string             `json:"name"`
 	Schemas     map[string]*Schema `json:"schemas"`
 	Driver      string             `json:"driver"`
-	Params      utility.Config     `json:"params"`
+	Params      et.Json            `json:"params"`
 	UseCore     bool               `json:"use_core"`
 	RecordLimit int                `json:"record_limit"`
 	IsDebug     bool               `json:"-"`
 	IsChanged   bool               `json:"-"`
+	isInit      bool               `json:"-"`
 	driver      Driver             `json:"-"`
 	db          *sql.DB            `json:"-"`
+	catalog     *Model             `json:"-"`
+	series      *Model             `json:"-"`
 }
 
 /**
 * newDB: Constructs a DB instance from the given config, resolving the driver by name.
-* @param params utility.Config
+* @param params et.Json
 * @return *DB, error
 **/
-func newDB(params utility.Config) (*DB, error) {
-	driverName := params.GetStr("DB_DRIVER", DriverPostgres)
+func newDB(params et.Json) (*DB, error) {
+	driverName := params.Str("driver")
 	if !utility.ValidStr(driverName, 2, []string{""}) {
 		return nil, errors.New(msg.MSG_DRIVER_NOT_FOUND)
 	}
@@ -42,9 +45,9 @@ func newDB(params utility.Config) (*DB, error) {
 		return nil, errors.New(msg.MSG_DRIVER_NOT_FOUND)
 	}
 
-	name := params.GetStr("DB_NAME", "test")
-	useCore := params.GetBool("DB_USE_CORE", false)
-	recordLimit := params.GetInt("DB_RECORD_LIMIT", 1000)
+	name := params.Str("database")
+	useCore := params.Bool("use_core")
+	recordLimit := params.Int("record_limit")
 	result := &DB{
 		Name:        name,
 		Schemas:     make(map[string]*Schema),
@@ -94,7 +97,7 @@ func (s *DB) ToJson() et.Json {
 * @return error
 **/
 func (s *DB) save() error {
-	return nil
+	return s.setCatalog(s.Name, "db", 1, s)
 }
 
 /**
@@ -102,6 +105,10 @@ func (s *DB) save() error {
 * @return error
 **/
 func (s *DB) init() error {
+	if s.isInit {
+		return nil
+	}
+
 	if s.db != nil {
 		return nil
 	}
@@ -123,6 +130,7 @@ func (s *DB) init() error {
 		}
 	}
 
+	s.isInit = true
 	if s.IsChanged {
 		return s.save()
 	}
@@ -152,7 +160,7 @@ func (s *DB) NewModel(schema, name string, version int) (*Model, error) {
 		sch = &Schema{
 			Database: s.Name,
 			Name:     schema,
-			models:   make(map[string]*Model),
+			Models:   make(map[string]*Model),
 			db:       s,
 			mu:       &sync.RWMutex{},
 		}
@@ -263,6 +271,19 @@ func (s *DB) Sql(query string, args ...any) (et.Items, error) {
 }
 
 /**
+* existModel: Checks if a table exists in the database.
+* @param schema string, name string
+* @return bool, error
+**/
+func (s *DB) existModel(schema string, name string) (bool, error) {
+	if s.driver == nil {
+		return false, errors.New(msg.MSG_DRIVER_NOT_FOUND)
+	}
+
+	return s.driver.ExistModel(s.db, schema, name)
+}
+
+/**
 * load: Generates DDL for the model via the driver and executes it against the DB.
 * @param model *Model
 * @return error
@@ -279,14 +300,15 @@ func (s *DB) load(model *Model) error {
 
 	if model.IsDebug {
 		logs.Debug("DDL:\n", sql)
+	}
+
+	if model.isTest {
 		return nil
 	}
 
-	if !model.isTest {
-		_, err = s.SqlTx(nil, sql)
-		if err != nil {
-			return err
-		}
+	_, err = s.SqlTx(nil, sql)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -328,10 +350,10 @@ func (s *DB) query(query *Query) (string, error) {
 
 /**
 * Define: Creates a model from a declarative definition (delegates to DefineModel).
-* @param definition Define
+* @param definition Def
 * @return *Model, error
 **/
-func (s *DB) Define(define Define) (*Model, error) {
+func (s *DB) Define(define Def) (*Model, error) {
 	if !utility.ValidStr(define.Schema, 0, []string{}) {
 		return nil, errors.New(msg.MSG_SCHEMA_REQUIRED)
 	}
@@ -347,19 +369,36 @@ func (s *DB) Define(define Define) (*Model, error) {
 		return nil, err
 	}
 
-	for _, column := range define.Columns {
-		result.defineColumn(column.Name, column.TypeColumn, column.TypeData, column.Default, column.Definition)
-	}
-
-	if define.SourceField != "" {
-		result.defineSource()
-	}
-
 	if define.IdxField != "" {
 		result.defineIdxField()
 	}
+
+	for _, column := range define.Columns {
+		result.defineColumn(column.Name, column.TypeColumn, column.TypeData, column.Default, column.Definition)
+	}
 	for _, primaryKey := range define.PrimaryKeys {
-		result.DefinePrimaryKey(primaryKey.Name, primaryKey.TypeData, primaryKey.Default)
+		result.PrimaryKeys = append(result.PrimaryKeys, &Index{
+			Name:   primaryKey.Name,
+			Sorted: primaryKey.Sorted,
+		})
+	}
+	for _, index := range define.Indexes {
+		result.Indexes = append(result.Indexes, &Index{
+			Name:   index.Name,
+			Sorted: index.Sorted,
+		})
+	}
+	for _, unique := range define.Unique {
+		result.Unique = append(result.Unique, &Index{
+			Name:   unique.Name,
+			Sorted: unique.Sorted,
+		})
+	}
+	for _, required := range define.Required {
+		result.Required = append(result.Required, &Index{
+			Name:   required.Name,
+			Sorted: required.Sorted,
+		})
 	}
 	for _, foreignKey := range define.ForeignKeys {
 		to, err := s.GetModel(foreignKey.To.Schema, foreignKey.To.Name)
@@ -368,17 +407,11 @@ func (s *DB) Define(define Define) (*Model, error) {
 		}
 		result.DefineForeignKeys(to, foreignKey.Keys, foreignKey.OnDeleteCascade, foreignKey.OnUpdateCascade)
 	}
-	for _, index := range define.Indexes {
-		result.DefineIndex(index.Name, index.TypeData, index.Default)
-	}
-	for _, unique := range define.Unique {
-		result.DefineUnique(unique.Name, unique.TypeData, unique.Default)
-	}
-	for _, required := range define.Required {
-		result.DefineRequired(required.Name, required.TypeData, required.Default)
-	}
 	for _, hidden := range define.Hiddens {
 		result.DefineHidden(hidden)
+	}
+	if define.SourceField != "" {
+		result.DefineSource()
 	}
 	for _, detail := range define.Details {
 		_, err := result.DefineDetail(detail.Name, detail.Keys, detail.Rows)
@@ -396,12 +429,9 @@ func (s *DB) Define(define Define) (*Model, error) {
 			return nil, err
 		}
 	}
-	if define.IsDebug {
-		result.IsDebug = true
-	}
-	if define.IsTest {
-		result.isTest = true
-	}
+	result.IsCore = define.IsCore
+	result.IsDebug = define.IsDebug
+	result.isTest = define.IsTest
 
 	return result, nil
 }

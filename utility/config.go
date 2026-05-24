@@ -55,7 +55,7 @@ func (s *Config) Remove(key string) error {
 func (s *Config) Get(key string, def interface{}) interface{} {
 	result, ok := s.params[key]
 	if !ok {
-		return envar.Get(key, def)
+		return def
 	}
 	return result
 }
@@ -71,6 +71,9 @@ func (s *Config) GetStr(key string, def string) string {
 	if !ok {
 		return def
 	}
+	if resultStr == "" {
+		return envar.GetStr(key, def)
+	}
 	return resultStr
 }
 
@@ -84,6 +87,9 @@ func (s *Config) GetInt(key string, def int) int {
 	resultInt, ok := result.(int)
 	if !ok {
 		return def
+	}
+	if resultInt == 0 {
+		return envar.GetInt(key, def)
 	}
 	return resultInt
 }
@@ -99,6 +105,9 @@ func (s *Config) GetFloat(key string, def float64) float64 {
 	if !ok {
 		return def
 	}
+	if resultFloat == 0 {
+		return envar.GetNumber(key, def)
+	}
 	return resultFloat
 }
 
@@ -112,6 +121,9 @@ func (s *Config) GetBool(key string, def bool) bool {
 	resultBool, ok := result.(bool)
 	if !ok {
 		return def
+	}
+	if !resultBool {
+		return envar.GetBool(key, def)
 	}
 	return resultBool
 }

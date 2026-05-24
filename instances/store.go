@@ -8,8 +8,3 @@ type Store interface {
 	Delete(id string) error
 	Query(query et.Json) (et.Items, error)
 }
-
-type GetInstanceFn func(id string, dest any) (bool, error)
-type SetInstanceFn func(id, tag string, obj any) error
-type DeleteInstanceFn func(id string) error
-type QueryInstanceFn func(query et.Json) (et.Items, error)

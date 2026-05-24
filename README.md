@@ -1,14 +1,16 @@
-# ET: Librería para servicios y herramientas en Go
+# ET: Go Services and Tools Library
 
-Librería modular en Go para microservicios, CLIs y aplicaciones web. Importa solo los paquetes que necesitas — no hay punto de entrada central.
+> [Versión en español](README.es.md)
 
-- Módulo: `github.com/cgalvisleon/et` — Go 1.23+ — MIT
+Modular Go library for microservices, CLIs, and web applications. Import only the packages you need — there is no central entry point.
 
-## Instalación
+- Module: `github.com/cgalvisleon/et` — Go 1.23+ — MIT
+
+## Installation
 
 ```bash
 go get github.com/cgalvisleon/et@latest
-go get github.com/cgalvisleon/et@v0.0.1
+go get github.com/cgalvisleon/et@v1.0.24
 ```
 
 ```go
@@ -18,104 +20,159 @@ import (
 )
 ```
 
-## Estructura
+## Packages
 
-| Paquete       | Descripción                                                           |
-| ------------- | --------------------------------------------------------------------- |
-| `et/`         | Tipos centrales: `Json`, `List`, `Item`, `Items`                      |
-| `cache/`      | Cliente Redis con Pub/Sub. Init: `cache.Load()`                       |
-| `event/`      | Pub/Sub sobre NATS. Init: `event.Load()`                              |
-| `ettp/v2/`    | Servidor HTTP (go-chi). Init: `ettp.New(name, config)`                |
-| `jrpc/`       | JSON-RPC entre servicios vía NATS                                     |
-| `jwt/`        | Generación de tokens JWT (usa `claim` + `cache`)                      |
-| `claim/`      | Claims JWT con campo `tenantId`                                       |
-| `crontab/`    | Scheduler cron con soporte de segundos. Init: `crontab.New(tag)`      |
-| `middleware/` | CORS, auth, logger, request ID, telemetría                            |
-| `response/`   | Respuestas HTTP unificadas                                            |
-| `request/`    | Cliente HTTP para peticiones salientes                                |
-| `router/`     | Routing HTTP con sincronización entre instancias vía NATS             |
-| `ws/`         | WebSocket bidireccional (gorilla/websocket)                           |
-| `logs/`       | Logging estructurado por niveles con colores                          |
-| `strs/`       | Utilidades de strings                                                 |
-| `utility/`    | Crypto, hashing, generación de IDs (UUID, ULID, Snowflake)            |
-| `envar/`      | Lectura de variables de entorno y argumentos CLI                      |
-| `config/`     | Configuración de aplicación (`GetStr`, `GetInt`, `GetBool`, …)        |
-| `service/`    | OTP (`SendOTPEmail`, `SendOTPSms`, `VerifyOTP`) y envío de mensajes   |
-| `sql/`        | Constructor de queries SQL (INSERT, UPDATE, DELETE, WHERE)            |
-| `jql/`        | Lenguaje de consulta sobre `et.Json` (filter, join, order)            |
-| `mem/`        | Caché en memoria con expiración y sincronización                      |
-| `ephemeral/`  | Datos temporales de corta vida                                        |
-| `js/`         | Runtime JavaScript embebido (goja) con hot-reload                     |
-| `ia/`         | Agentes IA sobre OpenAI (`openai-go/v3`)                              |
-| `workflow/`   | Orquestación de flujos multi-paso con resiliencia y estado            |
-| `graph/`      | Conectividad Neo4j (`neo4j-go-driver/v5`)                             |
-| `instances/`  | Interfaz `Store` para persistencia de estado (`ia`, `workflow`, `js`) |
-| `resilience/` | Circuit breaker y patrones de resiliencia                             |
-| `reg/`        | Registro de servicios y generación de IDs                             |
-| `aws/`        | S3, SES, SMS vía AWS SDK                                              |
-| `brevo/`      | Email, SMS y WhatsApp vía Brevo API                                   |
-| `wsp/`        | Cliente WhatsApp Business API                                         |
-| `tcp/`        | Nodo TCP con balanceo y Raft                                          |
-| `file/`       | Operaciones de archivo y watcher de cambios                           |
-| `color/`      | Colores ANSI para terminal                                            |
-| `stdrout/`    | Salida estándar formateada con colores                                |
-| `timezone/`   | Helpers de zona horaria                                               |
-| `units/`      | Conversiones de unidades                                              |
-| `race/`       | Detección de condiciones de carrera                                   |
-| `cmds/`       | Sistema de comandos y etapas de ejecución                             |
-| `iterate/`    | Control de iteraciones con tiempo                                     |
-| `create/`     | Templates de código (microservicios, K8s)                             |
-| `cmd/`        | Binarios CLI (`et`, `apigateway`, `daemon`, `server`, `vm`, …)        |
+| Package       | Description                                                                       |
+| ------------- | --------------------------------------------------------------------------------- |
+| `et/`         | Core types: `Json`, `List`, `Item`, `Items`                                       |
+| `cache/`      | Redis client with Pub/Sub. Init: `cache.Load()`                                   |
+| `event/`      | Pub/Sub over NATS. Init: `event.Load()`                                           |
+| `ettp/v2/`    | Full-featured HTTP server (go-chi + Redis + NATS). Init: `ettp.New(name, config)` |
+| `server/`     | Lightweight HTTP server (chi only, no external deps). Init: `server.New()`        |
+| `router/`     | Standalone HTTP router with cross-instance sync via NATS                          |
+| `jrpc/`       | Go `net/rpc` over TCP with load balancing and Raft consensus                      |
+| `jwt/`        | JWT token creation (`New`, `NewAuthentication`, `NewAuthorization`)               |
+| `claim/`      | JWT claims struct with `tenantId` field. Signs with HS256                         |
+| `crontab/`    | Cron scheduler with seconds support. Init: `crontab.New(tag)`                     |
+| `middleware/` | CORS, auth, logger, request ID, telemetry, panic recovery                         |
+| `response/`   | Unified HTTP responses: `ITEM`, `ITEMS`, `HTTPError`                              |
+| `request/`    | Inbound helpers (`URLParam`, `GetBody`) and outbound HTTP client                  |
+| `ws/`         | Bidirectional WebSocket (gorilla/websocket)                                       |
+| `jsql/`       | Database-agnostic SQL builder and lightweight ORM                                 |
+| `jval/`       | Fluent JSON validation: typed validators with chainable constraints               |
+| `logs/`       | Structured leveled logging with colorized output                                  |
+| `strs/`       | String utilities                                                                  |
+| `utility/`    | Crypto, hashing, ID generation (UUID, ULID, Snowflake)                            |
+| `envar/`      | Environment variable access and CLI argument helpers                              |
+| `config/`     | App configuration (`GetStr`, `GetInt`, `GetBool`, `GetFloat`, `GetTime`)          |
+| `service/`    | OTP helpers (`SendOTPEmail`, `SendOTPSms`, `VerifyOTP`) and messaging             |
+| `mem/`        | In-memory cache with expiration and sync primitives                               |
+| `ephemeral/`  | Short-lived temporary data structures                                             |
+| `vm/`         | Embedded JavaScript runtime (goja) with hot-reload                                |
+| `ia/`         | OpenAI agent integration (`openai-go/v3`) with conversation tracking              |
+| `workflow/`   | Multi-step workflow orchestration with instance state and resilience              |
+| `graph/`      | Neo4j connectivity (`neo4j-go-driver/v5`)                                         |
+| `instances/`  | `Store` interface for state persistence used by `ia`, `workflow`, `vm`            |
+| `resilience/` | Circuit breaker and resilience patterns                                           |
+| `reg/`        | Service registration and ID generation helpers (ULID, etc.)                       |
+| `aws/`        | AWS SDK wrapper: S3, SES (email), SMS                                             |
+| `brevo/`      | Brevo API client: email, SMS, WhatsApp                                            |
+| `wsp/`        | WhatsApp Business API client                                                      |
+| `tcp/`        | Distributed TCP node with Raft-style leader election                              |
+| `file/`       | File operations and filesystem watcher                                            |
+| `color/`      | ANSI terminal colors                                                              |
+| `stdrout/`    | Low-level colorized stdout routing used by `logs`                                 |
+| `timezone/`   | Timezone helpers                                                                  |
+| `units/`      | Unit conversion utilities                                                         |
+| `race/`       | Race condition detection helpers                                                  |
+| `cmds/`       | Command and stage execution system                                                |
+| `iterate/`    | Iteration control with time support                                               |
+| `create/`     | Code templates for microservices and Kubernetes deployments                       |
+| `cmd/`        | CLI binaries: `et`, `apigateway`, `daemon`, `server`, `vm`, `jsql`, …             |
 
-## Tipo central: `et.Json`
+## Core type: `et.Json`
 
-`et.Json` (`map[string]interface{}`) es el tipo transversal de la librería. Accesores tipados con valor por defecto y traversal anidado:
+`et.Json` (`map[string]interface{}`) is the library's universal data type. Typed accessors with default-value pattern and nested key traversal:
 
 ```go
 data := et.Json{"user": et.Json{"name": "Ana", "age": 30}}
-name := data.Str("user", "name")   // "Ana"
-age  := data.Int("user", "age")    // 30
+name := data.Str("user", "name")       // "Ana"
+age  := data.Int("user", "age")        // 30
+ok   := data.Bool("active")            // false (zero value)
 data.Set("active", true)
 ```
 
-`et.List` — resultado paginado (`Rows`, `All`, `Count`, `Page`, `Start`, `End`, `Result []Json`).  
-`et.Item` / `et.Items` — wrappers de resultado individual y múltiple.  
-`items.AddMany([]Json)` — bulk insert con capacidad pre-alocada.
+`et.List` — paginated result (`Rows`, `All`, `Count`, `Page`, `Start`, `End`, `Result []Json`).  
+`et.Item` / `et.Items` — single and multi-item result wrappers.
 
-## Patrón de inicialización
+## Initialization pattern
 
-`Load()` es idempotente y thread-safe (usa mutex interno). Llama una vez al arrancar:
+`Load()` is idempotent and thread-safe. Call once at startup:
 
 ```go
-cache.Load()  // Requiere REDIS_HOST
-event.Load()  // Requiere NATS_HOST
+cache.Load()  // requires REDIS_HOST
+event.Load()  // requires NATS_HOST
 ```
 
-`ettp.New(name, config)` llama a `cache.Load()` y `event.Load()` internamente.
+`ettp.New(name, config)` calls `cache.Load()` and `event.Load()` internally.
 
-## Variables de entorno requeridas
+## SQL builder: `jsql/`
 
-| Paquete | Variable                                     | Descripción                            |
-| ------- | -------------------------------------------- | -------------------------------------- |
-| `cache` | `REDIS_HOST`                                 | Host Redis                             |
-| `cache` | `REDIS_PASSWORD`, `REDIS_DB`                 | Auth y base (opcionales)               |
-| `event` | `NATS_HOST`                                  | Host NATS                              |
-| `event` | `NATS_USER`, `NATS_PASSWORD`                 | Auth NATS (opcionales)                 |
-| `claim` | `SECRET`                                     | Clave de firma JWT (default: `"1977"`) |
-| `graph` | `NEO4J_HOST`, `NEO4J_USER`, `NEO4J_PASSWORD` | Conexión Neo4j                         |
-| `ia`    | `OPENAI_API_KEY`                             | API key de OpenAI                      |
-| `wsp`   | `WHATSAPP_API_URL`                           | URL base WhatsApp Graph API (opcional) |
+Database-agnostic SQL builder and lightweight ORM. Supports PostgreSQL and SQLite.
+
+```go
+import _ "github.com/cgalvisleon/et/jsql/drivers/postgres"
+
+db, _ := jsql.Load() // reads DB_DRIVER, DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+
+// Define a model (adds id, created_at, updated_at, _source JSONB, _idx)
+model, _ := db.DefineModel("public", "users", 1)
+model.DefineAttrib("name", jsql.TEXT, "")
+model.Init()
+
+// Query
+items, _ := model.Where(jsql.Eq("status", "active")).Limit(20).Page(1).All()
+item,  _ := model.Where(jsql.Eq("id", id)).One()
+
+// Commands
+_, _ = model.Insert(et.Json{"email": "a@b.com"}).ExecTx(nil)
+_, _ = model.Update(et.Json{"status": "archived"}).Where(jsql.Eq("id", id)).ExecTx(nil)
+_, _ = model.Upsert(et.Json{"id": id, "email": "a@b.com"}).ExecTx(nil)
+```
+
+Both `Query` and `Command` support `.Debug()` (logs SQL, skips execution) and `.Test()` (returns SQL string without executing).
+
+## Workflow orchestration: `workflow/`
+
+Multi-step workflow engine with instance state, rollback, and resilience.
+
+**Type hierarchy:**
+
+```
+Flow  (definition)
+  ├── Steper  (named path/lane, identified by tag)
+  │     └── Steps []int  (indexes into Flow.Steps)
+  └── Steps  []*Step  (shared step pool: Definition, Undo, Stop)
+
+Instance  (runtime execution of a Flow for a specific entity ID)
+```
+
+```go
+workflow.Load(myStore) // myStore implements instances.Store
+
+// Define a flow
+flow, _ := workflow.NewFlow("onboarding", "v1", "Onboarding", "User onboarding flow", "admin")
+flow.Resilence(3, 5*time.Second, "ops-team", "high")
+
+steper, _ := flow.NewSteper("main", "Main Path", "Primary onboarding steps")
+step, _   := flow.NewStep(workflow.Def{
+    Name:       "send-welcome",
+    Definition: `/* JS or definition */`,
+    Undo:       `/* rollback logic */`,
+    Stop:       false,
+})
+
+// Run an instance
+result, err := workflow.RunInstance(entityID, "onboarding", 0, ctx, tags, username)
+
+// Lifecycle operations
+workflow.ResetInstance(id, username)    // reset to step 0
+workflow.RollbackInstance(id, username) // execute undo chain
+workflow.StopInstance(id, username)     // halt execution
+```
+
+HTTP handlers exposed on `*WorkFlow`: `HttpGetFlow`, `HttpNewFlow`, `HttpDeleteFlow`, `HttpNewStep`, `HttpSetStep`, `HttpDeleteStep`, `HttpNewSteper`, `HttpSetSteper`, `HttpDeleteSteper`, `HttpAddStepFromSteper`, `HttpRemoveStepFromSteper`, `HttpMoveStepFromSteper`, `HttpGetInstance`, `HttpRunInstance`, `HttpResetInstance`, `HttpRollbackInstance`, `HttpStopInstance`.
 
 ## Crontab
 
 ```go
-ct := crontab.New("mi-servicio")
+ct := crontab.New("my-service")
 
-ct.AddJob("job-1", "0 * * * * *", et.Json{"msg": "hola"}, 0, true,
+ct.AddJob("job-1", "0 * * * * *", et.Json{"msg": "hello"}, 0, true,
     func(job *crontab.Job) { logs.Infof("[cron] %s", job.Params.ToString()) },
 )
 
-ct.AddEventJob("job-2", "@every 30s", "mi-canal", 0, true,
+ct.AddEventJob("job-2", "@every 30s", "my-channel", 0, true,
     et.Json{"foo": "bar"},
     func(msg event.Message) { logs.Infof("[event] %s", msg.Data.ToString()) },
 )
@@ -123,56 +180,69 @@ ct.AddEventJob("job-2", "@every 30s", "mi-canal", 0, true,
 
 API: `New`, `AddJob`, `AddOneShotJob`, `AddEventJob`, `AddOneShotEventJob`, `DeleteJob`, `StartJob`, `StopJob`, `Stop`.
 
-## JavaScript embebido (`js/`)
+## JavaScript runtime (`vm/`)
 
-Runtime goja con tres modos: `Develop` (hot-reload), `Production` (desde Store), `Building` (compila + semver).  
-Expone `console.*`, `ctx.*`, `fetch()`, `require()`.
+Embedded goja runtime with three modes: `Develop` (hot-reload from files), `Production` (loads from Store), `Building` (compiles + semver bump). Exposes `console.*`, `ctx.*`, `fetch()`, `require()`.
 
 ```go
-v := js.New("mi-vm")
+v := vm.New("my-vm")
 v.RunDev("./cmd/vm")
 ```
 
-## Agentes IA (`ia/`)
+## AI agents (`ia/`)
 
 ```go
-agent := ia.New(name, myStore) // myStore implementa instances.Store
+agent := ia.New(name, myStore) // myStore implements instances.Store
 ```
 
-Seguimiento de conversación, event handlers y estado por instancia. Requiere `OPENAI_API_KEY`.
+Manages conversation tracking, event handlers, and per-instance state. Requires `OPENAI_API_KEY`.
 
 ## Logging
 
 ```go
-logs.Info("mensaje")
-logs.Errorf("falló: %v", err)
-logs.Fatal(err)              // os.Exit(1)
-logs.EnableCallerInfo = false // desactiva runtime.Callers en Error() — recomendado en producción
+logs.Info("message")
+logs.Errorf("failed: %v", err)
+logs.Fatal(err)                  // calls os.Exit(1)
+logs.EnableCallerInfo = false    // disable runtime.Callers in Error() — recommended in production
 ```
 
-## Desarrollo
+## Required environment variables
+
+| Package | Variable                                                                                  | Purpose                                |
+| ------- | ----------------------------------------------------------------------------------------- | -------------------------------------- |
+| `cache` | `REDIS_HOST`                                                                              | Redis host                             |
+| `cache` | `REDIS_PASSWORD`, `REDIS_DB`                                                              | Redis auth and database (optional)     |
+| `event` | `NATS_HOST`                                                                               | NATS host                              |
+| `event` | `NATS_USER`, `NATS_PASSWORD`                                                              | NATS auth (optional)                   |
+| `claim` | `SECRET`                                                                                  | JWT signing key (default: `"1977"`)    |
+| `jsql`  | `DB_DRIVER`                                                                               | Driver name: `postgres` or `sqlite`    |
+| `jsql`  | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`                                 | Database connection                    |
+| `jsql`  | `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_CONN_LIFETIME`, `DB_POOL_CONN_IDLE_TIME` | Connection pool (optional)             |
+| `graph` | `NEO4J_HOST`, `NEO4J_USER`, `NEO4J_PASSWORD`                                              | Neo4j connection                       |
+| `ia`    | `OPENAI_API_KEY`                                                                          | OpenAI API key                         |
+| `wsp`   | `WHATSAPP_API_URL`                                                                        | WhatsApp Graph API base URL (optional) |
+
+## CLI binaries
 
 ```bash
-gofmt -w .           # formatear
-go build ./...       # compilar
-go test ./...        # pruebas
-./version.sh --minor # bump de versión semántica
+go run ./cmd/et                          # main CLI (cobra)
+go run ./cmd/apigateway                  # API Gateway / proxy
+go run ./cmd/daemon                      # background service with systemd integration
+go run ./cmd/server                      # TCP node server (default port 1377, use -port flag)
+go run ./cmd/vm                          # JS VM with hot-reload
+go run ./cmd/jsql                        # jsql driver demo and test
+go run ./cmd/client -addr localhost:1377 # TCP test client
 ```
 
-## Binarios CLI
+## Development
 
 ```bash
-go run ./cmd/et                          # CLI principal
-go run ./cmd/apigateway                  # API Gateway
-go run ./cmd/daemon                      # Servicio systemd
-go run ./cmd/server                      # Nodo TCP (:1377)
-go run ./cmd/vm                          # VM JS con hot-reload
-go run ./cmd/client -addr localhost:1377 # Cliente TCP de prueba
-go run ./cmd/wsp             # WhatsApp
+gofmt -w .           # format code
+go build ./...       # compile all packages
+go test ./...        # run tests (no *_test.go files yet — compiles only)
+./version.sh --minor # semantic version bump (reads git tags, updates README, pushes tag)
 ```
 
-## Licencia
+## License
 
 MIT. Ver `LICENSE`.
-
-A

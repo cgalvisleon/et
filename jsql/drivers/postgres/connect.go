@@ -6,25 +6,28 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/utility"
 	"github.com/lib/pq"
 )
 
 /**
 * defaultChain: Returns the default connection string for PostgreSQL
-* @param params utility.Config
+* @param params et.Json
 * @return string
 **/
-func defaultChain(params utility.Config) string {
-	host := params.GetStr("DB_HOST", "localhost")
-	port := params.GetInt("DB_PORT", 5432)
-	user := params.GetStr("DB_USER", "postgres")
-	password := params.GetStr("DB_PASSWORD", "")
+func defaultChain(params et.Json) string {
+	host := params.ValStr("localhost", "host")
+	port := params.ValInt(5432, "port")
+	user := params.ValStr("", "user")
+	password := params.ValStr("", "password")
 	name := "postgres"
-	sslMode := params.GetStr("DB_SSL_MODE", "disable")
-	appName := params.GetStr("DB_APP_NAME", "et")
+	sslMode := params.ValStr("disable", "sslmode")
+	if sslMode == "" {
+		sslMode = "disable"
+	}
+	appName := params.ValStr("et", "app_name")
 
 	dsn := fmt.Sprintf(
 		"postgres://%s:%s@%s:%d/%s?sslmode=%s&application_name=%s",
@@ -35,17 +38,20 @@ func defaultChain(params utility.Config) string {
 
 /**
 * chain: Returns the connection string for the named database specified in DB_NAME.
-* @param params utility.Config
+* @param params et.Json
 * @return string
 **/
-func chain(params utility.Config) string {
-	host := params.GetStr("DB_HOST", "localhost")
-	port := params.GetInt("DB_PORT", 5432)
-	user := params.GetStr("DB_USER", "postgres")
-	password := params.GetStr("DB_PASSWORD", "")
-	name := params.GetStr("DB_NAME", "")
-	sslMode := params.GetStr("DB_SSL_MODE", "disable")
-	appName := params.GetStr("DB_APP_NAME", "et")
+func chain(params et.Json) string {
+	host := params.ValStr("localhost", "host")
+	port := params.ValInt(5432, "port")
+	user := params.ValStr("postgres", "user")
+	password := params.ValStr("", "password")
+	name := params.ValStr("", "name")
+	sslMode := params.ValStr("disable", "sslmode")
+	if sslMode == "" {
+		sslMode = "disable"
+	}
+	appName := params.ValStr("et", "app_name")
 
 	dsn := fmt.Sprintf(
 		"postgres://%s:%s@%s:%d/%s?sslmode=%s&application_name=%s",
@@ -121,10 +127,10 @@ func (s *Postgres) Connect(ctx context.Context, db *jsql.DB) (*sql.DB, error) {
 		return nil, err
 	}
 
-	database := params.GetStr("DB_NAME", "")
+	database := params.ValStr("", "database")
 	if database == "" {
 		result.Close()
-		return nil, fmt.Errorf("DB_NAME is required")
+		return nil, fmt.Errorf("database is required")
 	}
 
 	err = CreateDatabase(result, database)
@@ -139,20 +145,19 @@ func (s *Postgres) Connect(ctx context.Context, db *jsql.DB) (*sql.DB, error) {
 		return nil, err
 	}
 
-	maxOpen := params.GetInt("DB_POOL_MAX_OPEN", 50)
-	maxIdle := params.GetInt("DB_POOL_MAX_IDLE", 25)
-	connLifetime := params.GetInt("DB_POOL_CONN_LIFETIME", 900)
-	connIdleTime := params.GetInt("DB_POOL_CONN_IDLE_TIME", 300)
+	maxOpen := params.ValInt(3, "pool_max_open")
+	maxIdle := params.ValInt(1, "pool_max_idle")
+	connLifetime := params.ValInt(30, "pool_lifetime")
+	connIdleTime := params.ValInt(2, "pool_idle_time")
 
 	result.SetMaxOpenConns(maxOpen)
 	result.SetMaxIdleConns(maxIdle)
-	result.SetConnMaxLifetime(time.Duration(connLifetime) * time.Second)
-	result.SetConnMaxIdleTime(time.Duration(connIdleTime) * time.Second)
+	result.SetConnMaxLifetime(time.Duration(connLifetime) * time.Minute)
+	result.SetConnMaxIdleTime(time.Duration(connIdleTime) * time.Minute)
 
-	host := params.GetStr("DB_HOST", "")
-	port := params.GetInt("DB_PORT", 5432)
-	name := params.GetStr("DB_NAME", "")
-	logs.Logf("Postgres", "Connected host:%s:%d db:%s", host, port, name)
+	host := params.ValStr("", "host")
+	port := params.ValInt(5432, "port")
+	logs.Logf("Postgres", "Connected host:%s:%d db:%s", host, port, database)
 	return result, nil
 }
 

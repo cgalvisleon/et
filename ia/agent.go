@@ -5,8 +5,6 @@ import (
 	"fmt"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/conversations"
@@ -26,22 +24,6 @@ Reglas obligatorias:
 `
 
 const modelDefault = openai.ChatModelGPT4oMini
-
-type Skill interface {
-	Tag() string
-	Name() string
-	Description() string
-	Execute(
-		ctx context.Context,
-		input map[string]any,
-	) (*SkillResult, error)
-}
-
-type SkillResult struct {
-	Success bool
-	Data    any
-	Error   string
-}
 
 type Agent struct {
 	ID          string           `json:"id"`
@@ -83,47 +65,6 @@ func newAgent(ia *Ia, name, description, context, model string) *Agent {
 	}
 	ia.addAgent(result)
 	return result
-}
-
-/**
-* save
-* @return error
-**/
-func (s *Agent) save() error {
-	data := s.ToJson()
-	if s.isDebug {
-		logs.Log(packageName, "save:", data.ToString())
-	}
-
-	if s.ia != nil && s.ia.store != nil {
-		err := s.ia.store.Set(s.ID, "agent", s)
-		if err != nil {
-			return err
-		}
-	}
-
-	event.Publish(EVENT_AGENT_SET, data)
-
-	return nil
-}
-
-/**
-* delete
-* @return error
-**/
-func (s *Agent) delete() error {
-	if s.ia != nil && s.ia.store != nil {
-		err := s.ia.store.Delete(s.ID)
-		if err != nil {
-			return err
-		}
-	}
-
-	event.Publish(EVENT_AGENT_DELETE, et.Json{
-		"id": s.ID,
-	})
-
-	return nil
 }
 
 /**

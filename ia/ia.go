@@ -9,6 +9,7 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/instances"
+	"github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/utility"
@@ -24,6 +25,7 @@ type Ia struct {
 	ID                string                   `json:"id"`
 	Agents            map[string]*Agent        `json:"agents"`
 	Conversations     map[string]*Conversation `json:"-"`
+	db                *jsql.DB                 `json:"-"`
 	sender            Sender                   `json:"-"`
 	muAgents          sync.RWMutex             `json:"-"`
 	muConversations   sync.RWMutex             `json:"-"`
@@ -34,14 +36,19 @@ type Ia struct {
 	isDebug           bool                     `json:"-"`
 }
 
-func New(store instances.Store) (*Ia, error) {
+/**
+* New
+* @param db *jsql.DB
+* @return (*Ia, error)
+**/
+func New(db *jsql.DB) (*Ia, error) {
 	err := event.Load()
 	if err != nil {
 		return nil, err
 	}
 
 	key := envar.GetStr("OPENAI_API_KEY", "")
-	ia = &Ia{
+	result := &Ia{
 		ID:              "ia:agents",
 		Agents:          make(map[string]*Agent, 0),
 		Conversations:   make(map[string]*Conversation, 0),
@@ -49,24 +56,28 @@ func New(store instances.Store) (*Ia, error) {
 		muConversations: sync.RWMutex{},
 		isDebug:         envar.GetBool("DEBUG", false),
 		key:             key,
-		store:           store,
+		db:              db,
+	}
+	err = result.up()
+	if err != nil {
+		return nil, err
 	}
 
-	return ia, nil
+	return result, nil
 }
 
 /**
 * New
-* @param store instances.Store
+* @param db *jsql.DB
 * @return error
 **/
-func Load(store instances.Store) error {
+func Load(db *jsql.DB) error {
 	if ia != nil {
 		return nil
 	}
 
 	var err error
-	ia, err = New(store)
+	ia, err = New(db)
 	if err != nil {
 		return err
 	}
@@ -129,6 +140,20 @@ func (s *Ia) delete() error {
 * up
 **/
 func (s *Ia) up() error {
+	err := s.initStore()
+	if err != nil {
+		return err
+	}
+
+	err = s.initStoreConversation()
+	if err != nil {
+		return err
+	}
+
+	err = s.initStoreMessage()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -177,13 +202,15 @@ func (s *Ia) getAgent(name string) (*Agent, bool) {
 /**
 * removeAgent
 * @param tag string
+* @return error
 **/
-func (s *Ia) removeAgent(name string) {
+func (s *Ia) removeAgent(name string) error {
 	id := agendId(name)
 	s.muAgents.Lock()
 	defer s.muAgents.Unlock()
 
 	delete(s.Agents, id)
+	return s.save()
 }
 
 /**
@@ -199,7 +226,7 @@ func (s *Ia) newAgent(name, description, context, model string) (*Agent, error) 
 
 	result := newAgent(s, name, description, context, model)
 	s.addAgent(result)
-	return result, nil
+	return result, s.save()
 }
 
 /**
@@ -220,7 +247,7 @@ func (s *Ia) setModelAgent(agentName string, model string) (*Agent, error) {
 		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, agentName)
 	}
 	result.setModel(model)
-	return result, result.save()
+	return result, s.save()
 }
 
 /**
@@ -241,7 +268,7 @@ func (s *Ia) setContextAgent(agentName string, context string) (*Agent, error) {
 		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, agentName)
 	}
 	result.setContext(context)
-	return result, result.save()
+	return result, s.save()
 }
 
 /**
@@ -262,7 +289,7 @@ func (s *Ia) setSkillAgent(agentName string, skill Skill) (*Agent, error) {
 		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, agentName)
 	}
 	result.addSkill(skill)
-	return result, result.save()
+	return result, s.save()
 }
 
 /**

@@ -1,6 +1,8 @@
 package instances
 
-import "github.com/cgalvisleon/et/et"
+import (
+	"github.com/cgalvisleon/et/et"
+)
 
 type Store interface {
 	Set(id, tag string, obj any) error

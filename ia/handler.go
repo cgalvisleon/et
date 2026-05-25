@@ -187,6 +187,24 @@ func (s *Ia) HttpSetApiSkillAgent(w http.ResponseWriter, r *http.Request) {
 }
 
 /**
+* HttpDelete
+* @param w http.ResponseWriter
+* @param r *http.Request
+**/
+func (s *Ia) HttpDelete(w http.ResponseWriter, r *http.Request) {
+	err := s.delete()
+	if err != nil {
+		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response.ITEM(w, r, http.StatusOK, et.Item{
+		Ok:     true,
+		Result: et.Json{"message": "ia deleted"},
+	})
+}
+
+/**
 * HttpConversation
 * @param w http.ResponseWriter
 * @param r *http.Request

@@ -168,7 +168,12 @@ func (s *Ia) HttpSetApiSkillAgent(w http.ResponseWriter, r *http.Request) {
 	method := body.Str("method")
 	headers := body.Json("headers")
 	bodyData := body.Json("body")
-	apiSkill := NewApiSkill(tag, name, description, url, method, headers, bodyData)
+	apiSkill, err := NewApiSkill(tag, name, description, url, method, headers, bodyData)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	result, err := s.setSkillAgent(agentName, apiSkill)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())

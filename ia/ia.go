@@ -203,11 +203,11 @@ func (s *Ia) newAgent(name, description, context, model string) (*Agent, error) 
 }
 
 /**
-* setModel
+* setModelAgent
 * @param agentName string, model string
 * @return (*Agent, error)
 **/
-func (s *Ia) setModel(agentName string, model string) (*Agent, error) {
+func (s *Ia) setModelAgent(agentName string, model string) (*Agent, error) {
 	if !utility.ValidStr(agentName, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "agentName")
 	}
@@ -224,11 +224,11 @@ func (s *Ia) setModel(agentName string, model string) (*Agent, error) {
 }
 
 /**
-* setContext
+* setContextAgent
 * @param agentName string, context string
 * @return (*Agent, error)
 **/
-func (s *Ia) setContext(agentName string, context string) (*Agent, error) {
+func (s *Ia) setContextAgent(agentName string, context string) (*Agent, error) {
 	if !utility.ValidStr(agentName, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "agentName")
 	}
@@ -245,11 +245,11 @@ func (s *Ia) setContext(agentName string, context string) (*Agent, error) {
 }
 
 /**
-* setSkill
+* setSkillAgent
 * @param agentName string, skill Skill
 * @return (*Agent, error)
 **/
-func (s *Ia) setSkill(agentName string, skill Skill) (*Agent, error) {
+func (s *Ia) setSkillAgent(agentName string, skill Skill) (*Agent, error) {
 	if !utility.ValidStr(agentName, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "agentName")
 	}

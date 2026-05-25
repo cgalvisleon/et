@@ -155,17 +155,14 @@ func (s *Ia) up() error {
 		return err
 	}
 
-	var res *Ia
-	exists, err := s.store.Get(s.ID, &res)
+	err = s.loadAgents()
 	if err != nil {
 		return err
 	}
 
-	if exists && res != nil {
-		for k, v := range res.Agents {
-			v.up(s)
-			s.Agents[k] = v
-		}
+	err = s.loadConversations()
+	if err != nil {
+		return err
 	}
 
 	return nil

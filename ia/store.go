@@ -43,6 +43,27 @@ func (s *Ia) initStore() error {
 }
 
 /**
+* loadAgents
+* @return error
+**/
+func (s *Ia) loadAgents() error {
+	var res *Ia
+	exists, err := s.store.Get(s.ID, &res)
+	if err != nil {
+		return err
+	}
+
+	if exists && res != nil {
+		for k, v := range res.Agents {
+			v.up(s)
+			s.Agents[k] = v
+		}
+	}
+
+	return nil
+}
+
+/**
 * initStoreConversation
 * @return error
 **/
@@ -76,6 +97,14 @@ func (s *Ia) initStoreConversation() error {
 
 	s.conversationStore = instances.LoadModel(model)
 
+	return nil
+}
+
+/**
+* loadConversations
+* @return error
+**/
+func (s *Ia) loadConversations() error {
 	return nil
 }
 

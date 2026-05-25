@@ -31,25 +31,22 @@ var (
 )
 
 /**
-* Load
-* @return error
+* New
+* @param store instances.Store
+* @return (*WorkFlow, error)
 **/
-func Load(store instances.Store) error {
-	if workflow != nil {
-		return nil
-	}
-
+func New(store instances.Store) (*WorkFlow, error) {
 	err := event.Load()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	resetInstance, err := resilience.New(store)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	workflow = &WorkFlow{
+	result := &WorkFlow{
 		Flows:       make(map[string]*Flow),
 		Instances:   make(map[string]*Instance),
 		Results:     make(map[string]et.Json),
@@ -58,6 +55,25 @@ func Load(store instances.Store) error {
 		store:       store,
 		resilience:  resetInstance,
 		isDebug:     envar.GetBool("DEBUG", false),
+	}
+	result.eventInit()
+
+	return result, nil
+}
+
+/**
+* Load
+* @return error
+**/
+func Load(store instances.Store) error {
+	if workflow != nil {
+		return nil
+	}
+
+	var err error
+	workflow, err = New(store)
+	if err != nil {
+		return err
 	}
 
 	return nil

@@ -15,8 +15,9 @@ import (
 	"github.com/openai/openai-go/v3"
 )
 
-const (
+var (
 	packageName = "ia"
+	ia          *Ia
 )
 
 type Ia struct {
@@ -33,21 +34,10 @@ type Ia struct {
 	isDebug           bool                     `json:"-"`
 }
 
-var ia *Ia
-
-/**
-* New
-* @param store instances.Store
-* @return error
-**/
-func Load(store instances.Store) error {
-	if ia != nil {
-		return nil
-	}
-
+func New(store instances.Store) (*Ia, error) {
 	err := event.Load()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	key := envar.GetStr("OPENAI_API_KEY", "")
@@ -60,6 +50,25 @@ func Load(store instances.Store) error {
 		isDebug:         envar.GetBool("DEBUG", false),
 		key:             key,
 		store:           store,
+	}
+
+	return ia, nil
+}
+
+/**
+* New
+* @param store instances.Store
+* @return error
+**/
+func Load(store instances.Store) error {
+	if ia != nil {
+		return nil
+	}
+
+	var err error
+	ia, err = New(store)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -317,30 +326,35 @@ func (s *Ia) Embed(ctx context.Context, agentName string, text string) ([]float6
 
 /**
 * Conversation
-* @param ctx context.Context, agentName string, convID string, prompt string
-* @return (et.Json, error)
+* @param ctx context.Context, agentName string, convID string, to string, prompt string
+* @return (*Conversation, error)
 **/
-func (s *Ia) Conversation(ctx context.Context, agentName, convID, prompt string) (et.Json, error) {
+func (s *Ia) Conversation(ctx context.Context, agentName, convID, to, prompt string) (*Conversation, error) {
 	if !utility.ValidStr(agentName, 0, []string{""}) {
-		return et.Json{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "agentName")
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "agentName")
 	}
 	if !utility.ValidStr(prompt, 1, []string{}) {
-		return et.Json{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "prompt")
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "prompt")
 	}
 
-	result, exists := s.getAgent(agentName)
+	agent, exists := s.getAgent(agentName)
 	if !exists {
-		return et.Json{}, fmt.Errorf(MSG_AGENT_NOT_FOUND, agentName)
+		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, agentName)
 	}
 
-	response, err := result.conversation(ctx, convID, prompt)
+	response, err := agent.conversation(ctx, convID, prompt)
 	if err != nil {
-		return et.Json{}, err
+		return nil, err
 	}
 
 	conversation, exists := s.getConversation(response.ConvID)
-	if !exists {
-		return et.Json{}, fmt.Errorf("conversation not found")
+	if exists {
+		s.addConversation(conversation)
+	}
+
+	_, err = conversation.SetTextMessage(to, response.Text)
+	if err != nil {
+		return nil, err
 	}
 
 	return conversation, nil

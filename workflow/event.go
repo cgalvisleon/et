@@ -6,3 +6,7 @@ const (
 	EVENT_INSTANCE_SET    = "workflow:instance:set"
 	EVENT_INSTANCE_DELETE = "workflow:instance:delete"
 )
+
+func (s *WorkFlow) eventInit() {
+
+}

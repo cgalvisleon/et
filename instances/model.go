@@ -24,10 +24,10 @@ func LoadModel(model *jsql.Model) *Model {
 
 /**
 * Set
-* @param id, tag string, obj any
+* @param id, tag, ownerId string, obj any
 * @return error
 **/
-func (s *Model) Set(id, tag string, obj any) error {
+func (s *Model) Set(id, tag, ownerId string, obj any) error {
 	bt, err := json.Marshal(s)
 	if err != nil {
 		return err
@@ -41,6 +41,7 @@ func (s *Model) Set(id, tag string, obj any) error {
 
 	result.Set("id", id)
 	result.Set("tag", tag)
+	result.Set("owner_id", ownerId)
 	_, err = s.model.
 		Upsert(result).
 		Where(jsql.Eq("id", id)).

@@ -18,12 +18,12 @@ var crontab *Crontab
 
 /**
 * Load
-* @params db *jdb.DB, schemaName, tag string
+* @params tag string, store instances.Store
 * @return error
 **/
 func Load(tag string, store instances.Store) error {
 	var err error
-	crontab, err = New(tag)
+	crontab, err = New(tag, store)
 	if err != nil {
 		return err
 	}
@@ -31,11 +31,6 @@ func Load(tag string, store instances.Store) error {
 	err = crontab.start()
 	if err != nil {
 		return err
-	}
-
-	if store != nil {
-		SetGetInstance(store.Get)
-		SetSetInstance(store.Set)
 	}
 
 	time.Sleep(1 * time.Second)
@@ -199,14 +194,14 @@ func HttpSet(w http.ResponseWriter, r *http.Request) {
 * @params w http.ResponseWriter, r *http.Request
 **/
 func HttpGet(w http.ResponseWriter, r *http.Request) {
-	if getInstance == nil {
-		response.HTTPError(w, r, http.StatusBadRequest, "get instance not found")
+	if crontab == nil || crontab.store == nil {
+		response.HTTPError(w, r, http.StatusBadRequest, msg.MSG_CRONTAB_UNLOAD)
 		return
 	}
 
 	id := request.URLParam(r, "id").Str()
 	var instance Job
-	exists, err := getInstance(id, &instance)
+	exists, err := crontab.store.Get(id, &instance)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -231,14 +226,14 @@ func HttpGet(w http.ResponseWriter, r *http.Request) {
 * @params w http.ResponseWriter, r *http.Request
 **/
 func HttpStart(w http.ResponseWriter, r *http.Request) {
-	if getInstance == nil {
-		response.HTTPError(w, r, http.StatusBadRequest, "get instance not found")
+	if crontab == nil || crontab.store == nil {
+		response.HTTPError(w, r, http.StatusBadRequest, msg.MSG_CRONTAB_UNLOAD)
 		return
 	}
 
 	id := request.URLParam(r, "id").Str()
 	var instance Job
-	exists, err := getInstance(id, &instance)
+	exists, err := crontab.store.Get(id, &instance)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -269,14 +264,14 @@ func HttpStart(w http.ResponseWriter, r *http.Request) {
 * @params w http.ResponseWriter, r *http.Request
 **/
 func HttpStop(w http.ResponseWriter, r *http.Request) {
-	if getInstance == nil {
-		response.HTTPError(w, r, http.StatusBadRequest, "get instance not found")
+	if crontab == nil || crontab.store == nil {
+		response.HTTPError(w, r, http.StatusBadRequest, msg.MSG_CRONTAB_UNLOAD)
 		return
 	}
 
 	id := request.URLParam(r, "id").Str()
 	var instance Job
-	exists, err := getInstance(id, &instance)
+	exists, err := crontab.store.Get(id, &instance)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return

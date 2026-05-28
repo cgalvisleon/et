@@ -100,6 +100,8 @@ type Metrics struct {
 	ResponseTime float64 `json:"response_time_ms"`
 	// http.server.request.duration — total request latency in milliseconds
 	Latency float64 `json:"latency_ms"`
+	// request over limit
+	OverLimit bool `json:"over_limit"`
 
 	key     string
 	mark    time.Time
@@ -246,7 +248,7 @@ func NewMetric(r *http.Request) *Metrics {
 	}
 
 	now := timezone.Now()
-	return &Metrics{
+	result := &Metrics{
 		TimeStamp:     now,
 		ServiceId:     serviceId,
 		ClientAddress: clientAddr,
@@ -262,6 +264,8 @@ func NewMetric(r *http.Request) *Metrics {
 		mark:          now,
 		key:           fmt.Sprintf(`%s:%s`, r.Method, r.URL.Path),
 	}
+	result.metrics = result.CallMetrics()
+	return result
 }
 
 /**
@@ -271,7 +275,7 @@ func NewMetric(r *http.Request) *Metrics {
 **/
 func NewRpcMetric(method string) *Metrics {
 	now := timezone.Now()
-	return &Metrics{
+	result := &Metrics{
 		TimeStamp: now,
 		ServiceId: utility.UUID(),
 		Scheme:    "rpc",
@@ -280,6 +284,8 @@ func NewRpcMetric(method string) *Metrics {
 		mark:      now,
 		key:       fmt.Sprintf(`RPC:%s`, method),
 	}
+	result.metrics = result.CallMetrics()
+	return result
 }
 
 /**
@@ -342,7 +348,7 @@ func (s *Metrics) CallMetrics() Telemetry {
 	second := timeNow.Format("2006-01-02-15:04:05")
 	requestsLimit := envar.GetInt("REQUESTS_LIMIT", 400)
 
-	return Telemetry{
+	result := Telemetry{
 		TimeStamp:         date,
 		Key:               s.key,
 		RequestsPerSecond: cache.Incr(reg.GenHashKey(s.key, second), 2*time.Second),
@@ -351,6 +357,9 @@ func (s *Metrics) CallMetrics() Telemetry {
 		RequestsPerDay:    cache.Incr(reg.GenHashKey(s.key, date), 24*time.Hour),
 		RequestsLimit:     int64(requestsLimit),
 	}
+	s.OverLimit = result.RequestsPerSecond > result.RequestsLimit
+
+	return result
 }
 
 /**
@@ -392,8 +401,6 @@ func (s *Metrics) logRequest() et.Json {
 	}
 
 	lg.Color(w, lg.White, " Response:%.2fms", s.ResponseTime)
-
-	s.metrics = s.CallMetrics()
 	threshold := float64(s.metrics.RequestsLimit) * 0.6
 	rps := s.metrics.RequestsPerSecond
 	switch {

@@ -71,6 +71,7 @@ func Authenticate(next http.Handler) http.Handler {
 		ctx = context.WithValue(ctx, request.UserIdKey, clm.UserId)
 		ctx = context.WithValue(ctx, request.UsernameKey, clm.Username)
 		ctx = context.WithValue(ctx, request.PayloadKey, clm.Payload)
+		ctx = context.WithValue(ctx, request.TokenKey, token)
 		data, err := clm.ToJson()
 		if err != nil {
 			response.Unauthorized(w, r)

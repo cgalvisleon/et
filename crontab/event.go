@@ -8,10 +8,10 @@ import (
 )
 
 var (
-	EVENT_CRONTAB_SET    = "event:crontab:set"
-	EVENT_CRONTAB_REMOVE = "event:crontab:remove"
-	EVENT_CRONTAB_STOP   = "event:crontab:stop"
-	EVENT_CRONTAB_START  = "event:crontab:start"
+	EVENT_CRONTAB_SET    = "crontab:set"
+	EVENT_CRONTAB_REMOVE = "crontab:remove"
+	EVENT_CRONTAB_STOP   = "crontab:stop"
+	EVENT_CRONTAB_START  = "crontab:start"
 )
 
 /**
@@ -19,10 +19,10 @@ var (
 * @return error
 **/
 func (s *Crontab) eventInit() error {
-	EVENT_CRONTAB_SET = fmt.Sprintf("event:crontab:set:%s", s.Tag)
-	EVENT_CRONTAB_REMOVE = fmt.Sprintf("event:crontab:remove:%s", s.Tag)
-	EVENT_CRONTAB_STOP = fmt.Sprintf("event:crontab:stop:%s", s.Tag)
-	EVENT_CRONTAB_START = fmt.Sprintf("event:crontab:start:%s", s.Tag)
+	EVENT_CRONTAB_SET = fmt.Sprintf("crontab:set:%s", s.Tag)
+	EVENT_CRONTAB_REMOVE = fmt.Sprintf("crontab:remove:%s", s.Tag)
+	EVENT_CRONTAB_STOP = fmt.Sprintf("crontab:stop:%s", s.Tag)
+	EVENT_CRONTAB_START = fmt.Sprintf("crontab:start:%s", s.Tag)
 
 	err := event.Stack(EVENT_CRONTAB_SET, s.eventSet)
 	if err != nil {
@@ -56,13 +56,14 @@ func (s *Crontab) eventSet(msg event.Message) {
 	data := msg.Data
 	tpStr := data.Str("type")
 	tag := data.Str("tag")
+	ownerId := data.Str("owner_id")
 	spec := data.Str("spec")
 	channel := data.Str("channel")
 	started := data.Bool("started")
 	params := data.Json("params")
 	repetitions := data.Int("repetitions")
 	tp := TypeJob(tpStr)
-	_, err := s.addJob(tp, tag, spec, channel, started, params, repetitions)
+	_, err := s.addJob(tp, tag, ownerId, spec, channel, started, params, repetitions)
 	if err != nil {
 		logs.Logf(packageName, fmt.Sprintf("error adding job: %s:%s; %s", tpStr, tag, err))
 		return

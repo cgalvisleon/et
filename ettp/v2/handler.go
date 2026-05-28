@@ -73,6 +73,12 @@ func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 	ctx := context.WithValue(r.Context(), middleware.MetricKey, metric)
 	r = r.WithContext(ctx)
 
+	/* Check if over limit */
+	if metric.OverLimit {
+		s.HTTPError(nil, metric, w, r, http.StatusTooManyRequests, http.StatusText(http.StatusTooManyRequests))
+		return
+	}
+
 	/* Get resolver */
 	resolver, err := s.FindResolver(r)
 	if err != nil {
@@ -116,6 +122,12 @@ func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handlerApi(w http.ResponseWriter, r *http.Request) {
 	rw := &middleware.ResponseWriterWrapper{ResponseWriter: w}
 	metric := middleware.GetMetrics(r)
+
+	/* Check if over limit */
+	if metric.OverLimit {
+		s.HTTPError(nil, metric, rw, r, http.StatusTooManyRequests, http.StatusText(http.StatusTooManyRequests))
+		return
+	}
 
 	resolver, ok := r.Context().Value(ResoluteKey).(*Resolver)
 	if !ok {

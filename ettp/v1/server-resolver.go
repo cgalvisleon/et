@@ -40,6 +40,12 @@ func (s *Server) handlerResolver(w http.ResponseWriter, r *http.Request) {
 	ctx := context.WithValue(r.Context(), MetricKey, metric)
 	r = r.WithContext(ctx)
 
+	/* Check if over limit */
+	if metric.OverLimit {
+		metric.HTTPError(w, r, http.StatusTooManyRequests, http.StatusText(http.StatusTooManyRequests))
+		return
+	}
+
 	/* Get resolver */
 	resolver, r := s.getResolver(r)
 	if s.debug {
@@ -77,7 +83,6 @@ func (s *Server) handlerResolver(w http.ResponseWriter, r *http.Request) {
 	h := s.handlerApiRest
 	ctx = context.WithValue(ctx, ResoluteKey, resolver)
 	handler := s.applyMiddlewares(http.HandlerFunc(h), router.middlewares)
-
 	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 

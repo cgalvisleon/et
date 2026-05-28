@@ -1,7 +1,6 @@
 package crontab
 
 import (
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -11,7 +10,6 @@ import (
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
-	"github.com/cgalvisleon/et/utility"
 	"github.com/robfig/cron/v3"
 )
 
@@ -38,6 +36,7 @@ type Job struct {
 	ExecuteAt   time.Time     `json:"execute_at"`
 	Type        TypeJob       `json:"type"`
 	Tag         string        `json:"tag"`
+	OwnerId     string        `json:"owner_id"`
 	Channel     string        `json:"channel"`
 	Params      et.Json       `json:"params"`
 	Spec        string        `json:"spec"`
@@ -47,6 +46,7 @@ type Job struct {
 	Attempts    int           `json:"attempts"`
 	Repetitions int           `json:"repetitions"`
 	Duration    time.Duration `json:"duration"`
+	isDebug     bool          `json:"-"`
 	idx         cron.EntryID  `json:"-"`
 	shot        *time.Timer   `json:"-"`
 	owner       *Crontab      `json:"-"`
@@ -55,14 +55,15 @@ type Job struct {
 
 /**
 * newJob
-* @param owner *Crontab, tp TypeJob, tag string, spec string, channel string, params et.Json, repetitions int
+* @param owner *Crontab, tp TypeJob, tag, ownerId, spec, channel string, params et.Json, repetitions int
 * @return *Job
 **/
-func newJob(owner *Crontab, tp TypeJob, tag, spec, channel string, params et.Json, repetitions int) *Job {
+func newJob(owner *Crontab, tp TypeJob, tag, ownerId, spec, channel string, params et.Json, repetitions int) *Job {
 	result := &Job{
 		ID:          reg.UUID(),
 		Type:        tp,
 		Tag:         tag,
+		OwnerId:     ownerId,
 		Channel:     channel,
 		Params:      params,
 		Spec:        spec,
@@ -73,6 +74,7 @@ func newJob(owner *Crontab, tp TypeJob, tag, spec, channel string, params et.Jso
 		Repetitions: repetitions,
 		idx:         -1,
 		owner:       owner,
+		isDebug:     owner.isDebug,
 		mu:          &sync.Mutex{},
 	}
 
@@ -80,35 +82,26 @@ func newJob(owner *Crontab, tp TypeJob, tag, spec, channel string, params et.Jso
 }
 
 /**
-* Serialize
-* @return ([]byte, error)
-**/
-func (s *Job) serialize() ([]byte, error) {
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return nil, err
-	}
-
-	return bt, nil
-}
-
-/**
 * ToJson
 * @return et.Json
 **/
 func (s *Job) ToJson() et.Json {
-	bt, err := s.serialize()
-	if err != nil {
-		return et.Json{}
+	return et.Json{
+		"id":          s.ID,
+		"execute_at":  s.ExecuteAt,
+		"type":        s.Type,
+		"tag":         s.Tag,
+		"owner_id":    s.OwnerId,
+		"channel":     s.Channel,
+		"params":      s.Params,
+		"spec":        s.Spec,
+		"started":     s.Started,
+		"status":      s.Status,
+		"host_name":   s.HostName,
+		"attempts":    s.Attempts,
+		"repetitions": s.Repetitions,
+		"duration":    s.Duration,
 	}
-
-	var result et.Json
-	err = json.Unmarshal(bt, &result)
-	if err != nil {
-		return et.Json{}
-	}
-
-	return result
 }
 
 /**
@@ -116,13 +109,19 @@ func (s *Job) ToJson() et.Json {
 * @return error
 **/
 func (s *Job) Save() error {
-	if setInstance == nil {
-		return nil
+	data := s.ToJson()
+	if s.isDebug {
+		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	s.ID = utility.UUID()
-	s.ExecuteAt = timezone.Now()
-	return setInstance(s.ID, s.Tag, s)
+	if s.owner.store != nil {
+		err := s.owner.store.Set(s.ID, packageName, s.OwnerId, s)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 /**

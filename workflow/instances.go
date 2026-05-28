@@ -41,6 +41,7 @@ type Instance struct {
 	UpdatedAt   time.Time            `json:"updated_at"`
 	ID          string               `json:"id"`
 	Tag         string               `json:"tag"`
+	OwnerId     string               `json:"owner_id"`
 	CreatedBy   string               `json:"created_by"`
 	UpdatedBy   string               `json:"updated_by"`
 	Ctx         et.Json              `json:"ctx"`
@@ -68,10 +69,10 @@ type Instance struct {
 
 /**
 * newInstance
-* @param steper *Steper, userName string
+* @param steper *Steper, id, ownerId, userName string
 * @return *Instance
  */
-func newInstance(steper *Steper, id, userName string) *Instance {
+func newInstance(steper *Steper, id, ownerId, userName string) *Instance {
 	if id == "" {
 		id = reg.GenUUId(steper.Tag)
 	}
@@ -81,6 +82,7 @@ func newInstance(steper *Steper, id, userName string) *Instance {
 		UpdatedAt:   now,
 		ID:          id,
 		Tag:         steper.flow.Tag,
+		OwnerId:     ownerId,
 		CreatedBy:   userName,
 		UpdatedBy:   userName,
 		Ctx:         et.Json{},
@@ -115,7 +117,7 @@ func (s *Instance) save() error {
 	}
 
 	if s.workflow != nil && s.workflow.store != nil {
-		err := s.workflow.store.Set(s.ID, s.Tag, s)
+		err := s.workflow.store.Set(s.ID, s.Tag, s.OwnerId, s)
 		if err != nil {
 			return err
 		}
@@ -165,6 +167,7 @@ func (s *Instance) ToJson() et.Json {
 		"updated_at":   s.UpdatedAt,
 		"id":           s.ID,
 		"tag":          s.Tag,
+		"owner_id":     s.OwnerId,
 		"created_by":   s.CreatedBy,
 		"updated_by":   s.UpdatedBy,
 		"ctx":          s.Ctx,
@@ -405,7 +408,7 @@ func (s *Instance) startResilence() (et.Json, error) {
 	}
 
 	description := fmt.Sprintf("flow: %s,  %s", s.flow.Name, s.flow.Description)
-	s.Resilence = s.workflow.resilience.Run(s.Tag, description, s.flow.TotalAttempts, s.flow.TimeAttempts, s.Tags, s.flow.Team, s.flow.Level, s.run, s.Ctx)
+	s.Resilence = s.workflow.resilience.Run(s.Tag, description, s.OwnerId, s.flow.TotalAttempts, s.flow.TimeAttempts, s.Tags, s.flow.Team, s.flow.Level, s.run, s.Ctx)
 	if s.Resilence.Error != "" {
 		return et.Json{}, errors.New(s.Resilence.Error)
 	}

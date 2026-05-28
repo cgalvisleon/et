@@ -65,6 +65,7 @@ const (
 	UsernameKey  ContextKey = "username"
 	TenantIdKey  ContextKey = "tenant_id"
 	ProfileIdKey ContextKey = "profile_id"
+	TokenKey     ContextKey = "token"
 )
 
 /**

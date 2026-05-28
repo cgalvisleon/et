@@ -96,12 +96,13 @@ func (s *Resilience) Count() int {
 * @param tag, description string, totalAttempts int, interval time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}
 * @return Instance
  */
-func (s *Resilience) new(tag, description string, totalAttempts int, interval time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
+func (s *Resilience) new(tag, description, ownerId string, totalAttempts int, interval time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
 	id := reg.UUID()
 	result := &Instance{
 		CreatedAt:     time.Now(),
 		ID:            id,
 		Tag:           tag,
+		OwnerId:       ownerId,
 		Description:   description,
 		fn:            fn,
 		fnArgs:        fnArgs,
@@ -162,7 +163,7 @@ func (s *Resilience) Get(id string) (*Instance, bool) {
 * @param tag, description string, totalAttempts int, interval time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}
 * @return *Instance
  */
-func (s *Resilience) Run(tag, description string, totalAttempts int, interval time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
+func (s *Resilience) Run(tag, description, ownerId string, totalAttempts int, interval time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
 	if totalAttempts <= 0 {
 		totalAttempts = 3
 	}
@@ -171,7 +172,7 @@ func (s *Resilience) Run(tag, description string, totalAttempts int, interval ti
 		interval = 30 * time.Second
 	}
 
-	result := s.new(tag, description, totalAttempts, interval, tags, team, level, fn, fnArgs...)
+	result := s.new(tag, description, ownerId, totalAttempts, interval, tags, team, level, fn, fnArgs...)
 	result.Run()
 
 	return result
@@ -179,15 +180,15 @@ func (s *Resilience) Run(tag, description string, totalAttempts int, interval ti
 
 /**
 * RunCustom
-* @param tag, description string, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}
+* @param tag, description, ownerId string, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}
 * @return *Instance
  */
-func (s *Resilience) RunCustom(tag, description string, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
+func (s *Resilience) RunCustom(tag, description, ownerId string, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
 	totalAttempts := envar.GetInt("RESILIENCE_TOTAL_ATTEMPTS", 3)
 	intervalSeconds := envar.GetInt("RESILIENCE_INTERVAL_SECONDS", 30)
 	interval := time.Duration(intervalSeconds) * time.Second
 
-	return s.Run(tag, description, totalAttempts, interval, tags, team, level, fn, fnArgs...)
+	return s.Run(tag, description, ownerId, totalAttempts, interval, tags, team, level, fn, fnArgs...)
 }
 
 /**

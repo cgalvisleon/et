@@ -100,7 +100,7 @@ func (s *Message) save() error {
 	}
 
 	if s.ia != nil && s.ia.messageStore != nil {
-		err := s.ia.messageStore.Set(s.ID, "message", s)
+		err := s.ia.messageStore.Set(s.ID, "message", s.ConversationID, s)
 		if err != nil {
 			return err
 		}

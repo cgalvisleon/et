@@ -21,8 +21,9 @@ func (s *Ia) initStore() error {
 		Columns: []jsql.Column{
 			{Name: "created_at", TypeData: jsql.DATETIME, Default: ""},
 			{Name: "updated_at", TypeData: jsql.DATETIME, Default: ""},
-			{Name: "id", TypeData: jsql.TEXT, Default: ""},
-			{Name: "tag", TypeData: jsql.TEXT, Default: ""},
+			{Name: "id", TypeData: jsql.KEY, Default: ""},
+			{Name: "tag", TypeData: jsql.KEY, Default: ""},
+			{Name: "owner_id", TypeData: jsql.KEY, Default: ""},
 		},
 		PrimaryKeys: []jsql.DefIndex{
 			{Name: "id", Sorted: true},
@@ -79,8 +80,9 @@ func (s *Ia) initStoreConversation() error {
 		Columns: []jsql.Column{
 			{Name: "created_at", TypeData: jsql.DATETIME, Default: ""},
 			{Name: "updated_at", TypeData: jsql.DATETIME, Default: ""},
-			{Name: "id", TypeData: jsql.TEXT, Default: ""},
-			{Name: "tag", TypeData: jsql.TEXT, Default: ""},
+			{Name: "id", TypeData: jsql.KEY, Default: ""},
+			{Name: "tag", TypeData: jsql.KEY, Default: ""},
+			{Name: "owner_id", TypeData: jsql.KEY, Default: ""},
 		},
 		PrimaryKeys: []jsql.DefIndex{
 			{Name: "id", Sorted: true},
@@ -124,8 +126,9 @@ func (s *Ia) initStoreMessage() error {
 		Columns: []jsql.Column{
 			{Name: "created_at", TypeData: jsql.DATETIME, Default: ""},
 			{Name: "updated_at", TypeData: jsql.DATETIME, Default: ""},
-			{Name: "id", TypeData: jsql.TEXT, Default: ""},
-			{Name: "tag", TypeData: jsql.TEXT, Default: ""},
+			{Name: "id", TypeData: jsql.KEY, Default: ""},
+			{Name: "tag", TypeData: jsql.KEY, Default: ""},
+			{Name: "owner_id", TypeData: jsql.KEY, Default: ""},
 		},
 		PrimaryKeys: []jsql.DefIndex{
 			{Name: "id", Sorted: true},

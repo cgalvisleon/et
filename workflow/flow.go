@@ -181,7 +181,7 @@ func (s *Flow) save() error {
 	}
 
 	if s.workflow != nil && s.workflow.store != nil {
-		err := s.workflow.store.Set(s.Tag, "flow", s)
+		err := s.workflow.store.Set(s.Tag, "flow", "", s)
 		if err != nil {
 			return err
 		}

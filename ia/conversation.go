@@ -84,7 +84,7 @@ func (s *Participant) save() error {
 	}
 
 	if s.ia.store != nil {
-		err := s.ia.store.Set(s.ID, "participant", s)
+		err := s.ia.store.Set(s.ID, "participant", s.ConversationID, s)
 		if err != nil {
 			return err
 		}
@@ -200,7 +200,7 @@ func (s *Conversation) save() error {
 	}
 
 	if s.ia.conversationStore != nil {
-		err := s.ia.conversationStore.Set(s.ID, "conversations", s)
+		err := s.ia.conversationStore.Set(s.ID, "conversations", s.ID, s)
 		if err != nil {
 			return err
 		}

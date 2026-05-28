@@ -108,7 +108,7 @@ func (s *Ia) save() error {
 	}
 
 	if s.store != nil {
-		err := s.store.Set(s.ID, packageName, s)
+		err := s.store.Set(s.ID, packageName, "", s)
 		if err != nil {
 			return err
 		}

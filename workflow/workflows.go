@@ -212,10 +212,10 @@ func (s *WorkFlow) CountInstances() int {
 
 /**
 * newInstance
-* @param tag, id string, tags et.Json, step int, username string
+* @param tag, id, ownerId string, tags et.Json, step int, username string
 * @return *Instance, error
 **/
-func (s *WorkFlow) newInstance(tag, id string, tags et.Json, step int, username string) (*Instance, error) {
+func (s *WorkFlow) newInstance(tag, id, ownerId string, tags et.Json, step int, username string) (*Instance, error) {
 	if id == "" {
 		return nil, fmt.Errorf(MSG_INSTANCE_ID_REQUIRED)
 	}
@@ -230,7 +230,7 @@ func (s *WorkFlow) newInstance(tag, id string, tags et.Json, step int, username 
 		return nil, fmt.Errorf(MSG_INVALID_STEPER_TAG, tag)
 	}
 
-	result := newInstance(steper, id, username)
+	result := newInstance(steper, id, ownerId, username)
 	result.SetCurrentStep(step)
 	result.putTag(tags)
 	s.addInstance(result)
@@ -274,14 +274,14 @@ func (s *WorkFlow) DeleteInstance(id string) error {
 
 /**
 * RunInstance
-* @param id, tag string, step int, ctx, tags et.Json, username string
+* @param tag, id, ownerId string, step int, ctx, tags et.Json, username string
 * @return et.Json, error
 **/
-func (s *WorkFlow) RunInstance(id, tag string, step int, ctx, tags et.Json, username string) (et.Json, error) {
+func (s *WorkFlow) RunInstance(tag, id, ownerId string, step int, ctx, tags et.Json, username string) (et.Json, error) {
 	var err error
 	instance, exist := s.getInstance(id)
 	if !exist {
-		instance, err = s.newInstance(tag, id, tags, step, username)
+		instance, err = s.newInstance(tag, id, ownerId, tags, step, username)
 		if err != nil {
 			return et.Json{}, err
 		}

@@ -33,6 +33,7 @@ type Instance struct {
 	DoneAt        time.Time       `json:"done_at"`
 	ID            string          `json:"id"`
 	Tag           string          `json:"tag"`
+	OwnerId       string          `json:"owner_id"`
 	Description   string          `json:"description"`
 	Status        Status          `json:"status"`
 	Attempt       int             `json:"attempt"`
@@ -104,7 +105,7 @@ func (s *Instance) save() error {
 	}
 
 	if s.owner != nil && s.owner.store != nil {
-		return s.owner.store.Set(s.ID, s.Tag, s)
+		return s.owner.store.Set(s.ID, s.Tag, s.OwnerId, data)
 	}
 
 	return nil

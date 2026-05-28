@@ -134,14 +134,15 @@ func (s *WorkFlow) HttpRunInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := body.Str("id")
 	tag := body.Str("tag")
+	id := body.Str("id")
+	ownerId := body.Str("ownerId")
 	step := body.Int("step")
 	ctx := body.Json("ctx")
 	tags := body.Json("tags")
 	username := body.Str("username")
 
-	result, err := s.RunInstance(id, tag, step, ctx, tags, username)
+	result, err := s.RunInstance(tag, id, ownerId, step, ctx, tags, username)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return

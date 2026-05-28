@@ -8,6 +8,7 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/timezone"
@@ -32,9 +33,16 @@ type Crontab struct {
 	cronJobs *cron.Cron      `json:"-"`
 	running  bool            `json:"-"`
 	mu       *sync.Mutex     `json:"-"`
+	store    instances.Store `json:"-"`
+	isDebug  bool            `json:"-"`
 }
 
-func New(tag string) (*Crontab, error) {
+/**
+* New
+* @param tag string, store instances.Store
+* @return (*Crontab, error)
+**/
+func New(tag string, store instances.Store) (*Crontab, error) {
 	err := event.Load()
 	if err != nil {
 		return nil, err
@@ -50,10 +58,20 @@ func New(tag string) (*Crontab, error) {
 			cron.WithSeconds(),
 			cron.WithLocation(loc),
 		),
-		mu: &sync.Mutex{},
+		mu:    &sync.Mutex{},
+		store: store,
 	}
 
 	return result, nil
+}
+
+/**
+* Debug
+* @return *Crontab
+**/
+func (s *Crontab) Debug() *Crontab {
+	s.isDebug = true
+	return s
 }
 
 /**
@@ -94,10 +112,10 @@ func (s *Crontab) addEventJob(jobType TypeJob, tag, spec, channel string, starte
 
 /**
 * addJob
-* @param tp TypeJob, tag, spec, channel string, started bool, params et.Json, repetitions int
+* @param tp TypeJob, tag, ownerId, spec, channel string, started bool, params et.Json, repetitions int
 * @return *Job, error
 **/
-func (s *Crontab) addJob(tp TypeJob, tag, spec, channel string, started bool, params et.Json, repetitions int) (*Job, error) {
+func (s *Crontab) addJob(tp TypeJob, tag, ownerId, spec, channel string, started bool, params et.Json, repetitions int) (*Job, error) {
 	if !utility.ValidStr(tag, 0, []string{"", " "}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "tag")
 	}
@@ -109,7 +127,7 @@ func (s *Crontab) addJob(tp TypeJob, tag, spec, channel string, started bool, pa
 		return result, nil
 	}
 
-	result = newJob(s, tp, tag, spec, channel, params, repetitions)
+	result = newJob(s, tp, tag, ownerId, spec, channel, params, repetitions)
 	s.mu.Lock()
 	s.Jobs[tag] = result
 	s.mu.Unlock()

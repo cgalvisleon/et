@@ -51,6 +51,8 @@ type Job struct {
 	shot        *time.Timer   `json:"-"`
 	owner       *Crontab      `json:"-"`
 	mu          *sync.Mutex   `json:"-"`
+	saveMu      sync.Mutex    `json:"-"`
+	saveTimer   *time.Timer   `json:"-"`
 }
 
 /**
@@ -80,6 +82,7 @@ func newJob(owner *Crontab, tp TypeJob, tag, ownerId, spec, channel string, para
 		owner:       owner,
 		isDebug:     owner.isDebug,
 		mu:          &sync.Mutex{},
+		saveMu:      sync.Mutex{},
 	}
 
 	return result
@@ -113,18 +116,28 @@ func (s *Job) ToJson() et.Json {
 * @return error
 **/
 func (s *Job) Save() error {
-	data := s.ToJson()
-	if s.isDebug {
-		logs.Log(packageName, "save:", data.ToString())
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
+
+	if s.saveTimer != nil {
+		s.saveTimer.Stop()
 	}
 
-	if s.owner.store != nil {
-		err := s.owner.store.Set(s.ID, packageName, s.OwnerId, s)
-		if err != nil {
-			return err
+	s.saveTimer = time.AfterFunc(100*time.Millisecond, func() {
+		data := s.ToJson()
+		if s.isDebug {
+			logs.Log(packageName, "save:", data.ToString())
 		}
-	}
 
+		if s.owner.store != nil {
+			err := s.owner.store.Set(s.ID, packageName, s.OwnerId, s)
+			if err != nil {
+				logs.Errorf("Error saving instance crontab: %v", err)
+			}
+		}
+
+		event.Publish(EVENT_INSTANCE_SET, data)
+	})
 	return nil
 }
 

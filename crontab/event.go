@@ -12,6 +12,7 @@ var (
 	EVENT_CRONTAB_REMOVE = "crontab:remove"
 	EVENT_CRONTAB_STOP   = "crontab:stop"
 	EVENT_CRONTAB_START  = "crontab:start"
+	EVENT_INSTANCE_SET   = "crontab:instance:set"
 )
 
 /**

@@ -22,12 +22,7 @@ func (s *Resilience) HttpGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonData, err := instance.ToJson()
-	if err != nil {
-		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-
+	jsonData := instance.ToJson()
 	response.ITEM(w, r, http.StatusOK, et.Item{
 		Ok:     true,
 		Result: jsonData,
@@ -59,12 +54,7 @@ func (s *Resilience) HttpState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonData, err := instance.ToJson()
-	if err != nil {
-		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-
+	jsonData := instance.ToJson()
 	response.ITEM(w, r, http.StatusOK, et.Item{
 		Ok:     true,
 		Result: jsonData,
@@ -89,12 +79,7 @@ func (s *Resilience) HttpSetParams(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonData, err := instance.ToJson()
-	if err != nil {
-		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-
+	jsonData := instance.ToJson()
 	for k, v := range body {
 		keys := strings.Split(k, "->")
 		jsonData.SetNested(keys, v)
@@ -118,12 +103,7 @@ func (s *Resilience) HttpSetParams(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonDataStr, err := instance.ToJson()
-	if err != nil {
-		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-
+	jsonDataStr := instance.ToJson()
 	response.ITEM(w, r, http.StatusOK, et.Item{
 		Ok:     true,
 		Result: jsonDataStr,

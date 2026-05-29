@@ -65,6 +65,8 @@ type Instance struct {
 	workflow    *WorkFlow            `json:"-"`
 	isDebug     bool                 `json:"-"`
 	mu          sync.Mutex           `json:"-"`
+	saveMu      sync.Mutex           `json:"-"`
+	saveTimer   *time.Timer          `json:"-"`
 }
 
 /**
@@ -75,6 +77,9 @@ type Instance struct {
 func newInstance(steper *Steper, id, ownerId, userName string) *Instance {
 	if id == "" {
 		id = reg.GenUUId(steper.Tag)
+	}
+	if ownerId == "" {
+		ownerId = id
 	}
 	now := timezone.Now()
 	return &Instance{
@@ -103,6 +108,7 @@ func newInstance(steper *Steper, id, ownerId, userName string) *Instance {
 		workflow:    steper.flow.workflow,
 		isDebug:     steper.flow.workflow.isDebug,
 		mu:          sync.Mutex{},
+		saveMu:      sync.Mutex{},
 	}
 }
 
@@ -111,19 +117,28 @@ func newInstance(steper *Steper, id, ownerId, userName string) *Instance {
 * @return error
 **/
 func (s *Instance) save() error {
-	data := s.ToJson()
-	if s.isDebug {
-		logs.Log(packageName, "save:", data.ToString())
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
+
+	if s.saveTimer != nil {
+		s.saveTimer.Stop()
 	}
 
-	if s.workflow != nil && s.workflow.store != nil {
-		err := s.workflow.store.Set(s.ID, s.Tag, s.OwnerId, s)
-		if err != nil {
-			return err
+	s.saveTimer = time.AfterFunc(100*time.Millisecond, func() {
+		data := s.ToJson()
+		if s.isDebug {
+			logs.Log(packageName, "save:", data.ToString())
 		}
-	}
 
-	event.Publish(EVENT_INSTANCE_SET, data)
+		if s.workflow != nil && s.workflow.store != nil {
+			err := s.workflow.store.Set(s.ID, s.Tag, s.OwnerId, s)
+			if err != nil {
+				logs.Errorf("Error saving instance workflow: %v", err)
+			}
+		}
+
+		event.Publish(EVENT_INSTANCE_SET, data)
+	})
 
 	return nil
 }
@@ -493,13 +508,13 @@ func (s *Instance) run(ctx et.Json) (et.Json, error) {
 			return result, nil
 		}
 
-		if s.isStop() || s.step.Stop {
-			return s.setStop(result)
-		}
-
 		if s.goToStep {
 			s.goToStep = false
 			continue
+		}
+
+		if s.isStop() || s.step.Stop {
+			return s.setStop(result)
 		}
 	}
 

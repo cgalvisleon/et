@@ -98,6 +98,9 @@ func (s *Resilience) Count() int {
  */
 func (s *Resilience) new(tag, description, ownerId string, totalAttempts int, interval time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
 	id := reg.UUID()
+	if ownerId == "" {
+		ownerId = id
+	}
 	result := &Instance{
 		CreatedAt:     time.Now(),
 		ID:            id,
@@ -114,7 +117,7 @@ func (s *Resilience) new(tag, description, ownerId string, totalAttempts int, in
 		Level:         level,
 		stop:          false,
 	}
-	result.setStatus(StatusPending)
+	result.setStatus(PENDING)
 	s.add(result)
 
 	return result

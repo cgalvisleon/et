@@ -59,8 +59,12 @@ type Job struct {
 * @return *Job
 **/
 func newJob(owner *Crontab, tp TypeJob, tag, ownerId, spec, channel string, params et.Json, repetitions int) *Job {
+	id := reg.UUID()
+	if ownerId == "" {
+		ownerId = id
+	}
 	result := &Job{
-		ID:          reg.UUID(),
+		ID:          id,
 		Type:        tp,
 		Tag:         tag,
 		OwnerId:     ownerId,

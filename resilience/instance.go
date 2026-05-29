@@ -1,9 +1,9 @@
 package resilience
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/cgalvisleon/et/et"
@@ -18,12 +18,12 @@ var errorInterface = reflect.TypeOf((*error)(nil)).Elem()
 type Status string
 
 const (
-	packageName          = "resilience"
-	StatusPending Status = "pending"
-	StatusRunning Status = "running"
-	StatusDone    Status = "done"
-	StatusStop    Status = "stop"
-	StatusFailed  Status = "failed"
+	packageName        = "resilience"
+	PENDING     Status = "pending"
+	RUNNING     Status = "running"
+	DONE        Status = "done"
+	STOP        Status = "stop"
+	FAILED      Status = "failed"
 )
 
 type Instance struct {
@@ -52,29 +52,41 @@ type Instance struct {
 	fnArgs        []interface{}   `json:"-"`
 	fnResult      []reflect.Value `json:"-"`
 	isDebug       bool            `json:"-"`
+	saveMu        sync.Mutex      `json:"-"`
+	saveTimer     *time.Timer     `json:"-"`
 }
 
 /**
 * ToJson
-* @return (et.Json, error)
+* @return et.Json
 **/
-func (s *Instance) ToJson() (et.Json, error) {
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return nil, err
-	}
-
-	var result et.Json
-	err = json.Unmarshal(bt, &result)
-	if err != nil {
-		return nil, err
+func (s *Instance) ToJson() et.Json {
+	result := et.Json{
+		"created_at":      s.CreatedAt,
+		"updated_at":      s.UpdatedAt,
+		"last_attempt_at": s.LastAttemptAt,
+		"done_at":         s.DoneAt,
+		"id":              s.ID,
+		"tag":             s.Tag,
+		"owner_id":        s.OwnerId,
+		"description":     s.Description,
+		"status":          s.Status,
+		"attempt":         s.Attempt,
+		"total_attempts":  s.TotalAttempts,
+		"interval":        s.Interval,
+		"tags":            s.Tags,
+		"team":            s.Team,
+		"level":           s.Level,
+		"error":           s.Error,
+		"response":        s.Response,
+		"result":          s.Result,
 	}
 
 	for k, v := range s.Tags {
 		result.Set(k, v)
 	}
 
-	return result, nil
+	return result
 }
 
 /**
@@ -82,11 +94,7 @@ func (s *Instance) ToJson() (et.Json, error) {
 * @return string
 **/
 func (s *Instance) ToString() string {
-	result, err := s.ToJson()
-	if err != nil {
-		return ""
-	}
-
+	result := s.ToJson()
 	return result.ToString()
 }
 
@@ -95,18 +103,28 @@ func (s *Instance) ToString() string {
 * @return error
 **/
 func (s *Instance) save() error {
-	data, err := s.ToJson()
-	if err != nil {
-		return err
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
+
+	if s.saveTimer != nil {
+		s.saveTimer.Stop()
 	}
 
-	if s.isDebug {
-		logs.Log(packageName, "save:", data.ToString())
-	}
+	s.saveTimer = time.AfterFunc(100*time.Millisecond, func() {
+		data := s.ToJson()
+		if s.isDebug {
+			logs.Log(packageName, "save:", data.ToString())
+		}
 
-	if s.owner != nil && s.owner.store != nil {
-		return s.owner.store.Set(s.ID, s.Tag, s.OwnerId, data)
-	}
+		if s.owner != nil && s.owner.store != nil {
+			err := s.owner.store.Set(s.ID, s.Tag, s.OwnerId, data)
+			if err != nil {
+				logs.Errorf("Error saving instance resilience: %v", err)
+			}
+		}
+
+		event.Publish(EVENT_INSTANCE_SET, data)
+	})
 
 	return nil
 }
@@ -133,28 +151,19 @@ func (s *Instance) setStatus(status Status) error {
 
 	s.Status = status
 	s.UpdatedAt = timezone.Now()
-	if s.Status == StatusDone {
-		s.DoneAt = s.UpdatedAt
-	}
-
 	switch s.Status {
-	case StatusFailed:
-		errMsg := ""
-		if s.err != nil {
-			errMsg = s.err.Error()
-		}
+	case DONE:
+		s.DoneAt = s.UpdatedAt
+	case FAILED:
 		if s.Attempt == s.TotalAttempts {
-			data, err := s.ToJson()
-			if err != nil {
-				return err
-			}
+			data := s.ToJson()
 			data.Set("team", s.Team)
 			data.Set("level", s.Level)
-			message := fmt.Sprintf(MSG_RESILIENCE_FINISHED_ERROR, s.Attempt, s.TotalAttempts, s.ID, s.Tag, s.Status, errMsg)
+			message := fmt.Sprintf(MSG_RESILIENCE_FINISHED_ERROR, s.Attempt, s.TotalAttempts, s.ID, s.Tag, s.Status, s.Error)
 			event.Publish(EVENT_RESILIENCE_FAILED, data)
 			logs.Logf(packageName, message)
 		} else {
-			logs.Logf(packageName, MSG_RESILIENCE_ERROR, s.Attempt, s.TotalAttempts, s.ID, s.Tag, s.Status, errMsg)
+			logs.Logf(packageName, MSG_RESILIENCE_ERROR, s.Attempt, s.TotalAttempts, s.ID, s.Tag, s.Status, s.Error)
 		}
 	default:
 		if s.Attempt == s.TotalAttempts {
@@ -174,7 +183,7 @@ func (s *Instance) setStatus(status Status) error {
 func (s *Instance) SetError(err error) {
 	s.Error = err.Error()
 	s.err = err
-	s.setStatus(StatusFailed)
+	s.setStatus(FAILED)
 }
 
 /**
@@ -183,7 +192,7 @@ func (s *Instance) SetError(err error) {
 **/
 func (s *Instance) Stop() et.Item {
 	s.stop = true
-	s.setStatus(StatusStop)
+	s.setStatus(STOP)
 
 	return et.Item{
 		Ok: true,
@@ -199,7 +208,7 @@ func (s *Instance) Stop() et.Item {
 **/
 func (s *Instance) Restart() et.Item {
 	s.stop = false
-	s.setStatus(StatusPending)
+	s.setStatus(PENDING)
 	go s.Run()
 
 	return et.Item{
@@ -222,9 +231,9 @@ func (s *Instance) Done() {
 		s.Result = et.Json{}
 	}
 
-	s.setStatus(StatusDone)
+	s.setStatus(DONE)
 
-	time.AfterFunc(3*time.Second, func() {
+	time.AfterFunc(300*time.Millisecond, func() {
 		s.owner.remove(s.ID)
 	})
 }
@@ -234,12 +243,8 @@ func (s *Instance) Done() {
 * @return []reflect.Value, error
 **/
 func (s *Instance) runAttempt() ([]reflect.Value, error) {
-	jsonData, err := s.ToJson()
-	if err != nil {
-		return nil, err
-	}
-
-	if s.Status == StatusDone {
+	jsonData := s.ToJson()
+	if s.Status == DONE {
 		return []reflect.Value{reflect.ValueOf(et.Item{
 			Ok:     true,
 			Result: jsonData,
@@ -255,13 +260,14 @@ func (s *Instance) runAttempt() ([]reflect.Value, error) {
 
 	s.LastAttemptAt = timezone.Now()
 	s.Attempt++
-	s.setStatus(StatusRunning)
+	s.setStatus(RUNNING)
 
 	argsValues := make([]reflect.Value, len(s.fnArgs))
 	for i, arg := range s.fnArgs {
 		argsValues[i] = reflect.ValueOf(arg)
 	}
 
+	var err error
 	var failed bool
 	fn := reflect.ValueOf(s.fn)
 	s.fnResult = fn.Call(argsValues)
@@ -289,7 +295,7 @@ func (s *Instance) Run() {
 	}
 
 	time.AfterFunc(s.Interval, func() {
-		if s.Status != StatusDone && s.Attempt < s.TotalAttempts {
+		if s.Status != DONE && s.Attempt < s.TotalAttempts {
 			_, err := s.runAttempt()
 			if err != nil {
 				s.Run()
@@ -303,7 +309,7 @@ func (s *Instance) Run() {
 * @return bool
 **/
 func (s *Instance) IsFailed() bool {
-	return s.Status == StatusFailed
+	return s.Status == FAILED
 }
 
 /**
@@ -313,7 +319,7 @@ func (s *Instance) IsFailed() bool {
 func (s *Instance) IsEnd() bool {
 	result := s.Attempt == s.TotalAttempts
 	if !result {
-		result = s.Status == StatusDone
+		result = s.Status == DONE
 	}
 	return result
 }

@@ -3,6 +3,7 @@ package jsql
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"slices"
 
 	"github.com/cgalvisleon/et/et"
@@ -438,8 +439,22 @@ func (s *Model) Upsert(data et.Json) *Command {
 * @param query et.Json
 * @return et.Items, error
 **/
+func (s *Model) QueryTx(tx *Tx, query et.Json) (et.Items, error) {
+	query.Set("from", fmt.Sprintf("%s:A", s.Table))
+	qr, err := loadQuery(s.db, query)
+	if err != nil {
+		return et.Items{}, err
+	}
+	return qr.ExecTx(tx)
+}
+
+/**
+* Query: Creates a new Query for this model with the given condition as the first WHERE clause.
+* @param query et.Json
+* @return et.Items, error
+**/
 func (s *Model) Query(query et.Json) (et.Items, error) {
-	return et.Items{}, nil
+	return s.QueryTx(nil, query)
 }
 
 /**

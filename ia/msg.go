@@ -10,6 +10,7 @@ var (
 	MSG_CONVERSATION_NOT_FOUND   = "conversation not found"
 	MSG_SKILL_HTTP_NOT_SUPPORTED = "skills must be registered programmatically, not via HTTP"
 	MSG_ATRIB_REQUIRED           = "%s is required"
+	MSG_INVALID_FROM             = "Invalid from: %s"
 )
 
 func init() {
@@ -21,5 +22,6 @@ func init() {
 		MSG_PARTICIPANT_NOT_FOUND = "participant not found"
 		MSG_SENDER_NOT_FOUND = "sender not found"
 		MSG_CONVERSATION_NOT_FOUND = "conversation not found"
+		MSG_INVALID_FROM = "Invalid from: %s"
 	}
 }

@@ -2,6 +2,7 @@ package jsql
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strconv"
 
@@ -191,6 +192,35 @@ func newQuery(model *Model, as ...string) *Query {
 	}
 	result.addFrom(model, as[0])
 	return result
+}
+
+/**
+* loadQuery: Creates a Query from a JSON object.
+* @param db *DB
+* @param query et.Json
+* @return *Query, error
+**/
+func loadQuery(db *DB, query et.Json) (*Query, error) {
+	from := query.Str("from")
+	as := "A"
+	args, ok := ArgWhitAs(from)
+	if ok {
+		from = args[0]
+		as = args[1]
+	}
+	args, ok = ArgWhitSchema(from)
+	if ok {
+		return nil, fmt.Errorf(MSG_INVALID_FROM, from)
+	}
+	schema := args[0]
+	table := args[1]
+	model, err := db.GetModel(schema, table)
+	if err != nil {
+		return nil, fmt.Errorf(MSG_MODEL_NOT_FOUND, from)
+	}
+	q := newQuery(model, as)
+
+	return q, nil
 }
 
 /**
@@ -742,6 +772,23 @@ func (s *Query) All() (et.Items, error) {
 	}
 
 	return result, nil
+}
+
+/**
+* ExecTx: Executes the query inside the given transaction.
+* @param tx *Tx
+* @return et.Items, error
+**/
+func (s *Query) ExecTx(tx *Tx) (et.Items, error) {
+	return s.AllTx(tx)
+}
+
+/**
+* Exec: Executes the query without an explicit transaction.
+* @return et.Items, error
+**/
+func (s *Query) Exec() (et.Items, error) {
+	return s.ExecTx(nil)
 }
 
 /**

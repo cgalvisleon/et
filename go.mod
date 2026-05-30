@@ -36,7 +36,6 @@ require (
 )
 
 require (
-	github.com/Knetic/govaluate v3.0.0+incompatible
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chzyer/readline v1.5.0 // indirect
 	github.com/common-nighthawk/go-figure v0.0.0-20200609044655-c4b36f998cf2 // indirect
@@ -48,7 +47,6 @@ require (
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/lib/pq v1.12.3
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-sqlite3 v1.14.44
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/nats-io/nkeys v0.4.11 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect

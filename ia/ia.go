@@ -275,7 +275,7 @@ func (s *Ia) newAgent(name, description, context, model string) (*Agent, error) 
 * @param name string, model string
 * @return (*Agent, error)
 **/
-func (s *Ia) setModelAgent(name string, model string) (*Agent, error) {
+func (s *Ia) SetModelAgent(name string, model string) (*Agent, error) {
 	if !utility.ValidStr(name, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
@@ -296,7 +296,7 @@ func (s *Ia) setModelAgent(name string, model string) (*Agent, error) {
 * @param name string, context string
 * @return (*Agent, error)
 **/
-func (s *Ia) setContextAgent(name string, context string) (*Agent, error) {
+func (s *Ia) SetContextAgent(name string, context string) (*Agent, error) {
 	if !utility.ValidStr(name, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
@@ -313,11 +313,11 @@ func (s *Ia) setContextAgent(name string, context string) (*Agent, error) {
 }
 
 /**
-* setSkillAgent
+* SetSkillAgent
 * @param name string, skill Skill
 * @return (*Agent, error)
 **/
-func (s *Ia) setSkillAgent(name string, skill Skill) (*Agent, error) {
+func (s *Ia) SetSkillAgent(name string, skill Skill) (*Agent, error) {
 	if !utility.ValidStr(name, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
@@ -340,7 +340,14 @@ func (s *Ia) setSkillAgent(name string, skill Skill) (*Agent, error) {
 **/
 func (s *Ia) loadParticipant(to string, dest *Participant) (bool, error) {
 	items, err := s.participantStore.
-		Query(et.Json{})
+		Query(et.Json{
+			"where": et.Json{
+				"to": et.Json{
+					"eq": to,
+				},
+			},
+			"limit": 1,
+		})
 	if err != nil {
 		return false, err
 	}
@@ -401,7 +408,14 @@ func (s *Ia) getParticipant(to, name string, role Role) (*Participant, error) {
 **/
 func (s *Ia) loadConversation(to string, dest *Conversation) (bool, error) {
 	items, err := s.participantStore.
-		Query(et.Json{})
+		Query(et.Json{
+			"where": et.Json{
+				"to": et.Json{
+					"eq": to,
+				},
+			},
+			"limit": 1,
+		})
 	if err != nil {
 		return false, err
 	}

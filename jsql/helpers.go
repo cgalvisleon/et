@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 
@@ -118,4 +119,33 @@ func RowsToItems(rows *sql.Rows) et.Items {
 	}
 
 	return result
+}
+
+/**
+* ArgWhitAs: Returns an array with the argument and its alias.
+* @param arg string
+* @return []string, bool
+**/
+func ArgWhitAs(arg string) ([]string, bool) {
+	pattern := regexp.MustCompile(`^([A-Za-z0-9_>-]+):([A-Za-z0-9_]+)$`) // field:as
+	ok := pattern.MatchString(arg)
+	if ok {
+		matches := pattern.FindStringSubmatch(arg)
+		if len(matches) == 3 {
+			return []string{matches[1], matches[2]}, true
+		}
+	}
+	return []string{arg}, false
+}
+
+func ArgWhitSchema(arg string) ([]string, bool) {
+	pattern := regexp.MustCompile(`^([A-Za-z0-9_>-]+)\.([A-Za-z0-9_]+)$`) // schema.table
+	ok := pattern.MatchString(arg)
+	if ok {
+		matches := pattern.FindStringSubmatch(arg)
+		if len(matches) == 3 {
+			return []string{matches[1], matches[2]}, true
+		}
+	}
+	return []string{arg}, false
 }

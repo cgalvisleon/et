@@ -657,9 +657,10 @@ func (s *Whatsapp) SendList(to, text, header, footer, button, section string) (e
 	return s.sendRequest(message)
 }
 
-func (s *Whatsapp) SendReplyList(to, text, header, footer, button, section string) (et.Json, error) {
+func (s *Whatsapp) SendReplyList(to, messageId, text, header, footer, button, section string) (et.Json, error) {
 	message := &Message{
-		To: to,
+		To:        to,
+		MessageID: messageId,
 		Header: Header{
 			Content: header,
 		},
@@ -672,5 +673,16 @@ func (s *Whatsapp) SendReplyList(to, text, header, footer, button, section strin
 	}
 
 	message.kind = MessageTypeReplyList
+	return s.sendRequest(message)
+}
+
+func (s *Whatsapp) SendReplyButton(to, text string, buttons []Button) (et.Json, error) {
+	message := &Message{
+		To:      to,
+		Text:    text,
+		Buttons: buttons,
+	}
+
+	message.kind = MessageTypeReplyButton
 	return s.sendRequest(message)
 }

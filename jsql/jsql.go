@@ -5,7 +5,6 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/msg"
 )
 
 var (
@@ -69,7 +68,7 @@ func Load() (*DB, error) {
 func GetDb(name string) (*DB, error) {
 	db, ok := dbs[name]
 	if !ok {
-		return nil, errors.New(msg.MSG_DB_NOT_FOUND)
+		return nil, errors.New(MSG_DB_NOT_FOUND)
 	}
 	return db, nil
 }

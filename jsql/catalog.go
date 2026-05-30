@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/msg"
 )
 
 /**
@@ -103,7 +102,7 @@ func (db *DB) getCatalog(name, kind string, des any) error {
 	}
 
 	if !item.Ok {
-		return fmt.Errorf(msg.MSG_CATALOG_NOT_FOUND, name)
+		return fmt.Errorf(MSG_CATALOG_NOT_FOUND, name)
 	}
 
 	bt, err := item.Byte("definition")

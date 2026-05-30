@@ -7,7 +7,6 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/msg"
 )
 
 type CommandType string
@@ -302,7 +301,7 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 
 		for _, col := range model.Required {
 			if _, ok := new[col.Name]; !ok {
-				return et.Items{}, fmt.Errorf(msg.MSG_REQUIRED_FIELD, col.Name)
+				return et.Items{}, fmt.Errorf(MSG_REQUIRED_FIELD, col.Name)
 			}
 		}
 

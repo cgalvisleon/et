@@ -3,10 +3,10 @@ package jsql
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/utility"
 )
 
@@ -59,7 +59,7 @@ func (s *Schema) ToJson() et.Json {
 **/
 func (s *Schema) save() error {
 	if s.db == nil {
-		return errors.New(msg.MSG_DB_IS_NIL)
+		return errors.New(MSG_DB_IS_NIL)
 	}
 	return nil
 }
@@ -213,7 +213,7 @@ func (s *Schema) GetModel(name string) (*Model, error) {
 	result, exists := s.Models[name]
 	s.mu.RLock()
 	if !exists {
-		return nil, errors.New(msg.MSG_MODEL_NOT_FOUND)
+		return nil, fmt.Errorf(MSG_MODEL_NOT_FOUND, name)
 	}
 
 	return result, nil

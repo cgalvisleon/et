@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/utility"
 )
 
@@ -59,7 +58,7 @@ func DefineInstance(db *DB, schema string, name string) (*Instance, error) {
 **/
 func (s *Instance) Set(id, tag string, obj any) error {
 	if s.model == nil {
-		return errors.New(msg.MSG_INSTANCE_REQUIRED_ID)
+		return errors.New(MSG_INSTANCE_REQUIRED_ID)
 	}
 
 	bt, ok := obj.([]byte)
@@ -102,7 +101,7 @@ func (s *Instance) Set(id, tag string, obj any) error {
 **/
 func (s *Instance) Get(id string, dest any) (bool, error) {
 	if s.model == nil {
-		return false, errors.New(msg.MSG_INSTANCE_REQUIRED_ID)
+		return false, errors.New(MSG_INSTANCE_REQUIRED_ID)
 	}
 
 	items, err := s.model.
@@ -157,7 +156,7 @@ func (s *Instance) Delete(id string) error {
 **/
 func (s *Instance) Query(query et.Json) (et.Items, error) {
 	if s.model == nil {
-		return et.Items{}, errors.New(msg.MSG_INSTANCE_REQUIRED_ID)
+		return et.Items{}, errors.New(MSG_INSTANCE_REQUIRED_ID)
 	}
 
 	return s.model.Query(query)

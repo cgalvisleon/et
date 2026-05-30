@@ -10,7 +10,6 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/utility"
 )
 
@@ -38,11 +37,11 @@ type DB struct {
 func newDB(params et.Json) (*DB, error) {
 	driverName := params.Str("driver")
 	if !utility.ValidStr(driverName, 2, []string{""}) {
-		return nil, errors.New(msg.MSG_DRIVER_NOT_FOUND)
+		return nil, errors.New(MSG_DRIVER_NOT_FOUND)
 	}
 	driver, ok := drivers[driverName]
 	if !ok {
-		return nil, errors.New(msg.MSG_DRIVER_NOT_FOUND)
+		return nil, errors.New(MSG_DRIVER_NOT_FOUND)
 	}
 
 	name := params.Str("database")
@@ -114,7 +113,7 @@ func (s *DB) init() error {
 	}
 
 	if s.driver == nil {
-		return errors.New(msg.MSG_DRIVER_NOT_FOUND)
+		return errors.New(MSG_DRIVER_NOT_FOUND)
 	}
 
 	db, err := s.driver.Connect(context.Background(), s)
@@ -201,7 +200,7 @@ func (s *DB) getSchema(name string) (*Schema, error) {
 		return result, nil
 	}
 
-	return nil, fmt.Errorf(msg.MSG_SCHEMA_NOT_FOUND, name)
+	return nil, fmt.Errorf(MSG_SCHEMA_NOT_FOUND, name)
 }
 
 /**
@@ -243,7 +242,7 @@ func (s *DB) SqlTx(tx *Tx, query string, arg ...any) (et.Items, error) {
 		if err != nil {
 			errR := tx.rollback()
 			if errR != nil {
-				err = fmt.Errorf(msg.MSG_ROLLBACK_ERROR, errR)
+				err = fmt.Errorf(MSG_ROLLBACK_ERROR, errR)
 			}
 			return et.Items{}, err
 		}
@@ -277,7 +276,7 @@ func (s *DB) Sql(query string, args ...any) (et.Items, error) {
 **/
 func (s *DB) existModel(schema string, name string) (bool, error) {
 	if s.driver == nil {
-		return false, errors.New(msg.MSG_DRIVER_NOT_FOUND)
+		return false, errors.New(MSG_DRIVER_NOT_FOUND)
 	}
 
 	return s.driver.ExistModel(s.db, schema, name)
@@ -290,7 +289,7 @@ func (s *DB) existModel(schema string, name string) (bool, error) {
 **/
 func (s *DB) load(model *Model) error {
 	if s.driver == nil {
-		return errors.New(msg.MSG_DRIVER_NOT_FOUND)
+		return errors.New(MSG_DRIVER_NOT_FOUND)
 	}
 
 	sql, err := s.driver.Load(model)
@@ -321,7 +320,7 @@ func (s *DB) load(model *Model) error {
 **/
 func (s *DB) command(command *Command) (string, error) {
 	if s.driver == nil {
-		return "", errors.New(msg.MSG_DRIVER_NOT_FOUND)
+		return "", errors.New(MSG_DRIVER_NOT_FOUND)
 	}
 
 	if s.IsDebug {
@@ -338,7 +337,7 @@ func (s *DB) command(command *Command) (string, error) {
 **/
 func (s *DB) query(query *Query) (string, error) {
 	if s.driver == nil {
-		return "", errors.New(msg.MSG_DRIVER_NOT_FOUND)
+		return "", errors.New(MSG_DRIVER_NOT_FOUND)
 	}
 
 	if s.IsDebug {
@@ -355,10 +354,10 @@ func (s *DB) query(query *Query) (string, error) {
 **/
 func (s *DB) Define(define Def) (*Model, error) {
 	if !utility.ValidStr(define.Schema, 0, []string{}) {
-		return nil, errors.New(msg.MSG_SCHEMA_REQUIRED)
+		return nil, errors.New(MSG_SCHEMA_REQUIRED)
 	}
 	if !utility.ValidStr(define.Name, 0, []string{}) {
-		return nil, errors.New(msg.MSG_NAME_REQUIRED)
+		return nil, errors.New(MSG_NAME_REQUIRED)
 	}
 	if define.Version <= 0 {
 		define.Version = 1

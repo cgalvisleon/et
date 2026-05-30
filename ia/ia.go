@@ -272,20 +272,20 @@ func (s *Ia) newAgent(name, description, context, model string) (*Agent, error) 
 
 /**
 * setModelAgent
-* @param agentName string, model string
+* @param name string, model string
 * @return (*Agent, error)
 **/
-func (s *Ia) setModelAgent(agentName string, model string) (*Agent, error) {
-	if !utility.ValidStr(agentName, 0, []string{""}) {
-		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "agentName")
+func (s *Ia) setModelAgent(name string, model string) (*Agent, error) {
+	if !utility.ValidStr(name, 0, []string{""}) {
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
 	if !utility.ValidStr(model, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "model")
 	}
 
-	result, exists := s.getAgent(agentName)
+	result, exists := s.getAgent(name)
 	if !exists {
-		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, agentName)
+		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, name)
 	}
 	result.setModel(model)
 	return result, s.save()
@@ -293,20 +293,20 @@ func (s *Ia) setModelAgent(agentName string, model string) (*Agent, error) {
 
 /**
 * setContextAgent
-* @param agentName string, context string
+* @param name string, context string
 * @return (*Agent, error)
 **/
-func (s *Ia) setContextAgent(agentName string, context string) (*Agent, error) {
-	if !utility.ValidStr(agentName, 0, []string{""}) {
-		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "agentName")
+func (s *Ia) setContextAgent(name string, context string) (*Agent, error) {
+	if !utility.ValidStr(name, 0, []string{""}) {
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
 	if !utility.ValidStr(context, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "context")
 	}
 
-	result, exists := s.getAgent(agentName)
+	result, exists := s.getAgent(name)
 	if !exists {
-		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, agentName)
+		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, name)
 	}
 	result.setContext(context)
 	return result, s.save()
@@ -314,20 +314,20 @@ func (s *Ia) setContextAgent(agentName string, context string) (*Agent, error) {
 
 /**
 * setSkillAgent
-* @param agentName string, skill Skill
+* @param name string, skill Skill
 * @return (*Agent, error)
 **/
-func (s *Ia) setSkillAgent(agentName string, skill Skill) (*Agent, error) {
-	if !utility.ValidStr(agentName, 0, []string{""}) {
-		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "agentName")
+func (s *Ia) setSkillAgent(name string, skill Skill) (*Agent, error) {
+	if !utility.ValidStr(name, 0, []string{""}) {
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
 	if !utility.ValidStr(skill.Tag(), 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "skill")
 	}
 
-	result, exists := s.getAgent(agentName)
+	result, exists := s.getAgent(name)
 	if !exists {
-		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, agentName)
+		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, name)
 	}
 	result.addSkill(skill)
 	return result, s.save()

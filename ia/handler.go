@@ -9,35 +9,13 @@ import (
 )
 
 /**
-* HttpGetConversation
-* @param w http.ResponseWriter
-* @param r *http.Request
-**/
-func (s *Ia) HttpGetConversation(w http.ResponseWriter, r *http.Request) {
-	id := request.URLParam(r, "id").Str()
-	result, exists := s.getConversation(id)
-	if !exists {
-		response.ITEM(w, r, http.StatusNotFound, et.Item{
-			Ok:     true,
-			Result: et.Json{"message": MSG_CONVERSATION_NOT_FOUND},
-		})
-		return
-	}
-
-	response.ITEM(w, r, http.StatusOK, et.Item{
-		Ok:     true,
-		Result: result.ToJson(),
-	})
-}
-
-/**
 * HttpGetAgent
 * @param w http.ResponseWriter
 * @param r *http.Request
 **/
 func (s *Ia) HttpGetAgent(w http.ResponseWriter, r *http.Request) {
 	name := request.URLParam(r, "name").Str()
-	result, exists := s.getAgent(name)
+	agent, exists := s.getAgent(name)
 	if !exists {
 		response.ITEM(w, r, http.StatusNotFound, et.Item{
 			Ok:     false,
@@ -48,7 +26,7 @@ func (s *Ia) HttpGetAgent(w http.ResponseWriter, r *http.Request) {
 
 	response.ITEM(w, r, http.StatusOK, et.Item{
 		Ok:     true,
-		Result: result.ToJson(),
+		Result: agent.ToJson(),
 	})
 }
 
@@ -69,7 +47,7 @@ func (s *Ia) HttpNewAgent(w http.ResponseWriter, r *http.Request) {
 	context := body.Str("context")
 	model := body.Str("model")
 
-	result, err := s.newAgent(name, description, context, model)
+	agent, err := s.newAgent(name, description, context, model)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 		return
@@ -77,16 +55,16 @@ func (s *Ia) HttpNewAgent(w http.ResponseWriter, r *http.Request) {
 
 	response.ITEM(w, r, http.StatusCreated, et.Item{
 		Ok:     true,
-		Result: result.ToJson(),
+		Result: agent.ToJson(),
 	})
 }
 
 /**
-* HttpRemoveAgent
+* HttpDeleteAgent
 * @param w http.ResponseWriter
 * @param r *http.Request
 **/
-func (s *Ia) HttpRemoveAgent(w http.ResponseWriter, r *http.Request) {
+func (s *Ia) HttpDeleteAgent(w http.ResponseWriter, r *http.Request) {
 	name := request.URLParam(r, "name").Str()
 	s.removeAgent(name)
 
@@ -97,46 +75,53 @@ func (s *Ia) HttpRemoveAgent(w http.ResponseWriter, r *http.Request) {
 }
 
 /**
-* HttpSetModelAgent
+* HttpSetAgent
 * @param w http.ResponseWriter
 * @param r *http.Request
 **/
-func (s *Ia) HttpSetModelAgent(w http.ResponseWriter, r *http.Request) {
-	agentName := request.URLParam(r, "agentName").Str()
+func (s *Ia) HttpSetAgent(w http.ResponseWriter, r *http.Request) {
 	body, err := request.GetBody(r)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	name := request.URLParam(r, "name").Str()
+	agent, exists := s.getAgent(name)
+	if !exists {
+		response.ITEM(w, r, http.StatusNotFound, et.Item{
+			Ok:     false,
+			Result: et.Json{"message": MSG_AGENT_NOT_FOUND},
+		})
 		return
 	}
 
 	model := body.Str("model")
-	result, err := s.setModelAgent(agentName, model)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
-		return
+	if model != "" {
+		agent.setModel(model)
 	}
-
-	response.ITEM(w, r, http.StatusOK, et.Item{
-		Ok:     true,
-		Result: result.ToJson(),
-	})
-}
-
-/**
-* HttpSetContextAgent
-* @param w http.ResponseWriter
-* @param r *http.Request
-**/
-func (s *Ia) HttpSetContextAgent(w http.ResponseWriter, r *http.Request) {
-	agentName := request.URLParam(r, "agentName").Str()
-	body, err := request.GetBody(r)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
 	context := body.Str("context")
-	result, err := s.setContextAgent(agentName, context)
+	if context != "" {
+		agent.setContext(context)
+	}
+	skillDef := body.Json("skill")
+	if skillDef != nil {
+		skill, err := NewApiSkill(
+			skillDef.Str("tag"),
+			skillDef.Str("name"),
+			skillDef.Str("description"),
+			skillDef.Str("url"),
+			skillDef.Str("method"),
+			skillDef.Json("headers"),
+			skillDef.Json("body"),
+		)
+		if err != nil {
+			response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+			return
+		}
+		agent.addSkill(skill)
+	}
+	err = s.save()
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 		return
@@ -144,45 +129,7 @@ func (s *Ia) HttpSetContextAgent(w http.ResponseWriter, r *http.Request) {
 
 	response.ITEM(w, r, http.StatusOK, et.Item{
 		Ok:     true,
-		Result: result.ToJson(),
-	})
-}
-
-/**
-* HttpSetApiSkillAgent
-* @param w http.ResponseWriter
-* @param r *http.Request
-**/
-func (s *Ia) HttpSetApiSkillAgent(w http.ResponseWriter, r *http.Request) {
-	agentName := request.URLParam(r, "agentName").Str()
-	body, err := request.GetBody(r)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	tag := body.Str("tag")
-	name := body.Str("name")
-	description := body.Str("description")
-	url := body.Str("url")
-	method := body.Str("method")
-	headers := body.Json("headers")
-	bodyData := body.Json("body")
-	apiSkill, err := NewApiSkill(tag, name, description, url, method, headers, bodyData)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	result, err := s.setSkillAgent(agentName, apiSkill)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	response.ITEM(w, r, http.StatusOK, et.Item{
-		Ok:     true,
-		Result: result.ToJson(),
+		Result: agent.ToJson(),
 	})
 }
 
@@ -217,11 +164,10 @@ func (s *Ia) HttpConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	convID := body.Str("convID")
 	to := body.Str("to")
 	prompt := body.Str("prompt")
 
-	conversation, err := s.Conversation(r.Context(), agentName, convID, to, prompt)
+	conversation, err := s.Conversation(r.Context(), agentName, to, prompt)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 		return

@@ -46,7 +46,7 @@ type Message struct {
 	Content         string           `json:"content"`
 	LastStatus      *MessageStatus   `json:"last_status"`
 	MessageStatuses []*MessageStatus `json:"message_statuses"`
-	ia              *Ia              `json:"-"`
+	conversation    *Conversation    `json:"-"`
 	isDebug         bool             `json:"-"`
 }
 
@@ -55,19 +55,19 @@ type Message struct {
 * @param ia *Ia, conversationID, userID, to string, tp TypeMessage, content string
 * @return *Message
 **/
-func newMessage(ia *Ia, conversationID, userID, to string, tp TypeMessage, content string) *Message {
+func newMessage(conversation *Conversation, userID, to string, tp TypeMessage, content string) *Message {
 	id := reg.GenUUId("message")
 	result := &Message{
 		CreatedAt:       time.Now(),
 		ID:              id,
-		ConversationID:  conversationID,
+		ConversationID:  conversation.ID,
 		UserID:          userID,
 		To:              to,
 		Type:            tp,
 		Content:         content,
 		MessageStatuses: make([]*MessageStatus, 0),
-		ia:              ia,
-		isDebug:         ia.isDebug,
+		conversation:    conversation,
+		isDebug:         conversation.isDebug,
 	}
 	return result
 }
@@ -99,8 +99,8 @@ func (s *Message) save() error {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	if s.ia != nil && s.ia.messageStore != nil {
-		err := s.ia.messageStore.Set(s.ID, "message", s.ConversationID, s)
+	if s.conversation != nil && s.conversation.messageStore != nil {
+		err := s.conversation.messageStore.Set(s.ID, "message", s.ConversationID, s)
 		if err != nil {
 			return err
 		}
@@ -116,8 +116,8 @@ func (s *Message) save() error {
 * @return error
 **/
 func (s *Message) delete() error {
-	if s.ia != nil && s.ia.messageStore != nil {
-		err := s.ia.messageStore.Delete(s.ID)
+	if s.conversation != nil && s.conversation.messageStore != nil {
+		err := s.conversation.messageStore.Delete(s.ID)
 		if err != nil {
 			return err
 		}

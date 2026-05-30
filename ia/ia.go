@@ -2,6 +2,7 @@ package ia
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -23,25 +24,28 @@ var (
 
 type Ia struct {
 	ID                string                   `json:"id"`
+	Tag               string                   `json:"tag"`
 	Agents            map[string]*Agent        `json:"agents"`
+	Participants      map[string]*Participant  `json:"participants"`
 	Conversations     map[string]*Conversation `json:"-"`
 	db                *jsql.DB                 `json:"-"`
 	sender            Sender                   `json:"-"`
 	muAgents          sync.RWMutex             `json:"-"`
+	muParticipants    sync.RWMutex             `json:"-"`
 	muConversations   sync.RWMutex             `json:"-"`
 	key               string                   `json:"-"`
 	store             instances.Store          `json:"-"`
+	participantStore  instances.Store          `json:"-"`
 	conversationStore instances.Store          `json:"-"`
-	messageStore      instances.Store          `json:"-"`
 	isDebug           bool                     `json:"-"`
 }
 
 /**
 * New
-* @param db *jsql.DB
+* @param tag string, db *jsql.DB
 * @return (*Ia, error)
 **/
-func New(db *jsql.DB) (*Ia, error) {
+func New(tag string, db *jsql.DB) (*Ia, error) {
 	err := event.Load()
 	if err != nil {
 		return nil, err
@@ -49,10 +53,13 @@ func New(db *jsql.DB) (*Ia, error) {
 
 	key := envar.GetStr("OPENAI_API_KEY", "")
 	result := &Ia{
-		ID:              "ia:agents",
+		ID:              "ia:" + tag,
+		Tag:             tag,
 		Agents:          make(map[string]*Agent, 0),
+		Participants:    make(map[string]*Participant, 0),
 		Conversations:   make(map[string]*Conversation, 0),
 		muAgents:        sync.RWMutex{},
+		muParticipants:  sync.RWMutex{},
 		muConversations: sync.RWMutex{},
 		isDebug:         envar.GetBool("DEBUG", false),
 		key:             key,
@@ -71,13 +78,13 @@ func New(db *jsql.DB) (*Ia, error) {
 * @param db *jsql.DB
 * @return error
 **/
-func Load(db *jsql.DB) error {
+func Load(tag string, db *jsql.DB) error {
 	if ia != nil {
 		return nil
 	}
 
 	var err error
-	ia, err = New(db)
+	ia, err = New(tag, db)
 	if err != nil {
 		return err
 	}
@@ -92,6 +99,7 @@ func Load(db *jsql.DB) error {
 func (s *Ia) ToJson() et.Json {
 	return et.Json{
 		"id":            s.ID,
+		"tag":           s.Tag,
 		"agents":        s.Agents,
 		"conversations": s.Conversations,
 	}
@@ -140,19 +148,26 @@ func (s *Ia) delete() error {
 * up
 **/
 func (s *Ia) up() error {
-	err := s.initStore()
-	if err != nil {
-		return err
+	var err error
+	if s.store == nil {
+		s.store, err = instances.New(s.db, "ia", "store", instances.KindJson)
+		if err != nil {
+			return err
+		}
 	}
 
-	err = s.initStoreConversation()
-	if err != nil {
-		return err
+	if s.participantStore == nil {
+		s.participantStore, err = instances.New(s.db, "ia", "participant", instances.KindJson)
+		if err != nil {
+			return err
+		}
 	}
 
-	err = s.initStoreMessage()
-	if err != nil {
-		return err
+	if s.conversationStore == nil {
+		s.conversationStore, err = instances.New(s.db, "ia", "conversation", instances.KindJson)
+		if err != nil {
+			return err
+		}
 	}
 
 	err = s.loadAgents()
@@ -160,9 +175,25 @@ func (s *Ia) up() error {
 		return err
 	}
 
-	err = s.loadConversations()
+	return nil
+}
+
+/**
+* loadAgents
+* @return error
+**/
+func (s *Ia) loadAgents() error {
+	var res *Ia
+	exists, err := s.store.Get(s.ID, &res)
 	if err != nil {
 		return err
+	}
+
+	if exists && res != nil {
+		for k, v := range res.Agents {
+			v.up(s)
+			s.Agents[k] = v
+		}
 	}
 
 	return nil
@@ -303,30 +334,125 @@ func (s *Ia) setSkillAgent(agentName string, skill Skill) (*Agent, error) {
 }
 
 /**
-* addConversation
-* @param conversation *Conversation
+* loadParticipant
+* @param to string, dest any
+* @return (*Participant, error)
 **/
-func (s *Ia) addConversation(conversation *Conversation) {
-	s.muConversations.Lock()
-	defer s.muConversations.Unlock()
+func (s *Ia) loadParticipant(to string, dest *Participant) (bool, error) {
+	items, err := s.participantStore.
+		Query(et.Json{})
+	if err != nil {
+		return false, err
+	}
 
-	s.Conversations[conversation.ID] = conversation
+	if !items.Ok {
+		return false, fmt.Errorf(MSG_PARTICIPANT_NOT_FOUND)
+	}
+
+	item, err := items.First()
+	if err != nil {
+		return false, err
+	}
+
+	bt := []byte(item.ToString())
+	err = json.Unmarshal(bt, dest)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+/**
+* getParticipant
+* @param userId, to, name string, role Role
+* @return (*Participant, error)
+**/
+func (s *Ia) getParticipant(to, name string, role Role) (*Participant, error) {
+	s.muParticipants.Lock()
+	result, exists := s.Participants[to]
+	s.muParticipants.Unlock()
+	if exists {
+		return result, nil
+	}
+
+	exists, err := s.loadParticipant(to, result)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		result, err = newParticipant(s, "", to, name, role)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	s.muParticipants.Lock()
+	s.Participants[to] = result
+	s.muParticipants.Unlock()
+
+	return result, s.save()
+}
+
+/**
+* loadConversation
+* @param to string, dest *Conversation
+* @return (bool, error)
+**/
+func (s *Ia) loadConversation(to string, dest *Conversation) (bool, error) {
+	items, err := s.participantStore.
+		Query(et.Json{})
+	if err != nil {
+		return false, err
+	}
+
+	if !items.Ok {
+		return false, fmt.Errorf(MSG_PARTICIPANT_NOT_FOUND)
+	}
+
+	item, err := items.First()
+	if err != nil {
+		return false, err
+	}
+
+	bt := []byte(item.ToString())
+	err = json.Unmarshal(bt, dest)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 /**
 * getConversation
-* @param convID string
-* @return (*Conversation, bool)
+* @param to *Participant
+* @return (*Conversation, error)
 **/
-func (s *Ia) getConversation(convID string) (*Conversation, bool) {
+func (s *Ia) getConversation(to *Participant) (*Conversation, error) {
 	s.muConversations.RLock()
-	conversation, exists := s.Conversations[convID]
+	result, exists := s.Conversations[to.To]
 	s.muConversations.RUnlock()
 	if !exists {
-		return nil, false
+		return result, nil
 	}
 
-	return conversation, true
+	exists, err := s.loadConversation(to.To, result)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		result, err = newConversation(to, to.Name, Direct)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	s.muConversations.Lock()
+	s.Conversations[to.To] = result
+	s.muConversations.Unlock()
+
+	return result, nil
 }
 
 /**
@@ -366,7 +492,7 @@ func (s *Ia) Embed(ctx context.Context, agentName string, text string) ([]float6
 * @param ctx context.Context, agentName string, convID string, to string, prompt string
 * @return (*Conversation, error)
 **/
-func (s *Ia) Conversation(ctx context.Context, agentName, convID, to, prompt string) (*Conversation, error) {
+func (s *Ia) Conversation(ctx context.Context, agentName, to, prompt string) (*Conversation, error) {
 	if !utility.ValidStr(agentName, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "agentName")
 	}
@@ -379,17 +505,22 @@ func (s *Ia) Conversation(ctx context.Context, agentName, convID, to, prompt str
 		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, agentName)
 	}
 
-	response, err := agent.conversation(ctx, convID, prompt)
+	participant, err := s.getParticipant(to, to, Member)
 	if err != nil {
 		return nil, err
 	}
 
-	conversation, exists := s.getConversation(response.ConvID)
-	if exists {
-		s.addConversation(conversation)
+	conversation, err := s.getConversation(participant)
+	if err != nil {
+		return nil, err
 	}
 
-	_, err = conversation.SetTextMessage(to, response.Text)
+	response, err := agent.conversation(ctx, conversation.ConvID, prompt)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = conversation.SendTextMessage(response.Text)
 	if err != nil {
 		return nil, err
 	}

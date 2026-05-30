@@ -156,8 +156,8 @@ func (s *Instance) Get(id string, dest any) (bool, error) {
 		return false, nil
 	}
 
-	data := []byte(item.Result.ToString())
-	err = json.Unmarshal(data, dest)
+	bt := []byte(item.Result.ToString())
+	err = json.Unmarshal(bt, dest)
 	if err != nil {
 		return false, err
 	}

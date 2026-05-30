@@ -1,6 +1,7 @@
 package ia
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
@@ -22,135 +24,36 @@ const (
 	Group  TypeConversation = "group"
 )
 
-type Role string
-
-const (
-	Admin  Role = "admin"
-	Member Role = "member"
-)
-
-type Participant struct {
-	JoinedAt       time.Time `json:"joined_at"`
-	ID             string    `json:"id"`
-	ConversationID string    `json:"conversation_id"`
-	UserID         string    `json:"user_id"`
-	To             string    `json:"to"`
-	Name           string    `json:"name"`
-	Role           Role      `json:"role"`
-	ia             *Ia       `json:"-"`
-}
-
-/**
-* newParticipant
-* @param ia *Ia, conversationId, userId, to string, role Role
-* @return *Participant
-**/
-func newParticipant(ia *Ia, conversationId, userId, to, name string, role Role) *Participant {
-	return &Participant{
-		JoinedAt:       timezone.Now(),
-		ID:             reg.GenULID("participant"),
-		ConversationID: conversationId,
-		UserID:         userId,
-		To:             to,
-		Name:           name,
-		Role:           role,
-		ia:             ia,
-	}
-}
-
-/**
-* ToJson
-* @return et.Json
-**/
-func (s *Participant) ToJson() et.Json {
-	return et.Json{
-		"joined_at":       s.JoinedAt,
-		"id":              s.ID,
-		"conversation_id": s.ConversationID,
-		"user_id":         s.UserID,
-		"to":              s.To,
-		"role":            s.Role,
-	}
-}
-
-/**
-* save
-* @return error
-**/
-func (s *Participant) save() error {
-	data := s.ToJson()
-	if s.ia.isDebug {
-		logs.Log(packageName, "save:", data.ToString())
-	}
-
-	if s.ia.store != nil {
-		err := s.ia.store.Set(s.ID, "participant", s.ConversationID, s)
-		if err != nil {
-			return err
-		}
-	}
-
-	event.Publish(EVENT_PARTICIPANT_SET, data)
-
-	return nil
-}
-
-/**
-* delete
-* @return error
-**/
-func (s *Participant) delete() error {
-	if s.ia.store != nil {
-		err := s.ia.store.Delete(s.ID)
-		if err != nil {
-			return err
-		}
-	}
-
-	event.Publish(EVENT_PARTICIPANT_DELETE, et.Json{
-		"id": s.ID,
-	})
-
-	return nil
-}
-
-/**
-* up
-* @param ia *Ia
-**/
-func (s *Participant) up(ia *Ia) {
-	s.ia = ia
-}
-
 type Conversation struct {
-	CreatedAt     time.Time               `json:"created_at"`
-	UpdatedAt     time.Time               `json:"updated_at"`
-	ID            string                  `json:"id"`
-	Title         string                  `json:"title"`
-	Type          TypeConversation        `json:"type"`
-	Participants  map[string]*Participant `json:"participants"`
-	LastMessage   *Message                `json:"last_message"`
-	Messages      []*Message              `json:"-"`
-	LimitMessages int                     `json:"limit_messages"`
-	mu            sync.RWMutex            `json:"-"`
-	ia            *Ia                     `json:"-"`
-	isDebug       bool                    `json:"-"`
+	CreatedAt     time.Time        `json:"created_at"`
+	UpdatedAt     time.Time        `json:"updated_at"`
+	ID            string           `json:"id"`
+	ConvID        string           `json:"conv_id"`
+	OwnerID       string           `json:"owner_id"`
+	Title         string           `json:"title"`
+	Type          TypeConversation `json:"type"`
+	LastMessage   *Message         `json:"last_message"`
+	LimitMessages int              `json:"limit_messages"`
+	Messages      []*Message       `json:"-"`
+	messageStore  instances.Store  `json:"-"`
+	mu            sync.RWMutex     `json:"-"`
+	to            *Participant     `json:"-"`
+	ia            *Ia              `json:"-"`
+	isDebug       bool             `json:"-"`
 }
 
 /**
 * newConversation
-* @param ia *Ia, userId, to string, name string, title string, type TypeConversation
+* @param ia *Ia, ownerId string, title string, type TypeConversation
 * @return (*Conversation, error)
 **/
-func newConversation(ia *Ia, userId, to, name, title string, conversationType TypeConversation) (*Conversation, error) {
-	if !utility.ValidStr(to, 4, []string{""}) {
-		return nil, fmt.Errorf(msg.MSG_ARG_REQUIRED, "to")
+func newConversation(to *Participant, title string, conversationType TypeConversation) (*Conversation, error) {
+	if !utility.ValidStr(title, 4, []string{""}) {
+		return nil, fmt.Errorf(msg.MSG_ARG_REQUIRED, "title")
 	}
-	if !utility.ValidStr(name, 4, []string{""}) {
-		return nil, fmt.Errorf(msg.MSG_ARG_REQUIRED, "name")
-	}
+
 	if title == "" {
-		title = name
+		title = to.Name
 	}
 
 	limitMessages := envar.GetInt("LIMIT_MESSAGES", 100)
@@ -160,16 +63,27 @@ func newConversation(ia *Ia, userId, to, name, title string, conversationType Ty
 		CreatedAt:     now,
 		UpdatedAt:     now,
 		ID:            id,
+		ConvID:        id,
+		OwnerID:       to.ID,
 		Title:         title,
 		Type:          conversationType,
-		Participants:  make(map[string]*Participant),
 		Messages:      make([]*Message, 0),
 		LimitMessages: limitMessages,
 		mu:            sync.RWMutex{},
-		ia:            ia,
-		isDebug:       ia.isDebug,
+		to:            to,
+		ia:            to.ia,
+		isDebug:       to.ia.isDebug,
 	}
-	result.addParticipant(userId, to, name, Admin)
+	var err error
+	result.messageStore, err = instances.New(to.ia.db, "ia", "message", instances.KindJson)
+	if err != nil {
+		return nil, err
+	}
+
+	err = result.save()
+	if err != nil {
+		return nil, err
+	}
 
 	return result, nil
 }
@@ -180,12 +94,20 @@ func newConversation(ia *Ia, userId, to, name, title string, conversationType Ty
 **/
 func (s *Conversation) ToJson() et.Json {
 	return et.Json{
-		"id":           s.ID,
-		"type":         s.Type,
-		"participants": s.Participants,
-		"last_message": s.LastMessage,
-		"created_at":   s.CreatedAt,
-		"updated_at":   s.UpdatedAt,
+		"created_at":     s.CreatedAt,
+		"updated_at":     s.UpdatedAt,
+		"id":             s.ID,
+		"conv_id":        s.ConvID,
+		"owner_id":       s.OwnerID,
+		"title":          s.Title,
+		"type":           s.Type,
+		"last_message":   s.LastMessage,
+		"limit_messages": s.LimitMessages,
+		"to": et.Json{
+			"id":   s.to.ID,
+			"to":   s.to.To,
+			"name": s.to.Name,
+		},
 	}
 }
 
@@ -200,7 +122,7 @@ func (s *Conversation) save() error {
 	}
 
 	if s.ia.conversationStore != nil {
-		err := s.ia.conversationStore.Set(s.ID, "conversations", s.ID, s)
+		err := s.ia.conversationStore.Set(s.ID, "conversations", s.OwnerID, s)
 		if err != nil {
 			return err
 		}
@@ -232,97 +154,63 @@ func (s *Conversation) delete() error {
 
 /**
 * up
-* @param ia *Ia
+* @param to *Participant
 **/
-func (s *Conversation) up(ia *Ia) {
-	s.ia = ia
-	s.isDebug = ia.isDebug
+func (s *Conversation) up(to *Participant) error {
+	s.to = to
+	s.ia = to.ia
+	s.isDebug = to.ia.isDebug
+
+	items, err := s.messageStore.
+		Query(et.Json{})
+	if err != nil {
+		return err
+	}
+
+	for _, item := range items.Result {
+		var message *Message
+		bt := []byte(item.ToString())
+		err = json.Unmarshal(bt, message)
+		if err != nil {
+			return err
+		}
+		s.Messages = append(s.Messages, message)
+	}
+
+	return nil
 }
 
 /**
-* setLimitMessages
+* SetConvId
+* @param convId string
+* @return error
+**/
+func (s *Conversation) SetConvId(convId string) error {
+	s.ConvID = convId
+	return s.save()
+}
+
+/**
+* SetLimitMessages
 * @param limit int
 * @return error
 **/
-func (s *Conversation) setLimitMessages(limit int) error {
+func (s *Conversation) SetLimitMessages(limit int) error {
 	s.LimitMessages = limit
 	return s.save()
 }
 
 /**
-* addParticipant
-* @param userId, to, name string, role Role
-* @return (*Participant, error)
-**/
-func (s *Conversation) addParticipant(userId, to, name string, role Role) (*Participant, error) {
-	now := timezone.Now()
-	participant := newParticipant(s.ia, s.ID, userId, to, name, role)
-	participant.JoinedAt = now
-	participant.ConversationID = s.ID
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.Participants[participant.To] = participant
-
-	return participant, s.save()
-}
-
-/**
-* addMember
-* @param userId, to, name string
-* @return (*Participant, error)
-**/
-func (s *Conversation) addMember(userId, to, name string) (*Participant, error) {
-	return s.addParticipant(userId, to, name, Member)
-}
-
-/**
-* removeParticipant
-* @param to string
-* @return error
-**/
-func (s *Conversation) removeParticipant(to string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	delete(s.Participants, to)
-	return s.save()
-}
-
-/**
-* getParticipant
-* @param to string
-* @return (*Participant, bool)
-**/
-func (s *Conversation) getParticipant(to string) (*Participant, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	participant, exists := s.Participants[to]
-	if !exists {
-		return nil, false
-	}
-
-	return participant, true
-}
-
-/**
-* SetTextMessage
-* @param to string, content string
+* SendTextMessage
+* @param content string
 * @return (*Message, error)
 **/
-func (s *Conversation) SetTextMessage(to, content string) (*Message, error) {
+func (s *Conversation) SendTextMessage(content string) (*Message, error) {
 	if s.ia.sender == nil {
 		return nil, fmt.Errorf(MSG_SENDER_NOT_FOUND)
 	}
 
-	participant, exists := s.getParticipant(to)
-	if !exists {
-		return nil, fmt.Errorf(MSG_PARTICIPANT_NOT_FOUND)
-	}
-
-	ms := newMessage(s.ia, s.ID, participant.UserID, participant.To, Text, content)
+	ms := newMessage(s, s.to.UserID, s.to.To, Text, content)
 	ms.setStatus(Sent)
 	s.Messages = append(s.Messages, ms)
 	s.LastMessage = ms

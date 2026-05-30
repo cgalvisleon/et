@@ -40,6 +40,7 @@ type Model struct {
 	Columns       []*Column               `json:"columns"`
 	SourceField   string                  `json:"source_field"`
 	IdxField      string                  `json:"idx_field"`
+	IdtField      string                  `json:"idt_field"`
 	Indexes       []*Index                `json:"indexes"`
 	PrimaryKeys   []*Index                `json:"primary_keys"`
 	ForeignKeys   []*Detail               `json:"foreign_keys"`

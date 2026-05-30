@@ -3,8 +3,9 @@ package jsql
 const (
 	RESULT     string = "result"
 	SOURCE     string = "_source"
-	IDX        string = "_idx"
 	ID         string = "id"
+	IDX        string = "_idx"
+	IDT        string = "_idt"
 	STATUS     string = "status"
 	VERSION    string = "version"
 	TENANT_ID  string = "tenant_id"

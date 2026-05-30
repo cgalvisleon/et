@@ -370,7 +370,11 @@ func (s *DB) Define(define Def) (*Model, error) {
 	}
 
 	if define.IdxField != "" {
-		result.defineIdxField()
+		result.DefineIdxField()
+	}
+
+	if define.IdtField != "" {
+		result.DefineIdTField()
 	}
 
 	for _, column := range define.Columns {

@@ -84,6 +84,26 @@ model.DefineForeignKeys(orders, map[string]string{"order_id": "id"}, true, false
 model.Init()  // executes DDL (CREATE TABLE, indexes, FK constraints)
 ```
 
+**Struct-based model definition (preferred for complex models):**
+
+```go
+model, _ := db.Define(jsql.Def{
+    Schema:  "public",
+    Name:    "users",
+    Version: 1,
+    IdxField: jsql.IDX,
+    Columns: []jsql.Column{
+        {Name: "email", TypeData: jsql.TEXT, Default: ""},
+        {Name: "name", TypeColumn: jsql.ATTRIB, TypeData: jsql.TEXT, Default: ""},
+    },
+    PrimaryKeys: []jsql.DefIndex{{Name: "email", Sorted: true}},
+    Unique:      []jsql.DefIndex{{Name: "email"}},
+})
+model.Init()
+```
+
+Package-level wrapper: `jsql.Define(dbName, def)` looks up the named DB from the registry.
+
 **Key column types:**
 
 | `TypeColumn` | Meaning |
@@ -121,7 +141,7 @@ type Driver interface {
 }
 ```
 
-Implementations live in `jsql/drivers/<name>/` and self-register via `init()`. Active drivers: `postgres` (`lib/pq`), `sqlite` (`mattn/go-sqlite3`). Import as a side-effect: `import _ "github.com/cgalvisleon/et/jsql/drivers/postgres"`. The `josefina` driver directory is an empty placeholder.
+Implementations live in `jsql/drivers/<name>/` and self-register via `init()`. Active drivers: `postgres` (`lib/pq`), `sqlite` (`mattn/go-sqlite3`). Import as a side-effect: `import _ "github.com/cgalvisleon/et/jsql/drivers/postgres"`. The `josefina` driver directory exists but contains no files.
 
 **Debug / Test mode:** both `Model`, `Query`, and `Command` support `.Debug()` (logs SQL, skips execution) and `.Test()` (generates SQL, skips execution). Both return the receiver for chaining.
 
@@ -166,8 +186,8 @@ There are two HTTP server packages at different abstraction levels:
 ### Application-layer packages
 
 - **`vm/`** — JavaScript runtime package (`dop251/goja`). `vm.New(name)` is the entry point; three modes: `Develop` (reads files, hot-reloads via `file.Watcher`), `Production` (loads from a `Store`), `Building` (compiles + stores with semver bumping). Global wrappers provide `console.*`, `ctx.*`, `fetch()`, and CommonJS-style `require()`. The `cmd/vm` binary runs this in dev mode via `js.RunDev("./cmd/vm")`.
-- **`ia/`** — OpenAI agent integration (`openai-go/v3`). Manages agents with conversation tracking, event handlers, and instance state via a caller-provided `instances.Store`.
-- **`workflow/`** — Workflow orchestration with multi-step execution, instance state, and resilience patterns. Integrates with `resilience/`, `instances/`, and `event/` (NATS) for async state sync. See detail below.
+- **`ia/`** — OpenAI agent integration (`openai-go/v3`). `ia.New(db *jsql.DB)` (direct) or `ia.Load(db *jsql.DB)` (singleton) initializes the package, which calls `event.Load()` internally. Manages agents with conversation tracking and instance state; requires `OPENAI_API_KEY`.
+- **`workflow/`** — Workflow orchestration with multi-step execution, instance state, and resilience patterns. `workflow.New(store)` creates a new instance; `workflow.Load(store)` is the singleton wrapper (no-op if already initialized). Integrates with `resilience/`, `instances/`, and `event/` (NATS) for async state sync. See detail below.
 - **`graph/`** — Neo4j connectivity (`neo4j-go-driver/v5`). `graph.Load()` returns a `*Conn` with the Neo4j driver.
 - **`instances/`** — `Store` interface (`Set`, `Get`, `Delete`, `Query`) used by `ia` and `workflow` for state persistence. Implementations are caller-provided.
 - **`resilience/`** — Resilience patterns (circuit breaker, etc.) used by `workflow`.

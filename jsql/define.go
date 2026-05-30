@@ -7,6 +7,7 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
+	"github.com/cgalvisleon/et/timezone"
 )
 
 type DefIndex struct {
@@ -44,6 +45,7 @@ type Def struct {
 	Name        string               `json:"name"`
 	Version     int                  `json:"version"`
 	IdxField    string               `json:"idx_field"`
+	IdtField    string               `json:"idt_field"`
 	PrimaryKeys []DefIndex           `json:"primary_keys"`
 	ForeignKeys []DefForeignKeys     `json:"foreign_keys"`
 	Indexes     []DefIndex           `json:"indexes"`
@@ -112,15 +114,32 @@ func (s *Model) DefineSource() *Column {
 }
 
 /**
-* defineIdxField: Defines the idx field column for the model.
+* DefineIdxField: Defines the idx field column for the model.
 * @return *Index
 **/
-func (s *Model) defineIdxField() *Index {
+func (s *Model) DefineIdxField() *Index {
 	s.IdxField = IDX
 	result := s.DefineIndex(IDX, KEY, "")
 	s.Hiddens = append(s.Hiddens, IDX)
 	s.BeforeInsert(func(tx *Tx, old, new et.Json) error {
 		new[s.IdxField] = reg.GetULID("")
+		return nil
+	})
+
+	return result
+}
+
+/**
+* DefineIdTField: Defines the idt field column for the model.
+* @return *Index
+**/
+func (s *Model) DefineIdTField() *Index {
+	s.IdtField = IDT
+	result := s.DefineIndex(IDT, INT, 0)
+	s.Hiddens = append(s.Hiddens, IDT)
+	s.BeforeInsert(func(tx *Tx, old, new et.Json) error {
+		now := timezone.Now()
+		new[s.IdtField] = now.UnixMilli()
 		return nil
 	})
 
@@ -329,7 +348,7 @@ func (s *Model) DefineModel() *Model {
 	s.DefineIndex(STATUS, TEXT, ACTIVE)
 	s.DefinePrimaryKey(ID, KEY, "")
 	s.DefineSource()
-	s.defineIdxField()
+	s.DefineIdxField()
 	return s
 }
 

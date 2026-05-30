@@ -28,6 +28,7 @@ func DefineInstance(db *DB, schema string, name string) (*Instance, error) {
 			{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 			{Name: ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 			{Name: "tag", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
+			{Name: "owner_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 			{Name: "definition", TypeColumn: COLUMN, TypeData: BYTES, Default: []byte{}},
 		},
 		PrimaryKeys: []DefIndex{

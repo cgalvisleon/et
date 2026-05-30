@@ -10,7 +10,7 @@ Modular Go library for microservices, CLIs, and web applications. Import only th
 
 ```bash
 go get github.com/cgalvisleon/et@latest
-go get github.com/cgalvisleon/et@v1.0.24
+go get github.com/cgalvisleon/et@v1.0.25
 ```
 
 ```go

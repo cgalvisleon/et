@@ -153,40 +153,76 @@ type Template struct {
 type MessageType string
 
 const (
-	MessageTypeText               MessageType = "text"
-	MessageTypeReplyText          MessageType = "reply_text"
-	MessageTypeTextWithPreviewURL MessageType = "text_with_preview_url"
-	MessageTypeReplyWithReaction  MessageType = "reply_with_reaction"
+	MessageTypeText                    MessageType = "text"
+	MessageTypeReplyText               MessageType = "reply_text"
+	MessageTypeTextWithPreviewURL      MessageType = "text_with_preview_url"
+	MessageTypeReplyWithReaction       MessageType = "reply_with_reaction"
+	MessageTypeImageById               MessageType = "image_by_id"
+	MessageTypeReplyImageById          MessageType = "reply_to_image_by_id"
+	MessageTypeImageByURL              MessageType = "image_by_URL"
+	MessageTypeReplyImageByURL         MessageType = "reply_to_image_by_URL"
+	MessageTypeAudioById               MessageType = "audio_by_id"
+	MessageTypeReplyAudioById          MessageType = "reply_to_audio_by_id"
+	MessageTypeAudioByURL              MessageType = "audio_by_URL"
+	MessageTypeReplyAudioByURL         MessageType = "reply_to_audio_by_URL"
+	MessageTypeDocumentById            MessageType = "send_document_by_ID"
+	MessageTypeReplyDocumentById       MessageType = "reply_to_document_by_ID"
+	MessageTypeDocumentByURL           MessageType = "send_document_by_URL"
+	MessageTypeReplyDocumentByURL      MessageType = "reply_to_document_by_URL"
+	MessageTypeStickerById             MessageType = "send_sticker_message_by_ID"
+	MessageTypeReplyStickerById        MessageType = "reply_to_sticker_message_by_ID"
+	MessageTypeStickerByURL            MessageType = "send_sticker_message_by_URL"
+	MessageTypeReplyStickerByURL       MessageType = "reply_to_sticker_message_by_URL"
+	MessageTypeVideoById               MessageType = "send_video_by_ID"
+	MessageTypeReplyVideoById          MessageType = "reply_to_video_by_ID"
+	MessageTypeVideoByURL              MessageType = "send_video_by_URL"
+	MessageTypeReplyVideoByURL         MessageType = "reply_to_video_by_URL"
+	MessageTypeSendContact             MessageType = "send_contact"
+	MessageTypeSendReplyContact        MessageType = "reply_to_contact"
+	MessageTypeSendLocation            MessageType = "send_location"
+	MessageTypeSendReplyLocation       MessageType = "reply_to_location"
+	MessageTypeSendTemplate            MessageType = "send_template_text"
+	MessageTypeSendTemplateMedia       MessageType = "send_template_media"
+	MessageTypeSendTemplateInteractive MessageType = "send_template_interactive"
+	MessageTypeSingleProduct           MessageType = "single_product"
+	MessageTypeMultiProduct            MessageType = "multi_product"
+	MessageTypeCatalog                 MessageType = "catalog"
+	MessageTypeCatalogTemplate         MessageType = "catalog_template"
+	MessageTypeList                    MessageType = "list"
+	MessageTypeReplyList               MessageType = "reply_list"
+	MessageTypeReplyButton             MessageType = "reply_button"
 )
 
 type Message struct {
-	kind                MessageType `json:"-"`
-	To                  string      `json:"to"`
-	Text                string      `json:"text"`
-	Buttons             []Button    `json:"buttons"`
-	Header              Header      `json:"header"`
-	Footer              Footer      `json:"footer"`
-	Button              string      `json:"button"`
-	Sections            []Section   `json:"sections"`
-	ImageObjectID       string      `json:"image_object_id"`
-	MessageID           string      `json:"message_id"`
-	Emoji               string      `json:"emoji"`
-	AudioObjectID       string      `json:"audio_object_id"`
-	DocumentObjectID    string      `json:"document_object_id"`
-	DocumentCaptionText string      `json:"document_caption_text"`
-	DocumentFilename    string      `json:"document_filename"`
-	MediaObjectID       string      `json:"media_object_id"`
-	VideoObjectID       string      `json:"video_object_id"`
-	VideoCaptionText    string      `json:"video_caption_text"`
-	Address             Address     `json:"address"`
-	Contact             Contact     `json:"contact"`
-	Email               Email       `json:"email"`
-	Phone               Phone       `json:"phone"`
-	Url                 Url         `json:"url"`
-	Location            Location    `json:"location"`
-	Template            Template    `json:"template"`
-	Action              Action      `json:"action"`
-	Component           Component   `json:"component"`
+	kind                MessageType   `json:"-"`
+	To                  string        `json:"to"`
+	Text                string        `json:"text"`
+	Buttons             []Button      `json:"buttons"`
+	Header              Header        `json:"header"`
+	Footer              Footer        `json:"footer"`
+	Button              string        `json:"button"`
+	Sections            []Section     `json:"sections"`
+	ImageObjectID       string        `json:"image_object_id"`
+	MessageID           string        `json:"message_id"`
+	Emoji               string        `json:"emoji"`
+	AudioObjectID       string        `json:"audio_object_id"`
+	DocumentObjectID    string        `json:"document_object_id"`
+	DocumentCaptionText string        `json:"document_caption_text"`
+	DocumentFilename    string        `json:"document_filename"`
+	MediaObjectID       string        `json:"media_object_id"`
+	VideoObjectID       string        `json:"video_object_id"`
+	VideoCaptionText    string        `json:"video_caption_text"`
+	Address             Address       `json:"address"`
+	Contact             Contact       `json:"contact"`
+	Email               Email         `json:"email"`
+	Phone               Phone         `json:"phone"`
+	Url                 Url           `json:"url"`
+	Location            Location      `json:"location"`
+	Template            Template      `json:"template"`
+	Parameter           Parameter     `json:"parameter"`
+	Action              Action        `json:"action"`
+	Component           Component     `json:"component"`
+	ActionSection       ActionSection `json:"action_section"`
 }
 
 /**
@@ -240,7 +276,7 @@ func (s *Message) body() et.Json {
 				},
 			},
 		}
-	case "list":
+	case MessageTypeList:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -262,7 +298,7 @@ func (s *Message) body() et.Json {
 			},
 		}
 
-	case "reply_list":
+	case MessageTypeReplyList:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -287,7 +323,7 @@ func (s *Message) body() et.Json {
 			},
 		}
 
-	case "reply_button":
+	case MessageTypeReplyButton:
 		Button := s.Buttons[0]
 		return et.Json{
 			"messaging_product": "whatsapp",
@@ -345,7 +381,7 @@ func (s *Message) body() et.Json {
 				"emoji":      s.Emoji,
 			},
 		}
-	case "send_image":
+	case MessageTypeImageById:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -355,7 +391,7 @@ func (s *Message) body() et.Json {
 				"id": s.ImageObjectID,
 			},
 		}
-	case "reply_to_image_by_ID":
+	case MessageTypeReplyImageById:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -368,7 +404,7 @@ func (s *Message) body() et.Json {
 				"id": s.ImageObjectID,
 			},
 		}
-	case "send_image_by_URL":
+	case MessageTypeImageByURL:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -378,7 +414,7 @@ func (s *Message) body() et.Json {
 				"link": s.Url,
 			},
 		}
-	case "reply_to_image_by_URL":
+	case MessageTypeReplyImageByURL:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -391,7 +427,7 @@ func (s *Message) body() et.Json {
 				"link": s.Url,
 			},
 		}
-	case "send_audio_by_ID":
+	case MessageTypeAudioById:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -401,7 +437,7 @@ func (s *Message) body() et.Json {
 				"id": s.AudioObjectID,
 			},
 		}
-	case "reply_to_audio_by_ID":
+	case MessageTypeReplyAudioById:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -414,7 +450,7 @@ func (s *Message) body() et.Json {
 				"id": s.AudioObjectID,
 			},
 		}
-	case "send_audio_by_URL":
+	case MessageTypeAudioByURL:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -424,7 +460,7 @@ func (s *Message) body() et.Json {
 				"link": s.Url,
 			},
 		}
-	case "reply_to_audio_by_URL":
+	case MessageTypeReplyAudioByURL:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -438,7 +474,7 @@ func (s *Message) body() et.Json {
 			},
 		}
 
-	case "send_document_by_ID":
+	case MessageTypeDocumentById:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -450,7 +486,7 @@ func (s *Message) body() et.Json {
 				"filename": s.DocumentFilename,
 			},
 		}
-	case "reply_to_document_by_ID":
+	case MessageTypeReplyDocumentById:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -465,7 +501,7 @@ func (s *Message) body() et.Json {
 				"filename": s.DocumentFilename,
 			},
 		}
-	case "send_document_by_URL":
+	case MessageTypeDocumentByURL:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -476,7 +512,7 @@ func (s *Message) body() et.Json {
 				"caption": s.DocumentCaptionText,
 			},
 		}
-	case "reply_to_document_by_URL":
+	case MessageTypeReplyDocumentByURL:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -490,7 +526,7 @@ func (s *Message) body() et.Json {
 				"caption": s.DocumentCaptionText,
 			},
 		}
-	case "send_sticker_message_by_ID":
+	case MessageTypeStickerById:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -500,7 +536,7 @@ func (s *Message) body() et.Json {
 				"id": s.MediaObjectID,
 			},
 		}
-	case "reply_to_sticker_message_by_ID":
+	case MessageTypeReplyStickerById:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -513,8 +549,7 @@ func (s *Message) body() et.Json {
 				"id": s.MediaObjectID,
 			},
 		}
-	case "send_sticker_message_by_URL":
-
+	case MessageTypeStickerByURL:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -524,7 +559,7 @@ func (s *Message) body() et.Json {
 				"link": s.Url,
 			},
 		}
-	case "reply_to_sticker_message_by_URL":
+	case MessageTypeReplyStickerByURL:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -537,7 +572,7 @@ func (s *Message) body() et.Json {
 				"link": s.Url,
 			},
 		}
-	case "send_video_by_ID":
+	case MessageTypeVideoById:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -548,7 +583,7 @@ func (s *Message) body() et.Json {
 				"id":      s.VideoObjectID,
 			},
 		}
-	case "reply_to_video_by_ID":
+	case MessageTypeReplyVideoById:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -562,7 +597,7 @@ func (s *Message) body() et.Json {
 				"id":      s.VideoObjectID,
 			},
 		}
-	case "send_video_by_URL":
+	case MessageTypeVideoByURL:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -573,7 +608,7 @@ func (s *Message) body() et.Json {
 				"caption": s.VideoCaptionText,
 			},
 		}
-	case "reply_to_video_by_URL":
+	case MessageTypeReplyVideoByURL:
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -587,7 +622,7 @@ func (s *Message) body() et.Json {
 				"caption": s.VideoCaptionText,
 			},
 		}
-	case "send_contact":
+	case MessageTypeSendContact:
 		address := s.Address
 		contact := s.Contact
 		email := s.Email
@@ -647,7 +682,7 @@ func (s *Message) body() et.Json {
 			},
 		}
 
-	case "reply_to_contact":
+	case MessageTypeSendReplyContact:
 		address := s.Address
 		contact := s.Contact
 		email := s.Email
@@ -711,7 +746,7 @@ func (s *Message) body() et.Json {
 			},
 		}
 
-	case "send_location":
+	case MessageTypeSendLocation:
 		location := s.Location
 		return et.Json{
 			"messaging_product": "whatsapp",
@@ -726,7 +761,7 @@ func (s *Message) body() et.Json {
 			},
 		}
 
-	case "reply_to_location":
+	case MessageTypeSendReplyLocation:
 		location := s.Location
 		return et.Json{
 			"messaging_product": "whatsapp",
@@ -743,10 +778,9 @@ func (s *Message) body() et.Json {
 				"address":   location.Address,
 			},
 		}
-	case "send_template_text":
+	case MessageTypeSendTemplate:
 		template := s.Template
-		component := s.Component
-		parameter := component.Parameter
+		parameter := s.Component.Parameter
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -791,10 +825,9 @@ func (s *Message) body() et.Json {
 			},
 		}
 
-	case "send_template_media":
+	case MessageTypeSendTemplateMedia:
 		template := s.Template
-		component := s.Component
-		parameter := component.Parameter
+		parameter := s.Component.Parameter
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -851,10 +884,9 @@ func (s *Message) body() et.Json {
 			},
 		}
 
-	case "send_template_interactive":
+	case MessageTypeSendTemplateInteractive:
 		template := s.Template
-		component := s.Component
-		parameter := component.Parameter
+		parameter := s.Component.Parameter
 		return et.Json{
 			"messaging_product": "whatsapp",
 			"recipient_type":    "individual",
@@ -933,7 +965,7 @@ func (s *Message) body() et.Json {
 			},
 		}
 
-	case "single_product":
+	case MessageTypeSingleProduct:
 		sections := s.Action.Sections
 		return et.Json{
 			"messaging_product": "whatsapp",
@@ -954,7 +986,7 @@ func (s *Message) body() et.Json {
 				},
 			},
 		}
-	case "multi_product":
+	case MessageTypeMultiProduct:
 		sections := s.Action.Sections
 		return et.Json{
 			"messaging_product": "whatsapp",
@@ -1002,7 +1034,7 @@ func (s *Message) body() et.Json {
 				},
 			},
 		}
-	case "catalog":
+	case MessageTypeCatalog:
 		sections := s.Action.Sections
 		return et.Json{
 			"messaging_product": "whatsapp",
@@ -1025,7 +1057,7 @@ func (s *Message) body() et.Json {
 				},
 			},
 		}
-	case "catalog_template":
+	case MessageTypeCatalogTemplate:
 		sections := s.Action.Sections
 		template := s.Template
 		parameter := s.Component.Parameter
@@ -1045,15 +1077,15 @@ func (s *Message) body() et.Json {
 						"parameters": []et.Json{
 							{
 								"type": "text",
-								"text": s.Text,
+								"text": parameter.Text,
 							},
 							{
 								"type": "text",
-								"text": s.Text,
+								"text": parameter.Text,
 							},
 							{
 								"type": "text",
-								"text": s.Text,
+								"text": parameter.Text,
 							},
 						},
 					},

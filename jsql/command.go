@@ -28,6 +28,12 @@ type Command struct {
 	Conditions     []*et.Condition   `json:"conditions"`
 	Returns        []string          `json:"returns"`
 	UseSourceField bool              `json:"use_source_field"`
+	BeforeInserts  []byte            `json:"before_inserts"`
+	BeforeUpdates  []byte            `json:"before_updates"`
+	BeforeDeletes  []byte            `json:"before_deletes"`
+	AfterInserts   []byte            `json:"after_inserts"`
+	AfterUpdates   []byte            `json:"after_updates"`
+	AfterDeletes   []byte            `json:"after_deletes"`
 	beforeInserts  []TriggerFunction `json:"-"`
 	beforeUpdates  []TriggerFunction `json:"-"`
 	beforeDeletes  []TriggerFunction `json:"-"`
@@ -56,6 +62,12 @@ func newCommand(model *Model, tp CommandType) *Command {
 		Conditions:     []*et.Condition{},
 		Returns:        []string{},
 		UseSourceField: model.SourceField != "",
+		BeforeInserts:  []byte{},
+		BeforeUpdates:  []byte{},
+		BeforeDeletes:  []byte{},
+		AfterInserts:   []byte{},
+		AfterUpdates:   []byte{},
+		AfterDeletes:   []byte{},
 		beforeInserts:  []TriggerFunction{},
 		beforeUpdates:  []TriggerFunction{},
 		beforeDeletes:  []TriggerFunction{},
@@ -546,5 +558,13 @@ func (s *Command) One() (et.Item, error) {
 * @return et.Items, error
 **/
 func (s *Command) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
+	s.Conditions = et.ToCondition(query)
+	s.Returns = query.ArrayStr("returns")
+	s.BeforeInserts = query.ArrayBytes("before_inserts")
+	s.BeforeUpdates = query.ArrayBytes("before_updates")
+	s.BeforeDeletes = query.ArrayBytes("before_deletes")
+	s.AfterInserts = query.ArrayBytes("after_inserts")
+	s.AfterUpdates = query.ArrayBytes("after_updates")
+	s.AfterDeletes = query.ArrayBytes("after_deletes")
 	return s.ExecTx(tx)
 }

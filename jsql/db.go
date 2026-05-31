@@ -437,6 +437,28 @@ func (s *DB) Define(define Def) (*Model, error) {
 * @return *Query, error
 **/
 func (s *DB) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
+	define := query.ArrayJson("define")
+	if len(define) > 0 {
+		results := et.Items{}
+		for _, d := range define {
+			bt := []byte(d.ToString())
+			def := Def{}
+			err := json.Unmarshal(bt, &def)
+			if err != nil {
+				return et.Items{}, err
+			}
+			model, err := s.Define(def)
+			if err != nil {
+				return et.Items{}, err
+			}
+			if err := model.Init(); err != nil {
+				return et.Items{}, err
+			}
+			results.Add(et.Json{"model": model.Name})
+		}
+		return results, nil
+	}
+
 	from := query.Str("from")
 	as := ""
 	args, ok := ArgWhitAs(from)
@@ -457,25 +479,25 @@ func (s *DB) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 
 	insert := query.Json("insert")
 	if insert.IsEmpty() {
-		command := newCommand(model, INSERT)
+		command := model.Insert(insert)
 		return command.loadQuery(tx, query)
 	}
 
 	update := query.Json("update")
 	if update.IsEmpty() {
-		command := newCommand(model, UPDATE)
+		command := model.Update(update)
 		return command.loadQuery(tx, query)
 	}
 
 	delete := query.Json("delete")
 	if delete.IsEmpty() {
-		command := newCommand(model, DELETE)
-		return command.loadQuery(tx, query)
+		command := model.Delete()
+		return command.loadQuery(tx, delete)
 	}
 
 	upsert := query.Json("upsert")
 	if upsert.IsEmpty() {
-		command := newCommand(model, UPSERT)
+		command := model.Upsert(upsert)
 		return command.loadQuery(tx, query)
 	}
 

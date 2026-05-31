@@ -25,7 +25,7 @@ type Pkg struct {
 	Version         string            `json:"version"`
 	Description     string            `json:"description"`
 	Main            string            `json:"main"`
-	Models          map[string]string `json:"models"`
+	Modules         map[string]string `json:"modules"`
 	Scripts         map[string]string `json:"scripts"`
 	Dependencies    map[string]string `json:"dependencies"`
 	DevDependencies map[string]string `json:"devDependencies"`
@@ -57,7 +57,7 @@ func newLoader(name string) *Loader {
 	result := &Loader{
 		Pkg: &Pkg{
 			Name:            name,
-			Models:          make(map[string]string),
+			Modules:         make(map[string]string),
 			Scripts:         make(map[string]string),
 			Dependencies:    make(map[string]string),
 			DevDependencies: make(map[string]string),
@@ -76,7 +76,7 @@ func (s *Loader) init() error {
 			return fmt.Errorf(msg.MSG_STORE_REQUIRED)
 		}
 
-		err := s.store.Connected()
+		err := s.store.Init()
 		if err != nil {
 			return err
 		}

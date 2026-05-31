@@ -49,7 +49,7 @@ func Build(store Store, part Part) (*VM, error) {
 	}
 
 	if result.store != nil {
-		err := result.store.Connected()
+		err := result.store.Init()
 		if err != nil {
 			return nil, err
 		}
@@ -65,7 +65,7 @@ func Build(store Store, part Part) (*VM, error) {
 		return nil, err
 	}
 
-	for module, path := range result.Pkg.Models {
+	for module, path := range result.Pkg.Modules {
 		inf := file.ExistPath(path)
 		if inf.IsDir {
 			continue
@@ -75,7 +75,7 @@ func Build(store Store, part Part) (*VM, error) {
 			return nil, err
 		}
 
-		id := fmt.Sprintf("pkg:%s:%s:%s", result.Name, result.Version, module)
+		id := fmt.Sprintf("pkg:%s:%s:%s", result.Name, module, result.Version)
 		result.store.Set(id, &Module{
 			ID:      id,
 			Scripts: string(data),

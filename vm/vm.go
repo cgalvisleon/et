@@ -103,13 +103,13 @@ func (s *VM) Set(name string, value interface{}) error {
 }
 
 /**
-* SetModel
+* SetModule
 * @params module string, path string
 * @return error
 **/
-func (s *VM) SetModel(module string, path string) error {
-	_, ok := s.Models[module]
-	s.Models[module] = path
+func (s *VM) SetModule(module string, path string) error {
+	_, ok := s.Modules[module]
+	s.Modules[module] = path
 	if !ok {
 		return s.save()
 	}

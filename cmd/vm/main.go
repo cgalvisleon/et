@@ -11,5 +11,4 @@ func main() {
 	if err != nil {
 		logs.Panic(err)
 	}
-
 }

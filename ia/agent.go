@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/conversations"
@@ -13,13 +14,13 @@ import (
 )
 
 const contextDefault = `Eres un asistente que SOLO puede responder con base en el CONTEXTO dado.
-{{contexto}}
+{{context}}
 
 Reglas obligatorias:
 1. Usa únicamente información del CONTEXTO.
 2. No completes con conocimiento externo.
 3. No hagas suposiciones.
-4. Si la respuesta no está explícitamente en el contexto, responde exactamente:
+4. Si la respuesta no está explícitamente en el CONTEXTO, responde exactamente:
 "No tengo suficiente información para responder a tu pregunta."
 `
 
@@ -29,6 +30,7 @@ type Agent struct {
 	ID          string           `json:"id"`
 	Name        string           `json:"name"`
 	Description string           `json:"description"`
+	ContextBase string           `json:"context_base"`
 	Context     []byte           `json:"context"`
 	Model       string           `json:"model"`
 	Skills      map[string]Skill `json:"skills"`
@@ -53,10 +55,17 @@ func agendId(name string) string {
 * @return *Agent
 **/
 func newAgent(ia *Ia, name, description, context, model string) *Agent {
+	if context == "" {
+		context = contextDefault
+	}
+	if model == "" {
+		model = modelDefault
+	}
 	result := &Agent{
 		ID:          agendId(name),
 		Name:        name,
 		Description: description,
+		ContextBase: context,
 		Context:     []byte(context),
 		Skills:      make(map[string]Skill),
 		Model:       model,
@@ -125,6 +134,7 @@ func (s *Agent) setModel(model string) *Agent {
 * @return *Agent
 **/
 func (s *Agent) setContext(context string) *Agent {
+	context = strs.Parse(s.ContextBase, et.Json{"context": context})
 	s.Context = []byte(context)
 	return s
 }

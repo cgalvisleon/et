@@ -24,8 +24,7 @@ type F struct {
 
 /**
 * getFrom: Builds a F descriptor from a model, using as as the SQL alias (defaults to table name).
-* @param model *Model
-* @param as string
+* @param model *Model, as string
 * @return *F
 **/
 func getFrom(model *Model, as string) *F {
@@ -79,17 +78,14 @@ type Join struct {
 
 /**
 * newJoin: Constructs a Join entry linked to its parent query.
-* @param query *Query
-* @param typ JoinType
-* @param to *F
-* @param condition *et.Condition
+* @param query *Query, typ JoinType, to *F, conditions []*et.Condition
 * @return *Join
 **/
-func newJoin(query *Query, typ JoinType, to *F, condition *et.Condition) *Join {
+func newJoin(query *Query, typ JoinType, to *F, conditions []*et.Condition) *Join {
 	return &Join{
 		Type:      typ,
 		To:        to,
-		Condition: []*et.Condition{condition},
+		Condition: conditions,
 		query:     query,
 	}
 }
@@ -165,8 +161,7 @@ type Query struct {
 
 /**
 * newQuery: Creates a Query with the model as the primary FROM source.
-* @param model *Model
-* @param as ...string
+* @param model *Model, as ...string
 * @return *Query
 **/
 func newQuery(model *Model, as ...string) *Query {
@@ -192,35 +187,6 @@ func newQuery(model *Model, as ...string) *Query {
 	}
 	result.addFrom(model, as[0])
 	return result
-}
-
-/**
-* loadQuery: Creates a Query from a JSON object.
-* @param db *DB
-* @param query et.Json
-* @return *Query, error
-**/
-func loadQuery(db *DB, query et.Json) (*Query, error) {
-	from := query.Str("from")
-	as := "A"
-	args, ok := ArgWhitAs(from)
-	if ok {
-		from = args[0]
-		as = args[1]
-	}
-	args, ok = ArgWhitSchema(from)
-	if ok {
-		return nil, fmt.Errorf(MSG_INVALID_FROM, from)
-	}
-	schema := args[0]
-	table := args[1]
-	model, err := db.GetModel(schema, table)
-	if err != nil {
-		return nil, fmt.Errorf(MSG_MODEL_NOT_FOUND, from)
-	}
-	q := newQuery(model, as)
-
-	return q, nil
 }
 
 /**
@@ -457,8 +423,7 @@ func (s *Query) GetField(field string) (*Field, bool) {
 
 /**
 * addFrom: Appends a FROM entry for the given model with the specified alias.
-* @param model *Model
-* @param as string
+* @param model *Model, as string
 * @return *Query
 **/
 func (s *Query) addFrom(model *Model, as string) *Query {
@@ -472,61 +437,54 @@ func (s *Query) addFrom(model *Model, as string) *Query {
 
 /**
 * join: Appends a JOIN clause of the given type with its ON condition.
-* @param model *Model
-* @param as string
-* @param tp JoinType
-* @param on *et.Condition
-* @return *Query
+* @param model *Model, as string, tp JoinType, conditions []*et.Condition
+* @return *Join
 **/
-func (s *Query) join(model *Model, as string, tp JoinType, on *et.Condition) *Query {
-	result := newJoin(s, tp, getFrom(model, as), on)
+func (s *Query) join(model *Model, as string, tp JoinType, conditions []*et.Condition) *Join {
+	result := newJoin(s, tp, getFrom(model, as), conditions)
 	s.Joins = append(s.Joins, result)
 	s.section = joinSection
-	return s
+	return result
 }
 
 /**
 * Join: Appends an INNER JOIN clause.
-* @param model *Model
-* @param as string
-* @param on *et.Condition
+* @param model *Model, as string, on *et.Condition
 * @return *Query
 **/
 func (s *Query) Join(model *Model, as string, on *et.Condition) *Query {
-	return s.join(model, as, INNER_JOIN, on)
+	s.join(model, as, INNER_JOIN, []*et.Condition{on})
+	return s
 }
 
 /**
 * LeftJoin: Appends a LEFT JOIN clause.
-* @param model *Model
-* @param as string
-* @param on *et.Condition
+* @param model *Model, as string, on *et.Condition
 * @return *Query
 **/
 func (s *Query) LeftJoin(model *Model, as string, on *et.Condition) *Query {
-	return s.join(model, as, LEFT_JOIN, on)
+	s.join(model, as, LEFT_JOIN, []*et.Condition{on})
+	return s
 }
 
 /**
 * RightJoin: Appends a RIGHT JOIN clause.
-* @param model *Model
-* @param as string
-* @param on *et.Condition
+* @param model *Model, as string, on *et.Condition
 * @return *Query
 **/
 func (s *Query) RightJoin(model *Model, as string, on *et.Condition) *Query {
-	return s.join(model, as, RIGHT_JOIN, on)
+	s.join(model, as, RIGHT_JOIN, []*et.Condition{on})
+	return s
 }
 
 /**
 * FullJoin: Appends a FULL JOIN clause.
-* @param model *Model
-* @param as string
-* @param on *et.Condition
+* @param model *Model, as string, on *et.Condition
 * @return *Query
 **/
 func (s *Query) FullJoin(model *Model, as string, on *et.Condition) *Query {
-	return s.join(model, as, FULL_JOIN, on)
+	s.join(model, as, FULL_JOIN, []*et.Condition{on})
+	return s
 }
 
 /**
@@ -629,6 +587,19 @@ func (s *Query) GroupBy(fields ...string) *Query {
 func (s *Query) Having(cond *et.Condition) *Query {
 	s.Havings = append(s.Havings, cond)
 	s.section = havingSection
+	return s
+}
+
+/**
+* setLimit: Sets the limit for the query.
+* @param rows int
+* @return *Query
+**/
+func (s *Query) setLimit(rows int) *Query {
+	if rows > s.maxRows {
+		rows = s.maxRows
+	}
+	s.Rows = rows
 	return s
 }
 
@@ -775,20 +746,20 @@ func (s *Query) All() (et.Items, error) {
 }
 
 /**
-* ExecTx: Executes the query inside the given transaction.
+* SqlTx: Executes the query inside the given transaction.
 * @param tx *Tx
 * @return et.Items, error
 **/
-func (s *Query) ExecTx(tx *Tx) (et.Items, error) {
+func (s *Query) SqlTx(tx *Tx) (et.Items, error) {
 	return s.AllTx(tx)
 }
 
 /**
-* Exec: Executes the query without an explicit transaction.
+* Sql: Executes the query without an explicit transaction.
 * @return et.Items, error
 **/
-func (s *Query) Exec() (et.Items, error) {
-	return s.ExecTx(nil)
+func (s *Query) Sql() (et.Items, error) {
+	return s.SqlTx(nil)
 }
 
 /**
@@ -825,10 +796,7 @@ func (s *Query) One() (et.Item, error) {
 * @return et.Items, error
 **/
 func (s *Query) LimitTx(tx *Tx, page, rows int) (et.Items, error) {
-	if rows > s.maxRows {
-		rows = s.maxRows
-	}
-	s.Rows = rows
+	s.setLimit(rows)
 	s.setPage(page)
 	return s.AllTx(tx)
 }
@@ -931,4 +899,152 @@ func (s *Query) CountTx(tx *Tx) (int, error) {
 **/
 func (s *Query) Count() (int, error) {
 	return s.CountTx(nil)
+}
+
+/**
+* loadQuery: Loads a query from a JSON object.
+* @param tx *Tx
+* @param query et.Json
+* @return et.Items, error
+**/
+func (s *Query) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
+	join := query.ArrayJson("join")
+	for _, j := range join {
+		to := j.Str("to")
+		as := ""
+		args, ok := ArgWhitAs(to)
+		if !ok {
+			return et.Items{}, fmt.Errorf(MSG_AS_REQUIRED_IN_JOIN, to)
+		}
+		to = args[0]
+		as = args[1]
+		args, ok = ArgWhitSchema(to)
+		if ok {
+			return et.Items{}, fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
+		}
+		schema := args[0]
+		table := args[1]
+		modelTo, err := s.db.GetModel(schema, table)
+		if err != nil {
+			return et.Items{}, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
+		}
+
+		conditions := et.ToCondition(j)
+		s.join(modelTo, as, INNER_JOIN, conditions)
+	}
+
+	leftJoin := query.ArrayJson("left_join")
+	for _, j := range leftJoin {
+		to := j.Str("to")
+		as := ""
+		args, ok := ArgWhitAs(to)
+		if !ok {
+			return et.Items{}, fmt.Errorf(MSG_AS_REQUIRED_IN_JOIN, to)
+		}
+		to = args[0]
+		as = args[1]
+		args, ok = ArgWhitSchema(to)
+		if ok {
+			return et.Items{}, fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
+		}
+		schema := args[0]
+		table := args[1]
+		modelTo, err := s.db.GetModel(schema, table)
+		if err != nil {
+			return et.Items{}, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
+		}
+
+		conditions := et.ToCondition(j)
+		s.join(modelTo, as, INNER_JOIN, conditions)
+	}
+
+	rightJoin := query.ArrayJson("right_join")
+	for _, j := range rightJoin {
+		to := j.Str("to")
+		as := ""
+		args, ok := ArgWhitAs(to)
+		if !ok {
+			return et.Items{}, fmt.Errorf(MSG_AS_REQUIRED_IN_JOIN, to)
+		}
+		to = args[0]
+		as = args[1]
+		args, ok = ArgWhitSchema(to)
+		if ok {
+			return et.Items{}, fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
+		}
+		schema := args[0]
+		table := args[1]
+		modelTo, err := s.db.GetModel(schema, table)
+		if err != nil {
+			return et.Items{}, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
+		}
+
+		conditions := et.ToCondition(j)
+		s.join(modelTo, as, INNER_JOIN, conditions)
+	}
+
+	fullJoin := query.ArrayJson("full_join")
+	for _, j := range fullJoin {
+		to := j.Str("to")
+		as := ""
+		args, ok := ArgWhitAs(to)
+		if !ok {
+			return et.Items{}, fmt.Errorf(MSG_AS_REQUIRED_IN_JOIN, to)
+		}
+		to = args[0]
+		as = args[1]
+		args, ok = ArgWhitSchema(to)
+		if ok {
+			return et.Items{}, fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
+		}
+		schema := args[0]
+		table := args[1]
+		modelTo, err := s.db.GetModel(schema, table)
+		if err != nil {
+			return et.Items{}, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
+		}
+
+		conditions := et.ToCondition(j)
+		s.join(modelTo, as, INNER_JOIN, conditions)
+	}
+
+	selects := query.ArrayStr("selects")
+	if len(selects) > 0 {
+		s.Select(selects...)
+	}
+
+	hiddens := query.ArrayStr("hiddens")
+	if len(hiddens) > 0 {
+		s.Hidden(hiddens...)
+	}
+
+	conditions := et.ToCondition(query)
+	if len(conditions) > 0 {
+		s.Conditions = conditions
+	}
+
+	groups := query.ArrayStr("groups")
+	if len(groups) > 0 {
+		s.GroupBy(groups...)
+	}
+
+	havings := query.Json("havings")
+	havingConditions := et.ToCondition(havings)
+	s.Havings = havingConditions
+
+	limit := query.ValInt(s.maxRows, "limit")
+	s.setLimit(limit)
+
+	page := query.ValInt(0, "page")
+	s.setPage(page)
+
+	orders := query.ArrayJson("orders")
+	for _, order := range orders {
+		for k := range order {
+			v := order.ValBool(true, k)
+			s.OrderBy(k, v)
+		}
+	}
+
+	return s.SqlTx(tx)
 }

@@ -254,19 +254,19 @@ func (s *Instance) setTrace(step int, result et.Json, err error) error {
 * SetParam
 * @param key string, value interface{}
 **/
-func (s *Instance) SetParam(key string, value interface{}) (et.Json, error) {
+func (s *Instance) SetParam(key string, value interface{}) et.Json {
 	s.Params[key] = value
-	return s.Params, s.save()
+	return s.Params
 }
 
 /**
 * PutParam
 * @param value et.Json
-* @return error
+* @return et.Json
 **/
-func (s *Instance) PutParam(value et.Json) error {
+func (s *Instance) PutParam(value et.Json) et.Json {
 	maps.Copy(s.Params, value)
-	return s.save()
+	return s.Params
 }
 
 /**
@@ -284,7 +284,7 @@ func (s *Instance) SetCheckList(tag string, ok bool, data et.Json) error {
 			Ok:          ok,
 			Data:        data,
 		})
-		return s.save()
+		return nil
 	}
 	return fmt.Errorf(MSG_CHECK_LIST_NOT_FOUND)
 }

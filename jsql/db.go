@@ -138,58 +138,6 @@ func (s *DB) init() error {
 }
 
 /**
-* Close: Closes the underlying *sql.DB connection pool.
-* @return error
-**/
-func (s *DB) Close() error {
-	return s.db.Close()
-}
-
-/**
-* NewModel: Returns (or creates) a Model under the given schema name.
-* @param schema string
-* @param name string
-* @param version int
-* @return *Model, error
-**/
-func (s *DB) NewModel(schema, name string, version int) (*Model, error) {
-	schema = utility.Normalize(schema)
-	sch, ok := s.Schemas[schema]
-	if !ok {
-		sch = &Schema{
-			Database: s.Name,
-			Name:     schema,
-			Models:   make(map[string]*Model),
-			db:       s,
-			mu:       &sync.RWMutex{},
-		}
-		s.Schemas[schema] = sch
-	}
-
-	result, err := sch.newModel(name, version)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-/**
-* SetDebug: Sets the debug flag to the given value.
-* @param debug bool
-**/
-func (s *DB) SetDebug(debug bool) {
-	s.IsDebug = debug
-}
-
-/**
-* Debug: Enables debug logging for all queries and commands.
-**/
-func (s *DB) Debug() {
-	s.IsDebug = true
-}
-
-/**
 * getSchema: Returns the named Schema or an error if it does not exist.
 * @param name string
 * @return *Schema, error
@@ -201,72 +149,6 @@ func (s *DB) getSchema(name string) (*Schema, error) {
 	}
 
 	return nil, fmt.Errorf(MSG_SCHEMA_NOT_FOUND, name)
-}
-
-/**
-* GetModel: Looks up a model by schema and name, returning an error if not found.
-* @param schema string
-* @param name string
-* @return *Model, error
-**/
-func (s *DB) GetModel(schema string, name string) (*Model, error) {
-	sch, err := s.getSchema(schema)
-	if err != nil {
-		return nil, err
-	}
-
-	result, err := sch.GetModel(name)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-/**
-* SqlTx: Executes a SQL query inside the given transaction (or directly on the pool if nil).
-* @param tx *Tx
-* @param query string
-* @param arg ...any
-* @return et.Items, error
-**/
-func (s *DB) SqlTx(tx *Tx, query string, arg ...any) (et.Items, error) {
-	query = SQLParse(query, arg...)
-	if tx != nil {
-		err := tx.begin(s.db)
-		if err != nil {
-			return et.Items{}, err
-		}
-
-		rows, err := tx.Tx.Query(query)
-		if err != nil {
-			errR := tx.rollback()
-			if errR != nil {
-				err = fmt.Errorf(MSG_ROLLBACK_ERROR, errR)
-			}
-			return et.Items{}, err
-		}
-		result := RowsToItems(rows)
-		return result, nil
-	}
-
-	rows, err := s.db.Query(query)
-	if err != nil {
-		return et.Items{}, err
-	}
-
-	result := RowsToItems(rows)
-	return result, nil
-}
-
-/**
-* Sql: Executes a SQL query directly on the DB (no transaction).
-* @param query string
-* @param args ...any
-* @return et.Items, error
-**/
-func (s *DB) Sql(query string, args ...any) (et.Items, error) {
-	return s.SqlTx(nil, query, args...)
 }
 
 /**
@@ -345,6 +227,116 @@ func (s *DB) query(query *Query) (string, error) {
 	}
 
 	return s.driver.Query(query)
+}
+
+/**
+* Close: Closes the underlying *sql.DB connection pool.
+* @return error
+**/
+func (s *DB) Close() error {
+	return s.db.Close()
+}
+
+/**
+* NewModel: Returns (or creates) a Model under the given schema name.
+* @param schema string
+* @param name string
+* @param version int
+* @return *Model, error
+**/
+func (s *DB) NewModel(schema, name string, version int) (*Model, error) {
+	schema = utility.Normalize(schema)
+	sch, ok := s.Schemas[schema]
+	if !ok {
+		sch = &Schema{
+			Database: s.Name,
+			Name:     schema,
+			Models:   make(map[string]*Model),
+			db:       s,
+			mu:       &sync.RWMutex{},
+		}
+		s.Schemas[schema] = sch
+	}
+
+	result, err := sch.newModel(name, version)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+/**
+* SetDebug: Sets the debug flag to the given value.
+* @param debug bool
+**/
+func (s *DB) SetDebug(debug bool) {
+	s.IsDebug = debug
+}
+
+/**
+* Debug: Enables debug logging for all queries and commands.
+**/
+func (s *DB) Debug() {
+	s.IsDebug = true
+}
+
+/**
+* GetModel: Looks up a model by schema and name, returning an error if not found.
+* @param schema string
+* @param name string
+* @return *Model, error
+**/
+func (s *DB) GetModel(schema string, name string) (*Model, error) {
+	sch, err := s.getSchema(schema)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := sch.GetModel(name)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+/**
+* SqlTx: Executes a SQL query inside the given transaction (or directly on the pool if nil).
+* @param tx *Tx
+* @param query string
+* @param arg ...any
+* @return et.Items, error
+**/
+func (s *DB) SqlTx(tx *Tx, query string, arg ...any) (et.Items, error) {
+	query = SQLParse(query, arg...)
+	if tx != nil {
+		rows, err := tx.Query(s.db, query)
+		if err != nil {
+			return et.Items{}, err
+		}
+
+		result := RowsToItems(rows)
+		return result, nil
+	}
+
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return et.Items{}, err
+	}
+
+	result := RowsToItems(rows)
+	return result, nil
+}
+
+/**
+* Sql: Executes a SQL query directly on the DB (no transaction).
+* @param query string
+* @param args ...any
+* @return et.Items, error
+**/
+func (s *DB) Sql(query string, args ...any) (et.Items, error) {
+	return s.SqlTx(nil, query, args...)
 }
 
 /**
@@ -435,6 +427,89 @@ func (s *DB) Define(define Def) (*Model, error) {
 	result.IsCore = define.IsCore
 	result.IsDebug = define.IsDebug
 	result.isTest = define.IsTest
+
+	return result, nil
+}
+
+/**
+* loadQuery: Creates a Query from a JSON object.
+* @param tx *Tx, query et.Json
+* @return *Query, error
+**/
+func (s *DB) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
+	from := query.Str("from")
+	as := ""
+	args, ok := ArgWhitAs(from)
+	if ok {
+		from = args[0]
+		as = args[1]
+	}
+	args, ok = ArgWhitSchema(from)
+	if ok {
+		return et.Items{}, fmt.Errorf(MSG_INVALID_FROM, from)
+	}
+	schema := args[0]
+	table := args[1]
+	model, err := s.GetModel(schema, table)
+	if err != nil {
+		return et.Items{}, fmt.Errorf(MSG_MODEL_NOT_FOUND, from)
+	}
+
+	insert := query.Json("insert")
+	if insert.IsEmpty() {
+		command := newCommand(model, INSERT)
+		return command.loadQuery(tx, query)
+	}
+
+	update := query.Json("update")
+	if update.IsEmpty() {
+		command := newCommand(model, UPDATE)
+		return command.loadQuery(tx, query)
+	}
+
+	delete := query.Json("delete")
+	if delete.IsEmpty() {
+		command := newCommand(model, DELETE)
+		return command.loadQuery(tx, query)
+	}
+
+	upsert := query.Json("upsert")
+	if upsert.IsEmpty() {
+		command := newCommand(model, UPSERT)
+		return command.loadQuery(tx, query)
+	}
+
+	q := newQuery(model, as)
+	return q.loadQuery(tx, query)
+}
+
+/**
+* Query: Renders a Query as SQL and returns the SQL string.
+* @param query []et.Json
+* @return string, error
+**/
+func (s *DB) Query(query []et.Json) (et.Items, error) {
+	result := et.Items{}
+	var tx *Tx
+	var commit bool
+	if len(query) > 0 {
+		tx, commit = getTx(tx)
+	}
+
+	for _, q := range query {
+		var err error
+		result, err = s.loadQuery(tx, q)
+		if err != nil {
+			return et.Items{}, err
+		}
+	}
+
+	if commit {
+		err := tx.commit()
+		if err != nil {
+			return et.Items{}, err
+		}
+	}
 
 	return result, nil
 }

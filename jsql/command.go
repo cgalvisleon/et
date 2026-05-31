@@ -539,3 +539,12 @@ func (s *Command) OneTx(tx *Tx) (et.Item, error) {
 func (s *Command) One() (et.Item, error) {
 	return s.OneTx(nil)
 }
+
+/**
+* loadQuery: Loads a query from a JSON object.
+* @param tx *Tx, query et.Json
+* @return et.Items, error
+**/
+func (s *Command) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
+	return s.ExecTx(tx)
+}

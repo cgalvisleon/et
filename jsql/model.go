@@ -440,12 +440,8 @@ func (s *Model) Upsert(data et.Json) *Command {
 * @return et.Items, error
 **/
 func (s *Model) QueryTx(tx *Tx, query et.Json) (et.Items, error) {
-	query.Set("from", fmt.Sprintf("%s:A", s.Table))
-	qr, err := loadQuery(s.db, query)
-	if err != nil {
-		return et.Items{}, err
-	}
-	return qr.ExecTx(tx)
+	query.Set("from", fmt.Sprintf("%s", s.Table))
+	return s.db.loadQuery(tx, query)
 }
 
 /**

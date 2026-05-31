@@ -2,6 +2,7 @@ package jsql
 
 import (
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/cgalvisleon/et/reg"
@@ -111,4 +112,27 @@ func (s *Tx) rollback() error {
 	s.setStatus(TxStatusRolledBack)
 
 	return nil
+}
+
+/**
+* Query: Executes a query within the transaction.
+* @param db *sql.DB, query string, args ...any
+* @return *sql.Rows, error
+**/
+func (s *Tx) Query(db *sql.DB, query string, args ...any) (*sql.Rows, error) {
+	err := s.begin(db)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := s.Tx.Query(query, args...)
+	if err != nil {
+		errR := s.rollback()
+		if errR != nil {
+			err = fmt.Errorf(MSG_ROLLBACK_ERROR, errR)
+		}
+		return nil, err
+	}
+
+	return rows, nil
 }

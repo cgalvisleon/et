@@ -732,9 +732,11 @@ func (s *Condition) ApplyToIndex(keys []string) []string {
 /**
 * ToCondition
 * @param json Json
-* @return *Condition
+* @return []*Condition
 **/
-func ToCondition(json Json) *Condition {
+func ToCondition(json Json) []*Condition {
+	result := []*Condition{}
+
 	getWhere := func(json Json) *Condition {
 		for fld := range json {
 			cond := json.Json(fld)
@@ -767,16 +769,20 @@ func ToCondition(json Json) *Condition {
 	for k := range json {
 		if strings.ToLower(k) == "and" {
 			def := json.Json(k)
-			return and(def)
+			result = append(result, and(def))
 		} else if strings.ToLower(k) == "or" {
 			def := json.Json(k)
-			return or(def)
-		} else {
-			return getWhere(json)
+			result = append(result, or(def))
+		} else if strings.ToLower(k) == "where" {
+			def := json.Json(k)
+			result = append(result, getWhere(def))
+		} else if strings.ToLower(k) == "on" {
+			def := json.Json(k)
+			result = append(result, getWhere(def))
 		}
 	}
 
-	return nil
+	return result
 }
 
 /**

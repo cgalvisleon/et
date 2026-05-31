@@ -169,13 +169,15 @@ func (s *ConversationResult) ToJson() et.Json {
 
 /**
 * conversation
-* @param ctx context.Context, convID, prompt string
+* @param ctx context.Context, conversation *Conversation, prompt string
 * @return (ConversationResult, error)
 **/
-func (s *Agent) conversation(ctx context.Context, convID, prompt string) (ConversationResult, error) {
+func (s *Agent) conversation(ctx context.Context, conversation *Conversation, prompt string) (ConversationResult, error) {
+	convID := conversation.ConvID
 	if convID == "" {
 		conv, _ := s.client.Conversations.New(ctx, conversations.ConversationNewParams{})
 		convID = conv.ID
+		conversation.SetConvId(convID)
 	}
 
 	contextStr := string(s.Context)

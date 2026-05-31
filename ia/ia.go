@@ -529,7 +529,7 @@ func (s *Ia) Conversation(ctx context.Context, agentName, to, prompt string) (*C
 		return nil, err
 	}
 
-	response, err := agent.conversation(ctx, conversation.ConvID, prompt)
+	response, err := agent.conversation(ctx, conversation, prompt)
 	if err != nil {
 		return nil, err
 	}

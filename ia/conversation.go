@@ -186,6 +186,9 @@ func (s *Conversation) up(to *Participant) error {
 * @return error
 **/
 func (s *Conversation) SetConvId(convId string) error {
+	if s.ConvID == convId {
+		return nil
+	}
 	s.ConvID = convId
 	return s.save()
 }
@@ -196,6 +199,9 @@ func (s *Conversation) SetConvId(convId string) error {
 * @return error
 **/
 func (s *Conversation) SetLimitMessages(limit int) error {
+	if s.LimitMessages == limit {
+		return nil
+	}
 	s.LimitMessages = limit
 	return s.save()
 }

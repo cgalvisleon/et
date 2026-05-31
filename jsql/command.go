@@ -80,6 +80,8 @@ func newCommand(model *Model, tp CommandType) *Command {
 		vm:             vm.New(model.Table),
 		isDebug:        model.db.IsDebug,
 	}
+	result.vm.Set("model", model)
+	result.vm.Set("db", result.db)
 	if map[CommandType]bool{INSERT: true, BULK: true, UPSERT: true}[tp] {
 		for _, fn := range model.beforeInserts {
 			result.beforeInserts = append(result.beforeInserts, fn)

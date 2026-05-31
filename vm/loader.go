@@ -113,6 +113,11 @@ func (s *Loader) init() error {
 	return nil
 }
 
+/**
+* SetVersion
+* @param version string
+* @return error
+**/
 func (s *Loader) SetVersion(version string) error {
 	s.Version = version
 	return s.save()

@@ -58,6 +58,12 @@ type Model struct {
 	IsChanged     bool                    `json:"-"`
 	isInit        bool                    `json:"-"`
 	isTest        bool                    `json:"-"`
+	BeforeInserts [][]byte                `json:"before_inserts"`
+	BeforeUpdates [][]byte                `json:"before_updates"`
+	BeforeDeletes [][]byte                `json:"before_deletes"`
+	AfterInserts  [][]byte                `json:"after_inserts"`
+	AfterUpdates  [][]byte                `json:"after_updates"`
+	AfterDeletes  [][]byte                `json:"after_deletes"`
 	beforeInserts []TriggerFunction       `json:"-"`
 	beforeUpdates []TriggerFunction       `json:"-"`
 	beforeDeletes []TriggerFunction       `json:"-"`

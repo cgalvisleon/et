@@ -7,6 +7,7 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/vm"
 )
 
 type CommandType string
@@ -28,12 +29,12 @@ type Command struct {
 	Conditions     []*et.Condition   `json:"conditions"`
 	Returns        []string          `json:"returns"`
 	UseSourceField bool              `json:"use_source_field"`
-	BeforeInserts  []byte            `json:"before_inserts"`
-	BeforeUpdates  []byte            `json:"before_updates"`
-	BeforeDeletes  []byte            `json:"before_deletes"`
-	AfterInserts   []byte            `json:"after_inserts"`
-	AfterUpdates   []byte            `json:"after_updates"`
-	AfterDeletes   []byte            `json:"after_deletes"`
+	BeforeInserts  [][]byte          `json:"before_inserts"`
+	BeforeUpdates  [][]byte          `json:"before_updates"`
+	BeforeDeletes  [][]byte          `json:"before_deletes"`
+	AfterInserts   [][]byte          `json:"after_inserts"`
+	AfterUpdates   [][]byte          `json:"after_updates"`
+	AfterDeletes   [][]byte          `json:"after_deletes"`
 	beforeInserts  []TriggerFunction `json:"-"`
 	beforeUpdates  []TriggerFunction `json:"-"`
 	beforeDeletes  []TriggerFunction `json:"-"`
@@ -42,14 +43,14 @@ type Command struct {
 	afterDeletes   []TriggerFunction `json:"-"`
 	db             *DB               `json:"-"`
 	model          *Model            `json:"-"`
+	vm             *vm.VM            `json:"-"`
 	isDebug        bool              `json:"-"`
 	isTest         bool              `json:"-"`
 }
 
 /**
 * newCommand: Constructs a Command of the given type, copying the model's trigger slices.
-* @param model *Model
-* @param tp CommandType
+* @param model *Model, tp CommandType
 * @return *Command
 **/
 func newCommand(model *Model, tp CommandType) *Command {
@@ -62,12 +63,12 @@ func newCommand(model *Model, tp CommandType) *Command {
 		Conditions:     []*et.Condition{},
 		Returns:        []string{},
 		UseSourceField: model.SourceField != "",
-		BeforeInserts:  []byte{},
-		BeforeUpdates:  []byte{},
-		BeforeDeletes:  []byte{},
-		AfterInserts:   []byte{},
-		AfterUpdates:   []byte{},
-		AfterDeletes:   []byte{},
+		BeforeInserts:  make([][]byte, 0),
+		BeforeUpdates:  make([][]byte, 0),
+		BeforeDeletes:  make([][]byte, 0),
+		AfterInserts:   make([][]byte, 0),
+		AfterUpdates:   make([][]byte, 0),
+		AfterDeletes:   make([][]byte, 0),
 		beforeInserts:  []TriggerFunction{},
 		beforeUpdates:  []TriggerFunction{},
 		beforeDeletes:  []TriggerFunction{},
@@ -76,6 +77,7 @@ func newCommand(model *Model, tp CommandType) *Command {
 		afterDeletes:   []TriggerFunction{},
 		db:             model.db,
 		model:          model,
+		vm:             vm.New(model.Table),
 		isDebug:        model.db.IsDebug,
 	}
 	if map[CommandType]bool{INSERT: true, BULK: true, UPSERT: true}[tp] {
@@ -85,6 +87,12 @@ func newCommand(model *Model, tp CommandType) *Command {
 		for _, fn := range model.afterInserts {
 			result.afterInserts = append(result.afterInserts, fn)
 		}
+		for _, code := range model.BeforeInserts {
+			result.BeforeInserts = append(result.BeforeInserts, code)
+		}
+		for _, code := range model.AfterInserts {
+			result.AfterInserts = append(result.AfterInserts, code)
+		}
 	}
 	if map[CommandType]bool{UPDATE: true, UPSERT: true}[tp] {
 		for _, fn := range model.beforeUpdates {
@@ -93,6 +101,12 @@ func newCommand(model *Model, tp CommandType) *Command {
 		for _, fn := range model.afterUpdates {
 			result.afterUpdates = append(result.afterUpdates, fn)
 		}
+		for _, code := range model.BeforeUpdates {
+			result.BeforeUpdates = append(result.BeforeUpdates, code)
+		}
+		for _, code := range model.AfterUpdates {
+			result.AfterUpdates = append(result.AfterUpdates, code)
+		}
 	}
 	if map[CommandType]bool{DELETE: true}[tp] {
 		for _, fn := range model.beforeDeletes {
@@ -100,6 +114,12 @@ func newCommand(model *Model, tp CommandType) *Command {
 		}
 		for _, fn := range model.afterDeletes {
 			result.afterDeletes = append(result.afterDeletes, fn)
+		}
+		for _, code := range model.BeforeDeletes {
+			result.BeforeDeletes = append(result.BeforeDeletes, code)
+		}
+		for _, code := range model.AfterDeletes {
+			result.AfterDeletes = append(result.AfterDeletes, code)
 		}
 	}
 	return result
@@ -323,6 +343,16 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 			}
 		}
 
+		for _, code := range s.BeforeInserts {
+			s.vm.Set("old", s.Old)
+			s.vm.Set("new", s.New)
+			if _, err := s.vm.RunByBt(code); err != nil {
+				return et.Items{}, err
+			}
+			s.Old = s.vm.GetJson("old")
+			s.New = s.vm.GetJson("new")
+		}
+
 		sql, err := s.db.command(s)
 		if err != nil {
 			return et.Items{}, err
@@ -343,6 +373,16 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 			if err := tg(tx, s.Old, s.New); err != nil {
 				return et.Items{}, err
 			}
+		}
+
+		for _, code := range s.AfterInserts {
+			s.vm.Set("old", s.Old)
+			s.vm.Set("new", s.New)
+			if _, err := s.vm.RunByBt(code); err != nil {
+				return et.Items{}, err
+			}
+			s.Old = s.vm.GetJson("old")
+			s.New = s.vm.GetJson("new")
 		}
 
 		result.Add(s.New)
@@ -381,6 +421,16 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 			}
 		}
 
+		for _, code := range s.BeforeUpdates {
+			s.vm.Set("old", s.Old)
+			s.vm.Set("new", s.New)
+			if _, err := s.vm.RunByBt(code); err != nil {
+				return et.Items{}, err
+			}
+			s.Old = s.vm.GetJson("old")
+			s.New = s.vm.GetJson("new")
+		}
+
 		sql, err := s.db.command(s)
 		if err != nil {
 			return et.Items{}, err
@@ -401,6 +451,16 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 			if err := tg(tx, s.Old, s.New); err != nil {
 				return et.Items{}, err
 			}
+		}
+
+		for _, code := range s.AfterUpdates {
+			s.vm.Set("old", s.Old)
+			s.vm.Set("new", s.New)
+			if _, err := s.vm.RunByBt(code); err != nil {
+				return et.Items{}, err
+			}
+			s.Old = s.vm.GetJson("old")
+			s.New = s.vm.GetJson("new")
 		}
 
 		result.Add(s.New)
@@ -435,6 +495,16 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 			}
 		}
 
+		for _, code := range s.BeforeDeletes {
+			s.vm.Set("old", s.Old)
+			s.vm.Set("new", s.New)
+			if _, err := s.vm.RunByBt(code); err != nil {
+				return et.Items{}, err
+			}
+			s.Old = s.vm.GetJson("old")
+			s.New = s.vm.GetJson("new")
+		}
+
 		sql, err := s.db.command(s)
 		if err != nil {
 			return et.Items{}, err
@@ -455,6 +525,16 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 			if err := tg(tx, s.Old, s.New); err != nil {
 				return et.Items{}, err
 			}
+		}
+
+		for _, code := range s.AfterDeletes {
+			s.vm.Set("old", s.Old)
+			s.vm.Set("new", s.New)
+			if _, err := s.vm.RunByBt(code); err != nil {
+				return et.Items{}, err
+			}
+			s.Old = s.vm.GetJson("old")
+			s.New = s.vm.GetJson("new")
 		}
 
 		result.Add(s.Old)

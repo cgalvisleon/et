@@ -30,18 +30,18 @@ type VM struct {
 /**
 * New
 * @param name string
-* @return *VM, error
+* @return *VM
 **/
-func New(name string) (*VM, error) {
+func New(name string) *VM {
 	if !utility.ValidStr(name, 0, []string{""}) {
-		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
+		name = "vm"
 	}
 
 	result := &VM{
 		Loader: newLoader(name),
 		Ctx:    et.Json{},
 	}
-	return result, nil
+	return result
 }
 
 /**
@@ -69,6 +69,28 @@ func (s *VM) Value(value interface{}) goja.Value {
 **/
 func (s *VM) Error(err error) *goja.Object {
 	return s.vm.NewGoError(err)
+}
+
+/**
+* Get
+* @param name string
+* @return goja.Value
+**/
+func (s *VM) Get(name string) goja.Value {
+	return s.vm.Get(name)
+}
+
+/**
+* GetJson
+* @param name string
+* @return et.Json
+**/
+func (s *VM) GetJson(name string) et.Json {
+	result, ok := s.vm.Get(name).Export().(et.Json)
+	if !ok {
+		return et.Json{}
+	}
+	return result
 }
 
 /**
@@ -135,9 +157,9 @@ func (s *VM) SetCtx(ctx et.Json) {
 /**
 * Run
 * @params str string
-* @return goja.Value, error
+* @return et.Json, error
 **/
-func (s *VM) Run(str string) (goja.Value, error) {
+func (s *VM) Run(str string) (et.Json, error) {
 	s.vm = goja.New()
 	wrap(s)
 
@@ -146,28 +168,28 @@ func (s *VM) Run(str string) (goja.Value, error) {
 		return nil, err
 	}
 
-	result, err := s.vm.RunString(str)
+	_, err = s.vm.RunString(str)
 	if err != nil {
 		return nil, err
 	}
-	return result, nil
+	return s.Ctx, nil
 }
 
 /**
 * RunCode
 * @params code []byte
-* @return goja.Value, error
+* @return et.Json, error
 **/
-func (s *VM) RunByBt(code []byte) (goja.Value, error) {
+func (s *VM) RunByBt(code []byte) (et.Json, error) {
 	return s.Run(string(code))
 }
 
 /**
 * RunByFile
 * @params path string
-* @return goja.Value, error
+* @return et.Json, error
 **/
-func (s *VM) RunByFile(path string) (goja.Value, error) {
+func (s *VM) RunByFile(path string) (et.Json, error) {
 	path = filepath.Join(s.Loader.BaseDir, path)
 	_, err := os.Stat(path)
 	if err != nil {
@@ -188,9 +210,9 @@ func (s *VM) RunByFile(path string) (goja.Value, error) {
 /**
 * RunBySource
 * @param path string
-* @return (goja.Value, error)
+* @return (et.Json, error)
 **/
-func (s *VM) RunBySource(path string) (goja.Value, error) {
+func (s *VM) RunBySource(path string) (et.Json, error) {
 	var scr Module
 	exists, err := s.get(path, &scr)
 	if err != nil {

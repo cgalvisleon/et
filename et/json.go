@@ -716,17 +716,17 @@ func (s Json) Array(atrib ...string) []interface{} {
 /**
 * ArrayBytes
 * @param atribs ...string
-* @return []byte
+* @return [][]byte
 **/
-func (s Json) ArrayBytes(atribs ...string) []byte {
+func (s Json) ArrayBytes(atribs ...string) [][]byte {
 	vals := s.Array(atribs...)
-	result := make([]byte, 0, len(vals))
+	result := make([][]byte, 0, len(vals))
 	for _, val := range vals {
 		switch v := val.(type) {
 		case string:
-			result = append(result, []byte(v)...)
+			result = append(result, []byte(v))
 		default:
-			result = append(result, []byte(fmt.Sprintf(`%v`, v))...)
+			result = append(result, []byte(fmt.Sprintf(`%v`, v)))
 		}
 	}
 

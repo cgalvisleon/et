@@ -129,11 +129,7 @@ func (s *Step) Run(flow *Instance, ctx et.Json) (et.Json, error) {
 	if s.fn != nil {
 		result, err = s.fn(flow, ctx)
 	} else {
-		s.vm, err = vm.New(s.Name)
-		if err != nil {
-			return nil, err
-		}
-
+		s.vm = vm.New(s.Name)
 		s.vm.SetCtx(ctx)
 		_, err = s.vm.RunByBt(s.Definition)
 		if err != nil {
@@ -160,11 +156,7 @@ func (s *Step) RunRollback(flow *Instance, ctx et.Json) (et.Json, error) {
 	if s.fnUndo != nil {
 		result, err = s.fnUndo(flow, ctx)
 	} else {
-		s.vm, err = vm.New(s.Name)
-		if err != nil {
-			return nil, err
-		}
-
+		s.vm = vm.New(s.Name)
 		s.vm.SetCtx(ctx)
 		_, err = s.vm.RunByBt(s.Undo)
 		if err != nil {

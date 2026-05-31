@@ -6,12 +6,8 @@ import (
 )
 
 func main() {
-	v, err := vm.New("vm")
-	if err != nil {
-		logs.Panic(err)
-	}
-
-	err = v.RunDev("./cmd/vm")
+	v := vm.New("vm")
+	err := v.RunDev("./cmd/vm")
 	if err != nil {
 		logs.Panic(err)
 	}

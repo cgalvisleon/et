@@ -359,15 +359,12 @@ func (s *DB) Define(define Def) (*Model, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	if define.IdxField != "" {
 		result.DefineIdxField()
 	}
-
 	if define.IdtField != "" {
 		result.DefineIdTField()
 	}
-
 	for _, column := range define.Columns {
 		result.defineColumn(column.Name, column.TypeColumn, column.TypeData, column.Default, column.Definition)
 	}

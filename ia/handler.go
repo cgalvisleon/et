@@ -42,12 +42,13 @@ func (s *Ia) HttpNewAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tag := body.Str("tag")
 	name := body.Str("name")
 	description := body.Str("description")
 	context := body.Str("context")
 	model := body.Str("model")
 
-	agent, err := s.newAgent(name, description, context, model)
+	agent, err := s.newAgent(tag, name, description, context, model)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 		return

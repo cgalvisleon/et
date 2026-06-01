@@ -10,7 +10,7 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/instances"
+	"github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
@@ -19,7 +19,7 @@ import (
 type Resilience struct {
 	instances map[string]*Instance `json:"-"`
 	mu        sync.Mutex           `json:"-"`
-	store     instances.Store      `json:"-"`
+	store     jsql.Store           `json:"-"`
 	isDebug   bool                 `json:"-"`
 }
 
@@ -27,7 +27,7 @@ type Resilience struct {
 * New
 * @return *Resilience, error
  */
-func New(store instances.Store) (*Resilience, error) {
+func New(store jsql.Store) (*Resilience, error) {
 	err := event.Load()
 	if err != nil {
 		return nil, err

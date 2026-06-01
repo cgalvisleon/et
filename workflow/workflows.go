@@ -8,7 +8,7 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/instances"
+	"github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/resilience"
 )
@@ -19,7 +19,7 @@ type WorkFlow struct {
 	Results     map[string]et.Json     `json:"results"`
 	muFlows     sync.Mutex             `json:"-"`
 	muInstances sync.Mutex             `json:"-"`
-	store       instances.Store        `json:"-"`
+	store       jsql.Store             `json:"-"`
 	resilience  *resilience.Resilience `json:"-"`
 	isDebug     bool                   `json:"-"`
 }
@@ -32,10 +32,10 @@ var (
 
 /**
 * New
-* @param store instances.Store
+* @param store jsql.Store
 * @return (*WorkFlow, error)
 **/
-func New(store instances.Store) (*WorkFlow, error) {
+func New(store jsql.Store) (*WorkFlow, error) {
 	err := event.Load()
 	if err != nil {
 		return nil, err
@@ -65,7 +65,7 @@ func New(store instances.Store) (*WorkFlow, error) {
 * Load
 * @return error
 **/
-func Load(store instances.Store) error {
+func Load(store jsql.Store) error {
 	if workflow != nil {
 		return nil
 	}

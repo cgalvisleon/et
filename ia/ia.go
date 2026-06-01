@@ -9,7 +9,6 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/instances"
 	"github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
@@ -34,9 +33,9 @@ type Ia struct {
 	muParticipants    sync.RWMutex             `json:"-"`
 	muConversations   sync.RWMutex             `json:"-"`
 	key               string                   `json:"-"`
-	store             instances.Store          `json:"-"`
-	participantStore  instances.Store          `json:"-"`
-	conversationStore instances.Store          `json:"-"`
+	store             jsql.Store               `json:"-"`
+	participantStore  jsql.Store               `json:"-"`
+	conversationStore jsql.Store               `json:"-"`
 	isDebug           bool                     `json:"-"`
 }
 
@@ -150,21 +149,21 @@ func (s *Ia) delete() error {
 func (s *Ia) up() error {
 	var err error
 	if s.store == nil {
-		s.store, err = instances.New(s.db, "ia", "store", instances.KindJson)
+		s.store, err = jsql.NewInstance(s.db, "ia", "store", jsql.KindJson)
 		if err != nil {
 			return err
 		}
 	}
 
 	if s.participantStore == nil {
-		s.participantStore, err = instances.New(s.db, "ia", "participant", instances.KindJson)
+		s.participantStore, err = jsql.NewInstance(s.db, "ia", "participant", jsql.KindJson)
 		if err != nil {
 			return err
 		}
 	}
 
 	if s.conversationStore == nil {
-		s.conversationStore, err = instances.New(s.db, "ia", "conversation", instances.KindJson)
+		s.conversationStore, err = jsql.NewInstance(s.db, "ia", "conversation", jsql.KindJson)
 		if err != nil {
 			return err
 		}
@@ -256,16 +255,16 @@ func (s *Ia) removeAgent(name string) error {
 
 /**
 * newAgent
-* @param name, description, context, model string
+* @param tag, name, description, context, model string
 * @return (*Agent, error)
 **/
-func (s *Ia) newAgent(name, description, context, model string) (*Agent, error) {
+func (s *Ia) newAgent(tag, name, description, context, model string) (*Agent, error) {
 	_, exists := s.getAgent(name)
 	if exists {
 		return nil, fmt.Errorf(MSG_AGENT_ALREADY_EXISTS, name)
 	}
 
-	result := newAgent(s, name, description, context, model)
+	result := newAgent(s, tag, name, description, context, model)
 	s.addAgent(result)
 	return result, s.save()
 }

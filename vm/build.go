@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/msg"
 )
@@ -16,71 +15,67 @@ import (
 * @param store Store, part Part
 * @return *VM, error
 **/
-func Build(store Store, part Part) (*VM, error) {
+func (s *VM) Build(store Store, part Part) error {
 	if store == nil {
-		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "store")
+		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "store")
 	}
 
 	absPath, err := filepath.Abs("")
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	pkgFile := filepath.Join(absPath, "package.json")
 	if !exists(pkgFile) {
-		return nil, fmt.Errorf("package.json not found")
+		return fmt.Errorf("package.json not found")
 	}
 
-	result := &VM{
-		Loader: newLoader(""),
-		Ctx:    et.Json{},
-	}
-	data, _ := os.ReadFile(pkgFile)
-	err = json.Unmarshal(data, &result.Pkg)
+	pkgData, _ := os.ReadFile(pkgFile)
+	err = json.Unmarshal(pkgData, &s.Pkg)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	result.store = store
-	result.mode = Building
-	err = result.init()
+	s.store = store
+	s.mode = Building
+	err = s.init()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if result.store != nil {
-		err := result.store.Init()
+	if s.store != nil {
+		err := s.store.Init()
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	_, err = result.BumpVersion(part)
+	_, err = s.BumpVersion(part)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	err = result.uppToStore()
+	err = s.uppToStore()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	for module, path := range result.Pkg.Modules {
+	for module, path := range s.Pkg.Modules {
 		inf := file.ExistPath(path)
 		if inf.IsDir {
 			continue
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		id := fmt.Sprintf("pkg:%s:%s:%s", result.Name, module, result.Version)
-		result.store.Set(id, &Module{
+		id := fmt.Sprintf("pkg:%s:%s:%s", s.Name, module, s.Version)
+		s.store.Set(id, &Module{
 			ID:      id,
 			Scripts: string(data),
 		})
 	}
 
-	return result, nil
+	return nil
 }

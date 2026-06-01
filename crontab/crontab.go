@@ -8,7 +8,7 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/instances"
+	"github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/timezone"
@@ -33,16 +33,16 @@ type Crontab struct {
 	cronJobs *cron.Cron      `json:"-"`
 	running  bool            `json:"-"`
 	mu       *sync.Mutex     `json:"-"`
-	store    instances.Store `json:"-"`
+	store    jsql.Store      `json:"-"`
 	isDebug  bool            `json:"-"`
 }
 
 /**
 * New
-* @param tag string, store instances.Store
+* @param tag string, store jsql.Store
 * @return (*Crontab, error)
 **/
-func New(tag string, store instances.Store) (*Crontab, error) {
+func New(tag string, store jsql.Store) (*Crontab, error) {
 	err := event.Load()
 	if err != nil {
 		return nil, err

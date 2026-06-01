@@ -28,6 +28,7 @@ const modelDefault = openai.ChatModelGPT4oMini
 
 type Agent struct {
 	ID          string           `json:"id"`
+	Tag         string           `json:"tag"`
 	Name        string           `json:"name"`
 	Description string           `json:"description"`
 	ContextBase string           `json:"context_base"`
@@ -41,20 +42,20 @@ type Agent struct {
 
 /**
 * agendId
-* @param name string
+* @param tag string
 * @return string
 **/
-func agendId(name string) string {
-	name = utility.Normalize(name)
-	return fmt.Sprintf("agent:%s", name)
+func agendId(tag string) string {
+	tag = utility.Normalize(tag)
+	return fmt.Sprintf("agent:%s", tag)
 }
 
 /**
 * newAgent
-* @param owner *Ia, name string, description string, context string, model string
+* @param owner *Ia, tag string, name string, description string, context string, model string
 * @return *Agent
 **/
-func newAgent(ia *Ia, name, description, context, model string) *Agent {
+func newAgent(ia *Ia, tag, name, description, context, model string) *Agent {
 	if context == "" {
 		context = contextDefault
 	}
@@ -62,7 +63,8 @@ func newAgent(ia *Ia, name, description, context, model string) *Agent {
 		model = modelDefault
 	}
 	result := &Agent{
-		ID:          agendId(name),
+		ID:          agendId(tag),
+		Tag:         tag,
 		Name:        name,
 		Description: description,
 		ContextBase: context,
@@ -95,6 +97,7 @@ func (s *Agent) up(ia *Ia) {
 func (s *Agent) ToJson() et.Json {
 	return et.Json{
 		"id":          s.ID,
+		"tag":         s.Tag,
 		"name":        s.Name,
 		"description": s.Description,
 		"context":     s.Context,

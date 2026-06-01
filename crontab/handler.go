@@ -7,7 +7,7 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/instances"
+	"github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/request"
@@ -18,10 +18,10 @@ var crontab *Crontab
 
 /**
 * Load
-* @params tag string, store instances.Store
+* @params tag string, store jsql.Store
 * @return error
 **/
-func Load(tag string, store instances.Store) error {
+func Load(tag string, store jsql.Store) error {
 	var err error
 	crontab, err = New(tag, store)
 	if err != nil {

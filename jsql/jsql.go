@@ -17,11 +17,11 @@ func init() {
 }
 
 /**
-* LoadTo: Returns an existing DB by name, or creates and initialises a new one from params.
+* ConnectTo: Returns an existing DB by name, or creates and initialises a new one from params.
 * @param connect Connection
 * @return *DB, error
 **/
-func LoadTo(connect Connection) (*DB, error) {
+func ConnectTo(connect Connection) (*DB, error) {
 	params := connect.GetParams()
 	name := params.Str("database")
 	result, ok := dbs[name]
@@ -44,6 +44,25 @@ func LoadTo(connect Connection) (*DB, error) {
 }
 
 /**
+* LoadTo: Returns an existing DB by name.
+* @param name string
+* @return *DB, error
+**/
+func LoadTo(name string) (*DB, error) {
+	config := PgConection{
+		Database:    envar.GetStr("DB_NAME", "test"),
+		Host:        envar.GetStr("DB_HOST", "localhost"),
+		Port:        envar.GetInt("DB_PORT", 5432),
+		User:        envar.GetStr("DB_USER", "test"),
+		Password:    envar.GetStr("DB_PASSWORD", "test"),
+		UseCore:     envar.GetBool("DB_USE_CORE", false),
+		RecordLimit: envar.GetInt("DB_RECORD_LIMIT", 1000),
+	}
+	config.Database = name
+	return ConnectTo(&config)
+}
+
+/**
 * Load: Connects to the default database reading configuration from environment variables.
 * @return *DB, error
 **/
@@ -57,7 +76,7 @@ func Load() (*DB, error) {
 		UseCore:     envar.GetBool("DB_USE_CORE", false),
 		RecordLimit: envar.GetInt("DB_RECORD_LIMIT", 1000),
 	}
-	return LoadTo(&config)
+	return ConnectTo(&config)
 }
 
 /**

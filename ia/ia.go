@@ -149,21 +149,21 @@ func (s *Ia) delete() error {
 func (s *Ia) up() error {
 	var err error
 	if s.store == nil {
-		s.store, err = jsql.NewInstance(s.db, "ia", "store", jsql.KindJson)
+		s.store, err = jsql.DefineInstance(s.db, "ia", "store", jsql.KindJson)
 		if err != nil {
 			return err
 		}
 	}
 
 	if s.participantStore == nil {
-		s.participantStore, err = jsql.NewInstance(s.db, "ia", "participant", jsql.KindJson)
+		s.participantStore, err = jsql.DefineInstance(s.db, "ia", "participant", jsql.KindJson)
 		if err != nil {
 			return err
 		}
 	}
 
 	if s.conversationStore == nil {
-		s.conversationStore, err = jsql.NewInstance(s.db, "ia", "conversation", jsql.KindJson)
+		s.conversationStore, err = jsql.DefineInstance(s.db, "ia", "conversation", jsql.KindJson)
 		if err != nil {
 			return err
 		}
@@ -211,11 +211,11 @@ func (s *Ia) addAgent(agent *Agent) {
 
 /**
 * getAgent
-* @param name string
-* @return (*Agent, error)
+* @param tag string
+* @return (*Agent, bool)
 **/
-func (s *Ia) getAgent(name string) (*Agent, bool) {
-	id := agendId(name)
+func (s *Ia) getAgent(tag string) (*Agent, bool) {
+	id := agendId(tag)
 	s.muAgents.RLock()
 	result, exists := s.Agents[id]
 	s.muAgents.RUnlock()
@@ -224,7 +224,7 @@ func (s *Ia) getAgent(name string) (*Agent, bool) {
 	}
 
 	if s.store != nil {
-		exists, err := s.store.Get(name, &result)
+		exists, err := s.store.Get(id, &result)
 		if err != nil {
 			return nil, false
 		}
@@ -244,8 +244,8 @@ func (s *Ia) getAgent(name string) (*Agent, bool) {
 * @param tag string
 * @return error
 **/
-func (s *Ia) removeAgent(name string) error {
-	id := agendId(name)
+func (s *Ia) removeAgent(tag string) error {
+	id := agendId(tag)
 	s.muAgents.Lock()
 	defer s.muAgents.Unlock()
 

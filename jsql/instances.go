@@ -26,14 +26,12 @@ type Instance struct {
 	kind  Kind
 }
 
-var instance *Instance
-
 /**
-* NewInstance
+* DefineInstance
 * @param db *DB, schema, name string, kind Kind
 * @return (*Instance, error)
 **/
-func NewInstance(db *DB, schema, name string, kind Kind) (*Instance, error) {
+func DefineInstance(db *DB, schema, name string, kind Kind) (*Instance, error) {
 	columns := []Column{
 		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
@@ -88,22 +86,6 @@ func NewInstance(db *DB, schema, name string, kind Kind) (*Instance, error) {
 	}
 
 	return &Instance{model: result}, nil
-}
-
-/**
-* LoadInstance
-* @param db *DB, schema, name string, kind Kind
-* @return (*Instance, error)
-**/
-func LoadInstance(db *DB, schema, name string, kind Kind) (*Instance, error) {
-	if instance != nil {
-		return instance, nil
-	}
-	instance, err := NewInstance(db, schema, name, kind)
-	if err != nil {
-		return nil, err
-	}
-	return instance, nil
 }
 
 /**

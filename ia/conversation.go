@@ -75,7 +75,7 @@ func newConversation(to *Participant, title string, conversationType TypeConvers
 		isDebug:       to.ia.isDebug,
 	}
 	var err error
-	result.messageStore, err = jsql.NewInstance(to.ia.db, "ia", "message", jsql.KindJson)
+	result.messageStore, err = jsql.DefineInstance(to.ia.db, "ia", "message", jsql.KindJson)
 	if err != nil {
 		return nil, err
 	}

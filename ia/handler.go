@@ -14,8 +14,8 @@ import (
 * @param r *http.Request
 **/
 func (s *Ia) HttpGetAgent(w http.ResponseWriter, r *http.Request) {
-	name := request.URLParam(r, "name").Str()
-	agent, exists := s.getAgent(name)
+	tag := request.URLParam(r, "tag").Str()
+	agent, exists := s.getAgent(tag)
 	if !exists {
 		response.ITEM(w, r, http.StatusNotFound, et.Item{
 			Ok:     false,
@@ -87,8 +87,8 @@ func (s *Ia) HttpSetAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name := request.URLParam(r, "name").Str()
-	agent, exists := s.getAgent(name)
+	tag := request.URLParam(r, "tag").Str()
+	agent, exists := s.getAgent(tag)
 	if !exists {
 		response.ITEM(w, r, http.StatusNotFound, et.Item{
 			Ok:     false,

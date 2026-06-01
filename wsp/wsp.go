@@ -3,19 +3,17 @@ package wsp
 import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/instances"
 )
 
 type Whatsapp struct {
-	Path              string          `json:"path"`
-	Token             string          `json:"token"`
-	PhoneNumberId     string          `json:"phone_number_id"`
-	VerifyToken       string          `json:"verify_token"`
-	EventHandler      func(et.Json)   `json:"-"`
-	EventHandlerError func(error)     `json:"-"`
-	store             instances.Store `json:"-"`
-	isTest            bool            `json:"-"`
-	isDebug           bool            `json:"-"`
+	Path              string        `json:"path"`
+	Token             string        `json:"token"`
+	PhoneNumberId     string        `json:"phone_number_id"`
+	VerifyToken       string        `json:"verify_token"`
+	EventHandler      func(et.Json) `json:"-"`
+	EventHandlerError func(error)   `json:"-"`
+	isTest            bool          `json:"-"`
+	isDebug           bool          `json:"-"`
 }
 
 /**

@@ -23,11 +23,11 @@ func defineCatalog(db *DB) error {
 		Name:    "catalog",
 		Version: 1,
 		Columns: []Column{
-			{Name: CREATED_AT, TypeData: DATETIME, Default: ""},
-			{Name: UPDATED_AT, TypeData: DATETIME, Default: ""},
-			{Name: "name", TypeData: TEXT, Default: ""},
-			{Name: "kind", TypeData: KEY, Default: ""},
-			{Name: "version", TypeData: INT, Default: 0},
+			{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
+			{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
+			{Name: "name", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
+			{Name: "kind", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
+			{Name: "version", TypeColumn: COLUMN, TypeData: INT, Default: 0},
 			{Name: "definition", TypeColumn: COLUMN, TypeData: BYTES, Default: []byte{}},
 		},
 		PrimaryKeys: []DefIndex{

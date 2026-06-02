@@ -335,7 +335,7 @@ func (s *WorkFlow) RollbackInstance(id, username string) (et.Json, error) {
 	}
 
 	instance.UpdatedBy = username
-	result, err := instance.rollback(instance.Ctx)
+	result, err := instance.rollback()
 	if err != nil {
 		return et.Json{}, err
 	}

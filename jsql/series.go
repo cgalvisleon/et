@@ -17,8 +17,8 @@ func defineSeries(db *DB) error {
 		Name:    "series",
 		Version: 1,
 		Columns: []Column{
-			{Name: "tag", TypeData: KEY, Default: ""},
-			{Name: "owner_id", TypeData: KEY, Default: ""},
+			{Name: "tag", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
+			{Name: "owner_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 			{Name: "format", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
 			{Name: "value", TypeColumn: COLUMN, TypeData: INT, Default: ""},
 		},

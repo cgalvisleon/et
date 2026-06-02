@@ -366,6 +366,15 @@ func (s *DB) Define(define Def) (*Model, error) {
 		result.DefineIdTField()
 	}
 	for _, column := range define.Columns {
+		if column.Name == "" {
+			return nil, fmt.Errorf(MSG_COLUMN_NAME_REQUIRED, result.Name)
+		}
+		if column.TypeColumn == "" {
+			return nil, fmt.Errorf(MSG_TYPE_COLUMN_REQUIRED, result.Name)
+		}
+		if column.TypeData == "" {
+			return nil, fmt.Errorf(MSG_TYPE_DATA_REQUIRED, result.Name)
+		}
 		result.defineColumn(column.Name, column.TypeColumn, column.TypeData, column.Default, column.Definition)
 	}
 	for _, primaryKey := range define.PrimaryKeys {

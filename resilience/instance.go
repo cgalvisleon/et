@@ -3,7 +3,6 @@ package resilience
 import (
 	"fmt"
 	"reflect"
-	"sync"
 	"time"
 
 	"github.com/cgalvisleon/et/et"
@@ -52,8 +51,6 @@ type Instance struct {
 	fnArgs        []interface{}   `json:"-"`
 	fnResult      []reflect.Value `json:"-"`
 	isDebug       bool            `json:"-"`
-	saveMu        sync.Mutex      `json:"-"`
-	saveTimer     *time.Timer     `json:"-"`
 }
 
 /**
@@ -103,28 +100,19 @@ func (s *Instance) ToString() string {
 * @return error
 **/
 func (s *Instance) save() error {
-	s.saveMu.Lock()
-	defer s.saveMu.Unlock()
-
-	if s.saveTimer != nil {
-		s.saveTimer.Stop()
+	data := s.ToJson()
+	if s.isDebug {
+		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	s.saveTimer = time.AfterFunc(100*time.Millisecond, func() {
-		data := s.ToJson()
-		if s.isDebug {
-			logs.Log(packageName, "save:", data.ToString())
+	if s.owner != nil && s.owner.store != nil {
+		err := s.owner.store.Set(s.ID, s.Tag, s.OwnerId, data)
+		if err != nil {
+			return err
 		}
+	}
 
-		if s.owner != nil && s.owner.store != nil {
-			err := s.owner.store.Set(s.ID, s.Tag, s.OwnerId, data)
-			if err != nil {
-				logs.Errorf("Error saving instance resilience: %v", err)
-			}
-		}
-
-		event.Publish(EVENT_INSTANCE_SET, data)
-	})
+	event.Publish(EVENT_INSTANCE_SET, data)
 
 	return nil
 }
@@ -177,20 +165,38 @@ func (s *Instance) setStatus(status Status) error {
 }
 
 /**
-* SetError
+* setError
 * @param err error
 **/
-func (s *Instance) SetError(err error) {
+func (s *Instance) setError(err error) {
 	s.Error = err.Error()
 	s.err = err
 	s.setStatus(FAILED)
 }
 
 /**
-* Stop
+* setDone
+**/
+func (s *Instance) setDone() {
+	if s.Response != nil && len(s.Response) > 0 {
+		v := reflect.ValueOf(s.Response)
+		s.Result = v.Interface()
+	} else {
+		s.Result = et.Json{}
+	}
+
+	s.setStatus(DONE)
+
+	time.AfterFunc(300*time.Millisecond, func() {
+		s.owner.removeInstance(s.ID)
+	})
+}
+
+/**
+* setStop
 * @return et.Item
 **/
-func (s *Instance) Stop() et.Item {
+func (s *Instance) setStop() et.Item {
 	s.stop = true
 	s.setStatus(STOP)
 
@@ -203,13 +209,13 @@ func (s *Instance) Stop() et.Item {
 }
 
 /**
-* Restart
+* setRestart
 * @return et.Item
 **/
-func (s *Instance) Restart() et.Item {
+func (s *Instance) setRestart() et.Item {
 	s.stop = false
 	s.setStatus(PENDING)
-	go s.Run()
+	go s.run()
 
 	return et.Item{
 		Ok: true,
@@ -217,25 +223,6 @@ func (s *Instance) Restart() et.Item {
 			"message": msg.MSG_INSTANCE_RESTARTED,
 		},
 	}
-}
-
-/**
-* Done
-* @return error
-**/
-func (s *Instance) Done() {
-	if s.Response != nil && len(s.Response) > 0 {
-		v := reflect.ValueOf(s.Response)
-		s.Result = v.Interface()
-	} else {
-		s.Result = et.Json{}
-	}
-
-	s.setStatus(DONE)
-
-	time.AfterFunc(300*time.Millisecond, func() {
-		s.owner.remove(s.ID)
-	})
 }
 
 /**
@@ -275,9 +262,9 @@ func (s *Instance) runAttempt() ([]reflect.Value, error) {
 		if r.Type().Implements(errorInterface) {
 			err, failed = r.Interface().(error)
 			if failed {
-				s.SetError(err)
+				s.setError(err)
 			} else {
-				s.Done()
+				s.setDone()
 			}
 		}
 	}
@@ -289,7 +276,7 @@ func (s *Instance) runAttempt() ([]reflect.Value, error) {
 * Run
 * @return error
 **/
-func (s *Instance) Run() {
+func (s *Instance) run() {
 	if s.Interval == 0 {
 		return
 	}
@@ -298,25 +285,25 @@ func (s *Instance) Run() {
 		if s.Status != DONE && s.Attempt < s.TotalAttempts {
 			_, err := s.runAttempt()
 			if err != nil {
-				s.Run()
+				s.run()
 			}
 		}
 	})
 }
 
 /**
-* IsFailed
+* isFailed
 * @return bool
 **/
-func (s *Instance) IsFailed() bool {
+func (s *Instance) isFailed() bool {
 	return s.Status == FAILED
 }
 
 /**
-* IsEnd
+* isEnd
 * @return bool
 **/
-func (s *Instance) IsEnd() bool {
+func (s *Instance) isEnd() bool {
 	result := s.Attempt == s.TotalAttempts
 	if !result {
 		result = s.Status == DONE

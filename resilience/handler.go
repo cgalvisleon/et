@@ -11,12 +11,12 @@ import (
 )
 
 /**
-* HttpGet
+* HttpGetInstace
 * @params w http.ResponseWriter, r *http.Request
 **/
-func (s *Resilience) HttpGet(w http.ResponseWriter, r *http.Request) {
+func (s *Resilience) HttpGetInstace(w http.ResponseWriter, r *http.Request) {
 	id := request.URLParam(r, "id").Str()
-	instance, exists := s.Get(id)
+	instance, exists := s.GetInstance(id)
 	if !exists {
 		response.HTTPError(w, r, http.StatusNotFound, "instance not found")
 		return
@@ -35,7 +35,7 @@ func (s *Resilience) HttpGet(w http.ResponseWriter, r *http.Request) {
 **/
 func (s *Resilience) HttpState(w http.ResponseWriter, r *http.Request) {
 	id := request.URLParam(r, "id").Str()
-	instance, exists := s.Get(id)
+	instance, exists := s.GetInstance(id)
 	if !exists {
 		response.HTTPError(w, r, http.StatusNotFound, "instance not found")
 		return
@@ -62,12 +62,12 @@ func (s *Resilience) HttpState(w http.ResponseWriter, r *http.Request) {
 }
 
 /**
-* HttpSetParams
+* HttpSetInstance
 * @params w http.ResponseWriter, r *http.Request
 **/
-func (s *Resilience) HttpSetParams(w http.ResponseWriter, r *http.Request) {
+func (s *Resilience) HttpSetInstance(w http.ResponseWriter, r *http.Request) {
 	id := request.URLParam(r, "id").Str()
-	instance, exists := s.Get(id)
+	instance, exists := s.GetInstance(id)
 	if !exists {
 		response.HTTPError(w, r, http.StatusNotFound, "instance not found")
 		return
@@ -111,10 +111,10 @@ func (s *Resilience) HttpSetParams(w http.ResponseWriter, r *http.Request) {
 }
 
 /**
-* HttpQuery
+* HttpQueryInstance
 * @params w http.ResponseWriter, r *http.Request
 **/
-func (s *Resilience) HttpQuery(w http.ResponseWriter, r *http.Request) {
+func (s *Resilience) HttpQueryInstance(w http.ResponseWriter, r *http.Request) {
 	body, err := request.GetBody(r)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())

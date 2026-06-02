@@ -50,7 +50,7 @@ func ConnectTo(connect Connection) (*DB, error) {
 **/
 func LoadTo(name string) (*DB, error) {
 	config := PgConection{
-		Database:    envar.GetStr("DB_NAME", "test"),
+		Database:    envar.GetStr("DB_NAME", "josephine"),
 		Host:        envar.GetStr("DB_HOST", "localhost"),
 		Port:        envar.GetInt("DB_PORT", 5432),
 		User:        envar.GetStr("DB_USER", "test"),
@@ -68,7 +68,7 @@ func LoadTo(name string) (*DB, error) {
 **/
 func Load() (*DB, error) {
 	config := PgConection{
-		Database:    envar.GetStr("DB_NAME", "test"),
+		Database:    envar.GetStr("DB_NAME", "josephine"),
 		Host:        envar.GetStr("DB_HOST", "localhost"),
 		Port:        envar.GetInt("DB_PORT", 5432),
 		User:        envar.GetStr("DB_USER", "test"),

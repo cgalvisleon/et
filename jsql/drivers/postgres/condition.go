@@ -92,7 +92,7 @@ func pgAttribCast(tp jsql.TypeData) string {
 	case jsql.BOOLEAN:
 		return "BOOLEAN"
 	case jsql.DATETIME:
-		return "TIMESTAMPTZ"
+		return "TIMESTAMP"
 	default:
 		return ""
 	}

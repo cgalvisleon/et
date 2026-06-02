@@ -65,8 +65,6 @@ type Instance struct {
 	workflow    *WorkFlow            `json:"-"`
 	isDebug     bool                 `json:"-"`
 	mu          sync.Mutex           `json:"-"`
-	saveMu      sync.Mutex           `json:"-"`
-	saveTimer   *time.Timer          `json:"-"`
 }
 
 /**
@@ -108,7 +106,6 @@ func newInstance(steper *Steper, id, ownerId, userName string) *Instance {
 		workflow:    steper.flow.workflow,
 		isDebug:     steper.flow.workflow.isDebug,
 		mu:          sync.Mutex{},
-		saveMu:      sync.Mutex{},
 	}
 }
 
@@ -117,28 +114,19 @@ func newInstance(steper *Steper, id, ownerId, userName string) *Instance {
 * @return error
 **/
 func (s *Instance) save() error {
-	s.saveMu.Lock()
-	defer s.saveMu.Unlock()
-
-	if s.saveTimer != nil {
-		s.saveTimer.Stop()
+	data := s.ToJson()
+	if s.isDebug {
+		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	s.saveTimer = time.AfterFunc(100*time.Millisecond, func() {
-		data := s.ToJson()
-		if s.isDebug {
-			logs.Log(packageName, "save:", data.ToString())
+	if s.workflow != nil && s.workflow.store != nil {
+		err := s.workflow.store.Set(s.ID, s.Tag, s.OwnerId, s)
+		if err != nil {
+			return err
 		}
+	}
 
-		if s.workflow != nil && s.workflow.store != nil {
-			err := s.workflow.store.Set(s.ID, s.Tag, s.OwnerId, s)
-			if err != nil {
-				logs.Errorf("Error saving instance workflow: %v", err)
-			}
-		}
-
-		event.Publish(EVENT_INSTANCE_SET, data)
-	})
+	event.Publish(EVENT_INSTANCE_SET, data)
 
 	return nil
 }
@@ -390,7 +378,7 @@ func (s *Instance) SetCtx(ctx et.Json, step int) et.Json {
 * @param idx int
 * @return et.Json
 **/
-func (s *Instance) getCtx(idx int) et.Json {
+func (s *Instance) GetCtx(idx int) et.Json {
 	result, ok := s.Ctxs[idx]
 	if !ok {
 		return et.Json{}
@@ -408,28 +396,6 @@ func (s *Instance) setStop(result et.Json) (et.Json, error) {
 	err := s.setStatus(PENDING)
 	if err != nil {
 		return result, err
-	}
-
-	return result, nil
-}
-
-/**
-* startResilence
-* @return (bool, error)
-**/
-func (s *Instance) startResilence() (et.Json, error) {
-	if s.flow.TotalAttempts == 0 {
-		return et.Json{}, nil
-	}
-
-	description := fmt.Sprintf("flow: %s,  %s", s.flow.Name, s.flow.Description)
-	s.Resilence = s.workflow.resilience.Run(s.Tag, description, s.OwnerId, s.flow.TotalAttempts, s.flow.TimeAttempts, s.Tags, s.flow.Team, s.flow.Level, s.run, s.Ctx)
-	if s.Resilence.Error != "" {
-		return et.Json{}, errors.New(s.Resilence.Error)
-	}
-	result, ok := s.Resilence.Result.(et.Json)
-	if !ok {
-		return et.Json{}, nil
 	}
 
 	return result, nil
@@ -495,13 +461,10 @@ func (s *Instance) run(ctx et.Json) (et.Json, error) {
 		ctx = s.SetCtx(ctx, s.CurrentStep)
 		result, err = s.step.Run(s, ctx)
 		if err != nil {
-			if s.flow.TotalAttempts != 0 {
-				result, err = s.startResilence()
-				if err == nil {
-					return result, nil
-				}
+			result, err := s.rollback()
+			if err != nil {
+				return result, err
 			}
-			return s.rollback(ctx)
 		}
 
 		if s.IsDone {
@@ -526,13 +489,20 @@ func (s *Instance) run(ctx et.Json) (et.Json, error) {
 * @param step *Step, ctx et.Json
 * @return et.Json, error
 **/
-func (s *Instance) rollback(ctx et.Json) (et.Json, error) {
+func (s *Instance) rollback() (et.Json, error) {
+	if s.flow.TotalAttempts > 0 {
+		result, err := s.startResilence()
+		if err == nil {
+			return result, nil
+		}
+	}
+
 	if s.Status == DONE {
-		return ctx, fmt.Errorf(MSG_INSTANCE_ALREADY_DONE, s.ID)
+		return et.Json{}, fmt.Errorf(MSG_INSTANCE_ALREADY_DONE, s.ID)
 	} else if s.Status == RUNNING {
-		return ctx, fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING, s.ID)
+		return et.Json{}, fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING, s.ID)
 	} else if s.Status == PENDING {
-		return ctx, fmt.Errorf(MSG_INSTANCE_PENDING, s.ID)
+		return et.Json{}, fmt.Errorf(MSG_INSTANCE_PENDING, s.ID)
 	}
 
 	var err error
@@ -542,11 +512,31 @@ func (s *Instance) rollback(ctx et.Json) (et.Json, error) {
 		if !exists {
 			continue
 		}
+
 		logs.Logf(packageName, MSG_INSTANCE_ROLLBACK_STEP, i)
+		ctx := s.GetCtx(i)
 		result, err = step.RunRollback(s, ctx)
 		if err != nil {
 			return et.Json{}, err
 		}
+	}
+
+	return result, nil
+}
+
+/**
+* startResilence
+* @return (bool, error)
+**/
+func (s *Instance) startResilence() (et.Json, error) {
+	description := fmt.Sprintf("flow: %s,  %s", s.flow.Name, s.flow.Description)
+	s.Resilence = s.workflow.resilience.Run(s.Tag, description, s.OwnerId, s.flow.TotalAttempts, s.flow.TimeAttempts, s.Tags, s.flow.Team, s.flow.Level, s.run, s.Ctx)
+	if s.Resilence.Error != "" {
+		return et.Json{}, errors.New(s.Resilence.Error)
+	}
+	result, ok := s.Resilence.Result.(et.Json)
+	if !ok {
+		return et.Json{}, nil
 	}
 
 	return result, nil

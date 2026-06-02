@@ -21,6 +21,9 @@ var (
 	MSG_AS_REQUIRED_IN_JOIN  = "As is required in join: %s"
 	MSG_TO_REQUIRED_IN_JOIN  = "To is required in join: %s"
 	MSG_INVALID_TO_IN_JOIN   = "Invalid to in join: %s"
+	MSG_COLUMN_NAME_REQUIRED = "Column is required in %s"
+	MSG_TYPE_COLUMN_REQUIRED = "Type column is required in %s"
+	MSG_TYPE_DATA_REQUIRED   = "Type data is required in %s"
 )
 
 func init() {
@@ -45,5 +48,8 @@ func init() {
 		MSG_AS_REQUIRED_IN_JOIN = "As es requerido en join: %s"
 		MSG_TO_REQUIRED_IN_JOIN = "To es requerido en join: %s"
 		MSG_INVALID_TO_IN_JOIN = "To inválido en join: %s"
+		MSG_COLUMN_NAME_REQUIRED = "Columna es requerida en %s"
+		MSG_TYPE_COLUMN_REQUIRED = "Tipo de columna es requerido en %s"
+		MSG_TYPE_DATA_REQUIRED = "Tipo de dato es requerido en %s"
 	}
 }

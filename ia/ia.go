@@ -52,7 +52,7 @@ func New(tag string, db *jsql.DB) (*Ia, error) {
 
 	key := envar.GetStr("OPENAI_API_KEY", "")
 	result := &Ia{
-		ID:              "ia:" + tag,
+		ID:              fmt.Sprintf("ia:%s", tag),
 		Tag:             tag,
 		Agents:          make(map[string]*Agent, 0),
 		Participants:    make(map[string]*Participant, 0),

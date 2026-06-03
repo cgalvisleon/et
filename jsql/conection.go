@@ -4,6 +4,8 @@ import "github.com/cgalvisleon/et/et"
 
 type Connection interface {
 	GetParams() et.Json
+	SetDatabase(string)
+	GetDatabase() string
 }
 
 type PgConection struct {
@@ -37,6 +39,22 @@ func (c *PgConection) GetParams() et.Json {
 	}
 }
 
+/**
+* SetDatabase: Sets the database name in the connection parameters.
+* @param name string
+**/
+func (c *PgConection) SetDatabase(name string) {
+	c.Database = name
+}
+
+/**
+* GetDatabase: Returns the database name from the connection parameters.
+* @return string
+**/
+func (c *PgConection) GetDatabase() string {
+	return c.Database
+}
+
 type SqliteConection struct {
 	Name         string
 	RecordLimit  int
@@ -62,4 +80,20 @@ func (c *SqliteConection) GetParams() et.Json {
 		"pool_idle_time": c.PoolIdleTime,
 		"app_name":       c.AppName,
 	}
+}
+
+/**
+* SetDatabase: Sets the database name in the connection parameters
+* @param name string
+**/
+func (c *SqliteConection) SetDatabase(name string) {
+	c.Name = name
+}
+
+/**
+* GetDatabase: Returns the database name from the connection parameters.
+* @return string
+**/
+func (c *SqliteConection) GetDatabase() string {
+	return c.Name
 }

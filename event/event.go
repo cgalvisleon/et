@@ -81,7 +81,7 @@ func Load() error {
 		return nil
 	}
 
-	params := utility.NewConfig(et.Json{
+	params := utility.NewJConfig(et.Json{
 		"NATS_HOST":     "",
 		"NATS_USER":     "",
 		"NATS_PASSWORD": "",

@@ -405,7 +405,7 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 
 	result := et.NewItems([]et.Json{})
 	model := s.model
-	items, err := newQuery(model).
+	current, err := newQuery(model).
 		addCondition(s.Conditions).
 		All()
 	if err != nil {
@@ -413,7 +413,7 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 	}
 
 	data := s.Data[0]
-	for _, old := range items.Result {
+	for _, old := range current.Result {
 		s.Old = old
 		s.New = s.Old.Clone()
 		maps.Copy(s.New, data)

@@ -2,6 +2,7 @@ package jsql
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
@@ -44,22 +45,48 @@ func ConnectTo(connect Connection) (*DB, error) {
 }
 
 /**
+* getConnection: Returns a Connection object based on the specified driver and environment variables.
+* @param driver string
+* @return Connection, error
+**/
+func getConnection(driver string) (Connection, error) {
+	switch driver {
+	case DriverPostgres:
+		config := PgConection{
+			Database:    envar.GetStr("DB_NAME", "josephine"),
+			Host:        envar.GetStr("DB_HOST", "localhost"),
+			Port:        envar.GetInt("DB_PORT", 5432),
+			User:        envar.GetStr("DB_USER", "test"),
+			Password:    envar.GetStr("DB_PASSWORD", "test"),
+			UseCore:     envar.GetBool("DB_USE_CORE", false),
+			RecordLimit: envar.GetInt("DB_RECORD_LIMIT", 1000),
+		}
+		return &config, nil
+	case DriverSqlite:
+		config := SqliteConection{
+			Name:        envar.GetStr("DB_NAME", "josephine.db"),
+			RecordLimit: envar.GetInt("DB_RECORD_LIMIT", 1000),
+			PoolMaxOpen: envar.GetInt("DB_POOL_MAX_OPEN", 10),
+		}
+		return &config, nil
+	default:
+		return nil, fmt.Errorf(MSG_UNSUPPORTED_DRIVER, driver)
+	}
+}
+
+/**
 * LoadTo: Returns an existing DB by name.
 * @param name string
 * @return *DB, error
 **/
 func LoadTo(name string) (*DB, error) {
-	config := PgConection{
-		Database:    envar.GetStr("DB_NAME", "josephine"),
-		Host:        envar.GetStr("DB_HOST", "localhost"),
-		Port:        envar.GetInt("DB_PORT", 5432),
-		User:        envar.GetStr("DB_USER", "test"),
-		Password:    envar.GetStr("DB_PASSWORD", "test"),
-		UseCore:     envar.GetBool("DB_USE_CORE", false),
-		RecordLimit: envar.GetInt("DB_RECORD_LIMIT", 1000),
+	driver := envar.GetStr("DB_DRIVER", DriverPostgres)
+	config, err := getConnection(driver)
+	if err != nil {
+		return nil, err
 	}
-	config.Database = name
-	return ConnectTo(&config)
+	config.SetDatabase(name)
+	return ConnectTo(config)
 }
 
 /**
@@ -67,16 +94,12 @@ func LoadTo(name string) (*DB, error) {
 * @return *DB, error
 **/
 func Load() (*DB, error) {
-	config := PgConection{
-		Database:    envar.GetStr("DB_NAME", "josephine"),
-		Host:        envar.GetStr("DB_HOST", "localhost"),
-		Port:        envar.GetInt("DB_PORT", 5432),
-		User:        envar.GetStr("DB_USER", "test"),
-		Password:    envar.GetStr("DB_PASSWORD", "test"),
-		UseCore:     envar.GetBool("DB_USE_CORE", false),
-		RecordLimit: envar.GetInt("DB_RECORD_LIMIT", 1000),
+	driver := envar.GetStr("DB_DRIVER", DriverPostgres)
+	config, err := getConnection(driver)
+	if err != nil {
+		return nil, err
 	}
-	return ConnectTo(&config)
+	return ConnectTo(config)
 }
 
 /**

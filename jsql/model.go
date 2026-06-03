@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"sync"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/reg"
@@ -71,6 +72,8 @@ type Model struct {
 	afterUpdates  []TriggerFunction       `json:"-"`
 	afterDeletes  []TriggerFunction       `json:"-"`
 	db            *DB                     `json:"-"`
+	historyDb     *DB                     `json:"-"`
+	deadDb        *DB                     `json:"-"`
 }
 
 /**
@@ -147,6 +150,27 @@ func (s *Model) Test() *Model {
 }
 
 /**
+* initInDb: Checks if the model exists in the database and loads it if not.
+* @param db *DB
+* @return (bool, error) where bool indicates if the model already existed
+**/
+func (s *Model) initInDb(db *DB) (bool, error) {
+	exist, err := db.existModel(s.Schema, s.Name)
+	if err != nil {
+		return false, err
+	}
+
+	if !exist {
+		err = s.db.load(s)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return exist, nil
+}
+
+/**
 * Init: Runs DDL for the model the first time it is called; subsequent calls are no-ops.
 * @return error
 **/
@@ -155,23 +179,59 @@ func (s *Model) Init() error {
 		return nil
 	}
 
-	exist, err := s.db.existModel(s.Schema, s.Name)
-	if err != nil {
-		return err
+	n := 1
+	if s.historyDb != nil {
+		n++
 	}
 
-	if !exist {
-		err = s.db.load(s)
+	if s.deadDb != nil {
+		n++
+	}
+
+	var err error
+	var wg sync.WaitGroup
+	wg.Add(n)
+
+	go func() {
+		defer wg.Done()
+		var exist bool
+		exist, err = s.initInDb(s.db)
 		if err != nil {
-			return err
+			return
 		}
 
-		if !s.IsCore {
-			err := s.save()
+		if !exist && !s.IsCore {
+			err = s.save()
 			if err != nil {
-				return err
+				return
 			}
 		}
+	}()
+
+	if s.historyDb != nil {
+		go func() {
+			defer wg.Done()
+			_, err = s.initInDb(s.historyDb)
+			if err != nil {
+				return
+			}
+		}()
+	}
+
+	if s.deadDb != nil {
+		go func() {
+			defer wg.Done()
+			_, err = s.initInDb(s.deadDb)
+			if err != nil {
+				return
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	if err != nil {
+		return err
 	}
 
 	s.isInit = true
@@ -191,6 +251,29 @@ func (s *Model) Stricted() {
 **/
 func (s *Model) Db() *sql.DB {
 	return s.db.db
+}
+
+/**
+* SetDb: Sets the primary DB connection for the model.
+* @param db *DB
+**/
+func (s *Model) SetDb(db *DB) {
+	s.db = db
+}
+
+/*** SetHistoryDb: Sets the history DB connection for the model.
+* @param db *DB
+**/
+func (s *Model) SetHistoryDb(db *DB) {
+	s.historyDb = db
+}
+
+/**
+* SetDeadDb: Sets the dead DB connection for the model.
+* @param db *DB
+**/
+func (s *Model) SetDeadDb(db *DB) {
+	s.deadDb = db
 }
 
 /**
@@ -457,6 +540,50 @@ func (s *Model) QueryTx(tx *Tx, query et.Json) (et.Items, error) {
 **/
 func (s *Model) Query(query et.Json) (et.Items, error) {
 	return s.QueryTx(nil, query)
+}
+
+/**
+* HistoryQuery: Executes a query against the model's history database, if configured.
+* @param query et.Json
+* @return et.Items, error
+**/
+func (s *Model) HistoryQueryTx(tx *Tx, query et.Json) (et.Items, error) {
+	if s.historyDb == nil {
+		return et.Items{}, fmt.Errorf(MSG_HISTORY_DB_NOT_CONFIGURED, s.Name)
+	}
+	query.Set("from", fmt.Sprintf("%s", s.Table))
+	return s.historyDb.loadQuery(tx, query)
+}
+
+/**
+* HistoryQuery: Executes a query against the model's history database, if configured.
+* @param query et.Json
+* @return et.Items, error
+**/
+func (s *Model) HistoryQuery(query et.Json) (et.Items, error) {
+	return s.HistoryQueryTx(nil, query)
+}
+
+/**
+* DeadQuery: Executes a query against the model's dead database, if configured.
+* @param query et.Json
+* @return et.Items, error
+**/
+func (s *Model) DeadQueryTx(tx *Tx, query et.Json) (et.Items, error) {
+	if s.deadDb == nil {
+		return et.Items{}, fmt.Errorf(MSG_DEAD_DB_NOT_CONFIGURED, s.Name)
+	}
+	query.Set("from", fmt.Sprintf("%s", s.Table))
+	return s.deadDb.loadQuery(tx, query)
+}
+
+/**
+* DeadQuery: Executes a query against the model's dead database, if configured.
+* @param query et.Json
+* @return et.Items, error
+**/
+func (s *Model) DeadQuery(query et.Json) (et.Items, error) {
+	return s.DeadQueryTx(nil, query)
 }
 
 /**

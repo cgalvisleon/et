@@ -78,7 +78,7 @@ func Load() error {
 		return nil
 	}
 
-	params := utility.NewConfig(et.Json{
+	params := utility.NewJConfig(et.Json{
 		"REDIS_HOST":     "",
 		"REDIS_PASSWORD": "",
 		"REDIS_DB":       0,

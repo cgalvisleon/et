@@ -310,7 +310,7 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 			Rows:   rollup.Rows,
 		}
 	}
-	if fld.TypeColumn == jsql.CALC {
+	if fld.TypeColumn == jsql.CALCFUNC {
 		if fld.From == nil {
 			return "", false
 		}
@@ -318,6 +318,18 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 			return "", false
 		}
 		calc, ok := fld.From.Model.GetCalcFunc(fld.Name)
+		if ok {
+			query.CalcFuns[fld.Name] = calc
+		}
+	}
+	if fld.TypeColumn == jsql.CALC {
+		if fld.From == nil {
+			return "", false
+		}
+		if fld.From.Model == nil {
+			return "", false
+		}
+		calc, ok := fld.From.Model.Calcs[fld.Name]
 		if ok {
 			query.Calcs[fld.Name] = calc
 		}

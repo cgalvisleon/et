@@ -8,6 +8,7 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/vm"
 )
 
 /**
@@ -149,12 +150,15 @@ type Query struct {
 	UseSourceField bool                    `json:"use_source_field"`
 	Details        map[string]*QueryDetail `json:"details"`
 	Rollups        map[string]*QueryDetail `json:"rollups"`
-	Calcs          map[string]CalcFunction `json:"calcs"`
+	CalcFuns       map[string]CalcFunction `json:"calc_funs"`
+	Calcs          map[string][]byte       `json:"calcs"`
 	IsExists       bool                    `json:"is_exists"`
 	IsCount        bool                    `json:"is_count"`
 	section        QuerySection            `json:"-"`
 	maxRows        int                     `json:"-"`
 	db             *DB                     `json:"-"`
+	historyDb      *DB                     `json:"-"`
+	vm             *vm.VM                  `json:"-"`
 	isDebug        bool                    `json:"-"`
 	isTest         bool                    `json:"-"`
 }
@@ -179,12 +183,15 @@ func newQuery(model *Model, as ...string) *Query {
 		Havings:    make([]*et.Condition, 0),
 		Details:    make(map[string]*QueryDetail, 0),
 		Rollups:    make(map[string]*QueryDetail, 0),
-		Calcs:      make(map[string]CalcFunction, 0),
+		CalcFuns:   make(map[string]CalcFunction, 0),
 		section:    whereSection,
 		maxRows:    model.db.RecordLimit,
 		db:         model.db,
+		vm:         vm.New("query_calc"),
+		historyDb:  model.historyDb,
 		isDebug:    model.db.IsDebug,
 	}
+	result.vm.Set("db", model.db)
 	result.addFrom(model, as[0])
 	return result
 }
@@ -432,6 +439,7 @@ func (s *Query) addFrom(model *Model, as string) *Query {
 	if !s.UseSourceField {
 		s.UseSourceField = model.SourceField != ""
 	}
+	s.vm.Set(model.Table, model)
 	return s
 }
 
@@ -683,15 +691,30 @@ func (s *Query) setRollup(tx *Tx, item et.Json) et.Json {
 }
 
 /**
-* setCalcs: Sets the calculations for the query.
+* setCalcFuns: Sets the calculations for the query.
 * @param tx *Tx, item et.Json
-* @return et.Json
 **/
-func (s *Query) setCalcs(tx *Tx, item et.Json) et.Json {
-	for _, calc := range s.Calcs {
+func (s *Query) setCalcFuns(tx *Tx, item et.Json) {
+	for _, calc := range s.CalcFuns {
 		calc(tx, item)
 	}
-	return item
+}
+
+/**
+* setCalc: Executes the bytecode calculations for the query and merges their results into the item.
+* @param tx *Tx, item et.Json
+**/
+func (s *Query) setCalc(tx *Tx, item et.Json) error {
+	for _, code := range s.Calcs {
+		s.vm.Set("item", item)
+		s.vm.Set("tx", tx)
+		if _, err := s.vm.RunByBt(code); err != nil {
+			return err
+		}
+		item = s.vm.GetJson("item")
+	}
+
+	return nil
 }
 
 /**
@@ -725,7 +748,8 @@ func (s *Query) AllTx(tx *Tx) (et.Items, error) {
 	for i, item := range result.Result {
 		item = s.setDetails(tx, item)
 		item = s.setRollup(tx, item)
-		s.setCalcs(tx, item)
+		s.setCalcFuns(tx, item)
+		s.setCalc(tx, item)
 		result.Result[i] = item
 	}
 

@@ -327,13 +327,84 @@ func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, sel
 }
 
 /**
-* DefineCalc: Defines a new calculation for the model.
+* DefineCalcFunc: Defines a new calculation for the model.
 * @param name string, calc CalcFunction
 * @return *Model
 **/
-func (s *Model) DefineCalc(name string, calc CalcFunction) *Model {
-	s.defineColumn(name, CALC, ANY, nil, []byte{})
+func (s *Model) DefineCalcFunc(name string, calc CalcFunction) *Model {
+	s.defineColumn(name, CALCFUNC, ANY, nil, []byte{})
 	s.calcs[name] = calc
+	return s
+}
+
+/**
+* DefineCalc: Defines a new calculation for the model using a bytecode definition.
+* @param name string, code string
+* @return *Model
+**/
+func (s *Model) DefineCalc(name string, code string) *Model {
+	s.defineColumn(name, CALCFUNC, ANY, nil, []byte{})
+	s.Calcs[name] = []byte(code)
+	return s
+}
+
+/**
+* DefineBeforeInsert: Defines a new before insert hook for the model using a bytecode definition.
+* @param code string
+* @return *Model
+**/
+func (s *Model) DefineBeforeInsert(code string) *Model {
+	s.BeforeInserts = append(s.BeforeInserts, []byte(code))
+	return s
+}
+
+/**
+* DefineBeforeUpdate: Defines a new before update hook for the model using a bytecode definition.
+* @param code string
+* @return *Model
+**/
+func (s *Model) DefineBeforeUpdate(code string) *Model {
+	s.BeforeUpdates = append(s.BeforeUpdates, []byte(code))
+	return s
+}
+
+/**
+* DefineBeforeDelete: Defines a new before delete hook for the model using a bytecode definition.
+* @param code string
+* @return *Model
+**/
+func (s *Model) DefineBeforeDelete(code string) *Model {
+	s.BeforeDeletes = append(s.BeforeDeletes, []byte(code))
+	return s
+}
+
+/**
+* DefineAfterInsert: Defines a new after insert hook for the model using a bytecode definition.
+* @param code string
+* @return *Model
+**/
+func (s *Model) DefineAfterInsert(code string) *Model {
+	s.AfterInserts = append(s.AfterInserts, []byte(code))
+	return s
+}
+
+/**
+* DefineAfterUpdate: Defines a new after update hook for the model using a bytecode definition.
+* @param code string
+* @return *Model
+**/
+func (s *Model) DefineAfterUpdate(code string) *Model {
+	s.AfterUpdates = append(s.AfterUpdates, []byte(code))
+	return s
+}
+
+/**
+* DefineAfterDelete: Defines a new after delete hook for the model using a bytecode definition.
+* @param code string
+* @return *Model
+**/
+func (s *Model) DefineAfterDelete(code string) *Model {
+	s.AfterDeletes = append(s.AfterDeletes, []byte(code))
 	return s
 }
 

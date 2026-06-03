@@ -531,13 +531,16 @@ func (s *Instance) rollback() (et.Json, error) {
 func (s *Instance) startResilence() (et.Json, error) {
 	description := fmt.Sprintf("flow: %s,  %s", s.flow.Name, s.flow.Description)
 	s.Resilence = s.workflow.resilience.LoadInstance(s.ID, s.Tag, description, s.OwnerId, s.flow.TotalAttempts, s.flow.TimeAttempts, s.Tags, s.flow.Team, s.flow.Level, s.run, s.Ctx)
-	if s.Resilence.Error != "" {
-		return et.Json{}, errors.New(s.Resilence.Error)
+	res, err := s.Resilence.Run()
+	if err != nil {
+		return et.Json{}, err
 	}
-	s.Resilence.Run()
-	result, ok := s.Resilence.Result.(et.Json)
+	if len(res) == 0 {
+		return et.Json{}, errors.New(MSG_RESILIENCE_NO_RESULT)
+	}
+	result, ok := res[0].(et.Json)
 	if !ok {
-		return et.Json{}, nil
+		return et.Json{}, errors.New(MSG_RESILIENCE_NO_RESULT)
 	}
 
 	return result, nil

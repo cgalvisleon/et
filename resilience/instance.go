@@ -56,6 +56,10 @@ type Instance struct {
 * @return et.Json
 **/
 func (s *Instance) ToJson() et.Json {
+	errMsg := ""
+	if s.Error != nil {
+		errMsg = s.Error.Error()
+	}
 	result := et.Json{
 		"created_at":      s.CreatedAt,
 		"updated_at":      s.UpdatedAt,
@@ -72,7 +76,7 @@ func (s *Instance) ToJson() et.Json {
 		"tags":            s.Tags,
 		"team":            s.Team,
 		"level":           s.Level,
-		"error":           s.Error.Error(),
+		"error":           errMsg,
 		"result":          s.Result,
 	}
 
@@ -201,17 +205,10 @@ func (s *Instance) setStop() et.Item {
 * setRestart
 * @return et.Item
 **/
-func (s *Instance) setRestart() et.Item {
+func (s *Instance) setRestart() ([]any, error) {
 	s.stop = false
 	s.setStatus(PENDING)
-	go s.Run()
-
-	return et.Item{
-		Ok: true,
-		Result: et.Json{
-			"message": msg.MSG_INSTANCE_RESTARTED,
-		},
-	}
+	return s.Run()
 }
 
 /**
@@ -282,15 +279,15 @@ func (s *Instance) Run() ([]any, error) {
 * isFailed
 * @return bool
 **/
-func (s *Instance) isFailed() bool {
+func (s *Instance) IsFailed() bool {
 	return s.Status == FAILED
 }
 
 /**
-* isEnd
+* IsDone
 * @return bool
 **/
-func (s *Instance) isEnd() bool {
+func (s *Instance) IsDone() bool {
 	result := s.Attempt == s.TotalAttempts
 	if !result {
 		result = s.Status == DONE

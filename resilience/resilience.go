@@ -117,6 +117,7 @@ func (s *Resilience) newInstance(id, tag, description, ownerId string, totalAtte
 		Tags:          tags,
 		Team:          team,
 		Level:         level,
+		Result:        make([]any, 0),
 		stop:          false,
 	}
 	result.setStatus(PENDING)

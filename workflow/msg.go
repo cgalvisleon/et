@@ -50,6 +50,7 @@ var (
 	MSG_STEPPER_NOT_FOUND           = "steper not found"
 	MSG_STEP_NOT_FOUND              = "step not found"
 	MSG_INVALID_TO_POSITION         = "invalid to position"
+	MSG_RESILIENCE_NO_RESULT        = "resilience no return result"
 )
 
 func init() {
@@ -100,5 +101,6 @@ func init() {
 		MSG_STEPPER_NOT_FOUND = "steper not found"
 		MSG_STEP_NOT_FOUND = "step not found"
 		MSG_INVALID_TO_POSITION = "invalid to position"
+		MSG_RESILIENCE_NO_RESULT = "resilience no return result"
 	}
 }

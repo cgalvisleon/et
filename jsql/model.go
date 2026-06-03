@@ -10,6 +10,7 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/strs"
+	"github.com/cgalvisleon/et/utility"
 )
 
 /**
@@ -51,7 +52,7 @@ type Model struct {
 	Hiddens       []string                `json:"hiddens"`
 	Details       map[string]*Detail      `json:"details"`
 	Rollups       map[string]*Detail      `json:"rollups"`
-	Calcs         map[string]CalcFunction `json:"-"`
+	calcs         map[string]CalcFunction `json:"-"`
 	IsStrict      bool                    `json:"is_strict"`
 	Version       int                     `json:"version"`
 	IsCore        bool                    `json:"is_core"`
@@ -59,6 +60,7 @@ type Model struct {
 	IsChanged     bool                    `json:"-"`
 	isInit        bool                    `json:"-"`
 	isTest        bool                    `json:"-"`
+	Calcs         map[string][]byte       `json:"calcs"`
 	BeforeInserts [][]byte                `json:"before_inserts"`
 	BeforeUpdates [][]byte                `json:"before_updates"`
 	BeforeDeletes [][]byte                `json:"before_deletes"`
@@ -74,6 +76,164 @@ type Model struct {
 	db            *DB                     `json:"-"`
 	historyDb     *DB                     `json:"-"`
 	deadDb        *DB                     `json:"-"`
+}
+
+/**
+* defaultTrigger: Returns a Model with default trigger functions for enforcing unique indexes.
+* @param model *Model
+* @return *Model
+**/
+func defaultTrigger(model *Model) *Model {
+	model.BeforeInsert(func(tx *Tx, old, new et.Json) error {
+		var results sync.Map
+		var hasError error
+		var wg sync.WaitGroup
+		for _, validate := range model.Unique {
+			wg.Add(1)
+			go func(field string) {
+				defer wg.Done()
+
+				if hasError != nil {
+					return
+				}
+
+				val := new.Str(field)
+				if len(val) == 0 {
+					results.Store(field, false)
+					return
+				}
+
+				exists, err := model.
+					Where(Eq(field, val)).
+					Exists()
+				if err != nil {
+					hasError = err
+					return
+				}
+				results.Store(field, exists)
+			}(validate.Name)
+		}
+		wg.Wait()
+
+		results.Range(func(key, value interface{}) bool {
+			if ok, _ := value.(bool); ok {
+				return false
+			}
+			return true
+		})
+
+		return hasError
+	})
+
+	model.BeforeUpdate(func(tx *Tx, old, new et.Json) error {
+		var results sync.Map
+		var hasError error
+		var wg sync.WaitGroup
+		for _, validate := range model.Unique {
+			wg.Add(1)
+			go func(field string) {
+				defer wg.Done()
+
+				if hasError != nil {
+					return
+				}
+
+				newVal := new[field]
+				chage := old.IsDeferent(field, newVal)
+				if !chage {
+					results.Store(field, false)
+					return
+				}
+
+				ql := model.Where(Eq(field, newVal))
+				for _, pk := range model.PrimaryKeys {
+					val := old[pk.Name]
+					ql = ql.And(Neg(pk.Name, val))
+				}
+
+				exists, err := ql.Exists()
+				if err != nil {
+					hasError = err
+					return
+				}
+				results.Store(field, exists)
+			}(validate.Name)
+		}
+		wg.Wait()
+
+		results.Range(func(key, value interface{}) bool {
+			if ok, _ := value.(bool); ok {
+				return false
+			}
+			return true
+		})
+
+		return hasError
+	})
+
+	return model
+}
+
+/**
+* newModel: Constructs a new Model with initialized fields and default triggers.
+* @param schema *Schema, name string, version int
+* @return *Model
+**/
+func newModel(schema *Schema, name string, version int) *Model {
+	name = utility.Normalize(name)
+	result := &Model{
+		Database:      schema.Database,
+		Schema:        schema.Name,
+		Name:          name,
+		Columns:       make([]*Column, 0),
+		Indexes:       make([]*Index, 0),
+		PrimaryKeys:   make([]*Index, 0),
+		ForeignKeys:   make([]*Detail, 0),
+		Unique:        make([]*Index, 0),
+		Required:      make([]*Index, 0),
+		Hiddens:       make([]string, 0),
+		Details:       make(map[string]*Detail, 0),
+		Rollups:       make(map[string]*Detail, 0),
+		calcs:         make(map[string]CalcFunction, 0),
+		Version:       version,
+		Calcs:         make(map[string][]byte, 0),
+		BeforeInserts: make([][]byte, 0),
+		BeforeUpdates: make([][]byte, 0),
+		BeforeDeletes: make([][]byte, 0),
+		AfterInserts:  make([][]byte, 0),
+		AfterUpdates:  make([][]byte, 0),
+		AfterDeletes:  make([][]byte, 0),
+		beforeInserts: make([]TriggerFunction, 0),
+		beforeUpdates: make([]TriggerFunction, 0),
+		beforeDeletes: make([]TriggerFunction, 0),
+		afterInserts:  make([]TriggerFunction, 0),
+		afterUpdates:  make([]TriggerFunction, 0),
+		afterDeletes:  make([]TriggerFunction, 0),
+		db:            schema.db,
+		historyDb:     schema.historyDb,
+		deadDb:        schema.deadDb,
+		IsDebug:       schema.db.IsDebug,
+	}
+	result = defaultTrigger(result)
+
+	return result
+}
+
+/**
+* loadModel: Loads a Model from the database catalog by name.
+* @param schema *Schema, name string
+* @return *Model, error
+**/
+func loadModel(schema *Schema, name string) (*Model, error) {
+	var result *Model
+	err := schema.db.getCatalog(name, "model", result)
+	if err != nil {
+		return nil, err
+	}
+	result = defaultTrigger(result)
+	result.up(schema)
+
+	return result, nil
 }
 
 /**
@@ -132,6 +292,21 @@ func (s *Model) save() error {
 }
 
 /**
+* up: Updates the model's database and schema references after loading from catalog.
+* @param schema *Schema
+* @return *Model
+**/
+func (s *Model) up(schema *Schema) *Model {
+	s.db = schema.db
+	s.historyDb = schema.historyDb
+	s.deadDb = schema.deadDb
+	for _, column := range s.Columns {
+		column.up(s)
+	}
+	return s
+}
+
+/**
 * Debug: Enables debug logging and returns the model for chaining.
 * @return *Model
 **/
@@ -147,6 +322,16 @@ func (s *Model) Debug() *Model {
 func (s *Model) Test() *Model {
 	s.isTest = true
 	return s
+}
+
+/**
+* GetCalcFunc: Returns the CalcFunction for the given name, if it exists.
+* @param name string
+* @return CalcFunction, bool
+**/
+func (s *Model) GetCalcFunc(name string) (CalcFunction, bool) {
+	result, ok := s.calcs[name]
+	return result, ok
 }
 
 /**

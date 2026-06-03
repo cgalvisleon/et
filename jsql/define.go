@@ -333,7 +333,7 @@ func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, sel
 **/
 func (s *Model) DefineCalc(name string, calc CalcFunction) *Model {
 	s.defineColumn(name, CALC, ANY, nil, []byte{})
-	s.Calcs[name] = calc
+	s.calcs[name] = calc
 	return s
 }
 

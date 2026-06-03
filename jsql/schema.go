@@ -2,7 +2,6 @@ package jsql
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -14,11 +13,13 @@ import (
 * Schema: Represents a database schema that owns a set of models.
 **/
 type Schema struct {
-	Database string            `json:"database"`
-	Name     string            `json:"name"`
-	Models   map[string]*Model `json:"-"`
-	db       *DB               `json:"-"`
-	mu       *sync.RWMutex     `json:"-"`
+	Database  string            `json:"database"`
+	Name      string            `json:"name"`
+	Models    map[string]*Model `json:"-"`
+	db        *DB               `json:"-"`
+	historyDb *DB               `json:"-"`
+	deadDb    *DB               `json:"-"`
+	mu        *sync.RWMutex     `json:"-"`
 }
 
 /**
@@ -54,20 +55,26 @@ func (s *Schema) ToJson() et.Json {
 }
 
 /**
-* save: Persists schema metadata changes (stub — no-op until storage is wired).
-* @return error
+* SetHistoryDb: Sets the history database for this schema.
+* @param db *DB
+* @return void
 **/
-func (s *Schema) save() error {
-	if s.db == nil {
-		return errors.New(MSG_DB_IS_NIL)
-	}
-	return nil
+func (s *Schema) SetHistoryDb(db *DB) {
+	s.historyDb = db
+}
+
+/**
+* SetDeadDb: Sets the dead database for this schema.
+* @param db *DB
+* @return void
+**/
+func (s *Schema) SetDeadDb(db *DB) {
+	s.deadDb = db
 }
 
 /**
 * newModel: Returns an existing model by name or creates and registers a new one.
-* @param name string
-* @param version int
+* @param name string, version int
 * @return *Model, error
 **/
 func (s *Schema) newModel(name string, version int) (*Model, error) {
@@ -81,136 +88,20 @@ func (s *Schema) newModel(name string, version int) (*Model, error) {
 	}
 
 	name = utility.Normalize(name)
-	result = &Model{
-		Database:      s.Database,
-		Schema:        s.Name,
-		Name:          name,
-		Columns:       make([]*Column, 0),
-		Indexes:       make([]*Index, 0),
-		PrimaryKeys:   make([]*Index, 0),
-		ForeignKeys:   make([]*Detail, 0),
-		Unique:        make([]*Index, 0),
-		Required:      make([]*Index, 0),
-		Hiddens:       make([]string, 0),
-		Details:       make(map[string]*Detail, 0),
-		Rollups:       make(map[string]*Detail, 0),
-		Calcs:         make(map[string]CalcFunction, 0),
-		Version:       version,
-		BeforeInserts: make([][]byte, 0),
-		BeforeUpdates: make([][]byte, 0),
-		BeforeDeletes: make([][]byte, 0),
-		AfterInserts:  make([][]byte, 0),
-		AfterUpdates:  make([][]byte, 0),
-		AfterDeletes:  make([][]byte, 0),
-		beforeInserts: make([]TriggerFunction, 0),
-		beforeUpdates: make([]TriggerFunction, 0),
-		beforeDeletes: make([]TriggerFunction, 0),
-		afterInserts:  make([]TriggerFunction, 0),
-		afterUpdates:  make([]TriggerFunction, 0),
-		afterDeletes:  make([]TriggerFunction, 0),
-		db:            s.db,
-		IsDebug:       s.db.IsDebug,
-	}
+	result = newModel(s, name, version)
 	s.mu.Lock()
 	s.Models[name] = result
 	s.mu.Unlock()
-
-	result.BeforeInsert(func(tx *Tx, old, new et.Json) error {
-		var results sync.Map
-		var hasError error
-		var wg sync.WaitGroup
-		for _, validate := range result.Unique {
-			wg.Add(1)
-			go func(field string) {
-				defer wg.Done()
-
-				if hasError != nil {
-					return
-				}
-
-				val := new.Str(field)
-				if len(val) == 0 {
-					results.Store(field, false)
-					return
-				}
-
-				exists, err := result.
-					Where(Eq(field, val)).
-					Exists()
-				if err != nil {
-					hasError = err
-					return
-				}
-				results.Store(field, exists)
-			}(validate.Name)
-		}
-		wg.Wait()
-
-		results.Range(func(key, value interface{}) bool {
-			if ok, _ := value.(bool); ok {
-				return false
-			}
-			return true
-		})
-
-		return hasError
-	})
-
-	result.BeforeUpdate(func(tx *Tx, old, new et.Json) error {
-		var results sync.Map
-		var hasError error
-		var wg sync.WaitGroup
-		for _, validate := range result.Unique {
-			wg.Add(1)
-			go func(field string) {
-				defer wg.Done()
-
-				if hasError != nil {
-					return
-				}
-
-				newVal := new[field]
-				chage := old.IsDeferent(field, newVal)
-				if !chage {
-					results.Store(field, false)
-					return
-				}
-
-				ql := result.Where(Eq(field, newVal))
-				for _, pk := range result.PrimaryKeys {
-					val := old[pk.Name]
-					ql = ql.And(Neg(pk.Name, val))
-				}
-
-				exists, err := ql.Exists()
-				if err != nil {
-					hasError = err
-					return
-				}
-				results.Store(field, exists)
-			}(validate.Name)
-		}
-		wg.Wait()
-
-		results.Range(func(key, value interface{}) bool {
-			if ok, _ := value.(bool); ok {
-				return false
-			}
-			return true
-		})
-
-		return hasError
-	})
 
 	return result, nil
 }
 
 /**
-* GetModel: Returns the named model or an error if it does not exist in this schema.
+* getModel: Returns the named model or an error if it does not exist in this schema.
 * @param name string
 * @return *Model, error
 **/
-func (s *Schema) GetModel(name string) (*Model, error) {
+func (s *Schema) getModel(name string) (*Model, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -219,7 +110,19 @@ func (s *Schema) GetModel(name string) (*Model, error) {
 	result, exists := s.Models[name]
 	s.mu.RLock()
 	if !exists {
-		return nil, fmt.Errorf(MSG_MODEL_NOT_FOUND, name)
+		var err error
+		result, err = loadModel(s, name)
+		if err != nil {
+			return nil, err
+		}
+
+		if result == nil {
+			return nil, fmt.Errorf(MSG_MODEL_NOT_FOUND, name)
+		}
+
+		s.mu.Lock()
+		s.Models[name] = result
+		s.mu.Unlock()
 	}
 
 	return result, nil

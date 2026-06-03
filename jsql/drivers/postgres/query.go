@@ -317,11 +317,10 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 		if fld.From.Model == nil {
 			return "", false
 		}
-		calc, ok := fld.From.Model.Calcs[fld.Name]
-		if !ok {
-			return "", false
+		calc, ok := fld.From.Model.GetCalcFunc(fld.Name)
+		if ok {
+			query.Calcs[fld.Name] = calc
 		}
-		query.Calcs[fld.Name] = calc
 	}
 
 	return "", false

@@ -106,6 +106,16 @@ type Column struct {
 }
 
 /**
+* up: Internal method to associate the column with a model and return it for chaining.
+* @param model *Model
+* @return *Column
+**/
+func (s *Column) up(model *Model) *Column {
+	s.model = model
+	return s
+}
+
+/**
 * SetModel: Associates the column with the given model and returns the column for chaining.
 * @param model *Model
 * @return *Column

@@ -69,16 +69,3 @@ type Joins struct {
 	To   *F
 	Keys map[string]string
 }
-
-/**
-* newJoins: Constructs a Joins entry for the given type, F, and key mapping.
-* @param tp TypeJoin, from *F, keys map[string]string
-* @return *Joins
-**/
-func newJoins(tp TypeJoin, from *F, keys map[string]string) *Joins {
-	return &Joins{
-		Type: tp,
-		To:   from,
-		Keys: keys,
-	}
-}

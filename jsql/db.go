@@ -20,6 +20,7 @@ type DB struct {
 	Params      et.Json            `json:"params"`
 	UseCore     bool               `json:"use_core"`
 	RecordLimit int                `json:"record_limit"`
+	Version     int                `json:"version"`
 	IsDebug     bool               `json:"-"`
 	IsChanged   bool               `json:"-"`
 	isInit      bool               `json:"-"`
@@ -47,6 +48,7 @@ func newDB(params et.Json) (*DB, error) {
 	name := params.Str("database")
 	useCore := params.Bool("use_core")
 	recordLimit := params.Int("record_limit")
+	version := params.ValInt(1, "version")
 	result := &DB{
 		Name:        name,
 		Schemas:     make(map[string]*Schema),
@@ -54,22 +56,10 @@ func newDB(params et.Json) (*DB, error) {
 		Params:      params,
 		UseCore:     useCore,
 		RecordLimit: recordLimit,
+		Version:     version,
 		driver:      driver,
 	}
 	return result, nil
-}
-
-/**
-* serialize: Marshals the DB metadata to JSON bytes.
-* @return []byte, error
-**/
-func (s *DB) serialize() ([]byte, error) {
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return nil, err
-	}
-
-	return bt, nil
 }
 
 /**
@@ -77,7 +67,7 @@ func (s *DB) serialize() ([]byte, error) {
 * @return et.Json
 **/
 func (s *DB) ToJson() et.Json {
-	bt, err := s.serialize()
+	bt, err := json.Marshal(s)
 	if err != nil {
 		return et.Json{}
 	}
@@ -96,7 +86,7 @@ func (s *DB) ToJson() et.Json {
 * @return error
 **/
 func (s *DB) save() error {
-	return s.setCatalog(s.Name, "db", 1, s)
+	return s.setCatalog(s.Name, "db", s.Version, s)
 }
 
 /**
@@ -293,7 +283,7 @@ func (s *DB) GetModel(schema string, name string) (*Model, error) {
 		return nil, err
 	}
 
-	result, err := sch.GetModel(name)
+	result, err := sch.getModel(name)
 	if err != nil {
 		return nil, err
 	}

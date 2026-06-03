@@ -12,8 +12,6 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-const packageName = "event"
-
 /**
 * asyncMsg holds a channel name and payload for non-blocking publish operations.
 **/
@@ -26,10 +24,11 @@ type asyncMsg struct {
 const asyncPublishBufSize = 256
 
 var (
-	conn     *Conn
-	oS       = ""
-	hostName string
-	loadMu   sync.Mutex
+	packageName = "event"
+	conn        *Conn
+	oS          = ""
+	hostName    string
+	loadMu      sync.Mutex
 	// asyncPublishCh is consumed by a single background worker started in init().
 	asyncPublishCh = make(chan asyncMsg, asyncPublishBufSize)
 )

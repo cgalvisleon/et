@@ -25,12 +25,13 @@ type Resilience struct {
 
 /**
 * New
+* @param store jsql.Store
 * @return *Resilience, error
- */
+**/
 func New(store jsql.Store) (*Resilience, error) {
 	err := event.Load()
 	if err != nil {
-		return nil, err
+		logs.Logf(packageName, MSG_EVENT_NOT_LOADED, err)
 	}
 
 	result := &Resilience{
@@ -47,7 +48,7 @@ func New(store jsql.Store) (*Resilience, error) {
 * addInstance
 * @param instance *Instance
 * @return void
- */
+**/
 func (s *Resilience) addInstance(instance *Instance) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -59,7 +60,7 @@ func (s *Resilience) addInstance(instance *Instance) {
 * getInstance
 * @param id string
 * @return *Instance, bool
- */
+**/
 func (s *Resilience) getInstance(id string) (*Instance, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -71,8 +72,7 @@ func (s *Resilience) getInstance(id string) (*Instance, bool) {
 /**
 * removeInstance
 * @param id string
-* @return void
- */
+**/
 func (s *Resilience) removeInstance(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -83,7 +83,7 @@ func (s *Resilience) removeInstance(id string) {
 /**
 * CountInstances
 * @return int
- */
+**/
 func (s *Resilience) CountInstances() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -95,7 +95,7 @@ func (s *Resilience) CountInstances() int {
 * newInstance
 * @param id, tag, description string, totalAttempts int, interval time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}
 * @return Instance
- */
+**/
 func (s *Resilience) newInstance(id, tag, description, ownerId string, totalAttempts int, interval time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
 	if id == "" {
 		id = reg.ULID()
@@ -167,8 +167,8 @@ func (s *Resilience) GetInstance(id string) (*Instance, bool) {
 * RunInstance
 * @param id, tag, description string, totalAttempts int, interval time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}
 * @return *Instance
- */
-func (s *Resilience) RunInstance(id, tag, description, ownerId string, totalAttempts int, interval time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
+**/
+func (s *Resilience) LoadInstance(id, tag, description, ownerId string, totalAttempts int, interval time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
 	if totalAttempts <= 0 {
 		totalAttempts = 3
 	}
@@ -183,29 +183,14 @@ func (s *Resilience) RunInstance(id, tag, description, ownerId string, totalAtte
 		result = s.newInstance(id, tag, description, ownerId, totalAttempts, interval, tags, team, level, fn, fnArgs...)
 	}
 
-	result.run()
-
 	return result
-}
-
-/**
-* RunCustom
-* @param tag, description, ownerId string, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}
-* @return *Instance
- */
-func (s *Resilience) RunCustom(tag, description, ownerId string, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
-	totalAttempts := envar.GetInt("RESILIENCE_TOTAL_ATTEMPTS", 3)
-	intervalSeconds := envar.GetInt("RESILIENCE_INTERVAL_SECONDS", 30)
-	interval := time.Duration(intervalSeconds) * time.Second
-
-	return s.RunInstance("", tag, description, ownerId, totalAttempts, interval, tags, team, level, fn, fnArgs...)
 }
 
 /**
 * Stop
 * @param id string
 * @return error
- */
+**/
 func (s *Resilience) Stop(id string) error {
 	result, exist := s.GetInstance(id)
 	if !exist {
@@ -221,7 +206,7 @@ func (s *Resilience) Stop(id string) error {
 * Restart
 * @param id string
 * @return error
- */
+**/
 func (s *Resilience) Restart(id string) error {
 	result, exist := s.GetInstance(id)
 	if !exist {
@@ -237,7 +222,7 @@ func (s *Resilience) Restart(id string) error {
 * Query
 * @param query et.Json
 * @return (et.Items, error)
- */
+**/
 func (s *Resilience) Query(query et.Json) (et.Items, error) {
 	if s.store == nil {
 		return et.Items{}, errors.New(msg.MSG_STORE_IS_REQUIRED)

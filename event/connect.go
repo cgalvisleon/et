@@ -1,6 +1,7 @@
 package event
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -17,7 +18,7 @@ import (
 **/
 func connectTo(host, user, password string) (*Conn, error) {
 	if !utility.ValidStr(host, 0, []string{}) {
-		return nil, logs.Alertf(msg.MSG_ATRIB_REQUIRED, "host")
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "host")
 	}
 
 	opts := []nats.Option{

@@ -41,12 +41,10 @@ type Instance struct {
 	Tags          et.Json         `json:"tags"`
 	Team          string          `json:"team"`
 	Level         string          `json:"level"`
-	Error         string          `json:"error"`
-	Response      map[string]any  `json:"response"`
-	Result        any             `json:"result"`
+	Error         error           `json:"error"`
+	Result        []any           `json:"result"`
 	owner         *Resilience     `json:"-"`
 	stop          bool            `json:"-"`
-	err           error           `json:"-"`
 	fn            interface{}     `json:"-"`
 	fnArgs        []interface{}   `json:"-"`
 	fnResult      []reflect.Value `json:"-"`
@@ -74,8 +72,7 @@ func (s *Instance) ToJson() et.Json {
 		"tags":            s.Tags,
 		"team":            s.Team,
 		"level":           s.Level,
-		"error":           s.Error,
-		"response":        s.Response,
+		"error":           s.Error.Error(),
 		"result":          s.Result,
 	}
 
@@ -169,8 +166,7 @@ func (s *Instance) setStatus(status Status) error {
 * @param err error
 **/
 func (s *Instance) setError(err error) {
-	s.Error = err.Error()
-	s.err = err
+	s.Error = err
 	s.setStatus(FAILED)
 }
 
@@ -178,13 +174,6 @@ func (s *Instance) setError(err error) {
 * setDone
 **/
 func (s *Instance) setDone() {
-	if s.Response != nil && len(s.Response) > 0 {
-		v := reflect.ValueOf(s.Response)
-		s.Result = v.Interface()
-	} else {
-		s.Result = et.Json{}
-	}
-
 	s.setStatus(DONE)
 
 	time.AfterFunc(300*time.Millisecond, func() {
@@ -215,7 +204,7 @@ func (s *Instance) setStop() et.Item {
 func (s *Instance) setRestart() et.Item {
 	s.stop = false
 	s.setStatus(PENDING)
-	go s.run()
+	go s.Run()
 
 	return et.Item{
 		Ok: true,
@@ -229,20 +218,13 @@ func (s *Instance) setRestart() et.Item {
 * runAttempt
 * @return []reflect.Value, error
 **/
-func (s *Instance) runAttempt() ([]reflect.Value, error) {
-	jsonData := s.ToJson()
+func (s *Instance) runAttempt() ([]any, error) {
 	if s.Status == DONE {
-		return []reflect.Value{reflect.ValueOf(et.Item{
-			Ok:     true,
-			Result: jsonData,
-		})}, nil
+		return s.Result, s.Error
 	}
 
 	if s.stop {
-		return []reflect.Value{reflect.ValueOf(et.Item{
-			Ok:     false,
-			Result: jsonData,
-		})}, nil
+		return s.Result, s.Error
 	}
 
 	s.LastAttemptAt = timezone.Now()
@@ -261,34 +243,39 @@ func (s *Instance) runAttempt() ([]reflect.Value, error) {
 	for _, r := range s.fnResult {
 		if r.Type().Implements(errorInterface) {
 			err, failed = r.Interface().(error)
-			if failed {
-				s.setError(err)
-			} else {
-				s.setDone()
-			}
+		} else {
+			s.Result = append(s.Result, r.Interface())
 		}
 	}
 
-	return s.fnResult, err
+	if failed {
+		s.setError(err)
+	} else {
+		s.setDone()
+	}
+
+	return s.Result, err
 }
 
 /**
 * Run
 * @return error
 **/
-func (s *Instance) run() {
+func (s *Instance) Run() ([]any, error) {
 	if s.Interval == 0 {
-		return
+		return s.Result, s.Error
 	}
 
 	time.AfterFunc(s.Interval, func() {
 		if s.Status != DONE && s.Attempt < s.TotalAttempts {
 			_, err := s.runAttempt()
 			if err != nil {
-				s.run()
+				s.Run()
 			}
 		}
 	})
+
+	return s.Result, s.Error
 }
 
 /**

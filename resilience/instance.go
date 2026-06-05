@@ -31,6 +31,8 @@ type Instance struct {
 	LastAttemptAt time.Time       `json:"last_attempt_at"`
 	DoneAt        time.Time       `json:"done_at"`
 	ID            string          `json:"id"`
+	ProjectId     string          `json:"project_id"`
+	UserId        string          `json:"user_id"`
 	Tag           string          `json:"tag"`
 	OwnerId       string          `json:"owner_id"`
 	Description   string          `json:"description"`

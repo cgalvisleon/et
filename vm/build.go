@@ -43,13 +43,6 @@ func (s *VM) Build(store Store, part Part) error {
 		return err
 	}
 
-	if s.store != nil {
-		err := s.store.Init()
-		if err != nil {
-			return err
-		}
-	}
-
 	_, err = s.BumpVersion(part)
 	if err != nil {
 		return err

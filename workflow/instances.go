@@ -14,6 +14,7 @@ import (
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/resilience"
 	"github.com/cgalvisleon/et/timezone"
+	"github.com/cgalvisleon/et/utility"
 )
 
 type Status string
@@ -40,6 +41,8 @@ type Instance struct {
 	CreatedAt   time.Time            `json:"created_at"`
 	UpdatedAt   time.Time            `json:"updated_at"`
 	ID          string               `json:"id"`
+	ProjectId   string               `json:"project_id"`
+	UserId      string               `json:"user_id"`
 	Tag         string               `json:"tag"`
 	OwnerId     string               `json:"owner_id"`
 	CreatedBy   string               `json:"created_by"`
@@ -110,6 +113,57 @@ func newInstance(steper *Steper, id, ownerId, userName string) *Instance {
 }
 
 /**
+* Serialize
+* @return ([]byte, error)
+**/
+func (s *Instance) Serialize() ([]byte, error) {
+	return utility.Serialize(s)
+}
+
+/**
+* ToJson
+* @return et.Json
+**/
+func (s *Instance) ToJson() et.Json {
+	result := et.Json{
+		"created_at":   s.CreatedAt,
+		"updated_at":   s.UpdatedAt,
+		"id":           s.ID,
+		"tag":          s.Tag,
+		"owner_id":     s.OwnerId,
+		"created_by":   s.CreatedBy,
+		"updated_by":   s.UpdatedBy,
+		"ctx":          s.Ctx,
+		"ctxs":         s.Ctxs,
+		"results":      s.Results,
+		"rollbacks":    s.Rollbacks,
+		"params":       s.Params,
+		"traces":       s.Traces,
+		"check_list":   s.CheckList,
+		"status":       s.Status,
+		"tags":         s.Tags,
+		"steper":       s.Steper,
+		"current_step": s.CurrentStep,
+		"is_done":      s.IsDone,
+		"is_stop":      s.IsStop,
+	}
+
+	for k, v := range s.Tags {
+		result.Set(k, v)
+	}
+
+	return result
+}
+
+/**
+* ToString
+* @return string
+**/
+func (s *Instance) ToString() string {
+	return s.ToJson().ToString()
+}
+
+/**
 * save
 * @return error
 **/
@@ -158,49 +212,6 @@ func (s *Instance) up(flow *Flow) {
 	s.flow = flow
 	s.workflow = flow.workflow
 	s.isDebug = flow.workflow.isDebug
-}
-
-/**
-* ToJson
-* @return et.Json
-**/
-func (s *Instance) ToJson() et.Json {
-	result := et.Json{
-		"created_at":   s.CreatedAt,
-		"updated_at":   s.UpdatedAt,
-		"id":           s.ID,
-		"tag":          s.Tag,
-		"owner_id":     s.OwnerId,
-		"created_by":   s.CreatedBy,
-		"updated_by":   s.UpdatedBy,
-		"ctx":          s.Ctx,
-		"ctxs":         s.Ctxs,
-		"results":      s.Results,
-		"rollbacks":    s.Rollbacks,
-		"params":       s.Params,
-		"traces":       s.Traces,
-		"check_list":   s.CheckList,
-		"status":       s.Status,
-		"tags":         s.Tags,
-		"steper":       s.Steper,
-		"current_step": s.CurrentStep,
-		"is_done":      s.IsDone,
-		"is_stop":      s.IsStop,
-	}
-
-	for k, v := range s.Tags {
-		result.Set(k, v)
-	}
-
-	return result
-}
-
-/**
-* ToString
-* @return string
-**/
-func (s *Instance) ToString() string {
-	return s.ToJson().ToString()
 }
 
 /**

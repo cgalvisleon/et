@@ -1,9 +1,9 @@
-package jsql
+package stores
 
 import (
-	"encoding/json"
-
+	"github.com/cgalvisleon/et/dt"
 	"github.com/cgalvisleon/et/et"
+	. "github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -13,10 +13,10 @@ type State struct {
 
 /**
 * DefineState
-* @param db *DB, schema, name string, kind Kind
+* @param db *DB, schema, name string
 * @return (*State, error)
 **/
-func DefineState(db *DB, schema, name string, kind Kind) (*State, error) {
+func DefineState(db *DB, schema string) (*State, error) {
 	columns := []Column{
 		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
@@ -24,12 +24,12 @@ func DefineState(db *DB, schema, name string, kind Kind) (*State, error) {
 		{Name: "tag", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 		{Name: "title", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
 		{Name: "owner_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: SOURCE, TypeColumn: COLUMN, TypeData: BYTES, Default: []byte{}},
+		{Name: SOURCE, TypeColumn: COLUMN, TypeData: JSON, Default: et.Json{}},
 	}
 
 	def := Def{
 		Schema:  schema,
-		Name:    name,
+		Name:    "states",
 		Version: 1,
 		Columns: columns,
 		PrimaryKeys: []DefIndex{
@@ -40,14 +40,11 @@ func DefineState(db *DB, schema, name string, kind Kind) (*State, error) {
 			{Name: "title", Sorted: true},
 			{Name: "owner_id", Sorted: true},
 		},
-		IdxField: IDX,
-		IdtField: IDT,
-		IsCore:   true,
-		IsDebug:  true,
-	}
-	if kind == KindJson {
-		def.Columns[5].TypeData = JSON
-		def.SourceField = SOURCE
+		IdxField:    IDX,
+		IdtField:    IDT,
+		SourceField: SOURCE,
+		IsCore:      true,
+		IsDebug:     true,
 	}
 
 	result, err := db.Define(def)
@@ -90,31 +87,39 @@ func (s *State) Set(id, tag, ownerId string, state et.Json) error {
 		return err
 	}
 
+	dt.Up(id, state)
+
 	return nil
 }
 
 /**
 * Get
-* @param id string, dest any
+* @param id string, dest et.Json
 * @return (bool, error)
 **/
-func (s *State) Get(id string, dest any) (bool, error) {
-	item, err := s.model.
+func (s *State) Get(id string, dest et.Json) (bool, error) {
+	item := dt.Get(id)
+	if item.Ok {
+		var ok bool
+		dest, ok = item.Json()
+		if ok {
+			return true, nil
+		}
+	}
+
+	result, err := s.model.
 		Where(Eq(ID, id)).
 		One()
 	if err != nil {
 		return false, err
 	}
 
-	if !item.Ok {
+	if !result.Ok {
 		return false, nil
 	}
 
-	bt := []byte(item.Result.ToString())
-	err = json.Unmarshal(bt, dest)
-	if err != nil {
-		return false, err
-	}
+	dest = result.Result
+	dt.Up(id, result.Result)
 
 	return true, nil
 }
@@ -132,6 +137,8 @@ func (s *State) Delete(id string) error {
 	if err != nil {
 		return err
 	}
+
+	dt.Drop(id)
 
 	return nil
 }

@@ -201,11 +201,11 @@ func GetInt64(name string, def int64) int64 {
 }
 
 /**
-* GetNumber
+* GetFloat
 * @param name string, def float64
 * @return float64
 **/
-func GetNumber(name string, def float64) float64 {
+func GetFloat(name string, def float64) float64 {
 	result := GetStr(name, strconv.FormatFloat(def, 'f', -1, 64))
 	val, err := strconv.ParseFloat(result, 64)
 	if err != nil {
@@ -262,8 +262,8 @@ func Int64(name string) int64 {
 * @param name string
 * @return float64
 **/
-func Number(name string) float64 {
-	return GetNumber(name, 0)
+func Float(name string) float64 {
+	return GetFloat(name, 0)
 }
 
 /**

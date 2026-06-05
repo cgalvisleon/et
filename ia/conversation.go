@@ -9,10 +9,10 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
+	"github.com/cgalvisleon/et/stores"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 )
@@ -35,7 +35,7 @@ type Conversation struct {
 	LastMessage   *Message         `json:"last_message"`
 	LimitMessages int              `json:"limit_messages"`
 	Messages      []*Message       `json:"-"`
-	messageStore  jsql.Store       `json:"-"`
+	messageStore  stores.Store     `json:"-"`
 	mu            sync.RWMutex     `json:"-"`
 	to            *Participant     `json:"-"`
 	ia            *Ia              `json:"-"`
@@ -75,7 +75,7 @@ func newConversation(to *Participant, title string, conversationType TypeConvers
 		isDebug:       to.ia.isDebug,
 	}
 	var err error
-	result.messageStore, err = jsql.DefineInstance(to.ia.db, "ia", "message", jsql.KindJson)
+	result.messageStore, err = stores.DefineInstance(to.ia.db, "ia", "message")
 	if err != nil {
 		return nil, err
 	}

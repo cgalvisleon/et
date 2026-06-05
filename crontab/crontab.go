@@ -6,11 +6,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/stores"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/robfig/cron/v3"
@@ -30,10 +32,11 @@ type Crontab struct {
 	Tag      string          `json:"tag"`
 	HostName string          `json:"host_name"`
 	Jobs     map[string]*Job `json:"jobs"`
+	Metrics  cache.Metrics   `json:"metrics"`
 	cronJobs *cron.Cron      `json:"-"`
 	running  bool            `json:"-"`
 	mu       *sync.Mutex     `json:"-"`
-	store    jsql.Store      `json:"-"`
+	store    stores.Store    `json:"-"`
 	isDebug  bool            `json:"-"`
 }
 
@@ -42,8 +45,13 @@ type Crontab struct {
 * @param tag string, store jsql.Store
 * @return (*Crontab, error)
 **/
-func New(tag string, store jsql.Store) (*Crontab, error) {
-	err := event.Load()
+func New(tag string, store stores.Store) (*Crontab, error) {
+	err := cache.Load()
+	if err != nil {
+		return nil, err
+	}
+
+	err = event.Load()
 	if err != nil {
 		return nil, err
 	}
@@ -54,6 +62,7 @@ func New(tag string, store jsql.Store) (*Crontab, error) {
 		Tag:      tag,
 		HostName: hostName,
 		Jobs:     make(map[string]*Job),
+		Metrics:  cache.Metrics{},
 		cronJobs: cron.New(
 			cron.WithSeconds(),
 			cron.WithLocation(loc),
@@ -175,6 +184,12 @@ func (s *Crontab) startJob(tag string) error {
 	s.mu.Unlock()
 	if !exists {
 		return fmt.Errorf("job not found")
+	}
+
+	limit := envar.GetInt64("CRONTAB_LIMIT", 400)
+	s.Metrics, _ = cache.CallMetrics(tag, limit)
+	if s.Metrics.OverLimit {
+		return fmt.Errorf("job over limit")
 	}
 
 	err := job.Start()

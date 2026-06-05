@@ -1,6 +1,7 @@
 package utility
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -576,4 +577,28 @@ func Add[T any](slice []T, item T) []T {
 	}
 
 	return slice
+}
+
+var instanceBufPool = sync.Pool{
+	New: func() interface{} { return new(bytes.Buffer) },
+}
+
+/**
+* Serialize
+* @param v any
+* @return []byte, error
+**/
+func Serialize(v any) ([]byte, error) {
+	buf := instanceBufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	err := json.NewEncoder(buf).Encode(v)
+	if err != nil {
+		instanceBufPool.Put(buf)
+		return nil, err
+	}
+
+	result := make([]byte, buf.Len())
+	copy(result, buf.Bytes())
+	instanceBufPool.Put(buf)
+	return result, nil
 }

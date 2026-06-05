@@ -12,6 +12,7 @@ import (
 	"github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/stores"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/openai/openai-go/v3"
 )
@@ -33,9 +34,9 @@ type Ia struct {
 	muParticipants    sync.RWMutex             `json:"-"`
 	muConversations   sync.RWMutex             `json:"-"`
 	key               string                   `json:"-"`
-	store             jsql.Store               `json:"-"`
-	participantStore  jsql.Store               `json:"-"`
-	conversationStore jsql.Store               `json:"-"`
+	store             stores.Store             `json:"-"`
+	participantStore  stores.Store             `json:"-"`
+	conversationStore stores.Store             `json:"-"`
 	isDebug           bool                     `json:"-"`
 }
 
@@ -149,21 +150,21 @@ func (s *Ia) delete() error {
 func (s *Ia) up() error {
 	var err error
 	if s.store == nil {
-		s.store, err = jsql.DefineInstance(s.db, "ia", "store", jsql.KindJson)
+		s.store, err = stores.DefineInstance(s.db, "ia", "store")
 		if err != nil {
 			return err
 		}
 	}
 
 	if s.participantStore == nil {
-		s.participantStore, err = jsql.DefineInstance(s.db, "ia", "participant", jsql.KindJson)
+		s.participantStore, err = stores.DefineInstance(s.db, "ia", "participant")
 		if err != nil {
 			return err
 		}
 	}
 
 	if s.conversationStore == nil {
-		s.conversationStore, err = jsql.DefineInstance(s.db, "ia", "conversation", jsql.KindJson)
+		s.conversationStore, err = stores.DefineInstance(s.db, "ia", "conversation")
 		if err != nil {
 			return err
 		}

@@ -76,11 +76,6 @@ func (s *Loader) init() error {
 			return fmt.Errorf(msg.MSG_STORE_REQUIRED)
 		}
 
-		err := s.store.Init()
-		if err != nil {
-			return err
-		}
-
 		var pkg Pkg
 		id := fmt.Sprintf("pkg:%s:%s", s.Name, s.Version)
 		ok, err := s.get(id, &pkg)

@@ -230,8 +230,7 @@ func (s Json) ValAny(def interface{}, atribs ...string) (result interface{}) {
 
 /**
 * ValStr return string value of the key
-* @param def string
-* @param atribs ...string
+* @param def string, atribs ...string
 * @return string
 **/
 func (s Json) ValStr(def string, atribs ...string) string {
@@ -250,8 +249,7 @@ func (s Json) ValStr(def string, atribs ...string) string {
 
 /**
 * ValInt return int value of the key
-* @param def int
-* @param atribs ...string
+* @param def int, atribs ...string
 * @return int
 **/
 func (s Json) ValInt(def int, atribs ...string) int {
@@ -284,6 +282,11 @@ func (s Json) ValInt(def int, atribs ...string) int {
 	}
 }
 
+/**
+* ValInt64 return int64 value of the key
+* @param def int64, atribs ...string
+* @return int64
+**/
 func (s Json) ValInt64(def int64, atribs ...string) int64 {
 	val := s.ValAny(def, atribs...)
 	if val == nil {
@@ -316,8 +319,7 @@ func (s Json) ValInt64(def int64, atribs ...string) int64 {
 
 /**
 * ValNum return float64 value of the key
-* @param def float64
-* @param atribs ...string
+* @param def float64, atribs ...string
 * @return float64
 **/
 func (s Json) ValNum(def float64, atribs ...string) float64 {
@@ -352,8 +354,7 @@ func (s Json) ValNum(def float64, atribs ...string) float64 {
 
 /**
 * ValBool return bool value of the key
-* @param def bool
-* @param atribs ...string
+* @param def bool, atribs ...string
 * @return bool
 **/
 func (s Json) ValBool(def bool, atribs ...string) bool {
@@ -383,8 +384,7 @@ func (s Json) ValBool(def bool, atribs ...string) bool {
 
 /**
 * ValTime return time value of the key
-* @param def time.Time
-* @param atribs ...string
+* @param def time.Time, atribs ...string
 * @return time.Time
 **/
 func (s Json) ValTime(def time.Time, atribs ...string) time.Time {

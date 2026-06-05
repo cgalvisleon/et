@@ -1,9 +1,11 @@
-package jsql
+package stores
 
 import (
 	"encoding/json"
 
+	"github.com/cgalvisleon/et/dt"
 	"github.com/cgalvisleon/et/et"
+	. "github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -20,11 +22,11 @@ type Instance struct {
 }
 
 /**
-* DefineInstance
+* defineInstance
 * @param db *DB, schema, name string, kind Kind
 * @return (*Instance, error)
 **/
-func DefineInstance(db *DB, schema, name string, kind Kind) (*Instance, error) {
+func defineInstance(db *DB, schema, name string, kind Kind) (*Instance, error) {
 	columns := []Column{
 		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
@@ -32,7 +34,11 @@ func DefineInstance(db *DB, schema, name string, kind Kind) (*Instance, error) {
 		{Name: "tag", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 		{Name: "title", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
 		{Name: "owner_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: SOURCE, TypeColumn: COLUMN, TypeData: BYTES, Default: []byte{}},
+		{Name: SOURCE, TypeColumn: COLUMN, TypeData: JSON, Default: et.Json{}},
+	}
+
+	if name == "" {
+		name = "instances"
 	}
 
 	def := Def{
@@ -53,7 +59,10 @@ func DefineInstance(db *DB, schema, name string, kind Kind) (*Instance, error) {
 		IsCore:   true,
 		IsDebug:  true,
 	}
-	if kind == KindJson {
+
+	if kind == KindBite {
+		def.Columns[5].TypeData = BYTES
+	} else {
 		def.Columns[5].TypeData = JSON
 		def.SourceField = SOURCE
 	}
@@ -78,7 +87,43 @@ func DefineInstance(db *DB, schema, name string, kind Kind) (*Instance, error) {
 		return nil, err
 	}
 
-	return &Instance{model: result}, nil
+	return &Instance{model: result, kind: kind}, nil
+}
+
+/**
+* DefineInstance
+* @param db *DB, schema, name string
+* @return (*Instance, error)
+**/
+func DefineInstance(db *DB, schema, name string) (*Instance, error) {
+	return defineInstance(db, schema, name, KindJson)
+}
+
+/**
+* DefineInstanceBite
+* @param db *DB, schema, name string
+* @return (*Instance, error)
+**/
+func DefineInstanceBite(db *DB, schema, name string) (*Instance, error) {
+	return defineInstance(db, schema, name, KindBite)
+}
+
+/**
+* LoadInstance
+* @param db *DB, schema string
+* @return (*Instance, error)
+**/
+func LoadInstance(db *DB, schema string) (*Instance, error) {
+	return DefineInstance(db, schema, "instances")
+}
+
+/**
+* LoadInstanceBite
+* @param db *DB, schema string
+* @return (*Instance, error)
+**/
+func LoadInstanceBite(db *DB, schema string) (*Instance, error) {
+	return DefineInstanceBite(db, schema, "instances")
 }
 
 /**
@@ -97,14 +142,14 @@ func (s *Instance) Set(id, tag, ownerId string, obj any) error {
 	}
 
 	var data = et.Json{}
-	if s.kind == KindJson {
+	if s.kind == KindBite {
+		data = et.Json{
+			SOURCE: bt,
+		}
+	} else {
 		err := json.Unmarshal(bt, &data)
 		if err != nil {
 			return err
-		}
-	} else {
-		data = et.Json{
-			SOURCE: bt,
 		}
 	}
 
@@ -119,6 +164,8 @@ func (s *Instance) Set(id, tag, ownerId string, obj any) error {
 		return err
 	}
 
+	dt.Drop(id)
+
 	return nil
 }
 
@@ -128,23 +175,45 @@ func (s *Instance) Set(id, tag, ownerId string, obj any) error {
 * @return (bool, error)
 **/
 func (s *Instance) Get(id string, dest any) (bool, error) {
-	item, err := s.model.
-		Where(Eq(ID, id)).
-		One()
-	if err != nil {
-		return false, err
+	var item et.Item
+	result := dt.Get(id)
+	if result.Ok {
+		var ok bool
+		item, ok = result.Item()
+		if !ok {
+			item = et.Item{}
+		}
+	}
+
+	if !item.Ok {
+		var err error
+		item, err = s.model.
+			Where(Eq(ID, id)).
+			One()
+		if err != nil {
+			return false, err
+		}
 	}
 
 	if !item.Ok {
 		return false, nil
 	}
 
-	bt := []byte(item.Result.ToString())
-	err = json.Unmarshal(bt, dest)
-	if err != nil {
-		return false, err
+	if s.kind == KindBite {
+		bt, err := item.Byte(SOURCE)
+		err = json.Unmarshal(bt, dest)
+		if err != nil {
+			return false, err
+		}
+	} else {
+		bt := []byte(item.Result.ToString())
+		err := json.Unmarshal(bt, dest)
+		if err != nil {
+			return false, err
+		}
 	}
 
+	dt.Up(id, item)
 	return true, nil
 }
 
@@ -161,6 +230,8 @@ func (s *Instance) Delete(id string) error {
 	if err != nil {
 		return err
 	}
+
+	dt.Drop(id)
 
 	return nil
 }

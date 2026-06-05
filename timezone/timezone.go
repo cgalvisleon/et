@@ -9,7 +9,23 @@ import (
 	"github.com/cgalvisleon/et/envar"
 )
 
+type Layout string
+
+const (
+	RFC3339Nano        Layout = "RFC3339Nano"
+	RFC3339            Layout = "RFC3339"
+	YYYYMMDDTHHMMSSZ   Layout = "2006-01-02T15:04:05Z"
+	YYYYMMDDTHHMMSSSSZ Layout = "2006-01-02T15:04:05.000Z"
+)
+
 var loc *time.Location
+var layouts = map[Layout]string{
+	RFC3339Nano:        time.RFC3339Nano,
+	RFC3339:            time.RFC3339,
+	YYYYMMDDTHHMMSSZ:   "2006-01-02T15:04:05Z",
+	YYYYMMDDTHHMMSSSSZ: "2006-01-02T15:04:05.000Z",
+}
+var layout = layouts[RFC3339]
 
 func init() {
 	timezone := envar.GetStr("TIMEZONE", "America/Bogota")
@@ -18,15 +34,22 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+
+	layoutTime := envar.GetStr("LAYOUT_TIME", "RFC3339")
+	var ok bool
+	layout, ok = layouts[Layout(layoutTime)]
+	if !ok {
+		layout = layouts[RFC3339]
+	}
 }
 
 /**
 * Now
 * @return time.Time
-* Remember to this function use ZONEINFO variable
 **/
 func Now() time.Time {
-	return time.Now().In(loc)
+	result := time.Now().In(loc)
+	return result
 }
 
 /**
@@ -34,7 +57,7 @@ func Now() time.Time {
 * @return string
 **/
 func NowStr() string {
-	return Now().Format("2006/01/02 15:04:05")
+	return Now().Format(layout)
 }
 
 /**
@@ -56,20 +79,28 @@ func Location() *time.Location {
 }
 
 /**
+* Format
+* @param t time.Time, layout Layout
+* @return string
+**/
+func Format(t time.Time, layout Layout) string {
+	return t.Format(layouts[layout])
+}
+
+/**
 * Parse
 * @param layout, value string
 * @return time.Time, error
 **/
-func Parse(layout string, value string) (time.Time, error) {
-	current, err := time.ParseInLocation(layout, value, loc)
+func Parse(layout Layout, value string) (time.Time, error) {
+	current, err := time.ParseInLocation(layouts[layout], value, loc)
 	if err != nil {
 		if strings.Count(value, "+") == 2 || strings.Count(value, "-") == 2 {
-			layout = "2006-01-02 15:04:05 -0700 -0700"
+			layout = YYYYMMDDTHHMMSSZ
 		} else {
-			layout = "2006-01-02 15:04:05 -0700"
+			layout = YYYYMMDDTHHMMSSSSZ
 		}
-
-		return time.ParseInLocation(layout, value, loc)
+		return time.ParseInLocation(layouts[layout], value, loc)
 	}
 
 	return current, nil

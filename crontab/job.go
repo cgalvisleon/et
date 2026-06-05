@@ -10,6 +10,7 @@ import (
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
+	"github.com/cgalvisleon/et/utility"
 	"github.com/robfig/cron/v3"
 )
 
@@ -33,6 +34,8 @@ const (
 
 type Job struct {
 	ID          string        `json:"id"`
+	ProjectId   string        `json:"project_id"`
+	UserId      string        `json:"user_id"`
 	ExecuteAt   time.Time     `json:"execute_at"`
 	Type        TypeJob       `json:"type"`
 	Tag         string        `json:"tag"`
@@ -89,13 +92,23 @@ func newJob(owner *Crontab, tp TypeJob, tag, ownerId, spec, channel string, para
 }
 
 /**
+* Serialize
+* @return ([]byte, error)
+**/
+func (s *Job) Serialize() ([]byte, error) {
+	return utility.Serialize(s)
+}
+
+/**
 * ToJson
 * @return et.Json
 **/
 func (s *Job) ToJson() et.Json {
 	return et.Json{
 		"id":          s.ID,
-		"execute_at":  s.ExecuteAt,
+		"project_id":  s.ProjectId,
+		"user_id":     s.UserId,
+		"execute_at":  timezone.Format(s.ExecuteAt, timezone.RFC3339),
 		"type":        s.Type,
 		"tag":         s.Tag,
 		"owner_id":    s.OwnerId,
@@ -109,6 +122,14 @@ func (s *Job) ToJson() et.Json {
 		"repetitions": s.Repetitions,
 		"duration":    s.Duration,
 	}
+}
+
+/**
+* ToString
+* @return string
+**/
+func (s *Job) ToString() string {
+	return s.ToJson().ToString()
 }
 
 /**
@@ -130,7 +151,7 @@ func (s *Job) Save() error {
 		}
 
 		if s.owner.store != nil {
-			err := s.owner.store.Set(s.ID, packageName, s.OwnerId, s)
+			err := s.owner.store.Set(s.ID, s.Tag, s.OwnerId, s.ProjectId, s, s.UserId)
 			if err != nil {
 				logs.Errorf("Error saving instance crontab: %v", err)
 			}
@@ -147,6 +168,10 @@ func (s *Job) Save() error {
 * @return error
 **/
 func (s *Job) setStatus(status JobStatus) error {
+	if s.Status == status {
+		return nil
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

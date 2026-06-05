@@ -30,9 +30,11 @@ func SetDuration(key string, val interface{}, expiration time.Duration) interfac
 	switch v := val.(type) {
 	case et.Json:
 		return SetCtx(conn.ctx, key, v.ToString(), expiration)
+	case et.Item:
+		return SetCtx(conn.ctx, key, v.ToString(), expiration)
 	case et.Items:
 		return SetCtx(conn.ctx, key, v.ToString(), expiration)
-	case et.Item:
+	case et.List:
 		return SetCtx(conn.ctx, key, v.ToString(), expiration)
 	case int:
 		return SetCtx(conn.ctx, key, fmt.Sprintf(`%d`, v), expiration)
@@ -126,6 +128,25 @@ func Get(key, defaultvalue string) (string, error) {
 	}
 
 	return GetCtx(conn.ctx, key, defaultvalue)
+}
+
+/**
+* GetObject
+* @params key string, dest any
+* @return error
+**/
+func GetObject(key string, dest any) (bool, error) {
+	result, err := Get(key, "")
+	if err != nil {
+		return false, err
+	}
+
+	err = json.Unmarshal([]byte(result), dest)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 /**

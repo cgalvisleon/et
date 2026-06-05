@@ -12,7 +12,6 @@ import (
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
-	"github.com/cgalvisleon/et/stores"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 )
@@ -29,13 +28,11 @@ type Conversation struct {
 	UpdatedAt     time.Time        `json:"updated_at"`
 	ID            string           `json:"id"`
 	ConvID        string           `json:"conv_id"`
-	OwnerID       string           `json:"owner_id"`
 	Title         string           `json:"title"`
 	Type          TypeConversation `json:"type"`
 	LastMessage   *Message         `json:"last_message"`
 	LimitMessages int              `json:"limit_messages"`
 	Messages      []*Message       `json:"-"`
-	messageStore  stores.Store     `json:"-"`
 	mu            sync.RWMutex     `json:"-"`
 	to            *Participant     `json:"-"`
 	ia            *Ia              `json:"-"`
@@ -64,7 +61,6 @@ func newConversation(to *Participant, title string, conversationType TypeConvers
 		UpdatedAt:     now,
 		ID:            id,
 		ConvID:        id,
-		OwnerID:       to.ID,
 		Title:         title,
 		Type:          conversationType,
 		Messages:      make([]*Message, 0),
@@ -74,55 +70,23 @@ func newConversation(to *Participant, title string, conversationType TypeConvers
 		ia:            to.ia,
 		isDebug:       to.ia.isDebug,
 	}
-	var err error
-	result.messageStore, err = stores.DefineInstance(to.ia.db, "ia", "message")
-	if err != nil {
-		return nil, err
-	}
-
-	err = result.save()
-	if err != nil {
-		return nil, err
-	}
-
 	return result, nil
-}
-
-/**
-* ToJson
-* @return et.Json
-**/
-func (s *Conversation) ToJson() et.Json {
-	return et.Json{
-		"created_at":     s.CreatedAt,
-		"updated_at":     s.UpdatedAt,
-		"id":             s.ID,
-		"conv_id":        s.ConvID,
-		"owner_id":       s.OwnerID,
-		"title":          s.Title,
-		"type":           s.Type,
-		"last_message":   s.LastMessage,
-		"limit_messages": s.LimitMessages,
-		"to": et.Json{
-			"id":   s.to.ID,
-			"to":   s.to.To,
-			"name": s.to.Name,
-		},
-	}
 }
 
 /**
 * save
 * @return error
 **/
-func (s *Conversation) save() error {
+func (s *Conversation) save(userId string) error {
+	s.UpdatedAt = timezone.Now()
 	data := s.ToJson()
+	data.Set("user_id", userId)
 	if s.isDebug {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	if s.ia.conversationStore != nil {
-		err := s.ia.conversationStore.Set(s.ID, "conversations", s.OwnerID, s)
+	if s.ia.store != nil {
+		err := s.ia.store.Set(s.ID, "conversation", s.ia.TenantID, s.ia.ID, s, userId)
 		if err != nil {
 			return err
 		}
@@ -138,8 +102,8 @@ func (s *Conversation) save() error {
 * @return error
 **/
 func (s *Conversation) delete() error {
-	if s.ia != nil && s.ia.conversationStore != nil {
-		err := s.ia.conversationStore.Delete(s.ID)
+	if s.ia != nil && s.ia.store != nil {
+		err := s.ia.store.Delete(s.ID, "conversation")
 		if err != nil {
 			return err
 		}
@@ -153,6 +117,30 @@ func (s *Conversation) delete() error {
 }
 
 /**
+* ToJson
+* @return et.Json
+**/
+func (s *Conversation) ToJson() et.Json {
+	return et.Json{
+		"created_at":     timezone.Format(s.CreatedAt, timezone.RFC3339),
+		"updated_at":     timezone.Format(s.UpdatedAt, timezone.RFC3339),
+		"tenant_id":      s.ia.TenantID,
+		"owner_id":       s.ia.ID,
+		"id":             s.ID,
+		"conv_id":        s.ConvID,
+		"title":          s.Title,
+		"type":           s.Type,
+		"last_message":   s.LastMessage,
+		"limit_messages": s.LimitMessages,
+		"to": et.Json{
+			"id":   s.to.ID,
+			"to":   s.to.To,
+			"name": s.to.Name,
+		},
+	}
+}
+
+/**
 * up
 * @param to *Participant
 **/
@@ -161,7 +149,7 @@ func (s *Conversation) up(to *Participant) error {
 	s.ia = to.ia
 	s.isDebug = to.ia.isDebug
 
-	items, err := s.messageStore.
+	items, err := s.ia.store.
 		Query(et.Json{})
 	if err != nil {
 		return err
@@ -185,12 +173,12 @@ func (s *Conversation) up(to *Participant) error {
 * @param convId string
 * @return error
 **/
-func (s *Conversation) SetConvId(convId string) error {
+func (s *Conversation) SetConvId(convId, agentId string) error {
 	if s.ConvID == convId {
 		return nil
 	}
 	s.ConvID = convId
-	return s.save()
+	return s.save(agentId)
 }
 
 /**
@@ -198,12 +186,12 @@ func (s *Conversation) SetConvId(convId string) error {
 * @param limit int
 * @return error
 **/
-func (s *Conversation) SetLimitMessages(limit int) error {
+func (s *Conversation) SetLimitMessages(limit int, userId string) error {
 	if s.LimitMessages == limit {
 		return nil
 	}
 	s.LimitMessages = limit
-	return s.save()
+	return s.save(userId)
 }
 
 /**
@@ -211,22 +199,22 @@ func (s *Conversation) SetLimitMessages(limit int) error {
 * @param content string
 * @return (*Message, error)
 **/
-func (s *Conversation) SendTextMessage(content string) (*Message, error) {
+func (s *Conversation) SendTextMessage(content, userId string) (*Message, error) {
 	if s.ia.sender == nil {
 		return nil, fmt.Errorf(MSG_SENDER_NOT_FOUND)
 	}
 
 	ms := newMessage(s, s.to.UserID, s.to.To, Text, content)
-	ms.setStatus(Sent)
+	ms.setStatus(Sent, userId)
 	s.Messages = append(s.Messages, ms)
 	s.LastMessage = ms
 	_, err := s.ia.sender.SendTextMessage(ms.To, ms.Content)
 	if err != nil {
-		ms.setStatus(Failed)
+		ms.setStatus(Failed, userId)
 		return nil, err
 	}
 
-	err = ms.setStatus(Delivered)
+	err = ms.setStatus(Delivered, userId)
 	if err != nil {
 		return nil, err
 	}

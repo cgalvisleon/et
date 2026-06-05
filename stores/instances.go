@@ -30,6 +30,7 @@ func defineInstance(db *DB, schema, name string, kind Kind) (*Instance, error) {
 	columns := []Column{
 		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
+		{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 		{Name: ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 		{Name: "tag", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 		{Name: "title", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
@@ -50,6 +51,7 @@ func defineInstance(db *DB, schema, name string, kind Kind) (*Instance, error) {
 			{Name: ID, Sorted: true},
 		},
 		Indexes: []DefIndex{
+			{Name: TENANT_ID, Sorted: true},
 			{Name: "tag", Sorted: true},
 			{Name: "title", Sorted: true},
 			{Name: "owner_id", Sorted: true},
@@ -128,10 +130,10 @@ func LoadInstanceBite(db *DB, schema string) (*Instance, error) {
 
 /**
 * Set
-* @param id, tag, ownerId string, obj any
+* @param id, tag, tenantId, ownerId string, obj any
 * @return error
 **/
-func (s *Instance) Set(id, tag, ownerId string, obj any) error {
+func (s *Instance) Set(id, tag, tenantId, ownerId string, obj any, userId string) error {
 	bt, ok := obj.([]byte)
 	if !ok {
 		var err error
@@ -153,9 +155,11 @@ func (s *Instance) Set(id, tag, ownerId string, obj any) error {
 		}
 	}
 
+	data.Set(TENANT_ID, tenantId)
 	data.Set(ID, id)
 	data.Set("tag", tag)
 	data.Set("owner_id", ownerId)
+	data.Set("user_id", userId)
 	_, err := s.model.
 		Upsert(data).
 		Where(Eq(ID, id)).

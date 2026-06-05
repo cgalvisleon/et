@@ -14,8 +14,8 @@ import (
 * @params w http.ResponseWriter, r *http.Request
 **/
 func (s *WorkFlow) HttpGetFlow(w http.ResponseWriter, r *http.Request) {
-	id := request.URLParam(r, "id").Str()
-	result, exists := s.getFlow(id)
+	tag := request.URLParam(r, "tag").Str()
+	result, exists := s.getFlow(tag)
 	if !exists {
 		response.ITEM(w, r, http.StatusNotFound, et.Item{
 			Ok:     true,
@@ -41,13 +41,15 @@ func (s *WorkFlow) HttpNewFlow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantId := body.Str("tenant_id")
+	ownerId := body.Str("owner_id")
 	tag := body.Str("tag")
 	version := body.Str("version")
 	name := body.Str("name")
 	description := body.Str("description")
-	username := body.Str("username")
+	userId := request.UserId(r)
 
-	flow, err := s.NewFlow(tag, version, name, description, username)
+	flow, err := s.NewFlow(tenantId, tag, ownerId, version, name, description, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -111,7 +113,9 @@ func (s *WorkFlow) HttpGetInstance(w http.ResponseWriter, r *http.Request) {
 **/
 func (s *WorkFlow) HttpDeleteInstance(w http.ResponseWriter, r *http.Request) {
 	id := request.URLParam(r, "id").Str()
-	err := s.DeleteInstance(id)
+	userId := request.UserId(r)
+
+	err := s.DeleteInstance(id, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -134,15 +138,16 @@ func (s *WorkFlow) HttpRunInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantId := body.Str("tenant_id")
+	ownerId := body.Str("owner_id")
 	tag := body.Str("tag")
 	id := body.Str("id")
-	ownerId := body.Str("ownerId")
 	step := body.Int("step")
 	ctx := body.Json("ctx")
 	tags := body.Json("tags")
-	username := body.Str("username")
+	userId := request.UserId(r)
 
-	result, err := s.RunInstance(tag, id, ownerId, step, ctx, tags, username)
+	result, err := s.RunInstance(tenantId, tag, id, ownerId, step, ctx, tags, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -160,15 +165,9 @@ func (s *WorkFlow) HttpRunInstance(w http.ResponseWriter, r *http.Request) {
 **/
 func (s *WorkFlow) HttpResetInstance(w http.ResponseWriter, r *http.Request) {
 	id := request.URLParam(r, "id").Str()
-	body, err := request.GetBody(r)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
+	userId := request.UserId(r)
 
-	username := body.Str("username")
-
-	result, err := s.ResetInstance(id, username)
+	result, err := s.ResetInstance(id, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -186,15 +185,9 @@ func (s *WorkFlow) HttpResetInstance(w http.ResponseWriter, r *http.Request) {
 **/
 func (s *WorkFlow) HttpRollbackInstance(w http.ResponseWriter, r *http.Request) {
 	id := request.URLParam(r, "id").Str()
-	body, err := request.GetBody(r)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
+	userId := request.UserId(r)
 
-	username := body.Str("username")
-
-	result, err := s.RollbackInstance(id, username)
+	result, err := s.RollbackInstance(id, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -212,15 +205,9 @@ func (s *WorkFlow) HttpRollbackInstance(w http.ResponseWriter, r *http.Request) 
 **/
 func (s *WorkFlow) HttpStopInstance(w http.ResponseWriter, r *http.Request) {
 	id := request.URLParam(r, "id").Str()
-	body, err := request.GetBody(r)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
+	userId := request.UserId(r)
 
-	username := body.Str("username")
-
-	result, err := s.StopInstance(id, username)
+	result, err := s.StopInstance(id, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -329,8 +316,9 @@ func (s *WorkFlow) HttpNewSteper(w http.ResponseWriter, r *http.Request) {
 	tag := body.Str("tag")
 	name := body.Str("name")
 	description := body.Str("description")
+	userId := request.UserId(r)
 
-	result, err := s.NewSteper(flowTag, tag, name, description)
+	result, err := s.NewSteper(flowTag, tag, name, description, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -357,8 +345,9 @@ func (s *WorkFlow) HttpSetSteper(w http.ResponseWriter, r *http.Request) {
 	tag := body.Str("tag")
 	name := body.Str("name")
 	description := body.Str("description")
+	userId := request.UserId(r)
 
-	result, err := s.SetSteper(id, tag, name, description)
+	result, err := s.SetSteper(id, tag, name, description, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -377,8 +366,9 @@ func (s *WorkFlow) HttpSetSteper(w http.ResponseWriter, r *http.Request) {
 func (s *WorkFlow) HttpDeleteSteper(w http.ResponseWriter, r *http.Request) {
 	id := request.URLParam(r, "id").Str()
 	tag := request.URLParam(r, "tag").Str()
+	userId := request.UserId(r)
 
-	err := s.DeleteSteper(id, tag)
+	err := s.DeleteSteper(id, tag, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -407,8 +397,9 @@ func (s *WorkFlow) HttpNewStep(w http.ResponseWriter, r *http.Request) {
 	definition := body.Str("definition")
 	undo := body.Str("undo")
 	stop := body.Bool("stop")
+	userId := request.UserId(r)
 
-	result, err := s.NewStep(flowTag, name, description, definition, undo, stop)
+	result, err := s.NewStep(flowTag, name, description, definition, undo, stop, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -438,8 +429,9 @@ func (s *WorkFlow) HttpSetStep(w http.ResponseWriter, r *http.Request) {
 	definition := body.Str("definition")
 	undo := body.Str("undo")
 	stop := body.Bool("stop")
+	userId := request.UserId(r)
 
-	result, err := s.SetStep(id, index, name, description, definition, undo, stop)
+	result, err := s.SetStep(id, index, name, description, definition, undo, stop, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -458,8 +450,9 @@ func (s *WorkFlow) HttpSetStep(w http.ResponseWriter, r *http.Request) {
 func (s *WorkFlow) HttpDeleteStep(w http.ResponseWriter, r *http.Request) {
 	id := request.URLParam(r, "id").Str()
 	index := request.URLParam(r, "index").Int()
+	userId := request.UserId(r)
 
-	_, err := s.DeleteStep(id, index)
+	_, err := s.DeleteStep(id, index, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return

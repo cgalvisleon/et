@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
@@ -52,12 +51,16 @@ func init() {
 	}()
 }
 
+type Config interface {
+	GetStr(key string, def string) string
+}
+
 /**
 * LoadTo loads the event connection from a Config struct.
-* @param cfg *config.Config
+* @param cfg Config
 * @return error
 **/
-func New(cfg *config.Config) (*Conn, error) {
+func New(cfg Config) (*Conn, error) {
 	if !slices.Contains([]string{"linux", "darwin", "windows"}, oS) {
 		return nil, logs.Alertf(MSG_UNSUPPORTED_OS, oS)
 	}

@@ -15,23 +15,29 @@ import (
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
-	"github.com/cgalvisleon/et/stores"
 )
+
+type Store interface {
+	Set(id, tag, tenantId, ownerId string, obj any, userId string) error
+	Get(id string, dest any) (bool, error)
+	Delete(id string) error
+	Query(query et.Json) (et.Items, error)
+}
 
 type Resilience struct {
 	instances map[string]*Instance `json:"-"`
 	mu        sync.Mutex           `json:"-"`
-	store     stores.Store         `json:"-"`
+	store     Store                `json:"-"`
 	metrics   cache.Metrics        `json:"-"`
 	isDebug   bool                 `json:"-"`
 }
 
 /**
 * New
-* @param store jsql.Store
+* @param store Store
 * @return *Resilience, error
 **/
-func New(store stores.Store) (*Resilience, error) {
+func New(store Store) (*Resilience, error) {
 	err := event.Load(config.CNF)
 	if err != nil {
 		logs.Logf(packageName, MSG_EVENT_NOT_LOADED, err)

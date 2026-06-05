@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
@@ -32,7 +31,7 @@ const (
 * Load
 * @return error
 **/
-func Load(cfg *config.Config) error {
+func Load(cfg Config) error {
 	if conn != nil {
 		return nil
 	}

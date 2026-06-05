@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/stores"
+	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/openai/openai-go/v3"
 )
@@ -22,37 +23,48 @@ var (
 	ia          *Ia
 )
 
+type Store interface {
+	Set(id, tag, tenantId, ownerId string, obj any, userId string) error
+	Get(id, tag string, dest any) (bool, error)
+	Delete(id, tag string) error
+	Query(query et.Json) (et.Items, error)
+}
+
 type Ia struct {
-	ID                string                   `json:"id"`
-	Tag               string                   `json:"tag"`
-	Agents            map[string]*Agent        `json:"agents"`
-	Participants      map[string]*Participant  `json:"participants"`
-	Conversations     map[string]*Conversation `json:"-"`
-	db                *jsql.DB                 `json:"-"`
-	sender            Sender                   `json:"-"`
-	muAgents          sync.RWMutex             `json:"-"`
-	muParticipants    sync.RWMutex             `json:"-"`
-	muConversations   sync.RWMutex             `json:"-"`
-	key               string                   `json:"-"`
-	store             stores.Store             `json:"-"`
-	participantStore  stores.Store             `json:"-"`
-	conversationStore stores.Store             `json:"-"`
-	isDebug           bool                     `json:"-"`
+	CreatedAt       time.Time                `json:"created_at"`
+	UpdatedAt       time.Time                `json:"updated_at"`
+	TenantID        string                   `json:"tenant_id"`
+	ID              string                   `json:"id"`
+	Tag             string                   `json:"tag"`
+	Agents          map[string]*Agent        `json:"agents"`
+	Participants    map[string]*Participant  `json:"participants"`
+	Conversations   map[string]*Conversation `json:"-"`
+	sender          Sender                   `json:"-"`
+	muAgents        sync.RWMutex             `json:"-"`
+	muParticipants  sync.RWMutex             `json:"-"`
+	muConversations sync.RWMutex             `json:"-"`
+	key             string                   `json:"-"`
+	store           Store                    `json:"-"`
+	isDebug         bool                     `json:"-"`
 }
 
 /**
 * New
-* @param tag string, db *jsql.DB
+* @param tenantId, tag string, store Store
 * @return (*Ia, error)
 **/
-func New(tag string, db *jsql.DB) (*Ia, error) {
-	err := event.Load()
+func New(tenantId, tag string, store Store) (*Ia, error) {
+	err := event.Load(config.CNF)
 	if err != nil {
 		return nil, err
 	}
 
+	now := timezone.Now()
 	key := envar.GetStr("OPENAI_API_KEY", "")
 	result := &Ia{
+		CreatedAt:       now,
+		UpdatedAt:       now,
+		TenantID:        tenantId,
 		ID:              fmt.Sprintf("ia:%s", tag),
 		Tag:             tag,
 		Agents:          make(map[string]*Agent, 0),
@@ -62,8 +74,8 @@ func New(tag string, db *jsql.DB) (*Ia, error) {
 		muParticipants:  sync.RWMutex{},
 		muConversations: sync.RWMutex{},
 		isDebug:         envar.GetBool("DEBUG", false),
+		store:           store,
 		key:             key,
-		db:              db,
 	}
 	err = result.up()
 	if err != nil {
@@ -75,19 +87,63 @@ func New(tag string, db *jsql.DB) (*Ia, error) {
 
 /**
 * New
-* @param db *jsql.DB
+* @param tenantId, tag string, store Store
 * @return error
 **/
-func Load(tag string, db *jsql.DB) error {
+func Load(tenantId, tag string, store Store) error {
 	if ia != nil {
 		return nil
 	}
 
 	var err error
-	ia, err = New(tag, db)
+	ia, err = New(tenantId, tag, store)
 	if err != nil {
 		return err
 	}
+
+	return nil
+}
+
+/**
+* save
+* @param userId string
+* @return error
+**/
+func (s *Ia) save(userId string) error {
+	s.UpdatedAt = timezone.Now()
+	data := s.ToJson()
+	data.Set("user_id", userId)
+	if s.isDebug {
+		logs.Log(packageName, "save:", data.ToString())
+	}
+
+	event.Publish(EVENT_IA_SET, data)
+
+	if s.store != nil {
+		err := s.store.Set(s.ID, packageName, s.TenantID, s.ID, s, userId)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+/**
+* delete
+* @return error
+**/
+func (s *Ia) delete() error {
+	if s.store != nil {
+		err := s.store.Delete(s.ID, packageName)
+		if err != nil {
+			return err
+		}
+	}
+
+	event.Publish(EVENT_IA_DELETE, et.Json{
+		"id": s.ID,
+	})
 
 	return nil
 }
@@ -98,6 +154,10 @@ func Load(tag string, db *jsql.DB) error {
 **/
 func (s *Ia) ToJson() et.Json {
 	return et.Json{
+		"created_at":    timezone.Format(s.CreatedAt, timezone.RFC3339),
+		"updated_at":    timezone.Format(s.UpdatedAt, timezone.RFC3339),
+		"tenant_id":     s.TenantID,
+		"owner_id":      s.ID,
 		"id":            s.ID,
 		"tag":           s.Tag,
 		"agents":        s.Agents,
@@ -106,71 +166,10 @@ func (s *Ia) ToJson() et.Json {
 }
 
 /**
-* save
-* @return error
-**/
-func (s *Ia) save() error {
-	data := s.ToJson()
-	if s.isDebug {
-		logs.Log(packageName, "save:", data.ToString())
-	}
-
-	if s.store != nil {
-		err := s.store.Set(s.ID, packageName, "", s)
-		if err != nil {
-			return err
-		}
-	}
-
-	event.Publish(EVENT_IA_SET, data)
-	return nil
-}
-
-/**
-* delete
-* @return error
-**/
-func (s *Ia) delete() error {
-	if s.store != nil {
-		err := s.store.Delete(s.ID)
-		if err != nil {
-			return err
-		}
-	}
-
-	event.Publish(EVENT_IA_DELETE, et.Json{
-		"id": s.ID,
-	})
-	return nil
-}
-
-/**
 * up
 **/
 func (s *Ia) up() error {
-	var err error
-	if s.store == nil {
-		s.store, err = stores.DefineInstance(s.db, "ia", "store")
-		if err != nil {
-			return err
-		}
-	}
-
-	if s.participantStore == nil {
-		s.participantStore, err = stores.DefineInstance(s.db, "ia", "participant")
-		if err != nil {
-			return err
-		}
-	}
-
-	if s.conversationStore == nil {
-		s.conversationStore, err = stores.DefineInstance(s.db, "ia", "conversation")
-		if err != nil {
-			return err
-		}
-	}
-
-	err = s.loadAgents()
+	err := s.loadAgents()
 	if err != nil {
 		return err
 	}
@@ -183,18 +182,6 @@ func (s *Ia) up() error {
 * @return error
 **/
 func (s *Ia) loadAgents() error {
-	var res *Ia
-	exists, err := s.store.Get(s.ID, &res)
-	if err != nil {
-		return err
-	}
-
-	if exists && res != nil {
-		for k, v := range res.Agents {
-			v.up(s)
-			s.Agents[k] = v
-		}
-	}
 
 	return nil
 }
@@ -225,7 +212,7 @@ func (s *Ia) getAgent(tag string) (*Agent, bool) {
 	}
 
 	if s.store != nil {
-		exists, err := s.store.Get(id, &result)
+		exists, err := s.store.Get(id, "agent", &result)
 		if err != nil {
 			return nil, false
 		}
@@ -245,13 +232,13 @@ func (s *Ia) getAgent(tag string) (*Agent, bool) {
 * @param tag string
 * @return error
 **/
-func (s *Ia) removeAgent(tag string) error {
+func (s *Ia) removeAgent(tag, userId string) error {
 	id := agendId(tag)
 	s.muAgents.Lock()
 	defer s.muAgents.Unlock()
 
 	delete(s.Agents, id)
-	return s.save()
+	return s.save(userId)
 }
 
 /**
@@ -259,7 +246,7 @@ func (s *Ia) removeAgent(tag string) error {
 * @param tag, name, description, context, model string
 * @return (*Agent, error)
 **/
-func (s *Ia) newAgent(tag, name, description, context, model string) (*Agent, error) {
+func (s *Ia) newAgent(tag, name, description, context, model, userId string) (*Agent, error) {
 	_, exists := s.getAgent(name)
 	if exists {
 		return nil, fmt.Errorf(MSG_AGENT_ALREADY_EXISTS, name)
@@ -267,7 +254,7 @@ func (s *Ia) newAgent(tag, name, description, context, model string) (*Agent, er
 
 	result := newAgent(s, tag, name, description, context, model)
 	s.addAgent(result)
-	return result, s.save()
+	return result, s.save(userId)
 }
 
 /**
@@ -275,7 +262,7 @@ func (s *Ia) newAgent(tag, name, description, context, model string) (*Agent, er
 * @param name string, model string
 * @return (*Agent, error)
 **/
-func (s *Ia) SetModelAgent(name string, model string) (*Agent, error) {
+func (s *Ia) SetModelAgent(name string, model, userId string) (*Agent, error) {
 	if !utility.ValidStr(name, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
@@ -287,8 +274,7 @@ func (s *Ia) SetModelAgent(name string, model string) (*Agent, error) {
 	if !exists {
 		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, name)
 	}
-	result.setModel(model)
-	return result, s.save()
+	return result.setModel(model, userId)
 }
 
 /**
@@ -296,7 +282,7 @@ func (s *Ia) SetModelAgent(name string, model string) (*Agent, error) {
 * @param name string, context string
 * @return (*Agent, error)
 **/
-func (s *Ia) SetContextAgent(name string, context string) (*Agent, error) {
+func (s *Ia) SetContextAgent(name string, context, userId string) (*Agent, error) {
 	if !utility.ValidStr(name, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
@@ -308,8 +294,7 @@ func (s *Ia) SetContextAgent(name string, context string) (*Agent, error) {
 	if !exists {
 		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, name)
 	}
-	result.setContext(context)
-	return result, s.save()
+	return result.setContext(context, userId)
 }
 
 /**
@@ -317,7 +302,7 @@ func (s *Ia) SetContextAgent(name string, context string) (*Agent, error) {
 * @param name string, skill Skill
 * @return (*Agent, error)
 **/
-func (s *Ia) SetSkillAgent(name string, skill Skill) (*Agent, error) {
+func (s *Ia) SetSkillAgent(name string, skill Skill, userId string) (*Agent, error) {
 	if !utility.ValidStr(name, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
@@ -329,8 +314,7 @@ func (s *Ia) SetSkillAgent(name string, skill Skill) (*Agent, error) {
 	if !exists {
 		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, name)
 	}
-	result.addSkill(skill)
-	return result, s.save()
+	return result.addSkill(skill, userId)
 }
 
 /**
@@ -339,15 +323,8 @@ func (s *Ia) SetSkillAgent(name string, skill Skill) (*Agent, error) {
 * @return (*Participant, error)
 **/
 func (s *Ia) loadParticipant(to string, dest *Participant) (bool, error) {
-	items, err := s.participantStore.
-		Query(et.Json{
-			"where": et.Json{
-				"to": et.Json{
-					"eq": to,
-				},
-			},
-			"limit": 1,
-		})
+	items, err := s.store.
+		Query(et.Json{})
 	if err != nil {
 		return false, err
 	}
@@ -372,10 +349,10 @@ func (s *Ia) loadParticipant(to string, dest *Participant) (bool, error) {
 
 /**
 * getParticipant
-* @param userId, to, name string, role Role
+* @param to, name string, role Role, userId string
 * @return (*Participant, error)
 **/
-func (s *Ia) getParticipant(to, name string, role Role) (*Participant, error) {
+func (s *Ia) getParticipant(to, name string, role Role, userId string) (*Participant, error) {
 	s.muParticipants.Lock()
 	result, exists := s.Participants[to]
 	s.muParticipants.Unlock()
@@ -387,18 +364,16 @@ func (s *Ia) getParticipant(to, name string, role Role) (*Participant, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if !exists {
-		result, err = newParticipant(s, "", to, name, role)
-		if err != nil {
-			return nil, err
-		}
+		result = newParticipant(s, "", to, name, role)
 	}
 
 	s.muParticipants.Lock()
 	s.Participants[to] = result
 	s.muParticipants.Unlock()
 
-	return result, s.save()
+	return result, s.save(userId)
 }
 
 /**
@@ -407,15 +382,8 @@ func (s *Ia) getParticipant(to, name string, role Role) (*Participant, error) {
 * @return (bool, error)
 **/
 func (s *Ia) loadConversation(to string, dest *Conversation) (bool, error) {
-	items, err := s.participantStore.
-		Query(et.Json{
-			"where": et.Json{
-				"to": et.Json{
-					"eq": to,
-				},
-			},
-			"limit": 1,
-		})
+	items, err := s.store.
+		Query(et.Json{})
 	if err != nil {
 		return false, err
 	}
@@ -455,6 +423,7 @@ func (s *Ia) getConversation(to *Participant) (*Conversation, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if !exists {
 		result, err = newConversation(to, to.Name, Direct)
 		if err != nil {

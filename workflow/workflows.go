@@ -12,15 +12,21 @@ import (
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/resilience"
-	"github.com/cgalvisleon/et/stores"
 )
+
+type Store interface {
+	Set(id, tag, tenantId, ownerId string, obj any, userId string) error
+	Get(id string, dest any) (bool, error)
+	Delete(id string) error
+	Query(query et.Json) (et.Items, error)
+}
 
 type WorkFlow struct {
 	Flows       map[string]*Flow       `json:"flows"`
 	Instances   map[string]*Instance   `json:"instances"`
 	muFlows     sync.Mutex             `json:"-"`
 	muInstances sync.Mutex             `json:"-"`
-	store       stores.Store           `json:"-"`
+	store       Store                  `json:"-"`
 	resilience  *resilience.Resilience `json:"-"`
 	metrics     cache.Metrics          `json:"-"`
 	isDebug     bool                   `json:"-"`
@@ -37,7 +43,7 @@ var (
 * @param store stores.Store
 * @return (*WorkFlow, error)
 **/
-func New(store stores.Store) (*WorkFlow, error) {
+func New(store Store) (*WorkFlow, error) {
 	err := cache.Load(config.CNF)
 	if err != nil {
 		return nil, err
@@ -72,7 +78,7 @@ func New(store stores.Store) (*WorkFlow, error) {
 * @param tenantId, ownerId string, store stores.Store
 * @return error
 **/
-func Load(store stores.Store) error {
+func Load(store Store) error {
 	if workflow != nil {
 		return nil
 	}

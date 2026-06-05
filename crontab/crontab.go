@@ -13,7 +13,6 @@ import (
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/stores"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/robfig/cron/v3"
@@ -28,6 +27,13 @@ var (
 	ErrJobExists = fmt.Errorf("job already exists")
 )
 
+type Store interface {
+	Set(id, tag, tenantId, ownerId string, obj any, userId string) error
+	Get(id string, dest any) (bool, error)
+	Delete(id string) error
+	Query(query et.Json) (et.Items, error)
+}
+
 type Crontab struct {
 	ID       string          `json:"id"`
 	Tag      string          `json:"tag"`
@@ -37,16 +43,16 @@ type Crontab struct {
 	cronJobs *cron.Cron      `json:"-"`
 	running  bool            `json:"-"`
 	mu       *sync.Mutex     `json:"-"`
-	store    stores.Store    `json:"-"`
+	store    Store           `json:"-"`
 	isDebug  bool            `json:"-"`
 }
 
 /**
 * New
-* @param tag string, store jsql.Store
+* @param tag string, store Store
 * @return (*Crontab, error)
 **/
-func New(tag string, store stores.Store) (*Crontab, error) {
+func New(tag string, store Store) (*Crontab, error) {
 	err := cache.Load(config.CNF)
 	if err != nil {
 		return nil, err

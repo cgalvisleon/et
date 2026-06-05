@@ -30,10 +30,11 @@ func DefineAuthorization(db *DB, schema string) (*Authorization, error) {
 	columns := []Column{
 		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
+		{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 		{Name: ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: "tag", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: "title", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
-		{Name: "owner_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
+		{Name: "profile_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
+		{Name: "method", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
+		{Name: "path", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
 		{Name: SOURCE, TypeColumn: COLUMN, TypeData: JSON, Default: et.Json{}},
 	}
 
@@ -46,9 +47,10 @@ func DefineAuthorization(db *DB, schema string) (*Authorization, error) {
 			{Name: ID, Sorted: true},
 		},
 		Indexes: []DefIndex{
-			{Name: "tag", Sorted: true},
-			{Name: "title", Sorted: true},
-			{Name: "owner_id", Sorted: true},
+			{Name: TENANT_ID, Sorted: true},
+			{Name: "profile_id", Sorted: true},
+			{Name: "method", Sorted: true},
+			{Name: "path", Sorted: true},
 		},
 		IdxField:    IDX,
 		IdtField:    IDT,
@@ -62,6 +64,24 @@ func DefineAuthorization(db *DB, schema string) (*Authorization, error) {
 		return nil, err
 	}
 	result.BeforeInsert(func(tx *Tx, old, new et.Json) error {
+		tenantId := new.Str(TENANT_ID)
+		profileId := new.Str("profile_id")
+		method := new.Str("method")
+		path := new.Str("path")
+		exists, err := result.
+			Where(Eq("tenant_id", tenantId)).
+			And(Eq("profile_id", profileId)).
+			And(Eq("method", method)).
+			And(Eq("path", path)).
+			ExistsTx(tx)
+		if err != nil {
+			return err
+		}
+
+		if exists {
+			return errors.New(MSG_RECORD_EXISTS)
+		}
+
 		now := timezone.Now()
 		new.Set(CREATED_AT, now)
 		new.Set(UPDATED_AT, now)
@@ -82,10 +102,10 @@ func DefineAuthorization(db *DB, schema string) (*Authorization, error) {
 
 /**
 * SetAuthor
-* @param projectId, profileId, method, path string
+* @param tenantId, profileId, method, path string
 * @return error
 **/
-func (s *Authorization) setAuthor(key, projectId, profileId, method, path string) error {
+func (s *Authorization) setAuthor(key, tenantId, profileId, method, path string) error {
 	if !utility.ValidStr(method, 0, []string{""}) {
 		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "method")
 	}
@@ -93,11 +113,10 @@ func (s *Authorization) setAuthor(key, projectId, profileId, method, path string
 		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "path")
 	}
 
-	now := timezone.Now()
+	dt.Drop(key)
 	_, err := s.model.
 		Insert(et.Json{
-			"created_at": now,
-			"project_id": projectId,
+			"tenant_id":  tenantId,
 			"profile_id": profileId,
 			"method":     method,
 			"path":       path,
@@ -107,25 +126,23 @@ func (s *Authorization) setAuthor(key, projectId, profileId, method, path string
 		return err
 	}
 
-	dt.Drop(key)
-
 	return nil
 }
 
 /**
 * SetAuthor
-* @param projectId, profileId, method, path string
+* @param tenantId, profileId, method, path string
 * @return error
 **/
-func (s *Authorization) SetAuthor(projectId, profileId, method, path string) error {
-	if !utility.ValidStr(projectId, 0, []string{""}) {
-		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "project_id")
+func (s *Authorization) SetAuthor(tenantId, profileId, method, path string) error {
+	if !utility.ValidStr(tenantId, 0, []string{""}) {
+		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "tenant_id")
 	}
 	if !utility.ValidStr(profileId, 0, []string{""}) {
 		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "profile_id")
 	}
-	key := fmt.Sprintf("%s:%s:%s:%s", projectId, profileId, method, path)
-	return s.setAuthor(key, projectId, profileId, method, path)
+	key := fmt.Sprintf("%s:%s:%s:%s", tenantId, profileId, method, path)
+	return s.setAuthor(key, tenantId, profileId, method, path)
 }
 
 /**
@@ -145,11 +162,11 @@ func (s *Authorization) SetPath(method, path string) error {
 
 /**
 * Author
-* @param projectId, profileId, method, path string
+* @param tenantId, profileId, method, path string
 * @return et.Item, error
 **/
-func (s *Authorization) Author(projectId, profileId, method, path string) (bool, error) {
-	key := fmt.Sprintf("%s:%s:%s:%s", projectId, profileId, method, path)
+func (s *Authorization) Author(tenantId, profileId, method, path string) (bool, error) {
+	key := fmt.Sprintf("%s:%s:%s:%s", tenantId, profileId, method, path)
 	item := dt.Get(key)
 	if item.Ok {
 		b, ok := item.Bool()
@@ -159,7 +176,7 @@ func (s *Authorization) Author(projectId, profileId, method, path string) (bool,
 	}
 
 	result, err := s.model.
-		Where(Eq("project_id", projectId)).
+		Where(Eq("tenant_id", tenantId)).
 		And(Eq("profile_id", profileId)).
 		And(Eq("method", method)).
 		And(Eq("path", path)).
@@ -174,16 +191,16 @@ func (s *Authorization) Author(projectId, profileId, method, path string) (bool,
 
 /**
 * RemoveAuthor
-* @param projectId, profileId, method, path string
+* @param tenantId, profileId, method, path string
 * @return error
 **/
-func (s *Authorization) RemoveAuthor(projectId, profileId, method, path string) error {
-	key := fmt.Sprintf("%s:%s:%s:%s", projectId, profileId, method, path)
+func (s *Authorization) RemoveAuthor(tenantId, profileId, method, path string) error {
+	key := fmt.Sprintf("%s:%s:%s:%s", tenantId, profileId, method, path)
 	dt.Drop(key)
 
 	_, err := s.model.
 		Delete().
-		Where(Eq("project_id", projectId)).
+		Where(Eq("tenant_id", tenantId)).
 		And(Eq("profile_id", profileId)).
 		And(Eq("method", method)).
 		And(Eq("path", path)).
@@ -192,7 +209,12 @@ func (s *Authorization) RemoveAuthor(projectId, profileId, method, path string) 
 		return err
 	}
 
-	event.Publish(EVENT_DEL_AUTHORIZATION, et.Json{key: key})
+	event.Publish(EVENT_DEL_AUTHORIZATION, et.Json{
+		"tenant_id":  tenantId,
+		"profile_id": profileId,
+		"method":     method,
+		"path":       path,
+	})
 	return nil
 }
 

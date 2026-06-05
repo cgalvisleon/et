@@ -48,6 +48,7 @@ type Message struct {
 	MessageStatuses []*MessageStatus `json:"message_statuses"`
 	conversation    *Conversation    `json:"-"`
 	isDebug         bool             `json:"-"`
+	ia              *Ia              `json:"-"`
 }
 
 /**
@@ -68,45 +69,30 @@ func newMessage(conversation *Conversation, userID, to string, tp TypeMessage, c
 		MessageStatuses: make([]*MessageStatus, 0),
 		conversation:    conversation,
 		isDebug:         conversation.isDebug,
+		ia:              conversation.ia,
 	}
 	return result
-}
-
-/**
-* ToJson
-* @return et.Json
-**/
-func (s *Message) ToJson() et.Json {
-	return et.Json{
-		"created_at":       s.CreatedAt,
-		"id":               s.ID,
-		"conversation_id":  s.ConversationID,
-		"user_id":          s.UserID,
-		"to":               s.To,
-		"type":             s.Type,
-		"content":          s.Content,
-		"message_statuses": s.MessageStatuses,
-	}
 }
 
 /**
 * save
 * @return error
 **/
-func (s *Message) save() error {
+func (s *Message) save(userId string) error {
 	data := s.ToJson()
+	data.Set("user_id", userId)
 	if s.isDebug {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	if s.conversation != nil && s.conversation.messageStore != nil {
-		err := s.conversation.messageStore.Set(s.ID, "message", s.ConversationID, s)
+	event.Publish(EVENT_MESSAGE_SET, data)
+
+	if s.ia.store != nil {
+		err := s.ia.store.Set(s.ID, "message", s.ia.TenantID, s.ia.ID, s, userId)
 		if err != nil {
 			return err
 		}
 	}
-
-	event.Publish(EVENT_MESSAGE_SET, data)
 
 	return nil
 }
@@ -116,8 +102,8 @@ func (s *Message) save() error {
 * @return error
 **/
 func (s *Message) delete() error {
-	if s.conversation != nil && s.conversation.messageStore != nil {
-		err := s.conversation.messageStore.Delete(s.ID)
+	if s.ia != nil && s.ia.store != nil {
+		err := s.ia.store.Delete(s.ID, "message")
 		if err != nil {
 			return err
 		}
@@ -131,11 +117,30 @@ func (s *Message) delete() error {
 }
 
 /**
+* ToJson
+* @return et.Json
+**/
+func (s *Message) ToJson() et.Json {
+	return et.Json{
+		"created_at":       timezone.Format(s.CreatedAt, timezone.RFC3339),
+		"tenant_id":        s.ia.TenantID,
+		"owner_id":         s.ia.ID,
+		"id":               s.ID,
+		"conversation_id":  s.ConversationID,
+		"user_id":          s.UserID,
+		"to":               s.To,
+		"type":             s.Type,
+		"content":          s.Content,
+		"message_statuses": s.MessageStatuses,
+	}
+}
+
+/**
 * setStatus
-* @param status StatusMessage
+* @param status StatusMessage, userId string
 * @return error
 **/
-func (s *Message) setStatus(status StatusMessage) error {
+func (s *Message) setStatus(status StatusMessage, userId string) error {
 	s.LastStatus = &MessageStatus{
 		CreatedAt: timezone.Now(),
 		MessageID: s.ID,
@@ -143,5 +148,5 @@ func (s *Message) setStatus(status StatusMessage) error {
 		Status:    status,
 	}
 	s.MessageStatuses = append(s.MessageStatuses, s.LastStatus)
-	return s.save()
+	return s.save(userId)
 }

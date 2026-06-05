@@ -18,13 +18,14 @@ const (
 )
 
 type Participant struct {
-	JoinedAt time.Time `json:"joined_at"`
-	ID       string    `json:"id"`
-	UserID   string    `json:"user_id"`
-	To       string    `json:"to"`
-	Name     string    `json:"name"`
-	IaID     string    `json:"ia_id"`
-	ia       *Ia       `json:"-"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	JoinedAt  time.Time `json:"joined_at"`
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	To        string    `json:"to"`
+	Name      string    `json:"name"`
+	ia        *Ia       `json:"-"`
 }
 
 /**
@@ -32,58 +33,45 @@ type Participant struct {
 * @param ia *Ia, userId, to string, role Role
 * @return (*Participant, error)
 **/
-func newParticipant(ia *Ia, userId, to, name string, role Role) (*Participant, error) {
+func newParticipant(ia *Ia, userId, to, name string, role Role) *Participant {
 	id := reg.GenULID("participant")
 	if userId == "" {
 		userId = id
 	}
+
 	if name == "" {
 		name = to
 	}
+
+	now := timezone.Now()
 	result := &Participant{
-		JoinedAt: timezone.Now(),
-		ID:       id,
-		UserID:   userId,
-		To:       to,
-		Name:     name,
-		IaID:     ia.ID,
-		ia:       ia,
-	}
-	err := result.save()
-	if err != nil {
-		return nil, err
+		CreatedAt: now,
+		UpdatedAt: now,
+		JoinedAt:  now,
+		ID:        id,
+		UserID:    userId,
+		To:        to,
+		Name:      name,
+		ia:        ia,
 	}
 
-	return result, nil
-}
-
-/**
-* ToJson
-* @return et.Json
-**/
-func (s *Participant) ToJson() et.Json {
-	return et.Json{
-		"joined_at": s.JoinedAt,
-		"id":        s.ID,
-		"user_id":   s.UserID,
-		"to":        s.To,
-		"name":      s.Name,
-		"ia_id":     s.IaID,
-	}
+	return result
 }
 
 /**
 * save
 * @return error
 **/
-func (s *Participant) save() error {
+func (s *Participant) save(userId string) error {
+	s.UpdatedAt = timezone.Now()
 	data := s.ToJson()
+	data.Set("user_id", userId)
 	if s.ia.isDebug {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
 	if s.ia.store != nil {
-		err := s.ia.store.Set(s.ID, "participant", s.IaID, s)
+		err := s.ia.store.Set(s.ID, "participant", s.ia.TenantID, s.ia.ID, s, userId)
 		if err != nil {
 			return err
 		}
@@ -100,7 +88,7 @@ func (s *Participant) save() error {
 **/
 func (s *Participant) delete() error {
 	if s.ia.store != nil {
-		err := s.ia.store.Delete(s.ID)
+		err := s.ia.store.Delete(s.ID, "participant")
 		if err != nil {
 			return err
 		}
@@ -111,6 +99,24 @@ func (s *Participant) delete() error {
 	})
 
 	return nil
+}
+
+/**
+* ToJson
+* @return et.Json
+**/
+func (s *Participant) ToJson() et.Json {
+	return et.Json{
+		"created_at": timezone.Format(s.CreatedAt, timezone.RFC3339),
+		"updated_at": timezone.Format(s.UpdatedAt, timezone.RFC3339),
+		"joined_at":  timezone.Format(s.JoinedAt, timezone.RFC3339),
+		"tenant_id":  s.ia.TenantID,
+		"owner_id":   s.ia.ID,
+		"id":         s.ID,
+		"user_id":    s.UserID,
+		"to":         s.To,
+		"name":       s.Name,
+	}
 }
 
 /**
@@ -126,9 +132,9 @@ func (s *Participant) up(ia *Ia) {
 * @param userId string
 * @return error
 **/
-func (s *Participant) SetUserId(userId string) error {
-	s.UserID = userId
-	return s.save()
+func (s *Participant) SetUserId(id, userId string) error {
+	s.UserID = id
+	return s.save(userId)
 }
 
 /**
@@ -136,7 +142,7 @@ func (s *Participant) SetUserId(userId string) error {
 * @param name string
 * @return error
 **/
-func (s *Participant) SetName(name string) error {
+func (s *Participant) SetName(name, userId string) error {
 	s.Name = name
-	return s.save()
+	return s.save(userId)
 }

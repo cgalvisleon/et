@@ -9,6 +9,7 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
@@ -25,10 +26,10 @@ type Config struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	ID        string    `json:"id"`
-	OwnerId   string    `json:"owner_id"`
 	TenantId  string    `json:"tenant_id"`
-	Params    et.Json   `json:"params"`
+	OwnerId   string    `json:"owner_id"`
 	Tag       string    `json:"tag"`
+	Params    et.Json   `json:"params"`
 	Stage     string    `json:"stage"`
 	store     Store     `json:"-"`
 	isDebug   bool      `json:"-"`
@@ -44,9 +45,9 @@ var (
 * @param tag, stage, tenantId, ownerId string, store Store
 * @return error
 **/
-func Load(tag, stage, tenantId, ownerId string, store Store) error {
+func Load(tag, stage, tenantId, ownerId string, store Store, userId string) error {
 	var err error
-	CNF, err = New(tag, stage, tenantId, ownerId, store)
+	CNF, err = New(tag, stage, tenantId, ownerId, store, userId)
 	if err != nil {
 		return err
 	}
@@ -56,10 +57,10 @@ func Load(tag, stage, tenantId, ownerId string, store Store) error {
 
 /**
 * NewConfig
-* @param ag, stage, tenantId, ownerId string, store Store
+* @param tag, stage, tenantId, ownerId string, store Store, userId string
 * @return *Config
 **/
-func New(tag, stage, tenantId, ownerId string, store Store) (*Config, error) {
+func New(tag, stage, tenantId, ownerId string, store Store, userId string) (*Config, error) {
 	if utility.ValidStr(tag, 1, []string{""}) {
 		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "tag")
 	}
@@ -72,7 +73,7 @@ func New(tag, stage, tenantId, ownerId string, store Store) (*Config, error) {
 		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "tenantId")
 	}
 
-	new := func() *Config {
+	new := func() (*Config, error) {
 		now := timezone.Now()
 		id := fmt.Sprintf("config:%s:%s:%s", tag, stage, tenantId)
 		result := &Config{
@@ -86,7 +87,14 @@ func New(tag, stage, tenantId, ownerId string, store Store) (*Config, error) {
 			TenantId:  tenantId,
 			store:     store,
 		}
-		return result
+		if store != nil {
+			err := result.save(userId)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		return result, nil
 	}
 
 	if store != nil {
@@ -97,7 +105,7 @@ func New(tag, stage, tenantId, ownerId string, store Store) (*Config, error) {
 		}
 
 		if !exists {
-			return new(), nil
+			return new()
 		}
 
 		bt, err := json.Marshal(CNF)
@@ -113,7 +121,7 @@ func New(tag, stage, tenantId, ownerId string, store Store) (*Config, error) {
 		return CNF, nil
 	}
 
-	return new(), nil
+	return new()
 }
 
 /**
@@ -130,14 +138,14 @@ func (s *Config) Serialize() ([]byte, error) {
 **/
 func (s *Config) ToJson() et.Json {
 	return et.Json{
-		"id":         s.ID,
 		"created_at": timezone.Format(s.CreatedAt, timezone.RFC3339),
 		"updated_at": timezone.Format(s.UpdatedAt, timezone.RFC3339),
-		"owner_id":   s.OwnerId,
+		"id":         s.ID,
 		"tenant_id":  s.TenantId,
+		"owner_id":   s.OwnerId,
 		"tag":        s.Tag,
-		"stage":      s.Stage,
 		"params":     s.Params,
+		"stage":      s.Stage,
 	}
 }
 
@@ -174,6 +182,8 @@ func (s *Config) save(userId string) error {
 	if s.store != nil {
 		return s.store.Set(s.Tag, s.Stage, s.OwnerId, s.TenantId, s.Params, userId)
 	}
+
+	event.Publish(EVENT_CONFIG_SET, data)
 
 	return nil
 }

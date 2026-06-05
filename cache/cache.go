@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
@@ -31,17 +30,21 @@ type Conn struct {
 	ctx      context.Context
 	host     string
 	dbname   int
-	config   *config.Config
 	channels map[string]*redis.PubSub
 	mutex    *sync.RWMutex
 }
 
+type Config interface {
+	GetStr(key string, def string) string
+	GetInt(key string, def int) int
+}
+
 /**
 * LoadTo: Initializes the Redis connection from a Config struct.
-* @param cfg *config.Config
+* @param cfg Config
 * @return error
 **/
-func New(cfg *config.Config) (*Conn, error) {
+func New(cfg Config) (*Conn, error) {
 	if !slices.Contains([]string{"linux", "darwin", "windows"}, os) {
 		return nil, logs.Alertf(MSG_UNSUPPORTED_OS, os)
 	}
@@ -82,7 +85,6 @@ func New(cfg *config.Config) (*Conn, error) {
 		ctx:      ctx,
 		host:     host,
 		dbname:   dbname,
-		config:   cfg,
 		channels: make(map[string]*redis.PubSub),
 		mutex:    &sync.RWMutex{},
 	}, nil

@@ -11,17 +11,16 @@ import (
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/stores"
 )
 
 var crontab *Crontab
 
 /**
 * Load
-* @params tag string, store jsql.Store
+* @params tag string, store Store
 * @return error
 **/
-func Load(tag string, store stores.Store) error {
+func Load(tag string, store Store) error {
 	var err error
 	crontab, err = New(tag, store)
 	if err != nil {

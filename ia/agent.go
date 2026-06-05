@@ -3,9 +3,13 @@ package ia
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
+	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/conversations"
@@ -27,6 +31,8 @@ Reglas obligatorias:
 const modelDefault = openai.ChatModelGPT4oMini
 
 type Agent struct {
+	CreatedAt   time.Time        `json:"created_at"`
+	UpdatedAt   time.Time        `json:"updated_at"`
 	ID          string           `json:"id"`
 	Tag         string           `json:"tag"`
 	Name        string           `json:"name"`
@@ -62,7 +68,10 @@ func newAgent(ia *Ia, tag, name, description, context, model string) *Agent {
 	if model == "" {
 		model = modelDefault
 	}
+	now := timezone.Now()
 	result := &Agent{
+		CreatedAt:   now,
+		UpdatedAt:   now,
 		ID:          agendId(tag),
 		Tag:         tag,
 		Name:        name,
@@ -76,6 +85,47 @@ func newAgent(ia *Ia, tag, name, description, context, model string) *Agent {
 	}
 	ia.addAgent(result)
 	return result
+}
+
+/**
+* save
+* @param userId string
+* @return error
+**/
+func (s *Agent) save(userId string) error {
+	s.UpdatedAt = timezone.Now()
+	data := s.ToJson()
+	data.Set("user_id", userId)
+	if s.isDebug {
+		logs.Log(packageName, "save:", data.ToString())
+	}
+
+	event.Publish(EVENT_AGENT_SET, data)
+
+	if s.ia.store != nil {
+		return s.ia.store.Set(s.ID, "agent", s.ia.TenantID, s.ia.ID, s, userId)
+	}
+
+	return nil
+}
+
+/**
+* delete
+* @return error
+**/
+func (s *Agent) delete() error {
+	if s.ia != nil && s.ia.store != nil {
+		err := s.ia.store.Delete(s.ID, "agent")
+		if err != nil {
+			return err
+		}
+	}
+
+	event.Publish(EVENT_CONVERSATION_DELETE, et.Json{
+		"id": s.ID,
+	})
+
+	return nil
 }
 
 /**
@@ -96,6 +146,10 @@ func (s *Agent) up(ia *Ia) {
 **/
 func (s *Agent) ToJson() et.Json {
 	return et.Json{
+		"created_at":  timezone.Format(s.CreatedAt, timezone.RFC3339),
+		"updated_at":  timezone.Format(s.UpdatedAt, timezone.RFC3339),
+		"tenant_id":   s.ia.TenantID,
+		"owner_id":    s.ia.ID,
 		"id":          s.ID,
 		"tag":         s.Tag,
 		"name":        s.Name,
@@ -117,39 +171,40 @@ func (s *Agent) ToString() string {
 /**
 * Debug
 **/
-func (s *Agent) Debug() {
+func (s *Agent) Debug() *Agent {
 	s.isDebug = true
+	return s
 }
 
 /**
 * setModel
-* @param model string
-* @return *Agent
+* @param model, userId string
+* @return *Agent, error
 **/
-func (s *Agent) setModel(model string) *Agent {
+func (s *Agent) setModel(model, userId string) (*Agent, error) {
 	s.Model = model
-	return s
+	return s, s.save(userId)
 }
 
 /**
 * setContext
-* @param context string
-* @return *Agent
+* @param context, userId string
+* @return *Agent, error
 **/
-func (s *Agent) setContext(context string) *Agent {
+func (s *Agent) setContext(context string, userId string) (*Agent, error) {
 	context = strs.Parse(s.ContextBase, et.Json{"context": context})
 	s.Context = []byte(context)
-	return s
+	return s, s.save(userId)
 }
 
 /**
 * addSkill
-* @param skill Skill
-* @return *Agent
+* @param skill Skill, userId string
+* @return *Agent, error
 **/
-func (s *Agent) addSkill(skill Skill) *Agent {
+func (s *Agent) addSkill(skill Skill, userId string) (*Agent, error) {
 	s.Skills[skill.Tag()] = skill
-	return s
+	return s, s.save(userId)
 }
 
 type ConversationResult struct {
@@ -180,7 +235,7 @@ func (s *Agent) conversation(ctx context.Context, conversation *Conversation, pr
 	if convID == "" {
 		conv, _ := s.client.Conversations.New(ctx, conversations.ConversationNewParams{})
 		convID = conv.ID
-		conversation.SetConvId(convID)
+		conversation.SetConvId(convID, s.ID)
 	}
 
 	contextStr := string(s.Context)

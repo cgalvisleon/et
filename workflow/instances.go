@@ -41,10 +41,9 @@ type Instance struct {
 	CreatedAt   time.Time            `json:"created_at"`
 	UpdatedAt   time.Time            `json:"updated_at"`
 	ID          string               `json:"id"`
-	ProjectId   string               `json:"project_id"`
-	UserId      string               `json:"user_id"`
-	Tag         string               `json:"tag"`
+	TenantId    string               `json:"tenant_id"`
 	OwnerId     string               `json:"owner_id"`
+	Tag         string               `json:"tag"`
 	CreatedBy   string               `json:"created_by"`
 	UpdatedBy   string               `json:"updated_by"`
 	Ctx         et.Json              `json:"ctx"`
@@ -72,10 +71,10 @@ type Instance struct {
 
 /**
 * newInstance
-* @param steper *Steper, id, ownerId, userName string
+* @param steper *Steper, id, tenantId, ownerId, userId string
 * @return *Instance
  */
-func newInstance(steper *Steper, id, ownerId, userName string) *Instance {
+func newInstance(steper *Steper, id, tenantId, ownerId, userId string) *Instance {
 	if id == "" {
 		id = reg.GenUUId(steper.Tag)
 	}
@@ -87,10 +86,11 @@ func newInstance(steper *Steper, id, ownerId, userName string) *Instance {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 		ID:          id,
-		Tag:         steper.flow.Tag,
+		TenantId:    tenantId,
 		OwnerId:     ownerId,
-		CreatedBy:   userName,
-		UpdatedBy:   userName,
+		Tag:         steper.flow.Tag,
+		CreatedBy:   userId,
+		UpdatedBy:   userId,
 		Ctx:         et.Json{},
 		Ctxs:        make(map[int]et.Json),
 		Results:     make(map[int]*Result),
@@ -126,11 +126,12 @@ func (s *Instance) Serialize() ([]byte, error) {
 **/
 func (s *Instance) ToJson() et.Json {
 	result := et.Json{
-		"created_at":   s.CreatedAt,
-		"updated_at":   s.UpdatedAt,
+		"created_at":   timezone.Format(s.CreatedAt, timezone.RFC3339),
+		"updated_at":   timezone.Format(s.UpdatedAt, timezone.RFC3339),
+		"tenant_id":    s.TenantId,
+		"owner_id":     s.OwnerId,
 		"id":           s.ID,
 		"tag":          s.Tag,
-		"owner_id":     s.OwnerId,
 		"created_by":   s.CreatedBy,
 		"updated_by":   s.UpdatedBy,
 		"ctx":          s.Ctx,
@@ -174,7 +175,7 @@ func (s *Instance) save() error {
 	}
 
 	if s.workflow != nil && s.workflow.store != nil {
-		err := s.workflow.store.Set(s.ID, s.Tag, s.OwnerId, s)
+		err := s.workflow.store.Set(s.ID, s.Tag, s.TenantId, s.OwnerId, s, s.UpdatedBy)
 		if err != nil {
 			return err
 		}
@@ -215,21 +216,11 @@ func (s *Instance) up(flow *Flow) {
 }
 
 /**
-* setTag
-* @param key string, value interface{}
-* @return et.Json
-**/
-func (s *Instance) SetTag(key string, value interface{}) et.Json {
-	s.Tags[key] = value
-	return s.Tags
-}
-
-/**
-* putTag
+* SetTag
 * @param tags et.Json
 * @return et.Json
 **/
-func (s *Instance) putTag(tags et.Json) et.Json {
+func (s *Instance) SetTag(tags et.Json) et.Json {
 	maps.Copy(s.Tags, tags)
 	return s.Tags
 }
@@ -251,19 +242,10 @@ func (s *Instance) setTrace(step int, result et.Json, err error) error {
 
 /**
 * SetParam
-* @param key string, value interface{}
-**/
-func (s *Instance) SetParam(key string, value interface{}) et.Json {
-	s.Params[key] = value
-	return s.Params
-}
-
-/**
-* PutParam
 * @param value et.Json
 * @return et.Json
 **/
-func (s *Instance) PutParam(value et.Json) et.Json {
+func (s *Instance) SetParam(value et.Json) et.Json {
 	maps.Copy(s.Params, value)
 	return s.Params
 }
@@ -541,14 +523,30 @@ func (s *Instance) rollback() (et.Json, error) {
 **/
 func (s *Instance) startResilence() (et.Json, error) {
 	description := fmt.Sprintf("flow: %s,  %s", s.flow.Name, s.flow.Description)
-	s.Resilence = s.workflow.resilience.LoadInstance(s.ID, s.Tag, description, s.OwnerId, s.flow.TotalAttempts, s.flow.TimeAttempts, s.Tags, s.flow.Team, s.flow.Level, s.run, s.Ctx)
-	res, err := s.Resilence.Run()
+	s.Resilence = s.workflow.resilience.LoadInstance(resilience.Params{
+		TenantId:      s.TenantId,
+		Id:            s.ID,
+		Tag:           s.Tag,
+		Description:   description,
+		OwnerId:       s.OwnerId,
+		TotalAttempts: s.flow.TotalAttempts,
+		Interval:      s.flow.TimeAttempts,
+		Tags:          s.Tags,
+		Team:          s.flow.Team,
+		Level:         s.flow.Level,
+		UserId:        s.CreatedBy,
+		Fn:            s.run,
+		FnArgs:        []interface{}{s.Ctx},
+	})
+	res, err := s.Resilence.Run(s.UpdatedBy)
 	if err != nil {
 		return et.Json{}, err
 	}
+
 	if len(res) == 0 {
 		return et.Json{}, errors.New(MSG_RESILIENCE_NO_RESULT)
 	}
+	
 	result, ok := res[0].(et.Json)
 	if !ok {
 		return et.Json{}, errors.New(MSG_RESILIENCE_NO_RESULT)

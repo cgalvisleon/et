@@ -70,10 +70,10 @@ func (s *Steper) ToJson() et.Json {
 
 /**
 * Step
-* @param def Def
+* @param def StParams
 * @return *Step
 **/
-func (s *Steper) Step(def Def) *Step {
+func (s *Steper) Step(def StParams) *Step {
 	result := newStep(s.flow, def)
 	s.Steps = append(s.Steps, result.Index)
 	return result
@@ -111,6 +111,8 @@ func (s *Steper) GetStep(idx int) (*Step, bool) {
 }
 
 type Flow struct {
+	TenantId      string             `json:"tenant_id"`
+	OwnerId       string             `json:"owner_id"`
 	Tag           string             `json:"tag"`
 	Version       string             `json:"version"`
 	Name          string             `json:"name"`
@@ -123,17 +125,20 @@ type Flow struct {
 	Team          string             `json:"team"`
 	Level         string             `json:"level"`
 	CreatedBy     string             `json:"created_by"`
+	UpdatedBy     string             `json:"updated_by"`
 	workflow      *WorkFlow          `json:"-"`
 	isDebug       bool               `json:"-"`
 }
 
 /**
 * newFlow
-* @param tag, version, name, description string, username string
+* @param tenantId, ownerId, tag, version, name, description string, username string
 * @return *Flow
 **/
-func newFlow(tag, version, name, description string, username string) *Flow {
+func newFlow(tenantId, ownerId, tag, version, name, description string, username string) *Flow {
 	flow := &Flow{
+		TenantId:    tenantId,
+		OwnerId:     ownerId,
 		Tag:         tag,
 		Version:     version,
 		Name:        name,
@@ -155,6 +160,8 @@ func newFlow(tag, version, name, description string, username string) *Flow {
 **/
 func (s *Flow) ToJson() et.Json {
 	return et.Json{
+		"tenant_id":      s.TenantId,
+		"owner_id":       s.OwnerId,
 		"tag":            s.Tag,
 		"version":        s.Version,
 		"name":           s.Name,
@@ -174,14 +181,14 @@ func (s *Flow) ToJson() et.Json {
 * save
 * @return error
 **/
-func (s *Flow) save() error {
+func (s *Flow) save(userId string) error {
 	data := s.ToJson()
 	if s.isDebug {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
 	if s.workflow != nil && s.workflow.store != nil {
-		err := s.workflow.store.Set(s.Tag, "flow", "", s)
+		err := s.workflow.store.Set(s.Tag, "flow", s.TenantId, s.OwnerId, s, userId)
 		if err != nil {
 			return err
 		}
@@ -245,17 +252,17 @@ func (s *Flow) AddStep(step *Step) {
 
 /**
 * NewSteper
-* @param tag, name, description string
-* @return (*Steper, error)
+* @param tag, name, description, userId string
+* @return *Steper, error
 **/
-func (s *Flow) NewSteper(tag, name, description string) (*Steper, error) {
+func (s *Flow) NewSteper(tag, name, description, userId string) (*Steper, error) {
 	_, ok := s.Steper[tag]
 	if ok {
 		return nil, fmt.Errorf(MSG_STEPER_ALREADY_EXISTS, tag)
 	}
 
 	result := newSteper(s, tag, name, description)
-	return result, s.save()
+	return result, s.save(userId)
 }
 
 /**
@@ -274,10 +281,10 @@ func (s *Flow) GetSteper(tag string) (*Steper, error) {
 
 /**
 * SetSteper
-* @param tag, name, description string
+* @param tag, name, description, userId string
 * @return (*Steper, error)
 **/
-func (s *Flow) SetSteper(tag, name, description string) (*Steper, error) {
+func (s *Flow) SetSteper(tag, name, description, userId string) (*Steper, error) {
 	if tag == "" {
 		return nil, fmt.Errorf(MSG_INVALID_STEPER_TAG, tag)
 	}
@@ -289,15 +296,15 @@ func (s *Flow) SetSteper(tag, name, description string) (*Steper, error) {
 
 	steper.Name = name
 	steper.Description = description
-	return steper, s.save()
+	return steper, s.save(userId)
 }
 
 /**
 * NewStep
-* @param def Def
-* @return (*Step, error)
+* @param def StParams
+* @return *Step, error
 **/
-func (s *Flow) NewStep(def Def) (*Step, error) {
+func (s *Flow) NewStep(def StParams, userId string) (*Step, error) {
 	step := &Step{
 		Index:       len(s.Steps),
 		Name:        def.Name,
@@ -307,7 +314,7 @@ func (s *Flow) NewStep(def Def) (*Step, error) {
 		Stop:        def.Stop,
 	}
 	s.Steps = append(s.Steps, step)
-	return step, s.save()
+	return step, s.save(userId)
 }
 
 /**
@@ -315,7 +322,7 @@ func (s *Flow) NewStep(def Def) (*Step, error) {
 * @param index int, name, description, definition, undo string, stop bool
 * @return (*Step, error)
 **/
-func (s *Flow) SetStep(index int, name, description, definition, undo string, stop bool) (*Step, error) {
+func (s *Flow) SetStep(index int, name, description, definition, undo string, stop bool, userId string) (*Step, error) {
 	step := s.Steps[index]
 	if step == nil {
 		return nil, fmt.Errorf(MSG_STEP_NOT_FOUND)
@@ -326,15 +333,15 @@ func (s *Flow) SetStep(index int, name, description, definition, undo string, st
 	step.Definition = []byte(definition)
 	step.Undo = []byte(undo)
 	step.Stop = stop
-	return step, s.save()
+	return step, s.save(userId)
 }
 
 /**
 * Step
-* @param def Def
+* @param def StParams
 * @return *Steper
 **/
-func (s *Flow) Step(def Def) *Steper {
+func (s *Flow) Step(def StParams) *Steper {
 	result := newSteper(s, s.Tag, s.Name, s.Description)
 	result.Step(def)
 	return result

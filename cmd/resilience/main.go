@@ -15,12 +15,27 @@ import (
 * @return void
 **/
 func main() {
-	resilience, err := resilience.New(nil)
+	res, err := resilience.New(nil)
 	if err != nil {
 		logs.Panic(err)
 	}
-	ins := resilience.LoadInstance("", "suma", "func suma", "", 3, 3*time.Second, et.Json{}, "", "", suma, 1, 2)
-	ins.Run()
+
+	ins := res.LoadInstance(resilience.Params{
+		TenantId:      "1234567890",
+		Id:            "suma",
+		Tag:           "func suma",
+		Description:   "",
+		OwnerId:       "",
+		TotalAttempts: 3,
+		Interval:      3 * time.Second,
+		Tags:          et.Json{},
+		Team:          "",
+		Level:         "",
+		UserId:        "1234567890",
+		Fn:            suma,
+		FnArgs:        []interface{}{1, 2},
+	})
+	ins.Run("1234567890")
 
 	utility.AppWait()
 }

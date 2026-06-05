@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
@@ -93,16 +94,16 @@ type Server struct {
 * @param name string
 * @return (*Server, error)
 **/
-func New(name string, config *Config) (*Server, error) {
+func New(name string, cnf *Config) (*Server, error) {
 	now := timezone.Now()
 	host, _ := os.Hostname()
 	result := &Server{
 		CreatedAt:     now,
 		Name:          name,
 		Host:          host,
-		Port:          config.Port,
-		Addr:          fmt.Sprintf(":%d", config.Port),
-		Parent:        config.Parent,
+		Port:          cnf.Port,
+		Addr:          fmt.Sprintf(":%d", cnf.Port),
+		Parent:        cnf.Parent,
 		Solvers:       make(map[string]*Solver),
 		Packages:      make(map[string]*Package),
 		router:        make(map[string]*Router),
@@ -111,28 +112,28 @@ func New(name string, config *Config) (*Server, error) {
 		mux:           http.NewServeMux(),
 		middlewares:   make([]func(http.Handler) http.Handler, 0),
 		authenticator: middleware.Authenticate,
-		readTimeout:   config.ReadTimeout,
-		writeTimeout:  config.WriteTimeout,
-		idleTimeout:   config.IdleTimeout,
-		istls:         config.IsTLS,
-		certFile:      config.CertFile,
-		keyFile:       config.KeyFile,
-		useCache:      config.UseCache,
-		useEvent:      config.UseEvent,
-		debug:         config.Debug,
+		readTimeout:   cnf.ReadTimeout,
+		writeTimeout:  cnf.WriteTimeout,
+		idleTimeout:   cnf.IdleTimeout,
+		istls:         cnf.IsTLS,
+		certFile:      cnf.CertFile,
+		keyFile:       cnf.KeyFile,
+		useCache:      cnf.UseCache,
+		useEvent:      cnf.UseEvent,
+		debug:         cnf.Debug,
 	}
 
 	result.svr = &http.Server{
 		Addr:         result.Addr,
-		Handler:      CorsAllowAll(config.AllowOrigin).Handler(result.mux),
-		ReadTimeout:  config.ReadTimeout,
-		WriteTimeout: config.WriteTimeout,
-		IdleTimeout:  config.IdleTimeout,
+		Handler:      CorsAllowAll(cnf.AllowOrigin).Handler(result.mux),
+		ReadTimeout:  cnf.ReadTimeout,
+		WriteTimeout: cnf.WriteTimeout,
+		IdleTimeout:  cnf.IdleTimeout,
 	}
 
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: !config.IsTLS,
+			InsecureSkipVerify: !cnf.IsTLS,
 		},
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 100,
@@ -142,35 +143,35 @@ func New(name string, config *Config) (*Server, error) {
 		ForceAttemptHTTP2:   true,
 	}
 
-	if config.Transport != nil {
+	if cnf.Transport != nil {
 		transport = &http.Transport{
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: !config.IsTLS,
+				InsecureSkipVerify: !cnf.IsTLS,
 			},
-			MaxIdleConns:        config.Transport.MaxIdleConns,
-			MaxIdleConnsPerHost: config.Transport.MaxIdleConnsPerHost,
-			MaxConnsPerHost:     config.Transport.MaxConnsPerHost,
-			IdleConnTimeout:     time.Duration(config.Transport.IdleConnTimeout) * time.Second,
-			TLSHandshakeTimeout: time.Duration(config.Transport.TLSHandshakeTimeout) * time.Second,
-			ForceAttemptHTTP2:   config.Transport.ForceAttemptHTTP2,
+			MaxIdleConns:        cnf.Transport.MaxIdleConns,
+			MaxIdleConnsPerHost: cnf.Transport.MaxIdleConnsPerHost,
+			MaxConnsPerHost:     cnf.Transport.MaxConnsPerHost,
+			IdleConnTimeout:     time.Duration(cnf.Transport.IdleConnTimeout) * time.Second,
+			TLSHandshakeTimeout: time.Duration(cnf.Transport.TLSHandshakeTimeout) * time.Second,
+			ForceAttemptHTTP2:   cnf.Transport.ForceAttemptHTTP2,
 		}
 	}
 
 	result.client = &http.Client{
-		Timeout:   config.Timeout,
+		Timeout:   cnf.Timeout,
 		Transport: transport,
 	}
 
 	result.mux.HandleFunc("/", result.handler)
 
-	if config.UseCache {
-		if err := cache.Load(); err != nil {
+	if cnf.UseCache {
+		if err := cache.Load(config.CNF); err != nil {
 			return nil, err
 		}
 	}
 
-	if config.UseEvent {
-		if err := event.Load(); err != nil {
+	if cnf.UseEvent {
+		if err := event.Load(config.CNF); err != nil {
 			return nil, err
 		}
 	}

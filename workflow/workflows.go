@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
@@ -16,11 +18,11 @@ import (
 type WorkFlow struct {
 	Flows       map[string]*Flow       `json:"flows"`
 	Instances   map[string]*Instance   `json:"instances"`
-	Results     map[string]et.Json     `json:"results"`
 	muFlows     sync.Mutex             `json:"-"`
 	muInstances sync.Mutex             `json:"-"`
 	store       stores.Store           `json:"-"`
 	resilience  *resilience.Resilience `json:"-"`
+	metrics     cache.Metrics          `json:"-"`
 	isDebug     bool                   `json:"-"`
 }
 
@@ -32,11 +34,16 @@ var (
 
 /**
 * New
-* @param store jsql.Store
+* @param store stores.Store
 * @return (*WorkFlow, error)
 **/
 func New(store stores.Store) (*WorkFlow, error) {
-	err := event.Load()
+	err := cache.Load(config.CNF)
+	if err != nil {
+		return nil, err
+	}
+
+	err = event.Load(config.CNF)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +56,6 @@ func New(store stores.Store) (*WorkFlow, error) {
 	result := &WorkFlow{
 		Flows:       make(map[string]*Flow),
 		Instances:   make(map[string]*Instance),
-		Results:     make(map[string]et.Json),
 		muFlows:     sync.Mutex{},
 		muInstances: sync.Mutex{},
 		store:       store,
@@ -63,6 +69,7 @@ func New(store stores.Store) (*WorkFlow, error) {
 
 /**
 * Load
+* @param tenantId, ownerId string, store stores.Store
 * @return error
 **/
 func Load(store stores.Store) error {
@@ -172,12 +179,12 @@ func (s *WorkFlow) getInstance(id string) (*Instance, bool) {
 			return nil, false
 		}
 
-		flow, ok := s.getFlow(result.Tag)
-		if !ok {
-			return nil, false
-		}
-
 		if exists {
+			flow, ok := s.getFlow(result.Tag)
+			if !ok {
+				return nil, false
+			}
+
 			result.up(flow)
 			result.isDebug = s.isDebug
 			s.addInstance(result)
@@ -200,22 +207,11 @@ func (s *WorkFlow) removeInstance(id string) {
 }
 
 /**
-* CountInstances
-* @return int
-**/
-func (s *WorkFlow) CountInstances() int {
-	s.muInstances.Lock()
-	defer s.muInstances.Unlock()
-
-	return len(s.Instances)
-}
-
-/**
 * newInstance
-* @param tag, id, ownerId string, tags et.Json, step int, username string
+* @param tenantId, tag, id, ownerId string, tags et.Json, step int, userId string
 * @return *Instance, error
 **/
-func (s *WorkFlow) newInstance(tag, id, ownerId string, tags et.Json, step int, username string) (*Instance, error) {
+func (s *WorkFlow) newInstance(tenantId, tag, id, ownerId string, tags et.Json, step int, userId string) (*Instance, error) {
 	if id == "" {
 		return nil, fmt.Errorf(MSG_INSTANCE_ID_REQUIRED)
 	}
@@ -230,12 +226,23 @@ func (s *WorkFlow) newInstance(tag, id, ownerId string, tags et.Json, step int, 
 		return nil, fmt.Errorf(MSG_INVALID_STEPER_TAG, tag)
 	}
 
-	result := newInstance(steper, id, ownerId, username)
+	result := newInstance(steper, id, tenantId, ownerId, userId)
 	result.SetCurrentStep(step)
-	result.putTag(tags)
+	result.SetTag(tags)
 	s.addInstance(result)
 
 	return result, nil
+}
+
+/**
+* CountInstances
+* @return int
+**/
+func (s *WorkFlow) CountInstances() int {
+	s.muInstances.Lock()
+	defer s.muInstances.Unlock()
+
+	return len(s.Instances)
 }
 
 /**
@@ -257,7 +264,7 @@ func (s *WorkFlow) GetInstance(id string) (*Instance, error) {
 * @param id string
 * @return error
 **/
-func (s *WorkFlow) DeleteInstance(id string) error {
+func (s *WorkFlow) DeleteInstance(id, userId string) error {
 	instance, exists := s.getInstance(id)
 	if !exists {
 		return fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
@@ -274,22 +281,22 @@ func (s *WorkFlow) DeleteInstance(id string) error {
 
 /**
 * RunInstance
-* @param tag, id, ownerId string, step int, ctx, tags et.Json, username string
+* @param tag, id, ownerId string, step int, ctx, tags et.Json, userId string
 * @return et.Json, error
 **/
-func (s *WorkFlow) RunInstance(tag, id, ownerId string, step int, ctx, tags et.Json, username string) (et.Json, error) {
+func (s *WorkFlow) RunInstance(tenantId, tag, id, ownerId string, step int, ctx, tags et.Json, userId string) (et.Json, error) {
 	var err error
 	instance, exist := s.getInstance(id)
 	if !exist {
-		instance, err = s.newInstance(tag, id, ownerId, tags, step, username)
+		instance, err = s.newInstance(tenantId, tag, id, ownerId, tags, step, userId)
 		if err != nil {
 			return et.Json{}, err
 		}
 	} else {
-		instance.putTag(tags)
+		instance.SetTag(tags)
+		instance.UpdatedBy = userId
 	}
 
-	instance.UpdatedBy = username
 	instance.SetCurrentStep(step)
 	instance.Stop(false)
 	var result et.Json
@@ -308,16 +315,16 @@ func (s *WorkFlow) RunInstance(tag, id, ownerId string, step int, ctx, tags et.J
 
 /**
 * ResetInstance
-* @param id string, username string
+* @param id string
 * @return et.Json, error
 **/
-func (s *WorkFlow) ResetInstance(id, username string) (et.Json, error) {
+func (s *WorkFlow) ResetInstance(id, userId string) (et.Json, error) {
 	instance, exists := s.getInstance(id)
 	if !exists {
 		return et.Json{}, fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
 	}
 
-	instance.UpdatedBy = username
+	instance.UpdatedBy = userId
 	instance.SetCurrentStep(0)
 	instance.setStatus(PENDING)
 	return instance.ToJson(), nil
@@ -325,16 +332,16 @@ func (s *WorkFlow) ResetInstance(id, username string) (et.Json, error) {
 
 /**
 * RollbackInstance
-* @param id string, username string
+* @param id string, userId string
 * @return et.Json, error
 **/
-func (s *WorkFlow) RollbackInstance(id, username string) (et.Json, error) {
+func (s *WorkFlow) RollbackInstance(id, userId string) (et.Json, error) {
 	instance, exists := s.getInstance(id)
 	if !exists {
 		return et.Json{}, fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
 	}
 
-	instance.UpdatedBy = username
+	instance.UpdatedBy = userId
 	result, err := instance.rollback()
 	if err != nil {
 		return et.Json{}, err
@@ -345,16 +352,16 @@ func (s *WorkFlow) RollbackInstance(id, username string) (et.Json, error) {
 
 /**
 * StopInstance
-* @param instanceId string, username string
+* @param instanceId string, userId string
 * @return et.Json, error
 **/
-func (s *WorkFlow) StopInstance(instanceId, username string) (et.Json, error) {
+func (s *WorkFlow) StopInstance(instanceId, userId string) (et.Json, error) {
 	instance, exists := s.getInstance(instanceId)
 	if !exists {
 		return et.Json{}, fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
 	}
 
-	instance.UpdatedBy = username
+	instance.UpdatedBy = userId
 	err := instance.Stop(true)
 	if err != nil {
 		return et.Json{}, err
@@ -364,10 +371,10 @@ func (s *WorkFlow) StopInstance(instanceId, username string) (et.Json, error) {
 
 /**
 * StatusInstance
-* @param id, status, username string
+* @param id, status, userId string
 * @return et.Json, error
 **/
-func (s *WorkFlow) StatusInstance(id, status, username string) (et.Json, error) {
+func (s *WorkFlow) StatusInstance(id, status, userId string) (et.Json, error) {
 	if _, ok := FlowStatusList[Status(status)]; !ok {
 		return et.Json{}, fmt.Errorf(MSG_STATUS_INVALID, status)
 	}
@@ -377,23 +384,23 @@ func (s *WorkFlow) StatusInstance(id, status, username string) (et.Json, error) 
 		return et.Json{}, fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
 	}
 
-	instance.UpdatedBy = username
+	instance.UpdatedBy = userId
 	instance.SetStatus(Status(status))
 	return instance.ToJson(), nil
 }
 
 /**
 * NewFlow
-* @param tag, version, name, description, username string
+* @param params FParams
 * @return *Flow, error
 **/
-func (s *WorkFlow) NewFlow(tag, version, name, description, username string) (*Flow, error) {
+func (s *WorkFlow) NewFlow(tenantId, tag, ownerId, version, name, description, userId string) (*Flow, error) {
 	_, exists := s.getFlow(tag)
 	if exists {
 		return nil, errors.New(MSG_FLOW_ALREADY_EXISTS)
 	}
 
-	result := newFlow(tag, version, name, description, username)
+	result := newFlow(tenantId, tag, ownerId, version, name, description, userId)
 	s.addFlow(result)
 	return result, nil
 }
@@ -423,13 +430,13 @@ func (s *WorkFlow) DeleteFlow(tag string) error {
 * @param tag, name, description strin
 * @return et.Json, error
 **/
-func (s *WorkFlow) NewSteper(flowTag, tag, name, description string) (et.Json, error) {
+func (s *WorkFlow) NewSteper(flowTag, tag, name, description, userId string) (et.Json, error) {
 	flow, exists := s.getFlow(flowTag)
 	if !exists {
 		return et.Json{}, errors.New(MSG_FLOW_NOT_FOUND)
 	}
 
-	steper, err := flow.NewSteper(tag, name, description)
+	steper, err := flow.NewSteper(tag, name, description, userId)
 	if err != nil {
 		return et.Json{}, err
 	}
@@ -442,7 +449,7 @@ func (s *WorkFlow) NewSteper(flowTag, tag, name, description string) (et.Json, e
 * @param flowTag, tag, name, description string
 * @return et.Json, error
 **/
-func (s *WorkFlow) SetSteper(flowTag, tag, name, description string) (et.Json, error) {
+func (s *WorkFlow) SetSteper(flowTag, tag, name, description, userId string) (et.Json, error) {
 	flow, exists := s.getFlow(flowTag)
 	if !exists {
 		return et.Json{}, errors.New(MSG_FLOW_NOT_FOUND)
@@ -455,7 +462,8 @@ func (s *WorkFlow) SetSteper(flowTag, tag, name, description string) (et.Json, e
 
 	steper.Name = name
 	steper.Description = description
-	err := flow.save()
+	steper.flow.UpdatedBy = userId
+	err := flow.save(userId)
 	if err != nil {
 		return et.Json{}, err
 	}
@@ -467,7 +475,7 @@ func (s *WorkFlow) SetSteper(flowTag, tag, name, description string) (et.Json, e
 * @param flowTag, tag string
 * @return error
 **/
-func (s *WorkFlow) DeleteSteper(flowTag, tag string) error {
+func (s *WorkFlow) DeleteSteper(flowTag, tag, userId string) error {
 	flow, exists := s.getFlow(flowTag)
 	if !exists {
 		return errors.New(MSG_FLOW_NOT_FOUND)
@@ -479,7 +487,8 @@ func (s *WorkFlow) DeleteSteper(flowTag, tag string) error {
 	}
 
 	delete(flow.Steper, tag)
-	return flow.save()
+	flow.UpdatedBy = userId
+	return flow.save(userId)
 }
 
 /**
@@ -550,22 +559,22 @@ func (s *WorkFlow) MoveStepFromSteper(flowTag, tag string, index, to int) (et.Js
 
 /**
 * NewStep
-* @param flowTag, steperTag, name, description, definition, undo string, stop bool
+* @param flowTag, name, description, definition, undo string, stop bool, userId string
 * @return et.Json, error
 **/
-func (s *WorkFlow) NewStep(flowTag, name, description, definition, undo string, stop bool) (et.Json, error) {
+func (s *WorkFlow) NewStep(flowTag, name, description, definition, undo string, stop bool, userId string) (et.Json, error) {
 	flow, exists := s.getFlow(flowTag)
 	if !exists {
 		return et.Json{}, errors.New(MSG_FLOW_NOT_FOUND)
 	}
 
-	result, err := flow.NewStep(Def{
+	result, err := flow.NewStep(StParams{
 		Name:        name,
 		Description: description,
 		Definition:  definition,
 		Undo:        undo,
 		Stop:        stop,
-	})
+	}, userId)
 	if err != nil {
 		return et.Json{}, err
 	}
@@ -575,34 +584,39 @@ func (s *WorkFlow) NewStep(flowTag, name, description, definition, undo string, 
 
 /**
 * SetStep
-* @param flowTag, steperTag string, index int, name, description, definition, undo string, stop bool
+* @param flowTag, index int, name, description, definition, undo string, stop bool, userId string
 * @return et.Json, error
 **/
-func (s *WorkFlow) SetStep(flowTag string, index int, name, description, definition, undo string, stop bool) (et.Json, error) {
+func (s *WorkFlow) SetStep(flowTag string, index int, name, description, definition, undo string, stop bool, userId string) (et.Json, error) {
 	flow, exists := s.getFlow(flowTag)
 	if !exists {
 		return et.Json{}, errors.New(MSG_FLOW_NOT_FOUND)
 	}
 
-	step, err := flow.SetStep(index, name, description, definition, undo, stop)
+	_, err := flow.SetStep(index, name, description, definition, undo, stop, userId)
 	if err != nil {
 		return et.Json{}, err
 	}
 
-	return step.ToJson(), nil
+	return flow.ToJson(), nil
 }
 
 /**
 * DeleteStep
-* @param flowTag string, index int
+* @param flowTag string, index int, userId string
 * @return et.Json, error
 **/
-func (s *WorkFlow) DeleteStep(flowTag string, index int) (et.Json, error) {
+func (s *WorkFlow) DeleteStep(flowTag string, index int, userId string) (et.Json, error) {
 	flow, exists := s.getFlow(flowTag)
 	if !exists {
 		return et.Json{}, errors.New(MSG_FLOW_NOT_FOUND)
 	}
 
 	flow.Steps = append(flow.Steps[:index], flow.Steps[index+1:]...)
-	return et.Json{}, nil
+	flow.UpdatedBy = userId
+	err := flow.save(userId)
+	if err != nil {
+		return et.Json{}, err
+	}
+	return flow.ToJson(), nil
 }

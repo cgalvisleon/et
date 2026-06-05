@@ -48,7 +48,8 @@ func (s *Resilience) HttpState(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := body.Str("status")
-	err = instance.setStatus(Status(status))
+	userId := request.UserId(r)
+	err = instance.setStatus(Status(status), userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -97,7 +98,8 @@ func (s *Resilience) HttpSetInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = instance.save()
+	userId := request.UserId(r)
+	err = instance.save(userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return

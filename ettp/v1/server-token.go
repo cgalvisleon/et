@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/claim"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jwt"
@@ -26,7 +25,7 @@ func developToken() string {
 
 	device := "develop"
 	duration := 1 * time.Hour
-	token, err := claim.NewToken(device, device, device, device, et.Json{}, duration)
+	token, err := jwt.NewToken(device, device, device, device, "", jwt.PROFILE_DEVELOP, et.Json{}, duration)
 	if err != nil {
 		logs.Alert(err)
 		return ""

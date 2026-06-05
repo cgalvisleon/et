@@ -9,7 +9,6 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
@@ -17,7 +16,7 @@ import (
 
 type Store interface {
 	Get(tag, stage string, dest any) (bool, error)
-	Set(tag, stage, ownerId, tenantId string, obj any, userId string) error
+	Set(tag, stage, tenantId, ownerId string, obj any, userId string) error
 	Delete(tag, stage string) error
 	Query(query et.Json) (et.Items, error)
 }
@@ -37,7 +36,7 @@ type Config struct {
 
 var (
 	packageName = "config"
-	cnf         *Config
+	CNF         *Config
 )
 
 /**
@@ -47,7 +46,7 @@ var (
 **/
 func Load(tag, stage, tenantId, ownerId string, store Store) error {
 	var err error
-	cnf, err = New(tag, stage, tenantId, ownerId, store)
+	CNF, err = New(tag, stage, tenantId, ownerId, store)
 	if err != nil {
 		return err
 	}
@@ -101,7 +100,7 @@ func New(tag, stage, tenantId, ownerId string, store Store) (*Config, error) {
 			return new(), nil
 		}
 
-		bt, err := json.Marshal(cnf)
+		bt, err := json.Marshal(CNF)
 		if err != nil {
 			return nil, err
 		}
@@ -111,7 +110,7 @@ func New(tag, stage, tenantId, ownerId string, store Store) (*Config, error) {
 			return nil, err
 		}
 
-		return cnf, nil
+		return CNF, nil
 	}
 
 	return new(), nil
@@ -172,8 +171,6 @@ func (s *Config) save(userId string) error {
 		logs.Logf(packageName, "save: %s", data.ToString())
 	}
 
-	event.Publish(EVENT_CONFIG_SET, data)
-
 	if s.store != nil {
 		return s.store.Set(s.Tag, s.Stage, s.OwnerId, s.TenantId, s.Params, userId)
 	}
@@ -188,6 +185,16 @@ func (s *Config) save(userId string) error {
 **/
 func (s *Config) Set(param et.Json, userId string) error {
 	maps.Copy(s.Params, param)
+	return s.save(userId)
+}
+
+/**
+* Delete
+* @param key string, userId string
+* @return error
+**/
+func (s *Config) Delete(key string, userId string) error {
+	delete(s.Params, key)
 	return s.save(userId)
 }
 

@@ -16,10 +16,10 @@ import (
 * @return error
 **/
 func Set(param et.Json, userId string) error {
-	if cnf == nil {
+	if CNF == nil {
 		return errors.New(MSG_CONFIG_NOT_LOADED)
 	}
-	return cnf.Set(param, userId)
+	return CNF.Set(param, userId)
 }
 
 /**
@@ -28,10 +28,10 @@ func Set(param et.Json, userId string) error {
 * @return interface{}
 **/
 func Get(key string, def interface{}) interface{} {
-	if cnf == nil {
+	if CNF == nil {
 		return envar.Get(key, def)
 	}
-	return cnf.Get(key, def)
+	return CNF.Get(key, def)
 }
 
 /**
@@ -40,10 +40,10 @@ func Get(key string, def interface{}) interface{} {
 * @return string
 **/
 func GetStr(key string, def string) string {
-	if cnf == nil {
+	if CNF == nil {
 		return envar.GetStr(key, def)
 	}
-	return cnf.GetStr(key, def)
+	return CNF.GetStr(key, def)
 }
 
 /**
@@ -52,10 +52,10 @@ func GetStr(key string, def string) string {
 * @return int
 **/
 func GetInt(key string, def int) int {
-	if cnf == nil {
+	if CNF == nil {
 		return envar.GetInt(key, def)
 	}
-	return cnf.GetInt(key, def)
+	return CNF.GetInt(key, def)
 }
 
 /**
@@ -64,10 +64,10 @@ func GetInt(key string, def int) int {
 * @return int64
 **/
 func GetInt64(key string, def int64) int64 {
-	if cnf == nil {
+	if CNF == nil {
 		return envar.GetInt64(key, def)
 	}
-	return cnf.GetInt64(key, def)
+	return CNF.GetInt64(key, def)
 }
 
 /**
@@ -76,10 +76,10 @@ func GetInt64(key string, def int64) int64 {
 * @return float64
 **/
 func GetFloat(key string, def float64) float64 {
-	if cnf == nil {
+	if CNF == nil {
 		return envar.GetFloat(key, def)
 	}
-	return cnf.GetFloat(key, def)
+	return CNF.GetFloat(key, def)
 }
 
 /**
@@ -88,10 +88,10 @@ func GetFloat(key string, def float64) float64 {
 * @return bool
 **/
 func GetBool(key string, def bool) bool {
-	if cnf == nil {
+	if CNF == nil {
 		return envar.GetBool(key, def)
 	}
-	return cnf.GetBool(key, def)
+	return CNF.GetBool(key, def)
 }
 
 /**
@@ -100,7 +100,7 @@ func GetBool(key string, def bool) bool {
 * @return time.Time
 **/
 func GetTime(key string, def time.Time) time.Time {
-	if cnf == nil {
+	if CNF == nil {
 		result := envar.GetStr(key, timezone.Format(def, timezone.RFC3339))
 		val, err := timezone.Parse(timezone.RFC3339, result)
 		if err != nil {
@@ -108,7 +108,7 @@ func GetTime(key string, def time.Time) time.Time {
 		}
 		return val
 	}
-	return cnf.GetTime(key, def)
+	return CNF.GetTime(key, def)
 }
 
 /**
@@ -117,7 +117,7 @@ func GetTime(key string, def time.Time) time.Time {
 * @return et.Json
 **/
 func GetJson(key string, def et.Json) et.Json {
-	if cnf == nil {
+	if CNF == nil {
 		result := envar.GetStr(key, def.ToString())
 		var resultJson et.Json
 		err := json.Unmarshal([]byte(result), &resultJson)
@@ -126,5 +126,5 @@ func GetJson(key string, def et.Json) et.Json {
 		}
 		return resultJson
 	}
-	return cnf.GetJson(key, def)
+	return CNF.GetJson(key, def)
 }

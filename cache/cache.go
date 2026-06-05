@@ -7,18 +7,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/redis/go-redis/v9"
 )
 
-const packageName = "cache"
-
 var (
-	os     = ""
-	conn   *Conn
-	loadMu sync.Mutex
+	packageName = "cache"
+	os          = ""
+	conn        *Conn
 )
 
 func init() {
@@ -31,97 +31,78 @@ type Conn struct {
 	ctx      context.Context
 	host     string
 	dbname   int
+	config   *config.Config
 	channels map[string]*redis.PubSub
 	mutex    *sync.RWMutex
 }
 
 /**
-* FromId
-* @return string
-**/
-func FromId() string {
-	if conn == nil {
-		return ""
-	}
-
-	return conn.Id
-}
-
-/**
 * LoadTo: Initializes the Redis connection from a Config struct.
-* @param params utility.Config
+* @param cfg *config.Config
 * @return error
 **/
-func LoadTo(params utility.Config) error {
-	host := params.GetStr("REDIS_HOST", "")
-	password := params.GetStr("REDIS_PASSWORD", "")
-	dbname := params.GetInt("REDIS_DB", 0)
-
-	var err error
-	conn, err = connectTo(host, password, dbname)
-	return err
-}
-
-/**
-* Load
-* @return error
-**/
-func Load() error {
+func New(cfg *config.Config) (*Conn, error) {
 	if !slices.Contains([]string{"linux", "darwin", "windows"}, os) {
-		return nil
+		return nil, logs.Alertf(MSG_UNSUPPORTED_OS, os)
 	}
 
-	loadMu.Lock()
-	defer loadMu.Unlock()
-
-	if conn != nil {
-		return nil
+	host := envar.GetStr("REDIS_HOST", "")
+	password := envar.GetStr("REDIS_PASSWORD", "")
+	dbname := envar.GetInt("REDIS_DB", 0)
+	if cfg != nil {
+		host = cfg.GetStr("REDIS_HOST", "")
+		password = cfg.GetStr("REDIS_PASSWORD", "")
+		dbname = cfg.GetInt("REDIS_DB", 0)
 	}
 
-	params := utility.NewJConfig(et.Json{
-		"REDIS_HOST":     "",
-		"REDIS_PASSWORD": "",
-		"REDIS_DB":       0,
+	if !utility.ValidStr(host, 0, []string{}) {
+		return nil, logs.Alertf(msg.MSG_ATRIB_REQUIRED, "host")
+	}
+
+	client := redis.NewClient(&redis.Options{
+		Addr:            host,
+		Password:        password,
+		DB:              dbname,
+		MaxRetries:      1000,
+		MinRetryBackoff: 1 * time.Second,
+		MaxRetryBackoff: 2 * time.Second,
 	})
-	err := LoadTo(params)
+
+	ctx := context.Background()
+	_, err := client.Ping(ctx).Result()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	logs.Logf("Redis", "Connected host:%s", host)
+
+	return &Conn{
+		Client:   client,
+		Id:       utility.UUID(),
+		ctx:      ctx,
+		host:     host,
+		dbname:   dbname,
+		config:   cfg,
+		channels: make(map[string]*redis.PubSub),
+		mutex:    &sync.RWMutex{},
+	}, nil
 }
 
 /**
 * Close terminates the Redis connection.
 **/
-func Close() {
-	if conn == nil {
-		return
-	}
-
-	conn.Close()
+func (s *Conn) Close() {
+	s.Close()
 
 	logs.Log(packageName, `Disconnect...`)
-}
-
-/**
-* IsLoad
-* @return bool
-**/
-func IsLoad() bool {
-	return conn != nil
 }
 
 /**
 * HealthCheck
 * @return bool
 **/
-func HealthCheck() bool {
-	if conn == nil {
-		return false
-	}
-
-	ctx, cancel := context.WithTimeout(conn.ctx, 2*time.Second)
+func (s *Conn) HealthCheck() bool {
+	ctx, cancel := context.WithTimeout(s.ctx, 2*time.Second)
 	defer cancel()
 
 	return conn.Ping(ctx).Err() == nil

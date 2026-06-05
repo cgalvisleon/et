@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/claim"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
@@ -16,6 +15,7 @@ import (
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/router"
+	"github.com/cgalvisleon/et/timezone"
 )
 
 /**
@@ -59,7 +59,7 @@ func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 	web := envar.GetStr("WEB", "")
 	help := envar.GetStr("HELP", "")
 	result := et.Json{
-		"created_at": s.CreatedAt.Format("02/01/2006 3:04:05 PM"),
+		"created_at": timezone.Format(s.CreatedAt, timezone.RFC3339),
 		"version":    s.Version,
 		"service":    s.Name,
 		"host":       s.Host,
@@ -106,7 +106,7 @@ func (s *Server) handlerDevToken(w http.ResponseWriter, r *http.Request) {
 
 		device := "develop"
 		duration := 1 * time.Hour
-		token, err := claim.NewToken(device, device, device, device, et.Json{}, duration)
+		token, err := jwt.NewToken(device, device, device, device, "", jwt.PROFILE_DEVELOP, et.Json{}, duration)
 		if err != nil {
 			logs.Alert(err)
 			return ""
@@ -202,9 +202,9 @@ func (s *Server) upsetRouter(w http.ResponseWriter, r *http.Request) {
 		router, err := s.SetRouter(method, path, resolve, tpHeader, header, excludeHeader, version, packageName, true)
 		if err != nil {
 			failed = append(failed, et.Json{
-				"method":  method,
-				"path":    path,
-				"error":   err.Error(),
+				"method": method,
+				"path":   path,
+				"error":  err.Error(),
 			})
 			continue
 		}

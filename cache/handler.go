@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
@@ -18,11 +19,72 @@ import (
 const IsNil = redis.Nil
 
 /**
-* SetDuration
+* Load
+* @param cfg *config.Config
+* @return error
+**/
+func Load(cfg *config.Config) error {
+	if conn != nil {
+		return nil
+	}
+
+	var err error
+	conn, err = New(cfg)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+/**
+* FromId
+* @return string
+**/
+func FromId() string {
+	if conn == nil {
+		return ""
+	}
+
+	return conn.Id
+}
+
+/**
+* IsLoad
+* @return bool
+**/
+func IsLoad() bool {
+	return conn != nil
+}
+
+/**
+* Close terminates the Redis connection.
+**/
+func Close() {
+	if conn == nil {
+		return
+	}
+
+	conn.Close()
+}
+
+/**
+* HealthCheck
+* @return bool
+**/
+func HealthCheck() bool {
+	if conn == nil {
+		return false
+	}
+
+	return conn.HealthCheck()
+}
+
+/**
+* SetWithDuration
 * @params key string, val interface{}, expMilisecond int64
 * @return interface{}
 **/
-func SetDuration(key string, val interface{}, expiration time.Duration) interface{} {
+func SetWithDuration(key string, val interface{}, expiration time.Duration) interface{} {
 	if conn == nil {
 		return val
 	}
@@ -114,7 +176,7 @@ func Set(key string, val interface{}, expiration time.Duration) interface{} {
 		return val
 	}
 
-	return SetDuration(key, val, expiration)
+	return SetWithDuration(key, val, expiration)
 }
 
 /**

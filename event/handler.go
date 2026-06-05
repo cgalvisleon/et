@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
@@ -26,6 +27,53 @@ const (
 	EVENT_WORK                    = "event:work"
 	EVENT_WORK_STATE              = "event:work:state"
 )
+
+/**
+* Load
+* @return error
+**/
+func Load(cfg *config.Config) error {
+	if conn != nil {
+		return nil
+	}
+
+	var err error
+	conn, err = New(cfg)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/**
+* Close
+**/
+func Close() {
+	if conn != nil {
+		conn.Close()
+	}
+}
+
+/**
+* IsLoad
+* @return bool
+**/
+func IsLoad() bool {
+	return conn != nil
+}
+
+/**
+* HealthCheck
+* @return bool
+**/
+func HealthCheck() bool {
+	if conn == nil {
+		return false
+	}
+
+	return conn.HealthCheck()
+}
 
 /**
 * publish
@@ -106,7 +154,7 @@ func Subscribe(channel string, f func(Message)) (err error) {
 		func(m *nats.Msg) {
 			defer func() {
 				if r := recover(); r != nil {
-					logs.Errorf("panic in Subscribe channel:%s err:%v", channel, r)
+					logs.Errorf(MSG_PANIC_IN_SUBSCRIBE, channel, r)
 				}
 			}()
 

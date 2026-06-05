@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
@@ -20,6 +22,7 @@ type Resilience struct {
 	instances map[string]*Instance `json:"-"`
 	mu        sync.Mutex           `json:"-"`
 	store     stores.Store         `json:"-"`
+	metrics   cache.Metrics        `json:"-"`
 	isDebug   bool                 `json:"-"`
 }
 
@@ -29,7 +32,7 @@ type Resilience struct {
 * @return *Resilience, error
 **/
 func New(store stores.Store) (*Resilience, error) {
-	err := event.Load()
+	err := event.Load(config.CNF)
 	if err != nil {
 		logs.Logf(packageName, MSG_EVENT_NOT_LOADED, err)
 	}
@@ -96,18 +99,20 @@ func (s *Resilience) CountInstances() int {
 * @param id, tag, description string, totalAttempts int, interval time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}
 * @return Instance
 **/
-func (s *Resilience) newInstance(id, tag, description, ownerId string, totalAttempts int, interval time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
+func (s *Resilience) newInstance(tenantId, id, tag, description, ownerId string, totalAttempts int, interval time.Duration, tags et.Json, team string, level, userId string, fn interface{}, fnArgs ...interface{}) *Instance {
 	if id == "" {
 		id = reg.ULID()
 	}
 	if ownerId == "" {
 		ownerId = id
 	}
+
 	result := &Instance{
 		CreatedAt:     time.Now(),
 		ID:            id,
-		Tag:           tag,
+		TenantId:      tenantId,
 		OwnerId:       ownerId,
+		Tag:           tag,
 		Description:   description,
 		fn:            fn,
 		fnArgs:        fnArgs,
@@ -120,7 +125,7 @@ func (s *Resilience) newInstance(id, tag, description, ownerId string, totalAtte
 		Result:        make([]any, 0),
 		stop:          false,
 	}
-	result.setStatus(PENDING)
+	result.setStatus(PENDING, userId)
 	s.addInstance(result)
 
 	return result
@@ -164,24 +169,40 @@ func (s *Resilience) GetInstance(id string) (*Instance, bool) {
 	return nil, false
 }
 
+type Params struct {
+	TenantId      string
+	Id            string
+	Tag           string
+	Description   string
+	OwnerId       string
+	TotalAttempts int
+	Interval      time.Duration
+	Tags          et.Json
+	Team          string
+	Level         string
+	UserId        string
+	Fn            interface{}
+	FnArgs        []interface{}
+}
+
 /**
 * RunInstance
-* @param id, tag, description string, totalAttempts int, interval time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}
+* @param tenantId, id, tag, description string, totalAttempts int, interval time.Duration, tags et.Json, team, level, userId string, fn interface{}, fnArgs ...interface{}
 * @return *Instance
 **/
-func (s *Resilience) LoadInstance(id, tag, description, ownerId string, totalAttempts int, interval time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}) *Instance {
-	if totalAttempts <= 0 {
-		totalAttempts = 3
+func (s *Resilience) LoadInstance(params Params) *Instance {
+	if params.TotalAttempts <= 0 {
+		params.TotalAttempts = 3
 	}
 
-	if interval <= 0 {
-		interval = 30 * time.Second
+	if params.Interval <= 0 {
+		params.Interval = 30 * time.Second
 	}
 
-	id = reg.GetULID(id)
-	result, exist := s.GetInstance(id)
+	params.Id = reg.GetULID(params.Id)
+	result, exist := s.GetInstance(params.Id)
 	if !exist {
-		result = s.newInstance(id, tag, description, ownerId, totalAttempts, interval, tags, team, level, fn, fnArgs...)
+		result = s.newInstance(params.TenantId, params.Id, params.Tag, params.Description, params.OwnerId, params.TotalAttempts, params.Interval, params.Tags, params.Team, params.Level, params.UserId, params.Fn, params.FnArgs...)
 	}
 
 	return result
@@ -192,13 +213,13 @@ func (s *Resilience) LoadInstance(id, tag, description, ownerId string, totalAtt
 * @param id string
 * @return error
 **/
-func (s *Resilience) Stop(id string) error {
+func (s *Resilience) Stop(id, userId string) error {
 	result, exist := s.GetInstance(id)
 	if !exist {
 		return fmt.Errorf(MSG_ID_NOT_FOUND)
 	}
 
-	result.setStop()
+	result.setStop(userId)
 
 	return nil
 }
@@ -208,13 +229,13 @@ func (s *Resilience) Stop(id string) error {
 * @param id string
 * @return error
 **/
-func (s *Resilience) Restart(id string) error {
+func (s *Resilience) Restart(id, userId string) error {
 	result, exist := s.GetInstance(id)
 	if !exist {
 		return fmt.Errorf(MSG_ID_NOT_FOUND)
 	}
 
-	result.setRestart()
+	result.setRestart(userId)
 
 	return nil
 }

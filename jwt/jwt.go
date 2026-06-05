@@ -11,6 +11,13 @@ import (
 	"github.com/cgalvisleon/et/msg"
 )
 
+const (
+	PROFILE_ADMIN   = "admin"
+	PROFILE_APP     = "app"
+	PROFILE_DEVELOP = "develop"
+	PROFILE_SUPORT  = "suport"
+)
+
 /**
 * GetTokenKey
 * @param app, device, username string
@@ -21,22 +28,22 @@ func GetKey(app, device, username string) string {
 }
 
 /**
-* New
+* NewToken
 * @param app, device, userId, username string, payload et.Json, duration time.Duration
 * @return string, error
 **/
-func New(app, device, userId, username string, payload et.Json, duration time.Duration) (string, error) {
+func NewToken(app, device, userId, username, tenantId, profileId string, payload et.Json, duration time.Duration) (string, error) {
 	if !cache.IsLoad() {
 		return "", errors.New(msg.MSG_CACHE_NOT_LOAD)
 	}
 
-	result, err := claim.NewToken(app, device, userId, username, payload, duration)
+	result, err := claim.NewToken(app, device, userId, username, tenantId, profileId, payload, duration)
 	if err != nil {
 		return "", err
 	}
 
 	key := GetKey(app, device, username)
-	cache.SetDuration(key, result, duration)
+	cache.SetWithDuration(key, result, duration)
 
 	return result, nil
 }
@@ -57,15 +64,15 @@ func NewAuthentication(app, device, userId, username string, duration time.Durat
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "username")
 	}
 
-	return New(app, device, userId, username, et.Json{}, duration)
+	return NewToken(app, device, userId, username, "", "", et.Json{}, duration)
 }
 
 /**
 * NewAuthorization
-* @param app, device, userId, username, tenantId, profileTp string, duration time.Duration
+* @param app, device, userId, username, tenantId, profileId string, duration time.Duration
 * @return string, error
 **/
-func NewAuthorization(app, device, userId, username, tenantId, profileTp string, duration time.Duration) (string, error) {
+func NewAuthorization(app, device, userId, username, tenantId, profileId string, duration time.Duration) (string, error) {
 	if app == "" {
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "app")
 	}
@@ -78,14 +85,11 @@ func NewAuthorization(app, device, userId, username, tenantId, profileTp string,
 	if tenantId == "" {
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "tenantId")
 	}
-	if profileTp == "" {
-		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "profileTp")
+	if profileId == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "profileId")
 	}
 
-	return New(app, device, userId, username, et.Json{
-		"tenant_id":  tenantId,
-		"profile_tp": profileTp,
-	}, duration)
+	return NewToken(app, device, userId, username, tenantId, profileId, et.Json{}, duration)
 }
 
 /**
@@ -101,15 +105,15 @@ func NewAppToken(app, device string, duration time.Duration) (string, error) {
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "device")
 	}
 
-	return New(app, device, app, app, et.Json{}, duration)
+	return NewToken(app, device, app, app, "", "", et.Json{}, duration)
 }
 
 /**
 * NewEphemeralToken
-* @param app, device, userId, username string, payload et.Json, duration time.Duration
+* @param app, device, userId, username, tenantId, profileId string, payload et.Json
 * @return string, error
 **/
-func NewEphemeralToken(app, device, userId, username string, payload et.Json, duration time.Duration) (string, error) {
+func NewEphemeralToken(app, device, userId, username, tenantId, profileId string, payload et.Json, duration time.Duration) (string, error) {
 	if app == "" {
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "app")
 	}
@@ -119,11 +123,13 @@ func NewEphemeralToken(app, device, userId, username string, payload et.Json, du
 	if username == "" {
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "username")
 	}
-	if duration <= 0 {
-		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "duration")
+
+	maxDuration := 15 * time.Minute
+	if duration > maxDuration {
+		duration = maxDuration
 	}
 
-	return New(app, device, userId, username, payload, duration)
+	return NewToken(app, device, userId, username, tenantId, profileId, payload, duration)
 }
 
 /**
@@ -169,19 +175,18 @@ func DeleteTokeByToken(token string) error {
 
 /**
 * Validate
-* @param token string
+* @param ctx context.Context, token string
 * @return *Claim, error
 **/
 func Validate(token string) (*claim.Claim, error) {
-	result, err := claim.ParceToken(token)
+	clm, err := claim.ParceToken(token)
 	if err != nil {
 		return nil, err
 	}
 
-	app := result.App
-	device := result.Device
-	username := result.Username
-
+	app := clm.App
+	device := clm.Device
+	username := clm.Username
 	key := GetKey(app, device, username)
 	val, err := cache.Get(key, "")
 	if err != nil {
@@ -193,7 +198,7 @@ func Validate(token string) (*claim.Claim, error) {
 		return nil, err
 	}
 
-	return result, nil
+	return clm, nil
 }
 
 /**
@@ -211,4 +216,27 @@ func SetToken(app, device, username, token string, duration time.Duration) error
 	cache.Set(key, token, duration)
 
 	return nil
+}
+
+/**
+* RenewToken
+* @param token string, duration time.Duration
+* @return string, error
+**/
+func RenewToken(token string, duration time.Duration) (string, error) {
+	clm, err := Validate(token)
+	if err != nil {
+		return "", err
+	}
+
+	app := clm.App
+	device := clm.Device
+	username := clm.Username
+	key := GetKey(app, device, username)
+	result, err := NewToken(app, device, clm.UserId, username, clm.TenantId, clm.ProfileId, clm.Payload, duration)
+	if err != nil {
+		return "", err
+	}
+	cache.Set(key, result, duration)
+	return result, nil
 }

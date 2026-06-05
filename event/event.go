@@ -5,12 +5,23 @@ import (
 	"runtime"
 	"slices"
 	"sync"
+	"time"
 
+	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/nats-io/nats.go"
 )
+
+type Conn struct {
+	*nats.Conn
+	id     string
+	events map[string]*nats.Subscription
+	mutex  *sync.RWMutex
+}
 
 /**
 * asyncMsg holds a channel name and payload for non-blocking publish operations.
@@ -24,12 +35,10 @@ type asyncMsg struct {
 const asyncPublishBufSize = 256
 
 var (
-	packageName = "event"
-	conn        *Conn
-	oS          = ""
-	hostName    string
-	loadMu      sync.Mutex
-	// asyncPublishCh is consumed by a single background worker started in init().
+	packageName    = "event"
+	conn           *Conn
+	oS             = ""
+	hostName       string
 	asyncPublishCh = make(chan asyncMsg, asyncPublishBufSize)
 )
 
@@ -43,90 +52,72 @@ func init() {
 	}()
 }
 
-type Conn struct {
-	*nats.Conn
-	id     string
-	events map[string]*nats.Subscription
-	mutex  *sync.RWMutex
-}
-
 /**
 * LoadTo loads the event connection from a Config struct.
-* @param params utility.Config
+* @param cfg *config.Config
 * @return error
 **/
-func LoadTo(params utility.Config) error {
-	host := params.GetStr("NATS_HOST", "")
-	user := params.GetStr("NATS_USER", "")
-	password := params.GetStr("NATS_PASSWORD", "")
-
-	var err error
-	conn, err = connectTo(host, user, password)
-	return err
-}
-
-/**
-* Load
-* @return error
-**/
-func Load() error {
+func New(cfg *config.Config) (*Conn, error) {
 	if !slices.Contains([]string{"linux", "darwin", "windows"}, oS) {
-		return nil
+		return nil, logs.Alertf(MSG_UNSUPPORTED_OS, oS)
 	}
 
-	loadMu.Lock()
-	defer loadMu.Unlock()
-
-	if conn != nil {
-		return nil
+	host := envar.GetStr("NATS_HOST", "")
+	user := envar.GetStr("NATS_USER", "")
+	password := envar.GetStr("NATS_PASSWORD", "")
+	if cfg != nil {
+		host = cfg.GetStr("NATS_HOST", "")
+		user = cfg.GetStr("NATS_USER", "")
+		password = cfg.GetStr("NATS_PASSWORD", "")
 	}
 
-	params := utility.NewJConfig(et.Json{
-		"NATS_HOST":     "",
-		"NATS_USER":     "",
-		"NATS_PASSWORD": "",
-	})
-	err := LoadTo(params)
+	if !utility.ValidStr(host, 0, []string{}) {
+		return nil, logs.Alertf(msg.MSG_ATRIB_REQUIRED, "host")
+	}
+
+	opts := []nats.Option{
+		nats.UserInfo(user, password),
+		nats.ReconnectWait(2 * time.Second),
+		nats.MaxReconnects(-1),
+		nats.ReconnectHandler(func(nc *nats.Conn) {
+			logs.Logf(packageName, `Reconnected host:%s`, host)
+		}),
+		nats.ClosedHandler(func(nc *nats.Conn) {
+			logs.Logf(packageName, `Closed host:%s`, host)
+		}),
+	}
+	client, err := nats.Connect(host, opts...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	logs.Logf(packageName, `Connected host:%s`, host)
+
+	return &Conn{
+		id:     utility.UUID(),
+		Conn:   client,
+		events: map[string]*nats.Subscription{},
+		mutex:  &sync.RWMutex{},
+	}, nil
 }
 
 /**
 * Close unsubscribes all active subscriptions and closes the NATS connection.
 **/
-func Close() {
-	if conn == nil {
-		return
-	}
-
-	for _, sub := range conn.events {
+func (s *Conn) Close() {
+	for _, sub := range s.events {
 		sub.Unsubscribe()
 	}
 
-	conn.Close()
+	s.Close()
 
 	logs.Log(packageName, `Disconnect...`)
-}
-
-/**
-* IsLoad
-* @return bool
-**/
-func IsLoad() bool {
-	return conn != nil
 }
 
 /**
 * HealthCheck
 * @return bool
 **/
-func HealthCheck() bool {
-	if conn == nil {
-		return false
-	}
-
-	return conn.IsConnected()
+func (s *Conn) HealthCheck() bool {
+	return s.IsConnected()
 }

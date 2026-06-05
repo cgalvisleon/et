@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -85,15 +86,15 @@ type Server struct {
 	debug           bool                              `json:"-"`
 }
 
-func New(config Config) (*Server, error) {
+func New(cnf *Config) (*Server, error) {
 	/* Cache */
-	err := cache.Load()
+	err := cache.Load(config.CNF)
 	if err != nil {
 		return nil, err
 	}
 
 	/* Event */
-	err = event.Load()
+	err = event.Load(config.CNF)
 	if err != nil {
 		return nil, err
 	}
@@ -105,16 +106,16 @@ func New(config Config) (*Server, error) {
 	srv := &Server{
 		CreatedAt:       timezone.Now(),
 		Id:              utility.UUID(),
-		Name:            config.Name,
+		Name:            cnf.Name,
 		Version:         version,
-		Company:         config.Company,
-		Web:             config.Web,
-		Help:            config.Help,
+		Company:         cnf.Company,
+		Web:             cnf.Web,
+		Help:            cnf.Help,
 		HostName:        hostName,
-		addr:            fmt.Sprintf(":%d", config.Port),
+		addr:            fmt.Sprintf(":%d", cnf.Port),
 		mux:             mux,
-		pathApi:         config.PathApi,
-		pathApp:         config.PathApp,
+		pathApi:         cnf.PathApi,
+		pathApp:         cnf.PathApp,
 		cors:            CorsAllowAll([]string{}),
 		notFoundHandler: notFoundHandler,
 		middlewares:     make([]func(http.Handler) http.Handler, 0),
@@ -123,14 +124,14 @@ func New(config Config) (*Server, error) {
 		packages:        []*Package{},
 		handlers:        make(map[string]*ApiFunc),
 		proxys:          make(map[string]*Proxy),
-		readTimeout:     config.ReadTimeout,
-		writeTimeout:    config.WriteTimeout,
-		idleTimeout:     config.IdleTimeout,
-		isTls:           config.IsTLS,
-		certFile:        config.CertFile,
-		keyFile:         config.KeyFile,
-		storageKey:      fmt.Sprintf("%s-%s", config.Name, version),
-		debug:           config.Debug,
+		readTimeout:     cnf.ReadTimeout,
+		writeTimeout:    cnf.WriteTimeout,
+		idleTimeout:     cnf.IdleTimeout,
+		isTls:           cnf.IsTLS,
+		certFile:        cnf.CertFile,
+		keyFile:         cnf.KeyFile,
+		storageKey:      fmt.Sprintf("%s-%s", cnf.Name, version),
+		debug:           cnf.Debug,
 	}
 
 	srv.svr = &http.Server{
@@ -143,7 +144,7 @@ func New(config Config) (*Server, error) {
 
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: !config.IsTLS,
+			InsecureSkipVerify: !cnf.IsTLS,
 		},
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 100,
@@ -153,22 +154,22 @@ func New(config Config) (*Server, error) {
 		ForceAttemptHTTP2:   true,
 	}
 
-	if config.Transport != nil {
+	if cnf.Transport != nil {
 		transport = &http.Transport{
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: !config.IsTLS,
+				InsecureSkipVerify: !cnf.IsTLS,
 			},
-			MaxIdleConns:        config.Transport.MaxIdleConns,
-			MaxIdleConnsPerHost: config.Transport.MaxIdleConnsPerHost,
-			MaxConnsPerHost:     config.Transport.MaxConnsPerHost,
-			IdleConnTimeout:     time.Duration(config.Transport.IdleConnTimeout) * time.Second,
-			TLSHandshakeTimeout: time.Duration(config.Transport.TLSHandshakeTimeout) * time.Second,
-			ForceAttemptHTTP2:   config.Transport.ForceAttemptHTTP2,
+			MaxIdleConns:        cnf.Transport.MaxIdleConns,
+			MaxIdleConnsPerHost: cnf.Transport.MaxIdleConnsPerHost,
+			MaxConnsPerHost:     cnf.Transport.MaxConnsPerHost,
+			IdleConnTimeout:     time.Duration(cnf.Transport.IdleConnTimeout) * time.Second,
+			TLSHandshakeTimeout: time.Duration(cnf.Transport.TLSHandshakeTimeout) * time.Second,
+			ForceAttemptHTTP2:   cnf.Transport.ForceAttemptHTTP2,
 		}
 	}
 
 	srv.client = &http.Client{
-		Timeout:   config.Timeout,
+		Timeout:   cnf.Timeout,
 		Transport: transport,
 	}
 

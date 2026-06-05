@@ -15,7 +15,7 @@ type Condition struct {
 	NoTo       int    `json:"no_to"`
 }
 
-type Def struct {
+type StParams struct {
 	Name        string    `json:"-"`
 	Description string    `json:"-"`
 	Definition  string    `json:"-"`
@@ -44,10 +44,10 @@ type Step struct {
 
 /**
 * newStep
-* @param flow *Flow, def Def
+* @param flow *Flow, def StParams
 * @return *Step
 **/
-func newStep(flow *Flow, def Def) *Step {
+func newStep(flow *Flow, def StParams) *Step {
 	result := &Step{
 		Name:        def.Name,
 		Description: def.Description,
@@ -86,20 +86,16 @@ func (s *Step) ToJson() et.Json {
 
 /**
 * Set
-* @param def Def
+* @param def StParams
 * @return (*Step, error)
 **/
-func (s Step) Set(def Def) (*Step, error) {
+func (s *Step) Set(def StParams) *Step {
 	s.Name = def.Name
 	s.Description = def.Description
 	s.Stop = def.Stop
 	s.Definition = []byte(def.Definition)
 	s.fn = def.Fn
-	err := s.flow.save()
-	if err != nil {
-		return nil, err
-	}
-	return &s, nil
+	return s
 }
 
 /**
@@ -111,6 +107,17 @@ func (s *Step) Rollback(def RefRollback) *Step {
 	s.fnUndo = def.Fn
 	s.Undo = []byte(def.Definition)
 	return s
+}
+
+/**
+* loadVm
+* @params ctx et.Json
+* @return *vm.VM
+**/
+func (s *Step) loadVm(ctx et.Json) *vm.VM {
+	s.vm = vm.New(s.Name)
+	s.vm.SetCtx(ctx)
+	return s.vm
 }
 
 /**
@@ -129,8 +136,7 @@ func (s *Step) Run(flow *Instance, ctx et.Json) (et.Json, error) {
 	if s.fn != nil {
 		result, err = s.fn(flow, ctx)
 	} else {
-		s.vm = vm.New(s.Name)
-		s.vm.SetCtx(ctx)
+		s.vm = s.loadVm(ctx)
 		_, err = s.vm.RunByBt(s.Definition)
 		if err != nil {
 			return nil, err
@@ -156,8 +162,7 @@ func (s *Step) RunRollback(flow *Instance, ctx et.Json) (et.Json, error) {
 	if s.fnUndo != nil {
 		result, err = s.fnUndo(flow, ctx)
 	} else {
-		s.vm = vm.New(s.Name)
-		s.vm.SetCtx(ctx)
+		s.vm = s.loadVm(ctx)
 		_, err = s.vm.RunByBt(s.Undo)
 		if err != nil {
 			return nil, err

@@ -6,20 +6,30 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/router"
 )
 
-func (s *Ia) LoadRouter(r router.Router) {
-	r.Protect(router.Get, "/agents/{tag}", s.HttpGetAgent)
-	r.Protect(router.Post, "/agents", s.HttpNewAgent)
-	r.Protect(router.Delete, "/agents/{tag}", s.HttpDeleteAgent)
-	r.Protect(router.Put, "/agents/{tag}", s.HttpSetAgent)
-	r.Protect(router.Post, "/conversation", s.HttpConversation)
-	r.Protect(router.Delete, "/conversations/{to}", s.HttpDeleteConversation)
-	r.Protect(router.Get, "/participants/{to}", s.HttpGetParticipant)
-	r.Protect(router.Post, "/participants", s.HttpNewParticipant)
-	r.Protect(router.Delete, "/participants/{to}", s.HttpDeleteParticipant)
-	r.Protect(router.Put, "/participants/{to}", s.HttpSetParticipant)
+const (
+	GET    = "GET"
+	POST   = "POST"
+	PUT    = "PUT"
+	DELETE = "DELETE"
+)
+
+type Router interface {
+	Protect(method, path string, handler func(http.ResponseWriter, *http.Request))
+}
+
+func (s *Ia) LoadRouter(r Router) {
+	r.Protect(GET, "/agents/{tag}", s.HttpGetAgent)
+	r.Protect(POST, "/agents", s.HttpNewAgent)
+	r.Protect(DELETE, "/agents/{tag}", s.HttpDeleteAgent)
+	r.Protect(PUT, "/agents/{tag}", s.HttpSetAgent)
+	r.Protect(POST, "/conversation", s.HttpConversation)
+	r.Protect(DELETE, "/conversations/{to}", s.HttpDeleteConversation)
+	r.Protect(GET, "/participants/{to}", s.HttpGetParticipant)
+	r.Protect(POST, "/participants", s.HttpNewParticipant)
+	r.Protect(DELETE, "/participants/{to}", s.HttpDeleteParticipant)
+	r.Protect(PUT, "/participants/{to}", s.HttpSetParticipant)
 }
 
 /**

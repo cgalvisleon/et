@@ -2,13 +2,10 @@ package event
 
 import (
 	"errors"
-	"net/http"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/request"
-	"github.com/cgalvisleon/et/response"
 	"github.com/nats-io/nats.go"
 )
 
@@ -281,26 +278,4 @@ func Error(event string, err error) error {
 	default:
 	}
 	return err
-}
-
-/**
-* HttpEventPublish
-* @param w http.ResponseWriter, r *http.Request
-**/
-func HttpEventPublish(w http.ResponseWriter, r *http.Request) {
-	body, _ := request.GetBody(r)
-	channel := body.Str("channel")
-	data := body.Json("data")
-	err := Publish(channel, data)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	response.JSON(w, r, http.StatusOK, et.Item{
-		Ok: err == nil,
-		Result: et.Json{
-			"message": "Event published",
-		},
-	})
 }

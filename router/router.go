@@ -18,13 +18,13 @@ type Router interface {
 }
 
 const (
-	Get         = "GET"
-	Post        = "POST"
-	Put         = "PUT"
-	Patch       = "PATCH"
-	Delete      = "DELETE"
-	Head        = "HEAD"
-	Options     = "OPTIONS"
+	GET         = "GET"
+	POST        = "POST"
+	PUT         = "PUT"
+	PATCH       = "PATCH"
+	DELETE      = "DELETE"
+	HEAD        = "HEAD"
+	OPTIONS     = "OPTIONS"
 	HandlerFunc = "HandlerFunc"
 )
 

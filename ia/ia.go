@@ -266,6 +266,25 @@ func (s *Ia) newAgent(tag, name, description, context, model, userId string) (*A
 }
 
 /**
+* deleteAgent
+* @param tag, userId string
+* @return error
+**/
+func (s *Ia) deleteAgent(tag, userId string) error {
+	agent, exists := s.getAgent(tag)
+	if !exists {
+		return fmt.Errorf(MSG_AGENT_NOT_FOUND, tag)
+	}
+
+	err := agent.delete()
+	if err != nil {
+		return err
+	}
+
+	return s.removeAgent(tag, userId)
+}
+
+/**
 * SetModelAgent
 * @param name string, model string
 * @return *Agent
@@ -349,10 +368,10 @@ func (s *Ia) loadParticipant(to string) (*Participant, error) {
 
 /**
 * getParticipant
-* @param to, name string, role Role, userId string
+* @param to, name string, userId string
 * @return (*Participant, error)
 **/
-func (s *Ia) getParticipant(to, name string, role Role, userId string) (*Participant, error) {
+func (s *Ia) getParticipant(to, name string, userId string) (*Participant, error) {
 	s.mutex["participants"].Lock()
 	result, exists := s.Participants[to]
 	s.mutex["participants"].Unlock()
@@ -378,6 +397,19 @@ func (s *Ia) getParticipant(to, name string, role Role, userId string) (*Partici
 	s.mutex["participants"].Unlock()
 
 	return result, s.save(userId)
+}
+
+/**
+* removeConversation
+* @param to, userId string
+* @return error
+**/
+func (s *Ia) removeConversation(to, userId string) error {
+	s.mutex["conversations"].Lock()
+	defer s.mutex["conversations"].Unlock()
+
+	delete(s.Conversations, to)
+	return s.save(userId)
 }
 
 /**
@@ -435,6 +467,27 @@ func (s *Ia) getConversation(to *Participant, userId string) (*Conversation, err
 }
 
 /**
+* deleteConversation
+* @param to, userId string
+* @return error
+**/
+func (s *Ia) deleteConversation(to, userId string) error {
+	s.mutex["conversations"].RLock()
+	result, exists := s.Conversations[to]
+	s.mutex["conversations"].RUnlock()
+	if !exists {
+		return fmt.Errorf(MSG_CONVERSATION_NOT_FOUND, to)
+	}
+
+	err := result.delete()
+	if err != nil {
+		return err
+	}
+
+	return s.removeConversation(to, userId)
+}
+
+/**
 * Embed - Genera un embedding
 * @param ctx context.Context, agentName string, text string
 * @return ([]float64, error)
@@ -487,7 +540,7 @@ func (s *Ia) Conversation(ctx context.Context, tagAgent, to, prompt, userId stri
 		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, tagAgent)
 	}
 
-	participant, err := s.getParticipant(to, to, Member, userId)
+	participant, err := s.getParticipant(to, to, userId)
 	if err != nil {
 		return nil, err
 	}

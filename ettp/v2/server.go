@@ -18,7 +18,6 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/router"
 	"github.com/cgalvisleon/et/timezone"
@@ -77,7 +76,7 @@ type Server struct {
 	client        *http.Client                      `json:"-"`
 	pipe          net.Listener                      `json:"-"`
 	middlewares   []func(http.Handler) http.Handler `json:"-"`
-	authenticator func(http.Handler) http.Handler   `json:"-"`
+	authenticator []func(http.Handler) http.Handler `json:"-"`
 	readTimeout   time.Duration                     `json:"-"`
 	writeTimeout  time.Duration                     `json:"-"`
 	idleTimeout   time.Duration                     `json:"-"`
@@ -111,7 +110,7 @@ func New(name string, cnf *Config) (*Server, error) {
 		Version:       Version,
 		mux:           http.NewServeMux(),
 		middlewares:   make([]func(http.Handler) http.Handler, 0),
-		authenticator: middleware.Authenticate,
+		authenticator: make([]func(http.Handler) http.Handler, 0),
 		readTimeout:   cnf.ReadTimeout,
 		writeTimeout:  cnf.WriteTimeout,
 		idleTimeout:   cnf.IdleTimeout,
@@ -424,7 +423,7 @@ func (s *Server) Private(method, path string, handlerFn http.HandlerFunc, packag
 	}
 
 	if s.authenticator != nil {
-		result.middlewares = append(result.middlewares, s.authenticator)
+		result.middlewares = append(result.middlewares, s.authenticator...)
 	}
 
 	return result, nil
@@ -439,13 +438,15 @@ func (s *Server) Use(middlewares ...func(http.Handler) http.Handler) {
 }
 
 /**
-* Authenticator
+* UseAutentication
 * @param middleware func(http.HandlerFunc) http.HandlerFunc
 * @return *Server
 **/
-func (s *Server) Authenticator(middleware func(http.Handler) http.Handler) *Server {
-	s.authenticator = middleware
-
+func (s *Server) UseAutentication(middleware func(http.Handler) http.Handler) *Server {
+	if s.authenticator == nil {
+		s.authenticator = make([]func(http.Handler) http.Handler, 0)
+	}
+	s.authenticator = append(s.authenticator, middleware)
 	return s
 }
 

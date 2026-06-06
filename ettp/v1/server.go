@@ -68,7 +68,7 @@ type Server struct {
 	pathApp         string                            `json:"-"`
 	cors            *cors.Cors                        `json:"-"`
 	middlewares     []func(http.Handler) http.Handler `json:"-"`
-	authenticator   func(http.Handler) http.Handler   `json:"-"`
+	authenticator   []func(http.Handler) http.Handler `json:"-"`
 	notFoundHandler http.HandlerFunc                  `json:"-"`
 	router          map[string]*Router                `json:"-"`
 	solvers         []*Router                         `json:"-"`
@@ -119,6 +119,7 @@ func New(cnf *Config) (*Server, error) {
 		cors:            CorsAllowAll([]string{}),
 		notFoundHandler: notFoundHandler,
 		middlewares:     make([]func(http.Handler) http.Handler, 0),
+		authenticator:   make([]func(http.Handler) http.Handler, 0),
 		router:          make(map[string]*Router),
 		solvers:         []*Router{},
 		packages:        []*Package{},
@@ -318,13 +319,15 @@ func (s *Server) With(middlewares ...func(http.Handler) http.Handler) *Router {
 }
 
 /**
-* Authenticator
+* UseAutentication
 * @param middleware func(http.HandlerFunc) http.HandlerFunc
 * @return *Server
 **/
-func (s *Server) Authenticator(middleware func(http.Handler) http.Handler) *Server {
-	s.authenticator = middleware
-
+func (s *Server) UseAutentication(middleware func(http.Handler) http.Handler) *Server {
+	if s.authenticator == nil {
+		s.authenticator = make([]func(http.Handler) http.Handler, 0)
+	}
+	s.authenticator = append(s.authenticator, middleware)
 	return s
 }
 

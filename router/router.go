@@ -10,6 +10,13 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+type Router interface {
+	UseAutentication(fn func(http.Handler) http.Handler)
+	Protect(method, path string, handler func(http.ResponseWriter, *http.Request))
+	Public(method, path string, handler func(http.ResponseWriter, *http.Request))
+	With(method, path string, middlewares []func(http.Handler) http.Handler, handler func(http.ResponseWriter, *http.Request))
+}
+
 const (
 	Get         = "GET"
 	Post        = "POST"
@@ -42,7 +49,7 @@ type Channels struct {
 
 var (
 	router              *Routes
-	autentication       func(http.Handler) http.Handler
+	autentication       []func(http.Handler) http.Handler
 	EVENT_SET_ROUTER    = "event:apigateway:set:router"
 	EVENT_REMOVE_ROUTER = "event:apigateway:remove:router"
 	EVENT_RESET_ROUTER  = "event:apigateway:reset:router"
@@ -212,6 +219,17 @@ func pushApiGateway(method, path, packagePath, host, packageName string) {
 }
 
 /**
+* UseAutentication
+* @param fn func(http.Handler) http.Handler
+**/
+func UseAutentication(fn func(http.Handler) http.Handler) {
+	if autentication == nil {
+		autentication = make([]func(http.Handler) http.Handler, 0)
+	}
+	autentication = append(autentication, fn)
+}
+
+/**
 * Public
 * @param r *chi.Mux, method string, path string, h http.HandlerFunc, packageName string, packagePath string, host string
 * @return *chi.Mux
@@ -242,14 +260,6 @@ func Public(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, pa
 }
 
 /**
-* SetAutentication
-* @param fn func(http.Handler) http.Handler
-**/
-func SetAutentication(fn func(http.Handler) http.Handler) {
-	autentication = fn
-}
-
-/**
 * Private
 * @param r *chi.Mux, method string, path string, h http.HandlerFunc, packageName string, packagePath string, host string
 * @return *chi.Mux
@@ -262,21 +272,21 @@ func Private(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, p
 
 	switch method {
 	case "GET":
-		r.With(autentication).Get(path, h)
+		r.With(autentication...).Get(path, h)
 	case "POST":
-		r.With(autentication).Post(path, h)
+		r.With(autentication...).Post(path, h)
 	case "PUT":
-		r.With(autentication).Put(path, h)
+		r.With(autentication...).Put(path, h)
 	case "PATCH":
-		r.With(autentication).Patch(path, h)
+		r.With(autentication...).Patch(path, h)
 	case "DELETE":
-		r.With(autentication).Delete(path, h)
+		r.With(autentication...).Delete(path, h)
 	case "HEAD":
-		r.With(autentication).Head(path, h)
+		r.With(autentication...).Head(path, h)
 	case "OPTIONS":
-		r.With(autentication).Options(path, h)
+		r.With(autentication...).Options(path, h)
 	case "HandlerFunc":
-		r.With(autentication).HandleFunc(path, h)
+		r.With(autentication...).HandleFunc(path, h)
 	}
 
 	pushApiGateway(method, path, packagePath, host, packageName)

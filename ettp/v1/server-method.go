@@ -51,7 +51,7 @@ func (s *Server) Private() *Router {
 		}
 	}
 
-	return s.With(s.authenticator)
+	return s.With(s.authenticator...)
 }
 
 /**

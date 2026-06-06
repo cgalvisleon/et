@@ -6,7 +6,17 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
+	"github.com/cgalvisleon/et/router"
 )
+
+func (s *Ia) LoadRouter(r router.Router) {
+	r.Protect(router.Get, "/agents/{tag}", s.HttpGetAgent)
+	r.Protect(router.Post, "/agents", s.HttpNewAgent)
+	r.Protect(router.Delete, "/agents/{tag}", s.HttpDeleteAgent)
+	r.Protect(router.Put, "/agents/{tag}", s.HttpSetAgent)
+	r.Protect(router.Post, "/conversation", s.HttpConversation)
+	r.Protect(router.Delete, "/conversations/{id}", s.HttpDeleteConversation)
+}
 
 /**
 * HttpGetAgent
@@ -67,9 +77,9 @@ func (s *Ia) HttpNewAgent(w http.ResponseWriter, r *http.Request) {
 * @param r *http.Request
 **/
 func (s *Ia) HttpDeleteAgent(w http.ResponseWriter, r *http.Request) {
-	name := request.URLParam(r, "name").Str()
+	tag := request.URLParam(r, "tag").Str()
 	userId := request.UserId(r)
-	err := s.removeAgent(name, userId)
+	err := s.deleteAgent(tag, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 		return
@@ -148,30 +158,12 @@ func (s *Ia) HttpSetAgent(w http.ResponseWriter, r *http.Request) {
 }
 
 /**
-* HttpDelete
-* @param w http.ResponseWriter
-* @param r *http.Request
-**/
-func (s *Ia) HttpDelete(w http.ResponseWriter, r *http.Request) {
-	err := s.delete()
-	if err != nil {
-		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	response.ITEM(w, r, http.StatusOK, et.Item{
-		Ok:     true,
-		Result: et.Json{"message": "ia deleted"},
-	})
-}
-
-/**
 * HttpConversation
 * @param w http.ResponseWriter
 * @param r *http.Request
 **/
 func (s *Ia) HttpConversation(w http.ResponseWriter, r *http.Request) {
-	agentName := request.URLParam(r, "name").Str()
+	tagAgent := request.URLParam(r, "tag").Str()
 	body, err := request.GetBody(r)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
@@ -182,7 +174,8 @@ func (s *Ia) HttpConversation(w http.ResponseWriter, r *http.Request) {
 	prompt := body.Str("prompt")
 	userId := request.UserId(r)
 
-	conversation, err := s.Conversation(r.Context(), agentName, to, prompt, userId)
+	ctx := r.Context()
+	conversation, err := s.Conversation(ctx, tagAgent, to, prompt, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 		return
@@ -191,5 +184,25 @@ func (s *Ia) HttpConversation(w http.ResponseWriter, r *http.Request) {
 	response.ITEM(w, r, http.StatusOK, et.Item{
 		Ok:     true,
 		Result: conversation.ToJson(),
+	})
+}
+
+/**
+* HttpDeleteConversation
+* @param w http.ResponseWriter
+* @param r *http.Request
+**/
+func (s *Ia) HttpDeleteConversation(w http.ResponseWriter, r *http.Request) {
+	to := request.URLParam(r, "to").Str()
+	userId := request.UserId(r)
+	err := s.deleteConversation(to, userId)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response.ITEM(w, r, http.StatusOK, et.Item{
+		Ok:     true,
+		Result: et.Json{"message": "ia deleted"},
 	})
 }

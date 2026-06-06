@@ -104,15 +104,27 @@ model.Init()
 
 Package-level wrapper: `jsql.Define(dbName, def)` looks up the named DB from the registry.
 
-**Key column types:**
+**Key column types (`TypeColumn`):**
 
 | `TypeColumn` | Meaning |
 |---|---|
 | `COLUMN` | Real SQL column |
 | `ATTRIB` | Key inside `_source` JSONB — accessed via `_source->>'field'` or with cast for numeric/bool/datetime |
-| `DETAIL` / `ROLLUP` / `RELATION` | Virtual relationship fields, not stored as columns |
+| `DETAIL` / `ROLLUP` | Virtual relationship fields, not stored as columns |
+| `CALCFUNC` | Computed column via a registered `CalcFunction` callback |
+| `CALC` | Computed expression evaluated at query time |
+| `AGG` | Aggregation column |
+
+**Key data types (`TypeData`):** `KEY` (VARCHAR 80, used for IDs and `_idx`), `TEXT`, `MEMO`, `INT`, `FLOAT`, `BOOLEAN`, `DATETIME`, `JSON`, `BYTES`, `GEOMETRY`, `EMBEDDING`, `ANY`.
+
+**Column name constants** (exported from `jsql/column.go` for use in queries and `Def`):
+`jsql.ID`, `jsql.IDX` (`_idx`), `jsql.IDT` (`_idt`), `jsql.SOURCE` (`_source`), `jsql.STATUS`, `jsql.TENANT_ID`, `jsql.PROJECT_ID`, `jsql.CREATED_AT`, `jsql.UPDATED_AT`.
+
+**Status constants:** `jsql.ACTIVE`, `jsql.ARCHIVED`, `jsql.CANCELED`, `jsql.PENDING`, `jsql.APPROVED`, `jsql.REJECTED`, `jsql.OF_SYSTEM`, `jsql.FOR_DELETE`. The `jsql.Status` map holds all non-active statuses; extend it with `jsql.SetStatus(value)`.
 
 `IdxField` (`_idx`) is `VARCHAR(80)` (`KEY` type); its value is a `reg.ULID()` set by an auto-registered `BeforeInsert` trigger — **not** a database serial/sequence.
+
+**Model triggers:** `Model` supports six trigger slices (`beforeInserts`, `beforeUpdates`, `beforeDeletes`, `afterInserts`, `afterUpdates`, `afterDeletes`) each accepting `TriggerFunction` (`func(tx *Tx, old, new et.Json) error`). Computed columns use `CalcFunction` (`func(tx *Tx, data et.Json)`), registered via `model.calcs`.
 
 **Query / Command API (fluent):**
 
@@ -141,7 +153,7 @@ type Driver interface {
 }
 ```
 
-Implementations live in `jsql/drivers/<name>/` and self-register via `init()`. Active drivers: `postgres` (`lib/pq`), `sqlite` (`mattn/go-sqlite3`). Import as a side-effect: `import _ "github.com/cgalvisleon/et/jsql/drivers/postgres"`. The `josefina` driver directory exists but contains no files.
+Implementations live in `jsql/drivers/<name>/` and self-register via `init()`. Active drivers: `postgres` (`lib/pq`), `sqlite` (`mattn/go-sqlite3`). Import as a side-effect: `import _ "github.com/cgalvisleon/et/jsql/drivers/postgres"`. The `josefina` and `mysql` driver directories exist but contain no files yet.
 
 **Debug / Test mode:** both `Model`, `Query`, and `Command` support `.Debug()` (logs SQL, skips execution) and `.Test()` (generates SQL, skips execution). Both return the receiver for chaining.
 
@@ -165,7 +177,7 @@ There are two HTTP server packages at different abstraction levels:
 - **`envar/`** — Low-level env var access; `envar.Validate([]string{...})` checks required vars exist.
 - **`logs/`** — Structured logging. Functions: `Log`, `Info`, `Infof`, `Alert`, `Alertf`, `Error`, `Errorf`, `Debug`, `Debugf`, `Fatal`, `Tracer`. All route through `stdrout` for colorized output.
 - **`jwt/`** — High-level token creation: `New`, `NewAuthentication`, `NewAuthorization`, `NewAppToken`. Stores tokens in `cache`. Built on top of `claim/`.
-- **`claim/`** — JWT claims struct with `tenantId` (not `projectId`). `GenToken` signs with HS256. Note the field is `tenantId`, not `projectId`.
+- **`claim/`** — JWT claims struct with `tenantId`. `GenToken` signs with HS256.
 - **`crontab/`** — Job scheduler. `crontab.New(tag)` creates a scheduler (calls `event.Load()` internally); `AddJob`, `AddOneShotJob`, `AddEventJob` register jobs. Supports `robfig/cron` spec format including seconds (`"0 * * * * *"`).
 - **`jval/`** — Fluent validation rules for `et.Json`. Implements `Rule` interface with typed validators (`Str`, `Int`, `Float`, `Bool`, `Email`, `Phone`, `Time`, etc.); chainable constraints (`.NotEmpty()`, `.Min()`, `.Max()`, etc.).
 - **`request/`** — Both inbound helpers (`URLParam`, `GetBody`) and outbound HTTP client utilities. `URLParam(r, "key").Str()` reads chi route params; `GetBody(r)` parses the JSON body into `et.Json`.
@@ -190,6 +202,8 @@ There are two HTTP server packages at different abstraction levels:
 - **`workflow/`** — Workflow orchestration with multi-step execution, instance state, and resilience patterns. `workflow.New(store)` creates a new instance; `workflow.Load(store)` is the singleton wrapper (no-op if already initialized). Integrates with `resilience/`, `instances/`, and `event/` (NATS) for async state sync. See detail below.
 - **`graph/`** — Neo4j connectivity (`neo4j-go-driver/v5`). `graph.Load()` returns a `*Conn` with the Neo4j driver.
 - **`instances/`** — `Store` interface (`Set`, `Get`, `Delete`, `Query`) used by `ia` and `workflow` for state persistence. Implementations are caller-provided.
+- **`stores/`** — jsql-backed implementation of `instances.Store`. `stores.NewInstance(db, schema, name, kind)` creates a DB-backed store (kind: `KindJson` or `KindBite`). Use this as the concrete `Store` when a `jsql.DB` is available.
+- **`dt/`** — Cache-backed object store. `dt.Up(key, data)` writes an object (uses Redis in production, reads from file in dev based on `PRODUCTION` env var); `dt.Get(key)` retrieves it. HTTP handler support via `handler.go`.
 - **`resilience/`** — Resilience patterns (circuit breaker, etc.) used by `workflow`.
 - **`reg/`** — Service registration/discovery; provides ID generation helpers (ULID, etc.) used by `claim` and others.
 - **`file/`** — File operations and watching (`FileInfo`, `Watcher`, `ExistPath()`); used by `vm` for hot-reload.
@@ -298,7 +312,7 @@ Use `http.StatusCreated` for POST handlers that create new resources, `http.Stat
 - **Error handling**: `logs.Fatal(err)` calls `os.Exit(1)`. Use `logs.Alert` / `logs.Error` for non-fatal errors.
 - **Event-driven coordination**: `ettp/v2` server syncs router state across replicas via NATS. The `m.Myself` flag prevents self-processing.
 - **`msg/` packages**: Each package has a local `msg/` or `msg.go` file with error message constants — use these instead of hardcoded strings.
-- **Store interface pattern**: `vm`, `workflow`, and `ia` accept a caller-provided `instances.Store` for persistence — the library defines the interface, consumers implement it.
+- **Store interface pattern**: `vm`, `workflow`, and `ia` accept a caller-provided `instances.Store` for persistence — the library defines the interface, consumers implement it. Use `stores/` for the jsql-backed implementation.
 
 ## Required environment variables
 
@@ -312,4 +326,5 @@ Use `http.StatusCreated` for POST handlers that create new resources, `http.Stat
 | `event` | `NATS_USER`, `NATS_PASSWORD`                 | NATS auth (optional)                   |
 | `graph` | `NEO4J_HOST`, `NEO4J_USER`, `NEO4J_PASSWORD` | Neo4j connection                       |
 | `ia`    | `OPENAI_API_KEY`                             | OpenAI agent integration               |
+| `dt`    | `PRODUCTION`                                 | `true` = use Redis, `false` = use file |
 | `wsp`   | `WHATSAPP_API_URL`                           | WhatsApp Graph API base URL (optional) |

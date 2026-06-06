@@ -41,8 +41,8 @@ func NewApi(name, path, host string, port int, version string) *Api {
 * SetAutentication
 * @param middleware func(http.Handler) http.Handler
 **/
-func (s *Api) SetAutentication(middleware func(http.Handler) http.Handler) {
-	router.SetAutentication(middleware)
+func (s *Api) UseAutentication(middleware func(http.Handler) http.Handler) {
+	router.UseAutentication(middleware)
 }
 
 /**

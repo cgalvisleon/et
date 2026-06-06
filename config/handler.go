@@ -11,6 +11,14 @@ import (
 )
 
 /**
+* IsLoad
+* @return bool
+**/
+func IsLoad() bool {
+	return CNF == nil
+}
+
+/**
 * Set
 * @param param et.Json, userId string
 * @return error

@@ -10,10 +10,8 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
-	"github.com/cgalvisleon/et/utility"
 )
 
 type TypeConversation string
@@ -24,31 +22,29 @@ const (
 )
 
 type Conversation struct {
-	CreatedAt     time.Time        `json:"created_at"`
-	UpdatedAt     time.Time        `json:"updated_at"`
-	ID            string           `json:"id"`
-	ConvID        string           `json:"conv_id"`
-	Title         string           `json:"title"`
-	Type          TypeConversation `json:"type"`
-	LastMessage   *Message         `json:"last_message"`
-	LimitMessages int              `json:"limit_messages"`
-	Messages      []*Message       `json:"-"`
-	mu            sync.RWMutex     `json:"-"`
-	to            *Participant     `json:"-"`
-	ia            *Ia              `json:"-"`
-	isDebug       bool             `json:"-"`
+	CreatedAt     time.Time               `json:"created_at"`
+	UpdatedAt     time.Time               `json:"updated_at"`
+	ID            string                  `json:"id"`
+	ConvID        string                  `json:"conv_id"`
+	Title         string                  `json:"title"`
+	Type          TypeConversation        `json:"type"`
+	LastMessage   *Message                `json:"last_message"`
+	LimitMessages int                     `json:"limit_messages"`
+	Messages      []*Message              `json:"-"`
+	Participants  map[string]*Participant `json:"participants"`
+	mu            sync.RWMutex            `json:"-"`
+	to            *Participant            `json:"-"`
+	ia            *Ia                     `json:"-"`
+	isDebug       bool                    `json:"-"`
+	isChanged     bool                    `json:"-"`
 }
 
 /**
 * newConversation
-* @param ia *Ia, ownerId string, title string, type TypeConversation
-* @return (*Conversation, error)
+* @param to *Participant, title string, conversationType TypeConversation
+* @return *Conversation
 **/
-func newConversation(to *Participant, title string, conversationType TypeConversation) (*Conversation, error) {
-	if !utility.ValidStr(title, 4, []string{""}) {
-		return nil, fmt.Errorf(msg.MSG_ARG_REQUIRED, "title")
-	}
-
+func newConversation(to *Participant, title string, conversationType TypeConversation) *Conversation {
 	if title == "" {
 		title = to.Name
 	}
@@ -63,14 +59,15 @@ func newConversation(to *Participant, title string, conversationType TypeConvers
 		ConvID:        id,
 		Title:         title,
 		Type:          conversationType,
-		Messages:      make([]*Message, 0),
 		LimitMessages: limitMessages,
+		Messages:      make([]*Message, 0),
+		Participants:  make(map[string]*Participant, 0),
 		mu:            sync.RWMutex{},
 		to:            to,
 		ia:            to.ia,
 		isDebug:       to.ia.isDebug,
 	}
-	return result, nil
+	return result
 }
 
 /**
@@ -117,30 +114,6 @@ func (s *Conversation) delete() error {
 }
 
 /**
-* ToJson
-* @return et.Json
-**/
-func (s *Conversation) ToJson() et.Json {
-	return et.Json{
-		"created_at":     timezone.Format(s.CreatedAt, timezone.RFC3339),
-		"updated_at":     timezone.Format(s.UpdatedAt, timezone.RFC3339),
-		"tenant_id":      s.ia.TenantID,
-		"owner_id":       s.ia.ID,
-		"id":             s.ID,
-		"conv_id":        s.ConvID,
-		"title":          s.Title,
-		"type":           s.Type,
-		"last_message":   s.LastMessage,
-		"limit_messages": s.LimitMessages,
-		"to": et.Json{
-			"id":   s.to.ID,
-			"to":   s.to.To,
-			"name": s.to.Name,
-		},
-	}
-}
-
-/**
 * up
 * @param to *Participant
 **/
@@ -169,29 +142,73 @@ func (s *Conversation) up(to *Participant) error {
 }
 
 /**
+* ToJson
+* @return et.Json
+**/
+func (s *Conversation) ToJson() et.Json {
+	return et.Json{
+		"created_at":     timezone.Format(s.CreatedAt, timezone.RFC3339),
+		"updated_at":     timezone.Format(s.UpdatedAt, timezone.RFC3339),
+		"tenant_id":      s.ia.TenantID,
+		"owner_id":       s.ia.ID,
+		"id":             s.ID,
+		"conv_id":        s.ConvID,
+		"title":          s.Title,
+		"type":           s.Type,
+		"last_message":   s.LastMessage,
+		"limit_messages": s.LimitMessages,
+		"participants":   s.Participants,
+		"messages":       s.Messages,
+		"to": et.Json{
+			"id":   s.to.ID,
+			"to":   s.to.To,
+			"name": s.to.Name,
+		},
+	}
+}
+
+/**
+* AddParticipant
+* @param participant *Participant
+* @return *Conversation
+**/
+func (s *Conversation) AddParticipant(participant *Participant) *Conversation {
+	_, ok := s.Participants[participant.To]
+	if ok {
+		return s
+	}
+
+	s.Participants[participant.To] = participant
+	s.isChanged = true
+	return s
+}
+
+/**
 * SetConvId
 * @param convId string
-* @return error
+* @return *Conversation
 **/
-func (s *Conversation) SetConvId(convId, agentId string) error {
+func (s *Conversation) SetConvId(convId string) *Conversation {
 	if s.ConvID == convId {
-		return nil
+		return s
 	}
 	s.ConvID = convId
-	return s.save(agentId)
+	s.isChanged = true
+	return s
 }
 
 /**
 * SetLimitMessages
 * @param limit int
-* @return error
+* @return *Conversation
 **/
-func (s *Conversation) SetLimitMessages(limit int, userId string) error {
+func (s *Conversation) SetLimitMessages(limit int) *Conversation {
 	if s.LimitMessages == limit {
-		return nil
+		return s
 	}
 	s.LimitMessages = limit
-	return s.save(userId)
+	s.isChanged = true
+	return s
 }
 
 /**

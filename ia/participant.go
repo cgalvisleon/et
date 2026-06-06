@@ -26,14 +26,15 @@ type Participant struct {
 	To        string    `json:"to"`
 	Name      string    `json:"name"`
 	ia        *Ia       `json:"-"`
+	isChanged bool      `json:"-"`
 }
 
 /**
 * newParticipant
-* @param ia *Ia, userId, to string, role Role
+* @param ia *Ia, userId, to string
 * @return (*Participant, error)
 **/
-func newParticipant(ia *Ia, userId, to, name string, role Role) *Participant {
+func newParticipant(ia *Ia, userId, to, name string) *Participant {
 	id := reg.GenULID("participant")
 	if userId == "" {
 		userId = id
@@ -79,6 +80,7 @@ func (s *Participant) save(userId string) error {
 
 	event.Publish(EVENT_PARTICIPANT_SET, data)
 
+	s.isChanged = false
 	return nil
 }
 
@@ -132,9 +134,13 @@ func (s *Participant) up(ia *Ia) {
 * @param userId string
 * @return error
 **/
-func (s *Participant) SetUserId(id, userId string) error {
+func (s *Participant) SetUserId(id string) *Participant {
+	if s.UserID == id {
+		return s
+	}
 	s.UserID = id
-	return s.save(userId)
+	s.isChanged = true
+	return s
 }
 
 /**
@@ -142,7 +148,11 @@ func (s *Participant) SetUserId(id, userId string) error {
 * @param name string
 * @return error
 **/
-func (s *Participant) SetName(name, userId string) error {
+func (s *Participant) SetName(name string) *Participant {
+	if s.Name == name {
+		return s
+	}
 	s.Name = name
-	return s.save(userId)
+	s.isChanged = true
+	return s
 }

@@ -44,6 +44,7 @@ type Agent struct {
 	client      openai.Client    `json:"-"`
 	ia          *Ia              `json:"-"`
 	isDebug     bool             `json:"-"`
+	isChanged   bool             `json:"-"`
 }
 
 /**
@@ -106,6 +107,7 @@ func (s *Agent) save(userId string) error {
 		return s.ia.store.Set(s.ID, "agent", s.ia.TenantID, s.ia.ID, s, userId)
 	}
 
+	s.isChanged = false
 	return nil
 }
 
@@ -178,23 +180,31 @@ func (s *Agent) Debug() *Agent {
 
 /**
 * setModel
-* @param model, userId string
+* @param model string
 * @return *Agent, error
 **/
-func (s *Agent) setModel(model, userId string) (*Agent, error) {
+func (s *Agent) setModel(model string) *Agent {
+	if s.Model == model {
+		return s
+	}
 	s.Model = model
-	return s, s.save(userId)
+	s.isChanged = true
+	return s
 }
 
 /**
 * setContext
 * @param context, userId string
-* @return *Agent, error
+* @return *Agent
 **/
-func (s *Agent) setContext(context string, userId string) (*Agent, error) {
+func (s *Agent) setContext(context string) *Agent {
 	context = strs.Parse(s.ContextBase, et.Json{"context": context})
+	if string(s.Context) == context {
+		return s
+	}
 	s.Context = []byte(context)
-	return s, s.save(userId)
+	s.isChanged = true
+	return s
 }
 
 /**
@@ -202,9 +212,14 @@ func (s *Agent) setContext(context string, userId string) (*Agent, error) {
 * @param skill Skill, userId string
 * @return *Agent, error
 **/
-func (s *Agent) addSkill(skill Skill, userId string) (*Agent, error) {
+func (s *Agent) addSkill(skill Skill) *Agent {
+	_, ok := s.Skills[skill.Tag()]
+	if ok {
+		return s
+	}
 	s.Skills[skill.Tag()] = skill
-	return s, s.save(userId)
+	s.isChanged = true
+	return s
 }
 
 type ConversationResult struct {
@@ -235,7 +250,8 @@ func (s *Agent) conversation(ctx context.Context, conversation *Conversation, pr
 	if convID == "" {
 		conv, _ := s.client.Conversations.New(ctx, conversations.ConversationNewParams{})
 		convID = conv.ID
-		conversation.SetConvId(convID, s.ID)
+		conversation.SetConvId(convID)
+		conversation.save(s.ID)
 	}
 
 	contextStr := string(s.Context)

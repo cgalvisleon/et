@@ -27,8 +27,8 @@ var (
 **/
 func getSecret() string {
 	secret := envar.GetStr("SECRET", "1977")
-	if config.CNF != nil {
-		secret = config.GetStr("SECRET", "1977")
+	if config.IsLoad() {
+		secret = config.GetStr("SECRET", secret)
 	}
 
 	jwtSecretOnce.Do(func() {

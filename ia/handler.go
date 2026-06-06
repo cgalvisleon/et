@@ -47,8 +47,9 @@ func (s *Ia) HttpNewAgent(w http.ResponseWriter, r *http.Request) {
 	description := body.Str("description")
 	context := body.Str("context")
 	model := body.Str("model")
+	userId := request.UserId(r)
 
-	agent, err := s.newAgent(tag, name, description, context, model)
+	agent, err := s.newAgent(tag, name, description, context, model, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 		return
@@ -67,7 +68,12 @@ func (s *Ia) HttpNewAgent(w http.ResponseWriter, r *http.Request) {
 **/
 func (s *Ia) HttpDeleteAgent(w http.ResponseWriter, r *http.Request) {
 	name := request.URLParam(r, "name").Str()
-	s.removeAgent(name)
+	userId := request.UserId(r)
+	err := s.removeAgent(name, userId)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
 
 	response.ITEM(w, r, http.StatusOK, et.Item{
 		Ok:     true,
@@ -88,6 +94,8 @@ func (s *Ia) HttpSetAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tag := request.URLParam(r, "tag").Str()
+	userId := request.UserId(r)
+
 	agent, exists := s.getAgent(tag)
 	if !exists {
 		response.ITEM(w, r, http.StatusNotFound, et.Item{
@@ -101,10 +109,12 @@ func (s *Ia) HttpSetAgent(w http.ResponseWriter, r *http.Request) {
 	if model != "" {
 		agent.setModel(model)
 	}
+
 	context := body.Str("context")
 	if context != "" {
 		agent.setContext(context)
 	}
+
 	skillDef := body.Json("skill")
 	if skillDef != nil {
 		skill, err := NewApiSkill(
@@ -122,15 +132,18 @@ func (s *Ia) HttpSetAgent(w http.ResponseWriter, r *http.Request) {
 		}
 		agent.addSkill(skill)
 	}
-	err = s.save()
-	if err != nil {
-		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
-		return
+
+	if agent.isChanged {
+		err = agent.save(userId)
+		if err != nil {
+			response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 
 	response.ITEM(w, r, http.StatusOK, et.Item{
 		Ok:     true,
-		Result: agent.ToJson(),
+		Result: et.Json{"message": "agent updated"},
 	})
 }
 
@@ -158,7 +171,7 @@ func (s *Ia) HttpDelete(w http.ResponseWriter, r *http.Request) {
 * @param r *http.Request
 **/
 func (s *Ia) HttpConversation(w http.ResponseWriter, r *http.Request) {
-	agentName := request.URLParam(r, "agentName").Str()
+	agentName := request.URLParam(r, "name").Str()
 	body, err := request.GetBody(r)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
@@ -167,8 +180,9 @@ func (s *Ia) HttpConversation(w http.ResponseWriter, r *http.Request) {
 
 	to := body.Str("to")
 	prompt := body.Str("prompt")
+	userId := request.UserId(r)
 
-	conversation, err := s.Conversation(r.Context(), agentName, to, prompt)
+	conversation, err := s.Conversation(r.Context(), agentName, to, prompt, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 		return

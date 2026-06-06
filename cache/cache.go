@@ -44,7 +44,7 @@ type Config interface {
 * @param cfg Config
 * @return error
 **/
-func New(cfg Config) (*Conn, error) {
+func New(config Config) (*Conn, error) {
 	if !slices.Contains([]string{"linux", "darwin", "windows"}, os) {
 		return nil, logs.Alertf(MSG_UNSUPPORTED_OS, os)
 	}
@@ -52,10 +52,10 @@ func New(cfg Config) (*Conn, error) {
 	host := envar.GetStr("REDIS_HOST", "")
 	password := envar.GetStr("REDIS_PASSWORD", "")
 	dbname := envar.GetInt("REDIS_DB", 0)
-	if cfg != nil {
-		host = cfg.GetStr("REDIS_HOST", "")
-		password = cfg.GetStr("REDIS_PASSWORD", "")
-		dbname = cfg.GetInt("REDIS_DB", 0)
+	if config != nil {
+		host = config.GetStr("REDIS_HOST", host)
+		password = config.GetStr("REDIS_PASSWORD", password)
+		dbname = config.GetInt("REDIS_DB", dbname)
 	}
 
 	if !utility.ValidStr(host, 0, []string{}) {

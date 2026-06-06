@@ -60,7 +60,7 @@ type Config interface {
 * @param cfg Config
 * @return error
 **/
-func New(cfg Config) (*Conn, error) {
+func New(config Config) (*Conn, error) {
 	if !slices.Contains([]string{"linux", "darwin", "windows"}, oS) {
 		return nil, logs.Alertf(MSG_UNSUPPORTED_OS, oS)
 	}
@@ -68,10 +68,10 @@ func New(cfg Config) (*Conn, error) {
 	host := envar.GetStr("NATS_HOST", "")
 	user := envar.GetStr("NATS_USER", "")
 	password := envar.GetStr("NATS_PASSWORD", "")
-	if cfg != nil {
-		host = cfg.GetStr("NATS_HOST", "")
-		user = cfg.GetStr("NATS_USER", "")
-		password = cfg.GetStr("NATS_PASSWORD", "")
+	if config != nil {
+		host = config.GetStr("NATS_HOST", host)
+		user = config.GetStr("NATS_USER", user)
+		password = config.GetStr("NATS_PASSWORD", password)
 	}
 
 	if !utility.ValidStr(host, 0, []string{}) {

@@ -2,6 +2,7 @@ package ia
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -366,12 +367,14 @@ func (s *Ia) loadParticipant(to string) (*Participant, error) {
 	return result, nil
 }
 
+var ErrParticipantNotFound = fmt.Errorf(MSG_PARTICIPANT_NOT_FOUND)
+
 /**
 * getParticipant
-* @param to, name string, userId string
+* @param to, userId string
 * @return (*Participant, error)
 **/
-func (s *Ia) getParticipant(to, name string, userId string) (*Participant, error) {
+func (s *Ia) getParticipant(to, userId string) (*Participant, error) {
 	s.mutex["participants"].Lock()
 	result, exists := s.Participants[to]
 	s.mutex["participants"].Unlock()
@@ -385,11 +388,26 @@ func (s *Ia) getParticipant(to, name string, userId string) (*Participant, error
 	}
 
 	if result == nil {
-		result = newParticipant(s, "", to, name)
-		err = result.save(userId)
-		if err != nil {
-			return nil, err
-		}
+		return nil, ErrParticipantNotFound
+	}
+
+	s.mutex["participants"].Lock()
+	s.Participants[to] = result
+	s.mutex["participants"].Unlock()
+
+	return result, s.save(userId)
+}
+
+/**
+* newParticipant
+* @param to, name, userId string
+* @return (*Participant, error)
+**/
+func (s *Ia) newParticipant(to, id, name, userId string) (*Participant, error) {
+	result := newParticipant(s, id, to, name)
+	err := result.save(userId)
+	if err != nil {
+		return nil, err
 	}
 
 	s.mutex["participants"].Lock()
@@ -409,6 +427,28 @@ func (s *Ia) removeConversation(to, userId string) error {
 	defer s.mutex["conversations"].Unlock()
 
 	delete(s.Conversations, to)
+	return s.save(userId)
+}
+
+/**
+* deleteParticipant
+* @param to, userId string
+* @return error
+**/
+func (s *Ia) deleteParticipant(to, userId string) error {
+	s.mutex["participants"].Lock()
+	result, exists := s.Participants[to]
+	s.mutex["participants"].Unlock()
+	if !exists {
+		return fmt.Errorf(MSG_PARTICIPANT_NOT_FOUND, to)
+	}
+
+	err := result.delete()
+	if err != nil {
+		return err
+	}
+
+	delete(s.Participants, to)
 	return s.save(userId)
 }
 
@@ -540,8 +580,13 @@ func (s *Ia) Conversation(ctx context.Context, tagAgent, to, prompt, userId stri
 		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, tagAgent)
 	}
 
-	participant, err := s.getParticipant(to, to, userId)
-	if err != nil {
+	participant, err := s.getParticipant(to, userId)
+	if errors.Is(err, ErrParticipantNotFound) {
+		participant, err = s.newParticipant(to, to, to, userId)
+		if err != nil {
+			return nil, err
+		}
+	} else if err != nil {
 		return nil, err
 	}
 

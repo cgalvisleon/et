@@ -15,7 +15,11 @@ func (s *Ia) LoadRouter(r router.Router) {
 	r.Protect(router.Delete, "/agents/{tag}", s.HttpDeleteAgent)
 	r.Protect(router.Put, "/agents/{tag}", s.HttpSetAgent)
 	r.Protect(router.Post, "/conversation", s.HttpConversation)
-	r.Protect(router.Delete, "/conversations/{id}", s.HttpDeleteConversation)
+	r.Protect(router.Delete, "/conversations/{to}", s.HttpDeleteConversation)
+	r.Protect(router.Get, "/participants/{to}", s.HttpGetParticipant)
+	r.Protect(router.Post, "/participants", s.HttpNewParticipant)
+	r.Protect(router.Delete, "/participants/{to}", s.HttpDeleteParticipant)
+	r.Protect(router.Put, "/participants/{to}", s.HttpSetParticipant)
 }
 
 /**
@@ -153,7 +157,7 @@ func (s *Ia) HttpSetAgent(w http.ResponseWriter, r *http.Request) {
 
 	response.ITEM(w, r, http.StatusOK, et.Item{
 		Ok:     true,
-		Result: et.Json{"message": "agent updated"},
+		Result: et.Json{"message": MSG_AGENT_UPDATED},
 	})
 }
 
@@ -204,5 +208,122 @@ func (s *Ia) HttpDeleteConversation(w http.ResponseWriter, r *http.Request) {
 	response.ITEM(w, r, http.StatusOK, et.Item{
 		Ok:     true,
 		Result: et.Json{"message": "ia deleted"},
+	})
+}
+
+/**
+* HttpGetParticipant
+* @param w http.ResponseWriter
+* @param r *http.Request
+**/
+func (s *Ia) HttpGetParticipant(w http.ResponseWriter, r *http.Request) {
+	to := request.URLParam(r, "to").Str()
+	userId := request.UserId(r)
+	participant, err := s.getParticipant(to, userId)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response.ITEM(w, r, http.StatusOK, et.Item{
+		Ok:     true,
+		Result: participant.ToJson(),
+	})
+}
+
+/**
+* HttpNewParticipant
+* @param w http.ResponseWriter
+* @param r *http.Request
+**/
+func (s *Ia) HttpNewParticipant(w http.ResponseWriter, r *http.Request) {
+	body, err := request.GetBody(r)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	to := body.Str("to")
+	id := body.Str("user_id")
+	name := body.Str("name")
+	userId := request.UserId(r)
+
+	participant, err := s.newParticipant(to, id, name, userId)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response.ITEM(w, r, http.StatusCreated, et.Item{
+		Ok: true,
+		Result: et.Json{
+			"id":      participant.ID,
+			"message": MSG_PARTICIPANT_CREATED,
+		},
+	})
+}
+
+/**
+* HttpDeleteParticipant
+* @param w http.ResponseWriter
+* @param r *http.Request
+**/
+func (s *Ia) HttpDeleteParticipant(w http.ResponseWriter, r *http.Request) {
+	to := request.URLParam(r, "to").Str()
+	userId := request.UserId(r)
+	err := s.deleteParticipant(to, userId)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response.ITEM(w, r, http.StatusOK, et.Item{
+		Ok:     true,
+		Result: et.Json{"message": MSG_PARTICIPANT_DELETED},
+	})
+}
+
+/**
+* HttpSetParticipant
+* @param w http.ResponseWriter
+* @param r *http.Request
+**/
+func (s *Ia) HttpSetParticipant(w http.ResponseWriter, r *http.Request) {
+	body, err := request.GetBody(r)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	to := request.URLParam(r, "to").Str()
+	userId := request.UserId(r)
+
+	participant, err := s.getParticipant(to, userId)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	id := body.Str("user_id")
+	if id != "" {
+		participant.SetUserId(id)
+	}
+
+	name := body.Str("name")
+	if name != "" {
+		participant.SetName(name)
+	}
+
+	if participant.isChanged {
+		err = participant.save(userId)
+		if err != nil {
+			response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+
+	response.ITEM(w, r, http.StatusOK, et.Item{
+		Ok:     true,
+		Result: et.Json{"message": MSG_PARTICIPANT_UPDATED},
 	})
 }

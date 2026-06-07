@@ -28,13 +28,13 @@ var (
 
 type Jrex struct {
 	*Loader `json:"-"`
-	Ctx     et.Json       `json:"ctx"`
-	ID      string        `json:"id"`
-	Scripts string        `json:"scripts"`
-	vm      *goja.Runtime `json:"-"`
-	watch   *file.Watcher `json:"-"`
-	store   Store         `json:"-"`
-	program *tea.Program  `json:"-"`
+	Ctx     et.Json           `json:"ctx"`
+	ID      string            `json:"id"`
+	Scripts string            `json:"scripts"`
+	vm      *goja.Runtime     `json:"-"`
+	watch   *file.Watcher     `json:"-"`
+	store   Store             `json:"-"`
+	program *tea.Program      `json:"-"`
 	onStart func(*Jrex) error `json:"-"`
 }
 
@@ -170,6 +170,16 @@ func (s *Jrex) SetCtx(ctx et.Json) {
 }
 
 /**
+* OnStart: Registers a function to run when the CLI starts. Has no effect if fn is nil.
+* @param fn func(*Jrex) error
+* @return *Jrex
+**/
+func (s *Jrex) OnStart(fn func(*Jrex) error) *Jrex {
+	s.onStart = fn
+	return s
+}
+
+/**
 * notify: Reports a kind/message pair to the running CLI program, falling back
 * to logs when no CLI program is attached.
 * @params kind string, message string
@@ -258,7 +268,6 @@ func (s *Jrex) RunBySource(path string) (et.Json, error) {
 	return s.Run(scr.Scripts)
 }
 
-
 /**
 * RunDev
 * @param baseDir string
@@ -276,6 +285,14 @@ func (s *Jrex) RunDev(baseDir string) error {
 	if err != nil {
 		return err
 	}
+
+	s.OnStart(func(s *Jrex) error {
+		_, err := s.RunByFile(s.Main)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 
 	return s.RunCli()
 }

@@ -196,6 +196,14 @@ func (s *Jrex) RunCli() error {
 	s.program = program
 	defer func() { s.program = nil }()
 
+	if s.onStart != nil {
+		go func() {
+			if err := s.onStart(s); err != nil {
+				s.notify("Error", err.Error())
+			}
+		}()
+	}
+
 	go func() {
 		if err := s.hotReload(); err != nil {
 			s.notify("Error", err.Error())

@@ -4,7 +4,7 @@ description("Pruebas de vm");
 const pricing = require("./modules/pricing");
 
 // Test 1
-result = pricing.calcular(100, 10);
+result = pricing.calcular(100, 20);
 console.log(result);
 
 // Test 2

@@ -11,7 +11,12 @@ import (
 	"github.com/cgalvisleon/et/timezone"
 )
 
+type Stdout interface {
+	Notify(kind string, message string)
+}
+
 var (
+	stdout Stdout
 	Reset  = "\033[97m"
 	Black  = "\033[30m"
 	Red    = "\033[31m"
@@ -80,6 +85,14 @@ func init() {
 }
 
 /**
+* SetStdout
+* @param v Stdout
+**/
+func SetStdout(v Stdout) {
+	stdout = v
+}
+
+/**
 * Color
 * @param s string, color string, format string, args ...interface{}
 * @return string
@@ -139,7 +152,11 @@ func Printl(kind string, color string, args ...any) string {
 		result = Reset + now + Purple + fmt.Sprintf(" [%s]: ", kind) + Reset + printColor + message + Reset
 	}
 
-	println(result)
+	if stdout == nil {
+		println(result)
+	} else {
+		stdout.Notify(kind, result)
+	}
 
 	return result
 }

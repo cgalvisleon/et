@@ -16,7 +16,11 @@ func main() {
 
 	logs.Debug("connected:", db.Name)
 
-	v := jrex.New("jrex", db.Rules)
+	v, err := jrex.New("jrex", db.Rules)
+	if err != nil {
+		logs.Panic(err)
+	}
+
 	err = v.RunDev("./cmd/jrex/src")
 	if err != nil {
 		logs.Panic(err)

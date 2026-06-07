@@ -8,8 +8,8 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/file"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
+	"github.com/cgalvisleon/et/stdrout"
 	"github.com/cgalvisleon/et/utility"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dop251/goja"
@@ -31,6 +31,7 @@ type Jrex struct {
 	Ctx     et.Json           `json:"ctx"`
 	ID      string            `json:"id"`
 	Scripts string            `json:"scripts"`
+	pkgFile string            `json:"-"`
 	vm      *goja.Runtime     `json:"-"`
 	watch   *file.Watcher     `json:"-"`
 	store   Store             `json:"-"`
@@ -43,7 +44,7 @@ type Jrex struct {
 * @param name string, store Store
 * @return *Jrex
 **/
-func New(name string, store Store) *Jrex {
+func New(name string, store Store) (*Jrex, error) {
 	if !utility.ValidStr(name, 0, []string{""}) {
 		name = "jrex"
 	}
@@ -56,7 +57,15 @@ func New(name string, store Store) *Jrex {
 		store: store,
 	}
 	result.Loader = newLoader(result, name)
-	return result
+
+	absPath, err := filepath.Abs("./")
+	if err != nil {
+		return nil, err
+	}
+
+	result.BaseDir = absPath
+	result.pkgFile = filepath.Join(result.BaseDir, "package.json")
+	return result, nil
 }
 
 /**
@@ -180,21 +189,15 @@ func (s *Jrex) OnStart(fn func(*Jrex) error) *Jrex {
 }
 
 /**
-* notify: Reports a kind/message pair to the running CLI program, falling back
+* Notify: Reports a kind/message pair to the running CLI program, falling back
 * to logs when no CLI program is attached.
 * @params kind string, message string
 **/
-func (s *Jrex) notify(kind, message string) {
+func (s *Jrex) Notify(kind, message string) {
 	if s.program != nil {
 		s.program.Send(cliLogMsg{kind: kind, message: message})
 		return
 	}
-
-	if kind == "Error" {
-		logs.Errorm(message)
-		return
-	}
-	logs.Log(kind, message)
 }
 
 /**
@@ -215,6 +218,8 @@ func (s *Jrex) Run(str string) (et.Json, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	stdrout.SetStdout(s)
 
 	return s.Ctx, nil
 }
@@ -281,6 +286,7 @@ func (s *Jrex) RunDev(baseDir string) error {
 	}
 
 	s.BaseDir = absPath
+	s.pkgFile = filepath.Join(s.BaseDir, "package.json")
 	s.mode = Develop
 	err = s.init()
 	if err != nil {
@@ -308,13 +314,13 @@ func (s *Jrex) hotReload() error {
 		return err
 	}
 	s.watch = watch
-	s.notify("Watcher", fmt.Sprintf("watching %s for changes", s.BaseDir))
+	s.Notify("Watcher", fmt.Sprintf("watching %s for changes", s.BaseDir))
 	err = s.watch.OnReload(func(info file.FileInfo, event fsnotify.Event) {
 		_, err := s.RunByFile(s.Main)
 		if err != nil {
-			s.notify("ERROR", err.Error())
+			s.Notify("ERROR", err.Error())
 		} else {
-			s.notify("CTX", s.Ctx.ToString())
+			s.Notify("CTX", s.Ctx.ToString())
 		}
 	}).Load()
 	if err != nil {

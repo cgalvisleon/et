@@ -193,7 +193,11 @@ func newQuery(model *Model, as ...string) *Query {
 		historyDb:  model.historyDb,
 		isDebug:    model.db.IsDebug,
 	}
-	result.jrex = jrex.New("query", model.db.Rules)
+	var err error
+	result.jrex, err = jrex.New("query", model.db.Rules)
+	if err != nil {
+		logs.Panic(err)
+	}
 	result.jrex.Set("db", model.db)
 	result.addFrom(model, as[0])
 	return result

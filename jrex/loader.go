@@ -39,7 +39,6 @@ type Mode string
 const (
 	Develop    Mode = "develop"
 	Production Mode = "production"
-	Building   Mode = "building"
 )
 
 type Loader struct {
@@ -66,9 +65,8 @@ func newLoader(jrex *Jrex, name string) *Loader {
 			Dependencies:    make(map[string]string),
 			DevDependencies: make(map[string]string),
 		},
-		mode:    Production,
-		BaseDir: "./",
-		jrex:    jrex,
+		mode: Production,
+		jrex: jrex,
 	}
 	return result
 }
@@ -78,8 +76,7 @@ func newLoader(jrex *Jrex, name string) *Loader {
 * @return error
 **/
 func (s *Loader) save() error {
-	pkgFile := filepath.Join(s.BaseDir, "package.json")
-	file, err := os.Create(pkgFile)
+	file, err := os.Create(s.jrex.pkgFile)
 	if err != nil {
 		return err
 	}
@@ -117,9 +114,8 @@ func (s *Loader) init() error {
 
 		return nil
 	} else {
-		pkgFile := filepath.Join(s.BaseDir, "package.json")
-		if exists(pkgFile) {
-			data, _ := os.ReadFile(pkgFile)
+		if exists(s.jrex.pkgFile) {
+			data, _ := os.ReadFile(s.jrex.pkgFile)
 			err := json.Unmarshal(data, &s.Pkg)
 			if err != nil {
 				return err
@@ -215,7 +211,7 @@ func (s *Loader) Resolve(modulePath string, currentDir string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		s.jrex.notify("LOG", fmt.Sprintf("Resolve: %s", result))
+		s.jrex.Notify("LOG", fmt.Sprintf("Resolve: %s", result))
 		return result, nil
 	}
 
@@ -225,7 +221,7 @@ func (s *Loader) Resolve(modulePath string, currentDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	s.jrex.notify("LOG", fmt.Sprintf("Resolve: %s", result))
+	s.jrex.Notify("LOG", fmt.Sprintf("Resolve: %s", result))
 	return result, nil
 }
 
@@ -246,9 +242,8 @@ func (s *Loader) resolveAsFileOrDir(base string) (string, error) {
 	}
 
 	// carpeta con package.json
-	pkgFile := filepath.Join(base, "package.json")
-	if exists(pkgFile) {
-		data, _ := os.ReadFile(pkgFile)
+	if exists(s.jrex.pkgFile) {
+		data, _ := os.ReadFile(s.jrex.pkgFile)
 
 		json.Unmarshal(data, &s.Pkg)
 

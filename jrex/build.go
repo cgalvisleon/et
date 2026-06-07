@@ -2,9 +2,9 @@ package jrex
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/msg"
@@ -21,28 +21,20 @@ type Module struct {
 * @return error
 **/
 func (s *Jrex) Build(part Part) error {
+	if s.mode != Develop {
+		return errors.New("build is only available in develop mode")
+	}
+
 	if s.store == nil {
 		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "store")
 	}
 
-	absPath, err := filepath.Abs("")
-	if err != nil {
-		return err
+	if !exists(s.pkgFile) {
+		return errors.New("package.json not found")
 	}
 
-	pkgFile := filepath.Join(absPath, "package.json")
-	if !exists(pkgFile) {
-		return fmt.Errorf("package.json not found")
-	}
-
-	pkgData, _ := os.ReadFile(pkgFile)
-	err = json.Unmarshal(pkgData, &s.Pkg)
-	if err != nil {
-		return err
-	}
-
-	s.mode = Building
-	err = s.init()
+	pkgData, _ := os.ReadFile(s.pkgFile)
+	err := json.Unmarshal(pkgData, &s.Pkg)
 	if err != nil {
 		return err
 	}

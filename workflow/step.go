@@ -114,10 +114,13 @@ func (s *Step) Rollback(def RefRollback) *Step {
 * @params ctx et.Json
 * @return *jrex.Jrex
 **/
-func (s *Step) loadVm(ctx et.Json) *jrex.Jrex {
-	s.jrex = jrex.New("workflow", s.flow.workflow.store)
-	s.jrex.SetCtx(ctx)
-	return s.jrex
+func (s *Step) loadVm(ctx et.Json) (*jrex.Jrex, error) {
+	jrex, err := jrex.New("workflow", s.flow.workflow.store)
+	if err != nil {
+		return nil, err
+	}
+	jrex.SetCtx(ctx)
+	return jrex, nil
 }
 
 /**
@@ -136,7 +139,11 @@ func (s *Step) Run(flow *Instance, ctx et.Json) (et.Json, error) {
 	if s.fn != nil {
 		result, err = s.fn(flow, ctx)
 	} else {
-		s.jrex = s.loadVm(ctx)
+		s.jrex, err = s.loadVm(ctx)
+		if err != nil {
+			return nil, err
+		}
+
 		_, err = s.jrex.RunByBt(s.Definition)
 		if err != nil {
 			return nil, err
@@ -162,7 +169,11 @@ func (s *Step) RunRollback(flow *Instance, ctx et.Json) (et.Json, error) {
 	if s.fnUndo != nil {
 		result, err = s.fnUndo(flow, ctx)
 	} else {
-		s.jrex = s.loadVm(ctx)
+		s.jrex, err = s.loadVm(ctx)
+		if err != nil {
+			return nil, err
+		}
+
 		_, err = s.jrex.RunByBt(s.Undo)
 		if err != nil {
 			return nil, err

@@ -1,6 +1,7 @@
 package jrex
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -16,7 +17,7 @@ var (
 )
 
 const cliHelpText = `available commands:
-  /build   bump the version (release) and publish to the store
+  /build [major|minor|release]   bump the version (default: release) and publish to the store
   /help    show this help message
   /quit, /q exit the CLI`
 
@@ -94,13 +95,13 @@ func (m cliModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.dispatch(line)
 		}
 	case cliLogMsg:
-		m.appendLine(fmt.Sprintf("[%s] %s", msg.kind, msg.message))
+		m.appendLog(msg.kind, msg.message)
 		return m, nil
 	case cliCmdResultMsg:
 		if msg.err != nil {
-			m.appendLine(fmt.Sprintf("[%s] error: %s", msg.kind, msg.err.Error()))
+			m.appendLog(msg.kind+" error", msg.err.Error())
 		} else {
-			m.appendLine(fmt.Sprintf("[%s] %s", msg.kind, msg.message))
+			m.appendLog(msg.kind, msg.message)
 		}
 		return m, nil
 	}
@@ -156,6 +157,17 @@ func (m *cliModel) appendLine(line string) {
 }
 
 /**
+* appendLog: Appends a kind/message pair to the log viewport, splitting the
+* message on line breaks so each line renders as its own row in the viewport.
+* @params kind, message string
+**/
+func (m *cliModel) appendLog(kind, message string) {
+	for line := range strings.SplitSeq(message, "\n") {
+		m.appendLine(fmt.Sprintf("[%s] %s", kind, line))
+	}
+}
+
+/**
 * dispatch: Parses a command line and returns the tea.Cmd that runs it.
 * @param line string
 * @return tea.Cmd
@@ -166,7 +178,12 @@ func (m *cliModel) dispatch(line string) tea.Cmd {
 
 	switch name {
 	case "/build":
-		return m.runBuild
+		part := "same"
+		if len(fields) > 1 {
+			part = fields[1]
+		}
+		m.runBuild(part)
+		return nil
 	case "/help":
 		m.appendLine(cliHelpText)
 		return nil
@@ -182,8 +199,17 @@ func (m *cliModel) dispatch(line string) tea.Cmd {
 * runBuild: Runs Build with the default release bump as a tea.Cmd.
 * @return tea.Msg
 **/
-func (m *cliModel) runBuild() tea.Msg {
-	err := m.jrex.Build(Release)
+func (m *cliModel) runBuild(part string) tea.Msg {
+	if map[string]bool{
+		"same":    true,
+		"major":   true,
+		"minor":   true,
+		"release": true,
+	}[part] == false {
+		return cliCmdResultMsg{kind: "Build", err: errors.New("invalid part")}
+	}
+
+	err := m.jrex.Build(Part(part))
 	if err != nil {
 		return cliCmdResultMsg{kind: "Build", err: err}
 	}
@@ -203,14 +229,14 @@ func (s *Jrex) RunCli() error {
 	if s.onStart != nil {
 		go func() {
 			if err := s.onStart(s); err != nil {
-				s.notify("Error", err.Error())
+				s.Notify("Error", err.Error())
 			}
 		}()
 	}
 
 	go func() {
 		if err := s.hotReload(); err != nil {
-			s.notify("Error", err.Error())
+			s.Notify("Error", err.Error())
 		}
 	}()
 

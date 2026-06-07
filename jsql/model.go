@@ -340,7 +340,7 @@ func (s *Model) GetCalcFunc(name string) (CalcFunction, bool) {
 * @return (bool, error) where bool indicates if the model already existed
 **/
 func (s *Model) initInDb(db *DB) (bool, error) {
-	exist, err := db.existModel(s.Schema, s.Name)
+	exist, err := db.existModel(s)
 	if err != nil {
 		return false, err
 	}
@@ -700,11 +700,6 @@ func (s *Model) Delete() *Command {
 func (s *Model) Upsert(data et.Json) *Command {
 	result := newCommand(s, UPSERT)
 	result.Data = append(result.Data, data)
-	for _, k := range s.PrimaryKeys {
-		if v, ok := data[k.Name]; ok {
-			result.Where(et.Eq(k.Name, v))
-		}
-	}
 	return result
 }
 

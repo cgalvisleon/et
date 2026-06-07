@@ -179,14 +179,15 @@ func ddlForeignKeys(model *jsql.Model, table string) []string {
 * @param db *sql.DB @param schema string @param name string
 * @return bool, error
 **/
-func (s *Postgres) ExistModel(db *sql.DB, schema, name string) (bool, error) {
+func (s *Postgres) ExistModel(db *sql.DB, model *jsql.Model) (bool, error) {
+	ddlTable(model)
 	query := `
 	SELECT EXISTS(
 	SELECT 1
 	FROM information_schema.tables
 	WHERE UPPER(table_schema) = UPPER($1)
 	AND UPPER(table_name) = UPPER($2));`
-	rows, err := db.Query(query, schema, name)
+	rows, err := db.Query(query, model.Schema, model.Name)
 	if err != nil {
 		return false, err
 	}

@@ -145,6 +145,17 @@ func Printl(kind string, color string, args ...any) string {
 	now := timezone.NowStr()
 	var result string
 
+	if stdout != nil {
+		printColor := colors[color]
+		if printColor == Reset {
+			result = Reset + now + Purple + Reset + message + Reset
+		} else {
+			result = Reset + now + Purple + Reset + printColor + message + Reset
+		}
+		stdout.Notify(kind, result)
+		return result
+	}
+
 	printColor := colors[color]
 	if printColor == Reset {
 		result = Reset + now + Purple + fmt.Sprintf(" [%s]: ", kind) + Reset + message + Reset
@@ -152,12 +163,7 @@ func Printl(kind string, color string, args ...any) string {
 		result = Reset + now + Purple + fmt.Sprintf(" [%s]: ", kind) + Reset + printColor + message + Reset
 	}
 
-	if stdout == nil {
-		println(result)
-	} else {
-		stdout.Notify(kind, result)
-	}
-
+	println(result)
 	return result
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/timezone"
 )
 
 func defineSeries(db *DB) error {
@@ -17,6 +18,8 @@ func defineSeries(db *DB) error {
 		Name:    "series",
 		Version: 1,
 		Columns: []Column{
+			{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
+			{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 			{Name: "tag", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 			{Name: "owner_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 			{Name: "format", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
@@ -33,6 +36,20 @@ func defineSeries(db *DB) error {
 	if err != nil {
 		return err
 	}
+
+	db.series.
+		BeforeInsert(func(tx *Tx, old, new et.Json) error {
+			now := timezone.Now()
+			new.Set(CREATED_AT, now)
+			new.Set(UPDATED_AT, now)
+			return nil
+		}).
+		BeforeUpdate(func(tx *Tx, old, new et.Json) error {
+			now := timezone.Now()
+			new.Set(UPDATED_AT, now)
+			return nil
+		})
+
 	err = db.series.Init()
 	if err != nil {
 		return err

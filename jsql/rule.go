@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/timezone"
 )
 
 type Rule struct {
@@ -36,6 +37,19 @@ func defineRule(db *DB, schema string) (*Rule, error) {
 		return nil, err
 	}
 
+	model.
+		BeforeInsert(func(tx *Tx, old, new et.Json) error {
+			now := timezone.Now()
+			new.Set(CREATED_AT, now)
+			new.Set(UPDATED_AT, now)
+			return nil
+		}).
+		BeforeUpdate(func(tx *Tx, old, new et.Json) error {
+			now := timezone.Now()
+			new.Set(UPDATED_AT, now)
+			return nil
+		})
+
 	err = model.Init()
 	if err != nil {
 		return nil, err
@@ -66,7 +80,7 @@ func (s *Rule) SetModule(module string, source any) error {
 			"id":         module,
 			"definition": bt,
 		}).
-		Debug().
+		Where(Eq("id", module)).
 		Exec()
 	if err != nil {
 		return err

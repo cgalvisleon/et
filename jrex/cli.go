@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cgalvisleon/et/stdrout"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -182,8 +183,9 @@ func (m *cliModel) dispatch(line string) tea.Cmd {
 		if len(fields) > 1 {
 			part = fields[1]
 		}
-		m.runBuild(part)
-		return nil
+		return func() tea.Msg {
+			return m.runBuild(part)
+		}
 	case "/help":
 		m.appendLine(cliHelpText)
 		return nil
@@ -224,6 +226,7 @@ func (m *cliModel) runBuild(part string) tea.Msg {
 func (s *Jrex) RunCli() error {
 	program := tea.NewProgram(newCliModel(s), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	s.program = program
+	stdrout.SetStdout(s)
 	defer func() { s.program = nil }()
 
 	if s.onStart != nil {

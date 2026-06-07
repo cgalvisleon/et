@@ -9,9 +9,9 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/reg"
-	"github.com/cgalvisleon/et/stdrout"
 	"github.com/cgalvisleon/et/utility"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/dop251/goja"
 	"github.com/fsnotify/fsnotify"
 )
@@ -189,13 +189,13 @@ func (s *Jrex) OnStart(fn func(*Jrex) error) *Jrex {
 }
 
 /**
-* Notify: Reports a kind/message pair to the running CLI program, falling back
-* to logs when no CLI program is attached.
+* Notify: Reports a kind/message pair to the running CLI program, stripping
+* ANSI escape codes so colorized log output doesn't corrupt the TUI rendering.
 * @params kind string, message string
 **/
 func (s *Jrex) Notify(kind, message string) {
 	if s.program != nil {
-		s.program.Send(cliLogMsg{kind: kind, message: message})
+		s.program.Send(cliLogMsg{kind: kind, message: ansi.Strip(message)})
 		return
 	}
 }
@@ -218,8 +218,6 @@ func (s *Jrex) Run(str string) (et.Json, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	stdrout.SetStdout(s)
 
 	return s.Ctx, nil
 }

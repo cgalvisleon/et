@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/timezone"
 )
 
 /**
@@ -43,6 +44,20 @@ func defineCatalog(db *DB) error {
 	if err != nil {
 		return err
 	}
+
+	db.catalog.
+		BeforeInsert(func(tx *Tx, old, new et.Json) error {
+			now := timezone.Now()
+			new.Set(CREATED_AT, now)
+			new.Set(UPDATED_AT, now)
+			return nil
+		}).
+		BeforeUpdate(func(tx *Tx, old, new et.Json) error {
+			now := timezone.Now()
+			new.Set(UPDATED_AT, now)
+			return nil
+		})
+
 	err = db.catalog.Init()
 	if err != nil {
 		return err

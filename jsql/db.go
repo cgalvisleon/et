@@ -147,12 +147,12 @@ func (s *DB) getSchema(name string) (*Schema, error) {
 * @param schema string, name string
 * @return bool, error
 **/
-func (s *DB) existModel(schema string, name string) (bool, error) {
+func (s *DB) existModel(model *Model) (bool, error) {
 	if s.driver == nil {
 		return false, errors.New(MSG_DRIVER_NOT_FOUND)
 	}
 
-	return s.driver.ExistModel(s.db, schema, name)
+	return s.driver.ExistModel(s.db, model)
 }
 
 /**

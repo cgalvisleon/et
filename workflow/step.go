@@ -4,7 +4,7 @@ import (
 	"maps"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/vm"
+	"github.com/cgalvisleon/et/jrex"
 )
 
 type FnContext func(flow *Instance, ctx et.Json) (et.Json, error)
@@ -30,16 +30,16 @@ type RefRollback struct {
 }
 
 type Step struct {
-	Index       int       `json:"index"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Stop        bool      `json:"stop"`
-	Definition  []byte    `json:"definition"`
-	Undo        []byte    `json:"undo"`
-	fn          FnContext `json:"-"`
-	fnUndo      FnContext `json:"-"`
-	vm          *vm.VM    `json:"-"`
-	flow        *Flow     `json:"-"`
+	Index       int        `json:"index"`
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	Stop        bool       `json:"stop"`
+	Definition  []byte     `json:"definition"`
+	Undo        []byte     `json:"undo"`
+	fn          FnContext  `json:"-"`
+	fnUndo      FnContext  `json:"-"`
+	jrex        *jrex.Jrex `json:"-"`
+	flow        *Flow      `json:"-"`
 }
 
 /**
@@ -112,12 +112,12 @@ func (s *Step) Rollback(def RefRollback) *Step {
 /**
 * loadVm
 * @params ctx et.Json
-* @return *vm.VM
+* @return *jrex.Jrex
 **/
-func (s *Step) loadVm(ctx et.Json) *vm.VM {
-	s.vm = vm.New(s.Name)
-	s.vm.SetCtx(ctx)
-	return s.vm
+func (s *Step) loadVm(ctx et.Json) *jrex.Jrex {
+	s.jrex = jrex.New("workflow", s.flow.workflow.store)
+	s.jrex.SetCtx(ctx)
+	return s.jrex
 }
 
 /**
@@ -136,8 +136,8 @@ func (s *Step) Run(flow *Instance, ctx et.Json) (et.Json, error) {
 	if s.fn != nil {
 		result, err = s.fn(flow, ctx)
 	} else {
-		s.vm = s.loadVm(ctx)
-		_, err = s.vm.RunByBt(s.Definition)
+		s.jrex = s.loadVm(ctx)
+		_, err = s.jrex.RunByBt(s.Definition)
 		if err != nil {
 			return nil, err
 		}
@@ -162,8 +162,8 @@ func (s *Step) RunRollback(flow *Instance, ctx et.Json) (et.Json, error) {
 	if s.fnUndo != nil {
 		result, err = s.fnUndo(flow, ctx)
 	} else {
-		s.vm = s.loadVm(ctx)
-		_, err = s.vm.RunByBt(s.Undo)
+		s.jrex = s.loadVm(ctx)
+		_, err = s.jrex.RunByBt(s.Undo)
 		if err != nil {
 			return nil, err
 		}

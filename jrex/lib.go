@@ -1,4 +1,4 @@
-package vm
+package jrex
 
 const requireRuntime = `
 const __cache = {};

@@ -1,4 +1,4 @@
-package vm
+package jrex
 
 import (
 	"encoding/json"
@@ -180,7 +180,7 @@ func (s *Loader) get(module string, dest any) (bool, error) {
 	if s.store == nil {
 		return false, nil
 	}
-	return s.store.Get(module, dest)
+	return s.store.GetModule(module, dest)
 }
 
 /**
@@ -192,7 +192,7 @@ func (s *Loader) set(module string, source any) error {
 	if s.store == nil {
 		return nil
 	}
-	return s.store.Set(module, source)
+	return s.store.SetModule(module, source)
 }
 
 /**

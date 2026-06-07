@@ -44,31 +44,30 @@ func ConnectTo(connect Connection) (*DB, error) {
 	return result, nil
 }
 
+type Config interface {
+	GetStr(key string, def string) string
+	GetInt(key string, def int) int
+	GetBool(key string, def bool) bool
+}
+
 /**
 * getConnection: Returns a Connection object based on the specified driver and environment variables.
-* @param driver string
+* @param config Config
 * @return Connection, error
 **/
-func getConnection(driver string) (Connection, error) {
+func getConnection(config Config) (Connection, error) {
+	driver := envar.GetStr("DB_DRIVER", DriverPostgres)
+	if config != nil {
+		driver = config.GetStr("DB_DRIVER", DriverPostgres)
+	}
+
 	switch driver {
 	case DriverPostgres:
-		config := PgConection{
-			Database:    envar.GetStr("DB_NAME", "josephine"),
-			Host:        envar.GetStr("DB_HOST", "localhost"),
-			Port:        envar.GetInt("DB_PORT", 5432),
-			User:        envar.GetStr("DB_USER", "test"),
-			Password:    envar.GetStr("DB_PASSWORD", "test"),
-			UseCore:     envar.GetBool("DB_USE_CORE", false),
-			RecordLimit: envar.GetInt("DB_RECORD_LIMIT", 1000),
-		}
-		return &config, nil
+		config := pgConection(config)
+		return config, nil
 	case DriverSqlite:
-		config := SqliteConection{
-			Name:        envar.GetStr("DB_NAME", "josephine.db"),
-			RecordLimit: envar.GetInt("DB_RECORD_LIMIT", 1000),
-			PoolMaxOpen: envar.GetInt("DB_POOL_MAX_OPEN", 10),
-		}
-		return &config, nil
+		config := sqliteConection(config)
+		return config, nil
 	default:
 		return nil, fmt.Errorf(MSG_UNSUPPORTED_DRIVER, driver)
 	}
@@ -79,30 +78,28 @@ func getConnection(driver string) (Connection, error) {
 * @param name string
 * @return *DB, error
 **/
-func LoadTo(name string) (*DB, error) {
-	driver := envar.GetStr("DB_DRIVER", DriverPostgres)
-	config, err := getConnection(driver)
+func LoadTo(config Config, name string) (*DB, error) {
+	conn, err := getConnection(config)
 	if err != nil {
 		return nil, err
 	}
-	config.SetDatabase(name)
-	return ConnectTo(config)
+	conn.SetDatabase(name)
+	return ConnectTo(conn)
 }
 
 /**
 * Load: Connects to the default database reading configuration from environment variables.
 * @return *DB, error
 **/
-func Load() (*DB, error) {
-	driver := envar.GetStr("DB_DRIVER", DriverPostgres)
-	config, err := getConnection(driver)
+func Load(config Config) (*DB, error) {
+	conn, err := getConnection(config)
 	if err != nil {
 		return nil, err
 	}
-	return ConnectTo(config)
+	return ConnectTo(conn)
 }
 
-/**
+/**Logero
 * GetDb: Returns an existing DB by name.
 * @param name string
 * @return *DB, error

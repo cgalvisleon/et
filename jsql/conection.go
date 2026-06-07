@@ -1,6 +1,9 @@
 package jsql
 
-import "github.com/cgalvisleon/et/et"
+import (
+	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/et"
+)
 
 type Connection interface {
 	GetParams() et.Json
@@ -20,22 +23,56 @@ type PgConection struct {
 	RecordLimit int
 }
 
+func pgConection(config Config) *PgConection {
+	database := envar.GetStr("DB_NAME", "josephine")
+	host := envar.GetStr("DB_HOST", "localhost")
+	port := envar.GetInt("DB_PORT", 5432)
+	user := envar.GetStr("DB_USER", "test")
+	password := envar.GetStr("DB_PASSWORD", "test")
+	sslmode := envar.GetStr("DB_SSLMODE", "disable")
+	useCore := envar.GetBool("DB_USE_CORE", false)
+	appName := envar.GetStr("DB_APP_NAME", "josephine")
+	recordLimit := envar.GetInt("DB_RECORD_LIMIT", 1000)
+	if config != nil {
+		database = config.GetStr("DB_NAME", database)
+		host = config.GetStr("DB_HOST", host)
+		port = config.GetInt("DB_PORT", port)
+		user = config.GetStr("DB_USER", user)
+		password = config.GetStr("DB_PASSWORD", password)
+		sslmode = config.GetStr("DB_SSLMODE", sslmode)
+		useCore = config.GetBool("DB_USE_CORE", useCore)
+		appName = config.GetStr("DB_APP_NAME", appName)
+		recordLimit = config.GetInt("DB_RECORD_LIMIT", recordLimit)
+	}
+	return &PgConection{
+		Database:    database,
+		Host:        host,
+		Port:        port,
+		User:        user,
+		Password:    password,
+		Sslmode:     sslmode,
+		UseCore:     useCore,
+		AppName:     appName,
+		RecordLimit: recordLimit,
+	}
+}
+
 /**
 * GetParams: Returns the connection parameters as a JSON object.
 * @return et.Json
 **/
-func (c *PgConection) GetParams() et.Json {
+func (s *PgConection) GetParams() et.Json {
 	return et.Json{
 		"driver":       DriverPostgres,
-		"database":     c.Database,
-		"host":         c.Host,
-		"port":         c.Port,
-		"user":         c.User,
-		"password":     c.Password,
-		"sslmode":      c.Sslmode,
-		"use_core":     c.UseCore,
-		"app_name":     c.AppName,
-		"record_limit": c.RecordLimit,
+		"database":     s.Database,
+		"host":         s.Host,
+		"port":         s.Port,
+		"user":         s.User,
+		"password":     s.Password,
+		"sslmode":      s.Sslmode,
+		"use_core":     s.UseCore,
+		"app_name":     s.AppName,
+		"record_limit": s.RecordLimit,
 	}
 }
 
@@ -43,16 +80,16 @@ func (c *PgConection) GetParams() et.Json {
 * SetDatabase: Sets the database name in the connection parameters.
 * @param name string
 **/
-func (c *PgConection) SetDatabase(name string) {
-	c.Database = name
+func (s *PgConection) SetDatabase(name string) {
+	s.Database = name
 }
 
 /**
 * GetDatabase: Returns the database name from the connection parameters.
 * @return string
 **/
-func (c *PgConection) GetDatabase() string {
-	return c.Database
+func (s *PgConection) GetDatabase() string {
+	return s.Database
 }
 
 type SqliteConection struct {
@@ -65,20 +102,48 @@ type SqliteConection struct {
 	AppName      string
 }
 
+func sqliteConection(config Config) *SqliteConection {
+	name := envar.GetStr("DB_NAME", "josephine.db")
+	recordLimit := envar.GetInt("DB_RECORD_LIMIT", 1000)
+	poolMaxOpen := envar.GetInt("DB_POOL_MAX_OPEN", 10)
+	poolMaxIdle := envar.GetInt("DB_POOL_MAX_IDLE", 10)
+	poolLifetime := envar.GetInt("DB_POOL_LIFETIME", 10)
+	poolIdleTime := envar.GetInt("DB_POOL_IDLE_TIME", 10)
+	appName := envar.GetStr("DB_APP_NAME", "josephine")
+	if config != nil {
+		name = config.GetStr("DB_NAME", name)
+		recordLimit = config.GetInt("DB_RECORD_LIMIT", recordLimit)
+		poolMaxOpen = config.GetInt("DB_POOL_MAX_OPEN", poolMaxOpen)
+		poolMaxIdle = config.GetInt("DB_POOL_MAX_IDLE", poolMaxIdle)
+		poolLifetime = config.GetInt("DB_POOL_LIFETIME", poolLifetime)
+		poolIdleTime = config.GetInt("DB_POOL_IDLE_TIME", poolIdleTime)
+		appName = config.GetStr("DB_APP_NAME", appName)
+	}
+	return &SqliteConection{
+		Name:         name,
+		RecordLimit:  recordLimit,
+		PoolMaxOpen:  poolMaxOpen,
+		PoolMaxIdle:  poolMaxIdle,
+		PoolLifetime: poolLifetime,
+		PoolIdleTime: poolIdleTime,
+		AppName:      appName,
+	}
+}
+
 /**
 * GetParams: Returns the connection parameters as a JSON object.
 * @return et.Json
 **/
-func (c *SqliteConection) GetParams() et.Json {
+func (s *SqliteConection) GetParams() et.Json {
 	return et.Json{
 		"driver":         DriverSqlite,
-		"name":           c.Name,
-		"record_limit":   c.RecordLimit,
-		"pool_max_open":  c.PoolMaxOpen,
-		"pool_max_idle":  c.PoolMaxIdle,
-		"pool_lifetime":  c.PoolLifetime,
-		"pool_idle_time": c.PoolIdleTime,
-		"app_name":       c.AppName,
+		"name":           s.Name,
+		"record_limit":   s.RecordLimit,
+		"pool_max_open":  s.PoolMaxOpen,
+		"pool_max_idle":  s.PoolMaxIdle,
+		"pool_lifetime":  s.PoolLifetime,
+		"pool_idle_time": s.PoolIdleTime,
+		"app_name":       s.AppName,
 	}
 }
 
@@ -86,14 +151,14 @@ func (c *SqliteConection) GetParams() et.Json {
 * SetDatabase: Sets the database name in the connection parameters
 * @param name string
 **/
-func (c *SqliteConection) SetDatabase(name string) {
-	c.Name = name
+func (s *SqliteConection) SetDatabase(name string) {
+	s.Name = name
 }
 
 /**
 * GetDatabase: Returns the database name from the connection parameters.
 * @return string
 **/
-func (c *SqliteConection) GetDatabase() string {
-	return c.Name
+func (s *SqliteConection) GetDatabase() string {
+	return s.Name
 }

@@ -1,4 +1,4 @@
-package vm
+package jrex
 
 import (
 	"fmt"
@@ -10,47 +10,51 @@ import (
 	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/dop251/goja"
 	"github.com/fsnotify/fsnotify"
 )
 
-type Module struct {
-	ID      string `json:"id"`
-	Scripts string `json:"scripts"`
+type Store interface {
+	SetModule(module string, source any) error
+	GetModule(module string, source any) (bool, error)
+	DeleteModule(module string) error
 }
 
-type VM struct {
+var (
+	packageName = "jrex"
+)
+
+type Jrex struct {
 	*Loader `json:"-"`
 	Ctx     et.Json       `json:"ctx"`
+	ID      string        `json:"id"`
+	Scripts string        `json:"scripts"`
 	vm      *goja.Runtime `json:"-"`
 	watch   *file.Watcher `json:"-"`
+	store   Store         `json:"-"`
 }
 
 /**
 * New
-* @param name string
-* @return *VM
+* @param name string, store Store
+* @return *Jrex
 **/
-func New(name string) *VM {
+func New(name string, store Store) *Jrex {
 	if !utility.ValidStr(name, 0, []string{""}) {
-		name = "vm"
+		name = "jrex"
 	}
 
-	result := &VM{
+	id := reg.GenULID(packageName)
+	result := &Jrex{
 		Loader: newLoader(name),
+		ID:     id,
 		Ctx:    et.Json{},
+		vm:     goja.New(),
+		store:  store,
 	}
 	return result
-}
-
-/**
-* uppToStore
-* @return error
-**/
-func (s *VM) uppToStore() error {
-	id := fmt.Sprintf("pkg:%s:%s", s.Name, s.Version)
-	return s.set(id, s)
 }
 
 /**
@@ -58,7 +62,7 @@ func (s *VM) uppToStore() error {
 * @param value interface{}
 * @return goja.Value
 **/
-func (s *VM) Value(value interface{}) goja.Value {
+func (s *Jrex) Value(value interface{}) goja.Value {
 	return s.vm.ToValue(value)
 }
 
@@ -67,7 +71,7 @@ func (s *VM) Value(value interface{}) goja.Value {
 * @param err error
 * @return *goja.Object
 **/
-func (s *VM) Error(err error) *goja.Object {
+func (s *Jrex) Error(err error) *goja.Object {
 	return s.vm.NewGoError(err)
 }
 
@@ -76,7 +80,7 @@ func (s *VM) Error(err error) *goja.Object {
 * @param name string
 * @return goja.Value
 **/
-func (s *VM) Get(name string) goja.Value {
+func (s *Jrex) Get(name string) goja.Value {
 	return s.vm.Get(name)
 }
 
@@ -85,7 +89,7 @@ func (s *VM) Get(name string) goja.Value {
 * @param name string
 * @return et.Json
 **/
-func (s *VM) GetJson(name string) et.Json {
+func (s *Jrex) GetJson(name string) et.Json {
 	result, ok := s.vm.Get(name).Export().(et.Json)
 	if !ok {
 		return et.Json{}
@@ -98,8 +102,17 @@ func (s *VM) GetJson(name string) et.Json {
 * @params name string, value interface{}
 * @return error
 **/
-func (s *VM) Set(name string, value interface{}) error {
+func (s *Jrex) Set(name string, value interface{}) error {
 	return s.vm.Set(name, value)
+}
+
+/**
+* uppToStore
+* @return error
+**/
+func (s *Jrex) uppToStore() error {
+	id := fmt.Sprintf("pkg:%s:%s", s.Name, s.Version)
+	return s.set(id, s)
 }
 
 /**
@@ -107,7 +120,7 @@ func (s *VM) Set(name string, value interface{}) error {
 * @params module string, path string
 * @return error
 **/
-func (s *VM) SetModule(module string, path string) error {
+func (s *Jrex) SetModule(module string, path string) error {
 	_, ok := s.Modules[module]
 	s.Modules[module] = path
 	if !ok {
@@ -121,7 +134,7 @@ func (s *VM) SetModule(module string, path string) error {
 * @params description string
 * @return error
 **/
-func (s *VM) SetDescription(description string) error {
+func (s *Jrex) SetDescription(description string) error {
 	s.Description = description
 	return s.save()
 }
@@ -131,7 +144,7 @@ func (s *VM) SetDescription(description string) error {
 * @params author string
 * @return error
 **/
-func (s *VM) SetAuthor(author string) error {
+func (s *Jrex) SetAuthor(author string) error {
 	s.Author = author
 	return s.save()
 }
@@ -141,7 +154,7 @@ func (s *VM) SetAuthor(author string) error {
 * @params license string
 * @return error
 **/
-func (s *VM) SetLicense(license string) error {
+func (s *Jrex) SetLicense(license string) error {
 	s.License = license
 	return s.save()
 }
@@ -150,7 +163,7 @@ func (s *VM) SetLicense(license string) error {
 * SetCtx
 * @params ctx et.Json
 **/
-func (s *VM) SetCtx(ctx et.Json) {
+func (s *Jrex) SetCtx(ctx et.Json) {
 	maps.Copy(s.Ctx, ctx)
 }
 
@@ -159,7 +172,7 @@ func (s *VM) SetCtx(ctx et.Json) {
 * @params str string
 * @return et.Json, error
 **/
-func (s *VM) Run(str string) (et.Json, error) {
+func (s *Jrex) Run(str string) (et.Json, error) {
 	s.vm = goja.New()
 	wrap(s)
 
@@ -180,7 +193,7 @@ func (s *VM) Run(str string) (et.Json, error) {
 * @params code []byte
 * @return et.Json, error
 **/
-func (s *VM) RunByBt(code []byte) (et.Json, error) {
+func (s *Jrex) RunByBt(code []byte) (et.Json, error) {
 	return s.Run(string(code))
 }
 
@@ -189,7 +202,7 @@ func (s *VM) RunByBt(code []byte) (et.Json, error) {
 * @params path string
 * @return et.Json, error
 **/
-func (s *VM) RunByFile(path string) (et.Json, error) {
+func (s *Jrex) RunByFile(path string) (et.Json, error) {
 	path = filepath.Join(s.Loader.BaseDir, path)
 	_, err := os.Stat(path)
 	if err != nil {
@@ -212,7 +225,7 @@ func (s *VM) RunByFile(path string) (et.Json, error) {
 * @param path string
 * @return (et.Json, error)
 **/
-func (s *VM) RunBySource(path string) (et.Json, error) {
+func (s *Jrex) RunBySource(path string) (et.Json, error) {
 	var scr Module
 	exists, err := s.get(path, &scr)
 	if err != nil {
@@ -230,7 +243,7 @@ func (s *VM) RunBySource(path string) (et.Json, error) {
 * @param baseDir string
 * @return error
 **/
-func (s *VM) RunDev(baseDir string) error {
+func (s *Jrex) RunDev(baseDir string) error {
 	absPath, err := filepath.Abs(baseDir)
 	if err != nil {
 		return err
@@ -261,7 +274,7 @@ func (s *VM) RunDev(baseDir string) error {
 * @param store Store
 * @return error
 **/
-func (s *VM) RunProd(store Store) error {
+func (s *Jrex) RunProd(store Store) error {
 	if store == nil {
 		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "store")
 	}
@@ -285,7 +298,7 @@ func (s *VM) RunProd(store Store) error {
 * HotReload
 * @return error
 **/
-func (s *VM) HotReload() error {
+func (s *Jrex) HotReload() error {
 	watch, err := file.NewWatcher(s.BaseDir)
 	if err != nil {
 		return err

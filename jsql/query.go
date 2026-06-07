@@ -7,8 +7,9 @@ import (
 	"strconv"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/jrex"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/vm"
+	"github.com/cgalvisleon/et/reg"
 )
 
 /**
@@ -137,6 +138,7 @@ func (s *QueryDetail) GetQuery(item et.Json) *Query {
 * Query: Holds all clauses needed to build a SELECT statement.
 **/
 type Query struct {
+	ID             string                  `json:"id"`
 	Froms          []*F                    `json:"froms"`
 	Joins          []*Join                 `json:"joins"`
 	Selects        []string                `json:"selects"`
@@ -158,7 +160,7 @@ type Query struct {
 	maxRows        int                     `json:"-"`
 	db             *DB                     `json:"-"`
 	historyDb      *DB                     `json:"-"`
-	vm             *vm.VM                  `json:"-"`
+	jrex           *jrex.Jrex              `json:"-"`
 	isDebug        bool                    `json:"-"`
 	isTest         bool                    `json:"-"`
 }
@@ -173,6 +175,7 @@ func newQuery(model *Model, as ...string) *Query {
 		as = []string{model.Table}
 	}
 	result := &Query{
+		ID:         reg.GenULID("query"),
 		Froms:      make([]*F, 0),
 		Joins:      make([]*Join, 0),
 		Selects:    make([]string, 0),
@@ -187,11 +190,11 @@ func newQuery(model *Model, as ...string) *Query {
 		section:    whereSection,
 		maxRows:    model.db.RecordLimit,
 		db:         model.db,
-		vm:         vm.New("query_calc"),
 		historyDb:  model.historyDb,
 		isDebug:    model.db.IsDebug,
 	}
-	result.vm.Set("db", model.db)
+	result.jrex = jrex.New("query", model.db.rules)
+	result.jrex.Set("db", model.db)
 	result.addFrom(model, as[0])
 	return result
 }
@@ -439,7 +442,7 @@ func (s *Query) addFrom(model *Model, as string) *Query {
 	if !s.UseSourceField {
 		s.UseSourceField = model.SourceField != ""
 	}
-	s.vm.Set(model.Table, model)
+	s.jrex.Set(model.Table, model)
 	return s
 }
 
@@ -706,12 +709,12 @@ func (s *Query) setCalcFuns(tx *Tx, item et.Json) {
 **/
 func (s *Query) setCalc(tx *Tx, item et.Json) error {
 	for _, code := range s.Calcs {
-		s.vm.Set("item", item)
-		s.vm.Set("tx", tx)
-		if _, err := s.vm.RunByBt(code); err != nil {
+		s.jrex.Set("item", item)
+		s.jrex.Set("tx", tx)
+		if _, err := s.jrex.RunByBt(code); err != nil {
 			return err
 		}
-		item = s.vm.GetJson("item")
+		item = s.jrex.GetJson("item")
 	}
 
 	return nil

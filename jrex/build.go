@@ -1,4 +1,4 @@
-package vm
+package jrex
 
 import (
 	"encoding/json"
@@ -10,12 +10,17 @@ import (
 	"github.com/cgalvisleon/et/msg"
 )
 
+type Module struct {
+	ID      string `json:"id"`
+	Scripts string `json:"scripts"`
+}
+
 /**
 * Build
 * @param store Store, part Part
 * @return *VM, error
 **/
-func (s *VM) Build(store Store, part Part) error {
+func (s *Jrex) Build(store Store, part Part) error {
 	if store == nil {
 		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "store")
 	}
@@ -64,7 +69,7 @@ func (s *VM) Build(store Store, part Part) error {
 		}
 
 		id := fmt.Sprintf("pkg:%s:%s:%s", s.Name, module, s.Version)
-		s.store.Set(id, &Module{
+		s.store.SetModule(id, &Module{
 			ID:      id,
 			Scripts: string(data),
 		})

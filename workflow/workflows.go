@@ -19,6 +19,9 @@ type Store interface {
 	Get(id string, dest any) (bool, error)
 	Delete(id string) error
 	Query(query et.Json) (et.Items, error)
+	SetModule(module string, source any) error
+	GetModule(module string, source any) (bool, error)
+	DeleteModule(module string) error
 }
 
 type WorkFlow struct {

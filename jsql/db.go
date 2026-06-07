@@ -28,6 +28,7 @@ type DB struct {
 	db          *sql.DB            `json:"-"`
 	catalog     *Model             `json:"-"`
 	series      *Model             `json:"-"`
+	rules       *Rule              `json:"-"`
 }
 
 /**

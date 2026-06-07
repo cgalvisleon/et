@@ -1,6 +1,7 @@
 package jsql
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 
@@ -274,7 +275,7 @@ func (s *Model) DefineDetail(name string, keys map[string]string, rows int) (*Mo
 	}
 
 	if len(keys) == 0 {
-		return nil, fmt.Errorf(MSG_KEYS_REQUIRED)
+		return nil, errors.New(MSG_KEYS_REQUIRED)
 	}
 
 	detailName := fmt.Sprintf("%s_%s", s.Name, name)
@@ -308,15 +309,15 @@ func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, sel
 	}
 
 	if to == nil {
-		return nil, fmt.Errorf(MSG_TO_MODEL_REQUIRED)
+		return nil, errors.New(MSG_TO_MODEL_REQUIRED)
 	}
 
 	if len(keys) == 0 {
-		return nil, fmt.Errorf(MSG_KEYS_REQUIRED)
+		return nil, errors.New(MSG_KEYS_REQUIRED)
 	}
 
 	if len(selects) == 0 {
-		return nil, fmt.Errorf(MSG_SELECTS_REQUIRED)
+		return nil, errors.New(MSG_SELECTS_REQUIRED)
 	}
 
 	s.defineColumn(name, ROLLUP, ANY, nil, []byte{})

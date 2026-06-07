@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
@@ -108,8 +110,44 @@ func wrapperCtx(instance *Jrex) {
 		"set": func(key string, value interface{}) {
 			instance.Ctx.Set(key, value)
 		},
-		"get": func(key string) interface{} {
-			return instance.Ctx.Get(key)
+		"get": func(keys ...string) interface{} {
+			return instance.Ctx.Get(keys...)
+		},
+		"str": func(keys ...string) string {
+			return instance.Ctx.Str(keys...)
+		},
+		"int": func(keys ...string) int {
+			return instance.Ctx.Int(keys...)
+		},
+		"int64": func(keys ...string) int64 {
+			return instance.Ctx.Int64(keys...)
+		},
+		"num": func(keys ...string) float64 {
+			return instance.Ctx.Num(keys...)
+		},
+		"bool": func(keys ...string) bool {
+			return instance.Ctx.Bool(keys...)
+		},
+		"time": func(keys ...string) time.Time {
+			return instance.Ctx.Time(keys...)
+		},
+		"json": func(key string) et.Json {
+			return instance.Ctx.Json(key)
+		},
+		"array": func(key string) []interface{} {
+			return instance.Ctx.Array(key)
+		},
+		"arrayStr": func(key string) []string {
+			return instance.Ctx.ArrayStr(key)
+		},
+		"arrayInt": func(key string) []int {
+			return instance.Ctx.ArrayInt(key)
+		},
+		"arrayInt64": func(key string) []int64 {
+			return instance.Ctx.ArrayInt64(key)
+		},
+		"arrayJson": func(key string) []et.Json {
+			return instance.Ctx.ArrayJson(key)
 		},
 	})
 }

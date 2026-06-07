@@ -2,7 +2,7 @@ package ia
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"sync"
 	"time"
 
@@ -218,7 +218,7 @@ func (s *Conversation) SetLimitMessages(limit int) *Conversation {
 **/
 func (s *Conversation) SendTextMessage(content, userId string) (*Message, error) {
 	if s.ia.sender == nil {
-		return nil, fmt.Errorf(MSG_SENDER_NOT_FOUND)
+		return nil, errors.New(MSG_SENDER_NOT_FOUND)
 	}
 
 	ms := newMessage(s, s.to.UserID, s.to.To, Text, content)

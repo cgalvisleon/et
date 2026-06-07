@@ -360,14 +360,14 @@ func (s *Ia) loadParticipant(to string) (*Participant, error) {
 	}
 
 	if !exists {
-		return nil, fmt.Errorf(MSG_PARTICIPANT_NOT_FOUND)
+		return nil, errors.New(MSG_PARTICIPANT_NOT_FOUND)
 	}
 
 	result.up(s)
 	return result, nil
 }
 
-var ErrParticipantNotFound = fmt.Errorf(MSG_PARTICIPANT_NOT_FOUND)
+var ErrParticipantNotFound = errors.New(MSG_PARTICIPANT_NOT_FOUND)
 
 /**
 * getParticipant
@@ -465,7 +465,7 @@ func (s *Ia) loadConversation(to *Participant) (*Conversation, error) {
 	}
 
 	if !exists {
-		return nil, fmt.Errorf(MSG_CONVERSATION_NOT_FOUND)
+		return nil, errors.New(MSG_CONVERSATION_NOT_FOUND)
 	}
 
 	result.up(to)

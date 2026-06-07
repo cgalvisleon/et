@@ -267,7 +267,7 @@ func (s *Instance) SetCheckList(tag string, ok bool, data et.Json) error {
 		})
 		return nil
 	}
-	return fmt.Errorf(MSG_CHECK_LIST_NOT_FOUND)
+	return errors.New(MSG_CHECK_LIST_NOT_FOUND)
 }
 
 /**
@@ -546,7 +546,7 @@ func (s *Instance) startResilence() (et.Json, error) {
 	if len(res) == 0 {
 		return et.Json{}, errors.New(MSG_RESILIENCE_NO_RESULT)
 	}
-	
+
 	result, ok := res[0].(et.Json)
 	if !ok {
 		return et.Json{}, errors.New(MSG_RESILIENCE_NO_RESULT)

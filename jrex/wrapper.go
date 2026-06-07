@@ -6,8 +6,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/file"
+	"github.com/cgalvisleon/et/jrpc"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/request"
@@ -23,6 +26,9 @@ func wrap(instance *Jrex) {
 	wrapperCtx(instance)
 	wrapperConsole(instance)
 	wrapperFetch(instance)
+	wrapperJrpc(instance)
+	wrapperCache(instance)
+	wrapperEvent(instance)
 }
 
 /**
@@ -215,5 +221,81 @@ func wrapperFetch(instance *Jrex) {
 			panic(instance.Error(fmt.Errorf("error al hacer la peticion: %s", status.Message)))
 		}
 		return instance.Value(result)
+	})
+}
+
+/**
+* wrapperJrpc: Wraps the jrpc
+* @param vm *VM
+**/
+func wrapperJrpc(instance *Jrex) {
+	instance.Set("jrpc", map[string]interface{}{
+		"call": func(method string, args any) (any, error) {
+			return jrpc.Call(method, args)
+		},
+		"callJson": func(method string, args et.Json) (et.Json, error) {
+			return jrpc.CallJson(method, args)
+		},
+		"callItems": func(method string, args et.Json) (et.Items, error) {
+			return jrpc.CallItems(method, args)
+		},
+		"callItem": func(method string, args et.Json) (et.Item, error) {
+			return jrpc.CallItem(method, args)
+		},
+	})
+}
+
+/**
+* wrapperCache: Wraps the cache
+* @param vm *VM
+**/
+func wrapperCache(instance *Jrex) {
+	instance.Set("cache", map[string]interface{}{
+		"set": func(key string, value interface{}, expiration time.Duration) interface{} {
+			return cache.Set(key, value, expiration)
+		},
+		"get": func(key string, defaultValue string) string {
+			result, err := cache.Get(key, defaultValue)
+			if err != nil {
+				return defaultValue
+			}
+			return result
+		},
+		"json": func(key string) et.Json {
+			result, err := cache.GetJson(key)
+			if err != nil {
+				return et.Json{}
+			}
+			return result
+		},
+		"items": func(key string) et.Items {
+			result, err := cache.GetItems(key)
+			if err != nil {
+				return et.Items{}
+			}
+			return result
+		},
+		"item": func(key string) et.Item {
+			result, err := cache.GetItem(key)
+			if err != nil {
+				return et.Item{}
+			}
+			return result
+		},
+		"delete": func(key string) bool {
+			_, err := cache.Delete(key)
+			if err != nil {
+				return false
+			}
+			return true
+		},
+	})
+}
+
+func wrapperEvent(instance *Jrex) {
+	instance.Set("event", map[string]interface{}{
+		"publish": func(channel string, data et.Json) {
+			event.Publish(channel, data)
+		},
 	})
 }

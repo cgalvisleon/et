@@ -18,7 +18,7 @@ type Authorization struct {
 }
 
 var (
-	ErrorSetAuthor = fmt.Errorf(msg.MSG_RECORD_NOT_FOUND)
+	ErrorSetAuthor = errors.New(msg.MSG_RECORD_NOT_FOUND)
 )
 
 /**

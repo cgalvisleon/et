@@ -37,7 +37,7 @@ type WorkFlow struct {
 
 var (
 	packageName           = "workflow"
-	ErrorInstanceNotFound = fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
+	ErrorInstanceNotFound = errors.New(MSG_INSTANCE_NOT_FOUND)
 	workflow              *WorkFlow
 )
 
@@ -222,12 +222,12 @@ func (s *WorkFlow) removeInstance(id string) {
 **/
 func (s *WorkFlow) newInstance(tenantId, tag, id, ownerId string, tags et.Json, step int, userId string) (*Instance, error) {
 	if id == "" {
-		return nil, fmt.Errorf(MSG_INSTANCE_ID_REQUIRED)
+		return nil, errors.New(MSG_INSTANCE_ID_REQUIRED)
 	}
 
 	flow, exists := s.getFlow(tag)
 	if !exists {
-		return nil, fmt.Errorf(MSG_FLOW_NOT_FOUND)
+		return nil, errors.New(MSG_FLOW_NOT_FOUND)
 	}
 
 	steper, ok := flow.Steper[tag]
@@ -276,7 +276,7 @@ func (s *WorkFlow) GetInstance(id string) (*Instance, error) {
 func (s *WorkFlow) DeleteInstance(id, userId string) error {
 	instance, exists := s.getInstance(id)
 	if !exists {
-		return fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
+		return errors.New(MSG_INSTANCE_NOT_FOUND)
 	}
 
 	err := instance.delete()
@@ -330,7 +330,7 @@ func (s *WorkFlow) RunInstance(tenantId, tag, id, ownerId string, step int, ctx,
 func (s *WorkFlow) ResetInstance(id, userId string) (et.Json, error) {
 	instance, exists := s.getInstance(id)
 	if !exists {
-		return et.Json{}, fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
+		return et.Json{}, errors.New(MSG_INSTANCE_NOT_FOUND)
 	}
 
 	instance.UpdatedBy = userId
@@ -347,7 +347,7 @@ func (s *WorkFlow) ResetInstance(id, userId string) (et.Json, error) {
 func (s *WorkFlow) RollbackInstance(id, userId string) (et.Json, error) {
 	instance, exists := s.getInstance(id)
 	if !exists {
-		return et.Json{}, fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
+		return et.Json{}, errors.New(MSG_INSTANCE_NOT_FOUND)
 	}
 
 	instance.UpdatedBy = userId
@@ -367,7 +367,7 @@ func (s *WorkFlow) RollbackInstance(id, userId string) (et.Json, error) {
 func (s *WorkFlow) StopInstance(instanceId, userId string) (et.Json, error) {
 	instance, exists := s.getInstance(instanceId)
 	if !exists {
-		return et.Json{}, fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
+		return et.Json{}, errors.New(MSG_INSTANCE_NOT_FOUND)
 	}
 
 	instance.UpdatedBy = userId
@@ -390,7 +390,7 @@ func (s *WorkFlow) StatusInstance(id, status, userId string) (et.Json, error) {
 
 	instance, exists := s.getInstance(id)
 	if !exists {
-		return et.Json{}, fmt.Errorf(MSG_INSTANCE_NOT_FOUND)
+		return et.Json{}, errors.New(MSG_INSTANCE_NOT_FOUND)
 	}
 
 	instance.UpdatedBy = userId

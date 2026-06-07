@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -325,7 +326,7 @@ func (s *Flow) NewStep(def StParams, userId string) (*Step, error) {
 func (s *Flow) SetStep(index int, name, description, definition, undo string, stop bool, userId string) (*Step, error) {
 	step := s.Steps[index]
 	if step == nil {
-		return nil, fmt.Errorf(MSG_STEP_NOT_FOUND)
+		return nil, errors.New(MSG_STEP_NOT_FOUND)
 	}
 
 	step.Name = name

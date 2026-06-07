@@ -2,7 +2,6 @@ package resilience
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 	"sync"
 	"time"
@@ -222,7 +221,7 @@ func (s *Resilience) LoadInstance(params Params) *Instance {
 func (s *Resilience) Stop(id, userId string) error {
 	result, exist := s.GetInstance(id)
 	if !exist {
-		return fmt.Errorf(MSG_ID_NOT_FOUND)
+		return errors.New(MSG_ID_NOT_FOUND)
 	}
 
 	result.setStop(userId)
@@ -238,7 +237,7 @@ func (s *Resilience) Stop(id, userId string) error {
 func (s *Resilience) Restart(id, userId string) error {
 	result, exist := s.GetInstance(id)
 	if !exist {
-		return fmt.Errorf(MSG_ID_NOT_FOUND)
+		return errors.New(MSG_ID_NOT_FOUND)
 	}
 
 	result.setRestart(userId)

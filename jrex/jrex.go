@@ -12,6 +12,7 @@ import (
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/utility"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dop251/goja"
 	"github.com/fsnotify/fsnotify"
 )
@@ -34,6 +35,7 @@ type Jrex struct {
 	vm      *goja.Runtime `json:"-"`
 	watch   *file.Watcher `json:"-"`
 	store   Store         `json:"-"`
+	program *tea.Program  `json:"-"`
 }
 
 /**
@@ -168,6 +170,24 @@ func (s *Jrex) SetCtx(ctx et.Json) {
 }
 
 /**
+* notify: Reports a kind/message pair to the running CLI program, falling back
+* to logs when no CLI program is attached.
+* @params kind string, message string
+**/
+func (s *Jrex) notify(kind, message string) {
+	if s.program != nil {
+		s.program.Send(cliLogMsg{kind: kind, message: message})
+		return
+	}
+
+	if kind == "Error" {
+		logs.Errorm(message)
+		return
+	}
+	logs.Log(kind, message)
+}
+
+/**
 * Run
 * @params str string
 * @return et.Json, error
@@ -261,12 +281,7 @@ func (s *Jrex) RunDev(baseDir string) error {
 		return err
 	}
 
-	err = s.HotReload()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return s.RunCli()
 }
 
 /**
@@ -307,9 +322,9 @@ func (s *Jrex) HotReload() error {
 	err = s.watch.OnReload(func(info file.FileInfo, event fsnotify.Event) {
 		_, err := s.RunByFile(s.Main)
 		if err != nil {
-			logs.Error(err)
+			s.notify("Error", err.Error())
 		} else {
-			logs.Log("Hot Reloaded:", s.Ctx.ToString())
+			s.notify("Hot Reloaded", s.Ctx.ToString())
 		}
 	}).Load()
 	if err != nil {

@@ -48,11 +48,11 @@ import (
 | `service/`    | OTP helpers (`SendOTPEmail`, `SendOTPSms`, `VerifyOTP`) and messaging             |
 | `mem/`        | In-memory cache with expiration and sync primitives                               |
 | `ephemeral/`  | Short-lived temporary data structures                                             |
-| `vm/`         | Embedded JavaScript runtime (goja) with hot-reload                                |
+| `jrex/`       | Embedded JavaScript runtime (goja) with hot-reload and a Bubble Tea dev CLI       |
 | `ia/`         | OpenAI agent integration (`openai-go/v3`) with conversation tracking              |
 | `workflow/`   | Multi-step workflow orchestration with instance state and resilience              |
 | `graph/`      | Neo4j connectivity (`neo4j-go-driver/v5`)                                         |
-| `instances/`  | `Store` interface for state persistence used by `ia`, `workflow`, `vm`            |
+| `instances/`  | `Store` interface for state persistence used by `ia`, `workflow`, `jrex`          |
 | `resilience/` | Circuit breaker and resilience patterns                                           |
 | `reg/`        | Service registration and ID generation helpers (ULID, etc.)                       |
 | `aws/`        | AWS SDK wrapper: S3, SES (email), SMS                                             |
@@ -68,7 +68,7 @@ import (
 | `cmds/`       | Command and stage execution system                                                |
 | `iterate/`    | Iteration control with time support                                               |
 | `create/`     | Code templates for microservices and Kubernetes deployments                       |
-| `cmd/`        | CLI binaries: `et`, `apigateway`, `daemon`, `server`, `vm`, `jsql`, …             |
+| `cmd/`        | CLI binaries: `et`, `apigateway`, `daemon`, `server`, `jrex`, `jsql`, …           |
 
 ## Core type: `et.Json`
 
@@ -180,14 +180,30 @@ ct.AddEventJob("job-2", "@every 30s", "my-channel", 0, true,
 
 API: `New`, `AddJob`, `AddOneShotJob`, `AddEventJob`, `AddOneShotEventJob`, `DeleteJob`, `StartJob`, `StopJob`, `Stop`.
 
-## JavaScript runtime (`vm/`)
+## JavaScript runtime (`jrex/`)
 
-Embedded goja runtime with three modes: `Develop` (hot-reload from files), `Production` (loads from Store), `Building` (compiles + semver bump). Exposes `console.*`, `ctx.*`, `fetch()`, `require()`.
+Embedded goja runtime with three modes: `Develop` (hot-reload from files), `Production` (loads from a `jrex.Store`), `Building` (compiles + semver bump). Exposes `console.*`, `ctx.*`, `fetch()`, `require()`.
 
 ```go
-v := vm.New("my-vm")
-v.RunDev("./cmd/vm")
+v := jrex.New("my-jrex", myStore) // myStore implements jrex.Store (SetModule/GetModule/DeleteModule), may be nil in dev
+v.RunDev("./cmd/jrex/src")
 ```
+
+`RunDev` runs the script once, then launches a split-pane terminal CLI (Bubble Tea): a scrolling log viewport on top — fed by hot-reload events as files change — and a command input line below. Built-in commands:
+
+| Command  | Action                                                  |
+| -------- | ------------------------------------------------------- |
+| `/build` | Bumps the package version (`release` by default) and publishes modules to the configured `Store` |
+| `/help`  | Lists the available commands                            |
+| `/quit`  | Exits the CLI (same as `Esc` / `Ctrl+C`)                 |
+
+### Running the `cmd/jrex` example
+
+```bash
+go run ./cmd/jrex
+```
+
+This connects to the database via `jsql.Load(nil)`, creates a `jrex.New("jrex", db.Rules)` instance using `db.Rules` (`*jsql.Rule`, a jsql-backed `jrex.Store`) for module persistence, and starts `RunDev("./cmd/jrex/src")` — opening the dev CLI against the scripts in `cmd/jrex/src`.
 
 ## AI agents (`ia/`)
 
@@ -229,7 +245,7 @@ go run ./cmd/et                          # main CLI (cobra)
 go run ./cmd/apigateway                  # API Gateway / proxy
 go run ./cmd/daemon                      # background service with systemd integration
 go run ./cmd/server                      # TCP node server (default port 1377, use -port flag)
-go run ./cmd/vm                          # JS VM with hot-reload
+go run ./cmd/jrex                        # JS runtime dev CLI with hot-reload (split-pane TUI)
 go run ./cmd/jsql                        # jsql driver demo and test
 go run ./cmd/client -addr localhost:1377 # TCP test client
 ```

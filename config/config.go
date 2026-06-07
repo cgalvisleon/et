@@ -29,8 +29,8 @@ type Config struct {
 	TenantId  string    `json:"tenant_id"`
 	OwnerId   string    `json:"owner_id"`
 	Tag       string    `json:"tag"`
-	Params    et.Json   `json:"params"`
 	Stage     string    `json:"stage"`
+	Params    et.Json   `json:"params"`
 	store     Store     `json:"-"`
 	isDebug   bool      `json:"-"`
 }

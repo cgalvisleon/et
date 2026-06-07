@@ -2,6 +2,7 @@ package jrex
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -58,13 +59,40 @@ func newLoader(name string) *Loader {
 	result := &Loader{
 		Pkg: &Pkg{
 			Name:            name,
+			Version:         "0.0.1",
+			Description:     "",
+			Main:            "index.js",
 			Modules:         make(map[string]string),
 			Scripts:         make(map[string]string),
 			Dependencies:    make(map[string]string),
 			DevDependencies: make(map[string]string),
 		},
+		mode:    Production,
+		BaseDir: "./",
 	}
 	return result
+}
+
+/**
+* save
+* @return error
+**/
+func (s *Loader) save() error {
+	pkgFile := filepath.Join(s.BaseDir, "package.json")
+	file, err := os.Create(pkgFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ") // bonito (pretty)
+
+	if err := encoder.Encode(s.Pkg); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 /**
@@ -74,11 +102,11 @@ func newLoader(name string) *Loader {
 func (s *Loader) init() error {
 	if s.mode == Production {
 		if s.store == nil {
-			return fmt.Errorf(msg.MSG_STORE_REQUIRED)
+			return errors.New(msg.MSG_STORE_REQUIRED)
 		}
 
-		var pkg Pkg
 		id := fmt.Sprintf("pkg:%s:%s", s.Name, s.Version)
+		var pkg Pkg
 		ok, err := s.get(id, &pkg)
 		if err != nil {
 			return err
@@ -88,21 +116,18 @@ func (s *Loader) init() error {
 		}
 
 		return nil
-	}
-
-	pkgFile := filepath.Join(s.BaseDir, "package.json")
-	if exists(pkgFile) {
-		data, _ := os.ReadFile(pkgFile)
-		err := json.Unmarshal(data, &s.Pkg)
-		if err != nil {
-			return err
-		}
 	} else {
-		s.Version = "0.0.1"
-		s.Description = ""
-		s.Main = "index.js"
-		if err := s.save(); err != nil {
-			return err
+		pkgFile := filepath.Join(s.BaseDir, "package.json")
+		if exists(pkgFile) {
+			data, _ := os.ReadFile(pkgFile)
+			err := json.Unmarshal(data, &s.Pkg)
+			if err != nil {
+				return err
+			}
+		} else {
+			if err := s.save(); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -144,32 +169,12 @@ func (s *Loader) BumpVersion(part Part) (string, error) {
 		patch = 0
 	case "release":
 		patch++
+	default:
+		return s.Version, nil
 	}
 
 	result := fmt.Sprintf("%d.%d.%d", major, minor, patch)
 	return result, s.SetVersion(result)
-}
-
-/**
-* save
-* @return error
-**/
-func (s *Loader) save() error {
-	pkgFile := filepath.Join(s.BaseDir, "package.json")
-	file, err := os.Create(pkgFile)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ") // bonito (pretty)
-
-	if err := encoder.Encode(s.Pkg); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 /**

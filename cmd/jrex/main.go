@@ -22,8 +22,4 @@ func main() {
 		logs.Panic(err)
 	}
 
-	err = v.Build(jrex.Same)
-	if err != nil {
-		logs.Panic(err)
-	}
 }

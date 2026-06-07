@@ -115,16 +115,35 @@ func wrapperConsole(instance *Jrex) {
 	instance.Set("console", map[string]interface{}{
 		"log": func(args ...interface{}) {
 			kind := "Log"
-			logs.Log(kind, args...)
+			if instance.mode == Production {
+				logs.Log(kind, args...)
+			} else {
+				instance.notify(kind, fmt.Sprintf("%v", args...))
+			}
 		},
 		"debug": func(args ...interface{}) {
-			logs.Debug(args...)
+			kind := "Debug"
+			if instance.mode == Production {
+				logs.Debug(args...)
+			} else {
+				instance.notify(kind, fmt.Sprintf("%v", args...))
+			}
 		},
 		"info": func(args ...interface{}) {
-			logs.Info(args...)
+			kind := "Info"
+			if instance.mode == Production {
+				logs.Info(args...)
+			} else {
+				instance.notify(kind, fmt.Sprintf("%v", args...))
+			}
 		},
 		"error": func(args string) {
-			logs.Error(errors.New(args))
+			kind := "Error"
+			if instance.mode == Production {
+				logs.Error(errors.New(args))
+			} else {
+				instance.notify(kind, args)
+			}
 		},
 	})
 }

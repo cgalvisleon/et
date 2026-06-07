@@ -9,7 +9,6 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/utility"
 	tea "github.com/charmbracelet/bubbletea"
@@ -36,6 +35,7 @@ type Jrex struct {
 	watch   *file.Watcher `json:"-"`
 	store   Store         `json:"-"`
 	program *tea.Program  `json:"-"`
+	onStart func(*Jrex) error `json:"-"`
 }
 
 /**
@@ -258,6 +258,7 @@ func (s *Jrex) RunBySource(path string) (et.Json, error) {
 	return s.Run(scr.Scripts)
 }
 
+
 /**
 * RunDev
 * @param baseDir string
@@ -276,49 +277,20 @@ func (s *Jrex) RunDev(baseDir string) error {
 		return err
 	}
 
-	_, err = s.RunByFile(s.Main)
-	if err != nil {
-		return err
-	}
-
 	return s.RunCli()
 }
 
 /**
-* RunProd
-* @param store Store
+* hotReload
 * @return error
 **/
-func (s *Jrex) RunProd(store Store) error {
-	if store == nil {
-		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "store")
-	}
-
-	s.store = store
-	s.mode = Production
-	err := s.init()
-	if err != nil {
-		return err
-	}
-
-	_, err = s.RunBySource(s.Main)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-/**
-* HotReload
-* @return error
-**/
-func (s *Jrex) HotReload() error {
+func (s *Jrex) hotReload() error {
 	watch, err := file.NewWatcher(s.BaseDir)
 	if err != nil {
 		return err
 	}
 	s.watch = watch
+	s.notify("Watcher", fmt.Sprintf("watching %s for changes", s.BaseDir))
 	err = s.watch.OnReload(func(info file.FileInfo, event fsnotify.Event) {
 		_, err := s.RunByFile(s.Main)
 		if err != nil {

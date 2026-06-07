@@ -197,7 +197,7 @@ func (s *Jrex) RunCli() error {
 	defer func() { s.program = nil }()
 
 	go func() {
-		if err := s.HotReload(); err != nil {
+		if err := s.hotReload(); err != nil {
 			s.notify("Error", err.Error())
 		}
 	}()

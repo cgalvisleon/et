@@ -158,7 +158,7 @@ result, err := workflow.RunInstance(entityID, "onboarding", 0, ctx, tags, userna
 // Lifecycle operations
 workflow.ResetInstance(id, username)    // reset to step 0
 workflow.RollbackInstance(id, username) // execute undo chain
-workflow.StopInstance(id, username)     // halt execution
+workflow.StopInstance(id, username)     // halt executiongit push --set-upstream origin ia/cmd
 ```
 
 HTTP handlers exposed on `*WorkFlow`: `HttpGetFlow`, `HttpNewFlow`, `HttpDeleteFlow`, `HttpNewStep`, `HttpSetStep`, `HttpDeleteStep`, `HttpNewSteper`, `HttpSetSteper`, `HttpDeleteSteper`, `HttpAddStepFromSteper`, `HttpRemoveStepFromSteper`, `HttpMoveStepFromSteper`, `HttpGetInstance`, `HttpRunInstance`, `HttpResetInstance`, `HttpRollbackInstance`, `HttpStopInstance`.
@@ -191,16 +191,16 @@ v.RunDev("./cmd/jrex/src")
 
 `RunDev` runs the script once, then launches a split-pane terminal CLI (Bubble Tea): a scrolling log viewport on top — fed by hot-reload events as files change — and a command input line below. Built-in commands:
 
-| Command  | Action                                                  |
-| -------- | ------------------------------------------------------- |
+| Command  | Action                                                                                           |
+| -------- | ------------------------------------------------------------------------------------------------ |
 | `/build` | Bumps the package version (`release` by default) and publishes modules to the configured `Store` |
-| `/help`  | Lists the available commands                            |
-| `/quit`  | Exits the CLI (same as `Esc` / `Ctrl+C`)                 |
+| `/help`  | Lists the available commands                                                                     |
+| `/quit`  | Exits the CLI (same as `Esc` / `Ctrl+C`)                                                         |
 
 ### Running the `cmd/jrex` example
 
 ```bash
-go run ./cmd/jrex
+go fmt . && go run ./cmd/jrex
 ```
 
 This connects to the database via `jsql.Load(nil)`, creates a `jrex.New("jrex", db.Rules)` instance using `db.Rules` (`*jsql.Rule`, a jsql-backed `jrex.Store`) for module persistence, and starts `RunDev("./cmd/jrex/src")` — opening the dev CLI against the scripts in `cmd/jrex/src`.

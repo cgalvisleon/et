@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 )
 
@@ -47,7 +46,7 @@ type Loader struct {
 	*Pkg
 	mode    Mode   `json:"-"`
 	BaseDir string `json:"-"`
-	store   Store  `json:"-"`
+	jrex    *Jrex  `json:"-"`
 }
 
 /**
@@ -55,7 +54,7 @@ type Loader struct {
 * @param name string
 * @return *Loader
 **/
-func newLoader(name string) *Loader {
+func newLoader(jrex *Jrex, name string) *Loader {
 	result := &Loader{
 		Pkg: &Pkg{
 			Name:            name,
@@ -69,6 +68,7 @@ func newLoader(name string) *Loader {
 		},
 		mode:    Production,
 		BaseDir: "./",
+		jrex:    jrex,
 	}
 	return result
 }
@@ -101,7 +101,7 @@ func (s *Loader) save() error {
 **/
 func (s *Loader) init() error {
 	if s.mode == Production {
-		if s.store == nil {
+		if s.jrex.store == nil {
 			return errors.New(msg.MSG_STORE_REQUIRED)
 		}
 
@@ -183,10 +183,11 @@ func (s *Loader) BumpVersion(part Part) (string, error) {
 * @return (bool, error)
 **/
 func (s *Loader) get(module string, dest any) (bool, error) {
-	if s.store == nil {
-		return false, nil
+	if s.jrex.store != nil {
+		return s.jrex.store.GetModule(module, dest)
 	}
-	return s.store.GetModule(module, dest)
+
+	return false, nil
 }
 
 /**
@@ -195,10 +196,10 @@ func (s *Loader) get(module string, dest any) (bool, error) {
 * @return error
 **/
 func (s *Loader) set(module string, source any) error {
-	if s.store == nil {
-		return nil
+	if s.jrex.store != nil {
+		return s.jrex.store.SetModule(module, source)
 	}
-	return s.store.SetModule(module, source)
+	return nil
 }
 
 /**
@@ -214,7 +215,7 @@ func (s *Loader) Resolve(modulePath string, currentDir string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		logs.Log("Resolve", result)
+		s.jrex.notify("LOG", fmt.Sprintf("Resolve: %s", result))
 		return result, nil
 	}
 
@@ -224,7 +225,7 @@ func (s *Loader) Resolve(modulePath string, currentDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	logs.Log("Resolve", result)
+	s.jrex.notify("LOG", fmt.Sprintf("Resolve: %s", result))
 	return result, nil
 }
 

@@ -104,7 +104,14 @@ func wrapperRunTime(instance *Jrex) {
 * @param vm *VM
 **/
 func wrapperCtx(instance *Jrex) {
-	instance.Set("Ctx", instance.Ctx)
+	instance.Set("ctx", map[string]interface{}{
+		"set": func(key string, value interface{}) {
+			instance.Ctx.Set(key, value)
+		},
+		"get": func(key string) interface{} {
+			return instance.Ctx.Get(key)
+		},
+	})
 }
 
 /**
@@ -114,7 +121,7 @@ func wrapperCtx(instance *Jrex) {
 func wrapperConsole(instance *Jrex) {
 	instance.Set("console", map[string]interface{}{
 		"log": func(args ...interface{}) {
-			kind := "Log"
+			kind := "LOG"
 			if instance.mode == Production {
 				logs.Log(kind, args...)
 			} else {
@@ -122,7 +129,7 @@ func wrapperConsole(instance *Jrex) {
 			}
 		},
 		"debug": func(args ...interface{}) {
-			kind := "Debug"
+			kind := "DEBUG"
 			if instance.mode == Production {
 				logs.Debug(args...)
 			} else {
@@ -130,7 +137,7 @@ func wrapperConsole(instance *Jrex) {
 			}
 		},
 		"info": func(args ...interface{}) {
-			kind := "Info"
+			kind := "INFO"
 			if instance.mode == Production {
 				logs.Info(args...)
 			} else {
@@ -138,7 +145,7 @@ func wrapperConsole(instance *Jrex) {
 			}
 		},
 		"error": func(args string) {
-			kind := "Error"
+			kind := "ERROR"
 			if instance.mode == Production {
 				logs.Error(errors.New(args))
 			} else {

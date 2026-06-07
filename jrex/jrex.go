@@ -50,12 +50,12 @@ func New(name string, store Store) *Jrex {
 
 	id := reg.GenULID(packageName)
 	result := &Jrex{
-		Loader: newLoader(name),
-		ID:     id,
-		Ctx:    et.Json{},
-		vm:     goja.New(),
-		store:  store,
+		ID:    id,
+		Ctx:   et.Json{},
+		vm:    goja.New(),
+		store: store,
 	}
+	result.Loader = newLoader(result, name)
 	return result
 }
 
@@ -215,6 +215,7 @@ func (s *Jrex) Run(str string) (et.Json, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return s.Ctx, nil
 }
 
@@ -311,9 +312,9 @@ func (s *Jrex) hotReload() error {
 	err = s.watch.OnReload(func(info file.FileInfo, event fsnotify.Event) {
 		_, err := s.RunByFile(s.Main)
 		if err != nil {
-			s.notify("Error", err.Error())
+			s.notify("ERROR", err.Error())
 		} else {
-			s.notify("Hot Reloaded", s.Ctx.ToString())
+			s.notify("CTX", s.Ctx.ToString())
 		}
 	}).Load()
 	if err != nil {

@@ -18,7 +18,7 @@ var (
 const cliHelpText = `available commands:
   /build   bump the version (release) and publish to the store
   /help    show this help message
-  /quit    exit the CLI`
+  /quit, /q exit the CLI`
 
 type cliLogMsg struct {
 	kind    string
@@ -76,6 +76,10 @@ func (m cliModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.resize(msg.Width, msg.Height)
 		return m, nil
+	case tea.MouseMsg:
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
+		return m, cmd
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
@@ -166,7 +170,7 @@ func (m *cliModel) dispatch(line string) tea.Cmd {
 	case "/help":
 		m.appendLine(cliHelpText)
 		return nil
-	case "/quit":
+	case "/quit", "/q":
 		return tea.Quit
 	default:
 		m.appendLine(fmt.Sprintf("unknown command: %s (try /help)", name))
@@ -192,7 +196,7 @@ func (m *cliModel) runBuild() tea.Msg {
 * @return error
 **/
 func (s *Jrex) RunCli() error {
-	program := tea.NewProgram(newCliModel(s), tea.WithAltScreen())
+	program := tea.NewProgram(newCliModel(s), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	s.program = program
 	defer func() { s.program = nil }()
 

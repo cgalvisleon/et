@@ -38,8 +38,7 @@ func defineCatalog(db *DB) error {
 			{Name: "kind", Sorted: true},
 			{Name: "version", Sorted: true},
 		},
-		IsCore:  true,
-		IsDebug: true,
+		IsCore: true,
 	})
 	if err != nil {
 		return err
@@ -78,7 +77,6 @@ func (db *DB) setCatalog(name, kind string, version int, obj any) error {
 			"version":    version,
 			"definition": bt,
 		}).
-		Debug().
 		Exec()
 	if err != nil {
 		return err
@@ -114,5 +112,22 @@ func (db *DB) getCatalog(name, kind string, des any) error {
 		return err
 	}
 
+	return nil
+}
+
+/**
+* deleteCatalog: Deletes the catalog data for the given name.
+* @param name, kind string
+* @return error
+**/
+func (db *DB) deleteCatalog(name, kind string) error {
+	_, err := db.catalog.
+		Delete().
+		Where(Eq("name", name)).
+		And(Eq("kind", kind)).
+		Exec()
+	if err != nil {
+		return err
+	}
 	return nil
 }

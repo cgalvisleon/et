@@ -28,7 +28,7 @@ type DB struct {
 	db          *sql.DB            `json:"-"`
 	catalog     *Model             `json:"-"`
 	series      *Model             `json:"-"`
-	rules       *Rule              `json:"-"`
+	Rules       *Rule              `json:"-"`
 }
 
 /**
@@ -531,4 +531,18 @@ func (s *DB) Query(query []et.Json) (et.Items, error) {
 	}
 
 	return result, nil
+}
+
+/**
+* DefineRule: Defines the rule table.
+* @param schema string
+* @return *Rule, error
+**/
+func (s *DB) DefineRule(schema string) (*Rule, error) {
+	rules, err := defineRule(s, schema)
+	if err != nil {
+		return nil, err
+	}
+	s.Rules = rules
+	return rules, nil
 }

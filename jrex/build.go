@@ -17,11 +17,11 @@ type Module struct {
 
 /**
 * Build
-* @param store Store, part Part
-* @return *VM, error
+* @param part Part
+* @return error
 **/
-func (s *Jrex) Build(store Store, part Part) error {
-	if store == nil {
+func (s *Jrex) Build(part Part) error {
+	if s.store == nil {
 		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "store")
 	}
 
@@ -41,7 +41,6 @@ func (s *Jrex) Build(store Store, part Part) error {
 		return err
 	}
 
-	s.store = store
 	s.mode = Building
 	err = s.init()
 	if err != nil {

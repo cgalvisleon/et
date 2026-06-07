@@ -15,6 +15,7 @@ import (
 type Part string
 
 const (
+	Same    Part = "same"
 	Major   Part = "major"
 	Minor   Part = "minor"
 	Release Part = "release"

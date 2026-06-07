@@ -82,7 +82,7 @@ func newCommand(model *Model, tp CommandType) *Command {
 		model:          model,
 		isDebug:        model.db.IsDebug,
 	}
-	result.jrex = jrex.New("command", model.db.rules)
+	result.jrex = jrex.New("command", model.db.Rules)
 	result.jrex.Set("model", model)
 	result.jrex.Set("db", result.db)
 	if map[CommandType]bool{INSERT: true, BULK: true, UPSERT: true}[tp] {

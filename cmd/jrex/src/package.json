@@ -1,11 +1,11 @@
 {
-  "name": "vm",
+  "name": "jrex",
   "version": "0.0.1",
   "description": "Pruebas de vm",
   "main": "index.js",
   "modules": {
-    "./math": "/Users/cesargalvisleon/Projects/cgalvisleon/et/cmd/vm/src/math.js",
-    "./src/pricing": "/Users/cesargalvisleon/Projects/cgalvisleon/et/cmd/vm/src/pricing.js"
+    "./math": "/Users/cesargalvisleon/Projects/cgalvisleon/et/cmd/jrex/src/modules/math.js",
+    "./modules/pricing": "/Users/cesargalvisleon/Projects/cgalvisleon/et/cmd/jrex/src/modules/pricing.js"
   },
   "scripts": {},
   "dependencies": {},

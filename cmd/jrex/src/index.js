@@ -1,10 +1,10 @@
 author("César Galvis León");
 description("Pruebas de vm");
 
-const pricing = require("./src/pricing");
+const pricing = require("./modules/pricing");
 
 // Test 1
-result = pricing.calcular(100, 20);
+result = pricing.calcular(100, 10);
 console.log(result);
 
 // Test 2

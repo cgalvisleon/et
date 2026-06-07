@@ -24,7 +24,7 @@ go run ./cmd/et
 go run ./cmd/apigateway
 go run ./cmd/daemon
 go run ./cmd/server          # TCP node server (default port 1377, use -port flag)
-go run ./cmd/vm              # JS VM with hot-reload from ./cmd/vm/
+go run ./cmd/jrex            # JS VM (jrex) with hot-reload from ./cmd/jrex/
 go run ./cmd/jsql            # jsql driver test/demo
 
 # Build all binaries
@@ -66,7 +66,7 @@ This is a **modular utility library** for building Go microservices. Each direct
 
 ### SQL builder: `jsql/`
 
-`jsql/` is a database-agnostic SQL builder and lightweight ORM. Entry points: `jsql.Load()` (reads env vars) and `jsql.LoadTo(config)`.
+`jsql/` is a database-agnostic SQL builder and lightweight ORM. Entry points: `jsql.Load(config)` (connects to the default DB) and `jsql.LoadTo(config, name)` (connects to a named DB). `config` is a `jsql.Config` interface (`GetStr`/`GetInt`/`GetBool` — satisfied by `*config.App`); pass `nil` to read connection settings purely from env vars (`DB_*`).
 
 **Model definition:**
 
@@ -197,7 +197,7 @@ There are two HTTP server packages at different abstraction levels:
 
 ### Application-layer packages
 
-- **`vm/`** — JavaScript runtime package (`dop251/goja`). `vm.New(name)` is the entry point; three modes: `Develop` (reads files, hot-reloads via `file.Watcher`), `Production` (loads from a `Store`), `Building` (compiles + stores with semver bumping). Global wrappers provide `console.*`, `ctx.*`, `fetch()`, and CommonJS-style `require()`. The `cmd/vm` binary runs this in dev mode via `js.RunDev("./cmd/vm")`.
+- **`jrex/`** — JavaScript runtime package (`dop251/goja`), formerly named `vm`. `jrex.New(name, store)` is the entry point — `store` is a caller-provided `jrex.Store` (`SetModule`/`GetModule`/`DeleteModule`, may be `nil` in dev mode); three modes: `Develop` (reads files, hot-reloads via `file.Watcher`), `Production` (loads from the `Store`), `Building` (compiles + stores with semver bumping). Global wrappers provide `console.*`, `ctx.*`, `fetch()`, and CommonJS-style `require()`. The `cmd/jrex` binary runs this in dev mode via `jrex.RunDev(baseDir)`.
 - **`ia/`** — OpenAI agent integration (`openai-go/v3`). `ia.New(db *jsql.DB)` (direct) or `ia.Load(db *jsql.DB)` (singleton) initializes the package, which calls `event.Load()` internally. Manages agents with conversation tracking and instance state; requires `OPENAI_API_KEY`.
 - **`workflow/`** — Workflow orchestration with multi-step execution, instance state, and resilience patterns. `workflow.New(store)` creates a new instance; `workflow.Load(store)` is the singleton wrapper (no-op if already initialized). Integrates with `resilience/`, `instances/`, and `event/` (NATS) for async state sync. See detail below.
 - **`graph/`** — Neo4j connectivity (`neo4j-go-driver/v5`). `graph.Load()` returns a `*Conn` with the Neo4j driver.
@@ -206,7 +206,7 @@ There are two HTTP server packages at different abstraction levels:
 - **`dt/`** — Cache-backed object store. `dt.Up(key, data)` writes an object (uses Redis in production, reads from file in dev based on `PRODUCTION` env var); `dt.Get(key)` retrieves it. HTTP handler support via `handler.go`.
 - **`resilience/`** — Resilience patterns (circuit breaker, etc.) used by `workflow`.
 - **`reg/`** — Service registration/discovery; provides ID generation helpers (ULID, etc.) used by `claim` and others.
-- **`file/`** — File operations and watching (`FileInfo`, `Watcher`, `ExistPath()`); used by `vm` for hot-reload.
+- **`file/`** — File operations and watching (`FileInfo`, `Watcher`, `ExistPath()`); used by `jrex` for hot-reload.
 - **`mem/`** — Shared memory and sync primitives.
 - **`ephemeral/`** — Ephemeral/temporary data structures.
 - **`iterate/`** — Iteration control with time support.
@@ -227,7 +227,7 @@ Each subdirectory under `cmd/` is a standalone binary:
 - `cmd/daemon/` — Background service with systemd integration (start/stop/restart/status/conf/version)
 - `cmd/create/` — Project/code scaffolding
 - `cmd/server/` — TCP node server (`tcp.NewNode(port)`)
-- `cmd/vm/` — JavaScript VM runner; `go run ./cmd/vm` starts `vm.RunDev("./cmd/vm")` with hot-reload
+- `cmd/jrex/` — JavaScript VM runner; `go run ./cmd/jrex` starts `jrex.New("jrex", nil).RunDev(baseDir)` with hot-reload
 - `cmd/jsql/` — jsql driver demo: DDL generation, condition building, SELECT field resolution, live DB connection
 - `cmd/client/` — Test client
 - `cmd/install/` — Installation utility
@@ -312,7 +312,7 @@ Use `http.StatusCreated` for POST handlers that create new resources, `http.Stat
 - **Error handling**: `logs.Fatal(err)` calls `os.Exit(1)`. Use `logs.Alert` / `logs.Error` for non-fatal errors.
 - **Event-driven coordination**: `ettp/v2` server syncs router state across replicas via NATS. The `m.Myself` flag prevents self-processing.
 - **`msg/` packages**: Each package has a local `msg/` or `msg.go` file with error message constants — use these instead of hardcoded strings.
-- **Store interface pattern**: `vm`, `workflow`, and `ia` accept a caller-provided `instances.Store` for persistence — the library defines the interface, consumers implement it. Use `stores/` for the jsql-backed implementation.
+- **Store interface pattern**: `workflow` and `ia` accept a caller-provided `instances.Store` for persistence; `jrex` accepts its own `jrex.Store` (`SetModule`/`GetModule`/`DeleteModule`) for compiled-module persistence in `Production`/`Building` modes. In each case the library defines the interface and consumers implement it. Use `stores/` for the jsql-backed implementation of `instances.Store`.
 
 ## Required environment variables
 

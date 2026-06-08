@@ -446,7 +446,7 @@ func (s *Query) addFrom(model *Model, as string) *Query {
 	if !s.UseSourceField {
 		s.UseSourceField = model.SourceField != ""
 	}
-	s.jrex.Set(model.Table, model)
+	s.jrex.Set(model.Name, model)
 	return s
 }
 

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/request"
 )
 
@@ -102,7 +103,23 @@ func GetParam(r *http.Request, key string) string {
 func WriteResponse(w http.ResponseWriter, statusCode int, e []byte) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(statusCode)
-	w.Write(e)
+	if statusCode >= 200 && statusCode < 300 {
+		w.Write(e)
+	} else {
+		result := Result{
+			Ok: http.StatusOK == statusCode,
+			Result: et.Json{
+				"message": http.StatusText(statusCode),
+			},
+		}
+
+		e, err := json.Marshal(result)
+		if err != nil {
+			return err
+		}
+
+		w.Write(e)
+	}
 
 	return nil
 }
@@ -140,7 +157,7 @@ func JSON(w http.ResponseWriter, r *http.Request, statusCode int, data interface
 	}
 
 	result := Result{
-		Ok:     http.StatusOK == statusCode,
+		Ok:     statusCode >= 200 && statusCode < 300,
 		Result: data,
 	}
 
@@ -255,7 +272,7 @@ func HTTPAlert(w http.ResponseWriter, r *http.Request, message string) error {
 * @param w http.ResponseWriter, r *http.Request
 **/
 func Unauthorized(w http.ResponseWriter, r *http.Request) {
-	HTTPError(w, r, http.StatusUnauthorized, "401 Unauthorized")
+	HTTPError(w, r, http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized))
 }
 
 /**
@@ -263,7 +280,7 @@ func Unauthorized(w http.ResponseWriter, r *http.Request) {
 * @param w http.ResponseWriter, r *http.Request, err error
 **/
 func InternalServerError(w http.ResponseWriter, r *http.Request, err error) {
-	HTTPError(w, r, http.StatusInternalServerError, "500 Autentication Server Error - "+err.Error())
+	HTTPError(w, r, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError)+" - "+err.Error())
 }
 
 /**
@@ -271,7 +288,7 @@ func InternalServerError(w http.ResponseWriter, r *http.Request, err error) {
 * @param w http.ResponseWriter, r *http.Request
 **/
 func Forbidden(w http.ResponseWriter, r *http.Request) {
-	HTTPError(w, r, http.StatusForbidden, "403 Forbidden")
+	HTTPError(w, r, http.StatusForbidden, http.StatusText(http.StatusForbidden))
 }
 
 type DataFunction func(page, rows int) (et.Items, error)
@@ -281,25 +298,35 @@ type DataFunction func(page, rows int) (et.Items, error)
 * @param w http.ResponseWriter, r *http.Request, rows int, getData DataFunction
 **/
 func Stream(w http.ResponseWriter, r *http.Request, rows int, getData DataFunction) {
-	page := 1
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("["))
-
+	flusher, _ := w.(http.Flusher)
+	opened := false
 	first := true
-	for {
+
+	open := func() {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("["))
+		opened = true
+	}
+
+	for page := 1; ; page++ {
 		items, err := getData(page, rows)
 		if err != nil {
-			HTTPError(w, r, http.StatusBadRequest, err.Error())
-			return
+			if !opened {
+				HTTPError(w, r, http.StatusBadRequest, err.Error())
+				return
+			}
+
+			logs.Error(err)
+			break
 		}
 
 		if !items.Ok {
 			break
 		}
 
-		if page > 1 {
-			w.Write([]byte(","))
+		if !opened {
+			open()
 		}
 
 		for _, item := range items.Result {
@@ -311,8 +338,17 @@ func Stream(w http.ResponseWriter, r *http.Request, rows int, getData DataFuncti
 			first = false
 		}
 
-		page++
+		if flusher != nil {
+			flusher.Flush()
+		}
+	}
+
+	if !opened {
+		open()
 	}
 
 	w.Write([]byte("]"))
+	if flusher != nil {
+		flusher.Flush()
+	}
 }

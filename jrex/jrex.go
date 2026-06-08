@@ -46,7 +46,7 @@ type Jrex struct {
 **/
 func New(name string, store Store) (*Jrex, error) {
 	if !utility.ValidStr(name, 0, []string{""}) {
-		name = "jrex"
+		return nil, fmt.Errorf("name is required, remember that is a unique identifier")
 	}
 
 	id := reg.GenULID(packageName)

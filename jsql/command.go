@@ -87,7 +87,7 @@ func newCommand(model *Model, tp CommandType) *Command {
 	if err != nil {
 		logs.Panic(err)
 	}
-	result.jrex.Set("model", model)
+	result.jrex.Set(model.Name, model)
 	result.jrex.Set("db", result.db)
 	if map[CommandType]bool{INSERT: true, BULK: true, UPSERT: true}[tp] {
 		for _, fn := range model.beforeInserts {

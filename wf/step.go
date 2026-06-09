@@ -191,6 +191,23 @@ func (s *Step) save() error {
 }
 
 /**
+* delete
+* @return error
+**/
+func (s *Step) delete() error {
+	if s.store == nil {
+		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
+	}
+
+	err := s.store.Delete("step", s.ID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/**
 * ToJson
 * @return et.Json
 **/

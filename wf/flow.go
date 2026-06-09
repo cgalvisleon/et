@@ -5,33 +5,51 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 )
 
+type Trigger string
+
+const (
+	MANUAL   Trigger = "manual"
+	WEBHOOK  Trigger = "webhook"
+	CRON     Trigger = "cron"
+	SCHEDULE Trigger = "schedule"
+)
+
+type Stepers struct {
+	Tag         string        `json:"tag"`
+	Trigger     Trigger       `json:"trigger"`
+	Connections []*Connection `json:"connections"`
+	StartId     string        `json:"start_id"`
+}
+
 type Flow struct {
-	CreatedAt     time.Time     `json:"created_at"`
-	UpdatedAt     time.Time     `json:"updated_at"`
-	TenantId      string        `json:"tenant_id"`
-	ProjectId     string        `json:"project_id"`
-	ID            string        `json:"id"`
-	Tag           string        `json:"tag"`
-	Title         string        `json:"title"`
-	Description   string        `json:"description"`
-	Version       string        `json:"version"`
-	WorkflowId    string        `json:"workflow_id"`
-	Steps         []*Step       `json:"steps"`
-	Connections   []*Connection `json:"connections"`
-	TotalAttempts int           `json:"total_attempts"`
-	TimeAttempts  time.Duration `json:"time_attempts"`
-	Public        bool          `json:"public"`
-	AuditLog      []et.Json     `json:"audit_log"`
-	UserID        string        `json:"-"`
-	isDebug       bool          `json:"-"`
-	isChanged     bool          `json:"-"`
-	store         Store         `json:"-"`
+	CreatedAt     time.Time           `json:"created_at"`
+	UpdatedAt     time.Time           `json:"updated_at"`
+	TenantId      string              `json:"tenant_id"`
+	ProjectId     string              `json:"project_id"`
+	ID            string              `json:"id"`
+	Tag           string              `json:"tag"`
+	Title         string              `json:"title"`
+	Description   string              `json:"description"`
+	Version       string              `json:"version"`
+	WorkflowId    string              `json:"workflow_id"`
+	Steps         map[string]*Step    `json:"steps"`
+	Connections   []*Connection       `json:"connections"`
+	Stepers       map[string]*Stepers `json:"steplers"`
+	TotalAttempts int                 `json:"total_attempts"`
+	TimeAttempts  time.Duration       `json:"time_attempts"`
+	Public        bool                `json:"public"`
+	AuditLog      []et.Json           `json:"audit_log"`
+	UserID        string              `json:"-"`
+	isDebug       bool                `json:"-"`
+	isChanged     bool                `json:"-"`
+	store         Store               `json:"-"`
 }
 
 type FlowParams struct {
@@ -67,8 +85,9 @@ func (s *WorkFlow) newFlow(params FlowParams) *Flow {
 		Description:   params.Description,
 		Version:       params.Version,
 		WorkflowId:    s.ID,
-		Steps:         make([]*Step, 0),
+		Steps:         make(map[string]*Step),
 		Connections:   make([]*Connection, 0),
+		Stepers:       make(map[string]*Stepers),
 		TotalAttempts: 0,
 		TimeAttempts:  0,
 		Public:        false,
@@ -79,6 +98,36 @@ func (s *WorkFlow) newFlow(params FlowParams) *Flow {
 	return result
 }
 
+/**
+* loadFlow
+* @param id, userId string
+* @return *Flow, error
+**/
+func (s *WorkFlow) loadFlow(id, userId string) (*Flow, error) {
+	if s.store == nil {
+		return nil, errors.New(MSG_WORKFLOW_STORE_IS_NIL)
+	}
+
+	result := &Flow{}
+	exists, err := s.store.Get("flow", id, result)
+	if err != nil {
+		return nil, err
+	}
+
+	if !exists {
+		return nil, errors.New(MSG_FLOW_NOT_FOUND)
+	}
+
+	result.store = s.store
+	result.isDebug = s.isDebug
+	result.UserID = userId
+	return result, nil
+}
+
+/**
+* save
+* @return error
+**/
 func (s *Flow) save() error {
 	if s.store == nil {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
@@ -91,14 +140,33 @@ func (s *Flow) save() error {
 		"user_id":    s.UserID,
 		"action":     "save",
 	})
+	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
+	s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+
+	s.isChanged = false
 
 	if s.isDebug {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	s.isChanged = false
-
 	err := s.store.Set("flow", s.ID, s.TenantId, s.ProjectId, s, s.UserID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/**
+* delete
+* @return error
+**/
+func (s *Flow) delete() error {
+	if s.store == nil {
+		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
+	}
+
+	err := s.store.Delete("flow", s.ID)
 	if err != nil {
 		return err
 	}

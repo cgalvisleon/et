@@ -15,15 +15,6 @@ type Condition struct {
 	NoTo       int    `json:"no_to"`
 }
 
-type StParams struct {
-	Name        string    `json:"-"`
-	Description string    `json:"-"`
-	Definition  string    `json:"-"`
-	Undo        string    `json:"-"`
-	Fn          FnContext `json:"-"`
-	Stop        bool      `json:"-"`
-}
-
 type RefRollback struct {
 	Definition string    `json:"-"`
 	Fn         FnContext `json:"-"`
@@ -31,6 +22,7 @@ type RefRollback struct {
 
 type Step struct {
 	Index       int        `json:"index"`
+	Tag         string     `json:"tag"`
 	Name        string     `json:"name"`
 	Description string     `json:"description"`
 	Stop        bool       `json:"stop"`
@@ -39,7 +31,17 @@ type Step struct {
 	fn          FnContext  `json:"-"`
 	fnUndo      FnContext  `json:"-"`
 	jrex        *jrex.Jrex `json:"-"`
-	flow        *Flow      `json:"-"`
+	store       Store      `json:"-"`
+}
+
+type StParams struct {
+	Tag         string    `json:"tag"`
+	Name        string    `json:"-"`
+	Description string    `json:"-"`
+	Definition  string    `json:"-"`
+	Undo        string    `json:"-"`
+	Fn          FnContext `json:"-"`
+	Stop        bool      `json:"-"`
 }
 
 /**
@@ -49,13 +51,14 @@ type Step struct {
 **/
 func newStep(flow *Flow, def StParams) *Step {
 	result := &Step{
+		Tag:         def.Tag,
 		Name:        def.Name,
 		Description: def.Description,
 		Stop:        def.Stop,
 		Definition:  []byte(def.Definition),
 		Undo:        []byte{},
 		fn:          def.Fn,
-		flow:        flow,
+		store:       flow.store,
 	}
 	flow.AddStep(result)
 	return result
@@ -66,7 +69,7 @@ func newStep(flow *Flow, def StParams) *Step {
 * @param flow *Flow
 **/
 func (s *Step) up(flow *Flow) {
-	s.flow = flow
+	s.store = flow.store
 }
 
 /**
@@ -76,6 +79,7 @@ func (s *Step) up(flow *Flow) {
 func (s *Step) ToJson() et.Json {
 	return et.Json{
 		"index":       s.Index,
+		"tag":         s.Tag,
 		"name":        s.Name,
 		"description": s.Description,
 		"stop":        s.Stop,
@@ -115,7 +119,7 @@ func (s *Step) Rollback(def RefRollback) *Step {
 * @return *jrex.Jrex
 **/
 func (s *Step) loadVm(ctx et.Json) (*jrex.Jrex, error) {
-	jrex, err := jrex.New("workflow", s.flow.workflow.store)
+	jrex, err := jrex.New(s.Tag, s.store)
 	if err != nil {
 		return nil, err
 	}

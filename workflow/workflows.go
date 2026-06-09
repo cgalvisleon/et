@@ -409,8 +409,7 @@ func (s *WorkFlow) NewFlow(tenantId, tag, ownerId, version, name, description, u
 		return nil, errors.New(MSG_FLOW_ALREADY_EXISTS)
 	}
 
-	result := newFlow(tenantId, tag, ownerId, version, name, description, userId)
-	s.addFlow(result)
+	result := newFlow(s, tenantId, tag, ownerId, version, name, description, userId)
 	return result, nil
 }
 

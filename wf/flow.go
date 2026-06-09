@@ -21,35 +21,55 @@ const (
 	SCHEDULE Trigger = "schedule"
 )
 
-type Stepers struct {
+type Port string
+
+const (
+	PortInput  Port = "input"
+	PortOutput Port = "output"
+)
+
+type StepConnection struct {
+	StepId string `json:"steper_id"`
+	Port   Port   `json:"port"`
+	Index  int    `json:"index"`
+}
+
+type Connection struct {
+	ID     string         `json:"id"`
+	Tag    string         `json:"tag"`
+	Source StepConnection `json:"source"`
+	Target StepConnection `json:"target"`
+	Kind   string         `json:"kind"`
+}
+
+type Steper struct {
 	Tag         string        `json:"tag"`
 	Trigger     Trigger       `json:"trigger"`
 	Connections []*Connection `json:"connections"`
-	StartId     string        `json:"start_id"`
 }
 
 type Flow struct {
-	CreatedAt     time.Time           `json:"created_at"`
-	UpdatedAt     time.Time           `json:"updated_at"`
-	TenantId      string              `json:"tenant_id"`
-	ProjectId     string              `json:"project_id"`
-	ID            string              `json:"id"`
-	Tag           string              `json:"tag"`
-	Title         string              `json:"title"`
-	Description   string              `json:"description"`
-	Version       string              `json:"version"`
-	WorkflowId    string              `json:"workflow_id"`
-	Steps         map[string]*Step    `json:"steps"`
-	Connections   []*Connection       `json:"connections"`
-	Stepers       map[string]*Stepers `json:"steplers"`
-	TotalAttempts int                 `json:"total_attempts"`
-	TimeAttempts  time.Duration       `json:"time_attempts"`
-	Public        bool                `json:"public"`
-	AuditLog      []et.Json           `json:"audit_log"`
-	UserID        string              `json:"-"`
-	isDebug       bool                `json:"-"`
-	isChanged     bool                `json:"-"`
-	store         Store               `json:"-"`
+	CreatedAt     time.Time          `json:"created_at"`
+	UpdatedAt     time.Time          `json:"updated_at"`
+	TenantId      string             `json:"tenant_id"`
+	ProjectId     string             `json:"project_id"`
+	ID            string             `json:"id"`
+	Tag           string             `json:"tag"`
+	Title         string             `json:"title"`
+	Description   string             `json:"description"`
+	Version       string             `json:"version"`
+	WorkflowId    string             `json:"workflow_id"`
+	Steps         map[string]*Step   `json:"steps"`
+	Connections   []*Connection      `json:"connections"`
+	Stepers       map[string]*Steper `json:"steper"`
+	TotalAttempts int                `json:"total_attempts"`
+	TimeAttempts  time.Duration      `json:"time_attempts"`
+	Public        bool               `json:"public"`
+	AuditLog      []et.Json          `json:"audit_log"`
+	UserID        string             `json:"-"`
+	isDebug       bool               `json:"-"`
+	isChanged     bool               `json:"-"`
+	store         Store              `json:"-"`
 }
 
 type FlowParams struct {
@@ -73,7 +93,7 @@ func (s *WorkFlow) newFlow(params FlowParams) *Flow {
 		params.Version = "1.0.0"
 	}
 	params.Tag = utility.Normalize(params.Tag)
-	id := fmt.Sprintf("flow:%s:%s:%s", params.Tag, s.ID, params.Version)
+	id := fmt.Sprintf("flow:%s:%s", params.Tag, params.Version)
 	result := &Flow{
 		CreatedAt:     now,
 		UpdatedAt:     now,
@@ -87,7 +107,7 @@ func (s *WorkFlow) newFlow(params FlowParams) *Flow {
 		WorkflowId:    s.ID,
 		Steps:         make(map[string]*Step),
 		Connections:   make([]*Connection, 0),
-		Stepers:       make(map[string]*Stepers),
+		Stepers:       make(map[string]*Steper),
 		TotalAttempts: 0,
 		TimeAttempts:  0,
 		Public:        false,

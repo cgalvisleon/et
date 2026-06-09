@@ -48,6 +48,7 @@ type Step struct {
 	Params      et.Json        `json:"params"`
 	Inputs      int            `json:"inputs"`
 	Outputs     int            `json:"outputs"`
+	Stop        bool           `json:"stop"`
 	AuditLog    []et.Json      `json:"audit_log"`
 	UserID      string         `json:"-"`
 	isDebug     bool           `json:"-"`
@@ -71,6 +72,7 @@ type StepParams struct {
 	Params      et.Json     `json:"params"`
 	Inputs      int         `json:"inputs"`
 	Outputs     int         `json:"outputs"`
+	Stop        bool        `json:"stop"`
 	UserID      string      `json:"user_id"`
 }
 
@@ -112,6 +114,7 @@ func (s *WorkFlow) newStep(def StepParams) (*Step, error) {
 		Params:      def.Params,
 		Inputs:      def.Inputs,
 		Outputs:     def.Outputs,
+		Stop:        def.Stop,
 		isDebug:     s.isDebug,
 		AuditLog:    make([]et.Json, 0),
 		UserID:      def.UserID,
@@ -227,6 +230,7 @@ func (s *Step) ToJson() et.Json {
 		"params":      s.Params,
 		"inputs":      s.Inputs,
 		"outputs":     s.Outputs,
+		"stop":        s.Stop,
 	}
 }
 

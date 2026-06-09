@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"errors"
 	"sync"
 	"time"
 
@@ -13,7 +14,7 @@ const (
 )
 
 type Store interface {
-	Set(collection, id, tenantId, ownerId string, obj any, userId string) error
+	Set(collection, id, tenantId, projectId string, obj any, userId string) error
 	Get(collection, id string, dest any) (bool, error)
 	Delete(collection, id string) error
 	Query(query et.Json) (et.Items, error)
@@ -36,4 +37,27 @@ type WorkFlow struct {
 	store       Store                `json:"-"`
 	metrics     cache.Metrics        `json:"-"`
 	isDebug     bool                 `json:"-"`
+}
+
+/**
+* getFlow
+* @param tag string
+* @return *Flow, error
+**/
+func (s *WorkFlow) getFlow(id, userId string) (*Flow, error) {
+	flow, exists := s.Flows[id]
+	if exists {
+		return flow, nil
+	}
+
+	flow, err := s.loadFlow(id, userId)
+	if err != nil {
+		return nil, err
+	}
+
+	if flow == nil {
+		return nil, errors.New(MSG_FLOW_NOT_FOUND)
+	}
+
+	return flow, nil
 }

@@ -14,8 +14,9 @@ var (
 	MSG_INSTANCE_ERROR                = "Instancia:%s tag:%s step:%d error:%s"
 	MSG_INSTANCE_ALREADY_DONE         = "instance already done"
 	MSG_INSTANCE_CONNECTION_NOT_FOUND = "instance connection not found"
+	MSG_INSTANCE_INVALID_CONNECTION   = "instance invalid connection"
 	MSG_INSTANCE_INVALID_STEP         = "instance invalid step"
-	MSG_INSTANCE_TRIGGER_NOT_FOUND    = "instance trigger not found"
+	MSG_STEPER_NOT_FOUND              = "steper not found"
 )
 
 func init() {
@@ -33,7 +34,8 @@ func init() {
 		MSG_INSTANCE_ERROR = "Instancia:%s tag:%s step:%d error:%s"
 		MSG_INSTANCE_ALREADY_DONE = "Instancia ya finalizada"
 		MSG_INSTANCE_CONNECTION_NOT_FOUND = "Conexión de instance no encontrada"
+		MSG_INSTANCE_INVALID_CONNECTION = "Conexión de instance invalido"
 		MSG_INSTANCE_INVALID_STEP = "Step de instance invalido"
-		MSG_INSTANCE_TRIGGER_NOT_FOUND = "Trigger de instance no encontrado"
+		MSG_STEPER_NOT_FOUND = "Steper no encontrado"
 	}
 }

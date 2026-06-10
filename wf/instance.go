@@ -38,48 +38,55 @@ var FlowStatusList map[Status]bool = map[Status]bool{
 }
 
 type Result struct {
-	Step   int     `json:"step"`
+	StepId string  `json:"step_id"`
 	Ctx    et.Json `json:"ctx"`
 	Result et.Json `json:"result"`
 	Error  string  `json:"error"`
 }
 
+type Current struct {
+	Source     *Step `json:"source"`
+	Target     *Step `json:"target"`
+	Error      *Step `json:"error"`
+	IsFinished bool  `json:"is_finished"`
+}
+
 type Instance struct {
-	StartedAt   time.Time            `json:"started_at"`
-	UpdatedAt   time.Time            `json:"updated_at"`
-	DoneAt      time.Time            `json:"done_at"`
-	TenantId    string               `json:"tenant_id"`
-	ProjectId   string               `json:"project_id"`
-	ID          string               `json:"id"`
-	FlowId      string               `json:"flow_id"`
-	Code        string               `json:"code"`
-	Title       string               `json:"title"`
-	Status      Status               `json:"status"`
-	Ctx         et.Json              `json:"ctx"`
-	Ctxs        map[int]et.Json      `json:"ctxs"`
-	Results     map[int]*Result      `json:"results"`
-	Params      et.Json              `json:"params"`
-	Tags        et.Json              `json:"tags"`
-	Traces      []et.Json            `json:"traces"`
-	Steper      *Steper              `json:"steper"`
-	CurrentStep int                  `json:"current_step"`
-	IsDone      bool                 `json:"is_done"`
-	IsStop      bool                 `json:"is_stop"`
-	AuditLog    []et.Json            `json:"audit_log"`
-	UserID      string               `json:"-"`
-	isDebug     bool                 `json:"-"`
-	store       Store                `json:"-"`
-	flow        *Flow                `json:"-"`
-	step        *Step                `json:"-"`
-	resilience  *resilience.Instance `json:"-"`
+	StartedAt  time.Time            `json:"started_at"`
+	UpdatedAt  time.Time            `json:"updated_at"`
+	DoneAt     time.Time            `json:"done_at"`
+	TenantId   string               `json:"tenant_id"`
+	ProjectId  string               `json:"project_id"`
+	ID         string               `json:"id"`
+	FlowId     string               `json:"flow_id"`
+	Code       string               `json:"code"`
+	Title      string               `json:"title"`
+	Status     Status               `json:"status"`
+	Ctx        et.Json              `json:"ctx"`
+	Ctxs       map[string]et.Json   `json:"ctxs"`
+	Results    map[string]*Result   `json:"results"`
+	Params     et.Json              `json:"params"`
+	Tags       et.Json              `json:"tags"`
+	Traces     []et.Json            `json:"traces"`
+	TriggerTag string               `json:"trigger_tag"`
+	Trigger    *Trigger             `json:"trigger"`
+	Current    *Current             `json:"current"`
+	IsDone     bool                 `json:"is_done"`
+	IsStop     bool                 `json:"is_stop"`
+	AuditLog   []et.Json            `json:"audit_log"`
+	UserID     string               `json:"-"`
+	isDebug    bool                 `json:"-"`
+	store      Store                `json:"-"`
+	flow       *Flow                `json:"-"`
+	resilience *resilience.Instance `json:"-"`
 }
 
 type InstanceParams struct {
-	TenantId  string `json:"tenant_id"`
-	ProjectId string `json:"project_id"`
-	FlowId    string `json:"flow_id"`
-	Steper    string `json:"steper"`
-	UserID    string `json:"user_id"`
+	TenantId   string `json:"tenant_id"`
+	ProjectId  string `json:"project_id"`
+	FlowId     string `json:"flow_id"`
+	TriggerTag string `json:"trigger_tag"`
+	UserID     string `json:"user_id"`
 }
 
 /**
@@ -93,9 +100,9 @@ func (s *WorkFlow) newInstance(params InstanceParams) (*Instance, error) {
 		return nil, err
 	}
 
-	steper, exists := flow.Stepers[params.Steper]
-	if !exists {
-		return nil, errors.New(MSG_STEPER_NOT_FOUND)
+	trigger, err := flow.getTrigger(params.TriggerTag)
+	if err != nil {
+		return nil, err
 	}
 
 	code := ""
@@ -115,28 +122,28 @@ func (s *WorkFlow) newInstance(params InstanceParams) (*Instance, error) {
 	now := timezone.Now()
 	id := reg.GenULID("instance")
 	result := &Instance{
-		StartedAt:   now,
-		TenantId:    params.TenantId,
-		ProjectId:   params.ProjectId,
-		ID:          id,
-		FlowId:      params.FlowId,
-		Code:        code,
-		Title:       title,
-		Status:      PENDING,
-		Ctx:         et.Json{},
-		Ctxs:        make(map[int]et.Json),
-		Results:     make(map[int]*Result),
-		Params:      et.Json{},
-		Tags:        et.Json{},
-		Traces:      make([]et.Json, 0),
-		Steper:      steper,
-		CurrentStep: -1,
-		IsDone:      false,
-		IsStop:      false,
-		AuditLog:    make([]et.Json, 0),
-		UserID:      params.UserID,
-		store:       s.store,
-		flow:        flow,
+		StartedAt:  now,
+		TenantId:   params.TenantId,
+		ProjectId:  params.ProjectId,
+		ID:         id,
+		FlowId:     params.FlowId,
+		Code:       code,
+		Title:      title,
+		Status:     PENDING,
+		Ctx:        et.Json{},
+		Ctxs:       make(map[string]et.Json),
+		Results:    make(map[string]*Result),
+		Params:     et.Json{},
+		Tags:       et.Json{},
+		Traces:     make([]et.Json, 0),
+		TriggerTag: params.TriggerTag,
+		Trigger:    trigger,
+		IsDone:     false,
+		IsStop:     false,
+		AuditLog:   make([]et.Json, 0),
+		UserID:     params.UserID,
+		store:      s.store,
+		flow:       flow,
 	}
 	return result, nil
 }
@@ -166,8 +173,14 @@ func (s *WorkFlow) loadInstance(id, userId string) (*Instance, error) {
 		return nil, err
 	}
 
+	trigger, err := flow.getTrigger(result.TriggerTag)
+	if err != nil {
+		return nil, err
+	}
+
 	result.store = s.store
 	result.flow = flow
+	result.Trigger = trigger
 	result.isDebug = s.isDebug
 	result.UserID = userId
 	return result, nil
@@ -226,25 +239,26 @@ func (s *Instance) delete() error {
 **/
 func (s *Instance) ToJson() et.Json {
 	return et.Json{
-		"started_at":   timezone.Format(s.StartedAt, timezone.RFC3339),
-		"updated_at":   timezone.Format(s.UpdatedAt, timezone.RFC3339),
-		"done_at":      timezone.Format(s.DoneAt, timezone.RFC3339),
-		"tenant_id":    s.TenantId,
-		"id":           s.ID,
-		"code":         s.Code,
-		"title":        s.Title,
-		"status":       s.Status,
-		"ctx":          s.Ctx,
-		"ctxs":         s.Ctxs,
-		"results":      s.Results,
-		"params":       s.Params,
-		"tags":         s.Tags,
-		"traces":       s.Traces,
-		"steper":       s.Steper,
-		"current_step": s.CurrentStep,
-		"is_done":      s.IsDone,
-		"is_stop":      s.IsStop,
-		"audit_log":    s.AuditLog,
+		"started_at":  timezone.Format(s.StartedAt, timezone.RFC3339),
+		"updated_at":  timezone.Format(s.UpdatedAt, timezone.RFC3339),
+		"done_at":     timezone.Format(s.DoneAt, timezone.RFC3339),
+		"tenant_id":   s.TenantId,
+		"id":          s.ID,
+		"code":        s.Code,
+		"title":       s.Title,
+		"status":      s.Status,
+		"ctx":         s.Ctx,
+		"ctxs":        s.Ctxs,
+		"results":     s.Results,
+		"params":      s.Params,
+		"tags":        s.Tags,
+		"traces":      s.Traces,
+		"trigger_tag": s.TriggerTag,
+		"trigger":     s.Trigger,
+		"current":     s.Current,
+		"is_done":     s.IsDone,
+		"is_stop":     s.IsStop,
+		"audit_log":   s.AuditLog,
 	}
 }
 
@@ -275,7 +289,11 @@ func (s *Instance) setStatus(status Status) error {
 	}
 
 	if status != FAILED {
-		logs.Logf(packageName, MSG_INSTANCE_STATUS, s.ID, s.FlowId, s.Status, s.CurrentStep)
+		step := ""
+		if s.Current != nil && s.Current.Source != nil {
+			step = s.Current.Source.Title
+		}
+		logs.Logf(packageName, MSG_INSTANCE_STATUS, s.ID, s.FlowId, s.Status, step)
 	}
 
 	return s.save()
@@ -332,15 +350,23 @@ func (s *Instance) setResult(result et.Json, err error) (et.Json, error) {
 	if err != nil {
 		errMessage = err.Error()
 	}
-	s.Results[s.CurrentStep] = &Result{
-		Step:   s.CurrentStep,
+	stepId := ""
+	if s.Current != nil && s.Current.Source != nil {
+		stepId = s.Current.Source.ID
+	}
+	s.Results[stepId] = &Result{
+		StepId: stepId,
 		Ctx:    s.Ctx,
 		Result: result,
 		Error:  errMessage,
 	}
 	if err != nil {
 		s.setStatus(FAILED)
-		logs.Logf(packageName, MSG_INSTANCE_ERROR, s.ID, s.FlowId, s.CurrentStep, err.Error())
+		step := ""
+		if s.Current != nil && s.Current.Source != nil {
+			step = s.Current.Source.Title
+		}
+		logs.Logf(packageName, MSG_INSTANCE_ERROR, s.ID, s.FlowId, step, err.Error())
 	}
 	return result, err
 }
@@ -352,25 +378,12 @@ func (s *Instance) setResult(result et.Json, err error) (et.Json, error) {
 **/
 func (s *Instance) setCtx(ctx et.Json) et.Json {
 	maps.Copy(s.Ctx, ctx)
-	s.Ctxs[s.CurrentStep] = ctx
+	stepId := ""
+	if s.Current != nil && s.Current.Source != nil {
+		stepId = s.Current.Source.ID
+	}
+	s.Ctxs[stepId] = ctx
 	return s.Ctx
-}
-
-/**
-* setCurrent
-* @param step int
-**/
-func (s *Instance) setCurrentStep(index int) error {
-	if s.IsDone {
-		return errors.New(MSG_INSTANCE_ALREADY_DONE)
-	}
-
-	if index < 0 || index >= len(s.Steper.Connections) {
-		return errors.New(MSG_INSTANCE_INVALID_STEP)
-	}
-
-	s.CurrentStep = index - 1
-	return nil
 }
 
 /**
@@ -386,25 +399,25 @@ func (s *Instance) next() bool {
 		return false
 	}
 
-	s.CurrentStep++
-	if s.CurrentStep >= len(s.Steper.Connections) {
-		s.setResult(et.Json{}, errors.New(MSG_INSTANCE_INVALID_CONNECTION))
-		return false
+	if s.Current == nil {
+		current, exists := s.flow.getCurrent(s.Trigger.StepId, 0)
+		if !exists {
+			return false
+		}
+		s.Current = current
+	} else {
+		target := s.Current.Target
+		if target == nil {
+			s.setResult(et.Json{}, errors.New(MSG_INSTANCE_INVALID_CONNECTION))
+			return false
+		}
+
+		current, exists := s.flow.getCurrent(target.ID, 0)
+		if !exists {
+			return false
+		}
+		s.Current = current
 	}
 
-	connection := s.Steper.Connections[s.CurrentStep]
-	if connection == nil {
-		s.setResult(et.Json{}, errors.New(MSG_INSTANCE_INVALID_CONNECTION))
-		return false
-	}
-
-	stepId := connection.Source.StepId
-	step, exists := s.flow.Steps[stepId]
-	if !exists {
-		s.setResult(et.Json{}, errors.New(MSG_STEP_NOT_FOUND))
-		return false
-	}
-
-	s.step = step
-	return s.step != nil
+	return true
 }

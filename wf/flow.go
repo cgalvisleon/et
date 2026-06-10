@@ -3,6 +3,7 @@ package workflow
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/cgalvisleon/et/config"
@@ -12,13 +13,11 @@ import (
 	"github.com/cgalvisleon/et/utility"
 )
 
-type Trigger string
-
 const (
-	MANUAL   Trigger = "manual"
-	WEBHOOK  Trigger = "webhook"
-	CRON     Trigger = "cron"
-	SCHEDULE Trigger = "schedule"
+	MANUAL   string = "manual"
+	WEBHOOK  string = "webhook"
+	CRON     string = "cron"
+	SCHEDULE string = "schedule"
 )
 
 type Port string
@@ -42,34 +41,35 @@ type Connection struct {
 	Kind   string         `json:"kind"`
 }
 
-type Steper struct {
-	Tag         string        `json:"tag"`
-	Trigger     Trigger       `json:"trigger"`
-	Connections []*Connection `json:"connections"`
+type Trigger struct {
+	Tag         string   `json:"tag"`
+	Type        string   `json:"type"`
+	StepId      string   `json:"step_id"`
+	Connections []string `json:"connections"`
 }
 
 type Flow struct {
-	CreatedAt     time.Time          `json:"created_at"`
-	UpdatedAt     time.Time          `json:"updated_at"`
-	TenantId      string             `json:"tenant_id"`
-	ProjectId     string             `json:"project_id"`
-	ID            string             `json:"id"`
-	Tag           string             `json:"tag"`
-	Title         string             `json:"title"`
-	Description   string             `json:"description"`
-	Version       string             `json:"version"`
-	WorkflowId    string             `json:"workflow_id"`
-	Steps         map[string]*Step   `json:"steps"`
-	Connections   []*Connection      `json:"connections"`
-	Stepers       map[string]*Steper `json:"steper"`
-	TotalAttempts int                `json:"total_attempts"`
-	TimeAttempts  time.Duration      `json:"time_attempts"`
-	Public        bool               `json:"public"`
-	AuditLog      []et.Json          `json:"audit_log"`
-	UserID        string             `json:"-"`
-	isDebug       bool               `json:"-"`
-	isChanged     bool               `json:"-"`
-	store         Store              `json:"-"`
+	CreatedAt     time.Time        `json:"created_at"`
+	UpdatedAt     time.Time        `json:"updated_at"`
+	TenantId      string           `json:"tenant_id"`
+	ProjectId     string           `json:"project_id"`
+	ID            string           `json:"id"`
+	Tag           string           `json:"tag"`
+	Title         string           `json:"title"`
+	Description   string           `json:"description"`
+	Version       string           `json:"version"`
+	WorkflowId    string           `json:"workflow_id"`
+	Steps         map[string]*Step `json:"steps"`
+	Connections   []*Connection    `json:"connections"`
+	Triggers      []*Trigger       `json:"triggers"`
+	TotalAttempts int              `json:"total_attempts"`
+	TimeAttempts  time.Duration    `json:"time_attempts"`
+	Public        bool             `json:"public"`
+	AuditLog      []et.Json        `json:"audit_log"`
+	UserID        string           `json:"-"`
+	isDebug       bool             `json:"-"`
+	isChanged     bool             `json:"-"`
+	store         Store            `json:"-"`
 }
 
 type FlowParams struct {
@@ -107,7 +107,7 @@ func (s *WorkFlow) newFlow(params FlowParams) *Flow {
 		WorkflowId:    s.ID,
 		Steps:         make(map[string]*Step),
 		Connections:   make([]*Connection, 0),
-		Stepers:       make(map[string]*Steper),
+		Triggers:      make([]*Trigger, 0),
 		TotalAttempts: 0,
 		TimeAttempts:  0,
 		Public:        false,
@@ -223,4 +223,101 @@ func (s *Flow) ToJson() et.Json {
 **/
 func (s *Flow) ToString() string {
 	return s.ToJson().ToString()
+}
+
+/**
+* getTrigger
+* @param tag string
+* @return *Trigger, error
+**/
+func (s *Flow) getTrigger(tag string) (*Trigger, error) {
+	idx := slices.IndexFunc(s.Triggers, func(trigger *Trigger) bool {
+		return trigger.Tag == tag
+	})
+
+	if idx == -1 {
+		return nil, errors.New(MSG_INSTANCE_TRIGGER_NOT_FOUND)
+	}
+
+	result := s.Triggers[idx]
+	if result == nil {
+		return nil, errors.New(MSG_INSTANCE_INVALID_TRIGGER)
+	}
+
+	return result, nil
+}
+
+/**
+* getCurrentSource
+* @param stepId string, index int
+* @return *Connection, error
+**/
+func (s *Flow) getConnection(stepId string, index int) (*Connection, bool) {
+	idx := slices.IndexFunc(s.Connections, func(connection *Connection) bool {
+		return connection.Source.StepId == stepId && connection.Source.Index == index && connection.Kind == "output"
+	})
+
+	if idx == -1 {
+		return nil, false
+	}
+
+	return s.Connections[idx], true
+}
+
+/**
+* getCurrentError
+* @param stepId string, index int
+* @return *Connection
+**/
+func (s *Flow) getConnectionError(stepId string, index int) (*Connection, bool) {
+	idx := slices.IndexFunc(s.Connections, func(connection *Connection) bool {
+		return connection.Source.StepId == stepId && connection.Source.Index == index && connection.Kind == "error"
+	})
+
+	if idx == -1 {
+		return nil, false
+	}
+
+	return s.Connections[idx], true
+}
+
+/**
+* getCurrent
+* @param stepId string, index int
+* @return *Connection, error
+**/
+func (s *Flow) getCurrent(stepId string, index int) (*Current, bool) {
+	conn, exists := s.getConnection(stepId, index)
+	if !exists {
+		return nil, false
+	}
+
+	source := s.getStep(conn.Source.StepId)
+	target := s.getStep(conn.Target.StepId)
+
+	result := &Current{
+		Source: source,
+		Target: target,
+	}
+
+	connError, exists := s.getConnectionError(stepId, index)
+	if exists {
+		result.Error = s.getStep(connError.Target.StepId)
+	}
+
+	return result, true
+}
+
+/**
+* getStep
+* @param stepId string
+* @return *Step, bool
+**/
+func (s *Flow) getStep(stepId string) *Step {
+	step, exists := s.Steps[stepId]
+	if !exists {
+		return nil
+	}
+
+	return step
 }

@@ -52,33 +52,34 @@ type Current struct {
 }
 
 type Instance struct {
-	StartedAt  time.Time            `json:"started_at"`
-	UpdatedAt  time.Time            `json:"updated_at"`
-	DoneAt     time.Time            `json:"done_at"`
-	TenantId   string               `json:"tenant_id"`
-	ProjectId  string               `json:"project_id"`
-	ID         string               `json:"id"`
-	FlowId     string               `json:"flow_id"`
-	Code       string               `json:"code"`
-	Title      string               `json:"title"`
-	Status     Status               `json:"status"`
-	Ctx        et.Json              `json:"ctx"`
-	Ctxs       map[string]et.Json   `json:"ctxs"`
-	Results    map[string]*Result   `json:"results"`
-	Params     et.Json              `json:"params"`
-	Tags       et.Json              `json:"tags"`
-	Traces     []et.Json            `json:"traces"`
-	TriggerTag string               `json:"trigger_tag"`
-	Trigger    *Trigger             `json:"trigger"`
-	Current    *Current             `json:"current"`
-	IsDone     bool                 `json:"is_done"`
-	IsStop     bool                 `json:"is_stop"`
-	AuditLog   []et.Json            `json:"audit_log"`
-	UserID     string               `json:"-"`
-	isDebug    bool                 `json:"-"`
-	store      Store                `json:"-"`
-	flow       *Flow                `json:"-"`
-	resilience *resilience.Instance `json:"-"`
+	StartedAt    time.Time            `json:"started_at"`
+	UpdatedAt    time.Time            `json:"updated_at"`
+	DoneAt       time.Time            `json:"done_at"`
+	TenantId     string               `json:"tenant_id"`
+	ProjectId    string               `json:"project_id"`
+	ID           string               `json:"id"`
+	FlowId       string               `json:"flow_id"`
+	Code         string               `json:"code"`
+	Title        string               `json:"title"`
+	Status       Status               `json:"status"`
+	Ctx          et.Json              `json:"ctx"`
+	Ctxs         map[string]et.Json   `json:"ctxs"`
+	Results      map[string]*Result   `json:"results"`
+	Params       et.Json              `json:"params"`
+	Tags         et.Json              `json:"tags"`
+	Traces       []et.Json            `json:"traces"`
+	TriggerTag   string               `json:"trigger_tag"`
+	Trigger      *Trigger             `json:"trigger"`
+	Current      *Current             `json:"current"`
+	CurrentIndex int                  `json:"current_index"`
+	IsDone       bool                 `json:"is_done"`
+	IsStop       bool                 `json:"is_stop"`
+	AuditLog     []et.Json            `json:"audit_log"`
+	UserID       string               `json:"-"`
+	isDebug      bool                 `json:"-"`
+	store        Store                `json:"-"`
+	flow         *Flow                `json:"-"`
+	resilience   *resilience.Instance `json:"-"`
 }
 
 type InstanceParams struct {
@@ -400,7 +401,7 @@ func (s *Instance) next() bool {
 	}
 
 	if s.Current == nil {
-		current, exists := s.flow.getCurrent(s.Trigger.StepId, 0)
+		current, exists := s.flow.getCurrent(s.Trigger.StepId, s.CurrentIndex)
 		if !exists {
 			return false
 		}
@@ -408,11 +409,10 @@ func (s *Instance) next() bool {
 	} else {
 		target := s.Current.Target
 		if target == nil {
-			s.setResult(et.Json{}, errors.New(MSG_INSTANCE_INVALID_CONNECTION))
 			return false
 		}
 
-		current, exists := s.flow.getCurrent(target.ID, 0)
+		current, exists := s.flow.getCurrent(target.ID, s.CurrentIndex)
 		if !exists {
 			return false
 		}

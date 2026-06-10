@@ -290,6 +290,47 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 			return et.Json{}, err
 		}
 		return result, nil
+	case []string:
+		if instance.CurrentIndex < 0 || instance.CurrentIndex >= len(v) {
+			return et.Json{}, errors.New(MSG_STEP_CODE_INDEX_NOT_FOUND)
+		}
+		code := v[instance.CurrentIndex]
+		jrex, err := jrex.New(s.ID, s.store)
+		if err != nil {
+			instance.setStatus(FAILED)
+			return et.Json{}, err
+		}
+		for name, binding := range s.bindings {
+			jrex.Set(name, binding)
+		}
+		instance.setStatus(RUNNING)
+		jrex.SetCtx(ctx)
+		result, err := jrex.Run(code)
+		if err != nil {
+			instance.setStatus(FAILED)
+			return et.Json{}, err
+		}
+		return result, nil
+	case [][]byte:
+		if instance.CurrentIndex < 0 || instance.CurrentIndex >= len(v) {
+			return et.Json{}, errors.New(MSG_STEP_CODE_INDEX_NOT_FOUND)
+		}
+		code := v[instance.CurrentIndex]
+		jrex, err := jrex.New(s.ID, s.store)
+		if err != nil {
+			return et.Json{}, err
+		}
+		for name, binding := range s.bindings {
+			jrex.Set(name, binding)
+		}
+		instance.setStatus(RUNNING)
+		jrex.SetCtx(ctx)
+		result, err := jrex.RunByBt(code)
+		if err != nil {
+			instance.setStatus(FAILED)
+			return et.Json{}, err
+		}
+		return result, nil
 	}
 
 	return et.Json{}, errors.New(MSG_STEP_DEFINITION_IS_UNKNOWN)

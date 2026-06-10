@@ -19,6 +19,7 @@ var (
 	MSG_INSTANCE_INVALID_TRIGGER      = "instance invalid trigger"
 	MSG_INSTANCE_TRIGGER_NOT_FOUND    = "instance trigger not found"
 	MSG_STEPER_NOT_FOUND              = "steper not found"
+	MSG_STEP_CODE_INDEX_NOT_FOUND     = "step code index not found"
 )
 
 func init() {
@@ -41,5 +42,6 @@ func init() {
 		MSG_INSTANCE_INVALID_TRIGGER = "Trigger de instance invalido"
 		MSG_INSTANCE_TRIGGER_NOT_FOUND = "Trigger de instance no encontrado"
 		MSG_STEPER_NOT_FOUND = "Steper no encontrado"
+		MSG_STEP_CODE_INDEX_NOT_FOUND = "Índice de código de step no encontrado"
 	}
 }

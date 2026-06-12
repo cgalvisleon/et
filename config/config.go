@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"strconv"
@@ -9,10 +10,8 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/timezone"
-	"github.com/cgalvisleon/et/utility"
 )
 
 type Store interface {
@@ -31,29 +30,15 @@ type Config struct {
 	Tag       string    `json:"tag"`
 	Stage     string    `json:"stage"`
 	Params    et.Json   `json:"params"`
+	AuditLog  []et.Json `json:"audit_log"`
 	store     Store     `json:"-"`
 	isDebug   bool      `json:"-"`
 }
 
 var (
 	packageName = "config"
-	CNF         *Config
+	cnf         *Config
 )
-
-/**
-* Load
-* @param tag, stage, tenantId, ownerId string, store Store
-* @return error
-**/
-func Load(tag, stage, tenantId, ownerId string, store Store, userId string) error {
-	var err error
-	CNF, err = New(tag, stage, tenantId, ownerId, store, userId)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
 
 /**
 * NewConfig
@@ -61,75 +46,85 @@ func Load(tag, stage, tenantId, ownerId string, store Store, userId string) erro
 * @return *Config
 **/
 func New(tag, stage, tenantId, ownerId string, store Store, userId string) (*Config, error) {
-	if utility.ValidStr(tag, 1, []string{""}) {
+	if tag == "" {
 		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "tag")
 	}
 
-	if utility.ValidStr(stage, 1, []string{""}) {
+	if stage == "" {
 		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "stage")
 	}
 
-	if utility.ValidStr(tenantId, 1, []string{""}) {
+	if tenantId == "" {
 		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "tenantId")
 	}
 
-	new := func() (*Config, error) {
-		now := timezone.Now()
-		id := fmt.Sprintf("config:%s:%s:%s", tag, stage, tenantId)
-		result := &Config{
-			CreatedAt: now,
-			UpdatedAt: now,
-			ID:        id,
-			Params:    et.Json{},
-			Tag:       tag,
-			Stage:     stage,
-			OwnerId:   ownerId,
-			TenantId:  tenantId,
-			store:     store,
-		}
-		if store != nil {
-			err := result.save(userId)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		return result, nil
+	now := timezone.Now()
+	id := fmt.Sprintf("config:%s:%s:%s", tag, stage, tenantId)
+	result := &Config{
+		CreatedAt: now,
+		UpdatedAt: now,
+		TenantId:  tenantId,
+		OwnerId:   ownerId,
+		ID:        id,
+		Tag:       tag,
+		Stage:     stage,
+		Params:    et.Json{},
+		AuditLog:  make([]et.Json, 0),
+		store:     store,
 	}
-
-	if store != nil {
-		var result *Config
-		exists, err := store.Get(tag, stage, result)
-		if err != nil {
-			return nil, err
-		}
-
-		if !exists {
-			return new()
-		}
-
-		bt, err := json.Marshal(CNF)
-		if err != nil {
-			return nil, err
-		}
-
-		err = json.Unmarshal(bt, &result)
-		if err != nil {
-			return nil, err
-		}
-
-		return CNF, nil
-	}
-
-	return new()
+	return result, nil
 }
 
 /**
-* Serialize
-* @return ([]byte, error)
+* Load
+* @param tag, stage, tenantId, ownerId string, store Store
+* @return error
 **/
-func (s *Config) Serialize() ([]byte, error) {
-	return utility.Serialize(s)
+func Load(tag, stage, tenantId, ownerId string, store Store, userId string) error {
+	if store == nil {
+		return errors.New(MSG_CONFIG_STORE_IS_NIL)
+	}
+
+	exists, err := store.Get(tag, stage, cnf)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		cnf, err = New(tag, stage, tenantId, ownerId, store, userId)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+/**
+* Save
+* @param userId string
+* @return error
+**/
+func (s *Config) Save(userId string) error {
+	if s.store == nil {
+		return errors.New(MSG_CONFIG_STORE_IS_NIL)
+	}
+
+	now := timezone.Now()
+	s.UpdatedAt = now
+	s.AuditLog = append(s.AuditLog, et.Json{
+		"created_at": now,
+		"user_id":    userId,
+		"action":     "save",
+	})
+	maxAuditLog := GetInt("MAX_AUDIT_LOG", 1000)
+	s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+
+	if s.isDebug {
+		logs.Log(packageName, "save:", s.ToString())
+	}
+
+	return s.store.Set(s.Tag, s.Stage, s.OwnerId, s.TenantId, s, userId)
 }
 
 /**
@@ -167,50 +162,28 @@ func (s *Config) Debug() *Config {
 }
 
 /**
-* save
-* @param userId string
-* @return error
-**/
-func (s *Config) save(userId string) error {
-	s.UpdatedAt = timezone.Now()
-	data := s.ToJson()
-	data.Set("user_id", userId)
-	if s.isDebug {
-		logs.Logf(packageName, "save: %s", data.ToString())
-	}
-
-	if s.store != nil {
-		return s.store.Set(s.Tag, s.Stage, s.OwnerId, s.TenantId, s.Params, userId)
-	}
-
-	event.Publish(EVENT_CONFIG_SET, data)
-
-	return nil
-}
-
-/**
 * Set
-* @param key string, value interface{}
-* @return error
+* @param param et.Json
+* @return *Config
 **/
-func (s *Config) Set(param et.Json, userId string) error {
+func (s *Config) Set(param et.Json) *Config {
 	maps.Copy(s.Params, param)
-	return s.save(userId)
+	return s
 }
 
 /**
 * Delete
-* @param key string, userId string
-* @return error
+* @param key string
+* @return *Config
 **/
-func (s *Config) Delete(key string, userId string) error {
+func (s *Config) Remove(key string) *Config {
 	delete(s.Params, key)
-	return s.save(userId)
+	return s
 }
 
 /**
 * Get
-* @param key string, def interface{}
+* @param key string
 * @return interface{}
 **/
 func (s *Config) Get(key string, def interface{}) interface{} {

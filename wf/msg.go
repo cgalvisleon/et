@@ -5,6 +5,7 @@ import "github.com/cgalvisleon/et/envar"
 var (
 	MSG_STEP_IS_FUNCTION              = "step is function"
 	MSG_WORKFLOW_STORE_IS_NIL         = "workflow store is nil"
+	MSG_WORKFLOW_NOT_FOUND            = "workflow not found"
 	MSG_STEP_NOT_FOUND                = "step not found"
 	MSG_STEP_DEFINITION_IS_UNKNOWN    = "step definition is unknown"
 	MSG_STEP_STATUS_INVALID           = "step status is invalid"
@@ -20,9 +21,10 @@ var (
 	MSG_INSTANCE_TRIGGER_NOT_FOUND    = "instance trigger not found"
 	MSG_STEPER_NOT_FOUND              = "steper not found"
 	MSG_STEP_CODE_INDEX_NOT_FOUND     = "step code index not found"
-	MSG_INSTANCE_ALREADY_RUNNING      = "instance already running"
+	MSG_INSTANCE_ALREADY_RUNNING      = "instance already running status:%s"
 	MSG_INSTANCE_ROLLBACK             = "instance rollback"
 	MSG_INSTANCE_CANCEL               = "instance cancel"
+	MSG_INSTANCE_STOP                 = "instance stop"
 	MSG_RESILIENCE_NO_RESULT          = "resilience no return result"
 )
 
@@ -32,6 +34,7 @@ func init() {
 	if lang == "es" {
 		MSG_STEP_IS_FUNCTION = "step is function"
 		MSG_WORKFLOW_STORE_IS_NIL = "workflow store es nulo"
+		MSG_WORKFLOW_NOT_FOUND = "workflow no encontrado"
 		MSG_STEP_NOT_FOUND = "step no encontrado"
 		MSG_STEP_DEFINITION_IS_UNKNOWN = "definición de step desconocida"
 		MSG_STEP_STATUS_INVALID = "status de step invalido"
@@ -47,9 +50,10 @@ func init() {
 		MSG_INSTANCE_TRIGGER_NOT_FOUND = "Trigger de instance no encontrado"
 		MSG_STEPER_NOT_FOUND = "Steper no encontrado"
 		MSG_STEP_CODE_INDEX_NOT_FOUND = "Índice de código de step no encontrado"
-		MSG_INSTANCE_ALREADY_RUNNING = "Instancia ya en ejecución"
+		MSG_INSTANCE_ALREADY_RUNNING = "Instancia ya en ejecución status:%s"
 		MSG_INSTANCE_ROLLBACK = "Instancia rollback"
 		MSG_INSTANCE_CANCEL = "Instancia cancelada"
+		MSG_INSTANCE_STOP = "Instancia detenida"
 		MSG_RESILIENCE_NO_RESULT = "resilience no return result"
 	}
 }

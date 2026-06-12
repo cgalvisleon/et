@@ -29,8 +29,6 @@ func main() {
 		TotalAttempts: 3,
 		Interval:      3 * time.Second,
 		Tags:          et.Json{},
-		Team:          "",
-		Level:         "",
 		UserId:        "1234567890",
 		Fn:            suma,
 		FnArgs:        []interface{}{1, 2},

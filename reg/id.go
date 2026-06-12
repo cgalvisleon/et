@@ -158,11 +158,6 @@ func TagUUID(tag, id string) string {
 		return fmt.Sprintf(`%s:%s`, tag, UUID())
 	}
 
-	list := strings.Split(id, ":")
-	if len(list) < 2 {
-		return fmt.Sprintf(`%s:%s`, tag, id)
-	}
-
 	return id
 }
 
@@ -176,11 +171,6 @@ func TagULID(tag, id string) string {
 		return fmt.Sprintf(`%s:%s`, tag, ULID())
 	}
 
-	list := strings.Split(id, ":")
-	if len(list) < 2 {
-		return fmt.Sprintf(`%s:%s`, tag, id)
-	}
-
 	return id
 }
 
@@ -192,11 +182,6 @@ func TagULID(tag, id string) string {
 func TagXID(tag, id string) string {
 	if map[string]bool{"": true, "*": true, "new": true}[id] {
 		return fmt.Sprintf(`%s:%s`, tag, XID())
-	}
-
-	list := strings.Split(id, ":")
-	if len(list) < 2 {
-		return fmt.Sprintf(`%s:%s`, tag, id)
 	}
 
 	return id

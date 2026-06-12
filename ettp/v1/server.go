@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -88,13 +87,13 @@ type Server struct {
 
 func New(cnf *Config) (*Server, error) {
 	/* Cache */
-	err := cache.Load(config.CNF)
+	err := cache.Load()
 	if err != nil {
 		return nil, err
 	}
 
 	/* Event */
-	err = event.Load(config.CNF)
+	err = event.Load()
 	if err != nil {
 		return nil, err
 	}

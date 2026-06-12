@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
@@ -37,7 +36,7 @@ type Resilience struct {
 * @return *Resilience, error
 **/
 func New(store Store) (*Resilience, error) {
-	err := event.Load(config.CNF)
+	err := event.Load()
 	if err != nil {
 		logs.Logf(packageName, MSG_EVENT_NOT_LOADED, err)
 	}

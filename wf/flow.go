@@ -169,12 +169,7 @@ func (s *Flow) save() error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("flow", s.ID, s.TenantId, s.ProjectId, s, s.UserID)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return s.store.Set("flow", s.ID, s.TenantId, s.WorkflowId, s, s.UserID)
 }
 
 /**
@@ -186,12 +181,7 @@ func (s *Flow) delete() error {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
 
-	err := s.store.DeleteByCollection("flow", s.ID)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return s.store.DeleteByCollection("flow", s.ID)
 }
 
 /**

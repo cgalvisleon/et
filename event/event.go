@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
@@ -51,33 +51,22 @@ func init() {
 	}()
 }
 
-type Config interface {
-	GetStr(key string, def string) string
-}
-
 /**
 * LoadTo loads the event connection from a Config struct.
-* @param cfg Config
 * @return error
 **/
-func New(config Config) (*Conn, error) {
+func New() (*Conn, error) {
 	if !slices.Contains([]string{"linux", "darwin", "windows"}, oS) {
 		return nil, logs.Alertf(MSG_UNSUPPORTED_OS, oS)
 	}
 
-	host := envar.GetStr("NATS_HOST", "")
-	user := envar.GetStr("NATS_USER", "")
-	password := envar.GetStr("NATS_PASSWORD", "")
-	if config != nil {
-		host = config.GetStr("NATS_HOST", host)
-		user = config.GetStr("NATS_USER", user)
-		password = config.GetStr("NATS_PASSWORD", password)
-	}
-
+	host := config.GetStr("NATS_HOST", "")
 	if !utility.ValidStr(host, 0, []string{}) {
 		return nil, logs.Alertf(msg.MSG_ATRIB_REQUIRED, "host")
 	}
 
+	user := config.GetStr("NATS_USER", "")
+	password := config.GetStr("NATS_PASSWORD", "")
 	opts := []nats.Option{
 		nats.UserInfo(user, password),
 		nats.ReconnectWait(2 * time.Second),

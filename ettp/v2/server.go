@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
@@ -164,13 +163,13 @@ func New(name string, cnf *Config) (*Server, error) {
 	result.mux.HandleFunc("/", result.handler)
 
 	if cnf.UseCache {
-		if err := cache.Load(config.CNF); err != nil {
+		if err := cache.Load(); err != nil {
 			return nil, err
 		}
 	}
 
 	if cnf.UseEvent {
-		if err := event.Load(config.CNF); err != nil {
+		if err := event.Load(); err != nil {
 			return nil, err
 		}
 	}

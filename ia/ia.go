@@ -57,7 +57,7 @@ type Ia struct {
 * @return (*Ia, error)
 **/
 func New(tenantId, tag string, store Store, config Config) (*Ia, error) {
-	err := event.Load(config)
+	err := event.Load()
 	if err != nil {
 		return nil, err
 	}

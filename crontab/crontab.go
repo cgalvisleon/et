@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
@@ -53,12 +52,12 @@ type Crontab struct {
 * @return (*Crontab, error)
 **/
 func New(tag string, store Store) (*Crontab, error) {
-	err := cache.Load(config.CNF)
+	err := cache.Load()
 	if err != nil {
 		return nil, err
 	}
 
-	err = event.Load(config.CNF)
+	err = event.Load()
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +147,7 @@ func (s *Crontab) addJob(tp TypeJob, tag, ownerId, spec, channel string, started
 	s.Jobs[tag] = result
 	s.mu.Unlock()
 
-	logs.Logf(packageName, fmt.Sprintf("job:%s | status:add | type:%s | spec:%s", tag, tp, spec))
+	logs.Log(packageName, fmt.Sprintf("job:%s | status:add | type:%s | spec:%s", tag, tp, spec))
 
 	if started {
 		result.Start()
@@ -176,7 +175,7 @@ func (s *Crontab) removeJob(tag string) bool {
 	delete(s.Jobs, tag)
 	s.mu.Unlock()
 
-	logs.Logf(packageName, fmt.Sprintf("job:%s removed", tag))
+	logs.Log(packageName, fmt.Sprintf("job:%s removed", tag))
 	return true
 }
 

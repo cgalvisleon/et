@@ -185,12 +185,7 @@ func (s *Step) save() error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("step", s.ID, s.TenantId, s.ProjectId, s, s.UserID)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return s.store.Set("step", s.ID, s.TenantId, s.ProjectId, s, s.UserID)
 }
 
 /**
@@ -202,12 +197,7 @@ func (s *Step) delete() error {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
 
-	err := s.store.DeleteByCollection("step", s.ID)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return s.store.DeleteByCollection("step", s.ID)
 }
 
 /**
@@ -263,7 +253,7 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 			instance.setStatus(FAILED)
 			return et.Json{}, err
 		}
-		for name, binding := range s.bindings {
+		for name, binding := range instance.bindings {
 			jrex.Set(name, binding)
 		}
 		instance.setStatus(RUNNING)
@@ -279,7 +269,7 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 		if err != nil {
 			return et.Json{}, err
 		}
-		for name, binding := range s.bindings {
+		for name, binding := range instance.bindings {
 			jrex.Set(name, binding)
 		}
 		instance.setStatus(RUNNING)
@@ -300,7 +290,7 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 			instance.setStatus(FAILED)
 			return et.Json{}, err
 		}
-		for name, binding := range s.bindings {
+		for name, binding := range instance.bindings {
 			jrex.Set(name, binding)
 		}
 		instance.setStatus(RUNNING)
@@ -320,7 +310,7 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 		if err != nil {
 			return et.Json{}, err
 		}
-		for name, binding := range s.bindings {
+		for name, binding := range instance.bindings {
 			jrex.Set(name, binding)
 		}
 		instance.setStatus(RUNNING)

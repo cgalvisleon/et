@@ -28,13 +28,13 @@ const (
 * Load
 * @return error
 **/
-func Load(cfg Config) error {
+func Load() error {
 	if conn != nil {
 		return nil
 	}
 
 	var err error
-	conn, err = New(cfg)
+	conn, err = New()
 	if err != nil {
 		return err
 	}

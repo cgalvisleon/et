@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/config"
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
@@ -22,11 +21,11 @@ var (
 )
 
 /**
-* getSecret returns the JWT signing secret, reading the SECRET env var only once.
+* getSecret returns the JWT signing secret, reading the SECRET config only once.
 * @return string
 **/
 func getSecret() string {
-	secret := envar.GetStr("SECRET", "1977")
+	secret := config.GetStr("SECRET", "1977")
 	if config.IsLoad() {
 		secret = config.GetStr("SECRET", secret)
 	}

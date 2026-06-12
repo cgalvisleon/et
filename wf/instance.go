@@ -6,6 +6,7 @@ import (
 	"maps"
 	"time"
 
+	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
@@ -26,16 +27,20 @@ const (
 	DONE     Status = "done"
 	FAILED   Status = "failed"
 	CANCEL   Status = "cancel"
+	STOP     Status = "stop"
 )
 
-var FlowStatusList map[Status]bool = map[Status]bool{
-	PENDING:  true,
-	RUNNING:  true,
-	ROLLBACK: true,
-	DONE:     true,
-	FAILED:   true,
-	CANCEL:   true,
-}
+var (
+	ErrorInstanceNotFound                 = errors.New(MSG_INSTANCE_NOT_FOUND)
+	FlowStatusList        map[Status]bool = map[Status]bool{
+		PENDING:  true,
+		RUNNING:  true,
+		ROLLBACK: true,
+		DONE:     true,
+		FAILED:   true,
+		CANCEL:   true,
+	}
+)
 
 type Result struct {
 	StepId string  `json:"step_id"`
@@ -80,12 +85,14 @@ type Instance struct {
 	isDebug      bool                   `json:"-"`
 	store        Store                  `json:"-"`
 	flow         *Flow                  `json:"-"`
+	bindings     map[string]any         `json:"-"`
 	resilience   *resilience.Resilience `json:"-"`
 }
 
 type InstanceParams struct {
 	TenantId   string `json:"tenant_id"`
 	ProjectId  string `json:"project_id"`
+	ID         string `json:"id"`
 	FlowId     string `json:"flow_id"`
 	TriggerTag string `json:"trigger_tag"`
 	UserID     string `json:"user_id"`
@@ -122,7 +129,7 @@ func (s *WorkFlow) newInstance(params InstanceParams) (*Instance, error) {
 	}
 
 	now := timezone.Now()
-	id := reg.GenULID("instance")
+	id := reg.TagULID("instance", params.ID)
 	result := &Instance{
 		StartedAt:  now,
 		TenantId:   params.TenantId,
@@ -146,6 +153,10 @@ func (s *WorkFlow) newInstance(params InstanceParams) (*Instance, error) {
 		UserID:     params.UserID,
 		store:      s.store,
 		flow:       flow,
+		bindings:   make(map[string]any),
+	}
+	for k, v := range s.bindings {
+		result.bindings[k] = v
 	}
 	return result, nil
 }
@@ -167,7 +178,7 @@ func (s *WorkFlow) loadInstance(id, userId string) (*Instance, error) {
 	}
 
 	if !exists {
-		return nil, errors.New(MSG_INSTANCE_NOT_FOUND)
+		return nil, ErrorInstanceNotFound
 	}
 
 	flow, err := s.getFlow(result.FlowId, userId)
@@ -185,6 +196,10 @@ func (s *WorkFlow) loadInstance(id, userId string) (*Instance, error) {
 	result.Trigger = trigger
 	result.isDebug = s.isDebug
 	result.UserID = userId
+	result.bindings = make(map[string]any)
+	for k, v := range s.bindings {
+		result.bindings[k] = v
+	}
 	return result, nil
 }
 
@@ -210,12 +225,9 @@ func (s *Instance) save() error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("instance", s.ID, s.TenantId, s.ProjectId, s, s.UserID)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	key := fmt.Sprintf("%s:status", s.ID)
+	cache.SetObject(key, s.Status, 1*time.Minute)
+	return s.store.Set("instance", s.ID, s.TenantId, s.ProjectId, s, s.UserID)
 }
 
 /**
@@ -227,12 +239,9 @@ func (s *Instance) delete() error {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
 
-	err := s.store.DeleteByCollection("instance", s.ID)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	key := fmt.Sprintf("%s:status", s.ID)
+	cache.Delete(key)
+	return s.store.DeleteByCollection("instance", s.ID)
 }
 
 /**
@@ -403,6 +412,18 @@ func (s *Instance) next() bool {
 	}
 
 	if s.IsDone {
+		return false
+	}
+
+	key := fmt.Sprintf("%s:status", s.ID)
+	status, err := cache.Get(key, string(s.Status))
+	if err != nil {
+		return false
+	}
+
+	if status == string(CANCEL) {
+		return false
+	} else if status == string(STOP) {
 		return false
 	}
 

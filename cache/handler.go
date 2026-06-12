@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
@@ -18,16 +17,15 @@ const IsNil = redis.Nil
 
 /**
 * Load
-* @param cfg *config.Config
 * @return error
 **/
-func Load(cfg *config.Config) error {
+func Load() error {
 	if conn != nil {
 		return nil
 	}
 
 	var err error
-	conn, err = New(cfg)
+	conn, err = New()
 	if err != nil {
 		return err
 	}
@@ -175,6 +173,24 @@ func Set(key string, val interface{}, expiration time.Duration) interface{} {
 	}
 
 	return SetWithDuration(key, val, expiration)
+}
+
+/**
+* SetObject
+* @params key string, val interface{}, expiration time.Duration
+* @return interface{}, error
+**/
+func SetObject(key string, val interface{}, expiration time.Duration) (interface{}, error) {
+	bt, ok := val.([]byte)
+	if !ok {
+		var err error
+		bt, err = json.Marshal(val)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return SetWithDuration(key, bt, expiration), nil
 }
 
 /**

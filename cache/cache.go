@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/utility"
@@ -34,34 +34,23 @@ type Conn struct {
 	mutex    *sync.RWMutex
 }
 
-type Config interface {
-	GetStr(key string, def string) string
-	GetInt(key string, def int) int
-}
-
 /**
 * LoadTo: Initializes the Redis connection from a Config struct.
 * @param cfg Config
 * @return error
 **/
-func New(config Config) (*Conn, error) {
+func New() (*Conn, error) {
 	if !slices.Contains([]string{"linux", "darwin", "windows"}, os) {
 		return nil, logs.Alertf(MSG_UNSUPPORTED_OS, os)
 	}
 
-	host := envar.GetStr("REDIS_HOST", "")
-	password := envar.GetStr("REDIS_PASSWORD", "")
-	dbname := envar.GetInt("REDIS_DB", 0)
-	if config != nil {
-		host = config.GetStr("REDIS_HOST", host)
-		password = config.GetStr("REDIS_PASSWORD", password)
-		dbname = config.GetInt("REDIS_DB", dbname)
-	}
-
+	host := config.GetStr("REDIS_HOST", "")
 	if !utility.ValidStr(host, 0, []string{}) {
 		return nil, logs.Alertf(msg.MSG_ATRIB_REQUIRED, "host")
 	}
 
+	password := config.GetStr("REDIS_PASSWORD", "")
+	dbname := config.GetInt("REDIS_DB", 0)
 	client := redis.NewClient(&redis.Options{
 		Addr:            host,
 		Password:        password,

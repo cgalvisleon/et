@@ -66,7 +66,7 @@ func (s *Crontab) eventSet(msg event.Message) {
 	tp := TypeJob(tpStr)
 	_, err := s.addJob(tp, tag, ownerId, spec, channel, started, params, repetitions)
 	if err != nil {
-		logs.Logf(packageName, fmt.Sprintf("error adding job: %s:%s; %s", tpStr, tag, err))
+		logs.Log(packageName, fmt.Sprintf("error adding job: %s:%s; %s", tpStr, tag, err))
 		return
 	}
 }
@@ -92,7 +92,7 @@ func (s *Crontab) eventStop(msg event.Message) {
 	tag := data.Str("tag")
 	err := s.stopJob(tag)
 	if err != nil {
-		logs.Logf(packageName, fmt.Sprintf("job:%s; error stopping job %s", tag, err))
+		logs.Log(packageName, fmt.Sprintf("job:%s; error stopping job %s", tag, err))
 		return
 	}
 }
@@ -107,7 +107,7 @@ func (s *Crontab) eventStart(msg event.Message) {
 	tag := data.Str("tag")
 	err := s.startJob(tag)
 	if err != nil {
-		logs.Logf(packageName, fmt.Sprintf("job:%s; error starting job %s", tag, err))
+		logs.Log(packageName, fmt.Sprintf("job:%s; error starting job %s", tag, err))
 		return
 	}
 }

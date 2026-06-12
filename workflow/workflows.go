@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
@@ -47,12 +46,12 @@ var (
 * @return (*WorkFlow, error)
 **/
 func New(store Store) (*WorkFlow, error) {
-	err := cache.Load(config.CNF)
+	err := cache.Load()
 	if err != nil {
 		return nil, err
 	}
 
-	err = event.Load(config.CNF)
+	err = event.Load()
 	if err != nil {
 		return nil, err
 	}

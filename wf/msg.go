@@ -1,6 +1,6 @@
 package workflow
 
-import "github.com/cgalvisleon/et/envar"
+import "github.com/cgalvisleon/et/config"
 
 var (
 	MSG_STEP_IS_FUNCTION              = "step is function"
@@ -29,7 +29,7 @@ var (
 )
 
 func init() {
-	lang := envar.GetStr("LANG", "en")
+	lang := config.GetStr("LANG", "en")
 
 	if lang == "es" {
 		MSG_STEP_IS_FUNCTION = "step is function"

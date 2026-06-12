@@ -198,7 +198,7 @@ There are two HTTP server packages at different abstraction levels:
 ### Application-layer packages
 
 - **`jrex/`** — JavaScript runtime package (`dop251/goja`), formerly named `vm`. `jrex.New(name, store)` is the entry point — `store` is a caller-provided `jrex.Store` (`SetModule`/`GetModule`/`DeleteModule`, may be `nil` in dev mode); three modes: `Develop` (reads files, hot-reloads via `file.Watcher`), `Production` (loads from the `Store`), `Building` (compiles + stores with semver bumping). Global wrappers provide `console.*`, `ctx.*`, `fetch()`, and CommonJS-style `require()`. The `cmd/jrex` binary runs this in dev mode via `jrex.RunDev(baseDir)`.
-- **`ia/`** — OpenAI agent integration (`openai-go/v3`). `ia.New(db *jsql.DB)` (direct) or `ia.Load(db *jsql.DB)` (singleton) initializes the package, which calls `event.Load()` internally. Manages agents with conversation tracking and instance state; requires `OPENAI_API_KEY`.
+- **`ia/`** — OpenAI agent integration (`openai-go/v3`). `ia.New(tenantId, tag string, store Store, config Config) (*Ia, error)` (direct) or `ia.Load(tenantId, tag string, store Store, config Config) error` (singleton) initializes the package, which calls `event.Load()` internally. `Store` (`Set`/`Get`/`Delete`/`Query`) and `Config` (`GetStr`/`GetInt`/`GetBool` — satisfied by `*config.App`) are caller-provided, mirroring the `instances.Store` pattern; `stores/` provides a jsql-backed `Store`. Manages `Agent`s, `Participant`s, and `Conversation`s (with `Message`s) per tenant; `Skill` (e.g. `ApiSkill`) lets agents call external APIs. Requires `OPENAI_API_KEY` via `Config`.
 - **`workflow/`** — Workflow orchestration with multi-step execution, instance state, and resilience patterns. `workflow.New(store)` creates a new instance; `workflow.Load(store)` is the singleton wrapper (no-op if already initialized). Integrates with `resilience/`, `instances/`, and `event/` (NATS) for async state sync. See detail below.
 - **`graph/`** — Neo4j connectivity (`neo4j-go-driver/v5`). `graph.Load()` returns a `*Conn` with the Neo4j driver.
 - **`instances/`** — `Store` interface (`Set`, `Get`, `Delete`, `Query`) used by `ia` and `workflow` for state persistence. Implementations are caller-provided.
@@ -238,6 +238,8 @@ Each subdirectory under `cmd/` is a standalone binary:
 Templates and generators for new microservices, projects, and Kubernetes deployments. Used by the `cmd/create` CLI.
 
 ### `workflow/` package detail
+
+> **Note:** `wf/` also declares `package workflow` and duplicates much of this package (flow, step, instance, router). It is an in-progress rewrite/scratch area not imported by anything else in the repo — treat `workflow/` as the active package unless told otherwise.
 
 `workflow.Load(store instances.Store)` initializes the singleton and calls `event.Load()` internally.
 

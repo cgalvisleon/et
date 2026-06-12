@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/request"
@@ -35,7 +35,7 @@ func SendEmail(sender et.Json, to []et.Json, subject string, htmlContent string,
 		return et.Items{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "type")
 	}
 
-	err := envar.Validate([]string{
+	err := config.Validate([]string{
 		"BREVO_SEND_PATH",
 		"BREVO_SEND_KEY",
 	})
@@ -43,8 +43,8 @@ func SendEmail(sender et.Json, to []et.Json, subject string, htmlContent string,
 		return et.Items{}, err
 	}
 
-	path := envar.GetStr("BREVO_SEND_PATH", "")
-	apiKey := envar.GetStr("BREVO_SEND_KEY", "")
+	path := config.GetStr("BREVO_SEND_PATH", "")
+	apiKey := config.GetStr("BREVO_SEND_KEY", "")
 	url := fmt.Sprintf("%s/smtp/email", path)
 	header := et.Json{
 		"accept":       "application/json",

@@ -1,6 +1,6 @@
 package workflow
 
-import "github.com/cgalvisleon/et/envar"
+import "github.com/cgalvisleon/et/config"
 
 var (
 	MSG_FLOW_CREATED                = "Flujo definido tag:%s version:%s name:%s"
@@ -54,7 +54,7 @@ var (
 )
 
 func init() {
-	lang := envar.GetStr("LANG", "en")
+	lang := config.GetStr("LANG", "en")
 
 	if lang == "es" {
 		MSG_FLOW_CREATED = "Flujo definido tag:%s version:%s name:%s"

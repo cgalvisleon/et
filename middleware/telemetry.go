@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/reg"
@@ -233,7 +233,7 @@ func NewMetric(r *http.Request) *Metrics {
 		mark:          now,
 		key:           fmt.Sprintf(`%s:%s`, r.Method, r.URL.Path),
 	}
-	limit := envar.GetInt64("REQUESTS_LIMIT", 400)
+	limit := config.GetInt64("REQUESTS_LIMIT", 400)
 	result.metrics, _ = cache.CallMetrics(result.key, limit)
 	return result
 }
@@ -254,7 +254,7 @@ func NewRpcMetric(method string) *Metrics {
 		mark:      now,
 		key:       fmt.Sprintf(`RPC:%s`, method),
 	}
-	limit := envar.GetInt64("REQUESTS_LIMIT", 400)
+	limit := config.GetInt64("REQUESTS_LIMIT", 400)
 	result.metrics, _ = cache.CallMetrics(result.key, limit)
 	return result
 }
@@ -334,7 +334,7 @@ func (s *Metrics) logRequest() et.Json {
 	size := float64(s.ResponseSize) / 1024
 	lg.Color(w, lg.Cyan, " Size:%.2fKB", size)
 
-	limitLatency := time.Duration(envar.GetInt("LATENCY_LIMIT", 1000)) * time.Millisecond
+	limitLatency := time.Duration(config.GetInt("LATENCY_LIMIT", 1000)) * time.Millisecond
 	latencyDur := time.Duration(s.Latency * float64(time.Millisecond))
 	switch {
 	case latencyDur >= 5*time.Second:

@@ -6,7 +6,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -44,6 +44,7 @@ type Flow struct {
 * @return *Flow
 **/
 func newFlow(w *WorkFlow, tenantId, ownerId, tag, version, name, description string, username string) *Flow {
+	isDebug := config.GetBool("DEBUG", false)
 	result := &Flow{
 		TenantId:    tenantId,
 		OwnerId:     ownerId,
@@ -55,7 +56,7 @@ func newFlow(w *WorkFlow, tenantId, ownerId, tag, version, name, description str
 		Steper:      make(map[string]*Steper),
 		CheckList:   make([]*CheckList, 0),
 		CreatedBy:   username,
-		isDebug:     envar.GetBool("DEBUG", false),
+		isDebug:     isDebug,
 		store:       w.store,
 	}
 	w.addFlow(result)

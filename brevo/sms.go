@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/request"
@@ -36,7 +36,7 @@ func sendSms(sender, organisation string, contactNumbers []string, content strin
 		tp = "transactional"
 	}
 
-	err := envar.Validate([]string{
+	err := config.Validate([]string{
 		"BREVO_SEND_PATH",
 		"BREVO_SEND_KEY",
 	})
@@ -44,8 +44,8 @@ func sendSms(sender, organisation string, contactNumbers []string, content strin
 		return et.Items{}, err
 	}
 
-	apiKey := envar.GetStr("BREVO_SEND_KEY", "")
-	path := envar.GetStr("BREVO_SEND_PATH", "")
+	apiKey := config.GetStr("BREVO_SEND_KEY", "")
+	path := config.GetStr("BREVO_SEND_PATH", "")
 	url := fmt.Sprintf("%s/transactionalSMS/sms", path)
 	header := et.Json{
 		"accept":       "application/json",

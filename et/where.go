@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 )
 
 type Iterator interface {
@@ -76,7 +76,7 @@ type Where struct {
 * @return *Where
 **/
 func newWhere(from Iterator) *Where {
-	limitRows := envar.GetInt("LIMIT_ROWS", 1000)
+	limitRows := config.GetInt("LIMIT_ROWS", 1000)
 	result := &Where{
 		From:       from,
 		Conditions: make([]*Condition, 0, 4),

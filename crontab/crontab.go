@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -192,7 +192,7 @@ func (s *Crontab) startJob(tag string) error {
 		return fmt.Errorf("job not found")
 	}
 
-	limit := envar.GetInt64("CRONTAB_LIMIT", 400)
+	limit := config.GetInt64("CRONTAB_LIMIT", 400)
 	s.Metrics, _ = cache.CallMetrics(tag, limit)
 	if s.Metrics.OverLimit {
 		return fmt.Errorf("job over limit")

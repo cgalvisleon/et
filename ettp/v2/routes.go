@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jwt"
@@ -26,7 +26,7 @@ func (s *Server) basicRoutes() error {
 	s.Public(GET, "/test/{id}/{test}", s.getTest, s.Name)
 	s.Private(GET, "/reset", s.reset, s.Name)
 	// Develop Token
-	production := envar.GetBool("PRODUCTION", true)
+	production := config.GetBool("PRODUCTION", true)
 	if !production {
 		s.Public(GET, "/tokens/develop", s.handlerDevToken, s.Name)
 	}
@@ -55,9 +55,9 @@ func (s *Server) basicRoutes() error {
 func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 	metric := middleware.GetMetrics(r)
 
-	company := envar.GetStr("COMPANY", "")
-	web := envar.GetStr("WEB", "")
-	help := envar.GetStr("HELP", "")
+	company := config.GetStr("COMPANY", "")
+	web := config.GetStr("WEB", "")
+	help := config.GetStr("HELP", "")
 	result := et.Json{
 		"created_at": timezone.Format(s.CreatedAt, timezone.RFC3339),
 		"version":    s.Version,
@@ -99,7 +99,7 @@ func (s *Server) handlerDevToken(w http.ResponseWriter, r *http.Request) {
 	metric := middleware.GetMetrics(r)
 
 	developToken := func() string {
-		production := envar.GetBool("PRODUCTION", true)
+		production := config.GetBool("PRODUCTION", true)
 		if production {
 			return ""
 		}

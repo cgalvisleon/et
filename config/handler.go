@@ -1,12 +1,9 @@
 package config
 
 import (
-	"encoding/json"
-	"time"
+	"fmt"
 
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/timezone"
 )
 
 /**
@@ -18,11 +15,26 @@ func IsLoad() bool {
 }
 
 /**
-* Set
-* @param param et.Json, userId string
+* Validate
+* @param keys []string
 * @return error
 **/
-func Set(param et.Json) *Config {
+func Validate(keys []string) error {
+	for _, key := range keys {
+		val := Get(key, "")
+		if val == "" {
+			return fmt.Errorf(MSG_ATRIB_REQUIRED, key)
+		}
+	}
+	return nil
+}
+
+/**
+* Set
+* @param param map[string]interface{}, userId string
+* @return error
+**/
+func Set(param map[string]interface{}) *Config {
 	if cnf == nil {
 		for key, value := range param {
 			envar.Set(key, value)
@@ -102,39 +114,4 @@ func GetBool(key string, def bool) bool {
 		return envar.GetBool(key, def)
 	}
 	return cnf.GetBool(key, def)
-}
-
-/**
-* GetTime
-* @param key string, def time.Time
-* @return time.Time
-**/
-func GetTime(key string, def time.Time) time.Time {
-	if cnf == nil {
-		result := envar.GetStr(key, timezone.Format(def, timezone.RFC3339))
-		val, err := timezone.Parse(timezone.RFC3339, result)
-		if err != nil {
-			return def
-		}
-		return val
-	}
-	return cnf.GetTime(key, def)
-}
-
-/**
-* GetJson
-* @param key string, def et.Json
-* @return et.Json
-**/
-func GetJson(key string, def et.Json) et.Json {
-	if cnf == nil {
-		result := envar.GetStr(key, def.ToString())
-		var resultJson et.Json
-		err := json.Unmarshal([]byte(result), &resultJson)
-		if err != nil {
-			return def
-		}
-		return resultJson
-	}
-	return cnf.GetJson(key, def)
 }

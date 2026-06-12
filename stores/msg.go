@@ -1,15 +1,13 @@
 package stores
 
-import (
-	"github.com/cgalvisleon/et/envar"
-)
+import "github.com/cgalvisleon/et/config"
 
 var (
 	MSG_RECORD_EXISTS = "record already exists"
 )
 
 func init() {
-	lang := envar.GetStr("LANG", "en")
+	lang := config.GetStr("LANG", "en")
 
 	if lang == "es" {
 		MSG_RECORD_EXISTS = "registro ya existe"

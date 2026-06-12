@@ -1,7 +1,6 @@
 package jsql
 
 import (
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -24,15 +23,15 @@ type PgConection struct {
 }
 
 func pgConection(config Config) *PgConection {
-	database := envar.GetStr("DB_NAME", "josephine")
-	host := envar.GetStr("DB_HOST", "localhost")
-	port := envar.GetInt("DB_PORT", 5432)
-	user := envar.GetStr("DB_USER", "test")
-	password := envar.GetStr("DB_PASSWORD", "test")
-	sslmode := envar.GetStr("DB_SSLMODE", "disable")
-	useCore := envar.GetBool("DB_USE_CORE", false)
-	appName := envar.GetStr("DB_APP_NAME", "josephine")
-	recordLimit := envar.GetInt("DB_RECORD_LIMIT", 1000)
+	database := config.GetStr("DB_NAME", "josephine")
+	host := config.GetStr("DB_HOST", "localhost")
+	port := config.GetInt("DB_PORT", 5432)
+	user := config.GetStr("DB_USER", "test")
+	password := config.GetStr("DB_PASSWORD", "test")
+	sslmode := config.GetStr("DB_SSLMODE", "disable")
+	useCore := config.GetBool("DB_USE_CORE", false)
+	appName := config.GetStr("DB_APP_NAME", "josephine")
+	recordLimit := config.GetInt("DB_RECORD_LIMIT", 1000)
 	if config != nil {
 		database = config.GetStr("DB_NAME", database)
 		host = config.GetStr("DB_HOST", host)
@@ -103,13 +102,13 @@ type SqliteConection struct {
 }
 
 func sqliteConection(config Config) *SqliteConection {
-	name := envar.GetStr("DB_NAME", "josephine.db")
-	recordLimit := envar.GetInt("DB_RECORD_LIMIT", 1000)
-	poolMaxOpen := envar.GetInt("DB_POOL_MAX_OPEN", 10)
-	poolMaxIdle := envar.GetInt("DB_POOL_MAX_IDLE", 10)
-	poolLifetime := envar.GetInt("DB_POOL_LIFETIME", 10)
-	poolIdleTime := envar.GetInt("DB_POOL_IDLE_TIME", 10)
-	appName := envar.GetStr("DB_APP_NAME", "josephine")
+	name := config.GetStr("DB_NAME", "josephine.db")
+	recordLimit := config.GetInt("DB_RECORD_LIMIT", 1000)
+	poolMaxOpen := config.GetInt("DB_POOL_MAX_OPEN", 10)
+	poolMaxIdle := config.GetInt("DB_POOL_MAX_IDLE", 10)
+	poolLifetime := config.GetInt("DB_POOL_LIFETIME", 10)
+	poolIdleTime := config.GetInt("DB_POOL_IDLE_TIME", 10)
+	appName := config.GetStr("DB_APP_NAME", "josephine")
 	if config != nil {
 		name = config.GetStr("DB_NAME", name)
 		recordLimit = config.GetInt("DB_RECORD_LIMIT", recordLimit)

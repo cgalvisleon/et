@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -44,7 +44,7 @@ func New(store Store) (*Resilience, error) {
 	result := &Resilience{
 		instances: make(map[string]*Instance),
 		mu:        sync.Mutex{},
-		isDebug:   envar.GetBool("DEBUG", false),
+		isDebug:   config.GetBool("DEBUG", false),
 		store:     store,
 	}
 

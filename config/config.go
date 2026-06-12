@@ -9,30 +9,23 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/timezone"
 )
 
 type Store interface {
 	Get(tag, stage string, dest any) (bool, error)
 	Set(tag, stage, tenantId, ownerId string, obj any, userId string) error
 	Delete(tag, stage string) error
-	Query(query et.Json) (et.Items, error)
 }
 
 type Config struct {
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	ID        string    `json:"id"`
-	TenantId  string    `json:"tenant_id"`
-	OwnerId   string    `json:"owner_id"`
-	Tag       string    `json:"tag"`
-	Stage     string    `json:"stage"`
-	Params    et.Json   `json:"params"`
-	AuditLog  []et.Json `json:"audit_log"`
-	store     Store     `json:"-"`
-	isDebug   bool      `json:"-"`
+	ID       string                   `json:"id"`
+	TenantId string                   `json:"tenant_id"`
+	OwnerId  string                   `json:"owner_id"`
+	Tag      string                   `json:"tag"`
+	Stage    string                   `json:"stage"`
+	Params   map[string]interface{}   `json:"params"`
+	AuditLog []map[string]interface{} `json:"audit_log"`
+	store    Store                    `json:"-"`
 }
 
 var (
@@ -58,19 +51,16 @@ func New(tag, stage, tenantId, ownerId string, store Store, userId string) (*Con
 		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "tenantId")
 	}
 
-	now := timezone.Now()
 	id := fmt.Sprintf("config:%s:%s:%s", tag, stage, tenantId)
 	result := &Config{
-		CreatedAt: now,
-		UpdatedAt: now,
-		TenantId:  tenantId,
-		OwnerId:   ownerId,
-		ID:        id,
-		Tag:       tag,
-		Stage:     stage,
-		Params:    et.Json{},
-		AuditLog:  make([]et.Json, 0),
-		store:     store,
+		TenantId: tenantId,
+		OwnerId:  ownerId,
+		ID:       id,
+		Tag:      tag,
+		Stage:    stage,
+		Params:   map[string]interface{}{},
+		AuditLog: make([]map[string]interface{}, 0),
+		store:    store,
 	}
 	return result, nil
 }
@@ -105,42 +95,34 @@ func Load(tag, stage, tenantId, ownerId string, store Store, userId string) erro
 * @param userId string
 * @return error
 **/
-func (s *Config) Save(userId string) error {
+func (s *Config) Save(updateAt time.Time, userId string) error {
 	if s.store == nil {
 		return errors.New(MSG_CONFIG_STORE_IS_NIL)
 	}
 
-	now := timezone.Now()
-	s.UpdatedAt = now
-	s.AuditLog = append(s.AuditLog, et.Json{
-		"created_at": now,
+	s.AuditLog = append(s.AuditLog, map[string]interface{}{
+		"created_at": updateAt,
 		"user_id":    userId,
 		"action":     "save",
 	})
 	maxAuditLog := GetInt("MAX_AUDIT_LOG", 1000)
 	s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
 
-	if s.isDebug {
-		logs.Log(packageName, "save:", s.ToString())
-	}
-
 	return s.store.Set(s.Tag, s.Stage, s.OwnerId, s.TenantId, s, userId)
 }
 
 /**
 * ToJson
-* @return et.Json
+* @return map[string]interface{}
 **/
-func (s *Config) ToJson() et.Json {
-	return et.Json{
-		"created_at": timezone.Format(s.CreatedAt, timezone.RFC3339),
-		"updated_at": timezone.Format(s.UpdatedAt, timezone.RFC3339),
-		"id":         s.ID,
-		"tenant_id":  s.TenantId,
-		"owner_id":   s.OwnerId,
-		"tag":        s.Tag,
-		"params":     s.Params,
-		"stage":      s.Stage,
+func (s *Config) ToJson() map[string]interface{} {
+	return map[string]interface{}{
+		"id":        s.ID,
+		"tenant_id": s.TenantId,
+		"owner_id":  s.OwnerId,
+		"tag":       s.Tag,
+		"params":    s.Params,
+		"stage":     s.Stage,
 	}
 }
 
@@ -149,24 +131,20 @@ func (s *Config) ToJson() et.Json {
 * @return string
 **/
 func (s *Config) ToString() string {
-	return s.ToJson().ToString()
-}
+	bt, err := json.Marshal(s)
+	if err != nil {
+		return ""
+	}
 
-/**
-* Debug
-* @return *Config
-**/
-func (s *Config) Debug() *Config {
-	s.isDebug = true
-	return s
+	return string(bt)
 }
 
 /**
 * Set
-* @param param et.Json
+* @param param map[string]interface{}
 * @return *Config
 **/
-func (s *Config) Set(param et.Json) *Config {
+func (s *Config) Set(param map[string]interface{}) *Config {
 	maps.Copy(s.Params, param)
 	return s
 }
@@ -260,33 +238,4 @@ func (s *Config) GetBool(key string, def bool) bool {
 		return def
 	}
 	return val
-}
-
-/**
-* GetTime
-* @param key string, def time.Time
-* @return time.Time
-**/
-func (s *Config) GetTime(key string, def time.Time) time.Time {
-	result := s.GetStr(key, timezone.Format(def, timezone.RFC3339))
-	val, err := timezone.Parse(timezone.RFC3339, result)
-	if err != nil {
-		return def
-	}
-	return val
-}
-
-/**
-* GetJson
-* @param key string, def et.Json
-* @return et.Json
-**/
-func (s *Config) GetJson(key string, def et.Json) et.Json {
-	result := s.GetStr(key, def.ToString())
-	var resultJson et.Json
-	err := json.Unmarshal([]byte(result), &resultJson)
-	if err != nil {
-		return def
-	}
-	return resultJson
 }

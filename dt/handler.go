@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 )
 
 /**
@@ -15,7 +15,7 @@ import (
 func Up(key string, data any) Object {
 	key = fmt.Sprintf("object:%s", key)
 	obj := newObject(key)
-	production := envar.GetBool("PRODUCTION", true)
+	production := config.GetBool("PRODUCTION", true)
 	obj.up(data, production)
 
 	return *obj

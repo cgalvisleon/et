@@ -1,6 +1,6 @@
 package resilience
 
-import "github.com/cgalvisleon/et/envar"
+import "github.com/cgalvisleon/et/config"
 
 var (
 	MSG_RESILIENCE_NOT_INITIALIZED = "resilience is not initialized"
@@ -17,7 +17,7 @@ var (
 )
 
 func init() {
-	lang := envar.GetStr("LANG", "en")
+	lang := config.GetStr("LANG", "en")
 
 	if lang == "es" {
 		MSG_RESILIENCE_NOT_INITIALIZED = "resilience no esta inicializado"

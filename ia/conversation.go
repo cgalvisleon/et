@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -49,7 +49,7 @@ func newConversation(to *Participant, title string, conversationType TypeConvers
 		title = to.Name
 	}
 
-	limitMessages := envar.GetInt("LIMIT_MESSAGES", 100)
+	limitMessages := config.GetInt("LIMIT_MESSAGES", 100)
 	id := reg.GenULID("conversation")
 	now := timezone.Now()
 	result := &Conversation{

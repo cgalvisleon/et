@@ -1,7 +1,5 @@
 package config
 
-import "github.com/cgalvisleon/et/envar"
-
 var (
 	MSG_ATRIB_REQUIRED      = "required attribute (%s)"
 	MSG_CONFIG_STORE_IS_NIL = "config store is nil"
@@ -9,7 +7,7 @@ var (
 )
 
 func init() {
-	lang := envar.GetStr("LANG", "en")
+	lang := GetStr("LANG", "en")
 
 	if lang == "es" {
 		MSG_ATRIB_REQUIRED = "atributo requerido (%s)"

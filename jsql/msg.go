@@ -1,6 +1,6 @@
 package jsql
 
-import "github.com/cgalvisleon/et/envar"
+import "github.com/cgalvisleon/et/config"
 
 var (
 	MSG_CATALOG_NOT_FOUND         = "Catalog not found: %s"
@@ -30,7 +30,7 @@ var (
 )
 
 func init() {
-	lang := envar.GetStr("LANG", "en")
+	lang := config.GetStr("LANG", "en")
 
 	if lang == "es" {
 		MSG_CATALOG_NOT_FOUND = "Catálogo no encontrado: %s"

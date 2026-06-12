@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -174,7 +174,7 @@ func New(name string, cnf *Config) (*Server, error) {
 		}
 	}
 
-	rpcPort := envar.GetInt("RPC_PORT", 4200)
+	rpcPort := config.GetInt("RPC_PORT", 4200)
 	// tlsConfig := &tls.Config{}
 	pipe, err := net.Listen("tcp", fmt.Sprintf(":%d", rpcPort))
 	if err != nil {

@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -63,8 +62,8 @@ func New(tenantId, tag string, store Store, config Config) (*Ia, error) {
 	}
 
 	now := timezone.Now()
-	key := envar.GetStr("OPENAI_API_KEY", "")
-	isDebug := envar.GetBool("DEBUG", true)
+	key := config.GetStr("OPENAI_API_KEY", "")
+	isDebug := config.GetBool("DEBUG", true)
 	if config != nil {
 		key = config.GetStr("OPENAI_API_KEY", key)
 		isDebug = config.GetBool("DEBUG", isDebug)

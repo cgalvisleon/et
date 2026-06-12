@@ -1,6 +1,6 @@
 package ia
 
-import "github.com/cgalvisleon/et/envar"
+import "github.com/cgalvisleon/et/config"
 
 var (
 	MSG_AGENT_NOT_FOUND          = "agente %s no encontrado"
@@ -18,7 +18,7 @@ var (
 )
 
 func init() {
-	lang := envar.GetStr("LANG", "en")
+	lang := config.GetStr("LANG", "en")
 
 	if lang == "es" {
 		MSG_AGENT_NOT_FOUND = "agente %s no encontrado"

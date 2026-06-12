@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -61,6 +61,7 @@ func New(store Store) (*WorkFlow, error) {
 		return nil, err
 	}
 
+	isDebug := config.GetBool("DEBUG", false)
 	result := &WorkFlow{
 		Flows:       make(map[string]*Flow),
 		Instances:   make(map[string]*Instance),
@@ -68,7 +69,7 @@ func New(store Store) (*WorkFlow, error) {
 		muInstances: sync.Mutex{},
 		store:       store,
 		resilience:  resetInstance,
-		isDebug:     envar.GetBool("DEBUG", false),
+		isDebug:     isDebug,
 	}
 	result.eventInit()
 

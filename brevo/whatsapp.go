@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/request"
@@ -35,7 +35,7 @@ func SendWhatsapp(contactNumbers []string, templateId string, params []et.Json, 
 		tp = "transactional"
 	}
 
-	err := envar.Validate([]string{
+	err := config.Validate([]string{
 		"BREVO_SEND_PATH",
 		"BREVO_SEND_KEY",
 		"BREVO_SENDER",
@@ -44,9 +44,9 @@ func SendWhatsapp(contactNumbers []string, templateId string, params []et.Json, 
 		return et.Items{}, err
 	}
 
-	path := envar.GetStr("BREVO_SEND_PATH", "")
-	apiKey := envar.GetStr("BREVO_SEND_KEY", "")
-	sender := envar.GetStr("BREVO_SENDER", "")
+	path := config.GetStr("BREVO_SEND_PATH", "")
+	apiKey := config.GetStr("BREVO_SEND_KEY", "")
+	sender := config.GetStr("BREVO_SENDER", "")
 	url := fmt.Sprintf("%s/whatsapp/sendMessage", path)
 	header := et.Json{
 		"accept":       "application/json",

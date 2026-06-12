@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -36,7 +36,7 @@ func (s *Object) ToString() string {
 * @return *Object
 **/
 func newObject(key string) *Object {
-	duration := time.Duration(envar.GetInt64("CACHE_DURATION", 5)) * time.Minute
+	duration := time.Duration(config.GetInt64("CACHE_DURATION", 5)) * time.Minute
 	return &Object{
 		Key:    key,
 		Expire: duration,
@@ -48,7 +48,7 @@ func newObject(key string) *Object {
 * @return bool
 **/
 func (s *Object) save() bool {
-	production := envar.GetBool("PRODUCTION", true)
+	production := config.GetBool("PRODUCTION", true)
 	if !production {
 		return false
 	}

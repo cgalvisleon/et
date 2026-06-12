@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
@@ -57,7 +57,7 @@ type Client struct {
 }
 
 func newClient() *Client {
-	timeout, err := time.ParseDuration(envar.GetStr("TIMEOUT", "10s"))
+	timeout, err := time.ParseDuration(config.GetStr("TIMEOUT", "10s"))
 	if err != nil {
 		timeout = 10 * time.Second
 	}
@@ -229,7 +229,7 @@ func (s *Client) disconnect() {
 func (s *Client) readLoop() {
 	reader := bufio.NewReader(s.conn)
 	lenBuf := make([]byte, 4)
-	limit := envar.GetInt("LIMIT_SIZE_MG", 10)
+	limit := config.GetInt("LIMIT_SIZE_MG", 10)
 	maxSize := uint32(limit * 1024 * 1024)
 
 	for {

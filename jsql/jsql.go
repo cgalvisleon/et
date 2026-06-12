@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -56,7 +55,7 @@ type Config interface {
 * @return Connection, error
 **/
 func getConnection(config Config) (Connection, error) {
-	driver := envar.GetStr("DB_DRIVER", DriverPostgres)
+	driver := config.GetStr("DB_DRIVER", DriverPostgres)
 	if config != nil {
 		driver = config.GetStr("DB_DRIVER", DriverPostgres)
 	}

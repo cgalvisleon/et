@@ -82,6 +82,11 @@ type BetweenValue struct {
 	Max any `json:"Max"`
 }
 
+type Value struct {
+	Type  string `json:"type"`
+	Value any    `json:"value"`
+}
+
 type Condition struct {
 	Field     string    `json:"field"`
 	Operator  Operator  `json:"operator"`

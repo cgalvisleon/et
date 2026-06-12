@@ -40,17 +40,16 @@ go build ./...
 
 ### Comments
 
-All doc comments for functions, methods, and types must use this block style:
+Always generate GoDoc comments for all functions.
 
-```go
-/**
-* FunctionName: Brief description.
-* @param paramName type
-* @return type
-**/
-```
+GoDoc comments must:
 
-Each `@param` and `@return` must be its own single line. For types and interfaces use only the first line (no `@param`/`@return`).
+- Start with the function name and Brief description.
+- Be written in English.
+- Describe one line to parameters and one line return values.
+- Be concise and professional.
+
+> **Note:** much existing code (e.g. `et/json.go`) uses an older `/** ... @param ... @return ... **/` block style. The GoDoc style above (from `AGENTS.md`) is the standard for new code.
 
 ## Architecture
 
@@ -106,14 +105,14 @@ Package-level wrapper: `jsql.Define(dbName, def)` looks up the named DB from the
 
 **Key column types (`TypeColumn`):**
 
-| `TypeColumn` | Meaning |
-|---|---|
-| `COLUMN` | Real SQL column |
-| `ATTRIB` | Key inside `_source` JSONB — accessed via `_source->>'field'` or with cast for numeric/bool/datetime |
-| `DETAIL` / `ROLLUP` | Virtual relationship fields, not stored as columns |
-| `CALCFUNC` | Computed column via a registered `CalcFunction` callback |
-| `CALC` | Computed expression evaluated at query time |
-| `AGG` | Aggregation column |
+| `TypeColumn`        | Meaning                                                                                              |
+| ------------------- | ---------------------------------------------------------------------------------------------------- |
+| `COLUMN`            | Real SQL column                                                                                      |
+| `ATTRIB`            | Key inside `_source` JSONB — accessed via `_source->>'field'` or with cast for numeric/bool/datetime |
+| `DETAIL` / `ROLLUP` | Virtual relationship fields, not stored as columns                                                   |
+| `CALCFUNC`          | Computed column via a registered `CalcFunction` callback                                             |
+| `CALC`              | Computed expression evaluated at query time                                                          |
+| `AGG`               | Aggregation column                                                                                   |
 
 **Key data types (`TypeData`):** `KEY` (VARCHAR 80, used for IDs and `_idx`), `TEXT`, `MEMO`, `INT`, `FLOAT`, `BOOLEAN`, `DATETIME`, `JSON`, `BYTES`, `GEOMETRY`, `EMBEDDING`, `ANY`.
 
@@ -262,13 +261,13 @@ Instance (runtime)
 
 **Instance lifecycle methods on `*WorkFlow`:**
 
-| Method | Purpose |
-|---|---|
-| `RunInstance(id, tag, step, ctx, tags, username)` | Start or resume an instance |
-| `GetInstance(id)` | Fetch instance by ID |
-| `ResetInstance(id, username)` | Reset to step 0, status PENDING |
-| `RollbackInstance(id, username)` | Execute undo chain |
-| `StopInstance(id, username)` | Halt execution |
+| Method                                            | Purpose                         |
+| ------------------------------------------------- | ------------------------------- |
+| `RunInstance(id, tag, step, ctx, tags, username)` | Start or resume an instance     |
+| `GetInstance(id)`                                 | Fetch instance by ID            |
+| `ResetInstance(id, username)`                     | Reset to step 0, status PENDING |
+| `RollbackInstance(id, username)`                  | Execute undo chain              |
+| `StopInstance(id, username)`                      | Halt execution                  |
 
 **HTTP handlers in `handler.go`** (all on `*WorkFlow`):
 
@@ -318,15 +317,15 @@ Use `http.StatusCreated` for POST handlers that create new resources, `http.Stat
 
 ## Required environment variables
 
-| Package | Variable                                     | Purpose                                |
-| ------- | -------------------------------------------- | -------------------------------------- |
-| `jsql`  | `DB_DRIVER`                                  | Driver name (`postgres`, `sqlite`, …)  |
-| `jsql`  | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Database connection       |
-| `jsql`  | `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_CONN_LIFETIME`, `DB_POOL_CONN_IDLE_TIME` | Connection pool (optional) |
-| `cache` | `REDIS_HOST`                                 | Redis connection                       |
-| `event` | `NATS_HOST`                                  | NATS connection                        |
-| `event` | `NATS_USER`, `NATS_PASSWORD`                 | NATS auth (optional)                   |
-| `graph` | `NEO4J_HOST`, `NEO4J_USER`, `NEO4J_PASSWORD` | Neo4j connection                       |
-| `ia`    | `OPENAI_API_KEY`                             | OpenAI agent integration               |
-| `dt`    | `PRODUCTION`                                 | `true` = use Redis, `false` = use file |
-| `wsp`   | `WHATSAPP_API_URL`                           | WhatsApp Graph API base URL (optional) |
+| Package | Variable                                                                                  | Purpose                                |
+| ------- | ----------------------------------------------------------------------------------------- | -------------------------------------- |
+| `jsql`  | `DB_DRIVER`                                                                               | Driver name (`postgres`, `sqlite`, …)  |
+| `jsql`  | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`                                 | Database connection                    |
+| `jsql`  | `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_CONN_LIFETIME`, `DB_POOL_CONN_IDLE_TIME` | Connection pool (optional)             |
+| `cache` | `REDIS_HOST`                                                                              | Redis connection                       |
+| `event` | `NATS_HOST`                                                                               | NATS connection                        |
+| `event` | `NATS_USER`, `NATS_PASSWORD`                                                              | NATS auth (optional)                   |
+| `graph` | `NEO4J_HOST`, `NEO4J_USER`, `NEO4J_PASSWORD`                                              | Neo4j connection                       |
+| `ia`    | `OPENAI_API_KEY`                                                                          | OpenAI agent integration               |
+| `dt`    | `PRODUCTION`                                                                              | `true` = use Redis, `false` = use file |
+| `wsp`   | `WHATSAPP_API_URL`                                                                        | WhatsApp Graph API base URL (optional) |

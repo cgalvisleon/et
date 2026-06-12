@@ -29,8 +29,7 @@ type Config struct {
 }
 
 var (
-	packageName = "config"
-	cnf         *Config
+	cnf *Config
 )
 
 /**
@@ -238,4 +237,19 @@ func (s *Config) GetBool(key string, def bool) bool {
 		return def
 	}
 	return val
+}
+
+/**
+* GetMap
+* @param key string, def map[string]any
+* @return map[string]any
+**/
+func (s *Config) GetMap(key string, def map[string]any) map[string]any {
+	str := s.GetStr(key, "{}")
+	var result map[string]any
+	err := json.Unmarshal([]byte(str), &result)
+	if err != nil {
+		return def
+	}
+	return result
 }

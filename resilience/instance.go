@@ -1,7 +1,6 @@
 package resilience
 
 import (
-	"fmt"
 	"reflect"
 	"time"
 
@@ -40,8 +39,6 @@ type Instance struct {
 	TotalAttempts int             `json:"total_attempts"`
 	Interval      time.Duration   `json:"interval"`
 	Tags          et.Json         `json:"tags"`
-	Team          string          `json:"team"`
-	Level         string          `json:"level"`
 	Error         error           `json:"error"`
 	Result        []any           `json:"result"`
 	owner         *Resilience     `json:"-"`
@@ -75,8 +72,6 @@ func (s *Instance) ToJson() et.Json {
 		"total_attempts":  s.TotalAttempts,
 		"interval":        s.Interval,
 		"tags":            s.Tags,
-		"team":            s.Team,
-		"level":           s.Level,
 		"error":           errMsg,
 		"result":          s.Result,
 	}
@@ -145,16 +140,7 @@ func (s *Instance) setStatus(status Status, userId string) error {
 	case DONE:
 		s.DoneAt = s.UpdatedAt
 	case FAILED:
-		if s.Attempt == s.TotalAttempts {
-			data := s.ToJson()
-			data.Set("team", s.Team)
-			data.Set("level", s.Level)
-			message := fmt.Sprintf(MSG_RESILIENCE_FINISHED_ERROR, s.Attempt, s.TotalAttempts, s.ID, s.Tag, s.Status, s.Error)
-			event.Publish(EVENT_RESILIENCE_FAILED, data)
-			logs.Logf(packageName, message)
-		} else {
-			logs.Logf(packageName, MSG_RESILIENCE_ERROR, s.Attempt, s.TotalAttempts, s.ID, s.Tag, s.Status, s.Error)
-		}
+		logs.Logf(packageName, MSG_RESILIENCE_ERROR, s.Attempt, s.TotalAttempts, s.ID, s.Tag, s.Status, s.Error)
 	default:
 		if s.Attempt == s.TotalAttempts {
 			logs.Logf(packageName, MSG_RESILIENCE_FINISHED, s.Attempt, s.TotalAttempts, s.ID, s.Tag, s.Status)

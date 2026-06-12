@@ -140,7 +140,7 @@ func (s *WorkFlow) loadStep(id, userId string) (*Step, error) {
 	}
 
 	result := &Step{}
-	exists, err := s.store.Get("step", id, result)
+	exists, err := s.store.GetByCollection("step", id, result)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +202,7 @@ func (s *Step) delete() error {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
 
-	err := s.store.Delete("step", s.ID)
+	err := s.store.DeleteByCollection("step", s.ID)
 	if err != nil {
 		return err
 	}

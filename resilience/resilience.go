@@ -17,7 +17,7 @@ import (
 )
 
 type Store interface {
-	Set(id, tag, tenantId, ownerId string, obj any, userId string) error
+	Set(tag, id, tenantId, ownerId string, obj any, userId string) error
 	Get(id string, dest any) (bool, error)
 	Delete(id string) error
 	Query(query et.Json) (et.Items, error)
@@ -101,10 +101,10 @@ func (s *Resilience) CountInstances() int {
 
 /**
 * newInstance
-* @param id, tag, description string, totalAttempts int, interval time.Duration, tags et.Json, team string, level string, fn interface{}, fnArgs ...interface{}
+* @param id, tag, description string, totalAttempts int, interval time.Duration, tags et.Json, userId string, fn interface{}, fnArgs ...interface{}
 * @return Instance
 **/
-func (s *Resilience) newInstance(tenantId, id, tag, description, ownerId string, totalAttempts int, interval time.Duration, tags et.Json, team string, level, userId string, fn interface{}, fnArgs ...interface{}) *Instance {
+func (s *Resilience) newInstance(tenantId, id, tag, description, ownerId string, totalAttempts int, interval time.Duration, tags et.Json, userId string, fn interface{}, fnArgs ...interface{}) *Instance {
 	if id == "" {
 		id = reg.ULID()
 	}
@@ -125,8 +125,6 @@ func (s *Resilience) newInstance(tenantId, id, tag, description, ownerId string,
 		TotalAttempts: totalAttempts,
 		Interval:      interval,
 		Tags:          tags,
-		Team:          team,
-		Level:         level,
 		Result:        make([]any, 0),
 		stop:          false,
 	}
@@ -183,8 +181,6 @@ type Params struct {
 	TotalAttempts int
 	Interval      time.Duration
 	Tags          et.Json
-	Team          string
-	Level         string
 	UserId        string
 	Fn            interface{}
 	FnArgs        []interface{}
@@ -207,7 +203,7 @@ func (s *Resilience) LoadInstance(params Params) *Instance {
 	params.Id = reg.GetULID(params.Id)
 	result, exist := s.GetInstance(params.Id)
 	if !exist {
-		result = s.newInstance(params.TenantId, params.Id, params.Tag, params.Description, params.OwnerId, params.TotalAttempts, params.Interval, params.Tags, params.Team, params.Level, params.UserId, params.Fn, params.FnArgs...)
+		result = s.newInstance(params.TenantId, params.Id, params.Tag, params.Description, params.OwnerId, params.TotalAttempts, params.Interval, params.Tags, params.UserId, params.Fn, params.FnArgs...)
 	}
 
 	return result

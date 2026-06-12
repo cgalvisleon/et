@@ -532,8 +532,6 @@ func (s *Instance) startResilence() (et.Json, error) {
 		TotalAttempts: s.flow.TotalAttempts,
 		Interval:      s.flow.TimeAttempts,
 		Tags:          s.Tags,
-		Team:          s.flow.Team,
-		Level:         s.flow.Level,
 		UserId:        s.CreatedBy,
 		Fn:            s.run,
 		FnArgs:        []interface{}{s.Ctx},

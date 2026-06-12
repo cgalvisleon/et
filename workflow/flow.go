@@ -31,8 +31,6 @@ type Flow struct {
 	CheckList     []*CheckList       `json:"check_list"`
 	TotalAttempts int                `json:"total_attempts"`
 	TimeAttempts  time.Duration      `json:"time_attempts"`
-	Team          string             `json:"team"`
-	Level         string             `json:"level"`
 	CreatedBy     string             `json:"created_by"`
 	UpdatedBy     string             `json:"updated_by"`
 	workflow      *WorkFlow          `json:"-"`
@@ -83,8 +81,6 @@ func (s *Flow) ToJson() et.Json {
 		"checklist":      s.CheckList,
 		"total_attempts": s.TotalAttempts,
 		"time_attempts":  s.TimeAttempts.String(),
-		"team":           s.Team,
-		"level":          s.Level,
 		"created_by":     s.CreatedBy,
 	}
 }
@@ -264,11 +260,9 @@ func (s *Flow) Step(def StParams) *Steper {
 * @param totalAttempts int, timeAttempts time.Duration
 * @return *Flow
 **/
-func (s *Flow) Resilence(totalAttempts int, timeAttempts time.Duration, team string, level string) *Flow {
+func (s *Flow) Resilence(totalAttempts int, timeAttempts time.Duration) *Flow {
 	s.TotalAttempts = totalAttempts
 	s.TimeAttempts = timeAttempts
-	s.Team = team
-	s.Level = level
 	logs.Logf(packageName, MSG_INSTANCE_RESILIENCE, s.Tag, totalAttempts, timeAttempts)
 	return s
 }

@@ -20,6 +20,10 @@ var (
 	MSG_INSTANCE_TRIGGER_NOT_FOUND    = "instance trigger not found"
 	MSG_STEPER_NOT_FOUND              = "steper not found"
 	MSG_STEP_CODE_INDEX_NOT_FOUND     = "step code index not found"
+	MSG_INSTANCE_ALREADY_RUNNING      = "instance already running"
+	MSG_INSTANCE_ROLLBACK             = "instance rollback"
+	MSG_INSTANCE_CANCEL               = "instance cancel"
+	MSG_RESILIENCE_NO_RESULT          = "resilience no return result"
 )
 
 func init() {
@@ -43,5 +47,9 @@ func init() {
 		MSG_INSTANCE_TRIGGER_NOT_FOUND = "Trigger de instance no encontrado"
 		MSG_STEPER_NOT_FOUND = "Steper no encontrado"
 		MSG_STEP_CODE_INDEX_NOT_FOUND = "Índice de código de step no encontrado"
+		MSG_INSTANCE_ALREADY_RUNNING = "Instancia ya en ejecución"
+		MSG_INSTANCE_ROLLBACK = "Instancia rollback"
+		MSG_INSTANCE_CANCEL = "Instancia cancelada"
+		MSG_RESILIENCE_NO_RESULT = "resilience no return result"
 	}
 }

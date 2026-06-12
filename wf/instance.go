@@ -52,34 +52,35 @@ type Current struct {
 }
 
 type Instance struct {
-	StartedAt    time.Time            `json:"started_at"`
-	UpdatedAt    time.Time            `json:"updated_at"`
-	DoneAt       time.Time            `json:"done_at"`
-	TenantId     string               `json:"tenant_id"`
-	ProjectId    string               `json:"project_id"`
-	ID           string               `json:"id"`
-	FlowId       string               `json:"flow_id"`
-	Code         string               `json:"code"`
-	Title        string               `json:"title"`
-	Status       Status               `json:"status"`
-	Ctx          et.Json              `json:"ctx"`
-	Ctxs         map[string]et.Json   `json:"ctxs"`
-	Results      map[string]*Result   `json:"results"`
-	Params       et.Json              `json:"params"`
-	Tags         et.Json              `json:"tags"`
-	Traces       []et.Json            `json:"traces"`
-	TriggerTag   string               `json:"trigger_tag"`
-	Trigger      *Trigger             `json:"trigger"`
-	Current      *Current             `json:"current"`
-	CurrentIndex int                  `json:"current_index"`
-	IsDone       bool                 `json:"is_done"`
-	IsStop       bool                 `json:"is_stop"`
-	AuditLog     []et.Json            `json:"audit_log"`
-	UserID       string               `json:"-"`
-	isDebug      bool                 `json:"-"`
-	store        Store                `json:"-"`
-	flow         *Flow                `json:"-"`
-	resilience   *resilience.Instance `json:"-"`
+	StartedAt    time.Time              `json:"started_at"`
+	UpdatedAt    time.Time              `json:"updated_at"`
+	DoneAt       time.Time              `json:"done_at"`
+	TenantId     string                 `json:"tenant_id"`
+	ProjectId    string                 `json:"project_id"`
+	ID           string                 `json:"id"`
+	FlowId       string                 `json:"flow_id"`
+	Code         string                 `json:"code"`
+	Title        string                 `json:"title"`
+	Status       Status                 `json:"status"`
+	Ctx          et.Json                `json:"ctx"`
+	Ctxs         map[string]et.Json     `json:"ctxs"`
+	Results      map[string]*Result     `json:"results"`
+	Params       et.Json                `json:"params"`
+	Tags         et.Json                `json:"tags"`
+	Traces       []et.Json              `json:"traces"`
+	TriggerTag   string                 `json:"trigger_tag"`
+	Trigger      *Trigger               `json:"trigger"`
+	Current      *Current               `json:"current"`
+	CurrentIndex int                    `json:"current_index"`
+	IsDone       bool                   `json:"is_done"`
+	IsStop       bool                   `json:"is_stop"`
+	AuditLog     []et.Json              `json:"audit_log"`
+	Rollbacks    bool                   `json:"rollbacks"`
+	UserID       string                 `json:"-"`
+	isDebug      bool                   `json:"-"`
+	store        Store                  `json:"-"`
+	flow         *Flow                  `json:"-"`
+	resilience   *resilience.Resilience `json:"-"`
 }
 
 type InstanceParams struct {
@@ -160,7 +161,7 @@ func (s *WorkFlow) loadInstance(id, userId string) (*Instance, error) {
 	}
 
 	result := &Instance{}
-	exists, err := s.store.Get("instance", id, result)
+	exists, err := s.store.GetByCollection("instance", id, result)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +227,7 @@ func (s *Instance) delete() error {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
 
-	err := s.store.Delete("instance", s.ID)
+	err := s.store.DeleteByCollection("instance", s.ID)
 	if err != nil {
 		return err
 	}
@@ -355,6 +356,11 @@ func (s *Instance) setResult(result et.Json, err error) (et.Json, error) {
 	if s.Current != nil && s.Current.Source != nil {
 		stepId = s.Current.Source.ID
 	}
+
+	if stepId == "" {
+		return result, err
+	}
+
 	s.Results[stepId] = &Result{
 		StepId: stepId,
 		Ctx:    s.Ctx,
@@ -382,8 +388,8 @@ func (s *Instance) setCtx(ctx et.Json) et.Json {
 	stepId := ""
 	if s.Current != nil && s.Current.Source != nil {
 		stepId = s.Current.Source.ID
+		s.Ctxs[stepId] = ctx
 	}
-	s.Ctxs[stepId] = ctx
 	return s.Ctx
 }
 
@@ -408,6 +414,10 @@ func (s *Instance) next() bool {
 		s.Current = current
 	} else {
 		target := s.Current.Target
+		if s.Rollbacks {
+			target = s.Current.Error
+		}
+
 		if target == nil {
 			return false
 		}
@@ -420,4 +430,125 @@ func (s *Instance) next() bool {
 	}
 
 	return true
+}
+
+/**
+* run
+* @param ctx et.Json
+* @return et.Json, error
+**/
+func (s *Instance) run(ctx et.Json) (et.Json, error) {
+	var err error
+	defer func() {
+		s.setTrace(s.Current.Source.ID, ctx, err)
+	}()
+
+	if s.Status == DONE {
+		err = fmt.Errorf(MSG_INSTANCE_ALREADY_DONE, s.ID)
+		return et.Json{}, err
+	} else if s.Status == RUNNING {
+		err = fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING, s.ID)
+		return et.Json{}, err
+	} else if s.Status == ROLLBACK {
+		err = fmt.Errorf(MSG_INSTANCE_ROLLBACK, s.ID)
+		return et.Json{}, err
+	} else if s.Status == CANCEL {
+		err = fmt.Errorf(MSG_INSTANCE_CANCEL, s.ID)
+		return et.Json{}, err
+	}
+
+	var result et.Json
+	for s.next() {
+		step := s.Current.Source
+		if step == nil {
+			return et.Json{}, errors.New(MSG_STEP_NOT_FOUND)
+		}
+
+		ctx = s.setCtx(ctx)
+		result, err = step.run(s, ctx)
+		if err != nil {
+			result, err := s.rollback(result, err)
+			if err != nil {
+				return result, err
+			}
+			continue
+		}
+
+		s.setResult(result, err)
+
+		if s.IsDone {
+			return result, nil
+		}
+
+		if s.IsStop || step.Stop {
+			return result, nil
+		}
+	}
+
+	return result, err
+}
+
+/**
+* rollback
+* @return et.Json, error
+**/
+func (s *Instance) rollback(result et.Json, err error) (et.Json, error) {
+	if s.flow.TotalAttempts > 0 {
+		result, err := s.startResilence()
+		if err == nil {
+			return result, nil
+		}
+	}
+
+	if s.Rollbacks {
+		return result, err
+	}
+	s.Rollbacks = true
+	s.setResult(result, err)
+
+	return result, err
+}
+
+/**
+* startResilence
+* @return (bool, error)
+**/
+func (s *Instance) startResilence() (et.Json, error) {
+	if s.resilience == nil {
+		resilience, err := resilience.New(s.store)
+		if err != nil {
+			return et.Json{}, err
+		}
+		s.resilience = resilience
+	}
+
+	description := fmt.Sprintf("flow: %s,  %s", s.flow.Title, s.flow.Description)
+	resilence := s.resilience.LoadInstance(resilience.Params{
+		TenantId:      s.TenantId,
+		Id:            s.ID,
+		Tag:           "instance",
+		Description:   description,
+		OwnerId:       s.ProjectId,
+		TotalAttempts: s.flow.TotalAttempts,
+		Interval:      s.flow.TimeAttempts,
+		Tags:          s.Tags,
+		UserId:        s.UserID,
+		Fn:            s.run,
+		FnArgs:        []interface{}{s.Ctx},
+	})
+	res, err := resilence.Run(s.UserID)
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	if len(res) == 0 {
+		return et.Json{}, errors.New(MSG_RESILIENCE_NO_RESULT)
+	}
+
+	result, ok := res[0].(et.Json)
+	if !ok {
+		return et.Json{}, errors.New(MSG_RESILIENCE_NO_RESULT)
+	}
+
+	return result, nil
 }

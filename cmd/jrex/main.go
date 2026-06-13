@@ -16,17 +16,17 @@ func main() {
 
 	logs.Debug("connected:", db.Name)
 
-	v, err := jrex.New("jrex", db.Rules)
-	if err != nil {
-		logs.Panic(err)
-	}
-
 	model, err := db.DefineModel("apps", "users", 1)
 	if err != nil {
 		logs.Panic(err)
 	}
 
 	err = model.Init()
+	if err != nil {
+		logs.Panic(err)
+	}
+
+	v, err := jrex.New("jrex", db.Rules)
 	if err != nil {
 		logs.Panic(err)
 	}

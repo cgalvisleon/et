@@ -82,15 +82,75 @@ type BetweenValue struct {
 	Max any `json:"Max"`
 }
 
+const (
+	ValueString   = "string"
+	ValueInt      = "int"
+	ValueFloat    = "float"
+	ValueBool     = "bool"
+	ValueDatetime = "datetime"
+	ValueArray    = "array"
+	ValueJson     = "json"
+	ValueBetween  = "between"
+	ValueNull     = "null"
+	ValueAny      = "any"
+)
+
 type Value struct {
 	Type  string `json:"type"`
 	Value any    `json:"value"`
 }
 
+/**
+* Raw: Returns the underlying raw value.
+* @return any
+**/
+func (v Value) Raw() any {
+	return v.Value
+}
+
+/**
+* NewValue: Wraps a raw value into a Value, inferring its logical Type.
+* @param v any
+* @return Value
+**/
+func NewValue(v any) Value {
+	return Value{Type: valueType(v), Value: v}
+}
+
+/**
+* valueType: Infers the logical type name for a raw value.
+* @param v any
+* @return string
+**/
+func valueType(v any) string {
+	switch v.(type) {
+	case nil:
+		return ValueNull
+	case string:
+		return ValueString
+	case bool:
+		return ValueBool
+	case time.Time:
+		return ValueDatetime
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return ValueInt
+	case float32, float64:
+		return ValueFloat
+	case BetweenValue:
+		return ValueBetween
+	case []Json, []interface{}:
+		return ValueArray
+	case Json, map[string]interface{}:
+		return ValueJson
+	default:
+		return ValueAny
+	}
+}
+
 type Condition struct {
 	Field     string    `json:"field"`
 	Operator  Operator  `json:"operator"`
-	Value     any       `json:"value"`
+	Value     Value     `json:"value"`
 	Connector Connector `json:"connector"`
 }
 
@@ -102,7 +162,7 @@ func (s *Condition) ToJson() Json {
 	if s.Connector == NaC {
 		return Json{
 			s.Field: Json{
-				s.Operator.Str(): s.Value,
+				s.Operator.Str(): s.Value.Value,
 			},
 		}
 	}
@@ -110,7 +170,7 @@ func (s *Condition) ToJson() Json {
 	return Json{
 		s.Connector.Str(): Json{
 			s.Field: Json{
-				s.Operator.Str(): s.Value,
+				s.Operator.Str(): s.Value.Value,
 			},
 		},
 	}
@@ -161,7 +221,7 @@ func (s *Condition) applyOpEq(val any) bool {
 		return false
 	}
 
-	switch bv := s.Value.(type) {
+	switch bv := s.Value.Value.(type) {
 	case []Json:
 		for _, item := range bv {
 			for _, value := range item {
@@ -205,7 +265,7 @@ func (s *Condition) applyOpLess(val any) bool {
 		return false
 	}
 
-	switch bv := s.Value.(type) {
+	switch bv := s.Value.Value.(type) {
 	case time.Time:
 		if av, ok := val.(time.Time); ok {
 			return av.Before(bv)
@@ -222,7 +282,7 @@ func (s *Condition) applyOpLess(val any) bool {
 			return invalidType()
 		}
 
-		bNum, bKind, ok := numberToFloat64(s.Value)
+		bNum, bKind, ok := numberToFloat64(s.Value.Value)
 		if !ok {
 			return invalidType()
 		}
@@ -234,7 +294,7 @@ func (s *Condition) applyOpLess(val any) bool {
 			}
 		}
 		if isUnsignedIntKind(aKind) && isSignedIntKind(bKind) {
-			bi, _ := numberToInt64(s.Value)
+			bi, _ := numberToInt64(s.Value.Value)
 			if bi < 0 {
 				return invalidType()
 			}
@@ -245,7 +305,7 @@ func (s *Condition) applyOpLess(val any) bool {
 		for _, item := range bv {
 			for _, value := range item {
 				tmp := *s
-				tmp.Value = value
+				tmp.Value = NewValue(value)
 				return tmp.applyOpLess(val)
 			}
 		}
@@ -253,7 +313,7 @@ func (s *Condition) applyOpLess(val any) bool {
 	case []interface{}:
 		for _, value := range bv {
 			tmp := *s
-			tmp.Value = value
+			tmp.Value = NewValue(value)
 			return tmp.applyOpLess(val)
 		}
 		return invalidType()
@@ -276,7 +336,7 @@ func (s *Condition) applyOpLessEq(val any) bool {
 		return false
 	}
 
-	switch bv := s.Value.(type) {
+	switch bv := s.Value.Value.(type) {
 	case time.Time:
 		if av, ok := val.(time.Time); ok {
 			return av.Before(bv) || av.Equal(bv)
@@ -293,7 +353,7 @@ func (s *Condition) applyOpLessEq(val any) bool {
 			return invalidType()
 		}
 
-		bNum, bKind, ok := numberToFloat64(s.Value)
+		bNum, bKind, ok := numberToFloat64(s.Value.Value)
 		if !ok {
 			return invalidType()
 		}
@@ -305,7 +365,7 @@ func (s *Condition) applyOpLessEq(val any) bool {
 			}
 		}
 		if isUnsignedIntKind(aKind) && isSignedIntKind(bKind) {
-			bi, _ := numberToInt64(s.Value)
+			bi, _ := numberToInt64(s.Value.Value)
 			if bi < 0 {
 				return invalidType()
 			}
@@ -316,7 +376,7 @@ func (s *Condition) applyOpLessEq(val any) bool {
 		for _, item := range bv {
 			for _, value := range item {
 				tmp := *s
-				tmp.Value = value
+				tmp.Value = NewValue(value)
 				return tmp.applyOpLessEq(val)
 			}
 		}
@@ -324,7 +384,7 @@ func (s *Condition) applyOpLessEq(val any) bool {
 	case []interface{}:
 		for _, value := range bv {
 			tmp := *s
-			tmp.Value = value
+			tmp.Value = NewValue(value)
 			return tmp.applyOpLessEq(val)
 		}
 		return invalidType()
@@ -347,7 +407,7 @@ func (s *Condition) applyOpMore(val any) bool {
 		return false
 	}
 
-	switch bv := s.Value.(type) {
+	switch bv := s.Value.Value.(type) {
 	case time.Time:
 		if av, ok := val.(time.Time); ok {
 			return av.After(bv)
@@ -364,7 +424,7 @@ func (s *Condition) applyOpMore(val any) bool {
 			return invalidType()
 		}
 
-		bNum, bKind, ok := numberToFloat64(s.Value)
+		bNum, bKind, ok := numberToFloat64(s.Value.Value)
 		if !ok {
 			return invalidType()
 		}
@@ -376,7 +436,7 @@ func (s *Condition) applyOpMore(val any) bool {
 			}
 		}
 		if isUnsignedIntKind(aKind) && isSignedIntKind(bKind) {
-			bi, _ := numberToInt64(s.Value)
+			bi, _ := numberToInt64(s.Value.Value)
 			if bi < 0 {
 				return invalidType()
 			}
@@ -387,7 +447,7 @@ func (s *Condition) applyOpMore(val any) bool {
 		for _, item := range bv {
 			for _, value := range item {
 				tmp := *s
-				tmp.Value = value
+				tmp.Value = NewValue(value)
 				return tmp.applyOpMore(val)
 			}
 		}
@@ -395,7 +455,7 @@ func (s *Condition) applyOpMore(val any) bool {
 	case []interface{}:
 		for _, value := range bv {
 			tmp := *s
-			tmp.Value = value
+			tmp.Value = NewValue(value)
 			return tmp.applyOpMore(val)
 		}
 		return invalidType()
@@ -418,7 +478,7 @@ func (s *Condition) applyOpMoreEq(val any) bool {
 		return false
 	}
 
-	switch bv := s.Value.(type) {
+	switch bv := s.Value.Value.(type) {
 	case time.Time:
 		if av, ok := val.(time.Time); ok {
 			return av.After(bv) || av.Equal(bv)
@@ -435,7 +495,7 @@ func (s *Condition) applyOpMoreEq(val any) bool {
 			return invalidType()
 		}
 
-		bNum, bKind, ok := numberToFloat64(s.Value)
+		bNum, bKind, ok := numberToFloat64(s.Value.Value)
 		if !ok {
 			return invalidType()
 		}
@@ -447,7 +507,7 @@ func (s *Condition) applyOpMoreEq(val any) bool {
 			}
 		}
 		if isUnsignedIntKind(aKind) && isSignedIntKind(bKind) {
-			bi, _ := numberToInt64(s.Value)
+			bi, _ := numberToInt64(s.Value.Value)
 			if bi < 0 {
 				return invalidType()
 			}
@@ -458,7 +518,7 @@ func (s *Condition) applyOpMoreEq(val any) bool {
 		for _, item := range bv {
 			for _, value := range item {
 				tmp := *s
-				tmp.Value = value
+				tmp.Value = NewValue(value)
 				return tmp.applyOpMoreEq(val)
 			}
 		}
@@ -466,7 +526,7 @@ func (s *Condition) applyOpMoreEq(val any) bool {
 	case []interface{}:
 		for _, value := range bv {
 			tmp := *s
-			tmp.Value = value
+			tmp.Value = NewValue(value)
 			return tmp.applyOpMoreEq(val)
 		}
 		return invalidType()
@@ -489,7 +549,7 @@ func (s *Condition) applyOpLike(val any) bool {
 		return false
 	}
 
-	switch bv := s.Value.(type) {
+	switch bv := s.Value.Value.(type) {
 	case string:
 		av, ok := val.(string)
 		if !ok {
@@ -499,14 +559,14 @@ func (s *Condition) applyOpLike(val any) bool {
 	case Json:
 		for _, value := range bv {
 			tmp := *s
-			tmp.Value = value
+			tmp.Value = NewValue(value)
 			return tmp.applyOpLike(val)
 		}
 		return invalidType()
 	case map[string]interface{}:
 		for _, value := range bv {
 			tmp := *s
-			tmp.Value = value
+			tmp.Value = NewValue(value)
 			return tmp.applyOpLike(val)
 		}
 		return invalidType()
@@ -514,7 +574,7 @@ func (s *Condition) applyOpLike(val any) bool {
 		for _, item := range bv {
 			for _, value := range item {
 				tmp := *s
-				tmp.Value = value
+				tmp.Value = NewValue(value)
 				return tmp.applyOpLike(val)
 			}
 		}
@@ -522,7 +582,7 @@ func (s *Condition) applyOpLike(val any) bool {
 	case []interface{}:
 		for _, value := range bv {
 			tmp := *s
-			tmp.Value = value
+			tmp.Value = NewValue(value)
 			return tmp.applyOpLike(val)
 		}
 		return invalidType()
@@ -545,7 +605,7 @@ func (s *Condition) applyOpIn(val any) bool {
 		return false
 	}
 
-	list := reflect.ValueOf(s.Value)
+	list := reflect.ValueOf(s.Value.Value)
 	if !list.IsValid() {
 		return invalidType()
 	}
@@ -585,15 +645,15 @@ func (s *Condition) applyOpNotIn(val any) bool {
 * @return bool
 **/
 func (s *Condition) applyOpIs(val any) bool {
-	if val == nil && s.Value == nil {
+	if val == nil && s.Value.Value == nil {
 		return true
 	}
 
-	if val == nil || s.Value == nil {
+	if val == nil || s.Value.Value == nil {
 		return false
 	}
 
-	ok, err := equalsAny(val, s.Value)
+	ok, err := equalsAny(val, s.Value.Value)
 	if err != nil {
 		return false
 	}
@@ -629,7 +689,7 @@ func (s *Condition) applyOpBetween(val any) bool {
 		return false
 	}
 
-	min, max, ok := getBetweenRange(s.Value)
+	min, max, ok := getBetweenRange(s.Value.Value)
 	if !ok {
 		return false
 	}
@@ -662,42 +722,97 @@ func (s *Condition) applyOpNotBetween(val any) bool {
 }
 
 /**
+* dateLayouts: Layouts tried when coercing a string into a time.Time for comparison.
+**/
+var dateLayouts = []string{
+	time.RFC3339,
+	time.RFC3339Nano,
+	"2006-01-02 15:04:05",
+	"2006-01-02",
+}
+
+/**
+* parseDate: Tries to parse a string into a time.Time using dateLayouts.
+* @param s string
+* @return time.Time, bool
+**/
+func parseDate(s string) (time.Time, bool) {
+	for _, layout := range dateLayouts {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t, true
+		}
+	}
+
+	return time.Time{}, false
+}
+
+/**
+* coerceForComparison: Normalizes val and the condition value so that a
+* datetime can be compared against its string representation, regardless of
+* which side carries the time.Time and which carries the string.
+* @param val any, cv Value
+* @return any, Value
+**/
+func coerceForComparison(val any, cv Value) (any, Value) {
+	switch a := val.(type) {
+	case time.Time:
+		if b, ok := cv.Value.(string); ok {
+			if t, ok := parseDate(b); ok {
+				return val, Value{Type: ValueDatetime, Value: t}
+			}
+		}
+	case string:
+		if _, ok := cv.Value.(time.Time); ok {
+			if t, ok := parseDate(a); ok {
+				return t, cv
+			}
+		}
+	}
+
+	return val, cv
+}
+
+/**
 * ApplyToValue
 * @param val any
 * @return bool
 **/
 func (s *Condition) ApplyToValue(val any) bool {
-	switch s.Operator {
+	val, cv := coerceForComparison(val, s.Value)
+	tmp := *s
+	tmp.Value = cv
+
+	switch tmp.Operator {
 	case EQ:
-		return s.applyOpEq(val)
+		return tmp.applyOpEq(val)
 	case NEG:
-		return s.applyOpNeg(val)
+		return tmp.applyOpNeg(val)
 	case LESS:
-		return s.applyOpLess(val)
+		return tmp.applyOpLess(val)
 	case LESS_EQ:
-		return s.applyOpLessEq(val)
+		return tmp.applyOpLessEq(val)
 	case MORE:
-		return s.applyOpMore(val)
+		return tmp.applyOpMore(val)
 	case MORE_EQ:
-		return s.applyOpMoreEq(val)
+		return tmp.applyOpMoreEq(val)
 	case LIKE:
-		return s.applyOpLike(val)
+		return tmp.applyOpLike(val)
 	case IN:
-		return s.applyOpIn(val)
+		return tmp.applyOpIn(val)
 	case NOT_IN:
-		return s.applyOpNotIn(val)
+		return tmp.applyOpNotIn(val)
 	case IS:
-		return s.applyOpIs(val)
+		return tmp.applyOpIs(val)
 	case IS_NOT:
-		return !s.applyOpIs(val)
+		return !tmp.applyOpIs(val)
 	case NULL:
-		return s.applyOpNull(val)
+		return tmp.applyOpNull(val)
 	case NOT_NULL:
-		return s.applyOpNotNull(val)
+		return tmp.applyOpNotNull(val)
 	case BETWEEN:
-		return s.applyOpBetween(val)
+		return tmp.applyOpBetween(val)
 	case NOT_BETWEEN:
-		return s.applyOpNotBetween(val)
+		return tmp.applyOpNotBetween(val)
 	default:
 		return false
 	}
@@ -799,7 +914,7 @@ func condition(field string, value interface{}, op Operator) *Condition {
 	return &Condition{
 		Field:     field,
 		Operator:  op,
-		Value:     value,
+		Value:     NewValue(value),
 		Connector: NaC,
 	}
 }

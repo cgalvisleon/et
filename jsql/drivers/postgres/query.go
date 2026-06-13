@@ -172,39 +172,39 @@ func pgCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bool, 
 	case et.NOT_NULL:
 		return fmt.Sprintf("%s IS NOT NULL", fieldExpr)
 	case et.IN:
-		return fmt.Sprintf("%s IN (%s)", fieldExpr, pgInValues(cond.Value))
+		return fmt.Sprintf("%s IN (%s)", fieldExpr, pgInValues(cond.Value.Value))
 	case et.NOT_IN:
-		return fmt.Sprintf("%s NOT IN (%s)", fieldExpr, pgInValues(cond.Value))
+		return fmt.Sprintf("%s NOT IN (%s)", fieldExpr, pgInValues(cond.Value.Value))
 	case et.BETWEEN:
-		bv, ok := cond.Value.(et.BetweenValue)
+		bv, ok := cond.Value.Value.(et.BetweenValue)
 		if !ok {
 			return ""
 		}
 		return fmt.Sprintf("%s BETWEEN %v AND %v", fieldExpr, jsql.Quoted(bv.Min), jsql.Quoted(bv.Max))
 	case et.NOT_BETWEEN:
-		bv, ok := cond.Value.(et.BetweenValue)
+		bv, ok := cond.Value.Value.(et.BetweenValue)
 		if !ok {
 			return ""
 		}
 		return fmt.Sprintf("%s NOT BETWEEN %v AND %v", fieldExpr, jsql.Quoted(bv.Min), jsql.Quoted(bv.Max))
 	case et.LIKE:
-		return fmt.Sprintf("%s ILIKE %v", fieldExpr, jsql.Quoted(cond.Value))
+		return fmt.Sprintf("%s ILIKE %v", fieldExpr, jsql.Quoted(cond.Value.Value))
 	case et.IS:
-		return fmt.Sprintf("%s IS %v", fieldExpr, jsql.Quoted(cond.Value))
+		return fmt.Sprintf("%s IS %v", fieldExpr, jsql.Quoted(cond.Value.Value))
 	case et.IS_NOT:
-		return fmt.Sprintf("%s IS NOT %v", fieldExpr, jsql.Quoted(cond.Value))
+		return fmt.Sprintf("%s IS NOT %v", fieldExpr, jsql.Quoted(cond.Value.Value))
 	case et.NEG:
-		return fmt.Sprintf("%s != %v", fieldExpr, jsql.Quoted(cond.Value))
+		return fmt.Sprintf("%s != %v", fieldExpr, jsql.Quoted(cond.Value.Value))
 	case et.LESS:
-		return fmt.Sprintf("%s < %v", fieldExpr, jsql.Quoted(cond.Value))
+		return fmt.Sprintf("%s < %v", fieldExpr, jsql.Quoted(cond.Value.Value))
 	case et.LESS_EQ:
-		return fmt.Sprintf("%s <= %v", fieldExpr, jsql.Quoted(cond.Value))
+		return fmt.Sprintf("%s <= %v", fieldExpr, jsql.Quoted(cond.Value.Value))
 	case et.MORE:
-		return fmt.Sprintf("%s > %v", fieldExpr, jsql.Quoted(cond.Value))
+		return fmt.Sprintf("%s > %v", fieldExpr, jsql.Quoted(cond.Value.Value))
 	case et.MORE_EQ:
-		return fmt.Sprintf("%s >= %v", fieldExpr, jsql.Quoted(cond.Value))
+		return fmt.Sprintf("%s >= %v", fieldExpr, jsql.Quoted(cond.Value.Value))
 	default:
-		return fmt.Sprintf("%s = %v", fieldExpr, jsql.Quoted(cond.Value))
+		return fmt.Sprintf("%s = %v", fieldExpr, jsql.Quoted(cond.Value.Value))
 	}
 }
 

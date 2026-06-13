@@ -171,39 +171,39 @@ func buildCondition(cond *et.Condition, model *jsql.Model, alias string) string 
 
 	switch cond.Operator {
 	case et.EQ:
-		return fmt.Sprintf("%s = %v", field, jsql.Quoted(cond.Value))
+		return fmt.Sprintf("%s = %v", field, jsql.Quoted(cond.Value.Value))
 	case et.NEG:
-		return fmt.Sprintf("%s <> %v", field, jsql.Quoted(cond.Value))
+		return fmt.Sprintf("%s <> %v", field, jsql.Quoted(cond.Value.Value))
 	case et.LESS:
-		return fmt.Sprintf("%s < %v", field, jsql.Quoted(cond.Value))
+		return fmt.Sprintf("%s < %v", field, jsql.Quoted(cond.Value.Value))
 	case et.LESS_EQ:
-		return fmt.Sprintf("%s <= %v", field, jsql.Quoted(cond.Value))
+		return fmt.Sprintf("%s <= %v", field, jsql.Quoted(cond.Value.Value))
 	case et.MORE:
-		return fmt.Sprintf("%s > %v", field, jsql.Quoted(cond.Value))
+		return fmt.Sprintf("%s > %v", field, jsql.Quoted(cond.Value.Value))
 	case et.MORE_EQ:
-		return fmt.Sprintf("%s >= %v", field, jsql.Quoted(cond.Value))
+		return fmt.Sprintf("%s >= %v", field, jsql.Quoted(cond.Value.Value))
 	case et.LIKE:
-		return fmt.Sprintf("%s ILIKE %v", field, jsql.Quoted(cond.Value))
+		return fmt.Sprintf("%s ILIKE %v", field, jsql.Quoted(cond.Value.Value))
 	case et.IN:
-		return fmt.Sprintf("%s IN (%s)", field, buildInList(cond.Value))
+		return fmt.Sprintf("%s IN (%s)", field, buildInList(cond.Value.Value))
 	case et.NOT_IN:
-		return fmt.Sprintf("%s NOT IN (%s)", field, buildInList(cond.Value))
+		return fmt.Sprintf("%s NOT IN (%s)", field, buildInList(cond.Value.Value))
 	case et.IS:
-		return fmt.Sprintf("%s IS %v", field, jsql.Quoted(cond.Value))
+		return fmt.Sprintf("%s IS %v", field, jsql.Quoted(cond.Value.Value))
 	case et.IS_NOT:
-		return fmt.Sprintf("%s IS NOT %v", field, jsql.Quoted(cond.Value))
+		return fmt.Sprintf("%s IS NOT %v", field, jsql.Quoted(cond.Value.Value))
 	case et.NULL:
 		return fmt.Sprintf("%s IS NULL", field)
 	case et.NOT_NULL:
 		return fmt.Sprintf("%s IS NOT NULL", field)
 	case et.BETWEEN:
-		bv, ok := cond.Value.(et.BetweenValue)
+		bv, ok := cond.Value.Value.(et.BetweenValue)
 		if !ok {
 			return ""
 		}
 		return fmt.Sprintf("%s BETWEEN %v AND %v", field, jsql.Quoted(bv.Min), jsql.Quoted(bv.Max))
 	case et.NOT_BETWEEN:
-		bv, ok := cond.Value.(et.BetweenValue)
+		bv, ok := cond.Value.Value.(et.BetweenValue)
 		if !ok {
 			return ""
 		}

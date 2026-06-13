@@ -3,13 +3,11 @@ package jrex
 import (
 	"errors"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/jrpc"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
@@ -29,6 +27,9 @@ func wrap(instance *Jrex) {
 	wrapperJrpc(instance)
 	wrapperCache(instance)
 	wrapperEvent(instance)
+	for _, module := range instance.Modules {
+		wrapperModules(module)
+	}
 }
 
 /**
@@ -36,74 +37,44 @@ func wrap(instance *Jrex) {
 * @param vm *VM
 **/
 func wrapperRunTime(instance *Jrex) {
-	instance.Set("os", nil)
-	instance.Set("exec", nil)
-	instance.Set("__rootDir", instance.Loader.BaseDir)
-	instance.Set("__resolve", func(module, currentDir string) string {
-		if instance.mode == Production {
-			return fmt.Sprintf("pkg:%s:%s:%s", instance.Name, module, instance.Version)
-		}
-
-		p, err := instance.Loader.Resolve(module, currentDir)
+	instance.Set("__resolve", func(module string) string {
+		result, err := instance.Resolve(module)
 		if err != nil {
 			panic(instance.Error(err))
 		}
-
-		instance.SetModule(module, p)
-		return p
+		return result
 	})
 	instance.Set("__load", func(path string) string {
-		if instance.mode == Production {
-			var scr Module
-			exists, err := instance.get(path, &scr)
-			if err != nil {
-				panic(instance.Error(err))
-			}
+		return ""
+	})
+}
 
-			if !exists {
-				panic(instance.Error(fmt.Errorf("script not found: %s", path)))
-			}
-
-			return scr.Scripts
+/**
+* wrapperRunTime: Wraps the runtime
+* @param vm *VM
+**/
+func wrapperModules(module *Module) {
+	module.Set("os", nil)
+	module.Set("exec", nil)
+	module.Set("version", func(value string) string {
+		part, ok := ToPart(value)
+		if !ok {
+			panic(module.Error(fmt.Errorf("invalid part: %s", value)))
 		}
-
-		inf := file.ExistPath(path)
-		if inf.IsDir {
-			return ""
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			panic(instance.Error(err))
-		}
-		return string(data)
+		module.SetVersion(part)
+		return module.Version
 	})
-	instance.Set("version", func(value string) string {
-		err := instance.SetVersion(value)
-		if err != nil {
-			panic(instance.Error(err))
-		}
-		return value
+	module.Set("description", func(value string) string {
+		module.SetDescription(value)
+		return module.Description
 	})
-	instance.Set("description", func(value string) string {
-		err := instance.SetDescription(value)
-		if err != nil {
-			panic(instance.Error(err))
-		}
-		return value
+	module.Set("author", func(value string) string {
+		module.SetAuthor(value)
+		return module.Author
 	})
-	instance.Set("author", func(value string) string {
-		err := instance.SetAuthor(value)
-		if err != nil {
-			panic(instance.Error(err))
-		}
-		return value
-	})
-	instance.Set("license", func(value string) string {
-		err := instance.SetLicense(value)
-		if err != nil {
-			panic(instance.Error(err))
-		}
-		return value
+	module.Set("license", func(value string) string {
+		module.SetLicense(value)
+		return module.License
 	})
 }
 

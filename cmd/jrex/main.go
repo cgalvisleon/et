@@ -26,7 +26,7 @@ func main() {
 		logs.Panic(err)
 	}
 
-	v, err := jrex.New("jrex", db.Rules)
+	v, err := jrex.New("jrex", nil)
 	if err != nil {
 		logs.Panic(err)
 	}
@@ -34,9 +34,10 @@ func main() {
 	v.Set("db", db)
 	v.Set(model.Name, model)
 
-	err = v.RunDev("./cmd/jrex/src")
+	result, err := v.Run()
 	if err != nil {
 		logs.Panic(err)
 	}
 
+	logs.Debug("result:", result.ToString())
 }

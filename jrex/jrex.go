@@ -1,18 +1,13 @@
 package jrex
 
 import (
+	"errors"
 	"fmt"
 	"maps"
-	"path/filepath"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/file"
-	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/utility"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/dop251/goja"
-	"github.com/fsnotify/fsnotify"
 )
 
 var (
@@ -20,16 +15,12 @@ var (
 )
 
 type Jrex struct {
-	*Loader `json:"-"`
-	Ctx     et.Json           `json:"ctx"`
-	ID      string            `json:"id"`
-	Scripts string            `json:"scripts"`
-	vm      *goja.Runtime     `json:"-"`
-	watch   *file.Watcher     `json:"-"`
-	store   Store             `json:"-"`
-	files   *FileStore        `json:"-"`
-	program *tea.Program      `json:"-"`
-	onStart func(*Jrex) error `json:"-"`
+	ID      string             `json:"id"`
+	Tag     string             `json:"tag"`
+	Ctx     et.Json            `json:"ctx"`
+	Modules map[string]*Module `json:"modules"`
+	store   Store              `json:"-"`
+	vm      *goja.Runtime      `json:"-"`
 }
 
 /**
@@ -37,34 +28,38 @@ type Jrex struct {
 * @param name string, store Store
 * @return *Jrex
 **/
-func New(name string, store Store) (*Jrex, error) {
-	if !utility.ValidStr(name, 0, []string{""}) {
-		return nil, fmt.Errorf("name is required, remember that is a unique identifier")
+func New(tag string, store Store) (*Jrex, error) {
+	if !utility.ValidStr(tag, 0, []string{""}) {
+		return nil, errors.New(MSG_TAG_REQUIRED)
 	}
 
-	id := reg.GenULID(packageName)
+	if store == nil {
+		var err error
+		store, err = NewFileStore("./src")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	tag = utility.Normalize(tag)
+	id := fmt.Sprintf("jrex:%s", tag)
 	result := &Jrex{
-		ID:    id,
-		Ctx:   et.Json{},
-		vm:    goja.New(),
-		store: store,
-	}
-	result.Loader = newLoader(result, name)
-
-	absPath, err := filepath.Abs("./")
-	if err != nil {
-		return nil, err
+		ID:      id,
+		Tag:     tag,
+		Ctx:     et.Json{},
+		Modules: make(map[string]*Module),
+		store:   store,
 	}
 
-	result.BaseDir = absPath
-	result.files, err = NewFileStore(result.BaseDir)
-	if err != nil {
-		return nil, err
-	}
-	if result.store == nil {
-		result.store = result.files
-	}
 	return result, nil
+}
+
+/**
+* save
+* @return error
+**/
+func (s *Jrex) Save(userId string) error {
+	return nil
 }
 
 /**
@@ -117,103 +112,25 @@ func (s *Jrex) Set(name string, value interface{}) error {
 }
 
 /**
-* uppToStore
-* @return error
-**/
-func (s *Jrex) uppToStore() error {
-	id := fmt.Sprintf("pkg:%s:%s", s.Name, s.Version)
-	return s.set(id, s)
-}
-
-/**
-* SetModule
-* @params module string, path string
-* @return error
-**/
-func (s *Jrex) SetModule(module string, path string) error {
-	_, ok := s.Modules[module]
-	s.Modules[module] = path
-	if !ok {
-		return s.save()
-	}
-	return nil
-}
-
-/**
-* SetDescription
-* @params description string
-* @return error
-**/
-func (s *Jrex) SetDescription(description string) error {
-	s.Description = description
-	return s.save()
-}
-
-/**
-* SetAuthor
-* @params author string
-* @return error
-**/
-func (s *Jrex) SetAuthor(author string) error {
-	s.Author = author
-	return s.save()
-}
-
-/**
-* SetLicense
-* @params license string
-* @return error
-**/
-func (s *Jrex) SetLicense(license string) error {
-	s.License = license
-	return s.save()
-}
-
-/**
 * SetCtx
 * @params ctx et.Json
 **/
-func (s *Jrex) SetCtx(ctx et.Json) {
+func (s *Jrex) SetCtx(ctx et.Json) *Jrex {
 	maps.Copy(s.Ctx, ctx)
-}
-
-/**
-* OnStart: Registers a function to run when the CLI starts. Has no effect if fn is nil.
-* @param fn func(*Jrex) error
-* @return *Jrex
-**/
-func (s *Jrex) OnStart(fn func(*Jrex) error) *Jrex {
-	s.onStart = fn
 	return s
 }
 
 /**
-* Notify: Reports a kind/message pair to the running CLI program, stripping
-* ANSI escape codes so colorized log output doesn't corrupt the TUI rendering.
-* @params kind string, message string
-**/
-func (s *Jrex) Notify(kind, message string) {
-	if s.program != nil {
-		s.program.Send(cliLogMsg{kind: kind, message: ansi.Strip(message)})
-		return
-	}
-}
-
-/**
 * Run
-* @params str string
 * @return et.Json, error
 **/
-func (s *Jrex) Run(str string) (et.Json, error) {
-	s.vm = goja.New()
-	wrap(s)
-
-	_, err := s.vm.RunString(requireRuntime)
-	if err != nil {
-		return nil, err
+func (s *Jrex) Require(name string) (et.Json, error) {
+	module, exists := s.Modules[name]
+	if !exists {
+		return nil, errors.New(MSG_INDEX_MODULE_NOT_FOUND)
 	}
 
-	_, err = s.vm.RunString(str)
+	_, err := s.vm.RunScript(module.Name, module.Code)
 	if err != nil {
 		return nil, err
 	}
@@ -222,105 +139,58 @@ func (s *Jrex) Run(str string) (et.Json, error) {
 }
 
 /**
-* RunCode
+* RunByCode
+* @params code string
+* @return et.Json, error
+**/
+func (s *Jrex) RunByCode(code string) (et.Json, error) {
+	_, err := s.vm.RunString(code)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.Ctx, nil
+}
+
+/**
+* RunByBt
 * @params code []byte
 * @return et.Json, error
 **/
 func (s *Jrex) RunByBt(code []byte) (et.Json, error) {
-	return s.Run(string(code))
+	return s.RunByCode(string(code))
 }
 
 /**
-* RunByFile
-* @params path string
+* Run
 * @return et.Json, error
 **/
-func (s *Jrex) RunByFile(path string) (et.Json, error) {
-	path = filepath.Join(s.Loader.BaseDir, path)
-	data, err := s.files.ReadTextFile(path)
+func (s *Jrex) Run() (et.Json, error) {
+	s.vm = goja.New()
+	wrap(s)
+
+	_, err := s.vm.RunString(requireRuntime)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := s.Run(data)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
+	return s.Require("index.js")
 }
 
 /**
-* RunBySource
-* @param path string
-* @return (et.Json, error)
+* Notify
+* @param channel string, message string
 **/
-func (s *Jrex) RunBySource(path string) (et.Json, error) {
-	var scr Module
-	exists, err := s.get(path, &scr)
-	if err != nil {
-		panic(s.Error(err))
-	}
+func (s *Jrex) Notify(channel string, message string) {
 
-	if !exists {
-		panic(s.Error(fmt.Errorf("script not found: %s", path)))
-	}
-	return s.Run(scr.Scripts)
 }
 
 /**
-* RunDev
-* @param baseDir string
-* @return error
+* Resolve
+* @param modulePath string
+* @return (string, error)
 **/
-func (s *Jrex) RunDev(baseDir string) error {
-	absPath, err := filepath.Abs(baseDir)
-	if err != nil {
-		return err
-	}
-
-	s.BaseDir = absPath
-	s.files, err = NewFileStore(s.BaseDir)
-	if err != nil {
-		return err
-	}
-	s.mode = Develop
-	err = s.init()
-	if err != nil {
-		return err
-	}
-
-	s.OnStart(func(s *Jrex) error {
-		_, err := s.RunByFile(s.Main)
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-
-	return s.RunCli()
-}
-
-/**
-* hotReload
-* @return error
-**/
-func (s *Jrex) hotReload() error {
-	watch, err := file.NewWatcher(s.BaseDir)
-	if err != nil {
-		return err
-	}
-	s.watch = watch
-	s.Notify("Watcher", fmt.Sprintf("watching %s for changes", s.BaseDir))
-	err = s.watch.OnReload(func(info file.FileInfo, event fsnotify.Event) {
-		_, err := s.RunByFile(s.Main)
-		if err != nil {
-			s.Notify("ERROR", err.Error())
-		} else {
-			s.Notify("CTX", s.Ctx.ToString())
-		}
-	}).Load()
-	if err != nil {
-		return err
-	}
-	return nil
+func (s *Jrex) Resolve(modulePath string) (string, error) {
+	s.Notify("LOG", fmt.Sprintf("Resolve: %s", modulePath))
+	return "", nil
 }

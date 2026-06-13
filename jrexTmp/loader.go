@@ -7,15 +7,6 @@ import (
 	"strings"
 )
 
-type Part string
-
-const (
-	Same    Part = "same"
-	Major   Part = "major"
-	Minor   Part = "minor"
-	Release Part = "release"
-)
-
 type Pkg struct {
 	Name            string            `json:"name"`
 	Version         string            `json:"version"`

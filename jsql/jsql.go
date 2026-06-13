@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -43,29 +44,20 @@ func ConnectTo(connect Connection) (*DB, error) {
 	return result, nil
 }
 
-type Config interface {
-	GetStr(key string, def string) string
-	GetInt(key string, def int) int
-	GetBool(key string, def bool) bool
-}
-
 /**
 * getConnection: Returns a Connection object based on the specified driver and environment variables.
 * @param config Config
 * @return Connection, error
 **/
-func getConnection(config Config) (Connection, error) {
+func getConnection() (Connection, error) {
 	driver := config.GetStr("DB_DRIVER", DriverPostgres)
-	if config != nil {
-		driver = config.GetStr("DB_DRIVER", DriverPostgres)
-	}
 
 	switch driver {
 	case DriverPostgres:
-		config := pgConection(config)
+		config := pgConection()
 		return config, nil
 	case DriverSqlite:
-		config := sqliteConection(config)
+		config := sqliteConection()
 		return config, nil
 	default:
 		return nil, fmt.Errorf(MSG_UNSUPPORTED_DRIVER, driver)
@@ -77,8 +69,8 @@ func getConnection(config Config) (Connection, error) {
 * @param name string
 * @return *DB, error
 **/
-func LoadTo(config Config, name string) (*DB, error) {
-	conn, err := getConnection(config)
+func LoadTo(name string) (*DB, error) {
+	conn, err := getConnection()
 	if err != nil {
 		return nil, err
 	}
@@ -90,8 +82,8 @@ func LoadTo(config Config, name string) (*DB, error) {
 * Load: Connects to the default database reading configuration from environment variables.
 * @return *DB, error
 **/
-func Load(config Config) (*DB, error) {
-	conn, err := getConnection(config)
+func Load() (*DB, error) {
+	conn, err := getConnection()
 	if err != nil {
 		return nil, err
 	}

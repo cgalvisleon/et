@@ -44,8 +44,50 @@ type Module struct {
 	Description string `json:"description"`
 	Author      string `json:"author"`
 	License     string `json:"license"`
-	Code        string `json:"scripts"`
+	Code        string `json:"code"`
 	jrex        *Jrex  `json:"-"`
+}
+
+func NewModule(name string) *Module {
+	name = utility.Normalize(name)
+	version := "1.0.0"
+	id := fmt.Sprintf("module:%s:%s", name, version)
+	return &Module{
+		ID:          id,
+		Name:        name,
+		Version:     version,
+		Description: "",
+		Author:      "",
+		License:     "MIT",
+		Code:        "",
+	}
+}
+
+/**
+* up
+* @param jrex *Jrex
+* @return *Module
+**/
+func (s *Module) up(jrex *Jrex) *Module {
+	s.jrex = jrex
+	s.jrex.Modules[s.Name] = s
+	return s
+}
+
+func (s *Jrex) GetModule(name string) *Module {
+	name = utility.Normalize(name)
+	version := "1.0.0"
+	id := fmt.Sprintf("module:%s:%s", name, version)
+	return &Module{
+		ID:          id,
+		Name:        name,
+		Version:     version,
+		Description: "",
+		Author:      "",
+		License:     "MIT",
+		Code:        "",
+		jrex:        s,
+	}
 }
 
 func (s *Jrex) AddModule(name string) *Module {
@@ -71,7 +113,7 @@ func (s *Jrex) AddModule(name string) *Module {
 * @params name string, value interface{}
 * @return error
 **/
-func (s *Module) Set(name string, value interface{}) error {
+func (s *Module) Set(name string, value interface{}) *Jrex {
 	return s.jrex.Set(name, value)
 }
 
@@ -124,6 +166,7 @@ func (s *Module) SetVersion(part Part) *Module {
 	}
 
 	result := fmt.Sprintf("%d.%d.%d", major, minor, patch)
+	s.ID = fmt.Sprintf("%s:%s", s.Name, result)
 	s.Version = result
 	return s
 }

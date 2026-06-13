@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	db, err := jsql.Load(nil)
+	db, err := jsql.Load()
 	if err != nil {
 		logs.Panic(err)
 	}
@@ -26,7 +26,7 @@ func main() {
 		logs.Panic(err)
 	}
 
-	v, err := jrex.New("jrex", nil)
+	v, err := jrex.Load("jrex", nil)
 	if err != nil {
 		logs.Panic(err)
 	}

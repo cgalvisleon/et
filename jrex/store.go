@@ -1,29 +1,148 @@
 package jrex
 
+import (
+	"fmt"
+	"path/filepath"
+
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/file"
+	"github.com/cgalvisleon/et/utility"
+)
+
 type Store interface {
-	SetModule(module string, source any) error
-	GetModule(module string, source any) (bool, error)
+	Load(tag string) (*Jrex, error)
+	GetModule(module string) (*Module, error)
+	SetModule(module *Module) error
 	DeleteModule(module string) error
 }
 
 type FileStore struct {
-	BaseDir string
+	BaseDir   string
+	ModuleDir string
 }
 
 func NewFileStore(baseDir string) (*FileStore, error) {
-	return &FileStore{
-		BaseDir: baseDir,
-	}, nil
+	absPath, err := filepath.Abs(baseDir)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = file.MakeFolder(absPath)
+	if err != nil {
+		return nil, err
+	}
+
+	modulePath := filepath.Join(absPath, ".modules")
+	_, err = file.MakeFolder(modulePath)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &FileStore{
+		BaseDir:   absPath,
+		ModuleDir: modulePath,
+	}
+
+	return result, nil
 }
 
-func (s *FileStore) SetModule(module string, source any) error {
+/**
+* Load
+* @param tag string
+* @return *Jrex, error
+**/
+func (s *FileStore) Load(tag string) (*Jrex, error) {
+	index, err := s.GetModule("index")
+	if err != nil {
+		return nil, err
+	}
+
+	tag = utility.Normalize(tag)
+	path := fmt.Sprintf("%s.json", tag)
+	path = filepath.Join(s.BaseDir, tag)
+	id := fmt.Sprintf("jrex:%s", tag)
+	result, err := file.LoadOrCreateJSON(path, &Jrex{
+		ID:      id,
+		Tag:     tag,
+		Ctx:     et.Json{},
+		Modules: make(map[string]*Module),
+	})
+	if err != nil {
+		return nil, err
+	}
+	index.up(result)
+
+	return result, nil
+}
+
+/**
+* GetModule
+* @param module string
+* @return *Module, error
+**/
+func (s *FileStore) GetModule(module string) (*Module, error) {
+	path := filepath.Join(s.ModuleDir, fmt.Sprintf("%s.json", module))
+	result, err := file.LoadOrCreateJSON(path, &Module{
+		ID:          fmt.Sprintf("module:%s:%s", module, "1.0.0"),
+		Name:        module,
+		Version:     "1.0.0",
+		Description: "",
+		Author:      "",
+		License:     "MIT",
+		Code:        "",
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	path = filepath.Join(s.BaseDir, fmt.Sprintf("%s.js", module))
+	code, err := file.LoadString(path, result.Code)
+	if err != nil {
+		return nil, err
+	}
+	result.Code = code
+
+	return result, nil
+}
+
+/**
+* SetModule
+* @param module *Module
+* @return error
+**/
+func (s *FileStore) SetModule(module *Module) error {
+	path := filepath.Join(s.ModuleDir, module.Name)
+	err := file.WriteJSON(path, module)
+	if err != nil {
+		return err
+	}
+
+	path = filepath.Join(s.BaseDir, module.Name)
+	err = file.WriteString(path, module.Code)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func (s *FileStore) GetModule(module string, source any) (bool, error) {
-	return false, nil
-}
-
+/**
+* DeleteModule
+* @param module string
+* @return error
+**/
 func (s *FileStore) DeleteModule(module string) error {
+	path := filepath.Join(s.ModuleDir, module)
+	_, err := file.RemoveFile(path)
+	if err != nil {
+		return err
+	}
+
+	path = filepath.Join(s.BaseDir, module)
+	_, err = file.RemoveFile(path)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

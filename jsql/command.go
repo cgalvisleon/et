@@ -84,7 +84,7 @@ func newCommand(model *Model, tp CommandType) *Command {
 	}
 	var err error
 	key := fmt.Sprintf("command:%s:%s", model.Key(), tp)
-	result.jrex, err = jrex.New(key, model.db.Rules)
+	result.jrex, err = jrex.New(key, nil)
 	if err != nil {
 		logs.Panic(err)
 	}

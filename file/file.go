@@ -3,6 +3,7 @@ package file
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -127,12 +128,12 @@ func MakeFolder(names ...string) (string, error) {
 
 /**
 * MakeFile
-* @param folder, name, model string, args ...any
+* @param path, name, model string, args ...any
 * @return string, error
 **/
-func MakeFile(folder, name, model string, args ...any) (string, error) {
-	path := fmt.Sprintf(`%s/%s`, folder, name)
-	info := ExistPath(path)
+func MakeFile(path, name, model string, args ...any) (string, error) {
+	pathFile := fmt.Sprintf(`%s/%s`, path, name)
+	info := ExistPath(pathFile)
 	if info.Error != nil {
 		return info.Path, info.Error
 	} else if info.IsDir {
@@ -193,67 +194,132 @@ func ExtencionFile(filename string) string {
 }
 
 /**
-* ReadFile
+* openOrCreate
 * @param path string
+* @return *os.File, bool, error
+**/
+func openOrCreate(path string) (*os.File, bool, error) {
+	created := false
+
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		created = true
+	}
+
+	f, err := os.OpenFile(
+		path,
+		os.O_RDWR|os.O_CREATE,
+		0o644,
+	)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return f, created, nil
+}
+
+/**
+* LoadOrCreateJSON
+* @param path string, defaultValue T
+* @return T, error
+**/
+func LoadOrCreateJSON[T any](path string, defaultValue T) (T, error) {
+	var result T
+
+	f, created, err := openOrCreate(path)
+	if err != nil {
+		return result, err
+	}
+	defer f.Close()
+
+	if created {
+		// Crear el archivo con los valores por defecto
+		b, err := json.MarshalIndent(defaultValue, "", "  ")
+		if err != nil {
+			return result, err
+		}
+
+		if _, err := f.Write(b); err != nil {
+			return result, err
+		}
+
+		return defaultValue, nil
+	}
+
+	// Leer contenido existente
+	b, err := io.ReadAll(f)
+	if err != nil {
+		return result, err
+	}
+
+	if len(b) == 0 {
+		return defaultValue, nil
+	}
+
+	if err := json.Unmarshal(b, &result); err != nil {
+		return result, err
+	}
+
+	return result, nil
+}
+
+/**
+* WriteJSON
+* @param path string, value T
+* @return error
+**/
+func WriteJSON[T any](path string, value T) error {
+	b, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	f, err := os.OpenFile(
+		path,
+		os.O_WRONLY|os.O_CREATE|os.O_TRUNC,
+		0o644,
+	)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = f.Write(b)
+	return err
+}
+
+/**
+* LoadOrCreateString
+* @param path string, defaultValue string
 * @return string, error
 **/
-func ReadFile(path string) (string, error) {
-	content, err := os.ReadFile(path)
+func LoadString(path string, defaultValue string) (string, error) {
+	f, created, err := openOrCreate(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	if created {
+		if _, err := f.WriteString(defaultValue); err != nil {
+			return "", err
+		}
+
+		return defaultValue, nil
+	}
+
+	b, err := io.ReadAll(f)
 	if err != nil {
 		return "", err
 	}
 
-	logs.Log("file", "read file:", path)
-	return string(content), nil
+	return string(b), nil
 }
 
 /**
-* Write
-* @param filePath string, obj any
+* WriteString
+* @param path string, value string
 * @return error
 **/
-func Write(filePath string, obj any) error {
-	f, err := os.Create(filePath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	enc := json.NewEncoder(f)
-	enc.SetIndent("", "  ")
-	return enc.Encode(obj)
-}
-
-/**
-* Read
-* @param filePath string, dest any
-* @return error
-**/
-func Read(filePath string, dest any) error {
-	// 1) Intentar abrir
-	f, err := os.Open(filePath)
-	if err != nil {
-		// Si no existe, crearlo con valores por defecto
-		if os.IsNotExist(err) {
-			b, err := json.MarshalIndent("", "", "  ")
-			if err != nil {
-				return err
-			}
-
-			if err := os.WriteFile(filePath, b, 0o644); err != nil {
-				return err
-			}
-
-			return nil
-		}
-		return err
-	}
-	defer f.Close()
-
-	// 2) Leer/parsear
-	if err := json.NewDecoder(f).Decode(&dest); err != nil {
-		return err
-	}
-
-	return nil
+func WriteString(path string, value string) error {
+	return os.WriteFile(path, []byte(value), 0o644)
 }

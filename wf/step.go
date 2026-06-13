@@ -258,7 +258,7 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 		}
 		instance.setStatus(RUNNING)
 		jrex.SetCtx(ctx)
-		result, err := jrex.Run(v)
+		result, err := jrex.RunByCode(v)
 		if err != nil {
 			instance.setStatus(FAILED)
 			return et.Json{}, err
@@ -295,7 +295,7 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 		}
 		instance.setStatus(RUNNING)
 		jrex.SetCtx(ctx)
-		result, err := jrex.Run(code)
+		result, err := jrex.RunByCode(code)
 		if err != nil {
 			instance.setStatus(FAILED)
 			return et.Json{}, err

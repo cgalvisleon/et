@@ -589,17 +589,10 @@ func (s *Node) Next() *Client {
 func (s *Node) electionLoop() error {
 	time.Sleep(300 * time.Millisecond)
 	var config *Config
-	err := file.Read(s.configFile, &config)
+	var err error
+	config, err = file.LoadOrCreateJSON(s.configFile, config)
 	if err != nil {
 		return err
-	}
-
-	if config == nil {
-		config = &Config{
-			Nodes: []string{},
-		}
-
-		file.Write(s.configFile, config)
 	}
 
 	for _, node := range config.Nodes {

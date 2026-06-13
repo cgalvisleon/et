@@ -127,7 +127,7 @@ func (s *Server) Save() error {
 		cache.Set(storage.Key, string(bt), 0)
 	} else {
 		path := path.Join("./", "apigateway.json")
-		err = file.Write(path, string(bt))
+		err = file.WriteJSON(path, storage)
 		if err != nil {
 			return err
 		}
@@ -165,16 +165,10 @@ func (s *Server) load() error {
 		}
 	} else {
 		path := path.Join("./", "apigateway.json")
-		err := file.Read(path, &storage)
+		var err error
+		storage, err = file.LoadOrCreateJSON(path, storage)
 		if err != nil {
 			return err
-		}
-
-		if storage == nil {
-			storage = NewStorage(s)
-			if err := file.Write(path, storage); err != nil {
-				logs.Alertf("Failed to initialize storage file: %s", err.Error())
-			}
 		}
 	}
 

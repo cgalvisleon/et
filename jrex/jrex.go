@@ -15,12 +15,13 @@ var (
 )
 
 type Jrex struct {
-	ID      string             `json:"id"`
-	Tag     string             `json:"tag"`
-	Ctx     et.Json            `json:"ctx"`
-	Modules map[string]*Module `json:"modules"`
-	store   Store              `json:"-"`
-	vm      *goja.Runtime      `json:"-"`
+	ID       string             `json:"id"`
+	Tag      string             `json:"tag"`
+	Ctx      et.Json            `json:"ctx"`
+	Modules  map[string]*Module `json:"modules"`
+	store    Store              `json:"-"`
+	bindings map[string]any     `json:"-"`
+	vm       *goja.Runtime      `json:"-"`
 }
 
 /**
@@ -44,13 +45,39 @@ func New(tag string, store Store) (*Jrex, error) {
 	tag = utility.Normalize(tag)
 	id := fmt.Sprintf("jrex:%s", tag)
 	result := &Jrex{
-		ID:      id,
-		Tag:     tag,
-		Ctx:     et.Json{},
-		Modules: make(map[string]*Module),
-		store:   store,
+		ID:       id,
+		Tag:      tag,
+		Ctx:      et.Json{},
+		Modules:  make(map[string]*Module),
+		bindings: make(map[string]any),
+		store:    store,
 	}
 
+	return result, nil
+}
+
+/**
+* Load
+* @param tag string, store Store
+* @return *Jrex, error
+**/
+func Load(tag string, store Store) (*Jrex, error) {
+	if !utility.ValidStr(tag, 0, []string{""}) {
+		return nil, errors.New(MSG_TAG_REQUIRED)
+	}
+
+	if store == nil {
+		var err error
+		store, err = NewFileStore("./src")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	result, err := store.Load(tag)
+	if err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
@@ -68,6 +95,9 @@ func (s *Jrex) Save(userId string) error {
 * @return goja.Value
 **/
 func (s *Jrex) Value(value interface{}) goja.Value {
+	if s.vm == nil {
+		return goja.Undefined()
+	}
 	return s.vm.ToValue(value)
 }
 
@@ -77,6 +107,9 @@ func (s *Jrex) Value(value interface{}) goja.Value {
 * @return *goja.Object
 **/
 func (s *Jrex) Error(err error) *goja.Object {
+	if s.vm == nil {
+		return nil
+	}
 	return s.vm.NewGoError(err)
 }
 
@@ -86,6 +119,9 @@ func (s *Jrex) Error(err error) *goja.Object {
 * @return goja.Value
 **/
 func (s *Jrex) Get(name string) goja.Value {
+	if s.vm == nil {
+		return goja.Undefined()
+	}
 	return s.vm.Get(name)
 }
 
@@ -95,6 +131,9 @@ func (s *Jrex) Get(name string) goja.Value {
 * @return et.Json
 **/
 func (s *Jrex) GetJson(name string) et.Json {
+	if s.vm == nil {
+		return et.Json{}
+	}
 	result, ok := s.vm.Get(name).Export().(et.Json)
 	if !ok {
 		return et.Json{}
@@ -107,8 +146,9 @@ func (s *Jrex) GetJson(name string) et.Json {
 * @params name string, value interface{}
 * @return error
 **/
-func (s *Jrex) Set(name string, value interface{}) error {
-	return s.vm.Set(name, value)
+func (s *Jrex) Set(name string, value interface{}) *Jrex {
+	s.bindings[name] = value
+	return s
 }
 
 /**
@@ -121,10 +161,23 @@ func (s *Jrex) SetCtx(ctx et.Json) *Jrex {
 }
 
 /**
+* up
+* @return *Jrex
+**/
+func (s *Jrex) up() *Jrex {
+	s.vm = goja.New()
+	wrap(s)
+	for name, value := range s.bindings {
+		s.vm.Set(name, value)
+	}
+	return s
+}
+
+/**
 * Run
 * @return et.Json, error
 **/
-func (s *Jrex) Require(name string) (et.Json, error) {
+func (s *Jrex) require(name string) (et.Json, error) {
 	module, exists := s.Modules[name]
 	if !exists {
 		return nil, errors.New(MSG_INDEX_MODULE_NOT_FOUND)
@@ -136,6 +189,21 @@ func (s *Jrex) Require(name string) (et.Json, error) {
 	}
 
 	return s.Ctx, nil
+}
+
+/**
+* Run
+* @return et.Json, error
+**/
+func (s *Jrex) Run() (et.Json, error) {
+	s.up()
+
+	_, err := s.vm.RunString(requireRuntime)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.require("index.js")
 }
 
 /**
@@ -159,22 +227,6 @@ func (s *Jrex) RunByCode(code string) (et.Json, error) {
 **/
 func (s *Jrex) RunByBt(code []byte) (et.Json, error) {
 	return s.RunByCode(string(code))
-}
-
-/**
-* Run
-* @return et.Json, error
-**/
-func (s *Jrex) Run() (et.Json, error) {
-	s.vm = goja.New()
-	wrap(s)
-
-	_, err := s.vm.RunString(requireRuntime)
-	if err != nil {
-		return nil, err
-	}
-
-	return s.Require("index.js")
 }
 
 /**

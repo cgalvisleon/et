@@ -98,49 +98,6 @@ func (s *Loader) init() error {
 }
 
 /**
-* SetVersion
-* @param version string
-* @return error
-**/
-func (s *Loader) SetVersion(version string) error {
-	s.Version = version
-	return s.save()
-}
-
-/**
-* BumpVersion
-* @param part Part
-* @return string
-**/
-func (s *Loader) BumpVersion(part Part) (string, error) {
-	parts := strings.Split(s.Version, ".")
-	if len(parts) != 3 {
-		return s.Version, nil
-	}
-
-	major, _ := strconv.Atoi(parts[0])
-	minor, _ := strconv.Atoi(parts[1])
-	patch, _ := strconv.Atoi(parts[2])
-
-	switch part {
-	case "major":
-		major++
-		minor = 0
-		patch = 0
-	case "minor":
-		minor++
-		patch = 0
-	case "release":
-		patch++
-	default:
-		return s.Version, nil
-	}
-
-	result := fmt.Sprintf("%d.%d.%d", major, minor, patch)
-	return result, s.SetVersion(result)
-}
-
-/**
 * get
 * @param module string, dest any
 * @return (bool, error)

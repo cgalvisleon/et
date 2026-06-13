@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -26,12 +27,6 @@ type Store interface {
 	Get(id, tag string, dest any) (bool, error)
 	Delete(id, tag string) error
 	Query(query et.Json) (et.Items, error)
-}
-
-type Config interface {
-	GetStr(key string, def string) string
-	GetInt(key string, def int) int
-	GetBool(key string, def bool) bool
 }
 
 type Ia struct {
@@ -55,7 +50,7 @@ type Ia struct {
 * @param tenantId, tag string, store Store
 * @return (*Ia, error)
 **/
-func New(tenantId, tag string, store Store, config Config) (*Ia, error) {
+func New(tenantId, tag string, store Store) (*Ia, error) {
 	err := event.Load()
 	if err != nil {
 		return nil, err
@@ -64,10 +59,6 @@ func New(tenantId, tag string, store Store, config Config) (*Ia, error) {
 	now := timezone.Now()
 	key := config.GetStr("OPENAI_API_KEY", "")
 	isDebug := config.GetBool("DEBUG", true)
-	if config != nil {
-		key = config.GetStr("OPENAI_API_KEY", key)
-		isDebug = config.GetBool("DEBUG", isDebug)
-	}
 	result := &Ia{
 		CreatedAt:     now,
 		UpdatedAt:     now,
@@ -95,16 +86,16 @@ func New(tenantId, tag string, store Store, config Config) (*Ia, error) {
 
 /**
 * New
-* @param tenantId, tag string, store Store, config Config
+* @param tenantId, tag string, store Store
 * @return error
 **/
-func Load(tenantId, tag string, store Store, config Config) error {
+func Load(tenantId, tag string, store Store) error {
 	if ia != nil {
 		return nil
 	}
 
 	var err error
-	ia, err = New(tenantId, tag, store, config)
+	ia, err = New(tenantId, tag, store)
 	if err != nil {
 		return err
 	}

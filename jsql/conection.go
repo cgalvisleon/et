@@ -1,6 +1,7 @@
 package jsql
 
 import (
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -22,7 +23,7 @@ type PgConection struct {
 	RecordLimit int
 }
 
-func pgConection(config Config) *PgConection {
+func pgConection() *PgConection {
 	database := config.GetStr("DB_NAME", "josephine")
 	host := config.GetStr("DB_HOST", "localhost")
 	port := config.GetInt("DB_PORT", 5432)
@@ -32,17 +33,6 @@ func pgConection(config Config) *PgConection {
 	useCore := config.GetBool("DB_USE_CORE", false)
 	appName := config.GetStr("DB_APP_NAME", "josephine")
 	recordLimit := config.GetInt("DB_RECORD_LIMIT", 1000)
-	if config != nil {
-		database = config.GetStr("DB_NAME", database)
-		host = config.GetStr("DB_HOST", host)
-		port = config.GetInt("DB_PORT", port)
-		user = config.GetStr("DB_USER", user)
-		password = config.GetStr("DB_PASSWORD", password)
-		sslmode = config.GetStr("DB_SSLMODE", sslmode)
-		useCore = config.GetBool("DB_USE_CORE", useCore)
-		appName = config.GetStr("DB_APP_NAME", appName)
-		recordLimit = config.GetInt("DB_RECORD_LIMIT", recordLimit)
-	}
 	return &PgConection{
 		Database:    database,
 		Host:        host,
@@ -101,7 +91,7 @@ type SqliteConection struct {
 	AppName      string
 }
 
-func sqliteConection(config Config) *SqliteConection {
+func sqliteConection() *SqliteConection {
 	name := config.GetStr("DB_NAME", "josephine.db")
 	recordLimit := config.GetInt("DB_RECORD_LIMIT", 1000)
 	poolMaxOpen := config.GetInt("DB_POOL_MAX_OPEN", 10)
@@ -109,15 +99,6 @@ func sqliteConection(config Config) *SqliteConection {
 	poolLifetime := config.GetInt("DB_POOL_LIFETIME", 10)
 	poolIdleTime := config.GetInt("DB_POOL_IDLE_TIME", 10)
 	appName := config.GetStr("DB_APP_NAME", "josephine")
-	if config != nil {
-		name = config.GetStr("DB_NAME", name)
-		recordLimit = config.GetInt("DB_RECORD_LIMIT", recordLimit)
-		poolMaxOpen = config.GetInt("DB_POOL_MAX_OPEN", poolMaxOpen)
-		poolMaxIdle = config.GetInt("DB_POOL_MAX_IDLE", poolMaxIdle)
-		poolLifetime = config.GetInt("DB_POOL_LIFETIME", poolLifetime)
-		poolIdleTime = config.GetInt("DB_POOL_IDLE_TIME", poolIdleTime)
-		appName = config.GetStr("DB_APP_NAME", appName)
-	}
 	return &SqliteConection{
 		Name:         name,
 		RecordLimit:  recordLimit,

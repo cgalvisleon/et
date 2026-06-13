@@ -35,7 +35,7 @@ func Validate(keys []string) error {
 * @return error
 **/
 func Set(param map[string]interface{}) *Config {
-	if cnf == nil {
+	if cnf == nil || cnf.store == nil {
 		for key, value := range param {
 			envar.Set(key, value)
 		}
@@ -50,7 +50,7 @@ func Set(param map[string]interface{}) *Config {
 * @return interface{}
 **/
 func Get(key string, def interface{}) interface{} {
-	if cnf == nil {
+	if cnf == nil || cnf.store == nil {
 		return envar.Get(key, def)
 	}
 	return cnf.Get(key, def)
@@ -62,7 +62,7 @@ func Get(key string, def interface{}) interface{} {
 * @return string
 **/
 func GetStr(key string, def string) string {
-	if cnf == nil {
+	if cnf == nil || cnf.store == nil {
 		return envar.GetStr(key, def)
 	}
 	return cnf.GetStr(key, def)
@@ -74,7 +74,7 @@ func GetStr(key string, def string) string {
 * @return int
 **/
 func GetInt(key string, def int) int {
-	if cnf == nil {
+	if cnf == nil || cnf.store == nil {
 		return envar.GetInt(key, def)
 	}
 	return cnf.GetInt(key, def)
@@ -86,7 +86,7 @@ func GetInt(key string, def int) int {
 * @return int64
 **/
 func GetInt64(key string, def int64) int64 {
-	if cnf == nil {
+	if cnf == nil || cnf.store == nil {
 		return envar.GetInt64(key, def)
 	}
 	return cnf.GetInt64(key, def)
@@ -98,7 +98,7 @@ func GetInt64(key string, def int64) int64 {
 * @return float64
 **/
 func GetFloat(key string, def float64) float64 {
-	if cnf == nil {
+	if cnf == nil || cnf.store == nil {
 		return envar.GetFloat(key, def)
 	}
 	return cnf.GetFloat(key, def)
@@ -110,7 +110,7 @@ func GetFloat(key string, def float64) float64 {
 * @return bool
 **/
 func GetBool(key string, def bool) bool {
-	if cnf == nil {
+	if cnf == nil || cnf.store == nil {
 		return envar.GetBool(key, def)
 	}
 	return cnf.GetBool(key, def)

@@ -194,7 +194,7 @@ func newQuery(model *Model, as ...string) *Query {
 		isDebug:    model.db.IsDebug,
 	}
 	var err error
-	result.jrex, err = jrex.New("query", model.db.Rules)
+	result.jrex, err = jrex.New("query", nil)
 	if err != nil {
 		logs.Panic(err)
 	}

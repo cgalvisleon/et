@@ -2,7 +2,6 @@ package jrex
 
 import (
 	"errors"
-	"fmt"
 	"maps"
 
 	"github.com/cgalvisleon/et/et"
@@ -22,38 +21,6 @@ type Jrex struct {
 	store    Store              `json:"-"`
 	bindings map[string]any     `json:"-"`
 	vm       *goja.Runtime      `json:"-"`
-}
-
-/**
-* New
-* @param name string, store Store
-* @return *Jrex
-**/
-func New(tag string, store Store) (*Jrex, error) {
-	if !utility.ValidStr(tag, 0, []string{""}) {
-		return nil, errors.New(MSG_TAG_REQUIRED)
-	}
-
-	if store == nil {
-		var err error
-		store, err = NewFileStore("./src")
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	tag = utility.Normalize(tag)
-	id := fmt.Sprintf("jrex:%s", tag)
-	result := &Jrex{
-		ID:       id,
-		Tag:      tag,
-		Ctx:      et.Json{},
-		Modules:  make(map[string]*Module),
-		bindings: make(map[string]any),
-		store:    store,
-	}
-
-	return result, nil
 }
 
 /**

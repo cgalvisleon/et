@@ -9,8 +9,7 @@
       "version": "1.0.0",
       "description": "",
       "author": "",
-      "license": "MIT",
-      "code": "author(\"César Galvis León\");\ndescription(\"Pruebas de vm\");\n\nconst pricing = require(\"./modules/pricing\");\n\n// Test 1\nresult = pricing.calcular(100, 15);\nconsole.log(result);\n\n// Test 2\nresult = pricing.calcular(130, 19);\nconsole.log(result);\n\n// Test 3\nresult = pricing.multiplicar(120, 7);\nconsole.log(result);\n\nctx.set(\"test\", \"test\");\n"
+      "license": "MIT"
     }
   }
 }

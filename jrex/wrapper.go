@@ -37,15 +37,12 @@ func wrap(instance *Jrex) {
 * @param vm *VM
 **/
 func wrapperRunTime(instance *Jrex) {
-	instance.Set("__resolve", func(module string) string {
-		result, err := instance.Resolve(module)
+	instance.Set("__load", func(module string) string {
+		code, err := instance.store.GetCode(module)
 		if err != nil {
 			panic(instance.Error(err))
 		}
-		return result
-	})
-	instance.Set("__load", func(path string) string {
-		return ""
+		return code
 	})
 }
 

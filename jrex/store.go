@@ -21,6 +21,7 @@ type Store interface {
 type FileStore struct {
 	BaseDir   string
 	ModuleDir string
+	rootDir   string
 }
 
 func NewFileStore(baseDir string) (*FileStore, error) {
@@ -43,6 +44,7 @@ func NewFileStore(baseDir string) (*FileStore, error) {
 	result := &FileStore{
 		BaseDir:   absPath,
 		ModuleDir: modulePath,
+		rootDir:   ".",
 	}
 
 	return result, nil
@@ -143,11 +145,14 @@ func (s *FileStore) DeleteModule(module string) error {
 * @return string, error
 **/
 func (s *FileStore) GetCode(module string) (string, error) {
-	path := filepath.Join(s.BaseDir, fmt.Sprintf("%s.js", module))
+	fl := fmt.Sprintf("%s.js", module)
+	fl = filepath.Join(s.rootDir, fl)
+	path := filepath.Join(s.BaseDir, fl)
 	code, err := file.LoadString(path, "")
 	if err != nil {
 		return "", err
 	}
+	s.rootDir = filepath.Dir(fl)
 
 	return code, nil
 }

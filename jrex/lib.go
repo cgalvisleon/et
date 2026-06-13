@@ -4,13 +4,10 @@ const requireRuntime = `
 const __cache = {};
 
 function require(modulePath) {
-    return __require(modulePath, __rootDir);
+    return __require(modulePath);
 }
 
-function __require(modulePath, currentDir) {
-
-    const resolved = __resolve(modulePath, currentDir);
-
+function __require(resolved) {
     if (__cache[resolved]) {
         return __cache[resolved];
     }

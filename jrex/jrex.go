@@ -78,7 +78,7 @@ func Load(tag string, store Store) (*Jrex, error) {
 	if err != nil {
 		return nil, err
 	}
-	result.up()
+	result.up(store)
 	return result, nil
 }
 
@@ -86,7 +86,8 @@ func Load(tag string, store Store) (*Jrex, error) {
 * up
 * @return *Jrex
 **/
-func (s *Jrex) up() *Jrex {
+func (s *Jrex) up(store Store) *Jrex {
+	s.store = store
 	s.bindings = make(map[string]any)
 	return s
 }
@@ -207,7 +208,6 @@ func (s *Jrex) init() *Jrex {
 **/
 func (s *Jrex) Run() (et.Json, error) {
 	s.init()
-
 	_, err := s.vm.RunString(requireRuntime)
 	if err != nil {
 		return nil, err
@@ -245,14 +245,4 @@ func (s *Jrex) RunByBt(code []byte) (et.Json, error) {
 **/
 func (s *Jrex) Notify(channel string, message string) {
 
-}
-
-/**
-* Resolve
-* @param modulePath string
-* @return (string, error)
-**/
-func (s *Jrex) Resolve(modulePath string) (string, error) {
-	s.Notify("LOG", fmt.Sprintf("Resolve: %s", modulePath))
-	return "", nil
 }

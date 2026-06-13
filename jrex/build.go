@@ -1,13 +1,10 @@
 package jrex
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/cgalvisleon/et/file"
-	"github.com/cgalvisleon/et/msg"
 )
 
 type Module struct {
@@ -25,18 +22,12 @@ func (s *Jrex) Build(part Part) error {
 		return errors.New("build is only available in develop mode")
 	}
 
-	if s.store == nil {
-		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "store")
-	}
-
-	if !exists(s.pkgFile) {
-		return errors.New("package.json not found")
-	}
-
-	pkgData, _ := os.ReadFile(s.pkgFile)
-	err := json.Unmarshal(pkgData, &s.Pkg)
+	ok, err := s.files.ReadJSON("package.json", &s.Pkg)
 	if err != nil {
 		return err
+	}
+	if !ok {
+		return errors.New("package.json not found")
 	}
 
 	_, err = s.BumpVersion(part)
@@ -54,7 +45,7 @@ func (s *Jrex) Build(part Part) error {
 		if inf.IsDir {
 			continue
 		}
-		data, err := os.ReadFile(path)
+		data, err := s.files.ReadTextFile(path)
 		if err != nil {
 			return err
 		}
@@ -62,7 +53,7 @@ func (s *Jrex) Build(part Part) error {
 		id := fmt.Sprintf("pkg:%s:%s:%s", s.Name, module, s.Version)
 		s.store.SetModule(id, &Module{
 			ID:      id,
-			Scripts: string(data),
+			Scripts: data,
 		})
 	}
 

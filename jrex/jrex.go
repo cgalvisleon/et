@@ -3,7 +3,6 @@ package jrex
 import (
 	"fmt"
 	"maps"
-	"os"
 	"path/filepath"
 
 	"github.com/cgalvisleon/et/et"
@@ -25,10 +24,10 @@ type Jrex struct {
 	Ctx     et.Json           `json:"ctx"`
 	ID      string            `json:"id"`
 	Scripts string            `json:"scripts"`
-	pkgFile string            `json:"-"`
 	vm      *goja.Runtime     `json:"-"`
 	watch   *file.Watcher     `json:"-"`
 	store   Store             `json:"-"`
+	files   *FileStore        `json:"-"`
 	program *tea.Program      `json:"-"`
 	onStart func(*Jrex) error `json:"-"`
 }
@@ -58,7 +57,13 @@ func New(name string, store Store) (*Jrex, error) {
 	}
 
 	result.BaseDir = absPath
-	result.pkgFile = filepath.Join(result.BaseDir, "package.json")
+	result.files, err = NewFileStore(result.BaseDir)
+	if err != nil {
+		return nil, err
+	}
+	if result.store == nil {
+		result.store = result.files
+	}
 	return result, nil
 }
 
@@ -232,16 +237,12 @@ func (s *Jrex) RunByBt(code []byte) (et.Json, error) {
 **/
 func (s *Jrex) RunByFile(path string) (et.Json, error) {
 	path = filepath.Join(s.Loader.BaseDir, path)
-	_, err := os.Stat(path)
-	if err != nil {
-		return nil, err
-	}
-	data, err := os.ReadFile(path)
+	data, err := s.files.ReadTextFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := s.Run(string(data))
+	result, err := s.Run(data)
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +279,10 @@ func (s *Jrex) RunDev(baseDir string) error {
 	}
 
 	s.BaseDir = absPath
-	s.pkgFile = filepath.Join(s.BaseDir, "package.json")
+	s.files, err = NewFileStore(s.BaseDir)
+	if err != nil {
+		return err
+	}
 	s.mode = Develop
 	err = s.init()
 	if err != nil {

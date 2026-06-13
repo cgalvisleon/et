@@ -1,15 +1,10 @@
 package jrex
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	"github.com/cgalvisleon/et/msg"
 )
 
 type Part string
@@ -76,20 +71,7 @@ func newLoader(jrex *Jrex, name string) *Loader {
 * @return error
 **/
 func (s *Loader) save() error {
-	file, err := os.Create(s.jrex.pkgFile)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ") // bonito (pretty)
-
-	if err := encoder.Encode(s.Pkg); err != nil {
-		return err
-	}
-
-	return nil
+	return s.jrex.files.WriteJSON("package.json", s.Pkg)
 }
 
 /**
@@ -98,10 +80,6 @@ func (s *Loader) save() error {
 **/
 func (s *Loader) init() error {
 	if s.mode == Production {
-		if s.jrex.store == nil {
-			return errors.New(msg.MSG_STORE_REQUIRED)
-		}
-
 		id := fmt.Sprintf("pkg:%s:%s", s.Name, s.Version)
 		var pkg Pkg
 		ok, err := s.get(id, &pkg)
@@ -114,13 +92,11 @@ func (s *Loader) init() error {
 
 		return nil
 	} else {
-		if exists(s.jrex.pkgFile) {
-			data, _ := os.ReadFile(s.jrex.pkgFile)
-			err := json.Unmarshal(data, &s.Pkg)
-			if err != nil {
-				return err
-			}
-		} else {
+		ok, err := s.jrex.files.ReadJSON("package.json", &s.Pkg)
+		if err != nil {
+			return err
+		}
+		if !ok {
 			if err := s.save(); err != nil {
 				return err
 			}
@@ -179,11 +155,7 @@ func (s *Loader) BumpVersion(part Part) (string, error) {
 * @return (bool, error)
 **/
 func (s *Loader) get(module string, dest any) (bool, error) {
-	if s.jrex.store != nil {
-		return s.jrex.store.GetModule(module, dest)
-	}
-
-	return false, nil
+	return s.jrex.store.GetModule(module, dest)
 }
 
 /**
@@ -192,10 +164,7 @@ func (s *Loader) get(module string, dest any) (bool, error) {
 * @return error
 **/
 func (s *Loader) set(module string, source any) error {
-	if s.jrex.store != nil {
-		return s.jrex.store.SetModule(module, source)
-	}
-	return nil
+	return s.jrex.store.SetModule(module, source)
 }
 
 /**
@@ -232,21 +201,17 @@ func (s *Loader) Resolve(modulePath string, currentDir string) (string, error) {
 **/
 func (s *Loader) resolveAsFileOrDir(base string) (string, error) {
 	// archivo directo
-	if exists(base) {
+	if s.jrex.files.Exists(base) {
 		return base, nil
 	}
 
 	// archivo .js
-	if exists(base + ".js") {
+	if s.jrex.files.Exists(base + ".js") {
 		return base + ".js", nil
 	}
 
 	// carpeta con package.json
-	if exists(s.jrex.pkgFile) {
-		data, _ := os.ReadFile(s.jrex.pkgFile)
-
-		json.Unmarshal(data, &s.Pkg)
-
+	if ok, _ := s.jrex.files.ReadJSON("package.json", &s.Pkg); ok {
 		if s.Pkg.Main != "" {
 			return filepath.Join(base, s.Pkg.Main), nil
 		}
@@ -254,19 +219,9 @@ func (s *Loader) resolveAsFileOrDir(base string) (string, error) {
 
 	// fallback index.js
 	index := filepath.Join(base, "index.js")
-	if exists(index) {
+	if s.jrex.files.Exists(index) {
 		return index, nil
 	}
 
 	return "", fmt.Errorf("module not found: %s", base)
-}
-
-/**
-* exists
-* @param path string
-* @return bool
-**/
-func exists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }

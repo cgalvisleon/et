@@ -14,6 +14,8 @@ type Store interface {
 	GetModule(module string) (*Module, error)
 	SetModule(module *Module) error
 	DeleteModule(module string) error
+	GetCode(module string) (string, error)
+	SetCode(module string, code string) error
 }
 
 type FileStore struct {
@@ -52,25 +54,27 @@ func NewFileStore(baseDir string) (*FileStore, error) {
 * @return *Jrex, error
 **/
 func (s *FileStore) Load(tag string) (*Jrex, error) {
-	index, err := s.GetModule("index")
+	module, err := s.GetModule("index")
 	if err != nil {
 		return nil, err
 	}
 
 	tag = utility.Normalize(tag)
-	path := fmt.Sprintf("%s.json", tag)
-	path = filepath.Join(s.BaseDir, tag)
 	id := fmt.Sprintf("jrex:%s", tag)
-	result, err := file.LoadOrCreateJSON(path, &Jrex{
+	defaultValue := &Jrex{
 		ID:      id,
 		Tag:     tag,
 		Ctx:     et.Json{},
 		Modules: make(map[string]*Module),
-	})
+	}
+	defaultValue.Modules[module.Name] = module
+
+	path := filepath.Join(s.BaseDir, "package.json")
+	result, err := file.LoadOrCreateJSON(path, defaultValue)
 	if err != nil {
 		return nil, err
 	}
-	index.up(result)
+	module.up(result)
 
 	return result, nil
 }
@@ -89,18 +93,10 @@ func (s *FileStore) GetModule(module string) (*Module, error) {
 		Description: "",
 		Author:      "",
 		License:     "MIT",
-		Code:        "",
 	})
 	if err != nil {
 		return nil, err
 	}
-
-	path = filepath.Join(s.BaseDir, fmt.Sprintf("%s.js", module))
-	code, err := file.LoadString(path, result.Code)
-	if err != nil {
-		return nil, err
-	}
-	result.Code = code
 
 	return result, nil
 }
@@ -113,12 +109,6 @@ func (s *FileStore) GetModule(module string) (*Module, error) {
 func (s *FileStore) SetModule(module *Module) error {
 	path := filepath.Join(s.ModuleDir, module.Name)
 	err := file.WriteJSON(path, module)
-	if err != nil {
-		return err
-	}
-
-	path = filepath.Join(s.BaseDir, module.Name)
-	err = file.WriteString(path, module.Code)
 	if err != nil {
 		return err
 	}
@@ -144,5 +134,34 @@ func (s *FileStore) DeleteModule(module string) error {
 		return err
 	}
 
+	return nil
+}
+
+/**
+* GetCode
+* @param module string
+* @return string, error
+**/
+func (s *FileStore) GetCode(module string) (string, error) {
+	path := filepath.Join(s.BaseDir, fmt.Sprintf("%s.js", module))
+	code, err := file.LoadString(path, "")
+	if err != nil {
+		return "", err
+	}
+
+	return code, nil
+}
+
+/**
+* SetCode
+* @param module string, code string
+* @return error
+**/
+func (s *FileStore) SetCode(module string, code string) error {
+	path := filepath.Join(s.BaseDir, fmt.Sprintf("%s.js", module))
+	err := file.WriteString(path, code)
+	if err != nil {
+		return err
+	}
 	return nil
 }

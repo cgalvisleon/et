@@ -44,7 +44,6 @@ type Module struct {
 	Description string `json:"description"`
 	Author      string `json:"author"`
 	License     string `json:"license"`
-	Code        string `json:"code"`
 	jrex        *Jrex  `json:"-"`
 }
 
@@ -59,7 +58,6 @@ func NewModule(name string) *Module {
 		Description: "",
 		Author:      "",
 		License:     "MIT",
-		Code:        "",
 	}
 }
 
@@ -85,7 +83,6 @@ func (s *Jrex) GetModule(name string) *Module {
 		Description: "",
 		Author:      "",
 		License:     "MIT",
-		Code:        "",
 		jrex:        s,
 	}
 }
@@ -101,7 +98,6 @@ func (s *Jrex) AddModule(name string) *Module {
 		Description: "",
 		Author:      "",
 		License:     "MIT",
-		Code:        "",
 		jrex:        s,
 	}
 	s.Modules[name] = result
@@ -183,10 +179,5 @@ func (s *Module) SetAuthor(author string) *Module {
 
 func (s *Module) SetLicense(license string) *Module {
 	s.License = license
-	return s
-}
-
-func (s *Module) SetCode(code string) *Module {
-	s.Code = code
 	return s
 }

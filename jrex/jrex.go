@@ -78,7 +78,17 @@ func Load(tag string, store Store) (*Jrex, error) {
 	if err != nil {
 		return nil, err
 	}
+	result.up()
 	return result, nil
+}
+
+/**
+* up
+* @return *Jrex
+**/
+func (s *Jrex) up() *Jrex {
+	s.bindings = make(map[string]any)
+	return s
 }
 
 /**
@@ -161,10 +171,28 @@ func (s *Jrex) SetCtx(ctx et.Json) *Jrex {
 }
 
 /**
+* Run
+* @return et.Json, error
+**/
+func (s *Jrex) require(module string) (et.Json, error) {
+	code, err := s.store.GetCode(module)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = s.vm.RunScript(module, code)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.Ctx, nil
+}
+
+/**
 * up
 * @return *Jrex
 **/
-func (s *Jrex) up() *Jrex {
+func (s *Jrex) init() *Jrex {
 	s.vm = goja.New()
 	wrap(s)
 	for name, value := range s.bindings {
@@ -177,33 +205,15 @@ func (s *Jrex) up() *Jrex {
 * Run
 * @return et.Json, error
 **/
-func (s *Jrex) require(name string) (et.Json, error) {
-	module, exists := s.Modules[name]
-	if !exists {
-		return nil, errors.New(MSG_INDEX_MODULE_NOT_FOUND)
-	}
-
-	_, err := s.vm.RunScript(module.Name, module.Code)
-	if err != nil {
-		return nil, err
-	}
-
-	return s.Ctx, nil
-}
-
-/**
-* Run
-* @return et.Json, error
-**/
 func (s *Jrex) Run() (et.Json, error) {
-	s.up()
+	s.init()
 
 	_, err := s.vm.RunString(requireRuntime)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.require("index.js")
+	return s.require("index")
 }
 
 /**

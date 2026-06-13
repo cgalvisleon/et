@@ -11,6 +11,7 @@ import (
 
 type Store interface {
 	Load(tag string) (*Jrex, error)
+	Save(jrex *Jrex) error
 	GetModule(module string) (*Module, error)
 	SetModule(module *Module) error
 	DeleteModule(module string) error
@@ -24,7 +25,7 @@ type FileStore struct {
 	rootDir   string
 }
 
-func NewFileStore(baseDir string) (*FileStore, error) {
+func NewStore(baseDir string) (*FileStore, error) {
 	absPath, err := filepath.Abs(baseDir)
 	if err != nil {
 		return nil, err
@@ -79,6 +80,15 @@ func (s *FileStore) Load(tag string) (*Jrex, error) {
 	module.up(result)
 
 	return result, nil
+}
+
+func (s *FileStore) Save(jrex *Jrex) error {
+	path := filepath.Join(s.BaseDir, "package.json")
+	err := file.WriteJSON(path, jrex)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 /**

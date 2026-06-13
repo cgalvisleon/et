@@ -35,7 +35,7 @@ func Load(tag string, store Store) (*Jrex, error) {
 
 	if store == nil {
 		var err error
-		store, err = NewFileStore("./src")
+		store, err = NewStore("./src")
 		if err != nil {
 			return nil, err
 		}

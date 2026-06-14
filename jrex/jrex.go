@@ -11,7 +11,6 @@ import (
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
-	"github.com/dop251/goja"
 )
 
 const (
@@ -31,7 +30,6 @@ type Jrex struct {
 	baseDir   string             `json:"-"`
 	userId    string             `json:"-"`
 	isDebug   bool               `json:"-"`
-	vm        *goja.Runtime      `json:"-"`
 }
 
 /**
@@ -160,58 +158,6 @@ func (s *Jrex) AddModule(module *Module) *Jrex {
 }
 
 /**
-* Value
-* @param value interface{}
-* @return goja.Value
-**/
-func (s *Jrex) Value(value interface{}) goja.Value {
-	if s.vm == nil {
-		return goja.Undefined()
-	}
-	return s.vm.ToValue(value)
-}
-
-/**
-* Error
-* @param err error
-* @return *goja.Object
-**/
-func (s *Jrex) Error(err error) *goja.Object {
-	if s.vm == nil {
-		return nil
-	}
-	return s.vm.NewGoError(err)
-}
-
-/**
-* Get
-* @param name string
-* @return goja.Value
-**/
-func (s *Jrex) Get(name string) goja.Value {
-	if s.vm == nil {
-		return goja.Undefined()
-	}
-	return s.vm.Get(name)
-}
-
-/**
-* GetJson
-* @param name string
-* @return et.Json
-**/
-func (s *Jrex) GetJson(name string) et.Json {
-	if s.vm == nil {
-		return et.Json{}
-	}
-	result, ok := s.vm.Get(name).Export().(et.Json)
-	if !ok {
-		return et.Json{}
-	}
-	return result
-}
-
-/**
 * Set
 * @params name string, value interface{}
 * @return error
@@ -234,31 +180,31 @@ func (s *Jrex) SetCtx(ctx et.Json) *Jrex {
 }
 
 /**
-* Run: Runs the Jrex
+* RunModule: Runs the module
+* @param module string
 * @return et.Json, error
 **/
-func (s *Jrex) Run() (et.Json, error) {
-	s.vm = goja.New()
-	wrap(s)
+func (s *Jrex) RunModule(module string) (et.Json, error) {
+	instance := newInstance(s)
+	wrap(instance)
 	for name, value := range s.bindings {
-		s.vm.Set(name, value)
+		instance.Set(name, value)
 	}
 
-	_, err := s.vm.RunString(requireRuntime)
+	_, err := instance.RunString(requireRuntime)
 	if err != nil {
-		return nil, err
+		return et.Json{}, err
 	}
 
 	s.baseDir = ""
-	module := "index"
 	code, err := s.store.GetCode(module)
 	if err != nil {
-		return nil, err
+		return et.Json{}, err
 	}
 
-	_, err = s.vm.RunScript(module, code)
+	_, err = instance.RunScript(module, code)
 	if err != nil {
-		return nil, err
+		return et.Json{}, err
 	}
 
 	if s.isChanged {
@@ -266,6 +212,14 @@ func (s *Jrex) Run() (et.Json, error) {
 	}
 
 	return s.Ctx, nil
+}
+
+/**
+* Run: Runs the Jrex
+* @return et.Json, error
+**/
+func (s *Jrex) Run() (et.Json, error) {
+	return s.RunModule("index")
 }
 
 /**

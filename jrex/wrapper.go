@@ -21,7 +21,7 @@ import (
 * wrap: Wraps the runtime
 * @param vm *VM
 **/
-func wrap(instance *Jrex) {
+func wrap(instance *Instance) {
 	wrapperRunTime(instance)
 	wrapperCtx(instance)
 	wrapperConsole(instance)
@@ -29,29 +29,30 @@ func wrap(instance *Jrex) {
 	wrapperJrpc(instance)
 	wrapperCache(instance)
 	wrapperEvent(instance)
-	for _, module := range instance.Modules {
-		wrapperModules(module)
+	for _, module := range instance.jrex.Modules {
+		instance.wrapperModules(module)
 	}
 }
 
 /**
 * wrapperRunTime: Wraps the runtime
-* @param vm *VM
+* @param instance *Instance
 **/
-func wrapperRunTime(instance *Jrex) {
+func wrapperRunTime(instance *Instance) {
 	instance.Set("os", nil)
 	instance.Set("exec", nil)
+	instance.Set("tenantId", instance.TenantId)
 	instance.Set("__load", func(modulePath string) string {
-		module := filepath.Join(instance.baseDir, modulePath)
-		code, err := instance.store.GetCode(module)
+		module := filepath.Join(instance.jrex.baseDir, modulePath)
+		code, err := instance.jrex.store.GetCode(module)
 		if err != nil {
 			panic(instance.Error(err))
 		}
-		instance.baseDir = filepath.Dir(module)
-		_, exists := instance.Modules[module]
+		instance.jrex.baseDir = filepath.Dir(module)
+		_, exists := instance.jrex.Modules[module]
 		if !exists {
 			mod := NewModule(module)
-			instance.AddModule(mod)
+			instance.jrex.AddModule(mod)
 		}
 
 		return code
@@ -59,29 +60,10 @@ func wrapperRunTime(instance *Jrex) {
 }
 
 /**
-* wrapperRunTime: Wraps the runtime
-* @param vm *VM
-**/
-func wrapperModules(module *Module) {
-	module.Set("version", func(value string) string {
-		part, ok := ToPart(value)
-		if !ok {
-			panic(module.Error(fmt.Errorf("invalid part: %s", value)))
-		}
-		module.SetVersion(part)
-		return module.Version
-	})
-	module.Set("metadata", func(value et.Json) et.Json {
-		module.SetMetadata(value)
-		return value
-	})
-}
-
-/**
 * wrapperCtx: Wraps the ctx
 * @param vm *VM
 **/
-func wrapperCtx(instance *Jrex) {
+func wrapperCtx(instance *Instance) {
 	instance.Set("ctx", map[string]interface{}{
 		"set": func(data et.Json) {
 			maps.Copy(instance.Ctx, data)
@@ -132,7 +114,7 @@ func wrapperCtx(instance *Jrex) {
 * wrapperConsole: Wraps the console
 * @param vm *VM
 **/
-func wrapperConsole(instance *Jrex) {
+func wrapperConsole(instance *Instance) {
 	instance.Set("console", map[string]interface{}{
 		"log": func(args ...interface{}) {
 			kind := "LOG"
@@ -154,7 +136,7 @@ func wrapperConsole(instance *Jrex) {
 * wrapperFetch: Wraps the fetch
 * @param vm *VM
 **/
-func wrapperFetch(instance *Jrex) {
+func wrapperFetch(instance *Instance) {
 	instance.Set("fetch", func(call goja.FunctionCall) goja.Value {
 		args := call.Arguments
 		if len(args) != 4 {
@@ -179,7 +161,7 @@ func wrapperFetch(instance *Jrex) {
 * wrapperJrpc: Wraps the jrpc
 * @param vm *VM
 **/
-func wrapperJrpc(instance *Jrex) {
+func wrapperJrpc(instance *Instance) {
 	instance.Set("jrpc", map[string]interface{}{
 		"call": func(method string, args any) (any, error) {
 			return jrpc.Call(method, args)
@@ -200,7 +182,7 @@ func wrapperJrpc(instance *Jrex) {
 * wrapperCache: Wraps the cache
 * @param vm *VM
 **/
-func wrapperCache(instance *Jrex) {
+func wrapperCache(instance *Instance) {
 	instance.Set("cache", map[string]interface{}{
 		"set": func(key string, value interface{}, expiration time.Duration) interface{} {
 			return cache.Set(key, value, expiration)
@@ -243,7 +225,7 @@ func wrapperCache(instance *Jrex) {
 	})
 }
 
-func wrapperEvent(instance *Jrex) {
+func wrapperEvent(instance *Instance) {
 	instance.Set("event", map[string]interface{}{
 		"publish": func(channel string, data et.Json) {
 			event.Publish(channel, data)

@@ -1,0 +1,134 @@
+package jrex
+
+import (
+	"fmt"
+	"maps"
+
+	"github.com/cgalvisleon/et/et"
+	"github.com/dop251/goja"
+)
+
+type Instance struct {
+	TenantId string  `json:"tenant_id"`
+	Ctx      et.Json `json:"ctx"`
+	jrex     *Jrex
+	vm       *goja.Runtime
+}
+
+func newInstance(jrex *Jrex) *Instance {
+	return &Instance{
+		TenantId: jrex.TenantId,
+		Ctx:      jrex.Ctx.Clone(),
+		jrex:     jrex,
+		vm:       goja.New(),
+	}
+}
+
+/**
+* Set
+* @param name string, value interface{}
+* @return *Instance
+**/
+func (s *Instance) Set(name string, value interface{}) *Instance {
+	s.vm.Set(name, value)
+	return s
+}
+
+/**
+* SetCtx
+* @param ctx et.Json
+* @return *Instance
+**/
+func (s *Instance) SetCtx(ctx et.Json) *Instance {
+	maps.Copy(s.Ctx, ctx)
+	return s
+}
+
+/**
+* RunString
+* @param code string
+* @return goja.Value, error
+**/
+func (s *Instance) RunString(code string) (goja.Value, error) {
+	return s.vm.RunString(code)
+}
+
+/**
+* RunScript
+* @param module string, code string
+* @return goja.Value, error
+**/
+func (s *Instance) RunScript(module string, code string) (goja.Value, error) {
+	return s.vm.RunScript(module, code)
+}
+
+/**
+* Value
+* @param value interface{}
+* @return goja.Value
+**/
+func (s *Instance) Value(value interface{}) goja.Value {
+	if s.vm == nil {
+		return goja.Undefined()
+	}
+	return s.vm.ToValue(value)
+}
+
+/**
+* Error
+* @param err error
+* @return *goja.Object
+**/
+func (s *Instance) Error(err error) *goja.Object {
+	if s.vm == nil {
+		return nil
+	}
+	return s.vm.NewGoError(err)
+}
+
+/**
+* Get
+* @param name string
+* @return goja.Value
+**/
+func (s *Instance) Get(name string) goja.Value {
+	if s.vm == nil {
+		return goja.Undefined()
+	}
+	return s.vm.Get(name)
+}
+
+/**
+* GetJson
+* @param name string
+* @return et.Json
+**/
+func (s *Instance) GetJson(name string) et.Json {
+	if s.vm == nil {
+		return et.Json{}
+	}
+	result, ok := s.vm.Get(name).Export().(et.Json)
+	if !ok {
+		return et.Json{}
+	}
+	return result
+}
+
+/**
+* wrapperRunTime: Wraps the runtime
+* @param vm *VM
+**/
+func (s *Instance) wrapperModules(module *Module) {
+	module.Set("version", func(value string) string {
+		part, ok := ToPart(value)
+		if !ok {
+			panic(s.Error(fmt.Errorf("invalid part: %s", value)))
+		}
+		module.SetVersion(part)
+		return module.Version
+	})
+	module.Set("metadata", func(value et.Json) et.Json {
+		module.SetMetadata(value)
+		return value
+	})
+}

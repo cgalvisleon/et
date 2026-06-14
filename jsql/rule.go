@@ -29,6 +29,7 @@ func defineRule(db *DB) error {
 		Columns: []Column{
 			{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 			{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
+			{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 			{Name: ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 			{Name: "definition", TypeColumn: COLUMN, TypeData: BYTES, Default: []byte{}},
 		},

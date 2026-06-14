@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/dop251/goja"
 )
 
 type Part string
@@ -74,15 +73,6 @@ func (s *Module) up(jrex *Jrex) *Module {
 **/
 func (s *Module) Set(name string, value interface{}) *Jrex {
 	return s.jrex.Set(name, value)
-}
-
-/**
-* Error
-* @param err error
-* @return *goja.Object
-**/
-func (s *Module) Error(err error) *goja.Object {
-	return s.jrex.Error(err)
 }
 
 /**

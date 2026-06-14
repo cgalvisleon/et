@@ -100,21 +100,6 @@ func (s *Jrex) Save(userId string) error {
 		return errors.New(MSG_STORE_IS_NIL)
 	}
 
-	if s.AuditLog == nil {
-		s.AuditLog = make([]et.Json, 0)
-	}
-
-	now := timezone.Now()
-	s.AuditLog = append(s.AuditLog, et.Json{
-		"created_at": now,
-		"user_id":    userId,
-		"action":     "save",
-	})
-	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
-	if len(s.AuditLog) > maxAuditLog {
-		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
-	}
-
 	s.isChanged = false
 	data := s.ToJson()
 
@@ -135,7 +120,31 @@ func (s *Jrex) Save(userId string) error {
 func (s *Jrex) Up(store Store) *Jrex {
 	s.store = store
 	s.bindings = make(map[string]any)
+	for _, module := range s.Modules {
+		module.up(s)
+	}
 	return s
+}
+
+/**
+* addAuditLog
+* @param userId string, action string
+**/
+func (s *Jrex) addAuditLog(userId string, action string) {
+	if s.AuditLog == nil {
+		s.AuditLog = make([]et.Json, 0)
+	}
+
+	now := timezone.Now()
+	s.AuditLog = append(s.AuditLog, et.Json{
+		"created_at": now,
+		"user_id":    userId,
+		"action":     action,
+	})
+	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
+	if len(s.AuditLog) > maxAuditLog {
+		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	}
 }
 
 /**
@@ -145,6 +154,7 @@ func (s *Jrex) Up(store Store) *Jrex {
 **/
 func (s *Jrex) AddModule(module *Module) *Jrex {
 	s.Modules[module.Path] = module
+	s.addAuditLog(s.userId, "add_module")
 	s.isChanged = true
 	return s
 }
@@ -207,6 +217,9 @@ func (s *Jrex) GetJson(name string) et.Json {
 * @return error
 **/
 func (s *Jrex) Set(name string, value interface{}) *Jrex {
+	if s.bindings == nil {
+		s.bindings = make(map[string]any)
+	}
 	s.bindings[name] = value
 	return s
 }

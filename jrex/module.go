@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/utility"
 	"github.com/dop251/goja"
 )
 
@@ -47,7 +46,6 @@ type Module struct {
 }
 
 func NewModule(path string) *Module {
-	path = utility.Normalize(path)
 	version := "1.0.0"
 	id := fmt.Sprintf("module:%s:%s", path, version)
 	return &Module{
@@ -67,14 +65,6 @@ func (s *Module) up(jrex *Jrex) *Module {
 	s.jrex = jrex
 	s.jrex.Modules[s.Path] = s
 	return s
-}
-
-/**
-* save
-* @return error
-**/
-func (s *Module) save(userId string) error {
-	return s.jrex.Save(userId)
 }
 
 /**

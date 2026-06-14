@@ -48,7 +48,6 @@ func wrapperRunTime(instance *Jrex) {
 			panic(instance.Error(err))
 		}
 		instance.baseDir = filepath.Dir(module)
-
 		_, exists := instance.Modules[module]
 		if !exists {
 			mod := NewModule(module)

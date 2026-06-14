@@ -83,6 +83,14 @@ func (s *DB) ToJson() et.Json {
 }
 
 /**
+* ToString: Returns the DB metadata as a string.
+* @return string
+**/
+func (s *DB) ToString() string {
+	return s.ToJson().ToString()
+}
+
+/**
 * save: Persists DB metadata changes (stub — no-op until storage is wired).
 * @return error
 **/

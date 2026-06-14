@@ -34,10 +34,8 @@ func main() {
 	v.Set("db", db)
 	v.Set(model.Name, model)
 
-	result, err := v.Run()
+	err = v.RunDev()
 	if err != nil {
 		logs.Panic(err)
 	}
-
-	logs.Debug("result:", result.ToString())
 }

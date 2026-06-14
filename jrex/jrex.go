@@ -5,6 +5,7 @@ import (
 	"maps"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/dop251/goja"
 )
@@ -41,7 +42,7 @@ func Load(tag string, store Store) (*Jrex, error) {
 	if err != nil {
 		return nil, err
 	}
-	result.up(store)
+	result.Up(store)
 	return result, nil
 }
 
@@ -49,7 +50,7 @@ func Load(tag string, store Store) (*Jrex, error) {
 * up
 * @return *Jrex
 **/
-func (s *Jrex) up(store Store) *Jrex {
+func (s *Jrex) Up(store Store) *Jrex {
 	s.store = store
 	s.bindings = make(map[string]any)
 	return s
@@ -135,24 +136,6 @@ func (s *Jrex) SetCtx(ctx et.Json) *Jrex {
 }
 
 /**
-* Run
-* @return et.Json, error
-**/
-func (s *Jrex) require(module string) (et.Json, error) {
-	code, err := s.store.GetCode(module)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = s.vm.RunScript(module, code)
-	if err != nil {
-		return nil, err
-	}
-
-	return s.Ctx, nil
-}
-
-/**
 * up
 * @return *Jrex
 **/
@@ -176,16 +159,17 @@ func (s *Jrex) Run() (et.Json, error) {
 		return nil, err
 	}
 
-	return s.require("index")
-}
+	module, exists := s.Modules["index"]
+	if !exists {
+		return nil, errors.New(MSG_INDEX_MODULE_NOT_FOUND)
+	}
 
-/**
-* RunByCode
-* @params code string
-* @return et.Json, error
-**/
-func (s *Jrex) RunByCode(code string) (et.Json, error) {
-	_, err := s.vm.RunString(code)
+	code, err := s.store.GetCode(module)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = s.vm.RunScript(module.Name, code)
 	if err != nil {
 		return nil, err
 	}
@@ -194,18 +178,16 @@ func (s *Jrex) RunByCode(code string) (et.Json, error) {
 }
 
 /**
-* RunByBt
-* @params code []byte
-* @return et.Json, error
+* RunDev
+* @return error
 **/
-func (s *Jrex) RunByBt(code []byte) (et.Json, error) {
-	return s.RunByCode(string(code))
-}
+func (s *Jrex) RunDev() error {
+	result, err := s.Run()
+	if err != nil {
+		return err
+	}
 
-/**
-* Notify
-* @param channel string, message string
-**/
-func (s *Jrex) Notify(channel string, message string) {
-
+	logs.Log("CTX", result.ToString())
+	utility.AppWait()
+	return nil
 }

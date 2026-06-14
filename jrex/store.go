@@ -7,8 +7,10 @@ import (
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/file"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
+	"github.com/fsnotify/fsnotify"
 )
 
 type Store interface {
@@ -17,7 +19,7 @@ type Store interface {
 	GetModule(module string) (*Module, error)
 	SetModule(module *Module) error
 	DeleteModule(module string) error
-	GetCode(module string) (string, error)
+	GetCode(module *Module) (string, error)
 	SetCode(module string, code string) error
 }
 
@@ -26,6 +28,7 @@ type FileStore struct {
 	ModuleDir string
 	AuditLog  []et.Json `json:"audit_log"`
 	rootDir   string
+	jrex      *Jrex
 }
 
 func NewStore(baseDir string) (*FileStore, error) {
@@ -55,6 +58,17 @@ func NewStore(baseDir string) (*FileStore, error) {
 }
 
 /**
+* up
+* @param jrex *Jrex
+* @return *FileStore
+**/
+func (s *FileStore) up(jrex *Jrex) *FileStore {
+	s.jrex = jrex
+	go s.hotReload()
+	return s
+}
+
+/**
 * Load
 * @param tag string
 * @return *Jrex, error
@@ -81,6 +95,7 @@ func (s *FileStore) Load(tag string) (*Jrex, error) {
 		return nil, err
 	}
 	module.up(result)
+	s.up(result)
 
 	return result, nil
 }
@@ -168,10 +183,10 @@ func (s *FileStore) DeleteModule(module string) error {
 
 /**
 * GetCode
-* @param module string
+* @param module *Module
 * @return string, error
 **/
-func (s *FileStore) GetCode(module string) (string, error) {
+func (s *FileStore) GetCode(module *Module) (string, error) {
 	fl := fmt.Sprintf("%s.js", module)
 	fl = filepath.Join(s.rootDir, fl)
 	path := filepath.Join(s.BaseDir, fl)
@@ -192,6 +207,38 @@ func (s *FileStore) GetCode(module string) (string, error) {
 func (s *FileStore) SetCode(module string, code string) error {
 	path := filepath.Join(s.BaseDir, fmt.Sprintf("%s.js", module))
 	err := file.WriteString(path, code)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+/**
+* Notify
+* @param kind string, message string
+**/
+func (s *FileStore) Notify(kind string, message string) {
+	logs.Log(kind, message)
+}
+
+/**
+* hotReload
+* @return error
+**/
+func (s *FileStore) hotReload() error {
+	watch, err := file.NewWatcher(s.BaseDir)
+	if err != nil {
+		return err
+	}
+	s.Notify("Watcher", fmt.Sprintf("watching %s for changes", s.BaseDir))
+	err = watch.OnReload(func(info file.FileInfo, event fsnotify.Event) {
+		ctx, err := s.jrex.Run()
+		if err != nil {
+			s.Notify("ERROR", err.Error())
+		} else {
+			s.Notify("CTX", ctx.ToString())
+		}
+	}).Load()
 	if err != nil {
 		return err
 	}

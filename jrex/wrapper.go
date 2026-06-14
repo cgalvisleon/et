@@ -37,8 +37,12 @@ func wrap(instance *Jrex) {
 * @param vm *VM
 **/
 func wrapperRunTime(instance *Jrex) {
-	instance.Set("__load", func(module string) string {
-		code, err := instance.store.GetCode(module)
+	instance.Set("__load", func(resolved string) string {
+		model, exists := instance.Modules[resolved]
+		if !exists {
+			panic(instance.Error(fmt.Errorf(MSG_MODULE_NOT_FOUND, resolved)))
+		}
+		code, err := instance.store.GetCode(model)
 		if err != nil {
 			panic(instance.Error(err))
 		}

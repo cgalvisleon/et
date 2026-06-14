@@ -44,6 +44,7 @@ type Module struct {
 	Description string `json:"description"`
 	Author      string `json:"author"`
 	License     string `json:"license"`
+	Path        string `json:"path"`
 	jrex        *Jrex  `json:"-"`
 }
 
@@ -58,6 +59,7 @@ func NewModule(name string) *Module {
 		Description: "",
 		Author:      "",
 		License:     "MIT",
+		Path:        "",
 	}
 }
 

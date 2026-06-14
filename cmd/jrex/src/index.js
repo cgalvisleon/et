@@ -15,4 +15,13 @@ console.log(result);
 result = pricing.multiplicar(120, 7);
 console.log(result);
 
-ctx.set("test", "test");
+ctx.set("name", "César Galvis León");
+ctx.set("age", 30);
+ctx.set("isMarried", true);
+ctx.set("birthDate", new Date("1996-01-01"));
+ctx.set("address", {
+  street: "123 Main St",
+  city: "Anytown",
+  state: "CA",
+  zip: "12345",
+});

@@ -2,7 +2,11 @@
   "id": "module:index:1.0.0",
   "name": "index",
   "version": "1.0.0",
-  "description": "",
-  "author": "",
-  "license": "MIT"
+  "metadata": {
+    "author": "César Galvis León",
+    "description": "Pruebas de vm",
+    "license": "MIT",
+    "path": "https://github.com/cgalvisleon/jrex",
+    "version": "1.0.0"
+  }
 }

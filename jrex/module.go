@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/dop251/goja"
 )
@@ -38,28 +39,22 @@ func ToPart(value string) (Part, bool) {
 }
 
 type Module struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Version     string `json:"version"`
-	Description string `json:"description"`
-	Author      string `json:"author"`
-	License     string `json:"license"`
-	Path        string `json:"path"`
-	jrex        *Jrex  `json:"-"`
+	ID       string  `json:"id"`
+	Path     string  `json:"name"`
+	Version  string  `json:"version"`
+	Metadata et.Json `json:"metadata"`
+	jrex     *Jrex   `json:"-"`
 }
 
-func NewModule(name string) *Module {
-	name = utility.Normalize(name)
+func NewModule(path string) *Module {
+	path = utility.Normalize(path)
 	version := "1.0.0"
-	id := fmt.Sprintf("module:%s:%s", name, version)
+	id := fmt.Sprintf("module:%s:%s", path, version)
 	return &Module{
-		ID:          id,
-		Name:        name,
-		Version:     version,
-		Description: "",
-		Author:      "",
-		License:     "MIT",
-		Path:        "",
+		ID:       id,
+		Path:     path,
+		Version:  version,
+		Metadata: et.Json{},
 	}
 }
 
@@ -70,40 +65,16 @@ func NewModule(name string) *Module {
 **/
 func (s *Module) up(jrex *Jrex) *Module {
 	s.jrex = jrex
-	s.jrex.Modules[s.Name] = s
+	s.jrex.Modules[s.Path] = s
 	return s
 }
 
-func (s *Jrex) GetModule(name string) *Module {
-	name = utility.Normalize(name)
-	version := "1.0.0"
-	id := fmt.Sprintf("module:%s:%s", name, version)
-	return &Module{
-		ID:          id,
-		Name:        name,
-		Version:     version,
-		Description: "",
-		Author:      "",
-		License:     "MIT",
-		jrex:        s,
-	}
-}
-
-func (s *Jrex) AddModule(name string) *Module {
-	name = utility.Normalize(name)
-	version := "1.0.0"
-	id := fmt.Sprintf("module:%s:%s", name, version)
-	result := &Module{
-		ID:          id,
-		Name:        name,
-		Version:     version,
-		Description: "",
-		Author:      "",
-		License:     "MIT",
-		jrex:        s,
-	}
-	s.Modules[name] = result
-	return result
+/**
+* save
+* @return error
+**/
+func (s *Module) save(userId string) error {
+	return s.jrex.Save(userId)
 }
 
 /**
@@ -129,8 +100,9 @@ func (s *Module) Error(err error) *goja.Object {
 * @params name string
 * @return *Module
 **/
-func (s *Module) SetName(name string) *Module {
-	s.Name = name
+func (s *Module) SetPath(path string) *Module {
+	s.Path = path
+	s.ID = fmt.Sprintf("module:%s:%s", s.Path, s.Version)
 	return s
 }
 
@@ -163,23 +135,19 @@ func (s *Module) SetVersion(part Part) *Module {
 		return s
 	}
 
-	result := fmt.Sprintf("%d.%d.%d", major, minor, patch)
-	s.ID = fmt.Sprintf("%s:%s", s.Name, result)
-	s.Version = result
+	s.Version = fmt.Sprintf("%d.%d.%d", major, minor, patch)
+	s.ID = fmt.Sprintf("module:%s:%s", s.Path, s.Version)
 	return s
 }
 
-func (s *Module) SetDescription(description string) *Module {
-	s.Description = description
-	return s
-}
-
-func (s *Module) SetAuthor(author string) *Module {
-	s.Author = author
-	return s
-}
-
-func (s *Module) SetLicense(license string) *Module {
-	s.License = license
-	return s
+/**
+* SetMetadata
+* @param metadata et.Json
+* @return error
+**/
+func (s *Module) SetMetadata(metadata et.Json) error {
+	userId := metadata.Str("user_id")
+	delete(metadata, "user_id")
+	s.Metadata = metadata
+	return s.save(userId)
 }

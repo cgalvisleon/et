@@ -1,5 +1,10 @@
-author("César Galvis León");
-description("Pruebas de vm");
+metadata({
+  author: "César Galvis León",
+  version: "1.0.0",
+  description: "Pruebas de vm",
+  license: "MIT",
+  path: "https://github.com/cgalvisleon/jrex",
+});
 
 const pricing = require("./modules/pricing");
 

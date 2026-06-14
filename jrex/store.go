@@ -16,9 +16,6 @@ import (
 type Store interface {
 	Load(tag string) (*Jrex, error)
 	Save(jrex *Jrex, userId string) error
-	GetModule(module string) (*Module, error)
-	SetModule(module *Module) error
-	DeleteModule(module string) error
 	GetCode(module string) (string, error)
 	SetCode(module string, code string) error
 }
@@ -129,12 +126,10 @@ func (s *FileStore) Save(jrex *Jrex, userId string) error {
 func (s *FileStore) GetModule(module string) (*Module, error) {
 	path := filepath.Join(s.ModuleDir, fmt.Sprintf("%s.json", module))
 	result, err := file.LoadOrCreateJSON(path, &Module{
-		ID:          fmt.Sprintf("module:%s:%s", module, "1.0.0"),
-		Name:        module,
-		Version:     "1.0.0",
-		Description: "",
-		Author:      "",
-		License:     "MIT",
+		ID:       fmt.Sprintf("module:%s:%s", module, "1.0.0"),
+		Name:     module,
+		Version:  "1.0.0",
+		Metadata: et.Json{},
 	})
 	if err != nil {
 		return nil, err
@@ -149,7 +144,7 @@ func (s *FileStore) GetModule(module string) (*Module, error) {
 * @return error
 **/
 func (s *FileStore) SetModule(module *Module) error {
-	path := filepath.Join(s.ModuleDir, module.Name)
+	path := filepath.Join(s.ModuleDir, fmt.Sprintf("%s.json", module.Name))
 	err := file.WriteJSON(path, module)
 	if err != nil {
 		return err
@@ -207,14 +202,6 @@ func (s *FileStore) SetCode(module string, code string) error {
 		return err
 	}
 	return nil
-}
-
-/**
-* Notify
-* @param kind string, message string
-**/
-func (s *FileStore) Notify(kind string, message string) {
-	logs.Log(kind, message)
 }
 
 /**

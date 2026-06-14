@@ -65,17 +65,12 @@ func wrapperModules(module *Module) {
 		module.SetVersion(part)
 		return module.Version
 	})
-	module.Set("description", func(value string) string {
-		module.SetDescription(value)
-		return module.Description
-	})
-	module.Set("author", func(value string) string {
-		module.SetAuthor(value)
-		return module.Author
-	})
-	module.Set("license", func(value string) string {
-		module.SetLicense(value)
-		return module.License
+	module.Set("metadata", func(value et.Json) et.Json {
+		err := module.SetMetadata(value)
+		if err != nil {
+			panic(module.Error(err))
+		}
+		return module.Metadata
 	})
 }
 

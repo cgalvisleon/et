@@ -3,6 +3,7 @@ package jrex
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
@@ -37,15 +38,15 @@ func wrap(instance *Jrex) {
 * @param vm *VM
 **/
 func wrapperRunTime(instance *Jrex) {
-	instance.Set("__load", func(resolved string) string {
-		model, exists := instance.Modules[resolved]
-		if !exists {
-			panic(instance.Error(fmt.Errorf(MSG_MODULE_NOT_FOUND, resolved)))
-		}
-		code, err := instance.store.GetCode(model)
+	instance.Set("os", nil)
+	instance.Set("exec", nil)
+	instance.Set("__load", func(modulePath string) string {
+		module := filepath.Join(instance.baseDir, modulePath)
+		code, err := instance.store.GetCode(module)
 		if err != nil {
 			panic(instance.Error(err))
 		}
+		instance.baseDir = filepath.Dir(module)
 		return code
 	})
 }
@@ -55,8 +56,6 @@ func wrapperRunTime(instance *Jrex) {
 * @param vm *VM
 **/
 func wrapperModules(module *Module) {
-	module.Set("os", nil)
-	module.Set("exec", nil)
 	module.Set("version", func(value string) string {
 		part, ok := ToPart(value)
 		if !ok {

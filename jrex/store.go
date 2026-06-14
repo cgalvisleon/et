@@ -19,7 +19,7 @@ type Store interface {
 	GetModule(module string) (*Module, error)
 	SetModule(module *Module) error
 	DeleteModule(module string) error
-	GetCode(module *Module) (string, error)
+	GetCode(module string) (string, error)
 	SetCode(module string, code string) error
 }
 
@@ -27,7 +27,6 @@ type FileStore struct {
 	BaseDir   string
 	ModuleDir string
 	AuditLog  []et.Json `json:"audit_log"`
-	rootDir   string
 	jrex      *Jrex
 }
 
@@ -51,7 +50,6 @@ func NewStore(baseDir string) (*FileStore, error) {
 	result := &FileStore{
 		BaseDir:   absPath,
 		ModuleDir: modulePath,
-		rootDir:   ".",
 	}
 
 	return result, nil
@@ -183,18 +181,16 @@ func (s *FileStore) DeleteModule(module string) error {
 
 /**
 * GetCode
-* @param module *Module
+* @param module string
 * @return string, error
 **/
-func (s *FileStore) GetCode(module *Module) (string, error) {
+func (s *FileStore) GetCode(module string) (string, error) {
 	fl := fmt.Sprintf("%s.js", module)
-	fl = filepath.Join(s.rootDir, fl)
 	path := filepath.Join(s.BaseDir, fl)
 	code, err := file.LoadString(path, "")
 	if err != nil {
 		return "", err
 	}
-	s.rootDir = filepath.Dir(fl)
 
 	return code, nil
 }

@@ -17,6 +17,7 @@ type Jrex struct {
 	Modules  map[string]*Module `json:"modules"`
 	store    Store              `json:"-"`
 	bindings map[string]any     `json:"-"`
+	baseDir  string             `json:"-"`
 	vm       *goja.Runtime      `json:"-"`
 }
 
@@ -159,17 +160,14 @@ func (s *Jrex) Run() (et.Json, error) {
 		return nil, err
 	}
 
-	module, exists := s.Modules["index"]
-	if !exists {
-		return nil, errors.New(MSG_INDEX_MODULE_NOT_FOUND)
-	}
-
+	s.baseDir = ""
+	module := "index"
 	code, err := s.store.GetCode(module)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = s.vm.RunScript(module.Name, code)
+	_, err = s.vm.RunScript(module, code)
 	if err != nil {
 		return nil, err
 	}

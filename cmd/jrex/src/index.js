@@ -21,9 +21,12 @@ ctx.set({
   isMarried: true,
   birthDate: new Date("1996-01-01"),
   address: {
-    street: "123 Main St",
-    city: "Anytown",
-    state: "CA",
-    zip: "12345",
+    street: "Cra 12A # 3 - 23",
+    city: "San Gil",
+    state: "Santander",
+    zip: "675001",
+    country: "Colombia",
+    countryCode: "CO",
+    type: "home",
   },
 });

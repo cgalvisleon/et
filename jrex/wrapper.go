@@ -3,6 +3,7 @@ package jrex
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"time"
 
@@ -84,8 +85,8 @@ func wrapperModules(module *Module) {
 **/
 func wrapperCtx(instance *Jrex) {
 	instance.Set("ctx", map[string]interface{}{
-		"set": func(key string, value interface{}) {
-			instance.Ctx.Set(key, value)
+		"set": func(data et.Json) {
+			maps.Copy(instance.Ctx, data)
 		},
 		"get": func(keys ...string) interface{} {
 			return instance.Ctx.Get(keys...)

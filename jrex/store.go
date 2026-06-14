@@ -226,13 +226,13 @@ func (s *FileStore) hotReload() error {
 	if err != nil {
 		return err
 	}
-	s.Notify("Watcher", fmt.Sprintf("watching %s for changes", s.BaseDir))
+	logs.Log("Watcher", fmt.Sprintf("watching %s for changes", s.BaseDir))
 	err = watch.OnReload(func(info file.FileInfo, event fsnotify.Event) {
 		ctx, err := s.jrex.Run()
 		if err != nil {
-			s.Notify("ERROR", err.Error())
+			logs.Log("ERROR", err.Error())
 		} else {
-			s.Notify("CTX", ctx.ToString())
+			logs.Log("CTX", ctx.ToString())
 		}
 	}).Load()
 	if err != nil {

@@ -73,11 +73,8 @@ func wrapperModules(module *Module) {
 		return module.Version
 	})
 	module.Set("metadata", func(value et.Json) et.Json {
-		err := module.SetMetadata(value)
-		if err != nil {
-			panic(module.Error(err))
-		}
-		return module.Metadata
+		module.SetMetadata(value)
+		return value
 	})
 }
 

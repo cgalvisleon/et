@@ -82,10 +82,11 @@ func (s *FileStore) Load(tag string) (*Jrex, error) {
 	tag = utility.Normalize(tag)
 	id := fmt.Sprintf("jrex:%s", tag)
 	def := &Jrex{
-		ID:      id,
-		Tag:     tag,
-		Ctx:     et.Json{},
-		Modules: make(map[string]*Module),
+		ID:       id,
+		Tag:      tag,
+		Ctx:      et.Json{},
+		Modules:  make(map[string]*Module),
+		AuditLog: make([]et.Json, 0),
 	}
 	def.Modules[module.Path] = module
 

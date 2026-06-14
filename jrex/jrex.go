@@ -2,6 +2,7 @@ package jrex
 
 import (
 	"errors"
+	"fmt"
 	"maps"
 
 	"github.com/cgalvisleon/et/config"
@@ -99,6 +100,10 @@ func (s *Jrex) Save(userId string) error {
 		return errors.New(MSG_STORE_IS_NIL)
 	}
 
+	if s.AuditLog == nil {
+		s.AuditLog = make([]et.Json, 0)
+	}
+
 	now := timezone.Now()
 	s.AuditLog = append(s.AuditLog, et.Json{
 		"created_at": now,
@@ -106,7 +111,9 @@ func (s *Jrex) Save(userId string) error {
 		"action":     "save",
 	})
 	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
-	s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	if len(s.AuditLog) > maxAuditLog {
+		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	}
 
 	s.isChanged = false
 	data := s.ToJson()
@@ -115,7 +122,8 @@ func (s *Jrex) Save(userId string) error {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	event.Publish(EVENT_JREX_SET, data)
+	channel := fmt.Sprintf("%s:%s", EVENT_JREX_SET, s.TenantId)
+	event.Publish(channel, data)
 
 	return s.store.Save(s, userId)
 }

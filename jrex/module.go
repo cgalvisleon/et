@@ -143,11 +143,7 @@ func (s *Module) SetVersion(part Part) *Module {
 /**
 * SetMetadata
 * @param metadata et.Json
-* @return error
 **/
-func (s *Module) SetMetadata(metadata et.Json) error {
-	userId := metadata.Str("user_id")
-	delete(metadata, "user_id")
+func (s *Module) SetMetadata(metadata et.Json) {
 	s.Metadata = metadata
-	return s.save(userId)
 }

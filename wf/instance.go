@@ -212,6 +212,10 @@ func (s *Instance) save() error {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
 
+	if s.AuditLog == nil {
+		s.AuditLog = make([]et.Json, 0)
+	}
+
 	now := timezone.Now()
 	s.AuditLog = append(s.AuditLog, et.Json{
 		"created_at": now,
@@ -219,7 +223,9 @@ func (s *Instance) save() error {
 		"action":     "save",
 	})
 	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
-	s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	if len(s.AuditLog) > maxAuditLog {
+		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	}
 
 	if s.isDebug {
 		logs.Log(packageName, "save:", s.ToString())

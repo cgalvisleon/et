@@ -133,6 +133,10 @@ func (s *WorkFlow) Save(userId string) error {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
 
+	if s.AuditLog == nil {
+		s.AuditLog = make([]et.Json, 0)
+	}
+
 	now := timezone.Now()
 	s.UpdatedAt = now
 	s.AuditLog = append(s.AuditLog, et.Json{
@@ -141,7 +145,9 @@ func (s *WorkFlow) Save(userId string) error {
 		"action":     "save",
 	})
 	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
-	s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	if len(s.AuditLog) > maxAuditLog {
+		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	}
 
 	return s.store.Set("workflow", s.ID, s.TenantId, s.TenantId, s, userId)
 }

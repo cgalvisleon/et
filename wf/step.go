@@ -169,6 +169,10 @@ func (s *Step) save() error {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
 
+	if s.AuditLog == nil {
+		s.AuditLog = make([]et.Json, 0)
+	}
+
 	now := timezone.Now()
 	s.UpdatedAt = now
 	s.AuditLog = append(s.AuditLog, et.Json{
@@ -177,7 +181,9 @@ func (s *Step) save() error {
 		"action":     "save",
 	})
 	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
-	s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	if len(s.AuditLog) > maxAuditLog {
+		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	}
 
 	s.isChanged = false
 

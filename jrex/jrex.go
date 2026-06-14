@@ -32,6 +32,23 @@ type Jrex struct {
 	isDebug   bool               `json:"-"`
 }
 
+func NewJrex(tag string) (*Jrex, error) {
+	if !utility.ValidStr(tag, 0, []string{""}) {
+		return nil, errors.New(MSG_TAG_REQUIRED)
+	}
+
+	tag = utility.Normalize(tag)
+	id := fmt.Sprintf("jrex:%s", tag)
+	result := &Jrex{
+		ID:       id,
+		Tag:      tag,
+		Ctx:      et.Json{},
+		Modules:  make(map[string]*Module),
+		AuditLog: make([]et.Json, 0),
+	}
+	return result, nil
+}
+
 /**
 * Load
 * @param tag string, store Store
@@ -152,6 +169,7 @@ func (s *Jrex) addAuditLog(userId string, action string) {
 * @return *Jrex
 **/
 func (s *Jrex) AddModule(module *Module) *Jrex {
+	module.up(s)
 	s.Modules[module.Path] = module
 	s.addAuditLog(s.userId, "add_module")
 	return s

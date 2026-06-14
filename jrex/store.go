@@ -4,10 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/utility"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -79,23 +77,17 @@ func (s *FileStore) Load(tag string) (*Jrex, error) {
 		return nil, err
 	}
 
-	tag = utility.Normalize(tag)
-	id := fmt.Sprintf("jrex:%s", tag)
-	def := &Jrex{
-		ID:       id,
-		Tag:      tag,
-		Ctx:      et.Json{},
-		Modules:  make(map[string]*Module),
-		AuditLog: make([]et.Json, 0),
+	def, err := NewJrex(tag)
+	if err != nil {
+		return nil, err
 	}
-	def.Modules[module.Path] = module
+	def.AddModule(module)
 
 	path := filepath.Join(s.BaseDir, "package.json")
 	result, err := file.LoadOrCreateJSON(path, def)
 	if err != nil {
 		return nil, err
 	}
-	module.up(result)
 	s.up(result)
 
 	return result, nil

@@ -58,12 +58,7 @@ func defineCatalog(db *DB) error {
 			return nil
 		})
 
-	err = db.catalog.Init()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return db.catalog.Init()
 }
 
 /**

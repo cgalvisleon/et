@@ -50,12 +50,7 @@ func defineSeries(db *DB) error {
 			return nil
 		})
 
-	err = db.series.Init()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return db.series.Init()
 }
 
 /**

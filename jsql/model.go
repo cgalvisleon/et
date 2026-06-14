@@ -84,6 +84,7 @@ type Model struct {
 	db            *DB                     `json:"-"`
 	historyDb     *DB                     `json:"-"`
 	deadDb        *DB                     `json:"-"`
+	rules         *Rule                   `json:"-"`
 }
 
 /**
@@ -129,6 +130,7 @@ func newModel(schema *Schema, name string, version int) *Model {
 		deadDb:        schema.deadDb,
 		IsDebug:       schema.db.IsDebug,
 	}
+	result.rules = newRule(result)
 	result = defaultTrigger(result)
 	return result
 }
@@ -216,7 +218,7 @@ func (s *Model) save() error {
 	channel := fmt.Sprintf("%s:%s", EVENT_MODEL_SET, s.TenantId)
 	event.Publish(channel, data)
 
-	return s.db.setCatalog(s.Name, "model", s.Version, s)
+	return s.db.setCatalog(s.Key(), "model", s.Version, s)
 }
 
 /**
@@ -369,9 +371,11 @@ func (s *Model) Init() error {
 		return err
 	}
 
-	s.Jrex, err = jrex.Load(s.Name, s.db.rules)
-	if err != nil {
-		return err
+	if !s.IsCore {
+		s.Jrex, err = jrex.Load(s.Key(), s.rules)
+		if err != nil {
+			return err
+		}
 	}
 
 	s.isInit = true

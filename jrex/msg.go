@@ -6,6 +6,7 @@ var (
 	MSG_TAG_REQUIRED           = "tag is required, remember that is a unique identifier"
 	MSG_INDEX_MODULE_NOT_FOUND = "index module not found"
 	MSG_MODULE_NOT_FOUND       = "module not found: %s"
+	MSG_STORE_IS_NIL           = "store is nil"
 )
 
 func init() {
@@ -15,5 +16,6 @@ func init() {
 		MSG_TAG_REQUIRED = "tag es requerido, recuerda que es un identificador único"
 		MSG_INDEX_MODULE_NOT_FOUND = "módulo index no encontrado"
 		MSG_MODULE_NOT_FOUND = "módulo no encontrado: %s"
+		MSG_STORE_IS_NIL = "store es nulo"
 	}
 }

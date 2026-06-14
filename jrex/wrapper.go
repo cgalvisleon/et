@@ -52,8 +52,7 @@ func wrapperRunTime(instance *Jrex) {
 		_, exists := instance.Modules[module]
 		if !exists {
 			mod := NewModule(module)
-			instance.Modules[module] = mod
-			instance.Save(instance.userId)
+			instance.AddModule(mod)
 		}
 
 		return code

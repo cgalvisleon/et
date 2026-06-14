@@ -4,22 +4,33 @@ import (
 	"errors"
 	"maps"
 
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/dop251/goja"
 )
 
+const (
+	packageName = "jrex"
+)
+
 type Jrex struct {
-	ID       string             `json:"id"`
-	Tag      string             `json:"tag"`
-	Ctx      et.Json            `json:"ctx"`
-	Modules  map[string]*Module `json:"modules"`
-	store    Store              `json:"-"`
-	bindings map[string]any     `json:"-"`
-	baseDir  string             `json:"-"`
-	userId   string             `json:"-"`
-	vm       *goja.Runtime      `json:"-"`
+	TenantId  string             `json:"tenant_id"`
+	ID        string             `json:"id"`
+	Tag       string             `json:"tag"`
+	Ctx       et.Json            `json:"ctx"`
+	Modules   map[string]*Module `json:"modules"`
+	AuditLog  []et.Json          `json:"audit_log"`
+	store     Store              `json:"-"`
+	bindings  map[string]any     `json:"-"`
+	baseDir   string             `json:"-"`
+	userId    string             `json:"-"`
+	isChanged bool               `json:"-"`
+	isDebug   bool               `json:"-"`
+	vm        *goja.Runtime      `json:"-"`
 }
 
 /**
@@ -49,6 +60,67 @@ func Load(tag string, store Store) (*Jrex, error) {
 }
 
 /**
+* ToJson
+* @return et.Json
+**/
+func (s *Jrex) ToJson() et.Json {
+	return et.Json{
+		"id":        s.ID,
+		"tag":       s.Tag,
+		"ctx":       s.Ctx,
+		"modules":   s.Modules,
+		"audit_log": s.AuditLog,
+	}
+}
+
+/**
+* ToString
+* @return string
+**/
+func (s *Jrex) ToString() string {
+	return s.ToJson().ToString()
+}
+
+/**
+* Debug
+* @return *Jrex
+**/
+func (s *Jrex) Debug() *Jrex {
+	s.isDebug = true
+	return s
+}
+
+/**
+* save
+* @return error
+**/
+func (s *Jrex) Save(userId string) error {
+	if s.store == nil {
+		return errors.New(MSG_STORE_IS_NIL)
+	}
+
+	now := timezone.Now()
+	s.AuditLog = append(s.AuditLog, et.Json{
+		"created_at": now,
+		"user_id":    userId,
+		"action":     "save",
+	})
+	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
+	s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+
+	s.isChanged = false
+	data := s.ToJson()
+
+	if s.isDebug {
+		logs.Log(packageName, "save:", data.ToString())
+	}
+
+	event.Publish(EVENT_JREX_SET, data)
+
+	return s.store.Save(s, userId)
+}
+
+/**
 * up
 * @return *Jrex
 **/
@@ -59,11 +131,14 @@ func (s *Jrex) Up(store Store) *Jrex {
 }
 
 /**
-* save
-* @return error
+* AddModule
+* @param module *Module
+* @return *Jrex
 **/
-func (s *Jrex) Save(userId string) error {
-	return nil
+func (s *Jrex) AddModule(module *Module) *Jrex {
+	s.Modules[module.Path] = module
+	s.isChanged = true
+	return s
 }
 
 /**
@@ -138,7 +213,7 @@ func (s *Jrex) SetCtx(ctx et.Json) *Jrex {
 }
 
 /**
-* Run
+* Run: Runs the Jrex
 * @return et.Json, error
 **/
 func (s *Jrex) Run() (et.Json, error) {
@@ -165,11 +240,16 @@ func (s *Jrex) Run() (et.Json, error) {
 		return nil, err
 	}
 
+	if s.isChanged {
+		s.Save(s.userId)
+	}
+
 	return s.Ctx, nil
 }
 
 /**
-* RunDev
+* RunDev: Runs the Jrex in development mode
+* @param userId string
 * @return error
 **/
 func (s *Jrex) RunDev(userId string) error {

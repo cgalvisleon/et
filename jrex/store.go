@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/fsnotify/fsnotify"
 )
@@ -21,9 +19,8 @@ type Store interface {
 }
 
 type FileStore struct {
-	BaseDir  string
-	AuditLog []et.Json `json:"audit_log"`
-	jrex     *Jrex
+	BaseDir string
+	jrex    *Jrex
 }
 
 func NewStore(baseDir string) (*FileStore, error) {
@@ -109,15 +106,6 @@ func (s *FileStore) Load(tag string) (*Jrex, error) {
 * @return error
 **/
 func (s *FileStore) Save(jrex *Jrex, userId string) error {
-	now := timezone.Now()
-	s.AuditLog = append(s.AuditLog, et.Json{
-		"created_at": now,
-		"user_id":    userId,
-		"action":     "save",
-	})
-	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
-	s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
-
 	path := filepath.Join(s.BaseDir, "package.json")
 	err := file.WriteJSON(path, jrex)
 	if err != nil {

@@ -21,10 +21,9 @@ type Store interface {
 }
 
 type FileStore struct {
-	BaseDir   string
-	ModuleDir string
-	AuditLog  []et.Json `json:"audit_log"`
-	jrex      *Jrex
+	BaseDir  string
+	AuditLog []et.Json `json:"audit_log"`
+	jrex     *Jrex
 }
 
 func NewStore(baseDir string) (*FileStore, error) {
@@ -38,15 +37,8 @@ func NewStore(baseDir string) (*FileStore, error) {
 		return nil, err
 	}
 
-	modulePath := filepath.Join(absPath, ".modules")
-	_, err = file.MakeFolder(modulePath)
-	if err != nil {
-		return nil, err
-	}
-
 	result := &FileStore{
-		BaseDir:   absPath,
-		ModuleDir: modulePath,
+		BaseDir: absPath,
 	}
 
 	return result, nil
@@ -76,16 +68,16 @@ func (s *FileStore) Load(tag string) (*Jrex, error) {
 
 	tag = utility.Normalize(tag)
 	id := fmt.Sprintf("jrex:%s", tag)
-	defaultValue := &Jrex{
+	def := &Jrex{
 		ID:      id,
 		Tag:     tag,
 		Ctx:     et.Json{},
 		Modules: make(map[string]*Module),
 	}
-	defaultValue.Modules[module.Name] = module
+	def.Modules[module.Path] = module
 
 	path := filepath.Join(s.BaseDir, "package.json")
-	result, err := file.LoadOrCreateJSON(path, defaultValue)
+	result, err := file.LoadOrCreateJSON(path, def)
 	if err != nil {
 		return nil, err
 	}
@@ -124,10 +116,10 @@ func (s *FileStore) Save(jrex *Jrex, userId string) error {
 * @return *Module, error
 **/
 func (s *FileStore) GetModule(module string) (*Module, error) {
-	path := filepath.Join(s.ModuleDir, fmt.Sprintf("%s.json", module))
+	path := filepath.Join(s.BaseDir, fmt.Sprintf("%s.json", module))
 	result, err := file.LoadOrCreateJSON(path, &Module{
 		ID:       fmt.Sprintf("module:%s:%s", module, "1.0.0"),
-		Name:     module,
+		Path:     module,
 		Version:  "1.0.0",
 		Metadata: et.Json{},
 	})
@@ -136,42 +128,6 @@ func (s *FileStore) GetModule(module string) (*Module, error) {
 	}
 
 	return result, nil
-}
-
-/**
-* SetModule
-* @param module *Module
-* @return error
-**/
-func (s *FileStore) SetModule(module *Module) error {
-	path := filepath.Join(s.ModuleDir, fmt.Sprintf("%s.json", module.Name))
-	err := file.WriteJSON(path, module)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-/**
-* DeleteModule
-* @param module string
-* @return error
-**/
-func (s *FileStore) DeleteModule(module string) error {
-	path := filepath.Join(s.ModuleDir, module)
-	_, err := file.RemoveFile(path)
-	if err != nil {
-		return err
-	}
-
-	path = filepath.Join(s.BaseDir, module)
-	_, err = file.RemoveFile(path)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 /**

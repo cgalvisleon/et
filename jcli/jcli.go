@@ -1,7 +1,6 @@
 package jrex
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -33,8 +32,14 @@ type cliCmdResultMsg struct {
 	err     error
 }
 
+type App interface {
+	RunCli() error
+}
+
 type cliModel struct {
-	jrex     *Jrex
+	app      App
+	program  *tea.Program
+	onStart  func(cli *cliModel, args ...any) error
 	viewport viewport.Model
 	input    textinput.Model
 	lines    []string
@@ -47,7 +52,7 @@ type cliModel struct {
 * @param jrex *Jrex
 * @return cliModel
 **/
-func newCliModel(jrex *Jrex) cliModel {
+func newCliModel(app App) cliModel {
 	input := textinput.New()
 	input.Prompt = "> "
 	input.Placeholder = "/build"
@@ -55,7 +60,7 @@ func newCliModel(jrex *Jrex) cliModel {
 	input.Focus()
 
 	return cliModel{
-		jrex:  jrex,
+		app:   app,
 		input: input,
 	}
 }
@@ -178,14 +183,6 @@ func (m *cliModel) dispatch(line string) tea.Cmd {
 	name := fields[0]
 
 	switch name {
-	case "/build":
-		part := "same"
-		if len(fields) > 1 {
-			part = fields[1]
-		}
-		return func() tea.Msg {
-			return m.runBuild(part)
-		}
 	case "/help":
 		m.appendLine(cliHelpText)
 		return nil
@@ -198,33 +195,28 @@ func (m *cliModel) dispatch(line string) tea.Cmd {
 }
 
 /**
-* runBuild: Runs Build with the default release bump as a tea.Cmd.
-* @return tea.Msg
+* Notify: Appends a kind/message pair to the log viewport.
+* @params kind, message string
 **/
-func (m *cliModel) runBuild(part string) tea.Msg {
-	if map[string]bool{
-		"same":    true,
-		"major":   true,
-		"minor":   true,
-		"release": true,
-	}[part] == false {
-		return cliCmdResultMsg{kind: "Build", err: errors.New("invalid part")}
-	}
-
-	err := m.jrex.Build(Part(part))
-	if err != nil {
-		return cliCmdResultMsg{kind: "Build", err: err}
-	}
-	return cliCmdResultMsg{kind: "Build", message: fmt.Sprintf("done — v%s", m.jrex.Version)}
+func (s *cliModel) Notify(kind, message string) {
+	s.appendLog(kind, message)
 }
 
 /**
-* RunCli: Launches the split-pane CLI (log viewport + command input) bound to
+* OnStart: Callback invoked when the CLI starts.
+* @params func(m *cliModel) error
+**/
+func (s *cliModel) OnStart(fn func(cli *cliModel, args ...any) error) {
+	s.onStart = fn
+}
+
+/**
+* Run: Launches the split-pane CLI (log viewport + command input) bound to
 * this Jrex instance, starts hot-reload watching, and blocks until the user exits.
 * @return error
 **/
-func (s *Jrex) RunCli() error {
-	program := tea.NewProgram(newCliModel(s), tea.WithAltScreen(), tea.WithMouseCellMotion())
+func (s *cliModel) Run() error {
+	program := tea.NewProgram(newCliModel(s.app), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	s.program = program
 	stdrout.SetStdout(s)
 	defer func() { s.program = nil }()
@@ -236,12 +228,6 @@ func (s *Jrex) RunCli() error {
 			}
 		}()
 	}
-
-	go func() {
-		if err := s.hotReload(); err != nil {
-			s.Notify("Error", err.Error())
-		}
-	}()
 
 	_, err := program.Run()
 	return err

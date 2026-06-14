@@ -137,24 +137,16 @@ func (s *Jrex) SetCtx(ctx et.Json) *Jrex {
 }
 
 /**
-* up
-* @return *Jrex
+* Run
+* @return et.Json, error
 **/
-func (s *Jrex) init() *Jrex {
+func (s *Jrex) Run() (et.Json, error) {
 	s.vm = goja.New()
 	wrap(s)
 	for name, value := range s.bindings {
 		s.vm.Set(name, value)
 	}
-	return s
-}
 
-/**
-* Run
-* @return et.Json, error
-**/
-func (s *Jrex) Run() (et.Json, error) {
-	s.init()
 	_, err := s.vm.RunString(requireRuntime)
 	if err != nil {
 		return nil, err

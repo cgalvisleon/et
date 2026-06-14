@@ -15,11 +15,10 @@ func (s *DB) initCore() error {
 		return err
 	}
 
-	rules, err := defineRule(s, "core")
+	err = defineRule(s)
 	if err != nil {
 		return err
 	}
-	s.Rules = rules
 
 	return nil
 }

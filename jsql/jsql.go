@@ -9,6 +9,7 @@ import (
 )
 
 var (
+	packageName            = "jsql"
 	dbs                    map[string]*DB
 	ErrRecordAlreadyExists = errors.New("record already exists")
 )

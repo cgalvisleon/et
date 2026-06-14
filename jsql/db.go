@@ -14,6 +14,7 @@ import (
 )
 
 type DB struct {
+	TenantId    string             `json:"tenant_id"`
 	Name        string             `json:"name"`
 	Schemas     map[string]*Schema `json:"schemas"`
 	Driver      string             `json:"driver"`
@@ -28,7 +29,7 @@ type DB struct {
 	db          *sql.DB            `json:"-"`
 	catalog     *Model             `json:"-"`
 	series      *Model             `json:"-"`
-	Rules       *Rule              `json:"-"`
+	rules       *Rule              `json:"-"`
 }
 
 /**
@@ -68,9 +69,14 @@ func newDB(params et.Json) (*DB, error) {
 * @return et.Json
 **/
 func (s *DB) ToJson() et.Json {
+	schemas := et.Json{}
+	for _, schema := range s.Schemas {
+		schemas[schema.Name] = schema.ToJson()
+	}
 	return et.Json{
+		"tenant_id":    s.TenantId,
 		"name":         s.Name,
-		"schemas":      s.Schemas,
+		"schemas":      schemas,
 		"driver":       s.Driver,
 		"params":       s.Params,
 		"use_core":     s.UseCore,
@@ -536,18 +542,4 @@ func (s *DB) Query(query []et.Json) (et.Items, error) {
 	}
 
 	return result, nil
-}
-
-/**
-* DefineRule: Defines the rule table.
-* @param schema string
-* @return *Rule, error
-**/
-func (s *DB) DefineRule(schema string) (*Rule, error) {
-	rules, err := defineRule(s, schema)
-	if err != nil {
-		return nil, err
-	}
-	s.Rules = rules
-	return rules, nil
 }

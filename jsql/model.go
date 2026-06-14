@@ -2,15 +2,18 @@ package jsql
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"sync"
 
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrex"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/strs"
+	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 )
 
@@ -37,6 +40,7 @@ type Index struct {
 }
 
 type Model struct {
+	TenantId      string                  `json:"tenant_id"`
 	Database      string                  `json:"database"`
 	Schema        string                  `json:"schema"`
 	Name          string                  `json:"name"`
@@ -68,6 +72,8 @@ type Model struct {
 	AfterInserts  []*jrex.Jrex            `json:"after_inserts"`
 	AfterUpdates  []*jrex.Jrex            `json:"after_updates"`
 	AfterDeletes  []*jrex.Jrex            `json:"after_deletes"`
+	AuditLog      []et.Json               `json:"audit_log"`
+	isChanged     bool                    `json:"-"`
 	beforeInserts []TriggerFunction       `json:"-"`
 	beforeUpdates []TriggerFunction       `json:"-"`
 	beforeDeletes []TriggerFunction       `json:"-"`
@@ -80,102 +86,6 @@ type Model struct {
 }
 
 /**
-* defaultTrigger: Returns a Model with default trigger functions for enforcing unique indexes.
-* @param model *Model
-* @return *Model
-**/
-func defaultTrigger(model *Model) *Model {
-	model.BeforeInsert(func(tx *Tx, old, new et.Json) error {
-		var results sync.Map
-		var hasError error
-		var wg sync.WaitGroup
-		for _, validate := range model.Unique {
-			wg.Add(1)
-			go func(field string) {
-				defer wg.Done()
-
-				if hasError != nil {
-					return
-				}
-
-				val := new.Str(field)
-				if len(val) == 0 {
-					results.Store(field, false)
-					return
-				}
-
-				exists, err := model.
-					Where(Eq(field, val)).
-					Exists()
-				if err != nil {
-					hasError = err
-					return
-				}
-				results.Store(field, exists)
-			}(validate.Name)
-		}
-		wg.Wait()
-
-		results.Range(func(key, value interface{}) bool {
-			if ok, _ := value.(bool); ok {
-				return false
-			}
-			return true
-		})
-
-		return hasError
-	})
-
-	model.BeforeUpdate(func(tx *Tx, old, new et.Json) error {
-		var results sync.Map
-		var hasError error
-		var wg sync.WaitGroup
-		for _, validate := range model.Unique {
-			wg.Add(1)
-			go func(field string) {
-				defer wg.Done()
-
-				if hasError != nil {
-					return
-				}
-
-				newVal := new[field]
-				chage := old.IsDeferent(field, newVal)
-				if !chage {
-					results.Store(field, false)
-					return
-				}
-
-				ql := model.Where(Eq(field, newVal))
-				for _, pk := range model.PrimaryKeys {
-					val := old[pk.Name]
-					ql = ql.And(Neg(pk.Name, val))
-				}
-
-				exists, err := ql.Exists()
-				if err != nil {
-					hasError = err
-					return
-				}
-				results.Store(field, exists)
-			}(validate.Name)
-		}
-		wg.Wait()
-
-		results.Range(func(key, value interface{}) bool {
-			if ok, _ := value.(bool); ok {
-				return false
-			}
-			return true
-		})
-
-		return hasError
-	})
-
-	return model
-}
-
-/**
 * newModel: Constructs a new Model with initialized fields and default triggers.
 * @param schema *Schema, name string, version int
 * @return *Model
@@ -183,6 +93,7 @@ func defaultTrigger(model *Model) *Model {
 func newModel(schema *Schema, name string, version int) *Model {
 	name = utility.Normalize(name)
 	result := &Model{
+		TenantId:      schema.TenantId,
 		Database:      schema.Database,
 		Schema:        schema.Name,
 		Name:          name,
@@ -204,6 +115,8 @@ func newModel(schema *Schema, name string, version int) *Model {
 		AfterInserts:  make([]*jrex.Jrex, 0),
 		AfterUpdates:  make([]*jrex.Jrex, 0),
 		AfterDeletes:  make([]*jrex.Jrex, 0),
+		AuditLog:      make([]et.Json, 0),
+		isChanged:     false,
 		beforeInserts: make([]TriggerFunction, 0),
 		beforeUpdates: make([]TriggerFunction, 0),
 		beforeDeletes: make([]TriggerFunction, 0),
@@ -216,7 +129,6 @@ func newModel(schema *Schema, name string, version int) *Model {
 		IsDebug:       schema.db.IsDebug,
 	}
 	result = defaultTrigger(result)
-
 	return result
 }
 
@@ -238,24 +150,14 @@ func loadModel(schema *Schema, name string) (*Model, error) {
 }
 
 /**
-* serialize: Marshals the model metadata to JSON bytes.
-* @return []byte, error
-**/
-func (s *Model) serialize() ([]byte, error) {
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return nil, err
-	}
-
-	return bt, nil
-}
-
-/**
 * ToJson: Returns the model metadata as an et.Json map.
 * @return et.Json
 **/
 func (s *Model) ToJson() et.Json {
 	return et.Json{
+		"tenant_id":    s.TenantId,
+		"database":     s.Database,
+		"schema":       s.Schema,
 		"name":         s.Name,
 		"table":        s.Table,
 		"columns":      s.Columns,
@@ -271,6 +173,7 @@ func (s *Model) ToJson() et.Json {
 		"details":      s.Details,
 		"rollups":      s.Rollups,
 		"calcs":        s.Calcs,
+		"audit_log":    s.AuditLog,
 	}
 }
 
@@ -302,6 +205,16 @@ func (s *Model) save() error {
 		return nil
 	}
 
+	s.isChanged = false
+	data := s.ToJson()
+
+	if s.IsDebug {
+		logs.Log(packageName, "save:", data.ToString())
+	}
+
+	channel := fmt.Sprintf("%s:%s", EVENT_MODEL_SET, s.TenantId)
+	event.Publish(channel, data)
+
 	return s.db.setCatalog(s.Name, "model", s.Version, s)
 }
 
@@ -311,6 +224,7 @@ func (s *Model) save() error {
 * @return *Model
 **/
 func (s *Model) up(schema *Schema) *Model {
+	s.TenantId = schema.TenantId
 	s.db = schema.db
 	s.historyDb = schema.historyDb
 	s.deadDb = schema.deadDb
@@ -318,6 +232,28 @@ func (s *Model) up(schema *Schema) *Model {
 		column.up(s)
 	}
 	return s
+}
+
+/**
+* addAuditLog
+* @param userId string, action string
+**/
+func (s *Model) addAuditLog(userId string, action string) {
+	if s.AuditLog == nil {
+		s.AuditLog = make([]et.Json, 0)
+	}
+
+	now := timezone.Now()
+	s.AuditLog = append(s.AuditLog, et.Json{
+		"created_at": now,
+		"user_id":    userId,
+		"action":     action,
+	})
+	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
+	if len(s.AuditLog) > maxAuditLog {
+		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	}
+	s.isChanged = true
 }
 
 /**

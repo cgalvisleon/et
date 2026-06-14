@@ -13,6 +13,7 @@ import (
 * Schema: Represents a database schema that owns a set of models.
 **/
 type Schema struct {
+	TenantId  string            `json:"tenant_id"`
 	Database  string            `json:"database"`
 	Name      string            `json:"name"`
 	Models    map[string]*Model `json:"models"`
@@ -40,18 +41,12 @@ func (s *Schema) serialize() ([]byte, error) {
 * @return et.Json
 **/
 func (s *Schema) ToJson() et.Json {
-	bt, err := s.serialize()
-	if err != nil {
-		return et.Json{}
+	return et.Json{
+		"tenant_id": s.TenantId,
+		"database":  s.Database,
+		"name":      s.Name,
+		"models":    s.Models,
 	}
-
-	var result et.Json
-	err = json.Unmarshal(bt, &result)
-	if err != nil {
-		return et.Json{}
-	}
-
-	return result
 }
 
 /**
@@ -60,6 +55,7 @@ func (s *Schema) ToJson() et.Json {
 * @return void
 **/
 func (s *Schema) SetHistoryDb(db *DB) {
+	s.TenantId = db.TenantId
 	s.historyDb = db
 }
 

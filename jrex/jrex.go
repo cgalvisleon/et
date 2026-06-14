@@ -25,11 +25,11 @@ type Jrex struct {
 	Ctx       et.Json            `json:"ctx"`
 	Modules   map[string]*Module `json:"modules"`
 	AuditLog  []et.Json          `json:"audit_log"`
+	isChanged bool               `json:"-"`
 	store     Store              `json:"-"`
 	bindings  map[string]any     `json:"-"`
 	baseDir   string             `json:"-"`
 	userId    string             `json:"-"`
-	isChanged bool               `json:"-"`
 	isDebug   bool               `json:"-"`
 	vm        *goja.Runtime      `json:"-"`
 }
@@ -145,6 +145,7 @@ func (s *Jrex) addAuditLog(userId string, action string) {
 	if len(s.AuditLog) > maxAuditLog {
 		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
 	}
+	s.isChanged = true
 }
 
 /**
@@ -155,7 +156,6 @@ func (s *Jrex) addAuditLog(userId string, action string) {
 func (s *Jrex) AddModule(module *Module) *Jrex {
 	s.Modules[module.Path] = module
 	s.addAuditLog(s.userId, "add_module")
-	s.isChanged = true
 	return s
 }
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/jrex"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -16,9 +17,13 @@ type Rule struct {
 * @param db *DB, schema string
 * @return (*Rule, error)
 **/
-func defineRule(db *DB, schema string) (*Rule, error) {
+func defineRule(db *DB) error {
+	if db.rules != nil {
+		return nil
+	}
+
 	model, err := db.Define(Def{
-		Schema:  schema,
+		Schema:  "core",
 		Name:    "rules",
 		Version: 1,
 		Columns: []Column{
@@ -34,7 +39,7 @@ func defineRule(db *DB, schema string) (*Rule, error) {
 		IsCore:   true,
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	model.
@@ -52,12 +57,11 @@ func defineRule(db *DB, schema string) (*Rule, error) {
 
 	err = model.Init()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return &Rule{
-		model: model,
-	}, nil
+	db.rules = &Rule{model: model}
+	return nil
 }
 
 /**
@@ -131,5 +135,21 @@ func (s *Rule) DeleteModule(module string) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (s *Rule) Load(tag string) (*jrex.Store, error) {
+	return nil, nil
+}
+
+func (s *Rule) Save(jrex *jrex.Jrex) error {
+	return nil
+}
+
+func (s *Rule) GetCode(module string) (string, error) {
+	return "", nil
+}
+
+func (s *Rule) SetCode(module string, code string) error {
 	return nil
 }

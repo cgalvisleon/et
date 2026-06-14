@@ -34,7 +34,7 @@ func main() {
 	v.Set("db", db)
 	v.Set(model.Name, model)
 
-	err = v.RunDev()
+	err = v.RunDev("cgalvisleon")
 	if err != nil {
 		logs.Panic(err)
 	}

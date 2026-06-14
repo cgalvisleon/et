@@ -8,6 +8,7 @@ import (
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
@@ -164,10 +165,13 @@ func (s *Flow) save() error {
 	s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
 
 	s.isChanged = false
+	data := s.ToJson()
 
 	if s.isDebug {
-		logs.Log(packageName, "save:", s.ToString())
+		logs.Log(packageName, "save:", data.ToString())
 	}
+
+	event.Publish(EVENT_FLOW_SET, data)
 
 	return s.store.Set("flow", s.ID, s.TenantId, s.WorkflowId, s, s.UserID)
 }

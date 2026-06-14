@@ -18,6 +18,7 @@ type Jrex struct {
 	store    Store              `json:"-"`
 	bindings map[string]any     `json:"-"`
 	baseDir  string             `json:"-"`
+	userId   string             `json:"-"`
 	vm       *goja.Runtime      `json:"-"`
 }
 
@@ -171,7 +172,8 @@ func (s *Jrex) Run() (et.Json, error) {
 * RunDev
 * @return error
 **/
-func (s *Jrex) RunDev() error {
+func (s *Jrex) RunDev(userId string) error {
+	s.userId = userId
 	result, err := s.Run()
 	if err != nil {
 		return err

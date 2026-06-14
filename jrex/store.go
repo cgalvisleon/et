@@ -56,12 +56,28 @@ func (s *FileStore) up(jrex *Jrex) *FileStore {
 }
 
 /**
+* getModule: Gets the module
+* @params module string
+* @return *Module, error
+**/
+func (s *FileStore) getModule(module string) (*Module, error) {
+	path := filepath.Join(s.BaseDir, fmt.Sprintf("%s.json", module))
+	mod := NewModule(module)
+	result, err := file.LoadOrCreateJSON(path, mod)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+/**
 * Load
 * @param tag string
 * @return *Jrex, error
 **/
 func (s *FileStore) Load(tag string) (*Jrex, error) {
-	module, err := s.GetModule("index")
+	module, err := s.getModule("index")
 	if err != nil {
 		return nil, err
 	}
@@ -108,26 +124,6 @@ func (s *FileStore) Save(jrex *Jrex, userId string) error {
 		return err
 	}
 	return nil
-}
-
-/**
-* GetModule
-* @param module string
-* @return *Module, error
-**/
-func (s *FileStore) GetModule(module string) (*Module, error) {
-	path := filepath.Join(s.BaseDir, fmt.Sprintf("%s.json", module))
-	result, err := file.LoadOrCreateJSON(path, &Module{
-		ID:       fmt.Sprintf("module:%s:%s", module, "1.0.0"),
-		Path:     module,
-		Version:  "1.0.0",
-		Metadata: et.Json{},
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
 }
 
 /**

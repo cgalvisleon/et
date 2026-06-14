@@ -47,11 +47,13 @@ func newDB(params et.Json) (*DB, error) {
 		return nil, errors.New(MSG_DRIVER_NOT_FOUND)
 	}
 
+	tenantId := params.Str("tenant_id")
 	name := params.Str("database")
 	useCore := params.Bool("use_core")
 	recordLimit := params.Int("record_limit")
 	version := params.ValInt(1, "version")
 	result := &DB{
+		TenantId:    tenantId,
 		Name:        name,
 		Schemas:     make(map[string]*Schema),
 		Driver:      driverName,

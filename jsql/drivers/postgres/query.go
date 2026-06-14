@@ -8,6 +8,7 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
+	"github.com/cgalvisleon/et/strs"
 )
 
 /**
@@ -245,11 +246,21 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 		return "", false
 	}
 	alias := fld.From.As
+	if alias == fld.From.Table {
+		alias = ""
+	}
 	if fld.TypeColumn == jsql.COLUMN {
 		if query.UseSourceField {
-			return fmt.Sprintf("'%s', %s.%s", fld.As, alias, fld.Name), true
+			expr := fld.Name
+			expr = strs.Append(alias, expr, ".")
+			return fmt.Sprintf("'%s', %s", fld.As, expr), true
 		} else {
-			return fmt.Sprintf("%s.%s AS %s", alias, fld.Name, fld.As), true
+			expr := fld.Name
+			if expr != fld.As {
+				expr = strs.Append(expr, fld.As, " AS ")
+			}
+			expr = strs.Append(alias, expr, ".")
+			return expr, true
 		}
 	}
 	if fld.TypeColumn == jsql.ATTRIB {
@@ -362,11 +373,9 @@ func pgSelects(query *jsql.Query) []string {
 			}
 			selectExprs = append(selectExprs, selectExpr)
 		}
-		selectExprs = append([]string{}, fmt.Sprintf("jsonb_build_object(\n%s\n)", strings.Join(selectExprs, ",\n")))
 	} else {
 		for _, from := range query.Froms {
 			model := from.Model
-			var columnExprs []string
 			for _, col := range model.Columns {
 				if slices.Contains(query.Hiddens, col.Name) {
 					continue
@@ -381,13 +390,29 @@ func pgSelects(query *jsql.Query) []string {
 				if !ok {
 					continue
 				}
-				columnExprs = append(columnExprs, columnExpr)
+				selectExprs = append(selectExprs, columnExpr)
 			}
-			selectExprs = append(selectExprs, fmt.Sprintf("%s.%s ||\njsonb_build_object(\n%s)", from.As, jsql.SOURCE, strings.Join(columnExprs, ",\n")))
 		}
 	}
 
-	return append([]string{}, fmt.Sprintf("%s AS %s", strings.Join(selectExprs, ",\n"), jsql.RESULT))
+	if query.UseSourceField {
+		if len(query.Selects) == 0 && len(query.Froms) > 0 {
+			from := query.Froms[0]
+			expr := from.As
+			if expr == from.Table {
+				expr = ""
+			}
+			expr = strs.Append(expr, jsql.SOURCE, ".")
+			expr = strs.Append(expr, strings.Join(selectExprs, ""), " ||\n")
+
+			selectExprs = append([]string{}, fmt.Sprintf("%s ||\njsonb_build_object(\n%s\n)", expr, strings.Join(selectExprs, ",\n")))
+		} else {
+			selectExprs = append([]string{}, fmt.Sprintf("jsonb_build_object(\n%s\n)", strings.Join(selectExprs, ",\n")))
+		}
+		return append([]string{}, fmt.Sprintf("%s AS %s", strings.Join(selectExprs, ",\n"), jsql.RESULT))
+	} else {
+		return append([]string{}, strings.Join(selectExprs, ",\n"))
+	}
 }
 
 /**

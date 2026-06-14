@@ -12,6 +12,7 @@ type Connection interface {
 }
 
 type PgConection struct {
+	TenantId    string
 	Database    string
 	Host        string
 	Port        int
@@ -23,7 +24,7 @@ type PgConection struct {
 	RecordLimit int
 }
 
-func pgConection() *PgConection {
+func pgConection(tenantId string) *PgConection {
 	database := config.GetStr("DB_NAME", "josephine")
 	host := config.GetStr("DB_HOST", "localhost")
 	port := config.GetInt("DB_PORT", 5432)
@@ -34,6 +35,7 @@ func pgConection() *PgConection {
 	appName := config.GetStr("DB_APP_NAME", "josephine")
 	recordLimit := config.GetInt("DB_RECORD_LIMIT", 1000)
 	return &PgConection{
+		TenantId:    tenantId,
 		Database:    database,
 		Host:        host,
 		Port:        port,
@@ -52,6 +54,7 @@ func pgConection() *PgConection {
 **/
 func (s *PgConection) GetParams() et.Json {
 	return et.Json{
+		"tenant_id":    s.TenantId,
 		"driver":       DriverPostgres,
 		"database":     s.Database,
 		"host":         s.Host,
@@ -82,6 +85,7 @@ func (s *PgConection) GetDatabase() string {
 }
 
 type SqliteConection struct {
+	TenantId     string
 	Name         string
 	RecordLimit  int
 	PoolMaxOpen  int
@@ -91,7 +95,7 @@ type SqliteConection struct {
 	AppName      string
 }
 
-func sqliteConection() *SqliteConection {
+func sqliteConection(tenantId string) *SqliteConection {
 	name := config.GetStr("DB_NAME", "josephine.db")
 	recordLimit := config.GetInt("DB_RECORD_LIMIT", 1000)
 	poolMaxOpen := config.GetInt("DB_POOL_MAX_OPEN", 10)
@@ -100,6 +104,7 @@ func sqliteConection() *SqliteConection {
 	poolIdleTime := config.GetInt("DB_POOL_IDLE_TIME", 10)
 	appName := config.GetStr("DB_APP_NAME", "josephine")
 	return &SqliteConection{
+		TenantId:     tenantId,
 		Name:         name,
 		RecordLimit:  recordLimit,
 		PoolMaxOpen:  poolMaxOpen,
@@ -116,6 +121,7 @@ func sqliteConection() *SqliteConection {
 **/
 func (s *SqliteConection) GetParams() et.Json {
 	return et.Json{
+		"tenant_id":      s.TenantId,
 		"driver":         DriverSqlite,
 		"name":           s.Name,
 		"record_limit":   s.RecordLimit,

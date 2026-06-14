@@ -8,7 +8,8 @@ import (
 )
 
 func main() {
-	db, err := jsql.Load()
+	tenantId := "37860631"
+	db, err := jsql.Load(tenantId)
 	if err != nil {
 		logs.Panic(err)
 	}

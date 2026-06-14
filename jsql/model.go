@@ -255,18 +255,31 @@ func (s *Model) serialize() ([]byte, error) {
 * @return et.Json
 **/
 func (s *Model) ToJson() et.Json {
-	bt, err := s.serialize()
-	if err != nil {
-		return et.Json{}
+	return et.Json{
+		"name":         s.Name,
+		"table":        s.Table,
+		"columns":      s.Columns,
+		"source_field": s.SourceField,
+		"idx_field":    s.IdxField,
+		"idt_field":    s.IdtField,
+		"indexes":      s.Indexes,
+		"primary_keys": s.PrimaryKeys,
+		"foreign_keys": s.ForeignKeys,
+		"unique":       s.Unique,
+		"required":     s.Required,
+		"hiddens":      s.Hiddens,
+		"details":      s.Details,
+		"rollups":      s.Rollups,
+		"calcs":        s.Calcs,
 	}
+}
 
-	var result et.Json
-	err = json.Unmarshal(bt, &result)
-	if err != nil {
-		return et.Json{}
-	}
-
-	return result
+/**
+* ToString: Returns the model metadata as a string.
+* @return string
+**/
+func (s *Model) ToString() string {
+	return s.ToJson().ToString()
 }
 
 /**

@@ -20,6 +20,9 @@ console.log(result);
 result = pricing.multiplicar(120, 7);
 console.log(result);
 
+const users = db.GetModel("apps", "users");
+console.log(users.ToString());
+
 ctx.set({
   name: "César Galvis León",
   age: 30,

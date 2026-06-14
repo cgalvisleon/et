@@ -68,18 +68,15 @@ func newDB(params et.Json) (*DB, error) {
 * @return et.Json
 **/
 func (s *DB) ToJson() et.Json {
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return et.Json{}
+	return et.Json{
+		"name":         s.Name,
+		"schemas":      s.Schemas,
+		"driver":       s.Driver,
+		"params":       s.Params,
+		"use_core":     s.UseCore,
+		"record_limit": s.RecordLimit,
+		"version":      s.Version,
 	}
-
-	var result et.Json
-	err = json.Unmarshal(bt, &result)
-	if err != nil {
-		return et.Json{}
-	}
-
-	return result
 }
 
 /**

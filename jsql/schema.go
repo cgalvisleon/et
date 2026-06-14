@@ -15,7 +15,7 @@ import (
 type Schema struct {
 	Database  string            `json:"database"`
 	Name      string            `json:"name"`
-	Models    map[string]*Model `json:"-"`
+	Models    map[string]*Model `json:"models"`
 	db        *DB               `json:"-"`
 	historyDb *DB               `json:"-"`
 	deadDb    *DB               `json:"-"`

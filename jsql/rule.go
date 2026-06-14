@@ -2,10 +2,8 @@ package jsql
 
 import (
 	"encoding/json"
-	"path/filepath"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/jrex"
 	"github.com/cgalvisleon/et/timezone"
 )
@@ -194,14 +192,12 @@ func (s *Rule) Load(tag string) (*jrex.Jrex, error) {
 		return nil, err
 	}
 	result.AddModule(module)
+	result.Up(s)
 
-	path := filepath.Join(s.BaseDir, "package.json")
-	result, err := file.LoadOrCreateJSON(path, def)
+	err = s.setCatalog(result.ID, "jrex", result)
 	if err != nil {
 		return nil, err
 	}
-	module.up(result)
-	s.up(result)
 
 	return result, nil
 }

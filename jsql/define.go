@@ -6,7 +6,6 @@ import (
 	"slices"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/jrex"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 )
@@ -344,98 +343,98 @@ func (s *Model) DefineCalcFunc(name string, calc CalcFunction) *Model {
 * @param name string, code string
 * @return *Model
 **/
-func (s *Model) DefineCalc(name string, jrex *jrex.Jrex) *Model {
+func (s *Model) DefineCalc(name, module string) *Model {
 	s.defineColumn(name, CALCFUNC, ANY, nil, []byte{})
-	s.Calcs[name] = jrex
+	s.Calcs[name] = module
 	return s
 }
 
 /**
 * DefineBeforeInsert: Defines a new before insert hook for the model using a bytecode definition.
-* @param rule *jrex.Jrex
+* @param module string
 * @return *Model
 **/
-func (s *Model) DefineBeforeInsert(rule *jrex.Jrex) *Model {
-	idx := slices.IndexFunc(s.BeforeInserts, func(r *jrex.Jrex) bool { return r.ID == rule.ID })
+func (s *Model) DefineBeforeInsert(module string) *Model {
+	idx := slices.IndexFunc(s.BeforeInserts, func(r string) bool { return r == module })
 	if idx != -1 {
-		s.BeforeInserts[idx] = rule
+		s.BeforeInserts[idx] = module
 	} else {
-		s.BeforeInserts = append(s.BeforeInserts, rule)
+		s.BeforeInserts = append(s.BeforeInserts, module)
 	}
 	return s
 }
 
 /**
 * DefineBeforeUpdate: Defines a new before update hook for the model using a bytecode definition.
-* @param rule *jrex.Jrex
+* @param module string
 * @return *Model
 **/
-func (s *Model) DefineBeforeUpdate(rule *jrex.Jrex) *Model {
-	idx := slices.IndexFunc(s.BeforeUpdates, func(r *jrex.Jrex) bool { return r.ID == rule.ID })
+func (s *Model) DefineBeforeUpdate(module string) *Model {
+	idx := slices.IndexFunc(s.BeforeUpdates, func(r string) bool { return r == module })
 	if idx != -1 {
-		s.BeforeUpdates[idx] = rule
+		s.BeforeUpdates[idx] = module
 	} else {
-		s.BeforeUpdates = append(s.BeforeUpdates, rule)
+		s.BeforeUpdates = append(s.BeforeUpdates, module)
 	}
 	return s
 }
 
 /**
 * DefineBeforeDelete: Defines a new before delete hook for the model using a bytecode definition.
-* @param rule *jrex.Jrex
+* @param module string
 * @return *Model
 **/
-func (s *Model) DefineBeforeDelete(rule *jrex.Jrex) *Model {
-	idx := slices.IndexFunc(s.BeforeDeletes, func(r *jrex.Jrex) bool { return r.ID == rule.ID })
+func (s *Model) DefineBeforeDelete(module string) *Model {
+	idx := slices.IndexFunc(s.BeforeDeletes, func(r string) bool { return r == module })
 	if idx != -1 {
-		s.BeforeDeletes[idx] = rule
+		s.BeforeDeletes[idx] = module
 	} else {
-		s.BeforeDeletes = append(s.BeforeDeletes, rule)
+		s.BeforeDeletes = append(s.BeforeDeletes, module)
 	}
 	return s
 }
 
 /**
 * DefineAfterInsert: Defines a new after insert hook for the model using a bytecode definition.
-* @param rule *jrex.Jrex
+* @param module string
 * @return *Model
 **/
-func (s *Model) DefineAfterInsert(rule *jrex.Jrex) *Model {
-	idx := slices.IndexFunc(s.AfterInserts, func(r *jrex.Jrex) bool { return r.ID == rule.ID })
+func (s *Model) DefineAfterInsert(module string) *Model {
+	idx := slices.IndexFunc(s.AfterInserts, func(r string) bool { return r == module })
 	if idx != -1 {
-		s.AfterInserts[idx] = rule
+		s.AfterInserts[idx] = module
 	} else {
-		s.AfterInserts = append(s.AfterInserts, rule)
+		s.AfterInserts = append(s.AfterInserts, module)
 	}
 	return s
 }
 
 /**
 * DefineAfterUpdate: Defines a new after update hook for the model using a bytecode definition.
-* @param rule *jrex.Jrex
+* @param module string
 * @return *Model
 **/
-func (s *Model) DefineAfterUpdate(rule *jrex.Jrex) *Model {
-	idx := slices.IndexFunc(s.AfterUpdates, func(r *jrex.Jrex) bool { return r.ID == rule.ID })
+func (s *Model) DefineAfterUpdate(module string) *Model {
+	idx := slices.IndexFunc(s.AfterUpdates, func(r string) bool { return r == module })
 	if idx != -1 {
-		s.AfterUpdates[idx] = rule
+		s.AfterUpdates[idx] = module
 	} else {
-		s.AfterUpdates = append(s.AfterUpdates, rule)
+		s.AfterUpdates = append(s.AfterUpdates, module)
 	}
 	return s
 }
 
 /**
 * DefineAfterDelete: Defines a new after delete hook for the model using a bytecode definition.
-* @param rule *jrex.Jrex
+* @param module string
 * @return *Model
 **/
-func (s *Model) DefineAfterDelete(rule *jrex.Jrex) *Model {
-	idx := slices.IndexFunc(s.AfterDeletes, func(r *jrex.Jrex) bool { return r.ID == rule.ID })
+func (s *Model) DefineAfterDelete(module string) *Model {
+	idx := slices.IndexFunc(s.AfterDeletes, func(r string) bool { return r == module })
 	if idx != -1 {
-		s.AfterDeletes[idx] = rule
+		s.AfterDeletes[idx] = module
 	} else {
-		s.AfterDeletes = append(s.AfterDeletes, rule)
+		s.AfterDeletes = append(s.AfterDeletes, module)
 	}
 	return s
 }

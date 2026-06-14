@@ -3,12 +3,10 @@ package jsql
 import (
 	"encoding/json"
 	"fmt"
-	"maps"
 	"regexp"
 	"strconv"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/jrex"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 )
@@ -135,6 +133,11 @@ func (s *QueryDetail) GetQuery(item et.Json) *Query {
 	return q
 }
 
+type Calc struct {
+	Model  *Model `json:"model"`
+	Module string `json:"module"`
+}
+
 /**
 * Query: Holds all clauses needed to build a SELECT statement.
 **/
@@ -154,7 +157,7 @@ type Query struct {
 	Details        map[string]*QueryDetail `json:"details"`
 	Rollups        map[string]*QueryDetail `json:"rollups"`
 	CalcFuns       map[string]CalcFunction `json:"calc_funs"`
-	Calcs          map[string]*jrex.Jrex   `json:"calcs"`
+	Calcs          map[string]*Calc        `json:"calcs"`
 	IsExists       bool                    `json:"is_exists"`
 	IsCount        bool                    `json:"is_count"`
 	section        QuerySection            `json:"-"`
@@ -187,6 +190,7 @@ func newQuery(model *Model, as ...string) *Query {
 		Details:    make(map[string]*QueryDetail, 0),
 		Rollups:    make(map[string]*QueryDetail, 0),
 		CalcFuns:   make(map[string]CalcFunction, 0),
+		Calcs:      make(map[string]*Calc, 0),
 		section:    whereSection,
 		maxRows:    model.db.RecordLimit,
 		db:         model.db,
@@ -705,12 +709,17 @@ func (s *Query) setCalcFuns(tx *Tx, item et.Json) {
 * @param tx *Tx, item et.Json
 **/
 func (s *Query) setCalc(tx *Tx, item et.Json) error {
-	for _, jrex := range s.Calcs {
-		ctx, err := jrex.Run()
+	for _, calc := range s.Calcs {
+		jrex, err := calc.Model.Jrex.NewInstance(calc.Module)
 		if err != nil {
 			return err
 		}
-		maps.Copy(item, ctx)
+		jrex.Set("item", item)
+		_, err = jrex.Run()
+		if err != nil {
+			return err
+		}
+		item = jrex.GetJson("item")
 	}
 
 	return nil

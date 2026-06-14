@@ -6,7 +6,6 @@ import (
 	"maps"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/jrex"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 )
@@ -31,12 +30,12 @@ type Command struct {
 	Conditions     []*et.Condition   `json:"conditions"`
 	Returns        []string          `json:"returns"`
 	UseSourceField bool              `json:"use_source_field"`
-	BeforeInserts  []*jrex.Jrex      `json:"before_inserts"`
-	BeforeUpdates  []*jrex.Jrex      `json:"before_updates"`
-	BeforeDeletes  []*jrex.Jrex      `json:"before_deletes"`
-	AfterInserts   []*jrex.Jrex      `json:"after_inserts"`
-	AfterUpdates   []*jrex.Jrex      `json:"after_updates"`
-	AfterDeletes   []*jrex.Jrex      `json:"after_deletes"`
+	BeforeInserts  []string          `json:"before_inserts"`
+	BeforeUpdates  []string          `json:"before_updates"`
+	BeforeDeletes  []string          `json:"before_deletes"`
+	AfterInserts   []string          `json:"after_inserts"`
+	AfterUpdates   []string          `json:"after_updates"`
+	AfterDeletes   []string          `json:"after_deletes"`
 	beforeInserts  []TriggerFunction `json:"-"`
 	beforeUpdates  []TriggerFunction `json:"-"`
 	beforeDeletes  []TriggerFunction `json:"-"`
@@ -65,12 +64,12 @@ func newCommand(model *Model, tp CommandType) *Command {
 		Conditions:     []*et.Condition{},
 		Returns:        []string{},
 		UseSourceField: model.SourceField != "",
-		BeforeInserts:  make([]*jrex.Jrex, 0),
-		BeforeUpdates:  make([]*jrex.Jrex, 0),
-		BeforeDeletes:  make([]*jrex.Jrex, 0),
-		AfterInserts:   make([]*jrex.Jrex, 0),
-		AfterUpdates:   make([]*jrex.Jrex, 0),
-		AfterDeletes:   make([]*jrex.Jrex, 0),
+		BeforeInserts:  make([]string, 0),
+		BeforeUpdates:  make([]string, 0),
+		BeforeDeletes:  make([]string, 0),
+		AfterInserts:   make([]string, 0),
+		AfterUpdates:   make([]string, 0),
+		AfterDeletes:   make([]string, 0),
 		beforeInserts:  []TriggerFunction{},
 		beforeUpdates:  []TriggerFunction{},
 		beforeDeletes:  []TriggerFunction{},
@@ -88,11 +87,11 @@ func newCommand(model *Model, tp CommandType) *Command {
 		for _, fn := range model.afterInserts {
 			result.afterInserts = append(result.afterInserts, fn)
 		}
-		for _, code := range model.BeforeInserts {
-			result.BeforeInserts = append(result.BeforeInserts, code)
+		for _, module := range model.BeforeInserts {
+			result.BeforeInserts = append(result.BeforeInserts, module)
 		}
-		for _, code := range model.AfterInserts {
-			result.AfterInserts = append(result.AfterInserts, code)
+		for _, module := range model.AfterInserts {
+			result.AfterInserts = append(result.AfterInserts, module)
 		}
 	}
 	if map[CommandType]bool{UPDATE: true, UPSERT: true}[tp] {
@@ -102,11 +101,11 @@ func newCommand(model *Model, tp CommandType) *Command {
 		for _, fn := range model.afterUpdates {
 			result.afterUpdates = append(result.afterUpdates, fn)
 		}
-		for _, code := range model.BeforeUpdates {
-			result.BeforeUpdates = append(result.BeforeUpdates, code)
+		for _, module := range model.BeforeUpdates {
+			result.BeforeUpdates = append(result.BeforeUpdates, module)
 		}
-		for _, code := range model.AfterUpdates {
-			result.AfterUpdates = append(result.AfterUpdates, code)
+		for _, module := range model.AfterUpdates {
+			result.AfterUpdates = append(result.AfterUpdates, module)
 		}
 	}
 	if map[CommandType]bool{DELETE: true}[tp] {
@@ -116,11 +115,11 @@ func newCommand(model *Model, tp CommandType) *Command {
 		for _, fn := range model.afterDeletes {
 			result.afterDeletes = append(result.afterDeletes, fn)
 		}
-		for _, code := range model.BeforeDeletes {
-			result.BeforeDeletes = append(result.BeforeDeletes, code)
+		for _, module := range model.BeforeDeletes {
+			result.BeforeDeletes = append(result.BeforeDeletes, module)
 		}
-		for _, code := range model.AfterDeletes {
-			result.AfterDeletes = append(result.AfterDeletes, code)
+		for _, module := range model.AfterDeletes {
+			result.AfterDeletes = append(result.AfterDeletes, module)
 		}
 	}
 	return result
@@ -344,10 +343,14 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 			}
 		}
 
-		for _, jrex := range s.BeforeInserts {
+		for _, module := range s.BeforeInserts {
+			jrex, err := s.model.Jrex.NewInstance(module)
+			if err != nil {
+				return et.Items{}, err
+			}
 			jrex.Set("old", s.Old)
 			jrex.Set("new", s.New)
-			_, err := jrex.Run()
+			_, err = jrex.Run()
 			if err != nil {
 				return et.Items{}, err
 			}
@@ -377,10 +380,14 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 			}
 		}
 
-		for _, jrex := range s.AfterInserts {
+		for _, module := range s.AfterInserts {
+			jrex, err := s.model.Jrex.NewInstance(module)
+			if err != nil {
+				return et.Items{}, err
+			}
 			jrex.Set("old", s.Old)
 			jrex.Set("new", s.New)
-			_, err := jrex.Run()
+			_, err = jrex.Run()
 			if err != nil {
 				return et.Items{}, err
 			}
@@ -424,10 +431,14 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 			}
 		}
 
-		for _, jrex := range s.BeforeUpdates {
+		for _, module := range s.BeforeUpdates {
+			jrex, err := s.model.Jrex.NewInstance(module)
+			if err != nil {
+				return et.Items{}, err
+			}
 			jrex.Set("old", s.Old)
 			jrex.Set("new", s.New)
-			_, err := jrex.Run()
+			_, err = jrex.Run()
 			if err != nil {
 				return et.Items{}, err
 			}
@@ -457,10 +468,14 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 			}
 		}
 
-		for _, jrex := range s.AfterUpdates {
+		for _, module := range s.AfterUpdates {
+			jrex, err := s.model.Jrex.NewInstance(module)
+			if err != nil {
+				return et.Items{}, err
+			}
 			jrex.Set("old", s.Old)
 			jrex.Set("new", s.New)
-			_, err := jrex.Run()
+			_, err = jrex.Run()
 			if err != nil {
 				return et.Items{}, err
 			}
@@ -500,10 +515,14 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 			}
 		}
 
-		for _, jrex := range s.BeforeDeletes {
+		for _, module := range s.BeforeDeletes {
+			jrex, err := s.model.Jrex.NewInstance(module)
+			if err != nil {
+				return et.Items{}, err
+			}
 			jrex.Set("old", s.Old)
 			jrex.Set("new", s.New)
-			_, err := jrex.Run()
+			_, err = jrex.Run()
 			if err != nil {
 				return et.Items{}, err
 			}
@@ -533,10 +552,14 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 			}
 		}
 
-		for _, jrex := range s.AfterDeletes {
+		for _, module := range s.AfterDeletes {
+			jrex, err := s.model.Jrex.NewInstance(module)
+			if err != nil {
+				return et.Items{}, err
+			}
 			jrex.Set("old", s.Old)
 			jrex.Set("new", s.New)
-			_, err := jrex.Run()
+			_, err = jrex.Run()
 			if err != nil {
 				return et.Items{}, err
 			}

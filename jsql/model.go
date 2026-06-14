@@ -65,13 +65,14 @@ type Model struct {
 	IsChanged     bool                    `json:"-"`
 	isInit        bool                    `json:"-"`
 	isTest        bool                    `json:"-"`
-	Calcs         map[string]*jrex.Jrex   `json:"calcs"`
-	BeforeInserts []*jrex.Jrex            `json:"before_inserts"`
-	BeforeUpdates []*jrex.Jrex            `json:"before_updates"`
-	BeforeDeletes []*jrex.Jrex            `json:"before_deletes"`
-	AfterInserts  []*jrex.Jrex            `json:"after_inserts"`
-	AfterUpdates  []*jrex.Jrex            `json:"after_updates"`
-	AfterDeletes  []*jrex.Jrex            `json:"after_deletes"`
+	Jrex          *jrex.Jrex              `json:"jrex"`
+	Calcs         map[string]string       `json:"calcs"`
+	BeforeInserts []string                `json:"before_inserts"`
+	BeforeUpdates []string                `json:"before_updates"`
+	BeforeDeletes []string                `json:"before_deletes"`
+	AfterInserts  []string                `json:"after_inserts"`
+	AfterUpdates  []string                `json:"after_updates"`
+	AfterDeletes  []string                `json:"after_deletes"`
 	AuditLog      []et.Json               `json:"audit_log"`
 	isChanged     bool                    `json:"-"`
 	beforeInserts []TriggerFunction       `json:"-"`
@@ -108,13 +109,13 @@ func newModel(schema *Schema, name string, version int) *Model {
 		Rollups:       make(map[string]*Detail, 0),
 		calcs:         make(map[string]CalcFunction, 0),
 		Version:       version,
-		Calcs:         make(map[string]*jrex.Jrex, 0),
-		BeforeInserts: make([]*jrex.Jrex, 0),
-		BeforeUpdates: make([]*jrex.Jrex, 0),
-		BeforeDeletes: make([]*jrex.Jrex, 0),
-		AfterInserts:  make([]*jrex.Jrex, 0),
-		AfterUpdates:  make([]*jrex.Jrex, 0),
-		AfterDeletes:  make([]*jrex.Jrex, 0),
+		Calcs:         make(map[string]string, 0),
+		BeforeInserts: make([]string, 0),
+		BeforeUpdates: make([]string, 0),
+		BeforeDeletes: make([]string, 0),
+		AfterInserts:  make([]string, 0),
+		AfterUpdates:  make([]string, 0),
+		AfterDeletes:  make([]string, 0),
 		AuditLog:      make([]et.Json, 0),
 		isChanged:     false,
 		beforeInserts: make([]TriggerFunction, 0),
@@ -364,7 +365,11 @@ func (s *Model) Init() error {
 	}
 
 	wg.Wait()
+	if err != nil {
+		return err
+	}
 
+	s.Jrex, err = jrex.Load(s.Name, s.db.rules)
 	if err != nil {
 		return err
 	}

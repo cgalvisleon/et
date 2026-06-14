@@ -180,12 +180,11 @@ func (s *Jrex) SetCtx(ctx et.Json) *Jrex {
 }
 
 /**
-* RunModule: Runs the module
-* @param module string
-* @return et.Json, error
+* newInstance
+* @return *Instance, error
 **/
-func (s *Jrex) RunModule(module string) (et.Json, error) {
-	instance := newInstance(s)
+func (s *Jrex) NewInstance(module string) (*Instance, error) {
+	instance := newInstance(s, module)
 	wrap(instance)
 	for name, value := range s.bindings {
 		instance.Set(name, value)
@@ -193,16 +192,25 @@ func (s *Jrex) RunModule(module string) (et.Json, error) {
 
 	_, err := instance.RunString(requireRuntime)
 	if err != nil {
-		return et.Json{}, err
+		return nil, err
 	}
 
+	return instance, nil
+}
+
+/**
+* RunString
+* @param code string
+* @return goja.Value, error
+**/
+func (s *Jrex) RunInstance(instance *Instance) (et.Json, error) {
 	s.baseDir = ""
-	code, err := s.store.GetCode(module)
+	code, err := s.store.GetCode(instance.Module)
 	if err != nil {
 		return et.Json{}, err
 	}
 
-	_, err = instance.RunScript(module, code)
+	_, err = instance.RunScript(instance.Module, code)
 	if err != nil {
 		return et.Json{}, err
 	}
@@ -212,6 +220,20 @@ func (s *Jrex) RunModule(module string) (et.Json, error) {
 	}
 
 	return s.Ctx, nil
+}
+
+/**
+* RunModule: Runs the module
+* @param module string
+* @return et.Json, error
+**/
+func (s *Jrex) RunModule(module string) (et.Json, error) {
+	instance, err := s.NewInstance(module)
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	return s.RunInstance(instance)
 }
 
 /**

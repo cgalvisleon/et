@@ -139,11 +139,11 @@ func (s *Rule) DeleteModule(module string) error {
 	return nil
 }
 
-func (s *Rule) Load(tag string) (*jrex.Store, error) {
+func (s *Rule) Load(tag string) (*jrex.Jrex, error) {
 	return nil, nil
 }
 
-func (s *Rule) Save(jrex *jrex.Jrex) error {
+func (s *Rule) Save(jrex *jrex.Jrex, userId string) error {
 	return nil
 }
 

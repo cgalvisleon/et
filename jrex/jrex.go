@@ -9,10 +9,6 @@ import (
 	"github.com/dop251/goja"
 )
 
-var (
-	packageName = "jrex"
-)
-
 type Jrex struct {
 	ID       string             `json:"id"`
 	Tag      string             `json:"tag"`

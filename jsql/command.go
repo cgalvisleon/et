@@ -31,12 +31,12 @@ type Command struct {
 	Conditions     []*et.Condition   `json:"conditions"`
 	Returns        []string          `json:"returns"`
 	UseSourceField bool              `json:"use_source_field"`
-	BeforeInserts  [][]byte          `json:"before_inserts"`
-	BeforeUpdates  [][]byte          `json:"before_updates"`
-	BeforeDeletes  [][]byte          `json:"before_deletes"`
-	AfterInserts   [][]byte          `json:"after_inserts"`
-	AfterUpdates   [][]byte          `json:"after_updates"`
-	AfterDeletes   [][]byte          `json:"after_deletes"`
+	BeforeInserts  []*jrex.Jrex      `json:"before_inserts"`
+	BeforeUpdates  []*jrex.Jrex      `json:"before_updates"`
+	BeforeDeletes  []*jrex.Jrex      `json:"before_deletes"`
+	AfterInserts   []*jrex.Jrex      `json:"after_inserts"`
+	AfterUpdates   []*jrex.Jrex      `json:"after_updates"`
+	AfterDeletes   []*jrex.Jrex      `json:"after_deletes"`
 	beforeInserts  []TriggerFunction `json:"-"`
 	beforeUpdates  []TriggerFunction `json:"-"`
 	beforeDeletes  []TriggerFunction `json:"-"`
@@ -45,7 +45,6 @@ type Command struct {
 	afterDeletes   []TriggerFunction `json:"-"`
 	db             *DB               `json:"-"`
 	model          *Model            `json:"-"`
-	jrex           *jrex.Jrex        `json:"-"`
 	isDebug        bool              `json:"-"`
 	isTest         bool              `json:"-"`
 }
@@ -66,12 +65,12 @@ func newCommand(model *Model, tp CommandType) *Command {
 		Conditions:     []*et.Condition{},
 		Returns:        []string{},
 		UseSourceField: model.SourceField != "",
-		BeforeInserts:  make([][]byte, 0),
-		BeforeUpdates:  make([][]byte, 0),
-		BeforeDeletes:  make([][]byte, 0),
-		AfterInserts:   make([][]byte, 0),
-		AfterUpdates:   make([][]byte, 0),
-		AfterDeletes:   make([][]byte, 0),
+		BeforeInserts:  make([]*jrex.Jrex, 0),
+		BeforeUpdates:  make([]*jrex.Jrex, 0),
+		BeforeDeletes:  make([]*jrex.Jrex, 0),
+		AfterInserts:   make([]*jrex.Jrex, 0),
+		AfterUpdates:   make([]*jrex.Jrex, 0),
+		AfterDeletes:   make([]*jrex.Jrex, 0),
 		beforeInserts:  []TriggerFunction{},
 		beforeUpdates:  []TriggerFunction{},
 		beforeDeletes:  []TriggerFunction{},
@@ -82,14 +81,6 @@ func newCommand(model *Model, tp CommandType) *Command {
 		model:          model,
 		isDebug:        model.db.IsDebug,
 	}
-	var err error
-	key := fmt.Sprintf("command:%s:%s", model.Key(), tp)
-	result.jrex, err = jrex.New(key, nil)
-	if err != nil {
-		logs.Panic(err)
-	}
-	result.jrex.Set(model.Name, model)
-	result.jrex.Set("db", result.db)
 	if map[CommandType]bool{INSERT: true, BULK: true, UPSERT: true}[tp] {
 		for _, fn := range model.beforeInserts {
 			result.beforeInserts = append(result.beforeInserts, fn)
@@ -353,14 +344,15 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 			}
 		}
 
-		for _, code := range s.BeforeInserts {
-			s.jrex.Set("old", s.Old)
-			s.jrex.Set("new", s.New)
-			if _, err := s.jrex.RunByBt(code); err != nil {
+		for _, jrex := range s.BeforeInserts {
+			jrex.Set("old", s.Old)
+			jrex.Set("new", s.New)
+			_, err := jrex.Run()
+			if err != nil {
 				return et.Items{}, err
 			}
-			s.Old = s.jrex.GetJson("old")
-			s.New = s.jrex.GetJson("new")
+			s.Old = jrex.GetJson("old")
+			s.New = jrex.GetJson("new")
 		}
 
 		sql, err := s.db.command(s)
@@ -385,14 +377,15 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 			}
 		}
 
-		for _, code := range s.AfterInserts {
-			s.jrex.Set("old", s.Old)
-			s.jrex.Set("new", s.New)
-			if _, err := s.jrex.RunByBt(code); err != nil {
+		for _, jrex := range s.AfterInserts {
+			jrex.Set("old", s.Old)
+			jrex.Set("new", s.New)
+			_, err := jrex.Run()
+			if err != nil {
 				return et.Items{}, err
 			}
-			s.Old = s.jrex.GetJson("old")
-			s.New = s.jrex.GetJson("new")
+			s.Old = jrex.GetJson("old")
+			s.New = jrex.GetJson("new")
 		}
 
 		result.Add(s.New)
@@ -431,14 +424,15 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 			}
 		}
 
-		for _, code := range s.BeforeUpdates {
-			s.jrex.Set("old", s.Old)
-			s.jrex.Set("new", s.New)
-			if _, err := s.jrex.RunByBt(code); err != nil {
+		for _, jrex := range s.BeforeUpdates {
+			jrex.Set("old", s.Old)
+			jrex.Set("new", s.New)
+			_, err := jrex.Run()
+			if err != nil {
 				return et.Items{}, err
 			}
-			s.Old = s.jrex.GetJson("old")
-			s.New = s.jrex.GetJson("new")
+			s.Old = jrex.GetJson("old")
+			s.New = jrex.GetJson("new")
 		}
 
 		sql, err := s.db.command(s)
@@ -463,14 +457,15 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 			}
 		}
 
-		for _, code := range s.AfterUpdates {
-			s.jrex.Set("old", s.Old)
-			s.jrex.Set("new", s.New)
-			if _, err := s.jrex.RunByBt(code); err != nil {
+		for _, jrex := range s.AfterUpdates {
+			jrex.Set("old", s.Old)
+			jrex.Set("new", s.New)
+			_, err := jrex.Run()
+			if err != nil {
 				return et.Items{}, err
 			}
-			s.Old = s.jrex.GetJson("old")
-			s.New = s.jrex.GetJson("new")
+			s.Old = jrex.GetJson("old")
+			s.New = jrex.GetJson("new")
 		}
 
 		result.Add(s.New)
@@ -505,14 +500,15 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 			}
 		}
 
-		for _, code := range s.BeforeDeletes {
-			s.jrex.Set("old", s.Old)
-			s.jrex.Set("new", s.New)
-			if _, err := s.jrex.RunByBt(code); err != nil {
+		for _, jrex := range s.BeforeDeletes {
+			jrex.Set("old", s.Old)
+			jrex.Set("new", s.New)
+			_, err := jrex.Run()
+			if err != nil {
 				return et.Items{}, err
 			}
-			s.Old = s.jrex.GetJson("old")
-			s.New = s.jrex.GetJson("new")
+			s.Old = jrex.GetJson("old")
+			s.New = jrex.GetJson("new")
 		}
 
 		sql, err := s.db.command(s)
@@ -537,14 +533,15 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 			}
 		}
 
-		for _, code := range s.AfterDeletes {
-			s.jrex.Set("old", s.Old)
-			s.jrex.Set("new", s.New)
-			if _, err := s.jrex.RunByBt(code); err != nil {
+		for _, jrex := range s.AfterDeletes {
+			jrex.Set("old", s.Old)
+			jrex.Set("new", s.New)
+			_, err := jrex.Run()
+			if err != nil {
 				return et.Items{}, err
 			}
-			s.Old = s.jrex.GetJson("old")
-			s.New = s.jrex.GetJson("new")
+			s.Old = jrex.GetJson("old")
+			s.New = jrex.GetJson("new")
 		}
 
 		result.Add(s.Old)
@@ -650,11 +647,5 @@ func (s *Command) One() (et.Item, error) {
 func (s *Command) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 	s.Conditions = et.ToCondition(query)
 	s.Returns = query.ArrayStr("returns")
-	s.BeforeInserts = query.ArrayBytes("before_inserts")
-	s.BeforeUpdates = query.ArrayBytes("before_updates")
-	s.BeforeDeletes = query.ArrayBytes("before_deletes")
-	s.AfterInserts = query.ArrayBytes("after_inserts")
-	s.AfterUpdates = query.ArrayBytes("after_updates")
-	s.AfterDeletes = query.ArrayBytes("after_deletes")
 	return s.ExecTx(tx)
 }

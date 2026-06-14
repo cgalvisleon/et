@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/jrex"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/utility"
@@ -60,13 +61,13 @@ type Model struct {
 	IsChanged     bool                    `json:"-"`
 	isInit        bool                    `json:"-"`
 	isTest        bool                    `json:"-"`
-	Calcs         map[string][]byte       `json:"calcs"`
-	BeforeInserts [][]byte                `json:"before_inserts"`
-	BeforeUpdates [][]byte                `json:"before_updates"`
-	BeforeDeletes [][]byte                `json:"before_deletes"`
-	AfterInserts  [][]byte                `json:"after_inserts"`
-	AfterUpdates  [][]byte                `json:"after_updates"`
-	AfterDeletes  [][]byte                `json:"after_deletes"`
+	Calcs         map[string]*jrex.Jrex   `json:"calcs"`
+	BeforeInserts []*jrex.Jrex            `json:"before_inserts"`
+	BeforeUpdates []*jrex.Jrex            `json:"before_updates"`
+	BeforeDeletes []*jrex.Jrex            `json:"before_deletes"`
+	AfterInserts  []*jrex.Jrex            `json:"after_inserts"`
+	AfterUpdates  []*jrex.Jrex            `json:"after_updates"`
+	AfterDeletes  []*jrex.Jrex            `json:"after_deletes"`
 	beforeInserts []TriggerFunction       `json:"-"`
 	beforeUpdates []TriggerFunction       `json:"-"`
 	beforeDeletes []TriggerFunction       `json:"-"`
@@ -196,13 +197,13 @@ func newModel(schema *Schema, name string, version int) *Model {
 		Rollups:       make(map[string]*Detail, 0),
 		calcs:         make(map[string]CalcFunction, 0),
 		Version:       version,
-		Calcs:         make(map[string][]byte, 0),
-		BeforeInserts: make([][]byte, 0),
-		BeforeUpdates: make([][]byte, 0),
-		BeforeDeletes: make([][]byte, 0),
-		AfterInserts:  make([][]byte, 0),
-		AfterUpdates:  make([][]byte, 0),
-		AfterDeletes:  make([][]byte, 0),
+		Calcs:         make(map[string]*jrex.Jrex, 0),
+		BeforeInserts: make([]*jrex.Jrex, 0),
+		BeforeUpdates: make([]*jrex.Jrex, 0),
+		BeforeDeletes: make([]*jrex.Jrex, 0),
+		AfterInserts:  make([]*jrex.Jrex, 0),
+		AfterUpdates:  make([]*jrex.Jrex, 0),
+		AfterDeletes:  make([]*jrex.Jrex, 0),
 		beforeInserts: make([]TriggerFunction, 0),
 		beforeUpdates: make([]TriggerFunction, 0),
 		beforeDeletes: make([]TriggerFunction, 0),

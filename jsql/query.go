@@ -3,6 +3,7 @@ package jsql
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"regexp"
 	"strconv"
 
@@ -153,14 +154,13 @@ type Query struct {
 	Details        map[string]*QueryDetail `json:"details"`
 	Rollups        map[string]*QueryDetail `json:"rollups"`
 	CalcFuns       map[string]CalcFunction `json:"calc_funs"`
-	Calcs          map[string][]byte       `json:"calcs"`
+	Calcs          map[string]*jrex.Jrex   `json:"calcs"`
 	IsExists       bool                    `json:"is_exists"`
 	IsCount        bool                    `json:"is_count"`
 	section        QuerySection            `json:"-"`
 	maxRows        int                     `json:"-"`
 	db             *DB                     `json:"-"`
 	historyDb      *DB                     `json:"-"`
-	jrex           *jrex.Jrex              `json:"-"`
 	isDebug        bool                    `json:"-"`
 	isTest         bool                    `json:"-"`
 }
@@ -193,12 +193,6 @@ func newQuery(model *Model, as ...string) *Query {
 		historyDb:  model.historyDb,
 		isDebug:    model.db.IsDebug,
 	}
-	var err error
-	result.jrex, err = jrex.New("query", nil)
-	if err != nil {
-		logs.Panic(err)
-	}
-	result.jrex.Set("db", model.db)
 	result.addFrom(model, as[0])
 	return result
 }
@@ -446,7 +440,6 @@ func (s *Query) addFrom(model *Model, as string) *Query {
 	if !s.UseSourceField {
 		s.UseSourceField = model.SourceField != ""
 	}
-	s.jrex.Set(model.Name, model)
 	return s
 }
 
@@ -712,13 +705,12 @@ func (s *Query) setCalcFuns(tx *Tx, item et.Json) {
 * @param tx *Tx, item et.Json
 **/
 func (s *Query) setCalc(tx *Tx, item et.Json) error {
-	for _, code := range s.Calcs {
-		s.jrex.Set("item", item)
-		s.jrex.Set("tx", tx)
-		if _, err := s.jrex.RunByBt(code); err != nil {
+	for _, jrex := range s.Calcs {
+		ctx, err := jrex.Run()
+		if err != nil {
 			return err
 		}
-		item = s.jrex.GetJson("item")
+		maps.Copy(item, ctx)
 	}
 
 	return nil

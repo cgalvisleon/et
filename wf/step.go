@@ -72,7 +72,7 @@ type Step struct {
 * @param def StepParams
 * @return *Step
 **/
-func (s *WorkFlow) newStep(tenantId string, kind Kind, tp, tag, version, title string) (*Step, error) {
+func (s *WorkFlow) newStep(kind Kind, tp, tag, version, title string) (*Step, error) {
 	if version == "" {
 		version = "1.0.0"
 	}
@@ -82,7 +82,7 @@ func (s *WorkFlow) newStep(tenantId string, kind Kind, tp, tag, version, title s
 	result := &Step{
 		CreatedAt: now,
 		UpdatedAt: now,
-		TenantId:  tenantId,
+		TenantId:  s.TenantId,
 		ID:        id,
 		Kind:      kind,
 		Type:      tp,

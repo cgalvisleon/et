@@ -2,6 +2,10 @@ package workflow
 
 import (
 	"net/http"
+
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/request"
+	"github.com/cgalvisleon/et/response"
 )
 
 const (
@@ -17,9 +21,19 @@ type Router interface {
 
 func (s *WorkFlow) LoadRouter(r Router) {
 	r.Protect(GET, "/steps/{id}", s.httpGetStep)
-	r.Protect(POST, "/steps", s.httpSetStep)
-	r.Protect(PUT, "/steps/{id}", s.httpStatusStep)
+	r.Protect(POST, "/steps", s.httpNewStep)
+	r.Protect(PUT, "/steps/{id}", s.httpUpdateStep)
+	r.Protect(PUT, "/steps/{id}/definition", s.httpSetDefinitionStep)
 	r.Protect(DELETE, "/steps/{id}", s.httpDeleteStep)
+	// Flows
+	r.Protect(GET, "/flows/{tag}", s.httpGetFlow)
+	r.Protect(POST, "/flows", s.httpSetFlow)
+	r.Protect(PUT, "/flows/{tag}", s.httpStatusFlow)
+	r.Protect(DELETE, "/flows/{tag}", s.httpDeleteFlow)
+	// Instances
+	r.Protect(GET, "/instances/{id}", s.httpGetInstance)
+	r.Protect(DELETE, "/instances/{id}", s.httpDeleteInstance)
+	r.Protect(POST, "/instances", s.httpRunInstance)
 }
 
 /**
@@ -27,20 +41,109 @@ func (s *WorkFlow) LoadRouter(r Router) {
 * @params w http.ResponseWriter, r *http.Request
 **/
 func (s *WorkFlow) httpGetStep(w http.ResponseWriter, r *http.Request) {
+	id := request.URLParam(r, "id").Str()
+	step, err := s.getStep(id)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.JSON(w, r, http.StatusOK, step.ToJson())
 }
 
 /**
-* httpSetStep
+* httpNewStep
 * @params w http.ResponseWriter, r *http.Request
 **/
-func (s *WorkFlow) httpSetStep(w http.ResponseWriter, r *http.Request) {
+func (s *WorkFlow) httpNewStep(w http.ResponseWriter, r *http.Request) {
+	body, err := request.GetBody(r)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	kind := Kind(body.Str("kind"))
+	tp := body.Str("type")
+	tag := body.Str("tag")
+	version := body.Str("version")
+	title := body.Str("title")
+
+	if !KindList[kind] {
+		response.HTTPError(w, r, http.StatusBadRequest, "invalid kind")
+		return
+	}
+
+	step, err := s.newStep(kind, tp, tag, version, title)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.JSON(w, r, http.StatusOK, step.ToJson())
 }
 
 /**
-* httpStatusStep
+* httpUpdateStep
 * @params w http.ResponseWriter, r *http.Request
 **/
-func (s *WorkFlow) httpStatusStep(w http.ResponseWriter, r *http.Request) {
+func (s *WorkFlow) httpUpdateStep(w http.ResponseWriter, r *http.Request) {
+	id := request.URLParam(r, "id").Str()
+	body, err := request.GetBody(r)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	step, err := s.getStep(id)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	version := body.Str("version")
+	title := body.Str("title")
+	description := body.Str("description")
+	config := body.Json("config")
+	params := body.Json("params")
+	userId := request.UserId(r)
+
+	err = step.put(version, title, description, config, params, userId)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.JSON(w, r, http.StatusOK, step.ToJson())
+}
+
+/**
+* httpSetDefinitionStep
+* @params w http.ResponseWriter, r *http.Request
+**/
+func (s *WorkFlow) httpSetDefinitionStep(w http.ResponseWriter, r *http.Request) {
+	id := request.URLParam(r, "id").Str()
+	body, err := request.GetBody(r)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	step, err := s.getStep(id)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	definition := body.Str("definition")
+	userId := request.UserId(r)
+
+	err = step.setDefinition(definition, userId)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.JSON(w, r, http.StatusOK, step.ToJson())
 }
 
 /**
@@ -48,4 +151,65 @@ func (s *WorkFlow) httpStatusStep(w http.ResponseWriter, r *http.Request) {
 * @params w http.ResponseWriter, r *http.Request
 **/
 func (s *WorkFlow) httpDeleteStep(w http.ResponseWriter, r *http.Request) {
+	id := request.URLParam(r, "id").Str()
+	userId := request.UserId(r)
+
+	err := s.deleteStep(id, userId)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.JSON(w, r, http.StatusOK, et.Json{
+		"message": "ok",
+	})
+}
+
+/**
+* httpGetFlow
+* @params w http.ResponseWriter, r *http.Request
+**/
+func (s *WorkFlow) httpGetFlow(w http.ResponseWriter, r *http.Request) {
+}
+
+/**
+* httpSetFlow
+* @params w http.ResponseWriter, r *http.Request
+**/
+func (s *WorkFlow) httpSetFlow(w http.ResponseWriter, r *http.Request) {}
+
+/**
+* httpStatusFlow
+* @params w http.ResponseWriter, r *http.Request
+**/
+func (s *WorkFlow) httpStatusFlow(w http.ResponseWriter, r *http.Request) {
+}
+
+/**
+* httpDeleteFlow
+* @params w http.ResponseWriter, r *http.Request
+**/
+func (s *WorkFlow) httpDeleteFlow(w http.ResponseWriter, r *http.Request) {
+
+}
+
+/**
+* httpGetInstance
+* @params w http.ResponseWriter, r *http.Request
+**/
+func (s *WorkFlow) httpGetInstance(w http.ResponseWriter, r *http.Request) {
+}
+
+/**
+* httpDeleteInstance
+* @params w http.ResponseWriter, r *http.Request
+**/
+func (s *WorkFlow) httpDeleteInstance(w http.ResponseWriter, r *http.Request) {
+}
+
+/**
+* httpRunInstance
+* @params w http.ResponseWriter, r *http.Request
+**/
+func (s *WorkFlow) httpRunInstance(w http.ResponseWriter, r *http.Request) {
 }

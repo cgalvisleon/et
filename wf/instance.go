@@ -98,7 +98,7 @@ type Instance struct {
 * @param params InstanceParams
 * @return *Instance, error
 **/
-func (s *WorkFlow) newInstance(tenantId, projectId, flowId, triggerTag, userId string) (*Instance, error) {
+func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*Instance, error) {
 	flow, err := s.getFlow(flowId)
 	if err != nil {
 		return nil, err
@@ -127,7 +127,7 @@ func (s *WorkFlow) newInstance(tenantId, projectId, flowId, triggerTag, userId s
 	id := reg.ULID()
 	result := &Instance{
 		StartedAt:  now,
-		TenantId:   tenantId,
+		TenantId:   s.TenantId,
 		ProjectId:  projectId,
 		ID:         id,
 		FlowId:     flowId,

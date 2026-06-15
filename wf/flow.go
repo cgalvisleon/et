@@ -80,7 +80,7 @@ type Flow struct {
 * @param tenantId, tag, title, version, userId string
 * @return *Flow
 **/
-func (s *WorkFlow) newFlow(tenantId, tag, title, version, userId string) *Flow {
+func (s *WorkFlow) newFlow(tag, title, version, userId string) *Flow {
 	if version == "" {
 		version = "1.0.0"
 	}
@@ -89,7 +89,7 @@ func (s *WorkFlow) newFlow(tenantId, tag, title, version, userId string) *Flow {
 	result := &Flow{
 		CreatedAt:     now,
 		UpdatedAt:     now,
-		TenantId:      tenantId,
+		TenantId:      s.TenantId,
 		ID:            id,
 		Tag:           tag,
 		Title:         title,

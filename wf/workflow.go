@@ -231,7 +231,7 @@ func (s *WorkFlow) Run(flowId, triggerTag, id, projectId string, ctx, tags et.Js
 
 	instance, err := s.getInstance(id, userId)
 	if errors.Is(err, ErrorInstanceNotFound) {
-		instance, err = s.newInstance(s.TenantId, projectId, flowId, triggerTag, userId)
+		instance, err = s.newInstance(projectId, flowId, triggerTag, userId)
 		instance.setStatus(PENDING, userId)
 	}
 	if err != nil {

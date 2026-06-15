@@ -136,6 +136,11 @@ func (s *Jrex) Save(userId string) error {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
+	err := s.store.Save(s, userId)
+	if err != nil {
+		return err
+	}
+
 	for _, onSave := range s.onSave {
 		err := onSave(s)
 		if err != nil {
@@ -143,7 +148,7 @@ func (s *Jrex) Save(userId string) error {
 		}
 	}
 
-	return s.store.Save(s, userId)
+	return nil
 }
 
 /**

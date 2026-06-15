@@ -10,6 +10,7 @@ import (
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/resilience"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -26,19 +27,20 @@ type Store interface {
 }
 
 type WorkFlow struct {
-	CreatedAt   time.Time            `json:"created_at"`
-	UpdatedAt   time.Time            `json:"updated_at"`
-	TenantId    string               `json:"tenant_id"`
-	ID          string               `json:"id"`
-	Flows       map[string]*Flow     `json:""`
-	Instances   map[string]*Instance `json:"-"`
-	AuditLog    []et.Json            `json:"audit_log"`
-	bindings    map[string]any       `json:"-"`
-	muFlows     sync.Mutex           `json:"-"`
-	muInstances sync.Mutex           `json:"-"`
-	store       Store                `json:"-"`
-	metrics     cache.Metrics        `json:"-"`
-	isDebug     bool                 `json:"-"`
+	CreatedAt       time.Time            `json:"created_at"`
+	UpdatedAt       time.Time            `json:"updated_at"`
+	TenantId        string               `json:"tenant_id"`
+	ID              string               `json:"id"`
+	Flows           map[string]*Flow     `json:""`
+	Instances       map[string]*Instance `json:"-"`
+	AuditLog        []et.Json            `json:"audit_log"`
+	bindings        map[string]any       `json:"-"`
+	muFlows         sync.Mutex           `json:"-"`
+	muInstances     sync.Mutex           `json:"-"`
+	store           Store                `json:"-"`
+	resilienceStore resilience.Store     `json:"-"`
+	metrics         cache.Metrics        `json:"-"`
+	isDebug         bool                 `json:"-"`
 }
 
 /**
@@ -174,31 +176,6 @@ func (s *WorkFlow) addFlow(flow *Flow) {
 }
 
 /**
-* getFlow
-* @param tag string
-* @return *Flow, error
-**/
-func (s *WorkFlow) getFlow(id, userId string) (*Flow, error) {
-	s.muFlows.Lock()
-	flow, exists := s.Flows[id]
-	s.muFlows.Unlock()
-	if exists {
-		return flow, nil
-	}
-
-	flow, err := s.loadFlow(id, userId)
-	if err != nil {
-		return nil, err
-	}
-
-	if flow == nil {
-		return nil, errors.New(MSG_FLOW_NOT_FOUND)
-	}
-
-	return flow, nil
-}
-
-/**
 * removeFlow
 * @param id string
 **/
@@ -221,30 +198,6 @@ func (s *WorkFlow) addInstance(instance *Instance) {
 }
 
 /**
-* getInstance
-* @param id string
-* @return *Instance, error
-**/
-func (s *WorkFlow) getInstance(id, userId string) (*Instance, error) {
-	s.muInstances.Lock()
-	defer s.muInstances.Unlock()
-
-	instance, exists := s.Instances[id]
-	if exists {
-		return instance, nil
-	}
-
-	instance, err := s.loadInstance(id, userId)
-	if err != nil {
-		return nil, err
-	}
-
-	s.addInstance(instance)
-
-	return instance, nil
-}
-
-/**
 * removeInstance
 * @param id string
 **/
@@ -262,7 +215,7 @@ func (s *WorkFlow) removeInstance(id string) {
 * @param tag, id, ownerId string, step int, ctx, tags et.Json, userId string
 * @return *Instance, error
 **/
-func (s *WorkFlow) Run(flowId, triggerTag, id, projectId, ownerId string, ctx, tags et.Json, userId string) (et.Json, error) {
+func (s *WorkFlow) Run(flowId, triggerTag, id, projectId string, ctx, tags et.Json, userId string) (et.Json, error) {
 	if id != "" {
 		key := fmt.Sprintf("%s:status", id)
 		exists := cache.Exists(key)
@@ -278,15 +231,8 @@ func (s *WorkFlow) Run(flowId, triggerTag, id, projectId, ownerId string, ctx, t
 
 	instance, err := s.getInstance(id, userId)
 	if errors.Is(err, ErrorInstanceNotFound) {
-		instance, err = s.newInstance(InstanceParams{
-			TenantId:   s.TenantId,
-			ProjectId:  ownerId,
-			ID:         id,
-			FlowId:     flowId,
-			TriggerTag: triggerTag,
-			UserID:     userId,
-		})
-		instance.setStatus(PENDING)
+		instance, err = s.newInstance(s.TenantId, projectId, flowId, triggerTag, userId)
+		instance.setStatus(PENDING, userId)
 	}
 	if err != nil {
 		return nil, err
@@ -295,7 +241,7 @@ func (s *WorkFlow) Run(flowId, triggerTag, id, projectId, ownerId string, ctx, t
 	s.addInstance(instance)
 	instance.setTag(tags)
 	instance.setCtx(ctx)
-	result, err := instance.run(ctx)
+	result, err := instance.run(ctx, userId)
 	if err != nil {
 		return et.Json{}, err
 	}

@@ -3,6 +3,7 @@ package workflow
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
@@ -40,26 +41,30 @@ var (
 )
 
 type Step struct {
-	TenantId    string         `json:"tenant_id"`
-	ID          string         `json:"id"`
-	Kind        Kind           `json:"kind"`
-	Type        string         `json:"type"`
-	Tag         string         `json:"tag"`
-	Version     string         `json:"version"`
-	Status      Status         `json:"status"`
-	Title       string         `json:"title"`
-	Description string         `json:"description"`
-	Definition  interface{}    `json:"definition"`
-	Config      et.Json        `json:"config"`
-	Params      et.Json        `json:"params"`
-	Inputs      int            `json:"inputs"`
-	Outputs     int            `json:"outputs"`
-	Stop        bool           `json:"stop"`
-	AuditLog    []et.Json      `json:"audit_log"`
-	isDebug     bool           `json:"-"`
-	isChanged   bool           `json:"-"`
-	store       Store          `json:"-"`
-	bindings    map[string]any `json:"-"`
+	CreatedAt   time.Time                               `json:"created_at"`
+	UpdatedAt   time.Time                               `json:"updated_at"`
+	TenantId    string                                  `json:"tenant_id"`
+	ID          string                                  `json:"id"`
+	Kind        Kind                                    `json:"kind"`
+	Type        string                                  `json:"type"`
+	Tag         string                                  `json:"tag"`
+	Version     string                                  `json:"version"`
+	Status      Status                                  `json:"status"`
+	Title       string                                  `json:"title"`
+	Description string                                  `json:"description"`
+	Definition  interface{}                             `json:"definition"`
+	Config      et.Json                                 `json:"config"`
+	Params      et.Json                                 `json:"params"`
+	Inputs      int                                     `json:"inputs"`
+	Outputs     int                                     `json:"outputs"`
+	Stop        bool                                    `json:"stop"`
+	AuditLog    []et.Json                               `json:"audit_log"`
+	isDebug     bool                                    `json:"-"`
+	isChanged   bool                                    `json:"-"`
+	store       Store                                   `json:"-"`
+	bindings    map[string]any                          `json:"-"`
+	onSave      []func(step *Step) error                `json:"-"`
+	onDelete    []func(step *Step, userId string) error `json:"-"`
 }
 
 /**
@@ -72,25 +77,30 @@ func (s *WorkFlow) newStep(tenantId string, kind Kind, tp, tag, version, title s
 		version = "1.0.0"
 	}
 
+	now := timezone.Now()
 	id := reg.ULID()
 	result := &Step{
-		TenantId: tenantId,
-		ID:       id,
-		Kind:     kind,
-		Type:     tp,
-		Tag:      tag,
-		Version:  version,
-		Status:   ACTIVE,
-		Title:    title,
-		Config:   et.Json{},
-		Params:   et.Json{},
-		Inputs:   0,
-		Outputs:  0,
-		Stop:     false,
-		AuditLog: make([]et.Json, 0),
-		isDebug:  s.isDebug,
-		store:    s.store,
-		bindings: s.bindings,
+		CreatedAt: now,
+		UpdatedAt: now,
+		TenantId:  tenantId,
+		ID:        id,
+		Kind:      kind,
+		Type:      tp,
+		Tag:       tag,
+		Version:   version,
+		Status:    ACTIVE,
+		Title:     title,
+		Config:    et.Json{},
+		Params:    et.Json{},
+		Inputs:    0,
+		Outputs:   0,
+		Stop:      false,
+		AuditLog:  make([]et.Json, 0),
+		isDebug:   s.isDebug,
+		store:     s.store,
+		bindings:  s.bindings,
+		onSave:    make([]func(step *Step) error, 0),
+		onDelete:  make([]func(step *Step, userId string) error, 0),
 	}
 	return result, nil
 }
@@ -118,6 +128,8 @@ func (s *WorkFlow) getStep(id string) (*Step, error) {
 	result.store = s.store
 	result.isDebug = s.isDebug
 	result.bindings = s.bindings
+	result.onSave = make([]func(step *Step) error, 0)
+	result.onDelete = make([]func(step *Step, userId string) error, 0)
 	return result, nil
 }
 
@@ -126,12 +138,29 @@ func (s *WorkFlow) getStep(id string) (*Step, error) {
 * @param id string
 * @return error
 **/
-func (s *WorkFlow) deleteStep(id string) error {
+func (s *WorkFlow) deleteStep(id, userId string) error {
 	if s.store == nil {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
 
-	return s.store.Delete("step", id)
+	step, err := s.getStep(id)
+	if err != nil {
+		return err
+	}
+
+	err = s.store.Delete("step", id)
+	if err != nil {
+		return err
+	}
+
+	for _, onDelete := range step.onDelete {
+		err := onDelete(step, userId)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 /**
@@ -157,6 +186,32 @@ func (s *Step) addAuditLog(userId string, action string) {
 }
 
 /**
+* OnSave
+* @param onSave func(jrex *Jrex) error
+* @return *Jrex
+**/
+func (s *Step) OnSave(onSave func(step *Step) error) *Step {
+	if s.onSave == nil {
+		s.onSave = make([]func(step *Step) error, 0)
+	}
+	s.onSave = append(s.onSave, onSave)
+	return s
+}
+
+/**
+* OnDelete
+* @param onDelete func(step *Step) error
+* @return *Step
+**/
+func (s *Step) OnDelete(onDelete func(step *Step, userId string) error) *Step {
+	if s.onDelete == nil {
+		s.onDelete = make([]func(step *Step, userId string) error, 0)
+	}
+	s.onDelete = append(s.onDelete, onDelete)
+	return s
+}
+
+/**
 * save
 * @return error
 **/
@@ -175,7 +230,19 @@ func (s *Step) save(userId string) error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	return s.store.Set("step", s.ID, s.TenantId, "", s, userId)
+	err := s.store.Set("step", s.ID, s.TenantId, "", s, userId)
+	if err != nil {
+		return err
+	}
+
+	for _, onSave := range s.onSave {
+		err := onSave(s)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 /**
@@ -184,6 +251,8 @@ func (s *Step) save(userId string) error {
 **/
 func (s *Step) ToJson() et.Json {
 	return et.Json{
+		"created_at":  timezone.Format(s.CreatedAt, timezone.RFC3339),
+		"updated_at":  timezone.Format(s.UpdatedAt, timezone.RFC3339),
 		"tenant_id":   s.TenantId,
 		"id":          s.ID,
 		"kind":        s.Kind,
@@ -214,7 +283,7 @@ func (s *Step) ToString() string {
 * @param instance *Instance, ctx et.Json
 * @return error
 **/
-func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
+func (s *Step) run(instance *Instance, ctx et.Json, userId string) (et.Json, error) {
 	initJrex := func() {
 		instance.jrex = goja.New()
 		wrapper(instance)
@@ -224,10 +293,10 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 	}
 
 	runString := func(code string) (et.Json, error) {
-		instance.setStatus(RUNNING)
+		instance.setStatus(RUNNING, userId)
 		_, err := instance.jrex.RunString(code)
 		if err != nil {
-			instance.setStatus(FAILED)
+			instance.setStatus(FAILED, userId)
 			return et.Json{}, err
 		}
 		return instance.Ctx, nil
@@ -235,10 +304,10 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 
 	switch v := s.Definition.(type) {
 	case StepFn:
-		instance.setStatus(RUNNING)
+		instance.setStatus(RUNNING, userId)
 		result, err := v(instance, ctx)
 		if err != nil {
-			instance.setStatus(FAILED)
+			instance.setStatus(FAILED, userId)
 			return et.Json{}, err
 		}
 		return result, nil

@@ -58,46 +58,39 @@ type Current struct {
 }
 
 type Instance struct {
-	StartedAt    time.Time              `json:"started_at"`
-	UpdatedAt    time.Time              `json:"updated_at"`
-	DoneAt       time.Time              `json:"done_at"`
-	TenantId     string                 `json:"tenant_id"`
-	ProjectId    string                 `json:"project_id"`
-	ID           string                 `json:"id"`
-	FlowId       string                 `json:"flow_id"`
-	Code         string                 `json:"code"`
-	Title        string                 `json:"title"`
-	Status       Status                 `json:"status"`
-	Ctx          et.Json                `json:"ctx"`
-	Ctxs         map[string]et.Json     `json:"ctxs"`
-	Results      map[string]*Result     `json:"results"`
-	Params       et.Json                `json:"params"`
-	Tags         et.Json                `json:"tags"`
-	Traces       []et.Json              `json:"traces"`
-	TriggerTag   string                 `json:"trigger_tag"`
-	Trigger      *Trigger               `json:"trigger"`
-	Current      *Current               `json:"current"`
-	CurrentIndex int                    `json:"current_index"`
-	IsDone       bool                   `json:"is_done"`
-	IsStop       bool                   `json:"is_stop"`
-	AuditLog     []et.Json              `json:"audit_log"`
-	Rollbacks    bool                   `json:"rollbacks"`
-	UserID       string                 `json:"-"`
-	isDebug      bool                   `json:"-"`
-	store        Store                  `json:"-"`
-	flow         *Flow                  `json:"-"`
-	bindings     map[string]interface{} `json:"-"`
-	resilience   *resilience.Resilience `json:"-"`
-	jrex         *goja.Runtime          `json:"-"`
-}
-
-type InstanceParams struct {
-	TenantId   string `json:"tenant_id"`
-	ProjectId  string `json:"project_id"`
-	ID         string `json:"id"`
-	FlowId     string `json:"flow_id"`
-	TriggerTag string `json:"trigger_tag"`
-	UserID     string `json:"user_id"`
+	StartedAt    time.Time                                       `json:"started_at"`
+	UpdatedAt    time.Time                                       `json:"updated_at"`
+	DoneAt       time.Time                                       `json:"done_at"`
+	TenantId     string                                          `json:"tenant_id"`
+	ProjectId    string                                          `json:"project_id"`
+	ID           string                                          `json:"id"`
+	FlowId       string                                          `json:"flow_id"`
+	Code         string                                          `json:"code"`
+	Title        string                                          `json:"title"`
+	Status       Status                                          `json:"status"`
+	Ctx          et.Json                                         `json:"ctx"`
+	Ctxs         map[string]et.Json                              `json:"ctxs"`
+	Results      map[string]*Result                              `json:"results"`
+	Params       et.Json                                         `json:"params"`
+	Tags         et.Json                                         `json:"tags"`
+	TriggerTag   string                                          `json:"trigger_tag"`
+	Trigger      *Trigger                                        `json:"trigger"`
+	Current      *Current                                        `json:"current"`
+	CurrentIndex int                                             `json:"current_index"`
+	IsDone       bool                                            `json:"is_done"`
+	IsStop       bool                                            `json:"is_stop"`
+	Rollbacks    bool                                            `json:"rollbacks"`
+	AuditLog     []et.Json                                       `json:"audit_log"`
+	isDebug      bool                                            `json:"-"`
+	isChanged    bool                                            `json:"-"`
+	store        Store                                           `json:"-"`
+	workflow     *WorkFlow                                       `json:"-"`
+	flow         *Flow                                           `json:"-"`
+	bindings     map[string]interface{}                          `json:"-"`
+	resilience   *resilience.Resilience                          `json:"-"`
+	jrex         *goja.Runtime                                   `json:"-"`
+	onSave       []func(instance *Instance) error                `json:"-"`
+	onDelete     []func(instance *Instance, userId string) error `json:"-"`
 }
 
 /**
@@ -105,13 +98,13 @@ type InstanceParams struct {
 * @param params InstanceParams
 * @return *Instance, error
 **/
-func (s *WorkFlow) newInstance(params InstanceParams) (*Instance, error) {
-	flow, err := s.getFlow(params.FlowId, params.UserID)
+func (s *WorkFlow) newInstance(tenantId, projectId, flowId, triggerTag, userId string) (*Instance, error) {
+	flow, err := s.getFlow(flowId)
 	if err != nil {
 		return nil, err
 	}
 
-	trigger, err := flow.getTrigger(params.TriggerTag)
+	trigger, err := flow.getTrigger(triggerTag)
 	if err != nil {
 		return nil, err
 	}
@@ -131,13 +124,13 @@ func (s *WorkFlow) newInstance(params InstanceParams) (*Instance, error) {
 	}
 
 	now := timezone.Now()
-	id := reg.TagULID("instance", params.ID)
+	id := reg.ULID()
 	result := &Instance{
 		StartedAt:  now,
-		TenantId:   params.TenantId,
-		ProjectId:  params.ProjectId,
+		TenantId:   tenantId,
+		ProjectId:  projectId,
 		ID:         id,
-		FlowId:     params.FlowId,
+		FlowId:     flowId,
 		Code:       code,
 		Title:      title,
 		Status:     PENDING,
@@ -146,35 +139,38 @@ func (s *WorkFlow) newInstance(params InstanceParams) (*Instance, error) {
 		Results:    make(map[string]*Result),
 		Params:     et.Json{},
 		Tags:       et.Json{},
-		Traces:     make([]et.Json, 0),
-		TriggerTag: params.TriggerTag,
+		TriggerTag: triggerTag,
 		Trigger:    trigger,
 		IsDone:     false,
 		IsStop:     false,
 		AuditLog:   make([]et.Json, 0),
-		UserID:     params.UserID,
 		store:      s.store,
+		workflow:   s,
 		flow:       flow,
 		bindings:   make(map[string]interface{}),
+		onSave:     make([]func(instance *Instance) error, 0),
+		onDelete:   make([]func(instance *Instance, userId string) error, 0),
 	}
 	for k, v := range s.bindings {
 		result.bindings[k] = v
 	}
+
+	result.addAuditLog(userId, "new_instance")
 	return result, nil
 }
 
 /**
-* loadInstance
+* getInstance
 * @param id, userId string
 * @return *Instance, error
 **/
-func (s *WorkFlow) loadInstance(id, userId string) (*Instance, error) {
+func (s *WorkFlow) getInstance(id, userId string) (*Instance, error) {
 	if s.store == nil {
 		return nil, errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
 
-	result := &Instance{}
-	exists, err := s.store.Get("instance", id, result)
+	var result *Instance
+	exists, err := s.store.Get("instance", id, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +179,7 @@ func (s *WorkFlow) loadInstance(id, userId string) (*Instance, error) {
 		return nil, ErrorInstanceNotFound
 	}
 
-	flow, err := s.getFlow(result.FlowId, userId)
+	flow, err := s.getFlow(result.FlowId)
 	if err != nil {
 		return nil, err
 	}
@@ -194,26 +190,59 @@ func (s *WorkFlow) loadInstance(id, userId string) (*Instance, error) {
 	}
 
 	result.store = s.store
+	result.workflow = s
 	result.flow = flow
 	result.Trigger = trigger
 	result.isDebug = s.isDebug
-	result.UserID = userId
-	result.bindings = make(map[string]any)
+	result.onSave = make([]func(instance *Instance) error, 0)
+	result.onDelete = make([]func(instance *Instance, userId string) error, 0)
+	result.bindings = make(map[string]interface{})
 	for k, v := range s.bindings {
 		result.bindings[k] = v
 	}
+
+	result.addAuditLog(userId, "get_instance")
 	return result, nil
 }
 
 /**
-* save
+* deleteInstance
+* @param id string, userId string
 * @return error
 **/
-func (s *Instance) save() error {
+func (s *WorkFlow) deleteInstance(id, userId string) error {
 	if s.store == nil {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
 
+	instance, err := s.getInstance(id, userId)
+	if err != nil {
+		return err
+	}
+
+	key := fmt.Sprintf("%s:status", s.ID)
+	cache.Delete(key)
+
+	err = s.store.Delete("instance", id)
+	if err != nil {
+		return err
+	}
+
+	for _, onDelete := range instance.onDelete {
+		err := onDelete(instance, userId)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+/**
+* addAuditLog
+* @param userId string, action interface{}
+**/
+func (s *Instance) addAuditLog(userId string, action interface{}) {
 	if s.AuditLog == nil {
 		s.AuditLog = make([]et.Json, 0)
 	}
@@ -221,13 +250,52 @@ func (s *Instance) save() error {
 	now := timezone.Now()
 	s.AuditLog = append(s.AuditLog, et.Json{
 		"created_at": now,
-		"user_id":    s.UserID,
-		"action":     "save",
+		"user_id":    userId,
+		"action":     action,
 	})
 	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
 	if len(s.AuditLog) > maxAuditLog {
 		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
 	}
+	s.isChanged = true
+}
+
+/**
+* OnSave
+* @param onSave func(jrex *Jrex) error
+* @return *Jrex
+**/
+func (s *Instance) OnSave(onSave func(instance *Instance) error) *Instance {
+	if s.onSave == nil {
+		s.onSave = make([]func(instance *Instance) error, 0)
+	}
+	s.onSave = append(s.onSave, onSave)
+	return s
+}
+
+/**
+* OnDelete
+* @param onDelete func(step *Step) error
+* @return *Step
+**/
+func (s *Instance) OnDelete(onDelete func(instance *Instance, userId string) error) *Instance {
+	if s.onDelete == nil {
+		s.onDelete = make([]func(instance *Instance, userId string) error, 0)
+	}
+	s.onDelete = append(s.onDelete, onDelete)
+	return s
+}
+
+/**
+* save
+* @return error
+**/
+func (s *Instance) save(userId string) error {
+	if s.store == nil {
+		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
+	}
+
+	s.isChanged = false
 
 	if s.isDebug {
 		logs.Log(packageName, "save:", s.ToString())
@@ -235,21 +303,20 @@ func (s *Instance) save() error {
 
 	key := fmt.Sprintf("%s:status", s.ID)
 	cache.SetObject(key, s.Status, 1*time.Minute)
-	return s.store.Set("instance", s.ID, s.TenantId, s.ProjectId, s, s.UserID)
-}
 
-/**
-* delete
-* @return error
-**/
-func (s *Instance) delete() error {
-	if s.store == nil {
-		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
+	err := s.store.Set("instance", s.ID, s.TenantId, s.ProjectId, s, userId)
+	if err != nil {
+		return err
 	}
 
-	key := fmt.Sprintf("%s:status", s.ID)
-	cache.Delete(key)
-	return s.store.Delete("instance", s.ID)
+	for _, onSave := range s.onSave {
+		err := onSave(s)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 /**
@@ -271,7 +338,6 @@ func (s *Instance) ToJson() et.Json {
 		"results":     s.Results,
 		"params":      s.Params,
 		"tags":        s.Tags,
-		"traces":      s.Traces,
 		"trigger_tag": s.TriggerTag,
 		"trigger":     s.Trigger,
 		"current":     s.Current,
@@ -318,7 +384,7 @@ func (s *Instance) ToString() string {
 * @param status Status
 * @return error
 **/
-func (s *Instance) setStatus(status Status) error {
+func (s *Instance) setStatus(status Status, userId string) error {
 	if s.Status == status {
 		return nil
 	}
@@ -331,15 +397,7 @@ func (s *Instance) setStatus(status Status) error {
 		s.IsDone = true
 	}
 
-	if status != FAILED {
-		step := ""
-		if s.Current != nil && s.Current.Source != nil {
-			step = s.Current.Source.Title
-		}
-		logs.Logf(packageName, MSG_INSTANCE_STATUS, s.ID, s.FlowId, s.Status, step)
-	}
-
-	return s.save()
+	return s.save(userId)
 }
 
 /**
@@ -367,20 +425,19 @@ func (s *Instance) setParams(params et.Json) et.Json {
 * @param step int, result et.Json, err error
 * @return error
 **/
-func (s *Instance) setTrace(stepId string, result et.Json, err error) error {
+func (s *Instance) setTrace(stepId string, result et.Json, err error, userId string) error {
 	errMessage := ""
 	if err != nil {
 		errMessage = err.Error()
 	}
-	now := timezone.Now()
-	s.Traces = append(s.Traces, et.Json{
-		"created_at": now,
-		"step_id":    stepId,
-		"ctx":        s.Ctx,
-		"result":     result,
-		"error":      errMessage,
+	s.addAuditLog(userId, et.Json{
+		"action":  "set_trace",
+		"step_id": stepId,
+		"ctx":     s.Ctx,
+		"result":  result,
+		"error":   errMessage,
 	})
-	return s.save()
+	return s.save(userId)
 }
 
 /**
@@ -388,7 +445,7 @@ func (s *Instance) setTrace(stepId string, result et.Json, err error) error {
 * @param result et.Json, err error
 * @return et.Json, error
 **/
-func (s *Instance) setResult(result et.Json, err error) (et.Json, error) {
+func (s *Instance) setResult(result et.Json, err error, userId string) (et.Json, error) {
 	errMessage := ""
 	if err != nil {
 		errMessage = err.Error()
@@ -409,7 +466,7 @@ func (s *Instance) setResult(result et.Json, err error) (et.Json, error) {
 		Error:  errMessage,
 	}
 	if err != nil {
-		s.setStatus(FAILED)
+		s.setStatus(FAILED, userId)
 		step := ""
 		if s.Current != nil && s.Current.Source != nil {
 			step = s.Current.Source.Title
@@ -487,13 +544,13 @@ func (s *Instance) next() bool {
 
 /**
 * run
-* @param ctx et.Json
+* @param ctx et.Json, userId string
 * @return et.Json, error
 **/
-func (s *Instance) run(ctx et.Json) (et.Json, error) {
+func (s *Instance) run(ctx et.Json, userId string) (et.Json, error) {
 	var err error
 	defer func() {
-		s.setTrace(s.Current.Source.ID, ctx, err)
+		s.setTrace(s.Current.Source.ID, ctx, err, userId)
 	}()
 
 	if s.Status == DONE {
@@ -518,16 +575,16 @@ func (s *Instance) run(ctx et.Json) (et.Json, error) {
 		}
 
 		ctx = s.setCtx(ctx)
-		result, err = step.run(s, ctx)
+		result, err = step.run(s, ctx, userId)
 		if err != nil {
-			result, err := s.rollback(result, err)
+			result, err := s.rollback(result, err, userId)
 			if err != nil {
 				return result, err
 			}
 			continue
 		}
 
-		s.setResult(result, err)
+		s.setResult(result, err, userId)
 
 		if s.IsDone {
 			return result, nil
@@ -545,9 +602,9 @@ func (s *Instance) run(ctx et.Json) (et.Json, error) {
 * rollback
 * @return et.Json, error
 **/
-func (s *Instance) rollback(result et.Json, err error) (et.Json, error) {
+func (s *Instance) rollback(result et.Json, err error, userId string) (et.Json, error) {
 	if s.flow.TotalAttempts > 0 {
-		result, err := s.startResilence()
+		result, err := s.startResilence(userId)
 		if err == nil {
 			return result, nil
 		}
@@ -557,7 +614,7 @@ func (s *Instance) rollback(result et.Json, err error) (et.Json, error) {
 		return result, err
 	}
 	s.Rollbacks = true
-	s.setResult(result, err)
+	s.setResult(result, err, userId)
 
 	return result, err
 }
@@ -566,9 +623,9 @@ func (s *Instance) rollback(result et.Json, err error) (et.Json, error) {
 * startResilence
 * @return (bool, error)
 **/
-func (s *Instance) startResilence() (et.Json, error) {
+func (s *Instance) startResilence(userId string) (et.Json, error) {
 	if s.resilience == nil {
-		resilience, err := resilience.New(s.store)
+		resilience, err := resilience.New(s.workflow.resilienceStore)
 		if err != nil {
 			return et.Json{}, err
 		}
@@ -585,11 +642,11 @@ func (s *Instance) startResilence() (et.Json, error) {
 		TotalAttempts: s.flow.TotalAttempts,
 		Interval:      s.flow.TimeAttempts,
 		Tags:          s.Tags,
-		UserId:        s.UserID,
+		UserId:        userId,
 		Fn:            s.run,
 		FnArgs:        []interface{}{s.Ctx},
 	})
-	res, err := resilence.Run(s.UserID)
+	res, err := resilence.Run(userId)
 	if err != nil {
 		return et.Json{}, err
 	}

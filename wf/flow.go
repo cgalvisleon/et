@@ -2,16 +2,14 @@ package workflow
 
 import (
 	"errors"
-	"fmt"
 	"slices"
 	"time"
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
-	"github.com/cgalvisleon/et/utility"
 )
 
 const (
@@ -19,6 +17,10 @@ const (
 	WEBHOOK  string = "webhook"
 	CRON     string = "cron"
 	SCHEDULE string = "schedule"
+)
+
+var (
+	ErrrFlowNotFound = errors.New(MSG_FLOW_NOT_FOUND)
 )
 
 type Port string
@@ -50,61 +52,49 @@ type Trigger struct {
 }
 
 type Flow struct {
-	CreatedAt     time.Time        `json:"created_at"`
-	UpdatedAt     time.Time        `json:"updated_at"`
-	TenantId      string           `json:"tenant_id"`
-	ProjectId     string           `json:"project_id"`
-	ID            string           `json:"id"`
-	Tag           string           `json:"tag"`
-	Title         string           `json:"title"`
-	Description   string           `json:"description"`
-	Version       string           `json:"version"`
-	WorkflowId    string           `json:"workflow_id"`
-	Steps         map[string]*Step `json:"steps"`
-	Connections   []*Connection    `json:"connections"`
-	Triggers      []*Trigger       `json:"triggers"`
-	TotalAttempts int              `json:"total_attempts"`
-	TimeAttempts  time.Duration    `json:"time_attempts"`
-	Public        bool             `json:"public"`
-	AuditLog      []et.Json        `json:"audit_log"`
-	UserID        string           `json:"-"`
-	isDebug       bool             `json:"-"`
-	isChanged     bool             `json:"-"`
-	store         Store            `json:"-"`
-}
-
-type FlowParams struct {
-	TenantId    string `json:"tenant_id"`
-	ProjectId   string `json:"project_id"`
-	Tag         string `json:"tag"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Version     string `json:"version"`
-	UserID      string `json:"user_id"`
+	CreatedAt     time.Time                               `json:"created_at"`
+	UpdatedAt     time.Time                               `json:"updated_at"`
+	TenantId      string                                  `json:"tenant_id"`
+	ID            string                                  `json:"id"`
+	Tag           string                                  `json:"tag"`
+	Title         string                                  `json:"title"`
+	Description   string                                  `json:"description"`
+	Version       string                                  `json:"version"`
+	WorkflowId    string                                  `json:"workflow_id"`
+	Steps         map[string]*Step                        `json:"steps"`
+	Connections   []*Connection                           `json:"connections"`
+	Triggers      []*Trigger                              `json:"triggers"`
+	TotalAttempts int                                     `json:"total_attempts"`
+	TimeAttempts  time.Duration                           `json:"time_attempts"`
+	Public        bool                                    `json:"public"`
+	AuditLog      []et.Json                               `json:"audit_log"`
+	isDebug       bool                                    `json:"-"`
+	isChanged     bool                                    `json:"-"`
+	store         Store                                   `json:"-"`
+	onSave        []func(flow *Flow) error                `json:"-"`
+	onDelete      []func(flow *Flow, userId string) error `json:"-"`
 }
 
 /**
 * newFlow
-* @param params FlowParams
+* @param tenantId, tag, title, version, userId string
 * @return *Flow
 **/
-func (s *WorkFlow) newFlow(params FlowParams) *Flow {
-	now := timezone.Now()
-	if params.Version == "" {
-		params.Version = "1.0.0"
+func (s *WorkFlow) newFlow(tenantId, tag, title, version, userId string) *Flow {
+	if version == "" {
+		version = "1.0.0"
 	}
-	params.Tag = utility.Normalize(params.Tag)
-	id := fmt.Sprintf("flow:%s:%s", params.Tag, params.Version)
+	id := reg.ULID()
+	now := timezone.Now()
 	result := &Flow{
 		CreatedAt:     now,
 		UpdatedAt:     now,
-		TenantId:      params.TenantId,
-		ProjectId:     params.ProjectId,
+		TenantId:      tenantId,
 		ID:            id,
-		Tag:           params.Tag,
-		Title:         params.Title,
-		Description:   params.Description,
-		Version:       params.Version,
+		Tag:           tag,
+		Title:         title,
+		Description:   "",
+		Version:       version,
 		WorkflowId:    s.ID,
 		Steps:         make(map[string]*Step),
 		Connections:   make([]*Connection, 0),
@@ -113,61 +103,125 @@ func (s *WorkFlow) newFlow(params FlowParams) *Flow {
 		TimeAttempts:  0,
 		Public:        false,
 		AuditLog:      make([]et.Json, 0),
-		UserID:        params.UserID,
+		isDebug:       s.isDebug,
 		store:         s.store,
+		onSave:        make([]func(flow *Flow) error, 0),
+		onDelete:      make([]func(flow *Flow, userId string) error, 0),
 	}
 	return result
 }
 
 /**
 * loadFlow
-* @param id, userId string
+* @param id string
 * @return *Flow, error
 **/
-func (s *WorkFlow) loadFlow(id, userId string) (*Flow, error) {
+func (s *WorkFlow) getFlow(id string) (*Flow, error) {
 	if s.store == nil {
 		return nil, errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
 
-	result := &Flow{}
-	exists, err := s.store.Get("flow", id, result)
+	var result *Flow
+	exists, err := s.store.Get("flow", id, &result)
 	if err != nil {
 		return nil, err
 	}
 
 	if !exists {
-		return nil, errors.New(MSG_FLOW_NOT_FOUND)
+		return nil, ErrrFlowNotFound
 	}
 
 	result.store = s.store
 	result.isDebug = s.isDebug
-	result.UserID = userId
+	result.onSave = make([]func(flow *Flow) error, 0)
+	result.onDelete = make([]func(flow *Flow, userId string) error, 0)
 	return result, nil
+}
+
+/**
+* delete
+* @return error
+**/
+func (s *WorkFlow) deleteFlow(id, userId string) error {
+	if s.store == nil {
+		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
+	}
+
+	flow, err := s.getFlow(id)
+	if err != nil {
+		return err
+	}
+
+	err = s.store.Delete("flow", id)
+	if err != nil {
+		return err
+	}
+
+	for _, onDelete := range flow.onDelete {
+		err := onDelete(flow, userId)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+/**
+* addAuditLog
+* @param userId string, action string
+**/
+func (s *Flow) addAuditLog(userId string, action string) {
+	if s.AuditLog == nil {
+		s.AuditLog = make([]et.Json, 0)
+	}
+
+	now := timezone.Now()
+	s.AuditLog = append(s.AuditLog, et.Json{
+		"created_at": now,
+		"user_id":    userId,
+		"action":     action,
+	})
+	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
+	if len(s.AuditLog) > maxAuditLog {
+		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	}
+	s.isChanged = true
+}
+
+/**
+* OnSave
+* @param onSave func(jrex *Jrex) error
+* @return *Jrex
+**/
+func (s *Flow) OnSave(onSave func(flow *Flow) error) *Flow {
+	if s.onSave == nil {
+		s.onSave = make([]func(flow *Flow) error, 0)
+	}
+	s.onSave = append(s.onSave, onSave)
+	return s
+}
+
+/**
+* OnDelete
+* @param onDelete func(step *Step) error
+* @return *Step
+**/
+func (s *Flow) OnDelete(onDelete func(flow *Flow, userId string) error) *Flow {
+	if s.onDelete == nil {
+		s.onDelete = make([]func(flow *Flow, userId string) error, 0)
+	}
+	s.onDelete = append(s.onDelete, onDelete)
+	return s
 }
 
 /**
 * save
 * @return error
 **/
-func (s *Flow) save() error {
+func (s *Flow) save(userId string) error {
 	if s.store == nil {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
-	}
-
-	if s.AuditLog == nil {
-		s.AuditLog = make([]et.Json, 0)
-	}
-
-	now := timezone.Now()
-	s.UpdatedAt = now
-	s.AuditLog = append(s.AuditLog, et.Json{
-		"created_at": now,
-		"user_id":    s.UserID,
-		"action":     "save",
-	})
-	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
-	if len(s.AuditLog) > maxAuditLog {
-		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
 	}
 
 	s.isChanged = false
@@ -177,21 +231,19 @@ func (s *Flow) save() error {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	event.Publish(EVENT_FLOW_SET, data)
-
-	return s.store.Set("flow", s.ID, s.TenantId, s.WorkflowId, s, s.UserID)
-}
-
-/**
-* delete
-* @return error
-**/
-func (s *Flow) delete() error {
-	if s.store == nil {
-		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
+	err := s.store.Set("flow", s.ID, s.TenantId, s.WorkflowId, s, userId)
+	if err != nil {
+		return err
 	}
 
-	return s.store.Delete("flow", s.ID)
+	for _, onSave := range s.onSave {
+		err := onSave(s)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 /**
@@ -200,10 +252,9 @@ func (s *Flow) delete() error {
 **/
 func (s *Flow) ToJson() et.Json {
 	return et.Json{
-		"created_at":     s.CreatedAt,
-		"updated_at":     s.UpdatedAt,
+		"created_at":     timezone.Format(s.CreatedAt, timezone.RFC3339),
+		"updated_at":     timezone.Format(s.UpdatedAt, timezone.RFC3339),
 		"tenant_id":      s.TenantId,
-		"project_id":     s.ProjectId,
 		"id":             s.ID,
 		"tag":            s.Tag,
 		"workflow_id":    s.WorkflowId,
@@ -214,6 +265,8 @@ func (s *Flow) ToJson() et.Json {
 		"connections":    s.Connections,
 		"total_attempts": s.TotalAttempts,
 		"time_attempts":  s.TimeAttempts.String(),
+		"public":         s.Public,
+		"audit_log":      s.AuditLog,
 	}
 }
 

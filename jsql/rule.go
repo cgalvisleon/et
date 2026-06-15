@@ -157,18 +157,31 @@ func (s *Rule) getCatalog(kind, tag string, des any) (bool, error) {
 
 /**
 * NewModule: Creates a new module
-* @param jrex *jrex.Jrex, path string
+* @param rex *jrex.Jrex, name string
 * @return *jrex.Module, error
 **/
-func (s *Rule) NewModule(jrex *jrex.Jrex, path string) (*jrex.Module, error) {
-	result := jrex.NewModule(path)
-	jrex.AddModule(result)
+func (s *Rule) NewModule(rex *jrex.Jrex, name string) (*jrex.Module, error) {
+	result := rex.NewModule(name)
+	rex.AddModule(result)
 	code := ""
 	err := s.setCatalog(result.ID, "code", result.Path, code)
 	if err != nil {
 		return nil, err
 	}
 	return result, nil
+}
+
+/**
+* GetModule: Gets the module
+* @param rex *jrex.Jrex, name string
+* @return *jrex.Module, error
+**/
+func (s *Rule) GetModule(rex *jrex.Jrex, name string) (*jrex.Module, error) {
+	mod, ok := rex.Modules[name]
+	if ok {
+		return mod, nil
+	}
+	return s.NewModule(rex, name)
 }
 
 /**
@@ -208,11 +221,11 @@ func (s *Rule) Load(tag string) (*jrex.Jrex, error) {
 
 /**
 * save: Saves the jrex
-* @param jrex *jrex.Jrex, userId string
+* @param rex *jrex.Jrex, userId string
 * @return error
 **/
-func (s *Rule) Save(jrex *jrex.Jrex, userId string) error {
-	err := s.setCatalog(jrex.ID, "jrex", jrex.Tag, jrex)
+func (s *Rule) Save(rex *jrex.Jrex, userId string) error {
+	err := s.setCatalog(rex.ID, "jrex", rex.Tag, rex)
 	if err != nil {
 		return err
 	}

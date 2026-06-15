@@ -354,12 +354,26 @@ func (s *Model) DefineCalc(name, module string) *Model {
 * @param module string
 * @return *Model
 **/
-func (s *Model) DefineBeforeInsert(module string) *Model {
-	idx := slices.IndexFunc(s.BeforeInserts, func(r string) bool { return r == module })
+func (s *Model) DefineBeforeInsert(name, code string) *Model {
+	if s.rules == nil {
+		return s
+	}
+
+	mod, err := s.rules.GetModule(s.Jrex, name)
+	if err != nil {
+		return s
+	}
+
+	err = s.rules.SetCode(mod, code)
+	if err != nil {
+		return s
+	}
+
+	idx := slices.IndexFunc(s.BeforeInserts, func(r string) bool { return r == name })
 	if idx != -1 {
-		s.BeforeInserts[idx] = module
+		s.BeforeInserts[idx] = name
 	} else {
-		s.BeforeInserts = append(s.BeforeInserts, module)
+		s.BeforeInserts = append(s.BeforeInserts, name)
 	}
 	return s
 }
@@ -369,12 +383,26 @@ func (s *Model) DefineBeforeInsert(module string) *Model {
 * @param module string
 * @return *Model
 **/
-func (s *Model) DefineBeforeUpdate(module string) *Model {
-	idx := slices.IndexFunc(s.BeforeUpdates, func(r string) bool { return r == module })
+func (s *Model) DefineBeforeUpdate(name, code string) *Model {
+	if s.rules == nil {
+		return s
+	}
+
+	mod, err := s.rules.GetModule(s.Jrex, name)
+	if err != nil {
+		return s
+	}
+
+	err = s.rules.SetCode(mod, code)
+	if err != nil {
+		return s
+	}
+
+	idx := slices.IndexFunc(s.BeforeUpdates, func(r string) bool { return r == name })
 	if idx != -1 {
-		s.BeforeUpdates[idx] = module
+		s.BeforeUpdates[idx] = name
 	} else {
-		s.BeforeUpdates = append(s.BeforeUpdates, module)
+		s.BeforeUpdates = append(s.BeforeUpdates, name)
 	}
 	return s
 }
@@ -384,12 +412,26 @@ func (s *Model) DefineBeforeUpdate(module string) *Model {
 * @param module string
 * @return *Model
 **/
-func (s *Model) DefineBeforeDelete(module string) *Model {
-	idx := slices.IndexFunc(s.BeforeDeletes, func(r string) bool { return r == module })
+func (s *Model) DefineBeforeDelete(name, code string) *Model {
+	if s.rules == nil {
+		return s
+	}
+
+	mod, err := s.rules.GetModule(s.Jrex, name)
+	if err != nil {
+		return s
+	}
+
+	err = s.rules.SetCode(mod, code)
+	if err != nil {
+		return s
+	}
+
+	idx := slices.IndexFunc(s.BeforeDeletes, func(r string) bool { return r == name })
 	if idx != -1 {
-		s.BeforeDeletes[idx] = module
+		s.BeforeDeletes[idx] = name
 	} else {
-		s.BeforeDeletes = append(s.BeforeDeletes, module)
+		s.BeforeDeletes = append(s.BeforeDeletes, name)
 	}
 	return s
 }
@@ -399,12 +441,26 @@ func (s *Model) DefineBeforeDelete(module string) *Model {
 * @param module string
 * @return *Model
 **/
-func (s *Model) DefineAfterInsert(module string) *Model {
-	idx := slices.IndexFunc(s.AfterInserts, func(r string) bool { return r == module })
+func (s *Model) DefineAfterInsert(name, code string) *Model {
+	if s.rules == nil {
+		return s
+	}
+
+	mod, err := s.rules.GetModule(s.Jrex, name)
+	if err != nil {
+		return s
+	}
+
+	err = s.rules.SetCode(mod, code)
+	if err != nil {
+		return s
+	}
+
+	idx := slices.IndexFunc(s.AfterInserts, func(r string) bool { return r == name })
 	if idx != -1 {
-		s.AfterInserts[idx] = module
+		s.AfterInserts[idx] = name
 	} else {
-		s.AfterInserts = append(s.AfterInserts, module)
+		s.AfterInserts = append(s.AfterInserts, name)
 	}
 	return s
 }
@@ -414,12 +470,26 @@ func (s *Model) DefineAfterInsert(module string) *Model {
 * @param module string
 * @return *Model
 **/
-func (s *Model) DefineAfterUpdate(module string) *Model {
-	idx := slices.IndexFunc(s.AfterUpdates, func(r string) bool { return r == module })
+func (s *Model) DefineAfterUpdate(name, code string) *Model {
+	if s.rules == nil {
+		return s
+	}
+
+	mod, err := s.rules.GetModule(s.Jrex, name)
+	if err != nil {
+		return s
+	}
+
+	err = s.rules.SetCode(mod, code)
+	if err != nil {
+		return s
+	}
+
+	idx := slices.IndexFunc(s.AfterUpdates, func(r string) bool { return r == name })
 	if idx != -1 {
-		s.AfterUpdates[idx] = module
+		s.AfterUpdates[idx] = name
 	} else {
-		s.AfterUpdates = append(s.AfterUpdates, module)
+		s.AfterUpdates = append(s.AfterUpdates, name)
 	}
 	return s
 }
@@ -429,12 +499,26 @@ func (s *Model) DefineAfterUpdate(module string) *Model {
 * @param module string
 * @return *Model
 **/
-func (s *Model) DefineAfterDelete(module string) *Model {
-	idx := slices.IndexFunc(s.AfterDeletes, func(r string) bool { return r == module })
+func (s *Model) DefineAfterDelete(name, code string) *Model {
+	if s.rules == nil {
+		return s
+	}
+
+	mod, err := s.rules.GetModule(s.Jrex, name)
+	if err != nil {
+		return s
+	}
+
+	err = s.rules.SetCode(mod, code)
+	if err != nil {
+		return s
+	}
+
+	idx := slices.IndexFunc(s.AfterDeletes, func(r string) bool { return r == name })
 	if idx != -1 {
-		s.AfterDeletes[idx] = module
+		s.AfterDeletes[idx] = name
 	} else {
-		s.AfterDeletes = append(s.AfterDeletes, module)
+		s.AfterDeletes = append(s.AfterDeletes, name)
 	}
 	return s
 }

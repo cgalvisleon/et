@@ -17,7 +17,7 @@ const (
 * @return void
 **/
 func wrapper(rex *jrex.Jrex, model *Model) {
-	rex.OnSave(func(jrex *jrex.Jrex) error {
+	rex.OnSave(func(rex *jrex.Jrex) error {
 		channel := fmt.Sprintf("%s:%s", EVENT_JREX_SET, model.TenantId)
 		event.Publish(channel, rex.ToJson())
 		return nil

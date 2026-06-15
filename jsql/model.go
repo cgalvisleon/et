@@ -130,7 +130,7 @@ func newModel(schema *Schema, name string, version int) *Model {
 		deadDb:        schema.deadDb,
 		IsDebug:       schema.db.IsDebug,
 	}
-	result.rules = loadRule(schema.db, schema.TenantId, result.Key())
+	result.rules = loadRule(result)
 	result = defaultTrigger(result)
 	return result
 }

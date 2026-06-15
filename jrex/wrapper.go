@@ -46,7 +46,7 @@ func wrapperRunTime(instance *Instance) {
 	instance.Set("exec", nil)
 	instance.Set("__load", func(modulePath string) string {
 		module := filepath.Join(instance.baseDir, modulePath)
-		code, err := instance.jrex.store.GetCode(module)
+		code, err := instance.store.GetCode(module)
 		if err != nil {
 			panic(instance.Error(err))
 		}
@@ -54,7 +54,7 @@ func wrapperRunTime(instance *Instance) {
 		_, exists := instance.jrex.Modules[module]
 		if !exists {
 			mod := instance.jrex.NewModule(module)
-			instance.jrex.AddModule(mod)
+			instance.jrex.addModule(mod)
 		}
 
 		return code

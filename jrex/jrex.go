@@ -186,7 +186,7 @@ func (s *Jrex) addAuditLog(userId string, action string) {
 * @param module *Module
 * @return *Jrex
 **/
-func (s *Jrex) AddModule(module *Module) *Jrex {
+func (s *Jrex) addModule(module *Module) *Jrex {
 	module.up(s)
 	s.Modules[module.Path] = module
 	s.addAuditLog(s.userId, "add_module")

@@ -19,12 +19,11 @@ const (
 
 type Store interface {
 	Set(collection, id, tenantId, ownerId string, obj any, userId string) error
+	Get(collection, id string, dest any) (bool, error)
+	Delete(collection, id string) error
 	// By Collection
 	GetByCollection(collection, id string, dest any) (bool, error)
 	DeleteByCollection(collection, id string) error
-	// By Id
-	Get(id string, dest any) (bool, error)
-	Delete(id string) error
 	// By Query
 	Query(query et.Json) (et.Items, error)
 	// By Module

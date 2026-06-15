@@ -13,7 +13,7 @@ type Store interface {
 	Load(tag string) (*Jrex, error)
 	Save(jrex *Jrex, userId string) error
 	GetCode(module string) (string, error)
-	SetCode(module *Module, code string) error
+	SetCode(module string, code string) error
 }
 
 type FileStore struct {
@@ -72,16 +72,10 @@ func (s *FileStore) getModule(module string) (*Module, error) {
 * @return *Jrex, error
 **/
 func (s *FileStore) Load(tag string) (*Jrex, error) {
-	module, err := s.getModule("index")
-	if err != nil {
-		return nil, err
-	}
-
 	def, err := NewJrex(tag)
 	if err != nil {
 		return nil, err
 	}
-	def.AddModule(module)
 
 	path := filepath.Join(s.BaseDir, "package.json")
 	result, err := file.LoadOrCreateJSON(path, def)
@@ -89,6 +83,13 @@ func (s *FileStore) Load(tag string) (*Jrex, error) {
 		return nil, err
 	}
 	s.up(result)
+
+	if len(def.Modules) == 0 {
+		_, err := s.getModule("index")
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	return result, nil
 }
@@ -128,8 +129,8 @@ func (s *FileStore) GetCode(module string) (string, error) {
 * @param module *Module, code string
 * @return error
 **/
-func (s *FileStore) SetCode(module *Module, code string) error {
-	path := filepath.Join(s.BaseDir, fmt.Sprintf("%s.js", module.Path))
+func (s *FileStore) SetCode(module string, code string) error {
+	path := filepath.Join(s.BaseDir, fmt.Sprintf("%s.js", module))
 	return file.WriteString(path, code)
 }
 

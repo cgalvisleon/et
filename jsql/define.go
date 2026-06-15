@@ -359,12 +359,7 @@ func (s *Model) DefineBeforeInsert(name, code string) *Model {
 		return s
 	}
 
-	mod, err := s.rules.GetModule(s.Jrex, name)
-	if err != nil {
-		return s
-	}
-
-	err = s.rules.SetCode(mod, code)
+	err := s.rules.SetCode(name, code)
 	if err != nil {
 		return s
 	}
@@ -388,12 +383,7 @@ func (s *Model) DefineBeforeUpdate(name, code string) *Model {
 		return s
 	}
 
-	mod, err := s.rules.GetModule(s.Jrex, name)
-	if err != nil {
-		return s
-	}
-
-	err = s.rules.SetCode(mod, code)
+	err := s.rules.SetCode(name, code)
 	if err != nil {
 		return s
 	}
@@ -417,12 +407,7 @@ func (s *Model) DefineBeforeDelete(name, code string) *Model {
 		return s
 	}
 
-	mod, err := s.rules.GetModule(s.Jrex, name)
-	if err != nil {
-		return s
-	}
-
-	err = s.rules.SetCode(mod, code)
+	err := s.rules.SetCode(name, code)
 	if err != nil {
 		return s
 	}
@@ -446,12 +431,7 @@ func (s *Model) DefineAfterInsert(name, code string) *Model {
 		return s
 	}
 
-	mod, err := s.rules.GetModule(s.Jrex, name)
-	if err != nil {
-		return s
-	}
-
-	err = s.rules.SetCode(mod, code)
+	err := s.rules.SetCode(name, code)
 	if err != nil {
 		return s
 	}
@@ -475,12 +455,7 @@ func (s *Model) DefineAfterUpdate(name, code string) *Model {
 		return s
 	}
 
-	mod, err := s.rules.GetModule(s.Jrex, name)
-	if err != nil {
-		return s
-	}
-
-	err = s.rules.SetCode(mod, code)
+	err := s.rules.SetCode(name, code)
 	if err != nil {
 		return s
 	}
@@ -504,12 +479,7 @@ func (s *Model) DefineAfterDelete(name, code string) *Model {
 		return s
 	}
 
-	mod, err := s.rules.GetModule(s.Jrex, name)
-	if err != nil {
-		return s
-	}
-
-	err = s.rules.SetCode(mod, code)
+	err := s.rules.SetCode(name, code)
 	if err != nil {
 		return s
 	}

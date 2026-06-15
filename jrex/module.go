@@ -53,12 +53,14 @@ type Module struct {
 func (s *Jrex) NewModule(path string) *Module {
 	version := "1.0.0"
 	id := reg.ULID()
-	return &Module{
+	result := &Module{
 		ID:       id,
 		Path:     path,
 		Version:  version,
 		Metadata: et.Json{},
 	}
+	s.addModule(result)
+	return result
 }
 
 /**

@@ -11,6 +11,7 @@ import (
 type Instance struct {
 	Module  string        `json:"module"`
 	Ctx     et.Json       `json:"ctx"`
+	store   Store         `json:"-"`
 	jrex    *Jrex         `json:"-"`
 	baseDir string        `json:"-"`
 	vm      *goja.Runtime `json:"-"`
@@ -20,6 +21,7 @@ func newInstance(jrex *Jrex, module string) *Instance {
 	return &Instance{
 		Module: module,
 		Ctx:    jrex.Ctx.Clone(),
+		store:  jrex.store,
 		jrex:   jrex,
 		vm:     goja.New(),
 	}
@@ -68,7 +70,7 @@ func (s *Instance) RunScript(module string, code string) (goja.Value, error) {
 * @return et.Json, error
 **/
 func (s *Instance) Run() (et.Json, error) {
-	code, err := s.jrex.store.GetCode(s.Module)
+	code, err := s.store.GetCode(s.Module)
 	if err != nil {
 		return et.Json{}, err
 	}

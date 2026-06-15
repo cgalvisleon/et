@@ -3,12 +3,12 @@ package workflow
 import (
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jrex"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 )
@@ -31,15 +31,12 @@ var StepStatusList map[Status]bool = map[Status]bool{
 }
 
 type Step struct {
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
 	TenantId    string         `json:"tenant_id"`
-	ProjectId   string         `json:"project_id"`
 	ID          string         `json:"id"`
-	Version     string         `json:"version"`
 	Type        string         `json:"type"`
 	Kind        Kind           `json:"kind"`
 	Tag         string         `json:"tag"`
+	Version     string         `json:"version"`
 	Status      Status         `json:"status"`
 	Title       string         `json:"title"`
 	Description string         `json:"description"`
@@ -49,31 +46,12 @@ type Step struct {
 	Inputs      int            `json:"inputs"`
 	Outputs     int            `json:"outputs"`
 	Stop        bool           `json:"stop"`
+	Jrex        *jrex.Jrex     `json:"jrex"`
 	AuditLog    []et.Json      `json:"audit_log"`
-	UserID      string         `json:"-"`
 	isDebug     bool           `json:"-"`
 	isChanged   bool           `json:"-"`
 	store       Store          `json:"-"`
 	bindings    map[string]any `json:"-"`
-}
-
-type StepParams struct {
-	TenantId    string      `json:"tenant_id"`
-	ProjectId   string      `json:"project_id"`
-	Version     string      `json:"version"`
-	Type        string      `json:"type"`
-	Kind        Kind        `json:"kind"`
-	Tag         string      `json:"tag"`
-	Status      Status      `json:"status"`
-	Title       string      `json:"title"`
-	Description string      `json:"description"`
-	Definition  interface{} `json:"definition"`
-	Config      et.Json     `json:"config"`
-	Params      et.Json     `json:"params"`
-	Inputs      int         `json:"inputs"`
-	Outputs     int         `json:"outputs"`
-	Stop        bool        `json:"stop"`
-	UserID      string      `json:"user_id"`
 }
 
 /**
@@ -81,27 +59,20 @@ type StepParams struct {
 * @param def StepParams
 * @return *Step
 **/
-func (s *WorkFlow) newStep(def StepParams) (*Step, error) {
+func (s *WorkFlow) newStep() (*Step, error) {
 	now := timezone.Now()
 	if def.Version == "" {
 		def.Version = "1.0.0"
 	}
 	def.Type = utility.Normalize(def.Type)
 	def.Tag = utility.Normalize(def.Tag)
-	id := fmt.Sprintf("step:%s:%s:%s", def.Kind, def.Type, def.Version)
-	if def.Tag != "" {
-		id = fmt.Sprintf("step:%s:%s:%s:%s", def.Kind, def.Type, def.Tag, def.Version)
-	}
-
 	if !StepStatusList[def.Status] {
 		return nil, errors.New(MSG_STEP_STATUS_INVALID)
 	}
 
+	id := reg.ULID()
 	result := &Step{
-		CreatedAt:   now,
-		UpdatedAt:   now,
 		TenantId:    def.TenantId,
-		ProjectId:   def.ProjectId,
 		ID:          id,
 		Type:        def.Type,
 		Kind:        def.Kind,
@@ -117,7 +88,6 @@ func (s *WorkFlow) newStep(def StepParams) (*Step, error) {
 		Stop:        def.Stop,
 		isDebug:     s.isDebug,
 		AuditLog:    make([]et.Json, 0),
-		UserID:      def.UserID,
 		store:       s.store,
 		bindings:    s.bindings,
 	}
@@ -139,8 +109,8 @@ func (s *WorkFlow) loadStep(id, userId string) (*Step, error) {
 		return nil, errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
 
-	result := &Step{}
-	exists, err := s.store.GetByCollection("step", id, result)
+	var result *Step
+	exists, err := s.store.Get("step", id, &result)
 	if err != nil {
 		return nil, err
 	}

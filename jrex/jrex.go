@@ -18,19 +18,19 @@ const (
 )
 
 type Jrex struct {
-	ID        string                 `json:"id"`
-	Tag       string                 `json:"tag"`
-	Ctx       et.Json                `json:"ctx"`
-	Modules   map[string]*Module     `json:"modules"`
-	AuditLog  []et.Json              `json:"audit_log"`
-	isChanged bool                   `json:"-"`
-	store     Store                  `json:"-"`
-	origin    Store                  `json:"-"`
-	bindings  map[string]any         `json:"-"`
-	baseDir   string                 `json:"-"`
-	userId    string                 `json:"-"`
-	isDebug   bool                   `json:"-"`
-	onSave    func(jrex *Jrex) error `json:"-"`
+	ID        string                   `json:"id"`
+	Tag       string                   `json:"tag"`
+	Ctx       et.Json                  `json:"ctx"`
+	Modules   map[string]*Module       `json:"modules"`
+	AuditLog  []et.Json                `json:"audit_log"`
+	isChanged bool                     `json:"-"`
+	store     Store                    `json:"-"`
+	origin    Store                    `json:"-"`
+	bindings  map[string]any           `json:"-"`
+	baseDir   string                   `json:"-"`
+	userId    string                   `json:"-"`
+	isDebug   bool                     `json:"-"`
+	onSave    []func(jrex *Jrex) error `json:"-"`
 }
 
 func NewJrex(tag string) (*Jrex, error) {
@@ -46,6 +46,8 @@ func NewJrex(tag string) (*Jrex, error) {
 		Ctx:      et.Json{},
 		Modules:  make(map[string]*Module),
 		AuditLog: make([]et.Json, 0),
+		onSave:   make([]func(jrex *Jrex) error, 0),
+		bindings: make(map[string]any),
 	}
 	return result, nil
 }
@@ -113,7 +115,10 @@ func (s *Jrex) Debug() *Jrex {
 * @return *Jrex
 **/
 func (s *Jrex) OnSave(onSave func(jrex *Jrex) error) *Jrex {
-	s.onSave = onSave
+	if s.onSave == nil {
+		s.onSave = make([]func(jrex *Jrex) error, 0)
+	}
+	s.onSave = append(s.onSave, onSave)
 	return s
 }
 
@@ -133,8 +138,8 @@ func (s *Jrex) Save(userId string) error {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	if s.onSave != nil {
-		err := s.onSave(s)
+	for _, onSave := range s.onSave {
+		err := onSave(s)
 		if err != nil {
 			return err
 		}

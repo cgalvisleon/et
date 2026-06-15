@@ -39,7 +39,7 @@ func ToPart(value string) (Part, bool) {
 
 type Module struct {
 	ID       string  `json:"id"`
-	Path     string  `json:"name"`
+	Path     string  `json:"path"`
 	Version  string  `json:"version"`
 	Metadata et.Json `json:"metadata"`
 	jrex     *Jrex   `json:"-"`

@@ -238,10 +238,10 @@ func (s *Model) up(schema *Schema) *Model {
 }
 
 /**
-* addAuditLog
+* AddAuditLog
 * @param userId string, action string
 **/
-func (s *Model) addAuditLog(userId string, action string) {
+func (s *Model) AddAuditLog(userId string, action string) {
 	if s.AuditLog == nil {
 		s.AuditLog = make([]et.Json, 0)
 	}

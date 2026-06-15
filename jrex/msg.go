@@ -7,6 +7,7 @@ var (
 	MSG_INDEX_MODULE_NOT_FOUND = "index module not found"
 	MSG_MODULE_NOT_FOUND       = "module not found: %s"
 	MSG_STORE_IS_NIL           = "store is nil"
+	MSG_ORIGIN_IS_NIL          = "origin store is nil"
 )
 
 func init() {
@@ -17,5 +18,6 @@ func init() {
 		MSG_INDEX_MODULE_NOT_FOUND = "módulo index no encontrado"
 		MSG_MODULE_NOT_FOUND = "módulo no encontrado: %s"
 		MSG_STORE_IS_NIL = "store es nulo"
+		MSG_ORIGIN_IS_NIL = "store de origen es nulo"
 	}
 }

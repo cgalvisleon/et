@@ -25,6 +25,7 @@ type Jrex struct {
 	AuditLog  []et.Json              `json:"audit_log"`
 	isChanged bool                   `json:"-"`
 	store     Store                  `json:"-"`
+	origin    Store                  `json:"-"`
 	bindings  map[string]any         `json:"-"`
 	baseDir   string                 `json:"-"`
 	userId    string                 `json:"-"`
@@ -291,4 +292,32 @@ func (s *Jrex) RunDev(userId string) error {
 	logs.Log("CTX", result.ToString())
 	utility.AppWait()
 	return nil
+}
+
+/**
+* SetOrigin
+* @param store Store
+* @return *Jrex
+**/
+func (s *Jrex) SetOrigin(store Store) *Jrex {
+	s.origin = store
+	return s
+}
+
+/**
+* Push
+* @param commit string
+* @return error
+**/
+func (s *Jrex) Push(commit, module string) error {
+	if s.origin == nil {
+		return errors.New(MSG_ORIGIN_IS_NIL)
+	}
+
+	mod, ok := s.Modules[module]
+	if !ok {
+		return errors.New(MSG_MODULE_NOT_FOUND)
+	}
+
+	return s.origin.SetCode(mod, commit)
 }

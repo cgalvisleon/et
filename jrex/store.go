@@ -13,6 +13,7 @@ type Store interface {
 	Load(tag string) (*Jrex, error)
 	Save(jrex *Jrex, userId string) error
 	GetCode(module string) (string, error)
+	SetCode(module *Module, code string) error
 }
 
 type FileStore struct {
@@ -120,6 +121,16 @@ func (s *FileStore) GetCode(module string) (string, error) {
 	}
 
 	return code, nil
+}
+
+/**
+* SetCode
+* @param module *Module, code string
+* @return error
+**/
+func (s *FileStore) SetCode(module *Module, code string) error {
+	path := filepath.Join(s.BaseDir, fmt.Sprintf("%s.js", module.Path))
+	return file.WriteString(path, code)
 }
 
 /**

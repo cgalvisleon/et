@@ -1,0 +1,48 @@
+{
+  "id": "01KV5A8064E8Y0RJJE65WVVPVX",
+  "tag": "jrex",
+  "ctx": {},
+  "modules": {
+    "": {
+      "id": "module:index:1.0.0",
+      "path": "",
+      "version": "1.0.0",
+      "metadata": {
+        "author": "César Galvis León",
+        "description": "Pruebas de vm",
+        "license": "MIT",
+        "path": "https://github.com/cgalvisleon/jrex",
+        "version": "1.0.0"
+      }
+    },
+    "modules/math": {
+      "id": "01KV5A822CC64GT8HS9MBYT3JP",
+      "path": "modules/math",
+      "version": "1.0.0",
+      "metadata": {}
+    },
+    "modules/pricing": {
+      "id": "01KV5A822BDE73Z0AZGPZ4537N",
+      "path": "modules/pricing",
+      "version": "1.0.0",
+      "metadata": {}
+    }
+  },
+  "audit_log": [
+    {
+      "action": "add_module",
+      "created_at": "2026-06-15T04:36:46.276644-05:00",
+      "user_id": ""
+    },
+    {
+      "action": "add_module",
+      "created_at": "2026-06-15T04:36:48.203608-05:00",
+      "user_id": "cgalvisleon"
+    },
+    {
+      "action": "add_module",
+      "created_at": "2026-06-15T04:36:48.204272-05:00",
+      "user_id": "cgalvisleon"
+    }
+  ]
+}

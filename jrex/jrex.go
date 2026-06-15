@@ -26,7 +26,6 @@ type Jrex struct {
 	isChanged bool                     `json:"-"`
 	store     Store                    `json:"-"`
 	bindings  map[string]any           `json:"-"`
-	baseDir   string                   `json:"-"`
 	userId    string                   `json:"-"`
 	isDebug   bool                     `json:"-"`
 	onSave    []func(jrex *Jrex) error `json:"-"`
@@ -241,22 +240,7 @@ func (s *Jrex) NewInstance(module string) (*Instance, error) {
 * @return goja.Value, error
 **/
 func (s *Jrex) RunInstance(instance *Instance) (et.Json, error) {
-	s.baseDir = ""
-	code, err := s.store.GetCode(instance.Module)
-	if err != nil {
-		return et.Json{}, err
-	}
-
-	_, err = instance.RunScript(instance.Module, code)
-	if err != nil {
-		return et.Json{}, err
-	}
-
-	if s.isChanged {
-		s.Save(s.userId)
-	}
-
-	return s.Ctx, nil
+	return instance.Run()
 }
 
 /**
@@ -282,6 +266,14 @@ func (s *Jrex) Run() (et.Json, error) {
 }
 
 /**
+* Notify: Notifies the Jrex
+* @param kind string, message string
+**/
+func (s *Jrex) Notify(kind, message string) {
+	logs.Log(kind, message)
+}
+
+/**
 * RunDev: Runs the Jrex in development mode
 * @param userId string
 * @return error
@@ -290,10 +282,11 @@ func (s *Jrex) RunDev(userId string) error {
 	s.userId = userId
 	result, err := s.Run()
 	if err != nil {
-		return err
+		s.Notify("ERROR", err.Error())
+	} else {
+		s.Notify("CTX", result.ToString())
 	}
 
-	logs.Log("CTX", result.ToString())
 	utility.AppWait()
 	return nil
 }

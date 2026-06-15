@@ -9,10 +9,11 @@ import (
 )
 
 type Instance struct {
-	Module string        `json:"module"`
-	Ctx    et.Json       `json:"ctx"`
-	jrex   *Jrex         `json:"-"`
-	vm     *goja.Runtime `json:"-"`
+	Module  string        `json:"module"`
+	Ctx     et.Json       `json:"ctx"`
+	jrex    *Jrex         `json:"-"`
+	baseDir string        `json:"-"`
+	vm      *goja.Runtime `json:"-"`
 }
 
 func newInstance(jrex *Jrex, module string) *Instance {
@@ -67,7 +68,21 @@ func (s *Instance) RunScript(module string, code string) (goja.Value, error) {
 * @return et.Json, error
 **/
 func (s *Instance) Run() (et.Json, error) {
-	return s.jrex.RunInstance(s)
+	code, err := s.jrex.store.GetCode(s.Module)
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	_, err = s.RunScript(s.Module, code)
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	if s.jrex.isChanged {
+		s.jrex.Save(s.jrex.userId)
+	}
+
+	return s.Ctx, nil
 }
 
 /**

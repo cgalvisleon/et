@@ -132,7 +132,6 @@ func (s *Rule) getCatalog(kind, tag string, des any) (bool, error) {
 		Where(Eq("owner_id", s.ownerId)).
 		And(Eq("kind", kind)).
 		And(Eq("tag", tag)).
-		Debug().
 		One()
 	if err != nil {
 		return false, err
@@ -191,7 +190,7 @@ func (s *Rule) GetModule(rex *jrex.Jrex, name string) (*jrex.Module, error) {
 **/
 func (s *Rule) Load(tag string) (*jrex.Jrex, error) {
 	var result *jrex.Jrex
-	exists, err := s.getCatalog("jrex", tag, result)
+	exists, err := s.getCatalog("jrex", tag, &result)
 	if err != nil {
 		return nil, err
 	}

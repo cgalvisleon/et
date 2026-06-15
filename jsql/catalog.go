@@ -117,6 +117,7 @@ func (db *DB) getCatalog(name, kind string, des any) error {
 	if err != nil {
 		return err
 	}
+
 	err = json.Unmarshal(bt, &des)
 	if err != nil {
 		return err

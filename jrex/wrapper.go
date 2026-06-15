@@ -13,7 +13,9 @@ import (
 	"github.com/cgalvisleon/et/jrpc"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/request"
+	"github.com/cgalvisleon/et/timezone"
 	"github.com/dop251/goja"
 )
 
@@ -23,6 +25,7 @@ import (
 **/
 func wrapper(instance *Instance) {
 	wrapperRunTime(instance)
+	wrapperBasic(instance)
 	wrapperCtx(instance)
 	wrapperConsole(instance)
 	wrapperFetch(instance)
@@ -42,12 +45,12 @@ func wrapperRunTime(instance *Instance) {
 	instance.Set("os", nil)
 	instance.Set("exec", nil)
 	instance.Set("__load", func(modulePath string) string {
-		module := filepath.Join(instance.jrex.baseDir, modulePath)
+		module := filepath.Join(instance.baseDir, modulePath)
 		code, err := instance.jrex.store.GetCode(module)
 		if err != nil {
 			panic(instance.Error(err))
 		}
-		instance.jrex.baseDir = filepath.Dir(module)
+		instance.baseDir = filepath.Dir(module)
 		_, exists := instance.jrex.Modules[module]
 		if !exists {
 			mod := instance.jrex.NewModule(module)
@@ -56,6 +59,20 @@ func wrapperRunTime(instance *Instance) {
 
 		return code
 	})
+}
+
+/**
+* wrapperBasic: Wraps the basic
+* @param instance *Instance
+**/
+func wrapperBasic(instance *Instance) {
+	instance.Set("UUID", reg.UUID)
+	instance.Set("ULID", reg.ULID)
+	instance.Set("XID", reg.XID)
+	instance.Set("GetUUID", reg.GetUUID)
+	instance.Set("GetULID", reg.GetULID)
+	instance.Set("GetXID", reg.GetXID)
+	instance.Set("timeNow", timezone.Now)
 }
 
 /**

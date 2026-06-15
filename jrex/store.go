@@ -146,9 +146,9 @@ func (s *FileStore) hotReload() error {
 	err = watch.OnReload(func(info file.FileInfo, event fsnotify.Event) {
 		ctx, err := s.jrex.Run()
 		if err != nil {
-			logs.Log("ERROR", err.Error())
+			s.jrex.Notify("ERROR", err.Error())
 		} else {
-			logs.Log("CTX", ctx.ToString())
+			s.jrex.Notify("CTX", ctx.ToString())
 		}
 	}).Load()
 	if err != nil {

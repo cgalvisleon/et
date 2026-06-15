@@ -489,6 +489,8 @@ func (s Items) One(idx int) (Item, error) {
 	n := s.Count
 	if idx < 0 {
 		idx = n + idx
+	} else {
+		idx = idx - 1
 	}
 
 	if idx >= n {

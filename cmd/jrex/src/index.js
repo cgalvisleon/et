@@ -21,7 +21,27 @@ result = pricing.multiplicar(120, 7);
 console.log(result);
 
 const users = db.GetModel("apps", "users");
-console.log(users.ToString());
+users.BeforeInsert(function (tx, old, next) {
+  const id = ULID();
+  const now = timeNow();
+  next.Set("created_at", now);
+  next.Set("updated_at", now);
+  next.Set("id", id);
+  return null;
+});
+
+const item = users
+  .Insert({
+    name: "César Galvis León",
+    email: "cgalvisleon@gmail.com",
+    password: "123456",
+  })
+  .BeforeInsert(function (tx, old, next) {
+    return null;
+  })
+  .Exec();
+
+console.log(item.ToString());
 
 ctx.set({
   name: "César Galvis León",

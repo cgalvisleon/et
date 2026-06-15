@@ -178,7 +178,7 @@ func newQuery(model *Model, as ...string) *Query {
 		as = []string{model.Table}
 	}
 	result := &Query{
-		ID:         reg.GenULID("query"),
+		ID:         reg.ULID(),
 		Froms:      make([]*F, 0),
 		Joins:      make([]*Join, 0),
 		Selects:    make([]string, 0),

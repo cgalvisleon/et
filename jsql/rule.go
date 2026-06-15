@@ -52,7 +52,8 @@ func defineRule(db *DB) error {
 	db.rules.
 		BeforeInsert(func(tx *Tx, old, new et.Json) error {
 			now := timezone.Now()
-			id := reg.GenULID("rule")
+			id := new.String(ID)
+			id = reg.GetULID(id)
 			new.Set(CREATED_AT, now)
 			new.Set(UPDATED_AT, now)
 			new.Set(ID, id)
@@ -68,8 +69,9 @@ func defineRule(db *DB) error {
 }
 
 type Rule struct {
-	ownerId string
-	rules   *Model
+	tenantId string
+	ownerId  string
+	rules    *Model
 }
 
 /**
@@ -77,10 +79,11 @@ type Rule struct {
 * @param model *Model
 * @return *Rule
 **/
-func loadRule(db *DB, ownerId string) *Rule {
+func loadRule(db *DB, tenantId, ownerId string) *Rule {
 	return &Rule{
-		ownerId: ownerId,
-		rules:   db.rules,
+		tenantId: tenantId,
+		ownerId:  ownerId,
+		rules:    db.rules,
 	}
 }
 
@@ -101,6 +104,7 @@ func (s *Rule) setCatalog(id, kind, tag string, obj any) error {
 
 	_, err := s.rules.
 		Upsert(et.Json{
+			"tenant_id":  s.tenantId,
 			"owner_id":   s.ownerId,
 			"kind":       kind,
 			"tag":        tag,

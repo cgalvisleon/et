@@ -50,7 +50,7 @@ func newConversation(to *Participant, title string, conversationType TypeConvers
 	}
 
 	limitMessages := config.GetInt("LIMIT_MESSAGES", 100)
-	id := reg.GenULID("conversation")
+	id := reg.ULID()
 	now := timezone.Now()
 	result := &Conversation{
 		CreatedAt:     now,

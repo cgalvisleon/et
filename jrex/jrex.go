@@ -2,12 +2,10 @@ package jrex
 
 import (
 	"errors"
-	"fmt"
 	"maps"
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/strs"
@@ -20,18 +18,18 @@ const (
 )
 
 type Jrex struct {
-	TenantId  string             `json:"tenant_id"`
-	ID        string             `json:"id"`
-	Tag       string             `json:"tag"`
-	Ctx       et.Json            `json:"ctx"`
-	Modules   map[string]*Module `json:"modules"`
-	AuditLog  []et.Json          `json:"audit_log"`
-	isChanged bool               `json:"-"`
-	store     Store              `json:"-"`
-	bindings  map[string]any     `json:"-"`
-	baseDir   string             `json:"-"`
-	userId    string             `json:"-"`
-	isDebug   bool               `json:"-"`
+	ID        string                 `json:"id"`
+	Tag       string                 `json:"tag"`
+	Ctx       et.Json                `json:"ctx"`
+	Modules   map[string]*Module     `json:"modules"`
+	AuditLog  []et.Json              `json:"audit_log"`
+	isChanged bool                   `json:"-"`
+	store     Store                  `json:"-"`
+	bindings  map[string]any         `json:"-"`
+	baseDir   string                 `json:"-"`
+	userId    string                 `json:"-"`
+	isDebug   bool                   `json:"-"`
+	onSave    func(jrex *Jrex) error `json:"-"`
 }
 
 func NewJrex(tag string) (*Jrex, error) {
@@ -40,7 +38,7 @@ func NewJrex(tag string) (*Jrex, error) {
 	}
 
 	tag = strs.Lowcase(tag)
-	id := reg.GenULID("jrex")
+	id := reg.ULID()
 	result := &Jrex{
 		ID:       id,
 		Tag:      tag,
@@ -109,6 +107,16 @@ func (s *Jrex) Debug() *Jrex {
 }
 
 /**
+* OnSave
+* @param onSave func(jrex *Jrex) error
+* @return *Jrex
+**/
+func (s *Jrex) OnSave(onSave func(jrex *Jrex) error) *Jrex {
+	s.onSave = onSave
+	return s
+}
+
+/**
 * save
 * @return error
 **/
@@ -124,8 +132,12 @@ func (s *Jrex) Save(userId string) error {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	channel := fmt.Sprintf("%s:%s", EVENT_JREX_SET, s.TenantId)
-	event.Publish(channel, data)
+	if s.onSave != nil {
+		err := s.onSave(s)
+		if err != nil {
+			return err
+		}
+	}
 
 	return s.store.Save(s, userId)
 }

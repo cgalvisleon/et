@@ -41,7 +41,6 @@ func wrapper(instance *Instance) {
 func wrapperRunTime(instance *Instance) {
 	instance.Set("os", nil)
 	instance.Set("exec", nil)
-	instance.Set("tenantId", instance.TenantId)
 	instance.Set("__load", func(modulePath string) string {
 		module := filepath.Join(instance.jrex.baseDir, modulePath)
 		code, err := instance.jrex.store.GetCode(module)

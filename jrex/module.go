@@ -52,7 +52,7 @@ type Module struct {
 **/
 func (s *Jrex) NewModule(path string) *Module {
 	version := "1.0.0"
-	id := reg.GenULID("module")
+	id := reg.ULID()
 	return &Module{
 		ID:       id,
 		Path:     path,

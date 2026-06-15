@@ -35,7 +35,7 @@ type Participant struct {
 * @return (*Participant, error)
 **/
 func newParticipant(ia *Ia, userId, to, name string) *Participant {
-	id := reg.GenULID("participant")
+	id := reg.ULID()
 	if userId == "" {
 		userId = id
 	}

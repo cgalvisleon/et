@@ -9,20 +9,18 @@ import (
 )
 
 type Instance struct {
-	TenantId string        `json:"tenant_id"`
-	Module   string        `json:"module"`
-	Ctx      et.Json       `json:"ctx"`
-	jrex     *Jrex         `json:"-"`
-	vm       *goja.Runtime `json:"-"`
+	Module string        `json:"module"`
+	Ctx    et.Json       `json:"ctx"`
+	jrex   *Jrex         `json:"-"`
+	vm     *goja.Runtime `json:"-"`
 }
 
 func newInstance(jrex *Jrex, module string) *Instance {
 	return &Instance{
-		TenantId: jrex.TenantId,
-		Module:   module,
-		Ctx:      jrex.Ctx.Clone(),
-		jrex:     jrex,
-		vm:       goja.New(),
+		Module: module,
+		Ctx:    jrex.Ctx.Clone(),
+		jrex:   jrex,
+		vm:     goja.New(),
 	}
 }
 

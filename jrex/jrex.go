@@ -9,6 +9,8 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/reg"
+	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 )
@@ -37,8 +39,8 @@ func NewJrex(tag string) (*Jrex, error) {
 		return nil, errors.New(MSG_TAG_REQUIRED)
 	}
 
-	tag = utility.Normalize(tag)
-	id := fmt.Sprintf("jrex:%s", tag)
+	tag = strs.Lowcase(tag)
+	id := reg.GenULID("jrex")
 	result := &Jrex{
 		ID:       id,
 		Tag:      tag,
@@ -203,7 +205,7 @@ func (s *Jrex) SetCtx(ctx et.Json) *Jrex {
 **/
 func (s *Jrex) NewInstance(module string) (*Instance, error) {
 	instance := newInstance(s, module)
-	wrap(instance)
+	wrapper(instance)
 	for name, value := range s.bindings {
 		instance.Set(name, value)
 	}

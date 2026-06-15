@@ -130,7 +130,7 @@ func newModel(schema *Schema, name string, version int) *Model {
 		deadDb:        schema.deadDb,
 		IsDebug:       schema.db.IsDebug,
 	}
-	result.rules = newRule(result)
+	result.rules = loadRule(schema.db, result.Key())
 	result = defaultTrigger(result)
 	return result
 }
@@ -376,6 +376,7 @@ func (s *Model) Init() error {
 		if err != nil {
 			return err
 		}
+		wrapper(s.Jrex)
 	}
 
 	s.isInit = true

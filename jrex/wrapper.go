@@ -21,7 +21,7 @@ import (
 * wrap: Wraps the runtime
 * @param vm *VM
 **/
-func wrap(instance *Instance) {
+func wrapper(instance *Instance) {
 	wrapperRunTime(instance)
 	wrapperCtx(instance)
 	wrapperConsole(instance)
@@ -51,7 +51,7 @@ func wrapperRunTime(instance *Instance) {
 		instance.jrex.baseDir = filepath.Dir(module)
 		_, exists := instance.jrex.Modules[module]
 		if !exists {
-			mod := NewModule(module)
+			mod := instance.jrex.NewModule(module)
 			instance.jrex.AddModule(mod)
 		}
 

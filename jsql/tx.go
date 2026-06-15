@@ -26,25 +26,31 @@ type Tx struct {
 }
 
 /**
+* NewTx: Creates a new transaction
+* @return *Tx
+**/
+func NewTx() *Tx {
+	now := timezone.Now()
+	return &Tx{
+		CreatedAt:    now,
+		LastUpdateAt: now,
+		Id:           reg.TagULID("tx", ""),
+		Status:       string(TxStatusPending),
+	}
+}
+
+/**
 * getTx: Returns the given Tx unchanged, or creates a new auto-commit Tx when nil.
 * The second return value is true when the caller must commit after the operation.
 * @param tx *Tx
 * @return *Tx, bool
 **/
 func getTx(tx *Tx) (*Tx, bool) {
-	isCommitted := false
 	if tx == nil {
-		now := timezone.Now()
-		tx = &Tx{
-			CreatedAt:    now,
-			LastUpdateAt: now,
-			Id:           reg.TagULID("tx", ""),
-			Status:       string(TxStatusPending),
-		}
-		isCommitted = true
+		return NewTx(), true
 	}
 
-	return tx, isCommitted
+	return tx, false
 }
 
 /**
@@ -63,7 +69,6 @@ func (s *Tx) begin(db *sql.DB) error {
 	}
 
 	s.Tx = tx
-
 	return nil
 }
 
@@ -80,7 +85,7 @@ func (s *Tx) setStatus(status TxStatus) {
 * commit: Commits the transaction and marks it as committed.
 * @return error
 **/
-func (s *Tx) commit() error {
+func (s *Tx) Commit() error {
 	if s.Tx == nil {
 		return nil
 	}
@@ -99,7 +104,7 @@ func (s *Tx) commit() error {
 * rollback: Rolls back the transaction and marks it as rolled back.
 * @return error
 **/
-func (s *Tx) rollback() error {
+func (s *Tx) Rollback() error {
 	if s.Tx == nil {
 		return nil
 	}
@@ -127,7 +132,7 @@ func (s *Tx) Query(db *sql.DB, query string, args ...any) (*sql.Rows, error) {
 
 	rows, err := s.Tx.Query(query, args...)
 	if err != nil {
-		errR := s.rollback()
+		errR := s.Rollback()
 		if errR != nil {
 			err = fmt.Errorf(MSG_ROLLBACK_ERROR, errR)
 		}

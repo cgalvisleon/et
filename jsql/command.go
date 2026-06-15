@@ -605,7 +605,7 @@ func (s *Command) upsert(tx *Tx) (et.Items, error) {
 func (s *Command) ExecTx(tx *Tx) (et.Items, error) {
 	var err error
 	var result et.Items
-	tx, isCommitted := getTx(tx)
+	tx, commit := getTx(tx)
 	switch s.Type {
 	case INSERT:
 		result, err = s.insert(tx)
@@ -622,8 +622,8 @@ func (s *Command) ExecTx(tx *Tx) (et.Items, error) {
 		return et.Items{}, err
 	}
 
-	if isCommitted {
-		err = tx.commit()
+	if commit {
+		err = tx.Commit()
 		if err != nil {
 			return et.Items{}, err
 		}

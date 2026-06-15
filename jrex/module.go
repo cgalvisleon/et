@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/reg"
 )
 
 type Part string
@@ -44,9 +45,14 @@ type Module struct {
 	jrex     *Jrex   `json:"-"`
 }
 
-func NewModule(path string) *Module {
+/**
+* NewModule: Creates a new module
+* @param jrex *Jrex, path string
+* @return *Module
+**/
+func (s *Jrex) NewModule(path string) *Module {
 	version := "1.0.0"
-	id := fmt.Sprintf("module:%s:%s", path, version)
+	id := reg.GenULID("module")
 	return &Module{
 		ID:       id,
 		Path:     path,

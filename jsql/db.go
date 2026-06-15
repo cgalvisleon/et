@@ -537,10 +537,7 @@ func (s *DB) Query(query []et.Json) (et.Items, error) {
 	}
 
 	if commit {
-		err := tx.commit()
-		if err != nil {
-			return et.Items{}, err
-		}
+		defer tx.Commit()
 	}
 
 	return result, nil

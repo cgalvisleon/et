@@ -13,7 +13,6 @@ type Store interface {
 	Load(tag string) (*Jrex, error)
 	Save(jrex *Jrex, userId string) error
 	GetCode(module string) (string, error)
-	SetCode(module string, code string) error
 }
 
 type FileStore struct {
@@ -56,8 +55,8 @@ func (s *FileStore) up(jrex *Jrex) *FileStore {
 * @return *Module, error
 **/
 func (s *FileStore) getModule(module string) (*Module, error) {
+	mod := s.jrex.NewModule(module)
 	path := filepath.Join(s.BaseDir, fmt.Sprintf("%s.json", module))
-	mod := NewModule(module)
 	result, err := file.LoadOrCreateJSON(path, mod)
 	if err != nil {
 		return nil, err
@@ -121,20 +120,6 @@ func (s *FileStore) GetCode(module string) (string, error) {
 	}
 
 	return code, nil
-}
-
-/**
-* SetCode
-* @param module string, code string
-* @return error
-**/
-func (s *FileStore) SetCode(module string, code string) error {
-	path := filepath.Join(s.BaseDir, fmt.Sprintf("%s.js", module))
-	err := file.WriteString(path, code)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 /**

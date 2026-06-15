@@ -2,10 +2,10 @@ package jsql
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jrex"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -29,16 +29,18 @@ func defineRule(db *DB) error {
 			{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 			{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 			{Name: ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-			{Name: "model_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
+			{Name: "owner_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 			{Name: "kind", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
+			{Name: "tag", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 			{Name: "definition", TypeColumn: COLUMN, TypeData: BYTES, Default: []byte{}},
 		},
 		PrimaryKeys: []DefIndex{
-			{Name: ID, Sorted: true},
-		},
-		Indexes: []DefIndex{
-			{Name: "model_id", Sorted: true},
+			{Name: "owner_id", Sorted: true},
 			{Name: "kind", Sorted: true},
+			{Name: "tag", Sorted: true},
+		},
+		Unique: []DefIndex{
+			{Name: ID, Sorted: true},
 		},
 		IdxField: IDX,
 		IsCore:   true,
@@ -50,8 +52,10 @@ func defineRule(db *DB) error {
 	db.rules.
 		BeforeInsert(func(tx *Tx, old, new et.Json) error {
 			now := timezone.Now()
+			id := reg.GenULID("rule")
 			new.Set(CREATED_AT, now)
 			new.Set(UPDATED_AT, now)
+			new.Set(ID, id)
 			return nil
 		}).
 		BeforeUpdate(func(tx *Tx, old, new et.Json) error {
@@ -64,29 +68,28 @@ func defineRule(db *DB) error {
 }
 
 type Rule struct {
-	modelId string
-	jrexId  string
+	ownerId string
 	rules   *Model
 }
 
 /**
-* newRule: Constructs a new Rule with initialized fields.
+* loadRule: Loads a Rule from the database catalog by name.
 * @param model *Model
 * @return *Rule
 **/
-func newRule(model *Model) *Rule {
+func loadRule(db *DB, ownerId string) *Rule {
 	return &Rule{
-		modelId: model.Key(),
-		rules:   model.db.rules,
+		ownerId: ownerId,
+		rules:   db.rules,
 	}
 }
 
 /**
 * setCatalog: Sets the catalog
-* @param id, kind string, obj any
+* @param id, kind, tag string, obj any
 * @return string
 **/
-func (s *Rule) setCatalog(id, kind string, obj any) error {
+func (s *Rule) setCatalog(id, kind, tag string, obj any) error {
 	bt, ok := obj.([]byte)
 	if !ok {
 		var err error
@@ -98,12 +101,15 @@ func (s *Rule) setCatalog(id, kind string, obj any) error {
 
 	_, err := s.rules.
 		Upsert(et.Json{
-			"model_id":   s.modelId,
+			"owner_id":   s.ownerId,
 			"kind":       kind,
-			"definition": bt,
+			"tag":        tag,
 			"id":         id,
+			"definition": bt,
 		}).
-		Where(Eq("id", id)).
+		Where(Eq("owner_id", s.ownerId)).
+		And(Eq("kind", kind)).
+		And(Eq("tag", tag)).
 		Exec()
 	if err != nil {
 		return err
@@ -117,11 +123,11 @@ func (s *Rule) setCatalog(id, kind string, obj any) error {
 * @param id, kind string, des any
 * @return error
 **/
-func (s *Rule) getCatalog(id, kind string, des any) (bool, error) {
+func (s *Rule) getCatalog(kind, tag string, des any) (bool, error) {
 	item, err := s.rules.
-		Where(Eq("model_id", s.modelId)).
+		Where(Eq("owner_id", s.ownerId)).
 		And(Eq("kind", kind)).
-		And(Eq("id", id)).
+		And(Eq("tag", tag)).
 		Debug().
 		One()
 	if err != nil {
@@ -146,13 +152,29 @@ func (s *Rule) getCatalog(id, kind string, des any) (bool, error) {
 }
 
 /**
+* NewModule: Creates a new module
+* @param jrex *jrex.Jrex, path string
+* @return *jrex.Module, error
+**/
+func (s *Rule) NewModule(jrex *jrex.Jrex, path string) (*jrex.Module, error) {
+	result := jrex.NewModule(path)
+	jrex.AddModule(result)
+	code := ""
+	err := s.setCatalog(result.ID, "code", result.Path, code)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+/**
 * loadModule: Loads the module
 * @param module string
 * @return *jrex.Module, error
 **/
 func (s *Rule) Load(tag string) (*jrex.Jrex, error) {
 	var result *jrex.Jrex
-	exists, err := s.getCatalog(tag, "jrex", result)
+	exists, err := s.getCatalog("jrex", tag, result)
 	if err != nil {
 		return nil, err
 	}
@@ -162,20 +184,21 @@ func (s *Rule) Load(tag string) (*jrex.Jrex, error) {
 		return result, nil
 	}
 
-	module := jrex.NewModule("index")
 	result, err = jrex.NewJrex(tag)
 	if err != nil {
 		return nil, err
 	}
-	result.AddModule(module)
+	_, err = s.NewModule(result, "index")
+	if err != nil {
+		return nil, err
+	}
 	result.Up(s)
 
-	err = s.setCatalog(result.ID, "jrex", result)
+	err = s.setCatalog(result.ID, "jrex", result.Tag, result)
 	if err != nil {
 		return nil, err
 	}
 
-	s.jrexId = result.ID
 	return result, nil
 }
 
@@ -185,7 +208,7 @@ func (s *Rule) Load(tag string) (*jrex.Jrex, error) {
 * @return error
 **/
 func (s *Rule) Save(jrex *jrex.Jrex, userId string) error {
-	err := s.setCatalog(jrex.ID, "jrex", jrex)
+	err := s.setCatalog(jrex.ID, "jrex", jrex.Tag, jrex)
 	if err != nil {
 		return err
 	}
@@ -198,9 +221,8 @@ func (s *Rule) Save(jrex *jrex.Jrex, userId string) error {
 * @return string, error
 **/
 func (s *Rule) GetCode(module string) (string, error) {
-	id := fmt.Sprintf("%s:%s", s.jrexId, module)
 	var result string
-	exists, err := s.getCatalog(id, "code", &result)
+	exists, err := s.getCatalog("code", module, &result)
 	if err != nil {
 		return "", err
 	}
@@ -217,9 +239,8 @@ func (s *Rule) GetCode(module string) (string, error) {
 * @param module string, code string
 * @return error
 **/
-func (s *Rule) SetCode(module string, code string) error {
-	id := fmt.Sprintf("%s:%s", s.jrexId, module)
-	err := s.setCatalog(id, "code", code)
+func (s *Rule) SetCode(module *jrex.Module, code string) error {
+	err := s.setCatalog(module.ID, "code", module.Path, code)
 	if err != nil {
 		return err
 	}

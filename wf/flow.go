@@ -130,7 +130,7 @@ func (s *WorkFlow) loadFlow(id, userId string) (*Flow, error) {
 	}
 
 	result := &Flow{}
-	exists, err := s.store.GetByCollection("flow", id, result)
+	exists, err := s.store.Get("flow", id, result)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +191,7 @@ func (s *Flow) delete() error {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
 
-	return s.store.DeleteByCollection("flow", s.ID)
+	return s.store.Delete("flow", s.ID)
 }
 
 /**

@@ -21,16 +21,7 @@ type Store interface {
 	Set(collection, id, tenantId, ownerId string, obj any, userId string) error
 	Get(collection, id string, dest any) (bool, error)
 	Delete(collection, id string) error
-	// By Collection
-	GetByCollection(collection, id string, dest any) (bool, error)
-	DeleteByCollection(collection, id string) error
-	// By Query
 	Query(query et.Json) (et.Items, error)
-	// By Module
-	SetModule(module string, source any) error
-	GetModule(module string, source any) (bool, error)
-	DeleteModule(module string) error
-	// Series by tag
 	GetCode(tag string) (string, error)
 }
 
@@ -98,7 +89,7 @@ func Load(tenantId string, store Store, userId string) (*WorkFlow, error) {
 
 	id := fmt.Sprintf("workflow:%s", tenantId)
 	result := &WorkFlow{}
-	exists, err := store.GetByCollection("workflow", id, result)
+	exists, err := store.Get("workflow", id, result)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +151,7 @@ func (s *WorkFlow) Delete() error {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
 
-	return s.store.DeleteByCollection("workflow", s.ID)
+	return s.store.Delete("workflow", s.ID)
 }
 
 /**

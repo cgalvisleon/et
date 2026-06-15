@@ -13,6 +13,7 @@ import (
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/resilience"
 	"github.com/cgalvisleon/et/timezone"
+	"github.com/dop251/goja"
 )
 
 type Status string
@@ -85,8 +86,9 @@ type Instance struct {
 	isDebug      bool                   `json:"-"`
 	store        Store                  `json:"-"`
 	flow         *Flow                  `json:"-"`
-	bindings     map[string]any         `json:"-"`
+	bindings     map[string]interface{} `json:"-"`
 	resilience   *resilience.Resilience `json:"-"`
+	jrex         *goja.Runtime          `json:"-"`
 }
 
 type InstanceParams struct {
@@ -153,7 +155,7 @@ func (s *WorkFlow) newInstance(params InstanceParams) (*Instance, error) {
 		UserID:     params.UserID,
 		store:      s.store,
 		flow:       flow,
-		bindings:   make(map[string]any),
+		bindings:   make(map[string]interface{}),
 	}
 	for k, v := range s.bindings {
 		result.bindings[k] = v
@@ -172,7 +174,7 @@ func (s *WorkFlow) loadInstance(id, userId string) (*Instance, error) {
 	}
 
 	result := &Instance{}
-	exists, err := s.store.GetByCollection("instance", id, result)
+	exists, err := s.store.Get("instance", id, result)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +249,7 @@ func (s *Instance) delete() error {
 
 	key := fmt.Sprintf("%s:status", s.ID)
 	cache.Delete(key)
-	return s.store.DeleteByCollection("instance", s.ID)
+	return s.store.Delete("instance", s.ID)
 }
 
 /**
@@ -277,6 +279,30 @@ func (s *Instance) ToJson() et.Json {
 		"is_stop":     s.IsStop,
 		"audit_log":   s.AuditLog,
 	}
+}
+
+/**
+* Error
+* @param err error
+* @return *goja.Object
+**/
+func (s *Instance) Error(err error) *goja.Object {
+	if s.jrex == nil {
+		return nil
+	}
+	return s.jrex.NewGoError(err)
+}
+
+/**
+* Value
+* @param value interface{}
+* @return goja.Value
+**/
+func (s *Instance) Value(value interface{}) goja.Value {
+	if s.jrex == nil {
+		return goja.Undefined()
+	}
+	return s.jrex.ToValue(value)
 }
 
 /**

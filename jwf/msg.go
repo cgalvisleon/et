@@ -1,4 +1,4 @@
-package workflow
+package jwf
 
 import "github.com/cgalvisleon/et/config"
 

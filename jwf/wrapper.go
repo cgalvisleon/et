@@ -38,8 +38,8 @@ func wrapper(instance *Instance) {
 * @param instance *Instance
 **/
 func wrapperRunTime(instance *Instance) {
-	instance.jrex.Set("os", nil)
-	instance.jrex.Set("exec", nil)
+	instance.Set("os", nil)
+	instance.Set("exec", nil)
 }
 
 /**
@@ -47,13 +47,13 @@ func wrapperRunTime(instance *Instance) {
 * @param instance *Instance
 **/
 func wrapperBasic(instance *Instance) {
-	instance.jrex.Set("UUID", reg.UUID)
-	instance.jrex.Set("ULID", reg.ULID)
-	instance.jrex.Set("XID", reg.XID)
-	instance.jrex.Set("GetUUID", reg.GetUUID)
-	instance.jrex.Set("GetULID", reg.GetULID)
-	instance.jrex.Set("GetXID", reg.GetXID)
-	instance.jrex.Set("timeNow", timezone.Now)
+	instance.Set("UUID", reg.UUID)
+	instance.Set("ULID", reg.ULID)
+	instance.Set("XID", reg.XID)
+	instance.Set("GetUUID", reg.GetUUID)
+	instance.Set("GetULID", reg.GetULID)
+	instance.Set("GetXID", reg.GetXID)
+	instance.Set("timeNow", timezone.Now)
 }
 
 /**
@@ -61,7 +61,7 @@ func wrapperBasic(instance *Instance) {
 * @param vm *VM
 **/
 func wrapperCtx(instance *Instance) {
-	instance.jrex.Set("ctx", map[string]interface{}{
+	instance.Set("ctx", map[string]interface{}{
 		"set": func(data et.Json) {
 			maps.Copy(instance.Ctx, data)
 		},
@@ -112,7 +112,7 @@ func wrapperCtx(instance *Instance) {
 * @param vm *VM
 **/
 func wrapperConsole(instance *Instance) {
-	instance.jrex.Set("console", map[string]interface{}{
+	instance.Set("console", map[string]interface{}{
 		"log": func(args ...interface{}) {
 			kind := "LOG"
 			logs.Log(kind, args...)
@@ -141,7 +141,7 @@ type Fetch struct {
 * @param vm *VM
 **/
 func wrapperFetch(instance *Instance) {
-	instance.jrex.Set("fetch", func(call goja.FunctionCall) *Fetch {
+	instance.Set("fetch", func(call goja.FunctionCall) *Fetch {
 		args := call.Arguments
 		if len(args) != 4 {
 			panic(instance.Error(fmt.Errorf(msg.MSG_ARG_REQUIRED, "method, url, headers, body")))
@@ -166,7 +166,7 @@ func wrapperFetch(instance *Instance) {
 * @param vm *VM
 **/
 func wrapperJrpc(instance *Instance) {
-	instance.jrex.Set("jrpc", map[string]interface{}{
+	instance.Set("jrpc", map[string]interface{}{
 		"call": func(method string, args any) (any, error) {
 			return jrpc.Call(method, args)
 		},
@@ -187,7 +187,7 @@ func wrapperJrpc(instance *Instance) {
 * @param vm *VM
 **/
 func wrapperCache(instance *Instance) {
-	instance.jrex.Set("cache", map[string]interface{}{
+	instance.Set("cache", map[string]interface{}{
 		"set": func(key string, value interface{}, expiration time.Duration) interface{} {
 			return cache.Set(key, value, expiration)
 		},
@@ -230,7 +230,7 @@ func wrapperCache(instance *Instance) {
 }
 
 func wrapperEvent(instance *Instance) {
-	instance.jrex.Set("event", map[string]interface{}{
+	instance.Set("event", map[string]interface{}{
 		"publish": func(channel string, data et.Json) {
 			event.Publish(channel, data)
 		},

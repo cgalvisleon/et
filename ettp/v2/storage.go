@@ -127,7 +127,7 @@ func (s *Server) Save() error {
 		cache.Set(storage.Key, string(bt), 0)
 	} else {
 		path := path.Join("./", "apigateway.json")
-		err = file.WriteJSON(path, storage)
+		err = file.Save(path, storage)
 		if err != nil {
 			return err
 		}
@@ -166,7 +166,7 @@ func (s *Server) load() error {
 	} else {
 		path := path.Join("./", "apigateway.json")
 		var err error
-		storage, err = file.LoadOrCreateJSON(path, storage)
+		_, err = file.LoadOrSave(path, storage)
 		if err != nil {
 			return err
 		}

@@ -371,6 +371,14 @@ func (s *Instance) Value(value interface{}) goja.Value {
 	return s.jrex.ToValue(value)
 }
 
+func (s *Instance) Set(name string, value interface{}) *Instance {
+	if s.jrex == nil {
+		return s
+	}
+	s.jrex.Set(name, value)
+	return s
+}
+
 /**
 * ToString
 * @return string

@@ -28,25 +28,25 @@ func MakeCmd(packageName, name string) error {
 
 func DeleteCmd(packageName string) error {
 	path := fmt.Sprintf(`./cmd/%s`, packageName)
-	_, err := file.RemoveFile(path)
+	_, err := file.Remove(path)
 	if err != nil {
 		return err
 	}
 
 	path = fmt.Sprintf(`./internal/services/%s`, packageName)
-	_, err = file.RemoveFile(path)
+	_, err = file.Remove(path)
 	if err != nil {
 		return err
 	}
 
 	path = fmt.Sprintf(`./internal/pkg/%s`, packageName)
-	_, err = file.RemoveFile(path)
+	_, err = file.Remove(path)
 	if err != nil {
 		return err
 	}
 
 	path = fmt.Sprintf(`./internal/rest/%s.http`, packageName)
-	_, err = file.RemoveFile(path)
+	_, err = file.Remove(path)
 	if err != nil {
 		return err
 	}

@@ -2,8 +2,8 @@ package file
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,6 +60,21 @@ func append(str1, str2, sp string) string {
 	}
 
 	return fmt.Sprintf(`%s%s%s`, str1, sp, str2)
+}
+
+/**
+* GetExtencion
+* @param filename string
+* @return string
+**/
+func GetExtencion(filename string) string {
+	lst := strings.Split(filename, ".")
+	n := len(lst)
+	if n > 1 {
+		return lst[n-1]
+	}
+
+	return ""
 }
 
 /**
@@ -159,11 +174,11 @@ func MakeFile(path, name, model string, args ...any) (string, error) {
 }
 
 /**
-* RemoveFile
+* Remove
 * @param path string
 * @return bool, error
 **/
-func RemoveFile(path string) (bool, error) {
+func Remove(path string) (bool, error) {
 	file := path
 	if _, err := os.Stat(file); os.IsNotExist(err) {
 		if err != nil {
@@ -179,147 +194,67 @@ func RemoveFile(path string) (bool, error) {
 }
 
 /**
-* ExtencionFile
-* @param filename string
-* @return string
-**/
-func ExtencionFile(filename string) string {
-	lst := strings.Split(filename, ".")
-	n := len(lst)
-	if n > 1 {
-		return lst[n-1]
-	}
-
-	return ""
-}
-
-/**
-* openOrCreate
-* @param path string
-* @return *os.File, bool, error
-**/
-func openOrCreate(path string) (*os.File, bool, error) {
-	created := false
-
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		created = true
-	}
-
-	f, err := os.OpenFile(
-		path,
-		os.O_RDWR|os.O_CREATE,
-		0o644,
-	)
-	if err != nil {
-		return nil, false, err
-	}
-
-	return f, created, nil
-}
-
-/**
-* LoadOrCreateJSON
-* @param path string, defaultValue T
-* @return T, error
-**/
-func LoadOrCreateJSON[T any](path string, defaultValue T) (T, error) {
-	var result T
-
-	f, created, err := openOrCreate(path)
-	if err != nil {
-		return result, err
-	}
-	defer f.Close()
-
-	if created {
-		// Crear el archivo con los valores por defecto
-		b, err := json.MarshalIndent(defaultValue, "", "  ")
-		if err != nil {
-			return result, err
-		}
-
-		if _, err := f.Write(b); err != nil {
-			return result, err
-		}
-
-		return defaultValue, nil
-	}
-
-	// Leer contenido existente
-	b, err := io.ReadAll(f)
-	if err != nil {
-		return result, err
-	}
-
-	if len(b) == 0 {
-		return defaultValue, nil
-	}
-
-	if err := json.Unmarshal(b, &result); err != nil {
-		return result, err
-	}
-
-	return result, nil
-}
-
-/**
-* WriteJSON
-* @param path string, value T
+* Save
+* @param path string, obj any
 * @return error
 **/
-func WriteJSON[T any](path string, value T) error {
-	b, err := json.MarshalIndent(value, "", "  ")
+func Save(path string, obj any) error {
+	// Crear los directorios si no existen.
+	dir := filepath.Dir(path)
+	if dir != "." {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return err
+		}
+	}
+
+	data, err := json.MarshalIndent(obj, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	f, err := os.OpenFile(
-		path,
-		os.O_WRONLY|os.O_CREATE|os.O_TRUNC,
-		0o644,
-	)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	_, err = f.Write(b)
-	return err
+	// WriteFile crea el archivo si no existe y lo sobrescribe si existe.
+	return os.WriteFile(path, data, 0644)
 }
 
 /**
-* LoadOrCreateString
-* @param path string, defaultValue string
-* @return string, error
+* Load
+* @param path string, obj *T
+* @return bool, error
 **/
-func LoadString(path string, defaultValue string) (string, error) {
-	f, created, err := openOrCreate(path)
+func Load[T any](path string, obj *T) (bool, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	if created {
-		if _, err := f.WriteString(defaultValue); err != nil {
-			return "", err
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
 		}
-
-		return defaultValue, nil
+		return false, err
 	}
 
-	b, err := io.ReadAll(f)
-	if err != nil {
-		return "", err
+	if err := json.Unmarshal(data, obj); err != nil {
+		return false, err
 	}
 
-	return string(b), nil
+	return true, nil
 }
 
 /**
-* WriteString
-* @param path string, value string
-* @return error
+* LoadOrSave
+* @param path string, obj *T
+* @return bool, error
 **/
-func WriteString(path string, value string) error {
-	return os.WriteFile(path, []byte(value), 0o644)
+func LoadOrSave[T any](path string, obj *T) (bool, error) {
+	loaded, err := Load(path, obj)
+	if err != nil {
+		return false, err
+	}
+
+	if loaded {
+		return true, nil
+	}
+
+	if err := Save(path, obj); err != nil {
+		return false, err
+	}
+
+	return false, nil
 }

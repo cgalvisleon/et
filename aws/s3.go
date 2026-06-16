@@ -63,7 +63,7 @@ func UploaderFile(r *http.Request, folder, name string) (et.Item, error) {
 	defer fileparts.Close()
 
 	contentType := fileInfo.Header.Get("Content-Type")
-	ext := file.ExtencionFile(fileInfo.Filename)
+	ext := file.GetExtencion(fileInfo.Filename)
 	filename := fileInfo.Filename
 	if len(name) > 0 {
 		filename = fmt.Sprintf(`%s.%s`, name, ext)
@@ -286,7 +286,7 @@ func DeleteFile(url string) (bool, error) {
 		return true, nil
 	}
 
-	outdel, err := file.RemoveFile(url)
+	outdel, err := file.Remove(url)
 	if err != nil {
 		return false, err
 	}

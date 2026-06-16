@@ -10,10 +10,8 @@ import (
 )
 
 type Store interface {
-	Load(tag string) (*Jrex, error)
-	Save(jrex *Jrex, userId string) error
-	GetCode(module string) (string, error)
-	SetCode(module string, code string) error
+	Get(collection, tenantId, id string, dest any) (bool, error)
+	Set(collection, id, tenantId string, obj any, userId string) error
 }
 
 type FileStore struct {
@@ -71,27 +69,29 @@ func (s *FileStore) getModule(module string) (*Module, error) {
 * @param tag string
 * @return *Jrex, error
 **/
-func (s *FileStore) Load(tag string) (*Jrex, error) {
-	def, err := NewJrex(tag)
-	if err != nil {
-		return nil, err
-	}
-
-	path := filepath.Join(s.BaseDir, "package.json")
-	result, err := file.LoadOrCreateJSON(path, def)
-	if err != nil {
-		return nil, err
-	}
-	s.up(result)
-
-	if len(def.Modules) == 0 {
-		_, err := s.getModule("index")
+func (s *FileStore) Get(collection, tenantId, id string, dest any) (bool, error) {
+	if collection == "jrex" {
+		def, err := newJrex(tenantId, id)
 		if err != nil {
 			return nil, err
 		}
-	}
 
-	return result, nil
+		path := filepath.Join(s.BaseDir, "package.json")
+		result, err := file.LoadOrCreateJSON(path, def)
+		if err != nil {
+			return nil, err
+		}
+		s.up(result)
+
+		if len(def.Modules) == 0 {
+			_, err := s.getModule("index")
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		return result, nil
+	}
 }
 
 /**

@@ -1,66 +1,79 @@
 package jrex
 
 import (
-	"fmt"
-	"strconv"
-	"strings"
+	"errors"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/reg"
+	"github.com/cgalvisleon/et/utility"
 )
-
-type Part string
-
-const (
-	Same    Part = "same"
-	Major   Part = "major"
-	Minor   Part = "minor"
-	Release Part = "release"
-)
-
-/**
-* ToPart
-* @param value string
-* @return Part, bool
-**/
-func ToPart(value string) (Part, bool) {
-	switch value {
-	case "same":
-		return Same, true
-	case "major":
-		return Major, true
-	case "minor":
-		return Minor, true
-	case "release":
-		return Release, true
-	}
-	return "", false
-}
 
 type Module struct {
 	ID       string  `json:"id"`
-	Path     string  `json:"path"`
-	Version  string  `json:"version"`
+	Tag      string  `json:"tag"`
 	Metadata et.Json `json:"metadata"`
+	Code     string  `json:"-"`
 	jrex     *Jrex   `json:"-"`
 }
 
 /**
 * NewModule: Creates a new module
-* @param jrex *Jrex, path string
+* @param tag string
 * @return *Module
 **/
-func (s *Jrex) NewModule(path string) *Module {
-	version := "1.0.0"
+func (s *Jrex) NewModule(tag string) (*Module, error) {
+	if !utility.ValidStr(tag, 0, []string{""}) {
+		return nil, errors.New(MSG_TAG_REQUIRED)
+	}
+
 	id := reg.ULID()
 	result := &Module{
 		ID:       id,
-		Path:     path,
-		Version:  version,
+		Tag:      tag,
 		Metadata: et.Json{},
 	}
 	s.addModule(result)
-	return result
+	return result, nil
+}
+
+/**
+* SaveCode
+* @param userId string
+* @return error
+**/
+func (s *Module) saveCode(userId string) error {
+	if s.jrex.store == nil {
+		return errors.New(MSG_STORE_IS_NIL)
+	}
+
+	err := s.jrex.store.Set("code", s.ID, s.jrex.TenantId, s.Code, userId)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/**
+* getCode
+* @return string, error
+**/
+func (s *Module) getCode() (string, error) {
+	if s.jrex.store == nil {
+		return "", errors.New(MSG_STORE_IS_NIL)
+	}
+
+	var result string
+	exists, err := s.jrex.store.Get("code", s.ID, &result)
+	if err != nil {
+		return "", err
+	}
+
+	if !exists {
+		return "", errors.New(MSG_CODE_NOT_FOUND)
+	}
+
+	return result, nil
 }
 
 /**
@@ -70,61 +83,6 @@ func (s *Jrex) NewModule(path string) *Module {
 **/
 func (s *Module) up(jrex *Jrex) *Module {
 	s.jrex = jrex
-	s.jrex.Modules[s.Path] = s
-	return s
-}
-
-/**
-* Set
-* @params name string, value interface{}
-* @return error
-**/
-func (s *Module) Set(name string, value interface{}) *Jrex {
-	return s.jrex.Set(name, value)
-}
-
-/**
-* SetName
-* @params name string
-* @return *Module
-**/
-func (s *Module) SetPath(path string) *Module {
-	s.Path = path
-	s.ID = fmt.Sprintf("module:%s:%s", s.Path, s.Version)
-	return s
-}
-
-/**
-* BumpVersion
-* @param part Part
-* @return string
-**/
-func (s *Module) SetVersion(part Part) *Module {
-	parts := strings.Split(s.Version, ".")
-	if len(parts) != 3 {
-		return s
-	}
-
-	major, _ := strconv.Atoi(parts[0])
-	minor, _ := strconv.Atoi(parts[1])
-	patch, _ := strconv.Atoi(parts[2])
-
-	switch part {
-	case "major":
-		major++
-		minor = 0
-		patch = 0
-	case "minor":
-		minor++
-		patch = 0
-	case "release":
-		patch++
-	default:
-		return s
-	}
-
-	s.Version = fmt.Sprintf("%d.%d.%d", major, minor, patch)
-	s.ID = fmt.Sprintf("module:%s:%s", s.Path, s.Version)
 	return s
 }
 
@@ -134,4 +92,13 @@ func (s *Module) SetVersion(part Part) *Module {
 **/
 func (s *Module) SetMetadata(metadata et.Json) {
 	s.Metadata = metadata
+}
+
+/**
+* Set
+* @params name string, value interface{}
+* @return error
+**/
+func (s *Module) Set(name string, value interface{}) *Jrex {
+	return s.jrex.Set(name, value)
 }

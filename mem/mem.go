@@ -16,8 +16,7 @@ type Mem struct {
 }
 
 var (
-	conn *Mem
-	// clearReCache caches compiled *regexp.Regexp instances keyed by pattern for Clear().
+	conn         *Mem
 	clearReCache sync.Map
 )
 

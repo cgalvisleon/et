@@ -590,7 +590,7 @@ func (s *Node) electionLoop() error {
 	time.Sleep(300 * time.Millisecond)
 	var config *Config
 	var err error
-	config, err = file.LoadOrCreateJSON(s.configFile, config)
+	_, err = file.LoadOrSave(s.configFile, config)
 	if err != nil {
 		return err
 	}

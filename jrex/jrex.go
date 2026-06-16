@@ -8,7 +8,6 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
-	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 )
@@ -18,44 +17,45 @@ const (
 )
 
 type Jrex struct {
-	ID        string                   `json:"id"`
-	Tag       string                   `json:"tag"`
-	Ctx       et.Json                  `json:"ctx"`
-	Modules   map[string]*Module       `json:"modules"`
-	AuditLog  []et.Json                `json:"audit_log"`
-	isChanged bool                     `json:"-"`
-	store     Store                    `json:"-"`
-	bindings  map[string]any           `json:"-"`
-	userId    string                   `json:"-"`
-	isDebug   bool                     `json:"-"`
-	onSave    []func(jrex *Jrex) error `json:"-"`
-}
-
-func NewJrex(tag string) (*Jrex, error) {
-	if !utility.ValidStr(tag, 0, []string{""}) {
-		return nil, errors.New(MSG_TAG_REQUIRED)
-	}
-
-	tag = strs.Lowcase(tag)
-	id := reg.ULID()
-	result := &Jrex{
-		ID:       id,
-		Tag:      tag,
-		Ctx:      et.Json{},
-		Modules:  make(map[string]*Module),
-		AuditLog: make([]et.Json, 0),
-		onSave:   make([]func(jrex *Jrex) error, 0),
-		bindings: make(map[string]any),
-	}
-	return result, nil
+	TenantId  string                                  `json:"tenant_id"`
+	ID        string                                  `json:"id"`
+	Tag       string                                  `json:"tag"`
+	Modules   map[string]*Module                      `json:"modules"`
+	AuditLog  []et.Json                               `json:"audit_log"`
+	isChanged bool                                    `json:"-"`
+	isDebug   bool                                    `json:"-"`
+	bindings  map[string]any                          `json:"-"`
+	store     Store                                   `json:"-"`
+	onSave    []func(jrex *Jrex, userId string) error `json:"-"`
+	onDelete  []func(jrex *Jrex, userId string) error `json:"-"`
 }
 
 /**
-* Load
+* newJrex: Creates a new Jrex
+* @param tenantId string, tag string
+* @return *Jrex
+**/
+func newJrex(tenantId, tag string) *Jrex {
+	id := reg.ULID()
+	result := &Jrex{
+		ID:       id,
+		TenantId: tenantId,
+		Tag:      tag,
+		Modules:  make(map[string]*Module),
+		AuditLog: make([]et.Json, 0),
+		bindings: make(map[string]any),
+		onSave:   make([]func(jrex *Jrex, userId string) error, 0),
+		onDelete: make([]func(jrex *Jrex, userId string) error, 0),
+	}
+	return result
+}
+
+/**
+* New
 * @param tag string, store Store
 * @return *Jrex, error
 **/
-func Load(tag string, store Store) (*Jrex, error) {
+func New(tenantId, tag string, store Store) (*Jrex, error) {
 	if !utility.ValidStr(tag, 0, []string{""}) {
 		return nil, errors.New(MSG_TAG_REQUIRED)
 	}
@@ -68,10 +68,47 @@ func Load(tag string, store Store) (*Jrex, error) {
 		}
 	}
 
-	result, err := store.Load(tag)
+	result := newJrex(tenantId, tag)
+	result.store = store
+	return result, nil
+}
+
+/**
+* Load
+* @param tag string, store Store
+* @return *Jrex, error
+**/
+func Load(tenantId, tag string, store Store) (*Jrex, error) {
+	if !utility.ValidStr(tag, 0, []string{""}) {
+		return nil, errors.New(MSG_TAG_REQUIRED)
+	}
+
+	if store == nil {
+		var err error
+		store, err = NewStore("./src")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var result *Jrex
+	exists, err := store.Get("jrex", tag, &result)
 	if err != nil {
 		return nil, err
 	}
+
+	if !exists {
+		result, err = New(tenantId, tag, store)
+		if err != nil {
+			return nil, err
+		}
+
+		err = result.Save(userId)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	result.Up(store)
 	return result, nil
 }
@@ -82,9 +119,9 @@ func Load(tag string, store Store) (*Jrex, error) {
 **/
 func (s *Jrex) ToJson() et.Json {
 	return et.Json{
+		"tenant_id": s.TenantId,
 		"id":        s.ID,
 		"tag":       s.Tag,
-		"ctx":       s.Ctx,
 		"modules":   s.Modules,
 		"audit_log": s.AuditLog,
 	}

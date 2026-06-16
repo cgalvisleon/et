@@ -77,10 +77,10 @@ type Flow struct {
 
 /**
 * newFlow
-* @param tenantId, tag, title, version, userId string
+* @param tag, title, version string
 * @return *Flow
 **/
-func (s *WorkFlow) newFlow(tag, title, version, userId string) *Flow {
+func (s *WorkFlow) newFlow(tag, title, version string) *Flow {
 	if version == "" {
 		version = "1.0.0"
 	}

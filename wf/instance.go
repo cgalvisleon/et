@@ -401,26 +401,6 @@ func (s *Instance) setStatus(status Status, userId string) error {
 }
 
 /**
-* setTag
-* @param tags et.Json
-* @return et.Json
-**/
-func (s *Instance) setTag(tags et.Json) et.Json {
-	maps.Copy(s.Tags, tags)
-	return s.Tags
-}
-
-/**
-* setParams
-* @param params et.Json
-* @return et.Json
-**/
-func (s *Instance) setParams(params et.Json) et.Json {
-	maps.Copy(s.Params, params)
-	return s.Params
-}
-
-/**
 * setTrace
 * @param step int, result et.Json, err error
 * @return error
@@ -477,6 +457,16 @@ func (s *Instance) setResult(result et.Json, err error, userId string) (et.Json,
 }
 
 /**
+* setTag
+* @param tags et.Json
+* @return et.Json
+**/
+func (s *Instance) setTag(tags et.Json) et.Json {
+	maps.Copy(s.Tags, tags)
+	return s.Tags
+}
+
+/**
 * setCtx
 * @param ctx et.Json, step int
 * @return et.Json
@@ -489,6 +479,16 @@ func (s *Instance) setCtx(ctx et.Json) et.Json {
 		s.Ctxs[stepId] = ctx
 	}
 	return s.Ctx
+}
+
+/**
+* setParams
+* @param params et.Json
+* @return et.Json
+**/
+func (s *Instance) SetParams(params et.Json) *Instance {
+	maps.Copy(s.Params, params)
+	return s
 }
 
 /**
@@ -636,7 +636,7 @@ func (s *Instance) startResilence(userId string) (et.Json, error) {
 	resilence := s.resilience.LoadInstance(resilience.Params{
 		TenantId:      s.TenantId,
 		Id:            s.ID,
-		Tag:           "instance",
+		Tag:           "workflow",
 		Description:   description,
 		OwnerId:       s.ProjectId,
 		TotalAttempts: s.flow.TotalAttempts,

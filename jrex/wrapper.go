@@ -19,17 +19,11 @@ import (
 	"github.com/dop251/goja"
 )
 
-type JrexInstance interface {
-	Set(name string, value interface{}) *Instance
-	Ctx() et.Json
-	Error(err error) *goja.Object
-}
-
 /**
 * wrap: Wraps the runtime
 * @param vm *VM
 **/
-func wrapper(instance JrexInstance) {
+func wrapper(instance *Instance) {
 	wrapperRunTime(instance)
 	wrapperBasic(instance)
 	wrapperCtx(instance)
@@ -45,7 +39,7 @@ func wrapper(instance JrexInstance) {
 
 /**
 * wrapperRunTime: Wraps the runtime
-* @param instance JrexInstance
+* @param instance *Instance
 **/
 func wrapperRunTime(instance *Instance) {
 	instance.Set("os", nil)
@@ -71,7 +65,7 @@ func wrapperRunTime(instance *Instance) {
 * wrapperBasic: Wraps the basic
 * @param instance *Instance
 **/
-func wrapperBasic(instance JrexInstance) {
+func wrapperBasic(instance *Instance) {
 	instance.Set("UUID", reg.UUID)
 	instance.Set("ULID", reg.ULID)
 	instance.Set("XID", reg.XID)
@@ -83,9 +77,9 @@ func wrapperBasic(instance JrexInstance) {
 
 /**
 * wrapperCtx: Wraps the ctx
-* @param instance JrexInstance
+* @param instance *Instance
 **/
-func wrapperCtx(instance JrexInstance) {
+func wrapperCtx(instance *Instance) {
 	instance.Set("ctx", map[string]interface{}{
 		"set": func(data et.Json) {
 			maps.Copy(instance.Ctx(), data)
@@ -134,9 +128,9 @@ func wrapperCtx(instance JrexInstance) {
 
 /**
 * wrapperConsole: Wraps the console
-* @param instance JrexInstance
+* @param instance *Instance
 **/
-func wrapperConsole(instance JrexInstance) {
+func wrapperConsole(instance *Instance) {
 	instance.Set("console", map[string]interface{}{
 		"log": func(args ...interface{}) {
 			kind := "LOG"
@@ -163,9 +157,9 @@ type Fetch struct {
 
 /**
 * wrapperFetch: Wraps the fetch
-* @param instance JrexInstance
+* @param instance *Instance
 **/
-func wrapperFetch(instance JrexInstance) {
+func wrapperFetch(instance *Instance) {
 	instance.Set("fetch", func(call goja.FunctionCall) *Fetch {
 		args := call.Arguments
 		if len(args) != 4 {
@@ -188,9 +182,9 @@ func wrapperFetch(instance JrexInstance) {
 
 /**
 * wrapperJrpc: Wraps the jrpc
-* @param instance JrexInstance
+* @param instance *Instance
 **/
-func wrapperJrpc(instance JrexInstance) {
+func wrapperJrpc(instance *Instance) {
 	instance.Set("jrpc", map[string]interface{}{
 		"call": func(method string, args any) (any, error) {
 			return jrpc.Call(method, args)
@@ -209,9 +203,9 @@ func wrapperJrpc(instance JrexInstance) {
 
 /**
 * wrapperCache: Wraps the cache
-* @param instance JrexInstance
+* @param instance *Instance
 **/
-func wrapperCache(instance JrexInstance) {
+func wrapperCache(instance *Instance) {
 	instance.Set("cache", map[string]interface{}{
 		"set": func(key string, value interface{}, expiration time.Duration) interface{} {
 			return cache.Set(key, value, expiration)
@@ -256,9 +250,9 @@ func wrapperCache(instance JrexInstance) {
 
 /**
 * wrapperEvent: Wraps the event
-* @param instance JrexInstance
+* @param instance *Instance
 **/
-func wrapperEvent(instance JrexInstance) {
+func wrapperEvent(instance *Instance) {
 	instance.Set("event", map[string]interface{}{
 		"publish": func(channel string, data et.Json) {
 			event.Publish(channel, data)

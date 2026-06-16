@@ -10,8 +10,8 @@ import (
 )
 
 type Store interface {
-	Get(collection, tenantId, id string, dest any) (bool, error)
-	Set(collection, id, tenantId string, obj any, userId string) error
+	Get(collection, id string, dest any) (bool, error)
+	Set(collection, id, ownerId string, obj any, userId string) error
 }
 
 type FileStore struct {
@@ -19,6 +19,11 @@ type FileStore struct {
 	jrex    *Jrex
 }
 
+/**
+* NewStore
+* @param baseDir string
+* @return *FileStore, error
+**/
 func NewStore(baseDir string) (*FileStore, error) {
 	absPath, err := filepath.Abs(baseDir)
 	if err != nil {
@@ -49,89 +54,84 @@ func (s *FileStore) up(jrex *Jrex) *FileStore {
 }
 
 /**
-* getModule: Gets the module
-* @params module string
-* @return *Module, error
-**/
-func (s *FileStore) getModule(module string) (*Module, error) {
-	mod := s.jrex.NewModule(module)
-	path := filepath.Join(s.BaseDir, fmt.Sprintf("%s.json", module))
-	result, err := file.LoadOrCreateJSON(path, mod)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-/**
 * Load
-* @param tag string
+* @param collection, id string, dest any
 * @return *Jrex, error
 **/
-func (s *FileStore) Get(collection, tenantId, id string, dest any) (bool, error) {
+func (s *FileStore) Get(collection, id string, dest any) (bool, error) {
 	if collection == "jrex" {
-		def, err := newJrex(tenantId, id)
-		if err != nil {
-			return nil, err
-		}
-
 		path := filepath.Join(s.BaseDir, "package.json")
-		result, err := file.LoadOrCreateJSON(path, def)
+		var result *Jrex
+		exists, err := file.Load(path, &result)
 		if err != nil {
-			return nil, err
+			return false, err
 		}
+
+		if exists {
+			s.up(result)
+			dest = result
+			return true, nil
+		}
+
+		result, err = newJrex(id, "")
+		if err != nil {
+			return false, err
+		}
+
+		err = file.Save(path, result)
+		if err != nil {
+			return false, err
+		}
+
 		s.up(result)
-
-		if len(def.Modules) == 0 {
-			_, err := s.getModule("index")
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		return result, nil
+		dest = result
+		return false, nil
 	}
+
+	path := filepath.Join(s.BaseDir, fmt.Sprintf("%s.js", id))
+	var result string
+	exists, err := file.Load(path, &result)
+	if err != nil {
+		return false, err
+	}
+
+	if exists {
+		dest = result
+		return true, nil
+	}
+
+	result = ""
+	err = file.Save(path, result)
+	if err != nil {
+		return false, err
+	}
+
+	dest = result
+	return false, nil
 }
 
 /**
-* Save
-* @param jrex *Jrex
+* Set
+* @param collection, id, ownerId string, obj any, userId string
 * @return error
 **/
-func (s *FileStore) Save(jrex *Jrex, userId string) error {
-	path := filepath.Join(s.BaseDir, "package.json")
-	err := file.WriteJSON(path, jrex)
+func (s *FileStore) Set(collection, id, ownerId string, obj any, userId string) error {
+	if collection == "jrex" {
+		path := filepath.Join(s.BaseDir, "package.json")
+		err := file.Save(path, obj)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	path := filepath.Join(s.BaseDir, fmt.Sprintf("%s.js", id))
+	err := file.Save(path, obj)
 	if err != nil {
 		return err
 	}
+
 	return nil
-}
-
-/**
-* GetCode
-* @param module string
-* @return string, error
-**/
-func (s *FileStore) GetCode(module string) (string, error) {
-	fl := fmt.Sprintf("%s.js", module)
-	path := filepath.Join(s.BaseDir, fl)
-	code, err := file.LoadString(path, "")
-	if err != nil {
-		return "", err
-	}
-
-	return code, nil
-}
-
-/**
-* SetCode
-* @param module *Module, code string
-* @return error
-**/
-func (s *FileStore) SetCode(module string, code string) error {
-	path := filepath.Join(s.BaseDir, fmt.Sprintf("%s.js", module))
-	return file.WriteString(path, code)
 }
 
 /**

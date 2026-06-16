@@ -17,9 +17,9 @@ const (
 )
 
 type Jrex struct {
-	TenantId  string                                  `json:"tenant_id"`
 	ID        string                                  `json:"id"`
 	Tag       string                                  `json:"tag"`
+	Ctx       et.Json                                 `json:"ctx"`
 	Modules   map[string]*Module                      `json:"modules"`
 	AuditLog  []et.Json                               `json:"audit_log"`
 	isChanged bool                                    `json:"-"`
@@ -32,14 +32,14 @@ type Jrex struct {
 
 /**
 * newJrex: Creates a new Jrex
-* @param tenantId string, tag string
-* @return *Jrex
+* @param tag, userId string
+* @return *Jrex, error
 **/
-func newJrex(tenantId, tag string) *Jrex {
+func newJrex(tag, userId string) (*Jrex, error) {
 	id := reg.ULID()
 	result := &Jrex{
 		ID:       id,
-		TenantId: tenantId,
+		Ctx:      et.Json{},
 		Tag:      tag,
 		Modules:  make(map[string]*Module),
 		AuditLog: make([]et.Json, 0),
@@ -47,29 +47,10 @@ func newJrex(tenantId, tag string) *Jrex {
 		onSave:   make([]func(jrex *Jrex, userId string) error, 0),
 		onDelete: make([]func(jrex *Jrex, userId string) error, 0),
 	}
-	return result
-}
-
-/**
-* New
-* @param tag string, store Store
-* @return *Jrex, error
-**/
-func New(tenantId, tag string, store Store) (*Jrex, error) {
-	if !utility.ValidStr(tag, 0, []string{""}) {
-		return nil, errors.New(MSG_TAG_REQUIRED)
+	_, err := result.NewModule("index", userId)
+	if err != nil {
+		return nil, err
 	}
-
-	if store == nil {
-		var err error
-		store, err = NewStore("./src")
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	result := newJrex(tenantId, tag)
-	result.store = store
 	return result, nil
 }
 
@@ -78,7 +59,7 @@ func New(tenantId, tag string, store Store) (*Jrex, error) {
 * @param tag string, store Store
 * @return *Jrex, error
 **/
-func Load(tenantId, tag string, store Store) (*Jrex, error) {
+func Load(tag string, store Store) (*Jrex, error) {
 	if !utility.ValidStr(tag, 0, []string{""}) {
 		return nil, errors.New(MSG_TAG_REQUIRED)
 	}
@@ -97,16 +78,19 @@ func Load(tenantId, tag string, store Store) (*Jrex, error) {
 		return nil, err
 	}
 
-	if !exists {
-		result, err = New(tenantId, tag, store)
-		if err != nil {
-			return nil, err
-		}
+	if exists {
+		result.Up(store)
+		return result, nil
+	}
 
-		err = result.Save(userId)
-		if err != nil {
-			return nil, err
-		}
+	result, err = newJrex(tag, "")
+	if err != nil {
+		return nil, err
+	}
+
+	err = result.Save("")
+	if err != nil {
+		return nil, err
 	}
 
 	result.Up(store)
@@ -119,9 +103,9 @@ func Load(tenantId, tag string, store Store) (*Jrex, error) {
 **/
 func (s *Jrex) ToJson() et.Json {
 	return et.Json{
-		"tenant_id": s.TenantId,
 		"id":        s.ID,
 		"tag":       s.Tag,
+		"ctx":       s.Ctx,
 		"modules":   s.Modules,
 		"audit_log": s.AuditLog,
 	}
@@ -149,9 +133,9 @@ func (s *Jrex) Debug() *Jrex {
 * @param onSave func(jrex *Jrex) error
 * @return *Jrex
 **/
-func (s *Jrex) OnSave(onSave func(jrex *Jrex) error) *Jrex {
+func (s *Jrex) OnSave(onSave func(jrex *Jrex, userId string) error) *Jrex {
 	if s.onSave == nil {
-		s.onSave = make([]func(jrex *Jrex) error, 0)
+		s.onSave = make([]func(jrex *Jrex, userId string) error, 0)
 	}
 	s.onSave = append(s.onSave, onSave)
 	return s
@@ -173,13 +157,13 @@ func (s *Jrex) Save(userId string) error {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	err := s.store.Save(s, userId)
+	err := s.store.Set("jrex", s.ID, s.ID, s, userId)
 	if err != nil {
 		return err
 	}
 
 	for _, onSave := range s.onSave {
-		err := onSave(s)
+		err := onSave(s, userId)
 		if err != nil {
 			return err
 		}
@@ -228,10 +212,10 @@ func (s *Jrex) addAuditLog(userId string, action string) {
 * @param module *Module
 * @return *Jrex
 **/
-func (s *Jrex) addModule(module *Module) *Jrex {
+func (s *Jrex) addModule(module *Module, userId string) *Jrex {
 	module.up(s)
-	s.Modules[module.Path] = module
-	s.addAuditLog(s.userId, "add_module")
+	s.Modules[module.Tag] = module
+	s.addAuditLog(userId, "add_module")
 	return s
 }
 
@@ -321,7 +305,6 @@ func (s *Jrex) Notify(kind, message string) {
 * @return error
 **/
 func (s *Jrex) RunDev(userId string) error {
-	s.userId = userId
 	result, err := s.Run()
 	if err != nil {
 		s.Notify("ERROR", err.Error())

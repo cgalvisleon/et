@@ -7,10 +7,10 @@ import (
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/jrex"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
-	"github.com/dop251/goja"
 )
 
 type StepFn func(inst *Instance, ctx et.Json) (et.Json, error)
@@ -284,22 +284,23 @@ func (s *Step) ToString() string {
 * @return error
 **/
 func (s *Step) run(instance *Instance, ctx et.Json, userId string) (et.Json, error) {
-	initJrex := func() {
-		instance.jrex = goja.New()
-		wrapper(instance)
+	initJrex := func() *jrex.Instance {
+		result := jrex.NewInstance()
 		for name, binding := range instance.bindings {
-			instance.jrex.Set(name, binding)
+			result.Set(name, binding)
 		}
+		return result
 	}
 
-	runString := func(code string) (et.Json, error) {
+	runJrex := func(rex *jrex.Instance, script string) (et.Json, error) {
 		instance.setStatus(RUNNING, userId)
-		_, err := instance.jrex.RunString(code)
+		rex.SetCtx(ctx)
+		_, err := rex.RunString(script)
 		if err != nil {
 			instance.setStatus(FAILED, userId)
 			return et.Json{}, err
 		}
-		return instance.Ctx, nil
+		return rex.Ctx, nil
 	}
 
 	switch v := s.Definition.(type) {
@@ -312,27 +313,27 @@ func (s *Step) run(instance *Instance, ctx et.Json, userId string) (et.Json, err
 		}
 		return result, nil
 	case string:
-		initJrex()
-		return runString(v)
+		rex := initJrex()
+		return runJrex(rex, v)
 	case []byte:
-		initJrex()
+		rex := initJrex()
 		code := string(v)
-		return runString(code)
+		return runJrex(rex, code)
 	case []string:
-		initJrex()
+		rex := initJrex()
 		if instance.CurrentIndex < 0 || instance.CurrentIndex >= len(v) {
 			return et.Json{}, errors.New(MSG_STEP_CODE_INDEX_NOT_FOUND)
 		}
 		code := v[instance.CurrentIndex]
-		return runString(code)
+		return runJrex(rex, code)
 	case [][]byte:
-		initJrex()
+		rex := initJrex()
 		if instance.CurrentIndex < 0 || instance.CurrentIndex >= len(v) {
 			return et.Json{}, errors.New(MSG_STEP_CODE_INDEX_NOT_FOUND)
 		}
 		bt := v[instance.CurrentIndex]
 		code := string(bt)
-		return runString(code)
+		return runJrex(rex, code)
 	}
 
 	return et.Json{}, errors.New(MSG_STEP_DEFINITION_IS_UNKNOWN)

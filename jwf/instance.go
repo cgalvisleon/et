@@ -13,7 +13,6 @@ import (
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/resilience"
 	"github.com/cgalvisleon/et/timezone"
-	"github.com/dop251/goja"
 )
 
 type Status string
@@ -88,7 +87,6 @@ type Instance struct {
 	flow         *Flow                                           `json:"-"`
 	bindings     map[string]interface{}                          `json:"-"`
 	resilience   *resilience.Resilience                          `json:"-"`
-	jrex         *goja.Runtime                                   `json:"-"`
 	onSave       []func(instance *Instance) error                `json:"-"`
 	onDelete     []func(instance *Instance, userId string) error `json:"-"`
 }
@@ -345,38 +343,6 @@ func (s *Instance) ToJson() et.Json {
 		"is_stop":     s.IsStop,
 		"audit_log":   s.AuditLog,
 	}
-}
-
-/**
-* Error
-* @param err error
-* @return *goja.Object
-**/
-func (s *Instance) Error(err error) *goja.Object {
-	if s.jrex == nil {
-		return nil
-	}
-	return s.jrex.NewGoError(err)
-}
-
-/**
-* Value
-* @param value interface{}
-* @return goja.Value
-**/
-func (s *Instance) Value(value interface{}) goja.Value {
-	if s.jrex == nil {
-		return goja.Undefined()
-	}
-	return s.jrex.ToValue(value)
-}
-
-func (s *Instance) Set(name string, value interface{}) *Instance {
-	if s.jrex == nil {
-		return s
-	}
-	s.jrex.Set(name, value)
-	return s
 }
 
 /**

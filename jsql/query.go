@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/jrex"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 )
@@ -710,16 +711,14 @@ func (s *Query) setCalcFuns(tx *Tx, item et.Json) {
 **/
 func (s *Query) setCalc(tx *Tx, item et.Json) error {
 	for _, calc := range s.Calcs {
-		jrex, err := calc.Model.Jrex.NewInstance(calc.Module)
+		instance := jrex.NewInstance()
+		calc.Model.wrapper(instance)
+		instance.Set("item", item)
+		_, err := instance.Run()
 		if err != nil {
 			return err
 		}
-		jrex.Set("item", item)
-		_, err = jrex.Run()
-		if err != nil {
-			return err
-		}
-		item = jrex.GetJson("item")
+		item = instance.GetJson("item")
 	}
 
 	return nil

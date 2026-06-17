@@ -57,7 +57,6 @@ type Model struct {
 	IsChanged     bool                    `json:"-"`
 	isInit        bool                    `json:"-"`
 	isTest        bool                    `json:"-"`
-	Jrex          *jrex.Jrex              `json:"jrex"`
 	Calcs         map[string]string       `json:"calcs"`
 	BeforeInserts []string                `json:"before_inserts"`
 	BeforeUpdates []string                `json:"before_updates"`

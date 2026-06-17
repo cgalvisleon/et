@@ -6,6 +6,7 @@ import (
 	"maps"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/jrex"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 )
@@ -343,19 +344,17 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 			}
 		}
 
-		for _, module := range s.BeforeInserts {
-			jrex, err := s.model.Jrex.NewInstance(module)
+		for _, script := range s.BeforeInserts {
+			instance := jrex.NewInstance()
+			model.wrapper(instance)
+			instance.Set("old", s.Old)
+			instance.Set("new", s.New)
+			_, err := instance.RunString(script)
 			if err != nil {
 				return et.Items{}, err
 			}
-			jrex.Set("old", s.Old)
-			jrex.Set("new", s.New)
-			_, err = jrex.Run()
-			if err != nil {
-				return et.Items{}, err
-			}
-			s.Old = jrex.GetJson("old")
-			s.New = jrex.GetJson("new")
+			s.Old = instance.GetJson("old")
+			s.New = instance.GetJson("new")
 		}
 
 		sql, err := s.db.command(s)
@@ -380,19 +379,17 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 			}
 		}
 
-		for _, module := range s.AfterInserts {
-			jrex, err := s.model.Jrex.NewInstance(module)
+		for _, script := range s.AfterInserts {
+			instance := jrex.NewInstance()
+			model.wrapper(instance)
+			instance.Set("old", s.Old)
+			instance.Set("new", s.New)
+			_, err := instance.RunString(script)
 			if err != nil {
 				return et.Items{}, err
 			}
-			jrex.Set("old", s.Old)
-			jrex.Set("new", s.New)
-			_, err = jrex.Run()
-			if err != nil {
-				return et.Items{}, err
-			}
-			s.Old = jrex.GetJson("old")
-			s.New = jrex.GetJson("new")
+			s.Old = instance.GetJson("old")
+			s.New = instance.GetJson("new")
 		}
 
 		result.Add(s.New)
@@ -431,19 +428,17 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 			}
 		}
 
-		for _, module := range s.BeforeUpdates {
-			jrex, err := s.model.Jrex.NewInstance(module)
+		for _, script := range s.BeforeUpdates {
+			instance := jrex.NewInstance()
+			model.wrapper(instance)
+			instance.Set("old", s.Old)
+			instance.Set("new", s.New)
+			_, err := instance.RunString(script)
 			if err != nil {
 				return et.Items{}, err
 			}
-			jrex.Set("old", s.Old)
-			jrex.Set("new", s.New)
-			_, err = jrex.Run()
-			if err != nil {
-				return et.Items{}, err
-			}
-			s.Old = jrex.GetJson("old")
-			s.New = jrex.GetJson("new")
+			s.Old = instance.GetJson("old")
+			s.New = instance.GetJson("new")
 		}
 
 		sql, err := s.db.command(s)
@@ -468,19 +463,17 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 			}
 		}
 
-		for _, module := range s.AfterUpdates {
-			jrex, err := s.model.Jrex.NewInstance(module)
+		for _, script := range s.AfterUpdates {
+			instance := jrex.NewInstance()
+			model.wrapper(instance)
+			instance.Set("old", s.Old)
+			instance.Set("new", s.New)
+			_, err := instance.RunString(script)
 			if err != nil {
 				return et.Items{}, err
 			}
-			jrex.Set("old", s.Old)
-			jrex.Set("new", s.New)
-			_, err = jrex.Run()
-			if err != nil {
-				return et.Items{}, err
-			}
-			s.Old = jrex.GetJson("old")
-			s.New = jrex.GetJson("new")
+			s.Old = instance.GetJson("old")
+			s.New = instance.GetJson("new")
 		}
 
 		result.Add(s.New)
@@ -515,19 +508,17 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 			}
 		}
 
-		for _, module := range s.BeforeDeletes {
-			jrex, err := s.model.Jrex.NewInstance(module)
+		for _, script := range s.BeforeDeletes {
+			instance := jrex.NewInstance()
+			model.wrapper(instance)
+			instance.Set("old", s.Old)
+			instance.Set("new", s.New)
+			_, err := instance.RunString(script)
 			if err != nil {
 				return et.Items{}, err
 			}
-			jrex.Set("old", s.Old)
-			jrex.Set("new", s.New)
-			_, err = jrex.Run()
-			if err != nil {
-				return et.Items{}, err
-			}
-			s.Old = jrex.GetJson("old")
-			s.New = jrex.GetJson("new")
+			s.Old = instance.GetJson("old")
+			s.New = instance.GetJson("new")
 		}
 
 		sql, err := s.db.command(s)
@@ -552,19 +543,17 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 			}
 		}
 
-		for _, module := range s.AfterDeletes {
-			jrex, err := s.model.Jrex.NewInstance(module)
+		for _, script := range s.AfterDeletes {
+			instance := jrex.NewInstance()
+			model.wrapper(instance)
+			instance.Set("old", s.Old)
+			instance.Set("new", s.New)
+			_, err := instance.RunString(script)
 			if err != nil {
 				return et.Items{}, err
 			}
-			jrex.Set("old", s.Old)
-			jrex.Set("new", s.New)
-			_, err = jrex.Run()
-			if err != nil {
-				return et.Items{}, err
-			}
-			s.Old = jrex.GetJson("old")
-			s.New = jrex.GetJson("new")
+			s.Old = instance.GetJson("old")
+			s.New = instance.GetJson("new")
 		}
 
 		result.Add(s.Old)

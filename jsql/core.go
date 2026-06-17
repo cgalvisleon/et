@@ -15,10 +15,5 @@ func (s *DB) initCore() error {
 		return err
 	}
 
-	err = defineRule(s, "core")
-	if err != nil {
-		return err
-	}
-
 	return nil
 }

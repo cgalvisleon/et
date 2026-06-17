@@ -2,7 +2,6 @@ package jrex
 
 import (
 	"errors"
-	"maps"
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
@@ -19,7 +18,6 @@ const (
 type Jrex struct {
 	ID        string                                  `json:"id"`
 	Tag       string                                  `json:"tag"`
-	Ctx       et.Json                                 `json:"ctx"`
 	Modules   map[string]*Module                      `json:"modules"`
 	AuditLog  []et.Json                               `json:"audit_log"`
 	isChanged bool                                    `json:"-"`
@@ -39,7 +37,6 @@ func newJrex(tag, userId string) (*Jrex, error) {
 	id := reg.ULID()
 	result := &Jrex{
 		ID:       id,
-		Ctx:      et.Json{},
 		Tag:      tag,
 		Modules:  make(map[string]*Module),
 		AuditLog: make([]et.Json, 0),
@@ -105,7 +102,6 @@ func (s *Jrex) ToJson() et.Json {
 	return et.Json{
 		"id":        s.ID,
 		"tag":       s.Tag,
-		"ctx":       s.Ctx,
 		"modules":   s.Modules,
 		"audit_log": s.AuditLog,
 	}
@@ -233,15 +229,6 @@ func (s *Jrex) Set(name string, value interface{}) *Jrex {
 }
 
 /**
-* SetCtx
-* @params ctx et.Json
-**/
-func (s *Jrex) SetCtx(ctx et.Json) *Jrex {
-	maps.Copy(s.Ctx, ctx)
-	return s
-}
-
-/**
 * newInstance
 * @return *Instance, error
 **/
@@ -301,10 +288,9 @@ func (s *Jrex) Notify(kind, message string) {
 
 /**
 * RunDev: Runs the Jrex in development mode
-* @param userId string
 * @return error
 **/
-func (s *Jrex) RunDev(userId string) error {
+func (s *Jrex) RunDev() error {
 	result, err := s.Run()
 	if err != nil {
 		s.Notify("ERROR", err.Error())

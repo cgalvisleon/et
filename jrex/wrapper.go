@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"path/filepath"
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
@@ -32,9 +31,6 @@ func wrapper(instance *Instance) {
 	wrapperJrpc(instance)
 	wrapperCache(instance)
 	wrapperEvent(instance)
-	for _, module := range instance.jrex.Modules {
-		instance.wrapperModules(module)
-	}
 }
 
 /**
@@ -44,17 +40,10 @@ func wrapper(instance *Instance) {
 func wrapperRunTime(instance *Instance) {
 	instance.Set("os", nil)
 	instance.Set("exec", nil)
-	instance.Set("__load", func(modulePath string) string {
-		module := filepath.Join(instance.baseDir, modulePath)
-		code, err := instance.store.GetCode(module)
+	instance.Set("__load", func(module string) string {
+		code, err := instance.GetCode(module)
 		if err != nil {
 			panic(instance.Error(err))
-		}
-		instance.baseDir = filepath.Dir(module)
-		_, exists := instance.jrex.Modules[module]
-		if !exists {
-			mod := instance.jrex.NewModule(module)
-			instance.jrex.addModule(mod)
 		}
 
 		return code
@@ -82,46 +71,46 @@ func wrapperBasic(instance *Instance) {
 func wrapperCtx(instance *Instance) {
 	instance.Set("ctx", map[string]interface{}{
 		"set": func(data et.Json) {
-			maps.Copy(instance.Ctx(), data)
+			maps.Copy(instance.Ctx, data)
 		},
 		"get": func(keys ...string) interface{} {
-			return instance.Ctx().Get(keys...)
+			return instance.Ctx.Get(keys...)
 		},
 		"str": func(keys ...string) string {
-			return instance.Ctx().Str(keys...)
+			return instance.Ctx.Str(keys...)
 		},
 		"int": func(keys ...string) int {
-			return instance.Ctx().Int(keys...)
+			return instance.Ctx.Int(keys...)
 		},
 		"int64": func(keys ...string) int64 {
-			return instance.Ctx().Int64(keys...)
+			return instance.Ctx.Int64(keys...)
 		},
 		"num": func(keys ...string) float64 {
-			return instance.Ctx().Num(keys...)
+			return instance.Ctx.Num(keys...)
 		},
 		"bool": func(keys ...string) bool {
-			return instance.Ctx().Bool(keys...)
+			return instance.Ctx.Bool(keys...)
 		},
 		"time": func(keys ...string) time.Time {
-			return instance.Ctx().Time(keys...)
+			return instance.Ctx.Time(keys...)
 		},
 		"json": func(key string) et.Json {
-			return instance.Ctx().Json(key)
+			return instance.Ctx.Json(key)
 		},
 		"array": func(key string) []interface{} {
-			return instance.Ctx().Array(key)
+			return instance.Ctx.Array(key)
 		},
 		"arrayStr": func(key string) []string {
-			return instance.Ctx().ArrayStr(key)
+			return instance.Ctx.ArrayStr(key)
 		},
 		"arrayInt": func(key string) []int {
-			return instance.Ctx().ArrayInt(key)
+			return instance.Ctx.ArrayInt(key)
 		},
 		"arrayInt64": func(key string) []int64 {
-			return instance.Ctx().ArrayInt64(key)
+			return instance.Ctx.ArrayInt64(key)
 		},
 		"arrayJson": func(key string) []et.Json {
-			return instance.Ctx().ArrayJson(key)
+			return instance.Ctx.ArrayJson(key)
 		},
 	})
 }

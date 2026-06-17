@@ -355,15 +355,6 @@ func (s *Model) DefineCalc(name, module string) *Model {
 * @return *Model
 **/
 func (s *Model) DefineBeforeInsert(name, code string) *Model {
-	if s.rules == nil {
-		return s
-	}
-
-	err := s.rules.SetCode(name, code)
-	if err != nil {
-		return s
-	}
-
 	idx := slices.IndexFunc(s.BeforeInserts, func(r string) bool { return r == name })
 	if idx != -1 {
 		s.BeforeInserts[idx] = name
@@ -379,15 +370,6 @@ func (s *Model) DefineBeforeInsert(name, code string) *Model {
 * @return *Model
 **/
 func (s *Model) DefineBeforeUpdate(name, code string) *Model {
-	if s.rules == nil {
-		return s
-	}
-
-	err := s.rules.SetCode(name, code)
-	if err != nil {
-		return s
-	}
-
 	idx := slices.IndexFunc(s.BeforeUpdates, func(r string) bool { return r == name })
 	if idx != -1 {
 		s.BeforeUpdates[idx] = name
@@ -403,15 +385,6 @@ func (s *Model) DefineBeforeUpdate(name, code string) *Model {
 * @return *Model
 **/
 func (s *Model) DefineBeforeDelete(name, code string) *Model {
-	if s.rules == nil {
-		return s
-	}
-
-	err := s.rules.SetCode(name, code)
-	if err != nil {
-		return s
-	}
-
 	idx := slices.IndexFunc(s.BeforeDeletes, func(r string) bool { return r == name })
 	if idx != -1 {
 		s.BeforeDeletes[idx] = name
@@ -427,15 +400,6 @@ func (s *Model) DefineBeforeDelete(name, code string) *Model {
 * @return *Model
 **/
 func (s *Model) DefineAfterInsert(name, code string) *Model {
-	if s.rules == nil {
-		return s
-	}
-
-	err := s.rules.SetCode(name, code)
-	if err != nil {
-		return s
-	}
-
 	idx := slices.IndexFunc(s.AfterInserts, func(r string) bool { return r == name })
 	if idx != -1 {
 		s.AfterInserts[idx] = name
@@ -451,15 +415,6 @@ func (s *Model) DefineAfterInsert(name, code string) *Model {
 * @return *Model
 **/
 func (s *Model) DefineAfterUpdate(name, code string) *Model {
-	if s.rules == nil {
-		return s
-	}
-
-	err := s.rules.SetCode(name, code)
-	if err != nil {
-		return s
-	}
-
 	idx := slices.IndexFunc(s.AfterUpdates, func(r string) bool { return r == name })
 	if idx != -1 {
 		s.AfterUpdates[idx] = name
@@ -475,15 +430,6 @@ func (s *Model) DefineAfterUpdate(name, code string) *Model {
 * @return *Model
 **/
 func (s *Model) DefineAfterDelete(name, code string) *Model {
-	if s.rules == nil {
-		return s
-	}
-
-	err := s.rules.SetCode(name, code)
-	if err != nil {
-		return s
-	}
-
 	idx := slices.IndexFunc(s.AfterDeletes, func(r string) bool { return r == name })
 	if idx != -1 {
 		s.AfterDeletes[idx] = name

@@ -1,7 +1,7 @@
 package jrex
 
 import (
-	"fmt"
+	"errors"
 	"maps"
 
 	"github.com/cgalvisleon/et/et"
@@ -9,18 +9,34 @@ import (
 )
 
 type Instance struct {
-	Module  string        `json:"module"`
-	Ctx     et.Json       `json:"ctx"`
-	store   Store         `json:"-"`
-	jrex    *Jrex         `json:"-"`
-	baseDir string        `json:"-"`
-	vm      *goja.Runtime `json:"-"`
+	Module string        `json:"module"`
+	Ctx    et.Json       `json:"ctx"`
+	store  Store         `json:"-"`
+	jrex   *Jrex         `json:"-"`
+	vm     *goja.Runtime `json:"-"`
 }
 
+func NewInstance() *Instance {
+	result := &Instance{
+		Module: "index",
+		Ctx:    et.Json{},
+		store:  nil,
+		jrex:   nil,
+		vm:     goja.New(),
+	}
+	wrapper(result)
+	return result
+}
+
+/**
+* newInstance
+* @param jrex *Jrex, module string
+* @return *Instance
+**/
 func newInstance(jrex *Jrex, module string) *Instance {
 	return &Instance{
 		Module: module,
-		Ctx:    jrex.Ctx.Clone(),
+		Ctx:    et.Json{},
 		store:  jrex.store,
 		jrex:   jrex,
 		vm:     goja.New(),
@@ -57,12 +73,21 @@ func (s *Instance) RunString(code string) (goja.Value, error) {
 }
 
 /**
-* RunScript
-* @param module string, code string
-* @return goja.Value, error
+* GetCode
+* @param module string
+* @return string, error
 **/
-func (s *Instance) RunScript(module string, code string) (goja.Value, error) {
-	return s.vm.RunScript(module, code)
+func (s *Instance) GetCode(module string) (string, error) {
+	if s.jrex == nil {
+		return "", errors.New(MSG_JREX_IS_NIL)
+	}
+
+	mod, exists := s.jrex.Modules[module]
+	if !exists {
+		return "", errors.New(MSG_MODULE_NOT_FOUND)
+	}
+
+	return mod.getCode()
 }
 
 /**
@@ -70,18 +95,14 @@ func (s *Instance) RunScript(module string, code string) (goja.Value, error) {
 * @return et.Json, error
 **/
 func (s *Instance) Run() (et.Json, error) {
-	code, err := s.store.GetCode(s.Module)
+	code, err := s.GetCode("index")
 	if err != nil {
 		return et.Json{}, err
 	}
 
-	_, err = s.RunScript(s.Module, code)
+	_, err = s.RunString(code)
 	if err != nil {
 		return et.Json{}, err
-	}
-
-	if s.jrex.isChanged {
-		s.jrex.Save(s.jrex.userId)
 	}
 
 	return s.Ctx, nil
@@ -137,23 +158,4 @@ func (s *Instance) GetJson(name string) et.Json {
 		return et.Json{}
 	}
 	return result
-}
-
-/**
-* wrapperRunTime: Wraps the runtime
-* @param vm *VM
-**/
-func (s *Instance) wrapperModules(module *Module) {
-	module.Set("version", func(value string) string {
-		part, ok := ToPart(value)
-		if !ok {
-			panic(s.Error(fmt.Errorf("invalid part: %s", value)))
-		}
-		module.SetVersion(part)
-		return module.Version
-	})
-	module.Set("metadata", func(value et.Json) et.Json {
-		module.SetMetadata(value)
-		return value
-	})
 }

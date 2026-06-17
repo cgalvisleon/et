@@ -18,14 +18,6 @@ import (
 )
 
 /**
-* Trigger: Stores a named trigger definition as raw bytes.
-**/
-type Trigger struct {
-	Name       string `json:"name"`
-	Definition []byte `json:"definition"`
-}
-
-/**
 * TriggerFunction: Callback invoked before or after a data-mutation command.
 **/
 type TriggerFunction func(tx *Tx, old, new et.Json) error
@@ -84,7 +76,6 @@ type Model struct {
 	db            *DB                     `json:"-"`
 	historyDb     *DB                     `json:"-"`
 	deadDb        *DB                     `json:"-"`
-	rules         *Rule                   `json:"-"`
 }
 
 /**
@@ -130,7 +121,6 @@ func newModel(schema *Schema, name string, version int) *Model {
 		deadDb:        schema.deadDb,
 		IsDebug:       schema.db.IsDebug,
 	}
-	result.rules = loadRule(result)
 	result = defaultTrigger(result)
 	return result
 }
@@ -309,6 +299,17 @@ func (s *Model) initInDb(db *DB) (bool, error) {
 }
 
 /**
+* wrapper: Wraps the jrex with the model
+* @param rex *jrex.Jrex, model *Model
+* @return void
+**/
+func (s *Model) wrapper(instance *jrex.Instance) {
+	instance.Set("db", s.db)
+	instance.Set("getDb", GetDb)
+	instance.Set("newTx", NewTx)
+}
+
+/**
 * Init: Runs DDL for the model the first time it is called; subsequent calls are no-ops.
 * @return error
 **/
@@ -369,14 +370,6 @@ func (s *Model) Init() error {
 	wg.Wait()
 	if err != nil {
 		return err
-	}
-
-	if !s.IsCore {
-		s.Jrex, err = jrex.Load(s.Key(), s.rules)
-		if err != nil {
-			return err
-		}
-		wrapper(s.Jrex, s)
 	}
 
 	s.isInit = true

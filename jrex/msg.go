@@ -9,6 +9,7 @@ var (
 	MSG_STORE_IS_NIL           = "store is nil"
 	MSG_ORIGIN_IS_NIL          = "origin store is nil"
 	MSG_CODE_NOT_FOUND         = "code not found"
+	MSG_JREX_IS_NIL            = "jrex is nil"
 )
 
 func init() {
@@ -21,5 +22,6 @@ func init() {
 		MSG_STORE_IS_NIL = "store es nulo"
 		MSG_ORIGIN_IS_NIL = "store de origen es nulo"
 		MSG_CODE_NOT_FOUND = "código no encontrado"
+		MSG_JREX_IS_NIL = "jrex es nulo"
 	}
 }

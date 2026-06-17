@@ -60,22 +60,17 @@ func (s *Module) getCode() (string, error) {
 	}
 
 	var result string
-	exists, err := s.jrex.store.Get("code", s.jrex.ID, &result)
+	exists, err := s.jrex.store.Get("code", s.Tag, &result)
 	if err != nil {
 		return "", err
 	}
 
-	if exists {
-		s.Code = result
-		return s.Code, nil
+	if !exists {
+		return "", errors.New(MSG_CODE_NOT_FOUND)
 	}
 
-	err = s.saveCode("")
-	if err != nil {
-		return "", err
-	}
-
-	return result, nil
+	s.Code = result
+	return s.Code, nil
 }
 
 /**

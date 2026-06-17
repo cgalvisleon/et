@@ -940,8 +940,8 @@ func (s *Query) Count() (int, error) {
 **/
 func (s *Query) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 	join := query.ArrayJson("join")
-	for _, j := range join {
-		to := j.Str("to")
+	for _, js := range join {
+		to := js.Str("to")
 		as := ""
 		args, ok := ArgWhitAs(to)
 		if !ok {
@@ -960,13 +960,13 @@ func (s *Query) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 			return et.Items{}, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
 		}
 
-		conditions := et.ToCondition(j)
+		conditions := et.ToCondition(js)
 		s.join(modelTo, as, INNER_JOIN, conditions)
 	}
 
 	leftJoin := query.ArrayJson("left_join")
-	for _, j := range leftJoin {
-		to := j.Str("to")
+	for _, js := range leftJoin {
+		to := js.Str("to")
 		as := ""
 		args, ok := ArgWhitAs(to)
 		if !ok {
@@ -985,13 +985,13 @@ func (s *Query) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 			return et.Items{}, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
 		}
 
-		conditions := et.ToCondition(j)
+		conditions := et.ToCondition(js)
 		s.join(modelTo, as, INNER_JOIN, conditions)
 	}
 
 	rightJoin := query.ArrayJson("right_join")
-	for _, j := range rightJoin {
-		to := j.Str("to")
+	for _, js := range rightJoin {
+		to := js.Str("to")
 		as := ""
 		args, ok := ArgWhitAs(to)
 		if !ok {
@@ -1010,13 +1010,13 @@ func (s *Query) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 			return et.Items{}, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
 		}
 
-		conditions := et.ToCondition(j)
+		conditions := et.ToCondition(js)
 		s.join(modelTo, as, INNER_JOIN, conditions)
 	}
 
 	fullJoin := query.ArrayJson("full_join")
-	for _, j := range fullJoin {
-		to := j.Str("to")
+	for _, js := range fullJoin {
+		to := js.Str("to")
 		as := ""
 		args, ok := ArgWhitAs(to)
 		if !ok {
@@ -1035,7 +1035,7 @@ func (s *Query) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 			return et.Items{}, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
 		}
 
-		conditions := et.ToCondition(j)
+		conditions := et.ToCondition(js)
 		s.join(modelTo, as, INNER_JOIN, conditions)
 	}
 

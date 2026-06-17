@@ -49,12 +49,12 @@ func (s Message) ToJson() (et.Json, error) {
 * @return string
 **/
 func (s Message) ToString() string {
-	j, err := s.ToJson()
+	result, err := s.ToJson()
 	if err != nil {
 		return et.Json{}.ToString()
 	}
 
-	return j.ToString()
+	return result.ToString()
 }
 
 /**

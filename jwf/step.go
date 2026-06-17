@@ -62,7 +62,7 @@ type Step struct {
 	isChanged   bool                                    `json:"-"`
 	store       Store                                   `json:"-"`
 	bindings    map[string]any                          `json:"-"`
-	onSave      []func(step *Step) error                `json:"-"`
+	onSave      []func(step *Step, userId string) error `json:"-"`
 	onDelete    []func(step *Step, userId string) error `json:"-"`
 }
 
@@ -97,7 +97,7 @@ func (s *WorkFlow) newStep(kind Kind, tag, version, title string) (*Step, error)
 		isDebug:   s.isDebug,
 		store:     s.store,
 		bindings:  s.bindings,
-		onSave:    make([]func(step *Step) error, 0),
+		onSave:    make([]func(step *Step, userId string) error, 0),
 		onDelete:  make([]func(step *Step, userId string) error, 0),
 	}
 	return result, nil
@@ -126,7 +126,7 @@ func (s *WorkFlow) getStep(id string) (*Step, error) {
 	result.store = s.store
 	result.isDebug = s.isDebug
 	result.bindings = s.bindings
-	result.onSave = make([]func(step *Step) error, 0)
+	result.onSave = make([]func(step *Step, userId string) error, 0)
 	result.onDelete = make([]func(step *Step, userId string) error, 0)
 	return result, nil
 }
@@ -188,9 +188,9 @@ func (s *Step) addAuditLog(userId string, action string) {
 * @param onSave func(jrex *Jrex) error
 * @return *Jrex
 **/
-func (s *Step) OnSave(onSave func(step *Step) error) *Step {
+func (s *Step) OnSave(onSave func(step *Step, userId string) error) *Step {
 	if s.onSave == nil {
-		s.onSave = make([]func(step *Step) error, 0)
+		s.onSave = make([]func(step *Step, userId string) error, 0)
 	}
 	s.onSave = append(s.onSave, onSave)
 	return s
@@ -234,7 +234,7 @@ func (s *Step) save(userId string) error {
 	}
 
 	for _, onSave := range s.onSave {
-		err := onSave(s)
+		err := onSave(s, userId)
 		if err != nil {
 			return err
 		}

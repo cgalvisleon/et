@@ -72,6 +72,7 @@ type Flow struct {
 	store         Store                                   `json:"-"`
 	onSave        []func(flow *Flow) error                `json:"-"`
 	onDelete      []func(flow *Flow, userId string) error `json:"-"`
+	step          *Step                                   `json:"-"`
 	err           error                                   `json:"-"`
 }
 
@@ -378,11 +379,52 @@ func (s *Flow) getStep(stepId string) *Step {
 }
 
 /**
-* Error
+* IsError
 * @return error
 **/
-func (s *Flow) Error() error {
+func (s *Flow) IsError() error {
 	return s.err
+}
+
+/**
+* addStep
+* @param tag, version, title string, kind Port, fn func(instance *Instance, ctx et.Json) (et.Json, error)
+* @return *Flow
+**/
+func (s *Flow) addStep(tag, version, title string, kind Port, fn func(instance *Instance, ctx et.Json) (et.Json, error)) *Flow {
+	step, err := s.workflow.newStep(KindFunction, tag, version, title)
+	if err != nil {
+		s.err = err
+		return s
+	}
+	step.Definition = fn
+	s.Steps[step.ID] = step
+
+	if s.step == nil {
+		s.err = errors.New(MSG_INVALID_SOURCE)
+		return s
+	}
+
+	s.Connections = append(s.Connections, &Connection{
+		ID: reg.ULID(),
+		Source: &StepConnection{
+			StepId: s.step.ID,
+			Port:   PortOutput,
+			Index:  0,
+		},
+		Target: &StepConnection{
+			StepId: step.ID,
+			Port:   PortInput,
+			Index:  0,
+		},
+		Kind: kind,
+	})
+
+	if kind != PortError {
+		s.step = step
+	}
+
+	return s
 }
 
 /**
@@ -407,47 +449,19 @@ func (s *Flow) Step(tag, version, title string, fn func(instance *Instance, ctx 
 		return s
 	}
 
-	step, err := s.workflow.newStep(KindFunction, tag, version, title)
-	if err != nil {
-		s.err = err
-		return s
-	}
-	step.Definition = fn
-	s.Steps[step.ID] = step
+	return s.addStep(tag, version, title, PortInput, fn)
+}
 
-	var source *StepConnection
-	if len(s.Connections) == 0 {
-		trigger := s.Triggers[0]
-		if trigger != nil {
-			source = &StepConnection{
-				StepId: trigger.StartId,
-				Port:   PortInput,
-				Index:  0,
-			}
-		}
-	} else {
-		source = &StepConnection{
-			StepId: s.Connections[len(s.Connections)-1].Target.StepId,
-			Port:   PortOutput,
-			Index:  s.Connections[len(s.Connections)-1].Target.Index,
-		}
-	}
-
-	if source == nil {
+/**
+* Error
+* @param stepId string
+* @return *Flow
+**/
+func (s *Flow) Error(tag, version, title string, fn func(instance *Instance, ctx et.Json) (et.Json, error)) *Flow {
+	if len(s.Steps) == 0 {
 		s.err = errors.New(MSG_INVALID_SOURCE)
 		return s
 	}
 
-	s.Connections = append(s.Connections, &Connection{
-		ID:     reg.ULID(),
-		Source: source,
-		Target: &StepConnection{
-			StepId: step.ID,
-			Port:   PortInput,
-			Index:  0,
-		},
-		Kind: PortOutput,
-	})
-
-	return s
+	return s.addStep(tag, version, title, PortError, fn)
 }

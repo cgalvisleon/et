@@ -28,6 +28,7 @@ type Port string
 const (
 	PortInput  Port = "input"
 	PortOutput Port = "output"
+	PortError  Port = "error"
 )
 
 type StepConnection struct {
@@ -37,17 +38,15 @@ type StepConnection struct {
 }
 
 type Connection struct {
-	ID     string         `json:"id"`
-	Tag    string         `json:"tag"`
-	Source StepConnection `json:"source"`
-	Target StepConnection `json:"target"`
-	Kind   string         `json:"kind"`
+	ID     string          `json:"id"`
+	Source *StepConnection `json:"source"`
+	Target *StepConnection `json:"target"`
+	Kind   Port            `json:"kind"`
 }
 
 type Trigger struct {
-	Tag         string   `json:"tag"`
-	StartStepId string   `json:"start_step_id"`
-	Connections []string `json:"connections"`
+	Tag     string `json:"tag"`
+	StartId string `json:"start_id"`
 }
 
 type Flow struct {
@@ -393,20 +392,62 @@ func (s *Flow) Error() error {
 **/
 func (s *Flow) Step(tag, version, title string, fn func(instance *Instance, ctx et.Json) (et.Json, error)) *Flow {
 	if len(s.Steps) == 0 {
-		step, err := s.workflow.newStep(KindFunction, tag, version, title)
+		step, err := s.workflow.newStep(KindTrigger, tag, version, title)
 		if err != nil {
 			s.err = err
 			return s
 		}
 		step.Definition = fn
 		s.Steps[step.ID] = step
+		s.Connections = make([]*Connection, 0)
 		s.Triggers = append(s.Triggers, &Trigger{
-			Tag:         tag,
-			StartStepId: step.ID,
-			Connections: make([]string, 0),
+			Tag:     tag,
+			StartId: step.ID,
 		})
 		return s
 	}
+
+	step, err := s.workflow.newStep(KindFunction, tag, version, title)
+	if err != nil {
+		s.err = err
+		return s
+	}
+	step.Definition = fn
+	s.Steps[step.ID] = step
+
+	var source *StepConnection
+	if len(s.Connections) == 0 {
+		trigger := s.Triggers[0]
+		if trigger != nil {
+			source = &StepConnection{
+				StepId: trigger.StartId,
+				Port:   PortInput,
+				Index:  0,
+			}
+		}
+	} else {
+		source = &StepConnection{
+			StepId: s.Connections[len(s.Connections)-1].Target.StepId,
+			Port:   PortOutput,
+			Index:  s.Connections[len(s.Connections)-1].Target.Index,
+		}
+	}
+
+	if source == nil {
+		s.err = errors.New(MSG_INVALID_SOURCE)
+		return s
+	}
+
+	s.Connections = append(s.Connections, &Connection{
+		ID:     reg.ULID(),
+		Source: source,
+		Target: &StepConnection{
+			StepId: step.ID,
+			Port:   PortInput,
+			Index:  0,
+		},
+		Kind: PortOutput,
+	})
 
 	return s
 }

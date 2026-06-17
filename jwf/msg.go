@@ -26,6 +26,7 @@ var (
 	MSG_INSTANCE_CANCEL               = "instance cancel"
 	MSG_INSTANCE_STOP                 = "instance stop"
 	MSG_RESILIENCE_NO_RESULT          = "resilience no return result"
+	MSG_INVALID_SOURCE                = "invalid source"
 )
 
 func init() {
@@ -55,5 +56,6 @@ func init() {
 		MSG_INSTANCE_CANCEL = "Instancia cancelada"
 		MSG_INSTANCE_STOP = "Instancia detenida"
 		MSG_RESILIENCE_NO_RESULT = "resilience no return result"
+		MSG_INVALID_SOURCE = "source invalido"
 	}
 }

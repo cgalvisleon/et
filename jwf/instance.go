@@ -491,7 +491,7 @@ func (s *Instance) next() bool {
 	}
 
 	if s.Current == nil {
-		current, exists := s.flow.getCurrent(s.Trigger.StartStepId, s.CurrentIndex)
+		current, exists := s.flow.getCurrent(s.Trigger.StartId, s.CurrentIndex)
 		if !exists {
 			return false
 		}

@@ -557,9 +557,7 @@ func DeleteVerify(device string, key string) (int64, error) {
 /**
 * AllCache: Scans all keys matching search and returns the requested page.
 * Redis SCAN cursor is opaque — offset-based pagination is done in memory after a full scan.
-* @param search string
-* @param page int
-* @param rows int
+* @param search string, page int, rows int
 * @return et.List, error
 **/
 func AllCache(search string, page, rows int) (et.List, error) {

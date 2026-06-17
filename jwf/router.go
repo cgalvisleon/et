@@ -63,7 +63,6 @@ func (s *WorkFlow) httpNewStep(w http.ResponseWriter, r *http.Request) {
 	}
 
 	kind := Kind(body.Str("kind"))
-	tp := body.Str("type")
 	tag := body.Str("tag")
 	version := body.Str("version")
 	title := body.Str("title")
@@ -73,7 +72,7 @@ func (s *WorkFlow) httpNewStep(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	step, err := s.newStep(kind, tp, tag, version, title)
+	step, err := s.newStep(kind, tag, version, title)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return

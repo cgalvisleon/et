@@ -46,8 +46,7 @@ type Connection struct {
 
 type Trigger struct {
 	Tag         string   `json:"tag"`
-	Type        string   `json:"type"`
-	StepId      string   `json:"step_id"`
+	StartStepId string   `json:"start_step_id"`
 	Connections []string `json:"connections"`
 }
 
@@ -70,9 +69,11 @@ type Flow struct {
 	AuditLog      []et.Json                               `json:"audit_log"`
 	isDebug       bool                                    `json:"-"`
 	isChanged     bool                                    `json:"-"`
+	workflow      *WorkFlow                               `json:"-"`
 	store         Store                                   `json:"-"`
 	onSave        []func(flow *Flow) error                `json:"-"`
 	onDelete      []func(flow *Flow, userId string) error `json:"-"`
+	err           error                                   `json:"-"`
 }
 
 /**
@@ -104,6 +105,7 @@ func (s *WorkFlow) newFlow(tag, title, version string) *Flow {
 		Public:        false,
 		AuditLog:      make([]et.Json, 0),
 		isDebug:       s.isDebug,
+		workflow:      s,
 		store:         s.store,
 		onSave:        make([]func(flow *Flow) error, 0),
 		onDelete:      make([]func(flow *Flow, userId string) error, 0),
@@ -112,7 +114,33 @@ func (s *WorkFlow) newFlow(tag, title, version string) *Flow {
 }
 
 /**
-* loadFlow
+* OnSave
+* @param onSave func(jrex *Jrex) error
+* @return *Jrex
+**/
+func (s *Flow) OnSave(onSave func(flow *Flow) error) *Flow {
+	if s.onSave == nil {
+		s.onSave = make([]func(flow *Flow) error, 0)
+	}
+	s.onSave = append(s.onSave, onSave)
+	return s
+}
+
+/**
+* OnDelete
+* @param onDelete func(step *Step) error
+* @return *Step
+**/
+func (s *Flow) OnDelete(onDelete func(flow *Flow, userId string) error) *Flow {
+	if s.onDelete == nil {
+		s.onDelete = make([]func(flow *Flow, userId string) error, 0)
+	}
+	s.onDelete = append(s.onDelete, onDelete)
+	return s
+}
+
+/**
+* getFlow
 * @param id string
 * @return *Flow, error
 **/
@@ -131,6 +159,7 @@ func (s *WorkFlow) getFlow(id string) (*Flow, error) {
 		return nil, ErrrFlowNotFound
 	}
 
+	result.workflow = s
 	result.store = s.store
 	result.isDebug = s.isDebug
 	result.onSave = make([]func(flow *Flow) error, 0)
@@ -139,7 +168,7 @@ func (s *WorkFlow) getFlow(id string) (*Flow, error) {
 }
 
 /**
-* delete
+* deleteFlow
 * @return error
 **/
 func (s *WorkFlow) deleteFlow(id, userId string) error {
@@ -187,32 +216,6 @@ func (s *Flow) addAuditLog(userId string, action string) {
 		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
 	}
 	s.isChanged = true
-}
-
-/**
-* OnSave
-* @param onSave func(jrex *Jrex) error
-* @return *Jrex
-**/
-func (s *Flow) OnSave(onSave func(flow *Flow) error) *Flow {
-	if s.onSave == nil {
-		s.onSave = make([]func(flow *Flow) error, 0)
-	}
-	s.onSave = append(s.onSave, onSave)
-	return s
-}
-
-/**
-* OnDelete
-* @param onDelete func(step *Step) error
-* @return *Step
-**/
-func (s *Flow) OnDelete(onDelete func(flow *Flow, userId string) error) *Flow {
-	if s.onDelete == nil {
-		s.onDelete = make([]func(flow *Flow, userId string) error, 0)
-	}
-	s.onDelete = append(s.onDelete, onDelete)
-	return s
 }
 
 /**
@@ -373,4 +376,37 @@ func (s *Flow) getStep(stepId string) *Step {
 	}
 
 	return step
+}
+
+/**
+* Error
+* @return error
+**/
+func (s *Flow) Error() error {
+	return s.err
+}
+
+/**
+* Step
+* @param tag, version, title string, fn func(instance *Instance, ctx et.Json) (et.Json, error)
+* @return *Flow
+**/
+func (s *Flow) Step(tag, version, title string, fn func(instance *Instance, ctx et.Json) (et.Json, error)) *Flow {
+	if len(s.Steps) == 0 {
+		step, err := s.workflow.newStep(KindFunction, tag, version, title)
+		if err != nil {
+			s.err = err
+			return s
+		}
+		step.Definition = fn
+		s.Steps[step.ID] = step
+		s.Triggers = append(s.Triggers, &Trigger{
+			Tag:         tag,
+			StartStepId: step.ID,
+			Connections: make([]string, 0),
+		})
+		return s
+	}
+
+	return s
 }

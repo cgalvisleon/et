@@ -46,7 +46,6 @@ type Step struct {
 	TenantId    string                                  `json:"tenant_id"`
 	ID          string                                  `json:"id"`
 	Kind        Kind                                    `json:"kind"`
-	Type        string                                  `json:"type"`
 	Tag         string                                  `json:"tag"`
 	Version     string                                  `json:"version"`
 	Status      Status                                  `json:"status"`
@@ -69,10 +68,10 @@ type Step struct {
 
 /**
 * newStep
-* @param def StepParams
+* @param kind Kind, tag, version, title string
 * @return *Step
 **/
-func (s *WorkFlow) newStep(kind Kind, tp, tag, version, title string) (*Step, error) {
+func (s *WorkFlow) newStep(kind Kind, tag, version, title string) (*Step, error) {
 	if version == "" {
 		version = "1.0.0"
 	}
@@ -85,7 +84,6 @@ func (s *WorkFlow) newStep(kind Kind, tp, tag, version, title string) (*Step, er
 		TenantId:  s.TenantId,
 		ID:        id,
 		Kind:      kind,
-		Type:      tp,
 		Tag:       tag,
 		Version:   version,
 		Status:    ACTIVE,
@@ -256,7 +254,7 @@ func (s *Step) ToJson() et.Json {
 		"tenant_id":   s.TenantId,
 		"id":          s.ID,
 		"kind":        s.Kind,
-		"type":        s.Type,
+		"tag":         s.Tag,
 		"version":     s.Version,
 		"title":       s.Title,
 		"description": s.Description,
@@ -349,8 +347,12 @@ func (s *Step) setStatus(status Status, userId string) error {
 		return errors.New(MSG_STEP_STATUS_INVALID)
 	}
 
-	s.addAuditLog(userId, fmt.Sprintf("update status: %s", status))
-	return s.save(userId)
+	if s.Status != status {
+		s.addAuditLog(userId, fmt.Sprintf("update status: %s", status))
+		s.Status = status
+		return s.save(userId)
+	}
+	return nil
 }
 
 /**
@@ -362,14 +364,14 @@ func (s *Step) setDefinition(definition interface{}, userId string) error {
 	if s.Definition != definition {
 		s.Definition = definition
 		s.addAuditLog(userId, fmt.Sprintf("update definition"))
+		return s.save(userId)
 	}
-
-	return s.save(userId)
+	return nil
 }
 
 /**
 * put
-* @param version, title, description string, definition interface{}, config et.Json, params et.Json, userId string
+* @param version, title, description string, config et.Json, params et.Json, userId string
 * @return error
 **/
 func (s *Step) put(version, title, description string, config et.Json, params et.Json, userId string) error {
@@ -390,6 +392,16 @@ func (s *Step) put(version, title, description string, config et.Json, params et
 	if s.Description != description {
 		s.addAuditLog(userId, fmt.Sprintf("update description old:%s", s.Description))
 		s.Description = description
+	}
+
+	if s.Config.ToString() != config.ToString() {
+		s.addAuditLog(userId, fmt.Sprintf("update config old:%s", s.Config))
+		s.Config = config
+	}
+
+	if s.Params.ToString() != params.ToString() {
+		s.addAuditLog(userId, fmt.Sprintf("update params old:%s", s.Params))
+		s.Params = params
 	}
 
 	return s.save(userId)

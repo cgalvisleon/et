@@ -211,6 +211,15 @@ func (s *WorkFlow) removeInstance(id string) {
 }
 
 /**
+* NewFlow
+* @param tag, title, version string
+* @return *Flow
+**/
+func (s *WorkFlow) NewFloW(tag, title, version string) *Flow {
+	return s.newFlow(tag, title, version)
+}
+
+/**
 * Run
 * @param tag, id, ownerId string, step int, ctx, tags et.Json, userId string
 * @return *Instance, error

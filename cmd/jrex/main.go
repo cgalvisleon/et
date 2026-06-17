@@ -35,12 +35,7 @@ func main() {
 	v.Set("db", db)
 	v.Set("getDb", jsql.GetDb)
 	v.Set(model.Name, model)
-	v.OnSave(func(rex *jrex.Jrex) error {
-		logs.Debug("jrex saved:", rex.ToJson())
-		return nil
-	})
-
-	err = v.RunDev("cgalvisleon")
+	err = v.RunDev()
 	if err != nil {
 		logs.Panic(err)
 	}

@@ -176,7 +176,7 @@ type Query struct {
 **/
 func newQuery(model *Model, as ...string) *Query {
 	if len(as) == 0 {
-		as = []string{model.Table}
+		as = []string{"A"}
 	}
 	result := &Query{
 		ID:         reg.ULID(),
@@ -714,6 +714,7 @@ func (s *Query) setCalc(tx *Tx, item et.Json) error {
 		instance := jrex.NewInstance()
 		calc.Model.wrapper(instance)
 		instance.Set("item", item)
+		instance.Set("tx", tx)
 		_, err := instance.Run()
 		if err != nil {
 			return err

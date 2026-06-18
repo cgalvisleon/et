@@ -3,6 +3,7 @@ package cache
 import "github.com/cgalvisleon/et/config"
 
 var (
+	MSG_ATRIB_REQUIRED = "cache, attribute %s is required"
 	MSG_UNSUPPORTED_OS = "unsupported os: %s"
 )
 

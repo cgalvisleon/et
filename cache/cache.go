@@ -9,7 +9,6 @@ import (
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/redis/go-redis/v9"
 )
@@ -46,7 +45,7 @@ func New() (*Conn, error) {
 
 	host := config.GetStr("REDIS_HOST", "")
 	if !utility.ValidStr(host, 0, []string{}) {
-		return nil, logs.Alertf(msg.MSG_ATRIB_REQUIRED, "host")
+		return nil, logs.Alertf(MSG_ATRIB_REQUIRED, "host")
 	}
 
 	password := config.GetStr("REDIS_PASSWORD", "")

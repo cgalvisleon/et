@@ -185,6 +185,17 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*I
 * @return *Instance, error
 **/
 func (s *WorkFlow) getInstance(id, userId string) (*Instance, error) {
+	if id != "" {
+		key := fmt.Sprintf("%s:status", id)
+		status, err := cache.Get(key, "")
+		if err != nil {
+			return nil, err
+		}
+		if status != "" {
+			return nil, fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING, status)
+		}
+	}
+
 	if s.store == nil {
 		return nil, errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}

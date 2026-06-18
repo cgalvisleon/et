@@ -508,9 +508,9 @@ func (s *Flow) addStep(kind Kind, tag, version, title string, port Port, fn func
 * @param tag, version, title string, fn func(instance *Instance, ctx et.Json) (et.Json, error), userId string
 * @return *Flow
 **/
-func (s *Flow) Step(tag, version, title string, fn func(instance *Instance, ctx et.Json) (et.Json, error)) *Flow {
+func (s *Flow) Step(tag, title string, fn func(instance *Instance, ctx et.Json) (et.Json, error)) *Flow {
 	if len(s.Steps) == 0 {
-		step, err := s.workflow.newStep(KindTrigger, tag, version, title, s.userId)
+		step, err := s.workflow.newStep(KindTrigger, tag, "1.0.0", title, s.userId)
 		if err != nil {
 			s.err = err
 			return s
@@ -523,7 +523,7 @@ func (s *Flow) Step(tag, version, title string, fn func(instance *Instance, ctx 
 		return s
 	}
 
-	return s.addStep(KindAction, tag, version, title, PortInput, fn, s.userId)
+	return s.addStep(KindAction, tag, "1.0.0", title, PortInput, fn, s.userId)
 }
 
 /**

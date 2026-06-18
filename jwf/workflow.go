@@ -227,19 +227,6 @@ func (s *WorkFlow) NewFloW(tag, title, version, userId string) *Flow {
 * @return *Instance, error
 **/
 func (s *WorkFlow) Run(flowId, triggerTag, id, projectId string, ctx, tags et.Json, userId string) (et.Json, error) {
-	if id != "" {
-		key := fmt.Sprintf("%s:status", id)
-		exists := cache.Exists(key)
-		if exists {
-			status, err := cache.Get(key, string(PENDING))
-			if err != nil {
-				return et.Json{}, err
-			}
-			return et.Json{}, fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING, status)
-		}
-		cache.Set(key, PENDING, 3*time.Second)
-	}
-
 	id = reg.GetULID(id)
 	instance, err := s.getInstance(id, userId)
 	if errors.Is(err, ErrorInstanceNotFound) {

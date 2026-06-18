@@ -129,11 +129,11 @@ func (s *Jrex) Debug() *Jrex {
 * @param onSave func(jrex *Jrex) error
 * @return *Jrex
 **/
-func (s *Jrex) OnSave(onSave func(jrex *Jrex, userId string) error) *Jrex {
+func (s *Jrex) OnSave(fn func(jrex *Jrex, userId string) error) *Jrex {
 	if s.onSave == nil {
 		s.onSave = make([]func(jrex *Jrex, userId string) error, 0)
 	}
-	s.onSave = append(s.onSave, onSave)
+	s.onSave = append(s.onSave, fn)
 	return s
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/resilience"
 	"github.com/cgalvisleon/et/timezone"
 )
@@ -238,6 +239,7 @@ func (s *WorkFlow) Run(flowId, triggerTag, id, projectId string, ctx, tags et.Js
 		cache.Set(key, PENDING, 3*time.Second)
 	}
 
+	id = reg.GetULID(id)
 	instance, err := s.getInstance(id, userId)
 	if errors.Is(err, ErrorInstanceNotFound) {
 		instance, err = s.newInstance(projectId, flowId, triggerTag, userId)

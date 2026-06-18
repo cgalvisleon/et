@@ -7,6 +7,7 @@ import (
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrex"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
@@ -21,6 +22,7 @@ const (
 	KindTrigger   Kind = "trigger"
 	KindAction    Kind = "action"
 	KindCondition Kind = "condition"
+	KindDelay     Kind = "delay"
 )
 
 var (
@@ -54,7 +56,6 @@ type Step struct {
 	Definition  interface{}                             `json:"definition"`
 	Config      et.Json                                 `json:"config"`
 	Params      et.Json                                 `json:"params"`
-	Inputs      int                                     `json:"inputs"`
 	Outputs     int                                     `json:"outputs"`
 	Stop        bool                                    `json:"stop"`
 	AuditLog    []et.Json                               `json:"audit_log"`
@@ -90,8 +91,6 @@ func (s *WorkFlow) newStep(kind Kind, tag, version, title string) (*Step, error)
 		Title:     title,
 		Config:    et.Json{},
 		Params:    et.Json{},
-		Inputs:    1,
-		Outputs:   1,
 		Stop:      false,
 		AuditLog:  make([]et.Json, 0),
 		isDebug:   s.isDebug,
@@ -100,6 +99,19 @@ func (s *WorkFlow) newStep(kind Kind, tag, version, title string) (*Step, error)
 		onSave:    make([]func(step *Step, userId string) error, 0),
 		onDelete:  make([]func(step *Step, userId string) error, 0),
 	}
+	result.
+		OnSave(func(step *Step, userId string) error {
+			key := fmt.Sprintf("step:%s", step.ID)
+			event.Publish(key, step.ToJson())
+			return nil
+		}).
+		OnDelete(func(step *Step, userId string) error {
+			key := fmt.Sprintf("step:%s:delete", step.ID)
+			event.Publish(key, et.Json{
+				"id": step.ID,
+			})
+			return nil
+		})
 	return result, nil
 }
 
@@ -128,6 +140,19 @@ func (s *WorkFlow) getStep(id string) (*Step, error) {
 	result.bindings = s.bindings
 	result.onSave = make([]func(step *Step, userId string) error, 0)
 	result.onDelete = make([]func(step *Step, userId string) error, 0)
+	result.
+		OnSave(func(step *Step, userId string) error {
+			key := fmt.Sprintf("step:%s", step.ID)
+			event.Publish(key, step.ToJson())
+			return nil
+		}).
+		OnDelete(func(step *Step, userId string) error {
+			key := fmt.Sprintf("step:%s:delete", step.ID)
+			event.Publish(key, et.Json{
+				"id": step.ID,
+			})
+			return nil
+		})
 	return result, nil
 }
 
@@ -185,27 +210,27 @@ func (s *Step) addAuditLog(userId string, action string) {
 
 /**
 * OnSave
-* @param onSave func(jrex *Jrex) error
+* @param fn func(step *Step, userId string) error
 * @return *Jrex
 **/
-func (s *Step) OnSave(onSave func(step *Step, userId string) error) *Step {
+func (s *Step) OnSave(fn func(step *Step, userId string) error) *Step {
 	if s.onSave == nil {
 		s.onSave = make([]func(step *Step, userId string) error, 0)
 	}
-	s.onSave = append(s.onSave, onSave)
+	s.onSave = append(s.onSave, fn)
 	return s
 }
 
 /**
 * OnDelete
-* @param onDelete func(step *Step) error
+* @param fn func(step *Step, userId string) error
 * @return *Step
 **/
-func (s *Step) OnDelete(onDelete func(step *Step, userId string) error) *Step {
+func (s *Step) OnDelete(fn func(step *Step, userId string) error) *Step {
 	if s.onDelete == nil {
 		s.onDelete = make([]func(step *Step, userId string) error, 0)
 	}
-	s.onDelete = append(s.onDelete, onDelete)
+	s.onDelete = append(s.onDelete, fn)
 	return s
 }
 
@@ -261,7 +286,6 @@ func (s *Step) ToJson() et.Json {
 		"definition":  s.Definition,
 		"config":      s.Config,
 		"params":      s.Params,
-		"inputs":      s.Inputs,
 		"outputs":     s.Outputs,
 		"stop":        s.Stop,
 		"audit_log":   s.AuditLog,
@@ -282,6 +306,10 @@ func (s *Step) ToString() string {
 * @return error
 **/
 func (s *Step) run(instance *Instance, ctx et.Json, userId string) (et.Json, error) {
+	if s.Definition == nil {
+		return et.Json{}, errors.New(MSG_STEP_DEFINITION_IS_NIL)
+	}
+
 	initJrex := func() *jrex.Instance {
 		result := jrex.NewInstance()
 		for name, binding := range instance.bindings {

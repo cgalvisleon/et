@@ -44,6 +44,11 @@ type Connection struct {
 	Kind   Port            `json:"kind"`
 }
 
+type Node struct {
+	ID      string `json:"id"`
+	ErrorId string `json:"error_id"`
+}
+
 type Trigger struct {
 	Tag     string `json:"tag"`
 	StartId string `json:"start_id"`
@@ -70,7 +75,7 @@ type Flow struct {
 	isChanged     bool                                    `json:"-"`
 	workflow      *WorkFlow                               `json:"-"`
 	store         Store                                   `json:"-"`
-	onSave        []func(flow *Flow) error                `json:"-"`
+	onSave        []func(flow *Flow, userId string) error `json:"-"`
 	onDelete      []func(flow *Flow, userId string) error `json:"-"`
 	step          *Step                                   `json:"-"`
 	err           error                                   `json:"-"`
@@ -107,7 +112,7 @@ func (s *WorkFlow) newFlow(tag, title, version string) *Flow {
 		isDebug:       s.isDebug,
 		workflow:      s,
 		store:         s.store,
-		onSave:        make([]func(flow *Flow) error, 0),
+		onSave:        make([]func(flow *Flow, userId string) error, 0),
 		onDelete:      make([]func(flow *Flow, userId string) error, 0),
 	}
 	return result
@@ -115,27 +120,27 @@ func (s *WorkFlow) newFlow(tag, title, version string) *Flow {
 
 /**
 * OnSave
-* @param onSave func(jrex *Jrex) error
+* @param fn func(flow *Flow, userId string) error
 * @return *Jrex
 **/
-func (s *Flow) OnSave(onSave func(flow *Flow) error) *Flow {
+func (s *Flow) OnSave(fn func(flow *Flow, userId string) error) *Flow {
 	if s.onSave == nil {
-		s.onSave = make([]func(flow *Flow) error, 0)
+		s.onSave = make([]func(flow *Flow, userId string) error, 0)
 	}
-	s.onSave = append(s.onSave, onSave)
+	s.onSave = append(s.onSave, fn)
 	return s
 }
 
 /**
 * OnDelete
-* @param onDelete func(step *Step) error
+* @param fn func(flow *Flow, userId string) error
 * @return *Step
 **/
-func (s *Flow) OnDelete(onDelete func(flow *Flow, userId string) error) *Flow {
+func (s *Flow) OnDelete(fn func(flow *Flow, userId string) error) *Flow {
 	if s.onDelete == nil {
 		s.onDelete = make([]func(flow *Flow, userId string) error, 0)
 	}
-	s.onDelete = append(s.onDelete, onDelete)
+	s.onDelete = append(s.onDelete, fn)
 	return s
 }
 
@@ -162,7 +167,7 @@ func (s *WorkFlow) getFlow(id string) (*Flow, error) {
 	result.workflow = s
 	result.store = s.store
 	result.isDebug = s.isDebug
-	result.onSave = make([]func(flow *Flow) error, 0)
+	result.onSave = make([]func(flow *Flow, userId string) error, 0)
 	result.onDelete = make([]func(flow *Flow, userId string) error, 0)
 	return result, nil
 }
@@ -240,7 +245,7 @@ func (s *Flow) save(userId string) error {
 	}
 
 	for _, onSave := range s.onSave {
-		err := onSave(s)
+		err := onSave(s, userId)
 		if err != nil {
 			return err
 		}

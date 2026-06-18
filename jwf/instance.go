@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"sync"
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
@@ -21,6 +22,8 @@ const (
 	SYSTEM   Status = "system"
 	ACTIVE   Status = "active"
 	ARCHIVED Status = "archived"
+	// Instance Status
+	CREATED  Status = "created"
 	PENDING  Status = "pending"
 	RUNNING  Status = "running"
 	ROLLBACK Status = "rollback"
@@ -33,12 +36,14 @@ const (
 var (
 	ErrorInstanceNotFound                 = errors.New(MSG_INSTANCE_NOT_FOUND)
 	FlowStatusList        map[Status]bool = map[Status]bool{
+		CREATED:  true,
 		PENDING:  true,
 		RUNNING:  true,
 		ROLLBACK: true,
 		DONE:     true,
 		FAILED:   true,
 		CANCEL:   true,
+		STOP:     true,
 	}
 )
 
@@ -87,8 +92,9 @@ type Instance struct {
 	flow         *Flow                                           `json:"-"`
 	bindings     map[string]interface{}                          `json:"-"`
 	resilience   *resilience.Resilience                          `json:"-"`
-	onSave       []func(instance *Instance) error                `json:"-"`
+	onSave       []func(instance *Instance, userId string) error `json:"-"`
 	onDelete     []func(instance *Instance, userId string) error `json:"-"`
+	mu           sync.Mutex                                      `json:"-"`
 }
 
 /**
@@ -131,7 +137,6 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*I
 		FlowId:     flowId,
 		Code:       code,
 		Title:      title,
-		Status:     PENDING,
 		Ctx:        et.Json{},
 		Ctxs:       make(map[string]et.Json),
 		Results:    make(map[string]*Result),
@@ -146,7 +151,7 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*I
 		workflow:   s,
 		flow:       flow,
 		bindings:   make(map[string]interface{}),
-		onSave:     make([]func(instance *Instance) error, 0),
+		onSave:     make([]func(instance *Instance, userId string) error, 0),
 		onDelete:   make([]func(instance *Instance, userId string) error, 0),
 	}
 	for k, v := range s.bindings {
@@ -154,6 +159,7 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*I
 	}
 
 	result.addAuditLog(userId, "new_instance")
+	result.setStatus(CREATED, userId)
 	return result, nil
 }
 
@@ -192,7 +198,7 @@ func (s *WorkFlow) getInstance(id, userId string) (*Instance, error) {
 	result.flow = flow
 	result.Trigger = trigger
 	result.isDebug = s.isDebug
-	result.onSave = make([]func(instance *Instance) error, 0)
+	result.onSave = make([]func(instance *Instance, userId string) error, 0)
 	result.onDelete = make([]func(instance *Instance, userId string) error, 0)
 	result.bindings = make(map[string]interface{})
 	for k, v := range s.bindings {
@@ -260,27 +266,27 @@ func (s *Instance) addAuditLog(userId string, action interface{}) {
 
 /**
 * OnSave
-* @param onSave func(jrex *Jrex) error
+* @param fn func(instance *Instance, userId string) error
 * @return *Jrex
 **/
-func (s *Instance) OnSave(onSave func(instance *Instance) error) *Instance {
+func (s *Instance) OnSave(fn func(instance *Instance, userId string) error) *Instance {
 	if s.onSave == nil {
-		s.onSave = make([]func(instance *Instance) error, 0)
+		s.onSave = make([]func(instance *Instance, userId string) error, 0)
 	}
-	s.onSave = append(s.onSave, onSave)
+	s.onSave = append(s.onSave, fn)
 	return s
 }
 
 /**
 * OnDelete
-* @param onDelete func(step *Step) error
+* @param fn func(instance *Instance, userId string) error
 * @return *Step
 **/
-func (s *Instance) OnDelete(onDelete func(instance *Instance, userId string) error) *Instance {
+func (s *Instance) OnDelete(fn func(instance *Instance, userId string) error) *Instance {
 	if s.onDelete == nil {
 		s.onDelete = make([]func(instance *Instance, userId string) error, 0)
 	}
-	s.onDelete = append(s.onDelete, onDelete)
+	s.onDelete = append(s.onDelete, fn)
 	return s
 }
 
@@ -299,16 +305,13 @@ func (s *Instance) save(userId string) error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	key := fmt.Sprintf("%s:status", s.ID)
-	cache.SetObject(key, s.Status, 1*time.Minute)
-
 	err := s.store.Set("instance", s.ID, s.TenantId, s.ProjectId, s, userId)
 	if err != nil {
 		return err
 	}
 
 	for _, onSave := range s.onSave {
-		err := onSave(s)
+		err := onSave(s, userId)
 		if err != nil {
 			return err
 		}
@@ -354,18 +357,44 @@ func (s *Instance) ToString() string {
 }
 
 /**
+* pushStatus
+* @return *Instance
+**/
+func (s *Instance) pushStatus(status Status) *Instance {
+	retensionTime := config.GetInt("STATUS_RETENTION_TIME", 60)
+	retensionTimeDuration := time.Duration(retensionTime) * time.Minute
+	key := fmt.Sprintf("%s:status", s.ID)
+	cache.SetObject(key, status, retensionTimeDuration)
+	return s
+}
+
+/**
+* getStatus
+* @return Status
+**/
+func (s *Instance) getStatus() Status {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Status
+}
+
+/**
 * setStatus
 * @param status Status
 * @return error
 **/
 func (s *Instance) setStatus(status Status, userId string) error {
-	if s.Status == status {
+	curStatus := s.getStatus()
+	if curStatus == status {
 		return nil
 	}
 
+	s.pushStatus(status)
 	s.UpdatedAt = timezone.Now()
+	s.mu.Lock()
 	s.Status = status
-	switch s.Status {
+	s.mu.Unlock()
+	switch status {
 	case DONE:
 		s.DoneAt = s.UpdatedAt
 		s.IsDone = true
@@ -419,6 +448,7 @@ func (s *Instance) setResult(result et.Json, err error, userId string) (et.Json,
 		Result: result,
 		Error:  errMessage,
 	}
+
 	if err != nil {
 		s.setStatus(FAILED, userId)
 		step := ""
@@ -426,7 +456,10 @@ func (s *Instance) setResult(result et.Json, err error, userId string) (et.Json,
 			step = s.Current.Source.Title
 		}
 		logs.Logf(packageName, MSG_INSTANCE_ERROR, s.ID, s.FlowId, step, err.Error())
+	} else {
+
 	}
+
 	return result, err
 }
 
@@ -478,15 +511,10 @@ func (s *Instance) next() bool {
 		return false
 	}
 
-	key := fmt.Sprintf("%s:status", s.ID)
-	status, err := cache.Get(key, string(s.Status))
-	if err != nil {
+	status := s.getStatus()
+	if status == CANCEL {
 		return false
-	}
-
-	if status == string(CANCEL) {
-		return false
-	} else if status == string(STOP) {
+	} else if status == STOP {
 		return false
 	}
 
@@ -527,16 +555,17 @@ func (s *Instance) run(ctx et.Json, userId string) (et.Json, error) {
 		s.setTrace(s.Current.Source.ID, ctx, err, userId)
 	}()
 
-	if s.Status == DONE {
+	status := s.getStatus()
+	if status == DONE {
 		err = fmt.Errorf(MSG_INSTANCE_ALREADY_DONE, s.ID)
 		return et.Json{}, err
-	} else if s.Status == RUNNING {
+	} else if status == RUNNING {
 		err = fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING, s.ID)
 		return et.Json{}, err
-	} else if s.Status == ROLLBACK {
+	} else if status == ROLLBACK {
 		err = fmt.Errorf(MSG_INSTANCE_ROLLBACK, s.ID)
 		return et.Json{}, err
-	} else if s.Status == CANCEL {
+	} else if status == CANCEL {
 		err = fmt.Errorf(MSG_INSTANCE_CANCEL, s.ID)
 		return et.Json{}, err
 	}
@@ -551,11 +580,13 @@ func (s *Instance) run(ctx et.Json, userId string) (et.Json, error) {
 		ctx = s.setCtx(ctx)
 		result, err = step.run(s, ctx, userId)
 		if err != nil {
-			result, err := s.rollback(result, err, userId)
+			result, err = s.runResilence(ctx, err, userId)
 			if err != nil {
-				return result, err
+				result, err := s.rollback(ctx, err, userId)
+				if err != nil {
+					return result, err
+				}
 			}
-			continue
 		}
 
 		s.setResult(result, err, userId)
@@ -573,31 +604,14 @@ func (s *Instance) run(ctx et.Json, userId string) (et.Json, error) {
 }
 
 /**
-* rollback
-* @return et.Json, error
-**/
-func (s *Instance) rollback(result et.Json, err error, userId string) (et.Json, error) {
-	if s.flow.TotalAttempts > 0 {
-		result, err := s.startResilence(userId)
-		if err == nil {
-			return result, nil
-		}
-	}
-
-	if s.Rollbacks {
-		return result, err
-	}
-	s.Rollbacks = true
-	s.setResult(result, err, userId)
-
-	return result, err
-}
-
-/**
-* startResilence
+* runResilence
 * @return (bool, error)
 **/
-func (s *Instance) startResilence(userId string) (et.Json, error) {
+func (s *Instance) runResilence(ctx et.Json, err error, userId string) (et.Json, error) {
+	if s.flow.TotalAttempts == 0 {
+		return et.Json{}, err
+	}
+
 	if s.resilience == nil {
 		resilience, err := resilience.New(s.workflow.resilienceStore)
 		if err != nil {
@@ -618,7 +632,7 @@ func (s *Instance) startResilence(userId string) (et.Json, error) {
 		Tags:          s.Tags,
 		UserId:        userId,
 		Fn:            s.run,
-		FnArgs:        []interface{}{s.Ctx},
+		FnArgs:        []interface{}{ctx, userId},
 	})
 	res, err := resilence.Run(userId)
 	if err != nil {
@@ -635,4 +649,18 @@ func (s *Instance) startResilence(userId string) (et.Json, error) {
 	}
 
 	return result, nil
+}
+
+/**
+* rollback
+* @return et.Json, error
+**/
+func (s *Instance) rollback(result et.Json, err error, userId string) (et.Json, error) {
+	if s.Rollbacks {
+		return result, err
+	}
+	s.Rollbacks = true
+	s.setResult(result, err, userId)
+
+	return result, err
 }

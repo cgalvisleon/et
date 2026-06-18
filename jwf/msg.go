@@ -27,6 +27,7 @@ var (
 	MSG_INSTANCE_STOP                 = "instance stop"
 	MSG_RESILIENCE_NO_RESULT          = "resilience no return result"
 	MSG_INVALID_SOURCE                = "invalid source"
+	MSG_STEP_DEFINITION_IS_NIL        = "step definition is nil"
 )
 
 func init() {
@@ -57,5 +58,6 @@ func init() {
 		MSG_INSTANCE_STOP = "Instancia detenida"
 		MSG_RESILIENCE_NO_RESULT = "resilience no return result"
 		MSG_INVALID_SOURCE = "source invalido"
+		MSG_STEP_DEFINITION_IS_NIL = "definición de step es nula"
 	}
 }

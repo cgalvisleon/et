@@ -63,7 +63,7 @@ func New(tenantId string, store Store) (*WorkFlow, error) {
 	isDebug := config.GetBool("DEBUG", false)
 	now := timezone.Now()
 	id := fmt.Sprintf("workflow:%s", tenantId)
-	return &WorkFlow{
+	result := &WorkFlow{
 		CreatedAt:   now,
 		UpdatedAt:   now,
 		TenantId:    tenantId,
@@ -77,7 +77,8 @@ func New(tenantId string, store Store) (*WorkFlow, error) {
 		store:       store,
 		metrics:     cache.Metrics{},
 		isDebug:     isDebug,
-	}, nil
+	}
+	return result, nil
 }
 
 /**

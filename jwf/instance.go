@@ -85,7 +85,6 @@ type Instance struct {
 	CurrentIndex int                                             `json:"current_index"`
 	IsDone       bool                                            `json:"is_done"`
 	IsStop       bool                                            `json:"is_stop"`
-	Rollbacks    bool                                            `json:"rollbacks"`
 	AuditLog     []et.Json                                       `json:"audit_log"`
 	isDebug      bool                                            `json:"-"`
 	isChanged    bool                                            `json:"-"`
@@ -159,6 +158,9 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*I
 	for k, v := range s.bindings {
 		result.bindings[k] = v
 	}
+	result.bindings["goTo"] = func(n int) {
+		result.CurrentIndex = n
+	}
 	result.
 		OnSave(func(instance *Instance, userId string) error {
 			key := fmt.Sprintf("instance:%s", instance.ID)
@@ -217,6 +219,9 @@ func (s *WorkFlow) getInstance(id, userId string) (*Instance, error) {
 	result.bindings = make(map[string]interface{})
 	for k, v := range s.bindings {
 		result.bindings[k] = v
+	}
+	result.bindings["goTo"] = func(n int) {
+		result.CurrentIndex = n
 	}
 	result.
 		OnSave(func(instance *Instance, userId string) error {
@@ -545,20 +550,12 @@ func (s *Instance) next() bool {
 		}
 		s.Current = step
 	} else {
-		target, exists := s.flow.getTarget(s.Current.ID, s.CurrentIndex, PortOutput)
-		if s.Rollbacks {
-			target = s.Current.Error
-		}
-
-		if target == nil {
-			return false
-		}
-
-		current, exists := s.flow.getCurrent(target.ID, s.CurrentIndex)
+		target, exists := s.flow.getTarget(s.Current.ID, s.CurrentIndex)
 		if !exists {
 			return false
 		}
-		s.Current = current
+
+		s.Current = target
 	}
 
 	return true
@@ -572,7 +569,7 @@ func (s *Instance) next() bool {
 func (s *Instance) run(ctx et.Json, userId string) (et.Json, error) {
 	var err error
 	defer func() {
-		s.setTrace(s.Current.Source.ID, ctx, err, userId)
+		s.setTrace(s.Current.ID, ctx, err, userId)
 	}()
 
 	status := s.getStatus()
@@ -592,7 +589,7 @@ func (s *Instance) run(ctx et.Json, userId string) (et.Json, error) {
 
 	var result et.Json
 	for s.next() {
-		step := s.Current.Source
+		step := s.Current
 		if step == nil {
 			return et.Json{}, errors.New(MSG_STEP_NOT_FOUND)
 		}
@@ -602,7 +599,7 @@ func (s *Instance) run(ctx et.Json, userId string) (et.Json, error) {
 		if err != nil {
 			result, err = s.runResilence(ctx, err, userId)
 			if err != nil {
-				result, err := s.rollback(ctx, err, userId)
+				result, err := s.runError(ctx, err, userId)
 				if err != nil {
 					return result, err
 				}
@@ -675,12 +672,6 @@ func (s *Instance) runResilence(ctx et.Json, err error, userId string) (et.Json,
 * rollback
 * @return et.Json, error
 **/
-func (s *Instance) rollback(result et.Json, err error, userId string) (et.Json, error) {
-	if s.Rollbacks {
-		return result, err
-	}
-	s.Rollbacks = true
-	s.setResult(result, err, userId)
-
-	return result, err
+func (s *Instance) runError(ctx et.Json, err error, userId string) (et.Json, error) {
+	return et.Json{}, err
 }

@@ -63,16 +63,17 @@ func (s *WorkFlow) httpNewStep(w http.ResponseWriter, r *http.Request) {
 	}
 
 	kind := Kind(body.Str("kind"))
-	tag := body.Str("tag")
-	version := body.Str("version")
-	title := body.Str("title")
-
 	if !KindList[kind] {
 		response.HTTPError(w, r, http.StatusBadRequest, "invalid kind")
 		return
 	}
 
-	step, err := s.newStep(kind, tag, version, title)
+	tag := body.Str("tag")
+	version := body.Str("version")
+	title := body.Str("title")
+	userId := request.UserId(r)
+
+	step, err := s.newStep(kind, tag, version, title, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return

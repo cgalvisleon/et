@@ -2,11 +2,13 @@ package jwf
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
@@ -69,6 +71,7 @@ type Flow struct {
 	Triggers      []*Trigger                              `json:"triggers"`
 	TotalAttempts int                                     `json:"total_attempts"`
 	TimeAttempts  time.Duration                           `json:"time_attempts"`
+	TimeAwait     time.Duration                           `json:"time_await"`
 	Public        bool                                    `json:"public"`
 	AuditLog      []et.Json                               `json:"audit_log"`
 	isDebug       bool                                    `json:"-"`
@@ -77,16 +80,17 @@ type Flow struct {
 	store         Store                                   `json:"-"`
 	onSave        []func(flow *Flow, userId string) error `json:"-"`
 	onDelete      []func(flow *Flow, userId string) error `json:"-"`
+	userId        string                                  `json:"-"`
 	step          *Step                                   `json:"-"`
 	err           error                                   `json:"-"`
 }
 
 /**
 * newFlow
-* @param tag, title, version string
+* @param tag, title, version, userId string
 * @return *Flow
 **/
-func (s *WorkFlow) newFlow(tag, title, version string) *Flow {
+func (s *WorkFlow) newFlow(tag, title, version, userId string) *Flow {
 	if version == "" {
 		version = "1.0.0"
 	}
@@ -107,6 +111,7 @@ func (s *WorkFlow) newFlow(tag, title, version string) *Flow {
 		Triggers:      make([]*Trigger, 0),
 		TotalAttempts: 0,
 		TimeAttempts:  0,
+		TimeAwait:     1 * time.Minute,
 		Public:        false,
 		AuditLog:      make([]et.Json, 0),
 		isDebug:       s.isDebug,
@@ -114,7 +119,22 @@ func (s *WorkFlow) newFlow(tag, title, version string) *Flow {
 		store:         s.store,
 		onSave:        make([]func(flow *Flow, userId string) error, 0),
 		onDelete:      make([]func(flow *Flow, userId string) error, 0),
+		userId:        userId,
 	}
+	result.
+		OnSave(func(flow *Flow, userId string) error {
+			key := fmt.Sprintf("flow:%s", flow.ID)
+			event.Publish(key, flow.ToJson())
+			return nil
+		}).
+		OnDelete(func(flow *Flow, userId string) error {
+			key := fmt.Sprintf("flow:%s:delete", flow.ID)
+			event.Publish(key, et.Json{
+				"id": flow.ID,
+			})
+			return nil
+		})
+	result.addAuditLog(userId, "new_flow")
 	return result
 }
 
@@ -169,6 +189,19 @@ func (s *WorkFlow) getFlow(id string) (*Flow, error) {
 	result.isDebug = s.isDebug
 	result.onSave = make([]func(flow *Flow, userId string) error, 0)
 	result.onDelete = make([]func(flow *Flow, userId string) error, 0)
+	result.
+		OnSave(func(flow *Flow, userId string) error {
+			key := fmt.Sprintf("flow:%s", flow.ID)
+			event.Publish(key, flow.ToJson())
+			return nil
+		}).
+		OnDelete(func(flow *Flow, userId string) error {
+			key := fmt.Sprintf("flow:%s:delete", flow.ID)
+			event.Publish(key, et.Json{
+				"id": flow.ID,
+			})
+			return nil
+		})
 	return result, nil
 }
 
@@ -287,35 +320,41 @@ func (s *Flow) ToString() string {
 }
 
 /**
+* setTimeAwait
+* @param time time.Duration, userId string
+* @return *Flow
+**/
+func (s *Flow) setTimeAwait(time time.Duration, userId string) *Flow {
+	s.TimeAwait = time
+	s.addAuditLog(userId, "set_time_await")
+	return s
+}
+
+/**
 * getTrigger
 * @param tag string
 * @return *Trigger, error
 **/
-func (s *Flow) getTrigger(tag string) (*Trigger, error) {
+func (s *Flow) getTrigger(tag string) (*Trigger, bool) {
 	idx := slices.IndexFunc(s.Triggers, func(trigger *Trigger) bool {
 		return trigger.Tag == tag
 	})
 
 	if idx == -1 {
-		return nil, errors.New(MSG_INSTANCE_TRIGGER_NOT_FOUND)
+		return nil, false
 	}
 
-	result := s.Triggers[idx]
-	if result == nil {
-		return nil, errors.New(MSG_INSTANCE_INVALID_TRIGGER)
-	}
-
-	return result, nil
+	return s.Triggers[idx], true
 }
 
 /**
-* getCurrentSource
-* @param stepId string, index int
+* getTarget
+* @param stepId string
 * @return *Connection, error
 **/
-func (s *Flow) getConnection(stepId string, index int) (*Connection, bool) {
+func (s *Flow) getTarget(stepId string, index int, kind Port) (*Connection, bool) {
 	idx := slices.IndexFunc(s.Connections, func(connection *Connection) bool {
-		return connection.Source.StepId == stepId && connection.Source.Index == index && connection.Kind == "output"
+		return connection.Kind == kind && connection.Source.StepId == stepId && connection.Target.Index == index
 	})
 
 	if idx == -1 {
@@ -326,13 +365,13 @@ func (s *Flow) getConnection(stepId string, index int) (*Connection, bool) {
 }
 
 /**
-* getCurrentError
+* getSource
 * @param stepId string, index int
-* @return *Connection
+* @return *Connection, bool
 **/
-func (s *Flow) getConnectionError(stepId string, index int) (*Connection, bool) {
+func (s *Flow) getSource(stepId string, index int) (*Connection, bool) {
 	idx := slices.IndexFunc(s.Connections, func(connection *Connection) bool {
-		return connection.Source.StepId == stepId && connection.Source.Index == index && connection.Kind == "error"
+		return connection.Kind == PortOutput && connection.Target.StepId == stepId && connection.Source.Index == index
 	})
 
 	if idx == -1 {
@@ -343,30 +382,20 @@ func (s *Flow) getConnectionError(stepId string, index int) (*Connection, bool) 
 }
 
 /**
-* getCurrent
+* getError
 * @param stepId string, index int
-* @return *Connection, error
+* @return *Connection, bool
 **/
-func (s *Flow) getCurrent(stepId string, index int) (*Current, bool) {
-	conn, exists := s.getConnection(stepId, index)
-	if !exists {
+func (s *Flow) getError(stepId string, index int) (*Connection, bool) {
+	idx := slices.IndexFunc(s.Connections, func(connection *Connection) bool {
+		return connection.Kind == PortError && connection.Source.StepId == stepId && connection.Target.Index == index
+	})
+
+	if idx == -1 {
 		return nil, false
 	}
 
-	source := s.getStep(conn.Source.StepId)
-	target := s.getStep(conn.Target.StepId)
-
-	result := &Current{
-		Source: source,
-		Target: target,
-	}
-
-	connError, exists := s.getConnectionError(stepId, index)
-	if exists {
-		result.Error = s.getStep(connError.Target.StepId)
-	}
-
-	return result, true
+	return s.Connections[idx], true
 }
 
 /**
@@ -374,79 +403,98 @@ func (s *Flow) getCurrent(stepId string, index int) (*Current, bool) {
 * @param stepId string
 * @return *Step, bool
 **/
-func (s *Flow) getStep(stepId string) *Step {
+func (s *Flow) getStep(stepId string) (*Step, bool) {
 	step, exists := s.Steps[stepId]
 	if !exists {
-		return nil
+		return nil, false
 	}
 
-	return step
+	return step, true
 }
 
 /**
-* IsError
-* @return error
+* addConnection
+* @param sourceId string, targetId string, kind Port
+* @return *Connection, bool
 **/
-func (s *Flow) IsError() error {
-	return s.err
-}
-
-/**
-* addStep
-* @param tag, version, title string, kind Port, fn func(instance *Instance, ctx et.Json) (et.Json, error)
-* @return *Flow
-**/
-func (s *Flow) addStep(tag, version, title string, kind Port, fn func(instance *Instance, ctx et.Json) (et.Json, error)) *Flow {
-	step, err := s.workflow.newStep(KindFunction, tag, version, title)
-	if err != nil {
-		s.err = err
-		return s
-	}
-	step.Definition = fn
-	s.Steps[step.ID] = step
-
-	if s.step == nil {
-		s.err = errors.New(MSG_INVALID_SOURCE)
-		return s
+func (s *Flow) addConnection(sourceId string, targetId string, index int, kind Port) (*Connection, bool) {
+	result, exists := s.getTarget(sourceId, index, kind)
+	if exists {
+		return result, false
 	}
 
-	s.Connections = append(s.Connections, &Connection{
+	_, exists = s.getStep(sourceId)
+	if !exists {
+		return nil, false
+	}
+
+	_, exists = s.getStep(targetId)
+	if !exists {
+		return nil, false
+	}
+
+	result = &Connection{
 		ID: reg.ULID(),
 		Source: &StepConnection{
-			StepId: s.step.ID,
+			StepId: sourceId,
 			Port:   PortOutput,
 			Index:  0,
 		},
 		Target: &StepConnection{
-			StepId: step.ID,
+			StepId: targetId,
 			Port:   PortInput,
-			Index:  0,
+			Index:  index,
 		},
 		Kind: kind,
-	})
-
-	if kind != PortError {
-		s.step = step
 	}
+
+	s.Connections = append(s.Connections, result)
+	return result, true
+}
+
+/**
+* addStep
+* @param tag, version, title string, kind Port, fn func(instance *Instance, ctx et.Json) (et.Json, error), userId string
+* @return *Flow
+**/
+func (s *Flow) addStep(kind Kind, tag, version, title string, port Port, fn func(instance *Instance, ctx et.Json) (et.Json, error), userId string) *Flow {
+	result, err := s.workflow.newStep(kind, tag, version, title, userId)
+	if err != nil {
+		s.err = err
+		return s
+	}
+	result.Definition = fn
+	s.Steps[result.ID] = result
+
+	if s.step == nil {
+		s.step = result
+		return s
+	}
+
+	_, exists := s.addConnection(s.step.ID, result.ID, 0, port)
+	if !exists {
+		s.err = errors.New(MSG_INVALID_SOURCE)
+		return s
+	}
+
+	s.step = result
 
 	return s
 }
 
 /**
 * Step
-* @param tag, version, title string, fn func(instance *Instance, ctx et.Json) (et.Json, error)
+* @param tag, version, title string, fn func(instance *Instance, ctx et.Json) (et.Json, error), userId string
 * @return *Flow
 **/
 func (s *Flow) Step(tag, version, title string, fn func(instance *Instance, ctx et.Json) (et.Json, error)) *Flow {
 	if len(s.Steps) == 0 {
-		step, err := s.workflow.newStep(KindTrigger, tag, version, title)
+		step, err := s.workflow.newStep(KindTrigger, tag, version, title, s.userId)
 		if err != nil {
 			s.err = err
 			return s
 		}
-		step.Definition = fn
-		s.Steps[step.ID] = step
-		s.Connections = make([]*Connection, 0)
+
 		s.Triggers = append(s.Triggers, &Trigger{
 			Tag:     tag,
 			StartId: step.ID,
@@ -454,7 +502,7 @@ func (s *Flow) Step(tag, version, title string, fn func(instance *Instance, ctx 
 		return s
 	}
 
-	return s.addStep(tag, version, title, PortInput, fn)
+	return s.addStep(KindAction, tag, version, title, PortInput, fn, s.userId)
 }
 
 /**
@@ -468,5 +516,13 @@ func (s *Flow) Error(tag, version, title string, fn func(instance *Instance, ctx
 		return s
 	}
 
-	return s.addStep(tag, version, title, PortError, fn)
+	return s.addStep(KindAction, tag, version, title, PortError, fn, s.userId)
+}
+
+/**
+* IsError
+* @return error
+**/
+func (s *Flow) IsError() error {
+	return s.err
 }

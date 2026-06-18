@@ -216,8 +216,8 @@ func (s *WorkFlow) removeInstance(id string) {
 * @param tag, title, version string
 * @return *Flow
 **/
-func (s *WorkFlow) NewFloW(tag, title, version string) *Flow {
-	return s.newFlow(tag, title, version)
+func (s *WorkFlow) NewFloW(tag, title, version, userId string) *Flow {
+	return s.newFlow(tag, title, version, userId)
 }
 
 /**

@@ -28,6 +28,7 @@ var (
 	MSG_RESILIENCE_NO_RESULT          = "resilience no return result"
 	MSG_INVALID_SOURCE                = "invalid source"
 	MSG_STEP_DEFINITION_IS_NIL        = "step definition is nil"
+	MSG_TRIGGER_NOT_FOUND             = "trigger not found"
 )
 
 func init() {
@@ -59,5 +60,6 @@ func init() {
 		MSG_RESILIENCE_NO_RESULT = "resilience no return result"
 		MSG_INVALID_SOURCE = "source invalido"
 		MSG_STEP_DEFINITION_IS_NIL = "definición de step es nula"
+		MSG_TRIGGER_NOT_FOUND = "trigger no encontrado"
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/resilience"
@@ -58,43 +59,43 @@ type Current struct {
 	Source     *Step `json:"source"`
 	Target     *Step `json:"target"`
 	Error      *Step `json:"error"`
+	Index      int   `json:"index"`
 	IsFinished bool  `json:"is_finished"`
 }
 
 type Instance struct {
-	StartedAt    time.Time                                       `json:"started_at"`
-	UpdatedAt    time.Time                                       `json:"updated_at"`
-	DoneAt       time.Time                                       `json:"done_at"`
-	TenantId     string                                          `json:"tenant_id"`
-	ProjectId    string                                          `json:"project_id"`
-	ID           string                                          `json:"id"`
-	FlowId       string                                          `json:"flow_id"`
-	Code         string                                          `json:"code"`
-	Title        string                                          `json:"title"`
-	Status       Status                                          `json:"status"`
-	Ctx          et.Json                                         `json:"ctx"`
-	Ctxs         map[string]et.Json                              `json:"ctxs"`
-	Results      map[string]*Result                              `json:"results"`
-	Params       et.Json                                         `json:"params"`
-	Tags         et.Json                                         `json:"tags"`
-	TriggerTag   string                                          `json:"trigger_tag"`
-	Trigger      *Trigger                                        `json:"trigger"`
-	Current      *Current                                        `json:"current"`
-	CurrentIndex int                                             `json:"current_index"`
-	IsDone       bool                                            `json:"is_done"`
-	IsStop       bool                                            `json:"is_stop"`
-	Rollbacks    bool                                            `json:"rollbacks"`
-	AuditLog     []et.Json                                       `json:"audit_log"`
-	isDebug      bool                                            `json:"-"`
-	isChanged    bool                                            `json:"-"`
-	store        Store                                           `json:"-"`
-	workflow     *WorkFlow                                       `json:"-"`
-	flow         *Flow                                           `json:"-"`
-	bindings     map[string]interface{}                          `json:"-"`
-	resilience   *resilience.Resilience                          `json:"-"`
-	onSave       []func(instance *Instance, userId string) error `json:"-"`
-	onDelete     []func(instance *Instance, userId string) error `json:"-"`
-	mu           sync.Mutex                                      `json:"-"`
+	StartedAt  time.Time                                       `json:"started_at"`
+	UpdatedAt  time.Time                                       `json:"updated_at"`
+	DoneAt     time.Time                                       `json:"done_at"`
+	TenantId   string                                          `json:"tenant_id"`
+	ProjectId  string                                          `json:"project_id"`
+	ID         string                                          `json:"id"`
+	FlowId     string                                          `json:"flow_id"`
+	Code       string                                          `json:"code"`
+	Title      string                                          `json:"title"`
+	Status     Status                                          `json:"status"`
+	Ctx        et.Json                                         `json:"ctx"`
+	Ctxs       map[string]et.Json                              `json:"ctxs"`
+	Results    map[string]*Result                              `json:"results"`
+	Params     et.Json                                         `json:"params"`
+	Tags       et.Json                                         `json:"tags"`
+	TriggerTag string                                          `json:"trigger_tag"`
+	Trigger    *Trigger                                        `json:"trigger"`
+	Current    *Current                                        `json:"current"`
+	IsDone     bool                                            `json:"is_done"`
+	IsStop     bool                                            `json:"is_stop"`
+	Rollbacks  bool                                            `json:"rollbacks"`
+	AuditLog   []et.Json                                       `json:"audit_log"`
+	isDebug    bool                                            `json:"-"`
+	isChanged  bool                                            `json:"-"`
+	store      Store                                           `json:"-"`
+	workflow   *WorkFlow                                       `json:"-"`
+	flow       *Flow                                           `json:"-"`
+	bindings   map[string]interface{}                          `json:"-"`
+	resilience *resilience.Resilience                          `json:"-"`
+	onSave     []func(instance *Instance, userId string) error `json:"-"`
+	onDelete   []func(instance *Instance, userId string) error `json:"-"`
+	mu         sync.Mutex                                      `json:"-"`
 }
 
 /**
@@ -108,9 +109,9 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*I
 		return nil, err
 	}
 
-	trigger, err := flow.getTrigger(triggerTag)
-	if err != nil {
-		return nil, err
+	trigger, exists := flow.getTrigger(triggerTag)
+	if !exists {
+		return nil, errors.New(MSG_TRIGGER_NOT_FOUND)
 	}
 
 	code := ""
@@ -157,7 +158,19 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*I
 	for k, v := range s.bindings {
 		result.bindings[k] = v
 	}
-
+	result.
+		OnSave(func(instance *Instance, userId string) error {
+			key := fmt.Sprintf("instance:%s", instance.ID)
+			event.Publish(key, instance.ToJson())
+			return nil
+		}).
+		OnDelete(func(instance *Instance, userId string) error {
+			key := fmt.Sprintf("instance:%s:delete", instance.ID)
+			event.Publish(key, et.Json{
+				"id": instance.ID,
+			})
+			return nil
+		})
 	result.addAuditLog(userId, "new_instance")
 	result.setStatus(CREATED, userId)
 	return result, nil
@@ -188,9 +201,9 @@ func (s *WorkFlow) getInstance(id, userId string) (*Instance, error) {
 		return nil, err
 	}
 
-	trigger, err := flow.getTrigger(result.TriggerTag)
-	if err != nil {
-		return nil, err
+	trigger, exists := flow.getTrigger(result.TriggerTag)
+	if !exists {
+		return nil, errors.New(MSG_TRIGGER_NOT_FOUND)
 	}
 
 	result.store = s.store
@@ -204,7 +217,19 @@ func (s *WorkFlow) getInstance(id, userId string) (*Instance, error) {
 	for k, v := range s.bindings {
 		result.bindings[k] = v
 	}
-
+	result.
+		OnSave(func(instance *Instance, userId string) error {
+			key := fmt.Sprintf("instance:%s", instance.ID)
+			event.Publish(key, instance.ToJson())
+			return nil
+		}).
+		OnDelete(func(instance *Instance, userId string) error {
+			key := fmt.Sprintf("instance:%s:delete", instance.ID)
+			event.Publish(key, et.Json{
+				"id": instance.ID,
+			})
+			return nil
+		})
 	result.addAuditLog(userId, "get_instance")
 	return result, nil
 }
@@ -224,7 +249,7 @@ func (s *WorkFlow) deleteInstance(id, userId string) error {
 		return err
 	}
 
-	key := fmt.Sprintf("%s:status", s.ID)
+	key := fmt.Sprintf("instance:%s:status", id)
 	cache.Delete(key)
 
 	err = s.store.Delete("instance", id)
@@ -361,10 +386,8 @@ func (s *Instance) ToString() string {
 * @return *Instance
 **/
 func (s *Instance) pushStatus(status Status) *Instance {
-	retensionTime := config.GetInt("STATUS_RETENTION_TIME", 60)
-	retensionTimeDuration := time.Duration(retensionTime) * time.Minute
-	key := fmt.Sprintf("%s:status", s.ID)
-	cache.SetObject(key, status, retensionTimeDuration)
+	key := fmt.Sprintf("instance:%s:status", s.ID)
+	cache.SetObject(key, status, s.flow.TimeAwait)
 	return s
 }
 
@@ -457,7 +480,7 @@ func (s *Instance) setResult(result et.Json, err error, userId string) (et.Json,
 		}
 		logs.Logf(packageName, MSG_INSTANCE_ERROR, s.ID, s.FlowId, step, err.Error())
 	} else {
-
+		s.pushStatus(s.Status)
 	}
 
 	return result, err

@@ -69,10 +69,10 @@ type Step struct {
 
 /**
 * newStep
-* @param kind Kind, tag, version, title string
+* @param kind Kind, tag, version, title, userId string
 * @return *Step
 **/
-func (s *WorkFlow) newStep(kind Kind, tag, version, title string) (*Step, error) {
+func (s *WorkFlow) newStep(kind Kind, tag, version, title, userId string) (*Step, error) {
 	if version == "" {
 		version = "1.0.0"
 	}
@@ -112,6 +112,7 @@ func (s *WorkFlow) newStep(kind Kind, tag, version, title string) (*Step, error)
 			})
 			return nil
 		})
+	result.addAuditLog(userId, "new_step")
 	return result, nil
 }
 
@@ -346,18 +347,20 @@ func (s *Step) run(instance *Instance, ctx et.Json, userId string) (et.Json, err
 		code := string(v)
 		return runJrex(rex, code)
 	case []string:
-		rex := initJrex()
-		if instance.CurrentIndex < 0 || instance.CurrentIndex >= len(v) {
+		if len(v) == 0 {
 			return et.Json{}, errors.New(MSG_STEP_CODE_INDEX_NOT_FOUND)
 		}
-		code := v[instance.CurrentIndex]
+
+		rex := initJrex()
+		code := v[0]
 		return runJrex(rex, code)
 	case [][]byte:
-		rex := initJrex()
-		if instance.CurrentIndex < 0 || instance.CurrentIndex >= len(v) {
+		if len(v) == 0 {
 			return et.Json{}, errors.New(MSG_STEP_CODE_INDEX_NOT_FOUND)
 		}
-		bt := v[instance.CurrentIndex]
+
+		rex := initJrex()
+		bt := v[0]
 		code := string(bt)
 		return runJrex(rex, code)
 	}

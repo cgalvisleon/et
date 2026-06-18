@@ -352,16 +352,22 @@ func (s *Flow) getTrigger(tag string) (*Trigger, bool) {
 * @param stepId string
 * @return *Connection, error
 **/
-func (s *Flow) getTarget(stepId string, index int, kind Port) (*Connection, bool) {
+func (s *Flow) getTarget(stepId string, index int) (*Step, bool) {
 	idx := slices.IndexFunc(s.Connections, func(connection *Connection) bool {
-		return connection.Kind == kind && connection.Source.StepId == stepId && connection.Target.Index == index
+		return connection.Kind == PortOutput && connection.Source.StepId == stepId && connection.Target.Index == index
 	})
 
 	if idx == -1 {
 		return nil, false
 	}
 
-	return s.Connections[idx], true
+	conn := s.Connections[idx]
+	step, exists := s.getStep(conn.Target.StepId)
+	if !exists {
+		return nil, false
+	}
+
+	return step, true
 }
 
 /**
@@ -369,7 +375,7 @@ func (s *Flow) getTarget(stepId string, index int, kind Port) (*Connection, bool
 * @param stepId string, index int
 * @return *Connection, bool
 **/
-func (s *Flow) getSource(stepId string, index int) (*Connection, bool) {
+func (s *Flow) getSource(stepId string, index int) (*Step, bool) {
 	idx := slices.IndexFunc(s.Connections, func(connection *Connection) bool {
 		return connection.Kind == PortOutput && connection.Target.StepId == stepId && connection.Source.Index == index
 	})
@@ -378,7 +384,13 @@ func (s *Flow) getSource(stepId string, index int) (*Connection, bool) {
 		return nil, false
 	}
 
-	return s.Connections[idx], true
+	conn := s.Connections[idx]
+	step, exists := s.getStep(conn.Source.StepId)
+	if !exists {
+		return nil, false
+	}
+
+	return step, true
 }
 
 /**
@@ -386,7 +398,7 @@ func (s *Flow) getSource(stepId string, index int) (*Connection, bool) {
 * @param stepId string, index int
 * @return *Connection, bool
 **/
-func (s *Flow) getError(stepId string, index int) (*Connection, bool) {
+func (s *Flow) getError(stepId string, index int) (*Step, bool) {
 	idx := slices.IndexFunc(s.Connections, func(connection *Connection) bool {
 		return connection.Kind == PortError && connection.Source.StepId == stepId && connection.Target.Index == index
 	})
@@ -395,7 +407,13 @@ func (s *Flow) getError(stepId string, index int) (*Connection, bool) {
 		return nil, false
 	}
 
-	return s.Connections[idx], true
+	conn := s.Connections[idx]
+	step, exists := s.getStep(conn.Source.StepId)
+	if !exists {
+		return nil, false
+	}
+
+	return step, true
 }
 
 /**
@@ -418,12 +436,15 @@ func (s *Flow) getStep(stepId string) (*Step, bool) {
 * @return *Connection, bool
 **/
 func (s *Flow) addConnection(sourceId string, targetId string, index int, kind Port) (*Connection, bool) {
-	result, exists := s.getTarget(sourceId, index, kind)
-	if exists {
-		return result, false
+	idx := slices.IndexFunc(s.Connections, func(connection *Connection) bool {
+		return connection.Kind == kind && connection.Source.StepId == sourceId && connection.Target.Index == index
+	})
+
+	if idx != -1 {
+		return s.Connections[idx], false
 	}
 
-	_, exists = s.getStep(sourceId)
+	_, exists := s.getStep(sourceId)
 	if !exists {
 		return nil, false
 	}
@@ -433,7 +454,7 @@ func (s *Flow) addConnection(sourceId string, targetId string, index int, kind P
 		return nil, false
 	}
 
-	result = &Connection{
+	result := &Connection{
 		ID: reg.ULID(),
 		Source: &StepConnection{
 			StepId: sourceId,

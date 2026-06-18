@@ -56,46 +56,47 @@ type Result struct {
 }
 
 type Current struct {
-	Source     *Step `json:"source"`
-	Target     *Step `json:"target"`
-	Error      *Step `json:"error"`
-	Index      int   `json:"index"`
-	IsFinished bool  `json:"is_finished"`
+	SourceId   string `json:"source_id"`
+	TargetId   string `json:"target_id"`
+	ErrorId    string `json:"error_id"`
+	Index      int    `json:"index"`
+	IsFinished bool   `json:"is_finished"`
 }
 
 type Instance struct {
-	StartedAt  time.Time                                       `json:"started_at"`
-	UpdatedAt  time.Time                                       `json:"updated_at"`
-	DoneAt     time.Time                                       `json:"done_at"`
-	TenantId   string                                          `json:"tenant_id"`
-	ProjectId  string                                          `json:"project_id"`
-	ID         string                                          `json:"id"`
-	FlowId     string                                          `json:"flow_id"`
-	Code       string                                          `json:"code"`
-	Title      string                                          `json:"title"`
-	Status     Status                                          `json:"status"`
-	Ctx        et.Json                                         `json:"ctx"`
-	Ctxs       map[string]et.Json                              `json:"ctxs"`
-	Results    map[string]*Result                              `json:"results"`
-	Params     et.Json                                         `json:"params"`
-	Tags       et.Json                                         `json:"tags"`
-	TriggerTag string                                          `json:"trigger_tag"`
-	Trigger    *Trigger                                        `json:"trigger"`
-	Current    *Current                                        `json:"current"`
-	IsDone     bool                                            `json:"is_done"`
-	IsStop     bool                                            `json:"is_stop"`
-	Rollbacks  bool                                            `json:"rollbacks"`
-	AuditLog   []et.Json                                       `json:"audit_log"`
-	isDebug    bool                                            `json:"-"`
-	isChanged  bool                                            `json:"-"`
-	store      Store                                           `json:"-"`
-	workflow   *WorkFlow                                       `json:"-"`
-	flow       *Flow                                           `json:"-"`
-	bindings   map[string]interface{}                          `json:"-"`
-	resilience *resilience.Resilience                          `json:"-"`
-	onSave     []func(instance *Instance, userId string) error `json:"-"`
-	onDelete   []func(instance *Instance, userId string) error `json:"-"`
-	mu         sync.Mutex                                      `json:"-"`
+	StartedAt    time.Time                                       `json:"started_at"`
+	UpdatedAt    time.Time                                       `json:"updated_at"`
+	DoneAt       time.Time                                       `json:"done_at"`
+	TenantId     string                                          `json:"tenant_id"`
+	ProjectId    string                                          `json:"project_id"`
+	ID           string                                          `json:"id"`
+	FlowId       string                                          `json:"flow_id"`
+	Code         string                                          `json:"code"`
+	Title        string                                          `json:"title"`
+	Status       Status                                          `json:"status"`
+	Ctx          et.Json                                         `json:"ctx"`
+	Ctxs         map[string]et.Json                              `json:"ctxs"`
+	Results      map[string]*Result                              `json:"results"`
+	Params       et.Json                                         `json:"params"`
+	Tags         et.Json                                         `json:"tags"`
+	TriggerTag   string                                          `json:"trigger_tag"`
+	Trigger      *Trigger                                        `json:"trigger"`
+	Current      *Step                                           `json:"current"`
+	CurrentIndex int                                             `json:"current_index"`
+	IsDone       bool                                            `json:"is_done"`
+	IsStop       bool                                            `json:"is_stop"`
+	Rollbacks    bool                                            `json:"rollbacks"`
+	AuditLog     []et.Json                                       `json:"audit_log"`
+	isDebug      bool                                            `json:"-"`
+	isChanged    bool                                            `json:"-"`
+	store        Store                                           `json:"-"`
+	workflow     *WorkFlow                                       `json:"-"`
+	flow         *Flow                                           `json:"-"`
+	bindings     map[string]interface{}                          `json:"-"`
+	resilience   *resilience.Resilience                          `json:"-"`
+	onSave       []func(instance *Instance, userId string) error `json:"-"`
+	onDelete     []func(instance *Instance, userId string) error `json:"-"`
+	mu           sync.Mutex                                      `json:"-"`
 }
 
 /**
@@ -457,8 +458,8 @@ func (s *Instance) setResult(result et.Json, err error, userId string) (et.Json,
 		errMessage = err.Error()
 	}
 	stepId := ""
-	if s.Current != nil && s.Current.Source != nil {
-		stepId = s.Current.Source.ID
+	if s.Current != nil {
+		stepId = s.Current.ID
 	}
 
 	if stepId == "" {
@@ -474,12 +475,9 @@ func (s *Instance) setResult(result et.Json, err error, userId string) (et.Json,
 
 	if err != nil {
 		s.setStatus(FAILED, userId)
-		step := ""
-		if s.Current != nil && s.Current.Source != nil {
-			step = s.Current.Source.Title
-		}
-		logs.Logf(packageName, MSG_INSTANCE_ERROR, s.ID, s.FlowId, step, err.Error())
+		logs.Logf(packageName, MSG_INSTANCE_ERROR, s.ID, s.FlowId, stepId, err.Error())
 	} else {
+		logs.Logf(packageName, MSG_INSTANCE_STATUS, s.ID, s.FlowId, stepId, s.Status)
 		s.pushStatus(s.Status)
 	}
 
@@ -503,9 +501,8 @@ func (s *Instance) setTag(tags et.Json) et.Json {
 **/
 func (s *Instance) setCtx(ctx et.Json) et.Json {
 	maps.Copy(s.Ctx, ctx)
-	stepId := ""
-	if s.Current != nil && s.Current.Source != nil {
-		stepId = s.Current.Source.ID
+	if s.Current != nil {
+		stepId := s.Current.ID
 		s.Ctxs[stepId] = ctx
 	}
 	return s.Ctx
@@ -542,13 +539,13 @@ func (s *Instance) next() bool {
 	}
 
 	if s.Current == nil {
-		current, exists := s.flow.getCurrent(s.Trigger.StartId, s.CurrentIndex)
+		step, exists := s.flow.getStep(s.Trigger.StartId)
 		if !exists {
 			return false
 		}
-		s.Current = current
+		s.Current = step
 	} else {
-		target := s.Current.Target
+		target, exists := s.flow.getTarget(s.Current.ID, s.CurrentIndex, PortOutput)
 		if s.Rollbacks {
 			target = s.Current.Error
 		}

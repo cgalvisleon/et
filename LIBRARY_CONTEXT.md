@@ -1,603 +1,415 @@
 # LIBRARY_CONTEXT.md
 
 > Documento de contexto persistente para asistentes de IA (Claude, ChatGPT, Cursor, Windsurf, Cline, etc.)
-> Librería: **`github.com/cgalvisleon/et`** — Go 1.23+ — MIT
+> Librería: **`github.com/cgalvisleon/et`** — Go 1.25 — MIT
 > Copia este archivo en la raíz de cualquier proyecto que dependa de `et` para que el asistente diseñe soluciones coherentes con la librería.
+>
+> **Advertencia de vigencia:** este repositorio cambia muy rápido y de forma poco documentada (el historial de commits son casi todos "Backup:" sin mensaje descriptivo). Este documento fue generado leyendo el código fuente real en la fecha de generación. Antes de confiar en una firma o ruta de archivo aquí citada para una decisión importante, verifícala contra el código — ver `CLAUDE.md` en la raíz del repo para más contexto operativo (comandos, convenciones).
 
 ---
 
-## 1. Resumen ejecutivo
+# Executive Summary
 
-`et` es una **librería modular de utilidades para construir microservicios, CLIs y aplicaciones web en Go**. No es un framework monolítico: es un conjunto de ~40 paquetes independientes que cubren, de punta a punta, las necesidades habituales de un backend:
+`et` es una **librería modular de utilidades para construir microservicios, CLIs y aplicaciones web en Go**. No es un framework monolítico: es un conjunto de ~50 paquetes independientes, cada uno importable por separado, que cubren de punta a punta las necesidades habituales de un backend:
 
-- **Modelo de datos universal** (`et.Json`, `et.List`, `et.Item`, `et.Items`).
-- **Persistencia** agnóstica de motor con ORM ligero (`jsql/`).
-- **Servidores HTTP** en dos niveles de abstracción (`server/`, `ettp/v2`) + router con sincronización distribuida (`router/`).
-- **Validación declarativa** de payloads (`jval/`).
-- **Autenticación/JWT** (`jwt/`, `claim/`) y middlewares HTTP (`middleware/`).
-- **Infraestructura**: Redis (`cache/`), NATS (`event/`), Neo4j (`graph/`).
-- **Configuración y entorno** (`config/`, `envar/`).
-- **Logging estructurado** (`logs/`).
-- **Orquestación**: cron (`crontab/`), workflows multi-paso (`workflow/`), agentes IA (`ia/`), runtime JS embebido (`jrex/`).
-- **Integraciones externas**: AWS (S3/SES/SMS), Brevo, WhatsApp Business (`wsp/`).
-- **Utilidades transversales**: IDs (ULID/UUID/Snowflake), criptografía, validación de formatos, manejo de tiempo, etc.
+- **Modelo de datos universal**: `et.Json`, `et.List`, `et.Item`, `et.Items`.
+- **Persistencia** agnóstica de motor con ORM ligero: `jsql/` (hoy, en la práctica, solo PostgreSQL funciona — ver Anti-Patrones).
+- **Servidores HTTP** en varios niveles de abstracción: `server/` (ligero), `ettp/v2` (completo, con cache/eventos), `ettp/v1` (legado), más `router/` y `middleware/`.
+- **Validación declarativa** de payloads: `jval/`.
+- **Autenticación/JWT**: `jwt/` + `claim/`.
+- **Infraestructura**: Redis (`cache/`), NATS (`event/`), Neo4j (`graph/`, muy incompleto).
+- **Configuración y entorno**: `config/`, `envar/`.
+- **Logging estructurado**: `logs/` (+ `stdrout/`, `color/`).
+- **Orquestación**: cron (`crontab/`), workflows multi-paso basados en grafo (`jwf/`), agentes de IA sobre OpenAI (`ia/`), runtime JS embebido (`jrex/`), resiliencia/reintentos (`resilience/`).
+- **Integraciones externas**: AWS (S3/SNS), Brevo (email/SMS/WhatsApp templado), WhatsApp Business Graph API (`wsp/`).
+- **Comunicación**: WebSocket (`ws/`), RPC sobre TCP (`jrpc/`), nodo TCP con consenso tipo Raft propio (`tcp/`).
+- **Utilidades transversales**: IDs (ULID/UUID/XID/Snowflake en `reg/`), criptografía y validación de formato (`utility/`), strings (`strs/`), memoria/concurrencia (`mem/`, `ephemeral/`, `race/`, `iterate/`), tiempo/unidades (`timezone/`, `units/`), generación de proyectos (`create/`).
 
-**Idea central**: cualquier dato dinámico que entra o sale de un servicio (JSON de HTTP, filas de DB, mensajes de eventos, configuración) se representa como `et.Json` (`map[string]interface{}`) con accesores tipados y valores por defecto. Esto evita el patrón `val, ok := m["x"].(string)` en todo el código.
+**Idea central**: cualquier dato dinámico que entra o sale de un servicio (body HTTP, fila de base de datos, mensaje de evento, configuración, claim JWT) se representa como `et.Json` (`map[string]interface{}`) con accesores tipados y valor por defecto. Esto evita el patrón `val, ok := m["x"].(string)` repetido en toda la base de código.
 
----
-
-## 2. Filosofía de diseño
-
-1. **"Json as lingua franca"**: `et.Json` es el tipo que cruza todas las capas — HTTP body, filas de base de datos (`_source JSONB`), mensajes NATS, configuración, claims JWT, resultados de workflows. Un solo tipo, un solo conjunto de accesores (`Str`, `Int`, `Bool`, `Time`, `Json`, `Array`, `ValStr(def, ...)`, etc.).
-2. **Modularidad por import, no por imposición**: no hay "framework" que envuelva la app. Cada paquete se importa solo si se necesita. `jsql` no requiere `cache`; `cache` no requiere `event`; `ettp/v2` sí necesita ambos (lo declara explícitamente).
-3. **`Load()` idempotente**: los paquetes de infraestructura (`cache`, `event`, `config`, `crontab`, `workflow`, `ia`) exponen `Load()` (o `New()`), seguro de llamar múltiples veces, que lee variables de entorno vía `envar` y establece conexiones una sola vez.
-4. **Inversión de dependencias vía interfaces pequeñas**: la librería define interfaces (`jsql.Driver`, `jsql.Config`, `instances.Store`, `jrex.Store`, `config.Store`) y el consumidor las implementa. `stores/` ofrece una implementación lista basada en `jsql` para `instances.Store`.
-5. **APIs fluidas / encadenables**: `model.Where(...).And(...).Limit(20).Page(1).All()`, `jval.Validate("user", jval.Str("email").NotEmpty())`, `flow.NewSteper(...)`.
-6. **Agnosticismo de driver**: `jsql` define el contrato (`Driver` interface) y los drivers (`postgres`, `sqlite`) se auto-registran con `init()` al importarse como side-effect.
-7. **Esquema híbrido relacional/documental**: las tablas tienen columnas reales (`COLUMN`) y atributos dentro de una columna `_source JSONB` (`ATTRIB`), permitiendo evolución de esquema sin migraciones constantes, sin perder capacidad de consulta SQL (`_source->>'campo'`).
-8. **Mensajes de error centralizados**: cada paquete tiene `msg/` o `msg.go` con constantes de error — nunca strings literales repetidos.
-9. **Respuestas HTTP unificadas**: toda respuesta de API pasa por `response.ITEM` / `response.ITEMS` / `response.DATA` / `response.HTTPError`, envolviendo `et.Item` / `et.Items` / `et.Json`.
-10. **Documentación de código estandarizada**: comentarios de funciones en bloque `/** ... @param ... @return ... **/` (ver `CLAUDE.md`).
+**Estado real del proyecto** (importante para decisiones de adopción): es una librería viva, en evolución activa y a veces inconsistente entre paquetes hermanos. Varias piezas documentadas en versiones anteriores de este archivo (paquetes `workflow/` e `instances/`) ya no existen — fueron remplazadas por `jwf/`. Algunos paquetes están notablemente incompletos (`graph/`, partes de `jrpc/`, `cmds.RunSSH`). Trátalo como una librería de utilidades sólida en su núcleo (`et`, `jsql` sobre Postgres, `cache`, `event`, HTTP) y experimental en sus bordes (`jwf`, `tcp`, `graph`).
 
 ---
 
-## 3. Principios arquitectónicos
+# Design Philosophy
 
-- **Sin punto de entrada central**: no existe un `et.App` que arranque "todo". Cada servicio compone los paquetes que necesita.
-- **Capas**:
-  1. *Utilidades autosuficientes* (`et`, `utility`, `strs`, `reg`, `jval`, `logs`, `config`, `envar`, `mem`, `ephemeral`, `iterate`, `timezone`, `units`, `color`, `race`, `file`) — sin dependencias externas de servicios.
-  2. *Infraestructura* (`cache` → Redis, `event` → NATS, `graph` → Neo4j, `jsql` → SQL) — requieren servicios externos vía variables de entorno.
-  3. *HTTP / routing* (`server`, `ettp/v1`, `ettp/v2`, `router`, `middleware`, `response`, `request`) — construidos sobre `chi`; `ettp/v2` añade sincronización de rutas vía NATS.
-  4. *Capa de aplicación* (`workflow`, `ia`, `jrex`, `crontab`, `service`) — orquestación de negocio, construida sobre las capas 1–3.
-  5. *Integraciones externas* (`aws`, `brevo`, `wsp`, `graph`).
-- **Sincronización entre réplicas vía eventos**: `ettp/v2` sincroniza el estado del router entre instancias usando eventos NATS (`EVENT_SET_ROUTER`, `EVENT_REMOVE_ROUTER`, `EVENT_RESET_ROUTER`), con bandera `m.Myself` para evitar bucles de auto-procesamiento. `router/` usa el mismo patrón de forma standalone.
-- **Patrón Store inyectado**: `workflow.Load(store instances.Store)`, `ia.New(tenantId, tag, store, config)`, `jrex.New(name, store)` — la librería define el contrato de persistencia, el consumidor decide el backend (`stores/` ofrece uno basado en `jsql`).
-- **Patrón Driver auto-registrado**: `import _ "github.com/cgalvisleon/et/jsql/drivers/postgres"` registra el driver vía `init()`; `jsql.Load(config)` lo resuelve por `DB_DRIVER`.
-- **Debug/Test transversal**: `Model`, `Query` y `Command` de `jsql` soportan `.Debug()` (loguea SQL sin ejecutar) y `.Test()` (devuelve SQL sin ejecutar) — útil para pruebas sin DB real.
-- **Contexto de request enriquecido**: `request/ctx.go` propaga `tenantId`, `userId`, `username`, `profileId`, `app`, `device`, `payload` a través de `context.Context`, leídos por middlewares y handlers (`request.TenantId(r)`, `request.UserId(r)`, etc.).
+1. **"JSON como lingua franca"**: `et.Json` cruza todas las capas — body HTTP, filas de base de datos (`_source` JSONB), mensajes NATS, configuración, claims JWT, resultados de workflows. Un solo tipo, un solo conjunto de accesores (`Str`, `Int`, `Int64`, `Num`, `Bool`, `Time`, `Json(attr)`, `Array...`, `ValStr(def, ...atribs)`, etc. — ver `et/json.go`).
+2. **Modularidad por import, no por imposición**: no hay un "framework" que envuelva la app. Cada paquete se importa solo si se necesita. `jsql` no requiere `cache`; `cache` no requiere `event`; `ettp/v2` sí puede necesitar ambos, pero solo si se activan los flags `Config.UseCache`/`Config.UseEvent`.
+3. **`Load()`/`New()` mayormente idempotente**: los paquetes de infraestructura (`cache`, `event`) exponen `Load()` seguro de llamar varias veces. Los paquetes de orquestación (`ia`, `jwf`, `crontab`, `config`) en cambio usan `New(...)`/`Load(...)` que crean una instancia explícita (no son singletons globales salvo excepciones puntuales como `ia.Load`).
+4. **Inversión de dependencias vía interfaces pequeñas y locales**: la librería define interfaces de persistencia (`jsql.Driver`, `ia.Store`, `jwf.Store`, `resilience.Store`, `config.Store`, `crontab.Store`, `jrex.Store`) y el consumidor las implementa. **Importante**: ya no existe una interfaz `Store` compartida (el antiguo paquete `instances/` fue eliminado) — cada paquete define la suya, con firmas parecidas pero no intercambiables sin verificar.
+5. **APIs fluidas / encadenables**: `model.Where(...).And(...).Limit(20).Page(1).All()`, `flow.Step(tag, title, fn).Step(...)`, `jval.Require(body, jval.Str("email").NotEmpty())`.
+6. **Agnosticismo de driver (en teoría)**: `jsql` define el contrato (`Driver` interface en `jsql/driver.go`) y los drivers se auto-registran con `init()` al importarse como side-effect. En la práctica solo `postgres` tiene implementación real hoy.
+7. **Esquema híbrido relacional/documental**: las tablas de `jsql` tienen columnas reales (`COLUMN`) y atributos dentro de una columna `_source JSONB` (`ATTRIB`), permitiendo evolución de esquema sin migraciones constantes, sin perder capacidad de consulta SQL (`_source->>'campo'`).
+8. **Mensajes de error centralizados**: casi todos los paquetes tienen un `msg.go` (o paquete `msg/`) con constantes de error — usarlas en vez de strings literales repetidos.
+9. **Respuestas HTTP unificadas**: la salida de una API pasa por `response.ITEM` / `response.ITEMS` / `response.DATA` / `response.JSON` / `response.HTTPError`, envolviendo `et.Item` / `et.Items` / `et.Json`. (`jwf/` es la excepción que usa `response.JSON` directo — ver Anti-Patrones.)
+10. **Estilo de comentarios no-GoDoc real**: la mayoría del código usa bloques `/** ... @param ... @return ... **/` en vez de comentarios GoDoc estándar (`// Func: ...`). Si generas código para este repo, sigue la convención del archivo que estés editando.
 
 ---
 
-## 4. Componentes principales
+# Architecture Overview
 
-### 4.1 Núcleo de datos (`et/`)
+No existe un punto de entrada central ni un `et.App` que arranque "todo". Cada servicio compone los paquetes que necesita. La arquitectura se entiende mejor en capas de dependencia:
+
+```
+Capa 1 — Utilidades autosuficientes (sin servicios externos)
+  et, utility, strs, reg, jval, logs, stdrout, color, config, envar,
+  mem, ephemeral, iterate, race, timezone, units, file
+
+Capa 2 — Infraestructura (requieren servicios externos vía env vars)
+  cache    -> Redis
+  event    -> NATS
+  graph    -> Neo4j (muy incompleto)
+  jsql     -> PostgreSQL (único driver funcional)
+
+Capa 3 — HTTP / routing (construidos sobre go-chi)
+  server, ettp/v1, ettp/v2, router, middleware, response, request, ws
+
+Capa 4 — Aplicación / orquestación (compone capas 1-3)
+  jwf (workflows), ia (agentes IA), jrex (runtime JS), crontab,
+  resilience, service, jrpc, tcp
+
+Capa 5 — Integraciones externas
+  aws (S3/SNS), brevo (email/SMS/WhatsApp templado), wsp (WhatsApp Graph API)
+
+Capa 6 — Persistencia de aplicación
+  stores (helpers jsql-backed: instancias, autorización)
+
+Herramientas de desarrollo
+  cmd/* (binarios), create (generador de proyectos), cmds (ejecución de pipelines), jcli (en progreso/huérfano)
+```
+
+**Patrones estructurales clave:**
+
+- **Sincronización entre réplicas vía eventos NATS**: `ettp/v2` sincroniza el estado del router entre instancias usando eventos (`EVENT_SET_ROUTER`, `EVENT_REMOVE_ROUTER`, `EVENT_RESET_ROUTER`), con bandera `m.Myself` para evitar bucles de auto-procesamiento. `router/` usa un patrón similar de forma standalone (`PushApiGateway`, `RemoveApiGateway`).
+- **Patrón Store inyectado, pero no unificado**: `ia.New(tenantId, tag, store)`, `jwf.New(tenantId, store)`, `crontab.New(tag, store)`, `resilience.New(store)`, `jrex.New(name, store)` — cada uno define su propio `Store` local. Antes de reutilizar una implementación entre paquetes, compara las firmas exactas (ver Anti-Patrones — el caso `stores.Instance` es el ejemplo real de una incompatibilidad).
+- **Patrón Driver auto-registrado**: `import _ "github.com/cgalvisleon/et/jsql/drivers/postgres"` registra el driver vía `init()`; `jsql.Load(tenantId)` lo resuelve internamente leyendo `DB_DRIVER` con `config.GetStr`.
+- **Debug/Test transversal en `jsql`**: `Model`, `Query` y `Command` soportan `.Debug()` (loguea SQL sin ejecutar) y `.Test()` (devuelve SQL sin ejecutar) — útil para pruebas sin DB real.
+- **Contexto de request enriquecido**: `request/ctx.go` propaga `tenantId`, `userId`, `username`, `profileId`, `app`, `device`, `payload` a través de `context.Context`, poblado por `middleware.Authenticate` y leído por handlers (`request.TenantId(r)`, `request.UserId(r)`, etc.).
+- **Motor de workflows basado en grafo, no en lista lineal**: `jwf/` modela un `Flow` como un conjunto de `Step`s conectados por `Connection`s con puertos (`input`/`output`/`error`), no como una secuencia fija — más cercano a un diagrama de flujo que a un pipeline.
+
+---
+
+# Core Components
+
+### Núcleo de datos — `et/`
 
 | Tipo | Propósito | API clave |
 |---|---|---|
-| `et.Json` (`map[string]interface{}`) | Tipo universal de datos | `Str`, `Int`, `Int64`, `Num`, `Bool`, `Time`, `Json(attr)`, `Array`, `ArrayStr/Int/Json`, `Map*`, `ValStr/ValInt/.../ValJson(def, ...atribs)`, `Get`, `Set`, `SetNested`, `Delete`, `Exist`, `Select`, `Hidden`, `Clone`, `Update`, `Compare`, `Append`, `IsChanged`, `ToByte/ToString/ToMap` |
-| `et.List` | Resultado paginado | `Rows`, `All`, `Count`, `Page`, `Start`, `End`, `Result []Json`, `ToJson/ToString/ToMap` |
-| `et.Item` | Resultado de un registro (`Ok bool`, `Result Json`) | mismos accesores tipados que `Json` (`Str`, `Int`, `Bool`, `Json`, `Array...`), `NewItem(data)` |
-| `et.Items` | Resultado multi-registro | `Add`, `AddMany`, `One(idx)`, `First`, `Last`, `ToList(all, page, rows)`, accesores indexados (`Str(idx, ...)`, `Int(idx, ...)`, etc.) |
+| `et.Json` (`map[string]interface{}`) | Tipo universal de datos | `Str`, `Int`, `Int64`, `Num`, `Bool`, `Time`, `Json(attr)`, `Array`, `ArrayStr/Int/Int64/Number/Bytes/Json`, `MapStr/Int/Float`, `ValStr/ValInt/ValInt64/ValNum/ValBool/ValTime/ValJson/ValArray(def, ...atribs)`, `Get`, `Set`, `SetNested`, `Delete`, `Exist`, `Remove`, `Select`, `Hidden`, `Clone`, `Update`, `Compare`, `Append`, `IsChanged`, `IsDeferent`, `ToByte/ToString/ToMap/ToEscapeHTML` |
+| `et.List` | Resultado paginado | `Rows`, `All`, `Count`, `Page`, `Start`, `End`, `Result []Json` |
+| `et.Item` | Resultado de un registro | `Ok bool`, `Result Json` + mismos accesores tipados que `Json` |
+| `et.Items` | Resultado multi-registro | `Add`, `AddMany`, `One(idx)`, `First`, `Last`, `ToList(all, page, rows)`, accesores indexados |
 
-> **Regla de oro**: si vas a leer/escribir datos dinámicos (JSON, filas de DB, payloads), usa `et.Json` y sus accesores — **nunca** `map[string]interface{}` a mano ni *type assertions* manuales.
+> **Regla de oro**: para leer/escribir datos dinámicos (JSON, filas de DB, payloads), usa `et.Json` y sus accesores — nunca `map[string]interface{}` a mano ni *type assertions* manuales.
 
-### 4.2 Persistencia (`jsql/`, `stores/`, `instances/`)
+### Persistencia — `jsql/`, `stores/`
 
-- **`jsql/`** — SQL builder agnóstico + ORM ligero. Entradas: `jsql.Load(config)` / `jsql.LoadTo(config, name)`. Drivers: `postgres`, `sqlite` (auto-registro vía `init()`).
-- Modelos: `db.DefineModel(schema, name, version)` (full: agrega `id`, `created_at`, `updated_at`, `_source`, `_idx`), `db.NewModel(...)` (manual), o `db.Define(jsql.Def{...})` (declarativo, preferido para modelos complejos).
-- Columnas: `COLUMN`, `ATTRIB` (dentro de `_source` JSONB), `DETAIL`/`ROLLUP` (relaciones virtuales), `CALCFUNC`/`CALC` (computadas), `AGG` (agregaciones).
-- Consultas/comandos fluidos: `.Where(jsql.Eq(...)).And(...).Limit().Page().All()/.One()`, `.Insert(...)`, `.Update(...)`, `.Upsert(...)`, todos con `.ExecTx(tx)`.
-- Triggers: `beforeInserts/Updates/Deletes`, `afterInserts/Updates/Deletes` (`TriggerFunction`), columnas calculadas vía `CalcFunction`.
+- `jsql.Load(tenantId) (*DB, error)` / `jsql.LoadTo(tenantId, name) (*DB, error)` — sin objeto de configuración, lee `DB_*` vía `config`/`envar`. **Solo `postgres` tiene driver real** (ver Anti-Patrones).
+- Modelos: `db.DefineModel(schema, name, version)` (agrega `id`, `created_at`, `updated_at`, `_source`, `_idx`), `db.NewModel(...)` (manual), `db.Define(jsql.Def{...})` (declarativo, preferido).
+- Tipos de columna: `COLUMN`, `ATTRIB` (dentro de `_source` JSONB), `DETAIL`/`ROLLUP` (relaciones virtuales), `CALCFUNC`/`CALC` (computadas), `AGG` (agregaciones).
+- Consultas/comandos fluidos: `.Where(jsql.Eq(...)).And(...).Limit().Page().All()/.One()`, `.Insert(...)`, `.Update(...)`, `.Upsert(...)`, `.Delete()`, todos con `.ExecTx(tx)`/`.Exec()`.
+- Triggers: `beforeInserts/Updates/Deletes`, `afterInserts/Updates/Deletes` (`TriggerFunction`); columnas calculadas vía `CalcFunction`.
 - Paths anidados JSONB: `"ventas->detalle->precio"` se traduce automáticamente a `->`/`->>` con casts.
-- **`instances.Store`** — interfaz (`Set`, `Get`, `Delete`, `Query`) usada por `workflow`, `ia`, `jrex` para persistir estado.
-- **`stores/`** — implementación de `instances.Store` basada en `jsql`: `stores.NewInstance(db, schema, name, kind)` (`KindJson` / `KindBite`).
+- `stores/` — helpers jsql-backed: `DefineInstance`/`LoadInstance`/`DefineInstanceBite`/`LoadInstanceBite` (registro genérico tipo "instancia"), `DefineAuthorization` (registro de permisos). Ver Anti-Patrones sobre su (in)compatibilidad con `ia.Store`/`jwf.Store`.
 
-### 4.3 HTTP y routing
+### HTTP y routing
 
 | Paquete | Nivel | Cuándo usarlo |
 |---|---|---|
-| `server/` | Ligero (`Ettp` sobre `chi.Mux`) | Servicios sin Redis/NATS. `server.New(name, port)`, `.Use(...)`, `.HandleFunc`, `.Mount`, `.Start()` |
-| `ettp/v2` | Completo | `ettp.New(name, cfg)` — llama `cache.Load()` + `event.Load()`; router sincronizado entre réplicas vía NATS; `.Public(method, path, handler, pkg)`, `.Private(...)`, `.UseAutentication(mw)`, `.SetRouter(...)` |
-| `ettp/v1` | Versión anterior | Prefiere `v2` |
-| `router/` | Standalone | Routing con sincronización NATS sin el resto de `ettp` |
-| `middleware/` | Transversal | `Authenticate`, `Logger`/`RequestLogger`, `Recoverer`, `RequestID`, `AllowAll` (CORS), `Metrics`/`PushTelemetry*` |
+| `server/` | Ligero (`Ettp` sobre `chi.Mux`) | Servicios sin Redis/NATS. `server.New(name, port) *Ettp`, `.Use(...)`, `.HandleFunc`, `.Mount`, `.Start()`, `.OnStart/.OnClose` |
+| `ettp/v2` | Completo | `ettp.New(name string, cnf *Config) (*Server, error)` — `Config.UseCache`/`UseEvent` activan `cache.Load()`/`event.Load()` internamente; router sincronizado entre réplicas vía NATS |
+| `ettp/v1` | Anterior, sin tocar desde 2026-06-02 | Prefiere `v2` |
+| `router/` | Standalone | Routing con sincronización NATS sin el resto de `ettp`: `Public/Private/Protect/With`, `PushApiGateway`, `SetChannels` |
+| `middleware/` | Transversal | `Authenticate`, `Logger`, `Recoverer`, `RequestID`, `AllowAll` (CORS), `Metrics`/`PushTelemetry*` |
 | `response/` | Salida | `ITEM`, `ITEMS`, `DATA`, `JSON`, `RESULT`, `ANY`, `Stream`, `HTTPError`, `HTTPAlert`, `Unauthorized`, `Forbidden`, `InternalServerError` |
-| `request/` | Entrada | `GetBody(r)`, `URLParam(r, key).Str()/.Int()/.../Object()/.ArrayJson()`, `Query(r, key)`, contexto: `TenantId`, `UserId`, `Username`, `ProfileId`, `App`, `Device`, `Payload`, `ServiceId`, `SetXxx(ctx, ...)` |
+| `request/` | Entrada | `GetBody(r)`, `URLParam(r, key).Str()/.Int()/...`, `Query(r, key)`, contexto: `TenantId`, `UserId`, `Username`, `ProfileId`, `App`, `Device`, `Payload` |
+| `ws/` | WebSocket | `ws.New() *Hub`, `hub.Connect/SendTo/Topic/Queue/Stack/Publish` |
 
-**Patrón de handler estándar** (ver §6 para ejemplo completo):
+### Validación — `jval/`
+
+Validadores tipados y encadenables sobre `et.Json`: `Str`, `Int`, `Float`, `Bool`, `Array`, `Email`, `Date`, `Enum`, `Phone`, `Between`, `Object` (anidado), agrupados con `jval.Require(data, rules...)` (todas obligatorias) o `jval.Maybe(data, rules...)` (opcionales).
+
+### Infraestructura — `cache/`, `event/`, `graph/`
+
+- `cache/` — Redis. `cache.Load()`, `Set/Get/Delete/Exists/Expire/Incr/Decr`, listas (`LPush/LRange/...`), colecciones hash, objetos JSON (`SetObject/GetObject`, `ObjetSet/ObjetGet`), verificación/OTP (`SetVerify/GetVerify`), `cache.Metrics`.
+- `event/` — NATS. `event.Load()`, `Publish(channel, data)`, `Subscribe(channel, fn)` (broadcast), `Queue(channel, queue, fn)` (reparto entre workers), `Stack(channel, fn)`, `event.Message{Data et.Json, Myself bool, ...}`.
+- `graph/` — Neo4j. **Solo tiene `graph.Load() (*Conn, error)`**, con URL y credenciales *hardcodeadas* (`neo4j://localhost:7687`, `neo4j`/`password`) — no hay métodos de consulta/sesión expuestos. No usable en producción tal cual.
+
+### Configuración, entorno y logging
+
+- `config/` — getters de paquete (`GetStr/GetInt/GetInt64/GetFloat/GetBool/Get/Set/Validate/IsLoad`), respaldados por `envar/`. `config.Config` es un registro de configuración por tenant respaldado por un `Store` (no es un descriptor de app global).
+- `envar/` — acceso a variables de entorno (`GetStr/GetInt/...`) y argumentos CLI (`ArgStr/ArgInt/...`), `Validate(keys)`.
+- `logs/` — `Log`, `Info(f)`, `Alert(f)`, `Error(f)`, `Debug(f)`, `Fatal`, `Panic`, `Tracer`, todo vía `stdrout/` (color ANSI, `color/`).
+
+### Identidad, autenticación y seguridad
+
+- `reg/` — generadores de ID: `UUID()`, `ULID()`, `XID()`, `GenSnowflake()`, más variantes "tag" y "get-or-generate" (`GetULID(id)` retorna `id` si ya es válido, o genera uno nuevo si está vacío/`"*"`/`"new"`).
+- `claim/` — claims JWT (`tenantId`, `profileId`, `payload`), `NewClaim`, `NewToken` (HS256 vía `golang-jwt/jwt/v4`), `ParceToken`.
+- `jwt/` — capa sobre `claim/` + `cache/`: `NewAuthentication`, `NewAuthorization`, `NewAppToken`, `NewEphemeralToken`, `Validate`, `RenewToken`, `DeleteToken` (logout).
+- `utility/` — criptografía (`Encrypt` con MD5/SHA1/SHA256/SHA512/AES, `DecryptoAES`), generación de IDs simples (`UUID`, `GetOTP`, `GenId`), validadores de formato (`ValidEmail`, `ValidPhone`, `ValidUUID`, etc.).
+
+### Orquestación
+
+- `crontab/` — `crontab.New(tag, store)` (requiere `Store`, ya no es opcional), `AddJob/AddOneShotJob/AddEventJob`, soporta segundos vía `robfig/cron` (`cron.WithSeconds()`).
+- `jwf/` — workflows basados en grafo (ver detalle completo en `COMPONENT_CATALOG.md` y `CLAUDE.md`). Sustituye a los antiguos `workflow/` e `instances/` (eliminados).
+- `resilience/` — reintentos con intervalo: `resilience.New(store)`, `LoadInstance(Params{...})`, `instance.Run(userId)`.
+- `ia/` — agentes sobre OpenAI (`openai-go/v3`): `ia.New(tenantId, tag, store) (*Ia, error)`, gestiona `Agent`/`Participant`/`Conversation`.
+- `jrex/` — runtime JS embebido (`dop251/goja`) con hot-reload, usado tanto standalone como motor de ejecución de pasos de `jwf/` cuando `Step.Definition` es un string JS.
+- `service/` — OTP y mensajería multicanal (`SendOTPEmail/SendOTPSms/VerifyOTP`, `SendSms/SendWhatsapp/SendEmail`), delega en `aws/`/`brevo/`.
+
+### Comunicación de bajo nivel
+
+- `jrpc/` — RPC sobre TCP con `net/rpc` estándar. **No tiene balanceador de carga ni consenso Raft** a pesar de lo que pueda sugerir documentación anterior — es un registro simple de `Solver{Host, Port}` por método.
+- `tcp/` — nodo TCP con consenso tipo Raft **implementado a mano** (no usa una librería externa de Raft/consenso) — modos `Follower`/`Candidate`/`Leader`/`Proxy`, pool de workers, callbacks (`onConnect`, `onInbox`, `onBecomeLeader`, etc.).
+
+### Integraciones externas
+
+- `aws/` — S3 (`UploaderS3/UploaderFile/UploaderB64/DownloadS3/DeleteS3`) y SMS vía SNS (`SendSMS`).
+- `brevo/` — Email/SMS/WhatsApp **templado** vía API de Brevo (`SendEmail*`, `SendSms*`, `SendWhatsapp*`).
+- `wsp/` — WhatsApp Business (Graph API de Meta) directo: `wsp.NewSender(token, phoneNumberId) *Whatsapp`, decenas de `Send*` para texto/imagen/audio/video/documento/sticker/ubicación/contacto/plantilla/catálogo/lista. **No confundir con `brevo/`** — son dos integraciones de WhatsApp distintas y no intercambiables.
+
+### Utilidades transversales
+
+`strs/` (formateo y manipulación de strings), `mem/` (cache en memoria thread-safe con TTL, tipado), `ephemeral/` (TTL simple sin tipado), `race/` (wrapper thread-safe genérico con `sync.RWMutex`), `iterate/` (medición de tiempo entre checkpoints), `timezone/` (`Now`, `Format`, `Parse`, zona vía env `TIMEZONE`), `units/` (conversión de unidades de distancia/masa/volumen), `file/` (`FileInfo`, `Watcher` con `fsnotify`), `cmds/` (pipelines de comandos OS — `RunSSH` **no ejecuta SSH real**, es un alias de `RunOS`).
+
+### Herramientas de desarrollo
+
+`create/` (generador interactivo de proyectos/microservicios/k8s vía Cobra + promptui), binarios en `cmd/*` (uno por capacidad: `et`, `apigateway`, `daemon`, `server`, `jrex`, `jsql`, `jwf`, `resilience`, `wsp`, `client`, `install`, `whatcher`).
+
+---
+
+# Public APIs
+
+Referencia rápida de los puntos de entrada más usados. **Para la lista exhaustiva con archivo:línea de cada función pública, ver `COMPONENT_CATALOG.md`.**
 
 ```go
-func (s *T) HttpFoo(w http.ResponseWriter, r *http.Request) {
-    id := request.URLParam(r, "id").Str()
-    body, err := request.GetBody(r)
-    if err != nil {
-        response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-        return
-    }
-    response.ITEM(w, r, http.StatusOK, et.Item{Ok: true, Result: data})
-}
+// Datos
+data := et.Json{"user": et.Json{"name": "Ana"}}
+name := data.Str("user", "name")
+
+// Persistencia (Postgres)
+db, _ := jsql.Load(tenantId)
+model, _ := db.DefineModel("public", "users", 1)
+items, _ := model.Where(jsql.Eq("status", jsql.ACTIVE)).Limit(20).Page(1).All()
+
+// HTTP ligero
+srv := server.New("my-service", 8080)
+srv.HandleFunc("/health", healthHandler)
+srv.Start()
+
+// HTTP completo
+srv, _ := ettp.New("my-service", &ettp.Config{Port: 8080, UseCache: true, UseEvent: true})
+
+// Validación
+err := jval.Require(body, jval.Str("email").NotEmpty(), jval.Email("email"))
+
+// Infraestructura
+cache.Load()
+event.Load()
+event.Publish("user.created", et.Json{"id": id})
+
+// Autenticación
+token, _ := jwt.NewAuthorization("myapp", "web", userId, username, tenantId, profileId, 24*time.Hour)
+
+// Cron
+ct, _ := crontab.New("my-service", myStore)
+ct.AddJob("job-1", "0 * * * * *", et.Json{}, 0, true, func(job *crontab.Job) {})
+
+// Workflows (jwf)
+wf, _ := jwf.New(tenantId, nil)
+flow := wf.NewFloW("onboarding", "Onboarding", "1.0.0", userId).
+    Step("start", "Bienvenida", myStepFn)
+result, _ := wf.Run(flow.ID, "start", "", projectId, et.Json{}, et.Json{}, userId)
 ```
 
-### 4.4 Validación (`jval/`)
+---
 
-Validadores tipados, encadenables, que operan sobre `et.Json`:
+# Recommended Patterns
+
+1. **Usa siempre `et.Json`** para datos dinámicos (body HTTP, filas de DB, payloads de eventos) — nunca `map[string]interface{}` con *type assertions* manuales.
+2. **Llama `Load()`/`New(...)` una sola vez al arrancar** el servicio y reutiliza el resultado; los paquetes de infraestructura están diseñados para esto (`cache.Load()`, `event.Load()`).
+3. **Usa el builder fluido de `jsql`** (`.Where().And().Limit().Page().All()`) en vez de construir SQL a mano.
+4. **Usa `jval.Require`/`jval.Maybe`** para validar payloads antes de tocar la base de datos.
+5. **Responde siempre con los helpers de `response/`** (`ITEM`, `ITEMS`, `HTTPError`) para mantener un contrato HTTP consistente entre servicios.
+6. **Centraliza mensajes de error en un `msg.go` local** de tu propio servicio, siguiendo el patrón que usa `et` internamente.
+7. **Antes de reutilizar un `Store` entre paquetes (`ia`, `jwf`, `crontab`, `resilience`, `config`), compara las firmas método por método** — no son intercambiables aunque se vean parecidas.
+8. **Usa `.Debug()`/`.Test()` de `jsql`** durante desarrollo para ver el SQL generado sin tocar la base de datos.
+9. **Propaga contexto de usuario/tenant con `request/ctx.go`** en vez de pasar `userId`/`tenantId` como parámetros sueltos por todas las capas.
+
+---
+
+# Anti Patterns
+
+1. **No asumas que `jsql` soporta SQLite hoy.** La constante `jsql.DriverSqlite` y la función `sqliteConection` existen, pero **no hay ningún driver registrado** en `jsql/drivers/sqlite/` (el directorio no existe) ni dependencia de un driver SQLite en `go.mod`. Configurar `DB_DRIVER=sqlite` fallará al resolver el driver. Lo mismo aplica a `mysql`/`mssql`/`oracle`/`josefina` (constantes declaradas, sin implementación).
+2. **No reutilices `stores.Instance` como `Store` de `ia/` o `jwf/` sin adaptarla.** `(*stores.Instance).Get(id string, dest any)` solo recibe una clave string; `ia.Store.Get` y `jwf.Store.Get` requieren dos (`id, tag`/`collection, id`). No calzan estructuralmente — de hecho, nada en el repo conecta hoy `stores/` con `ia`/`jwf` (ambos se usan con `store=nil` en sus ejemplos de `cmd/`).
+3. **No confíes en `graph/` para producción.** `graph.Load()` tiene URL y credenciales de Neo4j *hardcodeadas* en el código (`neo4j://localhost:7687`, usuario/clave `neo4j`/`password`) y no expone ningún método de consulta o sesión — solo la conexión cruda.
+4. **No esperes SSH real de `cmds.RunSSH`.** Es funcionalmente idéntico a `RunOS` (usa `exec.Command` local); no implementa un cliente SSH.
+5. **Evita `wsp.SendReplyVideoMessageByURL(to, url, videoCaptionText)`** — hay un bug real: la función asigna `url` al campo `MessageID` del mensaje (no recibe un `messageID` separado como sus métodos hermanos `SendReply*ById`). Si necesitas responder a un video por URL con ID de mensaje, repórtalo o evita ese método.
+6. **No mezcles el paquete de WhatsApp.** `brevo.SendWhatsapp*` (plantillas vía Brevo) y `wsp.NewSender(...).Send*` (Graph API directo) son integraciones distintas con APIs y casos de uso diferentes — no son intercambiables.
+7. **No asumas que los handlers HTTP de `jwf/` están implementados.** `httpGetFlow`, `httpSetFlow`, `httpStatusFlow`, `httpDeleteFlow`, `httpGetInstance`, `httpDeleteInstance`, `httpRunInstance` en `jwf/router.go` tienen **cuerpo vacío**. Solo los handlers de `Step` (`httpGetStep`, `httpNewStep`, etc.) están implementados.
+8. **No copies ejemplos de versiones previas que mencionen `workflow.RunInstance`, `instances.Store`, `ia.New(..., config Config)` o `jsql.Load(config)`/`jsql.LoadTo(config, name)`.** Esas firmas y paquetes ya no existen en el código actual.
+
+---
+
+# Extension Points
+
+| Punto de extensión | Interfaz/mecanismo | Dónde |
+|---|---|---|
+| Nuevo motor de base de datos | `jsql.Driver` (`Connect`, `Load`, `Query`, `Command`) auto-registrado vía `init()` | `jsql/drivers/<nombre>/` |
+| Nuevo backend de persistencia para agentes IA | `ia.Store` local (`Set/Get/Delete/Query`) | implementación propia |
+| Nuevo backend de persistencia para workflows | `jwf.Store` local | implementación propia |
+| Nuevo backend de persistencia para resiliencia/cron/config | `resilience.Store` / `crontab.Store` / `config.Store` | implementación propia |
+| Nueva regla de validación | interfaz `jval.Rule` (`Validate(et.Json) error`, `Name() string`) | `jval/` o paquete propio |
+| Columna calculada en `jsql` | `CalcFunction` registrada en el modelo | `model.calcs` |
+| Trigger de modelo `jsql` | `TriggerFunction` (`beforeInsert/Update/Delete`, `afterInsert/Update/Delete`) | `model.BeforeInsert(...)`, etc. |
+| Paso de workflow ejecutado en JS en vez de Go | `Step.Definition` como `string`/`[]byte` (ejecutado vía `jrex.Instance`) | `jwf/` |
+| Middleware HTTP personalizado | `func(http.Handler) http.Handler` agregado al router (`chi`) | `middleware/`, `server/`, `ettp/v2` |
+| Callbacks de WebSocket | `Hub.OnConnection/OnDisconnection/OnPublish/OnChannel/...` | `ws/` |
+| Callbacks de nodo TCP | `Node.onConnect/onInbox/onBecomeLeader/onChangeLeader/...` | `tcp/` |
+| Almacenamiento de módulos JS compilados | `jrex.Store` (`Get/Set`) | `jrex/` |
+
+---
+
+# AI Development Rules
+
+Reglas obligatorias para cualquier asistente de IA que genere código en un proyecto que dependa de `et`:
+
+1. **Prefiere `et` antes que dependencias externas** para: estructuras de datos JSON dinámicas, builder SQL/ORM (Postgres), validación de payloads, JWT, cron, cache Redis, pub/sub NATS, logging, generación de IDs, WebSocket. No añadas `gin`/`echo`/`gorm`/`go-playground/validator`/etc. si la necesidad ya la cubre `et` razonablemente.
+2. **Reutiliza componentes existentes de `et`** en vez de reimplementar (por ejemplo: usa `reg.ULID()` en vez de otra librería de IDs; usa `response.ITEM`/`HTTPError` en vez de escribir JSON a mano).
+3. **Evita implementaciones duplicadas** dentro del mismo proyecto — si ya existe un `Store` para `jwf`, no crees otro para `ia` salvo que las firmas realmente difieran (verifícalo, no lo asumas).
+4. **Sigue los patrones arquitectónicos existentes**: `Load()`/`New()` al arrancar, builder fluido para `jsql`, `et.Json` como tipo de transporte, respuestas unificadas con `response/`.
+5. **Justifica explícitamente cualquier decisión de evitar `et`** (por ejemplo: "no hay driver SQLite real en `jsql`, así que para SQLite uso `database/sql` + `mattn/go-sqlite3` directamente"). No lo hagas en silencio.
+6. **Prefiere extender abstracciones existentes sobre crear nuevas.** Si necesitas un nuevo tipo de regla de validación, implementa `jval.Rule` en vez de escribir un validador ad-hoc fuera de `jval/`.
+
+---
+
+# Code Generation Guidelines
+
+Al generar código Go que **consume** esta librería:
+
+- Importa solo los paquetes que necesitas; no hay un paquete "raíz" que se importe siempre.
+- Usa `et.Json{...}` como literal para construir payloads; usa los accesores tipados (`.Str(...)`, `.Int(...)`, `.ValStr(def, ...)`) para leer, nunca *type assertions* manuales sobre `map[string]interface{}`.
+- Para conectarte a Postgres: `import _ "github.com/cgalvisleon/et/jsql/drivers/postgres"` (side-effect) + `jsql.Load(tenantId)`. No intentes usar `DB_DRIVER=sqlite` (ver Anti-Patrones).
+- Para servidores HTTP: usa `server.New(name, port)` si no necesitas Redis/NATS; usa `ettp.New(name, &ettp.Config{...})` si sí los necesitas (activa `UseCache`/`UseEvent` explícitamente).
+- Para handlers HTTP, sigue el patrón estándar (URL params con `request.URLParam`, body con `request.GetBody`, respuesta con `response.ITEM`/`response.HTTPError`).
+- Define un `Store` local por paquete que lo requiera (`ia`, `jwf`, `crontab`, `resilience`, `config`) implementando exactamente la interfaz que ese paquete declara — no compartas una sola struct entre todos sin verificar las firmas.
+- Centraliza los mensajes de error de tu propio servicio en un `msg.go`, replicando el patrón de `et`.
+- Sigue el estilo de comentarios del archivo que edites: la mayoría de `et` usa bloques `/** ... @param ... @return ... **/`, no GoDoc estándar.
+
+---
+
+# Dependency Decision Matrix
+
+| Capacidad | `et` ofrece | Alternativa externa común | Cuándo preferir la externa |
+|---|---|---|---|
+| Tipo de datos dinámico JSON | `et.Json` | `map[string]interface{}` a mano, `mapstructure` | Casi nunca — `et.Json` ya cubre el caso de uso |
+| ORM/SQL builder | `jsql/` (solo Postgres funcional) | `gorm`, `sqlx`, `ent`, `bun` | Si necesitas MySQL/SQLite/MSSQL/Oracle hoy mismo (no implementados en `jsql`), o features de ORM avanzadas (migraciones versionadas, generación de código) |
+| Cliente Redis | `cache/` | `go-redis` directo | Si necesitas comandos Redis no envueltos por `cache/` (Streams, Lua scripting, cluster avanzado) |
+| Pub/Sub | `event/` (NATS) | `nats.go` directo, Kafka, RabbitMQ | Si necesitas garantías de entrega/colas que NATS core no da (considera NATS JetStream o Kafka) |
+| Validación de payloads | `jval/` | `go-playground/validator`, `ozzo-validation` | Si necesitas validación basada en tags de struct en vez de `et.Json` |
+| JWT | `jwt/` + `claim/` | `golang-jwt/jwt` directo | Si no necesitas la capa de revocación/logout basada en cache que da `jwt/` |
+| Cron | `crontab/` | `robfig/cron` directo | Si no necesitas la integración con eventos NATS (`AddEventJob`) que añade `crontab/` |
+| WebSocket | `ws/` | `gorilla/websocket` directo | Si no necesitas el modelo de `Hub`/tópicos/colas/pila que añade `ws/` |
+| Workflows/orquestación durable | `jwf/` | Temporal, Cadence, AWS Step Functions | Para cargas de producción que requieran durabilidad fuerte, reintentos distribuidos robustos y observabilidad — `jwf/` es joven, en memoria por defecto, y su capa HTTP está parcialmente sin implementar |
+| Grafos / Neo4j | `graph/` | `neo4j-go-driver/v5` directo | Casi siempre — `graph/` hoy solo abre la conexión, sin API de consultas |
+| Base de datos embebida (SQLite) | *(no disponible)* | `database/sql` + `mattn/go-sqlite3`/`modernc.org/sqlite` | Siempre, hasta que `jsql/drivers/sqlite/` exista de nuevo |
+| SSH remoto | *(no disponible — `cmds.RunSSH` es local)* | `golang.org/x/crypto/ssh` | Siempre que necesites ejecución remota real |
+| Agentes de IA / LLM | `ia/` (solo OpenAI) | LangChain-Go, SDKs de otros proveedores | Si necesitas multi-proveedor o features avanzadas de orquestación de agentes |
+
+---
+
+# Migration Guide
+
+## A. Migrando código interno que usaba las APIs antiguas de `et`
+
+Si tienes código (o ejemplos/documentación) que referencia las APIs **eliminadas**, esta es la equivalencia:
+
+| API antigua (eliminada) | API actual |
+|---|---|
+| `workflow.Load(store instances.Store)` | `jwf.New(tenantId, store)` / `jwf.Load(tenantId, store, userId)` |
+| `workflow.RunInstance(id, tag, step, ctx, tags, username)` | `wf.Run(flowId, triggerTag, instanceId, projectId, ctx, tags, userId)` |
+| Paquete `instances/` con `instances.Store` compartido | Cada paquete (`ia`, `jwf`) define su propio `Store` local — no hay interfaz compartida |
+| `ia.New(tenantId, tag, store, config Config)` | `ia.New(tenantId, tag, store)` — `OPENAI_API_KEY` se lee directo de `config.GetStr` |
+| `jsql.Load(config)` / `jsql.LoadTo(config, name)` | `jsql.Load(tenantId)` / `jsql.LoadTo(tenantId, name)` — sin objeto config, lee env vars internamente |
+| `config.App{Name, Version, Company, Host, Port, Stage}` | No existe. `config.Config` es un registro de configuración por tenant, distinto en propósito |
+| `crontab.New(tag)` | `crontab.New(tag, store)` — `store` ahora obligatorio |
+| `wsp.NewWhatsapp(token, phoneNumberId)` | `wsp.NewSender(token, phoneNumberId)` |
+
+## B. Migrando desde librerías externas hacia `et`
+
+- **Desde `gin`/`echo` hacia `server/`+`ettp/v2`**: el modelo mental es similar (router + middlewares + handlers `http.HandlerFunc`), pero `et` usa `go-chi` por debajo y añade `request.GetBody`/`response.ITEM` como capa de (de)serialización uniforme.
+- **Desde `gorm` hacia `jsql/`**: en vez de structs con tags, defines un `jsql.Def{Columns: []jsql.Column{...}}` declarativo; las columnas "extra" no migradas a SQL real pueden vivir temporalmente como `ATTRIB` dentro de `_source` JSONB, lo que facilita una migración incremental sin tener que decidir el esquema completo de una vez.
+- **Desde `go-playground/validator` hacia `jval/`**: en vez de tags de struct (`validate:"required,email"`), construyes una lista de `jval.Rule` y la pasas a `jval.Require(data, rules...)` sobre un `et.Json`.
+
+---
+
+# Examples
 
 ```go
-err := jval.Require(body,
+// --- et.Json ---
+data := et.Json{"user": et.Json{"name": "Ana", "age": 30}}
+name := data.Str("user", "name")     // "Ana"
+age  := data.Int("user", "age")      // 30
+data.Set("active", true)
+
+// --- jsql: modelo + consulta (Postgres) ---
+import _ "github.com/cgalvisleon/et/jsql/drivers/postgres"
+
+db, err := jsql.Load(tenantId)
+model, _ := db.DefineModel("public", "users", 1)
+model.DefineAttrib("name", jsql.TEXT, "")
+model.Init()
+
+items, _ := model.Where(jsql.Eq("status", jsql.ACTIVE)).Limit(20).Page(1).All()
+item, _  := model.Where(jsql.Eq("id", id)).One()
+_, _     = model.Insert(et.Json{"email": "a@b.com"}).ExecTx(nil)
+
+// --- Validación ---
+err = jval.Require(body,
     jval.Str("email").NotEmpty(),
     jval.Email("email"),
     jval.Int("age").Min(18).Max(120),
-    jval.Enum("role", "admin", "user"),
-    jval.Array("tags").NotEmpty(),
-)
-```
-
-Reglas disponibles: `Str`, `Int`, `Float`, `Array`, `Email`, `Date(layout)`, `Enum(name, vals...)`, `Phone` (`CountryCode`, `Length`), `Between(min,max)`, `Validate(name, rules...)` (objetos anidados). Helpers: `jval.Require(data, rules...)` (todas obligatorias), `jval.Maybe(data, rules...)` (valida solo si el campo existe).
-
-### 4.5 Autenticación (`jwt/`, `claim/`)
-
-- `claim.Claim` — claims JWT con `tenantId`, firmado HS256 (clave: env `SECRET`, default `"1977"`).
-- `jwt.NewAuthentication(app, device, userId, username, duration)` / `jwt.NewAuthorization(app, device, userId, username, tenantId, profileId, duration)` / `jwt.NewAppToken(app, device, duration)` / `jwt.NewEphemeralToken(...)`.
-- Tokens almacenados en `cache` (Redis); `jwt.Validate(token)`, `jwt.RenewToken`, `jwt.DeleteToken`, `jwt.DeleteTokeByToken`.
-- `middleware.Authenticate` — valida el Bearer token y puebla el contexto del request.
-
-### 4.6 Infraestructura
-
-- **`cache/`** (Redis, `REDIS_HOST`): `cache.Load()`, `Set/Get/Delete`, `SetWithDuration`, `SetH/D/W/M/Y` (atajos de expiración hora/día/semana/mes/año), `Incr/Decr`, `LPush/LRange/LTrim`, `SetObject/GetObject` (serialización automática), `Collection*` (hashes), `Pub/Sub` vía `event`.
-- **`event/`** (NATS, `NATS_HOST`): `event.Load()`, `Publish(channel, data)`, `Subscribe(channel, fn)`, `Queue(channel, queue, fn)` (balanceo de carga), `Stack`/`Source`, `Work`/`State` (seguimiento de tareas).
-- **`graph/`** (Neo4j): `graph.Load()` → `*Conn` con driver Neo4j.
-
-### 4.7 Configuración y entorno
-
-- **`config/`** — `config.New(tag, stage, tenantId, ownerId, store, userId)` / `config.Load(...)`; getters `GetStr/GetInt/GetInt64/GetFloat/GetBool/GetMap` con default; `Set`, `Save`, `Remove`.
-- **`envar/`** — acceso a variables de entorno y parámetros CLI; `envar.Validate([]string{...})` verifica variables requeridas.
-
-### 4.8 Logging (`logs/`)
-
-`logs.Info`, `Infof`, `Alert`/`Alertf`/`Alertm`, `Error`/`Errorf`/`Errorm`, `Warn`, `Debug`, `Tracer`, `Fatal` (→ `os.Exit(1)`), `Panic`. Salida colorizada vía `stdrout`. `logs.EnableCallerInfo = false` recomendado en producción.
-
-### 4.9 Orquestación
-
-- **`crontab/`** — `crontab.New(tag)` (llama `event.Load()`); `AddJob`, `AddOneShotJob`, `AddEventJob`, `AddOneShotEventJob`, `DeleteJob`, `StartJob/StopJob/Stop`. Soporta spec con segundos (`"0 * * * * *"`).
-- **`workflow/`** — `workflow.Load(store)` / `workflow.New(store)`. Jerarquía `Flow → Steper → Step` + `Instance` en runtime. `RunInstance`, `GetInstance`, `ResetInstance`, `RollbackInstance`, `StopInstance`. Handlers HTTP listos (`HttpRunInstance`, etc.).
-- **`ia/`** — `ia.New(tenantId, tag, store, config)` / `ia.Load(...)` (singleton). Gestiona `Agent`, `Participant`, `Conversation`/`Message` por tenant. `Skill` (p.ej. `ApiSkill`) permite que agentes llamen APIs externas. Requiere `OPENAI_API_KEY`.
-- **`jrex/`** — runtime JS embebido (`goja`). Modos `Develop` (hot-reload), `Production` (carga desde `Store`), `Building` (compila + versiona). Expone `console.*`, `ctx.*`, `fetch()`, `require()`.
-
-### 4.10 Integraciones externas
-
-- **`aws/`** — S3, SES (email), SMS.
-- **`brevo/`** — email, SMS, WhatsApp vía Brevo.
-- **`wsp/`** — WhatsApp Business API (Graph API), `NewWhatsapp(token, phoneNumberId)`.
-- **`service/`** — OTP (`SendOTPEmail`, `SendOTPSms`, `VerifyOTP`) multi-tenant.
-
-### 4.11 Utilidades transversales
-
-- **`reg/`** — generación de IDs: `UUID()`, `ULID()`, `XID()`, `GenULID/GenUUId/GenXID(tag)`, `GenSnowflake()`, `GenHashKey`, `TagULID/TagUUID/TagXID(tag, id)`.
-- **`utility/`** — `ValidEmail/ValidPhone/ValidUUID/ValidName/...`, `GetRandom`, `GetOTP`, `Encrypt`/`DecryptoAES` (MD5/SHA1/SHA256/SHA512/AES), `Now()`, `TimeDifference`, `Contains`.
-- **`strs/`** — utilidades de strings.
-- **`mem/`** — caché en memoria con expiración y primitivas de sincronización.
-- **`ephemeral/`**, **`iterate/`**, **`race/`**, **`timezone/`**, **`units/`**, **`color/`**, **`file/`** — soporte transversal (datos temporales, iteración con control de tiempo, detección de condiciones de carrera, husos horarios, conversión de unidades, color de terminal, watcher de archivos).
-
-### 4.12 Redes y CLI
-
-- **`tcp/`** — nodo TCP distribuido con elección de líder estilo Raft (`Follower/Candidate/Leader/Proxy`); `tcp.NewNode(port)`.
-- **`jrpc/`** — `net/rpc` sobre TCP con balanceo de carga y consenso Raft.
-- **`ws/`** — WebSocket bidireccional (`gorilla/websocket`).
-- **`cmd/`** — binarios independientes (`et`, `apigateway`, `daemon`, `server`, `jrex`, `jsql`, `client`, `create`, `install`, `whatcher`).
-- **`create/`** — plantillas de scaffolding para microservicios y despliegues Kubernetes.
-
----
-
-## 5. Casos de uso comunes
-
-| Necesidad | Componente(s) | Notas |
-|---|---|---|
-| API REST con persistencia | `ettp/v2` o `server` + `jsql` + `response` + `request` | Patrón handler estándar (§4.3) |
-| Validar payloads de entrada | `jval` | `Require`/`Maybe` en el primer paso del handler |
-| Login / sesiones | `jwt` + `claim` + `middleware.Authenticate` + `cache` | Tokens en Redis |
-| Multi-tenant | `request.TenantId(r)`, `claim.Claim.tenantId`, `jsql.TENANT_ID` | Propagado por contexto |
-| Cache de resultados / rate limiting | `cache` (`SetWithDuration`, `Incr`) | Atajos `SetH/D/W/M/Y` |
-| Comunicación entre microservicios | `event` (pub/sub NATS) o `jrpc` (RPC balanceado) | `event.Queue` para balanceo tipo cola |
-| Tareas programadas | `crontab` | Soporta segundos y jobs basados en eventos |
-| Llamadas a APIs externas | `request.Get/Post/Put/Delete/Patch` (+ `WithTls`) | Devuelve `*request.Body, request.Status` |
-| Procesos de negocio multi-paso con rollback | `workflow` | `Flow → Steper → Step`, `RollbackInstance` |
-| Agentes conversacionales / IA | `ia` + `stores` (Store sobre `jsql`) | Requiere `OPENAI_API_KEY` |
-| Scripts dinámicos / lógica configurable en runtime | `jrex` | Hot-reload en dev, `Store` en producción |
-| Notificaciones (email/SMS/WhatsApp) | `aws`, `brevo`, `wsp`, `service` (OTP) | Elegir según proveedor |
-| IDs únicos (orden temporal, distribuidos) | `reg.ULID()`, `reg.GenULID(tag)` | `_idx` de `jsql` usa ULID, no secuencias |
-| Configuración por entorno/tenant | `config` + `envar` | `config.New(...)` por tenant si aplica |
-
----
-
-## 6. Ejemplos de integración
-
-### 6.1 Microservicio mínimo con `server/` + `jsql` + `jval` + `response`
-
-```go
-package main
-
-import (
-    "net/http"
-
-    "github.com/cgalvisleon/et/et"
-    "github.com/cgalvisleon/et/jsql"
-    _ "github.com/cgalvisleon/et/jsql/drivers/postgres"
-    "github.com/cgalvisleon/et/jval"
-    "github.com/cgalvisleon/et/logs"
-    "github.com/cgalvisleon/et/request"
-    "github.com/cgalvisleon/et/response"
-    "github.com/cgalvisleon/et/server"
 )
 
-var users *jsql.Model
-
-func main() {
-    db, err := jsql.Load(nil) // lee DB_* desde env
-    if err != nil {
-        logs.Fatal(err)
-    }
-
-    users, err = db.Define(jsql.Def{
-        Schema:  "public",
-        Name:    "users",
-        Version: 1,
-        IdxField: jsql.IDX,
-        Columns: []jsql.Column{
-            {Name: "email", TypeData: jsql.TEXT, Default: ""},
-            {Name: "name", TypeColumn: jsql.ATTRIB, TypeData: jsql.TEXT, Default: ""},
-        },
-        Unique: []jsql.DefIndex{{Name: "email"}},
-    })
-    if err != nil {
-        logs.Fatal(err)
-    }
-    if err := users.Init(); err != nil {
-        logs.Fatal(err)
-    }
-
-    srv := server.New("users-svc", 8080)
-    srv.HandleFunc("/users", httpCreateUser)
-    srv.HandleFunc("/users/{id}", httpGetUser)
-    srv.Start()
-}
-
-func httpCreateUser(w http.ResponseWriter, r *http.Request) {
-    body, err := request.GetBody(r)
-    if err != nil {
-        response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-        return
-    }
-
-    if err := jval.Require(body,
-        jval.Email("email"),
-        jval.Str("name").NotEmpty(),
-    ); err != nil {
-        response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-        return
-    }
-
-    item, err := users.Insert(et.Json{
-        "email": body.Str("email"),
-        "name":  body.Str("name"),
-    }).ExecTx(nil)
-    if err != nil {
-        response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
-        return
-    }
-
-    response.ITEM(w, r, http.StatusCreated, item)
-}
-
-func httpGetUser(w http.ResponseWriter, r *http.Request) {
+// --- Handler HTTP típico ---
+func (s *T) HttpGetUser(w http.ResponseWriter, r *http.Request) {
     id := request.URLParam(r, "id").Str()
-
-    item, err := users.Where(jsql.Eq("id", id)).One()
+    item, err := model.Where(jsql.Eq("id", id)).One()
     if err != nil {
-        response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+        response.HTTPError(w, r, http.StatusBadRequest, err.Error())
         return
     }
-    if item.IsEmpty() {
-        response.HTTPError(w, r, http.StatusNotFound, "user not found")
-        return
-    }
-
     response.ITEM(w, r, http.StatusOK, item)
 }
-```
 
-### 6.2 Autenticación con `jwt` + `middleware`
+// --- Workflow con jwf ---
+wf, _ := jwf.New(tenantId, nil)
+flow := wf.NewFloW("onboarding", "Onboarding", "1.0.0", userId).
+    Step("welcome", "Enviar bienvenida", func(instance *jwf.Instance, ctx et.Json) (et.Json, error) {
+        return instance.SetParams(et.Json{"sent": true}), nil
+    })
+result, err := wf.Run(flow.ID, "welcome", "", projectId, et.Json{}, et.Json{}, userId)
 
-```go
-token, err := jwt.NewAuthorization("my-app", "web", userId, username, tenantId, profileId, 24*time.Hour)
-// ...
-srv.Use(middleware.Authenticate) // valida Bearer token y puebla el contexto
-
-func httpProtected(w http.ResponseWriter, r *http.Request) {
-    tenantId := request.TenantId(r)
-    userId   := request.UserId(r)
-    response.DATA(w, r, http.StatusOK, et.Json{"tenantId": tenantId, "userId": userId})
-}
-```
-
-### 6.3 Eventos entre servicios
-
-```go
-event.Load() // requiere NATS_HOST
-
+// --- Cache + Eventos ---
+cache.Load()
+event.Load()
+event.Publish("user.created", et.Json{"id": id})
 event.Subscribe("user.created", func(msg event.Message) {
-    data, _ := msg.ToJson()
-    logs.Infof("nuevo usuario: %s", data.Str("email"))
+    logs.Infof("nuevo usuario: %s", msg.Data.Str("id"))
 })
-
-event.Publish("user.created", et.Json{"email": "a@b.com", "tenantId": tenantId})
-```
-
-### 6.4 Llamadas HTTP salientes
-
-```go
-body, status := request.Post("https://api.externa.com/v1/orders",
-    et.Json{"Authorization": "Bearer " + token},
-    et.Json{"sku": "ABC", "qty": 2},
-)
-if !status.Ok {
-    return fmt.Errorf("error externo: %s", status.ToString())
-}
-result, err := body.ToJson()
 ```
 
 ---
 
-## 7. Buenas prácticas
+# Future Project Context
 
-1. **Usa `et.Json` y sus accesores tipados** (`Str`, `Int`, `ValStr(def, ...)`, etc.) para cualquier dato dinámico — nunca *type assertions* manuales sobre `map[string]interface{}`.
-2. **Define modelos con `db.Define(jsql.Def{...})`** en lugar de SQL crudo; usa `ATTRIB` para campos flexibles que no requieren índices ni FKs.
-3. **Centraliza mensajes de error** en un `msg/` o `msg.go` del paquete, como hace el resto de la librería — evita strings repetidos.
-4. **Llama `Load()` una sola vez** al arrancar el servicio (`cache.Load()`, `event.Load()`, `jsql.Load()`); es idempotente, así que llamarlo de más no rompe nada, pero estructura el arranque para que sea explícito.
-5. **Usa `response.ITEM/ITEMS/DATA/HTTPError`** para todas las respuestas HTTP — mantiene un contrato consistente (`{Ok, Result}` / errores) entre todos los servicios.
-6. **Valida en el borde con `jval`** (`Require`/`Maybe`) antes de tocar la base de datos o lógica de negocio.
-7. **Genera IDs con `reg`** (`ULID`, `UUID`, `GenULID(tag)`) — son ordenables temporalmente y consistentes con `_idx` de `jsql`.
-8. **Inyecta `Store`/`Config` por interfaz** cuando uses `workflow`, `ia`, `jrex`, `config` — usa `stores/` como implementación por defecto sobre `jsql`.
-9. **Propaga contexto de request** (`request.TenantId/UserId/Username`) en lugar de pasar estos valores manualmente por parámetros.
-10. **Usa `.Debug()`/`.Test()` de `jsql`** durante desarrollo para inspeccionar el SQL generado sin tocar la base de datos.
-11. **Sigue el estilo de comentarios `/** ... @param ... @return **/`** para nuevas funciones (consistencia con el resto del código).
+Checklist para arrancar un proyecto nuevo sobre `et`:
 
----
-
-## 8. Anti-patrones
-
-| ❌ Anti-patrón | ✅ Alternativa en `et` |
-|---|---|
-| `m["email"].(string)` con verificación manual de `ok` | `data.Str("email")` o `data.ValStr("default", "email")` |
-| `database/sql` con queries en strings concatenados | `jsql.Model` con `.Where`, `.Insert`, `.Update`, `.Upsert` |
-| Validación manual con `if`/`else` anidados | `jval.Require/Maybe` con reglas declarativas |
-| JWT hecho a mano con `golang-jwt` directo | `jwt.NewAuthentication/NewAuthorization` + `claim.Claim` |
-| Cliente Redis (`go-redis`) directo en el código de negocio | `cache.Set/Get/SetWithDuration/Incr/...` |
-| Cliente NATS directo | `event.Publish/Subscribe/Queue` |
-| `uuid.New()` / `time.Now().UnixNano()` para IDs | `reg.ULID()`, `reg.GenULID(tag)`, `reg.UUID()` |
-| Respuestas HTTP con `json.NewEncoder(w).Encode(...)` ad hoc | `response.ITEM/ITEMS/DATA/JSON/HTTPError` |
-| `os.Getenv("X")` disperso por el código | `envar`/`config` (`config.GetStr/GetInt/...`, `envar.Validate`) |
-| `cron.New()` (robfig) directo + goroutines propias para pub/sub | `crontab.New(tag)` + `AddJob/AddEventJob` (ya integra NATS) |
-| Reimplementar paginación (`limit`, `offset`, `total`) por servicio | `et.List` / `model.Limit(n).Page(p).All()` |
-| Middlewares de logging/CORS/recovery propios | `middleware.Logger/AllowAll/Recoverer/RequestID/Authenticate` |
-| Cliente HTTP propio con `net/http` + manejo de errores ad hoc | `request.Get/Post/Put/Delete/Patch(...)` → `(*Body, Status)` |
-| Definir `_idx`/`createdAt`/`updatedAt` a mano en cada tabla | `db.DefineModel(...)` (full) que ya los agrega |
-
----
-
-## 9. Guía de migración desde alternativas
-
-| Desde | Hacia (`et`) | Notas de migración |
-|---|---|---|
-| `gin`, `echo`, `fiber` | `server/` (ligero) o `ettp/v2` (completo, con sync NATS) | `ettp/v2` requiere Redis + NATS; `server/` no. Las rutas usan `chi` por debajo, sintaxis de patrones compatible (`/users/{id}`). |
-| `gorm`, `sqlx`, `ent` | `jsql/` | Define modelos con `jsql.Def{}`; usa `ATTRIB` para columnas JSONB en vez de structs con `gorm.Model`. Drivers: `postgres`, `sqlite` (vía `init()`). |
-| `go-playground/validator`, `ozzo-validation` | `jval/` | Reemplaza tags de struct por reglas fluidas sobre `et.Json`: `jval.Require(body, jval.Str("name").NotEmpty(), jval.Email("email"))`. |
-| `golang-jwt/jwt` crudo | `jwt/` + `claim/` | `jwt.NewAuthentication/NewAuthorization/NewAppToken` ya gestionan firma (HS256, env `SECRET`), expiración y almacenamiento en `cache`. |
-| `go-redis/redis` crudo | `cache/` | `cache.Load()` lee `REDIS_HOST` (+ `REDIS_PASSWORD`, `REDIS_DB`); usa `SetObject/GetObject` para serialización automática, `SetH/D/W/M/Y` para TTLs comunes. |
-| `nats.go` crudo | `event/` | `event.Load()` lee `NATS_HOST`; usa `Queue` para balanceo de carga (cola), `Subscribe` para fan-out, `Stack`/`Source` para flujos especializados. |
-| `robfig/cron` crudo | `crontab/` | `crontab.New(tag)` ya integra `event`; usa `AddJob`/`AddEventJob` con specs de 6 campos (con segundos). |
-| `google/uuid`, `oklog/ulid`, `rs/xid` directos | `reg/` | `reg.UUID()/ULID()/XID()`, con variantes con prefijo `GenULID(tag)`, `TagULID(tag, id)`. |
-| `logrus`, `zap`, `zerolog` | `logs/` | API más simple (`Info/Error/Alert/Fatal/Debug`), salida colorizada vía `stdrout`. Si necesitas structured logging avanzado (JSON, sinks múltiples), evalúa si `logs/` cubre el caso o documenta la excepción (ver §10, regla de justificación). |
-| Validación de email/teléfono/UUID con regex propias | `utility/` (`ValidEmail`, `ValidPhone`, `ValidUUID`, `ValidName`, ...) | |
-| Cliente HTTP propio (`resty`, `net/http` envuelto) | `request/` | `request.Get/Post/Put/Delete/Patch/Options` (+ `WithTls`) devuelven `(*request.Body, request.Status)`; `Body` tiene `ToJson/ToItem/ToItems/ToArrayJson/ToInt/...`. |
-| Orquestadores de workflow propios (state machines ad hoc) | `workflow/` | Modela como `Flow → Steper → Step`; usa `RunInstance/ResetInstance/RollbackInstance/StopInstance`. |
-| Integración directa con OpenAI SDK | `ia/` | `ia.New(tenantId, tag, store, config)` gestiona `Agent`/`Conversation`/`Message` y persistencia vía `instances.Store`. |
-
----
-
-## 10. AI Development Rules
-
-> **Estas reglas son vinculantes para cualquier asistente de IA que genere o modifique código en un proyecto que dependa de `github.com/cgalvisleon/et`.**
-
-1. **Prioriza `et` antes que cualquier dependencia externa.** Antes de proponer `go get` para una nueva librería (validación, HTTP, JWT, cache, pub/sub, cron, IDs, logging, llamadas HTTP, workflows), **verifica primero si `et` ya resuelve el problema** (ver §4 y §5 de este documento).
-2. **Antes de crear un nuevo componente, busca un equivalente en `et`.** Ejemplos: ¿necesitas paginación? → `et.List` / `model.Limit().Page()`. ¿Necesitas un wrapper de respuesta HTTP? → `et.Item`/`et.Items` + `response.*`. ¿Necesitas un generador de IDs? → `reg.*`.
-3. **Antes de escribir lógica personalizada, revisa si `et` ya la ofrece.** Ejemplos: parsing de body JSON (`request.GetBody`), extracción de claims (`request.TenantId/UserId/...`), validación de email/teléfono (`utility.ValidEmail/ValidPhone`), cifrado (`utility.Encrypt`).
-4. **No dupliques capacidades existentes.** Si el proyecto ya usa `jsql` para persistencia, no introduzcas `database/sql` crudo "solo para esta query"; extiende el modelo existente o usa `.Debug()`/`.Test()` para depurar.
-5. **Mantén consistencia con los patrones de la librería**:
-   - `et.Json` como tipo de datos dinámico, con accesores tipados.
-   - `Load()` idempotente para inicialización de infraestructura.
-   - Interfaces `Store`/`Config`/`Driver` para inyección de dependencias.
-   - Constantes de error en `msg/` o `msg.go`.
-   - Comentarios de función en estilo `/** ... @param ... @return **/`.
-   - Handlers HTTP con el patrón de §4.3 (`request.GetBody` → `jval.Require` → lógica → `response.ITEM/HTTPError`).
-6. **Favorece la composición sobre la implementación ad hoc.** Combina `jsql` + `jval` + `response` + `middleware` antes de escribir un endpoint desde cero con `net/http` puro.
-7. **Si decides NO usar `et` para algo que tiene equivalente interno, justifícalo explícitamente** en el código (comentario breve) y en tu respuesta al usuario: por qué la alternativa interna no aplica (ej. requisito de protocolo específico, limitación de rendimiento documentada, incompatibilidad de tipos). No reemplaces silenciosamente un componente de `et` por otro.
-8. **No reescribas paquetes de `et`** salvo que el usuario lo solicite explícitamente. Si encuentras una limitación, prefiere extender (wrapper/adaptador) antes que forkear o copiar código del paquete.
-9. **Respeta las variables de entorno y convenciones de configuración** documentadas en `CLAUDE.md` y este archivo (`DB_*`, `REDIS_*`, `NATS_*`, `OPENAI_API_KEY`, `SECRET`, etc.) — no introduzcas un sistema de configuración paralelo.
-10. **Cuando el usuario pida "agregar X"**, responde primero identificando si `et` ya tiene un componente para `X` (cítalo con su paquete y función), y solo después propone una implementación nueva si no existe equivalente.
-
----
-
-## 11. Code Generation Guidelines
-
-### 11.1 Priority Matrix (orden de decisión obligatorio)
-
-Al generar código para resolver una necesidad, evalúa **en este orden** y detente en la primera opción viable:
-
-| Prioridad | Acción | Ejemplo |
-|---|---|---|
-| **1** | **Usar un componente nativo de `et` tal cual** | Validar email → `jval.Email("email")`; generar ID → `reg.ULID()`; responder JSON → `response.ITEM(...)` |
-| **2** | **Extender un componente de `et`** (nuevas reglas, modelos, middlewares que se integran con su API) | Crear una nueva `jval.Rule` personalizada implementando la interfaz `Rule`; agregar un `TriggerFunction` a un modelo `jsql` |
-| **3** | **Crear un adaptador alrededor de `et`** (cuando el contrato externo no coincide pero la lógica interna sí debe usar `et`) | Adaptador que traduce un webhook externo a `et.Json` y lo persiste vía `jsql.Model` |
-| **4** | **Implementar una solución personalizada** (sin tocar dependencias externas) | Lógica de negocio específica del dominio que no tiene equivalente genérico |
-| **5** | **Incorporar una dependencia externa** (última opción, requiere justificación explícita) | Un protocolo o SDK de terceros que `et` no cubre (ej. un proveedor de pagos específico) |
-
-### 11.2 Componentes y APIs preferidas (resumen rápido)
-
-| Necesidad | Preferido |
-|---|---|
-| Tipo de dato dinámico | `et.Json` |
-| Resultado paginado / item / lista | `et.List`, `et.Item`, `et.Items` |
-| Acceso a DB | `jsql.Model` (`Define`, `Where`, `Insert`, `Update`, `Upsert`) |
-| Validación de entrada | `jval.Require` / `jval.Maybe` |
-| Respuesta HTTP | `response.ITEM/ITEMS/DATA/HTTPError` |
-| Lectura de request | `request.GetBody`, `request.URLParam`, `request.Query`, `request.TenantId/UserId/...` |
-| Llamadas salientes | `request.Get/Post/Put/Delete/Patch` |
-| Auth | `jwt.NewAuthentication/NewAuthorization` + `middleware.Authenticate` |
-| Cache | `cache.Set/Get/SetObject/GetObject/SetWithDuration` |
-| Pub/Sub | `event.Publish/Subscribe/Queue` |
-| Cron | `crontab.New(tag).AddJob/AddEventJob` |
-| IDs | `reg.ULID/UUID/XID`, `reg.GenULID(tag)` |
-| Logging | `logs.Info/Error/Alert/Fatal/Debug` |
-| Config/env | `config.GetStr/GetInt/...`, `envar.Validate` |
-| Workflows | `workflow.NewFlow/RunInstance/RollbackInstance` |
-
-### 11.3 Convenciones de nombres
-
-- Paquetes en minúsculas, sin guiones (`jsql`, `jval`, `ettp`).
-- Funciones exportadas en `PascalCase`, comenzando con verbo cuando aplica (`NewToken`, `GetBody`, `ValidEmail`).
-- Constantes de mensajes de error: `MSG_<DESCRIPCION>` en `msg.go` (ver `msg/msg.go`).
-- Handlers HTTP: `Http<Acción><Recurso>` (`HttpGetUser`, `HttpNewFlow`, `HttpRunInstance`).
-- Columnas/atributos de `jsql`: `snake_case` para nombres de columna SQL; constantes exportadas en `PascalCase` desde `jsql/column.go` (`jsql.ID`, `jsql.IDX`, `jsql.TENANT_ID`).
-- Comentarios de función: bloque `/** ... **/` con `FunctionName: descripción`, `@param`/`@return` una línea cada uno (ver `CLAUDE.md`).
-
-### 11.4 Estructura de carpetas recomendada para un servicio consumidor
-
-```
-my-service/
-├── cmd/
-│   └── my-service/main.go        // arranque: Load() de cache/event/jsql, server/ettp.New, registro de rutas
-├── internal/
-│   ├── models/                   // definiciones jsql.Def por entidad
-│   ├── handlers/                 // Http<Accion><Recurso>, usa request/response/jval
-│   ├── services/                 // lógica de negocio (usa jsql.Model, cache, event)
-│   ├── msg/                      // constantes MSG_* del servicio
-│   └── workflows/                // flows/steps si aplica
-├── go.mod
-└── CLAUDE.md / LIBRARY_CONTEXT.md
-```
-
-### 11.5 Patrón de inyección de dependencias
-
-- Las dependencias de infraestructura (`*jsql.DB`, implementaciones de `instances.Store`, `*config.Config`) se construyen **una vez en `main`** y se inyectan a structs de servicio/handler como campos.
-- Para `workflow`/`ia`/`jrex`, implementa la interfaz `Store` correspondiente (o usa `stores.NewInstance(db, schema, name, kind)`) y pásala a `Load`/`New`.
-- No uses variables globales mutables salvo las que la propia librería expone como singletons (`cache`, `event`, `config` tras `Load()`).
-
-```go
-type UserService struct {
-    db    *jsql.Model
-    cache bool // o referencia explícita si se requiere
-}
-
-func NewUserService(db *jsql.Model) *UserService {
-    return &UserService{db: db}
-}
-```
-
-### 11.6 Manejo de errores
-
-- Funciones de negocio devuelven `error` estándar de Go.
-- Mensajes de error como constantes `msg.MSG_*` (con `fmt.Errorf(msg.MSG_X, args...)` cuando llevan formato).
-- En el borde HTTP: `response.HTTPError(w, r, statusCode, err.Error())`.
-- Errores fatales de arranque: `logs.Fatal(err)`.
-- Errores no fatales pero relevantes: `logs.Error(err)` / `logs.Alert(err)`.
-
-### 11.7 Testing
-
-- El repo de `et` no tiene `*_test.go` aún; `go test ./...` compila pero no ejecuta nada.
-- Para servicios consumidores: usa `.Test()`/`.Debug()` de `jsql.Model`/`Query`/`Command` para verificar el SQL generado sin DB real.
-- Para handlers HTTP, usa `httptest` estándar de Go + `request`/`response` helpers (son funciones puras sobre `http.ResponseWriter`/`*http.Request`, fácilmente testeables).
-- Para `jval`, las reglas son testeables unitariamente: `rule.Validate(et.Json{...})`.
-
-### 11.8 Observabilidad
-
-- Logging: `logs.*` para todo logging de aplicación (no introducir otro logger salvo justificación, ver Regla 7 de §10).
-- Métricas/telemetría HTTP: `middleware.Metrics` (`NewMetric`, `PushTelemetry`, `PushTelemetryLog`, `PushTelemetryOverflow`, `DoneHTTP`).
-- Request ID: `middleware.RequestID` + `middleware.GetReqID(ctx)`.
-- Recuperación de pánicos con stack legible: `middleware.Recoverer`.
-
-### 11.9 Ejemplos correctos vs incorrectos
-
-**❌ Incorrecto** — type assertions manuales, SQL crudo, respuesta ad hoc:
-
-```go
-func handler(w http.ResponseWriter, r *http.Request) {
-    var body map[string]interface{}
-    json.NewDecoder(r.Body).Decode(&body)
-    email, _ := body["email"].(string)
-
-    rows, _ := db.Query("SELECT id, name FROM users WHERE email = $1", email)
-    // ...
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "data": rows})
-}
-```
-
-**✅ Correcto** — `et.Json`, `jval`, `jsql`, `response`:
-
-```go
-func httpGetUserByEmail(w http.ResponseWriter, r *http.Request) {
-    body, err := request.GetBody(r)
-    if err != nil {
-        response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-        return
-    }
-
-    if err := jval.Require(body, jval.Email("email")); err != nil {
-        response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-        return
-    }
-
-    item, err := users.Where(jsql.Eq("email", body.Str("email"))).One()
-    if err != nil {
-        response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
-        return
-    }
-
-    response.ITEM(w, r, http.StatusOK, item)
-}
-```
-
----
-
-## 12. Qué reemplaza `et` (y qué dependencias evita)
-
-### 12.1 Frameworks/librerías que `et` reemplaza total o parcialmente
-
-| Categoría | Alternativas externas comunes | Reemplazo en `et` |
-|---|---|---|
-| Framework web | `gin`, `echo`, `fiber` | `server/`, `ettp/v2` (sobre `chi`) |
-| ORM / query builder | `gorm`, `ent`, `sqlx`, `squirrel` | `jsql/` |
-| Validación de structs/JSON | `go-playground/validator`, `ozzo-validation` | `jval/` |
-| JWT | `golang-jwt/jwt` (uso directo) | `jwt/` + `claim/` |
-| Cliente Redis | `go-redis/redis` (uso directo) | `cache/` |
-| Cliente NATS / mensajería | `nats.go` (uso directo), `rabbitmq` para pub/sub simple | `event/` |
-| Cron | `robfig/cron` (uso directo) | `crontab/` |
-| Generación de IDs | `google/uuid`, `oklog/ulid`, `rs/xid`, `bwmarrin/snowflake` (uso directo) | `reg/` |
-| Cliente HTTP | `net/http` envuelto a mano, `resty`, `go-resty` | `request/` |
-| Logging | `logrus`, `zap`, `zerolog` (para casos simples) | `logs/` |
-| Middlewares chi comunes | `go-chi/cors`, `go-chi/middleware` reimplementado | `middleware/` (incluye versiones propias de logger, recoverer, request ID, telemetry) |
-| Orquestación de procesos / sagas | Implementaciones propias de state machines, `temporal` (para casos simples) | `workflow/` |
-| Integración OpenAI con tracking | `openai-go` SDK directo + tracking propio | `ia/` |
-| Validación de formatos (email, teléfono, UUID) | `regexp` propias, `asaskevich/govalidator` | `utility/` |
-
-### 12.2 Dependencias futuras que `et` puede evitar
-
-Al planear nuevas features, considera que `et` ya cubre lo siguiente — **no agregues estas dependencias salvo justificación**:
-
-- Librerías de paginación/serialización de resultados → `et.List`/`et.Item`/`et.Items`.
-- SDKs de Redis/NATS adicionales → `cache/`, `event/`.
-- Librerías de scheduling (`gocron`, etc.) → `crontab/`.
-- Librerías de circuit breaker / retry (`sony/gobreaker`, `hashicorp/go-resiliency`) → `resilience/` (usado por `workflow`).
-- Librerías de generación de tokens OTP → `utility.GetOTP` + `service` (`SendOTPEmail/SendOTPSms/VerifyOTP`).
-- Clientes para AWS S3/SES/SNS, Brevo, WhatsApp Business → `aws/`, `brevo/`, `wsp/`.
-- Librerías de manejo de zonas horarias / unidades → `timezone/`, `units/`.
-- Librerías de colores en terminal (`fatih/color`) → `color/`, `stdrout/`.
-- Watchers de filesystem (`fsnotify` envuelto) → `file/` (usado por `jrex` para hot-reload).
-- Drivers Neo4j envueltos → `graph/`.
-
-### 12.3 Límites conocidos (no inventar capacidades)
-
-- **No hay `*_test.go` en `et`** — no asumas helpers de testing propios de la librería más allá de `.Debug()`/`.Test()`.
-- **Drivers `jsql`**: solo `postgres` y `sqlite` están implementados; `josefina` y `mysql` existen como directorios vacíos — no asumas soporte MySQL/josefina sin verificarlo en el código.
-- **`wf/`** es una reescritura en progreso de `workflow/`, no usada por nada más — no la uses como referencia de API estable.
-- **`ettp/v1`** es la versión anterior de `ettp/v2` — prefiere `v2` salvo que el proyecto ya dependa de `v1`.
+1. **Go 1.25** y módulo `github.com/cgalvisleon/et` vía `go get`.
+2. Decide la capa HTTP: `server/` (simple, sin Redis/NATS) vs `ettp/v2` (completo, requiere `REDIS_HOST`/`NATS_HOST` si activas `UseCache`/`UseEvent`).
+3. Si necesitas base de datos relacional: usa **PostgreSQL** (`DB_DRIVER=postgres`). No planifiques sobre SQLite/MySQL/MSSQL/Oracle vía `jsql` — no están implementados hoy.
+4. Si necesitas grafos (Neo4j): planea usar `neo4j-go-driver/v5` directamente para las consultas; `graph/` solo te da una conexión hardcodeada a `localhost`, insuficiente para producción.
+5. Si vas a usar `jwf/` para workflows: ten presente que su capa HTTP (`jwf/router.go`) tiene varios handlers sin implementar, y que por defecto las instancias viven en memoria si no le das un `Store`. Para procesos críticos de negocio con necesidad de durabilidad fuerte, evalúa si te conviene más una herramienta dedicada (Temporal, etc.) hasta que `jwf/` madure.
+6. Variables de entorno mínimas según lo que uses: `DB_DRIVER`/`DB_HOST`/`DB_PORT`/`DB_USER`/`DB_PASSWORD`/`DB_NAME` (jsql), `REDIS_HOST` (cache), `NATS_HOST` (event), `OPENAI_API_KEY` (ia), `SECRET` (claim/jwt, default `"1977"` — cámbialo en producción), `WHATSAPP_API_URL` (wsp).
+7. Sigue el patrón de mensajes de error centralizados (`msg.go`) y de respuestas unificadas (`response/`) desde el día uno — es más fácil mantenerlo que migrarlo después.
+8. Para más detalle operativo del propio repo `et` (comandos, convenciones de comentarios), consulta `CLAUDE.md`. Para el catálogo exhaustivo de funciones públicas por paquete, consulta `COMPONENT_CATALOG.md`. Para la guía de decisiones rápidas al generar código, consulta `AI_USAGE_GUIDE.md`.

@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Module
 
-`github.com/cgalvisleon/et` — Go 1.23+, MIT license.
+`github.com/cgalvisleon/et` — Go 1.25, MIT license.
+
+> **Note:** This codebase changes fast and in-place (commit history is mostly bare "Backup:" commits with no descriptive messages) — prefer reading the actual source over trusting prior assumptions about an API shape, including the rest of this file. `LIBRARY_CONTEXT.md` (Spanish, for external consumers of the library) and `README.es.md` can also drift out of sync with the code; verify before relying on them.
 
 ## Commands
 
@@ -49,7 +51,7 @@ GoDoc comments must:
 - Describe one line to parameters and one line return values.
 - Be concise and professional.
 
-> **Note:** much existing code (e.g. `et/json.go`) uses an older `/** ... @param ... @return ... **/` block style. The GoDoc style above (from `AGENTS.md`) is the standard for new code.
+> **Note:** most existing code (e.g. `et/json.go`, and the newer `jwf/`, `resilience/`, `stores/` packages) actually uses an older `/** ... @param ... @return ... **/` block style, not real GoDoc syntax. Follow that existing convention when editing those files for consistency; use real GoDoc (`// FuncName: ...`) only where the surrounding file already does.
 
 ## Architecture
 
@@ -65,7 +67,7 @@ This is a **modular utility library** for building Go microservices. Each direct
 
 ### SQL builder: `jsql/`
 
-`jsql/` is a database-agnostic SQL builder and lightweight ORM. Entry points: `jsql.Load(config)` (connects to the default DB) and `jsql.LoadTo(config, name)` (connects to a named DB). `config` is a `jsql.Config` interface (`GetStr`/`GetInt`/`GetBool` — satisfied by `*config.App`); pass `nil` to read connection settings purely from env vars (`DB_*`).
+`jsql/` is a database-agnostic SQL builder and lightweight ORM. Entry points: `jsql.Load(tenantId string) (*DB, error)` (connects to the default DB) and `jsql.LoadTo(tenantId, name string) (*DB, error)` (connects to a named DB). There is no config object to pass in anymore — connection settings (`DB_DRIVER`, `DB_HOST`, etc.) are read internally via `config.GetStr`/`config.GetInt` (package-level functions in `config/`, backed by `envar`). `jsql.DriverPostgres`, `DriverSqlite`, `DriverMysql`, `DriverMssql`, `DriverOracle`, `DriverJosefina` are declared as driver-name constants (`jsql/driver.go`). Only `postgres` has an actual implementation under `jsql/drivers/postgres/`. `getConnection` (`jsql/jsql.go`) still has a `case DriverSqlite` branch that builds a `*SqliteConection`, but **there is no `jsql/drivers/sqlite/` directory at all** — nothing registers a `Driver` for `"sqlite"`, so setting `DB_DRIVER=sqlite` will reach `ConnectTo` and fail to resolve a driver. `mysql`/`mssql`/`oracle`/`josefina` constants exist with no backing implementation either (`jsql/drivers/mysql/` and `jsql/drivers/josefina/` are empty directories; there's no `jsql/drivers/mssql/` or `jsql/drivers/oracle/` directory at all). In practice, **`postgres` is the only working driver today.**
 
 **Model definition:**
 
@@ -152,7 +154,7 @@ type Driver interface {
 }
 ```
 
-Implementations live in `jsql/drivers/<name>/` and self-register via `init()`. Active drivers: `postgres` (`lib/pq`), `sqlite` (`mattn/go-sqlite3`). Import as a side-effect: `import _ "github.com/cgalvisleon/et/jsql/drivers/postgres"`. The `josefina` and `mysql` driver directories exist but contain no files yet.
+Implementations live in `jsql/drivers/<name>/` and self-register via `init()`. The only active driver is `postgres` (`lib/pq`). Import as a side-effect: `import _ "github.com/cgalvisleon/et/jsql/drivers/postgres"`. (`go.mod` does not even list a sqlite Go driver dependency, e.g. `mattn/go-sqlite3` — confirming sqlite support was removed, not just unfinished.)
 
 **Debug / Test mode:** both `Model`, `Query`, and `Command` support `.Debug()` (logs SQL, skips execution) and `.Test()` (generates SQL, skips execution). Both return the receiver for chaining.
 
@@ -161,7 +163,7 @@ Implementations live in `jsql/drivers/<name>/` and self-register via `init()`. A
 There are two HTTP server packages at different abstraction levels:
 
 - **`server/`** — Lightweight HTTP server (`Ettp` struct wrapping `chi.Mux`). No external service dependencies. Use when Redis/NATS are not needed.
-- **`ettp/v2/`** — Full-featured HTTP server. `ettp.New(name, config)` calls `cache.Load()` + `event.Load()` internally. Router state is synchronized across instances via NATS events (`EVENT_SET_ROUTER`, `EVENT_REMOVE_ROUTER`, `EVENT_RESET_ROUTER`). The `m.Myself` flag prevents self-processing. `ettp/v1/` is the older version; prefer `v2`.
+- **`ettp/v2/`** — Full-featured HTTP server. `ettp.New(name string, cnf *Config) (*Server, error)` — `Config` has `Port`, `Parent`, timeouts, `AllowOrigin`, TLS fields, and `UseCache`/`UseEvent` bool flags that conditionally call `cache.Load()`/`event.Load()` inside `New` (so Redis/NATS are only required if those flags are set). Router state is synchronized across instances via NATS events (`EVENT_SET_ROUTER`, `EVENT_REMOVE_ROUTER`, `EVENT_RESET_ROUTER`). The `m.Myself` flag prevents self-processing. `ettp/v1/` is the older version (untouched since 2026-06-02); prefer `v2`.
 - **`router/`** — Standalone router package (used internally by `ettp/v2`). Can be imported directly for custom HTTP routing without the full server setup.
 
 ### Infrastructure packages (require external services)
@@ -172,12 +174,12 @@ There are two HTTP server packages at different abstraction levels:
 
 ### Self-contained utility packages
 
-- **`config/`** — App config/env with getters `GetStr`, `GetInt`, `GetBool`, `GetFloat`, `GetTime` and CLI param helpers `ParamStr`, `ParamInt`, etc. The `config.App` struct holds `name`, `version`, `company`, `host`, `port`, `stage`.
-- **`envar/`** — Low-level env var access; `envar.Validate([]string{...})` checks required vars exist.
-- **`logs/`** — Structured logging. Functions: `Log`, `Info`, `Infof`, `Alert`, `Alertf`, `Error`, `Errorf`, `Debug`, `Debugf`, `Fatal`, `Tracer`. All route through `stdrout` for colorized output.
+- **`config/`** — Package-level env getters: `GetStr`, `GetInt`, `GetInt64`, `GetFloat`, `GetBool`, `Get`, `Set`, `Validate`, `IsLoad` (all backed by `envar/`). There is no `config.App` struct — `config.Config` is a different, store-backed settings object (`ID`, `TenantId`, `OwnerId`, `Tag`, `Stage`, `Params`, `AuditLog`) created via `config.New(tag, stage, tenantId, ownerId, store, userId)` / loaded via `config.Load(...)`, with its own `Store` interface (`Get`/`Set`/`Delete`) for persistence — it's a per-tenant settings record, not a process-wide app descriptor.
+- **`envar/`** — Low-level env var access; `envar.GetStr/GetInt/GetBool/GetFloat` read env vars with defaults, `envar.ArgStr/ArgInt/ArgBool/...` read CLI args, `envar.Validate([]string{...})` checks required vars exist.
+- **`logs/`** — Structured logging. Functions: `Log`, `Info`, `Infof`, `Alert`, `Alertf`, `Error`, `Errorf`, `Debug`, `Debugf`, `Fatal`, `Panic`, `Tracer`. All route through `stdrout` for colorized output.
 - **`jwt/`** — High-level token creation: `New`, `NewAuthentication`, `NewAuthorization`, `NewAppToken`. Stores tokens in `cache`. Built on top of `claim/`.
-- **`claim/`** — JWT claims struct with `tenantId`. `GenToken` signs with HS256.
-- **`crontab/`** — Job scheduler. `crontab.New(tag)` creates a scheduler (calls `event.Load()` internally); `AddJob`, `AddOneShotJob`, `AddEventJob` register jobs. Supports `robfig/cron` spec format including seconds (`"0 * * * * *"`).
+- **`claim/`** — JWT claims struct with `tenantId`. `GenToken` signs with HS256 (`golang-jwt/jwt/v4`).
+- **`crontab/`** — Job scheduler. `crontab.New(tag string, store Store)` creates a scheduler (calls `event.Load()` internally — note `store` is now a required second argument, not optional); `AddJob`, `AddOneShotJob`, `AddEventJob` register jobs. Supports `robfig/cron` spec format including seconds (`cron.WithSeconds()`, e.g. `"0 * * * * *"`).
 - **`jval/`** — Fluent validation rules for `et.Json`. Implements `Rule` interface with typed validators (`Str`, `Int`, `Float`, `Bool`, `Email`, `Phone`, `Time`, etc.); chainable constraints (`.NotEmpty()`, `.Min()`, `.Max()`, etc.).
 - **`request/`** — Both inbound helpers (`URLParam`, `GetBody`) and outbound HTTP client utilities. `URLParam(r, "key").Str()` reads chi route params; `GetBody(r)` parses the JSON body into `et.Json`.
 - **`strs/`** — String utilities.
@@ -192,18 +194,17 @@ There are two HTTP server packages at different abstraction levels:
 
 - **`aws/`** — AWS SDK wrapper: S3, SES (email), SMS.
 - **`brevo/`** — Brevo API client: email, SMS, WhatsApp.
-- **`wsp/`** — WhatsApp Business API client. `NewWhatsapp(token, phoneNumberId)` produces a message builder; uses Facebook Graph API (configurable via `WHATSAPP_API_URL`).
+- **`wsp/`** — WhatsApp Business API client. `wsp.NewSender(token, phoneNumberId) *Whatsapp` produces a message/webhook builder (`Debug()`, `IsTest()`, `SetVerifyToken()`, `SetEventHandler()`); uses Facebook Graph API (configurable via `WHATSAPP_API_URL`).
 
 ### Application-layer packages
 
-- **`jrex/`** — JavaScript runtime package (`dop251/goja`), formerly named `vm`. `jrex.New(name, store)` is the entry point — `store` is a caller-provided `jrex.Store` (`SetModule`/`GetModule`/`DeleteModule`, may be `nil` in dev mode); three modes: `Develop` (reads files, hot-reloads via `file.Watcher`), `Production` (loads from the `Store`), `Building` (compiles + stores with semver bumping). Global wrappers provide `console.*`, `ctx.*`, `fetch()`, and CommonJS-style `require()`. The `cmd/jrex` binary runs this in dev mode via `jrex.RunDev(baseDir)`.
-- **`ia/`** — OpenAI agent integration (`openai-go/v3`). `ia.New(tenantId, tag string, store Store, config Config) (*Ia, error)` (direct) or `ia.Load(tenantId, tag string, store Store, config Config) error` (singleton) initializes the package, which calls `event.Load()` internally. `Store` (`Set`/`Get`/`Delete`/`Query`) and `Config` (`GetStr`/`GetInt`/`GetBool` — satisfied by `*config.App`) are caller-provided, mirroring the `instances.Store` pattern; `stores/` provides a jsql-backed `Store`. Manages `Agent`s, `Participant`s, and `Conversation`s (with `Message`s) per tenant; `Skill` (e.g. `ApiSkill`) lets agents call external APIs. Requires `OPENAI_API_KEY` via `Config`.
-- **`workflow/`** — Workflow orchestration with multi-step execution, instance state, and resilience patterns. `workflow.New(store)` creates a new instance; `workflow.Load(store)` is the singleton wrapper (no-op if already initialized). Integrates with `resilience/`, `instances/`, and `event/` (NATS) for async state sync. See detail below.
+- **`jrex/`** — JavaScript runtime package (`dop251/goja`), formerly named `vm`. `jrex.New(name, store)` is the entry point — `store` is a caller-provided `jrex.Store` (`SetModule`/`GetModule`/`DeleteModule`, may be `nil` in dev mode); three modes: `Develop` (reads files, hot-reloads via `file.Watcher`), `Production` (loads from the `Store`), `Building` (compiles + stores with semver bumping). Global wrappers provide `console.*`, `ctx.*`, `fetch()`, and CommonJS-style `require()`. The `cmd/jrex` binary runs this in dev mode via `jrex.RunDev(baseDir)`. There is also a `jcli/` package at the repo root (not under `jrex/`) holding a Bubble Tea CLI model (`cliModel`, `App` interface) — its file still declares `package jrex` and nothing imports `github.com/cgalvisleon/et/jcli`, so treat it as in-progress/orphaned work extracting the dev CLI out of `jrex/`, not a wired feature.
+- **`ia/`** — OpenAI agent integration (`openai-go/v3`). `ia.New(tenantId, tag string, store Store) (*Ia, error)` (direct) or `ia.Load(tenantId, tag string, store Store) error` (singleton) initializes the package, which calls `event.Load()` internally (no `cache.Load()`). `Store` is a locally-defined interface in `ia/ia.go` (`Set(id, tag, tenantId, ownerId string, obj any, userId string) error`, `Get(id, tag string, dest any) (bool, error)`, `Delete(id, tag string) error`, `Query(query et.Json) (et.Items, error)`) — caller-provided, no shared package defines it. `OPENAI_API_KEY` is read directly via `config.GetStr`, not passed in. Manages `Agent`s, `Participant`s, and `Conversation`s (with `Message`s) per tenant; `Skill` (e.g. `ApiSkill`) lets agents call external APIs.
+- **`jwf/`** — Workflow orchestration (replaces the old `workflow/` package, which was deleted; a separate `wf/` scratch package was also deleted). Calls `cache.Load()` + `event.Load()` internally. See detail below.
 - **`graph/`** — Neo4j connectivity (`neo4j-go-driver/v5`). `graph.Load()` returns a `*Conn` with the Neo4j driver.
-- **`instances/`** — `Store` interface (`Set`, `Get`, `Delete`, `Query`) used by `ia` and `workflow` for state persistence. Implementations are caller-provided.
-- **`stores/`** — jsql-backed implementation of `instances.Store`. `stores.NewInstance(db, schema, name, kind)` creates a DB-backed store (kind: `KindJson` or `KindBite`). Use this as the concrete `Store` when a `jsql.DB` is available.
-- **`dt/`** — Cache-backed object store. `dt.Up(key, data)` writes an object (uses Redis in production, reads from file in dev based on `PRODUCTION` env var); `dt.Get(key)` retrieves it. HTTP handler support via `handler.go`.
-- **`resilience/`** — Resilience patterns (circuit breaker, etc.) used by `workflow`.
+- **`stores/`** — jsql-backed persistence helpers: `stores.DefineInstance`/`LoadInstance`/`DefineInstanceBite`/`LoadInstanceBite` (kind: `KindJson` or `KindBite`) and `stores.DefineAuthorization`. **Caveat:** `(*stores.Instance).Get(id string, dest any) (bool, error)` only takes one string key, so it does *not* structurally satisfy the two-string-key `Store.Get` interfaces defined locally in `ia/` and `jwf/` (`Get(id, tag string, dest any)` / `Get(collection, id string, dest any)`) — nothing in the repo currently wires `stores/` into `ia` or `jwf` (both are exercised with a `nil` store in their `cmd/` examples). Check signatures before assuming it's a drop-in.
+- **`dt/`** — Cache-backed object store. `dt.Up(key, data)` writes an object (uses Redis in production, reads from file in dev based on `PRODUCTION` env var); `dt.Get(key)` retrieves it, `dt.Drop(key)` removes it. HTTP handler support via `handler.go`.
+- **`resilience/`** — Resilience/retry pattern. `resilience.New(store)` (store: local `Store` interface — `Set`/`Get`/`Delete`/`Query`), `LoadInstance(Params{TenantId, Id, Tag, Description, OwnerId, TotalAttempts, Interval, Tags, UserId, Fn, FnArgs})` returns an `*Instance`, then `instance.Run(userId)` executes `Fn` with retry/interval semantics. Used by `jwf` for step-level resilience; see `cmd/resilience` for a standalone example.
 - **`reg/`** — Service registration/discovery; provides ID generation helpers (ULID, etc.) used by `claim` and others.
 - **`file/`** — File operations and watching (`FileInfo`, `Watcher`, `ExistPath()`); used by `jrex` for hot-reload.
 - **`mem/`** — Shared memory and sync primitives.
@@ -231,51 +232,49 @@ Each subdirectory under `cmd/` is a standalone binary:
 - `cmd/client/` — Test client
 - `cmd/install/` — Installation utility
 - `cmd/whatcher/` — Filesystem change watcher
+- `cmd/jwf/` — `jwf/` (workflow) usage example: builds a flow with `NewFloW`/`Step`, runs it with `wf.Run(...)`
+- `cmd/resilience/` — `resilience/` usage example: `resilience.New(nil)`, `LoadInstance(Params{...})`, `ins.Run(userId)`
+- `cmd/wsp/` — `wsp/` (WhatsApp) usage example
 
 ### Code generation (`create/`)
 
 Templates and generators for new microservices, projects, and Kubernetes deployments. Used by the `cmd/create` CLI.
 
-### `workflow/` package detail
+### `jwf/` package detail
 
-> **Note:** `wf/` also declares `package workflow` and duplicates much of this package (flow, step, instance, router). It is an in-progress rewrite/scratch area not imported by anything else in the repo — treat `workflow/` as the active package unless told otherwise.
+> **Note:** This package replaces what used to be two separate packages: a top-level `workflow/` package and a `wf/` scratch/rewrite area — both were deleted (last seen 2026-06-16 and 2026-06-18 respectively) and consolidated into `jwf/`, which has a different API from either predecessor. References to `workflow.RunInstance`, `instances.Store`, etc. elsewhere (old branches, comments) describe the removed package, not `jwf/`.
 
-`workflow.Load(store instances.Store)` initializes the singleton and calls `event.Load()` internally.
+`jwf.New(tenantId string, store Store) (*WorkFlow, error)` calls `cache.Load()` + `event.Load()` internally. `jwf.Load(tenantId string, store Store, userId string) (*WorkFlow, error)` is the store-backed variant that loads-or-creates a persisted `WorkFlow` (errors if `store` is `nil`, unlike `New`).
 
-**Type hierarchy:**
+**Type hierarchy** (graph-based, not a linear step list):
 
 ```
-Flow (definition)
-  └── Steper (named path/lane, identified by tag)
-        └── Steps []int  (indexes into Flow.Steps)
-  └── Steps []*Step  (all step definitions, shared pool)
-
-Instance (runtime)
-  └── runs one Steper of a Flow for a specific entity ID
+WorkFlow (tenant-scoped container)
+  -- Flows map[string]*Flow
+        -- Steps map[string]*Step       (pool of steps, including one or more Triggers)
+        -- Connections []*Connection    (Source/Target step + port: input/output/error)
+        -- Triggers []*Trigger          (tag -> starting Step.ID)
+  -- Instances map[string]*Instance     (runtime, in-memory unless backed by Store)
 ```
 
-- **`Flow`** — top-level definition (`tag`, `version`, `name`, `description`). Created via `NewFlow(tag, version, name, description, username)`.
-- **`Steper`** — a named ordered path through steps within a flow. Multiple stepers can share steps from the same pool.
-- **`Step`** — individual unit: `Definition` (executable), `Undo` (rollback), `Stop bool`.
-- **`Instance`** — runtime execution. `ToJson()` returns `(et.Json, error)` (two values). `GetInstance(id string)` takes only `id`.
+A `Flow` is built fluently: `flow.Step(tag, title, fn)` adds the first step as a `KindTrigger` (registering a `Trigger`) or chains an action step via an output `Connection`; `flow.Error(tag, version, title, fn)` attaches an error-port step to the most recently added step. `fn` has signature `func(instance *jwf.Instance, ctx et.Json) (et.Json, error)`; `Step.Definition` also accepts a JS string/`[]byte` body, executed via an embedded `jrex.Instance` instead of a Go closure.
 
-**Instance lifecycle methods on `*WorkFlow`:**
+```go
+wf, _ := jwf.New(tenantId, nil) // nil store: in-memory only, nothing persisted
+flow := wf.NewFloW("add", "add item", "1.0.0", userId). // note: "FloW", not "Flow"
+    Step("add", "add item", func(instance *jwf.Instance, ctx et.Json) (et.Json, error) {
+        return instance.SetParams(et.Json{"step1": "step1"}), nil
+    }).
+    Step("add", "add item", func(instance *jwf.Instance, ctx et.Json) (et.Json, error) {
+        return instance.SetParams(et.Json{"step2": "step2"}), nil
+    })
 
-| Method                                            | Purpose                         |
-| ------------------------------------------------- | ------------------------------- |
-| `RunInstance(id, tag, step, ctx, tags, username)` | Start or resume an instance     |
-| `GetInstance(id)`                                 | Fetch instance by ID            |
-| `ResetInstance(id, username)`                     | Reset to step 0, status PENDING |
-| `RollbackInstance(id, username)`                  | Execute undo chain              |
-| `StopInstance(id, username)`                      | Halt execution                  |
+result, err := wf.Run(flow.ID, "add", "" /* instance id, blank = new */, projectId, et.Json{}, et.Json{}, userId)
+```
 
-**HTTP handlers in `handler.go`** (all on `*WorkFlow`):
+`Instance` tracks `Status` (`CREATED`, `PENDING`, `RUNNING`, `ROLLBACK`, `DONE`, `FAILED`, `CANCEL`, `STOP`), advances step-to-step via `next()` following `Connections`, and on a step error falls back to `resilience.New` (when `Flow.TotalAttempts > 0`) before giving up.
 
-Flow: `HttpGetFlow`, `HttpNewFlow`, `HttpDeleteFlow`
-Step: `HttpNewStep`, `HttpSetStep`, `HttpDeleteStep`
-Steper: `HttpNewSteper`, `HttpSetSteper`, `HttpDeleteSteper`
-Steper↔Step wiring: `HttpAddStepFromSteper`, `HttpRemoveStepFromSteper`, `HttpMoveStepFromSteper`
-Instance: `HttpGetInstance`, `HttpRunInstance`, `HttpResetInstance`, `HttpRollbackInstance`, `HttpStopInstance`
+**HTTP routing:** `(*WorkFlow).LoadRouter(r Router)` wires a small set of *lowercase* (unexported) handlers — `httpGetStep`/`httpNewStep`/`httpUpdateStep`/`httpSetDefinitionStep`/`httpDeleteStep` for steps, plus stub handlers for flows and instances (`httpGetFlow`, `httpSetFlow`, `httpStatusFlow`, `httpDeleteFlow`, `httpGetInstance`, `httpDeleteInstance`, `httpRunInstance` — currently **empty function bodies** in `jwf/router.go`, not yet implemented). `Router` is a minimal local interface (`Protect(method, path string, handler func(http.ResponseWriter, *http.Request))`), unrelated to the repo's `router/` package. These handlers call `response.JSON(...)` (not `response.ITEM`/`ITEMS`) and `request.UserId(r)` to read the authenticated user.
 
 ### HTTP handler pattern
 
@@ -313,7 +312,7 @@ Use `http.StatusCreated` for POST handlers that create new resources, `http.Stat
 - **Error handling**: `logs.Fatal(err)` calls `os.Exit(1)`. Use `logs.Alert` / `logs.Error` for non-fatal errors.
 - **Event-driven coordination**: `ettp/v2` server syncs router state across replicas via NATS. The `m.Myself` flag prevents self-processing.
 - **`msg/` packages**: Each package has a local `msg/` or `msg.go` file with error message constants — use these instead of hardcoded strings.
-- **Store interface pattern**: `workflow` and `ia` accept a caller-provided `instances.Store` for persistence; `jrex` accepts its own `jrex.Store` (`SetModule`/`GetModule`/`DeleteModule`) for compiled-module persistence in `Production`/`Building` modes. In each case the library defines the interface and consumers implement it. Use `stores/` for the jsql-backed implementation of `instances.Store`.
+- **Store interface pattern**: `jwf` and `ia` each accept a caller-provided `Store` for persistence — these are now two separately-defined, structurally-similar (but not identical or shared) interfaces local to each package (there is no shared `instances` package anymore); `jrex` accepts its own `jrex.Store` (`SetModule`/`GetModule`/`DeleteModule`) for compiled-module persistence in `Production`/`Building` modes; `resilience` and `config` each define their own local `Store` too. In every case the library defines the interface and consumers implement it — check the exact method signatures per package before reusing one implementation across packages (see the `stores/` caveat above).
 
 ## Required environment variables
 
@@ -329,3 +328,4 @@ Use `http.StatusCreated` for POST handlers that create new resources, `http.Stat
 | `ia`    | `OPENAI_API_KEY`                                                                          | OpenAI agent integration               |
 | `dt`    | `PRODUCTION`                                                                              | `true` = use Redis, `false` = use file |
 | `wsp`   | `WHATSAPP_API_URL`                                                                        | WhatsApp Graph API base URL (optional) |
+| `claim` | `SECRET`                                                                                  | JWT signing key (default: `"1977"`)    |

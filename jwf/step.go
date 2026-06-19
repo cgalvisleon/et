@@ -3,6 +3,7 @@ package jwf
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/cgalvisleon/et/config"
@@ -339,6 +340,14 @@ func (s *Step) run(instance *Instance, ctx et.Json, userId string) (et.Json, err
 			return et.Json{}, err
 		}
 		return result, nil
+	case func(instance *Instance, ctx et.Json) (et.Json, error):
+		instance.setStatus(RUNNING, userId)
+		result, err := v(instance, ctx)
+		if err != nil {
+			instance.setStatus(FAILED, userId)
+			return et.Json{}, err
+		}
+		return result, nil
 	case string:
 		rex := initJrex()
 		return runJrex(rex, v)
@@ -363,9 +372,9 @@ func (s *Step) run(instance *Instance, ctx et.Json, userId string) (et.Json, err
 		bt := v[0]
 		code := string(bt)
 		return runJrex(rex, code)
+	default:
+		return et.Json{}, fmt.Errorf(MSG_STEP_DEFINITION_IS_UNKNOWN, reflect.TypeOf(s.Definition))
 	}
-
-	return et.Json{}, errors.New(MSG_STEP_DEFINITION_IS_UNKNOWN)
 }
 
 /**

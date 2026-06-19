@@ -171,7 +171,11 @@ func (s *Flow) OnDelete(fn func(flow *Flow, userId string) error) *Flow {
 **/
 func (s *WorkFlow) getFlow(id string) (*Flow, error) {
 	if s.store == nil {
-		return nil, errors.New(MSG_WORKFLOW_STORE_IS_NIL)
+		result, exists := s.Flows[id]
+		if exists {
+			return result, nil
+		}
+		return nil, ErrrFlowNotFound
 	}
 
 	var result *Flow
@@ -510,20 +514,23 @@ func (s *Flow) addStep(kind Kind, tag, version, title string, port Port, fn func
 **/
 func (s *Flow) Step(tag, title string, fn func(instance *Instance, ctx et.Json) (et.Json, error)) *Flow {
 	if len(s.Steps) == 0 {
-		step, err := s.workflow.newStep(KindTrigger, tag, "1.0.0", title, s.userId)
+		result, err := s.workflow.newStep(KindTrigger, tag, "1.0.0", title, s.userId)
 		if err != nil {
 			s.err = err
 			return s
 		}
+		result.Definition = fn
+		s.Steps[result.ID] = result
+		s.step = result
 
 		s.Triggers = append(s.Triggers, &Trigger{
 			Tag:     tag,
-			StartId: step.ID,
+			StartId: result.ID,
 		})
 		return s
 	}
 
-	return s.addStep(KindAction, tag, "1.0.0", title, PortInput, fn, s.userId)
+	return s.addStep(KindAction, tag, "1.0.0", title, PortOutput, fn, s.userId)
 }
 
 /**

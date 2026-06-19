@@ -17,15 +17,15 @@ func main() {
 			result := et.Json{
 				"step1": "step1",
 			}
-			instance.SetParams(result)
-			return result, nil
+			params := instance.SetParams(result)
+			return params, nil
 		}).
 		Step("add", "add item", func(instance *jwf.Instance, ctx et.Json) (et.Json, error) {
 			result := et.Json{
 				"step2": "step2",
 			}
-			instance.SetParams(result)
-			return result, nil
+			params := instance.SetParams(result)
+			return params, nil
 		})
 
 	result, err := wf.Run(f.ID, "add", "", "37860631", et.Json{}, et.Json{}, "cgalvisl")

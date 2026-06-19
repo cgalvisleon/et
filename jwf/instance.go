@@ -115,7 +115,7 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*I
 	}
 
 	code := ""
-	if s.store == nil {
+	if s.store != nil {
 		var err error
 		code, err = s.store.GetCode(flow.Tag)
 		if err != nil {
@@ -154,6 +154,7 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*I
 		bindings:   make(map[string]interface{}),
 		onSave:     make([]func(instance *Instance, userId string) error, 0),
 		onDelete:   make([]func(instance *Instance, userId string) error, 0),
+		mu:         sync.Mutex{},
 	}
 	for k, v := range s.bindings {
 		result.bindings[k] = v
@@ -197,7 +198,11 @@ func (s *WorkFlow) getInstance(id, userId string) (*Instance, error) {
 	}
 
 	if s.store == nil {
-		return nil, errors.New(MSG_WORKFLOW_STORE_IS_NIL)
+		result, exists := s.Instances[id]
+		if exists {
+			return result, nil
+		}
+		return nil, ErrorInstanceNotFound
 	}
 
 	var result *Instance
@@ -433,6 +438,7 @@ func (s *Instance) setStatus(status Status, userId string) error {
 	s.UpdatedAt = timezone.Now()
 	s.mu.Lock()
 	s.Status = status
+	s.IsStop = status == STOP
 	s.mu.Unlock()
 	switch status {
 	case DONE:
@@ -493,8 +499,8 @@ func (s *Instance) setResult(result et.Json, err error, userId string) (et.Json,
 		s.setStatus(FAILED, userId)
 		logs.Logf(packageName, MSG_INSTANCE_ERROR, s.ID, s.FlowId, stepId, err.Error())
 	} else {
-		logs.Logf(packageName, MSG_INSTANCE_STATUS, s.ID, s.FlowId, stepId, s.Status)
 		s.pushStatus(s.Status)
+		logs.Logf(packageName, MSG_INSTANCE_STATUS, s.ID, s.FlowId, stepId, s.Status)
 	}
 
 	return result, err
@@ -529,9 +535,9 @@ func (s *Instance) setCtx(ctx et.Json) et.Json {
 * @param params et.Json
 * @return et.Json
 **/
-func (s *Instance) SetParams(params et.Json) *Instance {
+func (s *Instance) SetParams(params et.Json) et.Json {
 	maps.Copy(s.Params, params)
-	return s
+	return s.Params
 }
 
 /**

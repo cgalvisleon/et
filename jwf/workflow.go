@@ -218,7 +218,9 @@ func (s *WorkFlow) removeInstance(id string) {
 * @return *Flow
 **/
 func (s *WorkFlow) NewFloW(tag, title, version, userId string) *Flow {
-	return s.newFlow(tag, title, version, userId)
+	result := s.newFlow(tag, title, version, userId)
+	s.addFlow(result)
+	return result
 }
 
 /**
@@ -231,6 +233,9 @@ func (s *WorkFlow) Run(flowId, triggerTag, id, projectId string, ctx, tags et.Js
 	instance, err := s.getInstance(id, userId)
 	if errors.Is(err, ErrorInstanceNotFound) {
 		instance, err = s.newInstance(projectId, flowId, triggerTag, userId)
+		if err != nil {
+			return nil, err
+		}
 		instance.setStatus(PENDING, userId)
 	}
 	if err != nil {

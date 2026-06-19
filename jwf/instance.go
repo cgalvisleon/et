@@ -159,22 +159,7 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*I
 	for k, v := range s.bindings {
 		result.bindings[k] = v
 	}
-	result.bindings["goTo"] = func(n int) {
-		result.CurrentIndex = n
-	}
-	result.
-		OnSave(func(instance *Instance, userId string) error {
-			key := fmt.Sprintf("instance:%s", instance.ID)
-			event.Publish(key, instance.ToJson())
-			return nil
-		}).
-		OnDelete(func(instance *Instance, userId string) error {
-			key := fmt.Sprintf("instance:%s:delete", instance.ID)
-			event.Publish(key, et.Json{
-				"id": instance.ID,
-			})
-			return nil
-		})
+	result.up()
 	result.addAuditLog(userId, "new_instance")
 	result.setStatus(CREATED, userId)
 	return result, nil
@@ -236,22 +221,7 @@ func (s *WorkFlow) getInstance(id, userId string) (*Instance, error) {
 	for k, v := range s.bindings {
 		result.bindings[k] = v
 	}
-	result.bindings["goTo"] = func(n int) {
-		result.CurrentIndex = n
-	}
-	result.
-		OnSave(func(instance *Instance, userId string) error {
-			key := fmt.Sprintf("instance:%s", instance.ID)
-			event.Publish(key, instance.ToJson())
-			return nil
-		}).
-		OnDelete(func(instance *Instance, userId string) error {
-			key := fmt.Sprintf("instance:%s:delete", instance.ID)
-			event.Publish(key, et.Json{
-				"id": instance.ID,
-			})
-			return nil
-		})
+	result.up()
 	result.addAuditLog(userId, "get_instance")
 	return result, nil
 }
@@ -287,6 +257,29 @@ func (s *WorkFlow) deleteInstance(id, userId string) error {
 	}
 
 	return nil
+}
+
+/**
+* up
+* @return *Instance
+**/
+func (s *Instance) up() *Instance {
+	s.bindings["goTo"] = func(idx int) {
+		s.setCurrentIndex(idx)
+	}
+	s.
+		OnSave(func(instance *Instance, userId string) error {
+			instance.pushInstance()
+			return nil
+		}).
+		OnDelete(func(instance *Instance, userId string) error {
+			key := fmt.Sprintf("instance:%s:delete", instance.ID)
+			event.Publish(key, et.Json{
+				"id": instance.ID,
+			})
+			return nil
+		})
+	return s
 }
 
 /**
@@ -404,6 +397,15 @@ func (s *Instance) ToString() string {
 }
 
 /**
+* pushInstance
+* @return error
+**/
+func (s *Instance) pushInstance() {
+	key := fmt.Sprintf("instance:%s", s.ID)
+	event.Publish(key, s.ToJson())
+}
+
+/**
 * pushStatus
 * @return *Instance
 **/
@@ -435,6 +437,7 @@ func (s *Instance) setStatus(status Status, userId string) error {
 	}
 
 	s.pushStatus(status)
+	s.pushInstance()
 	s.UpdatedAt = timezone.Now()
 	s.mu.Lock()
 	s.Status = status
@@ -474,7 +477,7 @@ func (s *Instance) setTrace(stepId string, result et.Json, err error, userId str
 * @param result et.Json, err error
 * @return et.Json, error
 **/
-func (s *Instance) setResult(result et.Json, err error, userId string) (et.Json, error) {
+func (s *Instance) setResult(result et.Json, err error, userId string) *Instance {
 	errMessage := ""
 	if err != nil {
 		errMessage = err.Error()
@@ -485,7 +488,7 @@ func (s *Instance) setResult(result et.Json, err error, userId string) (et.Json,
 	}
 
 	if stepId == "" {
-		return result, err
+		return s
 	}
 
 	s.Results[stepId] = &Result{
@@ -503,7 +506,8 @@ func (s *Instance) setResult(result et.Json, err error, userId string) (et.Json,
 		logs.Logf(packageName, MSG_INSTANCE_STATUS, s.ID, s.FlowId, stepId, s.Status)
 	}
 
-	return result, err
+	s.pushInstance()
+	return s
 }
 
 /**
@@ -513,6 +517,7 @@ func (s *Instance) setResult(result et.Json, err error, userId string) (et.Json,
 **/
 func (s *Instance) setTag(tags et.Json) et.Json {
 	maps.Copy(s.Tags, tags)
+	s.pushInstance()
 	return s.Tags
 }
 
@@ -527,6 +532,7 @@ func (s *Instance) setCtx(ctx et.Json) et.Json {
 		stepId := s.Current.ID
 		s.Ctxs[stepId] = ctx
 	}
+	s.pushInstance()
 	return s.Ctx
 }
 
@@ -537,7 +543,28 @@ func (s *Instance) setCtx(ctx et.Json) et.Json {
 **/
 func (s *Instance) SetParams(params et.Json) et.Json {
 	maps.Copy(s.Params, params)
+	s.pushInstance()
 	return s.Params
+}
+
+/**
+* setCurrent
+* @param step *Step
+* @return error
+**/
+func (s *Instance) setCurrent(step *Step) {
+	s.Current = step
+	s.pushInstance()
+}
+
+/**
+* setCurrentIndex
+* @param idx int
+* @return *Instance
+**/
+func (s *Instance) setCurrentIndex(idx int) {
+	s.CurrentIndex = idx
+	s.pushInstance()
 }
 
 /**
@@ -565,14 +592,13 @@ func (s *Instance) next() bool {
 		if !exists {
 			return false
 		}
-		s.Current = step
+		s.setCurrent(step)
 	} else {
 		target, exists := s.flow.getTarget(s.Current.ID, s.CurrentIndex)
 		if !exists {
 			return false
 		}
-
-		s.Current = target
+		s.setCurrent(target)
 	}
 
 	return true

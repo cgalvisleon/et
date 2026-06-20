@@ -1,4 +1,4 @@
-package wsp
+package jwsp
 
 import (
 	"github.com/cgalvisleon/et/et"

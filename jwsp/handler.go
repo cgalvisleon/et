@@ -1,4 +1,4 @@
-package wsp
+package jwsp
 
 import (
 	"errors"

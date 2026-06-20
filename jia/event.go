@@ -1,4 +1,4 @@
-package ia
+package jia
 
 const (
 	EVENT_IA_SET              = "ia:set"

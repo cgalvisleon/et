@@ -190,7 +190,7 @@ func (s *Job) setStatus(status JobStatus) error {
 	s.Status = status
 
 	s.addAuditLog(s.HostName, string(status))
-	logs.Logf(packageName, fmt.Sprintf(MSG_JOB_STATUS, s.Tag, status, s.HostName, s.Attempts, s.Repetitions))
+	logs.Logf(packageName, MSG_JOB_STATUS, s.Tag, status, s.HostName, s.Attempts, s.Repetitions)
 
 	return s.save(s.HostName)
 }

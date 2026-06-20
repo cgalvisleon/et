@@ -4,16 +4,12 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/timezone"
-	"github.com/cgalvisleon/et/utility"
 	"github.com/robfig/cron/v3"
 )
 
@@ -27,18 +23,16 @@ var (
 )
 
 type Store interface {
-	Set(id, tag, tenantId, ownerId string, obj any, userId string) error
-	Get(id string, dest any) (bool, error)
-	Delete(id string) error
+	Set(collection, id, tenantId, ownerId string, obj any, userId string) error
+	Get(collection, id string, dest any) (bool, error)
+	Delete(collection, id string) error
 	Query(query et.Json) (et.Items, error)
 }
 
 type Crontab struct {
-	ID       string          `json:"id"`
-	Tag      string          `json:"tag"`
+	TenantId string          `json:"tenant_id"`
 	HostName string          `json:"host_name"`
 	Jobs     map[string]*Job `json:"jobs"`
-	Metrics  cache.Metrics   `json:"metrics"`
 	cronJobs *cron.Cron      `json:"-"`
 	running  bool            `json:"-"`
 	mu       *sync.Mutex     `json:"-"`
@@ -48,10 +42,10 @@ type Crontab struct {
 
 /**
 * New
-* @param tag string, store Store
+* @param tenantId string, store Store
 * @return (*Crontab, error)
 **/
-func New(tag string, store Store) (*Crontab, error) {
+func New(tenantId string, store Store) (*Crontab, error) {
 	err := cache.Load()
 	if err != nil {
 		return nil, err
@@ -64,11 +58,9 @@ func New(tag string, store Store) (*Crontab, error) {
 
 	loc := timezone.Location()
 	result := &Crontab{
-		ID:       utility.UUID(),
-		Tag:      tag,
+		TenantId: tenantId,
 		HostName: hostName,
 		Jobs:     make(map[string]*Job),
-		Metrics:  cache.Metrics{},
 		cronJobs: cron.New(
 			cron.WithSeconds(),
 			cron.WithLocation(loc),
@@ -76,6 +68,7 @@ func New(tag string, store Store) (*Crontab, error) {
 		mu:    &sync.Mutex{},
 		store: store,
 	}
+	result.cronJobs.Start()
 
 	return result, nil
 }
@@ -90,70 +83,31 @@ func (s *Crontab) Debug() *Crontab {
 }
 
 /**
-* addEventJob
-* @param jobType TypeJob, tag, spec, channel string, started bool, params et.Json, repetitions int, fn func(event.Message)
-* @return error
-**/
-func (s *Crontab) addEventJob(jobType TypeJob, tag, spec, channel string, started bool, params et.Json, repetitions int, fn func(event.Message)) error {
-	data := et.Json{
-		"type":        jobType,
-		"tag":         tag,
-		"spec":        spec,
-		"channel":     channel,
-		"started":     started,
-		"params":      params,
-		"repetitions": repetitions,
-	}
-
-	err := event.Publish(EVENT_CRONTAB_REMOVE, et.Json{"tag": tag})
-	if err != nil {
-		return err
-	}
-
-	time.Sleep(1 * time.Second)
-
-	err = event.Publish(EVENT_CRONTAB_SET, data)
-	if err != nil {
-		return err
-	}
-
-	err = event.Stack(channel, fn)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-/**
 * addJob
 * @param tp TypeJob, tag, ownerId, spec, channel string, started bool, params et.Json, repetitions int
 * @return *Job, error
 **/
-func (s *Crontab) addJob(tp TypeJob, tag, ownerId, spec, channel string, started bool, params et.Json, repetitions int) (*Job, error) {
-	if !utility.ValidStr(tag, 0, []string{"", " "}) {
-		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "tag")
-	}
-
+func (s *Crontab) addJob(job *Job) error {
 	s.mu.Lock()
-	result, exists := s.Jobs[tag]
+	_, exists := s.Jobs[job.ID]
 	s.mu.Unlock()
 	if exists {
-		return result, nil
+		return nil
 	}
 
-	result = newJob(s, tp, tag, ownerId, spec, channel, params, repetitions)
 	s.mu.Lock()
-	s.Jobs[tag] = result
+	s.Jobs[job.ID] = job
 	s.mu.Unlock()
 
-	logs.Log(packageName, fmt.Sprintf("job:%s | status:add | type:%s | spec:%s", tag, tp, spec))
-
-	if started {
-		result.Start()
+	job.up(s)
+	err := job.start()
+	if err != nil {
+		return err
 	}
 
-	return result, nil
+	logs.Log(packageName, fmt.Sprintf(MSG_ADD_JOB, job.ID, job.Tag, job.Type, job.Spec))
+
+	return nil
 }
 
 /**
@@ -161,21 +115,21 @@ func (s *Crontab) addJob(tp TypeJob, tag, ownerId, spec, channel string, started
 * @param tag string
 * @return bool
 **/
-func (s *Crontab) removeJob(tag string) bool {
+func (s *Crontab) removeJob(id string) bool {
 	s.mu.Lock()
-	job, exists := s.Jobs[tag]
+	job, exists := s.Jobs[id]
 	s.mu.Unlock()
 	if !exists {
 		return false
 	}
 
-	job.Stop()
+	job.stop()
 
 	s.mu.Lock()
-	delete(s.Jobs, tag)
+	delete(s.Jobs, id)
 	s.mu.Unlock()
 
-	logs.Log(packageName, fmt.Sprintf("job:%s removed", tag))
+	logs.Log(packageName, fmt.Sprintf(MSG_REMOVE_JOB, id))
 	return true
 }
 
@@ -184,21 +138,15 @@ func (s *Crontab) removeJob(tag string) bool {
 * @param tag string
 * @return error
 **/
-func (s *Crontab) startJob(tag string) error {
+func (s *Crontab) startJob(id string) error {
 	s.mu.Lock()
-	job, exists := s.Jobs[tag]
+	job, exists := s.Jobs[id]
 	s.mu.Unlock()
 	if !exists {
 		return fmt.Errorf("job not found")
 	}
 
-	limit := config.GetInt64("CRONTAB_LIMIT", 400)
-	s.Metrics, _ = cache.CallMetrics(tag, limit)
-	if s.Metrics.OverLimit {
-		return fmt.Errorf("job over limit")
-	}
-
-	err := job.Start()
+	err := job.start()
 	if err != nil {
 		return err
 	}
@@ -219,54 +167,6 @@ func (s *Crontab) stopJob(tag string) error {
 		return fmt.Errorf("job not found")
 	}
 
-	job.Stop()
-	return nil
-}
-
-/**
-* Start
-* @return error
-**/
-func (s *Crontab) start() error {
-	if s.cronJobs == nil {
-		return fmt.Errorf("crontab not initialized")
-	}
-
-	if s.running {
-		return nil
-	}
-
-	err := s.eventInit()
-	if err != nil {
-		return err
-	}
-
-	s.cronJobs.Start()
-	s.running = true
-
-	logs.Logf(packageName, `Crontab started`)
-
-	return nil
-}
-
-/**
-* stop
-* @return error
-**/
-func (s *Crontab) stop() error {
-	if s.cronJobs == nil {
-		return fmt.Errorf("crontab not initialized")
-	}
-
-	s.cronJobs.Stop()
-
-	for _, job := range s.Jobs {
-		job.Stop()
-	}
-
-	s.running = false
-
-	logs.Logf(packageName, `Crontab stopped`)
-
+	job.stop()
 	return nil
 }

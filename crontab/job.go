@@ -1,16 +1,17 @@
 package crontab
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
-	"github.com/cgalvisleon/et/utility"
 	"github.com/robfig/cron/v3"
 )
 
@@ -18,11 +19,11 @@ type JobStatus string
 
 const (
 	Pending  JobStatus = "pending"
-	Awaiting JobStatus = "awaiting"
 	Running  JobStatus = "running"
 	Done     JobStatus = "done"
 	Failed   JobStatus = "failed"
 	Finished JobStatus = "finished"
+	Awaiting JobStatus = "awaiting"
 )
 
 type TypeJob string
@@ -33,70 +34,54 @@ const (
 )
 
 type Job struct {
+	CreatedAt   time.Time     `json:"created_at"`
+	UpdatedAt   time.Time     `json:"updated_at"`
+	TenantId    string        `json:"tenant_id"`
 	ID          string        `json:"id"`
-	ProjectId   string        `json:"project_id"`
-	UserId      string        `json:"user_id"`
-	ExecuteAt   time.Time     `json:"execute_at"`
 	Type        TypeJob       `json:"type"`
 	Tag         string        `json:"tag"`
 	OwnerId     string        `json:"owner_id"`
-	Channel     string        `json:"channel"`
-	Params      et.Json       `json:"params"`
 	Spec        string        `json:"spec"`
-	Started     bool          `json:"started"`
+	Params      et.Json       `json:"params"`
 	Status      JobStatus     `json:"status"`
 	HostName    string        `json:"host_name"`
-	Attempts    int           `json:"attempts"`
 	Repetitions int           `json:"repetitions"`
+	Attempts    int           `json:"attempts"`
 	Duration    time.Duration `json:"duration"`
+	AuditLog    []et.Json     `json:"audit_log"`
 	isDebug     bool          `json:"-"`
+	isChanged   bool          `json:"-"`
 	idx         cron.EntryID  `json:"-"`
 	shot        *time.Timer   `json:"-"`
-	owner       *Crontab      `json:"-"`
+	crontab     *Crontab      `json:"-"`
+	store       Store         `json:"-"`
 	mu          *sync.Mutex   `json:"-"`
-	saveMu      sync.Mutex    `json:"-"`
-	saveTimer   *time.Timer   `json:"-"`
 }
 
 /**
 * newJob
-* @param owner *Crontab, tp TypeJob, tag, ownerId, spec, channel string, params et.Json, repetitions int
+* @param tp TypeJob, tag, ownerId, spec string, params et.Json, repetitions int
 * @return *Job
 **/
-func newJob(owner *Crontab, tp TypeJob, tag, ownerId, spec, channel string, params et.Json, repetitions int) *Job {
-	id := reg.UUID()
-	if ownerId == "" {
-		ownerId = id
-	}
+func newJob(tenantId string, tp TypeJob, tag, ownerId, spec string, params et.Json, repetitions int) *Job {
+	now := timezone.Now()
+	id := reg.ULID()
 	result := &Job{
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		TenantId:    tenantId,
 		ID:          id,
 		Type:        tp,
 		Tag:         tag,
 		OwnerId:     ownerId,
-		Channel:     channel,
-		Params:      params,
 		Spec:        spec,
-		Started:     false,
+		Params:      params,
 		Status:      Pending,
-		HostName:    hostName,
-		Attempts:    0,
 		Repetitions: repetitions,
 		idx:         -1,
-		owner:       owner,
-		isDebug:     owner.isDebug,
-		mu:          &sync.Mutex{},
-		saveMu:      sync.Mutex{},
 	}
-
+	event.Publish(EVENT_CRONTAB_SET, result.ToJson())
 	return result
-}
-
-/**
-* Serialize
-* @return ([]byte, error)
-**/
-func (s *Job) Serialize() ([]byte, error) {
-	return utility.Serialize(s)
 }
 
 /**
@@ -105,22 +90,21 @@ func (s *Job) Serialize() ([]byte, error) {
 **/
 func (s *Job) ToJson() et.Json {
 	return et.Json{
+		"created_at":  timezone.Format(s.CreatedAt, timezone.RFC3339),
+		"updated_at":  timezone.Format(s.UpdatedAt, timezone.RFC3339),
+		"tenant_id":   s.TenantId,
 		"id":          s.ID,
-		"project_id":  s.ProjectId,
-		"user_id":     s.UserId,
-		"execute_at":  timezone.Format(s.ExecuteAt, timezone.RFC3339),
 		"type":        s.Type,
 		"tag":         s.Tag,
 		"owner_id":    s.OwnerId,
-		"channel":     s.Channel,
-		"params":      s.Params,
 		"spec":        s.Spec,
-		"started":     s.Started,
+		"params":      s.Params,
 		"status":      s.Status,
 		"host_name":   s.HostName,
-		"attempts":    s.Attempts,
 		"repetitions": s.Repetitions,
+		"attempts":    s.Attempts,
 		"duration":    s.Duration,
+		"audit_log":   s.AuditLog,
 	}
 }
 
@@ -133,32 +117,61 @@ func (s *Job) ToString() string {
 }
 
 /**
-* Save
-* @return error
+* up
+* @param crontab *Crontab
+* @return *Job
 **/
-func (s *Job) Save() error {
-	s.saveMu.Lock()
-	defer s.saveMu.Unlock()
+func (s *Job) up(crontab *Crontab) *Job {
+	s.HostName = crontab.HostName
+	s.crontab = crontab
+	s.store = crontab.store
+	s.mu = &sync.Mutex{}
+	s.isDebug = crontab.isDebug
+	return s
+}
 
-	if s.saveTimer != nil {
-		s.saveTimer.Stop()
+/**
+* addAuditLog
+* @param userId string, action string
+**/
+func (s *Job) addAuditLog(userId string, action string) {
+	if s.AuditLog == nil {
+		s.AuditLog = make([]et.Json, 0)
 	}
 
-	s.saveTimer = time.AfterFunc(100*time.Millisecond, func() {
-		data := s.ToJson()
-		if s.isDebug {
-			logs.Log(packageName, "save:", data.ToString())
-		}
-
-		if s.owner.store != nil {
-			err := s.owner.store.Set(s.ID, s.Tag, s.OwnerId, s.ProjectId, s, s.UserId)
-			if err != nil {
-				logs.Errorf("Error saving instance crontab: %v", err)
-			}
-		}
-
-		event.Publish(EVENT_INSTANCE_SET, data)
+	now := timezone.Now()
+	s.AuditLog = append(s.AuditLog, et.Json{
+		"created_at": now,
+		"user_id":    userId,
+		"action":     action,
 	})
+	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
+	if len(s.AuditLog) > maxAuditLog {
+		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	}
+	s.isChanged = true
+}
+
+/**
+* save
+* @param userId string
+* @return error
+**/
+func (s *Job) save(userId string) error {
+	if s.store == nil {
+		return errors.New(MSG_JOB_STORE_IS_NIL)
+	}
+
+	s.isChanged = false
+
+	if s.isDebug {
+		logs.Log(packageName, "save:", s.ToString())
+	}
+
+	err := s.store.Set("job", s.ID, s.TenantId, s.OwnerId, s, userId)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -176,8 +189,11 @@ func (s *Job) setStatus(status JobStatus) error {
 	defer s.mu.Unlock()
 
 	s.Status = status
-	logs.Logf(packageName, fmt.Sprintf("job:%s | status:%s | host:%s | attempt:%d | repetitions:%d", s.Tag, status, s.HostName, s.Attempts, s.Repetitions))
-	return s.Save()
+
+	s.addAuditLog(s.HostName, string(status))
+	logs.Logf(packageName, fmt.Sprintf(MSG_JOB_STATUS, s.Tag, status, s.HostName, s.Attempts, s.Repetitions))
+
+	return s.save(s.HostName)
 }
 
 /**
@@ -185,17 +201,18 @@ func (s *Job) setStatus(status JobStatus) error {
 * @return void
 **/
 func (s *Job) trigger() {
+	s.setStatus(Running)
 	s.Attempts++
-	err := event.Publish(s.Channel, s.Params)
+	channel := fmt.Sprintf("job:%s:%s", s.TenantId, s.Tag)
+	err := event.Publish(channel, s.Params)
 	if err != nil {
 		s.setStatus(Failed)
-	} else {
-		s.setStatus(Running)
 	}
+
 	if s.Repetitions != 0 && s.Attempts >= s.Repetitions {
-		s.Finish()
+		s.finish()
 	} else if s.Type != CronJob {
-		s.Finish()
+		s.finish()
 	} else {
 		s.setStatus(Awaiting)
 	}
@@ -208,30 +225,32 @@ func (s *Job) trigger() {
 func (s *Job) start() error {
 	if s.Type == CronJob {
 		if s.idx != -1 {
-			s.owner.cronJobs.Remove(s.idx)
+			s.crontab.cronJobs.Remove(s.idx)
 		}
 
-		idx, err := s.owner.cronJobs.AddFunc(s.Spec, s.trigger)
+		idx, err := s.crontab.cronJobs.AddFunc(s.Spec, s.trigger)
 		if err != nil {
 			return err
 		}
 
 		s.idx = idx
-	} else {
-		if s.shot != nil {
-			s.shot.Stop()
-		}
+		return s.save(s.HostName)
+	}
 
-		now := timezone.Now()
-		shotTime, err := timezone.Parse("2006-01-02T15:04:05", s.Spec)
-		if err != nil {
-			return err
-		}
-		if shotTime.After(now) {
-			duration := shotTime.Sub(now)
-			s.Duration = duration
-			s.shot = time.AfterFunc(duration, s.trigger)
-		}
+	if s.shot != nil {
+		s.shot.Stop()
+	}
+
+	now := timezone.Now()
+	shotTime, err := timezone.Parse(time.RFC3339, s.Spec)
+	if err != nil {
+		return err
+	}
+
+	if shotTime.After(now) {
+		duration := shotTime.Sub(now)
+		s.Duration = duration
+		s.shot = time.AfterFunc(duration, s.trigger)
 	}
 
 	return nil
@@ -247,7 +266,7 @@ func (s *Job) stop() {
 
 	if s.Type == CronJob {
 		if s.idx != -1 {
-			s.owner.cronJobs.Remove(s.idx)
+			s.crontab.cronJobs.Remove(s.idx)
 			s.idx = -1
 		}
 	} else if s.shot != nil {
@@ -256,58 +275,10 @@ func (s *Job) stop() {
 }
 
 /**
-* Start
-* @return error
-**/
-func (s *Job) Start() error {
-	s.Started = true
-	time.AfterFunc(100*time.Millisecond, func() {
-		s.start()
-	})
-
-	return s.setStatus(Awaiting)
-}
-
-/**
-* Stop
-* @return error
-**/
-func (s *Job) Stop() {
-	if !s.Started {
-		return
-	}
-
-	s.Started = false
-	s.stop()
-	s.setStatus(Awaiting)
-}
-
-/**
-* Finish
-* @return error
-**/
-func (s *Job) Finish() {
-	s.Started = false
-	s.stop()
-	s.setStatus(Finished)
-	time.AfterFunc(300*time.Millisecond, func() {
-		delete(s.owner.Jobs, s.Tag)
-	})
-}
-
-/**
-* SetSpec
-* @param spec string
+* finish
 * @return void
 **/
-func (s *Job) SetSpec(spec string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	isStarted := s.Started
+func (s *Job) finish() {
 	s.stop()
-	s.Spec = spec
-	if isStarted {
-		s.start()
-	}
+	s.setStatus(Finished)
 }

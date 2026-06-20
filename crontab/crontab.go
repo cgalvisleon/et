@@ -5,7 +5,6 @@ import (
 	"os"
 	"sync"
 
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -46,12 +45,7 @@ type Crontab struct {
 * @return (*Crontab, error)
 **/
 func New(tenantId string, store Store) (*Crontab, error) {
-	err := cache.Load()
-	if err != nil {
-		return nil, err
-	}
-
-	err = event.Load()
+	err := event.Load()
 	if err != nil {
 		return nil, err
 	}
@@ -99,8 +93,12 @@ func (s *Crontab) addJob(job *Job) error {
 	s.Jobs[job.ID] = job
 	s.mu.Unlock()
 
-	job.up(s)
-	err := job.start()
+	err := job.up(s)
+	if err != nil {
+		return err
+	}
+
+	err = job.start()
 	if err != nil {
 		return err
 	}

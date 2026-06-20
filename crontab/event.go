@@ -1,6 +1,7 @@
 package crontab
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/cgalvisleon/et/event"
@@ -55,18 +56,17 @@ func (s *Crontab) eventInit() error {
 **/
 func (s *Crontab) eventSet(msg event.Message) {
 	data := msg.Data
-	tpStr := data.Str("type")
-	tag := data.Str("tag")
-	ownerId := data.Str("owner_id")
-	spec := data.Str("spec")
-	channel := data.Str("channel")
-	started := data.Bool("started")
-	params := data.Json("params")
-	repetitions := data.Int("repetitions")
-	tp := TypeJob(tpStr)
-	_, err := s.addJob(tp, tag, ownerId, spec, channel, started, params, repetitions)
+	bt := []byte(data.ToString())
+	var job *Job
+	err := json.Unmarshal(bt, &job)
 	if err != nil {
-		logs.Log(packageName, fmt.Sprintf("error adding job: %s:%s; %s", tpStr, tag, err))
+		logs.Errorf(MSG_ERROR_UNMARSHALLING_JOB, err.Error())
+		return
+	}
+
+	err = s.addJob(job)
+	if err != nil {
+		logs.Errorf(MSG_ERROR_ADDING_JOB, err.Error())
 		return
 	}
 }
@@ -78,8 +78,8 @@ func (s *Crontab) eventSet(msg event.Message) {
 **/
 func (s *Crontab) eventRemove(msg event.Message) {
 	data := msg.Data
-	tag := data.Str("tag")
-	s.removeJob(tag)
+	id := data.Str("id")
+	s.removeJob(id)
 }
 
 /**
@@ -89,10 +89,10 @@ func (s *Crontab) eventRemove(msg event.Message) {
 **/
 func (s *Crontab) eventStop(msg event.Message) {
 	data := msg.Data
-	tag := data.Str("tag")
-	err := s.stopJob(tag)
+	id := data.Str("id")
+	err := s.stopJob(id)
 	if err != nil {
-		logs.Log(packageName, fmt.Sprintf("job:%s; error stopping job %s", tag, err))
+		logs.Errorf(MSG_ERROR_STOPPING_JOB, err.Error())
 		return
 	}
 }
@@ -104,10 +104,10 @@ func (s *Crontab) eventStop(msg event.Message) {
 **/
 func (s *Crontab) eventStart(msg event.Message) {
 	data := msg.Data
-	tag := data.Str("tag")
-	err := s.startJob(tag)
+	id := data.Str("id")
+	err := s.startJob(id)
 	if err != nil {
-		logs.Log(packageName, fmt.Sprintf("job:%s; error starting job %s", tag, err))
+		logs.Errorf(MSG_ERROR_STARTING_JOB, err.Error())
 		return
 	}
 }

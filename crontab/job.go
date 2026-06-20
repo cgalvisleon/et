@@ -1,7 +1,6 @@
 package crontab
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -29,8 +28,8 @@ const (
 type TypeJob string
 
 const (
-	CronJob     TypeJob = "cronJob"
-	ScheduleJob TypeJob = "scheduleJob"
+	CRONJOB     TypeJob = "cronJob"
+	SCHEDULEJOB TypeJob = "scheduleJob"
 )
 
 type Job struct {
@@ -119,15 +118,15 @@ func (s *Job) ToString() string {
 /**
 * up
 * @param crontab *Crontab
-* @return *Job
+* @return error
 **/
-func (s *Job) up(crontab *Crontab) *Job {
+func (s *Job) up(crontab *Crontab) error {
 	s.HostName = crontab.HostName
 	s.crontab = crontab
 	s.store = crontab.store
 	s.mu = &sync.Mutex{}
 	s.isDebug = crontab.isDebug
-	return s
+	return s.save(s.HostName)
 }
 
 /**
@@ -158,14 +157,14 @@ func (s *Job) addAuditLog(userId string, action string) {
 * @return error
 **/
 func (s *Job) save(userId string) error {
-	if s.store == nil {
-		return errors.New(MSG_JOB_STORE_IS_NIL)
-	}
-
 	s.isChanged = false
 
 	if s.isDebug {
 		logs.Log(packageName, "save:", s.ToString())
+	}
+
+	if s.store == nil {
+		return nil
 	}
 
 	err := s.store.Set("job", s.ID, s.TenantId, s.OwnerId, s, userId)
@@ -211,7 +210,7 @@ func (s *Job) trigger() {
 
 	if s.Repetitions != 0 && s.Attempts >= s.Repetitions {
 		s.finish()
-	} else if s.Type != CronJob {
+	} else if s.Type != CRONJOB {
 		s.finish()
 	} else {
 		s.setStatus(Awaiting)
@@ -223,7 +222,7 @@ func (s *Job) trigger() {
 * @return error
 **/
 func (s *Job) start() error {
-	if s.Type == CronJob {
+	if s.Type == CRONJOB {
 		if s.idx != -1 {
 			s.crontab.cronJobs.Remove(s.idx)
 		}
@@ -264,7 +263,7 @@ func (s *Job) stop() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.Type == CronJob {
+	if s.Type == CRONJOB {
 		if s.idx != -1 {
 			s.crontab.cronJobs.Remove(s.idx)
 			s.idx = -1

@@ -16,7 +16,7 @@ import (
 * @param f *jsql.F
 * @return string
 **/
-func pgFromRef(f *jsql.F) string {
+func pgFromRef(f *jsql.From) string {
 	if f.Schema != "" {
 		return fmt.Sprintf("%s.%s", f.Schema, f.Name)
 	}

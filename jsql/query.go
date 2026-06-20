@@ -13,9 +13,9 @@ import (
 )
 
 /**
-* F: Identifies a table source with its fully-qualified name and SQL alias.
+* From: Identifies a table source with its fully-qualified name and SQL alias.
 **/
-type F struct {
+type From struct {
 	Database string `json:"database"`
 	Schema   string `json:"schema"`
 	Name     string `json:"name"`
@@ -25,15 +25,15 @@ type F struct {
 }
 
 /**
-* getFrom: Builds a F descriptor from a model, using as as the SQL alias (defaults to table name).
+* getFrom: Builds a From descriptor from a model, using as as the SQL alias (defaults to table name).
 * @param model *Model, as string
-* @return *F
+* @return *From
 **/
-func getFrom(model *Model, as string) *F {
+func getFrom(model *Model, as string) *From {
 	if as == "" {
 		as = model.Table
 	}
-	return &F{
+	return &From{
 		Database: model.Database,
 		Schema:   model.Schema,
 		Name:     model.Name,
@@ -51,7 +51,7 @@ type Field struct {
 	TypeData   TypeData   `json:"type_data"`
 	Name       string     `json:"name"`
 	As         string     `json:"as"`
-	From       *F         `json:"from"`
+	From       *From      `json:"from"`
 	Agg        string     `json:"agg"`
 	Page       int        `json:"page"`
 }
@@ -73,17 +73,17 @@ const (
 **/
 type Join struct {
 	Type      JoinType        `json:"type"`
-	To        *F              `json:"to"`
+	To        *From           `json:"to"`
 	Condition []*et.Condition `json:"condition"`
 	query     *Query          `json:"-"`
 }
 
 /**
 * newJoin: Constructs a Join entry linked to its parent query.
-* @param query *Query, typ JoinType, to *F, conditions []*et.Condition
+* @param query *Query, typ JoinType, to *From, conditions []*et.Condition
 * @return *Join
 **/
-func newJoin(query *Query, typ JoinType, to *F, conditions []*et.Condition) *Join {
+func newJoin(query *Query, typ JoinType, to *From, conditions []*et.Condition) *Join {
 	return &Join{
 		Type:      typ,
 		To:        to,
@@ -107,7 +107,7 @@ const (
 * QueryDetail: Defines a relationship to another model, including join keys and cascade rules.
 **/
 type QueryDetail struct {
-	To     *F                `json:"to"`
+	To     *From             `json:"to"`
 	Keys   map[string]string `json:"keys"`
 	Select []string          `json:"select"`
 	Page   int               `json:"page"`
@@ -144,7 +144,7 @@ type Calc struct {
 **/
 type Query struct {
 	ID             string                  `json:"id"`
-	Froms          []*F                    `json:"froms"`
+	Froms          []*From                 `json:"froms"`
 	Joins          []*Join                 `json:"joins"`
 	Selects        []string                `json:"selects"`
 	Conditions     []*et.Condition         `json:"conditions"`
@@ -180,7 +180,7 @@ func newQuery(model *Model, as ...string) *Query {
 	}
 	result := &Query{
 		ID:         reg.ULID(),
-		Froms:      make([]*F, 0),
+		Froms:      make([]*From, 0),
 		Joins:      make([]*Join, 0),
 		Selects:    make([]string, 0),
 		Conditions: make([]*et.Condition, 0),
@@ -262,7 +262,7 @@ func (s *Query) Test() *Query {
 }
 
 /**
-* GetField: Creates a Field from a Column, using the Column's name and attaching the provided F.
+* GetField: Creates a Field from a Column, using the Column's name and attaching the provided From.
 * @param field string
 * @return (*Field, bool)
 **/
@@ -275,7 +275,7 @@ func (s *Query) GetField(field string) (*Field, bool) {
 	pattern6 := regexp.MustCompile(`^([A-Za-z0-9_]+)\((.+)\)`)                             // agg(field)
 	pattern7 := regexp.MustCompile(`^([^|]+)\|page:(\d+)$`)                                // field|page:1
 
-	getForm := func(name string) *F {
+	getForm := func(name string) *From {
 		if len(s.Froms) == 0 {
 			return nil
 		}

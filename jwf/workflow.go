@@ -11,7 +11,6 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/reg"
-	"github.com/cgalvisleon/et/resilience"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -24,24 +23,22 @@ type Store interface {
 	Get(collection, id string, dest any) (bool, error)
 	Delete(collection, id string) error
 	Query(query et.Json) (et.Items, error)
-	GetCode(tag string) (string, error)
+	GenSerie(TenantId, tag string) (string, error)
 }
 
 type WorkFlow struct {
-	CreatedAt       time.Time            `json:"created_at"`
-	UpdatedAt       time.Time            `json:"updated_at"`
-	TenantId        string               `json:"tenant_id"`
-	ID              string               `json:"id"`
-	Flows           map[string]*Flow     `json:""`
-	Instances       map[string]*Instance `json:"-"`
-	AuditLog        []et.Json            `json:"audit_log"`
-	bindings        map[string]any       `json:"-"`
-	muFlows         sync.Mutex           `json:"-"`
-	muInstances     sync.Mutex           `json:"-"`
-	store           Store                `json:"-"`
-	resilienceStore resilience.Store     `json:"-"`
-	metrics         cache.Metrics        `json:"-"`
-	isDebug         bool                 `json:"-"`
+	CreatedAt   time.Time            `json:"created_at"`
+	UpdatedAt   time.Time            `json:"updated_at"`
+	TenantId    string               `json:"tenant_id"`
+	ID          string               `json:"id"`
+	Flows       map[string]*Flow     `json:""`
+	Instances   map[string]*Instance `json:"-"`
+	AuditLog    []et.Json            `json:"audit_log"`
+	bindings    map[string]any       `json:"-"`
+	muFlows     sync.Mutex           `json:"-"`
+	muInstances sync.Mutex           `json:"-"`
+	store       Store                `json:"-"`
+	isDebug     bool                 `json:"-"`
 }
 
 /**
@@ -75,7 +72,6 @@ func New(tenantId string, store Store) (*WorkFlow, error) {
 		muFlows:     sync.Mutex{},
 		muInstances: sync.Mutex{},
 		store:       store,
-		metrics:     cache.Metrics{},
 		isDebug:     isDebug,
 	}
 	return result, nil
@@ -113,7 +109,6 @@ func Load(tenantId string, store Store, userId string) (*WorkFlow, error) {
 
 	isDebug := config.GetBool("DEBUG", false)
 	result.store = store
-	result.metrics = cache.Metrics{}
 	result.isDebug = isDebug
 	return result, nil
 }

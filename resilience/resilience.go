@@ -16,9 +16,9 @@ import (
 )
 
 type Store interface {
-	Set(tag, id, tenantId, ownerId string, obj any, userId string) error
-	Get(id string, dest any) (bool, error)
-	Delete(id string) error
+	Set(collection, id, tenantId, ownerId string, obj any, userId string) error
+	Get(collection, id string, dest any) (bool, error)
+	Delete(collection, id string) error
 	Query(query et.Json) (et.Items, error)
 }
 
@@ -149,7 +149,7 @@ func (s *Resilience) GetInstance(id string) (*Instance, bool) {
 	}
 
 	if s.store != nil {
-		exist, err := s.store.Get(id, &result)
+		exist, err := s.store.Get("resilience", id, &result)
 		if err != nil {
 			return nil, false
 		}

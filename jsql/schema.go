@@ -20,6 +20,7 @@ type Schema struct {
 	db        *DB               `json:"-"`
 	historyDb *DB               `json:"-"`
 	deadDb    *DB               `json:"-"`
+	IsDebug   bool              `json:"-"`
 	mu        *sync.RWMutex     `json:"-"`
 }
 

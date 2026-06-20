@@ -118,7 +118,7 @@ func newModel(schema *Schema, name string, version int) *Model {
 		db:            schema.db,
 		historyDb:     schema.historyDb,
 		deadDb:        schema.deadDb,
-		IsDebug:       schema.db.IsDebug,
+		IsDebug:       schema.IsDebug,
 	}
 	result = defaultTrigger(result)
 	return result
@@ -223,6 +223,7 @@ func (s *Model) up(schema *Schema) *Model {
 	for _, column := range s.Columns {
 		column.up(s)
 	}
+
 	return s
 }
 
@@ -720,20 +721,20 @@ func (s *Model) DeadQuery(query et.Json) (et.Items, error) {
 
 /**
 * SetSeries: Creates a Command of type SET_SERIES pre-loaded with the given data.
-* @param tag, ownerId, format string, val int
+* @param tag, format string, val int
 * @return error
 **/
-func (s *Model) SetSeries(tag, ownerId, format string, val int) error {
-	return s.db.SetSeries(tag, ownerId, format, val)
+func (s *Model) SetSeries(tag, format string, val int) error {
+	return s.db.SetSeries(tag, format, val)
 }
 
 /**
 * GetSeries: Returns the series data for the given tag and owner.
-* @param tag, ownerId string
+* @param tag string
 * @return (et.Item, error)
 **/
-func (s *Model) GetSeries(tag, ownerId string) (et.Item, error) {
-	return s.db.GetSeries(tag, ownerId)
+func (s *Model) GetSeries(tag string) (et.Item, error) {
+	return s.db.GetSeries(tag)
 }
 
 /**
@@ -741,24 +742,24 @@ func (s *Model) GetSeries(tag, ownerId string) (et.Item, error) {
 * @param tag, ownerId string
 * @return error
 **/
-func (s *Model) DeleteSeries(tag, ownerId string) error {
-	return s.db.DeleteSeries(tag, ownerId)
+func (s *Model) DeleteSeries(tag string) error {
+	return s.db.DeleteSeries(tag)
 }
 
 /**
-* NextSeries: Returns the next series value for the given tag and owner.
+* GenSerie: Returns the next series value for the given tag and owner.
 * @param tag, ownerId string
 * @return (string, error)
 **/
-func (s *Model) NextSeries(tag, ownerId string) (string, error) {
-	return s.db.NextSeries(tag, ownerId)
+func (s *Model) GenSerie(tag string) (string, error) {
+	return s.db.GenSerie(tag)
 }
 
 /**
-* NextValue: Returns the next value for the given tag and owner.
+* GenValue: Returns the next value for the given tag and owner.
 * @param tag, ownerId string
 * @return (int, error)
 **/
-func (s *Model) NextValue(tag, ownerId string) (int, error) {
-	return s.db.NextValue(tag, ownerId)
+func (s *Model) GenValue(tag string) (int, error) {
+	return s.db.GenValue(tag)
 }

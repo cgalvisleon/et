@@ -127,10 +127,7 @@ func (s *DB) init() error {
 
 	s.db = db
 	if s.UseCore {
-		err := s.initCore()
-		if err != nil {
-			return err
-		}
+		return nil
 	}
 
 	s.isInit = true

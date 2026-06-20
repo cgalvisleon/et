@@ -7,27 +7,27 @@ import (
 	"github.com/cgalvisleon/et/timezone"
 )
 
-func defineSeries(db *DB) error {
+func DefineSeries(db *DB, schema string) error {
 	if db.series != nil {
 		return nil
 	}
 
 	var err error
 	db.series, err = db.Define(Def{
-		Schema:  "core",
+		Schema:  schema,
 		Name:    "series",
 		Version: 1,
 		Columns: []Column{
 			{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 			{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
+			{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 			{Name: "tag", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-			{Name: "owner_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 			{Name: "format", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
 			{Name: "value", TypeColumn: COLUMN, TypeData: INT, Default: ""},
 		},
 		PrimaryKeys: []DefIndex{
+			{Name: TENANT_ID, Sorted: true},
 			{Name: "tag", Sorted: true},
-			{Name: "owner_id", Sorted: true},
 		},
 		IdxField: IDX,
 		IsCore:   true,
@@ -55,23 +55,23 @@ func defineSeries(db *DB) error {
 
 /**
 * SetSeries
-* @param string tag, ownerId string, format string, value int
+* @param string tag, format string, value int
 * @return error
 **/
-func (db *DB) SetSeries(tag, ownerId string, format string, value int) error {
+func (s *DB) SetSeries(tag string, format string, value int) error {
 	if format == "" {
 		format = "%08d"
 	}
-	_, err := db.series.
+	_, err := s.series.
 		Upsert(
 			et.Json{
-				"tag":      tag,
-				"owner_id": ownerId,
-				"format":   format,
-				"value":    value,
+				"tenant_id": s.TenantId,
+				"tag":       tag,
+				"format":    format,
+				"value":     value,
 			}).
-		Where(Eq("tag", tag)).
-		And(Eq("owner_id", ownerId)).
+		Where(Eq("tenant_id", s.TenantId)).
+		And(Eq("tag", tag)).
 		Exec()
 	return err
 }
@@ -81,10 +81,10 @@ func (db *DB) SetSeries(tag, ownerId string, format string, value int) error {
 * @param string tag, ownerId string
 * @return (et.Item, error)
 **/
-func (db *DB) GetSeries(tag, ownerId string) (et.Item, error) {
-	result, err := db.series.
-		Where(Eq("tag", tag)).
-		And(Eq("owner_id", ownerId)).
+func (s *DB) GetSeries(tag string) (et.Item, error) {
+	result, err := s.series.
+		Where(Eq("tenant_id", s.TenantId)).
+		And(Eq("tag", tag)).
 		One()
 	if err != nil {
 		return et.Item{}, err
@@ -97,11 +97,11 @@ func (db *DB) GetSeries(tag, ownerId string) (et.Item, error) {
 * @param string tag, ownerId string
 * @return error
 **/
-func (db *DB) DeleteSeries(tag, ownerId string) error {
-	_, err := db.series.
+func (s *DB) DeleteSeries(tag string) error {
+	_, err := s.series.
 		Delete().
-		Where(Eq("tag", tag)).
-		And(Eq("owner_id", ownerId)).
+		Where(Eq("tenant_id", s.TenantId)).
+		And(Eq("tag", tag)).
 		Exec()
 	if err != nil {
 		return err
@@ -110,43 +110,43 @@ func (db *DB) DeleteSeries(tag, ownerId string) error {
 }
 
 /**
-* NextSeries
-* @param string tag, ownerId string
+* GenSerie
+* @param string tag
 * @return (string, error)
 **/
-func (db *DB) NextSeries(tag, ownerId string) (string, error) {
-	item, err := db.series.
+func (s *DB) GenSerie(tag string) (string, error) {
+	item, err := s.series.
 		Update(et.Json{}).
 		BeforeUpdate(func(tx *Tx, old, new et.Json) error {
 			new["value"] = old["value"].(int) + 1
 			return nil
 		}).
-		Where(Eq("tag", tag)).
-		And(Eq("owner_id", ownerId)).
+		Where(Eq("tenant_id", s.TenantId)).
+		And(Eq("tag", tag)).
 		One()
 	if err != nil {
 		return "", err
 	}
 	format := item.String("format")
 	value := item.Int("value")
-	result := fmt.Sprintf(format, value+1)
+	result := fmt.Sprintf(format, value)
 	return result, nil
 }
 
 /**
-* NextValue
-* @param string tag, ownerId string
+* GenValue
+* @param string tag
 * @return (int, error)
 **/
-func (db *DB) NextValue(tag, ownerId string) (int, error) {
-	item, err := db.series.
+func (s *DB) GenValue(tag string) (int, error) {
+	item, err := s.series.
 		Update(et.Json{}).
 		BeforeUpdate(func(tx *Tx, old, new et.Json) error {
 			new["value"] = old["value"].(int) + 1
 			return nil
 		}).
-		Where(Eq("tag", tag)).
-		And(Eq("owner_id", ownerId)).
+		Where(Eq("tenant_id", s.TenantId)).
+		And(Eq("tag", tag)).
 		One()
 	if err != nil {
 		return 0, err

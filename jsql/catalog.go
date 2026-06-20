@@ -9,33 +9,37 @@ import (
 )
 
 /**
-* defineCatalog: Defines the catalog table.
+* DefineCatalog: Defines the catalog table.
 * @param db *DB
 * @return error
 **/
-func defineCatalog(db *DB) error {
+func DefineCatalog(db *DB, schema string) error {
 	if db.catalog != nil {
 		return nil
 	}
 
 	var err error
 	db.catalog, err = db.Define(Def{
-		Schema:  "core",
+		Schema:  schema,
 		Name:    "catalog",
 		Version: 1,
 		Columns: []Column{
 			{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 			{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
+			{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 			{Name: "name", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
 			{Name: "kind", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 			{Name: "version", TypeColumn: COLUMN, TypeData: INT, Default: 0},
 			{Name: "definition", TypeColumn: COLUMN, TypeData: BYTES, Default: []byte{}},
 		},
 		PrimaryKeys: []DefIndex{
+			{Name: TENANT_ID, Sorted: true},
 			{Name: "name", Sorted: true},
+			{Name: "kind", Sorted: true},
 		},
 		IdxField: IDX,
 		Indexes: []DefIndex{
+			{Name: TENANT_ID, Sorted: true},
 			{Name: "kind", Sorted: true},
 			{Name: "version", Sorted: true},
 		},
@@ -66,8 +70,8 @@ func defineCatalog(db *DB) error {
 * @param name, kind string, version int, obj any
 * @return error
 **/
-func (db *DB) setCatalog(name, kind string, version int, obj any) error {
-	if db.catalog == nil {
+func (s *DB) setCatalog(name, kind string, version int, obj any) error {
+	if s.catalog == nil {
 		return nil
 	}
 
@@ -80,8 +84,9 @@ func (db *DB) setCatalog(name, kind string, version int, obj any) error {
 		}
 	}
 
-	_, err := db.catalog.
+	_, err := s.catalog.
 		Upsert(et.Json{
+			"tenant_id":  s.TenantId,
 			"name":       name,
 			"kind":       kind,
 			"version":    version,
@@ -100,8 +105,9 @@ func (db *DB) setCatalog(name, kind string, version int, obj any) error {
 * @param name, kind string, des any
 * @return error
 **/
-func (db *DB) getCatalog(name, kind string, des any) error {
-	item, err := db.catalog.
+func (s *DB) getCatalog(name, kind string, des any) error {
+	item, err := s.catalog.
+		Where(Eq("tenant_id", s.TenantId)).
 		Where(Eq("name", name)).
 		And(Eq("kind", kind)).
 		One()
@@ -131,10 +137,11 @@ func (db *DB) getCatalog(name, kind string, des any) error {
 * @param name, kind string
 * @return error
 **/
-func (db *DB) deleteCatalog(name, kind string) error {
-	_, err := db.catalog.
+func (s *DB) deleteCatalog(name, kind string) error {
+	_, err := s.catalog.
 		Delete().
-		Where(Eq("name", name)).
+		Where(Eq("tenant_id", s.TenantId)).
+		And(Eq("name", name)).
 		And(Eq("kind", kind)).
 		Exec()
 	if err != nil {

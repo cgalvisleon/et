@@ -6,7 +6,7 @@ import "github.com/cgalvisleon/et/et"
 * Detail: Defines a relationship to another model, including join keys and cascade rules.
 **/
 type Detail struct {
-	To              *F                `json:"to"`
+	To              *From             `json:"to"`
 	Keys            map[string]string `json:"keys"`
 	Select          []string          `json:"select"`
 	OnDeleteCascade bool              `json:"on_delete_cascade"`
@@ -66,6 +66,6 @@ const (
 **/
 type Joins struct {
 	Type TypeJoin
-	To   *F
+	To   *From
 	Keys map[string]string
 }

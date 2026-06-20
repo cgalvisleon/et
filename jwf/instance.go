@@ -117,7 +117,7 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*I
 	code := ""
 	if s.store != nil {
 		var err error
-		code, err = s.store.GetCode(flow.Tag)
+		code, err = s.store.GenSerie(s.TenantId, flow.Tag)
 		if err != nil {
 			return nil, err
 		}
@@ -673,7 +673,7 @@ func (s *Instance) runResilence(ctx et.Json, err error, userId string) (et.Json,
 	}
 
 	if s.resilience == nil {
-		resilience, err := resilience.New(s.workflow.resilienceStore)
+		resilience, err := resilience.New(s.workflow.store)
 		if err != nil {
 			return et.Json{}, err
 		}

@@ -104,7 +104,7 @@ type Instance struct {
 * @return *Instance, error
 **/
 func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*Instance, error) {
-	flow, err := s.getFlow(flowId)
+	flow, err := s.loadFlow(flowId)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +172,7 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*I
 **/
 func (s *WorkFlow) getInstance(id, userId string) (*Instance, error) {
 	if id != "" {
-		key := fmt.Sprintf("%s:status", id)
+		key := fmt.Sprintf("instance:%s:status", id)
 		status, err := cache.Get(key, "")
 		if err != nil {
 			return nil, err
@@ -183,10 +183,6 @@ func (s *WorkFlow) getInstance(id, userId string) (*Instance, error) {
 	}
 
 	if s.store == nil {
-		result, exists := s.Instances[id]
-		if exists {
-			return result, nil
-		}
 		return nil, ErrorInstanceNotFound
 	}
 
@@ -200,7 +196,7 @@ func (s *WorkFlow) getInstance(id, userId string) (*Instance, error) {
 		return nil, ErrorInstanceNotFound
 	}
 
-	flow, err := s.getFlow(result.FlowId)
+	flow, err := s.loadFlow(result.FlowId)
 	if err != nil {
 		return nil, err
 	}

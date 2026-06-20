@@ -56,6 +56,17 @@ type Trigger struct {
 	StartId string `json:"start_id"`
 }
 
+type FlowDefinition struct {
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	TenantId    string    `json:"tenant_id"`
+	ID          string    `json:"id"`
+	Tag         string    `json:"tag"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Version     string    `json:"version"`
+}
+
 type Flow struct {
 	CreatedAt     time.Time                               `json:"created_at"`
 	UpdatedAt     time.Time                               `json:"updated_at"`
@@ -66,6 +77,7 @@ type Flow struct {
 	Description   string                                  `json:"description"`
 	Version       string                                  `json:"version"`
 	WorkflowId    string                                  `json:"workflow_id"`
+	Params        et.Json                                 `json:"params"`
 	Steps         map[string]*Step                        `json:"steps"`
 	Connections   []*Connection                           `json:"connections"`
 	Triggers      []*Trigger                              `json:"triggers"`
@@ -80,7 +92,6 @@ type Flow struct {
 	store         Store                                   `json:"-"`
 	onSave        []func(flow *Flow, userId string) error `json:"-"`
 	onDelete      []func(flow *Flow, userId string) error `json:"-"`
-	userId        string                                  `json:"-"`
 	step          *Step                                   `json:"-"`
 	err           error                                   `json:"-"`
 }
@@ -106,6 +117,7 @@ func (s *WorkFlow) newFlow(tag, title, version, userId string) *Flow {
 		Description:   "",
 		Version:       version,
 		WorkflowId:    s.ID,
+		Params:        make(et.Json),
 		Steps:         make(map[string]*Step),
 		Connections:   make([]*Connection, 0),
 		Triggers:      make([]*Trigger, 0),
@@ -114,14 +126,50 @@ func (s *WorkFlow) newFlow(tag, title, version, userId string) *Flow {
 		TimeAwait:     1 * time.Minute,
 		Public:        false,
 		AuditLog:      make([]et.Json, 0),
-		isDebug:       s.isDebug,
-		workflow:      s,
-		store:         s.store,
-		onSave:        make([]func(flow *Flow, userId string) error, 0),
-		onDelete:      make([]func(flow *Flow, userId string) error, 0),
-		userId:        userId,
 	}
-	result.
+	result.addAuditLog(userId, "new_flow")
+	return result.up(s)
+}
+
+/**
+* loadFlow
+* @param id string
+* @return *Flow, error
+**/
+func (s *WorkFlow) loadFlow(id string) (*Flow, error) {
+	if s.store == nil {
+		return nil, errors.New(MSG_WORKFLOW_STORE_IS_NIL)
+	}
+
+	result, exists := s.getFlow(id)
+	if exists {
+		return result, nil
+	}
+
+	exists, err := s.store.Get("flow", id, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	if !exists {
+		return nil, ErrrFlowNotFound
+	}
+
+	return result.up(s), nil
+}
+
+/**
+* up
+* @param workflow *WorkFlow
+* @return *Flow
+**/
+func (s *Flow) up(workflow *WorkFlow) *Flow {
+	s.workflow = workflow
+	s.store = workflow.store
+	s.isDebug = workflow.isDebug
+	s.onSave = make([]func(flow *Flow, userId string) error, 0)
+	s.onDelete = make([]func(flow *Flow, userId string) error, 0)
+	s.
 		OnSave(func(flow *Flow, userId string) error {
 			key := fmt.Sprintf("flow:%s", flow.ID)
 			event.Publish(key, flow.ToJson())
@@ -134,8 +182,8 @@ func (s *WorkFlow) newFlow(tag, title, version, userId string) *Flow {
 			})
 			return nil
 		})
-	result.addAuditLog(userId, "new_flow")
-	return result
+	workflow.addFlow(s)
+	return s
 }
 
 /**
@@ -162,80 +210,6 @@ func (s *Flow) OnDelete(fn func(flow *Flow, userId string) error) *Flow {
 	}
 	s.onDelete = append(s.onDelete, fn)
 	return s
-}
-
-/**
-* getFlow
-* @param id string
-* @return *Flow, error
-**/
-func (s *WorkFlow) getFlow(id string) (*Flow, error) {
-	if s.store == nil {
-		result, exists := s.Flows[id]
-		if exists {
-			return result, nil
-		}
-		return nil, ErrrFlowNotFound
-	}
-
-	var result *Flow
-	exists, err := s.store.Get("flow", id, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	if !exists {
-		return nil, ErrrFlowNotFound
-	}
-
-	result.workflow = s
-	result.store = s.store
-	result.isDebug = s.isDebug
-	result.onSave = make([]func(flow *Flow, userId string) error, 0)
-	result.onDelete = make([]func(flow *Flow, userId string) error, 0)
-	result.
-		OnSave(func(flow *Flow, userId string) error {
-			key := fmt.Sprintf("flow:%s", flow.ID)
-			event.Publish(key, flow.ToJson())
-			return nil
-		}).
-		OnDelete(func(flow *Flow, userId string) error {
-			key := fmt.Sprintf("flow:%s:delete", flow.ID)
-			event.Publish(key, et.Json{
-				"id": flow.ID,
-			})
-			return nil
-		})
-	return result, nil
-}
-
-/**
-* deleteFlow
-* @return error
-**/
-func (s *WorkFlow) deleteFlow(id, userId string) error {
-	if s.store == nil {
-		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
-	}
-
-	flow, err := s.getFlow(id)
-	if err != nil {
-		return err
-	}
-
-	err = s.store.Delete("flow", id)
-	if err != nil {
-		return err
-	}
-
-	for _, onDelete := range flow.onDelete {
-		err := onDelete(flow, userId)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 /**
@@ -483,11 +457,7 @@ func (s *Flow) addConnection(sourceId string, targetId string, index int, kind P
 * @return *Flow
 **/
 func (s *Flow) addStep(kind Kind, tag, version, title string, port Port, fn func(instance *Instance, ctx et.Json) (et.Json, error), userId string) *Flow {
-	result, err := s.workflow.newStep(kind, tag, version, title, userId)
-	if err != nil {
-		s.err = err
-		return s
-	}
+	result := s.workflow.newStep(kind, tag, version, title, userId)
 	result.Definition = fn
 	s.Steps[result.ID] = result
 
@@ -514,11 +484,7 @@ func (s *Flow) addStep(kind Kind, tag, version, title string, port Port, fn func
 **/
 func (s *Flow) Step(tag, title string, fn func(instance *Instance, ctx et.Json) (et.Json, error)) *Flow {
 	if len(s.Steps) == 0 {
-		result, err := s.workflow.newStep(KindTrigger, tag, "1.0.0", title, s.userId)
-		if err != nil {
-			s.err = err
-			return s
-		}
+		result := s.workflow.newStep(KindTrigger, tag, "1.0.0", title, s.ID)
 		result.Definition = fn
 		s.Steps[result.ID] = result
 		s.step = result
@@ -530,7 +496,7 @@ func (s *Flow) Step(tag, title string, fn func(instance *Instance, ctx et.Json) 
 		return s
 	}
 
-	return s.addStep(KindAction, tag, "1.0.0", title, PortOutput, fn, s.userId)
+	return s.addStep(KindAction, tag, "1.0.0", title, PortOutput, fn, s.ID)
 }
 
 /**
@@ -544,7 +510,7 @@ func (s *Flow) Error(tag, version, title string, fn func(instance *Instance, ctx
 		return s
 	}
 
-	return s.addStep(KindAction, tag, version, title, PortError, fn, s.userId)
+	return s.addStep(KindAction, tag, version, title, PortError, fn, s.ID)
 }
 
 /**

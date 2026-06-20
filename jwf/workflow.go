@@ -1,6 +1,7 @@
 package jwf
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -10,6 +11,7 @@ import (
 	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 )
@@ -27,18 +29,19 @@ type Store interface {
 }
 
 type WorkFlow struct {
-	CreatedAt   time.Time            `json:"created_at"`
-	UpdatedAt   time.Time            `json:"updated_at"`
-	TenantId    string               `json:"tenant_id"`
-	ID          string               `json:"id"`
-	Flows       map[string]*Flow     `json:""`
-	Instances   map[string]*Instance `json:"-"`
-	AuditLog    []et.Json            `json:"audit_log"`
-	bindings    map[string]any       `json:"-"`
-	muFlows     sync.Mutex           `json:"-"`
-	muInstances sync.Mutex           `json:"-"`
-	store       Store                `json:"-"`
-	isDebug     bool                 `json:"-"`
+	CreatedAt time.Time        `json:"created_at"`
+	UpdatedAt time.Time        `json:"updated_at"`
+	TenantId  string           `json:"tenant_id"`
+	ID        string           `json:"id"`
+	AuditLog  []et.Json        `json:"audit_log"`
+	Flows     map[string]*Flow `json:"-"`
+	Steps     map[string]*Step `json:"-"`
+	bindings  map[string]any   `json:"-"`
+	muFlows   sync.Mutex       `json:"-"`
+	muSteps   sync.Mutex       `json:"-"`
+	store     Store            `json:"-"`
+	isDebug   bool             `json:"-"`
+	isChanged bool             `json:"-"`
 }
 
 /**
@@ -57,60 +60,127 @@ func New(tenantId string, store Store) (*WorkFlow, error) {
 		return nil, err
 	}
 
-	isDebug := config.GetBool("DEBUG", false)
 	now := timezone.Now()
-	id := fmt.Sprintf("workflow:%s", tenantId)
 	result := &WorkFlow{
-		CreatedAt:   now,
-		UpdatedAt:   now,
-		TenantId:    tenantId,
-		ID:          id,
-		Flows:       make(map[string]*Flow),
-		Instances:   make(map[string]*Instance),
-		AuditLog:    make([]et.Json, 0),
-		bindings:    make(map[string]any),
-		muFlows:     sync.Mutex{},
-		muInstances: sync.Mutex{},
-		store:       store,
-		isDebug:     isDebug,
+		CreatedAt: now,
+		UpdatedAt: now,
+		TenantId:  tenantId,
+		ID:        reg.ULID(),
+		Flows:     make(map[string]*Flow),
+		Steps:     make(map[string]*Step),
+		AuditLog:  make([]et.Json, 0),
 	}
-	return result, nil
+	return result.up(store)
 }
 
 /**
 * Load
-* @param store Store
+* @param tenantId string, store Store
 * @return *WorkFlow, error
 **/
-func Load(tenantId string, store Store, userId string) (*WorkFlow, error) {
+func Load(id string, store Store) (*WorkFlow, error) {
 	if store == nil {
 		return nil, errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
 
-	id := fmt.Sprintf("workflow:%s", tenantId)
-	result := &WorkFlow{}
-	exists, err := store.Get("workflow", id, result)
+	var def et.Json
+	exists, err := store.Get("workflow", id, &def)
 	if err != nil {
 		return nil, err
 	}
 
 	if !exists {
-		result, err = New(tenantId, store)
-		if err != nil {
-			return nil, err
-		}
-
-		err = result.Save(userId)
-		if err != nil {
-			return nil, err
-		}
-		return result, nil
+		return nil, errors.New(MSG_WORKFLOW_NOT_FOUND)
 	}
 
+	result := &WorkFlow{}
+	err = json.Unmarshal([]byte(def.ToString()), &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result.up(store)
+}
+
+/**
+* up
+* @param store Store
+* @return *WorkFlow
+**/
+func (s *WorkFlow) up(store Store) (*WorkFlow, error) {
 	isDebug := config.GetBool("DEBUG", false)
-	result.store = store
-	result.isDebug = isDebug
-	return result, nil
+	s.bindings = make(map[string]any)
+	s.muFlows = sync.Mutex{}
+	s.muSteps = sync.Mutex{}
+	s.store = store
+	s.isDebug = isDebug
+	for id := range s.Flows {
+		_, err := s.loadFlow(id)
+		if err != nil {
+			return nil, err
+		}
+	}
+	for id := range s.Steps {
+		_, err := s.loadStep(id)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return s, nil
+}
+
+/**
+* ToJson
+* @return et.Json
+**/
+func (s *WorkFlow) ToJson() et.Json {
+	flows := et.Json{}
+	for id, flow := range s.Flows {
+		flows[id] = flow.ToJson()
+	}
+	steps := et.Json{}
+	for id, step := range s.Steps {
+		steps[id] = step.ToJson()
+	}
+	return et.Json{
+		"created_at": timezone.Format(s.CreatedAt, timezone.RFC3339),
+		"updated_at": timezone.Format(s.UpdatedAt, timezone.RFC3339),
+		"tenant_id":  s.TenantId,
+		"id":         s.ID,
+		"flows":      flows,
+		"steps":      steps,
+		"audit_log":  s.AuditLog,
+	}
+}
+
+/**
+* ToString
+* @return string
+**/
+func (s *WorkFlow) ToString() string {
+	return s.ToJson().ToString()
+}
+
+/**
+* addAuditLog
+* @param userId string, action string
+**/
+func (s *WorkFlow) addAuditLog(userId string, action string) {
+	if s.AuditLog == nil {
+		s.AuditLog = make([]et.Json, 0)
+	}
+
+	now := timezone.Now()
+	s.AuditLog = append(s.AuditLog, et.Json{
+		"created_at": now,
+		"user_id":    userId,
+		"action":     action,
+	})
+	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
+	if len(s.AuditLog) > maxAuditLog {
+		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	}
+	s.isChanged = true
 }
 
 /**
@@ -122,20 +192,10 @@ func (s *WorkFlow) Save(userId string) error {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
 
-	if s.AuditLog == nil {
-		s.AuditLog = make([]et.Json, 0)
-	}
+	s.isChanged = false
 
-	now := timezone.Now()
-	s.UpdatedAt = now
-	s.AuditLog = append(s.AuditLog, et.Json{
-		"created_at": now,
-		"user_id":    userId,
-		"action":     "save",
-	})
-	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
-	if len(s.AuditLog) > maxAuditLog {
-		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	if s.isDebug {
+		logs.Log(packageName, "save:", s.ToString())
 	}
 
 	return s.store.Set("workflow", s.ID, s.TenantId, s.TenantId, s, userId)
@@ -173,6 +233,22 @@ func (s *WorkFlow) addFlow(flow *Flow) {
 }
 
 /**
+* addStep
+* @param step *Step
+**/
+func (s *WorkFlow) getFlow(id string) (*Flow, bool) {
+	s.muFlows.Lock()
+	defer s.muFlows.Unlock()
+
+	flow, exists := s.Flows[id]
+	if !exists {
+		return nil, false
+	}
+
+	return flow, true
+}
+
+/**
 * removeFlow
 * @param id string
 **/
@@ -187,24 +263,39 @@ func (s *WorkFlow) removeFlow(id string) {
 * addInstance
 * @param instance *Instance
 **/
-func (s *WorkFlow) addInstance(instance *Instance) {
+func (s *WorkFlow) addStep(step *Step) {
 	s.muFlows.Lock()
 	defer s.muFlows.Unlock()
 
-	s.Instances[instance.ID] = instance
+	s.Steps[step.ID] = step
 }
 
 /**
-* removeInstance
+* getStep
+* @param id string
+* @return *Step, bool
+**/
+func (s *WorkFlow) getStep(id string) (*Step, bool) {
+	s.muSteps.Lock()
+	defer s.muSteps.Unlock()
+
+	step, exists := s.Steps[id]
+	if !exists {
+		return nil, false
+	}
+
+	return step, true
+}
+
+/**
+* removeStep
 * @param id string
 **/
-func (s *WorkFlow) removeInstance(id string) {
-	s.muInstances.Lock()
-	defer s.muInstances.Unlock()
+func (s *WorkFlow) removeStep(id string) {
+	s.muSteps.Lock()
+	defer s.muSteps.Unlock()
 
-	key := fmt.Sprintf("%s:status", id)
-	cache.Delete(key)
-	delete(s.Instances, id)
+	delete(s.Steps, id)
 }
 
 /**
@@ -237,7 +328,6 @@ func (s *WorkFlow) Run(flowId, triggerTag, id, projectId string, ctx, tags et.Js
 		return nil, err
 	}
 
-	s.addInstance(instance)
 	instance.setTag(tags)
 	instance.setCtx(ctx)
 	result, err := instance.run(ctx, userId)
@@ -245,7 +335,8 @@ func (s *WorkFlow) Run(flowId, triggerTag, id, projectId string, ctx, tags et.Js
 		return et.Json{}, err
 	}
 
-	s.removeInstance(instance.ID)
+	key := fmt.Sprintf("instance:%s:status", id)
+	cache.Delete(key)
 
 	return result, nil
 }

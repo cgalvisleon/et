@@ -156,11 +156,8 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*I
 		onDelete:   make([]func(instance *Instance, userId string) error, 0),
 		mu:         sync.Mutex{},
 	}
-	for k, v := range s.bindings {
-		result.bindings[k] = v
-	}
-	result.up()
 	result.addAuditLog(userId, "new_instance")
+	result.up(flow)
 	result.setStatus(CREATED, userId)
 	return result, nil
 }
@@ -205,21 +202,10 @@ func (s *WorkFlow) getInstance(id, userId string) (*Instance, error) {
 	if !exists {
 		return nil, errors.New(MSG_TRIGGER_NOT_FOUND)
 	}
-
-	result.store = s.store
-	result.workflow = s
-	result.flow = flow
 	result.Trigger = trigger
-	result.isDebug = s.isDebug
-	result.onSave = make([]func(instance *Instance, userId string) error, 0)
-	result.onDelete = make([]func(instance *Instance, userId string) error, 0)
-	result.bindings = make(map[string]interface{})
-	for k, v := range s.bindings {
-		result.bindings[k] = v
-	}
-	result.up()
+
 	result.addAuditLog(userId, "get_instance")
-	return result, nil
+	return result.up(flow), nil
 }
 
 /**
@@ -259,7 +245,16 @@ func (s *WorkFlow) deleteInstance(id, userId string) error {
 * up
 * @return *Instance
 **/
-func (s *Instance) up() *Instance {
+func (s *Instance) up(flow *Flow) *Instance {
+	s.flow = flow
+	s.store = flow.store
+	s.workflow = flow.workflow
+	s.isDebug = flow.isDebug
+	s.onSave = make([]func(instance *Instance, userId string) error, 0)
+	s.onDelete = make([]func(instance *Instance, userId string) error, 0)
+	for k, v := range flow.workflow.bindings {
+		s.bindings[k] = v
+	}
 	s.bindings["goTo"] = func(idx int) {
 		s.setCurrentIndex(idx)
 	}

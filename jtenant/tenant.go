@@ -7,26 +7,12 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jsql"
-	"github.com/cgalvisleon/et/jwf"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 )
 
 const packageName = "jtenant"
-
-type App struct {
-	CreatedAt   time.Time                `json:"created_at"`
-	UpdatedAt   time.Time                `json:"updated_at"`
-	TenantID    string                   `json:"tenant_id"`
-	ID          string                   `json:"id"`
-	Tag         string                   `json:"tag"`
-	Name        string                   `json:"name"`
-	Description string                   `json:"description"`
-	DBS         map[string]*jsql.DB      `json:"dbs"`
-	WorkFlows   map[string]*jwf.WorkFlow `json:"workflows"`
-	store       Store                    `json:"-"`
-}
 
 type ServerDB interface {
 	NewDB(name string) (*jsql.DB, error)
@@ -92,12 +78,12 @@ func NewTenant(tag, name string, store Store) *Tenant {
 
 /**
 * LoadTenant
-* @param tag string, store Store
+* @param id string, store Store
 * @return *Tenant, error
 **/
-func LoadTenant(tag string, store Store) (*Tenant, error) {
+func LoadTenant(id string, store Store) (*Tenant, error) {
 	var tenant *Tenant
-	exists, err := store.Get("tenant", tag, &tenant)
+	exists, err := store.Get("tenant", id, &tenant)
 	if err != nil {
 		return nil, err
 	}

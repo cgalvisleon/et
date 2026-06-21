@@ -42,9 +42,9 @@ func (s *WorkFlow) LoadRouter(r Router) {
 **/
 func (s *WorkFlow) httpGetStep(w http.ResponseWriter, r *http.Request) {
 	id := request.URLParam(r, "id").Str()
-	step, err := s.getStep(id)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+	step, exists := s.getStep(id)
+	if !exists {
+		response.HTTPError(w, r, http.StatusBadRequest, MSG_STEP_NOT_FOUND)
 		return
 	}
 
@@ -73,12 +73,7 @@ func (s *WorkFlow) httpNewStep(w http.ResponseWriter, r *http.Request) {
 	title := body.Str("title")
 	userId := request.UserId(r)
 
-	step, err := s.newStep(kind, tag, version, title, userId)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
+	step := s.newStep(kind, tag, version, title, userId)
 	response.JSON(w, r, http.StatusOK, step.ToJson())
 }
 
@@ -94,9 +89,9 @@ func (s *WorkFlow) httpUpdateStep(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	step, err := s.getStep(id)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+	step, exists := s.getStep(id)
+	if !exists {
+		response.HTTPError(w, r, http.StatusBadRequest, MSG_STEP_NOT_FOUND)
 		return
 	}
 
@@ -128,9 +123,9 @@ func (s *WorkFlow) httpSetDefinitionStep(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	step, err := s.getStep(id)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+	step, exists := s.getStep(id)
+	if !exists {
+		response.HTTPError(w, r, http.StatusBadRequest, MSG_STEP_NOT_FOUND)
 		return
 	}
 

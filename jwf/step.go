@@ -46,7 +46,7 @@ var (
 type Step struct {
 	CreatedAt   time.Time                `json:"created_at"`
 	UpdatedAt   time.Time                `json:"updated_at"`
-	TenantId    string                   `json:"tenant_id"`
+	WorkflowId  string                   `json:"workflow_id"`
 	ID          string                   `json:"id"`
 	Kind        Kind                     `json:"kind"`
 	Tag         string                   `json:"tag"`
@@ -54,7 +54,6 @@ type Step struct {
 	Status      Status                   `json:"status"`
 	Title       string                   `json:"title"`
 	Description string                   `json:"description"`
-	WorkflowId  string                   `json:"workflow_id"`
 	Definition  interface{}              `json:"definition"`
 	Config      et.Json                  `json:"config"`
 	Params      et.Json                  `json:"params"`
@@ -84,7 +83,7 @@ func (s *WorkFlow) newStep(kind Kind, tag, version, title, userId string) *Step 
 	result := &Step{
 		CreatedAt:   now,
 		UpdatedAt:   now,
-		TenantId:    s.TenantId,
+		WorkflowId:  s.ID,
 		ID:          id,
 		Kind:        kind,
 		Tag:         tag,
@@ -92,14 +91,13 @@ func (s *WorkFlow) newStep(kind Kind, tag, version, title, userId string) *Step 
 		Status:      ACTIVE,
 		Title:       title,
 		Description: "",
-		WorkflowId:  s.ID,
 		Config:      et.Json{},
 		Params:      et.Json{},
 		Outputs:     1,
 		Stop:        false,
 		AuditLog:    make([]et.Json, 0),
 	}
-	result.addAuditLog(userId, "new_step")
+	s.addAuditLog(userId, "new_step")
 	return result.up(s)
 }
 
@@ -254,7 +252,7 @@ func (s *Step) save() error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("step", s.ID, s.TenantId, "", s)
+	err := s.store.Set("step", s.ID, s.WorkflowId, s)
 	if err != nil {
 		return err
 	}
@@ -277,7 +275,7 @@ func (s *Step) ToJson() et.Json {
 	return et.Json{
 		"created_at":  timezone.Format(s.CreatedAt, timezone.RFC3339),
 		"updated_at":  timezone.Format(s.UpdatedAt, timezone.RFC3339),
-		"tenant_id":   s.TenantId,
+		"workflow_id": s.WorkflowId,
 		"id":          s.ID,
 		"kind":        s.Kind,
 		"tag":         s.Tag,

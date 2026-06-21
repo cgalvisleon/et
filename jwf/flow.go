@@ -70,13 +70,12 @@ type FlowDefinition struct {
 type Flow struct {
 	CreatedAt     time.Time                `json:"created_at"`
 	UpdatedAt     time.Time                `json:"updated_at"`
-	TenantId      string                   `json:"tenant_id"`
+	WorkflowId    string                   `json:"workflow_id"`
 	ID            string                   `json:"id"`
 	Tag           string                   `json:"tag"`
 	Title         string                   `json:"title"`
 	Description   string                   `json:"description"`
 	Version       string                   `json:"version"`
-	WorkflowId    string                   `json:"workflow_id"`
 	Params        et.Json                  `json:"params"`
 	Steps         map[string]*Step         `json:"steps"`
 	Connections   []*Connection            `json:"connections"`
@@ -105,18 +104,17 @@ func (s *WorkFlow) newFlow(tag, title, version, userId string) *Flow {
 	if version == "" {
 		version = "1.0.0"
 	}
-	id := reg.ULID()
+
 	now := timezone.Now()
 	result := &Flow{
 		CreatedAt:     now,
 		UpdatedAt:     now,
-		TenantId:      s.TenantId,
-		ID:            id,
+		WorkflowId:    s.ID,
+		ID:            reg.ULID(),
 		Tag:           tag,
 		Title:         title,
 		Description:   "",
 		Version:       version,
-		WorkflowId:    s.ID,
 		Params:        make(et.Json),
 		Steps:         make(map[string]*Step),
 		Connections:   make([]*Connection, 0),
@@ -127,7 +125,7 @@ func (s *WorkFlow) newFlow(tag, title, version, userId string) *Flow {
 		Public:        false,
 		AuditLog:      make([]et.Json, 0),
 	}
-	result.addAuditLog(userId, "new_flow")
+	s.addAuditLog(userId, "new_flow")
 	return result.up(s)
 }
 
@@ -249,7 +247,7 @@ func (s *Flow) save() error {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	err := s.store.Set("flow", s.ID, s.TenantId, s.WorkflowId, s)
+	err := s.store.Set("flow", s.ID, s.WorkflowId, s)
 	if err != nil {
 		return err
 	}
@@ -272,10 +270,9 @@ func (s *Flow) ToJson() et.Json {
 	return et.Json{
 		"created_at":     timezone.Format(s.CreatedAt, timezone.RFC3339),
 		"updated_at":     timezone.Format(s.UpdatedAt, timezone.RFC3339),
-		"tenant_id":      s.TenantId,
+		"workflow_id":    s.WorkflowId,
 		"id":             s.ID,
 		"tag":            s.Tag,
-		"workflow_id":    s.WorkflowId,
 		"title":          s.Title,
 		"description":    s.Description,
 		"version":        s.Version,

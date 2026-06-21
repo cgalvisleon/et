@@ -67,7 +67,7 @@ type Instance struct {
 	StartedAt    time.Time                        `json:"started_at"`
 	UpdatedAt    time.Time                        `json:"updated_at"`
 	DoneAt       time.Time                        `json:"done_at"`
-	TenantId     string                           `json:"tenant_id"`
+	WorkflowId   string                           `json:"workflow_id"`
 	ProjectId    string                           `json:"project_id"`
 	ID           string                           `json:"id"`
 	FlowId       string                           `json:"flow_id"`
@@ -117,7 +117,7 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*I
 	code := ""
 	if s.store != nil {
 		var err error
-		code, err = s.store.GenSerie(s.TenantId, flow.Tag)
+		code, err = s.store.GenSerie(flow.Tag)
 		if err != nil {
 			return nil, err
 		}
@@ -132,7 +132,7 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*I
 	id := reg.ULID()
 	result := &Instance{
 		StartedAt:  now,
-		TenantId:   s.TenantId,
+		WorkflowId: s.ID,
 		ProjectId:  projectId,
 		ID:         id,
 		FlowId:     flowId,
@@ -335,7 +335,7 @@ func (s *Instance) save() error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("instance", s.ID, s.TenantId, s.ProjectId, s)
+	err := s.store.Set("instance", s.ID, s.WorkflowId, s)
 	if err != nil {
 		return err
 	}
@@ -359,7 +359,8 @@ func (s *Instance) ToJson() et.Json {
 		"started_at":  timezone.Format(s.StartedAt, timezone.RFC3339),
 		"updated_at":  timezone.Format(s.UpdatedAt, timezone.RFC3339),
 		"done_at":     timezone.Format(s.DoneAt, timezone.RFC3339),
-		"tenant_id":   s.TenantId,
+		"workflow_id": s.WorkflowId,
+		"project_id":  s.ProjectId,
 		"id":          s.ID,
 		"code":        s.Code,
 		"title":       s.Title,
@@ -452,6 +453,7 @@ func (s *Instance) setTrace(stepId string, result et.Json, err error, userId str
 	if err != nil {
 		errMessage = err.Error()
 	}
+
 	s.addAuditLog(userId, et.Json{
 		"action":  "set_trace",
 		"step_id": stepId,
@@ -672,7 +674,6 @@ func (s *Instance) runResilence(ctx et.Json, err error, userId string) (et.Json,
 
 	description := fmt.Sprintf("flow: %s,  %s", s.flow.Title, s.flow.Description)
 	resilence := s.resilience.LoadInstance(resilience.Params{
-		TenantId:      s.TenantId,
 		Id:            s.ID,
 		Tag:           "workflow",
 		Description:   description,

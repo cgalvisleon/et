@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -62,10 +63,10 @@ func agendId(tag string) string {
 
 /**
 * newAgent
-* @param owner *Ia, tag string, name string, description string, context string, model string
+* @param owner *Ia, tag string, name string, description string, context string, model string, userId string
 * @return *Agent
 **/
-func newAgent(ia *Ia, tag, name, description, context, model string) *Agent {
+func newAgent(ia *Ia, tag, name, description, context, model, userId string) *Agent {
 	if context == "" {
 		context = contextDefault
 	}
@@ -85,34 +86,114 @@ func newAgent(ia *Ia, tag, name, description, context, model string) *Agent {
 		Skills:      make(map[string]Skill),
 		AuditLog:    make([]et.Json, 0),
 		Model:       model,
-		ia:          ia,
-		isDebug:     ia.isDebug,
 	}
+	result.addAuditLog(userId, "new_agent")
+	result.up(ia)
 	ia.addAgent(result)
 	return result
 }
 
-func (s *Agent) up(userId string, action string) {
+/**
+* up
+* @param ia *Ia
+* @return *Agent
+**/
+func (s *Agent) up(ia *Ia) *Agent {
+	s.client = openai.NewClient(
+		option.WithAPIKey(ia.key),
+	)
+	s.ia = ia
+	s.isDebug = ia.isDebug
+	s.onSave = make([]func(agent *Agent) error, 0)
+	s.onDelete = make([]func(agent *Agent) error, 0)
+	s.OnSave(func(agent *Agent) error {
+		event.Publish(EVENT_AGENT_SET, agent.ToJson())
+		return nil
+	})
+	s.OnDelete(func(agent *Agent) error {
+		event.Publish(EVENT_AGENT_DELETE, et.Json{
+			"id": agent.ID,
+		})
+		return nil
+	})
+	return s
+}
+
+/**
+* OnSave
+* @param fn func(agent *Agent) error
+* @return *Agent
+**/
+func (s *Agent) OnSave(fn func(agent *Agent) error) *Agent {
+	if s.onSave == nil {
+		s.onSave = make([]func(agent *Agent) error, 0)
+	}
+	s.onSave = append(s.onSave, fn)
+	return s
+}
+
+/**
+* OnDelete
+* @param fn func(agent *Agent) error
+* @return *Agent
+**/
+func (s *Agent) OnDelete(fn func(agent *Agent) error) *Agent {
+	if s.onDelete == nil {
+		s.onDelete = make([]func(agent *Agent) error, 0)
+	}
+	s.onDelete = append(s.onDelete, fn)
+	return s
+}
+
+/**
+* addAuditLog
+* @param userId string, action string
+**/
+func (s *Agent) addAuditLog(userId string, action string) {
+	if s.AuditLog == nil {
+		s.AuditLog = make([]et.Json, 0)
+	}
+
+	now := timezone.Now()
+	s.AuditLog = append(s.AuditLog, et.Json{
+		"created_at": now,
+		"user_id":    userId,
+		"action":     action,
+	})
+	maxAuditLog := envar.GetInt("MAX_AUDIT_LOG", 1000)
+	if len(s.AuditLog) > maxAuditLog {
+		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	}
+	s.isChanged = true
+}
+
 /**
 * save
 * @param userId string
 * @return error
 **/
-func (s *Agent) save() error {
+func (s *Agent) save(userId string) error {
 	s.UpdatedAt = timezone.Now()
-	data := s.ToJson()
-	data.Set("user_id", userId)
+	s.addAuditLog(userId, "update_agent")
 	if s.isDebug {
-		logs.Log(packageName, "save:", data.ToString())
+		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	event.Publish(EVENT_AGENT_SET, data)
-
 	if s.ia.store != nil {
-		return s.ia.store.Set(s.ID, "agent", s.ia.TenantID, s.ia.ID, s)
+		err := s.ia.store.Set(s.ID, "agent", s.ia.TenantID, s.ia.ID, s)
+		if err != nil {
+			return err
+		}
 	}
 
 	s.isChanged = false
+
+	for _, onSave := range s.onSave {
+		if err := onSave(s); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -128,23 +209,13 @@ func (s *Agent) delete() error {
 		}
 	}
 
-	event.Publish(EVENT_CONVERSATION_DELETE, et.Json{
-		"id": s.ID,
-	})
+	for _, onDelete := range s.onDelete {
+		if err := onDelete(s); err != nil {
+			return err
+		}
+	}
 
 	return nil
-}
-
-/**
-* up
-* @param ia *Ia
-**/
-func (s *Agent) up(ia *Ia) {
-	s.client = openai.NewClient(
-		option.WithAPIKey(ia.key),
-	)
-	s.ia = ia
-	s.isDebug = ia.isDebug
 }
 
 /**

@@ -21,35 +21,36 @@ const (
 )
 
 type Store interface {
-	Set(collection, id, tenantId, ownerId string, obj any) error
+	Set(collection, id, ownerId string, obj any) error
 	Get(collection, id string, dest any) (bool, error)
 	Delete(collection, id string) error
 	Query(query et.Json) (et.Items, error)
-	GenSerie(TenantId, tag string) (string, error)
+	GenSerie(tag string) (string, error)
 }
 
 type WorkFlow struct {
-	CreatedAt time.Time        `json:"created_at"`
-	UpdatedAt time.Time        `json:"updated_at"`
-	TenantId  string           `json:"tenant_id"`
-	ID        string           `json:"id"`
-	AuditLog  []et.Json        `json:"audit_log"`
-	Flows     map[string]*Flow `json:"-"`
-	Steps     map[string]*Step `json:"-"`
-	bindings  map[string]any   `json:"-"`
-	muFlows   sync.Mutex       `json:"-"`
-	muSteps   sync.Mutex       `json:"-"`
-	store     Store            `json:"-"`
-	isDebug   bool             `json:"-"`
-	isChanged bool             `json:"-"`
+	CreatedAt time.Time                        `json:"created_at"`
+	UpdatedAt time.Time                        `json:"updated_at"`
+	ID        string                           `json:"id"`
+	AuditLog  []et.Json                        `json:"audit_log"`
+	Flows     map[string]*Flow                 `json:"-"`
+	Steps     map[string]*Step                 `json:"-"`
+	bindings  map[string]any                   `json:"-"`
+	muFlows   sync.Mutex                       `json:"-"`
+	muSteps   sync.Mutex                       `json:"-"`
+	store     Store                            `json:"-"`
+	isDebug   bool                             `json:"-"`
+	isChanged bool                             `json:"-"`
+	onSave    []func(workflow *WorkFlow) error `json:"-"`
+	onDelete  []func(workflow *WorkFlow) error `json:"-"`
 }
 
 /**
 * New
-* @param tenantId string, store Store
+* @param store Store
 * @return *WorkFlow
 **/
-func New(tenantId string, store Store) (*WorkFlow, error) {
+func New(store Store) (*WorkFlow, error) {
 	err := cache.Load()
 	if err != nil {
 		return nil, err
@@ -64,7 +65,6 @@ func New(tenantId string, store Store) (*WorkFlow, error) {
 	result := &WorkFlow{
 		CreatedAt: now,
 		UpdatedAt: now,
-		TenantId:  tenantId,
 		ID:        reg.ULID(),
 		Flows:     make(map[string]*Flow),
 		Steps:     make(map[string]*Step),
@@ -114,6 +114,20 @@ func (s *WorkFlow) up(store Store) (*WorkFlow, error) {
 	s.muSteps = sync.Mutex{}
 	s.store = store
 	s.isDebug = isDebug
+	s.onSave = make([]func(workflow *WorkFlow) error, 0)
+	s.onDelete = make([]func(workflow *WorkFlow) error, 0)
+	s.OnSave(func(workflow *WorkFlow) error {
+		key := fmt.Sprintf("workflow:%s", workflow.ID)
+		event.Publish(key, workflow.ToJson())
+		return nil
+	})
+	s.OnDelete(func(workflow *WorkFlow) error {
+		key := fmt.Sprintf("workflow:%s:delete", workflow.ID)
+		event.Publish(key, et.Json{
+			"id": workflow.ID,
+		})
+		return nil
+	})
 	for id := range s.Flows {
 		_, err := s.loadFlow(id)
 		if err != nil {
@@ -167,7 +181,6 @@ func (s *WorkFlow) ToJson() et.Json {
 	return et.Json{
 		"created_at": timezone.Format(s.CreatedAt, timezone.RFC3339),
 		"updated_at": timezone.Format(s.UpdatedAt, timezone.RFC3339),
-		"tenant_id":  s.TenantId,
 		"id":         s.ID,
 		"flows":      flows,
 		"steps":      steps,
@@ -184,6 +197,32 @@ func (s *WorkFlow) ToString() string {
 }
 
 /**
+* OnSave
+* @param fn func(workflow *WorkFlow) error
+* @return *WorkFlow
+**/
+func (s *WorkFlow) OnSave(fn func(workflow *WorkFlow) error) *WorkFlow {
+	if s.onSave == nil {
+		s.onSave = make([]func(workflow *WorkFlow) error, 0)
+	}
+	s.onSave = append(s.onSave, fn)
+	return s
+}
+
+/**
+* OnDelete
+* @param fn func(workflow *WorkFlow) error
+* @return *WorkFlow
+**/
+func (s *WorkFlow) OnDelete(fn func(workflow *WorkFlow) error) *WorkFlow {
+	if s.onDelete == nil {
+		s.onDelete = make([]func(workflow *WorkFlow) error, 0)
+	}
+	s.onDelete = append(s.onDelete, fn)
+	return s
+}
+
+/**
 * Save
 * @return error
 **/
@@ -197,7 +236,18 @@ func (s *WorkFlow) Save() error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	return s.store.Set("workflow", s.ID, s.TenantId, s.TenantId, s)
+	err := s.store.Set("workflow", s.ID, s.ID, s)
+	if err != nil {
+		return err
+	}
+
+	for _, onSave := range s.onSave {
+		if err := onSave(s); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 /**
@@ -209,7 +259,18 @@ func (s *WorkFlow) Delete() error {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
 
-	return s.store.Delete("workflow", s.ID)
+	err := s.store.Delete("workflow", s.ID)
+	if err != nil {
+		return err
+	}
+
+	for _, onDelete := range s.onDelete {
+		if err := onDelete(s); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 /**
@@ -290,10 +351,11 @@ func (s *WorkFlow) getStep(id string) (*Step, bool) {
 * removeStep
 * @param id string
 **/
-func (s *WorkFlow) removeStep(id string) {
+func (s *WorkFlow) removeStep(id, userId string) {
 	s.muSteps.Lock()
 	defer s.muSteps.Unlock()
 
+	s.addAuditLog(userId, "remove_step")
 	delete(s.Steps, id)
 }
 
@@ -304,6 +366,7 @@ func (s *WorkFlow) removeStep(id string) {
 **/
 func (s *WorkFlow) NewFloW(tag, title, version, userId string) *Flow {
 	result := s.newFlow(tag, title, version, userId)
+	s.addAuditLog(userId, "new_flow")
 	s.addFlow(result)
 	return result
 }

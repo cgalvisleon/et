@@ -38,11 +38,15 @@ type Ia struct {
 	Agents        map[string]*Agent        `json:"agents"`
 	Participants  map[string]*Participant  `json:"participants"`
 	Conversations map[string]*Conversation `json:"-"`
+	AuditLog      []et.Json                `json:"audit_log"`
 	sender        Sender                   `json:"-"`
 	mutex         map[string]*sync.RWMutex `json:"-"`
 	key           string                   `json:"-"`
 	store         Store                    `json:"-"`
 	isDebug       bool                     `json:"-"`
+	isChanged     bool                     `json:"-"`
+	onSave        []func(ia *Ia) error     `json:"-"`
+	onDelete      []func(ia *Ia) error     `json:"-"`
 }
 
 /**
@@ -68,6 +72,7 @@ func New(tenantId, tag string, store Store) (*Ia, error) {
 		Agents:        make(map[string]*Agent, 0),
 		Participants:  make(map[string]*Participant, 0),
 		Conversations: make(map[string]*Conversation, 0),
+		AuditLog:      make([]et.Json, 0),
 		mutex:         make(map[string]*sync.RWMutex, 0),
 		isDebug:       isDebug,
 		store:         store,
@@ -110,17 +115,20 @@ func Load(tenantId, tag string, store Store) error {
 **/
 func (s *Ia) save(userId string) error {
 	s.UpdatedAt = timezone.Now()
-	data := s.ToJson()
-	data.Set("user_id", userId)
+	s.isChanged = false
 	if s.isDebug {
-		logs.Log(packageName, "save:", data.ToString())
+		logs.Log(packageName, "save:", s.ToString())
 	}
-
-	event.Publish(EVENT_IA_SET, data)
 
 	if s.store != nil {
 		err := s.store.Set(s.ID, packageName, s.TenantID, s.ID, s)
 		if err != nil {
+			return err
+		}
+	}
+
+	for _, onSave := range s.onSave {
+		if err := onSave(s); err != nil {
 			return err
 		}
 	}
@@ -140,11 +148,69 @@ func (s *Ia) delete() error {
 		}
 	}
 
-	event.Publish(EVENT_IA_DELETE, et.Json{
-		"id": s.ID,
-	})
+	for _, onDelete := range s.onDelete {
+		if err := onDelete(s); err != nil {
+			return err
+		}
+	}
 
 	return nil
+}
+
+/**
+* ToString
+* @return string
+**/
+func (s *Ia) ToString() string {
+	return s.ToJson().ToString()
+}
+
+/**
+* OnSave
+* @param fn func(ia *Ia) error
+* @return *Ia
+**/
+func (s *Ia) OnSave(fn func(ia *Ia) error) *Ia {
+	if s.onSave == nil {
+		s.onSave = make([]func(ia *Ia) error, 0)
+	}
+	s.onSave = append(s.onSave, fn)
+	return s
+}
+
+/**
+* OnDelete
+* @param fn func(ia *Ia) error
+* @return *Ia
+**/
+func (s *Ia) OnDelete(fn func(ia *Ia) error) *Ia {
+	if s.onDelete == nil {
+		s.onDelete = make([]func(ia *Ia) error, 0)
+	}
+	s.onDelete = append(s.onDelete, fn)
+	return s
+}
+
+/**
+* addAuditLog
+* @param userId string, action string
+**/
+func (s *Ia) addAuditLog(userId string, action string) {
+	if s.AuditLog == nil {
+		s.AuditLog = make([]et.Json, 0)
+	}
+
+	now := timezone.Now()
+	s.AuditLog = append(s.AuditLog, et.Json{
+		"created_at": now,
+		"user_id":    userId,
+		"action":     action,
+	})
+	maxAuditLog := envar.GetInt("MAX_AUDIT_LOG", 1000)
+	if len(s.AuditLog) > maxAuditLog {
+		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	}
+	s.isChanged = true
 }
 
 /**
@@ -161,6 +227,7 @@ func (s *Ia) ToJson() et.Json {
 		"tag":           s.Tag,
 		"agents":        s.Agents,
 		"conversations": s.Conversations,
+		"audit_log":     s.AuditLog,
 	}
 }
 
@@ -168,6 +235,19 @@ func (s *Ia) ToJson() et.Json {
 * up
 **/
 func (s *Ia) up() error {
+	s.onSave = make([]func(ia *Ia) error, 0)
+	s.onDelete = make([]func(ia *Ia) error, 0)
+	s.OnSave(func(ia *Ia) error {
+		event.Publish(EVENT_IA_SET, ia.ToJson())
+		return nil
+	})
+	s.OnDelete(func(ia *Ia) error {
+		event.Publish(EVENT_IA_DELETE, et.Json{
+			"id": ia.ID,
+		})
+		return nil
+	})
+
 	err := s.loadAgents()
 	if err != nil {
 		return err
@@ -237,6 +317,7 @@ func (s *Ia) removeAgent(tag, userId string) error {
 	defer s.mutex["agents"].Unlock()
 
 	delete(s.Agents, id)
+	s.addAuditLog(userId, fmt.Sprintf("remove_agent:%s", tag))
 	return s.save(userId)
 }
 
@@ -251,8 +332,9 @@ func (s *Ia) newAgent(tag, name, description, context, model, userId string) (*A
 		return nil, fmt.Errorf(MSG_AGENT_ALREADY_EXISTS, name)
 	}
 
-	result := newAgent(s, tag, name, description, context, model)
+	result := newAgent(s, tag, name, description, context, model, userId)
 	s.addAgent(result)
+	s.addAuditLog(userId, fmt.Sprintf("new_agent:%s", name))
 	return result, s.save(userId)
 }
 
@@ -385,6 +467,7 @@ func (s *Ia) getParticipant(to, userId string) (*Participant, error) {
 	s.Participants[to] = result
 	s.mutex["participants"].Unlock()
 
+	s.addAuditLog(userId, fmt.Sprintf("load_participant:%s", to))
 	return result, s.save(userId)
 }
 
@@ -404,6 +487,7 @@ func (s *Ia) newParticipant(to, id, name, userId string) (*Participant, error) {
 	s.Participants[to] = result
 	s.mutex["participants"].Unlock()
 
+	s.addAuditLog(userId, fmt.Sprintf("new_participant:%s", to))
 	return result, s.save(userId)
 }
 
@@ -417,6 +501,7 @@ func (s *Ia) removeConversation(to, userId string) error {
 	defer s.mutex["conversations"].Unlock()
 
 	delete(s.Conversations, to)
+	s.addAuditLog(userId, fmt.Sprintf("remove_conversation:%s", to))
 	return s.save(userId)
 }
 

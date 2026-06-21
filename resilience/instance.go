@@ -103,7 +103,7 @@ func (s *Instance) save(userId string) error {
 	}
 
 	if s.owner != nil && s.owner.store != nil {
-		err := s.owner.store.Set(s.ID, s.Tag, s.TenantId, s.OwnerId, data, userId)
+		err := s.owner.store.Set(s.ID, s.Tag, s.TenantId, s.OwnerId, data)
 		if err != nil {
 			return err
 		}

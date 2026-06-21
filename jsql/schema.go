@@ -1,7 +1,6 @@
 package jsql
 
 import (
-	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -20,21 +19,26 @@ type Schema struct {
 	db        *DB               `json:"-"`
 	historyDb *DB               `json:"-"`
 	deadDb    *DB               `json:"-"`
-	IsDebug   bool              `json:"-"`
+	isDebug   bool              `json:"-"`
 	mu        *sync.RWMutex     `json:"-"`
+	store     Store             `json:"-"`
 }
 
 /**
-* serialize: Marshals the schema metadata to JSON bytes.
-* @return []byte, error
+* up: Updates the schema metadata after loading from catalog.
+* @param db *DB
+* @return *Schema
 **/
-func (s *Schema) serialize() ([]byte, error) {
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return nil, err
+func (s *Schema) up(db *DB) (*Schema, error) {
+	s.db = db
+	s.isDebug = db.isDebug
+	for _, model := range s.Models {
+		_, err := s.loadModel(model.ID)
+		if err != nil {
+			return nil, err
+		}
 	}
-
-	return bt, nil
+	return s, nil
 }
 
 /**
@@ -42,11 +46,14 @@ func (s *Schema) serialize() ([]byte, error) {
 * @return et.Json
 **/
 func (s *Schema) ToJson() et.Json {
+	models := et.Json{}
+	for _, model := range s.Models {
+		models[model.Name] = model.ToJson()
+	}
 	return et.Json{
-		"tenant_id": s.TenantId,
-		"database":  s.Database,
-		"name":      s.Name,
-		"models":    s.Models,
+		"database": s.Database,
+		"name":     s.Name,
+		"models":   s.Models,
 	}
 }
 
@@ -70,27 +77,25 @@ func (s *Schema) SetDeadDb(db *DB) {
 }
 
 /**
-* newModel: Returns an existing model by name or creates and registers a new one.
-* @param name string, version int
-* @return *Model, error
+* addModel: Adds a model to the schema.
+* @param model *Model
+* @return void
 **/
-func (s *Schema) newModel(name string, version int) (*Model, error) {
-	name = utility.Normalize(name)
-
+func (s *Schema) addModel(model *Model) {
 	s.mu.Lock()
-	result, ok := s.Models[name]
+	s.Models[model.Name] = model
 	s.mu.Unlock()
-	if ok {
-		return result, nil
-	}
+}
 
-	name = utility.Normalize(name)
-	result = newModel(s, name, version)
+/**
+* removeModel: Removes a model from the schema.
+* @param name string
+* @return void
+**/
+func (s *Schema) removeModel(name string) {
 	s.mu.Lock()
-	s.Models[name] = result
+	delete(s.Models, name)
 	s.mu.Unlock()
-
-	return result, nil
 }
 
 /**
@@ -99,27 +104,13 @@ func (s *Schema) newModel(name string, version int) (*Model, error) {
 * @return *Model, error
 **/
 func (s *Schema) getModel(name string) (*Model, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	name = utility.Normalize(name)
 	s.mu.RUnlock()
 	result, exists := s.Models[name]
 	s.mu.RLock()
+
 	if !exists {
-		var err error
-		result, err = loadModel(s, name)
-		if err != nil {
-			return nil, err
-		}
-
-		if result == nil {
-			return nil, fmt.Errorf(MSG_MODEL_NOT_FOUND, name)
-		}
-
-		s.mu.Lock()
-		s.Models[name] = result
-		s.mu.Unlock()
+		return nil, fmt.Errorf(MSG_MODEL_NOT_FOUND, name)
 	}
 
 	return result, nil

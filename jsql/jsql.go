@@ -1,10 +1,12 @@
 package jsql
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/et"
 )
 
 var (
@@ -89,14 +91,57 @@ func Load(tenantId string) (*DB, error) {
 	return ConnectTo(conn)
 }
 
+/**
+* NewDB: Constructs a DB instance from the given config, resolving the driver by name.
+* @param params et.Json, store Store, userId string
+* @return *DB, error
+**/
+func NewDB(params et.Json, store Store, userId string) (*DB, error) {
+	result, err := newDB(params)
+	if err != nil {
+		return nil, err
+	}
+	result.addAuditLog(userId, "new_db")
+	return result.up(store)
+}
+
+/**
+* LoadDB: Loads a DB instance from the given id and store.
+* @param id string, store Store
+* @return *DB, error
+**/
+func LoadDB(id string, store Store) (*DB, error) {
+	if store == nil {
+		return nil, errors.New(MSG_DB_STORE_IS_NIL)
+	}
+
+	var def et.Json
+	exists, err := store.Get("db", id, &def)
+	if err != nil {
+		return nil, err
+	}
+
+	if !exists {
+		return nil, errors.New(MSG_DB_NOT_FOUND)
+	}
+
+	result := &DB{}
+	err = json.Unmarshal([]byte(def.ToString()), &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result.up(store)
+}
+
 /**Logero
 * GetDb: Returns an existing DB by name.
 * @param name string
 * @return *DB, error
 **/
 func GetDb(name string) (*DB, error) {
-	db, ok := dbs[name]
-	if !ok {
+	db, exists := dbs[name]
+	if !exists {
 		return nil, errors.New(MSG_DB_NOT_FOUND)
 	}
 	return db, nil
@@ -118,13 +163,4 @@ func GetModel(db string, schema string, name string) (*Model, error) {
 		return nil, err
 	}
 	return model, nil
-}
-
-/**
-* NewModel: Creates a new Model by name.
-* @param db *DB, schema string, name string, version int
-* @return *Model, error
-**/
-func NewModel(db *DB, schema string, name string, version int) (*Model, error) {
-	return db.NewModel(schema, name, version)
 }

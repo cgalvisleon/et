@@ -3,6 +3,7 @@ package jsql
 import "github.com/cgalvisleon/et/config"
 
 var (
+	MSG_DB_STORE_IS_NIL           = "Model store is nil"
 	MSG_CATALOG_NOT_FOUND         = "Catalog not found: %s"
 	MSG_DB_IS_NIL                 = "Database is nil"
 	MSG_DB_NOT_FOUND              = "Database not found"
@@ -33,6 +34,7 @@ func init() {
 	lang := config.GetStr("LANG", "en")
 
 	if lang == "es" {
+		MSG_DB_STORE_IS_NIL = "Store de base de datos es nulo"
 		MSG_CATALOG_NOT_FOUND = "Catálogo no encontrado: %s"
 		MSG_DB_IS_NIL = "Base de datos es nula"
 		MSG_DB_NOT_FOUND = "Base de datos no encontrada"

@@ -11,12 +11,12 @@ import (
 * @param model *Model
 * @return *Model
 **/
-func defaultTrigger(model *Model) *Model {
-	model.BeforeInsert(func(tx *Tx, old, new et.Json) error {
+func (s *Model) defaultTrigger() *Model {
+	s.BeforeInsert(func(tx *Tx, old, new et.Json) error {
 		var results sync.Map
 		var hasError error
 		var wg sync.WaitGroup
-		for _, validate := range model.Unique {
+		for _, validate := range s.Unique {
 			wg.Add(1)
 			go func(field string) {
 				defer wg.Done()
@@ -31,7 +31,7 @@ func defaultTrigger(model *Model) *Model {
 					return
 				}
 
-				exists, err := model.
+				exists, err := s.
 					Where(Eq(field, val)).
 					Exists()
 				if err != nil {
@@ -53,11 +53,11 @@ func defaultTrigger(model *Model) *Model {
 		return hasError
 	})
 
-	model.BeforeUpdate(func(tx *Tx, old, new et.Json) error {
+	s.BeforeUpdate(func(tx *Tx, old, new et.Json) error {
 		var results sync.Map
 		var hasError error
 		var wg sync.WaitGroup
-		for _, validate := range model.Unique {
+		for _, validate := range s.Unique {
 			wg.Add(1)
 			go func(field string) {
 				defer wg.Done()
@@ -73,8 +73,8 @@ func defaultTrigger(model *Model) *Model {
 					return
 				}
 
-				ql := model.Where(Eq(field, newVal))
-				for _, pk := range model.PrimaryKeys {
+				ql := s.Where(Eq(field, newVal))
+				for _, pk := range s.PrimaryKeys {
 					val := old[pk.Name]
 					ql = ql.And(Neg(pk.Name, val))
 				}
@@ -99,5 +99,5 @@ func defaultTrigger(model *Model) *Model {
 		return hasError
 	})
 
-	return model
+	return s
 }

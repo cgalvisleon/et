@@ -70,7 +70,7 @@ func DefineCatalog(db *DB, schema string) error {
 * @param name, kind string, version int, obj any
 * @return error
 **/
-func (s *DB) setCatalog(name, kind string, version int, obj any) error {
+func setCatalog(name, kind string, version int, obj any) error {
 	if s.catalog == nil {
 		return nil
 	}
@@ -105,7 +105,7 @@ func (s *DB) setCatalog(name, kind string, version int, obj any) error {
 * @param name, kind string, des any
 * @return error
 **/
-func (s *DB) getCatalog(name, kind string, des any) error {
+func getCatalog(name, kind string, des any) error {
 	item, err := s.catalog.
 		Where(Eq("tenant_id", s.TenantId)).
 		Where(Eq("name", name)).
@@ -137,7 +137,7 @@ func (s *DB) getCatalog(name, kind string, des any) error {
 * @param name, kind string
 * @return error
 **/
-func (s *DB) deleteCatalog(name, kind string) error {
+func deleteCatalog(name, kind string) error {
 	_, err := s.catalog.
 		Delete().
 		Where(Eq("tenant_id", s.TenantId)).

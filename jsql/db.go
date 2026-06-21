@@ -8,13 +8,25 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/reg"
+	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 )
 
+type Store interface {
+	Set(collection, id, tenantId, ownerId string, obj any, userId string) error
+	Get(collection, id string, dest any) (bool, error)
+	Delete(collection, id string) error
+	Query(query et.Json) (et.Items, error)
+}
+
 type DB struct {
 	TenantId    string             `json:"tenant_id"`
+	ID          string             `json:"id"`
 	Name        string             `json:"name"`
 	Schemas     map[string]*Schema `json:"schemas"`
 	Driver      string             `json:"driver"`
@@ -22,14 +34,14 @@ type DB struct {
 	UseCore     bool               `json:"use_core"`
 	RecordLimit int                `json:"record_limit"`
 	Version     int                `json:"version"`
-	IsDebug     bool               `json:"-"`
-	IsChanged   bool               `json:"-"`
+	AuditLog    []et.Json          `json:"audit_log"`
+	isDebug     bool               `json:"-"`
+	isChanged   bool               `json:"-"`
 	isInit      bool               `json:"-"`
 	driver      Driver             `json:"-"`
 	db          *sql.DB            `json:"-"`
-	catalog     *Model             `json:"-"`
 	series      *Model             `json:"-"`
-	rules       *Model             `json:"-"`
+	store       Store              `json:"-"`
 }
 
 /**
@@ -54,6 +66,7 @@ func newDB(params et.Json) (*DB, error) {
 	version := params.ValInt(1, "version")
 	result := &DB{
 		TenantId:    tenantId,
+		ID:          reg.ULID(),
 		Name:        name,
 		Schemas:     make(map[string]*Schema),
 		Driver:      driverName,
@@ -61,9 +74,53 @@ func newDB(params et.Json) (*DB, error) {
 		UseCore:     useCore,
 		RecordLimit: recordLimit,
 		Version:     version,
+		AuditLog:    make([]et.Json, 0),
 		driver:      driver,
+		isChanged:   true,
 	}
 	return result, nil
+}
+
+/**
+* up: Updates the DB metadata after loading from catalog.
+* @return *DB
+**/
+func (s *DB) up(store Store) (*DB, error) {
+	s.store = store
+	err := s.init()
+	if err != nil {
+		return nil, err
+	}
+	for _, schema := range s.Schemas {
+		_, err := schema.up(s)
+		if err != nil {
+			return nil, err
+		}
+	}
+	dbs[s.Name] = s
+	return s, nil
+}
+
+/**
+* addAuditLog: Adds an audit log entry to the DB.
+* @param userId string, action string
+**/
+func (s *DB) addAuditLog(userId string, action string) {
+	if s.AuditLog == nil {
+		s.AuditLog = make([]et.Json, 0)
+	}
+
+	now := timezone.Now()
+	s.AuditLog = append(s.AuditLog, et.Json{
+		"created_at": now,
+		"user_id":    userId,
+		"action":     action,
+	})
+	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
+	if len(s.AuditLog) > maxAuditLog {
+		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	}
+	s.isChanged = true
 }
 
 /**
@@ -76,12 +133,11 @@ func (s *DB) ToJson() et.Json {
 		schemas[schema.Name] = schema.ToJson()
 	}
 	return et.Json{
+		"id":           s.ID,
 		"tenant_id":    s.TenantId,
 		"name":         s.Name,
 		"schemas":      schemas,
 		"driver":       s.Driver,
-		"params":       s.Params,
-		"use_core":     s.UseCore,
 		"record_limit": s.RecordLimit,
 		"version":      s.Version,
 	}
@@ -100,7 +156,18 @@ func (s *DB) ToString() string {
 * @return error
 **/
 func (s *DB) save() error {
-	return s.setCatalog(s.Name, "db", s.Version, s)
+	if s.store == nil {
+		return nil
+	}
+
+	err := s.store.Set("db", s.ID, s.TenantId, s.ID, s, s.ID)
+	if err != nil {
+		return err
+	}
+
+	channel := fmt.Sprintf("db:%s", s.ID)
+	event.Publish(channel, s.ToJson())
+	return nil
 }
 
 /**
@@ -130,8 +197,15 @@ func (s *DB) init() error {
 		return nil
 	}
 
+	if s.UseCore {
+		err = DefineSeries(s, "core")
+		if err != nil {
+			return err
+		}
+	}
+
 	s.isInit = true
-	if s.IsChanged {
+	if s.isChanged {
 		return s.save()
 	}
 
@@ -184,10 +258,6 @@ func (s *DB) load(model *Model) error {
 		logs.Debug("DDL:\n", sql)
 	}
 
-	if model.isTest {
-		return nil
-	}
-
 	_, err = s.SqlTx(nil, sql)
 	if err != nil {
 		return err
@@ -206,7 +276,7 @@ func (s *DB) command(command *Command) (string, error) {
 		return "", errors.New(MSG_DRIVER_NOT_FOUND)
 	}
 
-	if s.IsDebug {
+	if s.isDebug {
 		logs.Debugf("command:%s", command.ToJson().ToEscapeHTML())
 	}
 
@@ -223,7 +293,7 @@ func (s *DB) query(query *Query) (string, error) {
 		return "", errors.New(MSG_DRIVER_NOT_FOUND)
 	}
 
-	if s.IsDebug {
+	if s.isDebug {
 		logs.Debugf("query:%s", query.ToJson().ToEscapeHTML())
 	}
 
@@ -240,12 +310,10 @@ func (s *DB) Close() error {
 
 /**
 * NewModel: Returns (or creates) a Model under the given schema name.
-* @param schema string
-* @param name string
-* @param version int
+* @param schema, name string, version int, userId string
 * @return *Model, error
 **/
-func (s *DB) NewModel(schema, name string, version int) (*Model, error) {
+func (s *DB) NewModel(schema, name string, version int, userId string) *Model {
 	schema = utility.Normalize(schema)
 	sch, ok := s.Schemas[schema]
 	if !ok {
@@ -259,12 +327,8 @@ func (s *DB) NewModel(schema, name string, version int) (*Model, error) {
 		s.Schemas[schema] = sch
 	}
 
-	result, err := sch.newModel(name, version)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	result := sch.newModel(name, version, userId)
+	return result
 }
 
 /**
@@ -272,14 +336,14 @@ func (s *DB) NewModel(schema, name string, version int) (*Model, error) {
 * @param debug bool
 **/
 func (s *DB) SetDebug(debug bool) {
-	s.IsDebug = debug
+	s.isDebug = debug
 }
 
 /**
 * Debug: Enables debug logging for all queries and commands.
 **/
 func (s *DB) Debug() {
-	s.IsDebug = true
+	s.isDebug = true
 }
 
 /**
@@ -356,10 +420,7 @@ func (s *DB) Define(define Def) (*Model, error) {
 		define.Version = 1
 	}
 
-	result, err := s.NewModel(define.Schema, define.Name, define.Version)
-	if err != nil {
-		return nil, err
-	}
+	result := s.NewModel(define.Schema, define.Name, define.Version, define.UserId)
 	if define.IdxField != "" {
 		result.DefineIdxField()
 	}
@@ -432,8 +493,7 @@ func (s *DB) Define(define Def) (*Model, error) {
 		}
 	}
 	result.IsCore = define.IsCore
-	result.IsDebug = define.IsDebug
-	result.isTest = define.IsTest
+	result.IsDebug = s.isDebug
 
 	return result, nil
 }

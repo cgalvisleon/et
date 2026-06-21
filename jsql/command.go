@@ -79,7 +79,7 @@ func newCommand(model *Model, tp CommandType) *Command {
 		afterDeletes:   []TriggerFunction{},
 		db:             model.db,
 		model:          model,
-		isDebug:        model.db.IsDebug,
+		isDebug:        model.IsDebug,
 	}
 	if map[CommandType]bool{INSERT: true, BULK: true, UPSERT: true}[tp] {
 		for _, fn := range model.beforeInserts {

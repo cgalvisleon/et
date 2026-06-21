@@ -196,7 +196,7 @@ func newQuery(model *Model, as ...string) *Query {
 		maxRows:    model.db.RecordLimit,
 		db:         model.db,
 		historyDb:  model.historyDb,
-		isDebug:    model.db.IsDebug,
+		isDebug:    model.IsDebug,
 	}
 	result.addFrom(model, as[0])
 	return result

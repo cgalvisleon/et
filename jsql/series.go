@@ -31,7 +31,6 @@ func DefineSeries(db *DB, schema string) error {
 		},
 		IdxField: IDX,
 		IsCore:   true,
-		IsDebug:  true,
 	})
 	if err != nil {
 		return err

@@ -57,8 +57,7 @@ type Def struct {
 	Details     map[string]DefDetail `json:"details"`
 	Rollups     map[string]DefRollup `json:"rollups"`
 	IsCore      bool                 `json:"is_core"`
-	IsDebug     bool                 `json:"is_debug"`
-	IsTest      bool                 `json:"is_test"`
+	UserId      string               `json:"user_id"`
 }
 
 /**
@@ -279,10 +278,7 @@ func (s *Model) DefineDetail(name string, keys map[string]string, rows int) (*Mo
 	}
 
 	detailName := fmt.Sprintf("%s_%s", s.Name, name)
-	to, err := s.db.NewModel(s.Schema, detailName, 1)
-	if err != nil {
-		return nil, err
-	}
+	to := s.db.NewModel(s.Schema, detailName, 1, s.ID)
 	for k, fk := range keys {
 		s.defineColumn(k, COLUMN, KEY, "", []byte{})
 		to.DefinePrimaryKey(fk, KEY, "")
@@ -458,11 +454,8 @@ func (s *Model) DefineModel() *Model {
 * @param schema string, name string, version int
 * @return *Model, error
 **/
-func (s *DB) DefineModel(schema, name string, version int) (*Model, error) {
-	result, err := s.NewModel(schema, name, version)
-	if err != nil {
-		return nil, err
-	}
+func (s *DB) DefineModel(schema, name string, version int, userId string) (*Model, error) {
+	result := s.NewModel(schema, name, version, userId)
 	result.DefineModel()
 	return result, nil
 }
@@ -472,11 +465,8 @@ func (s *DB) DefineModel(schema, name string, version int) (*Model, error) {
 * @param schema string, name string, version int
 * @return *Model, error
 **/
-func (s *DB) DefineTenantModel(schema, name string, version int) (*Model, error) {
-	result, err := s.NewModel(schema, name, version)
-	if err != nil {
-		return nil, err
-	}
+func (s *DB) DefineTenantModel(schema, name string, version int, userId string) (*Model, error) {
+	result := s.NewModel(schema, name, version, userId)
 	result.DefineModel()
 	result.DefineIndex(TENANT_ID, KEY, "")
 	result.DefineSource()
@@ -488,11 +478,8 @@ func (s *DB) DefineTenantModel(schema, name string, version int) (*Model, error)
 * @param schema string, name string, version int
 * @return *Model, error
 **/
-func (s *DB) DefineProjectModel(schema, name string, version int) (*Model, error) {
-	result, err := s.NewModel(schema, name, version)
-	if err != nil {
-		return nil, err
-	}
+func (s *DB) DefineProjectModel(schema, name string, version int, userId string) (*Model, error) {
+	result := s.NewModel(schema, name, version, userId)
 	result.DefineModel()
 	result.DefineIndex(PROJECT_ID, KEY, "")
 	result.DefineSource()

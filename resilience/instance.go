@@ -27,13 +27,12 @@ const (
 type Instance struct {
 	CreatedAt     time.Time       `json:"created_at"`
 	UpdatedAt     time.Time       `json:"updated_at"`
-	LastAttemptAt time.Time       `json:"last_attempt_at"`
-	DoneAt        time.Time       `json:"done_at"`
+	ResilienceId  string          `json:"resilience_id"`
 	ID            string          `json:"id"`
-	OwnerId       string          `json:"owner_id"`
-	TenantId      string          `json:"tenant_id"`
 	Tag           string          `json:"tag"`
 	Description   string          `json:"description"`
+	LastAttemptAt time.Time       `json:"last_attempt_at"`
+	DoneAt        time.Time       `json:"done_at"`
 	Status        Status          `json:"status"`
 	Attempt       int             `json:"attempt"`
 	TotalAttempts int             `json:"total_attempts"`
@@ -41,12 +40,13 @@ type Instance struct {
 	Tags          et.Json         `json:"tags"`
 	Error         error           `json:"error"`
 	Result        []any           `json:"result"`
-	owner         *Resilience     `json:"-"`
+	resilience    *Resilience     `json:"-"`
 	stop          bool            `json:"-"`
 	fn            interface{}     `json:"-"`
 	fnArgs        []interface{}   `json:"-"`
 	fnResult      []reflect.Value `json:"-"`
 	isDebug       bool            `json:"-"`
+	store         Store           `json:"-"`
 }
 
 /**
@@ -61,12 +61,12 @@ func (s *Instance) ToJson() et.Json {
 	result := et.Json{
 		"created_at":      s.CreatedAt,
 		"updated_at":      s.UpdatedAt,
-		"last_attempt_at": s.LastAttemptAt,
-		"done_at":         s.DoneAt,
+		"resilience_id":   s.ResilienceId,
 		"id":              s.ID,
 		"tag":             s.Tag,
-		"owner_id":        s.OwnerId,
 		"description":     s.Description,
+		"last_attempt_at": s.LastAttemptAt,
+		"done_at":         s.DoneAt,
 		"status":          s.Status,
 		"attempt":         s.Attempt,
 		"total_attempts":  s.TotalAttempts,
@@ -96,14 +96,14 @@ func (s *Instance) ToString() string {
 * save
 * @return error
 **/
-func (s *Instance) save(userId string) error {
+func (s *Instance) save() error {
 	data := s.ToJson()
 	if s.isDebug {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	if s.owner != nil && s.owner.store != nil {
-		err := s.owner.store.Set(s.ID, s.Tag, s.TenantId, s.OwnerId, data)
+	if s.store != nil {
+		err := s.store.Set("resilience", s.ID, s.ResilienceId, data)
 		if err != nil {
 			return err
 		}
@@ -116,11 +116,13 @@ func (s *Instance) save(userId string) error {
 
 /**
 * up
-* @param owner *Resilience
+* @param resilience *Resilience
 * @return *Instance
 **/
-func (s *Instance) up(owner *Resilience) *Instance {
-	s.owner = owner
+func (s *Instance) up(resilience *Resilience) *Instance {
+	s.resilience = resilience
+	s.store = resilience.store
+	s.isDebug = resilience.isDebug
 	return s
 }
 
@@ -129,7 +131,7 @@ func (s *Instance) up(owner *Resilience) *Instance {
 * @param status Status
 * @return error
 **/
-func (s *Instance) setStatus(status Status, userId string) error {
+func (s *Instance) setStatus(status Status) error {
 	if s.Status == status {
 		return nil
 	}
@@ -149,26 +151,26 @@ func (s *Instance) setStatus(status Status, userId string) error {
 		}
 	}
 
-	return s.save(userId)
+	return s.save()
 }
 
 /**
 * setError
 * @param err error
 **/
-func (s *Instance) setError(err error, userId string) {
+func (s *Instance) setError(err error) {
 	s.Error = err
-	s.setStatus(FAILED, userId)
+	s.setStatus(FAILED)
 }
 
 /**
 * setDone
 **/
 func (s *Instance) setDone(userId string) {
-	s.setStatus(DONE, userId)
+	s.setStatus(DONE)
 
 	time.AfterFunc(300*time.Millisecond, func() {
-		s.owner.removeInstance(s.ID)
+		s.resilience.removeInstance(s.ID)
 	})
 }
 
@@ -176,9 +178,9 @@ func (s *Instance) setDone(userId string) {
 * setStop
 * @return et.Item
 **/
-func (s *Instance) setStop(userId string) et.Item {
+func (s *Instance) setStop() et.Item {
 	s.stop = true
-	s.setStatus(STOP, userId)
+	s.setStatus(STOP)
 
 	return et.Item{
 		Ok: true,
@@ -194,7 +196,7 @@ func (s *Instance) setStop(userId string) et.Item {
 **/
 func (s *Instance) setRestart(userId string) ([]any, error) {
 	s.stop = false
-	s.setStatus(PENDING, userId)
+	s.setStatus(PENDING)
 	return s.Run(userId)
 }
 
@@ -213,7 +215,7 @@ func (s *Instance) runAttempt(userId string) ([]any, error) {
 
 	s.LastAttemptAt = timezone.Now()
 	s.Attempt++
-	s.setStatus(RUNNING, userId)
+	s.setStatus(RUNNING)
 
 	argsValues := make([]reflect.Value, len(s.fnArgs))
 	for i, arg := range s.fnArgs {
@@ -233,7 +235,7 @@ func (s *Instance) runAttempt(userId string) ([]any, error) {
 	}
 
 	if failed {
-		s.setError(err, userId)
+		s.setError(err)
 	} else {
 		s.setDone(userId)
 	}

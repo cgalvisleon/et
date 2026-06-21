@@ -13,16 +13,20 @@ import (
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
+	"github.com/cgalvisleon/et/timezone"
 )
 
 type Store interface {
-	Set(collection, id, tenantId, ownerId string, obj any) error
+	Set(collection, id, ownerId string, obj any) error
 	Get(collection, id string, dest any) (bool, error)
 	Delete(collection, id string) error
 	Query(query et.Json) (et.Items, error)
 }
 
 type Resilience struct {
+	CreatedAt time.Time            `json:"created_at"`
+	UpdatedAt time.Time            `json:"updated_at"`
+	ID        string               `json:"id"`
 	instances map[string]*Instance `json:"-"`
 	mu        sync.Mutex           `json:"-"`
 	store     Store                `json:"-"`
@@ -41,7 +45,11 @@ func New(store Store) (*Resilience, error) {
 		logs.Logf(packageName, MSG_EVENT_NOT_LOADED, err)
 	}
 
+	now := timezone.Now()
 	result := &Resilience{
+		CreatedAt: now,
+		UpdatedAt: now,
+		ID:        reg.ULID(),
 		instances: make(map[string]*Instance),
 		mu:        sync.Mutex{},
 		isDebug:   envar.GetBool("DEBUG", false),
@@ -100,22 +108,20 @@ func (s *Resilience) CountInstances() int {
 
 /**
 * newInstance
-* @param id, tag, description string, totalAttempts int, interval time.Duration, tags et.Json, userId string, fn interface{}, fnArgs ...interface{}
+* @param id, tag, description string, totalAttempts int, interval time.Duration, tags et.Json, fn interface{}, fnArgs ...interface{}
 * @return Instance
 **/
-func (s *Resilience) newInstance(tenantId, id, tag, description, ownerId string, totalAttempts int, interval time.Duration, tags et.Json, userId string, fn interface{}, fnArgs ...interface{}) *Instance {
+func (s *Resilience) newInstance(id, tag, description string, totalAttempts int, interval time.Duration, tags et.Json, fn interface{}, fnArgs ...interface{}) *Instance {
 	if id == "" {
 		id = reg.ULID()
 	}
-	if ownerId == "" {
-		ownerId = id
-	}
 
+	now := timezone.Now()
 	result := &Instance{
-		CreatedAt:     time.Now(),
+		CreatedAt:     now,
+		UpdatedAt:     now,
+		ResilienceId:  s.ID,
 		ID:            id,
-		TenantId:      tenantId,
-		OwnerId:       ownerId,
 		Tag:           tag,
 		Description:   description,
 		fn:            fn,
@@ -127,7 +133,7 @@ func (s *Resilience) newInstance(tenantId, id, tag, description, ownerId string,
 		Result:        make([]any, 0),
 		stop:          false,
 	}
-	result.setStatus(PENDING, userId)
+	result.setStatus(PENDING)
 	s.addInstance(result)
 
 	return result
@@ -172,22 +178,19 @@ func (s *Resilience) GetInstance(id string) (*Instance, bool) {
 }
 
 type Params struct {
-	TenantId      string
 	Id            string
 	Tag           string
 	Description   string
-	OwnerId       string
 	TotalAttempts int
 	Interval      time.Duration
 	Tags          et.Json
-	UserId        string
 	Fn            interface{}
 	FnArgs        []interface{}
 }
 
 /**
 * RunInstance
-* @param tenantId, id, tag, description string, totalAttempts int, interval time.Duration, tags et.Json, team, level, userId string, fn interface{}, fnArgs ...interface{}
+* @param id, tag, description string, totalAttempts int, interval time.Duration, tags et.Json, fn interface{}, fnArgs ...interface{}
 * @return *Instance
 **/
 func (s *Resilience) LoadInstance(params Params) *Instance {
@@ -202,7 +205,7 @@ func (s *Resilience) LoadInstance(params Params) *Instance {
 	params.Id = reg.GetULID(params.Id)
 	result, exist := s.GetInstance(params.Id)
 	if !exist {
-		result = s.newInstance(params.TenantId, params.Id, params.Tag, params.Description, params.OwnerId, params.TotalAttempts, params.Interval, params.Tags, params.UserId, params.Fn, params.FnArgs...)
+		result = s.newInstance(params.Id, params.Tag, params.Description, params.TotalAttempts, params.Interval, params.Tags, params.Fn, params.FnArgs...)
 	}
 
 	return result
@@ -213,14 +216,13 @@ func (s *Resilience) LoadInstance(params Params) *Instance {
 * @param id string
 * @return error
 **/
-func (s *Resilience) Stop(id, userId string) error {
+func (s *Resilience) Stop(id string) error {
 	result, exist := s.GetInstance(id)
 	if !exist {
 		return errors.New(MSG_ID_NOT_FOUND)
 	}
 
-	result.setStop(userId)
-
+	result.setStop()
 	return nil
 }
 

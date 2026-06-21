@@ -93,7 +93,7 @@ func newAgent(ia *Ia, tag, name, description, context, model string) *Agent {
 * @param userId string
 * @return error
 **/
-func (s *Agent) save(userId string) error {
+func (s *Agent) save() error {
 	s.UpdatedAt = timezone.Now()
 	data := s.ToJson()
 	data.Set("user_id", userId)
@@ -104,7 +104,7 @@ func (s *Agent) save(userId string) error {
 	event.Publish(EVENT_AGENT_SET, data)
 
 	if s.ia.store != nil {
-		return s.ia.store.Set(s.ID, "agent", s.ia.TenantID, s.ia.ID, s, userId)
+		return s.ia.store.Set(s.ID, "agent", s.ia.TenantID, s.ia.ID, s)
 	}
 
 	s.isChanged = false

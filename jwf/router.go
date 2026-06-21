@@ -147,9 +147,8 @@ func (s *WorkFlow) httpSetDefinitionStep(w http.ResponseWriter, r *http.Request)
 **/
 func (s *WorkFlow) httpDeleteStep(w http.ResponseWriter, r *http.Request) {
 	id := request.URLParam(r, "id").Str()
-	userId := request.UserId(r)
 
-	err := s.deleteStep(id, userId)
+	err := s.deleteStep(id)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return

@@ -321,7 +321,7 @@ func (s *WorkFlow) Run(flowId, triggerTag, id, projectId string, ctx, tags et.Js
 		if err != nil {
 			return nil, err
 		}
-		instance.setStatus(PENDING, userId)
+		instance.setStatus(PENDING)
 	}
 	if err != nil {
 		return nil, err

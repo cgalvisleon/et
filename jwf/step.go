@@ -44,29 +44,29 @@ var (
 )
 
 type Step struct {
-	CreatedAt   time.Time                               `json:"created_at"`
-	UpdatedAt   time.Time                               `json:"updated_at"`
-	TenantId    string                                  `json:"tenant_id"`
-	ID          string                                  `json:"id"`
-	Kind        Kind                                    `json:"kind"`
-	Tag         string                                  `json:"tag"`
-	Version     string                                  `json:"version"`
-	Status      Status                                  `json:"status"`
-	Title       string                                  `json:"title"`
-	Description string                                  `json:"description"`
-	WorkflowId  string                                  `json:"workflow_id"`
-	Definition  interface{}                             `json:"definition"`
-	Config      et.Json                                 `json:"config"`
-	Params      et.Json                                 `json:"params"`
-	Outputs     int                                     `json:"outputs"`
-	Stop        bool                                    `json:"stop"`
-	AuditLog    []et.Json                               `json:"audit_log"`
-	isDebug     bool                                    `json:"-"`
-	isChanged   bool                                    `json:"-"`
-	store       Store                                   `json:"-"`
-	bindings    map[string]any                          `json:"-"`
-	onSave      []func(step *Step, userId string) error `json:"-"`
-	onDelete    []func(step *Step, userId string) error `json:"-"`
+	CreatedAt   time.Time                `json:"created_at"`
+	UpdatedAt   time.Time                `json:"updated_at"`
+	TenantId    string                   `json:"tenant_id"`
+	ID          string                   `json:"id"`
+	Kind        Kind                     `json:"kind"`
+	Tag         string                   `json:"tag"`
+	Version     string                   `json:"version"`
+	Status      Status                   `json:"status"`
+	Title       string                   `json:"title"`
+	Description string                   `json:"description"`
+	WorkflowId  string                   `json:"workflow_id"`
+	Definition  interface{}              `json:"definition"`
+	Config      et.Json                  `json:"config"`
+	Params      et.Json                  `json:"params"`
+	Outputs     int                      `json:"outputs"`
+	Stop        bool                     `json:"stop"`
+	AuditLog    []et.Json                `json:"audit_log"`
+	isDebug     bool                     `json:"-"`
+	isChanged   bool                     `json:"-"`
+	store       Store                    `json:"-"`
+	bindings    map[string]any           `json:"-"`
+	onSave      []func(step *Step) error `json:"-"`
+	onDelete    []func(step *Step) error `json:"-"`
 }
 
 /**
@@ -135,7 +135,7 @@ func (s *WorkFlow) loadStep(id string) (*Step, error) {
 * @param id string
 * @return error
 **/
-func (s *WorkFlow) deleteStep(id, userId string) error {
+func (s *WorkFlow) deleteStep(id string) error {
 	if s.store == nil {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
@@ -151,7 +151,7 @@ func (s *WorkFlow) deleteStep(id, userId string) error {
 	}
 
 	for _, onDelete := range step.onDelete {
-		err := onDelete(step, userId)
+		err := onDelete(step)
 		if err != nil {
 			return err
 		}
@@ -169,21 +169,20 @@ func (s *Step) up(workflow *WorkFlow) *Step {
 	s.store = workflow.store
 	s.isDebug = workflow.isDebug
 	s.bindings = workflow.bindings
-	s.onSave = make([]func(step *Step, userId string) error, 0)
-	s.onDelete = make([]func(step *Step, userId string) error, 0)
-	s.
-		OnSave(func(step *Step, userId string) error {
-			key := fmt.Sprintf("step:%s", step.ID)
-			event.Publish(key, step.ToJson())
-			return nil
-		}).
-		OnDelete(func(step *Step, userId string) error {
-			key := fmt.Sprintf("step:%s:delete", step.ID)
-			event.Publish(key, et.Json{
-				"id": step.ID,
-			})
-			return nil
+	s.onSave = make([]func(step *Step) error, 0)
+	s.onDelete = make([]func(step *Step) error, 0)
+	s.OnSave(func(step *Step) error {
+		key := fmt.Sprintf("step:%s", step.ID)
+		event.Publish(key, step.ToJson())
+		return nil
+	})
+	s.OnDelete(func(step *Step) error {
+		key := fmt.Sprintf("step:%s:delete", step.ID)
+		event.Publish(key, et.Json{
+			"id": step.ID,
 		})
+		return nil
+	})
 	workflow.addStep(s)
 	return s
 }
@@ -215,9 +214,9 @@ func (s *Step) addAuditLog(userId string, action string) {
 * @param fn func(step *Step, userId string) error
 * @return *Jrex
 **/
-func (s *Step) OnSave(fn func(step *Step, userId string) error) *Step {
+func (s *Step) OnSave(fn func(step *Step) error) *Step {
 	if s.onSave == nil {
-		s.onSave = make([]func(step *Step, userId string) error, 0)
+		s.onSave = make([]func(step *Step) error, 0)
 	}
 	s.onSave = append(s.onSave, fn)
 	return s
@@ -228,9 +227,9 @@ func (s *Step) OnSave(fn func(step *Step, userId string) error) *Step {
 * @param fn func(step *Step, userId string) error
 * @return *Step
 **/
-func (s *Step) OnDelete(fn func(step *Step, userId string) error) *Step {
+func (s *Step) OnDelete(fn func(step *Step) error) *Step {
 	if s.onDelete == nil {
-		s.onDelete = make([]func(step *Step, userId string) error, 0)
+		s.onDelete = make([]func(step *Step) error, 0)
 	}
 	s.onDelete = append(s.onDelete, fn)
 	return s
@@ -240,7 +239,7 @@ func (s *Step) OnDelete(fn func(step *Step, userId string) error) *Step {
 * save
 * @return error
 **/
-func (s *Step) save(userId string) error {
+func (s *Step) save() error {
 	if s.Kind == KindFunction {
 		return errors.New(MSG_STEP_IS_FUNCTION)
 	}
@@ -255,13 +254,13 @@ func (s *Step) save(userId string) error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("step", s.ID, s.TenantId, "", s, userId)
+	err := s.store.Set("step", s.ID, s.TenantId, "", s)
 	if err != nil {
 		return err
 	}
 
 	for _, onSave := range s.onSave {
-		err := onSave(s, userId)
+		err := onSave(s)
 		if err != nil {
 			return err
 		}
@@ -316,11 +315,11 @@ func (s *Step) run(instance *Instance, ctx et.Json, userId string) (et.Json, err
 	}
 
 	runJrex := func(rex *jrex.Instance, script string) (et.Json, error) {
-		instance.setStatus(RUNNING, userId)
+		instance.setStatus(RUNNING)
 		rex.SetCtx(ctx)
 		_, err := rex.RunString(script)
 		if err != nil {
-			instance.setStatus(FAILED, userId)
+			instance.setStatus(FAILED)
 			return et.Json{}, err
 		}
 		return rex.Ctx, nil
@@ -328,18 +327,18 @@ func (s *Step) run(instance *Instance, ctx et.Json, userId string) (et.Json, err
 
 	switch v := s.Definition.(type) {
 	case StepFn:
-		instance.setStatus(RUNNING, userId)
+		instance.setStatus(RUNNING)
 		result, err := v(instance, ctx)
 		if err != nil {
-			instance.setStatus(FAILED, userId)
+			instance.setStatus(FAILED)
 			return et.Json{}, err
 		}
 		return result, nil
 	case func(instance *Instance, ctx et.Json) (et.Json, error):
-		instance.setStatus(RUNNING, userId)
+		instance.setStatus(RUNNING)
 		result, err := v(instance, ctx)
 		if err != nil {
-			instance.setStatus(FAILED, userId)
+			instance.setStatus(FAILED)
 			return et.Json{}, err
 		}
 		return result, nil
@@ -388,7 +387,7 @@ func (s *Step) setStatus(status Status, userId string) error {
 
 	s.addAuditLog(userId, fmt.Sprintf("update status: %s", status))
 	s.Status = status
-	return s.save(userId)
+	return s.save()
 }
 
 /**
@@ -403,7 +402,7 @@ func (s *Step) setDefinition(definition interface{}, userId string) error {
 
 	s.addAuditLog(userId, fmt.Sprintf("update definition"))
 	s.Definition = definition
-	return s.save(userId)
+	return s.save()
 }
 
 /**
@@ -431,7 +430,7 @@ func (s *Step) put(version, title, description string, config et.Json, params et
 		s.Description = description
 	}
 
-	if s.Config.ToString() != envar.ToString() {
+	if s.Config.ToString() != config.ToString() {
 		s.addAuditLog(userId, fmt.Sprintf("update config old:%s", s.Config))
 		s.Config = config
 	}
@@ -441,5 +440,5 @@ func (s *Step) put(version, title, description string, config et.Json, params et
 		s.Params = params
 	}
 
-	return s.save(userId)
+	return s.save()
 }

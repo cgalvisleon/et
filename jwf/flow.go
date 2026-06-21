@@ -68,32 +68,32 @@ type FlowDefinition struct {
 }
 
 type Flow struct {
-	CreatedAt     time.Time                               `json:"created_at"`
-	UpdatedAt     time.Time                               `json:"updated_at"`
-	TenantId      string                                  `json:"tenant_id"`
-	ID            string                                  `json:"id"`
-	Tag           string                                  `json:"tag"`
-	Title         string                                  `json:"title"`
-	Description   string                                  `json:"description"`
-	Version       string                                  `json:"version"`
-	WorkflowId    string                                  `json:"workflow_id"`
-	Params        et.Json                                 `json:"params"`
-	Steps         map[string]*Step                        `json:"steps"`
-	Connections   []*Connection                           `json:"connections"`
-	Triggers      []*Trigger                              `json:"triggers"`
-	TotalAttempts int                                     `json:"total_attempts"`
-	TimeAttempts  time.Duration                           `json:"time_attempts"`
-	TimeAwait     time.Duration                           `json:"time_await"`
-	Public        bool                                    `json:"public"`
-	AuditLog      []et.Json                               `json:"audit_log"`
-	isDebug       bool                                    `json:"-"`
-	isChanged     bool                                    `json:"-"`
-	workflow      *WorkFlow                               `json:"-"`
-	store         Store                                   `json:"-"`
-	onSave        []func(flow *Flow, userId string) error `json:"-"`
-	onDelete      []func(flow *Flow, userId string) error `json:"-"`
-	step          *Step                                   `json:"-"`
-	err           error                                   `json:"-"`
+	CreatedAt     time.Time                `json:"created_at"`
+	UpdatedAt     time.Time                `json:"updated_at"`
+	TenantId      string                   `json:"tenant_id"`
+	ID            string                   `json:"id"`
+	Tag           string                   `json:"tag"`
+	Title         string                   `json:"title"`
+	Description   string                   `json:"description"`
+	Version       string                   `json:"version"`
+	WorkflowId    string                   `json:"workflow_id"`
+	Params        et.Json                  `json:"params"`
+	Steps         map[string]*Step         `json:"steps"`
+	Connections   []*Connection            `json:"connections"`
+	Triggers      []*Trigger               `json:"triggers"`
+	TotalAttempts int                      `json:"total_attempts"`
+	TimeAttempts  time.Duration            `json:"time_attempts"`
+	TimeAwait     time.Duration            `json:"time_await"`
+	Public        bool                     `json:"public"`
+	AuditLog      []et.Json                `json:"audit_log"`
+	isDebug       bool                     `json:"-"`
+	isChanged     bool                     `json:"-"`
+	workflow      *WorkFlow                `json:"-"`
+	store         Store                    `json:"-"`
+	onSave        []func(flow *Flow) error `json:"-"`
+	onDelete      []func(flow *Flow) error `json:"-"`
+	step          *Step                    `json:"-"`
+	err           error                    `json:"-"`
 }
 
 /**
@@ -167,33 +167,32 @@ func (s *Flow) up(workflow *WorkFlow) *Flow {
 	s.workflow = workflow
 	s.store = workflow.store
 	s.isDebug = workflow.isDebug
-	s.onSave = make([]func(flow *Flow, userId string) error, 0)
-	s.onDelete = make([]func(flow *Flow, userId string) error, 0)
-	s.
-		OnSave(func(flow *Flow, userId string) error {
-			key := fmt.Sprintf("flow:%s", flow.ID)
-			event.Publish(key, flow.ToJson())
-			return nil
-		}).
-		OnDelete(func(flow *Flow, userId string) error {
-			key := fmt.Sprintf("flow:%s:delete", flow.ID)
-			event.Publish(key, et.Json{
-				"id": flow.ID,
-			})
-			return nil
+	s.onSave = make([]func(flow *Flow) error, 0)
+	s.onDelete = make([]func(flow *Flow) error, 0)
+	s.OnSave(func(flow *Flow) error {
+		key := fmt.Sprintf("flow:%s", flow.ID)
+		event.Publish(key, flow.ToJson())
+		return nil
+	})
+	s.OnDelete(func(flow *Flow) error {
+		key := fmt.Sprintf("flow:%s:delete", flow.ID)
+		event.Publish(key, et.Json{
+			"id": flow.ID,
 		})
+		return nil
+	})
 	workflow.addFlow(s)
 	return s
 }
 
 /**
 * OnSave
-* @param fn func(flow *Flow, userId string) error
+* @param fn func(flow *Flow) error
 * @return *Jrex
 **/
-func (s *Flow) OnSave(fn func(flow *Flow, userId string) error) *Flow {
+func (s *Flow) OnSave(fn func(flow *Flow) error) *Flow {
 	if s.onSave == nil {
-		s.onSave = make([]func(flow *Flow, userId string) error, 0)
+		s.onSave = make([]func(flow *Flow) error, 0)
 	}
 	s.onSave = append(s.onSave, fn)
 	return s
@@ -201,12 +200,12 @@ func (s *Flow) OnSave(fn func(flow *Flow, userId string) error) *Flow {
 
 /**
 * OnDelete
-* @param fn func(flow *Flow, userId string) error
+* @param fn func(flow *Flow) error
 * @return *Step
 **/
-func (s *Flow) OnDelete(fn func(flow *Flow, userId string) error) *Flow {
+func (s *Flow) OnDelete(fn func(flow *Flow) error) *Flow {
 	if s.onDelete == nil {
-		s.onDelete = make([]func(flow *Flow, userId string) error, 0)
+		s.onDelete = make([]func(flow *Flow) error, 0)
 	}
 	s.onDelete = append(s.onDelete, fn)
 	return s
@@ -238,7 +237,7 @@ func (s *Flow) addAuditLog(userId string, action string) {
 * save
 * @return error
 **/
-func (s *Flow) save(userId string) error {
+func (s *Flow) save() error {
 	if s.store == nil {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
@@ -250,13 +249,13 @@ func (s *Flow) save(userId string) error {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	err := s.store.Set("flow", s.ID, s.TenantId, s.WorkflowId, s, userId)
+	err := s.store.Set("flow", s.ID, s.TenantId, s.WorkflowId, s)
 	if err != nil {
 		return err
 	}
 
 	for _, onSave := range s.onSave {
-		err := onSave(s, userId)
+		err := onSave(s)
 		if err != nil {
 			return err
 		}

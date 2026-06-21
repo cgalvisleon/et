@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `github.com/cgalvisleon/et` — Go 1.25, MIT license.
 
-> **Note:** This codebase changes fast and in-place (commit history is mostly bare "Backup:" commits with no descriptive messages) — prefer reading the actual source over trusting prior assumptions about an API shape, including the rest of this file. `LIBRARY_CONTEXT.md` (Spanish, for external consumers of the library) and `README.es.md` can also drift out of sync with the code; verify before relying on them.
+> **Note:** This codebase changes fast and in-place (commit history is mostly bare "Backup:" commits with no descriptive messages, saved as periodic WIP checkpoints) — prefer reading the actual source over trusting prior assumptions about an API shape, including the rest of this file. Because commits can land mid-refactor, `go build ./...` can intermittently fail on a freshly-cloned `HEAD` (e.g. a half-renamed function or a stray syntax error in one file); if it does, check whether the specific files involved look incomplete before assuming the wider architecture described here is wrong. `LIBRARY_CONTEXT.md`, `ARCHITECTURE_SUMMARY.md`, `COMPONENT_CATALOG.md`, `AI_USAGE_GUIDE.md` (all Spanish, generated for external consumers of the library) and `README.es.md` can also drift out of sync with the code; verify before relying on them.
 
 ## Commands
 
@@ -26,7 +26,7 @@ go run ./cmd/et
 go run ./cmd/apigateway
 go run ./cmd/daemon
 go run ./cmd/server          # TCP node server (default port 1377, use -port flag)
-go run ./cmd/jrex            # JS VM (jrex) with hot-reload from ./cmd/jrex/
+go run ./cmd/jrex            # JS runtime (jrex) with hot-reload from ./cmd/jrex/src/
 go run ./cmd/jsql            # jsql driver test/demo
 
 # Build all binaries
@@ -73,10 +73,10 @@ This is a **modular utility library** for building Go microservices. Each direct
 
 ```go
 // Full-featured model (adds id, created_at, updated_at, _source JSONB, _idx VARCHAR(80)):
-model, _ := db.DefineModel("public", "users", 1)
+model, _ := db.DefineModel("public", "users", 1, userId)
 
 // Manual model (add every column yourself):
-model, _ := db.NewModel("public", "users", 1)
+model := db.NewModel("public", "users", 1, userId)
 model.DefineColumn("email", jsql.TEXT, "")
 model.DefinePrimaryKey("id", jsql.KEY, "")
 model.DefineUnique("email", jsql.TEXT, "")
@@ -186,7 +186,7 @@ There are two HTTP server packages at different abstraction levels:
 - **`utility/`** — Crypto, validation, ID generation (UUID, Snowflake, ULID), general helpers.
 - **`middleware/`** — HTTP middleware (CORS, request ID, logger, auth, telemetry, panic recovery).
 - **`response/`** — Unified HTTP response helpers. Key functions: `ITEM(w, r, status, et.Item{})`, `ITEMS(w, r, status, items)`, `HTTPError(w, r, status, message)`.
-- **`ws/`** — WebSocket support via `gorilla/websocket`.
+- **`jws/`** — WebSocket support via `gorilla/websocket` (formerly named `ws`).
 - **`service/`** — OTP helpers (`SendOTPEmail`, `SendOTPSms`, `VerifyOTP`) and messaging integration; uses `tenantId`.
 - **`stdrout/`** — Low-level colorized stdout routing used by `logs/`.
 
@@ -194,15 +194,16 @@ There are two HTTP server packages at different abstraction levels:
 
 - **`aws/`** — AWS SDK wrapper: S3, SES (email), SMS.
 - **`brevo/`** — Brevo API client: email, SMS, WhatsApp.
-- **`wsp/`** — WhatsApp Business API client. `wsp.NewSender(token, phoneNumberId) *Whatsapp` produces a message/webhook builder (`Debug()`, `IsTest()`, `SetVerifyToken()`, `SetEventHandler()`); uses Facebook Graph API (configurable via `WHATSAPP_API_URL`).
+- **`jwsp/`** — WhatsApp Business API client (formerly named `wsp`). `jwsp.NewSender(token, phoneNumberId) *Whatsapp` produces a message/webhook builder (`Debug()`, `IsTest()`, `SetVerifyToken()`, `SetEventHandler()`); uses Facebook Graph API (configurable via `WHATSAPP_API_URL`).
 
 ### Application-layer packages
 
-- **`jrex/`** — JavaScript runtime package (`dop251/goja`), formerly named `vm`. `jrex.New(name, store)` is the entry point — `store` is a caller-provided `jrex.Store` (`SetModule`/`GetModule`/`DeleteModule`, may be `nil` in dev mode); three modes: `Develop` (reads files, hot-reloads via `file.Watcher`), `Production` (loads from the `Store`), `Building` (compiles + stores with semver bumping). Global wrappers provide `console.*`, `ctx.*`, `fetch()`, and CommonJS-style `require()`. The `cmd/jrex` binary runs this in dev mode via `jrex.RunDev(baseDir)`. There is also a `jcli/` package at the repo root (not under `jrex/`) holding a Bubble Tea CLI model (`cliModel`, `App` interface) — its file still declares `package jrex` and nothing imports `github.com/cgalvisleon/et/jcli`, so treat it as in-progress/orphaned work extracting the dev CLI out of `jrex/`, not a wired feature.
-- **`ia/`** — OpenAI agent integration (`openai-go/v3`). `ia.New(tenantId, tag string, store Store) (*Ia, error)` (direct) or `ia.Load(tenantId, tag string, store Store) error` (singleton) initializes the package, which calls `event.Load()` internally (no `cache.Load()`). `Store` is a locally-defined interface in `ia/ia.go` (`Set(id, tag, tenantId, ownerId string, obj any, userId string) error`, `Get(id, tag string, dest any) (bool, error)`, `Delete(id, tag string) error`, `Query(query et.Json) (et.Items, error)`) — caller-provided, no shared package defines it. `OPENAI_API_KEY` is read directly via `config.GetStr`, not passed in. Manages `Agent`s, `Participant`s, and `Conversation`s (with `Message`s) per tenant; `Skill` (e.g. `ApiSkill`) lets agents call external APIs.
+- **`jrex/`** — JavaScript runtime package (`dop251/goja`), formerly named `vm`. Entry point: `jrex.Load(tag string, store Store) (*Jrex, error)` — loads-or-creates a persisted `Jrex` (looked up under collection `"jrex"`); pass `store = nil` to default to a `FileStore` rooted at `./src` (`jrex.NewStore(baseDir)`). `jrex.Store` is a 2-method interface (`Set(collection, id, ownerId string, obj any) error`, `Get(collection, id string, dest any) (bool, error)`) — there are no `Develop`/`Production`/`Building` modes or `SetModule`/`GetModule`/`DeleteModule` methods in the current code (older docs describing those are stale). `(*Jrex).Set(name, value)` injects a Go binding into every new `Instance`; `(*Jrex).Run()`/`RunModule(tag)` executes the `"index"` module (or another by tag) in a fresh `goja` `Instance`; `(*Jrex).RunDev()` runs once and blocks via `utility.AppWait()` — with the default `FileStore`, file changes under `BaseDir` also trigger a re-run via `file.NewWatcher` (hot reload). Global wrappers still provide `console.*`, `ctx.*`, `fetch()`, and CommonJS-style `require()` (`jrex/wrapper.go`, `jrex/lib.go`). There is also a `jcli/` package at the repo root (not under `jrex/`) holding a Bubble Tea CLI model (`cliModel`, `App` interface) — its file still declares `package jrex` and nothing imports `github.com/cgalvisleon/et/jcli`, so treat it as in-progress/orphaned work extracting the dev CLI out of `jrex/`, not a wired feature.
+- **`jia/`** — OpenAI agent integration (`openai-go/v3`), formerly named `ia`. `jia.New(tenantId, tag string, store Store) (*Ia, error)` (direct) or `jia.Load(tenantId, tag string, store Store) error` (singleton) initializes the package, which calls `event.Load()` internally (no `cache.Load()`). `Store` is a locally-defined interface in `jia/ia.go` (`Set(id, tag, tenantId, ownerId string, obj any, userId string) error`, `Get(id, tag string, dest any) (bool, error)`, `Delete(id, tag string) error`, `Query(query et.Json) (et.Items, error)`) — caller-provided, no shared package defines it. `OPENAI_API_KEY` is read directly via `config.GetStr`, not passed in. Manages `Agent`s, `Participant`s, and `Conversation`s (with `Message`s) per tenant; `Skill` (e.g. `ApiSkill`) lets agents call external APIs.
 - **`jwf/`** — Workflow orchestration (replaces the old `workflow/` package, which was deleted; a separate `wf/` scratch package was also deleted). Calls `cache.Load()` + `event.Load()` internally. See detail below.
 - **`graph/`** — Neo4j connectivity (`neo4j-go-driver/v5`). `graph.Load()` returns a `*Conn` with the Neo4j driver.
-- **`stores/`** — jsql-backed persistence helpers: `stores.DefineInstance`/`LoadInstance`/`DefineInstanceBite`/`LoadInstanceBite` (kind: `KindJson` or `KindBite`) and `stores.DefineAuthorization`. **Caveat:** `(*stores.Instance).Get(id string, dest any) (bool, error)` only takes one string key, so it does *not* structurally satisfy the two-string-key `Store.Get` interfaces defined locally in `ia/` and `jwf/` (`Get(id, tag string, dest any)` / `Get(collection, id string, dest any)`) — nothing in the repo currently wires `stores/` into `ia` or `jwf` (both are exercised with a `nil` store in their `cmd/` examples). Check signatures before assuming it's a drop-in.
+- **`stores/`** — jsql-backed persistence helpers: `stores.DefineInstance`/`LoadInstance`/`DefineInstanceBite`/`LoadInstanceBite` (kind: `KindJson` or `KindBite`) and `stores.DefineAuthorization` (tenant/profile/method/path ACL checks, cached through `dt`). **Caveat:** `(*stores.Instance).Get(id string, dest any) (bool, error)` only takes one string key, so it does *not* structurally satisfy the two-string-key `Store.Get` interfaces defined locally in `jia/` and `jwf/` (`Get(id, tag string, dest any)` / `Get(collection, id string, dest any)`) — nothing in the repo currently wires `stores/` into `jia` or `jwf` (both are exercised with a `nil` store in their `cmd/` examples). Check signatures before assuming it's a drop-in. `stores/catalog.go` is currently mid-refactor and does not compile (undefined identifiers) — don't take it as a model for new code until it's fixed.
+- **`jtenant/`** — New, early-stage multi-tenant container (no importers yet, not wired into any `cmd/` binary). `jtenant.NewTenant(tag, name string, store Store, userId string) *Tenant` / `jtenant.LoadTenant(id string, store Store) (*Tenant, error)`; a `Tenant` owns `Apps map[string]*App`, and each `App` owns `DBS map[string]*jsql.DB` and `WorkFlows map[string]*jwf.WorkFlow`. Defines its own local `Store`, `ServerDB`, and `ServerStorage` interfaces. Treat as work-in-progress, not yet a stable API.
 - **`dt/`** — Cache-backed object store. `dt.Up(key, data)` writes an object (uses Redis in production, reads from file in dev based on `PRODUCTION` env var); `dt.Get(key)` retrieves it, `dt.Drop(key)` removes it. HTTP handler support via `handler.go`.
 - **`resilience/`** — Resilience/retry pattern. `resilience.New(store)` (store: local `Store` interface — `Set`/`Get`/`Delete`/`Query`), `LoadInstance(Params{TenantId, Id, Tag, Description, OwnerId, TotalAttempts, Interval, Tags, UserId, Fn, FnArgs})` returns an `*Instance`, then `instance.Run(userId)` executes `Fn` with retry/interval semantics. Used by `jwf` for step-level resilience; see `cmd/resilience` for a standalone example.
 - **`reg/`** — Service registration/discovery; provides ID generation helpers (ULID, etc.) used by `claim` and others.
@@ -214,9 +215,9 @@ There are two HTTP server packages at different abstraction levels:
 - **`cmds/`** — Command/stage execution system (distinct from the `cmd/` CLI binaries).
 - **`timezone/`**, **`units/`**, **`color/`** — Timezone handling, unit conversions, terminal color utilities.
 
-### TCP cluster: `tcp/`
+### TCP cluster: `jtcp/`
 
-`tcp/` implements a distributed TCP node with Raft-style leader election. Modes: `Follower`, `Candidate`, `Leader`, `Proxy`. `tcp.NewNode(port)` is used by `cmd/server`.
+`jtcp/` (formerly named `tcp`) implements a distributed TCP node with Raft-style leader election. Modes: `Follower`, `Candidate`, `Leader`, `Proxy`. `jtcp.NewNode(port)` is used by `cmd/server`.
 
 ### CLI (`cmd/`)
 
@@ -226,15 +227,15 @@ Each subdirectory under `cmd/` is a standalone binary:
 - `cmd/apigateway/` — API Gateway/proxy using `ettp.New`
 - `cmd/daemon/` — Background service with systemd integration (start/stop/restart/status/conf/version)
 - `cmd/create/` — Project/code scaffolding
-- `cmd/server/` — TCP node server (`tcp.NewNode(port)`)
-- `cmd/jrex/` — JavaScript VM runner; `go run ./cmd/jrex` starts `jrex.New("jrex", nil).RunDev(baseDir)` with hot-reload
+- `cmd/server/` — TCP node server (`jtcp.NewNode(port)`)
+- `cmd/jrex/` — JavaScript runtime example; connects a `jsql.DB`, then `jrex.Load("jrex", nil)`, binds `db`/`getDb`/the model via `v.Set(...)`, and runs `v.RunDev()` (hot-reloads scripts under `cmd/jrex/src/`)
 - `cmd/jsql/` — jsql driver demo: DDL generation, condition building, SELECT field resolution, live DB connection
-- `cmd/client/` — Test client
+- `cmd/client/` — Test client (`jtcp`)
 - `cmd/install/` — Installation utility
 - `cmd/whatcher/` — Filesystem change watcher
 - `cmd/jwf/` — `jwf/` (workflow) usage example: builds a flow with `NewFloW`/`Step`, runs it with `wf.Run(...)`
 - `cmd/resilience/` — `resilience/` usage example: `resilience.New(nil)`, `LoadInstance(Params{...})`, `ins.Run(userId)`
-- `cmd/wsp/` — `wsp/` (WhatsApp) usage example
+- `cmd/wsp/` — `jwsp/` (WhatsApp) usage example
 
 ### Code generation (`create/`)
 
@@ -312,7 +313,7 @@ Use `http.StatusCreated` for POST handlers that create new resources, `http.Stat
 - **Error handling**: `logs.Fatal(err)` calls `os.Exit(1)`. Use `logs.Alert` / `logs.Error` for non-fatal errors.
 - **Event-driven coordination**: `ettp/v2` server syncs router state across replicas via NATS. The `m.Myself` flag prevents self-processing.
 - **`msg/` packages**: Each package has a local `msg/` or `msg.go` file with error message constants — use these instead of hardcoded strings.
-- **Store interface pattern**: `jwf` and `ia` each accept a caller-provided `Store` for persistence — these are now two separately-defined, structurally-similar (but not identical or shared) interfaces local to each package (there is no shared `instances` package anymore); `jrex` accepts its own `jrex.Store` (`SetModule`/`GetModule`/`DeleteModule`) for compiled-module persistence in `Production`/`Building` modes; `resilience` and `config` each define their own local `Store` too. In every case the library defines the interface and consumers implement it — check the exact method signatures per package before reusing one implementation across packages (see the `stores/` caveat above).
+- **Store interface pattern**: `jwf`, `jia`, and `jtenant` each accept a caller-provided `Store` for persistence — these are separately-defined, structurally-similar (but not identical or shared) interfaces local to each package (there is no shared `instances` package anymore); `jrex` accepts its own, narrower `jrex.Store` (`Set(collection, id, ownerId string, obj any) error` / `Get(collection, id string, dest any) (bool, error)`, no `Delete`); `resilience` and `config` each define their own local `Store` too. In every case the library defines the interface and consumers implement it — check the exact method signatures per package before reusing one implementation across packages (see the `stores/` caveat above).
 
 ## Required environment variables
 
@@ -325,7 +326,7 @@ Use `http.StatusCreated` for POST handlers that create new resources, `http.Stat
 | `event` | `NATS_HOST`                                                                               | NATS connection                        |
 | `event` | `NATS_USER`, `NATS_PASSWORD`                                                              | NATS auth (optional)                   |
 | `graph` | `NEO4J_HOST`, `NEO4J_USER`, `NEO4J_PASSWORD`                                              | Neo4j connection                       |
-| `ia`    | `OPENAI_API_KEY`                                                                          | OpenAI agent integration               |
+| `jia`   | `OPENAI_API_KEY`                                                                          | OpenAI agent integration               |
 | `dt`    | `PRODUCTION`                                                                              | `true` = use Redis, `false` = use file |
-| `wsp`   | `WHATSAPP_API_URL`                                                                        | WhatsApp Graph API base URL (optional) |
+| `jwsp`  | `WHATSAPP_API_URL`                                                                        | WhatsApp Graph API base URL (optional) |
 | `claim` | `SECRET`                                                                                  | JWT signing key (default: `"1977"`)    |

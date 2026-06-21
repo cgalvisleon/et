@@ -66,6 +66,7 @@ func New(tag, stage, tenantId, ownerId string, store Store, userId string) (*Con
 		AuditLog: make([]et.Json, 0),
 		store:    store,
 	}
+	result.addAuditLog(userId, "new_config")
 	return result, nil
 }
 

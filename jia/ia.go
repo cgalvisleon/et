@@ -23,9 +23,9 @@ var (
 )
 
 type Store interface {
-	Set(id, tag, tenantId, ownerId string, obj any) error
-	Get(id, tag string, dest any) (bool, error)
-	Delete(id, tag string) error
+	Set(collection, id, tenantId, ownerId string, obj any) error
+	Get(collection, id string, dest any) (bool, error)
+	Delete(collection, id string) error
 	Query(query et.Json) (et.Items, error)
 }
 

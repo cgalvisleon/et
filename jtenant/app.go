@@ -134,7 +134,7 @@ func (s *App) save(userId string) error {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	err := s.store.Set("app", s.ID, s.TenantID, s.ID, s, userId)
+	err := s.store.Set("app", s.ID, s.TenantID, s.ID, s)
 	if err != nil {
 		return err
 	}

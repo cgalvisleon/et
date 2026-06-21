@@ -10,6 +10,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/go-chi/chi/v5"
@@ -58,13 +59,7 @@ func (s *Systemd) SetConfig(cfg string) {
 		return
 	}
 
-	config, err := et.ToJson(cfg)
-	if err != nil {
-		logs.Alert(err)
-		return
-	}
-
-	s.port = envar.Int("port")
+	s.port = envar.GetInt("PORT", 1377)
 }
 
 func (s *Systemd) Status() et.Json {

@@ -31,20 +31,23 @@ Reglas obligatorias:
 const modelDefault = openai.ChatModelGPT4oMini
 
 type Agent struct {
-	CreatedAt   time.Time        `json:"created_at"`
-	UpdatedAt   time.Time        `json:"updated_at"`
-	ID          string           `json:"id"`
-	Tag         string           `json:"tag"`
-	Name        string           `json:"name"`
-	Description string           `json:"description"`
-	ContextBase string           `json:"context_base"`
-	Context     []byte           `json:"context"`
-	Model       string           `json:"model"`
-	Skills      map[string]Skill `json:"skills"`
-	client      openai.Client    `json:"-"`
-	ia          *Ia              `json:"-"`
-	isDebug     bool             `json:"-"`
-	isChanged   bool             `json:"-"`
+	CreatedAt   time.Time                  `json:"created_at"`
+	UpdatedAt   time.Time                  `json:"updated_at"`
+	ID          string                     `json:"id"`
+	Tag         string                     `json:"tag"`
+	Name        string                     `json:"name"`
+	Description string                     `json:"description"`
+	ContextBase string                     `json:"context_base"`
+	Context     []byte                     `json:"context"`
+	Model       string                     `json:"model"`
+	Skills      map[string]Skill           `json:"skills"`
+	AuditLog    []et.Json                  `json:"audit_log"`
+	client      openai.Client              `json:"-"`
+	ia          *Ia                        `json:"-"`
+	isDebug     bool                       `json:"-"`
+	isChanged   bool                       `json:"-"`
+	onSave      []func(agent *Agent) error `json:"-"`
+	onDelete    []func(agent *Agent) error `json:"-"`
 }
 
 /**
@@ -80,6 +83,7 @@ func newAgent(ia *Ia, tag, name, description, context, model string) *Agent {
 		ContextBase: context,
 		Context:     []byte(context),
 		Skills:      make(map[string]Skill),
+		AuditLog:    make([]et.Json, 0),
 		Model:       model,
 		ia:          ia,
 		isDebug:     ia.isDebug,
@@ -88,6 +92,7 @@ func newAgent(ia *Ia, tag, name, description, context, model string) *Agent {
 	return result
 }
 
+func (s *Agent) up(userId string, action string) {
 /**
 * save
 * @param userId string

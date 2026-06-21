@@ -112,10 +112,10 @@ func (s *FileStore) Get(collection, id string, dest any) (bool, error) {
 
 /**
 * Set
-* @param collection, id, ownerId string, obj any, userId string
+* @param collection, id, ownerId string, obj any
 * @return error
 **/
-func (s *FileStore) Set(collection, id, ownerId string, obj any, userId string) error {
+func (s *FileStore) Set(collection, id, ownerId string, obj any) error {
 	if collection == "jrex" {
 		path := filepath.Join(s.BaseDir, "package.json")
 		err := file.Save(path, obj)

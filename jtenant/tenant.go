@@ -209,7 +209,7 @@ func (s *Tenant) save(userId string) error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("tenant", s.ID, s.ID, s.ID, s, userId)
+	err := s.store.Set("tenant", s.ID, s.ID, s.ID, s)
 	if err != nil {
 		return err
 	}

@@ -42,7 +42,7 @@ func (s *Module) saveCode(userId string) error {
 		return errors.New(MSG_STORE_IS_NIL)
 	}
 
-	err := s.jrex.store.Set("code", s.Tag, s.jrex.ID, s.Code, userId)
+	err := s.jrex.store.Set("code", s.Tag, s.jrex.ID, s.Code)
 	if err != nil {
 		return err
 	}

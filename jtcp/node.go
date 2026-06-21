@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/logs"
@@ -594,7 +595,7 @@ func (s *Node) electionLoop() error {
 		return err
 	}
 
-	for _, node := range envar.Nodes {
+	for _, node := range config.Nodes {
 		s.AddNode(node)
 	}
 

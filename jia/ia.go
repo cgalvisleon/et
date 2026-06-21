@@ -119,7 +119,7 @@ func (s *Ia) save(userId string) error {
 	event.Publish(EVENT_IA_SET, data)
 
 	if s.store != nil {
-		err := s.store.Set(s.ID, packageName, s.TenantID, s.ID, s, userId)
+		err := s.store.Set(s.ID, packageName, s.TenantID, s.ID, s)
 		if err != nil {
 			return err
 		}

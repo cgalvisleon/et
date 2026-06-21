@@ -6,7 +6,7 @@ import (
 	"time"
 	_ "time/tzdata"
 
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 )
 
 type Layout string
@@ -28,14 +28,14 @@ var layouts = map[Layout]string{
 var layout = layouts[RFC3339]
 
 func init() {
-	timezone := config.GetStr("TIMEZONE", "America/Bogota")
+	timezone := envar.GetStr("TIMEZONE", "America/Bogota")
 	var err error
 	loc, err = time.LoadLocation(timezone)
 	if err != nil {
 		panic(err)
 	}
 
-	layoutTime := config.GetStr("LAYOUT_TIME", "RFC3339")
+	layoutTime := envar.GetStr("LAYOUT_TIME", "RFC3339")
 	var ok bool
 	layout, ok = layouts[Layout(layoutTime)]
 	if !ok {

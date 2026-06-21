@@ -6,30 +6,36 @@ import (
 	"fmt"
 	"maps"
 	"strconv"
-	"time"
 
 	"github.com/cgalvisleon/et/envar"
+	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/reg"
+	"github.com/cgalvisleon/et/timezone"
 )
 
 type Store interface {
+	Set(tag, stage, tenantId, ownerId string, obj any) error
 	Get(tag, stage string, dest any) (bool, error)
-	Set(tag, stage, tenantId, ownerId string, obj any, userId string) error
 	Delete(tag, stage string) error
 }
 
 type Config struct {
-	ID       string                   `json:"id"`
-	TenantId string                   `json:"tenant_id"`
-	OwnerId  string                   `json:"owner_id"`
-	Tag      string                   `json:"tag"`
-	Stage    string                   `json:"stage"`
-	Params   map[string]interface{}   `json:"params"`
-	AuditLog []map[string]interface{} `json:"audit_log"`
-	store    Store                    `json:"-"`
+	ID        string    `json:"id"`
+	TenantId  string    `json:"tenant_id"`
+	OwnerId   string    `json:"owner_id"`
+	Tag       string    `json:"tag"`
+	Stage     string    `json:"stage"`
+	Params    et.Json   `json:"params"`
+	AuditLog  []et.Json `json:"audit_log"`
+	isDebug   bool      `json:"-"`
+	isChanged bool      `json:"-"`
+	store     Store     `json:"-"`
 }
 
 var (
-	cnf *Config
+	cnf         *Config
+	packageName = "config"
 )
 
 /**
@@ -50,15 +56,14 @@ func New(tag, stage, tenantId, ownerId string, store Store, userId string) (*Con
 		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "tenantId")
 	}
 
-	id := fmt.Sprintf("config:%s:%s:%s", tag, stage, tenantId)
 	result := &Config{
 		TenantId: tenantId,
 		OwnerId:  ownerId,
-		ID:       id,
+		ID:       reg.ULID(),
 		Tag:      tag,
 		Stage:    stage,
-		Params:   map[string]interface{}{},
-		AuditLog: make([]map[string]interface{}, 0),
+		Params:   et.Json{},
+		AuditLog: make([]et.Json, 0),
 		store:    store,
 	}
 	return result, nil
@@ -66,10 +71,10 @@ func New(tag, stage, tenantId, ownerId string, store Store, userId string) (*Con
 
 /**
 * Load
-* @param tag, stage, tenantId, ownerId string, store Store
+* @param tag, stage string, store Store, userId string
 * @return error
 **/
-func Load(tag, stage, tenantId, ownerId string, store Store, userId string) error {
+func Load(tag, stage string, store Store, userId string) error {
 	if store == nil {
 		return errors.New(MSG_CONFIG_STORE_IS_NIL)
 	}
@@ -80,13 +85,32 @@ func Load(tag, stage, tenantId, ownerId string, store Store, userId string) erro
 	}
 
 	if !exists {
-		cnf, err = New(tag, stage, tenantId, ownerId, store, userId)
-		if err != nil {
-			return err
-		}
+		return errors.New(MSG_CONFIG_NOT_LOADED)
 	}
 
 	return nil
+}
+
+/**
+* addAuditLog
+* @param userId string, action string
+**/
+func (s *Config) addAuditLog(userId string, action string) {
+	if s.AuditLog == nil {
+		s.AuditLog = make([]et.Json, 0)
+	}
+
+	now := timezone.Now()
+	s.AuditLog = append(s.AuditLog, et.Json{
+		"created_at": now,
+		"user_id":    userId,
+		"action":     action,
+	})
+	maxAuditLog := envar.GetInt("MAX_AUDIT_LOG", 1000)
+	if len(s.AuditLog) > maxAuditLog {
+		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	}
+	s.isChanged = true
 }
 
 /**
@@ -94,20 +118,17 @@ func Load(tag, stage, tenantId, ownerId string, store Store, userId string) erro
 * @param userId string
 * @return error
 **/
-func (s *Config) Save(updateAt time.Time, userId string) error {
+func (s *Config) Save() error {
 	if s.store == nil {
 		return errors.New(MSG_CONFIG_STORE_IS_NIL)
 	}
 
-	s.AuditLog = append(s.AuditLog, map[string]interface{}{
-		"created_at": updateAt,
-		"user_id":    userId,
-		"action":     "save",
-	})
-	maxAuditLog := GetInt("MAX_AUDIT_LOG", 1000)
-	s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	s.isChanged = false
+	if s.isDebug {
+		logs.Log(packageName, "save:", s.ToString())
+	}
 
-	return s.store.Set(s.Tag, s.Stage, s.OwnerId, s.TenantId, s, userId)
+	return s.store.Set(s.Tag, s.Stage, s.OwnerId, s.TenantId, s)
 }
 
 /**

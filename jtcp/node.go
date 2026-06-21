@@ -17,7 +17,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/logs"
@@ -90,12 +89,12 @@ type Node struct {
 **/
 func NewNode(port int, tlsConfig ...*tls.Config) *Node {
 	addr := fmt.Sprintf("%s:%d", hostName, port)
-	timeout, err := time.ParseDuration(config.GetStr("TIMEOUT", "10s"))
+	timeout, err := time.ParseDuration(envar.GetStr("TIMEOUT", "10s"))
 	if err != nil {
 		timeout = 10 * time.Second
 	}
 
-	workerCount := config.GetInt("WORKER_COUNT", 1000)
+	workerCount := envar.GetInt("WORKER_COUNT", 1000)
 	ctx, cancel := context.WithCancel(context.Background())
 	result := &Node{
 		ctx:            ctx,
@@ -112,7 +111,7 @@ func NewNode(port int, tlsConfig ...*tls.Config) *Node {
 		method:         make(map[string]Service),
 		index:          atomic.Uint64{},
 		total:          atomic.Int64{},
-		configFile:     config.GetStr("CONFIG_FILE", "./config.json"),
+		configFile:     envar.GetStr("CONFIG_FILE", "./envar.json"),
 		mu:             make(map[string]*sync.Mutex),
 		onConnect:      make([]func(*Client), 0),
 		onDisconnect:   make([]func(*Client), 0),
@@ -474,7 +473,7 @@ func (s *Node) handle(c *Client) {
 func (s *Node) handleClient(c *Client) {
 	reader := bufio.NewReader(c.conn)
 	lenBuf := make([]byte, 4)
-	limit := config.GetInt("LIMIT_SIZE_MG", 10)
+	limit := envar.GetInt("LIMIT_SIZE_MG", 10)
 	maxSize := uint32(limit * 1024 * 1024)
 
 	for {
@@ -595,7 +594,7 @@ func (s *Node) electionLoop() error {
 		return err
 	}
 
-	for _, node := range config.Nodes {
+	for _, node := range envar.Nodes {
 		s.AddNode(node)
 	}
 

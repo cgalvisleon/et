@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -18,7 +18,7 @@ import (
 )
 
 type Store interface {
-	Set(collection, id, tenantId, ownerId string, obj any, userId string) error
+	Set(collection, id, tenantId, ownerId string, obj any) error
 	Get(collection, id string, dest any) (bool, error)
 	Delete(collection, id string) error
 	Query(query et.Json) (et.Items, error)
@@ -116,7 +116,7 @@ func (s *DB) addAuditLog(userId string, action string) {
 		"user_id":    userId,
 		"action":     action,
 	})
-	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
+	maxAuditLog := envar.GetInt("MAX_AUDIT_LOG", 1000)
 	if len(s.AuditLog) > maxAuditLog {
 		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
 	}

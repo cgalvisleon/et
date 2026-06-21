@@ -1,9 +1,10 @@
 package et
 
 type Source struct {
-	data []Json
-	as   string
-	pos  int
+	data      []Json `json:"-"`
+	as        string `json:"-"`
+	pos       int    `json:"-"`
+	limitRows int    `json:"-"`
 }
 
 /**
@@ -45,4 +46,15 @@ func (s *Source) Data(index int) Json {
 		return Json{}
 	}
 	return s.data[index]
+}
+
+/**
+* LimitRows
+* @return int
+**/
+func (s *Source) LimitRows() int {
+	if s.limitRows == 0 {
+		s.limitRows = 1000
+	}
+	return s.limitRows
 }

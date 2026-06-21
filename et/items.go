@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
-
-	"github.com/cgalvisleon/et/msg"
 )
 
 type Items struct {
@@ -494,7 +492,7 @@ func (s Items) One(idx int) (Item, error) {
 	}
 
 	if idx >= n {
-		return Item{}, errors.New(msg.MSG_INDEX_OUT_OF_RANGE)
+		return Item{}, errors.New(MSG_INDEX_OUT_OF_RANGE)
 	}
 
 	return NewItem(s.Result[idx]), nil

@@ -1,6 +1,6 @@
 package jwf
 
-import "github.com/cgalvisleon/et/config"
+import "github.com/cgalvisleon/et/envar"
 
 var (
 	MSG_STEP_IS_FUNCTION              = "step is function"
@@ -32,7 +32,7 @@ var (
 )
 
 func init() {
-	lang := config.GetStr("LANG", "en")
+	lang := envar.GetStr("LANG", "en")
 
 	if lang == "es" {
 		MSG_STEP_IS_FUNCTION = "step is function"

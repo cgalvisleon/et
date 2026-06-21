@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jsql"
@@ -90,7 +90,7 @@ func (s *App) addAuditLog(userId string, action string) {
 		"user_id":    userId,
 		"action":     action,
 	})
-	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
+	maxAuditLog := envar.GetInt("MAX_AUDIT_LOG", 1000)
 	if len(s.AuditLog) > maxAuditLog {
 		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
 	}

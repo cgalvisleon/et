@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 )
 
 type CryptoType int
@@ -114,7 +114,7 @@ func cryptoSHA512(value string) (string, error) {
 * @return string, error
 **/
 func cryptoAES(value string) (string, error) {
-	secret := config.GetStr("SECRET", "1977")
+	secret := envar.GetStr("SECRET", "1977")
 	data := []byte(value)
 	key := []byte(secret)
 
@@ -164,7 +164,7 @@ func Encrypt(value string, cryptoType CryptoType) (string, error) {
 * @return string, error
 **/
 func DecryptoAES(value string) (string, error) {
-	secret := config.GetStr("SECRET", "1977")
+	secret := envar.GetStr("SECRET", "1977")
 	key := []byte(secret)
 	cipherText, err := base64.StdEncoding.DecodeString(value)
 	if err != nil {

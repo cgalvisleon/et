@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrex"
@@ -203,7 +203,7 @@ func (s *Step) addAuditLog(userId string, action string) {
 		"user_id":    userId,
 		"action":     action,
 	})
-	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
+	maxAuditLog := envar.GetInt("MAX_AUDIT_LOG", 1000)
 	if len(s.AuditLog) > maxAuditLog {
 		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
 	}
@@ -431,7 +431,7 @@ func (s *Step) put(version, title, description string, config et.Json, params et
 		s.Description = description
 	}
 
-	if s.Config.ToString() != config.ToString() {
+	if s.Config.ToString() != envar.ToString() {
 		s.addAuditLog(userId, fmt.Sprintf("update config old:%s", s.Config))
 		s.Config = config
 	}

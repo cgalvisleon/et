@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -16,7 +16,7 @@ import (
 )
 
 type Store interface {
-	Set(collection, id, tenantId, ownerId string, obj any, userId string) error
+	Set(collection, id, tenantId, ownerId string, obj any) error
 	Get(collection, id string, dest any) (bool, error)
 	Delete(collection, id string) error
 	Query(query et.Json) (et.Items, error)
@@ -44,7 +44,7 @@ func New(store Store) (*Resilience, error) {
 	result := &Resilience{
 		instances: make(map[string]*Instance),
 		mu:        sync.Mutex{},
-		isDebug:   config.GetBool("DEBUG", false),
+		isDebug:   envar.GetBool("DEBUG", false),
 		store:     store,
 	}
 

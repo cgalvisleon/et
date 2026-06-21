@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
@@ -60,13 +60,13 @@ func New() (*Conn, error) {
 		return nil, logs.Alertf(MSG_UNSUPPORTED_OS, oS)
 	}
 
-	host := config.GetStr("NATS_HOST", "")
+	host := envar.GetStr("NATS_HOST", "")
 	if !utility.ValidStr(host, 0, []string{}) {
 		return nil, logs.Alertf(msg.MSG_ATRIB_REQUIRED, "host")
 	}
 
-	user := config.GetStr("NATS_USER", "")
-	password := config.GetStr("NATS_PASSWORD", "")
+	user := envar.GetStr("NATS_USER", "")
+	password := envar.GetStr("NATS_PASSWORD", "")
 	opts := []nats.Option{
 		nats.UserInfo(user, password),
 		nats.ReconnectWait(2 * time.Second),

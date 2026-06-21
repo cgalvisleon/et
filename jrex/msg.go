@@ -1,6 +1,6 @@
 package jrex
 
-import "github.com/cgalvisleon/et/config"
+import "github.com/cgalvisleon/et/envar"
 
 var (
 	MSG_TAG_REQUIRED           = "tag is required, remember that is a unique identifier"
@@ -13,7 +13,7 @@ var (
 )
 
 func init() {
-	lang := config.GetStr("LANG", "en")
+	lang := envar.GetStr("LANG", "en")
 
 	if lang == "es" {
 		MSG_TAG_REQUIRED = "tag es requerido, recuerda que es un identificador único"

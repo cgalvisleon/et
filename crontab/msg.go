@@ -1,6 +1,6 @@
 package crontab
 
-import "github.com/cgalvisleon/et/config"
+import "github.com/cgalvisleon/et/envar"
 
 var (
 	MSG_ADD_JOB                    = "Add job:%s tag:%s channel:%s type:%s spec:%s"
@@ -23,7 +23,7 @@ var (
 )
 
 func init() {
-	lang := config.GetStr("LANG", "en")
+	lang := envar.GetStr("LANG", "en")
 
 	if lang == "es" {
 		MSG_ADD_JOB = "Agregar job:%s tag:%s channel:%s type:%s spec:%s"

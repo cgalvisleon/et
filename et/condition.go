@@ -5,13 +5,11 @@ import (
 	"reflect"
 	"strings"
 	"time"
-
-	"github.com/cgalvisleon/et/msg"
 )
 
 var (
-	ErrorFieldNotFound = errors.New(msg.MSG_FIELD_NOT_FOUND)
-	ErrorDataNotFound  = errors.New(msg.MSG_DATA_NOT_FOUND)
+	ErrorFieldNotFound = errors.New(MSG_FIELD_NOT_FOUND)
+	ErrorDataNotFound  = errors.New(MSG_DATA_NOT_FOUND)
 )
 
 type Operator string

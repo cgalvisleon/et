@@ -3,7 +3,7 @@ package jrex
 import (
 	"errors"
 
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
@@ -196,7 +196,7 @@ func (s *Jrex) addAuditLog(userId string, action string) {
 		"user_id":    userId,
 		"action":     action,
 	})
-	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
+	maxAuditLog := envar.GetInt("MAX_AUDIT_LOG", 1000)
 	if len(s.AuditLog) > maxAuditLog {
 		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
 	}

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
@@ -25,11 +25,7 @@ var (
 * @return string
 **/
 func getSecret() string {
-	secret := config.GetStr("SECRET", "1977")
-	if config.IsLoad() {
-		secret = config.GetStr("SECRET", secret)
-	}
-
+	secret := envar.GetStr("SECRET", "1977")
 	jwtSecretOnce.Do(func() {
 		jwtSecret = secret
 	})

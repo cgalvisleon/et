@@ -53,21 +53,21 @@ ENTRYPOINT ["/$1"]
 const ModelMain = `package main
 
 import (
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/logs"
 	serv "$1/internal/services/$2"
 )
 
 func main() {
-	config.SetIntByArg("PORT", 3000)
-	config.SetIntByArg("RPC_PORT", 4200)
-	config.SetStrByArg("DB_HOST", "localhost")
-	config.SetIntByArg("DB_PORT", 5432)
-	config.SetStrByArg("DB_NAME", "")
-	config.SetStrByArg("DB_USER", "")
-	config.SetStrByArg("DB_PASSWORD", "")
-	config.SetStrByArg("DB_APP", "Test")
-	config.Reload()
+	envar.SetIntByArg("PORT", 3000)
+	envar.SetIntByArg("RPC_PORT", 4200)
+	envar.SetStrByArg("DB_HOST", "localhost")
+	envar.SetIntByArg("DB_PORT", 5432)
+	envar.SetStrByArg("DB_NAME", "")
+	envar.SetStrByArg("DB_USER", "")
+	envar.SetStrByArg("DB_PASSWORD", "")
+	envar.SetStrByArg("DB_APP", "Test")
+	envar.Reload()
 
 	srv, err := serv.New()
 	if err != nil {
@@ -221,7 +221,7 @@ import (
 )
 
 func LoadConfig() error {
-	stage := config.String("STAGE", "local")
+	stage := envar.String("STAGE", "local")
 	name := "default"
 	result, err := jrpc.CallItem("Module.Services.GetConfig", et.Json{
 		"stage":  stage,
@@ -237,7 +237,7 @@ func LoadConfig() error {
 	}
 
 	cfg := result.Json("config")
-	err = config.SetToEnvar(cfg)
+	err = envar.SetToEnvar(cfg)
 	if err != nil {
 		return err
 	}
@@ -262,12 +262,12 @@ type Controller struct {
 
 func (c *Controller) Version(ctx context.Context) (et.Json, error) {	
 	service := et.Json{
-		"version": config.App.Version,
+		"version": envar.App.Version,
 		"service": PackageName,
-		"host":    config.App.Host,
-		"company": config.App.Company,
-		"web":     config.App.Web,
-		"help":    config.App.Help,
+		"host":    envar.App.Host,
+		"company": envar.App.Company,
+		"web":     envar.App.Web,
+		"help":    envar.App.Help,
 	}
 
 	return service, nil
@@ -299,12 +299,12 @@ type Controller struct {
 
 func (c *Controller) Version(ctx context.Context) (et.Json, error) {	
   service := et.Json{
-		"version": config.App.Version,
+		"version": envar.App.Version,
 		"service": PackageName,
-		"host":    config.App.Host,
-		"company": config.App.Company,
-		"web":     config.App.Web,
-		"help":    config.App.Help,
+		"host":    envar.App.Host,
+		"company": envar.App.Company,
+		"web":     envar.App.Web,
+		"help":    envar.App.Help,
 	}
 
 	return service, nil
@@ -884,8 +884,8 @@ import (
 
 var PackageName = "$1"
 var PackageTitle = "$1"
-var PackagePath = config.App.PathApi
-var PackageVersion = config.App.Version
+var PackagePath = envar.App.PathApi
+var PackageVersion = envar.App.Version
 var HostName, _ = os.Hostname()
 
 type Router struct {
@@ -894,7 +894,7 @@ type Router struct {
 
 func (rt *Router) Routes() http.Handler {
 	defaultHost := fmt.Sprintf("http://%s", HostName)
-	var host = fmt.Sprintf("%s:%d", config.String("HOST", defaultHost), config.Int("PORT", 3300))
+	var host = fmt.Sprintf("%s:%d", envar.String("HOST", defaultHost), envar.Int("PORT", 3300))
 
 	r := chi.NewRouter()
 
@@ -966,8 +966,8 @@ import (
 
 var PackageName = "$1"
 var PackageTitle = "$1"
-var PackagePath = config.App.PathApi
-var PackageVersion = config.App.Version
+var PackagePath = envar.App.PathApi
+var PackageVersion = envar.App.Version
 var HostName, _ = os.Hostname()
 
 type Router struct {
@@ -976,7 +976,7 @@ type Router struct {
 
 func (rt *Router) Routes() http.Handler {
 	defaultHost := fmt.Sprintf("http://%s", HostName)
-	var host = fmt.Sprintf("%s:%d", config.String("HOST", defaultHost), config.Int("PORT", 3300))
+	var host = fmt.Sprintf("%s:%d", envar.String("HOST", defaultHost), envar.Int("PORT", 3300))
 
 	r := chi.NewRouter()
 
@@ -1055,12 +1055,12 @@ func (c *Services) Version(require et.Json, response *et.Item) error {
 	response.Ok = true
 	response.Result = et.Json{
 		"methos":  "RPC",
-		"version": config.App.Version,
+		"version": envar.App.Version,
 		"service": PackageName,
-		"host":    config.App.Host,
-		"company": config.App.Company,
-		"web":     config.App.Web,
-		"help":    config.App.Help,
+		"host":    envar.App.Host,
+		"company": envar.App.Company,
+		"web":     envar.App.Web,
+		"help":    envar.App.Help,
 	}
 
 	return logs.Rpc(PackageName, response.ToString())

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -126,7 +126,7 @@ func (s *Job) up(crontab *Crontab) error {
 	s.store = crontab.store
 	s.mu = &sync.Mutex{}
 	s.isDebug = crontab.isDebug
-	return s.save(s.HostName)
+	return s.save()
 }
 
 /**
@@ -144,7 +144,7 @@ func (s *Job) addAuditLog(userId string, action string) {
 		"user_id":    userId,
 		"action":     action,
 	})
-	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
+	maxAuditLog := envar.GetInt("MAX_AUDIT_LOG", 1000)
 	if len(s.AuditLog) > maxAuditLog {
 		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
 	}
@@ -153,10 +153,9 @@ func (s *Job) addAuditLog(userId string, action string) {
 
 /**
 * save
-* @param userId string
 * @return error
 **/
-func (s *Job) save(userId string) error {
+func (s *Job) save() error {
 	s.isChanged = false
 
 	if s.isDebug {
@@ -167,7 +166,7 @@ func (s *Job) save(userId string) error {
 		return nil
 	}
 
-	err := s.store.Set("job", s.ID, s.TenantId, s.OwnerId, s, userId)
+	err := s.store.Set("job", s.ID, s.TenantId, s.OwnerId, s)
 	if err != nil {
 		return err
 	}
@@ -192,7 +191,7 @@ func (s *Job) setStatus(status JobStatus) error {
 	s.addAuditLog(s.HostName, string(status))
 	logs.Logf(packageName, MSG_JOB_STATUS, s.Tag, status, s.HostName, s.Attempts, s.Repetitions)
 
-	return s.save(s.HostName)
+	return s.save()
 }
 
 /**
@@ -233,7 +232,7 @@ func (s *Job) start() error {
 		}
 
 		s.idx = idx
-		return s.save(s.HostName)
+		return s.save()
 	}
 
 	if s.shot != nil {

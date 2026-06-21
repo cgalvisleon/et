@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/redis/go-redis/v9"
@@ -43,13 +43,13 @@ func New() (*Conn, error) {
 		return nil, logs.Alertf(MSG_UNSUPPORTED_OS, os)
 	}
 
-	host := config.GetStr("REDIS_HOST", "")
+	host := envar.GetStr("REDIS_HOST", "")
 	if !utility.ValidStr(host, 0, []string{}) {
 		return nil, logs.Alertf(MSG_ATRIB_REQUIRED, "host")
 	}
 
-	password := config.GetStr("REDIS_PASSWORD", "")
-	dbname := config.GetInt("REDIS_DB", 0)
+	password := envar.GetStr("REDIS_PASSWORD", "")
+	dbname := envar.GetInt("REDIS_DB", 0)
 	client := redis.NewClient(&redis.Options{
 		Addr:            host,
 		Password:        password,

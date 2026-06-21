@@ -22,7 +22,7 @@ var (
 )
 
 type Store interface {
-	Set(collection, id, tenantId, ownerId string, obj any, userId string) error
+	Set(collection, id, tenantId, ownerId string, obj any) error
 	Get(collection, id string, dest any) (bool, error)
 	Delete(collection, id string) error
 	Query(query et.Json) (et.Items, error)

@@ -4,14 +4,13 @@ import (
 	"encoding/json"
 	"sort"
 	"strings"
-
-	"github.com/cgalvisleon/et/config"
 )
 
 type Iterator interface {
 	Next() (Json, bool)
 	As() string
 	Add(item Json)
+	LimitRows() int
 }
 
 type JoinType int
@@ -76,7 +75,6 @@ type Where struct {
 * @return *Where
 **/
 func newWhere(from Iterator) *Where {
-	limitRows := config.GetInt("LIMIT_ROWS", 1000)
 	result := &Where{
 		From:       from,
 		Conditions: make([]*Condition, 0, 4),
@@ -85,9 +83,9 @@ func newWhere(from Iterator) *Where {
 		Hiddens:    make([]string, 0, 4),
 		OrderBy:    make([]OrderField, 0, 2),
 		Offset:     0,
-		Limits:     limitRows,
+		Limits:     from.LimitRows(),
 		Workers:    1,
-		Result:     make([]Json, 0, limitRows),
+		Result:     make([]Json, 0, from.LimitRows()),
 	}
 
 	return result

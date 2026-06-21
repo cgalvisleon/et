@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -41,7 +40,7 @@ func (s *Json) Scan(src interface{}) error {
 		*s = Json(v)
 		return nil
 	default:
-		return fmt.Errorf(msg.MSG_FAILED_TO_UNMARSHAL_JSON_VALUE, src)
+		return fmt.Errorf(MSG_FAILED_TO_UNMARSHAL_JSON_VALUE, src)
 	}
 
 	t := map[string]interface{}{}

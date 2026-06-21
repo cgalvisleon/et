@@ -64,7 +64,7 @@ func (s *Systemd) SetConfig(cfg string) {
 		return
 	}
 
-	s.port = config.Int("port")
+	s.port = envar.Int("port")
 }
 
 func (s *Systemd) Status() et.Json {

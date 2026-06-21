@@ -11,22 +11,17 @@ import (
 
 type Kind string
 
-const (
-	KindJson Kind = "json"
-	KindBite Kind = "binary"
-)
-
 type Instance struct {
-	model *Model
-	kind  Kind
+	TenantId string
+	model    *Model
 }
 
 /**
 * defineInstance
-* @param db *DB, schema, name string, kind Kind
+* @param db *DB, tenantId, schema, name string
 * @return (*Instance, error)
 **/
-func defineInstance(db *DB, schema, name string, kind Kind) (*Instance, error) {
+func defineInstance(db *DB, tenantId, schema, name string) (*Instance, error) {
 	columns := []Column{
 		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
@@ -35,7 +30,7 @@ func defineInstance(db *DB, schema, name string, kind Kind) (*Instance, error) {
 		{Name: "tag", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 		{Name: "title", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
 		{Name: "owner_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: SOURCE, TypeColumn: COLUMN, TypeData: JSON, Default: et.Json{}},
+		{Name: "definition", TypeColumn: COLUMN, TypeData: BYTES, Default: []byte("")},
 	}
 
 	if name == "" {
@@ -59,14 +54,6 @@ func defineInstance(db *DB, schema, name string, kind Kind) (*Instance, error) {
 		IdxField: IDX,
 		IdtField: IDT,
 		IsCore:   true,
-		IsDebug:  true,
-	}
-
-	if kind == KindBite {
-		def.Columns[5].TypeData = BYTES
-	} else {
-		def.Columns[5].TypeData = JSON
-		def.SourceField = SOURCE
 	}
 
 	result, err := db.Define(def)
@@ -84,12 +71,16 @@ func defineInstance(db *DB, schema, name string, kind Kind) (*Instance, error) {
 		new.Set(UPDATED_AT, now)
 		return nil
 	})
+
 	err = result.Init()
 	if err != nil {
 		return nil, err
 	}
 
-	return &Instance{model: result, kind: kind}, nil
+	return &Instance{
+		TenantId: tenantId,
+		model:    result,
+	}, nil
 }
 
 /**

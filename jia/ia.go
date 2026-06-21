@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -23,7 +23,7 @@ var (
 )
 
 type Store interface {
-	Set(id, tag, tenantId, ownerId string, obj any, userId string) error
+	Set(id, tag, tenantId, ownerId string, obj any) error
 	Get(id, tag string, dest any) (bool, error)
 	Delete(id, tag string) error
 	Query(query et.Json) (et.Items, error)
@@ -57,8 +57,8 @@ func New(tenantId, tag string, store Store) (*Ia, error) {
 	}
 
 	now := timezone.Now()
-	key := config.GetStr("OPENAI_API_KEY", "")
-	isDebug := config.GetBool("DEBUG", true)
+	key := envar.GetStr("OPENAI_API_KEY", "")
+	isDebug := envar.GetBool("DEBUG", true)
 	result := &Ia{
 		CreatedAt:     now,
 		UpdatedAt:     now,

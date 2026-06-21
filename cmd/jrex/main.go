@@ -17,7 +17,7 @@ func main() {
 
 	logs.Debug("connected:", db.Name)
 
-	model, err := db.DefineModel("apps", "users", 1)
+	model, err := db.DefineModel("apps", "users", 1, "admin")
 	if err != nil {
 		logs.Panic(err)
 	}

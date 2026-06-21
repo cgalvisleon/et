@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -21,7 +21,7 @@ const (
 )
 
 type Store interface {
-	Set(collection, id, tenantId, ownerId string, obj any, userId string) error
+	Set(collection, id, tenantId, ownerId string, obj any) error
 	Get(collection, id string, dest any) (bool, error)
 	Delete(collection, id string) error
 	Query(query et.Json) (et.Items, error)
@@ -108,7 +108,7 @@ func Load(id string, store Store) (*WorkFlow, error) {
 * @return *WorkFlow
 **/
 func (s *WorkFlow) up(store Store) (*WorkFlow, error) {
-	isDebug := config.GetBool("DEBUG", false)
+	isDebug := envar.GetBool("DEBUG", false)
 	s.bindings = make(map[string]any)
 	s.muFlows = sync.Mutex{}
 	s.muSteps = sync.Mutex{}
@@ -127,6 +127,28 @@ func (s *WorkFlow) up(store Store) (*WorkFlow, error) {
 		}
 	}
 	return s, nil
+}
+
+/**
+* addAuditLog
+* @param userId string, action string
+**/
+func (s *WorkFlow) addAuditLog(userId string, action string) {
+	if s.AuditLog == nil {
+		s.AuditLog = make([]et.Json, 0)
+	}
+
+	now := timezone.Now()
+	s.AuditLog = append(s.AuditLog, et.Json{
+		"created_at": now,
+		"user_id":    userId,
+		"action":     action,
+	})
+	maxAuditLog := envar.GetInt("MAX_AUDIT_LOG", 1000)
+	if len(s.AuditLog) > maxAuditLog {
+		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	}
+	s.isChanged = true
 }
 
 /**
@@ -162,43 +184,20 @@ func (s *WorkFlow) ToString() string {
 }
 
 /**
-* addAuditLog
-* @param userId string, action string
-**/
-func (s *WorkFlow) addAuditLog(userId string, action string) {
-	if s.AuditLog == nil {
-		s.AuditLog = make([]et.Json, 0)
-	}
-
-	now := timezone.Now()
-	s.AuditLog = append(s.AuditLog, et.Json{
-		"created_at": now,
-		"user_id":    userId,
-		"action":     action,
-	})
-	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
-	if len(s.AuditLog) > maxAuditLog {
-		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
-	}
-	s.isChanged = true
-}
-
-/**
 * Save
 * @return error
 **/
-func (s *WorkFlow) Save(userId string) error {
+func (s *WorkFlow) Save() error {
 	if s.store == nil {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
 
 	s.isChanged = false
-
 	if s.isDebug {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	return s.store.Set("workflow", s.ID, s.TenantId, s.TenantId, s, userId)
+	return s.store.Set("workflow", s.ID, s.TenantId, s.TenantId, s)
 }
 
 /**

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jsql"
@@ -30,7 +30,7 @@ type ServerStorage interface {
 }
 
 type Store interface {
-	Set(collection, id, tenantId, ownerId string, obj any, userId string) error
+	Set(collection, id, tenantId, ownerId string, obj any) error
 	Get(collection, id string, dest any) (bool, error)
 	Delete(collection, id string) error
 	GenCode(tag string) (string, error)
@@ -134,7 +134,7 @@ func (s *Tenant) ToString() string {
 **/
 func (s *Tenant) up(store Store) *Tenant {
 	s.store = store
-	s.isDebug = config.GetBool("DEBUG", false)
+	s.isDebug = envar.GetBool("DEBUG", false)
 	s.onSave = make([]func(tenant *Tenant, userId string) error, 0)
 	s.onDelete = make([]func(tenant *Tenant, userId string) error, 0)
 	s.OnSave(func(tenant *Tenant, userId string) error {
@@ -166,7 +166,7 @@ func (s *Tenant) addAuditLog(userId string, action string) {
 		"user_id":    userId,
 		"action":     action,
 	})
-	maxAuditLog := config.GetInt("MAX_AUDIT_LOG", 1000)
+	maxAuditLog := envar.GetInt("MAX_AUDIT_LOG", 1000)
 	if len(s.AuditLog) > maxAuditLog {
 		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
 	}

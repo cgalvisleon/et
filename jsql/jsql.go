@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -25,7 +25,7 @@ func init() {
 * @return Connection, error
 **/
 func getConnection(tenantId string) (Connection, error) {
-	driver := config.GetStr("DB_DRIVER", DriverPostgres)
+	driver := envar.GetStr("DB_DRIVER", DriverPostgres)
 	switch driver {
 	case DriverPostgres:
 		config := pgConection(tenantId)

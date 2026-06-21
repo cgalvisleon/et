@@ -1,6 +1,6 @@
 package jtenant
 
-import "github.com/cgalvisleon/et/config"
+import "github.com/cgalvisleon/et/envar"
 
 var (
 	MSG_TENANT_NOT_FOUND = "tenant not found"
@@ -8,7 +8,7 @@ var (
 )
 
 func init() {
-	lang := config.GetStr("LANG", "en")
+	lang := envar.GetStr("LANG", "en")
 	if lang == "es" {
 		MSG_TENANT_NOT_FOUND = "tenant no encontrado"
 		MSG_STORE_IS_NIL = "store es nulo"

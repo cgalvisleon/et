@@ -1,6 +1,6 @@
 package jia
 
-import "github.com/cgalvisleon/et/config"
+import "github.com/cgalvisleon/et/envar"
 
 var (
 	MSG_AGENT_NOT_FOUND          = "agente %s no encontrado"
@@ -18,7 +18,7 @@ var (
 )
 
 func init() {
-	lang := config.GetStr("LANG", "en")
+	lang := envar.GetStr("LANG", "en")
 
 	if lang == "es" {
 		MSG_AGENT_NOT_FOUND = "agente %s no encontrado"

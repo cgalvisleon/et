@@ -10,8 +10,8 @@ import (
 )
 
 type Store interface {
+	Set(collection, id, ownerId string, obj any) error
 	Get(collection, id string, dest any) (bool, error)
-	Set(collection, id, ownerId string, obj any, userId string) error
 }
 
 type FileStore struct {

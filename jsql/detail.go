@@ -1,6 +1,10 @@
 package jsql
 
-import "github.com/cgalvisleon/et/et"
+import (
+	"errors"
+
+	"github.com/cgalvisleon/et/et"
+)
 
 /**
 * Detail: Defines a relationship to another model, including join keys and cascade rules.
@@ -12,6 +16,23 @@ type Detail struct {
 	OnDeleteCascade bool              `json:"on_delete_cascade"`
 	OnUpdateCascade bool              `json:"on_update_cascade"`
 	Rows            int               `json:"rows"`
+}
+
+func (s *Detail) init() error {
+	if s.To == nil {
+		return errors.New(MSG_TO_MODEL_REQUIRED)
+	}
+
+	if s.To.Model == nil {
+		return errors.New(MSG_TO_MODEL_REQUIRED)
+	}
+
+	err := s.To.Model.Init()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 /**

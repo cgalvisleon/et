@@ -44,7 +44,6 @@ func DefineState(db *DB, schema string) (*State, error) {
 		IdtField:    IDT,
 		SourceField: SOURCE,
 		IsCore:      true,
-		IsDebug:     true,
 	}
 
 	result, err := db.Define(def)

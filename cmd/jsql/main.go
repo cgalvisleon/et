@@ -18,7 +18,7 @@ func demoDBConnect() error {
 
 	logs.Debug("connected:", db.Name)
 
-	model, err := db.DefineModel("public", "users", 1)
+	model, err := db.DefineModel("public", "users", 1, "admin")
 	if err != nil {
 		return err
 	}

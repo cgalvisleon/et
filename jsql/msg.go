@@ -1,6 +1,6 @@
 package jsql
 
-import "github.com/cgalvisleon/et/config"
+import "github.com/cgalvisleon/et/envar"
 
 var (
 	MSG_DB_STORE_IS_NIL           = "Model store is nil"
@@ -31,7 +31,7 @@ var (
 )
 
 func init() {
-	lang := config.GetStr("LANG", "en")
+	lang := envar.GetStr("LANG", "en")
 
 	if lang == "es" {
 		MSG_DB_STORE_IS_NIL = "Store de base de datos es nulo"

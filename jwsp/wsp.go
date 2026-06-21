@@ -1,7 +1,7 @@
 package jwsp
 
 import (
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -23,7 +23,7 @@ type Whatsapp struct {
 **/
 func NewSender(token, phoneNumberId string) *Whatsapp {
 	return &Whatsapp{
-		Path:          config.GetStr("WHATSAPP_API_URL", "https://graph.facebook.com/v22.0"),
+		Path:          envar.GetStr("WHATSAPP_API_URL", "https://graph.facebook.com/v22.0"),
 		Token:         token,
 		PhoneNumberId: phoneNumberId,
 		EventHandler:  nil,

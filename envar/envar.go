@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	_ "github.com/joho/godotenv/autoload"
 )
@@ -228,6 +229,20 @@ func GetBool(name string, def bool) bool {
 	}
 
 	return val
+}
+
+/**
+* GetDuration
+* @param name string, def time.Duration
+* @return time.Duration
+**/
+func GetDuration(name string, def time.Duration) time.Duration {
+	result := GetStr(name, strconv.FormatInt(int64(def), 10))
+	val, err := strconv.ParseInt(result, 10, 64)
+	if err != nil {
+		return def
+	}
+	return time.Duration(val)
 }
 
 /**

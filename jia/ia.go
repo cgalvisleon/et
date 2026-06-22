@@ -246,16 +246,16 @@ func (s *Ia) delete() error {
 **/
 func (s *Ia) ToJson() et.Json {
 	agents := et.Json{}
-	for id, agent := range s.Agents {
-		agents[id] = agent.ToJson()
+	for tag, agent := range s.Agents {
+		agents[tag] = agent.ToJson()
 	}
 	participants := et.Json{}
-	for id, participant := range s.Participants {
-		participants[id] = participant.ToJson()
+	for to, participant := range s.Participants {
+		participants[to] = participant.ToJson()
 	}
 	conversations := et.Json{}
-	for id, conversation := range s.Conversations {
-		conversations[id] = conversation.ToJson()
+	for convID, conversation := range s.Conversations {
+		conversations[convID] = conversation.ToJson()
 	}
 	return et.Json{
 		"created_at":    timezone.Format(s.CreatedAt, timezone.RFC3339),
@@ -279,13 +279,14 @@ func (s *Ia) ToString() string {
 
 /**
 * addAgent
-* @param agent *Agent
+* @param agent *Agent, userId string
 **/
-func (s *Ia) addAgent(agent *Agent) {
+func (s *Ia) addAgent(agent *Agent, userId string) {
 	s.muAgents.Lock()
 	defer s.muAgents.Unlock()
 
-	s.Agents[agent.ID] = agent
+	agent.addAuditLog(userId, "add_agent")
+	s.Agents[agent.Tag] = agent
 }
 
 /**
@@ -293,25 +294,12 @@ func (s *Ia) addAgent(agent *Agent) {
 * @param tag string
 * @return (*Agent, bool)
 **/
-func (s *Ia) getAgent(id string) (*Agent, bool) {
+func (s *Ia) getAgent(tag string) (*Agent, bool) {
 	s.muAgents.RLock()
-	result, exists := s.Agents[id]
+	result, exists := s.Agents[tag]
 	s.muAgents.RUnlock()
 	if exists {
 		return result, true
-	}
-
-	if s.store != nil {
-		exists, err := s.store.Get(id, "agent", &result)
-		if err != nil {
-			return nil, false
-		}
-
-		if exists {
-			result.up(s)
-			s.addAgent(result)
-			return result, true
-		}
 	}
 
 	return nil, false
@@ -319,298 +307,156 @@ func (s *Ia) getAgent(id string) (*Agent, bool) {
 
 /**
 * removeAgent
-* @param tag string
-* @return error
-**/
-func (s *Ia) removeAgent(tag, userId string) error {
-	id := agendId(tag)
-	s.mutex["agents"].Lock()
-	defer s.mutex["agents"].Unlock()
-
-	delete(s.Agents, id)
-	s.addAuditLog(userId, fmt.Sprintf("remove_agent:%s", tag))
-	return s.save(userId)
-}
-
-/**
-* newAgent
-* @param tag, name, description, context, model string
-* @return (*Agent, error)
-**/
-func (s *Ia) newAgent(tag, name, description, context, model, userId string) (*Agent, error) {
-	_, exists := s.getAgent(name)
-	if exists {
-		return nil, fmt.Errorf(MSG_AGENT_ALREADY_EXISTS, name)
-	}
-
-	result := newAgent(s, tag, name, description, context, model, userId)
-	s.addAgent(result)
-	s.addAuditLog(userId, fmt.Sprintf("new_agent:%s", name))
-	return result, s.save(userId)
-}
-
-/**
-* deleteAgent
 * @param tag, userId string
-* @return error
 **/
-func (s *Ia) deleteAgent(tag, userId string) error {
-	agent, exists := s.getAgent(tag)
-	if !exists {
-		return fmt.Errorf(MSG_AGENT_NOT_FOUND, tag)
-	}
+func (s *Ia) removeAgent(tag, userId string) {
+	s.muAgents.Lock()
+	defer s.muAgents.Unlock()
 
-	err := agent.delete()
-	if err != nil {
-		return err
-	}
-
-	return s.removeAgent(tag, userId)
+	s.addAuditLog(userId, "remove_agent")
+	delete(s.Agents, tag)
 }
 
 /**
 * SetModelAgent
-* @param name string, model string
+* @param id string, model, userId string
 * @return *Agent
 **/
-func (s *Ia) SetModelAgent(name string, model string) (*Agent, error) {
-	if !utility.ValidStr(name, 0, []string{""}) {
-		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
+func (s *Ia) SetModelAgent(tag string, model, userId string) (*Agent, error) {
+	if !utility.ValidStr(tag, 0, []string{""}) {
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "tag")
 	}
 	if !utility.ValidStr(model, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "model")
 	}
 
-	result, exists := s.getAgent(name)
+	result, exists := s.getAgent(tag)
 	if !exists {
-		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, name)
+		return nil, errors.New(MSG_AGENT_NOT_FOUND)
 	}
 
-	return result.setModel(model), nil
+	return result.setModel(model, userId), nil
 }
 
 /**
-* setContextAgent
-* @param name string, context string
+* SetContextAgent
+* @param tag string, context, userId string
 * @return (*Agent, error)
 **/
-func (s *Ia) SetContextAgent(name string, context string) (*Agent, error) {
-	if !utility.ValidStr(name, 0, []string{""}) {
-		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
+func (s *Ia) SetContextAgent(tag string, context, userId string) (*Agent, error) {
+	if !utility.ValidStr(tag, 0, []string{""}) {
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "tag")
 	}
 	if !utility.ValidStr(context, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "context")
 	}
 
-	result, exists := s.getAgent(name)
+	result, exists := s.getAgent(tag)
 	if !exists {
-		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, name)
+		return nil, errors.New(MSG_AGENT_NOT_FOUND)
 	}
 
-	return result.setContext(context), nil
+	return result.setContext(context, userId), nil
 }
 
 /**
 * SetSkillAgent
-* @param name string, skill Skill
+* @param tag string, skill Skill, userId string
 * @return (*Agent, error)
 **/
-func (s *Ia) SetSkillAgent(name string, skill Skill) (*Agent, error) {
-	if !utility.ValidStr(name, 0, []string{""}) {
-		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
+func (s *Ia) SetSkillAgent(tag string, skill Skill, userId string) (*Agent, error) {
+	if !utility.ValidStr(tag, 0, []string{""}) {
+		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "tag")
 	}
 	if !utility.ValidStr(skill.Tag(), 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "skill")
 	}
 
-	result, exists := s.getAgent(name)
+	result, exists := s.getAgent(tag)
 	if !exists {
-		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, name)
+		return nil, errors.New(MSG_AGENT_NOT_FOUND)
 	}
-	return result.addSkill(skill), nil
+	return result.addSkill(skill, userId), nil
 }
 
 /**
-* loadParticipant
-* @param to string, dest any
-* @return (*Participant, error)
+* addParticipant
+* @param participant *Participant, userId string
 **/
-func (s *Ia) loadParticipant(to string) (*Participant, error) {
-	var result *Participant
-	exists, err := s.store.Get(to, "participant", &result)
-	if err != nil {
-		return nil, err
-	}
+func (s *Ia) addParticipant(participant *Participant, userId string) {
+	s.muParticipants.Lock()
+	defer s.muParticipants.Unlock()
 
-	if !exists {
-		return nil, errors.New(MSG_PARTICIPANT_NOT_FOUND)
-	}
-
-	result.up(s)
-	return result, nil
+	s.addAuditLog(userId, "add_participant")
+	s.Participants[participant.To] = participant
 }
-
-var ErrParticipantNotFound = errors.New(MSG_PARTICIPANT_NOT_FOUND)
 
 /**
 * getParticipant
-* @param to, userId string
+* @param to string
 * @return (*Participant, error)
 **/
-func (s *Ia) getParticipant(to, userId string) (*Participant, error) {
-	s.mutex["participants"].Lock()
+func (s *Ia) getParticipant(to string) (*Participant, bool) {
+	s.muParticipants.RLock()
 	result, exists := s.Participants[to]
-	s.mutex["participants"].Unlock()
+	s.muParticipants.RUnlock()
 	if exists {
-		return result, nil
+		return result, true
 	}
 
-	result, err := s.loadParticipant(to)
-	if err != nil {
-		return nil, err
-	}
-
-	if result == nil {
-		return nil, ErrParticipantNotFound
-	}
-
-	s.mutex["participants"].Lock()
-	s.Participants[to] = result
-	s.mutex["participants"].Unlock()
-
-	s.addAuditLog(userId, fmt.Sprintf("load_participant:%s", to))
-	return result, s.save(userId)
+	return nil, false
 }
 
 /**
-* newParticipant
-* @param to, name, userId string
-* @return (*Participant, error)
-**/
-func (s *Ia) newParticipant(to, id, name, userId string) (*Participant, error) {
-	result := newParticipant(s, id, to, name)
-	err := result.save(userId)
-	if err != nil {
-		return nil, err
-	}
-
-	s.mutex["participants"].Lock()
-	s.Participants[to] = result
-	s.mutex["participants"].Unlock()
-
-	s.addAuditLog(userId, fmt.Sprintf("new_participant:%s", to))
-	return result, s.save(userId)
-}
-
-/**
-* removeConversation
+* removeParticipant
 * @param to, userId string
-* @return error
 **/
-func (s *Ia) removeConversation(to, userId string) error {
-	s.mutex["conversations"].Lock()
-	defer s.mutex["conversations"].Unlock()
+func (s *Ia) removeParticipant(to, userId string) {
+	s.muParticipants.Lock()
+	defer s.muParticipants.Unlock()
 
-	delete(s.Conversations, to)
-	s.addAuditLog(userId, fmt.Sprintf("remove_conversation:%s", to))
-	return s.save(userId)
-}
-
-/**
-* deleteParticipant
-* @param to, userId string
-* @return error
-**/
-func (s *Ia) deleteParticipant(to, userId string) error {
-	s.mutex["participants"].Lock()
-	result, exists := s.Participants[to]
-	s.mutex["participants"].Unlock()
-	if !exists {
-		return fmt.Errorf(MSG_PARTICIPANT_NOT_FOUND, to)
-	}
-
-	err := result.delete()
-	if err != nil {
-		return err
-	}
-
+	s.addAuditLog(userId, "remove_participant")
 	delete(s.Participants, to)
-	return s.save(userId)
 }
 
 /**
-* loadConversation
-* @param to string, dest *Conversation
-* @return (bool, error)
+* addConversation
+* @param conversation *Conversation, userId string
 **/
-func (s *Ia) loadConversation(to *Participant) (*Conversation, error) {
-	var result *Conversation
-	exists, err := s.store.Get(to.To, "conversation", &result)
-	if err != nil {
-		return nil, err
-	}
+func (s *Ia) addConversation(conversation *Conversation, userId string) {
+	s.muConversations.Lock()
+	defer s.muConversations.Unlock()
 
-	if !exists {
-		return nil, errors.New(MSG_CONVERSATION_NOT_FOUND)
-	}
-
-	result.up(to)
-	return result, nil
+	s.addAuditLog(userId, "add_conversation")
+	s.Conversations[conversation.ConvID] = conversation
 }
 
 /**
 * getConversation
-* @param to *Participant
-* @return (*Conversation, error)
+* @param convID string
+* @return (*Conversation, bool)
 **/
-func (s *Ia) getConversation(to *Participant, userId string) (*Conversation, error) {
-	s.mutex["conversations"].RLock()
-	result, exists := s.Conversations[to.To]
-	s.mutex["conversations"].RUnlock()
-	if !exists {
-		return result, nil
+func (s *Ia) getConversation(convID string) (*Conversation, bool) {
+	s.muConversations.RLock()
+	result, exists := s.Conversations[convID]
+	s.muConversations.RUnlock()
+	if exists {
+		return result, true
 	}
 
-	result, err := s.loadConversation(to)
-	if err != nil {
-		return nil, err
-	}
-
-	if !exists {
-		result = newConversation(to, to.Name, Direct)
-		result.AddParticipant(to)
-		err = result.save(userId)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	s.mutex["conversations"].Lock()
-	s.Conversations[to.To] = result
-	s.mutex["conversations"].Unlock()
-
-	return result, nil
+	return nil, false
 }
 
 /**
-* deleteConversation
-* @param to, userId string
-* @return error
+* removeConversation
+* @param convID, userId string
 **/
-func (s *Ia) deleteConversation(to, userId string) error {
-	s.mutex["conversations"].RLock()
-	result, exists := s.Conversations[to]
-	s.mutex["conversations"].RUnlock()
-	if !exists {
-		return fmt.Errorf(MSG_CONVERSATION_NOT_FOUND, to)
-	}
+func (s *Ia) removeConversation(convID, userId string) {
+	s.muConversations.Lock()
+	defer s.muConversations.Unlock()
 
-	err := result.delete()
-	if err != nil {
-		return err
-	}
-
-	return s.removeConversation(to, userId)
+	s.addAuditLog(userId, "remove_conversation")
+	delete(s.Conversations, convID)
 }
 
 /**
@@ -647,10 +493,10 @@ func (s *Ia) Embed(ctx context.Context, agentName string, text string) ([]float6
 
 /**
 * Conversation
-* @param ctx context.Context, agentName string, convID string, to string, prompt string, userId string
+* @param ctx context.Context, agentName string, to string, name string, prompt string, userId string
 * @return *Conversation, error
 **/
-func (s *Ia) Conversation(ctx context.Context, tagAgent, to, prompt, userId string) (*Conversation, error) {
+func (s *Ia) Conversation(ctx context.Context, tagAgent, to, name, prompt, userId string) (*Conversation, error) {
 	if !utility.ValidStr(tagAgent, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "tagAgent")
 	}
@@ -666,19 +512,22 @@ func (s *Ia) Conversation(ctx context.Context, tagAgent, to, prompt, userId stri
 		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, tagAgent)
 	}
 
-	participant, err := s.getParticipant(to, userId)
-	if errors.Is(err, ErrParticipantNotFound) {
-		participant, err = s.newParticipant(to, to, to, userId)
+	participant, exists := s.getParticipant(to)
+	if !exists {
+		var err error
+		participant, err = s.newParticipant(to, name, userId)
 		if err != nil {
 			return nil, err
 		}
-	} else if err != nil {
-		return nil, err
 	}
 
-	conversation, err := s.getConversation(participant, userId)
-	if err != nil {
-		return nil, err
+	conversation, exists := s.getConversation(participant.ConvID)
+	if !exists {
+		var err error
+		conversation, err = s.newConversation(participant, userId)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	response, err := agent.conversation(ctx, conversation, prompt)

@@ -104,6 +104,26 @@ func (s *Ia) loadAgend(id string) (*Agent, error) {
 }
 
 /**
+* deleteAgent
+* @param tag, userId string
+* @return error
+**/
+func (s *Ia) deleteAgent(id, userId string) error {
+	agent, exists := s.getAgent(id)
+	if !exists {
+		return errors.New(MSG_AGENT_NOT_FOUND)
+	}
+
+	err := agent.delete()
+	if err != nil {
+		return err
+	}
+
+	s.removeAgent(id, userId)
+	return nil
+}
+
+/**
 * up
 * @param ia *Ia
 * @return *Agent
@@ -127,6 +147,7 @@ func (s *Agent) up(ia *Ia) *Agent {
 		})
 		return nil
 	})
+	ia.addAgent(s, ia.ID)
 	return s
 }
 
@@ -272,7 +293,7 @@ func (s *Agent) Debug() *Agent {
 /**
 * setModel
 * @param model, userId string
-* @return *Agent, error
+* @return *Agent
 **/
 func (s *Agent) setModel(model, userId string) *Agent {
 	if s.Model == model {

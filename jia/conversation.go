@@ -71,6 +71,26 @@ func newConversation(to *Participant, title string, conversationType TypeConvers
 }
 
 /**
+* loadConversation
+* @param to string, dest *Conversation
+* @return (bool, error)
+**/
+func (s *Ia) loadConversation(to *Participant) (*Conversation, error) {
+	var result *Conversation
+	exists, err := s.store.Get(to.To, "conversation", &result)
+	if err != nil {
+		return nil, err
+	}
+
+	if !exists {
+		return nil, errors.New(MSG_CONVERSATION_NOT_FOUND)
+	}
+
+	result.up(to)
+	return result, nil
+}
+
+/**
 * save
 * @return error
 **/

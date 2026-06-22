@@ -234,7 +234,7 @@ func (s *Conversation) delete() error {
 		return errors.New(MSG_STORE_IS_NIL)
 	}
 
-	err := s.ia.store.Delete("conversation", s.ID)
+	err := s.store.Delete("conversation", s.ID)
 	if err != nil {
 		return err
 	}
@@ -293,7 +293,7 @@ func (s *Conversation) SetLimitMessages(limit int) *Conversation {
 
 /**
 * SendTextMessage
-* @param content string
+* @param content, userId, to string
 * @return (*Message, error)
 **/
 func (s *Conversation) SendTextMessage(content, userId, to string) (*Message, error) {
@@ -301,17 +301,17 @@ func (s *Conversation) SendTextMessage(content, userId, to string) (*Message, er
 		return nil, errors.New(MSG_SENDER_NOT_FOUND)
 	}
 
-	ms := s.ia.newMessage(s, s.To.UserID, s.To.To, Text, content)
-	ms.setStatus(Sent, userId)
+	ms := s.ia.newMessage(s, userId, to, Text, content)
+	ms.setStatus(Sent)
 	s.Messages = append(s.Messages, ms)
 	s.LastMessage = ms
 	_, err := s.ia.sender.SendTextMessage(ms.To, ms.Content)
 	if err != nil {
-		ms.setStatus(Failed, userId)
+		ms.setStatus(Failed)
 		return nil, err
 	}
 
-	err = ms.setStatus(Delivered, userId)
+	err = ms.setStatus(Delivered)
 	if err != nil {
 		return nil, err
 	}

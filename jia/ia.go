@@ -460,6 +460,26 @@ func (s *Ia) removeConversation(convID, userId string) {
 }
 
 /**
+* deleteConversation
+* @param convID, userId string
+* @return error
+**/
+func (s *Ia) deleteConversation(convID, userId string) error {
+	conversation, exists := s.getConversation(convID)
+	if !exists {
+		return errors.New(MSG_CONVERSATION_NOT_FOUND)
+	}
+
+	err := conversation.delete()
+	if err != nil {
+		return err
+	}
+
+	s.removeConversation(convID, userId)
+	return nil
+}
+
+/**
 * Embed - Genera un embedding
 * @param ctx context.Context, agentName string, text string
 * @return ([]float64, error)

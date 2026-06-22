@@ -69,15 +69,9 @@ func (s *Ia) HttpNewAgent(w http.ResponseWriter, r *http.Request) {
 	tag := body.Str("tag")
 	name := body.Str("name")
 	description := body.Str("description")
-	context := body.Str("context")
-	model := body.Str("model")
 	userId := request.UserId(r)
 
-	agent, err := s.newAgent(tag, name, description, context, model, userId)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
+	agent := s.newAgent(tag, name, description, userId)
 
 	response.ITEM(w, r, http.StatusCreated, et.Item{
 		Ok:     true,
@@ -131,12 +125,12 @@ func (s *Ia) HttpSetAgent(w http.ResponseWriter, r *http.Request) {
 
 	model := body.Str("model")
 	if model != "" {
-		agent.setModel(model)
+		agent.setModel(model, userId)
 	}
 
 	context := body.Str("context")
 	if context != "" {
-		agent.setContext(context)
+		agent.setContext(context, userId)
 	}
 
 	skillDef := body.Json("skill")
@@ -154,11 +148,11 @@ func (s *Ia) HttpSetAgent(w http.ResponseWriter, r *http.Request) {
 			response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 			return
 		}
-		agent.addSkill(skill)
+		agent.addSkill(skill, userId)
 	}
 
 	if agent.isChanged {
-		err = agent.save(userId)
+		err = agent.save()
 		if err != nil {
 			response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 			return
@@ -228,10 +222,9 @@ func (s *Ia) HttpDeleteConversation(w http.ResponseWriter, r *http.Request) {
 **/
 func (s *Ia) HttpGetParticipant(w http.ResponseWriter, r *http.Request) {
 	to := request.URLParam(r, "to").Str()
-	userId := request.UserId(r)
-	participant, err := s.getParticipant(to, userId)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+	participant, exists := s.getParticipant(to)
+	if !exists {
+		response.HTTPError(w, r, http.StatusNotFound, MSG_PARTICIPANT_NOT_FOUND)
 		return
 	}
 
@@ -254,11 +247,10 @@ func (s *Ia) HttpNewParticipant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	to := body.Str("to")
-	id := body.Str("user_id")
 	name := body.Str("name")
 	userId := request.UserId(r)
 
-	participant, err := s.newParticipant(to, id, name, userId)
+	participant, err := s.newParticipant(to, name, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 		return
@@ -308,24 +300,19 @@ func (s *Ia) HttpSetParticipant(w http.ResponseWriter, r *http.Request) {
 	to := request.URLParam(r, "to").Str()
 	userId := request.UserId(r)
 
-	participant, err := s.getParticipant(to, userId)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+	participant, exists := s.getParticipant(to)
+	if !exists {
+		response.HTTPError(w, r, http.StatusNotFound, MSG_PARTICIPANT_NOT_FOUND)
 		return
-	}
-
-	id := body.Str("user_id")
-	if id != "" {
-		participant.SetUserId(id)
 	}
 
 	name := body.Str("name")
 	if name != "" {
-		participant.SetName(name)
+		participant.SetName(name, userId)
 	}
 
 	if participant.isChanged {
-		err = participant.save(userId)
+		err = participant.save()
 		if err != nil {
 			response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 			return

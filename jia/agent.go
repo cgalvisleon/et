@@ -201,6 +201,35 @@ func (s *Agent) addAuditLog(userId string, action string) {
 }
 
 /**
+* ToJson
+* @return et.Json
+**/
+func (s *Agent) ToJson() et.Json {
+	return et.Json{
+		"created_at":   timezone.Format(s.CreatedAt, timezone.RFC3339),
+		"updated_at":   timezone.Format(s.UpdatedAt, timezone.RFC3339),
+		"ia_id":        s.IaID,
+		"id":           s.ID,
+		"tag":          s.Tag,
+		"name":         s.Name,
+		"description":  s.Description,
+		"context_base": s.ContextBase,
+		"context":      s.Context,
+		"model":        s.Model,
+		"skills":       s.Skills,
+		"audit_log":    s.AuditLog,
+	}
+}
+
+/**
+* ToString
+* @return string
+**/
+func (s *Agent) ToString() string {
+	return s.ToJson().ToString()
+}
+
+/**
 * save
 * @return error
 **/
@@ -251,35 +280,6 @@ func (s *Agent) delete() error {
 	}
 
 	return nil
-}
-
-/**
-* ToJson
-* @return et.Json
-**/
-func (s *Agent) ToJson() et.Json {
-	return et.Json{
-		"created_at":   timezone.Format(s.CreatedAt, timezone.RFC3339),
-		"updated_at":   timezone.Format(s.UpdatedAt, timezone.RFC3339),
-		"ia_id":        s.IaID,
-		"id":           s.ID,
-		"tag":          s.Tag,
-		"name":         s.Name,
-		"description":  s.Description,
-		"context_base": s.ContextBase,
-		"context":      s.Context,
-		"model":        s.Model,
-		"skills":       s.Skills,
-		"audit_log":    s.AuditLog,
-	}
-}
-
-/**
-* ToString
-* @return string
-**/
-func (s *Agent) ToString() string {
-	return s.ToJson().ToString()
 }
 
 /**
@@ -357,13 +357,12 @@ func (s *ConversationResult) ToJson() et.Json {
 * @param ctx context.Context, conversation *Conversation, prompt string
 * @return (ConversationResult, error)
 **/
-func (s *Agent) conversation(ctx context.Context, conversation *Conversation, prompt string) (ConversationResult, error) {
-	convID := conversation.ConvID
+func (s *Agent) conversation(ctx context.Context, participant *Participant, prompt string) (ConversationResult, error) {
+	convID := participant.ConvID
 	if convID == "" {
 		conv, _ := s.client.Conversations.New(ctx, conversations.ConversationNewParams{})
 		convID = conv.ID
-		conversation.SetConvId(convID)
-		conversation.save(s.ID)
+		participant.SetConvId(convID, s.ID)
 	}
 
 	contextStr := string(s.Context)
@@ -379,6 +378,7 @@ func (s *Agent) conversation(ctx context.Context, conversation *Conversation, pr
 			},
 		},
 	})
+
 	if err != nil {
 		return ConversationResult{
 			ConvID: convID,

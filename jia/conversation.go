@@ -1,8 +1,8 @@
 package jia
 
 import (
-	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -17,26 +17,30 @@ import (
 type TypeConversation string
 
 const (
-	Direct TypeConversation = "direct"
-	Group  TypeConversation = "group"
+	DIRECT TypeConversation = "direct"
+	GROUP  TypeConversation = "group"
 )
 
 type Conversation struct {
-	CreatedAt     time.Time               `json:"created_at"`
-	UpdatedAt     time.Time               `json:"updated_at"`
-	ID            string                  `json:"id"`
-	ConvID        string                  `json:"conv_id"`
-	Title         string                  `json:"title"`
-	Type          TypeConversation        `json:"type"`
-	LastMessage   *Message                `json:"last_message"`
-	LimitMessages int                     `json:"limit_messages"`
-	Messages      []*Message              `json:"-"`
-	Participants  map[string]*Participant `json:"participants"`
-	mu            sync.RWMutex            `json:"-"`
-	to            *Participant            `json:"-"`
-	ia            *Ia                     `json:"-"`
-	isDebug       bool                    `json:"-"`
-	isChanged     bool                    `json:"-"`
+	CreatedAt     time.Time                                `json:"created_at"`
+	UpdatedAt     time.Time                                `json:"updated_at"`
+	IAID          string                                   `json:"ia_id"`
+	ID            string                                   `json:"id"`
+	ConvID        string                                   `json:"conv_id"`
+	Title         string                                   `json:"title"`
+	Type          TypeConversation                         `json:"type"`
+	LastMessage   *Message                                 `json:"last_message"`
+	LimitMessages int                                      `json:"limit_messages"`
+	Messages      []*Message                               `json:"Messages"`
+	To            *Participant                             `json:"to"`
+	Participants  map[string]*Participant                  `json:"participants"`
+	mu            sync.RWMutex                             `json:"-"`
+	ia            *Ia                                      `json:"-"`
+	isDebug       bool                                     `json:"-"`
+	isChanged     bool                                     `json:"-"`
+	store         Store                                    `json:"-"`
+	onSave        []func(conversation *Conversation) error `json:"-"`
+	onDelete      []func(conversation *Conversation) error `json:"-"`
 }
 
 /**
@@ -44,7 +48,7 @@ type Conversation struct {
 * @param to *Participant, title string, conversationType TypeConversation
 * @return *Conversation
 **/
-func newConversation(to *Participant, title string, conversationType TypeConversation) *Conversation {
+func (s *Ia) newConversation(to *Participant, title string, conversationType TypeConversation) *Conversation {
 	if title == "" {
 		title = to.Name
 	}
@@ -55,18 +59,19 @@ func newConversation(to *Participant, title string, conversationType TypeConvers
 	result := &Conversation{
 		CreatedAt:     now,
 		UpdatedAt:     now,
+		IAID:          s.ID,
 		ID:            id,
-		ConvID:        id,
+		ConvID:        to.ConvID,
 		Title:         title,
 		Type:          conversationType,
 		LimitMessages: limitMessages,
 		Messages:      make([]*Message, 0),
+		To:            to,
 		Participants:  make(map[string]*Participant, 0),
-		mu:            sync.RWMutex{},
-		to:            to,
-		ia:            to.ia,
-		isDebug:       to.ia.isDebug,
 	}
+	result.Participants[to.To] = to
+	s.addConversation(result, to.ID)
+	result.up(s)
 	return result
 }
 
@@ -86,30 +91,91 @@ func (s *Ia) loadConversation(to *Participant) (*Conversation, error) {
 		return nil, errors.New(MSG_CONVERSATION_NOT_FOUND)
 	}
 
-	result.up(to)
+	result.up(s)
 	return result, nil
+}
+
+/**
+* up
+* @param to *Participant
+**/
+func (s *Conversation) up(ia *Ia) error {
+	s.ia = ia
+	s.isDebug = ia.isDebug
+	s.store = ia.store
+	s.onSave = make([]func(conversation *Conversation) error, 0)
+	s.onDelete = make([]func(conversation *Conversation) error, 0)
+	s.OnSave(func(conversation *Conversation) error {
+		key := fmt.Sprintf("conversation:%s", conversation.ID)
+		event.Publish(key, conversation.ToJson())
+		return nil
+	})
+	s.OnDelete(func(conversation *Conversation) error {
+		key := fmt.Sprintf("conversation:%s:delete", conversation.ID)
+		event.Publish(key, et.Json{
+			"id": conversation.ID,
+		})
+		return nil
+	})
+	for _, message := range s.Messages {
+		s.Messages = append(s.Messages, message)
+	}
+
+	return nil
+}
+
+/**
+* OnSave
+* @param fn func(conversation *Conversation) error
+* @return *Conversation
+**/
+func (s *Conversation) OnSave(fn func(conversation *Conversation) error) *Conversation {
+	if s.onSave == nil {
+		s.onSave = make([]func(conversation *Conversation) error, 0)
+	}
+	s.onSave = append(s.onSave, fn)
+	return s
+}
+
+/**
+* OnDelete
+* @param fn func(conversation *Conversation) error
+* @return *Conversation
+**/
+func (s *Conversation) OnDelete(fn func(conversation *Conversation) error) *Conversation {
+	if s.onDelete == nil {
+		s.onDelete = make([]func(conversation *Conversation) error, 0)
+	}
+	s.onDelete = append(s.onDelete, fn)
+	return s
 }
 
 /**
 * save
 * @return error
 **/
-func (s *Conversation) save(userId string) error {
-	s.UpdatedAt = timezone.Now()
-	data := s.ToJson()
-	data.Set("user_id", userId)
-	if s.isDebug {
-		logs.Log(packageName, "save:", data.ToString())
+func (s *Conversation) save() error {
+	if s.store == nil {
+		return errors.New(MSG_STORE_IS_NIL)
 	}
 
-	if s.ia.store != nil {
-		err := s.ia.store.Set(s.ID, "conversation", s.ia.TenantID, s.ia.ID, s, userId)
+	s.isChanged = false
+
+	if s.isDebug {
+		logs.Log(packageName, "save:", s.ToString())
+	}
+
+	err := s.store.Set("step", s.ID, s.WorkflowId, s)
+	if err != nil {
+		return err
+	}
+
+	for _, onSave := range s.onSave {
+		err := onSave(s)
 		if err != nil {
 			return err
 		}
 	}
-
-	event.Publish(EVENT_CONVERSATION_SET, data)
 
 	return nil
 }
@@ -129,34 +195,6 @@ func (s *Conversation) delete() error {
 	event.Publish(EVENT_CONVERSATION_DELETE, et.Json{
 		"id": s.ID,
 	})
-
-	return nil
-}
-
-/**
-* up
-* @param to *Participant
-**/
-func (s *Conversation) up(to *Participant) error {
-	s.to = to
-	s.ia = to.ia
-	s.isDebug = to.ia.isDebug
-
-	items, err := s.ia.store.
-		Query(et.Json{})
-	if err != nil {
-		return err
-	}
-
-	for _, item := range items.Result {
-		var message *Message
-		bt := []byte(item.ToString())
-		err = json.Unmarshal(bt, message)
-		if err != nil {
-			return err
-		}
-		s.Messages = append(s.Messages, message)
-	}
 
 	return nil
 }

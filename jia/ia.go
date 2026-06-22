@@ -521,18 +521,14 @@ func (s *Ia) Conversation(ctx context.Context, tagAgent, to, name, prompt, userI
 		}
 	}
 
-	conversation, exists := s.getConversation(participant.ConvID)
-	if !exists {
-		var err error
-		conversation, err = s.newConversation(participant, userId)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	response, err := agent.conversation(ctx, conversation, prompt)
+	response, err := agent.conversation(ctx, participant, prompt)
 	if err != nil {
 		return nil, err
+	}
+
+	conversation, exists := s.getConversation(participant.ConvID)
+	if !exists {
+		conversation = s.newConversation(participant, to, DIRECT)
 	}
 
 	_, err = conversation.SendTextMessage(response.Text, userId)

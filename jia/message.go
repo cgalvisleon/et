@@ -1,6 +1,8 @@
 package jia
 
 import (
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/cgalvisleon/et/et"
@@ -37,31 +39,36 @@ type MessageStatus struct {
 }
 
 type Message struct {
-	CreatedAt       time.Time        `json:"created_at"`
-	ID              string           `json:"id"`
-	ConversationID  string           `json:"conversation_id"`
-	Type            TypeMessage      `json:"type"`
-	UserID          string           `json:"user_id"`
-	To              string           `json:"to"`
-	Content         string           `json:"content"`
-	LastStatus      *MessageStatus   `json:"last_status"`
-	MessageStatuses []*MessageStatus `json:"message_statuses"`
-	conversation    *Conversation    `json:"-"`
-	isDebug         bool             `json:"-"`
-	ia              *Ia              `json:"-"`
+	CreatedAt       time.Time                      `json:"created_at"`
+	IAID            string                         `json:"ia_id"`
+	ConversationID  string                         `json:"conversation_id"`
+	ID              string                         `json:"id"`
+	Type            TypeMessage                    `json:"type"`
+	UserID          string                         `json:"user_id"`
+	To              string                         `json:"to"`
+	Content         string                         `json:"content"`
+	LastStatus      *MessageStatus                 `json:"last_status"`
+	MessageStatuses []*MessageStatus               `json:"message_statuses"`
+	conversation    *Conversation                  `json:"-"`
+	isDebug         bool                           `json:"-"`
+	ia              *Ia                            `json:"-"`
+	store           Store                          `json:"-"`
+	onSave          []func(message *Message) error `json:"-"`
+	onDelete        []func(message *Message) error `json:"-"`
 }
 
 /**
 * newMessage
-* @param ia *Ia, conversationID, userID, to string, tp TypeMessage, content string
+* @param conversation *Conversation, userID, to string, tp TypeMessage, content string
 * @return *Message
 **/
-func newMessage(conversation *Conversation, userID, to string, tp TypeMessage, content string) *Message {
-	id := reg.GenUUId("message")
+func (s *Ia) newMessage(conversation *Conversation, userID, to string, tp TypeMessage, content string) *Message {
+	now := timezone.Now()
 	result := &Message{
-		CreatedAt:       time.Now(),
-		ID:              id,
+		CreatedAt:       now,
+		IAID:            s.ID,
 		ConversationID:  conversation.ID,
+		ID:              reg.ULID(),
 		UserID:          userID,
 		To:              to,
 		Type:            tp,
@@ -70,28 +77,106 @@ func newMessage(conversation *Conversation, userID, to string, tp TypeMessage, c
 		conversation:    conversation,
 		isDebug:         conversation.isDebug,
 		ia:              conversation.ia,
+		store:           s.store,
 	}
-	return result
+	return result.up(s)
+}
+
+/**
+* up
+* @param ia *Ia
+* @return *Message
+**/
+func (s *Message) up(ia *Ia) *Message {
+	s.ia = ia
+	s.isDebug = ia.isDebug
+	s.store = ia.store
+	s.onSave = make([]func(message *Message) error, 0)
+	s.onDelete = make([]func(message *Message) error, 0)
+	s.OnSave(func(message *Message) error {
+		key := fmt.Sprintf("message:%s", message.ID)
+		event.Publish(key, message.ToJson())
+		return nil
+	})
+	s.OnDelete(func(message *Message) error {
+		key := fmt.Sprintf("message:%s:delete", message.ID)
+		event.Publish(key, et.Json{
+			"id": message.ID,
+		})
+		return nil
+	})
+	return s
+}
+
+/**
+* ToJson
+* @return et.Json
+**/
+func (s *Message) ToJson() et.Json {
+	return et.Json{
+		"created_at":       timezone.Format(s.CreatedAt, timezone.RFC3339),
+		"ia_id":            s.IAID,
+		"conversation_id":  s.ConversationID,
+		"id":               s.ID,
+		"type":             s.Type,
+		"user_id":          s.UserID,
+		"to":               s.To,
+		"content":          s.Content,
+		"last_status":      s.LastStatus,
+		"message_statuses": s.MessageStatuses,
+	}
+}
+
+/**
+* ToString
+* @return string
+**/
+func (s *Message) ToString() string {
+	return s.ToJson().ToString()
+}
+
+/**
+* OnSave
+* @param fn func(message *Message) error
+* @return *Message
+**/
+func (s *Message) OnSave(fn func(message *Message) error) *Message {
+	if s.onSave == nil {
+		s.onSave = make([]func(message *Message) error, 0)
+	}
+	s.onSave = append(s.onSave, fn)
+	return s
+}
+
+/**
+* OnDelete
+* @param fn func(message *Message) error
+* @return *Message
+**/
+func (s *Message) OnDelete(fn func(message *Message) error) *Message {
+	if s.onDelete == nil {
+		s.onDelete = make([]func(message *Message) error, 0)
+	}
+	s.onDelete = append(s.onDelete, fn)
+	return s
 }
 
 /**
 * save
 * @return error
 **/
-func (s *Message) save(userId string) error {
-	data := s.ToJson()
-	data.Set("user_id", userId)
-	if s.isDebug {
-		logs.Log(packageName, "save:", data.ToString())
+func (s *Message) save() error {
+	if s.store == nil {
+		return errors.New(MSG_STORE_IS_NIL)
 	}
 
-	event.Publish(EVENT_MESSAGE_SET, data)
+	if s.isDebug {
+		logs.Log(packageName, "save:", s.ToString())
+	}
 
-	if s.ia.store != nil {
-		err := s.ia.store.Set(s.ID, "message", s.ia.TenantID, s.ia.ID, s, userId)
-		if err != nil {
-			return err
-		}
+	err := s.store.Set("message", s.ID, s.IAID, s)
+	if err != nil {
+		return err
 	}
 
 	return nil

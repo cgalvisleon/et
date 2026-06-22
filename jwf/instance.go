@@ -631,7 +631,7 @@ func (s *Instance) run(ctx et.Json, userId string) (et.Json, error) {
 		}
 
 		ctx = s.setCtx(ctx)
-		result, err = step.run(s, ctx, userId)
+		result, err = step.run(s, ctx)
 		if err != nil {
 			result, err = s.runResilence(ctx, err, userId)
 			if err != nil {

@@ -493,10 +493,10 @@ func (s *Ia) Embed(ctx context.Context, agentName string, text string) ([]float6
 
 /**
 * Conversation
-* @param ctx context.Context, agentName string, to string, name string, prompt string, userId string
+* @param ctx context.Context, agentName, to, name, prompt string
 * @return *Conversation, error
 **/
-func (s *Ia) Conversation(ctx context.Context, tagAgent, to, name, prompt, userId string) (*Conversation, error) {
+func (s *Ia) Conversation(ctx context.Context, tagAgent, to, name, prompt string) (*Conversation, error) {
 	if !utility.ValidStr(tagAgent, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "tagAgent")
 	}
@@ -515,7 +515,7 @@ func (s *Ia) Conversation(ctx context.Context, tagAgent, to, name, prompt, userI
 	participant, exists := s.getParticipant(to)
 	if !exists {
 		var err error
-		participant, err = s.newParticipant(to, name, userId)
+		participant, err = s.newParticipant(to, name, to)
 		if err != nil {
 			return nil, err
 		}
@@ -531,7 +531,7 @@ func (s *Ia) Conversation(ctx context.Context, tagAgent, to, name, prompt, userI
 		conversation = s.newConversation(participant, to, DIRECT)
 	}
 
-	_, err = conversation.SendTextMessage(response.Text, userId)
+	_, err = conversation.SendTextMessage(response.Text, participant.ID, to)
 	if err != nil {
 		return nil, err
 	}

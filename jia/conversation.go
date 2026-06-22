@@ -34,6 +34,7 @@ type Conversation struct {
 	Messages      []*Message                               `json:"Messages"`
 	To            *Participant                             `json:"to"`
 	Participants  map[string]*Participant                  `json:"participants"`
+	AuditLog      []et.Json                                `json:"audit_log"`
 	mu            sync.RWMutex                             `json:"-"`
 	ia            *Ia                                      `json:"-"`
 	isDebug       bool                                     `json:"-"`
@@ -68,6 +69,7 @@ func (s *Ia) newConversation(to *Participant, title string, conversationType Typ
 		Messages:      make([]*Message, 0),
 		To:            to,
 		Participants:  make(map[string]*Participant, 0),
+		AuditLog:      make([]et.Json, 0),
 	}
 	result.Participants[to.To] = to
 	s.addConversation(result, to.ID)
@@ -96,10 +98,53 @@ func (s *Ia) loadConversation(to *Participant) (*Conversation, error) {
 }
 
 /**
+* ToJson
+* @return et.Json
+**/
+func (s *Conversation) ToJson() et.Json {
+	messages := []et.Json{}
+	for _, message := range s.Messages {
+		messages = append(messages, message.ToJson())
+	}
+	participants := []et.Json{}
+	for _, participant := range s.Participants {
+		participants = append(participants, participant.ToJson())
+	}
+	to := et.Json{
+		"id":   s.To.ID,
+		"to":   s.To.To,
+		"name": s.To.Name,
+	}
+	return et.Json{
+		"created_at":     timezone.Format(s.CreatedAt, timezone.RFC3339),
+		"updated_at":     timezone.Format(s.UpdatedAt, timezone.RFC3339),
+		"ia_id":          s.IAID,
+		"id":             s.ID,
+		"conv_id":        s.ConvID,
+		"title":          s.Title,
+		"type":           s.Type,
+		"last_message":   s.LastMessage.ToJson(),
+		"limit_messages": s.LimitMessages,
+		"messages":       messages,
+		"participants":   participants,
+		"to":             to,
+	}
+}
+
+/**
+* ToString
+* @return string
+**/
+func (s *Conversation) ToString() string {
+	return s.ToJson().ToString()
+}
+
+/**
 * up
 * @param to *Participant
 **/
 func (s *Conversation) up(ia *Ia) error {
+	s.mu = sync.RWMutex{}
 	s.ia = ia
 	s.isDebug = ia.isDebug
 	s.store = ia.store
@@ -165,7 +210,7 @@ func (s *Conversation) save() error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("step", s.ID, s.WorkflowId, s)
+	err := s.store.Set("conversation", s.ID, s.IAID, s)
 	if err != nil {
 		return err
 	}
@@ -185,44 +230,23 @@ func (s *Conversation) save() error {
 * @return error
 **/
 func (s *Conversation) delete() error {
-	if s.ia != nil && s.ia.store != nil {
-		err := s.ia.store.Delete(s.ID, "conversation")
+	if s.store == nil {
+		return errors.New(MSG_STORE_IS_NIL)
+	}
+
+	err := s.ia.store.Delete("conversation", s.ID)
+	if err != nil {
+		return err
+	}
+
+	for _, onDelete := range s.onDelete {
+		err := onDelete(s)
 		if err != nil {
 			return err
 		}
 	}
 
-	event.Publish(EVENT_CONVERSATION_DELETE, et.Json{
-		"id": s.ID,
-	})
-
 	return nil
-}
-
-/**
-* ToJson
-* @return et.Json
-**/
-func (s *Conversation) ToJson() et.Json {
-	return et.Json{
-		"created_at":     timezone.Format(s.CreatedAt, timezone.RFC3339),
-		"updated_at":     timezone.Format(s.UpdatedAt, timezone.RFC3339),
-		"tenant_id":      s.ia.TenantID,
-		"owner_id":       s.ia.ID,
-		"id":             s.ID,
-		"conv_id":        s.ConvID,
-		"title":          s.Title,
-		"type":           s.Type,
-		"last_message":   s.LastMessage,
-		"limit_messages": s.LimitMessages,
-		"participants":   s.Participants,
-		"messages":       s.Messages,
-		"to": et.Json{
-			"id":   s.to.ID,
-			"to":   s.to.To,
-			"name": s.to.Name,
-		},
-	}
 }
 
 /**
@@ -231,13 +255,9 @@ func (s *Conversation) ToJson() et.Json {
 * @return *Conversation
 **/
 func (s *Conversation) AddParticipant(participant *Participant) *Conversation {
-	_, ok := s.Participants[participant.To]
-	if ok {
-		return s
-	}
-
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.Participants[participant.To] = participant
-	s.isChanged = true
 	return s
 }
 
@@ -250,8 +270,9 @@ func (s *Conversation) SetConvId(convId string) *Conversation {
 	if s.ConvID == convId {
 		return s
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.ConvID = convId
-	s.isChanged = true
 	return s
 }
 
@@ -264,8 +285,9 @@ func (s *Conversation) SetLimitMessages(limit int) *Conversation {
 	if s.LimitMessages == limit {
 		return s
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.LimitMessages = limit
-	s.isChanged = true
 	return s
 }
 
@@ -274,12 +296,12 @@ func (s *Conversation) SetLimitMessages(limit int) *Conversation {
 * @param content string
 * @return (*Message, error)
 **/
-func (s *Conversation) SendTextMessage(content, userId string) (*Message, error) {
+func (s *Conversation) SendTextMessage(content, userId, to string) (*Message, error) {
 	if s.ia.sender == nil {
 		return nil, errors.New(MSG_SENDER_NOT_FOUND)
 	}
 
-	ms := newMessage(s, s.to.UserID, s.to.To, Text, content)
+	ms := s.ia.newMessage(s, s.To.UserID, s.To.To, Text, content)
 	ms.setStatus(Sent, userId)
 	s.Messages = append(s.Messages, ms)
 	s.LastMessage = ms

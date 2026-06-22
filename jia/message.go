@@ -75,8 +75,8 @@ func (s *Ia) newMessage(conversation *Conversation, userID, to string, tp TypeMe
 		Content:         content,
 		MessageStatuses: make([]*MessageStatus, 0),
 		conversation:    conversation,
-		isDebug:         conversation.isDebug,
-		ia:              conversation.ia,
+		isDebug:         s.isDebug,
+		ia:              s,
 		store:           s.store,
 	}
 	return result.up(s)

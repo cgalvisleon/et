@@ -158,6 +158,33 @@ func (s *WorkFlow) deleteStep(id string) error {
 }
 
 /**
+* ToJson
+* @return et.Json
+**/
+func (s *Step) ToJson() et.Json {
+	return et.Json{
+		"created_at":  timezone.Format(s.CreatedAt, timezone.RFC3339),
+		"updated_at":  timezone.Format(s.UpdatedAt, timezone.RFC3339),
+		"workflow_id": s.WorkflowId,
+		"id":          s.ID,
+		"kind":        s.Kind,
+		"tag":         s.Tag,
+		"version":     s.Version,
+		"status":      s.Status,
+		"title":       s.Title,
+		"description": s.Description,
+	}
+}
+
+/**
+* ToString
+* @return string
+**/
+func (s *Step) ToString() string {
+	return s.ToJson().ToString()
+}
+
+/**
 * up
 * @param workflow *WorkFlow
 * @return *Step
@@ -268,38 +295,11 @@ func (s *Step) save() error {
 }
 
 /**
-* ToJson
-* @return et.Json
-**/
-func (s *Step) ToJson() et.Json {
-	return et.Json{
-		"created_at":  timezone.Format(s.CreatedAt, timezone.RFC3339),
-		"updated_at":  timezone.Format(s.UpdatedAt, timezone.RFC3339),
-		"workflow_id": s.WorkflowId,
-		"id":          s.ID,
-		"kind":        s.Kind,
-		"tag":         s.Tag,
-		"version":     s.Version,
-		"status":      s.Status,
-		"title":       s.Title,
-		"description": s.Description,
-	}
-}
-
-/**
-* ToString
-* @return string
-**/
-func (s *Step) ToString() string {
-	return s.ToJson().ToString()
-}
-
-/**
 * run
 * @param instance *Instance, ctx et.Json
 * @return error
 **/
-func (s *Step) run(instance *Instance, ctx et.Json, userId string) (et.Json, error) {
+func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 	if s.Definition == nil {
 		return et.Json{}, errors.New(MSG_STEP_DEFINITION_IS_NIL)
 	}

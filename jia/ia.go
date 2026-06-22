@@ -128,9 +128,11 @@ func (s *Ia) up(store Store) (*Ia, error) {
 		return nil
 	})
 
-	err := s.loadAgents()
-	if err != nil {
-		return nil, err
+	for id := range s.Agents {
+		_, err := s.loadAgend(id)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return s, nil

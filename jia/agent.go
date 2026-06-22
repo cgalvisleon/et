@@ -81,11 +81,11 @@ func (s *Ia) newAgent(tag, name, description, userId string) *Agent {
 }
 
 /**
-* Load
+* loadAgend
 * @param id string
 * @return *Agent, error
 **/
-func (s *Ia) Load(id string) (*Agent, error) {
+func (s *Ia) loadAgend(id string) (*Agent, error) {
 	if s.store == nil {
 		return nil, errors.New(MSG_STORE_IS_NIL)
 	}

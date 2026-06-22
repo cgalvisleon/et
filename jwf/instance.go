@@ -282,6 +282,7 @@ func (s *Instance) addAuditLog(userId string, action interface{}) {
 	}
 
 	now := timezone.Now()
+	s.UpdatedAt = now
 	s.AuditLog = append(s.AuditLog, et.Json{
 		"created_at": now,
 		"user_id":    userId,

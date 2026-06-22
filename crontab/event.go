@@ -21,10 +21,10 @@ var (
 * @return error
 **/
 func (s *Crontab) eventInit() error {
-	EVENT_CRONTAB_SET = fmt.Sprintf("crontab:set:%s", s.TenantId)
-	EVENT_CRONTAB_REMOVE = fmt.Sprintf("crontab:remove:%s", s.TenantId)
-	EVENT_CRONTAB_STOP = fmt.Sprintf("crontab:stop:%s", s.TenantId)
-	EVENT_CRONTAB_START = fmt.Sprintf("crontab:start:%s", s.TenantId)
+	EVENT_CRONTAB_SET = fmt.Sprintf("crontab:set:%s", s.Tag)
+	EVENT_CRONTAB_REMOVE = fmt.Sprintf("crontab:remove:%s", s.Tag)
+	EVENT_CRONTAB_STOP = fmt.Sprintf("crontab:stop:%s", s.Tag)
+	EVENT_CRONTAB_START = fmt.Sprintf("crontab:start:%s", s.Tag)
 
 	err := event.Stack(EVENT_CRONTAB_SET, s.eventSet)
 	if err != nil {

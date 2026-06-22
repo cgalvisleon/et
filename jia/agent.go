@@ -2,6 +2,7 @@ package jia
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -9,9 +10,9 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
-	"github.com/cgalvisleon/et/utility"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/conversations"
 	"github.com/openai/openai-go/v3/option"
@@ -34,17 +35,19 @@ const modelDefault = openai.ChatModelGPT4oMini
 type Agent struct {
 	CreatedAt   time.Time                  `json:"created_at"`
 	UpdatedAt   time.Time                  `json:"updated_at"`
+	IaID        string                     `json:"ia_id"`
 	ID          string                     `json:"id"`
 	Tag         string                     `json:"tag"`
 	Name        string                     `json:"name"`
 	Description string                     `json:"description"`
 	ContextBase string                     `json:"context_base"`
-	Context     []byte                     `json:"context"`
+	Context     string                     `json:"context"`
 	Model       string                     `json:"model"`
 	Skills      map[string]Skill           `json:"skills"`
 	AuditLog    []et.Json                  `json:"audit_log"`
 	client      openai.Client              `json:"-"`
 	ia          *Ia                        `json:"-"`
+	store       Store                      `json:"-"`
 	isDebug     bool                       `json:"-"`
 	isChanged   bool                       `json:"-"`
 	onSave      []func(agent *Agent) error `json:"-"`
@@ -52,45 +55,52 @@ type Agent struct {
 }
 
 /**
-* agendId
-* @param tag string
-* @return string
-**/
-func agendId(tag string) string {
-	tag = utility.Normalize(tag)
-	return fmt.Sprintf("agent:%s", tag)
-}
-
-/**
 * newAgent
-* @param owner *Ia, tag string, name string, description string, context string, model string, userId string
+* @param tag string, name string, description string, userId string
 * @return *Agent
 **/
-func newAgent(ia *Ia, tag, name, description, context, model, userId string) *Agent {
-	if context == "" {
-		context = contextDefault
-	}
-	if model == "" {
-		model = modelDefault
-	}
+func (s *Ia) newAgent(tag, name, description, userId string) *Agent {
 	now := timezone.Now()
 	result := &Agent{
 		CreatedAt:   now,
 		UpdatedAt:   now,
-		ID:          agendId(tag),
+		IaID:        s.ID,
+		ID:          reg.ULID(),
 		Tag:         tag,
 		Name:        name,
 		Description: description,
-		ContextBase: context,
-		Context:     []byte(context),
+		ContextBase: contextDefault,
+		Context:     contextDefault,
 		Skills:      make(map[string]Skill),
 		AuditLog:    make([]et.Json, 0),
-		Model:       model,
+		Model:       modelDefault,
 	}
 	result.addAuditLog(userId, "new_agent")
-	result.up(ia)
-	ia.addAgent(result)
+	result.up(s)
 	return result
+}
+
+/**
+* Load
+* @param id string
+* @return *Agent, error
+**/
+func (s *Ia) Load(id string) (*Agent, error) {
+	if s.store == nil {
+		return nil, errors.New(MSG_STORE_IS_NIL)
+	}
+
+	var result *Agent
+	exists, err := s.store.Get("agent", id, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	if !exists {
+		return nil, errors.New(MSG_AGENT_NOT_FOUND)
+	}
+
+	return result.up(s), nil
 }
 
 /**
@@ -104,6 +114,7 @@ func (s *Agent) up(ia *Ia) *Agent {
 	)
 	s.ia = ia
 	s.isDebug = ia.isDebug
+	s.store = ia.store
 	s.onSave = make([]func(agent *Agent) error, 0)
 	s.onDelete = make([]func(agent *Agent) error, 0)
 	s.OnSave(func(agent *Agent) error {
@@ -155,6 +166,7 @@ func (s *Agent) addAuditLog(userId string, action string) {
 	}
 
 	now := timezone.Now()
+	s.UpdatedAt = now
 	s.AuditLog = append(s.AuditLog, et.Json{
 		"created_at": now,
 		"user_id":    userId,
@@ -169,27 +181,27 @@ func (s *Agent) addAuditLog(userId string, action string) {
 
 /**
 * save
-* @param userId string
 * @return error
 **/
-func (s *Agent) save(userId string) error {
-	s.UpdatedAt = timezone.Now()
-	s.addAuditLog(userId, "update_agent")
-	if s.isDebug {
-		logs.Log(packageName, "save:", s.ToString())
-	}
-
-	if s.ia.store != nil {
-		err := s.ia.store.Set(s.ID, "agent", s.ia.TenantID, s.ia.ID, s)
-		if err != nil {
-			return err
-		}
+func (s *Agent) save() error {
+	if s.store == nil {
+		return errors.New(MSG_STORE_IS_NIL)
 	}
 
 	s.isChanged = false
 
+	if s.isDebug {
+		logs.Log(packageName, "save:", s.ToString())
+	}
+
+	err := s.store.Set("step", s.ID, s.IaID, s)
+	if err != nil {
+		return err
+	}
+
 	for _, onSave := range s.onSave {
-		if err := onSave(s); err != nil {
+		err := onSave(s)
+		if err != nil {
 			return err
 		}
 	}
@@ -202,11 +214,13 @@ func (s *Agent) save(userId string) error {
 * @return error
 **/
 func (s *Agent) delete() error {
-	if s.ia != nil && s.ia.store != nil {
-		err := s.ia.store.Delete(s.ID, "agent")
-		if err != nil {
-			return err
-		}
+	if s.store == nil {
+		return errors.New(MSG_STORE_IS_NIL)
+	}
+
+	err := s.store.Delete("agent", s.ID)
+	if err != nil {
+		return err
 	}
 
 	for _, onDelete := range s.onDelete {
@@ -224,17 +238,18 @@ func (s *Agent) delete() error {
 **/
 func (s *Agent) ToJson() et.Json {
 	return et.Json{
-		"created_at":  timezone.Format(s.CreatedAt, timezone.RFC3339),
-		"updated_at":  timezone.Format(s.UpdatedAt, timezone.RFC3339),
-		"tenant_id":   s.ia.TenantID,
-		"owner_id":    s.ia.ID,
-		"id":          s.ID,
-		"tag":         s.Tag,
-		"name":        s.Name,
-		"description": s.Description,
-		"context":     s.Context,
-		"model":       s.Model,
-		"skills":      s.Skills,
+		"created_at":   timezone.Format(s.CreatedAt, timezone.RFC3339),
+		"updated_at":   timezone.Format(s.UpdatedAt, timezone.RFC3339),
+		"ia_id":        s.IaID,
+		"id":           s.ID,
+		"tag":          s.Tag,
+		"name":         s.Name,
+		"description":  s.Description,
+		"context_base": s.ContextBase,
+		"context":      s.Context,
+		"model":        s.Model,
+		"skills":       s.Skills,
+		"audit_log":    s.AuditLog,
 	}
 }
 
@@ -256,15 +271,15 @@ func (s *Agent) Debug() *Agent {
 
 /**
 * setModel
-* @param model string
+* @param model, userId string
 * @return *Agent, error
 **/
-func (s *Agent) setModel(model string) *Agent {
+func (s *Agent) setModel(model, userId string) *Agent {
 	if s.Model == model {
 		return s
 	}
 	s.Model = model
-	s.isChanged = true
+	s.addAuditLog(userId, "set_model")
 	return s
 }
 
@@ -273,13 +288,13 @@ func (s *Agent) setModel(model string) *Agent {
 * @param context, userId string
 * @return *Agent
 **/
-func (s *Agent) setContext(context string) *Agent {
+func (s *Agent) setContext(context, userId string) *Agent {
 	context = strs.Parse(s.ContextBase, et.Json{"context": context})
-	if string(s.Context) == context {
+	if s.Context == context {
 		return s
 	}
-	s.Context = []byte(context)
-	s.isChanged = true
+	s.Context = context
+	s.addAuditLog(userId, "set_context")
 	return s
 }
 
@@ -288,13 +303,13 @@ func (s *Agent) setContext(context string) *Agent {
 * @param skill Skill, userId string
 * @return *Agent, error
 **/
-func (s *Agent) addSkill(skill Skill) *Agent {
+func (s *Agent) addSkill(skill Skill, userId string) *Agent {
 	_, ok := s.Skills[skill.Tag()]
 	if ok {
 		return s
 	}
 	s.Skills[skill.Tag()] = skill
-	s.isChanged = true
+	s.addAuditLog(userId, "add_skill")
 	return s
 }
 

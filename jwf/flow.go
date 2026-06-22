@@ -184,6 +184,29 @@ func (s *Flow) up(workflow *WorkFlow) *Flow {
 }
 
 /**
+* addAuditLog
+* @param userId string, action string
+**/
+func (s *Flow) addAuditLog(userId string, action string) {
+	if s.AuditLog == nil {
+		s.AuditLog = make([]et.Json, 0)
+	}
+
+	now := timezone.Now()
+	s.UpdatedAt = now
+	s.AuditLog = append(s.AuditLog, et.Json{
+		"created_at": now,
+		"user_id":    userId,
+		"action":     action,
+	})
+	maxAuditLog := envar.GetInt("MAX_AUDIT_LOG", 1000)
+	if len(s.AuditLog) > maxAuditLog {
+		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	}
+	s.isChanged = true
+}
+
+/**
 * OnSave
 * @param fn func(flow *Flow) error
 * @return *Jrex
@@ -207,28 +230,6 @@ func (s *Flow) OnDelete(fn func(flow *Flow) error) *Flow {
 	}
 	s.onDelete = append(s.onDelete, fn)
 	return s
-}
-
-/**
-* addAuditLog
-* @param userId string, action string
-**/
-func (s *Flow) addAuditLog(userId string, action string) {
-	if s.AuditLog == nil {
-		s.AuditLog = make([]et.Json, 0)
-	}
-
-	now := timezone.Now()
-	s.AuditLog = append(s.AuditLog, et.Json{
-		"created_at": now,
-		"user_id":    userId,
-		"action":     action,
-	})
-	maxAuditLog := envar.GetInt("MAX_AUDIT_LOG", 1000)
-	if len(s.AuditLog) > maxAuditLog {
-		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
-	}
-	s.isChanged = true
 }
 
 /**

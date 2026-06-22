@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"strconv"
+	"time"
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
@@ -21,6 +22,8 @@ type Store interface {
 }
 
 type Config struct {
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 	ID        string    `json:"id"`
 	TenantId  string    `json:"tenant_id"`
 	OwnerId   string    `json:"owner_id"`
@@ -102,6 +105,7 @@ func (s *Config) addAuditLog(userId string, action string) {
 	}
 
 	now := timezone.Now()
+	s.UpdatedAt = now
 	s.AuditLog = append(s.AuditLog, et.Json{
 		"created_at": now,
 		"user_id":    userId,

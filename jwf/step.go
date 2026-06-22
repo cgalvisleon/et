@@ -79,12 +79,11 @@ func (s *WorkFlow) newStep(kind Kind, tag, version, title, userId string) *Step 
 	}
 
 	now := timezone.Now()
-	id := reg.ULID()
 	result := &Step{
 		CreatedAt:   now,
 		UpdatedAt:   now,
 		WorkflowId:  s.ID,
-		ID:          id,
+		ID:          reg.ULID(),
 		Kind:        kind,
 		Tag:         tag,
 		Version:     version,
@@ -195,6 +194,7 @@ func (s *Step) addAuditLog(userId string, action string) {
 	}
 
 	now := timezone.Now()
+	s.UpdatedAt = now
 	s.AuditLog = append(s.AuditLog, et.Json{
 		"created_at": now,
 		"user_id":    userId,

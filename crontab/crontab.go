@@ -22,14 +22,14 @@ var (
 )
 
 type Store interface {
-	Set(collection, id, tenantId, ownerId string, obj any) error
+	Set(collection, id, ownerId string, obj any) error
 	Get(collection, id string, dest any) (bool, error)
 	Delete(collection, id string) error
 	Query(query et.Json) (et.Items, error)
 }
 
 type Crontab struct {
-	TenantId string          `json:"tenant_id"`
+	Tag      string          `json:"tag"`
 	HostName string          `json:"host_name"`
 	Jobs     map[string]*Job `json:"jobs"`
 	cronJobs *cron.Cron      `json:"-"`
@@ -41,10 +41,10 @@ type Crontab struct {
 
 /**
 * New
-* @param tenantId string, store Store
+* @param tag string, store Store
 * @return (*Crontab, error)
 **/
-func New(tenantId string, store Store) (*Crontab, error) {
+func New(tag string, store Store) (*Crontab, error) {
 	err := event.Load()
 	if err != nil {
 		return nil, err
@@ -52,7 +52,7 @@ func New(tenantId string, store Store) (*Crontab, error) {
 
 	loc := timezone.Location()
 	result := &Crontab{
-		TenantId: tenantId,
+		Tag:      tag,
 		HostName: hostName,
 		Jobs:     make(map[string]*Job),
 		cronJobs: cron.New(
@@ -62,9 +62,17 @@ func New(tenantId string, store Store) (*Crontab, error) {
 		mu:    &sync.Mutex{},
 		store: store,
 	}
-	result.cronJobs.Start()
-
+	result.up()
 	return result, nil
+}
+
+/**
+* up
+* @return void
+**/
+func (s *Crontab) up() {
+	s.cronJobs.Start()
+	s.eventInit()
 }
 
 /**

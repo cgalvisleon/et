@@ -35,11 +35,10 @@ const (
 type Job struct {
 	CreatedAt   time.Time     `json:"created_at"`
 	UpdatedAt   time.Time     `json:"updated_at"`
-	TenantId    string        `json:"tenant_id"`
+	OwnerId     string        `json:"owner_id"`
 	ID          string        `json:"id"`
 	Type        TypeJob       `json:"type"`
 	Tag         string        `json:"tag"`
-	OwnerId     string        `json:"owner_id"`
 	Spec        string        `json:"spec"`
 	Params      et.Json       `json:"params"`
 	Status      JobStatus     `json:"status"`
@@ -62,17 +61,16 @@ type Job struct {
 * @param tp TypeJob, tag, ownerId, spec string, params et.Json, repetitions int
 * @return *Job
 **/
-func newJob(tenantId string, tp TypeJob, tag, ownerId, spec string, params et.Json, repetitions int) *Job {
+func newJob(tp TypeJob, tag, ownerId, spec string, params et.Json, repetitions int) *Job {
 	now := timezone.Now()
 	id := reg.ULID()
 	result := &Job{
 		CreatedAt:   now,
 		UpdatedAt:   now,
-		TenantId:    tenantId,
+		OwnerId:     ownerId,
 		ID:          id,
 		Type:        tp,
 		Tag:         tag,
-		OwnerId:     ownerId,
 		Spec:        spec,
 		Params:      params,
 		Status:      Pending,
@@ -91,11 +89,10 @@ func (s *Job) ToJson() et.Json {
 	return et.Json{
 		"created_at":  timezone.Format(s.CreatedAt, timezone.RFC3339),
 		"updated_at":  timezone.Format(s.UpdatedAt, timezone.RFC3339),
-		"tenant_id":   s.TenantId,
+		"owner_id":    s.OwnerId,
 		"id":          s.ID,
 		"type":        s.Type,
 		"tag":         s.Tag,
-		"owner_id":    s.OwnerId,
 		"spec":        s.Spec,
 		"params":      s.Params,
 		"status":      s.Status,
@@ -139,6 +136,7 @@ func (s *Job) addAuditLog(userId string, action string) {
 	}
 
 	now := timezone.Now()
+	s.UpdatedAt = now
 	s.AuditLog = append(s.AuditLog, et.Json{
 		"created_at": now,
 		"user_id":    userId,
@@ -166,7 +164,7 @@ func (s *Job) save() error {
 		return nil
 	}
 
-	err := s.store.Set("job", s.ID, s.TenantId, s.OwnerId, s)
+	err := s.store.Set("job", s.ID, s.OwnerId, s)
 	if err != nil {
 		return err
 	}
@@ -201,7 +199,7 @@ func (s *Job) setStatus(status JobStatus) error {
 func (s *Job) trigger() {
 	s.setStatus(Running)
 	s.Attempts++
-	channel := fmt.Sprintf("job:%s:%s", s.TenantId, s.Tag)
+	channel := fmt.Sprintf("job:%s", s.Tag)
 	err := event.Publish(channel, s.Params)
 	if err != nil {
 		s.setStatus(Failed)

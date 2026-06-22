@@ -15,6 +15,8 @@ var (
 	MSG_PARTICIPANT_CREATED      = "participant created"
 	MSG_PARTICIPANT_DELETED      = "participant deleted"
 	MSG_PARTICIPANT_UPDATED      = "participant updated"
+	MSG_STORE_IS_NIL             = "store is nil"
+	MSG_IA_NOT_FOUND             = "ia not found"
 )
 
 func init() {
@@ -31,5 +33,7 @@ func init() {
 		MSG_PARTICIPANT_CREATED = "participant creado"
 		MSG_PARTICIPANT_DELETED = "participante eliminado"
 		MSG_PARTICIPANT_UPDATED = "participante actualizado"
+		MSG_STORE_IS_NIL = "store es nulo"
+		MSG_IA_NOT_FOUND = "ia no encontrada"
 	}
 }

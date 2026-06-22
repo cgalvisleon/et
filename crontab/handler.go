@@ -23,7 +23,7 @@ var crontab *Crontab
 * @return error
 **/
 func eventFunc(job *Job, fn func(params et.Json) error) error {
-	channel := fmt.Sprintf("job:%s:%s", job.TenantId, job.Tag)
+	channel := fmt.Sprintf("job:%s", job.Tag)
 	event.Subscribe(channel, func(msg event.Message) {
 		params := msg.Data
 		err := fn(params)
@@ -39,9 +39,9 @@ func eventFunc(job *Job, fn func(params et.Json) error) error {
 * @params tag string, store Store
 * @return error
 **/
-func Load(tenantId string, store Store) error {
+func Load(tag string, store Store) error {
 	var err error
-	crontab, err = New(tenantId, store)
+	crontab, err = New(tag, store)
 	if err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func CronJob(tag, ownerId string, spec Cron, repetitions int, params et.Json, fn
 		return err
 	}
 
-	job := newJob(crontab.TenantId, CRONJOB, tag, ownerId, specStr, params, repetitions)
+	job := newJob(CRONJOB, tag, ownerId, specStr, params, repetitions)
 	return eventFunc(job, fn)
 }
 
@@ -116,7 +116,7 @@ func ScheduleJob(tag, ownerId string, spec time.Time, params et.Json, fn func(pa
 		return errors.New(msg.MSG_CRONTAB_UNLOAD)
 	}
 
-	job := newJob(crontab.TenantId, SCHEDULEJOB, tag, ownerId, spec.Format(time.RFC3339), params, 0)
+	job := newJob(SCHEDULEJOB, tag, ownerId, spec.Format(time.RFC3339), params, 0)
 	return eventFunc(job, fn)
 }
 

@@ -153,6 +153,7 @@ func (s *WorkFlow) addAuditLog(userId string, action string) {
 	}
 
 	now := timezone.Now()
+	s.UpdatedAt = now
 	s.AuditLog = append(s.AuditLog, et.Json{
 		"created_at": now,
 		"user_id":    userId,

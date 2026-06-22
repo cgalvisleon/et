@@ -202,30 +202,11 @@ func (s *Message) delete() error {
 }
 
 /**
-* ToJson
-* @return et.Json
-**/
-func (s *Message) ToJson() et.Json {
-	return et.Json{
-		"created_at":       timezone.Format(s.CreatedAt, timezone.RFC3339),
-		"tenant_id":        s.ia.TenantID,
-		"owner_id":         s.ia.ID,
-		"id":               s.ID,
-		"conversation_id":  s.ConversationID,
-		"user_id":          s.UserID,
-		"to":               s.To,
-		"type":             s.Type,
-		"content":          s.Content,
-		"message_statuses": s.MessageStatuses,
-	}
-}
-
-/**
 * setStatus
-* @param status StatusMessage, userId string
+* @param status StatusMessage
 * @return error
 **/
-func (s *Message) setStatus(status StatusMessage, userId string) error {
+func (s *Message) setStatus(status StatusMessage) error {
 	s.LastStatus = &MessageStatus{
 		CreatedAt: timezone.Now(),
 		MessageID: s.ID,
@@ -233,5 +214,5 @@ func (s *Message) setStatus(status StatusMessage, userId string) error {
 		Status:    status,
 	}
 	s.MessageStatuses = append(s.MessageStatuses, s.LastStatus)
-	return s.save(userId)
+	return s.save()
 }

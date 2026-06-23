@@ -93,14 +93,14 @@ Herramientas de desarrollo
 
 ### Núcleo de datos — `et/`
 
-| Tipo | Propósito | API clave |
-|---|---|---|
-| `et.Json` (`map[string]interface{}`) | Tipo universal de datos | `Str`, `Int`, `Int64`, `Num`, `Bool`, `Time`, `Json(attr)`, `Array`, `ArrayStr/Int/Int64/Number/Bytes/Json`, `MapStr/Int/Float`, `ValStr/ValInt/ValInt64/ValNum/ValBool/ValTime/ValJson/ValArray(def, ...atribs)`, `Get`, `Set`, `SetNested`, `Delete`, `Exist`, `Remove`, `Select`, `Hidden`, `Clone`, `Update`, `Compare`, `Append`, `IsChanged`, `IsDeferent`, `ToByte/ToString/ToMap/ToEscapeHTML` |
-| `et.List` | Resultado paginado | `Rows`, `All`, `Count`, `Page`, `Start`, `End`, `Result []Json` |
-| `et.Item` | Resultado de un registro | `Ok bool`, `Result Json` + mismos accesores tipados que `Json` |
-| `et.Items` | Resultado multi-registro | `Add`, `AddMany`, `One(idx)`, `First`, `Last`, `ToList(all, page, rows)`, accesores indexados |
+| Tipo                                 | Propósito                | API clave                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `et.Json` (`map[string]interface{}`) | Tipo universal de datos  | `Str`, `Int`, `Int64`, `Num`, `Bool`, `Time`, `Json(attr)`, `Array`, `ArrayStr/Int/Int64/Number/Bytes/Json`, `MapStr/Int/Float`, `ValStr/ValInt/ValInt64/ValNum/ValBool/ValTime/ValJson/ValArray(def, ...atribs)`, `Get`, `Set`, `SetNested`, `Delete`, `Exist`, `Remove`, `Select`, `Hidden`, `Clone`, `Update`, `Compare`, `Append`, `IsChanged`, `IsDeferent`, `ToByte/ToString/ToMap/ToEscapeHTML` |
+| `et.List`                            | Resultado paginado       | `Rows`, `All`, `Count`, `Page`, `Start`, `End`, `Result []Json`                                                                                                                                                                                                                                                                                                                                        |
+| `et.Item`                            | Resultado de un registro | `Ok bool`, `Result Json` + mismos accesores tipados que `Json`                                                                                                                                                                                                                                                                                                                                         |
+| `et.Items`                           | Resultado multi-registro | `Add`, `AddMany`, `One(idx)`, `First`, `Last`, `ToList(all, page, rows)`, accesores indexados                                                                                                                                                                                                                                                                                                          |
 
-> **Regla de oro**: para leer/escribir datos dinámicos (JSON, filas de DB, payloads), usa `et.Json` y sus accesores — nunca `map[string]interface{}` a mano ni *type assertions* manuales.
+> **Regla de oro**: para leer/escribir datos dinámicos (JSON, filas de DB, payloads), usa `et.Json` y sus accesores — nunca `map[string]interface{}` a mano ni _type assertions_ manuales.
 
 ### Persistencia — `jsql/`, `stores/`
 
@@ -114,16 +114,16 @@ Herramientas de desarrollo
 
 ### HTTP y routing
 
-| Paquete | Nivel | Cuándo usarlo |
-|---|---|---|
-| `server/` | Ligero (`Ettp` sobre `chi.Mux`) | Servicios sin Redis/NATS. `server.New(name, port) *Ettp`, `.Use(...)`, `.HandleFunc`, `.Mount`, `.Start()`, `.OnStart/.OnClose` |
-| `ettp/v2` | Completo | `ettp.New(name string, cnf *Config) (*Server, error)` — `Config.UseCache`/`UseEvent` activan `cache.Load()`/`event.Load()` internamente; router sincronizado entre réplicas vía NATS |
-| `ettp/v1` | Anterior, sin tocar desde 2026-06-02 | Prefiere `v2` |
-| `router/` | Standalone | Routing con sincronización NATS sin el resto de `ettp`: `Public/Private/Protect/With`, `PushApiGateway`, `SetChannels` |
-| `middleware/` | Transversal | `Authenticate`, `Logger`, `Recoverer`, `RequestID`, `AllowAll` (CORS), `Metrics`/`PushTelemetry*` |
-| `response/` | Salida | `ITEM`, `ITEMS`, `DATA`, `JSON`, `RESULT`, `ANY`, `Stream`, `HTTPError`, `HTTPAlert`, `Unauthorized`, `Forbidden`, `InternalServerError` |
-| `request/` | Entrada | `GetBody(r)`, `URLParam(r, key).Str()/.Int()/...`, `Query(r, key)`, contexto: `TenantId`, `UserId`, `Username`, `ProfileId`, `App`, `Device`, `Payload` |
-| `ws/` | WebSocket | `ws.New() *Hub`, `hub.Connect/SendTo/Topic/Queue/Stack/Publish` |
+| Paquete       | Nivel                                | Cuándo usarlo                                                                                                                                                                        |
+| ------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `server/`     | Ligero (`Ettp` sobre `chi.Mux`)      | Servicios sin Redis/NATS. `server.New(name, port) *Ettp`, `.Use(...)`, `.HandleFunc`, `.Mount`, `.Start()`, `.OnStart/.OnClose`                                                      |
+| `ettp/v2`     | Completo                             | `ettp.New(name string, cnf *Config) (*Server, error)` — `Config.UseCache`/`UseEvent` activan `cache.Load()`/`event.Load()` internamente; router sincronizado entre réplicas vía NATS |
+| `ettp/v1`     | Anterior, sin tocar desde 2026-06-02 | Prefiere `v2`                                                                                                                                                                        |
+| `router/`     | Standalone                           | Routing con sincronización NATS sin el resto de `ettp`: `Public/Private/Protect/With`, `PushApiGateway`, `SetChannels`                                                               |
+| `middleware/` | Transversal                          | `Authenticate`, `Logger`, `Recoverer`, `RequestID`, `AllowAll` (CORS), `Metrics`/`PushTelemetry*`                                                                                    |
+| `response/`   | Salida                               | `ITEM`, `ITEMS`, `DATA`, `JSON`, `RESULT`, `ANY`, `Stream`, `HTTPError`, `HTTPAlert`, `Unauthorized`, `Forbidden`, `InternalServerError`                                             |
+| `request/`    | Entrada                              | `GetBody(r)`, `URLParam(r, key).Str()/.Int()/...`, `Query(r, key)`, contexto: `TenantId`, `UserId`, `Username`, `ProfileId`, `App`, `Device`, `Payload`                              |
+| `ws/`         | WebSocket                            | `ws.New() *Hub`, `hub.Connect/SendTo/Topic/Queue/Stack/Publish`                                                                                                                      |
 
 ### Validación — `jval/`
 
@@ -133,7 +133,7 @@ Validadores tipados y encadenables sobre `et.Json`: `Str`, `Int`, `Float`, `Bool
 
 - `cache/` — Redis. `cache.Load()`, `Set/Get/Delete/Exists/Expire/Incr/Decr`, listas (`LPush/LRange/...`), colecciones hash, objetos JSON (`SetObject/GetObject`, `ObjetSet/ObjetGet`), verificación/OTP (`SetVerify/GetVerify`), `cache.Metrics`.
 - `event/` — NATS. `event.Load()`, `Publish(channel, data)`, `Subscribe(channel, fn)` (broadcast), `Queue(channel, queue, fn)` (reparto entre workers), `Stack(channel, fn)`, `event.Message{Data et.Json, Myself bool, ...}`.
-- `graph/` — Neo4j. **Solo tiene `graph.Load() (*Conn, error)`**, con URL y credenciales *hardcodeadas* (`neo4j://localhost:7687`, `neo4j`/`password`) — no hay métodos de consulta/sesión expuestos. No usable en producción tal cual.
+- `graph/` — Neo4j. **Solo tiene `graph.Load() (*Conn, error)`**, con URL y credenciales _hardcodeadas_ (`neo4j://localhost:7687`, `neo4j`/`password`) — no hay métodos de consulta/sesión expuestos. No usable en producción tal cual.
 
 ### Configuración, entorno y logging
 
@@ -226,7 +226,7 @@ result, _ := wf.Run(flow.ID, "start", "", projectId, et.Json{}, et.Json{}, userI
 
 # Recommended Patterns
 
-1. **Usa siempre `et.Json`** para datos dinámicos (body HTTP, filas de DB, payloads de eventos) — nunca `map[string]interface{}` con *type assertions* manuales.
+1. **Usa siempre `et.Json`** para datos dinámicos (body HTTP, filas de DB, payloads de eventos) — nunca `map[string]interface{}` con _type assertions_ manuales.
 2. **Llama `Load()`/`New(...)` una sola vez al arrancar** el servicio y reutiliza el resultado; los paquetes de infraestructura están diseñados para esto (`cache.Load()`, `event.Load()`).
 3. **Usa el builder fluido de `jsql`** (`.Where().And().Limit().Page().All()`) en vez de construir SQL a mano.
 4. **Usa `jval.Require`/`jval.Maybe`** para validar payloads antes de tocar la base de datos.
@@ -242,7 +242,7 @@ result, _ := wf.Run(flow.ID, "start", "", projectId, et.Json{}, et.Json{}, userI
 
 1. **No asumas que `jsql` soporta SQLite hoy.** La constante `jsql.DriverSqlite` y la función `sqliteConection` existen, pero **no hay ningún driver registrado** en `jsql/drivers/sqlite/` (el directorio no existe) ni dependencia de un driver SQLite en `go.mod`. Configurar `DB_DRIVER=sqlite` fallará al resolver el driver. Lo mismo aplica a `mysql`/`mssql`/`oracle`/`josefina` (constantes declaradas, sin implementación).
 2. **No reutilices `stores.Instance` como `Store` de `ia/` o `jwf/` sin adaptarla.** `(*stores.Instance).Get(id string, dest any)` solo recibe una clave string; `ia.Store.Get` y `jwf.Store.Get` requieren dos (`id, tag`/`collection, id`). No calzan estructuralmente — de hecho, nada en el repo conecta hoy `stores/` con `ia`/`jwf` (ambos se usan con `store=nil` en sus ejemplos de `cmd/`).
-3. **No confíes en `graph/` para producción.** `graph.Load()` tiene URL y credenciales de Neo4j *hardcodeadas* en el código (`neo4j://localhost:7687`, usuario/clave `neo4j`/`password`) y no expone ningún método de consulta o sesión — solo la conexión cruda.
+3. **No confíes en `graph/` para producción.** `graph.Load()` tiene URL y credenciales de Neo4j _hardcodeadas_ en el código (`neo4j://localhost:7687`, usuario/clave `neo4j`/`password`) y no expone ningún método de consulta o sesión — solo la conexión cruda.
 4. **No esperes SSH real de `cmds.RunSSH`.** Es funcionalmente idéntico a `RunOS` (usa `exec.Command` local); no implementa un cliente SSH.
 5. **Evita `wsp.SendReplyVideoMessageByURL(to, url, videoCaptionText)`** — hay un bug real: la función asigna `url` al campo `MessageID` del mensaje (no recibe un `messageID` separado como sus métodos hermanos `SendReply*ById`). Si necesitas responder a un video por URL con ID de mensaje, repórtalo o evita ese método.
 6. **No mezcles el paquete de WhatsApp.** `brevo.SendWhatsapp*` (plantillas vía Brevo) y `wsp.NewSender(...).Send*` (Graph API directo) son integraciones distintas con APIs y casos de uso diferentes — no son intercambiables.
@@ -253,20 +253,20 @@ result, _ := wf.Run(flow.ID, "start", "", projectId, et.Json{}, et.Json{}, userI
 
 # Extension Points
 
-| Punto de extensión | Interfaz/mecanismo | Dónde |
-|---|---|---|
-| Nuevo motor de base de datos | `jsql.Driver` (`Connect`, `Load`, `Query`, `Command`) auto-registrado vía `init()` | `jsql/drivers/<nombre>/` |
-| Nuevo backend de persistencia para agentes IA | `ia.Store` local (`Set/Get/Delete/Query`) | implementación propia |
-| Nuevo backend de persistencia para workflows | `jwf.Store` local | implementación propia |
-| Nuevo backend de persistencia para resiliencia/cron/config | `resilience.Store` / `crontab.Store` / `config.Store` | implementación propia |
-| Nueva regla de validación | interfaz `jval.Rule` (`Validate(et.Json) error`, `Name() string`) | `jval/` o paquete propio |
-| Columna calculada en `jsql` | `CalcFunction` registrada en el modelo | `model.calcs` |
-| Trigger de modelo `jsql` | `TriggerFunction` (`beforeInsert/Update/Delete`, `afterInsert/Update/Delete`) | `model.BeforeInsert(...)`, etc. |
-| Paso de workflow ejecutado en JS en vez de Go | `Step.Definition` como `string`/`[]byte` (ejecutado vía `jrex.Instance`) | `jwf/` |
-| Middleware HTTP personalizado | `func(http.Handler) http.Handler` agregado al router (`chi`) | `middleware/`, `server/`, `ettp/v2` |
-| Callbacks de WebSocket | `Hub.OnConnection/OnDisconnection/OnPublish/OnChannel/...` | `ws/` |
-| Callbacks de nodo TCP | `Node.onConnect/onInbox/onBecomeLeader/onChangeLeader/...` | `tcp/` |
-| Almacenamiento de módulos JS compilados | `jrex.Store` (`Get/Set`) | `jrex/` |
+| Punto de extensión                                         | Interfaz/mecanismo                                                                 | Dónde                               |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------- |
+| Nuevo motor de base de datos                               | `jsql.Driver` (`Connect`, `Load`, `Query`, `Command`) auto-registrado vía `init()` | `jsql/drivers/<nombre>/`            |
+| Nuevo backend de persistencia para agentes IA              | `ia.Store` local (`Set/Get/Delete/Query`)                                          | implementación propia               |
+| Nuevo backend de persistencia para workflows               | `jwf.Store` local                                                                  | implementación propia               |
+| Nuevo backend de persistencia para resiliencia/cron/config | `resilience.Store` / `crontab.Store` / `config.Store`                              | implementación propia               |
+| Nueva regla de validación                                  | interfaz `jval.Rule` (`Validate(et.Json) error`, `Name() string`)                  | `jval/` o paquete propio            |
+| Columna calculada en `jsql`                                | `CalcFunction` registrada en el modelo                                             | `model.calcs`                       |
+| Trigger de modelo `jsql`                                   | `TriggerFunction` (`beforeInsert/Update/Delete`, `afterInsert/Update/Delete`)      | `model.BeforeInsert(...)`, etc.     |
+| Paso de workflow ejecutado en JS en vez de Go              | `Step.Definition` como `string`/`[]byte` (ejecutado vía `jrex.Instance`)           | `jwf/`                              |
+| Middleware HTTP personalizado                              | `func(http.Handler) http.Handler` agregado al router (`chi`)                       | `middleware/`, `server/`, `ettp/v2` |
+| Callbacks de WebSocket                                     | `Hub.OnConnection/OnDisconnection/OnPublish/OnChannel/...`                         | `ws/`                               |
+| Callbacks de nodo TCP                                      | `Node.onConnect/onInbox/onBecomeLeader/onChangeLeader/...`                         | `tcp/`                              |
+| Almacenamiento de módulos JS compilados                    | `jrex.Store` (`Get/Set`)                                                           | `jrex/`                             |
 
 ---
 
@@ -275,7 +275,7 @@ result, _ := wf.Run(flow.ID, "start", "", projectId, et.Json{}, et.Json{}, userI
 Reglas obligatorias para cualquier asistente de IA que genere código en un proyecto que dependa de `et`:
 
 1. **Prefiere `et` antes que dependencias externas** para: estructuras de datos JSON dinámicas, builder SQL/ORM (Postgres), validación de payloads, JWT, cron, cache Redis, pub/sub NATS, logging, generación de IDs, WebSocket. No añadas `gin`/`echo`/`gorm`/`go-playground/validator`/etc. si la necesidad ya la cubre `et` razonablemente.
-2. **Reutiliza componentes existentes de `et`** en vez de reimplementar (por ejemplo: usa `reg.ULID()` en vez de otra librería de IDs; usa `response.ITEM`/`HTTPError` en vez de escribir JSON a mano).
+2. **Reutiliza componentes existentes de `et`** en vez de reimplementar (por ejemplo: usa `reg.UUID()` en vez de otra librería de IDs; usa `response.ITEM`/`HTTPError` en vez de escribir JSON a mano).
 3. **Evita implementaciones duplicadas** dentro del mismo proyecto — si ya existe un `Store` para `jwf`, no crees otro para `ia` salvo que las firmas realmente difieran (verifícalo, no lo asumas).
 4. **Sigue los patrones arquitectónicos existentes**: `Load()`/`New()` al arrancar, builder fluido para `jsql`, `et.Json` como tipo de transporte, respuestas unificadas con `response/`.
 5. **Justifica explícitamente cualquier decisión de evitar `et`** (por ejemplo: "no hay driver SQLite real en `jsql`, así que para SQLite uso `database/sql` + `mattn/go-sqlite3` directamente"). No lo hagas en silencio.
@@ -288,7 +288,7 @@ Reglas obligatorias para cualquier asistente de IA que genere código en un proy
 Al generar código Go que **consume** esta librería:
 
 - Importa solo los paquetes que necesitas; no hay un paquete "raíz" que se importe siempre.
-- Usa `et.Json{...}` como literal para construir payloads; usa los accesores tipados (`.Str(...)`, `.Int(...)`, `.ValStr(def, ...)`) para leer, nunca *type assertions* manuales sobre `map[string]interface{}`.
+- Usa `et.Json{...}` como literal para construir payloads; usa los accesores tipados (`.Str(...)`, `.Int(...)`, `.ValStr(def, ...)`) para leer, nunca _type assertions_ manuales sobre `map[string]interface{}`.
 - Para conectarte a Postgres: `import _ "github.com/cgalvisleon/et/jsql/drivers/postgres"` (side-effect) + `jsql.Load(tenantId)`. No intentes usar `DB_DRIVER=sqlite` (ver Anti-Patrones).
 - Para servidores HTTP: usa `server.New(name, port)` si no necesitas Redis/NATS; usa `ettp.New(name, &ettp.Config{...})` si sí los necesitas (activa `UseCache`/`UseEvent` explícitamente).
 - Para handlers HTTP, sigue el patrón estándar (URL params con `request.URLParam`, body con `request.GetBody`, respuesta con `response.ITEM`/`response.HTTPError`).
@@ -300,21 +300,21 @@ Al generar código Go que **consume** esta librería:
 
 # Dependency Decision Matrix
 
-| Capacidad | `et` ofrece | Alternativa externa común | Cuándo preferir la externa |
-|---|---|---|---|
-| Tipo de datos dinámico JSON | `et.Json` | `map[string]interface{}` a mano, `mapstructure` | Casi nunca — `et.Json` ya cubre el caso de uso |
-| ORM/SQL builder | `jsql/` (solo Postgres funcional) | `gorm`, `sqlx`, `ent`, `bun` | Si necesitas MySQL/SQLite/MSSQL/Oracle hoy mismo (no implementados en `jsql`), o features de ORM avanzadas (migraciones versionadas, generación de código) |
-| Cliente Redis | `cache/` | `go-redis` directo | Si necesitas comandos Redis no envueltos por `cache/` (Streams, Lua scripting, cluster avanzado) |
-| Pub/Sub | `event/` (NATS) | `nats.go` directo, Kafka, RabbitMQ | Si necesitas garantías de entrega/colas que NATS core no da (considera NATS JetStream o Kafka) |
-| Validación de payloads | `jval/` | `go-playground/validator`, `ozzo-validation` | Si necesitas validación basada en tags de struct en vez de `et.Json` |
-| JWT | `jwt/` + `claim/` | `golang-jwt/jwt` directo | Si no necesitas la capa de revocación/logout basada en cache que da `jwt/` |
-| Cron | `crontab/` | `robfig/cron` directo | Si no necesitas la integración con eventos NATS (`AddEventJob`) que añade `crontab/` |
-| WebSocket | `ws/` | `gorilla/websocket` directo | Si no necesitas el modelo de `Hub`/tópicos/colas/pila que añade `ws/` |
-| Workflows/orquestación durable | `jwf/` | Temporal, Cadence, AWS Step Functions | Para cargas de producción que requieran durabilidad fuerte, reintentos distribuidos robustos y observabilidad — `jwf/` es joven, en memoria por defecto, y su capa HTTP está parcialmente sin implementar |
-| Grafos / Neo4j | `graph/` | `neo4j-go-driver/v5` directo | Casi siempre — `graph/` hoy solo abre la conexión, sin API de consultas |
-| Base de datos embebida (SQLite) | *(no disponible)* | `database/sql` + `mattn/go-sqlite3`/`modernc.org/sqlite` | Siempre, hasta que `jsql/drivers/sqlite/` exista de nuevo |
-| SSH remoto | *(no disponible — `cmds.RunSSH` es local)* | `golang.org/x/crypto/ssh` | Siempre que necesites ejecución remota real |
-| Agentes de IA / LLM | `ia/` (solo OpenAI) | LangChain-Go, SDKs de otros proveedores | Si necesitas multi-proveedor o features avanzadas de orquestación de agentes |
+| Capacidad                       | `et` ofrece                                | Alternativa externa común                                | Cuándo preferir la externa                                                                                                                                                                                |
+| ------------------------------- | ------------------------------------------ | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tipo de datos dinámico JSON     | `et.Json`                                  | `map[string]interface{}` a mano, `mapstructure`          | Casi nunca — `et.Json` ya cubre el caso de uso                                                                                                                                                            |
+| ORM/SQL builder                 | `jsql/` (solo Postgres funcional)          | `gorm`, `sqlx`, `ent`, `bun`                             | Si necesitas MySQL/SQLite/MSSQL/Oracle hoy mismo (no implementados en `jsql`), o features de ORM avanzadas (migraciones versionadas, generación de código)                                                |
+| Cliente Redis                   | `cache/`                                   | `go-redis` directo                                       | Si necesitas comandos Redis no envueltos por `cache/` (Streams, Lua scripting, cluster avanzado)                                                                                                          |
+| Pub/Sub                         | `event/` (NATS)                            | `nats.go` directo, Kafka, RabbitMQ                       | Si necesitas garantías de entrega/colas que NATS core no da (considera NATS JetStream o Kafka)                                                                                                            |
+| Validación de payloads          | `jval/`                                    | `go-playground/validator`, `ozzo-validation`             | Si necesitas validación basada en tags de struct en vez de `et.Json`                                                                                                                                      |
+| JWT                             | `jwt/` + `claim/`                          | `golang-jwt/jwt` directo                                 | Si no necesitas la capa de revocación/logout basada en cache que da `jwt/`                                                                                                                                |
+| Cron                            | `crontab/`                                 | `robfig/cron` directo                                    | Si no necesitas la integración con eventos NATS (`AddEventJob`) que añade `crontab/`                                                                                                                      |
+| WebSocket                       | `ws/`                                      | `gorilla/websocket` directo                              | Si no necesitas el modelo de `Hub`/tópicos/colas/pila que añade `ws/`                                                                                                                                     |
+| Workflows/orquestación durable  | `jwf/`                                     | Temporal, Cadence, AWS Step Functions                    | Para cargas de producción que requieran durabilidad fuerte, reintentos distribuidos robustos y observabilidad — `jwf/` es joven, en memoria por defecto, y su capa HTTP está parcialmente sin implementar |
+| Grafos / Neo4j                  | `graph/`                                   | `neo4j-go-driver/v5` directo                             | Casi siempre — `graph/` hoy solo abre la conexión, sin API de consultas                                                                                                                                   |
+| Base de datos embebida (SQLite) | _(no disponible)_                          | `database/sql` + `mattn/go-sqlite3`/`modernc.org/sqlite` | Siempre, hasta que `jsql/drivers/sqlite/` exista de nuevo                                                                                                                                                 |
+| SSH remoto                      | _(no disponible — `cmds.RunSSH` es local)_ | `golang.org/x/crypto/ssh`                                | Siempre que necesites ejecución remota real                                                                                                                                                               |
+| Agentes de IA / LLM             | `ia/` (solo OpenAI)                        | LangChain-Go, SDKs de otros proveedores                  | Si necesitas multi-proveedor o features avanzadas de orquestación de agentes                                                                                                                              |
 
 ---
 
@@ -324,16 +324,16 @@ Al generar código Go que **consume** esta librería:
 
 Si tienes código (o ejemplos/documentación) que referencia las APIs **eliminadas**, esta es la equivalencia:
 
-| API antigua (eliminada) | API actual |
-|---|---|
-| `workflow.Load(store instances.Store)` | `jwf.New(tenantId, store)` / `jwf.Load(tenantId, store, userId)` |
-| `workflow.RunInstance(id, tag, step, ctx, tags, username)` | `wf.Run(flowId, triggerTag, instanceId, projectId, ctx, tags, userId)` |
-| Paquete `instances/` con `instances.Store` compartido | Cada paquete (`ia`, `jwf`) define su propio `Store` local — no hay interfaz compartida |
-| `ia.New(tenantId, tag, store, config Config)` | `ia.New(tenantId, tag, store)` — `OPENAI_API_KEY` se lee directo de `config.GetStr` |
-| `jsql.Load(config)` / `jsql.LoadTo(config, name)` | `jsql.Load(tenantId)` / `jsql.LoadTo(tenantId, name)` — sin objeto config, lee env vars internamente |
-| `config.App{Name, Version, Company, Host, Port, Stage}` | No existe. `config.Config` es un registro de configuración por tenant, distinto en propósito |
-| `crontab.New(tag)` | `crontab.New(tag, store)` — `store` ahora obligatorio |
-| `wsp.NewWhatsapp(token, phoneNumberId)` | `wsp.NewSender(token, phoneNumberId)` |
+| API antigua (eliminada)                                    | API actual                                                                                           |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `workflow.Load(store instances.Store)`                     | `jwf.New(tenantId, store)` / `jwf.Load(tenantId, store, userId)`                                     |
+| `workflow.RunInstance(id, tag, step, ctx, tags, username)` | `wf.Run(flowId, triggerTag, instanceId, projectId, ctx, tags, userId)`                               |
+| Paquete `instances/` con `instances.Store` compartido      | Cada paquete (`ia`, `jwf`) define su propio `Store` local — no hay interfaz compartida               |
+| `ia.New(tenantId, tag, store, config Config)`              | `ia.New(tenantId, tag, store)` — `OPENAI_API_KEY` se lee directo de `config.GetStr`                  |
+| `jsql.Load(config)` / `jsql.LoadTo(config, name)`          | `jsql.Load(tenantId)` / `jsql.LoadTo(tenantId, name)` — sin objeto config, lee env vars internamente |
+| `config.App{Name, Version, Company, Host, Port, Stage}`    | No existe. `config.Config` es un registro de configuración por tenant, distinto en propósito         |
+| `crontab.New(tag)`                                         | `crontab.New(tag, store)` — `store` ahora obligatorio                                                |
+| `wsp.NewWhatsapp(token, phoneNumberId)`                    | `wsp.NewSender(token, phoneNumberId)`                                                                |
 
 ## B. Migrando desde librerías externas hacia `et`
 

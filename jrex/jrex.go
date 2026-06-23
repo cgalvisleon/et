@@ -34,7 +34,7 @@ type Jrex struct {
 * @return *Jrex, error
 **/
 func newJrex(tag, userId string) (*Jrex, error) {
-	id := reg.ULID()
+	id := reg.UUID()
 	result := &Jrex{
 		ID:       id,
 		Tag:      tag,

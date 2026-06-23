@@ -21,15 +21,12 @@ func main() {
 	}
 
 	ins := res.LoadInstance(resilience.Params{
-		TenantId:      "1234567890",
 		Id:            "suma",
 		Tag:           "func suma",
 		Description:   "",
-		OwnerId:       "",
 		TotalAttempts: 3,
 		Interval:      3 * time.Second,
 		Tags:          et.Json{},
-		UserId:        "1234567890",
 		Fn:            suma,
 		FnArgs:        []interface{}{1, 2},
 	})

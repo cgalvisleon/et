@@ -56,7 +56,7 @@ type Command struct {
 **/
 func newCommand(model *Model, tp CommandType) *Command {
 	result := &Command{
-		ID:             reg.ULID(),
+		ID:             reg.UUID(),
 		Type:           tp,
 		From:           getFrom(model, ""),
 		Data:           []et.Json{},

@@ -83,7 +83,7 @@ func (s *WorkFlow) newStep(kind Kind, tag, version, title, userId string) *Step 
 		CreatedAt:   now,
 		UpdatedAt:   now,
 		WorkflowId:  s.ID,
-		ID:          reg.ULID(),
+		ID:          reg.UUID(),
 		Kind:        kind,
 		Tag:         tag,
 		Version:     version,

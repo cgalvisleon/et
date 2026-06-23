@@ -49,7 +49,7 @@ func New(store Store) (*Resilience, error) {
 	result := &Resilience{
 		CreatedAt: now,
 		UpdatedAt: now,
-		ID:        reg.ULID(),
+		ID:        reg.UUID(),
 		instances: make(map[string]*Instance),
 		mu:        sync.Mutex{},
 		isDebug:   envar.GetBool("DEBUG", false),
@@ -113,7 +113,7 @@ func (s *Resilience) CountInstances() int {
 **/
 func (s *Resilience) newInstance(id, tag, description string, totalAttempts int, interval time.Duration, tags et.Json, fn interface{}, fnArgs ...interface{}) *Instance {
 	if id == "" {
-		id = reg.ULID()
+		id = reg.UUID()
 	}
 
 	now := timezone.Now()

@@ -41,51 +41,51 @@ Cuando necesites implementar una capacidad (HTTP, persistencia, validación, men
 
 ## 2. Tabla rápida "necesito X → usa Y"
 
-| Necesito... | Usa de `et` | Función/tipo de entrada |
-|---|---|---|
-| Representar datos JSON dinámicos | `et` | `et.Json{...}`, `.Str()/.Int()/.ValStr(def, ...)` |
-| Resultado paginado de una lista | `et` | `et.List{Rows, All, Count, Page, Result}` |
-| Conectar a Postgres | `jsql` | `jsql.Load(tenantId)` + `import _ ".../jsql/drivers/postgres"` |
-| Definir una tabla/modelo | `jsql` | `db.Define(jsql.Def{...})` o `db.DefineModel(...)` |
-| Consultar con filtros | `jsql` | `model.Where(jsql.Eq(...)).And(...).Limit().Page().All()` |
-| Servidor HTTP simple | `server` | `server.New(name, port)` |
-| Servidor HTTP con cache/eventos | `ettp/v2` | `ettp.New(name, &ettp.Config{UseCache: true, UseEvent: true})` |
-| Middleware de auth/CORS/logging | `middleware` | `Authenticate`, `AllowAll`, `Logger`, `Recoverer` |
-| Responder JSON desde un handler | `response` | `response.ITEM/ITEMS/HTTPError(w, r, status, ...)` |
-| Leer body/params de un request | `request` | `request.GetBody(r)`, `request.URLParam(r, "id").Str()` |
-| Validar un payload | `jval` | `jval.Require(data, jval.Str("x").NotEmpty(), ...)` |
-| Cache / Redis | `cache` | `cache.Load()`, `cache.Set/Get/SetObject/GetObject` |
-| Pub/Sub entre servicios | `event` | `event.Load()`, `event.Publish/Subscribe/Queue` |
-| Emitir/validar JWT | `jwt` + `claim` | `jwt.NewAuthorization(...)`, `jwt.Validate(token)` |
-| Generar IDs (ULID/UUID/XID) | `reg` | `reg.ULID()`, `reg.GetULID(id)` |
-| Cron jobs | `crontab` | `crontab.New(tag, store)` + `AddJob/AddEventJob` |
-| Workflows multi-paso | `jwf` | `jwf.New(tenantId, store)` + `flow.Step(...)` + `wf.Run(...)` |
-| Reintentos con backoff | `resilience` | `resilience.New(store).LoadInstance(Params{...}).Run(userId)` |
-| Agente sobre OpenAI | `ia` | `ia.New(tenantId, tag, store)` |
-| Ejecutar JS embebido | `jrex` | `jrex.New(name, store)` / `jrex.NewInstance()` |
-| WebSocket | `ws` | `ws.New()` (Hub) + `.Connect/.Publish/.SendTo` |
-| Subir archivos a S3 | `aws` | `aws.UploaderFile/UploaderB64` |
-| Enviar WhatsApp (Graph API directo) | `wsp` | `wsp.NewSender(token, phoneNumberId).SendTextMessage(...)` |
-| Enviar WhatsApp/Email/SMS templado | `brevo` | `brevo.SendWhatsapp*/SendEmail*/SendSms*` |
-| Logging estructurado | `logs` | `logs.Info/Error/Fatal/Panic` |
-| Variables de entorno | `envar`/`config` | `config.GetStr(key, def)`, `envar.Validate([...])` |
-| Medir tiempo entre pasos | `iterate` | `iterate.Start/Segment/End(tag, ...)` |
-| Cache en memoria con TTL | `mem` | `mem.Set/Get/GetInt/.../More` |
-| Valor compartido thread-safe | `race` | `race.NewValue(v)` |
-| Zona horaria / formateo de fechas | `timezone` | `timezone.Now()/Format(t, layout)` |
+| Necesito...                         | Usa de `et`      | Función/tipo de entrada                                        |
+| ----------------------------------- | ---------------- | -------------------------------------------------------------- |
+| Representar datos JSON dinámicos    | `et`             | `et.Json{...}`, `.Str()/.Int()/.ValStr(def, ...)`              |
+| Resultado paginado de una lista     | `et`             | `et.List{Rows, All, Count, Page, Result}`                      |
+| Conectar a Postgres                 | `jsql`           | `jsql.Load(tenantId)` + `import _ ".../jsql/drivers/postgres"` |
+| Definir una tabla/modelo            | `jsql`           | `db.Define(jsql.Def{...})` o `db.DefineModel(...)`             |
+| Consultar con filtros               | `jsql`           | `model.Where(jsql.Eq(...)).And(...).Limit().Page().All()`      |
+| Servidor HTTP simple                | `server`         | `server.New(name, port)`                                       |
+| Servidor HTTP con cache/eventos     | `ettp/v2`        | `ettp.New(name, &ettp.Config{UseCache: true, UseEvent: true})` |
+| Middleware de auth/CORS/logging     | `middleware`     | `Authenticate`, `AllowAll`, `Logger`, `Recoverer`              |
+| Responder JSON desde un handler     | `response`       | `response.ITEM/ITEMS/HTTPError(w, r, status, ...)`             |
+| Leer body/params de un request      | `request`        | `request.GetBody(r)`, `request.URLParam(r, "id").Str()`        |
+| Validar un payload                  | `jval`           | `jval.Require(data, jval.Str("x").NotEmpty(), ...)`            |
+| Cache / Redis                       | `cache`          | `cache.Load()`, `cache.Set/Get/SetObject/GetObject`            |
+| Pub/Sub entre servicios             | `event`          | `event.Load()`, `event.Publish/Subscribe/Queue`                |
+| Emitir/validar JWT                  | `jwt` + `claim`  | `jwt.NewAuthorization(...)`, `jwt.Validate(token)`             |
+| Generar IDs (ULID/UUID/XID)         | `reg`            | `reg.UUID()`, `reg.GetULID(id)`                                |
+| Cron jobs                           | `crontab`        | `crontab.New(tag, store)` + `AddJob/AddEventJob`               |
+| Workflows multi-paso                | `jwf`            | `jwf.New(tenantId, store)` + `flow.Step(...)` + `wf.Run(...)`  |
+| Reintentos con backoff              | `resilience`     | `resilience.New(store).LoadInstance(Params{...}).Run(userId)`  |
+| Agente sobre OpenAI                 | `ia`             | `ia.New(tenantId, tag, store)`                                 |
+| Ejecutar JS embebido                | `jrex`           | `jrex.New(name, store)` / `jrex.NewInstance()`                 |
+| WebSocket                           | `ws`             | `ws.New()` (Hub) + `.Connect/.Publish/.SendTo`                 |
+| Subir archivos a S3                 | `aws`            | `aws.UploaderFile/UploaderB64`                                 |
+| Enviar WhatsApp (Graph API directo) | `wsp`            | `wsp.NewSender(token, phoneNumberId).SendTextMessage(...)`     |
+| Enviar WhatsApp/Email/SMS templado  | `brevo`          | `brevo.SendWhatsapp*/SendEmail*/SendSms*`                      |
+| Logging estructurado                | `logs`           | `logs.Info/Error/Fatal/Panic`                                  |
+| Variables de entorno                | `envar`/`config` | `config.GetStr(key, def)`, `envar.Validate([...])`             |
+| Medir tiempo entre pasos            | `iterate`        | `iterate.Start/Segment/End(tag, ...)`                          |
+| Cache en memoria con TTL            | `mem`            | `mem.Set/Get/GetInt/.../More`                                  |
+| Valor compartido thread-safe        | `race`           | `race.NewValue(v)`                                             |
+| Zona horaria / formateo de fechas   | `timezone`       | `timezone.Now()/Format(t, layout)`                             |
 
 ---
 
 ## 3. Huecos conocidos — aquí SÍ se justifica salir de `et` (Prioridad 4/5)
 
-| Necesidad | Por qué `et` no alcanza hoy | Qué usar en su lugar |
-|---|---|---|
-| Base de datos SQLite/MySQL/MSSQL/Oracle | `jsql` solo tiene driver real para Postgres; `sqlite` ni tiene directorio | `database/sql` + driver nativo del motor, o espera a que se implemente el driver en `jsql/drivers/` |
-| Consultas/sesiones Neo4j | `graph.Load()` solo abre una conexión hardcodeada a `localhost`, sin API de consultas | `github.com/neo4j/neo4j-go-driver/v5` directamente |
-| Ejecución remota vía SSH | `cmds.RunSSH` es idéntico a `RunOS` (local) | `golang.org/x/crypto/ssh` |
-| Balanceo de carga / consenso RPC robusto | `jrpc` no tiene balancer ni Raft real | Diseña tu propio mecanismo o usa una librería RPC madura (gRPC, etc.) si el caso lo amerita |
-| Orquestación de workflows con durabilidad fuerte a gran escala | `jwf` es joven, en memoria por defecto, capa HTTP de Flow/Instance sin implementar | Temporal, Cadence, AWS Step Functions, según el contexto |
-| Multi-proveedor de LLM o agentes complejos | `ia` solo soporta OpenAI | SDK del proveedor específico, o una librería de orquestación de agentes |
+| Necesidad                                                      | Por qué `et` no alcanza hoy                                                           | Qué usar en su lugar                                                                                |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Base de datos SQLite/MySQL/MSSQL/Oracle                        | `jsql` solo tiene driver real para Postgres; `sqlite` ni tiene directorio             | `database/sql` + driver nativo del motor, o espera a que se implemente el driver en `jsql/drivers/` |
+| Consultas/sesiones Neo4j                                       | `graph.Load()` solo abre una conexión hardcodeada a `localhost`, sin API de consultas | `github.com/neo4j/neo4j-go-driver/v5` directamente                                                  |
+| Ejecución remota vía SSH                                       | `cmds.RunSSH` es idéntico a `RunOS` (local)                                           | `golang.org/x/crypto/ssh`                                                                           |
+| Balanceo de carga / consenso RPC robusto                       | `jrpc` no tiene balancer ni Raft real                                                 | Diseña tu propio mecanismo o usa una librería RPC madura (gRPC, etc.) si el caso lo amerita         |
+| Orquestación de workflows con durabilidad fuerte a gran escala | `jwf` es joven, en memoria por defecto, capa HTTP de Flow/Instance sin implementar    | Temporal, Cadence, AWS Step Functions, según el contexto                                            |
+| Multi-proveedor de LLM o agentes complejos                     | `ia` solo soporta OpenAI                                                              | SDK del proveedor específico, o una librería de orquestación de agentes                             |
 
 Antes de añadir cualquier dependencia externa para cubrir estos casos, confírmalo releyendo el código real (estos huecos pueden cerrarse en futuras versiones del repo — no asumas que seguirán igual para siempre).
 

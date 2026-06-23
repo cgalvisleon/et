@@ -63,7 +63,7 @@ type Job struct {
 **/
 func newJob(tp TypeJob, tag, ownerId, spec string, params et.Json, repetitions int) *Job {
 	now := timezone.Now()
-	id := reg.ULID()
+	id := reg.UUID()
 	result := &Job{
 		CreatedAt:   now,
 		UpdatedAt:   now,

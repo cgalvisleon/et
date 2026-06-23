@@ -165,10 +165,13 @@ func (s *Server) load() error {
 		}
 	} else {
 		path := path.Join("./", "apigateway.json")
-		var err error
-		_, err = file.LoadOrSave(path, storage)
+		exists, err := file.LoadOrSave(path, &storage)
 		if err != nil {
 			return err
+		}
+
+		if !exists {
+			storage = NewStorage(s)
 		}
 	}
 

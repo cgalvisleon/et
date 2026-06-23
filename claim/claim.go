@@ -107,7 +107,7 @@ func (s *Claim) SetPayload(payload et.Json) {
 **/
 func NewClaim(duration time.Duration) *Claim {
 	result := &Claim{}
-	result.ID = reg.ULID()
+	result.ID = reg.UUID()
 	result.Salt = utility.GetOTP(6)
 	result.Duration = duration
 	if result.Duration != 0 {

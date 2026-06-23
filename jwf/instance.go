@@ -129,7 +129,7 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*I
 	}
 
 	now := timezone.Now()
-	id := reg.ULID()
+	id := reg.UUID()
 	result := &Instance{
 		StartedAt:  now,
 		WorkflowId: s.ID,

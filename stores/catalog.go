@@ -2,7 +2,7 @@ package stores
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 
 	"github.com/cgalvisleon/et/et"
 	. "github.com/cgalvisleon/et/jsql"
@@ -24,26 +24,24 @@ func DefineCatalog(db *DB, tenantId, schema string) (*Catalog, error) {
 		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 		{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: "name", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
 		{Name: "kind", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: "version", TypeColumn: COLUMN, TypeData: INT, Default: 0},
+		{Name: "id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
+		{Name: "owner_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 		{Name: "definition", TypeColumn: COLUMN, TypeData: BYTES, Default: []byte{}},
 	}
 
 	def := Def{
 		Schema:  schema,
-		Name:    "catalog",
+		Name:    "catalogs",
 		Version: 1,
 		Columns: columns,
 		PrimaryKeys: []DefIndex{
 			{Name: TENANT_ID, Sorted: true},
-			{Name: "name", Sorted: true},
 			{Name: "kind", Sorted: true},
+			{Name: "id", Sorted: true},
 		},
 		Indexes: []DefIndex{
-			{Name: TENANT_ID, Sorted: true},
-			{Name: "kind", Sorted: true},
-			{Name: "version", Sorted: true},
+			{Name: "owner_id", Sorted: true},
 		},
 		IdxField: IDX,
 		IdtField: IDT,
@@ -77,24 +75,31 @@ func DefineCatalog(db *DB, tenantId, schema string) (*Catalog, error) {
 }
 
 /**
-* setCatalog: Sets the catalog data for the given name.
-* @param name, kind string, version int, obj any
+* Set: Sets the catalog data for the given name.
+* @param collection, id, ownerId string, obj any
 * @return error
 **/
-func Set(kind string, id, tenantId, ownerId string, obj any, userId string) error {
+func (s *Catalog) Set(collection, id, ownerId string, obj any) error {
 	bt, ok := obj.([]byte)
 	if !ok {
-		return fmt.Errorf(MSG_OBJECT_NOT_BYTE, "obj")
+		var err error
+		bt, err = json.Marshal(obj)
+		if err != nil {
+			return err
+		}
 	}
 
-	_, err := s.catalog.
+	_, err := s.model.
 		Upsert(et.Json{
 			"tenant_id":  s.TenantId,
-			"name":       name,
-			"kind":       kind,
-			"version":    version,
+			"kind":       collection,
+			"id":         id,
+			"owner_id":   ownerId,
 			"definition": bt,
 		}).
+		Where(Eq("tenant_id", s.TenantId)).
+		And(Eq("kind", collection)).
+		And(Eq("id", id)).
 		Exec()
 	if err != nil {
 		return err
@@ -108,18 +113,18 @@ func Set(kind string, id, tenantId, ownerId string, obj any, userId string) erro
 * @param name, kind string, des any
 * @return error
 **/
-func getCatalog(name, kind string, des any) error {
-	item, err := s.catalog.
+func (s *Catalog) Get(collection, id string, des any) error {
+	item, err := s.model.
 		Where(Eq("tenant_id", s.TenantId)).
-		Where(Eq("name", name)).
-		And(Eq("kind", kind)).
+		And(Eq("kind", collection)).
+		And(Eq("id", id)).
 		One()
 	if err != nil {
 		return err
 	}
 
 	if !item.Ok {
-		return fmt.Errorf(MSG_CATALOG_NOT_FOUND, name)
+		return errors.New(MSG_RECORD_NOT_FOUND)
 	}
 
 	bt, err := item.Byte("definition")
@@ -136,19 +141,28 @@ func getCatalog(name, kind string, des any) error {
 }
 
 /**
-* deleteCatalog: Deletes the catalog data for the given name.
-* @param name, kind string
+* Delete: Deletes the catalog data for the given name.
+* @param collection, id string
 * @return error
 **/
-func deleteCatalog(name, kind string) error {
-	_, err := s.catalog.
+func (s *Catalog) Delete(collection, id string) error {
+	_, err := s.model.
 		Delete().
 		Where(Eq("tenant_id", s.TenantId)).
-		And(Eq("name", name)).
-		And(Eq("kind", kind)).
+		And(Eq("kind", collection)).
+		And(Eq("id", id)).
 		Exec()
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+/**
+* Query: Queries the catalog data for the given name.
+* @param query et.Json
+* @return (et.Items, error)
+**/
+func (s *Catalog) Query(query et.Json) (et.Items, error) {
+	return s.model.Query(query)
 }

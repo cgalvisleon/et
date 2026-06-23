@@ -68,7 +68,7 @@ func (s *Ia) newMessage(conversation *Conversation, userID, to string, tp TypeMe
 		CreatedAt:       now,
 		IAID:            s.ID,
 		ConversationID:  conversation.ID,
-		ID:              reg.ULID(),
+		ID:              reg.UUID(),
 		UserID:          userID,
 		To:              to,
 		Type:            tp,

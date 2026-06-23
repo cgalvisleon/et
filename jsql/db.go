@@ -18,7 +18,7 @@ import (
 )
 
 type Store interface {
-	Set(collection, id, tenantId, ownerId string, obj any) error
+	Set(collection, id, ownerId string, obj any) error
 	Get(collection, id string, dest any) (bool, error)
 	Delete(collection, id string) error
 	Query(query et.Json) (et.Items, error)
@@ -66,7 +66,7 @@ func newDB(params et.Json) (*DB, error) {
 	version := params.ValInt(1, "version")
 	result := &DB{
 		TenantId:    tenantId,
-		ID:          reg.ULID(),
+		ID:          reg.UUID(),
 		Name:        name,
 		Schemas:     make(map[string]*Schema),
 		Driver:      driverName,

@@ -268,7 +268,7 @@ func NewMessage(tp TpMessage, message any) (*Message, error) {
 	}
 
 	result := &Message{
-		ID:      reg.ULID(),
+		ID:      reg.UUID(),
 		Type:    tp,
 		Payload: bt,
 		Args:    []any{},

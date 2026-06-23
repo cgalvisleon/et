@@ -110,7 +110,7 @@ func (s *WorkFlow) newFlow(tag, title, version, userId string) *Flow {
 		CreatedAt:     now,
 		UpdatedAt:     now,
 		WorkflowId:    s.ID,
-		ID:            reg.ULID(),
+		ID:            reg.UUID(),
 		Tag:           tag,
 		Title:         title,
 		Description:   "",
@@ -430,7 +430,7 @@ func (s *Flow) addConnection(sourceId string, targetId string, index int, kind P
 	}
 
 	result := &Connection{
-		ID: reg.ULID(),
+		ID: reg.UUID(),
 		Source: &StepConnection{
 			StepId: sourceId,
 			Port:   PortOutput,

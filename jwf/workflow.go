@@ -65,7 +65,7 @@ func New(store Store) (*WorkFlow, error) {
 	result := &WorkFlow{
 		CreatedAt: now,
 		UpdatedAt: now,
-		ID:        reg.ULID(),
+		ID:        reg.UUID(),
 		Flows:     make(map[string]*Flow),
 		Steps:     make(map[string]*Step),
 		AuditLog:  make([]et.Json, 0),

@@ -5,12 +5,14 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/ettp/v2"
+	"github.com/cgalvisleon/et/logs"
 )
 
 func main() {
 	timeout := envar.GetFloat("TIMEOUT", 100)
 	srv, err := ettp.New("Apigateway", &ettp.Config{
-		Port:         8080,
+		Port:         4040,
+		RpcPort:      4400,
 		Parent:       "/api",
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -25,7 +27,7 @@ func main() {
 	})
 
 	if err != nil {
-		panic(err)
+		logs.Panic(err)
 	}
 
 	srv.Start()

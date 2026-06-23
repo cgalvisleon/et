@@ -14,7 +14,8 @@ import (
 )
 
 type Authorization struct {
-	model *Model
+	TenantId string
+	model    *Model
 }
 
 var (
@@ -44,13 +45,13 @@ func DefineAuthorization(db *DB, schema string) (*Authorization, error) {
 		Version: 1,
 		Columns: columns,
 		PrimaryKeys: []DefIndex{
-			{Name: ID, Sorted: true},
-		},
-		Indexes: []DefIndex{
 			{Name: TENANT_ID, Sorted: true},
 			{Name: "profile_id", Sorted: true},
 			{Name: "method", Sorted: true},
 			{Name: "path", Sorted: true},
+		},
+		Unique: []DefIndex{
+			{Name: ID, Sorted: true},
 		},
 		IdxField:    IDX,
 		IdtField:    IDT,
@@ -101,10 +102,10 @@ func DefineAuthorization(db *DB, schema string) (*Authorization, error) {
 
 /**
 * SetAuthor
-* @param tenantId, profileId, method, path string
+* @param profileId, method, path string
 * @return error
 **/
-func (s *Authorization) setAuthor(key, tenantId, profileId, method, path string) error {
+func (s *Authorization) SetAuthor(profileId, method, path string) error {
 	if !utility.ValidStr(method, 0, []string{""}) {
 		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "method")
 	}
@@ -112,36 +113,22 @@ func (s *Authorization) setAuthor(key, tenantId, profileId, method, path string)
 		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "path")
 	}
 
-	dt.Drop(key)
 	_, err := s.model.
 		Insert(et.Json{
-			"tenant_id":  tenantId,
+			"tenant_id":  s.TenantId,
 			"profile_id": profileId,
 			"method":     method,
 			"path":       path,
 		}).
-		Exec()
+		One()
 	if err != nil {
 		return err
 	}
 
-	return nil
-}
+	key := fmt.Sprintf("%s:%s:%s:%s", s.TenantId, profileId, method, path)
+	dt.Drop(key)
 
-/**
-* SetAuthor
-* @param tenantId, profileId, method, path string
-* @return error
-**/
-func (s *Authorization) SetAuthor(tenantId, profileId, method, path string) error {
-	if !utility.ValidStr(tenantId, 0, []string{""}) {
-		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "tenant_id")
-	}
-	if !utility.ValidStr(profileId, 0, []string{""}) {
-		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "profile_id")
-	}
-	key := fmt.Sprintf("%s:%s:%s:%s", tenantId, profileId, method, path)
-	return s.setAuthor(key, tenantId, profileId, method, path)
+	return nil
 }
 
 /**
@@ -150,8 +137,7 @@ func (s *Authorization) SetAuthor(tenantId, profileId, method, path string) erro
 * @return error
 **/
 func (s *Authorization) SetPath(method, path string) error {
-	key := fmt.Sprintf("%s:%s", method, path)
-	err := s.setAuthor(key, "", "", method, path)
+	err := s.SetAuthor("", method, path)
 	if err != nil && !errors.Is(err, ErrorSetAuthor) {
 		return err
 	}
@@ -161,11 +147,11 @@ func (s *Authorization) SetPath(method, path string) error {
 
 /**
 * Author
-* @param tenantId, profileId, method, path string
+* @param profileId, method, path string
 * @return et.Item, error
 **/
-func (s *Authorization) Author(tenantId, profileId, method, path string) (bool, error) {
-	key := fmt.Sprintf("%s:%s:%s:%s", tenantId, profileId, method, path)
+func (s *Authorization) Author(profileId, method, path string) (bool, error) {
+	key := fmt.Sprintf("%s:%s:%s:%s", s.TenantId, profileId, method, path)
 	item := dt.Get(key)
 	if item.Ok {
 		b, ok := item.Bool()
@@ -175,7 +161,7 @@ func (s *Authorization) Author(tenantId, profileId, method, path string) (bool, 
 	}
 
 	result, err := s.model.
-		Where(Eq("tenant_id", tenantId)).
+		Where(Eq("tenant_id", s.TenantId)).
 		And(Eq("profile_id", profileId)).
 		And(Eq("method", method)).
 		And(Eq("path", path)).
@@ -193,13 +179,13 @@ func (s *Authorization) Author(tenantId, profileId, method, path string) (bool, 
 * @param tenantId, profileId, method, path string
 * @return error
 **/
-func (s *Authorization) RemoveAuthor(tenantId, profileId, method, path string) error {
-	key := fmt.Sprintf("%s:%s:%s:%s", tenantId, profileId, method, path)
+func (s *Authorization) RemoveAuthor(profileId, method, path string) error {
+	key := fmt.Sprintf("%s:%s:%s:%s", s.TenantId, profileId, method, path)
 	dt.Drop(key)
 
 	_, err := s.model.
 		Delete().
-		Where(Eq("tenant_id", tenantId)).
+		Where(Eq("tenant_id", s.TenantId)).
 		And(Eq("profile_id", profileId)).
 		And(Eq("method", method)).
 		And(Eq("path", path)).
@@ -209,7 +195,7 @@ func (s *Authorization) RemoveAuthor(tenantId, profileId, method, path string) e
 	}
 
 	event.Publish(EVENT_DEL_AUTHORIZATION, et.Json{
-		"tenant_id":  tenantId,
+		"tenant_id":  s.TenantId,
 		"profile_id": profileId,
 		"method":     method,
 		"path":       path,

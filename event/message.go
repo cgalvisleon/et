@@ -26,7 +26,7 @@ type Message struct {
 **/
 func NewEvenMessage(channel string, data et.Json) Message {
 	now := timezone.Now()
-	id := reg.ULID()
+	id := reg.UUID()
 	return Message{
 		CreatedAt: now,
 		Id:        id,

@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -41,6 +40,7 @@ type TransportConfig struct {
 
 type Config struct {
 	Port         int              `json:"port"`
+	RpcPort      int              `json:"rpc_port"`
 	Parent       string           `json:"parent"`
 	ReadTimeout  time.Duration    `json:"read_timeout"`
 	WriteTimeout time.Duration    `json:"write_timeout"`
@@ -61,6 +61,7 @@ type Server struct {
 	Name          string                            `json:"name"`
 	Host          string                            `json:"host"`
 	Port          int                               `json:"port"`
+	RpcPort       int                               `json:"rpc_port"`
 	Addr          string                            `json:"addr"`
 	Parent        string                            `json:"parent"`
 	Version       string                            `json:"version"`
@@ -100,6 +101,7 @@ func New(name string, cnf *Config) (*Server, error) {
 		Name:          name,
 		Host:          host,
 		Port:          cnf.Port,
+		RpcPort:       cnf.RpcPort,
 		Addr:          fmt.Sprintf(":%d", cnf.Port),
 		Parent:        cnf.Parent,
 		Solvers:       make(map[string]*Solver),
@@ -174,9 +176,8 @@ func New(name string, cnf *Config) (*Server, error) {
 		}
 	}
 
-	rpcPort := envar.GetInt("RPC_PORT", 4200)
 	// tlsConfig := &tls.Config{}
-	pipe, err := net.Listen("tcp", fmt.Sprintf(":%d", rpcPort))
+	pipe, err := net.Listen("tcp", fmt.Sprintf(":%d", cnf.RpcPort))
 	if err != nil {
 		return nil, err
 	}

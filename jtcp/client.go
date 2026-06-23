@@ -67,7 +67,7 @@ func newClient() *Client {
 		ctx:           ctx,
 		cancel:        cancel,
 		CreatedAt:     timezone.Now(),
-		ID:            reg.ULID(),
+		ID:            reg.UUID(),
 		Status:        Pending,
 		inbound:       make(chan []byte, 128),
 		messages:      make(map[string]chan *Message),

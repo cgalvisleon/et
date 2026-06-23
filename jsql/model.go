@@ -88,7 +88,7 @@ func (s *Schema) newModel(name string, version int, userId string) *Model {
 	name = utility.Normalize(name)
 	result := &Model{
 		TenantId:      s.TenantId,
-		ID:            reg.ULID(),
+		ID:            reg.UUID(),
 		Database:      s.Database,
 		Schema:        s.Name,
 		DatabaseId:    s.db.ID,

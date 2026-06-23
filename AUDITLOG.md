@@ -158,7 +158,7 @@ func New(tenantId string, store Store) (*{Class}, error) {
         CreatedAt: now,
         UpdatedAt: now,
         TenantId:  tenantId,
-        ID:        reg.ULID(),
+        ID:        reg.UUID(),
         AuditLog:  make([]et.Json, 0),
         // ... resto de campos propios
     }
@@ -201,7 +201,7 @@ func (s *{Parent}) new{Class}(/* params propios */, userId string) *{Class} {
         CreatedAt: now,
         UpdatedAt: now,
         TenantId:  s.TenantId,
-        ID:        reg.ULID(),
+        ID:        reg.UUID(),
         AuditLog:  make([]et.Json, 0),
         // ... resto de campos propios
     }
@@ -238,7 +238,7 @@ Usa la variante A si `{Class}` no vive dentro de un mapa de un padre; usa B si `
 
 - El paquete `{package}` debe definir `MSG_{PACKAGE}_STORE_IS_NIL` (y `Errr{Class}NotFound`, o `MSG_{PACKAGE}_NOT_FOUND` en la variante A) en su `msg.go`.
 - `{Parent}` debe exponer `store`, `isDebug` y un método `add{Class}`/`get{Class}` equivalentes a los de `WorkFlow` en `jwf/`.
-- Variante A además necesita `reg.ULID()`, `timezone.Now()` y `encoding/json` para el `Unmarshal` de `Load`.
+- Variante A además necesita `reg.UUID()`, `timezone.Now()` y `encoding/json` para el `Unmarshal` de `Load`.
 
 ## Candidatos identificados en este repo (sin aplicar todavía)
 

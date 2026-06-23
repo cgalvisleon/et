@@ -62,7 +62,7 @@ func New(tag, stage, tenantId, ownerId string, store Store, userId string) (*Con
 	result := &Config{
 		TenantId: tenantId,
 		OwnerId:  ownerId,
-		ID:       reg.ULID(),
+		ID:       reg.UUID(),
 		Tag:      tag,
 		Stage:    stage,
 		Params:   et.Json{},

@@ -45,7 +45,7 @@ type Participant struct {
 **/
 func (s *Ia) newParticipant(to, name, userId string) (*Participant, error) {
 	now := timezone.Now()
-	id := reg.ULID()
+	id := reg.UUID()
 	result := &Participant{
 		CreatedAt: now,
 		UpdatedAt: now,

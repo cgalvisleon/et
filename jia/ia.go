@@ -65,7 +65,7 @@ func New(tag string, store Store, userId string) (*Ia, error) {
 	result := &Ia{
 		CreatedAt:     now,
 		UpdatedAt:     now,
-		ID:            reg.ULID(),
+		ID:            reg.UUID(),
 		Tag:           tag,
 		Agents:        make(map[string]*Agent, 0),
 		Participants:  make(map[string]*Participant, 0),

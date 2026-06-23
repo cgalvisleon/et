@@ -65,7 +65,7 @@ func newResolver(r *http.Request, solver *Solver, params map[string]string) (*Re
 
 	serviceId := r.Header.Get("ServiceId")
 	if serviceId == "" {
-		serviceId = reg.ULID()
+		serviceId = reg.UUID()
 		r.Header.Set("ServiceId", serviceId)
 	}
 

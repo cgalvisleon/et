@@ -65,7 +65,7 @@ func (s *Ia) newAgent(tag, name, description, userId string) *Agent {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 		IaID:        s.ID,
-		ID:          reg.ULID(),
+		ID:          reg.UUID(),
 		Tag:         tag,
 		Name:        name,
 		Description: description,

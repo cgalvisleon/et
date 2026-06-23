@@ -3,7 +3,9 @@ package stores
 import "github.com/cgalvisleon/et/envar"
 
 var (
-	MSG_RECORD_EXISTS = "record already exists"
+	MSG_RECORD_EXISTS      = "record already exists"
+	MSG_RECORD_NOT_FOUND   = "record not found"
+	MSG_RECORD_NOT_CREATED = "record not created"
 )
 
 func init() {
@@ -11,5 +13,7 @@ func init() {
 
 	if lang == "es" {
 		MSG_RECORD_EXISTS = "registro ya existe"
+		MSG_RECORD_NOT_FOUND = "registro no encontrado"
+		MSG_RECORD_NOT_CREATED = "registro no creado"
 	}
 }

@@ -179,7 +179,7 @@ func newQuery(model *Model, as ...string) *Query {
 		as = []string{"A"}
 	}
 	result := &Query{
-		ID:         reg.ULID(),
+		ID:         reg.UUID(),
 		Froms:      make([]*From, 0),
 		Joins:      make([]*Join, 0),
 		Selects:    make([]string, 0),

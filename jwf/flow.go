@@ -453,7 +453,7 @@ func (s *Flow) addConnection(sourceId string, targetId string, index int, kind P
 * @return *Flow
 **/
 func (s *Flow) addStep(kind Kind, tag, version, title string, port Port, fn func(instance *Instance, ctx et.Json) (et.Json, error), userId string) *Flow {
-	result := s.workflow.newStep(kind, tag, version, title, userId)
+	result := s.workflow.newStep(kind, "", tag, version, title, userId)
 	result.Definition = fn
 	s.Steps[result.ID] = result
 
@@ -480,7 +480,7 @@ func (s *Flow) addStep(kind Kind, tag, version, title string, port Port, fn func
 **/
 func (s *Flow) Step(tag, title string, fn func(instance *Instance, ctx et.Json) (et.Json, error)) *Flow {
 	if len(s.Steps) == 0 {
-		result := s.workflow.newStep(KindTrigger, tag, "1.0.0", title, s.ID)
+		result := s.workflow.newStep(KindTrigger, "", tag, "1.0.0", title, s.ID)
 		result.Definition = fn
 		s.Steps[result.ID] = result
 		s.step = result
@@ -539,6 +539,12 @@ func (s *Flow) AddStep(stepDef et.Json, userId string) (*Flow, error) {
 	step.OwnerId = s.ID
 	s.addAuditLog(userId, "add_step")
 	s.Steps[step.ID] = step
+	if step.Kind == KindTrigger {
+		s.Triggers = append(s.Triggers, &Trigger{
+			Tag:     step.Tag,
+			StartId: step.ID,
+		})
+	}
 	return s, nil
 }
 

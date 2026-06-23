@@ -23,6 +23,7 @@ const (
 	KindAction    Kind = "action"
 	KindCondition Kind = "condition"
 	KindDelay     Kind = "delay"
+	KindBucle     Kind = "bucle"
 )
 
 var (
@@ -75,11 +76,13 @@ type Step struct {
 * @param ownerId, id string, kind Kind, tag, version, title string
 * @return *Step
 **/
-func newStep(ownerId string, kind Kind, tag, version, title string) *Step {
+func newStep(ownerId, id string, kind Kind, tag, version, title string) *Step {
 	if version == "" {
 		version = "1.0.0"
 	}
-	id := reg.UUID()
+	if id == "" {
+		id = reg.UUID()
+	}
 	now := timezone.Now()
 	result := &Step{
 		CreatedAt:   now,
@@ -108,8 +111,8 @@ func newStep(ownerId string, kind Kind, tag, version, title string) *Step {
 * @param kind Kind, tag, version, title, userId string
 * @return *Step
 **/
-func (s *WorkFlow) newStep(kind Kind, tag, version, title, userId string) *Step {
-	result := newStep(s.ID, kind, tag, version, title)
+func (s *WorkFlow) newStep(kind Kind, id, tag, version, title, userId string) *Step {
+	result := newStep(s.ID, id, kind, tag, version, title)
 	s.addAuditLog(userId, "new_step")
 	s.addStep(result)
 	return result.up(s)

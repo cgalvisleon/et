@@ -33,6 +33,7 @@ type WorkFlow struct {
 	UpdatedAt time.Time                        `json:"updated_at"`
 	ID        string                           `json:"id"`
 	AuditLog  []et.Json                        `json:"audit_log"`
+	IsInitial bool                             `json:"is_initial"`
 	Flows     map[string]*Flow                 `json:"-"`
 	Steps     map[string]*Step                 `json:"-"`
 	bindings  map[string]any                   `json:"-"`
@@ -84,7 +85,7 @@ func Load(id string, store Store) (*WorkFlow, error) {
 	}
 
 	var def et.Json
-	exists, err := store.Get("workflow", id, &def)
+	exists, err := store.Get("workflows", id, &def)
 	if err != nil {
 		return nil, err
 	}
@@ -140,6 +141,10 @@ func (s *WorkFlow) up(store Store) (*WorkFlow, error) {
 			return nil, err
 		}
 	}
+	err := s.init()
+	if err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -185,6 +190,7 @@ func (s *WorkFlow) ToJson() et.Json {
 		"id":         s.ID,
 		"flows":      flows,
 		"steps":      steps,
+		"is_initial": s.IsInitial,
 		"audit_log":  s.AuditLog,
 	}
 }
@@ -237,7 +243,7 @@ func (s *WorkFlow) Save() error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("workflow", s.ID, s.ID, s)
+	err := s.store.Set("workflows", s.ID, s.ID, s)
 	if err != nil {
 		return err
 	}
@@ -373,11 +379,11 @@ func (s *WorkFlow) NewFloW(tag, title, version, userId string) *Flow {
 }
 
 /**
-* AddStep
+* SetStep
 * @param stepDef et.Json
 * @return *Flow, error
 **/
-func (s *WorkFlow) AddStep(stepDef et.Json, userId string) (*WorkFlow, error) {
+func (s *WorkFlow) SetStep(stepDef et.Json, userId string) (*WorkFlow, error) {
 	var step *Step
 	bt, err := stepDef.ToByte()
 	if err != nil {
@@ -389,9 +395,10 @@ func (s *WorkFlow) AddStep(stepDef et.Json, userId string) (*WorkFlow, error) {
 		return s, err
 	}
 
-	id := reg.UUID()
-	step.ID = id
-	step.TypeId = id
+	if step.ID == "" {
+		step.ID = reg.UUID()
+	}
+	step.TypeId = step.ID
 	step.OwnerId = s.ID
 	step.up(s)
 	s.addAuditLog(userId, "new_step")

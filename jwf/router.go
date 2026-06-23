@@ -21,7 +21,7 @@ type Router interface {
 
 func (s *WorkFlow) LoadRouter(r Router) {
 	r.Protect(GET, "/steps/{id}", s.httpGetStep)
-	r.Protect(POST, "/steps", s.httpNewStep)
+	r.Protect(POST, "/steps", s.httpSetStep)
 	r.Protect(PUT, "/steps/{id}", s.httpUpdateStep)
 	r.Protect(PUT, "/steps/{id}/definition", s.httpSetDefinitionStep)
 	r.Protect(DELETE, "/steps/{id}", s.httpDeleteStep)
@@ -52,10 +52,10 @@ func (s *WorkFlow) httpGetStep(w http.ResponseWriter, r *http.Request) {
 }
 
 /**
-* httpNewStep
+* httpSetStep
 * @params w http.ResponseWriter, r *http.Request
 **/
-func (s *WorkFlow) httpNewStep(w http.ResponseWriter, r *http.Request) {
+func (s *WorkFlow) httpSetStep(w http.ResponseWriter, r *http.Request) {
 	body, err := request.GetBody(r)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
@@ -68,12 +68,14 @@ func (s *WorkFlow) httpNewStep(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tag := body.Str("tag")
-	version := body.Str("version")
-	title := body.Str("title")
 	userId := request.UserId(r)
 
-	step := s.newStep(kind, tag, version, title, userId)
+	step, err := s.SetStep(body, userId)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	response.JSON(w, r, http.StatusOK, step.ToJson())
 }
 

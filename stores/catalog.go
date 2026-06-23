@@ -45,7 +45,6 @@ func DefineCatalog(db *DB, tenantId, schema string) (*Catalog, error) {
 		},
 		IdxField: IDX,
 		IdtField: IDT,
-		IsCore:   true,
 	}
 
 	result, err := db.Define(def)

@@ -1,29 +1,33 @@
 package stores
 
 import (
+	"fmt"
+
 	"github.com/cgalvisleon/et/dt"
 	"github.com/cgalvisleon/et/et"
 	. "github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/timezone"
 )
 
-type State struct {
-	model *Model
+type FormState struct {
+	TenantId string
+	model    *Model
 }
 
 /**
-* DefineState
-* @param db *DB, schema, name string
-* @return (*State, error)
+* DefineFormState
+* @param db *DB, tenantId, schema string
+* @return (*FormState, error)
 **/
-func DefineState(db *DB, schema string) (*State, error) {
+func DefineFormState(db *DB, tenantId, schema string) (*FormState, error) {
 	columns := []Column{
 		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
+		{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
+		{Name: "app_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 		{Name: ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 		{Name: "tag", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 		{Name: "title", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
-		{Name: "owner_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 		{Name: SOURCE, TypeColumn: COLUMN, TypeData: JSON, Default: et.Json{}},
 	}
 
@@ -36,14 +40,34 @@ func DefineState(db *DB, schema string) (*State, error) {
 			{Name: ID, Sorted: true},
 		},
 		Indexes: []DefIndex{
+			{Name: TENANT_ID, Sorted: true},
+			{Name: "app_id", Sorted: true},
 			{Name: "tag", Sorted: true},
 			{Name: "title", Sorted: true},
-			{Name: "owner_id", Sorted: true},
 		},
 		IdxField:    IDX,
 		IdtField:    IDT,
 		SourceField: SOURCE,
-		IsCore:      true,
+		Details: []DefDetail{
+			{
+				Name: "owners",
+				Keys: map[string]string{
+					ID: "state_id",
+				},
+				Rows: 1,
+				Columns: []Column{
+					{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
+					{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
+					{Name: ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
+					{Name: "owner_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
+				},
+				Indexes: []DefIndex{
+					{Name: "owner_id", Sorted: true},
+				},
+				IdxField: IDX,
+				IdtField: IDT,
+			},
+		},
 	}
 
 	result, err := db.Define(def)
@@ -66,7 +90,10 @@ func DefineState(db *DB, schema string) (*State, error) {
 		return nil, err
 	}
 
-	return &State{model: result}, nil
+	return &FormState{
+		TenantId: tenantId,
+		model:    result,
+	}, nil
 }
 
 /**
@@ -74,10 +101,12 @@ func DefineState(db *DB, schema string) (*State, error) {
 * @param id, tag, ownerId string, obj any
 * @return error
 **/
-func (s *State) Set(id, tag, ownerId string, state et.Json) error {
+func (s *FormState) Set(id, tag, ownerId string, state et.Json) error {
+	key := fmt.Sprintf("form_state:%s", id)
+	dt.Drop(key)
+
 	state.Set(ID, id)
 	state.Set("tag", tag)
-	state.Set("owner_id", ownerId)
 	_, err := s.model.
 		Upsert(state).
 		Where(Eq(ID, id)).
@@ -86,7 +115,21 @@ func (s *State) Set(id, tag, ownerId string, state et.Json) error {
 		return err
 	}
 
-	dt.Up(id, state)
+	owner, ok := s.model.GetDetail("owners")
+	if ok {
+		_, err := owner.
+			Upsert(et.Json{
+				"tenant_id": s.TenantId,
+				"id":        id,
+				"owner_id":  ownerId,
+			}).
+			Where(Eq(ID, id)).
+			And(Eq("owner_id", ownerId)).
+			Exec()
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
@@ -96,8 +139,9 @@ func (s *State) Set(id, tag, ownerId string, state et.Json) error {
 * @param id string, dest et.Json
 * @return (bool, error)
 **/
-func (s *State) Get(id string, dest et.Json) (bool, error) {
-	item := dt.Get(id)
+func (s *FormState) Get(id string, dest et.Json) (bool, error) {
+	key := fmt.Sprintf("form_state:%s", id)
+	item := dt.Get(key)
 	if item.Ok {
 		var ok bool
 		dest, ok = item.Json()
@@ -117,6 +161,18 @@ func (s *State) Get(id string, dest et.Json) (bool, error) {
 		return false, nil
 	}
 
+	owner, ok := s.model.GetDetail("owners")
+	if ok {
+		owners, err := owner.
+			Where(Eq(ID, id)).
+			All()
+		if err != nil {
+			return false, err
+		}
+
+		result.Set("owners", owners.Result)
+	}
+
 	dest = result.Result
 	dt.Up(id, result.Result)
 
@@ -128,7 +184,7 @@ func (s *State) Get(id string, dest et.Json) (bool, error) {
 * @param id string
 * @return error
 **/
-func (s *State) Delete(id string) error {
+func (s *FormState) Delete(id string) error {
 	_, err := s.model.
 		Delete().
 		Where(Eq(ID, id)).
@@ -147,6 +203,6 @@ func (s *State) Delete(id string) error {
 * @param query et.Json
 * @return (et.Items, error)
 **/
-func (s *State) Query(query et.Json) (et.Items, error) {
+func (s *FormState) Query(query et.Json) (et.Items, error) {
 	return s.model.Query(query)
 }

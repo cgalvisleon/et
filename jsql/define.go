@@ -28,9 +28,13 @@ type DefForeignKeys struct {
 }
 
 type DefDetail struct {
-	Name string            `json:"name"`
-	Keys map[string]string `json:"keys"`
-	Rows int               `json:"rows"`
+	Name     string            `json:"name"`
+	Keys     map[string]string `json:"keys"`
+	Rows     int               `json:"rows"`
+	Columns  []Column          `json:"columns"`
+	Indexes  []DefIndex        `json:"indexes"`
+	IdxField string            `json:"idx_field"`
+	IdtField string            `json:"idt_field"`
 }
 
 type DefRollup struct {
@@ -41,23 +45,23 @@ type DefRollup struct {
 }
 
 type Def struct {
-	Schema      string               `json:"schema"`
-	Name        string               `json:"name"`
-	Version     int                  `json:"version"`
-	IdxField    string               `json:"idx_field"`
-	IdtField    string               `json:"idt_field"`
-	PrimaryKeys []DefIndex           `json:"primary_keys"`
-	ForeignKeys []DefForeignKeys     `json:"foreign_keys"`
-	Indexes     []DefIndex           `json:"indexes"`
-	Unique      []DefIndex           `json:"unique"`
-	Required    []DefIndex           `json:"required"`
-	Columns     []Column             `json:"columns"`
-	SourceField string               `json:"source_field"`
-	Hiddens     []string             `json:"hiddens"`
-	Details     map[string]DefDetail `json:"details"`
-	Rollups     map[string]DefRollup `json:"rollups"`
-	IsCore      bool                 `json:"is_core"`
-	UserId      string               `json:"user_id"`
+	Schema      string           `json:"schema"`
+	Name        string           `json:"name"`
+	Version     int              `json:"version"`
+	IdxField    string           `json:"idx_field"`
+	IdtField    string           `json:"idt_field"`
+	PrimaryKeys []DefIndex       `json:"primary_keys"`
+	ForeignKeys []DefForeignKeys `json:"foreign_keys"`
+	Indexes     []DefIndex       `json:"indexes"`
+	Unique      []DefIndex       `json:"unique"`
+	Required    []DefIndex       `json:"required"`
+	Columns     []Column         `json:"columns"`
+	SourceField string           `json:"source_field"`
+	Hiddens     []string         `json:"hiddens"`
+	Details     []DefDetail      `json:"details"`
+	Rollups     []DefRollup      `json:"rollups"`
+	IsCore      bool             `json:"is_core"`
+	UserId      string           `json:"user_id"`
 }
 
 /**
@@ -340,8 +344,7 @@ func (s *Model) DefineCalcFunc(name string, calc CalcFunction) *Model {
 * @return *Model
 **/
 func (s *Model) DefineCalc(name, module string) *Model {
-	s.defineColumn(name, CALCFUNC, ANY, nil, []byte{})
-	s.Calcs[name] = module
+	s.defineColumn(name, CALC, ANY, nil, []byte(module))
 	return s
 }
 

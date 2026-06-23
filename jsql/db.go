@@ -420,6 +420,20 @@ func (s *DB) Define(define Def) (*Model, error) {
 		define.Version = 1
 	}
 
+	defColumns := func(model *Model, def Column) (*Column, error) {
+		if def.Name == "" {
+			return nil, fmt.Errorf(MSG_COLUMN_NAME_REQUIRED, "name")
+		}
+		if def.TypeColumn == "" {
+			return nil, fmt.Errorf(MSG_TYPE_COLUMN_REQUIRED, "type_column")
+		}
+		if def.TypeData == "" {
+			return nil, fmt.Errorf(MSG_TYPE_DATA_REQUIRED, "type_data")
+		}
+		result := model.defineColumn(def.Name, def.TypeColumn, def.TypeData, def.Default, def.Definition)
+		return result, nil
+	}
+
 	result := s.NewModel(define.Schema, define.Name, define.Version, define.UserId)
 	if define.IdxField != "" {
 		result.DefineIdxField()
@@ -428,16 +442,10 @@ func (s *DB) Define(define Def) (*Model, error) {
 		result.DefineIdTField()
 	}
 	for _, column := range define.Columns {
-		if column.Name == "" {
-			return nil, fmt.Errorf(MSG_COLUMN_NAME_REQUIRED, result.Name)
+		_, err := defColumns(result, column)
+		if err != nil {
+			return nil, err
 		}
-		if column.TypeColumn == "" {
-			return nil, fmt.Errorf(MSG_TYPE_COLUMN_REQUIRED, result.Name)
-		}
-		if column.TypeData == "" {
-			return nil, fmt.Errorf(MSG_TYPE_DATA_REQUIRED, result.Name)
-		}
-		result.defineColumn(column.Name, column.TypeColumn, column.TypeData, column.Default, column.Definition)
 	}
 	for _, primaryKey := range define.PrimaryKeys {
 		result.PrimaryKeys = append(result.PrimaryKeys, &Index{
@@ -476,10 +484,22 @@ func (s *DB) Define(define Def) (*Model, error) {
 	if define.SourceField != "" {
 		result.DefineSource()
 	}
-	for _, detail := range define.Details {
-		_, err := result.DefineDetail(detail.Name, detail.Keys, detail.Rows)
+	for _, defDetail := range define.Details {
+		detail, err := result.DefineDetail(defDetail.Name, defDetail.Keys, defDetail.Rows)
 		if err != nil {
 			return nil, err
+		}
+		for _, def := range defDetail.Columns {
+			_, err := defColumns(detail, def)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if defDetail.IdxField != "" {
+			detail.DefineIdxField()
+		}
+		if defDetail.IdtField != "" {
+			detail.DefineIdTField()
 		}
 	}
 	for _, rollup := range define.Rollups {

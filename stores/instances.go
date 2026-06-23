@@ -51,7 +51,6 @@ func DefineInstance(db *DB, tenantId, schema string) (*Instance, error) {
 		},
 		IdxField: IDX,
 		IdtField: IDT,
-		IsCore:   true,
 	}
 
 	result, err := db.Define(def)

@@ -170,7 +170,7 @@ There are two HTTP server packages at different abstraction levels:
 
 - **`cache/`** — Redis client (requires `REDIS_HOST`, optionally `REDIS_PASSWORD`, `REDIS_DB`). `cache.Load()` initializes; provides `Set`, `Get`, `Delete`, `Pub`, `Sub`.
 - **`event/`** — NATS pub/sub (requires `NATS_HOST`, optionally `NATS_USER`, `NATS_PASSWORD`). `event.Load()` initializes; provides `Subscribe`, `Publish`, `Stack`.
-- **`jrpc/`** — Go `net/rpc` over TCP (not NATS). `jrpc.Mount(host, port, services, packageName)` registers a service; includes load balancing (`balancer.go`) and Raft consensus (`raft.go`).
+- **`jrpc/`** — Go `net/rpc` over TCP (not NATS). `jrpc.Mount(host, port, services, packageName) (*Package, error)` registers a service under a simple `Solver{Host, Port, Inputs, Output}` registry (`jrpc/package.go`) — no load balancing or Raft logic lives here. `balancer.go` and `raft.go` are in `jtcp/`, not `jrpc/`; an older note attributing them to `jrpc` (also still present in `README.md`) was wrong.
 
 ### Self-contained utility packages
 

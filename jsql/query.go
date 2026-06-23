@@ -50,6 +50,7 @@ type Field struct {
 	TypeColumn TypeColumn `json:"type_column"`
 	TypeData   TypeData   `json:"type_data"`
 	Name       string     `json:"name"`
+	Definition []byte     `json:"definition"`
 	As         string     `json:"as"`
 	From       *From      `json:"from"`
 	Agg        string     `json:"agg"`
@@ -331,6 +332,7 @@ func (s *Query) GetField(field string) (*Field, bool) {
 				TypeColumn: col.TypeColumn,
 				TypeData:   col.TypeData,
 				Name:       columnName,
+				Definition: col.Definition,
 				As:         as,
 				From:       from,
 				Page:       page,
@@ -353,6 +355,7 @@ func (s *Query) GetField(field string) (*Field, bool) {
 				TypeColumn: col.TypeColumn,
 				TypeData:   col.TypeData,
 				Name:       columnName,
+				Definition: col.Definition,
 				As:         columnName,
 				From:       from,
 				Page:       page,
@@ -375,6 +378,7 @@ func (s *Query) GetField(field string) (*Field, bool) {
 				TypeColumn: col.TypeColumn,
 				TypeData:   col.TypeData,
 				Name:       columnName,
+				Definition: col.Definition,
 				As:         as,
 				From:       from,
 				Page:       page,
@@ -396,6 +400,7 @@ func (s *Query) GetField(field string) (*Field, bool) {
 				TypeColumn: col.TypeColumn,
 				TypeData:   col.TypeData,
 				Name:       columnName,
+				Definition: col.Definition,
 				As:         columnName,
 				From:       from,
 				Page:       page,

@@ -59,13 +59,13 @@ Cuando necesites implementar una capacidad (HTTP, persistencia, validación, men
 | Emitir/validar JWT                  | `jwt` + `claim`  | `jwt.NewAuthorization(...)`, `jwt.Validate(token)`             |
 | Generar IDs (ULID/UUID/XID)         | `reg`            | `reg.UUID()`, `reg.GetULID(id)`                                |
 | Cron jobs                           | `crontab`        | `crontab.New(tag, store)` + `AddJob/AddEventJob`               |
-| Workflows multi-paso                | `jwf`            | `jwf.New(tenantId, store)` + `flow.Step(...)` + `wf.Run(...)`  |
+| Workflows multi-paso                | `jwf`            | `jwf.New(store)` + `flow.Step(...)` + `wf.Run(...)` (ya no recibe `tenantId`) |
 | Reintentos con backoff              | `resilience`     | `resilience.New(store).LoadInstance(Params{...}).Run(userId)`  |
-| Agente sobre OpenAI                 | `ia`             | `ia.New(tenantId, tag, store)`                                 |
-| Ejecutar JS embebido                | `jrex`           | `jrex.New(name, store)` / `jrex.NewInstance()`                 |
-| WebSocket                           | `ws`             | `ws.New()` (Hub) + `.Connect/.Publish/.SendTo`                 |
+| Agente sobre OpenAI                 | `jia`            | `jia.New(tag, store, userId)` (ya no recibe `tenantId`)        |
+| Ejecutar JS embebido                | `jrex`           | `jrex.Load(tag, store)` (entry point real; `jrex.NewInstance()` es de bajo nivel) |
+| WebSocket                           | `jws`            | `jws.New()` (Hub) + `.Connect/.Publish/.SendTo`                |
 | Subir archivos a S3                 | `aws`            | `aws.UploaderFile/UploaderB64`                                 |
-| Enviar WhatsApp (Graph API directo) | `wsp`            | `wsp.NewSender(token, phoneNumberId).SendTextMessage(...)`     |
+| Enviar WhatsApp (Graph API directo) | `jwsp`           | `jwsp.NewSender(token, phoneNumberId).SendTextMessage(...)`    |
 | Enviar WhatsApp/Email/SMS templado  | `brevo`          | `brevo.SendWhatsapp*/SendEmail*/SendSms*`                      |
 | Logging estructurado                | `logs`           | `logs.Info/Error/Fatal/Panic`                                  |
 | Variables de entorno                | `envar`/`config` | `config.GetStr(key, def)`, `envar.Validate([...])`             |
@@ -85,7 +85,7 @@ Cuando necesites implementar una capacidad (HTTP, persistencia, validación, men
 | Ejecución remota vía SSH                                       | `cmds.RunSSH` es idéntico a `RunOS` (local)                                           | `golang.org/x/crypto/ssh`                                                                           |
 | Balanceo de carga / consenso RPC robusto                       | `jrpc` no tiene balancer ni Raft real                                                 | Diseña tu propio mecanismo o usa una librería RPC madura (gRPC, etc.) si el caso lo amerita         |
 | Orquestación de workflows con durabilidad fuerte a gran escala | `jwf` es joven, en memoria por defecto, capa HTTP de Flow/Instance sin implementar    | Temporal, Cadence, AWS Step Functions, según el contexto                                            |
-| Multi-proveedor de LLM o agentes complejos                     | `ia` solo soporta OpenAI                                                              | SDK del proveedor específico, o una librería de orquestación de agentes                             |
+| Multi-proveedor de LLM o agentes complejos                     | `jia` solo soporta OpenAI                                                             | SDK del proveedor específico, o una librería de orquestación de agentes                             |
 
 Antes de añadir cualquier dependencia externa para cubrir estos casos, confírmalo releyendo el código real (estos huecos pueden cerrarse en futuras versiones del repo — no asumas que seguirán igual para siempre).
 
@@ -106,12 +106,14 @@ No lo hagas en silencio — el usuario necesita saber cuándo y por qué se desv
 Estas son trampas reales detectadas en el código, no hipotéticas. Si tu solución toca alguno de estos puntos, detente y revisa `COMPONENT_CATALOG.md`/`LIBRARY_CONTEXT.md` antes de continuar:
 
 - ⚠️ **`DB_DRIVER=sqlite`/`mysql`/`mssql`/`oracle`/`josefina`** → no resolverá ningún driver. Solo `postgres` funciona.
-- ⚠️ **Reutilizar `stores.Instance` como `Store` de `ia`/`jwf`** → incompatible (`Get` con 1 vs. 2 parámetros string). Verifica firma exacta antes de inyectar.
+- ⚠️ **Reutilizar `stores.Instance` o `stores.Catalog` como `Store` de `jia`/`jwf`** → incompatible (`Get` con 1 string o que devuelve solo `error`, vs. los 2 strings + `(bool, error)` que exigen `jia.Store`/`jwf.Store`). Verifica firma exacta antes de inyectar.
 - ⚠️ **`graph.Load()` en producción** → credenciales y host hardcodeados (`localhost`, `neo4j`/`password`), sin API de consultas.
 - ⚠️ **`cmds.RunSSH`** → no ejecuta SSH real, ejecuta localmente igual que `RunOS`.
-- ⚠️ **`wsp.SendReplyVideoMessageByURL`** → bug conocido, asigna `url` a `MessageID`.
+- ⚠️ **`jwsp.SendReplyVideoMessageByURL`** → bug conocido, asigna `url` a `MessageID`.
 - ⚠️ **Handlers HTTP de `jwf` para Flow/Instance** (`httpGetFlow`, `httpRunInstance`, etc.) → cuerpo vacío, no implementados. Solo los handlers de `Step` funcionan.
-- ⚠️ **Ejemplos/documentación que mencionen `workflow.RunInstance`, `instances.Store`, `ia.New(..., config Config)`, `jsql.Load(config)`, `config.App`, `crontab.New(tag)` (sin store), `wsp.NewWhatsapp`** → APIs **eliminadas o renombradas**. Ver tabla de migración en `LIBRARY_CONTEXT.md` (sección Migration Guide).
+- ⚠️ **Los paquetes `ws/`, `wsp/`, `tcp/`, `ia/`, `vm/` ya no existen** → fueron renombrados a `jws/`, `jwsp/`, `jtcp/`, `jia/`, `jrex/`. Cualquier ejemplo o ruta de import con el nombre viejo no compilará.
+- ⚠️ **`jia.New(tenantId, tag, store)` / `jwf.New(tenantId, store)`** → forma intermedia ya obsoleta. Hoy ninguno de los dos recibe `tenantId`: `jia.New(tag, store, userId)` / `jwf.New(store)`, ambos generan su propio `ID` con `reg.UUID()`.
+- ⚠️ **Ejemplos/documentación que mencionen `workflow.RunInstance`, `instances.Store`, `ia.New(..., config Config)`, `jsql.Load(config)`, `config.App`, `crontab.New(tag)` (sin store), `wsp.NewWhatsapp`, `resilience.Params{TenantId/OwnerId/UserId, ...}`** → APIs **eliminadas o renombradas**. Ver tabla de migración en `LIBRARY_CONTEXT.md` (sección Migration Guide).
 - ⚠️ **El repo cambia rápido** (commits "Backup:" sin mensaje) → si una firma citada aquí no compila, confía en el código actual, no en este documento; actualízalo si detectas el drift.
 
 ---
@@ -121,7 +123,7 @@ Estas son trampas reales detectadas en el código, no hipotéticas. Si tu soluci
 1. Toda estructura de datos dinámica en código nuevo es `et.Json`, no `map[string]interface{}`.
 2. Toda respuesta HTTP de un handler de negocio pasa por `response.ITEM`/`ITEMS`/`HTTPError` (o `response.JSON` si seguís el patrón de `jwf`), nunca `json.Marshal` + `w.Write` manual.
 3. Toda consulta a Postgres usa el builder fluido de `jsql`, no SQL crudo concatenado a mano (salvo dentro de un nuevo `Driver`).
-4. Todo `Store` inyectado en `ia`/`jwf`/`crontab`/`resilience`/`config` implementa la interfaz exacta de **ese** paquete — cópiala de `COMPONENT_CATALOG.md`, no la adivines por similitud con otra.
+4. Todo `Store` inyectado en `jia`/`jwf`/`crontab`/`resilience`/`config` implementa la interfaz exacta de **ese** paquete — cópiala de `COMPONENT_CATALOG.md`, no la adivines por similitud con otra.
 5. Toda inicialización de infraestructura (`cache`, `event`) ocurre una vez al arrancar el proceso, no por request.
 6. Todo mensaje de error de tu propio servicio vive en un `msg.go` local, igual que en `et`.
 7. Todo uso de `jsql` en desarrollo puede (y debería) pasar por `.Debug()`/`.Test()` antes de tocar una base de datos real.

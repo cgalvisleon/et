@@ -58,7 +58,6 @@ type Model struct {
 	IsCore        bool                    `json:"is_core"`
 	IsDebug       bool                    `json:"-"`
 	isInit        bool                    `json:"-"`
-	Calcs         map[string]string       `json:"calcs"`
 	BeforeInserts []string                `json:"before_inserts"`
 	BeforeUpdates []string                `json:"before_updates"`
 	BeforeDeletes []string                `json:"before_deletes"`
@@ -212,7 +211,6 @@ func (s *Model) ToJson() et.Json {
 		"hiddens":      s.Hiddens,
 		"details":      s.Details,
 		"rollups":      s.Rollups,
-		"calcs":        s.Calcs,
 		"audit_log":    s.AuditLog,
 	}
 }
@@ -516,6 +514,28 @@ func (s *Model) GetField(name string) (*Field, bool) {
 		As:         "",
 		From:       getFrom(s, ""),
 	}, true
+}
+
+/**
+* GetDetail: Returns the detail for the given name.
+* @param name string
+* @return *Model, bool
+**/
+func (s *Model) GetDetail(name string) (*Model, bool) {
+	detail, ok := s.Details[name]
+	if !ok {
+		return nil, false
+	}
+
+	if detail.To == nil {
+		return nil, false
+	}
+
+	if detail.To.Model == nil {
+		return nil, false
+	}
+
+	return detail.To.Model, true
 }
 
 /**

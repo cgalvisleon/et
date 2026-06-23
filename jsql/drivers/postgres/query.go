@@ -301,8 +301,7 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 			Page:   fld.Page,
 			Rows:   detail.Rows,
 		}
-	}
-	if fld.TypeColumn == jsql.ROLLUP {
+	} else if fld.TypeColumn == jsql.ROLLUP {
 		if fld.From == nil {
 			return "", false
 		}
@@ -320,8 +319,18 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 			Page:   fld.Page,
 			Rows:   rollup.Rows,
 		}
-	}
-	if fld.TypeColumn == jsql.CALCFUNC {
+	} else if fld.TypeColumn == jsql.CALC {
+		if fld.From == nil {
+			return "", false
+		}
+		if fld.From.Model == nil {
+			return "", false
+		}
+		query.Calcs[fld.Name] = &jsql.Calc{
+			Model:  fld.From.Model,
+			Module: string(fld.Definition),
+		}
+	} else if fld.TypeColumn == jsql.CALCFUNC {
 		if fld.From == nil {
 			return "", false
 		}
@@ -331,21 +340,6 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 		calc, ok := fld.From.Model.GetCalcFunc(fld.Name)
 		if ok {
 			query.CalcFuns[fld.Name] = calc
-		}
-	}
-	if fld.TypeColumn == jsql.CALC {
-		if fld.From == nil {
-			return "", false
-		}
-		if fld.From.Model == nil {
-			return "", false
-		}
-		calc, ok := fld.From.Model.Calcs[fld.Name]
-		if ok {
-			query.Calcs[fld.Name] = &jsql.Calc{
-				Model:  fld.From.Model,
-				Module: calc,
-			}
 		}
 	}
 

@@ -56,7 +56,6 @@ func DefineAuthorization(db *DB, tenantId, schema string) (*Authorization, error
 		IdxField:    IDX,
 		IdtField:    IDT,
 		SourceField: SOURCE,
-		IsCore:      true,
 	}
 
 	result, err := db.Define(def)

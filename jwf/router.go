@@ -95,14 +95,9 @@ func (s *WorkFlow) httpUpdateStep(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	version := body.Str("version")
-	title := body.Str("title")
-	description := body.Str("description")
-	config := body.Json("config")
-	params := body.Json("params")
 	userId := request.UserId(r)
 
-	err = step.put(version, title, description, config, params, userId)
+	err = step.put(body, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return

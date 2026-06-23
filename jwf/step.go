@@ -15,7 +15,6 @@ import (
 	"github.com/cgalvisleon/et/timezone"
 )
 
-type StepFn func(inst *Instance, ctx et.Json) (et.Json, error)
 type Kind string
 
 const (
@@ -343,14 +342,6 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 	}
 
 	switch v := s.Definition.(type) {
-	case StepFn:
-		instance.setStatus(RUNNING)
-		result, err := v(instance, ctx)
-		if err != nil {
-			instance.setStatus(FAILED)
-			return et.Json{}, err
-		}
-		return result, nil
 	case func(instance *Instance, ctx et.Json) (et.Json, error):
 		instance.setStatus(RUNNING)
 		result, err := v(instance, ctx)
@@ -389,6 +380,71 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 }
 
 /**
+* run
+* @param instance *Instance, ctx et.Json
+* @return error
+**/
+func (s *Step) runOnPublish(flow *Flow, ctx et.Json) (et.Json, error) {
+	if s.OnPublish == nil {
+		return et.Json{}, errors.New(MSG_STEP_ON_PUBLISH_IS_NIL)
+	}
+
+	initJrex := func() *jrex.Instance {
+		result := jrex.NewInstance()
+		for name, binding := range flow.workflow.bindings {
+			result.Set(name, binding)
+		}
+		result.Set("params", s.Params)
+		result.Set("flow", flow)
+		return result
+	}
+
+	runJrex := func(rex *jrex.Instance, script string) (et.Json, error) {
+		rex.SetCtx(ctx)
+		_, err := rex.RunString(script)
+		if err != nil {
+			return et.Json{}, err
+		}
+		return rex.Ctx, nil
+	}
+
+	switch v := s.OnPublish.(type) {
+	case func(flow *Flow, ctx et.Json) (et.Json, error):
+		result, err := v(flow, ctx)
+		if err != nil {
+			return et.Json{}, err
+		}
+		return result, nil
+	case string:
+		rex := initJrex()
+		return runJrex(rex, v)
+	case []byte:
+		rex := initJrex()
+		code := string(v)
+		return runJrex(rex, code)
+	case []string:
+		if len(v) == 0 {
+			return et.Json{}, errors.New(MSG_STEP_CODE_INDEX_NOT_FOUND)
+		}
+
+		rex := initJrex()
+		code := v[0]
+		return runJrex(rex, code)
+	case [][]byte:
+		if len(v) == 0 {
+			return et.Json{}, errors.New(MSG_STEP_CODE_INDEX_NOT_FOUND)
+		}
+
+		rex := initJrex()
+		bt := v[0]
+		code := string(bt)
+		return runJrex(rex, code)
+	default:
+		return et.Json{}, fmt.Errorf(MSG_STEP_ON_PUBLISH_IS_UNKNOWN, reflect.TypeOf(s.OnPublish))
+	}
+}
+
+/**
 * setStatus
 * @param status Status
 * @return error
@@ -417,8 +473,23 @@ func (s *Step) setDefinition(definition interface{}, userId string) error {
 		return nil
 	}
 
-	s.addAuditLog(userId, fmt.Sprintf("update definition"))
+	s.addAuditLog(userId, "update definition")
 	s.Definition = definition
+	return s.save()
+}
+
+/**
+* setOnPublish
+* @param onPublish interface{}
+* @return error
+**/
+func (s *Step) setOnPublish(onPublish interface{}, userId string) error {
+	if s.OnPublish == onPublish {
+		return nil
+	}
+
+	s.addAuditLog(userId, "update on publish")
+	s.OnPublish = onPublish
 	return s.save()
 }
 
@@ -427,34 +498,51 @@ func (s *Step) setDefinition(definition interface{}, userId string) error {
 * @param version, title, description string, config et.Json, params et.Json, userId string
 * @return error
 **/
-func (s *Step) put(version, title, description string, config et.Json, params et.Json, userId string) error {
+func (s *Step) put(def et.Json, userId string) error {
 	if s.store == nil {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
 
-	if s.Version != version {
+	version := def.Str("version")
+	if version != "" && s.Version != version {
 		s.addAuditLog(userId, fmt.Sprintf("update version old:%s", s.Version))
 		s.Version = version
 	}
 
-	if s.Title != title {
+	title := def.Str("title")
+	if title != "" && s.Title != title {
 		s.addAuditLog(userId, fmt.Sprintf("update title  ol:%s", s.Title))
 		s.Title = title
 	}
 
-	if s.Description != description {
+	description := def.Str("description")
+	if description != "" && s.Description != description {
 		s.addAuditLog(userId, fmt.Sprintf("update description old:%s", s.Description))
 		s.Description = description
 	}
 
-	if s.Config.ToString() != config.ToString() {
-		s.addAuditLog(userId, fmt.Sprintf("update config old:%s", s.Config))
+	config := def.Json("config")
+	if len(config) > 0 && s.Config.ToString() != config.ToString() {
+		s.addAuditLog(userId, "update config")
 		s.Config = config
 	}
 
-	if s.Params.ToString() != params.ToString() {
-		s.addAuditLog(userId, fmt.Sprintf("update params old:%s", s.Params))
+	params := def.Json("params")
+	if len(params) > 0 && s.Params.ToString() != params.ToString() {
+		s.addAuditLog(userId, "update params")
 		s.Params = params
+	}
+
+	definition := def.Str("definition")
+	if definition != "" && s.Definition != definition {
+		s.addAuditLog(userId, "update definition")
+		s.Definition = definition
+	}
+
+	onPublish := def.Str("on_publish")
+	if onPublish != "" && s.OnPublish != onPublish {
+		s.addAuditLog(userId, "update on publish")
+		s.OnPublish = onPublish
 	}
 
 	return s.save()

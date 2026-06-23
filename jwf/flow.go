@@ -83,7 +83,7 @@ type Flow struct {
 	TotalAttempts int                      `json:"total_attempts"`
 	TimeAttempts  time.Duration            `json:"time_attempts"`
 	TimeAwait     time.Duration            `json:"time_await"`
-	Public        bool                     `json:"public"`
+	Published     bool                     `json:"published"`
 	AuditLog      []et.Json                `json:"audit_log"`
 	isDebug       bool                     `json:"-"`
 	isChanged     bool                     `json:"-"`
@@ -121,7 +121,7 @@ func (s *WorkFlow) newFlow(tag, title, version, userId string) *Flow {
 		TotalAttempts: 0,
 		TimeAttempts:  0,
 		TimeAwait:     1 * time.Minute,
-		Public:        false,
+		Published:     false,
 		AuditLog:      make([]et.Json, 0),
 	}
 	s.addAuditLog(userId, "new_flow")
@@ -280,7 +280,7 @@ func (s *Flow) ToJson() et.Json {
 		"connections":    s.Connections,
 		"total_attempts": s.TotalAttempts,
 		"time_attempts":  s.TimeAttempts.String(),
-		"public":         s.Public,
+		"published":      s.Published,
 		"audit_log":      s.AuditLog,
 	}
 }
@@ -536,7 +536,26 @@ func (s *Flow) AddStep(stepDef et.Json, userId string) (*Flow, error) {
 
 	step.ID = reg.UUID()
 	step.up(s.workflow)
-	s.Steps[step.ID] = step
+	step.OwnerId = s.ID
 	s.addAuditLog(userId, "add_step")
+	s.Steps[step.ID] = step
 	return s, nil
+}
+
+/**
+* Publish
+* @return []et.Json, error
+**/
+func (s *Flow) Publish() ([]et.Json, error) {
+	s.Published = true
+	s.addAuditLog(s.ID, "publish")
+	results := make([]et.Json, 0)
+	for _, step := range s.Steps {
+		result, err := step.runOnPublish(s, et.Json{})
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, result)
+	}
+	return results, nil
 }

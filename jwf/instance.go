@@ -334,7 +334,7 @@ func (s *Instance) save() error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("instance", s.ID, s.WorkflowId, s)
+	err := s.store.Set("instances", s.ID, s.WorkflowId, s)
 	if err != nil {
 		return err
 	}

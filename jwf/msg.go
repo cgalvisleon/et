@@ -29,6 +29,8 @@ var (
 	MSG_INVALID_SOURCE                = "invalid source"
 	MSG_STEP_DEFINITION_IS_NIL        = "step definition is nil"
 	MSG_TRIGGER_NOT_FOUND             = "trigger not found"
+	MSG_STEP_ON_PUBLISH_IS_UNKNOWN    = "step on publish is unknown %v"
+	MSG_STEP_ON_PUBLISH_IS_NIL        = "step on publish is nil"
 )
 
 func init() {
@@ -61,5 +63,7 @@ func init() {
 		MSG_INVALID_SOURCE = "source invalido"
 		MSG_STEP_DEFINITION_IS_NIL = "definición de step es nula"
 		MSG_TRIGGER_NOT_FOUND = "trigger no encontrado"
+		MSG_STEP_ON_PUBLISH_IS_UNKNOWN = "on publish de step desconocido %v"
+		MSG_STEP_ON_PUBLISH_IS_NIL = "on publish de step es nulo"
 	}
 }

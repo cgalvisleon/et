@@ -469,31 +469,27 @@ func (s *Step) setStatus(status Status, userId string) error {
 /**
 * setDefinition
 * @param definition interface{}
-* @return error
+* @return *Step
 **/
-func (s *Step) setDefinition(definition interface{}, userId string) error {
+func (s *Step) setDefinition(definition interface{}) *Step {
 	if s.Definition == definition {
 		return nil
 	}
-
-	s.addAuditLog(userId, "update definition")
 	s.Definition = definition
-	return s.save()
+	return s
 }
 
 /**
 * setOnPublish
 * @param onPublish interface{}
-* @return error
+* @return *Step
 **/
-func (s *Step) setOnPublish(onPublish interface{}, userId string) error {
+func (s *Step) setOnPublish(onPublish interface{}) *Step {
 	if s.OnPublish == onPublish {
-		return nil
+		return s
 	}
-
-	s.addAuditLog(userId, "update on publish")
 	s.OnPublish = onPublish
-	return s.save()
+	return s
 }
 
 /**

@@ -23,7 +23,6 @@ func (s *WorkFlow) LoadRouter(r Router) {
 	r.Protect(GET, "/steps/{id}", s.httpGetStep)
 	r.Protect(POST, "/steps", s.httpSetStep)
 	r.Protect(PUT, "/steps/{id}", s.httpUpdateStep)
-	r.Protect(PUT, "/steps/{id}/definition", s.httpSetDefinitionStep)
 	r.Protect(DELETE, "/steps/{id}", s.httpDeleteStep)
 	// Flows
 	r.Protect(GET, "/flows/{tag}", s.httpGetFlow)
@@ -100,36 +99,6 @@ func (s *WorkFlow) httpUpdateStep(w http.ResponseWriter, r *http.Request) {
 	userId := request.UserId(r)
 
 	err = step.put(body, userId)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	response.JSON(w, r, http.StatusOK, step.ToJson())
-}
-
-/**
-* httpSetDefinitionStep
-* @params w http.ResponseWriter, r *http.Request
-**/
-func (s *WorkFlow) httpSetDefinitionStep(w http.ResponseWriter, r *http.Request) {
-	id := request.URLParam(r, "id").Str()
-	body, err := request.GetBody(r)
-	if err != nil {
-		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	step, exists := s.getStep(id)
-	if !exists {
-		response.HTTPError(w, r, http.StatusBadRequest, MSG_STEP_NOT_FOUND)
-		return
-	}
-
-	definition := body.Str("definition")
-	userId := request.UserId(r)
-
-	err = step.setDefinition(definition, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return

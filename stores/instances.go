@@ -2,6 +2,8 @@ package stores
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 
 	"github.com/cgalvisleon/et/dt"
 	"github.com/cgalvisleon/et/et"
@@ -17,11 +19,11 @@ type Instance struct {
 }
 
 /**
-* defineInstance
-* @param db *DB, tenantId, schema, name string
+* DefineInstance
+* @param db *DB, tenantId, schema string
 * @return (*Instance, error)
 **/
-func defineInstance(db *DB, tenantId, schema, name string) (*Instance, error) {
+func DefineInstance(db *DB, tenantId, schema string) (*Instance, error) {
 	columns := []Column{
 		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
@@ -33,13 +35,9 @@ func defineInstance(db *DB, tenantId, schema, name string) (*Instance, error) {
 		{Name: "definition", TypeColumn: COLUMN, TypeData: BYTES, Default: []byte("")},
 	}
 
-	if name == "" {
-		name = "instances"
-	}
-
 	def := Def{
 		Schema:  schema,
-		Name:    name,
+		Name:    "instances",
 		Version: 1,
 		Columns: columns,
 		PrimaryKeys: []DefIndex{
@@ -84,47 +82,11 @@ func defineInstance(db *DB, tenantId, schema, name string) (*Instance, error) {
 }
 
 /**
-* DefineInstance
-* @param db *DB, schema, name string
-* @return (*Instance, error)
-**/
-func DefineInstance(db *DB, schema, name string) (*Instance, error) {
-	return defineInstance(db, schema, name, KindJson)
-}
-
-/**
-* DefineInstanceBite
-* @param db *DB, schema, name string
-* @return (*Instance, error)
-**/
-func DefineInstanceBite(db *DB, schema, name string) (*Instance, error) {
-	return defineInstance(db, schema, name, KindBite)
-}
-
-/**
-* LoadInstance
-* @param db *DB, schema string
-* @return (*Instance, error)
-**/
-func LoadInstance(db *DB, schema string) (*Instance, error) {
-	return DefineInstance(db, schema, "instances")
-}
-
-/**
-* LoadInstanceBite
-* @param db *DB, schema string
-* @return (*Instance, error)
-**/
-func LoadInstanceBite(db *DB, schema string) (*Instance, error) {
-	return DefineInstanceBite(db, schema, "instances")
-}
-
-/**
 * Set
-* @param id, tag, tenantId, ownerId string, obj any
+* @param tag, id, ownerId string, obj any
 * @return error
 **/
-func (s *Instance) Set(id, tag, tenantId, ownerId string, obj any, userId string) error {
+func (s *Instance) Set(tag, id, ownerId string, obj any) error {
 	bt, ok := obj.([]byte)
 	if !ok {
 		var err error
@@ -134,32 +96,33 @@ func (s *Instance) Set(id, tag, tenantId, ownerId string, obj any, userId string
 		}
 	}
 
-	var data = et.Json{}
-	if s.kind == KindBite {
-		data = et.Json{
-			SOURCE: bt,
-		}
-	} else {
-		err := json.Unmarshal(bt, &data)
-		if err != nil {
-			return err
-		}
-	}
-
-	data.Set(TENANT_ID, tenantId)
-	data.Set(ID, id)
-	data.Set("tag", tag)
-	data.Set("owner_id", ownerId)
-	data.Set("user_id", userId)
 	_, err := s.model.
-		Upsert(data).
+		Upsert(et.Json{
+			"tenant_id":  s.TenantId,
+			"id":         id,
+			"tag":        tag,
+			"owner_id":   ownerId,
+			"definition": bt,
+		}).
+		BeforeInsert(func(tx *Tx, old, new et.Json) error {
+			now := timezone.Now()
+			new.Set(CREATED_AT, now)
+			new.Set(UPDATED_AT, now)
+			return nil
+		}).
+		BeforeUpdate(func(tx *Tx, old, new et.Json) error {
+			now := timezone.Now()
+			new.Set(UPDATED_AT, now)
+			return nil
+		}).
 		Where(Eq(ID, id)).
 		Exec()
 	if err != nil {
 		return err
 	}
 
-	dt.Drop(id)
+	key := fmt.Sprintf("instance:%s", id)
+	dt.Drop(key)
 
 	return nil
 }
@@ -170,45 +133,44 @@ func (s *Instance) Set(id, tag, tenantId, ownerId string, obj any, userId string
 * @return (bool, error)
 **/
 func (s *Instance) Get(id string, dest any) (bool, error) {
-	var item et.Item
-	result := dt.Get(id)
+	key := fmt.Sprintf("instance:%s", id)
+	result := dt.Get(key)
+	var bt []byte
 	if result.Ok {
-		var ok bool
-		item, ok = result.Item()
+		item, ok := result.Item()
 		if !ok {
-			item = et.Item{}
+			return false, errors.New(MSG_RECORD_IS_NOT_ITEM)
 		}
-	}
 
-	if !item.Ok {
 		var err error
-		item, err = s.model.
+		bt, err = item.Byte("definition")
+		if err != nil {
+			return false, err
+		}
+	} else {
+		item, err := s.model.
 			Where(Eq(ID, id)).
 			One()
 		if err != nil {
 			return false, err
 		}
-	}
 
-	if !item.Ok {
-		return false, nil
-	}
-
-	if s.kind == KindBite {
-		bt, err := item.Byte(SOURCE)
-		err = json.Unmarshal(bt, dest)
-		if err != nil {
-			return false, err
+		if !item.Ok {
+			return false, errors.New(MSG_RECORD_NOT_FOUND)
 		}
-	} else {
-		bt := []byte(item.Result.ToString())
-		err := json.Unmarshal(bt, dest)
+
+		bt, err = item.Byte("definition")
 		if err != nil {
 			return false, err
 		}
 	}
 
-	dt.Up(id, item)
+	err := json.Unmarshal(bt, &dest)
+	if err != nil {
+		return false, err
+	}
+
+	dt.Up(key, bt)
 	return true, nil
 }
 
@@ -218,6 +180,9 @@ func (s *Instance) Get(id string, dest any) (bool, error) {
 * @return error
 **/
 func (s *Instance) Delete(id string) error {
+	key := fmt.Sprintf("instance:%s", id)
+	dt.Drop(key)
+
 	_, err := s.model.
 		Delete().
 		Where(Eq(ID, id)).
@@ -225,8 +190,6 @@ func (s *Instance) Delete(id string) error {
 	if err != nil {
 		return err
 	}
-
-	dt.Drop(id)
 
 	return nil
 }

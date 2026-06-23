@@ -160,7 +160,7 @@ func (s *DB) save() error {
 		return nil
 	}
 
-	err := s.store.Set("db", s.ID, s.TenantId, s.ID, s)
+	err := s.store.Set("db", s.ID, s.TenantId, s)
 	if err != nil {
 		return err
 	}

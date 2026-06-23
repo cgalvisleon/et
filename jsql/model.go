@@ -256,7 +256,7 @@ func (s *Model) save() error {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	err := s.store.Set("model", s.ID, s.TenantId, s.DatabaseId, s)
+	err := s.store.Set("model", s.ID, s.DatabaseId, s)
 	if err != nil {
 		return err
 	}

@@ -23,11 +23,11 @@ var (
 )
 
 /**
-* defineInstance
-* @param db *DB, schema, name string, kind Kind
+* DefineAuthorization
+* @param db *DB, tenantId, schema string
 * @return (*Authorization, error)
 **/
-func DefineAuthorization(db *DB, schema string) (*Authorization, error) {
+func DefineAuthorization(db *DB, tenantId, schema string) (*Authorization, error) {
 	columns := []Column{
 		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
@@ -97,7 +97,10 @@ func DefineAuthorization(db *DB, schema string) (*Authorization, error) {
 		return nil, err
 	}
 
-	return &Authorization{model: result}, nil
+	return &Authorization{
+		TenantId: tenantId,
+		model:    result,
+	}, nil
 }
 
 /**

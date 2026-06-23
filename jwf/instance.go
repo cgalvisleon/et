@@ -77,7 +77,6 @@ type Instance struct {
 	Ctx          et.Json                          `json:"ctx"`
 	Ctxs         map[string]et.Json               `json:"ctxs"`
 	Results      map[string]*Result               `json:"results"`
-	Params       et.Json                          `json:"params"`
 	Tags         et.Json                          `json:"tags"`
 	TriggerTag   string                           `json:"trigger_tag"`
 	Trigger      *Trigger                         `json:"trigger"`
@@ -141,7 +140,6 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*I
 		Ctx:        et.Json{},
 		Ctxs:       make(map[string]et.Json),
 		Results:    make(map[string]*Result),
-		Params:     et.Json{},
 		Tags:       et.Json{},
 		TriggerTag: triggerTag,
 		Trigger:    trigger,
@@ -369,7 +367,6 @@ func (s *Instance) ToJson() et.Json {
 		"ctx":         s.Ctx,
 		"ctxs":        s.Ctxs,
 		"results":     s.Results,
-		"params":      s.Params,
 		"tags":        s.Tags,
 		"trigger_tag": s.TriggerTag,
 		"trigger":     s.Trigger,
@@ -530,17 +527,6 @@ func (s *Instance) setCtx(ctx et.Json) et.Json {
 }
 
 /**
-* setParams
-* @param params et.Json
-* @return et.Json
-**/
-func (s *Instance) SetParams(params et.Json) et.Json {
-	maps.Copy(s.Params, params)
-	s.pushInstance()
-	return s.Params
-}
-
-/**
 * setCurrent
 * @param step *Step
 * @return error
@@ -635,14 +621,15 @@ func (s *Instance) run(ctx et.Json, userId string) (et.Json, error) {
 		if err != nil {
 			result, err = s.runResilence(ctx, err, userId)
 			if err != nil {
-				result, err := s.runError(ctx, err, userId)
-				if err != nil {
-					return result, err
-				}
+				result, err = s.runError(ctx, err)
 			}
 		}
 
 		s.setResult(result, err)
+
+		if err != nil {
+			return result, err
+		}
 
 		if s.IsDone {
 			return result, nil
@@ -705,6 +692,16 @@ func (s *Instance) runResilence(ctx et.Json, err error, userId string) (et.Json,
 * rollback
 * @return et.Json, error
 **/
-func (s *Instance) runError(ctx et.Json, err error, userId string) (et.Json, error) {
-	return et.Json{}, err
+func (s *Instance) runError(ctx et.Json, err error) (et.Json, error) {
+	step, exists := s.flow.getError(s.Current.ID, 0)
+	if !exists {
+		return et.Json{}, err
+	}
+
+	result, errStep := step.run(s, ctx)
+	if errStep != nil {
+		return et.Json{}, errStep
+	}
+
+	return result, err
 }

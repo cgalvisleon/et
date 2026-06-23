@@ -13,15 +13,15 @@
 ├──────────────────────────────────────────────────────────────────────┤
 │ Capa 5 — Integraciones externas                                      │
 │   aws/ (S3, SNS)  ·  brevo/ (email/SMS/WhatsApp templado)            │
-│   wsp/ (WhatsApp Business Graph API)                                 │
+│   jwsp/ (WhatsApp Business Graph API)                                │
 ├──────────────────────────────────────────────────────────────────────┤
 │ Capa 4 — Aplicación / orquestación                                   │
-│   jwf/ (workflows)  ·  ia/ (agentes IA)  ·  jrex/ (runtime JS)       │
-│   crontab/  ·  resilience/  ·  service/  ·  jrpc/  ·  tcp/           │
+│   jwf/ (workflows)  ·  jia/ (agentes IA)  ·  jrex/ (runtime JS)      │
+│   crontab/  ·  resilience/  ·  service/  ·  jrpc/  ·  jtcp/          │
 ├──────────────────────────────────────────────────────────────────────┤
 │ Capa 3 — HTTP / routing (sobre go-chi)                               │
 │   server/  ·  ettp/v1  ·  ettp/v2  ·  router/                       │
-│   middleware/  ·  response/  ·  request/  ·  ws/                    │
+│   middleware/  ·  response/  ·  request/  ·  jws/                   │
 ├──────────────────────────────────────────────────────────────────────┤
 │ Capa 2 — Infraestructura (servicios externos)                        │
 │   cache/ → Redis   ·   event/ → NATS   ·   graph/ → Neo4j (stub)    │
@@ -33,39 +33,39 @@
 │   units · file                                                       │
 ├──────────────────────────────────────────────────────────────────────┤
 │ Persistencia de aplicación (cruza capas 2 y 4)                       │
-│   stores/ (helpers jsql-backed: instancias, autorización)            │
+│   stores/ (helpers jsql-backed: instancias, autorización, catálogo)  │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-No existe un punto de entrada único (`et.App`, `et.Run()`, etc.). Cada binario en `cmd/` compone manualmente las capas que necesita. La dirección de dependencia es de arriba hacia abajo: una capa puede importar capas inferiores, nunca al revés (con la excepción de `jwf/` → `jrex/`, que es capa 4 → capa 4, ambas de orquestación).
+No existe un punto de entrada único (`et.App`, `et.Run()`, etc.). Cada binario en `cmd/` compone manualmente las capas que necesita. La dirección de dependencia es de arriba hacia abajo: una capa puede importar capas inferiores, nunca al revés (con la excepción de `jwf/` → `jrex/` y `jwf/` → `resilience/`, que son capa 4 → capa 4, orquestación componiendo orquestación).
 
 ---
 
-## 2. Grafo de dependencias entre paquetes internos (verificado)
+## 2. Grafo de dependencias entre paquetes internos (verificado contra código actual)
 
 | Paquete | Importa de `et` (capas inferiores/hermanas) | Notas |
 |---|---|---|
-| `jsql/` | `config`, `et` | Postgres vía `jsql/drivers/postgres` (auto-registro `init()`) |
+| `jsql/` | `config`, `et`, `event`, `reg`, `timezone`, `utility` | Postgres vía `jsql/drivers/postgres` (auto-registro `init()`). Define su **propio** `Store` interno (ver §3.2) para persistir metadata de `DB`/`Model`, opcional vía `jsql.NewDB(params, store, userId)`/`LoadDB(id, store)` — distinto del flujo normal de conexión (`jsql.Load`/`LoadTo`) |
 | `cache/` | `config`, `et`, `msg`, `utility`, `reg` | Redis |
 | `event/` | `et`, `msg`, `logs`, `timezone`, `reg` | NATS |
-| `ettp/v2` | `cache`, `event`, `config`, `et`, `router` (implícito vía sincronización) | `Config.UseCache`/`UseEvent` deciden si llama `cache.Load()`/`event.Load()` |
+| `ettp/v2` | `cache`, `event`, `config`, `et`, `router` | `Config.UseCache`/`UseEvent` deciden si llama `cache.Load()`/`event.Load()`; `Config.RpcPort` ya no tiene fallback interno |
 | `server/` | `et` (mínimo) | Sin `cache`/`event` — deliberadamente ligero |
 | `middleware/` | `jwt`, `request`, `response`, `event` (telemetría) | |
 | `response/`, `request/` | `et` | Capa de E/S HTTP compartida por `server`, `ettp`, `jwf`, etc. |
-| `jwf/` | `cache`, `config`, `et`, `event`, `reg`, `resilience`, `timezone`, `jrex`, `logs`, `request`, `response` | Motor de workflows; usa `jrex` para pasos definidos en JS |
-| `ia/` | `config`, `et`, `event`, `logs`, `msg`, `timezone`, `utility`, `openai-go/v3` | Sin `cache` (a diferencia de versiones previas) |
-| `crontab/` | `cache`, `event`, `timezone`, `utility` | |
-| `resilience/` | `et` + su propio `Store` local | Usado por `jwf` para reintentos de paso |
-| `jrex/` | `file`, `config`, `timezone`, `utility`, `reg`, `et`, `logs`, `goja`, `fsnotify` | VM JS embebida |
-| `stores/` | `dt`, `et`, `event`, `jsql`, `msg`, `timezone`, `utility` | Helpers de persistencia sobre `jsql` |
+| `jwf/` | `cache`, `event`, `et`, `reg`, `envar`, `timezone`, `jrex` (vía pasos JS), `resilience` (reintentos de paso) | `New(store)` llama `cache.Load()` **y** `event.Load()` |
+| `jia/` | `et`, `event`, `envar`, `reg`, `timezone`, `utility`, `openai-go/v3` | `New(tag, store, userId)` solo llama `event.Load()` — **sin** `cache.Load()` |
+| `crontab/` | `et`, `event`, `logs`, `timezone`, `robfig/cron` | `New(tag, store)` solo llama `event.Load()` — **sin** `cache.Load()` |
+| `resilience/` | `cache` (tipo `cache.Metrics`, sin llamar `cache.Load()`), `event`, `et`, `envar`, `reg`, `timezone` | `New(store)` llama `event.Load()` |
+| `jrex/` | `file`, `config`, `timezone`, `utility`, `reg`, `et`, `logs`, `goja`, `fsnotify` | VM JS embebida; `Store` es un subconjunto de 2 métodos (`Set`/`Get`, sin `Delete`/`Query`) |
+| `stores/` | `dt`, `et`, `jsql`, `timezone` | Helpers de persistencia sobre `jsql` (`Instance`, `Authorization`, `Catalog`) |
 | `dt/` | `cache` (producción) o filesystem (dev, según `PRODUCTION`) | Cache de objetos liviano |
-| `service/` | `aws`, `brevo`, `cache` | Orquesta envío de OTP/mensajes |
-| `claim/` | `config`, `et`, `msg`, `timezone`, `utility`, `reg`, `golang-jwt/jwt/v4` | |
+| `service/` | `aws`, `brevo`, `et` | Orquesta envío de OTP/mensajes |
+| `claim/` | `et`, `msg`, `timezone`, `utility`, `reg`, `golang-jwt/jwt/v4` | |
 | `jwt/` | `claim`, `cache`, `et`, `msg` | |
-| `tcp/` | `et`, `config`, `file`, `logs`, `msg`, `color` | Sin dependencia de consenso externo — Raft propio |
-| `jrpc/` | `et`, `net/rpc` (stdlib) | Sin balanceador ni Raft (a diferencia de lo sugerido en documentación previa) |
+| `jtcp/` (antes `tcp/`) | `et`, `config`, `file`, `logs`, `msg`, `color` | Sin dependencia de consenso externo — Raft propio (`jtcp/raft.go`) |
+| `jrpc/` | `et`, `net/rpc` (stdlib) | Sin balanceador ni Raft — eso vive en `jtcp/`, no aquí |
 
-**Lectura del grafo**: las únicas dependencias "hacia arriba" llamativas son `jwf/` → `jrex/` y `jwf/` → `resilience/` (capa 4 consumiendo capa 4 — orquestación componiendo orquestación, lo cual es esperado) y `stores/` → `dt/` + `jsql/` (persistencia de aplicación apoyándose en infraestructura, también esperado).
+**Lectura del grafo**: las únicas dependencias "hacia arriba" llamativas son `jwf/` → `jrex/` y `jwf/` → `resilience/` (capa 4 consumiendo capa 4 — orquestación componiendo orquestación, esperado) y `stores/` → `dt/` + `jsql/` (persistencia de aplicación apoyándose en infraestructura, también esperado).
 
 ---
 
@@ -74,48 +74,43 @@ No existe un punto de entrada único (`et.App`, `et.Run()`, etc.). Cada binario 
 ### 3.1 `Load()` idempotente vs `New()` explícito
 
 - **Singleton perezoso** (`cache.Load()`, `event.Load()`): primera llamada conecta, llamadas posteriores son no-op. Pensado para llamarse una vez por proceso, desde cualquier paquete que lo necesite, sin coordinación.
-- **Instancia explícita** (`jwf.New(tenantId, store)`, `ia.New(tenantId, tag, store)`, `crontab.New(tag, store)`, `resilience.New(store)`): cada llamada crea un objeto independiente — útil para multi-tenant en el mismo proceso, pero significa que **no hay un único "workflow global"** como sí lo hay para cache/event.
+- **Instancia explícita** (`jwf.New(store)`, `jia.New(tag, store, userId)`, `crontab.New(tag, store)`, `resilience.New(store)`): cada llamada crea un objeto independiente con su propio `ID` (`reg.UUID()`) — ninguno de los cuatro recibe ya `tenantId`. No hay un único "workflow global" como sí lo hay para cache/event; cargar una instancia existente es `jia.Load(id, store)` / `jwf.Load(id, store)` (por **su propio ID**, no por tenant).
 
-### 3.2 Store inyectado, interfaces no compartidas
+### 3.2 Store inyectado — convergencia real hacia una forma única
 
-Cinco paquetes definen su propia interfaz `Store` local, con formas parecidas pero no idénticas:
+A diferencia de lo que sugería documentación anterior ("interfaces parecidas pero no idénticas"), la lectura directa del código muestra que **cinco paquetes hoy comparten exactamente la misma forma** de `Store` (siguen siendo tipos Go distintos y no intercambiables formalmente — cada paquete declara su propio `type Store interface`, no hay un `import` compartido — pero la firma es idéntica carácter por carácter):
 
 ```go
-// ia/ia.go
+// jia/ia.go, jwf/workflow.go (+GenSerie), resilience/resilience.go,
+// crontab/crontab.go, jsql/db.go — misma forma en los cinco:
 type Store interface {
-    Set(id, tag, tenantId, ownerId string, obj any, userId string) error
-    Get(id, tag string, dest any) (bool, error)
-    Delete(id, tag string) error
-    Query(query et.Json) (et.Items, error)
-}
-
-// jwf/workflow.go
-type Store interface {
-    Set(collection, id, tenantId, ownerId string, obj any, userId string) error
+    Set(collection, id, ownerId string, obj any) error
     Get(collection, id string, dest any) (bool, error)
     Delete(collection, id string) error
-    Query(query et.Json) (et.Items, error)
-    GetCode(tag string) (string, error)
-}
-
-// crontab/crontab.go
-type Store interface {
-    Set(id, tag, tenantId, ownerId string, obj any, userId string) error
-    Get(id string, dest any) (bool, error)
-    Delete(id string) error
-    Query(query et.Json) (et.Items, error)
-}
-
-// resilience/resilience.go
-type Store interface {
-    Set(tag, id, tenantId, ownerId string, obj any, userId string) error
-    Get(id string, dest any) (bool, error)
-    Delete(id string) error
     Query(query et.Json) (et.Items, error)
 }
 ```
 
-`Set` es casi idéntico entre los cuatro (4 strings + `obj any` + `userId string`), pero `Get`/`Delete` varían entre 1 y 2 parámetros string. **Una sola implementación no satisface las cuatro interfaces simultáneamente** sin un adaptador. `stores/` (jsql-backed) implementa una forma con `Get(id string, dest any)` de un solo parámetro — compatible estructuralmente con `crontab.Store`/`resilience.Store`, pero no con `ia.Store`/`jwf.Store`.
+`jwf.Store` es la única variante que añade un método extra: `GenSerie(tag string) (string, error)`. `jrex.Store` es un **subconjunto** intencional de solo 2 métodos (`Set`/`Get`, sin `Delete`/`Query`) — no toda la forma, pero el `Set`/`Get` que tiene coincide exactamente.
+
+`config.Store` es la verdadera excepción — usa una forma distinta orientada a `(tag, stage)` en vez de `(collection, id)`, y no tiene `Query`:
+
+```go
+// config/config.go:18
+type Store interface {
+    Set(tag, stage, tenantId, ownerId string, obj any) error
+    Get(tag, stage string, dest any) (bool, error)
+    Delete(tag, stage string) error
+}
+```
+
+**Bug real encontrado en `config/config.go`**: la interfaz declara el orden `Set(tag, stage, tenantId, ownerId string, obj any)`, pero `(*Config).Save()` (línea 136) invoca `s.store.Set(s.Tag, s.Stage, s.OwnerId, s.TenantId, s)` — **`tenantId` y `ownerId` están intercambiados** en el sitio de la llamada respecto al orden declarado en la interfaz. Como ambos son `string`, el compilador no lo detecta; cualquier `Store` real que distinga ambos campos internamente los guardará cruzados.
+
+`stores/` (jsql-backed) tiene dos implementaciones con grados de compatibilidad distintos con esta forma unificada:
+- `stores.Catalog`: `Set(collection, id, ownerId string, obj any) error` ✅ coincide. `Delete(collection, id string) error` ✅ coincide. `Query(query et.Json) (et.Items, error)` ✅ coincide. **Solo `Get(collection, id string, dest any) error`** rompe la compatibilidad — devuelve únicamente `error`, no `(bool, error)`. Es, con diferencia, la implementación más cercana a calzar sin adaptador.
+- `stores.Instance`: `Set(tag, id, ownerId string, obj any) error` (mismo shape, solo cambia el nombre del primer parámetro) ✅, pero `Get(id string, dest any) (bool, error)` y `Delete(id string) error` solo reciben **una** clave string, no dos. No calza con la forma unificada de 2 claves.
+
+**Conclusión práctica**: ya no hace falta tratar "comparar firma por firma" como una tarea abierta entre `jia`/`jwf`/`resilience`/`crontab`/`jsql` — son intercambiables en la práctica si se define un único adaptador con esa forma. La cautela real sigue siendo necesaria solo contra `config.Store` (forma distinta + bug de orden) y contra `jrex.Store`/`stores.Instance`/`stores.Catalog` (subconjuntos o casi-calces, no calces exactos).
 
 ### 3.3 Driver auto-registrado (`jsql`)
 
@@ -133,6 +128,8 @@ import _ "github.com/cgalvisleon/et/jsql/drivers/postgres"
 ```
 
 `jsql.Load(tenantId)` resuelve el driver por nombre (`DB_DRIVER`, leído vía `config.GetStr`) contra el registro interno (`jsql/driver.go: var drivers map[string]Driver`). Si el nombre no está registrado (caso `sqlite` hoy), falla en tiempo de ejecución, no de compilación.
+
+Separado de esto, `jsql.NewDB(params et.Json, store Store, userId string) (*DB, error)` / `jsql.LoadDB(id string, store Store) (*DB, error)` permiten persistir la metadata del propio `*DB`/`*Model` (registro de bases y modelos) en un `Store` inyectado — opcional; si no se pasa, `(*DB).save()`/`(*Model).save()` son no-op (`if s.store == nil { return nil }`).
 
 ### 3.4 Builder fluido (`jsql.Query`/`jsql.Command`, `jwf.Flow`)
 
@@ -198,7 +195,7 @@ El campo `Myself` en `event.Message` permite que una instancia ignore sus propio
 ## 5. Ciclo de vida de un workflow (`jwf`)
 
 ```
-1. wf, _ := jwf.New(tenantId, store)        // cache.Load() + event.Load()
+1. wf, _ := jwf.New(store)                  // cache.Load() + event.Load(); WorkFlow.ID = reg.UUID()
 2. flow := wf.NewFloW(tag, title, version, userId)
 3. flow.Step(tag, title, fn)                // 1er Step -> KindTrigger + Trigger{Tag, StartId}
    flow.Step(tag2, title2, fn2)             // Steps siguientes -> Connection PortOutput
@@ -224,8 +221,9 @@ El campo `Myself` en `event.Message` permite que una instancia ignore sus propio
 | `jsql` drivers `sqlite`/`mysql`/`mssql`/`oracle`/`josefina` | Solo constantes, sin implementación (`sqlite` ni siquiera tiene directorio) | La capa de persistencia es, en la práctica, **Postgres-only** |
 | `graph/` | Solo `Load()` con credenciales hardcodeadas, sin API de consultas | No usable como capa de persistencia en grafo real todavía |
 | `jrpc/` | Sin balanceador de carga ni Raft (solo registro `Solver{Host,Port}`) | RPC simple punto a punto, no un mesh distribuido |
-| `tcp/` | Consenso Raft implementado a mano, sin librería externa | Validar cuidadosamente antes de usar en clúster crítico — es código propio, no una implementación de Raft madura y probada externamente |
+| `jtcp/` (antes `tcp/`) | Consenso Raft implementado a mano, sin librería externa | Validar cuidadosamente antes de usar en clúster crítico — es código propio, no una implementación de Raft madura y probada externamente |
 | `jwf/router.go` | Handlers de Flow/Instance vacíos; solo Step está implementado | La gestión de workflows por HTTP aún no es funcional completa |
+| `config/config.go` | Bug de orden de parámetros en `Save()` (`tenantId`/`ownerId` intercambiados al llamar `store.Set`) | Cualquier `Store` real conectado a `config.Config` guardará esos dos campos cruzados — ver §3.2 |
 | `cmds.RunSSH` | Idéntico a `RunOS` (ejecución local) | No usar para automatización remota real |
 | `jcli/` | Declara `package jrex` en directorio `jcli/`, no importado por nadie | Código huérfano/en progreso, no parte de ninguna ruta activa |
 

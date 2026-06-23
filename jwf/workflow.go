@@ -403,3 +403,29 @@ func (s *WorkFlow) Run(flowId, triggerTag, id, projectId string, ctx, tags et.Js
 
 	return result, nil
 }
+
+/**
+* AddStep
+* @param stepDef et.Json
+* @return *Flow, error
+**/
+func (s *WorkFlow) AddStep(stepDef et.Json, userId string) (*WorkFlow, error) {
+	var step *Step
+	bt, err := stepDef.ToByte()
+	if err != nil {
+		return s, err
+	}
+
+	err = json.Unmarshal(bt, &step)
+	if err != nil {
+		return s, err
+	}
+
+	id := reg.UUID()
+	step.ID = id
+	step.TypeId = id
+	step.up(s)
+	s.addAuditLog(userId, "new_step")
+	s.addStep(step)
+	return s, nil
+}

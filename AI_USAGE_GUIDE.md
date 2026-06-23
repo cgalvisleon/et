@@ -58,7 +58,7 @@ Cuando necesites implementar una capacidad (HTTP, persistencia, validación, men
 | Pub/Sub entre servicios             | `event`          | `event.Load()`, `event.Publish/Subscribe/Queue`                |
 | Emitir/validar JWT                  | `jwt` + `claim`  | `jwt.NewAuthorization(...)`, `jwt.Validate(token)`             |
 | Generar IDs (ULID/UUID/XID)         | `reg`            | `reg.UUID()`, `reg.GetULID(id)`                                |
-| Cron jobs                           | `crontab`        | `crontab.New(tag, store)` + `AddJob/AddEventJob`               |
+| Cron jobs                           | `crontab`        | `crontab.Load(tag, store)` + `crontab.CronJob(...)`/`ScheduleJob(...)` (no más `AddJob`) |
 | Workflows multi-paso                | `jwf`            | `jwf.New(store)` + `flow.Step(...)` + `wf.Run(...)` (ya no recibe `tenantId`) |
 | Reintentos con backoff              | `resilience`     | `resilience.New(store).LoadInstance(Params{...}).Run(userId)`  |
 | Agente sobre OpenAI                 | `jia`            | `jia.New(tag, store, userId)` (ya no recibe `tenantId`)        |
@@ -113,7 +113,9 @@ Estas son trampas reales detectadas en el código, no hipotéticas. Si tu soluci
 - ⚠️ **Handlers HTTP de `jwf` para Flow/Instance** (`httpGetFlow`, `httpRunInstance`, etc.) → cuerpo vacío, no implementados. Solo los handlers de `Step` funcionan.
 - ⚠️ **Los paquetes `ws/`, `wsp/`, `tcp/`, `ia/`, `vm/` ya no existen** → fueron renombrados a `jws/`, `jwsp/`, `jtcp/`, `jia/`, `jrex/`. Cualquier ejemplo o ruta de import con el nombre viejo no compilará.
 - ⚠️ **`jia.New(tenantId, tag, store)` / `jwf.New(tenantId, store)`** → forma intermedia ya obsoleta. Hoy ninguno de los dos recibe `tenantId`: `jia.New(tag, store, userId)` / `jwf.New(store)`, ambos generan su propio `ID` con `reg.UUID()`.
-- ⚠️ **Ejemplos/documentación que mencionen `workflow.RunInstance`, `instances.Store`, `ia.New(..., config Config)`, `jsql.Load(config)`, `config.App`, `crontab.New(tag)` (sin store), `wsp.NewWhatsapp`, `resilience.Params{TenantId/OwnerId/UserId, ...}`** → APIs **eliminadas o renombradas**. Ver tabla de migración en `LIBRARY_CONTEXT.md` (sección Migration Guide).
+- ⚠️ **Ejemplos/documentación que mencionen `workflow.RunInstance`, `instances.Store`, `ia.New(..., config Config)`, `jsql.Load(config)`, `config.App`, `crontab.New(tag)` (sin store), `ct.AddJob/AddOneShotJob/AddEventJob/StartJob/StopJob/DeleteJob` (métodos de instancia de `crontab`), `wsp.NewWhatsapp`, `resilience.Params{TenantId/OwnerId/UserId, ...}`** → APIs **eliminadas o renombradas**. Ver tabla de migración en `LIBRARY_CONTEXT.md` (sección Migration Guide).
+- ⚠️ **`config.Store`** → `(*config.Config).Save()` invoca `store.Set(tag, stage, ownerId, tenantId, obj)` pero la interfaz declara el orden `(tag, stage, tenantId, ownerId, obj)` — los dos últimos parámetros están intercambiados en el código actual (`config/config.go:136`). Si implementas este `Store`, tenlo presente.
+- ⚠️ **`jia.Store`, `jwf.Store`, `resilience.Store`, `crontab.Store` y `jsql.Store`** comparten hoy exactamente la misma forma (`Set(collection, id, ownerId, obj)`/`Get(collection, id, dest) (bool, error)`/`Delete(collection, id)`/`Query(...)`, `jwf` añade `GenSerie`) — sí son intercambiables entre sí con un solo adaptador. La excepción real es `config.Store` (forma distinta, ver punto anterior).
 - ⚠️ **El repo cambia rápido** (commits "Backup:" sin mensaje) → si una firma citada aquí no compila, confía en el código actual, no en este documento; actualízalo si detectas el drift.
 
 ---

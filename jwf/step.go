@@ -46,17 +46,20 @@ var (
 type Step struct {
 	CreatedAt   time.Time                `json:"created_at"`
 	UpdatedAt   time.Time                `json:"updated_at"`
-	WorkflowId  string                   `json:"workflow_id"`
+	OwnerId     string                   `json:"owner_id"`
 	ID          string                   `json:"id"`
 	Kind        Kind                     `json:"kind"`
+	TypeId      string                   `json:"type_id"`
 	Tag         string                   `json:"tag"`
 	Version     string                   `json:"version"`
 	Status      Status                   `json:"status"`
 	Title       string                   `json:"title"`
 	Description string                   `json:"description"`
 	Definition  interface{}              `json:"definition"`
+	OnPublish   interface{}              `json:"on_publish"`
 	Config      et.Json                  `json:"config"`
 	Params      et.Json                  `json:"params"`
+	Inputs      int                      `json:"inputs"`
 	Outputs     int                      `json:"outputs"`
 	Stop        bool                     `json:"stop"`
 	AuditLog    []et.Json                `json:"audit_log"`
@@ -70,20 +73,21 @@ type Step struct {
 
 /**
 * newStep
-* @param kind Kind, tag, version, title, userId string
+* @param ownerId, id string, kind Kind, tag, version, title string
 * @return *Step
 **/
-func (s *WorkFlow) newStep(kind Kind, tag, version, title, userId string) *Step {
+func newStep(ownerId string, kind Kind, tag, version, title string) *Step {
 	if version == "" {
 		version = "1.0.0"
 	}
-
+	id := reg.UUID()
 	now := timezone.Now()
 	result := &Step{
 		CreatedAt:   now,
 		UpdatedAt:   now,
-		WorkflowId:  s.ID,
-		ID:          reg.UUID(),
+		OwnerId:     ownerId,
+		ID:          id,
+		TypeId:      id,
 		Kind:        kind,
 		Tag:         tag,
 		Version:     version,
@@ -92,11 +96,23 @@ func (s *WorkFlow) newStep(kind Kind, tag, version, title, userId string) *Step 
 		Description: "",
 		Config:      et.Json{},
 		Params:      et.Json{},
+		Inputs:      0,
 		Outputs:     1,
 		Stop:        false,
 		AuditLog:    make([]et.Json, 0),
 	}
+	return result
+}
+
+/**
+* newStep
+* @param kind Kind, tag, version, title, userId string
+* @return *Step
+**/
+func (s *WorkFlow) newStep(kind Kind, tag, version, title, userId string) *Step {
+	result := newStep(s.ID, kind, tag, version, title)
 	s.addAuditLog(userId, "new_step")
+	s.addStep(result)
 	return result.up(s)
 }
 
@@ -115,7 +131,7 @@ func (s *WorkFlow) loadStep(id string) (*Step, error) {
 		return result, nil
 	}
 
-	exists, err := s.store.Get("step", id, &result)
+	exists, err := s.store.Get("steps", id, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +140,9 @@ func (s *WorkFlow) loadStep(id string) (*Step, error) {
 		return nil, ErrrStepNotFound
 	}
 
-	return result.up(s), nil
+	result.up(s)
+	s.addStep(result)
+	return result, nil
 }
 
 /**
@@ -165,8 +183,9 @@ func (s *Step) ToJson() et.Json {
 	return et.Json{
 		"created_at":  timezone.Format(s.CreatedAt, timezone.RFC3339),
 		"updated_at":  timezone.Format(s.UpdatedAt, timezone.RFC3339),
-		"workflow_id": s.WorkflowId,
+		"owner_id":    s.OwnerId,
 		"id":          s.ID,
+		"type_id":     s.TypeId,
 		"kind":        s.Kind,
 		"tag":         s.Tag,
 		"version":     s.Version,
@@ -207,7 +226,6 @@ func (s *Step) up(workflow *WorkFlow) *Step {
 		})
 		return nil
 	})
-	workflow.addStep(s)
 	return s
 }
 
@@ -279,7 +297,7 @@ func (s *Step) save() error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("step", s.ID, s.WorkflowId, s)
+	err := s.store.Set("steps", s.ID, s.OwnerId, s)
 	if err != nil {
 		return err
 	}
@@ -309,6 +327,7 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 		for name, binding := range instance.bindings {
 			result.Set(name, binding)
 		}
+		result.Set("params", s.Params)
 		return result
 	}
 

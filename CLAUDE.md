@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `github.com/cgalvisleon/et` — Go 1.25, MIT license.
 
-> **Note:** This codebase changes fast and in-place (commit history is mostly bare "Backup:" commits with no descriptive messages, saved as periodic WIP checkpoints) — prefer reading the actual source over trusting prior assumptions about an API shape, including the rest of this file. Because commits can land mid-refactor, `go build ./...` can intermittently fail on a freshly-cloned `HEAD` (e.g. a half-renamed function or a stray syntax error in one file); if it does, check whether the specific files involved look incomplete before assuming the wider architecture described here is wrong. `LIBRARY_CONTEXT.md`, `ARCHITECTURE_SUMMARY.md`, `COMPONENT_CATALOG.md`, `AI_USAGE_GUIDE.md` (all Spanish, generated for external consumers of the library) and `README.es.md` can also drift out of sync with the code; verify before relying on them.
+> **Note:** This codebase changes fast and in-place (commit history is mostly bare "Backup:" commits with no descriptive messages, saved as periodic WIP checkpoints) — prefer reading the actual source over trusting prior assumptions about an API shape, including the rest of this file. Because commits can land mid-refactor, `go build ./...` can intermittently fail on a freshly-cloned `HEAD` (e.g. a half-renamed function or a stray syntax error in one file); if it does, check whether the specific files involved look incomplete before assuming the wider architecture described here is wrong. `LIBRARY_CONTEXT.md`, `ARCHITECTURE_SUMMARY.md`, `COMPONENT_CATALOG.md`, `AI_USAGE_GUIDE.md` (all Spanish, generated for external consumers of the library) and `README.es.md`/`README.md` can also drift out of sync with the code; verify before relying on them. (`README.md` in particular currently still documents several removed packages by their old names — `ws/`, `ia/`, `workflow/`, `tcp/`, `wsp/`, `instances/` — and stale APIs for `crontab`/`jrex`; don't trust its package table or code samples without checking the source.)
 
 ## Commands
 
@@ -179,7 +179,7 @@ There are two HTTP server packages at different abstraction levels:
 - **`logs/`** — Structured logging. Functions: `Log`, `Info`, `Infof`, `Alert`, `Alertf`, `Error`, `Errorf`, `Debug`, `Debugf`, `Fatal`, `Panic`, `Tracer`. All route through `stdrout` for colorized output.
 - **`jwt/`** — High-level token creation: `New`, `NewAuthentication`, `NewAuthorization`, `NewAppToken`. Stores tokens in `cache`. Built on top of `claim/`.
 - **`claim/`** — JWT claims struct with `tenantId`. `GenToken` signs with HS256 (`golang-jwt/jwt/v4`).
-- **`crontab/`** — Job scheduler. `crontab.New(tag string, store Store)` creates a scheduler (calls `event.Load()` internally — note `store` is now a required second argument, not optional); `AddJob`, `AddOneShotJob`, `AddEventJob` register jobs. Supports `robfig/cron` spec format including seconds (`cron.WithSeconds()`, e.g. `"0 * * * * *"`).
+- **`crontab/`** — Job scheduler, recently redesigned to be event-driven. `crontab.New(tag string, store Store) (*Crontab, error)` builds an instance (calls `event.Load()` only); `crontab.Load(tag string, store Store) error` is the usual entry point — it builds a `*Crontab` via `New` and stores it in a **package-level singleton**, then wires `event.Subscribe`/`event.Stack` listeners (`crontab/event.go`). The old instance methods `AddJob`/`AddOneShotJob`/`AddEventJob`/`StartJob`/`StopJob`/`DeleteJob` **no longer exist** — register jobs with the package-level `crontab.CronJob(tag, ownerId string, spec Cron, repetitions int, params et.Json, fn func(et.Json) error) error` (recurring, spec is now a structured `Cron{DayOfWeek, Month, DayOfMonth, Hour, Minute}`, not a raw cron string) or `crontab.ScheduleJob(tag, ownerId string, spec time.Time, params et.Json, fn func(et.Json) error) error` (one-shot); both fail if `Load` wasn't called first. `crontab.HttpRemoveJob`/`HttpStopJob`/`HttpStartJob` are HTTP handlers that publish control events rather than mutating a job directly. Nothing in the repo currently imports `crontab`.
 - **`jval/`** — Fluent validation rules for `et.Json`. Implements `Rule` interface with typed validators (`Str`, `Int`, `Float`, `Bool`, `Email`, `Phone`, `Time`, etc.); chainable constraints (`.NotEmpty()`, `.Min()`, `.Max()`, etc.).
 - **`request/`** — Both inbound helpers (`URLParam`, `GetBody`) and outbound HTTP client utilities. `URLParam(r, "key").Str()` reads chi route params; `GetBody(r)` parses the JSON body into `et.Json`.
 - **`strs/`** — String utilities.
@@ -263,14 +263,16 @@ A `Flow` is built fluently: `flow.Step(tag, title, fn)` adds the first step as a
 wf, _ := jwf.New(nil) // nil store: in-memory only, nothing persisted
 flow := wf.NewFloW("add", "add item", "1.0.0", userId). // note: "FloW", not "Flow"
     Step("add", "add item", func(instance *jwf.Instance, ctx et.Json) (et.Json, error) {
-        return instance.SetParams(et.Json{"step1": "step1"}), nil
+        return et.Json{"step1": "step1"}, nil
     }).
     Step("add", "add item", func(instance *jwf.Instance, ctx et.Json) (et.Json, error) {
-        return instance.SetParams(et.Json{"step2": "step2"}), nil
+        return et.Json{"step2": "step2"}, nil
     })
 
 result, err := wf.Run(flow.ID, "add", "" /* instance id, blank = new */, projectId, et.Json{}, et.Json{}, userId)
 ```
+
+> **Caveat:** `Instance` no longer has a `Params` field or a `SetParams` method (both were removed from `jwf/instance.go`) — a step closure now just returns the `et.Json{}` it wants recorded as that step's result directly, as above. `Step` itself still has a `Params` field (design-time config set via `step.put(...)`, surfaced to JS step definitions as the `params` binding), which is a different thing from the old instance-level `Params`. **As of this writing `cmd/jwf/main.go` was not updated for this removal and still calls `instance.SetParams`, so `go build ./...` currently fails on that file** — a live example of the "mid-refactor breakage" warned about above; check whether it's been fixed before assuming the wider example is wrong.
 
 `Instance` tracks `Status` (`CREATED`, `PENDING`, `RUNNING`, `ROLLBACK`, `DONE`, `FAILED`, `CANCEL`, `STOP`), advances step-to-step via `next()` following `Connections`, and on a step error falls back to `resilience.New` (when `Flow.TotalAttempts > 0`) before giving up.
 

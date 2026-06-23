@@ -1,6 +1,7 @@
 package jwf
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -76,7 +77,6 @@ type Flow struct {
 	Title         string                   `json:"title"`
 	Description   string                   `json:"description"`
 	Version       string                   `json:"version"`
-	Params        et.Json                  `json:"params"`
 	Steps         map[string]*Step         `json:"steps"`
 	Connections   []*Connection            `json:"connections"`
 	Triggers      []*Trigger               `json:"triggers"`
@@ -115,7 +115,6 @@ func (s *WorkFlow) newFlow(tag, title, version, userId string) *Flow {
 		Title:         title,
 		Description:   "",
 		Version:       version,
-		Params:        make(et.Json),
 		Steps:         make(map[string]*Step),
 		Connections:   make([]*Connection, 0),
 		Triggers:      make([]*Trigger, 0),
@@ -144,7 +143,7 @@ func (s *WorkFlow) loadFlow(id string) (*Flow, error) {
 		return result, nil
 	}
 
-	exists, err := s.store.Get("flow", id, &result)
+	exists, err := s.store.Get("flows", id, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +235,7 @@ func (s *Flow) OnDelete(fn func(flow *Flow) error) *Flow {
 * save
 * @return error
 **/
-func (s *Flow) save() error {
+func (s *Flow) Save() error {
 	if s.store == nil {
 		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
@@ -248,7 +247,7 @@ func (s *Flow) save() error {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	err := s.store.Set("flow", s.ID, s.WorkflowId, s)
+	err := s.store.Set("flows", s.ID, s.WorkflowId, s)
 	if err != nil {
 		return err
 	}
@@ -516,4 +515,28 @@ func (s *Flow) Error(tag, version, title string, fn func(instance *Instance, ctx
 **/
 func (s *Flow) IsError() error {
 	return s.err
+}
+
+/**
+* AddStep
+* @param stepDef et.Json
+* @return *Flow, error
+**/
+func (s *Flow) AddStep(stepDef et.Json, userId string) (*Flow, error) {
+	var step *Step
+	bt, err := stepDef.ToByte()
+	if err != nil {
+		return s, err
+	}
+
+	err = json.Unmarshal(bt, &step)
+	if err != nil {
+		return s, err
+	}
+
+	step.ID = reg.UUID()
+	step.up(s.workflow)
+	s.Steps[step.ID] = step
+	s.addAuditLog(userId, "add_step")
+	return s, nil
 }

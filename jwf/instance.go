@@ -76,6 +76,7 @@ type Instance struct {
 	Status       Status                           `json:"status"`
 	Ctx          et.Json                          `json:"ctx"`
 	Ctxs         map[string]et.Json               `json:"ctxs"`
+	Params       et.Json                          `json:"params"`
 	Results      map[string]*Result               `json:"results"`
 	Tags         et.Json                          `json:"tags"`
 	TriggerTag   string                           `json:"trigger_tag"`
@@ -139,6 +140,7 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*I
 		Title:      title,
 		Ctx:        et.Json{},
 		Ctxs:       make(map[string]et.Json),
+		Params:     et.Json{},
 		Results:    make(map[string]*Result),
 		Tags:       et.Json{},
 		TriggerTag: triggerTag,
@@ -250,12 +252,7 @@ func (s *Instance) up(flow *Flow) *Instance {
 	s.isDebug = flow.isDebug
 	s.onSave = make([]func(instance *Instance) error, 0)
 	s.onDelete = make([]func(instance *Instance) error, 0)
-	for k, v := range flow.workflow.bindings {
-		s.bindings[k] = v
-	}
-	s.bindings["goTo"] = func(idx int) {
-		s.setCurrentIndex(idx)
-	}
+	s.wrapper()
 	s.OnSave(func(instance *Instance) error {
 		instance.pushInstance()
 		return nil
@@ -268,6 +265,63 @@ func (s *Instance) up(flow *Flow) *Instance {
 		return nil
 	})
 	return s
+}
+
+/**
+* wrapper
+* @param step *Step
+**/
+func (s *Instance) wrapper() {
+	for k, v := range s.flow.workflow.bindings {
+		s.bindings[k] = v
+	}
+	s.bindings["goTo"] = func(idx int) {
+		s.setCurrentIndex(idx)
+	}
+	s.bindings["ctx"] = map[string]interface{}{
+		"set": func(data et.Json) {
+			maps.Copy(s.Params, data)
+		},
+		"get": func(keys ...string) interface{} {
+			return s.Params.Get(keys...)
+		},
+		"str": func(keys ...string) string {
+			return s.Params.Str(keys...)
+		},
+		"int": func(keys ...string) int {
+			return s.Params.Int(keys...)
+		},
+		"int64": func(keys ...string) int64 {
+			return s.Params.Int64(keys...)
+		},
+		"num": func(keys ...string) float64 {
+			return s.Params.Num(keys...)
+		},
+		"bool": func(keys ...string) bool {
+			return s.Params.Bool(keys...)
+		},
+		"time": func(keys ...string) time.Time {
+			return s.Params.Time(keys...)
+		},
+		"json": func(key string) et.Json {
+			return s.Params.Json(key)
+		},
+		"array": func(key string) []interface{} {
+			return s.Params.Array(key)
+		},
+		"arrayStr": func(key string) []string {
+			return s.Params.ArrayStr(key)
+		},
+		"arrayInt": func(key string) []int {
+			return s.Params.ArrayInt(key)
+		},
+		"arrayInt64": func(key string) []int64 {
+			return s.Params.ArrayInt64(key)
+		},
+		"arrayJson": func(key string) []et.Json {
+			return s.Params.ArrayJson(key)
+		},
+	}
 }
 
 /**
@@ -524,6 +578,17 @@ func (s *Instance) setCtx(ctx et.Json) et.Json {
 	}
 	s.pushInstance()
 	return s.Ctx
+}
+
+/**
+* setParams
+* @param params et.Json
+* @return et.Json
+**/
+func (s *Instance) SetParams(params et.Json) et.Json {
+	maps.Copy(s.Params, params)
+	s.pushInstance()
+	return s.Params
 }
 
 /**

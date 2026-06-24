@@ -80,6 +80,28 @@ type BetweenValue struct {
 	Max any `json:"Max"`
 }
 
+/**
+* Time: Converts a value to a time.Time
+* @param val any
+* @return time.Time
+**/
+func Time(val any) *time.Time {
+	switch v := val.(type) {
+	case time.Time:
+		return &v
+	case *time.Time:
+		return v
+	case string:
+		t, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			return nil
+		}
+		return &t
+	default:
+		return nil
+	}
+}
+
 const (
 	ValueString   = "string"
 	ValueInt      = "int"
@@ -129,6 +151,8 @@ func valueType(v any) string {
 	case bool:
 		return ValueBool
 	case time.Time:
+		return ValueDatetime
+	case *time.Time:
 		return ValueDatetime
 	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
 		return ValueInt

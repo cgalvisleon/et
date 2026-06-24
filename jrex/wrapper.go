@@ -25,7 +25,7 @@ import (
 func wrapper(instance *Instance) {
 	wrapperRunTime(instance)
 	wrapperBasic(instance)
-	wrapperVar(instance, "ctx")
+	wrapperVar(instance)
 	wrapperConsole(instance)
 	wrapperFetch(instance)
 	wrapperJrpc(instance)
@@ -68,8 +68,8 @@ func wrapperBasic(instance *Instance) {
 * wrapperCtx: Wraps the ctx
 * @param instance *Instance
 **/
-func wrapperVar(instance *Instance, name string) {
-	instance.Set(name, map[string]interface{}{
+func wrapperVar(instance *Instance) {
+	instance.Set("ctx", map[string]interface{}{
 		"set": func(data et.Json) {
 			maps.Copy(instance.Ctx, data)
 		},

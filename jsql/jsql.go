@@ -11,13 +11,8 @@ import (
 
 var (
 	packageName            = "jsql"
-	dbs                    map[string]*DB
 	ErrRecordAlreadyExists = errors.New("record already exists")
 )
-
-func init() {
-	dbs = make(map[string]*DB)
-}
 
 /**
 * getConnection: Returns a Connection object based on the specified driver and environment variables.
@@ -43,15 +38,10 @@ func getConnection(tenantId string) (Connection, error) {
 * @param connect Connection
 * @return *DB, error
 **/
-func ConnectTo(connect Connection) (*DB, error) {
+func ConnectTo(tenantId, name string, connect Connection) (*DB, error) {
 	params := connect.GetParams()
-	name := params.Str("database")
-	result, ok := dbs[name]
-	if ok {
-		return result, nil
-	}
-
-	result, err := newDB(params)
+	driver := params.Str("driver")
+	result, err := newDB(tenantId, driver, name, params)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +51,6 @@ func ConnectTo(connect Connection) (*DB, error) {
 		return nil, err
 	}
 
-	dbs[name] = result
 	return result, nil
 }
 
@@ -76,7 +65,7 @@ func LoadTo(tenantId, name string) (*DB, error) {
 		return nil, err
 	}
 	conn.SetDatabase(name)
-	return ConnectTo(conn)
+	return ConnectTo(tenantId, name, conn)
 }
 
 /**
@@ -88,7 +77,8 @@ func Load(tenantId string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ConnectTo(conn)
+	name := conn.GetDatabase()
+	return ConnectTo(tenantId, name, conn)
 }
 
 /**
@@ -96,8 +86,8 @@ func Load(tenantId string) (*DB, error) {
 * @param params et.Json, store Store, userId string
 * @return *DB, error
 **/
-func NewDB(params et.Json, store Store, userId string) (*DB, error) {
-	result, err := newDB(params)
+func NewDB(tenantId, driver, name string, params et.Json, store Store, userId string) (*DB, error) {
+	result, err := newDB(tenantId, driver, name, params)
 	if err != nil {
 		return nil, err
 	}
@@ -132,35 +122,4 @@ func LoadDB(id string, store Store) (*DB, error) {
 	}
 
 	return result.up(store)
-}
-
-/**Logero
-* GetDb: Returns an existing DB by name.
-* @param name string
-* @return *DB, error
-**/
-func GetDb(name string) (*DB, error) {
-	db, exists := dbs[name]
-	if !exists {
-		return nil, errors.New(MSG_DB_NOT_FOUND)
-	}
-	return db, nil
-}
-
-/**
-* GetModel: Returns an existing Model by name.
-* @param db string, schema string, name string
-* @return *Model, error
-**/
-func GetModel(db string, schema string, name string) (*Model, error) {
-	dbInstance, err := GetDb(db)
-	if err != nil {
-		return nil, err
-	}
-
-	model, err := dbInstance.GetModel(schema, name)
-	if err != nil {
-		return nil, err
-	}
-	return model, nil
 }

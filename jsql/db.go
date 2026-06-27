@@ -31,7 +31,6 @@ type DB struct {
 	Schemas     map[string]*Schema `json:"schemas"`
 	Driver      string             `json:"driver"`
 	Params      et.Json            `json:"params"`
-	UseCore     bool               `json:"use_core"`
 	RecordLimit int                `json:"record_limit"`
 	Version     int                `json:"version"`
 	AuditLog    []et.Json          `json:"audit_log"`
@@ -40,7 +39,6 @@ type DB struct {
 	isInit      bool               `json:"-"`
 	driver      Driver             `json:"-"`
 	db          *sql.DB            `json:"-"`
-	series      *Model             `json:"-"`
 	store       Store              `json:"-"`
 }
 
@@ -49,19 +47,15 @@ type DB struct {
 * @param params et.Json
 * @return *DB, error
 **/
-func newDB(params et.Json) (*DB, error) {
-	driverName := params.Str("driver")
-	if !utility.ValidStr(driverName, 2, []string{""}) {
+func newDB(tenantId, driver, name string, params et.Json) (*DB, error) {
+	if !utility.ValidStr(driver, 2, []string{""}) {
 		return nil, errors.New(MSG_DRIVER_NOT_FOUND)
 	}
-	driver, ok := drivers[driverName]
+	drv, ok := drivers[driver]
 	if !ok {
 		return nil, errors.New(MSG_DRIVER_NOT_FOUND)
 	}
 
-	tenantId := params.Str("tenant_id")
-	name := params.Str("database")
-	useCore := params.Bool("use_core")
 	recordLimit := params.Int("record_limit")
 	version := params.ValInt(1, "version")
 	result := &DB{
@@ -69,13 +63,12 @@ func newDB(params et.Json) (*DB, error) {
 		ID:          reg.UUID(),
 		Name:        name,
 		Schemas:     make(map[string]*Schema),
-		Driver:      driverName,
+		Driver:      driver,
 		Params:      params,
-		UseCore:     useCore,
 		RecordLimit: recordLimit,
 		Version:     version,
 		AuditLog:    make([]et.Json, 0),
-		driver:      driver,
+		driver:      drv,
 		isChanged:   true,
 	}
 	return result, nil
@@ -97,7 +90,7 @@ func (s *DB) up(store Store) (*DB, error) {
 			return nil, err
 		}
 	}
-	dbs[s.Name] = s
+
 	return s, nil
 }
 
@@ -193,16 +186,6 @@ func (s *DB) init() error {
 	}
 
 	s.db = db
-	if s.UseCore {
-		return nil
-	}
-
-	if s.UseCore {
-		err = DefineSeries(s, "core")
-		if err != nil {
-			return err
-		}
-	}
 
 	s.isInit = true
 	if s.isChanged {

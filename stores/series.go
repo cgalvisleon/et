@@ -1,42 +1,46 @@
-package jsql
+package stores
 
 import (
 	"fmt"
 
 	"github.com/cgalvisleon/et/et"
+	. "github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/timezone"
 )
 
-func DefineSeries(db *DB, schema string) error {
-	if db.series != nil {
-		return nil
+type Series struct {
+	TenantId string
+	model    *Model
+}
+
+func DefineSeries(db *DB, tenantId, schema string) (*Series, error) {
+	columns := []Column{
+		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
+		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
+		{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
+		{Name: "tag", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
+		{Name: "format", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
+		{Name: "value", TypeColumn: COLUMN, TypeData: INT, Default: ""},
 	}
 
-	var err error
-	db.series, err = db.Define(Def{
+	def := Def{
 		Schema:  schema,
 		Name:    "series",
 		Version: 1,
-		Columns: []Column{
-			{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
-			{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
-			{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-			{Name: "tag", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-			{Name: "format", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
-			{Name: "value", TypeColumn: COLUMN, TypeData: INT, Default: ""},
-		},
+		Columns: columns,
 		PrimaryKeys: []DefIndex{
 			{Name: TENANT_ID, Sorted: true},
 			{Name: "tag", Sorted: true},
 		},
 		IdxField: IDX,
 		IsCore:   true,
-	})
+	}
+	result, err := db.Define(def)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	db.series.
+	result.
 		BeforeInsert(func(tx *Tx, old, new et.Json) error {
 			now := timezone.Now()
 			new.Set(CREATED_AT, now)

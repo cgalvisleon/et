@@ -333,7 +333,6 @@ func (s *Model) initInDb(db *DB) (bool, error) {
 **/
 func (s *Model) wrapper(instance *jrex.Instance) {
 	instance.Set("db", s.db)
-	instance.Set("getDb", GetDb)
 	instance.Set("newTx", NewTx)
 }
 
@@ -774,49 +773,4 @@ func (s *Model) DeadQueryTx(tx *Tx, query et.Json) (et.Items, error) {
 **/
 func (s *Model) DeadQuery(query et.Json) (et.Items, error) {
 	return s.DeadQueryTx(nil, query)
-}
-
-/**
-* SetSeries: Creates a Command of type SET_SERIES pre-loaded with the given data.
-* @param tag, format string, val int
-* @return error
-**/
-func (s *Model) SetSeries(tag, format string, val int) error {
-	return s.db.SetSeries(tag, format, val)
-}
-
-/**
-* GetSeries: Returns the series data for the given tag and owner.
-* @param tag string
-* @return (et.Item, error)
-**/
-func (s *Model) GetSeries(tag string) (et.Item, error) {
-	return s.db.GetSeries(tag)
-}
-
-/**
-* DeleteSeries: Deletes the series data for the given tag and owner.
-* @param tag, ownerId string
-* @return error
-**/
-func (s *Model) DeleteSeries(tag string) error {
-	return s.db.DeleteSeries(tag)
-}
-
-/**
-* GenSerie: Returns the next series value for the given tag and owner.
-* @param tag, ownerId string
-* @return (string, error)
-**/
-func (s *Model) GenSerie(tag string) (string, error) {
-	return s.db.GenSerie(tag)
-}
-
-/**
-* GenValue: Returns the next value for the given tag and owner.
-* @param tag, ownerId string
-* @return (int, error)
-**/
-func (s *Model) GenValue(tag string) (int, error) {
-	return s.db.GenValue(tag)
 }

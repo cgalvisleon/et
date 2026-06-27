@@ -20,11 +20,11 @@ type Config struct {
 }
 
 /**
-* defineConfig
+* DefineConfig
 * @param db *DB, tenantId, schema string
 * @return (*Config, error)
 **/
-func defineConfig(db *DB, tenantId, schema, stage, tag string) (*Config, error) {
+func DefineConfig(db *DB, tenantId, schema, stage, tag string) (*Config, error) {
 	columns := []Column{
 		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
@@ -84,20 +84,6 @@ func defineConfig(db *DB, tenantId, schema, stage, tag string) (*Config, error) 
 	result.initEvent()
 
 	return result, nil
-}
-
-/**
-* LoadConfig
-* @param db *DB, tenantId, schema, stage, tag string
-* @return (*Config, error)
-**/
-func LoadConfig(db *DB, tenantId, schema, stage, tag string) (*Config, error) {
-	config, err := defineConfig(db, tenantId, schema, stage, tag)
-	if err != nil {
-		return nil, err
-	}
-
-	return config, nil
 }
 
 /**

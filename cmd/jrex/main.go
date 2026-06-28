@@ -33,7 +33,6 @@ func main() {
 	}
 
 	v.Set("db", db)
-	v.Set("getDb", jsql.GetDb)
 	v.Set(model.Name, model)
 	err = v.RunDev()
 	if err != nil {

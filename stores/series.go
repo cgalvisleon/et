@@ -40,20 +40,22 @@ func DefineSeries(db *DB, tenantId, schema string) (*Series, error) {
 		return nil, err
 	}
 
-	result.
-		BeforeInsert(func(tx *Tx, old, new et.Json) error {
-			now := timezone.Now()
-			new.Set(CREATED_AT, now)
-			new.Set(UPDATED_AT, now)
-			return nil
-		}).
+	result.BeforeInsert(func(tx *Tx, old, new et.Json) error {
+		now := timezone.Now()
+		new.Set(CREATED_AT, now)
+		new.Set(UPDATED_AT, now)
+		return nil
+	}).
 		BeforeUpdate(func(tx *Tx, old, new et.Json) error {
 			now := timezone.Now()
 			new.Set(UPDATED_AT, now)
 			return nil
 		})
 
-	return db.series.Init()
+	return &Series{
+		TenantId: tenantId,
+		model:    result,
+	}, nil
 }
 
 /**
@@ -61,11 +63,11 @@ func DefineSeries(db *DB, tenantId, schema string) (*Series, error) {
 * @param string tag, format string, value int
 * @return error
 **/
-func (s *DB) SetSeries(tag string, format string, value int) error {
+func (s *Series) SetSeries(tag string, format string, value int) error {
 	if format == "" {
 		format = "%08d"
 	}
-	_, err := s.series.
+	_, err := s.model.
 		Upsert(
 			et.Json{
 				"tenant_id": s.TenantId,
@@ -84,8 +86,8 @@ func (s *DB) SetSeries(tag string, format string, value int) error {
 * @param string tag, ownerId string
 * @return (et.Item, error)
 **/
-func (s *DB) GetSeries(tag string) (et.Item, error) {
-	result, err := s.series.
+func (s *Series) GetSeries(tag string) (et.Item, error) {
+	result, err := s.model.
 		Where(Eq("tenant_id", s.TenantId)).
 		And(Eq("tag", tag)).
 		One()
@@ -100,8 +102,8 @@ func (s *DB) GetSeries(tag string) (et.Item, error) {
 * @param string tag, ownerId string
 * @return error
 **/
-func (s *DB) DeleteSeries(tag string) error {
-	_, err := s.series.
+func (s *Series) DeleteSeries(tag string) error {
+	_, err := s.model.
 		Delete().
 		Where(Eq("tenant_id", s.TenantId)).
 		And(Eq("tag", tag)).
@@ -117,8 +119,8 @@ func (s *DB) DeleteSeries(tag string) error {
 * @param string tag
 * @return (string, error)
 **/
-func (s *DB) GenSerie(tag string) (string, error) {
-	item, err := s.series.
+func (s *Series) GenSerie(tag string) (string, error) {
+	item, err := s.model.
 		Update(et.Json{}).
 		BeforeUpdate(func(tx *Tx, old, new et.Json) error {
 			new["value"] = old["value"].(int) + 1
@@ -141,8 +143,8 @@ func (s *DB) GenSerie(tag string) (string, error) {
 * @param string tag
 * @return (int, error)
 **/
-func (s *DB) GenValue(tag string) (int, error) {
-	item, err := s.series.
+func (s *Series) GenValue(tag string) (int, error) {
+	item, err := s.model.
 		Update(et.Json{}).
 		BeforeUpdate(func(tx *Tx, old, new et.Json) error {
 			new["value"] = old["value"].(int) + 1
@@ -154,5 +156,6 @@ func (s *DB) GenValue(tag string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	return item.Int("value"), nil
 }

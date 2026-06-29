@@ -34,7 +34,7 @@ func NewTx() *Tx {
 	return &Tx{
 		CreatedAt:    now,
 		LastUpdateAt: now,
-		Id:           reg.TagULID("tx", ""),
+		Id:           reg.UUID(),
 		Status:       string(TxStatusPending),
 	}
 }

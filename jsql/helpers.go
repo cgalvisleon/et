@@ -10,9 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
+	"github.com/cgalvisleon/et/timezone"
 )
 
 /**
@@ -138,6 +140,11 @@ func ArgWhitAs(arg string) ([]string, bool) {
 	return []string{arg}, false
 }
 
+/**
+* ArgWhitSchema: Returns an array with the argument and its schema.
+* @param arg string
+* @return []string, bool
+**/
 func ArgWhitSchema(arg string) ([]string, bool) {
 	pattern := regexp.MustCompile(`^([A-Za-z0-9_>-]+)\.([A-Za-z0-9_]+)$`) // schema.table
 	ok := pattern.MatchString(arg)
@@ -148,4 +155,26 @@ func ArgWhitSchema(arg string) ([]string, bool) {
 		}
 	}
 	return []string{arg}, false
+}
+
+/**
+* addAuditLog
+* @param userId string, action string
+**/
+func AddAuditLog(auditLog []et.Json, userId string, action string) []et.Json {
+	if auditLog == nil {
+		auditLog = make([]et.Json, 0)
+	}
+
+	now := timezone.Now()
+	auditLog = append(auditLog, et.Json{
+		"created_at": now,
+		"user_id":    userId,
+		"action":     action,
+	})
+	maxAuditLog := envar.GetInt("MAX_AUDIT_LOG", 1000)
+	if len(auditLog) > maxAuditLog {
+		auditLog = auditLog[len(auditLog)-maxAuditLog:]
+	}
+	return auditLog
 }

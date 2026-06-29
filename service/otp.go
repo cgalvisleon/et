@@ -35,7 +35,7 @@ func VerifyOTP(channel string, otp, createdBy string) (bool, error) {
 * @response et.Items, error
 **/
 func SendOTPSMS(tenantId, serviceId, sender, countryCode, phoneNumber string, length int, duration time.Duration, createdBy string) (et.Items, error) {
-	serviceId = reg.TagULID("service", serviceId)
+	serviceId = reg.GetUUID(serviceId)
 	otp := utility.GetOTP(length)
 	channel := fmt.Sprintf("%s%s", countryCode, phoneNumber)
 	key := fmt.Sprintf("service:otp:%s", channel)
@@ -74,7 +74,7 @@ func SendOTPSMS(tenantId, serviceId, sender, countryCode, phoneNumber string, le
 * @response et.Items, error
 **/
 func SendOTPEmail(tenantId, serviceId string, from et.Json, name, email string, length int, duration time.Duration, createdBy string) (et.Items, error) {
-	serviceId = reg.TagULID("service", serviceId)
+	serviceId = reg.GetUUID(serviceId)
 	otp := utility.GetOTP(length)
 	channel := email
 	key := fmt.Sprintf("service:otp:%s", channel)
@@ -113,7 +113,7 @@ func SendOTPEmail(tenantId, serviceId string, from et.Json, name, email string, 
 * @response et.Items, error
 **/
 func SendOTPByTemplateId(tenantId, serviceId string, from et.Json, name, email string, length int, duration time.Duration, templateId string, createdBy string) (et.Items, error) {
-	serviceId = reg.TagULID("service", serviceId)
+	serviceId = reg.GetUUID(serviceId)
 	otp := utility.GetOTP(length)
 	key := fmt.Sprintf("service:otp:%s", email)
 	params := et.Json{

@@ -543,7 +543,7 @@ func (s *Model) GetDetail(name string) (*Model, bool) {
 * @return string
 **/
 func (s *Model) GetId(id string) string {
-	return reg.TagULID(s.Name, id)
+	return reg.GetUUID(id)
 }
 
 /**
@@ -626,6 +626,14 @@ func (s *Model) AfterInsertOrUpdate(fn TriggerFunction) *Model {
 	s.afterInserts = append(s.afterInserts, fn)
 	s.afterUpdates = append(s.afterUpdates, fn)
 	return s
+}
+
+/**
+* GetFrom: Returns the From for the model.
+* @return *From
+**/
+func (s *Model) GetFrom() *From {
+	return getFrom(s, "")
 }
 
 /**

@@ -136,13 +136,8 @@ func (s *Instance) Get(id string, dest any) (bool, error) {
 	result := dt.Get(key)
 	var bt []byte
 	if result.Ok {
-		item, ok := result.Item()
-		if !ok {
-			return false, errors.New(MSG_RECORD_IS_NOT_ITEM)
-		}
-
 		var err error
-		bt, err = item.Byte("definition")
+		bt, err = result.Byte()
 		if err != nil {
 			return false, err
 		}

@@ -33,12 +33,12 @@ type WorkFlow struct {
 	UpdatedAt time.Time                        `json:"updated_at"`
 	ID        string                           `json:"id"`
 	AuditLog  []et.Json                        `json:"audit_log"`
-	IsInitial bool                             `json:"is_initial"`
-	Flows     map[string]*Flow                 `json:"-"`
-	Steps     map[string]*Step                 `json:"-"`
+	Steps     map[string]*Step                 `json:"steps"`
+	Flows     map[string]*Flow                 `json:"flows"`
 	bindings  map[string]any                   `json:"-"`
 	muFlows   sync.Mutex                       `json:"-"`
 	muSteps   sync.Mutex                       `json:"-"`
+	isInitial bool                             `json:"-"`
 	store     Store                            `json:"-"`
 	isDebug   bool                             `json:"-"`
 	isChanged bool                             `json:"-"`
@@ -67,11 +67,14 @@ func New(store Store) (*WorkFlow, error) {
 		CreatedAt: now,
 		UpdatedAt: now,
 		ID:        reg.UUID(),
-		Flows:     make(map[string]*Flow),
-		Steps:     make(map[string]*Step),
 		AuditLog:  make([]et.Json, 0),
+		Steps:     make(map[string]*Step),
+		Flows:     make(map[string]*Flow),
+		muFlows:   sync.Mutex{},
+		muSteps:   sync.Mutex{},
+		store:     store,
 	}
-	return result.up(store)
+	return result.up()
 }
 
 /**
@@ -94,13 +97,35 @@ func Load(id string, store Store) (*WorkFlow, error) {
 		return nil, errors.New(MSG_WORKFLOW_NOT_FOUND)
 	}
 
-	result := &WorkFlow{}
-	err = json.Unmarshal([]byte(def.ToString()), &result)
-	if err != nil {
-		return nil, err
+	result := &WorkFlow{
+		CreatedAt: def.Time("created_at"),
+		UpdatedAt: def.Time("updated_at"),
+		ID:        def.String("id"),
+		AuditLog:  def.ArrayJson("audit_log"),
+		Steps:     make(map[string]*Step),
+		Flows:     make(map[string]*Flow),
+		muFlows:   sync.Mutex{},
+		muSteps:   sync.Mutex{},
+		store:     store,
 	}
 
-	return result.up(store)
+	steps := def.Json("steps")
+	for id := range steps {
+		_, err := result.loadStep(id)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	flows := def.Json("flows")
+	for id := range flows {
+		_, err := result.loadFlow(id)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return result.up()
 }
 
 /**
@@ -108,12 +133,9 @@ func Load(id string, store Store) (*WorkFlow, error) {
 * @param store Store
 * @return *WorkFlow
 **/
-func (s *WorkFlow) up(store Store) (*WorkFlow, error) {
+func (s *WorkFlow) up() (*WorkFlow, error) {
 	isDebug := envar.GetBool("DEBUG", false)
 	s.bindings = make(map[string]any)
-	s.muFlows = sync.Mutex{}
-	s.muSteps = sync.Mutex{}
-	s.store = store
 	s.isDebug = isDebug
 	s.onSave = make([]func(workflow *WorkFlow) error, 0)
 	s.onDelete = make([]func(workflow *WorkFlow) error, 0)
@@ -129,18 +151,6 @@ func (s *WorkFlow) up(store Store) (*WorkFlow, error) {
 		})
 		return nil
 	})
-	for id := range s.Flows {
-		_, err := s.loadFlow(id)
-		if err != nil {
-			return nil, err
-		}
-	}
-	for id := range s.Steps {
-		_, err := s.loadStep(id)
-		if err != nil {
-			return nil, err
-		}
-	}
 	err := s.init()
 	if err != nil {
 		return nil, err
@@ -175,22 +185,36 @@ func (s *WorkFlow) addAuditLog(userId string, action string) {
 * ToJson
 * @return et.Json
 **/
-func (s *WorkFlow) ToJson() et.Json {
+func (s *WorkFlow) ref() et.Json {
 	flows := et.Json{}
 	for id, flow := range s.Flows {
-		flows[id] = flow.ToJson()
+		flows[id] = flow.ref()
 	}
 	steps := et.Json{}
 	for id, step := range s.Steps {
-		steps[id] = step.ToJson()
+		steps[id] = step.ref()
 	}
 	return et.Json{
 		"created_at": timezone.Format(s.CreatedAt, timezone.RFC3339),
 		"updated_at": timezone.Format(s.UpdatedAt, timezone.RFC3339),
 		"id":         s.ID,
+		"audit_log":  s.AuditLog,
 		"flows":      flows,
 		"steps":      steps,
-		"is_initial": s.IsInitial,
+	}
+}
+
+/**
+* ToJson
+* @return et.Json
+**/
+func (s *WorkFlow) ToJson() et.Json {
+	return et.Json{
+		"created_at": timezone.Format(s.CreatedAt, timezone.RFC3339),
+		"updated_at": timezone.Format(s.UpdatedAt, timezone.RFC3339),
+		"id":         s.ID,
+		"flows":      s.Flows,
+		"steps":      s.Steps,
 		"audit_log":  s.AuditLog,
 	}
 }
@@ -243,7 +267,7 @@ func (s *WorkFlow) Save() error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("workflows", s.ID, s.ID, s)
+	err := s.store.Set("workflows", s.ID, s.ID, s.ref())
 	if err != nil {
 		return err
 	}

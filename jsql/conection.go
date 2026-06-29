@@ -1,6 +1,8 @@
 package jsql
 
 import (
+	"fmt"
+
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 )
@@ -12,7 +14,6 @@ type Connection interface {
 }
 
 type PgConection struct {
-	TenantId    string
 	Database    string
 	Host        string
 	Port        int
@@ -24,9 +25,8 @@ type PgConection struct {
 	RecordLimit int
 }
 
-func pgConection(tenantId string) *PgConection {
+func pgConection(host string) *PgConection {
 	database := envar.GetStr("DB_NAME", "josephine")
-	host := envar.GetStr("DB_HOST", "localhost")
 	port := envar.GetInt("DB_PORT", 5432)
 	user := envar.GetStr("DB_USER", "test")
 	password := envar.GetStr("DB_PASSWORD", "test")
@@ -35,7 +35,6 @@ func pgConection(tenantId string) *PgConection {
 	appName := envar.GetStr("DB_APP_NAME", "josephine")
 	recordLimit := envar.GetInt("DB_RECORD_LIMIT", 1000)
 	return &PgConection{
-		TenantId:    tenantId,
 		Database:    database,
 		Host:        host,
 		Port:        port,
@@ -54,7 +53,6 @@ func pgConection(tenantId string) *PgConection {
 **/
 func (s *PgConection) GetParams() et.Json {
 	return et.Json{
-		"tenant_id":    s.TenantId,
 		"driver":       DriverPostgres,
 		"database":     s.Database,
 		"host":         s.Host,
@@ -85,7 +83,6 @@ func (s *PgConection) GetDatabase() string {
 }
 
 type SqliteConection struct {
-	TenantId     string
 	Name         string
 	RecordLimit  int
 	PoolMaxOpen  int
@@ -95,8 +92,11 @@ type SqliteConection struct {
 	AppName      string
 }
 
-func sqliteConection(tenantId string) *SqliteConection {
+func sqliteConection(path string) *SqliteConection {
 	name := envar.GetStr("DB_NAME", "josephine.db")
+	if path != "" {
+		name = fmt.Sprintf("%s/%s", path, name)
+	}
 	recordLimit := envar.GetInt("DB_RECORD_LIMIT", 1000)
 	poolMaxOpen := envar.GetInt("DB_POOL_MAX_OPEN", 10)
 	poolMaxIdle := envar.GetInt("DB_POOL_MAX_IDLE", 10)
@@ -104,7 +104,6 @@ func sqliteConection(tenantId string) *SqliteConection {
 	poolIdleTime := envar.GetInt("DB_POOL_IDLE_TIME", 10)
 	appName := envar.GetStr("DB_APP_NAME", "josephine")
 	return &SqliteConection{
-		TenantId:     tenantId,
 		Name:         name,
 		RecordLimit:  recordLimit,
 		PoolMaxOpen:  poolMaxOpen,
@@ -121,7 +120,6 @@ func sqliteConection(tenantId string) *SqliteConection {
 **/
 func (s *SqliteConection) GetParams() et.Json {
 	return et.Json{
-		"tenant_id":      s.TenantId,
 		"driver":         DriverSqlite,
 		"name":           s.Name,
 		"record_limit":   s.RecordLimit,

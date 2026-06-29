@@ -6,7 +6,6 @@ import (
 	"path"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/et"
 	v1 "github.com/cgalvisleon/et/ettp/v1"
 	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/logs"
@@ -19,48 +18,102 @@ type Storage struct {
 }
 
 /**
-* NewStorage
+* newStorage
 * @param s *Server
 * @return *Storage
 **/
-func NewStorage(s *Server) *Storage {
+func newStorage(s *Server) *Storage {
+	key := fmt.Sprintf("%s:%s", s.Name, s.Version)
 	return &Storage{
 		Solvers: s.Solvers,
 		Version: s.Version,
-		Key:     fmt.Sprintf("%s:%s", s.Name, s.Version),
+		Key:     key,
 	}
 }
 
 /**
-* Serialize
-* @return ([]byte, error)
+* Save
+* @return error
 **/
-func (s *Storage) Serialize() ([]byte, error) {
-	bt, err := json.Marshal(s)
+func (s *Server) Save() error {
+	storage := newStorage(s)
+	bt, err := json.Marshal(storage)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return bt, nil
+	if cache.IsLoad() {
+		cache.Set(storage.Key, string(bt), 0)
+	} else {
+		path := path.Join("./", "apigateway.json")
+		err = file.Save(path, storage)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 /**
-* ToJson
-* @return et.Json
+* Load
+* @return error
 **/
-func (s *Storage) ToJson() et.Json {
-	bt, err := s.Serialize()
-	if err != nil {
-		return et.Json{}
+func (s *Server) load() error {
+	var storage *Storage
+	key := fmt.Sprintf("%s:%s", s.Name, s.Version)
+	if cache.IsLoad() {
+		if !cache.Exists(key) {
+			return s.migrate()
+		}
+
+		storage = newStorage(s)
+		bt, err := json.Marshal(storage)
+		if err != nil {
+			return err
+		}
+
+		strs, err := cache.Get(key, string(bt))
+		if err != nil {
+			return err
+		}
+
+		err = json.Unmarshal([]byte(strs), &storage)
+		if err != nil {
+			return err
+		}
+	} else {
+		path := path.Join("./", "apigateway.json")
+		exists, err := file.LoadOrSave(path, &storage)
+		if err != nil {
+			return err
+		}
+
+		if !exists {
+			storage = newStorage(s)
+		}
 	}
 
-	var result et.Json
-	err = json.Unmarshal(bt, &result)
-	if err != nil {
-		return et.Json{}
+	for _, solver := range storage.Solvers {
+		if solver.Kind == TpHandler {
+			continue
+		}
+
+		s.setSolver(
+			solver.Kind,
+			solver.Method,
+			solver.Path,
+			solver.Solver,
+			solver.TypeHeader,
+			solver.Header,
+			solver.ExcludeHeader,
+			solver.Version,
+			solver.PackageName,
+			false,
+		)
 	}
 
-	return result
+	return nil
 }
 
 /**
@@ -107,91 +160,6 @@ func (s *Server) migrate() error {
 
 	if err := s.Save(); err != nil {
 		logs.Alertf("Failed to save routes: %s", err.Error())
-	}
-
-	return nil
-}
-
-/**
-* Save
-* @return error
-**/
-func (s *Server) Save() error {
-	storage := NewStorage(s)
-	bt, err := json.Marshal(storage)
-	if err != nil {
-		return err
-	}
-
-	if s.useCache {
-		cache.Set(storage.Key, string(bt), 0)
-	} else {
-		path := path.Join("./", "apigateway.json")
-		err = file.Save(path, storage)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-/**
-* Load
-* @return error
-**/
-func (s *Server) load() error {
-	key := fmt.Sprintf("%s:%s", s.Name, s.Version)
-	if s.useCache && !cache.Exists(key) {
-		return s.migrate()
-	}
-
-	var storage *Storage
-	if s.useCache {
-		storage = NewStorage(s)
-		bt, err := json.Marshal(storage)
-		if err != nil {
-			return err
-		}
-
-		strs, err := cache.Get(key, string(bt))
-		if err != nil {
-			return err
-		}
-
-		err = json.Unmarshal([]byte(strs), &storage)
-		if err != nil {
-			return err
-		}
-	} else {
-		path := path.Join("./", "apigateway.json")
-		exists, err := file.LoadOrSave(path, &storage)
-		if err != nil {
-			return err
-		}
-
-		if !exists {
-			storage = NewStorage(s)
-		}
-	}
-
-	for _, solver := range storage.Solvers {
-		if solver.Kind == TpHandler {
-			continue
-		}
-
-		s.setSolver(
-			solver.Kind,
-			solver.Method,
-			solver.Path,
-			solver.Solver,
-			solver.TypeHeader,
-			solver.Header,
-			solver.ExcludeHeader,
-			solver.Version,
-			solver.PackageName,
-			false,
-		)
 	}
 
 	return nil

@@ -164,33 +164,31 @@ func (s *Config) DeleteConfig(tag, stage string) error {
 * @return (et.Json, error)
 **/
 func (s *Config) Get(name string, def interface{}) interface{} {
-	config := et.Json{}
 	key := fmt.Sprintf("config:%s:%s:%s", s.TenantId, s.Stage, s.Tag)
 	item := dt.Get(key)
 	if item.Ok {
-		val, ok := item.Json()
-		if ok {
-			config = val
-		}
-	} else {
-		item, err := s.model.
-			Where(Eq(TENANT_ID, s.TenantId)).
-			And(Eq("stage", s.Stage)).
-			And(Eq("tag", s.Tag)).
-			One()
+		result, err := item.Json()
 		if err != nil {
 			return def
 		}
-
-		if !item.Ok {
-			return def
-		}
-
-		dt.Up(key, item.Result)
-		config = item.Result
+		return result.ValAny(def, name)
 	}
 
-	return config.ValAny(def, name)
+	result, err := s.model.
+		Where(Eq(TENANT_ID, s.TenantId)).
+		And(Eq("stage", s.Stage)).
+		And(Eq("tag", s.Tag)).
+		One()
+	if err != nil {
+		return def
+	}
+
+	if !item.Ok {
+		return def
+	}
+
+	dt.Up(key, result.Result)
+	return result.Result.ValAny(def, name)
 }
 
 /**

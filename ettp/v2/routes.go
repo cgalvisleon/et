@@ -169,11 +169,7 @@ func (s *Server) getRouter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json, err := s.ToJson()
-	if err != nil {
-		metric.HTTPError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
+	json := s.ToJson()
 	metric.JSON(w, r, http.StatusOK, json)
 }
 

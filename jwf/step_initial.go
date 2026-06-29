@@ -1,7 +1,7 @@
 package jwf
 
 func (s *WorkFlow) init() error {
-	if s.IsInitial {
+	if s.isInitial {
 		return nil
 	}
 
@@ -53,6 +53,6 @@ func (s *WorkFlow) init() error {
 		setOnPublish(``).
 		save()
 
-	s.IsInitial = true
+	s.isInitial = true
 	return nil
 }

@@ -6,6 +6,12 @@ import (
 	"github.com/cgalvisleon/et/et"
 )
 
+func Relation(key, foreignKey string) map[string]string {
+	return map[string]string{
+		key: foreignKey,
+	}
+}
+
 /**
 * Detail: Defines a relationship to another model, including join keys and cascade rules.
 **/

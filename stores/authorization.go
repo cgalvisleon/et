@@ -156,10 +156,7 @@ func (s *Authorization) Author(profileId, method, path string) (bool, error) {
 	key := fmt.Sprintf("%s:%s:%s:%s", s.TenantId, profileId, method, path)
 	item := dt.Get(key)
 	if item.Ok {
-		b, ok := item.Bool()
-		if ok {
-			return b, nil
-		}
+		return item.Bool()
 	}
 
 	result, err := s.model.

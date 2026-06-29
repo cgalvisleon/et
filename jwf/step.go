@@ -181,6 +181,18 @@ func (s *WorkFlow) deleteStep(id string) error {
 * ToJson
 * @return et.Json
 **/
+func (s *Step) ref() et.Json {
+	return et.Json{
+		"id":    s.ID,
+		"tag":   s.Tag,
+		"title": s.Title,
+	}
+}
+
+/**
+* ToJson
+* @return et.Json
+**/
 func (s *Step) ToJson() et.Json {
 	return et.Json{
 		"created_at":  timezone.Format(s.CreatedAt, timezone.RFC3339),

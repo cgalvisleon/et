@@ -2,7 +2,6 @@ package ettp
 
 import (
 	"crypto/tls"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -12,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
@@ -51,8 +49,6 @@ type Config struct {
 	CertFile     string           `json:"cert_file"`
 	KeyFile      string           `json:"key_file"`
 	Transport    *TransportConfig `json:"transport"`
-	UseCache     bool             `json:"use_cache"`
-	UseEvent     bool             `json:"use_event"`
 	Debug        bool             `json:"debug"`
 }
 
@@ -67,8 +63,8 @@ type Server struct {
 	Version       string                            `json:"version"`
 	Solvers       map[string]*Solver                `json:"solvers"`
 	Packages      map[string]*Package               `json:"packages"`
-	router        map[string]*Router                `json:"-"`
 	Requests      map[string]*Resolver              `json:"requests"`
+	router        map[string]*Router                `json:"-"`
 	muRequests    sync.RWMutex                      `json:"-"`
 	muRoutes      sync.RWMutex                      `json:"-"`
 	mux           *http.ServeMux                    `json:"-"`
@@ -83,8 +79,6 @@ type Server struct {
 	istls         bool                              `json:"-"`
 	certFile      string                            `json:"-"`
 	keyFile       string                            `json:"-"`
-	useCache      bool                              `json:"-"`
-	useEvent      bool                              `json:"-"`
 	debug         bool                              `json:"-"`
 }
 
@@ -118,8 +112,6 @@ func New(name string, cnf *Config) (*Server, error) {
 		istls:         cnf.IsTLS,
 		certFile:      cnf.CertFile,
 		keyFile:       cnf.KeyFile,
-		useCache:      cnf.UseCache,
-		useEvent:      cnf.UseEvent,
 		debug:         cnf.Debug,
 	}
 
@@ -164,18 +156,6 @@ func New(name string, cnf *Config) (*Server, error) {
 
 	result.mux.HandleFunc("/", result.handler)
 
-	if cnf.UseCache {
-		if err := cache.Load(); err != nil {
-			return nil, err
-		}
-	}
-
-	if cnf.UseEvent {
-		if err := event.Load(); err != nil {
-			return nil, err
-		}
-	}
-
 	// tlsConfig := &tls.Config{}
 	pipe, err := net.Listen("tcp", fmt.Sprintf(":%d", cnf.RpcPort))
 	if err != nil {
@@ -188,21 +168,30 @@ func New(name string, cnf *Config) (*Server, error) {
 
 /**
 * ToJson
-* @return (et.Json, error)
+* @return et.Json
 **/
-func (s *Server) ToJson() (et.Json, error) {
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return nil, err
+func (s *Server) ToJson() et.Json {
+	return et.Json{
+		"created_at": s.CreatedAt,
+		"name":       s.Name,
+		"host":       s.Host,
+		"port":       s.Port,
+		"rpc_port":   s.RpcPort,
+		"addr":       s.Addr,
+		"parent":     s.Parent,
+		"version":    s.Version,
+		"solvers":    s.Solvers,
+		"packages":   s.Packages,
+		"requests":   s.Requests,
 	}
+}
 
-	var result et.Json
-	err = json.Unmarshal(bt, &result)
-	if err != nil {
-		return et.Json{}, err
-	}
-
-	return result, nil
+/**
+* ToString
+* @return string
+**/
+func (s *Server) ToString() string {
+	return s.ToJson().ToString()
 }
 
 /**
@@ -524,11 +513,7 @@ func (s *Server) Start() {
 	s.banner()
 
 	if s.debug {
-		json, err := s.ToJson()
-		if err != nil {
-			logs.Fatal(err)
-		}
-		logs.Log("Start:", json.ToString())
+		logs.Log("Start:", s.ToString())
 	}
 
 	utility.AppWait()

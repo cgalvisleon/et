@@ -21,8 +21,6 @@ func main() {
 		IsTLS:        false,
 		CertFile:     "",
 		KeyFile:      "",
-		UseCache:     false,
-		UseEvent:     false,
 		Debug:        true,
 	})
 

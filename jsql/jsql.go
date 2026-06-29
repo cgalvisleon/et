@@ -16,17 +16,16 @@ var (
 
 /**
 * getConnection: Returns a Connection object based on the specified driver and environment variables.
-* @param tenantId string
 * @return Connection, error
 **/
-func getConnection(tenantId string) (Connection, error) {
+func getConnection(host string) (Connection, error) {
 	driver := envar.GetStr("DB_DRIVER", DriverPostgres)
 	switch driver {
 	case DriverPostgres:
-		config := pgConection(tenantId)
+		config := pgConection(host)
 		return config, nil
 	case DriverSqlite:
-		config := sqliteConection(tenantId)
+		config := sqliteConection(host)
 		return config, nil
 	default:
 		return nil, fmt.Errorf(MSG_UNSUPPORTED_DRIVER, driver)
@@ -59,26 +58,28 @@ func ConnectTo(tenantId, name string, connect Connection) (*DB, error) {
 * @param name string
 * @return *DB, error
 **/
-func LoadTo(tenantId, name string) (*DB, error) {
-	conn, err := getConnection(tenantId)
+func LoadTo(name string) (*DB, error) {
+	host := envar.GetStr("DB_HOST", "localhost")
+	conn, err := getConnection(host)
 	if err != nil {
 		return nil, err
 	}
 	conn.SetDatabase(name)
-	return ConnectTo(tenantId, name, conn)
+	return ConnectTo("", name, conn)
 }
 
 /**
 * Load: Connects to the default database reading configuration from environment variables.
 * @return *DB, error
 **/
-func Load(tenantId string) (*DB, error) {
-	conn, err := getConnection(tenantId)
+func Load() (*DB, error) {
+	host := envar.GetStr("DB_HOST", "localhost")
+	conn, err := getConnection(host)
 	if err != nil {
 		return nil, err
 	}
 	name := conn.GetDatabase()
-	return ConnectTo(tenantId, name, conn)
+	return ConnectTo("", name, conn)
 }
 
 /**

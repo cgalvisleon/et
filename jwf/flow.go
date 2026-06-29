@@ -266,6 +266,23 @@ func (s *Flow) Save() error {
 * ToJson
 * @return et.Json
 **/
+func (s *Flow) ref() et.Json {
+	steps := []et.Json{}
+	for _, step := range s.Steps {
+		steps = append(steps, step.ref())
+	}
+	return et.Json{
+		"id":    s.ID,
+		"tag":   s.Tag,
+		"title": s.Title,
+		"steps": steps,
+	}
+}
+
+/**
+* ToJson
+* @return et.Json
+**/
 func (s *Flow) ToJson() et.Json {
 	return et.Json{
 		"created_at":     timezone.Format(s.CreatedAt, timezone.RFC3339),

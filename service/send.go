@@ -36,7 +36,7 @@ func SendSms(tenantId, serviceId string, contactNumbers []string, content string
 		return et.Items{}, err
 	}
 
-	serviceId = reg.TagULID("service", serviceId)
+	serviceId = reg.GetUUID(serviceId)
 	if set != nil {
 		set(serviceId, et.Json{
 			"tenantId":       tenantId,
@@ -66,7 +66,7 @@ func SendWhatsapp(tenantId, serviceId, templateId string, contactNumbers []strin
 		return et.Items{}, err
 	}
 
-	serviceId = reg.TagULID("service", serviceId)
+	serviceId = reg.GetUUID(serviceId)
 	if set != nil {
 		set(serviceId, et.Json{
 			"tenantId":       tenantId,
@@ -96,7 +96,7 @@ func SendEmail(tenantId, serviceId string, from et.Json, to []et.Json, subject s
 		return et.Items{}, err
 	}
 
-	serviceId = reg.TagULID("service", serviceId)
+	serviceId = reg.GetUUID(serviceId)
 	if set != nil {
 		set(serviceId, et.Json{
 			"tenantId":    tenantId,

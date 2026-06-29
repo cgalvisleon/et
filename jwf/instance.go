@@ -11,6 +11,7 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/resilience"
@@ -63,6 +64,11 @@ type Current struct {
 	IsFinished bool   `json:"is_finished"`
 }
 
+type Owner struct {
+	From jsql.From
+	Id   string `json:"id"`
+}
+
 type Instance struct {
 	StartedAt    time.Time                        `json:"started_at"`
 	UpdatedAt    time.Time                        `json:"updated_at"`
@@ -78,6 +84,7 @@ type Instance struct {
 	Ctxs         map[string]et.Json               `json:"ctxs"`
 	Params       et.Json                          `json:"params"`
 	Results      map[string]*Result               `json:"results"`
+	Owners       []*Owner                         `json:"owners"`
 	Tags         et.Json                          `json:"tags"`
 	TriggerTag   string                           `json:"trigger_tag"`
 	Trigger      *Trigger                         `json:"trigger"`
@@ -141,6 +148,7 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*I
 		Ctx:        et.Json{},
 		Ctxs:       make(map[string]et.Json),
 		Params:     et.Json{},
+		Owners:     make([]*Owner, 0),
 		Results:    make(map[string]*Result),
 		Tags:       et.Json{},
 		TriggerTag: triggerTag,
@@ -320,6 +328,33 @@ func (s *Instance) wrapper() {
 		},
 		"arrayJson": func(key string) []et.Json {
 			return s.Params.ArrayJson(key)
+		},
+	}
+	s.bindings["owner"] = map[string]interface{}{
+		"add": func(from jsql.From, id string) {
+			s.Owners = append(s.Owners, &Owner{
+				From: from,
+				Id:   id,
+			})
+		},
+		"get": func(id string) *Owner {
+			for _, owner := range s.Owners {
+				if owner.Id == id {
+					return owner
+				}
+			}
+			return nil
+		},
+		"remove": func(id string) {
+			for i, owner := range s.Owners {
+				if owner.Id == id {
+					s.Owners = append(s.Owners[:i], s.Owners[i+1:]...)
+					break
+				}
+			}
+		},
+		"list": func() []*Owner {
+			return s.Owners
 		},
 	}
 }

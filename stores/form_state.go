@@ -143,11 +143,12 @@ func (s *FormState) Get(id string, dest et.Json) (bool, error) {
 	key := fmt.Sprintf("form_state:%s", id)
 	item := dt.Get(key)
 	if item.Ok {
-		var ok bool
-		dest, ok = item.Json()
-		if ok {
-			return true, nil
+		result, err := item.Json()
+		if err != nil {
+			return false, err
 		}
+		dest = result
+		return true, nil
 	}
 
 	result, err := s.model.

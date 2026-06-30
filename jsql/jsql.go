@@ -107,7 +107,12 @@ func NewDB(tenantId, name string, params et.Json, store Store, userId string) (*
 * @return *DB, error
 **/
 func LoadDB(store Store, id string) (*DB, error) {
-	result, err := loadDB(store, id)
+	result := &DB{
+		ID:    id,
+		store: store,
+	}
+
+	err := result.Load()
 	if err != nil {
 		return nil, err
 	}

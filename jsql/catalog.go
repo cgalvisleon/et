@@ -110,33 +110,33 @@ func (s *Catalog) Set(collection, id, ownerId string, obj any) error {
 /**
 * getCatalog: Gets the catalog data for the given name.
 * @param name, kind string, des any
-* @return error
+* @return bool, error
 **/
-func (s *Catalog) Get(collection, id string, des any) error {
+func (s *Catalog) Get(collection, id string, des any) (bool, error) {
 	item, err := s.model.
 		Where(Eq("tenant_id", s.TenantId)).
 		And(Eq("kind", collection)).
 		And(Eq("id", id)).
 		One()
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if !item.Ok {
-		return errors.New(MSG_RECORD_NOT_FOUND)
+		return false, errors.New(MSG_RECORD_NOT_FOUND)
 	}
 
 	bt, err := item.Byte("definition")
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	err = json.Unmarshal(bt, &des)
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	return nil
+	return true, nil
 }
 
 /**

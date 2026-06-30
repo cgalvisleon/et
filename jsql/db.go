@@ -82,53 +82,48 @@ func newDB(tenantId, name string, params et.Json, store Store) (*DB, error) {
 * @param def et.Json
 * @return *DB, error
 **/
-func loadDB(store Store, id string) (*DB, error) {
-	if store == nil {
-		return nil, errors.New(MSG_STORE_IS_NIL)
-	}
-
-	result := &DB{
-		ID:    id,
-		store: store,
+func (s *DB) Load() error {
+	if s.store == nil {
+		return errors.New(MSG_STORE_IS_NIL)
 	}
 
 	var def et.Json
-	exists, err := store.Get("db", result.ID, &def)
+	exists, err := s.store.Get("db", s.ID, &def)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if !exists {
-		return nil, errors.New(MSG_DB_NOT_FOUND)
+		return errors.New(MSG_DB_NOT_FOUND)
 	}
 
-	result.TenantId = def.Str("tenant_id")
-	result.Name = def.Str("name")
-	result.Driver = def.Str("driver")
-	result.Params = def.Json("params")
-	result.RecordLimit = def.Int("record_limit")
-	result.Version = def.Int("version")
-	result.AuditLog = def.ArrayJson("audit_log")
-	result.Schemas = make(map[string]*Schema)
+	s.TenantId = def.Str("tenant_id")
+	s.Name = def.Str("name")
+	s.Driver = def.Str("driver")
+	s.Params = def.Json("params")
+	s.RecordLimit = def.Int("record_limit")
+	s.Version = def.Int("version")
+	s.AuditLog = def.ArrayJson("audit_log")
+	s.Schemas = make(map[string]*Schema)
 
 	schemas := def.Json("schemas")
 	for name := range schemas {
-		schema, ok := result.Schemas[name]
+		schema, ok := s.Schemas[name]
 		if !ok {
-			schema = result.newSchema(name)
-			schema.up(result)
+			schema = s.newSchema(name)
+			schema.up(s)
 		}
 		def := schemas.Json(name)
 		models := def.Json("models")
 		for modelId := range models {
 			_, err := schema.loadModel(modelId)
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 	}
 
-	return result, nil
+	return nil
 }
 
 /**
@@ -158,18 +153,9 @@ func (s *DB) addAuditLog(userId string, action string) {
 * @return et.Json
 **/
 func (s *DB) Ref() et.Json {
-	schemas := et.Json{}
-	for _, schema := range s.Schemas {
-		schemas[schema.Name] = schema.Ref()
-	}
 	return et.Json{
-		"tenant_id":    s.TenantId,
-		"id":           s.ID,
-		"name":         s.Name,
-		"schemas":      schemas,
-		"driver":       s.Driver,
-		"record_limit": s.RecordLimit,
-		"version":      s.Version,
+		"id":   s.ID,
+		"name": s.Name,
 	}
 }
 

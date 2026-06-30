@@ -110,7 +110,7 @@ type Instance struct {
 * @param params InstanceParams
 * @return *Instance, error
 **/
-func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*Instance, error) {
+func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, code, userId string) (*Instance, error) {
 	flow, err := s.loadFlow(flowId)
 	if err != nil {
 		return nil, err
@@ -119,15 +119,6 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, userId string) (*I
 	trigger, exists := flow.getTrigger(triggerTag)
 	if !exists {
 		return nil, errors.New(MSG_TRIGGER_NOT_FOUND)
-	}
-
-	code := ""
-	if s.store != nil {
-		var err error
-		code, err = s.store.GenSerie(flow.Tag)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	title := flow.Title

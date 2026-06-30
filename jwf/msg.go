@@ -31,6 +31,7 @@ var (
 	MSG_TRIGGER_NOT_FOUND             = "trigger not found"
 	MSG_STEP_ON_PUBLISH_IS_UNKNOWN    = "step on publish is unknown %v"
 	MSG_STEP_ON_PUBLISH_IS_NIL        = "step on publish is nil"
+	MSG_MODEL_NOT_FOUND               = "model not found: %s"
 )
 
 func init() {
@@ -65,5 +66,6 @@ func init() {
 		MSG_TRIGGER_NOT_FOUND = "trigger no encontrado"
 		MSG_STEP_ON_PUBLISH_IS_UNKNOWN = "on publish de step desconocido %v"
 		MSG_STEP_ON_PUBLISH_IS_NIL = "on publish de step es nulo"
+		MSG_MODEL_NOT_FOUND = "modelo no encontrado: %s"
 	}
 }

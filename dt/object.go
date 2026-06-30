@@ -20,18 +20,6 @@ type Object struct {
 }
 
 /**
-* ToString
-* @return string
-**/
-func (s *Object) ToString() string {
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return ""
-	}
-	return string(bt)
-}
-
-/**
 * newObject
 * @param key string
 * @return *Object
@@ -42,6 +30,18 @@ func newObject(key string) *Object {
 		Key:    key,
 		Expire: duration,
 	}
+}
+
+/**
+* ToString
+* @return string
+**/
+func (s *Object) ToString() string {
+	bt, err := json.Marshal(s)
+	if err != nil {
+		return ""
+	}
+	return string(bt)
 }
 
 /**

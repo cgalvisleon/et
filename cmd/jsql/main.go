@@ -9,8 +9,7 @@ import (
 // demoDBConnect attempts a live connection using env vars
 // (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME).
 func demoDBConnect() error {
-	tenantId := "37860631"
-	db, err := jsql.Load(tenantId)
+	db, err := jsql.Load()
 	if err != nil {
 		return err
 	}

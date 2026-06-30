@@ -20,9 +20,9 @@ type PgConection struct {
 	User        string
 	Password    string
 	Sslmode     string
-	UseCore     bool
 	AppName     string
 	RecordLimit int
+	UseCore     bool
 }
 
 func pgConection(host string) *PgConection {
@@ -31,9 +31,9 @@ func pgConection(host string) *PgConection {
 	user := envar.GetStr("DB_USER", "test")
 	password := envar.GetStr("DB_PASSWORD", "test")
 	sslmode := envar.GetStr("DB_SSLMODE", "disable")
-	useCore := envar.GetBool("DB_USE_CORE", false)
 	appName := envar.GetStr("DB_APP_NAME", "josephine")
 	recordLimit := envar.GetInt("DB_RECORD_LIMIT", 1000)
+	useCore := envar.GetBool("DB_USE_CORE", false)
 	return &PgConection{
 		Database:    database,
 		Host:        host,
@@ -41,9 +41,9 @@ func pgConection(host string) *PgConection {
 		User:        user,
 		Password:    password,
 		Sslmode:     sslmode,
-		UseCore:     useCore,
 		AppName:     appName,
 		RecordLimit: recordLimit,
+		UseCore:     useCore,
 	}
 }
 
@@ -60,9 +60,9 @@ func (s *PgConection) GetParams() et.Json {
 		"user":         s.User,
 		"password":     s.Password,
 		"sslmode":      s.Sslmode,
-		"use_core":     s.UseCore,
 		"app_name":     s.AppName,
 		"record_limit": s.RecordLimit,
+		"use_core":     s.UseCore,
 	}
 }
 
@@ -90,6 +90,7 @@ type SqliteConection struct {
 	PoolLifetime int
 	PoolIdleTime int
 	AppName      string
+	UseCore      bool
 }
 
 func sqliteConection(path string) *SqliteConection {
@@ -103,6 +104,7 @@ func sqliteConection(path string) *SqliteConection {
 	poolLifetime := envar.GetInt("DB_POOL_LIFETIME", 10)
 	poolIdleTime := envar.GetInt("DB_POOL_IDLE_TIME", 10)
 	appName := envar.GetStr("DB_APP_NAME", "josephine")
+	useCore := envar.GetBool("DB_USE_CORE", false)
 	return &SqliteConection{
 		Name:         name,
 		RecordLimit:  recordLimit,
@@ -111,6 +113,7 @@ func sqliteConection(path string) *SqliteConection {
 		PoolLifetime: poolLifetime,
 		PoolIdleTime: poolIdleTime,
 		AppName:      appName,
+		UseCore:      useCore,
 	}
 }
 
@@ -128,6 +131,7 @@ func (s *SqliteConection) GetParams() et.Json {
 		"pool_lifetime":  s.PoolLifetime,
 		"pool_idle_time": s.PoolIdleTime,
 		"app_name":       s.AppName,
+		"use_core":       s.UseCore,
 	}
 }
 

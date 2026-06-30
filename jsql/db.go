@@ -34,12 +34,15 @@ type DB struct {
 	RecordLimit int                `json:"record_limit"`
 	Version     int                `json:"version"`
 	AuditLog    []et.Json          `json:"audit_log"`
+	UseCore     bool               `json:"use_core"`
 	isDebug     bool               `json:"-"`
 	isChanged   bool               `json:"-"`
 	isInit      bool               `json:"-"`
 	driver      Driver             `json:"-"`
 	db          *sql.DB            `json:"-"`
 	store       Store              `json:"-"`
+	series      *Series            `json:"-"`
+	catalog     *Catalog           `json:"-"`
 }
 
 /**
@@ -47,10 +50,8 @@ type DB struct {
 * @param params et.Json
 * @return *DB, error
 **/
-func newDB(tenantId, driver, name string, params et.Json) (*DB, error) {
-	if !utility.ValidStr(driver, 2, []string{""}) {
-		return nil, errors.New(MSG_DRIVER_NOT_FOUND)
-	}
+func newDB(tenantId, name string, params et.Json, store Store) (*DB, error) {
+	driver := params.Str("driver")
 	drv, ok := drivers[driver]
 	if !ok {
 		return nil, errors.New(MSG_DRIVER_NOT_FOUND)
@@ -68,30 +69,71 @@ func newDB(tenantId, driver, name string, params et.Json) (*DB, error) {
 		RecordLimit: recordLimit,
 		Version:     version,
 		AuditLog:    make([]et.Json, 0),
+		UseCore:     params.Bool("use_core"),
 		driver:      drv,
-		isChanged:   true,
+		store:       store,
 	}
+	err := result.save()
+	if err != nil {
+		return nil, err
+	}
+
 	return result, nil
 }
 
 /**
-* up: Updates the DB metadata after loading from catalog.
-* @return *DB
+* loadDB: Loads a DB instance from the given definition.
+* @param def et.Json
+* @return *DB, error
 **/
-func (s *DB) up(store Store) (*DB, error) {
-	s.store = store
-	err := s.init()
+func loadDB(store Store, id string) (*DB, error) {
+	if store == nil {
+		return nil, errors.New(MSG_STORE_IS_NIL)
+	}
+
+	result := &DB{
+		ID:    id,
+		store: store,
+	}
+
+	var def et.Json
+	exists, err := store.Get("db", result.ID, &def)
 	if err != nil {
 		return nil, err
 	}
-	for _, schema := range s.Schemas {
-		_, err := schema.up(s)
-		if err != nil {
-			return nil, err
+
+	if !exists {
+		return nil, errors.New(MSG_DB_NOT_FOUND)
+	}
+
+	result.TenantId = def.Str("tenant_id")
+	result.Name = def.Str("name")
+	result.Driver = def.Str("driver")
+	result.Params = def.Json("params")
+	result.RecordLimit = def.Int("record_limit")
+	result.Version = def.Int("version")
+	result.AuditLog = def.ArrayJson("audit_log")
+	result.UseCore = def.Bool("use_core")
+	result.Schemas = make(map[string]*Schema)
+
+	schemas := def.Json("schemas")
+	for name := range schemas {
+		schema, ok := result.Schemas[name]
+		if !ok {
+			schema = result.newSchema(name)
+			schema.up(result)
+		}
+		def := schemas.Json(name)
+		models := def.Json("models")
+		for modelId := range models {
+			_, err := schema.loadModel(modelId)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
-	return s, nil
+	return result, nil
 }
 
 /**
@@ -117,22 +159,40 @@ func (s *DB) addAuditLog(userId string, action string) {
 }
 
 /**
-* ToJson: Returns the DB metadata as an et.Json map.
+* Ref: Returns the DB metadata as an et.Json map.
 * @return et.Json
 **/
-func (s *DB) ToJson() et.Json {
+func (s *DB) Ref() et.Json {
 	schemas := et.Json{}
 	for _, schema := range s.Schemas {
-		schemas[schema.Name] = schema.ToJson()
+		schemas[schema.Name] = schema.Ref()
 	}
 	return et.Json{
-		"id":           s.ID,
 		"tenant_id":    s.TenantId,
+		"id":           s.ID,
 		"name":         s.Name,
 		"schemas":      schemas,
 		"driver":       s.Driver,
 		"record_limit": s.RecordLimit,
 		"version":      s.Version,
+	}
+}
+
+/**
+* ToJson: Returns the DB metadata as an et.Json map.
+* @return et.Json
+**/
+func (s *DB) ToJson() et.Json {
+	return et.Json{
+		"tenant_id":    s.TenantId,
+		"id":           s.ID,
+		"name":         s.Name,
+		"schemas":      s.Schemas,
+		"driver":       s.Driver,
+		"params":       s.Params,
+		"record_limit": s.RecordLimit,
+		"version":      s.Version,
+		"audit_log":    s.AuditLog,
 	}
 }
 
@@ -153,13 +213,14 @@ func (s *DB) save() error {
 		return nil
 	}
 
-	err := s.store.Set("db", s.ID, s.TenantId, s)
+	err := s.store.Set("db", s.ID, s.TenantId, s.Ref())
 	if err != nil {
 		return err
 	}
 
+	json := s.ToJson()
 	channel := fmt.Sprintf("db:%s", s.ID)
-	event.Publish(channel, s.ToJson())
+	event.Publish(channel, json)
 	return nil
 }
 
@@ -167,7 +228,7 @@ func (s *DB) save() error {
 * init: Opens the driver connection and, when UseCore is set, initializes core tables.
 * @return error
 **/
-func (s *DB) init() error {
+func (s *DB) Init() error {
 	if s.isInit {
 		return nil
 	}
@@ -186,10 +247,34 @@ func (s *DB) init() error {
 	}
 
 	s.db = db
+	if s.UseCore {
+		err = s.initCore()
+		if err != nil {
+			return err
+		}
+	}
 
 	s.isInit = true
 	if s.isChanged {
 		return s.save()
+	}
+
+	return nil
+}
+
+/**
+* initCore: Initializes the core tables.
+* @return error
+**/
+func (s *DB) initCore() error {
+	err := s.defineSeries("core")
+	if err != nil {
+		return err
+	}
+
+	err = s.defineCatalog("core")
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -292,6 +377,26 @@ func (s *DB) Close() error {
 }
 
 /**
+* newSchema: Constructs a new Schema with initialized fields.
+* @param name string
+* @return *Schema
+**/
+func (s *DB) newSchema(name string) *Schema {
+	result := &Schema{
+		TenantId: s.TenantId,
+		Database: s.Name,
+		Name:     name,
+		Models:   make(map[string]*Model),
+		db:       s,
+		isDebug:  s.isDebug,
+		mu:       &sync.RWMutex{},
+		store:    s.store,
+	}
+	s.Schemas[name] = result
+	return result
+}
+
+/**
 * NewModel: Returns (or creates) a Model under the given schema name.
 * @param schema, name string, version int, userId string
 * @return *Model, error
@@ -300,14 +405,7 @@ func (s *DB) NewModel(schema, name string, version int, userId string) *Model {
 	schema = utility.Normalize(schema)
 	sch, ok := s.Schemas[schema]
 	if !ok {
-		sch = &Schema{
-			Database: s.Name,
-			Name:     schema,
-			Models:   make(map[string]*Model),
-			db:       s,
-			mu:       &sync.RWMutex{},
-		}
-		s.Schemas[schema] = sch
+		sch = s.newSchema(schema)
 	}
 
 	result := sch.newModel(name, version, userId)
@@ -331,11 +429,10 @@ func (s *DB) Debug() {
 
 /**
 * GetModel: Looks up a model by schema and name, returning an error if not found.
-* @param schema string
-* @param name string
+* @param schema, name string
 * @return *Model, error
 **/
-func (s *DB) GetModel(schema string, name string) (*Model, error) {
+func (s *DB) GetModel(schema, name string) (*Model, error) {
 	sch, err := s.getSchema(schema)
 	if err != nil {
 		return nil, err
@@ -351,9 +448,7 @@ func (s *DB) GetModel(schema string, name string) (*Model, error) {
 
 /**
 * SqlTx: Executes a SQL query inside the given transaction (or directly on the pool if nil).
-* @param tx *Tx
-* @param query string
-* @param arg ...any
+* @param tx *Tx, query string, args ...any
 * @return et.Items, error
 **/
 func (s *DB) SqlTx(tx *Tx, query string, arg ...any) (et.Items, error) {
@@ -379,8 +474,7 @@ func (s *DB) SqlTx(tx *Tx, query string, arg ...any) (et.Items, error) {
 
 /**
 * Sql: Executes a SQL query directly on the DB (no transaction).
-* @param query string
-* @param args ...any
+* @param query string, args ...any
 * @return et.Items, error
 **/
 func (s *DB) Sql(query string, args ...any) (et.Items, error) {

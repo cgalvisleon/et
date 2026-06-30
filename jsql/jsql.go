@@ -1,7 +1,6 @@
 package jsql
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -39,13 +38,12 @@ func getConnection(host string) (Connection, error) {
 **/
 func ConnectTo(tenantId, name string, connect Connection) (*DB, error) {
 	params := connect.GetParams()
-	driver := params.Str("driver")
-	result, err := newDB(tenantId, driver, name, params)
+	result, err := newDB(tenantId, name, params, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	err = result.init()
+	err = result.Init()
 	if err != nil {
 		return nil, err
 	}
@@ -55,31 +53,32 @@ func ConnectTo(tenantId, name string, connect Connection) (*DB, error) {
 
 /**
 * LoadTo: Returns an existing DB by name.
-* @param name string
+* @param tenantId, name string
 * @return *DB, error
 **/
-func LoadTo(name string) (*DB, error) {
+func LoadTo(tenantId, name string) (*DB, error) {
 	host := envar.GetStr("DB_HOST", "localhost")
 	conn, err := getConnection(host)
 	if err != nil {
 		return nil, err
 	}
 	conn.SetDatabase(name)
-	return ConnectTo("", name, conn)
+	result, err := ConnectTo(tenantId, name, conn)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 /**
 * Load: Connects to the default database reading configuration from environment variables.
+* @param tenantId string
 * @return *DB, error
 **/
-func Load() (*DB, error) {
-	host := envar.GetStr("DB_HOST", "localhost")
-	conn, err := getConnection(host)
-	if err != nil {
-		return nil, err
-	}
-	name := conn.GetDatabase()
-	return ConnectTo("", name, conn)
+func Load(tenantId string) (*DB, error) {
+	name := envar.GetStr("DB_NAME", "josephine")
+	return LoadTo(tenantId, name)
 }
 
 /**
@@ -87,13 +86,18 @@ func Load() (*DB, error) {
 * @param params et.Json, store Store, userId string
 * @return *DB, error
 **/
-func NewDB(tenantId, driver, name string, params et.Json, store Store, userId string) (*DB, error) {
-	result, err := newDB(tenantId, driver, name, params)
+func NewDB(tenantId, name string, params et.Json, store Store, userId string) (*DB, error) {
+	result, err := newDB(tenantId, name, params, store)
 	if err != nil {
 		return nil, err
 	}
 	result.addAuditLog(userId, "new_db")
-	return result.up(store)
+	err = result.Init()
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 /**
@@ -101,26 +105,16 @@ func NewDB(tenantId, driver, name string, params et.Json, store Store, userId st
 * @param id string, store Store
 * @return *DB, error
 **/
-func LoadDB(id string, store Store) (*DB, error) {
-	if store == nil {
-		return nil, errors.New(MSG_DB_STORE_IS_NIL)
-	}
-
-	var def et.Json
-	exists, err := store.Get("db", id, &def)
+func LoadDB(store Store, id string) (*DB, error) {
+	result, err := loadDB(store, id)
 	if err != nil {
 		return nil, err
 	}
 
-	if !exists {
-		return nil, errors.New(MSG_DB_NOT_FOUND)
-	}
-
-	result := &DB{}
-	err = json.Unmarshal([]byte(def.ToString()), &result)
+	err = result.Init()
 	if err != nil {
 		return nil, err
 	}
 
-	return result.up(store)
+	return result, nil
 }

@@ -1,10 +1,9 @@
-package stores
+package jsql
 
 import (
 	"fmt"
 
 	"github.com/cgalvisleon/et/et"
-	. "github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -13,7 +12,12 @@ type Series struct {
 	model    *Model
 }
 
-func DefineSeries(db *DB, tenantId, schema string) (*Series, error) {
+/**
+* defineSeries
+* @param schema string
+* @return error
+**/
+func (s *DB) defineSeries(schema string) error {
 	columns := []Column{
 		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
@@ -35,12 +39,12 @@ func DefineSeries(db *DB, tenantId, schema string) (*Series, error) {
 		IdxField: IDX,
 		IsCore:   true,
 	}
-	result, err := db.Define(def)
+	model, err := s.Define(def)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	result.BeforeInsert(func(tx *Tx, old, new et.Json) error {
+	model.BeforeInsert(func(tx *Tx, old, new et.Json) error {
 		now := timezone.Now()
 		new.Set(CREATED_AT, now)
 		new.Set(UPDATED_AT, now)
@@ -52,10 +56,17 @@ func DefineSeries(db *DB, tenantId, schema string) (*Series, error) {
 			return nil
 		})
 
-	return &Series{
-		TenantId: tenantId,
-		model:    result,
-	}, nil
+	err = model.Init()
+	if err != nil {
+		return err
+	}
+
+	s.series = &Series{
+		TenantId: s.TenantId,
+		model:    model,
+	}
+
+	return nil
 }
 
 /**

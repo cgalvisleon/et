@@ -2,7 +2,7 @@ package jsql
 
 import (
 	"database/sql"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"sync"
@@ -79,68 +79,6 @@ type Model struct {
 }
 
 /**
-* newModel: Constructs a new Model with initialized fields and default triggers.
-* @param schema *Schema, name string, version int, userId string
-* @return *Model
-**/
-func (s *Schema) newModel(name string, version int, userId string) *Model {
-	name = utility.Normalize(name)
-	result := &Model{
-		TenantId:      s.TenantId,
-		ID:            reg.UUID(),
-		Database:      s.Database,
-		Schema:        s.Name,
-		DatabaseId:    s.db.ID,
-		Name:          name,
-		Columns:       make([]*Column, 0),
-		Indexes:       make([]*Index, 0),
-		PrimaryKeys:   make([]*Index, 0),
-		ForeignKeys:   make([]*Detail, 0),
-		Unique:        make([]*Index, 0),
-		Required:      make([]*Index, 0),
-		Hiddens:       make([]string, 0),
-		Details:       make(map[string]*Detail, 0),
-		Rollups:       make(map[string]*Detail, 0),
-		calcs:         make(map[string]CalcFunction, 0),
-		Version:       version,
-		BeforeInserts: make([]string, 0),
-		BeforeUpdates: make([]string, 0),
-		BeforeDeletes: make([]string, 0),
-		AfterInserts:  make([]string, 0),
-		AfterUpdates:  make([]string, 0),
-		AfterDeletes:  make([]string, 0),
-		AuditLog:      make([]et.Json, 0),
-		isChanged:     true,
-	}
-	result.addAuditLog(userId, "new_model")
-	result.up(s)
-	return result
-}
-
-/**
-* loadModel: Loads a Model from the database catalog by name.
-* @param schema *Schema, name string
-* @return *Model, error
-**/
-func (s *Schema) loadModel(id string) (*Model, error) {
-	if s.store == nil {
-		return nil, errors.New(MSG_DB_STORE_IS_NIL)
-	}
-
-	var result *Model
-	exists, err := s.store.Get("model", id, &result)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.New(MSG_MODEL_NOT_FOUND)
-	}
-	result.up(s)
-
-	return result, nil
-}
-
-/**
 * up: Updates the model's database and schema references after loading from catalog.
 * @param schema *Schema
 * @return *Model
@@ -156,8 +94,6 @@ func (s *Model) up(schema *Schema) *Model {
 	s.afterUpdates = make([]TriggerFunction, 0)
 	s.afterDeletes = make([]TriggerFunction, 0)
 	s.db = schema.db
-	s.historyDb = schema.historyDb
-	s.deadDb = schema.deadDb
 	for _, column := range s.Columns {
 		column.up(s)
 	}
@@ -192,35 +128,37 @@ func (s *Model) addAuditLog(userId string, action string) {
 * ToJson: Returns the model metadata as an et.Json map.
 * @return et.Json
 **/
-func (s *Model) ToJson() et.Json {
+func (s *Model) Ref() et.Json {
 	return et.Json{
-		"id":           s.ID,
-		"database":     s.Database,
-		"schema":       s.Schema,
-		"name":         s.Name,
-		"table":        s.Table,
-		"columns":      s.Columns,
-		"source_field": s.SourceField,
-		"idx_field":    s.IdxField,
-		"idt_field":    s.IdtField,
-		"indexes":      s.Indexes,
-		"primary_keys": s.PrimaryKeys,
-		"foreign_keys": s.ForeignKeys,
-		"unique":       s.Unique,
-		"required":     s.Required,
-		"hiddens":      s.Hiddens,
-		"details":      s.Details,
-		"rollups":      s.Rollups,
-		"audit_log":    s.AuditLog,
+		"id":   s.ID,
+		"name": s.Name,
 	}
+}
+
+/**
+* ToJson: Returns the model metadata as an et.Json map.
+* @return et.Json
+**/
+func (s *Model) ToJson() (et.Json, error) {
+	bt, err := utility.Serialize(s)
+	if err != nil {
+		return et.Json{}, err
+	}
+	var result et.Json
+	err = json.Unmarshal(bt, &result)
+	return result, nil
 }
 
 /**
 * ToString: Returns the model metadata as a string.
 * @return string
 **/
-func (s *Model) ToString() string {
-	return s.ToJson().ToString()
+func (s *Model) ToString() (string, error) {
+	result, err := s.ToJson()
+	if err != nil {
+		return "", err
+	}
+	return result.ToString(), nil
 }
 
 /**
@@ -249,18 +187,21 @@ func (s *Model) save() error {
 
 	s.isChanged = false
 
-	data := s.ToJson()
+	json, err := s.ToJson()
+	if err != nil {
+		return err
+	}
 	if s.IsDebug {
-		logs.Log(packageName, "save:", data.ToString())
+		logs.Log(packageName, "save:", json.ToString())
 	}
 
-	err := s.store.Set("model", s.ID, s.DatabaseId, s)
+	err = s.store.Set("model", s.ID, s.DatabaseId, s)
 	if err != nil {
 		return err
 	}
 
 	channel := fmt.Sprintf("model:%s", s.ID)
-	event.Publish(channel, data)
+	event.Publish(channel, json)
 	return nil
 }
 
@@ -306,11 +247,11 @@ func (s *Model) GetCalcFunc(name string) (CalcFunction, bool) {
 }
 
 /**
-* initInDb: Checks if the model exists in the database and loads it if not.
+* existModel: Checks if the model exists in the database and loads it if not.
 * @param db *DB
 * @return (bool, error) where bool indicates if the model already existed
 **/
-func (s *Model) initInDb(db *DB) (bool, error) {
+func (s *Model) existModel(db *DB) (bool, error) {
 	exist, err := db.existModel(s)
 	if err != nil {
 		return false, err
@@ -361,7 +302,7 @@ func (s *Model) Init() error {
 	go func() {
 		defer wg.Done()
 		var exist bool
-		exist, err = s.initInDb(s.db)
+		exist, err = s.existModel(s.db)
 		if err != nil {
 			return
 		}
@@ -377,7 +318,7 @@ func (s *Model) Init() error {
 	if s.historyDb != nil {
 		go func() {
 			defer wg.Done()
-			_, err = s.initInDb(s.historyDb)
+			_, err = s.existModel(s.historyDb)
 			if err != nil {
 				return
 			}
@@ -387,7 +328,7 @@ func (s *Model) Init() error {
 	if s.deadDb != nil {
 		go func() {
 			defer wg.Done()
-			_, err = s.initInDb(s.deadDb)
+			_, err = s.existModel(s.deadDb)
 			if err != nil {
 				return
 			}

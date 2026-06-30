@@ -3,7 +3,6 @@ package jsql
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"slices"
 
 	"github.com/cgalvisleon/et/et"
@@ -63,70 +62,6 @@ type Def struct {
 	Rollups     []DefRollup      `json:"rollups"`
 	IsCore      bool             `json:"is_core"`
 	UserId      string           `json:"user_id"`
-}
-
-func StructToDef(schema, name string, version int, s any) Def {
-	result := Def{
-		Schema:  schema,
-		Name:    name,
-		Version: version,
-		Columns: []Column{},
-		Details: []DefDetail{},
-	}
-	t := reflect.TypeOf(s)
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		tpColumn := COLUMN
-		tpData := ANY
-		var def any = nil
-		switch field.Type.Kind() {
-		case reflect.Slice, reflect.Array:
-			elem := field.Type.Elem()
-
-			fmt.Printf("  Es un %s\n", field.Type.Kind())
-			fmt.Printf("  Tipo de elementos: %s\n", elem)
-
-			if elem.Kind() == reflect.Struct {
-				fmt.Println("  -> Es un arreglo de structs")
-			}
-		default:
-			tpColumn = COLUMN
-			switch field.Type.String() {
-			case "string":
-				tpData = TEXT
-				def = ""
-			case "int":
-				tpData = INT
-				def = 0
-			case "float64":
-				tpData = FLOAT
-				def = 0.00
-			case "bool":
-				tpData = BOOLEAN
-				def = false
-			case "time.Time":
-				tpData = DATETIME
-			case "[]byte":
-				tpData = BYTES
-				def = []byte{}
-			case "et.Json", "*et.Json", "map[string]interface{}":
-				tpData = JSON
-				def = et.Json{}
-			default:
-				tpData = ANY
-				def = ""
-			}
-
-			result.Columns = append(result.Columns, Column{
-				Name:       field.Name,
-				TypeColumn: tpColumn,
-				TypeData:   tpData,
-				Default:    def,
-				Definition: []byte{},
-			})
-		}
-	}
-	return result
 }
 
 /**

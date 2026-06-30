@@ -20,7 +20,7 @@ type Store interface {
 	Set(collection, id, ownerId string, obj any) error
 	Get(collection, id string, dest any) (bool, error)
 	Delete(collection, id string) error
-	Query(query et.Json) (et.Items, error)
+	Query(collection string, query et.Json) (et.Items, error)
 }
 
 type Resilience struct {
@@ -252,5 +252,5 @@ func (s *Resilience) Query(query et.Json) (et.Items, error) {
 		return et.Items{}, errors.New(msg.MSG_STORE_IS_REQUIRED)
 	}
 
-	return s.store.Query(query)
+	return s.store.Query("resilience", query)
 }

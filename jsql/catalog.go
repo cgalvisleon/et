@@ -1,11 +1,10 @@
-package stores
+package jsql
 
 import (
 	"encoding/json"
 	"errors"
 
 	"github.com/cgalvisleon/et/et"
-	. "github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -15,11 +14,11 @@ type Catalog struct {
 }
 
 /**
-* DefineCatalog: Defines the catalog table.
-* @param db *DB
+* defineCatalog: Defines the catalog table.
+* @param schema string
 * @return error
 **/
-func DefineCatalog(db *DB, tenantId, schema string) (*Catalog, error) {
+func (s *DB) defineCatalog(schema string) error {
 	columns := []Column{
 		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
@@ -47,30 +46,33 @@ func DefineCatalog(db *DB, tenantId, schema string) (*Catalog, error) {
 		IdtField: IDT,
 	}
 
-	result, err := db.Define(def)
+	model, err := s.Define(def)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	result.BeforeInsert(func(tx *Tx, old, new et.Json) error {
+	model.BeforeInsert(func(tx *Tx, old, new et.Json) error {
 		now := timezone.Now()
 		new.Set(CREATED_AT, now)
 		new.Set(UPDATED_AT, now)
 		return nil
 	})
-	result.BeforeUpdate(func(tx *Tx, old, new et.Json) error {
+	model.BeforeUpdate(func(tx *Tx, old, new et.Json) error {
 		now := timezone.Now()
 		new.Set(UPDATED_AT, now)
 		return nil
 	})
-	err = result.Init()
+
+	err = model.Init()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return &Catalog{
-		TenantId: tenantId,
-		model:    result,
-	}, nil
+	s.catalog = &Catalog{
+		TenantId: s.TenantId,
+		model:    model,
+	}
+
+	return nil
 }
 
 /**

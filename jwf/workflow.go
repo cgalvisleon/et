@@ -20,14 +20,6 @@ const (
 	packageName = "workflow"
 )
 
-type Store interface {
-	Set(collection, id, ownerId string, obj any) error
-	Get(collection, id string, dest any) (bool, error)
-	Delete(collection, id string) error
-	Query(query et.Json) (et.Items, error)
-	GenSerie(tag string) (string, error)
-}
-
 type WorkFlow struct {
 	CreatedAt time.Time                        `json:"created_at"`
 	UpdatedAt time.Time                        `json:"updated_at"`
@@ -79,10 +71,10 @@ func New(store Store) (*WorkFlow, error) {
 
 /**
 * Load
-* @param tenantId string, store Store
+* @param store Store, id string
 * @return *WorkFlow, error
 **/
-func Load(id string, store Store) (*WorkFlow, error) {
+func Load(store Store, id string) (*WorkFlow, error) {
 	if store == nil {
 		return nil, errors.New(MSG_WORKFLOW_STORE_IS_NIL)
 	}
@@ -182,10 +174,10 @@ func (s *WorkFlow) addAuditLog(userId string, action string) {
 }
 
 /**
-* ToJson
+* Ref
 * @return et.Json
 **/
-func (s *WorkFlow) ref() et.Json {
+func (s *WorkFlow) Ref() et.Json {
 	flows := et.Json{}
 	for id, flow := range s.Flows {
 		flows[id] = flow.ref()
@@ -195,12 +187,9 @@ func (s *WorkFlow) ref() et.Json {
 		steps[id] = step.ref()
 	}
 	return et.Json{
-		"created_at": timezone.Format(s.CreatedAt, timezone.RFC3339),
-		"updated_at": timezone.Format(s.UpdatedAt, timezone.RFC3339),
-		"id":         s.ID,
-		"audit_log":  s.AuditLog,
-		"flows":      flows,
-		"steps":      steps,
+		"id":    s.ID,
+		"flows": flows,
+		"steps": steps,
 	}
 }
 
@@ -267,7 +256,7 @@ func (s *WorkFlow) Save() error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("workflows", s.ID, s.ID, s.ref())
+	err := s.store.Set("workflows", s.ID, s.ID, s.Ref())
 	if err != nil {
 		return err
 	}
@@ -432,14 +421,14 @@ func (s *WorkFlow) SetStep(stepDef et.Json, userId string) (*WorkFlow, error) {
 
 /**
 * Run
-* @param tag, id, ownerId string, step int, ctx, tags et.Json, userId string
+* @param flowId, triggerTag, id, projectId, code string, ctx, tags et.Json, userId string
 * @return *Instance, error
 **/
-func (s *WorkFlow) Run(flowId, triggerTag, id, projectId string, ctx, tags et.Json, userId string) (et.Json, error) {
+func (s *WorkFlow) Run(flowId, triggerTag, id, projectId, code string, ctx, tags et.Json, userId string) (et.Json, error) {
 	id = reg.GetULID(id)
 	instance, err := s.getInstance(id, userId)
 	if errors.Is(err, ErrorInstanceNotFound) {
-		instance, err = s.newInstance(projectId, flowId, triggerTag, userId)
+		instance, err = s.newInstance(projectId, flowId, triggerTag, code, userId)
 		if err != nil {
 			return nil, err
 		}

@@ -315,7 +315,7 @@ func (s *Flow) ToString() string {
 * @param time time.Duration, userId string
 * @return *Flow
 **/
-func (s *Flow) setTimeAwait(time time.Duration, userId string) *Flow {
+func (s *Flow) SetTimeAwait(time time.Duration, userId string) *Flow {
 	s.TimeAwait = time
 	s.addAuditLog(userId, "set_time_await")
 	return s

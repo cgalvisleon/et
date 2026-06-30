@@ -17,7 +17,7 @@ type Series struct {
 * @param schema string
 * @return error
 **/
-func (s *DB) defineSeries(schema string) error {
+func DefineSeries(db *DB, tenantId, schema string) (*Series, error) {
 	columns := []Column{
 		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
@@ -39,9 +39,9 @@ func (s *DB) defineSeries(schema string) error {
 		IdxField: IDX,
 		IsCore:   true,
 	}
-	model, err := s.Define(def)
+	model, err := db.Define(def)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	model.BeforeInsert(func(tx *Tx, old, new et.Json) error {
@@ -58,15 +58,13 @@ func (s *DB) defineSeries(schema string) error {
 
 	err = model.Init()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	s.series = &Series{
-		TenantId: s.TenantId,
+	return &Series{
+		TenantId: tenantId,
 		model:    model,
-	}
-
-	return nil
+	}, nil
 }
 
 /**

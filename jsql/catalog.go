@@ -15,10 +15,10 @@ type Catalog struct {
 
 /**
 * defineCatalog: Defines the catalog table.
-* @param schema string
-* @return error
+* @param db *DB, tenantId, schema string
+* @return *Catalog, error
 **/
-func (s *DB) defineCatalog(schema string) error {
+func DefineCatalog(db *DB, tenantId, schema string) (*Catalog, error) {
 	columns := []Column{
 		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
@@ -46,9 +46,9 @@ func (s *DB) defineCatalog(schema string) error {
 		IdtField: IDT,
 	}
 
-	model, err := s.Define(def)
+	model, err := db.Define(def)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	model.BeforeInsert(func(tx *Tx, old, new et.Json) error {
 		now := timezone.Now()
@@ -64,15 +64,13 @@ func (s *DB) defineCatalog(schema string) error {
 
 	err = model.Init()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	s.catalog = &Catalog{
-		TenantId: s.TenantId,
+	return &Catalog{
+		TenantId: tenantId,
 		model:    model,
-	}
-
-	return nil
+	}, nil
 }
 
 /**

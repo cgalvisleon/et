@@ -22,7 +22,6 @@ type PgConection struct {
 	Sslmode     string
 	AppName     string
 	RecordLimit int
-	UseCore     bool
 }
 
 func pgConection(host string) *PgConection {
@@ -33,7 +32,6 @@ func pgConection(host string) *PgConection {
 	sslmode := envar.GetStr("DB_SSLMODE", "disable")
 	appName := envar.GetStr("DB_APP_NAME", "josephine")
 	recordLimit := envar.GetInt("DB_RECORD_LIMIT", 1000)
-	useCore := envar.GetBool("DB_USE_CORE", false)
 	return &PgConection{
 		Database:    database,
 		Host:        host,
@@ -43,7 +41,6 @@ func pgConection(host string) *PgConection {
 		Sslmode:     sslmode,
 		AppName:     appName,
 		RecordLimit: recordLimit,
-		UseCore:     useCore,
 	}
 }
 
@@ -62,7 +59,6 @@ func (s *PgConection) GetParams() et.Json {
 		"sslmode":      s.Sslmode,
 		"app_name":     s.AppName,
 		"record_limit": s.RecordLimit,
-		"use_core":     s.UseCore,
 	}
 }
 
@@ -90,7 +86,6 @@ type SqliteConection struct {
 	PoolLifetime int
 	PoolIdleTime int
 	AppName      string
-	UseCore      bool
 }
 
 func sqliteConection(path string) *SqliteConection {
@@ -104,7 +99,6 @@ func sqliteConection(path string) *SqliteConection {
 	poolLifetime := envar.GetInt("DB_POOL_LIFETIME", 10)
 	poolIdleTime := envar.GetInt("DB_POOL_IDLE_TIME", 10)
 	appName := envar.GetStr("DB_APP_NAME", "josephine")
-	useCore := envar.GetBool("DB_USE_CORE", false)
 	return &SqliteConection{
 		Name:         name,
 		RecordLimit:  recordLimit,
@@ -113,7 +107,6 @@ func sqliteConection(path string) *SqliteConection {
 		PoolLifetime: poolLifetime,
 		PoolIdleTime: poolIdleTime,
 		AppName:      appName,
-		UseCore:      useCore,
 	}
 }
 
@@ -131,7 +124,6 @@ func (s *SqliteConection) GetParams() et.Json {
 		"pool_lifetime":  s.PoolLifetime,
 		"pool_idle_time": s.PoolIdleTime,
 		"app_name":       s.AppName,
-		"use_core":       s.UseCore,
 	}
 }
 

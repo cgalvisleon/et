@@ -43,7 +43,7 @@ type WorkFlow struct {
 * @param store Store
 * @return *WorkFlow
 **/
-func New(store Store) (*WorkFlow, error) {
+func New(store Store, userID string) (*WorkFlow, error) {
 	err := cache.Load()
 	if err != nil {
 		return nil, err
@@ -66,7 +66,17 @@ func New(store Store) (*WorkFlow, error) {
 		muSteps:   sync.Mutex{},
 		store:     store,
 	}
-	return result.up()
+	result.addAuditLog(userID, "new_workflow")
+	_, err = result.up()
+	if err != nil {
+		return nil, err
+	}
+
+	err = result.Save()
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 /**
@@ -90,16 +100,16 @@ func Load(store Store, id string) (*WorkFlow, error) {
 	}
 
 	result := &WorkFlow{
-		CreatedAt: def.Time("created_at"),
-		UpdatedAt: def.Time("updated_at"),
-		ID:        def.String("id"),
-		AuditLog:  def.ArrayJson("audit_log"),
-		Steps:     make(map[string]*Step),
-		Flows:     make(map[string]*Flow),
-		muFlows:   sync.Mutex{},
-		muSteps:   sync.Mutex{},
-		store:     store,
+		ID:    id,
+		store: store,
 	}
+	result.CreatedAt = def.Time("created_at")
+	result.UpdatedAt = def.Time("updated_at")
+	result.AuditLog = def.ArrayJson("audit_log")
+	result.Steps = make(map[string]*Step)
+	result.Flows = make(map[string]*Flow)
+	result.muFlows = sync.Mutex{}
+	result.muSteps = sync.Mutex{}
 
 	steps := def.Json("steps")
 	for id := range steps {
@@ -117,7 +127,12 @@ func Load(store Store, id string) (*WorkFlow, error) {
 		}
 	}
 
-	return result.up()
+	_, err = result.up()
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 /**

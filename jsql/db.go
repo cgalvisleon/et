@@ -34,15 +34,12 @@ type DB struct {
 	RecordLimit int                `json:"record_limit"`
 	Version     int                `json:"version"`
 	AuditLog    []et.Json          `json:"audit_log"`
-	UseCore     bool               `json:"use_core"`
 	isDebug     bool               `json:"-"`
 	isChanged   bool               `json:"-"`
 	isInit      bool               `json:"-"`
 	driver      Driver             `json:"-"`
 	db          *sql.DB            `json:"-"`
 	store       Store              `json:"-"`
-	series      *Series            `json:"-"`
-	catalog     *Catalog           `json:"-"`
 }
 
 /**
@@ -69,7 +66,6 @@ func newDB(tenantId, name string, params et.Json, store Store) (*DB, error) {
 		RecordLimit: recordLimit,
 		Version:     version,
 		AuditLog:    make([]et.Json, 0),
-		UseCore:     params.Bool("use_core"),
 		driver:      drv,
 		store:       store,
 	}
@@ -113,7 +109,6 @@ func loadDB(store Store, id string) (*DB, error) {
 	result.RecordLimit = def.Int("record_limit")
 	result.Version = def.Int("version")
 	result.AuditLog = def.ArrayJson("audit_log")
-	result.UseCore = def.Bool("use_core")
 	result.Schemas = make(map[string]*Schema)
 
 	schemas := def.Json("schemas")
@@ -247,34 +242,9 @@ func (s *DB) Init() error {
 	}
 
 	s.db = db
-	if s.UseCore {
-		err = s.initCore()
-		if err != nil {
-			return err
-		}
-	}
-
 	s.isInit = true
 	if s.isChanged {
 		return s.save()
-	}
-
-	return nil
-}
-
-/**
-* initCore: Initializes the core tables.
-* @return error
-**/
-func (s *DB) initCore() error {
-	err := s.defineSeries("core")
-	if err != nil {
-		return err
-	}
-
-	err = s.defineCatalog("core")
-	if err != nil {
-		return err
 	}
 
 	return nil

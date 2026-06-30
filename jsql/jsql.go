@@ -14,11 +14,11 @@ var (
 )
 
 /**
-* getConnection: Returns a Connection object based on the specified driver and environment variables.
+* GetConnection: Returns a Connection object based on the specified driver and environment variables.
+* @param driver, host string
 * @return Connection, error
 **/
-func getConnection(host string) (Connection, error) {
-	driver := envar.GetStr("DB_DRIVER", DriverPostgres)
+func GetConnection(driver, host string) (Connection, error) {
 	switch driver {
 	case DriverPostgres:
 		config := pgConection(host)
@@ -57,8 +57,9 @@ func ConnectTo(tenantId, name string, connect Connection) (*DB, error) {
 * @return *DB, error
 **/
 func LoadTo(tenantId, name string) (*DB, error) {
+	driver := envar.GetStr("DB_DRIVER", DriverPostgres)
 	host := envar.GetStr("DB_HOST", "localhost")
-	conn, err := getConnection(host)
+	conn, err := GetConnection(driver, host)
 	if err != nil {
 		return nil, err
 	}

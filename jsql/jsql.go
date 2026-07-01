@@ -33,10 +33,15 @@ func GetConnection(driver, host string) (Connection, error) {
 
 /**
 * ConnectTo: Returns an existing DB by name, or creates and initialises a new one from params.
-* @param connect Connection
+* @param tenantId, host, driver, name string
 * @return *DB, error
 **/
-func ConnectTo(tenantId, name string, connect Connection) (*DB, error) {
+func ConnectTo(tenantId, host, driver, name string) (*DB, error) {
+	connect, err := GetConnection(driver, host)
+	if err != nil {
+		return nil, err
+	}
+
 	connect.SetDatabase(name)
 	params := connect.GetParams()
 	result, err := newDB(tenantId, name, params, nil)
@@ -60,11 +65,7 @@ func ConnectTo(tenantId, name string, connect Connection) (*DB, error) {
 func LoadTo(name string) (*DB, error) {
 	driver := envar.GetStr("DB_DRIVER", DriverPostgres)
 	host := envar.GetStr("DB_HOST", "localhost")
-	conn, err := GetConnection(driver, host)
-	if err != nil {
-		return nil, err
-	}
-	result, err := ConnectTo("tenant:root", name, conn)
+	result, err := ConnectTo("tenant:root", host, driver, name)
 	if err != nil {
 		return nil, err
 	}

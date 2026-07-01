@@ -24,6 +24,10 @@ type Detail struct {
 	Rows            int               `json:"rows"`
 }
 
+/**
+* init: Initializes the detail.
+* @return error
+**/
 func (s *Detail) init() error {
 	if s.To == nil {
 		return errors.New(MSG_TO_MODEL_REQUIRED)

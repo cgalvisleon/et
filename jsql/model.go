@@ -236,6 +236,28 @@ func (s *Model) Debug() *Model {
 }
 
 /**
+* Detail: Returns the detail for the given name.
+* @param name string
+* @return *Detail, bool
+**/
+func (s *Model) Detail(name string) (*Model, bool) {
+	detail, ok := s.Details[name]
+	if !ok {
+		return nil, false
+	}
+
+	if detail.To == nil {
+		return nil, false
+	}
+
+	if detail.To.Model == nil {
+		return nil, false
+	}
+
+	return detail.To.Model, true
+}
+
+/**
 * GetCalcFunc: Returns the CalcFunction for the given name, if it exists.
 * @param name string
 * @return CalcFunction, bool

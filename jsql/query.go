@@ -526,6 +526,24 @@ func (s *Query) Select(fields ...string) *Query {
 }
 
 /**
+* Detail: Appends fields to the DETAIL clause.
+* @param fields ...string
+* @return *Query
+**/
+func (s *Query) Calc(fields ...string) *Query {
+	for _, field := range fields {
+		for _, from := range s.Froms {
+			fn, ok := from.Model.calcs[field]
+			if !ok {
+				continue
+			}
+			s.CalcFuns[field] = fn
+		}
+	}
+	return s
+}
+
+/**
 * Hidden: Appends fields to the HIDDEN clause.
 * @param fields ...string
 * @return *Query

@@ -66,7 +66,7 @@ func New(store Store, userID string) (*WorkFlow, error) {
 		muSteps:   sync.Mutex{},
 		store:     store,
 	}
-	result.addAuditLog(userID, "new_workflow")
+	result.addAuditLog(userID, "new workflow")
 	_, err = result.up()
 	if err != nil {
 		return nil, err
@@ -390,7 +390,7 @@ func (s *WorkFlow) removeStep(id, userId string) {
 	s.muSteps.Lock()
 	defer s.muSteps.Unlock()
 
-	s.addAuditLog(userId, "remove_step")
+	s.addAuditLog(userId, "remove step")
 	delete(s.Steps, id)
 }
 
@@ -401,7 +401,7 @@ func (s *WorkFlow) removeStep(id, userId string) {
 **/
 func (s *WorkFlow) NewFloW(tag, title, version, userId string) *Flow {
 	result := s.newFlow(tag, title, version, userId)
-	s.addAuditLog(userId, "new_flow")
+	s.addAuditLog(userId, "new flow")
 	s.addFlow(result)
 	return result
 }
@@ -429,7 +429,7 @@ func (s *WorkFlow) SetStep(stepDef et.Json, userId string) (*WorkFlow, error) {
 	step.TypeId = step.ID
 	step.OwnerId = s.ID
 	step.up(s)
-	s.addAuditLog(userId, "new_step")
+	s.addAuditLog(userId, "new step")
 	s.addStep(step)
 	return s, nil
 }

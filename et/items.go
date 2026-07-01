@@ -487,7 +487,7 @@ func (s Items) One(idx int) (Item, error) {
 	n := s.Count
 	if idx < 0 {
 		idx = n + idx
-	} else {
+	} else if idx > 0 {
 		idx = idx - 1
 	}
 
@@ -503,7 +503,7 @@ func (s Items) One(idx int) (Item, error) {
 * @return Item, error
 **/
 func (s *Items) First() (Item, error) {
-	return s.One(0)
+	return s.One(1)
 }
 
 /**

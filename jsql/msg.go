@@ -3,6 +3,7 @@ package jsql
 import "github.com/cgalvisleon/et/envar"
 
 var (
+	MSG_ATRIB_REQUIRED            = "attribute (%s) is required"
 	MSG_DB_STORE_IS_NIL           = "model store is nil"
 	MSG_CATALOG_NOT_FOUND         = "catalog not found: %s"
 	MSG_DB_IS_NIL                 = "database is nil"
@@ -36,6 +37,7 @@ func init() {
 	lang := envar.GetStr("LANG", "en")
 
 	if lang == "es" {
+		MSG_ATRIB_REQUIRED = "atributo (%s) es requerido"
 		MSG_DB_STORE_IS_NIL = "store de base de datos es nulo"
 		MSG_CATALOG_NOT_FOUND = "catalogo no encontrado: %s"
 		MSG_DB_IS_NIL = "base de datos es nula"

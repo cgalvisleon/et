@@ -54,11 +54,20 @@ func newDB(tenantId, name string, params et.Json, store Store) (*DB, error) {
 		return nil, errors.New(MSG_DRIVER_NOT_FOUND)
 	}
 
+	if !utility.ValidStr(tenantId, 0, []string{""}) {
+		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "tenant_id")
+	}
+
+	if !utility.ValidStr(name, 0, []string{""}) {
+		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "name")
+	}
+
 	recordLimit := params.Int("record_limit")
 	version := params.ValInt(1, "version")
+	id := reg.UUID()
 	result := &DB{
 		TenantId:    tenantId,
-		ID:          reg.UUID(),
+		ID:          id,
 		Name:        name,
 		Schemas:     make(map[string]*Schema),
 		Driver:      driver,
@@ -68,6 +77,7 @@ func newDB(tenantId, name string, params et.Json, store Store) (*DB, error) {
 		AuditLog:    make([]et.Json, 0),
 		driver:      drv,
 		store:       store,
+		isDebug:     envar.GetBool("DEBUG", false),
 	}
 	err := result.save()
 	if err != nil {

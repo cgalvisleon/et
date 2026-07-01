@@ -56,7 +56,7 @@ func pgDefault(tp jsql.TypeData, val any) string {
 	case jsql.BOOLEAN:
 		return fmt.Sprintf("%v", val)
 	case jsql.JSON:
-		return fmt.Sprintf("'%v'::jsonb", val)
+		return "'{}'::jsonb"
 	case jsql.DATETIME:
 		return "NOW()"
 	default:

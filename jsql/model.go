@@ -12,7 +12,6 @@ import (
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrex"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
@@ -247,11 +246,11 @@ func (s *Model) GetCalcFunc(name string) (CalcFunction, bool) {
 }
 
 /**
-* existModel: Checks if the model exists in the database and loads it if not.
+* initModel: Checks if the model exists in the database and loads it if not.
 * @param db *DB
 * @return (bool, error) where bool indicates if the model already existed
 **/
-func (s *Model) existModel(db *DB) (bool, error) {
+func (s *Model) initModel(db *DB) (bool, error) {
 	exist, err := db.existModel(s)
 	if err != nil {
 		return false, err
@@ -302,7 +301,7 @@ func (s *Model) Init() error {
 	go func() {
 		defer wg.Done()
 		var exist bool
-		exist, err = s.existModel(s.db)
+		exist, err = s.initModel(s.db)
 		if err != nil {
 			return
 		}
@@ -318,7 +317,7 @@ func (s *Model) Init() error {
 	if s.historyDb != nil {
 		go func() {
 			defer wg.Done()
-			_, err = s.existModel(s.historyDb)
+			_, err = s.initModel(s.historyDb)
 			if err != nil {
 				return
 			}
@@ -328,7 +327,7 @@ func (s *Model) Init() error {
 	if s.deadDb != nil {
 		go func() {
 			defer wg.Done()
-			_, err = s.existModel(s.deadDb)
+			_, err = s.initModel(s.deadDb)
 			if err != nil {
 				return
 			}
@@ -476,15 +475,6 @@ func (s *Model) GetDetail(name string) (*Model, bool) {
 	}
 
 	return detail.To.Model, true
-}
-
-/**
-* GetId: Returns a ULID tagged with the model name, used as a stable record identifier.
-* @param id string
-* @return string
-**/
-func (s *Model) GetId(id string) string {
-	return reg.GetUUID(id)
 }
 
 /**

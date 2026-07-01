@@ -377,7 +377,7 @@ func pgSelects(query *jsql.Query) []string {
 				if slices.Contains(model.Hiddens, col.Name) {
 					continue
 				}
-				if col.TypeColumn != jsql.COLUMN && col.Name == jsql.SOURCE {
+				if col.TypeColumn != jsql.COLUMN || col.Name == jsql.SOURCE {
 					continue
 				}
 				columnExpr, ok := pgSelectExpr(query, col.Name)
@@ -397,8 +397,6 @@ func pgSelects(query *jsql.Query) []string {
 				expr = ""
 			}
 			expr = strs.Append(expr, jsql.SOURCE, ".")
-			expr = strs.Append(expr, strings.Join(selectExprs, ""), " ||\n")
-
 			selectExprs = append([]string{}, fmt.Sprintf("%s ||\njsonb_build_object(\n%s\n)", expr, strings.Join(selectExprs, ",\n")))
 		} else {
 			selectExprs = append([]string{}, fmt.Sprintf("jsonb_build_object(\n%s\n)", strings.Join(selectExprs, ",\n")))
@@ -452,6 +450,9 @@ func (s *Postgres) Query(query *jsql.Query) (string, error) {
 	if query.IsExists {
 		// EXISTS
 		sb.WriteString("SELECT 1")
+	} else if query.IsCount {
+		// COUNT
+		sb.WriteString("SELECT COUNT(*)")
 	} else {
 		// SELECT
 		selects := pgSelects(query)

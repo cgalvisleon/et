@@ -133,6 +133,11 @@ func (s *DB) Load() error {
 		}
 	}
 
+	err = s.Init()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -569,7 +574,7 @@ func (s *DB) Define(define Def) (*Model, error) {
 func (s *DB) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 	define := query.ArrayJson("define")
 	if len(define) > 0 {
-		results := et.Items{}
+		results := et.Items{Result: []et.Json{}}
 		for _, d := range define {
 			bt := []byte(d.ToString())
 			def := Def{}
@@ -584,7 +589,11 @@ func (s *DB) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 			if err := model.Init(); err != nil {
 				return et.Items{}, err
 			}
-			results.Add(et.Json{"model": model.Name})
+			json, err := model.ToJson()
+			if err != nil {
+				return et.Items{}, err
+			}
+			results.Add(et.Json{model.Table: json})
 		}
 		return results, nil
 	}
@@ -640,8 +649,8 @@ func (s *DB) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 * @param query []et.Json
 * @return string, error
 **/
-func (s *DB) Query(query []et.Json) (et.Items, error) {
-	result := et.Items{}
+func (s *DB) Query(query []et.Json) ([][]et.Json, error) {
+	result := [][]et.Json{}
 	var tx *Tx
 	var commit bool
 	if len(query) > 0 {
@@ -649,11 +658,11 @@ func (s *DB) Query(query []et.Json) (et.Items, error) {
 	}
 
 	for _, q := range query {
-		var err error
-		result, err = s.loadQuery(tx, q)
+		items, err := s.loadQuery(tx, q)
 		if err != nil {
-			return et.Items{}, err
+			return nil, err
 		}
+		result = append(result, items.Result)
 	}
 
 	if commit {

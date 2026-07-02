@@ -18,8 +18,8 @@ import (
 )
 
 type Store interface {
-	Set(collection, id, ownerId string, obj any) error
-	Get(collection, id string, dest any) (bool, error)
+	Set(collection, id, ownerId string, obj et.Json) error
+	Get(collection, id string) (et.Json, error)
 	Delete(collection, id string) error
 	Query(query et.Json) (et.Items, error)
 }
@@ -39,15 +39,14 @@ type DB struct {
 	isInit      bool               `json:"-"`
 	driver      Driver             `json:"-"`
 	db          *sql.DB            `json:"-"`
-	store       Store              `json:"-"`
 }
 
 /**
-* newDB: Constructs a DB instance from the given config, resolving the driver by name.
-* @param params et.Json
+* NewDB
+* @param tenantId, name string, params et.Json
 * @return *DB, error
 **/
-func newDB(tenantId, name string, params et.Json, store Store) (*DB, error) {
+func NewDB(tenantId, name string, params et.Json) (*DB, error) {
 	driver := params.Str("driver")
 	drv, ok := drivers[driver]
 	if !ok {
@@ -64,10 +63,9 @@ func newDB(tenantId, name string, params et.Json, store Store) (*DB, error) {
 
 	recordLimit := params.Int("record_limit")
 	version := params.ValInt(1, "version")
-	id := reg.UUID()
 	result := &DB{
 		TenantId:    tenantId,
-		ID:          id,
+		ID:          reg.UUID(),
 		Name:        name,
 		Schemas:     make(map[string]*Schema),
 		Driver:      driver,
@@ -76,10 +74,77 @@ func newDB(tenantId, name string, params et.Json, store Store) (*DB, error) {
 		Version:     version,
 		AuditLog:    make([]et.Json, 0),
 		driver:      drv,
-		store:       store,
 		isDebug:     envar.GetBool("DEBUG", false),
 	}
-	err := result.save()
+
+	return result, nil
+}
+
+/**
+* LoadDb
+* @param store Store, id string
+* @return *DB, error
+**/
+func LoadDb(store Store, id string) (*DB, error) {
+	if store == nil {
+		return nil, errors.New(MSG_STORE_IS_NIL)
+	}
+
+	ref, err := store.Get("db", id)
+	if err != nil {
+		return nil, err
+	}
+
+	recordLimit := envar.GetInt("RECORD_LIMIT", 1000)
+	params := ref.Json("params")
+	driver := params.Str("driver")
+	drv, ok := drivers[driver]
+	if !ok {
+		return nil, errors.New(MSG_DRIVER_NOT_FOUND)
+	}
+
+	result := &DB{
+		TenantId:    ref.Str("tenant_id"),
+		ID:          ref.Str("id"),
+		Name:        ref.Str("name"),
+		Schemas:     make(map[string]*Schema),
+		Driver:      ref.Str("driver"),
+		Params:      params,
+		RecordLimit: ref.ValInt(recordLimit, "record_limit"),
+		Version:     ref.Int("version"),
+		AuditLog:    ref.ArrayJson("audit_log"),
+		isDebug:     envar.GetBool("DEBUG", false),
+		driver:      drv,
+	}
+
+	if !utility.ValidStr(result.ID, 0, []string{""}) {
+		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "id")
+	}
+	if !utility.ValidStr(result.Name, 0, []string{""}) {
+		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "name")
+	}
+
+	schemas := ref.ArrayJson("schemas")
+	for _, schemaRef := range schemas {
+		name := schemaRef.Str("name")
+		schema, ok := result.Schemas[name]
+		if !ok {
+			schema = result.newSchema(name)
+		}
+		models := schemaRef.ArrayJson("models")
+		for _, modelRef := range models {
+			modelId := modelRef.Str("id")
+			_, ok := schema.Models[modelId]
+			if !ok {
+				_, err := schema.loadModel(store, modelId)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
+	err = result.Init()
 	if err != nil {
 		return nil, err
 	}
@@ -88,56 +153,22 @@ func newDB(tenantId, name string, params et.Json, store Store) (*DB, error) {
 }
 
 /**
-* loadDB: Loads a DB instance from the given definition.
-* @param def et.Json
-* @return *DB, error
+* saveDb
+* @return error
 **/
-func (s *DB) Load() error {
-	if s.store == nil {
+func (s *DB) SaveDb(store Store, db *DB) error {
+	if store == nil {
 		return errors.New(MSG_STORE_IS_NIL)
 	}
 
-	var def et.Json
-	exists, err := s.store.Get("db", s.ID, &def)
+	err := store.Set("db", s.ID, s.TenantId, s.Ref())
 	if err != nil {
 		return err
 	}
 
-	if !exists {
-		return errors.New(MSG_DB_NOT_FOUND)
-	}
-
-	s.TenantId = def.Str("tenant_id")
-	s.Name = def.Str("name")
-	s.Driver = def.Str("driver")
-	s.Params = def.Json("params")
-	s.RecordLimit = def.Int("record_limit")
-	s.Version = def.Int("version")
-	s.AuditLog = def.ArrayJson("audit_log")
-	s.Schemas = make(map[string]*Schema)
-
-	schemas := def.Json("schemas")
-	for name := range schemas {
-		schema, ok := s.Schemas[name]
-		if !ok {
-			schema = s.newSchema(name)
-			schema.up(s)
-		}
-		def := schemas.Json(name)
-		models := def.Json("models")
-		for modelId := range models {
-			_, err := schema.loadModel(modelId)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	err = s.Init()
-	if err != nil {
-		return err
-	}
-
+	json := s.ToJson()
+	channel := fmt.Sprintf("db:%s", s.ID)
+	event.Publish(channel, json)
 	return nil
 }
 
@@ -168,9 +199,20 @@ func (s *DB) addAuditLog(userId string, action string) {
 * @return et.Json
 **/
 func (s *DB) Ref() et.Json {
+	schemas := []et.Json{}
+	for _, schema := range s.Schemas {
+		schemas = append(schemas, schema.Ref())
+	}
+
 	return et.Json{
-		"id":   s.ID,
-		"name": s.Name,
+		"tenant_id":    s.TenantId,
+		"id":           s.ID,
+		"name":         s.Name,
+		"schemas":      schemas,
+		"params":       s.Params,
+		"record_limit": s.RecordLimit,
+		"version":      s.Version,
+		"audit_log":    s.AuditLog,
 	}
 }
 
@@ -201,26 +243,6 @@ func (s *DB) ToString() string {
 }
 
 /**
-* save: Persists DB metadata changes (stub — no-op until storage is wired).
-* @return error
-**/
-func (s *DB) save() error {
-	if s.store == nil {
-		return nil
-	}
-
-	err := s.store.Set("db", s.ID, s.TenantId, s.Ref())
-	if err != nil {
-		return err
-	}
-
-	json := s.ToJson()
-	channel := fmt.Sprintf("db:%s", s.ID)
-	event.Publish(channel, json)
-	return nil
-}
-
-/**
 * init: Opens the driver connection and, when UseCore is set, initializes core tables.
 * @return error
 **/
@@ -243,10 +265,15 @@ func (s *DB) Init() error {
 	}
 
 	s.db = db
-	s.isInit = true
-	if s.isChanged {
-		return s.save()
+
+	for _, schema := range s.Schemas {
+		err := schema.init()
+		if err != nil {
+			return err
+		}
 	}
+
+	s.isInit = true
 
 	return nil
 }
@@ -361,7 +388,6 @@ func (s *DB) newSchema(name string) *Schema {
 		db:       s,
 		isDebug:  s.isDebug,
 		mu:       &sync.RWMutex{},
-		store:    s.store,
 	}
 	s.Schemas[name] = result
 	return result
@@ -542,6 +568,18 @@ func (s *DB) Define(define Def) (*Model, error) {
 			if err != nil {
 				return nil, err
 			}
+		}
+		for _, primaryKey := range defDetail.PrimaryKeys {
+			detail.PrimaryKeys = append(detail.PrimaryKeys, &Index{
+				Name:   primaryKey.Name,
+				Sorted: primaryKey.Sorted,
+			})
+		}
+		for _, index := range defDetail.Indexes {
+			detail.Indexes = append(detail.Indexes, &Index{
+				Name:   index.Name,
+				Sorted: index.Sorted,
+			})
 		}
 		if defDetail.IdxField != "" {
 			detail.DefineIdxField()

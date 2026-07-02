@@ -1,5 +1,7 @@
 package jsql
 
+import "github.com/cgalvisleon/et/et"
+
 const (
 	RESULT     string = "result"
 	SOURCE     string = "_source"
@@ -104,6 +106,20 @@ type Column struct {
 	Default    any        `json:"default"`
 	Definition []byte     `json:"definition"`
 	model      *Model     `json:"-"`
+}
+
+/**
+* Ref: Returns the reference of the column.
+* @return et.Json
+**/
+func (s *Column) Ref() et.Json {
+	return et.Json{
+		"name":        s.Name,
+		"type_column": s.TypeColumn,
+		"type_data":   s.TypeData,
+		"default":     s.Default,
+		"definition":  s.Definition,
+	}
 }
 
 /**

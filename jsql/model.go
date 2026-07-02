@@ -5,13 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"sync"
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrex"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
@@ -29,6 +26,13 @@ type CalcFunction func(tx *Tx, data et.Json)
 type Index struct {
 	Name   string `json:"name"`
 	Sorted bool   `json:"sorted"`
+}
+
+func (s *Index) Ref() et.Json {
+	return et.Json{
+		"name":   s.Name,
+		"sorted": s.Sorted,
+	}
 }
 
 type Model struct {
@@ -72,33 +76,6 @@ type Model struct {
 	afterUpdates  []TriggerFunction       `json:"-"`
 	afterDeletes  []TriggerFunction       `json:"-"`
 	db            *DB                     `json:"-"`
-	historyDb     *DB                     `json:"-"`
-	deadDb        *DB                     `json:"-"`
-	store         Store                   `json:"-"`
-}
-
-/**
-* up: Updates the model's database and schema references after loading from catalog.
-* @param schema *Schema
-* @return *Model
-**/
-func (s *Model) up(schema *Schema) *Model {
-	s.store = schema.store
-	s.calcs = make(map[string]CalcFunction, 0)
-	s.IsDebug = schema.isDebug
-	s.beforeInserts = make([]TriggerFunction, 0)
-	s.beforeUpdates = make([]TriggerFunction, 0)
-	s.beforeDeletes = make([]TriggerFunction, 0)
-	s.afterInserts = make([]TriggerFunction, 0)
-	s.afterUpdates = make([]TriggerFunction, 0)
-	s.afterDeletes = make([]TriggerFunction, 0)
-	s.db = schema.db
-	for _, column := range s.Columns {
-		column.up(s)
-	}
-	s.defaultTrigger()
-	schema.addModel(s)
-	return s
 }
 
 /**
@@ -169,39 +146,6 @@ func (s *Model) Key() string {
 	result = strs.Append(s.Schema, result, ".")
 	result = strs.Append(s.Database, result, ".")
 	return result
-}
-
-/**
-* save: Persists model metadata changes (stub — no-op until storage is wired).
-* @return error
-**/
-func (s *Model) save() error {
-	if s.IsCore {
-		return nil
-	}
-
-	if s.store == nil {
-		return nil
-	}
-
-	s.isChanged = false
-
-	json, err := s.ToJson()
-	if err != nil {
-		return err
-	}
-	if s.IsDebug {
-		logs.Log(packageName, "save:", json.ToString())
-	}
-
-	err = s.store.Set("model", s.ID, s.DatabaseId, s)
-	if err != nil {
-		return err
-	}
-
-	channel := fmt.Sprintf("model:%s", s.ID)
-	event.Publish(channel, json)
-	return nil
 }
 
 /**
@@ -307,56 +251,7 @@ func (s *Model) Init() error {
 		return nil
 	}
 
-	n := 1
-	if s.historyDb != nil {
-		n++
-	}
-
-	if s.deadDb != nil {
-		n++
-	}
-
-	var err error
-	var wg sync.WaitGroup
-	wg.Add(n)
-
-	go func() {
-		defer wg.Done()
-		var exist bool
-		exist, err = s.initModel(s.db)
-		if err != nil {
-			return
-		}
-
-		if !exist && !s.IsCore {
-			err = s.save()
-			if err != nil {
-				return
-			}
-		}
-	}()
-
-	if s.historyDb != nil {
-		go func() {
-			defer wg.Done()
-			_, err = s.initModel(s.historyDb)
-			if err != nil {
-				return
-			}
-		}()
-	}
-
-	if s.deadDb != nil {
-		go func() {
-			defer wg.Done()
-			_, err = s.initModel(s.deadDb)
-			if err != nil {
-				return
-			}
-		}()
-	}
-
-	wg.Wait()
+	_, err := s.initModel(s.db)
 	if err != nil {
 		return err
 	}
@@ -393,21 +288,6 @@ func (s *Model) Db() *sql.DB {
 **/
 func (s *Model) SetDb(db *DB) {
 	s.db = db
-}
-
-/*** SetHistoryDb: Sets the history DB connection for the model.
-* @param db *DB
-**/
-func (s *Model) SetHistoryDb(db *DB) {
-	s.historyDb = db
-}
-
-/**
-* SetDeadDb: Sets the dead DB connection for the model.
-* @param db *DB
-**/
-func (s *Model) SetDeadDb(db *DB) {
-	s.deadDb = db
 }
 
 /**
@@ -690,48 +570,4 @@ func (s *Model) QueryTx(tx *Tx, query et.Json) (et.Items, error) {
 **/
 func (s *Model) Query(query et.Json) (et.Items, error) {
 	return s.QueryTx(nil, query)
-}
-
-/**
-* HistoryQuery: Executes a query against the model's history database, if configured.
-* @param query et.Json
-* @return et.Items, error
-**/
-func (s *Model) HistoryQueryTx(tx *Tx, query et.Json) (et.Items, error) {
-	if s.historyDb == nil {
-		return et.Items{}, fmt.Errorf(MSG_HISTORY_DB_NOT_CONFIGURED, s.Name)
-	}
-	query.Set("from", fmt.Sprintf("%s", s.Table))
-	return s.historyDb.loadQuery(tx, query)
-}
-
-/**
-* HistoryQuery: Executes a query against the model's history database, if configured.
-* @param query et.Json
-* @return et.Items, error
-**/
-func (s *Model) HistoryQuery(query et.Json) (et.Items, error) {
-	return s.HistoryQueryTx(nil, query)
-}
-
-/**
-* DeadQuery: Executes a query against the model's dead database, if configured.
-* @param query et.Json
-* @return et.Items, error
-**/
-func (s *Model) DeadQueryTx(tx *Tx, query et.Json) (et.Items, error) {
-	if s.deadDb == nil {
-		return et.Items{}, fmt.Errorf(MSG_DEAD_DB_NOT_CONFIGURED, s.Name)
-	}
-	query.Set("from", fmt.Sprintf("%s", s.Table))
-	return s.deadDb.loadQuery(tx, query)
-}
-
-/**
-* DeadQuery: Executes a query against the model's dead database, if configured.
-* @param query et.Json
-* @return et.Items, error
-**/
-func (s *Model) DeadQuery(query et.Json) (et.Items, error) {
-	return s.DeadQueryTx(nil, query)
 }

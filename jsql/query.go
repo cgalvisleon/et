@@ -25,6 +25,20 @@ type From struct {
 }
 
 /**
+* Ref: Returns the reference of the from.
+* @return et.Json
+**/
+func (s *From) Ref() et.Json {
+	return et.Json{
+		"database": s.Database,
+		"schema":   s.Schema,
+		"name":     s.Name,
+		"table":    s.Table,
+		"as":       s.As,
+	}
+}
+
+/**
 * getFrom: Builds a From descriptor from a model, using as as the SQL alias (defaults to table name).
 * @param model *Model, as string
 * @return *From
@@ -165,7 +179,6 @@ type Query struct {
 	section        QuerySection            `json:"-"`
 	maxRows        int                     `json:"-"`
 	db             *DB                     `json:"-"`
-	historyDb      *DB                     `json:"-"`
 	isDebug        bool                    `json:"-"`
 	isTest         bool                    `json:"-"`
 }
@@ -196,7 +209,6 @@ func newQuery(model *Model, as ...string) *Query {
 		section:    whereSection,
 		maxRows:    model.db.RecordLimit,
 		db:         model.db,
-		historyDb:  model.historyDb,
 		isDebug:    model.IsDebug,
 	}
 	result.addFrom(model, as[0])

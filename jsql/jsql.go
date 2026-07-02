@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/et"
 )
 
 var (
@@ -44,7 +43,7 @@ func ConnectTo(tenantId, host, driver, name string) (*DB, error) {
 
 	connect.SetDatabase(name)
 	params := connect.GetParams()
-	result, err := newDB(tenantId, name, params, nil)
+	result, err := NewDB(tenantId, name, params)
 	if err != nil {
 		return nil, err
 	}
@@ -63,9 +62,10 @@ func ConnectTo(tenantId, host, driver, name string) (*DB, error) {
 * @return *DB, error
 **/
 func LoadTo(name string) (*DB, error) {
+	tenantId := envar.GetStr("DB_TENANT_ID", "tenant:root")
 	driver := envar.GetStr("DB_DRIVER", DriverPostgres)
 	host := envar.GetStr("DB_HOST", "localhost")
-	result, err := ConnectTo("tenant:root", host, driver, name)
+	result, err := ConnectTo(tenantId, host, driver, name)
 	if err != nil {
 		return nil, err
 	}
@@ -80,47 +80,4 @@ func LoadTo(name string) (*DB, error) {
 func Load() (*DB, error) {
 	name := envar.GetStr("DB_NAME", "josephine")
 	return LoadTo(name)
-}
-
-/**
-* NewDB: Constructs a DB instance from the given config, resolving the driver by name.
-* @param params et.Json, store Store, userId string
-* @return *DB, error
-**/
-func NewDB(tenantId, name string, params et.Json, store Store, userId string) (*DB, error) {
-	result, err := newDB(tenantId, name, params, store)
-	if err != nil {
-		return nil, err
-	}
-	result.addAuditLog(userId, "new_db")
-	err = result.Init()
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-/**
-* LoadDB: Loads a DB instance from the given id and store.
-* @param id string, store Store
-* @return *DB, error
-**/
-func LoadDB(store Store, id string) (*DB, error) {
-	result := &DB{
-		ID:    id,
-		store: store,
-	}
-
-	err := result.Load()
-	if err != nil {
-		return nil, err
-	}
-
-	err = result.Init()
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
 }

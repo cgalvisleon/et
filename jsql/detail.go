@@ -25,6 +25,16 @@ type Detail struct {
 }
 
 /**
+* Ref: Returns the reference of the detail.
+* @return et.Json
+**/
+func (s *Detail) Ref() et.Json {
+	return et.Json{
+		"to": s.To,
+	}
+}
+
+/**
 * init: Initializes the detail.
 * @return error
 **/

@@ -193,18 +193,8 @@ func (s *WorkFlow) addAuditLog(userId string, action string) {
 * @return et.Json
 **/
 func (s *WorkFlow) Ref() et.Json {
-	flows := et.Json{}
-	for id, flow := range s.Flows {
-		flows[id] = flow.ref()
-	}
-	steps := et.Json{}
-	for id, step := range s.Steps {
-		steps[id] = step.ref()
-	}
 	return et.Json{
-		"id":    s.ID,
-		"flows": flows,
-		"steps": steps,
+		"id": s.ID,
 	}
 }
 

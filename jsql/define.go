@@ -28,13 +28,14 @@ type DefForeignKeys struct {
 }
 
 type DefDetail struct {
-	Name     string            `json:"name"`
-	Keys     map[string]string `json:"keys"`
-	Rows     int               `json:"rows"`
-	Columns  []Column          `json:"columns"`
-	Indexes  []DefIndex        `json:"indexes"`
-	IdxField string            `json:"idx_field"`
-	IdtField string            `json:"idt_field"`
+	Name        string            `json:"name"`
+	Keys        map[string]string `json:"keys"`
+	Rows        int               `json:"rows"`
+	Columns     []Column          `json:"columns"`
+	PrimaryKeys []DefIndex        `json:"primary_keys"`
+	Indexes     []DefIndex        `json:"indexes"`
+	IdxField    string            `json:"idx_field"`
+	IdtField    string            `json:"idt_field"`
 }
 
 type DefRollup struct {
@@ -285,7 +286,8 @@ func (s *Model) DefineDetail(name string, keys map[string]string, rows int) (*Mo
 	to := s.db.NewModel(s.Schema, detailName, 1, s.ID)
 	for k, fk := range keys {
 		s.defineColumn(k, COLUMN, KEY, "", []byte{})
-		to.DefinePrimaryKey(fk, KEY, "")
+		to.defineColumn(fk, COLUMN, KEY, "", []byte{})
+		to.DefineForeignKeys(s, map[string]string{fk: k}, true, false)
 		to.DefineHidden(fk)
 	}
 	s.defineColumn(name, DETAIL, ANY, nil, []byte{})

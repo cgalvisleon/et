@@ -37,7 +37,6 @@ func DefineSeries(db *DB, tenantId, schema string) (*Series, error) {
 			{Name: "tag", Sorted: true},
 		},
 		IdxField: IDX,
-		IsCore:   true,
 	}
 	model, err := db.Define(def)
 	if err != nil {

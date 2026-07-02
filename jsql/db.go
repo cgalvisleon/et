@@ -17,13 +17,6 @@ import (
 	"github.com/cgalvisleon/et/utility"
 )
 
-type Store interface {
-	Set(collection, id, ownerId string, obj et.Json) error
-	Get(collection, id string) (et.Json, error)
-	Delete(collection, id string) error
-	Query(query et.Json) (et.Items, error)
-}
-
 type DB struct {
 	TenantId    string             `json:"tenant_id"`
 	ID          string             `json:"id"`
@@ -82,17 +75,22 @@ func NewDB(tenantId, name string, params et.Json) (*DB, error) {
 
 /**
 * LoadDb
-* @param store Store, id string
+* @param store *Store, id string
 * @return *DB, error
 **/
-func LoadDb(store Store, id string) (*DB, error) {
+func LoadDb(store *Store, id string) (*DB, error) {
 	if store == nil {
 		return nil, errors.New(MSG_STORE_IS_NIL)
 	}
 
-	ref, err := store.Get("db", id)
+	ref := et.Json{}
+	exists, err := store.Get("db", id, &ref)
 	if err != nil {
 		return nil, err
+	}
+
+	if !exists {
+		return nil, fmt.Errorf(MSG_RECORD_NOT_FOUND, "db", id)
 	}
 
 	recordLimit := envar.GetInt("RECORD_LIMIT", 1000)
@@ -156,7 +154,7 @@ func LoadDb(store Store, id string) (*DB, error) {
 * saveDb
 * @return error
 **/
-func (s *DB) SaveDb(store Store, db *DB) error {
+func (s *DB) Save(store *Store) error {
 	if store == nil {
 		return errors.New(MSG_STORE_IS_NIL)
 	}
@@ -512,39 +510,46 @@ func (s *DB) Define(define Def) (*Model, error) {
 	if define.IdxField != "" {
 		result.DefineIdxField()
 	}
+
 	if define.IdtField != "" {
 		result.DefineIdTField()
 	}
+
 	for _, column := range define.Columns {
 		_, err := defColumns(result, column)
 		if err != nil {
 			return nil, err
 		}
 	}
+
 	for _, primaryKey := range define.PrimaryKeys {
 		result.PrimaryKeys = append(result.PrimaryKeys, &Index{
 			Name:   primaryKey.Name,
 			Sorted: primaryKey.Sorted,
 		})
 	}
+
 	for _, index := range define.Indexes {
 		result.Indexes = append(result.Indexes, &Index{
 			Name:   index.Name,
 			Sorted: index.Sorted,
 		})
 	}
+
 	for _, unique := range define.Unique {
 		result.Unique = append(result.Unique, &Index{
 			Name:   unique.Name,
 			Sorted: unique.Sorted,
 		})
 	}
+
 	for _, required := range define.Required {
 		result.Required = append(result.Required, &Index{
 			Name:   required.Name,
 			Sorted: required.Sorted,
 		})
 	}
+
 	for _, foreignKey := range define.ForeignKeys {
 		to, err := s.GetModel(foreignKey.To.Schema, foreignKey.To.Name)
 		if err != nil {
@@ -552,53 +557,63 @@ func (s *DB) Define(define Def) (*Model, error) {
 		}
 		result.DefineForeignKeys(to, foreignKey.Keys, foreignKey.OnDeleteCascade, foreignKey.OnUpdateCascade)
 	}
+
 	for _, hidden := range define.Hiddens {
 		result.DefineHidden(hidden)
 	}
+
 	if define.SourceField != "" {
 		result.DefineSource()
 	}
+
 	for _, defDetail := range define.Details {
 		detail, err := result.DefineDetail(defDetail.Name, defDetail.Keys, defDetail.Rows)
 		if err != nil {
 			return nil, err
 		}
+
 		for _, def := range defDetail.Columns {
 			_, err := defColumns(detail, def)
 			if err != nil {
 				return nil, err
 			}
 		}
+
 		for _, primaryKey := range defDetail.PrimaryKeys {
 			detail.PrimaryKeys = append(detail.PrimaryKeys, &Index{
 				Name:   primaryKey.Name,
 				Sorted: primaryKey.Sorted,
 			})
 		}
+
 		for _, index := range defDetail.Indexes {
 			detail.Indexes = append(detail.Indexes, &Index{
 				Name:   index.Name,
 				Sorted: index.Sorted,
 			})
 		}
+
 		if defDetail.IdxField != "" {
 			detail.DefineIdxField()
 		}
+
 		if defDetail.IdtField != "" {
 			detail.DefineIdTField()
 		}
 	}
+
 	for _, rollup := range define.Rollups {
 		to, err := s.GetModel(rollup.To.Schema, rollup.To.Name)
 		if err != nil {
 			return nil, err
 		}
+
 		_, err = result.DefineRollup(rollup.Name, to, rollup.Keys, rollup.Select)
 		if err != nil {
 			return nil, err
 		}
 	}
-	result.IsCore = define.IsCore
+
 	result.IsDebug = s.isDebug
 
 	return result, nil
@@ -627,11 +642,7 @@ func (s *DB) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 			if err := model.Init(); err != nil {
 				return et.Items{}, err
 			}
-			json, err := model.ToJson()
-			if err != nil {
-				return et.Items{}, err
-			}
-			results.Add(et.Json{model.Table: json})
+			results.Add(et.Json{model.Table: model.ToJson()})
 		}
 		return results, nil
 	}

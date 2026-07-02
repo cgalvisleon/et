@@ -8,7 +8,7 @@ import (
 	"github.com/cgalvisleon/et/timezone"
 )
 
-type Catalog struct {
+type Store struct {
 	TenantId string
 	model    *Model
 }
@@ -18,7 +18,7 @@ type Catalog struct {
 * @param db *DB, tenantId, schema string
 * @return *Catalog, error
 **/
-func DefineCatalog(db *DB, tenantId, schema string) (*Catalog, error) {
+func DefineStore(db *DB, tenantId, schema string) (*Store, error) {
 	columns := []Column{
 		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
@@ -50,14 +50,14 @@ func DefineCatalog(db *DB, tenantId, schema string) (*Catalog, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	now := timezone.Now()
 	model.BeforeInsert(func(tx *Tx, old, new et.Json) error {
-		now := timezone.Now()
 		new.Set(CREATED_AT, now)
 		new.Set(UPDATED_AT, now)
 		return nil
 	})
 	model.BeforeUpdate(func(tx *Tx, old, new et.Json) error {
-		now := timezone.Now()
 		new.Set(UPDATED_AT, now)
 		return nil
 	})
@@ -67,7 +67,7 @@ func DefineCatalog(db *DB, tenantId, schema string) (*Catalog, error) {
 		return nil, err
 	}
 
-	return &Catalog{
+	return &Store{
 		TenantId: tenantId,
 		model:    model,
 	}, nil
@@ -78,7 +78,7 @@ func DefineCatalog(db *DB, tenantId, schema string) (*Catalog, error) {
 * @param collection, id, ownerId string, obj any
 * @return error
 **/
-func (s *Catalog) Set(collection, id, ownerId string, obj any) error {
+func (s *Store) Set(collection, id, ownerId string, obj any) error {
 	bt, ok := obj.([]byte)
 	if !ok {
 		var err error
@@ -112,7 +112,7 @@ func (s *Catalog) Set(collection, id, ownerId string, obj any) error {
 * @param name, kind string, des any
 * @return bool, error
 **/
-func (s *Catalog) Get(collection, id string, des any) (bool, error) {
+func (s *Store) Get(collection, id string, des any) (bool, error) {
 	item, err := s.model.
 		Where(Eq("tenant_id", s.TenantId)).
 		And(Eq("kind", collection)).
@@ -144,7 +144,7 @@ func (s *Catalog) Get(collection, id string, des any) (bool, error) {
 * @param collection, id string
 * @return error
 **/
-func (s *Catalog) Delete(collection, id string) error {
+func (s *Store) Delete(collection, id string) error {
 	_, err := s.model.
 		Delete().
 		Where(Eq("tenant_id", s.TenantId)).
@@ -162,6 +162,6 @@ func (s *Catalog) Delete(collection, id string) error {
 * @param query et.Json
 * @return (et.Items, error)
 **/
-func (s *Catalog) Query(query et.Json) (et.Items, error) {
+func (s *Store) Query(query et.Json) (et.Items, error) {
 	return s.model.Query(query)
 }

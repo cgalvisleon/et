@@ -2,16 +2,16 @@ package jsql
 
 import (
 	"database/sql"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrex"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
-	"github.com/cgalvisleon/et/utility"
 )
 
 /**
@@ -58,7 +58,6 @@ type Model struct {
 	calcs         map[string]CalcFunction `json:"-"`
 	IsStrict      bool                    `json:"is_strict"`
 	Version       int                     `json:"version"`
-	IsCore        bool                    `json:"is_core"`
 	IsDebug       bool                    `json:"-"`
 	isInit        bool                    `json:"-"`
 	BeforeInserts []string                `json:"before_inserts"`
@@ -101,6 +100,27 @@ func (s *Model) addAuditLog(userId string, action string) {
 }
 
 /**
+* Save: Saves the model to the store.
+* @param store *Store
+* @return error
+**/
+func (s *Model) Save(store *Store) error {
+	if store == nil {
+		return errors.New(MSG_STORE_IS_NIL)
+	}
+
+	err := store.Set("model", s.ID, s.TenantId, s)
+	if err != nil {
+		return err
+	}
+
+	json := s.ToJson()
+	channel := fmt.Sprintf("model:%s", s.ID)
+	event.Publish(channel, json)
+	return nil
+}
+
+/**
 * ToJson: Returns the model metadata as an et.Json map.
 * @return et.Json
 **/
@@ -115,26 +135,45 @@ func (s *Model) Ref() et.Json {
 * ToJson: Returns the model metadata as an et.Json map.
 * @return et.Json
 **/
-func (s *Model) ToJson() (et.Json, error) {
-	bt, err := utility.Serialize(s)
-	if err != nil {
-		return et.Json{}, err
+func (s *Model) ToJson() et.Json {
+	return et.Json{
+		"tenant_id":      s.TenantId,
+		"id":             s.ID,
+		"database":       s.Database,
+		"schema":         s.Schema,
+		"name":           s.Name,
+		"database_id":    s.DatabaseId,
+		"table":          s.Table,
+		"columns":        s.Columns,
+		"source_field":   s.SourceField,
+		"idx_field":      s.IdxField,
+		"idt_field":      s.IdtField,
+		"indexes":        s.Indexes,
+		"primary_keys":   s.PrimaryKeys,
+		"foreign_keys":   s.ForeignKeys,
+		"unique":         s.Unique,
+		"required":       s.Required,
+		"hiddens":        s.Hiddens,
+		"details":        s.Details,
+		"rollups":        s.Rollups,
+		"is_strict":      s.IsStrict,
+		"version":        s.Version,
+		"before_inserts": s.BeforeInserts,
+		"before_updates": s.BeforeUpdates,
+		"before_deletes": s.BeforeDeletes,
+		"after_inserts":  s.AfterInserts,
+		"after_updates":  s.AfterUpdates,
+		"after_deletes":  s.AfterDeletes,
+		"audit_log":      s.AuditLog,
 	}
-	var result et.Json
-	err = json.Unmarshal(bt, &result)
-	return result, nil
 }
 
 /**
 * ToString: Returns the model metadata as a string.
 * @return string
 **/
-func (s *Model) ToString() (string, error) {
-	result, err := s.ToJson()
-	if err != nil {
-		return "", err
-	}
-	return result.ToString(), nil
+func (s *Model) ToString() string {
+	return s.ToJson().ToString()
 }
 
 /**

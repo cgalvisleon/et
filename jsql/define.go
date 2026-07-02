@@ -61,7 +61,6 @@ type Def struct {
 	Hiddens     []string         `json:"hiddens"`
 	Details     []DefDetail      `json:"details"`
 	Rollups     []DefRollup      `json:"rollups"`
-	IsCore      bool             `json:"is_core"`
 	UserId      string           `json:"user_id"`
 }
 

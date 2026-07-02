@@ -9,20 +9,18 @@ import (
 )
 
 type Store struct {
-	TenantId string
-	model    *Model
+	model *Model
 }
 
 /**
 * defineCatalog: Defines the catalog table.
-* @param db *DB, tenantId, schema string
+* @param db *DB, schema string
 * @return *Catalog, error
 **/
-func DefineStore(db *DB, tenantId, schema string) (*Store, error) {
+func DefineStore(db *DB, schema string) (*Store, error) {
 	columns := []Column{
 		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
-		{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 		{Name: "kind", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 		{Name: "id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 		{Name: "owner_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
@@ -35,7 +33,6 @@ func DefineStore(db *DB, tenantId, schema string) (*Store, error) {
 		Version: 1,
 		Columns: columns,
 		PrimaryKeys: []DefIndex{
-			{Name: TENANT_ID, Sorted: true},
 			{Name: "kind", Sorted: true},
 			{Name: "id", Sorted: true},
 		},
@@ -68,8 +65,7 @@ func DefineStore(db *DB, tenantId, schema string) (*Store, error) {
 	}
 
 	return &Store{
-		TenantId: tenantId,
-		model:    model,
+		model: model,
 	}, nil
 }
 
@@ -90,14 +86,12 @@ func (s *Store) Set(collection, id, ownerId string, obj any) error {
 
 	_, err := s.model.
 		Upsert(et.Json{
-			"tenant_id":  s.TenantId,
 			"kind":       collection,
 			"id":         id,
 			"owner_id":   ownerId,
 			"definition": bt,
 		}).
-		Where(Eq("tenant_id", s.TenantId)).
-		And(Eq("kind", collection)).
+		Where(Eq("kind", collection)).
 		And(Eq("id", id)).
 		Exec()
 	if err != nil {
@@ -114,8 +108,7 @@ func (s *Store) Set(collection, id, ownerId string, obj any) error {
 **/
 func (s *Store) Get(collection, id string, des any) (bool, error) {
 	item, err := s.model.
-		Where(Eq("tenant_id", s.TenantId)).
-		And(Eq("kind", collection)).
+		Where(Eq("kind", collection)).
 		And(Eq("id", id)).
 		One()
 	if err != nil {
@@ -147,8 +140,7 @@ func (s *Store) Get(collection, id string, des any) (bool, error) {
 func (s *Store) Delete(collection, id string) error {
 	_, err := s.model.
 		Delete().
-		Where(Eq("tenant_id", s.TenantId)).
-		And(Eq("kind", collection)).
+		Where(Eq("kind", collection)).
 		And(Eq("id", id)).
 		Exec()
 	if err != nil {

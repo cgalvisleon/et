@@ -36,24 +36,30 @@ type DB struct {
 
 /**
 * NewDB
-* @param tenantId, name string, params et.Json
+* @param tenantId, host, name, driver string
 * @return *DB, error
 **/
-func NewDB(tenantId, name string, params et.Json) (*DB, error) {
-	driver := params.Str("driver")
+func NewDB(tenantId, host, name, driver string) (*DB, error) {
 	drv, ok := drivers[driver]
 	if !ok {
 		return nil, errors.New(MSG_DRIVER_NOT_FOUND)
-	}
-
-	if !utility.ValidStr(tenantId, 0, []string{""}) {
-		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "tenant_id")
 	}
 
 	if !utility.ValidStr(name, 0, []string{""}) {
 		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "name")
 	}
 
+	if !utility.ValidStr(host, 0, []string{""}) {
+		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "host")
+	}
+
+	connect, err := GetConnection(driver, host)
+	if err != nil {
+		return nil, err
+	}
+
+	connect.SetDatabase(name)
+	params := connect.GetParams()
 	recordLimit := params.Int("record_limit")
 	version := params.ValInt(1, "version")
 	result := &DB{

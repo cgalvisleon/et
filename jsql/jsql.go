@@ -36,14 +36,7 @@ func GetConnection(driver, host string) (Connection, error) {
 * @return *DB, error
 **/
 func ConnectTo(tenantId, host, driver, name string) (*DB, error) {
-	connect, err := GetConnection(driver, host)
-	if err != nil {
-		return nil, err
-	}
-
-	connect.SetDatabase(name)
-	params := connect.GetParams()
-	result, err := NewDB(tenantId, name, params)
+	result, err := NewDB(tenantId, host, name, driver)
 	if err != nil {
 		return nil, err
 	}

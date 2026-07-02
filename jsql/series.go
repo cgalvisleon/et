@@ -8,8 +8,7 @@ import (
 )
 
 type Series struct {
-	TenantId string
-	model    *Model
+	model *Model
 }
 
 /**
@@ -17,11 +16,10 @@ type Series struct {
 * @param schema string
 * @return error
 **/
-func DefineSeries(db *DB, tenantId, schema string) (*Series, error) {
+func DefineSeries(db *DB, schema string) (*Series, error) {
 	columns := []Column{
 		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
-		{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 		{Name: "tag", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 		{Name: "format", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
 		{Name: "value", TypeColumn: COLUMN, TypeData: INT, Default: ""},
@@ -33,7 +31,6 @@ func DefineSeries(db *DB, tenantId, schema string) (*Series, error) {
 		Version: 1,
 		Columns: columns,
 		PrimaryKeys: []DefIndex{
-			{Name: TENANT_ID, Sorted: true},
 			{Name: "tag", Sorted: true},
 		},
 		IdxField: IDX,
@@ -61,8 +58,7 @@ func DefineSeries(db *DB, tenantId, schema string) (*Series, error) {
 	}
 
 	return &Series{
-		TenantId: tenantId,
-		model:    model,
+		model: model,
 	}, nil
 }
 
@@ -78,13 +74,11 @@ func (s *Series) SetSeries(tag string, format string, value int) error {
 	_, err := s.model.
 		Upsert(
 			et.Json{
-				"tenant_id": s.TenantId,
-				"tag":       tag,
-				"format":    format,
-				"value":     value,
+				"tag":    tag,
+				"format": format,
+				"value":  value,
 			}).
-		Where(Eq("tenant_id", s.TenantId)).
-		And(Eq("tag", tag)).
+		Where(Eq("tag", tag)).
 		Exec()
 	return err
 }
@@ -96,8 +90,7 @@ func (s *Series) SetSeries(tag string, format string, value int) error {
 **/
 func (s *Series) GetSeries(tag string) (et.Item, error) {
 	result, err := s.model.
-		Where(Eq("tenant_id", s.TenantId)).
-		And(Eq("tag", tag)).
+		Where(Eq("tag", tag)).
 		One()
 	if err != nil {
 		return et.Item{}, err
@@ -113,8 +106,7 @@ func (s *Series) GetSeries(tag string) (et.Item, error) {
 func (s *Series) DeleteSeries(tag string) error {
 	_, err := s.model.
 		Delete().
-		Where(Eq("tenant_id", s.TenantId)).
-		And(Eq("tag", tag)).
+		Where(Eq("tag", tag)).
 		Exec()
 	if err != nil {
 		return err
@@ -134,8 +126,7 @@ func (s *Series) GenSerie(tag string) (string, error) {
 			new["value"] = old["value"].(int) + 1
 			return nil
 		}).
-		Where(Eq("tenant_id", s.TenantId)).
-		And(Eq("tag", tag)).
+		Where(Eq("tag", tag)).
 		One()
 	if err != nil {
 		return "", err
@@ -158,8 +149,7 @@ func (s *Series) GenValue(tag string) (int, error) {
 			new["value"] = old["value"].(int) + 1
 			return nil
 		}).
-		Where(Eq("tenant_id", s.TenantId)).
-		And(Eq("tag", tag)).
+		Where(Eq("tag", tag)).
 		One()
 	if err != nil {
 		return 0, err

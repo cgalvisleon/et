@@ -516,43 +516,43 @@ func (s *Step) put(def et.Json, userId string) error {
 
 	version := def.Str("version")
 	if version != "" && s.Version != version {
-		s.addAuditLog(userId, fmt.Sprintf("update version old:%s", s.Version))
+		s.addAuditLog(userId, fmt.Sprintf("update_version old:%s", s.Version))
 		s.Version = version
 	}
 
 	title := def.Str("title")
 	if title != "" && s.Title != title {
-		s.addAuditLog(userId, fmt.Sprintf("update title  ol:%s", s.Title))
+		s.addAuditLog(userId, fmt.Sprintf("update_title old:%s", s.Title))
 		s.Title = title
 	}
 
 	description := def.Str("description")
 	if description != "" && s.Description != description {
-		s.addAuditLog(userId, fmt.Sprintf("update description old:%s", s.Description))
+		s.addAuditLog(userId, fmt.Sprintf("update_description old:%s", s.Description))
 		s.Description = description
 	}
 
 	config := def.Json("config")
 	if len(config) > 0 && s.Config.ToString() != config.ToString() {
-		s.addAuditLog(userId, "update config")
+		s.addAuditLog(userId, "update_config")
 		s.Config = config
 	}
 
 	params := def.Json("params")
 	if len(params) > 0 && s.Params.ToString() != params.ToString() {
-		s.addAuditLog(userId, "update params")
+		s.addAuditLog(userId, "update_params")
 		s.Params = params
 	}
 
 	definition := def.Str("definition")
 	if definition != "" && s.Definition != definition {
-		s.addAuditLog(userId, "update definition")
+		s.addAuditLog(userId, "update_definition")
 		s.Definition = definition
 	}
 
 	onPublish := def.Str("on_publish")
 	if onPublish != "" && s.OnPublish != onPublish {
-		s.addAuditLog(userId, "update on publish")
+		s.addAuditLog(userId, "update_on_publish")
 		s.OnPublish = onPublish
 	}
 

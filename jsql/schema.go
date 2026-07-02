@@ -120,6 +120,7 @@ func (s *Schema) newModel(name string, version int, userId string) *Model {
 		db:            s.db,
 	}
 	result.addAuditLog(userId, "new_model")
+	s.db.addAuditLog(userId, "new_model")
 	s.addModel(result)
 	return result
 }

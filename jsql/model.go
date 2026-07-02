@@ -519,6 +519,17 @@ func (s *Model) From(as ...string) *Query {
 }
 
 /**
+* Select: Creates a new Query for this model with the given fields as the SELECT clause.
+* @param fields ...string
+* @return *Query
+**/
+func (s *Model) Select(fields ...string) *Query {
+	result := s.From()
+	result.Select(fields...)
+	return result
+}
+
+/**
 * Where: Creates a new Query for this model with the given condition as the first WHERE clause.
 * @param cond *et.Condition
 * @return *Query
@@ -537,6 +548,16 @@ func (s *Model) Count() (int, error) {
 	return s.
 		From().
 		Count()
+}
+
+/**
+* First: Returns the first record in the model.
+* @return (et.Item, error)
+**/
+func (s *Model) First(n int) (et.Items, error) {
+	return s.
+		From().
+		Limit(1, n)
 }
 
 /**

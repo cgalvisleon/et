@@ -813,23 +813,6 @@ func (s *Query) All() (et.Items, error) {
 }
 
 /**
-* SqlTx: Executes the query inside the given transaction.
-* @param tx *Tx
-* @return et.Items, error
-**/
-func (s *Query) SqlTx(tx *Tx) (et.Items, error) {
-	return s.AllTx(tx)
-}
-
-/**
-* Sql: Executes the query without an explicit transaction.
-* @return et.Items, error
-**/
-func (s *Query) Sql() (et.Items, error) {
-	return s.SqlTx(nil)
-}
-
-/**
 * OneTx: Executes the query limited to one row inside the given transaction.
 * @param tx *Tx
 * @return et.Item, error
@@ -855,6 +838,24 @@ func (s *Query) OneTx(tx *Tx) (et.Item, error) {
 **/
 func (s *Query) One() (et.Item, error) {
 	return s.OneTx(nil)
+}
+
+/**
+* FirstTx: Executes the query limited to the first n rows inside the given transaction.
+* @param tx *Tx, n int
+* @return et.Items, error
+**/
+func (s *Query) FirstTx(tx *Tx, n int) (et.Items, error) {
+	return s.LimitTx(tx, 1, n)
+}
+
+/**
+* First: Executes the query limited to the first n rows without an explicit transaction.
+* @param n int
+* @return et.Items, error
+**/
+func (s *Query) First(n int) (et.Items, error) {
+	return s.FirstTx(nil, n)
 }
 
 /**
@@ -1113,5 +1114,5 @@ func (s *Query) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 		}
 	}
 
-	return s.SqlTx(tx)
+	return s.AllTx(tx)
 }

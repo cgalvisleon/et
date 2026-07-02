@@ -148,11 +148,6 @@ func LoadDb(store *Store, id string) (*DB, error) {
 		}
 	}
 
-	err = result.Init()
-	if err != nil {
-		return nil, err
-	}
-
 	return result, nil
 }
 

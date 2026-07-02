@@ -201,5 +201,6 @@ func (s *Schema) init() error {
 			return err
 		}
 	}
+
 	return nil
 }

@@ -29,7 +29,7 @@ func DefineStore(db *DB, schema string) (*Store, error) {
 
 	def := Def{
 		Schema:  schema,
-		Name:    "catalogs",
+		Name:    "db_catalogs",
 		Version: 1,
 		Columns: columns,
 		PrimaryKeys: []DefIndex{

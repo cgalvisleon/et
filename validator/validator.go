@@ -7,7 +7,7 @@ import (
 	"github.com/cgalvisleon/et/et"
 )
 
-type Validator struct {
+type Condition struct {
 	required  bool
 	min       float64
 	max       float64
@@ -17,15 +17,18 @@ type Validator struct {
 	message   string
 }
 
+type Field struct {
+	Name      string
+	Validator *Condition
+}
+
+type Validator struct {
+	Fields map[string]*Field
+}
+
 func New() *Validator {
 	return &Validator{
-		required:  false,
-		min:       0,
-		max:       0,
-		minLength: 0,
-		maxLength: 0,
-		pattern:   "",
-		message:   "",
+		Fields: make(map[string]*Field),
 	}
 }
 
@@ -34,9 +37,9 @@ func New() *Validator {
 * @param required bool
 * @return *Validator
 **/
-func (v *Validator) Required(required bool) *Validator {
-	v.required = required
-	return v
+func (s *Condition) Required(required bool) *Condition {
+	s.required = required
+	return s
 }
 
 /**
@@ -44,9 +47,9 @@ func (v *Validator) Required(required bool) *Validator {
 * @param min int
 * @return *Validator
 **/
-func (v *Validator) Min(min float64) *Validator {
-	v.min = min
-	return v
+func (s *Condition) Min(min float64) *Condition {
+	s.min = min
+	return s
 }
 
 /**
@@ -54,9 +57,9 @@ func (v *Validator) Min(min float64) *Validator {
 * @param max int
 * @return *Validator
 **/
-func (v *Validator) Max(max float64) *Validator {
-	v.max = max
-	return v
+func (s *Condition) Max(max float64) *Condition {
+	s.max = max
+	return s
 }
 
 /**
@@ -64,10 +67,10 @@ func (v *Validator) Max(max float64) *Validator {
 * @param min, max int
 * @return *Validator
 **/
-func (v *Validator) Between(min, max float64) *Validator {
-	v.min = min
-	v.max = max
-	return v
+func (s *Condition) Between(min, max float64) *Condition {
+	s.min = min
+	s.max = max
+	return s
 }
 
 /**
@@ -75,9 +78,9 @@ func (v *Validator) Between(min, max float64) *Validator {
 * @param minLength int
 * @return *Validator
 **/
-func (v *Validator) MinLength(minLength int) *Validator {
-	v.minLength = minLength
-	return v
+func (s *Condition) MinLength(minLength int) *Condition {
+	s.minLength = minLength
+	return s
 }
 
 /**
@@ -85,9 +88,9 @@ func (v *Validator) MinLength(minLength int) *Validator {
 * @param maxLength int
 * @return *Validator
 **/
-func (v *Validator) MaxLength(maxLength int) *Validator {
-	v.maxLength = maxLength
-	return v
+func (s *Condition) MaxLength(maxLength int) *Condition {
+	s.maxLength = maxLength
+	return s
 }
 
 /**
@@ -95,9 +98,9 @@ func (v *Validator) MaxLength(maxLength int) *Validator {
 * @param pattern string
 * @return *Validator
 **/
-func (v *Validator) Pattern(pattern string) *Validator {
-	v.pattern = pattern
-	return v
+func (s *Condition) Pattern(pattern string) *Condition {
+	s.pattern = pattern
+	return s
 }
 
 /**
@@ -105,9 +108,9 @@ func (v *Validator) Pattern(pattern string) *Validator {
 * @param message string
 * @return *Validator
 **/
-func (v *Validator) Message(message string) *Validator {
-	v.message = message
-	return v
+func (s *Condition) Message(message string) *Condition {
+	s.message = message
+	return s
 }
 
 /**
@@ -115,32 +118,26 @@ func (v *Validator) Message(message string) *Validator {
 * @param value any
 * @return bool
 **/
-func (v *Validator) Validate(value any) bool {
+func (s *Condition) validate(value any) bool {
 	switch value.(type) {
 	case string:
-		return v.validateString(value.(string))
+		return s.validateString(value.(string))
 	case int:
-		return v.validateInt(value.(int))
+		return s.validateInt(value.(int))
 	case float64:
-		return v.validateFloat(value.(float64))
+		return s.validateFloat(value.(float64))
 	case bool:
-		return v.validateBool(value.(bool))
+		return s.validateBool(value.(bool))
 	case time.Time:
-		return v.validateTime(value.(time.Time))
+		return s.validateTime(value.(time.Time))
 	case []byte:
-		return v.validateBytes(value.([]byte))
+		return s.validateBytes(value.([]byte))
 	case []string:
-		return v.validateArrayString(value.([]string))
+		return s.validateArrayString(value.([]string))
 	case []int:
-		return v.validateInts(value.([]int))
+		return s.validateInts(value.([]int))
 	case []float64:
-		return v.validateFloats(value.([]float64))
-	case map[string]interface{}:
-		return v.validateJson(value.(map[string]interface{}))
-	case et.Json:
-		return v.validateJson(value.(et.Json))
-	case []et.Json:
-		return v.validateArrayJson(value.([]et.Json))
+		return s.validateFloats(value.([]float64))
 	}
 	return false
 }
@@ -150,14 +147,14 @@ func (v *Validator) Validate(value any) bool {
 * @param value string
 * @return bool
 **/
-func (v *Validator) validateString(value string) bool {
-	if v.required && value == "" {
+func (s *Condition) validateString(value string) bool {
+	if s.required && value == "" {
 		return false
-	} else if v.minLength > 0 && len(value) < v.minLength {
+	} else if s.minLength > 0 && len(value) < s.minLength {
 		return false
-	} else if v.maxLength > 0 && len(value) > v.maxLength {
+	} else if s.maxLength > 0 && len(value) > s.maxLength {
 		return false
-	} else if v.pattern != "" && !regexp.MustCompile(v.pattern).MatchString(value) {
+	} else if s.pattern != "" && !regexp.MustCompile(s.pattern).MatchString(value) {
 		return false
 	}
 	return true
@@ -168,12 +165,12 @@ func (v *Validator) validateString(value string) bool {
 * @param value int
 * @return bool
 **/
-func (v *Validator) validateInt(value int) bool {
-	if v.required && value == 0 {
+func (s *Condition) validateInt(value int) bool {
+	if s.required && value == 0 {
 		return false
-	} else if v.min > 0 && float64(value) < v.min {
+	} else if s.min > 0 && float64(value) < s.min {
 		return false
-	} else if v.max > 0 && float64(value) > v.max {
+	} else if s.max > 0 && float64(value) > s.max {
 		return false
 	}
 	return true
@@ -184,12 +181,12 @@ func (v *Validator) validateInt(value int) bool {
 * @param value float64
 * @return bool
 **/
-func (v *Validator) validateFloat(value float64) bool {
-	if v.required && value == 0 {
+func (s *Condition) validateFloat(value float64) bool {
+	if s.required && value == 0 {
 		return false
-	} else if v.min > 0 && value < v.min {
+	} else if s.min > 0 && value < s.min {
 		return false
-	} else if v.max > 0 && value > v.max {
+	} else if s.max > 0 && value > s.max {
 		return false
 	}
 	return true
@@ -200,8 +197,8 @@ func (v *Validator) validateFloat(value float64) bool {
 * @param value bool
 * @return bool
 **/
-func (v *Validator) validateBool(value bool) bool {
-	if v.required && !value {
+func (s *Condition) validateBool(value bool) bool {
+	if s.required && !value {
 		return false
 	}
 	return true
@@ -212,8 +209,8 @@ func (v *Validator) validateBool(value bool) bool {
 * @param value time.Time
 * @return bool
 **/
-func (v *Validator) validateTime(value time.Time) bool {
-	if v.required && value.IsZero() {
+func (s *Condition) validateTime(value time.Time) bool {
+	if s.required && value.IsZero() {
 		return false
 	}
 	return true
@@ -224,12 +221,12 @@ func (v *Validator) validateTime(value time.Time) bool {
 * @param value []byte
 * @return bool
 **/
-func (v *Validator) validateBytes(value []byte) bool {
-	if v.required && len(value) == 0 {
+func (s *Condition) validateBytes(value []byte) bool {
+	if s.required && len(value) == 0 {
 		return false
-	} else if v.minLength > 0 && len(value) < v.minLength {
+	} else if s.minLength > 0 && len(value) < s.minLength {
 		return false
-	} else if v.maxLength > 0 && len(value) > v.maxLength {
+	} else if s.maxLength > 0 && len(value) > s.maxLength {
 		return false
 	}
 	return true
@@ -240,12 +237,12 @@ func (v *Validator) validateBytes(value []byte) bool {
 * @param value []string
 * @return bool
 **/
-func (v *Validator) validateArrayString(value []string) bool {
-	if v.required && len(value) == 0 {
+func (s *Condition) validateArrayString(value []string) bool {
+	if s.required && len(value) == 0 {
 		return false
-	} else if v.minLength > 0 && len(value) < v.minLength {
+	} else if s.minLength > 0 && len(value) < s.minLength {
 		return false
-	} else if v.maxLength > 0 && len(value) > v.maxLength {
+	} else if s.maxLength > 0 && len(value) > s.maxLength {
 		return false
 	}
 	return true
@@ -256,12 +253,12 @@ func (v *Validator) validateArrayString(value []string) bool {
 * @param value []int
 * @return bool
 **/
-func (v *Validator) validateInts(value []int) bool {
-	if v.required && len(value) == 0 {
+func (s *Condition) validateInts(value []int) bool {
+	if s.required && len(value) == 0 {
 		return false
-	} else if v.minLength > 0 && len(value) < v.minLength {
+	} else if s.minLength > 0 && len(value) < s.minLength {
 		return false
-	} else if v.maxLength > 0 && len(value) > v.maxLength {
+	} else if s.maxLength > 0 && len(value) > s.maxLength {
 		return false
 	}
 	return true
@@ -272,28 +269,12 @@ func (v *Validator) validateInts(value []int) bool {
 * @param value []float64
 * @return bool
 **/
-func (v *Validator) validateFloats(value []float64) bool {
-	if v.required && len(value) == 0 {
+func (s *Condition) validateFloats(value []float64) bool {
+	if s.required && len(value) == 0 {
 		return false
-	} else if v.minLength > 0 && len(value) < v.minLength {
+	} else if s.minLength > 0 && len(value) < s.minLength {
 		return false
-	} else if v.maxLength > 0 && len(value) > v.maxLength {
-		return false
-	}
-	return true
-}
-
-/**
-* validateArrayInt: Validate the array of ints value using the validator.
-* @param value []int
-* @return bool
-**/
-func (v *Validator) validateArrayInt(value []int) bool {
-	if v.required && len(value) == 0 {
-		return false
-	} else if v.minLength > 0 && len(value) < v.minLength {
-		return false
-	} else if v.maxLength > 0 && len(value) > v.maxLength {
+	} else if s.maxLength > 0 && len(value) > s.maxLength {
 		return false
 	}
 	return true
@@ -304,37 +285,27 @@ func (v *Validator) validateArrayInt(value []int) bool {
 * @param value []float64
 * @return bool
 **/
-func (v *Validator) validateArrayFloat(value []float64) bool {
-	if v.required && len(value) == 0 {
+func (s *Condition) validateArrayFloat(value []float64) bool {
+	if s.required && len(value) == 0 {
 		return false
-	} else if v.minLength > 0 && len(value) < v.minLength {
+	} else if s.minLength > 0 && len(value) < s.minLength {
 		return false
-	} else if v.maxLength > 0 && len(value) > v.maxLength {
-		return false
-	}
-	return true
-}
-
-/**
-* validateJson: Validate the json value using the validator.
-* @param value map[string]interface{}
-* @return bool
-**/
-func (v *Validator) validateJson(value map[string]interface{}) bool {
-	if v.required && len(value) == 0 {
+	} else if s.maxLength > 0 && len(value) > s.maxLength {
 		return false
 	}
 	return true
 }
 
 /**
-* validateArrayJson: Validate the array of json value using the validator.
-* @param value []et.Json
+* Validate: Validate the json value using the validator.
+* @param value et.Json
 * @return bool
 **/
-func (v *Validator) validateArrayJson(value []et.Json) bool {
-	if v.required && len(value) == 0 {
-		return false
+func (s *Validator) Validate(value et.Json) bool {
+	for key, val := range value {
+		if s.Fields[key].Validator.validate(val) {
+			return false
+		}
 	}
 	return true
 }

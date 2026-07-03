@@ -3,10 +3,12 @@ package router
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/strs"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -151,6 +153,7 @@ func PushApiGateway(method, path, resolve string, tpHeader TpHeader, header et.J
 	key := fmt.Sprintf("%s:%s", method, path)
 	router.Routes[key] = et.Json{
 		"_id":            key,
+		"id":             key,
 		"kind":           "api",
 		"method":         method,
 		"path":           path,
@@ -196,10 +199,8 @@ func GetRoutes() map[string]et.Json {
 * PushApiGateway
 * @param method, path, packagePath, host, packageName string
 **/
-func pushApiGateway(method, path, packagePath, host, packageName string) {
-	path = packagePath + path
+func pushApiGateway(method, path, host, packageName string) {
 	resolve := host + path
-
 	PushApiGateway(method, path, resolve, TpReplaceHeader, et.Json{}, []string{}, 0, packageName)
 }
 
@@ -209,6 +210,10 @@ func pushApiGateway(method, path, packagePath, host, packageName string) {
 * @return *chi.Mux
 **/
 func Publish(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, packagePath, host string) *chi.Mux {
+	path = strs.Append(packagePath, path, "/")
+	path = strings.ReplaceAll(path, "//", "/")
+	path = strings.ReplaceAll(path, "//", "/")
+
 	switch method {
 	case "GET":
 		r.Get(path, h)
@@ -228,7 +233,7 @@ func Publish(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, p
 		r.HandleFunc(path, h)
 	}
 
-	pushApiGateway(method, path, packagePath, host, packageName)
+	pushApiGateway(method, path, host, packageName)
 
 	return r
 }
@@ -239,6 +244,10 @@ func Publish(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, p
 * @return *chi.Mux
 **/
 func With(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, packagePath, host string, middlewares []func(http.Handler) http.Handler) *chi.Mux {
+	path = strs.Append(packagePath, path, "/")
+	path = strings.ReplaceAll(path, "//", "/")
+	path = strings.ReplaceAll(path, "//", "/")
+
 	switch method {
 	case "GET":
 		r.With(middlewares...).Get(path, h)
@@ -258,7 +267,7 @@ func With(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, pack
 		r.With(middlewares...).HandleFunc(path, h)
 	}
 
-	pushApiGateway(method, path, packagePath, host, packageName)
+	pushApiGateway(method, path, host, packageName)
 
 	return r
 }

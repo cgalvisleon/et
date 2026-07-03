@@ -1,8 +1,8 @@
 package router
 
 import (
+	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/strs"
@@ -28,7 +28,9 @@ type Api struct {
 * @return *Api
 **/
 func NewApi(name, path, host string, port, rpc int, version string) *Api {
-	addr := strs.Format("%s:%d", host, port)
+	addr := host
+	portS := fmt.Sprintf("%d", port)
+	addr = strs.Append(addr, portS, ":")
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
@@ -67,10 +69,7 @@ func (s *Api) UseAuthorization(middlewares ...func(http.Handler) http.Handler) {
 * @param method, path string, handler func(http.ResponseWriter, *http.Request)
 **/
 func (s *Api) Public(method, path string, handler func(http.ResponseWriter, *http.Request)) {
-	path = strs.Format("%s/%s", s.Path, path)
-	path = strings.ReplaceAll(path, "//", "/")
-	path = strings.ReplaceAll(path, "//", "/")
-	Publish(s.Router, method, path, handler, s.Name, s.Path, s.Host)
+	Publish(s.Router, method, path, handler, s.Name, s.Path, s.Addr)
 }
 
 /**
@@ -78,10 +77,7 @@ func (s *Api) Public(method, path string, handler func(http.ResponseWriter, *htt
 * @param method, path string, handler func(http.ResponseWriter, *http.Request)
 **/
 func (s *Api) Authentication(method, path string, handler func(http.ResponseWriter, *http.Request)) {
-	path = strs.Format("%s/%s", s.Path, path)
-	path = strings.ReplaceAll(path, "//", "/")
-	path = strings.ReplaceAll(path, "//", "/")
-	With(s.Router, method, path, handler, s.Name, s.Path, s.Host, s.authentication)
+	With(s.Router, method, path, handler, s.Name, s.Path, s.Addr, s.authentication)
 }
 
 /**
@@ -89,8 +85,5 @@ func (s *Api) Authentication(method, path string, handler func(http.ResponseWrit
 * @param method, path string, handler func(http.ResponseWriter, *http.Request)
 **/
 func (s *Api) Authorization(method, path string, handler func(http.ResponseWriter, *http.Request)) {
-	path = strs.Format("%s/%s", s.Path, path)
-	path = strings.ReplaceAll(path, "//", "/")
-	path = strings.ReplaceAll(path, "//", "/")
-	With(s.Router, method, path, handler, s.Name, s.Path, s.Host, s.authorization)
+	With(s.Router, method, path, handler, s.Name, s.Path, s.Addr, s.authorization)
 }

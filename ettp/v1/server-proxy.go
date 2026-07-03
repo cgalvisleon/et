@@ -600,14 +600,17 @@ func (s *Server) SetProxys(w http.ResponseWriter, r *http.Request) {
 		}
 
 		result.Add(proxy.ToJson())
-		event.Publish(rt.EVENT_SET_ROUTER, et.Json{
+		router := et.Json{
+			"_id":          proxy.Id,
 			"id":           proxy.Id,
 			"path":         proxy.Path,
 			"name":         proxy.Name,
 			"description":  proxy.Description,
 			"solver":       proxy.Solver,
 			"package_name": proxy.PackageName,
-		})
+		}
+		event.Publish(rt.APIGATEWAY_SET_ROUTER, router)
+		event.Publish(rt.APIGATEWAY_SET_RESOLVE, router)
 	}
 
 	metric.ITEMS(w, r, http.StatusOK, result)
@@ -644,14 +647,18 @@ func (s *Server) SetPortForwards(w http.ResponseWriter, r *http.Request) {
 		}
 
 		result.Add(portForward.ToJson())
-		event.Publish(rt.EVENT_SET_ROUTER, et.Json{
+		router := et.Json{
+			"_id":          portForward.Id,
 			"id":           portForward.Id,
 			"path":         portForward.Path,
 			"name":         portForward.Name,
 			"description":  portForward.Description,
 			"solver":       portForward.Solver,
 			"package_name": portForward.PackageName,
-		})
+		}
+
+		event.Publish(rt.APIGATEWAY_SET_ROUTER, router)
+		event.Publish(rt.APIGATEWAY_SET_RESOLVE, router)
 	}
 
 	metric.ITEMS(w, r, http.StatusOK, result)
@@ -676,9 +683,10 @@ func (s *Server) DeleteProxys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	event.Publish(rt.EVENT_REMOVE_ROUTER, et.Json{
-		"id": id,
-	})
+	router := et.Json{"id": id}
+	event.Publish(rt.APIGATEWAY_REMOVE_ROUTER, router)
+	event.Publish(rt.APIGATEWAY_DELETE_RESOLVE, router)
+
 	metric.ITEM(w, r, http.StatusOK, et.Item{
 		Ok: true,
 		Result: et.Json{

@@ -552,5 +552,6 @@ func (s *Server) Reset() {
 		logs.Fatal(err)
 	}
 
-	event.Publish(router.EVENT_RESET_ROUTER, et.Json{})
+	event.Publish(router.APIGATEWAY_RESET_ROUTER, et.Json{})
+	event.Publish(router.APIGATEWAY_RESET, et.Json{})
 }

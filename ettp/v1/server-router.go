@@ -172,9 +172,10 @@ func (s *Server) SetRouter(private bool, method, path, resolve string, header et
 		return nil, fmt.Errorf(MSG_ROUTE_NOT_REGISTER)
 	}
 
-	event.Publish(rt.EVENT_SET_ROUTER, et.Json{
-		"private":        private,
+	router := et.Json{
+		"_id":            route.Id,
 		"id":             route.Id,
+		"private":        private,
 		"method":         method,
 		"path":           path,
 		"resolve":        resolve,
@@ -182,7 +183,10 @@ func (s *Server) SetRouter(private bool, method, path, resolve string, header et
 		"tp_header":      tpHeader,
 		"exclude_header": excludeHeader,
 		"package_name":   packageName,
-	})
+	}
+
+	event.Publish(rt.APIGATEWAY_SET_ROUTER, router)
+	event.Publish(rt.APIGATEWAY_SET_RESOLVE, router)
 
 	return route, nil
 }

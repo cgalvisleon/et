@@ -6,27 +6,35 @@ import (
 	"github.com/cgalvisleon/et/router"
 )
 
-const (
-	APIGATEWAY_SET_RESOLVE = "apigateway/set/resolve"
-)
-
 func (s *Server) initEvents() error {
-	err := event.Subscribe(APIGATEWAY_SET_RESOLVE, s.eventSetResolve)
+	// V_1
+	err := event.Subscribe(router.APIGATEWAY_SET_ROUTER, s.eventSetResolve)
 	if err != nil {
 		return err
 	}
 
-	err = event.Subscribe(router.EVENT_SET_ROUTER, s.eventSetRouter)
+	err = event.Subscribe(router.APIGATEWAY_REMOVE_ROUTER, s.eventRemoveRouterById)
 	if err != nil {
 		return err
 	}
 
-	err = event.Subscribe(router.EVENT_REMOVE_ROUTER, s.eventRemoveRouterById)
+	err = event.Subscribe(router.APIGATEWAY_RESET_ROUTER, s.eventReset)
 	if err != nil {
 		return err
 	}
 
-	err = event.Subscribe(router.EVENT_RESET_ROUTER, s.eventReset)
+	// V_0
+	err = event.Subscribe(router.APIGATEWAY_SET_RESOLVE, s.eventSetResolve)
+	if err != nil {
+		return err
+	}
+
+	err = event.Subscribe(router.APIGATEWAY_REMOVE_ROUTER, s.eventRemoveRouterById)
+	if err != nil {
+		return err
+	}
+
+	err = event.Subscribe(router.APIGATEWAY_RESET_ROUTER, s.eventReset)
 	if err != nil {
 		return err
 	}

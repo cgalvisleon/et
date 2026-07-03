@@ -7,17 +7,34 @@ import (
 )
 
 func (s *Server) initEvents() {
-	err := event.Subscribe(rt.EVENT_SET_ROUTER, s.eventSetRouter)
+	// V_1
+	err := event.Subscribe(rt.APIGATEWAY_SET_ROUTER, s.eventSetRouter)
 	if err != nil {
 		logs.Error(err)
 	}
 
-	err = event.Subscribe(rt.EVENT_REMOVE_ROUTER, s.eventDeleteRouter)
+	err = event.Subscribe(rt.APIGATEWAY_REMOVE_ROUTER, s.eventDeleteRouter)
 	if err != nil {
 		logs.Error(err)
 	}
 
-	err = event.Subscribe(rt.EVENT_RESET_ROUTER, s.eventReset)
+	err = event.Subscribe(rt.APIGATEWAY_RESET_ROUTER, s.eventReset)
+	if err != nil {
+		logs.Error(err)
+	}
+
+	// V_0
+	err = event.Subscribe(rt.APIGATEWAY_SET_RESOLVE, s.eventSetRouter)
+	if err != nil {
+		logs.Error(err)
+	}
+
+	err = event.Subscribe(rt.APIGATEWAY_DELETE_RESOLVE, s.eventDeleteRouter)
+	if err != nil {
+		logs.Error(err)
+	}
+
+	err = event.Subscribe(rt.APIGATEWAY_RESET, s.eventReset)
 	if err != nil {
 		logs.Error(err)
 	}

@@ -234,9 +234,9 @@ func (s *Server) deleteRouteById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	event.Publish(router.EVENT_REMOVE_ROUTER, et.Json{
-		"id": id,
-	})
+	rt := et.Json{"id": id}
+	event.Publish(router.APIGATEWAY_REMOVE_ROUTER, rt)
+	event.Publish(router.APIGATEWAY_DELETE_RESOLVE, rt)
 
 	metric.ITEM(w, r, http.StatusOK, et.Item{
 		Ok: true,
@@ -330,7 +330,9 @@ func (s *Server) reset(w http.ResponseWriter, r *http.Request) {
 	s.Reset()
 
 	for _, pk := range s.Packages {
-		channel := fmt.Sprintf(`%s:%s`, router.EVENT_RESET_ROUTER, pk.Name)
+		channel := fmt.Sprintf(`%s:%s`, router.APIGATEWAY_RESET_ROUTER, pk.Name)
+		event.Publish(channel, et.Json{})
+		channel = fmt.Sprintf(`%s:%s`, router.APIGATEWAY_RESET, pk.Name)
 		event.Publish(channel, et.Json{})
 	}
 

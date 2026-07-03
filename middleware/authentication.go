@@ -37,10 +37,10 @@ func getBearerToken(r *http.Request) (string, error) {
 }
 
 /**
-* Authenticate
+* Authentication
 * @param next http.Handler
 **/
-func Authenticate(next http.Handler) http.Handler {
+func Authentication(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, err := getBearerToken(r)
 		if err != nil {

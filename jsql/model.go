@@ -317,7 +317,15 @@ func (s *Model) Stricted() {
 * Db: Returns the underlying *sql.DB connection pool.
 * @return *sql.DB
 **/
-func (s *Model) Db() *sql.DB {
+func (s *Model) Db() *DB {
+	return s.db
+}
+
+/**
+* SqlDb: Returns the underlying *sql.DB connection pool.
+* @return *sql.DB
+**/
+func (s *Model) SqlDB() *sql.DB {
 	return s.db.db
 }
 
@@ -327,6 +335,16 @@ func (s *Model) Db() *sql.DB {
 **/
 func (s *Model) SetDb(db *DB) {
 	s.db = db
+}
+
+/**
+* GetModel: Returns the model for the given schema and name.
+* @param schema string
+* @param name string
+* @return *Model, error
+**/
+func (s *Model) GetModel(schema, name string) (*Model, error) {
+	return s.db.GetModel(schema, name)
 }
 
 /**
@@ -519,6 +537,18 @@ func (s *Model) From(as ...string) *Query {
 }
 
 /**
+* InnerJoin: Creates a new Query for this model with the given model as the INNER JOIN clause.
+* @param model *Model
+* @param on *et.Condition
+* @return *Query
+**/
+func (s *Model) Join(to *Model, as string, on *et.Condition) *Query {
+	result := s.From("A")
+	result.Join(to, as, on)
+	return result
+}
+
+/**
 * Select: Creates a new Query for this model with the given fields as the SELECT clause.
 * @param fields ...string
 * @return *Query
@@ -526,6 +556,17 @@ func (s *Model) From(as ...string) *Query {
 func (s *Model) Select(fields ...string) *Query {
 	result := s.From()
 	result.Select(fields...)
+	return result
+}
+
+/**
+* Calc: Creates a new Query for this model with the given fields as the CALC clause.
+* @param fields ...string
+* @return *Query
+**/
+func (s *Model) Calc(fields ...string) *Query {
+	result := s.From()
+	result.Calc(fields...)
 	return result
 }
 

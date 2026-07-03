@@ -555,6 +555,30 @@ func (s *Query) Calc(fields ...string) *Query {
 	return s
 }
 
+func (s *Query) Detail(fields ...string) *Query {
+	for _, field := range fields {
+		from := s.Froms[0]
+		if from == nil {
+			continue
+		}
+
+		detail, ok := from.Model.Details[field]
+		if !ok {
+			continue
+		}
+		
+		s.Details[field] = &QueryDetail{
+			To:     from,
+			Keys:   detail.Keys,
+			Select: detail.Select,
+			Page:   s.Offset,
+			Rows:   s.Rows,
+		}
+	}
+	
+	return s
+}
+
 /**
 * Hidden: Appends fields to the HIDDEN clause.
 * @param fields ...string

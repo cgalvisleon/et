@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"fmt"
 	"regexp"
 	"time"
 
@@ -14,12 +15,13 @@ type Condition struct {
 	minLength int
 	maxLength int
 	pattern   string
-	message   string
+	name      string
+	validator *Validator
 }
 
 type Field struct {
-	Name      string
-	Validator *Condition
+	Name      string     `json:"name"`
+	Condition *Condition `json:"condition"`
 }
 
 type Validator struct {
@@ -33,12 +35,36 @@ func New() *Validator {
 }
 
 /**
+* AddField: Add a field to the validator.
+* @param name string, validator *Condition
+* @return *Validator
+**/
+func (s *Validator) Field(name string) *Condition {
+	s.Fields[name] = &Field{
+		Name: name,
+		Condition: &Condition{
+			name:      name,
+			validator: s,
+		},
+	}
+	return s.Fields[name].Condition
+}
+
+/**
+* Fields: Get the fields of the validator.
+* @return map[string]*Field
+**/
+func (s *Condition) Field(name string) *Condition {
+	return s.validator.Field(name)
+}
+
+/**
 * Required: Set the required flag for the validator.
 * @param required bool
 * @return *Validator
 **/
-func (s *Condition) Required(required bool) *Condition {
-	s.required = required
+func (s *Condition) Required() *Condition {
+	s.required = true
 	return s
 }
 
@@ -104,196 +130,173 @@ func (s *Condition) Pattern(pattern string) *Condition {
 }
 
 /**
-* Message: Set the message for the validator.
-* @param message string
-* @return *Validator
-**/
-func (s *Condition) Message(message string) *Condition {
-	s.message = message
-	return s
-}
-
-/**
 * Validate: Validate the value using the validator.
 * @param value any
 * @return bool
 **/
-func (s *Condition) validate(value any) bool {
-	switch value.(type) {
+func (s *Condition) validate(value any) (bool, error) {
+	switch v := value.(type) {
 	case string:
-		return s.validateString(value.(string))
+		return s.validateString(v)
 	case int:
-		return s.validateInt(value.(int))
+		return s.validateInt(v)
 	case float64:
-		return s.validateFloat(value.(float64))
+		return s.validateFloat(v)
 	case bool:
-		return s.validateBool(value.(bool))
+		return s.validateBool(v)
 	case time.Time:
-		return s.validateTime(value.(time.Time))
+		return s.validateTime(v)
 	case []byte:
-		return s.validateBytes(value.([]byte))
-	case []string:
-		return s.validateArrayString(value.([]string))
-	case []int:
-		return s.validateInts(value.([]int))
-	case []float64:
-		return s.validateFloats(value.([]float64))
+		return s.validateBytes(v)
 	}
-	return false
+	return false, fmt.Errorf(MSG_VALIDATOR_INVALID_TYPE, s.name)
 }
 
 /**
 * validateString: Validate the string value using the validator.
 * @param value string
-* @return bool
+* @return bool, error
 **/
-func (s *Condition) validateString(value string) bool {
+func (s *Condition) validateString(value string) (bool, error) {
 	if s.required && value == "" {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_REQUIRED, s.name)
 	} else if s.minLength > 0 && len(value) < s.minLength {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_MIN_LENGTH, s.name, s.minLength)
 	} else if s.maxLength > 0 && len(value) > s.maxLength {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_MAX_LENGTH, s.name, s.maxLength)
 	} else if s.pattern != "" && !regexp.MustCompile(s.pattern).MatchString(value) {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_PATTERN, s.name, s.pattern)
 	}
-	return true
+	return true, nil
 }
 
 /**
 * validateInt: Validate the int value using the validator.
 * @param value int
-* @return bool
+* @return bool, error
 **/
-func (s *Condition) validateInt(value int) bool {
+func (s *Condition) validateInt(value int) (bool, error) {
 	if s.required && value == 0 {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_REQUIRED, s.name)
 	} else if s.min > 0 && float64(value) < s.min {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_MIN, s.name, s.min)
 	} else if s.max > 0 && float64(value) > s.max {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_MAX, s.name, s.max)
 	}
-	return true
+	return true, nil
 }
 
 /**
 * validateFloat: Validate the float value using the validator.
 * @param value float64
-* @return bool
+* @return bool, error
 **/
-func (s *Condition) validateFloat(value float64) bool {
+func (s *Condition) validateFloat(value float64) (bool, error) {
 	if s.required && value == 0 {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_REQUIRED, s.name)
 	} else if s.min > 0 && value < s.min {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_MIN, s.name, s.min)
 	} else if s.max > 0 && value > s.max {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_MAX, s.name, s.max)
 	}
-	return true
+	return true, nil
 }
 
 /**
 * validateBool: Validate the bool value using the validator.
 * @param value bool
-* @return bool
+* @return bool, error
 **/
-func (s *Condition) validateBool(value bool) bool {
+func (s *Condition) validateBool(value bool) (bool, error) {
 	if s.required && !value {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_REQUIRED, s.name)
 	}
-	return true
+	return true, nil
 }
 
 /**
 * validateTime: Validate the time value using the validator.
 * @param value time.Time
-* @return bool
+* @return bool, error
 **/
-func (s *Condition) validateTime(value time.Time) bool {
+func (s *Condition) validateTime(value time.Time) (bool, error) {
 	if s.required && value.IsZero() {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_REQUIRED, s.name)
 	}
-	return true
+	return true, nil
 }
 
 /**
 * validateBytes: Validate the bytes value using the validator.
 * @param value []byte
-* @return bool
+* @return bool, error
 **/
-func (s *Condition) validateBytes(value []byte) bool {
+func (s *Condition) validateBytes(value []byte) (bool, error) {
 	if s.required && len(value) == 0 {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_REQUIRED, s.name)
 	} else if s.minLength > 0 && len(value) < s.minLength {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_MIN_LENGTH, s.name, s.minLength)
 	} else if s.maxLength > 0 && len(value) > s.maxLength {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_MAX_LENGTH, s.name, s.maxLength)
 	}
-	return true
+	return true, nil
 }
 
 /**
 * validateArrayString: Validate the array of strings value using the validator.
 * @param value []string
-* @return bool
+* @return bool, error
 **/
-func (s *Condition) validateArrayString(value []string) bool {
+func (s *Condition) validateArrayString(value []string) (bool, error) {
 	if s.required && len(value) == 0 {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_REQUIRED, s.name)
 	} else if s.minLength > 0 && len(value) < s.minLength {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_MIN_LENGTH, s.name, s.minLength)
 	} else if s.maxLength > 0 && len(value) > s.maxLength {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_MAX_LENGTH, s.name, s.maxLength)
 	}
-	return true
+	return true, nil
 }
 
 /**
 * validateInts: Validate the array of ints value using the validator.
 * @param value []int
-* @return bool
+* @return bool, error
 **/
-func (s *Condition) validateInts(value []int) bool {
+func (s *Condition) validateInts(value []int) (bool, error) {
 	if s.required && len(value) == 0 {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_REQUIRED, s.name)
 	} else if s.minLength > 0 && len(value) < s.minLength {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_MIN_LENGTH, s.name, s.minLength)
 	} else if s.maxLength > 0 && len(value) > s.maxLength {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_MAX_LENGTH, s.name, s.maxLength)
 	}
-	return true
+	return true, nil
 }
 
 /**
 * validateFloats: Validate the array of floats value using the validator.
 * @param value []float64
-* @return bool
+* @return bool, error
 **/
-func (s *Condition) validateFloats(value []float64) bool {
+func (s *Condition) validateFloats(value []float64) (bool, error) {
 	if s.required && len(value) == 0 {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_REQUIRED, s.name)
 	} else if s.minLength > 0 && len(value) < s.minLength {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_MIN_LENGTH, s.name, s.minLength)
 	} else if s.maxLength > 0 && len(value) > s.maxLength {
-		return false
+		return false, fmt.Errorf(MSG_VALIDATOR_MAX_LENGTH, s.name, s.maxLength)
 	}
-	return true
+	return true, nil
 }
 
 /**
-* validateArrayFloat: Validate the array of floats value using the validator.
-* @param value []float64
-* @return bool
+* Validate: Validate the value using the validator.
+* @param value any
+* @return bool, error
 **/
-func (s *Condition) validateArrayFloat(value []float64) bool {
-	if s.required && len(value) == 0 {
-		return false
-	} else if s.minLength > 0 && len(value) < s.minLength {
-		return false
-	} else if s.maxLength > 0 && len(value) > s.maxLength {
-		return false
-	}
-	return true
+func (s *Condition) Validate(value et.Json) (bool, error) {
+	return s.validator.Validate(value)
 }
 
 /**
@@ -301,11 +304,12 @@ func (s *Condition) validateArrayFloat(value []float64) bool {
 * @param value et.Json
 * @return bool
 **/
-func (s *Validator) Validate(value et.Json) bool {
+func (s *Validator) Validate(value et.Json) (bool, error) {
 	for key, val := range value {
-		if s.Fields[key].Validator.validate(val) {
-			return false
+		ok, err := s.Fields[key].Condition.validate(val)
+		if !ok || err != nil {
+			return false, err
 		}
 	}
-	return true
+	return true, nil
 }

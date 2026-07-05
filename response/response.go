@@ -103,23 +103,7 @@ func GetParam(r *http.Request, key string) string {
 func WriteResponse(w http.ResponseWriter, statusCode int, e []byte) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(statusCode)
-	if statusCode >= 200 && statusCode < 300 {
-		w.Write(e)
-	} else {
-		result := Result{
-			Ok: http.StatusOK == statusCode,
-			Result: et.Json{
-				"message": http.StatusText(statusCode),
-			},
-		}
-
-		e, err := json.Marshal(result)
-		if err != nil {
-			return err
-		}
-
-		w.Write(e)
-	}
+	w.Write(e)
 
 	return nil
 }

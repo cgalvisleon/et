@@ -1,31 +1,42 @@
 package aws
 
 import (
+	"errors"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/cgalvisleon/et/envar"
 )
+
+type Params struct {
+	Region string
+	KeyId  string
+	Secret string
+	Token  string
+}
 
 /**
 * NewSession
 * @return *session.Session
 **/
-func newSession() (*session.Session, error) {
-	err := envar.Validate([]string{
-		"AWS_REGION",
-		"AWS_ACCESS_KEY_ID",
-		"AWS_SECRET_ACCESS_KEY",
-		"AWS_SESSION_TOKEN",
-	})
-	if err != nil {
-		return nil, err
+func newSession(params Params) (*session.Session, error) {
+	if params.Region == "" {
+		return nil, errors.New(MSG_REGION_REQUIRED)
+	}
+	if params.KeyId == "" {
+		return nil, errors.New(MSG_KEY_ID_REQUIRED)
+	}
+	if params.Secret == "" {
+		return nil, errors.New(MSG_SECRET_REQUIRED)
+	}
+	if params.Token == "" {
+		return nil, errors.New(MSG_TOKEN_REQUIRED)
 	}
 
-	region := envar.GetStr("AWS_REGION", "")
-	keyId := envar.GetStr("AWS_ACCESS_KEY_ID", "")
-	secret := envar.GetStr("AWS_SECRET_ACCESS_KEY", "")
-	token := envar.GetStr("AWS_SESSION_TOKEN", "")
+	region := params.Region
+	keyId := params.KeyId
+	secret := params.Secret
+	token := params.Token
 
 	return session.Must(session.NewSession(&aws.Config{
 		Region: aws.String(region),

@@ -5,36 +5,56 @@ import (
 	"slices"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sns"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/strs"
 )
 
+type SenderAWS struct {
+	Params Params
+	sess   *session.Session
+}
+
+/**
+* NewSenderAWS
+* @param params Params
+* @return *SenderAWS, error
+**/
+func NewSenderAWS(params Params) (*SenderAWS, error) {
+	result := &SenderAWS{
+		Params: params,
+	}
+
+	sess, err := newSession(params)
+	if err != nil {
+		return nil, err
+	}
+
+	result.sess = sess
+	return result, nil
+}
+
 /**
 * SendSMS
 * @param contactNumbers []string, content string, params et.Json, tp string
 * @return et.Items, error
 **/
-func SendSMS(contactNumbers []string, content string, params et.Json, tp string) (et.Items, error) {
+func (s *SenderAWS) SendSMS(contactNumbers []string, content string, params et.Json, tpMessage string) (et.Item, error) {
 	if len(contactNumbers) == 0 {
-		return et.Items{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "contactNumbers")
+		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "contactNumbers")
 	}
 
 	if content == "" {
-		return et.Items{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "content")
+		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "content")
 	}
 
-	if !slices.Contains([]string{"Transactional", "Promotional"}, tp) {
-		return et.Items{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "type")
+	if !slices.Contains([]string{"Transactional", "Promotional"}, tpMessage) {
+		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "type")
 	}
 
-	sess, err := newSession()
-	if err != nil {
-		return et.Items{}, err
-	}
-
-	result := et.Items{}
+	result := []et.Json{}
 	for _, phoneNumber := range contactNumbers {
 		message := content
 		for k, v := range params {
@@ -43,33 +63,50 @@ func SendSMS(contactNumbers []string, content string, params et.Json, tp string)
 			message = strs.Replace(message, k, s)
 		}
 
-		svc := sns.New(sess)
+		svc := sns.New(s.sess)
 		params := &sns.PublishInput{
 			Message:     aws.String(message),
 			PhoneNumber: aws.String(phoneNumber),
 			MessageAttributes: map[string]*sns.MessageAttributeValue{
 				"AWS.SNS.SMS.SMSType": {
 					DataType:    aws.String("String"),
-					StringValue: aws.String(tp),
+					StringValue: aws.String(tpMessage),
 				},
 			},
 		}
 
 		output, err := svc.Publish(params)
 		if err != nil {
-			return result, err
+			result = append(result, et.Json{
+				"phoneNumber": phoneNumber,
+				"error":       err.Error(),
+				"result":      output,
+			})
+
+			return et.Item{
+				Ok: false,
+				Result: et.Json{
+					"provider": "AWS SNS",
+					"type":     tpMessage,
+					"message":  err.Error(),
+					"result":   output,
+				},
+			}, err
 		}
 
-		result.Add(et.Json{
+		result = append(result, et.Json{
 			"phoneNumber": phoneNumber,
-			"type":        tp,
-			"sender":      "AWS SNS",
-			"status": et.Json{
-				"sequence": output.SequenceNumber,
-				"status":   output.MessageId,
-			},
+			"result":      output,
 		})
 	}
 
-	return result, nil
+	return et.Item{
+		Ok: true,
+		Result: et.Json{
+			"provider": "AWS SNS",
+			"type":     tpMessage,
+			"message":  "SMS sent successfully",
+			"result":   result,
+		},
+	}, nil
 }

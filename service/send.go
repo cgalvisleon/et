@@ -2,11 +2,11 @@ package service
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
-	"github.com/cgalvisleon/et/aws"
 	"github.com/cgalvisleon/et/brevo"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/reg"
 )
 
 type TpMessage int
@@ -25,31 +25,100 @@ func IntToTpMessage(i int) TpMessage {
 	return TpMessage(i)
 }
 
+type Level int
+
+const (
+	LevelPrimary Level = iota
+	LevelSecondary
+)
+
+type Send struct {
+	Name                   string                           `json:"name"`
+	Email                  string                           `json:"email"`
+	SenderSMS              map[Level]SenderSMS              `json:"-"`
+	SenderWhatsapp         map[Level]SenderWhatsapp         `json:"-"`
+	SenderEmail            map[Level]SenderEmail            `json:"-"`
+	SenderPushNotification map[Level]SenderPushNotification `json:"-"`
+}
+
 /**
-* SendSms
-* @param tenantId string, contactNumbers []string, content string, params et.Json, tp TpMessage, createdBy string
+* NewSend
+* @param name string, email string
+* @return *Send
+**/
+func NewSend(name string, email string) *Send {
+	return &Send{
+		Name:                   name,
+		Email:                  email,
+		SenderSMS:              make(map[Level]SenderSMS),
+		SenderWhatsapp:         make(map[Level]SenderWhatsapp),
+		SenderEmail:            make(map[Level]SenderEmail),
+		SenderPushNotification: make(map[Level]SenderPushNotification),
+	}
+}
+
+/**
+* AddSenderSMS
+* @param level Level, sender SenderSMS
+* @return *Send
+**/
+func (s *Send) AddSenderSMS(level Level, sender SenderSMS) *Send {
+	s.SenderSMS[level] = sender
+	return s
+}
+
+/**
+* AddSenderWhatsapp
+* @param level Level, sender SenderWhatsapp
+* @return *Send
+**/
+func (s *Send) AddSenderWhatsapp(level Level, sender SenderWhatsapp) *Send {
+	s.SenderWhatsapp[level] = sender
+	return s
+}
+
+/**
+* AddSenderEmail
+* @param level Level, sender SenderEmail
+* @return *Send
+**/
+func (s *Send) AddSenderEmail(level Level, sender SenderEmail) *Send {
+	s.SenderEmail[level] = sender
+	return s
+}
+
+/**
+* AddSenderPushNotification
+* @param level Level, sender SenderPushNotification
+* @return *Send
+**/
+func (s *Send) AddSenderPushNotification(level Level, sender SenderPushNotification) *Send {
+	s.SenderPushNotification[level] = sender
+	return s
+}
+
+/**
+* SendSMS
+* @param contactNumbers []string, content string, params et.Json, tpMessage string
 * @response et.Item, error
 **/
-func SendSms(tenantId, serviceId string, contactNumbers []string, content string, params et.Json, tp TpMessage, createdBy string) (et.Items, error) {
-	result, err := aws.SendSMS(contactNumbers, content, params, tp.String())
-	if err != nil {
-		return et.Items{}, err
+func (s *Send) SendSMS(contactNumbers []string, content string, params et.Json, tpMessage TpMessage) (et.Item, error) {
+	sender, exists := s.SenderSMS[LevelPrimary]
+	if !exists {
+		return et.Item{}, errors.New(MSG_SEND_SMS_SENDER_REQUIRED)
 	}
 
-	serviceId = reg.GetUUID(serviceId)
-	if set != nil {
-		set(serviceId, et.Json{
-			"tenantId":       tenantId,
-			"serviceId":      serviceId,
-			"service":        SERVICE_SMS,
-			"contactNumbers": contactNumbers,
-			"content":        content,
-			"params":         params,
-			"type":           tp.String(),
-			"createdBy":      createdBy,
-			"sender":         "AWS SNS",
-			"result":         result,
-		})
+	result, err := sender.SendSMS(contactNumbers, content, params, tpMessage.String())
+	if err != nil {
+		secondarySender, exists := s.SenderSMS[LevelSecondary]
+		if !exists {
+			return et.Item{}, err
+		}
+
+		result, err = secondarySender.SendSMS(contactNumbers, content, params, tpMessage.String())
+		if err != nil {
+			return et.Item{}, err
+		}
 	}
 
 	return result, nil
@@ -57,29 +126,13 @@ func SendSms(tenantId, serviceId string, contactNumbers []string, content string
 
 /**
 * SendWhatsapp
-* @param tenantId, serviceId, templateId string, contactNumbers []string, params []et.Json, tp TpMessage, createdBy string
+* @param templateId string, contactNumbers []string, params []et.Json, tp TpMessage
 * @response et.Items, error
 **/
-func SendWhatsapp(tenantId, serviceId, templateId string, contactNumbers []string, params []et.Json, tp TpMessage, createdBy string) (et.Items, error) {
+func SendWhatsapp(templateId string, contactNumbers []string, params []et.Json, tp TpMessage) (et.Items, error) {
 	result, err := brevo.SendWhatsapp(contactNumbers, templateId, params, tp.String())
 	if err != nil {
 		return et.Items{}, err
-	}
-
-	serviceId = reg.GetUUID(serviceId)
-	if set != nil {
-		set(serviceId, et.Json{
-			"tenantId":       tenantId,
-			"serviceId":      serviceId,
-			"service":        SERVICE_WHATSAPP,
-			"templateId":     templateId,
-			"contactNumbers": contactNumbers,
-			"params":         params,
-			"type":           tp.String(),
-			"createdBy":      createdBy,
-			"sender":         "Brevo",
-			"result":         result,
-		})
 	}
 
 	return result, nil
@@ -87,50 +140,18 @@ func SendWhatsapp(tenantId, serviceId, templateId string, contactNumbers []strin
 
 /**
 * SendEmail
-* @param tenantId, serviceId string, from et.Json, to []et.Json, subject string, htmlContent string, params []et.Json, tp TpMessage, createdBy string
+* @param from et.Json, to []et.Json, subject string, htmlContent string, params []et.Json, tp TpMessage
 * @response et.Items, error
 **/
-func SendEmail(tenantId, serviceId string, from et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp TpMessage, createdBy string) (et.Items, error) {
+func SendEmail(from et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp TpMessage) (et.Items, error) {
+	for key, value := range params {
+		htmlContent = strings.Replace(htmlContent, "{{"+key+"}}", fmt.Sprintf("%v", value), 1)
+	}
+
 	result, err := brevo.SendEmail(from, to, subject, htmlContent, params, tp.String())
 	if err != nil {
 		return et.Items{}, err
 	}
 
-	serviceId = reg.GetUUID(serviceId)
-	if set != nil {
-		set(serviceId, et.Json{
-			"tenantId":    tenantId,
-			"serviceId":   serviceId,
-			"service":     SERVICE_EMAIL,
-			"from":        from,
-			"to":          to,
-			"subject":     subject,
-			"htmlContent": htmlContent,
-			"params":      params,
-			"type":        tp.String(),
-			"createdBy":   createdBy,
-			"sender":      "Brevo",
-			"result":      result,
-		})
-	}
-
 	return result, nil
-}
-
-/**
-* SendEmailByTemplateId
-* @param tenantId, serviceId string, from et.Json, to []et.Json, subject string, templateId string, params et.Json, tp TpMessage, createdBy string
-* @response et.Items, error
-**/
-func SendEmailByTemplateId(tenantId, serviceId string, from et.Json, to []et.Json, subject string, templateId string, params et.Json, tp TpMessage, createdBy string) (et.Items, error) {
-	if getTemplate == nil {
-		return et.Items{}, errors.New("get template is nil")
-	}
-
-	template, err := getTemplate(templateId)
-	if err != nil {
-		return et.Items{}, err
-	}
-
-	return SendEmail(tenantId, serviceId, from, to, subject, template, params, tp, createdBy)
 }

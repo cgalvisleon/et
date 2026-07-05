@@ -62,7 +62,7 @@ func (s *Send) SendOTPSMS(key, sender, countryCode, phoneNumber string, length i
 * @param key, sender string, from et.Json, name, email string, length int, duration time.Duration, htmlContent string
 * @response et.Items, error
 **/
-func SendOTPEmail(key, sender string, name, email string, length int, duration time.Duration, htmlContent string) (et.Items, error) {
+func (s *Send) SendOTPEmail(key, sender string, name, email string, length int, duration time.Duration, htmlContent string) (et.Item, error) {
 	if duration == 0 {
 		duration = 5 * time.Minute
 	}
@@ -85,9 +85,9 @@ func SendOTPEmail(key, sender string, name, email string, length int, duration t
 		"name":  name,
 		"email": email,
 	}}
-	result, err := SendEmail(from, to, "OTP", htmlContent, params, TypeAutentication)
+	result, err := s.SendEmail(from, to, MSG_VERIFY_EMAIL, htmlContent, params, TypeAutentication)
 	if err != nil {
-		return et.Items{}, err
+		return et.Item{}, err
 	}
 
 	cache.Set(key, otp, duration)

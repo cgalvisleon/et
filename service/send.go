@@ -2,10 +2,7 @@ package service
 
 import (
 	"errors"
-	"fmt"
-	"strings"
 
-	"github.com/cgalvisleon/et/brevo"
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -129,10 +126,23 @@ func (s *Send) SendSMS(contactNumbers []string, content string, params et.Json, 
 * @param templateId string, contactNumbers []string, params []et.Json, tp TpMessage
 * @response et.Items, error
 **/
-func SendWhatsapp(templateId string, contactNumbers []string, params []et.Json, tp TpMessage) (et.Items, error) {
-	result, err := brevo.SendWhatsapp(contactNumbers, templateId, params, tp.String())
+func (s *Send) SendWhatsapp(templateId string, contactNumbers []string, params []et.Json, tp TpMessage) (et.Item, error) {
+	sender, exists := s.SenderWhatsapp[LevelPrimary]
+	if !exists {
+		return et.Item{}, errors.New(MSG_SEND_WHATSAPP_SENDER_REQUIRED)
+	}
+
+	result, err := sender.SendWhatsapp(contactNumbers, templateId, params, tp.String())
 	if err != nil {
-		return et.Items{}, err
+		secondarySender, exists := s.SenderWhatsapp[LevelSecondary]
+		if !exists {
+			return et.Item{}, err
+		}
+
+		result, err = secondarySender.SendWhatsapp(contactNumbers, templateId, params, tp.String())
+		if err != nil {
+			return et.Item{}, err
+		}
 	}
 
 	return result, nil
@@ -143,14 +153,23 @@ func SendWhatsapp(templateId string, contactNumbers []string, params []et.Json, 
 * @param from et.Json, to []et.Json, subject string, htmlContent string, params []et.Json, tp TpMessage
 * @response et.Items, error
 **/
-func SendEmail(from et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp TpMessage) (et.Items, error) {
-	for key, value := range params {
-		htmlContent = strings.Replace(htmlContent, "{{"+key+"}}", fmt.Sprintf("%v", value), 1)
+func (s *Send) SendEmail(from et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp TpMessage) (et.Item, error) {
+	sender, exists := s.SenderEmail[LevelPrimary]
+	if !exists {
+		return et.Item{}, errors.New(MSG_SEND_EMAIL_SENDER_REQUIRED)
 	}
 
-	result, err := brevo.SendEmail(from, to, subject, htmlContent, params, tp.String())
+	result, err := sender.SendEmail(from, to, subject, htmlContent, params, tp.String())
 	if err != nil {
-		return et.Items{}, err
+		secondarySender, exists := s.SenderEmail[LevelSecondary]
+		if !exists {
+			return et.Item{}, err
+		}
+
+		result, err = secondarySender.SendEmail(from, to, subject, htmlContent, params, tp.String())
+		if err != nil {
+			return et.Item{}, err
+		}
 	}
 
 	return result, nil

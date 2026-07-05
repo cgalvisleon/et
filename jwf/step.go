@@ -124,13 +124,13 @@ func (s *WorkFlow) newStep(kind Kind, id, tag, version, title, userId string) *S
 * @return *Step, error
 **/
 func (s *WorkFlow) loadStep(id string) (*Step, error) {
-	if s.store == nil {
-		return nil, errors.New(MSG_WORKFLOW_STORE_IS_NIL)
-	}
-
 	result, exists := s.getStep(id)
 	if exists {
 		return result, nil
+	}
+
+	if s.store == nil {
+		return nil, ErrrStepNotFound
 	}
 
 	exists, err := s.store.Get("steps", id, &result)
@@ -153,12 +153,12 @@ func (s *WorkFlow) loadStep(id string) (*Step, error) {
 * @return error
 **/
 func (s *WorkFlow) deleteStep(id string) error {
-	if s.store == nil {
-		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
-	}
-
 	step, exists := s.Steps[id]
 	if !exists {
+		return ErrrStepNotFound
+	}
+
+	if s.store == nil {
 		return ErrrStepNotFound
 	}
 
@@ -301,19 +301,17 @@ func (s *Step) save() error {
 		return errors.New(MSG_STEP_IS_FUNCTION)
 	}
 
-	if s.store == nil {
-		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
-	}
-
 	s.isChanged = false
 
 	if s.isDebug {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("steps", s.ID, s.OwnerId, s)
-	if err != nil {
-		return err
+	if s.store != nil {
+		err := s.store.Set("steps", s.ID, s.OwnerId, s)
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, onSave := range s.onSave {

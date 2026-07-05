@@ -134,13 +134,13 @@ func (s *WorkFlow) newFlow(tag, title, version, userId string) *Flow {
 * @return *Flow, error
 **/
 func (s *WorkFlow) loadFlow(id string) (*Flow, error) {
-	if s.store == nil {
-		return nil, errors.New(MSG_WORKFLOW_STORE_IS_NIL)
-	}
-
 	result, exists := s.getFlow(id)
 	if exists {
 		return result, nil
+	}
+
+	if s.store == nil {
+		return nil, ErrrFlowNotFound
 	}
 
 	exists, err := s.store.Get("flows", id, &result)
@@ -236,10 +236,6 @@ func (s *Flow) OnDelete(fn func(flow *Flow) error) *Flow {
 * @return error
 **/
 func (s *Flow) Save() error {
-	if s.store == nil {
-		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
-	}
-
 	s.isChanged = false
 	data := s.ToJson()
 
@@ -247,9 +243,11 @@ func (s *Flow) Save() error {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	err := s.store.Set("flows", s.ID, s.WorkflowId, s)
-	if err != nil {
-		return err
+	if s.store != nil {
+		err := s.store.Set("flows", s.ID, s.WorkflowId, s)
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, onSave := range s.onSave {

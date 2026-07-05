@@ -252,18 +252,17 @@ func (s *WorkFlow) OnDelete(fn func(workflow *WorkFlow) error) *WorkFlow {
 * @return error
 **/
 func (s *WorkFlow) Save() error {
-	if s.store == nil {
-		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
-	}
-
 	s.isChanged = false
+
 	if s.isDebug {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("workflows", s.ID, s.ID, s.Ref())
-	if err != nil {
-		return err
+	if s.store != nil {
+		err := s.store.Set("workflows", s.ID, s.ID, s.Ref())
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, onSave := range s.onSave {
@@ -280,13 +279,11 @@ func (s *WorkFlow) Save() error {
 * @return error
 **/
 func (s *WorkFlow) Delete() error {
-	if s.store == nil {
-		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
-	}
-
-	err := s.store.Delete("workflow", s.ID)
-	if err != nil {
-		return err
+	if s.store != nil {
+		err := s.store.Delete("workflow", s.ID)
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, onDelete := range s.onDelete {

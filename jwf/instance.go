@@ -102,6 +102,7 @@ type Instance struct {
 	resilience   *resilience.Resilience           `json:"-"`
 	onSave       []func(instance *Instance) error `json:"-"`
 	onDelete     []func(instance *Instance) error `json:"-"`
+	onDone       []func(instance *Instance) error `json:"-"`
 	mu           sync.Mutex                       `json:"-"`
 }
 
@@ -153,6 +154,7 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, code, userId strin
 		bindings:   make(map[string]interface{}),
 		onSave:     make([]func(instance *Instance) error, 0),
 		onDelete:   make([]func(instance *Instance) error, 0),
+		onDone:     make([]func(instance *Instance) error, 0),
 		mu:         sync.Mutex{},
 	}
 	result.addAuditLog(userId, "new_instance")
@@ -213,10 +215,6 @@ func (s *WorkFlow) getInstance(id, userId string) (*Instance, error) {
 * @return error
 **/
 func (s *WorkFlow) deleteInstance(id, userId string) error {
-	if s.store == nil {
-		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
-	}
-
 	instance, err := s.getInstance(id, userId)
 	if err != nil {
 		return err
@@ -225,9 +223,11 @@ func (s *WorkFlow) deleteInstance(id, userId string) error {
 	key := fmt.Sprintf("instance:%s:status", id)
 	cache.Delete(key)
 
-	err = s.store.Delete("instance", id)
-	if err != nil {
-		return err
+	if s.store != nil {
+		err = s.store.Delete("instance", id)
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, onDelete := range instance.onDelete {
@@ -400,23 +400,34 @@ func (s *Instance) OnDelete(fn func(instance *Instance) error) *Instance {
 }
 
 /**
+* OnDone
+* @param fn func(instance *Instance) error
+* @return *Instance
+**/
+func (s *Instance) OnDone(fn func(instance *Instance) error) *Instance {
+	if s.onDone == nil {
+		s.onDone = make([]func(instance *Instance) error, 0)
+	}
+	s.onDone = append(s.onDone, fn)
+	return s
+}
+
+/**
 * save
 * @return error
 **/
 func (s *Instance) save() error {
-	if s.store == nil {
-		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
-	}
-
 	s.isChanged = false
 
 	if s.isDebug {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("instances", s.ID, s.WorkflowId, s)
-	if err != nil {
-		return err
+	if s.store != nil {
+		err := s.store.Set("instances", s.ID, s.WorkflowId, s)
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, onSave := range s.onSave {
@@ -516,6 +527,12 @@ func (s *Instance) setStatus(status Status) error {
 	case DONE:
 		s.DoneAt = s.UpdatedAt
 		s.IsDone = true
+		for _, onDone := range s.onDone {
+			err := onDone(s)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	return s.save()
@@ -618,6 +635,15 @@ func (s *Instance) SetParams(params et.Json) et.Json {
 }
 
 /**
+* Done
+* @return *Instance
+**/
+func (s *Instance) Done() *Instance {
+	s.setStatus(DONE)
+	return s
+}
+
+/**
 * setCurrent
 * @param step *Step
 * @return error
@@ -717,7 +743,6 @@ func (s *Instance) run(ctx et.Json, userId string) (et.Json, error) {
 		}
 
 		s.setResult(result, err)
-
 		if err != nil {
 			return result, err
 		}

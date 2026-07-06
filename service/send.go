@@ -4,7 +4,25 @@ import (
 	"errors"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/validator"
 )
+
+type SenderSMS interface {
+	SendSMS(contactNumbers []string, content string, params et.Json, tpMessage string) (et.Item, error)
+}
+
+type SenderWhatsapp interface {
+	SendWhatsapp(contactNumbers []string, content string, params []et.Json, tpMessage string) (et.Item, error)
+	SendWhatsappByTemplateId(contactNumbers []string, templateId string, params []et.Json, tpMessage string) (et.Item, error)
+}
+
+type SenderEmail interface {
+	SendEmail(from et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tpMessage string) (et.Item, error)
+}
+
+type SenderPushNotification interface {
+	SendPushNotification(deviceToken string, title string, body string, tpMessage string) (et.Item, error)
+}
 
 type TpMessage int
 
@@ -36,6 +54,7 @@ type Send struct {
 	SenderWhatsapp         map[Level]SenderWhatsapp         `json:"-"`
 	SenderEmail            map[Level]SenderEmail            `json:"-"`
 	SenderPushNotification map[Level]SenderPushNotification `json:"-"`
+	onSender               []func(et.Item, error)           `json:"-"`
 }
 
 /**
@@ -43,7 +62,23 @@ type Send struct {
 * @param name string, email string
 * @return *Send
 **/
-func NewSend(name string, email string) *Send {
+func NewSend(name string, email string) (*Send, error) {
+	valid, err := validator.New().
+		Field("name").
+		Required().
+		Field("email").
+		Required().
+		Validate(et.Json{
+			"name":  name,
+			"email": email,
+		})
+	if err != nil {
+		return nil, err
+	}
+	if !valid {
+		return nil, err
+	}
+
 	return &Send{
 		Name:                   name,
 		Email:                  email,
@@ -51,7 +86,8 @@ func NewSend(name string, email string) *Send {
 		SenderWhatsapp:         make(map[Level]SenderWhatsapp),
 		SenderEmail:            make(map[Level]SenderEmail),
 		SenderPushNotification: make(map[Level]SenderPushNotification),
-	}
+		onSender:               []func(et.Item, error){},
+	}, nil
 }
 
 /**
@@ -95,6 +131,23 @@ func (s *Send) AddSenderPushNotification(level Level, sender SenderPushNotificat
 }
 
 /**
+* OnSender
+* @param onSender func(et.Item, error)
+* @return *Send
+**/
+func (s *Send) OnSender(fn func(et.Item, error)) *Send {
+	s.onSender = append(s.onSender, fn)
+	return s
+}
+
+func (s *Send) response(result et.Item, err error) (et.Item, error) {
+	for _, fn := range s.onSender {
+		fn(result, err)
+	}
+	return result, err
+}
+
+/**
 * SendSMS
 * @param contactNumbers []string, content string, params et.Json, tpMessage string
 * @response et.Item, error
@@ -102,23 +155,23 @@ func (s *Send) AddSenderPushNotification(level Level, sender SenderPushNotificat
 func (s *Send) SendSMS(contactNumbers []string, content string, params et.Json, tpMessage TpMessage) (et.Item, error) {
 	sender, exists := s.SenderSMS[LevelPrimary]
 	if !exists {
-		return et.Item{}, errors.New(MSG_SEND_SMS_SENDER_REQUIRED)
+		return s.response(et.Item{}, errors.New(MSG_SEND_SMS_SENDER_REQUIRED))
 	}
 
 	result, err := sender.SendSMS(contactNumbers, content, params, tpMessage.String())
 	if err != nil {
 		secondarySender, exists := s.SenderSMS[LevelSecondary]
 		if !exists {
-			return et.Item{}, err
+			return s.response(et.Item{}, err)
 		}
 
 		result, err = secondarySender.SendSMS(contactNumbers, content, params, tpMessage.String())
 		if err != nil {
-			return et.Item{}, err
+			return s.response(et.Item{}, err)
 		}
 	}
 
-	return result, nil
+	return s.response(result, nil)
 }
 
 /**
@@ -129,23 +182,23 @@ func (s *Send) SendSMS(contactNumbers []string, content string, params et.Json, 
 func (s *Send) SendWhatsapp(templateId string, contactNumbers []string, params []et.Json, tp TpMessage) (et.Item, error) {
 	sender, exists := s.SenderWhatsapp[LevelPrimary]
 	if !exists {
-		return et.Item{}, errors.New(MSG_SEND_WHATSAPP_SENDER_REQUIRED)
+		return s.response(et.Item{}, errors.New(MSG_SEND_WHATSAPP_SENDER_REQUIRED))
 	}
 
 	result, err := sender.SendWhatsapp(contactNumbers, templateId, params, tp.String())
 	if err != nil {
 		secondarySender, exists := s.SenderWhatsapp[LevelSecondary]
 		if !exists {
-			return et.Item{}, err
+			return s.response(et.Item{}, err)
 		}
 
 		result, err = secondarySender.SendWhatsapp(contactNumbers, templateId, params, tp.String())
 		if err != nil {
-			return et.Item{}, err
+			return s.response(et.Item{}, err)
 		}
 	}
 
-	return result, nil
+	return s.response(result, nil)
 }
 
 /**
@@ -156,21 +209,21 @@ func (s *Send) SendWhatsapp(templateId string, contactNumbers []string, params [
 func (s *Send) SendEmail(from et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp TpMessage) (et.Item, error) {
 	sender, exists := s.SenderEmail[LevelPrimary]
 	if !exists {
-		return et.Item{}, errors.New(MSG_SEND_EMAIL_SENDER_REQUIRED)
+		return s.response(et.Item{}, errors.New(MSG_SEND_EMAIL_SENDER_REQUIRED))
 	}
 
 	result, err := sender.SendEmail(from, to, subject, htmlContent, params, tp.String())
 	if err != nil {
 		secondarySender, exists := s.SenderEmail[LevelSecondary]
 		if !exists {
-			return et.Item{}, err
+			return s.response(et.Item{}, err)
 		}
 
 		result, err = secondarySender.SendEmail(from, to, subject, htmlContent, params, tp.String())
 		if err != nil {
-			return et.Item{}, err
+			return s.response(et.Item{}, err)
 		}
 	}
 
-	return result, nil
+	return s.response(result, nil)
 }

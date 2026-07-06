@@ -13,7 +13,7 @@ import (
 * @param channel string, otp string
 * @response bool, error
 **/
-func VerifyOTP(key string, otp string) (bool, error) {
+func (s *Send) VerifyOTP(key string, otp string) (bool, error) {
 	otpCache, err := cache.Get(key, "")
 	if err != nil {
 		return false, err

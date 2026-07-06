@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/celsiainternet/elvis/logs"
-	"github.com/celsiainternet/elvis/queue"
+	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/queue"
 )
 
 /**

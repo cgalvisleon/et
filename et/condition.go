@@ -103,16 +103,21 @@ func Time(val any) *time.Time {
 }
 
 const (
-	ValueString   = "string"
-	ValueInt      = "int"
-	ValueFloat    = "float"
-	ValueBool     = "bool"
-	ValueDatetime = "datetime"
-	ValueArray    = "array"
-	ValueJson     = "json"
-	ValueBetween  = "between"
-	ValueNull     = "null"
-	ValueAny      = "any"
+	STRING         = "string"
+	INT            = "int"
+	FLOAT          = "float"
+	BOOL           = "bool"
+	DATETIME       = "datetime"
+	JSON           = "json"
+	ARRAY_JSON     = "array"
+	ARRAY_STRING   = "array"
+	ARRAY_INT      = "array"
+	ARRAY_FLOAT    = "array"
+	ARRAY_BOOL     = "array"
+	ARRAY_DATETIME = "array"
+	VAL_BETWEEN    = "between"
+	VAL_NULL       = "null"
+	ANY            = "any"
 )
 
 type Value struct {
@@ -145,27 +150,37 @@ func NewValue(v any) Value {
 func valueType(v any) string {
 	switch v.(type) {
 	case nil:
-		return ValueNull
+		return VAL_NULL
 	case string:
-		return ValueString
+		return STRING
 	case bool:
-		return ValueBool
+		return BOOL
 	case time.Time:
-		return ValueDatetime
+		return DATETIME
 	case *time.Time:
-		return ValueDatetime
+		return DATETIME
 	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-		return ValueInt
+		return INT
 	case float32, float64:
-		return ValueFloat
-	case BetweenValue:
-		return ValueBetween
-	case []Json, []interface{}:
-		return ValueArray
+		return FLOAT
 	case Json, map[string]interface{}:
-		return ValueJson
+		return JSON
+	case BetweenValue:
+		return VAL_BETWEEN
+	case []Json, []interface{}:
+		return ARRAY_JSON
+	case []string:
+		return ARRAY_STRING
+	case []int, []int8, []int16, []int32, []int64, []uint, []uint8, []uint16, []uint32, []uint64:
+		return ARRAY_INT
+	case []float32, []float64:
+		return ARRAY_FLOAT
+	case []bool:
+		return ARRAY_BOOL
+	case []time.Time:
+		return ARRAY_DATETIME
 	default:
-		return ValueAny
+		return ANY
 	}
 }
 
@@ -256,6 +271,12 @@ func (s *Condition) applyOpEq(val any) bool {
 		}
 		return false
 	default:
+		if first, ok := firstOfSlice(bv); ok {
+			tmp := *s
+			tmp.Value = NewValue(first)
+			return tmp.applyOpEq(val)
+		}
+
 		ok, err := equalsAny(val, bv)
 		if err != nil {
 			return false
@@ -340,6 +361,11 @@ func (s *Condition) applyOpLess(val any) bool {
 		}
 		return invalidType()
 	default:
+		if first, ok := firstOfSlice(bv); ok {
+			tmp := *s
+			tmp.Value = NewValue(first)
+			return tmp.applyOpLess(val)
+		}
 		return invalidType()
 	}
 }
@@ -411,6 +437,11 @@ func (s *Condition) applyOpLessEq(val any) bool {
 		}
 		return invalidType()
 	default:
+		if first, ok := firstOfSlice(bv); ok {
+			tmp := *s
+			tmp.Value = NewValue(first)
+			return tmp.applyOpLessEq(val)
+		}
 		return invalidType()
 	}
 }
@@ -482,6 +513,11 @@ func (s *Condition) applyOpMore(val any) bool {
 		}
 		return invalidType()
 	default:
+		if first, ok := firstOfSlice(bv); ok {
+			tmp := *s
+			tmp.Value = NewValue(first)
+			return tmp.applyOpMore(val)
+		}
 		return invalidType()
 	}
 }
@@ -553,6 +589,11 @@ func (s *Condition) applyOpMoreEq(val any) bool {
 		}
 		return invalidType()
 	default:
+		if first, ok := firstOfSlice(bv); ok {
+			tmp := *s
+			tmp.Value = NewValue(first)
+			return tmp.applyOpMoreEq(val)
+		}
 		return invalidType()
 	}
 }
@@ -609,6 +650,11 @@ func (s *Condition) applyOpLike(val any) bool {
 		}
 		return invalidType()
 	default:
+		if first, ok := firstOfSlice(bv); ok {
+			tmp := *s
+			tmp.Value = NewValue(first)
+			return tmp.applyOpLike(val)
+		}
 		return invalidType()
 	}
 }
@@ -780,7 +826,7 @@ func coerceForComparison(val any, cv Value) (any, Value) {
 	case time.Time:
 		if b, ok := cv.Value.(string); ok {
 			if t, ok := parseDate(b); ok {
-				return val, Value{Type: ValueDatetime, Value: t}
+				return val, Value{Type: DATETIME, Value: t}
 			}
 		}
 	case string:

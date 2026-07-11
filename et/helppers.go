@@ -333,6 +333,24 @@ func getBetweenRange(v any) (min any, max any, ok bool) {
 }
 
 /**
+* firstOfSlice: Returns the first element of a slice/array value.
+* @param v any
+* @return any, bool
+**/
+func firstOfSlice(v any) (any, bool) {
+	rv := reflect.ValueOf(v)
+	if !rv.IsValid() {
+		return nil, false
+	}
+
+	if (rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array) || rv.Len() == 0 {
+		return nil, false
+	}
+
+	return rv.Index(0).Interface(), true
+}
+
+/**
 * getField
 * @param field string
 * @return keys []string, as string

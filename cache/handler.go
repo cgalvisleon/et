@@ -213,7 +213,9 @@ func Get(key, defaultvalue string) (string, error) {
 **/
 func GetObject(key string, dest any) (bool, error) {
 	result, err := Get(key, "")
-	if err != nil {
+	if err == redis.Nil {
+		return false, nil
+	} else if err != nil {
 		return false, err
 	}
 

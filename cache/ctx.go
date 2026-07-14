@@ -7,7 +7,6 @@ import (
 
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
-	"github.com/redis/go-redis/v9"
 )
 
 /**
@@ -109,9 +108,7 @@ func GetCtx(ctx context.Context, key, def string) (string, error) {
 	}
 
 	result, err := conn.Get(ctx, key).Result()
-	if err == redis.Nil {
-		return def, nil
-	} else if err != nil {
+	if err != nil {
 		return def, err
 	}
 

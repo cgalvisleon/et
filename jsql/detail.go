@@ -6,9 +6,15 @@ import (
 	"github.com/cgalvisleon/et/et"
 )
 
-func Relation(key, foreignKey string) map[string]string {
+func DetailKeys(key, foreignKey string) map[string]string {
 	return map[string]string{
 		key: foreignKey,
+	}
+}
+
+func RollupKeys(key, foreignKey string) map[string]string {
+	return map[string]string{
+		foreignKey: key,
 	}
 }
 

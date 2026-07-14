@@ -735,7 +735,7 @@ func (s *Query) setDetails(tx *Tx, item et.Json) et.Json {
 **/
 func (s *Query) setRollup(tx *Tx, item et.Json) et.Json {
 	for name, detail := range s.Rollups {
-		qry := detail.GetQuery(item)
+		qry := detail.GetQuery(item)		
 		detailResult, err := qry.AllTx(tx)
 		if err != nil {
 			return item

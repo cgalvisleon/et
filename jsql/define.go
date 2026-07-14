@@ -34,6 +34,7 @@ type DefDetail struct {
 	Columns     []Column          `json:"columns"`
 	PrimaryKeys []DefIndex        `json:"primary_keys"`
 	Indexes     []DefIndex        `json:"indexes"`
+	Rollups     []DefRollup       `json:"rollups"`
 	IdxField    string            `json:"idx_field"`
 	IdtField    string            `json:"idt_field"`
 }
@@ -324,7 +325,7 @@ func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, sel
 	s.defineColumn(name, ROLLUP, ANY, nil, []byte{})
 	detail := newDetail(to, keys, selects, false, false)
 	detail.Rows = 1
-	s.Details[name] = detail
+	s.Rollups[name] = detail
 	return detail, nil
 }
 

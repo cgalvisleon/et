@@ -62,7 +62,7 @@ func Get(key string) *Object {
 	}
 
 	if !exists {
-		return nil
+		return newObject(key)
 	}
 
 	return result

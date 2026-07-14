@@ -68,9 +68,9 @@ func (s *Schema) removeModel(name string) {
 **/
 func (s *Schema) getModel(name string) (*Model, error) {
 	name = utility.Normalize(name)
-	s.mu.RUnlock()
-	result, exists := s.Models[name]
 	s.mu.RLock()
+	result, exists := s.Models[name]
+	s.mu.RUnlock()
 
 	if !exists {
 		return nil, fmt.Errorf(MSG_MODEL_NOT_FOUND, name)

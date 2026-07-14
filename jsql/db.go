@@ -601,6 +601,18 @@ func (s *DB) Define(define Def) (*Model, error) {
 		if defDetail.IdtField != "" {
 			detail.DefineIdTField()
 		}
+
+		for _, rollup := range defDetail.Rollups {
+			to, err := s.GetModel(rollup.To.Schema, rollup.To.Name)
+			if err != nil {
+				return nil, err
+			}
+			
+			_, err = detail.DefineRollup(rollup.Name, to, rollup.Keys, rollup.Select)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	for _, rollup := range define.Rollups {

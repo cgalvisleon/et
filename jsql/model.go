@@ -54,6 +54,7 @@ type Model struct {
 	Required      []*Index                `json:"required"`
 	Hiddens       []string                `json:"hiddens"`
 	Details       map[string]*Detail      `json:"details"`
+	Master        map[string]*Master      `json:"master"`
 	Rollups       map[string]*Detail      `json:"rollups"`
 	calcs         map[string]CalcFunction `json:"-"`
 	IsStrict      bool                    `json:"is_strict"`
@@ -155,6 +156,7 @@ func (s *Model) ToJson() et.Json {
 		"required":       s.Required,
 		"hiddens":        s.Hiddens,
 		"details":        s.Details,
+		"master":         s.Master,
 		"rollups":        s.Rollups,
 		"is_strict":      s.IsStrict,
 		"version":        s.Version,
@@ -297,6 +299,13 @@ func (s *Model) Init() error {
 
 	for _, detail := range s.Details {
 		err = detail.init()
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, master := range s.Master {
+		err = master.init()
 		if err != nil {
 			return err
 		}

@@ -20,6 +20,7 @@ var (
 	MSG_SCHEMA_REQUIRED           = "schema is required"
 	MSG_SELECTS_REQUIRED          = "selects is required"
 	MSG_TO_MODEL_REQUIRED         = "to model is required"
+	MSG_BRIDGE_MODEL_REQUIRED     = "bridge model is required"
 	MSG_AS_REQUIRED_IN_JOIN       = "as is required in join: %s"
 	MSG_TO_REQUIRED_IN_JOIN       = "to is required in join: %s"
 	MSG_INVALID_TO_IN_JOIN        = "invalid to in join: %s"

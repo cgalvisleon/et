@@ -101,6 +101,7 @@ func (s *Schema) newModel(name string, version int, userId string) *Model {
 		Required:      make([]*Index, 0),
 		Hiddens:       make([]string, 0),
 		Details:       make(map[string]*Detail, 0),
+		Master:        make(map[string]*Master, 0),
 		Rollups:       make(map[string]*Detail, 0),
 		calcs:         make(map[string]CalcFunction, 0),
 		Version:       version,

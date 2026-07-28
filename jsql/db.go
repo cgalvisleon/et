@@ -607,11 +607,26 @@ func (s *DB) Define(define Def) (*Model, error) {
 			if err != nil {
 				return nil, err
 			}
-			
+
 			_, err = detail.DefineRollup(rollup.Name, to, rollup.Keys, rollup.Select)
 			if err != nil {
 				return nil, err
 			}
+		}
+	}
+
+	for _, defMaster := range define.Masters {
+		to, err := s.GetModel(defMaster.To.Schema, defMaster.To.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		bridge, err := result.DefineMaster(defMaster.Name, to, defMaster.Keys, defMaster.ToKeys)
+		if err != nil {
+			return nil, err
+		}
+		if err := bridge.Init(); err != nil {
+			return nil, err
 		}
 	}
 

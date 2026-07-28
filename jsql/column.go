@@ -33,6 +33,7 @@ const (
 	COLUMN   TypeColumn = "column"
 	ATTRIB   TypeColumn = "atrib"
 	DETAIL   TypeColumn = "detail"
+	MASTER   TypeColumn = "master"
 	ROLLUP   TypeColumn = "rollup"
 	CALCFUNC TypeColumn = "calc_func"
 	CALC     TypeColumn = "calc"
@@ -79,6 +80,7 @@ const (
 )
 
 var Status = map[string]bool{
+	ACTIVE:     true,
 	ARCHIVED:   true,
 	CANCELED:   true,
 	OF_SYSTEM:  true,
@@ -88,12 +90,8 @@ var Status = map[string]bool{
 	REJECTED:   true,
 }
 
-/**
-* SetStatus: Adds a new status to the Status map.
-* @param status string
-**/
-func SetStatus(status string) {
-	Status[status] = true
+func StatusList() []interface{} {
+	return []interface{}{ACTIVE, ARCHIVED, CANCELED, OF_SYSTEM, FOR_DELETE, PENDING, APPROVED, REJECTED}
 }
 
 /**

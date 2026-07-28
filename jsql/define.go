@@ -39,6 +39,13 @@ type DefDetail struct {
 	IdtField    string            `json:"idt_field"`
 }
 
+type DefMaster struct {
+	Name   string            `json:"name"`
+	To     DefTo             `json:"to"`
+	Keys   map[string]string `json:"keys"`
+	ToKeys map[string]string `json:"to_keys"`
+}
+
 type DefRollup struct {
 	Name   string            `json:"name"`
 	To     DefTo             `json:"to"`
@@ -61,6 +68,7 @@ type Def struct {
 	SourceField string           `json:"source_field"`
 	Hiddens     []string         `json:"hiddens"`
 	Details     []DefDetail      `json:"details"`
+	Masters     []DefMaster      `json:"master"`
 	Rollups     []DefRollup      `json:"rollups"`
 	UserId      string           `json:"user_id"`
 }
@@ -295,6 +303,37 @@ func (s *Model) DefineDetail(name string, keys map[string]string, rows int) (*Mo
 	detail.Rows = rows
 	s.Details[name] = detail
 	return to, nil
+}
+
+/**
+* DefineMaster: Defines a new master for the model.
+* @param name string, to *Model, keys, toKeys map[string]string
+* @return (*Master, error)
+**/
+func (s *Model) DefineMaster(name string, to *Model, keys, toKeys map[string]string) (*Model, error) {
+	result, ok := s.Master[name]
+	if ok {
+		return result.To.Model, nil
+	}
+
+	if len(keys) == 0 {
+		return nil, errors.New(MSG_KEYS_REQUIRED)
+	}
+
+	detailName := fmt.Sprintf("%s_%s", s.Name, to.Name)
+	bridge := s.db.NewModel(s.Schema, detailName, 1, s.ID)
+	for k, fk := range keys {
+		bridge.defineColumn(fk, COLUMN, KEY, "", []byte{})
+		bridge.DefineForeignKeys(s, map[string]string{fk: k}, true, false)
+	}
+	for k, fk := range toKeys {
+		bridge.defineColumn(fk, COLUMN, KEY, "", []byte{})
+		bridge.DefineForeignKeys(to, map[string]string{fk: k}, true, false)
+	}
+	s.defineColumn(name, MASTER, ANY, nil, []byte{})
+	master := newMaster(to, bridge, keys, toKeys)
+	s.Master[name] = master
+	return bridge, nil
 }
 
 /**

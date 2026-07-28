@@ -621,11 +621,8 @@ func (s *DB) Define(define Def) (*Model, error) {
 			return nil, err
 		}
 
-		bridge, err := result.DefineMaster(defMaster.Name, to, defMaster.Keys, defMaster.ToKeys)
+		_, err = result.DefineMaster(defMaster.Name, to, defMaster.Keys, defMaster.ToKeys)
 		if err != nil {
-			return nil, err
-		}
-		if err := bridge.Init(); err != nil {
 			return nil, err
 		}
 	}

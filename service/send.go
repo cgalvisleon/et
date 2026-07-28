@@ -48,6 +48,7 @@ const (
 )
 
 type Send struct {
+	TenantId               string                           `json:"tenant_id"`
 	Name                   string                           `json:"name"`
 	Email                  string                           `json:"email"`
 	SenderSMS              map[Level]SenderSMS              `json:"-"`
@@ -57,20 +58,30 @@ type Send struct {
 	onSender               []func(et.Item, error)           `json:"-"`
 }
 
+var senders = make(map[string]*Send)
+
 /**
 * NewSend
-* @param name string, email string
+* @param tenantId, name, email string
 * @return *Send
 **/
-func NewSend(name string, email string) (*Send, error) {
+func NewSend(tenantId, name, email string) (*Send, error) {
+	result, exists := senders[tenantId]
+	if exists {
+		return result, nil
+	}
+
 	valid, err := validator.New().
+		Field("tenant_id").
+		Required().
 		Field("name").
 		Required().
 		Field("email").
 		Required().
 		Validate(et.Json{
-			"name":  name,
-			"email": email,
+			"tenant_id": tenantId,
+			"name":      name,
+			"email":     email,
 		})
 	if err != nil {
 		return nil, err
@@ -79,7 +90,8 @@ func NewSend(name string, email string) (*Send, error) {
 		return nil, err
 	}
 
-	return &Send{
+	result = &Send{
+		TenantId:               tenantId,
 		Name:                   name,
 		Email:                  email,
 		SenderSMS:              make(map[Level]SenderSMS),
@@ -87,7 +99,10 @@ func NewSend(name string, email string) (*Send, error) {
 		SenderEmail:            make(map[Level]SenderEmail),
 		SenderPushNotification: make(map[Level]SenderPushNotification),
 		onSender:               []func(et.Item, error){},
-	}, nil
+	}
+
+	senders[tenantId] = result
+	return result, nil
 }
 
 /**
@@ -140,6 +155,11 @@ func (s *Send) OnSender(fn func(et.Item, error)) *Send {
 	return s
 }
 
+/**
+* response
+* @param result et.Item, err error
+* @return et.Item, error
+**/
 func (s *Send) response(result et.Item, err error) (et.Item, error) {
 	for _, fn := range s.onSender {
 		fn(result, err)

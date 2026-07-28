@@ -21,13 +21,30 @@ type Storage interface {
 }
 
 type LocalStorage struct {
-	Path string
+	TenantId string
+	Path     string
 }
 
-func NewLocalStorage(path string) *LocalStorage {
-	return &LocalStorage{
-		Path: path,
+var storages = make(map[string]*LocalStorage)
+
+/**
+* NewLocalStorage
+* @param tenantId, path string
+* @return *LocalStorage
+**/
+func NewLocalStorage(tenantId, path string) *LocalStorage {
+	result, exists := storages[tenantId]
+	if exists {
+		return result
 	}
+
+	result = &LocalStorage{
+		TenantId: tenantId,
+		Path:     path,
+	}
+
+	storages[tenantId] = result
+	return result
 }
 
 /**

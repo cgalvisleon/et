@@ -301,6 +301,24 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 			Page:   fld.Page,
 			Rows:   detail.Rows,
 		}
+	} else if fld.TypeColumn == jsql.MASTER {
+		if fld.From == nil {
+			return "", false
+		}
+		if fld.From.Model == nil {
+			return "", false
+		}
+		master, ok := fld.From.Model.Masters[fld.Name]
+		if !ok {
+			return "", false
+		}
+		query.Masters[fld.Name] = &jsql.QueryDetail{
+			To:     master.To,
+			Keys:   master.Keys,
+			Select: []string{},
+			Page:   fld.Page,
+			Rows:   query.MaxRows,
+		}
 	} else if fld.TypeColumn == jsql.ROLLUP {
 		if fld.From == nil {
 			return "", false

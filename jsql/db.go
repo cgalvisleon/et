@@ -508,6 +508,7 @@ func (s *DB) Define(define Def) (*Model, error) {
 	}
 
 	result := s.NewModel(define.Schema, define.Name, define.Version, define.UserId)
+	result.TenantId = define.TenantId
 	if define.IdxField != "" {
 		result.DefineIdxField()
 	}

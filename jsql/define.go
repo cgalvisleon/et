@@ -54,6 +54,7 @@ type DefRollup struct {
 }
 
 type Def struct {
+	TenantId    string           `json:"tenant_id"`
 	Schema      string           `json:"schema"`
 	Name        string           `json:"name"`
 	Version     int              `json:"version"`
@@ -311,7 +312,7 @@ func (s *Model) DefineDetail(name string, keys map[string]string, rows int) (*Mo
 * @return (*Master, error)
 **/
 func (s *Model) DefineMaster(name string, to *Model, keys, toKeys map[string]string) (*Model, error) {
-	result, ok := s.Master[name]
+	result, ok := s.Masters[name]
 	if ok {
 		return result.To.Model, nil
 	}
@@ -332,7 +333,7 @@ func (s *Model) DefineMaster(name string, to *Model, keys, toKeys map[string]str
 	}
 	s.defineColumn(name, MASTER, ANY, nil, []byte{})
 	master := newMaster(to, bridge, keys, toKeys)
-	s.Master[name] = master
+	s.Masters[name] = master
 	return bridge, nil
 }
 

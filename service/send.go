@@ -61,11 +61,11 @@ type Send struct {
 var senders = make(map[string]*Send)
 
 /**
-* NewSend
+* LoadSend
 * @param tenantId, name, email string
 * @return *Send
 **/
-func NewSend(tenantId, name, email string) (*Send, error) {
+func LoadSend(tenantId, name, email string) (*Send, error) {
 	result, exists := senders[tenantId]
 	if exists {
 		return result, nil
@@ -102,6 +102,19 @@ func NewSend(tenantId, name, email string) (*Send, error) {
 	}
 
 	senders[tenantId] = result
+	return result, nil
+}
+
+/**
+* GetSender
+* @param tenantId string
+* @return *Send, error
+**/
+func GetSender(tenantId string) (*Send, error) {
+	result, exists := senders[tenantId]
+	if !exists {
+		return nil, errors.New(MSG_SEND_NOT_FOUND)
+	}
 	return result, nil
 }
 

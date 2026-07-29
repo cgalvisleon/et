@@ -171,13 +171,14 @@ type Query struct {
 	Rows           int                     `json:"rows"`
 	UseSourceField bool                    `json:"use_source_field"`
 	Details        map[string]*QueryDetail `json:"details"`
+	Masters        map[string]*QueryDetail `json:"masters"`
 	Rollups        map[string]*QueryDetail `json:"rollups"`
 	CalcFuns       map[string]CalcFunction `json:"calc_funs"`
 	Calcs          map[string]*Calc        `json:"calcs"`
 	IsExists       bool                    `json:"is_exists"`
 	IsCount        bool                    `json:"is_count"`
 	section        QuerySection            `json:"-"`
-	maxRows        int                     `json:"-"`
+	MaxRows        int                     `json:"-"`
 	db             *DB                     `json:"-"`
 	isDebug        bool                    `json:"-"`
 	isTest         bool                    `json:"-"`
@@ -207,7 +208,7 @@ func newQuery(model *Model, as ...string) *Query {
 		CalcFuns:   make(map[string]CalcFunction, 0),
 		Calcs:      make(map[string]*Calc, 0),
 		section:    whereSection,
-		maxRows:    model.db.RecordLimit,
+		MaxRows:    model.db.RecordLimit,
 		db:         model.db,
 		isDebug:    model.IsDebug,
 	}
@@ -482,8 +483,8 @@ func (s *Query) join(model *Model, as string, tp JoinType, conditions []*et.Cond
 * @param model *Model, as string, on *et.Condition
 * @return *Query
 **/
-func (s *Query) Join(model *Model, as string, on *et.Condition) *Query {
-	s.join(model, as, INNER_JOIN, []*et.Condition{on})
+func (s *Query) Join(model *Model, as string, on []*et.Condition) *Query {
+	s.join(model, as, INNER_JOIN, on)
 	return s
 }
 
@@ -492,8 +493,8 @@ func (s *Query) Join(model *Model, as string, on *et.Condition) *Query {
 * @param model *Model, as string, on *et.Condition
 * @return *Query
 **/
-func (s *Query) LeftJoin(model *Model, as string, on *et.Condition) *Query {
-	s.join(model, as, LEFT_JOIN, []*et.Condition{on})
+func (s *Query) LeftJoin(model *Model, as string, on []*et.Condition) *Query {
+	s.join(model, as, LEFT_JOIN, on)
 	return s
 }
 
@@ -502,8 +503,8 @@ func (s *Query) LeftJoin(model *Model, as string, on *et.Condition) *Query {
 * @param model *Model, as string, on *et.Condition
 * @return *Query
 **/
-func (s *Query) RightJoin(model *Model, as string, on *et.Condition) *Query {
-	s.join(model, as, RIGHT_JOIN, []*et.Condition{on})
+func (s *Query) RightJoin(model *Model, as string, on []*et.Condition) *Query {
+	s.join(model, as, RIGHT_JOIN, on)
 	return s
 }
 
@@ -512,8 +513,8 @@ func (s *Query) RightJoin(model *Model, as string, on *et.Condition) *Query {
 * @param model *Model, as string, on *et.Condition
 * @return *Query
 **/
-func (s *Query) FullJoin(model *Model, as string, on *et.Condition) *Query {
-	s.join(model, as, FULL_JOIN, []*et.Condition{on})
+func (s *Query) FullJoin(model *Model, as string, on []*et.Condition) *Query {
+	s.join(model, as, FULL_JOIN, on)
 	return s
 }
 
@@ -566,7 +567,7 @@ func (s *Query) Detail(fields ...string) *Query {
 		if !ok {
 			continue
 		}
-		
+
 		s.Details[field] = &QueryDetail{
 			To:     from,
 			Keys:   detail.Keys,
@@ -575,7 +576,7 @@ func (s *Query) Detail(fields ...string) *Query {
 			Rows:   s.Rows,
 		}
 	}
-	
+
 	return s
 }
 
@@ -668,8 +669,8 @@ func (s *Query) Having(cond *et.Condition) *Query {
 * @return *Query
 **/
 func (s *Query) setLimit(rows int) *Query {
-	if rows > s.maxRows {
-		rows = s.maxRows
+	if rows > s.MaxRows {
+		rows = s.MaxRows
 	}
 	s.Rows = rows
 	return s
@@ -735,7 +736,7 @@ func (s *Query) setDetails(tx *Tx, item et.Json) et.Json {
 **/
 func (s *Query) setRollup(tx *Tx, item et.Json) et.Json {
 	for name, detail := range s.Rollups {
-		qry := detail.GetQuery(item)		
+		qry := detail.GetQuery(item)
 		detailResult, err := qry.AllTx(tx)
 		if err != nil {
 			return item
@@ -791,7 +792,7 @@ func (s *Query) setCalc(tx *Tx, item et.Json) error {
 **/
 func (s *Query) AllTx(tx *Tx) (et.Items, error) {
 	if s.Rows == 0 {
-		s.Rows = s.maxRows
+		s.Rows = s.MaxRows
 	}
 
 	sql, err := s.db.query(s)
@@ -1124,7 +1125,7 @@ func (s *Query) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 	havingConditions := et.ToCondition(havings)
 	s.Havings = havingConditions
 
-	limit := query.ValInt(s.maxRows, "limit")
+	limit := query.ValInt(s.MaxRows, "limit")
 	s.setLimit(limit)
 
 	page := query.ValInt(0, "page")

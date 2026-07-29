@@ -28,11 +28,11 @@ type LocalStorage struct {
 var storages = make(map[string]*LocalStorage)
 
 /**
-* NewLocalStorage
+* LoadLocalStorage
 * @param tenantId, path string
 * @return *LocalStorage
 **/
-func NewLocalStorage(tenantId, path string) *LocalStorage {
+func LoadLocalStorage(tenantId, path string) *LocalStorage {
 	result, exists := storages[tenantId]
 	if exists {
 		return result

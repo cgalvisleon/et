@@ -10,6 +10,7 @@ var (
 	MSG_SEND_WHATSAPP_SENDER_REQUIRED = "El campo sender es requerido"
 	MSG_SEND_EMAIL_SENDER_REQUIRED    = "El campo sender es requerido"
 	MSG_VERIFY_EMAIL                  = "Verificación de email"
+	MSG_SEND_NOT_FOUND                = "Sender no encontrado"
 )
 
 func init() {
@@ -23,5 +24,6 @@ func init() {
 		MSG_SEND_WHATSAPP_SENDER_REQUIRED = "El campo sender es requerido"
 		MSG_SEND_EMAIL_SENDER_REQUIRED = "El campo sender es requerido"
 		MSG_VERIFY_EMAIL = "Verificación de email"
+		MSG_SEND_NOT_FOUND = "Sender no encontrado"
 	}
 }

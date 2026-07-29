@@ -23,11 +23,11 @@ type Storage struct {
 }
 
 /**
-* DefineStore
-* @param db *jsql.DB, schema string
-* @return *Storage, error
+* StoreDefine
+* @param tenantId, schema, name string
+* @return jsql.Def
 **/
-func DefineStore(db *jsql.DB, schema string) (*Storage, error) {
+func StoreDefine(tenantId, schema, name string) jsql.Def {
 	columns := []jsql.Column{
 		{Name: jsql.CREATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
 		{Name: jsql.UPDATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
@@ -38,10 +38,11 @@ func DefineStore(db *jsql.DB, schema string) (*Storage, error) {
 	}
 
 	def := jsql.Def{
-		Schema:  schema,
-		Name:    "workflows",
-		Version: 1,
-		Columns: columns,
+		TenantId: tenantId,
+		Schema:   schema,
+		Name:     name,
+		Version:  1,
+		Columns:  columns,
 		PrimaryKeys: []jsql.DefIndex{
 			{Name: jsql.ID, Sorted: true},
 		},
@@ -51,6 +52,17 @@ func DefineStore(db *jsql.DB, schema string) (*Storage, error) {
 		},
 		IdxField: jsql.IDX,
 	}
+
+	return def
+}
+
+/**
+* DefineStore
+* @param db *jsql.DB, schema string
+* @return *Storage, error
+**/
+func DefineStore(db *jsql.DB, schema string) (*Storage, error) {
+	def := StoreDefine(db.TenantId, schema, "workflows")
 	workflows, err := db.Define(def)
 	if err != nil {
 		return nil, err
@@ -80,17 +92,6 @@ func DefineStore(db *jsql.DB, schema string) (*Storage, error) {
 		return nil, err
 	}
 
-	def.Name = "instances"
-	def.IdxField = jsql.IDX
-	instances, err := db.Define(def)
-	if err != nil {
-		return nil, err
-	}
-	err = instances.Init()
-	if err != nil {
-		return nil, err
-	}
-
 	result := &Storage{
 		TenantId: db.TenantId,
 		db:       db,
@@ -99,9 +100,27 @@ func DefineStore(db *jsql.DB, schema string) (*Storage, error) {
 	result.models["workflows"] = workflows
 	result.models["flows"] = flows
 	result.models["steps"] = steps
-	result.models["instances"] = instances
 
 	return result, nil
+}
+
+/**
+* DefineInstances
+* @param db *jsql.DB, tenantId string
+* @return error
+**/
+func (s *Storage) DefineInstances(db *jsql.DB, tenantId string) error {
+	def := StoreDefine(tenantId, "workflows", "instances")
+	result, err := db.Define(def)
+	if err != nil {
+		return err
+	}
+	err = result.Init()
+	if err != nil {
+		return err
+	}
+	s.models["instances"] = result
+	return nil
 }
 
 /**

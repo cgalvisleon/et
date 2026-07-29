@@ -54,7 +54,7 @@ type Model struct {
 	Required      []*Index                `json:"required"`
 	Hiddens       []string                `json:"hiddens"`
 	Details       map[string]*Detail      `json:"details"`
-	Master        map[string]*Master      `json:"master"`
+	Masters       map[string]*Master      `json:"master"`
 	Rollups       map[string]*Detail      `json:"rollups"`
 	calcs         map[string]CalcFunction `json:"-"`
 	IsStrict      bool                    `json:"is_strict"`
@@ -221,28 +221,6 @@ func (s *Model) Debug() *Model {
 }
 
 /**
-* Detail: Returns the detail for the given name.
-* @param name string
-* @return *Detail, bool
-**/
-func (s *Model) Detail(name string) (*Model, bool) {
-	detail, ok := s.Details[name]
-	if !ok {
-		return nil, false
-	}
-
-	if detail.To == nil {
-		return nil, false
-	}
-
-	if detail.To.Model == nil {
-		return nil, false
-	}
-
-	return detail.To.Model, true
-}
-
-/**
 * GetCalcFunc: Returns the CalcFunction for the given name, if it exists.
 * @param name string
 * @return CalcFunction, bool
@@ -304,7 +282,7 @@ func (s *Model) Init() error {
 		}
 	}
 
-	for _, master := range s.Master {
+	for _, master := range s.Masters {
 		err = master.init()
 		if err != nil {
 			return err
@@ -424,28 +402,6 @@ func (s *Model) GetField(name string) (*Field, bool) {
 }
 
 /**
-* GetDetail: Returns the detail for the given name.
-* @param name string
-* @return *Model, bool
-**/
-func (s *Model) GetDetail(name string) (*Model, bool) {
-	detail, ok := s.Details[name]
-	if !ok {
-		return nil, false
-	}
-
-	if detail.To == nil {
-		return nil, false
-	}
-
-	if detail.To.Model == nil {
-		return nil, false
-	}
-
-	return detail.To.Model, true
-}
-
-/**
 * BeforeInsert: Registers a trigger function to run before each INSERT.
 * @param fn TriggerFunction
 * @return *Model
@@ -546,12 +502,65 @@ func (s *Model) From(as ...string) *Query {
 }
 
 /**
+* Detail: Returns the detail for the given name.
+* @param name string
+* @return *Query, bool
+**/
+func (s *Model) Detail(name string) (*Query, bool) {
+	detail, ok := s.Details[name]
+	if !ok {
+		return nil, false
+	}
+
+	if detail.To == nil {
+		return nil, false
+	}
+
+	if detail.To.Model == nil {
+		return nil, false
+	}
+
+	result := detail.To.Model.From("A")
+	return result, true
+}
+
+/**
+* Master: Returns the master for the given name.
+* @param name string
+* @return *Query, bool
+**/
+func (s *Model) Master(name string) (*Query, bool) {
+	master, ok := s.Masters[name]
+	if !ok {
+		return nil, false
+	}
+
+	if master.To == nil {
+		return nil, false
+	}
+
+	if master.To.Model == nil {
+		return nil, false
+	}
+
+	conditions := make([]*et.Condition, 0)
+	for k, fK := range master.ToKeys {
+		k = fmt.Sprintf("A.%s", k)
+		fK = fmt.Sprintf("B.%s", fK)
+		conditions = append(conditions, Eq(k, fK))
+	}
+
+	result := master.To.Model.From("A")
+	result.Join(master.Bridge.Model, "B", conditions)
+	return result, true
+}
+
+/**
 * InnerJoin: Creates a new Query for this model with the given model as the INNER JOIN clause.
-* @param model *Model
-* @param on *et.Condition
+* @param model *Model, as string, on *et.Condition
 * @return *Query
 **/
-func (s *Model) Join(to *Model, as string, on *et.Condition) *Query {
+func (s *Model) Join(to *Model, as string, on []*et.Condition) *Query {
 	result := s.From("A")
 	result.Join(to, as, on)
 	return result
@@ -563,7 +572,7 @@ func (s *Model) Join(to *Model, as string, on *et.Condition) *Query {
 * @return *Query
 **/
 func (s *Model) Select(fields ...string) *Query {
-	result := s.From()
+	result := s.From("A")
 	result.Select(fields...)
 	return result
 }
@@ -574,7 +583,7 @@ func (s *Model) Select(fields ...string) *Query {
 * @return *Query
 **/
 func (s *Model) Calc(fields ...string) *Query {
-	result := s.From()
+	result := s.From("A")
 	result.Calc(fields...)
 	return result
 }
@@ -585,7 +594,7 @@ func (s *Model) Calc(fields ...string) *Query {
 * @return *Query
 **/
 func (s *Model) Where(cond *et.Condition) *Query {
-	result := s.From()
+	result := s.From("A")
 	result.Where(cond)
 	return result
 }

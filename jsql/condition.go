@@ -4,8 +4,7 @@ import "github.com/cgalvisleon/et/et"
 
 /**
 * Eq: Returns an equality condition (field = value).
-* @param field string
-* @param value interface{}
+* @param field string, value interface{}
 * @return *et.Condition
 **/
 func Eq(field string, value interface{}) *et.Condition {
@@ -14,8 +13,7 @@ func Eq(field string, value interface{}) *et.Condition {
 
 /**
 * Neg: Returns a not-equal condition (field <> value).
-* @param field string
-* @param value interface{}
+* @param field string, value interface{}
 * @return *et.Condition
 **/
 func Neg(field string, value interface{}) *et.Condition {
@@ -24,8 +22,7 @@ func Neg(field string, value interface{}) *et.Condition {
 
 /**
 * Less: Returns a less-than condition (field < value).
-* @param field string
-* @param value interface{}
+* @param field string, value interface{}
 * @return *et.Condition
 **/
 func Less(field string, value interface{}) *et.Condition {
@@ -34,8 +31,7 @@ func Less(field string, value interface{}) *et.Condition {
 
 /**
 * LessEq: Returns a less-than-or-equal condition (field <= value).
-* @param field string
-* @param value interface{}
+* @param field string, value interface{}
 * @return *et.Condition
 **/
 func LessEq(field string, value interface{}) *et.Condition {
@@ -44,8 +40,7 @@ func LessEq(field string, value interface{}) *et.Condition {
 
 /**
 * More: Returns a greater-than condition (field > value).
-* @param field string
-* @param value interface{}
+* @param field string, value interface{}
 * @return *et.Condition
 **/
 func More(field string, value interface{}) *et.Condition {
@@ -54,8 +49,7 @@ func More(field string, value interface{}) *et.Condition {
 
 /**
 * MoreEq: Returns a greater-than-or-equal condition (field >= value).
-* @param field string
-* @param value interface{}
+* @param field string, value interface{}
 * @return *et.Condition
 **/
 func MoreEq(field string, value interface{}) *et.Condition {
@@ -64,8 +58,7 @@ func MoreEq(field string, value interface{}) *et.Condition {
 
 /**
 * Like: Returns a case-insensitive pattern match condition (field ILIKE value).
-* @param field string
-* @param value interface{}
+* @param field string, value interface{}
 * @return *et.Condition
 **/
 func Like(field string, value interface{}) *et.Condition {
@@ -74,8 +67,7 @@ func Like(field string, value interface{}) *et.Condition {
 
 /**
 * In: Returns an inclusion condition (field IN (values...)).
-* @param field string
-* @param value []interface{}
+* @param field string, value []interface{}
 * @return *et.Condition
 **/
 func In(field string, value []interface{}) *et.Condition {
@@ -84,8 +76,7 @@ func In(field string, value []interface{}) *et.Condition {
 
 /**
 * NotIn: Returns an exclusion condition (field NOT IN (values...)).
-* @param field string
-* @param value []interface{}
+* @param field string, value []interface{}
 * @return *et.Condition
 **/
 func NotIn(field string, value []interface{}) *et.Condition {
@@ -94,8 +85,7 @@ func NotIn(field string, value []interface{}) *et.Condition {
 
 /**
 * Is: Returns an IS condition (field IS value), typically used with NULL or booleans.
-* @param field string
-* @param value interface{}
+* @param field string, value interface{}
 * @return *et.Condition
 **/
 func Is(field string, value interface{}) *et.Condition {
@@ -104,8 +94,7 @@ func Is(field string, value interface{}) *et.Condition {
 
 /**
 * IsNot: Returns an IS NOT condition (field IS NOT value).
-* @param field string
-* @param value interface{}
+* @param field string, value interface{}
 * @return *et.Condition
 **/
 func IsNot(field string, value interface{}) *et.Condition {
@@ -132,9 +121,7 @@ func NotNull(field string) *et.Condition {
 
 /**
 * Between: Returns a range condition (field BETWEEN min AND max).
-* @param field string
-* @param min any
-* @param max any
+* @param field string, min any, max any
 * @return *et.Condition
 **/
 func Between(field string, min, max any) *et.Condition {
@@ -143,9 +130,7 @@ func Between(field string, min, max any) *et.Condition {
 
 /**
 * NotBetween: Returns a negated range condition (field NOT BETWEEN min AND max).
-* @param field string
-* @param min any
-* @param max any
+* @param field string, min any, max any
 * @return *et.Condition
 **/
 func NotBetween(field string, min, max any) *et.Condition {
@@ -154,8 +139,7 @@ func NotBetween(field string, min, max any) *et.Condition {
 
 /**
 * Evaluate: Returns true if all conditions in the slice match the given JSON object.
-* @param item et.Json
-* @param conditions []*et.Condition
+* @param item et.Json, conditions []*et.Condition
 * @return bool
 **/
 func Evaluate(item et.Json, conditions []*et.Condition) bool {

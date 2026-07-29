@@ -225,10 +225,10 @@ func pgCondsSQL(getField func(string) (*jsql.Field, bool), useSourceField bool, 
 		if first || cond.Connector == et.NaC {
 			parts = append(parts, expr)
 			first = false
-		} else if cond.Connector == et.And {
-			parts = append(parts, "AND "+expr)
-		} else {
+		} else if cond.Connector == et.Or {
 			parts = append(parts, "OR "+expr)
+		} else {
+			parts = append(parts, "AND "+expr)
 		}
 	}
 	return strings.Join(parts, "\n  ")

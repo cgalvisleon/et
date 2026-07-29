@@ -214,6 +214,24 @@ func (s *Condition) ToJson() Json {
 }
 
 /**
+* And
+* @return *Condition
+**/
+func (s *Condition) And() *Condition {
+	s.Connector = And
+	return s
+}
+
+/**
+* Or
+* @return *Condition
+**/
+func (s *Condition) Or() *Condition {
+	s.Connector = Or
+	return s
+}
+
+/**
 * fieldValue
 * @param data Json
 * @return any, error

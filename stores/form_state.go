@@ -115,7 +115,7 @@ func (s *FormState) Set(id, tag, ownerId string, state et.Json) error {
 		return err
 	}
 
-	owner, ok := s.model.GetDetail("owners")
+	owner, ok := s.model.Detail("owners")
 	if ok {
 		_, err := owner.
 			Upsert(et.Json{
@@ -162,7 +162,7 @@ func (s *FormState) Get(id string, dest et.Json) (bool, error) {
 		return false, nil
 	}
 
-	owner, ok := s.model.GetDetail("owners")
+	owner, ok := s.model.Detail("owners")
 	if ok {
 		owners, err := owner.
 			Where(Eq(ID, id)).

@@ -504,9 +504,9 @@ func (s *Model) From(as ...string) *Query {
 /**
 * Detail: Returns the detail for the given name.
 * @param name string
-* @return *Query, bool
+* @return *Model, bool
 **/
-func (s *Model) Detail(name string) (*Query, bool) {
+func (s *Model) Detail(name string) (*Model, bool) {
 	detail, ok := s.Details[name]
 	if !ok {
 		return nil, false
@@ -520,8 +520,7 @@ func (s *Model) Detail(name string) (*Query, bool) {
 		return nil, false
 	}
 
-	result := detail.To.Model.From("A")
-	return result, true
+	return detail.To.Model, true
 }
 
 /**
@@ -572,7 +571,7 @@ func (s *Model) Join(to *Model, as string, on []*et.Condition) *Query {
 * @return *Query
 **/
 func (s *Model) Select(fields ...string) *Query {
-	result := s.From("A")
+	result := s.From("")
 	result.Select(fields...)
 	return result
 }
@@ -583,7 +582,7 @@ func (s *Model) Select(fields ...string) *Query {
 * @return *Query
 **/
 func (s *Model) Calc(fields ...string) *Query {
-	result := s.From("A")
+	result := s.From("")
 	result.Calc(fields...)
 	return result
 }
@@ -594,7 +593,7 @@ func (s *Model) Calc(fields ...string) *Query {
 * @return *Query
 **/
 func (s *Model) Where(cond *et.Condition) *Query {
-	result := s.From("A")
+	result := s.From("")
 	result.Where(cond)
 	return result
 }

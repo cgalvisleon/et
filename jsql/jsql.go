@@ -8,7 +8,6 @@ import (
 )
 
 var (
-	packageName            = "jsql"
 	ErrRecordAlreadyExists = errors.New("record already exists")
 )
 

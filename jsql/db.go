@@ -409,6 +409,22 @@ func (s *DB) NewModel(schema, name string, version int, userId string) *Model {
 }
 
 /**
+* RemoveModel: Removes a model from the database.
+* @param schema, name string
+* @return error
+**/
+func (s *DB) RemoveModel(schema, name string) error {
+	schema = utility.Normalize(schema)
+	sch, ok := s.Schemas[schema]
+	if !ok {
+		return fmt.Errorf(MSG_SCHEMA_NOT_FOUND, schema)
+	}
+
+	sch.removeModel(name)
+	return nil
+}
+
+/**
 * SetDebug: Sets the debug flag to the given value.
 * @param debug bool
 **/

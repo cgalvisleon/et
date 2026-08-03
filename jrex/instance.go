@@ -17,6 +17,10 @@ type Instance struct {
 	vm    *goja.Runtime `json:"-"`
 }
 
+/**
+* NewInstance
+* @return *Instance
+**/
 func NewInstance() *Instance {
 	result := &Instance{
 		ID:    reg.UUID(),
@@ -141,4 +145,22 @@ func (s *Instance) GetJson(name string) et.Json {
 		return et.Json{}
 	}
 	return result
+}
+
+/**
+* Save
+* @param store Store
+* @return error
+**/
+func (s *Instance) Save(store Store) error {
+	if store == nil {
+		return errors.New(MSG_STORE_IS_NIL)
+	}
+
+	err := store.Set("jrex", s.ID, s.ID, s.Ctx)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

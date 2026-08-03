@@ -233,13 +233,14 @@ func (s *Jrex) Set(name string, value interface{}) *Jrex {
 * @return *Instance, error
 **/
 func (s *Jrex) NewInstance(module string) (*Instance, error) {
-	instance := newInstance(s, module)
+	instance := NewInstance()
 	wrapper(instance)
 	for name, value := range s.bindings {
 		instance.Set(name, value)
 	}
 
-	_, err := instance.RunString(requireRuntime)
+	instance.SetCode(requireRuntime)
+	_, err := instance.Run()
 	if err != nil {
 		return nil, err
 	}

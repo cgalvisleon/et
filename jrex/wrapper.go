@@ -23,7 +23,6 @@ import (
 * @param vm *VM
 **/
 func wrapper(instance *Instance) {
-	wrapperRunTime(instance)
 	wrapperBasic(instance)
 	wrapperVar(instance)
 	wrapperConsole(instance)
@@ -31,23 +30,6 @@ func wrapper(instance *Instance) {
 	wrapperJrpc(instance)
 	wrapperCache(instance)
 	wrapperEvent(instance)
-}
-
-/**
-* wrapperRunTime: Wraps the runtime
-* @param instance *Instance
-**/
-func wrapperRunTime(instance *Instance) {
-	instance.Set("os", nil)
-	instance.Set("exec", nil)
-	instance.Set("__load", func(module string) string {
-		code, err := instance.GetCode(module)
-		if err != nil {
-			panic(instance.Error(err))
-		}
-
-		return code
-	})
 }
 
 /**

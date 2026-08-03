@@ -376,7 +376,7 @@ func (s *Instance) addAuditLog(userId string, action interface{}) {
 /**
 * OnSave
 * @param fn func(instance *Instance) error
-* @return *Jrex
+* @return *Instance
 **/
 func (s *Instance) OnSave(fn func(instance *Instance) error) *Instance {
 	if s.onSave == nil {

@@ -556,6 +556,11 @@ func (s *Query) Calc(fields ...string) *Query {
 	return s
 }
 
+/**
+* Detail: Appends fields to the DETAIL clause.
+* @param fields ...string
+* @return *Query
+**/
 func (s *Query) Detail(fields ...string) *Query {
 	for _, field := range fields {
 		from := s.Froms[0]
@@ -577,6 +582,34 @@ func (s *Query) Detail(fields ...string) *Query {
 		}
 	}
 
+	return s
+}
+
+/**
+* Master: Appends fields to the MASTER clause.
+* @param fields ...string
+* @return *Query
+**/
+func (s *Query) Master(fields ...string) *Query {
+	for _, field := range fields {
+		from := s.Froms[0]
+		if from == nil {
+			continue
+		}
+
+		master, ok := from.Model.Masters[field]
+		if !ok {
+			continue
+		}
+
+		s.Masters[field] = &QueryDetail{
+			To:     from,
+			Keys:   master.Keys,
+			Select: master.Select,
+			Page:   s.Offset,
+			Rows:   s.Rows,
+		}
+	}
 	return s
 }
 

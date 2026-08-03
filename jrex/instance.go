@@ -5,42 +5,56 @@ import (
 	"maps"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/dop251/goja"
 )
 
 type Instance struct {
-	Module string        `json:"module"`
-	Ctx    et.Json       `json:"ctx"`
-	store  Store         `json:"-"`
-	jrex   *Jrex         `json:"-"`
-	vm     *goja.Runtime `json:"-"`
+	ID    string        `json:"id"`
+	Ctx   et.Json       `json:"ctx"`
+	code  string        `json:"-"`
+	store Store         `json:"-"`
+	vm    *goja.Runtime `json:"-"`
 }
 
 func NewInstance() *Instance {
 	result := &Instance{
-		Module: "index",
-		Ctx:    et.Json{},
-		store:  nil,
-		jrex:   nil,
-		vm:     goja.New(),
+		ID:    reg.UUID(),
+		Ctx:   et.Json{},
+		store: nil,
+		vm:    goja.New(),
 	}
 	wrapper(result)
 	return result
 }
 
 /**
-* newInstance
-* @param jrex *Jrex, module string
+* SetStore
+* @param store Store
 * @return *Instance
 **/
-func newInstance(jrex *Jrex, module string) *Instance {
-	return &Instance{
-		Module: module,
-		Ctx:    et.Json{},
-		store:  jrex.store,
-		jrex:   jrex,
-		vm:     goja.New(),
-	}
+func (s *Instance) SetStore(store Store) *Instance {
+	s.store = store
+	return s
+}
+
+/**
+* SetCode
+* @param code string
+* @return *Instance
+**/
+func (s *Instance) SetCode(code string) *Instance {
+	s.code = code
+	return s
+}
+
+/**
+* GetCode
+* @param module string
+* @return string, error
+**/
+func (s *Instance) GetCode() string {
+	return s.code
 }
 
 /**
@@ -64,43 +78,14 @@ func (s *Instance) SetCtx(ctx et.Json) *Instance {
 }
 
 /**
-* RunString
-* @param code string
-* @return goja.Value, error
-**/
-func (s *Instance) RunString(code string) (goja.Value, error) {
-	return s.vm.RunString(code)
-}
-
-/**
-* GetCode
-* @param module string
-* @return string, error
-**/
-func (s *Instance) GetCode(module string) (string, error) {
-	if s.jrex == nil {
-		return "", errors.New(MSG_JREX_IS_NIL)
-	}
-
-	mod, exists := s.jrex.Modules[module]
-	if !exists {
-		return "", errors.New(MSG_MODULE_NOT_FOUND)
-	}
-
-	return mod.getCode()
-}
-
-/**
 * Run
 * @return et.Json, error
 **/
 func (s *Instance) Run() (et.Json, error) {
-	code, err := s.GetCode("index")
-	if err != nil {
-		return et.Json{}, err
+	if s.code == "" {
+		return et.Json{}, errors.New(MSG_CODE_IS_EMPTY)
 	}
-
-	_, err = s.RunString(code)
+	_, err := s.vm.RunString(s.code)
 	if err != nil {
 		return et.Json{}, err
 	}
@@ -150,10 +135,8 @@ func (s *Instance) Get(name string) goja.Value {
 * @return et.Json
 **/
 func (s *Instance) GetJson(name string) et.Json {
-	if s.vm == nil {
-		return et.Json{}
-	}
-	result, ok := s.vm.Get(name).Export().(et.Json)
+	value := s.Get(name)
+	result, ok := value.Export().(et.Json)
 	if !ok {
 		return et.Json{}
 	}

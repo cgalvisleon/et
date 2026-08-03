@@ -48,8 +48,8 @@ type cliModel struct {
 
 /**
 * newCliModel: Builds the CLI model that pairs a scrolling log viewport with a
-* command input line for the given Jrex instance.
-* @param jrex *Jrex
+* command input line for the given App instance.
+* @param app App
 * @return cliModel
 **/
 func newCliModel(app App) cliModel {
@@ -212,7 +212,7 @@ func (s *cliModel) OnStart(fn func(cli *cliModel, args ...any) error) {
 
 /**
 * Run: Launches the split-pane CLI (log viewport + command input) bound to
-* this Jrex instance, starts hot-reload watching, and blocks until the user exits.
+* this App instance, starts hot-reload watching, and blocks until the user exits.
 * @return error
 **/
 func (s *cliModel) Run() error {

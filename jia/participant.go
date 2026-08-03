@@ -150,7 +150,7 @@ func (s *Participant) addAuditLog(userId string, action string) {
 /**
 * OnSave
 * @param fn func(step *Step, userId string) error
-* @return *Jrex
+* @return *Participant
 **/
 func (s *Participant) OnSave(fn func(participant *Participant) error) *Participant {
 	if s.onSave == nil {

@@ -56,7 +56,7 @@ func (s *FileStore) up(jrex *Jrex) *FileStore {
 /**
 * Load
 * @param collection, id string, dest any
-* @return *Jrex, error
+* @return bool, error
 **/
 func (s *FileStore) Get(collection, id string, dest any) (bool, error) {
 	if collection == "jrex" {

@@ -11,6 +11,7 @@ type Master struct {
 	Bridge *From
 	Keys   map[string]string
 	ToKeys map[string]string
+	Select []string
 }
 
 /**
@@ -60,14 +61,15 @@ func (s *Master) init() error {
 
 /**
 * newMaster: Creates a new master.
-* @param to, bridge *Model, keys, toKeys map[string]string
+* @param to, bridge *Model, keys, toKeys map[string]string, selects []string
 * @return *Master
 **/
-func newMaster(to, bridge *Model, keys, toKeys map[string]string) *Master {
+func newMaster(to, bridge *Model, keys, toKeys map[string]string, selects []string) *Master {
 	return &Master{
 		To:     getFrom(to, ""),
 		Bridge: getFrom(bridge, ""),
 		Keys:   keys,
 		ToKeys: toKeys,
+		Select: selects,
 	}
 }

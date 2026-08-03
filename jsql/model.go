@@ -253,7 +253,7 @@ func (s *Model) initModel(db *DB) (bool, error) {
 
 /**
 * wrapper: Wraps the jrex with the model
-* @param rex *jrex.Jrex, model *Model
+* @param instance *jrex.Instance, model *Model
 * @return void
 **/
 func (s *Model) wrapper(instance *jrex.Instance) {

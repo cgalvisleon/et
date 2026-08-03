@@ -638,7 +638,7 @@ func (s *DB) Define(define Def) (*Model, error) {
 			return nil, err
 		}
 
-		_, err = result.DefineMaster(defMaster.Name, to, defMaster.Keys, defMaster.ToKeys)
+		_, err = result.DefineMaster(defMaster.Name, to, defMaster.Keys, defMaster.ToKeys, defMaster.Select)
 		if err != nil {
 			return nil, err
 		}

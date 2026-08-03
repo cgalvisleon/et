@@ -208,7 +208,7 @@ func (s *Flow) addAuditLog(userId string, action string) {
 /**
 * OnSave
 * @param fn func(flow *Flow) error
-* @return *Jrex
+* @return *Flow
 **/
 func (s *Flow) OnSave(fn func(flow *Flow) error) *Flow {
 	if s.onSave == nil {

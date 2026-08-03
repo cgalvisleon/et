@@ -346,10 +346,11 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 
 		for _, script := range s.BeforeInserts {
 			instance := jrex.NewInstance()
+			instance.SetCode(script)
 			model.wrapper(instance)
 			instance.Set("old", s.Old)
 			instance.Set("new", s.New)
-			_, err := instance.RunString(script)
+			_, err := instance.Run()
 			if err != nil {
 				return et.Items{}, err
 			}
@@ -381,10 +382,11 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 
 		for _, script := range s.AfterInserts {
 			instance := jrex.NewInstance()
+			instance.SetCode(script)
 			model.wrapper(instance)
 			instance.Set("old", s.Old)
 			instance.Set("new", s.New)
-			_, err := instance.RunString(script)
+			_, err := instance.Run()
 			if err != nil {
 				return et.Items{}, err
 			}
@@ -430,10 +432,11 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 
 		for _, script := range s.BeforeUpdates {
 			instance := jrex.NewInstance()
+			instance.SetCode(script)
 			model.wrapper(instance)
 			instance.Set("old", s.Old)
 			instance.Set("new", s.New)
-			_, err := instance.RunString(script)
+			_, err := instance.Run()
 			if err != nil {
 				return et.Items{}, err
 			}
@@ -465,10 +468,11 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 
 		for _, script := range s.AfterUpdates {
 			instance := jrex.NewInstance()
+			instance.SetCode(script)
 			model.wrapper(instance)
 			instance.Set("old", s.Old)
 			instance.Set("new", s.New)
-			_, err := instance.RunString(script)
+			_, err := instance.Run()
 			if err != nil {
 				return et.Items{}, err
 			}
@@ -510,10 +514,11 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 
 		for _, script := range s.BeforeDeletes {
 			instance := jrex.NewInstance()
+			instance.SetCode(script)
 			model.wrapper(instance)
 			instance.Set("old", s.Old)
 			instance.Set("new", s.New)
-			_, err := instance.RunString(script)
+			_, err := instance.Run()
 			if err != nil {
 				return et.Items{}, err
 			}
@@ -545,10 +550,11 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 
 		for _, script := range s.AfterDeletes {
 			instance := jrex.NewInstance()
+			instance.SetCode(script)
 			model.wrapper(instance)
 			instance.Set("old", s.Old)
 			instance.Set("new", s.New)
-			_, err := instance.RunString(script)
+			_, err := instance.Run()
 			if err != nil {
 				return et.Items{}, err
 			}

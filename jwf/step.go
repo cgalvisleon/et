@@ -269,7 +269,7 @@ func (s *Step) addAuditLog(userId string, action string) {
 /**
 * OnSave
 * @param fn func(step *Step, userId string) error
-* @return *Jrex
+* @return *Step
 **/
 func (s *Step) OnSave(fn func(step *Step) error) *Step {
 	if s.onSave == nil {
@@ -346,7 +346,8 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 	runJrex := func(rex *jrex.Instance, script string) (et.Json, error) {
 		instance.setStatus(RUNNING)
 		rex.SetCtx(ctx)
-		_, err := rex.RunString(script)
+		rex.SetCode(script)
+		_, err := rex.Run()
 		if err != nil {
 			instance.setStatus(FAILED)
 			return et.Json{}, err
@@ -414,7 +415,8 @@ func (s *Step) runOnPublish(flow *Flow, ctx et.Json) (et.Json, error) {
 
 	runJrex := func(rex *jrex.Instance, script string) (et.Json, error) {
 		rex.SetCtx(ctx)
-		_, err := rex.RunString(script)
+		rex.SetCode(script)
+		_, err := rex.Run()
 		if err != nil {
 			return et.Json{}, err
 		}

@@ -44,6 +44,7 @@ type DefMaster struct {
 	To     DefTo             `json:"to"`
 	Keys   map[string]string `json:"keys"`
 	ToKeys map[string]string `json:"to_keys"`
+	Select []string          `json:"select"`
 }
 
 type DefRollup struct {
@@ -308,10 +309,10 @@ func (s *Model) DefineDetail(name string, keys map[string]string, rows int) (*Mo
 
 /**
 * DefineMaster: Defines a new master for the model.
-* @param name string, to *Model, keys, toKeys map[string]string
+* @param name string, to *Model, keys, toKeys map[string]string, selects []string
 * @return (*Master, error)
 **/
-func (s *Model) DefineMaster(name string, to *Model, keys, toKeys map[string]string) (*Model, error) {
+func (s *Model) DefineMaster(name string, to *Model, keys, toKeys map[string]string, selects []string) (*Model, error) {
 	result, ok := s.Masters[name]
 	if ok {
 		return result.To.Model, nil
@@ -332,7 +333,7 @@ func (s *Model) DefineMaster(name string, to *Model, keys, toKeys map[string]str
 		bridge.DefineForeignKeys(to, map[string]string{fk: k}, true, false)
 	}
 	s.defineColumn(name, MASTER, ANY, nil, []byte{})
-	master := newMaster(to, bridge, keys, toKeys)
+	master := newMaster(to, bridge, keys, toKeys, selects)
 	s.Masters[name] = master
 	return bridge, nil
 }

@@ -68,11 +68,10 @@ func (s *XlsReader) Close() error {
 
 /**
 * GetSheet: Returns the rows of a sheet as a list of Json objects. If columns is empty, all columns of the sheet are returned.
-* @param nameSheet string
-* @param columns []string
+* @param nameSheet string, columns []string
 * @return []et.Json, error
 **/
-func (s *XlsReader) GetSheet(nameSheet string, columns []string) ([]et.Json, error) {
+func (s *XlsReader) GetSheet(nameSheet string, columns ...string) ([]et.Json, error) {
 	rows, err := s.file.GetRows(nameSheet)
 	if err != nil {
 		return nil, err
@@ -106,8 +105,7 @@ func (s *XlsReader) GetSheet(nameSheet string, columns []string) ([]et.Json, err
 
 /**
 * indexOf: Returns the index of value inside list, or -1 if not found.
-* @param list []string
-* @param value string
+* @param list []string, value string
 * @return int
 **/
 func indexOf(list []string, value string) int {

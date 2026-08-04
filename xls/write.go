@@ -16,6 +16,7 @@ type Column struct {
 	Key   string
 	Title string
 	Width float64
+	Align string
 }
 
 /**
@@ -36,12 +37,10 @@ type Xls struct {
 
 /**
 * NewXls: Builds an Xls workbook with an initial sheet from a list of Json rows, a sheet name and the column definitions.
-* @param data []et.Json
-* @param nameSheet string
-* @param columns []Column
+* @param data []et.Json, nameSheet string, columns []Column
 * @return *Xls
 **/
-func NewXls(data []et.Json, nameSheet string, columns []Column) *Xls {
+func NewXls(data []et.Json, nameSheet string, columns ...Column) *Xls {
 	result := &Xls{
 		Sheets: []*Sheet{},
 	}
@@ -54,9 +53,7 @@ func NewXls(data []et.Json, nameSheet string, columns []Column) *Xls {
 * Add: Appends a new sheet to the workbook from a list of Json rows, a sheet name and the column definitions.
 * If columns is empty, the columns are derived from the union of keys present in data, sorted alphabetically,
 * using the key as the title and the default width. A Column with an empty Title falls back to its Key.
-* @param data []et.Json
-* @param nameSheet string
-* @param columns []Column
+* @param data []et.Json, nameSheet string, columns ...Column
 * @return *Xls
 **/
 func (s *Xls) Add(data []et.Json, nameSheet string, columns []Column) *Xls {
@@ -132,6 +129,24 @@ func (s *Xls) build() (*excelize.File, error) {
 					return nil, err
 				}
 			}
+
+			if column.Align != "" {
+				styleId, err := f.NewStyle(&excelize.Style{
+					Alignment: &excelize.Alignment{Horizontal: column.Align},
+				})
+				if err != nil {
+					return nil, err
+				}
+
+				endCell, err := excelize.CoordinatesToCellName(col+1, len(sheet.Rows)+1)
+				if err != nil {
+					return nil, err
+				}
+
+				if err := f.SetCellStyle(sheetName, colName+"1", endCell, styleId); err != nil {
+					return nil, err
+				}
+			}
 		}
 
 		for rowIdx, row := range sheet.Rows {
@@ -190,8 +205,7 @@ func (s *Xls) ToWriter(w io.Writer) error {
 
 /**
 * ToHttp: Writes the workbook as a downloadable xlsx attachment to the http response.
-* @param w http.ResponseWriter
-* @param filename string
+* @param w http.ResponseWriter, filename string
 * @return error
 **/
 func (s *Xls) ToHttp(w http.ResponseWriter, filename string) error {

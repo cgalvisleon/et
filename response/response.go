@@ -17,13 +17,32 @@ type Result struct {
 }
 
 /**
-* ScanBody
+* scanBody
 * @param r io.Reader
 * @return et.Json, error
 **/
-func ScanBody(r io.Reader) (et.Json, error) {
+func scanBody(r io.Reader) (et.Json, error) {
 	var result et.Json
 	err := json.NewDecoder(r).Decode(&result)
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	return result, nil
+}
+
+/**
+* GetBody
+* @param r *http.Request
+* @return et.Json, error
+**/
+func GetBody(r *http.Request) (et.Json, error) {
+	body, err := request.ReadBody(r.Body)
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	result, err := body.ToJson()
 	if err != nil {
 		return et.Json{}, err
 	}
@@ -37,7 +56,7 @@ func ScanBody(r io.Reader) (et.Json, error) {
 * @return et.Json, error
 **/
 func ScanStr(value string) (et.Json, error) {
-	return ScanBody(strings.NewReader(value))
+	return scanBody(strings.NewReader(value))
 }
 
 /**

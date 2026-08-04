@@ -103,6 +103,7 @@ func Time(val any) *time.Time {
 }
 
 const (
+	ANY            = "any"
 	STRING         = "string"
 	INT            = "int"
 	FLOAT          = "float"
@@ -117,7 +118,6 @@ const (
 	ARRAY_DATETIME = "array_datetime"
 	VAL_BETWEEN    = "between"
 	VAL_NULL       = "null"
-	ANY            = "any"
 )
 
 type Value struct {

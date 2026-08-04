@@ -11,13 +11,6 @@ import (
 	"github.com/cgalvisleon/et/msg"
 )
 
-const (
-	PROFILE_ADMIN   = "admin"
-	PROFILE_APP     = "app"
-	PROFILE_DEVELOP = "develop"
-	PROFILE_SUPORT  = "suport"
-)
-
 /**
 * GetTokenKey
 * @param app, device, username string
@@ -32,12 +25,12 @@ func GetKey(app, device, username string) string {
 * @param app, device, userId, username string, payload et.Json, duration time.Duration
 * @return string, error
 **/
-func NewToken(app, device, userId, username, tenantId, profileId string, payload et.Json, duration time.Duration) (string, error) {
+func NewToken(app, device, userId, username string, payload et.Json, duration time.Duration) (string, error) {
 	if !cache.IsLoad() {
 		return "", errors.New(msg.MSG_CACHE_NOT_LOAD)
 	}
 
-	result, err := claim.NewToken(app, device, userId, username, tenantId, profileId, payload, duration)
+	result, err := claim.NewToken(app, device, userId, username, payload, duration)
 	if err != nil {
 		return "", err
 	}
@@ -64,7 +57,7 @@ func NewAuthentication(app, device, userId, username string, duration time.Durat
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "username")
 	}
 
-	return NewToken(app, device, userId, username, "", "", et.Json{}, duration)
+	return NewToken(app, device, userId, username, et.Json{}, duration)
 }
 
 /**
@@ -88,8 +81,12 @@ func NewAuthorization(app, device, userId, username, tenantId, profileId string,
 	if profileId == "" {
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "profileId")
 	}
+	payload := et.Json{
+		"tenantId":  tenantId,
+		"profileId": profileId,
+	}
 
-	return NewToken(app, device, userId, username, tenantId, profileId, et.Json{}, duration)
+	return NewToken(app, device, userId, username, payload, duration)
 }
 
 /**
@@ -105,15 +102,15 @@ func NewAppToken(app, device string, duration time.Duration) (string, error) {
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "device")
 	}
 
-	return NewToken(app, device, app, app, "", "", et.Json{}, duration)
+	return NewToken(app, device, app, app, et.Json{}, duration)
 }
 
 /**
 * NewEphemeralToken
-* @param app, device, userId, username, tenantId, profileId string, payload et.Json
+* @param app, device, userId, username string, payload et.Json
 * @return string, error
 **/
-func NewEphemeralToken(app, device, userId, username, tenantId, profileId string, payload et.Json, duration time.Duration) (string, error) {
+func NewEphemeralToken(app, device, userId, username string, payload et.Json, duration time.Duration) (string, error) {
 	if app == "" {
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "app")
 	}
@@ -129,7 +126,7 @@ func NewEphemeralToken(app, device, userId, username, tenantId, profileId string
 		duration = maxDuration
 	}
 
-	return NewToken(app, device, userId, username, tenantId, profileId, payload, duration)
+	return NewToken(app, device, userId, username, payload, duration)
 }
 
 /**
@@ -233,7 +230,7 @@ func RenewToken(token string, duration time.Duration) (string, error) {
 	device := clm.Device
 	username := clm.Username
 	key := GetKey(app, device, username)
-	result, err := NewToken(app, device, clm.UserId, username, clm.TenantId, clm.ProfileId, clm.Payload, duration)
+	result, err := NewToken(app, device, clm.UserId, username, clm.Payload, duration)
 	if err != nil {
 		return "", err
 	}

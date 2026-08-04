@@ -38,16 +38,14 @@ func getSecret() string {
 **/
 type Claim struct {
 	jwt.StandardClaims
-	ID        string        `json:"id"`
-	Salt      string        `json:"salt"`
-	Duration  time.Duration `json:"duration"`
-	App       string        `json:"app"`
-	Device    string        `json:"device"`
-	UserId    string        `json:"userId"`
-	Username  string        `json:"username"`
-	TenantId  string        `json:"tenantId"`
-	ProfileId string        `json:"profileId"`
-	Payload   et.Json       `json:"payload"`
+	ID       string        `json:"id"`
+	Salt     string        `json:"salt"`
+	Duration time.Duration `json:"duration"`
+	App      string        `json:"app"`
+	Device   string        `json:"device"`
+	UserId   string        `json:"userId"`
+	Username string        `json:"username"`
+	Payload  et.Json       `json:"payload"`
 }
 
 /**
@@ -63,8 +61,6 @@ func (s *Claim) ToJson() (et.Json, error) {
 		"device":    s.Device,
 		"userId":    s.UserId,
 		"username":  s.Username,
-		"tenantId":  s.TenantId,
-		"profileId": s.ProfileId,
 		"payload":   s.Payload,
 		"expiresAt": time.Unix(s.ExpiresAt, 0).Format("2006-01-02 03:04:05 PM"),
 	}
@@ -133,6 +129,29 @@ func genToken(c *Claim, secret string) (string, error) {
 }
 
 /**
+* NewToken
+* @param app, device, userId, username, tenantId, profileId string, payload et.Json, duration time.Duration
+* @return string, error
+**/
+func NewToken(app, device, userId, username string, payload et.Json, duration time.Duration) (string, error) {
+	if app == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "app")
+	}
+	c := NewClaim(duration)
+	c.App = app
+	c.Device = device
+	c.UserId = userId
+	c.Username = username
+	c.Payload = payload
+	result, err := genToken(c, getSecret())
+	if err != nil {
+		return "", err
+	}
+
+	return result, nil
+}
+
+/**
 * ParceToken
 * @param token string
 * @return *Claim, error
@@ -190,16 +209,6 @@ func ParceToken(token string) (*Claim, error) {
 		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "payload")
 	}
 
-	tenantId, ok := claim["tenantId"].(string)
-	if !ok {
-		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "tenantId")
-	}
-
-	profileId, ok := claim["profileId"].(string)
-	if !ok {
-		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "profileId")
-	}
-
 	payload := et.Json{}
 	switch v := payloadItf.(type) {
 	case map[string]interface{}:
@@ -210,46 +219,19 @@ func ParceToken(token string) (*Claim, error) {
 
 	duration := time.Duration(second)
 	result := &Claim{
-		ID:        id,
-		App:       app,
-		Device:    device,
-		UserId:    userId,
-		Username:  username,
-		Duration:  duration,
-		TenantId:  tenantId,
-		ProfileId: profileId,
-		Payload:   payload,
+		ID:       id,
+		App:      app,
+		Device:   device,
+		UserId:   userId,
+		Username: username,
+		Duration: duration,
+		Payload:  payload,
 	}
 	if result.Duration != 0 {
 		exp, ok := claim["exp"].(float64)
 		if ok {
 			result.ExpiresAt = int64(exp)
 		}
-	}
-
-	return result, nil
-}
-
-/**
-* NewToken
-* @param app, device, userId, username, tenantId, profileId string, payload et.Json, duration time.Duration
-* @return string, error
-**/
-func NewToken(app, device, userId, username, tenantId, profileId string, payload et.Json, duration time.Duration) (string, error) {
-	if app == "" {
-		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "app")
-	}
-	c := NewClaim(duration)
-	c.App = app
-	c.Device = device
-	c.UserId = userId
-	c.Username = username
-	c.TenantId = tenantId
-	c.ProfileId = profileId
-	c.Payload = payload
-	result, err := genToken(c, getSecret())
-	if err != nil {
-		return "", err
 	}
 
 	return result, nil

@@ -63,8 +63,6 @@ const (
 	DeviceKey    ContextKey = "device"
 	UserIdKey    ContextKey = "user_id"
 	UsernameKey  ContextKey = "username"
-	TenantIdKey  ContextKey = "tenant_id"
-	ProfileIdKey ContextKey = "profile_id"
 	TokenKey     ContextKey = "token"
 )
 
@@ -139,26 +137,6 @@ func UserId(r *http.Request) string {
 }
 
 /**
-* TenantId
-* @param r *http.Request
-* @return string
-**/
-func TenantId(r *http.Request) string {
-	ctx := r.Context()
-	return TenantIdKey.String(ctx, "")
-}
-
-/**
-* ProfileId
-* @param r *http.Request
-* @return string
-**/
-func ProfileId(r *http.Request) string {
-	ctx := r.Context()
-	return ProfileIdKey.String(ctx, "")
-}
-
-/**
 * SetDuration
 * @param ctx context.Context, duration time.Duration
 * @return context.Context
@@ -219,22 +197,4 @@ func SetUserId(ctx context.Context, userId string) context.Context {
 **/
 func SetUsername(ctx context.Context, username string) context.Context {
 	return context.WithValue(ctx, UsernameKey, username)
-}
-
-/**
-* SetTenantId
-* @param ctx context.Context, tenantId string
-* @return context.Context
-**/
-func SetTenantId(ctx context.Context, tenantId string) context.Context {
-	return context.WithValue(ctx, TenantIdKey, tenantId)
-}
-
-/**
-* SetProfileId
-* @param ctx context.Context, profileId string
-* @return context.Context
-**/
-func SetProfileId(ctx context.Context, profileId string) context.Context {
-	return context.WithValue(ctx, ProfileIdKey, profileId)
 }

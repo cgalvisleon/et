@@ -10,90 +10,36 @@ import (
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
-
-	"github.com/cgalvisleon/et/envar"
-)
-
-type CryptoType int
-
-const (
-	MD5 CryptoType = iota
-	SHA1
-	SHA256
-	SHA512
-	AES
 )
 
 /**
-* String return string of crypto type
-* @return string
-**/
-func (c CryptoType) String() string {
-	switch c {
-	case MD5:
-		return "MD5"
-	case SHA1:
-		return "SHA1"
-	case SHA256:
-		return "SHA256"
-	case SHA512:
-		return "SHA512"
-	case AES:
-		return "AES"
-	}
-	return ""
-}
-
-/**
-* GetCryptoType return a crypto type from a string
-* @param value string
-* @return CryptoType
-**/
-func GetCryptoType(value string) CryptoType {
-	switch value {
-	case "MD5":
-		return MD5
-	case "SHA1":
-		return SHA1
-	case "SHA256":
-		return SHA256
-	case "SHA512":
-		return SHA512
-	case "AES":
-		return AES
-	}
-	return MD5
-}
-
-/**
-* CryptoMD5 return a string with the value encrypted in md5
+* EncryptMD5 return a string with the value encrypted in md5
 * @param value string
 * @return string, error
 **/
-func cryptoMD5(value string) (string, error) {
+func EncryptMD5(value string) (string, error) {
 	hash := md5.Sum([]byte(value))
 	return hex.EncodeToString(hash[:]), nil
 }
 
 /**
-* CryptoSHA1 return a string with the value encrypted in sha1
+* HashSHA1 return a string with the value encrypted in sha1
 * @param value string
 * @return string, error
 **/
-func cryptoSHA1(value string) (string, error) {
+func HashSHA1(value string) (string, error) {
 	hash := sha1.Sum([]byte(value))
 	return hex.EncodeToString(hash[:]), nil
 }
 
 /**
-* CryptoSHA256 return a string with the value encrypted in sha256
+* HashSHA256 return a string with the value encrypted in sha256
 * @param value string
 * @return string, error
 **/
-func cryptoSHA256(value string) (string, error) {
+func HashSHA256(value string) (string, error) {
 	hash := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(hash[:]), nil
 }
@@ -103,18 +49,17 @@ func cryptoSHA256(value string) (string, error) {
 * @param value string
 * @return string, error
 **/
-func cryptoSHA512(value string) (string, error) {
+func HashSHA512(value string) (string, error) {
 	hash := sha512.Sum512([]byte(value))
 	return hex.EncodeToString(hash[:]), nil
 }
 
 /**
-* CryptoAES return a string with the value encrypted in aes
+* EncryptAES return a string with the value encrypted in aes
 * @param value string
 * @return string, error
 **/
-func cryptoAES(value string) (string, error) {
-	secret := envar.GetStr("SECRET", "1977")
+func EncryptAES(value, secret string) (string, error) {
 	data := []byte(value)
 	key := []byte(secret)
 
@@ -137,34 +82,11 @@ func cryptoAES(value string) (string, error) {
 }
 
 /**
-* Encrypt return a string with the value encrypted in the crypto type
-* @param value string, cryptoType CryptoType
-* @return string, error
-**/
-func Encrypt(value string, cryptoType CryptoType) (string, error) {
-	switch cryptoType {
-	case MD5:
-		return cryptoMD5(value)
-	case SHA1:
-		return cryptoSHA1(value)
-	case SHA256:
-		return cryptoSHA256(value)
-	case SHA512:
-		return cryptoSHA512(value)
-	case AES:
-		return cryptoAES(value)
-	}
-	return "", errors.New("crypto type not found")
-
-}
-
-/**
 * DecryptoAES return a string with the value decrypted in aes
 * @param value string
 * @return string, error
 **/
-func DecryptoAES(value string) (string, error) {
-	secret := envar.GetStr("SECRET", "1977")
+func DecryptAES(value, secret string) (string, error) {
 	key := []byte(secret)
 	cipherText, err := base64.StdEncoding.DecodeString(value)
 	if err != nil {

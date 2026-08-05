@@ -61,8 +61,8 @@ const (
 	ServiceIdKey ContextKey = "service_id"
 	AppKey       ContextKey = "app"
 	DeviceKey    ContextKey = "device"
-	UserIdKey    ContextKey = "user_id"
-	UsernameKey  ContextKey = "username"
+	SessionIDKey ContextKey = "session_id"
+	NameKey      ContextKey = "name"
 	TokenKey     ContextKey = "token"
 )
 
@@ -117,23 +117,23 @@ func Device(r *http.Request) string {
 }
 
 /**
-* Username
+* SessionID
 * @param r *http.Request
 * @return string
 **/
-func Username(r *http.Request) string {
+func SessionID(r *http.Request) string {
 	ctx := r.Context()
-	return UsernameKey.String(ctx, "Anonimo")
+	return SessionIDKey.String(ctx, "")
 }
 
 /**
-* UserId
+* Name
 * @param r *http.Request
 * @return string
 **/
-func UserId(r *http.Request) string {
+func Name(r *http.Request) string {
 	ctx := r.Context()
-	return UserIdKey.String(ctx, "")
+	return NameKey.String(ctx, "")
 }
 
 /**
@@ -182,19 +182,19 @@ func SetDevice(ctx context.Context, device string) context.Context {
 }
 
 /**
-* SetUserId
+* SetSessionID
 * @param ctx context.Context, userId string
 * @return context.Context
 **/
-func SetUserId(ctx context.Context, userId string) context.Context {
-	return context.WithValue(ctx, UserIdKey, userId)
+func SetSessionID(ctx context.Context, sessionID string) context.Context {
+	return context.WithValue(ctx, SessionIDKey, sessionID)
 }
 
 /**
-* SetUsername
+* SetName
 * @param ctx context.Context, username string
 * @return context.Context
 **/
-func SetUsername(ctx context.Context, username string) context.Context {
-	return context.WithValue(ctx, UsernameKey, username)
+func SetName(ctx context.Context, name string) context.Context {
+	return context.WithValue(ctx, NameKey, name)
 }

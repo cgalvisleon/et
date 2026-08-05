@@ -38,14 +38,14 @@ func getSecret() string {
 **/
 type Claim struct {
 	jwt.StandardClaims
-	ID       string        `json:"id"`
-	Salt     string        `json:"salt"`
-	Duration time.Duration `json:"duration"`
-	App      string        `json:"app"`
-	Device   string        `json:"device"`
-	UserId   string        `json:"userId"`
-	Username string        `json:"username"`
-	Payload  et.Json       `json:"payload"`
+	ID        string        `json:"id"`
+	Salt      string        `json:"salt"`
+	Duration  time.Duration `json:"duration"`
+	App       string        `json:"app"`
+	Device    string        `json:"device"`
+	SessionID string        `json:"sessionId"`
+	Name      string        `json:"name"`
+	Payload   et.Json       `json:"payload"`
 }
 
 /**
@@ -59,8 +59,8 @@ func (s *Claim) ToJson() (et.Json, error) {
 		"duration":  s.Duration,
 		"app":       s.App,
 		"device":    s.Device,
-		"userId":    s.UserId,
-		"username":  s.Username,
+		"sessionId": s.SessionID,
+		"name":      s.Name,
 		"payload":   s.Payload,
 		"expiresAt": time.Unix(s.ExpiresAt, 0).Format("2006-01-02 03:04:05 PM"),
 	}
@@ -130,18 +130,18 @@ func genToken(c *Claim, secret string) (string, error) {
 
 /**
 * NewToken
-* @param app, device, userId, username, tenantId, profileId string, payload et.Json, duration time.Duration
+* @param app, device, sessionID, username, tenantId, profileId string, payload et.Json, duration time.Duration
 * @return string, error
 **/
-func NewToken(app, device, userId, username string, payload et.Json, duration time.Duration) (string, error) {
+func NewToken(app, device, sessionID, name string, payload et.Json, duration time.Duration) (string, error) {
 	if app == "" {
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "app")
 	}
 	c := NewClaim(duration)
 	c.App = app
 	c.Device = device
-	c.UserId = userId
-	c.Username = username
+	c.SessionID = sessionID
+	c.Name = name
 	c.Payload = payload
 	result, err := genToken(c, getSecret())
 	if err != nil {
@@ -189,12 +189,12 @@ func ParceToken(token string) (*Claim, error) {
 		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "device")
 	}
 
-	userId, ok := claim["userId"].(string)
+	sessionID, ok := claim["sessionId"].(string)
 	if !ok {
 		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "userId")
 	}
 
-	username, ok := claim["username"].(string)
+	name, ok := claim["name"].(string)
 	if !ok {
 		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "username")
 	}
@@ -219,13 +219,13 @@ func ParceToken(token string) (*Claim, error) {
 
 	duration := time.Duration(second)
 	result := &Claim{
-		ID:       id,
-		App:      app,
-		Device:   device,
-		UserId:   userId,
-		Username: username,
-		Duration: duration,
-		Payload:  payload,
+		ID:        id,
+		App:       app,
+		Device:    device,
+		SessionID: sessionID,
+		Name:      name,
+		Duration:  duration,
+		Payload:   payload,
 	}
 	if result.Duration != 0 {
 		exp, ok := claim["exp"].(float64)

@@ -13,29 +13,29 @@ import (
 
 /**
 * GetTokenKey
-* @param app, device, username string
+* @param app, device, sessionID string
 * @return string
 **/
-func GetKey(app, device, username string) string {
-	return fmt.Sprintf("%s:%s:%s", app, device, username)
+func GetKey(app, device, sessionID string) string {
+	return fmt.Sprintf("%s:%s:%s", app, device, sessionID)
 }
 
 /**
 * NewToken
-* @param app, device, userId, username string, payload et.Json, duration time.Duration
+* @param app, device, sessionID, name string, payload et.Json, duration time.Duration
 * @return string, error
 **/
-func NewToken(app, device, userId, username string, payload et.Json, duration time.Duration) (string, error) {
+func NewToken(app, device, sessionID, name string, payload et.Json, duration time.Duration) (string, error) {
 	if !cache.IsLoad() {
 		return "", errors.New(msg.MSG_CACHE_NOT_LOAD)
 	}
 
-	result, err := claim.NewToken(app, device, userId, username, payload, duration)
+	result, err := claim.NewToken(app, device, sessionID, name, payload, duration)
 	if err != nil {
 		return "", err
 	}
 
-	key := GetKey(app, device, username)
+	key := GetKey(app, device, sessionID)
 	cache.SetWithDuration(key, result, duration)
 
 	return result, nil
@@ -43,37 +43,43 @@ func NewToken(app, device, userId, username string, payload et.Json, duration ti
 
 /**
 * NewAuthentication
-* @param app, device, userId, username string, duration time.Duration
+* @param app, device, sessionID, name string, duration time.Duration
 * @return string, error
 **/
-func NewAuthentication(app, device, userId, username string, duration time.Duration) (string, error) {
+func NewAuthentication(app, device, sessionID, name string, duration time.Duration) (string, error) {
 	if app == "" {
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "app")
 	}
 	if device == "" {
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "device")
 	}
-	if username == "" {
-		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "username")
+	if sessionID == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "sessionID")
+	}
+	if name == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
 
-	return NewToken(app, device, userId, username, et.Json{}, duration)
+	return NewToken(app, device, sessionID, name, et.Json{}, duration)
 }
 
 /**
 * NewAuthorization
-* @param app, device, userId, username, tenantId, profileId string, duration time.Duration
+* @param app, device, sessionID, name, tenantId, profileId string, duration time.Duration
 * @return string, error
 **/
-func NewAuthorization(app, device, userId, username, tenantId, profileId string, duration time.Duration) (string, error) {
+func NewAuthorization(app, device, sessionID, name, tenantId, profileId string, duration time.Duration) (string, error) {
 	if app == "" {
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "app")
 	}
 	if device == "" {
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "device")
 	}
-	if username == "" {
-		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "username")
+	if sessionID == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "sessionID")
+	}
+	if name == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
 	if tenantId == "" {
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "tenantId")
@@ -86,7 +92,7 @@ func NewAuthorization(app, device, userId, username, tenantId, profileId string,
 		"profileId": profileId,
 	}
 
-	return NewToken(app, device, userId, username, payload, duration)
+	return NewToken(app, device, sessionID, name, payload, duration)
 }
 
 /**
@@ -110,15 +116,18 @@ func NewAppToken(app, device string, duration time.Duration) (string, error) {
 * @param app, device, userId, username string, payload et.Json
 * @return string, error
 **/
-func NewEphemeralToken(app, device, userId, username string, payload et.Json, duration time.Duration) (string, error) {
+func NewEphemeralToken(app, device, sessionID, name string, payload et.Json, duration time.Duration) (string, error) {
 	if app == "" {
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "app")
 	}
 	if device == "" {
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "device")
 	}
-	if username == "" {
+	if sessionID == "" {
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "username")
+	}
+	if name == "" {
+		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
 
 	maxDuration := 15 * time.Minute
@@ -126,7 +135,7 @@ func NewEphemeralToken(app, device, userId, username string, payload et.Json, du
 		duration = maxDuration
 	}
 
-	return NewToken(app, device, userId, username, payload, duration)
+	return NewToken(app, device, sessionID, name, payload, duration)
 }
 
 /**
@@ -140,11 +149,11 @@ func GetToken(key string) (string, error) {
 
 /**
 * DeleteToken
-* @param app, device, username string
+* @param app, device, sessionID string
 * @return error
 **/
-func DeleteToken(app, device, username string) error {
-	key := GetKey(app, device, username)
+func DeleteToken(app, device, sessionID string) error {
+	key := GetKey(app, device, sessionID)
 	_, err := cache.Delete(key)
 	if err != nil {
 		return err
@@ -166,8 +175,8 @@ func DeleteTokeByToken(token string) error {
 
 	app := parce.App
 	device := parce.Device
-	username := parce.Username
-	return DeleteToken(app, device, username)
+	sessionID := parce.SessionID
+	return DeleteToken(app, device, sessionID)
 }
 
 /**
@@ -183,8 +192,8 @@ func Validate(token string) (*claim.Claim, error) {
 
 	app := clm.App
 	device := clm.Device
-	username := clm.Username
-	key := GetKey(app, device, username)
+	sessionID := clm.SessionID
+	key := GetKey(app, device, sessionID)
 	val, err := cache.Get(key, "")
 	if err != nil {
 		return nil, err
@@ -200,11 +209,11 @@ func Validate(token string) (*claim.Claim, error) {
 
 /**
 * SetToken
-* @param app, device, username, token string, duration time.Duration
+* @param app, device, sessionID, token string, duration time.Duration
 * @return error
 **/
-func SetToken(app, device, username, token string, duration time.Duration) error {
-	key := GetKey(app, device, username)
+func SetToken(app, device, sessionID, token string, duration time.Duration) error {
+	key := GetKey(app, device, sessionID)
 	if duration < 0 {
 		cache.Delete(key)
 		return errors.New(msg.MSG_TOKEN_EXPIRED)
@@ -228,9 +237,9 @@ func RenewToken(token string, duration time.Duration) (string, error) {
 
 	app := clm.App
 	device := clm.Device
-	username := clm.Username
-	key := GetKey(app, device, username)
-	result, err := NewToken(app, device, clm.UserId, username, clm.Payload, duration)
+	sessionID := clm.SessionID
+	key := GetKey(app, device, sessionID)
+	result, err := NewToken(app, device, sessionID, clm.Name, clm.Payload, duration)
 	if err != nil {
 		return "", err
 	}

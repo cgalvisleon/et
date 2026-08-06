@@ -67,8 +67,7 @@ func (s *WorkFlow) httpSetStep(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userId := request.UserId(r)
-
+	userId := request.SessionID(r)
 	step, err := s.SetStep(body, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
@@ -96,8 +95,7 @@ func (s *WorkFlow) httpUpdateStep(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userId := request.UserId(r)
-
+	userId := request.SessionID(r)
 	err = step.put(body, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())

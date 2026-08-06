@@ -2,10 +2,12 @@ package xls
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"mime/multipart"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/msg"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -67,12 +69,29 @@ func (s *XlsReader) Close() error {
 }
 
 /**
+* GetRows: Returns the rows of a sheet as a list of strings.
+* @param nameSheet string
+* @return [][]string, error
+**/
+func (s *XlsReader) GetRows(nameSheet string) ([][]string, error) {
+	result, err := s.file.GetRows(nameSheet)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(result) == 0 {
+		return nil, fmt.Errorf(msg.MSG_SHEET_NOT_DATA, nameSheet)
+	}
+	return result, nil
+}
+
+/**
 * GetSheet: Returns the rows of a sheet as a list of Json objects. If columns is empty, all columns of the sheet are returned.
 * @param nameSheet string, columns []string
 * @return []et.Json, error
 **/
-func (s *XlsReader) GetSheet(nameSheet string, columns ...string) ([]et.Json, error) {
-	rows, err := s.file.GetRows(nameSheet)
+func (s *XlsReader) GetSheet(nameSheet string, columns []string) ([]et.Json, error) {
+	rows, err := s.GetRows(nameSheet)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +110,7 @@ func (s *XlsReader) GetSheet(nameSheet string, columns ...string) ([]et.Json, er
 	for _, row := range rows[1:] {
 		item := et.Json{}
 		for _, col := range selected {
-			idx := indexOf(headers, col)
+			idx := IndexOf(headers, col)
 			if idx == -1 || idx >= len(row) {
 				continue
 			}
@@ -105,10 +124,11 @@ func (s *XlsReader) GetSheet(nameSheet string, columns ...string) ([]et.Json, er
 
 /**
 * indexOf: Returns the index of value inside list, or -1 if not found.
-* @param list []string, value string
+* @param list []string
+* @param value string
 * @return int
 **/
-func indexOf(list []string, value string) int {
+func IndexOf(list []string, value string) int {
 	for i, v := range list {
 		if v == value {
 			return i

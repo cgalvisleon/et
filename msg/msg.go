@@ -98,6 +98,7 @@ var (
 	MSG_INSTANCE_RESTARTED             = "Instance restarted"
 	MSG_INSTANCE_NOT_FOUND             = "instance not found"
 	MSG_STORE_IS_REQUIRED              = "store is required"
+	MSG_SHEET_NOT_DATA                 = "sheet %s not data"
 )
 
 func init() {
@@ -199,5 +200,6 @@ func init() {
 		MSG_INSTANCE_RESTARTED = "Instancia reiniciada"
 		MSG_INSTANCE_NOT_FOUND = "instancia no encontrada"
 		MSG_STORE_IS_REQUIRED = "store es requerido"
+		MSG_SHEET_NOT_DATA = "hoja %s no tiene datos"
 	}
 }

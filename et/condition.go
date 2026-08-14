@@ -2,6 +2,7 @@ package et
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"time"
@@ -134,6 +135,14 @@ func (v Value) Raw() any {
 }
 
 /**
+* String: Returns the string representation of the value.
+* @return string
+**/
+func (v Value) String() string {
+	return fmt.Sprintf("%v", v.Value)
+}
+
+/**
 * NewValue: Wraps a raw value into a Value, inferring its logical Type.
 * @param v any
 * @return Value
@@ -211,6 +220,14 @@ func (s *Condition) ToJson() Json {
 			},
 		},
 	}
+}
+
+/**
+* Field
+* @return string
+**/
+func (s *Condition) Key() string {
+	return strings.ToLower(s.Field)
 }
 
 /**
@@ -1141,26 +1158,48 @@ func NotBetween(field string, min, max any) *Condition {
 }
 
 /**
-* Evaluate
+* EvaluateObject
 * @param item Json, conditions []*Condition
 * @return bool
 **/
-func Evaluate(item Json, conditions []*Condition) bool {
+func EvaluateObject(item Json, conditions []*Condition) bool {
 	if len(conditions) == 0 {
 		return true
 	}
 
-	var result bool
-	for i, con := range conditions {
-		ok := con.ApplyToObject(item)
-		if i == 0 {
-			result = ok
-			continue
+	result := conditions[0].ApplyToObject(item)
+	for _, cond := range conditions {
+		ok := cond.ApplyToObject(item)
+		if cond.Connector == And {
+			result = result && ok
+		} else if cond.Connector == Or {
+			result = result || ok
 		}
 
-		if con.Connector == And {
+		if !result {
+			break
+		}
+	}
+
+	return result
+}
+
+/**
+* EvaluateValue
+* @param value any, conditions []*Condition
+* @return bool
+**/
+func EvaluateValue(value any, conditions []*Condition) bool {
+	if len(conditions) == 0 {
+		return true
+	}
+
+	result := conditions[0].ApplyToValue(value)
+	for _, cond := range conditions {
+		ok := cond.ApplyToValue(value)
+		if cond.Connector == And {
 			result = result && ok
-		} else if con.Connector == Or {
+		} else if cond.Connector == Or {
 			result = result || ok
 		}
 

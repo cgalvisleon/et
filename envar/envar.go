@@ -11,8 +11,13 @@ type Store interface {
 }
 
 var (
-	_store Store
+	_store  Store
+	_config map[string]interface{}
 )
+
+func init() {
+	_config = make(map[string]interface{})
+}
 
 /**
 * Load
@@ -21,6 +26,14 @@ var (
 **/
 func Load(store Store) {
 	_store = store
+}
+
+/**
+* GetConfig
+* @return map[string]string
+**/
+func GetConfig() map[string]interface{} {
+	return _config
 }
 
 /**

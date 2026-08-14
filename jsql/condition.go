@@ -142,6 +142,6 @@ func NotBetween(field string, min, max any) *et.Condition {
 * @param item et.Json, conditions []*et.Condition
 * @return bool
 **/
-func Evaluate(item et.Json, conditions []*et.Condition) bool {
-	return et.Evaluate(item, conditions)
+func EvaluateObject(item et.Json, conditions []*et.Condition) bool {
+	return et.EvaluateObject(item, conditions)
 }

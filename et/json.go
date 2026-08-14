@@ -1119,10 +1119,10 @@ func (s Json) From(as string) *Where {
 }
 
 /**
-* ApplyCondition
+* Query
 * @param condition *Condition
 * @return bool
 **/
-func (s Json) ApplyCondition(condition *Condition) bool {
+func (s Json) Query(condition *Condition) bool {
 	return condition.ApplyToObject(s)
 }

@@ -36,6 +36,19 @@ func (s Item) ToByte() ([]byte, error) {
 }
 
 /**
+* ToObject convert a json to a object
+* @return []byte, error
+**/
+func (s Item) ToObject(dest any) error {
+	bt, err := json.Marshal(s.Result.ToString())
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(bt, dest)
+}
+
+/**
 * ToJson convert a json to a Json
 * @return Json
 **/

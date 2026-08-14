@@ -403,7 +403,7 @@ func (s *Where) All() []Json {
 		if !ok {
 			break
 		}
-		ok = Evaluate(item, s.Conditions)
+		ok = EvaluateObject(item, s.Conditions)
 		if !ok {
 			continue
 		}

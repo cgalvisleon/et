@@ -15,15 +15,19 @@ import (
 **/
 func Get(name string, def interface{}) interface{} {
 	if _store != nil {
-		return _store.Get(name, def)
+		result := _store.Get(name, def)
+		_config[name] = result
+		return result
 	}
 
 	name = strings.ToUpper(name)
 	result := os.Getenv(name)
 	if result == "" {
+		_config[name] = def
 		return def
 	}
 
+	_config[name] = result
 	return result
 }
 

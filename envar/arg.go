@@ -19,6 +19,7 @@ func ArgStr(name, defaultVal string) (string, bool) {
 				return defaultVal, false
 			}
 			value := os.Args[i+2]
+			_config[name] = value
 			return value, true
 		}
 	}

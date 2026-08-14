@@ -53,6 +53,7 @@ func registerRoutes(srv *ettp.Server) {
 		{ettp.POST, "/learn", httpLearn},
 		{ettp.PUT, "/revise/{factId}", httpRevise},
 		{ettp.POST, "/verify", httpVerify},
+		{ettp.GET, "/facts/{kbId}", httpFacts},
 		{ettp.DELETE, "/unload/{kbId}", httpUnload},
 		{ettp.GET, "/loaded/{kbId}", httpIsLoaded},
 	}

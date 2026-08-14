@@ -3,6 +3,7 @@ package ia
 import (
 	"errors"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -303,19 +304,53 @@ func (s *KnowledgeBase) Len() int {
 * @return *Fact, float64
 **/
 func ClosestFact(kb *KnowledgeBase, statement string) (*Fact, float64) {
-	if kb == nil {
+	facts := RelevantFacts(kb, statement, 1, 0)
+	if len(facts) == 0 {
 		return nil, 0
 	}
 
-	var best *Fact
-	bestScore := 0.0
-	for _, fact := range kb.FindSimilar(statement) {
+	return facts[0], StatementSimilarity(statement, facts[0].Statement)
+}
+
+/**
+* RelevantFacts: returns kb's active facts most similar to statement (by
+* StatementSimilarity), scoring at least minScore, sorted from most to least similar
+* and capped at limit results (no cap when limit <= 0). Uses kb.FindSimilar for
+* candidates instead of scanning every fact. Returns nil when kb is nil.
+* @param kb *KnowledgeBase, statement string, limit int, minScore float64
+* @return []*Fact
+**/
+func RelevantFacts(kb *KnowledgeBase, statement string, limit int, minScore float64) []*Fact {
+	if kb == nil {
+		return nil
+	}
+
+	type scoredFact struct {
+		fact  *Fact
+		score float64
+	}
+
+	candidates := kb.FindSimilar(statement)
+	scored := make([]scoredFact, 0, len(candidates))
+	for _, fact := range candidates {
 		score := StatementSimilarity(statement, fact.Statement)
-		if score > bestScore {
-			bestScore = score
-			best = fact
+		if score >= minScore {
+			scored = append(scored, scoredFact{fact, score})
 		}
 	}
 
-	return best, bestScore
+	sort.Slice(scored, func(i, j int) bool {
+		return scored[i].score > scored[j].score
+	})
+
+	if limit > 0 && len(scored) > limit {
+		scored = scored[:limit]
+	}
+
+	result := make([]*Fact, len(scored))
+	for i, sf := range scored {
+		result[i] = sf.fact
+	}
+
+	return result
 }

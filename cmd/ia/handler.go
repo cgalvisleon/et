@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/cgalvisleon/et/et"
@@ -12,9 +11,10 @@ import (
 )
 
 /**
-* httpConversation: POST /conversation - the main "ask the model a question"
-* endpoint. Body: {kb_id, statement}. Classifies statement against kb_id's current
-* knowledge and returns the raw Verdict plus a human-readable message.
+* httpConversation: POST /conversation - the main "ask questions about the knowledge
+* base" endpoint. Body: {kb_id, question} (statement also accepted as an alias for
+* question). Answers using the closest matching facts already learned in kb_id — it
+* does not judge whether the question itself is true or false, see /verify for that.
 * @param w http.ResponseWriter, r *http.Request
 **/
 func httpConversation(w http.ResponseWriter, r *http.Request) {
@@ -25,47 +25,28 @@ func httpConversation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	kbId := body.Str("kb_id")
-	statement := body.Str("statement")
-	if statement == "" {
+	question := body.Str("question")
+	if question == "" {
+		question = body.Str("statement")
+	}
+	if question == "" {
 		response.HTTPError(w, r, http.StatusBadRequest, ia.MSG_STATEMENT_EMPTY)
 		return
 	}
 
-	verdict, err := engine.Verify(kbId, statement)
+	answer, err := engine.Ask(kbId, question)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	result, err := toJson(verdict)
+	result, err := toJson(answer)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
-	result.Set("message", conversationMessage(verdict))
 
 	response.ITEM(w, r, http.StatusOK, et.Item{Ok: true, Result: result})
-}
-
-/**
-* conversationMessage: turns a Verdict into a short, human-readable explanation for
-* the /conversation endpoint.
-* @param v ia.Verdict
-* @return string
-**/
-func conversationMessage(v ia.Verdict) string {
-	pct := int(v.Confidence * 100)
-
-	switch {
-	case v.IsTruth && v.ContradictsFactID != "":
-		return fmt.Sprintf("Parece verdadero (%d%% de confianza), aunque contradice un hecho previo (%s).", pct, v.ContradictsFactID)
-	case v.IsTruth:
-		return fmt.Sprintf("Parece verdadero, con %d%% de confianza.", pct)
-	case v.ContradictsFactID != "":
-		return fmt.Sprintf("Parece una mentira (%d%% de confianza) y contradice un hecho ya conocido (%s).", pct, v.ContradictsFactID)
-	default:
-		return fmt.Sprintf("Parece una mentira, con %d%% de confianza.", pct)
-	}
 }
 
 /**
@@ -168,6 +149,40 @@ func httpVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.ITEM(w, r, http.StatusOK, et.Item{Ok: true, Result: result})
+}
+
+/**
+* httpFacts: GET /facts/{kbId} - lists every active fact known inside a knowledge
+* base. A reliable, non-heuristic alternative to asking /conversation to enumerate
+* what it knows.
+* @param w http.ResponseWriter, r *http.Request
+**/
+func httpFacts(w http.ResponseWriter, r *http.Request) {
+	kbId := r.PathValue("kbId")
+
+	facts, err := engine.Facts(kbId)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// toJson only handles values that marshal to a JSON object at the top level
+	// (Fact does), not a bare array (facts, as a []*ia.Fact, would), so each fact is
+	// converted individually.
+	items := make([]et.Json, 0, len(facts))
+	for _, fact := range facts {
+		item, err := toJson(fact)
+		if err != nil {
+			response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+			return
+		}
+		items = append(items, item)
+	}
+
+	response.ITEM(w, r, http.StatusOK, et.Item{Ok: true, Result: et.Json{
+		"kb_id": kbId,
+		"facts": items,
+	}})
 }
 
 /**

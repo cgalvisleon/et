@@ -180,8 +180,16 @@ func scoreAgainstKB(statement, normalized string, kb *KnowledgeBase, features *F
 		return
 	}
 
-	// Crude contradiction heuristic: statements about the same topic (high lexical
-	// overlap) where exactly one side carries a negation are flagged as conflicting.
+	// Two contradiction signals: a structured one (same subject+predicate anchor but
+	// a different object — e.g. "yo pague" with two different amounts) and, as a
+	// fallback for clauses extractTriples couldn't anchor, the cruder heuristic that
+	// statements about the same topic where exactly one side carries a negation
+	// word are flagged as conflicting.
+	if triplesContradict(extractTriples(statement), bestFact.Triples) {
+		features.ContradictsKB = 1
+		return
+	}
+
 	hasNegation := negationRe.MatchString(normalized)
 	factHasNegation := negationRe.MatchString(bestFact.Normalized)
 	if hasNegation != factHasNegation {

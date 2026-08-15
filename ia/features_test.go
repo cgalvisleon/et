@@ -31,6 +31,21 @@ func TestExtractFeaturesContradictsKB(t *testing.T) {
 	}
 }
 
+func TestExtractFeaturesContradictsKBViaTriples(t *testing.T) {
+	kb := NewKnowledgeBase("kb-2")
+	if _, err := kb.AddFact("Pague 100 dolares por el servicio.", 1, nil); err != nil {
+		t.Fatalf("AddFact: %v", err)
+	}
+
+	// No negation word on either side, but same subject+predicate ("yo pague") with
+	// a different object (100 vs 200) — the old negation-only heuristic would miss
+	// this entirely.
+	f := ExtractFeatures("Pague 200 dolares por el servicio.", kb, nil)
+	if f.ContradictsKB != 1 {
+		t.Fatalf("expected the differing amount to be flagged as a triple-level contradiction")
+	}
+}
+
 func TestExtractFeaturesEmptyStatement(t *testing.T) {
 	f := ExtractFeatures("   ", nil, nil)
 	if f.WordCount != 0 {

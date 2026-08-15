@@ -89,7 +89,32 @@ func mustEngine() *ia.Engine {
 		logs.Panic(err)
 	}
 
+	if llm := maybeOllamaLLM(); llm != nil {
+		result.UseLLM(llm)
+	}
+
 	return result
+}
+
+/**
+* maybeOllamaLLM: builds an ia.OllamaLLM from OLLAMA_HOST/OLLAMA_MODEL/
+* OLLAMA_TIMEOUT_SECONDS when OLLAMA_HOST is set (e.g. pointing at the container
+* from this repo's docker-compose.yml), or returns nil when it is not — leaving
+* /conversation on its existing heuristic-only behavior.
+* @return ia.LLM
+**/
+func maybeOllamaLLM() ia.LLM {
+	host := envar.GetStr("OLLAMA_HOST", "")
+	if host == "" {
+		return nil
+	}
+
+	model := envar.GetStr("OLLAMA_MODEL", "llama3.2")
+	timeoutSeconds := envar.GetInt("OLLAMA_TIMEOUT_SECONDS", 10)
+
+	logs.Infof("usando Ollama en %s (modelo=%s) para /conversation", host, model)
+
+	return ia.NewOllamaLLM(host, model, time.Duration(timeoutSeconds)*time.Second)
 }
 
 /**

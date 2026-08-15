@@ -34,6 +34,7 @@ type Fact struct {
 	ID           string     `json:"id"`
 	Statement    string     `json:"statement"`
 	Normalized   string     `json:"normalized"`
+	Triples      []Triple   `json:"triples,omitempty"`
 	Confidence   float64    `json:"confidence"`
 	Status       FactStatus `json:"status"`
 	Version      int        `json:"version"`
@@ -142,6 +143,7 @@ func (s *KnowledgeBase) AddFact(statement string, confidence float64, ctx et.Jso
 		ID:         reg.UUID(),
 		Statement:  statement,
 		Normalized: normalizeStatement(statement),
+		Triples:    extractTriples(statement),
 		Confidence: confidence,
 		Status:     FactActive,
 		Version:    1,
@@ -187,6 +189,7 @@ func (s *KnowledgeBase) UpdateFact(id string, statement string, confidence float
 		ID:           reg.UUID(),
 		Statement:    statement,
 		Normalized:   normalizeStatement(statement),
+		Triples:      extractTriples(statement),
 		Confidence:   confidence,
 		Status:       FactActive,
 		Version:      prev.Version + 1,
@@ -325,6 +328,8 @@ func RelevantFacts(kb *KnowledgeBase, statement string, limit int, minScore floa
 		return nil
 	}
 
+	queryTriples := extractTriples(statement)
+
 	type scoredFact struct {
 		fact  *Fact
 		score float64
@@ -334,6 +339,9 @@ func RelevantFacts(kb *KnowledgeBase, statement string, limit int, minScore floa
 	scored := make([]scoredFact, 0, len(candidates))
 	for _, fact := range candidates {
 		score := StatementSimilarity(statement, fact.Statement)
+		if tripleShareAnchor(queryTriples, fact.Triples) {
+			score = min(score+tripleAnchorBoost, 1)
+		}
 		if score >= minScore {
 			scored = append(scored, scoredFact{fact, score})
 		}

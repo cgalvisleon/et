@@ -1,0 +1,22 @@
+# Runs Ollama in a container so ia/ can use it as an optional local LLM backend for
+# POST /conversation (see cmd/ia/main.go: OLLAMA_HOST/OLLAMA_MODEL). Ollama's REST
+# API is published to the host so cmd/ia (run natively, not containerized) can reach
+# it at http://localhost:11434. Nothing here is required to run cmd/ia — without
+# OLLAMA_HOST set, /conversation keeps using its existing heuristic answers.
+#
+# Usage:
+#   docker compose up -d
+#   docker compose exec ollama ollama pull llama3.2
+#   OLLAMA_HOST=http://localhost:11434 OLLAMA_MODEL=llama3.2 go run ./cmd/ia
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: et-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  ollama-data:

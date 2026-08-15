@@ -1,9 +1,25 @@
 package ia
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"testing"
 )
+
+// fakeLLM is a test double for LLM: it returns a fixed answer/error and records the
+// last prompt it was given, so tests can drive Engine.Ask's LLM branch without a
+// real Ollama server.
+type fakeLLM struct {
+	answer     string
+	err        error
+	lastPrompt string
+}
+
+func (s *fakeLLM) Complete(ctx context.Context, prompt string) (string, error) {
+	s.lastPrompt = prompt
+	return s.answer, s.err
+}
 
 func trainTestModel(t *testing.T) *Model {
 	t.Helper()
@@ -114,6 +130,64 @@ func TestEngineAskFindsRelevantFact(t *testing.T) {
 	}
 	if !matched {
 		t.Fatalf("expected Answer to start with a confidence-graded prefix, got %q", answer.Answer)
+	}
+}
+
+func TestEngineAskUsesLLMWhenConfigured(t *testing.T) {
+	engine := newTestEngine(t)
+	llm := &fakeLLM{answer: "Según lo que sé, el cielo es azul."}
+	engine.UseLLM(llm)
+
+	if _, err := engine.Learn("conv-llm", "El cielo es azul.", 1, nil); err != nil {
+		t.Fatalf("Learn: %v", err)
+	}
+
+	answer, err := engine.Ask("conv-llm", "de que color es el cielo")
+	if err != nil {
+		t.Fatalf("Ask: %v", err)
+	}
+	if answer.Source != "llm" || answer.Answer != llm.answer {
+		t.Fatalf("expected the LLM's answer with Source=llm, got %+v", answer)
+	}
+	if !strings.Contains(llm.lastPrompt, "El cielo es azul.") {
+		t.Fatalf("expected the prompt to ground on the learned fact, got %q", llm.lastPrompt)
+	}
+}
+
+func TestEngineAskFallsBackWhenLLMFails(t *testing.T) {
+	engine := newTestEngine(t)
+	engine.UseLLM(&fakeLLM{err: errors.New("ollama unreachable")})
+
+	if _, err := engine.Learn("conv-llm-fail", "El cielo es azul.", 1, nil); err != nil {
+		t.Fatalf("Learn: %v", err)
+	}
+
+	answer, err := engine.Ask("conv-llm-fail", "de que color es el cielo")
+	if err != nil {
+		t.Fatalf("Ask: %v", err)
+	}
+	if answer.Source == "llm" {
+		t.Fatalf("expected a heuristic fallback answer, got Source=llm: %+v", answer)
+	}
+	if !answer.Found || answer.Fact == nil {
+		t.Fatalf("expected the heuristic pipeline to still find the fact, got %+v", answer)
+	}
+}
+
+func TestEngineAskFallsBackWhenLLMReturnsEmpty(t *testing.T) {
+	engine := newTestEngine(t)
+	engine.UseLLM(&fakeLLM{answer: "   "})
+
+	if _, err := engine.Learn("conv-llm-empty", "El cielo es azul.", 1, nil); err != nil {
+		t.Fatalf("Learn: %v", err)
+	}
+
+	answer, err := engine.Ask("conv-llm-empty", "de que color es el cielo")
+	if err != nil {
+		t.Fatalf("Ask: %v", err)
+	}
+	if answer.Source == "llm" {
+		t.Fatalf("expected a heuristic fallback answer for an empty LLM response, got %+v", answer)
 	}
 }
 

@@ -501,7 +501,10 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 		return et.Items{}, err
 	}
 
-	data := s.Data[0]
+	var data et.Json
+	if len(s.Data) > 0 {
+		data = s.Data[0]
+	}
 	for _, old := range items.Result {
 		s.Old = old
 		s.New = et.Json{}

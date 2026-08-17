@@ -326,11 +326,11 @@ func (s *Model) DefineMaster(name string, to *Model, keys, toKeys map[string]str
 	bridge := s.db.NewModel(s.Schema, detailName, 1, s.ID)
 	bridge.DefineIdxField()
 	for k, fk := range keys {
-		bridge.defineColumn(fk, COLUMN, KEY, "", []byte{})
+		bridge.DefinePrimaryKey(fk, KEY, "")
 		bridge.DefineForeignKeys(s, map[string]string{fk: k}, true, false)
 	}
 	for k, fk := range toKeys {
-		bridge.defineColumn(fk, COLUMN, KEY, "", []byte{})
+		bridge.DefinePrimaryKey(fk, KEY, "")
 		bridge.DefineForeignKeys(to, map[string]string{fk: k}, true, false)
 	}
 	s.defineColumn(name, MASTER, ANY, nil, []byte{})

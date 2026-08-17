@@ -177,23 +177,23 @@ func sqliteCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bo
 		}
 		return fmt.Sprintf("%s NOT BETWEEN %v AND %v", fieldExpr, jsql.Quoted(bv.Min), jsql.Quoted(bv.Max))
 	case et.LIKE:
-		return fmt.Sprintf("%s LIKE %v", fieldExpr, jsql.Quoted(cond.Value.Value))
+		return fmt.Sprintf("%s LIKE %s", fieldExpr, Quoted(cond.Value))
 	case et.IS:
-		return fmt.Sprintf("%s IS %v", fieldExpr, jsql.Quoted(cond.Value.Value))
+		return fmt.Sprintf("%s IS %s", fieldExpr, Quoted(cond.Value))
 	case et.IS_NOT:
-		return fmt.Sprintf("%s IS NOT %v", fieldExpr, jsql.Quoted(cond.Value.Value))
+		return fmt.Sprintf("%s IS NOT %s", fieldExpr, Quoted(cond.Value))
 	case et.NEG:
-		return fmt.Sprintf("%s != %v", fieldExpr, jsql.Quoted(cond.Value.Value))
+		return fmt.Sprintf("%s != %s", fieldExpr, Quoted(cond.Value))
 	case et.LESS:
-		return fmt.Sprintf("%s < %v", fieldExpr, jsql.Quoted(cond.Value.Value))
+		return fmt.Sprintf("%s < %s", fieldExpr, Quoted(cond.Value))
 	case et.LESS_EQ:
-		return fmt.Sprintf("%s <= %v", fieldExpr, jsql.Quoted(cond.Value.Value))
+		return fmt.Sprintf("%s <= %s", fieldExpr, Quoted(cond.Value))
 	case et.MORE:
-		return fmt.Sprintf("%s > %v", fieldExpr, jsql.Quoted(cond.Value.Value))
+		return fmt.Sprintf("%s > %s", fieldExpr, Quoted(cond.Value))
 	case et.MORE_EQ:
-		return fmt.Sprintf("%s >= %v", fieldExpr, jsql.Quoted(cond.Value.Value))
+		return fmt.Sprintf("%s >= %s", fieldExpr, Quoted(cond.Value))
 	default:
-		return fmt.Sprintf("%s = %v", fieldExpr, jsql.Quoted(cond.Value.Value))
+		return fmt.Sprintf("%s = %s", fieldExpr, Quoted(cond.Value))
 	}
 }
 

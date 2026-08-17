@@ -40,12 +40,7 @@ func (s Item) ToByte() ([]byte, error) {
 * @return []byte, error
 **/
 func (s Item) ToObject(dest any) error {
-	bt, err := json.Marshal(s.Result.ToString())
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(bt, dest)
+	return s.Result.ToObject(dest)
 }
 
 /**

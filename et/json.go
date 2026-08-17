@@ -122,6 +122,20 @@ func (s Json) ToByte() ([]byte, error) {
 }
 
 /**
+* ToObject convert a json to a object
+* @param dest any
+* @return error
+**/
+func (s Json) ToObject(dest any) error {
+	bt, err := json.Marshal(s.ToString())
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(bt, dest)
+}
+
+/**
 * ToString convert a json to a string
 * @return string
 **/

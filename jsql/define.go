@@ -324,6 +324,7 @@ func (s *Model) DefineMaster(name string, to *Model, keys, toKeys map[string]str
 
 	detailName := fmt.Sprintf("%s_%s", s.Name, to.Name)
 	bridge := s.db.NewModel(s.Schema, detailName, 1, s.ID)
+	bridge.DefineIdxField()
 	for k, fk := range keys {
 		bridge.defineColumn(fk, COLUMN, KEY, "", []byte{})
 		bridge.DefineForeignKeys(s, map[string]string{fk: k}, true, false)
@@ -335,6 +336,7 @@ func (s *Model) DefineMaster(name string, to *Model, keys, toKeys map[string]str
 	s.defineColumn(name, MASTER, ANY, nil, []byte{})
 	master := newMaster(to, bridge, keys, toKeys, selects)
 	s.Masters[name] = master
+	to.Masters[s.Name] = master
 	return bridge, nil
 }
 

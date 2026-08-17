@@ -152,6 +152,42 @@ func LoadDb(store *Store, id string) (*DB, error) {
 }
 
 /**
+* Ref: Returns the DB metadata as an et.Json map.
+* @return et.Json
+**/
+func (s *DB) Ref() et.Json {
+	return et.Json{
+		"tenant_id": s.TenantId,
+		"id":        s.ID,
+		"name":      s.Name,
+		"version":   s.Version,
+	}
+}
+
+/**
+* ToJson: Returns the DB metadata as an et.Json map.
+* @return et.Json
+**/
+func (s *DB) ToJson() et.Json {
+	schemas := []et.Json{}
+	for _, schema := range s.Schemas {
+		schemas = append(schemas, schema.Ref())
+	}
+
+	return et.Json{
+		"tenant_id":    s.TenantId,
+		"id":           s.ID,
+		"name":         s.Name,
+		"schemas":      schemas,
+		"driver":       s.Driver,
+		"params":       s.Params,
+		"record_limit": s.RecordLimit,
+		"version":      s.Version,
+		"audit_log":    s.AuditLog,
+	}
+}
+
+/**
 * saveDb
 * @return error
 **/
@@ -160,14 +196,13 @@ func (s *DB) Save(store *Store) error {
 		return errors.New(MSG_STORE_IS_NIL)
 	}
 
-	err := store.Set("db", s.ID, s.TenantId, s.Ref())
+	err := store.Set("db", s.ID, s.TenantId, s.ToJson())
 	if err != nil {
 		return err
 	}
 
-	json := s.ToJson()
 	channel := fmt.Sprintf("db:%s", s.ID)
-	event.Publish(channel, json)
+	event.Publish(channel, s.ToJson())
 	return nil
 }
 
@@ -191,54 +226,6 @@ func (s *DB) addAuditLog(userId string, action string) {
 		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
 	}
 	s.isChanged = true
-}
-
-/**
-* Ref: Returns the DB metadata as an et.Json map.
-* @return et.Json
-**/
-func (s *DB) Ref() et.Json {
-	schemas := []et.Json{}
-	for _, schema := range s.Schemas {
-		schemas = append(schemas, schema.Ref())
-	}
-
-	return et.Json{
-		"tenant_id":    s.TenantId,
-		"id":           s.ID,
-		"name":         s.Name,
-		"schemas":      schemas,
-		"params":       s.Params,
-		"record_limit": s.RecordLimit,
-		"version":      s.Version,
-		"audit_log":    s.AuditLog,
-	}
-}
-
-/**
-* ToJson: Returns the DB metadata as an et.Json map.
-* @return et.Json
-**/
-func (s *DB) ToJson() et.Json {
-	return et.Json{
-		"tenant_id":    s.TenantId,
-		"id":           s.ID,
-		"name":         s.Name,
-		"schemas":      s.Schemas,
-		"driver":       s.Driver,
-		"params":       s.Params,
-		"record_limit": s.RecordLimit,
-		"version":      s.Version,
-		"audit_log":    s.AuditLog,
-	}
-}
-
-/**
-* ToString: Returns the DB metadata as a string.
-* @return string
-**/
-func (s *DB) ToString() string {
-	return s.ToJson().ToString()
 }
 
 /**

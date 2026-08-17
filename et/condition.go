@@ -119,6 +119,7 @@ const (
 	ARRAY_DATETIME = "array_datetime"
 	VAL_BETWEEN    = "between"
 	VAL_NULL       = "null"
+	EXPR           = "expr"
 )
 
 type Value struct {
@@ -149,6 +150,15 @@ func (v Value) String() string {
 **/
 func NewValue(v any) Value {
 	return Value{Type: valueType(v), Value: v}
+}
+
+/**
+* Expr: Wraps an expression into a Value.
+* @param expr string
+* @return Value
+**/
+func Expr(expr string) Value {
+	return Value{Type: EXPR, Value: expr}
 }
 
 /**

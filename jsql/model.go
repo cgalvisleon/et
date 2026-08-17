@@ -496,7 +496,7 @@ func (s *Model) GetFrom() *From {
 * @param as ...string
 * @return *Query
 **/
-func (s *Model) From(as ...string) *Query {
+func (s *Model) As(as ...string) *Query {
 	result := newQuery(s, as...)
 	return result
 }
@@ -549,9 +549,23 @@ func (s *Model) Master(name string) (*Query, bool) {
 		conditions = append(conditions, Eq(k, fK))
 	}
 
-	result := master.To.Model.From("A")
+	result := master.To.Model.As("A")
 	result.Join(master.Bridge.Model, "B", conditions)
 	return result, true
+}
+
+/**
+* Bridge: Returns the bridge for the given name.
+* @param name string
+* @return *Model, bool
+**/
+func (s *Model) Bridge(name string) (*Model, bool) {
+	master, ok := s.Masters[name]
+	if !ok {
+		return nil, false
+	}
+
+	return master.Bridge.Model, true
 }
 
 /**
@@ -560,7 +574,7 @@ func (s *Model) Master(name string) (*Query, bool) {
 * @return *Query
 **/
 func (s *Model) Join(to *Model, as string, on []*et.Condition) *Query {
-	result := s.From("A")
+	result := s.As("A")
 	result.Join(to, as, on)
 	return result
 }
@@ -571,7 +585,7 @@ func (s *Model) Join(to *Model, as string, on []*et.Condition) *Query {
 * @return *Query
 **/
 func (s *Model) Select(fields ...string) *Query {
-	result := s.From("")
+	result := s.As("")
 	result.Select(fields...)
 	return result
 }
@@ -582,7 +596,7 @@ func (s *Model) Select(fields ...string) *Query {
 * @return *Query
 **/
 func (s *Model) Calc(fields ...string) *Query {
-	result := s.From("")
+	result := s.As("")
 	result.Calc(fields...)
 	return result
 }
@@ -593,7 +607,7 @@ func (s *Model) Calc(fields ...string) *Query {
 * @return *Query
 **/
 func (s *Model) Where(cond *et.Condition) *Query {
-	result := s.From("")
+	result := s.As("")
 	result.Where(cond)
 	return result
 }
@@ -604,7 +618,7 @@ func (s *Model) Where(cond *et.Condition) *Query {
 **/
 func (s *Model) Count() (int, error) {
 	return s.
-		From().
+		As().
 		Count()
 }
 
@@ -614,7 +628,7 @@ func (s *Model) Count() (int, error) {
 **/
 func (s *Model) First(n int) (et.Items, error) {
 	return s.
-		From().
+		As().
 		Limit(1, n)
 }
 

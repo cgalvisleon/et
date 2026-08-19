@@ -32,6 +32,7 @@ type DB struct {
 	isInit      bool               `json:"-"`
 	driver      Driver             `json:"-"`
 	db          *sql.DB            `json:"-"`
+	store       *Store             `json:"-"`
 }
 
 /**
@@ -74,6 +75,11 @@ func NewDB(tenantId, host, name, driver string) (*DB, error) {
 		AuditLog:    make([]et.Json, 0),
 		driver:      drv,
 		isDebug:     envar.GetBool("DEBUG", false),
+	}
+
+	result.store, err = DefineStore(result)
+	if err != nil {
+		return nil, err
 	}
 
 	return result, nil
@@ -119,6 +125,11 @@ func LoadDb(store *Store, id string) (*DB, error) {
 		AuditLog:    ref.ArrayJson("audit_log"),
 		isDebug:     envar.GetBool("DEBUG", false),
 		driver:      drv,
+	}
+
+	result.store, err = DefineStore(result)
+	if err != nil {
+		return nil, err
 	}
 
 	if !utility.ValidStr(result.ID, 0, []string{""}) {
@@ -188,7 +199,7 @@ func (s *DB) ToJson() et.Json {
 }
 
 /**
-* saveDb
+* save: Saves the DB metadata to the store.
 * @return error
 **/
 func (s *DB) Save(store *Store) error {
@@ -251,6 +262,11 @@ func (s *DB) Init() error {
 	}
 
 	s.db = db
+
+	err = s.store.init()
+	if err != nil {
+		return err
+	}
 
 	for _, schema := range s.Schemas {
 		err := schema.init()

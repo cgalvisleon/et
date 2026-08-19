@@ -13,11 +13,11 @@ type Store struct {
 }
 
 /**
-* defineCatalog: Defines the catalog table.
+* DefineStore: Defines the store table.
 * @param db *DB, schema string
-* @return *Catalog, error
+* @return error
 **/
-func DefineStore(db *DB, schema string) (*Store, error) {
+func DefineStore(db *DB) (*Store, error) {
 	columns := []Column{
 		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
 		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
@@ -28,7 +28,7 @@ func DefineStore(db *DB, schema string) (*Store, error) {
 	}
 
 	def := Def{
-		Schema:  schema,
+		Schema:  "core",
 		Name:    "db_catalogs",
 		Version: 1,
 		Columns: columns,
@@ -59,18 +59,23 @@ func DefineStore(db *DB, schema string) (*Store, error) {
 		return nil
 	})
 
-	err = model.Init()
-	if err != nil {
-		return nil, err
+	store := &Store{
+		model: model,
 	}
 
-	return &Store{
-		model: model,
-	}, nil
+	return store, nil
 }
 
 /**
-* Set: Sets the catalog data for the given name.
+* init: Initializes the store.
+* @return error
+**/
+func (s *Store) init() error {
+	return s.model.Init()
+}
+
+/**
+* set: Sets the catalog data for the given name.
 * @param collection, id, ownerId string, obj any
 * @return error
 **/
@@ -102,7 +107,7 @@ func (s *Store) Set(collection, id, ownerId string, obj any) error {
 }
 
 /**
-* getCatalog: Gets the catalog data for the given name.
+* Get: Gets the catalog data for the given name.
 * @param name, kind string, des any
 * @return bool, error
 **/

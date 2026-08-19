@@ -149,7 +149,12 @@ func (v Value) String() string {
 * @return Value
 **/
 func NewValue(v any) Value {
-	return Value{Type: valueType(v), Value: v}
+	switch t := v.(type) {
+	case Value:
+		return t
+	default:
+		return Value{Type: valueType(v), Value: v}
+	}
 }
 
 /**

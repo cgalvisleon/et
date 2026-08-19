@@ -77,6 +77,7 @@ type Instance struct {
 	ProjectId    string                           `json:"project_id"`
 	ID           string                           `json:"id"`
 	FlowId       string                           `json:"flow_id"`
+	FlowTag      string                           `json:"flow_tag"`
 	Code         string                           `json:"code"`
 	Title        string                           `json:"title"`
 	Status       Status                           `json:"status"`
@@ -111,8 +112,8 @@ type Instance struct {
 * @param params InstanceParams
 * @return *Instance, error
 **/
-func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, code, userId string) (*Instance, error) {
-	flow, err := s.loadFlow(flowId)
+func (s *WorkFlow) newInstance(projectId, tag, triggerTag, id, code, userId string) (*Instance, error) {
+	flow, err := s.loadFlow(tag)
 	if err != nil {
 		return nil, err
 	}
@@ -128,13 +129,14 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, code, userId strin
 	}
 
 	now := timezone.Now()
-	id := reg.UUID()
+	id = reg.GetUUID(id)
 	result := &Instance{
 		StartedAt:  now,
 		WorkflowId: s.ID,
 		ProjectId:  projectId,
 		ID:         id,
-		FlowId:     flowId,
+		FlowId:     flow.ID,
+		FlowTag:    flow.Tag,
 		Code:       code,
 		Title:      title,
 		Ctx:        et.Json{},
@@ -143,7 +145,7 @@ func (s *WorkFlow) newInstance(projectId, flowId, triggerTag, code, userId strin
 		Owners:     make([]*Owner, 0),
 		Results:    make(map[string]*Result),
 		Tags:       et.Json{},
-		TriggerTag: triggerTag,
+		TriggerTag: tag,
 		Trigger:    trigger,
 		IsDone:     false,
 		IsStop:     false,

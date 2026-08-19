@@ -11,6 +11,7 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
+	"github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
@@ -81,16 +82,22 @@ func New(store Store, userID string) (*WorkFlow, error) {
 
 /**
 * Load
-* @param store Store, id string
+* @param db *jsql.DB, tenantId string
 * @return *WorkFlow, error
 **/
-func Load(store Store, id string) (*WorkFlow, error) {
-	if store == nil {
-		return nil, errors.New(MSG_WORKFLOW_STORE_IS_NIL)
+func Load(db *jsql.DB, tenantId string) (*WorkFlow, error) {
+	store, err := DefineStore(db, "workflows")
+	if err != nil {
+		return nil, err
+	}
+
+	err = store.DefineInstances(db, tenantId)
+	if err != nil {
+		return nil, err
 	}
 
 	var def et.Json
-	exists, err := store.Get("workflows", id, &def)
+	exists, err := store.Get("workflows", tenantId, &def)
 	if err != nil {
 		return nil, err
 	}
@@ -100,16 +107,18 @@ func Load(store Store, id string) (*WorkFlow, error) {
 	}
 
 	result := &WorkFlow{
-		ID:    id,
-		store: store,
+		ID:        tenantId,
+		store:     store,
+		CreatedAt: def.Time("created_at"),
+		UpdatedAt: def.Time("updated_at"),
+		AuditLog:  def.ArrayJson("audit_log"),
+		Steps:     make(map[string]*Step),
+		Flows:     make(map[string]*Flow),
+		muFlows:   sync.Mutex{},
+		muSteps:   sync.Mutex{},
+		onSave:    make([]func(workflow *WorkFlow) error, 0),
+		onDelete:  make([]func(workflow *WorkFlow) error, 0),
 	}
-	result.CreatedAt = def.Time("created_at")
-	result.UpdatedAt = def.Time("updated_at")
-	result.AuditLog = def.ArrayJson("audit_log")
-	result.Steps = make(map[string]*Step)
-	result.Flows = make(map[string]*Flow)
-	result.muFlows = sync.Mutex{}
-	result.muSteps = sync.Mutex{}
 
 	steps := def.Json("steps")
 	for id := range steps {
@@ -311,18 +320,19 @@ func (s *WorkFlow) addFlow(flow *Flow) {
 	s.muFlows.Lock()
 	defer s.muFlows.Unlock()
 
-	s.Flows[flow.ID] = flow
+	s.Flows[flow.Tag] = flow
 }
 
 /**
-* addStep
-* @param step *Step
+* getFlow
+* @param tag string
+* @return *Flow, bool
 **/
-func (s *WorkFlow) getFlow(id string) (*Flow, bool) {
+func (s *WorkFlow) getFlow(tag string) (*Flow, bool) {
 	s.muFlows.Lock()
 	defer s.muFlows.Unlock()
 
-	flow, exists := s.Flows[id]
+	flow, exists := s.Flows[tag]
 	if !exists {
 		return nil, false
 	}
@@ -332,17 +342,17 @@ func (s *WorkFlow) getFlow(id string) (*Flow, bool) {
 
 /**
 * removeFlow
-* @param id string
+* @param tag string
 **/
-func (s *WorkFlow) removeFlow(id string) {
+func (s *WorkFlow) removeFlow(tag string) {
 	s.muFlows.Lock()
 	defer s.muFlows.Unlock()
 
-	delete(s.Flows, id)
+	delete(s.Flows, tag)
 }
 
 /**
-* addInstance
+* addStep
 * @param instance *Instance
 **/
 func (s *WorkFlow) addStep(step *Step) {
@@ -423,14 +433,14 @@ func (s *WorkFlow) SetStep(stepDef et.Json, userId string) (*WorkFlow, error) {
 
 /**
 * Run
-* @param flowId, triggerTag, id, projectId, code string, ctx, tags et.Json, userId string
+* @param flowId, tag, id, projectId, code string, ctx, tags et.Json, userId string
 * @return *Instance, error
 **/
-func (s *WorkFlow) Run(flowId, triggerTag, id, projectId, code string, ctx, tags et.Json, userId string) (et.Json, error) {
+func (s *WorkFlow) Run(tag, triggerTag, id, projectId, code string, ctx, tags et.Json, userId string) (et.Json, error) {
 	id = reg.GetULID(id)
 	instance, err := s.getInstance(id, userId)
 	if errors.Is(err, ErrorInstanceNotFound) {
-		instance, err = s.newInstance(projectId, flowId, triggerTag, code, userId)
+		instance, err = s.newInstance(projectId, tag, triggerTag, id, code, userId)
 		if err != nil {
 			return nil, err
 		}

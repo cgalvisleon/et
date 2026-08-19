@@ -12,7 +12,7 @@ func main() {
 		logs.Panic(err)
 	}
 
-	f := wf.NewFloW("add", "add item", "1.0.0", "cgalvisl").
+	wf.NewFloW("add", "add item", "1.0.0", "cgalvisl").
 		Step("add", "add item", func(instance *jwf.Instance, ctx et.Json) (et.Json, error) {
 			result := et.Json{
 				"step1": "step1",
@@ -28,7 +28,7 @@ func main() {
 			return params, nil
 		})
 
-	result, err := wf.Run(f.ID, "add", "", "37860631", "0001", et.Json{}, et.Json{}, "cgalvisl")
+	result, err := wf.Run("add", "add", "", "37860631", "0001", et.Json{}, et.Json{}, "cgalvisl")
 	if err != nil {
 		logs.Panic(err)
 	}

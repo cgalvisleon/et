@@ -133,8 +133,8 @@ func (s *WorkFlow) newFlow(tag, title, version, userId string) *Flow {
 * @param id string
 * @return *Flow, error
 **/
-func (s *WorkFlow) loadFlow(id string) (*Flow, error) {
-	result, exists := s.getFlow(id)
+func (s *WorkFlow) loadFlow(tag string) (*Flow, error) {
+	result, exists := s.getFlow(tag)
 	if exists {
 		return result, nil
 	}
@@ -143,7 +143,7 @@ func (s *WorkFlow) loadFlow(id string) (*Flow, error) {
 		return nil, ErrrFlowNotFound
 	}
 
-	exists, err := s.store.Get("flows", id, &result)
+	exists, err := s.store.Get("flows", tag, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +244,7 @@ func (s *Flow) Save() error {
 	}
 
 	if s.store != nil {
-		err := s.store.Set("flows", s.ID, s.WorkflowId, s)
+		err := s.store.Set("flows", s.Tag, s.WorkflowId, s)
 		if err != nil {
 			return err
 		}

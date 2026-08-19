@@ -29,9 +29,8 @@ const collectionKnowledgeBases = "knowledge_bases"
 // "definition BYTES column" shape as jwf.Storage.
 // @param TenantId string
 type Storage struct {
-	TenantId string
-	db       *jsql.DB
-	models   map[string]*jsql.Model
+	db     *jsql.DB
+	models map[string]*jsql.Model
 }
 
 /**
@@ -39,7 +38,7 @@ type Storage struct {
 * @param tenantId, schema, name string
 * @return jsql.Def
 **/
-func storeDefine(tenantId, schema, name string) jsql.Def {
+func storeDefine(schema, name string) jsql.Def {
 	columns := []jsql.Column{
 		{Name: jsql.CREATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
 		{Name: jsql.UPDATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
@@ -50,11 +49,10 @@ func storeDefine(tenantId, schema, name string) jsql.Def {
 	}
 
 	return jsql.Def{
-		TenantId: tenantId,
-		Schema:   schema,
-		Name:     name,
-		Version:  1,
-		Columns:  columns,
+		Schema:  schema,
+		Name:    name,
+		Version: 1,
+		Columns: columns,
 		PrimaryKeys: []jsql.DefIndex{
 			{Name: jsql.ID, Sorted: true},
 		},
@@ -73,7 +71,7 @@ func storeDefine(tenantId, schema, name string) jsql.Def {
 * @return *Storage, error
 **/
 func DefineStore(db *jsql.DB, schema string) (*Storage, error) {
-	def := storeDefine(db.TenantId, schema, collectionKnowledgeBases)
+	def := storeDefine(schema, collectionKnowledgeBases)
 	knowledgeBases, err := db.Define(def)
 	if err != nil {
 		return nil, err
@@ -83,9 +81,8 @@ func DefineStore(db *jsql.DB, schema string) (*Storage, error) {
 	}
 
 	return &Storage{
-		TenantId: db.TenantId,
-		db:       db,
-		models:   map[string]*jsql.Model{collectionKnowledgeBases: knowledgeBases},
+		db:     db,
+		models: map[string]*jsql.Model{collectionKnowledgeBases: knowledgeBases},
 	}, nil
 }
 
@@ -108,7 +105,6 @@ func (s *Storage) Set(collection, id, ownerId string, obj any) error {
 	now := timezone.Now()
 	_, err = model.
 		Upsert(et.Json{
-			"tenant_id":  s.TenantId,
 			"id":         id,
 			"owner_id":   ownerId,
 			"definition": bt,

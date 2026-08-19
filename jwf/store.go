@@ -17,17 +17,16 @@ type Store interface {
 }
 
 type Storage struct {
-	TenantId string
-	db       *jsql.DB
-	models   map[string]*jsql.Model
+	db     *jsql.DB
+	models map[string]*jsql.Model
 }
 
 /**
 * StoreDefine
-* @param tenantId, schema, name string
+* @param schema, name string
 * @return jsql.Def
 **/
-func StoreDefine(tenantId, schema, name string) jsql.Def {
+func StoreDefine(schema, name string) jsql.Def {
 	columns := []jsql.Column{
 		{Name: jsql.CREATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
 		{Name: jsql.UPDATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
@@ -38,11 +37,10 @@ func StoreDefine(tenantId, schema, name string) jsql.Def {
 	}
 
 	def := jsql.Def{
-		TenantId: tenantId,
-		Schema:   schema,
-		Name:     name,
-		Version:  1,
-		Columns:  columns,
+		Schema:  schema,
+		Name:    name,
+		Version: 1,
+		Columns: columns,
 		PrimaryKeys: []jsql.DefIndex{
 			{Name: jsql.ID, Sorted: true},
 		},
@@ -62,7 +60,7 @@ func StoreDefine(tenantId, schema, name string) jsql.Def {
 * @return *Storage, error
 **/
 func DefineStore(db *jsql.DB, schema string) (*Storage, error) {
-	def := StoreDefine(db.TenantId, schema, "workflows")
+	def := StoreDefine(schema, "workflows")
 	workflows, err := db.Define(def)
 	if err != nil {
 		return nil, err
@@ -93,9 +91,8 @@ func DefineStore(db *jsql.DB, schema string) (*Storage, error) {
 	}
 
 	result := &Storage{
-		TenantId: db.TenantId,
-		db:       db,
-		models:   make(map[string]*jsql.Model),
+		db:     db,
+		models: make(map[string]*jsql.Model),
 	}
 	result.models["workflows"] = workflows
 	result.models["flows"] = flows
@@ -106,11 +103,11 @@ func DefineStore(db *jsql.DB, schema string) (*Storage, error) {
 
 /**
 * DefineInstances
-* @param db *jsql.DB, tenantId string
+* @param db *jsql.DB, dbId string
 * @return error
 **/
-func (s *Storage) DefineInstances(db *jsql.DB, tenantId string) error {
-	def := StoreDefine(tenantId, "workflows", "instances")
+func (s *Storage) DefineInstances(db *jsql.DB) error {
+	def := StoreDefine("workflows", "instances")
 	result, err := db.Define(def)
 	if err != nil {
 		return err
@@ -146,7 +143,6 @@ func (s *Storage) Set(collection, id, ownerId string, obj any) error {
 	now := timezone.Now()
 	_, err := model.
 		Upsert(et.Json{
-			"tenant_id":  s.TenantId,
 			"id":         id,
 			"owner_id":   ownerId,
 			"definition": bt,

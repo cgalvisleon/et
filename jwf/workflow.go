@@ -85,19 +85,19 @@ func New(store Store, userID string) (*WorkFlow, error) {
 * @param db *jsql.DB, tenantId string
 * @return *WorkFlow, error
 **/
-func Load(db *jsql.DB, tenantId string) (*WorkFlow, error) {
+func Load(db *jsql.DB, id string) (*WorkFlow, error) {
 	store, err := DefineStore(db, "workflows")
 	if err != nil {
 		return nil, err
 	}
 
-	err = store.DefineInstances(db, tenantId)
+	err = store.DefineInstances(db)
 	if err != nil {
 		return nil, err
 	}
 
 	var def et.Json
-	exists, err := store.Get("workflows", tenantId, &def)
+	exists, err := store.Get("workflows", id, &def)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func Load(db *jsql.DB, tenantId string) (*WorkFlow, error) {
 	}
 
 	result := &WorkFlow{
-		ID:        tenantId,
+		ID:        id,
 		store:     store,
 		CreatedAt: def.Time("created_at"),
 		UpdatedAt: def.Time("updated_at"),

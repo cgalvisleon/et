@@ -14,7 +14,6 @@ import (
 * Schema: Represents a database schema that owns a set of models.
 **/
 type Schema struct {
-	TenantId string            `json:"tenant_id"`
 	Database string            `json:"database"`
 	Name     string            `json:"name"`
 	Models   map[string]*Model `json:"models"`
@@ -87,7 +86,6 @@ func (s *Schema) getModel(name string) (*Model, error) {
 func (s *Schema) newModel(name string, version int, userId string) *Model {
 	name = utility.Normalize(name)
 	result := &Model{
-		TenantId:      s.TenantId,
 		ID:            reg.UUID(),
 		Database:      s.Database,
 		Schema:        s.Name,

@@ -55,7 +55,6 @@ type DefRollup struct {
 }
 
 type Def struct {
-	TenantId    string           `json:"tenant_id"`
 	Schema      string           `json:"schema"`
 	Name        string           `json:"name"`
 	Version     int              `json:"version"`

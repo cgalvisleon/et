@@ -36,7 +36,6 @@ func (s *Index) Ref() et.Json {
 }
 
 type Model struct {
-	TenantId      string                  `json:"tenant_id"`
 	ID            string                  `json:"id"`
 	Database      string                  `json:"database"`
 	Schema        string                  `json:"schema"`
@@ -110,7 +109,7 @@ func (s *Model) Save(store *Store) error {
 		return errors.New(MSG_STORE_IS_NIL)
 	}
 
-	err := store.Set("model", s.ID, s.TenantId, s)
+	err := store.Set("model", s.ID, s.db.ID, s)
 	if err != nil {
 		return err
 	}
@@ -138,7 +137,6 @@ func (s *Model) Ref() et.Json {
 **/
 func (s *Model) ToJson() et.Json {
 	return et.Json{
-		"tenant_id":      s.TenantId,
 		"id":             s.ID,
 		"database":       s.Database,
 		"schema":         s.Schema,
@@ -262,6 +260,17 @@ func (s *Model) wrapper(instance *jrex.Instance) {
 }
 
 /**
+* Clone: Clones the model
+* @return *Model
+**/
+func (s *Model) Clone() *Model {
+	result := new(Model)
+	*result = *s
+	result.isInit = false
+	return result
+}
+
+/**
 * Init: Runs DDL for the model the first time it is called; subsequent calls are no-ops.
 * @return error
 **/
@@ -309,19 +318,20 @@ func (s *Model) Db() *DB {
 }
 
 /**
+* SetDb: Sets the primary DB connection for the model.
+* @param db *DB
+**/
+func (s *Model) SetDb(db *DB) {
+	s.isInit = false
+	s.db = db
+}
+
+/**
 * SqlDb: Returns the underlying *sql.DB connection pool.
 * @return *sql.DB
 **/
 func (s *Model) SqlDB() *sql.DB {
 	return s.db.db
-}
-
-/**
-* SetDb: Sets the primary DB connection for the model.
-* @param db *DB
-**/
-func (s *Model) SetDb(db *DB) {
-	s.db = db
 }
 
 /**

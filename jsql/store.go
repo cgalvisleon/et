@@ -59,19 +59,16 @@ func DefineStore(db *DB) (*Store, error) {
 		return nil
 	})
 
+	err = model.Init()
+	if err != nil {
+		return nil, err
+	}
+
 	store := &Store{
 		model: model,
 	}
 
 	return store, nil
-}
-
-/**
-* init: Initializes the store.
-* @return error
-**/
-func (s *Store) init() error {
-	return s.model.Init()
 }
 
 /**

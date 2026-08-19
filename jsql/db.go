@@ -18,7 +18,6 @@ import (
 )
 
 type DB struct {
-	TenantId    string             `json:"tenant_id"`
 	ID          string             `json:"id"`
 	Name        string             `json:"name"`
 	Schemas     map[string]*Schema `json:"schemas"`
@@ -37,10 +36,10 @@ type DB struct {
 
 /**
 * NewDB
-* @param tenantId, host, name, driver string
+* @param id, host, name, driver string
 * @return *DB, error
 **/
-func NewDB(tenantId, host, name, driver string) (*DB, error) {
+func NewDB(id, host, name, driver string) (*DB, error) {
 	drv, ok := drivers[driver]
 	if !ok {
 		return nil, errors.New(MSG_DRIVER_NOT_FOUND)
@@ -63,9 +62,9 @@ func NewDB(tenantId, host, name, driver string) (*DB, error) {
 	params := connect.GetParams()
 	recordLimit := params.Int("record_limit")
 	version := params.ValInt(1, "version")
+	id = reg.GetUUID(id)
 	result := &DB{
-		TenantId:    tenantId,
-		ID:          reg.UUID(),
+		ID:          id,
 		Name:        name,
 		Schemas:     make(map[string]*Schema),
 		Driver:      driver,
@@ -75,11 +74,6 @@ func NewDB(tenantId, host, name, driver string) (*DB, error) {
 		AuditLog:    make([]et.Json, 0),
 		driver:      drv,
 		isDebug:     envar.GetBool("DEBUG", false),
-	}
-
-	result.store, err = DefineStore(result)
-	if err != nil {
-		return nil, err
 	}
 
 	return result, nil
@@ -114,7 +108,6 @@ func LoadDb(store *Store, id string) (*DB, error) {
 	}
 
 	result := &DB{
-		TenantId:    ref.Str("tenant_id"),
 		ID:          ref.Str("id"),
 		Name:        ref.Str("name"),
 		Schemas:     make(map[string]*Schema),
@@ -125,11 +118,7 @@ func LoadDb(store *Store, id string) (*DB, error) {
 		AuditLog:    ref.ArrayJson("audit_log"),
 		isDebug:     envar.GetBool("DEBUG", false),
 		driver:      drv,
-	}
-
-	result.store, err = DefineStore(result)
-	if err != nil {
-		return nil, err
+		store:       store,
 	}
 
 	if !utility.ValidStr(result.ID, 0, []string{""}) {
@@ -168,10 +157,9 @@ func LoadDb(store *Store, id string) (*DB, error) {
 **/
 func (s *DB) Ref() et.Json {
 	return et.Json{
-		"tenant_id": s.TenantId,
-		"id":        s.ID,
-		"name":      s.Name,
-		"version":   s.Version,
+		"id":      s.ID,
+		"name":    s.Name,
+		"version": s.Version,
 	}
 }
 
@@ -186,7 +174,6 @@ func (s *DB) ToJson() et.Json {
 	}
 
 	return et.Json{
-		"tenant_id":    s.TenantId,
 		"id":           s.ID,
 		"name":         s.Name,
 		"schemas":      schemas,
@@ -199,15 +186,24 @@ func (s *DB) ToJson() et.Json {
 }
 
 /**
+* SetStore: Sets the store for the DB.
+* @param store *Store
+**/
+func (s *DB) SetStore(store *Store) {
+	s.store = store
+	s.isChanged = true
+}
+
+/**
 * save: Saves the DB metadata to the store.
 * @return error
 **/
-func (s *DB) Save(store *Store) error {
-	if store == nil {
+func (s *DB) Save() error {
+	if s.store == nil {
 		return errors.New(MSG_STORE_IS_NIL)
 	}
 
-	err := store.Set("db", s.ID, s.TenantId, s.ToJson())
+	err := s.store.Set("db", s.ID, "", s.ToJson())
 	if err != nil {
 		return err
 	}
@@ -262,11 +258,6 @@ func (s *DB) Init() error {
 	}
 
 	s.db = db
-
-	err = s.store.init()
-	if err != nil {
-		return err
-	}
 
 	for _, schema := range s.Schemas {
 		err := schema.init()
@@ -383,7 +374,6 @@ func (s *DB) Close() error {
 **/
 func (s *DB) newSchema(name string) *Schema {
 	result := &Schema{
-		TenantId: s.TenantId,
 		Database: s.Name,
 		Name:     name,
 		Models:   make(map[string]*Model),
@@ -527,7 +517,6 @@ func (s *DB) Define(define Def) (*Model, error) {
 	}
 
 	result := s.NewModel(define.Schema, define.Name, define.Version, define.UserId)
-	result.TenantId = define.TenantId
 	if define.IdxField != "" {
 		result.DefineIdxField()
 	}

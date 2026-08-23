@@ -41,10 +41,10 @@ type WorkFlow struct {
 
 /**
 * New
-* @param store Store
+* @param db *jsql.DB, id, userID string
 * @return *WorkFlow
 **/
-func New(store Store, userID string) (*WorkFlow, error) {
+func New(db *jsql.DB, id, userID string) (*WorkFlow, error) {
 	err := cache.Load()
 	if err != nil {
 		return nil, err
@@ -55,17 +55,31 @@ func New(store Store, userID string) (*WorkFlow, error) {
 		return nil, err
 	}
 
+	store, err := DefineStore(db, "workflows")
+	if err != nil {
+		return nil, err
+	}
+
+	err = store.DefineInstances(db)
+	if err != nil {
+		return nil, err
+	}
+
 	now := timezone.Now()
+	id = reg.GetUUID(id)
 	result := &WorkFlow{
 		CreatedAt: now,
 		UpdatedAt: now,
-		ID:        reg.UUID(),
+		ID:        id,
 		AuditLog:  make([]et.Json, 0),
 		Steps:     make(map[string]*Step),
 		Flows:     make(map[string]*Flow),
+		bindings:  make(map[string]any),
 		muFlows:   sync.Mutex{},
 		muSteps:   sync.Mutex{},
 		store:     store,
+		onSave:    make([]func(workflow *WorkFlow) error, 0),
+		onDelete:  make([]func(workflow *WorkFlow) error, 0),
 	}
 	result.addAuditLog(userID, "new_workflow")
 	_, err = result.up()
@@ -82,10 +96,10 @@ func New(store Store, userID string) (*WorkFlow, error) {
 
 /**
 * Load
-* @param db *jsql.DB, tenantId string
+* @param db *jsql.DB, id, userId string
 * @return *WorkFlow, error
 **/
-func Load(db *jsql.DB, id string) (*WorkFlow, error) {
+func Load(db *jsql.DB, id, userId string) (*WorkFlow, error) {
 	store, err := DefineStore(db, "workflows")
 	if err != nil {
 		return nil, err
@@ -103,7 +117,11 @@ func Load(db *jsql.DB, id string) (*WorkFlow, error) {
 	}
 
 	if !exists {
-		return nil, errors.New(MSG_WORKFLOW_NOT_FOUND)
+		result, err := New(db, id, userId)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
 	}
 
 	result := &WorkFlow{

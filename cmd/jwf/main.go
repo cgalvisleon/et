@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	wf, err := jwf.New(nil, "cgalvisl")
+	wf, err := jwf.New(nil, "", "cgalvisl")
 	if err != nil {
 		logs.Panic(err)
 	}

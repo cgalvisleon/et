@@ -98,6 +98,22 @@ func (s *Json) ScanRows(rows *sql.Rows) error {
 				continue
 			}
 			result[col] = bt
+		case string:
+			// Drivers without a native JSON/bytea type (e.g. SQLite) return JSON
+			// column values as plain strings instead of []byte. Only attempt to
+			// decode strings that look like a JSON object or array, so an
+			// ordinary text value (e.g. "123" or "true") is left untouched.
+			trimmed := strings.TrimSpace(v)
+			if len(trimmed) == 0 || (trimmed[0] != '{' && trimmed[0] != '[') {
+				result[col] = v
+				continue
+			}
+			var bt interface{}
+			if err := json.Unmarshal([]byte(v), &bt); err != nil {
+				result[col] = v
+				continue
+			}
+			result[col] = bt
 		default:
 			result[col] = src
 		}

@@ -18,6 +18,7 @@ const (
 
 type Store interface {
 	Set(collection, id, ownerId string, obj any) error
+	SetInstance(id, workflowId, projectId, flowId, flowTag, code, title string, status Status, obj any) error
 	Get(collection, id string, dest any) (bool, error)
 	Delete(collection, id string) error
 	Query(collection string, query et.Json) (et.Items, error)
@@ -36,11 +37,11 @@ type Storage struct {
 }
 
 /**
-* StoreDefine
+* storeDefine
 * @param schema, name string
 * @return jsql.Def
 **/
-func StoreDefine(schema, name string) jsql.Def {
+func storeDefine(schema, name string) jsql.Def {
 	columns := []jsql.Column{
 		{Name: jsql.CREATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
 		{Name: jsql.UPDATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
@@ -67,12 +68,55 @@ func StoreDefine(schema, name string) jsql.Def {
 }
 
 /**
+* storeInstance
+* @param schema, name string
+* @return jsql.Def
+**/
+func storeInstance(schema, name string) jsql.Def {
+	columns := []jsql.Column{
+		{Name: jsql.CREATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
+		{Name: jsql.UPDATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
+		{Name: jsql.ID, TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
+		{Name: "workflow_id", TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
+		{Name: "project_id", TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
+		{Name: "flow_id", TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
+		{Name: "flow_tag", TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
+		{Name: "code", TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
+		{Name: "title", TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
+		{Name: "status", TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
+		{Name: "definition", TypeColumn: jsql.COLUMN, TypeData: jsql.BYTES, Default: []byte("")},
+	}
+
+	def := jsql.Def{
+		Schema:  schema,
+		Name:    name,
+		Version: 1,
+		Columns: columns,
+		PrimaryKeys: []jsql.DefIndex{
+			{Name: jsql.ID, Sorted: true},
+		},
+		Indexes: []jsql.DefIndex{
+			{Name: "workflow_id", Sorted: true},
+			{Name: "project_id", Sorted: true},
+			{Name: "flow_id", Sorted: true},
+			{Name: "flow_tag", Sorted: true},
+			{Name: "code", Sorted: true},
+			{Name: "title", Sorted: true},
+			{Name: "status", Sorted: true},
+		},
+		IdxField: jsql.IDX,
+	}
+
+	return def
+}
+
+/**
 * DefineStore
 * @param db *jsql.DB, schema string
 * @return *Storage, error
 **/
 func DefineStore(db *jsql.DB, schema string) (*Storage, error) {
-	def := StoreDefine(schema, storeWorkflows)
+	def := storeDefine(schema, storeWorkflows)
 	workflows, err := db.Define(def)
 	if err != nil {
 		return nil, err
@@ -82,7 +126,7 @@ func DefineStore(db *jsql.DB, schema string) (*Storage, error) {
 		return nil, err
 	}
 
-	def.Name = storeFlows
+	def = storeDefine(schema, storeFlows)
 	flows, err := db.Define(def)
 	if err != nil {
 		return nil, err
@@ -92,7 +136,7 @@ func DefineStore(db *jsql.DB, schema string) (*Storage, error) {
 		return nil, err
 	}
 
-	def.Name = storeSteps
+	def = storeDefine(schema, storeSteps)
 	steps, err := db.Define(def)
 	if err != nil {
 		return nil, err
@@ -123,7 +167,7 @@ func DefineStore(db *jsql.DB, schema string) (*Storage, error) {
 * @return error
 **/
 func (s *Storage) DefineInstances(db *jsql.DB) error {
-	def := StoreDefine("workflows", "instances")
+	def := storeInstance(storeWorkflows, storeInstances)
 	result, err := db.Define(def)
 	if err != nil {
 		return err
@@ -132,7 +176,7 @@ func (s *Storage) DefineInstances(db *jsql.DB) error {
 	if err != nil {
 		return err
 	}
-	s.models["instances"] = result
+	s.models[storeInstances] = result
 	return nil
 }
 
@@ -163,6 +207,56 @@ func (s *Storage) Set(collection, id, ownerId string, obj any) error {
 			"id":         id,
 			"owner_id":   ownerId,
 			"definition": bt,
+		}).
+		BeforeInsert(func(tx *jsql.Tx, old, new et.Json) error {
+			new.Set(jsql.CREATED_AT, now)
+			new.Set(jsql.UPDATED_AT, now)
+			return nil
+		}).
+		BeforeUpdate(func(tx *jsql.Tx, old, new et.Json) error {
+			new.Set(jsql.UPDATED_AT, now)
+			return nil
+		}).
+		Where(jsql.Eq(jsql.ID, id)).
+		Exec()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+/**
+* SetInstance
+* @param id, workflowId, projectId, flowId, flowTag, code, title string, status Status, obj any
+* @return error
+**/
+func (s *Storage) SetInstance(id, workflowId, projectId, flowId, flowTag, code, title string, status Status, obj any) error {
+	bt, ok := obj.([]byte)
+	if !ok {
+		var err error
+		bt, err = json.Marshal(obj)
+		if err != nil {
+			return err
+		}
+	}
+
+	model, ok := s.models[storeInstances]
+	if !ok {
+		return fmt.Errorf(MSG_MODEL_NOT_FOUND, storeInstances)
+	}
+
+	now := timezone.Now()
+	_, err := model.
+		Upsert(et.Json{
+			"workflow_id": workflowId,
+			"project_id":  projectId,
+			"flow_id":     flowId,
+			"flow_tag":    flowTag,
+			"code":        code,
+			"title":       title,
+			"status":      status.Str(),
+			"id":          id,
+			"definition":  bt,
 		}).
 		BeforeInsert(func(tx *jsql.Tx, old, new et.Json) error {
 			new.Set(jsql.CREATED_AT, now)

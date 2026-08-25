@@ -21,6 +21,10 @@ import (
 
 type Status string
 
+func (s Status) Str() string {
+	return string(s)
+}
+
 const (
 	SYSTEM   Status = "system"
 	ACTIVE   Status = "active"
@@ -437,7 +441,7 @@ func (s *Instance) save() error {
 	}
 
 	if s.store != nil {
-		err := s.store.Set(storeInstances, s.ID, s.WorkflowId, s)
+		err := s.store.SetInstance(s.ID, s.WorkflowId, s.ProjectId, s.FlowId, s.FlowTag, s.Code, s.Title, s.Status, s)
 		if err != nil {
 			return err
 		}

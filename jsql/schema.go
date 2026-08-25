@@ -99,7 +99,7 @@ func (s *Schema) newModel(name string, version int, userId string) *Model {
 		Required:      make([]*Index, 0),
 		Hiddens:       make([]string, 0),
 		Details:       make(map[string]*Detail, 0),
-		Masters:        make(map[string]*Master, 0),
+		Masters:       make(map[string]*Master, 0),
 		Rollups:       make(map[string]*Detail, 0),
 		calcs:         make(map[string]CalcFunction, 0),
 		Version:       version,
@@ -135,7 +135,7 @@ func (s *Schema) loadModel(store *Store, id string) (*Model, error) {
 	}
 
 	var result *Model
-	exists, err := store.Get("model", id, &result)
+	exists, err := store.Get(storeModels, id, &result)
 	if err != nil {
 		return nil, err
 	}

@@ -72,7 +72,7 @@ func Load(tag string, store Store) (*Jrex, error) {
 	}
 
 	var result *Jrex
-	exists, err := store.Get("jrex", tag, &result)
+	exists, err := store.Get(storeJrex, tag, &result)
 	if err != nil {
 		return nil, err
 	}

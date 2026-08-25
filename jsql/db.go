@@ -90,7 +90,7 @@ func LoadDb(store *Store, id string) (*DB, error) {
 	}
 
 	ref := et.Json{}
-	exists, err := store.Get("db", id, &ref)
+	exists, err := store.Get(storeDb, id, &ref)
 	if err != nil {
 		return nil, err
 	}

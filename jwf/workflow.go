@@ -100,7 +100,7 @@ func New(db *jsql.DB, id, userID string) (*WorkFlow, error) {
 * @return *WorkFlow, error
 **/
 func Load(db *jsql.DB, id, userId string) (*WorkFlow, error) {
-	store, err := DefineStore(db, "workflows")
+	store, err := DefineStore(db, storeWorkflows)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ func Load(db *jsql.DB, id, userId string) (*WorkFlow, error) {
 	}
 
 	var def et.Json
-	exists, err := store.Get("workflows", id, &def)
+	exists, err := store.Get(storeWorkflows, id, &def)
 	if err != nil {
 		return nil, err
 	}

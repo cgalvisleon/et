@@ -305,6 +305,9 @@ func (s *Condition) Validate(value et.Json) (bool, error) {
 * @return bool
 **/
 func (s *Validator) Validate(value et.Json) (bool, error) {
+	if value.IsEmpty() {
+		return false, fmt.Errorf(MSG_VALIDATOR_EMPTY)
+	}
 	for key, val := range value {
 		ok, err := s.Fields[key].Condition.validate(val)
 		if !ok || err != nil {

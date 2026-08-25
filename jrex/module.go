@@ -60,7 +60,7 @@ func (s *Module) getCode() (string, error) {
 	}
 
 	var result string
-	exists, err := s.jrex.store.Get("code", s.Tag, &result)
+	exists, err := s.jrex.store.Get(storeCode, s.Tag, &result)
 	if err != nil {
 		return "", err
 	}

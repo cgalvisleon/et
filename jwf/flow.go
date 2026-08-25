@@ -143,7 +143,7 @@ func (s *WorkFlow) loadFlow(tag string) (*Flow, error) {
 		return nil, ErrrFlowNotFound
 	}
 
-	exists, err := s.store.Get("flows", tag, &result)
+	exists, err := s.store.Get(storeFlows, tag, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +244,7 @@ func (s *Flow) Save() error {
 	}
 
 	if s.store != nil {
-		err := s.store.Set("flows", s.Tag, s.WorkflowId, s)
+		err := s.store.Set(storeFlows, s.Tag, s.WorkflowId, s)
 		if err != nil {
 			return err
 		}

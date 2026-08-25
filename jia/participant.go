@@ -16,8 +16,9 @@ import (
 type Role string
 
 const (
-	Admin  Role = "admin"
-	Member Role = "member"
+	Admin             Role = "admin"
+	Member            Role = "member"
+	storeParticipants      = "participants"
 )
 
 type Participant struct {
@@ -67,7 +68,7 @@ func (s *Ia) newParticipant(to, name, userId string) (*Participant, error) {
 **/
 func (s *Ia) loadParticipant(to string) (*Participant, error) {
 	var result *Participant
-	exists, err := s.store.Get("participant", to, &result)
+	exists, err := s.store.Get(storeParticipants, to, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +189,7 @@ func (s *Participant) save() error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("participant", s.ID, s.IAID, s)
+	err := s.store.Set(storeParticipants, s.ID, s.IAID, s)
 	if err != nil {
 		return err
 	}

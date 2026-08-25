@@ -524,7 +524,7 @@ func Upsert$2(tenantId, id, name, description string, data et.Json, createdBy st
 			data["updated_by"] = createdBy
 			return nil
 		}).
-		Where(jdb.STATUS_ID).Eq(jdb.ACTIVE).
+		Where(jdb.Eq(jdb.KEY, id)).
 		Exec()
 	if err != nil {
 		return et.Item{}, err

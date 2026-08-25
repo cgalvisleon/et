@@ -13,6 +13,8 @@ import (
 
 const (
 	packageName = "jrex"
+	storeJrex   = "jrex"
+	storeCode   = "code"
 )
 
 type Jrex struct {
@@ -153,7 +155,7 @@ func (s *Jrex) Save(userId string) error {
 		logs.Log(packageName, "save:", data.ToString())
 	}
 
-	err := s.store.Set("jrex", s.ID, s.ID, s)
+	err := s.store.Set(storeJrex, s.ID, s.ID, s)
 	if err != nil {
 		return err
 	}

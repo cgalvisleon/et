@@ -203,7 +203,7 @@ func (s *DB) Save() error {
 		return errors.New(MSG_STORE_IS_NIL)
 	}
 
-	err := s.store.Set("db", s.ID, "", s.ToJson())
+	err := s.store.Set(storeDb, s.ID, "", s.ToJson())
 	if err != nil {
 		return err
 	}

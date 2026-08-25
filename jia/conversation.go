@@ -17,8 +17,10 @@ import (
 type TypeConversation string
 
 const (
-	DIRECT TypeConversation = "direct"
-	GROUP  TypeConversation = "group"
+	DIRECT             TypeConversation = "direct"
+	GROUP              TypeConversation = "group"
+	storeConversations                  = "conversations"
+	storeIa                             = "ia"
 )
 
 type Conversation struct {
@@ -210,7 +212,7 @@ func (s *Conversation) save() error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("conversation", s.ID, s.IAID, s)
+	err := s.store.Set(storeConversations, s.ID, s.IAID, s)
 	if err != nil {
 		return err
 	}

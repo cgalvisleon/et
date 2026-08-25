@@ -101,14 +101,14 @@ func DefineFormState(db *DB, tenantId, schema string) (*FormState, error) {
 * @param id, tag, ownerId string, obj any
 * @return error
 **/
-func (s *FormState) Set(id, tag, ownerId string, state et.Json) error {
+func (s *FormState) Set(id, tag, ownerId string, data et.Json) error {
 	key := fmt.Sprintf("form_state:%s", id)
 	dt.Drop(key)
 
-	state.Set(ID, id)
-	state.Set("tag", tag)
+	data.Set(ID, id)
+	data.Set("tag", tag)
 	_, err := s.model.
-		Upsert(state).
+		Upsert(data).
 		Where(Eq(ID, id)).
 		Exec()
 	if err != nil {

@@ -41,10 +41,10 @@ func DefineSeries(db *DB, schema string) (*Series, error) {
 	}
 
 	now := timezone.Now()
-	model.BeforeInsert(func(tx *Tx, old, new et.Json) error {		
+	model.BeforeInsert(func(tx *Tx, old, new et.Json) error {
 		new.Set(CREATED_AT, now)
 		new.Set(UPDATED_AT, now)
-		
+
 		return nil
 	}).
 		BeforeUpdate(func(tx *Tx, old, new et.Json) error {
@@ -73,12 +73,11 @@ func (s *Series) SetSeries(tag string, format string, value int) error {
 		format = "%08d"
 	}
 	_, err := s.model.
-		Upsert(
-			et.Json{
-				"tag":    tag,
-				"format": format,
-				"value":  value,
-			}).
+		Upsert(et.Json{
+			"tag":    tag,
+			"format": format,
+			"value":  value,
+		}).
 		Where(Eq("tag", tag)).
 		Exec()
 	return err
@@ -122,9 +121,16 @@ func (s *Series) DeleteSeries(tag string) error {
 **/
 func (s *Series) GenSerie(tag string) (string, error) {
 	item, err := s.model.
-		Update(et.Json{}).
+		Upsert(et.Json{}).
+		BeforeInsert(func(tx *Tx, old, new et.Json) error {
+			new["tag"] = tag
+			new["format"] = "%08d"
+			new["value"] = 1
+			return nil
+		}).
 		BeforeUpdate(func(tx *Tx, old, new et.Json) error {
-			new["value"] = old["value"].(int) + 1
+			value := old.Int("value")
+			new["value"] = value + 1
 			return nil
 		}).
 		Where(Eq("tag", tag)).

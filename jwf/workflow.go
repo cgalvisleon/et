@@ -286,7 +286,7 @@ func (s *WorkFlow) Save() error {
 	}
 
 	if s.store != nil {
-		err := s.store.Set("workflows", s.ID, s.ID, s.Ref())
+		err := s.store.Set(storeWorkflows, s.ID, s.ID, s.Ref())
 		if err != nil {
 			return err
 		}
@@ -462,7 +462,10 @@ func (s *WorkFlow) Run(tag, triggerTag, id, projectId, code string, ctx, tags et
 		if err != nil {
 			return nil, err
 		}
-		instance.setStatus(PENDING)
+		err = instance.setStatus(PENDING)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if err != nil {
 		return nil, err

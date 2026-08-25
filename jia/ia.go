@@ -202,7 +202,7 @@ func (s *Ia) save() error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("ia", s.ID, s.ID, s)
+	err := s.store.Set(storeIa, s.ID, s.ID, s)
 	if err != nil {
 		return err
 	}

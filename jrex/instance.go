@@ -157,7 +157,7 @@ func (s *Instance) Save(store Store) error {
 		return errors.New(MSG_STORE_IS_NIL)
 	}
 
-	err := store.Set("jrex", s.ID, s.ID, s.Ctx)
+	err := store.Set(storeJrex, s.ID, s.ID, s.Ctx)
 	if err != nil {
 		return err
 	}

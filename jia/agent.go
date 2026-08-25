@@ -30,7 +30,10 @@ Reglas obligatorias:
 "No tengo suficiente información para responder a tu pregunta."
 `
 
-const modelDefault = openai.ChatModelGPT4oMini
+const (
+	modelDefault = openai.ChatModelGPT4oMini
+	storeAgents  = "agents"
+)
 
 type Agent struct {
 	CreatedAt   time.Time                  `json:"created_at"`
@@ -91,7 +94,7 @@ func (s *Ia) loadAgend(id string) (*Agent, error) {
 	}
 
 	var result *Agent
-	exists, err := s.store.Get("agent", id, &result)
+	exists, err := s.store.Get(storeAgents, id, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +247,7 @@ func (s *Agent) save() error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("step", s.ID, s.IaID, s)
+	err := s.store.Set(storeAgents, s.ID, s.IaID, s)
 	if err != nil {
 		return err
 	}

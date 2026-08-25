@@ -16,6 +16,10 @@ import (
 	"github.com/cgalvisleon/et/timezone"
 )
 
+const (
+	storeResilience = "resilience"
+)
+
 type Store interface {
 	Set(collection, id, ownerId string, obj any) error
 	Get(collection, id string, dest any) (bool, error)
@@ -155,7 +159,7 @@ func (s *Resilience) GetInstance(id string) (*Instance, bool) {
 	}
 
 	if s.store != nil {
-		exist, err := s.store.Get("resilience", id, &result)
+		exist, err := s.store.Get(storeResilience, id, &result)
 		if err != nil {
 			return nil, false
 		}

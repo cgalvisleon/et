@@ -16,6 +16,7 @@ import (
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/resilience"
 	"github.com/cgalvisleon/et/timezone"
+	"github.com/redis/go-redis/v9"
 )
 
 type Status string
@@ -123,6 +124,16 @@ func (s *WorkFlow) newInstance(projectId, tag, triggerTag, id, code, userId stri
 		return nil, errors.New(MSG_TRIGGER_NOT_FOUND)
 	}
 
+	if code == "" {
+		if s.store != nil {
+			serie := fmt.Sprintf("%s:%s", tag, projectId)
+			code, err = s.store.GenSerie(serie)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	title := flow.Title
 	if code != "" {
 		title = fmt.Sprintf("%s %s", flow.Title, code)
@@ -174,7 +185,7 @@ func (s *WorkFlow) getInstance(id, userId string) (*Instance, error) {
 	if id != "" {
 		key := fmt.Sprintf("instance:%s:status", id)
 		status, err := cache.Get(key, "")
-		if err != nil {
+		if err != nil && !errors.Is(err, redis.Nil) {
 			return nil, err
 		}
 		if status != "" {
@@ -187,7 +198,7 @@ func (s *WorkFlow) getInstance(id, userId string) (*Instance, error) {
 	}
 
 	var result *Instance
-	exists, err := s.store.Get("instance", id, &result)
+	exists, err := s.store.Get(storeInstances, id, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -426,7 +437,7 @@ func (s *Instance) save() error {
 	}
 
 	if s.store != nil {
-		err := s.store.Set("instances", s.ID, s.WorkflowId, s)
+		err := s.store.Set(storeInstances, s.ID, s.WorkflowId, s)
 		if err != nil {
 			return err
 		}

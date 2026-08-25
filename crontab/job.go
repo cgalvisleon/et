@@ -164,7 +164,7 @@ func (s *Job) save() error {
 		return nil
 	}
 
-	err := s.store.Set("job", s.ID, s.OwnerId, s)
+	err := s.store.Set(storeJobs, s.ID, s.OwnerId, s)
 	if err != nil {
 		return err
 	}

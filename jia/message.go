@@ -15,10 +15,11 @@ import (
 type StatusMessage string
 
 const (
-	Sent      StatusMessage = "sent"
-	Delivered StatusMessage = "delivered"
-	Read      StatusMessage = "read"
-	Failed    StatusMessage = "failed"
+	Sent          StatusMessage = "sent"
+	Delivered     StatusMessage = "delivered"
+	Read          StatusMessage = "read"
+	Failed        StatusMessage = "failed"
+	storeMessages               = "messages"
 )
 
 type TypeMessage string
@@ -174,7 +175,7 @@ func (s *Message) save() error {
 		logs.Log(packageName, "save:", s.ToString())
 	}
 
-	err := s.store.Set("message", s.ID, s.IAID, s)
+	err := s.store.Set(storeMessages, s.ID, s.IAID, s)
 	if err != nil {
 		return err
 	}

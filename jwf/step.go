@@ -133,7 +133,7 @@ func (s *WorkFlow) loadStep(id string) (*Step, error) {
 		return nil, ErrrStepNotFound
 	}
 
-	exists, err := s.store.Get("steps", id, &result)
+	exists, err := s.store.Get(storeSteps, id, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -308,7 +308,7 @@ func (s *Step) save() error {
 	}
 
 	if s.store != nil {
-		err := s.store.Set("steps", s.ID, s.OwnerId, s)
+		err := s.store.Set(storeSteps, s.ID, s.OwnerId, s)
 		if err != nil {
 			return err
 		}

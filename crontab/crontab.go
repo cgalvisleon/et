@@ -14,6 +14,7 @@ import (
 
 const (
 	packageName = "crontab"
+	storeJobs   = "jobs"
 )
 
 var (

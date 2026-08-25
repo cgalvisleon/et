@@ -9,15 +9,29 @@ import (
 	"github.com/cgalvisleon/et/timezone"
 )
 
+const (
+	storeWorkflows = "workflows"
+	storeFlows     = "flows"
+	storeInstances = "instances"
+	storeSteps     = "steps"
+)
+
 type Store interface {
 	Set(collection, id, ownerId string, obj any) error
 	Get(collection, id string, dest any) (bool, error)
 	Delete(collection, id string) error
 	Query(collection string, query et.Json) (et.Items, error)
+	// Series
+	SetSeries(tag string, format string, value int) error
+	GetSeries(tag string) (et.Item, error)
+	DeleteSeries(tag string) error
+	GenSerie(tag string) (string, error)
+	GenValue(tag string) (int, error)
 }
 
 type Storage struct {
 	db     *jsql.DB
+	series *jsql.Series
 	models map[string]*jsql.Model
 }
 
@@ -30,7 +44,6 @@ func StoreDefine(schema, name string) jsql.Def {
 	columns := []jsql.Column{
 		{Name: jsql.CREATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
 		{Name: jsql.UPDATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
-		{Name: jsql.TENANT_ID, TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
 		{Name: jsql.ID, TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
 		{Name: "owner_id", TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
 		{Name: "definition", TypeColumn: jsql.COLUMN, TypeData: jsql.BYTES, Default: []byte("")},
@@ -45,7 +58,6 @@ func StoreDefine(schema, name string) jsql.Def {
 			{Name: jsql.ID, Sorted: true},
 		},
 		Indexes: []jsql.DefIndex{
-			{Name: jsql.TENANT_ID, Sorted: true},
 			{Name: "owner_id", Sorted: true},
 		},
 		IdxField: jsql.IDX,
@@ -60,7 +72,7 @@ func StoreDefine(schema, name string) jsql.Def {
 * @return *Storage, error
 **/
 func DefineStore(db *jsql.DB, schema string) (*Storage, error) {
-	def := StoreDefine(schema, "workflows")
+	def := StoreDefine(schema, storeWorkflows)
 	workflows, err := db.Define(def)
 	if err != nil {
 		return nil, err
@@ -70,7 +82,7 @@ func DefineStore(db *jsql.DB, schema string) (*Storage, error) {
 		return nil, err
 	}
 
-	def.Name = "flows"
+	def.Name = storeFlows
 	flows, err := db.Define(def)
 	if err != nil {
 		return nil, err
@@ -80,7 +92,7 @@ func DefineStore(db *jsql.DB, schema string) (*Storage, error) {
 		return nil, err
 	}
 
-	def.Name = "steps"
+	def.Name = storeSteps
 	steps, err := db.Define(def)
 	if err != nil {
 		return nil, err
@@ -94,9 +106,13 @@ func DefineStore(db *jsql.DB, schema string) (*Storage, error) {
 		db:     db,
 		models: make(map[string]*jsql.Model),
 	}
-	result.models["workflows"] = workflows
-	result.models["flows"] = flows
-	result.models["steps"] = steps
+	result.series, err = jsql.DefineSeries(db, schema)
+	if err != nil {
+		return nil, err
+	}
+	result.models[storeWorkflows] = workflows
+	result.models[storeFlows] = flows
+	result.models[storeSteps] = steps
 
 	return result, nil
 }
@@ -143,6 +159,7 @@ func (s *Storage) Set(collection, id, ownerId string, obj any) error {
 	now := timezone.Now()
 	_, err := model.
 		Upsert(et.Json{
+			"kind":       collection,
 			"id":         id,
 			"owner_id":   ownerId,
 			"definition": bt,
@@ -156,6 +173,7 @@ func (s *Storage) Set(collection, id, ownerId string, obj any) error {
 			new.Set(jsql.UPDATED_AT, now)
 			return nil
 		}).
+		Where(jsql.Eq(jsql.ID, id)).
 		Exec()
 	if err != nil {
 		return err
@@ -231,4 +249,49 @@ func (s *Storage) Query(collection string, query et.Json) (et.Items, error) {
 	}
 
 	return model.Query(query)
+}
+
+/**
+* SetSeries
+* @param tag string, format string, value int
+* @return error
+**/
+func (s *Storage) SetSeries(tag string, format string, value int) error {
+	return s.series.SetSeries(tag, format, value)
+}
+
+/**
+* GetSeries
+* @param tag string
+* @return et.Item, error
+**/
+func (s *Storage) GetSeries(tag string) (et.Item, error) {
+	return s.series.GetSeries(tag)
+}
+
+/**
+* DeleteSeries
+* @param tag string
+* @return error
+**/
+func (s *Storage) DeleteSeries(tag string) error {
+	return s.series.DeleteSeries(tag)
+}
+
+/**
+* GenSerie
+* @param tag string
+* @return string, error
+**/
+func (s *Storage) GenSerie(tag string) (string, error) {
+	return s.series.GenSerie(tag)
+}
+
+/**
+* GenValue
+* @param tag string
+* @return int, error
+**/
+func (s *Storage) GenValue(tag string) (int, error) {
+	return s.series.GenValue(tag)
 }

@@ -109,7 +109,7 @@ func (s *Model) Save(store *Store) error {
 		return errors.New(MSG_STORE_IS_NIL)
 	}
 
-	err := store.Set("model", s.ID, s.db.ID, s)
+	err := store.Set(storeModels, s.ID, s.db.ID, s)
 	if err != nil {
 		return err
 	}

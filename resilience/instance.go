@@ -103,7 +103,7 @@ func (s *Instance) save() error {
 	}
 
 	if s.store != nil {
-		err := s.store.Set("resilience", s.ID, s.ResilienceId, data)
+		err := s.store.Set(storeResilience, s.ID, s.ResilienceId, data)
 		if err != nil {
 			return err
 		}

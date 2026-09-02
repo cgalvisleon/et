@@ -462,9 +462,9 @@ func (s *WorkFlow) Run(tag, triggerTag, id, projectId, code string, ctx, tags et
 		if err != nil {
 			return nil, err
 		}
-		err = instance.setStatus(PENDING)
-		if err != nil {
-			return nil, err
+		errStatus := instance.setStatus(PENDING)
+		if errStatus != nil {
+			return nil, errStatus
 		}
 	}
 	if err != nil {
@@ -472,7 +472,6 @@ func (s *WorkFlow) Run(tag, triggerTag, id, projectId, code string, ctx, tags et
 	}
 
 	instance.setTag(tags)
-	instance.setCtx(ctx)
 	result, err := instance.run(ctx, userId)
 	if err != nil {
 		return et.Json{}, err

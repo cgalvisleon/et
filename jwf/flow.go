@@ -68,6 +68,8 @@ type FlowDefinition struct {
 	Version     string    `json:"version"`
 }
 
+type fnStep func(instance *Instance, ctx et.Json) (et.Json, error)
+
 type Flow struct {
 	CreatedAt     time.Time                `json:"created_at"`
 	UpdatedAt     time.Time                `json:"updated_at"`
@@ -464,12 +466,12 @@ func (s *Flow) addConnection(sourceId string, targetId string, index int, kind P
 
 /**
 * addStep
-* @param tag, version, title string, kind Port, fn func(instance *Instance, ctx et.Json) (et.Json, error), userId string
+* @param tag, version, title string, kind Port, fn fnStep, userId string
 * @return *Flow
 **/
-func (s *Flow) addStep(kind Kind, tag, version, title string, port Port, fn func(instance *Instance, ctx et.Json) (et.Json, error), userId string) *Flow {
+func (s *Flow) addStep(kind Kind, tag, version, title string, port Port, fn fnStep, userId string) *Flow {
 	result := s.workflow.newStep(kind, "", tag, version, title, userId)
-	result.Definition = fn
+	result.definition = fn
 	s.Steps[result.ID] = result
 
 	if s.step == nil {
@@ -490,13 +492,13 @@ func (s *Flow) addStep(kind Kind, tag, version, title string, port Port, fn func
 
 /**
 * Step
-* @param tag, version, title string, fn func(instance *Instance, ctx et.Json) (et.Json, error), userId string
+* @param tag, version, title string, fn fnStep, userId string
 * @return *Flow
 **/
-func (s *Flow) Step(tag, title string, fn func(instance *Instance, ctx et.Json) (et.Json, error)) *Flow {
+func (s *Flow) Step(tag, title string, fn fnStep) *Flow {
 	if len(s.Steps) == 0 {
 		result := s.workflow.newStep(KindTrigger, "", tag, "1.0.0", title, s.ID)
-		result.Definition = fn
+		result.definition = fn
 		s.Steps[result.ID] = result
 		s.step = result
 
@@ -515,7 +517,7 @@ func (s *Flow) Step(tag, title string, fn func(instance *Instance, ctx et.Json) 
 * @param stepId string
 * @return *Flow
 **/
-func (s *Flow) Error(tag, version, title string, fn func(instance *Instance, ctx et.Json) (et.Json, error)) *Flow {
+func (s *Flow) Error(tag, version, title string, fn fnStep) *Flow {
 	if len(s.Steps) == 0 {
 		s.err = errors.New(MSG_INVALID_SOURCE)
 		return s

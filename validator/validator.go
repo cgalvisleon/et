@@ -1,22 +1,32 @@
 package validator
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/cgalvisleon/et/et"
 )
 
+var letterPattern = regexp.MustCompile(`\p{L}`)
+var numberPattern = regexp.MustCompile(`[0-9]`)
+var specialCharPattern = regexp.MustCompile(`[^\p{L}0-9\s]`)
+
 type Condition struct {
-	required  bool
-	min       float64
-	max       float64
-	minLength int
-	maxLength int
-	pattern   string
-	name      string
-	validator *Validator
+	required            bool
+	notEmpty            bool
+	isLetters           bool
+	isNumbers           bool
+	isSpecialCharacters bool
+	min                 float64
+	max                 float64
+	minLength           int
+	maxLength           int
+	pattern             string
+	name                string
+	validator           *Validator
 }
 
 type Field struct {
@@ -65,6 +75,42 @@ func (s *Condition) Field(name string) *Condition {
 **/
 func (s *Condition) Required() *Condition {
 	s.required = true
+	return s
+}
+
+/**
+* NotEmpty: Require the string value to contain at least one non-whitespace character.
+* @return *Condition
+**/
+func (s *Condition) NotEmpty() *Condition {
+	s.notEmpty = true
+	return s
+}
+
+/**
+* IsLetters: Require the string value to contain at least one letter. Can be combined with IsNumbers and IsSpecialCharacters.
+* @return *Condition
+**/
+func (s *Condition) IsLetters() *Condition {
+	s.isLetters = true
+	return s
+}
+
+/**
+* IsNumbers: Require the string value to contain at least one digit. Can be combined with IsLetters and IsSpecialCharacters.
+* @return *Condition
+**/
+func (s *Condition) IsNumbers() *Condition {
+	s.isNumbers = true
+	return s
+}
+
+/**
+* IsSpecialCharacters: Require the string value to contain at least one special (non-alphanumeric) character. Can be combined with IsLetters and IsNumbers.
+* @return *Condition
+**/
+func (s *Condition) IsSpecialCharacters() *Condition {
+	s.isSpecialCharacters = true
 	return s
 }
 
@@ -160,12 +206,20 @@ func (s *Condition) validate(value any) (bool, error) {
 func (s *Condition) validateString(value string) (bool, error) {
 	if s.required && value == "" {
 		return false, fmt.Errorf(MSG_VALIDATOR_REQUIRED, s.name)
+	} else if s.notEmpty && strings.TrimSpace(value) == "" {
+		return false, fmt.Errorf(MSG_VALIDATOR_NOT_EMPTY, s.name)
 	} else if s.minLength > 0 && len(value) < s.minLength {
 		return false, fmt.Errorf(MSG_VALIDATOR_MIN_LENGTH, s.name, s.minLength)
 	} else if s.maxLength > 0 && len(value) > s.maxLength {
 		return false, fmt.Errorf(MSG_VALIDATOR_MAX_LENGTH, s.name, s.maxLength)
 	} else if s.pattern != "" && !regexp.MustCompile(s.pattern).MatchString(value) {
 		return false, fmt.Errorf(MSG_VALIDATOR_PATTERN, s.name, s.pattern)
+	} else if s.isLetters && !letterPattern.MatchString(value) {
+		return false, fmt.Errorf(MSG_VALIDATOR_LETTERS, s.name)
+	} else if s.isNumbers && !numberPattern.MatchString(value) {
+		return false, fmt.Errorf(MSG_VALIDATOR_NUMBERS, s.name)
+	} else if s.isSpecialCharacters && !specialCharPattern.MatchString(value) {
+		return false, fmt.Errorf(MSG_VALIDATOR_SPECIAL_CHARACTERS, s.name)
 	}
 	return true, nil
 }
@@ -306,10 +360,15 @@ func (s *Condition) Validate(value et.Json) (bool, error) {
 **/
 func (s *Validator) Validate(value et.Json) (bool, error) {
 	if value.IsEmpty() {
-		return false, fmt.Errorf(MSG_VALIDATOR_EMPTY)
+		return false, errors.New(MSG_VALIDATOR_EMPTY)
 	}
 	for key, val := range value {
-		ok, err := s.Fields[key].Condition.validate(val)
+		field, exists := s.Fields[key]
+		if !exists {
+			continue
+		}
+
+		ok, err := field.Condition.validate(val)
 		if !ok || err != nil {
 			return false, err
 		}

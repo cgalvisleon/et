@@ -3,7 +3,6 @@ package jwf
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/cgalvisleon/et/envar"
@@ -43,6 +42,8 @@ var (
 	}
 )
 
+type fnPublish func(flow *Flow, ctx et.Json) (et.Json, error)
+
 type Step struct {
 	CreatedAt   time.Time                `json:"created_at"`
 	UpdatedAt   time.Time                `json:"updated_at"`
@@ -55,14 +56,16 @@ type Step struct {
 	Status      Status                   `json:"status"`
 	Title       string                   `json:"title"`
 	Description string                   `json:"description"`
-	Definition  interface{}              `json:"definition"`
-	OnPublish   interface{}              `json:"on_publish"`
+	Definition  string                   `json:"definition"`
+	OnPublish   string                   `json:"on_publish"`
 	Config      et.Json                  `json:"config"`
 	Params      et.Json                  `json:"params"`
 	Inputs      int                      `json:"inputs"`
 	Outputs     int                      `json:"outputs"`
 	Stop        bool                     `json:"stop"`
 	AuditLog    []et.Json                `json:"audit_log"`
+	definition  fnStep                   `json:"-"`
+	onPublish   fnPublish                `json:"-"`
 	isDebug     bool                     `json:"-"`
 	isChanged   bool                     `json:"-"`
 	store       Store                    `json:"-"`
@@ -96,6 +99,8 @@ func newStep(ownerId, id string, kind Kind, tag, version, title string) *Step {
 		Status:      ACTIVE,
 		Title:       title,
 		Description: "",
+		Definition:  "",
+		OnPublish:   "",
 		Config:      et.Json{},
 		Params:      et.Json{},
 		Inputs:      0,
@@ -330,8 +335,20 @@ func (s *Step) save() error {
 * @return error
 **/
 func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
-	if s.Definition == nil {
-		return et.Json{}, errors.New(MSG_STEP_DEFINITION_IS_NIL)
+	if s.definition != nil {
+		errStatus := instance.setStatus(RUNNING)
+		if errStatus != nil {
+			return et.Json{}, errStatus
+		}
+		result, err := s.definition(instance, ctx)
+		if err != nil {
+			errStatus := instance.setStatus(FAILED)
+			if errStatus != nil {
+				return et.Json{}, errStatus
+			}
+			return et.Json{}, err
+		}
+		return result, nil
 	}
 
 	initJrex := func() *jrex.Instance {
@@ -344,53 +361,25 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 	}
 
 	runJrex := func(rex *jrex.Instance, script string) (et.Json, error) {
-		instance.setStatus(RUNNING)
+		errStatus := instance.setStatus(RUNNING)
+		if errStatus != nil {
+			return et.Json{}, errStatus
+		}
 		rex.SetCtx(ctx)
 		rex.SetCode(script)
 		_, err := rex.Run()
 		if err != nil {
-			instance.setStatus(FAILED)
+			errStatus := instance.setStatus(FAILED)
+			if errStatus != nil {
+				return et.Json{}, errStatus
+			}
 			return et.Json{}, err
 		}
 		return rex.Ctx, nil
 	}
 
-	switch v := s.Definition.(type) {
-	case func(instance *Instance, ctx et.Json) (et.Json, error):
-		instance.setStatus(RUNNING)
-		result, err := v(instance, ctx)
-		if err != nil {
-			instance.setStatus(FAILED)
-			return et.Json{}, err
-		}
-		return result, nil
-	case string:
-		rex := initJrex()
-		return runJrex(rex, v)
-	case []byte:
-		rex := initJrex()
-		code := string(v)
-		return runJrex(rex, code)
-	case []string:
-		if len(v) == 0 {
-			return et.Json{}, errors.New(MSG_STEP_CODE_INDEX_NOT_FOUND)
-		}
-
-		rex := initJrex()
-		code := v[0]
-		return runJrex(rex, code)
-	case [][]byte:
-		if len(v) == 0 {
-			return et.Json{}, errors.New(MSG_STEP_CODE_INDEX_NOT_FOUND)
-		}
-
-		rex := initJrex()
-		bt := v[0]
-		code := string(bt)
-		return runJrex(rex, code)
-	default:
-		return et.Json{}, fmt.Errorf(MSG_STEP_DEFINITION_IS_UNKNOWN, reflect.TypeOf(s.Definition))
-	}
+	rex := initJrex()
+	return runJrex(rex, s.Definition)
 }
 
 /**
@@ -399,8 +388,12 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 * @return error
 **/
 func (s *Step) runOnPublish(flow *Flow, ctx et.Json) (et.Json, error) {
-	if s.OnPublish == nil {
-		return et.Json{}, errors.New(MSG_STEP_ON_PUBLISH_IS_NIL)
+	if s.onPublish == nil {
+		result, err := s.onPublish(flow, ctx)
+		if err != nil {
+			return et.Json{}, err
+		}
+		return result, nil
 	}
 
 	initJrex := func() *jrex.Instance {
@@ -423,40 +416,8 @@ func (s *Step) runOnPublish(flow *Flow, ctx et.Json) (et.Json, error) {
 		return rex.Ctx, nil
 	}
 
-	switch v := s.OnPublish.(type) {
-	case func(flow *Flow, ctx et.Json) (et.Json, error):
-		result, err := v(flow, ctx)
-		if err != nil {
-			return et.Json{}, err
-		}
-		return result, nil
-	case string:
-		rex := initJrex()
-		return runJrex(rex, v)
-	case []byte:
-		rex := initJrex()
-		code := string(v)
-		return runJrex(rex, code)
-	case []string:
-		if len(v) == 0 {
-			return et.Json{}, errors.New(MSG_STEP_CODE_INDEX_NOT_FOUND)
-		}
-
-		rex := initJrex()
-		code := v[0]
-		return runJrex(rex, code)
-	case [][]byte:
-		if len(v) == 0 {
-			return et.Json{}, errors.New(MSG_STEP_CODE_INDEX_NOT_FOUND)
-		}
-
-		rex := initJrex()
-		bt := v[0]
-		code := string(bt)
-		return runJrex(rex, code)
-	default:
-		return et.Json{}, fmt.Errorf(MSG_STEP_ON_PUBLISH_IS_UNKNOWN, reflect.TypeOf(s.OnPublish))
-	}
+	rex := initJrex()
+	return runJrex(rex, s.OnPublish)
 }
 
 /**
@@ -480,13 +441,10 @@ func (s *Step) setStatus(status Status, userId string) error {
 
 /**
 * setDefinition
-* @param definition interface{}
+* @param definition string
 * @return *Step
 **/
-func (s *Step) setDefinition(definition interface{}) *Step {
-	if s.Definition == definition {
-		return nil
-	}
+func (s *Step) setDefinition(definition string) *Step {
 	s.Definition = definition
 	return s
 }
@@ -496,10 +454,7 @@ func (s *Step) setDefinition(definition interface{}) *Step {
 * @param onPublish interface{}
 * @return *Step
 **/
-func (s *Step) setOnPublish(onPublish interface{}) *Step {
-	if s.OnPublish == onPublish {
-		return s
-	}
+func (s *Step) setOnPublish(onPublish string) *Step {
 	s.OnPublish = onPublish
 	return s
 }

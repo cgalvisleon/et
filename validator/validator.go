@@ -194,6 +194,14 @@ func (s *Condition) validate(value any) (bool, error) {
 		return s.validateTime(v)
 	case []byte:
 		return s.validateBytes(v)
+	case []string:
+		return s.validateArrayString(v)
+	case []int:
+		return s.validateInts(v)
+	case []float64:
+		return s.validateFloats(v)
+	case []any:
+		return s.validateArrayAny(v)
 	}
 	return false, fmt.Errorf(MSG_VALIDATOR_INVALID_TYPE, s.name)
 }
@@ -297,19 +305,28 @@ func (s *Condition) validateBytes(value []byte) (bool, error) {
 }
 
 /**
+* validateArrayLength: Validate an array length against required/minLength/maxLength.
+* @param length int
+* @return bool, error
+**/
+func (s *Condition) validateArrayLength(length int) (bool, error) {
+	if s.required && length == 0 {
+		return false, fmt.Errorf(MSG_VALIDATOR_REQUIRED, s.name)
+	} else if s.minLength > 0 && length < s.minLength {
+		return false, fmt.Errorf(MSG_VALIDATOR_MIN_LENGTH, s.name, s.minLength)
+	} else if s.maxLength > 0 && length > s.maxLength {
+		return false, fmt.Errorf(MSG_VALIDATOR_MAX_LENGTH, s.name, s.maxLength)
+	}
+	return true, nil
+}
+
+/**
 * validateArrayString: Validate the array of strings value using the validator.
 * @param value []string
 * @return bool, error
 **/
 func (s *Condition) validateArrayString(value []string) (bool, error) {
-	if s.required && len(value) == 0 {
-		return false, fmt.Errorf(MSG_VALIDATOR_REQUIRED, s.name)
-	} else if s.minLength > 0 && len(value) < s.minLength {
-		return false, fmt.Errorf(MSG_VALIDATOR_MIN_LENGTH, s.name, s.minLength)
-	} else if s.maxLength > 0 && len(value) > s.maxLength {
-		return false, fmt.Errorf(MSG_VALIDATOR_MAX_LENGTH, s.name, s.maxLength)
-	}
-	return true, nil
+	return s.validateArrayLength(len(value))
 }
 
 /**
@@ -318,14 +335,7 @@ func (s *Condition) validateArrayString(value []string) (bool, error) {
 * @return bool, error
 **/
 func (s *Condition) validateInts(value []int) (bool, error) {
-	if s.required && len(value) == 0 {
-		return false, fmt.Errorf(MSG_VALIDATOR_REQUIRED, s.name)
-	} else if s.minLength > 0 && len(value) < s.minLength {
-		return false, fmt.Errorf(MSG_VALIDATOR_MIN_LENGTH, s.name, s.minLength)
-	} else if s.maxLength > 0 && len(value) > s.maxLength {
-		return false, fmt.Errorf(MSG_VALIDATOR_MAX_LENGTH, s.name, s.maxLength)
-	}
-	return true, nil
+	return s.validateArrayLength(len(value))
 }
 
 /**
@@ -334,14 +344,16 @@ func (s *Condition) validateInts(value []int) (bool, error) {
 * @return bool, error
 **/
 func (s *Condition) validateFloats(value []float64) (bool, error) {
-	if s.required && len(value) == 0 {
-		return false, fmt.Errorf(MSG_VALIDATOR_REQUIRED, s.name)
-	} else if s.minLength > 0 && len(value) < s.minLength {
-		return false, fmt.Errorf(MSG_VALIDATOR_MIN_LENGTH, s.name, s.minLength)
-	} else if s.maxLength > 0 && len(value) > s.maxLength {
-		return false, fmt.Errorf(MSG_VALIDATOR_MAX_LENGTH, s.name, s.maxLength)
-	}
-	return true, nil
+	return s.validateArrayLength(len(value))
+}
+
+/**
+* validateArrayAny: Validate a generic array value (e.g. []any from a decoded JSON array) using the validator.
+* @param value []any
+* @return bool, error
+**/
+func (s *Condition) validateArrayAny(value []any) (bool, error) {
+	return s.validateArrayLength(len(value))
 }
 
 /**

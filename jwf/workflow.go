@@ -450,11 +450,11 @@ func (s *WorkFlow) SetStep(stepDef et.Json, userId string) (*WorkFlow, error) {
 }
 
 /**
-* Run
-* @param flowId, tag, id, projectId, code string, ctx, tags et.Json, userId string
+* GetInstance
+* @param tag, triggerTag, id, projectId, code, userId string
 * @return *Instance, error
 **/
-func (s *WorkFlow) Run(tag, triggerTag, id, projectId, code string, ctx, tags et.Json, userId string) (et.Json, error) {
+func (s *WorkFlow) GetInstance(tag, triggerTag, id, projectId, code, userId string) (*Instance, error) {
 	id = reg.GetULID(id)
 	instance, err := s.getInstance(id, userId)
 	if errors.Is(err, ErrorInstanceNotFound) {
@@ -471,14 +471,56 @@ func (s *WorkFlow) Run(tag, triggerTag, id, projectId, code string, ctx, tags et
 		return nil, err
 	}
 
+	return instance, nil
+}
+
+/**
+* ValidStatus
+* @param instance *Instance
+* @return et.Json, error
+**/
+func (s *WorkFlow) ValidStatus(instance *Instance) error {
+	if instance.Status == DONE {
+		return errors.New(MSG_INSTANCE_ALREADY_DONE)
+	} else if instance.Status == RUNNING {
+		return errors.New(MSG_INSTANCE_ALREADY_RUNNING)
+	} else if instance.Status == ROLLBACK {
+		return errors.New(MSG_INSTANCE_ROLLBACK)
+	} else if instance.Status == CANCEL {
+		return errors.New(MSG_INSTANCE_CANCEL)
+	}
+
+	return nil
+}
+
+/**
+* RunInstance
+* @param instance *Instance, ctx, tags et.Json, userId string
+* @return et.Json, error
+**/
+func (s *WorkFlow) RunInstance(instance *Instance, ctx, tags et.Json, userId string) (et.Json, error) {
 	instance.setTag(tags)
 	result, err := instance.run(ctx, userId)
 	if err != nil {
 		return et.Json{}, err
 	}
 
-	key := fmt.Sprintf("instance:%s:status", id)
+	key := fmt.Sprintf("instance:%s:status", instance.ID)
 	cache.Delete(key)
 
 	return result, nil
+}
+
+/**
+* Run
+* @param flowId, tag, id, projectId, code string, ctx, tags et.Json, userId string
+* @return *Instance, error
+**/
+func (s *WorkFlow) Run(tag, triggerTag, id, projectId, code string, ctx, tags et.Json, userId string) (et.Json, error) {
+	instance, err := s.GetInstance(tag, triggerTag, id, projectId, code, userId)
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	return s.RunInstance(instance, ctx, tags, userId)
 }

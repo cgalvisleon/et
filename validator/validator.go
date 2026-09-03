@@ -35,13 +35,23 @@ type Field struct {
 }
 
 type Validator struct {
-	Fields map[string]*Field
+	Fields   map[string]*Field
+	notEmpty bool
 }
 
 func New() *Validator {
 	return &Validator{
 		Fields: make(map[string]*Field),
 	}
+}
+
+/**
+* NotEmpty: Require the json data passed to Validate to contain at least one key.
+* @return *Validator
+**/
+func (s *Validator) NotEmpty() *Validator {
+	s.notEmpty = true
+	return s
 }
 
 /**
@@ -371,7 +381,7 @@ func (s *Condition) Validate(value et.Json) (bool, error) {
 * @return bool
 **/
 func (s *Validator) Validate(value et.Json) (bool, error) {
-	if value.IsEmpty() {
+	if s.notEmpty && value.IsEmpty() {
 		return false, errors.New(MSG_VALIDATOR_EMPTY)
 	}
 	for key, val := range value {

@@ -44,11 +44,11 @@ func (s Status) ToString() string {
 }
 
 /**
-* statusOk
+* IsStatusOk
 * @param status int
 * @return bool
 **/
-func statusOk(status int) bool {
+func IsStatusOk(status int) bool {
 	return status >= http.StatusOK && status < http.StatusMultipleChoices
 }
 

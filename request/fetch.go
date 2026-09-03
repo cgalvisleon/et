@@ -118,7 +118,7 @@ func HttpWithContext(ctx context.Context, method, url string, header, body et.Js
 	}
 
 	return result, Status{
-		Ok:      statusOk(res.StatusCode),
+		Ok:      IsStatusOk(res.StatusCode),
 		Code:    res.StatusCode,
 		Message: res.Status,
 	}

@@ -37,10 +37,10 @@ type DB struct {
 
 /**
 * NewDB
-* @param id, host, name, driver string
+* @param id, host, name, driver string, showLog bool
 * @return *DB, error
 **/
-func NewDB(id, host, name, driver string) (*DB, error) {
+func NewDB(id, host, name, driver string, showLog bool) (*DB, error) {
 	drv, ok := drivers[driver]
 	if !ok {
 		return nil, errors.New(MSG_DRIVER_NOT_FOUND)
@@ -75,7 +75,7 @@ func NewDB(id, host, name, driver string) (*DB, error) {
 		AuditLog:    make([]et.Json, 0),
 		driver:      drv,
 		isDebug:     envar.GetBool("DEBUG", false),
-		showLog:     envar.GetBool("SHOW_LOG", true),
+		showLog:     showLog,
 	}
 
 	return result, nil

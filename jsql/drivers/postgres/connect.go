@@ -115,11 +115,10 @@ func connectWithRetry(ctx context.Context, dsn string, maxRetries int) (*sql.DB,
 /**
 * Connect: Establishes a PostgreSQL connection using the parameters stored in db.
 * Reads DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME and DB_SSL_MODE from db.Params.
-* @param ctx context.Context
-* @param db *jsql.DB
+* @param ctx context.Context, db *jsql.DB, showLog bool
 * @return *sql.DB, error
 **/
-func (s *Postgres) Connect(ctx context.Context, db *jsql.DB, show bool) (*sql.DB, error) {
+func (s *Postgres) Connect(ctx context.Context, db *jsql.DB) (*sql.DB, error) {
 	params := db.Params
 	dsn := defaultChain(params)
 	result, err := connectWithRetry(ctx, dsn, 5)
@@ -157,7 +156,7 @@ func (s *Postgres) Connect(ctx context.Context, db *jsql.DB, show bool) (*sql.DB
 
 	host := params.ValStr("", "host")
 	port := params.ValInt(5432, "port")
-	if show {
+	if db.ShowLog() {
 		logs.Logf("Postgres", "Connected host:%s:%d db:%s", host, port, database)
 	}
 	return result, nil

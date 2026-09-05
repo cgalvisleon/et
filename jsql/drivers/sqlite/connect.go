@@ -72,7 +72,7 @@ func connectTo(ctx context.Context, path string) (*sql.DB, error) {
 * @param ctx context.Context, db *jsql.DB
 * @return *sql.DB, error
 **/
-func (s *Sqlite) Connect(ctx context.Context, db *jsql.DB, show bool) (*sql.DB, error) {
+func (s *Sqlite) Connect(ctx context.Context, db *jsql.DB) (*sql.DB, error) {
 	path, err := dbPath(db)
 	if err != nil {
 		return nil, err
@@ -96,7 +96,7 @@ func (s *Sqlite) Connect(ctx context.Context, db *jsql.DB, show bool) (*sql.DB, 
 	result.SetConnMaxLifetime(time.Duration(connLifetime) * time.Minute)
 	result.SetConnMaxIdleTime(time.Duration(connIdleTime) * time.Minute)
 
-	if show {
+	if db.ShowLog() {
 		logs.Logf("Sqlite", "Connected db:%s", path)
 	}
 	return result, nil

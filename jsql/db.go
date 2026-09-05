@@ -157,6 +157,22 @@ func LoadDb(store *Store, id string) (*DB, error) {
 * SetShowLog: Sets the show log flag.
 * @param show bool
 **/
+func (s *DB) ShowLog() bool {
+	return s.showLog
+}
+
+/**
+* SetShowLog: Sets the show log flag.
+* @param show bool
+**/
+func (s *DB) SetShowLog(show bool) {
+	s.showLog = show
+}
+
+/**
+* SetShowLog: Sets the show log flag.
+* @param show bool
+**/
 func (s *DB) ShowLogOff() {
 	s.showLog = false
 }
@@ -270,7 +286,7 @@ func (s *DB) Init() error {
 		return errors.New(MSG_DRIVER_NOT_FOUND)
 	}
 
-	db, err := s.driver.Connect(context.Background(), s, s.showLog)
+	db, err := s.driver.Connect(context.Background(), s)
 	if err != nil {
 		return err
 	}

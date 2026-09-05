@@ -119,7 +119,7 @@ func connectWithRetry(ctx context.Context, dsn string, maxRetries int) (*sql.DB,
 * @param db *jsql.DB
 * @return *sql.DB, error
 **/
-func (s *Postgres) Connect(ctx context.Context, db *jsql.DB) (*sql.DB, error) {
+func (s *Postgres) Connect(ctx context.Context, db *jsql.DB, show bool) (*sql.DB, error) {
 	params := db.Params
 	dsn := defaultChain(params)
 	result, err := connectWithRetry(ctx, dsn, 5)
@@ -157,7 +157,9 @@ func (s *Postgres) Connect(ctx context.Context, db *jsql.DB) (*sql.DB, error) {
 
 	host := params.ValStr("", "host")
 	port := params.ValInt(5432, "port")
-	logs.Logf("Postgres", "Connected host:%s:%d db:%s", host, port, database)
+	if show {
+		logs.Logf("Postgres", "Connected host:%s:%d db:%s", host, port, database)
+	}
 	return result, nil
 }
 

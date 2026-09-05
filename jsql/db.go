@@ -32,6 +32,7 @@ type DB struct {
 	driver      Driver             `json:"-"`
 	db          *sql.DB            `json:"-"`
 	store       *Store             `json:"-"`
+	showLog     bool               `json:"-"`
 }
 
 /**
@@ -74,6 +75,7 @@ func NewDB(id, host, name, driver string) (*DB, error) {
 		AuditLog:    make([]et.Json, 0),
 		driver:      drv,
 		isDebug:     envar.GetBool("DEBUG", false),
+		showLog:     envar.GetBool("SHOW_LOG", true),
 	}
 
 	return result, nil
@@ -149,6 +151,22 @@ func LoadDb(store *Store, id string) (*DB, error) {
 	}
 
 	return result, nil
+}
+
+/**
+* SetShowLog: Sets the show log flag.
+* @param show bool
+**/
+func (s *DB) ShowLogOff() {
+	s.showLog = false
+}
+
+/**
+* ShowLogOn: Sets the show log flag to true.
+* @param show bool
+**/
+func (s *DB) ShowLogOn() {
+	s.showLog = true
 }
 
 /**
@@ -252,7 +270,7 @@ func (s *DB) Init() error {
 		return errors.New(MSG_DRIVER_NOT_FOUND)
 	}
 
-	db, err := s.driver.Connect(context.Background(), s)
+	db, err := s.driver.Connect(context.Background(), s, s.showLog)
 	if err != nil {
 		return err
 	}

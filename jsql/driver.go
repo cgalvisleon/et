@@ -18,7 +18,7 @@ const (
 * Driver: Interface that every database backend must implement to generate SQL and manage connections.
 **/
 type Driver interface {
-	Connect(ctx context.Context, db *DB) (*sql.DB, error)
+	Connect(ctx context.Context, db *DB, show bool) (*sql.DB, error)
 	ExistModel(db *sql.DB, model *Model) (bool, error)
 	Load(model *Model) (string, error)
 	Query(query *Query) (string, error)

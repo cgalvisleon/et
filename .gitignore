@@ -17,6 +17,7 @@ build
 dist
 web
 .vscode
+.tick
 /web
 acs.md
 /cmd/server/__debug_bin*

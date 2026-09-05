@@ -87,7 +87,7 @@ age := data.ValInt(0, "user", "age")
 - `func Define(dbName string, def Def) (*Model, error)` — atajo de paquete que delega en `(*DB).Define`
 - `func Insert/Update/Delete/Upsert(model *Model, data et.Json) *Command`
 
-**`(*DB).NewDB(tenantId, host, name, driver string) (*DB, error)`** (`jsql/db.go:42`) — constructor de bajo nivel usado internamente por `Load`/`LoadTo`; no confundir con conectar directamente.
+**`NewDB(id, host, name, driver string, showLog ...bool) (*DB, error)`** (`jsql/db.go:43`) — constructor de bajo nivel usado internamente por `Load`/`LoadTo`/`ConnectTo`; no inicializa el DDL por sí solo (requiere `Init()` después). `showLog` es variádico y opcional, por defecto `true`. No confundir con conectar directamente.
 
 **`jsql.Store` — es un STRUCT concreto, no una interfaz** (`jsql/store.go:11`):
 ```go

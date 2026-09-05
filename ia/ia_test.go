@@ -31,7 +31,7 @@ func newTestRag(t *testing.T) *Rag {
 	t.Helper()
 
 	dbPath := filepath.Join(t.TempDir(), "ia_test.db")
-	db, err := jsql.NewDB("tenant:root", "local", dbPath, jsql.DriverSqlite, false)
+	db, err := jsql.NewDB("tenant:root", "local", dbPath, jsql.DriverSqlite)
 	if err != nil {
 		t.Fatalf("NewDB: %v", err)
 	}

@@ -36,11 +36,16 @@ type DB struct {
 }
 
 /**
-* NewDB
-* @param id, host, name, driver string, showLog bool
+* NewDB: Creates a new DB instance for the given driver without initializing it (call Init afterwards).
+* @param id, host, name, driver string, showLog ...bool (optional, defaults to true)
 * @return *DB, error
 **/
-func NewDB(id, host, name, driver string, showLog bool) (*DB, error) {
+func NewDB(id, host, name, driver string, showLog ...bool) (*DB, error) {
+	show := true
+	if len(showLog) > 0 {
+		show = showLog[0]
+	}
+
 	drv, ok := drivers[driver]
 	if !ok {
 		return nil, errors.New(MSG_DRIVER_NOT_FOUND)
@@ -75,7 +80,7 @@ func NewDB(id, host, name, driver string, showLog bool) (*DB, error) {
 		AuditLog:    make([]et.Json, 0),
 		driver:      drv,
 		isDebug:     envar.GetBool("DEBUG", false),
-		showLog:     showLog,
+		showLog:     show,
 	}
 
 	return result, nil

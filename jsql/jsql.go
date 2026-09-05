@@ -39,8 +39,8 @@ func GetConnection(driver, host string) (Connection, error) {
 * @param tenantId, host, driver, name string, showLog bool
 * @return *DB, error
 **/
-func ConnectTo(tenantId, host, driver, name string, showLog bool) (*DB, error) {
-	result, err := NewDB(tenantId, host, name, driver, showLog)
+func ConnectTo(tenantId, host, driver, name string, showLog ...bool) (*DB, error) {
+	result, err := NewDB(tenantId, host, name, driver, showLog...)
 	if err != nil {
 		return nil, err
 	}

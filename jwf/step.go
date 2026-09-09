@@ -167,7 +167,7 @@ func (s *WorkFlow) deleteStep(id string) error {
 		return ErrrStepNotFound
 	}
 
-	err := s.store.Delete("step", id)
+	err := s.store.Delete(storeSteps, id)
 	if err != nil {
 		return err
 	}
@@ -388,7 +388,7 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 * @return error
 **/
 func (s *Step) runOnPublish(flow *Flow, ctx et.Json) (et.Json, error) {
-	if s.onPublish == nil {
+	if s.onPublish != nil {
 		result, err := s.onPublish(flow, ctx)
 		if err != nil {
 			return et.Json{}, err

@@ -368,7 +368,7 @@ func (s *Flow) getTarget(stepId string, index int) (*Step, bool) {
 **/
 func (s *Flow) getSource(stepId string, index int) (*Step, bool) {
 	idx := slices.IndexFunc(s.Connections, func(connection *Connection) bool {
-		return connection.Kind == PortOutput && connection.Target.StepId == stepId && connection.Source.Index == index
+		return connection.Kind == PortOutput && connection.Target.StepId == stepId && connection.Target.Index == index
 	})
 
 	if idx == -1 {
@@ -399,7 +399,7 @@ func (s *Flow) getError(stepId string, index int) (*Step, bool) {
 	}
 
 	conn := s.Connections[idx]
-	step, exists := s.getStep(conn.Source.StepId)
+	step, exists := s.getStep(conn.Target.StepId)
 	if !exists {
 		return nil, false
 	}

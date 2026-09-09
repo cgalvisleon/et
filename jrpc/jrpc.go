@@ -2,6 +2,7 @@ package jrpc
 
 import (
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"net"
 	"net/rpc"
@@ -14,8 +15,9 @@ import (
 )
 
 var (
-	os   string
-	rpcs map[string]et.Json
+	os       string
+	rpcs     map[string]et.Json
+	listener net.Listener
 )
 
 func init() {
@@ -69,6 +71,8 @@ func Mount(host string, port int, services any, packageName string) (*Package, e
 		return nil, err
 	}
 
+	rpcs[pkg.Name] = pkg.ToJson()
+
 	return pkg, nil
 }
 
@@ -78,15 +82,19 @@ func Mount(host string, port int, services any, packageName string) (*Package, e
 **/
 func Start(port int) error {
 	address := fmt.Sprintf(`:%d`, port)
-	listener, err := net.Listen("tcp", address)
+	l, err := net.Listen("tcp", address)
 	if err != nil {
 		return err
 	}
+	listener = l
 
 	go func() {
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
+				if errors.Is(err, net.ErrClosed) {
+					return
+				}
 				logs.Error(err)
 				continue
 			}

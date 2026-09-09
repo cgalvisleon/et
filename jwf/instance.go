@@ -241,7 +241,7 @@ func (s *WorkFlow) deleteInstance(id, userId string) error {
 	cache.Delete(key)
 
 	if s.store != nil {
-		err = s.store.Delete("instance", id)
+		err = s.store.Delete(storeInstances, id)
 		if err != nil {
 			return err
 		}
@@ -725,7 +725,9 @@ func (s *Instance) next() bool {
 func (s *Instance) run(ctx et.Json, userId string) (et.Json, error) {
 	var err error
 	defer func() {
-		s.setTrace(s.Current.ID, ctx, err, userId)
+		if s.Current != nil {
+			s.setTrace(s.Current.ID, ctx, err, userId)
+		}
 	}()
 
 	status := s.getStatus()

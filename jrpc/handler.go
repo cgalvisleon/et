@@ -10,8 +10,9 @@ import (
 )
 
 var (
-	ErrorRpcNotConnected = errors.New("rpc not connected")
-	pkg                  *Package
+	ErrorRpcNotConnected   = errors.New("rpc not connected")
+	ErrorPackageNotMounted = errors.New("rpc package not mounted")
+	pkg                    *Package
 )
 
 /**
@@ -20,6 +21,10 @@ var (
 * @return (*Solver, error)
 **/
 func GetSolver(method string) (*Solver, error) {
+	if pkg == nil {
+		return nil, ErrorPackageNotMounted
+	}
+
 	solver, ok := pkg.Solvers[method]
 	if !ok {
 		return nil, errors.New("solver not found")
@@ -31,6 +36,9 @@ func GetSolver(method string) (*Solver, error) {
 * Close
 **/
 func Close() {
+	if listener != nil {
+		listener.Close()
+	}
 	logs.Log("Rpc", `Shutting down server...`)
 }
 

@@ -307,7 +307,7 @@ func (s *WorkFlow) Save() error {
 **/
 func (s *WorkFlow) Delete() error {
 	if s.store != nil {
-		err := s.store.Delete("workflow", s.ID)
+		err := s.store.Delete(storeWorkflows, s.ID)
 		if err != nil {
 			return err
 		}
@@ -374,8 +374,8 @@ func (s *WorkFlow) removeFlow(tag string) {
 * @param instance *Instance
 **/
 func (s *WorkFlow) addStep(step *Step) {
-	s.muFlows.Lock()
-	defer s.muFlows.Unlock()
+	s.muSteps.Lock()
+	defer s.muSteps.Unlock()
 
 	s.Steps[step.ID] = step
 }

@@ -22,7 +22,7 @@ func MkProject(packageName, name, author, schema string) error {
 	}
 
 	ProgressNext()
-	err = MakeReadme(name)
+	err = MakeReadme(packageName, name)
 	if err != nil {
 		return err
 	}
@@ -38,8 +38,8 @@ func MkProject(packageName, name, author, schema string) error {
 	return nil
 }
 
-func MakeReadme(packageName string) error {
-	_, _ = file.MakeFile(".", "README.md", template.ModelReadme, packageName, "```")
+func MakeReadme(moduleName, name string) error {
+	_, _ = file.MakeFile(".", "README.md", template.ModelReadme, name, moduleName, "```")
 
 	return nil
 }

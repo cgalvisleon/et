@@ -62,7 +62,7 @@ func LoadTo(name string) (*DB, error) {
 	tenantId := envar.GetStr("DB_TENANT_ID", "tenant:root")
 	driver := envar.GetStr("DB_DRIVER", DriverPostgres)
 	host := envar.GetStr("DB_HOST", "localhost")
-	result, err := ConnectTo(tenantId, host, driver, name, true)
+	result, err := ConnectTo(tenantId, host, driver, name)
 	if err != nil {
 		return nil, err
 	}

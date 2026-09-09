@@ -34,8 +34,6 @@ func MakeInternal(projectName, name, schema string) error {
 func MakeInternalModel(name, schema string) error {
 	path, _ := file.MakeFolder("internal", "models", schema)
 
-	_, _ = file.MakeFile(path, "schema.go", template.ModelSchema, schema)
-
 	_, _ = file.MakeFile(path, "msg.go", template.ModelMsg, schema)
 
 	modelo := strs.Titlecase(name)

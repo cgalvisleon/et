@@ -111,8 +111,17 @@ var CmdModelo = &cobra.Command{
 			return
 		}
 
-		title := strs.Titlecase(packageName)
-		message := fmt.Sprintf(`Remember, including the router, that it is on the bottom of the h%s.go, in routers section of the router.go file`, title)
+		title := strs.Titlecase(modelo)
+		var message string
+		if len(schema) > 0 {
+			message = fmt.Sprintf(`Remember to wire up the new model manually:
+  1. In pkg/%s/model.go, add "%s.Define%s(db)" inside initModels.
+  2. Copy the route registrations from the bottom of pkg/%s/router-%s.go into pkg/%s/router.go.`,
+				packageName, schema, title, packageName, strs.Lowcase(modelo), packageName)
+		} else {
+			message = fmt.Sprintf(`Remember to copy the route registration from the bottom of pkg/%s/h%s.go into pkg/%s/router.go.`,
+				packageName, title, packageName)
+		}
 		fmt.Println(message)
 	},
 }

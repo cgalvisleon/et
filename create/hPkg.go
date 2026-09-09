@@ -65,7 +65,7 @@ func MakePkg(projectName, name, schema string) error {
 			return err
 		}
 
-		_, err = file.MakeFile(pathPkg, "router.go", template.ModelRouter, name)
+		_, err = file.MakeFile(pathPkg, "router.go", template.ModelRouter, name, toCamelCase(modelo))
 		if err != nil {
 			return err
 		}
@@ -79,7 +79,9 @@ func MakeModel(projectName, packageName, modelo, schema string) error {
 
 	if len(schema) > 0 {
 		modelo := strs.Titlecase(modelo)
-		_, _ = file.MakeFile(pathPkg, "model.go", template.ModelModel, packageName, modelo, projectName)
+		// model.go already exists from the initial scaffold and file.MakeFile never
+		// overwrites an existing file — wiring Define<Modelo> into initModels is a
+		// manual step the caller is reminded about (see CmdModelo's Run in hCommand.go).
 
 		fileName := fmt.Sprintf(`router-%s.go`, strs.Lowcase(modelo))
 		_, err := file.MakeFile(pathPkg, fileName, template.ModelDbHandler, packageName, toCamelCase(modelo), projectName, schema)

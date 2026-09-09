@@ -10,7 +10,7 @@ Librería modular en Go para microservicios, CLIs y aplicaciones web. Importa so
 
 ```bash
 go get github.com/cgalvisleon/et@latest
-go get github.com/cgalvisleon/et@v1.0.24
+go get github.com/cgalvisleon/et@v1.0.33
 ```
 
 ```go
@@ -22,52 +22,52 @@ import (
 
 ## Paquetes
 
-| Paquete       | Descripción                                                                         |
-| ------------- | ----------------------------------------------------------------------------------- |
-| `et/`         | Tipos centrales: `Json`, `List`, `Item`, `Items`                                    |
-| `cache/`      | Cliente Redis con Pub/Sub. Init: `cache.Load()`                                     |
-| `event/`      | Pub/Sub sobre NATS. Init: `event.Load()`                                            |
-| `ettp/v2/`    | Servidor HTTP completo (go-chi + Redis + NATS). Init: `ettp.New(name, config)`      |
-| `server/`     | Servidor HTTP ligero (solo chi, sin dependencias externas). Init: `server.New()`    |
-| `router/`     | Router HTTP independiente con sincronización entre instancias vía NATS              |
-| `jrpc/`       | `net/rpc` de Go sobre TCP con balanceo de carga y consenso Raft                     |
-| `jwt/`        | Creación de tokens JWT (`New`, `NewAuthentication`, `NewAuthorization`)             |
-| `claim/`      | Claims JWT con campo `tenantId`. Firma con HS256                                    |
+| Paquete       | Descripción                                                                        |
+| ------------- | ---------------------------------------------------------------------------------- |
+| `et/`         | Tipos centrales: `Json`, `List`, `Item`, `Items`                                   |
+| `cache/`      | Cliente Redis con Pub/Sub. Init: `cache.Load()`                                    |
+| `event/`      | Pub/Sub sobre NATS. Init: `event.Load()`                                           |
+| `ettp/v2/`    | Servidor HTTP completo (go-chi + Redis + NATS). Init: `ettp.New(name, config)`     |
+| `server/`     | Servidor HTTP ligero (solo chi, sin dependencias externas). Init: `server.New()`   |
+| `router/`     | Router HTTP independiente con sincronización entre instancias vía NATS             |
+| `jrpc/`       | `net/rpc` de Go sobre TCP con balanceo de carga y consenso Raft                    |
+| `jwt/`        | Creación de tokens JWT (`New`, `NewAuthentication`, `NewAuthorization`)            |
+| `claim/`      | Claims JWT con campo `tenantId`. Firma con HS256                                   |
 | `crontab/`    | Scheduler cron con soporte de segundos. Init: `crontab.New(tag)`                   |
-| `middleware/` | CORS, auth, logger, request ID, telemetría, recuperación de pánico                  |
-| `response/`   | Respuestas HTTP unificadas: `ITEM`, `ITEMS`, `HTTPError`                            |
-| `request/`    | Helpers de entrada (`URLParam`, `GetBody`) y cliente HTTP de salida                 |
-| `ws/`         | WebSocket bidireccional (gorilla/websocket)                                         |
-| `jsql/`       | Constructor SQL agnóstico a la base de datos y ORM ligero                           |
-| `jval/`       | Validación fluida de JSON: validadores tipados con restricciones encadenables       |
-| `logs/`       | Logging estructurado por niveles con salida colorizada                              |
-| `strs/`       | Utilidades de strings                                                               |
+| `middleware/` | CORS, auth, logger, request ID, telemetría, recuperación de pánico                 |
+| `response/`   | Respuestas HTTP unificadas: `ITEM`, `ITEMS`, `HTTPError`                           |
+| `request/`    | Helpers de entrada (`URLParam`, `GetBody`) y cliente HTTP de salida                |
+| `ws/`         | WebSocket bidireccional (gorilla/websocket)                                        |
+| `jsql/`       | Constructor SQL agnóstico a la base de datos y ORM ligero                          |
+| `jval/`       | Validación fluida de JSON: validadores tipados con restricciones encadenables      |
+| `logs/`       | Logging estructurado por niveles con salida colorizada                             |
+| `strs/`       | Utilidades de strings                                                              |
 | `utility/`    | Crypto, hashing, generación de IDs (UUID, ULID, Snowflake)                         |
-| `envar/`      | Acceso a variables de entorno y argumentos CLI                                      |
+| `envar/`      | Acceso a variables de entorno y argumentos CLI                                     |
 | `config/`     | Configuración de aplicación (`GetStr`, `GetInt`, `GetBool`, `GetFloat`, `GetTime`) |
 | `service/`    | Helpers OTP (`SendOTPEmail`, `SendOTPSms`, `VerifyOTP`) y mensajería               |
-| `mem/`        | Caché en memoria con expiración y primitivas de sincronización                      |
-| `ephemeral/`  | Estructuras de datos temporales de corta vida                                       |
+| `mem/`        | Caché en memoria con expiración y primitivas de sincronización                     |
+| `ephemeral/`  | Estructuras de datos temporales de corta vida                                      |
 | `vm/`         | Runtime JavaScript embebido (goja) con hot-reload                                  |
-| `ia/`         | Integración con agentes OpenAI (`openai-go/v3`) con seguimiento de conversación     |
-| `workflow/`   | Orquestación de flujos multi-paso con estado de instancia y resiliencia             |
-| `graph/`      | Conectividad Neo4j (`neo4j-go-driver/v5`)                                           |
-| `instances/`  | Interfaz `Store` para persistencia de estado usada por `ia`, `workflow`, `vm`       |
-| `resilience/` | Circuit breaker y patrones de resiliencia                                           |
+| `ia/`         | Integración con agentes OpenAI (`openai-go/v3`) con seguimiento de conversación    |
+| `workflow/`   | Orquestación de flujos multi-paso con estado de instancia y resiliencia            |
+| `graph/`      | Conectividad Neo4j (`neo4j-go-driver/v5`)                                          |
+| `instances/`  | Interfaz `Store` para persistencia de estado usada por `ia`, `workflow`, `vm`      |
+| `resilience/` | Circuit breaker y patrones de resiliencia                                          |
 | `reg/`        | Registro de servicios y helpers de generación de IDs (ULID, etc.)                  |
-| `aws/`        | Wrapper del SDK de AWS: S3, SES (email), SMS                                        |
-| `brevo/`      | Cliente de la API de Brevo: email, SMS, WhatsApp                                    |
-| `wsp/`        | Cliente de la API de WhatsApp Business                                              |
-| `tcp/`        | Nodo TCP distribuido con elección de líder estilo Raft                              |
-| `file/`       | Operaciones de archivo y watcher de cambios en el sistema de archivos               |
-| `color/`      | Colores ANSI para terminal                                                           |
-| `stdrout/`    | Salida estándar colorizada de bajo nivel usada por `logs`                           |
-| `timezone/`   | Helpers de zona horaria                                                              |
-| `units/`      | Utilidades de conversión de unidades                                                |
-| `race/`       | Helpers de detección de condiciones de carrera                                      |
-| `cmds/`       | Sistema de comandos y etapas de ejecución                                           |
-| `iterate/`    | Control de iteraciones con soporte de tiempo                                        |
-| `create/`     | Templates de código para microservicios y despliegues en Kubernetes                 |
+| `aws/`        | Wrapper del SDK de AWS: S3, SES (email), SMS                                       |
+| `brevo/`      | Cliente de la API de Brevo: email, SMS, WhatsApp                                   |
+| `wsp/`        | Cliente de la API de WhatsApp Business                                             |
+| `tcp/`        | Nodo TCP distribuido con elección de líder estilo Raft                             |
+| `file/`       | Operaciones de archivo y watcher de cambios en el sistema de archivos              |
+| `color/`      | Colores ANSI para terminal                                                         |
+| `stdrout/`    | Salida estándar colorizada de bajo nivel usada por `logs`                          |
+| `timezone/`   | Helpers de zona horaria                                                            |
+| `units/`      | Utilidades de conversión de unidades                                               |
+| `race/`       | Helpers de detección de condiciones de carrera                                     |
+| `cmds/`       | Sistema de comandos y etapas de ejecución                                          |
+| `iterate/`    | Control de iteraciones con soporte de tiempo                                       |
+| `create/`     | Templates de código para microservicios y despliegues en Kubernetes                |
 | `cmd/`        | Binarios CLI: `et`, `apigateway`, `daemon`, `server`, `vm`, `jsql`, …              |
 
 ## Tipo central: `et.Json`
@@ -208,19 +208,19 @@ logs.EnableCallerInfo = false    // desactiva runtime.Callers en Error() — rec
 
 ## Variables de entorno requeridas
 
-| Paquete | Variable                                                                     | Descripción                                  |
-| ------- | ---------------------------------------------------------------------------- | -------------------------------------------- |
-| `cache` | `REDIS_HOST`                                                                 | Host de Redis                                |
-| `cache` | `REDIS_PASSWORD`, `REDIS_DB`                                                 | Auth y base de datos de Redis (opcionales)   |
-| `event` | `NATS_HOST`                                                                  | Host de NATS                                 |
-| `event` | `NATS_USER`, `NATS_PASSWORD`                                                 | Auth de NATS (opcionales)                    |
-| `claim` | `SECRET`                                                                     | Clave de firma JWT (por defecto: `"1977"`)   |
-| `jsql`  | `DB_DRIVER`                                                                  | Nombre del driver: `postgres` o `sqlite`     |
-| `jsql`  | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`                    | Conexión a la base de datos                  |
-| `jsql`  | `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_CONN_LIFETIME`, `DB_POOL_CONN_IDLE_TIME` | Pool de conexiones (opcionales) |
-| `graph` | `NEO4J_HOST`, `NEO4J_USER`, `NEO4J_PASSWORD`                                 | Conexión a Neo4j                             |
-| `ia`    | `OPENAI_API_KEY`                                                             | Clave de API de OpenAI                       |
-| `wsp`   | `WHATSAPP_API_URL`                                                           | URL base de la API de WhatsApp Graph (opcional)|
+| Paquete | Variable                                                                                  | Descripción                                     |
+| ------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `cache` | `REDIS_HOST`                                                                              | Host de Redis                                   |
+| `cache` | `REDIS_PASSWORD`, `REDIS_DB`                                                              | Auth y base de datos de Redis (opcionales)      |
+| `event` | `NATS_HOST`                                                                               | Host de NATS                                    |
+| `event` | `NATS_USER`, `NATS_PASSWORD`                                                              | Auth de NATS (opcionales)                       |
+| `claim` | `SECRET`                                                                                  | Clave de firma JWT (por defecto: `"1977"`)      |
+| `jsql`  | `DB_DRIVER`                                                                               | Nombre del driver: `postgres` o `sqlite`        |
+| `jsql`  | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`                                 | Conexión a la base de datos                     |
+| `jsql`  | `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_CONN_LIFETIME`, `DB_POOL_CONN_IDLE_TIME` | Pool de conexiones (opcionales)                 |
+| `graph` | `NEO4J_HOST`, `NEO4J_USER`, `NEO4J_PASSWORD`                                              | Conexión a Neo4j                                |
+| `ia`    | `OPENAI_API_KEY`                                                                          | Clave de API de OpenAI                          |
+| `wsp`   | `WHATSAPP_API_URL`                                                                        | URL base de la API de WhatsApp Graph (opcional) |
 
 ## Binarios CLI
 

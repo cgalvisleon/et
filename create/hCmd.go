@@ -39,13 +39,13 @@ func DeleteCmd(packageName string) error {
 		return err
 	}
 
-	path = fmt.Sprintf(`./internal/pkg/%s`, packageName)
+	path = fmt.Sprintf(`./pkg/%s`, packageName)
 	_, err = file.Remove(path)
 	if err != nil {
 		return err
 	}
 
-	path = fmt.Sprintf(`./internal/rest/%s.http`, packageName)
+	path = fmt.Sprintf(`./scripts/%s.http`, packageName)
 	_, err = file.Remove(path)
 	if err != nil {
 		return err

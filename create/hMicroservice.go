@@ -44,13 +44,14 @@ func MkMicroservice(projectName, name, schema string) error {
 
 func MkMolue(projectName, packageName, modelo, schema string) error {
 	ProgressAdd(2)
-	err := MakeInternalModel(modelo, schema)
-	if err != nil {
-		return err
+	if len(schema) > 0 {
+		if err := MakeInternalModel(modelo, schema); err != nil {
+			return err
+		}
 	}
 
 	ProgressNext()
-	err = MakeModel(projectName, packageName, modelo, schema)
+	err := MakeModel(projectName, packageName, modelo, schema)
 	if err != nil {
 		return err
 	}

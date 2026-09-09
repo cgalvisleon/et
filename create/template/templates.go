@@ -1,7 +1,7 @@
 package template
 
 const ModelDockerfile = `# Versión de Go como argumento3
-ARG GO_VERSION=1.23
+ARG GO_VERSION=1.25
 
 # Stage 1: Compilación (builder)
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS builder
@@ -50,6 +50,7 @@ COPY --from=builder /$1 /$1
 ENTRYPOINT ["/$1"]
 `
 
+// ModelMain: cmd/$2/main.go — $1 = module path (go.mod's module), $2 = service name.
 const ModelMain = `package main
 
 import (
@@ -59,17 +60,10 @@ import (
 )
 
 func main() {
-	envar.SetIntByArg("PORT", 3000)
-	envar.SetIntByArg("RPC_PORT", 4200)
-	envar.SetStrByArg("DB_HOST", "localhost")
-	envar.SetIntByArg("DB_PORT", 5432)
-	envar.SetStrByArg("DB_NAME", "")
-	envar.SetStrByArg("DB_USER", "")
-	envar.SetStrByArg("DB_PASSWORD", "")
-	envar.SetStrByArg("DB_APP", "Test")
-	envar.Reload()
+	port := envar.SetIntByArg("-port", "PORT", 3300)
+	rpcPort := envar.SetIntByArg("-rpc_port", "RPC_PORT", 4200)
 
-	srv, err := serv.New()
+	srv, err := serv.New(port, rpcPort)
 	if err != nil {
 		logs.Fatal(err)
 	}
@@ -78,117 +72,94 @@ func main() {
 }
 `
 
+// ModelApi: internal/services/$2/v1/api.go, no-DB variant — $1 = module path, $2 = service name.
 const ModelApi = `package v1
 
 import (
 	"net/http"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrpc"
-	_ "github.com/cgalvisleon/jdb/drivers/postgres"
-	"github.com/cgalvisleon/jdb/jdb"
-	"github.com/go-chi/chi/v5"
-	pkg "$1/pkg/$2"	
+	"github.com/cgalvisleon/et/logs"
+	pkg "$1/pkg/$2"
 )
 
-func New() http.Handler {
-	r := chi.NewRouter()
-
-	err := pkg.LoadConfig()
-	if err != nil {
+func New(rpcPort int) http.Handler {
+	if err := pkg.LoadConfig(); err != nil {
 		logs.Panic(err)
 	}
 
-	err = cache.Load()
-	if err != nil {
+	if err := cache.Load(); err != nil {
 		logs.Panic(err)
 	}
 
-	err = event.Load()
-	if err != nil {
+	if err := event.Load(); err != nil {
 		logs.Panic(err)
 	}
 
-	_pkg := &pkg.Router{
-		Repository: &pkg.Controller{
-		},
+	if err := pkg.StartRpcServer(rpcPort); err != nil {
+		logs.Panic(err)
 	}
 
-	r.Mount(pkg.PackagePath, _pkg.Routes())
-
-	return r
+	return pkg.Routes()
 }
 
 func Close() {
 	jrpc.Close()
-	cache.Close()
-	event.Close()
+	// cache.Close()/event.Close() no cierran limpio (bug conocido de recursión
+	// infinita en et/cache y et/event) — no se llaman aquí a propósito.
 }
 `
 
+// ModelDbApi: internal/services/$2/v1/api.go, DB-backed variant — $1 = module path, $2 = service name.
 const ModelDbApi = `package v1
 
 import (
 	"net/http"
 
 	"github.com/cgalvisleon/et/cache"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrpc"
-	_ "github.com/cgalvisleon/jdb/drivers/postgres"
-	"github.com/cgalvisleon/jdb/jdb"
-	"github.com/go-chi/chi/v5"
-	pkg "$1/pkg/$2"	
+	"github.com/cgalvisleon/et/jsql"
+	_ "github.com/cgalvisleon/et/jsql/drivers/postgres"
+	"github.com/cgalvisleon/et/logs"
+	pkg "$1/pkg/$2"
 )
 
-func New() http.Handler {
-	r := chi.NewRouter()
-
-	err := pkg.LoadConfig()
-	if err != nil {
-		logs.Alert(err)
+func New(rpcPort int) http.Handler {
+	if err := pkg.LoadConfig(); err != nil {
+		logs.Panic(err)
 	}
 
-	err = pkg.StartRpcServer()
+	if err := cache.Load(); err != nil {
+		logs.Panic(err)
+	}
+
+	if err := event.Load(); err != nil {
+		logs.Panic(err)
+	}
+
+	if err := pkg.StartRpcServer(rpcPort); err != nil {
+		logs.Panic(err)
+	}
+
+	db, err := jsql.Load()
 	if err != nil {
 		logs.Panic(err)
 	}
 
-	err = cache.Load()
-	if err != nil {
-		logs.Panic(err)
-	}
-
-	err = event.Load()
-	if err != nil {
-		logs.Panic(err)
-	}
-
-	db, err := jdb.Load()
-	if err != nil {
-		logs.Panic(err)
-	}
-
-	_pkg := &pkg.Router{
-		Repository: &pkg.Controller{
-			Db: db,
-		},
-	}
-
-	r.Mount(pkg.PackagePath, _pkg.Routes())
-
-	return r
+	return pkg.Routes(db)
 }
 
 func Close() {
 	jrpc.Close()
-	cache.Close()
-	event.Close()
+	// cache.Close()/event.Close() no cierran limpio (bug conocido de recursión
+	// infinita en et/cache y et/event) — no se llaman aquí a propósito.
 }
 `
 
+// ModelService: internal/services/$2/service.go — $1 = module path, $2 = service name.
 const ModelService = `package $2
 
 import (
@@ -196,130 +167,118 @@ import (
 	v1 "$1/internal/services/$2/v1"
 )
 
-func New() (*server.Ettp, error) {
-	result, err := server.New("$2")
-	if err != nil {
-		return nil, err
-	}
-	latest := v1.New()
+func New(port, rpcPort int) (*server.Ettp, error) {
+	result := server.New("$2", port)
+
+	latest := v1.New(rpcPort)
 	result.Mount("/", latest)
 	result.Mount("/v1", latest)
+	result.OnClose(v1.Close)
 
 	return result, nil
 }
 `
 
+// ModelConfig: pkg/$1/config.go — $1 = package name.
 const ModelConfig = `package $1
 
-import (
-  "fmt"
-	"errors"
+import "github.com/cgalvisleon/et/envar"
 
-	"github.com/cgalvisleon/et/config"
-	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/jrpc"
-)
-
+/**
+* LoadConfig: Validates that the environment is ready before the service starts.
+* Extend the required-keys list as this service grows.
+* @return error
+**/
 func LoadConfig() error {
-	stage := envar.String("STAGE", "local")
-	name := "default"
-	result, err := jrpc.CallItem("Module.Services.GetConfig", et.Json{
-		"stage":  stage,
-		"name":   name,
-		"config": et.Json{},
-	})
-	if err != nil {
-		return err
-	}
-
-	if !result.Ok {
-		return fmt.Errorf(jrpc.MSG_NOT_LOAD_CONFIG, stage, name)
-	}
-
-	cfg := result.Json("config")
-	err = envar.SetToEnvar(cfg)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return envar.Validate([]string{"PORT"})
 }
 `
 
+// ModelDbController: pkg/$1/controller.go, DB-backed variant — $1 = package name.
 const ModelDbController = `package $1
 
 import (
 	"context"
 
-	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/jdb/jdb"
+	"github.com/cgalvisleon/et/jsql"
 )
 
 type Controller struct {
-	Db *jdb.DB
+	Db *jsql.DB
 }
 
-func (c *Controller) Version(ctx context.Context) (et.Json, error) {	
-	service := et.Json{
-		"version": envar.App.Version,
+/**
+* Version: Returns basic service metadata.
+* @param ctx context.Context
+* @return et.Json, error
+**/
+func (c *Controller) Version(ctx context.Context) (et.Json, error) {
+	return et.Json{
 		"service": PackageName,
-		"host":    envar.App.Host,
-		"company": envar.App.Company,
-		"web":     envar.App.Web,
-		"help":    envar.App.Help,
+		"version": PackageVersion,
+	}, nil
+}
+
+/**
+* Init: Defines models and wires event subscriptions. Called once when the router is built.
+* @param ctx context.Context
+* @return error
+**/
+func (c *Controller) Init(ctx context.Context) error {
+	if err := initModels(c.Db); err != nil {
+		return err
 	}
 
-	return service, nil
-}
-
-func (c *Controller) Init(ctx context.Context) {
-	initModels(c.Db)
-	initEvents()
+	return initEvents()
 }
 
 type Repository interface {
 	Version(ctx context.Context) (et.Json, error)
-	Init(ctx context.Context)
+	Init(ctx context.Context) error
 }
 `
 
+// ModelController: pkg/$1/controller.go, no-DB variant — $1 = package name.
 const ModelController = `package $1
 
 import (
 	"context"
 
-	"github.com/cgalvisleon/et/config"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/linq"
 )
 
 type Controller struct {
 }
 
-func (c *Controller) Version(ctx context.Context) (et.Json, error) {	
-  service := et.Json{
-		"version": envar.App.Version,
+/**
+* Version: Returns basic service metadata.
+* @param ctx context.Context
+* @return et.Json, error
+**/
+func (c *Controller) Version(ctx context.Context) (et.Json, error) {
+	return et.Json{
 		"service": PackageName,
-		"host":    envar.App.Host,
-		"company": envar.App.Company,
-		"web":     envar.App.Web,
-		"help":    envar.App.Help,
-	}
-
-	return service, nil
+		"version": PackageVersion,
+	}, nil
 }
 
-func (c *Controller) Init(ctx context.Context) {
-	initEvents()
+/**
+* Init: Wires event subscriptions. Called once when the router is built.
+* @param ctx context.Context
+* @return error
+**/
+func (c *Controller) Init(ctx context.Context) error {
+	return initEvents()
 }
 
 type Repository interface {
 	Version(ctx context.Context) (et.Json, error)
-	Init(ctx context.Context)
+	Init(ctx context.Context) error
 }
 `
 
+// ModelEvent: pkg/$1/event.go — $1 = package name.
 const ModelEvent = `package $1
 
 import (
@@ -327,254 +286,168 @@ import (
 	"github.com/cgalvisleon/et/logs"
 )
 
-func initEvents() {
-	err := event.Stack("<channel>", eventAction)
-	if err != nil {
-		logs.Error(err)
-	}
-
-}
-
-func eventAction(m event.Message) {
-	data := m.Data
-
-	logs.Log("eventAction", data)
+/**
+* initEvents: Subscribes to the events this service reacts to. Requires event.Load()
+* to have already been called (see internal/services/$1/v1/api.go).
+* @return error
+**/
+func initEvents() error {
+	return event.Stack("$1", func(m event.Message) {
+		logs.Log("event", m.Data)
+	})
 }
 `
 
+// ModelData: internal/models/$4/$name.go — $1 = field/var lowercase name, $2 = CamelCase model
+// name, $3 = table name, $4 = schema (also the package name of internal/models/$4).
 const ModelData = `package $4
 
 import (
-	"fmt"
-	"sync"
 	"errors"
+	"fmt"
 
-	"github.com/cgalvisleon/et/config"
-	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/dt"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
-	"github.com/cgalvisleon/et/utility"
-	"github.com/cgalvisleon/jdb/jdb"
 )
 
-var $2 *jdb.Model
+var $2 *jsql.Model
 
-func Define$2(db *jdb.DB) error {
-	if err := defineSchema(db); err != nil {
-		return logs.Panic(err)
-	}
-
+/**
+* Define$2: Defines and initializes the "$3" table.
+* @param db *jsql.DB
+* @return error
+**/
+func Define$2(db *jsql.DB) error {
 	if $2 != nil {
 		return nil
 	}
 
-	$2 = jdb.NewModel(schema, "$3", 1)
-	$2.DefineModel()
-	$2.DefineColumn("name", jdb.TypeDataText)
-	$2.DefineIndex(true,
-		"name",
-	)
-	$2.BeforeInsert(func(tx *jdb.Tx, data et.Json) error {
-		id := data.Str(jdb.KEY)
-		exists, err := $2.
-			Where(jdb.KEY).Neg(id).
-			ItExistsTx(tx)
-		if err != nil {
-			return err
-		}
-
-		if exists {
-			return errors.New(MSG_RECORD_EXISTS)
-		}
-		
-		return nil
-	})
-	$2.BeforeUpdate(func(tx *jdb.Tx, data et.Json) error {
-		tenantId := data.Str(jdb.TENANT_ID)
-		id := data.Str(jdb.KEY)
-		name := data.Str("name")
-		exists, err := $2.
-			Where(jdb.TENANT_ID).Eq(tenantId).
-			And("name").Eq(name).
-			And(jdb.KEY).Neg(id).
-			ItExistsTx(tx)
-		if err != nil {
-			return err
-		}
-
-		if exists {
-			return errors.New(MSG_RECORD_EXISTS)
-		}
-		
-		return nil
-	})
-	
-	if err := $2.Init(); err != nil {
-		return logs.Panic(err)
+	def := jsql.Def{
+		Schema:  "$4",
+		Name:    "$3",
+		Version: 1,
+		Columns: []jsql.Column{
+			{Name: jsql.CREATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
+			{Name: jsql.UPDATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
+			{Name: jsql.STATUS, TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: jsql.ACTIVE},
+			{Name: jsql.ID, TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
+			{Name: "name", TypeColumn: jsql.COLUMN, TypeData: jsql.TEXT, Default: ""},
+			{Name: "description", TypeColumn: jsql.COLUMN, TypeData: jsql.MEMO, Default: ""},
+		},
+		PrimaryKeys: []jsql.DefIndex{
+			{Name: jsql.ID, Sorted: true},
+		},
+		Indexes: []jsql.DefIndex{
+			{Name: "name", Sorted: true},
+		},
+		IdxField:    jsql.IDX,
+		SourceField: jsql.SOURCE,
 	}
 
+	result, err := db.Define(def)
+	if err != nil {
+		return err
+	}
+
+	if err := result.Init(); err != nil {
+		return err
+	}
+
+	$2 = result
 	return nil
 }
 
 /**
-* Get$2ById
+* Get$2ById: Returns a single "$3" row by id.
 * @param id string
-* @return dt.Object, error
+* @return et.Item, error
 **/
-func Get$2ById(id string) (dt.Object, error) {
-	result := dt.Get(id)
-	if result.Ok {
-		return result, nil
+func Get$2ById(id string) (et.Item, error) {
+	if $2 == nil {
+		return et.Item{}, errors.New(MSG_MODEL_NOT_DEFINED)
 	}
 
-	item, err := $2.
-		Where(jdb.KEY).Eq(id).
-		One()
-	if err != nil {
-		return dt.Object{}, err
-	}
-
-	return dt.Up(id, item), nil
+	return $2.Where(jsql.Eq(jsql.ID, id)).One()
 }
 
 /**
-* insert$2
-* @param tenantId, statusId, id, name, description string, data et.Json, createdBy string
+* Upsert$2: Creates or updates a "$3" row.
+* @param id, name, description string
 * @return et.Item, error
 **/
-func insert$2(tenantId, statusId, id, name, description string, data et.Json, createdBy string) (et.Item, error) {
-	if !utility.ValidStr(tenantId, 0, []string{""}) {
-		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, jdb.TENANT_ID)
+func Upsert$2(id, name, description string) (et.Item, error) {
+	if $2 == nil {
+		return et.Item{}, errors.New(MSG_MODEL_NOT_DEFINED)
 	}
 
-	if !utility.ValidStr(id, 0, []string{""}) {
-		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, jdb.KEY)
-	}
-
-	if !utility.ValidStr(name, 0, []string{""}) {
+	if name == "" {
 		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
 	}
 
-	id = $2.GetId(id)
+	id = reg.GetUUID(id)
 	now := timezone.Now()
-	data[jdb.TENANT_ID] = tenantId
-	data[jdb.KEY] = id
-	data["name"] = name
-	data["description"] = description
 	_, err := $2.
-		Insert(data).
-		BeforeInsert(func(tx *jdb.Tx, data et.Json) error {			
-			data[jdb.CREATED_AT] = now
-			data[jdb.UPDATED_AT] = now
-			data[jdb.STATUS_ID] = statusId
-			data["created_by"] = createdBy
+		Upsert(et.Json{
+			jsql.ID:       id,
+			"name":        name,
+			"description": description,
+		}).
+		BeforeInsert(func(tx *jsql.Tx, old, data et.Json) error {
+			data[jsql.CREATED_AT] = now
+			data[jsql.UPDATED_AT] = now
+			data[jsql.STATUS] = jsql.ACTIVE
 			return nil
 		}).
+		BeforeUpdate(func(tx *jsql.Tx, old, data et.Json) error {
+			data[jsql.UPDATED_AT] = now
+			return nil
+		}).
+		Where(jsql.Eq(jsql.ID, id)).
 		Exec()
 	if err != nil {
 		return et.Item{}, err
 	}
 
-	dt.Drop(id)
 	return et.Item{
 		Ok: true,
 		Result: et.Json{
-			"message": MSG_RECORD_CREATED,
+			"message": MSG_RECORD_SAVED,
+			jsql.ID:   id,
 		},
 	}, nil
 }
 
 /**
-* Upsert$2
-* @param tenantId, id, name, description string, data et.Json, createdBy string
+* State$2: Changes the status of a "$3" row (also used to soft-delete via jsql.FOR_DELETE).
+* @param id, status string
 * @return et.Item, error
 **/
-func Upsert$2(tenantId, id, name, description string, data et.Json, createdBy string) (et.Item, error) {
-	if !utility.ValidStr(tenantId, 0, []string{""}) {
-		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, jdb.TENANT_ID)
-	}
-
-	if !utility.ValidStr(id, 0, []string{""}) {
-		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, jdb.KEY)
-	}
-
-	if !utility.ValidStr(name, 0, []string{""}) {
-		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "name")
-	}
-
-	id = $2.GetId(id)
-	now := timezone.Now()
-	data[jdb.TENANT_ID] = tenantId
-	data[jdb.KEY] = id
-	data["name"] = name
-	data["description"] = description
-	_, err := $2.
-		Upsert(data).
-		BeforeInsert(func(tx *jdb.Tx, data et.Json) error {			
-			data[jdb.CREATED_AT] = now
-			data[jdb.UPDATED_AT] = now
-			data[jdb.STATUS_ID] = jdb.ACTIVE
-			data["created_by"] = createdBy
-			return nil
-		}).
-		BeforeUpdate(func(tx *jdb.Tx, data et.Json) error {			
-			data[jdb.UPDATED_AT] = now
-			data["updated_by"] = createdBy
-			return nil
-		}).
-		Where(jdb.Eq(jdb.KEY, id)).
-		Exec()
-	if err != nil {
-		return et.Item{}, err
-	}
-
-	dt.Drop(id)
-	return et.Item{
-		Ok: true,
-		Result: et.Json{
-			"message": MSG_RECORD_CREATED,
-		},
-	}, nil
-}
-
-/**
-* State$2
-* @param id, stateId, createdBy string
-* @return et.Item, error
-**/
-func State$2(id, stateId, createdBy string) (et.Item, error) {
-	if !utility.ValidStr(stateId, 0, []string{""}) {
-		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, jdb.STATUS_ID)
-	}
-
-	if !utility.ValidStr(id, 0, []string{""}) {
-		return et.Item{}, fmt.Errorf(msg.MSG_ATRIB_REQUIRED, jdb.KEY)
+func State$2(id, status string) (et.Item, error) {
+	if $2 == nil {
+		return et.Item{}, errors.New(MSG_MODEL_NOT_DEFINED)
 	}
 
 	now := timezone.Now()
-	result, err := $2.
+	items, err := $2.
 		Update(et.Json{
-			jdb.UPDATED_AT: now,
-			jdb.STATUS_ID:  stateId,
-			"updated_by":   createdBy,
+			jsql.STATUS:     status,
+			jsql.UPDATED_AT: now,
 		}).
-		Where(jdb.KEY).Eq(id).
-		And(jdb.STATUS_ID).Neg(stateId).
-		One()
+		Where(jsql.Eq(jsql.ID, id)).
+		Exec()
 	if err != nil {
 		return et.Item{}, err
 	}
 
-	dt.Drop(id)
-
-	if !result.Ok {
-		return et.Item{}, logs.Alertm(MSG_RECORD_NOT_EXISTS)
+	if items.Count == 0 {
+		return et.Item{}, errors.New(MSG_RECORD_NOT_FOUND)
 	}
 
 	return et.Item{
-		Ok: result.Ok,
+		Ok: true,
 		Result: et.Json{
 			"message": MSG_RECORD_UPDATED,
 		},
@@ -582,32 +455,29 @@ func State$2(id, stateId, createdBy string) (et.Item, error) {
 }
 
 /**
-* Query$2
+* Query$2: Runs a query.QL-style query (see jsql.Model.Query) against "$3".
 * @param query et.Json
-* @return interface{}, error
+* @return et.Items, error
 **/
-func Query$2(query et.Json) (interface{}, error) {
-	result, err := jdb.From($2).
-		Query(query)
-	if err != nil {
-		return nil, err
+func Query$2(query et.Json) (et.Items, error) {
+	if $2 == nil {
+		return et.Items{}, errors.New(MSG_MODEL_NOT_DEFINED)
 	}
 
-	return result, nil
+	return $2.Query(query)
 }
 `
 
+// ModelDbHandler: pkg/$1/router-<name>.go, DB-backed variant.
+// $1 = package name, $2 = CamelCase model name, $3 = module path, $4 = schema.
 const ModelDbHandler = `package $1
 
 import (
 	"net/http"
 
-	"github.com/cgalvisleon/et/claim"
+	"github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/utility"
-	"github.com/cgalvisleon/jdb/jdb"
-	"github.com/go-chi/chi/v5"
 	"$3/internal/models/$4"
 )
 
@@ -617,19 +487,22 @@ import (
 * @param r *http.Request
 **/
 func (rt *Router) upsert$2(w http.ResponseWriter, r *http.Request) {
-	body, _ := request.GetBody(r)
-	tenantId := body.Str(jdb.TENANT_ID)
-	id := body.Str(jdb.KEY)
-	name := body.Str("name")
-	description := body.Str("description")
-	clientName := claim.ClientName(r)
-	result, err := $4.Upsert$2(tenantId, id, name, description, body, clientName)
+	body, err := request.GetBody(r)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	response.JSON(w, r, http.StatusOK, result)
+	id := body.Str(jsql.ID)
+	name := body.Str("name")
+	description := body.Str("description")
+	result, err := $4.Upsert$2(id, name, description)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.ITEM(w, r, http.StatusCreated, result)
 }
 
 /**
@@ -645,7 +518,7 @@ func (rt *Router) get$2ById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.JSON(w, r, http.StatusOK, result)
+	response.ITEM(w, r, http.StatusOK, result)
 }
 
 /**
@@ -655,10 +528,14 @@ func (rt *Router) get$2ById(w http.ResponseWriter, r *http.Request) {
 **/
 func (rt *Router) state$2(w http.ResponseWriter, r *http.Request) {
 	id := request.URLParam(r, "id").Str()
-	body, _ := request.GetBody(r)
-	statusId := body.Str(jdb.STATUS_ID)
-	clientName := claim.ClientName(r)
-	result, err := $4.State$2(id, statusId, clientName)
+	body, err := request.GetBody(r)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	status := body.Str(jsql.STATUS)
+	result, err := $4.State$2(id, status)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -674,8 +551,7 @@ func (rt *Router) state$2(w http.ResponseWriter, r *http.Request) {
 **/
 func (rt *Router) delete$2(w http.ResponseWriter, r *http.Request) {
 	id := request.URLParam(r, "id").Str()
-	clientName := claim.ClientName(r)
-	result, err := $4.State$2(id, utility.FOR_DELETE, clientName)
+	result, err := $4.State$2(id, jsql.FOR_DELETE)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
@@ -690,7 +566,12 @@ func (rt *Router) delete$2(w http.ResponseWriter, r *http.Request) {
 * @param r *http.Request
 **/
 func (rt *Router) query$2(w http.ResponseWriter, r *http.Request) {
-	body, _ := request.GetBody(r)
+	body, err := request.GetBody(r)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	query := body.Json("query")
 	result, err := $4.Query$2(query)
 	if err != nil {
@@ -698,48 +579,51 @@ func (rt *Router) query$2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.JSON(w, r, http.StatusOK, result)
+	response.ITEMS(w, r, http.StatusOK, result)
 }
 
-/** Copy this code to router.go
+/** Copy these lines into the Routes() func in router.go — mount them under their own
+    prefix (e.g. r.Route("/$2", func(r chi.Router) {...})) so they don't collide with
+    the routes already registered for the first resource:
 	// $2
-	router.Protect(r, router.Get, "/assets/{id}", rt.get$2ById, PackageName, PackagePath, host)
-	router.Protect(r, router.Post, "/assets", rt.upsert$2, PackageName, PackagePath, host)
-	router.Protect(r, router.Put, "/assets/{id}", rt.state$2, PackageName, PackagePath, host)
-	router.Protect(r, router.Delete, "/assets/{id}", rt.delete$2, PackageName, PackagePath, host)
-	router.Protect(r, router.Get, "/assets/", rt.query$2, PackageName, PackagePath, host)
+	r.Get("/{id}", rt.get$2ById)
+	r.Post("/", rt.upsert$2)
+	r.Put("/{id}/status", rt.state$2)
+	r.Delete("/{id}", rt.delete$2)
+	r.Get("/", rt.query$2)
 **/
 
-/** Copy this code to func initModel in model.go
-	if err := Define$2(db); err != nil {
-		return logs.Panic(err)
+/** Copy this line into initModels() in model.go:
+	if err := $4.Define$2(db); err != nil {
+		return err
 	}
 **/
 `
 
+// ModelHandler: pkg/$1/h$2.go, no-DB variant — $1 = package name, $2 = CamelCase model name.
 const ModelHandler = `package $1
 
 import (
 	"net/http"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/msg"
+	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
-	"github.com/go-chi/chi/v5"
 )
 
-
 /**
-* Get$2
+* Get$2: Replace this with the real lookup for your resource.
 * @param id string
-* @return et.Item
-* @return error
+* @return et.Item, error
 **/
 func Get$2(id string) (et.Item, error) {
-	
-	return et.item{}, nil
+	return et.Item{
+		Ok: true,
+		Result: et.Json{
+			"id": id,
+		},
+	}, nil
 }
-
 
 /**
 * get$2
@@ -758,62 +642,38 @@ func (rt *Router) get$2(w http.ResponseWriter, r *http.Request) {
 	response.ITEM(w, r, http.StatusOK, result)
 }
 
-/** Copy this code to router.go
+/** Copy this line into the Routes() func in router.go:
 	// $2
-	router.Protect(r, router.Get, "/assets/{id}", rt.get$2, PackageName, PackagePath, host)	
+	r.Get("/$2/{id}", rt.get$2)
 **/
 `
 
+// ModelModel: pkg/$1/model.go — $1 = package name, $2 = schema (import segment / package
+// alias, same value declared as `package $2` in internal/models/$2), $3 = module path,
+// $4 = CamelCase model name.
 const ModelModel = `package $1
 
 import (
-	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/jdb/jdb"
-	"$3/internal/models/$2"	
+	"github.com/cgalvisleon/et/jsql"
+	"$3/internal/models/$2"
 )
 
-func initModels(db *jdb.DB) error {
-	if err := $2.Define$4(db); err != nil {
-		return logs.Panic(err)
-	}
-
-	return nil
-}
-`
-
-const ModelSchema = `package $1
-
-import (
-	"fmt"
-
-	"github.com/cgalvisleon/jdb/jdb"
-)
-
-var schema *jdb.Schema
-
-func defineSchema(db *jdb.DB) error {
-	if schema != nil {
-		return nil
-	}
-
-	schema = jdb.NewSchema(db, "$1")
-	if schema == nil {
-		return fmt.Errorf(jdb.MSG_SCHEMA_NOT_FOUND, "$1")
-	}
-
-	return nil
+func initModels(db *jsql.DB) error {
+	return $2.Define$4(db)
 }
 `
 
 const ModelhRpc = `package $1
 
 import (
+	"encoding/json"
 	"net/rpc"
 
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 )
 
+var PackageName = "$1"
 var initRpc bool
 
 type Service et.Item
@@ -836,80 +696,84 @@ func (c *Service) Version(require []byte, response *[]byte) error {
 		return nil
 	}
 
-	rq := et.ByteToJson(require)
+	var rq et.Json
+	if err := json.Unmarshal(require, &rq); err != nil {
+		return err
+	}
 	help := rq.Str("help")
 
 	result := et.Item{
 		Ok: true,
 		Result: et.Json{
 			"service": PackageName,
-			"host":    HostName,
 			"help":    help,
 		},
 	}
 
-	*response = result.ToByte()
+	bt, err := result.ToByte()
+	if err != nil {
+		return err
+	}
+
+	*response = bt
 
 	return nil
 }
 `
 
+// ModelMsg: pkg/$1/msg.go and internal/models/$1/msg.go — $1 = package name.
 const ModelMsg = `package $1
 
 const (
-	MSG_VALUE_REQUIRED 	 = "atributo requerido (%s) value:%s"
-	MSG_STATE_NOT_ACTIVE = "estado no activo (%s)"  
-	MSG_RECORD_NOT_FOUND     = "registro no encontrado"
-	MSG_RECORD_NOT_UPDATE    = "registro no actualizado"
+	MSG_MODEL_NOT_DEFINED = "model not defined, call Define first"
+	MSG_RECORD_NOT_FOUND  = "record not found"
+	MSG_RECORD_SAVED      = "record saved"
+	MSG_RECORD_UPDATED    = "record updated"
 )
 `
 
+// ModelDbRouter: pkg/$1/router.go, DB-backed variant — $1 = package name, $2 = CamelCase model name.
 const ModelDbRouter = `package $1
 
 import (
 	"context"
 	"net/http"
-	"os"
-	"fmt"
 
-	"github.com/cgalvisleon/et/config"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/router"
-	"github.com/cgalvisleon/et/strs"
 	"github.com/go-chi/chi/v5"
 )
 
 var PackageName = "$1"
-var PackageTitle = "$1"
-var PackagePath = envar.App.PathApi
-var PackageVersion = envar.App.Version
-var HostName, _ = os.Hostname()
+var PackageVersion = envar.GetStr("VERSION", "0.0.0")
 
 type Router struct {
 	Repository Repository
 }
 
-func (rt *Router) Routes() http.Handler {
-	defaultHost := fmt.Sprintf("http://%s", HostName)
-	var host = fmt.Sprintf("%s:%d", envar.String("HOST", defaultHost), envar.Int("PORT", 3300))
+/**
+* Routes: Builds the HTTP handler for this package, initializing its models and
+* event subscriptions once (via Repository.Init) before serving.
+* @param db *jsql.DB
+* @return http.Handler
+**/
+func Routes(db *jsql.DB) http.Handler {
+	rt := &Router{Repository: &Controller{Db: db}}
+	if err := rt.Repository.Init(context.Background()); err != nil {
+		logs.Panic(err)
+	}
 
 	r := chi.NewRouter()
-
-	router.Public(r, router.Get, "/version", rt.version, PackageName, PackagePath, host)
-	router.Protect(r, router.Get, "/routes", rt.routes, PackageName, PackagePath, host)
+	r.Get("/version", rt.version)
 	// $2
-	router.Protect(r, router.Get, "/{id}", rt.get$2ById, PackageName, PackagePath, host)
-	router.Protect(r, router.Post, "/", rt.upsert$2, PackageName, PackagePath, host)
-	router.Protect(r, router.Put, "/{id}", rt.state$2, PackageName, PackagePath, host)
-	router.Protect(r, router.Delete, "/{id}", rt.delete$2, PackageName, PackagePath, host)
-	router.Protect(r, router.Get, "/", rt.query$2, PackageName, PackagePath, host)
-
-	ctx := context.Background()
-	rt.Repository.Init(ctx)
-	middleware.SetServiceName(PackageName)
+	r.Get("/{id}", rt.get$2ById)
+	r.Post("/", rt.upsert$2)
+	r.Put("/{id}/status", rt.state$2)
+	r.Delete("/{id}", rt.delete$2)
+	r.Get("/", rt.query$2)
 
 	logs.Logf(PackageName, "Router version:%s", PackageVersion)
 
@@ -917,77 +781,52 @@ func (rt *Router) Routes() http.Handler {
 }
 
 func (rt *Router) version(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	result, err := rt.Repository.Version(ctx)
+	result, err := rt.Repository.Version(r.Context())
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	response.JSON(w, r, http.StatusOK, result)
-}
-
-func (rt *Router) routes(w http.ResponseWriter, r *http.Request) {
-	_routes := router.GetRoutes()
-	routes := []et.Json{}
-	for _, route := range _routes {
-		routes = append(routes, et.Json{
-			"method": route.Str("method"),
-			"path":   route.Str("path"),
-		})
-	}
-
-	result := et.Items{
-		Ok:     true,
-		Count:  len(routes),
-		Result: routes,
-	}
-
-	response.ITEMS(w, r, http.StatusOK, result)
+	response.ITEM(w, r, http.StatusOK, et.Item{Ok: true, Result: result})
 }
 `
 
+// ModelRouter: pkg/$1/router.go, no-DB variant — $1 = package name, $2 = CamelCase model name.
 const ModelRouter = `package $1
 
 import (
 	"context"
 	"net/http"
-	"os"
-	"fmt"
 
-	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/config"
-	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/router"
-	"github.com/cgalvisleon/et/strs"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/response"
 	"github.com/go-chi/chi/v5"
 )
 
 var PackageName = "$1"
-var PackageTitle = "$1"
-var PackagePath = envar.App.PathApi
-var PackageVersion = envar.App.Version
-var HostName, _ = os.Hostname()
+var PackageVersion = envar.GetStr("VERSION", "0.0.0")
 
 type Router struct {
 	Repository Repository
 }
 
-func (rt *Router) Routes() http.Handler {
-	defaultHost := fmt.Sprintf("http://%s", HostName)
-	var host = fmt.Sprintf("%s:%d", envar.String("HOST", defaultHost), envar.Int("PORT", 3300))
+/**
+* Routes: Builds the HTTP handler for this package, running Repository.Init once
+* (event subscriptions, etc.) before serving.
+* @return http.Handler
+**/
+func Routes() http.Handler {
+	rt := &Router{Repository: &Controller{}}
+	if err := rt.Repository.Init(context.Background()); err != nil {
+		logs.Panic(err)
+	}
 
 	r := chi.NewRouter()
-
-	router.Public(r, router.Get, "/version", rt.version, PackageName, PackagePath, host)
-	router.Protect(r, router.Get, "/routes", rt.routes, PackageName, PackagePath, host)
+	r.Get("/version", rt.version)
 	// $2
-	router.Protect(r, router.Post, "/", rt.get$2, PackageName, PackagePath, host)
-	
-	ctx := context.Background()
-	rt.Repository.Init(ctx)
-	middleware.SetServiceName(PackageName)
+	r.Get("/{id}", rt.get$2)
 
 	logs.Logf(PackageName, "Router version:%s", PackageVersion)
 
@@ -995,92 +834,67 @@ func (rt *Router) Routes() http.Handler {
 }
 
 func (rt *Router) version(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	result, err := rt.Repository.Version(ctx)
+	result, err := rt.Repository.Version(r.Context())
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	response.JSON(w, r, http.StatusOK, result)
-}
-
-func (rt *Router) routes(w http.ResponseWriter, r *http.Request) {
-	_routes := router.GetRoutes()
-	routes := []et.Json{}
-	for _, route := range _routes {
-		routes = append(routes, et.Json{
-			"method": route.Str("method"),
-			"path":   route.Str("path"),
-		})
-	}
-
-	result := et.Items{
-		Ok:     true,
-		Count:  len(routes),
-		Result: routes,
-	}
-
-	response.ITEMS(w, r, http.StatusOK, result)
+	response.ITEM(w, r, http.StatusOK, et.Item{Ok: true, Result: result})
 }
 `
 
+// ModelRpc: pkg/$1/rpc.go — $1 = package name. Exposes the service over the classic
+// net/rpc-over-TCP transport (github.com/cgalvisleon/et/jrpc), mirroring the pattern
+// documented for core-studio/api's pkg/<service>/rpc.go.
 const ModelRpc = `package $1
 
 import (
-	"github.com/cgalvisleon/et/config"
-	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jrpc"
+	"github.com/cgalvisleon/et/logs"
 )
 
 type Services struct{}
 
-func StartRpcServer() error {
-	err := jrpc.Load(PackageName)
-	if err != nil {
+/**
+* StartRpcServer: Registers Services over net/rpc and starts listening on rpcPort.
+* @param rpcPort int
+* @return error
+**/
+func StartRpcServer(rpcPort int) error {
+	host := envar.GetStr("RPC_HOST", "localhost")
+	if _, err := jrpc.Mount(host, rpcPort, new(Services), PackageName); err != nil {
 		return err
 	}
 
-	services := new(Services)
-	err = jrpc.Mount(services)
-	if err != nil {
-		return err
-	}
-
-	return jrpc.Start()
+	return jrpc.Start(rpcPort)
 }
 
 func (c *Services) Version(require et.Json, response *et.Item) error {
 	response.Ok = true
 	response.Result = et.Json{
-		"methos":  "RPC",
-		"version": envar.App.Version,
 		"service": PackageName,
-		"host":    envar.App.Host,
-		"company": envar.App.Company,
-		"web":     envar.App.Web,
-		"help":    envar.App.Help,
+		"version": PackageVersion,
 	}
 
-	return logs.Rpc(PackageName, response.ToString())
+	return logs.Log("rpc", response.ToJson())
 }
 `
 
 const RestHttp = `@host=localhost:3300
-@token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IlVTRVIuQURNSU4iLCJhcHAiOiJEZXZvcHMtSW50ZXJuZXQiLCJuYW1lIjoiQ2VzYXIgR2FsdmlzIExlw7NuIiwia2luZCI6ImF1dGgiLCJ1c2VybmFtZSI6Iis1NzMxNjA0Nzk3MjQiLCJkZXZpY2UiOiJkZXZlbG9wIiwiZHVyYXRpb24iOjI1OTIwMDB9.dexIOute7r9o_P8U3t6l9RihN8BOnLl4xpoh9QbQI4k
+@token=
 
 ###
-GET /auth HTTP/1.1
-Host: {{host}}/version
-Authorization: Bearer {{token}}
+GET /version HTTP/1.1
+Host: {{host}}
 
 ###
-POST /api/test/test HTTP/1.1
+POST /api/$1 HTTP/1.1
 Host: {{host}}
 Content-Type: application/json
 Authorization: Bearer {{token}}
-Content-Length: 227
 
 {
 }
@@ -1091,32 +905,24 @@ const ModelReadme = `
 
 ## Create project
 
-$2
-go mod init github.com/redist/$1
-$2
+$3
+go mod init $2
+$3
 
 ## Dependencias
 
-$2
-go get github.com/cgalvisleon/et@v0.0.8
-go get github.com/cgalvisleon/jdb@v1.0.3
-$2
-
-## Create
-
-$2
-go run github.com/cgalvisleon/et/cmd/create go
-$2
+$3
+go get github.com/cgalvisleon/et@latest
+$3
 
 ## Run
 
-$2
-gofmt -w . && go run ./cmd/$1 -port 3600 -rpc 4600
-$2
-
+$3
+gofmt -w . && go run ./cmd/$1 -port 3300 -rpc_port 4200
+$3
 `
 
-const ModelEnvar = `APP=
+const ModelEnvar = `APP=$1
 PORT=3300
 VERSION=0.0.0
 COMPANY=Company
@@ -1131,12 +937,13 @@ RPC_HOST=localhost
 RPC_PORT=4200
 
 # DB
-DB_DRIVE=postgres
+DB_DRIVER=postgres
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=test
 DB_USER=test
 DB_PASSWORD=test
+DB_TENANT_ID=tenant:root
 
 # REDIS
 REDIS_HOST=localhost:6379
@@ -1184,21 +991,21 @@ services:
       - "PRODUCTION=true"
       - "HOST=stack"
       # DB
-      - "DB_DRIVE=postgres"
+      - "DB_DRIVER=postgres"
       - "DB_HOST="
       - "DB_PORT=5432"
       - "DB_NAME=internet"
       - "DB_USER=internet"
       - "DB_PASSWORD="
-      - "DB_APPLICATION_NAME=$1"
       # REDIS
       - "REDIS_HOST="
       - "REDIS_PASSWORD="
       - "REDIS_DB=0"
       # NATS
       - "NATS_HOST=nats:4222"
-      # CALM
+      # SECRET
       - "SECRET="
       # RPC
-      - "PORT_RPC=4200"
+      - "RPC_HOST=$1"
+      - "RPC_PORT=4200"
 `

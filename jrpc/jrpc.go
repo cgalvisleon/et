@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
@@ -18,6 +19,7 @@ var (
 	os       string
 	rpcs     map[string]et.Json
 	listener net.Listener
+	mu       sync.RWMutex
 )
 
 func init() {
@@ -36,9 +38,12 @@ func init() {
 * @return (*Package, error)
 **/
 func Mount(host string, port int, services any, packageName string) (*Package, error) {
+	mu.Lock()
 	if pkg == nil {
 		pkg = newPackage(packageName, host, port)
 	}
+	current := pkg
+	mu.Unlock()
 
 	tipoStruct := reflect.TypeOf(services)
 	structName := tipoStruct.String()
@@ -62,7 +67,9 @@ func Mount(host string, port int, services any, packageName string) (*Package, e
 		}
 
 		methodName := fmt.Sprintf("%s.%s", structName, metodo.Name)
-		pkg.Add(methodName, inputs, outputs)
+		mu.Lock()
+		current.Add(methodName, inputs, outputs)
+		mu.Unlock()
 		logs.Logf("rpc", "RPC:/%s/%s", host, methodName)
 	}
 
@@ -71,9 +78,11 @@ func Mount(host string, port int, services any, packageName string) (*Package, e
 		return nil, err
 	}
 
-	rpcs[pkg.Name] = pkg.ToJson()
+	mu.Lock()
+	rpcs[current.Name] = current.ToJson()
+	mu.Unlock()
 
-	return pkg, nil
+	return current, nil
 }
 
 /**
@@ -86,11 +95,13 @@ func Start(port int) error {
 	if err != nil {
 		return err
 	}
+	mu.Lock()
 	listener = l
+	mu.Unlock()
 
-	go func() {
+	go func(l net.Listener) {
 		for {
-			conn, err := listener.Accept()
+			conn, err := l.Accept()
 			if err != nil {
 				if errors.Is(err, net.ErrClosed) {
 					return
@@ -101,7 +112,7 @@ func Start(port int) error {
 
 			go rpc.ServeConn(conn)
 		}
-	}()
+	}(l)
 
 	logs.Logf("Rpc", "running on %d", port)
 	return nil

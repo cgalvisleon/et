@@ -21,6 +21,9 @@ var (
 * @return (*Solver, error)
 **/
 func GetSolver(method string) (*Solver, error) {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	if pkg == nil {
 		return nil, ErrorPackageNotMounted
 	}
@@ -36,8 +39,12 @@ func GetSolver(method string) (*Solver, error) {
 * Close
 **/
 func Close() {
-	if listener != nil {
-		listener.Close()
+	mu.Lock()
+	l := listener
+	mu.Unlock()
+
+	if l != nil {
+		l.Close()
 	}
 	logs.Log("Rpc", `Shutting down server...`)
 }
@@ -48,6 +55,9 @@ func Close() {
 * @return error
 **/
 func listRouters() ([]et.Json, error) {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	result := []et.Json{}
 	for name, pkg := range rpcs {
 		result = append(result, et.Json{

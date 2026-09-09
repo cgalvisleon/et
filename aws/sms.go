@@ -89,7 +89,7 @@ func (s *SenderAWS) SendSMS(contactNumbers []string, content string, params et.J
 					"provider": "AWS SNS",
 					"type":     tpMessage,
 					"message":  err.Error(),
-					"result":   output,
+					"result":   result,
 				},
 			}, err
 		}

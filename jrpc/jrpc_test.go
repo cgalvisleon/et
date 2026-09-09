@@ -2,6 +2,7 @@ package jrpc
 
 import (
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -11,6 +12,13 @@ import (
 type EchoService struct{}
 
 func (EchoService) Echo(arg *string, reply *string) error {
+	*reply = *arg
+	return nil
+}
+
+type EchoService2 struct{}
+
+func (EchoService2) Echo(arg *string, reply *string) error {
 	*reply = *arg
 	return nil
 }
@@ -69,6 +77,41 @@ func TestStartCloseReleasesListener(t *testing.T) {
 		t.Fatalf("expected to rebind port %d after Close, got: %v", port, err)
 	}
 	Close()
+}
+
+// TestMountGetSolverListRoutersConcurrent guards against pkg/rpcs being read
+// and written from different goroutines with no synchronization: Mount wrote
+// to pkg.Solvers (via Package.Add) and to rpcs while GetSolver and
+// listRouters read them with no lock at all — a real "concurrent map
+// read/write" hazard once Mount can run while the server is already serving
+// RPC/HTTP traffic. Run with -race.
+func TestMountGetSolverListRoutersConcurrent(t *testing.T) {
+	savedPkg, savedRpcs := pkg, rpcs
+	pkg = nil
+	rpcs = make(map[string]et.Json)
+	defer func() { pkg, rpcs = savedPkg, savedRpcs }()
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		if _, err := Mount("localhost", 9001, &EchoService2{}, "ConcPkg"); err != nil {
+			t.Errorf("Mount failed: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for range 200 {
+			GetSolver("EchoService2.Echo")
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for range 200 {
+			listRouters()
+		}
+	}()
+	wg.Wait()
 }
 
 func freePort(t *testing.T) int {

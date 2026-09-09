@@ -61,10 +61,10 @@ func sendSms(sender, organisation string, contactNumbers []string, content strin
 	}
 
 	result := et.Items{}
-	for _, phoneNumber := range contactNumbers {
+	for i, phoneNumber := range contactNumbers {
 		message := content
-		for _, param := range params {
-			for k, v := range param {
+		if i < len(params) {
+			for k, v := range params[i] {
 				k := fmt.Sprintf("{{%s}}", k)
 				s := fmt.Sprintf("%v", v)
 				message = strs.Replace(message, k, s)

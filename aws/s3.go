@@ -80,7 +80,10 @@ func (s *S3AWS) Uploader(bucket, filename, contentType string, contentFile []byt
 * @return et.Item, error
 **/
 func (s *S3AWS) UploaderFile(r *http.Request, bucket, folder, fileName string) (et.Item, error) {
-	r.ParseMultipartForm(2000)
+	if err := r.ParseMultipartForm(2000); err != nil {
+		return et.Item{}, err
+	}
+
 	fileparts, fileInfo, err := r.FormFile("myFile")
 	if err != nil {
 		return et.Item{}, err

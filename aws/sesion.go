@@ -29,21 +29,18 @@ func newSession(params Params) (*session.Session, error) {
 	if params.Secret == "" {
 		return nil, errors.New(MSG_SECRET_REQUIRED)
 	}
-	if params.Token == "" {
-		return nil, errors.New(MSG_TOKEN_REQUIRED)
-	}
 
 	region := params.Region
 	keyId := params.KeyId
 	secret := params.Secret
 	token := params.Token
 
-	return session.Must(session.NewSession(&aws.Config{
+	return session.NewSession(&aws.Config{
 		Region: aws.String(region),
 		Credentials: credentials.NewStaticCredentials(
 			keyId,
 			secret,
 			token,
 		),
-	})), nil
+	})
 }

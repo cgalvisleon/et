@@ -1,6 +1,9 @@
 package jws
 
-import "slices"
+import (
+	"slices"
+	"sync"
+)
 
 type TypeChannel string
 
@@ -15,6 +18,7 @@ type Channel struct {
 	Type        TypeChannel `json:"type"`
 	Subscribers []string    `json:"subscribers"`
 	Turn        int         `json:"turn"`
+	mu          *sync.Mutex `json:"-"`
 }
 
 /**
@@ -28,6 +32,7 @@ func newChannel(name string, tp TypeChannel) *Channel {
 		Type:        tp,
 		Subscribers: []string{},
 		Turn:        0,
+		mu:          &sync.Mutex{},
 	}
 }
 
@@ -36,6 +41,9 @@ func newChannel(name string, tp TypeChannel) *Channel {
 * @param subscriber string
 **/
 func (s *Channel) subscriber(subscriber string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	idx := slices.IndexFunc(s.Subscribers, func(item string) bool {
 		return item == subscriber
 	})
@@ -51,6 +59,9 @@ func (s *Channel) subscriber(subscriber string) {
 * @param subscriber string
 **/
 func (s *Channel) remove(subscriber string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	idx := slices.IndexFunc(s.Subscribers, func(item string) bool {
 		return item == subscriber
 	})
@@ -59,4 +70,59 @@ func (s *Channel) remove(subscriber string) {
 	}
 
 	s.Subscribers = append(s.Subscribers[:idx], s.Subscribers[idx+1:]...)
+}
+
+/**
+* list
+* @return []string - a snapshot copy of the current subscribers
+**/
+func (s *Channel) list() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	result := make([]string, len(s.Subscribers))
+	copy(result, s.Subscribers)
+	return result
+}
+
+/**
+* nextQueueTarget
+* @return (string, bool) - the next subscriber to receive a queued message, round-robin
+**/
+func (s *Channel) nextQueueTarget() (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	n := len(s.Subscribers)
+	if n == 0 {
+		return "", false
+	}
+
+	if s.Turn >= n {
+		s.Turn = 0
+	}
+	target := s.Subscribers[s.Turn]
+	s.Turn++
+	return target, true
+}
+
+/**
+* nextStackTarget
+* @return (string, bool) - the next subscriber to receive a stacked message, reverse round-robin
+**/
+func (s *Channel) nextStackTarget() (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	n := len(s.Subscribers)
+	if n == 0 {
+		return "", false
+	}
+
+	if s.Turn < 0 || s.Turn >= n {
+		s.Turn = n - 1
+	}
+	target := s.Subscribers[s.Turn]
+	s.Turn--
+	return target, true
 }

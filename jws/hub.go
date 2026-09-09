@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/cgalvisleon/et/logs"
@@ -80,12 +81,13 @@ func (s *Hub) onDisconnect(client *Client) {
 
 	_, ok := s.Subscribers[client.Name]
 	if ok {
-		s.Subscribers[client.Name].Status = Disconnected
+		client.Status = Disconnected
 		for _, fn := range s.onDisconnection {
 			fn(client)
 		}
 
 		delete(s.Subscribers, client.Name)
+		client.retire()
 	}
 }
 
@@ -129,25 +131,26 @@ func (s *Hub) Connect(socket *websocket.Conn, ctx context.Context) (*Client, err
 		return nil, errors.New(msg.MSG_HUB_NOT_STARTED)
 	}
 
-	username := ctx.Value("username").(string)
-	if !utility.ValidStr(username, 0, []string{""}) {
+	username, ok := ctx.Value("username").(string)
+	if !ok || !utility.ValidStr(username, 0, []string{""}) {
 		return nil, fmt.Errorf(msg.MSG_ARG_REQUIRED, "username")
 	}
 
-	s.mu.Lock()
-	client, ok := s.Subscribers[username]
-	s.mu.Unlock()
-	if ok {
-		client.Addr = socket.RemoteAddr().String()
-		client.socket = socket
+	s.mu.RLock()
+	client, exists := s.Subscribers[username]
+	s.mu.RUnlock()
+	if exists {
+		outbound, done := client.rebind(socket)
+		go client.read(socket, done)
+		go client.write(socket, outbound, done)
 		return client, nil
 	}
 
 	client = newSubscriber(s, ctx, username, socket)
 	s.register <- client
 
-	go client.write()
-	go client.read()
+	go client.write(client.socket, client.outbound, client.done)
+	go client.read(client.socket, client.done)
 	go client.SendHola()
 
 	return client, nil
@@ -236,8 +239,17 @@ func (s *Hub) SendTo(to []string, message Message) ([]string, error) {
 		}
 	}
 
+	s.mu.RLock()
+	clients := make(map[string]*Client, len(to))
 	for _, username := range to {
-		client, ok := s.Subscribers[username]
+		if client, ok := s.Subscribers[username]; ok {
+			clients[username] = client
+		}
+	}
+	s.mu.RUnlock()
+
+	for _, username := range to {
+		client, ok := clients[username]
 		if ok {
 			idx := slices.IndexFunc(message.Ignored, func(user string) bool {
 				return user == username
@@ -257,7 +269,7 @@ func (s *Hub) SendTo(to []string, message Message) ([]string, error) {
 	}
 
 	if len(result) == 0 {
-		return nil, errors.New(msg.MSG_USER_NOT_FOUND)
+		return nil, fmt.Errorf(msg.MSG_USER_NOT_FOUND, strings.Join(to, ", "))
 	}
 
 	return result, nil
@@ -305,21 +317,22 @@ func (s *Hub) Stack(channel string) *Channel {
 func (s *Hub) Remove(channel string) error {
 	s.mu.Lock()
 	ch, ok := s.Channels[channel]
-	s.mu.Unlock()
 	if !ok {
+		s.mu.Unlock()
 		return fmt.Errorf(msg.MSG_CHANNEL_NOT_FOUND, channel)
 	}
+	delete(s.Channels, channel)
+	s.mu.Unlock()
 
-	for _, subscribe := range ch.Subscribers {
+	for _, subscribe := range ch.list() {
+		s.mu.RLock()
 		client, ok := s.Subscribers[subscribe]
+		s.mu.RUnlock()
 		if ok {
 			client.removeChannel(channel)
 		}
 	}
 
-	s.mu.Lock()
-	delete(s.Channels, channel)
-	s.mu.Unlock()
 	for _, fn := range s.onRemove {
 		fn(channel)
 	}
@@ -332,12 +345,15 @@ func (s *Hub) Remove(channel string) error {
 * @return error
 **/
 func (s *Hub) Subscribe(channel string, subscribe string) error {
+	s.mu.RLock()
 	ch, ok := s.Channels[channel]
 	if !ok {
+		s.mu.RUnlock()
 		return fmt.Errorf(msg.MSG_CHANNEL_NOT_FOUND, channel)
 	}
 
 	client, ok := s.Subscribers[subscribe]
+	s.mu.RUnlock()
 	if !ok {
 		return fmt.Errorf(msg.MSG_USER_NOT_FOUND, subscribe)
 	}
@@ -353,12 +369,15 @@ func (s *Hub) Subscribe(channel string, subscribe string) error {
 * @return error
 **/
 func (s *Hub) Unsubscribe(cache string, subscribe string) error {
+	s.mu.RLock()
 	ch, ok := s.Channels[cache]
 	if !ok {
+		s.mu.RUnlock()
 		return fmt.Errorf(msg.MSG_CHANNEL_NOT_FOUND, cache)
 	}
 
 	client, ok := s.Subscribers[subscribe]
+	s.mu.RUnlock()
 	if !ok {
 		return fmt.Errorf(msg.MSG_USER_NOT_FOUND, subscribe)
 	}
@@ -386,30 +405,20 @@ func (s *Hub) Publish(channel string, message Message) ([]string, error) {
 
 	switch ch.Type {
 	case TpQueue:
-		n := len(ch.Subscribers)
-		if n == 0 {
-			return []string{}, errors.New(msg.MSG_USER_NOT_FOUND)
+		subscribe, ok := ch.nextQueueTarget()
+		if !ok {
+			return []string{}, fmt.Errorf(msg.MSG_USER_NOT_FOUND, channel)
 		}
-		if ch.Turn >= n {
-			ch.Turn = 0
-		}
-		subscribe := ch.Subscribers[ch.Turn]
-		ch.Turn++
 		return s.SendTo([]string{subscribe}, message)
 	case TpStack:
-		n := len(ch.Subscribers)
-		if n == 0 {
-			return []string{}, errors.New(msg.MSG_USER_NOT_FOUND)
+		subscribe, ok := ch.nextStackTarget()
+		if !ok {
+			return []string{}, fmt.Errorf(msg.MSG_USER_NOT_FOUND, channel)
 		}
-		if ch.Turn < 0 {
-			ch.Turn = n - 1
-		}
-		subscribe := ch.Subscribers[ch.Turn]
-		ch.Turn--
 		return s.SendTo([]string{subscribe}, message)
 	case TpTopic:
-		return s.SendTo(ch.Subscribers, message)
+		return s.SendTo(ch.list(), message)
 	}
 
-	return []string{}, errors.New(msg.MSG_USER_NOT_FOUND)
+	return []string{}, fmt.Errorf(msg.MSG_USER_NOT_FOUND, channel)
 }

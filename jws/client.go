@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/gorilla/websocket"
@@ -42,6 +43,8 @@ type Client struct {
 	Channels   []string        `json:"channels"`
 	socket     *websocket.Conn `json:"-"`
 	outbound   chan Outbound   `json:"-"`
+	done       chan struct{}   `json:"-"`
+	closed     bool            `json:"-"`
 	mu         sync.RWMutex    `json:"-"`
 	hub        *Hub            `json:"-"`
 	ctx        context.Context `json:"-"`
@@ -61,7 +64,7 @@ func newSubscriber(hub *Hub, ctx context.Context, username string, socket *webso
 		Channels:   []string{},
 		socket:     socket,
 		outbound:   make(chan Outbound),
-		mu:         sync.RWMutex{},
+		done:       make(chan struct{}),
 		hub:        hub,
 		ctx:        ctx,
 	}
@@ -72,24 +75,85 @@ func newSubscriber(hub *Hub, ctx context.Context, username string, socket *webso
 * @return et.Json
 **/
 func (s *Client) ToJson() et.Json {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	return et.Json{
 		"created_at": s.Created_at,
 		"name":       s.Name,
 		"addr":       s.Addr,
 		"status":     s.Status,
-		"channels":   s.Channels,
+		"channels":   append([]string{}, s.Channels...),
 	}
 }
 
 /**
-* read
+* rebind retires the client's current connection (if any) and installs a new
+* socket, returning the fresh outbound/done pair for the caller to start
+* read()/write() goroutines with. Used when a client reconnects under the
+* same username so the previous connection's goroutines are cleanly retired
+* instead of leaking.
+* @param socket *websocket.Conn
+* @return (chan Outbound, chan struct{})
 **/
-func (s *Client) read() {
+func (s *Client) rebind(socket *websocket.Conn) (chan Outbound, chan struct{}) {
+	s.mu.Lock()
+	oldSocket := s.socket
+	oldDone := s.done
+	wasClosed := s.closed
+
+	newOutbound := make(chan Outbound)
+	newDone := make(chan struct{})
+	s.Addr = socket.RemoteAddr().String()
+	s.socket = socket
+	s.outbound = newOutbound
+	s.done = newDone
+	s.closed = false
+	s.mu.Unlock()
+
+	if !wasClosed {
+		close(oldDone)
+		oldSocket.Close()
+	}
+
+	return newOutbound, newDone
+}
+
+/**
+* retire permanently shuts down the client's current connection: it closes
+* the done channel (signals read()/write() to stop) and the socket. Safe to
+* call more than once.
+**/
+func (s *Client) retire() {
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return
+	}
+	s.closed = true
+	done := s.done
+	socket := s.socket
+	s.mu.Unlock()
+
+	close(done)
+	socket.Close()
+}
+
+/**
+* read
+* @param socket *websocket.Conn, done chan struct{}
+**/
+func (s *Client) read(socket *websocket.Conn, done chan struct{}) {
 	for {
-		_, message, err := s.socket.ReadMessage()
+		_, message, err := socket.ReadMessage()
 		if err != nil {
-			s.hub.unregister <- s
-			break
+			select {
+			case <-done:
+				// this connection was already retired (disconnect or reconnect); nothing to do.
+			default:
+				s.hub.unregister <- s
+			}
+			return
 		}
 
 		s.listener(message)
@@ -98,13 +162,28 @@ func (s *Client) read() {
 
 /**
 * write
+* @param socket *websocket.Conn, outbound chan Outbound, done chan struct{}
 **/
-func (s *Client) write() {
-	for message := range s.outbound {
-		s.socket.WriteMessage(TextMessage, message.message)
+func (s *Client) write(socket *websocket.Conn, outbound chan Outbound, done chan struct{}) {
+	for {
+		select {
+		case message := <-outbound:
+			if err := socket.WriteMessage(message.messageType, message.message); err != nil {
+				logs.Alertf("jws: write error to %s: %v", s.Name, err)
+				select {
+				case <-done:
+				default:
+					s.hub.unregister <- s
+				}
+				socket.Close()
+				return
+			}
+		case <-done:
+			socket.WriteMessage(CloseMessage, []byte{})
+			socket.Close()
+			return
+		}
 	}
-
-	s.socket.WriteMessage(CloseMessage, []byte{})
 }
 
 /**
@@ -122,9 +201,15 @@ func (s *Client) listener(message []byte) {
 * @param tp int, bt []byte
 **/
 func (s *Client) Send(tp int, bt []byte) {
-	s.outbound <- Outbound{
-		messageType: tp,
-		message:     bt,
+	s.mu.RLock()
+	outbound := s.outbound
+	done := s.done
+	s.mu.RUnlock()
+
+	select {
+	case outbound <- Outbound{messageType: tp, message: bt}:
+	case <-done:
+		// client has been retired or is mid-reconnect; drop the message.
 	}
 }
 
@@ -177,6 +262,9 @@ func (s *Client) SendHola() {
 * @param channel string
 **/
 func (s *Client) addChannel(channel string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	idx := slices.IndexFunc(s.Channels, func(c string) bool {
 		return c == channel
 	})
@@ -191,6 +279,9 @@ func (s *Client) addChannel(channel string) {
 * @param channel string
 **/
 func (s *Client) removeChannel(channel string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	idx := slices.IndexFunc(s.Channels, func(c string) bool {
 		return c == channel
 	})

@@ -48,7 +48,7 @@ func Quoted(val any) any {
 	format := `'%v'`
 	switch v := val.(type) {
 	case string:
-		return fmt.Sprintf(format, v)
+		return fmt.Sprintf(format, EscapeSQLString(v))
 	case int:
 		return v
 	case float64:
@@ -66,16 +66,16 @@ func Quoted(val any) any {
 	case time.Time:
 		return fmt.Sprintf(format, v.Format("2006-01-02 15:04:05"))
 	case et.Json:
-		return fmt.Sprintf(format, v.ToString())
+		return fmt.Sprintf(format, EscapeSQLString(v.ToString()))
 	case map[string]interface{}:
-		return fmt.Sprintf(format, et.Json(v).ToString())
+		return fmt.Sprintf(format, EscapeSQLString(et.Json(v).ToString()))
 	case []string, []et.Json, []interface{}, []map[string]interface{}:
 		bt, err := json.Marshal(v)
 		if err != nil {
 			logs.Errorf("Quote, type:%v, value:%v, error marshalling array: %v", reflect.TypeOf(v), v, err)
 			return strs.Format(format, `[]`)
 		}
-		return fmt.Sprintf(format, string(bt))
+		return fmt.Sprintf(format, EscapeSQLString(string(bt)))
 	case []uint8:
 		b := []byte(val.([]uint8))
 		return fmt.Sprintf("'\\x%s'", hex.EncodeToString(b))
@@ -85,6 +85,17 @@ func Quoted(val any) any {
 		logs.Errorf("Quote, type:%v, value:%v", reflect.TypeOf(v), v)
 		return val
 	}
+}
+
+/**
+* EscapeSQLString: Escapes single quotes in s by doubling them (standard SQL
+* string-literal escaping), so a value can be safely embedded between the
+* surrounding '...' produced by Quoted.
+* @param s string
+* @return string
+**/
+func EscapeSQLString(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
 }
 
 /**
@@ -129,7 +140,7 @@ func RowsToItems(rows *sql.Rows) et.Items {
 * @return []string, bool
 **/
 func ArgWhitAs(arg string) ([]string, bool) {
-	pattern := regexp.MustCompile(`^([A-Za-z0-9_>-]+):([A-Za-z0-9_]+)$`) // field:as
+	pattern := regexp.MustCompile(`^([A-Za-z0-9_.>-]+):([A-Za-z0-9_]+)$`) // field:as, or schema.field:as
 	ok := pattern.MatchString(arg)
 	if ok {
 		matches := pattern.FindStringSubmatch(arg)

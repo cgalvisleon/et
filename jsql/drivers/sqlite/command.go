@@ -259,9 +259,10 @@ func sqliteUpdateSQL(command *jsql.Command) (string, error) {
 	if whereSQL == "" && len(command.Conditions) > 0 {
 		whereSQL = BuildConditions(command.Conditions, model, "")
 	}
-	if whereSQL != "" {
-		sb.WriteString("\nWHERE " + whereSQL)
+	if whereSQL == "" {
+		return "", fmt.Errorf("refusing to UPDATE %s without a WHERE clause (missing primary key value in New and no Conditions set)", table)
 	}
+	sb.WriteString("\nWHERE " + whereSQL)
 
 	sb.WriteString(sqliteReturningClause(command))
 	sb.WriteString(";")
@@ -288,9 +289,10 @@ func sqliteDeleteSQL(command *jsql.Command) (string, error) {
 	if whereSQL == "" && len(command.Conditions) > 0 {
 		whereSQL = BuildConditions(command.Conditions, model, "")
 	}
-	if whereSQL != "" {
-		sb.WriteString("\nWHERE " + whereSQL)
+	if whereSQL == "" {
+		return "", fmt.Errorf("refusing to DELETE from %s without a WHERE clause (missing primary key value in Old and no Conditions set)", table)
 	}
+	sb.WriteString("\nWHERE " + whereSQL)
 
 	sb.WriteString(sqliteReturningClause(command))
 	sb.WriteString(";")

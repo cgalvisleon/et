@@ -701,7 +701,7 @@ func (s *Model) Upsert(data et.Json) *Command {
 * @return et.Items, error
 **/
 func (s *Model) QueryTx(tx *Tx, query et.Json) (et.Items, error) {
-	query.Set("from", fmt.Sprintf("%s", s.Table))
+	query.Set("from", fmt.Sprintf("%s.%s", s.Schema, s.Table))
 	return s.db.loadQuery(tx, query)
 }
 

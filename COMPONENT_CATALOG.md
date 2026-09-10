@@ -15,10 +15,10 @@
 7. Identidad/seguridad: `claim/`, `jwt/`, `reg/`, `utility/`, `strs/`
 8. Orquestación: `crontab/`, `jwf/`, `resilience/`, `jia/`, `jrex/`, `service/`
 9. Comunicación de bajo nivel: `jrpc/`, `jtcp/`
-10. Integraciones externas: `aws/`, `brevo/`, `jwsp/`
+10. Integraciones externas: `aws/`, `brevo/`, `jwsp/`, `infobip/`
 11. Concurrencia/memoria: `mem/`, `ephemeral/`, `race/`, `iterate/`, `queue/`
 12. Tiempo/unidades/archivos: `timezone/`, `units/`, `file/`
-13. Herramientas de desarrollo: `cmds/`, `create/`, `cmd/*`, `jcli/`, `infobip/`
+13. Herramientas de desarrollo: `cmds/`, `create/`, `cmd/*`, `jcli/`
 14. Patrón transversal `msg/`
 
 ---
@@ -569,6 +569,16 @@ Pura capa HTTP vía `request.Fetch`/`request.Post` (sin SDK). Auth: env `BREVO_S
 - **Bug confirmado**: `SendReplyVideoMessageByURL(to, url, videoCaptionText string)` asigna `url` al campo `MessageID` del mensaje, en vez de recibir un `messageID` separado como su hermano correcto `SendReplyVideoMessageById(to, messageID, videoCaptionText, videoObjectID string)`.
 - `jwsp/event.go` es un stub vacío (solo `package jwsp`, sin código).
 
+### 10.4 `infobip/`
+
+Pura capa HTTP vía `request.Fetch` (sin SDK), mismo estilo de `Params`/constructor que `aws/` en vez de funciones sueltas por env var como `brevo/`. Ya no es un stub — tiene los tres canales implementados.
+- `type Params struct { BaseUrl, ApiKey, Sender string }` — las tres son obligatorias, validadas en el constructor.
+- `func NewSenderInfobip(params Params) (*SenderInfobip, error)` → un solo cliente compartido por los tres canales.
+- `func (*SenderInfobip) SendSMS(contactNumbers []string, content string, params et.Json, tpMessage string) (et.Item, error)` — `POST {baseUrl}/sms/3/messages`.
+- `func (*SenderInfobip) SendEmail(to []string, subject, htmlContent string, params et.Json, tpMessage string) (et.Item, error)` — `POST {baseUrl}/email/4/messages` (Email API v4, JSON; deliberadamente no la v3 `/email/3/send`, que exige `multipart/form-data` y no encaja con `request.Fetch`).
+- `func (*SenderInfobip) SendWhatsApp(contactNumbers []string, templateName, language string, placeholders [][]string, tpMessage string) (et.Items, error)` — `POST {baseUrl}/whatsapp/1/message/template`, una request por destinatario; solo plantillas pre-aprobadas con placeholders posicionales `{{n}}` (`placeholders[i]` para `contactNumbers[i]`), no mensajes de sesión libres.
+- Las tres funciones validan `tpMessage` ∈ `{"Transactional","Promotional"}` y aceptan `params et.Json` con plantillado `{{key}}` vía `strs.Replace` (excepto `SendWhatsApp`, que usa placeholders posicionales por ser plantillas de WhatsApp Business).
+
 ---
 
 ## 11. Concurrencia y memoria
@@ -650,10 +660,6 @@ No existe `cmd/jia` — a diferencia de `jwf`/`jrex`, `jia` no tiene ejemplo run
 ### 13.4 `jcli/` (huérfano, en progreso)
 
 `jcli/jcli.go` implementa un modelo de CLI Bubble Tea (`cliModel`, interfaz `App{RunCli() error}`) pero **declara `package jrex`** estando en el directorio `jcli/`, y **nada en el repo importa `github.com/cgalvisleon/et/jcli`**. Parece ser una extracción en progreso del CLI de desarrollo de `jrex/` hacia su propio paquete, sin terminar de conectar.
-
-### 13.5 `infobip/` (stub vacío)
-
-`infobip/infobip.go` contiene únicamente `package infobip` — sin ningún código. Placeholder para una integración futura, no usable hoy.
 
 ---
 

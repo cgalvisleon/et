@@ -91,6 +91,7 @@ func (s *Schema) newModel(name string, version int, userId string) *Model {
 		Schema:        s.Name,
 		DatabaseId:    s.db.ID,
 		Name:          name,
+		Table:         name,
 		Columns:       make([]*Column, 0),
 		Indexes:       make([]*Index, 0),
 		PrimaryKeys:   make([]*Index, 0),

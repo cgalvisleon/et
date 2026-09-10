@@ -1045,7 +1045,7 @@ func (s *Query) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 		to = args[0]
 		as = args[1]
 		args, ok = ArgWhitSchema(to)
-		if ok {
+		if !ok {
 			return et.Items{}, fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
 		}
 		schema := args[0]
@@ -1070,7 +1070,7 @@ func (s *Query) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 		to = args[0]
 		as = args[1]
 		args, ok = ArgWhitSchema(to)
-		if ok {
+		if !ok {
 			return et.Items{}, fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
 		}
 		schema := args[0]
@@ -1081,7 +1081,7 @@ func (s *Query) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 		}
 
 		conditions := et.ToCondition(js)
-		s.join(modelTo, as, INNER_JOIN, conditions)
+		s.join(modelTo, as, LEFT_JOIN, conditions)
 	}
 
 	rightJoin := query.ArrayJson("right_join")
@@ -1095,7 +1095,7 @@ func (s *Query) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 		to = args[0]
 		as = args[1]
 		args, ok = ArgWhitSchema(to)
-		if ok {
+		if !ok {
 			return et.Items{}, fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
 		}
 		schema := args[0]
@@ -1106,7 +1106,7 @@ func (s *Query) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 		}
 
 		conditions := et.ToCondition(js)
-		s.join(modelTo, as, INNER_JOIN, conditions)
+		s.join(modelTo, as, RIGHT_JOIN, conditions)
 	}
 
 	fullJoin := query.ArrayJson("full_join")
@@ -1120,7 +1120,7 @@ func (s *Query) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 		to = args[0]
 		as = args[1]
 		args, ok = ArgWhitSchema(to)
-		if ok {
+		if !ok {
 			return et.Items{}, fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
 		}
 		schema := args[0]
@@ -1131,7 +1131,7 @@ func (s *Query) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 		}
 
 		conditions := et.ToCondition(js)
-		s.join(modelTo, as, INNER_JOIN, conditions)
+		s.join(modelTo, as, FULL_JOIN, conditions)
 	}
 
 	selects := query.ArrayStr("selects")

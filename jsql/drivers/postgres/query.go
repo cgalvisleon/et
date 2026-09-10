@@ -52,9 +52,16 @@ func pgJsonbPath(field string) string {
 		return field
 	}
 	parts := strings.Split(field, "->")
+	root := parts[0]
+	if strings.Contains(root, ".") {
+		root = sanitizeQualifiedIdent(root)
+	} else {
+		root = sanitizeIdent(root)
+	}
 	var sb strings.Builder
-	sb.WriteString(parts[0])
+	sb.WriteString(root)
 	for i, p := range parts[1:] {
+		p = jsql.EscapeSQLString(p)
 		if i == len(parts)-2 {
 			sb.WriteString(fmt.Sprintf("->>'%s'", p))
 		} else {

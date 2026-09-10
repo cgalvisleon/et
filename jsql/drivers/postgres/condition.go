@@ -2,11 +2,40 @@ package postgres
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
 )
+
+// identifierUnsafe matches any character not allowed in a bare SQL
+// identifier segment (letters, digits, underscore). Used to strip anything
+// an attacker could use to break out of the generated SQL when a field name
+// coming from outside the model's column whitelist is used to build an
+// expression (e.g. quotes, semicolons, comment markers, whitespace).
+var identifierUnsafe = regexp.MustCompile(`[^A-Za-z0-9_]`)
+var qualifiedIdentifierUnsafe = regexp.MustCompile(`[^A-Za-z0-9_.]`)
+
+/**
+* sanitizeIdent: Strips anything that isn't a letter, digit or underscore,
+* so a value can never break out of the identifier position it's placed in.
+* @param s string
+* @return string
+**/
+func sanitizeIdent(s string) string {
+	return identifierUnsafe.ReplaceAllString(s, "")
+}
+
+/**
+* sanitizeQualifiedIdent: Like sanitizeIdent but also allows "." for an
+* already schema/table-qualified identifier (e.g. "table.column").
+* @param s string
+* @return string
+**/
+func sanitizeQualifiedIdent(s string) string {
+	return qualifiedIdentifierUnsafe.ReplaceAllString(s, "")
+}
 
 /**
 * resolveField: Translates a field name (possibly a nested JSONB path using "->"
@@ -39,15 +68,21 @@ func resolveField(field string, model *jsql.Model, alias string) string {
 	if isAttrib {
 		src := model.SourceField
 		if alias != "" {
-			src = fmt.Sprintf("%s.%s", alias, src)
+			src = fmt.Sprintf("%s.%s", sanitizeIdent(alias), src)
 		}
 		base = src
 		pathSegs = append([]string{root}, path...)
 	} else {
-		if alias != "" && !strings.Contains(root, ".") {
-			base = fmt.Sprintf("%s.%s", alias, root)
+		safeRoot := root
+		if strings.Contains(root, ".") {
+			safeRoot = sanitizeQualifiedIdent(root)
 		} else {
-			base = root
+			safeRoot = sanitizeIdent(root)
+		}
+		if alias != "" && !strings.Contains(root, ".") {
+			base = fmt.Sprintf("%s.%s", sanitizeIdent(alias), safeRoot)
+		} else {
+			base = safeRoot
 		}
 		pathSegs = path
 	}
@@ -59,6 +94,7 @@ func resolveField(field string, model *jsql.Model, alias string) string {
 	var sb strings.Builder
 	sb.WriteString(base)
 	for i, seg := range pathSegs {
+		seg = jsql.EscapeSQLString(seg)
 		if i == len(pathSegs)-1 {
 			sb.WriteString(fmt.Sprintf("->>'%s'", seg))
 		} else {

@@ -121,7 +121,7 @@ func buildInList(val any) string {
 	case []string:
 		parts := make([]string, len(v))
 		for i, s := range v {
-			parts[i] = fmt.Sprintf("'%s'", s)
+			parts[i] = sqliteQuoteString(s)
 		}
 		return strings.Join(parts, ", ")
 	case []int:

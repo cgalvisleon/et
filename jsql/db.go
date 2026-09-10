@@ -728,7 +728,7 @@ func (s *DB) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 		as = args[1]
 	}
 	args, ok = ArgWhitSchema(from)
-	if ok {
+	if !ok {
 		return et.Items{}, fmt.Errorf(MSG_INVALID_FROM, from)
 	}
 	schema := args[0]
@@ -739,25 +739,25 @@ func (s *DB) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 	}
 
 	insert := query.Json("insert")
-	if insert.IsEmpty() {
+	if !insert.IsEmpty() {
 		command := model.Insert(insert)
 		return command.loadQuery(tx, query)
 	}
 
 	update := query.Json("update")
-	if update.IsEmpty() {
+	if !update.IsEmpty() {
 		command := model.Update(update)
 		return command.loadQuery(tx, query)
 	}
 
 	delete := query.Json("delete")
-	if delete.IsEmpty() {
+	if !delete.IsEmpty() {
 		command := model.Delete()
 		return command.loadQuery(tx, delete)
 	}
 
 	upsert := query.Json("upsert")
-	if upsert.IsEmpty() {
+	if !upsert.IsEmpty() {
 		command := model.Upsert(upsert)
 		return command.loadQuery(tx, query)
 	}

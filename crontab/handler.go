@@ -4,7 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cgalvisleon/et/et"
@@ -46,7 +47,7 @@ func Load(tag string, store Store) error {
 		return err
 	}
 
-	return crontab.eventInit()
+	return nil
 }
 
 type Cron struct {
@@ -57,34 +58,75 @@ type Cron struct {
 	Minute     string `json:"minuto"`
 }
 
-func (s *Cron) toString() (string, error) {
-	dayOfWeekRegex := `^([0-7]|\*|\*/[0-7]|[0-7]-[0-7]|[0-7](,[0-7])*)$`
-	monthRegex := `^([0-12]|\*|\*/[0-12]|[0-12]-[0-12]|[0-12](,[0-12])*)$`
-	dayOfMonthRegex := `^([0-31]|\*|\*/[0-31]|[0-31]-[0-31]|[0-31](,[0-31])*)$`
-	hourRegex := `^([0-23]|\*|\*/[0-23]|[0-23]-[0-23]|[0-23](,[0-23])*)$`
-	minuteRegex := `^([0-59]|\*|\*/[0-59]|[0-59]-[0-59]|[0-59](,[0-59])*)$`
+/**
+* isValidCronNumber reports whether s is an integer within [min, max].
+* @param s string, min, max int
+* @return bool
+**/
+func isValidCronNumber(s string, min, max int) bool {
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return false
+	}
+	return n >= min && n <= max
+}
 
-	if ok, _ := regexp.MatchString(dayOfWeekRegex, s.DayOfWeek); !ok {
+/**
+* isValidCronField reports whether value is a valid cron field for the [min, max]
+* range: a wildcard, a wildcard step, a single number, a range, or a comma list.
+* @param value string, min, max int
+* @return bool
+**/
+func isValidCronField(value string, min, max int) bool {
+	if value == "*" {
+		return true
+	}
+
+	for _, part := range strings.Split(value, ",") {
+		if step, ok := strings.CutPrefix(part, "*/"); ok {
+			if !isValidCronNumber(step, 1, max) {
+				return false
+			}
+			continue
+		}
+
+		if from, to, ok := strings.Cut(part, "-"); ok {
+			if !isValidCronNumber(from, min, max) || !isValidCronNumber(to, min, max) {
+				return false
+			}
+			continue
+		}
+
+		if !isValidCronNumber(part, min, max) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (s *Cron) toString() (string, error) {
+	if !isValidCronField(s.DayOfWeek, 0, 7) {
 		return "", errors.New(MSG_ERROR_DAY_OF_WEEK_INVALID)
 	}
 
-	if ok, _ := regexp.MatchString(monthRegex, s.Month); !ok {
+	if !isValidCronField(s.Month, 1, 12) {
 		return "", errors.New(MSG_ERROR_MONTH_INVALID)
 	}
 
-	if ok, _ := regexp.MatchString(dayOfMonthRegex, s.DayOfMonth); !ok {
+	if !isValidCronField(s.DayOfMonth, 1, 31) {
 		return "", errors.New(MSG_ERROR_DAY_OF_MONTH_INVALID)
 	}
 
-	if ok, _ := regexp.MatchString(hourRegex, s.Hour); !ok {
+	if !isValidCronField(s.Hour, 0, 23) {
 		return "", errors.New(MSG_ERROR_HOUR_INVALID)
 	}
 
-	if ok, _ := regexp.MatchString(minuteRegex, s.Minute); !ok {
+	if !isValidCronField(s.Minute, 0, 59) {
 		return "", errors.New(MSG_ERROR_MINUTE_INVALID)
 	}
 
-	return fmt.Sprintf("%s %s %s %s %s", s.DayOfWeek, s.Month, s.DayOfMonth, s.Hour, s.Minute), nil
+	return fmt.Sprintf("0 %s %s %s %s %s", s.Minute, s.Hour, s.DayOfMonth, s.Month, s.DayOfWeek), nil
 }
 
 /**

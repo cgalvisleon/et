@@ -24,7 +24,7 @@ func (s *Server) handlerApiRest(w http.ResponseWriter, r *http.Request) {
 
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
 	if !ok {
-		metric.HTTPError(rw, r, http.StatusInternalServerError, "Metric not found")
+		http.Error(rw, "Metric not found", http.StatusInternalServerError)
 		return
 	}
 

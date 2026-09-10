@@ -293,6 +293,9 @@ func (s *Where) Order(field string, asc bool) *Where {
 * @return *Where
 **/
 func (s *Where) Limit(page int, rows int) *Where {
+	if page < 1 {
+		page = 1
+	}
 	offset := (page - 1) * rows
 	s.Limits = rows
 	s.Offset = offset
@@ -425,6 +428,9 @@ func (s *Where) All() []Json {
 	if hasOrder {
 		s.sortResult()
 		start := s.Offset
+		if start < 0 {
+			start = 0
+		}
 		if start > len(s.Result) {
 			start = len(s.Result)
 		}
@@ -453,7 +459,7 @@ func (s *Where) One(idx int) Json {
 		idx = n + idx
 	}
 
-	if idx >= n {
+	if idx < 0 || idx >= n {
 		return Json{}
 	}
 

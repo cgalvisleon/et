@@ -17,7 +17,7 @@ type Stdout interface {
 
 var (
 	stdout Stdout
-	Reset  = "\033[97m"
+	Reset  = "\033[0m"
 	Black  = "\033[30m"
 	Red    = "\033[31m"
 	Green  = "\033[32m"
@@ -36,7 +36,7 @@ var (
 	BPurple  = []byte{'\033', '[', '3', '5', ';', '1', 'm'}
 	BCyan    = []byte{'\033', '[', '3', '6', ';', '1', 'm'}
 	BWhite   = []byte{'\033', '[', '3', '7', ';', '1', 'm'}
-	BReset   = []byte{'\033', '[', '9', '7', 'm'}
+	BReset   = []byte{'\033', '[', '0', 'm'}
 	IsTTY    bool
 	useColor = true
 	colors   = map[string]string{

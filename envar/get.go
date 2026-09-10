@@ -111,12 +111,12 @@ func GetBool(name string, def bool) bool {
 * @return time.Duration
 **/
 func GetDuration(name string, def time.Duration) time.Duration {
-	result := GetStr(name, strconv.FormatInt(int64(def), 10))
-	val, err := strconv.ParseInt(result, 10, 64)
+	result := GetStr(name, def.String())
+	val, err := time.ParseDuration(result)
 	if err != nil {
 		return def
 	}
-	return time.Duration(val)
+	return val
 }
 
 /**

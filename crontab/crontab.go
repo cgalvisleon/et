@@ -95,7 +95,7 @@ func (s *Crontab) addJob(job *Job) error {
 	_, exists := s.Jobs[job.ID]
 	s.mu.Unlock()
 	if exists {
-		return nil
+		return ErrJobExists
 	}
 
 	s.mu.Lock()
@@ -112,7 +112,8 @@ func (s *Crontab) addJob(job *Job) error {
 		return err
 	}
 
-	logs.Log(packageName, fmt.Sprintf(MSG_ADD_JOB, job.ID, job.Tag, job.Type, job.Spec))
+	channel := fmt.Sprintf("job:%s", job.Tag)
+	logs.Log(packageName, fmt.Sprintf(MSG_ADD_JOB, job.ID, job.Tag, channel, job.Type, job.Spec))
 
 	return nil
 }

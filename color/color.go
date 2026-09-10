@@ -79,6 +79,15 @@ func White(str string) string {
 }
 
 /**
+* Gray returns a gray-colored string
+* @params str string
+* @return string
+**/
+func Gray(str string) string {
+	return color(stdrout.Gray, str)
+}
+
+/**
 * Black returns a black-colored string
 * @params str string
 * @return string

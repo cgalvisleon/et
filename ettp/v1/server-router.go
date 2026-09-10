@@ -111,6 +111,9 @@ func (s *Server) setRouter(method, path, resolve string, kind TypeApi, header et
 * @return *Router
 **/
 func (s *Server) GetRouteById(id string) *Router {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	for _, router := range s.router {
 		find := router.getRouterById(id)
 		if find != nil {

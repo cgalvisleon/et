@@ -46,7 +46,7 @@ func (s *Server) mountApiGatewayFunc() {
 func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
 	if !ok {
-		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
+		http.Error(w, MSG_METRIC_NOT_FOUND, http.StatusInternalServerError)
 		return
 	}
 
@@ -62,7 +62,7 @@ func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 func (s *Server) upsetRouter(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
 	if !ok {
-		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
+		http.Error(w, MSG_METRIC_NOT_FOUND, http.StatusInternalServerError)
 		return
 	}
 
@@ -100,7 +100,7 @@ func (s *Server) upsetRouter(w http.ResponseWriter, r *http.Request) {
 func (s *Server) deleteRouteById(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
 	if !ok {
-		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
+		http.Error(w, MSG_METRIC_NOT_FOUND, http.StatusInternalServerError)
 		return
 	}
 
@@ -125,7 +125,7 @@ func (s *Server) deleteRouteById(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getRoutes(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
 	if !ok {
-		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
+		http.Error(w, MSG_METRIC_NOT_FOUND, http.StatusInternalServerError)
 		return
 	}
 
@@ -158,7 +158,7 @@ func (s *Server) getRoutes(w http.ResponseWriter, r *http.Request) {
 func (s *Server) reset(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
 	if !ok {
-		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
+		http.Error(w, MSG_METRIC_NOT_FOUND, http.StatusInternalServerError)
 		return
 	}
 
@@ -167,7 +167,12 @@ func (s *Server) reset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for _, pk := range s.packages {
+	s.mu.RLock()
+	packages := make([]*Package, len(s.packages))
+	copy(packages, s.packages)
+	s.mu.RUnlock()
+
+	for _, pk := range packages {
 		channel := fmt.Sprintf(`%s:%s`, rt.APIGATEWAY_RESET_ROUTER, pk.Name)
 		event.Publish(channel, et.Json{})
 		channel = fmt.Sprintf(`%s:%s`, rt.APIGATEWAY_RESET, pk.Name)
@@ -185,7 +190,7 @@ func (s *Server) reset(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handlerDevToken(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
 	if !ok {
-		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
+		http.Error(w, MSG_METRIC_NOT_FOUND, http.StatusInternalServerError)
 		return
 	}
 

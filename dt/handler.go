@@ -35,6 +35,10 @@ func GetObject(key string, dest any) (bool, error) {
 		return false, err
 	}
 
+	if !exists || result == nil {
+		return false, nil
+	}
+
 	bt, err := result.Byte()
 	if err != nil {
 		return false, err

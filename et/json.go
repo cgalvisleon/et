@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -424,12 +425,13 @@ func (s Json) ValTime(def time.Time, atribs ...string) time.Time {
 
 	switch v := val.(type) {
 	case string:
-		layout := "2006-01-02T15:04:05.000Z"
-		result, err := time.Parse(layout, v)
-		if err != nil {
-			return def
+		layouts := []string{time.RFC3339, time.RFC3339Nano, "2006-01-02T15:04:05.000Z"}
+		for _, layout := range layouts {
+			if result, err := time.Parse(layout, v); err == nil {
+				return result
+			}
 		}
-		return result
+		return def
 	case time.Time:
 		return v
 	default:
@@ -905,6 +907,23 @@ func (s Json) Update(from Json) {
 }
 
 /**
+* deepEqualValue reports whether a and b represent the same JSON value.
+* It compares via their JSON encoding so that nested maps/slices never panic
+* on uncomparable types and named vs. unnamed map types (e.g. Json vs.
+* map[string]interface{}) don't cause spurious mismatches.
+* @param a, b interface{}
+* @return bool
+**/
+func deepEqualValue(a, b interface{}) bool {
+	ab, errA := json.Marshal(a)
+	bb, errB := json.Marshal(b)
+	if errA != nil || errB != nil {
+		return reflect.DeepEqual(a, b)
+	}
+	return bytes.Equal(ab, bb)
+}
+
+/**
 * Compare: This method return a new json with the diferent values between s and from. Also include the keys that not exist in s.
 * @param from Json
 * @return bool
@@ -912,7 +931,7 @@ func (s Json) Update(from Json) {
 func (s Json) Compare(from Json) Json {
 	result := Json{}
 	for key, value := range from {
-		if old, ok := s[key]; !ok || old != value {
+		if old, ok := s[key]; !ok || !deepEqualValue(old, value) {
 			result[key] = value
 		}
 	}
@@ -942,20 +961,8 @@ func (s Json) Append(from Json) Json {
 func (s Json) IsChanged(from Json) bool {
 	for key, vb := range from {
 		va, ok := s[key]
-		if !ok {
+		if !ok || !deepEqualValue(va, vb) {
 			return true
-		}
-
-		switch v := va.(type) {
-		case map[string]interface{}:
-			return s.IsChanged(v)
-		case Json:
-			return s.IsChanged(v)
-		default:
-			ok := va == vb
-			if !ok {
-				return true
-			}
 		}
 	}
 
@@ -973,7 +980,7 @@ func (s Json) IsDeferent(atrib string, val interface{}) bool {
 	if !ok {
 		return true
 	}
-	return current != val
+	return !deepEqualValue(current, val)
 }
 
 /**

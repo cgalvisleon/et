@@ -186,7 +186,16 @@ func (s *Server) handlerApi(w http.ResponseWriter, r *http.Request) {
 
 	_, err = io.Copy(rw, res.Body)
 	if err != nil {
-		s.HTTPError(resolver, metric, rw, r, http.StatusInternalServerError, err.Error())
+		// The status line and part of the body may already be flushed to the
+		// client at this point, so we can no longer send a clean error
+		// response (doing so would just append a stray JSON body after the
+		// partial output). Just record the failure and stop.
+		logs.Errorf("error copying proxy response body: %s", err.Error())
+		if resolver != nil {
+			resolver.setStatus(TpStatusFailed)
+			s.deleteRequest(resolver.ID)
+		}
+		return
 	}
 
 	s.HTTPSuccess(resolver, metric, rw)

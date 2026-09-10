@@ -310,16 +310,18 @@ func (s *Condition) applyOpEq(val any) bool {
 
 	switch bv := s.Value.Value.(type) {
 	case []Json:
-		for _, item := range bv {
-			for _, value := range item {
-				ok, err := equalsAny(val, value)
-				if err != nil {
-					return false
-				}
-				return ok
-			}
+		if len(bv) == 0 {
+			return false
 		}
-		return false
+		value, ok := firstMapValueSorted(bv[0])
+		if !ok {
+			return false
+		}
+		result, err := equalsAny(val, value)
+		if err != nil {
+			return false
+		}
+		return result
 	default:
 		if first, ok := firstOfSlice(bv); ok {
 			tmp := *s
@@ -395,14 +397,16 @@ func (s *Condition) applyOpLess(val any) bool {
 
 		return aNum < bNum
 	case []Json:
-		for _, item := range bv {
-			for _, value := range item {
-				tmp := *s
-				tmp.Value = NewValue(value)
-				return tmp.applyOpLess(val)
-			}
+		if len(bv) == 0 {
+			return invalidType()
 		}
-		return invalidType()
+		value, ok := firstMapValueSorted(bv[0])
+		if !ok {
+			return invalidType()
+		}
+		tmp := *s
+		tmp.Value = NewValue(value)
+		return tmp.applyOpLess(val)
 	case []interface{}:
 		for _, value := range bv {
 			tmp := *s
@@ -471,14 +475,16 @@ func (s *Condition) applyOpLessEq(val any) bool {
 
 		return aNum <= bNum
 	case []Json:
-		for _, item := range bv {
-			for _, value := range item {
-				tmp := *s
-				tmp.Value = NewValue(value)
-				return tmp.applyOpLessEq(val)
-			}
+		if len(bv) == 0 {
+			return invalidType()
 		}
-		return invalidType()
+		value, ok := firstMapValueSorted(bv[0])
+		if !ok {
+			return invalidType()
+		}
+		tmp := *s
+		tmp.Value = NewValue(value)
+		return tmp.applyOpLessEq(val)
 	case []interface{}:
 		for _, value := range bv {
 			tmp := *s
@@ -547,14 +553,16 @@ func (s *Condition) applyOpMore(val any) bool {
 
 		return aNum > bNum
 	case []Json:
-		for _, item := range bv {
-			for _, value := range item {
-				tmp := *s
-				tmp.Value = NewValue(value)
-				return tmp.applyOpMore(val)
-			}
+		if len(bv) == 0 {
+			return invalidType()
 		}
-		return invalidType()
+		value, ok := firstMapValueSorted(bv[0])
+		if !ok {
+			return invalidType()
+		}
+		tmp := *s
+		tmp.Value = NewValue(value)
+		return tmp.applyOpMore(val)
 	case []interface{}:
 		for _, value := range bv {
 			tmp := *s
@@ -623,14 +631,16 @@ func (s *Condition) applyOpMoreEq(val any) bool {
 
 		return aNum >= bNum
 	case []Json:
-		for _, item := range bv {
-			for _, value := range item {
-				tmp := *s
-				tmp.Value = NewValue(value)
-				return tmp.applyOpMoreEq(val)
-			}
+		if len(bv) == 0 {
+			return invalidType()
 		}
-		return invalidType()
+		value, ok := firstMapValueSorted(bv[0])
+		if !ok {
+			return invalidType()
+		}
+		tmp := *s
+		tmp.Value = NewValue(value)
+		return tmp.applyOpMoreEq(val)
 	case []interface{}:
 		for _, value := range bv {
 			tmp := *s
@@ -670,28 +680,32 @@ func (s *Condition) applyOpLike(val any) bool {
 		}
 		return matchLikeStar(av, bv)
 	case Json:
-		for _, value := range bv {
-			tmp := *s
-			tmp.Value = NewValue(value)
-			return tmp.applyOpLike(val)
+		value, ok := firstMapValueSorted(bv)
+		if !ok {
+			return invalidType()
 		}
-		return invalidType()
+		tmp := *s
+		tmp.Value = NewValue(value)
+		return tmp.applyOpLike(val)
 	case map[string]interface{}:
-		for _, value := range bv {
-			tmp := *s
-			tmp.Value = NewValue(value)
-			return tmp.applyOpLike(val)
+		value, ok := firstMapValueSorted(bv)
+		if !ok {
+			return invalidType()
 		}
-		return invalidType()
+		tmp := *s
+		tmp.Value = NewValue(value)
+		return tmp.applyOpLike(val)
 	case []Json:
-		for _, item := range bv {
-			for _, value := range item {
-				tmp := *s
-				tmp.Value = NewValue(value)
-				return tmp.applyOpLike(val)
-			}
+		if len(bv) == 0 {
+			return invalidType()
 		}
-		return invalidType()
+		value, ok := firstMapValueSorted(bv[0])
+		if !ok {
+			return invalidType()
+		}
+		tmp := *s
+		tmp.Value = NewValue(value)
+		return tmp.applyOpLike(val)
 	case []interface{}:
 		for _, value := range bv {
 			tmp := *s
@@ -1005,18 +1019,19 @@ func ToCondition(json Json) []*Condition {
 	}
 
 	for k := range json {
+		var cond *Condition
 		if strings.ToLower(k) == "and" {
-			def := json.Json(k)
-			result = append(result, and(def))
+			cond = and(json.Json(k))
 		} else if strings.ToLower(k) == "or" {
-			def := json.Json(k)
-			result = append(result, or(def))
+			cond = or(json.Json(k))
 		} else if strings.ToLower(k) == "where" {
-			def := json.Json(k)
-			result = append(result, getWhere(def))
+			cond = getWhere(json.Json(k))
 		} else if strings.ToLower(k) == "on" {
-			def := json.Json(k)
-			result = append(result, getWhere(def))
+			cond = getWhere(json.Json(k))
+		}
+
+		if cond != nil {
+			result = append(result, cond)
 		}
 	}
 
@@ -1183,16 +1198,12 @@ func EvaluateObject(item Json, conditions []*Condition) bool {
 	}
 
 	result := conditions[0].ApplyToObject(item)
-	for _, cond := range conditions {
+	for _, cond := range conditions[1:] {
 		ok := cond.ApplyToObject(item)
 		if cond.Connector == And {
 			result = result && ok
 		} else if cond.Connector == Or {
 			result = result || ok
-		}
-
-		if !result {
-			break
 		}
 	}
 
@@ -1210,16 +1221,12 @@ func EvaluateValue(value any, conditions []*Condition) bool {
 	}
 
 	result := conditions[0].ApplyToValue(value)
-	for _, cond := range conditions {
+	for _, cond := range conditions[1:] {
 		ok := cond.ApplyToValue(value)
 		if cond.Connector == And {
 			result = result && ok
 		} else if cond.Connector == Or {
 			result = result || ok
-		}
-
-		if !result {
-			break
 		}
 	}
 

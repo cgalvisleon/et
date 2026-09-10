@@ -82,7 +82,7 @@ func New() (*Conn, error) {
 * Close terminates the Redis connection.
 **/
 func (s *Conn) Close() {
-	s.Close()
+	s.Client.Close()
 
 	logs.Log(packageName, `Disconnect...`)
 }
@@ -95,5 +95,5 @@ func (s *Conn) HealthCheck() bool {
 	ctx, cancel := context.WithTimeout(s.ctx, 2*time.Second)
 	defer cancel()
 
-	return conn.Ping(ctx).Err() == nil
+	return s.Ping(ctx).Err() == nil
 }

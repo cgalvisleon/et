@@ -47,11 +47,11 @@ func params(str string, args ...any) string {
 }
 
 /**
-* Append
+* joinSep joins str1 and str2 with sp, skipping either side if empty.
 * @param str1, str2, sp string
 * @return string
 **/
-func append(str1, str2, sp string) string {
+func joinSep(str1, str2, sp string) string {
 	if len(str1) == 0 {
 		return str2
 	}
@@ -118,7 +118,7 @@ func ExistPath(path string) FileInfo {
 func MakeFolder(names ...string) (string, error) {
 	var path string
 	for _, name := range names {
-		path = append(path, name, "/")
+		path = joinSep(path, name, "/")
 		absPath, err := filepath.Abs(path)
 		if err != nil {
 			return path, err
@@ -161,6 +161,7 @@ func MakeFile(path, name, model string, args ...any) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	defer file.Close()
 
 	content := params(model, args...)
 	bt := []byte(content)
@@ -181,16 +182,17 @@ func MakeFile(path, name, model string, args ...any) (string, error) {
 func Remove(path string) (bool, error) {
 	file := path
 	if _, err := os.Stat(file); os.IsNotExist(err) {
-		if err != nil {
-			return false, err
-		}
-
 		logs.Log("file", "remove file:", file)
 		return true, nil
-	} else {
-		os.Remove(file)
-		return true, nil
+	} else if err != nil {
+		return false, err
 	}
+
+	if err := os.Remove(file); err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 /**

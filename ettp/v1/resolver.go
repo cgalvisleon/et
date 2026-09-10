@@ -47,27 +47,29 @@ func newSolver(route *Router, params et.Json, r *http.Request) *solver {
 
 	switch route.TpParams {
 	case TpQueryParams:
-		sp := "?"
-		ls := strings.Split(resolve, sp)
-		query := params["query"].(string)
-		resolve = ls[0] + sp + query
-		querys := strings.Split(query, "&")
-		for _, q := range querys {
-			qs := strings.Split(q, "=")
-			if len(qs) == 2 {
-				r.SetPathValue(qs[0], qs[1])
+		if query, ok := params["query"].(string); ok {
+			sp := "?"
+			ls := strings.Split(resolve, sp)
+			resolve = ls[0] + sp + query
+			querys := strings.Split(query, "&")
+			for _, q := range querys {
+				qs := strings.Split(q, "=")
+				if len(qs) == 2 {
+					r.SetPathValue(qs[0], qs[1])
+				}
 			}
 		}
 	case TpMatrixParams:
-		sp := ";"
-		ls := strings.Split(resolve, sp)
-		matrix := params["matrix"].(string)
-		resolve = ls[0] + sp + matrix
-		matrixs := strings.Split(matrix, ";")
-		for _, m := range matrixs {
-			ms := strings.Split(m, "=")
-			if len(ms) == 2 {
-				r.SetPathValue(ms[0], ms[1])
+		if matrix, ok := params["matrix"].(string); ok {
+			sp := ";"
+			ls := strings.Split(resolve, sp)
+			resolve = ls[0] + sp + matrix
+			matrixs := strings.Split(matrix, ";")
+			for _, m := range matrixs {
+				ms := strings.Split(m, "=")
+				if len(ms) == 2 {
+					r.SetPathValue(ms[0], ms[1])
+				}
 			}
 		}
 	}

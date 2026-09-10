@@ -24,7 +24,11 @@ func CorsAllowAll(allowedOrigins []string) *cors.Cors {
 			http.MethodPatch,
 			http.MethodDelete,
 		},
-		AllowedHeaders:   []string{"*"},
-		AllowCredentials: true,
+		AllowedHeaders: []string{"*"},
+		// Credentials must never be allowed alongside a reflect-any-origin
+		// policy (the case below when allowedOrigins is empty) — that combo
+		// lets any site make authenticated requests using the caller's
+		// cookies. Only enable it once an explicit allowlist is in effect.
+		AllowCredentials: len(allowedOrigins) > 0,
 	})
 }

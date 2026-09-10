@@ -2,10 +2,12 @@ package ettp
 
 import (
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/rpc"
+	"time"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jrpc"
@@ -56,12 +58,27 @@ func (s *Codec) WriteResponse(r *rpc.Response, body interface{}) error {
 func (s *Server) startPipe() {
 	logs.Logf("Pipe", "Starting pipe on port %s", s.pipe.Addr().String())
 	go func() {
+		var backoff time.Duration
 		for {
 			conn, err := s.pipe.Accept()
 			if err != nil {
+				if errors.Is(err, net.ErrClosed) {
+					return
+				}
+
 				logs.Error(err)
+				if backoff == 0 {
+					backoff = 5 * time.Millisecond
+				} else {
+					backoff *= 2
+				}
+				if max := time.Second; backoff > max {
+					backoff = max
+				}
+				time.Sleep(backoff)
 				continue
 			}
+			backoff = 0
 			go s.handlerPipe(conn)
 		}
 	}()

@@ -137,6 +137,10 @@ func IncrDuration(key string, expiration time.Duration) int64 {
 * @return error
 **/
 func Expire(key string, expiration time.Duration) error {
+	if conn == nil {
+		return errors.New(msg.MSG_NOT_CACHE_SERVICE)
+	}
+
 	return ExpireCtx(conn.ctx, key, expiration)
 }
 

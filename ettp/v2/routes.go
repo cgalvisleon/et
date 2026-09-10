@@ -183,7 +183,11 @@ func (s *Server) upsetRouter(w http.ResponseWriter, r *http.Request) {
 
 	succeeded := et.Items{Result: []et.Json{}}
 	var failed []et.Json
-	body, _ := response.GetArray(r)
+	body, err := response.GetArray(r)
+	if err != nil {
+		metric.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
 	n := len(body)
 	for i := 0; i < n; i++ {
 		item := body[i]
@@ -303,6 +307,11 @@ func (s *Server) deletePackage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for id := range result.Routes {
+		if solver, ok := s.Solvers[id]; ok {
+			if router, ok := s.router[solver.Method]; ok {
+				router.delete(solver.Path)
+			}
+		}
 		delete(s.Solvers, id)
 	}
 	delete(s.Packages, name)

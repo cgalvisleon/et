@@ -491,7 +491,7 @@ func (s Items) One(idx int) (Item, error) {
 		idx = idx - 1
 	}
 
-	if idx >= n {
+	if idx < 0 || idx >= n {
 		return Item{}, errors.New(MSG_INDEX_OUT_OF_RANGE)
 	}
 

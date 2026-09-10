@@ -231,13 +231,17 @@ func (s *Server) Reset() error {
 	s.router = make(map[string]*Router)
 	s.solvers = []*Router{}
 	s.packages = []*Package{}
+	handlers := make([]*ApiFunc, 0, len(s.handlers))
+	for _, handler := range s.handlers {
+		handlers = append(handlers, handler)
+	}
 	s.mu.Unlock()
 
 	if err := s.Save(); err != nil {
 		return err
 	}
 
-	for _, handler := range s.handlers {
+	for _, handler := range handlers {
 		s.setApiFunc(handler.Method, handler.Path, handler.HandlerFn, handler.PackageName)
 	}
 
@@ -252,9 +256,9 @@ func (s *Server) Close() {
 		s.svr.Close()
 
 		if s.isTls {
-			logs.Logf(packageName, "Shutting down server...")
+			logs.Logf(packageName, "Shutting down HTTPS server...")
 		} else {
-			logs.Logf(packageName, "Shutting down server...")
+			logs.Logf(packageName, "Shutting down HTTP server...")
 		}
 	}
 
@@ -335,6 +339,9 @@ func (s *Server) UseAutentication(middleware func(http.Handler) http.Handler) *S
 * @return et.Items
 **/
 func (s *Server) GetPackages(name string) et.Items {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	var result = []et.Json{}
 	if name != "" {
 		idx := slices.IndexFunc(s.packages, func(e *Package) bool { return strs.Lowcase(e.Name) == strs.Lowcase(name) })

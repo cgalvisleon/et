@@ -160,7 +160,7 @@ func LPushCtx(ctx context.Context, key string, val string) error {
 		return errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
-	err := conn.RPush(ctx, key, val).Err()
+	err := conn.LPush(ctx, key, val).Err()
 	if err != nil {
 		return err
 	}

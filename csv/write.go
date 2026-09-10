@@ -36,7 +36,8 @@ type Csv struct {
 * @return *Csv
 **/
 func NewCsv(data []et.Json, columns ...Column) *Csv {
-	cols := columns
+	cols := make([]Column, len(columns))
+	copy(cols, columns)
 	if len(cols) == 0 {
 		keys := []string{}
 		seen := map[string]bool{}

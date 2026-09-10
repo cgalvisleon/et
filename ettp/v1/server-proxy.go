@@ -320,21 +320,31 @@ func (s *Proxy) StartPortForward() error {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
+		var backoff time.Duration
 		for {
-			for {
-				conn, err := ln.Accept()
-				if err != nil {
-					select {
-					case <-ctx.Done():
-						return // Se pidió detener
-					default:
-						logs.Logf(packageName, "Error aceptando conexión: %s", err.Error())
-						continue
-					}
+			conn, err := ln.Accept()
+			if err != nil {
+				select {
+				case <-ctx.Done():
+					return // Se pidió detener
+				default:
 				}
 
-				go s.handlerConnection(conn)
+				logs.Logf(packageName, "Error aceptando conexión: %s", err.Error())
+				if backoff == 0 {
+					backoff = 5 * time.Millisecond
+				} else {
+					backoff *= 2
+				}
+				if max := time.Second; backoff > max {
+					backoff = max
+				}
+				time.Sleep(backoff)
+				continue
 			}
+			backoff = 0
+
+			go s.handlerConnection(conn)
 		}
 	}()
 
@@ -399,6 +409,9 @@ func (s *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 * @return *Proxy
 **/
 func (s *Server) getProxyById(id string) *Proxy {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	for _, proxy := range s.proxys {
 		if proxy.Id == id {
 			return proxy
@@ -520,6 +533,9 @@ func (s *Server) DeleteProxyById(id string, save bool) error {
 * @return et.Items
 **/
 func (s *Server) listProxies() et.Items {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	items := et.Items{Result: []et.Json{}}
 
 	for _, proxy := range s.proxys {
@@ -537,7 +553,7 @@ func (s *Server) listProxies() et.Items {
 func (s *Server) GetProxys(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
 	if !ok {
-		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
+		http.Error(w, MSG_METRIC_NOT_FOUND, http.StatusInternalServerError)
 		return
 	}
 
@@ -553,7 +569,7 @@ func (s *Server) GetProxys(w http.ResponseWriter, r *http.Request) {
 func (s *Server) GetProxysById(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
 	if !ok {
-		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
+		http.Error(w, MSG_METRIC_NOT_FOUND, http.StatusInternalServerError)
 		return
 	}
 
@@ -578,7 +594,7 @@ func (s *Server) GetProxysById(w http.ResponseWriter, r *http.Request) {
 func (s *Server) SetProxys(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
 	if !ok {
-		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
+		http.Error(w, MSG_METRIC_NOT_FOUND, http.StatusInternalServerError)
 		return
 	}
 
@@ -624,7 +640,7 @@ func (s *Server) SetProxys(w http.ResponseWriter, r *http.Request) {
 func (s *Server) SetPortForwards(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
 	if !ok {
-		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
+		http.Error(w, MSG_METRIC_NOT_FOUND, http.StatusInternalServerError)
 		return
 	}
 
@@ -672,7 +688,7 @@ func (s *Server) SetPortForwards(w http.ResponseWriter, r *http.Request) {
 func (s *Server) DeleteProxys(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
 	if !ok {
-		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
+		http.Error(w, MSG_METRIC_NOT_FOUND, http.StatusInternalServerError)
 		return
 	}
 

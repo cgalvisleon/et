@@ -336,7 +336,7 @@ func (s Item) Get(key string) interface{} {
 * @param val interface{}
 * @return bool
 **/
-func (s Item) Set(key string, val interface{}) {
+func (s *Item) Set(key string, val interface{}) {
 	if s.Result == nil {
 		s.Result = Json{}
 	}

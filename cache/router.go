@@ -45,8 +45,7 @@ func HttpAll(w http.ResponseWriter, r *http.Request) {
 * @params w http.ResponseWriter, r *http.Request
 **/
 func HttpGet(w http.ResponseWriter, r *http.Request) {
-	query := response.GetQuery(r)
-	key := query.Str("key")
+	key := response.GetParam(r, "key")
 
 	result, err := Get(key, "")
 	if err != nil {

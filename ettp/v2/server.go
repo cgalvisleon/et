@@ -125,7 +125,7 @@ func New(name string, cnf *Config) (*Server, error) {
 
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: !cnf.IsTLS,
+			InsecureSkipVerify: false,
 		},
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 100,
@@ -138,7 +138,7 @@ func New(name string, cnf *Config) (*Server, error) {
 	if cnf.Transport != nil {
 		transport = &http.Transport{
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: !cnf.IsTLS,
+				InsecureSkipVerify: cnf.Transport.InsecureSkipVerify,
 			},
 			MaxIdleConns:        cnf.Transport.MaxIdleConns,
 			MaxIdleConnsPerHost: cnf.Transport.MaxIdleConnsPerHost,
@@ -446,12 +446,15 @@ func (s *Server) UseAutentication(middleware func(http.Handler) http.Handler) *S
 **/
 func (s *Server) RemoveRouterById(id string, save bool) error {
 	s.muRoutes.Lock()
-	_, ok := s.Solvers[id]
+	solver, ok := s.Solvers[id]
 	if !ok {
 		s.muRoutes.Unlock()
 		return fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, id)
 	}
 	delete(s.Solvers, id)
+	if router, ok := s.router[solver.Method]; ok {
+		router.delete(solver.Path)
+	}
 	s.muRoutes.Unlock()
 
 	if save {
@@ -471,13 +474,13 @@ func (s *Server) FindResolver(r *http.Request) (*Resolver, error) {
 
 	s.muRoutes.RLock()
 	router, ok := s.router[method]
-	s.muRoutes.RUnlock()
-
 	if !ok {
+		s.muRoutes.RUnlock()
 		return nil, errors.New("router not found")
 	}
 
 	result, err := router.findResolver(r)
+	s.muRoutes.RUnlock()
 	if err != nil {
 		return nil, err
 	}
@@ -510,6 +513,7 @@ func (s *Server) Start() {
 	if err := s.initHttpServer(); err != nil {
 		logs.Fatal(err)
 	}
+	s.startPipe()
 	s.banner()
 
 	if s.debug {

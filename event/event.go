@@ -101,7 +101,7 @@ func (s *Conn) Close() {
 		sub.Unsubscribe()
 	}
 
-	s.Close()
+	s.Conn.Close()
 
 	logs.Log(packageName, `Disconnect...`)
 }

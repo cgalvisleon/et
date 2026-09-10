@@ -1,17 +1,23 @@
 package event
 
 import (
+	"sync"
+
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 )
 
-var emiter *EventEmiter
+var (
+	emiter     *EventEmiter
+	emiterOnce sync.Once
+)
 
 type Handler func(message *Message)
 
 type EventEmiter struct {
+	mu     sync.RWMutex
 	events map[string]Handler `json:"-"`
 	ch     chan *Message      `json:"-"`
 }
@@ -35,18 +41,19 @@ func newEventEmiter() *EventEmiter {
 * start
 **/
 func (s *EventEmiter) loop() {
-	for {
-		select {
-		case message := <-s.ch:
-			if message != nil {
-				fn, ok := s.events[message.Channel]
-				if !ok {
-					continue
-				}
-
-				fn(message)
-			}
+	for message := range s.ch {
+		if message == nil {
+			continue
 		}
+
+		s.mu.RLock()
+		fn, ok := s.events[message.Channel]
+		s.mu.RUnlock()
+		if !ok {
+			continue
+		}
+
+		fn(message)
 	}
 }
 
@@ -55,6 +62,9 @@ func (s *EventEmiter) loop() {
 * @param channel string, handler Handler
 **/
 func (s *EventEmiter) on(channel string, handler Handler) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.events == nil {
 		s.events = make(map[string]Handler)
 	}
@@ -86,9 +96,9 @@ func (s *EventEmiter) emiter(channel string, data et.Json) {
 * @param channel string, handler Handler
 **/
 func On(channel string, handler Handler) {
-	if emiter == nil {
+	emiterOnce.Do(func() {
 		emiter = newEventEmiter()
-	}
+	})
 
 	emiter.on(channel, handler)
 }
@@ -98,9 +108,9 @@ func On(channel string, handler Handler) {
 * @param channel string, data et.Json
 **/
 func Emiter(channel string, data et.Json) {
-	if emiter == nil {
+	emiterOnce.Do(func() {
 		emiter = newEventEmiter()
-	}
+	})
 
 	emiter.emiter(channel, data)
 }

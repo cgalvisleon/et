@@ -15,7 +15,7 @@ import (
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 	metric, ok := r.Context().Value(MetricKey).(*middleware.Metrics)
 	if !ok {
-		metric.HTTPError(w, r, http.StatusInternalServerError, MSG_METRIC_NOT_FOUND)
+		http.Error(w, MSG_METRIC_NOT_FOUND, http.StatusInternalServerError)
 		return
 	}
 

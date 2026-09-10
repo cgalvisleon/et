@@ -11,6 +11,7 @@ func init() {
 	lang := envar.GetStr("LANG", "en")
 
 	if lang == "es" {
+		MSG_ATRIB_REQUIRED = "cache, el atributo %s es requerido"
 		MSG_UNSUPPORTED_OS = "sistema operativo no soportado: %s"
 	}
 }

@@ -172,6 +172,9 @@ func Subscribe(channel string, f func(Message)) (err error) {
 	}
 
 	conn.mutex.Lock()
+	if old, ok := conn.events[channel]; ok {
+		old.Unsubscribe()
+	}
 	conn.events[channel] = subscribe
 	conn.mutex.Unlock()
 
@@ -221,6 +224,9 @@ func Queue(channel, queue string, f func(Message)) (err error) {
 	}
 
 	conn.mutex.Lock()
+	if old, ok := conn.events[channel]; ok {
+		old.Unsubscribe()
+	}
 	conn.events[channel] = subscribe
 	conn.mutex.Unlock()
 

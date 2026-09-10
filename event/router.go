@@ -25,10 +25,14 @@ func LoadRouter(r Router) {
 * @param w http.ResponseWriter, r *http.Request
 **/
 func HttpEventPublish(w http.ResponseWriter, r *http.Request) {
-	body, _ := request.GetBody(r)
+	body, err := request.GetBody(r)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
 	channel := body.Str("channel")
 	data := body.Json("data")
-	err := Publish(channel, data)
+	err = Publish(channel, data)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 		return

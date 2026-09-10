@@ -201,7 +201,7 @@ func Validate(token string) (*claim.Claim, error) {
 
 	if val != token {
 		cache.Delete(key)
-		return nil, err
+		return nil, errors.New(msg.MSG_TOKEN_INVALID)
 	}
 
 	return clm, nil

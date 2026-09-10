@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 )
@@ -316,6 +317,13 @@ func getBetweenRange(v any) (min any, max any, ok bool) {
 		return min, max, okMin && okMax
 	}
 
+	// Caso 2b: Json {"min":X,"max":Y}
+	if m, ok := v.(Json); ok {
+		min, okMin := m["min"]
+		max, okMax := m["max"]
+		return min, max, okMin && okMax
+	}
+
 	// Caso 3: slice/array de 2 elementos: []any{min,max}
 	rv := reflect.ValueOf(v)
 	if !rv.IsValid() {
@@ -348,6 +356,29 @@ func firstOfSlice(v any) (any, bool) {
 	}
 
 	return rv.Index(0).Interface(), true
+}
+
+/**
+* firstMapValueSorted: Deterministically returns the value of the
+* alphabetically-first key in m. Go's map iteration order is randomized, so
+* callers that need to pick "the" value out of a single/multi-key map (e.g.
+* unwrapping a Json wrapper) must go through this instead of `range`-ing the
+* map directly, or the result varies from call to call.
+* @param m map[string]interface{}
+* @return any, bool
+**/
+func firstMapValueSorted(m map[string]interface{}) (any, bool) {
+	if len(m) == 0 {
+		return nil, false
+	}
+
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	return m[keys[0]], true
 }
 
 /**
@@ -437,8 +468,10 @@ func MergeToMap(left, right []Json) []Json {
 	result := make([]Json, 0, len(left)*len(right))
 	for _, itemL := range left {
 		for _, itemR := range right {
-			maps.Copy(itemR, itemL)
-			result = append(result, itemR)
+			merged := make(Json, len(itemR)+len(itemL))
+			maps.Copy(merged, itemR)
+			maps.Copy(merged, itemL)
+			result = append(result, merged)
 		}
 	}
 
@@ -568,9 +601,15 @@ func merge(left, right Json) Json {
 * @return string
 **/
 func buildKey(j Json, keys map[string]string, fromLeft bool) string {
+	lks := make([]string, 0, len(keys))
+	for lk := range keys {
+		lks = append(lks, lk)
+	}
+	sort.Strings(lks)
+
 	var sb strings.Builder
-	for lk, rk := range keys {
-		field := rk
+	for _, lk := range lks {
+		field := keys[lk]
 		if fromLeft {
 			field = lk
 		}

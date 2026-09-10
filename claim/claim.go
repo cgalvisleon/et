@@ -8,6 +8,7 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
@@ -25,9 +26,11 @@ var (
 * @return string
 **/
 func getSecret() string {
-	secret := envar.GetStr("SECRET", "1977")
 	jwtSecretOnce.Do(func() {
-		jwtSecret = secret
+		jwtSecret = envar.GetStr("SECRET", "")
+		if jwtSecret == "" {
+			logs.Fatal(fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "SECRET"))
+		}
 	})
 	return jwtSecret
 }
@@ -62,9 +65,9 @@ func (s *Claim) ToJson() (et.Json, error) {
 		"sessionId": s.SessionID,
 		"name":      s.Name,
 		"payload":   s.Payload,
-		"expiresAt": time.Unix(s.ExpiresAt, 0).Format("2006-01-02 03:04:05 PM"),
 	}
 	if s.ExpiresAt != 0 {
+		result["expiresAt"] = time.Unix(s.ExpiresAt, 0).Format("2006-01-02 03:04:05 PM")
 		result["exp"] = s.ExpiresAt
 	}
 	if s.Issuer != "" {
@@ -158,7 +161,10 @@ func NewToken(app, device, sessionID, name string, payload et.Json, duration tim
 **/
 func ParceToken(token string) (*Claim, error) {
 	secret := getSecret()
-	jToken, err := jwt.Parse(token, func(*jwt.Token) (interface{}, error) {
+	jToken, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
 		return []byte(secret), nil
 	})
 	if err != nil {
@@ -177,6 +183,11 @@ func ParceToken(token string) (*Claim, error) {
 	id, ok := claim["id"].(string)
 	if !ok {
 		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "id")
+	}
+
+	salt, ok := claim["salt"].(string)
+	if !ok {
+		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "salt")
 	}
 
 	app, ok := claim["app"].(string)
@@ -220,6 +231,7 @@ func ParceToken(token string) (*Claim, error) {
 	duration := time.Duration(second)
 	result := &Claim{
 		ID:        id,
+		Salt:      salt,
 		App:       app,
 		Device:    device,
 		SessionID: sessionID,

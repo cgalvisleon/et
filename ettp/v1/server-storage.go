@@ -81,10 +81,12 @@ func (s *Server) migrate() error {
 * @return error
 **/
 func (s *Server) save() error {
+	s.mu.RLock()
 	storage := NewStorage()
 	storage.Router = s.solvers
 	storage.Proxy = s.proxys
 	bt, err := json.Marshal(storage)
+	s.mu.RUnlock()
 	if err != nil {
 		return err
 	}

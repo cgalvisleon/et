@@ -2,6 +2,7 @@ package ettp
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path"
 
@@ -9,6 +10,7 @@ import (
 	v1 "github.com/cgalvisleon/et/ettp/v1"
 	"github.com/cgalvisleon/et/file"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/redis/go-redis/v9"
 )
 
 type Storage struct {
@@ -130,6 +132,10 @@ func (s *Server) migrate() error {
 
 	storageBeforeKey := "Apigateway-v0.0.1"
 	strs, err := cache.Get(storageBeforeKey, string(bt))
+	if errors.Is(err, redis.Nil) {
+		// No legacy v0.0.1 storage exists — nothing to migrate, not an error.
+		return nil
+	}
 	if err != nil {
 		return err
 	}

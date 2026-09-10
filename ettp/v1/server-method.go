@@ -33,7 +33,9 @@ func (s *Server) setApiFunc(method, path string, handlerFn http.HandlerFunc, pac
 	}
 
 	if route != nil {
+		s.mu.Lock()
 		s.handlers[route.Id] = NewApiFunc(method, path, handlerFn, packageName)
+		s.mu.Unlock()
 	}
 
 	return route

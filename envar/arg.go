@@ -15,7 +15,7 @@ func ArgStr(name, defaultVal string) (string, bool) {
 	for i, arg := range os.Args[1:] {
 		if arg == strings.ToLower(name) {
 			n := len(os.Args)
-			if n < i+2 {
+			if n < i+3 {
 				return defaultVal, false
 			}
 			value := os.Args[i+2]

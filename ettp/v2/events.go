@@ -67,30 +67,6 @@ func (s *Server) eventSetResolve(m event.Message) {
 }
 
 /**
-* eventSetRouter
-* @param m event.Message
-**/
-func (s *Server) eventSetRouter(m event.Message) {
-	if m.Myself {
-		return
-	}
-
-	data := m.Data
-	method := data.Str("method")
-	path := data.Str("path")
-	resolve := data.Str("resolve")
-	typeHeader := data.Int("type_header")
-	header := data.Json("header")
-	excludeHeader := data.ArrayStr("exclude_header")
-	version := data.Int("version")
-	packageName := data.Str("package_name")
-	_, err := s.SetRouter(method, path, resolve, typeHeader, header, excludeHeader, version, packageName, true)
-	if err != nil {
-		logs.Alertf(`eventSetRouter error:%s`, err.Error())
-	}
-}
-
-/**
 * eventRemoveRouterById
 * @param m event.Message
 **/

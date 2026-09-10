@@ -3,6 +3,7 @@ package file
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/cgalvisleon/et/logs"
@@ -27,6 +28,9 @@ type Watcher struct {
 	onReload     func(FileInfo, fsnotify.Event)
 	onEventError func(err error)
 	reloadFile   map[string]fsnotify.Op
+	reloadFileMu sync.Mutex
+	done         chan struct{}
+	closeOnce    sync.Once
 	isDebug      bool
 }
 
@@ -44,21 +48,25 @@ func NewWatcher(root string) (*Watcher, error) {
 		root:       root,
 		watcher:    watcher,
 		reloadFile: make(map[string]fsnotify.Op),
+		done:       make(chan struct{}),
 	}
 	result.onEvent = func(event fsnotify.Event) {
 		inf := ExistPath(event.Name)
 		if !inf.IsDir {
+			result.reloadFileMu.Lock()
 			op, ok := result.reloadFile[event.Name]
-			if ok {
-				if op == fsnotify.Write && event.Op == fsnotify.Chmod {
-					if result.onReload != nil {
-						result.onReload(inf, event)
-					}
+			result.reloadFile[event.Name] = event.Op
+			result.reloadFileMu.Unlock()
+
+			if ok && op == fsnotify.Write && event.Op == fsnotify.Chmod {
+				if result.onReload != nil {
+					result.onReload(inf, event)
 				}
 			}
-			result.reloadFile[event.Name] = event.Op
 			time.AfterFunc(3*time.Second, func() {
+				result.reloadFileMu.Lock()
 				delete(result.reloadFile, event.Name)
+				result.reloadFileMu.Unlock()
 			})
 		}
 		switch event.Op {
@@ -93,7 +101,12 @@ func NewWatcher(root string) (*Watcher, error) {
 * @return error
 **/
 func (s *Watcher) Close() error {
-	return s.watcher.Close()
+	var err error
+	s.closeOnce.Do(func() {
+		close(s.done)
+		err = s.watcher.Close()
+	})
+	return err
 }
 
 /**
@@ -241,12 +254,16 @@ func (s *Watcher) Load() error {
 		return err
 	}
 
-	done := make(chan bool)
-
 	go func() {
 		for {
 			select {
-			case event := <-s.watcher.Events:
+			case <-s.done:
+				return
+			case event, ok := <-s.watcher.Events:
+				if !ok {
+					return
+				}
+
 				if s.isDebug {
 					logs.Log(watcherPrefix, "Event:", event)
 				}
@@ -259,21 +276,22 @@ func (s *Watcher) Load() error {
 				if event.Op&fsnotify.Create == fsnotify.Create {
 					info, err := os.Stat(event.Name)
 					if err == nil && info.IsDir() {
-						err = s.addWatch(event.Name)
-						if err != nil {
+						if err := s.addWatch(event.Name); err != nil {
 							s.onError(err)
-							return
 						}
 					}
 				}
-			case err := <-s.watcher.Errors:
+			case err, ok := <-s.watcher.Errors:
+				if !ok {
+					return
+				}
 				s.onError(err)
 			}
 		}
 	}()
 
 	logs.Log(watcherPrefix, "Watching recursively:", s.root)
-	<-done
+	<-s.done
 
 	return nil
 }

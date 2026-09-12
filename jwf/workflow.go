@@ -495,12 +495,12 @@ func (s *WorkFlow) ValidStatus(instance *Instance) error {
 
 /**
 * RunInstance
-* @param instance *Instance, ctx, tags et.Json, userId string
+* @param instance *Instance, ctx, tags et.Json, await bool, userId string
 * @return et.Json, error
 **/
-func (s *WorkFlow) RunInstance(instance *Instance, ctx, tags et.Json, userId string) (et.Json, error) {
+func (s *WorkFlow) RunInstance(instance *Instance, ctx, tags et.Json, await bool, userId string) (et.Json, error) {
 	instance.setTag(tags)
-	result, err := instance.run(ctx, userId)
+	result, err := instance.run(ctx, await, userId)
 	if err != nil {
 		return et.Json{}, err
 	}
@@ -513,14 +513,14 @@ func (s *WorkFlow) RunInstance(instance *Instance, ctx, tags et.Json, userId str
 
 /**
 * Run
-* @param flowId, tag, id, projectId, code string, ctx, tags et.Json, userId string
+* @param flowId, tag, id, projectId, code string, ctx, tags et.Json, await bool, userId string
 * @return *Instance, error
 **/
-func (s *WorkFlow) Run(tag, triggerTag, id, projectId, code string, ctx, tags et.Json, userId string) (et.Json, error) {
+func (s *WorkFlow) Run(tag, triggerTag, id, projectId, code string, ctx, tags et.Json, await bool, userId string) (et.Json, error) {
 	instance, err := s.GetInstance(tag, triggerTag, id, projectId, code, userId)
 	if err != nil {
 		return et.Json{}, err
 	}
 
-	return s.RunInstance(instance, ctx, tags, userId)
+	return s.RunInstance(instance, ctx, tags, await, userId)
 }

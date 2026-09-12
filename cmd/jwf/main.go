@@ -28,7 +28,7 @@ func main() {
 			return params, nil
 		})
 
-	result, err := wf.Run("add", "add", "", "37860631", "0001", et.Json{}, et.Json{}, "cgalvisl")
+	result, err := wf.Run("add", "add", "", "37860631", "0001", et.Json{}, et.Json{}, true, "cgalvisl")
 	if err != nil {
 		logs.Panic(err)
 	}

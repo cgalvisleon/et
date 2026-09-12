@@ -719,10 +719,10 @@ func (s *Instance) next() bool {
 
 /**
 * run
-* @param ctx et.Json, userId string
+* @param ctx et.Json, await bool, userId string
 * @return et.Json, error
 **/
-func (s *Instance) run(ctx et.Json, userId string) (et.Json, error) {
+func (s *Instance) run(ctx et.Json, await bool, userId string) (et.Json, error) {
 	var err error
 	defer func() {
 		if s.Current != nil {
@@ -745,37 +745,58 @@ func (s *Instance) run(ctx et.Json, userId string) (et.Json, error) {
 		return et.Json{}, err
 	}
 
-	var result et.Json
-	for s.next() {
-		step := s.Current
-		if step == nil {
-			return et.Json{}, errors.New(MSG_STEP_NOT_FOUND)
-		}
+	runing := func() (et.Json, error) {
+		var result et.Json
+		for s.next() {
+			step := s.Current
+			if step == nil {
+				return et.Json{}, errors.New(MSG_STEP_NOT_FOUND)
+			}
 
-		ctx = s.setCtx(ctx)
-		result, err = step.run(s, ctx)
-		if err != nil {
-			result, err = s.runResilence(ctx, err, userId)
+			ctx = s.setCtx(ctx)
+			result, err = step.run(s, ctx)
 			if err != nil {
-				result, err = s.runError(ctx, err)
+				result, err = s.runResilence(ctx, err, userId)
+				if err != nil {
+					result, err = s.runError(ctx, err)
+				}
+			}
+
+			s.setResult(result, err)
+			if err != nil {
+				return result, err
+			}
+
+			if s.IsDone {
+				return result, nil
+			}
+
+			if s.IsStop || step.Stop {
+				return result, nil
 			}
 		}
-
-		s.setResult(result, err)
-		if err != nil {
-			return result, err
-		}
-
-		if s.IsDone {
-			return result, nil
-		}
-
-		if s.IsStop || step.Stop {
-			return result, nil
-		}
+		return result, nil
 	}
 
-	return result, err
+	if await {
+		return runing()
+	}
+
+	go func() {
+		_, err := runing()
+		if err != nil {
+			logs.Logf(packageName, MSG_INSTANCE_ERROR, s.ID, s.FlowId, s.Current.ID, err.Error())
+		}
+	}()
+
+	return et.Json{
+		"instance_id": s.ID,
+		"flow_id":     s.FlowId,
+		"flow_tag":    s.FlowTag,
+		"code":        s.Code,
+		"title":       s.Title,
+		"status":      "running",
+	}, nil
 }
 
 /**

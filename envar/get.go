@@ -9,25 +9,50 @@ import (
 )
 
 /**
+* getValueConfig
+* @param name string, def interface{}
+* @return interface{}, bool
+**/
+func getValueConfig(name string, def interface{}) (interface{}, bool) {
+	_mu.RLock()
+	result, exists := _config[name]
+	_mu.RUnlock()
+	return result, exists
+}
+
+/**
+* setValueConfig
+* @param name string, value interface{}
+* @return void
+**/
+func setValueConfig(name string, value interface{}) {
+	_mu.Lock()
+	_config[name] = value
+	_mu.Unlock()
+}
+
+/**
 * Get
 * @param name string, def interface{}
 * @return interface{}
 **/
 func Get(name string, def interface{}) interface{} {
-	if _store != nil {
-		result := _store.Get(name, def)
-		_config[name] = result
+	result, exists := getValueConfig(name, def)
+	if exists {
 		return result
 	}
 
 	name = strings.ToUpper(name)
-	result := os.Getenv(name)
-	if result == "" {
-		_config[name] = def
-		return def
+	result = os.Getenv(name)
+	if _store != nil {
+		result, exists := _store.Get(name, def)
+		if !exists {
+			setValueConfig(name, result)
+			_store.Set(name, result)
+		}
 	}
 
-	_config[name] = result
+	setValueConfig(name, result)
 	return result
 }
 

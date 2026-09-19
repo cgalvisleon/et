@@ -1163,3 +1163,16 @@ func (s Json) From(as string) *Where {
 func (s Json) Query(condition *Condition) bool {
 	return condition.ApplyToObject(s)
 }
+
+/**
+* GetItem
+* @param items []Json, index int
+* @return Json
+**/
+func (s Json) GetItem(items []Json, index int) (Json, bool) {
+	if index < 0 || index >= len(items) {
+		return Json{}, false
+	}
+
+	return items[index], true
+}

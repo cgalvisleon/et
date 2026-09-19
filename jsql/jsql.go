@@ -55,14 +55,17 @@ func ConnectTo(tenantId, host, driver, name string, showLog ...bool) (*DB, error
 
 /**
 * LoadTo: Returns an existing DB by name.
-* @param name string
+* @param name, hostName string
 * @return *DB, error
 **/
-func LoadTo(name string) (*DB, error) {
+func LoadTo(dbName string, hostName ...string) (*DB, error) {
 	tenantId := envar.GetStr("DB_TENANT_ID", "tenant:root")
 	driver := envar.GetStr("DB_DRIVER", DriverPostgres)
 	host := envar.GetStr("DB_HOST", "localhost")
-	result, err := ConnectTo(tenantId, host, driver, name)
+	if len(hostName) > 0 {
+		host = hostName[0]
+	}
+	result, err := ConnectTo(tenantId, host, driver, dbName)
 	if err != nil {
 		return nil, err
 	}

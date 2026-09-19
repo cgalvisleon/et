@@ -26,12 +26,7 @@ func NewItems(data []Json) Items {
 * @return []byte, error
 **/
 func (s Items) ToByte() ([]byte, error) {
-	result, err := json.Marshal(s)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return json.Marshal(s)
 }
 
 /**
@@ -39,11 +34,17 @@ func (s Items) ToByte() ([]byte, error) {
 * @return Json
 **/
 func (s Items) ToJson() Json {
-	return Json{
-		"ok":     s.Ok,
-		"count":  s.Count,
-		"result": s.Result,
+	bt, err := s.ToByte()
+	if err != nil {
+		return Json{}
 	}
+
+	var result Json
+	err = json.Unmarshal(bt, &result)
+	if err != nil {
+		return Json{}
+	}
+	return result
 }
 
 /**
@@ -51,11 +52,7 @@ func (s Items) ToJson() Json {
 * @return string
 **/
 func (s Items) ToString() string {
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return ""
-	}
-	return string(bt)
+	return s.ToJson().ToString()
 }
 
 /**

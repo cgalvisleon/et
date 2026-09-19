@@ -13,20 +13,26 @@ type List struct {
 	Result []Json `json:"result"`
 }
 
+func (s *List) ToByte() ([]byte, error) {
+	return json.Marshal(s)
+}
+
 /**
 * ToJson
 * @return Json
 **/
 func (s *List) ToJson() Json {
-	return Json{
-		"rows":   s.Rows,
-		"all":    s.All,
-		"count":  s.Count,
-		"page":   s.Page,
-		"start":  s.Start,
-		"end":    s.End,
-		"result": s.Result,
+	bt, err := s.ToByte()
+	if err != nil {
+		return Json{}
 	}
+
+	var result Json
+	err = json.Unmarshal(bt, &result)
+	if err != nil {
+		return Json{}
+	}
+	return result
 }
 
 /**
@@ -34,11 +40,7 @@ func (s *List) ToJson() Json {
 * @return string
 **/
 func (s *List) ToString() string {
-	bt, err := json.Marshal(s)
-	if err != nil {
-		return ""
-	}
-	return string(bt)
+	return s.ToJson().ToString()
 }
 
 /**

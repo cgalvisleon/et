@@ -7,8 +7,12 @@ import (
 	"crypto/x509"
 	"errors"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/cgalvisleon/et/et"
@@ -50,16 +54,20 @@ var StreamClient = &http.Client{
 }
 
 /**
+* bufPool: Pool de buffers para reutilizar memoria.
+**/
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		return new(bytes.Buffer)
+	},
+}
+
+/**
 * HttpWithContext: Ejecuta un request HTTP propagando el context del caller.
-* @param ctx context.Context
-* @param method string
-* @param url string
-* @param header et.Json
-* @param body et.Json
-* @param tlsConfig *tls.Config
+* @param ctx context.Context, method string, path string, header et.Json, body et.Json, tlsConfig *tls.Config
 * @return *Body, Status
 **/
-func HttpWithContext(ctx context.Context, method, url string, header, body et.Json, tlsConfig *tls.Config) (*Body, Status) {
+func HttpWithContext(ctx context.Context, method, uRL string, header, body et.Json, tlsConfig *tls.Config) (*Body, Status) {
 	if _, ok := methods[method]; !ok {
 		return nil, Status{
 			Ok:      false,
@@ -68,13 +76,58 @@ func HttpWithContext(ctx context.Context, method, url string, header, body et.Js
 		}
 	}
 
-	var ioBody io.Reader
-	if body != nil {
-		bodyBytes := bodyParams(header, body)
-		ioBody = bytes.NewBuffer(bodyBytes)
+	contentType := header.Str("Content-Type")
+
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return nil, Status{
+			Ok:      false,
+			Code:    http.StatusBadRequest,
+			Message: err.Error(),
+		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, url, ioBody)
+	var ioBody io.Reader
+	var buf *bytes.Buffer
+
+	switch mediaType {
+	case "multipart/form-data":
+		writer := multipart.NewWriter(buf)
+		for k := range body {
+			v := body.Str(k)
+			if err := writer.WriteField(k, v); err != nil {
+				return nil, Status{
+					Ok:      false,
+					Code:    http.StatusBadRequest,
+					Message: err.Error(),
+				}
+			}
+		}
+		if err := writer.Close(); err != nil {
+			return nil, Status{
+				Ok:      false,
+				Code:    http.StatusBadRequest,
+				Message: err.Error(),
+			}
+		}
+		ioBody = buf
+	case "application/x-www-form-urlencoded":
+		data := url.Values{}
+		for k := range body {
+			v := body.Str(k)
+			data.Set(k, v)
+		}
+		ioBody = bytes.NewBufferString(data.Encode())
+	case "application/json":
+		if body != nil {
+			buf = bufPool.Get().(*bytes.Buffer)
+			buf.Reset()
+			buf.Write(bodyParams(header, body))
+			ioBody = buf
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, uRL, ioBody)
 	if err != nil {
 		return nil, Status{Ok: false, Code: http.StatusBadRequest, Message: err.Error()}
 	}
@@ -126,123 +179,119 @@ func HttpWithContext(ctx context.Context, method, url string, header, body et.Js
 
 /**
 * Http: Ejecuta un request HTTP con context.Background().
-* @param method string
-* @param url string
-* @param header et.Json
-* @param body et.Json
-* @param tlsConfig *tls.Config
+* @param method string, uRL string, header et.Json, body et.Json, tlsConfig *tls.Config
 * @return *Body, Status
 **/
-func Http(method, url string, header, body et.Json, tlsConfig *tls.Config) (*Body, Status) {
-	return HttpWithContext(context.Background(), method, url, header, body, tlsConfig)
+func Http(method, uRL string, header, body et.Json, tlsConfig *tls.Config) (*Body, Status) {
+	return HttpWithContext(context.Background(), method, uRL, header, body, tlsConfig)
 }
 
 /**
 * Fetch
-* @param method, url string, header, body et.Json
+* @param method, uRL string, header, body et.Json
 * @return *Body, Status
 **/
-func Fetch(method, url string, header, body et.Json) (*Body, Status) {
-	return Http(method, url, header, body, nil)
+func Fetch(method, uRL string, header, body et.Json) (*Body, Status) {
+	return Http(method, uRL, header, body, nil)
 }
 
 /**
 * Post
-* @param url string, header, body et.Json
+* @param uRL string, header, body et.Json
 * @return *Body, Status
 **/
-func Post(url string, header, body et.Json) (*Body, Status) {
-	return Http("POST", url, header, body, nil)
+func Post(uRL string, header, body et.Json) (*Body, Status) {
+	return Http("POST", uRL, header, body, nil)
 }
 
 /**
 * Get
-* @param url string, header et.Json
+* @param uRL string, header et.Json
 * @return *Body, Status
 **/
-func Get(url string, header et.Json) (*Body, Status) {
-	return Http("GET", url, header, nil, nil)
+func Get(uRL string, header et.Json) (*Body, Status) {
+	return Http("GET", uRL, header, nil, nil)
 }
 
 /**
 * Put
-* @param url string, header, body et.Json
+* @param uRL string, header, body et.Json
 * @return *Body, Status
 **/
-func Put(url string, header, body et.Json) (*Body, Status) {
-	return Http("PUT", url, header, body, nil)
+func Put(uRL string, header, body et.Json) (*Body, Status) {
+	return Http("PUT", uRL, header, body, nil)
 }
 
 /**
 * Delete
-* @param url string, header et.Json
+* @param uRL string, header et.Json
 * @return *Body, Status
 **/
-func Delete(url string, header et.Json) (*Body, Status) {
-	return Http("DELETE", url, header, et.Json{}, nil)
+func Delete(uRL string, header et.Json) (*Body, Status) {
+	return Http("DELETE", uRL, header, et.Json{}, nil)
 }
 
 /**
 * Patch
-* @param url string, header, body et.Json
+* @param uRL string, header, body et.Json
 * @return *Body, Status
 **/
-func Patch(url string, header, body et.Json) (*Body, Status) {
-	return Http("PATCH", url, header, body, nil)
+func Patch(uRL string, header, body et.Json) (*Body, Status) {
+	return Http("PATCH", uRL, header, body, nil)
 }
 
 /**
 * Options
-* @param url string, header et.Json
+* @param uRL string, header et.Json
 * @return *Body, Status
 **/
-func Options(url string, header et.Json) (*Body, Status) {
-	return Http("OPTIONS", url, header, et.Json{}, nil)
+func Options(uRL string, header et.Json) (*Body, Status) {
+	return Http("OPTIONS", uRL, header, et.Json{}, nil)
 }
 
 /**
 * PostWithTls
-* @param url string, header, body et.Json, tlsConfig *tls.Config
+* @param uRL string, header, body et.Json, tlsConfig *tls.Config
 * @return *Body, Status
 **/
-func PostWithTls(url string, header, body et.Json, tlsConfig *tls.Config) (*Body, Status) {
-	return Http("POST", url, header, body, tlsConfig)
+func PostWithTls(uRL string, header, body et.Json, tlsConfig *tls.Config) (*Body, Status) {
+	return Http("POST", uRL, header, body, tlsConfig)
 }
 
 /**
 * GetWithTls
-* @param url string, header et.Json, tlsConfig *tls.Config
+* @param uRL string, header et.Json, tlsConfig *tls.Config
 * @return *Body, Status
 **/
-func GetWithTls(url string, header et.Json, tlsConfig *tls.Config) (*Body, Status) {
-	return Http("GET", url, header, et.Json{}, tlsConfig)
+func GetWithTls(uRL string, header et.Json, tlsConfig *tls.Config) (*Body, Status) {
+	return Http("GET", uRL, header, et.Json{}, tlsConfig)
 }
 
 /**
 * PutWithTls
-* @param url string, header, body et.Json, tlsConfig *tls.Config
+* @param uRL string, header, body et.Json, tlsConfig *tls.Config
 * @return *Body, Status
 **/
-func PutWithTls(url string, header, body et.Json, tlsConfig *tls.Config) (*Body, Status) {
-	return Http("PUT", url, header, body, tlsConfig)
+func PutWithTls(uRL string, header, body et.Json, tlsConfig *tls.Config) (*Body, Status) {
+	return Http("PUT", uRL, header, body, tlsConfig)
 }
 
 /**
 * DeleteWithTls
-* @param url string, header et.Json, tlsConfig *tls.Config
+* @param uRL string, header et.Json, tlsConfig *tls.Config
 * @return *Body, Status
 **/
-func DeleteWithTls(url string, header et.Json, tlsConfig *tls.Config) (*Body, Status) {
-	return Http("DELETE", url, header, et.Json{}, tlsConfig)
+func DeleteWithTls(uRL string, header et.Json, tlsConfig *tls.Config) (*Body, Status) {
+	return Http("DELETE", uRL, header, et.Json{}, tlsConfig)
 }
 
 /**
 * PatchWithCA
-* @param url string, header, body et.Json, tlsConfig *tls.Config
+* @param uRL string, header, body et.Json, tlsConfig *tls.Config
 * @return *Body, Status
 **/
-func PatchWithTls(url string, header, body et.Json, tlsConfig *tls.Config) (*Body, Status) {
-	return Http("PATCH", url, header, body, tlsConfig)
+func PatchWithTls(uRL string, header, body et.Json, tlsConfig *tls.Config) (*Body, Status) {
+	return Http("PATCH", uRL, header, body, tlsConfig)
 }
 
 /**
@@ -250,8 +299,8 @@ func PatchWithTls(url string, header, body et.Json, tlsConfig *tls.Config) (*Bod
 * @param url string, header et.Json, tlsConfig *tls.Config
 * @return *Body, Status
 **/
-func OptionsWithTls(url string, header et.Json, tlsConfig *tls.Config) (*Body, Status) {
-	return Http("OPTIONS", url, header, et.Json{}, tlsConfig)
+func OptionsWithTls(uRL string, header et.Json, tlsConfig *tls.Config) (*Body, Status) {
+	return Http("OPTIONS", uRL, header, et.Json{}, tlsConfig)
 }
 
 /**

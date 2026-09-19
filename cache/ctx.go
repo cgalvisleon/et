@@ -151,6 +151,36 @@ func DeleteCtx(ctx context.Context, key string) (int64, error) {
 }
 
 /**
+* DeleteByPrefixCtx
+* @params ctx context.Context, prefix string
+* @return error
+**/
+func DeleteByPrefixCtx(ctx context.Context, prefix string) error {
+	var cursor uint64
+
+	for {
+		keys, nextCursor, err := conn.Scan(ctx, cursor, prefix+"*", 1000).Result()
+		if err != nil {
+			return err
+		}
+
+		if len(keys) > 0 {
+			if err := conn.Unlink(ctx, keys...).Err(); err != nil {
+				return err
+			}
+		}
+
+		cursor = nextCursor
+
+		if cursor == 0 {
+			break
+		}
+	}
+
+	return nil
+}
+
+/**
 * LPushCtx
 * @params ctx context.Context, key string, val string
 * @return error

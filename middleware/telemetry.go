@@ -364,7 +364,7 @@ func (s *Metrics) logRequest() et.Json {
 	if s.TraceID != "" {
 		lg.Color(w, lg.Cyan, " [TraceId]:%s", s.TraceID)
 	}
-	lg.Color(w, lg.White, " [App]:%s", s.AppName)
+	lg.Color(w, lg.White, " [AppName]:%s", s.AppName)
 	println(*w)
 
 	s.setRequest(true)

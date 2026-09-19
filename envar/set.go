@@ -16,7 +16,8 @@ func setEnvar(name string, value interface{}) {
 	name = strings.ToUpper(name)
 	val := fmt.Sprintf("%v", value)
 	os.Setenv(name, val)
-	_config[name] = value
+
+	setValueConfig(name, value)
 }
 
 /**

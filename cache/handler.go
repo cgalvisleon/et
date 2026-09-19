@@ -258,6 +258,18 @@ func Delete(key string) (int64, error) {
 }
 
 /**
+* DeleteByPrefix
+* @params prefix string
+* @return error
+**/
+func DeleteByPrefix(prefix string) error {
+	if conn == nil {
+		return errors.New(msg.MSG_NOT_CACHE_SERVICE)
+	}
+	return DeleteByPrefixCtx(conn.ctx, prefix)
+}
+
+/**
 * LPush
 * @params key string, val string
 * @return error

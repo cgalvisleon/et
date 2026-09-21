@@ -388,20 +388,20 @@ func HttpWithTimeout(method, uRL string, header, body et.Json, tlsConfig *tls.Co
 }
 
 /**
-* PostWithTimeout
+* PostWithTlsTimeout
 * @param uRL string, header et.Json, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte
 * @return *Body, Status
 **/
-func PostWithTimeout(uRL string, header, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+func PostWithTlsTimeout(uRL string, header, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
 	return HttpWithContext(context.Background(), "POST", uRL, header, body, tlsConfig, timeout, defaultValue)
 }
 
 /**
-* GetWithTimeout
+* GetWithTlsTimeout
 * @param uRL string, header et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte
 * @return *Body, Status
 **/
-func GetWithTimeout(uRL string, header et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+func GetWithTlsTimeout(uRL string, header et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
 	return HttpWithContext(context.Background(), "GET", uRL, header, et.Json{}, tlsConfig, timeout, defaultValue)
 }
 
@@ -410,7 +410,7 @@ func GetWithTimeout(uRL string, header et.Json, tlsConfig *tls.Config, timeout t
 * @param uRL string, header et.Json, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte
 * @return *Body, Status
 **/
-func PutWithTimeout(uRL string, header, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+func PutWithTlsTimeout(uRL string, header, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
 	return HttpWithContext(context.Background(), "PUT", uRL, header, body, tlsConfig, timeout, defaultValue)
 }
 
@@ -419,7 +419,7 @@ func PutWithTimeout(uRL string, header, body et.Json, tlsConfig *tls.Config, tim
 * @param uRL string, header et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte
 * @return *Body, Status
 **/
-func DeleteWithTimeout(uRL string, header et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+func DeleteWithTlsTimeout(uRL string, header et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
 	return HttpWithContext(context.Background(), "DELETE", uRL, header, et.Json{}, tlsConfig, timeout, defaultValue)
 }
 
@@ -428,7 +428,7 @@ func DeleteWithTimeout(uRL string, header et.Json, tlsConfig *tls.Config, timeou
 * @param uRL string, header et.Json, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte
 * @return *Body, Status
 **/
-func PatchWithTimeout(uRL string, header, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+func PatchWithTlsTimeout(uRL string, header, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
 	return HttpWithContext(context.Background(), "PATCH", uRL, header, body, tlsConfig, timeout, defaultValue)
 }
 
@@ -437,8 +437,62 @@ func PatchWithTimeout(uRL string, header, body et.Json, tlsConfig *tls.Config, t
 * @param uRL string, header et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte
 * @return *Body, Status
 **/
-func OptionsWithTimeout(uRL string, header et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+func OptionsWithTlsTimeout(uRL string, header et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
 	return HttpWithContext(context.Background(), "OPTIONS", uRL, header, et.Json{}, tlsConfig, timeout, defaultValue)
+}
+
+/**
+* PostWithTimeout
+* @param uRL string, header et.Json, body et.Json, timeout time.Duration, defaultValue []byte
+* @return *Body, Status
+**/
+func PostWithTimeout(uRL string, header, body et.Json, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+	return HttpWithContext(context.Background(), "POST", uRL, header, body, nil, timeout, defaultValue)
+}
+
+/**
+* GetWithTimeout
+* @param uRL string, header et.Json, timeout time.Duration, defaultValue []byte
+* @return *Body, Status
+**/
+func GetWithTimeout(uRL string, header et.Json, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+	return HttpWithContext(context.Background(), "GET", uRL, header, et.Json{}, nil, timeout, defaultValue)
+}
+
+/**
+* PutWithTimeout
+* @param uRL string, header et.Json, body et.Json, timeout time.Duration, defaultValue []byte
+* @return *Body, Status
+**/
+func PutWithTimeout(uRL string, header, body et.Json, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+	return HttpWithContext(context.Background(), "PUT", uRL, header, body, nil, timeout, defaultValue)
+}
+
+/**
+* DeleteWithTimeout
+* @param uRL string, header et.Json, timeout time.Duration, defaultValue []byte
+* @return *Body, Status
+**/
+func DeleteWithTimeout(uRL string, header et.Json, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+	return HttpWithContext(context.Background(), "DELETE", uRL, header, et.Json{}, nil, timeout, defaultValue)
+}
+
+/**
+* PatchWithTimeout
+* @param uRL string, header et.Json, body et.Json, timeout time.Duration, defaultValue []byte
+* @return *Body, Status
+**/
+func PatchWithTimeout(uRL string, header, body et.Json, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+	return HttpWithContext(context.Background(), "PATCH", uRL, header, body, nil, timeout, defaultValue)
+}
+
+/**
+* OptionsWithTimeout
+* @param uRL string, header et.Json, timeout time.Duration, defaultValue []byte
+* @return *Body, Status
+**/
+func OptionsWithTimeout(uRL string, header et.Json, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+	return HttpWithContext(context.Background(), "OPTIONS", uRL, header, et.Json{}, nil, timeout, defaultValue)
 }
 
 /**

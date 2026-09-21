@@ -37,7 +37,7 @@ func DefineConfig(db *DB, tenantId, schema, stage, tag string) (*Config, error) 
 		{Name: "params", TypeColumn: COLUMN, TypeData: JSON, Default: et.Json{}},
 	}
 
-	def := Def{
+	def := Define{
 		Schema:  schema,
 		Name:    "configs",
 		Version: 1,

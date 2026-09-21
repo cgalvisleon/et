@@ -7,12 +7,15 @@ import (
 
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
+	"github.com/redis/go-redis/v9"
 )
 
 /**
 * minExpiration: Minimum TTL Redis accepts (1 millisecond via PEXPIRE).
 **/
 const minExpiration = time.Millisecond
+
+var ErrNotFound = errors.New("not found")
 
 /**
 * clampExpiration: Returns d clamped to the Redis minimum TTL.
@@ -108,7 +111,9 @@ func GetCtx(ctx context.Context, key, def string) (string, error) {
 	}
 
 	result, err := conn.Get(ctx, key).Result()
-	if err != nil {
+	if err == redis.Nil {
+		return def, ErrNotFound
+	} else if err != nil {
 		return def, err
 	}
 

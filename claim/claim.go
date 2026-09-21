@@ -41,14 +41,16 @@ func getSecret() string {
 **/
 type Claim struct {
 	jwt.StandardClaims
-	ID        string        `json:"id"`
-	Salt      string        `json:"salt"`
-	Duration  time.Duration `json:"duration"`
-	App       string        `json:"app"`
-	Device    string        `json:"device"`
-	SessionID string        `json:"sessionId"`
-	Name      string        `json:"name"`
-	Payload   et.Json       `json:"payload"`
+	ID       string        `json:"id"`
+	Salt     string        `json:"salt"`
+	Duration time.Duration `json:"duration"`
+	App      string        `json:"app"`
+	Device   string        `json:"device"`
+	UserID   string        `json:"userId"`
+	TenantID string        `json:"tenantId"`
+	RoleID   string        `json:"roleId"`
+	Name     string        `json:"name"`
+	Payload  et.Json       `json:"payload"`
 }
 
 /**
@@ -57,14 +59,16 @@ type Claim struct {
 **/
 func (s *Claim) ToJson() (et.Json, error) {
 	result := et.Json{
-		"id":        s.ID,
-		"salt":      s.Salt,
-		"duration":  s.Duration,
-		"app":       s.App,
-		"device":    s.Device,
-		"sessionId": s.SessionID,
-		"name":      s.Name,
-		"payload":   s.Payload,
+		"id":       s.ID,
+		"salt":     s.Salt,
+		"duration": s.Duration,
+		"app":      s.App,
+		"device":   s.Device,
+		"userId":   s.UserID,
+		"tenantId": s.TenantID,
+		"roleId":   s.RoleID,
+		"name":     s.Name,
+		"payload":  s.Payload,
 	}
 	if s.ExpiresAt != 0 {
 		result["expiresAt"] = time.Unix(s.ExpiresAt, 0).Format("2006-01-02 03:04:05 PM")
@@ -133,17 +137,19 @@ func genToken(c *Claim, secret string) (string, error) {
 
 /**
 * NewToken
-* @param app, device, sessionID, username, tenantId, profileId string, payload et.Json, duration time.Duration
+* @param app, device, userId, tenantId, roleId, name string, payload et.Json, duration time.Duration
 * @return string, error
 **/
-func NewToken(app, device, sessionID, name string, payload et.Json, duration time.Duration) (string, error) {
+func NewToken(app, device, userId, tenantId, roleId, name string, payload et.Json, duration time.Duration) (string, error) {
 	if app == "" {
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "app")
 	}
 	c := NewClaim(duration)
 	c.App = app
 	c.Device = device
-	c.SessionID = sessionID
+	c.UserID = userId
+	c.TenantID = tenantId
+	c.RoleID = roleId
 	c.Name = name
 	c.Payload = payload
 	result, err := genToken(c, getSecret())
@@ -152,6 +158,15 @@ func NewToken(app, device, sessionID, name string, payload et.Json, duration tim
 	}
 
 	return result, nil
+}
+
+/**
+* NewAuthenticationToken
+* @param app, device, userId, name string, payload et.Json, duration time.Duration
+* @return string, error
+**/
+func NewAuthenticationToken(app, device, userId, name string, payload et.Json, duration time.Duration) (string, error) {
+	return NewToken(app, device, userId, name, "", "", payload, duration)
 }
 
 /**
@@ -200,9 +215,19 @@ func ParceToken(token string) (*Claim, error) {
 		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "device")
 	}
 
-	sessionID, ok := claim["sessionId"].(string)
+	userId, ok := claim["userId"].(string)
 	if !ok {
 		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "userId")
+	}
+
+	tenantId, ok := claim["tenantId"].(string)
+	if !ok {
+		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "tenantId")
+	}
+
+	roleId, ok := claim["roleId"].(string)
+	if !ok {
+		return nil, fmt.Errorf(msg.MSG_TOKEN_INVALID_ATRIB, "roleId")
 	}
 
 	name, ok := claim["name"].(string)
@@ -230,14 +255,16 @@ func ParceToken(token string) (*Claim, error) {
 
 	duration := time.Duration(second)
 	result := &Claim{
-		ID:        id,
-		Salt:      salt,
-		App:       app,
-		Device:    device,
-		SessionID: sessionID,
-		Name:      name,
-		Duration:  duration,
-		Payload:   payload,
+		ID:       id,
+		Salt:     salt,
+		App:      app,
+		Device:   device,
+		UserID:   userId,
+		TenantID: tenantId,
+		RoleID:   roleId,
+		Name:     name,
+		Duration: duration,
+		Payload:  payload,
 	}
 	if result.Duration != 0 {
 		exp, ok := claim["exp"].(float64)

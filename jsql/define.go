@@ -54,7 +54,7 @@ type DefRollup struct {
 	Select []string          `json:"select"`
 }
 
-type Def struct {
+type Define struct {
 	Schema      string           `json:"schema"`
 	Name        string           `json:"name"`
 	Version     int              `json:"version"`

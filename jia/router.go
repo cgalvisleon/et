@@ -69,7 +69,7 @@ func (s *Ia) HttpNewAgent(w http.ResponseWriter, r *http.Request) {
 	tag := body.Str("tag")
 	name := body.Str("name")
 	description := body.Str("description")
-	userId := request.SessionID(r)
+	userId := request.UserID(r)
 	agent := s.newAgent(tag, name, description, userId)
 
 	response.ITEM(w, r, http.StatusCreated, et.Item{
@@ -85,7 +85,7 @@ func (s *Ia) HttpNewAgent(w http.ResponseWriter, r *http.Request) {
 **/
 func (s *Ia) HttpDeleteAgent(w http.ResponseWriter, r *http.Request) {
 	tag := request.URLParam(r, "tag").Str()
-	userId := request.SessionID(r)
+	userId := request.UserID(r)
 	err := s.deleteAgent(tag, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
@@ -111,7 +111,7 @@ func (s *Ia) HttpSetAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tag := request.URLParam(r, "tag").Str()
-	userId := request.SessionID(r)
+	userId := request.UserID(r)
 	agent, exists := s.getAgent(tag)
 	if !exists {
 		response.ITEM(w, r, http.StatusNotFound, et.Item{
@@ -178,7 +178,7 @@ func (s *Ia) HttpConversation(w http.ResponseWriter, r *http.Request) {
 
 	to := body.Str("to")
 	prompt := body.Str("prompt")
-	userId := request.SessionID(r)
+	userId := request.UserID(r)
 	ctx := r.Context()
 	conversation, err := s.Conversation(ctx, tagAgent, to, prompt, userId)
 	if err != nil {
@@ -199,7 +199,7 @@ func (s *Ia) HttpConversation(w http.ResponseWriter, r *http.Request) {
 **/
 func (s *Ia) HttpDeleteConversation(w http.ResponseWriter, r *http.Request) {
 	to := request.URLParam(r, "to").Str()
-	userId := request.SessionID(r)
+	userId := request.UserID(r)
 	err := s.deleteConversation(to, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
@@ -245,7 +245,7 @@ func (s *Ia) HttpNewParticipant(w http.ResponseWriter, r *http.Request) {
 
 	to := body.Str("to")
 	name := body.Str("name")
-	userId := request.SessionID(r)
+	userId := request.UserID(r)
 	participant, err := s.newParticipant(to, name, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
@@ -268,7 +268,7 @@ func (s *Ia) HttpNewParticipant(w http.ResponseWriter, r *http.Request) {
 **/
 func (s *Ia) HttpDeleteParticipant(w http.ResponseWriter, r *http.Request) {
 	to := request.URLParam(r, "to").Str()
-	userId := request.SessionID(r)
+	userId := request.UserID(r)
 	err := s.deleteParticipant(to, userId)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
@@ -294,7 +294,7 @@ func (s *Ia) HttpSetParticipant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	to := request.URLParam(r, "to").Str()
-	userId := request.SessionID(r)
+	userId := request.UserID(r)
 	participant, exists := s.getParticipant(to)
 	if !exists {
 		response.HTTPError(w, r, http.StatusNotFound, MSG_PARTICIPANT_NOT_FOUND)

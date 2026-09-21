@@ -77,6 +77,15 @@ type Body struct {
 }
 
 /**
+* newBody
+* @param data []byte
+* @return *Body
+**/
+func newBody(data []byte) *Body {
+	return &Body{Data: data}
+}
+
+/**
 * ToJson returns a Json object
 * @return et.Json
 **/
@@ -221,7 +230,7 @@ func ReadBody(body io.ReadCloser) (*Body, error) {
 		return nil, err
 	}
 
-	return &Body{Data: bodyBytes}, nil
+	return newBody(bodyBytes), nil
 }
 
 /**

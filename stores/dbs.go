@@ -34,7 +34,7 @@ func DefineDbs(db *DB, schema string) (*Dbs, error) {
 		{Name: "params", TypeColumn: COLUMN, TypeData: JSON, Default: ""},
 	}
 
-	def := Def{
+	def := Define{
 		Schema:  schema,
 		Name:    "dbs",
 		Version: 1,

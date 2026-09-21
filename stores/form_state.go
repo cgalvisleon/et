@@ -31,7 +31,7 @@ func DefineFormState(db *DB, tenantId, schema string) (*FormState, error) {
 		{Name: SOURCE, TypeColumn: COLUMN, TypeData: JSON, Default: et.Json{}},
 	}
 
-	def := Def{
+	def := Define{
 		Schema:  schema,
 		Name:    "states",
 		Version: 1,

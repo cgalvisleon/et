@@ -25,7 +25,7 @@ func DefineSeries(db *DB, schema string) (*Series, error) {
 		{Name: "value", TypeColumn: COLUMN, TypeData: INT, Default: ""},
 	}
 
-	def := Def{
+	def := Define{
 		Schema:  schema,
 		Name:    "series",
 		Version: 1,

@@ -41,7 +41,7 @@ type Storage struct {
 * @param schema, name string
 * @return jsql.Def
 **/
-func storeDefine(schema, name string) jsql.Def {
+func storeDefine(schema, name string) jsql.Define {
 	columns := []jsql.Column{
 		{Name: jsql.CREATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
 		{Name: jsql.UPDATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
@@ -50,7 +50,7 @@ func storeDefine(schema, name string) jsql.Def {
 		{Name: "definition", TypeColumn: jsql.COLUMN, TypeData: jsql.BYTES, Default: []byte("")},
 	}
 
-	def := jsql.Def{
+	def := jsql.Define{
 		Schema:  schema,
 		Name:    name,
 		Version: 1,
@@ -72,7 +72,7 @@ func storeDefine(schema, name string) jsql.Def {
 * @param schema, name string
 * @return jsql.Def
 **/
-func storeInstance(schema, name string) jsql.Def {
+func storeInstance(schema, name string) jsql.Define {
 	columns := []jsql.Column{
 		{Name: jsql.CREATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
 		{Name: jsql.UPDATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
@@ -87,7 +87,7 @@ func storeInstance(schema, name string) jsql.Def {
 		{Name: "definition", TypeColumn: jsql.COLUMN, TypeData: jsql.BYTES, Default: []byte("")},
 	}
 
-	def := jsql.Def{
+	def := jsql.Define{
 		Schema:  schema,
 		Name:    name,
 		Version: 1,

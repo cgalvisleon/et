@@ -27,7 +27,7 @@ func DefineStore(db *DB) (*Store, error) {
 		{Name: "definition", TypeColumn: COLUMN, TypeData: BYTES, Default: []byte{}},
 	}
 
-	def := Def{
+	def := Define{
 		Schema:  "core",
 		Name:    "db_catalogs",
 		Version: 1,

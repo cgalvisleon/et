@@ -35,7 +35,7 @@ func DefineInstance(db *DB, tenantId, schema string) (*Instance, error) {
 		{Name: "definition", TypeColumn: COLUMN, TypeData: BYTES, Default: []byte("")},
 	}
 
-	def := Def{
+	def := Define{
 		Schema:  schema,
 		Name:    "instances",
 		Version: 1,

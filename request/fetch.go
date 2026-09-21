@@ -62,118 +62,184 @@ var bufPool = sync.Pool{
 	},
 }
 
+type HttpResult struct {
+	Body   *Body
+	Status Status
+}
+
 /**
 * HttpWithContext: Ejecuta un request HTTP propagando el context del caller.
-* @param ctx context.Context, method string, path string, header et.Json, body et.Json, tlsConfig *tls.Config
+* @param ctx context.Context, method string, path string, header et.Json, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte
 * @return *Body, Status
 **/
-func HttpWithContext(ctx context.Context, method, uRL string, header, body et.Json, tlsConfig *tls.Config) (*Body, Status) {
-	if _, ok := methods[method]; !ok {
-		return nil, Status{
-			Ok:      false,
-			Code:    http.StatusBadRequest,
-			Message: "Invalid method",
+func HttpWithContext(ctx context.Context, method, uRL string, header, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+	result := make(chan HttpResult, 1)
+
+	go func() {
+		if _, ok := methods[method]; !ok {
+			result <- HttpResult{
+				Body: nil,
+				Status: Status{
+					Ok:      false,
+					Code:    http.StatusBadRequest,
+					Message: "Invalid method",
+				},
+			}
+			return
 		}
-	}
 
-	contentType := header.Str("Content-Type")
+		contentType := header.Str("Content-Type")
 
-	mediaType, _, err := mime.ParseMediaType(contentType)
-	if err != nil {
-		return nil, Status{
-			Ok:      false,
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
-		}
-	}
-
-	var ioBody io.Reader
-	var buf *bytes.Buffer
-
-	switch mediaType {
-	case "multipart/form-data":
-		writer := multipart.NewWriter(buf)
-		for k := range body {
-			v := body.Str(k)
-			if err := writer.WriteField(k, v); err != nil {
-				return nil, Status{
+		mediaType, _, err := mime.ParseMediaType(contentType)
+		if err != nil {
+			result <- HttpResult{
+				Body: nil,
+				Status: Status{
 					Ok:      false,
 					Code:    http.StatusBadRequest,
 					Message: err.Error(),
+				},
+			}
+			return
+		}
+
+		var ioBody io.Reader
+		var buf *bytes.Buffer
+
+		switch mediaType {
+		case "multipart/form-data":
+			writer := multipart.NewWriter(buf)
+			for k := range body {
+				v := body.Str(k)
+				if err := writer.WriteField(k, v); err != nil {
+					result <- HttpResult{
+						Body: nil,
+						Status: Status{
+							Ok:      false,
+							Code:    http.StatusBadRequest,
+							Message: err.Error(),
+						},
+					}
+					return
 				}
 			}
-		}
-		if err := writer.Close(); err != nil {
-			return nil, Status{
-				Ok:      false,
-				Code:    http.StatusBadRequest,
-				Message: err.Error(),
+			if err := writer.Close(); err != nil {
+				result <- HttpResult{
+					Body: nil,
+					Status: Status{
+						Ok:      false,
+						Code:    http.StatusBadRequest,
+						Message: err.Error(),
+					},
+				}
+				return
+			}
+			ioBody = buf
+		case "application/x-www-form-urlencoded":
+			data := url.Values{}
+			for k := range body {
+				v := body.Str(k)
+				data.Set(k, v)
+			}
+			ioBody = bytes.NewBufferString(data.Encode())
+		case "application/json":
+			if body != nil {
+				buf = bufPool.Get().(*bytes.Buffer)
+				buf.Reset()
+				buf.Write(bodyParams(header, body))
+				ioBody = buf
 			}
 		}
-		ioBody = buf
-	case "application/x-www-form-urlencoded":
-		data := url.Values{}
-		for k := range body {
-			v := body.Str(k)
-			data.Set(k, v)
+
+		req, err := http.NewRequestWithContext(ctx, method, uRL, ioBody)
+		if err != nil {
+			result <- HttpResult{
+				Body: nil,
+				Status: Status{
+					Ok:      false,
+					Code:    http.StatusBadRequest,
+					Message: err.Error(),
+				},
+			}
+			return
 		}
-		ioBody = bytes.NewBufferString(data.Encode())
-	case "application/json":
-		if body != nil {
-			buf = bufPool.Get().(*bytes.Buffer)
-			buf.Reset()
-			buf.Write(bodyParams(header, body))
-			ioBody = buf
+
+		for k, v := range header {
+			req.Header.Set(k, v.(string))
 		}
-	}
 
-	req, err := http.NewRequestWithContext(ctx, method, uRL, ioBody)
-	if err != nil {
-		return nil, Status{Ok: false, Code: http.StatusBadRequest, Message: err.Error()}
-	}
+		client := defaultClient
+		if tlsConfig != nil {
+			client = &http.Client{
+				Transport: &http.Transport{
+					TLSClientConfig:       tlsConfig,
+					MaxIdleConns:          100,
+					MaxIdleConnsPerHost:   10,
+					IdleConnTimeout:       90 * time.Second,
+					TLSHandshakeTimeout:   10 * time.Second,
+					ExpectContinueTimeout: 1 * time.Second,
+				},
+				Timeout: 15 * time.Second,
+			}
+		}
 
-	for k, v := range header {
-		req.Header.Set(k, v.(string))
-	}
+		res, err := client.Do(req)
+		if err != nil {
+			result <- HttpResult{
+				Body: nil,
+				Status: Status{
+					Ok:      false,
+					Code:    http.StatusBadRequest,
+					Message: err.Error(),
+				},
+			}
+			return
+		}
+		defer res.Body.Close()
 
-	client := defaultClient
-	if tlsConfig != nil {
-		client = &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig:       tlsConfig,
-				MaxIdleConns:          100,
-				MaxIdleConnsPerHost:   10,
-				IdleConnTimeout:       90 * time.Second,
-				TLSHandshakeTimeout:   10 * time.Second,
-				ExpectContinueTimeout: 1 * time.Second,
+		resultBody, err := ReadBody(res.Body)
+		if err != nil {
+			result <- HttpResult{
+				Body: nil,
+				Status: Status{
+					Ok:      false,
+					Code:    http.StatusBadRequest,
+					Message: err.Error(),
+				},
+			}
+			return
+		}
+
+		result <- HttpResult{
+			Body: resultBody,
+			Status: Status{
+				Ok:      IsStatusOk(res.StatusCode),
+				Code:    res.StatusCode,
+				Message: res.Status,
 			},
-			Timeout: 15 * time.Second,
 		}
-	}
+		return
+	}()
 
-	res, err := client.Do(req)
-	if err != nil {
-		return nil, Status{
-			Ok:      false,
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
+	if timeout == 0 {
+		select {
+		case respuesta := <-result:
+			return respuesta.Body, respuesta.Status
 		}
-	}
-	defer res.Body.Close()
+	} else {
+		select {
+		case respuesta := <-result:
+			// La función terminó antes de timeout
+			return respuesta.Body, respuesta.Status
 
-	result, err := ReadBody(res.Body)
-	if err != nil {
-		return nil, Status{
-			Ok:      false,
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
+		case <-time.After(timeout):
+			// Se agotaron los timeout
+			return newBody(defaultValue), Status{
+				Ok:      false,
+				Code:    http.StatusRequestTimeout,
+				Message: "timeout",
+			}
 		}
-	}
-
-	return result, Status{
-		Ok:      IsStatusOk(res.StatusCode),
-		Code:    res.StatusCode,
-		Message: res.Status,
 	}
 }
 
@@ -183,7 +249,7 @@ func HttpWithContext(ctx context.Context, method, uRL string, header, body et.Js
 * @return *Body, Status
 **/
 func Http(method, uRL string, header, body et.Json, tlsConfig *tls.Config) (*Body, Status) {
-	return HttpWithContext(context.Background(), method, uRL, header, body, tlsConfig)
+	return HttpWithContext(context.Background(), method, uRL, header, body, tlsConfig, 0, nil)
 }
 
 /**
@@ -301,6 +367,78 @@ func PatchWithTls(uRL string, header, body et.Json, tlsConfig *tls.Config) (*Bod
 **/
 func OptionsWithTls(uRL string, header et.Json, tlsConfig *tls.Config) (*Body, Status) {
 	return Http("OPTIONS", uRL, header, et.Json{}, tlsConfig)
+}
+
+/**
+* HttpCtxWithTimeout
+* @param ctx context.Context, method string, path string, header et.Json, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte
+* @return *Body, Status
+**/
+func HttpCtxWithTimeout(ctx context.Context, method, uRL string, header, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+	return HttpWithContext(ctx, method, uRL, header, body, tlsConfig, timeout, defaultValue)
+}
+
+/**
+* HttpWithTimeout
+* @param method string, path string, header et.Json, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte
+* @return *Body, Status
+**/
+func HttpWithTimeout(method, uRL string, header, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+	return HttpWithContext(context.Background(), method, uRL, header, body, tlsConfig, timeout, defaultValue)
+}
+
+/**
+* PostWithTimeout
+* @param uRL string, header et.Json, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte
+* @return *Body, Status
+**/
+func PostWithTimeout(uRL string, header, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+	return HttpWithContext(context.Background(), "POST", uRL, header, body, tlsConfig, timeout, defaultValue)
+}
+
+/**
+* GetWithTimeout
+* @param uRL string, header et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte
+* @return *Body, Status
+**/
+func GetWithTimeout(uRL string, header et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+	return HttpWithContext(context.Background(), "GET", uRL, header, et.Json{}, tlsConfig, timeout, defaultValue)
+}
+
+/**
+* PutWithTimeout
+* @param uRL string, header et.Json, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte
+* @return *Body, Status
+**/
+func PutWithTimeout(uRL string, header, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+	return HttpWithContext(context.Background(), "PUT", uRL, header, body, tlsConfig, timeout, defaultValue)
+}
+
+/**
+* DeleteWithTimeout
+* @param uRL string, header et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte
+* @return *Body, Status
+**/
+func DeleteWithTimeout(uRL string, header et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+	return HttpWithContext(context.Background(), "DELETE", uRL, header, et.Json{}, tlsConfig, timeout, defaultValue)
+}
+
+/**
+* PatchWithTimeout
+* @param uRL string, header et.Json, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte
+* @return *Body, Status
+**/
+func PatchWithTimeout(uRL string, header, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+	return HttpWithContext(context.Background(), "PATCH", uRL, header, body, tlsConfig, timeout, defaultValue)
+}
+
+/**
+* OptionsWithTimeout
+* @param uRL string, header et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte
+* @return *Body, Status
+**/
+func OptionsWithTimeout(uRL string, header et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+	return HttpWithContext(context.Background(), "OPTIONS", uRL, header, et.Json{}, tlsConfig, timeout, defaultValue)
 }
 
 /**

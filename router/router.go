@@ -210,31 +210,30 @@ func pushApiGateway(method, path, host, packageName string) {
 * @return *chi.Mux
 **/
 func Publish(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, packagePath, host string) *chi.Mux {
-	resolve := strs.Append(packagePath, path, "/")
-	resolve = strings.ReplaceAll(resolve, "//", "/")
-	resolve = strings.ReplaceAll(resolve, "//", "/")
+	path = strs.Append(packagePath, path, "/")
+	path = strings.ReplaceAll(path, "//", "/")
+	path = strings.ReplaceAll(path, "//", "/")
 
 	switch method {
 	case "GET":
-		r.Get(resolve, h)
+		r.Get(path, h)
 	case "POST":
-		r.Post(resolve, h)
+		r.Post(path, h)
 	case "PUT":
-		r.Put(resolve, h)
+		r.Put(path, h)
 	case "PATCH":
-		r.Patch(resolve, h)
+		r.Patch(path, h)
 	case "DELETE":
-		r.Delete(resolve, h)
+		r.Delete(path, h)
 	case "HEAD":
-		r.Head(resolve, h)
+		r.Head(path, h)
 	case "OPTIONS":
-		r.Options(resolve, h)
+		r.Options(path, h)
 	case "HandlerFunc":
-		r.HandleFunc(resolve, h)
+		r.HandleFunc(path, h)
 	}
 
 	pushApiGateway(method, path, host, packageName)
-
 	return r
 }
 
@@ -244,30 +243,29 @@ func Publish(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, p
 * @return *chi.Mux
 **/
 func With(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, packagePath, host string, middlewares []func(http.Handler) http.Handler) *chi.Mux {
-	resolve := strs.Append(packagePath, path, "/")
-	resolve = strings.ReplaceAll(resolve, "//", "/")
-	resolve = strings.ReplaceAll(resolve, "//", "/")
+	path = strs.Append(packagePath, path, "/")
+	path = strings.ReplaceAll(path, "//", "/")
+	path = strings.ReplaceAll(path, "//", "/")
 
 	switch method {
 	case "GET":
-		r.With(middlewares...).Get(resolve, h)
+		r.With(middlewares...).Get(path, h)
 	case "POST":
-		r.With(middlewares...).Post(resolve, h)
+		r.With(middlewares...).Post(path, h)
 	case "PUT":
-		r.With(middlewares...).Put(resolve, h)
+		r.With(middlewares...).Put(path, h)
 	case "PATCH":
-		r.With(middlewares...).Patch(resolve, h)
+		r.With(middlewares...).Patch(path, h)
 	case "DELETE":
-		r.With(middlewares...).Delete(resolve, h)
+		r.With(middlewares...).Delete(path, h)
 	case "HEAD":
-		r.With(middlewares...).Head(resolve, h)
+		r.With(middlewares...).Head(path, h)
 	case "OPTIONS":
-		r.With(middlewares...).Options(resolve, h)
+		r.With(middlewares...).Options(path, h)
 	case "HandlerFunc":
-		r.With(middlewares...).HandleFunc(resolve, h)
+		r.With(middlewares...).HandleFunc(path, h)
 	}
 
 	pushApiGateway(method, path, host, packageName)
-
 	return r
 }

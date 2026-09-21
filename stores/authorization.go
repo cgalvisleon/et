@@ -29,17 +29,17 @@ var (
 **/
 func DefineAuthorization(db *DB, tenantId, schema string) (*Authorization, error) {
 	columns := []Column{
-		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
-		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
-		{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
+		{Name: "created_at", TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
+		{Name: "updated_at", TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
+		{Name: "tenant_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
+		{Name: "id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 		{Name: "profile_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
 		{Name: "method", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
 		{Name: "path", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
-		{Name: SOURCE, TypeColumn: COLUMN, TypeData: JSON, Default: et.Json{}},
+		{Name: "source", TypeColumn: COLUMN, TypeData: JSON, Default: et.Json{}},
 	}
 
-	def := Def{
+	def := Define{
 		Schema:  schema,
 		Name:    "authorizations",
 		Version: 1,

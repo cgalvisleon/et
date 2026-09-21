@@ -527,10 +527,10 @@ func (s *DB) Sql(query string, args ...any) (et.Items, error) {
 
 /**
 * Define: Creates a model from a declarative definition (delegates to DefineModel).
-* @param definition Def
+* @param definition Define
 * @return *Model, error
 **/
-func (s *DB) Define(define Def) (*Model, error) {
+func (s *DB) Define(define Define) (*Model, error) {
 	if !utility.ValidStr(define.Schema, 0, []string{}) {
 		return nil, errors.New(MSG_SCHEMA_REQUIRED)
 	}
@@ -703,7 +703,7 @@ func (s *DB) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 		results := et.Items{Result: []et.Json{}}
 		for _, d := range define {
 			bt := []byte(d.ToString())
-			def := Def{}
+			def := Define{}
 			err := json.Unmarshal(bt, &def)
 			if err != nil {
 				return et.Items{}, err

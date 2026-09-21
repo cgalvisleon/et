@@ -14,12 +14,20 @@ import (
 * @param w http.ResponseWriter, r *http.Request
 **/
 func HttpSet(w http.ResponseWriter, r *http.Request) {
-	body, _ := request.GetBody(r)
+	body, err := request.GetBody(r)
+	if err != nil {
+		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	method := body.String("method")
 	path := body.String("path")
 	resolve := body.String("resolve")
 	tpHeader := TpHeader(body.Int("header"))
+	header := body.Json("header")
 	excludeHeader := body.ArrayStr("exclude_header")
+	params := body.Json("params")
+	bodyParams := body.Json("body")
 	version := body.Int("version")
 	packageName := body.String("package_name")
 	key := fmt.Sprintf("%s:%s", method, path)
@@ -32,7 +40,7 @@ func HttpSet(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	PushApiGateway(method, path, resolve, tpHeader, et.Json{}, excludeHeader, version, packageName)
+	PushApiGateway(method, path, resolve, tpHeader, header, excludeHeader, params, bodyParams, version, packageName)
 	response.ITEM(w, r, http.StatusOK, et.Item{
 		Ok: true,
 		Result: et.Json{

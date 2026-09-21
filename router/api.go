@@ -68,22 +68,14 @@ func (s *Api) UseAuthorization(middlewares ...func(http.Handler) http.Handler) {
 * Public
 * @param method, path string, handler func(http.ResponseWriter, *http.Request)
 **/
-func (s *Api) Public(method, path string, handler func(http.ResponseWriter, *http.Request)) {
-	Publish(s.Router, method, path, handler, s.Name, s.Path, s.Addr)
+func (s *Api) Public(route Route) {
+	Publish(s.Router, route)
 }
 
 /**
 * Protect
 * @param method, path string, handler func(http.ResponseWriter, *http.Request)
 **/
-func (s *Api) Authentication(method, path string, handler func(http.ResponseWriter, *http.Request)) {
-	With(s.Router, method, path, handler, s.Name, s.Path, s.Addr, s.authentication)
-}
-
-/**
-* Authorization
-* @param method, path string, handler func(http.ResponseWriter, *http.Request)
-**/
-func (s *Api) Authorization(method, path string, handler func(http.ResponseWriter, *http.Request)) {
-	With(s.Router, method, path, handler, s.Name, s.Path, s.Addr, s.authorization)
+func (s *Api) Authentication(route Route) {
+	With(s.Router, route, s.authentication)
 }

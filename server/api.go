@@ -73,30 +73,30 @@ func (s *Api) Use(middlewares ...func(http.Handler) http.Handler) {
 * Public
 * @param method, path string, handler http.HandlerFunc
 **/
-func (s *Api) Public(r *chi.Mux, method, path string, handler http.HandlerFunc) {
-	router.Publish(r, method, path, handler, s.Name, s.path, s.addr)
+func (s *Api) Public(r *chi.Mux, route router.Route) {
+	router.Publish(r, route)
 }
 
 /**
 * Private
 * @param method, path string, handler http.HandlerFunc
 **/
-func (s *Api) Private(r *chi.Mux, method, path string, handler http.HandlerFunc) {
-	router.With(r, method, path, handler, s.Name, s.path, s.addr, s.autentication)
+func (s *Api) Private(r *chi.Mux, route router.Route) {
+	router.With(r, route, s.autentication)
 }
 
 /**
 * Authentication
 * @param method, path string, handler http.HandlerFunc
 **/
-func (s *Api) Authentication(r *chi.Mux, method, path string, handler http.HandlerFunc) {
-	router.With(r, method, path, handler, s.Name, s.path, s.addr, s.autentication)
+func (s *Api) Authentication(r *chi.Mux, route router.Route) {
+	router.With(r, route, s.autentication)
 }
 
 /**
 * Authorization
 * @param method, path string, handler http.HandlerFunc
 **/
-func (s *Api) Authorization(r *chi.Mux, method, path string, handler http.HandlerFunc) {
-	router.With(r, method, path, handler, s.Name, s.path, s.addr, s.authorization)
+func (s *Api) Authorization(r *chi.Mux, route router.Route) {
+	router.With(r, route, s.authorization)
 }

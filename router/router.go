@@ -146,9 +146,9 @@ func ToTpHeader(tp int) TpHeader {
 
 /**
 * PushApiGateway
-* @param method, path, resolve string, header et.Json, tpHeader TpHeader, excludeHeader []string, version int, packageName string
+* @param method, path, resolve string, header et.Json, tpHeader TpHeader, excludeHeader []string, params, body et.Json, version int, packageName string
 **/
-func PushApiGateway(method, path, resolve string, tpHeader TpHeader, header et.Json, excludeHeader []string, version int, packageName string) {
+func PushApiGateway(method, path, resolve string, tpHeader TpHeader, header et.Json, excludeHeader []string, params, body et.Json, version int, packageName string) {
 	initRouter(packageName)
 	key := fmt.Sprintf("%s:%s", method, path)
 	router.Routes[key] = et.Json{
@@ -161,6 +161,8 @@ func PushApiGateway(method, path, resolve string, tpHeader TpHeader, header et.J
 		"tp_header":      tpHeader,
 		"header":         header,
 		"exclude_header": excludeHeader,
+		"params":         params,
+		"body":           body,
 		"version":        version,
 		"package_name":   packageName,
 	}
@@ -197,11 +199,24 @@ func GetRoutes() map[string]et.Json {
 
 /**
 * PushApiGateway
-* @param method, path, packagePath, host, packageName string
+* @param method, path, host string, header et.Json, excludeHeader []string, params, body et.Json, version int, packageName string
 **/
-func pushApiGateway(method, path, host, packageName string) {
-	resolve := host + path
-	PushApiGateway(method, path, resolve, TpReplaceHeader, et.Json{}, []string{}, 0, packageName)
+func pushApiGateway(route Route) {
+	resolve := route.Host + route.Path
+	PushApiGateway(route.Method, route.Path, resolve, TpReplaceHeader, route.Header, route.ExcludeHeader, route.Params, route.Body, route.Version, route.PackageName)
+}
+
+type Route struct {
+	Method        string
+	Path          string
+	Host          string
+	Handler       http.HandlerFunc
+	Header        et.Json
+	ExcludeHeader []string
+	Params        et.Json
+	Body          et.Json
+	Version       int
+	PackageName   string
 }
 
 /**
@@ -209,31 +224,31 @@ func pushApiGateway(method, path, host, packageName string) {
 * @param r *chi.Mux, method string, path string, h http.HandlerFunc, packageName string, packagePath string, host string
 * @return *chi.Mux
 **/
-func Publish(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, packagePath, host string) *chi.Mux {
-	path = strs.Append(packagePath, path, "/")
-	path = strings.ReplaceAll(path, "//", "/")
-	path = strings.ReplaceAll(path, "//", "/")
+func Publish(r *chi.Mux, route Route) *chi.Mux {
+	route.Path = strs.Append(route.PackageName, route.Path, "/")
+	route.Path = strings.ReplaceAll(route.Path, "//", "/")
+	route.Path = strings.ReplaceAll(route.Path, "//", "/")
 
-	switch method {
+	switch route.Method {
 	case "GET":
-		r.Get(path, h)
+		r.Get(route.Path, route.Handler)
 	case "POST":
-		r.Post(path, h)
+		r.Post(route.Path, route.Handler)
 	case "PUT":
-		r.Put(path, h)
+		r.Put(route.Path, route.Handler)
 	case "PATCH":
-		r.Patch(path, h)
+		r.Patch(route.Path, route.Handler)
 	case "DELETE":
-		r.Delete(path, h)
+		r.Delete(route.Path, route.Handler)
 	case "HEAD":
-		r.Head(path, h)
+		r.Head(route.Path, route.Handler)
 	case "OPTIONS":
-		r.Options(path, h)
+		r.Options(route.Path, route.Handler)
 	case "HandlerFunc":
-		r.HandleFunc(path, h)
+		r.HandleFunc(route.Path, route.Handler)
 	}
 
-	pushApiGateway(method, path, host, packageName)
+	pushApiGateway(route)
 	return r
 }
 
@@ -242,30 +257,30 @@ func Publish(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, p
 * @param r *chi.Mux, method string, path string, middlewares []func(http.Handler) http.Handler, h http.HandlerFunc, packageName string, packagePath string, host string
 * @return *chi.Mux
 **/
-func With(r *chi.Mux, method, path string, h http.HandlerFunc, packageName, packagePath, host string, middlewares []func(http.Handler) http.Handler) *chi.Mux {
-	path = strs.Append(packagePath, path, "/")
-	path = strings.ReplaceAll(path, "//", "/")
-	path = strings.ReplaceAll(path, "//", "/")
+func With(r *chi.Mux, route Route, middlewares []func(http.Handler) http.Handler) *chi.Mux {
+	route.Path = strs.Append(route.PackageName, route.Path, "/")
+	route.Path = strings.ReplaceAll(route.Path, "//", "/")
+	route.Path = strings.ReplaceAll(route.Path, "//", "/")
 
-	switch method {
+	switch route.Method {
 	case "GET":
-		r.With(middlewares...).Get(path, h)
+		r.With(middlewares...).Get(route.Path, route.Handler)
 	case "POST":
-		r.With(middlewares...).Post(path, h)
+		r.With(middlewares...).Post(route.Path, route.Handler)
 	case "PUT":
-		r.With(middlewares...).Put(path, h)
+		r.With(middlewares...).Put(route.Path, route.Handler)
 	case "PATCH":
-		r.With(middlewares...).Patch(path, h)
+		r.With(middlewares...).Patch(route.Path, route.Handler)
 	case "DELETE":
-		r.With(middlewares...).Delete(path, h)
+		r.With(middlewares...).Delete(route.Path, route.Handler)
 	case "HEAD":
-		r.With(middlewares...).Head(path, h)
+		r.With(middlewares...).Head(route.Path, route.Handler)
 	case "OPTIONS":
-		r.With(middlewares...).Options(path, h)
+		r.With(middlewares...).Options(route.Path, route.Handler)
 	case "HandlerFunc":
-		r.With(middlewares...).HandleFunc(path, h)
+		r.With(middlewares...).HandleFunc(route.Path, route.Handler)
 	}
 
-	pushApiGateway(method, path, host, packageName)
+	pushApiGateway(route)
 	return r
 }

@@ -342,7 +342,8 @@ func (s *Storage) Query(collection string, query et.Json) (et.Items, error) {
 		return et.Items{}, fmt.Errorf(MSG_MODEL_NOT_FOUND, collection)
 	}
 
-	return model.Query(query)
+	ql := model.Query(query)
+	return ql.All()
 }
 
 /**

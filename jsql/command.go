@@ -661,12 +661,12 @@ func (s *Command) One() (et.Item, error) {
 }
 
 /**
-* loadQuery: Loads a query from a JSON object.
-* @param tx *Tx, query et.Json
-* @return et.Items, error
+* loadCommand: Loads a command from a JSON object.
+* @param query et.Json
+* @return *Command, error
 **/
-func (s *Command) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
+func (s *Command) loadCommand(query et.Json) (*Command, error) {
 	s.Conditions = et.ToCondition(query)
 	s.Returns = query.ArrayStr("returns")
-	return s.ExecTx(tx)
+	return s, nil
 }

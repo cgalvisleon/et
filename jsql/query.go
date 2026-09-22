@@ -1033,26 +1033,26 @@ func (s *Query) Count() (int, error) {
 * @param query et.Json
 * @return et.Items, error
 **/
-func (s *Query) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
+func (s *Query) loadQuery(query et.Json) (*Query, error) {
 	join := query.ArrayJson("join")
 	for _, js := range join {
 		to := js.Str("to")
 		as := ""
 		args, ok := ArgWhitAs(to)
 		if !ok {
-			return et.Items{}, fmt.Errorf(MSG_AS_REQUIRED_IN_JOIN, to)
+			return s, fmt.Errorf(MSG_AS_REQUIRED_IN_JOIN, to)
 		}
 		to = args[0]
 		as = args[1]
 		args, ok = ArgWhitSchema(to)
 		if !ok {
-			return et.Items{}, fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
+			return s, fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
 		}
 		schema := args[0]
 		table := args[1]
 		modelTo, err := s.db.GetModel(schema, table)
 		if err != nil {
-			return et.Items{}, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
+			return s, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
 		}
 
 		conditions := et.ToCondition(js)
@@ -1065,19 +1065,19 @@ func (s *Query) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 		as := ""
 		args, ok := ArgWhitAs(to)
 		if !ok {
-			return et.Items{}, fmt.Errorf(MSG_AS_REQUIRED_IN_JOIN, to)
+			return s, fmt.Errorf(MSG_AS_REQUIRED_IN_JOIN, to)
 		}
 		to = args[0]
 		as = args[1]
 		args, ok = ArgWhitSchema(to)
 		if !ok {
-			return et.Items{}, fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
+			return s, fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
 		}
 		schema := args[0]
 		table := args[1]
 		modelTo, err := s.db.GetModel(schema, table)
 		if err != nil {
-			return et.Items{}, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
+			return s, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
 		}
 
 		conditions := et.ToCondition(js)
@@ -1090,19 +1090,19 @@ func (s *Query) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 		as := ""
 		args, ok := ArgWhitAs(to)
 		if !ok {
-			return et.Items{}, fmt.Errorf(MSG_AS_REQUIRED_IN_JOIN, to)
+			return s, fmt.Errorf(MSG_AS_REQUIRED_IN_JOIN, to)
 		}
 		to = args[0]
 		as = args[1]
 		args, ok = ArgWhitSchema(to)
 		if !ok {
-			return et.Items{}, fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
+			return s, fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
 		}
 		schema := args[0]
 		table := args[1]
 		modelTo, err := s.db.GetModel(schema, table)
 		if err != nil {
-			return et.Items{}, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
+			return s, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
 		}
 
 		conditions := et.ToCondition(js)
@@ -1115,19 +1115,19 @@ func (s *Query) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 		as := ""
 		args, ok := ArgWhitAs(to)
 		if !ok {
-			return et.Items{}, fmt.Errorf(MSG_AS_REQUIRED_IN_JOIN, to)
+			return s, fmt.Errorf(MSG_AS_REQUIRED_IN_JOIN, to)
 		}
 		to = args[0]
 		as = args[1]
 		args, ok = ArgWhitSchema(to)
 		if !ok {
-			return et.Items{}, fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
+			return s, fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
 		}
 		schema := args[0]
 		table := args[1]
 		modelTo, err := s.db.GetModel(schema, table)
 		if err != nil {
-			return et.Items{}, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
+			return s, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
 		}
 
 		conditions := et.ToCondition(js)
@@ -1172,5 +1172,5 @@ func (s *Query) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
 		}
 	}
 
-	return s.AllTx(tx)
+	return s, nil
 }

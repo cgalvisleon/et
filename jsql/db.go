@@ -3,7 +3,6 @@ package jsql
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -688,108 +687,6 @@ func (s *DB) Define(define Define) (*Model, error) {
 	}
 
 	result.IsDebug = s.isDebug
-
-	return result, nil
-}
-
-/**
-* loadQuery: Creates a Query from a JSON object.
-* @param tx *Tx, query et.Json
-* @return *Query, error
-**/
-func (s *DB) loadQuery(tx *Tx, query et.Json) (et.Items, error) {
-	define := query.ArrayJson("define")
-	if len(define) > 0 {
-		results := et.Items{Result: []et.Json{}}
-		for _, d := range define {
-			bt := []byte(d.ToString())
-			def := Define{}
-			err := json.Unmarshal(bt, &def)
-			if err != nil {
-				return et.Items{}, err
-			}
-			model, err := s.Define(def)
-			if err != nil {
-				return et.Items{}, err
-			}
-			if err := model.Init(); err != nil {
-				return et.Items{}, err
-			}
-			results.Add(et.Json{model.Table: model.ToJson()})
-		}
-		return results, nil
-	}
-
-	from := query.Str("from")
-	as := ""
-	args, ok := ArgWhitAs(from)
-	if ok {
-		from = args[0]
-		as = args[1]
-	}
-	args, ok = ArgWhitSchema(from)
-	if !ok {
-		return et.Items{}, fmt.Errorf(MSG_INVALID_FROM, from)
-	}
-	schema := args[0]
-	table := args[1]
-	model, err := s.GetModel(schema, table)
-	if err != nil {
-		return et.Items{}, fmt.Errorf(MSG_MODEL_NOT_FOUND, from)
-	}
-
-	insert := query.Json("insert")
-	if !insert.IsEmpty() {
-		command := model.Insert(insert)
-		return command.loadQuery(tx, query)
-	}
-
-	update := query.Json("update")
-	if !update.IsEmpty() {
-		command := model.Update(update)
-		return command.loadQuery(tx, query)
-	}
-
-	delete := query.Json("delete")
-	if !delete.IsEmpty() {
-		command := model.Delete()
-		return command.loadQuery(tx, delete)
-	}
-
-	upsert := query.Json("upsert")
-	if !upsert.IsEmpty() {
-		command := model.Upsert(upsert)
-		return command.loadQuery(tx, query)
-	}
-
-	q := newQuery(model, as)
-	return q.loadQuery(tx, query)
-}
-
-/**
-* Query: Renders a Query as SQL and returns the SQL string.
-* @param query []et.Json
-* @return string, error
-**/
-func (s *DB) Query(query []et.Json) ([][]et.Json, error) {
-	result := [][]et.Json{}
-	var tx *Tx
-	var commit bool
-	if len(query) > 0 {
-		tx, commit = getTx(tx)
-	}
-
-	for _, q := range query {
-		items, err := s.loadQuery(tx, q)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, items.Result)
-	}
-
-	if commit {
-		defer tx.Commit()
-	}
 
 	return result, nil
 }

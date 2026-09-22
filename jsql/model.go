@@ -698,36 +698,19 @@ func (s *Model) Upsert(data et.Json) *Command {
 /**
 * Query: Creates a new Query for this model with the given condition as the first WHERE clause.
 * @param query et.Json
-* @return et.Items, error
+* @return *Query
 **/
-func (s *Model) QueryTx(tx *Tx, query et.Json) (et.Items, error) {
-	query.Set("from", fmt.Sprintf("%s.%s", s.Schema, s.Table))
-	return s.db.loadQuery(tx, query)
+func (s *Model) QueryTx(tx *Tx, query et.Json) *Query {
+	result := s.As("")
+	result.loadQuery(query)
+	return result
 }
 
 /**
 * Query: Creates a new Query for this model with the given condition as the first WHERE clause.
 * @param query et.Json
-* @return et.Items, error
+* @return *Query
 **/
-func (s *Model) Query(query et.Json) (et.Items, error) {
+func (s *Model) Query(query et.Json) *Query {
 	return s.QueryTx(nil, query)
-}
-
-/**
-* CountedTx: Returns the count of records in the model.
-* @param tx *Tx, query et.Json
-* @return (int, error)
-**/
-func (s *Model) CountedTx(tx *Tx, query et.Json) (int, error) {
-	return 0, nil
-}
-
-/**
-* Counted: Returns the count of records in the model.
-* @param query et.Json
-* @return (int, error)
-**/
-func (s *Model) Counted(query et.Json) (int, error) {
-	return s.CountedTx(nil, query)
 }

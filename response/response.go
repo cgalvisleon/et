@@ -213,6 +213,26 @@ func ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, data et.Items
 }
 
 /**
+* LIST
+* @param w http.ResponseWriter, r *http.Request, statusCode int, data et.List
+* @return error
+**/
+func LIST(w http.ResponseWriter, r *http.Request, statusCode int, data et.List) error {
+	if &data == (&et.List{}) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(statusCode)
+		return nil
+	}
+
+	e, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	return WriteResponse(w, statusCode, e)
+}
+
+/**
 * DATA
 * @param w http.ResponseWriter, r *http.Request, statusCode int, data et.Json
 * @return error

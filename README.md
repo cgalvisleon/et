@@ -262,3 +262,23 @@ go test ./...        # run tests (no *_test.go files yet — compiles only)
 ## License
 
 MIT. Ver `LICENSE`.
+
+```json
+{
+    "where" {
+        "kind": {
+            "eq": "sidebar_type"
+        },
+        "and": [
+            {
+                "status": {
+                    "eq": "active"
+                }
+            }
+        ]
+    },
+    "orders": {
+      "name": true
+    }
+}
+```

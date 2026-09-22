@@ -16,6 +16,8 @@ var (
 	MSG_VALIDATOR_NUMBERS            = "the field %s must contain at least one number"
 	MSG_VALIDATOR_SPECIAL_CHARACTERS = "the field %s must contain at least one special character"
 	MSG_VALIDATOR_INVALID_TYPE       = "the field %s is of invalid type"
+	MSG_VALIDATOR_EMAIL              = "the field %s must be a valid email"
+	MSG_VALIDATOR_PHONE              = "the field %s must be a valid phone"
 )
 
 func init() {
@@ -35,5 +37,7 @@ func init() {
 		MSG_VALIDATOR_NUMBERS = "el campo %s debe contener al menos un número"
 		MSG_VALIDATOR_SPECIAL_CHARACTERS = "el campo %s debe contener al menos un carácter especial"
 		MSG_VALIDATOR_INVALID_TYPE = "el campo %s es de tipo inválido"
+		MSG_VALIDATOR_EMAIL = "el campo %s debe ser un correo electrónico válido"
+		MSG_VALIDATOR_PHONE = "el campo %s debe ser un teléfono válido"
 	}
 }

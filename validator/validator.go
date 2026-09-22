@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/utility"
 )
 
 var letterPattern = regexp.MustCompile(`\p{L}`)
@@ -20,6 +21,8 @@ type Condition struct {
 	isLetters           bool
 	isNumbers           bool
 	isSpecialCharacters bool
+	isEmail             bool
+	isPhone             bool
 	min                 float64
 	max                 float64
 	minLength           int
@@ -121,6 +124,24 @@ func (s *Condition) IsNumbers() *Condition {
 **/
 func (s *Condition) IsSpecialCharacters() *Condition {
 	s.isSpecialCharacters = true
+	return s
+}
+
+/**
+* IsEmail: Require the string value to be a valid email address.
+* @return *Condition
+**/
+func (s *Condition) IsEmail() *Condition {
+	s.isEmail = true
+	return s
+}
+
+/**
+* IsPhone: Require the string value to be a valid phone number.
+* @return *Condition
+**/
+func (s *Condition) IsPhone() *Condition {
+	s.isPhone = true
 	return s
 }
 
@@ -238,6 +259,10 @@ func (s *Condition) validateString(value string) (bool, error) {
 		return false, fmt.Errorf(MSG_VALIDATOR_NUMBERS, s.name)
 	} else if s.isSpecialCharacters && !specialCharPattern.MatchString(value) {
 		return false, fmt.Errorf(MSG_VALIDATOR_SPECIAL_CHARACTERS, s.name)
+	} else if s.isEmail && !utility.ValidEmail(value) {
+		return false, fmt.Errorf(MSG_VALIDATOR_EMAIL, s.name)
+	} else if s.isPhone && !utility.ValidPhone(value) {
+		return false, fmt.Errorf(MSG_VALIDATOR_PHONE, s.name)
 	}
 	return true, nil
 }

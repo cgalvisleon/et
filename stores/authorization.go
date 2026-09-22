@@ -208,5 +208,6 @@ func (s *Authorization) RemoveAuthor(profileId, method, path string) error {
 * @return (et.Items, error)
 **/
 func (s *Authorization) Query(query et.Json) (et.Items, error) {
-	return s.model.Query(query)
+	ql := s.model.Query(query)
+	return ql.All()
 }

@@ -1018,20 +1018,28 @@ func ToCondition(json Json) []*Condition {
 		return result
 	}
 
-	for k := range json {
-		var cond *Condition
-		if strings.ToLower(k) == "and" {
-			cond = and(json.Json(k))
-		} else if strings.ToLower(k) == "or" {
-			cond = or(json.Json(k))
-		} else if strings.ToLower(k) == "where" {
-			cond = getWhere(json.Json(k))
-		} else if strings.ToLower(k) == "on" {
-			cond = getWhere(json.Json(k))
-		}
+	// Fixed order: where/on first, then and, then or. Ranging over the map directly gave a random order, and the SQL
+	// only joins with AND/OR the conditions after the first one, so an "and" landing first left the "where" glued on
+	// without an operator (invalid SQL)
+	for _, name := range []string{"where", "on", "and", "or"} {
+		for k := range json {
+			if strings.ToLower(k) != name {
+				continue
+			}
 
-		if cond != nil {
-			result = append(result, cond)
+			var cond *Condition
+			switch name {
+			case "and":
+				cond = and(json.Json(k))
+			case "or":
+				cond = or(json.Json(k))
+			default:
+				cond = getWhere(json.Json(k))
+			}
+
+			if cond != nil {
+				result = append(result, cond)
+			}
 		}
 	}
 

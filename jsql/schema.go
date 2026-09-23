@@ -84,7 +84,7 @@ func (s *Schema) getModel(name string) (*Model, error) {
 **/
 func (s *Schema) newModel(name string, version int, userId string) *Model {
 	name = utility.Normalize(name)
-	id := fmt.Sprintf("model:%s:%s:%s", s.Database, s.Name, name)
+	id := fmt.Sprintf("model:%s:%s:%s:%d", s.Database, s.Name, name, version)
 	result := &Model{
 		ID:            id,
 		Database:      s.Database,

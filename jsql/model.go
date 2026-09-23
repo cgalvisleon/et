@@ -154,7 +154,7 @@ func (s *Model) ToJson() et.Json {
 		"required":       s.Required,
 		"hiddens":        s.Hiddens,
 		"details":        s.Details,
-		"master":         s.Master,
+		"master":         s.Masters,
 		"rollups":        s.Rollups,
 		"is_strict":      s.IsStrict,
 		"version":        s.Version,

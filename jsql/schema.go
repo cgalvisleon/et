@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/utility"
 )
 
@@ -85,8 +84,9 @@ func (s *Schema) getModel(name string) (*Model, error) {
 **/
 func (s *Schema) newModel(name string, version int, userId string) *Model {
 	name = utility.Normalize(name)
+	id := fmt.Sprintf("model:%s:%s:%s", s.Database, s.Name, name)
 	result := &Model{
-		ID:            reg.UUID(),
+		ID:            id,
 		Database:      s.Database,
 		Schema:        s.Name,
 		DatabaseId:    s.db.ID,

@@ -11,7 +11,6 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 )
@@ -39,7 +38,7 @@ type DB struct {
 * @param id, host, name, driver string, showLog ...bool (optional, defaults to true)
 * @return *DB, error
 **/
-func NewDB(id, host, name, driver string, showLog ...bool) (*DB, error) {
+func NewDB(host, name, driver string, showLog ...bool) (*DB, error) {
 	show := true
 	if len(showLog) > 0 {
 		show = showLog[0]
@@ -67,7 +66,7 @@ func NewDB(id, host, name, driver string, showLog ...bool) (*DB, error) {
 	params := connect.GetParams()
 	recordLimit := params.Int("record_limit")
 	version := params.ValInt(1, "version")
-	id = reg.GetUUID(id)
+	id := fmt.Sprintf("db:%s", name)
 	result := &DB{
 		ID:          id,
 		Name:        name,

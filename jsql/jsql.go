@@ -39,8 +39,8 @@ func GetConnection(driver, host string) (Connection, error) {
 * @param tenantId, host, driver, name string, showLog bool
 * @return *DB, error
 **/
-func ConnectTo(tenantId, host, driver, name string, showLog ...bool) (*DB, error) {
-	result, err := NewDB(tenantId, host, name, driver, showLog...)
+func ConnectTo(host, driver, name string, showLog ...bool) (*DB, error) {
+	result, err := NewDB(host, name, driver, showLog...)
 	if err != nil {
 		return nil, err
 	}
@@ -59,13 +59,12 @@ func ConnectTo(tenantId, host, driver, name string, showLog ...bool) (*DB, error
 * @return *DB, error
 **/
 func LoadTo(dbName string, hostName ...string) (*DB, error) {
-	tenantId := envar.GetStr("DB_TENANT_ID", "tenant:root")
 	driver := envar.GetStr("DB_DRIVER", DriverPostgres)
 	host := envar.GetStr("DB_HOST", "localhost")
 	if len(hostName) > 0 {
 		host = hostName[0]
 	}
-	result, err := ConnectTo(tenantId, host, driver, dbName)
+	result, err := ConnectTo(host, driver, dbName)
 	if err != nil {
 		return nil, err
 	}

@@ -25,6 +25,8 @@ func sqliteType(tp jsql.TypeData) string {
 		return "TEXT"
 	case jsql.JSON:
 		return "TEXT"
+	case jsql.ARRAYJSON:
+		return "TEXT"
 	case jsql.DATETIME:
 		return "TEXT"
 	case jsql.BOOLEAN:

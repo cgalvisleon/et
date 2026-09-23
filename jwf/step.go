@@ -23,6 +23,7 @@ const (
 	KindCondition Kind = "condition"
 	KindDelay     Kind = "delay"
 	KindBucle     Kind = "bucle"
+	KindIAAgent   Kind = "ia_agent"
 )
 
 var (

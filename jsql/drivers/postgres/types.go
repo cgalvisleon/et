@@ -25,6 +25,8 @@ func pgType(tp jsql.TypeData) string {
 		return "TEXT"
 	case jsql.JSON:
 		return "JSONB"
+	case jsql.ARRAYJSON:
+		return "JSONB"
 	case jsql.DATETIME:
 		return "TIMESTAMP"
 	case jsql.BOOLEAN:

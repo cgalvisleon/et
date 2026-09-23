@@ -62,6 +62,7 @@ const (
 	TEXT      TypeData = "text"
 	MEMO      TypeData = "memo"
 	JSON      TypeData = "json"
+	ARRAYJSON TypeData = "array_json"
 	DATETIME  TypeData = "datetime"
 	BOOLEAN   TypeData = "boolean"
 	GEOMETRY  TypeData = "geometry"

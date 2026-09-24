@@ -83,7 +83,7 @@ func New() (*Conn, error) {
 		return nil, err
 	}
 
-	logs.Logf(packageName, `Connected host:%s`, host)
+	logs.Logf("nats", `Connected host:%s`, host)
 
 	return &Conn{
 		id:     utility.UUID(),

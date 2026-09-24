@@ -116,10 +116,7 @@ func (s *Resilience) CountInstances() int {
 * @return Instance
 **/
 func (s *Resilience) newInstance(id, tag, description string, totalAttempts int, interval time.Duration, tags et.Json, fn interface{}, fnArgs ...interface{}) *Instance {
-	if id == "" {
-		id = reg.UUID()
-	}
-
+	id = reg.GetUUID(id)
 	now := timezone.Now()
 	result := &Instance{
 		CreatedAt:     now,

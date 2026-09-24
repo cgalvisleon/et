@@ -84,9 +84,8 @@ func newStep(ownerId, id string, kind Kind, tag, version, title string) *Step {
 	if version == "" {
 		version = "1.0.0"
 	}
-	if id == "" {
-		id = reg.UUID()
-	}
+
+	id = reg.GetUUID(id)
 	now := timezone.Now()
 	result := &Step{
 		CreatedAt:   now,

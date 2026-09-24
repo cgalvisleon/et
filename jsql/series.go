@@ -40,14 +40,15 @@ func DefineSeries(db *DB, schema string) (*Series, error) {
 		return nil, err
 	}
 
-	now := timezone.Now()
 	model.BeforeInsert(func(tx *Tx, old, new et.Json) error {
+		now := timezone.Now()
 		new.Set(CREATED_AT, now)
 		new.Set(UPDATED_AT, now)
 
 		return nil
 	}).
 		BeforeUpdate(func(tx *Tx, old, new et.Json) error {
+			now := timezone.Now()
 			new.Set(UPDATED_AT, now)
 
 			return nil

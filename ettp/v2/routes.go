@@ -11,7 +11,6 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jwt"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/router"
@@ -98,29 +97,46 @@ func (s *Server) getTest(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handlerDevToken(w http.ResponseWriter, r *http.Request) {
 	metric := middleware.GetMetrics(r)
 
-	developToken := func() string {
-		production := envar.GetBool("PRODUCTION", true)
-		if production {
-			return ""
-		}
-
-		device := "develop"
-		duration := 1 * time.Hour
-		token, err := jwt.NewToken(device, device, device, device, et.Json{}, duration)
-		if err != nil {
-			logs.Alert(err)
-			return ""
-		}
-
-		_, err = jwt.Validate(token)
-		if err != nil {
-			logs.Alertf("handlerDevToken:%s", err.Error())
-			return ""
-		}
-
-		return token
+	production := envar.GetBool("PRODUCTION", true)
+	if production {
+		return
 	}
-	token := developToken()
+
+	body, err := response.GetBody(r)
+	if err != nil {
+		return
+	}
+
+	app := "develop"
+	device := "apirest"
+	userId := "dev:user"
+	name := "Test User"
+	duration := 1 * time.Hour
+	tenantId := body.Str("tenant_id")
+
+	token := ""
+
+	if tenantId == "" {
+		token, err = jwt.NewToken(app, device, userId, name, et.Json{}, duration)
+		if err != nil {
+			event.ErrorMessage(tenantId, err.Error(), "handlerDevToken", "NewToken")
+			return
+		}
+	} else {
+		roleId := body.Str("role_id")
+
+		token, err = jwt.NewAuthorization(app, device, userId, name, tenantId, roleId, duration)
+		if err != nil {
+			event.ErrorMessage(tenantId, err.Error(), "handlerDevToken", "NewAuthorization")
+			return
+		}
+	}
+
+	_, err = jwt.Validate(token)
+	if err != nil {
+		event.ErrorMessage(tenantId, err.Error(), "handlerDevToken", "Validate")
+		return
+	}
 
 	metric.JSON(w, r, http.StatusOK, et.Json{
 		"token": token,
@@ -188,6 +204,7 @@ func (s *Server) upsetRouter(w http.ResponseWriter, r *http.Request) {
 		metric.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
+
 	n := len(body)
 	for i := 0; i < n; i++ {
 		item := body[i]

@@ -22,6 +22,7 @@ const (
 	EVENT_OVERFLOW                = "event:overflow"
 	EVENT_WORK                    = "event:work"
 	EVENT_WORK_STATE              = "event:work:state"
+	EVENT_SET_ERROR               = "event:set:error"
 )
 
 /**
@@ -173,7 +174,7 @@ func Subscribe(channel string, f func(Message)) (err error) {
 		return err
 	}
 
-	conn.mutex.Lock()	
+	conn.mutex.Lock()
 	conn.events[channel] = subscribe
 	conn.mutex.Unlock()
 
@@ -273,13 +274,37 @@ func Overflow(data et.Json) {
 
 /**
 * Error
-* @param event string,
+* @param data et.Json
 * @return error
 **/
-func Error(event string, err error) error {
-	select {
-	case asyncPublishCh <- asyncMsg{event, et.Json{"error": err.Error()}}:
-	default:
-	}
-	return err
+func Error(data et.Json) {
+	Log(EVENT_SET_ERROR, data)
+}
+
+func ErrorMessage(tenantId, message, method, functionName string) {
+	Error(et.Json{
+		"tenant_id":     tenantId,
+		"message":       message,
+		"method":        method,
+		"function_name": functionName,
+	})
+}
+
+func ErrorDetails(tenantId string, statusCode int, provider, providerError, response string, attempt int) {
+	Error(et.Json{
+		"tenant_id":   tenantId,
+		"message":     providerError,
+		"status_code": statusCode,
+		"provider":    provider,
+		"response":    response,
+		"attempt":     attempt,
+	})
+}
+
+func ErrorContext(tenantId, workflowId, nodeId, customerId string, ctx et.Json) {
+	ctx.Set("tenant_id", tenantId)
+	ctx.Set("workflow_id", workflowId)
+	ctx.Set("node_id", nodeId)
+	ctx.Set("customer_id", customerId)
+	Error(ctx)
 }

@@ -156,7 +156,6 @@ func New(name string, cnf *Config) (*Server, error) {
 
 	result.mux.HandleFunc("/", result.handler)
 
-	// tlsConfig := &tls.Config{}
 	pipe, err := net.Listen("tcp", fmt.Sprintf(":%d", cnf.RpcPort))
 	if err != nil {
 		return nil, err

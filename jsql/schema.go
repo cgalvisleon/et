@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/utility"
 )
 
@@ -13,28 +14,12 @@ import (
 * Schema: Represents a database schema that owns a set of models.
 **/
 type Schema struct {
-	Database string            `json:"database"`
+	database string            `json:"-"`
 	Name     string            `json:"name"`
 	Models   map[string]*Model `json:"models"`
 	db       *DB               `json:"-"`
 	isDebug  bool              `json:"-"`
 	mu       *sync.RWMutex     `json:"-"`
-}
-
-/**
-* ToJson: Returns the schema metadata as an et.Json map.
-* @return et.Json
-**/
-func (s *Schema) Ref() et.Json {
-	models := []et.Json{}
-	for _, model := range s.Models {
-		models = append(models, model.Ref())
-	}
-
-	return et.Json{
-		"name":   s.Name,
-		"models": models,
-	}
 }
 
 /**
@@ -95,15 +80,15 @@ func (s *Schema) getModel(name string) (*Model, error) {
 
 /**
 * newModel: Constructs a new Model with initialized fields and default triggers.
-* @param schema *Schema, name string, version int, userId string
+* @param id string, name string, version int, userId string
 * @return *Model
 **/
-func (s *Schema) newModel(name string, version int, userId string) *Model {
+func (s *Schema) newModel(id, name string, version int, userId string) *Model {
 	name = utility.Normalize(name)
-	id := fmt.Sprintf("model:%s:%s:%s:%d", s.Database, s.Name, name, version)
+	id = reg.GetUUID(id)
 	result := &Model{
 		ID:            id,
-		Database:      s.Database,
+		database:      s.database,
 		Schema:        s.Name,
 		Name:          name,
 		Table:         name,
@@ -168,7 +153,7 @@ func (s *Schema) loadModel(params et.Json) (*Model, error) {
 
 	result := &Model{
 		ID:            id,
-		Database:      s.Database,
+		database:      s.database,
 		Schema:        s.Name,
 		Name:          name,
 		Table:         table,

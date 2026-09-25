@@ -4,6 +4,9 @@ import "github.com/cgalvisleon/et/envar"
 
 var (
 	MSG_FIELD_NOT_FOUND                = "field not found"
+	MSG_OPERATOR_NOT_FOUND             = "operator not found"
+	MSG_VALUE_NOT_FOUND                = "value not found"
+	MSG_CONNECTOR_NOT_FOUND            = "connector not found"
 	MSG_DATA_NOT_FOUND                 = "data not found"
 	MSG_INDEX_OUT_OF_RANGE             = "index out of range"
 	MSG_FAILED_TO_UNMARSHAL_JSON_VALUE = "failed to unmarshal JSON value:%s"

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 )
@@ -64,23 +65,6 @@ func ToOperator(s string) Operator {
 	return result
 }
 
-type Connector string
-
-const (
-	NaC Connector = ""
-	And Connector = "and"
-	Or  Connector = "or"
-)
-
-func (s Connector) Str() string {
-	return string(s)
-}
-
-type BetweenValue struct {
-	Min any `json:"Min"`
-	Max any `json:"Max"`
-}
-
 /**
 * Time: Converts a value to a time.Time
 * @param val any
@@ -111,6 +95,7 @@ const (
 	BOOL           = "bool"
 	DATETIME       = "datetime"
 	JSON           = "json"
+	ARRAY          = "array"
 	ARRAY_JSON     = "array_json"
 	ARRAY_STRING   = "array_string"
 	ARRAY_INT      = "array_int"
@@ -120,7 +105,34 @@ const (
 	VAL_BETWEEN    = "between"
 	VAL_NULL       = "null"
 	EXPR           = "expr"
+	AGGREGATE      = "aggregate"
 )
+
+var TypeValues = []string{
+	ANY,
+	STRING,
+	INT,
+	FLOAT,
+	BOOL,
+	DATETIME,
+	JSON,
+	ARRAY,
+	ARRAY_JSON,
+	ARRAY_STRING,
+	ARRAY_INT,
+	ARRAY_FLOAT,
+	ARRAY_BOOL,
+	ARRAY_DATETIME,
+	VAL_BETWEEN,
+	VAL_NULL,
+	EXPR,
+	AGGREGATE,
+}
+
+func IsTypeValue(v string) bool {
+	v = strings.ToLower(v)
+	return slices.Contains(TypeValues, v)
+}
 
 type Value struct {
 	Type  string `json:"type"`
@@ -144,6 +156,29 @@ func (v Value) String() string {
 }
 
 /**
+* Is: Checks if the value is of the given type.
+* @param tpData string
+* @return bool
+**/
+func (v Value) Is(tpData string) bool {
+	if !IsTypeValue(tpData) {
+		return false
+	}
+	return v.Type == tpData
+}
+
+/**
+* Fields: Returns the fields of the value.
+* @return []string
+**/
+func (v Value) Fields() []string {
+	if !v.Is(STRING) {
+		return []string{}
+	}
+	return strings.Split(v.String(), "->")
+}
+
+/**
 * NewValue: Wraps a raw value into a Value, inferring its logical Type.
 * @param v any
 * @return Value
@@ -155,15 +190,6 @@ func NewValue(v any) Value {
 	default:
 		return Value{Type: valueType(v), Value: v}
 	}
-}
-
-/**
-* Expr: Wraps an expression into a Value.
-* @param expr string
-* @return Value
-**/
-func Expr(expr string) Value {
-	return Value{Type: EXPR, Value: expr}
 }
 
 /**
@@ -191,7 +217,11 @@ func valueType(v any) string {
 		return JSON
 	case BetweenValue:
 		return VAL_BETWEEN
-	case []Json, []interface{}:
+	case Aggregate:
+		return AGGREGATE
+	case []interface{}:
+		return ARRAY
+	case []Json:
 		return ARRAY_JSON
 	case []string:
 		return ARRAY_STRING
@@ -204,15 +234,150 @@ func valueType(v any) string {
 	case []time.Time:
 		return ARRAY_DATETIME
 	default:
-		return ANY
+		return fmt.Sprintf("%T", v)
 	}
 }
 
+type BetweenValue struct {
+	Min any `json:"Min"`
+	Max any `json:"Max"`
+}
+
+type Function int
+
+const (
+	COUNT Function = iota
+	SUM
+	AVG
+	MIN
+	MAX
+)
+
+func (s Function) Str() string {
+	switch s {
+	case COUNT:
+		return "count"
+	case SUM:
+		return "sum"
+	case AVG:
+		return "avg"
+	case MIN:
+		return "min"
+	case MAX:
+		return "max"
+	default:
+		return fmt.Sprintf("%d", s)
+	}
+}
+
+type Aggregate struct {
+	Function Function `json:"function"`
+	Value    Value    `json:"field"`
+}
+
+/**
+* Expr: Wraps an expression into a Value.
+* @param expr string
+* @return Value
+**/
+func Expr(expr string) Value {
+	return Value{Type: EXPR, Value: expr}
+}
+
+/**
+* Sum: Returns a SUM aggregate.
+* @param value any
+* @return Aggregate
+**/
+func Sum(value any) Aggregate {
+	return Aggregate{Function: SUM, Value: NewValue(value)}
+}
+
+/**
+* Avg: Returns an AVG aggregate.
+* @param value any
+* @return Aggregate
+**/
+func Avg(value any) Aggregate {
+	return Aggregate{Function: AVG, Value: NewValue(value)}
+}
+
+/**
+* Min: Returns a MIN aggregate.
+* @param value any
+* @return Aggregate
+**/
+func Min(value any) Aggregate {
+	return Aggregate{Function: MIN, Value: NewValue(value)}
+}
+
+/**
+* Max: Returns a MAX aggregate.
+* @param value any
+* @return Aggregate
+**/
+func Max(value any) Aggregate {
+	return Aggregate{Function: MAX, Value: NewValue(value)}
+}
+
+type Connector string
+
+const (
+	NaC Connector = ""
+	AND Connector = "and"
+	OR  Connector = "or"
+)
+
+func ToConnector(s string) Connector {
+	switch s {
+	case "and":
+		return AND
+	case "or":
+		return OR
+	}
+	return NaC
+}
+
+func (s Connector) Str() string {
+	return string(s)
+}
+
 type Condition struct {
-	Field     string    `json:"field"`
+	Field     Value     `json:"field"`
 	Operator  Operator  `json:"operator"`
 	Value     Value     `json:"value"`
 	Connector Connector `json:"connector"`
+}
+
+/**
+* ToCondition: Converts a JSON object into a Condition.
+* @param params Json
+* @return *Condition, error
+**/
+func ToCondition(params Json) (*Condition, error) {
+	field, ok := params["field"]
+	if !ok {
+		return nil, errors.New(MSG_FIELD_NOT_FOUND)
+	}
+	operator, ok := params["operator"]
+	if !ok {
+		return nil, errors.New(MSG_OPERATOR_NOT_FOUND)
+	}
+	value, ok := params["value"]
+	if !ok {
+		return nil, errors.New(MSG_VALUE_NOT_FOUND)
+	}
+	connector, ok := params["connector"]
+	if !ok {
+		return nil, errors.New(MSG_CONNECTOR_NOT_FOUND)
+	}
+
+	return &Condition{
+		Field:     NewValue(field),
+		Operator:  ToOperator(fmt.Sprintf("%v", operator)),
+		Value:     NewValue(value),
+		Connector: ToConnector(fmt.Sprintf("%v", connector)),
+	}, nil
 }
 
 /**
@@ -222,7 +387,7 @@ type Condition struct {
 func (s *Condition) ToJson() Json {
 	if s.Connector == NaC {
 		return Json{
-			s.Field: Json{
+			s.Field.String(): Json{
 				s.Operator.Str(): s.Value.Value,
 			},
 		}
@@ -230,7 +395,7 @@ func (s *Condition) ToJson() Json {
 
 	return Json{
 		s.Connector.Str(): Json{
-			s.Field: Json{
+			s.Field.String(): Json{
 				s.Operator.Str(): s.Value.Value,
 			},
 		},
@@ -238,19 +403,11 @@ func (s *Condition) ToJson() Json {
 }
 
 /**
-* Field
-* @return string
-**/
-func (s *Condition) Key() string {
-	return strings.ToLower(s.Field)
-}
-
-/**
 * And
 * @return *Condition
 **/
 func (s *Condition) And() *Condition {
-	s.Connector = And
+	s.Connector = AND
 	return s
 }
 
@@ -259,7 +416,7 @@ func (s *Condition) And() *Condition {
 * @return *Condition
 **/
 func (s *Condition) Or() *Condition {
-	s.Connector = Or
+	s.Connector = OR
 	return s
 }
 
@@ -270,7 +427,7 @@ func (s *Condition) Or() *Condition {
 **/
 func (s *Condition) fieldValue(data Json) (result any) {
 	result = data.Clone()
-	fields := strings.Split(s.Field, "->")
+	fields := s.Field.Fields()
 	for _, field := range fields {
 		switch v := result.(type) {
 		case Json:
@@ -967,7 +1124,8 @@ func (s *Condition) ApplyToObject(obj Json) bool {
 **/
 func (s *Condition) ApplyToIndex(keys []string) []string {
 	result := make([]string, 0)
-	if s.Field == "" {
+	fields := s.Field.Fields()
+	if len(fields) == 0 {
 		return result
 	}
 
@@ -982,78 +1140,13 @@ func (s *Condition) ApplyToIndex(keys []string) []string {
 }
 
 /**
-* ToCondition
-* @param json Json
-* @return []*Condition
-**/
-func ToCondition(json Json) []*Condition {
-	result := []*Condition{}
-
-	getWhere := func(json Json) *Condition {
-		for fld := range json {
-			cond := json.Json(fld)
-			for cnd := range cond {
-				val := cond[cnd]
-				return condition(fld, val, ToOperator(cnd))
-			}
-		}
-		return nil
-	}
-
-	and := func(jsons Json) *Condition {
-		result := getWhere(jsons)
-		if result != nil {
-			result.Connector = And
-		}
-
-		return result
-	}
-
-	or := func(jsons Json) *Condition {
-		result := getWhere(jsons)
-		if result != nil {
-			result.Connector = Or
-		}
-
-		return result
-	}
-
-	// Fixed order: where/on first, then and, then or. Ranging over the map directly gave a random order, and the SQL
-	// only joins with AND/OR the conditions after the first one, so an "and" landing first left the "where" glued on
-	// without an operator (invalid SQL)
-	for _, name := range []string{"where", "on", "and", "or"} {
-		for k := range json {
-			if strings.ToLower(k) != name {
-				continue
-			}
-
-			var cond *Condition
-			switch name {
-			case "and":
-				cond = and(json.Json(k))
-			case "or":
-				cond = or(json.Json(k))
-			default:
-				cond = getWhere(json.Json(k))
-			}
-
-			if cond != nil {
-				result = append(result, cond)
-			}
-		}
-	}
-
-	return result
-}
-
-/**
 * condition
-* @param field string, value interface{}, op string
+* @param field, value interface{}, op string
 * @return *Condition
 **/
-func condition(field string, value interface{}, op Operator) *Condition {
+func condition(field, value interface{}, op Operator) *Condition {
 	return &Condition{
-		Field:     field,
+		Field:     NewValue(field),
 		Operator:  op,
 		Value:     NewValue(value),
 		Connector: NaC,
@@ -1061,65 +1154,91 @@ func condition(field string, value interface{}, op Operator) *Condition {
 }
 
 /**
-* Eq
-* @param field string, value interface{}
+* Where
+* @param field, value interface{}
 * @return Condition
 **/
-func Eq(field string, value interface{}) *Condition {
+func Where(field, value interface{}) *Condition {
+	return condition(field, value, EQ)
+}
+
+/**
+* And
+* @param field, operator Operator, value interface{}
+* @return Condition
+**/
+func And(field interface{}, operator Operator, value interface{}) *Condition {
+	result := condition(field, value, operator)
+	result.Connector = AND
+	return result
+}
+
+func Or(field interface{}, operator Operator, value interface{}) *Condition {
+	result := condition(field, value, operator)
+	result.Connector = OR
+	return result
+}
+
+/**
+* Eq
+* @param field, value interface{}
+* @return Condition
+**/
+func Eq(field, value interface{}) *Condition {
 	return condition(field, value, EQ)
 }
 
 /**
 * Neg
-* @param field string, value interface{}
+* @param field, value interface{}
 * @return Condition
 **/
-func Neg(field string, value interface{}) *Condition {
+func Neg(field, value interface{}) *Condition {
 	return condition(field, value, NEG)
 }
 
 /**
 * Less
-* @param field string, value interface{}
+* @param field, value interface{}
 * @return Condition
 **/
-func Less(field string, value interface{}) *Condition {
+func Less(field, value interface{}) *Condition {
 	return condition(field, value, LESS)
 }
 
 /**
 * LessEq
-* @param field string, value interface{}
+* @param field, value interface{}
 * @return Condition
 **/
-func LessEq(field string, value interface{}) *Condition {
+func LessEq(field, value interface{}) *Condition {
 	return condition(field, value, LESS_EQ)
 }
 
 /**
 * More
-* @param field string, value interface{}
+* @param field, value interface{}
 * @return Condition
 **/
-func More(field string, value interface{}) *Condition {
+func More(field, value interface{}) *Condition {
 	return condition(field, value, MORE)
 }
 
 /**
 * MoreEq
-* @param field string, value interface{}
+* @param field, value interface{}
 * @return Condition
 **/
-func MoreEq(field string, value interface{}) *Condition {
+func MoreEq(field, value interface{}) *Condition {
 	return condition(field, value, MORE_EQ)
 }
 
 /**
 * Like
-* @param field string, value interface{}
+* @param field, value interface{}
 * @return Condition
 **/
-func Like(field string, value interface{}) *Condition {
+func Like(field, value interface{}) *Condition {
 	return condition(field, value, LIKE)
 }
 
@@ -1143,19 +1262,19 @@ func NotIn(field string, value []interface{}) *Condition {
 
 /**
 * Is
-* @param field string, value interface{}
+* @param field, value interface{}
 * @return Condition
 **/
-func Is(field string, value interface{}) *Condition {
+func Is(field, value interface{}) *Condition {
 	return condition(field, value, IS)
 }
 
 /**
 * IsNot
-* @param field string, value interface{}
+* @param field, value interface{}
 * @return Condition
 **/
-func IsNot(field string, value interface{}) *Condition {
+func IsNot(field, value interface{}) *Condition {
 	return condition(field, value, IS_NOT)
 }
 
@@ -1196,29 +1315,6 @@ func NotBetween(field string, min, max any) *Condition {
 }
 
 /**
-* EvaluateObject
-* @param item Json, conditions []*Condition
-* @return bool
-**/
-func EvaluateObject(item Json, conditions []*Condition) bool {
-	if len(conditions) == 0 {
-		return true
-	}
-
-	result := conditions[0].ApplyToObject(item)
-	for _, cond := range conditions[1:] {
-		ok := cond.ApplyToObject(item)
-		if cond.Connector == And {
-			result = result && ok
-		} else if cond.Connector == Or {
-			result = result || ok
-		}
-	}
-
-	return result
-}
-
-/**
 * EvaluateValue
 * @param value any, conditions []*Condition
 * @return bool
@@ -1231,12 +1327,60 @@ func EvaluateValue(value any, conditions []*Condition) bool {
 	result := conditions[0].ApplyToValue(value)
 	for _, cond := range conditions[1:] {
 		ok := cond.ApplyToValue(value)
-		if cond.Connector == And {
+		if cond.Connector == AND {
 			result = result && ok
-		} else if cond.Connector == Or {
+		} else if cond.Connector == OR {
 			result = result || ok
 		}
 	}
 
+	return result
+}
+
+type WheRes []*Condition
+
+/**
+* ToWheRes
+* @param params []Json
+* @return WheRes, error
+**/
+func ToWheRes(params []Json) (WheRes, error) {
+	result := WheRes{}
+	for _, param := range params {
+		condition, err := ToCondition(param)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, condition)
+	}
+	return result, nil
+}
+
+/**
+* Len
+* @return int
+**/
+func (s WheRes) Len() int {
+	return len(s)
+}
+
+/**
+* Add
+* @param condition *Condition
+**/
+func (s WheRes) Add(condition *Condition) {
+	s = append(s, condition)
+}
+
+/**
+* ToJson
+* @return []Json
+**/
+func (s WheRes) ToJson() []Json {
+	result := make([]Json, 0)
+	for _, condition := range s {
+		cond := condition.ToJson()
+		result = append(result, cond)
+	}
 	return result
 }

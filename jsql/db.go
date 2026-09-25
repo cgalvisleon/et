@@ -184,17 +184,6 @@ func (s *DB) addAuditLog(userId string, action string) {
 }
 
 /**
-* Ref: Returns the DB metadata as an et.Json map.
-* @return et.Json
-**/
-func (s *DB) Ref() et.Json {
-	return et.Json{
-		"id":   s.ID,
-		"name": s.Name,
-	}
-}
-
-/**
 * ToJson: Returns the DB metadata as an et.Json map.
 * @return et.Json
 **/
@@ -356,7 +345,7 @@ func (s *DB) Close() error {
 **/
 func (s *DB) newSchema(name string) *Schema {
 	result := &Schema{
-		Database: s.Name,
+		database: s.Name,
 		Name:     name,
 		Models:   make(map[string]*Model),
 		db:       s,
@@ -379,7 +368,7 @@ func (s *DB) NewModel(schema, name string, version int, userId string) *Model {
 		sch = s.newSchema(schema)
 	}
 
-	result := sch.newModel(name, version, userId)
+	result := sch.newModel("", name, version, userId)
 	return result
 }
 
@@ -474,6 +463,9 @@ func (s *DB) Sql(query string, args ...any) (et.Items, error) {
 * @return *Model, error
 **/
 func (s *DB) Define(define Define) (*Model, error) {
+	if !utility.ValidStr(define.ID, 0, []string{}) {
+		define.ID = reg.UUID()
+	}
 	if !utility.ValidStr(define.Schema, 0, []string{}) {
 		return nil, errors.New(MSG_SCHEMA_REQUIRED)
 	}

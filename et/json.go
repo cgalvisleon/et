@@ -1151,7 +1151,7 @@ func (s Json) Hidden(keys []string) Json {
 * @param as string
 * @return *Where
 **/
-func (s Json) From(as string) *Where {
+func (s Json) From(as string) *Wheres {
 	return From([]Json{s}, as)
 }
 

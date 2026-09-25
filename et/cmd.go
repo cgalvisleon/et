@@ -14,7 +14,7 @@ const (
 * @param itmes []Json, as ...string
 * @return *Where
 **/
-func From(items []Json, as ...string) *Where {
+func From(items []Json, as ...string) *Wheres {
 	asStr := "A"
 	if len(as) == 1 {
 		asStr = as[0]

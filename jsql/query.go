@@ -48,7 +48,7 @@ func getFrom(model *Model, as string) *From {
 		as = model.Table
 	}
 	return &From{
-		Database: model.Database,
+		Database: model.database,
 		Schema:   model.Schema,
 		Name:     model.Name,
 		Table:    model.Table,

@@ -364,6 +364,6 @@ func (s Item) Exist(key string) bool {
 * @param as string
 * @return *Where
 **/
-func (s Item) From(as string) *Where {
+func (s Item) From(as string) *Wheres {
 	return From([]Json{s.Result}, as)
 }

@@ -8,7 +8,6 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jrex"
-	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -26,16 +25,9 @@ type Index struct {
 	Sorted bool   `json:"sorted"`
 }
 
-func (s *Index) Ref() et.Json {
-	return et.Json{
-		"name":   s.Name,
-		"sorted": s.Sorted,
-	}
-}
-
 type Model struct {
 	ID            string                  `json:"id"`
-	Database      string                  `json:"database"`
+	database      string                  `json:"-"`
 	Schema        string                  `json:"schema"`
 	Name          string                  `json:"name"`
 	Table         string                  `json:"table"`
@@ -103,17 +95,6 @@ func (s *Model) AddAuditLog(userId string, action string) {
 * ToJson: Returns the model metadata as an et.Json map.
 * @return et.Json
 **/
-func (s *Model) Ref() et.Json {
-	return et.Json{
-		"id":   s.ID,
-		"name": s.Name,
-	}
-}
-
-/**
-* ToJson: Returns the model metadata as an et.Json map.
-* @return et.Json
-**/
 func (s *Model) ToJson() et.Json {
 	columns := make([]et.Json, 0)
 	for _, column := range s.Columns {
@@ -122,7 +103,6 @@ func (s *Model) ToJson() et.Json {
 
 	return et.Json{
 		"id":             s.ID,
-		"database":       s.Database,
 		"schema":         s.Schema,
 		"name":           s.Name,
 		"table":          s.Table,
@@ -152,34 +132,6 @@ func (s *Model) ToJson() et.Json {
 }
 
 /**
-* ToString: Returns the model metadata as a string.
-* @return string
-**/
-func (s *Model) ToString() string {
-	return s.ToJson().ToString()
-}
-
-/**
-* Key: Returns the fully-qualified model identifier (database.schema.name).
-* @return string
-**/
-func (s *Model) Key() string {
-	result := s.Name
-	result = strs.Append(s.Schema, result, ".")
-	result = strs.Append(s.Database, result, ".")
-	return result
-}
-
-/**
-* Debug: Enables debug logging and returns the model for chaining.
-* @return *Model
-**/
-func (s *Model) Debug() *Model {
-	s.IsDebug = true
-	return s
-}
-
-/**
 * loadColumns: Loads the columns from a JSON object.
 * @param columns []et.Json
 * @return void
@@ -189,6 +141,15 @@ func (s *Model) loadColumns(columns []et.Json) {
 		col := loadColumn(column)
 		s.Columns = append(s.Columns, col)
 	}
+}
+
+/**
+* Debug: Enables debug logging and returns the model for chaining.
+* @return *Model
+**/
+func (s *Model) Debug() *Model {
+	s.IsDebug = true
+	return s
 }
 
 /**

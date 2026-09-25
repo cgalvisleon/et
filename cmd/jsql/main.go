@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
 	_ "github.com/cgalvisleon/et/jsql/drivers/postgres"
 	"github.com/cgalvisleon/et/logs"
@@ -9,37 +10,18 @@ import (
 // demoDBConnect attempts a live connection using env vars
 // (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME).
 func demoDBConnect() error {
-	db, err := jsql.ConnectTo()
+	db, err := jsql.Load()
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
-	logs.Debug("connected:", db.Name)
-
-	model, err := db.DefineModel("public", "users", 1, "admin")
+	result, err := db.Query(et.Json{})
 	if err != nil {
 		return err
 	}
 
-	model.Debug()
-	err = model.Init()
-	if err != nil {
-		return err
-	}
-
-	result, err := model.
-		As("u").
-		Where(jsql.Eq("u.id", 1)).
-		// Select("u.id", "u.name", "u.email", "u.full_name").
-		Test().
-		Debug().
-		One()
-	if err != nil {
-		return err
-	}
-
-	logs.Debug("result:", result)
+	logs.Debug("result:", result.ToString())
 
 	return nil
 }

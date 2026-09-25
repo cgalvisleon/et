@@ -64,6 +64,6 @@ func (s *List) ToMap() map[string]interface{} {
 * @param as string
 * @return *Where
 **/
-func (s List) From(as string) *Where {
+func (s List) From(as string) *Wheres {
 	return From(s.Result, as)
 }

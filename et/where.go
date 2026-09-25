@@ -55,7 +55,7 @@ type OrderField struct {
 /**
 * Where
 **/
-type Where struct {
+type Wheres struct {
 	From       Iterator     `json:"from"`
 	Conditions []*Condition `json:"conditions"`
 	Selects    []string     `json:"selects"`
@@ -72,10 +72,10 @@ type Where struct {
 /**
 * newWhere
 * @param from []Json, as string
-* @return *Where
+* @return *Wheres
 **/
-func newWhere(from Iterator) *Where {
-	result := &Where{
+func newWhere(from Iterator) *Wheres {
+	result := &Wheres{
 		From:       from,
 		Conditions: make([]*Condition, 0, 4),
 		Selects:    make([]string, 0, 4),
@@ -93,9 +93,9 @@ func newWhere(from Iterator) *Where {
 
 /**
 * IsDebug: Returns the debug mode
-* @return *Where
+* @return *Wheres
 **/
-func (s *Where) IsDebug() *Where {
+func (s *Wheres) IsDebug() *Wheres {
 	s.isDebug = true
 	return s
 }
@@ -104,7 +104,7 @@ func (s *Where) IsDebug() *Where {
 * ToJson
 * @return Json
 **/
-func (s *Where) ToJson() (Json, error) {
+func (s *Wheres) ToJson() (Json, error) {
 	bt, err := json.Marshal(s)
 	if err != nil {
 		return nil, err
@@ -122,11 +122,11 @@ func (s *Where) ToJson() (Json, error) {
 /**
 * Add
 * @param condition *Condition
-* @return *Where
+* @return *Wheres
 **/
-func (s *Where) Add(condition *Condition) *Where {
+func (s *Wheres) Add(condition *Condition) *Wheres {
 	if len(s.Conditions) > 0 && condition.Connector == NaC {
-		condition.Connector = And
+		condition.Connector = AND
 	}
 
 	s.Conditions = append(s.Conditions, condition)
@@ -136,38 +136,38 @@ func (s *Where) Add(condition *Condition) *Where {
 /**
 * Where
 * @param condition *Condition
-* @return *Where
+* @return *Wheres
 **/
-func (s *Where) Where(condition *Condition) *Where {
+func (s *Wheres) Where(condition *Condition) *Wheres {
 	return s.Add(condition)
 }
 
 /**
 * And
 * @param condition *Condition
-* @return *Where
+* @return *Wheres
 **/
-func (s *Where) And(condition *Condition) *Where {
-	condition.Connector = And
+func (s *Wheres) And(condition *Condition) *Wheres {
+	condition.Connector = AND
 	return s.Add(condition)
 }
 
 /**
 * Or
 * @param condition *Condition
-* @return *Where
+* @return *Wheres
 **/
-func (s *Where) Or(condition *Condition) *Where {
-	condition.Connector = Or
+func (s *Wheres) Or(condition *Condition) *Wheres {
+	condition.Connector = OR
 	return s.Add(condition)
 }
 
 /**
 * Select
 * @param fields ...string
-* @return *Where
+* @return *Wheres
 **/
-func (s *Where) Select(fields ...string) *Where {
+func (s *Wheres) Select(fields ...string) *Wheres {
 	if len(fields) == 0 {
 		return s
 	}
@@ -182,9 +182,9 @@ func (s *Where) Select(fields ...string) *Where {
 /**
 * join
 * @param to []Json, as string, keys map[string]string, joinType JoinType
-* @return *Where
+* @return *Wheres
 **/
-func (s *Where) join(to []Json, as string, keys map[string]string, joinType JoinType) *Where {
+func (s *Wheres) join(to []Json, as string, keys map[string]string, joinType JoinType) *Wheres {
 	if len(to) == 0 {
 		return s
 	}
@@ -205,45 +205,45 @@ func (s *Where) join(to []Json, as string, keys map[string]string, joinType Join
 /**
 * Join
 * @param to []Json, as string, keys map[string]string
-* @return *Where
+* @return *Wheres
 **/
-func (s *Where) Join(to []Json, as string, keys map[string]string) *Where {
+func (s *Wheres) Join(to []Json, as string, keys map[string]string) *Wheres {
 	return s.join(to, as, keys, InnerJoin)
 }
 
 /**
 * LeftJoin
 * @param to []Json, as string, keys map[string]string
-* @return *Where
+* @return *Wheres
 **/
-func (s *Where) LeftJoin(to []Json, as string, keys map[string]string) *Where {
+func (s *Wheres) LeftJoin(to []Json, as string, keys map[string]string) *Wheres {
 	return s.join(to, as, keys, LeftJoin)
 }
 
 /**
 * RightJoin
 * @param to []Json, as string, keys map[string]string
-* @return *Where
+* @return *Wheres
 **/
-func (s *Where) RightJoin(to []Json, as string, keys map[string]string) *Where {
+func (s *Wheres) RightJoin(to []Json, as string, keys map[string]string) *Wheres {
 	return s.join(to, as, keys, RightJoin)
 }
 
 /**
 * FullJoin
 * @param to []Json, as string, keys map[string]string
-* @return *Where
+* @return *Wheres
 **/
-func (s *Where) FullJoin(to []Json, as string, keys map[string]string) *Where {
+func (s *Wheres) FullJoin(to []Json, as string, keys map[string]string) *Wheres {
 	return s.join(to, as, keys, FullJoin)
 }
 
 /**
 * Hidden
 * @param fields ...string
-* @return *Where
+* @return *Wheres
 **/
-func (s *Where) Hidden(fields ...string) *Where {
+func (s *Wheres) Hidden(fields ...string) *Wheres {
 	if len(fields) == 0 {
 		return s
 	}
@@ -258,9 +258,9 @@ func (s *Where) Hidden(fields ...string) *Where {
 /**
 * Asc
 * @param field string
-* @return *Where
+* @return *Wheres
 **/
-func (s *Where) Asc(field string) *Where {
+func (s *Wheres) Asc(field string) *Wheres {
 	s.OrderBy = append(s.OrderBy, OrderField{Field: field, Asc: true})
 	return s
 }
@@ -268,9 +268,9 @@ func (s *Where) Asc(field string) *Where {
 /**
 * Desc
 * @param field string
-* @return *Where
+* @return *Wheres
 **/
-func (s *Where) Desc(field string) *Where {
+func (s *Wheres) Desc(field string) *Wheres {
 	s.OrderBy = append(s.OrderBy, OrderField{Field: field, Asc: false})
 	return s
 }
@@ -278,9 +278,9 @@ func (s *Where) Desc(field string) *Where {
 /**
 * Order
 * @param field string
-* @return *Where
+* @return *Wheres
 **/
-func (s *Where) Order(field string, asc bool) *Where {
+func (s *Wheres) Order(field string, asc bool) *Wheres {
 	if asc {
 		return s.Asc(field)
 	}
@@ -290,9 +290,9 @@ func (s *Where) Order(field string, asc bool) *Where {
 /**
 * Limit
 * @param page int, rows int
-* @return *Where
+* @return *Wheres
 **/
-func (s *Where) Limit(page int, rows int) *Where {
+func (s *Wheres) Limit(page int, rows int) *Wheres {
 	if page < 1 {
 		page = 1
 	}
@@ -306,7 +306,7 @@ func (s *Where) Limit(page int, rows int) *Where {
 * addItem: Applies select/hidden transforms and appends item to Result without limit check.
 * @param item Json
 **/
-func (s *Where) addItem(item Json) {
+func (s *Wheres) addItem(item Json) {
 	if len(s.Selects) == 0 {
 		item = hidden(s.Hiddens, item)
 		s.Result = append(s.Result, item)
@@ -333,7 +333,7 @@ func (s *Where) addItem(item Json) {
 * @param item Json
 * @return next bool
 **/
-func (s *Where) AdddResult(item Json) (next bool) {
+func (s *Wheres) AdddResult(item Json) (next bool) {
 	s.addItem(item)
 
 	if s.Limits == 0 {
@@ -348,7 +348,7 @@ func (s *Where) AdddResult(item Json) (next bool) {
 /**
 * sortResult: Sorts Result in-place using OrderBy fields.
 **/
-func (s *Where) sortResult() {
+func (s *Wheres) sortResult() {
 	if len(s.OrderBy) == 0 || len(s.Result) == 0 {
 		return
 	}
@@ -374,7 +374,7 @@ func (s *Where) sortResult() {
 * All
 * @return []Json
 **/
-func (s *Where) All() []Json {
+func (s *Wheres) All() []Json {
 	from := s.From
 	if len(s.Joins) == 0 && s.From.As() != "" {
 		fromAs := strings.ToLower(s.From.As())
@@ -406,7 +406,7 @@ func (s *Where) All() []Json {
 		if !ok {
 			break
 		}
-		ok = EvaluateObject(item, s.Conditions)
+		ok = evaluateObject(item, s.Conditions)
 		if !ok {
 			continue
 		}
@@ -444,11 +444,34 @@ func (s *Where) All() []Json {
 }
 
 /**
+* evaluateObject
+* @param item Json, conditions []*Condition
+* @return bool
+**/
+func evaluateObject(item Json, conditions []*Condition) bool {
+	if len(conditions) == 0 {
+		return true
+	}
+
+	result := conditions[0].ApplyToObject(item)
+	for _, cond := range conditions[1:] {
+		ok := cond.ApplyToObject(item)
+		if cond.Connector == AND {
+			result = result && ok
+		} else if cond.Connector == OR {
+			result = result || ok
+		}
+	}
+
+	return result
+}
+
+/**
 * One
 * @param idx int
 * @return Json
 **/
-func (s *Where) One(idx int) Json {
+func (s *Wheres) One(idx int) Json {
 	rows := s.All()
 	if len(rows) == 0 {
 		return Json{}
@@ -470,7 +493,7 @@ func (s *Where) One(idx int) Json {
 * First
 * @return Json
 **/
-func (s *Where) First() Json {
+func (s *Wheres) First() Json {
 	return s.One(0)
 }
 
@@ -478,6 +501,6 @@ func (s *Where) First() Json {
 * Last
 * @return Json
 **/
-func (s *Where) Last() Json {
+func (s *Wheres) Last() Json {
 	return s.One(-1)
 }

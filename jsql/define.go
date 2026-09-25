@@ -56,6 +56,7 @@ type DefRollup struct {
 
 type Define struct {
 	Schema      string           `json:"schema"`
+	ID          string           `json:"id"`
 	Name        string           `json:"name"`
 	Version     int              `json:"version"`
 	IdxField    string           `json:"idx_field"`

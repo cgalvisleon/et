@@ -552,6 +552,6 @@ func (s *Items) ToList(all, page, rows int) List {
 * @param as string
 * @return *Where
 **/
-func (s Items) From(as string) *Where {
+func (s Items) From(as string) *Wheres {
 	return From(s.Result, as)
 }

@@ -494,7 +494,7 @@ func (s *DB) Define(define Define) (*Model, error) {
 		if def.TypeData == "" {
 			return nil, fmt.Errorf(MSG_TYPE_DATA_REQUIRED, "type_data")
 		}
-		result := model.defineColumn(def.Name, def.TypeColumn, def.TypeData, def.Default, def.Definition)
+		result := model.defineColumn(def.Name, def.TypeColumn, def.TypeData, def.Default)
 		return result, nil
 	}
 

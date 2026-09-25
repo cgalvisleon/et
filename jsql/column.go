@@ -107,6 +107,25 @@ type Column struct {
 }
 
 /**
+* loadColumn: Loads a column from a JSON object.
+* @param params et.Json
+* @return *Column
+**/
+func loadColumn(params et.Json) *Column {
+	name := params.String("name")
+	typeColumn := params.String("type_column")
+	typeData := params.String("type_data")
+	defaultValue := params.Any("default")
+
+	return &Column{
+		Name:       name,
+		TypeColumn: TypeColumn(typeColumn),
+		TypeData:   TypeData(typeData),
+		Default:    defaultValue,
+	}
+}
+
+/**
 * ToJson: Returns the column metadata as an et.Json map.
 * @return et.Json
 **/

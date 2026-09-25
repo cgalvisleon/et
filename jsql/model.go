@@ -75,10 +75,10 @@ type Model struct {
 }
 
 /**
-* addAuditLog
+* AddAuditLog: Adds an audit log to the model.
 * @param userId string, action string
 **/
-func (s *Model) addAuditLog(userId string, action string) {
+func (s *Model) AddAuditLog(userId string, action string) {
 	if s.AuditLog == nil {
 		s.AuditLog = &et.SafeData{}
 	}
@@ -115,13 +115,18 @@ func (s *Model) Ref() et.Json {
 * @return et.Json
 **/
 func (s *Model) ToJson() et.Json {
+	columns := make([]et.Json, 0)
+	for _, column := range s.Columns {
+		columns = append(columns, column.ToJson())
+	}
+
 	return et.Json{
 		"id":             s.ID,
 		"database":       s.Database,
 		"schema":         s.Schema,
 		"name":           s.Name,
 		"table":          s.Table,
-		"columns":        s.Columns,
+		"columns":        columns,
 		"source_field":   s.SourceField,
 		"idx_field":      s.IdxField,
 		"idt_field":      s.IdtField,
@@ -166,34 +171,24 @@ func (s *Model) Key() string {
 }
 
 /**
-* AddAuditLog
-* @param userId string, action string
-**/
-func (s *Model) AddAuditLog(userId string, action string) {
-	if s.AuditLog == nil {
-		s.AuditLog = make([]et.Json, 0)
-	}
-
-	now := timezone.Now()
-	s.AuditLog = append(s.AuditLog, et.Json{
-		"created_at": now,
-		"user_id":    userId,
-		"action":     action,
-	})
-	maxAuditLog := envar.GetInt("MAX_AUDIT_LOG", 1000)
-	if len(s.AuditLog) > maxAuditLog {
-		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
-	}
-	s.isChanged = true
-}
-
-/**
 * Debug: Enables debug logging and returns the model for chaining.
 * @return *Model
 **/
 func (s *Model) Debug() *Model {
 	s.IsDebug = true
 	return s
+}
+
+/**
+* loadColumns: Loads the columns from a JSON object.
+* @param columns []et.Json
+* @return void
+**/
+func (s *Model) loadColumns(columns []et.Json) {
+	for _, column := range columns {
+		col := loadColumn(column)
+		s.Columns = append(s.Columns, col)
+	}
 }
 
 /**
@@ -327,13 +322,12 @@ func (s *Model) GetModel(schema, name string) (*Model, error) {
 * @param name string, tpColumn TypeColumn, tpData TypeData, defaultValue interface{}, definition []byte
 * @return *Column
 **/
-func (s *Model) newColumn(name string, tpColumn TypeColumn, tpData TypeData, defaultValue interface{}, definition []byte) *Column {
+func (s *Model) newColumn(name string, tpColumn TypeColumn, tpData TypeData, deFault any) *Column {
 	return &Column{
 		Name:       name,
 		TypeColumn: tpColumn,
 		TypeData:   tpData,
-		Default:    defaultValue,
-		Definition: definition,
+		Default:    deFault,
 		model:      s,
 	}
 }
@@ -367,7 +361,7 @@ func (s *Model) GetColumn(name string) (*Column, bool) {
 		return nil, false
 	}
 
-	return s.newColumn(name, ATTRIB, ANY, "", []byte{}), true
+	return s.newColumn(name, ATTRIB, ANY, ""), true
 }
 
 /**

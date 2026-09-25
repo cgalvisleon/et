@@ -105,7 +105,6 @@ func (s *Schema) newModel(name string, version int, userId string) *Model {
 		ID:            id,
 		Database:      s.Database,
 		Schema:        s.Name,
-		DatabaseId:    s.db.ID,
 		Name:          name,
 		Table:         name,
 		Columns:       make([]*Column, 0),
@@ -135,7 +134,6 @@ func (s *Schema) newModel(name string, version int, userId string) *Model {
 		afterDeletes:  make([]TriggerFunction, 0),
 		db:            s.db,
 	}
-	result.addAuditLog(userId, "new_model")
 	s.db.addAuditLog(userId, "new_model")
 	s.addModel(result)
 	return result
@@ -172,7 +170,6 @@ func (s *Schema) loadModel(params et.Json) (*Model, error) {
 		ID:            id,
 		Database:      s.Database,
 		Schema:        s.Name,
-		DatabaseId:    s.db.ID,
 		Name:          name,
 		Table:         table,
 		Columns:       make([]*Column, 0),
@@ -202,12 +199,8 @@ func (s *Schema) loadModel(params et.Json) (*Model, error) {
 		afterDeletes:  make([]TriggerFunction, 0),
 		db:            s.db,
 	}
-	s.addModel(result)
-
 	columns := params.ArrayJson("columns")
-	for _, column := range result.Columns {
-		column.model = result
-	}
+	result.loadColumns(columns)
 
 	for _, foreignKey := range result.ForeignKeys {
 		to := foreignKey.To
@@ -237,8 +230,8 @@ func (s *Schema) loadModel(params et.Json) (*Model, error) {
 	}
 
 	result.defaultTrigger()
-	s.addModel(result)
 
+	s.addModel(result)
 	return result, nil
 }
 

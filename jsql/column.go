@@ -75,11 +75,11 @@ func StatusList() []interface{} {
 * Column: Describes a single field in a Model, including its storage type, data type, and default.
 **/
 type Column struct {
-	Name       string     `json:"name"`
-	TypeColumn TypeColumn `json:"type_column"`
-	TypeData   TypeData   `json:"type_data"`
-	Default    any        `json:"default"`
-	model      *Model     `json:"-"`
+	Name       string      `json:"name"`
+	TypeColumn TypeColumn  `json:"type_column"`
+	TypeData   et.TypeData `json:"type_data"`
+	Default    any         `json:"default"`
+	model      *Model      `json:"-"`
 }
 
 /**
@@ -96,7 +96,7 @@ func loadColumn(params et.Json) *Column {
 	return &Column{
 		Name:       name,
 		TypeColumn: TypeColumn(typeColumn),
-		TypeData:   TypeData(typeData),
+		TypeData:   et.TypeData(typeData),
 		Default:    defaultValue,
 	}
 }

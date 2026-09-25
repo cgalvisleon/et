@@ -92,6 +92,7 @@ type TypeData string
 const (
 	ANY            TypeData = "any"
 	BYTE           TypeData = "byte"
+	KEY            TypeData = "key"
 	TEXT           TypeData = "text"
 	MEMO           TypeData = "memo"
 	INT            TypeData = "int"
@@ -119,6 +120,7 @@ func (s TypeData) Str() string {
 var TypeValues = map[string]TypeData{
 	ANY.Str():            ANY,
 	BYTE.Str():           BYTE,
+	KEY.Str():            KEY,
 	TEXT.Str():           TEXT,
 	MEMO.Str():           MEMO,
 	INT.Str():            INT,

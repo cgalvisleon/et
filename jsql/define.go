@@ -87,10 +87,10 @@ func (s *Model) indexColumn(name string) int {
 
 /**
 * defineColumn: Appends a new column definition to the model.
-* @param name string, tpColumn TypeColumn, tpData TypeData, default any
+* @param name string, tpColumn TypeColumn, tpData et.TypeData, default any
 * @return *Column
 **/
-func (s *Model) defineColumn(name string, tpColumn TypeColumn, tpData TypeData, deFault any) *Column {
+func (s *Model) defineColumn(name string, tpColumn TypeColumn, tpData et.TypeData, deFault any) *Column {
 	idx := s.indexColumn(name)
 	if idx != -1 {
 		return s.Columns[idx]
@@ -123,7 +123,7 @@ func (s *Model) defineColumn(name string, tpColumn TypeColumn, tpData TypeData, 
 **/
 func (s *Model) DefineSource() *Column {
 	s.SourceField = SOURCE
-	return s.defineColumn(SOURCE, COLUMN, JSON, et.Json{})
+	return s.defineColumn(SOURCE, COLUMN, et.JSON, et.Json{})
 }
 
 /**
@@ -132,7 +132,7 @@ func (s *Model) DefineSource() *Column {
 **/
 func (s *Model) DefineIdxField() *Index {
 	s.IdxField = IDX
-	result := s.DefineIndex(IDX, KEY, "")
+	result := s.DefineIndex(IDX, et.KEY, "")
 	s.Hiddens = append(s.Hiddens, IDX)
 	s.BeforeInsert(func(tx *Tx, old, new et.Json) error {
 		new[s.IdxField] = reg.GetULID("")
@@ -148,7 +148,7 @@ func (s *Model) DefineIdxField() *Index {
 **/
 func (s *Model) DefineIdTField() *Index {
 	s.IdtField = IDT
-	result := s.DefineIndex(IDT, INT, 0)
+	result := s.DefineIndex(IDT, et.INT, 0)
 	s.Hiddens = append(s.Hiddens, IDT)
 	s.BeforeInsert(func(tx *Tx, old, new et.Json) error {
 		now := timezone.Now()
@@ -161,10 +161,10 @@ func (s *Model) DefineIdTField() *Index {
 
 /**
 * DefineIndex: Defines a new index column for the model.
-* @param name string, tp TypeData, deFault any
+* @param name string, tp et.TypeData, deFault any
 * @return *Index
 **/
-func (s *Model) DefineIndex(name string, tp TypeData, deFault any) *Index {
+func (s *Model) DefineIndex(name string, tp et.TypeData, deFault any) *Index {
 	s.defineColumn(name, COLUMN, tp, deFault)
 	idx := slices.IndexFunc(s.Indexes, func(idx *Index) bool { return idx.Name == name })
 	if idx != -1 {
@@ -180,10 +180,10 @@ func (s *Model) DefineIndex(name string, tp TypeData, deFault any) *Index {
 
 /**
 * DefinePrimaryKey: Defines a new primary key column for the model.
-* @param name string, tp TypeData, deFault any
+* @param name string, tp et.TypeData, deFault any
 * @return *Index
 **/
-func (s *Model) DefinePrimaryKey(name string, tp TypeData, deFault any) *Index {
+func (s *Model) DefinePrimaryKey(name string, tp et.TypeData, deFault any) *Index {
 	s.defineColumn(name, COLUMN, tp, deFault)
 	idx := slices.IndexFunc(s.PrimaryKeys, func(idx *Index) bool { return idx.Name == name })
 	if idx != -1 {
@@ -214,10 +214,10 @@ func (s *Model) DefineForeignKeys(to *Model, keys map[string]string, onDeleteCas
 
 /**
 * DefineUnique: Defines a new unique index for the model.
-* @param name string, tp TypeData, deFault any
+* @param name string, tp et.TypeData, deFault any
 * @return *Index
 **/
-func (s *Model) DefineUnique(name string, tp TypeData, deFault any) *Index {
+func (s *Model) DefineUnique(name string, tp et.TypeData, deFault any) *Index {
 	s.defineColumn(name, COLUMN, tp, deFault)
 	idx := slices.IndexFunc(s.Unique, func(idx *Index) bool { return idx.Name == name })
 	if idx != -1 {
@@ -233,10 +233,10 @@ func (s *Model) DefineUnique(name string, tp TypeData, deFault any) *Index {
 
 /**
 * DefineRequired: Defines a new required column for the model.
-* @param name string, tp TypeData, deFault any
+* @param name string, tp et.TypeData, deFault any
 * @return *Index
 **/
-func (s *Model) DefineRequired(name string, tp TypeData, deFault any) *Index {
+func (s *Model) DefineRequired(name string, tp et.TypeData, deFault any) *Index {
 	s.defineColumn(name, COLUMN, tp, deFault)
 	idx := slices.IndexFunc(s.Required, func(idx *Index) bool { return idx.Name == name })
 	if idx != -1 {
@@ -260,19 +260,19 @@ func (s *Model) DefineHidden(name ...string) {
 
 /**
 * DefineColumn: Defines a new column for the model.
-* @param name string, tp TypeData, deFault any
+* @param name string, tp et.TypeData, deFault any
 * @return *Column
 **/
-func (s *Model) DefineColumn(name string, tp TypeData, deFault any) *Column {
+func (s *Model) DefineColumn(name string, tp et.TypeData, deFault any) *Column {
 	return s.defineColumn(name, COLUMN, tp, deFault)
 }
 
 /**
 * DefineAttrib: Defines a new attribute for the model.
-* @param name string, tp TypeData, deFault any
+* @param name string, tp et.TypeData, deFault any
 * @return *Column
 **/
-func (s *Model) DefineAttrib(name string, tp TypeData, deFault any) *Column {
+func (s *Model) DefineAttrib(name string, tp et.TypeData, deFault any) *Column {
 	return s.defineColumn(name, ATTRIB, tp, deFault)
 }
 
@@ -294,12 +294,12 @@ func (s *Model) DefineDetail(name string, keys map[string]string, rows int) (*Mo
 	detailName := fmt.Sprintf("%s_%s", s.Name, name)
 	to := s.db.NewModel(s.Schema, detailName, 1, s.ID)
 	for k, fk := range keys {
-		s.defineColumn(k, COLUMN, KEY, "")
-		to.defineColumn(fk, COLUMN, KEY, "")
+		s.defineColumn(k, COLUMN, et.KEY, "")
+		to.defineColumn(fk, COLUMN, et.KEY, "")
 		to.DefineForeignKeys(s, map[string]string{fk: k}, true, false)
 		to.DefineHidden(fk)
 	}
-	s.defineColumn(name, DETAIL, ANY, nil)
+	s.defineColumn(name, DETAIL, et.ANY, nil)
 	detail := newDetail(to, keys, []string{}, true, true)
 	detail.Rows = rows
 	s.Details[name] = detail
@@ -325,14 +325,14 @@ func (s *Model) DefineMaster(name string, to *Model, keys, toKeys map[string]str
 	bridge := s.db.NewModel(s.Schema, detailName, 1, s.ID)
 	bridge.DefineIdxField()
 	for k, fk := range keys {
-		bridge.DefinePrimaryKey(fk, KEY, "")
+		bridge.DefinePrimaryKey(fk, et.KEY, "")
 		bridge.DefineForeignKeys(s, map[string]string{fk: k}, true, false)
 	}
 	for k, fk := range toKeys {
-		bridge.DefinePrimaryKey(fk, KEY, "")
+		bridge.DefinePrimaryKey(fk, et.KEY, "")
 		bridge.DefineForeignKeys(to, map[string]string{fk: k}, true, false)
 	}
-	s.defineColumn(name, MASTER, ANY, nil)
+	s.defineColumn(name, MASTER, et.ANY, nil)
 	master := newMaster(to, bridge, keys, toKeys, selects)
 	s.Masters[name] = master
 	to.Masters[s.Name] = master
@@ -364,7 +364,7 @@ func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, sel
 		return nil, errors.New(MSG_SELECTS_REQUIRED)
 	}
 
-	s.defineColumn(name, ROLLUP, ANY, nil)
+	s.defineColumn(name, ROLLUP, et.ANY, nil)
 	detail := newDetail(to, keys, selects, false, false)
 	detail.Rows = 1
 	s.Rollups[name] = detail
@@ -377,7 +377,7 @@ func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, sel
 * @return *Model
 **/
 func (s *Model) DefineCalcFunc(name string, calc CalcFunction) *Model {
-	s.defineColumn(name, CALCFUNC, ANY, nil)
+	s.defineColumn(name, CALCFUNC, et.ANY, nil)
 	s.calcs[name] = calc
 	return s
 }
@@ -388,7 +388,7 @@ func (s *Model) DefineCalcFunc(name string, calc CalcFunction) *Model {
 * @return *Model
 **/
 func (s *Model) DefineCalc(name, script string) *Model {
-	s.defineColumn(name, CALC, ANY, nil)
+	s.defineColumn(name, CALC, et.ANY, nil)
 	return s
 }
 
@@ -487,10 +487,10 @@ func (s *Model) DefineAfterDelete(name, code string) *Model {
 * @return *Model
 **/
 func (s *Model) DefineModel() *Model {
-	s.DefineColumn(CREATED_AT, DATETIME, nil)
-	s.DefineColumn(UPDATED_AT, DATETIME, nil)
-	s.DefineIndex(STATUS, TEXT, ACTIVE)
-	s.DefinePrimaryKey(ID, KEY, "")
+	s.DefineColumn(CREATED_AT, et.DATETIME, nil)
+	s.DefineColumn(UPDATED_AT, et.DATETIME, nil)
+	s.DefineIndex(STATUS, et.TEXT, ACTIVE)
+	s.DefinePrimaryKey(ID, et.KEY, "")
 	s.DefineSource()
 	s.DefineIdxField()
 	return s
@@ -515,7 +515,7 @@ func (s *DB) DefineModel(schema, name string, version int, userId string) (*Mode
 func (s *DB) DefineTenantModel(schema, name string, version int, userId string) (*Model, error) {
 	result := s.NewModel(schema, name, version, userId)
 	result.DefineModel()
-	result.DefineIndex(TENANT_ID, KEY, "")
+	result.DefineIndex(TENANT_ID, et.KEY, "")
 	result.DefineSource()
 	return result, nil
 }
@@ -528,7 +528,7 @@ func (s *DB) DefineTenantModel(schema, name string, version int, userId string) 
 func (s *DB) DefineProjectModel(schema, name string, version int, userId string) (*Model, error) {
 	result := s.NewModel(schema, name, version, userId)
 	result.DefineModel()
-	result.DefineIndex(PROJECT_ID, KEY, "")
+	result.DefineIndex(PROJECT_ID, et.KEY, "")
 	result.DefineSource()
 	return result, nil
 }

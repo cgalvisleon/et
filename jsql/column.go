@@ -9,7 +9,6 @@ const (
 	SOURCE     string = "_source"
 	ID         string = "id"
 	IDX        string = "_idx"
-	IDT        string = "_idt"
 	STATUS     string = "status"
 	VERSION    string = "version"
 	TENANT_ID  string = "tenant_id"

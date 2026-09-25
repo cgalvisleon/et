@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"slices"
+	"sync"
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
@@ -34,7 +35,6 @@ type Model struct {
 	Columns       []*Column               `json:"columns"`
 	SourceField   string                  `json:"source_field"`
 	IdxField      string                  `json:"idx_field"`
-	IdtField      string                  `json:"idt_field"`
 	Indexes       []*Index                `json:"indexes"`
 	PrimaryKeys   []*Index                `json:"primary_keys"`
 	ForeignKeys   []*Detail               `json:"foreign_keys"`
@@ -64,6 +64,18 @@ type Model struct {
 	afterUpdates  []TriggerFunction       `json:"-"`
 	afterDeletes  []TriggerFunction       `json:"-"`
 	db            *DB                     `json:"-"`
+	muIdx         sync.Mutex              `json:"-"`
+}
+
+/**
+* getIdx: Returns the index for the model.
+* @return string
+**/
+func (s *Model) getIdx() string {
+	s.muIdx.Lock()
+	defer s.muIdx.Unlock()
+	now := timezone.Now()
+	return fmt.Sprintf("%d", now.UnixMilli())
 }
 
 /**
@@ -109,7 +121,6 @@ func (s *Model) ToJson() et.Json {
 		"columns":        columns,
 		"source_field":   s.SourceField,
 		"idx_field":      s.IdxField,
-		"idt_field":      s.IdtField,
 		"indexes":        s.Indexes,
 		"primary_keys":   s.PrimaryKeys,
 		"foreign_keys":   s.ForeignKeys,
@@ -127,7 +138,7 @@ func (s *Model) ToJson() et.Json {
 		"after_inserts":  s.AfterInserts,
 		"after_updates":  s.AfterUpdates,
 		"after_deletes":  s.AfterDeletes,
-		"audit_log":      s.AuditLog,
+		"audit_log":      s.AuditLog.Data,
 	}
 }
 
@@ -191,17 +202,6 @@ func (s *Model) initModel(db *DB) (bool, error) {
 func (s *Model) wrapper(instance *jrex.Instance) {
 	instance.Set("db", s.db)
 	instance.Set("newTx", NewTx)
-}
-
-/**
-* Clone: Clones the model
-* @return *Model
-**/
-func (s *Model) Clone() *Model {
-	result := new(Model)
-	*result = *s
-	result.isInit = false
-	return result
 }
 
 /**

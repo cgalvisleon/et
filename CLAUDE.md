@@ -77,10 +77,10 @@ model, _ := db.DefineModel("public", "users", 1, userId)
 
 // Manual model (add every column yourself):
 model := db.NewModel("public", "users", 1, userId)
-model.DefineColumn("email", jsql.TEXT, "")
-model.DefinePrimaryKey("id", jsql.KEY, "")
-model.DefineUnique("email", jsql.TEXT, "")
-model.DefineAttrib("name", jsql.TEXT, "")   // stored inside _source JSONB
+model.DefineColumn("email", et.TEXT, "")
+model.DefinePrimaryKey("id", et.KEY, "")
+model.DefineUnique("email", et.TEXT, "")
+model.DefineAttrib("name", et.TEXT, "")   // stored inside _source JSONB
 model.DefineForeignKeys(orders, map[string]string{"order_id": "id"}, true, false)
 model.Init()  // executes DDL (CREATE TABLE, indexes, FK constraints)
 ```
@@ -94,8 +94,8 @@ model, _ := db.Define(jsql.Def{
     Version: 1,
     IdxField: jsql.IDX,
     Columns: []jsql.Column{
-        {Name: "email", TypeData: jsql.TEXT, Default: ""},
-        {Name: "name", TypeColumn: jsql.ATTRIB, TypeData: jsql.TEXT, Default: ""},
+        {Name: "email", TypeData: et.TEXT, Default: ""},
+        {Name: "name", TypeColumn: jsql.ATTRIB, TypeData: et.TEXT, Default: ""},
     },
     PrimaryKeys: []jsql.DefIndex{{Name: "email", Sorted: true}},
     Unique:      []jsql.DefIndex{{Name: "email"}},
@@ -116,7 +116,7 @@ Package-level wrapper: `jsql.Define(dbName, def)` looks up the named DB from the
 | `CALC`              | Computed expression evaluated at query time                                                          |
 | `AGG`               | Aggregation column                                                                                   |
 
-**Key data types (`TypeData`):** `KEY` (VARCHAR 80, used for IDs and `_idx`), `TEXT`, `MEMO`, `INT`, `FLOAT`, `BOOLEAN`, `DATETIME`, `JSON`, `BYTES`, `GEOMETRY`, `EMBEDDING`, `ANY`.
+**Key data types (`et.TypeData`, en `et/condition.go`; ya no están en `jsql`):** `KEY` (VARCHAR 80, used for IDs and `_idx`), `TEXT`, `MEMO`, `INT`, `FLOAT`, `BOOL`, `DATETIME`, `JSON`, `BYTE`, `ANY`, y los arreglos `ARRAY`, `ARRAY_JSON`, `ARRAY_STRING`, `ARRAY_INT`, `ARRAY_FLOAT`, `ARRAY_BOOL`, `ARRAY_DATETIME` (JSONB / arreglos nativos en postgres, TEXT con JSON en sqlite). No hay `GEOMETRY`, `EMBEDDING` ni `STRING`: el texto se entrecomilla como `TEXT`/`KEY`/`MEMO`. Los drivers (`jsql/drivers/postgres`, `jsql/drivers/sqlite`) usan solo estos tipos.
 
 **Column name constants** (exported from `jsql/column.go` for use in queries and `Def`):
 `jsql.ID`, `jsql.IDX` (`_idx`), `jsql.IDT` (`_idt`), `jsql.SOURCE` (`_source`), `jsql.STATUS`, `jsql.TENANT_ID`, `jsql.PROJECT_ID`, `jsql.CREATED_AT`, `jsql.UPDATED_AT`.

@@ -29,6 +29,8 @@ func pgType(tp et.TypeData) string {
 		return "DOUBLE PRECISION"
 	case et.BOOL:
 		return "BOOLEAN"
+	case et.DATETIME:
+		return "TIMESTAMP"
 	case et.JSON:
 		return "JSONB"
 	case et.ARRAY:

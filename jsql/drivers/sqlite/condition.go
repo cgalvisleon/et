@@ -1,55 +1,25 @@
-package postgres
+package sqlite
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
 )
 
-// identifierUnsafe matches any character not allowed in a bare SQL
-// identifier segment (letters, digits, underscore). Used to strip anything
-// an attacker could use to break out of the generated SQL when a field name
-// coming from outside the model's column whitelist is used to build an
-// expression (e.g. quotes, semicolons, comment markers, whitespace).
-var identifierUnsafe = regexp.MustCompile(`[^A-Za-z0-9_]`)
-var qualifiedIdentifierUnsafe = regexp.MustCompile(`[^A-Za-z0-9_.]`)
-
 /**
-* sanitizeIdent: Strips anything that isn't a letter, digit or underscore,
-* so a value can never break out of the identifier position it's placed in.
-* @param s string
-* @return string
-**/
-func sanitizeIdent(s string) string {
-	return identifierUnsafe.ReplaceAllString(s, "")
-}
-
-/**
-* sanitizeQualifiedIdent: Like sanitizeIdent but also allows "." for an
-* already schema/table-qualified identifier (e.g. "table.column").
-* @param s string
-* @return string
-**/
-func sanitizeQualifiedIdent(s string) string {
-	return qualifiedIdentifierUnsafe.ReplaceAllString(s, "")
-}
-
-/**
-* resolveField: Translates a field name (possibly a nested JSONB path using "->"
-* as separator) to its PostgreSQL SQL expression.
+* resolveField: Translates a field name (possibly a nested JSON path using "->" as
+* separator) to its SQLite SQL expression.
 *
 * Rules:
-*   - "field"              → alias.field                        (COLUMN)
-*   - "field"              → (alias._source->>'field')::T        (ATTRIB, with cast if typed)
-*   - "field->a->b"        → alias.field->'a'->>'b'              (COLUMN with JSON path)
-*   - "field->a->b"        → alias._source->'field'->'a'->>'b'   (ATTRIB with JSON path)
+*   - "field"       → alias.field                              (COLUMN)
+*   - "field"       → json_extract(alias._source, '$.field')   (ATTRIB)
+*   - "field->a->b"  → json_extract(alias.field, '$.a.b')        (COLUMN with JSON path)
+*   - "field->a->b"  → json_extract(alias._source, '$.field.a.b') (ATTRIB with JSON path)
 *
-* Intermediate segments use ->, the leaf segment uses ->>.
-* A type cast is applied only when the root is a typed ATTRIB and has no sub-path
-* (i.e. the direct value is read and its TypeData is numeric, bool or datetime).
+* A CAST(... AS type) is applied only when the root is a typed ATTRIB with no
+* sub-path and its TypeData is numeric, boolean or datetime.
 *
 * @param field string, model *jsql.Model, alias string
 * @return string
@@ -62,84 +32,64 @@ func resolveField(field string, model *jsql.Model, alias string) string {
 	col, ok := model.GetColumn(root)
 	isAttrib := ok && col.TypeColumn == jsql.ATTRIB
 
-	var base string
-	var pathSegs []string
-
 	if isAttrib {
 		src := model.SourceField
 		if alias != "" {
-			src = fmt.Sprintf("%s.%s", sanitizeIdent(alias), src)
+			src = fmt.Sprintf("%s.%s", alias, src)
 		}
-		base = src
-		pathSegs = append([]string{root}, path...)
-	} else {
-		safeRoot := root
-		if strings.Contains(root, ".") {
-			safeRoot = sanitizeQualifiedIdent(root)
-		} else {
-			safeRoot = sanitizeIdent(root)
+		jsonPath := "$." + strings.Join(append([]string{root}, path...), ".")
+		expr := fmt.Sprintf("json_extract(%s, '%s')", src, jsonPath)
+
+		if len(path) == 0 {
+			if cast := sqliteAttribCast(col.TypeData); cast != "" {
+				return fmt.Sprintf("CAST(%s AS %s)", expr, cast)
+			}
 		}
-		if alias != "" && !strings.Contains(root, ".") {
-			base = fmt.Sprintf("%s.%s", sanitizeIdent(alias), safeRoot)
-		} else {
-			base = safeRoot
-		}
-		pathSegs = path
+		return expr
 	}
 
-	if len(pathSegs) == 0 {
+	var base string
+	if alias != "" && !strings.Contains(root, ".") {
+		base = fmt.Sprintf("%s.%s", alias, root)
+	} else {
+		base = root
+	}
+
+	if len(path) == 0 {
 		return base
 	}
 
-	var sb strings.Builder
-	sb.WriteString(base)
-	for i, seg := range pathSegs {
-		seg = jsql.EscapeSQLString(seg)
-		if i == len(pathSegs)-1 {
-			sb.WriteString(fmt.Sprintf("->>'%s'", seg))
-		} else {
-			sb.WriteString(fmt.Sprintf("->'%s'", seg))
-		}
-	}
-	expr := sb.String()
-
-	if isAttrib && len(path) == 0 {
-		if cast := pgAttribCast(col.TypeData); cast != "" {
-			return fmt.Sprintf("(%s)::%s", expr, cast)
-		}
-	}
-
-	return expr
+	jsonPath := "$." + strings.Join(path, ".")
+	return fmt.Sprintf("json_extract(%s, '%s')", base, jsonPath)
 }
 
 /**
-* pgAttribCast: Returns the PostgreSQL cast type for JSONB text extraction
-* when the ATTRIB TypeData requires a non-text comparison.
-* Returns empty string for text types (no cast needed).
+* sqliteAttribCast: Returns the SQLite CAST type for JSON text extraction when the
+* ATTRIB TypeData requires a non-text comparison. Returns empty string for text
+* types (no cast needed).
 * @param tp et.TypeData
 * @return string
 **/
-func pgAttribCast(tp et.TypeData) string {
+func sqliteAttribCast(tp et.TypeData) string {
 	switch tp {
 	case et.INT:
-		return "BIGINT"
+		return "INTEGER"
 	case et.FLOAT:
-		return "DOUBLE PRECISION"
+		return "REAL"
 	case et.BOOL:
-		return "BOOLEAN"
+		return "INTEGER"
 	case et.DATETIME:
-		return "TIMESTAMP"
+		return "TEXT"
 	default:
 		return ""
 	}
 }
 
 /**
-* BuildSelectField: Returns the SQL expression for a SELECT list entry.
-* For simple fields it returns the qualified column name.
-* For nested paths (e.g. "data->address->city") it returns the JSONB path
-* expression followed by AS <last_segment> so the result column is named
-* after the leaf key.
+* BuildSelectField: Returns the SQL expression for a SELECT list entry. For simple
+* fields it returns the qualified column name. For nested paths (e.g.
+* "data->address->city") it returns the JSON path expression followed by
+* AS <last_segment> so the result column is named after the leaf key.
 * @param field string, model *jsql.Model, alias string
 * @return string
 **/
@@ -171,7 +121,7 @@ func buildInList(val any) string {
 	case []string:
 		parts := make([]string, len(v))
 		for i, s := range v {
-			parts[i] = fmt.Sprintf("'%s'", s)
+			parts[i] = sqliteQuoteString(s)
 		}
 		return strings.Join(parts, ", ")
 	case []int:
@@ -199,6 +149,8 @@ func buildInList(val any) string {
 
 /**
 * buildCondition: Converts a single et.Condition to a SQL predicate fragment.
+* Note: SQLite's LIKE is already case-insensitive for ASCII by default, so unlike
+* Postgres there is no separate ILIKE operator to translate to.
 * @param cond *et.Condition, model *jsql.Model, alias string
 * @return string
 **/
@@ -219,7 +171,7 @@ func buildCondition(cond *et.Condition, model *jsql.Model, alias string) string 
 	case et.MORE_EQ:
 		return fmt.Sprintf("%s >= %s", field, Quoted(cond.Value))
 	case et.LIKE:
-		return fmt.Sprintf("%s ILIKE %s", field, Quoted(cond.Value))
+		return fmt.Sprintf("%s LIKE %s", field, Quoted(cond.Value))
 	case et.IN:
 		return fmt.Sprintf("%s IN (%s)", field, buildInList(cond.Value.Value))
 	case et.NOT_IN:
@@ -262,23 +214,22 @@ func BuildConditions(conds []*et.Condition, model *jsql.Model, alias string) str
 	}
 
 	var sb strings.Builder
-	ok := true
+	written := 0
 	for _, cond := range conds {
 		fragment := buildCondition(cond, model, alias)
 		if fragment == "" {
 			continue
 		}
-		if ok {
-			sb.WriteString(fragment)
-			ok = false
-			continue
+		if written > 0 {
+			switch cond.Connector {
+			case et.OR:
+				sb.WriteString("\n OR ")
+			default:
+				sb.WriteString("\n AND ")
+			}
 		}
-		switch cond.Connector {
-		case et.OR:
-			sb.WriteString("\n OR ")
-		default:
-			sb.WriteString("\n AND ")
-		}
+		sb.WriteString(fragment)
+		written++
 	}
 
 	return sb.String()

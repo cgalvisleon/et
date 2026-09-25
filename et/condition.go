@@ -1379,6 +1379,29 @@ func NotBetween(field string, min, max any) *Condition {
 }
 
 /**
+* EvaluateObject: Evalúa las condiciones sobre un objeto, encadenándolas por su conector (AND / OR).
+* @param obj Json, conditions []*Condition
+* @return bool
+**/
+func EvaluateObject(obj Json, conditions []*Condition) bool {
+	if len(conditions) == 0 {
+		return true
+	}
+
+	result := conditions[0].ApplyToObject(obj)
+	for _, cond := range conditions[1:] {
+		ok := cond.ApplyToObject(obj)
+		if cond.Connector == AND {
+			result = result && ok
+		} else if cond.Connector == OR {
+			result = result || ok
+		}
+	}
+
+	return result
+}
+
+/**
 * EvaluateValue
 * @param value any, conditions []*Condition
 * @return bool

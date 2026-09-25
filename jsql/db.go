@@ -495,10 +495,6 @@ func (s *DB) Define(define Define) (*Model, error) {
 		result.DefineIdxField()
 	}
 
-	if define.IdtField != "" {
-		result.DefineIdTField()
-	}
-
 	for _, column := range define.Columns {
 		_, err := defColumns(result, column)
 		if err != nil {
@@ -579,10 +575,6 @@ func (s *DB) Define(define Define) (*Model, error) {
 
 		if defDetail.IdxField != "" {
 			detail.DefineIdxField()
-		}
-
-		if defDetail.IdtField != "" {
-			detail.DefineIdTField()
 		}
 
 		for _, rollup := range defDetail.Rollups {

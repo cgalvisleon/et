@@ -2,6 +2,8 @@ package jsql
 
 import "github.com/cgalvisleon/et/et"
 
+// Default column name
+
 const (
 	RESULT     string = "result"
 	SOURCE     string = "_source"
@@ -40,44 +42,18 @@ const (
 	AGG      TypeColumn = "agg"
 )
 
-/**
-* TypeData: Specifies the logical data type of a column value.
-**/
-type TypeData string
-
-/**
-* Str: Returns the string representation of the TypeData.
-* @return string
-**/
-func (s TypeData) Str() string {
-	return string(s)
-}
-
 const (
-	ANY       TypeData = "any"
-	BYTES     TypeData = "bytes"
-	INT       TypeData = "int"
-	FLOAT     TypeData = "float"
-	KEY       TypeData = "key"
-	TEXT      TypeData = "text"
-	MEMO      TypeData = "memo"
-	JSON      TypeData = "json"
-	ARRAYJSON TypeData = "array_json"
-	DATETIME  TypeData = "datetime"
-	BOOLEAN   TypeData = "boolean"
-	GEOMETRY  TypeData = "geometry"
-	EMBEDDING TypeData = "embedding"
-)
-
-const (
+	OF_SYSTEM  string = "of_system"
 	ACTIVE     string = "active"
 	ARCHIVED   string = "archived"
 	CANCELED   string = "canceled"
-	OF_SYSTEM  string = "of_system"
 	FOR_DELETE string = "for_delete"
+	// Workflow status
+	IN_PROCESS string = "in_process"
 	PENDING    string = "pending"
 	APPROVED   string = "approved"
 	REJECTED   string = "rejected"
+	FAILED     string = "failed"
 )
 
 var Status = map[string]bool{
@@ -136,14 +112,4 @@ func (s *Column) ToJson() et.Json {
 		"type_data":   s.TypeData,
 		"default":     s.Default,
 	}
-}
-
-/**
-* SetModel: Associates the column with the given model and returns the column for chaining.
-* @param model *Model
-* @return *Column
-**/
-func (s *Column) setModel(model *Model) *Column {
-	s.model = model
-	return s
 }

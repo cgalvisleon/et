@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"slices"
 	"strings"
 	"time"
 )
@@ -88,56 +87,67 @@ func Time(val any) *time.Time {
 	}
 }
 
+type TypeData string
+
 const (
-	ANY            = "any"
-	STRING         = "string"
-	INT            = "int"
-	FLOAT          = "float"
-	BOOL           = "bool"
-	DATETIME       = "datetime"
-	JSON           = "json"
-	ARRAY          = "array"
-	ARRAY_JSON     = "array_json"
-	ARRAY_STRING   = "array_string"
-	ARRAY_INT      = "array_int"
-	ARRAY_FLOAT    = "array_float"
-	ARRAY_BOOL     = "array_bool"
-	ARRAY_DATETIME = "array_datetime"
-	VAL_BETWEEN    = "between"
-	VAL_NULL       = "null"
-	EXPR           = "expr"
-	AGGREGATE      = "aggregate"
+	ANY            TypeData = "any"
+	BYTE           TypeData = "byte"
+	TEXT           TypeData = "text"
+	MEMO           TypeData = "memo"
+	INT            TypeData = "int"
+	FLOAT          TypeData = "float"
+	BOOL           TypeData = "bool"
+	DATETIME       TypeData = "datetime"
+	JSON           TypeData = "json"
+	ARRAY          TypeData = "array"
+	ARRAY_JSON     TypeData = "array_json"
+	ARRAY_STRING   TypeData = "array_string"
+	ARRAY_INT      TypeData = "array_int"
+	ARRAY_FLOAT    TypeData = "array_float"
+	ARRAY_BOOL     TypeData = "array_bool"
+	ARRAY_DATETIME TypeData = "array_datetime"
+	VAL_BETWEEN    TypeData = "between"
+	VAL_NULL       TypeData = "null"
+	EXPR           TypeData = "expr"
+	AGGREGATE      TypeData = "aggregate"
 )
 
-var TypeValues = []string{
-	ANY,
-	STRING,
-	INT,
-	FLOAT,
-	BOOL,
-	DATETIME,
-	JSON,
-	ARRAY,
-	ARRAY_JSON,
-	ARRAY_STRING,
-	ARRAY_INT,
-	ARRAY_FLOAT,
-	ARRAY_BOOL,
-	ARRAY_DATETIME,
-	VAL_BETWEEN,
-	VAL_NULL,
-	EXPR,
-	AGGREGATE,
+func (s TypeData) Str() string {
+	return string(s)
+}
+
+var TypeValues = map[string]TypeData{
+	ANY.Str():            ANY,
+	BYTE.Str():           BYTE,
+	TEXT.Str():           TEXT,
+	MEMO.Str():           MEMO,
+	INT.Str():            INT,
+	FLOAT.Str():          FLOAT,
+	BOOL.Str():           BOOL,
+	DATETIME.Str():       DATETIME,
+	JSON.Str():           JSON,
+	ARRAY.Str():          ARRAY,
+	ARRAY_JSON.Str():     ARRAY_JSON,
+	ARRAY_STRING.Str():   ARRAY_STRING,
+	ARRAY_INT.Str():      ARRAY_INT,
+	ARRAY_FLOAT.Str():    ARRAY_FLOAT,
+	ARRAY_BOOL.Str():     ARRAY_BOOL,
+	ARRAY_DATETIME.Str(): ARRAY_DATETIME,
+	VAL_BETWEEN.Str():    VAL_BETWEEN,
+	VAL_NULL.Str():       VAL_NULL,
+	EXPR.Str():           EXPR,
+	AGGREGATE.Str():      AGGREGATE,
 }
 
 func IsTypeValue(v string) bool {
 	v = strings.ToLower(v)
-	return slices.Contains(TypeValues, v)
+	_, exists := TypeValues[v]
+	return exists
 }
 
 type Value struct {
-	Type  string `json:"type"`
-	Value any    `json:"value"`
+	Type  TypeData `json:"type"`
+	Value any      `json:"value"`
 }
 
 /**
@@ -165,7 +175,8 @@ func (v Value) Is(tpData string) bool {
 	if !IsTypeValue(tpData) {
 		return false
 	}
-	return v.Type == tpData
+	tpData = strings.ToLower(tpData)
+	return v.Type == TypeData(tpData)
 }
 
 /**
@@ -173,7 +184,7 @@ func (v Value) Is(tpData string) bool {
 * @return []string
 **/
 func (v Value) Fields() []string {
-	if !v.Is(STRING) {
+	if v.Type != TEXT {
 		return []string{}
 	}
 	return strings.Split(v.String(), "->")
@@ -198,12 +209,17 @@ func NewValue(v any) Value {
 * @param v any
 * @return string
 **/
-func valueType(v any) string {
+func valueType(v any) TypeData {
 	switch v.(type) {
 	case nil:
 		return VAL_NULL
 	case string:
-		return STRING
+		if len(v.(string)) > 255 {
+			return MEMO
+		}
+		return TEXT
+	case []byte:
+		return BYTE
 	case bool:
 		return BOOL
 	case time.Time:
@@ -226,7 +242,7 @@ func valueType(v any) string {
 		return ARRAY_JSON
 	case []string:
 		return ARRAY_STRING
-	case []int, []int8, []int16, []int32, []int64, []uint, []uint8, []uint16, []uint32, []uint64:
+	case []int, []int8, []int16, []int32, []int64, []uint, []uint16, []uint32, []uint64:
 		return ARRAY_INT
 	case []float32, []float64:
 		return ARRAY_FLOAT
@@ -235,7 +251,7 @@ func valueType(v any) string {
 	case []time.Time:
 		return ARRAY_DATETIME
 	default:
-		return fmt.Sprintf("%T", v)
+		return TypeData(fmt.Sprintf("%T", v))
 	}
 }
 

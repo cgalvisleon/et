@@ -21,17 +21,6 @@ func getValueConfig(name string, def interface{}) (interface{}, bool) {
 }
 
 /**
-* setValueConfig
-* @param name string, value interface{}
-* @return void
-**/
-func setValueConfig(name string, value interface{}) {
-	_mu.Lock()
-	_config[name] = value
-	_mu.Unlock()
-}
-
-/**
 * Get
 * @param name string, def interface{}
 * @return interface{}

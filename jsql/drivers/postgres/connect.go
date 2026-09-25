@@ -157,7 +157,7 @@ func (s *Postgres) Connect(ctx context.Context, db *jsql.DB) (*sql.DB, error) {
 	host := params.ValStr("", "host")
 	port := params.ValInt(5432, "port")
 	if db.ShowLog() {
-		logs.Logf("Postgres", "Connected host:%s:%d db:%s", host, port, database)
+		logs.Logf("Postgres", "Connected host:%s:%d:%s", host, port, database)
 	}
 	return result, nil
 }

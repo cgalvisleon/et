@@ -21,6 +21,17 @@ func setEnvar(name string, value interface{}) {
 }
 
 /**
+* setValueConfig
+* @param name string, value interface{}
+* @return void
+**/
+func setValueConfig(name string, value interface{}) {
+	_mu.Lock()
+	_config[name] = value
+	_mu.Unlock()
+}
+
+/**
 * SetStrByArg
 * @param arg, name, def string
 * @return string

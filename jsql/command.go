@@ -659,14 +659,3 @@ func (s *Command) OneTx(tx *Tx) (et.Item, error) {
 func (s *Command) One() (et.Item, error) {
 	return s.OneTx(nil)
 }
-
-/**
-* loadCommand: Loads a command from a JSON object.
-* @param query et.Json
-* @return *Command, error
-**/
-func (s *Command) loadCommand(query et.Json) (*Command, error) {
-	s.Conditions = et.ToCondition(query)
-	s.Returns = query.ArrayStr("returns")
-	return s, nil
-}

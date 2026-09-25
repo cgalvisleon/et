@@ -325,19 +325,6 @@ func (s *Server) setRequest(key string, resolver *Resolver) {
 }
 
 /**
-* getRequest
-* @param key string
-* @return (*Resolver, bool)
-**/
-func (s *Server) getRequest(key string) (*Resolver, bool) {
-	s.muRequests.RLock()
-	defer s.muRequests.RUnlock()
-
-	resolver, ok := s.Requests[key]
-	return resolver, ok
-}
-
-/**
 * deleteRequest
 * @param key string
 * @return void
@@ -351,22 +338,6 @@ func (s *Server) deleteRequest(key string) {
 		r.timer = nil
 	}
 	delete(s.Requests, key)
-}
-
-/**
-* listRequests
-* @return map[string]*Resolver
-**/
-func (s *Server) listRequests() map[string]*Resolver {
-	s.muRequests.RLock()
-	defer s.muRequests.RUnlock()
-
-	result := make(map[string]*Resolver)
-	for k, v := range s.Requests {
-		result[k] = v
-	}
-
-	return result
 }
 
 /**

@@ -14,7 +14,7 @@ import (
 
 /**
 * Quoted: Formats an et.Value as the SQL literal that PostgreSQL expects,
-* chosen according to the value's declared Type (et.STRING, et.INT, et.DATETIME,
+* chosen according to the value's declared Type (et.TEXT, et.KEY, et.MEMO, et.INT, et.DATETIME,
 * et.JSON, the ARRAY_* types, et.VAL_BETWEEN, et.VAL_NULL, etc.).
 * et.EXPR is the one type returned verbatim, with no quoting at all: it carries
 * a raw SQL fragment rather than a literal value, e.g. COUNT(*) or a field
@@ -29,7 +29,7 @@ func Quoted(v et.Value) string {
 		return s
 	case et.VAL_NULL:
 		return "NULL"
-	case et.STRING:
+	case et.TEXT, et.KEY, et.MEMO:
 		return pgQuoteString(v.Value)
 	case et.INT, et.FLOAT:
 		if v.Value == nil {
@@ -125,13 +125,13 @@ func pgQuoteJson(val any) string {
 
 /**
 * arrayElemType: Maps an ARRAY_* et.Value type to the logical type of its elements.
-* @param tp string
-* @return string
+* @param tp et.TypeData
+* @return et.TypeData
 **/
-func arrayElemType(tp string) string {
+func arrayElemType(tp et.TypeData) et.TypeData {
 	switch tp {
 	case et.ARRAY_STRING:
-		return et.STRING
+		return et.TEXT
 	case et.ARRAY_INT:
 		return et.INT
 	case et.ARRAY_FLOAT:

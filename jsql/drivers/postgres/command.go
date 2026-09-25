@@ -106,19 +106,19 @@ func pgColsVals(model *jsql.Model, data et.Json, excludePKs bool) (cols, vals []
 
 /**
 * pgAttribReturn: Builds a _source JSONB extraction expression for RETURNING clauses (no table alias).
-* @param sourceField string, field string, tp jsql.TypeData
+* @param sourceField string, field string, tp et.TypeData
 * @return string
 **/
-func pgAttribReturn(sourceField, field string, tp jsql.TypeData) string {
+func pgAttribReturn(sourceField, field string, tp et.TypeData) string {
 	path := fmt.Sprintf("%s->>'%s'", sourceField, field)
 	switch tp {
-	case jsql.INT:
+	case et.INT:
 		return fmt.Sprintf("(%s)::bigint AS %s", path, field)
-	case jsql.FLOAT:
+	case et.FLOAT:
 		return fmt.Sprintf("(%s)::double precision AS %s", path, field)
-	case jsql.BOOLEAN:
+	case et.BOOL:
 		return fmt.Sprintf("(%s)::boolean AS %s", path, field)
-	case jsql.DATETIME:
+	case et.DATETIME:
 		return fmt.Sprintf("(%s)::timestamptz AS %s", path, field)
 	default:
 		return fmt.Sprintf("%s AS %s", path, field)

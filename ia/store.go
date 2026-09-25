@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
 )
 
@@ -44,8 +45,8 @@ func defineTenantProjectModel(db *jsql.DB, schema, name string, version int, use
 		return nil, err
 	}
 
-	model.DefineIndex(jsql.TENANT_ID, jsql.KEY, "")
-	model.DefineIndex(jsql.PROJECT_ID, jsql.KEY, "")
+	model.DefineIndex(jsql.TENANT_ID, et.KEY, "")
+	model.DefineIndex(jsql.PROJECT_ID, et.KEY, "")
 
 	return model, nil
 }
@@ -75,10 +76,10 @@ func Load(db *jsql.DB, schema string, cnf Config) (*Rag, error) {
 	if err != nil {
 		return nil, err
 	}
-	documents.DefineColumn("name", jsql.TEXT, "")
-	documents.DefineColumn("source", jsql.TEXT, "")
-	documents.DefineColumn("chunk_count", jsql.INT, 0)
-	documents.DefineColumn("created_by", jsql.KEY, "")
+	documents.DefineColumn("name", et.TEXT, "")
+	documents.DefineColumn("source", et.TEXT, "")
+	documents.DefineColumn("chunk_count", et.INT, 0)
+	documents.DefineColumn("created_by", et.KEY, "")
 	if err := documents.Init(); err != nil {
 		return nil, err
 	}
@@ -87,10 +88,10 @@ func Load(db *jsql.DB, schema string, cnf Config) (*Rag, error) {
 	if err != nil {
 		return nil, err
 	}
-	chunks.DefineIndex("document_id", jsql.KEY, "")
-	chunks.DefineColumn("idx", jsql.INT, 0)
-	chunks.DefineColumn("content", jsql.MEMO, "")
-	chunks.DefineColumn("embedding", jsql.JSON, []any{})
+	chunks.DefineIndex("document_id", et.KEY, "")
+	chunks.DefineColumn("idx", et.INT, 0)
+	chunks.DefineColumn("content", et.MEMO, "")
+	chunks.DefineColumn("embedding", et.JSON, []any{})
 	if err := chunks.Init(); err != nil {
 		return nil, err
 	}
@@ -99,8 +100,8 @@ func Load(db *jsql.DB, schema string, cnf Config) (*Rag, error) {
 	if err != nil {
 		return nil, err
 	}
-	conversations.DefineIndex("user_id", jsql.KEY, "")
-	conversations.DefineColumn("title", jsql.TEXT, "")
+	conversations.DefineIndex("user_id", et.KEY, "")
+	conversations.DefineColumn("title", et.TEXT, "")
 	if err := conversations.Init(); err != nil {
 		return nil, err
 	}
@@ -109,10 +110,10 @@ func Load(db *jsql.DB, schema string, cnf Config) (*Rag, error) {
 	if err != nil {
 		return nil, err
 	}
-	messages.DefineIndex("conversation_id", jsql.KEY, "")
-	messages.DefineColumn("role", jsql.TEXT, "")
-	messages.DefineColumn("content", jsql.MEMO, "")
-	messages.DefineColumn("sources", jsql.JSON, []any{})
+	messages.DefineIndex("conversation_id", et.KEY, "")
+	messages.DefineColumn("role", et.TEXT, "")
+	messages.DefineColumn("content", et.MEMO, "")
+	messages.DefineColumn("sources", et.JSON, []any{})
 	if err := messages.Init(); err != nil {
 		return nil, err
 	}

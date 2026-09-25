@@ -330,12 +330,12 @@ func Define$2(db *jsql.DB) error {
 		Name:    "$3",
 		Version: 1,
 		Columns: []jsql.Column{
-			{Name: jsql.CREATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
-			{Name: jsql.UPDATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
-			{Name: jsql.STATUS, TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: jsql.ACTIVE},
-			{Name: jsql.ID, TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
-			{Name: "name", TypeColumn: jsql.COLUMN, TypeData: jsql.TEXT, Default: ""},
-			{Name: "description", TypeColumn: jsql.COLUMN, TypeData: jsql.MEMO, Default: ""},
+			{Name: jsql.CREATED_AT, TypeColumn: jsql.COLUMN, TypeData: et.DATETIME, Default: ""},
+			{Name: jsql.UPDATED_AT, TypeColumn: jsql.COLUMN, TypeData: et.DATETIME, Default: ""},
+			{Name: jsql.STATUS, TypeColumn: jsql.COLUMN, TypeData: et.KEY, Default: jsql.ACTIVE},
+			{Name: jsql.ID, TypeColumn: jsql.COLUMN, TypeData: et.KEY, Default: ""},
+			{Name: "name", TypeColumn: jsql.COLUMN, TypeData: et.TEXT, Default: ""},
+			{Name: "description", TypeColumn: jsql.COLUMN, TypeData: et.MEMO, Default: ""},
 		},
 		PrimaryKeys: []jsql.DefIndex{
 			{Name: jsql.ID, Sorted: true},

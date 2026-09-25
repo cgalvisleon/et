@@ -102,13 +102,13 @@ func pgFieldExpr(field *jsql.Field, useSource bool) string {
 				path = alias + "." + fullPath
 			}
 			switch field.TypeData {
-			case jsql.INT:
+			case et.INT:
 				return fmt.Sprintf("(%s)::bigint", path)
-			case jsql.FLOAT:
+			case et.FLOAT:
 				return fmt.Sprintf("(%s)::double precision", path)
-			case jsql.BOOLEAN:
+			case et.BOOL:
 				return fmt.Sprintf("(%s)::boolean", path)
-			case jsql.DATETIME:
+			case et.DATETIME:
 				return fmt.Sprintf("(%s)::timestamptz", path)
 			default:
 				return path
@@ -164,11 +164,11 @@ func pgInValues(val any) string {
 **/
 func pgCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bool, cond *et.Condition, alias string) string {
 	var fieldExpr string
-	if fld, ok := getField(cond.Field); ok {
+	if fld, ok := getField(cond.Field.String()); ok {
 		fieldExpr = pgFieldExpr(fld, useSourceField)
 	}
 	if fieldExpr == "" {
-		f := pgJsonbPath(cond.Field)
+		f := pgJsonbPath(cond.Field.String())
 		if alias != "" && !strings.Contains(f, ".") {
 			f = fmt.Sprintf("%s.%s", alias, f)
 		}
@@ -232,7 +232,7 @@ func pgCondsSQL(getField func(string) (*jsql.Field, bool), useSourceField bool, 
 		if first || cond.Connector == et.NaC {
 			parts = append(parts, expr)
 			first = false
-		} else if cond.Connector == et.Or {
+		} else if cond.Connector == et.OR {
 			parts = append(parts, "OR "+expr)
 		} else {
 			parts = append(parts, "AND "+expr)
@@ -278,13 +278,13 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 			path = alias + "." + fullPath
 		}
 		switch fld.TypeData {
-		case jsql.INT:
+		case et.INT:
 			return fmt.Sprintf("'%s', (%s)::bigint", fld.As, path), true
-		case jsql.FLOAT:
+		case et.FLOAT:
 			return fmt.Sprintf("'%s', (%s)::double precision", fld.As, path), true
-		case jsql.BOOLEAN:
+		case et.BOOL:
 			return fmt.Sprintf("'%s', (%s)::boolean", fld.As, path), true
-		case jsql.DATETIME:
+		case et.DATETIME:
 			return fmt.Sprintf("'%s', (%s)::timestamptz", fld.As, path), true
 		default:
 			return fmt.Sprintf("'%s', %s", fld.As, path), true

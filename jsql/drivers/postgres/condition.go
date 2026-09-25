@@ -116,18 +116,18 @@ func resolveField(field string, model *jsql.Model, alias string) string {
 * pgAttribCast: Returns the PostgreSQL cast type for JSONB text extraction
 * when the ATTRIB TypeData requires a non-text comparison.
 * Returns empty string for text types (no cast needed).
-* @param tp jsql.TypeData
+* @param tp et.TypeData
 * @return string
 **/
-func pgAttribCast(tp jsql.TypeData) string {
+func pgAttribCast(tp et.TypeData) string {
 	switch tp {
-	case jsql.INT:
+	case et.INT:
 		return "BIGINT"
-	case jsql.FLOAT:
+	case et.FLOAT:
 		return "DOUBLE PRECISION"
-	case jsql.BOOLEAN:
+	case et.BOOL:
 		return "BOOLEAN"
-	case jsql.DATETIME:
+	case et.DATETIME:
 		return "TIMESTAMP"
 	default:
 		return ""
@@ -203,7 +203,7 @@ func buildInList(val any) string {
 * @return string
 **/
 func buildCondition(cond *et.Condition, model *jsql.Model, alias string) string {
-	field := resolveField(cond.Field, model, alias)
+	field := resolveField(cond.Field.String(), model, alias)
 
 	switch cond.Operator {
 	case et.EQ:
@@ -270,7 +270,7 @@ func BuildConditions(conds []*et.Condition, model *jsql.Model, alias string) str
 		}
 		if written > 0 {
 			switch cond.Connector {
-			case et.Or:
+			case et.OR:
 				sb.WriteString("\n OR ")
 			default:
 				sb.WriteString("\n AND ")

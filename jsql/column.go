@@ -66,6 +66,8 @@ var Status = map[string]bool{
 	REJECTED:   true,
 }
 
+var IsEditableStatus = []interface{}{ACTIVE, PENDING}
+
 func StatusList() []interface{} {
 	return []interface{}{ACTIVE, ARCHIVED, CANCELED, OF_SYSTEM, FOR_DELETE, PENDING, APPROVED, REJECTED}
 }

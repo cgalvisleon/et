@@ -440,7 +440,7 @@ func (s *Model) GetFrom() *From {
 * @return *Query
 **/
 func (s *Model) As(as ...string) *Query {
-	result := newQuery(s, as...)
+	result := NewQuery(s, as...)
 	return result
 }
 

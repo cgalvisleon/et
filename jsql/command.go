@@ -412,7 +412,7 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 
 	result := et.NewItems([]et.Json{})
 	model := s.model
-	current, err := newQuery(model).
+	current, err := NewQuery(model).
 		addCondition(s.Conditions).
 		All()
 	if err != nil {
@@ -494,7 +494,7 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 func (s *Command) delete(tx *Tx) (et.Items, error) {
 	result := et.NewItems([]et.Json{})
 	model := s.model
-	items, err := newQuery(model).
+	items, err := NewQuery(model).
 		addCondition(s.Conditions).
 		All()
 	if err != nil {
@@ -578,7 +578,7 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 **/
 func (s *Command) upsert(tx *Tx) (et.Items, error) {
 	model := s.model
-	isExists, err := newQuery(model).
+	isExists, err := NewQuery(model).
 		addCondition(s.Conditions).
 		setDebug(s.isDebug).
 		ExistsTx(tx)

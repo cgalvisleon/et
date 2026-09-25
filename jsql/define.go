@@ -257,6 +257,36 @@ func (s *Model) DefineAttrib(name string, tp et.TypeData, deFault any) *Column {
 }
 
 /**
+* DefineRollup: Defines a new rollup for the model.
+* @param name string, to *Model, keys map[string]string, selects []string
+* @return (*Detail, error)
+**/
+func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, selects []string) (*Detail, error) {
+	result, ok := s.Details[name]
+	if ok {
+		return result, nil
+	}
+
+	if to == nil {
+		return nil, errors.New(MSG_TO_MODEL_REQUIRED)
+	}
+
+	if len(keys) == 0 {
+		return nil, errors.New(MSG_KEYS_REQUIRED)
+	}
+
+	if len(selects) == 0 {
+		return nil, errors.New(MSG_SELECTS_REQUIRED)
+	}
+
+	s.defineColumn(name, ROLLUP, et.ANY, nil)
+	detail := newDetail(to, keys, selects, false, false)
+	detail.Rows = 1
+	s.Rollups[name] = detail
+	return detail, nil
+}
+
+/**
 * DefineDetail: Defines a new detail for the model.
 * @param name string, keys map[string]string, rows int
 * @return (*Model, error)
@@ -317,38 +347,6 @@ func (s *Model) DefineMaster(name string, to *Model, keys, toKeys map[string]str
 	s.Masters[name] = master
 	to.Masters[s.Name] = master
 	return bridge, nil
-}
-
-/**
-* DefineRollup: Defines a new rollup for the model.
-* @param name string, to *Model,
-* @param keys map[string]string is primary key and foreign key,
-* @param selects []string
-* @return (*Detail, error)
-**/
-func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, selects []string) (*Detail, error) {
-	result, ok := s.Details[name]
-	if ok {
-		return result, nil
-	}
-
-	if to == nil {
-		return nil, errors.New(MSG_TO_MODEL_REQUIRED)
-	}
-
-	if len(keys) == 0 {
-		return nil, errors.New(MSG_KEYS_REQUIRED)
-	}
-
-	if len(selects) == 0 {
-		return nil, errors.New(MSG_SELECTS_REQUIRED)
-	}
-
-	s.defineColumn(name, ROLLUP, et.ANY, nil)
-	detail := newDetail(to, keys, selects, false, false)
-	detail.Rows = 1
-	s.Rollups[name] = detail
-	return detail, nil
 }
 
 /**

@@ -6,11 +6,6 @@ import (
 	"github.com/cgalvisleon/et/envar"
 )
 
-const (
-	storeDb     = "dbs"
-	storeModels = "models"
-)
-
 var (
 	ErrRecordAlreadyExists = errors.New("record already exists")
 )

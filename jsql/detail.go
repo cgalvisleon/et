@@ -67,7 +67,7 @@ func (s *Detail) init() error {
 * @return *Query
 **/
 func (s *Detail) GetQuery(item et.Json, page, rows int) *Query {
-	q := newQuery(s.To.Model, "A")
+	q := NewQuery(s.To.Model, "A")
 	for k, fk := range s.Keys {
 		v, exists := item[k]
 		if !exists {

@@ -134,7 +134,7 @@ type QueryDetail struct {
 * @return *Query
 **/
 func (s *QueryDetail) GetQuery(item et.Json) *Query {
-	q := newQuery(s.To.Model, "A")
+	q := NewQuery(s.To.Model, "A")
 	for k, fk := range s.Keys {
 		v, exists := item[k]
 		if !exists {
@@ -184,11 +184,11 @@ type Query struct {
 }
 
 /**
-* newQuery: Creates a Query with the model as the primary FROM source.
+* NewQuery: Creates a Query with the model as the primary FROM source.
 * @param model *Model, as ...string
 * @return *Query
 **/
-func newQuery(model *Model, as ...string) *Query {
+func NewQuery(model *Model, as ...string) *Query {
 	if len(as) == 0 {
 		as = []string{"A"}
 	}
@@ -619,15 +619,28 @@ func (s *Query) Hidden(fields ...string) *Query {
 }
 
 /**
+* AddCondition: Appends a condition to the WHERE clause.
+* @param cond *et.Condition
+* @return *Query
+**/
+func (s *Query) AddCondition(cond *et.Condition) *Query {
+	if s.Conditions == nil {
+		s.Conditions = []*et.Condition{}
+	}
+	if len(s.Conditions) > 0 && cond.Connector == et.AND {
+		cond.Connector = et.AND
+	}
+	s.Conditions = append(s.Conditions, cond)
+	return s
+}
+
+/**
 * Where: Appends a condition to the WHERE clause and sets the active section to where.
 * @param cond *et.Condition
 * @return *Query
 **/
 func (s *Query) Where(cond *et.Condition) *Query {
-	if len(s.Conditions) > 0 {
-		return s.And(cond)
-	}
-	s.Conditions = append(s.Conditions, cond)
+	s.AddCondition(cond)
 	s.section = whereSection
 	return s
 }

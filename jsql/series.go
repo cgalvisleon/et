@@ -8,7 +8,8 @@ import (
 )
 
 type Series struct {
-	model *Model
+	model  *Model
+	schema string
 }
 
 /**
@@ -60,7 +61,8 @@ func DefineSeries(db *DB, schema string) (*Series, error) {
 	}
 
 	return &Series{
-		model: model,
+		model:  model,
+		schema: schema,
 	}, nil
 }
 

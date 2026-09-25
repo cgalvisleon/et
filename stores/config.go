@@ -26,15 +26,15 @@ type Config struct {
 **/
 func DefineConfig(db *DB, tenantId, schema, stage, tag string) (*Config, error) {
 	columns := []Column{
-		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
-		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
-		{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: "tag", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: "stage", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: "title", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
-		{Name: "definition", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
-		{Name: "params", TypeColumn: COLUMN, TypeData: JSON, Default: et.Json{}},
+		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: et.DATETIME, Default: ""},
+		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: et.DATETIME, Default: ""},
+		{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: ID, TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "tag", TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "stage", TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "title", TypeColumn: COLUMN, TypeData: et.TEXT, Default: ""},
+		{Name: "definition", TypeColumn: COLUMN, TypeData: et.TEXT, Default: ""},
+		{Name: "params", TypeColumn: COLUMN, TypeData: et.JSON, Default: et.Json{}},
 	}
 
 	def := Define{

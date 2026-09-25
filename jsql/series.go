@@ -18,11 +18,11 @@ type Series struct {
 **/
 func DefineSeries(db *DB, schema string) (*Series, error) {
 	columns := []Column{
-		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
-		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
-		{Name: "tag", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: "format", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
-		{Name: "value", TypeColumn: COLUMN, TypeData: INT, Default: ""},
+		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: et.DATETIME, Default: ""},
+		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: et.DATETIME, Default: ""},
+		{Name: "tag", TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "format", TypeColumn: COLUMN, TypeData: et.TEXT, Default: ""},
+		{Name: "value", TypeColumn: COLUMN, TypeData: et.INT, Default: ""},
 	}
 
 	def := Define{

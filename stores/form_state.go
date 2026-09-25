@@ -21,14 +21,14 @@ type FormState struct {
 **/
 func DefineFormState(db *DB, tenantId, schema string) (*FormState, error) {
 	columns := []Column{
-		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
-		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
-		{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: "app_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: "tag", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: "title", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
-		{Name: SOURCE, TypeColumn: COLUMN, TypeData: JSON, Default: et.Json{}},
+		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: et.DATETIME, Default: ""},
+		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: et.DATETIME, Default: ""},
+		{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "app_id", TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: ID, TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "tag", TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "title", TypeColumn: COLUMN, TypeData: et.TEXT, Default: ""},
+		{Name: SOURCE, TypeColumn: COLUMN, TypeData: et.JSON, Default: et.Json{}},
 	}
 
 	def := Define{
@@ -56,10 +56,10 @@ func DefineFormState(db *DB, tenantId, schema string) (*FormState, error) {
 				},
 				Rows: 1,
 				Columns: []Column{
-					{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
-					{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-					{Name: ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-					{Name: "owner_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
+					{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: et.DATETIME, Default: ""},
+					{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+					{Name: ID, TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+					{Name: "owner_id", TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
 				},
 				Indexes: []DefIndex{
 					{Name: "owner_id", Sorted: true},

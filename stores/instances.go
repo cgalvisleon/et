@@ -25,14 +25,14 @@ type Instance struct {
 **/
 func DefineInstance(db *DB, tenantId, schema string) (*Instance, error) {
 	columns := []Column{
-		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
-		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
-		{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: "tag", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: "title", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
-		{Name: "owner_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: "definition", TypeColumn: COLUMN, TypeData: BYTES, Default: []byte("")},
+		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: et.DATETIME, Default: ""},
+		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: et.DATETIME, Default: ""},
+		{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: ID, TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "tag", TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "title", TypeColumn: COLUMN, TypeData: et.TEXT, Default: ""},
+		{Name: "owner_id", TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "definition", TypeColumn: COLUMN, TypeData: et.BYTE, Default: []byte("")},
 	}
 
 	def := Define{

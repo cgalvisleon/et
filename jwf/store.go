@@ -43,11 +43,11 @@ type Storage struct {
 **/
 func storeDefine(schema, name string) jsql.Define {
 	columns := []jsql.Column{
-		{Name: jsql.CREATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
-		{Name: jsql.UPDATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
-		{Name: jsql.ID, TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
-		{Name: "owner_id", TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
-		{Name: "definition", TypeColumn: jsql.COLUMN, TypeData: jsql.BYTES, Default: []byte("")},
+		{Name: jsql.CREATED_AT, TypeColumn: jsql.COLUMN, TypeData: et.DATETIME, Default: ""},
+		{Name: jsql.UPDATED_AT, TypeColumn: jsql.COLUMN, TypeData: et.DATETIME, Default: ""},
+		{Name: jsql.ID, TypeColumn: jsql.COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "owner_id", TypeColumn: jsql.COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "definition", TypeColumn: jsql.COLUMN, TypeData: et.BYTE, Default: []byte("")},
 	}
 
 	def := jsql.Define{
@@ -74,17 +74,17 @@ func storeDefine(schema, name string) jsql.Define {
 **/
 func storeInstance(schema, name string) jsql.Define {
 	columns := []jsql.Column{
-		{Name: jsql.CREATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
-		{Name: jsql.UPDATED_AT, TypeColumn: jsql.COLUMN, TypeData: jsql.DATETIME, Default: ""},
-		{Name: jsql.ID, TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
-		{Name: "workflow_id", TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
-		{Name: "project_id", TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
-		{Name: "flow_id", TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
-		{Name: "flow_tag", TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
-		{Name: "code", TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
-		{Name: "title", TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
-		{Name: "status", TypeColumn: jsql.COLUMN, TypeData: jsql.KEY, Default: ""},
-		{Name: "definition", TypeColumn: jsql.COLUMN, TypeData: jsql.BYTES, Default: []byte("")},
+		{Name: jsql.CREATED_AT, TypeColumn: jsql.COLUMN, TypeData: et.DATETIME, Default: ""},
+		{Name: jsql.UPDATED_AT, TypeColumn: jsql.COLUMN, TypeData: et.DATETIME, Default: ""},
+		{Name: jsql.ID, TypeColumn: jsql.COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "workflow_id", TypeColumn: jsql.COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "project_id", TypeColumn: jsql.COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "flow_id", TypeColumn: jsql.COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "flow_tag", TypeColumn: jsql.COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "code", TypeColumn: jsql.COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "title", TypeColumn: jsql.COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "status", TypeColumn: jsql.COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "definition", TypeColumn: jsql.COLUMN, TypeData: et.BYTE, Default: []byte("")},
 	}
 
 	def := jsql.Define{

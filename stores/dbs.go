@@ -25,13 +25,13 @@ type Dbs struct {
 **/
 func DefineDbs(db *DB, schema string) (*Dbs, error) {
 	columns := []Column{
-		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
-		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
-		{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: ID, TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: "name", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: "host", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
-		{Name: "params", TypeColumn: COLUMN, TypeData: JSON, Default: ""},
+		{Name: CREATED_AT, TypeColumn: COLUMN, TypeData: et.DATETIME, Default: ""},
+		{Name: UPDATED_AT, TypeColumn: COLUMN, TypeData: et.DATETIME, Default: ""},
+		{Name: TENANT_ID, TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: ID, TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "name", TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "host", TypeColumn: COLUMN, TypeData: et.TEXT, Default: ""},
+		{Name: "params", TypeColumn: COLUMN, TypeData: et.JSON, Default: ""},
 	}
 
 	def := Define{

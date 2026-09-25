@@ -29,14 +29,14 @@ var (
 **/
 func DefineAuthorization(db *DB, tenantId, schema string) (*Authorization, error) {
 	columns := []Column{
-		{Name: "created_at", TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
-		{Name: "updated_at", TypeColumn: COLUMN, TypeData: DATETIME, Default: ""},
-		{Name: "tenant_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: "id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: "profile_id", TypeColumn: COLUMN, TypeData: KEY, Default: ""},
-		{Name: "method", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
-		{Name: "path", TypeColumn: COLUMN, TypeData: TEXT, Default: ""},
-		{Name: "source", TypeColumn: COLUMN, TypeData: JSON, Default: et.Json{}},
+		{Name: "created_at", TypeColumn: COLUMN, TypeData: et.DATETIME, Default: ""},
+		{Name: "updated_at", TypeColumn: COLUMN, TypeData: et.DATETIME, Default: ""},
+		{Name: "tenant_id", TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "id", TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "profile_id", TypeColumn: COLUMN, TypeData: et.KEY, Default: ""},
+		{Name: "method", TypeColumn: COLUMN, TypeData: et.TEXT, Default: ""},
+		{Name: "path", TypeColumn: COLUMN, TypeData: et.TEXT, Default: ""},
+		{Name: "source", TypeColumn: COLUMN, TypeData: et.JSON, Default: et.Json{}},
 	}
 
 	def := Define{

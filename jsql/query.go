@@ -61,13 +61,13 @@ func getFrom(model *Model, as string) *From {
 * Field: Represents a SELECT list entry with an optional alias and source table reference.
 **/
 type Field struct {
-	TypeColumn TypeColumn `json:"type_column"`
-	TypeData   TypeData   `json:"type_data"`
-	Name       string     `json:"name"`
-	As         string     `json:"as"`
-	From       *From      `json:"from"`
-	Agg        string     `json:"agg"`
-	Page       int        `json:"page"`
+	TypeColumn TypeColumn  `json:"type_column"`
+	TypeData   et.TypeData `json:"type_data"`
+	Name       string      `json:"name"`
+	As         string      `json:"as"`
+	From       *From       `json:"from"`
+	Agg        string      `json:"agg"`
+	Page       int         `json:"page"`
 }
 
 /**

@@ -280,10 +280,10 @@ func (s *Model) GetModel(schema, name string) (*Model, error) {
 
 /**
 * newColumn: Constructs a Column bound to this model without adding it to the Columns slice.
-* @param name string, tpColumn TypeColumn, tpData TypeData, defaultValue interface{}, definition []byte
+* @param name string, tpColumn TypeColumn, tpData et.TypeData, defaultValue interface{}, definition []byte
 * @return *Column
 **/
-func (s *Model) newColumn(name string, tpColumn TypeColumn, tpData TypeData, deFault any) *Column {
+func (s *Model) newColumn(name string, tpColumn TypeColumn, tpData et.TypeData, deFault any) *Column {
 	return &Column{
 		Name:       name,
 		TypeColumn: tpColumn,
@@ -322,7 +322,7 @@ func (s *Model) GetColumn(name string) (*Column, bool) {
 		return nil, false
 	}
 
-	return s.newColumn(name, ATTRIB, ANY, ""), true
+	return s.newColumn(name, ATTRIB, et.ANY, ""), true
 }
 
 /**

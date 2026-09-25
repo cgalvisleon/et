@@ -50,7 +50,6 @@ func DefineInstance(db *DB, tenantId, schema string) (*Instance, error) {
 			{Name: "owner_id", Sorted: true},
 		},
 		IdxField: IDX,
-		IdtField: IDT,
 	}
 
 	result, err := db.Define(def)

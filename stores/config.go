@@ -51,7 +51,6 @@ func DefineConfig(db *DB, tenantId, schema, stage, tag string) (*Config, error) 
 			{Name: ID, Sorted: true},
 		},
 		IdxField: IDX,
-		IdtField: IDT,
 	}
 
 	model, err := db.Define(def)

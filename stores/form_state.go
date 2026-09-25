@@ -46,7 +46,6 @@ func DefineFormState(db *DB, tenantId, schema string) (*FormState, error) {
 			{Name: "title", Sorted: true},
 		},
 		IdxField:    IDX,
-		IdtField:    IDT,
 		SourceField: SOURCE,
 		Details: []DefDetail{
 			{
@@ -65,7 +64,6 @@ func DefineFormState(db *DB, tenantId, schema string) (*FormState, error) {
 					{Name: "owner_id", Sorted: true},
 				},
 				IdxField: IDX,
-				IdtField: IDT,
 			},
 		},
 	}

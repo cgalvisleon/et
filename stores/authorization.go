@@ -54,7 +54,6 @@ func DefineAuthorization(db *DB, tenantId, schema string) (*Authorization, error
 			{Name: ID, Sorted: true},
 		},
 		IdxField:    IDX,
-		IdtField:    IDT,
 		SourceField: SOURCE,
 	}
 

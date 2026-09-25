@@ -26,6 +26,7 @@ require (
 	github.com/spf13/cobra v1.9.1
 	golang.org/x/crypto v0.53.0
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0
+	modernc.org/sqlite v1.56.0
 )
 
 require (
@@ -64,7 +65,6 @@ require (
 	modernc.org/libc v1.74.4 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.56.0 // indirect
 )
 
 require (

@@ -38,6 +38,22 @@ func (s *Schema) Ref() et.Json {
 }
 
 /**
+* ToJson: Returns the schema metadata as an et.Json map.
+* @return et.Json
+**/
+func (s *Schema) ToJson() et.Json {
+	models := et.Json{}
+	for name, model := range s.Models {
+		models[name] = model.ToJson()
+	}
+
+	return et.Json{
+		"name":   s.Name,
+		"models": models,
+	}
+}
+
+/**
 * addModel: Adds a model to the schema.
 * @param model *Model
 * @return void
@@ -102,7 +118,6 @@ func (s *Schema) newModel(name string, version int, userId string) *Model {
 		Details:       make(map[string]*Detail, 0),
 		Masters:       make(map[string]*Master, 0),
 		Rollups:       make(map[string]*Detail, 0),
-		calcs:         make(map[string]CalcFunction, 0),
 		Version:       version,
 		BeforeInserts: make([]string, 0),
 		BeforeUpdates: make([]string, 0),
@@ -110,7 +125,8 @@ func (s *Schema) newModel(name string, version int, userId string) *Model {
 		AfterInserts:  make([]string, 0),
 		AfterUpdates:  make([]string, 0),
 		AfterDeletes:  make([]string, 0),
-		AuditLog:      make([]et.Json, 0),
+		AuditLog:      &et.SafeData{},
+		calcs:         make(map[string]CalcFunction, 0),
 		beforeInserts: make([]TriggerFunction, 0),
 		beforeUpdates: make([]TriggerFunction, 0),
 		beforeDeletes: make([]TriggerFunction, 0),
@@ -127,32 +143,68 @@ func (s *Schema) newModel(name string, version int, userId string) *Model {
 
 /**
 * loadModel: Loads a Model from the database catalog by name.
-* @param store *Store, id string
+* @param params et.Json
 * @return *Model, error
 **/
-func (s *Schema) loadModel(store *Store, id string) (*Model, error) {
-	if store == nil {
-		return nil, errors.New(MSG_DB_STORE_IS_NIL)
+func (s *Schema) loadModel(params et.Json) (*Model, error) {
+	if params.IsEmpty() {
+		return nil, errors.New(MSG_PARAMS_IS_EMPTY)
 	}
 
-	var result *Model
-	exists, err := store.Get(storeModels, id, &result)
-	if err != nil {
-		return nil, err
+	id := params.Str("id")
+	if !utility.ValidStr(id, 0, []string{""}) {
+		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "id")
 	}
 
-	if !exists {
-		return nil, fmt.Errorf(MSG_RECORD_NOT_FOUND, "model", id)
+	name := params.Str("name")
+	if !utility.ValidStr(name, 0, []string{""}) {
+		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "name")
 	}
 
-	result.beforeInserts = make([]TriggerFunction, 0)
-	result.beforeUpdates = make([]TriggerFunction, 0)
-	result.beforeDeletes = make([]TriggerFunction, 0)
-	result.afterInserts = make([]TriggerFunction, 0)
-	result.afterUpdates = make([]TriggerFunction, 0)
-	result.afterDeletes = make([]TriggerFunction, 0)
-	result.db = s.db
+	table := params.Str("table")
+	if !utility.ValidStr(table, 0, []string{""}) {
+		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "table")
+	}
 
+	version := params.ValInt(0, "version")
+
+	result := &Model{
+		ID:            id,
+		Database:      s.Database,
+		Schema:        s.Name,
+		DatabaseId:    s.db.ID,
+		Name:          name,
+		Table:         table,
+		Columns:       make([]*Column, 0),
+		Indexes:       make([]*Index, 0),
+		PrimaryKeys:   make([]*Index, 0),
+		ForeignKeys:   make([]*Detail, 0),
+		Unique:        make([]*Index, 0),
+		Required:      make([]*Index, 0),
+		Hiddens:       make([]string, 0),
+		Details:       make(map[string]*Detail, 0),
+		Masters:       make(map[string]*Master, 0),
+		Rollups:       make(map[string]*Detail, 0),
+		Version:       version,
+		BeforeInserts: make([]string, 0),
+		BeforeUpdates: make([]string, 0),
+		BeforeDeletes: make([]string, 0),
+		AfterInserts:  make([]string, 0),
+		AfterUpdates:  make([]string, 0),
+		AfterDeletes:  make([]string, 0),
+		AuditLog:      &et.SafeData{},
+		calcs:         make(map[string]CalcFunction, 0),
+		beforeInserts: make([]TriggerFunction, 0),
+		beforeUpdates: make([]TriggerFunction, 0),
+		beforeDeletes: make([]TriggerFunction, 0),
+		afterInserts:  make([]TriggerFunction, 0),
+		afterUpdates:  make([]TriggerFunction, 0),
+		afterDeletes:  make([]TriggerFunction, 0),
+		db:            s.db,
+	}
+	s.addModel(result)
+
+	columns := params.ArrayJson("columns")
 	for _, column := range result.Columns {
 		column.model = result
 	}

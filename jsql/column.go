@@ -103,21 +103,19 @@ type Column struct {
 	TypeColumn TypeColumn `json:"type_column"`
 	TypeData   TypeData   `json:"type_data"`
 	Default    any        `json:"default"`
-	Definition []byte     `json:"definition"`
 	model      *Model     `json:"-"`
 }
 
 /**
-* Ref: Returns the reference of the column.
+* ToJson: Returns the column metadata as an et.Json map.
 * @return et.Json
 **/
-func (s *Column) Ref() et.Json {
+func (s *Column) ToJson() et.Json {
 	return et.Json{
 		"name":        s.Name,
 		"type_column": s.TypeColumn,
 		"type_data":   s.TypeData,
 		"default":     s.Default,
-		"definition":  s.Definition,
 	}
 }
 
@@ -126,17 +124,7 @@ func (s *Column) Ref() et.Json {
 * @param model *Model
 * @return *Column
 **/
-func (s *Column) SetModel(model *Model) *Column {
+func (s *Column) setModel(model *Model) *Column {
 	s.model = model
-	return s
-}
-
-/**
-* SetDefinition: Sets the raw definition bytes on the column and returns it for chaining.
-* @param definition []byte
-* @return *Column
-**/
-func (s *Column) SetDefinition(definition []byte) *Column {
-	s.Definition = definition
 	return s
 }

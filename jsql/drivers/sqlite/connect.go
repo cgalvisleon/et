@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/jsql"
-	"github.com/cgalvisleon/et/logs"
 	_ "modernc.org/sqlite"
 )
 
@@ -96,8 +95,5 @@ func (s *Sqlite) Connect(ctx context.Context, db *jsql.DB) (*sql.DB, error) {
 	result.SetConnMaxLifetime(time.Duration(connLifetime) * time.Minute)
 	result.SetConnMaxIdleTime(time.Duration(connIdleTime) * time.Minute)
 
-	if db.ShowLog() {
-		logs.Logf("Sqlite", "Connected db:%s", path)
-	}
 	return result, nil
 }

@@ -2,7 +2,6 @@ package jsql
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/cgalvisleon/et/envar"
 )
@@ -16,22 +15,13 @@ var (
 	ErrRecordAlreadyExists = errors.New("record already exists")
 )
 
-/**
-* GetConnection: Returns a Connection object based on the specified driver and environment variables.
-* @param driver, host string
-* @return Connection, error
-**/
-func GetConnection(driver, host string) (Connection, error) {
-	switch driver {
-	case DriverPostgres:
-		config := pgConection(host)
-		return config, nil
-	case DriverSqlite:
-		config := sqliteConection(host)
-		return config, nil
-	default:
-		return nil, fmt.Errorf(MSG_UNSUPPORTED_DRIVER, driver)
-	}
+type ConnectParams struct {
+	Driver      string     `json:"driver"`
+	Host        string     `json:"host"`
+	Name        string     `json:"name"`
+	Connection  Connection `json:"connection"`
+	RecordLimit int        `json:"record_limit"`
+	IsDebug     bool       `json:"is_debug"`
 }
 
 /**
@@ -39,8 +29,8 @@ func GetConnection(driver, host string) (Connection, error) {
 * @param tenantId, host, driver, name string, showLog bool
 * @return *DB, error
 **/
-func ConnectTo(host, driver, name string, showLog ...bool) (*DB, error) {
-	result, err := NewDB(host, name, driver, showLog...)
+func ConnectTo(params ConnectParams) (*DB, error) {
+	result, err := NewDB(params)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +54,23 @@ func LoadTo(dbName string, hostName ...string) (*DB, error) {
 	if len(hostName) > 0 {
 		host = hostName[0]
 	}
-	result, err := ConnectTo(host, driver, dbName)
+
+	connection, err := getConnection(driver, host)
+	if err != nil {
+		return nil, err
+	}
+
+	connection.SetDatabase(dbName)
+	recordLimit := envar.GetInt("DB_RECORD_LIMIT", 1000)
+	isDebug := envar.GetBool("DB_IS_DEBUG", false)
+	result, err := ConnectTo(ConnectParams{
+		Driver:      driver,
+		Host:        host,
+		Name:        dbName,
+		Connection:  connection,
+		RecordLimit: recordLimit,
+		IsDebug:     isDebug,
+	})
 	if err != nil {
 		return nil, err
 	}

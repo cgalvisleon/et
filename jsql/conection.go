@@ -7,6 +7,24 @@ import (
 	"github.com/cgalvisleon/et/et"
 )
 
+/**
+* getConnection: Returns a Connection object based on the specified driver and environment variables.
+* @param driver, host string
+* @return Connection, error
+**/
+func getConnection(driver, host string) (Connection, error) {
+	switch driver {
+	case DriverPostgres:
+		config := pgConection(host)
+		return config, nil
+	case DriverSqlite:
+		config := sqliteConection(host)
+		return config, nil
+	default:
+		return nil, fmt.Errorf(MSG_UNSUPPORTED_DRIVER, driver)
+	}
+}
+
 type Connection interface {
 	GetParams() et.Json
 	SetDatabase(string)
@@ -14,9 +32,9 @@ type Connection interface {
 }
 
 type PgConection struct {
-	Database    string
 	Host        string
 	Port        int
+	Database    string
 	User        string
 	Password    string
 	Sslmode     string
@@ -25,17 +43,17 @@ type PgConection struct {
 }
 
 func pgConection(host string) *PgConection {
-	database := envar.GetStr("DB_NAME", "josephine")
 	port := envar.GetInt("DB_PORT", 5432)
+	database := envar.GetStr("DB_NAME", "josephine")
 	user := envar.GetStr("DB_USER", "test")
 	password := envar.GetStr("DB_PASSWORD", "test")
 	sslmode := envar.GetStr("DB_SSLMODE", "disable")
 	appName := envar.GetStr("DB_APP_NAME", "josephine")
 	recordLimit := envar.GetInt("DB_RECORD_LIMIT", 1000)
 	return &PgConection{
-		Database:    database,
 		Host:        host,
 		Port:        port,
+		Database:    database,
 		User:        user,
 		Password:    password,
 		Sslmode:     sslmode,
@@ -51,9 +69,9 @@ func pgConection(host string) *PgConection {
 func (s *PgConection) GetParams() et.Json {
 	return et.Json{
 		"driver":       DriverPostgres,
-		"database":     s.Database,
 		"host":         s.Host,
 		"port":         s.Port,
+		"database":     s.Database,
 		"user":         s.User,
 		"password":     s.Password,
 		"sslmode":      s.Sslmode,

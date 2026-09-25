@@ -9,28 +9,27 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 )
 
 type DB struct {
-	ID          string             `json:"id"`
-	Name        string             `json:"name"`
-	Schemas     map[string]*Schema `json:"schemas"`
-	Driver      string             `json:"driver"`
-	Params      et.Json            `json:"params"`
-	RecordLimit int                `json:"record_limit"`
-	Version     int                `json:"version"`
-	AuditLog    []et.Json          `json:"audit_log"`
-	isDebug     bool               `json:"-"`
-	isChanged   bool               `json:"-"`
-	isInit      bool               `json:"-"`
-	driver      Driver             `json:"-"`
-	db          *sql.DB            `json:"-"`
-	store       *Store             `json:"-"`
-	showLog     bool               `json:"-"`
+	ID          string                                   `json:"id"`
+	Host        string                                   `json:"host"`
+	Driver      string                                   `json:"driver"`
+	Name        string                                   `json:"name"`
+	Params      et.Json                                  `json:"params"`
+	Schemas     map[string]*Schema                       `json:"schemas"`
+	RecordLimit int                                      `json:"record_limit"`
+	AuditLog    *et.SafeData                             `json:"audit_log"`
+	isDebug     bool                                     `json:"-"`
+	isChanged   bool                                     `json:"-"`
+	isInit      bool                                     `json:"-"`
+	driver      Driver                                   `json:"-"`
+	db          *sql.DB                                  `json:"-"`
+	onAuditLog  func(userId string, action string) error `json:"-"`
 }
 
 /**
@@ -38,47 +37,36 @@ type DB struct {
 * @param id, host, name, driver string, showLog ...bool (optional, defaults to true)
 * @return *DB, error
 **/
-func NewDB(host, name, driver string, showLog ...bool) (*DB, error) {
-	show := true
-	if len(showLog) > 0 {
-		show = showLog[0]
-	}
-
-	drv, ok := drivers[driver]
+func NewDB(params ConnectParams) (*DB, error) {
+	drv, ok := drivers[params.Driver]
 	if !ok {
 		return nil, errors.New(MSG_DRIVER_NOT_FOUND)
 	}
 
-	if !utility.ValidStr(name, 0, []string{""}) {
-		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "name")
-	}
-
-	if !utility.ValidStr(host, 0, []string{""}) {
+	if !utility.ValidStr(params.Host, 0, []string{""}) {
 		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "host")
 	}
 
-	connect, err := GetConnection(driver, host)
-	if err != nil {
-		return nil, err
+	if !utility.ValidStr(params.Name, 0, []string{""}) {
+		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "name")
 	}
 
-	connect.SetDatabase(name)
-	params := connect.GetParams()
-	recordLimit := params.Int("record_limit")
-	version := params.ValInt(1, "version")
-	id := fmt.Sprintf("db:%s", name)
+	if params.Connection == nil {
+		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "connection")
+	}
+
+	connection := params.Connection.GetParams()
 	result := &DB{
-		ID:          id,
-		Name:        name,
+		ID:          reg.UUID(),
+		Host:        params.Host,
+		Driver:      params.Driver,
+		Name:        params.Name,
+		Params:      connection,
 		Schemas:     make(map[string]*Schema),
-		Driver:      driver,
-		Params:      params,
-		RecordLimit: recordLimit,
-		Version:     version,
-		AuditLog:    make([]et.Json, 0),
-		driver:      drv,
+		RecordLimit: params.RecordLimit,
+		AuditLog:    &et.SafeData{},
 		isDebug:     envar.GetBool("DEBUG", false),
-		showLog:     show,
+		driver:      drv,
 	}
 
 	return result, nil
@@ -86,66 +74,73 @@ func NewDB(host, name, driver string, showLog ...bool) (*DB, error) {
 
 /**
 * LoadDb
-* @param store *Store, id string
+* @param params et.Json
 * @return *DB, error
 **/
-func LoadDb(store *Store, id string) (*DB, error) {
-	if store == nil {
-		return nil, errors.New(MSG_STORE_IS_NIL)
+func LoadDb(params et.Json) (*DB, error) {
+	if params.IsEmpty() {
+		return nil, errors.New(MSG_PARAMS_IS_EMPTY)
 	}
 
-	ref := et.Json{}
-	exists, err := store.Get(storeDb, id, &ref)
-	if err != nil {
-		return nil, err
+	id := params.Str("id")
+	if !utility.ValidStr(id, 0, []string{""}) {
+		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "id")
 	}
 
-	if !exists {
-		return nil, fmt.Errorf(MSG_RECORD_NOT_FOUND, "db", id)
+	host := params.Str("host")
+	if !utility.ValidStr(host, 0, []string{""}) {
+		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "host")
 	}
 
-	recordLimit := envar.GetInt("RECORD_LIMIT", 1000)
-	params := ref.Json("params")
 	driver := params.Str("driver")
+	if !utility.ValidStr(driver, 0, []string{""}) {
+		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "driver")
+	}
+
 	drv, ok := drivers[driver]
 	if !ok {
 		return nil, errors.New(MSG_DRIVER_NOT_FOUND)
 	}
 
-	result := &DB{
-		ID:          ref.Str("id"),
-		Name:        ref.Str("name"),
-		Schemas:     make(map[string]*Schema),
-		Driver:      ref.Str("driver"),
-		Params:      params,
-		RecordLimit: ref.ValInt(recordLimit, "record_limit"),
-		Version:     ref.Int("version"),
-		AuditLog:    ref.ArrayJson("audit_log"),
-		isDebug:     envar.GetBool("DEBUG", false),
-		driver:      drv,
-		store:       store,
-	}
-
-	if !utility.ValidStr(result.ID, 0, []string{""}) {
-		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "id")
-	}
-	if !utility.ValidStr(result.Name, 0, []string{""}) {
+	name := params.Str("name")
+	if !utility.ValidStr(name, 0, []string{""}) {
 		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "name")
 	}
 
-	schemas := ref.ArrayJson("schemas")
-	for _, schemaRef := range schemas {
+	connection := params.Json("params")
+	if connection.IsEmpty() {
+		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "params")
+	}
+
+	recordLimit := params.ValInt(1000, "record_limit")
+	result := &DB{
+		ID:          id,
+		Host:        host,
+		Driver:      driver,
+		Name:        name,
+		Params:      connection,
+		Schemas:     make(map[string]*Schema),
+		RecordLimit: recordLimit,
+		AuditLog:    &et.SafeData{},
+		isDebug:     envar.GetBool("DEBUG", false),
+		driver:      drv,
+	}
+
+	schemas := params.Json("schemas")
+	for k := range schemas {
+		schemaRef := schemas.Json(k)
 		name := schemaRef.Str("name")
 		schema, ok := result.Schemas[name]
 		if !ok {
 			schema = result.newSchema(name)
 		}
-		models := schemaRef.ArrayJson("models")
-		for _, modelRef := range models {
+		models := schemaRef.Json("models")
+		for k := range models {
+			modelRef := models.Json(k)
 			modelId := modelRef.Str("id")
 			_, ok := schema.Models[modelId]
 			if !ok {
-				_, err := schema.loadModel(store, modelId)
+				_, err := schema.loadModel(modelRef)
 				if err != nil {
 					return nil, err
 				}
@@ -156,98 +151,8 @@ func LoadDb(store *Store, id string) (*DB, error) {
 	return result, nil
 }
 
-/**
-* SetShowLog: Sets the show log flag.
-* @param show bool
-**/
-func (s *DB) ShowLog() bool {
-	return s.showLog
-}
-
-/**
-* SetShowLog: Sets the show log flag.
-* @param show bool
-**/
-func (s *DB) SetShowLog(show bool) {
-	s.showLog = show
-}
-
-/**
-* SetShowLog: Sets the show log flag.
-* @param show bool
-**/
-func (s *DB) ShowLogOff() {
-	s.showLog = false
-}
-
-/**
-* ShowLogOn: Sets the show log flag to true.
-* @param show bool
-**/
-func (s *DB) ShowLogOn() {
-	s.showLog = true
-}
-
-/**
-* Ref: Returns the DB metadata as an et.Json map.
-* @return et.Json
-**/
-func (s *DB) Ref() et.Json {
-	return et.Json{
-		"id":      s.ID,
-		"name":    s.Name,
-		"version": s.Version,
-	}
-}
-
-/**
-* ToJson: Returns the DB metadata as an et.Json map.
-* @return et.Json
-**/
-func (s *DB) ToJson() et.Json {
-	schemas := []et.Json{}
-	for _, schema := range s.Schemas {
-		schemas = append(schemas, schema.Ref())
-	}
-
-	return et.Json{
-		"id":           s.ID,
-		"name":         s.Name,
-		"schemas":      schemas,
-		"driver":       s.Driver,
-		"params":       s.Params,
-		"record_limit": s.RecordLimit,
-		"version":      s.Version,
-		"audit_log":    s.AuditLog,
-	}
-}
-
-/**
-* SetStore: Sets the store for the DB.
-* @param store *Store
-**/
-func (s *DB) SetStore(store *Store) {
-	s.store = store
-	s.isChanged = true
-}
-
-/**
-* save: Saves the DB metadata to the store.
-* @return error
-**/
-func (s *DB) Save() error {
-	if s.store == nil {
-		return errors.New(MSG_STORE_IS_NIL)
-	}
-
-	err := s.store.Set(storeDb, s.ID, "", s.ToJson())
-	if err != nil {
-		return err
-	}
-
-	channel := fmt.Sprintf("db:%s", s.ID)
-	event.Publish(channel, s.ToJson())
-	return nil
+func (s *DB) OnAuditLog(fn func(userId string, action string) error) {
+	s.onAuditLog = fn
 }
 
 /**
@@ -256,20 +161,59 @@ func (s *DB) Save() error {
 **/
 func (s *DB) addAuditLog(userId string, action string) {
 	if s.AuditLog == nil {
-		s.AuditLog = make([]et.Json, 0)
+		s.AuditLog = &et.SafeData{}
 	}
 
 	now := timezone.Now()
-	s.AuditLog = append(s.AuditLog, et.Json{
+	s.AuditLog.Add(et.Json{
 		"created_at": now,
 		"user_id":    userId,
 		"action":     action,
 	})
+
 	maxAuditLog := envar.GetInt("MAX_AUDIT_LOG", 1000)
-	if len(s.AuditLog) > maxAuditLog {
-		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	if s.AuditLog.Len() > maxAuditLog {
+		s.AuditLog.Delete(maxAuditLog)
 	}
+
 	s.isChanged = true
+
+	if s.onAuditLog != nil {
+		s.onAuditLog(userId, action)
+	}
+}
+
+/**
+* Ref: Returns the DB metadata as an et.Json map.
+* @return et.Json
+**/
+func (s *DB) Ref() et.Json {
+	return et.Json{
+		"id":   s.ID,
+		"name": s.Name,
+	}
+}
+
+/**
+* ToJson: Returns the DB metadata as an et.Json map.
+* @return et.Json
+**/
+func (s *DB) ToJson() et.Json {
+	schemas := et.Json{}
+	for name, schema := range s.Schemas {
+		schemas[name] = schema.ToJson()
+	}
+
+	return et.Json{
+		"id":           s.ID,
+		"host":         s.Host,
+		"driver":       s.Driver,
+		"name":         s.Name,
+		"params":       s.Params,
+		"schemas":      schemas,
+		"record_limit": s.RecordLimit,
+		"audit_log":    s.AuditLog.Data,
+	}
 }
 
 /**
@@ -304,6 +248,7 @@ func (s *DB) Init() error {
 	}
 
 	s.isInit = true
+	logs.Logf(s.Driver, "Connected host:%s:%d:%s", s.Host, s.Params.Int("port"), s.Name)
 
 	return nil
 }

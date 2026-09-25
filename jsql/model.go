@@ -2,13 +2,11 @@ package jsql
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"slices"
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrex"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
@@ -40,7 +38,6 @@ type Model struct {
 	Database      string                  `json:"database"`
 	Schema        string                  `json:"schema"`
 	Name          string                  `json:"name"`
-	DatabaseId    string                  `json:"database_id"`
 	Table         string                  `json:"table"`
 	Columns       []*Column               `json:"columns"`
 	SourceField   string                  `json:"source_field"`
@@ -55,7 +52,6 @@ type Model struct {
 	Details       map[string]*Detail      `json:"details"`
 	Masters       map[string]*Master      `json:"master"`
 	Rollups       map[string]*Detail      `json:"rollups"`
-	calcs         map[string]CalcFunction `json:"-"`
 	IsStrict      bool                    `json:"is_strict"`
 	Version       int                     `json:"version"`
 	IsDebug       bool                    `json:"-"`
@@ -66,8 +62,9 @@ type Model struct {
 	AfterInserts  []string                `json:"after_inserts"`
 	AfterUpdates  []string                `json:"after_updates"`
 	AfterDeletes  []string                `json:"after_deletes"`
-	AuditLog      []et.Json               `json:"audit_log"`
+	AuditLog      *et.SafeData            `json:"audit_log"`
 	isChanged     bool                    `json:"-"`
+	calcs         map[string]CalcFunction `json:"-"`
 	beforeInserts []TriggerFunction       `json:"-"`
 	beforeUpdates []TriggerFunction       `json:"-"`
 	beforeDeletes []TriggerFunction       `json:"-"`
@@ -83,41 +80,23 @@ type Model struct {
 **/
 func (s *Model) addAuditLog(userId string, action string) {
 	if s.AuditLog == nil {
-		s.AuditLog = make([]et.Json, 0)
+		s.AuditLog = &et.SafeData{}
 	}
 
 	now := timezone.Now()
-	s.AuditLog = append(s.AuditLog, et.Json{
+	s.AuditLog.Add(et.Json{
 		"created_at": now,
 		"user_id":    userId,
 		"action":     action,
 	})
 	maxAuditLog := envar.GetInt("MAX_AUDIT_LOG", 1000)
-	if len(s.AuditLog) > maxAuditLog {
-		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
+	if s.AuditLog.Len() > maxAuditLog {
+		s.AuditLog.Delete(maxAuditLog)
 	}
 	s.isChanged = true
-}
-
-/**
-* Save: Saves the model to the store.
-* @param store *Store
-* @return error
-**/
-func (s *Model) Save(store *Store) error {
-	if store == nil {
-		return errors.New(MSG_STORE_IS_NIL)
+	if s.db != nil {
+		s.db.addAuditLog(userId, action)
 	}
-
-	err := store.Set(storeModels, s.ID, s.db.ID, s)
-	if err != nil {
-		return err
-	}
-
-	json := s.ToJson()
-	channel := fmt.Sprintf("model:%s", s.ID)
-	event.Publish(channel, json)
-	return nil
 }
 
 /**
@@ -141,7 +120,6 @@ func (s *Model) ToJson() et.Json {
 		"database":       s.Database,
 		"schema":         s.Schema,
 		"name":           s.Name,
-		"database_id":    s.DatabaseId,
 		"table":          s.Table,
 		"columns":        s.Columns,
 		"source_field":   s.SourceField,

@@ -46,10 +46,11 @@ type DefMaster struct {
 }
 
 type DefRollup struct {
-	Name   string            `json:"name"`
-	To     DefTo             `json:"to"`
-	Keys   map[string]string `json:"keys"`
-	Select []string          `json:"select"`
+	Name      string            `json:"name"`
+	To        DefTo             `json:"to"`
+	Keys      map[string]string `json:"keys"`
+	Select    []string          `json:"select"`
+	Operation RollupOperation   `json:"operation"`
 }
 
 type Define struct {
@@ -258,11 +259,13 @@ func (s *Model) DefineAttrib(name string, tp et.TypeData, deFault any) *Column {
 
 /**
 * DefineRollup: Defines a new rollup for the model.
-* @param name string, to *Model, keys map[string]string, selects []string
-* @return (*Detail, error)
+* Selects are required except for RollupCount (counts rows) and RollupObject (whole row).
+* An empty operation defaults to RollupObject.
+* @param name string, to *Model, keys map[string]string, selects []string, operation RollupOperation
+* @return (*Rollups, error)
 **/
-func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, selects []string) (*Detail, error) {
-	result, ok := s.Details[name]
+func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, selects []string, operation RollupOperation) (*Rollups, error) {
+	result, ok := s.Rollups[name]
 	if ok {
 		return result, nil
 	}
@@ -275,15 +278,22 @@ func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, sel
 		return nil, errors.New(MSG_KEYS_REQUIRED)
 	}
 
-	if len(selects) == 0 {
+	if operation == "" {
+		operation = RollupObject
+	}
+
+	if !operation.IsValid() {
+		return nil, fmt.Errorf(MSG_INVALID_ROLLUP_OPERATION, operation)
+	}
+
+	if len(selects) == 0 && operation != RollupCount && operation != RollupObject {
 		return nil, errors.New(MSG_SELECTS_REQUIRED)
 	}
 
 	s.defineColumn(name, ROLLUP, et.ANY, nil)
-	detail := newDetail(to, keys, selects, false, false)
-	detail.Rows = 1
-	s.Rollups[name] = detail
-	return detail, nil
+	result = newRollup(to, keys, selects, operation)
+	s.Rollups[name] = result
+	return result, nil
 }
 
 /**

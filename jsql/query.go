@@ -3,8 +3,10 @@ package jsql
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jrex"
@@ -129,6 +131,65 @@ type QueryDetail struct {
 }
 
 /**
+* QueryRollups: Rollup resolved for a query; executed per resulting row after the main SQL.
+**/
+type QueryRollups struct {
+	To        *From             `json:"to"`
+	Keys      map[string]string `json:"keys"`
+	Select    []string          `json:"select"`
+	Operation RollupOperation   `json:"operation"`
+}
+
+/**
+* rollupAggSelect: Wraps a select field as an aggregate expression "op(field):as" understood by GetField.
+* @param op RollupOperation, field string
+* @return string
+**/
+func rollupAggSelect(op RollupOperation, field string) string {
+	name, as := field, field
+	if i := strings.LastIndex(field, ":"); i != -1 {
+		name, as = field[:i], field[i+1:]
+	}
+	if i := strings.LastIndex(as, "."); i != -1 {
+		as = as[i+1:]
+	}
+	as = strings.ReplaceAll(as, "->", "_")
+	return fmt.Sprintf("%s(%s):%s", op, name, as)
+}
+
+/**
+* GetQuery: Returns the query for the rollup filtered by the keys of the given row.
+* Returns false when the row lacks any of the keys, so the rollup is not applied.
+* @param item et.Json
+* @return *Query, bool
+**/
+func (s *QueryRollups) GetQuery(item et.Json) (*Query, bool) {
+	if s.To == nil || s.To.Model == nil {
+		return nil, false
+	}
+
+	q := NewQuery(s.To.Model, "A")
+	for k, fk := range s.Keys {
+		v, exists := item[k]
+		if !exists {
+			return nil, false
+		}
+		q.Where(Eq(fk, v))
+	}
+
+	if s.Operation.IsAggregate() {
+		for _, field := range s.Select {
+			q.Select(rollupAggSelect(s.Operation, field))
+		}
+		return q, true
+	}
+
+	q.Select(s.Select...)
+	q.Rows = 1
+	return q, true
+}
+
+/**
 * GetQuery: Returns the query for the detail.
 * @param item et.Json
 * @return *Query
@@ -157,30 +218,30 @@ type Calc struct {
 * Query: Holds all clauses needed to build a SELECT statement.
 **/
 type Query struct {
-	ID             string                  `json:"id"`
-	Froms          []*From                 `json:"froms"`
-	Joins          []*Join                 `json:"joins"`
-	Selects        []string                `json:"selects"`
-	Conditions     []*et.Condition         `json:"conditions"`
-	Hiddens        []string                `json:"hidden"`
-	GroupsBy       []string                `json:"group_by"`
-	OrdersBy       []*Index                `json:"order_by"`
-	Havings        []*et.Condition         `json:"havings"`
-	Offset         int                     `json:"offset"`
-	Rows           int                     `json:"rows"`
-	UseSourceField bool                    `json:"use_source_field"`
-	Details        map[string]*QueryDetail `json:"details"`
-	Masters        map[string]*QueryDetail `json:"masters"`
-	Rollups        map[string]*QueryDetail `json:"rollups"`
-	CalcFuns       map[string]CalcFunction `json:"calc_funs"`
-	Calcs          map[string]*Calc        `json:"calcs"`
-	IsExists       bool                    `json:"is_exists"`
-	IsCount        bool                    `json:"is_count"`
-	section        QuerySection            `json:"-"`
-	MaxRows        int                     `json:"-"`
-	db             *DB                     `json:"-"`
-	isDebug        bool                    `json:"-"`
-	isTest         bool                    `json:"-"`
+	ID             string                   `json:"id"`
+	Froms          []*From                  `json:"froms"`
+	Joins          []*Join                  `json:"joins"`
+	Selects        []string                 `json:"selects"`
+	Conditions     []*et.Condition          `json:"conditions"`
+	Hiddens        []string                 `json:"hidden"`
+	GroupsBy       []string                 `json:"group_by"`
+	OrdersBy       []*Index                 `json:"order_by"`
+	Havings        []*et.Condition          `json:"havings"`
+	Offset         int                      `json:"offset"`
+	Rows           int                      `json:"rows"`
+	UseSourceField bool                     `json:"use_source_field"`
+	Details        map[string]*QueryDetail  `json:"details"`
+	Masters        map[string]*QueryDetail  `json:"masters"`
+	Rollups        map[string]*QueryRollups `json:"rollups"`
+	CalcFuns       map[string]CalcFunction  `json:"calc_funs"`
+	Calcs          map[string]*Calc         `json:"calcs"`
+	IsExists       bool                     `json:"is_exists"`
+	IsCount        bool                     `json:"is_count"`
+	section        QuerySection             `json:"-"`
+	MaxRows        int                      `json:"-"`
+	db             *DB                      `json:"-"`
+	isDebug        bool                     `json:"-"`
+	isTest         bool                     `json:"-"`
 }
 
 /**
@@ -203,7 +264,7 @@ func NewQuery(model *Model, as ...string) *Query {
 		OrdersBy:   make([]*Index, 0),
 		Havings:    make([]*et.Condition, 0),
 		Details:    make(map[string]*QueryDetail, 0),
-		Rollups:    make(map[string]*QueryDetail, 0),
+		Rollups:    make(map[string]*QueryRollups, 0),
 		CalcFuns:   make(map[string]CalcFunction, 0),
 		Calcs:      make(map[string]*Calc, 0),
 		section:    whereSection,
@@ -770,28 +831,55 @@ func (s *Query) setDetails(tx *Tx, item et.Json) et.Json {
 }
 
 /**
-* setRollup: Sets the rollup for the query.
+* setRollup: Executes each rollup query for the row and applies its result by operation:
+* aggregates set item[name] (a value for one select, an object for several),
+* RollupRow merges the resulting fields into item and RollupObject sets item[name] to the resulting object.
 * @param tx *Tx
 * @param item et.Json
 * @return et.Json
 **/
 func (s *Query) setRollup(tx *Tx, item et.Json) et.Json {
-	for name, detail := range s.Rollups {
-		qry := detail.GetQuery(item)
-		detailResult, err := qry.AllTx(tx)
+	for name, rollup := range s.Rollups {
+		qry, ok := rollup.GetQuery(item)
+		if !ok {
+			continue
+		}
+
+		if rollup.Operation == RollupCount && len(rollup.Select) == 0 {
+			count, err := qry.CountTx(tx)
+			if err != nil {
+				continue
+			}
+			item[name] = count
+			continue
+		}
+
+		result, err := qry.AllTx(tx)
 		if err != nil {
-			return item
-		}
-		if !detailResult.Ok {
 			continue
 		}
-		if len(detail.Select) == 1 {
-			att := detail.Select[0]
-			val := detailResult.Get(0, att)
-			item[att] = val
-			continue
+
+		var first et.Json
+		if result.Ok && len(result.Result) > 0 {
+			first = result.Result[0]
 		}
-		item[name] = detailResult.Result[0]
+
+		switch rollup.Operation {
+		case RollupRow:
+			maps.Copy(item, first)
+		case RollupObject:
+			item[name] = first
+		default:
+			if len(rollup.Select) == 1 {
+				var val any
+				for _, v := range first {
+					val = v
+				}
+				item[name] = val
+				continue
+			}
+			item[name] = first
+		}
 	}
 	return item
 }

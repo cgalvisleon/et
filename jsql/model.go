@@ -43,7 +43,7 @@ type Model struct {
 	Hiddens       []string                `json:"hiddens"`
 	Details       map[string]*Detail      `json:"details"`
 	Masters       map[string]*Master      `json:"master"`
-	Rollups       map[string]*Detail      `json:"rollups"`
+	Rollups       map[string]*Rollups     `json:"rollups"`
 	IsStrict      bool                    `json:"is_strict"`
 	Version       int                     `json:"version"`
 	IsDebug       bool                    `json:"-"`

@@ -242,6 +242,35 @@ func pgCondsSQL(getField func(string) (*jsql.Field, bool), useSourceField bool, 
 }
 
 /**
+* pgAggExpr: Renders an aggregate field (count, sum, avg, min, max) as a SQL expression.
+* sum/avg are cast to double precision and count to bigint so results scan as JSON numbers.
+* @param fld *jsql.Field
+* @return string, bool
+**/
+func pgAggExpr(fld *jsql.Field) (string, bool) {
+	if fld.TypeColumn != jsql.COLUMN && fld.TypeColumn != jsql.ATTRIB {
+		return "", false
+	}
+	fieldExpr := pgFieldExpr(fld, true)
+	if fieldExpr == "" {
+		return "", false
+	}
+	switch jsql.RollupOperation(strings.ToLower(fld.Agg)) {
+	case jsql.RollupCount:
+		return fmt.Sprintf("COUNT(%s)::bigint", fieldExpr), true
+	case jsql.RollupSum:
+		return fmt.Sprintf("COALESCE(SUM(%s), 0)::double precision", fieldExpr), true
+	case jsql.RollupAvg:
+		return fmt.Sprintf("AVG(%s)::double precision", fieldExpr), true
+	case jsql.RollupMin:
+		return fmt.Sprintf("MIN(%s)", fieldExpr), true
+	case jsql.RollupMax:
+		return fmt.Sprintf("MAX(%s)", fieldExpr), true
+	}
+	return "", false
+}
+
+/**
 * pgSelectExpr: Resolves an explicit field name from query.Selects into a SQL expression.
 * Detects ATTRIB columns and emits the appropriate _source extraction.
 * @param query *jsql.Query, field string
@@ -255,6 +284,16 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 	alias := fld.From.As
 	if alias == fld.From.Table {
 		alias = ""
+	}
+	if fld.Agg != "" {
+		expr, ok := pgAggExpr(fld)
+		if !ok {
+			return "", false
+		}
+		if query.UseSourceField {
+			return fmt.Sprintf("'%s', %s", fld.As, expr), true
+		}
+		return fmt.Sprintf("%s AS %s", expr, fld.As), true
 	}
 	if fld.TypeColumn == jsql.COLUMN {
 		if query.UseSourceField {
@@ -337,12 +376,11 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 		if !ok {
 			return "", false
 		}
-		query.Rollups[fld.Name] = &jsql.QueryDetail{
-			To:     rollup.To,
-			Keys:   rollup.Keys,
-			Select: rollup.Select,
-			Page:   fld.Page,
-			Rows:   rollup.Rows,
+		query.Rollups[fld.Name] = &jsql.QueryRollups{
+			To:        rollup.To,
+			Keys:      rollup.Keys,
+			Select:    rollup.Select,
+			Operation: rollup.Operation,
 		}
 	} else if fld.TypeColumn == jsql.CALC {
 		if fld.From == nil {

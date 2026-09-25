@@ -583,7 +583,7 @@ func (s *DB) Define(define Define) (*Model, error) {
 				return nil, err
 			}
 
-			_, err = detail.DefineRollup(rollup.Name, to, rollup.Keys, rollup.Select)
+			_, err = detail.DefineRollup(rollup.Name, to, rollup.Keys, rollup.Select, rollup.Operation)
 			if err != nil {
 				return nil, err
 			}
@@ -608,7 +608,7 @@ func (s *DB) Define(define Define) (*Model, error) {
 			return nil, err
 		}
 
-		_, err = result.DefineRollup(rollup.Name, to, rollup.Keys, rollup.Select)
+		_, err = result.DefineRollup(rollup.Name, to, rollup.Keys, rollup.Select, rollup.Operation)
 		if err != nil {
 			return nil, err
 		}

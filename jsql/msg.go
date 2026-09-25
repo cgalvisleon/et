@@ -33,6 +33,7 @@ var (
 	MSG_UNSUPPORTED_DRIVER        = "unsupported driver: %s"
 	MSG_RECORD_NOT_FOUND          = "record not found"
 	MSG_STORE_IS_NIL              = "store is nil"
+	MSG_INVALID_ROLLUP_OPERATION  = "invalid rollup operation: %s"
 )
 
 func init() {
@@ -67,5 +68,6 @@ func init() {
 		MSG_UNSUPPORTED_DRIVER = "driver no soportado: %s"
 		MSG_RECORD_NOT_FOUND = "registro no encontrado"
 		MSG_STORE_IS_NIL = "store es nulo"
+		MSG_INVALID_ROLLUP_OPERATION = "operación de rollup inválida: %s"
 	}
 }

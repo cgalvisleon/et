@@ -97,6 +97,67 @@ func newDetail(to *Model, keys map[string]string, selecs []string, onDeleteCasca
 }
 
 /**
+* RollupOperation: Specifies how the result of a rollup query is applied to each resulting row.
+**/
+type RollupOperation string
+
+const (
+	RollupCount  RollupOperation = "count"
+	RollupSum    RollupOperation = "sum"
+	RollupAvg    RollupOperation = "avg"
+	RollupMin    RollupOperation = "min"
+	RollupMax    RollupOperation = "max"
+	RollupRow    RollupOperation = "row"
+	RollupObject RollupOperation = "object"
+)
+
+/**
+* IsAggregate: Returns true if the operation is a SQL aggregate (count, sum, avg, min, max).
+* @return bool
+**/
+func (s RollupOperation) IsAggregate() bool {
+	switch s {
+	case RollupCount, RollupSum, RollupAvg, RollupMin, RollupMax:
+		return true
+	}
+	return false
+}
+
+/**
+* IsValid: Returns true if the operation is one of the defined rollup operations.
+* @return bool
+**/
+func (s RollupOperation) IsValid() bool {
+	return s.IsAggregate() || s == RollupRow || s == RollupObject
+}
+
+/**
+* Rollups: Defines a lookup against another model, executed after the main query for each resulting row.
+* Keys maps a field of the resulting row to a field of the To model; Select lists the To fields
+* and Operation defines how the result is applied (aggregate, merged row or nested object).
+**/
+type Rollups struct {
+	To        *From             `json:"to"`
+	Keys      map[string]string `json:"keys"`
+	Select    []string          `json:"select"`
+	Operation RollupOperation   `json:"operation"`
+}
+
+/**
+* newRollup: Constructs a Rollups linking to the given model with join keys, selects and operation.
+* @param to *Model, keys map[string]string, selects []string, operation RollupOperation
+* @return *Rollups
+**/
+func newRollup(to *Model, keys map[string]string, selects []string, operation RollupOperation) *Rollups {
+	return &Rollups{
+		To:        getFrom(to, ""),
+		Keys:      keys,
+		Select:    selects,
+		Operation: operation,
+	}
+}
+
+/**
 * TypeJoin: Specifies the SQL join strategy.
 **/
 type TypeJoin string

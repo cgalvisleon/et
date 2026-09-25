@@ -39,6 +39,7 @@ func (s Operator) Str() string {
 }
 
 func ToOperator(s string) Operator {
+	s = strings.ToLower(s)
 	values := map[string]Operator{
 		"eq":          EQ,
 		"neg":         NEG,
@@ -355,29 +356,74 @@ type Condition struct {
 * @return *Condition, error
 **/
 func ToCondition(params Json) (*Condition, error) {
-	field, ok := params["field"]
-	if !ok {
-		return nil, errors.New(MSG_FIELD_NOT_FOUND)
-	}
-	operator, ok := params["operator"]
-	if !ok {
-		return nil, errors.New(MSG_OPERATOR_NOT_FOUND)
-	}
-	value, ok := params["value"]
-	if !ok {
-		return nil, errors.New(MSG_VALUE_NOT_FOUND)
-	}
-	connector, ok := params["connector"]
-	if !ok {
-		return nil, errors.New(MSG_CONNECTOR_NOT_FOUND)
+	condition := func(fld string, wr Json) *Condition {
+		for k, v := range wr {
+			op := ToOperator(k)
+			return &Condition{
+				Field:     NewValue(fld),
+				Operator:  op,
+				Value:     NewValue(v),
+				Connector: NaC,
+			}
+		}
+		return nil
 	}
 
-	return &Condition{
-		Field:     NewValue(field),
-		Operator:  ToOperator(fmt.Sprintf("%v", operator)),
-		Value:     NewValue(value),
-		Connector: ToConnector(fmt.Sprintf("%v", connector)),
-	}, nil
+	fldCondition := func(wr Json) *Condition {
+		for k := range wr {
+			cmd := wr.Json(k)
+			result := condition(k, cmd)
+			if result != nil {
+				return result
+			}
+			return result
+		}
+		return nil
+	}
+
+	for key := range params {
+		switch strings.ToLower(key) {
+		case "and":
+			value := params.Json(key)
+			result := fldCondition(value)
+			if result != nil {
+				result.Connector = AND
+				return result, nil
+			}
+		case "or":
+			value := params.Json(key)
+			result := fldCondition(value)
+			if result != nil {
+				result.Connector = OR
+				return result, nil
+			}
+		default:
+			value := params.Json(key)
+			result := fldCondition(value)
+			if result != nil {
+				return result, nil
+			}
+		}
+	}
+
+	return nil, errors.New(MSG_INVALID_CONDITION)
+}
+
+/**
+* ToConditions: Converts a list of JSON objects into a list of Conditions.
+* @param params []Json
+* @return []*Condition, error
+**/
+func ToConditions(params []Json) ([]*Condition, error) {
+	result := make([]*Condition, 0)
+	for _, param := range params {
+		condition, err := ToCondition(param)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, condition)
+	}
+	return result, nil
 }
 
 /**

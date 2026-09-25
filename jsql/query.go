@@ -638,7 +638,7 @@ func (s *Query) Where(cond *et.Condition) *Query {
 * @return *Query
 **/
 func (s *Query) And(cond *et.Condition) *Query {
-	cond.Connector = et.And
+	cond.Connector = et.AND
 	switch s.section {
 	case joinSection:
 		n := len(s.Joins)
@@ -657,7 +657,7 @@ func (s *Query) And(cond *et.Condition) *Query {
 * @return *Query
 **/
 func (s *Query) Or(cond *et.Condition) *Query {
-	cond.Connector = et.Or
+	cond.Connector = et.OR
 	switch s.section {
 	case joinSection:
 		n := len(s.Joins)
@@ -1050,7 +1050,11 @@ func (s *Query) loadQuery(query et.Json) (*Query, error) {
 			return s, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
 		}
 
-		conditions := et.ToCondition(js)
+		on := js.ArrayJson("on")
+		conditions, err := et.ToConditions(on)
+		if err != nil {
+			return s, err
+		}
 		s.join(modelTo, as, INNER_JOIN, conditions)
 	}
 
@@ -1075,7 +1079,11 @@ func (s *Query) loadQuery(query et.Json) (*Query, error) {
 			return s, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
 		}
 
-		conditions := et.ToCondition(js)
+		on := js.ArrayJson("on")
+		conditions, err := et.ToConditions(on)
+		if err != nil {
+			return s, err
+		}
 		s.join(modelTo, as, LEFT_JOIN, conditions)
 	}
 
@@ -1100,7 +1108,11 @@ func (s *Query) loadQuery(query et.Json) (*Query, error) {
 			return s, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
 		}
 
-		conditions := et.ToCondition(js)
+		on := js.ArrayJson("on")
+		conditions, err := et.ToConditions(on)
+		if err != nil {
+			return s, err
+		}
 		s.join(modelTo, as, RIGHT_JOIN, conditions)
 	}
 
@@ -1125,7 +1137,11 @@ func (s *Query) loadQuery(query et.Json) (*Query, error) {
 			return s, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
 		}
 
-		conditions := et.ToCondition(js)
+		on := js.ArrayJson("on")
+		conditions, err := et.ToConditions(on)
+		if err != nil {
+			return s, err
+		}
 		s.join(modelTo, as, FULL_JOIN, conditions)
 	}
 
@@ -1139,18 +1155,23 @@ func (s *Query) loadQuery(query et.Json) (*Query, error) {
 		s.Hidden(hiddens...)
 	}
 
-	conditions := et.ToCondition(query)
-	if len(conditions) > 0 {
-		s.Conditions = conditions
+	wheres := query.ArrayJson("where")
+	conditions, err := et.ToConditions(wheres)
+	if err != nil {
+		return s, err
 	}
+	s.Conditions = conditions
 
 	groups := query.ArrayStr("groups")
 	if len(groups) > 0 {
 		s.GroupBy(groups...)
 	}
 
-	havings := query.Json("havings")
-	havingConditions := et.ToCondition(havings)
+	havings := query.ArrayJson("havings")
+	havingConditions, err := et.ToConditions(havings)
+	if err != nil {
+		return s, err
+	}
 	s.Havings = havingConditions
 
 	limit := query.ValInt(s.MaxRows, "limit")

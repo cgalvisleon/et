@@ -210,7 +210,7 @@ func (s *Command) Where(cond *et.Condition) *Command {
 * @return *Command
 **/
 func (s *Command) And(cond *et.Condition) *Command {
-	cond.Connector = et.And
+	cond.Connector = et.AND
 	return s.addCondition(cond)
 }
 
@@ -220,7 +220,7 @@ func (s *Command) And(cond *et.Condition) *Command {
 * @return *Command
 **/
 func (s *Command) Or(cond *et.Condition) *Command {
-	cond.Connector = et.Or
+	cond.Connector = et.OR
 	return s.addCondition(cond)
 }
 

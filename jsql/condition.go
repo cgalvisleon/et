@@ -3,6 +3,33 @@ package jsql
 import "github.com/cgalvisleon/et/et"
 
 /**
+* Where: Returns a WHERE condition (field = value).
+* @param field, value interface{}
+* @return *et.Condition
+**/
+func Where(field, value interface{}) *et.Condition {
+	return et.Where(field, value)
+}
+
+/**
+* And: Returns a AND condition (field = value).
+* @param field, operator et.Operator, value interface{}
+* @return *et.Condition
+**/
+func And(field interface{}, operator et.Operator, value interface{}) *et.Condition {
+	return et.And(field, operator, value)
+}
+
+/**
+* Or: Returns a OR condition (field = value).
+* @param field, operator et.Operator, value interface{}
+* @return *et.Condition
+**/
+func Or(field interface{}, operator et.Operator, value interface{}) *et.Condition {
+	return et.Or(field, operator, value)
+}
+
+/**
 * Eq: Returns an equality condition (field = value).
 * @param field string, value interface{}
 * @return *et.Condition
@@ -135,13 +162,4 @@ func Between(field string, min, max any) *et.Condition {
 **/
 func NotBetween(field string, min, max any) *et.Condition {
 	return et.NotBetween(field, min, max)
-}
-
-/**
-* Evaluate: Returns true if all conditions in the slice match the given JSON object.
-* @param item et.Json, conditions []*et.Condition
-* @return bool
-**/
-func EvaluateObject(item et.Json, conditions []*et.Condition) bool {
-	return et.EvaluateObject(item, conditions)
 }

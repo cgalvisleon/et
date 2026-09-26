@@ -18,13 +18,13 @@ import (
 //	3   Relaciones y campos calculados  19
 //	4   Consultas                       46
 //	5   Condiciones                     18
-//	6   Comandos                        16
+//	6   Comandos                        17
 //	7   Triggers                        22
 //	8   Transacciones                   4
 //	9   Series                          6
 //	10  Auditoría                       3
 //	11  Utilidades                      17
-//	    Total                           195
+//	    Total                           196
 
 // =============================================================================
 // 1. Conexión y base de datos (24)
@@ -1158,7 +1158,7 @@ func NotBetween(field string, min, max any) *et.Condition {
 }
 
 // =============================================================================
-// 6. Comandos (16)
+// 6. Comandos (17)
 // =============================================================================
 
 /**
@@ -1219,6 +1219,16 @@ func (s *Command) Or(cond *et.Condition) *Command {
 **/
 func (s *Command) Return(fields ...string) *Command {
 	return s.returning(fields...)
+}
+
+/**
+* Limit: Sets how many rows an update or delete works on: n > 0 at most n rows, 0 every row that
+* matches the where. Without Limit, DB_RECORD_LIMIT is used with a maximum of 1000.
+* @param rows int
+* @return *Command
+**/
+func (s *Command) Limit(rows int) *Command {
+	return s.limit(rows)
 }
 
 /**

@@ -224,7 +224,7 @@ func catalogTargets() []target {
 			tg.cleanup = []string{`DROP SCHEMA IF EXISTS jsql_catalog CASCADE`}
 		case "oracle":
 			tg.cleanup = oracleDrops(tg.schema, "f_users_f_roles", "f_orders_items", "f_orders", "f_users", "f_roles", "f_doc_types",
-				"f_products", "f_events", "f_tenant", "f_project", "f_required", "f_strict", "f_child", "f_parent", "series")
+				"f_products", "f_json_model", "f_many", "f_events", "f_tenant", "f_project", "f_required", "f_strict", "f_child", "f_parent", "series")
 		}
 		result = append(result, tg)
 	}
@@ -317,9 +317,16 @@ func (s *suite) connection() {
 		db.SetDebug(false)
 		return db.ToJson().Str("name"), nil
 	})
-	s.mark(1, "DB.Query / DB.QueryTx (SQL libre en JSON)", "gap", "jquery.go no genera SQL todavía (brecha #1 de spec.md)", func() (any, error) {
-		_, err := db.Query(et.Json{"select": []any{"id"}})
-		return fmt.Sprint(err), nil
+	s.run(1, "DB.Query con descriptor inválido (devuelve error)", func() (any, error) {
+		_, err := db.Query(et.Json{"limit": 10})
+		if err == nil {
+			return nil, errors.New("a descriptor without query, command or define key was accepted")
+		}
+		_, err2 := db.Query(et.Json{"insert": et.Json{"from": "f_products"}, "delete": et.Json{"from": "f_products"}})
+		if err2 == nil {
+			return nil, errors.New("a descriptor with two commands was accepted")
+		}
+		return []string{err.Error(), err2.Error()}, nil
 	})
 }
 
@@ -535,6 +542,35 @@ func (s *suite) ddl() {
 		}
 		return "ok", nil
 	})
+	s.run(2, "DB.Query define (Define en JSON)", func() (any, error) {
+		items, err := db.Query(et.Json{"define": et.Json{
+			"schema":       s.schema,
+			"name":         "f_json_model",
+			"version":      1,
+			"source_field": jsql.SOURCE,
+			"columns": []any{
+				et.Json{"name": "id", "type_column": "column", "type_data": "key", "default": ""},
+				et.Json{"name": "title", "type_column": "column", "type_data": "text", "default": ""},
+			},
+			"primary_keys": []any{et.Json{"name": "id", "sorted": true}},
+		}})
+		if err != nil {
+			return nil, err
+		}
+		model, err := db.GetModel(s.schema, "f_json_model")
+		if err != nil {
+			return nil, err
+		}
+		if _, err := model.Insert(et.Json{"id": "j1", "title": "desde define", "extra": 1}).Exec(); err != nil {
+			return nil, err
+		}
+		row, err := model.Where(jsql.Eq("id", "j1")).One()
+		if err != nil {
+			return nil, err
+		}
+		got := et.Json{"name": items.Result[0].Str("name"), "title": row.Result["title"], "extra": row.Result["extra"]}
+		return got, expect("define", et.Json{"name": "f_json_model", "title": "desde define", "extra": 1}, got)
+	})
 	s.run(2, "Insert (datos base)", func() (any, error) {
 		m := s.models
 		rows := []struct {
@@ -580,6 +616,35 @@ func (s *suite) ddl() {
 **/
 func (s *suite) relations() {
 	users, orders := s.models["f_users"], s.models["f_orders"]
+	s.run(2, "DefineUnique (rechaza duplicados en insert, bulk y update)", func() (any, error) {
+		users := s.models["f_users"]
+		_, errInsert := users.Insert(et.Json{"id": "u9", "name": "Copia", "email": "ana@example.com"}).Exec()
+		if !errors.Is(errInsert, jsql.ErrRecordAlreadyExists) {
+			return nil, fmt.Errorf("insert with a duplicated email: want ErrRecordAlreadyExists, got %v", errInsert)
+		}
+		_, errBulk := users.Bulk([]et.Json{
+			{"id": "u8", "name": "Uno", "email": "same@example.com"},
+			{"id": "u7", "name": "Dos", "email": "same@example.com"},
+		}).Exec()
+		if !errors.Is(errBulk, jsql.ErrRecordAlreadyExists) {
+			return nil, fmt.Errorf("bulk with a repeated email: want ErrRecordAlreadyExists, got %v", errBulk)
+		}
+		_, errUpdate := users.Update(et.Json{"email": "ana@example.com"}).Where(jsql.Eq("id", "u2")).Exec()
+		if !errors.Is(errUpdate, jsql.ErrRecordAlreadyExists) {
+			return nil, fmt.Errorf("update to another row's email: want ErrRecordAlreadyExists, got %v", errUpdate)
+		}
+		if _, err := users.Update(et.Json{"email": "luis@example.com", "age": 17}).Where(jsql.Eq("id", "u2")).Exec(); err != nil {
+			return nil, fmt.Errorf("update keeping its own email: %w", err)
+		}
+		count, err := users.Count()
+		if err != nil {
+			return nil, err
+		}
+		if count != 3 {
+			return nil, fmt.Errorf("the rejected inserts changed the table: %d users", count)
+		}
+		return []string{errInsert.Error(), errBulk.Error(), errUpdate.Error()}, nil
+	})
 	s.run(3, "Detail en el select (DefineDetail)", func() (any, error) {
 		row, err := orders.Select("id", "items").Where(jsql.Eq("id", "o1")).One()
 		if err != nil {
@@ -672,6 +737,13 @@ func (s *suite) relations() {
 		}
 		return row.Result, expect("label", "Ana <ana@example.com>", row.Result["label"])
 	})
+	s.run(3, "Query.Calc con script JS (DefineCalc)", func() (any, error) {
+		row, err := users.Where(jsql.Eq("id", "u3")).Calc("initial").One()
+		if err != nil {
+			return nil, err
+		}
+		return row.Result, expect("initial", "M", row.Result["initial"])
+	})
 	s.run(3, "DefineCalc (script JS)", func() (any, error) {
 		row, err := users.Select("id", "name", "initial").Where(jsql.Eq("id", "u3")).One()
 		if err != nil {
@@ -756,6 +828,31 @@ func (s *suite) queries() {
 		}
 		return items.Result, expect("rows", []et.Json{{"id": "u1", "n": 2}, {"id": "u2", "n": 0}, {"id": "u3", "n": 1}}, items.Result)
 	})
+	s.run(4, "RightJoin / FullJoin", func() (any, error) {
+		want := []et.Json{{"id": "u1", "n": 2}, {"id": "u2", "n": 0}, {"id": "u3", "n": 1}}
+		right, err := orders.As("A").
+			RightJoin(users, "U", []*et.Condition{jsql.Eq("A.user_id", "U.id")}).
+			Select("U.id", "count(A.id):n").
+			GroupBy("U.id").
+			OrderBy("U.id", true).
+			All()
+		if err != nil {
+			return nil, err
+		}
+		if err := expect("right join", want, right.Result); err != nil {
+			return right.Result, err
+		}
+		full, err := users.As("A").
+			FullJoin(orders, "O", []*et.Condition{jsql.Eq("O.user_id", "A.id")}).
+			Select("A.id", "count(O.id):n").
+			GroupBy("A.id").
+			OrderBy("A.id", true).
+			All()
+		if err != nil {
+			return nil, err
+		}
+		return full.Result, expect("full join", want, full.Result)
+	})
 	s.run(4, "GroupBy + Having (fluido)", func() (any, error) {
 		items, err := orders.Select("user_id", "count(id):n", "sum(amount):total").
 			GroupBy("user_id").
@@ -820,6 +917,46 @@ func (s *suite) queries() {
 			return nil, errors.New("an unknown from was accepted")
 		}
 		return err.Error(), nil
+	})
+	s.run(4, "DB.Query consulta (select, from, join, group by, order by)", func() (any, error) {
+		items, err := s.db.Query(et.Json{
+			"select":    []any{"U.name", "count(O.id):n"},
+			"from":      s.schema + ".f_users:U",
+			"left join": []any{et.Json{"to": s.schema + ".f_orders:O", "on": []any{et.Json{"O.user_id": et.Json{"eq": "U.id"}}}}},
+			"group by":  []any{"U.name"},
+			"order by":  []any{et.Json{"U.name": true}},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return items.Result, expect("rows", []et.Json{{"name": "Ana", "n": 2}, {"name": "Luis", "n": 0}, {"name": "Marta O'Neil", "n": 1}}, items.Result)
+	})
+	s.run(4, "DB.Query consulta (where + and/or de primer nivel, limit, offset)", func() (any, error) {
+		items, err := s.db.Query(et.Json{
+			"select":   []any{"id"},
+			"from":     "f_users",
+			"where":    []any{et.Json{"age": et.Json{"more": 18}}},
+			"or":       []any{et.Json{"name": et.Json{"eq": "Luis"}}},
+			"order_by": []any{et.Json{"id": true}},
+			"limit":    2,
+			"offset":   1,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return items.Result, expect("ids", []string{"u2", "u3"}, ids(items))
+	})
+	s.run(4, "Model.Query con claves select / group by / order by", func() (any, error) {
+		items, err := orders.Query(et.Json{
+			"select":   []any{"user_id", "count(id):n"},
+			"group by": []any{"user_id"},
+			"having":   []any{et.Json{"count(id)": et.Json{"more": 1}}},
+			"order by": []any{et.Json{"user_id": true}},
+		}).All()
+		if err != nil {
+			return nil, err
+		}
+		return items.Result, expect("rows", []et.Json{{"user_id": "u1", "n": 2}}, items.Result)
 	})
 	s.run(4, "NewQuery / GetField / GetColumn / GetFrom / ToJson", func() (any, error) {
 		query := jsql.NewQuery(users, "X")
@@ -964,6 +1101,142 @@ func (s *suite) commands() {
 		}
 		got := et.Json{"deleted": row.Result.Str("name"), "exists": exists}
 		return got, expect("delete", et.Json{"deleted": "Control", "exists": false}, got)
+	})
+	s.run(6, "DB.Query insert + bulk (con triggers JS)", func() (any, error) {
+		from := s.schema + ".f_products"
+		inserted, err := s.db.Query(et.Json{"insert": et.Json{
+			"from":          from,
+			"data":          et.Json{"id": "j1", "name": "Mesh", "category": "equipos", "price": 450000},
+			"before_insert": []any{`NEW.origin = "json";`},
+		}})
+		if err != nil {
+			return nil, err
+		}
+		bulk, err := s.db.Query(et.Json{"bulk": et.Json{
+			"from": from,
+			"data": []any{
+				et.Json{"id": "j2", "name": "Extensor", "category": "equipos"},
+				et.Json{"id": "j3", "name": "Splitter", "category": "equipos"},
+			},
+		}})
+		if err != nil {
+			return nil, err
+		}
+		got := et.Json{"origin": inserted.Result[0]["origin"], "bulk": ids(bulk)}
+		return got, expect("insert", et.Json{"origin": "json", "bulk": []string{"j2", "j3"}}, got)
+	})
+	s.run(6, "DB.Query update + delete", func() (any, error) {
+		from := s.schema + ".f_products"
+		updated, err := s.db.Query(et.Json{"update": et.Json{
+			"from":          from,
+			"data":          et.Json{"price": 99},
+			"where":         []any{et.Json{"category": et.Json{"eq": "equipos"}}, et.Json{"and": et.Json{"id": et.Json{"in": []any{"j2", "j3"}}}}},
+			"before_update": []any{`NEW.touched = true;`},
+		}})
+		if err != nil {
+			return nil, err
+		}
+		deleted, err := s.db.Query(et.Json{"delete": et.Json{
+			"from":  from,
+			"where": []any{et.Json{"id": et.Json{"eq": "j3"}}},
+		}})
+		if err != nil {
+			return nil, err
+		}
+		prices := []any{}
+		for _, row := range updated.Result {
+			prices = append(prices, row["price"], row["touched"])
+		}
+		got := et.Json{"updated": updated.Count, "values": prices, "deleted": ids(deleted)}
+		return got, expect("update/delete", et.Json{"updated": 2, "values": []any{99, true, 99, true}, "deleted": []string{"j3"}}, got)
+	})
+	s.run(6, "DB.Query upsert (inserta, actualiza y exige where)", func() (any, error) {
+		from := s.schema + ".f_products"
+		upsert := func(name string) (et.Items, error) {
+			return s.db.Query(et.Json{"upsert": et.Json{
+				"from":                 from,
+				"data":                 et.Json{"id": "j4", "name": name},
+				"where":                []any{et.Json{"id": et.Json{"eq": "j4"}}},
+				"before_insert":        []any{`NEW.path = "insert";`},
+				"before_update":        []any{`NEW.path = "update";`},
+				"before_insert_update": []any{`NEW.both = true;`},
+			}})
+		}
+		first, err := upsert("Repetidor")
+		if err != nil {
+			return nil, err
+		}
+		second, err := upsert("Repetidor Pro")
+		if err != nil {
+			return nil, err
+		}
+		_, errWhere := s.db.Query(et.Json{"upsert": et.Json{"from": from, "data": et.Json{"id": "j5"}}})
+		if errWhere == nil {
+			return nil, errors.New("upsert without where was accepted")
+		}
+		got := et.Json{
+			"first":  et.Json{"name": first.Result[0]["name"], "path": first.Result[0]["path"], "both": first.Result[0]["both"]},
+			"second": et.Json{"name": second.Result[0]["name"], "path": second.Result[0]["path"], "both": second.Result[0]["both"]},
+		}
+		return got, expect("upsert", et.Json{
+			"first":  et.Json{"name": "Repetidor", "path": "insert", "both": true},
+			"second": et.Json{"name": "Repetidor Pro", "path": "update", "both": true},
+		}, got)
+	})
+	s.run(6, "Update / Delete con limit (por defecto, n y 0 = todas)", func() (any, error) {
+		many, err := s.model("f_many", "name")
+		if err != nil {
+			return nil, err
+		}
+		if err := many.Init(); err != nil {
+			return nil, err
+		}
+		for i := 1; i <= 6; i++ {
+			if _, err := many.Insert(et.Json{"id": fmt.Sprintf("m%d", i), "name": "x"}).Exec(); err != nil {
+				return nil, err
+			}
+		}
+		// Default limit: DB_RECORD_LIMIT (here 2), capped at 1000.
+		limit := s.db.RecordLimit
+		s.db.RecordLimit = 2
+		byDefault, err := many.Update(et.Json{"name": "y"}).Where(jsql.Eq("name", "x")).Exec()
+		s.db.RecordLimit = limit
+		if err != nil {
+			return nil, err
+		}
+		explicit, err := many.Update(et.Json{"name": "y"}).Where(jsql.Eq("name", "x")).Limit(3).Exec()
+		if err != nil {
+			return nil, err
+		}
+		pending, err := many.Where(jsql.Eq("name", "x")).Count()
+		if err != nil {
+			return nil, err
+		}
+		deleted, err := s.db.Query(et.Json{"delete": et.Json{
+			"from":  s.schema + ".f_many",
+			"where": []any{et.Json{"name": et.Json{"in": []any{"x", "y"}}}},
+			"limit": 0,
+		}})
+		if err != nil {
+			return nil, err
+		}
+		left, err := many.Count()
+		if err != nil {
+			return nil, err
+		}
+		got := et.Json{"default": byDefault.Count, "limit_3": explicit.Count, "pending": pending, "limit_0_deleted": deleted.Count, "left": left}
+		return got, expect("counts", et.Json{"default": 2, "limit_3": 3, "pending": 1, "limit_0_deleted": 6, "left": 0}, got)
+	})
+	s.run(6, "Upsert fluido sin where (devuelve error)", func() (any, error) {
+		_, err := products.Upsert(et.Json{"id": "p9", "name": "sin where"}).Exec()
+		if !errors.Is(err, jsql.ErrUpsertWhereRequired) {
+			return nil, fmt.Errorf("want ErrUpsertWhereRequired, got %v", err)
+		}
+		exists, err := products.Where(jsql.Eq("id", "p9")).Exists()
+		if err != nil {
+			return nil, err
+		}
+		return exists, expect("inserted", false, exists)
 	})
 	s.run(6, "Test (no ejecuta) + ToJson", func() (any, error) {
 		cmd := products.Insert(et.Json{"id": "p8", "name": "No se guarda"}).Test()
@@ -1199,6 +1472,15 @@ func (s *suite) utilities() {
 			"parse":  "name = 'Ana' AND age = 30",
 			"json":   `{"html":"<b>&"}`,
 		}, got)
+	})
+	s.run(11, "SQLParse con 10 o más parámetros", func() (any, error) {
+		args := []any{"a"}
+		for i := 2; i <= 11; i++ {
+			args = append(args, i)
+		}
+		args[1] = "costs $3"
+		got := jsql.SQLParse("x = $1 AND y = $2 AND z = $10 AND w = $11 AND v = $12", args...)
+		return got, expect("sql", "x = 'a' AND y = 'costs $3' AND z = 10 AND w = 11 AND v = $12", got)
 	})
 	s.run(11, "ArgWhitAs / ArgWhitSchema / StatusList / TypeColumn.Str", func() (any, error) {
 		as, _ := jsql.ArgWhitAs("public.users:U")

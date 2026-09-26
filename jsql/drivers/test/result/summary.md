@@ -4,9 +4,9 @@ Generado por `go test -run TestCatalog` en `jsql/drivers/test`. El detalle de ca
 
 | Driver | Pasan | Fallan | Brechas | Omitidos |
 |---|---|---|---|---|
-| sqlite | 78 | 0 | 1 | 1 |
-| postgres | 78 | 0 | 1 | 1 |
-| oracle | 78 | 0 | 1 | 1 |
+| sqlite | 92 | 0 | 0 | 1 |
+| postgres | 92 | 0 | 0 | 1 |
+| oracle | 92 | 0 | 0 | 1 |
 
 ## 1. Conexión y base de datos
 
@@ -21,7 +21,7 @@ Generado por `go test -run TestCatalog` en `jsql/drivers/test`. El detalle de ca
 | SqlTx + Tx.Commit | ✅ | ✅ | ✅ |
 | Connection.GetParams / SetDatabase / GetDatabase | ✅ | ✅ | ✅ |
 | SetDebug / Debug | ✅ | ✅ | ✅ |
-| DB.Query / DB.QueryTx (SQL libre en JSON) | ⚠️ brecha | ⚠️ brecha | ⚠️ brecha |
+| DB.Query con descriptor inválido (devuelve error) | ✅ | ✅ | ✅ |
 
 ## 2. Definición de modelos (DDL)
 
@@ -34,7 +34,9 @@ Generado por `go test -run TestCatalog` en `jsql/drivers/test`. El detalle de ca
 | DefineForeignKeys (rechaza un hijo sin padre) | ✅ | ✅ | ✅ |
 | Stricted (ignora campos desconocidos) | ✅ | ✅ | ✅ |
 | GetModel / RemoveModel / NewModel | ✅ | ✅ | ✅ |
+| DB.Query define (Define en JSON) | ✅ | ✅ | ✅ |
 | Insert (datos base) | ✅ | ✅ | ✅ |
+| DefineUnique (rechaza duplicados en insert, bulk y update) | ✅ | ✅ | ✅ |
 
 ## 3. Relaciones y campos calculados
 
@@ -48,6 +50,7 @@ Generado por `go test -run TestCatalog` en `jsql/drivers/test`. El detalle de ca
 | DefineRollup row (tp_doc → title) | ✅ | ✅ | ✅ |
 | DefineRollup (count, sum, object) | ✅ | ✅ | ✅ |
 | DefineCalcFunc + Model.Calc | ✅ | ✅ | ✅ |
+| Query.Calc con script JS (DefineCalc) | ✅ | ✅ | ✅ |
 | DefineCalc (script JS) | ✅ | ✅ | ✅ |
 
 ## 4. Consultas
@@ -60,12 +63,16 @@ Generado por `go test -run TestCatalog` en `jsql/drivers/test`. El detalle de ca
 | Hidden (campo oculto en la consulta y en el modelo) | ✅ | ✅ | ✅ |
 | Join (fluido) | ✅ | ✅ | ✅ |
 | LeftJoin + GroupBy | ✅ | ✅ | ✅ |
+| RightJoin / FullJoin | ✅ | ✅ | ✅ |
 | GroupBy + Having (fluido) | ✅ | ✅ | ✅ |
 | Model.Query (JSON) | ✅ | ✅ | ✅ |
 | Model.Query con from (otro modelo y alias) | ✅ | ✅ | ✅ |
 | Model.Query con from sin esquema | ✅ | ✅ | ✅ |
 | Model.Query con from + join + groups | ✅ | ✅ | ✅ |
 | Model.Query con from inválido (devuelve error) | ✅ | ✅ | ✅ |
+| DB.Query consulta (select, from, join, group by, order by) | ✅ | ✅ | ✅ |
+| DB.Query consulta (where + and/or de primer nivel, limit, offset) | ✅ | ✅ | ✅ |
+| Model.Query con claves select / group by / order by | ✅ | ✅ | ✅ |
 | NewQuery / GetField / GetColumn / GetFrom / ToJson | ✅ | ✅ | ✅ |
 | Test (genera el SQL sin ejecutarlo) / Debug | ✅ | ✅ | ✅ |
 
@@ -102,6 +109,11 @@ Generado por `go test -run TestCatalog` en `jsql/drivers/test`. El detalle de ca
 | Upsert (inserta y luego actualiza) | ✅ | ✅ | ✅ |
 | Return (campos del RETURNING) | ✅ | ✅ | ✅ |
 | Delete (devuelve la fila borrada) | ✅ | ✅ | ✅ |
+| DB.Query insert + bulk (con triggers JS) | ✅ | ✅ | ✅ |
+| DB.Query update + delete | ✅ | ✅ | ✅ |
+| DB.Query upsert (inserta, actualiza y exige where) | ✅ | ✅ | ✅ |
+| Update / Delete con limit (por defecto, n y 0 = todas) | ✅ | ✅ | ✅ |
+| Upsert fluido sin where (devuelve error) | ✅ | ✅ | ✅ |
 | Test (no ejecuta) + ToJson | ✅ | ✅ | ✅ |
 
 ## 7. Triggers
@@ -139,6 +151,7 @@ Generado por `go test -run TestCatalog` en `jsql/drivers/test`. El detalle de ca
 | Caso | sqlite | postgres | oracle |
 |---|---|---|---|
 | Quoted / EscapeSQLString / SQLParse / JsonString | ✅ | ✅ | ✅ |
+| SQLParse con 10 o más parámetros | ✅ | ✅ | ✅ |
 | ArgWhitAs / ArgWhitSchema / StatusList / TypeColumn.Str | ✅ | ✅ | ✅ |
 | RowsToItems | ✅ | ✅ | ✅ |
 | Model.Db / SetDb / GetModel / ToJson, Column.ToJson, Schema.ToJson | ✅ | ✅ | ✅ |

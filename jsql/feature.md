@@ -124,7 +124,7 @@ Los comandos también se pueden describir en json. Cada comando se escribe bajo 
 
 before_insert y after_insert son listas de código javascript que goja ejecuta antes y después del insert. En el script, el registro nuevo está en NEW (OLD está vacío en un insert), y los cambios que before_insert haga en NEW son los que se guardan.
 
-- Update: actualiza los registros que cumplen el where con los valores de data. Los atributos se fusionan en SourceField sin borrar los que ya existen. La estructura json para un update es la siguiente:
+- Update: actualiza los registros que cumplen el where con los valores de data. Los atributos se fusionan en SourceField sin borrar los que ya existen. limit indica cuántos registros se actualizan como máximo, para no poner en riesgo la estabilidad de la base de datos con un where muy amplio: si no se envía, se usa un valor por defecto de máximo 1000 registros, y si se envía en 0 se actualizan todos los registros que cumplen el where. La estructura json para un update es la siguiente:
 
 ```json
 {
@@ -137,6 +137,7 @@ before_insert y after_insert son listas de código javascript que goja ejecuta a
       { "id": { "eq": 1 } },
       { "and": { "status": { "eq": "active" } } }
     ],
+    "limit": 100,
     "before_update": ["code javascript...", "code javascript..."],
     "after_update": ["code javascript...", "code javascript..."]
   }
@@ -145,7 +146,7 @@ before_insert y after_insert son listas de código javascript que goja ejecuta a
 
 before_update y after_update son listas de código javascript que goja ejecuta antes y después de actualizar cada registro. En el script, OLD es el registro antes del cambio y NEW el registro con los valores de data aplicados; los cambios que before_update haga en NEW son los que se guardan.
 
-- Delete: elimina los registros que cumplen el where y devuelve los datos eliminados. La estructura json para un delete es la siguiente:
+- Delete: elimina los registros que cumplen el where y devuelve los datos eliminados. Igual que en update, limit indica cuántos registros se eliminan como máximo: si no se envía, se usa un valor por defecto de máximo 1000 registros, y si se envía en 0 se eliminan todos los registros que cumplen el where. La estructura json para un delete es la siguiente:
 
 ```json
 {
@@ -155,6 +156,7 @@ before_update y after_update son listas de código javascript que goja ejecuta a
       { "id": { "eq": 1 } },
       { "and": { "status": { "eq": "active" } } }
     ],
+    "limit": 100,
     "before_delete": ["code javascript...", "code javascript..."],
     "after_delete": ["code javascript...", "code javascript..."]
   }
@@ -176,6 +178,7 @@ before_delete y after_delete son listas de código javascript que goja ejecuta a
       { "id": { "eq": 1 } },
       { "and": { "status": { "eq": "active" } } }
     ],
+    "limit": 100,
     "before_insert": ["code javascript...", "code javascript..."],
     "after_insert": ["code javascript...", "code javascript..."],
     "before_update": ["code javascript...", "code javascript..."],

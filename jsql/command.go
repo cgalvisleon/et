@@ -30,6 +30,7 @@ type Command struct {
 	Old            et.Json           `json:"old"`
 	Conditions     []*et.Condition   `json:"conditions"`
 	Returns        []string          `json:"returns"`
+	RowsLimit      *int              `json:"limit,omitempty"`
 	UseSourceField bool              `json:"use_source_field"`
 	BeforeInserts  []string          `json:"before_inserts"`
 	BeforeUpdates  []string          `json:"before_updates"`
@@ -392,6 +393,54 @@ func getJsJson(instance *jrex.Instance, name string) et.Json {
 	return et.Json{}
 }
 
+// maxDefaultCommandRows caps the default number of rows an update or delete works on when no limit is set.
+const maxDefaultCommandRows = 1000
+
+/**
+* limit: Sets how many rows an update or delete (or the update of an upsert) works on: n > 0 works
+* on at most n rows and 0 on every row that matches the where. Without a limit, DB_RECORD_LIMIT is
+* used, with a maximum of 1000, so a command without where cannot touch a whole large table.
+* @param rows int
+* @return *Command
+**/
+func (s *Command) limit(rows int) *Command {
+	if rows < 0 {
+		rows = 0
+	}
+	s.RowsLimit = &rows
+	return s
+}
+
+/**
+* rowsLimit: Returns the number of rows the command works on (0 = every row that matches the where).
+* @return int
+**/
+func (s *Command) rowsLimit() int {
+	if s.RowsLimit != nil {
+		return *s.RowsLimit
+	}
+	rows := maxDefaultCommandRows
+	if s.db != nil && s.db.RecordLimit > 0 && s.db.RecordLimit < rows {
+		rows = s.db.RecordLimit
+	}
+	return rows
+}
+
+/**
+* rowsQuery: Returns the query that reads the rows an update or delete works on: the rows that
+* match the conditions, up to rowsLimit (all of them when it is 0).
+* @return *Query
+**/
+func (s *Command) rowsQuery() *Query {
+	query := NewQuery(s.model).addCondition(s.Conditions)
+	if rows := s.rowsLimit(); rows > 0 {
+		query.Rows = rows
+	} else {
+		query.unlimited = true
+	}
+	return query
+}
+
 /**
 * insert: Executes INSERT for each row in Data, running before/after triggers per row.
 * @param tx *Tx
@@ -486,8 +535,7 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 
 	result := et.NewItems([]et.Json{})
 	model := s.model
-	current, err := NewQuery(model).
-		addCondition(s.Conditions).
+	current, err := s.rowsQuery().
 		AllTx(tx)
 	if err != nil {
 		return et.Items{}, err
@@ -566,8 +614,7 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 func (s *Command) delete(tx *Tx) (et.Items, error) {
 	result := et.NewItems([]et.Json{})
 	model := s.model
-	items, err := NewQuery(model).
-		addCondition(s.Conditions).
+	items, err := s.rowsQuery().
 		AllTx(tx)
 	if err != nil {
 		return et.Items{}, err
@@ -646,6 +693,9 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 * @return et.Items, error
 **/
 func (s *Command) upsert(tx *Tx) (et.Items, error) {
+	if len(s.Conditions) == 0 {
+		return et.Items{}, ErrUpsertWhereRequired
+	}
 	model := s.model
 	isExists, err := NewQuery(model).
 		addCondition(s.Conditions).

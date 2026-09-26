@@ -255,6 +255,7 @@ type Query struct {
 	isTest         bool                     `json:"-"`
 	relationKeys   []string                 `json:"-"`
 	err            error                    `json:"-"`
+	unlimited      bool                     `json:"-"`
 }
 
 /**
@@ -499,11 +500,12 @@ func (s *Query) selects(fields ...string) *Query {
 func (s *Query) calc(fields ...string) *Query {
 	for _, field := range fields {
 		for _, from := range s.Froms {
-			fn, ok := from.Model.calcs[field]
-			if !ok {
-				continue
+			if fn, ok := from.Model.calcs[field]; ok {
+				s.CalcFuns[field] = fn
 			}
-			s.CalcFuns[field] = fn
+			if _, ok := from.Model.calcScripts[field]; ok {
+				s.Calcs[field] = &Calc{Model: from.Model}
+			}
 		}
 	}
 	return s
@@ -713,6 +715,46 @@ func (s *Query) orderBy(field string, sorted ...bool) *Query {
 	}
 	s.OrdersBy = append(s.OrdersBy, &Index{Name: field, Sorted: sortedValue})
 	return s
+}
+
+// queryAliases maps the other spellings accepted in a JSON query to the keys loadQuery reads:
+// the SQL-like keywords of DB.Query ("select", "group by"…) and their snake_case forms.
+var queryAliases = map[string]string{
+	"select":     "selects",
+	"hidden":     "hiddens",
+	"group by":   "groups",
+	"group_by":   "groups",
+	"having":     "havings",
+	"order by":   "orders",
+	"order_by":   "orders",
+	"left join":  "left_join",
+	"right join": "right_join",
+	"full join":  "full_join",
+}
+
+/**
+* normalizeQuery: Returns the query descriptor with lowercase keys and the accepted aliases
+* ("select", "group by", "order by", "having"…) renamed to the keys loadQuery reads. When both a
+* key and its alias are present, the key wins.
+* @param query et.Json
+* @return et.Json
+**/
+func normalizeQuery(query et.Json) et.Json {
+	result := et.Json{}
+	for key, value := range query {
+		result[strings.ToLower(strings.TrimSpace(key))] = value
+	}
+	for alias, key := range queryAliases {
+		value, ok := result[alias]
+		if !ok {
+			continue
+		}
+		if _, exists := result[key]; !exists {
+			result[key] = value
+		}
+		delete(result, alias)
+	}
+	return result
 }
 
 /**
@@ -1005,7 +1047,7 @@ func (s *Query) allTx(tx *Tx) (et.Items, error) {
 	if s.err != nil {
 		return et.Items{}, s.err
 	}
-	if s.Rows == 0 {
+	if s.Rows == 0 && !s.unlimited {
 		s.Rows = s.MaxRows
 	}
 	s.addRelationKeys()
@@ -1228,6 +1270,7 @@ func (s *Query) count() (int, error) {
 * @return et.Items, error
 **/
 func (s *Query) loadQuery(query et.Json) (*Query, error) {
+	query = normalizeQuery(query)
 	if err := s.loadFrom(query["from"]); err != nil {
 		return s, err
 	}
@@ -1365,6 +1408,24 @@ func (s *Query) loadQuery(query et.Json) (*Query, error) {
 	}
 	s.Conditions = conditions
 
+	// "and" / "or" at the first level add conditions joined with that connector.
+	for _, group := range []struct {
+		key       string
+		connector et.Connector
+	}{{"and", et.AND}, {"or", et.OR}} {
+		key, connector := group.key, group.connector
+		extra, err := et.ToConditions(query.ArrayJson(key))
+		if err != nil {
+			return s, err
+		}
+		for _, cond := range extra {
+			if cond.Connector == et.NaC {
+				cond.Connector = connector
+			}
+			s.Conditions = append(s.Conditions, cond)
+		}
+	}
+
 	groups := query.ArrayStr("groups")
 	if len(groups) > 0 {
 		s.GroupBy(groups...)
@@ -1382,6 +1443,10 @@ func (s *Query) loadQuery(query et.Json) (*Query, error) {
 
 	page := query.ValInt(0, "page")
 	s.setPage(page)
+
+	if offset := query.ValInt(-1, "offset"); offset >= 0 {
+		s.Offset = offset
+	}
 
 	orders := query.ArrayJson("orders")
 	for _, order := range orders {

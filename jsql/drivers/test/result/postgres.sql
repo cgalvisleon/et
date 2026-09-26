@@ -220,7 +220,7 @@ ALTER TABLE jsql_catalog.f_child ADD CONSTRAINT fk_jsql_catalog_f_child_jsql_cat
 INSERT INTO jsql_catalog.f_parent
   (_idx, id)
 VALUES
-  ('1790448835465', 'p1')
+  ('1790455005747', 'p1')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -233,7 +233,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_child
   (_idx, id, parent_id)
 VALUES
-  ('1790448835469', 'c1', 'p1')
+  ('1790455005753', 'c1', 'p1')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -247,7 +247,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_child
   (_idx, id, parent_id)
 VALUES
-  ('1790448835472', 'c2', 'missing')
+  ('1790455005758', 'c2', 'missing')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -280,7 +280,7 @@ CREATE INDEX IF NOT EXISTS jsql_catalog_f_strict__idx_idx ON jsql_catalog.f_stri
 INSERT INTO jsql_catalog.f_strict
   (_idx, id, name)
 VALUES
-  ('1790448835478', 's1', 'x')
+  ('1790455005768', 's1', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -304,13 +304,48 @@ FROM jsql_catalog.f_strict AS A
 WHERE A.id = 's1'
 LIMIT 1;
 
+-- ========== 2. Definición de modelos (DDL) · DB.Query define (Define en JSON) [pass]
+
+-- DDL
+CREATE SCHEMA IF NOT EXISTS jsql_catalog;
+
+CREATE TABLE IF NOT EXISTS jsql_catalog.f_json_model (
+  id VARCHAR(80) DEFAULT NULL,
+  title VARCHAR(255) DEFAULT NULL,
+  _source JSONB DEFAULT '{}'
+);
+
+ALTER TABLE jsql_catalog.f_json_model ADD CONSTRAINT jsql_catalog_f_json_model_pkey PRIMARY KEY (id);
+
+-- INSERT
+INSERT INTO jsql_catalog.f_json_model
+  (id, title, _source)
+VALUES
+  ('j1', 'desde define', '{"extra":1}'::jsonb)
+RETURNING _source ||
+jsonb_build_object(
+'id', id,
+'title', title
+) AS result;
+
+-- QUERY
+SELECT
+A._source ||
+jsonb_build_object(
+'id', A.id,
+'title', A.title
+) AS result
+FROM jsql_catalog.f_json_model AS A
+WHERE A.id = 'j1'
+LIMIT 1;
+
 -- ========== 2. Definición de modelos (DDL) · Insert (datos base) [pass]
 
 -- INSERT
 INSERT INTO jsql_catalog.f_doc_types
   (_idx, id, title)
 VALUES
-  ('1790448835482', 'CC', 'Cédula de ciudadanía')
+  ('1790455005798', 'CC', 'Cédula de ciudadanía')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -324,7 +359,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_doc_types
   (_idx, id, title)
 VALUES
-  ('1790448835485', 'NIT', 'Número de identificación tributaria')
+  ('1790455005842', 'NIT', 'Número de identificación tributaria')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -334,11 +369,16 @@ jsonb_build_object(
 'title', title
 ) AS result;
 
+-- QUERY
+SELECT EXISTS(SELECT 1
+FROM jsql_catalog.f_users AS A
+WHERE A.email = 'ana@example.com');
+
 -- INSERT
 INSERT INTO jsql_catalog.f_users
   (_idx, email, id, name, _source)
 VALUES
-  ('1790448835486', 'ana@example.com', 'u1', 'Ana', '{"age":30,"password":"secret","tp_doc":"CC"}'::jsonb)
+  ('1790455005857', 'ana@example.com', 'u1', 'Ana', '{"age":30,"password":"secret","tp_doc":"CC"}'::jsonb)
 RETURNING (_source - '{"_idx","password"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -349,11 +389,16 @@ jsonb_build_object(
 'email', email
 ) AS result;
 
+-- QUERY
+SELECT EXISTS(SELECT 1
+FROM jsql_catalog.f_users AS A
+WHERE A.email = 'luis@example.com');
+
 -- INSERT
 INSERT INTO jsql_catalog.f_users
   (_idx, email, id, name, _source)
 VALUES
-  ('1790448835488', 'luis@example.com', 'u2', 'Luis', '{"age":17}'::jsonb)
+  ('1790455005864', 'luis@example.com', 'u2', 'Luis', '{"age":17}'::jsonb)
 RETURNING (_source - '{"_idx","password"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -364,11 +409,16 @@ jsonb_build_object(
 'email', email
 ) AS result;
 
+-- QUERY
+SELECT EXISTS(SELECT 1
+FROM jsql_catalog.f_users AS A
+WHERE A.email = 'marta@example.com');
+
 -- INSERT
 INSERT INTO jsql_catalog.f_users
   (_idx, email, id, name, _source)
 VALUES
-  ('1790448835490', 'marta@example.com', 'u3', 'Marta O''Neil', '{"age":45,"tp_doc":"NIT"}'::jsonb)
+  ('1790455005865', 'marta@example.com', 'u3', 'Marta O''Neil', '{"age":45,"tp_doc":"NIT"}'::jsonb)
 RETURNING (_source - '{"_idx","password"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -383,7 +433,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_roles
   (_idx, id, name)
 VALUES
-  ('1790448835490', 'r1', 'admin')
+  ('1790455005865', 'r1', 'admin')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -397,7 +447,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_roles
   (_idx, id, name)
 VALUES
-  ('1790448835493', 'r2', 'editor')
+  ('1790455005870', 'r2', 'editor')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -411,7 +461,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_orders
   (_idx, id, user_id, _source)
 VALUES
-  ('1790448835494', 'o1', 'u1', '{"amount":100.5}'::jsonb)
+  ('1790455005877', 'o1', 'u1', '{"amount":100.5}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -425,7 +475,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_orders
   (_idx, id, user_id, _source)
 VALUES
-  ('1790448835496', 'o2', 'u1', '{"amount":200}'::jsonb)
+  ('1790455005881', 'o2', 'u1', '{"amount":200}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -439,7 +489,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_orders
   (_idx, id, user_id, _source)
 VALUES
-  ('1790448835497', 'o3', 'u3', '{"amount":50}'::jsonb)
+  ('1790455005882', 'o3', 'u3', '{"amount":50}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -503,22 +553,123 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_users_f_roles
   (_idx, role_id, user_id)
 VALUES
-  ('1790448835505', 'r1', 'u1')
+  ('1790455005893', 'r1', 'u1')
 RETURNING user_id, role_id;
 
 -- INSERT
 INSERT INTO jsql_catalog.f_users_f_roles
   (_idx, role_id, user_id)
 VALUES
-  ('1790448835506', 'r2', 'u1')
+  ('1790455005894', 'r2', 'u1')
 RETURNING user_id, role_id;
 
 -- INSERT
 INSERT INTO jsql_catalog.f_users_f_roles
   (_idx, role_id, user_id)
 VALUES
-  ('1790448835507', 'r2', 'u2')
+  ('1790455005895', 'r2', 'u2')
 RETURNING user_id, role_id;
+
+-- ========== 2. Definición de modelos (DDL) · DefineUnique (rechaza duplicados en insert, bulk y update) [pass]
+
+-- QUERY
+SELECT EXISTS(SELECT 1
+FROM jsql_catalog.f_users AS A
+WHERE A.email = 'ana@example.com');
+
+-- QUERY
+SELECT EXISTS(SELECT 1
+FROM jsql_catalog.f_users AS A
+WHERE A.email = 'same@example.com');
+
+-- BULK
+INSERT INTO jsql_catalog.f_users
+  (_idx, email, id, name)
+VALUES
+  ('1790455005897', 'same@example.com', 'u8', 'Uno')
+RETURNING (_source - '{"_idx","password"}'::text[]) ||
+jsonb_build_object(
+'created_at', created_at,
+'updated_at', updated_at,
+'status', status,
+'id', id,
+'name', name,
+'email', email
+) AS result;
+
+-- QUERY
+SELECT EXISTS(SELECT 1
+FROM jsql_catalog.f_users AS A
+WHERE A.email = 'same@example.com');
+
+-- QUERY
+SELECT
+(A._source - '{"_idx","password"}'::text[]) ||
+jsonb_build_object(
+'created_at', A.created_at,
+'updated_at', A.updated_at,
+'status', A.status,
+'id', A.id,
+'name', A.name,
+'email', A.email
+) AS result
+FROM jsql_catalog.f_users AS A
+WHERE A.id = 'u2'
+LIMIT 1000;
+
+-- QUERY
+SELECT
+(A._source - '{"_idx","password"}'::text[]) ||
+jsonb_build_object(
+'created_at', A.created_at,
+'updated_at', A.updated_at,
+'status', A.status,
+'id', A.id,
+'name', A.name,
+'email', A.email
+) AS result
+FROM jsql_catalog.f_users AS A
+WHERE A.email = 'ana@example.com'
+LIMIT 2;
+
+-- QUERY
+SELECT
+(A._source - '{"_idx","password"}'::text[]) ||
+jsonb_build_object(
+'created_at', A.created_at,
+'updated_at', A.updated_at,
+'status', A.status,
+'id', A.id,
+'name', A.name,
+'email', A.email
+) AS result
+FROM jsql_catalog.f_users AS A
+WHERE A.id = 'u2'
+LIMIT 1000;
+
+-- UPDATE
+UPDATE jsql_catalog.f_users
+SET
+  created_at = NULL,
+  email = 'luis@example.com',
+  name = 'Luis',
+  status = 'active',
+  updated_at = NULL,
+  _source = COALESCE(_source, '{}'::jsonb) || '{"age":17}'::jsonb
+WHERE id = 'u2'
+RETURNING (_source - '{"_idx","password"}'::text[]) ||
+jsonb_build_object(
+'created_at', created_at,
+'updated_at', updated_at,
+'status', status,
+'id', id,
+'name', name,
+'email', email
+) AS result;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_catalog.f_users AS A;
 
 -- ========== 3. Relaciones y campos calculados · Detail en el select (DefineDetail) [pass]
 
@@ -714,6 +865,23 @@ FROM jsql_catalog.f_users AS A
 WHERE A.id = 'u1'
 LIMIT 1;
 
+-- ========== 3. Relaciones y campos calculados · Query.Calc con script JS (DefineCalc) [pass]
+
+-- QUERY
+SELECT
+(A._source - '{"_idx","password"}'::text[]) ||
+jsonb_build_object(
+'created_at', A.created_at,
+'updated_at', A.updated_at,
+'status', A.status,
+'id', A.id,
+'name', A.name,
+'email', A.email
+) AS result
+FROM jsql_catalog.f_users AS A
+WHERE A.id = 'u3'
+LIMIT 1;
+
 -- ========== 3. Relaciones y campos calculados · DefineCalc (script JS) [pass]
 
 -- QUERY
@@ -844,6 +1012,34 @@ GROUP BY A.id
 ORDER BY A.id ASC
 LIMIT 1000;
 
+-- ========== 4. Consultas · RightJoin / FullJoin [pass]
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', U.id,
+'n', COUNT(A.id)::bigint
+) AS result
+FROM jsql_catalog.f_orders AS A
+RIGHT JOIN jsql_catalog.f_users AS U
+  ON A.user_id = U.id
+GROUP BY U.id
+ORDER BY U.id ASC
+LIMIT 1000;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'n', COUNT(O.id)::bigint
+) AS result
+FROM jsql_catalog.f_users AS A
+FULL JOIN jsql_catalog.f_orders AS O
+  ON O.user_id = A.id
+GROUP BY A.id
+ORDER BY A.id ASC
+LIMIT 1000;
+
 -- ========== 4. Consultas · GroupBy + Having (fluido) [pass]
 
 -- QUERY
@@ -908,6 +1104,49 @@ INNER JOIN jsql_catalog.f_orders AS O
   ON O.user_id = U.id
 GROUP BY U.name
 ORDER BY U.name ASC
+LIMIT 1000;
+
+-- ========== 4. Consultas · DB.Query consulta (select, from, join, group by, order by) [pass]
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'name', U.name,
+'n', COUNT(O.id)::bigint
+) AS result
+FROM jsql_catalog.f_users AS U
+LEFT JOIN jsql_catalog.f_orders AS O
+  ON O.user_id = U.id
+GROUP BY U.name
+ORDER BY U.name ASC
+LIMIT 1000;
+
+-- ========== 4. Consultas · DB.Query consulta (where + and/or de primer nivel, limit, offset) [pass]
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_catalog.f_users AS A
+WHERE (A._source->>'age')::bigint > 18
+  OR A.name = 'Luis'
+ORDER BY A.id ASC
+LIMIT 2
+OFFSET 1;
+
+-- ========== 4. Consultas · Model.Query con claves select / group by / order by [pass]
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'user_id', A.user_id,
+'n', COUNT(A.id)::bigint
+) AS result
+FROM jsql_catalog.f_orders AS A
+GROUP BY A.user_id
+HAVING COUNT(A.id)::bigint > 1
+ORDER BY A.user_id ASC
 LIMIT 1000;
 
 -- ========== 4. Consultas · Test (genera el SQL sin ejecutarlo) / Debug [pass]
@@ -1462,6 +1701,476 @@ SELECT EXISTS(SELECT 1
 FROM jsql_catalog.f_products AS A
 WHERE A.id = 'p6');
 
+-- ========== 6. Comandos · DB.Query insert + bulk (con triggers JS) [pass]
+
+-- INSERT
+INSERT INTO jsql_catalog.f_products
+  (category, id, name, _source)
+VALUES
+  ('equipos', 'j1', 'Mesh', '{"origin":"json","price":450000}'::jsonb)
+RETURNING _source ||
+jsonb_build_object(
+'id', id,
+'name', name,
+'category', category
+) AS result;
+
+-- BULK
+INSERT INTO jsql_catalog.f_products
+  (category, id, name)
+VALUES
+  ('equipos', 'j2', 'Extensor')
+RETURNING _source ||
+jsonb_build_object(
+'id', id,
+'name', name,
+'category', category
+) AS result;
+
+-- BULK
+INSERT INTO jsql_catalog.f_products
+  (category, id, name)
+VALUES
+  ('equipos', 'j3', 'Splitter')
+RETURNING _source ||
+jsonb_build_object(
+'id', id,
+'name', name,
+'category', category
+) AS result;
+
+-- ========== 6. Comandos · DB.Query update + delete [pass]
+
+-- QUERY
+SELECT
+A._source ||
+jsonb_build_object(
+'id', A.id,
+'name', A.name,
+'category', A.category
+) AS result
+FROM jsql_catalog.f_products AS A
+WHERE A.category = 'equipos'
+  AND A.id IN ('j2', 'j3')
+LIMIT 1000;
+
+-- UPDATE
+UPDATE jsql_catalog.f_products
+SET
+  category = 'equipos',
+  name = 'Extensor',
+  _source = COALESCE(_source, '{}'::jsonb) || '{"price":99,"touched":true}'::jsonb
+WHERE id = 'j2'
+RETURNING _source ||
+jsonb_build_object(
+'id', id,
+'name', name,
+'category', category
+) AS result;
+
+-- UPDATE
+UPDATE jsql_catalog.f_products
+SET
+  category = 'equipos',
+  name = 'Splitter',
+  _source = COALESCE(_source, '{}'::jsonb) || '{"price":99,"touched":true}'::jsonb
+WHERE id = 'j3'
+RETURNING _source ||
+jsonb_build_object(
+'id', id,
+'name', name,
+'category', category
+) AS result;
+
+-- QUERY
+SELECT
+A._source ||
+jsonb_build_object(
+'id', A.id,
+'name', A.name,
+'category', A.category
+) AS result
+FROM jsql_catalog.f_products AS A
+WHERE A.id = 'j3'
+LIMIT 1000;
+
+-- DELETE
+DELETE FROM jsql_catalog.f_products
+WHERE id = 'j3'
+RETURNING _source ||
+jsonb_build_object(
+'id', id,
+'name', name,
+'category', category
+) AS result;
+
+-- ========== 6. Comandos · DB.Query upsert (inserta, actualiza y exige where) [pass]
+
+-- QUERY
+SELECT EXISTS(SELECT 1
+FROM jsql_catalog.f_products AS A
+WHERE A.id = 'j4');
+
+-- INSERT
+INSERT INTO jsql_catalog.f_products
+  (id, name, _source)
+VALUES
+  ('j4', 'Repetidor', '{"both":true,"path":"insert"}'::jsonb)
+RETURNING _source ||
+jsonb_build_object(
+'id', id,
+'name', name,
+'category', category
+) AS result;
+
+-- QUERY
+SELECT EXISTS(SELECT 1
+FROM jsql_catalog.f_products AS A
+WHERE A.id = 'j4');
+
+-- QUERY
+SELECT
+A._source ||
+jsonb_build_object(
+'id', A.id,
+'name', A.name,
+'category', A.category
+) AS result
+FROM jsql_catalog.f_products AS A
+WHERE A.id = 'j4'
+LIMIT 1000;
+
+-- UPDATE
+UPDATE jsql_catalog.f_products
+SET
+  category = NULL,
+  name = 'Repetidor Pro',
+  _source = COALESCE(_source, '{}'::jsonb) || '{"both":true,"path":"update"}'::jsonb
+WHERE id = 'j4'
+RETURNING _source ||
+jsonb_build_object(
+'id', id,
+'name', name,
+'category', category
+) AS result;
+
+-- ========== 6. Comandos · Update / Delete con limit (por defecto, n y 0 = todas) [pass]
+
+-- DDL
+CREATE SCHEMA IF NOT EXISTS jsql_catalog;
+
+CREATE TABLE IF NOT EXISTS jsql_catalog.f_many (
+  created_at TIMESTAMP DEFAULT NULL,
+  updated_at TIMESTAMP DEFAULT NULL,
+  status VARCHAR(255) DEFAULT 'active',
+  id VARCHAR(80) DEFAULT NULL,
+  _source JSONB DEFAULT '{}',
+  name VARCHAR(80) DEFAULT NULL,
+  _idx VARCHAR(80) DEFAULT NULL
+);
+
+ALTER TABLE jsql_catalog.f_many ADD CONSTRAINT jsql_catalog_f_many_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS jsql_catalog_f_many_status_idx ON jsql_catalog.f_many USING BTREE (status);
+CREATE INDEX IF NOT EXISTS jsql_catalog_f_many__idx_idx ON jsql_catalog.f_many USING BTREE (_idx);
+
+-- INSERT
+INSERT INTO jsql_catalog.f_many
+  (_idx, id, name)
+VALUES
+  ('1790455005944', 'm1', 'x')
+RETURNING (_source - '{"_idx"}'::text[]) ||
+jsonb_build_object(
+'created_at', created_at,
+'updated_at', updated_at,
+'status', status,
+'id', id,
+'name', name
+) AS result;
+
+-- INSERT
+INSERT INTO jsql_catalog.f_many
+  (_idx, id, name)
+VALUES
+  ('1790455005946', 'm2', 'x')
+RETURNING (_source - '{"_idx"}'::text[]) ||
+jsonb_build_object(
+'created_at', created_at,
+'updated_at', updated_at,
+'status', status,
+'id', id,
+'name', name
+) AS result;
+
+-- INSERT
+INSERT INTO jsql_catalog.f_many
+  (_idx, id, name)
+VALUES
+  ('1790455005947', 'm3', 'x')
+RETURNING (_source - '{"_idx"}'::text[]) ||
+jsonb_build_object(
+'created_at', created_at,
+'updated_at', updated_at,
+'status', status,
+'id', id,
+'name', name
+) AS result;
+
+-- INSERT
+INSERT INTO jsql_catalog.f_many
+  (_idx, id, name)
+VALUES
+  ('1790455005947', 'm4', 'x')
+RETURNING (_source - '{"_idx"}'::text[]) ||
+jsonb_build_object(
+'created_at', created_at,
+'updated_at', updated_at,
+'status', status,
+'id', id,
+'name', name
+) AS result;
+
+-- INSERT
+INSERT INTO jsql_catalog.f_many
+  (_idx, id, name)
+VALUES
+  ('1790455005948', 'm5', 'x')
+RETURNING (_source - '{"_idx"}'::text[]) ||
+jsonb_build_object(
+'created_at', created_at,
+'updated_at', updated_at,
+'status', status,
+'id', id,
+'name', name
+) AS result;
+
+-- INSERT
+INSERT INTO jsql_catalog.f_many
+  (_idx, id, name)
+VALUES
+  ('1790455005949', 'm6', 'x')
+RETURNING (_source - '{"_idx"}'::text[]) ||
+jsonb_build_object(
+'created_at', created_at,
+'updated_at', updated_at,
+'status', status,
+'id', id,
+'name', name
+) AS result;
+
+-- QUERY
+SELECT
+(A._source - '{"_idx"}'::text[]) ||
+jsonb_build_object(
+'created_at', A.created_at,
+'updated_at', A.updated_at,
+'status', A.status,
+'id', A.id,
+'name', A.name
+) AS result
+FROM jsql_catalog.f_many AS A
+WHERE A.name = 'x'
+LIMIT 2;
+
+-- UPDATE
+UPDATE jsql_catalog.f_many
+SET
+  created_at = NULL,
+  name = 'y',
+  status = 'active',
+  updated_at = NULL
+WHERE id = 'm1'
+RETURNING (_source - '{"_idx"}'::text[]) ||
+jsonb_build_object(
+'created_at', created_at,
+'updated_at', updated_at,
+'status', status,
+'id', id,
+'name', name
+) AS result;
+
+-- UPDATE
+UPDATE jsql_catalog.f_many
+SET
+  created_at = NULL,
+  name = 'y',
+  status = 'active',
+  updated_at = NULL
+WHERE id = 'm2'
+RETURNING (_source - '{"_idx"}'::text[]) ||
+jsonb_build_object(
+'created_at', created_at,
+'updated_at', updated_at,
+'status', status,
+'id', id,
+'name', name
+) AS result;
+
+-- QUERY
+SELECT
+(A._source - '{"_idx"}'::text[]) ||
+jsonb_build_object(
+'created_at', A.created_at,
+'updated_at', A.updated_at,
+'status', A.status,
+'id', A.id,
+'name', A.name
+) AS result
+FROM jsql_catalog.f_many AS A
+WHERE A.name = 'x'
+LIMIT 3;
+
+-- UPDATE
+UPDATE jsql_catalog.f_many
+SET
+  created_at = NULL,
+  name = 'y',
+  status = 'active',
+  updated_at = NULL
+WHERE id = 'm3'
+RETURNING (_source - '{"_idx"}'::text[]) ||
+jsonb_build_object(
+'created_at', created_at,
+'updated_at', updated_at,
+'status', status,
+'id', id,
+'name', name
+) AS result;
+
+-- UPDATE
+UPDATE jsql_catalog.f_many
+SET
+  created_at = NULL,
+  name = 'y',
+  status = 'active',
+  updated_at = NULL
+WHERE id = 'm4'
+RETURNING (_source - '{"_idx"}'::text[]) ||
+jsonb_build_object(
+'created_at', created_at,
+'updated_at', updated_at,
+'status', status,
+'id', id,
+'name', name
+) AS result;
+
+-- UPDATE
+UPDATE jsql_catalog.f_many
+SET
+  created_at = NULL,
+  name = 'y',
+  status = 'active',
+  updated_at = NULL
+WHERE id = 'm5'
+RETURNING (_source - '{"_idx"}'::text[]) ||
+jsonb_build_object(
+'created_at', created_at,
+'updated_at', updated_at,
+'status', status,
+'id', id,
+'name', name
+) AS result;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_catalog.f_many AS A
+WHERE A.name = 'x';
+
+-- QUERY
+SELECT
+(A._source - '{"_idx"}'::text[]) ||
+jsonb_build_object(
+'created_at', A.created_at,
+'updated_at', A.updated_at,
+'status', A.status,
+'id', A.id,
+'name', A.name
+) AS result
+FROM jsql_catalog.f_many AS A
+WHERE A.name IN ('x', 'y');
+
+-- DELETE
+DELETE FROM jsql_catalog.f_many
+WHERE id = 'm6'
+RETURNING (_source - '{"_idx"}'::text[]) ||
+jsonb_build_object(
+'created_at', created_at,
+'updated_at', updated_at,
+'status', status,
+'id', id,
+'name', name
+) AS result;
+
+-- DELETE
+DELETE FROM jsql_catalog.f_many
+WHERE id = 'm1'
+RETURNING (_source - '{"_idx"}'::text[]) ||
+jsonb_build_object(
+'created_at', created_at,
+'updated_at', updated_at,
+'status', status,
+'id', id,
+'name', name
+) AS result;
+
+-- DELETE
+DELETE FROM jsql_catalog.f_many
+WHERE id = 'm2'
+RETURNING (_source - '{"_idx"}'::text[]) ||
+jsonb_build_object(
+'created_at', created_at,
+'updated_at', updated_at,
+'status', status,
+'id', id,
+'name', name
+) AS result;
+
+-- DELETE
+DELETE FROM jsql_catalog.f_many
+WHERE id = 'm3'
+RETURNING (_source - '{"_idx"}'::text[]) ||
+jsonb_build_object(
+'created_at', created_at,
+'updated_at', updated_at,
+'status', status,
+'id', id,
+'name', name
+) AS result;
+
+-- DELETE
+DELETE FROM jsql_catalog.f_many
+WHERE id = 'm4'
+RETURNING (_source - '{"_idx"}'::text[]) ||
+jsonb_build_object(
+'created_at', created_at,
+'updated_at', updated_at,
+'status', status,
+'id', id,
+'name', name
+) AS result;
+
+-- DELETE
+DELETE FROM jsql_catalog.f_many
+WHERE id = 'm5'
+RETURNING (_source - '{"_idx"}'::text[]) ||
+jsonb_build_object(
+'created_at', created_at,
+'updated_at', updated_at,
+'status', status,
+'id', id,
+'name', name
+) AS result;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_catalog.f_many AS A;
+
+-- ========== 6. Comandos · Upsert fluido sin where (devuelve error) [pass]
+
+-- QUERY
+SELECT EXISTS(SELECT 1
+FROM jsql_catalog.f_products AS A
+WHERE A.id = 'p9');
+
 -- ========== 6. Comandos · Test (no ejecuta) + ToJson [pass]
 
 -- INSERT
@@ -1504,7 +2213,7 @@ CREATE INDEX IF NOT EXISTS jsql_catalog_f_events__idx_idx ON jsql_catalog.f_even
 INSERT INTO jsql_catalog.f_events
   (_idx, id, name, _source)
 VALUES
-  ('1790448835535', 'e1', 'alta', '{"stage":"before_insert","touched":true}'::jsonb)
+  ('1790455005962', 'e1', 'alta', '{"stage":"before_insert","touched":true}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -1578,7 +2287,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_events
   (_idx, id, name, _source)
 VALUES
-  ('1790448835538', 'e2', 'cmd', '{"source":"command","stage":"before_insert","touched":true}'::jsonb)
+  ('1790455005970', 'e2', 'cmd', '{"source":"command","stage":"before_insert","touched":true}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -1599,7 +2308,7 @@ WHERE A.id = 'e3');
 INSERT INTO jsql_catalog.f_events
   (_idx, id, name, _source)
 VALUES
-  ('1790448835540', 'e4', 'js', '{"js":"before_insert","stage":"before_insert","touched":true}'::jsonb)
+  ('1790455005971', 'e4', 'js', '{"js":"before_insert","stage":"before_insert","touched":true}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -1739,7 +2448,7 @@ WHERE A.tag = 'invoice');
 INSERT INTO jsql_catalog.series
   (_idx, created_at, format, tag, updated_at, value)
 VALUES
-  ('1790448835549', '2026-09-26 13:53:55', 'FAC-%05d', 'invoice', '2026-09-26 13:53:55', 10)
+  ('1790455005984', '2026-09-26 15:36:45', 'FAC-%05d', 'invoice', '2026-09-26 15:36:45', 10)
 RETURNING created_at, updated_at, tag, format, value;
 
 -- QUERY
@@ -1769,9 +2478,9 @@ LIMIT 1000;
 -- UPDATE
 UPDATE jsql_catalog.series
 SET
-  created_at = '2026-09-26 13:53:55',
+  created_at = '2026-09-26 15:36:45',
   format = 'FAC-%05d',
-  updated_at = '2026-09-26 13:53:55',
+  updated_at = '2026-09-26 15:36:45',
   value = 11
 WHERE tag = 'invoice'
 RETURNING created_at, updated_at, tag, format, value;
@@ -1795,9 +2504,9 @@ LIMIT 1000;
 -- UPDATE
 UPDATE jsql_catalog.series
 SET
-  created_at = '2026-09-26 13:53:55',
+  created_at = '2026-09-26 15:36:45',
   format = 'FAC-%05d',
-  updated_at = '2026-09-26 13:53:55',
+  updated_at = '2026-09-26 15:36:45',
   value = 12
 WHERE tag = 'invoice'
 RETURNING created_at, updated_at, tag, format, value;

@@ -8,6 +8,7 @@ import (
 
 var (
 	ErrRecordAlreadyExists = errors.New("record already exists")
+	ErrUpsertWhereRequired = errors.New("upsert requires a where")
 )
 
 type ConnectParams struct {

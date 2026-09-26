@@ -1,6 +1,6 @@
 # Especificación del paquete `jsql`
 
-> Fuente original: [`../feature.md`](../feature.md). Este documento la formaliza y la contrasta con el código actual de `jsql/` y `jsql/drivers/postgres/`. La sección [Brechas](#12-brechas-entre-la-especificación-y-el-código) lista lo que la especificación pide y el código todavía no cumple.
+> Fuente original: [`feature.md`](feature.md). Este documento la formaliza y la contrasta con el código actual de `jsql/` y sus drivers (`jsql/drivers/`). La sección [Brechas](#12-brechas-entre-la-especificación-y-el-código) lista lo que la especificación pide y el código todavía no cumple.
 
 ## 1. Objetivo
 
@@ -227,7 +227,8 @@ Siempre se excluyen `Model.Hiddens` y `Query.Hiddens`. Con el select vacío no s
 - `from` es el origen: `schema.tabla:alias`, `tabla:alias` (usa el esquema del modelo que ejecuta la consulta), `schema.tabla` o `tabla` (alias `A`). También acepta una lista: la primera referencia reemplaza al origen principal y las demás se agregan como orígenes adicionales. El modelo debe estar definido en la `DB`.
 - `to` en los joins es obligatorio con la forma `schema.tabla:alias`; el modelo destino debe estar definido en la `DB`.
 - Si el descriptor tiene un error (un `from` o un `to` que no existe, una condición inválida), la consulta lo devuelve al ejecutarse (`All`, `One`, `Count`, `Exists`…) en lugar de correr con lo que se pudo leer.
-- `limit` por defecto: `DB.RecordLimit` (`DB_RECORD_LIMIT`, 1000). `page` calcula el `OFFSET`.
+- Las claves también se aceptan con su forma SQL (`select`, `group by`, `order by`, `having`…, ver §8.2), además de `offset` y las claves `and` / `or` de primer nivel.
+- `limit` por defecto: `DB.RecordLimit` (`DB_RECORD_LIMIT`, 1000). `page` calcula el `OFFSET`; `offset` lo fija directamente.
 - `orders`: `true` = ASC, `false` = DESC.
 
 ## 6. Condiciones
@@ -254,22 +255,26 @@ Un campo sin columna se busca en `SourceField` (`_source->>'last_name'`), según
 |---|---|---|
 | `INSERT` | `model.Insert(data)` | Valida `Required`, corre triggers *before*, genera y ejecuta el SQL, corre triggers *after*. |
 | `BULK` | `model.Bulk([]data)` | `INSERT` por cada elemento. |
-| `UPDATE` | `model.Update(data).Where(...)` | Lee las filas que cumplen el `where`; por cada una, `new = old ⊕ data`, triggers, SQL, triggers. |
-| `DELETE` | `model.Delete().Where(...)` | Lee las filas que cumplen el `where`; triggers, SQL, triggers. |
-| `UPSERT` | `model.Upsert(data).Where(...)` | **A partir del resultado del `where`**: si existe → `UPDATE`, si no → `INSERT`. |
+| `UPDATE` | `model.Update(data).Where(...)` | Lee las filas que cumplen el `where`, hasta el límite del comando (ver *Límite* abajo); por cada una, `new = old ⊕ data`, triggers, SQL, triggers. |
+| `DELETE` | `model.Delete().Where(...)` | Lee las filas que cumplen el `where`, hasta el límite del comando; triggers, SQL, triggers. |
+| `UPSERT` | `model.Upsert(data).Where(...)` | **A partir del resultado del `where`**: si existe → `UPDATE`, si no → `INSERT`. El `where` es obligatorio: sin él devuelve `ErrUpsertWhereRequired`. |
 
 Reglas:
 
 - **`SourceField`**: `INSERT` y `UPDATE` aplican §3 a las claves de `data` sin columna.
 - **`RETURNING`**: los tres comandos incluyen `RETURNING`. `INSERT` y `UPDATE` devuelven los **datos actualizados**; `DELETE` devuelve los **datos eliminados**. El resultado es la fila que devuelve la base, con la misma forma que un `SELECT` sin campos: con `SourceField`, `SourceField || jsonb_build_object(columnas) AS result`, sin los campos ocultos. Los triggers *after* reciben `new` con esos datos fusionados. `Command.Return(fields...)` restringe los campos devueltos.
+- **Límite**: `update`, `delete` y el update de un `upsert` trabajan sobre un número máximo de filas, para no poner en riesgo la estabilidad de la base con un `where` muy amplio. `Command.Limit(n)` (o `"limit"` en JSON) lo fija: `n > 0` afecta como máximo `n` filas y `0` a todas las que cumplen el `where`. Sin límite se usa `DB_RECORD_LIMIT`, con un máximo de 1000. Qué filas entran cuando hay más que el límite no está garantizado.
 - **Filtros**: `Where`/`And`/`Or` reciben `*et.Condition` y admiten el mismo `[]Json` de §6.
 - **Ejecución**: `Exec()`, `ExecTx(tx)` → `et.Items`; `One()`, `OneTx(tx)` → `et.Item`. Con `tx == nil`, el comando abre su propia transacción y hace commit.
+- **Campos únicos**: antes de cada insert y update, `jsql` verifica los campos definidos con `DefineUnique` (sin contar los vacíos) dentro de la transacción del comando, así que también detecta duplicados dentro de un mismo `bulk`. En un update solo revisa el campo si cambia, y excluye la fila que se actualiza por su llave primaria. Un duplicado devuelve `ErrRecordAlreadyExists` con el campo y el valor (`record already exists: email = ana@example.com`), que se puede comprobar con `errors.Is`. El índice único de la base de datos se mantiene como garantía final.
 - **Triggers**: `TriggerFunction func(tx *Tx, old, new et.Json) error` para `Before/After × Insert/Update/Delete` (en `Model` o por `Command`), y scripts JS (`jrex`) registrados con `DefineBeforeInsert(code)`, `DefineBeforeUpdate(name, code)`, etc. En el script los registros son `OLD` y `NEW` (`new` es palabra reservada de JavaScript), por ejemplo `NEW.estado = "revisado";`. Un error en un trigger aborta el comando y, si el comando abrió su propia transacción, la revierte.
 - **Campos calculados**: `DefineCalcFunc(name, fn)` en Go y `DefineCalc(name, script)` en JS, que recibe la fila como `item` (por ejemplo `item.inicial = item.name.substring(0, 1);`).
 
 ## 8. Consultas y comandos descritos en JSON sobre la `DB` (`jquery.go`)
 
-`DB.Query(json)` / `DB.QueryTx(tx, json)` reciben un descriptor JSON independiente de un modelo: el modelo se indica en el propio JSON (`from`). Según la clave principal, el descriptor es una consulta (`select`, `from`), un comando (`insert`, `update`, `delete`, `upsert`, `bulk`) o una definición (`define`). El descriptor se traduce a las mismas estructuras de `jsql` (`Query`, `Command`, `Define`), así que sigue las reglas de `SourceField`, `RETURNING` y triggers de las secciones anteriores. Todavía no está implementado (brecha #1).
+`DB.Query(json)` / `DB.QueryTx(tx, json)` reciben un descriptor JSON independiente de un modelo: el modelo se indica en el propio JSON (`from`). Según la clave principal, el descriptor es un comando (`insert`, `update`, `delete`, `upsert`, `bulk`), una definición (`define`) o una consulta (`select`, `from`); se revisan en ese orden, sin distinguir mayúsculas, y un descriptor con dos comandos o sin ninguna de esas claves devuelve error. El descriptor se traduce a las mismas estructuras de `jsql` (`Query`, `Command`, `Define`), así que sigue las reglas de `SourceField`, `RETURNING` y triggers de las secciones anteriores.
+
+En `from`, `schema.tabla` indica el modelo; sin esquema, la tabla se busca en todos los esquemas de la `DB` y debe ser única.
 
 ### 8.1 Comandos
 
@@ -280,6 +285,7 @@ Cada comando va bajo una clave con su nombre y contiene:
 | `from` | Modelo destino, `schema.tabla`. | todos |
 | `data` | Valores a guardar: un objeto (`insert`, `update`, `upsert`) o una lista de objetos (`bulk`). Los campos sin columna van a `SourceField`. | `insert`, `update`, `upsert`, `bulk` |
 | `where` | Condiciones con el formato de §6. En `upsert` nunca puede estar vacío. | `update`, `delete`, `upsert` |
+| `limit` | Máximo de filas afectadas: sin enviar, `DB_RECORD_LIMIT` con tope de 1000; `0`, todas las que cumplen `where`. | `update`, `delete`, `upsert` |
 | `before_insert`, `after_insert` | Listas de código JavaScript (goja) que corren antes y después de cada insert. | `insert`, `bulk`, `upsert` |
 | `before_update`, `after_update` | Ídem, antes y después de actualizar cada registro. | `update`, `upsert` |
 | `before_delete`, `after_delete` | Ídem, antes y después de eliminar cada registro. | `delete` |
@@ -294,6 +300,7 @@ Cada comando va bajo una clave con su nombre y contiene:
       { "id": { "eq": 1 } },
       { "and": { "status": { "eq": "active" } } }
     ],
+    "limit": 100,
     "before_update": ["NEW.updated_by = 'api';"]
   }
 }
@@ -303,16 +310,16 @@ Cada comando va bajo una clave con su nombre y contiene:
 |---|---|---|
 | `insert` | Inserta un registro con `data`. | El registro insertado. |
 | `bulk` | Inserta un registro por cada objeto de `data`; los triggers corren por registro. | Los registros insertados. |
-| `update` | Actualiza los registros que cumplen `where` con `data`; los atributos se fusionan en `SourceField` sin borrar los existentes. | Los registros actualizados. |
-| `delete` | Elimina los registros que cumplen `where`. | Los registros eliminados. |
+| `update` | Actualiza los registros que cumplen `where` con `data`, hasta `limit`; los atributos se fusionan en `SourceField` sin borrar los existentes. | Los registros actualizados. |
+| `delete` | Elimina los registros que cumplen `where`, hasta `limit`. | Los registros eliminados. |
 | `upsert` | Si ningún registro cumple `where`, inserta `data`; si alguno lo cumple, actualiza esos registros con `data`. | Los registros insertados o actualizados. |
 
 En los scripts, los registros están en `NEW` (con los valores que se van a guardar; en `before_*` sus cambios se guardan) y `OLD` (el registro antes del cambio, vacío en un insert), como en §7.
 
 ### 8.2 Consultas y definiciones
 
-- **Consulta**: `from` más las claves de §5.4. Claves reconocidas en `jquery.go` (sin distinguir mayúsculas; con espacio o guion bajo): `select`, `from`, `join`, `left join`, `right join`, `full join`, `where`, `and`, `or`, `group by`, `having`, `order by`, `limit`, `offset`.
-- **Definición**: `define` con la estructura `Define` (§4.1) en JSON.
+- **Consulta**: `from` (obligatorio) más las claves de §5.4. Cada clave admite también su forma SQL: `select` (= `selects`), `group by` / `group_by` (= `groups`), `having` (= `havings`), `order by` / `order_by` (= `orders`), `left join` / `right join` / `full join` (= `left_join`…). Además acepta `offset` y las claves `and` / `or` de primer nivel, que agregan condiciones con ese conector después del `where`. El resultado son las filas de la consulta.
+- **Definición**: `define` con la estructura `Define` (§4.1) en JSON (`schema`, `name`, `columns`, `primary_keys`, `source_field`…). Define el modelo, crea la tabla si no existe y devuelve la definición del modelo.
 
 ## 9. Drivers
 
@@ -335,7 +342,7 @@ type Driver interface {
 | Driver | Constante | Estado |
 |---|---|---|
 | `postgres` (`lib/pq`) | `DriverPostgres` | Completo. |
-| `sqlite` (`modernc.org/sqlite`) | `DriverSqlite` | Completo; cada fila es un objeto JSON y el JSON anidado llega doblemente codificado. |
+| `sqlite` (`modernc.org/sqlite`) | `DriverSqlite` | Completo; `RIGHT JOIN` y `FULL JOIN` nativos (SQLite 3.39 o superior). |
 | `oracle` (`go-ora/v2`) | `DriverOracle` | Completo, para Oracle 19c o superior (probado en 23ai Free). Ver §9.1. |
 | `mysql`, `mssql`, `josefina` | constantes | Sin implementación. |
 
@@ -366,7 +373,7 @@ type Driver interface {
 ## 11. Utilidades
 
 - `jsql.DefineSeries(db, schema)` → `*Series`: consecutivos y códigos (`SetSeries`, `GetSeries`, `DeleteSeries`, `GenSerie`, `GenValue`).
-- Helpers (`helpers.go`): `SQLParse`, `Quoted`, `EscapeSQLString`, `RowsToItems`, `ArgWhitAs` (`campo:alias`), `ArgWhitSchema` (`schema.tabla`), `AddAuditLog`.
+- Helpers (`helpers.go`): `SQLParse` (reemplaza `$1`…`$N` por los argumentos escapados en una sola pasada; `$10` no se confunde con `$1`), `Quoted`, `EscapeSQLString`, `RowsToItems`, `ArgWhitAs` (`campo:alias`), `ArgWhitSchema` (`schema.tabla`), `AddAuditLog`.
 - Estados (`column.go`): `ACTIVE`, `ARCHIVED`, `CANCELED`, `OF_SYSTEM`, `FOR_DELETE`, `PENDING`, `APPROVED`, `REJECTED` (+ `IN_PROCESS`, `FAILED`).
 
 ## 12. Brechas entre la especificación y el código
@@ -375,7 +382,4 @@ Estado revisado el 2026-09-26.
 
 | # | Especificación | Código actual | Ubicación |
 |---|---|---|---|
-| 1 | `DB.Query(json)` interpreta consultas, comandos (§8.1) y definiciones. | Solo existe el esqueleto: `queryJsonTx` despacha a `parseQuery`, `parseCommand` o `parseDDL`, que devuelven un resultado vacío, y los `parse*` de cada cláusula no están implementados. El despacho recorre las llaves de un `map`, así que su orden no es determinista. | `jquery.go` |
-| 2 | `select` en JSON recibe `[]interface{}` bajo la clave `select`. | `loadQuery` lee `selects` (y `hiddens`, `groups`, `havings`, `orders`) como `[]string`. | `query.go` `loadQuery` |
-| 3 | Validación de índices únicos antes de insertar/actualizar. | `defaultTrigger` calcula si existe duplicado, pero el resultado de `results.Range` se ignora y nunca devuelve error. | `trigger.go` |
-| 4 | Driver para varios motores. | `postgres`, `sqlite` y `oracle` generan SQL; `mysql`, `mssql` y `josefina` no tienen implementación. | `drivers/` |
+| 1 | Driver para varios motores. | `postgres`, `sqlite` y `oracle` generan SQL; `mysql`, `mssql` y `josefina` no tienen implementación. | `drivers/` |

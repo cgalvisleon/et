@@ -199,7 +199,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_parent"
   ("_idx", "id")
-  VALUES ('1790448836188', 'p1')
+  VALUES ('1790455007912', 'p1')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -217,7 +217,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_child"
   ("_idx", "id", "parent_id")
-  VALUES ('1790448836267', 'c1', 'p1')
+  VALUES ('1790455008380', 'c1', 'p1')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -236,7 +236,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_child"
   ("_idx", "id", "parent_id")
-  VALUES ('1790448836284', 'c2', 'missing')
+  VALUES ('1790455008468', 'c2', 'missing')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -273,7 +273,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_strict"
   ("_idx", "id", "name")
-  VALUES ('1790448836311', 's1', 'x')
+  VALUES ('1790455008555', 's1', 'x')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -298,6 +298,44 @@ FROM JSQL."f_strict" A
 WHERE A."id" = 's1'
 FETCH NEXT 1 ROWS ONLY
 
+-- ========== 2. Definición de modelos (DDL) · DB.Query define (Define en JSON) [pass]
+
+-- DDL
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE TABLE JSQL."f_json_model" (
+  "id" VARCHAR2(80) DEFAULT NULL,
+  "title" VARCHAR2(255) DEFAULT NULL,
+  "_source" CLOB DEFAULT TO_CLOB(''{}'') CHECK ("_source" IS JSON)
+)';
+  EXECUTE IMMEDIATE 'ALTER TABLE JSQL."f_json_model" ADD CONSTRAINT "jsql_f_json_model_pkey" PRIMARY KEY ("id")';
+END;
+
+-- INSERT
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  INSERT INTO JSQL."f_json_model"
+  ("id", "title", "_source")
+  VALUES ('j1', 'desde define', TO_CLOB('{"extra":1}'))
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), JSON_OBJECT(
+'id' VALUE "id",
+'title' VALUE "title"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_json_model" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- QUERY
+SELECT
+JSON_MERGEPATCH(NVL(A."_source", TO_CLOB('{}')), JSON_OBJECT(
+'id' VALUE A."id",
+'title' VALUE A."title"
+RETURNING CLOB) RETURNING CLOB) AS "result"
+FROM JSQL."f_json_model" A
+WHERE A."id" = 'j1'
+FETCH NEXT 1 ROWS ONLY
+
 -- ========== 2. Definición de modelos (DDL) · Insert (datos base) [pass]
 
 -- INSERT
@@ -307,7 +345,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_doc_types"
   ("_idx", "id", "title")
-  VALUES ('1790448836332', 'CC', 'Cédula de ciudadanía')
+  VALUES ('1790455008827', 'CC', 'Cédula de ciudadanía')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -326,7 +364,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_doc_types"
   ("_idx", "id", "title")
-  VALUES ('1790448836425', 'NIT', 'Número de identificación tributaria')
+  VALUES ('1790455008966', 'NIT', 'Número de identificación tributaria')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -338,6 +376,11 @@ RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_doc_types" WHERE ROWIDT
   DBMS_SQL.RETURN_RESULT(c);
 END;
 
+-- QUERY
+SELECT CASE WHEN EXISTS(SELECT 1
+FROM JSQL."f_users" A
+WHERE A."email" = 'ana@example.com') THEN 'true' ELSE 'false' END AS "exists" FROM DUAL
+
 -- INSERT
 DECLARE
   rs SYS.ODCIVARCHAR2LIST;
@@ -345,7 +388,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_users"
   ("_idx", "email", "id", "name", "_source")
-  VALUES ('1790448836429', 'ana@example.com', 'u1', 'Ana', TO_CLOB('{"age":30,"password":"secret","tp_doc":"CC"}'))
+  VALUES ('1790455008976', 'ana@example.com', 'u1', 'Ana', TO_CLOB('{"age":30,"password":"secret","tp_doc":"CC"}'))
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null,"password":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -358,6 +401,11 @@ RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_users" WHERE ROWIDTOCHA
   DBMS_SQL.RETURN_RESULT(c);
 END;
 
+-- QUERY
+SELECT CASE WHEN EXISTS(SELECT 1
+FROM JSQL."f_users" A
+WHERE A."email" = 'luis@example.com') THEN 'true' ELSE 'false' END AS "exists" FROM DUAL
+
 -- INSERT
 DECLARE
   rs SYS.ODCIVARCHAR2LIST;
@@ -365,7 +413,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_users"
   ("_idx", "email", "id", "name", "_source")
-  VALUES ('1790448836464', 'luis@example.com', 'u2', 'Luis', TO_CLOB('{"age":17}'))
+  VALUES ('1790455009044', 'luis@example.com', 'u2', 'Luis', TO_CLOB('{"age":17}'))
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null,"password":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -378,6 +426,11 @@ RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_users" WHERE ROWIDTOCHA
   DBMS_SQL.RETURN_RESULT(c);
 END;
 
+-- QUERY
+SELECT CASE WHEN EXISTS(SELECT 1
+FROM JSQL."f_users" A
+WHERE A."email" = 'marta@example.com') THEN 'true' ELSE 'false' END AS "exists" FROM DUAL
+
 -- INSERT
 DECLARE
   rs SYS.ODCIVARCHAR2LIST;
@@ -385,7 +438,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_users"
   ("_idx", "email", "id", "name", "_source")
-  VALUES ('1790448836467', 'marta@example.com', 'u3', 'Marta O''Neil', TO_CLOB('{"age":45,"tp_doc":"NIT"}'))
+  VALUES ('1790455009053', 'marta@example.com', 'u3', 'Marta O''Neil', TO_CLOB('{"age":45,"tp_doc":"NIT"}'))
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null,"password":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -405,7 +458,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_roles"
   ("_idx", "id", "name")
-  VALUES ('1790448836472', 'r1', 'admin')
+  VALUES ('1790455009061', 'r1', 'admin')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -424,7 +477,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_roles"
   ("_idx", "id", "name")
-  VALUES ('1790448836527', 'r2', 'editor')
+  VALUES ('1790455009114', 'r2', 'editor')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -443,7 +496,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_orders"
   ("_idx", "id", "user_id", "_source")
-  VALUES ('1790448836530', 'o1', 'u1', TO_CLOB('{"amount":100.5}'))
+  VALUES ('1790455009120', 'o1', 'u1', TO_CLOB('{"amount":100.5}'))
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -462,7 +515,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_orders"
   ("_idx", "id", "user_id", "_source")
-  VALUES ('1790448836587', 'o2', 'u1', TO_CLOB('{"amount":200}'))
+  VALUES ('1790455009168', 'o2', 'u1', TO_CLOB('{"amount":200}'))
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -481,7 +534,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_orders"
   ("_idx", "id", "user_id", "_source")
-  VALUES ('1790448836594', 'o3', 'u3', TO_CLOB('{"amount":50}'))
+  VALUES ('1790455009173', 'o3', 'u3', TO_CLOB('{"amount":50}'))
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -583,7 +636,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_users_f_roles"
   ("_idx", "role_id", "user_id")
-  VALUES ('1790448836663', 'r1', 'u1')
+  VALUES ('1790455009273', 'r1', 'u1')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_OBJECT(
 'user_id' VALUE "user_id",
@@ -599,7 +652,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_users_f_roles"
   ("_idx", "role_id", "user_id")
-  VALUES ('1790448836671', 'r2', 'u1')
+  VALUES ('1790455009290', 'r2', 'u1')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_OBJECT(
 'user_id' VALUE "user_id",
@@ -615,7 +668,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_users_f_roles"
   ("_idx", "role_id", "user_id")
-  VALUES ('1790448836674', 'r2', 'u2')
+  VALUES ('1790455009293', 'r2', 'u2')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_OBJECT(
 'user_id' VALUE "user_id",
@@ -623,6 +676,112 @@ BEGIN
 RETURNING CLOB) AS "result" FROM JSQL."f_users_f_roles" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
   DBMS_SQL.RETURN_RESULT(c);
 END;
+
+-- ========== 2. Definición de modelos (DDL) · DefineUnique (rechaza duplicados en insert, bulk y update) [pass]
+
+-- QUERY
+SELECT CASE WHEN EXISTS(SELECT 1
+FROM JSQL."f_users" A
+WHERE A."email" = 'ana@example.com') THEN 'true' ELSE 'false' END AS "exists" FROM DUAL
+
+-- QUERY
+SELECT CASE WHEN EXISTS(SELECT 1
+FROM JSQL."f_users" A
+WHERE A."email" = 'same@example.com') THEN 'true' ELSE 'false' END AS "exists" FROM DUAL
+
+-- BULK
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  INSERT INTO JSQL."f_users"
+  ("_idx", "email", "id", "name")
+  VALUES ('1790455009307', 'same@example.com', 'u8', 'Uno')
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null,"password":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE "created_at",
+'updated_at' VALUE "updated_at",
+'status' VALUE "status",
+'id' VALUE "id",
+'name' VALUE "name",
+'email' VALUE "email"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_users" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- QUERY
+SELECT CASE WHEN EXISTS(SELECT 1
+FROM JSQL."f_users" A
+WHERE A."email" = 'same@example.com') THEN 'true' ELSE 'false' END AS "exists" FROM DUAL
+
+-- QUERY
+SELECT
+JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A."_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null,"password":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE A."created_at",
+'updated_at' VALUE A."updated_at",
+'status' VALUE A."status",
+'id' VALUE A."id",
+'name' VALUE A."name",
+'email' VALUE A."email"
+RETURNING CLOB) RETURNING CLOB) AS "result"
+FROM JSQL."f_users" A
+WHERE A."id" = 'u2'
+FETCH NEXT 1000 ROWS ONLY
+
+-- QUERY
+SELECT
+JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A."_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null,"password":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE A."created_at",
+'updated_at' VALUE A."updated_at",
+'status' VALUE A."status",
+'id' VALUE A."id",
+'name' VALUE A."name",
+'email' VALUE A."email"
+RETURNING CLOB) RETURNING CLOB) AS "result"
+FROM JSQL."f_users" A
+WHERE A."email" = 'ana@example.com'
+FETCH NEXT 2 ROWS ONLY
+
+-- QUERY
+SELECT
+JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A."_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null,"password":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE A."created_at",
+'updated_at' VALUE A."updated_at",
+'status' VALUE A."status",
+'id' VALUE A."id",
+'name' VALUE A."name",
+'email' VALUE A."email"
+RETURNING CLOB) RETURNING CLOB) AS "result"
+FROM JSQL."f_users" A
+WHERE A."id" = 'u2'
+FETCH NEXT 1000 ROWS ONLY
+
+-- UPDATE
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  UPDATE JSQL."f_users"
+  SET "email" = 'luis@example.com',
+    "name" = 'Luis',
+    "status" = 'active',
+    "_source" = JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"age":17}') RETURNING CLOB)
+  WHERE "id" = 'u2'
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null,"password":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE "created_at",
+'updated_at' VALUE "updated_at",
+'status' VALUE "status",
+'id' VALUE "id",
+'name' VALUE "name",
+'email' VALUE "email"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_users" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- QUERY
+SELECT COUNT(*) AS "count"
+FROM JSQL."f_users" A
 
 -- ========== 3. Relaciones y campos calculados · Detail en el select (DefineDetail) [pass]
 
@@ -780,11 +939,6 @@ WHERE A."id" = 'u3'
 FETCH NEXT 1 ROWS ONLY
 
 -- QUERY
-SELECT COUNT(*) AS "count"
-FROM JSQL."f_orders" A
-WHERE A."user_id" = 'u3'
-
--- QUERY
 SELECT
 JSON_OBJECT(
 'amount' VALUE SUM(JSON_VALUE(A."_source", '$."amount"' RETURNING NUMBER))
@@ -803,6 +957,11 @@ FROM JSQL."f_orders" A
 WHERE A."user_id" = 'u3'
 FETCH NEXT 1 ROWS ONLY
 
+-- QUERY
+SELECT COUNT(*) AS "count"
+FROM JSQL."f_orders" A
+WHERE A."user_id" = 'u3'
+
 -- ========== 3. Relaciones y campos calculados · DefineCalcFunc + Model.Calc [pass]
 
 -- QUERY
@@ -817,6 +976,22 @@ JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A."_source", TO_CLOB('{}')), TO_CLOB('{"_idx
 RETURNING CLOB) RETURNING CLOB) AS "result"
 FROM JSQL."f_users" A
 WHERE A."id" = 'u1'
+FETCH NEXT 1 ROWS ONLY
+
+-- ========== 3. Relaciones y campos calculados · Query.Calc con script JS (DefineCalc) [pass]
+
+-- QUERY
+SELECT
+JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A."_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null,"password":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE A."created_at",
+'updated_at' VALUE A."updated_at",
+'status' VALUE A."status",
+'id' VALUE A."id",
+'name' VALUE A."name",
+'email' VALUE A."email"
+RETURNING CLOB) RETURNING CLOB) AS "result"
+FROM JSQL."f_users" A
+WHERE A."id" = 'u3'
 FETCH NEXT 1 ROWS ONLY
 
 -- ========== 3. Relaciones y campos calculados · DefineCalc (script JS) [pass]
@@ -945,6 +1120,34 @@ GROUP BY A."id"
 ORDER BY A."id" ASC
 FETCH NEXT 1000 ROWS ONLY
 
+-- ========== 4. Consultas · RightJoin / FullJoin [pass]
+
+-- QUERY
+SELECT
+JSON_OBJECT(
+'id' VALUE U."id",
+'n' VALUE COUNT(A."id")
+RETURNING CLOB) AS "result"
+FROM JSQL."f_orders" A
+RIGHT JOIN JSQL."f_users" U
+  ON A."user_id" = U."id"
+GROUP BY U."id"
+ORDER BY U."id" ASC
+FETCH NEXT 1000 ROWS ONLY
+
+-- QUERY
+SELECT
+JSON_OBJECT(
+'id' VALUE A."id",
+'n' VALUE COUNT(O."id")
+RETURNING CLOB) AS "result"
+FROM JSQL."f_users" A
+FULL JOIN JSQL."f_orders" O
+  ON O."user_id" = A."id"
+GROUP BY A."id"
+ORDER BY A."id" ASC
+FETCH NEXT 1000 ROWS ONLY
+
 -- ========== 4. Consultas · GroupBy + Having (fluido) [pass]
 
 -- QUERY
@@ -1009,6 +1212,49 @@ INNER JOIN JSQL."f_orders" O
   ON O."user_id" = U."id"
 GROUP BY U."name"
 ORDER BY U."name" ASC
+FETCH NEXT 1000 ROWS ONLY
+
+-- ========== 4. Consultas · DB.Query consulta (select, from, join, group by, order by) [pass]
+
+-- QUERY
+SELECT
+JSON_OBJECT(
+'name' VALUE U."name",
+'n' VALUE COUNT(O."id")
+RETURNING CLOB) AS "result"
+FROM JSQL."f_users" U
+LEFT JOIN JSQL."f_orders" O
+  ON O."user_id" = U."id"
+GROUP BY U."name"
+ORDER BY U."name" ASC
+FETCH NEXT 1000 ROWS ONLY
+
+-- ========== 4. Consultas · DB.Query consulta (where + and/or de primer nivel, limit, offset) [pass]
+
+-- QUERY
+SELECT
+JSON_OBJECT(
+'id' VALUE A."id"
+RETURNING CLOB) AS "result"
+FROM JSQL."f_users" A
+WHERE JSON_VALUE(A."_source", '$."age"' RETURNING NUMBER) > 18
+  OR A."name" = 'Luis'
+ORDER BY A."id" ASC
+OFFSET 1 ROWS
+FETCH NEXT 2 ROWS ONLY
+
+-- ========== 4. Consultas · Model.Query con claves select / group by / order by [pass]
+
+-- QUERY
+SELECT
+JSON_OBJECT(
+'user_id' VALUE A."user_id",
+'n' VALUE COUNT(A."id")
+RETURNING CLOB) AS "result"
+FROM JSQL."f_orders" A
+GROUP BY A."user_id"
+HAVING COUNT(A."id") > 1
+ORDER BY A."user_id" ASC
 FETCH NEXT 1000 ROWS ONLY
 
 -- ========== 4. Consultas · Test (genera el SQL sin ejecutarlo) / Debug [pass]
@@ -1590,6 +1836,569 @@ SELECT CASE WHEN EXISTS(SELECT 1
 FROM JSQL."f_products" A
 WHERE A."id" = 'p6') THEN 'true' ELSE 'false' END AS "exists" FROM DUAL
 
+-- ========== 6. Comandos · DB.Query insert + bulk (con triggers JS) [pass]
+
+-- INSERT
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  INSERT INTO JSQL."f_products"
+  ("category", "id", "name", "_source")
+  VALUES ('equipos', 'j1', 'Mesh', TO_CLOB('{"origin":"json","price":450000}'))
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), JSON_OBJECT(
+'id' VALUE "id",
+'name' VALUE "name",
+'category' VALUE "category"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_products" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- BULK
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  INSERT INTO JSQL."f_products"
+  ("category", "id", "name")
+  VALUES ('equipos', 'j2', 'Extensor')
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), JSON_OBJECT(
+'id' VALUE "id",
+'name' VALUE "name",
+'category' VALUE "category"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_products" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- BULK
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  INSERT INTO JSQL."f_products"
+  ("category", "id", "name")
+  VALUES ('equipos', 'j3', 'Splitter')
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), JSON_OBJECT(
+'id' VALUE "id",
+'name' VALUE "name",
+'category' VALUE "category"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_products" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- ========== 6. Comandos · DB.Query update + delete [pass]
+
+-- QUERY
+SELECT
+JSON_MERGEPATCH(NVL(A."_source", TO_CLOB('{}')), JSON_OBJECT(
+'id' VALUE A."id",
+'name' VALUE A."name",
+'category' VALUE A."category"
+RETURNING CLOB) RETURNING CLOB) AS "result"
+FROM JSQL."f_products" A
+WHERE A."category" = 'equipos'
+  AND A."id" IN ('j2', 'j3')
+FETCH NEXT 1000 ROWS ONLY
+
+-- UPDATE
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  UPDATE JSQL."f_products"
+  SET "category" = 'equipos',
+    "name" = 'Extensor',
+    "_source" = JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"price":99,"touched":true}') RETURNING CLOB)
+  WHERE "id" = 'j2'
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), JSON_OBJECT(
+'id' VALUE "id",
+'name' VALUE "name",
+'category' VALUE "category"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_products" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- UPDATE
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  UPDATE JSQL."f_products"
+  SET "category" = 'equipos',
+    "name" = 'Splitter',
+    "_source" = JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"price":99,"touched":true}') RETURNING CLOB)
+  WHERE "id" = 'j3'
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), JSON_OBJECT(
+'id' VALUE "id",
+'name' VALUE "name",
+'category' VALUE "category"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_products" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- QUERY
+SELECT
+JSON_MERGEPATCH(NVL(A."_source", TO_CLOB('{}')), JSON_OBJECT(
+'id' VALUE A."id",
+'name' VALUE A."name",
+'category' VALUE A."category"
+RETURNING CLOB) RETURNING CLOB) AS "result"
+FROM JSQL."f_products" A
+WHERE A."id" = 'j3'
+FETCH NEXT 1000 ROWS ONLY
+
+-- DELETE
+DECLARE
+  c SYS_REFCURSOR;
+BEGIN
+  OPEN c FOR SELECT JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), JSON_OBJECT(
+'id' VALUE "id",
+'name' VALUE "name",
+'category' VALUE "category"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_products" WHERE "id" = 'j3';
+  DELETE FROM JSQL."f_products" WHERE "id" = 'j3';
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- ========== 6. Comandos · DB.Query upsert (inserta, actualiza y exige where) [pass]
+
+-- QUERY
+SELECT CASE WHEN EXISTS(SELECT 1
+FROM JSQL."f_products" A
+WHERE A."id" = 'j4') THEN 'true' ELSE 'false' END AS "exists" FROM DUAL
+
+-- INSERT
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  INSERT INTO JSQL."f_products"
+  ("id", "name", "_source")
+  VALUES ('j4', 'Repetidor', TO_CLOB('{"both":true,"path":"insert"}'))
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), JSON_OBJECT(
+'id' VALUE "id",
+'name' VALUE "name",
+'category' VALUE "category"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_products" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- QUERY
+SELECT CASE WHEN EXISTS(SELECT 1
+FROM JSQL."f_products" A
+WHERE A."id" = 'j4') THEN 'true' ELSE 'false' END AS "exists" FROM DUAL
+
+-- QUERY
+SELECT
+JSON_MERGEPATCH(NVL(A."_source", TO_CLOB('{}')), JSON_OBJECT(
+'id' VALUE A."id",
+'name' VALUE A."name",
+'category' VALUE A."category"
+RETURNING CLOB) RETURNING CLOB) AS "result"
+FROM JSQL."f_products" A
+WHERE A."id" = 'j4'
+FETCH NEXT 1000 ROWS ONLY
+
+-- UPDATE
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  UPDATE JSQL."f_products"
+  SET "name" = 'Repetidor Pro',
+    "_source" = JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"both":true,"path":"update"}') RETURNING CLOB)
+  WHERE "id" = 'j4'
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), JSON_OBJECT(
+'id' VALUE "id",
+'name' VALUE "name",
+'category' VALUE "category"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_products" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- ========== 6. Comandos · Update / Delete con limit (por defecto, n y 0 = todas) [pass]
+
+-- DDL
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE TABLE JSQL."f_many" (
+  "created_at" TIMESTAMP DEFAULT NULL,
+  "updated_at" TIMESTAMP DEFAULT NULL,
+  "status" VARCHAR2(255) DEFAULT ''active'',
+  "id" VARCHAR2(80) DEFAULT NULL,
+  "_source" CLOB DEFAULT TO_CLOB(''{}'') CHECK ("_source" IS JSON),
+  "name" VARCHAR2(80) DEFAULT NULL,
+  "_idx" VARCHAR2(80) DEFAULT NULL
+)';
+  EXECUTE IMMEDIATE 'ALTER TABLE JSQL."f_many" ADD CONSTRAINT "jsql_f_many_pkey" PRIMARY KEY ("id")';
+  EXECUTE IMMEDIATE 'CREATE INDEX "jsql_f_many_status_idx" ON JSQL."f_many" ("status")';
+  EXECUTE IMMEDIATE 'CREATE INDEX "jsql_f_many__idx_idx" ON JSQL."f_many" ("_idx")';
+END;
+
+-- INSERT
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  INSERT INTO JSQL."f_many"
+  ("_idx", "id", "name")
+  VALUES ('1790455009966', 'm1', 'x')
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE "created_at",
+'updated_at' VALUE "updated_at",
+'status' VALUE "status",
+'id' VALUE "id",
+'name' VALUE "name"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_many" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- INSERT
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  INSERT INTO JSQL."f_many"
+  ("_idx", "id", "name")
+  VALUES ('1790455010007', 'm2', 'x')
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE "created_at",
+'updated_at' VALUE "updated_at",
+'status' VALUE "status",
+'id' VALUE "id",
+'name' VALUE "name"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_many" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- INSERT
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  INSERT INTO JSQL."f_many"
+  ("_idx", "id", "name")
+  VALUES ('1790455010012', 'm3', 'x')
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE "created_at",
+'updated_at' VALUE "updated_at",
+'status' VALUE "status",
+'id' VALUE "id",
+'name' VALUE "name"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_many" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- INSERT
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  INSERT INTO JSQL."f_many"
+  ("_idx", "id", "name")
+  VALUES ('1790455010018', 'm4', 'x')
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE "created_at",
+'updated_at' VALUE "updated_at",
+'status' VALUE "status",
+'id' VALUE "id",
+'name' VALUE "name"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_many" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- INSERT
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  INSERT INTO JSQL."f_many"
+  ("_idx", "id", "name")
+  VALUES ('1790455010022', 'm5', 'x')
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE "created_at",
+'updated_at' VALUE "updated_at",
+'status' VALUE "status",
+'id' VALUE "id",
+'name' VALUE "name"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_many" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- INSERT
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  INSERT INTO JSQL."f_many"
+  ("_idx", "id", "name")
+  VALUES ('1790455010028', 'm6', 'x')
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE "created_at",
+'updated_at' VALUE "updated_at",
+'status' VALUE "status",
+'id' VALUE "id",
+'name' VALUE "name"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_many" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- QUERY
+SELECT
+JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A."_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE A."created_at",
+'updated_at' VALUE A."updated_at",
+'status' VALUE A."status",
+'id' VALUE A."id",
+'name' VALUE A."name"
+RETURNING CLOB) RETURNING CLOB) AS "result"
+FROM JSQL."f_many" A
+WHERE A."name" = 'x'
+FETCH NEXT 2 ROWS ONLY
+
+-- UPDATE
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  UPDATE JSQL."f_many"
+  SET "name" = 'y',
+    "status" = 'active'
+  WHERE "id" = 'm1'
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE "created_at",
+'updated_at' VALUE "updated_at",
+'status' VALUE "status",
+'id' VALUE "id",
+'name' VALUE "name"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_many" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- UPDATE
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  UPDATE JSQL."f_many"
+  SET "name" = 'y',
+    "status" = 'active'
+  WHERE "id" = 'm2'
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE "created_at",
+'updated_at' VALUE "updated_at",
+'status' VALUE "status",
+'id' VALUE "id",
+'name' VALUE "name"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_many" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- QUERY
+SELECT
+JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A."_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE A."created_at",
+'updated_at' VALUE A."updated_at",
+'status' VALUE A."status",
+'id' VALUE A."id",
+'name' VALUE A."name"
+RETURNING CLOB) RETURNING CLOB) AS "result"
+FROM JSQL."f_many" A
+WHERE A."name" = 'x'
+FETCH NEXT 3 ROWS ONLY
+
+-- UPDATE
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  UPDATE JSQL."f_many"
+  SET "name" = 'y',
+    "status" = 'active'
+  WHERE "id" = 'm3'
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE "created_at",
+'updated_at' VALUE "updated_at",
+'status' VALUE "status",
+'id' VALUE "id",
+'name' VALUE "name"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_many" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- UPDATE
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  UPDATE JSQL."f_many"
+  SET "name" = 'y',
+    "status" = 'active'
+  WHERE "id" = 'm4'
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE "created_at",
+'updated_at' VALUE "updated_at",
+'status' VALUE "status",
+'id' VALUE "id",
+'name' VALUE "name"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_many" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- UPDATE
+DECLARE
+  rs SYS.ODCIVARCHAR2LIST;
+  c SYS_REFCURSOR;
+BEGIN
+  UPDATE JSQL."f_many"
+  SET "name" = 'y',
+    "status" = 'active'
+  WHERE "id" = 'm5'
+  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
+  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE "created_at",
+'updated_at' VALUE "updated_at",
+'status' VALUE "status",
+'id' VALUE "id",
+'name' VALUE "name"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_many" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- QUERY
+SELECT COUNT(*) AS "count"
+FROM JSQL."f_many" A
+WHERE A."name" = 'x'
+
+-- QUERY
+SELECT
+JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A."_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE A."created_at",
+'updated_at' VALUE A."updated_at",
+'status' VALUE A."status",
+'id' VALUE A."id",
+'name' VALUE A."name"
+RETURNING CLOB) RETURNING CLOB) AS "result"
+FROM JSQL."f_many" A
+WHERE A."name" IN ('x', 'y')
+
+-- DELETE
+DECLARE
+  c SYS_REFCURSOR;
+BEGIN
+  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE "created_at",
+'updated_at' VALUE "updated_at",
+'status' VALUE "status",
+'id' VALUE "id",
+'name' VALUE "name"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_many" WHERE "id" = 'm1';
+  DELETE FROM JSQL."f_many" WHERE "id" = 'm1';
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- DELETE
+DECLARE
+  c SYS_REFCURSOR;
+BEGIN
+  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE "created_at",
+'updated_at' VALUE "updated_at",
+'status' VALUE "status",
+'id' VALUE "id",
+'name' VALUE "name"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_many" WHERE "id" = 'm2';
+  DELETE FROM JSQL."f_many" WHERE "id" = 'm2';
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- DELETE
+DECLARE
+  c SYS_REFCURSOR;
+BEGIN
+  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE "created_at",
+'updated_at' VALUE "updated_at",
+'status' VALUE "status",
+'id' VALUE "id",
+'name' VALUE "name"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_many" WHERE "id" = 'm3';
+  DELETE FROM JSQL."f_many" WHERE "id" = 'm3';
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- DELETE
+DECLARE
+  c SYS_REFCURSOR;
+BEGIN
+  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE "created_at",
+'updated_at' VALUE "updated_at",
+'status' VALUE "status",
+'id' VALUE "id",
+'name' VALUE "name"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_many" WHERE "id" = 'm4';
+  DELETE FROM JSQL."f_many" WHERE "id" = 'm4';
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- DELETE
+DECLARE
+  c SYS_REFCURSOR;
+BEGIN
+  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE "created_at",
+'updated_at' VALUE "updated_at",
+'status' VALUE "status",
+'id' VALUE "id",
+'name' VALUE "name"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_many" WHERE "id" = 'm5';
+  DELETE FROM JSQL."f_many" WHERE "id" = 'm5';
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- DELETE
+DECLARE
+  c SYS_REFCURSOR;
+BEGIN
+  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
+'created_at' VALUE "created_at",
+'updated_at' VALUE "updated_at",
+'status' VALUE "status",
+'id' VALUE "id",
+'name' VALUE "name"
+RETURNING CLOB) RETURNING CLOB) AS "result" FROM JSQL."f_many" WHERE "id" = 'm6';
+  DELETE FROM JSQL."f_many" WHERE "id" = 'm6';
+  DBMS_SQL.RETURN_RESULT(c);
+END;
+
+-- QUERY
+SELECT COUNT(*) AS "count"
+FROM JSQL."f_many" A
+
+-- ========== 6. Comandos · Upsert fluido sin where (devuelve error) [pass]
+
+-- QUERY
+SELECT CASE WHEN EXISTS(SELECT 1
+FROM JSQL."f_products" A
+WHERE A."id" = 'p9') THEN 'true' ELSE 'false' END AS "exists" FROM DUAL
+
 -- ========== 6. Comandos · Test (no ejecuta) + ToJson [pass]
 
 -- INSERT
@@ -1639,7 +2448,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_events"
   ("_idx", "id", "name", "_source")
-  VALUES ('1790448836898', 'e1', 'alta', TO_CLOB('{"stage":"before_insert","touched":true}'))
+  VALUES ('1790455010156', 'e1', 'alta', TO_CLOB('{"stage":"before_insert","touched":true}'))
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -1722,7 +2531,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_events"
   ("_idx", "id", "name", "_source")
-  VALUES ('1790448836939', 'e2', 'cmd', TO_CLOB('{"source":"command","stage":"before_insert","touched":true}'))
+  VALUES ('1790455010271', 'e2', 'cmd', TO_CLOB('{"source":"command","stage":"before_insert","touched":true}'))
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -1748,7 +2557,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_events"
   ("_idx", "id", "name", "_source")
-  VALUES ('1790448836945', 'e4', 'js', TO_CLOB('{"js":"before_insert","stage":"before_insert","touched":true}'))
+  VALUES ('1790455010278', 'e4', 'js', TO_CLOB('{"js":"before_insert","stage":"before_insert","touched":true}'))
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -1906,7 +2715,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."series"
   ("_idx", "created_at", "format", "tag", "updated_at", "value")
-  VALUES ('1790448836980', TO_TIMESTAMP('2026-09-26 13:53:56.980150', 'YYYY-MM-DD HH24:MI:SS.FF'), 'FAC-%05d', 'invoice', TO_TIMESTAMP('2026-09-26 13:53:56.980150', 'YYYY-MM-DD HH24:MI:SS.FF'), 10)
+  VALUES ('1790455010335', TO_TIMESTAMP('2026-09-26 15:36:50.335177', 'YYYY-MM-DD HH24:MI:SS.FF'), 'FAC-%05d', 'invoice', TO_TIMESTAMP('2026-09-26 15:36:50.335177', 'YYYY-MM-DD HH24:MI:SS.FF'), 10)
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -1952,9 +2761,9 @@ DECLARE
   c SYS_REFCURSOR;
 BEGIN
   UPDATE JSQL."series"
-  SET "created_at" = TO_TIMESTAMP('2026-09-26 13:53:56.980150', 'YYYY-MM-DD HH24:MI:SS.FF'),
+  SET "created_at" = TO_TIMESTAMP('2026-09-26 15:36:50.335177', 'YYYY-MM-DD HH24:MI:SS.FF'),
     "format" = 'FAC-%05d',
-    "updated_at" = TO_TIMESTAMP('2026-09-26 13:53:56.990703', 'YYYY-MM-DD HH24:MI:SS.FF'),
+    "updated_at" = TO_TIMESTAMP('2026-09-26 15:36:50.352037', 'YYYY-MM-DD HH24:MI:SS.FF'),
     "value" = 11
   WHERE "tag" = 'invoice'
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
@@ -1992,9 +2801,9 @@ DECLARE
   c SYS_REFCURSOR;
 BEGIN
   UPDATE JSQL."series"
-  SET "created_at" = TO_TIMESTAMP('2026-09-26 13:53:56.980150', 'YYYY-MM-DD HH24:MI:SS.FF'),
+  SET "created_at" = TO_TIMESTAMP('2026-09-26 15:36:50.335177', 'YYYY-MM-DD HH24:MI:SS.FF'),
     "format" = 'FAC-%05d',
-    "updated_at" = TO_TIMESTAMP('2026-09-26 13:53:56.997061', 'YYYY-MM-DD HH24:MI:SS.FF'),
+    "updated_at" = TO_TIMESTAMP('2026-09-26 15:36:50.356920', 'YYYY-MM-DD HH24:MI:SS.FF'),
     "value" = 12
   WHERE "tag" = 'invoice'
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;

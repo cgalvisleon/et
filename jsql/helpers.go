@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,20 +26,21 @@ import (
 * @return string
 **/
 func sqlParse(sql string, args ...any) string {
-	for i := range args {
-		old := fmt.Sprintf(`$%d`, i+1)
-		new := fmt.Sprintf(`{$%d}`, i+1)
-		sql = strings.ReplaceAll(sql, old, new)
+	if len(args) == 0 {
+		return sql
 	}
-
-	for i, arg := range args {
-		old := fmt.Sprintf(`{$%d}`, i+1)
-		new := fmt.Sprintf(`%v`, Quoted(arg))
-		sql = strings.ReplaceAll(sql, old, new)
-	}
-
-	return sql
+	// One pass over whole placeholders: $10 is never read as $1 followed by 0, and a "$2" inside
+	// an already substituted value is not replaced again.
+	return placeholder.ReplaceAllStringFunc(sql, func(match string) string {
+		n, err := strconv.Atoi(match[1:])
+		if err != nil || n < 1 || n > len(args) {
+			return match
+		}
+		return fmt.Sprintf(`%v`, Quoted(args[n-1]))
+	})
 }
+
+var placeholder = regexp.MustCompile(`\$\d+`)
 
 /**
 * quoted: Returns val formatted as a SQL literal (quoted string, bare number, NULL, etc.).

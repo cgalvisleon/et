@@ -31,9 +31,9 @@ func sqliteJoinKeyword(tp jsql.JoinType) string {
 	case jsql.LEFT_JOIN:
 		return "LEFT JOIN"
 	case jsql.RIGHT_JOIN:
-		return "LEFT JOIN"
+		return "RIGHT JOIN"
 	case jsql.FULL_JOIN:
-		return "LEFT JOIN"
+		return "FULL JOIN"
 	default:
 		return "INNER JOIN"
 	}
@@ -533,11 +533,8 @@ func sqliteFrom(query *jsql.Query) []string {
 }
 
 /**
-* Query: Generates the SQL SELECT string for the given Query descriptor. SQLite's
-* JOIN grammar has no RIGHT JOIN or FULL JOIN, so both are downgraded to LEFT JOIN
-* by sqliteJoinKeyword above (callers wanting a true right/full join should build
-* the query with the sides swapped, or use a UNION — this driver keeps the simple
-* case working rather than silently producing invalid SQL).
+* Query: Generates the SQL SELECT string for the given Query descriptor. RIGHT JOIN and
+* FULL JOIN are emitted as such (supported natively since SQLite 3.39).
 * @param query *jsql.Query
 * @return string, error
 **/

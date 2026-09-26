@@ -39,7 +39,6 @@ El SQL concreto lo genera un `Driver` por motor (ver §9); el núcleo de `jsql` 
 | `ROLLUP` | `rollup` | Consulta hacia otro modelo que devuelve un solo registro (`row`, `object`) o un agregado (`count`, `sum`, `avg`, `min`, `max`) y lo asigna al atributo del rollup (ver §2.3). |
 | `CALCFUNC` | `calc_func` | Función de Go (`CalcFunction`) que se ejecuta sobre cada fila cuando la columna está incluida en el select. |
 | `CALC` | `calc` | Script de JavaScript que se ejecuta con goja (`jrex`) sobre cada fila cuando la columna está incluida en el select. |
-| `AGG` | `agg` | Expresión de agregación. |
 
 Las columnas `DETAIL`, `MASTER`, `ROLLUP`, `CALCFUNC` y `CALC` solo se ejecutan si se incluyen de manera literal en el select (o con `Query.Detail`, `Query.Master` y `Query.Calc`). Con el select vacío solo se incluyen las columnas `COLUMN` y, si el modelo tiene `SourceField`, sus atributos (§5.3).
 
@@ -268,9 +267,52 @@ Reglas:
 - **Triggers**: `TriggerFunction func(tx *Tx, old, new et.Json) error` para `Before/After × Insert/Update/Delete` (en `Model` o por `Command`), y scripts JS (`jrex`) registrados con `DefineBeforeInsert(code)`, `DefineBeforeUpdate(name, code)`, etc. En el script los registros son `OLD` y `NEW` (`new` es palabra reservada de JavaScript), por ejemplo `NEW.estado = "revisado";`. Un error en un trigger aborta el comando y, si el comando abrió su propia transacción, la revierte.
 - **Campos calculados**: `DefineCalcFunc(name, fn)` en Go y `DefineCalc(name, script)` en JS, que recibe la fila como `item` (por ejemplo `item.inicial = item.name.substring(0, 1);`).
 
-## 8. Consulta SQL descrita en JSON sobre la `DB` (`jquery.go`)
+## 8. Consultas y comandos descritos en JSON sobre la `DB` (`jquery.go`)
 
-`DB.Query(json)` / `DB.QueryTx(tx, json)`: SQL libre descrito por palabras clave, independiente de un modelo. Claves reconocidas (sin distinguir mayúsculas; con espacio o guion bajo): `select`, `from`, `join`, `left join`, `right join`, `full join`, `where`, `and`, `or`, `group by`, `having`, `order by`, `limit`, `offset`, `insert`, `update`, `delete`, `upsert`, `define`.
+`DB.Query(json)` / `DB.QueryTx(tx, json)` reciben un descriptor JSON independiente de un modelo: el modelo se indica en el propio JSON (`from`). Según la clave principal, el descriptor es una consulta (`select`, `from`), un comando (`insert`, `update`, `delete`, `upsert`, `bulk`) o una definición (`define`). El descriptor se traduce a las mismas estructuras de `jsql` (`Query`, `Command`, `Define`), así que sigue las reglas de `SourceField`, `RETURNING` y triggers de las secciones anteriores. Todavía no está implementado (brecha #1).
+
+### 8.1 Comandos
+
+Cada comando va bajo una clave con su nombre y contiene:
+
+| Clave | Uso | Comandos |
+|---|---|---|
+| `from` | Modelo destino, `schema.tabla`. | todos |
+| `data` | Valores a guardar: un objeto (`insert`, `update`, `upsert`) o una lista de objetos (`bulk`). Los campos sin columna van a `SourceField`. | `insert`, `update`, `upsert`, `bulk` |
+| `where` | Condiciones con el formato de §6. En `upsert` nunca puede estar vacío. | `update`, `delete`, `upsert` |
+| `before_insert`, `after_insert` | Listas de código JavaScript (goja) que corren antes y después de cada insert. | `insert`, `bulk`, `upsert` |
+| `before_update`, `after_update` | Ídem, antes y después de actualizar cada registro. | `update`, `upsert` |
+| `before_delete`, `after_delete` | Ídem, antes y después de eliminar cada registro. | `delete` |
+| `before_insert_update`, `after_insert_update` | Ídem, tanto si el `upsert` inserta como si actualiza. | `upsert` |
+
+```json
+{
+  "update": {
+    "from": "public.users",
+    "data": { "name": "Cesar Galvis" },
+    "where": [
+      { "id": { "eq": 1 } },
+      { "and": { "status": { "eq": "active" } } }
+    ],
+    "before_update": ["NEW.updated_by = 'api';"]
+  }
+}
+```
+
+| Comando | Comportamiento | Resultado |
+|---|---|---|
+| `insert` | Inserta un registro con `data`. | El registro insertado. |
+| `bulk` | Inserta un registro por cada objeto de `data`; los triggers corren por registro. | Los registros insertados. |
+| `update` | Actualiza los registros que cumplen `where` con `data`; los atributos se fusionan en `SourceField` sin borrar los existentes. | Los registros actualizados. |
+| `delete` | Elimina los registros que cumplen `where`. | Los registros eliminados. |
+| `upsert` | Si ningún registro cumple `where`, inserta `data`; si alguno lo cumple, actualiza esos registros con `data`. | Los registros insertados o actualizados. |
+
+En los scripts, los registros están en `NEW` (con los valores que se van a guardar; en `before_*` sus cambios se guardan) y `OLD` (el registro antes del cambio, vacío en un insert), como en §7.
+
+### 8.2 Consultas y definiciones
+
+- **Consulta**: `from` más las claves de §5.4. Claves reconocidas en `jquery.go` (sin distinguir mayúsculas; con espacio o guion bajo): `select`, `from`, `join`, `left join`, `right join`, `full join`, `where`, `and`, `or`, `group by`, `having`, `order by`, `limit`, `offset`.
+- **Definición**: `define` con la estructura `Define` (§4.1) en JSON.
 
 ## 9. Drivers
 
@@ -333,7 +375,7 @@ Estado revisado el 2026-09-26.
 
 | # | Especificación | Código actual | Ubicación |
 |---|---|---|---|
-| 1 | `DB.Query(json)` interpreta `select`, `from`, `join`… | Todos los `parse*` devuelven `""`, así que la llamada siempre falla con `invalid sql`. Además, iterar el `map` no garantiza el orden de las cláusulas. | `jquery.go` |
+| 1 | `DB.Query(json)` interpreta consultas, comandos (§8.1) y definiciones. | Solo existe el esqueleto: `queryJsonTx` despacha a `parseQuery`, `parseCommand` o `parseDDL`, que devuelven un resultado vacío, y los `parse*` de cada cláusula no están implementados. El despacho recorre las llaves de un `map`, así que su orden no es determinista. | `jquery.go` |
 | 2 | `select` en JSON recibe `[]interface{}` bajo la clave `select`. | `loadQuery` lee `selects` (y `hiddens`, `groups`, `havings`, `orders`) como `[]string`. | `query.go` `loadQuery` |
 | 3 | Validación de índices únicos antes de insertar/actualizar. | `defaultTrigger` calcula si existe duplicado, pero el resultado de `results.Range` se ignora y nunca devuelve error. | `trigger.go` |
 | 4 | Driver para varios motores. | `postgres`, `sqlite` y `oracle` generan SQL; `mysql`, `mssql` y `josefina` no tienen implementación. | `drivers/` |

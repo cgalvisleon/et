@@ -89,7 +89,6 @@ COLUMN   TypeColumn = "column"
 	ROLLUP   TypeColumn = "rollup"
 	CALCFUNC TypeColumn = "calc_func"
 	CALC     TypeColumn = "calc"
-	AGG      TypeColumn = "agg"
 ```
 
 - COLUMN: corresponde a las columnas que se crean en la tabla.
@@ -102,9 +101,11 @@ COLUMN   TypeColumn = "column"
 
 Las columnas de tipo DETAIL, MASTER, ROLLUP, CALCFUNC y CALC solo se ejecutan si se incluyen de manera literal en el select. Cuando el array del select está vacío, solo se incluyen las columnas de tipo COLUMN.
 
-Commandos
+Comandos
 
-- Insert: la estructura json para un inser es la siguiente
+Los comandos también se pueden describir en json. Cada comando se escribe bajo una clave con su nombre (insert, update, delete, upsert o bulk) y dentro indica el modelo en from (schema.tabla), los valores en data, las condiciones en where y, de forma opcional, triggers en javascript. Igual que los comandos del modelo, siguen la regla de SourceField: los valores con columna se guardan en su columna y el resto en SourceField. Todos devuelven los registros afectados (RETURNING).
+
+- Insert: inserta un registro en el modelo indicado en from con los valores de data. La estructura json para un insert es la siguiente:
 
 ```json
 {
@@ -121,9 +122,9 @@ Commandos
 }
 ```
 
-before_insert, after_insert son codigo javascript que es ejecutado por goja.
+before_insert y after_insert son listas de código javascript que goja ejecuta antes y después del insert. En el script, el registro nuevo está en NEW (OLD está vacío en un insert), y los cambios que before_insert haga en NEW son los que se guardan.
 
-- Update: La estructura json para un update es la siguiente
+- Update: actualiza los registros que cumplen el where con los valores de data. Los atributos se fusionan en SourceField sin borrar los que ya existen. La estructura json para un update es la siguiente:
 
 ```json
 {
@@ -142,9 +143,9 @@ before_insert, after_insert son codigo javascript que es ejecutado por goja.
 }
 ```
 
-before_update y after_update son codigo javascript que es ejecutado por goja.
+before_update y after_update son listas de código javascript que goja ejecuta antes y después de actualizar cada registro. En el script, OLD es el registro antes del cambio y NEW el registro con los valores de data aplicados; los cambios que before_update haga en NEW son los que se guardan.
 
-- Delete: La estructura json para un Delete es la siguiente
+- Delete: elimina los registros que cumplen el where y devuelve los datos eliminados. La estructura json para un delete es la siguiente:
 
 ```json
 {
@@ -160,9 +161,9 @@ before_update y after_update son codigo javascript que es ejecutado por goja.
 }
 ```
 
-before_delete y after_delete son codigo javascript que es ejecutado por goja.
+before_delete y after_delete son listas de código javascript que goja ejecuta antes y después de eliminar cada registro. En el script, OLD es el registro que se elimina.
 
-- Upsert: entendiendo upsert que si el exist del where es false se ejecuta un insert de lo contratio un update, el where ninca puede ser vacio. su estructura es la siguiente
+- Upsert: consulta si existe algún registro que cumpla el where. Si no existe, ejecuta un insert con los valores de data; si existe, ejecuta un update con data de los registros que lo cumplen. El where nunca puede estar vacío. Su estructura es la siguiente:
 
 ```json
 {
@@ -185,23 +186,22 @@ before_delete y after_delete son codigo javascript que es ejecutado por goja.
 }
 ```
 
-before_insert, after_insert, before_update, after_update, before_insert_update y after_insert_update son codigo javascript que es ejecutado por goja.
+before_insert, after_insert, before_update, after_update, before_insert_update y after_insert_update son listas de código javascript que ejecuta goja. Los de insert solo se ejecutan cuando el upsert inserta, los de update solo cuando actualiza, y before_insert_update y after_insert_update se ejecutan en ambos casos.
 
-- Bulk: La estructura json para un insercion a granel es la siguiente
+- Bulk: inserta varios registros en una sola operación; data es una lista con un objeto por registro. La estructura json para una inserción a granel es la siguiente:
 
 ```json
 {
   "bulk": {
     "from": "public.users",
-    "data": {
-      "id": 1,
-      "status": "active",
-      "name": "Cesar"
-    },
+    "data": [
+      { "id": 1, "status": "active", "name": "Cesar" },
+      { "id": 2, "status": "active", "name": "Ana" }
+    ],
     "before_insert": ["code javascript...", "code javascript..."],
     "after_insert": ["code javascript...", "code javascript..."]
   }
 }
 ```
 
-before_insert, after_insert son codigo javascript que es ejecutado por goja.
+before_insert y after_insert son listas de código javascript que goja ejecuta antes y después de insertar cada registro de la lista, igual que en insert.

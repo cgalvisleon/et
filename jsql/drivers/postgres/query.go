@@ -158,22 +158,71 @@ func pgInValues(val any) string {
 }
 
 /**
+* pgJoinColumnRef: In a JOIN ON condition, resolves a string value of the form "alias.field"
+* that names a field of one of the query origins, so {"A.role_id": {"eq": "R.id"}} compares
+* two columns instead of a column with the literal 'R.id'.
+* @param getField func(string) (*jsql.Field, bool), useSourceField bool, val et.Value
+* @return string, bool
+**/
+func pgJoinColumnRef(getField func(string) (*jsql.Field, bool), useSourceField bool, val et.Value) (string, bool) {
+	str, ok := val.Value.(string)
+	if !ok || !strings.Contains(str, ".") {
+		return "", false
+	}
+	def, ok := et.ToField(str)
+	if !ok || def.Source == "" || def.Agg != nil {
+		return "", false
+	}
+	fld, ok := getField(str)
+	if !ok || fld.From == nil || (fld.From.As != def.Source && fld.From.Name != def.Source) {
+		return "", false
+	}
+	expr := pgFieldExpr(fld, useSourceField)
+	return expr, expr != ""
+}
+
+/**
 * pgCondExpr: Renders a single Condition as a SQL fragment using alias to qualify the field.
-* @param getField func(string) (*jsql.Field, bool), useSourceField bool, cond *et.Condition, alias string
+* Untyped ATTRIB fields (->> text) are cast according to the compared value, so numbers,
+* booleans and times compare by value instead of failing with text = integer.
+* A field that cannot be resolved is reduced to a safe identifier.
+* @param getField func(string) (*jsql.Field, bool), useSourceField bool, cond *et.Condition, alias string, isJoin bool
 * @return string
 **/
-func pgCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bool, cond *et.Condition, alias string) string {
+func pgCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bool, cond *et.Condition, alias string, isJoin bool) string {
 	var fieldExpr string
-	if fld, ok := getField(cond.Field.String()); ok {
+	fld, ok := getField(cond.Field.String())
+	if ok {
 		fieldExpr = pgFieldExpr(fld, useSourceField)
+		if fld.TypeColumn == jsql.ATTRIB && useSourceField && pgAttribCast(fld.TypeData) == "" {
+			if cast := pgValueCast(cond.Value.Value); cast != "" {
+				fieldExpr = fmt.Sprintf("(%s)::%s", fieldExpr, cast)
+			}
+		}
 	}
 	if fieldExpr == "" {
 		f := pgJsonbPath(cond.Field.String())
+		if !strings.Contains(cond.Field.String(), "->") {
+			f = sanitizeQualifiedIdent(f)
+		}
+		if f == "" {
+			return ""
+		}
 		if alias != "" && !strings.Contains(f, ".") {
 			f = fmt.Sprintf("%s.%s", alias, f)
 		}
 		fieldExpr = f
 	}
+
+	value := func() string {
+		if isJoin {
+			if ref, ok := pgJoinColumnRef(getField, useSourceField, cond.Value); ok {
+				return ref
+			}
+		}
+		return Quoted(cond.Value)
+	}
+
 	switch cond.Operator {
 	case et.NULL:
 		return fmt.Sprintf("%s IS NULL", fieldExpr)
@@ -196,36 +245,36 @@ func pgCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bool, 
 		}
 		return fmt.Sprintf("%s NOT BETWEEN %v AND %v", fieldExpr, jsql.Quoted(bv.Min), jsql.Quoted(bv.Max))
 	case et.LIKE:
-		return fmt.Sprintf("%s ILIKE %s", fieldExpr, Quoted(cond.Value))
+		return fmt.Sprintf("%s ILIKE %s", fieldExpr, value())
 	case et.IS:
-		return fmt.Sprintf("%s IS %s", fieldExpr, Quoted(cond.Value))
+		return fmt.Sprintf("%s IS %s", fieldExpr, value())
 	case et.IS_NOT:
-		return fmt.Sprintf("%s IS NOT %s", fieldExpr, Quoted(cond.Value))
+		return fmt.Sprintf("%s IS NOT %s", fieldExpr, value())
 	case et.NEG:
-		return fmt.Sprintf("%s != %s", fieldExpr, Quoted(cond.Value))
+		return fmt.Sprintf("%s != %s", fieldExpr, value())
 	case et.LESS:
-		return fmt.Sprintf("%s < %s", fieldExpr, Quoted(cond.Value))
+		return fmt.Sprintf("%s < %s", fieldExpr, value())
 	case et.LESS_EQ:
-		return fmt.Sprintf("%s <= %s", fieldExpr, Quoted(cond.Value))
+		return fmt.Sprintf("%s <= %s", fieldExpr, value())
 	case et.MORE:
-		return fmt.Sprintf("%s > %s", fieldExpr, Quoted(cond.Value))
+		return fmt.Sprintf("%s > %s", fieldExpr, value())
 	case et.MORE_EQ:
-		return fmt.Sprintf("%s >= %s", fieldExpr, Quoted(cond.Value))
+		return fmt.Sprintf("%s >= %s", fieldExpr, value())
 	default:
-		return fmt.Sprintf("%s = %s", fieldExpr, Quoted(cond.Value))
+		return fmt.Sprintf("%s = %s", fieldExpr, value())
 	}
 }
 
 /**
-* pgCondsSQL: Renders a Condition slice as a SQL clause body joined by AND/OR connectors.
-* @param getField func(string) (*jsql.Field, bool), useSourceField bool, conds []*et.Condition, alias string
+* pgConds: Renders a Condition slice as a SQL clause body joined by AND/OR connectors.
+* @param getField func(string) (*jsql.Field, bool), useSourceField bool, conds []*et.Condition, alias string, isJoin bool
 * @return string
 **/
-func pgCondsSQL(getField func(string) (*jsql.Field, bool), useSourceField bool, conds []*et.Condition, alias string) string {
+func pgConds(getField func(string) (*jsql.Field, bool), useSourceField bool, conds []*et.Condition, alias string, isJoin bool) string {
 	var parts []string
 	first := true
 	for _, cond := range conds {
-		expr := pgCondExpr(getField, useSourceField, cond, alias)
+		expr := pgCondExpr(getField, useSourceField, cond, alias, isJoin)
 		if expr == "" {
 			continue
 		}
@@ -239,6 +288,58 @@ func pgCondsSQL(getField func(string) (*jsql.Field, bool), useSourceField bool, 
 		}
 	}
 	return strings.Join(parts, "\n  ")
+}
+
+/**
+* pgCondsSQL: Renders the WHERE / HAVING conditions as a SQL clause body.
+* @param getField func(string) (*jsql.Field, bool), useSourceField bool, conds []*et.Condition, alias string
+* @return string
+**/
+func pgCondsSQL(getField func(string) (*jsql.Field, bool), useSourceField bool, conds []*et.Condition, alias string) string {
+	return pgConds(getField, useSourceField, conds, alias, false)
+}
+
+/**
+* pgJoinCondsSQL: Renders the ON conditions of a JOIN; "alias.field" string values are column references.
+* @param getField func(string) (*jsql.Field, bool), useSourceField bool, conds []*et.Condition, alias string
+* @return string
+**/
+func pgJoinCondsSQL(getField func(string) (*jsql.Field, bool), useSourceField bool, conds []*et.Condition, alias string) string {
+	return pgConds(getField, useSourceField, conds, alias, true)
+}
+
+/**
+* pgSourceExpr: Returns the SourceField expression without the hidden keys (source - '{"a","b"}'::text[]).
+* @param source string, hiddens []string
+* @return string
+**/
+func pgSourceExpr(source string, hiddens []string) string {
+	if len(hiddens) == 0 {
+		return source
+	}
+	return fmt.Sprintf("(%s - %s::text[])", source, pgTextArray(hiddens))
+}
+
+/**
+* pgMergeObject: Builds source || jsonb_build_object(pairs...), splitting pairs into chunks of 50
+* because PostgreSQL functions accept at most 100 arguments. An empty source returns only the object.
+* @param source string, pairs []string ("'key', expr")
+* @return string
+**/
+func pgMergeObject(source string, pairs []string) string {
+	const maxPairs = 50
+	parts := make([]string, 0)
+	if source != "" {
+		parts = append(parts, source)
+	}
+	for i := 0; i < len(pairs); i += maxPairs {
+		end := min(i+maxPairs, len(pairs))
+		parts = append(parts, fmt.Sprintf("jsonb_build_object(\n%s\n)", strings.Join(pairs[i:end], ",\n")))
+	}
+	if len(parts) == 0 {
+		return "'{}'::jsonb"
+	}
+	return strings.Join(parts, " ||\n")
 }
 
 /**
@@ -294,7 +395,7 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 			return "", false
 		}
 		if query.UseSourceField {
-			return fmt.Sprintf("'%s', %s", fld.As, expr), true
+			return fmt.Sprintf("%s, %s", pgQuoteKey(fld.As), expr), true
 		}
 		return fmt.Sprintf("%s AS %s", expr, fld.As), true
 	}
@@ -302,7 +403,7 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 		if query.UseSourceField {
 			expr := fld.Name
 			expr = strs.Append(alias, expr, ".")
-			return fmt.Sprintf("'%s', %s", fld.As, expr), true
+			return fmt.Sprintf("%s, %s", pgQuoteKey(fld.As), expr), true
 		} else {
 			expr := fld.Name
 			if expr != fld.As {
@@ -314,6 +415,9 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 	}
 	if fld.TypeColumn == jsql.ATTRIB {
 		sourceField := jsql.SOURCE
+		if fld.From.Model != nil && fld.From.Model.SourceField != "" {
+			sourceField = fld.From.Model.SourceField
+		}
 		fullPath := pgJsonbPath(sourceField + "->" + fld.Name)
 		path := fullPath
 		if alias != "" {
@@ -321,15 +425,15 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 		}
 		switch fld.TypeData {
 		case et.INT:
-			return fmt.Sprintf("'%s', (%s)::bigint", fld.As, path), true
+			return fmt.Sprintf("%s, (%s)::bigint", pgQuoteKey(fld.As), path), true
 		case et.FLOAT:
-			return fmt.Sprintf("'%s', (%s)::double precision", fld.As, path), true
+			return fmt.Sprintf("%s, (%s)::double precision", pgQuoteKey(fld.As), path), true
 		case et.BOOL:
-			return fmt.Sprintf("'%s', (%s)::boolean", fld.As, path), true
+			return fmt.Sprintf("%s, (%s)::boolean", pgQuoteKey(fld.As), path), true
 		case et.DATETIME:
-			return fmt.Sprintf("'%s', (%s)::timestamptz", fld.As, path), true
+			return fmt.Sprintf("%s, (%s)::timestamptz", pgQuoteKey(fld.As), path), true
 		default:
-			return fmt.Sprintf("'%s', %s", fld.As, path), true
+			return fmt.Sprintf("%s, %s", pgQuoteKey(fld.As), path), true
 		}
 	}
 	if fld.TypeColumn == jsql.DETAIL {
@@ -443,10 +547,14 @@ func pgSelects(query *jsql.Query) []string {
 				if slices.Contains(model.Hiddens, col.Name) {
 					continue
 				}
-				if col.TypeColumn != jsql.COLUMN || col.Name == jsql.SOURCE {
+				if col.TypeColumn != jsql.COLUMN || col.Name == model.SourceField {
 					continue
 				}
-				columnExpr, ok := pgSelectExpr(query, col.Name)
+				name := col.Name
+				if len(query.Froms) > 1 {
+					name = fmt.Sprintf("%s.%s", from.As, col.Name)
+				}
+				columnExpr, ok := pgSelectExpr(query, name)
 				if !ok {
 					continue
 				}
@@ -456,21 +564,27 @@ func pgSelects(query *jsql.Query) []string {
 	}
 
 	if query.UseSourceField {
+		source := ""
 		if len(query.Selects) == 0 && len(query.Froms) > 0 {
 			from := query.Froms[0]
-			expr := from.As
-			if expr == from.Table {
-				expr = ""
+			sourceField := jsql.SOURCE
+			if from.Model != nil && from.Model.SourceField != "" {
+				sourceField = from.Model.SourceField
 			}
-			expr = strs.Append(expr, jsql.SOURCE, ".")
-			selectExprs = append([]string{}, fmt.Sprintf("%s ||\njsonb_build_object(\n%s\n)", expr, strings.Join(selectExprs, ",\n")))
-		} else {
-			selectExprs = append([]string{}, fmt.Sprintf("jsonb_build_object(\n%s\n)", strings.Join(selectExprs, ",\n")))
+			alias := from.As
+			if alias == from.Table {
+				alias = ""
+			}
+			hiddens := slices.Clone(query.Hiddens)
+			if from.Model != nil {
+				hiddens = append(hiddens, from.Model.Hiddens...)
+			}
+			source = pgSourceExpr(strs.Append(alias, sourceField, "."), hiddens)
 		}
-		return append([]string{}, fmt.Sprintf("%s AS %s", strings.Join(selectExprs, ",\n"), jsql.RESULT))
-	} else {
-		return append([]string{}, strings.Join(selectExprs, ",\n"))
+		return []string{fmt.Sprintf("%s AS %s", pgMergeObject(source, selectExprs), jsql.RESULT)}
 	}
+
+	return []string{strings.Join(selectExprs, ",\n")}
 }
 
 /**
@@ -534,7 +648,7 @@ func (s *Postgres) Query(query *jsql.Query) (string, error) {
 	for _, join := range query.Joins {
 		sb.WriteString(fmt.Sprintf("\n%s %s AS %s", pgJoinKeyword(join.Type), pgFromRef(join.To), join.To.As))
 		if len(join.Condition) > 0 {
-			onSQL := pgCondsSQL(query.GetField, query.UseSourceField, join.Condition, join.To.As)
+			onSQL := pgJoinCondsSQL(query.GetField, query.UseSourceField, join.Condition, join.To.As)
 			if onSQL != "" {
 				sb.WriteString("\n  ON " + onSQL)
 			}

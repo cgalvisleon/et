@@ -143,7 +143,7 @@ func ddlIndexes(model *jsql.Model, table string) []string {
 **/
 func (s *Sqlite) ExistModel(db *sql.DB, model *jsql.Model) (bool, error) {
 	table := ddlTable(model)
-	query := `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?);`
+	query := `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?) AS "exists";`
 	rows, err := db.Query(query, table)
 	if err != nil {
 		return false, err

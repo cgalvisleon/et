@@ -72,8 +72,8 @@ La misma regla aplica en:
 | Operación | Comportamiento esperado |
 |---|---|
 | `INSERT` | Las claves sin columna se guardan en `SourceField`. |
-| `UPDATE` | Las claves sin columna se fusionan en `SourceField` (Postgres: `jsonb_set` encadenado por llave, sin borrar las otras). |
-| `WHERE` / `HAVING` / `ORDER BY` / `GROUP BY` | Un campo sin columna se resuelve como `SourceField->>'campo'` (con *cast* si el tipo es conocido). |
+| `UPDATE` | Las claves sin columna se fusionan en `SourceField` sin borrar las otras (Postgres: `COALESCE(_source, '{}') \|\| {...}` y `jsonb_set` para las rutas anidadas, creando los objetos intermedios). |
+| `WHERE` / `HAVING` / `ORDER BY` / `GROUP BY` | Un campo sin columna se resuelve como `SourceField->>'campo'`, con *cast* según el tipo declarado o, si no tiene tipo, según el valor comparado (número, booleano o fecha). |
 | `SELECT` | Ver §5.3. |
 
 En esta condición, `last_name` no tiene columna, así que se busca como atributo: `_source->>'last_name'`.
@@ -166,7 +166,7 @@ Siempre se excluyen `Model.Hiddens` y `Query.Hiddens`. La fila resultante con `S
 
 ### 5.4 Consulta descrita en JSON
 
-`Model.Query(json)` / `Model.QueryTx(tx, json)` construyen un `*Query` a partir de un `et.Json` (`Query.loadQuery`). El `from` es el propio modelo (alias `A`).
+`Model.Query(json)` / `Model.QueryTx(tx, json)` construyen un `*Query` a partir de un `et.Json` (`Query.loadQuery`). El `from` es el propio modelo con el alias `A`, que es el alias por defecto de toda consulta. En los `on` de un join, un valor de texto `alias.campo` que nombra un campo de la consulta se toma como columna, no como texto.
 
 ```json
 {
@@ -226,7 +226,7 @@ Un campo sin columna se busca en `SourceField` (`_source->>'last_name'`), según
 Reglas:
 
 - **`SourceField`**: `INSERT` y `UPDATE` aplican §3 a las claves de `data` sin columna.
-- **`RETURNING`**: los tres comandos incluyen `RETURNING`. `INSERT` y `UPDATE` devuelven los **datos actualizados**; `DELETE` devuelve los **datos eliminados**. Con `SourceField`, los atributos se reconstruyen en el resultado. `Command.Return(fields...)` restringe los campos devueltos.
+- **`RETURNING`**: los tres comandos incluyen `RETURNING`. `INSERT` y `UPDATE` devuelven los **datos actualizados**; `DELETE` devuelve los **datos eliminados**. El resultado es la fila que devuelve la base, con la misma forma que un `SELECT` sin campos: con `SourceField`, `SourceField || jsonb_build_object(columnas) AS result`, sin los campos ocultos. Los triggers *after* reciben `new` con esos datos fusionados. `Command.Return(fields...)` restringe los campos devueltos.
 - **Filtros**: `Where`/`And`/`Or` reciben `*et.Condition` y admiten el mismo `[]Json` de §6.
 - **Ejecución**: `Exec()`, `ExecTx(tx)` → `et.Items`; `One()`, `OneTx(tx)` → `et.Item`. Con `tx == nil`, el comando abre su propia transacción y hace commit.
 - **Triggers**: `TriggerFunction func(tx *Tx, old, new et.Json) error` para `Before/After × Insert/Update/Delete` (en `Model` o por `Command`), y scripts JS (`jrex`) registrados con `DefineBeforeInsert`, etc. Un error en un trigger aborta el comando.
@@ -257,8 +257,17 @@ type Driver interface {
 |---|---|---|
 | `postgres` (`lib/pq`) | `DriverPostgres` | Completo. |
 | `sqlite` (`modernc.org/sqlite`) | `DriverSqlite` | Completo; cada fila es un objeto JSON y el JSON anidado llega doblemente codificado. |
-| `oracle` (`go-ora/v2`) | `DriverOracle` | Solo `Connect`; `Load`/`Query`/`Command` devuelven `not implemented`. |
+| `oracle` (`go-ora/v2`) | `DriverOracle` | Completo, para Oracle 19c o superior (probado en 23ai Free). Ver §9.1. |
 | `mysql`, `mssql`, `josefina` | constantes | Sin implementación. |
+
+### 9.1 Particularidades del driver Oracle
+
+- **Nombres**: tablas y columnas se crean como identificadores entre comillas y en minúscula (`JSQL."users"."_source"`), así conservan el nombre del modelo y admiten `_source` o `_idx`. El esquema del modelo es un usuario de Oracle que debe existir (`Load` no lo crea) y se escribe sin comillas, así que se resuelve en mayúscula.
+- **Tipos**: el JSON se guarda en `CLOB` con `CHECK (... IS JSON)`; `BOOL` es `NUMBER(1)`, que en los resultados JSON vuelve como `true`/`false`; `ANY` es `VARCHAR2(4000)`.
+- **Comandos**: Oracle no devuelve filas con `RETURNING`, así que `Command` genera un bloque PL/SQL que ejecuta el DML, recoge los `ROWID` afectados y devuelve esas filas con `DBMS_SQL.RETURN_RESULT`. El `DELETE` abre el cursor antes de borrar.
+- **`SourceField`**: el `UPDATE` fusiona los atributos con `JSON_MERGEPATCH`, que conserva los hermanos anidados; un valor `null` en `data` **borra** la llave, en lugar de guardar `null` como en Postgres. Por la misma razón, las columnas con valor `NULL` no aparecen en el `result`.
+- **Literales**: los textos de más de 1000 caracteres se parten en `TO_CLOB('…') || TO_CLOB('…')` para no pasar el límite de 4000 bytes por literal (`ORA-01704`). Oracle guarda `''` como `NULL`.
+- **Consultas**: `LIKE` no distingue mayúsculas (`UPPER(x) LIKE UPPER(v)`); la paginación usa `OFFSET … ROWS FETCH NEXT … ROWS ONLY`; `ON UPDATE CASCADE` no existe y se omite; no se crean índices sobre LOB ni un segundo índice sobre una columna ya indexada.
 
 ## 10. Conexión y configuración
 
@@ -268,7 +277,7 @@ type Driver interface {
 |---|---|---|
 | `DB_DRIVER` | Driver | `postgres` |
 | `DB_HOST`, `DB_PORT` | Servidor | `localhost`, 5432 / 1521 |
-| `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Credenciales y base / servicio | — / `josephine` |
+| `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Credenciales y base (en Oracle, el *service name*, p. ej. `FREEPDB1`) | — / `josephine` |
 | `DB_SSL`, `DB_SSL_VERIFY` | TLS (oracle) | `false`, `true` |
 | `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_CONN_LIFETIME`, `DB_POOL_CONN_IDLE_TIME` | Pool | driver |
 | `DB_RECORD_LIMIT` | Límite de filas por consulta | 1000 |
@@ -288,8 +297,7 @@ Estado revisado el 2026-09-26.
 | # | Especificación | Código actual | Ubicación |
 |---|---|---|---|
 | 1 | `DB.Query(json)` interpreta `select`, `from`, `join`… | Todos los `parse*` devuelven `""`, así que la llamada siempre falla con `invalid sql`. Además, iterar el `map` no garantiza el orden de las cláusulas. | `jquery.go` |
-| 2 | `INSERT`/`UPDATE`/`DELETE` devuelven los datos del `RETURNING`. | El SQL incluye `RETURNING`, pero `insert`/`update`/`delete` descartan el resultado de `SqlTx` y devuelven `s.New` / `s.Old` armados en memoria. | `command.go` |
-| 3 | `select` en JSON recibe `[]interface{}` bajo la clave `select`. | `loadQuery` lee `selects` (y `hiddens`, `groups`, `havings`, `orders`) como `[]string`. | `query.go` `loadQuery` |
-| 4 | `Query` admite `from` en JSON. | `loadQuery` no lee `from`: el origen es siempre el modelo que invoca. | `query.go` |
-| 5 | Validación de índices únicos antes de insertar/actualizar. | `defaultTrigger` calcula si existe duplicado, pero el resultado de `results.Range` se ignora y nunca devuelve error. | `trigger.go` |
-| 6 | Driver para varios motores. | Solo `postgres` y `sqlite` generan SQL; `oracle` solo conecta. | `drivers/` |
+| 2 | `select` en JSON recibe `[]interface{}` bajo la clave `select`. | `loadQuery` lee `selects` (y `hiddens`, `groups`, `havings`, `orders`) como `[]string`. | `query.go` `loadQuery` |
+| 3 | `Query` admite `from` en JSON. | `loadQuery` no lee `from`: el origen es siempre el modelo que invoca. | `query.go` |
+| 4 | Validación de índices únicos antes de insertar/actualizar. | `defaultTrigger` calcula si existe duplicado, pero el resultado de `results.Range` se ignora y nunca devuelve error. | `trigger.go` |
+| 5 | Driver para varios motores. | `postgres`, `sqlite` y `oracle` generan SQL; `mysql`, `mssql` y `josefina` no tienen implementación. | `drivers/` |

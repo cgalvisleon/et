@@ -245,7 +245,7 @@ type Query struct {
 * @return *Query
 **/
 func NewQuery(model *Model, as ...string) *Query {
-	if len(as) == 0 {
+	if len(as) == 0 || as[0] == "" {
 		as = []string{"A"}
 	}
 	result := &Query{
@@ -362,7 +362,7 @@ func (s *Query) GetField(field string) (*Field, bool) {
 }
 
 /**
-* getFrom: Returns the origin whose name or alias matches name; an empty name returns the first origin.
+* getFrom: Returns the origin (FROM or JOIN) whose name or alias matches name; an empty name returns the first FROM.
 * @param name string
 * @return *From
 **/
@@ -376,6 +376,11 @@ func (s *Query) getFrom(name string) *From {
 	for _, from := range s.Froms {
 		if from.Name == name || from.As == name {
 			return from
+		}
+	}
+	for _, join := range s.Joins {
+		if join.To != nil && (join.To.Name == name || join.To.As == name) {
+			return join.To
 		}
 	}
 	return nil

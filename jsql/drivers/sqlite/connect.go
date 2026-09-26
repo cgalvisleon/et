@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/cgalvisleon/et/jsql"
@@ -27,8 +28,32 @@ func dbPath(db *jsql.DB) (string, error) {
 }
 
 /**
-* connectTo: Opens the SQLite file at path and applies PRAGMAs needed for
-* correctness (foreign keys) and concurrent reads (WAL journal mode).
+* pragmas: PRAGMAs every pooled connection needs, for correctness (foreign keys)
+* and concurrency (WAL journal mode, waiting on a locked database instead of
+* failing). They go in the DSN so the driver runs them on each new connection,
+* not only on the first one.
+**/
+var pragmas = []string{
+	"foreign_keys(1)",
+	"journal_mode(WAL)",
+	"busy_timeout(5000)",
+}
+
+/**
+* dsn: Returns path with the connection PRAGMAs as "_pragma" query parameters.
+* @param path string
+* @return string
+**/
+func dsn(path string) string {
+	params := make([]string, len(pragmas))
+	for i, pragma := range pragmas {
+		params[i] = "_pragma=" + pragma
+	}
+	return path + "?" + strings.Join(params, "&")
+}
+
+/**
+* connectTo: Opens the SQLite file at path, with the PRAGMAs applied to every connection.
 * @param ctx context.Context, path string
 * @return *sql.DB, error
 **/
@@ -39,7 +64,7 @@ func connectTo(ctx context.Context, path string) (*sql.DB, error) {
 		}
 	}
 
-	result, err := sql.Open("sqlite", path)
+	result, err := sql.Open("sqlite", dsn(path))
 	if err != nil {
 		return nil, err
 	}
@@ -49,25 +74,14 @@ func connectTo(ctx context.Context, path string) (*sql.DB, error) {
 		return nil, err
 	}
 
-	for _, pragma := range []string{
-		"PRAGMA foreign_keys = ON;",
-		"PRAGMA journal_mode = WAL;",
-		"PRAGMA busy_timeout = 5000;",
-	} {
-		if _, err := result.ExecContext(ctx, pragma); err != nil {
-			result.Close()
-			return nil, err
-		}
-	}
-
 	return result, nil
 }
 
 /**
 * Connect: Opens the SQLite database file described by db.Params ("name" holds the
-* file path) and configures the connection pool. A single writer connection is
-* enforced (SQLite allows only one writer at a time); WAL mode still allows
-* concurrent readers.
+* file path) and configures the connection pool. SQLite allows one writer at a
+* time: WAL mode lets readers run alongside it and busy_timeout makes other
+* writers wait for it.
 * @param ctx context.Context, db *jsql.DB
 * @return *sql.DB, error
 **/

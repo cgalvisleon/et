@@ -35,6 +35,11 @@ func clampExpiration(d time.Duration) time.Duration {
 * @return string
 **/
 func SetCtx(ctx context.Context, key, val string, expiration time.Duration) string {
+	if local != nil {
+		local.set(key, val, clampExpiration(expiration))
+		return val
+	}
+
 	if conn == nil {
 		return val
 	}
@@ -53,6 +58,11 @@ func SetCtx(ctx context.Context, key, val string, expiration time.Duration) stri
 * @return error
 **/
 func ExpireCtx(ctx context.Context, key string, expiration time.Duration) error {
+	if local != nil {
+		local.expire(key, clampExpiration(expiration))
+		return nil
+	}
+
 	if conn == nil {
 		return errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
@@ -66,6 +76,14 @@ func ExpireCtx(ctx context.Context, key string, expiration time.Duration) error 
 * @return int64
 **/
 func IncrCtx(ctx context.Context, key string, expiration time.Duration) int64 {
+	if local != nil {
+		result, created := local.incrBy(key, 1)
+		if created {
+			local.expire(key, clampExpiration(expiration))
+		}
+		return result
+	}
+
 	if conn == nil {
 		return 0
 	}
@@ -88,6 +106,11 @@ func IncrCtx(ctx context.Context, key string, expiration time.Duration) int64 {
 * @return int64
 **/
 func DecrCtx(ctx context.Context, key string) int64 {
+	if local != nil {
+		result, _ := local.incrBy(key, -1)
+		return result
+	}
+
 	if conn == nil {
 		return 0
 	}
@@ -106,6 +129,14 @@ func DecrCtx(ctx context.Context, key string) int64 {
 * @return string, error
 **/
 func GetCtx(ctx context.Context, key, def string) (string, error) {
+	if local != nil {
+		result, ok := local.get(key)
+		if !ok {
+			return def, ErrNotFound
+		}
+		return result, nil
+	}
+
 	if conn == nil {
 		return def, errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
@@ -126,6 +157,10 @@ func GetCtx(ctx context.Context, key, def string) (string, error) {
 * @return bool
 **/
 func ExistsCtx(ctx context.Context, key string) bool {
+	if local != nil {
+		return local.exists(key)
+	}
+
 	if conn == nil {
 		logs.Alertm(msg.MSG_NOT_CACHE_SERVICE)
 		return false
@@ -146,6 +181,10 @@ func ExistsCtx(ctx context.Context, key string) bool {
 * @return int64, error
 **/
 func DeleteCtx(ctx context.Context, key string) (int64, error) {
+	if local != nil {
+		return local.del(key), nil
+	}
+
 	if conn == nil {
 		return 0, errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
@@ -161,6 +200,15 @@ func DeleteCtx(ctx context.Context, key string) (int64, error) {
 * @return error
 **/
 func DeleteByPrefixCtx(ctx context.Context, prefix string) error {
+	if local != nil {
+		local.del(local.keys(prefix + "*")...)
+		return nil
+	}
+
+	if conn == nil {
+		return errors.New(msg.MSG_NOT_CACHE_SERVICE)
+	}
+
 	var cursor uint64
 
 	for {
@@ -191,6 +239,11 @@ func DeleteByPrefixCtx(ctx context.Context, prefix string) error {
 * @return error
 **/
 func LPushCtx(ctx context.Context, key string, val string) error {
+	if local != nil {
+		local.lpush(key, val)
+		return nil
+	}
+
 	if conn == nil {
 		return errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
@@ -209,6 +262,11 @@ func LPushCtx(ctx context.Context, key string, val string) error {
 * @return error
 **/
 func LRemCtx(ctx context.Context, key string, val string) error {
+	if local != nil {
+		local.lrem(key, 1, val)
+		return nil
+	}
+
 	if conn == nil {
 		return errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
@@ -227,6 +285,10 @@ func LRemCtx(ctx context.Context, key string, val string) error {
 * @return []string, error
 **/
 func LRangeCtx(ctx context.Context, key string, start int64, stop int64) ([]string, error) {
+	if local != nil {
+		return local.lrange(key, start, stop), nil
+	}
+
 	if conn == nil {
 		return []string{}, errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
@@ -242,6 +304,11 @@ func LRangeCtx(ctx context.Context, key string, start int64, stop int64) ([]stri
 * @return error
 **/
 func LTrimCtx(ctx context.Context, key string, start int64, stop int64) error {
+	if local != nil {
+		local.ltrim(key, start, stop)
+		return nil
+	}
+
 	if conn == nil {
 		return errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
@@ -260,6 +327,11 @@ func LTrimCtx(ctx context.Context, key string, start int64, stop int64) error {
 * @return error
 **/
 func HSetCtx(ctx context.Context, key string, val map[string]string) error {
+	if local != nil {
+		local.hset(key, val)
+		return nil
+	}
+
 	if conn == nil {
 		return errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
@@ -278,6 +350,10 @@ func HSetCtx(ctx context.Context, key string, val map[string]string) error {
 * @return map[string]string, error
 **/
 func HGetCtx(ctx context.Context, key string) (map[string]string, error) {
+	if local != nil {
+		return local.hgetall(key), nil
+	}
+
 	if conn == nil {
 		return map[string]string{}, errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
@@ -293,6 +369,11 @@ func HGetCtx(ctx context.Context, key string) (map[string]string, error) {
 * @return error
 **/
 func HDeleteCtx(ctx context.Context, key, atr string) error {
+	if local != nil {
+		local.hdel(key, atr)
+		return nil
+	}
+
 	if conn == nil {
 		return errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}

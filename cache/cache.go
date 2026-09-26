@@ -17,6 +17,7 @@ var (
 	packageName = "cache"
 	os          = ""
 	conn        *Conn
+	local       *memStore
 )
 
 func init() {

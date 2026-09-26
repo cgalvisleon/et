@@ -68,15 +68,13 @@ func pgDefault(tp et.TypeData, val any) string {
 		return fmt.Sprintf("%v", val)
 	case et.BOOL:
 		return fmt.Sprintf("%v", val)
-	case et.JSON, et.ARRAY, et.ARRAY_JSON:
-		return "'{}'::jsonb"
+	case et.JSON, et.ARRAY, et.ARRAY_JSON, et.VAL_BETWEEN:
+		return pgQuoteJson(val)
 	case et.ARRAY_STRING, et.ARRAY_INT, et.ARRAY_FLOAT, et.ARRAY_BOOL, et.ARRAY_DATETIME:
-		return "ARRAY[]::TEXT[]"
-	case et.VAL_BETWEEN:
-		return fmt.Sprintf("'{\"min\": %v, \"max\": %v}'::jsonb", val.(et.BetweenValue).Min, val.(et.BetweenValue).Max)
+		return "'{}'"
 	case et.DATETIME:
 		return "NOW()"
 	default:
-		return fmt.Sprintf("'%v'", val)
+		return pgQuoteString(val)
 	}
 }

@@ -2,65 +2,25 @@ package sqlite
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
 )
 
+// qualifiedIdentifierUnsafe matches any character not allowed in a (possibly
+// table-qualified) identifier, so a field name coming from outside the model can
+// never break out of the identifier position it is placed in.
+var qualifiedIdentifierUnsafe = regexp.MustCompile(`[^A-Za-z0-9_.]`)
+
 /**
-* resolveField: Translates a field name (possibly a nested JSON path using "->" as
-* separator) to its SQLite SQL expression.
-*
-* Rules:
-*   - "field"       → alias.field                              (COLUMN)
-*   - "field"       → json_extract(alias._source, '$.field')   (ATTRIB)
-*   - "field->a->b"  → json_extract(alias.field, '$.a.b')        (COLUMN with JSON path)
-*   - "field->a->b"  → json_extract(alias._source, '$.field.a.b') (ATTRIB with JSON path)
-*
-* A CAST(... AS type) is applied only when the root is a typed ATTRIB with no
-* sub-path and its TypeData is numeric, boolean or datetime.
-*
-* @param field string, model *jsql.Model, alias string
+* sanitizeQualifiedIdent: Strips anything that isn't a letter, digit, "_" or ".".
+* @param s string
 * @return string
 **/
-func resolveField(field string, model *jsql.Model, alias string) string {
-	parts := strings.Split(field, "->")
-	root := parts[0]
-	path := parts[1:]
-
-	col, ok := model.GetColumn(root)
-	isAttrib := ok && col.TypeColumn == jsql.ATTRIB
-
-	if isAttrib {
-		src := model.SourceField
-		if alias != "" {
-			src = fmt.Sprintf("%s.%s", alias, src)
-		}
-		jsonPath := "$." + strings.Join(append([]string{root}, path...), ".")
-		expr := fmt.Sprintf("json_extract(%s, '%s')", src, jsonPath)
-
-		if len(path) == 0 {
-			if cast := sqliteAttribCast(col.TypeData); cast != "" {
-				return fmt.Sprintf("CAST(%s AS %s)", expr, cast)
-			}
-		}
-		return expr
-	}
-
-	var base string
-	if alias != "" && !strings.Contains(root, ".") {
-		base = fmt.Sprintf("%s.%s", alias, root)
-	} else {
-		base = root
-	}
-
-	if len(path) == 0 {
-		return base
-	}
-
-	jsonPath := "$." + strings.Join(path, ".")
-	return fmt.Sprintf("json_extract(%s, '%s')", base, jsonPath)
+func sanitizeQualifiedIdent(s string) string {
+	return qualifiedIdentifierUnsafe.ReplaceAllString(s, "")
 }
 
 /**
@@ -86,151 +46,79 @@ func sqliteAttribCast(tp et.TypeData) string {
 }
 
 /**
-* BuildSelectField: Returns the SQL expression for a SELECT list entry. For simple
-* fields it returns the qualified column name. For nested paths (e.g.
-* "data->address->city") it returns the JSON path expression followed by
-* AS <last_segment> so the result column is named after the leaf key.
-* @param field string, model *jsql.Model, alias string
+* sqliteQuoteKey: Quotes a JSON key as a SQLite string literal ('key') for json_object.
+* @param key string
 * @return string
 **/
-func BuildSelectField(field string, model *jsql.Model, alias string) string {
-	parts := strings.Split(field, "->")
-	expr := resolveField(field, model, alias)
+func sqliteQuoteKey(key string) string {
+	return fmt.Sprintf("'%s'", jsql.EscapeSQLString(key))
+}
 
-	if len(parts) == 1 {
+/**
+* sqlitePath: Builds a JSON path literal ('$."a"."b"') from parts. Each key is double-quoted
+* with \ and " escaped, so keys with dots, quotes or spaces keep their exact value.
+* @param parts []string
+* @return string
+**/
+func sqlitePath(parts []string) string {
+	var sb strings.Builder
+	sb.WriteString("$")
+	for _, p := range parts {
+		p = strings.ReplaceAll(p, `\`, `\\`)
+		p = strings.ReplaceAll(p, `"`, `\"`)
+		sb.WriteString(`."` + p + `"`)
+	}
+	return fmt.Sprintf("'%s'", jsql.EscapeSQLString(sb.String()))
+}
+
+/**
+* sqliteColumnJson: Returns a column as a JSON value for json_object/json_set: JSON columns are
+* parsed with json(), booleans become true/false; other columns keep their SQL value.
+* @param ref string, tp et.TypeData
+* @return string
+**/
+func sqliteColumnJson(ref string, tp et.TypeData) string {
+	switch tp {
+	case et.BOOL:
+		return fmt.Sprintf("json(CASE %s WHEN 1 THEN 'true' WHEN 0 THEN 'false' END)", ref)
+	case et.JSON, et.ARRAY, et.ARRAY_JSON, et.ARRAY_STRING, et.ARRAY_INT, et.ARRAY_FLOAT, et.ARRAY_BOOL, et.ARRAY_DATETIME, et.VAL_BETWEEN:
+		return fmt.Sprintf("json(%s)", ref)
+	default:
+		return ref
+	}
+}
+
+/**
+* sqliteSourceExpr: Returns the SourceField as a JSON object without the hidden keys;
+* a NULL source counts as '{}'.
+* @param source string, hiddens []string
+* @return string
+**/
+func sqliteSourceExpr(source string, hiddens []string) string {
+	expr := fmt.Sprintf("COALESCE(%s, '{}')", source)
+	if len(hiddens) == 0 {
 		return expr
 	}
-
-	leaf := parts[len(parts)-1]
-	return fmt.Sprintf("%s AS %s", expr, leaf)
+	paths := make([]string, len(hiddens))
+	for i, h := range hiddens {
+		paths[i] = sqlitePath([]string{h})
+	}
+	return fmt.Sprintf("json_remove(%s, %s)", expr, strings.Join(paths, ", "))
 }
 
 /**
-* buildInList: Formats a value slice as a comma-separated SQL IN list.
-* @param val any
+* sqliteSetObject: Builds json_set(base, path, value, ...) from pairs ("path, value"), nesting
+* calls in chunks of 50 pairs to stay under SQLite's function argument limit.
+* json_set keeps null values and creates missing parent objects.
+* @param base string, pairs []string
 * @return string
 **/
-func buildInList(val any) string {
-	switch v := val.(type) {
-	case []any:
-		parts := make([]string, len(v))
-		for i, item := range v {
-			parts[i] = fmt.Sprintf("%v", jsql.Quoted(item))
-		}
-		return strings.Join(parts, ", ")
-	case []string:
-		parts := make([]string, len(v))
-		for i, s := range v {
-			parts[i] = sqliteQuoteString(s)
-		}
-		return strings.Join(parts, ", ")
-	case []int:
-		parts := make([]string, len(v))
-		for i, n := range v {
-			parts[i] = fmt.Sprintf("%d", n)
-		}
-		return strings.Join(parts, ", ")
-	case []int64:
-		parts := make([]string, len(v))
-		for i, n := range v {
-			parts[i] = fmt.Sprintf("%d", n)
-		}
-		return strings.Join(parts, ", ")
-	case []float64:
-		parts := make([]string, len(v))
-		for i, n := range v {
-			parts[i] = fmt.Sprintf("%v", n)
-		}
-		return strings.Join(parts, ", ")
-	default:
-		return fmt.Sprintf("%v", jsql.Quoted(val))
+func sqliteSetObject(base string, pairs []string) string {
+	const maxPairs = 50
+	expr := base
+	for i := 0; i < len(pairs); i += maxPairs {
+		end := min(i+maxPairs, len(pairs))
+		expr = fmt.Sprintf("json_set(%s,\n%s\n)", expr, strings.Join(pairs[i:end], ",\n"))
 	}
-}
-
-/**
-* buildCondition: Converts a single et.Condition to a SQL predicate fragment.
-* Note: SQLite's LIKE is already case-insensitive for ASCII by default, so unlike
-* Postgres there is no separate ILIKE operator to translate to.
-* @param cond *et.Condition, model *jsql.Model, alias string
-* @return string
-**/
-func buildCondition(cond *et.Condition, model *jsql.Model, alias string) string {
-	field := resolveField(cond.Field.String(), model, alias)
-
-	switch cond.Operator {
-	case et.EQ:
-		return fmt.Sprintf("%s = %s", field, Quoted(cond.Value))
-	case et.NEG:
-		return fmt.Sprintf("%s <> %s", field, Quoted(cond.Value))
-	case et.LESS:
-		return fmt.Sprintf("%s < %s", field, Quoted(cond.Value))
-	case et.LESS_EQ:
-		return fmt.Sprintf("%s <= %s", field, Quoted(cond.Value))
-	case et.MORE:
-		return fmt.Sprintf("%s > %s", field, Quoted(cond.Value))
-	case et.MORE_EQ:
-		return fmt.Sprintf("%s >= %s", field, Quoted(cond.Value))
-	case et.LIKE:
-		return fmt.Sprintf("%s LIKE %s", field, Quoted(cond.Value))
-	case et.IN:
-		return fmt.Sprintf("%s IN (%s)", field, buildInList(cond.Value.Value))
-	case et.NOT_IN:
-		return fmt.Sprintf("%s NOT IN (%s)", field, buildInList(cond.Value.Value))
-	case et.IS:
-		return fmt.Sprintf("%s IS %s", field, Quoted(cond.Value))
-	case et.IS_NOT:
-		return fmt.Sprintf("%s IS NOT %s", field, Quoted(cond.Value))
-	case et.NULL:
-		return fmt.Sprintf("%s IS NULL", field)
-	case et.NOT_NULL:
-		return fmt.Sprintf("%s IS NOT NULL", field)
-	case et.BETWEEN:
-		bv, ok := cond.Value.Value.(et.BetweenValue)
-		if !ok {
-			return ""
-		}
-		return fmt.Sprintf("%s BETWEEN %v AND %v", field, jsql.Quoted(bv.Min), jsql.Quoted(bv.Max))
-	case et.NOT_BETWEEN:
-		bv, ok := cond.Value.Value.(et.BetweenValue)
-		if !ok {
-			return ""
-		}
-		return fmt.Sprintf("%s NOT BETWEEN %v AND %v", field, jsql.Quoted(bv.Min), jsql.Quoted(bv.Max))
-	default:
-		return ""
-	}
-}
-
-/**
-* BuildConditions: Translates a slice of et.Condition to a SQL predicate string
-* (without the WHERE keyword). Consecutive conditions are joined with AND/OR
-* according to each condition's Connector field.
-* @param conds []*et.Condition, model *jsql.Model, alias string
-* @return string
-**/
-func BuildConditions(conds []*et.Condition, model *jsql.Model, alias string) string {
-	if len(conds) == 0 {
-		return ""
-	}
-
-	var sb strings.Builder
-	written := 0
-	for _, cond := range conds {
-		fragment := buildCondition(cond, model, alias)
-		if fragment == "" {
-			continue
-		}
-		if written > 0 {
-			switch cond.Connector {
-			case et.OR:
-				sb.WriteString("\n OR ")
-			default:
-				sb.WriteString("\n AND ")
-			}
-		}
-		sb.WriteString(fragment)
-		written++
-	}
-
-	return sb.String()
+	return expr
 }

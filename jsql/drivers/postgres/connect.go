@@ -217,7 +217,7 @@ func CreateDatabase(db *sql.DB, name string) error {
 * @return error
 **/
 func DropDatabase(db *sql.DB, name string) error {
-	sql := fmt.Sprintf(`DROP DATABASE %s;`, name)
+	sql := fmt.Sprintf(`DROP DATABASE %s;`, pq.QuoteIdentifier(name))
 	_, err := db.Exec(sql)
 	if err != nil {
 		return err

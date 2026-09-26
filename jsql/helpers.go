@@ -1,6 +1,7 @@
 package jsql
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -65,17 +66,20 @@ func Quoted(val any) any {
 		return v
 	case time.Time:
 		return fmt.Sprintf(format, v.Format("2006-01-02 15:04:05"))
-	case et.Json:
-		return fmt.Sprintf(format, EscapeSQLString(v.ToString()))
-	case map[string]interface{}:
-		return fmt.Sprintf(format, EscapeSQLString(et.Json(v).ToString()))
+	case et.Json, map[string]interface{}:
+		str, err := JsonString(v)
+		if err != nil {
+			logs.Errorf("Quote, type:%v, value:%v, error marshalling json: %v", reflect.TypeOf(v), v, err)
+			return fmt.Sprintf(format, `{}`)
+		}
+		return fmt.Sprintf(format, EscapeSQLString(str))
 	case []string, []et.Json, []interface{}, []map[string]interface{}:
-		bt, err := json.Marshal(v)
+		str, err := JsonString(v)
 		if err != nil {
 			logs.Errorf("Quote, type:%v, value:%v, error marshalling array: %v", reflect.TypeOf(v), v, err)
 			return strs.Format(format, `[]`)
 		}
-		return fmt.Sprintf(format, EscapeSQLString(string(bt)))
+		return fmt.Sprintf(format, EscapeSQLString(str))
 	case []uint8:
 		b := []byte(val.([]uint8))
 		return fmt.Sprintf("'\\x%s'", hex.EncodeToString(b))
@@ -96,6 +100,23 @@ func Quoted(val any) any {
 **/
 func EscapeSQLString(s string) string {
 	return strings.ReplaceAll(s, "'", "''")
+}
+
+/**
+* JsonString: Serializes val as compact JSON without HTML escaping, so characters
+* such as <, > and & are stored as-is instead of \u003c, \u003e and \u0026.
+* The result still needs EscapeSQLString before being embedded in a SQL literal.
+* @param val any
+* @return string, error
+**/
+func JsonString(val any) (string, error) {
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(val); err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(buf.String(), "\n"), nil
 }
 
 /**

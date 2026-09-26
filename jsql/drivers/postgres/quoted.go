@@ -1,7 +1,6 @@
 package postgres
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -105,21 +104,15 @@ func pgQuoteTime(val any) string {
 * @return string
 **/
 func pgQuoteJson(val any) string {
-	switch j := val.(type) {
-	case nil:
+	if val == nil {
 		return "NULL"
-	case et.Json:
-		return fmt.Sprintf("'%s'::jsonb", strings.ReplaceAll(j.ToString(), "'", "''"))
-	case map[string]interface{}:
-		return fmt.Sprintf("'%s'::jsonb", strings.ReplaceAll(et.Json(j).ToString(), "'", "''"))
-	default:
-		bt, err := json.Marshal(val)
-		if err != nil {
-			logs.Errorf("Quoted, error marshalling json value:%v, error:%v", val, err)
-			return "NULL"
-		}
-		return fmt.Sprintf("'%s'::jsonb", strings.ReplaceAll(string(bt), "'", "''"))
 	}
+	str, err := jsql.JsonString(val)
+	if err != nil {
+		logs.Errorf("Quoted, error marshalling json value:%v, error:%v", val, err)
+		return "NULL"
+	}
+	return fmt.Sprintf("'%s'::jsonb", jsql.EscapeSQLString(str))
 }
 
 /**

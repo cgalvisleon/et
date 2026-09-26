@@ -66,3 +66,9 @@ type Driver interface {
 ```
 
 Esta interfaz recibe un Model para definir el sql de tipo DDL que crea las tablas y sus elementos, un Query para definir el sql de tipo consulta, y un Command para definir el sql de tipo comando (INSERT, UPDATE, DELETE).
+
+Las Columnas tienen la siguiete structura
+
+```go
+
+```

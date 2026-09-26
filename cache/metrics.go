@@ -44,7 +44,7 @@ func (s *Metrics) ToJson() et.Json {
 * @return Metrics
 **/
 func CallMetrics(key string, limit int64) (Metrics, error) {
-	if conn == nil {
+	if !IsLoad() {
 		return Metrics{}, errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 

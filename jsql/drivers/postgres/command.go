@@ -1,56 +1,119 @@
 package postgres
 
 import (
-	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
+	"github.com/cgalvisleon/et/logs"
 )
 
 /**
-* pgJsonbValue: Serializes a Go value as a PostgreSQL jsonb literal ('...'::jsonb).
+* pgJsonbValue: Serializes a Go value as a PostgreSQL jsonb literal ('...'::jsonb),
+* escaping single quotes so any string content is safe inside the literal.
 * @param val any
 * @return string
 **/
 func pgJsonbValue(val any) string {
-	bt, err := json.Marshal(val)
+	str, err := jsql.JsonString(val)
 	if err != nil {
+		logs.Errorf("pgJsonbValue, error marshalling value:%v, error:%v", val, err)
 		return "'null'::jsonb"
 	}
-	return fmt.Sprintf("'%s'::jsonb", string(bt))
+	return fmt.Sprintf("'%s'::jsonb", jsql.EscapeSQLString(str))
 }
 
 /**
-* pgJsonbSetPath: Converts a '->' separated field path into a PostgreSQL jsonb path array ('{a,b,c}').
+* pgJsonbSetPath: Converts a '->' separated field path into a PostgreSQL jsonb path literal ('{"a","b"}').
 * @param field string
 * @return string
 **/
 func pgJsonbSetPath(field string) string {
-	parts := strings.Split(field, "->")
-	return fmt.Sprintf("'{%s}'", strings.Join(parts, ","))
+	return pgTextArray(strings.Split(field, "->"))
 }
 
 /**
-* pgJsonbSet: Builds a chained jsonb_set expression to patch individual ATTRIB keys into sourceField.
-* Each key in source becomes jsonb_set(expr, '{key}', value::jsonb, true).
+* pgJsonbSet: Builds the expression that merges the ATTRIB keys of source into sourceField
+* without removing the other keys already stored there.
+* Top-level keys are merged with ||; nested keys ("a->b") use jsonb_set, creating the missing
+* parent objects first. A NULL sourceField is treated as '{}'.
 * @param sourceField string, source et.Json
 * @return string
 **/
 func pgJsonbSet(sourceField string, source et.Json) string {
+	top := et.Json{}
+	nested := make([]string, 0)
+	for k, v := range source {
+		if strings.Contains(k, "->") {
+			nested = append(nested, k)
+		} else {
+			top[k] = v
+		}
+	}
+	sort.Strings(nested)
+
+	expr := fmt.Sprintf("COALESCE(%s, '{}'::jsonb)", sourceField)
+	if len(top) > 0 {
+		expr = fmt.Sprintf("%s || %s", expr, pgJsonbValue(top))
+	}
+
+	parents := make([]string, 0)
+	for _, k := range nested {
+		parts := strings.Split(k, "->")
+		for i := 1; i < len(parts); i++ {
+			parent := strings.Join(parts[:i], "->")
+			if !slices.Contains(parents, parent) {
+				parents = append(parents, parent)
+			}
+		}
+	}
+	sort.SliceStable(parents, func(i, j int) bool {
+		return strings.Count(parents[i], "->") < strings.Count(parents[j], "->")
+	})
+	for _, parent := range parents {
+		if _, ok := top[strings.Split(parent, "->")[0]]; ok {
+			continue
+		}
+		path := pgJsonbSetPath(parent)
+		expr = fmt.Sprintf("jsonb_set(%s, %s, COALESCE(%s #> %s, '{}'::jsonb), true)", expr, path, sourceField, path)
+	}
+
+	for _, k := range nested {
+		expr = fmt.Sprintf("jsonb_set(%s, %s, %s, true)", expr, pgJsonbSetPath(k), pgJsonbValue(source[k]))
+	}
+	return expr
+}
+
+/**
+* pgNestSource: Expands '->' keys of source into nested objects ({"a->b": 1} → {"a": {"b": 1}}),
+* so an INSERT stores the same shape an UPDATE produces with jsonb_set.
+* @param source et.Json
+* @return et.Json
+**/
+func pgNestSource(source et.Json) et.Json {
+	result := et.Json{}
 	keys := make([]string, 0, len(source))
 	for k := range source {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-
-	expr := sourceField
 	for _, k := range keys {
-		expr = fmt.Sprintf("jsonb_set(%s, %s, %s, true)", expr, pgJsonbSetPath(k), pgJsonbValue(source[k]))
+		parts := strings.Split(k, "->")
+		node := result
+		for _, part := range parts[:len(parts)-1] {
+			child, ok := node[part].(et.Json)
+			if !ok {
+				child = et.Json{}
+				node[part] = child
+			}
+			node = child
+		}
+		node[parts[len(parts)-1]] = source[k]
 	}
-	return expr
+	return result
 }
 
 /**
@@ -105,29 +168,10 @@ func pgColsVals(model *jsql.Model, data et.Json, excludePKs bool) (cols, vals []
 }
 
 /**
-* pgAttribReturn: Builds a _source JSONB extraction expression for RETURNING clauses (no table alias).
-* @param sourceField string, field string, tp et.TypeData
-* @return string
-**/
-func pgAttribReturn(sourceField, field string, tp et.TypeData) string {
-	path := fmt.Sprintf("%s->>'%s'", sourceField, field)
-	switch tp {
-	case et.INT:
-		return fmt.Sprintf("(%s)::bigint AS %s", path, field)
-	case et.FLOAT:
-		return fmt.Sprintf("(%s)::double precision AS %s", path, field)
-	case et.BOOL:
-		return fmt.Sprintf("(%s)::boolean AS %s", path, field)
-	case et.DATETIME:
-		return fmt.Sprintf("(%s)::timestamptz AS %s", path, field)
-	default:
-		return fmt.Sprintf("%s AS %s", path, field)
-	}
-}
-
-/**
-* pgReturningClause: Builds the RETURNING clause, expanding ATTRIB columns from _source inline.
-* Uses command.Returns when set; otherwise auto-builds from the model column list.
+* pgReturningClause: Builds the RETURNING clause with the same shape as a SELECT without fields:
+* with a SourceField the row comes back as one JSON (sourceField || jsonb_build_object(columns) AS result),
+* so attributes without a declared column are returned too; without it, the column list.
+* Hidden columns and attributes are excluded. Uses command.Returns when set.
 * @param command *jsql.Command
 * @return string
 **/
@@ -141,30 +185,33 @@ func pgReturningClause(command *jsql.Command) string {
 		return "\nRETURNING *"
 	}
 
-	exprs := make([]string, 0, len(model.Columns))
+	pairs := make([]string, 0, len(model.Columns))
+	cols := make([]string, 0, len(model.Columns))
 	for _, col := range model.Columns {
-		switch col.TypeColumn {
-		case jsql.COLUMN:
-			if col.Name == model.SourceField {
-				continue
-			}
-			exprs = append(exprs, col.Name)
-		case jsql.ATTRIB:
-			if model.SourceField == "" {
-				continue
-			}
-			exprs = append(exprs, pgAttribReturn(model.SourceField, col.Name, col.TypeData))
+		if col.TypeColumn != jsql.COLUMN || col.Name == model.SourceField {
+			continue
 		}
+		if slices.Contains(model.Hiddens, col.Name) {
+			continue
+		}
+		pairs = append(pairs, fmt.Sprintf("%s, %s", pgQuoteKey(col.Name), col.Name))
+		cols = append(cols, col.Name)
 	}
 
-	if len(exprs) == 0 {
+	if model.SourceField != "" {
+		source := pgSourceExpr(model.SourceField, model.Hiddens)
+		return fmt.Sprintf("\nRETURNING %s AS %s", pgMergeObject(source, pairs), jsql.RESULT)
+	}
+
+	if len(cols) == 0 {
 		return "\nRETURNING *"
 	}
-	return "\nRETURNING " + strings.Join(exprs, ", ")
+	return "\nRETURNING " + strings.Join(cols, ", ")
 }
 
 /**
 * pgPKWhere: Builds a WHERE clause using primary key values from data.
+* Returns empty string when any primary key is missing, so the caller falls back to Conditions.
 * @param model *jsql.Model, data et.Json
 * @return string
 **/
@@ -173,7 +220,7 @@ func pgPKWhere(model *jsql.Model, data et.Json) string {
 	for _, pk := range model.PrimaryKeys {
 		val, ok := data[pk.Name]
 		if !ok {
-			continue
+			return ""
 		}
 		conds = append(conds, fmt.Sprintf("%s = %v", pk.Name, jsql.Quoted(val)))
 	}
@@ -196,7 +243,7 @@ func pgInsertSQL(command *jsql.Command) (string, error) {
 		cols, vals, source = pgColsVals(model, command.New, false)
 		if model.SourceField != "" && len(source) > 0 {
 			cols = append(cols, model.SourceField)
-			vals = append(vals, fmt.Sprintf("%v::jsonb", jsql.Quoted(source)))
+			vals = append(vals, pgJsonbValue(pgNestSource(source)))
 		}
 	} else {
 		keys := make([]string, 0, len(command.New))
@@ -207,7 +254,7 @@ func pgInsertSQL(command *jsql.Command) (string, error) {
 		cols = make([]string, len(keys))
 		vals = make([]string, len(keys))
 		for i, k := range keys {
-			cols[i] = k
+			cols[i] = sanitizeIdent(k)
 			vals[i] = fmt.Sprintf("%v", jsql.Quoted(command.New[k]))
 		}
 	}
@@ -227,7 +274,8 @@ func pgInsertSQL(command *jsql.Command) (string, error) {
 
 /**
 * pgUpdateSQL: Generates UPDATE … SET … WHERE … RETURNING …
-* Excludes primary key columns from SET; WHERE uses PK values from command.New.
+* Excludes primary key columns from SET; WHERE uses the PK values of the fetched row (command.Old),
+* falling back to command.New and then to the command Conditions.
 * @param command *jsql.Command
 * @return string, error
 **/
@@ -252,7 +300,7 @@ func pgUpdateSQL(command *jsql.Command) (string, error) {
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			setCols = append(setCols, fmt.Sprintf("%s = %v", k, jsql.Quoted(command.New[k])))
+			setCols = append(setCols, fmt.Sprintf("%s = %v", sanitizeIdent(k), jsql.Quoted(command.New[k])))
 		}
 	}
 
@@ -266,13 +314,16 @@ func pgUpdateSQL(command *jsql.Command) (string, error) {
 
 	var whereSQL string
 	if model != nil && len(model.PrimaryKeys) > 0 {
-		whereSQL = pgPKWhere(model, command.New)
+		whereSQL = pgPKWhere(model, command.Old)
+		if whereSQL == "" {
+			whereSQL = pgPKWhere(model, command.New)
+		}
 	}
-	if whereSQL == "" && len(command.Conditions) > 0 {
+	if whereSQL == "" && model != nil && len(command.Conditions) > 0 {
 		whereSQL = pgCondsSQL(model.GetField, model.SourceField != "", command.Conditions, "")
 	}
 	if whereSQL == "" {
-		return "", fmt.Errorf("refusing to UPDATE %s without a WHERE clause (missing primary key value in New and no Conditions set)", table)
+		return "", fmt.Errorf("refusing to UPDATE %s without a WHERE clause (missing primary key value in Old/New and no Conditions set)", table)
 	}
 	sb.WriteString("\nWHERE " + whereSQL)
 
@@ -298,7 +349,7 @@ func pgDeleteSQL(command *jsql.Command) (string, error) {
 	if model != nil && len(model.PrimaryKeys) > 0 && len(command.Old) > 0 {
 		whereSQL = pgPKWhere(model, command.Old)
 	}
-	if whereSQL == "" && len(command.Conditions) > 0 {
+	if whereSQL == "" && model != nil && len(command.Conditions) > 0 {
 		whereSQL = pgCondsSQL(model.GetField, model.SourceField != "", command.Conditions, "")
 	}
 	if whereSQL == "" {

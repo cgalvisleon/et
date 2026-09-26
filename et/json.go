@@ -398,6 +398,9 @@ func (s Json) ValBool(def bool, atribs ...string) bool {
 		return v
 	case int:
 		return v == 1
+	case int64:
+		// SQLite has no boolean type: EXISTS and 0/1 columns come back as int64.
+		return v == 1
 	case string:
 		switch strings.ToLower(v) {
 		case "true":

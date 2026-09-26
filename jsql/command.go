@@ -317,6 +317,34 @@ func (s *Command) AfterDelete(fn TriggerFunction) *Command {
 }
 
 /**
+* exec: Runs the generated SQL and returns the first row of its RETURNING clause (empty when none).
+* @param tx *Tx, sql string
+* @return et.Json, error
+**/
+func (s *Command) exec(tx *Tx, sql string) (et.Json, error) {
+	items, err := s.db.SqlTx(tx, sql)
+	if err != nil {
+		return et.Json{}, err
+	}
+	if len(items.Result) == 0 {
+		return et.Json{}, nil
+	}
+	return items.Result[0], nil
+}
+
+/**
+* returnedOr: Returns the row given by RETURNING, or data when the driver returned nothing (e.g. Test mode).
+* @param returned, data et.Json
+* @return et.Json
+**/
+func returnedOr(returned, data et.Json) et.Json {
+	if len(returned) > 0 {
+		return returned
+	}
+	return data
+}
+
+/**
 * insert: Executes INSERT for each row in Data, running before/after triggers per row.
 * @param tx *Tx
 * @return et.Items, error
@@ -367,11 +395,13 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 			logs.Debug("INSERT:", sql)
 		}
 
+		returned := et.Json{}
 		if !s.isTest {
-			_, err = s.db.SqlTx(tx, sql)
+			returned, err = s.exec(tx, sql)
 			if err != nil {
 				return et.Items{}, err
 			}
+			maps.Copy(s.New, returned)
 		}
 
 		for _, tg := range s.afterInserts {
@@ -394,7 +424,7 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 			s.New = instance.GetJson("new")
 		}
 
-		result.Add(s.New)
+		result.Add(returnedOr(returned, s.New))
 	}
 
 	return result, nil
@@ -453,11 +483,13 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 			logs.Debug("UPDATE:", sql)
 		}
 
+		returned := et.Json{}
 		if !s.isTest {
-			_, err = s.db.SqlTx(tx, sql)
+			returned, err = s.exec(tx, sql)
 			if err != nil {
 				return et.Items{}, err
 			}
+			maps.Copy(s.New, returned)
 		}
 
 		for _, tg := range s.afterUpdates {
@@ -480,7 +512,7 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 			s.New = instance.GetJson("new")
 		}
 
-		result.Add(s.New)
+		result.Add(returnedOr(returned, s.New))
 	}
 
 	return result, nil
@@ -538,8 +570,9 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 			logs.Debug("DELETE:", sql)
 		}
 
+		returned := et.Json{}
 		if !s.isTest {
-			_, err = s.db.SqlTx(tx, sql)
+			returned, err = s.exec(tx, sql)
 			if err != nil {
 				return et.Items{}, err
 			}
@@ -565,7 +598,7 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 			s.New = instance.GetJson("new")
 		}
 
-		result.Add(s.Old)
+		result.Add(returnedOr(returned, s.Old))
 	}
 
 	return result, nil

@@ -655,7 +655,7 @@ func ToCondition(params Json) (*Condition, error) {
 			}
 		default:
 			value := params.Json(key)
-			result := fldCondition(value)
+			result := condition(key, value)
 			if result != nil {
 				return result, nil
 			}
@@ -1475,6 +1475,11 @@ func And(field interface{}, operator Operator, value interface{}) *Condition {
 	return result
 }
 
+/**
+* Or
+* @param field, operator Operator, value interface{}
+* @return Condition
+**/
 func Or(field interface{}, operator Operator, value interface{}) *Condition {
 	result := condition(field, value, operator)
 	result.Connector = OR

@@ -1,12 +1,15 @@
 package cache
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/utility"
@@ -20,7 +23,14 @@ const IsNil = redis.Nil
 * @return error
 **/
 func Load() error {
-	if conn != nil {
+	if conn != nil || local != nil {
+		return nil
+	}
+
+	// No Redis configured: keep the cache in this process (see memory.go).
+	if envar.GetStr("REDIS_HOST", "") == "" {
+		local = newMemStore()
+		logs.Log(packageName, "REDIS_HOST is not set, using an in-memory cache")
 		return nil
 	}
 
@@ -37,6 +47,10 @@ func Load() error {
 * @return string
 **/
 func FromId() string {
+	if local != nil {
+		return local.id
+	}
+
 	if conn == nil {
 		return ""
 	}
@@ -49,18 +63,37 @@ func FromId() string {
 * @return bool
 **/
 func IsLoad() bool {
-	return conn != nil
+	return conn != nil || local != nil
+}
+
+/**
+* bg: Context for the package-level helpers (the Redis connection's, or a
+* background one for the in-memory cache).
+* @return context.Context
+**/
+func bg() context.Context {
+	if conn != nil {
+		return conn.ctx
+	}
+
+	return context.Background()
 }
 
 /**
 * Close terminates the Redis connection.
 **/
 func Close() {
+	if local != nil {
+		local.close()
+		local = nil
+	}
+
 	if conn == nil {
 		return
 	}
 
 	conn.Close()
+	conn = nil
 }
 
 /**
@@ -68,6 +101,10 @@ func Close() {
 * @return bool
 **/
 func HealthCheck() bool {
+	if local != nil {
+		return true
+	}
+
 	if conn == nil {
 		return false
 	}
@@ -81,37 +118,37 @@ func HealthCheck() bool {
 * @return interface{}
 **/
 func SetWithDuration(key string, val interface{}, expiration time.Duration) interface{} {
-	if conn == nil {
+	if !IsLoad() {
 		return val
 	}
 
 	switch v := val.(type) {
 	case et.Json:
-		return SetCtx(conn.ctx, key, v.ToString(), expiration)
+		return SetCtx(bg(), key, v.ToString(), expiration)
 	case et.Item:
-		return SetCtx(conn.ctx, key, v.ToString(), expiration)
+		return SetCtx(bg(), key, v.ToString(), expiration)
 	case et.Items:
-		return SetCtx(conn.ctx, key, v.ToString(), expiration)
+		return SetCtx(bg(), key, v.ToString(), expiration)
 	case et.List:
-		return SetCtx(conn.ctx, key, v.ToString(), expiration)
+		return SetCtx(bg(), key, v.ToString(), expiration)
 	case int:
-		return SetCtx(conn.ctx, key, fmt.Sprintf(`%d`, v), expiration)
+		return SetCtx(bg(), key, fmt.Sprintf(`%d`, v), expiration)
 	case int64:
-		return SetCtx(conn.ctx, key, fmt.Sprintf(`%d`, v), expiration)
+		return SetCtx(bg(), key, fmt.Sprintf(`%d`, v), expiration)
 	case float64:
-		return SetCtx(conn.ctx, key, fmt.Sprintf(`%f`, v), expiration)
+		return SetCtx(bg(), key, fmt.Sprintf(`%f`, v), expiration)
 	case bool:
-		return SetCtx(conn.ctx, key, fmt.Sprintf(`%t`, v), expiration)
+		return SetCtx(bg(), key, fmt.Sprintf(`%t`, v), expiration)
 	case []byte:
-		return SetCtx(conn.ctx, key, string(v), expiration)
+		return SetCtx(bg(), key, string(v), expiration)
 	case time.Time:
-		return SetCtx(conn.ctx, key, v.Format(time.RFC3339), expiration)
+		return SetCtx(bg(), key, v.Format(time.RFC3339), expiration)
 	case time.Duration:
-		return SetCtx(conn.ctx, key, v.String(), expiration)
+		return SetCtx(bg(), key, v.String(), expiration)
 	default:
 		s, ok := v.(string)
 		if ok {
-			return SetCtx(conn.ctx, key, s, expiration)
+			return SetCtx(bg(), key, s, expiration)
 		}
 	}
 
@@ -124,11 +161,11 @@ func SetWithDuration(key string, val interface{}, expiration time.Duration) inte
 * @return int64
 **/
 func IncrDuration(key string, expiration time.Duration) int64 {
-	if conn == nil {
+	if !IsLoad() {
 		return 0
 	}
 
-	return IncrCtx(conn.ctx, key, expiration)
+	return IncrCtx(bg(), key, expiration)
 }
 
 /**
@@ -137,11 +174,11 @@ func IncrDuration(key string, expiration time.Duration) int64 {
 * @return error
 **/
 func Expire(key string, expiration time.Duration) error {
-	if conn == nil {
+	if !IsLoad() {
 		return errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
-	return ExpireCtx(conn.ctx, key, expiration)
+	return ExpireCtx(bg(), key, expiration)
 }
 
 /**
@@ -159,11 +196,11 @@ func Incr(key string, expiration time.Duration) int64 {
 * @return int64
 **/
 func Decr(key string) int64 {
-	if conn == nil {
+	if !IsLoad() {
 		return 0
 	}
 
-	return DecrCtx(conn.ctx, key)
+	return DecrCtx(bg(), key)
 }
 
 /**
@@ -172,7 +209,7 @@ func Decr(key string) int64 {
 * @return interface{}
 **/
 func Set(key string, val interface{}, expiration time.Duration) interface{} {
-	if conn == nil {
+	if !IsLoad() {
 		return val
 	}
 
@@ -203,11 +240,11 @@ func SetObject(key string, val interface{}, expiration time.Duration) (interface
 * @return string, error
 **/
 func Get(key, defaultvalue string) (string, error) {
-	if conn == nil {
+	if !IsLoad() {
 		return defaultvalue, errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
-	return GetCtx(conn.ctx, key, defaultvalue)
+	return GetCtx(bg(), key, defaultvalue)
 }
 
 /**
@@ -237,11 +274,11 @@ func GetObject(key string, dest any) (bool, error) {
 * @return bool
 **/
 func Exists(key string) bool {
-	if conn == nil {
+	if !IsLoad() {
 		return false
 	}
 
-	return ExistsCtx(conn.ctx, key)
+	return ExistsCtx(bg(), key)
 }
 
 /**
@@ -250,11 +287,11 @@ func Exists(key string) bool {
 * @return int64, error
 **/
 func Delete(key string) (int64, error) {
-	if conn == nil {
+	if !IsLoad() {
 		return 0, errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
-	return DeleteCtx(conn.ctx, key)
+	return DeleteCtx(bg(), key)
 }
 
 /**
@@ -263,10 +300,10 @@ func Delete(key string) (int64, error) {
 * @return error
 **/
 func DeleteByPrefix(prefix string) error {
-	if conn == nil {
+	if !IsLoad() {
 		return errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
-	return DeleteByPrefixCtx(conn.ctx, prefix)
+	return DeleteByPrefixCtx(bg(), prefix)
 }
 
 /**
@@ -275,11 +312,11 @@ func DeleteByPrefix(prefix string) error {
 * @return error
 **/
 func LPush(key, val string) error {
-	if conn == nil {
+	if !IsLoad() {
 		return errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
-	return LPushCtx(conn.ctx, key, val)
+	return LPushCtx(bg(), key, val)
 }
 
 /**
@@ -288,11 +325,11 @@ func LPush(key, val string) error {
 * @return error
 **/
 func LRem(key, val string) error {
-	if conn == nil {
+	if !IsLoad() {
 		return errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
-	return LRemCtx(conn.ctx, key, val)
+	return LRemCtx(bg(), key, val)
 }
 
 /**
@@ -301,11 +338,11 @@ func LRem(key, val string) error {
 * @return []string, error
 **/
 func LRange(key string, start, stop int64) ([]string, error) {
-	if conn == nil {
+	if !IsLoad() {
 		return []string{}, errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
-	return LRangeCtx(conn.ctx, key, start, stop)
+	return LRangeCtx(bg(), key, start, stop)
 }
 
 /**
@@ -314,11 +351,11 @@ func LRange(key string, start, stop int64) ([]string, error) {
 * @return error
 **/
 func LTrim(key string, start, stop int64) error {
-	if conn == nil {
+	if !IsLoad() {
 		return errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
-	return LTrimCtx(conn.ctx, key, start, stop)
+	return LTrimCtx(bg(), key, start, stop)
 }
 
 /**
@@ -372,14 +409,19 @@ func SetY(key string, val interface{}, expiration int) interface{} {
 * @return error
 **/
 func Empty(match string) error {
-	if conn == nil {
+	if !IsLoad() {
 		return errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
-	iter := conn.Scan(conn.ctx, 0, match, 0).Iterator()
-	for iter.Next(conn.ctx) {
+	if local != nil {
+		local.del(local.keys(match)...)
+		return nil
+	}
+
+	iter := conn.Scan(bg(), 0, match, 0).Iterator()
+	for iter.Next(bg()) {
 		key := iter.Val()
-		DeleteCtx(conn.ctx, key)
+		DeleteCtx(bg(), key)
 	}
 
 	return nil
@@ -391,11 +433,11 @@ func Empty(match string) error {
 * @return error
 **/
 func CollectionSet(name string, val map[string]string) error {
-	if conn == nil {
+	if !IsLoad() {
 		return errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
-	return HSetCtx(conn.ctx, name, val)
+	return HSetCtx(bg(), name, val)
 }
 
 /**
@@ -404,11 +446,11 @@ func CollectionSet(name string, val map[string]string) error {
 * @return map[string]string, error
 **/
 func CollectionGet(name string) (map[string]string, error) {
-	if conn == nil {
+	if !IsLoad() {
 		return map[string]string{}, errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
-	return HGetCtx(conn.ctx, name)
+	return HGetCtx(bg(), name)
 }
 
 /**
@@ -417,11 +459,11 @@ func CollectionGet(name string) (map[string]string, error) {
 * @return error
 **/
 func CollectionDelete(name, key string) error {
-	if conn == nil {
+	if !IsLoad() {
 		return errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
-	return HDeleteCtx(conn.ctx, name, key)
+	return HDeleteCtx(bg(), name, key)
 }
 
 /**
@@ -430,11 +472,11 @@ func CollectionDelete(name, key string) error {
 * @return error
 **/
 func CollectionPut(name, key, val string) error {
-	if conn == nil {
+	if !IsLoad() {
 		return errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
-	return HSetCtx(conn.ctx, name, map[string]string{key: val})
+	return HSetCtx(bg(), name, map[string]string{key: val})
 }
 
 /**
@@ -443,11 +485,11 @@ func CollectionPut(name, key, val string) error {
 * @return string, error
 **/
 func CollectionFind(name, key string) (string, error) {
-	if conn == nil {
+	if !IsLoad() {
 		return "", errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
-	atribs, err := HGetCtx(conn.ctx, name)
+	atribs, err := HGetCtx(bg(), name)
 	if err != nil {
 		return "", err
 	}
@@ -579,23 +621,13 @@ func DeleteVerify(device string, key string) (int64, error) {
 * @return et.List, error
 **/
 func AllCache(search string, page, rows int) (et.List, error) {
-	if conn == nil {
+	if !IsLoad() {
 		return et.List{}, errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
-	var cursor uint64
-	var keys []string
-	for {
-		var batch []string
-		var err error
-		batch, cursor, err = conn.Scan(conn.ctx, cursor, search, 100).Result()
-		if err != nil {
-			return et.List{}, err
-		}
-		keys = append(keys, batch...)
-		if cursor == 0 {
-			break
-		}
+	keys, err := scanKeys(search)
+	if err != nil {
+		return et.List{}, err
 	}
 
 	total := len(keys)
@@ -618,12 +650,37 @@ func AllCache(search string, page, rows int) (et.List, error) {
 }
 
 /**
+* scanKeys: Returns every key matching the glob pattern (full SCAN on Redis).
+* @param match string
+* @return []string, error
+**/
+func scanKeys(match string) ([]string, error) {
+	if local != nil {
+		return local.keys(match), nil
+	}
+
+	var cursor uint64
+	var keys []string
+	for {
+		batch, next, err := conn.Scan(bg(), cursor, match, 100).Result()
+		if err != nil {
+			return nil, err
+		}
+		keys = append(keys, batch...)
+		cursor = next
+		if cursor == 0 {
+			return keys, nil
+		}
+	}
+}
+
+/**
 * GetJson
 * @params key string
 * @return Json, error
 **/
 func GetJson(key string) (et.Json, error) {
-	if conn == nil {
+	if !IsLoad() {
 		return et.Json{}, errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
@@ -652,7 +709,7 @@ func GetJson(key string) (et.Json, error) {
 * @return Item, error
 **/
 func GetItem(key string) (et.Item, error) {
-	if conn == nil {
+	if !IsLoad() {
 		return et.Item{}, errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
@@ -681,7 +738,7 @@ func GetItem(key string) (et.Item, error) {
 * @return Items, error
 **/
 func GetItems(key string) (et.Items, error) {
-	if conn == nil {
+	if !IsLoad() {
 		return et.Items{}, errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 

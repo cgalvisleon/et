@@ -40,17 +40,19 @@ func sqliteJoinKeyword(tp jsql.JoinType) string {
 }
 
 /**
-* sqliteJsonPath: Converts a field reference containing '->' separators into a
-* SQLite json_extract() expression.
+* sqliteJsonPath: Builds a safe expression for a field that did not resolve against the model:
+* identifiers are reduced to letters, digits, "_" and "."; a '->' path becomes json_extract with
+* quoted keys.
 * @param field string
 * @return string
 **/
 func sqliteJsonPath(field string) string {
-	if !strings.Contains(field, "->") {
-		return field
-	}
 	parts := strings.Split(field, "->")
-	return fmt.Sprintf("json_extract(%s, '$.%s')", parts[0], strings.Join(parts[1:], "."))
+	root := sanitizeQualifiedIdent(parts[0])
+	if len(parts) == 1 || root == "" {
+		return root
+	}
+	return fmt.Sprintf("json_extract(%s, %s)", root, sqlitePath(parts[1:]))
 }
 
 /**
@@ -82,17 +84,11 @@ func sqliteFieldExpr(field *jsql.Field, useSource bool) string {
 			if alias != "" {
 				src = alias + "." + sourceField
 			}
-			path := fmt.Sprintf("json_extract(%s, '$.%s')", src, field.Name)
-			switch field.TypeData {
-			case et.INT:
-				return fmt.Sprintf("CAST(%s AS INTEGER)", path)
-			case et.FLOAT:
-				return fmt.Sprintf("CAST(%s AS REAL)", path)
-			case et.BOOL:
-				return fmt.Sprintf("CAST(%s AS INTEGER)", path)
-			default:
-				return path
+			path := fmt.Sprintf("json_extract(%s, %s)", src, sqlitePath(strings.Split(field.Name, "->")))
+			if cast := sqliteAttribCast(field.TypeData); cast != "" {
+				return fmt.Sprintf("CAST(%s AS %s)", path, cast)
 			}
+			return path
 		} else {
 			if alias == "" {
 				return field.Name
@@ -150,6 +146,9 @@ func sqliteCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bo
 	}
 	if fieldExpr == "" {
 		f := sqliteJsonPath(cond.Field.String())
+		if f == "" {
+			return ""
+		}
 		if alias != "" && !strings.Contains(f, ".") {
 			f = fmt.Sprintf("%s.%s", alias, f)
 		}
@@ -242,7 +241,7 @@ func sqliteSelectExpr(query *jsql.Query, field string) (string, bool) {
 		if query.UseSourceField {
 			expr := fld.Name
 			expr = strs.Append(alias, expr, ".")
-			return fmt.Sprintf("'%s', %s", fld.As, expr), true
+			return fmt.Sprintf("%s, %s", sqliteQuoteKey(fld.As), sqliteColumnJson(expr, fld.TypeData)), true
 		} else {
 			expr := fld.Name
 			if expr != fld.As {
@@ -254,21 +253,15 @@ func sqliteSelectExpr(query *jsql.Query, field string) (string, bool) {
 	}
 	if fld.TypeColumn == jsql.ATTRIB {
 		sourceField := jsql.SOURCE
-		src := sourceField
-		if alias != "" {
-			src = alias + "." + sourceField
+		if fld.From.Model != nil && fld.From.Model.SourceField != "" {
+			sourceField = fld.From.Model.SourceField
 		}
-		path := fmt.Sprintf("json_extract(%s, '$.%s')", src, fld.Name)
-		switch fld.TypeData {
-		case et.INT:
-			return fmt.Sprintf("'%s', CAST(%s AS INTEGER)", fld.As, path), true
-		case et.FLOAT:
-			return fmt.Sprintf("'%s', CAST(%s AS REAL)", fld.As, path), true
-		case et.BOOL:
-			return fmt.Sprintf("'%s', CAST(%s AS INTEGER)", fld.As, path), true
-		default:
-			return fmt.Sprintf("'%s', %s", fld.As, path), true
+		src := strs.Append(alias, sourceField, ".")
+		path := sqlitePath(strings.Split(fld.Name, "->"))
+		if !query.UseSourceField {
+			return fmt.Sprintf("json_extract(%s, %s) AS %s", src, path, fld.As), true
 		}
+		return fmt.Sprintf("%s, json(%s -> %s)", sqliteQuoteKey(fld.As), src, path), true
 	}
 	if fld.TypeColumn == jsql.DETAIL {
 		if fld.From == nil {
@@ -371,44 +364,54 @@ func sqliteSelects(query *jsql.Query) []string {
 			}
 			selectExprs = append(selectExprs, selectExpr)
 		}
-	} else {
-		for _, from := range query.Froms {
-			model := from.Model
-			for _, col := range model.Columns {
-				if slices.Contains(query.Hiddens, col.Name) {
-					continue
-				}
-				if slices.Contains(model.Hiddens, col.Name) {
-					continue
-				}
-				if col.TypeColumn != jsql.COLUMN || col.Name == jsql.SOURCE {
-					continue
-				}
-				columnExpr, ok := sqliteSelectExpr(query, col.Name)
-				if !ok {
-					continue
-				}
-				selectExprs = append(selectExprs, columnExpr)
+		if query.UseSourceField {
+			return []string{fmt.Sprintf("json_object(\n%s\n) AS %s", strings.Join(selectExprs, ",\n"), jsql.RESULT)}
+		}
+		return []string{strings.Join(selectExprs, ",\n")}
+	}
+
+	pairs := make([]string, 0)
+	for _, from := range query.Froms {
+		model := from.Model
+		alias := from.As
+		if alias == from.Table {
+			alias = ""
+		}
+		for _, col := range model.Columns {
+			if slices.Contains(query.Hiddens, col.Name) || slices.Contains(model.Hiddens, col.Name) {
+				continue
+			}
+			if col.TypeColumn != jsql.COLUMN || col.Name == model.SourceField {
+				continue
+			}
+			ref := strs.Append(alias, col.Name, ".")
+			if query.UseSourceField {
+				pairs = append(pairs, fmt.Sprintf("%s, %s", sqlitePath([]string{col.Name}), sqliteColumnJson(ref, col.TypeData)))
+			} else {
+				selectExprs = append(selectExprs, ref)
 			}
 		}
 	}
 
-	if query.UseSourceField {
-		if len(query.Selects) == 0 && len(query.Froms) > 0 {
-			from := query.Froms[0]
-			expr := from.As
-			if expr == from.Table {
-				expr = ""
-			}
-			expr = strs.Append(expr, jsql.SOURCE, ".")
-			selectExprs = append([]string{}, fmt.Sprintf("json_patch(%s,\njson_object(\n%s\n))", expr, strings.Join(selectExprs, ",\n")))
-		} else {
-			selectExprs = append([]string{}, fmt.Sprintf("json_object(\n%s\n)", strings.Join(selectExprs, ",\n")))
-		}
-		return append([]string{}, fmt.Sprintf("%s AS %s", strings.Join(selectExprs, ",\n"), jsql.RESULT))
-	} else {
-		return append([]string{}, strings.Join(selectExprs, ",\n"))
+	if !query.UseSourceField {
+		return []string{strings.Join(selectExprs, ",\n")}
 	}
+
+	from := query.Froms[0]
+	alias := from.As
+	if alias == from.Table {
+		alias = ""
+	}
+	sourceField := jsql.SOURCE
+	hiddens := slices.Clone(query.Hiddens)
+	if from.Model != nil {
+		if from.Model.SourceField != "" {
+			sourceField = from.Model.SourceField
+		}
+		hiddens = append(hiddens, from.Model.Hiddens...)
+	}
+	source := sqliteSourceExpr(strs.Append(alias, sourceField, "."), hiddens)
+	return []string{fmt.Sprintf("%s AS %s", sqliteSetObject(source, pairs), jsql.RESULT)}
 }
 
 /**
@@ -457,7 +460,9 @@ func (s *Sqlite) Query(query *jsql.Query) (string, error) {
 	if query.IsExists {
 		sb.WriteString("SELECT 1")
 	} else if query.IsCount {
-		sb.WriteString("SELECT COUNT(*)")
+		// SQLite names an unaliased column after its expression ("COUNT(*)");
+		// jsql reads the result as "count", like Postgres names it.
+		sb.WriteString("SELECT COUNT(*) AS count")
 	} else {
 		selects := sqliteSelects(query)
 		sb.WriteString("SELECT\n")
@@ -527,7 +532,7 @@ func (s *Sqlite) Query(query *jsql.Query) (string, error) {
 	}
 
 	if query.IsExists {
-		sql := fmt.Sprintf("SELECT EXISTS(%s)", sb.String())
+		sql := fmt.Sprintf("SELECT EXISTS(%s) AS \"exists\"", sb.String())
 		sb.Reset()
 		sb.WriteString(sql)
 	}

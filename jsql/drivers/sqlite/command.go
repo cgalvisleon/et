@@ -1,8 +1,8 @@
 package sqlite
 
 import (
-	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -11,21 +11,22 @@ import (
 )
 
 /**
-* sqliteJsonValue: Serializes a Go value as a SQLite JSON text literal.
+* sqliteJsonValue: Serializes a Go value as a SQLite JSON text literal, escaping single quotes.
 * @param val any
 * @return string
 **/
 func sqliteJsonValue(val any) string {
-	bt, err := json.Marshal(val)
+	str, err := jsql.JsonString(val)
 	if err != nil {
 		return "'null'"
 	}
-	return fmt.Sprintf("'%s'", strings.ReplaceAll(string(bt), "'", "''"))
+	return fmt.Sprintf("'%s'", jsql.EscapeSQLString(str))
 }
 
 /**
-* sqliteJsonSet: Builds a chained json_set expression to patch individual ATTRIB
-* keys into sourceField.
+* sqliteJsonSet: Builds the expression that writes the ATTRIB keys of source into sourceField
+* without removing the other keys. Each key ("a" or "a->b") becomes a json_set path, which
+* creates missing parents and keeps null values. A NULL sourceField is treated as '{}'.
 * @param sourceField string, source et.Json
 * @return string
 **/
@@ -36,11 +37,40 @@ func sqliteJsonSet(sourceField string, source et.Json) string {
 	}
 	sort.Strings(keys)
 
-	expr := sourceField
-	for _, k := range keys {
-		expr = fmt.Sprintf("json_set(%s, '$.%s', json(%s))", expr, k, sqliteJsonValue(source[k]))
+	pairs := make([]string, len(keys))
+	for i, k := range keys {
+		pairs[i] = fmt.Sprintf("%s, json(%s)", sqlitePath(strings.Split(k, "->")), sqliteJsonValue(source[k]))
 	}
-	return expr
+	return sqliteSetObject(fmt.Sprintf("COALESCE(%s, '{}')", sourceField), pairs)
+}
+
+/**
+* sqliteNestSource: Expands '->' keys of source into nested objects ({"a->b": 1} → {"a": {"b": 1}}),
+* so an INSERT stores the same shape an UPDATE produces with json_set.
+* @param source et.Json
+* @return et.Json
+**/
+func sqliteNestSource(source et.Json) et.Json {
+	result := et.Json{}
+	keys := make([]string, 0, len(source))
+	for k := range source {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		parts := strings.Split(k, "->")
+		node := result
+		for _, part := range parts[:len(parts)-1] {
+			child, ok := node[part].(et.Json)
+			if !ok {
+				child = et.Json{}
+				node[part] = child
+			}
+			node = child
+		}
+		node[parts[len(parts)-1]] = source[k]
+	}
+	return result
 }
 
 /**
@@ -96,25 +126,10 @@ func sqliteColsVals(model *jsql.Model, data et.Json, excludePKs bool) (cols, val
 }
 
 /**
-* sqliteAttribReturn: Builds a _source JSON extraction expression for RETURNING
-* clauses (no table alias).
-* @param sourceField string, field string, tp et.TypeData
-* @return string
-**/
-func sqliteAttribReturn(sourceField, field string, tp et.TypeData) string {
-	path := fmt.Sprintf("json_extract(%s, '$.%s')", sourceField, field)
-	switch cast := sqliteAttribCast(tp); cast {
-	case "":
-		return fmt.Sprintf("%s AS %s", path, field)
-	default:
-		return fmt.Sprintf("CAST(%s AS %s) AS %s", path, cast, field)
-	}
-}
-
-/**
-* sqliteReturningClause: Builds the RETURNING clause, expanding ATTRIB columns from
-* _source inline. Uses command.Returns when set; otherwise auto-builds from the
-* model column list.
+* sqliteReturningClause: Builds the RETURNING clause with the same shape as a SELECT without fields:
+* with a SourceField the row comes back as one JSON "result" (SourceField without hidden keys plus
+* the visible columns), so attributes without a declared column are returned too; without it, the
+* column list. Uses command.Returns when set.
 * @param command *jsql.Command
 * @return string
 **/
@@ -128,30 +143,29 @@ func sqliteReturningClause(command *jsql.Command) string {
 		return "\nRETURNING *"
 	}
 
-	exprs := make([]string, 0, len(model.Columns))
+	pairs := make([]string, 0, len(model.Columns))
+	cols := make([]string, 0, len(model.Columns))
 	for _, col := range model.Columns {
-		switch col.TypeColumn {
-		case jsql.COLUMN:
-			if col.Name == model.SourceField {
-				continue
-			}
-			exprs = append(exprs, col.Name)
-		case jsql.ATTRIB:
-			if model.SourceField == "" {
-				continue
-			}
-			exprs = append(exprs, sqliteAttribReturn(model.SourceField, col.Name, col.TypeData))
+		if col.TypeColumn != jsql.COLUMN || col.Name == model.SourceField || slices.Contains(model.Hiddens, col.Name) {
+			continue
 		}
+		pairs = append(pairs, fmt.Sprintf("%s, %s", sqlitePath([]string{col.Name}), sqliteColumnJson(col.Name, col.TypeData)))
+		cols = append(cols, col.Name)
 	}
 
-	if len(exprs) == 0 {
+	if model.SourceField != "" {
+		source := sqliteSourceExpr(model.SourceField, model.Hiddens)
+		return fmt.Sprintf("\nRETURNING %s AS %s", sqliteSetObject(source, pairs), jsql.RESULT)
+	}
+	if len(cols) == 0 {
 		return "\nRETURNING *"
 	}
-	return "\nRETURNING " + strings.Join(exprs, ", ")
+	return "\nRETURNING " + strings.Join(cols, ", ")
 }
 
 /**
 * sqlitePKWhere: Builds a WHERE clause using primary key values from data.
+* Returns empty string when any primary key is missing.
 * @param model *jsql.Model, data et.Json
 * @return string
 **/
@@ -160,7 +174,7 @@ func sqlitePKWhere(model *jsql.Model, data et.Json) string {
 	for _, pk := range model.PrimaryKeys {
 		val, ok := data[pk.Name]
 		if !ok {
-			continue
+			return ""
 		}
 		conds = append(conds, fmt.Sprintf("%s = %v", pk.Name, jsql.Quoted(val)))
 	}
@@ -183,7 +197,7 @@ func sqliteInsertSQL(command *jsql.Command) (string, error) {
 		cols, vals, source = sqliteColsVals(model, command.New, false)
 		if model.SourceField != "" && len(source) > 0 {
 			cols = append(cols, model.SourceField)
-			vals = append(vals, sqliteJsonValue(source))
+			vals = append(vals, sqliteJsonValue(sqliteNestSource(source)))
 		}
 	} else {
 		keys := make([]string, 0, len(command.New))
@@ -214,8 +228,8 @@ func sqliteInsertSQL(command *jsql.Command) (string, error) {
 
 /**
 * sqliteUpdateSQL: Generates UPDATE … SET … WHERE … RETURNING …
-* Excludes primary key columns from SET; WHERE uses PK values from command.New,
-* falling back to command.Conditions.
+* Excludes primary key columns from SET; WHERE uses the PK values of the fetched row (command.Old),
+* falling back to command.New and then to command.Conditions.
 * @param command *jsql.Command
 * @return string, error
 **/
@@ -254,10 +268,13 @@ func sqliteUpdateSQL(command *jsql.Command) (string, error) {
 
 	var whereSQL string
 	if model != nil && len(model.PrimaryKeys) > 0 {
-		whereSQL = sqlitePKWhere(model, command.New)
+		whereSQL = sqlitePKWhere(model, command.Old)
+		if whereSQL == "" {
+			whereSQL = sqlitePKWhere(model, command.New)
+		}
 	}
-	if whereSQL == "" && len(command.Conditions) > 0 {
-		whereSQL = BuildConditions(command.Conditions, model, "")
+	if whereSQL == "" && model != nil && len(command.Conditions) > 0 {
+		whereSQL = sqliteCondsSQL(model.GetField, model.SourceField != "", command.Conditions, "")
 	}
 	if whereSQL == "" {
 		return "", fmt.Errorf("refusing to UPDATE %s without a WHERE clause (missing primary key value in New and no Conditions set)", table)
@@ -286,8 +303,8 @@ func sqliteDeleteSQL(command *jsql.Command) (string, error) {
 	if model != nil && len(model.PrimaryKeys) > 0 && len(command.Old) > 0 {
 		whereSQL = sqlitePKWhere(model, command.Old)
 	}
-	if whereSQL == "" && len(command.Conditions) > 0 {
-		whereSQL = BuildConditions(command.Conditions, model, "")
+	if whereSQL == "" && model != nil && len(command.Conditions) > 0 {
+		whereSQL = sqliteCondsSQL(model.GetField, model.SourceField != "", command.Conditions, "")
 	}
 	if whereSQL == "" {
 		return "", fmt.Errorf("refusing to DELETE from %s without a WHERE clause (missing primary key value in Old and no Conditions set)", table)

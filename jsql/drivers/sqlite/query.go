@@ -134,14 +134,67 @@ func sqliteInValues(val any) string {
 }
 
 /**
+* sqliteAggExpr: Renders an aggregate field (count, sum, avg, min, max) as a SQL expression.
+* @param fld *jsql.Field
+* @return string, bool
+**/
+func sqliteAggExpr(fld *jsql.Field) (string, bool) {
+	if fld.Agg == nil || (fld.TypeColumn != jsql.COLUMN && fld.TypeColumn != jsql.ATTRIB) {
+		return "", false
+	}
+	expr := sqliteFieldExpr(fld, true)
+	if expr == "" {
+		return "", false
+	}
+	switch fld.Agg.Function {
+	case et.COUNT:
+		return fmt.Sprintf("COUNT(%s)", expr), true
+	case et.SUM:
+		return fmt.Sprintf("COALESCE(SUM(%s), 0)", expr), true
+	case et.AVG:
+		return fmt.Sprintf("AVG(%s)", expr), true
+	case et.MIN:
+		return fmt.Sprintf("MIN(%s)", expr), true
+	case et.MAX:
+		return fmt.Sprintf("MAX(%s)", expr), true
+	}
+	return "", false
+}
+
+/**
+* sqliteJoinColumnRef: In a JOIN ON condition, resolves a string value "alias.field" that names
+* a field of the query origins as a column reference instead of a literal.
+* @param getField func(string) (*jsql.Field, bool), useSourceField bool, val et.Value
+* @return string, bool
+**/
+func sqliteJoinColumnRef(getField func(string) (*jsql.Field, bool), useSourceField bool, val et.Value) (string, bool) {
+	str, ok := val.Value.(string)
+	if !ok || !strings.Contains(str, ".") {
+		return "", false
+	}
+	def, ok := et.ToField(str)
+	if !ok || def.Source == "" || def.Agg != nil {
+		return "", false
+	}
+	fld, ok := getField(str)
+	if !ok || fld.From == nil || (fld.From.As != def.Source && fld.From.Name != def.Source) {
+		return "", false
+	}
+	expr := sqliteFieldExpr(fld, useSourceField)
+	return expr, expr != ""
+}
+
+/**
 * sqliteCondExpr: Renders a single Condition as a SQL fragment using alias to
 * qualify the field.
 * @param getField func(string) (*jsql.Field, bool), useSourceField bool, cond *et.Condition, alias string
 * @return string
 **/
-func sqliteCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bool, cond *et.Condition, alias string) string {
+func sqliteCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bool, cond *et.Condition, alias string, isJoin bool) string {
 	var fieldExpr string
-	if fld, ok := getField(cond.Field.String()); ok {
+	if fld, ok := getField(cond.Field.String()); ok && fld.Agg != nil {
+		fieldExpr, _ = sqliteAggExpr(fld)
+	} else if ok {
 		fieldExpr = sqliteFieldExpr(fld, useSourceField)
 	}
 	if fieldExpr == "" {
@@ -154,6 +207,15 @@ func sqliteCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bo
 		}
 		fieldExpr = f
 	}
+	value := func() string {
+		if isJoin {
+			if ref, ok := sqliteJoinColumnRef(getField, useSourceField, cond.Value); ok {
+				return ref
+			}
+		}
+		return Quoted(cond.Value)
+	}
+
 	switch cond.Operator {
 	case et.NULL:
 		return fmt.Sprintf("%s IS NULL", fieldExpr)
@@ -176,23 +238,23 @@ func sqliteCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bo
 		}
 		return fmt.Sprintf("%s NOT BETWEEN %v AND %v", fieldExpr, jsql.Quoted(bv.Min), jsql.Quoted(bv.Max))
 	case et.LIKE:
-		return fmt.Sprintf("%s LIKE %s", fieldExpr, Quoted(cond.Value))
+		return fmt.Sprintf("%s LIKE %s", fieldExpr, value())
 	case et.IS:
-		return fmt.Sprintf("%s IS %s", fieldExpr, Quoted(cond.Value))
+		return fmt.Sprintf("%s IS %s", fieldExpr, value())
 	case et.IS_NOT:
-		return fmt.Sprintf("%s IS NOT %s", fieldExpr, Quoted(cond.Value))
+		return fmt.Sprintf("%s IS NOT %s", fieldExpr, value())
 	case et.NEG:
-		return fmt.Sprintf("%s != %s", fieldExpr, Quoted(cond.Value))
+		return fmt.Sprintf("%s != %s", fieldExpr, value())
 	case et.LESS:
-		return fmt.Sprintf("%s < %s", fieldExpr, Quoted(cond.Value))
+		return fmt.Sprintf("%s < %s", fieldExpr, value())
 	case et.LESS_EQ:
-		return fmt.Sprintf("%s <= %s", fieldExpr, Quoted(cond.Value))
+		return fmt.Sprintf("%s <= %s", fieldExpr, value())
 	case et.MORE:
-		return fmt.Sprintf("%s > %s", fieldExpr, Quoted(cond.Value))
+		return fmt.Sprintf("%s > %s", fieldExpr, value())
 	case et.MORE_EQ:
-		return fmt.Sprintf("%s >= %s", fieldExpr, Quoted(cond.Value))
+		return fmt.Sprintf("%s >= %s", fieldExpr, value())
 	default:
-		return fmt.Sprintf("%s = %s", fieldExpr, Quoted(cond.Value))
+		return fmt.Sprintf("%s = %s", fieldExpr, value())
 	}
 }
 
@@ -203,10 +265,28 @@ func sqliteCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bo
 * @return string
 **/
 func sqliteCondsSQL(getField func(string) (*jsql.Field, bool), useSourceField bool, conds []*et.Condition, alias string) string {
+	return sqliteConds(getField, useSourceField, conds, alias, false)
+}
+
+/**
+* sqliteJoinCondsSQL: Renders the ON conditions of a JOIN; "alias.field" string values are column references.
+* @param getField func(string) (*jsql.Field, bool), useSourceField bool, conds []*et.Condition, alias string
+* @return string
+**/
+func sqliteJoinCondsSQL(getField func(string) (*jsql.Field, bool), useSourceField bool, conds []*et.Condition, alias string) string {
+	return sqliteConds(getField, useSourceField, conds, alias, true)
+}
+
+/**
+* sqliteConds: Renders a Condition slice as a SQL clause body joined by AND/OR connectors.
+* @param getField func(string) (*jsql.Field, bool), useSourceField bool, conds []*et.Condition, alias string, isJoin bool
+* @return string
+**/
+func sqliteConds(getField func(string) (*jsql.Field, bool), useSourceField bool, conds []*et.Condition, alias string, isJoin bool) string {
 	var parts []string
 	first := true
 	for _, cond := range conds {
-		expr := sqliteCondExpr(getField, useSourceField, cond, alias)
+		expr := sqliteCondExpr(getField, useSourceField, cond, alias, isJoin)
 		if expr == "" {
 			continue
 		}
@@ -236,6 +316,16 @@ func sqliteSelectExpr(query *jsql.Query, field string) (string, bool) {
 	alias := fld.From.As
 	if alias == fld.From.Table {
 		alias = ""
+	}
+	if fld.Agg != nil {
+		expr, ok := sqliteAggExpr(fld)
+		if !ok {
+			return "", false
+		}
+		if query.UseSourceField {
+			return fmt.Sprintf("%s, %s", sqliteQuoteKey(fld.As), expr), true
+		}
+		return fmt.Sprintf("%s AS %s", expr, fld.As), true
 	}
 	if fld.TypeColumn == jsql.COLUMN {
 		if query.UseSourceField {
@@ -475,7 +565,7 @@ func (s *Sqlite) Query(query *jsql.Query) (string, error) {
 	for _, join := range query.Joins {
 		sb.WriteString(fmt.Sprintf("\n%s %s AS %s", sqliteJoinKeyword(join.Type), sqliteFromRef(join.To), join.To.As))
 		if len(join.Condition) > 0 {
-			onSQL := sqliteCondsSQL(query.GetField, query.UseSourceField, join.Condition, join.To.As)
+			onSQL := sqliteJoinCondsSQL(query.GetField, query.UseSourceField, join.Condition, join.To.As)
 			if onSQL != "" {
 				sb.WriteString("\n  ON " + onSQL)
 			}

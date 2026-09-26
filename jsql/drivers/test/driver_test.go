@@ -26,7 +26,7 @@ type target struct {
 	name    string
 	params  jsql.ConnectParams
 	schema  string
-	cleanup string
+	cleanup []string
 	file    string
 }
 
@@ -103,7 +103,7 @@ func targets() []target {
 				RecordLimit: 1000,
 			},
 			schema:  "jsql_test",
-			cleanup: `DROP SCHEMA IF EXISTS jsql_test CASCADE`,
+			cleanup: []string{`DROP SCHEMA IF EXISTS jsql_test CASCADE`},
 		},
 		{
 			name: "oracle",
@@ -121,9 +121,51 @@ func targets() []target {
 				RecordLimit: 1000,
 			},
 			schema:  oraUser,
-			cleanup: fmt.Sprintf(`BEGIN EXECUTE IMMEDIATE 'DROP TABLE %s."transfers"'; EXCEPTION WHEN OTHERS THEN NULL; END;`, oraUser),
+			cleanup: oracleDrops(oraUser, "transfers", "subscriptions", "clients", "plans"),
 		},
 	}
+}
+
+/**
+* oracleDrops: Returns one DROP TABLE block per table, ignoring tables that do not exist.
+* @param schema string, tables ...string
+* @return []string
+**/
+func oracleDrops(schema string, tables ...string) []string {
+	result := make([]string, len(tables))
+	for i, table := range tables {
+		result[i] = fmt.Sprintf(`BEGIN EXECUTE IMMEDIATE 'DROP TABLE %s."%s" CASCADE CONSTRAINTS'; EXCEPTION WHEN OTHERS THEN NULL; END;`, schema, table)
+	}
+	return result
+}
+
+/**
+* connect: Opens the target database with a clean slate (the SQLite file is recreated and the test
+* tables dropped) and registers the cleanup; the subtest is skipped when the database is not available.
+* @param t *testing.T, tg target
+* @return *jsql.DB
+**/
+func connect(t *testing.T, tg target) *jsql.DB {
+	t.Helper()
+	if tg.file != "" {
+		removeFile(tg.file)
+		t.Cleanup(func() { removeFile(tg.file) })
+	}
+	db, err := jsql.ConnectTo(tg.params)
+	if err != nil {
+		t.Skipf("%s not available: %v", tg.name, err)
+	}
+	drop := func() {
+		for _, stmt := range tg.cleanup {
+			db.Sql(stmt)
+		}
+	}
+	drop()
+	t.Cleanup(func() {
+		drop()
+		db.Close()
+	})
+	return db
 }
 
 /**
@@ -211,24 +253,54 @@ func assertFields(t *testing.T, label string, expected, got et.Json, dropNulls b
 }
 
 /**
+* assertRows: Checks that got has the same rows, in order, with the same content as expected.
+* @param t *testing.T, label string, expected, got []et.Json
+**/
+func assertRows(t *testing.T, label string, expected, got []et.Json) {
+	t.Helper()
+	exp := normalize(expected, false)
+	res := normalize(got, false)
+	if !reflect.DeepEqual(exp, res) {
+		a, _ := json.Marshal(exp)
+		b, _ := json.Marshal(res)
+		t.Errorf("%s\n  want: %s\n  got:  %s", label, a, b)
+	}
+}
+
+/**
+* defineModel: Defines a model with the standard columns (id, status, dates, _source) plus the given
+* KEY columns; any other value is stored in _source. With JSQL_DEBUG set, the model logs its SQL.
+* @param t *testing.T, db *jsql.DB, schema, name string, columns ...string
+* @return *jsql.Model
+**/
+func defineModel(t *testing.T, db *jsql.DB, schema, name string, columns ...string) *jsql.Model {
+	t.Helper()
+	model, err := db.DefineModel(schema, name, 1, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if os.Getenv("JSQL_DEBUG") != "" {
+		model.Debug()
+	}
+	for _, column := range columns {
+		model.DefineColumn(column, et.KEY, "")
+	}
+	if err := model.Init(); err != nil {
+		t.Fatalf("init %s: %v", name, err)
+	}
+	return model
+}
+
+/**
 * defineTransfers: Defines the transfers model: id/status/created_at/updated_at from DefineModel,
 * kind/code/client_id as columns, and everything else (nested data, extended attributes) in _source.
+* With JSQL_DEBUG set, the model logs every generated SQL statement (DDL, queries and commands).
 * @param t *testing.T, db *jsql.DB, schema string
 * @return *jsql.Model
 **/
 func defineTransfers(t *testing.T, db *jsql.DB, schema string) *jsql.Model {
 	t.Helper()
-	model, err := db.DefineModel(schema, "transfers", 1, "test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	model.DefineColumn("kind", et.KEY, "")
-	model.DefineColumn("code", et.KEY, "")
-	model.DefineColumn("client_id", et.KEY, "")
-	if err := model.Init(); err != nil {
-		t.Fatal("init:", err)
-	}
-	return model
+	return defineModel(t, db, schema, "transfers", "kind", "code", "client_id")
 }
 
 /**
@@ -238,19 +310,7 @@ func defineTransfers(t *testing.T, db *jsql.DB, schema string) *jsql.Model {
 func TestInsertUpdate(t *testing.T) {
 	for _, tg := range targets() {
 		t.Run(tg.name, func(t *testing.T) {
-			if tg.file != "" {
-				removeFile(tg.file)
-				defer removeFile(tg.file)
-			}
-			db, err := jsql.ConnectTo(tg.params)
-			if err != nil {
-				t.Skipf("%s not available: %v", tg.name, err)
-			}
-			defer db.Close()
-			if tg.cleanup != "" {
-				db.Sql(tg.cleanup)
-				defer db.Sql(tg.cleanup)
-			}
+			db := connect(t, tg)
 
 			// Oracle's JSON_MERGEPATCH removes keys set to null, so nulls are ignored there.
 			dropNulls := tg.name == "oracle"
@@ -272,6 +332,32 @@ func TestInsertUpdate(t *testing.T) {
 				t.Fatal("read after insert:", err)
 			}
 			assertFields(t, "read after insert", fixture, read.Result, false)
+
+			// The inserted record can be queried by columns and by nested attributes of _source.
+			found, err := model.Query(et.Json{
+				"selects": []any{
+					"id",
+					"code",
+					"data->transfer_address->municipality_name:municipality",
+					"extendedAttributeValues->plan_comercial:plan",
+					"step",
+				},
+				"where": []any{
+					et.Json{"kind": et.Json{"eq": "transfers"}},
+					et.Json{"and": et.Json{"data->transfer_address->stratum": et.Json{"eq": "4"}}},
+					et.Json{"and": et.Json{"step": et.Json{"eq": 3}}},
+				},
+			}).All()
+			if err != nil {
+				t.Fatal("query:", err)
+			}
+			assertRows(t, "query inserted", []et.Json{{
+				"id":           id,
+				"code":         "00000009",
+				"municipality": "PALMIRA",
+				"plan":         "PLAN 200 MEGAS 2026 F",
+				"step":         3,
+			}}, found.Result)
 
 			changes := et.Json{
 				"status":                                "done",
@@ -314,6 +400,96 @@ func TestInsertUpdate(t *testing.T) {
 			if lat := read.Result.Num("data", "transfer_address", "coordinates", "lat"); lat != 3.1234567 {
 				t.Errorf("nested sibling lost: data.transfer_address.coordinates.lat = %v", lat)
 			}
+		})
+	}
+}
+
+/**
+* TestJoinGroupHaving: Uses three related tables (clients, plans and subscriptions) to query with
+* JSON descriptors: a JOIN of the three, a GROUP BY with aggregates, and the same grouping filtered
+* with HAVING. city and price are attributes stored in _source.
+**/
+func TestJoinGroupHaving(t *testing.T) {
+	for _, tg := range targets() {
+		t.Run(tg.name, func(t *testing.T) {
+			db := connect(t, tg)
+			clients := defineModel(t, db, tg.schema, "clients", "name")
+			plans := defineModel(t, db, tg.schema, "plans", "name")
+			subscriptions := defineModel(t, db, tg.schema, "subscriptions", "client_id", "plan_id")
+
+			insert := func(model *jsql.Model, rows ...et.Json) {
+				for _, row := range rows {
+					if _, err := model.Insert(row).Exec(); err != nil {
+						t.Fatalf("insert %s: %v", model.Name, err)
+					}
+				}
+			}
+			insert(clients,
+				et.Json{"id": "c1", "name": "Ana", "city": "PALMIRA"},
+				et.Json{"id": "c2", "name": "Luis", "city": "CALI"},
+				et.Json{"id": "c3", "name": "Marta O'Neil", "city": "PALMIRA"},
+			)
+			insert(plans,
+				et.Json{"id": "p1", "name": "PLAN 200", "price": 90000},
+				et.Json{"id": "p2", "name": "PLAN 500", "price": 150000},
+			)
+			insert(subscriptions,
+				et.Json{"id": "s1", "client_id": "c1", "plan_id": "p1"},
+				et.Json{"id": "s2", "client_id": "c1", "plan_id": "p2"},
+				et.Json{"id": "s3", "client_id": "c2", "plan_id": "p1"},
+				et.Json{"id": "s4", "client_id": "c3", "plan_id": "p2"},
+			)
+
+			joins := []any{
+				et.Json{"to": tg.schema + ".clients:C", "on": []any{et.Json{"A.client_id": et.Json{"eq": "C.id"}}}},
+				et.Json{"to": tg.schema + ".plans:P", "on": []any{et.Json{"A.plan_id": et.Json{"eq": "P.id"}}}},
+			}
+
+			// JOIN: each subscription with its client and plan.
+			joined, err := subscriptions.Query(et.Json{
+				"selects": []any{"A.id", "C.name:client", "C.city:city", "P.name:plan", "P.price:price"},
+				"join":    joins,
+				"orders":  []any{et.Json{"A.id": true}},
+			}).All()
+			if err != nil {
+				t.Fatal("join:", err)
+			}
+			assertRows(t, "join", []et.Json{
+				{"id": "s1", "client": "Ana", "city": "PALMIRA", "plan": "PLAN 200", "price": 90000},
+				{"id": "s2", "client": "Ana", "city": "PALMIRA", "plan": "PLAN 500", "price": 150000},
+				{"id": "s3", "client": "Luis", "city": "CALI", "plan": "PLAN 200", "price": 90000},
+				{"id": "s4", "client": "Marta O'Neil", "city": "PALMIRA", "plan": "PLAN 500", "price": 150000},
+			}, joined.Result)
+
+			// GROUP BY: subscriptions and amount per city.
+			grouped, err := subscriptions.Query(et.Json{
+				"selects": []any{"C.city:city", "count(A.id):total", "sum(P.price):amount"},
+				"join":    joins,
+				"groups":  []any{"C.city"},
+				"orders":  []any{et.Json{"C.city": true}},
+			}).All()
+			if err != nil {
+				t.Fatal("group by:", err)
+			}
+			assertRows(t, "group by", []et.Json{
+				{"city": "CALI", "total": 1, "amount": 90000},
+				{"city": "PALMIRA", "total": 3, "amount": 390000},
+			}, grouped.Result)
+
+			// HAVING: only the cities with more than one subscription.
+			having, err := subscriptions.Query(et.Json{
+				"selects": []any{"C.city:city", "count(A.id):total", "sum(P.price):amount"},
+				"join":    joins,
+				"groups":  []any{"C.city"},
+				"havings": []any{et.Json{"count(A.id)": et.Json{"more": 1}}},
+				"orders":  []any{et.Json{"C.city": true}},
+			}).All()
+			if err != nil {
+				t.Fatal("having:", err)
+			}
+			assertRows(t, "having", []et.Json{
+				{"city": "PALMIRA", "total": 3, "amount": 390000},
+			}, having.Result)
 		})
 	}
 }

@@ -249,7 +249,10 @@ func oraFallbackField(field, alias string) string {
 func oraCondExpr(getField func(string) (*jsql.Field, bool), cond *et.Condition, alias string, isJoin bool) string {
 	var fieldExpr string
 	tp := et.ANY
-	if fld, ok := getField(cond.Field.String()); ok {
+	if fld, ok := getField(cond.Field.String()); ok && fld.Agg != nil {
+		fieldExpr, _ = oraAggExpr(fld)
+		tp = et.FLOAT
+	} else if ok {
 		tp = fld.TypeData
 		if fld.TypeColumn == jsql.ATTRIB && (tp == et.ANY || tp == et.TEXT || tp == et.KEY) {
 			if vt := oraValueType(cond.Value.Value); vt != et.ANY {
@@ -425,7 +428,8 @@ func oraSelectExpr(query *jsql.Query, field string) (string, bool) {
 
 	switch fld.TypeColumn {
 	case jsql.COLUMN, jsql.ATTRIB:
-		if !query.UseSourceField {
+		// A grouped query must select the same expression it groups by.
+		if !query.UseSourceField || len(query.GroupsBy) > 0 {
 			return pair(oraScalarExpr(fld, fld.TypeData))
 		}
 		return pair(oraJsonValueExpr(fld))

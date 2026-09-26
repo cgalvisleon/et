@@ -192,7 +192,9 @@ func pgJoinColumnRef(getField func(string) (*jsql.Field, bool), useSourceField b
 func pgCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bool, cond *et.Condition, alias string, isJoin bool) string {
 	var fieldExpr string
 	fld, ok := getField(cond.Field.String())
-	if ok {
+	if ok && fld.Agg != nil {
+		fieldExpr, _ = pgAggExpr(fld)
+	} else if ok {
 		fieldExpr = pgFieldExpr(fld, useSourceField)
 		if fld.TypeColumn == jsql.ATTRIB && useSourceField && pgAttribCast(fld.TypeData) == "" {
 			if cast := pgValueCast(cond.Value.Value); cast != "" {
@@ -359,6 +361,9 @@ func pgAggExpr(fld *jsql.Field) (string, bool) {
 	if fld.Agg == nil {
 		return "", false
 	}
+	if fld.TypeColumn == jsql.ATTRIB && pgAttribCast(fld.TypeData) == "" && fld.Agg.Function != et.COUNT {
+		fieldExpr = fmt.Sprintf("(%s)::numeric", fieldExpr)
+	}
 	switch jsql.RollupOperation(fld.Agg.Function.Str()) {
 	case jsql.RollupCount:
 		return fmt.Sprintf("COUNT(%s)::bigint", fieldExpr), true
@@ -433,6 +438,11 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 		case et.DATETIME:
 			return fmt.Sprintf("%s, (%s)::timestamptz", pgQuoteKey(fld.As), path), true
 		default:
+			// Without a grouping, read the attribute as jsonb (-> instead of ->> on the leaf)
+			// so it keeps its JSON type; a grouped query must select the text it groups by.
+			if i := strings.LastIndex(path, "->>"); i != -1 && len(query.GroupsBy) == 0 {
+				path = path[:i] + "->" + path[i+3:]
+			}
 			return fmt.Sprintf("%s, %s", pgQuoteKey(fld.As), path), true
 		}
 	}

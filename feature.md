@@ -92,8 +92,116 @@ COLUMN   TypeColumn = "column"
 	AGG      TypeColumn = "agg"
 ```
 
-- Column: corresponde a las columnas que se crean en la tabla.
-- Atrib: corresponde a los atributos que no tienen una columna propia y se guardan dentro del campo SourceField.
-- Detail: da soporte a relaciones maestro-detalle. Define el modelo del detalle, las keys que unen el maestro con el detalle, los campos que se muestran y cuántos registros se muestran.
-- Master: da soporte a relaciones 1 a 1 a través de una tabla intermedia. Define el modelo destino, el modelo puente, las keys del maestro al puente y del puente al destino, los campos que se muestran y cuántos registros se muestran.
-- Rollup: da soporte a consultas hacia modelos que devuelven un solo registro. Por ejemplo, el atributo tp_documento, cuyo valor puede ser CC, NIT o RUT, tiene su significado en la tabla Tipo_documentos con los campos id y title. Un rollup de tipo RollupRow con Select []string{"title"} hace una consulta con limit 1 de la columna title y la asigna al atributo cuyo nombre es la llave del map[string]\*Rollups. Si es RollupObject con Select []string{id, title}, devuelve un objeto que se asigna a ese mismo atributo. También existen RollupCount, RollupSum, RollupAvg, RollupMin y RollupMax, que calculan un count, sum, avg, min o max sobre el modelo To y asignan el resultado al atributo.
+- COLUMN: corresponde a las columnas que se crean en la tabla.
+- ATTRIB: corresponde a los atributos que no tienen una columna propia y se guardan dentro del campo SourceField.
+- DETAIL: da soporte a relaciones maestro-detalle. Define el modelo del detalle, las keys que unen el maestro con el detalle, los campos que se muestran y cuántos registros se muestran.
+- MASTER: da soporte a relaciones 1 a 1 a través de una tabla intermedia. Define el modelo destino, el modelo puente, las keys del maestro al puente y del puente al destino, los campos que se muestran y cuántos registros se muestran.
+- ROLLUP: da soporte a consultas hacia modelos que devuelven un solo registro. Por ejemplo, el atributo tp_documento, cuyo valor puede ser CC, NIT o RUT, tiene su significado en la tabla Tipo_documentos con los campos id y title. Un rollup de tipo RollupRow con Select []string{"title"} hace una consulta con limit 1 de la columna title y la asigna al atributo cuyo nombre es la llave del map[string]\*Rollups. Si es RollupObject con Select []string{id, title}, devuelve un objeto que se asigna a ese mismo atributo. También existen RollupCount, RollupSum, RollupAvg, RollupMin y RollupMax, que calculan un count, sum, avg, min o max sobre el modelo To y asignan el resultado al atributo.
+- CALCFUNC: da soporte a funciones de Go (CalcFunction) que se ejecutan cuando esta columna está incluida en el select.
+- CALC: da soporte a scripts de JavaScript que se ejecutan con el paquete goja cuando esta columna está incluida en el select.
+
+Las columnas de tipo DETAIL, MASTER, ROLLUP, CALCFUNC y CALC solo se ejecutan si se incluyen de manera literal en el select. Cuando el array del select está vacío, solo se incluyen las columnas de tipo COLUMN.
+
+Commandos
+
+- Insert: la estructura json para un inser es la siguiente
+
+```json
+{
+  "insert": {
+    "from": "public.users",
+    "data": {
+      "id": 1,
+      "status": "active",
+      "name": "Cesar"
+    },
+    "before_insert": ["code javascript...", "code javascript..."],
+    "after_insert": ["code javascript...", "code javascript..."]
+  }
+}
+```
+
+before_insert, after_insert son codigo javascript que es ejecutado por goja.
+
+- Update: La estructura json para un update es la siguiente
+
+```json
+{
+  "update": {
+    "from": "public.users",
+    "data": {
+      "name": "Cesar Galvis"
+    },
+    "where": [
+      { "id": { "eq": 1 } },
+      { "and": { "status": { "eq": "active" } } }
+    ],
+    "before_update": ["code javascript...", "code javascript..."],
+    "after_update": ["code javascript...", "code javascript..."]
+  }
+}
+```
+
+before_update y after_update son codigo javascript que es ejecutado por goja.
+
+- Delete: La estructura json para un Delete es la siguiente
+
+```json
+{
+  "delete": {
+    "from": "public.users",
+    "where": [
+      { "id": { "eq": 1 } },
+      { "and": { "status": { "eq": "active" } } }
+    ],
+    "before_delete": ["code javascript...", "code javascript..."],
+    "after_delete": ["code javascript...", "code javascript..."]
+  }
+}
+```
+
+before_delete y after_delete son codigo javascript que es ejecutado por goja.
+
+- Upsert: entendiendo upsert que si el exist del where es false se ejecuta un insert de lo contratio un update, el where ninca puede ser vacio. su estructura es la siguiente
+
+```json
+{
+  "upsert": {
+    "from": "public.users",
+    "data": {
+      "name": "Cesar Galvis"
+    },
+    "where": [
+      { "id": { "eq": 1 } },
+      { "and": { "status": { "eq": "active" } } }
+    ],
+    "before_insert": ["code javascript...", "code javascript..."],
+    "after_insert": ["code javascript...", "code javascript..."],
+    "before_update": ["code javascript...", "code javascript..."],
+    "after_update": ["code javascript...", "code javascript..."],
+    "before_insert_update": ["code javascript...", "code javascript..."],
+    "after_insert_update": ["code javascript...", "code javascript..."]
+  }
+}
+```
+
+before_insert, after_insert, before_update, after_update, before_insert_update y after_insert_update son codigo javascript que es ejecutado por goja.
+
+- Bulk: La estructura json para un insercion a granel es la siguiente
+
+```json
+{
+  "bulk": {
+    "from": "public.users",
+    "data": {
+      "id": 1,
+      "status": "active",
+      "name": "Cesar"
+    },
+    "before_insert": ["code javascript...", "code javascript..."],
+    "after_insert": ["code javascript...", "code javascript..."]
+  }
+}
+```
+
+before_insert, after_insert son codigo javascript que es ejecutado por goja.

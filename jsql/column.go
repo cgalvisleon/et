@@ -38,7 +38,6 @@ const (
 	ROLLUP   TypeColumn = "rollup"
 	CALCFUNC TypeColumn = "calc_func"
 	CALC     TypeColumn = "calc"
-	AGG      TypeColumn = "agg"
 )
 
 const (

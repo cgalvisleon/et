@@ -37,9 +37,11 @@ El SQL concreto lo genera un `Driver` por motor (ver §9); el núcleo de `jsql` 
 | `DETAIL` | `detail` | Relación maestro-detalle: el modelo del detalle, las keys que unen el maestro con el detalle, los campos que se muestran y cuántos registros se muestran. Se resuelve con una sub-consulta por fila. |
 | `MASTER` | `master` | Relación a través de una tabla intermedia: el modelo destino, el modelo puente, las keys del maestro al puente y del puente al destino, los campos que se muestran y cuántos registros se muestran; con un registro es 1 a 1 (ver §2.3). |
 | `ROLLUP` | `rollup` | Consulta hacia otro modelo que devuelve un solo registro (`row`, `object`) o un agregado (`count`, `sum`, `avg`, `min`, `max`) y lo asigna al atributo del rollup (ver §2.3). |
-| `CALCFUNC` | `calc_func` | Calculado en Go (`CalcFunction`) tras la consulta. |
-| `CALC` | `calc` | Calculado con script JS (`jrex`) tras la consulta. |
+| `CALCFUNC` | `calc_func` | Función de Go (`CalcFunction`) que se ejecuta sobre cada fila cuando la columna está incluida en el select. |
+| `CALC` | `calc` | Script de JavaScript que se ejecuta con goja (`jrex`) sobre cada fila cuando la columna está incluida en el select. |
 | `AGG` | `agg` | Expresión de agregación. |
+
+Las columnas `DETAIL`, `MASTER`, `ROLLUP`, `CALCFUNC` y `CALC` solo se ejecutan si se incluyen de manera literal en el select (o con `Query.Detail`, `Query.Master` y `Query.Calc`). Con el select vacío solo se incluyen las columnas `COLUMN` y, si el modelo tiene `SourceField`, sus atributos (§5.3).
 
 Estructura de una columna (`column.go`):
 
@@ -193,7 +195,7 @@ Constructores: `Model.Select/Where/Join/As/Calc`, `jsql.NewQuery(model, as...)`.
 | vacío | `A._source \|\| jsonb_build_object('id', A.id, 'name', A.name, …) AS result`: todos los atributos más todas las columnas `COLUMN` no ocultas. | Todas las columnas `COLUMN` no ocultas. |
 | con campos | `jsonb_build_object('id', A.id, 'last_name', A._source->>'last_name', …) AS result`: solo los `Field` pedidos, agrupados en un objeto. | Lista de columnas pedidas. |
 
-Siempre se excluyen `Model.Hiddens` y `Query.Hiddens`. La fila resultante con `SourceField` es un único JSON en la columna `result`, que `jsql` devuelve como `et.Json`.
+Siempre se excluyen `Model.Hiddens` y `Query.Hiddens`. Con el select vacío no se resuelven detalles, maestros, rollups ni campos calculados: hay que pedirlos por nombre (§2.1). La fila resultante con `SourceField` es un único JSON en la columna `result`, que `jsql` devuelve como `et.Json`.
 
 ### 5.4 Consulta descrita en JSON
 

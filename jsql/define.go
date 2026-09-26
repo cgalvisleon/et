@@ -29,6 +29,7 @@ type DefDetail struct {
 	Name        string            `json:"name"`
 	Keys        map[string]string `json:"keys"`
 	Rows        int               `json:"rows"`
+	Select      []string          `json:"select"`
 	Columns     []Column          `json:"columns"`
 	PrimaryKeys []DefIndex        `json:"primary_keys"`
 	Indexes     []DefIndex        `json:"indexes"`
@@ -43,6 +44,7 @@ type DefMaster struct {
 	Keys   map[string]string `json:"keys"`
 	ToKeys map[string]string `json:"to_keys"`
 	Select []string          `json:"select"`
+	Rows   int               `json:"rows"`
 }
 
 type DefRollup struct {
@@ -116,19 +118,19 @@ func (s *Model) defineColumn(name string, tpColumn TypeColumn, tpData et.TypeDat
 }
 
 /**
-* DefineSource: Defines the source column for the model.
+* defineSource: Defines the source column for the model.
 * @return *Column
 **/
-func (s *Model) DefineSource() *Column {
+func (s *Model) defineSource() *Column {
 	s.SourceField = SOURCE
 	return s.defineColumn(SOURCE, COLUMN, et.JSON, et.Json{})
 }
 
 /**
-* DefineIdxField: Defines the idx field column for the model.
+* defineIdxField: Defines the idx field column for the model.
 * @return *Index
 **/
-func (s *Model) DefineIdxField() *Index {
+func (s *Model) defineIdxField() *Index {
 	s.IdxField = IDX
 	result := s.DefineIndex(IDX, et.KEY, "")
 	s.Hiddens = append(s.Hiddens, IDX)
@@ -141,11 +143,11 @@ func (s *Model) DefineIdxField() *Index {
 }
 
 /**
-* DefineIndex: Defines a new index column for the model.
+* defineIndex: Defines a new index column for the model.
 * @param name string, tp et.TypeData, deFault any
 * @return *Index
 **/
-func (s *Model) DefineIndex(name string, tp et.TypeData, deFault any) *Index {
+func (s *Model) defineIndex(name string, tp et.TypeData, deFault any) *Index {
 	s.defineColumn(name, COLUMN, tp, deFault)
 	idx := slices.IndexFunc(s.Indexes, func(idx *Index) bool { return idx.Name == name })
 	if idx != -1 {
@@ -160,11 +162,11 @@ func (s *Model) DefineIndex(name string, tp et.TypeData, deFault any) *Index {
 }
 
 /**
-* DefinePrimaryKey: Defines a new primary key column for the model.
+* definePrimaryKey: Defines a new primary key column for the model.
 * @param name string, tp et.TypeData, deFault any
 * @return *Index
 **/
-func (s *Model) DefinePrimaryKey(name string, tp et.TypeData, deFault any) *Index {
+func (s *Model) definePrimaryKey(name string, tp et.TypeData, deFault any) *Index {
 	s.defineColumn(name, COLUMN, tp, deFault)
 	idx := slices.IndexFunc(s.PrimaryKeys, func(idx *Index) bool { return idx.Name == name })
 	if idx != -1 {
@@ -179,11 +181,11 @@ func (s *Model) DefinePrimaryKey(name string, tp et.TypeData, deFault any) *Inde
 }
 
 /**
-* DefineForeignKeys: Defines a new foreign key column for the model.
+* defineForeignKeys: Defines a new foreign key column for the model.
 * @param to *Model, keys map[string]string, onDeleteCascade bool, onUpdateCascade bool
 * @return *Detail
 **/
-func (s *Model) DefineForeignKeys(to *Model, keys map[string]string, onDeleteCascade, onUpdateCascade bool) *Detail {
+func (s *Model) defineForeignKeys(to *Model, keys map[string]string, onDeleteCascade, onUpdateCascade bool) *Detail {
 	idx := slices.IndexFunc(s.ForeignKeys, func(idx *Detail) bool { return idx.To.Name == to.Name })
 	if idx != -1 {
 		return s.ForeignKeys[idx]
@@ -194,11 +196,11 @@ func (s *Model) DefineForeignKeys(to *Model, keys map[string]string, onDeleteCas
 }
 
 /**
-* DefineUnique: Defines a new unique index for the model.
+* defineUnique: Defines a new unique index for the model.
 * @param name string, tp et.TypeData, deFault any
 * @return *Index
 **/
-func (s *Model) DefineUnique(name string, tp et.TypeData, deFault any) *Index {
+func (s *Model) defineUnique(name string, tp et.TypeData, deFault any) *Index {
 	s.defineColumn(name, COLUMN, tp, deFault)
 	idx := slices.IndexFunc(s.Unique, func(idx *Index) bool { return idx.Name == name })
 	if idx != -1 {
@@ -213,11 +215,11 @@ func (s *Model) DefineUnique(name string, tp et.TypeData, deFault any) *Index {
 }
 
 /**
-* DefineRequired: Defines a new required column for the model.
+* defineRequired: Defines a new required column for the model.
 * @param name string, tp et.TypeData, deFault any
 * @return *Index
 **/
-func (s *Model) DefineRequired(name string, tp et.TypeData, deFault any) *Index {
+func (s *Model) defineRequired(name string, tp et.TypeData, deFault any) *Index {
 	s.defineColumn(name, COLUMN, tp, deFault)
 	idx := slices.IndexFunc(s.Required, func(idx *Index) bool { return idx.Name == name })
 	if idx != -1 {
@@ -232,39 +234,39 @@ func (s *Model) DefineRequired(name string, tp et.TypeData, deFault any) *Index 
 }
 
 /**
-* DefineHidden: Defines a new hidden column for the model.
+* defineHidden: Defines a new hidden column for the model.
 * @param name ...string
 **/
-func (s *Model) DefineHidden(name ...string) {
+func (s *Model) defineHidden(name ...string) {
 	s.Hiddens = append(s.Hiddens, name...)
 }
 
 /**
-* DefineColumn: Defines a new column for the model.
+* defineRealColumn: Defines a new column for the model.
 * @param name string, tp et.TypeData, deFault any
 * @return *Column
 **/
-func (s *Model) DefineColumn(name string, tp et.TypeData, deFault any) *Column {
+func (s *Model) defineRealColumn(name string, tp et.TypeData, deFault any) *Column {
 	return s.defineColumn(name, COLUMN, tp, deFault)
 }
 
 /**
-* DefineAttrib: Defines a new attribute for the model.
+* defineAttrib: Defines a new attribute for the model.
 * @param name string, tp et.TypeData, deFault any
 * @return *Column
 **/
-func (s *Model) DefineAttrib(name string, tp et.TypeData, deFault any) *Column {
+func (s *Model) defineAttrib(name string, tp et.TypeData, deFault any) *Column {
 	return s.defineColumn(name, ATTRIB, tp, deFault)
 }
 
 /**
-* DefineRollup: Defines a new rollup for the model.
+* defineRollup: Defines a new rollup for the model.
 * Selects are required except for RollupCount (counts rows) and RollupObject (whole row).
 * An empty operation defaults to RollupObject.
 * @param name string, to *Model, keys map[string]string, selects []string, operation RollupOperation
 * @return (*Rollups, error)
 **/
-func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, selects []string, operation RollupOperation) (*Rollups, error) {
+func (s *Model) defineRollup(name string, to *Model, keys map[string]string, selects []string, operation RollupOperation) (*Rollups, error) {
 	result, ok := s.Rollups[name]
 	if ok {
 		return result, nil
@@ -297,11 +299,11 @@ func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, sel
 }
 
 /**
-* DefineDetail: Defines a new detail for the model.
+* defineDetail: Defines a new detail for the model.
 * @param name string, keys map[string]string, rows int
 * @return (*Model, error)
 **/
-func (s *Model) DefineDetail(name string, keys map[string]string, rows int) (*Model, error) {
+func (s *Model) defineDetail(name string, keys map[string]string, rows int, selects ...string) (*Model, error) {
 	result, ok := s.Details[name]
 	if ok {
 		return result.To.Model, nil
@@ -320,18 +322,18 @@ func (s *Model) DefineDetail(name string, keys map[string]string, rows int) (*Mo
 		to.DefineHidden(fk)
 	}
 	s.defineColumn(name, DETAIL, et.ANY, nil)
-	detail := newDetail(to, keys, []string{}, true, true)
+	detail := newDetail(to, keys, selects, true, true)
 	detail.Rows = rows
 	s.Details[name] = detail
 	return to, nil
 }
 
 /**
-* DefineMaster: Defines a new master for the model.
+* defineMaster: Defines a new master for the model.
 * @param name string, to *Model, keys, toKeys map[string]string, selects []string
 * @return (*Master, error)
 **/
-func (s *Model) DefineMaster(name string, to *Model, keys, toKeys map[string]string, selects []string) (*Model, error) {
+func (s *Model) defineMaster(name string, to *Model, keys, toKeys map[string]string, selects []string, rows ...int) (*Model, error) {
 	result, ok := s.Masters[name]
 	if ok {
 		return result.To.Model, nil
@@ -353,39 +355,43 @@ func (s *Model) DefineMaster(name string, to *Model, keys, toKeys map[string]str
 		bridge.DefineForeignKeys(to, map[string]string{fk: k}, true, false)
 	}
 	s.defineColumn(name, MASTER, et.ANY, nil)
-	master := newMaster(to, bridge, keys, toKeys, selects)
+	master := newMaster(s, to, bridge, keys, toKeys, selects)
+	if len(rows) > 0 {
+		master.Rows = rows[0]
+	}
 	s.Masters[name] = master
 	to.Masters[s.Name] = master
 	return bridge, nil
 }
 
 /**
-* DefineCalcFunc: Defines a new calculation for the model.
+* defineCalcFunc: Defines a new calculation for the model.
 * @param name string, calc CalcFunction
 * @return *Model
 **/
-func (s *Model) DefineCalcFunc(name string, calc CalcFunction) *Model {
+func (s *Model) defineCalcFunc(name string, calc CalcFunction) *Model {
 	s.defineColumn(name, CALCFUNC, et.ANY, nil)
 	s.calcs[name] = calc
 	return s
 }
 
 /**
-* DefineCalc: Defines a new calculation for the model using a bytecode definition.
+* defineCalc: Defines a new calculation for the model using a bytecode definition.
 * @param name string, code string
 * @return *Model
 **/
-func (s *Model) DefineCalc(name, script string) *Model {
+func (s *Model) defineCalc(name, script string) *Model {
 	s.defineColumn(name, CALC, et.ANY, nil)
+	s.calcScripts[name] = script
 	return s
 }
 
 /**
-* DefineBeforeInsert: Defines a new before insert hook for the model.
+* defineBeforeInsert: (stores the JS code; name is used when code is empty) Defines a new before insert hook for the model.
 * @param name string
 * @return *Model
 **/
-func (s *Model) DefineBeforeInsert(name string) *Model {
+func (s *Model) defineBeforeInsert(name string) *Model {
 	idx := slices.IndexFunc(s.BeforeInserts, func(r string) bool { return r == name })
 	if idx != -1 {
 		s.BeforeInserts[idx] = name
@@ -396,85 +402,85 @@ func (s *Model) DefineBeforeInsert(name string) *Model {
 }
 
 /**
-* DefineBeforeUpdate: Defines a new before update hook for the model using a bytecode definition.
+* defineBeforeUpdate: (stores the JS code; name is used when code is empty) Defines a new before update hook for the model using a bytecode definition.
 * @param module string
 * @return *Model
 **/
-func (s *Model) DefineBeforeUpdate(name, code string) *Model {
-	idx := slices.IndexFunc(s.BeforeUpdates, func(r string) bool { return r == name })
-	if idx != -1 {
-		s.BeforeUpdates[idx] = name
-	} else {
-		s.BeforeUpdates = append(s.BeforeUpdates, name)
+func (s *Model) defineBeforeUpdate(name, code string) *Model {
+	if code == "" {
+		code = name
+	}
+	if !slices.Contains(s.BeforeUpdates, code) {
+		s.BeforeUpdates = append(s.BeforeUpdates, code)
 	}
 	return s
 }
 
 /**
-* DefineBeforeDelete: Defines a new before delete hook for the model using a bytecode definition.
+* defineBeforeDelete: (stores the JS code; name is used when code is empty) Defines a new before delete hook for the model using a bytecode definition.
 * @param module string
 * @return *Model
 **/
-func (s *Model) DefineBeforeDelete(name, code string) *Model {
-	idx := slices.IndexFunc(s.BeforeDeletes, func(r string) bool { return r == name })
-	if idx != -1 {
-		s.BeforeDeletes[idx] = name
-	} else {
-		s.BeforeDeletes = append(s.BeforeDeletes, name)
+func (s *Model) defineBeforeDelete(name, code string) *Model {
+	if code == "" {
+		code = name
+	}
+	if !slices.Contains(s.BeforeDeletes, code) {
+		s.BeforeDeletes = append(s.BeforeDeletes, code)
 	}
 	return s
 }
 
 /**
-* DefineAfterInsert: Defines a new after insert hook for the model using a bytecode definition.
+* defineAfterInsert: (stores the JS code; name is used when code is empty) Defines a new after insert hook for the model using a bytecode definition.
 * @param module string
 * @return *Model
 **/
-func (s *Model) DefineAfterInsert(name, code string) *Model {
-	idx := slices.IndexFunc(s.AfterInserts, func(r string) bool { return r == name })
-	if idx != -1 {
-		s.AfterInserts[idx] = name
-	} else {
-		s.AfterInserts = append(s.AfterInserts, name)
+func (s *Model) defineAfterInsert(name, code string) *Model {
+	if code == "" {
+		code = name
+	}
+	if !slices.Contains(s.AfterInserts, code) {
+		s.AfterInserts = append(s.AfterInserts, code)
 	}
 	return s
 }
 
 /**
-* DefineAfterUpdate: Defines a new after update hook for the model using a bytecode definition.
+* defineAfterUpdate: (stores the JS code; name is used when code is empty) Defines a new after update hook for the model using a bytecode definition.
 * @param module string
 * @return *Model
 **/
-func (s *Model) DefineAfterUpdate(name, code string) *Model {
-	idx := slices.IndexFunc(s.AfterUpdates, func(r string) bool { return r == name })
-	if idx != -1 {
-		s.AfterUpdates[idx] = name
-	} else {
-		s.AfterUpdates = append(s.AfterUpdates, name)
+func (s *Model) defineAfterUpdate(name, code string) *Model {
+	if code == "" {
+		code = name
+	}
+	if !slices.Contains(s.AfterUpdates, code) {
+		s.AfterUpdates = append(s.AfterUpdates, code)
 	}
 	return s
 }
 
 /**
-* DefineAfterDelete: Defines a new after delete hook for the model using a bytecode definition.
+* defineAfterDelete: (stores the JS code; name is used when code is empty) Defines a new after delete hook for the model using a bytecode definition.
 * @param module string
 * @return *Model
 **/
-func (s *Model) DefineAfterDelete(name, code string) *Model {
-	idx := slices.IndexFunc(s.AfterDeletes, func(r string) bool { return r == name })
-	if idx != -1 {
-		s.AfterDeletes[idx] = name
-	} else {
-		s.AfterDeletes = append(s.AfterDeletes, name)
+func (s *Model) defineAfterDelete(name, code string) *Model {
+	if code == "" {
+		code = name
+	}
+	if !slices.Contains(s.AfterDeletes, code) {
+		s.AfterDeletes = append(s.AfterDeletes, code)
 	}
 	return s
 }
 
 /**
-* DefineModel: Defines the standard columns for the model.
+* defineModel: Defines the standard columns for the model.
 * @return *Model
 **/
-func (s *Model) DefineModel() *Model {
+func (s *Model) defineModel() *Model {
 	s.DefineColumn(CREATED_AT, et.DATETIME, nil)
 	s.DefineColumn(UPDATED_AT, et.DATETIME, nil)
 	s.DefineIndex(STATUS, et.TEXT, ACTIVE)
@@ -485,22 +491,22 @@ func (s *Model) DefineModel() *Model {
 }
 
 /**
-* DefineModel: Defines a new model for the database.
+* defineModel: Defines a new model for the database.
 * @param schema string, name string, version int
 * @return *Model, error
 **/
-func (s *DB) DefineModel(schema, name string, version int, userId string) (*Model, error) {
+func (s *DB) defineModel(schema, name string, version int, userId string) (*Model, error) {
 	result := s.NewModel(schema, name, version, userId)
 	result.DefineModel()
 	return result, nil
 }
 
 /**
-* DefineTenantModel: Defines a new tenant model for the database.
+* defineTenantModel: Defines a new tenant model for the database.
 * @param schema string, name string, version int
 * @return *Model, error
 **/
-func (s *DB) DefineTenantModel(schema, name string, version int, userId string) (*Model, error) {
+func (s *DB) defineTenantModel(schema, name string, version int, userId string) (*Model, error) {
 	result := s.NewModel(schema, name, version, userId)
 	result.DefineModel()
 	result.DefineIndex(TENANT_ID, et.KEY, "")
@@ -509,11 +515,11 @@ func (s *DB) DefineTenantModel(schema, name string, version int, userId string) 
 }
 
 /**
-* DefineProjectModel: Defines a new project model for the database.
+* defineProjectModel: Defines a new project model for the database.
 * @param schema string, name string, version int
 * @return *Model, error
 **/
-func (s *DB) DefineProjectModel(schema, name string, version int, userId string) (*Model, error) {
+func (s *DB) defineProjectModel(schema, name string, version int, userId string) (*Model, error) {
 	result := s.NewModel(schema, name, version, userId)
 	result.DefineModel()
 	result.DefineIndex(PROJECT_ID, et.KEY, "")

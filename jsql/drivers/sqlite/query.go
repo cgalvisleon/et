@@ -384,10 +384,12 @@ func sqliteSelectExpr(query *jsql.Query, field string) (string, bool) {
 		}
 		query.Masters[fld.Name] = &jsql.QueryDetail{
 			To:     master.To,
+			Bridge: master.Bridge,
+			ToKeys: master.ToKeys,
 			Keys:   master.Keys,
-			Select: []string{},
+			Select: master.Select,
 			Page:   fld.Page,
-			Rows:   query.MaxRows,
+			Rows:   masterRows(master, query.MaxRows),
 		}
 	} else if fld.TypeColumn == jsql.ROLLUP {
 		if fld.From == nil {
@@ -629,4 +631,16 @@ func (s *Sqlite) Query(query *jsql.Query) (string, error) {
 
 	sb.WriteString(";")
 	return sb.String(), nil
+}
+
+/**
+* masterRows: Returns how many records a master shows: its Rows, or limit when it is not set.
+* @param master *jsql.Master, limit int
+* @return int
+**/
+func masterRows(master *jsql.Master, limit int) int {
+	if master.Rows > 0 {
+		return master.Rows
+	}
+	return limit
 }

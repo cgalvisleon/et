@@ -66,10 +66,10 @@ func pgConection(host string) *PgConection {
 }
 
 /**
-* GetParams: Returns the connection parameters as a JSON object.
+* getParams: Returns the connection parameters as a JSON object.
 * @return et.Json
 **/
-func (s *PgConection) GetParams() et.Json {
+func (s *PgConection) getParams() et.Json {
 	return et.Json{
 		"driver":       DriverPostgres,
 		"host":         s.Host,
@@ -84,18 +84,18 @@ func (s *PgConection) GetParams() et.Json {
 }
 
 /**
-* SetDatabase: Sets the database name in the connection parameters.
+* setDatabase: Sets the database name in the connection parameters.
 * @param name string
 **/
-func (s *PgConection) SetDatabase(name string) {
+func (s *PgConection) setDatabase(name string) {
 	s.Database = name
 }
 
 /**
-* GetDatabase: Returns the database name from the connection parameters.
+* getDatabase: Returns the database name from the connection parameters.
 * @return string
 **/
-func (s *PgConection) GetDatabase() string {
+func (s *PgConection) getDatabase() string {
 	return s.Database
 }
 
@@ -132,10 +132,10 @@ func sqliteConection(path string) *SqliteConection {
 }
 
 /**
-* GetParams: Returns the connection parameters as a JSON object.
+* getParams: Returns the connection parameters as a JSON object.
 * @return et.Json
 **/
-func (s *SqliteConection) GetParams() et.Json {
+func (s *SqliteConection) getParams() et.Json {
 	return et.Json{
 		"driver":         DriverSqlite,
 		"name":           s.Name,
@@ -149,18 +149,18 @@ func (s *SqliteConection) GetParams() et.Json {
 }
 
 /**
-* SetDatabase: Sets the database name in the connection parameters
+* setDatabase: Sets the database name in the connection parameters
 * @param name string
 **/
-func (s *SqliteConection) SetDatabase(name string) {
+func (s *SqliteConection) setDatabase(name string) {
 	s.Name = name
 }
 
 /**
-* GetDatabase: Returns the database name from the connection parameters.
+* getDatabase: Returns the database name from the connection parameters.
 * @return string
 **/
-func (s *SqliteConection) GetDatabase() string {
+func (s *SqliteConection) getDatabase() string {
 	return s.Name
 }
 
@@ -193,10 +193,10 @@ func oracleConection(host string) *OracleConection {
 }
 
 /**
-* GetParams: Returns the connection parameters as a JSON object.
+* getParams: Returns the connection parameters as a JSON object.
 * @return et.Json
 **/
-func (s *OracleConection) GetParams() et.Json {
+func (s *OracleConection) getParams() et.Json {
 	return et.Json{
 		"driver":       DriverOracle,
 		"host":         s.Host,
@@ -210,17 +210,17 @@ func (s *OracleConection) GetParams() et.Json {
 }
 
 /**
-* SetDatabase: Sets the database name in the connection parameters
+* setDatabase: Sets the database name in the connection parameters
 * @param name string
 **/
-func (s *OracleConection) SetDatabase(name string) {
+func (s *OracleConection) setDatabase(name string) {
 	s.ServiceName = name
 }
 
 /**
-* GetDatabase: Returns the database name from the connection parameters.
+* getDatabase: Returns the database name from the connection parameters.
 * @return string
 **/
-func (s *OracleConection) GetDatabase() string {
+func (s *OracleConection) getDatabase() string {
 	return s.ServiceName
 }

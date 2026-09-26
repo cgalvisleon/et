@@ -6,13 +6,13 @@ import (
 	"github.com/cgalvisleon/et/et"
 )
 
-func DetailKeys(key, foreignKey string) map[string]string {
+func detailKeys(key, foreignKey string) map[string]string {
 	return map[string]string{
 		key: foreignKey,
 	}
 }
 
-func RollupKeys(key, foreignKey string) map[string]string {
+func rollupKeys(key, foreignKey string) map[string]string {
 	return map[string]string{
 		foreignKey: key,
 	}
@@ -31,10 +31,10 @@ type Detail struct {
 }
 
 /**
-* Ref: Returns the reference of the detail.
+* ref: Returns the reference of the detail.
 * @return et.Json
 **/
-func (s *Detail) Ref() et.Json {
+func (s *Detail) ref() et.Json {
 	return et.Json{
 		"to": s.To,
 	}
@@ -62,11 +62,11 @@ func (s *Detail) init() error {
 }
 
 /**
-* GetQuery: Returns the query for the detail.
+* getQuery: Returns the query for the detail.
 * @param item et.Json
 * @return *Query
 **/
-func (s *Detail) GetQuery(item et.Json, page, rows int) *Query {
+func (s *Detail) getQuery(item et.Json, page, rows int) *Query {
 	q := NewQuery(s.To.Model, "A")
 	for k, fk := range s.Keys {
 		v, exists := item[k]
@@ -112,10 +112,10 @@ const (
 )
 
 /**
-* IsAggregate: Returns true if the operation is a SQL aggregate (count, sum, avg, min, max).
+* isAggregate: Returns true if the operation is a SQL aggregate (count, sum, avg, min, max).
 * @return bool
 **/
-func (s RollupOperation) IsAggregate() bool {
+func (s RollupOperation) isAggregate() bool {
 	switch s {
 	case RollupCount, RollupSum, RollupAvg, RollupMin, RollupMax:
 		return true
@@ -124,10 +124,10 @@ func (s RollupOperation) IsAggregate() bool {
 }
 
 /**
-* IsValid: Returns true if the operation is one of the defined rollup operations.
+* isValid: Returns true if the operation is one of the defined rollup operations.
 * @return bool
 **/
-func (s RollupOperation) IsValid() bool {
+func (s RollupOperation) isValid() bool {
 	return s.IsAggregate() || s == RollupRow || s == RollupObject
 }
 

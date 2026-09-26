@@ -58,6 +58,7 @@ type Model struct {
 	AuditLog      *et.SafeData            `json:"audit_log"`
 	isChanged     bool                    `json:"-"`
 	calcs         map[string]CalcFunction `json:"-"`
+	calcScripts   map[string]string       `json:"-"`
 	beforeInserts []TriggerFunction       `json:"-"`
 	beforeUpdates []TriggerFunction       `json:"-"`
 	beforeDeletes []TriggerFunction       `json:"-"`
@@ -80,10 +81,10 @@ func (s *Model) getIdx() string {
 }
 
 /**
-* AddAuditLog: Adds an audit log to the model.
+* addAuditLog: Adds an audit log to the model.
 * @param userId string, action string
 **/
-func (s *Model) AddAuditLog(userId string, action string) {
+func (s *Model) addAuditLog(userId string, action string) {
 	if s.AuditLog == nil {
 		s.AuditLog = &et.SafeData{}
 	}
@@ -105,10 +106,10 @@ func (s *Model) AddAuditLog(userId string, action string) {
 }
 
 /**
-* ToJson: Returns the model metadata as an et.Json map.
+* toJson: Returns the model metadata as an et.Json map.
 * @return et.Json
 **/
-func (s *Model) ToJson() et.Json {
+func (s *Model) toJson() et.Json {
 	columns := make([]et.Json, 0)
 	for _, column := range s.Columns {
 		columns = append(columns, column.ToJson())
@@ -156,20 +157,20 @@ func (s *Model) loadColumns(columns []et.Json) {
 }
 
 /**
-* Debug: Enables debug logging and returns the model for chaining.
+* debug: Enables debug logging and returns the model for chaining.
 * @return *Model
 **/
-func (s *Model) Debug() *Model {
+func (s *Model) debug() *Model {
 	s.IsDebug = true
 	return s
 }
 
 /**
-* GetCalcFunc: Returns the CalcFunction for the given name, if it exists.
+* getCalcFunc: Returns the CalcFunction for the given name, if it exists.
 * @param name string
 * @return CalcFunction, bool
 **/
-func (s *Model) GetCalcFunc(name string) (CalcFunction, bool) {
+func (s *Model) getCalcFunc(name string) (CalcFunction, bool) {
 	result, ok := s.calcs[name]
 	return result, ok
 }
@@ -206,10 +207,10 @@ func (s *Model) wrapper(instance *jrex.Instance) {
 }
 
 /**
-* Init: Runs DDL for the model the first time it is called; subsequent calls are no-ops.
+* init: Runs DDL for the model the first time it is called; subsequent calls are no-ops.
 * @return error
 **/
-func (s *Model) Init() error {
+func (s *Model) init() error {
 	if s.isInit {
 		return nil
 	}
@@ -219,9 +220,13 @@ func (s *Model) Init() error {
 		return err
 	}
 
+	// Marked before the relations: a master is registered on both models, so initializing
+	// it calls back into this model, which must not start over.
+	s.isInit = true
 	for _, detail := range s.Details {
 		err = detail.init()
 		if err != nil {
+			s.isInit = false
 			return err
 		}
 	}
@@ -229,53 +234,53 @@ func (s *Model) Init() error {
 	for _, master := range s.Masters {
 		err = master.init()
 		if err != nil {
+			s.isInit = false
 			return err
 		}
 	}
 
-	s.isInit = true
 	return nil
 }
 
 /**
-* Stricted: Enables strict mode — unknown field names are not treated as ATTRIBs.
+* stricted: Enables strict mode — unknown field names are not treated as ATTRIBs.
 **/
-func (s *Model) Stricted() {
+func (s *Model) stricted() {
 	s.IsStrict = true
 }
 
 /**
-* Db: Returns the underlying *sql.DB connection pool.
+* getDb: Returns the underlying *sql.DB connection pool.
 * @return *sql.DB
 **/
-func (s *Model) Db() *DB {
+func (s *Model) getDb() *DB {
 	return s.db
 }
 
 /**
-* SetDb: Sets the primary DB connection for the model.
+* setDb: Sets the primary DB connection for the model.
 * @param db *DB
 **/
-func (s *Model) SetDb(db *DB) {
+func (s *Model) setDb(db *DB) {
 	s.isInit = false
 	s.db = db
 }
 
 /**
-* SqlDb: Returns the underlying *sql.DB connection pool.
+* sqlDB: Returns the underlying *sql.DB connection pool.
 * @return *sql.DB
 **/
-func (s *Model) SqlDB() *sql.DB {
+func (s *Model) sqlDB() *sql.DB {
 	return s.db.db
 }
 
 /**
-* GetModel: Returns the model for the given schema and name.
+* getModel: Returns the model for the given schema and name.
 * @param schema string
 * @param name string
 * @return *Model, error
 **/
-func (s *Model) GetModel(schema, name string) (*Model, error) {
+func (s *Model) getModel(schema, name string) (*Model, error) {
 	return s.db.GetModel(schema, name)
 }
 
@@ -304,12 +309,12 @@ func (s *Model) idxColumn(name string) int {
 }
 
 /**
-* FindColumn: Returns the Column for the given name. For non-strict models with a SourceField,
+* getColumn: Returns the Column for the given name. For non-strict models with a SourceField,
 * unknown names are returned as synthetic ATTRIB columns.
 * @param name string
 * @return *Column
 **/
-func (s *Model) GetColumn(name string) (*Column, bool) {
+func (s *Model) getColumn(name string) (*Column, bool) {
 	idx := s.idxColumn(name)
 	if idx != -1 {
 		return s.Columns[idx], true
@@ -327,11 +332,11 @@ func (s *Model) GetColumn(name string) (*Column, bool) {
 }
 
 /**
-* GetField: Returns the Field for the given name.
+* getField: Returns the Field for the given name.
 * @param name string
 * @return *Field, bool
 **/
-func (s *Model) GetField(name string) (*Field, bool) {
+func (s *Model) getField(name string) (*Field, bool) {
 	col, ok := s.GetColumn(name)
 	if !ok {
 		return nil, false
@@ -345,111 +350,111 @@ func (s *Model) GetField(name string) (*Field, bool) {
 }
 
 /**
-* BeforeInsert: Registers a trigger function to run before each INSERT.
+* beforeInsert: Registers a trigger function to run before each INSERT.
 * @param fn TriggerFunction
 * @return *Model
 **/
-func (s *Model) BeforeInsert(fn TriggerFunction) *Model {
+func (s *Model) beforeInsert(fn TriggerFunction) *Model {
 	s.beforeInserts = append(s.beforeInserts, fn)
 	return s
 }
 
 /**
-* BeforeUpdate: Registers a trigger function to run before each UPDATE.
+* beforeUpdate: Registers a trigger function to run before each UPDATE.
 * @param fn TriggerFunction
 * @return *Model
 **/
-func (s *Model) BeforeUpdate(fn TriggerFunction) *Model {
+func (s *Model) beforeUpdate(fn TriggerFunction) *Model {
 	s.beforeUpdates = append(s.beforeUpdates, fn)
 	return s
 }
 
 /**
-* BeforeDelete: Registers a trigger function to run before each DELETE.
+* beforeDelete: Registers a trigger function to run before each DELETE.
 * @param fn TriggerFunction
 * @return *Model
 **/
-func (s *Model) BeforeDelete(fn TriggerFunction) *Model {
+func (s *Model) beforeDelete(fn TriggerFunction) *Model {
 	s.beforeDeletes = append(s.beforeDeletes, fn)
 	return s
 }
 
 /**
-* BeforeInsertOrUpdate: Registers a trigger function to run before INSERT and UPDATE.
+* beforeInsertOrUpdate: Registers a trigger function to run before INSERT and UPDATE.
 * @param fn TriggerFunction
 * @return *Model
 **/
-func (s *Model) BeforeInsertOrUpdate(fn TriggerFunction) *Model {
+func (s *Model) beforeInsertOrUpdate(fn TriggerFunction) *Model {
 	s.beforeInserts = append(s.beforeInserts, fn)
 	s.beforeUpdates = append(s.beforeUpdates, fn)
 	return s
 }
 
 /**
-* AfterInsert: Registers a trigger function to run after each INSERT.
+* afterInsert: Registers a trigger function to run after each INSERT.
 * @param fn TriggerFunction
 * @return *Model
 **/
-func (s *Model) AfterInsert(fn TriggerFunction) *Model {
+func (s *Model) afterInsert(fn TriggerFunction) *Model {
 	s.afterInserts = append(s.afterInserts, fn)
 	return s
 }
 
 /**
-* AfterUpdate: Registers a trigger function to run after each UPDATE.
+* afterUpdate: Registers a trigger function to run after each UPDATE.
 * @param fn TriggerFunction
 * @return *Model
 **/
-func (s *Model) AfterUpdate(fn TriggerFunction) *Model {
+func (s *Model) afterUpdate(fn TriggerFunction) *Model {
 	s.afterUpdates = append(s.afterUpdates, fn)
 	return s
 }
 
 /**
-* AfterDelete: Registers a trigger function to run after each DELETE.
+* afterDelete: Registers a trigger function to run after each DELETE.
 * @param fn TriggerFunction
 * @return *Model
 **/
-func (s *Model) AfterDelete(fn TriggerFunction) *Model {
+func (s *Model) afterDelete(fn TriggerFunction) *Model {
 	s.afterDeletes = append(s.afterDeletes, fn)
 	return s
 }
 
 /**
-* AfterInsertOrUpdate: Registers a trigger function to run after INSERT and UPDATE.
+* afterInsertOrUpdate: Registers a trigger function to run after INSERT and UPDATE.
 * @param fn TriggerFunction
 * @return *Model
 **/
-func (s *Model) AfterInsertOrUpdate(fn TriggerFunction) *Model {
+func (s *Model) afterInsertOrUpdate(fn TriggerFunction) *Model {
 	s.afterInserts = append(s.afterInserts, fn)
 	s.afterUpdates = append(s.afterUpdates, fn)
 	return s
 }
 
 /**
-* GetFrom: Returns the From for the model.
+* getFrom: Returns the From for the model.
 * @return *From
 **/
-func (s *Model) GetFrom() *From {
+func (s *Model) getFrom() *From {
 	return getFrom(s, "")
 }
 
 /**
-* From: Creates a new Query for this model with the given alias.
+* as: Creates a new Query for this model with the given alias.
 * @param as ...string
 * @return *Query
 **/
-func (s *Model) As(as ...string) *Query {
+func (s *Model) as(as ...string) *Query {
 	result := NewQuery(s, as...)
 	return result
 }
 
 /**
-* Detail: Returns the detail for the given name.
+* detail: Returns the detail for the given name.
 * @param name string
 * @return *Model, bool
 **/
-func (s *Model) Detail(name string) (*Model, bool) {
+func (s *Model) detail(name string) (*Model, bool) {
 	detail, ok := s.Details[name]
 	if !ok {
 		return nil, false
@@ -467,11 +472,11 @@ func (s *Model) Detail(name string) (*Model, bool) {
 }
 
 /**
-* Master: Returns the master for the given name.
+* master: Returns the master for the given name.
 * @param name string
 * @return *Query, bool
 **/
-func (s *Model) Master(name string) (*Query, bool) {
+func (s *Model) master(name string) (*Query, bool) {
 	master, ok := s.Masters[name]
 	if !ok {
 		return nil, false
@@ -498,11 +503,11 @@ func (s *Model) Master(name string) (*Query, bool) {
 }
 
 /**
-* Bridge: Returns the bridge for the given name.
+* bridge: Returns the bridge for the given name.
 * @param name string
 * @return *Model, bool
 **/
-func (s *Model) Bridge(name string) (*Model, bool) {
+func (s *Model) bridge(name string) (*Model, bool) {
 	master, ok := s.Masters[name]
 	if !ok {
 		return nil, false
@@ -512,128 +517,128 @@ func (s *Model) Bridge(name string) (*Model, bool) {
 }
 
 /**
-* InnerJoin: Creates a new Query for this model with the given model as the INNER JOIN clause.
+* join: Creates a new Query for this model with the given model as the INNER JOIN clause.
 * @param model *Model, as string, on *et.Condition
 * @return *Query
 **/
-func (s *Model) Join(to *Model, as string, on []*et.Condition) *Query {
+func (s *Model) join(to *Model, as string, on []*et.Condition) *Query {
 	result := s.As("A")
 	result.Join(to, as, on)
 	return result
 }
 
 /**
-* Select: Creates a new Query for this model with the given fields as the SELECT clause.
+* selects: Creates a new Query for this model with the given fields as the SELECT clause.
 * @param fields ...string
 * @return *Query
 **/
-func (s *Model) Select(fields ...string) *Query {
+func (s *Model) selects(fields ...string) *Query {
 	result := s.As("")
 	result.Select(fields...)
 	return result
 }
 
 /**
-* Calc: Creates a new Query for this model with the given fields as the CALC clause.
+* calc: Creates a new Query for this model with the given fields as the CALC clause.
 * @param fields ...string
 * @return *Query
 **/
-func (s *Model) Calc(fields ...string) *Query {
+func (s *Model) calc(fields ...string) *Query {
 	result := s.As("")
 	result.Calc(fields...)
 	return result
 }
 
 /**
-* Where: Creates a new Query for this model with the given condition as the first WHERE clause.
+* where: Creates a new Query for this model with the given condition as the first WHERE clause.
 * @param cond *et.Condition
 * @return *Query
 **/
-func (s *Model) Where(cond *et.Condition) *Query {
+func (s *Model) where(cond *et.Condition) *Query {
 	result := s.As("")
 	result.Where(cond)
 	return result
 }
 
 /**
-* Count: Returns the count of records in the model.
+* count: Returns the count of records in the model.
 * @return (int, error)
 **/
-func (s *Model) Count() (int, error) {
+func (s *Model) count() (int, error) {
 	return s.
 		As().
 		Count()
 }
 
 /**
-* First: Returns the first record in the model.
+* first: Returns the first record in the model.
 * @return (et.Item, error)
 **/
-func (s *Model) First(n int) (et.Items, error) {
+func (s *Model) first(n int) (et.Items, error) {
 	return s.
 		As().
 		Limit(1, n)
 }
 
 /**
-* Insert: Creates a Command of type INSERT pre-loaded with the given data row.
+* insert: Creates a Command of type INSERT pre-loaded with the given data row.
 * @param data et.Json
 * @return *Command
 **/
-func (s *Model) Insert(data et.Json) *Command {
+func (s *Model) insert(data et.Json) *Command {
 	result := newCommand(s, INSERT)
 	result.Data = append(result.Data, data)
 	return result
 }
 
 /**
-* Bulk: Creates a Command of type BULK pre-loaded with multiple data rows.
+* bulk: Creates a Command of type BULK pre-loaded with multiple data rows.
 * @param data []et.Json
 * @return *Command
 **/
-func (s *Model) Bulk(data []et.Json) *Command {
+func (s *Model) bulk(data []et.Json) *Command {
 	result := newCommand(s, BULK)
 	result.Data = data
 	return result
 }
 
 /**
-* Update: Creates a Command of type UPDATE pre-loaded with the given data row.
+* update: Creates a Command of type UPDATE pre-loaded with the given data row.
 * @param data et.Json
 * @return *Command
 **/
-func (s *Model) Update(data et.Json) *Command {
+func (s *Model) update(data et.Json) *Command {
 	result := newCommand(s, UPDATE)
 	result.Data = append(result.Data, data)
 	return result
 }
 
 /**
-* Delete: Creates a Command of type DELETE (conditions must be added with Where/And).
+* delete: Creates a Command of type DELETE (conditions must be added with Where/And).
 * @return *Command
 **/
-func (s *Model) Delete() *Command {
+func (s *Model) delete() *Command {
 	result := newCommand(s, DELETE)
 	return result
 }
 
 /**
-* Upsert: Creates a Command of type UPSERT pre-loaded with data and primary-key conditions.
+* upsert: Creates a Command of type UPSERT pre-loaded with data and primary-key conditions.
 * @param data et.Json
 * @return *Command
 **/
-func (s *Model) Upsert(data et.Json) *Command {
+func (s *Model) upsert(data et.Json) *Command {
 	result := newCommand(s, UPSERT)
 	result.Data = append(result.Data, data)
 	return result
 }
 
 /**
-* Query: Creates a new Query for this model with the given condition as the first WHERE clause.
+* queryTx: Creates a new Query for this model with the given condition as the first WHERE clause.
 * @param query et.Json
 * @return *Query
 **/
-func (s *Model) QueryTx(tx *Tx, query et.Json) *Query {
+func (s *Model) queryTx(tx *Tx, query et.Json) *Query {
 	result := s.As("")
 	_, err := result.loadQuery(query)
 	if err != nil {
@@ -643,10 +648,10 @@ func (s *Model) QueryTx(tx *Tx, query et.Json) *Query {
 }
 
 /**
-* Query: Creates a new Query for this model with the given condition as the first WHERE clause.
+* query: Creates a new Query for this model with the given condition as the first WHERE clause.
 * @param query et.Json
 * @return *Query
 **/
-func (s *Model) Query(query et.Json) *Query {
+func (s *Model) query(query et.Json) *Query {
 	return s.QueryTx(nil, query)
 }

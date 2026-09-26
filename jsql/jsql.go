@@ -20,11 +20,11 @@ type ConnectParams struct {
 }
 
 /**
-* ConnectTo: Returns an existing DB by name, or creates and initialises a new one from params.
+* connectTo: Returns an existing DB by name, or creates and initialises a new one from params.
 * @param tenantId, host, driver, name string, showLog bool
 * @return *DB, error
 **/
-func ConnectTo(params ConnectParams) (*DB, error) {
+func connectTo(params ConnectParams) (*DB, error) {
 	result, err := NewDB(params)
 	if err != nil {
 		return nil, err
@@ -39,11 +39,11 @@ func ConnectTo(params ConnectParams) (*DB, error) {
 }
 
 /**
-* LoadTo: Returns an existing DB by name.
+* loadTo: Returns an existing DB by name.
 * @param name, hostName string
 * @return *DB, error
 **/
-func LoadTo(dbName string, hostName ...string) (*DB, error) {
+func loadTo(dbName string, hostName ...string) (*DB, error) {
 	driver := envar.GetStr("DB_DRIVER", DriverPostgres)
 	host := envar.GetStr("DB_HOST", "localhost")
 	if len(hostName) > 0 {
@@ -74,10 +74,10 @@ func LoadTo(dbName string, hostName ...string) (*DB, error) {
 }
 
 /**
-* Load: Connects to the default database reading configuration from environment variables.
+* load: Connects to the default database reading configuration from environment variables.
 * @return *DB, error
 **/
-func Load() (*DB, error) {
+func load() (*DB, error) {
 	name := envar.GetStr("DB_NAME", "josephine")
 	return LoadTo(name)
 }

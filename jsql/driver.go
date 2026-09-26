@@ -32,10 +32,10 @@ func init() {
 }
 
 /**
-* Register: Registers a Driver implementation under the given name so jsql can resolve it by config.
+* register: Registers a Driver implementation under the given name so jsql can resolve it by config.
 * @param name string
 * @param driver Driver
 **/
-func Register(name string, driver Driver) {
+func register(name string, driver Driver) {
 	drivers[name] = driver
 }

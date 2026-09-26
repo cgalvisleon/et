@@ -3,163 +3,163 @@ package jsql
 import "github.com/cgalvisleon/et/et"
 
 /**
-* Where: Returns a WHERE condition (field = value).
+* where: Returns a WHERE condition (field = value).
 * @param field, value interface{}
 * @return *et.Condition
 **/
-func Where(field, value interface{}) *et.Condition {
+func where(field, value interface{}) *et.Condition {
 	return et.Where(field, value)
 }
 
 /**
-* And: Returns a AND condition (field = value).
+* and: Returns a AND condition (field = value).
 * @param field, operator et.Operator, value interface{}
 * @return *et.Condition
 **/
-func And(field interface{}, operator et.Operator, value interface{}) *et.Condition {
+func and(field interface{}, operator et.Operator, value interface{}) *et.Condition {
 	return et.And(field, operator, value)
 }
 
 /**
-* Or: Returns a OR condition (field = value).
+* or: Returns a OR condition (field = value).
 * @param field, operator et.Operator, value interface{}
 * @return *et.Condition
 **/
-func Or(field interface{}, operator et.Operator, value interface{}) *et.Condition {
+func or(field interface{}, operator et.Operator, value interface{}) *et.Condition {
 	return et.Or(field, operator, value)
 }
 
 /**
-* Eq: Returns an equality condition (field = value).
+* eq: Returns an equality condition (field = value).
 * @param field string, value interface{}
 * @return *et.Condition
 **/
-func Eq(field string, value interface{}) *et.Condition {
+func eq(field string, value interface{}) *et.Condition {
 	return et.Eq(field, value)
 }
 
 /**
-* Neg: Returns a not-equal condition (field <> value).
+* neg: Returns a not-equal condition (field <> value).
 * @param field string, value interface{}
 * @return *et.Condition
 **/
-func Neg(field string, value interface{}) *et.Condition {
+func neg(field string, value interface{}) *et.Condition {
 	return et.Neg(field, value)
 }
 
 /**
-* Less: Returns a less-than condition (field < value).
+* less: Returns a less-than condition (field < value).
 * @param field string, value interface{}
 * @return *et.Condition
 **/
-func Less(field string, value interface{}) *et.Condition {
+func less(field string, value interface{}) *et.Condition {
 	return et.Less(field, value)
 }
 
 /**
-* LessEq: Returns a less-than-or-equal condition (field <= value).
+* lessEq: Returns a less-than-or-equal condition (field <= value).
 * @param field string, value interface{}
 * @return *et.Condition
 **/
-func LessEq(field string, value interface{}) *et.Condition {
+func lessEq(field string, value interface{}) *et.Condition {
 	return et.LessEq(field, value)
 }
 
 /**
-* More: Returns a greater-than condition (field > value).
+* more: Returns a greater-than condition (field > value).
 * @param field string, value interface{}
 * @return *et.Condition
 **/
-func More(field string, value interface{}) *et.Condition {
+func more(field string, value interface{}) *et.Condition {
 	return et.More(field, value)
 }
 
 /**
-* MoreEq: Returns a greater-than-or-equal condition (field >= value).
+* moreEq: Returns a greater-than-or-equal condition (field >= value).
 * @param field string, value interface{}
 * @return *et.Condition
 **/
-func MoreEq(field string, value interface{}) *et.Condition {
+func moreEq(field string, value interface{}) *et.Condition {
 	return et.MoreEq(field, value)
 }
 
 /**
-* Like: Returns a case-insensitive pattern match condition (field ILIKE value).
+* like: Returns a case-insensitive pattern match condition (field ILIKE value).
 * @param field string, value interface{}
 * @return *et.Condition
 **/
-func Like(field string, value interface{}) *et.Condition {
+func like(field string, value interface{}) *et.Condition {
 	return et.Like(field, value)
 }
 
 /**
-* In: Returns an inclusion condition (field IN (values...)).
+* in: Returns an inclusion condition (field IN (values...)).
 * @param field string, value []interface{}
 * @return *et.Condition
 **/
-func In(field string, value []interface{}) *et.Condition {
+func in(field string, value []interface{}) *et.Condition {
 	return et.In(field, value)
 }
 
 /**
-* NotIn: Returns an exclusion condition (field NOT IN (values...)).
+* notIn: Returns an exclusion condition (field NOT IN (values...)).
 * @param field string, value []interface{}
 * @return *et.Condition
 **/
-func NotIn(field string, value []interface{}) *et.Condition {
+func notIn(field string, value []interface{}) *et.Condition {
 	return et.NotIn(field, value)
 }
 
 /**
-* Is: Returns an IS condition (field IS value), typically used with NULL or booleans.
+* is: Returns an IS condition (field IS value), typically used with NULL or booleans.
 * @param field string, value interface{}
 * @return *et.Condition
 **/
-func Is(field string, value interface{}) *et.Condition {
+func is(field string, value interface{}) *et.Condition {
 	return et.Is(field, value)
 }
 
 /**
-* IsNot: Returns an IS NOT condition (field IS NOT value).
+* isNot: Returns an IS NOT condition (field IS NOT value).
 * @param field string, value interface{}
 * @return *et.Condition
 **/
-func IsNot(field string, value interface{}) *et.Condition {
+func isNot(field string, value interface{}) *et.Condition {
 	return et.IsNot(field, value)
 }
 
 /**
-* Null: Returns an IS NULL condition (field IS NULL).
+* null: Returns an IS NULL condition (field IS NULL).
 * @param field string
 * @return *et.Condition
 **/
-func Null(field string) *et.Condition {
+func null(field string) *et.Condition {
 	return et.Null(field)
 }
 
 /**
-* NotNull: Returns an IS NOT NULL condition (field IS NOT NULL).
+* notNull: Returns an IS NOT NULL condition (field IS NOT NULL).
 * @param field string
 * @return *et.Condition
 **/
-func NotNull(field string) *et.Condition {
+func notNull(field string) *et.Condition {
 	return et.NotNull(field)
 }
 
 /**
-* Between: Returns a range condition (field BETWEEN min AND max).
+* between: Returns a range condition (field BETWEEN min AND max).
 * @param field string, min any, max any
 * @return *et.Condition
 **/
-func Between(field string, min, max any) *et.Condition {
+func between(field string, min, max any) *et.Condition {
 	return et.Between(field, min, max)
 }
 
 /**
-* NotBetween: Returns a negated range condition (field NOT BETWEEN min AND max).
+* notBetween: Returns a negated range condition (field NOT BETWEEN min AND max).
 * @param field string, min any, max any
 * @return *et.Condition
 **/
-func NotBetween(field string, min, max any) *et.Condition {
+func notBetween(field string, min, max any) *et.Condition {
 	return et.NotBetween(field, min, max)
 }

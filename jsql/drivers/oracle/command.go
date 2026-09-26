@@ -83,41 +83,51 @@ func oraColsVals(model *jsql.Model, data et.Json, excludePKs bool) (cols, vals [
 }
 
 /**
-* oraRowResult: Builds the expression returned for each affected row, with the same shape as a SELECT
-* without fields: with a SourceField, one JSON "result" (SourceField without hidden keys merged with the
-* visible columns); without it, the visible columns. Uses command.Returns when set.
+* oraRowResult: Builds the expression returned for each affected row as one JSON "result", with the same
+* shape as a SELECT without fields: the SourceField (without hidden keys) merged with the visible columns,
+* or only the fields of command.Returns when set.
 * @param command *jsql.Command
 * @return string
 **/
 func oraRowResult(command *jsql.Command) string {
-	if len(command.Returns) > 0 {
-		return strings.Join(command.Returns, ", ")
-	}
-
 	model := command.From.Model
 	if model == nil {
-		return "*"
+		if len(command.Returns) == 0 {
+			return "*"
+		}
+		cols := make([]string, len(command.Returns))
+		for i, name := range command.Returns {
+			cols[i] = oraIdent(name)
+		}
+		return strings.Join(cols, ", ")
 	}
 
 	pairs := make([]string, 0, len(model.Columns))
-	cols := make([]string, 0, len(model.Columns))
+	if len(command.Returns) > 0 {
+		for _, name := range command.Returns {
+			col, ok := model.GetColumn(name)
+			if !ok {
+				continue
+			}
+			fld := &jsql.Field{Field: et.Field{Name: name, As: name}, TypeColumn: col.TypeColumn, TypeData: col.TypeData, From: command.From}
+			pairs = append(pairs, fmt.Sprintf("%s VALUE %s", oraQuoteKey(name), oraJsonValueExpr(fld)))
+		}
+		return fmt.Sprintf("%s AS %s", oraMergeObject("", pairs), oraIdent(jsql.RESULT))
+	}
+
 	for _, col := range model.Columns {
 		if col.TypeColumn != jsql.COLUMN || col.Name == model.SourceField || slices.Contains(model.Hiddens, col.Name) {
 			continue
 		}
 		fld := &jsql.Field{Field: et.Field{Name: col.Name, As: col.Name}, TypeColumn: jsql.COLUMN, TypeData: col.TypeData, From: command.From}
 		pairs = append(pairs, fmt.Sprintf("%s VALUE %s", oraQuoteKey(col.Name), oraJsonValueExpr(fld)))
-		cols = append(cols, fmt.Sprintf("%s AS %s", oraIdent(col.Name), oraIdent(col.Name)))
 	}
 
+	source := ""
 	if model.SourceField != "" {
-		source := oraSourceExpr(oraIdent(model.SourceField), model.Hiddens)
-		return fmt.Sprintf("%s AS %s", oraMergeObject(source, pairs), oraIdent(jsql.RESULT))
+		source = oraSourceExpr(oraIdent(model.SourceField), model.Hiddens)
 	}
-	if len(cols) == 0 {
-		return "*"
-	}
-	return strings.Join(cols, ", ")
+	return fmt.Sprintf("%s AS %s", oraMergeObject(source, pairs), oraIdent(jsql.RESULT))
 }
 
 /**

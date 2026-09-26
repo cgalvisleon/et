@@ -19,12 +19,12 @@ import (
 )
 
 /**
-* SQLParse: Replaces $N positional placeholders in sql with their quoted argument values.
+* sqlParse: Replaces $N positional placeholders in sql with their quoted argument values.
 * @param sql string
 * @param args ...any
 * @return string
 **/
-func SQLParse(sql string, args ...any) string {
+func sqlParse(sql string, args ...any) string {
 	for i := range args {
 		old := fmt.Sprintf(`$%d`, i+1)
 		new := fmt.Sprintf(`{$%d}`, i+1)
@@ -41,11 +41,11 @@ func SQLParse(sql string, args ...any) string {
 }
 
 /**
-* Quoted: Returns val formatted as a SQL literal (quoted string, bare number, NULL, etc.).
+* quoted: Returns val formatted as a SQL literal (quoted string, bare number, NULL, etc.).
 * @param val any
 * @return any
 **/
-func Quoted(val any) any {
+func quoted(val any) any {
 	format := `'%v'`
 	switch v := val.(type) {
 	case string:
@@ -92,24 +92,24 @@ func Quoted(val any) any {
 }
 
 /**
-* EscapeSQLString: Escapes single quotes in s by doubling them (standard SQL
+* escapeSQLString: Escapes single quotes in s by doubling them (standard SQL
 * string-literal escaping), so a value can be safely embedded between the
 * surrounding '...' produced by Quoted.
 * @param s string
 * @return string
 **/
-func EscapeSQLString(s string) string {
+func escapeSQLString(s string) string {
 	return strings.ReplaceAll(s, "'", "''")
 }
 
 /**
-* JsonString: Serializes val as compact JSON without HTML escaping, so characters
+* jsonString: Serializes val as compact JSON without HTML escaping, so characters
 * such as <, > and & are stored as-is instead of \u003c, \u003e and \u0026.
 * The result still needs EscapeSQLString before being embedded in a SQL literal.
 * @param val any
 * @return string, error
 **/
-func JsonString(val any) (string, error) {
+func jsonString(val any) (string, error) {
 	var buf bytes.Buffer
 	encoder := json.NewEncoder(&buf)
 	encoder.SetEscapeHTML(false)
@@ -120,11 +120,11 @@ func JsonString(val any) (string, error) {
 }
 
 /**
-* RowsToItems: Scans all rows from a *sql.Rows result set into an et.Items collection.
+* rowsToItems: Scans all rows from a *sql.Rows result set into an et.Items collection.
 * @param rows *sql.Rows
 * @return et.Items
 **/
-func RowsToItems(rows *sql.Rows) et.Items {
+func rowsToItems(rows *sql.Rows) et.Items {
 	defer rows.Close()
 
 	result := et.Items{Result: []et.Json{}}
@@ -156,11 +156,11 @@ func RowsToItems(rows *sql.Rows) et.Items {
 }
 
 /**
-* ArgWhitAs: Returns an array with the argument and its alias.
+* argWhitAs: Returns an array with the argument and its alias.
 * @param arg string
 * @return []string, bool
 **/
-func ArgWhitAs(arg string) ([]string, bool) {
+func argWhitAs(arg string) ([]string, bool) {
 	pattern := regexp.MustCompile(`^([A-Za-z0-9_.>-]+):([A-Za-z0-9_]+)$`) // field:as, or schema.field:as
 	ok := pattern.MatchString(arg)
 	if ok {
@@ -173,11 +173,11 @@ func ArgWhitAs(arg string) ([]string, bool) {
 }
 
 /**
-* ArgWhitSchema: Returns an array with the argument and its schema.
+* argWhitSchema: Returns an array with the argument and its schema.
 * @param arg string
 * @return []string, bool
 **/
-func ArgWhitSchema(arg string) ([]string, bool) {
+func argWhitSchema(arg string) ([]string, bool) {
 	pattern := regexp.MustCompile(`^([A-Za-z0-9_>-]+)\.([A-Za-z0-9_]+)$`) // schema.table
 	ok := pattern.MatchString(arg)
 	if ok {
@@ -193,7 +193,7 @@ func ArgWhitSchema(arg string) ([]string, bool) {
 * addAuditLog
 * @param userId string, action string
 **/
-func AddAuditLog(auditLog []et.Json, userId string, action string) []et.Json {
+func addAuditLog(auditLog []et.Json, userId string, action string) []et.Json {
 	if auditLog == nil {
 		auditLog = make([]et.Json, 0)
 	}

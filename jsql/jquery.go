@@ -36,20 +36,20 @@ var keywords = []string{
 }
 
 /**
-* Query: Executes a query.
+* queryJson: Executes a query.
 * @param sql et.Json
 * @return et.Items, error
 **/
-func (s *DB) Query(sql et.Json) (et.Items, error) {
+func (s *DB) queryJson(sql et.Json) (et.Items, error) {
 	return s.QueryTx(nil, sql)
 }
 
 /**
-* QueryTx: Executes a query with a transaction.
+* queryJsonTx: Executes a query with a transaction.
 * @param tx *Tx, sql ry.Json
 * @return et.Items, error
 **/
-func (s *DB) QueryTx(tx *Tx, sql et.Json) (et.Items, error) {
+func (s *DB) queryJsonTx(tx *Tx, sql et.Json) (et.Items, error) {
 	sqlStr := ""
 	for k := range sql {
 		if isKeyword(k) {

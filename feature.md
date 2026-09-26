@@ -67,8 +67,33 @@ type Driver interface {
 
 Esta interfaz recibe un Model para definir el sql de tipo DDL que crea las tablas y sus elementos, un Query para definir el sql de tipo consulta, y un Command para definir el sql de tipo comando (INSERT, UPDATE, DELETE).
 
-Las Columnas tienen la siguiete structura
+Las columnas tienen la siguiente estructura:
 
 ```go
-
+type Column struct {
+	Name       string      `json:"name"`
+	TypeColumn TypeColumn  `json:"type_column"`
+	TypeData   et.TypeData `json:"type_data"`
+	Default    any         `json:"default"`
+	model      *Model      `json:"-"`
+}
 ```
+
+TypeColumn puede tener estos valores:
+
+```go
+COLUMN   TypeColumn = "column"
+	ATTRIB   TypeColumn = "atrib"
+	DETAIL   TypeColumn = "detail"
+	MASTER   TypeColumn = "master"
+	ROLLUP   TypeColumn = "rollup"
+	CALCFUNC TypeColumn = "calc_func"
+	CALC     TypeColumn = "calc"
+	AGG      TypeColumn = "agg"
+```
+
+- Column: corresponde a las columnas que se crean en la tabla.
+- Atrib: corresponde a los atributos que no tienen una columna propia y se guardan dentro del campo SourceField.
+- Detail: da soporte a relaciones maestro-detalle. Define el modelo del detalle, las keys que unen el maestro con el detalle, los campos que se muestran y cuántos registros se muestran.
+- Master: da soporte a relaciones 1 a 1 a través de una tabla intermedia. Define el modelo destino, el modelo puente, las keys del maestro al puente y del puente al destino, los campos que se muestran y cuántos registros se muestran.
+- Rollup: da soporte a consultas hacia modelos que devuelven un solo registro. Por ejemplo, el atributo tp_documento, cuyo valor puede ser CC, NIT o RUT, tiene su significado en la tabla Tipo_documentos con los campos id y title. Un rollup de tipo RollupRow con Select []string{"title"} hace una consulta con limit 1 de la columna title y la asigna al atributo cuyo nombre es la llave del map[string]\*Rollups. Si es RollupObject con Select []string{id, title}, devuelve un objeto que se asigna a ese mismo atributo. También existen RollupCount, RollupSum, RollupAvg, RollupMin y RollupMax, que calculan un count, sum, avg, min o max sobre el modelo To y asignan el resultado al atributo.

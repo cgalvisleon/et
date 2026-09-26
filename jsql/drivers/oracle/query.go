@@ -411,11 +411,7 @@ func oraSelectExpr(query *jsql.Query, field string) (string, bool) {
 	}
 
 	pair := func(expr string) (string, bool) {
-		if query.UseSourceField {
-			return fmt.Sprintf("%s VALUE %s", oraQuoteKey(fld.As), expr), true
-		}
-		expr = strings.TrimSuffix(expr, " FORMAT JSON")
-		return fmt.Sprintf("%s AS %s", expr, oraIdent(fld.As)), true
+		return fmt.Sprintf("%s VALUE %s", oraQuoteKey(fld.As), expr), true
 	}
 
 	if fld.Agg != nil {
@@ -429,7 +425,7 @@ func oraSelectExpr(query *jsql.Query, field string) (string, bool) {
 	switch fld.TypeColumn {
 	case jsql.COLUMN, jsql.ATTRIB:
 		// A grouped query must select the same expression it groups by.
-		if !query.UseSourceField || len(query.GroupsBy) > 0 {
+		if len(query.GroupsBy) > 0 {
 			return pair(oraScalarExpr(fld, fld.TypeData))
 		}
 		return pair(oraJsonValueExpr(fld))
@@ -446,7 +442,7 @@ func oraSelectExpr(query *jsql.Query, field string) (string, bool) {
 		}
 	case jsql.MASTER:
 		if master, ok := model.Masters[fld.Name]; ok {
-			query.Masters[fld.Name] = &jsql.QueryDetail{To: master.To, Keys: master.Keys, Select: []string{}, Page: fld.Page, Rows: query.MaxRows}
+			query.Masters[fld.Name] = &jsql.QueryDetail{To: master.To, Bridge: master.Bridge, ToKeys: master.ToKeys, Keys: master.Keys, Select: master.Select, Page: fld.Page, Rows: masterRows(master, query.MaxRows)}
 		}
 	case jsql.ROLLUP:
 		if rollup, ok := model.Rollups[fld.Name]; ok {
@@ -501,15 +497,10 @@ func oraSelects(query *jsql.Query) string {
 		}
 	}
 
-	if !query.UseSourceField {
-		if len(exprs) == 0 {
-			return "*"
-		}
-		return strings.Join(exprs, ",\n")
-	}
-
+	// Rows always come back as one JSON "result" (also without a SourceField): go-ora returns
+	// NUMBER columns as text, while JSON_OBJECT keeps numbers, booleans and nested JSON typed.
 	source := ""
-	if len(query.Selects) == 0 && len(query.Froms) > 0 {
+	if query.UseSourceField && len(query.Selects) == 0 && len(query.Froms) > 0 {
 		from := query.Froms[0]
 		sourceField := jsql.SOURCE
 		hiddens := slices.Clone(query.Hiddens)
@@ -633,4 +624,16 @@ func (s *Oracle) Query(query *jsql.Query) (string, error) {
 	}
 
 	return sb.String(), nil
+}
+
+/**
+* masterRows: Returns how many records a master shows: its Rows, or limit when it is not set.
+* @param master *jsql.Master, limit int
+* @return int
+**/
+func masterRows(master *jsql.Master, limit int) int {
+	if master.Rows > 0 {
+		return master.Rows
+	}
+	return limit
 }

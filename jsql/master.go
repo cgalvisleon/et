@@ -7,18 +7,20 @@ import (
 )
 
 type Master struct {
-	To     *From
-	Bridge *From
-	Keys   map[string]string
-	ToKeys map[string]string
-	Select []string
+	From   *From             `json:"from"`
+	To     *From             `json:"to"`
+	Bridge *From             `json:"bridge"`
+	Keys   map[string]string `json:"keys"`
+	ToKeys map[string]string `json:"to_keys"`
+	Select []string          `json:"select"`
+	Rows   int               `json:"rows"`
 }
 
 /**
-* Ref: Returns the reference of the master.
+* ref: Returns the reference of the master.
 * @return et.Json
 **/
-func (s *Master) Ref() et.Json {
+func (s *Master) ref() et.Json {
 	return et.Json{
 		"to":     s.To,
 		"bridge": s.Bridge,
@@ -46,6 +48,13 @@ func (s *Master) init() error {
 		return errors.New(MSG_BRIDGE_MODEL_REQUIRED)
 	}
 
+	// The bridge has foreign keys to both models, so both tables must exist first.
+	if s.From != nil && s.From.Model != nil {
+		if err := s.From.Model.Init(); err != nil {
+			return err
+		}
+	}
+
 	err := s.To.Model.Init()
 	if err != nil {
 		return err
@@ -61,11 +70,12 @@ func (s *Master) init() error {
 
 /**
 * newMaster: Creates a new master.
-* @param to, bridge *Model, keys, toKeys map[string]string, selects []string
+* @param from, to, bridge *Model, keys, toKeys map[string]string, selects []string
 * @return *Master
 **/
-func newMaster(to, bridge *Model, keys, toKeys map[string]string, selects []string) *Master {
+func newMaster(from, to, bridge *Model, keys, toKeys map[string]string, selects []string) *Master {
 	return &Master{
+		From:   getFrom(from, ""),
 		To:     getFrom(to, ""),
 		Bridge: getFrom(bridge, ""),
 		Keys:   keys,

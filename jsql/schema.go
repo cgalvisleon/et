@@ -23,10 +23,10 @@ type Schema struct {
 }
 
 /**
-* ToJson: Returns the schema metadata as an et.Json map.
+* toJson: Returns the schema metadata as an et.Json map.
 * @return et.Json
 **/
-func (s *Schema) ToJson() et.Json {
+func (s *Schema) toJson() et.Json {
 	models := et.Json{}
 	for name, model := range s.Models {
 		models[name] = model.ToJson()
@@ -111,6 +111,7 @@ func (s *Schema) newModel(id, name string, version int, userId string) *Model {
 		AfterDeletes:  make([]string, 0),
 		AuditLog:      &et.SafeData{},
 		calcs:         make(map[string]CalcFunction, 0),
+		calcScripts:   make(map[string]string, 0),
 		beforeInserts: make([]TriggerFunction, 0),
 		beforeUpdates: make([]TriggerFunction, 0),
 		beforeDeletes: make([]TriggerFunction, 0),
@@ -176,6 +177,7 @@ func (s *Schema) loadModel(params et.Json) (*Model, error) {
 		AfterDeletes:  make([]string, 0),
 		AuditLog:      &et.SafeData{},
 		calcs:         make(map[string]CalcFunction, 0),
+		calcScripts:   make(map[string]string, 0),
 		beforeInserts: make([]TriggerFunction, 0),
 		beforeUpdates: make([]TriggerFunction, 0),
 		beforeDeletes: make([]TriggerFunction, 0),

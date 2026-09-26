@@ -140,10 +140,10 @@ func (s *Command) serialize() ([]byte, error) {
 }
 
 /**
-* ToJson: Returns the command metadata as an et.Json map.
+* toJson: Returns the command metadata as an et.Json map.
 * @return et.Json
 **/
-func (s *Command) ToJson() et.Json {
+func (s *Command) toJson() et.Json {
 	bt, err := s.serialize()
 	if err != nil {
 		return et.Json{}
@@ -169,18 +169,18 @@ func (s *Command) setDebug(debug bool) *Command {
 }
 
 /**
-* Debug: Enables debug mode — SQL is logged to stdout.
+* debug: Enables debug mode — SQL is logged to stdout.
 * @return *Command
 **/
-func (s *Command) Debug() *Command {
+func (s *Command) debug() *Command {
 	return s.setDebug(true)
 }
 
 /**
-* Test: Enables test mode — SQL is generated but not executed.
+* test: Enables test mode — SQL is generated but not executed.
 * @return *Command
 **/
-func (s *Command) Test() *Command {
+func (s *Command) test() *Command {
 	s.isTest = true
 	return s
 }
@@ -196,122 +196,122 @@ func (s *Command) addCondition(cond *et.Condition) *Command {
 }
 
 /**
-* Where: Sets the first WHERE condition and returns the command for chaining.
+* where: Sets the first WHERE condition and returns the command for chaining.
 * @param cond *et.Condition
 * @return *Command
 **/
-func (s *Command) Where(cond *et.Condition) *Command {
+func (s *Command) where(cond *et.Condition) *Command {
 	return s.addCondition(cond)
 }
 
 /**
-* And: Appends a condition joined with AND to the WHERE clause.
+* and: Appends a condition joined with AND to the WHERE clause.
 * @param cond *et.Condition
 * @return *Command
 **/
-func (s *Command) And(cond *et.Condition) *Command {
+func (s *Command) and(cond *et.Condition) *Command {
 	cond.Connector = et.AND
 	return s.addCondition(cond)
 }
 
 /**
-* Or: Appends a condition joined with OR to the WHERE clause.
+* or: Appends a condition joined with OR to the WHERE clause.
 * @param cond *et.Condition
 * @return *Command
 **/
-func (s *Command) Or(cond *et.Condition) *Command {
+func (s *Command) or(cond *et.Condition) *Command {
 	cond.Connector = et.OR
 	return s.addCondition(cond)
 }
 
 /**
-* Return: Sets the fields to return in the result.
+* returning: Sets the fields to return in the result.
 * @param fields ...string
 * @return *Command
 **/
-func (s *Command) Return(fields ...string) *Command {
+func (s *Command) returning(fields ...string) *Command {
 	s.Returns = fields
 	return s
 }
 
 /**
-* BeforeInsert: Registers a trigger function to run before each INSERT execution.
+* beforeInsert: Registers a trigger function to run before each INSERT execution.
 * @param fn TriggerFunction
 * @return *Command
 **/
-func (s *Command) BeforeInsert(fn TriggerFunction) *Command {
+func (s *Command) beforeInsert(fn TriggerFunction) *Command {
 	s.beforeInserts = append(s.beforeInserts, fn)
 	return s
 }
 
 /**
-* BeforeUpdate: Registers a trigger function to run before each UPDATE execution.
+* beforeUpdate: Registers a trigger function to run before each UPDATE execution.
 * @param fn TriggerFunction
 * @return *Command
 **/
-func (s *Command) BeforeUpdate(fn TriggerFunction) *Command {
+func (s *Command) beforeUpdate(fn TriggerFunction) *Command {
 	s.beforeUpdates = append(s.beforeUpdates, fn)
 	return s
 }
 
 /**
-* BeforeDelete: Registers a trigger function to run before each DELETE execution.
+* beforeDelete: Registers a trigger function to run before each DELETE execution.
 * @param fn TriggerFunction
 * @return *Command
 **/
-func (s *Command) BeforeDelete(fn TriggerFunction) *Command {
+func (s *Command) beforeDelete(fn TriggerFunction) *Command {
 	s.beforeDeletes = append(s.beforeDeletes, fn)
 	return s
 }
 
 /**
-* BeforeInsertOrUpdate: Registers a trigger function to run before INSERT and UPDATE.
+* beforeInsertOrUpdate: Registers a trigger function to run before INSERT and UPDATE.
 * @param fn TriggerFunction
 * @return *Command
 **/
-func (s *Command) BeforeInsertOrUpdate(fn TriggerFunction) *Command {
+func (s *Command) beforeInsertOrUpdate(fn TriggerFunction) *Command {
 	s.beforeInserts = append(s.beforeInserts, fn)
 	s.beforeUpdates = append(s.beforeUpdates, fn)
 	return s
 }
 
 /**
-* AfterInsert: Registers a trigger function to run after each INSERT execution.
+* afterInsert: Registers a trigger function to run after each INSERT execution.
 * @param fn TriggerFunction
 * @return *Command
 **/
-func (s *Command) AfterInsert(fn TriggerFunction) *Command {
+func (s *Command) afterInsert(fn TriggerFunction) *Command {
 	s.afterInserts = append(s.afterInserts, fn)
 	return s
 }
 
 /**
-* AfterUpdate: Registers a trigger function to run after each UPDATE execution.
+* afterUpdate: Registers a trigger function to run after each UPDATE execution.
 * @param fn TriggerFunction
 * @return *Command
 **/
-func (s *Command) AfterUpdate(fn TriggerFunction) *Command {
+func (s *Command) afterUpdate(fn TriggerFunction) *Command {
 	s.afterUpdates = append(s.afterUpdates, fn)
 	return s
 }
 
 /**
-* AfterInsertOrUpdate: Registers a trigger function to run after INSERT and UPDATE.
+* afterInsertOrUpdate: Registers a trigger function to run after INSERT and UPDATE.
 * @param fn TriggerFunction
 * @return *Command
 **/
-func (s *Command) AfterInsertOrUpdate(fn TriggerFunction) *Command {
+func (s *Command) afterInsertOrUpdate(fn TriggerFunction) *Command {
 	s.afterInserts = append(s.afterInserts, fn)
 	s.afterUpdates = append(s.afterUpdates, fn)
 	return s
 }
 
 /**
-* AfterDelete: Registers a trigger function to run after each DELETE execution.
+* afterDelete: Registers a trigger function to run after each DELETE execution.
 * @param fn TriggerFunction
 * @return *Command
 **/
-func (s *Command) AfterDelete(fn TriggerFunction) *Command {
+func (s *Command) afterDelete(fn TriggerFunction) *Command {
 	s.afterDeletes = append(s.afterDeletes, fn)
 	return s
 }
@@ -342,6 +342,54 @@ func returnedOr(returned, data et.Json) et.Json {
 		return returned
 	}
 	return data
+}
+
+/**
+* setTriggerRecords: Exposes the records to a JS trigger as OLD and NEW ("new" is a reserved word in
+* JavaScript, so a script cannot use it; "old" and "new" are still set for compatibility).
+* @param instance *jrex.Instance, old, new et.Json
+**/
+func setTriggerRecords(instance *jrex.Instance, old, new et.Json) {
+	setJsJson(instance, "OLD", old)
+	setJsJson(instance, "NEW", new)
+	setJsJson(instance, "old", old)
+	setJsJson(instance, "new", new)
+}
+
+/**
+* getTriggerRecords: Reads back the records a JS trigger may have changed (OLD and NEW).
+* @param instance *jrex.Instance
+* @return et.Json, et.Json
+**/
+func getTriggerRecords(instance *jrex.Instance) (et.Json, et.Json) {
+	return getJsJson(instance, "OLD"), getJsJson(instance, "NEW")
+}
+
+/**
+* setJsJson: Sets a record in a JS instance as a plain map, so the script reads and writes its keys
+* as properties (goja exposes the methods of et.Json instead of its keys).
+* @param instance *jrex.Instance, name string, value et.Json
+**/
+func setJsJson(instance *jrex.Instance, name string, value et.Json) {
+	if value == nil {
+		value = et.Json{}
+	}
+	instance.Set(name, map[string]any(value))
+}
+
+/**
+* getJsJson: Reads back a record set with setJsJson, including the changes made by the script.
+* @param instance *jrex.Instance, name string
+* @return et.Json
+**/
+func getJsJson(instance *jrex.Instance, name string) et.Json {
+	switch v := instance.Get(name).Export().(type) {
+	case map[string]any:
+		return et.Json(v)
+	case et.Json:
+		return v
+	}
+	return et.Json{}
 }
 
 /**
@@ -376,14 +424,12 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 			instance := jrex.NewInstance()
 			instance.SetCode(script)
 			model.wrapper(instance)
-			instance.Set("old", s.Old)
-			instance.Set("new", s.New)
+			setTriggerRecords(instance, s.Old, s.New)
 			_, err := instance.Run()
 			if err != nil {
 				return et.Items{}, err
 			}
-			s.Old = instance.GetJson("old")
-			s.New = instance.GetJson("new")
+			s.Old, s.New = getTriggerRecords(instance)
 		}
 
 		sql, err := s.db.command(s)
@@ -414,14 +460,12 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 			instance := jrex.NewInstance()
 			instance.SetCode(script)
 			model.wrapper(instance)
-			instance.Set("old", s.Old)
-			instance.Set("new", s.New)
+			setTriggerRecords(instance, s.Old, s.New)
 			_, err := instance.Run()
 			if err != nil {
 				return et.Items{}, err
 			}
-			s.Old = instance.GetJson("old")
-			s.New = instance.GetJson("new")
+			s.Old, s.New = getTriggerRecords(instance)
 		}
 
 		result.Add(returnedOr(returned, s.New))
@@ -444,7 +488,7 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 	model := s.model
 	current, err := NewQuery(model).
 		addCondition(s.Conditions).
-		All()
+		AllTx(tx)
 	if err != nil {
 		return et.Items{}, err
 	}
@@ -464,14 +508,12 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 			instance := jrex.NewInstance()
 			instance.SetCode(script)
 			model.wrapper(instance)
-			instance.Set("old", s.Old)
-			instance.Set("new", s.New)
+			setTriggerRecords(instance, s.Old, s.New)
 			_, err := instance.Run()
 			if err != nil {
 				return et.Items{}, err
 			}
-			s.Old = instance.GetJson("old")
-			s.New = instance.GetJson("new")
+			s.Old, s.New = getTriggerRecords(instance)
 		}
 
 		sql, err := s.db.command(s)
@@ -502,14 +544,12 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 			instance := jrex.NewInstance()
 			instance.SetCode(script)
 			model.wrapper(instance)
-			instance.Set("old", s.Old)
-			instance.Set("new", s.New)
+			setTriggerRecords(instance, s.Old, s.New)
 			_, err := instance.Run()
 			if err != nil {
 				return et.Items{}, err
 			}
-			s.Old = instance.GetJson("old")
-			s.New = instance.GetJson("new")
+			s.Old, s.New = getTriggerRecords(instance)
 		}
 
 		result.Add(returnedOr(returned, s.New))
@@ -528,7 +568,7 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 	model := s.model
 	items, err := NewQuery(model).
 		addCondition(s.Conditions).
-		All()
+		AllTx(tx)
 	if err != nil {
 		return et.Items{}, err
 	}
@@ -551,14 +591,12 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 			instance := jrex.NewInstance()
 			instance.SetCode(script)
 			model.wrapper(instance)
-			instance.Set("old", s.Old)
-			instance.Set("new", s.New)
+			setTriggerRecords(instance, s.Old, s.New)
 			_, err := instance.Run()
 			if err != nil {
 				return et.Items{}, err
 			}
-			s.Old = instance.GetJson("old")
-			s.New = instance.GetJson("new")
+			s.Old, s.New = getTriggerRecords(instance)
 		}
 
 		sql, err := s.db.command(s)
@@ -588,14 +626,12 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 			instance := jrex.NewInstance()
 			instance.SetCode(script)
 			model.wrapper(instance)
-			instance.Set("old", s.Old)
-			instance.Set("new", s.New)
+			setTriggerRecords(instance, s.Old, s.New)
 			_, err := instance.Run()
 			if err != nil {
 				return et.Items{}, err
 			}
-			s.Old = instance.GetJson("old")
-			s.New = instance.GetJson("new")
+			s.Old, s.New = getTriggerRecords(instance)
 		}
 
 		result.Add(returnedOr(returned, s.Old))
@@ -629,14 +665,25 @@ func (s *Command) upsert(tx *Tx) (et.Items, error) {
 }
 
 /**
-* ExecTx: Dispatches the command to the appropriate handler and commits if no external Tx was given.
+* execTx: Dispatches the command to the appropriate handler and commits if no external Tx was given.
 * @param tx *Tx
 * @return et.Items, error
 **/
-func (s *Command) ExecTx(tx *Tx) (et.Items, error) {
-	var err error
-	var result et.Items
+func (s *Command) execTx(tx *Tx) (result et.Items, err error) {
 	tx, commit := getTx(tx)
+	if commit {
+		// The command owns the transaction: roll it back on any error or panic, so the
+		// connection is released (SQLite has a single writer connection).
+		defer func() {
+			if r := recover(); r != nil {
+				tx.Rollback()
+				panic(r)
+			}
+			if err != nil {
+				tx.Rollback()
+			}
+		}()
+	}
 	switch s.Type {
 	case INSERT:
 		result, err = s.insert(tx)
@@ -664,19 +711,19 @@ func (s *Command) ExecTx(tx *Tx) (et.Items, error) {
 }
 
 /**
-* Exec: Executes the command without an explicit transaction.
+* execute: Executes the command without an explicit transaction.
 * @return et.Items, error
 **/
-func (s *Command) Exec() (et.Items, error) {
+func (s *Command) execute() (et.Items, error) {
 	return s.ExecTx(nil)
 }
 
 /**
-* OneTx: Executes the command and returns the first result within the given transaction.
+* oneTx: Executes the command and returns the first result within the given transaction.
 * @param tx *Tx
 * @return et.Item, error
 **/
-func (s *Command) OneTx(tx *Tx) (et.Item, error) {
+func (s *Command) oneTx(tx *Tx) (et.Item, error) {
 	items, err := s.ExecTx(tx)
 	if err != nil {
 		return et.Item{}, err
@@ -686,9 +733,9 @@ func (s *Command) OneTx(tx *Tx) (et.Item, error) {
 }
 
 /**
-* One: Executes the command and returns the first result without an explicit transaction.
+* one: Executes the command and returns the first result without an explicit transaction.
 * @return et.Item, error
 **/
-func (s *Command) One() (et.Item, error) {
+func (s *Command) one() (et.Item, error) {
 	return s.OneTx(nil)
 }

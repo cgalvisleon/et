@@ -26,10 +26,10 @@ type Tx struct {
 }
 
 /**
-* NewTx: Creates a new transaction
+* newTx: Creates a new transaction
 * @return *Tx
 **/
-func NewTx() *Tx {
+func newTx() *Tx {
 	now := timezone.Now()
 	return &Tx{
 		CreatedAt:    now,
@@ -85,7 +85,7 @@ func (s *Tx) setStatus(status TxStatus) {
 * commit: Commits the transaction and marks it as committed.
 * @return error
 **/
-func (s *Tx) Commit() error {
+func (s *Tx) commit() error {
 	if s.Tx == nil {
 		return nil
 	}
@@ -104,7 +104,7 @@ func (s *Tx) Commit() error {
 * rollback: Rolls back the transaction and marks it as rolled back.
 * @return error
 **/
-func (s *Tx) Rollback() error {
+func (s *Tx) rollback() error {
 	if s.Tx == nil {
 		return nil
 	}
@@ -120,11 +120,11 @@ func (s *Tx) Rollback() error {
 }
 
 /**
-* Query: Executes a query within the transaction.
+* query: Executes a query within the transaction.
 * @param db *sql.DB, query string, args ...any
 * @return *sql.Rows, error
 **/
-func (s *Tx) Query(db *sql.DB, query string, args ...any) (*sql.Rows, error) {
+func (s *Tx) query(db *sql.DB, query string, args ...any) (*sql.Rows, error) {
 	err := s.begin(db)
 	if err != nil {
 		return nil, err

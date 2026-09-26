@@ -1,0 +1,1033 @@
+[
+  {
+    "section": "1. Conexión y base de datos",
+    "case": "Register + ConnectTo",
+    "status": "pass",
+    "output": "rec_oracle"
+  },
+  {
+    "section": "1. Conexión y base de datos",
+    "case": "Init (idempotente)",
+    "status": "pass"
+  },
+  {
+    "section": "1. Conexión y base de datos",
+    "case": "NewDB",
+    "status": "pass",
+    "output": "FREEPDB1"
+  },
+  {
+    "section": "1. Conexión y base de datos",
+    "case": "LoadDb (desde ToJson)",
+    "status": "pass",
+    "output": "rec_oracle"
+  },
+  {
+    "section": "1. Conexión y base de datos",
+    "case": "Load / LoadTo",
+    "status": "skip",
+    "note": "leen la configuración de DB_* con envar, que la guarda en caché; se cubren con ConnectTo"
+  },
+  {
+    "section": "1. Conexión y base de datos",
+    "case": "Sql",
+    "status": "pass",
+    "output": [
+      {
+        "n": "1"
+      }
+    ]
+  },
+  {
+    "section": "1. Conexión y base de datos",
+    "case": "SqlTx + Tx.Commit",
+    "status": "pass",
+    "output": 1
+  },
+  {
+    "section": "1. Conexión y base de datos",
+    "case": "Connection.GetParams / SetDatabase / GetDatabase",
+    "status": "pass",
+    "output": "oracle"
+  },
+  {
+    "section": "1. Conexión y base de datos",
+    "case": "SetDebug / Debug",
+    "status": "pass",
+    "output": "FREEPDB1"
+  },
+  {
+    "section": "1. Conexión y base de datos",
+    "case": "DB.Query / DB.QueryTx (SQL libre en JSON)",
+    "status": "gap",
+    "note": "jquery.go no genera SQL todavía (brecha #1 de spec.md)",
+    "output": "invalid sql"
+  },
+  {
+    "section": "2. Definición de modelos (DDL)",
+    "case": "Define (declarativo)",
+    "status": "pass",
+    "output": "f_products",
+    "sql": [
+      "-- DDL\nBEGIN\n  EXECUTE IMMEDIATE 'CREATE TABLE JSQL.\"f_products\" (\n  \"id\" VARCHAR2(80) DEFAULT NULL,\n  \"name\" VARCHAR2(255) DEFAULT NULL,\n  \"category\" VARCHAR2(80) DEFAULT NULL,\n  \"_source\" CLOB DEFAULT TO_CLOB(''{}'') CHECK (\"_source\" IS JSON)\n)';\n  EXECUTE IMMEDIATE 'ALTER TABLE JSQL.\"f_products\" ADD CONSTRAINT \"jsql_f_products_pkey\" PRIMARY KEY (\"id\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_products_category_idx\" ON JSQL.\"f_products\" (\"category\")';\nEND;"
+    ]
+  },
+  {
+    "section": "2. Definición de modelos (DDL)",
+    "case": "DefineModel + DefineColumn / DefineAttrib / DefineUnique / DefineHidden",
+    "status": "pass",
+    "output": [
+      "f_roles",
+      "f_orders",
+      "f_orders_items",
+      "f_users"
+    ],
+    "sql": [
+      "-- DDL\nBEGIN\n  EXECUTE IMMEDIATE 'CREATE TABLE JSQL.\"f_roles\" (\n  \"created_at\" TIMESTAMP DEFAULT NULL,\n  \"updated_at\" TIMESTAMP DEFAULT NULL,\n  \"status\" VARCHAR2(255) DEFAULT ''active'',\n  \"id\" VARCHAR2(80) DEFAULT NULL,\n  \"_source\" CLOB DEFAULT TO_CLOB(''{}'') CHECK (\"_source\" IS JSON),\n  \"name\" VARCHAR2(80) DEFAULT NULL,\n  \"_idx\" VARCHAR2(80) DEFAULT NULL\n)';\n  EXECUTE IMMEDIATE 'ALTER TABLE JSQL.\"f_roles\" ADD CONSTRAINT \"jsql_f_roles_pkey\" PRIMARY KEY (\"id\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_roles_status_idx\" ON JSQL.\"f_roles\" (\"status\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_roles__idx_idx\" ON JSQL.\"f_roles\" (\"_idx\")';\nEND;",
+      "-- DDL\nBEGIN\n  EXECUTE IMMEDIATE 'CREATE TABLE JSQL.\"f_users\" (\n  \"created_at\" TIMESTAMP DEFAULT NULL,\n  \"updated_at\" TIMESTAMP DEFAULT NULL,\n  \"status\" VARCHAR2(255) DEFAULT ''active'',\n  \"id\" VARCHAR2(80) DEFAULT NULL,\n  \"_source\" CLOB DEFAULT TO_CLOB(''{}'') CHECK (\"_source\" IS JSON),\n  \"name\" VARCHAR2(80) DEFAULT NULL,\n  \"email\" VARCHAR2(255) DEFAULT NULL,\n  \"_idx\" VARCHAR2(80) DEFAULT NULL\n)';\n  EXECUTE IMMEDIATE 'ALTER TABLE JSQL.\"f_users\" ADD CONSTRAINT \"jsql_f_users_pkey\" PRIMARY KEY (\"id\")';\n  EXECUTE IMMEDIATE 'CREATE UNIQUE INDEX \"jsql_f_users_email_key\" ON JSQL.\"f_users\" (\"email\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_users_status_idx\" ON JSQL.\"f_users\" (\"status\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_users__idx_idx\" ON JSQL.\"f_users\" (\"_idx\")';\nEND;",
+      "-- DDL\nBEGIN\n  EXECUTE IMMEDIATE 'CREATE TABLE JSQL.\"f_users_f_roles\" (\n  \"user_id\" VARCHAR2(80) DEFAULT NULL,\n  \"role_id\" VARCHAR2(80) DEFAULT NULL,\n  \"_idx\" VARCHAR2(80) DEFAULT NULL\n)';\n  EXECUTE IMMEDIATE 'ALTER TABLE JSQL.\"f_users_f_roles\" ADD CONSTRAINT \"jsql_f_users_f_roles_pkey\" PRIMARY KEY (\"user_id\", \"role_id\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_users_f_roles__idx_idx\" ON JSQL.\"f_users_f_roles\" (\"_idx\")';\n  EXECUTE IMMEDIATE 'ALTER TABLE JSQL.\"f_users_f_roles\" ADD CONSTRAINT \"fk_jsql_f_users_f_roles_jsql_f_users\" FOREIGN KEY (\"user_id\") REFERENCES JSQL.\"f_users\" (\"id\") ON DELETE CASCADE';\n  EXECUTE IMMEDIATE 'ALTER TABLE JSQL.\"f_users_f_roles\" ADD CONSTRAINT \"fk_jsql_f_users_f_roles_jsql_f_roles\" FOREIGN KEY (\"role_id\") REFERENCES JSQL.\"f_roles\" (\"id\") ON DELETE CASCADE';\nEND;",
+      "-- DDL\nBEGIN\n  EXECUTE IMMEDIATE 'CREATE TABLE JSQL.\"f_doc_types\" (\n  \"created_at\" TIMESTAMP DEFAULT NULL,\n  \"updated_at\" TIMESTAMP DEFAULT NULL,\n  \"status\" VARCHAR2(255) DEFAULT ''active'',\n  \"id\" VARCHAR2(80) DEFAULT NULL,\n  \"_source\" CLOB DEFAULT TO_CLOB(''{}'') CHECK (\"_source\" IS JSON),\n  \"title\" VARCHAR2(80) DEFAULT NULL,\n  \"_idx\" VARCHAR2(80) DEFAULT NULL\n)';\n  EXECUTE IMMEDIATE 'ALTER TABLE JSQL.\"f_doc_types\" ADD CONSTRAINT \"jsql_f_doc_types_pkey\" PRIMARY KEY (\"id\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_doc_types_status_idx\" ON JSQL.\"f_doc_types\" (\"status\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_doc_types__idx_idx\" ON JSQL.\"f_doc_types\" (\"_idx\")';\nEND;",
+      "-- DDL\nBEGIN\n  EXECUTE IMMEDIATE 'CREATE TABLE JSQL.\"f_orders\" (\n  \"created_at\" TIMESTAMP DEFAULT NULL,\n  \"updated_at\" TIMESTAMP DEFAULT NULL,\n  \"status\" VARCHAR2(255) DEFAULT ''active'',\n  \"id\" VARCHAR2(80) DEFAULT NULL,\n  \"_source\" CLOB DEFAULT TO_CLOB(''{}'') CHECK (\"_source\" IS JSON),\n  \"user_id\" VARCHAR2(80) DEFAULT NULL,\n  \"_idx\" VARCHAR2(80) DEFAULT NULL\n)';\n  EXECUTE IMMEDIATE 'ALTER TABLE JSQL.\"f_orders\" ADD CONSTRAINT \"jsql_f_orders_pkey\" PRIMARY KEY (\"id\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_orders_status_idx\" ON JSQL.\"f_orders\" (\"status\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_orders__idx_idx\" ON JSQL.\"f_orders\" (\"_idx\")';\nEND;",
+      "-- DDL\nBEGIN\n  EXECUTE IMMEDIATE 'CREATE TABLE JSQL.\"f_orders_items\" (\n  \"order_id\" VARCHAR2(80) DEFAULT NULL,\n  \"id\" VARCHAR2(80) DEFAULT NULL,\n  \"product\" VARCHAR2(255) DEFAULT NULL\n)';\n  EXECUTE IMMEDIATE 'ALTER TABLE JSQL.\"f_orders_items\" ADD CONSTRAINT \"jsql_f_orders_items_pkey\" PRIMARY KEY (\"id\")';\n  EXECUTE IMMEDIATE 'ALTER TABLE JSQL.\"f_orders_items\" ADD CONSTRAINT \"fk_jsql_f_orders_items_jsql_f_orders\" FOREIGN KEY (\"order_id\") REFERENCES JSQL.\"f_orders\" (\"id\") ON DELETE CASCADE';\nEND;"
+    ]
+  },
+  {
+    "section": "2. Definición de modelos (DDL)",
+    "case": "DefineTenantModel / DefineProjectModel",
+    "status": "pass",
+    "output": [
+      "tenant_id",
+      "project_id"
+    ],
+    "sql": [
+      "-- DDL\nBEGIN\n  EXECUTE IMMEDIATE 'CREATE TABLE JSQL.\"f_tenant\" (\n  \"created_at\" TIMESTAMP DEFAULT NULL,\n  \"updated_at\" TIMESTAMP DEFAULT NULL,\n  \"status\" VARCHAR2(255) DEFAULT ''active'',\n  \"id\" VARCHAR2(80) DEFAULT NULL,\n  \"_source\" CLOB DEFAULT TO_CLOB(''{}'') CHECK (\"_source\" IS JSON),\n  \"tenant_id\" VARCHAR2(80) DEFAULT NULL,\n  \"_idx\" VARCHAR2(80) DEFAULT NULL\n)';\n  EXECUTE IMMEDIATE 'ALTER TABLE JSQL.\"f_tenant\" ADD CONSTRAINT \"jsql_f_tenant_pkey\" PRIMARY KEY (\"id\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_tenant_status_idx\" ON JSQL.\"f_tenant\" (\"status\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_tenant__idx_idx\" ON JSQL.\"f_tenant\" (\"_idx\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_tenant_tenant_id_idx\" ON JSQL.\"f_tenant\" (\"tenant_id\")';\nEND;",
+      "-- DDL\nBEGIN\n  EXECUTE IMMEDIATE 'CREATE TABLE JSQL.\"f_project\" (\n  \"created_at\" TIMESTAMP DEFAULT NULL,\n  \"updated_at\" TIMESTAMP DEFAULT NULL,\n  \"status\" VARCHAR2(255) DEFAULT ''active'',\n  \"id\" VARCHAR2(80) DEFAULT NULL,\n  \"_source\" CLOB DEFAULT TO_CLOB(''{}'') CHECK (\"_source\" IS JSON),\n  \"project_id\" VARCHAR2(80) DEFAULT NULL,\n  \"_idx\" VARCHAR2(80) DEFAULT NULL\n)';\n  EXECUTE IMMEDIATE 'ALTER TABLE JSQL.\"f_project\" ADD CONSTRAINT \"jsql_f_project_pkey\" PRIMARY KEY (\"id\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_project_status_idx\" ON JSQL.\"f_project\" (\"status\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_project__idx_idx\" ON JSQL.\"f_project\" (\"_idx\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_project_project_id_idx\" ON JSQL.\"f_project\" (\"project_id\")';\nEND;"
+    ]
+  },
+  {
+    "section": "2. Definición de modelos (DDL)",
+    "case": "DefineRequired (rechaza el insert sin el campo)",
+    "status": "pass",
+    "output": "required field name",
+    "sql": [
+      "-- DDL\nBEGIN\n  EXECUTE IMMEDIATE 'CREATE TABLE JSQL.\"f_required\" (\n  \"created_at\" TIMESTAMP DEFAULT NULL,\n  \"updated_at\" TIMESTAMP DEFAULT NULL,\n  \"status\" VARCHAR2(255) DEFAULT ''active'',\n  \"id\" VARCHAR2(80) DEFAULT NULL,\n  \"_source\" CLOB DEFAULT TO_CLOB(''{}'') CHECK (\"_source\" IS JSON),\n  \"name\" VARCHAR2(255) DEFAULT NULL,\n  \"_idx\" VARCHAR2(80) DEFAULT NULL\n)';\n  EXECUTE IMMEDIATE 'ALTER TABLE JSQL.\"f_required\" ADD CONSTRAINT \"jsql_f_required_pkey\" PRIMARY KEY (\"id\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_required_status_idx\" ON JSQL.\"f_required\" (\"status\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_required__idx_idx\" ON JSQL.\"f_required\" (\"_idx\")';\nEND;"
+    ]
+  },
+  {
+    "section": "2. Definición de modelos (DDL)",
+    "case": "DefineForeignKeys (rechaza un hijo sin padre)",
+    "status": "pass",
+    "output": "fk violation",
+    "sql": [
+      "-- DDL\nBEGIN\n  EXECUTE IMMEDIATE 'CREATE TABLE JSQL.\"f_parent\" (\n  \"created_at\" TIMESTAMP DEFAULT NULL,\n  \"updated_at\" TIMESTAMP DEFAULT NULL,\n  \"status\" VARCHAR2(255) DEFAULT ''active'',\n  \"id\" VARCHAR2(80) DEFAULT NULL,\n  \"_source\" CLOB DEFAULT TO_CLOB(''{}'') CHECK (\"_source\" IS JSON),\n  \"_idx\" VARCHAR2(80) DEFAULT NULL\n)';\n  EXECUTE IMMEDIATE 'ALTER TABLE JSQL.\"f_parent\" ADD CONSTRAINT \"jsql_f_parent_pkey\" PRIMARY KEY (\"id\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_parent_status_idx\" ON JSQL.\"f_parent\" (\"status\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_parent__idx_idx\" ON JSQL.\"f_parent\" (\"_idx\")';\nEND;",
+      "-- DDL\nBEGIN\n  EXECUTE IMMEDIATE 'CREATE TABLE JSQL.\"f_child\" (\n  \"created_at\" TIMESTAMP DEFAULT NULL,\n  \"updated_at\" TIMESTAMP DEFAULT NULL,\n  \"status\" VARCHAR2(255) DEFAULT ''active'',\n  \"id\" VARCHAR2(80) DEFAULT NULL,\n  \"_source\" CLOB DEFAULT TO_CLOB(''{}'') CHECK (\"_source\" IS JSON),\n  \"parent_id\" VARCHAR2(80) DEFAULT NULL,\n  \"_idx\" VARCHAR2(80) DEFAULT NULL\n)';\n  EXECUTE IMMEDIATE 'ALTER TABLE JSQL.\"f_child\" ADD CONSTRAINT \"jsql_f_child_pkey\" PRIMARY KEY (\"id\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_child_status_idx\" ON JSQL.\"f_child\" (\"status\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_child__idx_idx\" ON JSQL.\"f_child\" (\"_idx\")';\n  EXECUTE IMMEDIATE 'ALTER TABLE JSQL.\"f_child\" ADD CONSTRAINT \"fk_jsql_f_child_jsql_f_parent\" FOREIGN KEY (\"parent_id\") REFERENCES JSQL.\"f_parent\" (\"id\") ON DELETE CASCADE';\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_parent\"\n  (\"_idx\", \"id\")\n  VALUES ('1790448435931', 'p1')\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'status' VALUE \"status\",\n'id' VALUE \"id\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_parent\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_child\"\n  (\"_idx\", \"id\", \"parent_id\")\n  VALUES ('1790448435983', 'c1', 'p1')\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'status' VALUE \"status\",\n'id' VALUE \"id\",\n'parent_id' VALUE \"parent_id\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_child\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_child\"\n  (\"_idx\", \"id\", \"parent_id\")\n  VALUES ('1790448436006', 'c2', 'missing')\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'status' VALUE \"status\",\n'id' VALUE \"id\",\n'parent_id' VALUE \"parent_id\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_child\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;"
+    ]
+  },
+  {
+    "section": "2. Definición de modelos (DDL)",
+    "case": "Stricted (ignora campos desconocidos)",
+    "status": "pass",
+    "output": {
+      "id": "s1",
+      "name": "x",
+      "status": "active"
+    },
+    "sql": [
+      "-- DDL\nBEGIN\n  EXECUTE IMMEDIATE 'CREATE TABLE JSQL.\"f_strict\" (\n  \"created_at\" TIMESTAMP DEFAULT NULL,\n  \"updated_at\" TIMESTAMP DEFAULT NULL,\n  \"status\" VARCHAR2(255) DEFAULT ''active'',\n  \"id\" VARCHAR2(80) DEFAULT NULL,\n  \"_source\" CLOB DEFAULT TO_CLOB(''{}'') CHECK (\"_source\" IS JSON),\n  \"name\" VARCHAR2(80) DEFAULT NULL,\n  \"_idx\" VARCHAR2(80) DEFAULT NULL\n)';\n  EXECUTE IMMEDIATE 'ALTER TABLE JSQL.\"f_strict\" ADD CONSTRAINT \"jsql_f_strict_pkey\" PRIMARY KEY (\"id\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_strict_status_idx\" ON JSQL.\"f_strict\" (\"status\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_strict__idx_idx\" ON JSQL.\"f_strict\" (\"_idx\")';\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_strict\"\n  (\"_idx\", \"id\", \"name\")\n  VALUES ('1790448436024', 's1', 'x')\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'status' VALUE \"status\",\n'id' VALUE \"id\",\n'name' VALUE \"name\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_strict\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_strict\" A\nWHERE A.\"id\" = 's1'\nFETCH NEXT 1 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "2. Definición de modelos (DDL)",
+    "case": "GetModel / RemoveModel / NewModel",
+    "status": "pass",
+    "output": "ok"
+  },
+  {
+    "section": "2. Definición de modelos (DDL)",
+    "case": "Insert (datos base)",
+    "status": "pass",
+    "output": 18,
+    "sql": [
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_doc_types\"\n  (\"_idx\", \"id\", \"title\")\n  VALUES ('1790448436041', 'CC', 'Cédula de ciudadanía')\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'status' VALUE \"status\",\n'id' VALUE \"id\",\n'title' VALUE \"title\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_doc_types\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_doc_types\"\n  (\"_idx\", \"id\", \"title\")\n  VALUES ('1790448436100', 'NIT', 'Número de identificación tributaria')\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'status' VALUE \"status\",\n'id' VALUE \"id\",\n'title' VALUE \"title\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_doc_types\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_users\"\n  (\"_idx\", \"email\", \"id\", \"name\", \"_source\")\n  VALUES ('1790448436105', 'ana@example.com', 'u1', 'Ana', TO_CLOB('{\"age\":30,\"password\":\"secret\",\"tp_doc\":\"CC\"}'))\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'status' VALUE \"status\",\n'id' VALUE \"id\",\n'name' VALUE \"name\",\n'email' VALUE \"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_users\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_users\"\n  (\"_idx\", \"email\", \"id\", \"name\", \"_source\")\n  VALUES ('1790448436152', 'luis@example.com', 'u2', 'Luis', TO_CLOB('{\"age\":17}'))\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'status' VALUE \"status\",\n'id' VALUE \"id\",\n'name' VALUE \"name\",\n'email' VALUE \"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_users\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_users\"\n  (\"_idx\", \"email\", \"id\", \"name\", \"_source\")\n  VALUES ('1790448436157', 'marta@example.com', 'u3', 'Marta O''Neil', TO_CLOB('{\"age\":45,\"tp_doc\":\"NIT\"}'))\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'status' VALUE \"status\",\n'id' VALUE \"id\",\n'name' VALUE \"name\",\n'email' VALUE \"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_users\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_roles\"\n  (\"_idx\", \"id\", \"name\")\n  VALUES ('1790448436161', 'r1', 'admin')\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'status' VALUE \"status\",\n'id' VALUE \"id\",\n'name' VALUE \"name\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_roles\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_roles\"\n  (\"_idx\", \"id\", \"name\")\n  VALUES ('1790448436200', 'r2', 'editor')\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'status' VALUE \"status\",\n'id' VALUE \"id\",\n'name' VALUE \"name\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_roles\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_orders\"\n  (\"_idx\", \"id\", \"user_id\", \"_source\")\n  VALUES ('1790448436204', 'o1', 'u1', TO_CLOB('{\"amount\":100.5}'))\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'status' VALUE \"status\",\n'id' VALUE \"id\",\n'user_id' VALUE \"user_id\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_orders\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_orders\"\n  (\"_idx\", \"id\", \"user_id\", \"_source\")\n  VALUES ('1790448436258', 'o2', 'u1', TO_CLOB('{\"amount\":200}'))\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'status' VALUE \"status\",\n'id' VALUE \"id\",\n'user_id' VALUE \"user_id\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_orders\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_orders\"\n  (\"_idx\", \"id\", \"user_id\", \"_source\")\n  VALUES ('1790448436262', 'o3', 'u3', TO_CLOB('{\"amount\":50}'))\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'status' VALUE \"status\",\n'id' VALUE \"id\",\n'user_id' VALUE \"user_id\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_orders\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_orders_items\"\n  (\"id\", \"order_id\", \"product\")\n  VALUES ('i1', 'o1', 'router')\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_OBJECT(\n'id' VALUE \"id\",\n'product' VALUE \"product\"\nRETURNING CLOB) AS \"result\" FROM JSQL.\"f_orders_items\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_orders_items\"\n  (\"id\", \"order_id\", \"product\")\n  VALUES ('i2', 'o1', 'cable')\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_OBJECT(\n'id' VALUE \"id\",\n'product' VALUE \"product\"\nRETURNING CLOB) AS \"result\" FROM JSQL.\"f_orders_items\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_products\"\n  (\"category\", \"id\", \"name\", \"_source\")\n  VALUES ('internet', 'p1', 'Plan 200', TO_CLOB('{\"price\":90000}'))\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE \"id\",\n'name' VALUE \"name\",\n'category' VALUE \"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_products\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_products\"\n  (\"category\", \"id\", \"name\", \"_source\")\n  VALUES ('internet', 'p2', 'Plan 500', TO_CLOB('{\"price\":150000}'))\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE \"id\",\n'name' VALUE \"name\",\n'category' VALUE \"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_products\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_products\"\n  (\"category\", \"id\", \"name\", \"_source\")\n  VALUES ('tv', 'p3', 'Decoder', TO_CLOB('{\"price\":20000}'))\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE \"id\",\n'name' VALUE \"name\",\n'category' VALUE \"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_products\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_users_f_roles\"\n  (\"_idx\", \"role_id\", \"user_id\")\n  VALUES ('1790448436325', 'r1', 'u1')\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_OBJECT(\n'user_id' VALUE \"user_id\",\n'role_id' VALUE \"role_id\"\nRETURNING CLOB) AS \"result\" FROM JSQL.\"f_users_f_roles\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_users_f_roles\"\n  (\"_idx\", \"role_id\", \"user_id\")\n  VALUES ('1790448436333', 'r2', 'u1')\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_OBJECT(\n'user_id' VALUE \"user_id\",\n'role_id' VALUE \"role_id\"\nRETURNING CLOB) AS \"result\" FROM JSQL.\"f_users_f_roles\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_users_f_roles\"\n  (\"_idx\", \"role_id\", \"user_id\")\n  VALUES ('1790448436337', 'r2', 'u2')\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_OBJECT(\n'user_id' VALUE \"user_id\",\n'role_id' VALUE \"role_id\"\nRETURNING CLOB) AS \"result\" FROM JSQL.\"f_users_f_roles\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;"
+    ]
+  },
+  {
+    "section": "3. Relaciones y campos calculados",
+    "case": "Detail en el select (DefineDetail)",
+    "status": "pass",
+    "output": {
+      "id": "o1",
+      "items": [
+        {
+          "product": "router"
+        },
+        {
+          "product": "cable"
+        }
+      ]
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id' VALUE A.\"id\"\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_orders\" A\nWHERE A.\"id\" = 'o1'\nFETCH NEXT 1 ROWS ONLY",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'product' VALUE A.\"product\"\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_orders_items\" A\nWHERE A.\"order_id\" = 'o1'\nFETCH NEXT 30 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "3. Relaciones y campos calculados",
+    "case": "Model.Detail + Query.Detail",
+    "status": "pass",
+    "output": {
+      "amount": 100.5,
+      "id": "o1",
+      "items": [
+        {
+          "product": "router"
+        },
+        {
+          "product": "cable"
+        }
+      ],
+      "status": "active",
+      "user_id": "u1"
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'user_id' VALUE A.\"user_id\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_orders\" A\nWHERE A.\"id\" = 'o1'\nFETCH NEXT 1 ROWS ONLY",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'product' VALUE A.\"product\"\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_orders_items\" A\nWHERE A.\"order_id\" = 'o1'\nFETCH NEXT 30 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "3. Relaciones y campos calculados",
+    "case": "Master en el select (DefineMaster)",
+    "status": "pass",
+    "output": {
+      "id": "u1",
+      "roles": [
+        {
+          "name": "admin"
+        },
+        {
+          "name": "editor"
+        }
+      ]
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id' VALUE A.\"id\"\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE A.\"id\" = 'u1'\nFETCH NEXT 1 ROWS ONLY",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'name' VALUE A.\"name\"\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_roles\" A\nINNER JOIN JSQL.\"f_users_f_roles\" B\n  ON B.\"role_id\" = A.\"id\"\nWHERE B.\"user_id\" = 'u1'\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "3. Relaciones y campos calculados",
+    "case": "Master 1 a 1 (rows = 1)",
+    "status": "pass",
+    "output": {
+      "id": "u2",
+      "main_role": {
+        "name": "editor"
+      }
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id' VALUE A.\"id\"\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE A.\"id\" = 'u2'\nFETCH NEXT 1 ROWS ONLY",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'name' VALUE A.\"name\"\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_roles\" A\nINNER JOIN JSQL.\"f_users_f_roles\" B\n  ON B.\"role_id\" = A.\"id\"\nWHERE B.\"user_id\" = 'u2'\nFETCH NEXT 1 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "3. Relaciones y campos calculados",
+    "case": "Model.Master + Model.Bridge",
+    "status": "pass",
+    "output": [
+      {
+        "id": "r2",
+        "name": "editor",
+        "status": "active"
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_roles\" A\nINNER JOIN JSQL.\"f_users_f_roles\" B\n  ON A.\"id\" = B.\"role_id\"\nWHERE B.\"user_id\" = 'u2'\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "3. Relaciones y campos calculados",
+    "case": "DefineRollup row (tp_doc → title)",
+    "status": "pass",
+    "output": [
+      {
+        "id": "u1",
+        "tp_doc_title": "Cédula de ciudadanía"
+      },
+      {
+        "id": "u2",
+        "tp_doc_title": null
+      },
+      {
+        "id": "u3",
+        "tp_doc_title": "Número de identificación tributaria"
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id' VALUE A.\"id\",\n'tp_doc' VALUE SUBSTR(JSON_QUERY(A.\"_source\", '$.\"tp_doc\"' RETURNING CLOB WITH ARRAY WRAPPER), 2, LENGTH(JSON_QUERY(A.\"_source\", '$.\"tp_doc\"' RETURNING CLOB WITH ARRAY WRAPPER)) - 2) FORMAT JSON\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nORDER BY A.\"id\" ASC\nFETCH NEXT 1000 ROWS ONLY",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'title' VALUE A.\"title\"\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_doc_types\" A\nWHERE A.\"id\" = 'CC'\nFETCH NEXT 1 ROWS ONLY",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'title' VALUE A.\"title\"\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_doc_types\" A\nWHERE A.\"id\" = NULL\nFETCH NEXT 1 ROWS ONLY",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'title' VALUE A.\"title\"\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_doc_types\" A\nWHERE A.\"id\" = 'NIT'\nFETCH NEXT 1 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "3. Relaciones y campos calculados",
+    "case": "DefineRollup (count, sum, object)",
+    "status": "pass",
+    "output": {
+      "id": "u3",
+      "last_order": {
+        "amount": 50,
+        "id": "o3"
+      },
+      "orders_count": 1,
+      "orders_total": 50
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id' VALUE A.\"id\"\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE A.\"id\" = 'u3'\nFETCH NEXT 1 ROWS ONLY",
+      "-- QUERY\nSELECT COUNT(*) AS \"count\"\nFROM JSQL.\"f_orders\" A\nWHERE A.\"user_id\" = 'u3'",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'amount' VALUE SUM(JSON_VALUE(A.\"_source\", '$.\"amount\"' RETURNING NUMBER))\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_orders\" A\nWHERE A.\"user_id\" = 'u3'\nFETCH NEXT 1000 ROWS ONLY",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id' VALUE A.\"id\",\n'amount' VALUE SUBSTR(JSON_QUERY(A.\"_source\", '$.\"amount\"' RETURNING CLOB WITH ARRAY WRAPPER), 2, LENGTH(JSON_QUERY(A.\"_source\", '$.\"amount\"' RETURNING CLOB WITH ARRAY WRAPPER)) - 2) FORMAT JSON\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_orders\" A\nWHERE A.\"user_id\" = 'u3'\nFETCH NEXT 1 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "3. Relaciones y campos calculados",
+    "case": "DefineCalcFunc + Model.Calc",
+    "status": "pass",
+    "output": {
+      "age": 30,
+      "email": "ana@example.com",
+      "id": "u1",
+      "label": "Ana \u003cana@example.com\u003e",
+      "name": "Ana",
+      "status": "active",
+      "tp_doc": "CC"
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE A.\"id\" = 'u1'\nFETCH NEXT 1 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "3. Relaciones y campos calculados",
+    "case": "DefineCalc (script JS)",
+    "status": "pass",
+    "output": {
+      "id": "u3",
+      "initial": "M",
+      "name": "Marta O'Neil"
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\"\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE A.\"id\" = 'u3'\nFETCH NEXT 1 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "Select + Where + OrderBy + All",
+    "status": "pass",
+    "output": [
+      {
+        "age": 45,
+        "id": "u3",
+        "name": "Marta O'Neil"
+      },
+      {
+        "age": 30,
+        "id": "u1",
+        "name": "Ana"
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'age' VALUE SUBSTR(JSON_QUERY(A.\"_source\", '$.\"age\"' RETURNING CLOB WITH ARRAY WRAPPER), 2, LENGTH(JSON_QUERY(A.\"_source\", '$.\"age\"' RETURNING CLOB WITH ARRAY WRAPPER)) - 2) FORMAT JSON\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE JSON_VALUE(A.\"_source\", '$.\"age\"' RETURNING NUMBER) \u003e 18\nORDER BY JSON_VALUE(A.\"_source\", '$.\"age\"' RETURNING NUMBER) DESC\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "One / First / Count / Exists",
+    "status": "pass",
+    "output": {
+      "count": 3,
+      "exists": false,
+      "first": [
+        "u1",
+        "u2"
+      ],
+      "one": "Luis"
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE A.\"id\" = 'u2'\nFETCH NEXT 1 ROWS ONLY",
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nORDER BY A.\"id\" ASC\nFETCH NEXT 2 ROWS ONLY",
+      "-- QUERY\nSELECT COUNT(*) AS \"count\"\nFROM JSQL.\"f_users\" A",
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM JSQL.\"f_users\" A\nWHERE A.\"id\" = 'u9') THEN 'true' ELSE 'false' END AS \"exists\" FROM DUAL"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "Limit (paginación) / Page",
+    "status": "pass",
+    "output": [
+      {
+        "age": 17,
+        "email": "luis@example.com",
+        "id": "u2",
+        "name": "Luis",
+        "status": "active"
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nORDER BY A.\"id\" ASC\nOFFSET 1 ROWS\nFETCH NEXT 1 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "Hidden (campo oculto en la consulta y en el modelo)",
+    "status": "pass",
+    "output": {
+      "age": 30,
+      "id": "u1",
+      "name": "Ana",
+      "status": "active",
+      "tp_doc": "CC"
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"email\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE A.\"id\" = 'u1'\nFETCH NEXT 1 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "Join (fluido)",
+    "status": "pass",
+    "output": [
+      {
+        "id": "o1",
+        "user": "Ana"
+      },
+      {
+        "id": "o2",
+        "user": "Ana"
+      },
+      {
+        "id": "o3",
+        "user": "Marta O'Neil"
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id' VALUE A.\"id\",\n'user' VALUE U.\"name\"\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_orders\" A\nINNER JOIN JSQL.\"f_users\" U\n  ON A.\"user_id\" = U.\"id\"\nORDER BY A.\"id\" ASC\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "LeftJoin + GroupBy",
+    "status": "pass",
+    "output": [
+      {
+        "id": "u1",
+        "n": 2
+      },
+      {
+        "id": "u2",
+        "n": 0
+      },
+      {
+        "id": "u3",
+        "n": 1
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id' VALUE A.\"id\",\n'n' VALUE COUNT(O.\"id\")\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nLEFT JOIN JSQL.\"f_orders\" O\n  ON O.\"user_id\" = A.\"id\"\nGROUP BY A.\"id\"\nORDER BY A.\"id\" ASC\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "GroupBy + Having (fluido)",
+    "status": "pass",
+    "output": [
+      {
+        "n": 2,
+        "total": 300.5,
+        "user_id": "u1"
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'user_id' VALUE A.\"user_id\",\n'n' VALUE COUNT(A.\"id\"),\n'total' VALUE SUM(JSON_VALUE(A.\"_source\", '$.\"amount\"' RETURNING NUMBER))\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_orders\" A\nGROUP BY A.\"user_id\"\nHAVING COUNT(A.\"id\") \u003e 1\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "Model.Query (JSON)",
+    "status": "pass",
+    "output": [
+      {
+        "id": "u3",
+        "name": "Marta O'Neil"
+      },
+      {
+        "id": "u1",
+        "name": "Ana"
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\"\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE JSON_VALUE(A.\"_source\", '$.\"age\"' RETURNING NUMBER) \u003e= 18\nORDER BY A.\"name\" DESC\nFETCH NEXT 10 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "NewQuery / GetField / GetColumn / GetFrom / ToJson",
+    "status": "pass",
+    "output": {
+      "column": "atrib",
+      "field": "nombre",
+      "from": "f_users",
+      "json": true
+    }
+  },
+  {
+    "section": "4. Consultas",
+    "case": "Test (genera el SQL sin ejecutarlo) / Debug",
+    "status": "pass",
+    "output": "sql generated, not executed",
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE A.\"id\" = 'u1'\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "Eq",
+    "status": "pass",
+    "output": [
+      "u1"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE A.\"name\" = 'Ana'\nORDER BY A.\"id\" ASC\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "Neg",
+    "status": "pass",
+    "output": [
+      "u2",
+      "u3"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE A.\"name\" != 'Ana'\nORDER BY A.\"id\" ASC\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "Less",
+    "status": "pass",
+    "output": [
+      "u2"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE JSON_VALUE(A.\"_source\", '$.\"age\"' RETURNING NUMBER) \u003c 30\nORDER BY A.\"id\" ASC\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "LessEq",
+    "status": "pass",
+    "output": [
+      "u1",
+      "u2"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE JSON_VALUE(A.\"_source\", '$.\"age\"' RETURNING NUMBER) \u003c= 30\nORDER BY A.\"id\" ASC\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "More",
+    "status": "pass",
+    "output": [
+      "u3"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE JSON_VALUE(A.\"_source\", '$.\"age\"' RETURNING NUMBER) \u003e 30\nORDER BY A.\"id\" ASC\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "MoreEq",
+    "status": "pass",
+    "output": [
+      "u1",
+      "u3"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE JSON_VALUE(A.\"_source\", '$.\"age\"' RETURNING NUMBER) \u003e= 30\nORDER BY A.\"id\" ASC\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "Like",
+    "status": "pass",
+    "output": [
+      "u1"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE UPPER(A.\"name\") LIKE UPPER('%an%')\nORDER BY A.\"id\" ASC\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "In",
+    "status": "pass",
+    "output": [
+      "u1",
+      "u3"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE A.\"id\" IN ('u1', 'u3')\nORDER BY A.\"id\" ASC\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "NotIn",
+    "status": "pass",
+    "output": [
+      "u2"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE A.\"id\" NOT IN ('u1', 'u3')\nORDER BY A.\"id\" ASC\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "Is (NULL)",
+    "status": "pass",
+    "output": [
+      "u1",
+      "u2",
+      "u3"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE JSON_VALUE(A.\"_source\", '$.\"nickname\"') IS NULL\nORDER BY A.\"id\" ASC\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "IsNot (NULL)",
+    "status": "pass",
+    "output": [
+      "u1",
+      "u2",
+      "u3"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE JSON_VALUE(A.\"_source\", '$.\"age\"' RETURNING NUMBER) IS NOT NULL\nORDER BY A.\"id\" ASC\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "Null",
+    "status": "pass",
+    "output": [
+      "u1",
+      "u2",
+      "u3"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE JSON_VALUE(A.\"_source\", '$.\"nickname\"') IS NULL\nORDER BY A.\"id\" ASC\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "NotNull",
+    "status": "pass",
+    "output": [
+      "u1",
+      "u2",
+      "u3"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE A.\"email\" IS NOT NULL\nORDER BY A.\"id\" ASC\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "Between",
+    "status": "pass",
+    "output": [
+      "u1"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE JSON_VALUE(A.\"_source\", '$.\"age\"' RETURNING NUMBER) BETWEEN 18 AND 40\nORDER BY A.\"id\" ASC\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "NotBetween",
+    "status": "pass",
+    "output": [
+      "u2",
+      "u3"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE JSON_VALUE(A.\"_source\", '$.\"age\"' RETURNING NUMBER) NOT BETWEEN 18 AND 40\nORDER BY A.\"id\" ASC\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "Where (genérico)",
+    "status": "pass",
+    "output": [
+      "u2"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE A.\"name\" = 'Luis'\nORDER BY A.\"id\" ASC\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "And / Or (conectores)",
+    "status": "pass",
+    "output": {
+      "and": [
+        "u3"
+      ],
+      "or": [
+        "u1",
+        "u2"
+      ]
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE A.\"name\" = 'Ana'\n  OR A.\"name\" = 'Luis'\nORDER BY A.\"id\" ASC\nFETCH NEXT 1000 ROWS ONLY",
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null,\"password\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'email' VALUE A.\"email\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_users\" A\nWHERE JSON_VALUE(A.\"_source\", '$.\"age\"' RETURNING NUMBER) \u003e 18\n  AND UPPER(A.\"name\") LIKE UPPER('%neil%')\nFETCH NEXT 1000 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "Insert (RETURNING)",
+    "status": "pass",
+    "output": {
+      "category": "equipos",
+      "id": "p4",
+      "name": "Router Wi-Fi 6",
+      "price": 350000
+    },
+    "sql": [
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_products\"\n  (\"category\", \"id\", \"name\", \"_source\")\n  VALUES ('equipos', 'p4', 'Router Wi-Fi 6', TO_CLOB('{\"price\":350000}'))\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE \"id\",\n'name' VALUE \"name\",\n'category' VALUE \"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_products\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "Bulk",
+    "status": "pass",
+    "output": [
+      {
+        "category": "tv",
+        "id": "p5",
+        "name": "Cable HDMI",
+        "price": 15000
+      },
+      {
+        "category": "tv",
+        "id": "p6",
+        "name": "Control",
+        "price": 10000
+      }
+    ],
+    "sql": [
+      "-- BULK\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_products\"\n  (\"category\", \"id\", \"name\", \"_source\")\n  VALUES ('tv', 'p5', 'Cable HDMI', TO_CLOB('{\"price\":15000}'))\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE \"id\",\n'name' VALUE \"name\",\n'category' VALUE \"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_products\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- BULK\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_products\"\n  (\"category\", \"id\", \"name\", \"_source\")\n  VALUES ('tv', 'p6', 'Control', TO_CLOB('{\"price\":10000}'))\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE \"id\",\n'name' VALUE \"name\",\n'category' VALUE \"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_products\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "Update + Where",
+    "status": "pass",
+    "output": {
+      "category": "internet",
+      "id": "p1",
+      "name": "Plan 200",
+      "price": 99000,
+      "promo": true
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'category' VALUE A.\"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_products\" A\nWHERE A.\"id\" = 'p1'\nFETCH NEXT 1000 ROWS ONLY",
+      "-- UPDATE\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  UPDATE JSQL.\"f_products\"\n  SET \"category\" = 'internet',\n    \"name\" = 'Plan 200',\n    \"_source\" = JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"price\":99000,\"promo\":true}') RETURNING CLOB)\n  WHERE \"id\" = 'p1'\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE \"id\",\n'name' VALUE \"name\",\n'category' VALUE \"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_products\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "Update + Where + Or (varias filas)",
+    "status": "pass",
+    "output": 2,
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'category' VALUE A.\"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_products\" A\nWHERE A.\"id\" = 'p5'\n  OR A.\"id\" = 'p6'\nFETCH NEXT 1000 ROWS ONLY",
+      "-- UPDATE\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  UPDATE JSQL.\"f_products\"\n  SET \"category\" = 'tv',\n    \"name\" = 'Cable HDMI',\n    \"_source\" = JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"price\":15000,\"stock\":5}') RETURNING CLOB)\n  WHERE \"id\" = 'p5'\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE \"id\",\n'name' VALUE \"name\",\n'category' VALUE \"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_products\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- UPDATE\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  UPDATE JSQL.\"f_products\"\n  SET \"category\" = 'tv',\n    \"name\" = 'Control',\n    \"_source\" = JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"price\":10000,\"stock\":5}') RETURNING CLOB)\n  WHERE \"id\" = 'p6'\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE \"id\",\n'name' VALUE \"name\",\n'category' VALUE \"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_products\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "Upsert (inserta y luego actualiza)",
+    "status": "pass",
+    "output": {
+      "insert": "Antena",
+      "update": "Antena HD"
+    },
+    "sql": [
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM JSQL.\"f_products\" A\nWHERE A.\"id\" = 'p7') THEN 'true' ELSE 'false' END AS \"exists\" FROM DUAL",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_products\"\n  (\"category\", \"id\", \"name\")\n  VALUES ('tv', 'p7', 'Antena')\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE \"id\",\n'name' VALUE \"name\",\n'category' VALUE \"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_products\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM JSQL.\"f_products\" A\nWHERE A.\"id\" = 'p7') THEN 'true' ELSE 'false' END AS \"exists\" FROM DUAL",
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'category' VALUE A.\"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_products\" A\nWHERE A.\"id\" = 'p7'\nFETCH NEXT 1000 ROWS ONLY",
+      "-- UPDATE\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  UPDATE JSQL.\"f_products\"\n  SET \"category\" = 'tv',\n    \"name\" = 'Antena HD'\n  WHERE \"id\" = 'p7'\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE \"id\",\n'name' VALUE \"name\",\n'category' VALUE \"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_products\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "Return (campos del RETURNING)",
+    "status": "pass",
+    "output": {
+      "id": "p4"
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'category' VALUE A.\"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_products\" A\nWHERE A.\"id\" = 'p4'\nFETCH NEXT 1000 ROWS ONLY",
+      "-- UPDATE\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  UPDATE JSQL.\"f_products\"\n  SET \"category\" = 'equipos',\n    \"name\" = 'Router Wi-Fi 6',\n    \"_source\" = JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"price\":350000,\"stock\":7}') RETURNING CLOB)\n  WHERE \"id\" = 'p4'\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_OBJECT(\n'id' VALUE \"id\"\nRETURNING CLOB) AS \"result\" FROM JSQL.\"f_products\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "Delete (devuelve la fila borrada)",
+    "status": "pass",
+    "output": {
+      "deleted": "Control",
+      "exists": false
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'category' VALUE A.\"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_products\" A\nWHERE A.\"id\" = 'p6'\nFETCH NEXT 1000 ROWS ONLY",
+      "-- DELETE\nDECLARE\n  c SYS_REFCURSOR;\nBEGIN\n  OPEN c FOR SELECT JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE \"id\",\n'name' VALUE \"name\",\n'category' VALUE \"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_products\" WHERE \"id\" = 'p6';\n  DELETE FROM JSQL.\"f_products\" WHERE \"id\" = 'p6';\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM JSQL.\"f_products\" A\nWHERE A.\"id\" = 'p6') THEN 'true' ELSE 'false' END AS \"exists\" FROM DUAL"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "Test (no ejecuta) + ToJson",
+    "status": "pass",
+    "output": {
+      "exists": false,
+      "type": "insert"
+    },
+    "sql": [
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_products\"\n  (\"id\", \"name\")\n  VALUES ('p8', 'No se guarda')\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE \"id\",\n'name' VALUE \"name\",\n'category' VALUE \"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_products\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM JSQL.\"f_products\" A\nWHERE A.\"id\" = 'p8') THEN 'true' ELSE 'false' END AS \"exists\" FROM DUAL"
+    ]
+  },
+  {
+    "section": "7. Triggers",
+    "case": "Before/After Insert, Update, Delete e InsertOrUpdate",
+    "status": "pass",
+    "output": {
+      "events": [
+        "after_insert",
+        "after_insert_or_update",
+        "after_update",
+        "after_insert_or_update",
+        "before_delete",
+        "after_delete"
+      ],
+      "insert": {
+        "stage": "before_insert",
+        "touched": true
+      },
+      "update": {
+        "stage": "before_update",
+        "touched": true
+      }
+    },
+    "sql": [
+      "-- DDL\nBEGIN\n  EXECUTE IMMEDIATE 'CREATE TABLE JSQL.\"f_events\" (\n  \"created_at\" TIMESTAMP DEFAULT NULL,\n  \"updated_at\" TIMESTAMP DEFAULT NULL,\n  \"status\" VARCHAR2(255) DEFAULT ''active'',\n  \"id\" VARCHAR2(80) DEFAULT NULL,\n  \"_source\" CLOB DEFAULT TO_CLOB(''{}'') CHECK (\"_source\" IS JSON),\n  \"name\" VARCHAR2(80) DEFAULT NULL,\n  \"_idx\" VARCHAR2(80) DEFAULT NULL\n)';\n  EXECUTE IMMEDIATE 'ALTER TABLE JSQL.\"f_events\" ADD CONSTRAINT \"jsql_f_events_pkey\" PRIMARY KEY (\"id\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_events_status_idx\" ON JSQL.\"f_events\" (\"status\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_f_events__idx_idx\" ON JSQL.\"f_events\" (\"_idx\")';\nEND;",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_events\"\n  (\"_idx\", \"id\", \"name\", \"_source\")\n  VALUES ('1790448436530', 'e1', 'alta', TO_CLOB('{\"stage\":\"before_insert\",\"touched\":true}'))\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'status' VALUE \"status\",\n'id' VALUE \"id\",\n'name' VALUE \"name\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_events\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_events\" A\nWHERE A.\"id\" = 'e1'\nFETCH NEXT 1000 ROWS ONLY",
+      "-- UPDATE\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  UPDATE JSQL.\"f_events\"\n  SET \"name\" = 'cambio',\n    \"status\" = 'active',\n    \"_source\" = JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"stage\":\"before_update\",\"touched\":true}') RETURNING CLOB)\n  WHERE \"id\" = 'e1'\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'status' VALUE \"status\",\n'id' VALUE \"id\",\n'name' VALUE \"name\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_events\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_events\" A\nWHERE A.\"id\" = 'e1'\nFETCH NEXT 1000 ROWS ONLY",
+      "-- DELETE\nDECLARE\n  c SYS_REFCURSOR;\nBEGIN\n  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'status' VALUE \"status\",\n'id' VALUE \"id\",\n'name' VALUE \"name\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_events\" WHERE \"id\" = 'e1';\n  DELETE FROM JSQL.\"f_events\" WHERE \"id\" = 'e1';\n  DBMS_SQL.RETURN_RESULT(c);\nEND;"
+    ]
+  },
+  {
+    "section": "7. Triggers",
+    "case": "Trigger del comando + error que aborta",
+    "status": "pass",
+    "output": {
+      "aborted_exists": false,
+      "source": "command"
+    },
+    "sql": [
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_events\"\n  (\"_idx\", \"id\", \"name\", \"_source\")\n  VALUES ('1790448436575', 'e2', 'cmd', TO_CLOB('{\"source\":\"command\",\"stage\":\"before_insert\",\"touched\":true}'))\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'status' VALUE \"status\",\n'id' VALUE \"id\",\n'name' VALUE \"name\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_events\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM JSQL.\"f_events\" A\nWHERE A.\"id\" = 'e3') THEN 'true' ELSE 'false' END AS \"exists\" FROM DUAL"
+    ]
+  },
+  {
+    "section": "7. Triggers",
+    "case": "Triggers JS (DefineBeforeInsert / DefineAfterUpdate…)",
+    "status": "pass",
+    "output": {
+      "insert": "before_insert",
+      "update": "before_update"
+    },
+    "sql": [
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_events\"\n  (\"_idx\", \"id\", \"name\", \"_source\")\n  VALUES ('1790448436580', 'e4', 'js', TO_CLOB('{\"js\":\"before_insert\",\"stage\":\"before_insert\",\"touched\":true}'))\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'status' VALUE \"status\",\n'id' VALUE \"id\",\n'name' VALUE \"name\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_events\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(JSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'status' VALUE A.\"status\",\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_events\" A\nWHERE A.\"id\" = 'e4'\nFETCH NEXT 1000 ROWS ONLY",
+      "-- UPDATE\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  UPDATE JSQL.\"f_events\"\n  SET \"name\" = 'js2',\n    \"status\" = 'active',\n    \"_source\" = JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"js\":\"before_update\",\"stage\":\"before_update\",\"touched\":true}') RETURNING CLOB)\n  WHERE \"id\" = 'e4'\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), TO_CLOB('{\"_idx\":null}') RETURNING CLOB), JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'status' VALUE \"status\",\n'id' VALUE \"id\",\n'name' VALUE \"name\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_events\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;"
+    ]
+  },
+  {
+    "section": "8. Transacciones",
+    "case": "NewTx + ExecTx + Rollback",
+    "status": "pass",
+    "output": false,
+    "sql": [
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_products\"\n  (\"id\", \"name\")\n  VALUES ('t1', 'rollback')\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE \"id\",\n'name' VALUE \"name\",\n'category' VALUE \"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_products\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM JSQL.\"f_products\" A\nWHERE A.\"id\" = 't1') THEN 'true' ELSE 'false' END AS \"exists\" FROM DUAL"
+    ]
+  },
+  {
+    "section": "8. Transacciones",
+    "case": "NewTx + ExecTx + Commit",
+    "status": "pass",
+    "output": {
+      "id": "t2",
+      "name": "commit 2"
+    },
+    "sql": [
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"f_products\"\n  (\"id\", \"name\")\n  VALUES ('t2', 'commit')\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE \"id\",\n'name' VALUE \"name\",\n'category' VALUE \"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_products\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'category' VALUE A.\"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_products\" A\nWHERE A.\"id\" = 't2'\nFETCH NEXT 1000 ROWS ONLY",
+      "-- UPDATE\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  UPDATE JSQL.\"f_products\"\n  SET \"name\" = 'commit 2'\n  WHERE \"id\" = 't2'\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_MERGEPATCH(NVL(\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE \"id\",\n'name' VALUE \"name\",\n'category' VALUE \"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\" FROM JSQL.\"f_products\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- QUERY\nSELECT\nJSON_MERGEPATCH(NVL(A.\"_source\", TO_CLOB('{}')), JSON_OBJECT(\n'id' VALUE A.\"id\",\n'name' VALUE A.\"name\",\n'category' VALUE A.\"category\"\nRETURNING CLOB) RETURNING CLOB) AS \"result\"\nFROM JSQL.\"f_products\" A\nWHERE A.\"id\" = 't2'\nFETCH NEXT 1 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "9. Series",
+    "case": "DefineSeries",
+    "status": "pass",
+    "output": "series",
+    "sql": [
+      "-- DDL\nBEGIN\n  EXECUTE IMMEDIATE 'CREATE TABLE JSQL.\"series\" (\n  \"created_at\" TIMESTAMP DEFAULT NULL,\n  \"updated_at\" TIMESTAMP DEFAULT NULL,\n  \"tag\" VARCHAR2(80) DEFAULT NULL,\n  \"format\" VARCHAR2(255) DEFAULT NULL,\n  \"value\" NUMBER(19) DEFAULT NULL,\n  \"_idx\" VARCHAR2(80) DEFAULT NULL\n)';\n  EXECUTE IMMEDIATE 'ALTER TABLE JSQL.\"series\" ADD CONSTRAINT \"jsql_series_pkey\" PRIMARY KEY (\"tag\")';\n  EXECUTE IMMEDIATE 'CREATE INDEX \"jsql_series__idx_idx\" ON JSQL.\"series\" (\"_idx\")';\nEND;"
+    ]
+  },
+  {
+    "section": "9. Series",
+    "case": "SetSeries + GetSeries",
+    "status": "pass",
+    "output": {
+      "format": "FAC-%05d",
+      "value": 10
+    },
+    "sql": [
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM JSQL.\"series\" A\nWHERE A.\"tag\" = 'invoice') THEN 'true' ELSE 'false' END AS \"exists\" FROM DUAL",
+      "-- INSERT\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  INSERT INTO JSQL.\"series\"\n  (\"_idx\", \"created_at\", \"format\", \"tag\", \"updated_at\", \"value\")\n  VALUES ('1790448436614', TO_TIMESTAMP('2026-09-26 13:47:16.614637', 'YYYY-MM-DD HH24:MI:SS.FF'), 'FAC-%05d', 'invoice', TO_TIMESTAMP('2026-09-26 13:47:16.614637', 'YYYY-MM-DD HH24:MI:SS.FF'), 10)\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'tag' VALUE \"tag\",\n'format' VALUE \"format\",\n'value' VALUE \"value\"\nRETURNING CLOB) AS \"result\" FROM JSQL.\"series\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'tag' VALUE A.\"tag\",\n'format' VALUE A.\"format\",\n'value' VALUE A.\"value\"\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"series\" A\nWHERE A.\"tag\" = 'invoice'\nFETCH NEXT 1 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "9. Series",
+    "case": "GenValue + GenSerie",
+    "status": "pass",
+    "output": {
+      "code": "FAC-00012",
+      "value": 11
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'tag' VALUE A.\"tag\",\n'format' VALUE A.\"format\",\n'value' VALUE A.\"value\"\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"series\" A\nWHERE A.\"tag\" = 'invoice'\nFETCH NEXT 1000 ROWS ONLY",
+      "-- UPDATE\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  UPDATE JSQL.\"series\"\n  SET \"created_at\" = TO_TIMESTAMP('2026-09-26 13:47:16.614637', 'YYYY-MM-DD HH24:MI:SS.FF'),\n    \"format\" = 'FAC-%05d',\n    \"updated_at\" = TO_TIMESTAMP('2026-09-26 13:47:16.625748', 'YYYY-MM-DD HH24:MI:SS.FF'),\n    \"value\" = 11\n  WHERE \"tag\" = 'invoice'\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'tag' VALUE \"tag\",\n'format' VALUE \"format\",\n'value' VALUE \"value\"\nRETURNING CLOB) AS \"result\" FROM JSQL.\"series\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM JSQL.\"series\" A\nWHERE A.\"tag\" = 'invoice') THEN 'true' ELSE 'false' END AS \"exists\" FROM DUAL",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'tag' VALUE A.\"tag\",\n'format' VALUE A.\"format\",\n'value' VALUE A.\"value\"\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"series\" A\nWHERE A.\"tag\" = 'invoice'\nFETCH NEXT 1000 ROWS ONLY",
+      "-- UPDATE\nDECLARE\n  rs SYS.ODCIVARCHAR2LIST;\n  c SYS_REFCURSOR;\nBEGIN\n  UPDATE JSQL.\"series\"\n  SET \"created_at\" = TO_TIMESTAMP('2026-09-26 13:47:16.614637', 'YYYY-MM-DD HH24:MI:SS.FF'),\n    \"format\" = 'FAC-%05d',\n    \"updated_at\" = TO_TIMESTAMP('2026-09-26 13:47:16.630976', 'YYYY-MM-DD HH24:MI:SS.FF'),\n    \"value\" = 12\n  WHERE \"tag\" = 'invoice'\n  RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;\n  OPEN c FOR SELECT JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'tag' VALUE \"tag\",\n'format' VALUE \"format\",\n'value' VALUE \"value\"\nRETURNING CLOB) AS \"result\" FROM JSQL.\"series\" WHERE ROWIDTOCHAR(ROWID) IN (SELECT COLUMN_VALUE FROM TABLE(rs));\n  DBMS_SQL.RETURN_RESULT(c);\nEND;"
+    ]
+  },
+  {
+    "section": "9. Series",
+    "case": "DeleteSeries",
+    "status": "pass",
+    "output": false,
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'tag' VALUE A.\"tag\",\n'format' VALUE A.\"format\",\n'value' VALUE A.\"value\"\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"series\" A\nWHERE A.\"tag\" = 'invoice'\nFETCH NEXT 1000 ROWS ONLY",
+      "-- DELETE\nDECLARE\n  c SYS_REFCURSOR;\nBEGIN\n  OPEN c FOR SELECT JSON_OBJECT(\n'created_at' VALUE \"created_at\",\n'updated_at' VALUE \"updated_at\",\n'tag' VALUE \"tag\",\n'format' VALUE \"format\",\n'value' VALUE \"value\"\nRETURNING CLOB) AS \"result\" FROM JSQL.\"series\" WHERE \"tag\" = 'invoice';\n  DELETE FROM JSQL.\"series\" WHERE \"tag\" = 'invoice';\n  DBMS_SQL.RETURN_RESULT(c);\nEND;",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'created_at' VALUE A.\"created_at\",\n'updated_at' VALUE A.\"updated_at\",\n'tag' VALUE A.\"tag\",\n'format' VALUE A.\"format\",\n'value' VALUE A.\"value\"\nRETURNING CLOB) AS \"result\"\nFROM JSQL.\"series\" A\nWHERE A.\"tag\" = 'invoice'\nFETCH NEXT 1 ROWS ONLY"
+    ]
+  },
+  {
+    "section": "10. Auditoría",
+    "case": "OnAuditLog + Model.AddAuditLog + AddAuditLog",
+    "status": "pass",
+    "output": {
+      "callback": [
+        "tester:review"
+      ],
+      "list": 1,
+      "model": true
+    }
+  },
+  {
+    "section": "11. Utilidades",
+    "case": "Quoted / EscapeSQLString / SQLParse / JsonString",
+    "status": "pass",
+    "output": {
+      "escape": "it''s",
+      "json": "{\"html\":\"\u003cb\u003e\u0026\"}",
+      "parse": "name = 'Ana' AND age = 30",
+      "quoted": "'O''Brien'"
+    }
+  },
+  {
+    "section": "11. Utilidades",
+    "case": "ArgWhitAs / ArgWhitSchema / StatusList / TypeColumn.Str",
+    "status": "pass",
+    "output": {
+      "as": [
+        "public.users",
+        "U"
+      ],
+      "schema": [
+        "public",
+        "users"
+      ],
+      "status": true,
+      "type": "atrib"
+    }
+  },
+  {
+    "section": "11. Utilidades",
+    "case": "RowsToItems",
+    "status": "pass",
+    "output": [
+      {
+        "n": "1"
+      }
+    ]
+  },
+  {
+    "section": "11. Utilidades",
+    "case": "Model.Db / SetDb / GetModel / ToJson, Column.ToJson, Schema.ToJson",
+    "status": "pass",
+    "output": {
+      "column": "name",
+      "model": "f_users",
+      "other": "f_orders",
+      "schemas": true
+    }
+  }
+]

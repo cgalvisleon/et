@@ -32,18 +32,49 @@ El SQL concreto lo genera un `Driver` por motor (ver §9); el núcleo de `jsql` 
 
 | Constante | Valor | Persistencia |
 |---|---|---|
-| `COLUMN` | `column` | Columna real de la tabla. |
-| `ATTRIB` | `atrib` | Llave dentro del campo JSONB `SourceField`. |
-| `DETAIL` | `detail` | Relación 1‑N virtual (sub-consulta por fila). |
-| `MASTER` | `master` | Relación N‑1/N‑N virtual (vía modelo puente). |
-| `ROLLUP` | `rollup` | Agregado (`count`, `sum`, `avg`, `min`, `max`, `row`, `object`) sobre otro modelo. |
+| `COLUMN` | `column` | Columna que se crea en la tabla. |
+| `ATTRIB` | `atrib` | Atributo sin columna propia, que se guarda dentro del campo `SourceField`. |
+| `DETAIL` | `detail` | Relación maestro-detalle: el modelo del detalle, las keys que unen el maestro con el detalle, los campos que se muestran y cuántos registros se muestran. Se resuelve con una sub-consulta por fila. |
+| `MASTER` | `master` | Relación a través de una tabla intermedia: el modelo destino, el modelo puente, las keys del maestro al puente y del puente al destino, los campos que se muestran y cuántos registros se muestran; con un registro es 1 a 1 (ver §2.3). |
+| `ROLLUP` | `rollup` | Consulta hacia otro modelo que devuelve un solo registro (`row`, `object`) o un agregado (`count`, `sum`, `avg`, `min`, `max`) y lo asigna al atributo del rollup (ver §2.3). |
 | `CALCFUNC` | `calc_func` | Calculado en Go (`CalcFunction`) tras la consulta. |
 | `CALC` | `calc` | Calculado con script JS (`jrex`) tras la consulta. |
 | `AGG` | `agg` | Expresión de agregación. |
 
+Estructura de una columna (`column.go`):
+
+```go
+type Column struct {
+    Name       string      `json:"name"`
+    TypeColumn TypeColumn  `json:"type_column"`
+    TypeData   et.TypeData `json:"type_data"`
+    Default    any         `json:"default"`
+    model      *Model      `json:"-"`
+}
+```
+
 ### 2.2 Columnas estándar (`column.go`)
 
 `id`, `_idx`, `_source`, `status`, `version`, `tenant_id`, `project_id`, `created_at`, `updated_at` y `result` (alias de la columna JSON devuelta por los `SELECT` con `SourceField`).
+
+### 2.3 Relaciones
+
+| Relación | Definición | Resultado en la fila |
+|---|---|---|
+| Detalle | `model.DefineDetail(name, keys, rows, selects...)` crea el modelo `<modelo>_<name>` con la llave foránea. `keys` va del campo del maestro al del detalle, `rows` es cuántos registros se muestran y `selects` (opcional) los campos que se muestran. | `name` es la lista de registros del detalle (hasta `rows`), con los campos de `selects` o, sin ellos, todos. |
+| Maestro | `model.DefineMaster(name, to, keys, toKeys, selects, rows...)` crea el modelo puente `<modelo>_<to>`. `keys` va del maestro al puente, `toKeys` del destino al puente, `selects` son los campos que se muestran y `rows` (opcional) cuántos registros. | Con `rows = 1` la relación es 1 a 1 y `name` es el registro enlazado como objeto (o `null`). Con `rows > 1`, o sin `rows`, `name` es la lista de registros enlazados (hasta `rows` o `DB_RECORD_LIMIT`). `Model.Bridge(name)` devuelve el puente para crear los enlaces y `Model.Master(name)` la consulta. |
+| Rollup | `model.DefineRollup(name, to, keys, selects, operation)`. `keys` va del campo de la fila al campo de `to`. | Depende de la operación (tabla siguiente). |
+
+| Operación | Resultado |
+|---|---|
+| `count` | Cantidad de registros de `to` (sin `selects`). |
+| `sum`, `avg`, `min`, `max` | El agregado del campo de `selects` sobre el modelo `to`, asignado a `name`. |
+| `row` | La consulta con `limit 1` del campo de `selects`, cuyo valor se asigna a `name`. Con varios campos en `selects`, se asigna el registro como objeto. |
+| `object` | El primer registro con los campos de `selects`, como objeto asignado a `name`. |
+
+No hace falta seleccionar los campos llave de una relación: si la consulta pide un detalle, un maestro o un rollup y no incluye sus llaves (por ejemplo `tp_documento`), `jsql` las agrega para resolver la relación y las quita del resultado.
+
+Ejemplo: el atributo `tp_documento` guarda `CC`, `NIT` o `RUT`, y su significado está en el modelo `tipo_documentos` (`id`, `title`). Un rollup `row` con `selects: ["title"]` consulta la columna `title` con `limit 1` y la asigna al atributo que lleva el nombre del rollup; uno `object` con `selects: ["id", "title"]` asigna el objeto completo a ese atributo.
 
 ## 3. `SourceField`: atributos en JSONB
 
@@ -229,7 +260,8 @@ Reglas:
 - **`RETURNING`**: los tres comandos incluyen `RETURNING`. `INSERT` y `UPDATE` devuelven los **datos actualizados**; `DELETE` devuelve los **datos eliminados**. El resultado es la fila que devuelve la base, con la misma forma que un `SELECT` sin campos: con `SourceField`, `SourceField || jsonb_build_object(columnas) AS result`, sin los campos ocultos. Los triggers *after* reciben `new` con esos datos fusionados. `Command.Return(fields...)` restringe los campos devueltos.
 - **Filtros**: `Where`/`And`/`Or` reciben `*et.Condition` y admiten el mismo `[]Json` de §6.
 - **Ejecución**: `Exec()`, `ExecTx(tx)` → `et.Items`; `One()`, `OneTx(tx)` → `et.Item`. Con `tx == nil`, el comando abre su propia transacción y hace commit.
-- **Triggers**: `TriggerFunction func(tx *Tx, old, new et.Json) error` para `Before/After × Insert/Update/Delete` (en `Model` o por `Command`), y scripts JS (`jrex`) registrados con `DefineBeforeInsert`, etc. Un error en un trigger aborta el comando.
+- **Triggers**: `TriggerFunction func(tx *Tx, old, new et.Json) error` para `Before/After × Insert/Update/Delete` (en `Model` o por `Command`), y scripts JS (`jrex`) registrados con `DefineBeforeInsert(code)`, `DefineBeforeUpdate(name, code)`, etc. En el script los registros son `OLD` y `NEW` (`new` es palabra reservada de JavaScript), por ejemplo `NEW.estado = "revisado";`. Un error en un trigger aborta el comando y, si el comando abrió su propia transacción, la revierte.
+- **Campos calculados**: `DefineCalcFunc(name, fn)` en Go y `DefineCalc(name, script)` en JS, que recibe la fila como `item` (por ejemplo `item.inicial = item.name.substring(0, 1);`).
 
 ## 8. Consulta SQL descrita en JSON sobre la `DB` (`jquery.go`)
 

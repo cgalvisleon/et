@@ -33,11 +33,11 @@ type DB struct {
 }
 
 /**
-* NewDB: Creates a new DB instance for the given driver without initializing it (call Init afterwards).
+* newDB: Creates a new DB instance for the given driver without initializing it (call Init afterwards).
 * @param id, host, name, driver string, showLog ...bool (optional, defaults to true)
 * @return *DB, error
 **/
-func NewDB(params ConnectParams) (*DB, error) {
+func newDB(params ConnectParams) (*DB, error) {
 	drv, ok := drivers[params.Driver]
 	if !ok {
 		return nil, errors.New(MSG_DRIVER_NOT_FOUND)
@@ -73,11 +73,11 @@ func NewDB(params ConnectParams) (*DB, error) {
 }
 
 /**
-* LoadDb
+* loadDb
 * @param params et.Json
 * @return *DB, error
 **/
-func LoadDb(params et.Json) (*DB, error) {
+func loadDb(params et.Json) (*DB, error) {
 	if params.IsEmpty() {
 		return nil, errors.New(MSG_PARAMS_IS_EMPTY)
 	}
@@ -151,7 +151,7 @@ func LoadDb(params et.Json) (*DB, error) {
 	return result, nil
 }
 
-func (s *DB) OnAuditLog(fn func(userId string, action string) error) {
+func (s *DB) setOnAuditLog(fn func(userId string, action string) error) {
 	s.onAuditLog = fn
 }
 
@@ -184,10 +184,10 @@ func (s *DB) addAuditLog(userId string, action string) {
 }
 
 /**
-* ToJson: Returns the DB metadata as an et.Json map.
+* toJson: Returns the DB metadata as an et.Json map.
 * @return et.Json
 **/
-func (s *DB) ToJson() et.Json {
+func (s *DB) toJson() et.Json {
 	schemas := et.Json{}
 	for name, schema := range s.Schemas {
 		schemas[name] = schema.ToJson()
@@ -209,7 +209,7 @@ func (s *DB) ToJson() et.Json {
 * init: Opens the driver connection and, when UseCore is set, initializes core tables.
 * @return error
 **/
-func (s *DB) Init() error {
+func (s *DB) init() error {
 	if s.isInit {
 		return nil
 	}
@@ -331,10 +331,10 @@ func (s *DB) query(query *Query) (string, error) {
 }
 
 /**
-* Close: Closes the underlying *sql.DB connection pool.
+* close: Closes the underlying *sql.DB connection pool.
 * @return error
 **/
-func (s *DB) Close() error {
+func (s *DB) close() error {
 	return s.db.Close()
 }
 
@@ -357,11 +357,11 @@ func (s *DB) newSchema(name string) *Schema {
 }
 
 /**
-* NewModel: Returns (or creates) a Model under the given schema name.
+* newModel: Returns (or creates) a Model under the given schema name.
 * @param schema, name string, version int, userId string
 * @return *Model, error
 **/
-func (s *DB) NewModel(schema, name string, version int, userId string) *Model {
+func (s *DB) newModel(schema, name string, version int, userId string) *Model {
 	schema = utility.Normalize(schema)
 	sch, ok := s.Schemas[schema]
 	if !ok {
@@ -373,11 +373,11 @@ func (s *DB) NewModel(schema, name string, version int, userId string) *Model {
 }
 
 /**
-* RemoveModel: Removes a model from the database.
+* removeModel: Removes a model from the database.
 * @param schema, name string
 * @return error
 **/
-func (s *DB) RemoveModel(schema, name string) error {
+func (s *DB) removeModel(schema, name string) error {
 	schema = utility.Normalize(schema)
 	sch, ok := s.Schemas[schema]
 	if !ok {
@@ -389,26 +389,26 @@ func (s *DB) RemoveModel(schema, name string) error {
 }
 
 /**
-* SetDebug: Sets the debug flag to the given value.
+* setDebug: Sets the debug flag to the given value.
 * @param debug bool
 **/
-func (s *DB) SetDebug(debug bool) {
+func (s *DB) setDebug(debug bool) {
 	s.isDebug = debug
 }
 
 /**
-* Debug: Enables debug logging for all queries and commands.
+* debug: Enables debug logging for all queries and commands.
 **/
-func (s *DB) Debug() {
+func (s *DB) debug() {
 	s.isDebug = true
 }
 
 /**
-* GetModel: Looks up a model by schema and name, returning an error if not found.
+* getModel: Looks up a model by schema and name, returning an error if not found.
 * @param schema, name string
 * @return *Model, error
 **/
-func (s *DB) GetModel(schema, name string) (*Model, error) {
+func (s *DB) getModel(schema, name string) (*Model, error) {
 	sch, err := s.getSchema(schema)
 	if err != nil {
 		return nil, err
@@ -423,11 +423,11 @@ func (s *DB) GetModel(schema, name string) (*Model, error) {
 }
 
 /**
-* SqlTx: Executes a SQL query inside the given transaction (or directly on the pool if nil).
+* sqlTx: Executes a SQL query inside the given transaction (or directly on the pool if nil).
 * @param tx *Tx, query string, args ...any
 * @return et.Items, error
 **/
-func (s *DB) SqlTx(tx *Tx, query string, arg ...any) (et.Items, error) {
+func (s *DB) sqlTx(tx *Tx, query string, arg ...any) (et.Items, error) {
 	query = SQLParse(query, arg...)
 	if tx != nil {
 		rows, err := tx.Query(s.db, query)
@@ -449,20 +449,20 @@ func (s *DB) SqlTx(tx *Tx, query string, arg ...any) (et.Items, error) {
 }
 
 /**
-* Sql: Executes a SQL query directly on the DB (no transaction).
+* sql: Executes a SQL query directly on the DB (no transaction).
 * @param query string, args ...any
 * @return et.Items, error
 **/
-func (s *DB) Sql(query string, args ...any) (et.Items, error) {
+func (s *DB) sql(query string, args ...any) (et.Items, error) {
 	return s.SqlTx(nil, query, args...)
 }
 
 /**
-* Define: Creates a model from a declarative definition (delegates to DefineModel).
+* define: Creates a model from a declarative definition (delegates to DefineModel).
 * @param definition Define
 * @return *Model, error
 **/
-func (s *DB) Define(define Define) (*Model, error) {
+func (s *DB) define(define Define) (*Model, error) {
 	if !utility.ValidStr(define.ID, 0, []string{}) {
 		define.ID = reg.UUID()
 	}
@@ -547,7 +547,7 @@ func (s *DB) Define(define Define) (*Model, error) {
 	}
 
 	for _, defDetail := range define.Details {
-		detail, err := result.DefineDetail(defDetail.Name, defDetail.Keys, defDetail.Rows)
+		detail, err := result.DefineDetail(defDetail.Name, defDetail.Keys, defDetail.Rows, defDetail.Select...)
 		if err != nil {
 			return nil, err
 		}
@@ -596,7 +596,7 @@ func (s *DB) Define(define Define) (*Model, error) {
 			return nil, err
 		}
 
-		_, err = result.DefineMaster(defMaster.Name, to, defMaster.Keys, defMaster.ToKeys, defMaster.Select)
+		_, err = result.DefineMaster(defMaster.Name, to, defMaster.Keys, defMaster.ToKeys, defMaster.Select, defMaster.Rows)
 		if err != nil {
 			return nil, err
 		}

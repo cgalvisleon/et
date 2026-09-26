@@ -3,7 +3,6 @@ package jsql
 import (
 	"encoding/json"
 	"fmt"
-	"maps"
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
@@ -25,10 +24,10 @@ type From struct {
 }
 
 /**
-* Ref: Returns the reference of the from.
+* ref: Returns the reference of the from.
 * @return et.Json
 **/
-func (s *From) Ref() et.Json {
+func (s *From) ref() et.Json {
 	return et.Json{
 		"database": s.Database,
 		"schema":   s.Schema,
@@ -119,6 +118,8 @@ const (
 **/
 type QueryDetail struct {
 	To     *From             `json:"to"`
+	Bridge *From             `json:"bridge,omitempty"`
+	ToKeys map[string]string `json:"to_keys,omitempty"`
 	Keys   map[string]string `json:"keys"`
 	Select []string          `json:"select"`
 	Page   int               `json:"page"`
@@ -153,12 +154,12 @@ func rollupAggSelect(op RollupOperation, field string) string {
 }
 
 /**
-* GetQuery: Returns the query for the rollup filtered by the keys of the given row.
+* getQuery: Returns the query for the rollup filtered by the keys of the given row.
 * Returns false when the row lacks any of the keys, so the rollup is not applied.
 * @param item et.Json
 * @return *Query, bool
 **/
-func (s *QueryRollups) GetQuery(item et.Json) (*Query, bool) {
+func (s *QueryRollups) getQuery(item et.Json) (*Query, bool) {
 	if s.To == nil || s.To.Model == nil {
 		return nil, false
 	}
@@ -185,12 +186,26 @@ func (s *QueryRollups) GetQuery(item et.Json) (*Query, bool) {
 }
 
 /**
-* GetQuery: Returns the query for the detail.
+* getQuery: Returns the query for the detail.
 * @param item et.Json
 * @return *Query
 **/
-func (s *QueryDetail) GetQuery(item et.Json) *Query {
+func (s *QueryDetail) getQuery(item et.Json) *Query {
 	q := NewQuery(s.To.Model, "A")
+	if s.Bridge != nil && s.Bridge.Model != nil {
+		// Master: the To rows linked to the item through the bridge (A = To, B = bridge).
+		on := make([]*et.Condition, 0, len(s.ToKeys))
+		for k, fk := range s.ToKeys {
+			on = append(on, Eq("B."+fk, "A."+k))
+		}
+		q.Join(s.Bridge.Model, "B", on)
+		for k, fk := range s.Keys {
+			q.Where(Eq("B."+fk, item[k]))
+		}
+		q.Select(s.Select...)
+		q.Rows = s.Rows
+		return q
+	}
 	for k, fk := range s.Keys {
 		v, exists := item[k]
 		if !exists {
@@ -237,14 +252,15 @@ type Query struct {
 	db             *DB                      `json:"-"`
 	isDebug        bool                     `json:"-"`
 	isTest         bool                     `json:"-"`
+	relationKeys   []string                 `json:"-"`
 }
 
 /**
-* NewQuery: Creates a Query with the model as the primary FROM source.
+* newQuery: Creates a Query with the model as the primary FROM source.
 * @param model *Model, as ...string
 * @return *Query
 **/
-func NewQuery(model *Model, as ...string) *Query {
+func newQuery(model *Model, as ...string) *Query {
 	if len(as) == 0 || as[0] == "" {
 		as = []string{"A"}
 	}
@@ -259,6 +275,7 @@ func NewQuery(model *Model, as ...string) *Query {
 		OrdersBy:   make([]*Index, 0),
 		Havings:    make([]*et.Condition, 0),
 		Details:    make(map[string]*QueryDetail, 0),
+		Masters:    make(map[string]*QueryDetail, 0),
 		Rollups:    make(map[string]*QueryRollups, 0),
 		CalcFuns:   make(map[string]CalcFunction, 0),
 		Calcs:      make(map[string]*Calc, 0),
@@ -285,10 +302,10 @@ func (s *Query) serialize() ([]byte, error) {
 }
 
 /**
-* ToJson: Returns the query metadata as an et.Json map.
+* toJson: Returns the query metadata as an et.Json map.
 * @return et.Json
 **/
-func (s *Query) ToJson() et.Json {
+func (s *Query) toJson() et.Json {
 	bt, err := s.serialize()
 	if err != nil {
 		return et.Json{}
@@ -314,30 +331,30 @@ func (s *Query) setDebug(debug bool) *Query {
 }
 
 /**
-* Debug: Enables SQL logging for this query and returns it for chaining.
+* debug: Enables SQL logging for this query and returns it for chaining.
 * @return *Query
 **/
-func (s *Query) Debug() *Query {
+func (s *Query) debug() *Query {
 	return s.setDebug(true)
 }
 
 /**
-* Test: Enables test mode — SQL is generated but not executed.
+* test: Enables test mode — SQL is generated but not executed.
 * @return *Query
 **/
-func (s *Query) Test() *Query {
+func (s *Query) test() *Query {
 	s.isTest = true
 	return s
 }
 
 /**
-* GetField: Parses a field reference with et.ToField and resolves it against the query's origins.
+* getField: Parses a field reference with et.ToField and resolves it against the query's origins.
 * Supports "field", "field:as", "from.field", "from.field:as", "agg(field)", "agg(field):as",
 * "field->a->b" and the "|page:n" suffix.
 * @param field string
 * @return (*Field, bool)
 **/
-func (s *Query) GetField(field string) (*Field, bool) {
+func (s *Query) getField(field string) (*Field, bool) {
 	def, ok := et.ToField(field)
 	if !ok {
 		return nil, false
@@ -413,41 +430,41 @@ func (s *Query) join(model *Model, as string, tp JoinType, conditions []*et.Cond
 }
 
 /**
-* Join: Appends an INNER JOIN clause.
+* joinInner: Appends an INNER JOIN clause.
 * @param model *Model, as string, on *et.Condition
 * @return *Query
 **/
-func (s *Query) Join(model *Model, as string, on []*et.Condition) *Query {
+func (s *Query) joinInner(model *Model, as string, on []*et.Condition) *Query {
 	s.join(model, as, INNER_JOIN, on)
 	return s
 }
 
 /**
-* LeftJoin: Appends a LEFT JOIN clause.
+* leftJoin: Appends a LEFT JOIN clause.
 * @param model *Model, as string, on *et.Condition
 * @return *Query
 **/
-func (s *Query) LeftJoin(model *Model, as string, on []*et.Condition) *Query {
+func (s *Query) leftJoin(model *Model, as string, on []*et.Condition) *Query {
 	s.join(model, as, LEFT_JOIN, on)
 	return s
 }
 
 /**
-* RightJoin: Appends a RIGHT JOIN clause.
+* rightJoin: Appends a RIGHT JOIN clause.
 * @param model *Model, as string, on *et.Condition
 * @return *Query
 **/
-func (s *Query) RightJoin(model *Model, as string, on []*et.Condition) *Query {
+func (s *Query) rightJoin(model *Model, as string, on []*et.Condition) *Query {
 	s.join(model, as, RIGHT_JOIN, on)
 	return s
 }
 
 /**
-* FullJoin: Appends a FULL JOIN clause.
+* fullJoin: Appends a FULL JOIN clause.
 * @param model *Model, as string, on *et.Condition
 * @return *Query
 **/
-func (s *Query) FullJoin(model *Model, as string, on []*et.Condition) *Query {
+func (s *Query) fullJoin(model *Model, as string, on []*et.Condition) *Query {
 	s.join(model, as, FULL_JOIN, on)
 	return s
 }
@@ -463,21 +480,21 @@ func (s *Query) addCondition(conds []*et.Condition) *Query {
 }
 
 /**
-* Select: Appends fields to the SELECT clause.
+* selects: Appends fields to the SELECT clause.
 * @param fields ...string
 * @return *Query
 **/
-func (s *Query) Select(fields ...string) *Query {
+func (s *Query) selects(fields ...string) *Query {
 	s.Selects = append(s.Selects, fields...)
 	return s
 }
 
 /**
-* Detail: Appends fields to the DETAIL clause.
+* calc: Appends fields to the DETAIL clause.
 * @param fields ...string
 * @return *Query
 **/
-func (s *Query) Calc(fields ...string) *Query {
+func (s *Query) calc(fields ...string) *Query {
 	for _, field := range fields {
 		for _, from := range s.Froms {
 			fn, ok := from.Model.calcs[field]
@@ -491,11 +508,11 @@ func (s *Query) Calc(fields ...string) *Query {
 }
 
 /**
-* Detail: Appends fields to the DETAIL clause.
+* detail: Appends fields to the DETAIL clause.
 * @param fields ...string
 * @return *Query
 **/
-func (s *Query) Detail(fields ...string) *Query {
+func (s *Query) detail(fields ...string) *Query {
 	for _, field := range fields {
 		from := s.Froms[0]
 		if from == nil {
@@ -508,11 +525,11 @@ func (s *Query) Detail(fields ...string) *Query {
 		}
 
 		s.Details[field] = &QueryDetail{
-			To:     from,
+			To:     detail.To,
 			Keys:   detail.Keys,
 			Select: detail.Select,
-			Page:   s.Offset,
-			Rows:   s.Rows,
+			Page:   1,
+			Rows:   detail.Rows,
 		}
 	}
 
@@ -520,11 +537,11 @@ func (s *Query) Detail(fields ...string) *Query {
 }
 
 /**
-* Master: Appends fields to the MASTER clause.
+* master: Appends fields to the MASTER clause.
 * @param fields ...string
 * @return *Query
 **/
-func (s *Query) Master(fields ...string) *Query {
+func (s *Query) master(fields ...string) *Query {
 	for _, field := range fields {
 		from := s.Froms[0]
 		if from == nil {
@@ -536,33 +553,39 @@ func (s *Query) Master(fields ...string) *Query {
 			continue
 		}
 
+		rows := master.Rows
+		if rows <= 0 {
+			rows = s.MaxRows
+		}
 		s.Masters[field] = &QueryDetail{
-			To:     from,
+			To:     master.To,
+			Bridge: master.Bridge,
+			ToKeys: master.ToKeys,
 			Keys:   master.Keys,
 			Select: master.Select,
-			Page:   s.Offset,
-			Rows:   s.Rows,
+			Page:   1,
+			Rows:   rows,
 		}
 	}
 	return s
 }
 
 /**
-* Hidden: Appends fields to the HIDDEN clause.
+* hidden: Appends fields to the HIDDEN clause.
 * @param fields ...string
 * @return *Query
 **/
-func (s *Query) Hidden(fields ...string) *Query {
+func (s *Query) hidden(fields ...string) *Query {
 	s.Hiddens = append(s.Hiddens, fields...)
 	return s
 }
 
 /**
-* AddCondition: Appends a condition to the WHERE clause.
+* addOneCondition: Appends a condition to the WHERE clause.
 * @param cond *et.Condition
 * @return *Query
 **/
-func (s *Query) AddCondition(cond *et.Condition) *Query {
+func (s *Query) addOneCondition(cond *et.Condition) *Query {
 	if s.Conditions == nil {
 		s.Conditions = []*et.Condition{}
 	}
@@ -574,22 +597,22 @@ func (s *Query) AddCondition(cond *et.Condition) *Query {
 }
 
 /**
-* Where: Appends a condition to the WHERE clause and sets the active section to where.
+* where: Appends a condition to the WHERE clause and sets the active section to where.
 * @param cond *et.Condition
 * @return *Query
 **/
-func (s *Query) Where(cond *et.Condition) *Query {
+func (s *Query) where(cond *et.Condition) *Query {
 	s.AddCondition(cond)
 	s.section = whereSection
 	return s
 }
 
 /**
-* And: Appends an AND condition to the active clause section (WHERE, JOIN ON, or HAVING).
+* and: Appends an AND condition to the active clause section (WHERE, JOIN ON, or HAVING).
 * @param cond *et.Condition
 * @return *Query
 **/
-func (s *Query) And(cond *et.Condition) *Query {
+func (s *Query) and(cond *et.Condition) *Query {
 	cond.Connector = et.AND
 	switch s.section {
 	case joinSection:
@@ -604,11 +627,11 @@ func (s *Query) And(cond *et.Condition) *Query {
 }
 
 /**
-* Or: Appends an OR condition to the active clause section (WHERE, JOIN ON, or HAVING).
+* or: Appends an OR condition to the active clause section (WHERE, JOIN ON, or HAVING).
 * @param cond *et.Condition
 * @return *Query
 **/
-func (s *Query) Or(cond *et.Condition) *Query {
+func (s *Query) or(cond *et.Condition) *Query {
 	cond.Connector = et.OR
 	switch s.section {
 	case joinSection:
@@ -623,21 +646,21 @@ func (s *Query) Or(cond *et.Condition) *Query {
 }
 
 /**
-* GroupBy: Adds one or more fields to the GROUP BY clause.
+* groupBy: Adds one or more fields to the GROUP BY clause.
 * @param fields ...string
 * @return *Query
 **/
-func (s *Query) GroupBy(fields ...string) *Query {
+func (s *Query) groupBy(fields ...string) *Query {
 	s.GroupsBy = append(s.GroupsBy, fields...)
 	return s
 }
 
 /**
-* Having: Appends a condition to the HAVING clause and sets the active section to having.
+* having: Appends a condition to the HAVING clause and sets the active section to having.
 * @param cond *et.Condition
 * @return *Query
 **/
-func (s *Query) Having(cond *et.Condition) *Query {
+func (s *Query) having(cond *et.Condition) *Query {
 	s.Havings = append(s.Havings, cond)
 	s.section = havingSection
 	return s
@@ -667,27 +690,78 @@ func (s *Query) setPage(page int) *Query {
 }
 
 /**
-* Page: Sets the result offset based on the 1-based page number and current Rows limit.
+* page: Sets the result offset based on the 1-based page number and current Rows limit.
 * @param page int
 * @return *Query
 **/
-func (s *Query) Page(page int) *Query {
+func (s *Query) page(page int) *Query {
 	return s.setPage(page)
 }
 
 /**
-* OrderBy: Appends a field to the ORDER BY clause; sorted=true means ASC, false means DESC.
+* orderBy: Appends a field to the ORDER BY clause; sorted=true means ASC, false means DESC.
 * @param field string
 * @param sorted bool
 * @return *Query
 **/
-func (s *Query) OrderBy(field string, sorted ...bool) *Query {
+func (s *Query) orderBy(field string, sorted ...bool) *Query {
 	sortedValue := true
 	if len(sorted) > 0 {
 		sortedValue = sorted[0]
 	}
 	s.OrdersBy = append(s.OrdersBy, &Index{Name: field, Sorted: sortedValue})
 	return s
+}
+
+/**
+* addRelationKeys: When the query selects details, masters or rollups, adds the key fields they need
+* to resolve each row (e.g. tp_doc for a rollup keyed by it) if they are not selected, and remembers
+* them in relationKeys so they are removed from the result afterwards.
+**/
+func (s *Query) addRelationKeys() {
+	if len(s.Selects) == 0 {
+		return
+	}
+	selected := map[string]bool{}
+	for _, field := range s.Selects {
+		if fld, ok := s.GetField(field); ok {
+			selected[fld.As] = true
+		}
+	}
+	for _, field := range s.Selects {
+		fld, ok := s.GetField(field)
+		if !ok || fld.From == nil || fld.From.Model == nil {
+			continue
+		}
+		model := fld.From.Model
+		var keys map[string]string
+		switch fld.TypeColumn {
+		case DETAIL:
+			if detail, ok := model.Details[fld.Name]; ok {
+				keys = detail.Keys
+			}
+		case MASTER:
+			if master, ok := model.Masters[fld.Name]; ok {
+				keys = master.Keys
+			}
+		case ROLLUP:
+			if rollup, ok := model.Rollups[fld.Name]; ok {
+				keys = rollup.Keys
+			}
+		}
+		for key := range keys {
+			if selected[key] {
+				continue
+			}
+			selected[key] = true
+			name := key
+			if len(s.Froms) > 1 {
+				name = fld.From.As + "." + key
+			}
+			s.Selects = append(s.Selects, name)
+			s.relationKeys = append(s.relationKeys, key)
+		}
+	}
 }
 
 /**
@@ -705,13 +779,31 @@ func (s *Query) setDetails(tx *Tx, item et.Json) et.Json {
 		}
 		item[name] = detailResult.Result
 	}
+	for name, master := range s.Masters {
+		qry := master.GetQuery(item)
+		masterResult, err := qry.AllTx(tx)
+		if err != nil {
+			return item
+		}
+		if master.Rows == 1 {
+			// 1 to 1 relation: the row gets the linked record as an object.
+			var first et.Json
+			if len(masterResult.Result) > 0 {
+				first = masterResult.Result[0]
+			}
+			item[name] = first
+			continue
+		}
+		item[name] = masterResult.Result
+	}
 	return item
 }
 
 /**
 * setRollup: Executes each rollup query for the row and applies its result by operation:
 * aggregates set item[name] (a value for one select, an object for several),
-* RollupRow merges the resulting fields into item and RollupObject sets item[name] to the resulting object.
+* RollupRow sets item[name] to the value of its single selected field (or to the record when it selects
+* several fields) and RollupObject sets item[name] to the resulting object.
 * @param tx *Tx
 * @param item et.Json
 * @return et.Json
@@ -744,7 +836,17 @@ func (s *Query) setRollup(tx *Tx, item et.Json) et.Json {
 
 		switch rollup.Operation {
 		case RollupRow:
-			maps.Copy(item, first)
+			// The value of the selected field is assigned to the rollup attribute; with several
+			// fields, the record is assigned as an object.
+			if len(rollup.Select) == 1 {
+				var val any
+				for _, v := range first {
+					val = v
+				}
+				item[name] = val
+				continue
+			}
+			item[name] = first
 		case RollupObject:
 			item[name] = first
 		default:
@@ -773,34 +875,44 @@ func (s *Query) setCalcFuns(tx *Tx, item et.Json) {
 }
 
 /**
-* setCalc: Executes the bytecode calculations for the query and merges their results into the item.
+* setCalc: Runs the JS scripts of the CALC fields (defined with DefineCalc) over the item, which they
+* receive as "item", and returns the item they leave.
 * @param tx *Tx, item et.Json
 **/
-func (s *Query) setCalc(tx *Tx, item et.Json) error {
-	for _, calc := range s.Calcs {
+func (s *Query) setCalc(tx *Tx, item et.Json) (et.Json, error) {
+	for name, calc := range s.Calcs {
+		code := calc.Module
+		if code == "" && calc.Model != nil {
+			code = calc.Model.calcScripts[name]
+		}
+		if code == "" {
+			continue
+		}
 		instance := jrex.NewInstance()
+		instance.SetCode(code)
 		calc.Model.wrapper(instance)
-		instance.Set("item", item)
+		setJsJson(instance, "item", item)
 		instance.Set("tx", tx)
 		_, err := instance.Run()
 		if err != nil {
-			return err
+			return item, err
 		}
-		item = instance.GetJson("item")
+		item = getJsJson(instance, "item")
 	}
 
-	return nil
+	return item, nil
 }
 
 /**
-* AllTx: Generates and executes a SELECT query inside the given transaction.
+* allTx: Generates and executes a SELECT query inside the given transaction.
 * @param tx *Tx
 * @return et.Items, error
 **/
-func (s *Query) AllTx(tx *Tx) (et.Items, error) {
+func (s *Query) allTx(tx *Tx) (et.Items, error) {
 	if s.Rows == 0 {
 		s.Rows = s.MaxRows
 	}
+	s.addRelationKeys()
 
 	sql, err := s.db.query(s)
 	if err != nil {
@@ -823,8 +935,14 @@ func (s *Query) AllTx(tx *Tx) (et.Items, error) {
 	for i, item := range result.Result {
 		item = s.setDetails(tx, item)
 		item = s.setRollup(tx, item)
+		for _, key := range s.relationKeys {
+			delete(item, key)
+		}
 		s.setCalcFuns(tx, item)
-		s.setCalc(tx, item)
+		item, err = s.setCalc(tx, item)
+		if err != nil {
+			return et.Items{}, err
+		}
 		result.Result[i] = item
 	}
 
@@ -832,10 +950,10 @@ func (s *Query) AllTx(tx *Tx) (et.Items, error) {
 }
 
 /**
-* All: Generates and executes a SELECT query without an explicit transaction.
+* all: Generates and executes a SELECT query without an explicit transaction.
 * @return et.Items, error
 **/
-func (s *Query) All() (et.Items, error) {
+func (s *Query) all() (et.Items, error) {
 	result, err := s.AllTx(nil)
 	if err != nil {
 		return et.Items{}, err
@@ -845,11 +963,11 @@ func (s *Query) All() (et.Items, error) {
 }
 
 /**
-* OneTx: Executes the query limited to one row inside the given transaction.
+* oneTx: Executes the query limited to one row inside the given transaction.
 * @param tx *Tx
 * @return et.Item, error
 **/
-func (s *Query) OneTx(tx *Tx) (et.Item, error) {
+func (s *Query) oneTx(tx *Tx) (et.Item, error) {
 	s.Offset = 0
 	s.Rows = 1
 	result, err := s.AllTx(tx)
@@ -865,56 +983,56 @@ func (s *Query) OneTx(tx *Tx) (et.Item, error) {
 }
 
 /**
-* One: Executes the query limited to one row without an explicit transaction.
+* one: Executes the query limited to one row without an explicit transaction.
 * @return et.Item, error
 **/
-func (s *Query) One() (et.Item, error) {
+func (s *Query) one() (et.Item, error) {
 	return s.OneTx(nil)
 }
 
 /**
-* FirstTx: Executes the query limited to the first n rows inside the given transaction.
+* firstTx: Executes the query limited to the first n rows inside the given transaction.
 * @param tx *Tx, n int
 * @return et.Items, error
 **/
-func (s *Query) FirstTx(tx *Tx, n int) (et.Items, error) {
+func (s *Query) firstTx(tx *Tx, n int) (et.Items, error) {
 	return s.LimitTx(tx, 1, n)
 }
 
 /**
-* First: Executes the query limited to the first n rows without an explicit transaction.
+* first: Executes the query limited to the first n rows without an explicit transaction.
 * @param n int
 * @return et.Items, error
 **/
-func (s *Query) First(n int) (et.Items, error) {
+func (s *Query) first(n int) (et.Items, error) {
 	return s.FirstTx(nil, n)
 }
 
 /**
-* Limit: Sets the maximum number of rows to return.
+* limitTx: Sets the maximum number of rows to return.
 * @param tx *Tx, page int, rows int
 * @return et.Items, error
 **/
-func (s *Query) LimitTx(tx *Tx, page, rows int) (et.Items, error) {
+func (s *Query) limitTx(tx *Tx, page, rows int) (et.Items, error) {
 	s.setLimit(rows)
 	s.setPage(page)
 	return s.AllTx(tx)
 }
 
 /**
-* Limit: Sets the maximum number of rows to return.
+* limit: Sets the maximum number of rows to return.
 * @param page int, rows int
 * @return et.Items, error
 **/
-func (s *Query) Limit(page, rows int) (et.Items, error) {
+func (s *Query) limit(page, rows int) (et.Items, error) {
 	return s.LimitTx(nil, page, rows)
 }
 
 /**
-* PrimaryModel: Returns the Model for the primary FROM source, or nil if not found.
+* existsTx: Returns the Model for the primary FROM source, or nil if not found.
 * @return *Model
 **/
-func (s *Query) ExistsTx(tx *Tx) (bool, error) {
+func (s *Query) existsTx(tx *Tx) (bool, error) {
 	s.IsExists = true
 	sql, err := s.db.query(s)
 	if err != nil {
@@ -948,19 +1066,19 @@ func (s *Query) ExistsTx(tx *Tx) (bool, error) {
 }
 
 /**
-* Exists: Checks if any rows match the query conditions.
+* exists: Checks if any rows match the query conditions.
 * @return bool, error
 **/
-func (s *Query) Exists() (bool, error) {
+func (s *Query) exists() (bool, error) {
 	return s.ExistsTx(nil)
 }
 
 /**
-* CountTx: Executes the query and returns the count of matching rows within the given transaction.
+* countTx: Executes the query and returns the count of matching rows within the given transaction.
 * @param tx *Tx
 * @return int, error
 **/
-func (s *Query) CountTx(tx *Tx) (int, error) {
+func (s *Query) countTx(tx *Tx) (int, error) {
 	s.IsCount = true
 	sql, err := s.db.query(s)
 	if err != nil {
@@ -994,10 +1112,10 @@ func (s *Query) CountTx(tx *Tx) (int, error) {
 }
 
 /**
-* Count: Executes the query and returns the count of matching rows.
+* count: Executes the query and returns the count of matching rows.
 * @return int, error
 **/
-func (s *Query) Count() (int, error) {
+func (s *Query) count() (int, error) {
 	return s.CountTx(nil)
 }
 

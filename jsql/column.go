@@ -23,10 +23,10 @@ const (
 type TypeColumn string
 
 /**
-* Str: Returns the string representation of the TypeColumn.
+* str: Returns the string representation of the TypeColumn.
 * @return string
 **/
-func (s TypeColumn) Str() string {
+func (s TypeColumn) str() string {
 	return string(s)
 }
 
@@ -68,7 +68,7 @@ var Status = map[string]bool{
 
 var IsEditableStatus = []interface{}{ACTIVE, PENDING}
 
-func StatusList() []interface{} {
+func statusList() []interface{} {
 	return []interface{}{ACTIVE, ARCHIVED, CANCELED, OF_SYSTEM, FOR_DELETE, PENDING, APPROVED, REJECTED}
 }
 
@@ -103,10 +103,10 @@ func loadColumn(params et.Json) *Column {
 }
 
 /**
-* ToJson: Returns the column metadata as an et.Json map.
+* toJson: Returns the column metadata as an et.Json map.
 * @return et.Json
 **/
-func (s *Column) ToJson() et.Json {
+func (s *Column) toJson() et.Json {
 	return et.Json{
 		"name":        s.Name,
 		"type_column": s.TypeColumn,

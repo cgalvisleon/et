@@ -16,8 +16,9 @@ import (
 // (ORA-01704) even when every character takes 4 bytes in UTF-8.
 const maxLiteralChars = 1000
 
-// timeLayouts are the string formats accepted for DATETIME values.
-var timeLayouts = []string{time.RFC3339Nano, "2006-01-02 15:04:05.999999999", "2006-01-02 15:04:05", "2006-01-02"}
+// timeLayouts are the string formats accepted for DATETIME values; the ISO form without zone
+// is how JSON_OBJECT returns a TIMESTAMP.
+var timeLayouts = []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999", "2006-01-02 15:04:05.999999999", "2006-01-02 15:04:05", "2006-01-02"}
 
 /**
 * Quoted: Formats an et.Value as the SQL literal that Oracle expects, chosen according to

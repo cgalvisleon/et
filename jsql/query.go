@@ -3,6 +3,7 @@ package jsql
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
@@ -253,6 +254,7 @@ type Query struct {
 	isDebug        bool                     `json:"-"`
 	isTest         bool                     `json:"-"`
 	relationKeys   []string                 `json:"-"`
+	err            error                    `json:"-"`
 }
 
 /**
@@ -714,6 +716,97 @@ func (s *Query) orderBy(field string, sorted ...bool) *Query {
 }
 
 /**
+* splitFromRef: Splits a from reference "schema.table:alias", "table:alias", "schema.table" or "table"
+* into its parts; the schema is empty when not given.
+* @param ref string
+* @return schema, table, alias string, ok bool
+**/
+func splitFromRef(ref string) (schema, table, alias string, ok bool) {
+	ref = strings.TrimSpace(ref)
+	if i := strings.LastIndex(ref, ":"); i != -1 {
+		ref, alias = ref[:i], ref[i+1:]
+		if !fromIdent.MatchString(alias) {
+			return "", "", "", false
+		}
+	}
+	table = ref
+	if i := strings.Index(ref, "."); i != -1 {
+		schema, table = ref[:i], ref[i+1:]
+		if !fromIdent.MatchString(schema) {
+			return "", "", "", false
+		}
+	}
+	if !fromIdent.MatchString(table) {
+		return "", "", "", false
+	}
+	return schema, table, alias, true
+}
+
+var fromIdent = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
+
+/**
+* loadFrom: Applies the "from" of a JSON query. It is a reference ("schema.table:alias",
+* "table:alias", "schema.table" or "table") or a list of them: the first one replaces the primary
+* origin of the query and the others are added as more origins. Without schema, the schema of the
+* model that runs the query is used; without alias, the primary origin is "A".
+* @param value any
+* @return error
+**/
+func (s *Query) loadFrom(value any) error {
+	refs := []string{}
+	switch v := value.(type) {
+	case nil:
+		return nil
+	case string:
+		refs = append(refs, v)
+	case []string:
+		refs = v
+	case []any:
+		for _, item := range v {
+			str, ok := item.(string)
+			if !ok {
+				return fmt.Errorf(MSG_INVALID_FROM, fmt.Sprint(item))
+			}
+			refs = append(refs, str)
+		}
+	default:
+		return fmt.Errorf(MSG_INVALID_FROM, fmt.Sprint(value))
+	}
+	if len(refs) == 0 || len(s.Froms) == 0 {
+		return nil
+	}
+
+	defaultSchema := s.Froms[0].Schema
+	froms := make([]*From, 0, len(refs))
+	for i, ref := range refs {
+		schema, table, alias, ok := splitFromRef(ref)
+		if !ok {
+			return fmt.Errorf(MSG_INVALID_FROM, ref)
+		}
+		if schema == "" {
+			schema = defaultSchema
+		}
+		model, err := s.db.GetModel(schema, table)
+		if err != nil {
+			return fmt.Errorf(MSG_INVALID_FROM, ref)
+		}
+		if alias == "" && i == 0 {
+			alias = "A"
+		}
+		froms = append(froms, getFrom(model, alias))
+	}
+
+	s.Froms = froms
+	s.UseSourceField = false
+	for _, from := range froms {
+		if from.Model.SourceField != "" {
+			s.UseSourceField = true
+		}
+	}
+	return nil
+}
+
+/**
 * addRelationKeys: When the query selects details, masters or rollups, adds the key fields they need
 * to resolve each row (e.g. tp_doc for a rollup keyed by it) if they are not selected, and remembers
 * them in relationKeys so they are removed from the result afterwards.
@@ -909,6 +1002,9 @@ func (s *Query) setCalc(tx *Tx, item et.Json) (et.Json, error) {
 * @return et.Items, error
 **/
 func (s *Query) allTx(tx *Tx) (et.Items, error) {
+	if s.err != nil {
+		return et.Items{}, s.err
+	}
 	if s.Rows == 0 {
 		s.Rows = s.MaxRows
 	}
@@ -1033,6 +1129,9 @@ func (s *Query) limit(page, rows int) (et.Items, error) {
 * @return *Model
 **/
 func (s *Query) existsTx(tx *Tx) (bool, error) {
+	if s.err != nil {
+		return false, s.err
+	}
 	s.IsExists = true
 	sql, err := s.db.query(s)
 	if err != nil {
@@ -1079,6 +1178,9 @@ func (s *Query) exists() (bool, error) {
 * @return int, error
 **/
 func (s *Query) countTx(tx *Tx) (int, error) {
+	if s.err != nil {
+		return 0, s.err
+	}
 	s.IsCount = true
 	sql, err := s.db.query(s)
 	if err != nil {
@@ -1126,6 +1228,10 @@ func (s *Query) count() (int, error) {
 * @return et.Items, error
 **/
 func (s *Query) loadQuery(query et.Json) (*Query, error) {
+	if err := s.loadFrom(query["from"]); err != nil {
+		return s, err
+	}
+
 	join := query.ArrayJson("join")
 	for _, js := range join {
 		to := js.Str("to")

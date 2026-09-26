@@ -9,7 +9,6 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jrex"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -640,10 +639,9 @@ func (s *Model) upsert(data et.Json) *Command {
 **/
 func (s *Model) queryTx(tx *Tx, query et.Json) *Query {
 	result := s.As("")
-	_, err := result.loadQuery(query)
-	if err != nil {
-		logs.Alert(err)
-	}
+	// An invalid descriptor (from, join, where…) is kept in the query and returned when it runs,
+	// instead of running the query with the parts that could be read.
+	_, result.err = result.loadQuery(query)
 	return result
 }
 

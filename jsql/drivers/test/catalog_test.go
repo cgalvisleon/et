@@ -778,6 +778,49 @@ func (s *suite) queries() {
 		}
 		return items.Result, expect("ids", []string{"u3", "u1"}, ids(items))
 	})
+	s.run(4, "Model.Query con from (otro modelo y alias)", func() (any, error) {
+		items, err := orders.Query(et.Json{
+			"from":    s.schema + ".f_users:U",
+			"selects": []any{"U.id", "U.name"},
+			"where":   []any{et.Json{"U.age": et.Json{"more": 18}}},
+			"orders":  []any{et.Json{"U.id": true}},
+		}).All()
+		if err != nil {
+			return nil, err
+		}
+		return items.Result, expect("ids", []string{"u1", "u3"}, ids(items))
+	})
+	s.run(4, "Model.Query con from sin esquema", func() (any, error) {
+		items, err := users.Query(et.Json{
+			"from":    "f_roles:R",
+			"selects": []any{"R.name"},
+			"orders":  []any{et.Json{"R.name": true}},
+		}).All()
+		if err != nil {
+			return nil, err
+		}
+		return items.Result, expect("roles", []et.Json{{"name": "admin"}, {"name": "editor"}}, items.Result)
+	})
+	s.run(4, "Model.Query con from + join + groups", func() (any, error) {
+		items, err := orders.Query(et.Json{
+			"from":    "f_users:U",
+			"join":    []any{et.Json{"to": s.schema + ".f_orders:O", "on": []any{et.Json{"O.user_id": et.Json{"eq": "U.id"}}}}},
+			"selects": []any{"U.name", "count(O.id):n"},
+			"groups":  []any{"U.name"},
+			"orders":  []any{et.Json{"U.name": true}},
+		}).All()
+		if err != nil {
+			return nil, err
+		}
+		return items.Result, expect("rows", []et.Json{{"name": "Ana", "n": 2}, {"name": "Marta O'Neil", "n": 1}}, items.Result)
+	})
+	s.run(4, "Model.Query con from inválido (devuelve error)", func() (any, error) {
+		_, err := users.Query(et.Json{"from": "no_existe:X"}).All()
+		if err == nil {
+			return nil, errors.New("an unknown from was accepted")
+		}
+		return err.Error(), nil
+	})
 	s.run(4, "NewQuery / GetField / GetColumn / GetFrom / ToJson", func() (any, error) {
 		query := jsql.NewQuery(users, "X")
 		fld, ok := query.GetField("X.name:nombre")

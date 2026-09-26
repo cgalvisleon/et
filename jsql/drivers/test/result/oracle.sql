@@ -199,7 +199,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_parent"
   ("_idx", "id")
-  VALUES ('1790448435931', 'p1')
+  VALUES ('1790448836188', 'p1')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -217,7 +217,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_child"
   ("_idx", "id", "parent_id")
-  VALUES ('1790448435983', 'c1', 'p1')
+  VALUES ('1790448836267', 'c1', 'p1')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -236,7 +236,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_child"
   ("_idx", "id", "parent_id")
-  VALUES ('1790448436006', 'c2', 'missing')
+  VALUES ('1790448836284', 'c2', 'missing')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -273,7 +273,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_strict"
   ("_idx", "id", "name")
-  VALUES ('1790448436024', 's1', 'x')
+  VALUES ('1790448836311', 's1', 'x')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -307,7 +307,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_doc_types"
   ("_idx", "id", "title")
-  VALUES ('1790448436041', 'CC', 'Cédula de ciudadanía')
+  VALUES ('1790448836332', 'CC', 'Cédula de ciudadanía')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -326,7 +326,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_doc_types"
   ("_idx", "id", "title")
-  VALUES ('1790448436100', 'NIT', 'Número de identificación tributaria')
+  VALUES ('1790448836425', 'NIT', 'Número de identificación tributaria')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -345,7 +345,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_users"
   ("_idx", "email", "id", "name", "_source")
-  VALUES ('1790448436105', 'ana@example.com', 'u1', 'Ana', TO_CLOB('{"age":30,"password":"secret","tp_doc":"CC"}'))
+  VALUES ('1790448836429', 'ana@example.com', 'u1', 'Ana', TO_CLOB('{"age":30,"password":"secret","tp_doc":"CC"}'))
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null,"password":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -365,7 +365,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_users"
   ("_idx", "email", "id", "name", "_source")
-  VALUES ('1790448436152', 'luis@example.com', 'u2', 'Luis', TO_CLOB('{"age":17}'))
+  VALUES ('1790448836464', 'luis@example.com', 'u2', 'Luis', TO_CLOB('{"age":17}'))
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null,"password":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -385,7 +385,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_users"
   ("_idx", "email", "id", "name", "_source")
-  VALUES ('1790448436157', 'marta@example.com', 'u3', 'Marta O''Neil', TO_CLOB('{"age":45,"tp_doc":"NIT"}'))
+  VALUES ('1790448836467', 'marta@example.com', 'u3', 'Marta O''Neil', TO_CLOB('{"age":45,"tp_doc":"NIT"}'))
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null,"password":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -405,7 +405,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_roles"
   ("_idx", "id", "name")
-  VALUES ('1790448436161', 'r1', 'admin')
+  VALUES ('1790448836472', 'r1', 'admin')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -424,7 +424,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_roles"
   ("_idx", "id", "name")
-  VALUES ('1790448436200', 'r2', 'editor')
+  VALUES ('1790448836527', 'r2', 'editor')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -443,7 +443,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_orders"
   ("_idx", "id", "user_id", "_source")
-  VALUES ('1790448436204', 'o1', 'u1', TO_CLOB('{"amount":100.5}'))
+  VALUES ('1790448836530', 'o1', 'u1', TO_CLOB('{"amount":100.5}'))
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -462,7 +462,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_orders"
   ("_idx", "id", "user_id", "_source")
-  VALUES ('1790448436258', 'o2', 'u1', TO_CLOB('{"amount":200}'))
+  VALUES ('1790448836587', 'o2', 'u1', TO_CLOB('{"amount":200}'))
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -481,7 +481,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_orders"
   ("_idx", "id", "user_id", "_source")
-  VALUES ('1790448436262', 'o3', 'u3', TO_CLOB('{"amount":50}'))
+  VALUES ('1790448836594', 'o3', 'u3', TO_CLOB('{"amount":50}'))
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -583,7 +583,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_users_f_roles"
   ("_idx", "role_id", "user_id")
-  VALUES ('1790448436325', 'r1', 'u1')
+  VALUES ('1790448836663', 'r1', 'u1')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_OBJECT(
 'user_id' VALUE "user_id",
@@ -599,7 +599,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_users_f_roles"
   ("_idx", "role_id", "user_id")
-  VALUES ('1790448436333', 'r2', 'u1')
+  VALUES ('1790448836671', 'r2', 'u1')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_OBJECT(
 'user_id' VALUE "user_id",
@@ -615,7 +615,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_users_f_roles"
   ("_idx", "role_id", "user_id")
-  VALUES ('1790448436337', 'r2', 'u2')
+  VALUES ('1790448836674', 'r2', 'u2')
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_OBJECT(
 'user_id' VALUE "user_id",
@@ -971,6 +971,45 @@ FROM JSQL."f_users" A
 WHERE JSON_VALUE(A."_source", '$."age"' RETURNING NUMBER) >= 18
 ORDER BY A."name" DESC
 FETCH NEXT 10 ROWS ONLY
+
+-- ========== 4. Consultas · Model.Query con from (otro modelo y alias) [pass]
+
+-- QUERY
+SELECT
+JSON_OBJECT(
+'id' VALUE U."id",
+'name' VALUE U."name"
+RETURNING CLOB) AS "result"
+FROM JSQL."f_users" U
+WHERE JSON_VALUE(U."_source", '$."age"' RETURNING NUMBER) > 18
+ORDER BY U."id" ASC
+FETCH NEXT 1000 ROWS ONLY
+
+-- ========== 4. Consultas · Model.Query con from sin esquema [pass]
+
+-- QUERY
+SELECT
+JSON_OBJECT(
+'name' VALUE R."name"
+RETURNING CLOB) AS "result"
+FROM JSQL."f_roles" R
+ORDER BY R."name" ASC
+FETCH NEXT 1000 ROWS ONLY
+
+-- ========== 4. Consultas · Model.Query con from + join + groups [pass]
+
+-- QUERY
+SELECT
+JSON_OBJECT(
+'name' VALUE U."name",
+'n' VALUE COUNT(O."id")
+RETURNING CLOB) AS "result"
+FROM JSQL."f_users" U
+INNER JOIN JSQL."f_orders" O
+  ON O."user_id" = U."id"
+GROUP BY U."name"
+ORDER BY U."name" ASC
+FETCH NEXT 1000 ROWS ONLY
 
 -- ========== 4. Consultas · Test (genera el SQL sin ejecutarlo) / Debug [pass]
 
@@ -1600,7 +1639,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_events"
   ("_idx", "id", "name", "_source")
-  VALUES ('1790448436530', 'e1', 'alta', TO_CLOB('{"stage":"before_insert","touched":true}'))
+  VALUES ('1790448836898', 'e1', 'alta', TO_CLOB('{"stage":"before_insert","touched":true}'))
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -1683,7 +1722,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_events"
   ("_idx", "id", "name", "_source")
-  VALUES ('1790448436575', 'e2', 'cmd', TO_CLOB('{"source":"command","stage":"before_insert","touched":true}'))
+  VALUES ('1790448836939', 'e2', 'cmd', TO_CLOB('{"source":"command","stage":"before_insert","touched":true}'))
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -1709,7 +1748,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."f_events"
   ("_idx", "id", "name", "_source")
-  VALUES ('1790448436580', 'e4', 'js', TO_CLOB('{"js":"before_insert","stage":"before_insert","touched":true}'))
+  VALUES ('1790448836945', 'e4', 'js', TO_CLOB('{"js":"before_insert","stage":"before_insert","touched":true}'))
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_MERGEPATCH(JSON_MERGEPATCH(NVL("_source", TO_CLOB('{}')), TO_CLOB('{"_idx":null}') RETURNING CLOB), JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -1867,7 +1906,7 @@ DECLARE
 BEGIN
   INSERT INTO JSQL."series"
   ("_idx", "created_at", "format", "tag", "updated_at", "value")
-  VALUES ('1790448436614', TO_TIMESTAMP('2026-09-26 13:47:16.614637', 'YYYY-MM-DD HH24:MI:SS.FF'), 'FAC-%05d', 'invoice', TO_TIMESTAMP('2026-09-26 13:47:16.614637', 'YYYY-MM-DD HH24:MI:SS.FF'), 10)
+  VALUES ('1790448836980', TO_TIMESTAMP('2026-09-26 13:53:56.980150', 'YYYY-MM-DD HH24:MI:SS.FF'), 'FAC-%05d', 'invoice', TO_TIMESTAMP('2026-09-26 13:53:56.980150', 'YYYY-MM-DD HH24:MI:SS.FF'), 10)
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
   OPEN c FOR SELECT JSON_OBJECT(
 'created_at' VALUE "created_at",
@@ -1913,9 +1952,9 @@ DECLARE
   c SYS_REFCURSOR;
 BEGIN
   UPDATE JSQL."series"
-  SET "created_at" = TO_TIMESTAMP('2026-09-26 13:47:16.614637', 'YYYY-MM-DD HH24:MI:SS.FF'),
+  SET "created_at" = TO_TIMESTAMP('2026-09-26 13:53:56.980150', 'YYYY-MM-DD HH24:MI:SS.FF'),
     "format" = 'FAC-%05d',
-    "updated_at" = TO_TIMESTAMP('2026-09-26 13:47:16.625748', 'YYYY-MM-DD HH24:MI:SS.FF'),
+    "updated_at" = TO_TIMESTAMP('2026-09-26 13:53:56.990703', 'YYYY-MM-DD HH24:MI:SS.FF'),
     "value" = 11
   WHERE "tag" = 'invoice'
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;
@@ -1953,9 +1992,9 @@ DECLARE
   c SYS_REFCURSOR;
 BEGIN
   UPDATE JSQL."series"
-  SET "created_at" = TO_TIMESTAMP('2026-09-26 13:47:16.614637', 'YYYY-MM-DD HH24:MI:SS.FF'),
+  SET "created_at" = TO_TIMESTAMP('2026-09-26 13:53:56.980150', 'YYYY-MM-DD HH24:MI:SS.FF'),
     "format" = 'FAC-%05d',
-    "updated_at" = TO_TIMESTAMP('2026-09-26 13:47:16.630976', 'YYYY-MM-DD HH24:MI:SS.FF'),
+    "updated_at" = TO_TIMESTAMP('2026-09-26 13:53:56.997061', 'YYYY-MM-DD HH24:MI:SS.FF'),
     "value" = 12
   WHERE "tag" = 'invoice'
   RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO rs;

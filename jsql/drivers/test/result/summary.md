@@ -4,9 +4,9 @@ Generado por `go test -run TestCatalog` en `jsql/drivers/test`. El detalle de ca
 
 | Driver | Pasan | Fallan | Brechas | Omitidos |
 |---|---|---|---|---|
-| sqlite | 74 | 0 | 1 | 1 |
-| postgres | 74 | 0 | 1 | 1 |
-| oracle | 74 | 0 | 1 | 1 |
+| sqlite | 78 | 0 | 1 | 1 |
+| postgres | 78 | 0 | 1 | 1 |
+| oracle | 78 | 0 | 1 | 1 |
 
 ## 1. Conexión y base de datos
 
@@ -62,6 +62,10 @@ Generado por `go test -run TestCatalog` en `jsql/drivers/test`. El detalle de ca
 | LeftJoin + GroupBy | ✅ | ✅ | ✅ |
 | GroupBy + Having (fluido) | ✅ | ✅ | ✅ |
 | Model.Query (JSON) | ✅ | ✅ | ✅ |
+| Model.Query con from (otro modelo y alias) | ✅ | ✅ | ✅ |
+| Model.Query con from sin esquema | ✅ | ✅ | ✅ |
+| Model.Query con from + join + groups | ✅ | ✅ | ✅ |
+| Model.Query con from inválido (devuelve error) | ✅ | ✅ | ✅ |
 | NewQuery / GetField / GetColumn / GetFrom / ToJson | ✅ | ✅ | ✅ |
 | Test (genera el SQL sin ejecutarlo) / Debug | ✅ | ✅ | ✅ |
 

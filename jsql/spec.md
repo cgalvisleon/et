@@ -197,10 +197,11 @@ Siempre se excluyen `Model.Hiddens` y `Query.Hiddens`. La fila resultante con `S
 
 ### 5.4 Consulta descrita en JSON
 
-`Model.Query(json)` / `Model.QueryTx(tx, json)` construyen un `*Query` a partir de un `et.Json` (`Query.loadQuery`). El `from` es el propio modelo con el alias `A`, que es el alias por defecto de toda consulta. En los `on` de un join, un valor de texto `alias.campo` que nombra un campo de la consulta se toma como columna, no como texto.
+`Model.Query(json)` / `Model.QueryTx(tx, json)` construyen un `*Query` a partir de un `et.Json` (`Query.loadQuery`). Sin `from`, el origen es el propio modelo con el alias `A`, que es el alias por defecto de toda consulta. En los `on` de un join, un valor de texto `alias.campo` que nombra un campo de la consulta se toma como columna, no como texto.
 
 ```json
 {
+  "from": "public.users:A",
   "selects": ["id", "name", "last_name"],
   "hiddens": ["password"],
   "join": [
@@ -222,7 +223,9 @@ Siempre se excluyen `Model.Hiddens` y `Query.Hiddens`. La fila resultante con `S
 }
 ```
 
+- `from` es el origen: `schema.tabla:alias`, `tabla:alias` (usa el esquema del modelo que ejecuta la consulta), `schema.tabla` o `tabla` (alias `A`). También acepta una lista: la primera referencia reemplaza al origen principal y las demás se agregan como orígenes adicionales. El modelo debe estar definido en la `DB`.
 - `to` en los joins es obligatorio con la forma `schema.tabla:alias`; el modelo destino debe estar definido en la `DB`.
+- Si el descriptor tiene un error (un `from` o un `to` que no existe, una condición inválida), la consulta lo devuelve al ejecutarse (`All`, `One`, `Count`, `Exists`…) en lugar de correr con lo que se pudo leer.
 - `limit` por defecto: `DB.RecordLimit` (`DB_RECORD_LIMIT`, 1000). `page` calcula el `OFFSET`.
 - `orders`: `true` = ASC, `false` = DESC.
 
@@ -330,6 +333,5 @@ Estado revisado el 2026-09-26.
 |---|---|---|---|
 | 1 | `DB.Query(json)` interpreta `select`, `from`, `join`… | Todos los `parse*` devuelven `""`, así que la llamada siempre falla con `invalid sql`. Además, iterar el `map` no garantiza el orden de las cláusulas. | `jquery.go` |
 | 2 | `select` en JSON recibe `[]interface{}` bajo la clave `select`. | `loadQuery` lee `selects` (y `hiddens`, `groups`, `havings`, `orders`) como `[]string`. | `query.go` `loadQuery` |
-| 3 | `Query` admite `from` en JSON. | `loadQuery` no lee `from`: el origen es siempre el modelo que invoca. | `query.go` |
-| 4 | Validación de índices únicos antes de insertar/actualizar. | `defaultTrigger` calcula si existe duplicado, pero el resultado de `results.Range` se ignora y nunca devuelve error. | `trigger.go` |
-| 5 | Driver para varios motores. | `postgres`, `sqlite` y `oracle` generan SQL; `mysql`, `mssql` y `josefina` no tienen implementación. | `drivers/` |
+| 3 | Validación de índices únicos antes de insertar/actualizar. | `defaultTrigger` calcula si existe duplicado, pero el resultado de `results.Range` se ignora y nunca devuelve error. | `trigger.go` |
+| 4 | Driver para varios motores. | `postgres`, `sqlite` y `oracle` generan SQL; `mysql`, `mssql` y `josefina` no tienen implementación. | `drivers/` |

@@ -16,17 +16,16 @@ import (
 * Quoted: Formats an et.Value as the SQL literal that PostgreSQL expects,
 * chosen according to the value's declared Type (et.TEXT, et.KEY, et.MEMO, et.INT, et.DATETIME,
 * et.JSON, the ARRAY_* types, et.VAL_BETWEEN, et.VAL_NULL, etc.).
-* et.EXPR is the one type returned verbatim, with no quoting at all: it carries
-* a raw SQL fragment rather than a literal value, e.g. COUNT(*) or a field
-* reference from another table required by a JOIN or expression.
+* et.AGGREGATE is not quoted: it carries an et.Aggregate whose operand is a raw SQL
+* fragment (a field reference or expression), rendered as the function applied to it,
+* e.g. COUNT(A.id); et.EXP returns the operand verbatim.
 * @param v et.Value
 * @return string
 **/
 func Quoted(v et.Value) string {
 	switch v.Type {
-	case et.EXPR:
-		s, _ := v.Value.(string)
-		return s
+	case et.AGGREGATE:
+		return pgQuoteAggregate(v.Value)
 	case et.VAL_NULL:
 		return "NULL"
 	case et.TEXT, et.KEY, et.MEMO:
@@ -165,4 +164,61 @@ func pgQuoteArray(v et.Value) string {
 		parts[i] = Quoted(et.Value{Type: elemType, Value: items.Index(i).Interface()})
 	}
 	return fmt.Sprintf("(%s)", strings.Join(parts, ", "))
+}
+
+/**
+* pgQuoteAggregate: Renders an et.Aggregate (value or pointer) as a SQL expression.
+* A string operand is used verbatim (field reference or expression); any other operand is quoted.
+* @param val any
+* @return string
+**/
+func pgQuoteAggregate(val any) string {
+	var agg et.Aggregate
+	switch t := val.(type) {
+	case et.Aggregate:
+		agg = t
+	case *et.Aggregate:
+		if t == nil {
+			return "NULL"
+		}
+		agg = *t
+	default:
+		return "NULL"
+	}
+
+	expr, ok := agg.Value.Value.(string)
+	if !ok {
+		expr = Quoted(agg.Value)
+	}
+
+	switch agg.Function {
+	case et.COUNT:
+		return fmt.Sprintf("COUNT(%s)", expr)
+	case et.SUM:
+		return fmt.Sprintf("SUM(%s)", expr)
+	case et.AVG:
+		return fmt.Sprintf("AVG(%s)", expr)
+	case et.MIN:
+		return fmt.Sprintf("MIN(%s)", expr)
+	case et.MAX:
+		return fmt.Sprintf("MAX(%s)", expr)
+	case et.EXTRACT_YEAR:
+		return fmt.Sprintf("EXTRACT(YEAR FROM %s)", expr)
+	case et.EXTRACT_MONTH:
+		return fmt.Sprintf("EXTRACT(MONTH FROM %s)", expr)
+	case et.EXTRACT_DAY:
+		return fmt.Sprintf("EXTRACT(DAY FROM %s)", expr)
+	case et.EXTRACT_HOUR:
+		return fmt.Sprintf("EXTRACT(HOUR FROM %s)", expr)
+	case et.EXTRACT_MINUTE:
+		return fmt.Sprintf("EXTRACT(MINUTE FROM %s)", expr)
+	case et.EXTRACT_SECOND:
+		return fmt.Sprintf("EXTRACT(SECOND FROM %s)", expr)
+	case et.INT_VALUE:
+		return fmt.Sprintf("(%s)::bigint", expr)
+	case et.FLOAT_VALUE:
+		return fmt.Sprintf("(%s)::double precision", expr)
+	default:
+		return expr
+	}
 }

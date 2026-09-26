@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -109,7 +111,6 @@ const (
 	ARRAY_DATETIME TypeData = "array_datetime"
 	VAL_BETWEEN    TypeData = "between"
 	VAL_NULL       TypeData = "null"
-	EXPR           TypeData = "expr"
 	AGGREGATE      TypeData = "aggregate"
 )
 
@@ -137,7 +138,6 @@ var TypeValues = map[string]TypeData{
 	ARRAY_DATETIME.Str(): ARRAY_DATETIME,
 	VAL_BETWEEN.Str():    VAL_BETWEEN,
 	VAL_NULL.Str():       VAL_NULL,
-	EXPR.Str():           EXPR,
 	AGGREGATE.Str():      AGGREGATE,
 }
 
@@ -236,7 +236,7 @@ func valueType(v any) TypeData {
 		return JSON
 	case BetweenValue:
 		return VAL_BETWEEN
-	case Aggregate:
+	case Aggregate, *Aggregate:
 		return AGGREGATE
 	case []interface{}:
 		return ARRAY
@@ -270,7 +270,50 @@ const (
 	AVG
 	MIN
 	MAX
+	EXP
+	EXTRACT_YEAR
+	EXTRACT_MONTH
+	EXTRACT_DAY
+	EXTRACT_HOUR
+	EXTRACT_MINUTE
+	EXTRACT_SECOND
+	INT_VALUE
+	FLOAT_VALUE
 )
+
+func ToFunction(s string) Function {
+	switch s {
+	case "count":
+		return COUNT
+	case "sum":
+		return SUM
+	case "avg":
+		return AVG
+	case "min":
+		return MIN
+	case "max":
+		return MAX
+	case "exp":
+		return EXP
+	case "extract_year":
+		return EXTRACT_YEAR
+	case "extract_month":
+		return EXTRACT_MONTH
+	case "extract_day":
+		return EXTRACT_DAY
+	case "extract_hour":
+		return EXTRACT_HOUR
+	case "extract_minute":
+		return EXTRACT_MINUTE
+	case "extract_second":
+		return EXTRACT_SECOND
+	case "int_value":
+		return INT_VALUE
+	case "float_value":
+		return FLOAT_VALUE
+	}
+	return COUNT
+}
 
 func (s Function) Str() string {
 	switch s {
@@ -284,6 +327,24 @@ func (s Function) Str() string {
 		return "min"
 	case MAX:
 		return "max"
+	case EXP:
+		return "exp"
+	case EXTRACT_YEAR:
+		return "extract_year"
+	case EXTRACT_MONTH:
+		return "extract_month"
+	case EXTRACT_DAY:
+		return "extract_day"
+	case EXTRACT_HOUR:
+		return "extract_hour"
+	case EXTRACT_MINUTE:
+		return "extract_minute"
+	case EXTRACT_SECOND:
+		return "extract_second"
+	case INT_VALUE:
+		return "int_value"
+	case FLOAT_VALUE:
+		return "float_value"
 	default:
 		return fmt.Sprintf("%d", s)
 	}
@@ -292,15 +353,120 @@ func (s Function) Str() string {
 type Aggregate struct {
 	Function Function `json:"function"`
 	Value    Value    `json:"field"`
+	As       string   `json:"as"`
+}
+
+var (
+	aggregateAsPattern = regexp.MustCompile(`^([A-Za-z0-9_]+)\((.+)\):([A-Za-z0-9_]+)$`) // agg(field):as
+	aggregatePattern   = regexp.MustCompile(`^([A-Za-z0-9_]+)\((.+)\)$`)                 // agg(field)
+)
+
+/**
+* ToAggregate: Parses an aggregate expression "agg(field)" or "agg(field):as".
+* Without an alias, the alias is the function name (count(id) → as "count").
+* @param s string
+* @return Aggregate, bool (false when s is not an aggregate or the function is unknown)
+**/
+func ToAggregate(s string) (Aggregate, bool) {
+	s = strings.TrimSpace(s)
+	var name, field, as string
+	if matches := aggregateAsPattern.FindStringSubmatch(s); matches != nil {
+		name, field, as = matches[1], matches[2], matches[3]
+	} else if matches := aggregatePattern.FindStringSubmatch(s); matches != nil {
+		name, field = matches[1], matches[2]
+	} else {
+		return Aggregate{}, false
+	}
+
+	name = strings.ToLower(name)
+	fn := ToFunction(name)
+	if fn.Str() != name {
+		return Aggregate{}, false
+	}
+
+	field = strings.TrimSpace(field)
+	if field == "" {
+		return Aggregate{}, false
+	}
+
+	if as == "" {
+		as = name
+	}
+
+	return Aggregate{Function: fn, Value: NewValue(field), As: as}, true
 }
 
 /**
-* Expr: Wraps an expression into a Value.
-* @param expr string
+* Field: Syntactic description of a field reference, independent of any model.
+* Source is the name or alias of the origin ("A" in "A.name"); empty means the first origin.
+* Agg is nil when the field is not an aggregate.
+**/
+type Field struct {
+	Source string     `json:"source"`
+	Name   string     `json:"name"`
+	As     string     `json:"as"`
+	Agg    *Aggregate `json:"agg,omitempty"`
+	Page   int        `json:"page"`
+}
+
+var (
+	fieldPagePattern = regexp.MustCompile(`^([^|]+)\|page:(\d+)$`)                                          // field|page:n
+	fieldPattern     = regexp.MustCompile(`^(?:([A-Za-z0-9_]+)\.)?([A-Za-z0-9_>-]+)(?::([A-Za-z0-9_]+))?$`) // [from.]field[:as]
+)
+
+/**
+* ToField: Parses a field reference: "field", "field:as", "from.field", "from.field:as",
+* "agg(field)", "agg(field):as", "field->a->b" and the "|page:n" suffix.
+* Without an alias, As is the field name, or the function name for aggregates.
+* @param s string
+* @return Field, bool (false when s does not match any form)
+**/
+func ToField(s string) (Field, bool) {
+	s = strings.TrimSpace(s)
+	page := 1
+	if matches := fieldPagePattern.FindStringSubmatch(s); matches != nil {
+		s = strings.TrimSpace(matches[1])
+		if n, err := strconv.Atoi(matches[2]); err == nil && n > 0 {
+			page = n
+		}
+	}
+
+	if agg, ok := ToAggregate(s); ok {
+		result, ok := ToField(agg.Value.String())
+		if !ok || result.Agg != nil {
+			return Field{}, false
+		}
+		result.As = agg.As
+		result.Agg = &agg
+		result.Page = page
+		return result, true
+	}
+
+	matches := fieldPattern.FindStringSubmatch(s)
+	if matches == nil {
+		return Field{}, false
+	}
+
+	as := matches[3]
+	if as == "" {
+		as = matches[2]
+	}
+
+	return Field{
+		Source: matches[1],
+		Name:   matches[2],
+		As:     as,
+		Page:   page,
+	}, true
+}
+
+/**
+* Exp: Wraps an expression into a Value.
+* @param value any
 * @return Value
 **/
-func Expr(expr string) Value {
-	return Value{Type: EXPR, Value: expr}
+func Exp(value any) Aggregate {
+	return Aggregate{Function: EXP, Value: NewValue(value)}
 }
 
 /**
@@ -337,6 +503,78 @@ func Min(value any) Aggregate {
 **/
 func Max(value any) Aggregate {
 	return Aggregate{Function: MAX, Value: NewValue(value)}
+}
+
+/**
+* ExtractYear: Returns a EXTRACT_YEAR aggregate.
+* @param value any
+* @return Aggregate
+**/
+func Year(value any) Aggregate {
+	return Aggregate{Function: EXTRACT_YEAR, Value: NewValue(value)}
+}
+
+/**
+* ExtractMonth: Returns a EXTRACT_MONTH aggregate.
+* @param value any
+* @return Aggregate
+**/
+func Month(value any) Aggregate {
+	return Aggregate{Function: EXTRACT_MONTH, Value: NewValue(value)}
+}
+
+/**
+* ExtractDay: Returns a EXTRACT_DAY aggregate.
+* @param value any
+* @return Aggregate
+**/
+func Day(value any) Aggregate {
+	return Aggregate{Function: EXTRACT_DAY, Value: NewValue(value)}
+}
+
+/**
+* ExtractHour: Returns a EXTRACT_HOUR aggregate.
+* @param value any
+* @return Aggregate
+**/
+func Hour(value any) Aggregate {
+	return Aggregate{Function: EXTRACT_HOUR, Value: NewValue(value)}
+}
+
+/**
+* ExtractMinute: Returns a EXTRACT_MINUTE aggregate.
+* @param value any
+* @return Aggregate
+**/
+func Minute(value any) Aggregate {
+	return Aggregate{Function: EXTRACT_MINUTE, Value: NewValue(value)}
+}
+
+/**
+* ExtractSecond: Returns a EXTRACT_SECOND aggregate.
+* @param value any
+* @return Aggregate
+**/
+func Second(value any) Aggregate {
+	return Aggregate{Function: EXTRACT_SECOND, Value: NewValue(value)}
+}
+
+/**
+* Int: Returns a INT_VALUE aggregate.
+* @param value any
+* @return Aggregate
+**/
+func Int(value any) Aggregate {
+	return Aggregate{Function: INT_VALUE, Value: NewValue(value)}
+}
+
+/**
+* Float: Returns a FLOAT_VALUE aggregate.
+* @param value any
+* @return Aggregate
+**/
+func Float(value any) Aggregate {
+	return Aggregate{Function: FLOAT_VALUE, Value: NewValue(value)}
 }
 
 type Connector string

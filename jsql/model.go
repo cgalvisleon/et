@@ -336,10 +336,9 @@ func (s *Model) GetField(name string) (*Field, bool) {
 		return nil, false
 	}
 	return &Field{
+		Field:      et.Field{Name: name},
 		TypeColumn: col.TypeColumn,
 		TypeData:   col.TypeData,
-		Name:       name,
-		As:         "",
 		From:       getFrom(s, ""),
 	}, true
 }

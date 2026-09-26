@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
@@ -60,16 +58,13 @@ func getFrom(model *Model, as string) *From {
 }
 
 /**
-* Field: Represents a SELECT list entry with an optional alias and source table reference.
+* Field: A parsed field reference (et.Field) resolved against a model: column type, data type and origin.
 **/
 type Field struct {
+	et.Field
 	TypeColumn TypeColumn  `json:"type_column"`
 	TypeData   et.TypeData `json:"type_data"`
-	Name       string      `json:"name"`
-	As         string      `json:"as"`
 	From       *From       `json:"from"`
-	Agg        string      `json:"agg"`
-	Page       int         `json:"page"`
 }
 
 /**
@@ -336,176 +331,54 @@ func (s *Query) Test() *Query {
 }
 
 /**
-* GetField: Creates a Field from a Column, using the Column's name and attaching the provided From.
+* GetField: Parses a field reference with et.ToField and resolves it against the query's origins.
+* Supports "field", "field:as", "from.field", "from.field:as", "agg(field)", "agg(field):as",
+* "field->a->b" and the "|page:n" suffix.
 * @param field string
 * @return (*Field, bool)
 **/
 func (s *Query) GetField(field string) (*Field, bool) {
-	pattern1 := regexp.MustCompile(`^([A-Za-z0-9_]+)\.([A-Za-z0-9_>-]+):([A-Za-z0-9_]+)$`) // from.field:as
-	pattern2 := regexp.MustCompile(`^([A-Za-z0-9_]+)\.([A-Za-z0-9_>-]+)$`)                 // from.field
-	pattern3 := regexp.MustCompile(`^([A-Za-z0-9_>-]+):([A-Za-z0-9_]+)$`)                  // field:as
-	pattern4 := regexp.MustCompile(`^([A-Za-z0-9_>-]+)$`)                                  // field
-	pattern5 := regexp.MustCompile(`^([A-Za-z0-9_]+)\((.+)\):([A-Za-z0-9_]+)$`)            // agg(field):as
-	pattern6 := regexp.MustCompile(`^([A-Za-z0-9_]+)\((.+)\)`)                             // agg(field)
-	pattern7 := regexp.MustCompile(`^([^|]+)\|page:(\d+)$`)                                // field|page:1
+	def, ok := et.ToField(field)
+	if !ok {
+		return nil, false
+	}
 
-	getForm := func(name string) *From {
-		if len(s.Froms) == 0 {
-			return nil
-		}
-		if name == "" {
-			return s.Froms[0]
-		}
-		for _, from := range s.Froms {
-			if from.Name == name {
-				return from
-			} else if from.As == name {
-				return from
-			}
-		}
+	from := s.getFrom(def.Source)
+	if from == nil {
+		return nil, false
+	}
+
+	col, ok := from.Model.GetColumn(def.Name)
+	if !ok {
+		return nil, false
+	}
+
+	return &Field{
+		Field:      def,
+		TypeColumn: col.TypeColumn,
+		TypeData:   col.TypeData,
+		From:       from,
+	}, true
+}
+
+/**
+* getFrom: Returns the origin whose name or alias matches name; an empty name returns the first origin.
+* @param name string
+* @return *From
+**/
+func (s *Query) getFrom(name string) *From {
+	if len(s.Froms) == 0 {
 		return nil
 	}
-
-	parseInt := func(s string, defaultValue int) int {
-		if s == "" {
-			return defaultValue
-		}
-		i, err := strconv.Atoi(s)
-		if err != nil {
-			return defaultValue
-		}
-		return i
+	if name == "" {
+		return s.Froms[0]
 	}
-
-	page := 1
-	if pattern7.MatchString(field) {
-		matches := pattern7.FindStringSubmatch(field)
-		if len(matches) == 3 {
-			field = matches[1]
-			page = parseInt(matches[2], 1)
-			return nil, false
+	for _, from := range s.Froms {
+		if from.Name == name || from.As == name {
+			return from
 		}
 	}
-
-	if pattern1.MatchString(field) {
-		matches := pattern1.FindStringSubmatch(field)
-		if len(matches) == 4 {
-			fromName := matches[1]
-			columnName := matches[2]
-			as := matches[3]
-			from := getForm(fromName)
-			if from == nil {
-				return nil, false
-			}
-			col, ok := from.Model.GetColumn(columnName)
-			if !ok {
-				return nil, false
-			}
-			return &Field{
-				TypeColumn: col.TypeColumn,
-				TypeData:   col.TypeData,
-				Name:       columnName,
-				As:         as,
-				From:       from,
-				Page:       page,
-			}, true
-		}
-	} else if pattern2.MatchString(field) {
-		matches := pattern2.FindStringSubmatch(field)
-		if len(matches) == 3 {
-			fromName := matches[1]
-			columnName := matches[2]
-			from := getForm(fromName)
-			if from == nil {
-				return nil, false
-			}
-			col, ok := from.Model.GetColumn(columnName)
-			if !ok {
-				return nil, false
-			}
-			return &Field{
-				TypeColumn: col.TypeColumn,
-				TypeData:   col.TypeData,
-				Name:       columnName,
-				As:         columnName,
-				From:       from,
-				Page:       page,
-			}, true
-		}
-	} else if pattern3.MatchString(field) {
-		matches := pattern3.FindStringSubmatch(field)
-		if len(matches) == 3 {
-			columnName := matches[1]
-			as := matches[2]
-			from := getForm("")
-			if from == nil {
-				return nil, false
-			}
-			col, ok := from.Model.GetColumn(columnName)
-			if !ok {
-				return nil, false
-			}
-			return &Field{
-				TypeColumn: col.TypeColumn,
-				TypeData:   col.TypeData,
-				Name:       columnName,
-				As:         as,
-				From:       from,
-				Page:       page,
-			}, true
-		}
-	} else if pattern4.MatchString(field) {
-		matches := pattern4.FindStringSubmatch(field)
-		if len(matches) == 2 {
-			columnName := matches[1]
-			from := getForm("")
-			if from == nil {
-				return nil, false
-			}
-			col, ok := from.Model.GetColumn(columnName)
-			if !ok {
-				return nil, false
-			}
-			return &Field{
-				TypeColumn: col.TypeColumn,
-				TypeData:   col.TypeData,
-				Name:       columnName,
-				As:         columnName,
-				From:       from,
-				Page:       page,
-			}, true
-		}
-	} else if pattern5.MatchString(field) {
-		matches := pattern5.FindStringSubmatch(field)
-		if len(matches) == 4 {
-			agg := matches[1]
-			columnName := matches[2]
-			as := matches[3]
-			result, ok := s.GetField(columnName)
-			if !ok {
-				return nil, false
-			}
-			result.As = as
-			result.Agg = agg
-			return result, true
-		}
-	} else if pattern6.MatchString(field) {
-		matches := pattern6.FindStringSubmatch(field)
-		if len(matches) == 3 {
-			agg := matches[1]
-			columnName := matches[2]
-			as := matches[1]
-			result, ok := s.GetField(columnName)
-			if !ok {
-				return nil, false
-			}
-			result.As = as
-			result.Agg = agg
-			return result, true
-		}
-	}
-
-	return nil, false
+	return nil
 }
 
 /**

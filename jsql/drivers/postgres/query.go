@@ -255,7 +255,10 @@ func pgAggExpr(fld *jsql.Field) (string, bool) {
 	if fieldExpr == "" {
 		return "", false
 	}
-	switch jsql.RollupOperation(strings.ToLower(fld.Agg)) {
+	if fld.Agg == nil {
+		return "", false
+	}
+	switch jsql.RollupOperation(fld.Agg.Function.Str()) {
 	case jsql.RollupCount:
 		return fmt.Sprintf("COUNT(%s)::bigint", fieldExpr), true
 	case jsql.RollupSum:
@@ -285,7 +288,7 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 	if alias == fld.From.Table {
 		alias = ""
 	}
-	if fld.Agg != "" {
+	if fld.Agg != nil {
 		expr, ok := pgAggExpr(fld)
 		if !ok {
 			return "", false

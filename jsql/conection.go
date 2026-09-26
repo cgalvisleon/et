@@ -20,6 +20,9 @@ func getConnection(driver, host string) (Connection, error) {
 	case DriverSqlite:
 		config := sqliteConection(host)
 		return config, nil
+	case DriverOracle:
+		config := oracleConection(host)
+		return config, nil
 	default:
 		return nil, fmt.Errorf(MSG_UNSUPPORTED_DRIVER, driver)
 	}
@@ -159,4 +162,65 @@ func (s *SqliteConection) SetDatabase(name string) {
 **/
 func (s *SqliteConection) GetDatabase() string {
 	return s.Name
+}
+
+type OracleConection struct {
+	Host        string
+	Port        int
+	Username    string
+	Password    string
+	ServiceName string
+	SSL         bool
+	SSLVerify   bool
+}
+
+func oracleConection(host string) *OracleConection {
+	port := envar.GetInt("DB_PORT", 1521)
+	username := envar.GetStr("DB_USER", "test")
+	password := envar.GetStr("DB_PASSWORD", "test")
+	serviceName := envar.GetStr("DB_NAME", "josephine")
+	ssl := envar.GetBool("DB_SSL", false)
+	sslVerify := envar.GetBool("DB_SSL_VERIFY", true)
+	return &OracleConection{
+		Host:        host,
+		Port:        port,
+		Username:    username,
+		Password:    password,
+		ServiceName: serviceName,
+		SSL:         ssl,
+		SSLVerify:   sslVerify,
+	}
+}
+
+/**
+* GetParams: Returns the connection parameters as a JSON object.
+* @return et.Json
+**/
+func (s *OracleConection) GetParams() et.Json {
+	return et.Json{
+		"driver":       DriverOracle,
+		"host":         s.Host,
+		"port":         s.Port,
+		"username":     s.Username,
+		"password":     s.Password,
+		"service_name": s.ServiceName,
+		"ssl":          s.SSL,
+		"ssl_verify":   s.SSLVerify,
+	}
+}
+
+/**
+* SetDatabase: Sets the database name in the connection parameters
+* @param name string
+**/
+func (s *OracleConection) SetDatabase(name string) {
+	s.ServiceName = name
+}
+
+/**
+* GetDatabase: Returns the database name from the connection parameters.
+* @return string
+**/
+func (s *OracleConection) GetDatabase() string {
+	return s.ServiceName
 }

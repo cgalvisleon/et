@@ -35,7 +35,21 @@ var keywords = []string{
 	"define",
 }
 
+/**
+* Query: Executes a query.
+* @param sql et.Json
+* @return et.Items, error
+**/
 func (s *DB) Query(sql et.Json) (et.Items, error) {
+	return s.QueryTx(nil, sql)
+}
+
+/**
+* QueryTx: Executes a query with a transaction.
+* @param tx *Tx, sql ry.Json
+* @return et.Items, error
+**/
+func (s *DB) QueryTx(tx *Tx, sql et.Json) (et.Items, error) {
 	sqlStr := ""
 	for k := range sql {
 		if isKeyword(k) {
@@ -48,7 +62,7 @@ func (s *DB) Query(sql et.Json) (et.Items, error) {
 		return et.Items{}, fmt.Errorf("invalid sql")
 	}
 
-	result, err := s.Sql(sqlStr)
+	result, err := s.SqlTx(tx, sqlStr)
 	if err != nil {
 		return et.Items{}, err
 	}

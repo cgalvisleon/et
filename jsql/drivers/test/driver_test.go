@@ -311,7 +311,7 @@ func TestInsertUpdate(t *testing.T) {
 			if city := read.Result.Str("data", "selected_service", "address", "city"); city != "PALMIRA" {
 				t.Errorf("nested sibling lost: data.selected_service.address.city = %q", city)
 			}
-			if lat := read.Result.Num("data", "transfer_address", "coordinates", "lat"); lat != 3.5202645 {
+			if lat := read.Result.Num("data", "transfer_address", "coordinates", "lat"); lat != 3.1234567 {
 				t.Errorf("nested sibling lost: data.transfer_address.coordinates.lat = %v", lat)
 			}
 		})

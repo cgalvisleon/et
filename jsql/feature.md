@@ -165,7 +165,7 @@ before_update y after_update son listas de código javascript que goja ejecuta a
 
 before_delete y after_delete son listas de código javascript que goja ejecuta antes y después de eliminar cada registro. En el script, OLD es el registro que se elimina.
 
-- Upsert: consulta si existe algún registro que cumpla el where. Si no existe, ejecuta un insert con los valores de data; si existe, ejecuta un update con data de los registros que lo cumplen. El where nunca puede estar vacío. Su estructura es la siguiente:
+- Upsert: consulta si existe algún registro que cumpla el where. Si no existe, ejecuta un insert con los valores de data; si existe, ejecuta un update con data de los registros que lo cumplen. El where nunca puede estar vacío. Cuando el upsert actualiza, limit funciona igual que en update: indica cuántos registros se actualizan como máximo, si no se envía se usa un valor por defecto de máximo 1000 registros, y si se envía en 0 se actualizan todos los registros que cumplen el where. Su estructura es la siguiente:
 
 ```json
 {

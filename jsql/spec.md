@@ -312,7 +312,7 @@ Cada comando va bajo una clave con su nombre y contiene:
 | `bulk` | Inserta un registro por cada objeto de `data`; los triggers corren por registro. | Los registros insertados. |
 | `update` | Actualiza los registros que cumplen `where` con `data`, hasta `limit`; los atributos se fusionan en `SourceField` sin borrar los existentes. | Los registros actualizados. |
 | `delete` | Elimina los registros que cumplen `where`, hasta `limit`. | Los registros eliminados. |
-| `upsert` | Si ningún registro cumple `where`, inserta `data`; si alguno lo cumple, actualiza esos registros con `data`. | Los registros insertados o actualizados. |
+| `upsert` | Si ningún registro cumple `where`, inserta `data`; si alguno lo cumple, actualiza esos registros con `data`, hasta `limit`. | Los registros insertados o actualizados. |
 
 En los scripts, los registros están en `NEW` (con los valores que se van a guardar; en `before_*` sus cambios se guardan) y `OLD` (el registro antes del cambio, vacío en un insert), como en §7.
 

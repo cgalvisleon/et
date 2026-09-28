@@ -67,6 +67,50 @@ func defineSeries(db *DB, schema string) (*Series, error) {
 }
 
 /**
+* exists
+* @param string tag
+* @return (bool, error)
+**/
+func (s *Series) exists(tag string) (bool, error) {
+	exists, err := s.model.
+		Where(Eq("tag", tag)).
+		Exists()
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
+/**
+* newSeries
+* @param string tag, format string
+* @return error
+**/
+func (s *Series) newSeries(tag, format string) error {
+	exists, err := s.exists(tag)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		return nil
+	}
+
+	if format == "" {
+		format = "%08d"
+	}
+
+	_, err = s.model.
+		Insert(et.Json{
+			"tag":    tag,
+			"format": format,
+			"value":  1,
+		}).
+		Exec()
+	return err
+}
+
+/**
 * setSeries
 * @param string tag, format string, value int
 * @return error

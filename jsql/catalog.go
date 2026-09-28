@@ -1582,6 +1582,15 @@ func DefineSeries(db *DB, schema string) (*Series, error) {
 }
 
 /**
+* NewSeries
+* @param string tag, format string
+* @return error
+**/
+func (s *Series) NewSeries(tag, format string) error {
+	return s.newSeries(tag, format)
+}
+
+/**
 * SetSeries
 * @param string tag, format string, value int
 * @return error

@@ -15,6 +15,7 @@ const (
 	PROJECT_ID string = "project_id"
 	CREATED_AT string = "created_at"
 	UPDATED_AT string = "updated_at"
+	CODE       string = "code"
 )
 
 /**

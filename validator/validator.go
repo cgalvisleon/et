@@ -213,6 +213,8 @@ func (s *Condition) Pattern(pattern string) *Condition {
 **/
 func (s *Condition) validate(value any) (bool, error) {
 	switch v := value.(type) {
+	case nil:
+		return s.validateNil()
 	case string:
 		return s.validateString(v)
 	case int:
@@ -233,6 +235,12 @@ func (s *Condition) validate(value any) (bool, error) {
 		return s.validateFloats(v)
 	case []any:
 		return s.validateArrayAny(v)
+	case et.Json:
+		return s.validateArrayLength(len(v))
+	case map[string]any:
+		return s.validateArrayLength(len(v))
+	case []et.Json:
+		return s.validateArrayLength(len(v))
 	}
 	return false, fmt.Errorf(MSG_VALIDATOR_INVALID_TYPE, s.name)
 }
@@ -295,6 +303,17 @@ func (s *Condition) validateFloat(value float64) (bool, error) {
 		return false, fmt.Errorf(MSG_VALIDATOR_MIN, s.name, s.min)
 	} else if s.max > 0 && value > s.max {
 		return false, fmt.Errorf(MSG_VALIDATOR_MAX, s.name, s.max)
+	}
+	return true, nil
+}
+
+/**
+* validateNil: Validate a missing or null value: only fails if the field is required.
+* @return bool, error
+**/
+func (s *Condition) validateNil() (bool, error) {
+	if s.required {
+		return false, fmt.Errorf(MSG_VALIDATOR_REQUIRED, s.name)
 	}
 	return true, nil
 }
@@ -408,6 +427,12 @@ func (s *Condition) Validate(value et.Json) (bool, error) {
 func (s *Validator) Validate(value et.Json) (bool, error) {
 	if s.notEmpty && value.IsEmpty() {
 		return false, errors.New(MSG_VALIDATOR_EMPTY)
+	}
+	// A required field that does not come in the json fails like an empty one
+	for key, field := range s.Fields {
+		if _, exists := value[key]; !exists && field.Condition.required {
+			return false, fmt.Errorf(MSG_VALIDATOR_REQUIRED, key)
+		}
 	}
 	for key, val := range value {
 		field, exists := s.Fields[key]

@@ -14,7 +14,7 @@ import (
 //
 //	#   Sección                         Cantidad
 //	1   Conexión y base de datos        24
-//	2   Definición de modelos (DDL)     20
+//	2   Definición de modelos (DDL)     21
 //	3   Relaciones y campos calculados  19
 //	4   Consultas                       47
 //	5   Condiciones                     18
@@ -24,7 +24,7 @@ import (
 //	9   Series                          6
 //	10  Auditoría                       3
 //	11  Utilidades                      17
-//	    Total                           197
+//	    Total                           198
 
 // =============================================================================
 // 1. Conexión y base de datos (24)
@@ -231,7 +231,7 @@ func Load() (*DB, error) {
 }
 
 // =============================================================================
-// 2. Definición de modelos (DDL) (20)
+// 2. Definición de modelos (DDL) (21)
 // =============================================================================
 
 /**
@@ -329,6 +329,16 @@ func (s *Model) DefineUnique(name string, tp et.TypeData, deFault any) *Index {
 **/
 func (s *Model) DefineRequired(name string, tp et.TypeData, deFault any) *Index {
 	return s.defineRequired(name, tp, deFault)
+}
+
+/**
+* DefineOmitUpdate: Adds columns or attributes that update commands must not change (e.g. created_at,
+* created_by). They are kept as they were even when the data or a before-update trigger changes them.
+* @param names ...string
+* @return *Model
+**/
+func (s *Model) DefineOmitUpdate(names ...string) *Model {
+	return s.defineOmitUpdate(names...)
 }
 
 /**

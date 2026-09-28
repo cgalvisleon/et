@@ -184,7 +184,7 @@ CREATE INDEX IF NOT EXISTS f_child__idx_idx ON f_child (_idx);
 INSERT INTO f_parent
   (_idx, id)
 VALUES
-  ('1790553364617', 'p1')
+  ('1790555192618', 'p1')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -196,7 +196,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO f_child
   (_idx, id, parent_id)
 VALUES
-  ('1790553364617', 'c1', 'p1')
+  ('1790555192618', 'c1', 'p1')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -209,7 +209,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO f_child
   (_idx, id, parent_id)
 VALUES
-  ('1790553364618', 'c2', 'missing')
+  ('1790555192618', 'c2', 'missing')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -239,7 +239,7 @@ CREATE INDEX IF NOT EXISTS f_strict__idx_idx ON f_strict (_idx);
 INSERT INTO f_strict
   (_idx, id, name)
 VALUES
-  ('1790553364618', 's1', 'x')
+  ('1790555192619', 's1', 'x')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -298,7 +298,7 @@ LIMIT 1;
 INSERT INTO f_doc_types
   (_idx, id, title)
 VALUES
-  ('1790553364619', 'CC', 'Cédula de ciudadanía')
+  ('1790555192619', 'CC', 'Cédula de ciudadanía')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -311,7 +311,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO f_doc_types
   (_idx, id, title)
 VALUES
-  ('1790553364619', 'NIT', 'Número de identificación tributaria')
+  ('1790555192620', 'NIT', 'Número de identificación tributaria')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -329,7 +329,7 @@ WHERE A.email = 'ana@example.com') AS "exists";
 INSERT INTO f_users
   (_idx, email, id, name, _source)
 VALUES
-  ('1790553364620', 'ana@example.com', 'u1', 'Ana', '{"age":30,"password":"secret","tp_doc":"CC"}')
+  ('1790555192620', 'ana@example.com', 'u1', 'Ana', '{"age":30,"password":"secret","tp_doc":"CC"}')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"', '$."password"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -348,7 +348,7 @@ WHERE A.email = 'luis@example.com') AS "exists";
 INSERT INTO f_users
   (_idx, email, id, name, _source)
 VALUES
-  ('1790553364620', 'luis@example.com', 'u2', 'Luis', '{"age":17}')
+  ('1790555192620', 'luis@example.com', 'u2', 'Luis', '{"age":17}')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"', '$."password"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -367,7 +367,7 @@ WHERE A.email = 'marta@example.com') AS "exists";
 INSERT INTO f_users
   (_idx, email, id, name, _source)
 VALUES
-  ('1790553364620', 'marta@example.com', 'u3', 'Marta O''Neil', '{"age":45,"tp_doc":"NIT"}')
+  ('1790555192620', 'marta@example.com', 'u3', 'Marta O''Neil', '{"age":45,"tp_doc":"NIT"}')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"', '$."password"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -381,7 +381,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"', '$."password
 INSERT INTO f_roles
   (_idx, id, name)
 VALUES
-  ('1790553364620', 'r1', 'admin')
+  ('1790555192620', 'r1', 'admin')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -394,7 +394,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO f_roles
   (_idx, id, name)
 VALUES
-  ('1790553364620', 'r2', 'editor')
+  ('1790555192620', 'r2', 'editor')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -407,7 +407,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO f_orders
   (_idx, id, user_id, _source)
 VALUES
-  ('1790553364621', 'o1', 'u1', '{"amount":100.5}')
+  ('1790555192621', 'o1', 'u1', '{"amount":100.5}')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -420,7 +420,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO f_orders
   (_idx, id, user_id, _source)
 VALUES
-  ('1790553364621', 'o2', 'u1', '{"amount":200}')
+  ('1790555192621', 'o2', 'u1', '{"amount":200}')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -433,7 +433,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO f_orders
   (_idx, id, user_id, _source)
 VALUES
-  ('1790553364621', 'o3', 'u3', '{"amount":50}')
+  ('1790555192621', 'o3', 'u3', '{"amount":50}')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -493,21 +493,21 @@ RETURNING json_set(COALESCE(_source, '{}'),
 INSERT INTO f_users_f_roles
   (_idx, role_id, user_id)
 VALUES
-  ('1790553364622', 'r1', 'u1')
+  ('1790555192622', 'r1', 'u1')
 RETURNING user_id, role_id;
 
 -- INSERT
 INSERT INTO f_users_f_roles
   (_idx, role_id, user_id)
 VALUES
-  ('1790553364622', 'r2', 'u1')
+  ('1790555192622', 'r2', 'u1')
 RETURNING user_id, role_id;
 
 -- INSERT
 INSERT INTO f_users_f_roles
   (_idx, role_id, user_id)
 VALUES
-  ('1790553364622', 'r2', 'u2')
+  ('1790555192622', 'r2', 'u2')
 RETURNING user_id, role_id;
 
 -- ========== 2. Definición de modelos (DDL) · DefineUnique (rechaza duplicados en insert, bulk y update) [pass]
@@ -526,7 +526,7 @@ WHERE A.email = 'same@example.com') AS "exists";
 INSERT INTO f_users
   (_idx, email, id, name)
 VALUES
-  ('1790553364623', 'same@example.com', 'u8', 'Uno')
+  ('1790555192622', 'same@example.com', 'u8', 'Uno')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"', '$."password"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -607,6 +607,57 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"', '$."password
 -- QUERY
 SELECT COUNT(*) AS count
 FROM f_users AS A;
+
+-- ========== 2. Definición de modelos (DDL) · OmitUpdates (DefineOmitUpdate y Define) [pass]
+
+-- DDL
+CREATE TABLE IF NOT EXISTS f_omit (
+  id TEXT DEFAULT NULL,
+  code TEXT DEFAULT NULL,
+  name TEXT DEFAULT NULL,
+  _source TEXT DEFAULT '{}',
+  PRIMARY KEY (id)
+);
+
+
+-- INSERT
+INSERT INTO f_omit
+  (code, id, name, _source)
+VALUES
+  ('A1', 'o1', 'antes', '{"created_by":"ana","meta":{"a":1}}')
+RETURNING json_set(COALESCE(_source, '{}'),
+'$."id"', id,
+'$."code"', code,
+'$."name"', name
+) AS result;
+
+-- QUERY
+SELECT
+json_set(COALESCE(A._source, '{}'),
+'$."id"', A.id,
+'$."code"', A.code,
+'$."name"', A.name
+) AS result
+FROM f_omit AS A
+WHERE A.id = 'o1'
+LIMIT 1000;
+
+-- UPDATE
+UPDATE f_omit
+SET
+  code = 'A1',
+  name = 'después',
+  _source = json_set(COALESCE(_source, '{}'),
+'$."created_by"', json('"ana"'),
+'$."meta"', json('{"a":1}'),
+'$."note"', json('"nueva"')
+)
+WHERE id = 'o1'
+RETURNING json_set(COALESCE(_source, '{}'),
+'$."id"', id,
+'$."code"', code,
+'$."name"', name
+) AS result;
 
 -- ========== 3. Relaciones y campos calculados · Detail en el select (DefineDetail) [pass]
 
@@ -1858,7 +1909,7 @@ CREATE INDEX IF NOT EXISTS f_many__idx_idx ON f_many (_idx);
 INSERT INTO f_many
   (_idx, id, name)
 VALUES
-  ('1790553364632', 'm1', 'x')
+  ('1790555192632', 'm1', 'x')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -1871,7 +1922,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO f_many
   (_idx, id, name)
 VALUES
-  ('1790553364632', 'm2', 'x')
+  ('1790555192632', 'm2', 'x')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -1884,7 +1935,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO f_many
   (_idx, id, name)
 VALUES
-  ('1790553364633', 'm3', 'x')
+  ('1790555192632', 'm3', 'x')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -1897,7 +1948,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO f_many
   (_idx, id, name)
 VALUES
-  ('1790553364633', 'm4', 'x')
+  ('1790555192632', 'm4', 'x')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -1910,7 +1961,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO f_many
   (_idx, id, name)
 VALUES
-  ('1790553364633', 'm5', 'x')
+  ('1790555192632', 'm5', 'x')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -1923,7 +1974,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO f_many
   (_idx, id, name)
 VALUES
-  ('1790553364633', 'm6', 'x')
+  ('1790555192632', 'm6', 'x')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -2171,7 +2222,7 @@ CREATE INDEX IF NOT EXISTS f_events__idx_idx ON f_events (_idx);
 INSERT INTO f_events
   (_idx, id, name, _source)
 VALUES
-  ('1790553364636', 'e1', 'alta', '{"stage":"before_insert","touched":true}')
+  ('1790555192634', 'e1', 'alta', '{"stage":"before_insert","touched":true}')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -2243,7 +2294,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO f_events
   (_idx, id, name, _source)
 VALUES
-  ('1790553364636', 'e2', 'cmd', '{"source":"command","stage":"before_insert","touched":true}')
+  ('1790555192634', 'e2', 'cmd', '{"source":"command","stage":"before_insert","touched":true}')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -2263,7 +2314,7 @@ WHERE A.id = 'e3') AS "exists";
 INSERT INTO f_events
   (_idx, id, name, _source)
 VALUES
-  ('1790553364637', 'e4', 'js', '{"js":"before_insert","stage":"before_insert","touched":true}')
+  ('1790555192634', 'e4', 'js', '{"js":"before_insert","stage":"before_insert","touched":true}')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -2397,7 +2448,7 @@ WHERE A.tag = 'invoice') AS "exists";
 INSERT INTO series
   (_idx, created_at, format, tag, updated_at, value)
 VALUES
-  ('1790553364638', '2026-09-27 18:56:04', 'FAC-%05d', 'invoice', '2026-09-27 18:56:04', 10)
+  ('1790555192636', '2026-09-27 19:26:32', 'FAC-%05d', 'invoice', '2026-09-27 19:26:32', 10)
 RETURNING created_at, updated_at, tag, format, value;
 
 -- QUERY
@@ -2427,9 +2478,9 @@ LIMIT 1000;
 -- UPDATE
 UPDATE series
 SET
-  created_at = '2026-09-27 18:56:04',
+  created_at = '2026-09-27 19:26:32',
   format = 'FAC-%05d',
-  updated_at = '2026-09-27 18:56:04',
+  updated_at = '2026-09-27 19:26:32',
   value = 11
 WHERE tag = 'invoice'
 RETURNING created_at, updated_at, tag, format, value;
@@ -2453,9 +2504,9 @@ LIMIT 1000;
 -- UPDATE
 UPDATE series
 SET
-  created_at = '2026-09-27 18:56:04',
+  created_at = '2026-09-27 19:26:32',
   format = 'FAC-%05d',
-  updated_at = '2026-09-27 18:56:04',
+  updated_at = '2026-09-27 19:26:32',
   value = 12
 WHERE tag = 'invoice'
 RETURNING created_at, updated_at, tag, format, value;

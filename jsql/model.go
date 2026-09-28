@@ -129,6 +129,7 @@ func (s *Model) toJson() et.Json {
 		"unique":         s.Unique,
 		"required":       s.Required,
 		"hiddens":        s.Hiddens,
+		"omit_updates":   s.OmitUpdates,
 		"details":        s.Details,
 		"master":         s.Masters,
 		"rollups":        s.Rollups,

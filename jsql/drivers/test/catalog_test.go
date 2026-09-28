@@ -236,7 +236,7 @@ func catalogTargets() []target {
 			tg.cleanup = []string{mssqlDropSchema("jsql_catalog")}
 		case "oracle":
 			tg.cleanup = oracleDrops(tg.schema, "f_users_f_roles", "f_orders_items", "f_orders", "f_users", "f_roles", "f_doc_types",
-				"f_products", "f_json_model", "f_many", "f_events", "f_tenant", "f_project", "f_required", "f_strict", "f_child", "f_parent", "series")
+				"f_products", "f_json_model", "f_many", "f_omit", "f_events", "f_tenant", "f_project", "f_required", "f_strict", "f_child", "f_parent", "series")
 		}
 		result = append(result, tg)
 	}
@@ -656,6 +656,41 @@ func (s *suite) relations() {
 			return nil, fmt.Errorf("the rejected inserts changed the table: %d users", count)
 		}
 		return []string{errInsert.Error(), errBulk.Error(), errUpdate.Error()}, nil
+	})
+	s.run(2, "OmitUpdates (DefineOmitUpdate y Define)", func() (any, error) {
+		model, err := s.db.Define(jsql.Define{
+			Schema: s.schema, Name: "f_omit", Version: 1, SourceField: jsql.SOURCE,
+			Columns: []jsql.Column{
+				{Name: "id", TypeColumn: jsql.COLUMN, TypeData: et.KEY, Default: ""},
+				{Name: "code", TypeColumn: jsql.COLUMN, TypeData: et.KEY, Default: ""},
+				{Name: "name", TypeColumn: jsql.COLUMN, TypeData: et.TEXT, Default: ""},
+			},
+			PrimaryKeys: []jsql.DefIndex{{Name: "id", Sorted: true}},
+			OmitUpdates: []string{"code"},
+		})
+		if err != nil {
+			return nil, err
+		}
+		model.DefineOmitUpdate("created_by", "meta")
+		model.DefineBeforeUpdate("force_code", `NEW.code = "C3";`)
+		if err := model.Init(); err != nil {
+			return nil, err
+		}
+		if _, err := model.Insert(et.Json{"id": "o1", "code": "A1", "name": "antes", "created_by": "ana", "meta": et.Json{"a": 1}}).Exec(); err != nil {
+			return nil, err
+		}
+		row, err := model.Update(et.Json{"code": "B2", "name": "después", "created_by": "luis", "meta->a": 2, "note": "nueva"}).
+			Where(jsql.Eq("id", "o1")).
+			One()
+		if err != nil {
+			return nil, err
+		}
+		r := row.Result
+		got := et.Json{"code": r["code"], "name": r["name"], "created_by": r["created_by"], "meta": r["meta"], "note": r["note"], "omit": model.ToJson()["omit_updates"]}
+		return got, expect("row", et.Json{
+			"code": "A1", "name": "después", "created_by": "ana", "meta": et.Json{"a": 1}, "note": "nueva",
+			"omit": []string{"code", "created_by", "meta"},
+		}, got)
 	})
 	s.run(3, "Detail en el select (DefineDetail)", func() (any, error) {
 		row, err := orders.Select("id", "items").Where(jsql.Eq("id", "o1")).One()

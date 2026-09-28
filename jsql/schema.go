@@ -99,6 +99,7 @@ func (s *Schema) newModel(id, name string, version int, userId string) *Model {
 		Unique:        make([]*Index, 0),
 		Required:      make([]*Index, 0),
 		Hiddens:       make([]string, 0),
+		OmitUpdates:   make([]string, 0),
 		Details:       make(map[string]*Detail, 0),
 		Masters:       make(map[string]*Master, 0),
 		Rollups:       make(map[string]*Rollups, 0),
@@ -166,6 +167,7 @@ func (s *Schema) loadModel(params et.Json) (*Model, error) {
 		Unique:        make([]*Index, 0),
 		Required:      make([]*Index, 0),
 		Hiddens:       make([]string, 0),
+		OmitUpdates:   make([]string, 0),
 		Details:       make(map[string]*Detail, 0),
 		Masters:       make(map[string]*Master, 0),
 		Rollups:       make(map[string]*Rollups, 0),
@@ -187,6 +189,7 @@ func (s *Schema) loadModel(params et.Json) (*Model, error) {
 		afterDeletes:  make([]TriggerFunction, 0),
 		db:            s.db,
 	}
+	result.OmitUpdates = append(result.OmitUpdates, params.ArrayStr("omit_updates")...)
 	columns := params.ArrayJson("columns")
 	result.loadColumns(columns)
 

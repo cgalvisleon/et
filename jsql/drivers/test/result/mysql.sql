@@ -183,7 +183,7 @@ ALTER TABLE `jsql_catalog`.`f_child` ADD CONSTRAINT `fk_f_child_f_parent` FOREIG
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_parent`
   (`_idx`, `id`)
-  VALUES ('1790553368528', 'p1');
+  VALUES ('1790555195363', 'p1');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -194,7 +194,7 @@ SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_child`
   (`_idx`, `id`, `parent_id`)
-  VALUES ('1790553368533', 'c1', 'p1');
+  VALUES ('1790555195368', 'c1', 'p1');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -206,7 +206,7 @@ SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_child`
   (`_idx`, `id`, `parent_id`)
-  VALUES ('1790553368536', 'c2', 'missing');
+  VALUES ('1790555195369', 'c2', 'missing');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -235,7 +235,7 @@ CREATE INDEX `f_strict__idx_idx` ON `jsql_catalog`.`f_strict` (`_idx`);
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_strict`
   (`_idx`, `id`, `name`)
-  VALUES ('1790553368561', 's1', 'x');
+  VALUES ('1790555195389', 's1', 'x');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -292,7 +292,7 @@ LIMIT 1
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_doc_types`
   (`_idx`, `id`, `title`)
-  VALUES ('1790553368577', 'CC', 'Cédula de ciudadanía');
+  VALUES ('1790555195398', 'CC', 'Cédula de ciudadanía');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -304,7 +304,7 @@ SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_doc_types`
   (`_idx`, `id`, `title`)
-  VALUES ('1790553368579', 'NIT', 'Número de identificación tributaria');
+  VALUES ('1790555195401', 'NIT', 'Número de identificación tributaria');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -321,7 +321,7 @@ WHERE A.`email` = 'ana@example.com') THEN 'true' ELSE 'false' END AS `exists`
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_users`
   (`_idx`, `email`, `id`, `name`, `_source`)
-  VALUES ('1790553368582', 'ana@example.com', 'u1', 'Ana', '{"age":30,"password":"secret","tp_doc":"CC"}');
+  VALUES ('1790555195406', 'ana@example.com', 'u1', 'Ana', '{"age":30,"password":"secret","tp_doc":"CC"}');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"', '$."password"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -339,7 +339,7 @@ WHERE A.`email` = 'luis@example.com') THEN 'true' ELSE 'false' END AS `exists`
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_users`
   (`_idx`, `email`, `id`, `name`, `_source`)
-  VALUES ('1790553368585', 'luis@example.com', 'u2', 'Luis', '{"age":17}');
+  VALUES ('1790555195408', 'luis@example.com', 'u2', 'Luis', '{"age":17}');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"', '$."password"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -357,7 +357,7 @@ WHERE A.`email` = 'marta@example.com') THEN 'true' ELSE 'false' END AS `exists`
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_users`
   (`_idx`, `email`, `id`, `name`, `_source`)
-  VALUES ('1790553368587', 'marta@example.com', 'u3', 'Marta O''Neil', '{"age":45,"tp_doc":"NIT"}');
+  VALUES ('1790555195409', 'marta@example.com', 'u3', 'Marta O''Neil', '{"age":45,"tp_doc":"NIT"}');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"', '$."password"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -370,7 +370,7 @@ SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"', '$."
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_roles`
   (`_idx`, `id`, `name`)
-  VALUES ('1790553368587', 'r1', 'admin');
+  VALUES ('1790555195411', 'r1', 'admin');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -382,7 +382,7 @@ SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_roles`
   (`_idx`, `id`, `name`)
-  VALUES ('1790553368590', 'r2', 'editor');
+  VALUES ('1790555195413', 'r2', 'editor');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -394,7 +394,7 @@ SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_orders`
   (`_idx`, `id`, `user_id`, `_source`)
-  VALUES ('1790553368591', 'o1', 'u1', '{"amount":100.5}');
+  VALUES ('1790555195416', 'o1', 'u1', '{"amount":100.5}');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -406,7 +406,7 @@ SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_orders`
   (`_idx`, `id`, `user_id`, `_source`)
-  VALUES ('1790553368594', 'o2', 'u1', '{"amount":200}');
+  VALUES ('1790555195418', 'o2', 'u1', '{"amount":200}');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -418,7 +418,7 @@ SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_orders`
   (`_idx`, `id`, `user_id`, `_source`)
-  VALUES ('1790553368596', 'o3', 'u3', '{"amount":50}');
+  VALUES ('1790555195420', 'o3', 'u3', '{"amount":50}');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -472,19 +472,19 @@ SELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_users_f_roles`
   (`_idx`, `role_id`, `user_id`)
-  VALUES ('1790553368605', 'r1', 'u1');
+  VALUES ('1790555195427', 'r1', 'u1');
 SELECT JSON_OBJECT('user_id', `user_id`, 'role_id', `role_id`) AS `result` FROM `jsql_catalog`.`f_users_f_roles` WHERE `user_id` = 'u1' AND `role_id` = 'r1';
 
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_users_f_roles`
   (`_idx`, `role_id`, `user_id`)
-  VALUES ('1790553368607', 'r2', 'u1');
+  VALUES ('1790555195429', 'r2', 'u1');
 SELECT JSON_OBJECT('user_id', `user_id`, 'role_id', `role_id`) AS `result` FROM `jsql_catalog`.`f_users_f_roles` WHERE `user_id` = 'u1' AND `role_id` = 'r2';
 
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_users_f_roles`
   (`_idx`, `role_id`, `user_id`)
-  VALUES ('1790553368609', 'r2', 'u2');
+  VALUES ('1790555195430', 'r2', 'u2');
 SELECT JSON_OBJECT('user_id', `user_id`, 'role_id', `role_id`) AS `result` FROM `jsql_catalog`.`f_users_f_roles` WHERE `user_id` = 'u2' AND `role_id` = 'r2';
 
 -- ========== 2. Definición de modelos (DDL) · DefineUnique (rechaza duplicados en insert, bulk y update) [pass]
@@ -502,7 +502,7 @@ WHERE A.`email` = 'same@example.com') THEN 'true' ELSE 'false' END AS `exists`
 -- BULK
 INSERT INTO `jsql_catalog`.`f_users`
   (`_idx`, `email`, `id`, `name`)
-  VALUES ('1790553368611', 'same@example.com', 'u8', 'Uno');
+  VALUES ('1790555195432', 'same@example.com', 'u8', 'Uno');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"', '$."password"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -582,6 +582,55 @@ SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"', '$."
 -- QUERY
 SELECT COUNT(*) AS `count`
 FROM `jsql_catalog`.`f_users` AS A
+
+-- ========== 2. Definición de modelos (DDL) · OmitUpdates (DefineOmitUpdate y Define) [pass]
+
+-- DDL
+CREATE SCHEMA IF NOT EXISTS `jsql_catalog`;
+CREATE TABLE IF NOT EXISTS `jsql_catalog`.`f_omit` (
+  `id` VARCHAR(80) NOT NULL,
+  `code` VARCHAR(80) DEFAULT NULL,
+  `name` VARCHAR(255) DEFAULT NULL,
+  `_source` JSON DEFAULT (JSON_OBJECT()),
+  PRIMARY KEY (`id`)
+);
+
+-- INSERT
+INSERT INTO `jsql_catalog`.`f_omit`
+  (`code`, `id`, `name`, `_source`)
+  VALUES ('A1', 'o1', 'antes', '{"created_by":"ana","meta":{"a":1}}');
+SELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),
+'$."id"', `id`,
+'$."code"', `code`,
+'$."name"', `name`
+) AS `result` FROM `jsql_catalog`.`f_omit` WHERE `id` = 'o1';
+
+-- QUERY
+SELECT
+JSON_SET(COALESCE(A.`_source`, JSON_OBJECT()),
+'$."id"', A.`id`,
+'$."code"', A.`code`,
+'$."name"', A.`name`
+) AS `result`
+FROM `jsql_catalog`.`f_omit` AS A
+WHERE A.`id` = 'o1'
+LIMIT 1000
+
+-- UPDATE
+UPDATE `jsql_catalog`.`f_omit`
+  SET `code` = 'A1',
+    `name` = 'después',
+    `_source` = JSON_SET(COALESCE(`_source`, JSON_OBJECT()),
+'$."created_by"', CAST('"ana"' AS JSON),
+'$."meta"', CAST('{"a":1}' AS JSON),
+'$."note"', CAST('"nueva"' AS JSON)
+)
+  WHERE `id` = 'o1';
+SELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),
+'$."id"', `id`,
+'$."code"', `code`,
+'$."name"', `name`
+) AS `result` FROM `jsql_catalog`.`f_omit` WHERE `id` = 'o1';
 
 -- ========== 3. Relaciones y campos calculados · Detail en el select (DefineDetail) [pass]
 
@@ -1798,7 +1847,7 @@ CREATE INDEX `f_many__idx_idx` ON `jsql_catalog`.`f_many` (`_idx`);
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_many`
   (`_idx`, `id`, `name`)
-  VALUES ('1790553368689', 'm1', 'x');
+  VALUES ('1790555195496', 'm1', 'x');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -1810,7 +1859,7 @@ SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_many`
   (`_idx`, `id`, `name`)
-  VALUES ('1790553368690', 'm2', 'x');
+  VALUES ('1790555195498', 'm2', 'x');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -1822,7 +1871,7 @@ SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_many`
   (`_idx`, `id`, `name`)
-  VALUES ('1790553368691', 'm3', 'x');
+  VALUES ('1790555195499', 'm3', 'x');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -1834,7 +1883,7 @@ SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_many`
   (`_idx`, `id`, `name`)
-  VALUES ('1790553368692', 'm4', 'x');
+  VALUES ('1790555195500', 'm4', 'x');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -1846,7 +1895,7 @@ SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_many`
   (`_idx`, `id`, `name`)
-  VALUES ('1790553368694', 'm5', 'x');
+  VALUES ('1790555195501', 'm5', 'x');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -1858,7 +1907,7 @@ SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_many`
   (`_idx`, `id`, `name`)
-  VALUES ('1790553368695', 'm6', 'x');
+  VALUES ('1790555195502', 'm6', 'x');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -2093,7 +2142,7 @@ CREATE INDEX `f_events__idx_idx` ON `jsql_catalog`.`f_events` (`_idx`);
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_events`
   (`_idx`, `id`, `name`, `_source`)
-  VALUES ('1790553368726', 'e1', 'alta', '{"stage":"before_insert","touched":true}');
+  VALUES ('1790555195527', 'e1', 'alta', '{"stage":"before_insert","touched":true}');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -2162,7 +2211,7 @@ DELETE FROM `jsql_catalog`.`f_events` WHERE `id` = 'e1';
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_events`
   (`_idx`, `id`, `name`, `_source`)
-  VALUES ('1790553368730', 'e2', 'cmd', '{"source":"command","stage":"before_insert","touched":true}');
+  VALUES ('1790555195531', 'e2', 'cmd', '{"source":"command","stage":"before_insert","touched":true}');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -2181,7 +2230,7 @@ WHERE A.`id` = 'e3') THEN 'true' ELSE 'false' END AS `exists`
 -- INSERT
 INSERT INTO `jsql_catalog`.`f_events`
   (`_idx`, `id`, `name`, `_source`)
-  VALUES ('1790553368732', 'e4', 'js', '{"js":"before_insert","stage":"before_insert","touched":true}');
+  VALUES ('1790555195535', 'e4', 'js', '{"js":"before_insert","stage":"before_insert","touched":true}');
 SELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$."_idx"'),
 '$."created_at"', `created_at`,
 '$."updated_at"', `updated_at`,
@@ -2310,7 +2359,7 @@ WHERE A.`tag` = 'invoice') THEN 'true' ELSE 'false' END AS `exists`
 -- INSERT
 INSERT INTO `jsql_catalog`.`series`
   (`_idx`, `created_at`, `format`, `tag`, `updated_at`, `value`)
-  VALUES ('1790553368752', '2026-09-27 18:56:08.752898', 'FAC-%05d', 'invoice', '2026-09-27 18:56:08.752898', 10);
+  VALUES ('1790555195553', '2026-09-27 19:26:35.553520', 'FAC-%05d', 'invoice', '2026-09-27 19:26:35.553520', 10);
 SELECT JSON_OBJECT('created_at', `created_at`, 'updated_at', `updated_at`, 'tag', `tag`, 'format', `format`, 'value', `value`) AS `result` FROM `jsql_catalog`.`series` WHERE `tag` = 'invoice';
 
 -- QUERY
@@ -2331,9 +2380,9 @@ LIMIT 1000
 
 -- UPDATE
 UPDATE `jsql_catalog`.`series`
-  SET `created_at` = '2026-09-27 18:56:08.752898',
+  SET `created_at` = '2026-09-27 19:26:35.553520',
     `format` = 'FAC-%05d',
-    `updated_at` = '2026-09-27 18:56:08.755089',
+    `updated_at` = '2026-09-27 19:26:35.555366',
     `value` = 11
   WHERE `tag` = 'invoice';
 SELECT JSON_OBJECT('created_at', `created_at`, 'updated_at', `updated_at`, 'tag', `tag`, 'format', `format`, 'value', `value`) AS `result` FROM `jsql_catalog`.`series` WHERE `tag` = 'invoice';
@@ -2352,9 +2401,9 @@ LIMIT 1000
 
 -- UPDATE
 UPDATE `jsql_catalog`.`series`
-  SET `created_at` = '2026-09-27 18:56:08.752898',
+  SET `created_at` = '2026-09-27 19:26:35.553520',
     `format` = 'FAC-%05d',
-    `updated_at` = '2026-09-27 18:56:08.756990',
+    `updated_at` = '2026-09-27 19:26:35.558036',
     `value` = 12
   WHERE `tag` = 'invoice';
 SELECT JSON_OBJECT('created_at', `created_at`, 'updated_at', `updated_at`, 'tag', `tag`, 'format', `format`, 'value', `value`) AS `result` FROM `jsql_catalog`.`series` WHERE `tag` = 'invoice';

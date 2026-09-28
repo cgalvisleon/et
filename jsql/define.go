@@ -69,6 +69,7 @@ type Define struct {
 	Required    []DefIndex       `json:"required"`
 	Columns     []Column         `json:"columns"`
 	Hiddens     []string         `json:"hiddens"`
+	OmitUpdates []string         `json:"omit_updates"`
 	Details     []DefDetail      `json:"details"`
 	Masters     []DefMaster      `json:"master"`
 	Rollups     []DefRollup      `json:"rollups"`
@@ -83,6 +84,21 @@ type Define struct {
 func (s *Model) indexColumn(name string) int {
 	result := slices.IndexFunc(s.Columns, func(col *Column) bool { return col.Name == name })
 	return result
+}
+
+/**
+* defineOmitUpdate: Adds columns or attributes that update commands must not change (e.g. created_at,
+* created_by). They are kept as they were even when the data or a before-update trigger changes them.
+* @param names ...string
+* @return *Model
+**/
+func (s *Model) defineOmitUpdate(names ...string) *Model {
+	for _, name := range names {
+		if name != "" && !slices.Contains(s.OmitUpdates, name) {
+			s.OmitUpdates = append(s.OmitUpdates, name)
+		}
+	}
+	return s
 }
 
 /**

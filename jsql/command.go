@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"strings"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jrex"
@@ -442,6 +443,59 @@ func (s *Command) rowsQuery() *Query {
 }
 
 /**
+* withoutOmitUpdates: Returns data without the fields of OmitUpdates (and their nested paths "field->…").
+* @param data et.Json
+* @return et.Json
+**/
+func (s *Model) withoutOmitUpdates(data et.Json) et.Json {
+	if len(s.OmitUpdates) == 0 {
+		return data
+	}
+	result := et.Json{}
+	for key, value := range data {
+		if s.isOmitUpdate(key) {
+			continue
+		}
+		result[key] = value
+	}
+	return result
+}
+
+/**
+* isOmitUpdate: Reports whether key is an OmitUpdates field or a nested path of one.
+* @param key string
+* @return bool
+**/
+func (s *Model) isOmitUpdate(key string) bool {
+	for _, name := range s.OmitUpdates {
+		if key == name || strings.HasPrefix(key, name+"->") {
+			return true
+		}
+	}
+	return false
+}
+
+/**
+* restoreOmitUpdates: Puts back in new the value that old had for each OmitUpdates field (or removes it
+* when old did not have it), undoing the changes a before-update trigger made to them.
+* @param old, new et.Json
+**/
+func (s *Model) restoreOmitUpdates(old, new et.Json) {
+	for _, name := range s.OmitUpdates {
+		if value, ok := old[name]; ok {
+			new[name] = value
+			continue
+		}
+		delete(new, name)
+	}
+	for key := range new {
+		if strings.Contains(key, "->") && s.isOmitUpdate(key) {
+			delete(new, key)
+		}
+	}
+}
+
+/**
 * insert: Executes INSERT for each row in Data, running before/after triggers per row.
 * @param tx *Tx
 * @return et.Items, error
@@ -541,7 +595,7 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 		return et.Items{}, err
 	}
 
-	data := s.Data[0]
+	data := model.withoutOmitUpdates(s.Data[0])
 	for _, old := range current.Result {
 		s.Old = old
 		s.New = s.Old.Clone()
@@ -563,6 +617,7 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 			}
 			s.Old, s.New = getTriggerRecords(instance)
 		}
+		model.restoreOmitUpdates(s.Old, s.New)
 
 		sql, err := s.db.command(s)
 		if err != nil {

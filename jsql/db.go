@@ -542,6 +542,8 @@ func (s *DB) define(define Define) (*Model, error) {
 		result.DefineHidden(hidden)
 	}
 
+	result.DefineOmitUpdate(define.OmitUpdates...)
+
 	if define.SourceField != "" {
 		result.DefineSource()
 	}

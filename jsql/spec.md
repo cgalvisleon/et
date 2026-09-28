@@ -141,9 +141,9 @@ model, err := db.Define(jsql.Define{
 })
 ```
 
-   `Define` admite además `ForeignKeys`, `Indexes`, `Required`, `Hiddens`, `Details` (`DefDetail`), `Masters` (`DefMaster`), `Rollups` (`DefRollup`) y `UserId` (auditoría).
+   `Define` admite además `ForeignKeys`, `Indexes`, `Required`, `Hiddens`, `OmitUpdates`, `Details` (`DefDetail`), `Masters` (`DefMaster`), `Rollups` (`DefRollup`) y `UserId` (auditoría).
 
-2. **Programática**: `db.NewModel(schema, name, version, userId)` + `DefineColumn`, `DefineAttrib`, `DefineIndex`, `DefinePrimaryKey`, `DefineUnique`, `DefineRequired`, `DefineHidden`, `DefineForeignKeys`, `DefineDetail`, `DefineMaster`, `DefineRollup`, `DefineCalcFunc`, `DefineCalc`, `DefineSource`, `DefineIdxField`.
+2. **Programática**: `db.NewModel(schema, name, version, userId)` + `DefineColumn`, `DefineAttrib`, `DefineIndex`, `DefinePrimaryKey`, `DefineUnique`, `DefineRequired`, `DefineHidden`, `DefineOmitUpdate`, `DefineForeignKeys`, `DefineDetail`, `DefineMaster`, `DefineRollup`, `DefineCalcFunc`, `DefineCalc`, `DefineSource`, `DefineIdxField`.
 
 3. **Plantillas**: `db.DefineModel(...)` (añade `created_at`, `updated_at`, `status`, `id` PK, `_source`, `_idx`), `db.DefineTenantModel(...)` (+ `tenant_id`), `db.DefineProjectModel(...)` (+ `project_id`).
 
@@ -263,6 +263,7 @@ Reglas:
 
 - **`SourceField`**: `INSERT` y `UPDATE` aplican §3 a las claves de `data` sin columna.
 - **`RETURNING`**: los tres comandos incluyen `RETURNING`. `INSERT` y `UPDATE` devuelven los **datos actualizados**; `DELETE` devuelve los **datos eliminados**. El resultado es la fila que devuelve la base, con la misma forma que un `SELECT` sin campos: con `SourceField`, `SourceField || jsonb_build_object(columnas) AS result`, sin los campos ocultos. Los triggers *after* reciben `new` con esos datos fusionados. `Command.Return(fields...)` restringe los campos devueltos y los resuelve igual que `Select`: columnas, atributos de `SourceField`, alias `campo:as` y rutas anidadas; con `SourceField` el resultado es un JSON solo con esos campos.
+- **Campos que no se actualizan** (`Model.OmitUpdates`): columnas y atributos que un `update` (o el update de un `upsert`) nunca cambia, por ejemplo `created_at` o `created_by`. Se definen con `model.DefineOmitUpdate(names...)`, el campo `OmitUpdates` de `Define` o la clave `omit_updates` del JSON. Se quitan de `data` (también sus rutas anidadas `campo->…`) y, si un trigger *before* los cambia, se restauran al valor anterior. El `insert` sí los guarda.
 - **Límite**: `update`, `delete` y el update de un `upsert` trabajan sobre un número máximo de filas, para no poner en riesgo la estabilidad de la base con un `where` muy amplio. `Command.Limit(n)` (o `"limit"` en JSON) lo fija: `n > 0` afecta como máximo `n` filas y `0` a todas las que cumplen el `where`. Sin límite se usa `DB_RECORD_LIMIT`, con un máximo de 1000. Qué filas entran cuando hay más que el límite no está garantizado.
 - **Filtros**: `Where`/`And`/`Or` reciben `*et.Condition` y admiten el mismo `[]Json` de §6.
 - **Ejecución**: `Exec()`, `ExecTx(tx)` → `et.Items`; `One()`, `OneTx(tx)` → `et.Item`. Con `tx == nil`, el comando abre su propia transacción y hace commit.

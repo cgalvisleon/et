@@ -44,6 +44,7 @@ type Model struct {
 	Details       map[string]*Detail      `json:"details"`
 	Masters       map[string]*Master      `json:"master"`
 	Rollups       map[string]*Rollups     `json:"rollups"`
+	OmitUpdates   []string                `json:"omit_updates"`
 	IsStrict      bool                    `json:"is_strict"`
 	Version       int                     `json:"version"`
 	IsDebug       bool                    `json:"-"`

@@ -382,6 +382,22 @@ func (s *Query) getField(field string) (*Field, bool) {
 }
 
 /**
+* getSelectField: Returns the field of the select list whose alias is name (e.g. "n" for
+* "count(id):n"), so ORDER BY can refer to a selected field or aggregate by its alias.
+* @param name string
+* @return *Field, bool
+**/
+func (s *Query) getSelectField(name string) (*Field, bool) {
+	for _, field := range s.Selects {
+		fld, ok := s.GetField(field)
+		if ok && fld.As == name {
+			return fld, true
+		}
+	}
+	return nil, false
+}
+
+/**
 * getFrom: Returns the origin (FROM or JOIN) whose name or alias matches name; an empty name returns the first FROM.
 * @param name string
 * @return *From

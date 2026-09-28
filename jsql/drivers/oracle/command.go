@@ -104,13 +104,13 @@ func oraRowResult(command *jsql.Command) string {
 
 	pairs := make([]string, 0, len(model.Columns))
 	if len(command.Returns) > 0 {
-		for _, name := range command.Returns {
-			col, ok := model.GetColumn(name)
-			if !ok {
-				continue
+		// Resolved like a Select (columns, attributes, "field:as", nested paths); the query has no
+		// alias (its As is the table), so the expressions are unqualified.
+		query := jsql.NewQuery(model, model.Table)
+		for _, field := range command.Returns {
+			if expr, ok := oraSelectExpr(query, field); ok {
+				pairs = append(pairs, expr)
 			}
-			fld := &jsql.Field{Field: et.Field{Name: name, As: name}, TypeColumn: col.TypeColumn, TypeData: col.TypeData, From: command.From}
-			pairs = append(pairs, fmt.Sprintf("%s VALUE %s", oraQuoteKey(name), oraJsonValueExpr(fld)))
 		}
 		return fmt.Sprintf("%s AS %s", oraMergeObject("", pairs), oraIdent(jsql.RESULT))
 	}

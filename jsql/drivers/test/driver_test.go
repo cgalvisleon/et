@@ -11,6 +11,8 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
+	_ "github.com/cgalvisleon/et/jsql/drivers/mssql"
+	_ "github.com/cgalvisleon/et/jsql/drivers/mysql"
 	_ "github.com/cgalvisleon/et/jsql/drivers/oracle"
 	_ "github.com/cgalvisleon/et/jsql/drivers/postgres"
 	_ "github.com/cgalvisleon/et/jsql/drivers/sqlite"
@@ -57,7 +59,9 @@ func getEnvInt(key string, def int) int {
 
 /**
 * targets: Postgres uses the DB_* variables (the repository .env is loaded); Oracle uses ORACLE_*,
-* with defaults for the local gvenzl/oracle-free container (user jsql, service FREEPDB1).
+* with defaults for the local gvenzl/oracle-free container (user jsql, service FREEPDB1); MySQL uses
+* MYSQL_*, with defaults for a local mysql:8.4 container (root, database jsql); SQL Server uses MSSQL_*,
+* with defaults for a local mcr.microsoft.com/mssql/server:2022 container (sa, database jsql).
 * @return []target
 **/
 func targets() []target {
@@ -123,7 +127,59 @@ func targets() []target {
 			schema:  oraUser,
 			cleanup: oracleDrops(oraUser, "transfers", "subscriptions", "clients", "plans"),
 		},
+		{
+			name: "mysql",
+			params: jsql.ConnectParams{
+				Driver: jsql.DriverMysql,
+				Host:   getEnv("MYSQL_HOST", "localhost"),
+				Name:   getEnv("MYSQL_DATABASE", "jsql"),
+				Connection: &jsql.MysqlConection{
+					Host:     getEnv("MYSQL_HOST", "localhost"),
+					Port:     getEnvInt("MYSQL_PORT", 3306),
+					Database: getEnv("MYSQL_DATABASE", "jsql"),
+					User:     getEnv("MYSQL_USER", "root"),
+					Password: getEnv("MYSQL_PASSWORD", "jsqlTest1"),
+				},
+				RecordLimit: 1000,
+			},
+			schema:  "jsql_test",
+			cleanup: []string{"DROP SCHEMA IF EXISTS `jsql_test`"},
+		},
+		{
+			name: "mssql",
+			params: jsql.ConnectParams{
+				Driver: jsql.DriverMssql,
+				Host:   getEnv("MSSQL_HOST", "localhost"),
+				Name:   getEnv("MSSQL_DATABASE", "jsql"),
+				Connection: &jsql.MssqlConection{
+					Host:     getEnv("MSSQL_HOST", "localhost"),
+					Port:     getEnvInt("MSSQL_PORT", 1433),
+					Database: getEnv("MSSQL_DATABASE", "jsql"),
+					User:     getEnv("MSSQL_USER", "sa"),
+					Password: getEnv("MSSQL_PASSWORD", "jsqlTest1!"),
+				},
+				RecordLimit: 1000,
+			},
+			schema:  "jsql_test",
+			cleanup: []string{mssqlDropSchema("jsql_test")},
+		},
 	}
+}
+
+/**
+* mssqlDropSchema: Returns a SQL Server batch that drops the foreign keys and tables of a schema and then
+* the schema (DROP SCHEMA needs it empty).
+* @param schema string
+* @return string
+**/
+func mssqlDropSchema(schema string) string {
+	return fmt.Sprintf(`DECLARE @sql NVARCHAR(MAX) = N'';
+SELECT @sql += N'ALTER TABLE ' + QUOTENAME(s.name) + N'.' + QUOTENAME(t.name) + N' DROP CONSTRAINT ' + QUOTENAME(f.name) + N';'
+  FROM sys.foreign_keys f JOIN sys.tables t ON f.parent_object_id = t.object_id JOIN sys.schemas s ON t.schema_id = s.schema_id WHERE s.name = N'%[1]s';
+SELECT @sql += N'DROP TABLE ' + QUOTENAME(s.name) + N'.' + QUOTENAME(t.name) + N';'
+  FROM sys.tables t JOIN sys.schemas s ON t.schema_id = s.schema_id WHERE s.name = N'%[1]s';
+EXEC(@sql);
+IF SCHEMA_ID(N'%[1]s') IS NOT NULL EXEC(N'DROP SCHEMA [%[1]s]');`, schema)
 }
 
 /**
@@ -312,8 +368,8 @@ func TestInsertUpdate(t *testing.T) {
 		t.Run(tg.name, func(t *testing.T) {
 			db := connect(t, tg)
 
-			// Oracle's JSON_MERGEPATCH removes keys set to null, so nulls are ignored there.
-			dropNulls := tg.name == "oracle"
+			// Oracle's JSON_MERGEPATCH and SQL Server's JSON_MODIFY remove keys set to null, so nulls are ignored there.
+			dropNulls := tg.name == "oracle" || tg.name == "mssql"
 			model := defineTransfers(t, db, tg.schema)
 			fixture := loadFixture(t)
 			id := fixture.Str("id")

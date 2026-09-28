@@ -23,6 +23,12 @@ func getConnection(driver, host string) (Connection, error) {
 	case DriverOracle:
 		config := oracleConection(host)
 		return config, nil
+	case DriverMysql:
+		config := mysqlConection(host)
+		return config, nil
+	case DriverMssql:
+		config := mssqlConection(host)
+		return config, nil
 	default:
 		return nil, fmt.Errorf(MSG_UNSUPPORTED_DRIVER, driver)
 	}
@@ -223,4 +229,118 @@ func (s *OracleConection) setDatabase(name string) {
 **/
 func (s *OracleConection) getDatabase() string {
 	return s.ServiceName
+}
+
+/**
+* MysqlConection: Connection parameters of a MySQL (8.0 or later) database.
+**/
+type MysqlConection struct {
+	Host     string
+	Port     int
+	Database string
+	User     string
+	Password string
+}
+
+/**
+* mysqlConection: Reads the MySQL connection parameters from the environment.
+* @param host string
+* @return *MysqlConection
+**/
+func mysqlConection(host string) *MysqlConection {
+	return &MysqlConection{
+		Host:     host,
+		Port:     envar.GetInt("DB_PORT", 3306),
+		Database: envar.GetStr("DB_NAME", "josephine"),
+		User:     envar.GetStr("DB_USER", "root"),
+		Password: envar.GetStr("DB_PASSWORD", ""),
+	}
+}
+
+/**
+* GetParams: Returns the connection parameters as a JSON object.
+* @return et.Json
+**/
+func (s *MysqlConection) GetParams() et.Json {
+	return et.Json{
+		"driver":   DriverMysql,
+		"host":     s.Host,
+		"port":     s.Port,
+		"database": s.Database,
+		"user":     s.User,
+		"password": s.Password,
+	}
+}
+
+/**
+* SetDatabase: Sets the database name in the connection parameters.
+* @param name string
+**/
+func (s *MysqlConection) SetDatabase(name string) {
+	s.Database = name
+}
+
+/**
+* GetDatabase: Returns the database name from the connection parameters.
+* @return string
+**/
+func (s *MysqlConection) GetDatabase() string {
+	return s.Database
+}
+
+/**
+* MssqlConection: Connection parameters of a SQL Server (2022 or later) database.
+**/
+type MssqlConection struct {
+	Host     string
+	Port     int
+	Database string
+	User     string
+	Password string
+}
+
+/**
+* mssqlConection: Reads the SQL Server connection parameters from the environment.
+* @param host string
+* @return *MssqlConection
+**/
+func mssqlConection(host string) *MssqlConection {
+	return &MssqlConection{
+		Host:     host,
+		Port:     envar.GetInt("DB_PORT", 1433),
+		Database: envar.GetStr("DB_NAME", "josephine"),
+		User:     envar.GetStr("DB_USER", "sa"),
+		Password: envar.GetStr("DB_PASSWORD", ""),
+	}
+}
+
+/**
+* GetParams: Returns the connection parameters as a JSON object.
+* @return et.Json
+**/
+func (s *MssqlConection) GetParams() et.Json {
+	return et.Json{
+		"driver":   DriverMssql,
+		"host":     s.Host,
+		"port":     s.Port,
+		"database": s.Database,
+		"user":     s.User,
+		"password": s.Password,
+	}
+}
+
+/**
+* SetDatabase: Sets the database name in the connection parameters.
+* @param name string
+**/
+func (s *MssqlConection) SetDatabase(name string) {
+	s.Database = name
+}
+
+/**
+* GetDatabase: Returns the database name from the connection parameters.
+* @return string
+**/
+func (s *MssqlConection) GetDatabase() string {
+	return s.Database
 }

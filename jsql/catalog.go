@@ -16,7 +16,7 @@ import (
 //	1   Conexión y base de datos        24
 //	2   Definición de modelos (DDL)     20
 //	3   Relaciones y campos calculados  19
-//	4   Consultas                       46
+//	4   Consultas                       47
 //	5   Condiciones                     18
 //	6   Comandos                        17
 //	7   Triggers                        22
@@ -24,7 +24,7 @@ import (
 //	9   Series                          6
 //	10  Auditoría                       3
 //	11  Utilidades                      17
-//	    Total                           196
+//	    Total                           197
 
 // =============================================================================
 // 1. Conexión y base de datos (24)
@@ -581,7 +581,7 @@ func (s *QueryDetail) GetQuery(item et.Json) *Query {
 }
 
 // =============================================================================
-// 4. Consultas (46)
+// 4. Consultas (47)
 // =============================================================================
 
 /**
@@ -849,6 +849,16 @@ func (s *Query) And(cond *et.Condition) *Query {
 **/
 func (s *Query) Or(cond *et.Condition) *Query {
 	return s.or(cond)
+}
+
+/**
+* GetSelectField: Returns the field of the select list whose alias is name (e.g. "n" for "count(id):n"),
+* so ORDER BY can refer to a selected field or aggregate by its alias.
+* @param name string
+* @return *Field, bool
+**/
+func (s *Query) GetSelectField(name string) (*Field, bool) {
+	return s.getSelectField(name)
 }
 
 /**

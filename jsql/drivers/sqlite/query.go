@@ -558,8 +558,8 @@ func (s *Sqlite) Query(query *jsql.Query) (string, error) {
 		sb.WriteString(strings.Join(selects, ",\n"))
 	}
 
-	from := sqliteFrom(query)
-	sb.WriteString(strings.Join(from, ",\n"))
+	// Each FROM part already carries its separator ("\nFROM …", ",\n…").
+	sb.WriteString(strings.Join(sqliteFrom(query), ""))
 
 	for _, join := range query.Joins {
 		sb.WriteString(fmt.Sprintf("\n%s %s AS %s", sqliteJoinKeyword(join.Type), sqliteFromRef(join.To), join.To.As))
@@ -572,7 +572,9 @@ func (s *Sqlite) Query(query *jsql.Query) (string, error) {
 	}
 
 	if len(query.Conditions) > 0 {
-		whereSQL := sqliteCondsSQL(query.GetField, query.UseSourceField, query.Conditions, primary.As)
+		// With several origins (FROM a, b) the tables are related in the WHERE, so "alias.field" string
+		// values that name a field of the query are column references, as in a JOIN ON.
+		whereSQL := sqliteConds(query.GetField, query.UseSourceField, query.Conditions, primary.As, len(query.Froms) > 1)
 		if whereSQL != "" {
 			sb.WriteString("\nWHERE " + whereSQL)
 		}
@@ -604,11 +606,11 @@ func (s *Sqlite) Query(query *jsql.Query) (string, error) {
 			if !idx.Sorted {
 				dir = "DESC"
 			}
-			fld, ok := query.GetField(idx.Name)
+			expr, ok := sqliteOrderExpr(query, idx.Name)
 			if !ok {
 				continue
 			}
-			parts = append(parts, fmt.Sprintf("%s %s", sqliteFieldExpr(fld, query.UseSourceField), dir))
+			parts = append(parts, fmt.Sprintf("%s %s", expr, dir))
 		}
 		sb.WriteString("\nORDER BY " + strings.Join(parts, ", "))
 	}
@@ -640,4 +642,25 @@ func masterRows(master *jsql.Master, limit int) int {
 		return master.Rows
 	}
 	return limit
+}
+
+/**
+* sqliteOrderExpr: Resolves an ORDER BY entry: the alias of a selected field or aggregate first
+* ("n" for "count(id):n"), then any field of the query.
+* @param query *jsql.Query, name string
+* @return string, bool
+**/
+func sqliteOrderExpr(query *jsql.Query, name string) (string, bool) {
+	fld, ok := query.GetSelectField(name)
+	if !ok {
+		fld, ok = query.GetField(name)
+	}
+	if !ok {
+		return "", false
+	}
+	if fld.Agg != nil {
+		return sqliteAggExpr(fld)
+	}
+	expr := sqliteFieldExpr(fld, query.UseSourceField)
+	return expr, expr != ""
 }

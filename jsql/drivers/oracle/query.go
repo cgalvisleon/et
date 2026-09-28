@@ -571,7 +571,9 @@ func (s *Oracle) Query(query *jsql.Query) (string, error) {
 		}
 	}
 
-	if where := oraConds(query.GetField, query.Conditions, alias, false); where != "" {
+	// With several origins (FROM a, b) the tables are related in the WHERE, so "alias.field" string
+	// values that name a field of the query are column references, as in a JOIN ON.
+	if where := oraConds(query.GetField, query.Conditions, alias, len(query.Froms) > 1); where != "" {
 		sb.WriteString("\nWHERE " + where)
 	}
 
@@ -601,7 +603,10 @@ func (s *Oracle) Query(query *jsql.Query) (string, error) {
 	if len(query.OrdersBy) > 0 {
 		parts := make([]string, 0, len(query.OrdersBy))
 		for _, idx := range query.OrdersBy {
-			fld, ok := query.GetField(idx.Name)
+			fld, ok := query.GetSelectField(idx.Name)
+			if !ok {
+				fld, ok = query.GetField(idx.Name)
+			}
 			if !ok {
 				continue
 			}
@@ -609,7 +614,11 @@ func (s *Oracle) Query(query *jsql.Query) (string, error) {
 			if !idx.Sorted {
 				dir = "DESC"
 			}
-			parts = append(parts, fmt.Sprintf("%s %s", oraScalarExpr(fld, fld.TypeData), dir))
+			expr := oraScalarExpr(fld, fld.TypeData)
+			if fld.Agg != nil {
+				expr, _ = oraAggExpr(fld)
+			}
+			parts = append(parts, fmt.Sprintf("%s %s", expr, dir))
 		}
 		if len(parts) > 0 {
 			sb.WriteString("\nORDER BY " + strings.Join(parts, ", "))

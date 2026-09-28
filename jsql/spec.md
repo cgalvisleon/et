@@ -194,7 +194,7 @@ Constructores: `Model.Select/Where/Join/As/Calc`, `jsql.NewQuery(model, as...)`.
 | vacío | `A._source \|\| jsonb_build_object('id', A.id, 'name', A.name, …) AS result`: todos los atributos más todas las columnas `COLUMN` no ocultas. | Todas las columnas `COLUMN` no ocultas. |
 | con campos | `jsonb_build_object('id', A.id, 'last_name', A._source->>'last_name', …) AS result`: solo los `Field` pedidos, agrupados en un objeto. | Lista de columnas pedidas. |
 
-Siempre se excluyen `Model.Hiddens` y `Query.Hiddens`. Con el select vacío no se resuelven detalles, maestros, rollups ni campos calculados: hay que pedirlos por nombre (§2.1). La fila resultante con `SourceField` es un único JSON en la columna `result`, que `jsql` devuelve como `et.Json`.
+Los campos ocultos (`Model.Hiddens` y `Query.Hiddens`) se excluyen cuando el select está vacío; si se piden por nombre en el select, se devuelven. Con el select vacío no se resuelven detalles, maestros, rollups ni campos calculados: hay que pedirlos por nombre (§2.1). La fila resultante con `SourceField` es un único JSON en la columna `result`, que `jsql` devuelve como `et.Json`.
 
 ### 5.4 Consulta descrita en JSON
 
@@ -224,12 +224,12 @@ Siempre se excluyen `Model.Hiddens` y `Query.Hiddens`. Con el select vacío no s
 }
 ```
 
-- `from` es el origen: `schema.tabla:alias`, `tabla:alias` (usa el esquema del modelo que ejecuta la consulta), `schema.tabla` o `tabla` (alias `A`). También acepta una lista: la primera referencia reemplaza al origen principal y las demás se agregan como orígenes adicionales. El modelo debe estar definido en la `DB`.
+- `from` es el origen: `schema.tabla:alias`, `tabla:alias` (usa el esquema del modelo que ejecuta la consulta), `schema.tabla` o `tabla` (alias `A`). También acepta una lista: la primera referencia reemplaza al origen principal y las demás se agregan como orígenes adicionales (`FROM a, b`). En ese caso los orígenes se relacionan en el `where`, donde un valor de texto `alias.campo` que nombra un campo de la consulta se toma como columna, igual que en el `on` de un join. El modelo debe estar definido en la `DB`.
 - `to` en los joins es obligatorio con la forma `schema.tabla:alias`; el modelo destino debe estar definido en la `DB`.
 - Si el descriptor tiene un error (un `from` o un `to` que no existe, una condición inválida), la consulta lo devuelve al ejecutarse (`All`, `One`, `Count`, `Exists`…) en lugar de correr con lo que se pudo leer.
 - Las claves también se aceptan con su forma SQL (`select`, `group by`, `order by`, `having`…, ver §8.2), además de `offset` y las claves `and` / `or` de primer nivel.
 - `limit` por defecto: `DB.RecordLimit` (`DB_RECORD_LIMIT`, 1000). `page` calcula el `OFFSET`; `offset` lo fija directamente.
-- `orders`: `true` = ASC, `false` = DESC.
+- `orders`: `true` = ASC, `false` = DESC. Un orden puede usar el alias de un campo seleccionado, incluido un agregado (`"orders": [{"n": false}]` con `"count(id):n"`); lo mismo con `Query.OrderBy`.
 
 ## 6. Condiciones
 
@@ -243,7 +243,7 @@ Cada condición es un objeto `{campo: {operador: valor}}`, opcionalmente envuelt
 | `more` / `more_eq` | `jsql.More` / `jsql.MoreEq` | `>` / `>=` |
 | `like` | `jsql.Like` | `ILIKE` / `LIKE` |
 | `in` / `not_in` | `jsql.In` / `jsql.NotIn` | `IN (…)` / `NOT IN (…)` |
-| `is` / `is_not` | `jsql.Is` / `jsql.IsNot` | `IS` / `IS NOT` |
+| `is` / `is_not` | `jsql.Is` / `jsql.IsNot` | `IS NULL` / `IS NOT NULL` con `nil`; con un valor, comparación que respeta `NULL` (`IS [NOT] DISTINCT FROM`, `<=>` en MySQL) |
 | `null` / `not_null` | `jsql.Null` / `jsql.NotNull` | `IS NULL` / `IS NOT NULL` |
 | `between` / `not_between` | `jsql.Between` / `jsql.NotBetween` | `BETWEEN … AND …` |
 
@@ -262,7 +262,7 @@ Un campo sin columna se busca en `SourceField` (`_source->>'last_name'`), según
 Reglas:
 
 - **`SourceField`**: `INSERT` y `UPDATE` aplican §3 a las claves de `data` sin columna.
-- **`RETURNING`**: los tres comandos incluyen `RETURNING`. `INSERT` y `UPDATE` devuelven los **datos actualizados**; `DELETE` devuelve los **datos eliminados**. El resultado es la fila que devuelve la base, con la misma forma que un `SELECT` sin campos: con `SourceField`, `SourceField || jsonb_build_object(columnas) AS result`, sin los campos ocultos. Los triggers *after* reciben `new` con esos datos fusionados. `Command.Return(fields...)` restringe los campos devueltos.
+- **`RETURNING`**: los tres comandos incluyen `RETURNING`. `INSERT` y `UPDATE` devuelven los **datos actualizados**; `DELETE` devuelve los **datos eliminados**. El resultado es la fila que devuelve la base, con la misma forma que un `SELECT` sin campos: con `SourceField`, `SourceField || jsonb_build_object(columnas) AS result`, sin los campos ocultos. Los triggers *after* reciben `new` con esos datos fusionados. `Command.Return(fields...)` restringe los campos devueltos y los resuelve igual que `Select`: columnas, atributos de `SourceField`, alias `campo:as` y rutas anidadas; con `SourceField` el resultado es un JSON solo con esos campos.
 - **Límite**: `update`, `delete` y el update de un `upsert` trabajan sobre un número máximo de filas, para no poner en riesgo la estabilidad de la base con un `where` muy amplio. `Command.Limit(n)` (o `"limit"` en JSON) lo fija: `n > 0` afecta como máximo `n` filas y `0` a todas las que cumplen el `where`. Sin límite se usa `DB_RECORD_LIMIT`, con un máximo de 1000. Qué filas entran cuando hay más que el límite no está garantizado.
 - **Filtros**: `Where`/`And`/`Or` reciben `*et.Condition` y admiten el mismo `[]Json` de §6.
 - **Ejecución**: `Exec()`, `ExecTx(tx)` → `et.Items`; `One()`, `OneTx(tx)` → `et.Item`. Con `tx == nil`, el comando abre su propia transacción y hace commit.
@@ -344,7 +344,9 @@ type Driver interface {
 | `postgres` (`lib/pq`) | `DriverPostgres` | Completo. |
 | `sqlite` (`modernc.org/sqlite`) | `DriverSqlite` | Completo; `RIGHT JOIN` y `FULL JOIN` nativos (SQLite 3.39 o superior). |
 | `oracle` (`go-ora/v2`) | `DriverOracle` | Completo, para Oracle 19c o superior (probado en 23ai Free). Ver §9.1. |
-| `mysql`, `mssql`, `josefina` | constantes | Sin implementación. |
+| `mysql` (`go-sql-driver/mysql`) | `DriverMysql` | Completo, para MySQL 8.0 o superior (probado en 8.4). Ver §9.2. |
+| `mssql` (`microsoft/go-mssqldb`) | `DriverMssql` | Completo, para SQL Server 2022 o superior. Ver §9.3. |
+| `josefina` | constante | Sin implementación. |
 
 ### 9.1 Particularidades del driver Oracle
 
@@ -355,13 +357,31 @@ type Driver interface {
 - **Literales**: los textos de más de 1000 caracteres se parten en `TO_CLOB('…') || TO_CLOB('…')` para no pasar el límite de 4000 bytes por literal (`ORA-01704`). Oracle guarda `''` como `NULL`.
 - **Consultas**: `LIKE` no distingue mayúsculas (`UPPER(x) LIKE UPPER(v)`); la paginación usa `OFFSET … ROWS FETCH NEXT … ROWS ONLY`; `ON UPDATE CASCADE` no existe y se omite; no se crean índices sobre LOB ni un segundo índice sobre una columna ya indexada.
 
+### 9.2 Particularidades del driver MySQL
+
+- **Esquemas**: el esquema de un modelo es una base de datos de MySQL (`CREATE SCHEMA` la crea); tablas y columnas van entre backticks. `Connect` crea la base de `DB_NAME` si no existe.
+- **Tipos**: `SourceField` y las columnas JSON son `JSON`; `BOOL` es `TINYINT(1)`, que en los resultados vuelve como `true`/`false`; `DATETIME` es `DATETIME(6)`; `ANY` es `TEXT`. No se indexan columnas `TEXT`, `BLOB` ni `JSON`.
+- **Comandos**: MySQL no tiene `RETURNING`; la conexión usa `multiStatements` y cada comando es un lote: el DML y un `SELECT` de la fila por su llave primaria (el `DELETE` hace el `SELECT` antes de borrar).
+- **Escapes**: MySQL usa `\` como carácter de escape dentro de las cadenas, así que el driver escapa `\` además de `'`.
+- **`SourceField`**: el `UPDATE` fusiona los atributos con `JSON_SET` (conserva los `null`) y crea antes los objetos padre de las rutas anidadas.
+- **Consultas**: `FULL JOIN` no existe en MySQL y devuelve `mysql.ErrFullJoin`. En consultas agrupadas, los campos seleccionados se envuelven en `ANY_VALUE`, porque `only_full_group_by` no reconoce la expresión JSON del `GROUP BY`. `LIKE` compara en minúsculas.
+
+### 9.3 Particularidades del driver SQL Server
+
+- **Nombres**: tablas y columnas van entre corchetes (`[schema].[tabla]`); sin esquema se usa `dbo`. `Connect` crea la base de `DB_NAME` si no existe y `Load` crea el esquema.
+- **Tipos**: `SourceField` y las columnas JSON son `NVARCHAR(MAX)` con `CHECK (ISJSON(...) = 1)`; `BOOL` es `BIT`; `DATETIME` es `DATETIME2`; `ANY` es `NVARCHAR(4000)`. No se indexan columnas `MAX` ni `NVARCHAR(4000)`.
+- **Resultados**: SQL Server no tiene una función que arme objetos JSON conservando los tipos, así que el driver construye el JSON de cada fila como texto (`STRING_ESCAPE` para los textos, números, `true`/`false`, fechas ISO 8601) y lee los atributos de `SourceField` con `OPENJSON` para conservar su tipo.
+- **Comandos**: cada comando es un lote con `SET NOCOUNT ON`: el DML y un `SELECT` de la fila por su llave primaria (el `DELETE` hace el `SELECT` antes de borrar).
+- **`SourceField`**: el `UPDATE` fusiona los atributos con `JSON_MODIFY` y crea antes los objetos padre; como en Oracle, un valor `null` **borra** la llave.
+- **Consultas**: la paginación usa `OFFSET … ROWS FETCH NEXT … ROWS ONLY`, que exige un `ORDER BY` (`ORDER BY (SELECT NULL)` si la consulta no tiene); `IS [NOT] DISTINCT FROM` requiere SQL Server 2022.
+
 ## 10. Conexión y configuración
 
 `jsql.Load()` (base `DB_NAME`) o `jsql.LoadTo(nombre, host...)` leen el entorno con `envar`; `jsql.ConnectTo(ConnectParams)` recibe los parámetros explícitos.
 
 | Variable | Uso | Defecto |
 |---|---|---|
-| `DB_DRIVER` | Driver | `postgres` |
+| `DB_DRIVER` | Driver: `postgres`, `sqlite`, `oracle`, `mysql` o `mssql` | `postgres` |
 | `DB_HOST`, `DB_PORT` | Servidor | `localhost`, 5432 / 1521 |
 | `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Credenciales y base (en Oracle, el *service name*, p. ej. `FREEPDB1`) | — / `josephine` |
 | `DB_SSL`, `DB_SSL_VERIFY` | TLS (oracle) | `false`, `true` |
@@ -382,4 +402,4 @@ Estado revisado el 2026-09-26.
 
 | # | Especificación | Código actual | Ubicación |
 |---|---|---|---|
-| 1 | Driver para varios motores. | `postgres`, `sqlite` y `oracle` generan SQL; `mysql`, `mssql` y `josefina` no tienen implementación. | `drivers/` |
+| 1 | Driver para varios motores. | `postgres`, `sqlite`, `oracle`, `mysql` y `mssql` generan SQL; `josefina` no tiene implementación. | `drivers/` |

@@ -134,23 +134,30 @@ func rowsToItems(rows *sql.Rows) et.Items {
 		result.Add(item)
 	}
 
-	for rows.Next() {
-		var item et.Json
-		item.ScanRows(rows)
+	// Every result set is read: MySQL and SQL Server run a command as a batch (DML followed by the
+	// SELECT that stands in for RETURNING), whose rows come in a later result set.
+	for {
+		for rows.Next() {
+			var item et.Json
+			item.ScanRows(rows)
 
-		if len(item) == 1 {
-			for _, v := range item {
-				switch val := v.(type) {
-				case et.Json:
-					append(val)
-				case map[string]interface{}:
-					append(et.Json(val))
-				default:
-					append(item)
+			if len(item) == 1 {
+				for _, v := range item {
+					switch val := v.(type) {
+					case et.Json:
+						append(val)
+					case map[string]interface{}:
+						append(et.Json(val))
+					default:
+						append(item)
+					}
 				}
+			} else {
+				append(item)
 			}
-		} else {
-			append(item)
+		}
+		if !rows.NextResultSet() {
+			break
 		}
 	}
 

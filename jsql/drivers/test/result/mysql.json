@@ -1,0 +1,1428 @@
+[
+  {
+    "section": "1. Conexión y base de datos",
+    "case": "Register + ConnectTo",
+    "status": "pass",
+    "output": "rec_mysql"
+  },
+  {
+    "section": "1. Conexión y base de datos",
+    "case": "Init (idempotente)",
+    "status": "pass"
+  },
+  {
+    "section": "1. Conexión y base de datos",
+    "case": "NewDB",
+    "status": "pass",
+    "output": "jsql"
+  },
+  {
+    "section": "1. Conexión y base de datos",
+    "case": "LoadDb (desde ToJson)",
+    "status": "pass",
+    "output": "rec_mysql"
+  },
+  {
+    "section": "1. Conexión y base de datos",
+    "case": "Load / LoadTo",
+    "status": "skip",
+    "note": "leen la configuración de DB_* con envar, que la guarda en caché; se cubren con ConnectTo"
+  },
+  {
+    "section": "1. Conexión y base de datos",
+    "case": "Sql",
+    "status": "pass",
+    "output": [
+      {
+        "n": 1
+      }
+    ]
+  },
+  {
+    "section": "1. Conexión y base de datos",
+    "case": "SqlTx + Tx.Commit",
+    "status": "pass",
+    "output": 1
+  },
+  {
+    "section": "1. Conexión y base de datos",
+    "case": "Connection.GetParams / SetDatabase / GetDatabase",
+    "status": "pass",
+    "output": "mysql"
+  },
+  {
+    "section": "1. Conexión y base de datos",
+    "case": "SetDebug / Debug",
+    "status": "pass",
+    "output": "jsql"
+  },
+  {
+    "section": "1. Conexión y base de datos",
+    "case": "DB.Query con descriptor inválido (devuelve error)",
+    "status": "pass",
+    "output": [
+      "invalid sql: the descriptor has no query, command or define key",
+      "invalid sql: the descriptor has more than one command"
+    ]
+  },
+  {
+    "section": "2. Definición de modelos (DDL)",
+    "case": "Define (declarativo)",
+    "status": "pass",
+    "output": "f_products",
+    "sql": [
+      "-- DDL\nCREATE SCHEMA IF NOT EXISTS `jsql_catalog`;\nCREATE TABLE IF NOT EXISTS `jsql_catalog`.`f_products` (\n  `id` VARCHAR(80) NOT NULL,\n  `name` VARCHAR(255) DEFAULT NULL,\n  `category` VARCHAR(80) DEFAULT NULL,\n  `_source` JSON DEFAULT (JSON_OBJECT()),\n  PRIMARY KEY (`id`)\n);\nCREATE INDEX `f_products_category_idx` ON `jsql_catalog`.`f_products` (`category`);"
+    ]
+  },
+  {
+    "section": "2. Definición de modelos (DDL)",
+    "case": "DefineModel + DefineColumn / DefineAttrib / DefineUnique / DefineHidden",
+    "status": "pass",
+    "output": [
+      "f_roles",
+      "f_orders",
+      "f_orders_items",
+      "f_users"
+    ],
+    "sql": [
+      "-- DDL\nCREATE SCHEMA IF NOT EXISTS `jsql_catalog`;\nCREATE TABLE IF NOT EXISTS `jsql_catalog`.`f_roles` (\n  `created_at` DATETIME(6) DEFAULT NULL,\n  `updated_at` DATETIME(6) DEFAULT NULL,\n  `status` VARCHAR(255) DEFAULT 'active',\n  `id` VARCHAR(80) NOT NULL,\n  `_source` JSON DEFAULT (JSON_OBJECT()),\n  `name` VARCHAR(80) DEFAULT NULL,\n  `_idx` VARCHAR(80) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n);\nCREATE INDEX `f_roles_status_idx` ON `jsql_catalog`.`f_roles` (`status`);\nCREATE INDEX `f_roles__idx_idx` ON `jsql_catalog`.`f_roles` (`_idx`);",
+      "-- DDL\nCREATE SCHEMA IF NOT EXISTS `jsql_catalog`;\nCREATE TABLE IF NOT EXISTS `jsql_catalog`.`f_users` (\n  `created_at` DATETIME(6) DEFAULT NULL,\n  `updated_at` DATETIME(6) DEFAULT NULL,\n  `status` VARCHAR(255) DEFAULT 'active',\n  `id` VARCHAR(80) NOT NULL,\n  `_source` JSON DEFAULT (JSON_OBJECT()),\n  `name` VARCHAR(80) DEFAULT NULL,\n  `email` VARCHAR(255) DEFAULT NULL,\n  `_idx` VARCHAR(80) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n);\nCREATE UNIQUE INDEX `f_users_email_key` ON `jsql_catalog`.`f_users` (`email`);\nCREATE INDEX `f_users_status_idx` ON `jsql_catalog`.`f_users` (`status`);\nCREATE INDEX `f_users__idx_idx` ON `jsql_catalog`.`f_users` (`_idx`);",
+      "-- DDL\nCREATE SCHEMA IF NOT EXISTS `jsql_catalog`;\nCREATE TABLE IF NOT EXISTS `jsql_catalog`.`f_users_f_roles` (\n  `user_id` VARCHAR(80) NOT NULL,\n  `role_id` VARCHAR(80) NOT NULL,\n  `_idx` VARCHAR(80) DEFAULT NULL,\n  PRIMARY KEY (`user_id`, `role_id`)\n);\nCREATE INDEX `f_users_f_roles__idx_idx` ON `jsql_catalog`.`f_users_f_roles` (`_idx`);\nALTER TABLE `jsql_catalog`.`f_users_f_roles` ADD CONSTRAINT `fk_f_users_f_roles_f_users` FOREIGN KEY (`user_id`) REFERENCES `jsql_catalog`.`f_users` (`id`) ON DELETE CASCADE;\nALTER TABLE `jsql_catalog`.`f_users_f_roles` ADD CONSTRAINT `fk_f_users_f_roles_f_roles` FOREIGN KEY (`role_id`) REFERENCES `jsql_catalog`.`f_roles` (`id`) ON DELETE CASCADE;",
+      "-- DDL\nCREATE SCHEMA IF NOT EXISTS `jsql_catalog`;\nCREATE TABLE IF NOT EXISTS `jsql_catalog`.`f_doc_types` (\n  `created_at` DATETIME(6) DEFAULT NULL,\n  `updated_at` DATETIME(6) DEFAULT NULL,\n  `status` VARCHAR(255) DEFAULT 'active',\n  `id` VARCHAR(80) NOT NULL,\n  `_source` JSON DEFAULT (JSON_OBJECT()),\n  `title` VARCHAR(80) DEFAULT NULL,\n  `_idx` VARCHAR(80) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n);\nCREATE INDEX `f_doc_types_status_idx` ON `jsql_catalog`.`f_doc_types` (`status`);\nCREATE INDEX `f_doc_types__idx_idx` ON `jsql_catalog`.`f_doc_types` (`_idx`);",
+      "-- DDL\nCREATE SCHEMA IF NOT EXISTS `jsql_catalog`;\nCREATE TABLE IF NOT EXISTS `jsql_catalog`.`f_orders` (\n  `created_at` DATETIME(6) DEFAULT NULL,\n  `updated_at` DATETIME(6) DEFAULT NULL,\n  `status` VARCHAR(255) DEFAULT 'active',\n  `id` VARCHAR(80) NOT NULL,\n  `_source` JSON DEFAULT (JSON_OBJECT()),\n  `user_id` VARCHAR(80) DEFAULT NULL,\n  `_idx` VARCHAR(80) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n);\nCREATE INDEX `f_orders_status_idx` ON `jsql_catalog`.`f_orders` (`status`);\nCREATE INDEX `f_orders__idx_idx` ON `jsql_catalog`.`f_orders` (`_idx`);",
+      "-- DDL\nCREATE SCHEMA IF NOT EXISTS `jsql_catalog`;\nCREATE TABLE IF NOT EXISTS `jsql_catalog`.`f_orders_items` (\n  `order_id` VARCHAR(80) DEFAULT NULL,\n  `id` VARCHAR(80) NOT NULL,\n  `product` VARCHAR(255) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n);\nALTER TABLE `jsql_catalog`.`f_orders_items` ADD CONSTRAINT `fk_f_orders_items_f_orders` FOREIGN KEY (`order_id`) REFERENCES `jsql_catalog`.`f_orders` (`id`) ON DELETE CASCADE;"
+    ]
+  },
+  {
+    "section": "2. Definición de modelos (DDL)",
+    "case": "DefineTenantModel / DefineProjectModel",
+    "status": "pass",
+    "output": [
+      "tenant_id",
+      "project_id"
+    ],
+    "sql": [
+      "-- DDL\nCREATE SCHEMA IF NOT EXISTS `jsql_catalog`;\nCREATE TABLE IF NOT EXISTS `jsql_catalog`.`f_tenant` (\n  `created_at` DATETIME(6) DEFAULT NULL,\n  `updated_at` DATETIME(6) DEFAULT NULL,\n  `status` VARCHAR(255) DEFAULT 'active',\n  `id` VARCHAR(80) NOT NULL,\n  `_source` JSON DEFAULT (JSON_OBJECT()),\n  `tenant_id` VARCHAR(80) DEFAULT NULL,\n  `_idx` VARCHAR(80) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n);\nCREATE INDEX `f_tenant_status_idx` ON `jsql_catalog`.`f_tenant` (`status`);\nCREATE INDEX `f_tenant__idx_idx` ON `jsql_catalog`.`f_tenant` (`_idx`);\nCREATE INDEX `f_tenant_tenant_id_idx` ON `jsql_catalog`.`f_tenant` (`tenant_id`);",
+      "-- DDL\nCREATE SCHEMA IF NOT EXISTS `jsql_catalog`;\nCREATE TABLE IF NOT EXISTS `jsql_catalog`.`f_project` (\n  `created_at` DATETIME(6) DEFAULT NULL,\n  `updated_at` DATETIME(6) DEFAULT NULL,\n  `status` VARCHAR(255) DEFAULT 'active',\n  `id` VARCHAR(80) NOT NULL,\n  `_source` JSON DEFAULT (JSON_OBJECT()),\n  `project_id` VARCHAR(80) DEFAULT NULL,\n  `_idx` VARCHAR(80) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n);\nCREATE INDEX `f_project_status_idx` ON `jsql_catalog`.`f_project` (`status`);\nCREATE INDEX `f_project__idx_idx` ON `jsql_catalog`.`f_project` (`_idx`);\nCREATE INDEX `f_project_project_id_idx` ON `jsql_catalog`.`f_project` (`project_id`);"
+    ]
+  },
+  {
+    "section": "2. Definición de modelos (DDL)",
+    "case": "DefineRequired (rechaza el insert sin el campo)",
+    "status": "pass",
+    "output": "required field name",
+    "sql": [
+      "-- DDL\nCREATE SCHEMA IF NOT EXISTS `jsql_catalog`;\nCREATE TABLE IF NOT EXISTS `jsql_catalog`.`f_required` (\n  `created_at` DATETIME(6) DEFAULT NULL,\n  `updated_at` DATETIME(6) DEFAULT NULL,\n  `status` VARCHAR(255) DEFAULT 'active',\n  `id` VARCHAR(80) NOT NULL,\n  `_source` JSON DEFAULT (JSON_OBJECT()),\n  `name` VARCHAR(255) DEFAULT NULL,\n  `_idx` VARCHAR(80) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n);\nCREATE INDEX `f_required_status_idx` ON `jsql_catalog`.`f_required` (`status`);\nCREATE INDEX `f_required__idx_idx` ON `jsql_catalog`.`f_required` (`_idx`);"
+    ]
+  },
+  {
+    "section": "2. Definición de modelos (DDL)",
+    "case": "DefineForeignKeys (rechaza un hijo sin padre)",
+    "status": "pass",
+    "output": "fk violation",
+    "sql": [
+      "-- DDL\nCREATE SCHEMA IF NOT EXISTS `jsql_catalog`;\nCREATE TABLE IF NOT EXISTS `jsql_catalog`.`f_parent` (\n  `created_at` DATETIME(6) DEFAULT NULL,\n  `updated_at` DATETIME(6) DEFAULT NULL,\n  `status` VARCHAR(255) DEFAULT 'active',\n  `id` VARCHAR(80) NOT NULL,\n  `_source` JSON DEFAULT (JSON_OBJECT()),\n  `_idx` VARCHAR(80) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n);\nCREATE INDEX `f_parent_status_idx` ON `jsql_catalog`.`f_parent` (`status`);\nCREATE INDEX `f_parent__idx_idx` ON `jsql_catalog`.`f_parent` (`_idx`);",
+      "-- DDL\nCREATE SCHEMA IF NOT EXISTS `jsql_catalog`;\nCREATE TABLE IF NOT EXISTS `jsql_catalog`.`f_child` (\n  `created_at` DATETIME(6) DEFAULT NULL,\n  `updated_at` DATETIME(6) DEFAULT NULL,\n  `status` VARCHAR(255) DEFAULT 'active',\n  `id` VARCHAR(80) NOT NULL,\n  `_source` JSON DEFAULT (JSON_OBJECT()),\n  `parent_id` VARCHAR(80) DEFAULT NULL,\n  `_idx` VARCHAR(80) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n);\nCREATE INDEX `f_child_status_idx` ON `jsql_catalog`.`f_child` (`status`);\nCREATE INDEX `f_child__idx_idx` ON `jsql_catalog`.`f_child` (`_idx`);\nALTER TABLE `jsql_catalog`.`f_child` ADD CONSTRAINT `fk_f_child_f_parent` FOREIGN KEY (`parent_id`) REFERENCES `jsql_catalog`.`f_parent` (`id`) ON DELETE CASCADE;",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_parent`\n  (`_idx`, `id`)\n  VALUES ('1790553368528', 'p1');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`\n) AS `result` FROM `jsql_catalog`.`f_parent` WHERE `id` = 'p1';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_child`\n  (`_idx`, `id`, `parent_id`)\n  VALUES ('1790553368533', 'c1', 'p1');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"parent_id\"', `parent_id`\n) AS `result` FROM `jsql_catalog`.`f_child` WHERE `id` = 'c1';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_child`\n  (`_idx`, `id`, `parent_id`)\n  VALUES ('1790553368536', 'c2', 'missing');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"parent_id\"', `parent_id`\n) AS `result` FROM `jsql_catalog`.`f_child` WHERE `id` = 'c2';"
+    ]
+  },
+  {
+    "section": "2. Definición de modelos (DDL)",
+    "case": "Stricted (ignora campos desconocidos)",
+    "status": "pass",
+    "output": {
+      "created_at": null,
+      "id": "s1",
+      "name": "x",
+      "status": "active",
+      "updated_at": null
+    },
+    "sql": [
+      "-- DDL\nCREATE SCHEMA IF NOT EXISTS `jsql_catalog`;\nCREATE TABLE IF NOT EXISTS `jsql_catalog`.`f_strict` (\n  `created_at` DATETIME(6) DEFAULT NULL,\n  `updated_at` DATETIME(6) DEFAULT NULL,\n  `status` VARCHAR(255) DEFAULT 'active',\n  `id` VARCHAR(80) NOT NULL,\n  `_source` JSON DEFAULT (JSON_OBJECT()),\n  `name` VARCHAR(80) DEFAULT NULL,\n  `_idx` VARCHAR(80) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n);\nCREATE INDEX `f_strict_status_idx` ON `jsql_catalog`.`f_strict` (`status`);\nCREATE INDEX `f_strict__idx_idx` ON `jsql_catalog`.`f_strict` (`_idx`);",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_strict`\n  (`_idx`, `id`, `name`)\n  VALUES ('1790553368561', 's1', 'x');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_strict` WHERE `id` = 's1';",
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`\n) AS `result`\nFROM `jsql_catalog`.`f_strict` AS A\nWHERE A.`id` = 's1'\nLIMIT 1"
+    ]
+  },
+  {
+    "section": "2. Definición de modelos (DDL)",
+    "case": "GetModel / RemoveModel / NewModel",
+    "status": "pass",
+    "output": "ok"
+  },
+  {
+    "section": "2. Definición de modelos (DDL)",
+    "case": "DB.Query define (Define en JSON)",
+    "status": "pass",
+    "output": {
+      "extra": 1,
+      "name": "f_json_model",
+      "title": "desde define"
+    },
+    "sql": [
+      "-- DDL\nCREATE SCHEMA IF NOT EXISTS `jsql_catalog`;\nCREATE TABLE IF NOT EXISTS `jsql_catalog`.`f_json_model` (\n  `id` VARCHAR(80) NOT NULL,\n  `title` VARCHAR(255) DEFAULT NULL,\n  `_source` JSON DEFAULT (JSON_OBJECT()),\n  PRIMARY KEY (`id`)\n);",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_json_model`\n  (`id`, `title`, `_source`)\n  VALUES ('j1', 'desde define', '{\"extra\":1}');\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"title\"', `title`\n) AS `result` FROM `jsql_catalog`.`f_json_model` WHERE `id` = 'j1';",
+      "-- QUERY\nSELECT\nJSON_SET(COALESCE(A.`_source`, JSON_OBJECT()),\n'$.\"id\"', A.`id`,\n'$.\"title\"', A.`title`\n) AS `result`\nFROM `jsql_catalog`.`f_json_model` AS A\nWHERE A.`id` = 'j1'\nLIMIT 1"
+    ]
+  },
+  {
+    "section": "2. Definición de modelos (DDL)",
+    "case": "Insert (datos base)",
+    "status": "pass",
+    "output": 18,
+    "sql": [
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_doc_types`\n  (`_idx`, `id`, `title`)\n  VALUES ('1790553368577', 'CC', 'Cédula de ciudadanía');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"title\"', `title`\n) AS `result` FROM `jsql_catalog`.`f_doc_types` WHERE `id` = 'CC';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_doc_types`\n  (`_idx`, `id`, `title`)\n  VALUES ('1790553368579', 'NIT', 'Número de identificación tributaria');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"title\"', `title`\n) AS `result` FROM `jsql_catalog`.`f_doc_types` WHERE `id` = 'NIT';",
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`email` = 'ana@example.com') THEN 'true' ELSE 'false' END AS `exists`",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_users`\n  (`_idx`, `email`, `id`, `name`, `_source`)\n  VALUES ('1790553368582', 'ana@example.com', 'u1', 'Ana', '{\"age\":30,\"password\":\"secret\",\"tp_doc\":\"CC\"}');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"email\"', `email`\n) AS `result` FROM `jsql_catalog`.`f_users` WHERE `id` = 'u1';",
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`email` = 'luis@example.com') THEN 'true' ELSE 'false' END AS `exists`",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_users`\n  (`_idx`, `email`, `id`, `name`, `_source`)\n  VALUES ('1790553368585', 'luis@example.com', 'u2', 'Luis', '{\"age\":17}');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"email\"', `email`\n) AS `result` FROM `jsql_catalog`.`f_users` WHERE `id` = 'u2';",
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`email` = 'marta@example.com') THEN 'true' ELSE 'false' END AS `exists`",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_users`\n  (`_idx`, `email`, `id`, `name`, `_source`)\n  VALUES ('1790553368587', 'marta@example.com', 'u3', 'Marta O''Neil', '{\"age\":45,\"tp_doc\":\"NIT\"}');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"email\"', `email`\n) AS `result` FROM `jsql_catalog`.`f_users` WHERE `id` = 'u3';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_roles`\n  (`_idx`, `id`, `name`)\n  VALUES ('1790553368587', 'r1', 'admin');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_roles` WHERE `id` = 'r1';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_roles`\n  (`_idx`, `id`, `name`)\n  VALUES ('1790553368590', 'r2', 'editor');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_roles` WHERE `id` = 'r2';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_orders`\n  (`_idx`, `id`, `user_id`, `_source`)\n  VALUES ('1790553368591', 'o1', 'u1', '{\"amount\":100.5}');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"user_id\"', `user_id`\n) AS `result` FROM `jsql_catalog`.`f_orders` WHERE `id` = 'o1';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_orders`\n  (`_idx`, `id`, `user_id`, `_source`)\n  VALUES ('1790553368594', 'o2', 'u1', '{\"amount\":200}');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"user_id\"', `user_id`\n) AS `result` FROM `jsql_catalog`.`f_orders` WHERE `id` = 'o2';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_orders`\n  (`_idx`, `id`, `user_id`, `_source`)\n  VALUES ('1790553368596', 'o3', 'u3', '{\"amount\":50}');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"user_id\"', `user_id`\n) AS `result` FROM `jsql_catalog`.`f_orders` WHERE `id` = 'o3';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_orders_items`\n  (`id`, `order_id`, `product`)\n  VALUES ('i1', 'o1', 'router');\nSELECT JSON_OBJECT('id', `id`, 'product', `product`) AS `result` FROM `jsql_catalog`.`f_orders_items` WHERE `id` = 'i1';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_orders_items`\n  (`id`, `order_id`, `product`)\n  VALUES ('i2', 'o1', 'cable');\nSELECT JSON_OBJECT('id', `id`, 'product', `product`) AS `result` FROM `jsql_catalog`.`f_orders_items` WHERE `id` = 'i2';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_products`\n  (`category`, `id`, `name`, `_source`)\n  VALUES ('internet', 'p1', 'Plan 200', '{\"price\":90000}');\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'p1';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_products`\n  (`category`, `id`, `name`, `_source`)\n  VALUES ('internet', 'p2', 'Plan 500', '{\"price\":150000}');\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'p2';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_products`\n  (`category`, `id`, `name`, `_source`)\n  VALUES ('tv', 'p3', 'Decoder', '{\"price\":20000}');\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'p3';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_users_f_roles`\n  (`_idx`, `role_id`, `user_id`)\n  VALUES ('1790553368605', 'r1', 'u1');\nSELECT JSON_OBJECT('user_id', `user_id`, 'role_id', `role_id`) AS `result` FROM `jsql_catalog`.`f_users_f_roles` WHERE `user_id` = 'u1' AND `role_id` = 'r1';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_users_f_roles`\n  (`_idx`, `role_id`, `user_id`)\n  VALUES ('1790553368607', 'r2', 'u1');\nSELECT JSON_OBJECT('user_id', `user_id`, 'role_id', `role_id`) AS `result` FROM `jsql_catalog`.`f_users_f_roles` WHERE `user_id` = 'u1' AND `role_id` = 'r2';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_users_f_roles`\n  (`_idx`, `role_id`, `user_id`)\n  VALUES ('1790553368609', 'r2', 'u2');\nSELECT JSON_OBJECT('user_id', `user_id`, 'role_id', `role_id`) AS `result` FROM `jsql_catalog`.`f_users_f_roles` WHERE `user_id` = 'u2' AND `role_id` = 'r2';"
+    ]
+  },
+  {
+    "section": "2. Definición de modelos (DDL)",
+    "case": "DefineUnique (rechaza duplicados en insert, bulk y update)",
+    "status": "pass",
+    "output": [
+      "record already exists: email = ana@example.com",
+      "record already exists: email = same@example.com",
+      "record already exists: email = ana@example.com"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`email` = 'ana@example.com') THEN 'true' ELSE 'false' END AS `exists`",
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`email` = 'same@example.com') THEN 'true' ELSE 'false' END AS `exists`",
+      "-- BULK\nINSERT INTO `jsql_catalog`.`f_users`\n  (`_idx`, `email`, `id`, `name`)\n  VALUES ('1790553368611', 'same@example.com', 'u8', 'Uno');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"email\"', `email`\n) AS `result` FROM `jsql_catalog`.`f_users` WHERE `id` = 'u8';",
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`email` = 'same@example.com') THEN 'true' ELSE 'false' END AS `exists`",
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`id` = 'u2'\nLIMIT 1000",
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`email` = 'ana@example.com'\nLIMIT 2",
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`id` = 'u2'\nLIMIT 1000",
+      "-- UPDATE\nUPDATE `jsql_catalog`.`f_users`\n  SET `created_at` = NULL,\n    `email` = 'luis@example.com',\n    `name` = 'Luis',\n    `status` = 'active',\n    `updated_at` = NULL,\n    `_source` = JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"age\"', CAST('17' AS JSON)\n)\n  WHERE `id` = 'u2';\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"email\"', `email`\n) AS `result` FROM `jsql_catalog`.`f_users` WHERE `id` = 'u2';",
+      "-- QUERY\nSELECT COUNT(*) AS `count`\nFROM `jsql_catalog`.`f_users` AS A"
+    ]
+  },
+  {
+    "section": "3. Relaciones y campos calculados",
+    "case": "Detail en el select (DefineDetail)",
+    "status": "pass",
+    "output": {
+      "id": "o1",
+      "items": [
+        {
+          "product": "router"
+        },
+        {
+          "product": "cable"
+        }
+      ]
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id', A.`id`\n) AS `result`\nFROM `jsql_catalog`.`f_orders` AS A\nWHERE A.`id` = 'o1'\nLIMIT 1",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'product', A.`product`\n) AS `result`\nFROM `jsql_catalog`.`f_orders_items` AS A\nWHERE A.`order_id` = 'o1'\nLIMIT 30"
+    ]
+  },
+  {
+    "section": "3. Relaciones y campos calculados",
+    "case": "Model.Detail + Query.Detail",
+    "status": "pass",
+    "output": {
+      "amount": 100.5,
+      "created_at": null,
+      "id": "o1",
+      "items": [
+        {
+          "product": "router"
+        },
+        {
+          "product": "cable"
+        }
+      ],
+      "status": "active",
+      "updated_at": null,
+      "user_id": "u1"
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"user_id\"', A.`user_id`\n) AS `result`\nFROM `jsql_catalog`.`f_orders` AS A\nWHERE A.`id` = 'o1'\nLIMIT 1",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'product', A.`product`\n) AS `result`\nFROM `jsql_catalog`.`f_orders_items` AS A\nWHERE A.`order_id` = 'o1'\nLIMIT 30"
+    ]
+  },
+  {
+    "section": "3. Relaciones y campos calculados",
+    "case": "Master en el select (DefineMaster)",
+    "status": "pass",
+    "output": {
+      "id": "u1",
+      "roles": [
+        {
+          "name": "admin"
+        },
+        {
+          "name": "editor"
+        }
+      ]
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id', A.`id`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`id` = 'u1'\nLIMIT 1",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'name', A.`name`\n) AS `result`\nFROM `jsql_catalog`.`f_roles` AS A\nINNER JOIN `jsql_catalog`.`f_users_f_roles` AS B\n  ON B.`role_id` = A.`id`\nWHERE B.`user_id` = 'u1'\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "3. Relaciones y campos calculados",
+    "case": "Master 1 a 1 (rows = 1)",
+    "status": "pass",
+    "output": {
+      "id": "u2",
+      "main_role": {
+        "name": "editor"
+      }
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id', A.`id`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`id` = 'u2'\nLIMIT 1",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'name', A.`name`\n) AS `result`\nFROM `jsql_catalog`.`f_roles` AS A\nINNER JOIN `jsql_catalog`.`f_users_f_roles` AS B\n  ON B.`role_id` = A.`id`\nWHERE B.`user_id` = 'u2'\nLIMIT 1"
+    ]
+  },
+  {
+    "section": "3. Relaciones y campos calculados",
+    "case": "Model.Master + Model.Bridge",
+    "status": "pass",
+    "output": [
+      {
+        "created_at": null,
+        "id": "r2",
+        "name": "editor",
+        "status": "active",
+        "updated_at": null
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`\n) AS `result`\nFROM `jsql_catalog`.`f_roles` AS A\nINNER JOIN `jsql_catalog`.`f_users_f_roles` AS B\n  ON A.`id` = B.`role_id`\nWHERE B.`user_id` = 'u2'\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "3. Relaciones y campos calculados",
+    "case": "DefineRollup row (tp_doc → title)",
+    "status": "pass",
+    "output": [
+      {
+        "id": "u1",
+        "tp_doc_title": "Cédula de ciudadanía"
+      },
+      {
+        "id": "u2",
+        "tp_doc_title": null
+      },
+      {
+        "id": "u3",
+        "tp_doc_title": "Número de identificación tributaria"
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id', A.`id`,\n'tp_doc', JSON_EXTRACT(A.`_source`, '$.\"tp_doc\"')\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nORDER BY A.`id` ASC\nLIMIT 1000",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'title', A.`title`\n) AS `result`\nFROM `jsql_catalog`.`f_doc_types` AS A\nWHERE A.`id` = 'CC'\nLIMIT 1",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'title', A.`title`\n) AS `result`\nFROM `jsql_catalog`.`f_doc_types` AS A\nWHERE A.`id` = NULL\nLIMIT 1",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'title', A.`title`\n) AS `result`\nFROM `jsql_catalog`.`f_doc_types` AS A\nWHERE A.`id` = 'NIT'\nLIMIT 1"
+    ]
+  },
+  {
+    "section": "3. Relaciones y campos calculados",
+    "case": "DefineRollup (count, sum, object)",
+    "status": "pass",
+    "output": {
+      "id": "u3",
+      "last_order": {
+        "amount": 50,
+        "id": "o3"
+      },
+      "orders_count": 1,
+      "orders_total": 50
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id', A.`id`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`id` = 'u3'\nLIMIT 1",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id', A.`id`,\n'amount', JSON_EXTRACT(A.`_source`, '$.\"amount\"')\n) AS `result`\nFROM `jsql_catalog`.`f_orders` AS A\nWHERE A.`user_id` = 'u3'\nLIMIT 1",
+      "-- QUERY\nSELECT COUNT(*) AS `count`\nFROM `jsql_catalog`.`f_orders` AS A\nWHERE A.`user_id` = 'u3'",
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'amount', COALESCE(SUM(CAST(JSON_UNQUOTE(JSON_EXTRACT(A.`_source`, '$.\"amount\"')) AS DECIMAL(38,10))), 0)\n) AS `result`\nFROM `jsql_catalog`.`f_orders` AS A\nWHERE A.`user_id` = 'u3'\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "3. Relaciones y campos calculados",
+    "case": "DefineCalcFunc + Model.Calc",
+    "status": "pass",
+    "output": {
+      "age": 30,
+      "created_at": null,
+      "email": "ana@example.com",
+      "id": "u1",
+      "label": "Ana \u003cana@example.com\u003e",
+      "name": "Ana",
+      "status": "active",
+      "tp_doc": "CC",
+      "updated_at": null
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`id` = 'u1'\nLIMIT 1"
+    ]
+  },
+  {
+    "section": "3. Relaciones y campos calculados",
+    "case": "Query.Calc con script JS (DefineCalc)",
+    "status": "pass",
+    "output": {
+      "age": 45,
+      "created_at": null,
+      "email": "marta@example.com",
+      "id": "u3",
+      "initial": "M",
+      "name": "Marta O'Neil",
+      "status": "active",
+      "tp_doc": "NIT",
+      "updated_at": null
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`id` = 'u3'\nLIMIT 1"
+    ]
+  },
+  {
+    "section": "3. Relaciones y campos calculados",
+    "case": "DefineCalc (script JS)",
+    "status": "pass",
+    "output": {
+      "id": "u3",
+      "initial": "M",
+      "name": "Marta O'Neil"
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id', A.`id`,\n'name', A.`name`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`id` = 'u3'\nLIMIT 1"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "Select + Where + OrderBy + All",
+    "status": "pass",
+    "output": [
+      {
+        "age": 45,
+        "id": "u3",
+        "name": "Marta O'Neil"
+      },
+      {
+        "age": 30,
+        "id": "u1",
+        "name": "Ana"
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id', A.`id`,\n'name', A.`name`,\n'age', JSON_EXTRACT(A.`_source`, '$.\"age\"')\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE CAST(JSON_UNQUOTE(JSON_EXTRACT(A.`_source`, '$.\"age\"')) AS SIGNED) \u003e 18\nORDER BY CAST(JSON_UNQUOTE(JSON_EXTRACT(A.`_source`, '$.\"age\"')) AS SIGNED) DESC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "One / First / Count / Exists",
+    "status": "pass",
+    "output": {
+      "count": 3,
+      "exists": false,
+      "first": [
+        "u1",
+        "u2"
+      ],
+      "one": "Luis"
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`id` = 'u2'\nLIMIT 1",
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nORDER BY A.`id` ASC\nLIMIT 2",
+      "-- QUERY\nSELECT COUNT(*) AS `count`\nFROM `jsql_catalog`.`f_users` AS A",
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`id` = 'u9') THEN 'true' ELSE 'false' END AS `exists`"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "Limit (paginación) / Page",
+    "status": "pass",
+    "output": [
+      {
+        "age": 17,
+        "created_at": null,
+        "email": "luis@example.com",
+        "id": "u2",
+        "name": "Luis",
+        "status": "active",
+        "updated_at": null
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nORDER BY A.`id` ASC\nLIMIT 1 OFFSET 1"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "Hidden (campo oculto en la consulta y en el modelo)",
+    "status": "pass",
+    "output": {
+      "age": 30,
+      "created_at": null,
+      "id": "u1",
+      "name": "Ana",
+      "status": "active",
+      "tp_doc": "CC",
+      "updated_at": null
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"email\"', '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`id` = 'u1'\nLIMIT 1"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "Hidden pedido por nombre (se devuelve)",
+    "status": "pass",
+    "output": {
+      "id": "u1",
+      "password": "secret"
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id', A.`id`,\n'password', JSON_EXTRACT(A.`_source`, '$.\"password\"')\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`id` = 'u1'\nLIMIT 1"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "Join (fluido)",
+    "status": "pass",
+    "output": [
+      {
+        "id": "o1",
+        "user": "Ana"
+      },
+      {
+        "id": "o2",
+        "user": "Ana"
+      },
+      {
+        "id": "o3",
+        "user": "Marta O'Neil"
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id', A.`id`,\n'user', U.`name`\n) AS `result`\nFROM `jsql_catalog`.`f_orders` AS A\nINNER JOIN `jsql_catalog`.`f_users` AS U\n  ON A.`user_id` = U.`id`\nORDER BY A.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "LeftJoin + GroupBy",
+    "status": "pass",
+    "output": [
+      {
+        "id": "u1",
+        "n": 2
+      },
+      {
+        "id": "u2",
+        "n": 0
+      },
+      {
+        "id": "u3",
+        "n": 1
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id', ANY_VALUE(A.`id`),\n'n', COUNT(O.`id`)\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nLEFT JOIN `jsql_catalog`.`f_orders` AS O\n  ON O.`user_id` = A.`id`\nGROUP BY A.`id`\nORDER BY A.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "RightJoin / FullJoin",
+    "status": "pass",
+    "output": [
+      {
+        "id": "u1",
+        "n": 2
+      },
+      {
+        "id": "u2",
+        "n": 0
+      },
+      {
+        "id": "u3",
+        "n": 1
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id', ANY_VALUE(U.`id`),\n'n', COUNT(A.`id`)\n) AS `result`\nFROM `jsql_catalog`.`f_orders` AS A\nRIGHT JOIN `jsql_catalog`.`f_users` AS U\n  ON A.`user_id` = U.`id`\nGROUP BY U.`id`\nORDER BY U.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "GroupBy + Having (fluido)",
+    "status": "pass",
+    "output": [
+      {
+        "n": 2,
+        "total": 300.5,
+        "user_id": "u1"
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'user_id', ANY_VALUE(A.`user_id`),\n'n', COUNT(A.`id`),\n'total', COALESCE(SUM(CAST(JSON_UNQUOTE(JSON_EXTRACT(A.`_source`, '$.\"amount\"')) AS DECIMAL(38,10))), 0)\n) AS `result`\nFROM `jsql_catalog`.`f_orders` AS A\nGROUP BY A.`user_id`\nHAVING COUNT(A.`id`) \u003e 1\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "OrderBy por alias de un agregado",
+    "status": "pass",
+    "output": [
+      {
+        "n": 2,
+        "user_id": "u1"
+      },
+      {
+        "n": 1,
+        "user_id": "u3"
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'user_id', ANY_VALUE(A.`user_id`),\n'n', COUNT(A.`id`)\n) AS `result`\nFROM `jsql_catalog`.`f_orders` AS A\nGROUP BY A.`user_id`\nORDER BY COUNT(A.`id`) DESC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "Model.Query (JSON)",
+    "status": "pass",
+    "output": [
+      {
+        "id": "u3",
+        "name": "Marta O'Neil"
+      },
+      {
+        "id": "u1",
+        "name": "Ana"
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id', A.`id`,\n'name', A.`name`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE CAST(JSON_UNQUOTE(JSON_EXTRACT(A.`_source`, '$.\"age\"')) AS SIGNED) \u003e= 18\nORDER BY A.`name` DESC\nLIMIT 10"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "Model.Query con from (otro modelo y alias)",
+    "status": "pass",
+    "output": [
+      {
+        "id": "u1",
+        "name": "Ana"
+      },
+      {
+        "id": "u3",
+        "name": "Marta O'Neil"
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id', U.`id`,\n'name', U.`name`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS U\nWHERE CAST(JSON_UNQUOTE(JSON_EXTRACT(U.`_source`, '$.\"age\"')) AS SIGNED) \u003e 18\nORDER BY U.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "Model.Query con from de varios orígenes",
+    "status": "pass",
+    "output": [
+      {
+        "name": "Ana",
+        "order": "o1"
+      },
+      {
+        "name": "Ana",
+        "order": "o2"
+      },
+      {
+        "name": "Marta O'Neil",
+        "order": "o3"
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'name', U.`name`,\n'order', O.`id`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS U,\n`jsql_catalog`.`f_orders` AS O\nWHERE O.`user_id` = U.`id`\nORDER BY O.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "Model.Query con from sin esquema",
+    "status": "pass",
+    "output": [
+      {
+        "name": "admin"
+      },
+      {
+        "name": "editor"
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'name', R.`name`\n) AS `result`\nFROM `jsql_catalog`.`f_roles` AS R\nORDER BY R.`name` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "Model.Query con from + join + groups",
+    "status": "pass",
+    "output": [
+      {
+        "n": 2,
+        "name": "Ana"
+      },
+      {
+        "n": 1,
+        "name": "Marta O'Neil"
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'name', ANY_VALUE(U.`name`),\n'n', COUNT(O.`id`)\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS U\nINNER JOIN `jsql_catalog`.`f_orders` AS O\n  ON O.`user_id` = U.`id`\nGROUP BY U.`name`\nORDER BY U.`name` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "Model.Query con from inválido (devuelve error)",
+    "status": "pass",
+    "output": "invalid from: no_existe:X"
+  },
+  {
+    "section": "4. Consultas",
+    "case": "DB.Query consulta (select, from, join, group by, order by)",
+    "status": "pass",
+    "output": [
+      {
+        "n": 2,
+        "name": "Ana"
+      },
+      {
+        "n": 0,
+        "name": "Luis"
+      },
+      {
+        "n": 1,
+        "name": "Marta O'Neil"
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'name', ANY_VALUE(U.`name`),\n'n', COUNT(O.`id`)\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS U\nLEFT JOIN `jsql_catalog`.`f_orders` AS O\n  ON O.`user_id` = U.`id`\nGROUP BY U.`name`\nORDER BY U.`name` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "DB.Query consulta (where + and/or de primer nivel, limit, offset)",
+    "status": "pass",
+    "output": [
+      {
+        "id": "u2"
+      },
+      {
+        "id": "u3"
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'id', A.`id`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE CAST(JSON_UNQUOTE(JSON_EXTRACT(A.`_source`, '$.\"age\"')) AS SIGNED) \u003e 18\n  OR A.`name` = 'Luis'\nORDER BY A.`id` ASC\nLIMIT 2 OFFSET 1"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "Model.Query con claves select / group by / order by",
+    "status": "pass",
+    "output": [
+      {
+        "n": 2,
+        "user_id": "u1"
+      }
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT(\n'user_id', ANY_VALUE(A.`user_id`),\n'n', COUNT(A.`id`)\n) AS `result`\nFROM `jsql_catalog`.`f_orders` AS A\nGROUP BY A.`user_id`\nHAVING COUNT(A.`id`) \u003e 1\nORDER BY A.`user_id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "4. Consultas",
+    "case": "NewQuery / GetField / GetColumn / GetFrom / ToJson",
+    "status": "pass",
+    "output": {
+      "column": "atrib",
+      "field": "nombre",
+      "from": "f_users",
+      "json": true
+    }
+  },
+  {
+    "section": "4. Consultas",
+    "case": "Test (genera el SQL sin ejecutarlo) / Debug",
+    "status": "pass",
+    "output": "sql generated, not executed",
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`id` = 'u1'\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "Eq",
+    "status": "pass",
+    "output": [
+      "u1"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`name` = 'Ana'\nORDER BY A.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "Neg",
+    "status": "pass",
+    "output": [
+      "u2",
+      "u3"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`name` != 'Ana'\nORDER BY A.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "Less",
+    "status": "pass",
+    "output": [
+      "u2"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE CAST(JSON_UNQUOTE(JSON_EXTRACT(A.`_source`, '$.\"age\"')) AS SIGNED) \u003c 30\nORDER BY A.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "LessEq",
+    "status": "pass",
+    "output": [
+      "u1",
+      "u2"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE CAST(JSON_UNQUOTE(JSON_EXTRACT(A.`_source`, '$.\"age\"')) AS SIGNED) \u003c= 30\nORDER BY A.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "More",
+    "status": "pass",
+    "output": [
+      "u3"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE CAST(JSON_UNQUOTE(JSON_EXTRACT(A.`_source`, '$.\"age\"')) AS SIGNED) \u003e 30\nORDER BY A.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "MoreEq",
+    "status": "pass",
+    "output": [
+      "u1",
+      "u3"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE CAST(JSON_UNQUOTE(JSON_EXTRACT(A.`_source`, '$.\"age\"')) AS SIGNED) \u003e= 30\nORDER BY A.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "Like",
+    "status": "pass",
+    "output": [
+      "u1"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE LOWER(A.`name`) LIKE LOWER('%an%')\nORDER BY A.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "In",
+    "status": "pass",
+    "output": [
+      "u1",
+      "u3"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`id` IN ('u1', 'u3')\nORDER BY A.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "NotIn",
+    "status": "pass",
+    "output": [
+      "u2"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`id` NOT IN ('u1', 'u3')\nORDER BY A.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "Is (NULL)",
+    "status": "pass",
+    "output": [
+      "u1",
+      "u2",
+      "u3"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE JSON_UNQUOTE(JSON_EXTRACT(A.`_source`, '$.\"nickname\"')) IS NULL\nORDER BY A.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "IsNot (NULL)",
+    "status": "pass",
+    "output": [
+      "u1",
+      "u2",
+      "u3"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE CAST(JSON_UNQUOTE(JSON_EXTRACT(A.`_source`, '$.\"age\"')) AS SIGNED) IS NOT NULL\nORDER BY A.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "Null",
+    "status": "pass",
+    "output": [
+      "u1",
+      "u2",
+      "u3"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE JSON_UNQUOTE(JSON_EXTRACT(A.`_source`, '$.\"nickname\"')) IS NULL\nORDER BY A.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "NotNull",
+    "status": "pass",
+    "output": [
+      "u1",
+      "u2",
+      "u3"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`email` IS NOT NULL\nORDER BY A.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "Between",
+    "status": "pass",
+    "output": [
+      "u1"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE CAST(JSON_UNQUOTE(JSON_EXTRACT(A.`_source`, '$.\"age\"')) AS SIGNED) BETWEEN 18 AND 40\nORDER BY A.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "NotBetween",
+    "status": "pass",
+    "output": [
+      "u2",
+      "u3"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE CAST(JSON_UNQUOTE(JSON_EXTRACT(A.`_source`, '$.\"age\"')) AS SIGNED) NOT BETWEEN 18 AND 40\nORDER BY A.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "Where (genérico)",
+    "status": "pass",
+    "output": [
+      "u2"
+    ],
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`name` = 'Luis'\nORDER BY A.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "Is / IsNot con valor (comparación NULL-safe)",
+    "status": "pass",
+    "output": {
+      "is": [
+        "u1"
+      ],
+      "is_not": [
+        "u2",
+        "u3"
+      ]
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`name` \u003c=\u003e 'Ana'\nORDER BY A.`id` ASC\nLIMIT 1000",
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE NOT (A.`name` \u003c=\u003e 'Ana')\nORDER BY A.`id` ASC\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "5. Condiciones",
+    "case": "And / Or (conectores)",
+    "status": "pass",
+    "output": {
+      "and": [
+        "u3"
+      ],
+      "or": [
+        "u1",
+        "u2"
+      ]
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE A.`name` = 'Ana'\n  OR A.`name` = 'Luis'\nORDER BY A.`id` ASC\nLIMIT 1000",
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"', '$.\"password\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"email\"', A.`email`\n) AS `result`\nFROM `jsql_catalog`.`f_users` AS A\nWHERE CAST(JSON_UNQUOTE(JSON_EXTRACT(A.`_source`, '$.\"age\"')) AS SIGNED) \u003e 18\n  AND LOWER(A.`name`) LIKE LOWER('%neil%')\nLIMIT 1000"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "Insert (RETURNING)",
+    "status": "pass",
+    "output": {
+      "category": "equipos",
+      "id": "p4",
+      "name": "Router Wi-Fi 6",
+      "price": 350000
+    },
+    "sql": [
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_products`\n  (`category`, `id`, `name`, `_source`)\n  VALUES ('equipos', 'p4', 'Router Wi-Fi 6', '{\"price\":350000}');\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'p4';"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "Bulk",
+    "status": "pass",
+    "output": [
+      {
+        "category": "tv",
+        "id": "p5",
+        "name": "Cable HDMI",
+        "price": 15000
+      },
+      {
+        "category": "tv",
+        "id": "p6",
+        "name": "Control",
+        "price": 10000
+      }
+    ],
+    "sql": [
+      "-- BULK\nINSERT INTO `jsql_catalog`.`f_products`\n  (`category`, `id`, `name`, `_source`)\n  VALUES ('tv', 'p5', 'Cable HDMI', '{\"price\":15000}');\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'p5';",
+      "-- BULK\nINSERT INTO `jsql_catalog`.`f_products`\n  (`category`, `id`, `name`, `_source`)\n  VALUES ('tv', 'p6', 'Control', '{\"price\":10000}');\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'p6';"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "Update + Where",
+    "status": "pass",
+    "output": {
+      "category": "internet",
+      "id": "p1",
+      "name": "Plan 200",
+      "price": 99000,
+      "promo": true
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(COALESCE(A.`_source`, JSON_OBJECT()),\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"category\"', A.`category`\n) AS `result`\nFROM `jsql_catalog`.`f_products` AS A\nWHERE A.`id` = 'p1'\nLIMIT 1000",
+      "-- UPDATE\nUPDATE `jsql_catalog`.`f_products`\n  SET `category` = 'internet',\n    `name` = 'Plan 200',\n    `_source` = JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"price\"', CAST('99000' AS JSON),\n'$.\"promo\"', CAST('true' AS JSON)\n)\n  WHERE `id` = 'p1';\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'p1';"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "Update + Where + Or (varias filas)",
+    "status": "pass",
+    "output": 2,
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(COALESCE(A.`_source`, JSON_OBJECT()),\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"category\"', A.`category`\n) AS `result`\nFROM `jsql_catalog`.`f_products` AS A\nWHERE A.`id` = 'p5'\n  OR A.`id` = 'p6'\nLIMIT 1000",
+      "-- UPDATE\nUPDATE `jsql_catalog`.`f_products`\n  SET `category` = 'tv',\n    `name` = 'Cable HDMI',\n    `_source` = JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"price\"', CAST('15000' AS JSON),\n'$.\"stock\"', CAST('5' AS JSON)\n)\n  WHERE `id` = 'p5';\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'p5';",
+      "-- UPDATE\nUPDATE `jsql_catalog`.`f_products`\n  SET `category` = 'tv',\n    `name` = 'Control',\n    `_source` = JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"price\"', CAST('10000' AS JSON),\n'$.\"stock\"', CAST('5' AS JSON)\n)\n  WHERE `id` = 'p6';\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'p6';"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "Upsert (inserta y luego actualiza)",
+    "status": "pass",
+    "output": {
+      "insert": "Antena",
+      "update": "Antena HD"
+    },
+    "sql": [
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM `jsql_catalog`.`f_products` AS A\nWHERE A.`id` = 'p7') THEN 'true' ELSE 'false' END AS `exists`",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_products`\n  (`category`, `id`, `name`)\n  VALUES ('tv', 'p7', 'Antena');\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'p7';",
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM `jsql_catalog`.`f_products` AS A\nWHERE A.`id` = 'p7') THEN 'true' ELSE 'false' END AS `exists`",
+      "-- QUERY\nSELECT\nJSON_SET(COALESCE(A.`_source`, JSON_OBJECT()),\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"category\"', A.`category`\n) AS `result`\nFROM `jsql_catalog`.`f_products` AS A\nWHERE A.`id` = 'p7'\nLIMIT 1000",
+      "-- UPDATE\nUPDATE `jsql_catalog`.`f_products`\n  SET `category` = 'tv',\n    `name` = 'Antena HD'\n  WHERE `id` = 'p7';\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'p7';"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "Return (campos como en Select: columna, atributo, alias, ruta)",
+    "status": "pass",
+    "output": {
+      "id": "p4",
+      "nombre": "Router Wi-Fi 6",
+      "stock": 7,
+      "wifi": "6"
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(COALESCE(A.`_source`, JSON_OBJECT()),\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"category\"', A.`category`\n) AS `result`\nFROM `jsql_catalog`.`f_products` AS A\nWHERE A.`id` = 'p4'\nLIMIT 1000",
+      "-- UPDATE\nUPDATE `jsql_catalog`.`f_products`\n  SET `category` = 'equipos',\n    `name` = 'Router Wi-Fi 6',\n    `_source` = JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"price\"', CAST('350000' AS JSON),\n'$.\"specs\"', CAST('{\"wifi\":\"6\"}' AS JSON),\n'$.\"stock\"', CAST('7' AS JSON)\n)\n  WHERE `id` = 'p4';\nSELECT JSON_OBJECT('id', `id`, 'nombre', `name`, 'stock', JSON_EXTRACT(`_source`, '$.\"stock\"'), 'wifi', JSON_EXTRACT(`_source`, '$.\"specs\".\"wifi\"')) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'p4';"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "Delete (devuelve la fila borrada)",
+    "status": "pass",
+    "output": {
+      "deleted": "Control",
+      "exists": false
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(COALESCE(A.`_source`, JSON_OBJECT()),\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"category\"', A.`category`\n) AS `result`\nFROM `jsql_catalog`.`f_products` AS A\nWHERE A.`id` = 'p6'\nLIMIT 1000",
+      "-- DELETE\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'p6';\nDELETE FROM `jsql_catalog`.`f_products` WHERE `id` = 'p6';",
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM `jsql_catalog`.`f_products` AS A\nWHERE A.`id` = 'p6') THEN 'true' ELSE 'false' END AS `exists`"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "DB.Query insert + bulk (con triggers JS)",
+    "status": "pass",
+    "output": {
+      "bulk": [
+        "j2",
+        "j3"
+      ],
+      "origin": "json"
+    },
+    "sql": [
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_products`\n  (`category`, `id`, `name`, `_source`)\n  VALUES ('equipos', 'j1', 'Mesh', '{\"origin\":\"json\",\"price\":450000}');\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'j1';",
+      "-- BULK\nINSERT INTO `jsql_catalog`.`f_products`\n  (`category`, `id`, `name`)\n  VALUES ('equipos', 'j2', 'Extensor');\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'j2';",
+      "-- BULK\nINSERT INTO `jsql_catalog`.`f_products`\n  (`category`, `id`, `name`)\n  VALUES ('equipos', 'j3', 'Splitter');\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'j3';"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "DB.Query update + delete",
+    "status": "pass",
+    "output": {
+      "deleted": [
+        "j3"
+      ],
+      "updated": 2,
+      "values": [
+        99,
+        true,
+        99,
+        true
+      ]
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_SET(COALESCE(A.`_source`, JSON_OBJECT()),\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"category\"', A.`category`\n) AS `result`\nFROM `jsql_catalog`.`f_products` AS A\nWHERE A.`category` = 'equipos'\n  AND A.`id` IN ('j2', 'j3')\nLIMIT 1000",
+      "-- UPDATE\nUPDATE `jsql_catalog`.`f_products`\n  SET `category` = 'equipos',\n    `name` = 'Extensor',\n    `_source` = JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"price\"', CAST('99' AS JSON),\n'$.\"touched\"', CAST('true' AS JSON)\n)\n  WHERE `id` = 'j2';\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'j2';",
+      "-- UPDATE\nUPDATE `jsql_catalog`.`f_products`\n  SET `category` = 'equipos',\n    `name` = 'Splitter',\n    `_source` = JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"price\"', CAST('99' AS JSON),\n'$.\"touched\"', CAST('true' AS JSON)\n)\n  WHERE `id` = 'j3';\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'j3';",
+      "-- QUERY\nSELECT\nJSON_SET(COALESCE(A.`_source`, JSON_OBJECT()),\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"category\"', A.`category`\n) AS `result`\nFROM `jsql_catalog`.`f_products` AS A\nWHERE A.`id` = 'j3'\nLIMIT 1000",
+      "-- DELETE\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'j3';\nDELETE FROM `jsql_catalog`.`f_products` WHERE `id` = 'j3';"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "DB.Query upsert (inserta, actualiza y exige where)",
+    "status": "pass",
+    "output": {
+      "first": {
+        "both": true,
+        "name": "Repetidor",
+        "path": "insert"
+      },
+      "second": {
+        "both": true,
+        "name": "Repetidor Pro",
+        "path": "update"
+      }
+    },
+    "sql": [
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM `jsql_catalog`.`f_products` AS A\nWHERE A.`id` = 'j4') THEN 'true' ELSE 'false' END AS `exists`",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_products`\n  (`id`, `name`, `_source`)\n  VALUES ('j4', 'Repetidor', '{\"both\":true,\"path\":\"insert\"}');\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'j4';",
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM `jsql_catalog`.`f_products` AS A\nWHERE A.`id` = 'j4') THEN 'true' ELSE 'false' END AS `exists`",
+      "-- QUERY\nSELECT\nJSON_SET(COALESCE(A.`_source`, JSON_OBJECT()),\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"category\"', A.`category`\n) AS `result`\nFROM `jsql_catalog`.`f_products` AS A\nWHERE A.`id` = 'j4'\nLIMIT 1000",
+      "-- UPDATE\nUPDATE `jsql_catalog`.`f_products`\n  SET `category` = NULL,\n    `name` = 'Repetidor Pro',\n    `_source` = JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"both\"', CAST('true' AS JSON),\n'$.\"path\"', CAST('\"update\"' AS JSON)\n)\n  WHERE `id` = 'j4';\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'j4';"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "Update / Delete con limit (por defecto, n y 0 = todas)",
+    "status": "pass",
+    "output": {
+      "default": 2,
+      "left": 0,
+      "limit_0_deleted": 6,
+      "limit_3": 3,
+      "pending": 1
+    },
+    "sql": [
+      "-- DDL\nCREATE SCHEMA IF NOT EXISTS `jsql_catalog`;\nCREATE TABLE IF NOT EXISTS `jsql_catalog`.`f_many` (\n  `created_at` DATETIME(6) DEFAULT NULL,\n  `updated_at` DATETIME(6) DEFAULT NULL,\n  `status` VARCHAR(255) DEFAULT 'active',\n  `id` VARCHAR(80) NOT NULL,\n  `_source` JSON DEFAULT (JSON_OBJECT()),\n  `name` VARCHAR(80) DEFAULT NULL,\n  `_idx` VARCHAR(80) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n);\nCREATE INDEX `f_many_status_idx` ON `jsql_catalog`.`f_many` (`status`);\nCREATE INDEX `f_many__idx_idx` ON `jsql_catalog`.`f_many` (`_idx`);",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_many`\n  (`_idx`, `id`, `name`)\n  VALUES ('1790553368689', 'm1', 'x');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_many` WHERE `id` = 'm1';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_many`\n  (`_idx`, `id`, `name`)\n  VALUES ('1790553368690', 'm2', 'x');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_many` WHERE `id` = 'm2';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_many`\n  (`_idx`, `id`, `name`)\n  VALUES ('1790553368691', 'm3', 'x');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_many` WHERE `id` = 'm3';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_many`\n  (`_idx`, `id`, `name`)\n  VALUES ('1790553368692', 'm4', 'x');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_many` WHERE `id` = 'm4';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_many`\n  (`_idx`, `id`, `name`)\n  VALUES ('1790553368694', 'm5', 'x');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_many` WHERE `id` = 'm5';",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_many`\n  (`_idx`, `id`, `name`)\n  VALUES ('1790553368695', 'm6', 'x');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_many` WHERE `id` = 'm6';",
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`\n) AS `result`\nFROM `jsql_catalog`.`f_many` AS A\nWHERE A.`name` = 'x'\nLIMIT 2",
+      "-- UPDATE\nUPDATE `jsql_catalog`.`f_many`\n  SET `created_at` = NULL,\n    `name` = 'y',\n    `status` = 'active',\n    `updated_at` = NULL\n  WHERE `id` = 'm1';\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_many` WHERE `id` = 'm1';",
+      "-- UPDATE\nUPDATE `jsql_catalog`.`f_many`\n  SET `created_at` = NULL,\n    `name` = 'y',\n    `status` = 'active',\n    `updated_at` = NULL\n  WHERE `id` = 'm2';\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_many` WHERE `id` = 'm2';",
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`\n) AS `result`\nFROM `jsql_catalog`.`f_many` AS A\nWHERE A.`name` = 'x'\nLIMIT 3",
+      "-- UPDATE\nUPDATE `jsql_catalog`.`f_many`\n  SET `created_at` = NULL,\n    `name` = 'y',\n    `status` = 'active',\n    `updated_at` = NULL\n  WHERE `id` = 'm3';\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_many` WHERE `id` = 'm3';",
+      "-- UPDATE\nUPDATE `jsql_catalog`.`f_many`\n  SET `created_at` = NULL,\n    `name` = 'y',\n    `status` = 'active',\n    `updated_at` = NULL\n  WHERE `id` = 'm4';\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_many` WHERE `id` = 'm4';",
+      "-- UPDATE\nUPDATE `jsql_catalog`.`f_many`\n  SET `created_at` = NULL,\n    `name` = 'y',\n    `status` = 'active',\n    `updated_at` = NULL\n  WHERE `id` = 'm5';\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_many` WHERE `id` = 'm5';",
+      "-- QUERY\nSELECT COUNT(*) AS `count`\nFROM `jsql_catalog`.`f_many` AS A\nWHERE A.`name` = 'x'",
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`\n) AS `result`\nFROM `jsql_catalog`.`f_many` AS A\nWHERE A.`name` IN ('x', 'y')",
+      "-- DELETE\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_many` WHERE `id` = 'm1';\nDELETE FROM `jsql_catalog`.`f_many` WHERE `id` = 'm1';",
+      "-- DELETE\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_many` WHERE `id` = 'm2';\nDELETE FROM `jsql_catalog`.`f_many` WHERE `id` = 'm2';",
+      "-- DELETE\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_many` WHERE `id` = 'm3';\nDELETE FROM `jsql_catalog`.`f_many` WHERE `id` = 'm3';",
+      "-- DELETE\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_many` WHERE `id` = 'm4';\nDELETE FROM `jsql_catalog`.`f_many` WHERE `id` = 'm4';",
+      "-- DELETE\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_many` WHERE `id` = 'm5';\nDELETE FROM `jsql_catalog`.`f_many` WHERE `id` = 'm5';",
+      "-- DELETE\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_many` WHERE `id` = 'm6';\nDELETE FROM `jsql_catalog`.`f_many` WHERE `id` = 'm6';",
+      "-- QUERY\nSELECT COUNT(*) AS `count`\nFROM `jsql_catalog`.`f_many` AS A"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "Upsert fluido sin where (devuelve error)",
+    "status": "pass",
+    "output": false,
+    "sql": [
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM `jsql_catalog`.`f_products` AS A\nWHERE A.`id` = 'p9') THEN 'true' ELSE 'false' END AS `exists`"
+    ]
+  },
+  {
+    "section": "6. Comandos",
+    "case": "Test (no ejecuta) + ToJson",
+    "status": "pass",
+    "output": {
+      "exists": false,
+      "type": "insert"
+    },
+    "sql": [
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_products`\n  (`id`, `name`)\n  VALUES ('p8', 'No se guarda');\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 'p8';",
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM `jsql_catalog`.`f_products` AS A\nWHERE A.`id` = 'p8') THEN 'true' ELSE 'false' END AS `exists`"
+    ]
+  },
+  {
+    "section": "7. Triggers",
+    "case": "Before/After Insert, Update, Delete e InsertOrUpdate",
+    "status": "pass",
+    "output": {
+      "events": [
+        "after_insert",
+        "after_insert_or_update",
+        "after_update",
+        "after_insert_or_update",
+        "before_delete",
+        "after_delete"
+      ],
+      "insert": {
+        "stage": "before_insert",
+        "touched": true
+      },
+      "update": {
+        "stage": "before_update",
+        "touched": true
+      }
+    },
+    "sql": [
+      "-- DDL\nCREATE SCHEMA IF NOT EXISTS `jsql_catalog`;\nCREATE TABLE IF NOT EXISTS `jsql_catalog`.`f_events` (\n  `created_at` DATETIME(6) DEFAULT NULL,\n  `updated_at` DATETIME(6) DEFAULT NULL,\n  `status` VARCHAR(255) DEFAULT 'active',\n  `id` VARCHAR(80) NOT NULL,\n  `_source` JSON DEFAULT (JSON_OBJECT()),\n  `name` VARCHAR(80) DEFAULT NULL,\n  `_idx` VARCHAR(80) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n);\nCREATE INDEX `f_events_status_idx` ON `jsql_catalog`.`f_events` (`status`);\nCREATE INDEX `f_events__idx_idx` ON `jsql_catalog`.`f_events` (`_idx`);",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_events`\n  (`_idx`, `id`, `name`, `_source`)\n  VALUES ('1790553368726', 'e1', 'alta', '{\"stage\":\"before_insert\",\"touched\":true}');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_events` WHERE `id` = 'e1';",
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`\n) AS `result`\nFROM `jsql_catalog`.`f_events` AS A\nWHERE A.`id` = 'e1'\nLIMIT 1000",
+      "-- UPDATE\nUPDATE `jsql_catalog`.`f_events`\n  SET `created_at` = NULL,\n    `name` = 'cambio',\n    `status` = 'active',\n    `updated_at` = NULL,\n    `_source` = JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"stage\"', CAST('\"before_update\"' AS JSON),\n'$.\"touched\"', CAST('true' AS JSON)\n)\n  WHERE `id` = 'e1';\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_events` WHERE `id` = 'e1';",
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`\n) AS `result`\nFROM `jsql_catalog`.`f_events` AS A\nWHERE A.`id` = 'e1'\nLIMIT 1000",
+      "-- DELETE\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_events` WHERE `id` = 'e1';\nDELETE FROM `jsql_catalog`.`f_events` WHERE `id` = 'e1';"
+    ]
+  },
+  {
+    "section": "7. Triggers",
+    "case": "Trigger del comando + error que aborta",
+    "status": "pass",
+    "output": {
+      "aborted_exists": false,
+      "source": "command"
+    },
+    "sql": [
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_events`\n  (`_idx`, `id`, `name`, `_source`)\n  VALUES ('1790553368730', 'e2', 'cmd', '{\"source\":\"command\",\"stage\":\"before_insert\",\"touched\":true}');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_events` WHERE `id` = 'e2';",
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM `jsql_catalog`.`f_events` AS A\nWHERE A.`id` = 'e3') THEN 'true' ELSE 'false' END AS `exists`"
+    ]
+  },
+  {
+    "section": "7. Triggers",
+    "case": "Triggers JS (DefineBeforeInsert / DefineAfterUpdate…)",
+    "status": "pass",
+    "output": {
+      "insert": "before_insert",
+      "update": "before_update"
+    },
+    "sql": [
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_events`\n  (`_idx`, `id`, `name`, `_source`)\n  VALUES ('1790553368732', 'e4', 'js', '{\"js\":\"before_insert\",\"stage\":\"before_insert\",\"touched\":true}');\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_events` WHERE `id` = 'e4';",
+      "-- QUERY\nSELECT\nJSON_SET(JSON_REMOVE(COALESCE(A.`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', A.`created_at`,\n'$.\"updated_at\"', A.`updated_at`,\n'$.\"status\"', A.`status`,\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`\n) AS `result`\nFROM `jsql_catalog`.`f_events` AS A\nWHERE A.`id` = 'e4'\nLIMIT 1000",
+      "-- UPDATE\nUPDATE `jsql_catalog`.`f_events`\n  SET `created_at` = NULL,\n    `name` = 'js2',\n    `status` = 'active',\n    `updated_at` = NULL,\n    `_source` = JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"js\"', CAST('\"before_update\"' AS JSON),\n'$.\"stage\"', CAST('\"before_update\"' AS JSON),\n'$.\"touched\"', CAST('true' AS JSON)\n)\n  WHERE `id` = 'e4';\nSELECT JSON_SET(JSON_REMOVE(COALESCE(`_source`, JSON_OBJECT()), '$.\"_idx\"'),\n'$.\"created_at\"', `created_at`,\n'$.\"updated_at\"', `updated_at`,\n'$.\"status\"', `status`,\n'$.\"id\"', `id`,\n'$.\"name\"', `name`\n) AS `result` FROM `jsql_catalog`.`f_events` WHERE `id` = 'e4';"
+    ]
+  },
+  {
+    "section": "8. Transacciones",
+    "case": "NewTx + ExecTx + Rollback",
+    "status": "pass",
+    "output": false,
+    "sql": [
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_products`\n  (`id`, `name`)\n  VALUES ('t1', 'rollback');\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 't1';",
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM `jsql_catalog`.`f_products` AS A\nWHERE A.`id` = 't1') THEN 'true' ELSE 'false' END AS `exists`"
+    ]
+  },
+  {
+    "section": "8. Transacciones",
+    "case": "NewTx + ExecTx + Commit",
+    "status": "pass",
+    "output": {
+      "category": null,
+      "id": "t2",
+      "name": "commit 2"
+    },
+    "sql": [
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`f_products`\n  (`id`, `name`)\n  VALUES ('t2', 'commit');\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 't2';",
+      "-- QUERY\nSELECT\nJSON_SET(COALESCE(A.`_source`, JSON_OBJECT()),\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"category\"', A.`category`\n) AS `result`\nFROM `jsql_catalog`.`f_products` AS A\nWHERE A.`id` = 't2'\nLIMIT 1000",
+      "-- UPDATE\nUPDATE `jsql_catalog`.`f_products`\n  SET `category` = NULL,\n    `name` = 'commit 2'\n  WHERE `id` = 't2';\nSELECT JSON_SET(COALESCE(`_source`, JSON_OBJECT()),\n'$.\"id\"', `id`,\n'$.\"name\"', `name`,\n'$.\"category\"', `category`\n) AS `result` FROM `jsql_catalog`.`f_products` WHERE `id` = 't2';",
+      "-- QUERY\nSELECT\nJSON_SET(COALESCE(A.`_source`, JSON_OBJECT()),\n'$.\"id\"', A.`id`,\n'$.\"name\"', A.`name`,\n'$.\"category\"', A.`category`\n) AS `result`\nFROM `jsql_catalog`.`f_products` AS A\nWHERE A.`id` = 't2'\nLIMIT 1"
+    ]
+  },
+  {
+    "section": "9. Series",
+    "case": "DefineSeries",
+    "status": "pass",
+    "output": "series",
+    "sql": [
+      "-- DDL\nCREATE SCHEMA IF NOT EXISTS `jsql_catalog`;\nCREATE TABLE IF NOT EXISTS `jsql_catalog`.`series` (\n  `created_at` DATETIME(6) DEFAULT NULL,\n  `updated_at` DATETIME(6) DEFAULT NULL,\n  `tag` VARCHAR(80) NOT NULL,\n  `format` VARCHAR(255) DEFAULT NULL,\n  `value` BIGINT DEFAULT NULL,\n  `_idx` VARCHAR(80) DEFAULT NULL,\n  PRIMARY KEY (`tag`)\n);\nCREATE INDEX `series__idx_idx` ON `jsql_catalog`.`series` (`_idx`);"
+    ]
+  },
+  {
+    "section": "9. Series",
+    "case": "SetSeries + GetSeries",
+    "status": "pass",
+    "output": {
+      "format": "FAC-%05d",
+      "value": 10
+    },
+    "sql": [
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM `jsql_catalog`.`series` AS A\nWHERE A.`tag` = 'invoice') THEN 'true' ELSE 'false' END AS `exists`",
+      "-- INSERT\nINSERT INTO `jsql_catalog`.`series`\n  (`_idx`, `created_at`, `format`, `tag`, `updated_at`, `value`)\n  VALUES ('1790553368752', '2026-09-27 18:56:08.752898', 'FAC-%05d', 'invoice', '2026-09-27 18:56:08.752898', 10);\nSELECT JSON_OBJECT('created_at', `created_at`, 'updated_at', `updated_at`, 'tag', `tag`, 'format', `format`, 'value', `value`) AS `result` FROM `jsql_catalog`.`series` WHERE `tag` = 'invoice';",
+      "-- QUERY\nSELECT\nJSON_OBJECT('created_at', A.`created_at`, 'updated_at', A.`updated_at`, 'tag', A.`tag`, 'format', A.`format`, 'value', A.`value`) AS `result`\nFROM `jsql_catalog`.`series` AS A\nWHERE A.`tag` = 'invoice'\nLIMIT 1"
+    ]
+  },
+  {
+    "section": "9. Series",
+    "case": "GenValue + GenSerie",
+    "status": "pass",
+    "output": {
+      "code": "FAC-00012",
+      "value": 11
+    },
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT('created_at', A.`created_at`, 'updated_at', A.`updated_at`, 'tag', A.`tag`, 'format', A.`format`, 'value', A.`value`) AS `result`\nFROM `jsql_catalog`.`series` AS A\nWHERE A.`tag` = 'invoice'\nLIMIT 1000",
+      "-- UPDATE\nUPDATE `jsql_catalog`.`series`\n  SET `created_at` = '2026-09-27 18:56:08.752898',\n    `format` = 'FAC-%05d',\n    `updated_at` = '2026-09-27 18:56:08.755089',\n    `value` = 11\n  WHERE `tag` = 'invoice';\nSELECT JSON_OBJECT('created_at', `created_at`, 'updated_at', `updated_at`, 'tag', `tag`, 'format', `format`, 'value', `value`) AS `result` FROM `jsql_catalog`.`series` WHERE `tag` = 'invoice';",
+      "-- QUERY\nSELECT CASE WHEN EXISTS(SELECT 1\nFROM `jsql_catalog`.`series` AS A\nWHERE A.`tag` = 'invoice') THEN 'true' ELSE 'false' END AS `exists`",
+      "-- QUERY\nSELECT\nJSON_OBJECT('created_at', A.`created_at`, 'updated_at', A.`updated_at`, 'tag', A.`tag`, 'format', A.`format`, 'value', A.`value`) AS `result`\nFROM `jsql_catalog`.`series` AS A\nWHERE A.`tag` = 'invoice'\nLIMIT 1000",
+      "-- UPDATE\nUPDATE `jsql_catalog`.`series`\n  SET `created_at` = '2026-09-27 18:56:08.752898',\n    `format` = 'FAC-%05d',\n    `updated_at` = '2026-09-27 18:56:08.756990',\n    `value` = 12\n  WHERE `tag` = 'invoice';\nSELECT JSON_OBJECT('created_at', `created_at`, 'updated_at', `updated_at`, 'tag', `tag`, 'format', `format`, 'value', `value`) AS `result` FROM `jsql_catalog`.`series` WHERE `tag` = 'invoice';"
+    ]
+  },
+  {
+    "section": "9. Series",
+    "case": "DeleteSeries",
+    "status": "pass",
+    "output": false,
+    "sql": [
+      "-- QUERY\nSELECT\nJSON_OBJECT('created_at', A.`created_at`, 'updated_at', A.`updated_at`, 'tag', A.`tag`, 'format', A.`format`, 'value', A.`value`) AS `result`\nFROM `jsql_catalog`.`series` AS A\nWHERE A.`tag` = 'invoice'\nLIMIT 1000",
+      "-- DELETE\nSELECT JSON_OBJECT('created_at', `created_at`, 'updated_at', `updated_at`, 'tag', `tag`, 'format', `format`, 'value', `value`) AS `result` FROM `jsql_catalog`.`series` WHERE `tag` = 'invoice';\nDELETE FROM `jsql_catalog`.`series` WHERE `tag` = 'invoice';",
+      "-- QUERY\nSELECT\nJSON_OBJECT('created_at', A.`created_at`, 'updated_at', A.`updated_at`, 'tag', A.`tag`, 'format', A.`format`, 'value', A.`value`) AS `result`\nFROM `jsql_catalog`.`series` AS A\nWHERE A.`tag` = 'invoice'\nLIMIT 1"
+    ]
+  },
+  {
+    "section": "10. Auditoría",
+    "case": "OnAuditLog + Model.AddAuditLog + AddAuditLog",
+    "status": "pass",
+    "output": {
+      "callback": [
+        "tester:review"
+      ],
+      "list": 1,
+      "model": true
+    }
+  },
+  {
+    "section": "11. Utilidades",
+    "case": "Quoted / EscapeSQLString / SQLParse / JsonString",
+    "status": "pass",
+    "output": {
+      "escape": "it''s",
+      "json": "{\"html\":\"\u003cb\u003e\u0026\"}",
+      "parse": "name = 'Ana' AND age = 30",
+      "quoted": "'O''Brien'"
+    }
+  },
+  {
+    "section": "11. Utilidades",
+    "case": "SQLParse con 10 o más parámetros",
+    "status": "pass",
+    "output": "x = 'a' AND y = 'costs $3' AND z = 10 AND w = 11 AND v = $12"
+  },
+  {
+    "section": "11. Utilidades",
+    "case": "ArgWhitAs / ArgWhitSchema / StatusList / TypeColumn.Str",
+    "status": "pass",
+    "output": {
+      "as": [
+        "public.users",
+        "U"
+      ],
+      "schema": [
+        "public",
+        "users"
+      ],
+      "status": true,
+      "type": "atrib"
+    }
+  },
+  {
+    "section": "11. Utilidades",
+    "case": "RowsToItems",
+    "status": "pass",
+    "output": [
+      {
+        "n": 1
+      }
+    ]
+  },
+  {
+    "section": "11. Utilidades",
+    "case": "Model.Db / SetDb / GetModel / ToJson, Column.ToJson, Schema.ToJson",
+    "status": "pass",
+    "output": {
+      "column": "name",
+      "model": "f_users",
+      "other": "f_orders",
+      "schemas": true
+    }
+  }
+]

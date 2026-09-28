@@ -134,13 +134,20 @@ func sqliteColsVals(model *jsql.Model, data et.Json, excludePKs bool) (cols, val
 * @return string
 **/
 func sqliteReturningClause(command *jsql.Command) string {
-	if len(command.Returns) > 0 {
-		return "\nRETURNING " + strings.Join(command.Returns, ", ")
-	}
-
 	model := command.From.Model
 	if model == nil {
+		if len(command.Returns) > 0 {
+			cols := make([]string, len(command.Returns))
+			for i, name := range command.Returns {
+				cols[i] = sanitizeQualifiedIdent(name)
+			}
+			return "\nRETURNING " + strings.Join(cols, ", ")
+		}
 		return "\nRETURNING *"
+	}
+
+	if len(command.Returns) > 0 {
+		return sqliteReturningFields(model, command.Returns)
 	}
 
 	pairs := make([]string, 0, len(model.Columns))
@@ -161,6 +168,31 @@ func sqliteReturningClause(command *jsql.Command) string {
 		return "\nRETURNING *"
 	}
 	return "\nRETURNING " + strings.Join(cols, ", ")
+}
+
+/**
+* sqliteReturningFields: Builds the RETURNING clause of Command.Return(fields...) resolving each field like
+* a Select: columns, SourceField attributes, "field:as" aliases and nested paths. With a SourceField the row
+* comes back as one JSON "result" with those fields; without it, as the listed columns.
+* @param model *jsql.Model, fields []string
+* @return string
+**/
+func sqliteReturningFields(model *jsql.Model, fields []string) string {
+	// The query has no alias (its As is the table), so the expressions are unqualified as RETURNING needs.
+	query := jsql.NewQuery(model, model.Table)
+	exprs := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if expr, ok := sqliteSelectExpr(query, field); ok {
+			exprs = append(exprs, expr)
+		}
+	}
+	if len(exprs) == 0 {
+		return "\nRETURNING *"
+	}
+	if query.UseSourceField {
+		return fmt.Sprintf("\nRETURNING json_object(\n%s\n) AS %s", strings.Join(exprs, ",\n"), jsql.RESULT)
+	}
+	return "\nRETURNING " + strings.Join(exprs, ", ")
 }
 
 /**

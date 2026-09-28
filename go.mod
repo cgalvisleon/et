@@ -11,12 +11,14 @@ require (
 	github.com/dimiro1/banner v1.1.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-chi/chi/v5 v5.2.1
+	github.com/go-sql-driver/mysql v1.10.1
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/manifoldco/promptui v0.9.0
 	github.com/mattn/go-colorable v0.1.14
+	github.com/microsoft/go-mssqldb v1.11.2
 	github.com/nats-io/nats.go v1.41.2
 	github.com/neo4j/neo4j-go-driver/v5 v5.28.0
 	github.com/openai/openai-go/v3 v3.29.0
@@ -24,9 +26,16 @@ require (
 	github.com/rs/cors v1.11.1
 	github.com/schollz/progressbar/v3 v3.18.0
 	github.com/spf13/cobra v1.9.1
-	golang.org/x/crypto v0.53.0
+	golang.org/x/crypto v0.55.0
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0
 	modernc.org/sqlite v1.56.0
+)
+
+require (
+	filippo.io/edwards25519 v1.2.0 // indirect
+	github.com/golang-sql/civil v0.0.0-20220223132316-b832511892a9 // indirect
+	github.com/golang-sql/sqlexp v0.1.0 // indirect
+	github.com/shopspring/decimal v1.4.0 // indirect
 )
 
 require (
@@ -60,9 +69,9 @@ require (
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/xuri/efp v0.0.1 // indirect
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
-	golang.org/x/net v0.56.0 // indirect
-	golang.org/x/sync v0.21.0 // indirect
-	golang.org/x/text v0.38.0 // indirect
+	golang.org/x/net v0.58.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
 	modernc.org/libc v1.74.4 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
@@ -90,5 +99,5 @@ require (
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/xuri/excelize/v2 v2.11.0
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/term v0.44.0 // indirect
+	golang.org/x/term v0.45.0 // indirect
 )

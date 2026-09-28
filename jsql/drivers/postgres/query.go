@@ -249,9 +249,16 @@ func pgCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bool, 
 	case et.LIKE:
 		return fmt.Sprintf("%s ILIKE %s", fieldExpr, value())
 	case et.IS:
-		return fmt.Sprintf("%s IS %s", fieldExpr, value())
+		// IS compares NULL-safely: IS NULL, or IS NOT DISTINCT FROM a value (plain IS only takes NULL/booleans).
+		if cond.Value.Value == nil {
+			return fmt.Sprintf("%s IS NULL", fieldExpr)
+		}
+		return fmt.Sprintf("%s IS NOT DISTINCT FROM %s", fieldExpr, value())
 	case et.IS_NOT:
-		return fmt.Sprintf("%s IS NOT %s", fieldExpr, value())
+		if cond.Value.Value == nil {
+			return fmt.Sprintf("%s IS NOT NULL", fieldExpr)
+		}
+		return fmt.Sprintf("%s IS DISTINCT FROM %s", fieldExpr, value())
 	case et.NEG:
 		return fmt.Sprintf("%s != %s", fieldExpr, value())
 	case et.LESS:
@@ -653,8 +660,8 @@ func (s *Postgres) Query(query *jsql.Query) (string, error) {
 	}
 
 	// FROM
-	from := pgFrom(query)
-	sb.WriteString(strings.Join(from, ",\n"))
+	// Each FROM part already carries its separator ("\nFROM …", ",\n…").
+	sb.WriteString(strings.Join(pgFrom(query), ""))
 
 	// JOINs
 	for _, join := range query.Joins {
@@ -669,7 +676,9 @@ func (s *Postgres) Query(query *jsql.Query) (string, error) {
 
 	// WHERE
 	if len(query.Conditions) > 0 {
-		whereSQL := pgCondsSQL(query.GetField, query.UseSourceField, query.Conditions, primary.As)
+		// With several origins (FROM a, b) the tables are related in the WHERE, so "alias.field" string
+		// values that name a field of the query are column references, as in a JOIN ON.
+		whereSQL := pgConds(query.GetField, query.UseSourceField, query.Conditions, primary.As, len(query.Froms) > 1)
 		if whereSQL != "" {
 			sb.WriteString("\nWHERE " + whereSQL)
 		}
@@ -704,11 +713,11 @@ func (s *Postgres) Query(query *jsql.Query) (string, error) {
 			if !idx.Sorted {
 				dir = "DESC"
 			}
-			fld, ok := query.GetField(idx.Name)
+			expr, ok := pgOrderExpr(query, idx.Name)
 			if !ok {
 				continue
 			}
-			parts = append(parts, fmt.Sprintf("%s %s", pgFieldExpr(fld, query.UseSourceField), dir))
+			parts = append(parts, fmt.Sprintf("%s %s", expr, dir))
 		}
 		sb.WriteString("\nORDER BY " + strings.Join(parts, ", "))
 	}
@@ -742,4 +751,25 @@ func masterRows(master *jsql.Master, limit int) int {
 		return master.Rows
 	}
 	return limit
+}
+
+/**
+* pgOrderExpr: Resolves an ORDER BY entry: the alias of a selected field or aggregate first
+* ("n" for "count(id):n"), then any field of the query.
+* @param query *jsql.Query, name string
+* @return string, bool
+**/
+func pgOrderExpr(query *jsql.Query, name string) (string, bool) {
+	fld, ok := query.GetSelectField(name)
+	if !ok {
+		fld, ok = query.GetField(name)
+	}
+	if !ok {
+		return "", false
+	}
+	if fld.Agg != nil {
+		return pgAggExpr(fld)
+	}
+	expr := pgFieldExpr(fld, query.UseSourceField)
+	return expr, expr != ""
 }

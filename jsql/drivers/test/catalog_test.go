@@ -14,6 +14,8 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
+	"github.com/cgalvisleon/et/jsql/drivers/mssql"
+	"github.com/cgalvisleon/et/jsql/drivers/mysql"
 	"github.com/cgalvisleon/et/jsql/drivers/oracle"
 	"github.com/cgalvisleon/et/jsql/drivers/postgres"
 	"github.com/cgalvisleon/et/jsql/drivers/sqlite"
@@ -195,6 +197,10 @@ func recorded(tg target) (target, *recorder) {
 		drv = &postgres.Postgres{}
 	case "oracle":
 		drv = &oracle.Oracle{}
+	case "mysql":
+		drv = &mysql.Mysql{}
+	case "mssql":
+		drv = &mssql.Mssql{}
 	default:
 		drv = &sqlite.Sqlite{}
 	}
@@ -222,6 +228,12 @@ func catalogTargets() []target {
 		case "postgres":
 			tg.schema = "jsql_catalog"
 			tg.cleanup = []string{`DROP SCHEMA IF EXISTS jsql_catalog CASCADE`}
+		case "mysql":
+			tg.schema = "jsql_catalog"
+			tg.cleanup = []string{"DROP SCHEMA IF EXISTS `jsql_catalog`"}
+		case "mssql":
+			tg.schema = "jsql_catalog"
+			tg.cleanup = []string{mssqlDropSchema("jsql_catalog")}
 		case "oracle":
 			tg.cleanup = oracleDrops(tg.schema, "f_users_f_roles", "f_orders_items", "f_orders", "f_users", "f_roles", "f_doc_types",
 				"f_products", "f_json_model", "f_many", "f_events", "f_tenant", "f_project", "f_required", "f_strict", "f_child", "f_parent", "series")
@@ -805,6 +817,13 @@ func (s *suite) queries() {
 		}
 		return row.Result, nil
 	})
+	s.run(4, "Hidden pedido por nombre (se devuelve)", func() (any, error) {
+		row, err := users.Select("id", "password").Where(jsql.Eq("id", "u1")).One()
+		if err != nil {
+			return nil, err
+		}
+		return row.Result, expect("row", et.Json{"id": "u1", "password": "secret"}, row.Result)
+	})
 	s.run(4, "Join (fluido)", func() (any, error) {
 		items, err := orders.As("A").
 			Join(users, "U", []*et.Condition{jsql.Eq("A.user_id", "U.id")}).
@@ -842,6 +861,13 @@ func (s *suite) queries() {
 		if err := expect("right join", want, right.Result); err != nil {
 			return right.Result, err
 		}
+		if s.tg.name == "mysql" {
+			_, err := users.As("A").FullJoin(orders, "O", []*et.Condition{jsql.Eq("O.user_id", "A.id")}).All()
+			if !errors.Is(err, mysql.ErrFullJoin) {
+				return nil, fmt.Errorf("mysql full join: want ErrFullJoin, got %v", err)
+			}
+			return right.Result, nil
+		}
 		full, err := users.As("A").
 			FullJoin(orders, "O", []*et.Condition{jsql.Eq("O.user_id", "A.id")}).
 			Select("A.id", "count(O.id):n").
@@ -862,6 +888,13 @@ func (s *suite) queries() {
 			return nil, err
 		}
 		return items.Result, expect("rows", []et.Json{{"user_id": "u1", "n": 2, "total": 300.5}}, items.Result)
+	})
+	s.run(4, "OrderBy por alias de un agregado", func() (any, error) {
+		items, err := orders.Select("user_id", "count(id):n").GroupBy("user_id").OrderBy("n", false).All()
+		if err != nil {
+			return nil, err
+		}
+		return items.Result, expect("rows", []et.Json{{"user_id": "u1", "n": 2}, {"user_id": "u3", "n": 1}}, items.Result)
 	})
 	s.run(4, "Model.Query (JSON)", func() (any, error) {
 		items, err := users.Query(et.Json{
@@ -886,6 +919,20 @@ func (s *suite) queries() {
 			return nil, err
 		}
 		return items.Result, expect("ids", []string{"u1", "u3"}, ids(items))
+	})
+	s.run(4, "Model.Query con from de varios orígenes", func() (any, error) {
+		items, err := users.Query(et.Json{
+			"from":    []any{"f_users:U", "f_orders:O"},
+			"selects": []any{"U.name", "O.id:order"},
+			"where":   []any{et.Json{"O.user_id": et.Json{"eq": "U.id"}}},
+			"orders":  []any{et.Json{"O.id": true}},
+		}).All()
+		if err != nil {
+			return nil, err
+		}
+		return items.Result, expect("rows", []et.Json{
+			{"name": "Ana", "order": "o1"}, {"name": "Ana", "order": "o2"}, {"name": "Marta O'Neil", "order": "o3"},
+		}, items.Result)
 	})
 	s.run(4, "Model.Query con from sin esquema", func() (any, error) {
 		items, err := users.Query(et.Json{
@@ -1020,6 +1067,18 @@ func (s *suite) conditions() {
 			return ids(items), expect(c.name, c.want, ids(items))
 		})
 	}
+	s.run(5, "Is / IsNot con valor (comparación NULL-safe)", func() (any, error) {
+		is, err := users.Where(jsql.Is("name", "Ana")).OrderBy("id", true).All()
+		if err != nil {
+			return nil, err
+		}
+		isNot, err := users.Where(jsql.IsNot("name", "Ana")).OrderBy("id", true).All()
+		if err != nil {
+			return nil, err
+		}
+		got := et.Json{"is": ids(is), "is_not": ids(isNot)}
+		return got, expect("ids", et.Json{"is": []string{"u1"}, "is_not": []string{"u2", "u3"}}, got)
+	})
 	s.run(5, "And / Or (conectores)", func() (any, error) {
 		items, err := users.Where(jsql.Eq("name", "Ana")).Or(jsql.Eq("name", "Luis")).OrderBy("id", true).All()
 		if err != nil {
@@ -1083,12 +1142,15 @@ func (s *suite) commands() {
 		got := et.Json{"insert": first.Result.Str("name"), "update": second.Result.Str("name")}
 		return got, expect("names", et.Json{"insert": "Antena", "update": "Antena HD"}, got)
 	})
-	s.run(6, "Return (campos del RETURNING)", func() (any, error) {
-		row, err := products.Update(et.Json{"stock": 7}).Where(jsql.Eq("id", "p4")).Return("id").One()
+	s.run(6, "Return (campos como en Select: columna, atributo, alias, ruta)", func() (any, error) {
+		row, err := products.Update(et.Json{"stock": 7, "specs": et.Json{"wifi": "6"}}).
+			Where(jsql.Eq("id", "p4")).
+			Return("id", "name:nombre", "stock", "specs->wifi:wifi").
+			One()
 		if err != nil {
 			return nil, err
 		}
-		return row.Result, expect("id", "p4", row.Result["id"])
+		return row.Result, expect("row", et.Json{"id": "p4", "nombre": "Router Wi-Fi 6", "stock": 7, "wifi": "6"}, row.Result)
 	})
 	s.run(6, "Delete (devuelve la fila borrada)", func() (any, error) {
 		row, err := products.Delete().Where(jsql.Eq("id", "p6")).One()
@@ -1556,7 +1618,7 @@ func writeResults(t *testing.T, driver string, results []caseResult) {
 **/
 func writeSummary(t *testing.T, all map[string][]caseResult) {
 	t.Helper()
-	drivers := []string{"sqlite", "postgres", "oracle"}
+	drivers := []string{"sqlite", "postgres", "oracle", "mysql", "mssql"}
 	status := map[string]map[string]string{}
 	order := []string{}
 	sectionOf := map[string]string{}
@@ -1594,10 +1656,14 @@ func writeSummary(t *testing.T, all map[string][]caseResult) {
 	for _, key := range order {
 		if sectionOf[key] != current {
 			current = sectionOf[key]
-			sb.WriteString(fmt.Sprintf("\n## %s\n\n| Caso | sqlite | postgres | oracle |\n|---|---|---|---|\n", current))
+			sb.WriteString(fmt.Sprintf("\n## %s\n\n| Caso | sqlite | postgres | oracle | mysql | mssql |\n|---|---|---|---|---|---|\n", current))
 		}
 		name := strings.TrimPrefix(key, current+" · ")
-		sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s |\n", name, icon[status[key]["sqlite"]], icon[status[key]["postgres"]], icon[status[key]["oracle"]]))
+		cells := []string{}
+		for _, d := range drivers {
+			cells = append(cells, icon[status[key][d]])
+		}
+		sb.WriteString(fmt.Sprintf("| %s | %s |\n", name, strings.Join(cells, " | ")))
 	}
 	if err := os.WriteFile(filepath.Join("result", "summary.md"), []byte(sb.String()), 0o644); err != nil {
 		t.Fatal(err)

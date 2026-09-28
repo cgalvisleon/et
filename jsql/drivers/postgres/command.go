@@ -176,13 +176,20 @@ func pgColsVals(model *jsql.Model, data et.Json, excludePKs bool) (cols, vals []
 * @return string
 **/
 func pgReturningClause(command *jsql.Command) string {
-	if len(command.Returns) > 0 {
-		return "\nRETURNING " + strings.Join(command.Returns, ", ")
-	}
-
 	model := command.From.Model
 	if model == nil {
+		if len(command.Returns) > 0 {
+			cols := make([]string, len(command.Returns))
+			for i, name := range command.Returns {
+				cols[i] = sanitizeIdent(name)
+			}
+			return "\nRETURNING " + strings.Join(cols, ", ")
+		}
 		return "\nRETURNING *"
+	}
+
+	if len(command.Returns) > 0 {
+		return pgReturningFields(model, command.Returns)
 	}
 
 	pairs := make([]string, 0, len(model.Columns))
@@ -207,6 +214,31 @@ func pgReturningClause(command *jsql.Command) string {
 		return "\nRETURNING *"
 	}
 	return "\nRETURNING " + strings.Join(cols, ", ")
+}
+
+/**
+* pgReturningFields: Builds the RETURNING clause of Command.Return(fields...) resolving each field like a
+* Select: columns, SourceField attributes, "field:as" aliases and nested paths. With a SourceField the row
+* comes back as one JSON "result" with those fields; without it, as the listed columns.
+* @param model *jsql.Model, fields []string
+* @return string
+**/
+func pgReturningFields(model *jsql.Model, fields []string) string {
+	// The query has no alias (its As is the table), so the expressions are unqualified as RETURNING needs.
+	query := jsql.NewQuery(model, model.Table)
+	exprs := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if expr, ok := pgSelectExpr(query, field); ok {
+			exprs = append(exprs, expr)
+		}
+	}
+	if len(exprs) == 0 {
+		return "\nRETURNING *"
+	}
+	if query.UseSourceField {
+		return fmt.Sprintf("\nRETURNING %s AS %s", pgMergeObject("", exprs), jsql.RESULT)
+	}
+	return "\nRETURNING " + strings.Join(exprs, ", ")
 }
 
 /**

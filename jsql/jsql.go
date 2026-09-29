@@ -32,6 +32,9 @@ type ConnectParams struct {
 * @return *DB, error
 **/
 func connectTo(params ConnectParams) (*DB, error) {
+	if _, ok := dbs[params.ID]; ok {
+		return dbs[params.ID], nil
+	}
 	result, err := NewDB(params)
 	if err != nil {
 		return nil, err
@@ -42,6 +45,7 @@ func connectTo(params ConnectParams) (*DB, error) {
 		return nil, err
 	}
 
+	dbs[params.ID] = result
 	return result, nil
 }
 

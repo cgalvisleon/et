@@ -38,6 +38,9 @@ type DB struct {
 * @return *DB, error
 **/
 func newDB(params ConnectParams) (*DB, error) {
+	if params.ID == "" {
+		params.ID = reg.UUID()
+	}
 	drv, ok := drivers[params.Driver]
 	if !ok {
 		return nil, errors.New(MSG_DRIVER_NOT_FOUND)

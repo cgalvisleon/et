@@ -640,9 +640,7 @@ func (s *Model) upsert(data et.Json) *Command {
 * @return *Query
 **/
 func (s *Model) queryTx(tx *Tx, query et.Json) *Query {
-	result := s.As("")
-	// An invalid descriptor (from, join, where…) is kept in the query and returned when it runs,
-	// instead of running the query with the parts that could be read.
+	result := s.As("")	
 	_, result.err = result.loadQuery(query)
 	return result
 }

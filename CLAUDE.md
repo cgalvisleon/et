@@ -178,3 +178,15 @@ func (s *T) HttpFoo(w http.ResponseWriter, r *http.Request) {
 | `claim` | `SECRET` (default `"1977"`) |
 | `validator` | `LANG` |
 | `jwf` | `MAX_AUDIT_LOG` (1000) |
+
+## Cambios del 2026-09-28 (desde core-studio)
+
+- `et.ToCondition` acepta `{"where": {campo: {op: valor}}}` como primera condición (sin conector), igual que `and`/`or`; antes `where` caía en el caso por defecto y armaba una condición sobre un campo llamado `where`.
+- `jsql.Series.Model()` expone el modelo de la tabla de series, para publicarlo como cualquier otro.
+- `jsql` `newSeries` crea la serie con `value` 0: el primer `GenSerie` devuelve 1 (antes 2).
+- `jwf.WorkFlow.SetFlow(def, userId)` carga un flujo entero desde su JSON (steps como mapa nodo → paso, connections, triggers) conservando los ids de los nodos; sin triggers, los arma de los pasos de kind trigger.
+- `jwf` `getInstance` y `cache.GetObject` tratan `cache.ErrNotFound` como clave inexistente (antes solo `redis.Nil`, que `cache.Get` ya no devuelve: toda instancia nueva fallaba con «not found»).
+
+- `ettp/v2` `migrate` (al arrancar un gateway sin rutas guardadas en Redis) trata `cache.ErrNotFound` como «no hay rutas v0.0.1 que migrar»; antes solo `redis.Nil`, así que el gateway se caía con `FATAL: not found`.
+- `ettp/v2`: `Save` serializa `Solvers` bajo `muRoutes` (varias suscripciones de NATS registran rutas a la vez y el gateway se caía con `concurrent map iteration and map write`); `findResolver` busca con `URL.EscapedPath()` y el resolver reenvía los parámetros sin decodificar (y los pasa decodificados a `SetPathValue`): un id con `%2F` ya no se parte en dos segmentos.
+- `router.Api`: `Public(method, path, name, handler)` y `Session(method, path, name, handler)` llevan `name`, como `Protected`; las tres anteponen el `Path` del Api (`getPath`) y publican la ruta al catálogo (`RegisterEndpoint`, grupo vacío en las públicas y de sesión). Llamadores actualizados: los routers de `core-studio/api/pkg/*` y `postick/api/pkg/postick`.

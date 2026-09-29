@@ -31,6 +31,14 @@ import (
 // =============================================================================
 
 /**
+* ID: Returns the connection ID.
+* @return string
+**/
+func (s *PgConection) ID() string {
+	return s.id()
+}
+
+/**
 * GetParams: Returns the connection parameters as a JSON object.
 * @return et.Json
 **/
@@ -55,6 +63,14 @@ func (s *PgConection) GetDatabase() string {
 }
 
 /**
+* ID: Returns the connection ID.
+* @return string
+**/
+func (s *SqliteConection) ID() string {
+	return s.id()
+}
+
+/**
 * GetParams: Returns the connection parameters as a JSON object.
 * @return et.Json
 **/
@@ -76,6 +92,14 @@ func (s *SqliteConection) SetDatabase(name string) {
 **/
 func (s *SqliteConection) GetDatabase() string {
 	return s.getDatabase()
+}
+
+/**
+* ID: Returns the connection ID.
+* @return string
+**/
+func (s *OracleConection) ID() string {
+	return s.id()
 }
 
 /**
@@ -1579,6 +1603,14 @@ func (s *Tx) Query(db *sql.DB, query string, args ...any) (*sql.Rows, error) {
 **/
 func DefineSeries(db *DB, schema string) (*Series, error) {
 	return defineSeries(db, schema)
+}
+
+/**
+* Model: The model of the series table, so its owner can publish it like any other model.
+* @return *Model
+**/
+func (s *Series) Model() *Model {
+	return s.model
 }
 
 /**

@@ -3,12 +3,10 @@ package router
 import (
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/strs"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -225,10 +223,6 @@ type Route struct {
 * @return *chi.Mux
 **/
 func Publish(r *chi.Mux, route Route) *chi.Mux {
-	route.Path = strs.Append(route.PackageName, route.Path, "/")
-	route.Path = strings.ReplaceAll(route.Path, "//", "/")
-	route.Path = strings.ReplaceAll(route.Path, "//", "/")
-
 	switch route.Method {
 	case "GET":
 		r.Get(route.Path, route.Handler)
@@ -258,10 +252,6 @@ func Publish(r *chi.Mux, route Route) *chi.Mux {
 * @return *chi.Mux
 **/
 func With(r *chi.Mux, route Route, middlewares []func(http.Handler) http.Handler) *chi.Mux {
-	route.Path = strs.Append(route.PackageName, route.Path, "/")
-	route.Path = strings.ReplaceAll(route.Path, "//", "/")
-	route.Path = strings.ReplaceAll(route.Path, "//", "/")
-
 	switch route.Method {
 	case "GET":
 		r.With(middlewares...).Get(route.Path, route.Handler)

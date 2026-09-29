@@ -3,6 +3,7 @@ package ettp
 import (
 	"errors"
 	"net/http"
+	neturl "net/url"
 	"slices"
 	"strings"
 	"time"
@@ -73,7 +74,12 @@ func newResolver(r *http.Request, solver *Solver, params map[string]string) (*Re
 	url := solver.Solver
 	for k, v := range params {
 		name := strings.Trim(k, "{}")
-		r.SetPathValue(name, v)
+		// The value arrives escaped (see findResolver): decoded for a handler of the gateway, escaped for the proxy
+		value, err := neturl.PathUnescape(v)
+		if err != nil {
+			value = v
+		}
+		r.SetPathValue(name, value)
 		url = strings.Replace(url, k, v, 1)
 	}
 

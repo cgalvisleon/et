@@ -18,6 +18,66 @@ El objetivo de package jsql es ser un sqlBuilder que usa estructuras json como p
 - update
 - delete
 
+El estándar para las consultas JSQL es el siguiente:
+
+```json
+{
+  "from": {
+    "database": "database",
+    "schema": "schema",
+    "model": "model",
+    "as": "A"
+  },
+  "selects": ["id", "name", "last_name"],
+  "hiddens": ["password"],
+  "join": [
+    {
+      "to": {
+        "database": "database",
+        "schema": "schema",
+        "model": "roles",
+        "as": "R"
+      },
+      "on": [{ "A.role_id": { "eq": "R.id" } }]
+    }
+  ],
+  "left_join": [
+    {
+      "to": {
+        "database": "database",
+        "schema": "schema",
+        "model": "areas",
+        "as": "B"
+      },
+      "on": [{ "A.area_id": { "eq": "B.id" } }]
+    }
+  ],
+  "right_join": [],
+  "full_join": [],
+  "where": [
+    { "id": { "eq": 1 } },
+    { "and": { "name": { "eq": "Cesar" } } },
+    { "or": { "last_name": { "eq": "Galvis" } } }
+  ],
+  "groups": ["status"],
+  "havings": [{ "count(id)": { "more": 1 } }],
+  "orders": [{ "name": true }, { "created_at": false }],
+  "limit": 20,
+  "page": 1
+}
+```
+
+- from: el modelo de origen. database es la base de datos donde está el modelo (la de la conexión si no se envía), schema su esquema (si no se envía, el modelo se busca en todos los esquemas y debe ser único), model el nombre del modelo y as su alias; el alias por defecto del origen principal es A. También se acepta la forma corta en texto, "schema.model:as", y una lista de orígenes, en la que el primero es el principal y los demás se relacionan en el where.
+- selects: los campos que se devuelven, con la forma campo, campo:alias, alias.campo, agregado(campo):alias (count, sum, avg, min, max) o una ruta dentro de un json (campo->a->b). Vacío, devuelve todos los campos que no son ocultos.
+- hiddens: campos que no se devuelven cuando selects está vacío.
+- join, left_join, right_join y full_join: listas de uniones; to indica el modelo destino con la misma estructura de from, y as es obligatorio. on son las condiciones de la unión, con el mismo formato de where; un valor de texto alias.campo que nombra un campo de la consulta se toma como columna, no como texto.
+- where: las condiciones. La primera no lleva conector y las siguientes se unen con and u or. Cada condición es {campo: {operador: valor}} y los operadores son eq, neg, less, less_eq, more, more_eq, like, in, not_in, is, is_not, null, not_null, between y not_between.
+- groups y havings: agrupación y condiciones sobre los grupos, con el mismo formato de where.
+- orders: el orden, true ascendente y false descendente; puede usar el alias de un campo seleccionado, incluido un agregado.
+- limit y page: cuántos registros se devuelven y qué página. Sin limit se usa el límite de la base de datos (DB_RECORD_LIMIT, 1000 por defecto); también se acepta offset en lugar de page.
+
+Las claves también se aceptan con su forma SQL: select, group by, having, order by, left join, right join y full join.
+
 También soporta la definición y creación de bases de datos, esquemas y tablas, con la siguiente particularidad.
 
 Los modelos definidos tienen un atributo llamado SourceField. Si no es "", contiene el nombre de un campo de tipo JSONB que guarda datos json. Por ejemplo, imagina un modelo llamado Users con los campos id, name y \_source, donde \_source es el SourceField. Si se hace un insert con este json:
@@ -103,14 +163,18 @@ Las columnas de tipo DETAIL, MASTER, ROLLUP, CALCFUNC y CALC solo se ejecutan si
 
 Comandos
 
-Los comandos también se pueden describir en json. Cada comando se escribe bajo una clave con su nombre (insert, update, delete, upsert o bulk) y dentro indica el modelo en from (schema.tabla), los valores en data, las condiciones en where y, de forma opcional, triggers en javascript. Igual que los comandos del modelo, siguen la regla de SourceField: los valores con columna se guardan en su columna y el resto en SourceField. Todos devuelven los registros afectados (RETURNING).
+Los comandos también se pueden describir en json. Cada comando se escribe bajo una clave con su nombre (insert, update, delete, upsert o bulk) y dentro indica el modelo en from, con la misma estructura de las consultas (database, schema y model, o la forma corta "schema.model"), los valores en data, las condiciones en where y, de forma opcional, triggers en javascript. Igual que los comandos del modelo, siguen la regla de SourceField: los valores con columna se guardan en su columna y el resto en SourceField. Todos devuelven los registros afectados (RETURNING).
 
 - Insert: inserta un registro en el modelo indicado en from con los valores de data. La estructura json para un insert es la siguiente:
 
 ```json
 {
   "insert": {
-    "from": "public.users",
+    "from": {
+      "database": "database",
+      "schema": "schema",
+      "model": "model"
+    },
     "data": {
       "id": 1,
       "status": "active",
@@ -129,7 +193,11 @@ before_insert y after_insert son listas de código javascript que goja ejecuta a
 ```json
 {
   "update": {
-    "from": "public.users",
+    "from": {
+      "database": "database",
+      "schema": "schema",
+      "model": "model"
+    },
     "data": {
       "name": "Cesar Galvis"
     },
@@ -151,7 +219,11 @@ before_update y after_update son listas de código javascript que goja ejecuta a
 ```json
 {
   "delete": {
-    "from": "public.users",
+    "from": {
+      "database": "database",
+      "schema": "schema",
+      "model": "model"
+    },
     "where": [
       { "id": { "eq": 1 } },
       { "and": { "status": { "eq": "active" } } }
@@ -170,7 +242,11 @@ before_delete y after_delete son listas de código javascript que goja ejecuta a
 ```json
 {
   "upsert": {
-    "from": "public.users",
+    "from": {
+      "database": "database",
+      "schema": "schema",
+      "model": "model"
+    },
     "data": {
       "name": "Cesar Galvis"
     },
@@ -196,7 +272,11 @@ before_insert, after_insert, before_update, after_update, before_insert_update y
 ```json
 {
   "bulk": {
-    "from": "public.users",
+    "from": {
+      "database": "database",
+      "schema": "schema",
+      "model": "model"
+    },
     "data": [
       { "id": 1, "status": "active", "name": "Cesar" },
       { "id": 2, "status": "active", "name": "Ana" }
@@ -208,3 +288,26 @@ before_insert, after_insert, before_update, after_update, before_insert_update y
 ```
 
 before_insert y after_insert son listas de código javascript que goja ejecuta antes y después de insertar cada registro de la lista, igual que en insert.
+
+- Define: define un modelo desde json y crea su tabla si no existe; devuelve la definición del modelo. Tiene la misma estructura que Define en Go: schema, name, version, columns (name, type_column, type_data y default), primary_keys, unique, indexes, foreign_keys, required, hiddens, omit_updates, source_field, idx_field, details, masters y rollups.
+
+```json
+{
+  "define": {
+    "schema": "public",
+    "name": "users",
+    "version": 1,
+    "source_field": "_source",
+    "columns": [
+      { "name": "id", "type_column": "column", "type_data": "key", "default": "" },
+      { "name": "email", "type_column": "column", "type_data": "text", "default": "" }
+    ],
+    "primary_keys": [{ "name": "id", "sorted": true }],
+    "unique": [{ "name": "email" }]
+  }
+}
+```
+
+Drivers
+
+Cada motor de base de datos tiene su driver en jsql/drivers/<nombre>, que se registra solo al importarlo y únicamente genera el sql; ejecutarlo, manejar las transacciones y correr los triggers es trabajo del paquete jsql. Los drivers soportados son postgres, sqlite, oracle (19c o superior), mysql (8.0 o superior) y mssql (SQL Server 2022 o superior), y se elige con la variable DB_DRIVER. Los motores que no tienen RETURNING (oracle, mysql y mssql) lo simulan devolviendo las filas afectadas en el mismo comando.

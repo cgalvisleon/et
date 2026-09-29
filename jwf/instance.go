@@ -189,7 +189,8 @@ func (s *WorkFlow) getInstance(id, userId string) (*Instance, error) {
 	if id != "" {
 		key := fmt.Sprintf("instance:%s:status", id)
 		status, err := cache.Get(key, "")
-		if err != nil && !errors.Is(err, redis.Nil) {
+		// A missing key is not an error: the cache answers it with redis.Nil or with its own ErrNotFound
+		if err != nil && !errors.Is(err, redis.Nil) && !errors.Is(err, cache.ErrNotFound) {
 			return nil, err
 		}
 		if status != "" {

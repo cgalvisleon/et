@@ -7,11 +7,17 @@ import (
 )
 
 var (
+	dbs                    = make(map[string]*DB)
 	ErrRecordAlreadyExists = errors.New("record already exists")
 	ErrUpsertWhereRequired = errors.New("upsert requires a where")
 )
 
+func init() {
+	dbs = make(map[string]*DB)
+}
+
 type ConnectParams struct {
+	ID          string     `json:"id"`
 	Driver      string     `json:"driver"`
 	Host        string     `json:"host"`
 	Name        string     `json:"name"`
@@ -60,6 +66,7 @@ func loadTo(dbName string, hostName ...string) (*DB, error) {
 	recordLimit := envar.GetInt("DB_RECORD_LIMIT", 1000)
 	isDebug := envar.GetBool("DB_IS_DEBUG", false)
 	result, err := ConnectTo(ConnectParams{
+		ID:          connection.ID(),
 		Driver:      driver,
 		Host:        host,
 		Name:        dbName,

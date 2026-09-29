@@ -35,12 +35,14 @@ func getConnection(driver, host string) (Connection, error) {
 }
 
 type Connection interface {
+	ID() string
 	GetParams() et.Json
 	SetDatabase(string)
 	GetDatabase() string
 }
 
 type PgConection struct {
+	Id          string
 	Host        string
 	Port        int
 	Database    string
@@ -59,7 +61,9 @@ func pgConection(host string) *PgConection {
 	sslmode := envar.GetStr("DB_SSLMODE", "disable")
 	appName := envar.GetStr("DB_APP_NAME", "josephine")
 	recordLimit := envar.GetInt("DB_RECORD_LIMIT", 1000)
+	id := fmt.Sprintf("db:%s:%s", host, database)
 	return &PgConection{
+		Id:          id,
 		Host:        host,
 		Port:        port,
 		Database:    database,
@@ -77,6 +81,7 @@ func pgConection(host string) *PgConection {
 **/
 func (s *PgConection) getParams() et.Json {
 	return et.Json{
+		"id":           s.Id,
 		"driver":       DriverPostgres,
 		"host":         s.Host,
 		"port":         s.Port,
@@ -87,6 +92,14 @@ func (s *PgConection) getParams() et.Json {
 		"app_name":     s.AppName,
 		"record_limit": s.RecordLimit,
 	}
+}
+
+/**
+* ID: Returns the connection ID.
+* @return string
+**/
+func (s *PgConection) id() string {
+	return s.Id
 }
 
 /**
@@ -106,6 +119,7 @@ func (s *PgConection) getDatabase() string {
 }
 
 type SqliteConection struct {
+	Id           string
 	Name         string
 	RecordLimit  int
 	PoolMaxOpen  int
@@ -126,7 +140,9 @@ func sqliteConection(path string) *SqliteConection {
 	poolLifetime := envar.GetInt("DB_POOL_LIFETIME", 10)
 	poolIdleTime := envar.GetInt("DB_POOL_IDLE_TIME", 10)
 	appName := envar.GetStr("DB_APP_NAME", "josephine")
+	id := fmt.Sprintf("db:%s", name)
 	return &SqliteConection{
+		Id:           id,
 		Name:         name,
 		RecordLimit:  recordLimit,
 		PoolMaxOpen:  poolMaxOpen,
@@ -138,11 +154,20 @@ func sqliteConection(path string) *SqliteConection {
 }
 
 /**
+* ID: Returns the connection ID.
+* @return string
+**/
+func (s *SqliteConection) id() string {
+	return s.Id
+}
+
+/**
 * getParams: Returns the connection parameters as a JSON object.
 * @return et.Json
 **/
 func (s *SqliteConection) getParams() et.Json {
 	return et.Json{
+		"id":             s.Id,
 		"driver":         DriverSqlite,
 		"name":           s.Name,
 		"record_limit":   s.RecordLimit,
@@ -171,6 +196,7 @@ func (s *SqliteConection) getDatabase() string {
 }
 
 type OracleConection struct {
+	Id          string
 	Host        string
 	Port        int
 	Username    string
@@ -187,7 +213,9 @@ func oracleConection(host string) *OracleConection {
 	serviceName := envar.GetStr("DB_NAME", "josephine")
 	ssl := envar.GetBool("DB_SSL", false)
 	sslVerify := envar.GetBool("DB_SSL_VERIFY", true)
+	id := fmt.Sprintf("db:%s:%s", host, serviceName)
 	return &OracleConection{
+		Id:          id,
 		Host:        host,
 		Port:        port,
 		Username:    username,
@@ -204,6 +232,7 @@ func oracleConection(host string) *OracleConection {
 **/
 func (s *OracleConection) getParams() et.Json {
 	return et.Json{
+		"id":           s.Id,
 		"driver":       DriverOracle,
 		"host":         s.Host,
 		"port":         s.Port,
@@ -213,6 +242,14 @@ func (s *OracleConection) getParams() et.Json {
 		"ssl":          s.SSL,
 		"ssl_verify":   s.SSLVerify,
 	}
+}
+
+/**
+* id: Returns the connection ID.
+* @return string
+**/
+func (s *OracleConection) id() string {
+	return s.Id
 }
 
 /**
@@ -235,6 +272,7 @@ func (s *OracleConection) getDatabase() string {
 * MysqlConection: Connection parameters of a MySQL (8.0 or later) database.
 **/
 type MysqlConection struct {
+	Id       string
 	Host     string
 	Port     int
 	Database string
@@ -248,13 +286,23 @@ type MysqlConection struct {
 * @return *MysqlConection
 **/
 func mysqlConection(host string) *MysqlConection {
+	database := envar.GetStr("DB_NAME", "josephine")
 	return &MysqlConection{
+		Id:       fmt.Sprintf("db:%s:%s", host, database),
 		Host:     host,
 		Port:     envar.GetInt("DB_PORT", 3306),
-		Database: envar.GetStr("DB_NAME", "josephine"),
+		Database: database,
 		User:     envar.GetStr("DB_USER", "root"),
 		Password: envar.GetStr("DB_PASSWORD", ""),
 	}
+}
+
+/**
+* ID: Returns the connection ID.
+* @return string
+**/
+func (s *MysqlConection) ID() string {
+	return s.Id
 }
 
 /**
@@ -263,6 +311,7 @@ func mysqlConection(host string) *MysqlConection {
 **/
 func (s *MysqlConection) GetParams() et.Json {
 	return et.Json{
+		"id":       s.Id,
 		"driver":   DriverMysql,
 		"host":     s.Host,
 		"port":     s.Port,
@@ -292,6 +341,7 @@ func (s *MysqlConection) GetDatabase() string {
 * MssqlConection: Connection parameters of a SQL Server (2022 or later) database.
 **/
 type MssqlConection struct {
+	Id       string
 	Host     string
 	Port     int
 	Database string
@@ -305,13 +355,23 @@ type MssqlConection struct {
 * @return *MssqlConection
 **/
 func mssqlConection(host string) *MssqlConection {
+	database := envar.GetStr("DB_NAME", "josephine")
 	return &MssqlConection{
+		Id:       fmt.Sprintf("db:%s:%s", host, database),
 		Host:     host,
 		Port:     envar.GetInt("DB_PORT", 1433),
-		Database: envar.GetStr("DB_NAME", "josephine"),
+		Database: database,
 		User:     envar.GetStr("DB_USER", "sa"),
 		Password: envar.GetStr("DB_PASSWORD", ""),
 	}
+}
+
+/**
+* ID: Returns the connection ID.
+* @return string
+**/
+func (s *MssqlConection) ID() string {
+	return s.Id
 }
 
 /**
@@ -320,6 +380,7 @@ func mssqlConection(host string) *MssqlConection {
 **/
 func (s *MssqlConection) GetParams() et.Json {
 	return et.Json{
+		"id":       s.Id,
 		"driver":   DriverMssql,
 		"host":     s.Host,
 		"port":     s.Port,

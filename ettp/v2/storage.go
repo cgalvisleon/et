@@ -38,8 +38,13 @@ func newStorage(s *Server) *Storage {
 * @return error
 **/
 func (s *Server) Save() error {
+	// Solvers is written by every route event (each on its own NATS goroutine): read it under the lock, or a route
+	// registered while it is being marshaled crashes the process (concurrent map iteration and map write). Every
+	// caller calls Save after releasing muRoutes
+	s.muRoutes.RLock()
 	storage := newStorage(s)
 	bt, err := json.Marshal(storage)
+	s.muRoutes.RUnlock()
 	if err != nil {
 		return err
 	}
@@ -48,7 +53,7 @@ func (s *Server) Save() error {
 		cache.Set(storage.Key, string(bt), 0)
 	} else {
 		path := path.Join("./", "apigateway.json")
-		err = file.Save(path, storage)
+		err = file.Save(path, json.RawMessage(bt))
 		if err != nil {
 			return err
 		}
@@ -132,8 +137,9 @@ func (s *Server) migrate() error {
 
 	storageBeforeKey := "Apigateway-v0.0.1"
 	strs, err := cache.Get(storageBeforeKey, string(bt))
-	if errors.Is(err, redis.Nil) {
-		// No legacy v0.0.1 storage exists — nothing to migrate, not an error.
+	if errors.Is(err, redis.Nil) || errors.Is(err, cache.ErrNotFound) {
+		// No legacy v0.0.1 storage exists — nothing to migrate, not an error. The cache answers a missing key with
+		// redis.Nil or with its own ErrNotFound
 		return nil
 	}
 	if err != nil {

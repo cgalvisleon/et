@@ -524,3 +524,61 @@ func (s *WorkFlow) Run(tag, triggerTag, id, projectId, code string, ctx, tags et
 
 	return s.RunInstance(instance, ctx, tags, await, userId)
 }
+
+/**
+* SetFlow: Loads a whole flow from its JSON (the Flow's own names: tag, title, version, steps as a map node → step,
+* connections and triggers) keeping the ids of its nodes, so the connections stay valid, and adds it to the workflow.
+* Without triggers, they are the steps of kind trigger.
+* @param def et.Json, userId string
+* @return *Flow, error
+**/
+func (s *WorkFlow) SetFlow(def et.Json, userId string) (*Flow, error) {
+	var flow *Flow
+	bt, err := def.ToByte()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(bt, &flow); err != nil {
+		return nil, err
+	}
+
+	if flow == nil || flow.Tag == "" {
+		return nil, ErrrFlowNotFound
+	}
+
+	if flow.ID == "" {
+		flow.ID = reg.UUID()
+	}
+	if flow.Steps == nil {
+		flow.Steps = make(map[string]*Step)
+	}
+	if flow.TimeAwait == 0 {
+		flow.TimeAwait = 1 * time.Minute
+	}
+
+	flow.WorkflowId = s.ID
+	for id, step := range flow.Steps {
+		if step == nil {
+			delete(flow.Steps, id)
+			continue
+		}
+
+		if step.ID == "" {
+			step.ID = id
+		}
+		step.OwnerId = flow.ID
+		step.up(s)
+	}
+
+	if len(flow.Triggers) == 0 {
+		for id, step := range flow.Steps {
+			if step.Kind == KindTrigger {
+				flow.Triggers = append(flow.Triggers, &Trigger{Tag: step.Tag, StartId: id})
+			}
+		}
+	}
+
+	s.addAuditLog(userId, "set_flow")
+	return flow.up(s), nil
+}

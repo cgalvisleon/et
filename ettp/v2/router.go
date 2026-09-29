@@ -222,7 +222,9 @@ func (s *Router) find(path string) (*Router, map[string]string, error) {
 * @return *Resolver, error
 **/
 func (s *Router) findResolver(req *http.Request) (*Resolver, error) {
-	path := req.URL.Path
+	// The escaped path: a parameter may carry an encoded "/" (%2F, like the id of an endpoint of the catalog), which
+	// the decoded URL.Path would split into two segments. The params keep their encoding, so the proxied URL does too
+	path := req.URL.EscapedPath()
 	target, params, err := s.find(path)
 	if err != nil {
 		return nil, err

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
@@ -81,18 +82,11 @@ func (s *Api) UseAuthorization(authorization func(method, path string) func(http
 	s.authorization = authorization
 }
 
-/**
-* public
-* @param method, path string, handler http.HandlerFunc
-**/
-func (s *Api) Public(method, path string, handler http.HandlerFunc) {
-	With(s.Router, Route{
-		Method:      method,
-		Path:        path,
-		Handler:     handler,
-		Host:        s.Addr,
-		PackageName: s.Path,
-	}, []func(http.Handler) http.Handler{})
+func (s *Api) getPath(path string) string {
+	path = strs.Append(s.Path, path, "/")
+	path = strings.ReplaceAll(path, "//", "/")
+	path = strings.ReplaceAll(path, "//", "/")
+	return path
 }
 
 /**
@@ -112,25 +106,44 @@ func (s *Api) RegisterEndpoint(packageName, group, method, path, name string) er
 }
 
 /**
-* Session
-* @param method, path string, handler http.HandlerFunc
+* Public: A route without token; it is published to the endpoint catalog with its name.
+* @param method, path, name string, handler http.HandlerFunc
 **/
-func (s *Api) Session(method, path string, handler http.HandlerFunc) {
+func (s *Api) Public(method, path, name string, handler http.HandlerFunc) {
+	path = s.getPath(path)
+	s.RegisterEndpoint(s.Name, "", method, path, name)
 	With(s.Router, Route{
 		Method:      method,
 		Path:        path,
 		Handler:     handler,
 		Host:        s.Addr,
-		PackageName: s.Path,
+		PackageName: s.Name,
+	}, []func(http.Handler) http.Handler{})
+}
+
+/**
+* Session: A route with token that does not check the role; it is published to the endpoint catalog with its name.
+* @param method, path, name string, handler http.HandlerFunc
+**/
+func (s *Api) Session(method, path, name string, handler http.HandlerFunc) {
+	path = s.getPath(path)
+	s.RegisterEndpoint(s.Name, "", method, path, name)
+	With(s.Router, Route{
+		Method:      method,
+		Path:        path,
+		Handler:     handler,
+		Host:        s.Addr,
+		PackageName: s.Name,
 		Version:     s.Version,
 	}, s.authentication)
 }
 
 /**
-* session
-* @param method, path string, handler http.HandlerFunc
+* Protected: A route with token and the role's authorization, published to the endpoint catalog in its group.
+* @param group, method, path, name string, handler http.HandlerFunc
 **/
 func (s *Api) Protected(group, method, path, name string, handler http.HandlerFunc) {
+	path = s.getPath(path)
 	s.RegisterEndpoint(s.Name, group, method, path, name)
 	authorize := make([]func(http.Handler) http.Handler, 0)
 	authorize = append(authorize, s.authentication...)
@@ -142,7 +155,7 @@ func (s *Api) Protected(group, method, path, name string, handler http.HandlerFu
 		Path:        path,
 		Handler:     handler,
 		Host:        s.Addr,
-		PackageName: s.Path,
+		PackageName: s.Name,
 	}, authorize)
 }
 

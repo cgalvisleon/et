@@ -104,7 +104,7 @@ func (s *Series) newSeries(tag, format string) error {
 		Insert(et.Json{
 			"tag":    tag,
 			"format": format,
-			"value":  1,
+			"value":  0, // the first GenSerie returns 1
 		}).
 		Exec()
 	return err

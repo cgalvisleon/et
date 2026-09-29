@@ -639,6 +639,13 @@ func ToCondition(params Json) (*Condition, error) {
 
 	for key := range params {
 		switch strings.ToLower(key) {
+		case "where":
+			// The first condition of a list: {"where": {field: {operator: value}}}, without a connector
+			value := params.Json(key)
+			result := fldCondition(value)
+			if result != nil {
+				return result, nil
+			}
 		case "and":
 			value := params.Json(key)
 			result := fldCondition(value)

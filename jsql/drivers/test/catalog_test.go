@@ -223,7 +223,7 @@ func catalogTargets() []target {
 			file := filepath.Join(os.TempDir(), "jsql_catalog.db")
 			tg.file = file
 			tg.params.Name = file
-			tg.params.Connection = &jsql.SqliteConection{Name: file, RecordLimit: 1000}
+			tg.params.Connection = &jsql.SqliteConection{File: file, RecordLimit: 1000}
 			tg.schema = "jsql_catalog"
 		case "postgres":
 			tg.schema = "jsql_catalog"

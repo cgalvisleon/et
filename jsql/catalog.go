@@ -31,14 +31,6 @@ import (
 // =============================================================================
 
 /**
-* ID: Returns the connection ID.
-* @return string
-**/
-func (s *PgConection) ID() string {
-	return s.id()
-}
-
-/**
 * GetParams: Returns the connection parameters as a JSON object.
 * @return et.Json
 **/
@@ -60,14 +52,6 @@ func (s *PgConection) SetDatabase(name string) {
 **/
 func (s *PgConection) GetDatabase() string {
 	return s.getDatabase()
-}
-
-/**
-* ID: Returns the connection ID.
-* @return string
-**/
-func (s *SqliteConection) ID() string {
-	return s.id()
 }
 
 /**

@@ -80,7 +80,7 @@ func targets() []target {
 				Host:   "local",
 				Name:   sqliteFile,
 				Connection: &jsql.SqliteConection{
-					Name:        sqliteFile,
+					File:        sqliteFile,
 					RecordLimit: 1000,
 				},
 				RecordLimit: 1000,

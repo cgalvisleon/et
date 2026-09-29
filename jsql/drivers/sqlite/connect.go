@@ -20,7 +20,8 @@ import (
 **/
 func dbPath(db *jsql.DB) (string, error) {
 	params := db.Params
-	path := params.ValStr("", "name")
+	// "file" es la clave de SqliteConection; "name" era la de antes (un DB guardado con ToJson antes del cambio)
+	path := params.ValStr(params.ValStr("", "name"), "file")
 	if path == "" {
 		return "", fmt.Errorf("database is required")
 	}
@@ -78,7 +79,7 @@ func connectTo(ctx context.Context, path string) (*sql.DB, error) {
 }
 
 /**
-* Connect: Opens the SQLite database file described by db.Params ("name" holds the
+* Connect: Opens the SQLite database file described by db.Params ("file" holds the
 * file path) and configures the connection pool. SQLite allows one writer at a
 * time: WAL mode lets readers run alongside it and busy_timeout makes other
 * writers wait for it.

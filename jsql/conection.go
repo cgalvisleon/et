@@ -35,14 +35,12 @@ func getConnection(driver, host string) (Connection, error) {
 }
 
 type Connection interface {
-	ID() string
 	GetParams() et.Json
 	SetDatabase(string)
 	GetDatabase() string
 }
 
 type PgConection struct {
-	Id          string
 	Host        string
 	Port        int
 	Database    string
@@ -61,9 +59,7 @@ func pgConection(host string) *PgConection {
 	sslmode := envar.GetStr("DB_SSLMODE", "disable")
 	appName := envar.GetStr("DB_APP_NAME", "josephine")
 	recordLimit := envar.GetInt("DB_RECORD_LIMIT", 1000)
-	id := fmt.Sprintf("db:%s:%s:%s", DriverPostgres, host, database)
 	return &PgConection{
-		Id:          id,
 		Host:        host,
 		Port:        port,
 		Database:    database,
@@ -81,7 +77,6 @@ func pgConection(host string) *PgConection {
 **/
 func (s *PgConection) getParams() et.Json {
 	return et.Json{
-		"id":           s.Id,
 		"driver":       DriverPostgres,
 		"host":         s.Host,
 		"port":         s.Port,
@@ -92,14 +87,6 @@ func (s *PgConection) getParams() et.Json {
 		"app_name":     s.AppName,
 		"record_limit": s.RecordLimit,
 	}
-}
-
-/**
-* ID: Returns the connection ID.
-* @return string
-**/
-func (s *PgConection) id() string {
-	return s.Id
 }
 
 /**
@@ -119,8 +106,7 @@ func (s *PgConection) getDatabase() string {
 }
 
 type SqliteConection struct {
-	Id           string
-	Name         string
+	File         string
 	RecordLimit  int
 	PoolMaxOpen  int
 	PoolMaxIdle  int
@@ -130,9 +116,9 @@ type SqliteConection struct {
 }
 
 func sqliteConection(path string) *SqliteConection {
-	name := envar.GetStr("DB_NAME", "josephine.db")
+	file := envar.GetStr("DB_NAME", "josephine.db")
 	if path != "" {
-		name = fmt.Sprintf("%s/%s", path, name)
+		file = fmt.Sprintf("%s/%s", path, file)
 	}
 	recordLimit := envar.GetInt("DB_RECORD_LIMIT", 1000)
 	poolMaxOpen := envar.GetInt("DB_POOL_MAX_OPEN", 10)
@@ -140,10 +126,8 @@ func sqliteConection(path string) *SqliteConection {
 	poolLifetime := envar.GetInt("DB_POOL_LIFETIME", 10)
 	poolIdleTime := envar.GetInt("DB_POOL_IDLE_TIME", 10)
 	appName := envar.GetStr("DB_APP_NAME", "josephine")
-	id := fmt.Sprintf("db:%s:%s", DriverSqlite, name)
 	return &SqliteConection{
-		Id:           id,
-		Name:         name,
+		File:         file,
 		RecordLimit:  recordLimit,
 		PoolMaxOpen:  poolMaxOpen,
 		PoolMaxIdle:  poolMaxIdle,
@@ -154,22 +138,13 @@ func sqliteConection(path string) *SqliteConection {
 }
 
 /**
-* ID: Returns the connection ID.
-* @return string
-**/
-func (s *SqliteConection) id() string {
-	return s.Id
-}
-
-/**
 * getParams: Returns the connection parameters as a JSON object.
 * @return et.Json
 **/
 func (s *SqliteConection) getParams() et.Json {
 	return et.Json{
-		"id":             s.Id,
 		"driver":         DriverSqlite,
-		"name":           s.Name,
+		"file":           s.File,
 		"record_limit":   s.RecordLimit,
 		"pool_max_open":  s.PoolMaxOpen,
 		"pool_max_idle":  s.PoolMaxIdle,
@@ -184,7 +159,7 @@ func (s *SqliteConection) getParams() et.Json {
 * @param name string
 **/
 func (s *SqliteConection) setDatabase(name string) {
-	s.Name = name
+	s.File = name
 }
 
 /**
@@ -192,7 +167,7 @@ func (s *SqliteConection) setDatabase(name string) {
 * @return string
 **/
 func (s *SqliteConection) getDatabase() string {
-	return s.Name
+	return s.File
 }
 
 type OracleConection struct {

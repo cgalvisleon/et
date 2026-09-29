@@ -16,7 +16,6 @@ import (
 )
 
 type DB struct {
-	ID          string                                   `json:"id"`
 	Host        string                                   `json:"host"`
 	Driver      string                                   `json:"driver"`
 	Name        string                                   `json:"name"`
@@ -38,9 +37,6 @@ type DB struct {
 * @return *DB, error
 **/
 func newDB(params ConnectParams) (*DB, error) {
-	if params.ID == "" {
-		params.ID = reg.UUID()
-	}
 	drv, ok := drivers[params.Driver]
 	if !ok {
 		return nil, errors.New(MSG_DRIVER_NOT_FOUND)
@@ -60,7 +56,6 @@ func newDB(params ConnectParams) (*DB, error) {
 
 	connection := params.Connection.GetParams()
 	result := &DB{
-		ID:          reg.UUID(),
 		Host:        params.Host,
 		Driver:      params.Driver,
 		Name:        params.Name,
@@ -117,7 +112,6 @@ func loadDb(params et.Json) (*DB, error) {
 
 	recordLimit := params.ValInt(1000, "record_limit")
 	result := &DB{
-		ID:          id,
 		Host:        host,
 		Driver:      driver,
 		Name:        name,
@@ -197,7 +191,6 @@ func (s *DB) toJson() et.Json {
 	}
 
 	return et.Json{
-		"id":           s.ID,
 		"host":         s.Host,
 		"driver":       s.Driver,
 		"name":         s.Name,

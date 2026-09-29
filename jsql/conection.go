@@ -61,7 +61,7 @@ func pgConection(host string) *PgConection {
 	sslmode := envar.GetStr("DB_SSLMODE", "disable")
 	appName := envar.GetStr("DB_APP_NAME", "josephine")
 	recordLimit := envar.GetInt("DB_RECORD_LIMIT", 1000)
-	id := fmt.Sprintf("db:%s:%s", host, database)
+	id := fmt.Sprintf("db:postgres:%s:%s", host, database)
 	return &PgConection{
 		Id:          id,
 		Host:        host,
@@ -140,7 +140,7 @@ func sqliteConection(path string) *SqliteConection {
 	poolLifetime := envar.GetInt("DB_POOL_LIFETIME", 10)
 	poolIdleTime := envar.GetInt("DB_POOL_IDLE_TIME", 10)
 	appName := envar.GetStr("DB_APP_NAME", "josephine")
-	id := fmt.Sprintf("db:%s", name)
+	id := fmt.Sprintf("db:sqlite:%s", name)
 	return &SqliteConection{
 		Id:           id,
 		Name:         name,
@@ -213,7 +213,7 @@ func oracleConection(host string) *OracleConection {
 	serviceName := envar.GetStr("DB_NAME", "josephine")
 	ssl := envar.GetBool("DB_SSL", false)
 	sslVerify := envar.GetBool("DB_SSL_VERIFY", true)
-	id := fmt.Sprintf("db:%s:%s", host, serviceName)
+	id := fmt.Sprintf("db:oracle:%s:%s", host, serviceName)
 	return &OracleConection{
 		Id:          id,
 		Host:        host,
@@ -288,7 +288,7 @@ type MysqlConection struct {
 func mysqlConection(host string) *MysqlConection {
 	database := envar.GetStr("DB_NAME", "josephine")
 	return &MysqlConection{
-		Id:       fmt.Sprintf("db:%s:%s", host, database),
+		Id:       fmt.Sprintf("db:mysql:%s:%s", host, database),
 		Host:     host,
 		Port:     envar.GetInt("DB_PORT", 3306),
 		Database: database,
@@ -357,7 +357,7 @@ type MssqlConection struct {
 func mssqlConection(host string) *MssqlConection {
 	database := envar.GetStr("DB_NAME", "josephine")
 	return &MssqlConection{
-		Id:       fmt.Sprintf("db:%s:%s", host, database),
+		Id:       fmt.Sprintf("db:mssql:%s:%s", host, database),
 		Host:     host,
 		Port:     envar.GetInt("DB_PORT", 1433),
 		Database: database,

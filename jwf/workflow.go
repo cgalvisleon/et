@@ -441,7 +441,6 @@ func (s *WorkFlow) SetStep(stepDef et.Json, userId string) (*WorkFlow, error) {
 	if step.ID == "" {
 		step.ID = reg.UUID()
 	}
-	step.TypeId = step.ID
 	step.OwnerId = s.ID
 	step.up(s)
 	s.addAuditLog(userId, "new_step")

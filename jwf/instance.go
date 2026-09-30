@@ -84,7 +84,7 @@ type Instance struct {
 	FlowId       string                           `json:"flow_id"`
 	FlowTag      string                           `json:"flow_tag"`
 	Code         string                           `json:"code"`
-	Title        string                           `json:"title"`
+	Name         string                           `json:"name"`
 	Status       Status                           `json:"status"`
 	Ctx          et.Json                          `json:"ctx"`
 	Ctxs         map[string]et.Json               `json:"ctxs"`
@@ -138,9 +138,9 @@ func (s *WorkFlow) newInstance(projectId, tag, triggerTag, id, code, userId stri
 		}
 	}
 
-	title := flow.Title
+	name := flow.Name
 	if code != "" {
-		title = fmt.Sprintf("%s %s", flow.Title, code)
+		name = fmt.Sprintf("%s %s", flow.Name, code)
 	}
 
 	now := timezone.Now()
@@ -153,7 +153,7 @@ func (s *WorkFlow) newInstance(projectId, tag, triggerTag, id, code, userId stri
 		FlowId:     flow.ID,
 		FlowTag:    flow.Tag,
 		Code:       code,
-		Title:      title,
+		Name:       name,
 		Ctx:        et.Json{},
 		Ctxs:       make(map[string]et.Json),
 		Params:     et.Json{},
@@ -442,7 +442,7 @@ func (s *Instance) save() error {
 	}
 
 	if s.store != nil {
-		err := s.store.SetInstance(s.ID, s.WorkflowId, s.ProjectId, s.FlowId, s.FlowTag, s.Code, s.Title, s.Status, s)
+		err := s.store.SetInstance(s.ID, s.WorkflowId, s.ProjectId, s.FlowId, s.FlowTag, s.Code, s.Name, s.Status, s)
 		if err != nil {
 			return err
 		}
@@ -471,7 +471,7 @@ func (s *Instance) ToJson() et.Json {
 		"project_id":  s.ProjectId,
 		"id":          s.ID,
 		"code":        s.Code,
-		"title":       s.Title,
+		"name":        s.Name,
 		"status":      s.Status,
 		"ctx":         s.Ctx,
 		"ctxs":        s.Ctxs,
@@ -795,7 +795,7 @@ func (s *Instance) run(ctx et.Json, await bool, userId string) (et.Json, error) 
 		"flow_id":     s.FlowId,
 		"flow_tag":    s.FlowTag,
 		"code":        s.Code,
-		"title":       s.Title,
+		"name":        s.Name,
 		"status":      "running",
 	}, nil
 }
@@ -817,7 +817,7 @@ func (s *Instance) runResilence(ctx et.Json, err error, userId string) (et.Json,
 		s.resilience = resilience
 	}
 
-	description := fmt.Sprintf("flow: %s,  %s", s.flow.Title, s.flow.Description)
+	description := fmt.Sprintf("flow: %s,  %s", s.flow.Name, s.flow.Description)
 	resilence := s.resilience.LoadInstance(resilience.Params{
 		Id:            s.ID,
 		Tag:           "workflow",

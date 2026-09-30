@@ -51,11 +51,10 @@ type Step struct {
 	OwnerId     string                   `json:"owner_id"`
 	ID          string                   `json:"id"`
 	Kind        Kind                     `json:"kind"`
-	TypeId      string                   `json:"type_id"`
 	Tag         string                   `json:"tag"`
 	Version     string                   `json:"version"`
 	Status      Status                   `json:"status"`
-	Title       string                   `json:"title"`
+	Name        string                   `json:"name"`
 	Description string                   `json:"description"`
 	Definition  string                   `json:"definition"`
 	OnPublish   string                   `json:"on_publish"`
@@ -77,10 +76,10 @@ type Step struct {
 
 /**
 * newStep
-* @param ownerId, id string, kind Kind, tag, version, title string
+* @param ownerId, id string, kind Kind, tag, version, name string
 * @return *Step
 **/
-func newStep(ownerId, id string, kind Kind, tag, version, title string) *Step {
+func newStep(ownerId, id string, kind Kind, tag, version, name string) *Step {
 	if version == "" {
 		version = "1.0.0"
 	}
@@ -92,12 +91,11 @@ func newStep(ownerId, id string, kind Kind, tag, version, title string) *Step {
 		UpdatedAt:   now,
 		OwnerId:     ownerId,
 		ID:          id,
-		TypeId:      id,
 		Kind:        kind,
 		Tag:         tag,
 		Version:     version,
 		Status:      ACTIVE,
-		Title:       title,
+		Name:        name,
 		Description: "",
 		Definition:  "",
 		OnPublish:   "",
@@ -188,9 +186,9 @@ func (s *WorkFlow) deleteStep(id string) error {
 **/
 func (s *Step) ref() et.Json {
 	return et.Json{
-		"id":    s.ID,
-		"tag":   s.Tag,
-		"title": s.Title,
+		"id":   s.ID,
+		"tag":  s.Tag,
+		"name": s.Name,
 	}
 }
 
@@ -204,12 +202,11 @@ func (s *Step) ToJson() et.Json {
 		"updated_at":  timezone.Format(s.UpdatedAt, timezone.RFC3339),
 		"owner_id":    s.OwnerId,
 		"id":          s.ID,
-		"type_id":     s.TypeId,
 		"kind":        s.Kind,
 		"tag":         s.Tag,
 		"version":     s.Version,
 		"status":      s.Status,
-		"title":       s.Title,
+		"name":        s.Name,
 		"description": s.Description,
 	}
 }
@@ -475,10 +472,10 @@ func (s *Step) put(def et.Json, userId string) error {
 		s.Version = version
 	}
 
-	title := def.Str("title")
-	if title != "" && s.Title != title {
-		s.addAuditLog(userId, fmt.Sprintf("update_title old:%s", s.Title))
-		s.Title = title
+	name := def.Str("name")
+	if name != "" && s.Name != name {
+		s.addAuditLog(userId, fmt.Sprintf("update_name old:%s", s.Name))
+		s.Name = name
 	}
 
 	description := def.Str("description")

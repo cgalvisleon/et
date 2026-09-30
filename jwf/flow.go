@@ -76,7 +76,7 @@ type Flow struct {
 	WorkflowId    string                   `json:"workflow_id"`
 	ID            string                   `json:"id"`
 	Tag           string                   `json:"tag"`
-	Title         string                   `json:"title"`
+	Name          string                   `json:"name"`
 	Description   string                   `json:"description"`
 	Version       string                   `json:"version"`
 	Steps         map[string]*Step         `json:"steps"`
@@ -99,10 +99,10 @@ type Flow struct {
 
 /**
 * newFlow
-* @param tag, title, version, userId string
+* @param tag, name, version, userId string
 * @return *Flow
 **/
-func (s *WorkFlow) newFlow(tag, title, version, userId string) *Flow {
+func (s *WorkFlow) newFlow(tag, name, version, userId string) *Flow {
 	if version == "" {
 		version = "1.0.0"
 	}
@@ -114,7 +114,7 @@ func (s *WorkFlow) newFlow(tag, title, version, userId string) *Flow {
 		WorkflowId:    s.ID,
 		ID:            reg.UUID(),
 		Tag:           tag,
-		Title:         title,
+		Name:          name,
 		Description:   "",
 		Version:       version,
 		Steps:         make(map[string]*Step),
@@ -274,7 +274,7 @@ func (s *Flow) ref() et.Json {
 	return et.Json{
 		"id":    s.ID,
 		"tag":   s.Tag,
-		"title": s.Title,
+		"name":  s.Name,
 		"steps": steps,
 	}
 }
@@ -290,7 +290,7 @@ func (s *Flow) ToJson() et.Json {
 		"workflow_id":    s.WorkflowId,
 		"id":             s.ID,
 		"tag":            s.Tag,
-		"title":          s.Title,
+		"name":           s.Name,
 		"description":    s.Description,
 		"version":        s.Version,
 		"steps":          s.Steps,

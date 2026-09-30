@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
@@ -298,7 +299,7 @@ END;`, oraRowResult(command), table, where, table, where), nil
 * @param command *jsql.Command
 * @return string, error
 **/
-func (s *Oracle) Command(command *jsql.Command) (string, error) {
+func (s *Oracle) Command(command *jsql.Command, timeout ...time.Duration) (string, error) {
 	switch command.Type {
 	case jsql.INSERT, jsql.BULK:
 		return oraInsertSQL(command)

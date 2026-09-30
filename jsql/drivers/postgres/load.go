@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/cgalvisleon/et/jsql"
 )
@@ -179,7 +180,10 @@ func ddlForeignKeys(model *jsql.Model, table string) []string {
 * @param db *sql.DB @param schema string @param name string
 * @return bool, error
 **/
-func (s *Postgres) ExistModel(db *sql.DB, model *jsql.Model) (bool, error) {
+func (s *Postgres) ExistModel(db *sql.DB, model *jsql.Model, timeout ...time.Duration) (bool, error) {
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
+
 	ddlTable(model)
 	query := `
 	SELECT EXISTS(
@@ -187,7 +191,7 @@ func (s *Postgres) ExistModel(db *sql.DB, model *jsql.Model) (bool, error) {
 	FROM information_schema.tables
 	WHERE UPPER(table_schema) = UPPER($1)
 	AND UPPER(table_name) = UPPER($2));`
-	rows, err := db.Query(query, model.Schema, model.Name)
+	rows, err := db.QueryContext(ctx, query, model.Schema, model.Name)
 	if err != nil {
 		return false, err
 	}
@@ -208,7 +212,7 @@ func (s *Postgres) ExistModel(db *sql.DB, model *jsql.Model) (bool, error) {
 * @param model *jsql.Model
 * @return string, error
 **/
-func (s *Postgres) Load(model *jsql.Model) (string, error) {
+func (s *Postgres) Load(model *jsql.Model, timeout ...time.Duration) (string, error) {
 	var sb strings.Builder
 
 	if schema := ddlSchema(model); schema != "" {

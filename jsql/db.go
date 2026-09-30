@@ -1,11 +1,11 @@
 package jsql
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
@@ -28,6 +28,7 @@ type DB struct {
 	isInit      bool                                     `json:"-"`
 	driver      Driver                                   `json:"-"`
 	db          *sql.DB                                  `json:"-"`
+	timeout     time.Duration                            `json:"-"`
 	onAuditLog  func(userId string, action string) error `json:"-"`
 }
 
@@ -65,6 +66,7 @@ func newDB(params ConnectParams) (*DB, error) {
 		AuditLog:    &et.SafeData{},
 		isDebug:     envar.GetBool("DEBUG", false),
 		driver:      drv,
+		timeout:     params.Timeout,
 	}
 
 	return result, nil
@@ -218,7 +220,7 @@ func (s *DB) init() error {
 		return errors.New(MSG_DRIVER_NOT_FOUND)
 	}
 
-	db, err := s.driver.Connect(context.Background(), s)
+	db, err := s.driver.Connect(s, s.timeout)
 	if err != nil {
 		return err
 	}
@@ -262,7 +264,7 @@ func (s *DB) existModel(model *Model) (bool, error) {
 		return false, errors.New(MSG_DRIVER_NOT_FOUND)
 	}
 
-	return s.driver.ExistModel(s.db, model)
+	return s.driver.ExistModel(s.db, model, s.timeout)
 }
 
 /**
@@ -275,7 +277,7 @@ func (s *DB) load(model *Model) error {
 		return errors.New(MSG_DRIVER_NOT_FOUND)
 	}
 
-	sql, err := s.driver.Load(model)
+	sql, err := s.driver.Load(model, s.timeout)
 	if err != nil {
 		return err
 	}
@@ -306,7 +308,7 @@ func (s *DB) command(command *Command) (string, error) {
 		logs.Debugf("command:%s", command.ToJson().ToEscapeHTML())
 	}
 
-	return s.driver.Command(command)
+	return s.driver.Command(command, s.timeout)
 }
 
 /**
@@ -323,7 +325,7 @@ func (s *DB) query(query *Query) (string, error) {
 		logs.Debugf("query:%s", query.ToJson().ToEscapeHTML())
 	}
 
-	return s.driver.Query(query)
+	return s.driver.Query(query, s.timeout)
 }
 
 /**

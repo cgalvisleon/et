@@ -475,6 +475,30 @@ func (s *WorkFlow) GetInstance(tag, triggerTag, id, projectId, code, userId stri
 }
 
 /**
+* LoadInstance: Una instancia guardada, solo para leerla (su estado, su contexto y sus resultados): no revisa si está
+* corriendo, no carga su flujo ni deja auditoría.
+* @param id string
+* @return *Instance, error
+**/
+func (s *WorkFlow) LoadInstance(id string) (*Instance, error) {
+	if s.store == nil || id == "" {
+		return nil, ErrorInstanceNotFound
+	}
+
+	var result *Instance
+	exists, err := s.store.Get(storeInstances, id, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	if !exists || result == nil {
+		return nil, ErrorInstanceNotFound
+	}
+
+	return result, nil
+}
+
+/**
 * ValidStatus
 * @param instance *Instance
 * @return et.Json, error

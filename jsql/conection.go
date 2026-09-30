@@ -2,6 +2,7 @@ package jsql
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
@@ -49,6 +50,7 @@ type PgConection struct {
 	Sslmode     string
 	AppName     string
 	RecordLimit int
+	Timeout     time.Duration
 }
 
 func pgConection(host string) *PgConection {
@@ -68,6 +70,7 @@ func pgConection(host string) *PgConection {
 		Sslmode:     sslmode,
 		AppName:     appName,
 		RecordLimit: recordLimit,
+		Timeout:     1 * time.Hour,
 	}
 }
 
@@ -86,6 +89,7 @@ func (s *PgConection) getParams() et.Json {
 		"sslmode":      s.Sslmode,
 		"app_name":     s.AppName,
 		"record_limit": s.RecordLimit,
+		"timeout":      s.Timeout,
 	}
 }
 
@@ -113,6 +117,7 @@ type SqliteConection struct {
 	PoolLifetime int
 	PoolIdleTime int
 	AppName      string
+	Timeout      time.Duration
 }
 
 func sqliteConection(path string) *SqliteConection {
@@ -134,6 +139,7 @@ func sqliteConection(path string) *SqliteConection {
 		PoolLifetime: poolLifetime,
 		PoolIdleTime: poolIdleTime,
 		AppName:      appName,
+		Timeout:      1 * time.Hour,
 	}
 }
 
@@ -151,6 +157,7 @@ func (s *SqliteConection) getParams() et.Json {
 		"pool_lifetime":  s.PoolLifetime,
 		"pool_idle_time": s.PoolIdleTime,
 		"app_name":       s.AppName,
+		"timeout":        s.Timeout,
 	}
 }
 
@@ -179,6 +186,7 @@ type OracleConection struct {
 	ServiceName string
 	SSL         bool
 	SSLVerify   bool
+	Timeout     time.Duration
 }
 
 func oracleConection(host string) *OracleConection {
@@ -198,6 +206,7 @@ func oracleConection(host string) *OracleConection {
 		ServiceName: serviceName,
 		SSL:         ssl,
 		SSLVerify:   sslVerify,
+		Timeout:     1 * time.Hour,
 	}
 }
 
@@ -216,6 +225,7 @@ func (s *OracleConection) getParams() et.Json {
 		"service_name": s.ServiceName,
 		"ssl":          s.SSL,
 		"ssl_verify":   s.SSLVerify,
+		"timeout":      s.Timeout,
 	}
 }
 
@@ -253,6 +263,7 @@ type MysqlConection struct {
 	Database string
 	User     string
 	Password string
+	Timeout  time.Duration
 }
 
 /**
@@ -269,6 +280,7 @@ func mysqlConection(host string) *MysqlConection {
 		Database: database,
 		User:     envar.GetStr("DB_USER", "root"),
 		Password: envar.GetStr("DB_PASSWORD", ""),
+		Timeout:  1 * time.Hour,
 	}
 }
 
@@ -293,6 +305,7 @@ func (s *MysqlConection) GetParams() et.Json {
 		"database": s.Database,
 		"user":     s.User,
 		"password": s.Password,
+		"timeout":  s.Timeout,
 	}
 }
 
@@ -322,6 +335,7 @@ type MssqlConection struct {
 	Database string
 	User     string
 	Password string
+	Timeout  time.Duration
 }
 
 /**
@@ -338,6 +352,7 @@ func mssqlConection(host string) *MssqlConection {
 		Database: database,
 		User:     envar.GetStr("DB_USER", "sa"),
 		Password: envar.GetStr("DB_PASSWORD", ""),
+		Timeout:  1 * time.Hour,
 	}
 }
 
@@ -362,6 +377,7 @@ func (s *MssqlConection) GetParams() et.Json {
 		"database": s.Database,
 		"user":     s.User,
 		"password": s.Password,
+		"timeout":  s.Timeout,
 	}
 }
 

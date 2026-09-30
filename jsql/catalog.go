@@ -2,6 +2,7 @@ package jsql
 
 import (
 	"database/sql"
+	"time"
 
 	"github.com/cgalvisleon/et/et"
 )
@@ -13,7 +14,7 @@ import (
 // Índice de la API pública (funciones y métodos por sección):
 //
 //	#   Sección                         Cantidad
-//	1   Conexión y base de datos        24
+//	1   Conexión y base de datos        26
 //	2   Definición de modelos (DDL)     21
 //	3   Relaciones y campos calculados  19
 //	4   Consultas                       47
@@ -24,10 +25,10 @@ import (
 //	9   Series                          6
 //	10  Auditoría                       3
 //	11  Utilidades                      17
-//	    Total                           198
+//	    Total                           200
 
 // =============================================================================
-// 1. Conexión y base de datos (24)
+// 1. Conexión y base de datos (26)
 // =============================================================================
 
 /**
@@ -236,6 +237,24 @@ func LoadTo(dbName string, hostName ...string) (*DB, error) {
 **/
 func Load() (*DB, error) {
 	return load()
+}
+
+/**
+* CreateDB: Creates the database of the connection params with the driver, when it does not exist.
+* @param connection *ConnectParams, timeout ...time.Duration (none or 0: no timeout)
+* @return error
+**/
+func CreateDB(connection *ConnectParams, timeout ...time.Duration) error {
+	return createDB(connection, timeout...)
+}
+
+/**
+* DropDB: Closes the connection pool (if open) and drops the database of the connection params with the driver.
+* @param db *DB, timeout ...time.Duration (none or 0: no timeout)
+* @return error
+**/
+func DropDB(db *DB, timeout ...time.Duration) error {
+	return dropDB(db, timeout...)
 }
 
 // =============================================================================

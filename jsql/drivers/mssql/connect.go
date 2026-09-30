@@ -79,34 +79,93 @@ func connectWithRetry(ctx context.Context, dsn string, maxRetries int) (*sql.DB,
 
 /**
 * Connect: Connects to the server, creates the database when it does not exist and returns a connection
-* to it, with the pool settings of db.Params.
-* @param ctx context.Context, db *jsql.DB
+* to it, with the pool settings of db.Params. With a timeout, connecting fails once it expires; none or 0
+* means no timeout.
+* @param db *jsql.DB, timeout ...time.Duration
 * @return *sql.DB, error
 **/
-func (s *Mssql) Connect(ctx context.Context, db *jsql.DB) (*sql.DB, error) {
+func (s *Mssql) Connect(db *jsql.DB, timeout ...time.Duration) (*sql.DB, error) {
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
+
 	params := db.Params
-	database := params.ValStr("", "database")
-	if database == "" {
-		return nil, errors.New("database is required")
-	}
-
-	server, err := connectWithRetry(ctx, dsn(params, "master"), 5)
-	if err != nil {
+	if err := createDB(ctx, params); err != nil {
 		return nil, err
 	}
-	_, err = server.ExecContext(ctx, fmt.Sprintf("IF DB_ID(%s) IS NULL CREATE DATABASE %s", msQuoteText(database), msIdent(database)))
-	server.Close()
+
+	result, err := connectWithRetry(ctx, dsn(params, params.ValStr("", "database")), 5)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := connectWithRetry(ctx, dsn(params, database), 5)
-	if err != nil {
-		return nil, err
-	}
 	result.SetMaxOpenConns(params.ValInt(3, "pool_max_open"))
 	result.SetMaxIdleConns(params.ValInt(1, "pool_max_idle"))
 	result.SetConnMaxLifetime(time.Duration(params.ValInt(30, "pool_lifetime")) * time.Minute)
 	result.SetConnMaxIdleTime(time.Duration(params.ValInt(2, "pool_idle_time")) * time.Minute)
 	return result, nil
+}
+
+/**
+* execMaster: Runs a statement on the master database and closes the connection.
+* @param ctx context.Context, params et.Json, statement string
+* @return error
+**/
+func execMaster(ctx context.Context, params et.Json, statement string) error {
+	server, err := connectWithRetry(ctx, dsn(params, "master"), 5)
+	if err != nil {
+		return err
+	}
+	defer server.Close()
+
+	_, err = server.ExecContext(ctx, statement)
+	return err
+}
+
+/**
+* createDB: Creates the database of the params ("database") when it does not exist.
+* @param ctx context.Context, params et.Json
+* @return error
+**/
+func createDB(ctx context.Context, params et.Json) error {
+	database := params.ValStr("", "database")
+	if database == "" {
+		return errors.New("database is required")
+	}
+
+	return execMaster(ctx, params, fmt.Sprintf("IF DB_ID(%s) IS NULL CREATE DATABASE %s", msQuoteText(database), msIdent(database)))
+}
+
+/**
+* CreateDB: Creates the database of the connection ("database") when it does not exist. It is idempotent.
+* None or 0 timeout means no timeout.
+* @param connection *jsql.ConnectParams, timeout ...time.Duration
+* @return error
+**/
+func (s *Mssql) CreateDB(connection *jsql.ConnectParams, timeout ...time.Duration) error {
+	if connection == nil || connection.Connection == nil {
+		return fmt.Errorf(jsql.MSG_ATRIB_REQUIRED, "connection")
+	}
+
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
+
+	return createDB(ctx, connection.Connection.GetParams())
+}
+
+/**
+* DropDB: Drops the database of db.Params ("database") when it exists. It is idempotent. It fails while other sessions are connected to the database.
+* None or 0 timeout means no timeout.
+* @param db *jsql.DB, timeout ...time.Duration
+* @return error
+**/
+func (s *Mssql) DropDB(db *jsql.DB, timeout ...time.Duration) error {
+	database := db.Params.ValStr("", "database")
+	if database == "" {
+		return errors.New("database is required")
+	}
+
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
+
+	return execMaster(ctx, db.Params, fmt.Sprintf("IF DB_ID(%s) IS NOT NULL DROP DATABASE %s", msQuoteText(database), msIdent(database)))
 }

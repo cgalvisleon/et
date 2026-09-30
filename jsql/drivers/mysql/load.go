@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
@@ -147,7 +148,10 @@ func ddlForeignKeys(model *jsql.Model, table string) []string {
 * @param db *sql.DB, model *jsql.Model
 * @return bool, error
 **/
-func (s *Mysql) ExistModel(db *sql.DB, model *jsql.Model) (bool, error) {
+func (s *Mysql) ExistModel(db *sql.DB, model *jsql.Model, timeout ...time.Duration) (bool, error) {
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
+
 	ddlTable(model)
 	schema := "DATABASE()"
 	if model.Schema != "" {
@@ -155,7 +159,7 @@ func (s *Mysql) ExistModel(db *sql.DB, model *jsql.Model) (bool, error) {
 	}
 	query := fmt.Sprintf("SELECT CASE WHEN EXISTS(SELECT 1 FROM information_schema.tables WHERE table_schema = %s AND table_name = %s) THEN 'true' ELSE 'false' END AS `exists`",
 		schema, myQuoteText(sanitizeIdent(model.Name)))
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return false, err
 	}
@@ -172,7 +176,7 @@ func (s *Mysql) ExistModel(db *sql.DB, model *jsql.Model) (bool, error) {
 * @param model *jsql.Model
 * @return string, error
 **/
-func (s *Mysql) Load(model *jsql.Model) (string, error) {
+func (s *Mysql) Load(model *jsql.Model, timeout ...time.Duration) (string, error) {
 	table := ddlTable(model)
 	cols := ddlColumns(model)
 	if len(cols) == 0 {

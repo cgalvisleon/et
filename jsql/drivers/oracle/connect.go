@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -88,14 +89,18 @@ func connectWithRetry(ctx context.Context, dsn string, maxRetries int) (*sql.DB,
 * Connect: Establishes an Oracle connection using the parameters stored in db.
 * Reads host, port, username, password, service_name, ssl and ssl_verify from db.Params.
 * Unlike postgres, the service (database) is not created: it must already exist.
-* @param ctx context.Context, db *jsql.DB
+* With a timeout, connecting fails once it expires; none or 0 means no timeout.
+* @param db *jsql.DB, timeout ...time.Duration
 * @return *sql.DB, error
 **/
-func (s *Oracle) Connect(ctx context.Context, db *jsql.DB) (*sql.DB, error) {
+func (s *Oracle) Connect(db *jsql.DB, timeout ...time.Duration) (*sql.DB, error) {
 	params := db.Params
 	if params.ValStr("", "service_name") == "" {
 		return nil, errors.New("service_name is required")
 	}
+
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
 
 	result, err := connectWithRetry(ctx, chain(params), 5)
 	if err != nil {
@@ -113,4 +118,40 @@ func (s *Oracle) Connect(ctx context.Context, db *jsql.DB) (*sql.DB, error) {
 	result.SetConnMaxIdleTime(time.Duration(connIdleTime) * time.Minute)
 
 	return result, nil
+}
+
+/**
+* CreateDB: Oracle does not create the service (database) from a connection: it must already exist, so this
+* only checks that the service of the connection ("service_name") answers. None or 0 timeout means no timeout.
+* @param connection *jsql.ConnectParams, timeout ...time.Duration
+* @return error
+**/
+func (s *Oracle) CreateDB(connection *jsql.ConnectParams, timeout ...time.Duration) error {
+	if connection == nil || connection.Connection == nil {
+		return fmt.Errorf(jsql.MSG_ATRIB_REQUIRED, "connection")
+	}
+
+	params := connection.Connection.GetParams()
+	if params.ValStr("", "service_name") == "" {
+		return errors.New("service_name is required")
+	}
+
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
+
+	result, err := connectWithRetry(ctx, chain(params), 5)
+	if err != nil {
+		return err
+	}
+
+	return result.Close()
+}
+
+/**
+* DropDB: Not supported: an Oracle service (database) is not dropped from a connection.
+* @param db *jsql.DB, timeout ...time.Duration
+* @return error
+**/
+func (s *Oracle) DropDB(db *jsql.DB, timeout ...time.Duration) error {
+	return fmt.Errorf(jsql.MSG_DRIVER_CANNOT_DROP_DB, jsql.DriverOracle)
 }

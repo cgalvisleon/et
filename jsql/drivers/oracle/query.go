@@ -539,7 +539,7 @@ func oraFrom(query *jsql.Query) string {
 * @param query *jsql.Query
 * @return string, error
 **/
-func (s *Oracle) Query(query *jsql.Query) (string, error) {
+func (s *Oracle) Query(query *jsql.Query, timeout ...time.Duration) (string, error) {
 	if len(query.Froms) == 0 {
 		return "", fmt.Errorf("query has no FROM source")
 	}

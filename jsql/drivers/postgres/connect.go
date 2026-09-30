@@ -113,33 +113,22 @@ func connectWithRetry(ctx context.Context, dsn string, maxRetries int) (*sql.DB,
 }
 
 /**
-* Connect: Establishes a PostgreSQL connection using the parameters stored in db.
-* Reads DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME and DB_SSL_MODE from db.Params.
-* @param ctx context.Context, db *jsql.DB, showLog bool
+* Connect: Establishes a PostgreSQL connection using the parameters stored in db; the database is created
+* when it does not exist. With a timeout, connecting fails once it expires; none or 0 means no timeout.
+* @param db *jsql.DB, timeout ...time.Duration
 * @return *sql.DB, error
 **/
-func (s *Postgres) Connect(ctx context.Context, db *jsql.DB) (*sql.DB, error) {
+func (s *Postgres) Connect(db *jsql.DB, timeout ...time.Duration) (*sql.DB, error) {
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
+
 	params := db.Params
-	dsn := defaultChain(params)
-	result, err := connectWithRetry(ctx, dsn, 5)
+	err := createDB(ctx, params)
 	if err != nil {
 		return nil, err
 	}
 
-	database := params.ValStr("", "database")
-	if database == "" {
-		result.Close()
-		return nil, fmt.Errorf("database is required")
-	}
-
-	err = CreateDatabase(result, database)
-	result.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	dsn = chain(params)
-	result, err = connectWithRetry(ctx, dsn, 5)
+	result, err := connectWithRetry(ctx, chain(params), 5)
 	if err != nil {
 		return nil, err
 	}
@@ -158,18 +147,90 @@ func (s *Postgres) Connect(ctx context.Context, db *jsql.DB) (*sql.DB, error) {
 }
 
 /**
+* createDB: Creates the database of the params ("database") when it does not exist, through the default
+* "postgres" database of the server.
+* @param ctx context.Context, params et.Json
+* @return error
+**/
+func createDB(ctx context.Context, params et.Json) error {
+	database := params.ValStr("", "database")
+	if database == "" {
+		return fmt.Errorf("database is required")
+	}
+
+	server, err := connectWithRetry(ctx, defaultChain(params), 5)
+	if err != nil {
+		return err
+	}
+	defer server.Close()
+
+	return CreateDatabase(ctx, server, database)
+}
+
+/**
+* CreateDB: Creates the database of the connection ("database") when it does not exist. It is idempotent: an
+* existing database is left untouched. None or 0 timeout means no timeout.
+* @param connection *jsql.ConnectParams, timeout ...time.Duration
+* @return error
+**/
+func (s *Postgres) CreateDB(connection *jsql.ConnectParams, timeout ...time.Duration) error {
+	if connection == nil || connection.Connection == nil {
+		return fmt.Errorf(jsql.MSG_ATRIB_REQUIRED, "connection")
+	}
+
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
+
+	return createDB(ctx, connection.Connection.GetParams())
+}
+
+/**
+* DropDB: Drops the database of db.Params ("database") when it exists, through the default "postgres"
+* database of the server. It is idempotent, and it fails while other sessions are connected to the database.
+* None or 0 timeout means no timeout.
+* @param db *jsql.DB, timeout ...time.Duration
+* @return error
+**/
+func (s *Postgres) DropDB(db *jsql.DB, timeout ...time.Duration) error {
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
+
+	params := db.Params
+	database := params.ValStr("", "database")
+	if database == "" {
+		return fmt.Errorf("database is required")
+	}
+
+	server, err := connectWithRetry(ctx, defaultChain(params), 5)
+	if err != nil {
+		return err
+	}
+	defer server.Close()
+
+	exist, err := ExistDatabase(ctx, server, database)
+	if err != nil {
+		return err
+	}
+
+	if !exist {
+		return nil
+	}
+
+	return DropDatabase(ctx, server, database)
+}
+
+/**
 * ExistDatabase: Returns true when a database with the given name exists in the PostgreSQL instance.
-* @param db *sql.DB
-* @param name string
+* @param ctx context.Context, db *sql.DB, name string
 * @return bool, error
 **/
-func ExistDatabase(db *sql.DB, name string) (bool, error) {
+func ExistDatabase(ctx context.Context, db *sql.DB, name string) (bool, error) {
 	query := `
 	SELECT EXISTS(
 	SELECT 1
 	FROM pg_database
 	WHERE UPPER(datname) = UPPER($1));`
-	rows, err := db.Query(query, name)
+	rows, err := db.QueryContext(ctx, query, name)
 	if err != nil {
 		return false, err
 	}
@@ -185,12 +246,11 @@ func ExistDatabase(db *sql.DB, name string) (bool, error) {
 
 /**
 * CreateDatabase: Creates a PostgreSQL database with the given name if it does not already exist.
-* @param db *sql.DB
-* @param name string
+* @param ctx context.Context, db *sql.DB, name string
 * @return error
 **/
-func CreateDatabase(db *sql.DB, name string) error {
-	exist, err := ExistDatabase(db, name)
+func CreateDatabase(ctx context.Context, db *sql.DB, name string) error {
+	exist, err := ExistDatabase(ctx, db, name)
 	if err != nil {
 		return err
 	}
@@ -200,7 +260,7 @@ func CreateDatabase(db *sql.DB, name string) error {
 	}
 
 	sql := fmt.Sprintf(`CREATE DATABASE %s;`, pq.QuoteIdentifier(name))
-	_, err = db.Exec(sql)
+	_, err = db.ExecContext(ctx, sql)
 	if err != nil {
 		return err
 	}
@@ -212,13 +272,12 @@ func CreateDatabase(db *sql.DB, name string) error {
 
 /**
 * DropDatabase: Drops the PostgreSQL database with the given name.
-* @param db *sql.DB
-* @param name string
+* @param ctx context.Context, db *sql.DB, name string
 * @return error
 **/
-func DropDatabase(db *sql.DB, name string) error {
+func DropDatabase(ctx context.Context, db *sql.DB, name string) error {
 	sql := fmt.Sprintf(`DROP DATABASE %s;`, pq.QuoteIdentifier(name))
-	_, err := db.Exec(sql)
+	_, err := db.ExecContext(ctx, sql)
 	if err != nil {
 		return err
 	}

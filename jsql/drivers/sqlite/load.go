@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/cgalvisleon/et/jsql"
 )
@@ -141,10 +142,13 @@ func ddlIndexes(model *jsql.Model, table string) []string {
 * @param db *sql.DB, model *jsql.Model
 * @return bool, error
 **/
-func (s *Sqlite) ExistModel(db *sql.DB, model *jsql.Model) (bool, error) {
+func (s *Sqlite) ExistModel(db *sql.DB, model *jsql.Model, timeout ...time.Duration) (bool, error) {
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
+
 	table := ddlTable(model)
 	query := `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?) AS "exists";`
-	rows, err := db.Query(query, table)
+	rows, err := db.QueryContext(ctx, query, table)
 	if err != nil {
 		return false, err
 	}
@@ -166,7 +170,7 @@ func (s *Sqlite) ExistModel(db *sql.DB, model *jsql.Model) (bool, error) {
 * @param model *jsql.Model
 * @return string, error
 **/
-func (s *Sqlite) Load(model *jsql.Model) (string, error) {
+func (s *Sqlite) Load(model *jsql.Model, timeout ...time.Duration) (string, error) {
 	var sb strings.Builder
 
 	table := ddlTable(model)

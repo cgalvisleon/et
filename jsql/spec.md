@@ -328,16 +328,20 @@ El driver recibe un `Model` para el DDL, un `Query` para el SQL de consulta y un
 
 ```go
 type Driver interface {
-	Connect(ctx context.Context, db *DB) (*sql.DB, error)
-	ExistModel(db *sql.DB, model *Model) (bool, error)
-	Load(model *Model) (string, error)        // DDL: tablas y sus elementos
-	Query(query *Query) (string, error)       // SQL de consulta
-	Command(command *Command) (string, error) // SQL de comando: INSERT, UPDATE, DELETE
+	CreateDB(connection *ConnectParams, timeout ...time.Duration) error // crea la base de la conexión si no existe
+	DropDB(db *DB, timeout ...time.Duration) error                      // elimina la base de los params si existe
+	Connect(db *DB, timeout ...time.Duration) (*sql.DB, error)
+	ExistModel(db *sql.DB, model *Model, timeout ...time.Duration) (bool, error)
+	Load(model *Model, timeout ...time.Duration) (string, error)        // DDL: tablas y sus elementos
+	Query(query *Query, timeout ...time.Duration) (string, error)       // SQL de consulta
+	Command(command *Command, timeout ...time.Duration) (string, error) // SQL de comando: INSERT, UPDATE, DELETE
 }
 ```
 
 - Cada driver vive en `jsql/drivers/<nombre>/`, se registra en `init()` con `jsql.Register(nombre, driver)` y se importa por efecto lateral (`_ "github.com/cgalvisleon/et/jsql/drivers/postgres"`).
 - El driver solo **genera SQL** (y abre la conexión); ejecutarlo, manejar transacciones y correr los triggers es trabajo del núcleo.
+- **Timeout:** cada método recibe un `timeout` opcional y el driver arma su contexto con `jsql.TimeoutContext(timeout...)`: sin timeout o con `0` no hay límite, así que la operación nunca falla por timeout; con un valor mayor falla con `context.DeadlineExceeded` al vencerse. El núcleo pasa el `Timeout` de `ConnectParams` (`DB.timeout`). `Load`, `Query` y `Command` solo generan SQL y no lo usan.
+- `CreateDB` y `DropDB` (expuestos como `jsql.CreateDB(connection, timeout...)` y `jsql.DropDB(db, timeout...)`, que antes cierra el pool) son idempotentes. En postgres, mysql y mssql crean/eliminan la base `database` desde la base del servidor (`postgres`, sin base, `master`), y `Connect` usa `CreateDB`; en sqlite crean/borran el archivo (con sus `-wal` y `-shm`); en oracle el servicio no se crea ni se elimina desde una conexión: `CreateDB` solo comprueba que responde y `DropDB` devuelve `MSG_DRIVER_CANNOT_DROP_DB`. Solo postgres está probado (brecha B8).
 - La conexión se describe con `jsql.Connection` (`GetParams`, `SetDatabase`, `GetDatabase`), creada según `DB_DRIVER` en `conection.go`.
 
 | Driver                           | Constante        | Estado                                                                 |
@@ -412,6 +416,7 @@ Revisado el 2026-09-28 contra el código y la batería `TestCatalog` (`jsql/driv
 | B5 | Driver para varios motores. | `josefina` es solo una constante, sin implementación. | `drivers/` | Bajo |
 | B6 | Los mensajes de error son `MSG_*` de `msg.go`. | `findModel` arma un error con texto fijo («exists in more than one schema»). | `jquery.go` | Bajo |
 | B7 | Probar sin efectos laterales. | `TestCatalog` reescribe `result/*.json`, `result/*.sql` y `result/summary.md` en cada corrida; el resumen deja de reflejar los motores que no estaban disponibles. | `drivers/test/catalog_test.go` | Bajo |
+| B8 | `CreateDB` / `DropDB` probados en todos los drivers (§9). | `TestCreateDropDB` solo corre contra postgres (pasa, 2026-09-30); sqlite, oracle, mysql y mssql se omiten como pendientes (`createDBDrivers`). Su implementación compila pero nunca se ha ejecutado. | `drivers/test/createdb_test.go`, `drivers/{sqlite,oracle,mysql,mssql}/connect.go` | Medio |
 
 ### Orden recomendado
 
@@ -419,4 +424,5 @@ Revisado el 2026-09-28 contra el código y la batería `TestCatalog` (`jsql/driv
 2. **B3:** aceptar `masters` (y `master` por compatibilidad) al leer el JSON.
 3. **B6** y **B7:** mensajes y un modo de la batería que no escriba resultados (por ejemplo, con una variable de entorno).
 4. **B4:** correr la batería contra un SQL Server 2022 (por ejemplo en Docker) antes de declarar el driver completo.
-5. **B5:** fuera de alcance hasta que `josefina` tenga su protocolo estable.
+5. **B8:** agregar cada driver a `createDBDrivers` en `createdb_test.go` y correr `TestCreateDropDB` contra él (sqlite no necesita servidor; en oracle el caso debe esperar el error de `DropDB`).
+6. **B5:** fuera de alcance hasta que `josefina` tenga su protocolo estable.

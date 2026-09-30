@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
@@ -153,7 +154,10 @@ func ddlForeignKeys(model *jsql.Model, table string) []string {
 * @param db *sql.DB, model *jsql.Model
 * @return bool, error
 **/
-func (s *Oracle) ExistModel(db *sql.DB, model *jsql.Model) (bool, error) {
+func (s *Oracle) ExistModel(db *sql.DB, model *jsql.Model, timeout ...time.Duration) (bool, error) {
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
+
 	ddlTable(model)
 	owner := "SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')"
 	if model.Schema != "" {
@@ -164,7 +168,7 @@ func (s *Oracle) ExistModel(db *sql.DB, model *jsql.Model) (bool, error) {
 	WHERE OWNER = %s
 	AND TABLE_NAME = '%s') THEN 'true' ELSE 'false' END AS "exists" FROM DUAL`,
 		owner, jsql.EscapeSQLString(sanitizeIdent(model.Name)))
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return false, err
 	}
@@ -184,7 +188,7 @@ func (s *Oracle) ExistModel(db *sql.DB, model *jsql.Model) (bool, error) {
 * @param model *jsql.Model
 * @return string, error
 **/
-func (s *Oracle) Load(model *jsql.Model) (string, error) {
+func (s *Oracle) Load(model *jsql.Model, timeout ...time.Duration) (string, error) {
 	table := ddlTable(model)
 	cols := ddlColumns(model)
 	if len(cols) == 0 {

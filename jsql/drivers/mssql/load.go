@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
@@ -156,10 +157,13 @@ func ddlForeignKeys(model *jsql.Model, table string) []string {
 * @param db *sql.DB, model *jsql.Model
 * @return bool, error
 **/
-func (s *Mssql) ExistModel(db *sql.DB, model *jsql.Model) (bool, error) {
+func (s *Mssql) ExistModel(db *sql.DB, model *jsql.Model, timeout ...time.Duration) (bool, error) {
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
+
 	table := ddlTable(model)
 	query := fmt.Sprintf("SELECT CASE WHEN OBJECT_ID(%s, N'U') IS NULL THEN 'false' ELSE 'true' END AS [exists]", msQuoteText(table))
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return false, err
 	}
@@ -176,7 +180,7 @@ func (s *Mssql) ExistModel(db *sql.DB, model *jsql.Model) (bool, error) {
 * @param model *jsql.Model
 * @return string, error
 **/
-func (s *Mssql) Load(model *jsql.Model) (string, error) {
+func (s *Mssql) Load(model *jsql.Model, timeout ...time.Duration) (string, error) {
 	table := ddlTable(model)
 	cols := ddlColumns(model)
 	if len(cols) == 0 {

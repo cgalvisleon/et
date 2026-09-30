@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
@@ -252,7 +253,7 @@ func msDeleteSQL(command *jsql.Command) (string, error) {
 * @param command *jsql.Command
 * @return string, error
 **/
-func (s *Mssql) Command(command *jsql.Command) (string, error) {
+func (s *Mssql) Command(command *jsql.Command, timeout ...time.Duration) (string, error) {
 	if command.From == nil || command.From.Model == nil {
 		return "", fmt.Errorf("command without model")
 	}

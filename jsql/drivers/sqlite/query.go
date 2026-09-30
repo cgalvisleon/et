@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
@@ -538,7 +539,7 @@ func sqliteFrom(query *jsql.Query) []string {
 * @param query *jsql.Query
 * @return string, error
 **/
-func (s *Sqlite) Query(query *jsql.Query) (string, error) {
+func (s *Sqlite) Query(query *jsql.Query, timeout ...time.Duration) (string, error) {
 	if len(query.Froms) == 0 {
 		return "", fmt.Errorf("query has no FROM source")
 	}

@@ -109,6 +109,9 @@ Manual alternative: `db.NewModel(...)` + `DefineColumn`/`DefinePrimaryKey`/`Defi
 - **`resilience/`** — retry: `resilience.New(store)`, `LoadInstance(Params{Id, Tag, Description, TotalAttempts, Interval, Tags, Fn, FnArgs})`, `instance.Run(userId)`. Used by `jwf`.
 - **`jwf/`** — workflow engine, detailed below.
 
+- **Crear / eliminar la base** (`Driver.CreateDB` / `Driver.DropDB`, expuestos como `jsql.CreateDB(connection, timeout...)` / `jsql.DropDB(db, timeout...)`; los métodos de `Driver` reciben `timeout ...time.Duration` y usan `jsql.TimeoutContext`: sin timeout o con `0` nunca fallan por timeout): idempotentes, implementados en los cinco drivers (`drivers/<x>/connect.go`); `Connect` de postgres, mysql y mssql usa `CreateDB`; oracle no crea ni elimina el servicio (`DropDB` devuelve `MSG_DRIVER_CANNOT_DROP_DB`). `TestCreateDropDB` (`jsql/drivers/test/createdb_test.go`) solo corre contra postgres; los demás están pendientes (brecha B8 de `jsql/spec.md`).
+- **Probar una conexión sin tocar nada** (`jsql/tester.go`): `jsql.TestConnection(ctx, connection, query)` busca el driver por `connection.GetParams()["driver"]` y, si implementa la interfaz opcional `jsql.Tester` (`Test(ctx, connection, query)`), abre, hace ping, corre la consulta (si hay) y cierra con `jsql.Probe`; si no, `MSG_DRIVER_CANNOT_TEST`. Los cinco drivers la implementan (`drivers/<x>/test.go`) reutilizando su `connectTo`/`dsn`/`chain`: **no crean la base** (a diferencia de `Connect`, que en postgres, mysql y mssql la crea si falta); postgres usa `postgres` y mssql `master` si no viene base; sqlite exige que el archivo exista (abrirlo lo crearía). El contexto acota cuánto tarda.
+
 ### `jwf/` (workflows)
 
 `jwf.New(db *jsql.DB, id, userID)` calls `cache.Load()` + `event.Load()`, builds its own `Storage` (schema hard-coded `"workflows"`), uses `reg.GetUUID(id)` (blank → new UUID). `jwf.Load(db, id, userId)` falls back to `New` if not found. A nil db is not supported.
@@ -133,6 +136,7 @@ result, err := wf.Run(flow.ID, "add", "", projectId, "", et.Json{}, et.Json{}, t
 
 - First `Step` becomes a trigger; the next ones chain through output connections. `flow.Error(...)` attaches an error-port step to the last step. `Step.Definition` can also be a JS body run through `jrex`.
 - Instances are not kept in memory: `Run` creates one (`newInstance`, code from `store.GenSerie(tag+":"+projectId)` when empty) or loads it from `"instances"`; a cache key `instance:<id>:status` (TTL `Flow.TimeAwait`) flags running ones. Status: `CREATED`, `PENDING`, `RUNNING`, `ROLLBACK`, `DONE`, `FAILED`, `CANCEL`, `STOP`. On a step error it retries via `resilience` (if `TotalAttempts != 0`), then follows the error connection.
+- `Run` returns only the result ctx, not the instance id: pass your own id (`reg.GetULID("")`) to read the instance afterwards. `wf.LoadInstance(id)` reads a stored instance as-is (no running check, no flow load, no audit entry) — for status queries; `ErrorInstanceNotFound` if missing. Instances of every workflow share the `instances` table, so filter by `ProjectId` yourself.
 - `jwf.Store`: `Set`/`Get`/`Delete`/`Query(collection, query)` + `SetSeries`/`GetSeries`/`DeleteSeries`/`GenSerie`/`GenValue`. Default impl `jwf.DefineStore(db, schema)` (models `workflows`/`flows`/`steps`/`instances` + `jsql.Series`).
 - `LoadRouter(Router)` registers 11 routes; only the Steps handlers are implemented — the Flows/Instances handler bodies are empty.
 - Quirk: `Flow.Step`/`Error` pass the flow ID as "userId" into step audit logs.

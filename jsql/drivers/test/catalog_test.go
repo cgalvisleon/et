@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
@@ -63,20 +64,20 @@ func (s *recorder) take() []string {
 	return result
 }
 
-func (s *recorder) Load(model *jsql.Model) (string, error) {
-	sql, err := s.Driver.Load(model)
+func (s *recorder) Load(model *jsql.Model, timeout ...time.Duration) (string, error) {
+	sql, err := s.Driver.Load(model, timeout...)
 	s.add("DDL", sql, err)
 	return sql, err
 }
 
-func (s *recorder) Query(query *jsql.Query) (string, error) {
-	sql, err := s.Driver.Query(query)
+func (s *recorder) Query(query *jsql.Query, timeout ...time.Duration) (string, error) {
+	sql, err := s.Driver.Query(query, timeout...)
 	s.add("QUERY", sql, err)
 	return sql, err
 }
 
-func (s *recorder) Command(command *jsql.Command) (string, error) {
-	sql, err := s.Driver.Command(command)
+func (s *recorder) Command(command *jsql.Command, timeout ...time.Duration) (string, error) {
+	sql, err := s.Driver.Command(command, timeout...)
 	s.add(strings.ToUpper(string(command.Type)), sql, err)
 	return sql, err
 }

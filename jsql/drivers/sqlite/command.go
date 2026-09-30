@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
@@ -354,7 +355,7 @@ func sqliteDeleteSQL(command *jsql.Command) (string, error) {
 * @param command *jsql.Command
 * @return string, error
 **/
-func (s *Sqlite) Command(command *jsql.Command) (string, error) {
+func (s *Sqlite) Command(command *jsql.Command, timeout ...time.Duration) (string, error) {
 	switch command.Type {
 	case jsql.INSERT, jsql.BULK:
 		return sqliteInsertSQL(command)

@@ -15,12 +15,12 @@ import (
 * @return void
 **/
 func main() {
-	res, err := resilience.New(nil)
+	res, err := resilience.New()
 	if err != nil {
 		logs.Panic(err)
 	}
 
-	ins := res.LoadInstance(resilience.Params{
+	ins, err := res.LoadInstance(resilience.Params{
 		Id:            "suma",
 		Tag:           "func suma",
 		Description:   "",
@@ -30,7 +30,7 @@ func main() {
 		Fn:            suma,
 		FnArgs:        []interface{}{1, 2},
 	})
-	ins.Run("1234567890")
+	ins.Run()
 
 	utility.AppWait()
 }

@@ -1,8 +1,6 @@
 package jwf
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -11,32 +9,28 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/jsql"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 )
 
 const (
-	packageName = "workflow"
+	EVENT_FLOW_SET = "workflow:flow:set"
+	packageName    = "workflow"
 )
 
 type WorkFlow struct {
-	CreatedAt time.Time                        `json:"created_at"`
-	UpdatedAt time.Time                        `json:"updated_at"`
-	ID        string                           `json:"id"`
-	AuditLog  []et.Json                        `json:"audit_log"`
-	Steps     map[string]*Step                 `json:"steps"`
-	Flows     map[string]*Flow                 `json:"flows"`
-	bindings  map[string]any                   `json:"-"`
-	muFlows   sync.Mutex                       `json:"-"`
-	muSteps   sync.Mutex                       `json:"-"`
-	isInitial bool                             `json:"-"`
-	store     Store                            `json:"-"`
-	isDebug   bool                             `json:"-"`
-	isChanged bool                             `json:"-"`
-	onSave    []func(workflow *WorkFlow) error `json:"-"`
-	onDelete  []func(workflow *WorkFlow) error `json:"-"`
+	CreatedAt time.Time                  `json:"created_at"`
+	UpdatedAt time.Time                  `json:"updated_at"`
+	ID        string                     `json:"id"`
+	Flows     map[string]*Flow           `json:"flows"`
+	TimeAwait time.Duration              `json:"time_await"`
+	AuditLog  []et.Json                  `json:"audit_log"`
+	bindings  map[string]any             `json:"-"`
+	muFlows   sync.Mutex                 `json:"-"`
+	isInitial bool                       `json:"-"`
+	isDebug   bool                       `json:"-"`
+	isChanged bool                       `json:"-"`
+	onChange  []func(data et.Json) error `json:"-"`
 }
 
 /**
@@ -44,7 +38,7 @@ type WorkFlow struct {
 * @param db *jsql.DB, id, userID string
 * @return *WorkFlow
 **/
-func New(db *jsql.DB, id, userID string) (*WorkFlow, error) {
+func New(id string) (*WorkFlow, error) {
 	err := cache.Load()
 	if err != nil {
 		return nil, err
@@ -55,110 +49,20 @@ func New(db *jsql.DB, id, userID string) (*WorkFlow, error) {
 		return nil, err
 	}
 
-	store, err := DefineStore(db, "workflows")
-	if err != nil {
-		return nil, err
-	}
-
-	err = store.DefineInstances(db)
-	if err != nil {
-		return nil, err
-	}
-
 	now := timezone.Now()
 	id = reg.GetUUID(id)
 	result := &WorkFlow{
 		CreatedAt: now,
 		UpdatedAt: now,
 		ID:        id,
-		AuditLog:  make([]et.Json, 0),
-		Steps:     make(map[string]*Step),
 		Flows:     make(map[string]*Flow),
+		TimeAwait: 10 * time.Minute,
+		AuditLog:  make([]et.Json, 0),
 		bindings:  make(map[string]any),
 		muFlows:   sync.Mutex{},
-		muSteps:   sync.Mutex{},
-		store:     store,
-		onSave:    make([]func(workflow *WorkFlow) error, 0),
-		onDelete:  make([]func(workflow *WorkFlow) error, 0),
+		onChange:  make([]func(data et.Json) error, 0),
 	}
-	result.addAuditLog(userID, "new_workflow")
-	_, err = result.up()
-	if err != nil {
-		return nil, err
-	}
-
-	err = result.Save()
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-/**
-* Load
-* @param db *jsql.DB, id, userId string
-* @return *WorkFlow, error
-**/
-func Load(db *jsql.DB, id, userId string) (*WorkFlow, error) {
-	store, err := DefineStore(db, storeWorkflows)
-	if err != nil {
-		return nil, err
-	}
-
-	err = store.DefineInstances(db)
-	if err != nil {
-		return nil, err
-	}
-
-	var def et.Json
-	exists, err := store.Get(storeWorkflows, id, &def)
-	if err != nil {
-		return nil, err
-	}
-
-	if !exists {
-		result, err := New(db, id, userId)
-		if err != nil {
-			return nil, err
-		}
-		return result, nil
-	}
-
-	result := &WorkFlow{
-		ID:        id,
-		store:     store,
-		CreatedAt: def.Time("created_at"),
-		UpdatedAt: def.Time("updated_at"),
-		AuditLog:  def.ArrayJson("audit_log"),
-		Steps:     make(map[string]*Step),
-		Flows:     make(map[string]*Flow),
-		muFlows:   sync.Mutex{},
-		muSteps:   sync.Mutex{},
-		onSave:    make([]func(workflow *WorkFlow) error, 0),
-		onDelete:  make([]func(workflow *WorkFlow) error, 0),
-	}
-
-	steps := def.Json("steps")
-	for id := range steps {
-		_, err := result.loadStep(id)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	flows := def.Json("flows")
-	for id := range flows {
-		_, err := result.loadFlow(id)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	_, err = result.up()
-	if err != nil {
-		return nil, err
-	}
-
+	result.up()
 	return result, nil
 }
 
@@ -167,29 +71,28 @@ func Load(db *jsql.DB, id, userId string) (*WorkFlow, error) {
 * @param store Store
 * @return *WorkFlow
 **/
-func (s *WorkFlow) up() (*WorkFlow, error) {
-	isDebug := envar.GetBool("DEBUG", false)
-	s.bindings = make(map[string]any)
-	s.isDebug = isDebug
-	s.onSave = make([]func(workflow *WorkFlow) error, 0)
-	s.onDelete = make([]func(workflow *WorkFlow) error, 0)
-	s.OnSave(func(workflow *WorkFlow) error {
-		key := fmt.Sprintf("workflow:%s", workflow.ID)
-		event.Publish(key, workflow.ToJson())
-		return nil
-	})
-	s.OnDelete(func(workflow *WorkFlow) error {
-		key := fmt.Sprintf("workflow:%s:delete", workflow.ID)
-		event.Publish(key, et.Json{
-			"id": workflow.ID,
-		})
-		return nil
-	})
-	err := s.init()
-	if err != nil {
-		return nil, err
+func (s *WorkFlow) up() *WorkFlow {
+	s.isDebug = envar.GetBool("DEBUG", false)
+	if s.bindings == nil {
+		s.bindings = make(map[string]any)
 	}
-	return s, nil
+	if s.onChange == nil {
+		s.onChange = make([]func(data et.Json) error, 0)
+	}
+	return s
+}
+
+/**
+* push
+* @return error
+**/
+func (s *WorkFlow) push() {
+	for _, onChange := range s.onChange {
+		err := onChange(s.ToJson())
+		if err != nil {
+			return
+		}
+	}
 }
 
 /**
@@ -213,16 +116,7 @@ func (s *WorkFlow) addAuditLog(userId string, action string) {
 		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
 	}
 	s.isChanged = true
-}
-
-/**
-* Ref
-* @return et.Json
-**/
-func (s *WorkFlow) Ref() et.Json {
-	return et.Json{
-		"id": s.ID,
-	}
+	s.push()
 }
 
 /**
@@ -235,7 +129,6 @@ func (s *WorkFlow) ToJson() et.Json {
 		"updated_at": timezone.Format(s.UpdatedAt, timezone.RFC3339),
 		"id":         s.ID,
 		"flows":      s.Flows,
-		"steps":      s.Steps,
 		"audit_log":  s.AuditLog,
 	}
 }
@@ -249,77 +142,16 @@ func (s *WorkFlow) ToString() string {
 }
 
 /**
-* OnSave
-* @param fn func(workflow *WorkFlow) error
+* OnChange
+* @param fn func(data et.Json) error
 * @return *WorkFlow
 **/
-func (s *WorkFlow) OnSave(fn func(workflow *WorkFlow) error) *WorkFlow {
-	if s.onSave == nil {
-		s.onSave = make([]func(workflow *WorkFlow) error, 0)
+func (s *WorkFlow) OnChange(fn func(data et.Json) error) *WorkFlow {
+	if s.onChange == nil {
+		s.onChange = make([]func(data et.Json) error, 0)
 	}
-	s.onSave = append(s.onSave, fn)
+	s.onChange = append(s.onChange, fn)
 	return s
-}
-
-/**
-* OnDelete
-* @param fn func(workflow *WorkFlow) error
-* @return *WorkFlow
-**/
-func (s *WorkFlow) OnDelete(fn func(workflow *WorkFlow) error) *WorkFlow {
-	if s.onDelete == nil {
-		s.onDelete = make([]func(workflow *WorkFlow) error, 0)
-	}
-	s.onDelete = append(s.onDelete, fn)
-	return s
-}
-
-/**
-* Save
-* @return error
-**/
-func (s *WorkFlow) Save() error {
-	s.isChanged = false
-
-	if s.isDebug {
-		logs.Log(packageName, "save:", s.ToString())
-	}
-
-	if s.store != nil {
-		err := s.store.Set(storeWorkflows, s.ID, s.ID, s.Ref())
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, onSave := range s.onSave {
-		if err := onSave(s); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-/**
-* Delete
-* @return error
-**/
-func (s *WorkFlow) Delete() error {
-	if s.store != nil {
-		err := s.store.Delete(storeWorkflows, s.ID)
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, onDelete := range s.onDelete {
-		if err := onDelete(s); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 /**
@@ -359,161 +191,136 @@ func (s *WorkFlow) getFlow(tag string) (*Flow, bool) {
 }
 
 /**
-* removeFlow
-* @param tag string
+* SetTimeAwait
+* @param time time.Duration
+* @return *WorkFlow
 **/
-func (s *WorkFlow) removeFlow(tag string) {
-	s.muFlows.Lock()
-	defer s.muFlows.Unlock()
-
-	delete(s.Flows, tag)
-}
-
-/**
-* addStep
-* @param instance *Instance
-**/
-func (s *WorkFlow) addStep(step *Step) {
-	s.muSteps.Lock()
-	defer s.muSteps.Unlock()
-
-	s.Steps[step.ID] = step
-}
-
-/**
-* getStep
-* @param id string
-* @return *Step, bool
-**/
-func (s *WorkFlow) getStep(id string) (*Step, bool) {
-	s.muSteps.Lock()
-	defer s.muSteps.Unlock()
-
-	step, exists := s.Steps[id]
-	if !exists {
-		return nil, false
-	}
-
-	return step, true
-}
-
-/**
-* removeStep
-* @param id string
-**/
-func (s *WorkFlow) removeStep(id, userId string) {
-	s.muSteps.Lock()
-	defer s.muSteps.Unlock()
-
-	s.addAuditLog(userId, "remove_step")
-	delete(s.Steps, id)
+func (s *WorkFlow) SetTimeAwait(time time.Duration, userId string) *WorkFlow {
+	s.TimeAwait = time
+	s.addAuditLog(userId, "set_time_await")
+	return s
 }
 
 /**
 * NewFlow
-* @param tag, title, version string
+* @param tag, name, version, ownerId, userId string
 * @return *Flow
 **/
-func (s *WorkFlow) NewFloW(tag, title, version, userId string) *Flow {
-	result := s.newFlow(tag, title, version, userId)
+func (s *WorkFlow) NewFlow(tag, name, version, ownerId, userId string) *Flow {
+	result := NewFlow(tag, name, version, ownerId, userId)
 	s.addAuditLog(userId, "new_flow")
 	s.addFlow(result)
 	return result
 }
 
 /**
-* SetStep
-* @param stepDef et.Json
-* @return *Flow, error
+* getInstance
+* @param id string
+* @return *Instance, error
 **/
-func (s *WorkFlow) SetStep(stepDef et.Json, userId string) (*WorkFlow, error) {
-	var step *Step
-	bt, err := stepDef.ToByte()
-	if err != nil {
-		return s, err
+func (s *WorkFlow) getInstance(id string) (*Instance, bool) {
+	if id == "" {
+		return nil, false
 	}
 
-	err = json.Unmarshal(bt, &step)
+	key := fmt.Sprintf("instance:%s", id)
+	var def et.Json
+	exists, err := cache.GetObject(key, &def)
 	if err != nil {
-		return s, err
+		return nil, false
 	}
 
-	if step.ID == "" {
-		step.ID = reg.UUID()
+	if !exists {
+		return nil, false
 	}
-	step.OwnerId = s.ID
-	step.up(s)
-	s.addAuditLog(userId, "new_step")
-	s.addStep(step)
-	return s, nil
+
+	if def.IsEmpty() {
+		return nil, false
+	}
+
+	flowTag := def.ValStr("", "flow_tag")
+	if flowTag == "" {
+		return nil, false
+	}
+
+	flow, exists := s.getFlow(flowTag)
+	if !exists {
+		return nil, false
+	}
+
+	result, err := flow.LoadInstance(def)
+	if err != nil {
+		return nil, false
+	}
+
+	result.OnChange(func(data et.Json) error {
+		_, err := cache.SetObject(key, data, 0)
+		return err
+	})
+
+	return result, true
 }
 
 /**
-* GetInstance
+* newInstance
+* @param params InstanceParams
+* @return *Instance, error
+**/
+func (s *WorkFlow) newInstance(tag, triggerTag, id, code, userId string) (*Instance, error) {
+	flow, exists := s.getFlow(tag)
+	if !exists {
+		return nil, ErrrFlowNotFound
+	}
+
+	trigger, exists := flow.getTrigger(triggerTag)
+	if !exists {
+		return nil, ErrrTriggerNotFound
+	}
+
+	name := flow.Name
+	if code != "" {
+		name = fmt.Sprintf("%s %s", flow.Name, code)
+	}
+
+	id = reg.GetUUID(id)
+	key := fmt.Sprintf("instance:%s", id)
+	result := flow.NewInstance(id, code, name, trigger)
+
+	result.OnChange(func(data et.Json) error {
+		_, err := cache.SetObject(key, data, 0)
+		return err
+	})
+
+	s.addAuditLog(userId, "new_instance")
+	return result, nil
+}
+
+/**
+* GetFlow
 * @param tag, triggerTag, id, projectId, code, userId string
 * @return *Instance, error
 **/
-func (s *WorkFlow) GetInstance(tag, triggerTag, id, projectId, code, userId string) (*Instance, error) {
+func (s *WorkFlow) GetInstance(tag, triggerTag, id, code, userId string) (*Instance, error) {
 	id = reg.GetULID(id)
-	instance, err := s.getInstance(id, userId)
-	if errors.Is(err, ErrorInstanceNotFound) {
-		instance, err = s.newInstance(projectId, tag, triggerTag, id, code, userId)
+	instance, exists := s.getInstance(id)
+	if !exists {
+		instance, err := s.newInstance(tag, triggerTag, id, code, userId)
 		if err != nil {
 			return nil, err
 		}
-		errStatus := instance.setStatus(PENDING)
-		if errStatus != nil {
-			return nil, errStatus
-		}
-	}
-	if err != nil {
-		return nil, err
+		return instance, nil
 	}
 
 	return instance, nil
 }
 
 /**
-* LoadInstance: Una instancia guardada, solo para leerla (su estado, su contexto y sus resultados): no revisa si está
-* corriendo, no carga su flujo ni deja auditoría.
+* StopInstance
 * @param id string
-* @return *Instance, error
 **/
-func (s *WorkFlow) LoadInstance(id string) (*Instance, error) {
-	if s.store == nil || id == "" {
-		return nil, ErrorInstanceNotFound
-	}
-
-	var result *Instance
-	exists, err := s.store.Get(storeInstances, id, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	if !exists || result == nil {
-		return nil, ErrorInstanceNotFound
-	}
-
-	return result, nil
-}
-
-/**
-* ValidStatus
-* @param instance *Instance
-* @return et.Json, error
-**/
-func (s *WorkFlow) ValidStatus(instance *Instance) error {
-	if instance.Status == DONE {
-		return errors.New(MSG_INSTANCE_ALREADY_DONE)
-	} else if instance.Status == RUNNING {
-		return errors.New(MSG_INSTANCE_ALREADY_RUNNING)
-	} else if instance.Status == ROLLBACK {
-		return errors.New(MSG_INSTANCE_ROLLBACK)
-	} else if instance.Status == CANCEL {
-		return errors.New(MSG_INSTANCE_CANCEL)
-	}
-
-	return nil
+func (s *WorkFlow) StopInstance(id string) {
+	key := fmt.Sprintf("instance:%s:stop", id)
+	cache.Set(key, "true", s.TimeAwait)
 }
 
 /**
@@ -522,86 +329,30 @@ func (s *WorkFlow) ValidStatus(instance *Instance) error {
 * @return et.Json, error
 **/
 func (s *WorkFlow) RunInstance(instance *Instance, ctx, tags et.Json, await bool, userId string) (et.Json, error) {
+	defer func() {
+		key := fmt.Sprintf("instance:%s", instance.ID)
+		cache.Delete(key)
+	}()
+
 	instance.setTag(tags)
-	result, err := instance.run(ctx, await, userId)
+	result, err := instance.Run(ctx, await, userId)
 	if err != nil {
 		return et.Json{}, err
 	}
-
-	key := fmt.Sprintf("instance:%s:status", instance.ID)
-	cache.Delete(key)
 
 	return result, nil
 }
 
 /**
 * Run
-* @param flowId, tag, id, projectId, code string, ctx, tags et.Json, await bool, userId string
+* @param tag, triggerTag, id, code string, ctx, tags et.Json, await bool, userId string
 * @return *Instance, error
 **/
-func (s *WorkFlow) Run(tag, triggerTag, id, projectId, code string, ctx, tags et.Json, await bool, userId string) (et.Json, error) {
-	instance, err := s.GetInstance(tag, triggerTag, id, projectId, code, userId)
+func (s *WorkFlow) Run(tag, triggerTag, id, code string, ctx, tags et.Json, await bool, userId string) (et.Json, error) {
+	instance, err := s.GetInstance(tag, triggerTag, id, code, userId)
 	if err != nil {
 		return et.Json{}, err
 	}
 
 	return s.RunInstance(instance, ctx, tags, await, userId)
-}
-
-/**
-* SetFlow: Loads a whole flow from its JSON (the Flow's own names: tag, title, version, steps as a map node → step,
-* connections and triggers) keeping the ids of its nodes, so the connections stay valid, and adds it to the workflow.
-* Without triggers, they are the steps of kind trigger.
-* @param def et.Json, userId string
-* @return *Flow, error
-**/
-func (s *WorkFlow) SetFlow(def et.Json, userId string) (*Flow, error) {
-	var flow *Flow
-	bt, err := def.ToByte()
-	if err != nil {
-		return nil, err
-	}
-
-	if err := json.Unmarshal(bt, &flow); err != nil {
-		return nil, err
-	}
-
-	if flow == nil || flow.Tag == "" {
-		return nil, ErrrFlowNotFound
-	}
-
-	if flow.ID == "" {
-		flow.ID = reg.UUID()
-	}
-	if flow.Steps == nil {
-		flow.Steps = make(map[string]*Step)
-	}
-	if flow.TimeAwait == 0 {
-		flow.TimeAwait = 1 * time.Minute
-	}
-
-	flow.WorkflowId = s.ID
-	for id, step := range flow.Steps {
-		if step == nil {
-			delete(flow.Steps, id)
-			continue
-		}
-
-		if step.ID == "" {
-			step.ID = id
-		}
-		step.OwnerId = flow.ID
-		step.up(s)
-	}
-
-	if len(flow.Triggers) == 0 {
-		for id, step := range flow.Steps {
-			if step.Kind == KindTrigger {
-				flow.Triggers = append(flow.Triggers, &Trigger{Tag: step.Tag, StartId: id})
-			}
-		}
-	}
-
-	s.addAuditLog(userId, "set_flow")
-	return flow.up(s), nil
 }

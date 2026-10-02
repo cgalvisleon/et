@@ -16,20 +16,6 @@ const (
 	storeSteps     = "steps"
 )
 
-type Store interface {
-	Set(collection, id, ownerId string, obj any) error
-	SetInstance(id, workflowId, projectId, flowId, flowTag, code, title string, status Status, obj any) error
-	Get(collection, id string, dest any) (bool, error)
-	Delete(collection, id string) error
-	Query(collection string, query et.Json) (et.Items, error)
-	// Series
-	SetSeries(tag string, format string, value int) error
-	GetSeries(tag string) (et.Item, error)
-	DeleteSeries(tag string) error
-	GenSerie(tag string) (string, error)
-	GenValue(tag string) (int, error)
-}
-
 type Storage struct {
 	db     *jsql.DB
 	series *jsql.Series

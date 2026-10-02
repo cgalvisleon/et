@@ -7,9 +7,7 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrex"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 )
@@ -46,32 +44,30 @@ var (
 type fnPublish func(flow *Flow, ctx et.Json) (et.Json, error)
 
 type Step struct {
-	CreatedAt   time.Time                `json:"created_at"`
-	UpdatedAt   time.Time                `json:"updated_at"`
-	OwnerId     string                   `json:"owner_id"`
-	ID          string                   `json:"id"`
-	Kind        Kind                     `json:"kind"`
-	Tag         string                   `json:"tag"`
-	Version     string                   `json:"version"`
-	Status      Status                   `json:"status"`
-	Name        string                   `json:"name"`
-	Description string                   `json:"description"`
-	Definition  string                   `json:"definition"`
-	OnPublish   string                   `json:"on_publish"`
-	Config      et.Json                  `json:"config"`
-	Params      et.Json                  `json:"params"`
-	Inputs      int                      `json:"inputs"`
-	Outputs     int                      `json:"outputs"`
-	Stop        bool                     `json:"stop"`
-	AuditLog    []et.Json                `json:"audit_log"`
-	definition  fnStep                   `json:"-"`
-	onPublish   fnPublish                `json:"-"`
-	isDebug     bool                     `json:"-"`
-	isChanged   bool                     `json:"-"`
-	store       Store                    `json:"-"`
-	bindings    map[string]any           `json:"-"`
-	onSave      []func(step *Step) error `json:"-"`
-	onDelete    []func(step *Step) error `json:"-"`
+	CreatedAt   time.Time                  `json:"created_at"`
+	UpdatedAt   time.Time                  `json:"updated_at"`
+	OwnerId     string                     `json:"owner_id"`
+	ID          string                     `json:"id"`
+	Kind        Kind                       `json:"kind"`
+	Tag         string                     `json:"tag"`
+	Version     string                     `json:"version"`
+	Status      Status                     `json:"status"`
+	Name        string                     `json:"name"`
+	Description string                     `json:"description"`
+	Definition  string                     `json:"definition"`
+	OnPublish   string                     `json:"on_publish"`
+	Config      et.Json                    `json:"config"`
+	Params      et.Json                    `json:"params"`
+	Inputs      int                        `json:"inputs"`
+	Outputs     int                        `json:"outputs"`
+	Stop        bool                       `json:"stop"`
+	AuditLog    []et.Json                  `json:"audit_log"`
+	fn          fnStep                     `json:"-"`
+	onPublish   fnPublish                  `json:"-"`
+	isDebug     bool                       `json:"-"`
+	isChanged   bool                       `json:"-"`
+	bindings    map[string]any             `json:"-"`
+	onChange    []func(data et.Json) error `json:"-"`
 }
 
 /**
@@ -105,91 +101,21 @@ func newStep(ownerId, id string, kind Kind, tag, version, name string) *Step {
 		Outputs:     1,
 		Stop:        false,
 		AuditLog:    make([]et.Json, 0),
+		bindings:    make(map[string]any),
+		onChange:    make([]func(data et.Json) error, 0),
 	}
-	return result
+	return result.Up()
 }
 
 /**
-* newStep
-* @param kind Kind, tag, version, title, userId string
+* up
 * @return *Step
 **/
-func (s *WorkFlow) newStep(kind Kind, id, tag, version, title, userId string) *Step {
-	result := newStep(s.ID, id, kind, tag, version, title)
-	s.addAuditLog(userId, "new_step")
-	s.addStep(result)
-	return result.up(s)
-}
-
-/**
-* loadStep
-* @param id, userId string
-* @return *Step, error
-**/
-func (s *WorkFlow) loadStep(id string) (*Step, error) {
-	result, exists := s.getStep(id)
-	if exists {
-		return result, nil
+func (s *Step) Up() *Step {
+	if s.onChange == nil {
+		s.onChange = make([]func(data et.Json) error, 0)
 	}
-
-	if s.store == nil {
-		return nil, ErrrStepNotFound
-	}
-
-	exists, err := s.store.Get(storeSteps, id, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	if !exists {
-		return nil, ErrrStepNotFound
-	}
-
-	result.up(s)
-	s.addStep(result)
-	return result, nil
-}
-
-/**
-* deleteStep
-* @param id string
-* @return error
-**/
-func (s *WorkFlow) deleteStep(id string) error {
-	step, exists := s.Steps[id]
-	if !exists {
-		return ErrrStepNotFound
-	}
-
-	if s.store == nil {
-		return ErrrStepNotFound
-	}
-
-	err := s.store.Delete(storeSteps, id)
-	if err != nil {
-		return err
-	}
-
-	for _, onDelete := range step.onDelete {
-		err := onDelete(step)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-/**
-* ToJson
-* @return et.Json
-**/
-func (s *Step) ref() et.Json {
-	return et.Json{
-		"id":   s.ID,
-		"tag":  s.Tag,
-		"name": s.Name,
-	}
+	return s
 }
 
 /**
@@ -208,6 +134,14 @@ func (s *Step) ToJson() et.Json {
 		"status":      s.Status,
 		"name":        s.Name,
 		"description": s.Description,
+		"definition":  s.Definition,
+		"on_publish":  s.OnPublish,
+		"config":      s.Config,
+		"params":      s.Params,
+		"inputs":      s.Inputs,
+		"outputs":     s.Outputs,
+		"stop":        s.Stop,
+		"audit_log":   s.AuditLog,
 	}
 }
 
@@ -217,32 +151,6 @@ func (s *Step) ToJson() et.Json {
 **/
 func (s *Step) ToString() string {
 	return s.ToJson().ToString()
-}
-
-/**
-* up
-* @param workflow *WorkFlow
-* @return *Step
-**/
-func (s *Step) up(workflow *WorkFlow) *Step {
-	s.store = workflow.store
-	s.isDebug = workflow.isDebug
-	s.bindings = workflow.bindings
-	s.onSave = make([]func(step *Step) error, 0)
-	s.onDelete = make([]func(step *Step) error, 0)
-	s.OnSave(func(step *Step) error {
-		key := fmt.Sprintf("step:%s", step.ID)
-		event.Publish(key, step.ToJson())
-		return nil
-	})
-	s.OnDelete(func(step *Step) error {
-		key := fmt.Sprintf("step:%s:delete", step.ID)
-		event.Publish(key, et.Json{
-			"id": step.ID,
-		})
-		return nil
-	})
-	return s
 }
 
 /**
@@ -266,64 +174,25 @@ func (s *Step) addAuditLog(userId string, action string) {
 		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
 	}
 	s.isChanged = true
-}
-
-/**
-* OnSave
-* @param fn func(step *Step, userId string) error
-* @return *Step
-**/
-func (s *Step) OnSave(fn func(step *Step) error) *Step {
-	if s.onSave == nil {
-		s.onSave = make([]func(step *Step) error, 0)
-	}
-	s.onSave = append(s.onSave, fn)
-	return s
-}
-
-/**
-* OnDelete
-* @param fn func(step *Step, userId string) error
-* @return *Step
-**/
-func (s *Step) OnDelete(fn func(step *Step) error) *Step {
-	if s.onDelete == nil {
-		s.onDelete = make([]func(step *Step) error, 0)
-	}
-	s.onDelete = append(s.onDelete, fn)
-	return s
-}
-
-/**
-* save
-* @return error
-**/
-func (s *Step) save() error {
-	if s.Kind == KindFunction {
-		return errors.New(MSG_STEP_IS_FUNCTION)
-	}
-
-	s.isChanged = false
-
-	if s.isDebug {
-		logs.Log(packageName, "save:", s.ToString())
-	}
-
-	if s.store != nil {
-		err := s.store.Set(storeSteps, s.ID, s.OwnerId, s)
+	for _, fn := range s.onChange {
+		err := fn(s.ToJson())
 		if err != nil {
-			return err
+			return
 		}
 	}
+}
 
-	for _, onSave := range s.onSave {
-		err := onSave(s)
-		if err != nil {
-			return err
-		}
+/**
+* OnChange
+* @param fn func(data et.Json) error
+* @return *Step
+**/
+func (s *Step) OnChange(fn func(data et.Json) error) *Step {
+	if s.onChange == nil {
+		s.onChange = make([]func(data et.Json) error, 0)
 	}
-
-	return nil
+	s.onChange = append(s.onChange, fn)
+	return s
 }
 
 /**
@@ -332,17 +201,11 @@ func (s *Step) save() error {
 * @return error
 **/
 func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
-	if s.definition != nil {
-		errStatus := instance.setStatus(RUNNING)
-		if errStatus != nil {
-			return et.Json{}, errStatus
-		}
-		result, err := s.definition(instance, ctx)
+	if s.fn != nil {
+		instance.setStatus(RUNNING)
+		result, err := s.fn(instance, ctx)
 		if err != nil {
-			errStatus := instance.setStatus(FAILED)
-			if errStatus != nil {
-				return et.Json{}, errStatus
-			}
+			instance.setStatus(FAILED)
 			return et.Json{}, err
 		}
 		return result, nil
@@ -358,18 +221,15 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 	}
 
 	runJrex := func(rex *jrex.Instance, script string) (et.Json, error) {
-		errStatus := instance.setStatus(RUNNING)
-		if errStatus != nil {
-			return et.Json{}, errStatus
+		instance.setStatus(RUNNING)
+		if script == "" {
+			return et.Json{}, nil
 		}
 		rex.SetCtx(ctx)
 		rex.SetCode(script)
 		_, err := rex.Run()
 		if err != nil {
-			errStatus := instance.setStatus(FAILED)
-			if errStatus != nil {
-				return et.Json{}, errStatus
-			}
+			instance.setStatus(FAILED)
 			return et.Json{}, err
 		}
 		return rex.Ctx, nil
@@ -395,9 +255,6 @@ func (s *Step) runOnPublish(flow *Flow, ctx et.Json) (et.Json, error) {
 
 	initJrex := func() *jrex.Instance {
 		result := jrex.NewInstance()
-		for name, binding := range flow.workflow.bindings {
-			result.Set(name, binding)
-		}
 		result.Set("params", s.Params)
 		result.Set("flow", flow)
 		return result
@@ -431,9 +288,9 @@ func (s *Step) setStatus(status Status, userId string) error {
 		return nil
 	}
 
-	s.addAuditLog(userId, fmt.Sprintf("update status: %s", status))
 	s.Status = status
-	return s.save()
+	s.addAuditLog(userId, fmt.Sprintf("update status: %s", status))
+	return nil
 }
 
 /**
@@ -454,59 +311,4 @@ func (s *Step) setDefinition(definition string) *Step {
 func (s *Step) setOnPublish(onPublish string) *Step {
 	s.OnPublish = onPublish
 	return s
-}
-
-/**
-* put
-* @param version, title, description string, config et.Json, params et.Json, userId string
-* @return error
-**/
-func (s *Step) put(def et.Json, userId string) error {
-	if s.store == nil {
-		return errors.New(MSG_WORKFLOW_STORE_IS_NIL)
-	}
-
-	version := def.Str("version")
-	if version != "" && s.Version != version {
-		s.addAuditLog(userId, fmt.Sprintf("update_version old:%s", s.Version))
-		s.Version = version
-	}
-
-	name := def.Str("name")
-	if name != "" && s.Name != name {
-		s.addAuditLog(userId, fmt.Sprintf("update_name old:%s", s.Name))
-		s.Name = name
-	}
-
-	description := def.Str("description")
-	if description != "" && s.Description != description {
-		s.addAuditLog(userId, fmt.Sprintf("update_description old:%s", s.Description))
-		s.Description = description
-	}
-
-	config := def.Json("config")
-	if len(config) > 0 && s.Config.ToString() != config.ToString() {
-		s.addAuditLog(userId, "update_config")
-		s.Config = config
-	}
-
-	params := def.Json("params")
-	if len(params) > 0 && s.Params.ToString() != params.ToString() {
-		s.addAuditLog(userId, "update_params")
-		s.Params = params
-	}
-
-	definition := def.Str("definition")
-	if definition != "" && s.Definition != definition {
-		s.addAuditLog(userId, "update_definition")
-		s.Definition = definition
-	}
-
-	onPublish := def.Str("on_publish")
-	if onPublish != "" && s.OnPublish != onPublish {
-		s.addAuditLog(userId, "update_on_publish")
-		s.OnPublish = onPublish
-	}
-
-	return s.save()
 }

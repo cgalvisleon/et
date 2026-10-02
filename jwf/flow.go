@@ -3,14 +3,11 @@ package jwf
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"slices"
 	"time"
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
 )
@@ -23,7 +20,8 @@ const (
 )
 
 var (
-	ErrrFlowNotFound = errors.New(MSG_FLOW_NOT_FOUND)
+	ErrrFlowNotFound    = errors.New(MSG_FLOW_NOT_FOUND)
+	ErrrTriggerNotFound = errors.New(MSG_TRIGGER_NOT_FOUND)
 )
 
 type Port string
@@ -71,38 +69,35 @@ type FlowDefinition struct {
 type fnStep func(instance *Instance, ctx et.Json) (et.Json, error)
 
 type Flow struct {
-	CreatedAt     time.Time                `json:"created_at"`
-	UpdatedAt     time.Time                `json:"updated_at"`
-	WorkflowId    string                   `json:"workflow_id"`
-	ID            string                   `json:"id"`
-	Tag           string                   `json:"tag"`
-	Name          string                   `json:"name"`
-	Description   string                   `json:"description"`
-	Version       string                   `json:"version"`
-	Steps         map[string]*Step         `json:"steps"`
-	Connections   []*Connection            `json:"connections"`
-	Triggers      []*Trigger               `json:"triggers"`
-	TotalAttempts int                      `json:"total_attempts"`
-	TimeAttempts  time.Duration            `json:"time_attempts"`
-	TimeAwait     time.Duration            `json:"time_await"`
-	Published     bool                     `json:"published"`
-	AuditLog      []et.Json                `json:"audit_log"`
-	isDebug       bool                     `json:"-"`
-	isChanged     bool                     `json:"-"`
-	workflow      *WorkFlow                `json:"-"`
-	store         Store                    `json:"-"`
-	onSave        []func(flow *Flow) error `json:"-"`
-	onDelete      []func(flow *Flow) error `json:"-"`
-	step          *Step                    `json:"-"`
-	err           error                    `json:"-"`
+	CreatedAt     time.Time                  `json:"created_at"`
+	UpdatedAt     time.Time                  `json:"updated_at"`
+	OwnerId       string                     `json:"owner_id"`
+	ID            string                     `json:"id"`
+	Tag           string                     `json:"tag"`
+	Name          string                     `json:"name"`
+	Description   string                     `json:"description"`
+	Version       string                     `json:"version"`
+	Steps         map[string]*Step           `json:"steps"`
+	Connections   []*Connection              `json:"connections"`
+	Triggers      []*Trigger                 `json:"triggers"`
+	TotalAttempts int                        `json:"total_attempts"`
+	TimeAttempts  time.Duration              `json:"time_attempts"`
+	TimeAwait     time.Duration              `json:"time_await"`
+	Resources     []et.Json                  `json:"resources"`
+	Published     bool                       `json:"published"`
+	AuditLog      []et.Json                  `json:"audit_log"`
+	isDebug       bool                       `json:"-"`
+	isChanged     bool                       `json:"-"`
+	onChange      []func(data et.Json) error `json:"-"`
+	step          *Step                      `json:"-"`
 }
 
 /**
 * newFlow
-* @param tag, name, version, userId string
+* @param tag, name, version, ownerId, userId string
 * @return *Flow
 **/
-func (s *WorkFlow) newFlow(tag, name, version, userId string) *Flow {
+func NewFlow(tag, name, version, ownerId, userId string) *Flow {
 	if version == "" {
 		version = "1.0.0"
 	}
@@ -111,7 +106,7 @@ func (s *WorkFlow) newFlow(tag, name, version, userId string) *Flow {
 	result := &Flow{
 		CreatedAt:     now,
 		UpdatedAt:     now,
-		WorkflowId:    s.ID,
+		OwnerId:       ownerId,
 		ID:            reg.UUID(),
 		Tag:           tag,
 		Name:          name,
@@ -122,39 +117,33 @@ func (s *WorkFlow) newFlow(tag, name, version, userId string) *Flow {
 		Triggers:      make([]*Trigger, 0),
 		TotalAttempts: 0,
 		TimeAttempts:  0,
-		TimeAwait:     1 * time.Minute,
+		TimeAwait:     10 * time.Minute,
+		Resources:     make([]et.Json, 0),
 		Published:     false,
 		AuditLog:      make([]et.Json, 0),
 	}
-	s.addAuditLog(userId, "new_flow")
-	return result.up(s)
+	result.up()
+	result.addAuditLog(userId, "new_flow")
+	return result
 }
 
 /**
-* loadFlow
-* @param id string
+* LoadFlow
+* @param def et.Json
 * @return *Flow, error
 **/
-func (s *WorkFlow) loadFlow(tag string) (*Flow, error) {
-	result, exists := s.getFlow(tag)
-	if exists {
-		return result, nil
-	}
-
-	if s.store == nil {
-		return nil, ErrrFlowNotFound
-	}
-
-	exists, err := s.store.Get(storeFlows, tag, &result)
+func LoadFlow(def et.Json) (*Flow, error) {
+	bt, err := def.ToByte()
 	if err != nil {
 		return nil, err
 	}
 
-	if !exists {
-		return nil, ErrrFlowNotFound
+	var result *Flow
+	if err := json.Unmarshal(bt, &result); err != nil {
+		return nil, err
 	}
 
-	return result.up(s), nil
+	return result.up(), nil
 }
 
 /**
@@ -162,25 +151,10 @@ func (s *WorkFlow) loadFlow(tag string) (*Flow, error) {
 * @param workflow *WorkFlow
 * @return *Flow
 **/
-func (s *Flow) up(workflow *WorkFlow) *Flow {
-	s.workflow = workflow
-	s.store = workflow.store
-	s.isDebug = workflow.isDebug
-	s.onSave = make([]func(flow *Flow) error, 0)
-	s.onDelete = make([]func(flow *Flow) error, 0)
-	s.OnSave(func(flow *Flow) error {
-		key := fmt.Sprintf("flow:%s", flow.ID)
-		event.Publish(key, flow.ToJson())
-		return nil
-	})
-	s.OnDelete(func(flow *Flow) error {
-		key := fmt.Sprintf("flow:%s:delete", flow.ID)
-		event.Publish(key, et.Json{
-			"id": flow.ID,
-		})
-		return nil
-	})
-	workflow.addFlow(s)
+func (s *Flow) up() *Flow {
+	if s.onChange == nil {
+		s.onChange = make([]func(data et.Json) error, 0)
+	}
 	return s
 }
 
@@ -205,78 +179,25 @@ func (s *Flow) addAuditLog(userId string, action string) {
 		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
 	}
 	s.isChanged = true
+	for _, fn := range s.onChange {
+		err := fn(s.ToJson())
+		if err != nil {
+			return
+		}
+	}
 }
 
 /**
-* OnSave
-* @param fn func(flow *Flow) error
+* OnChange
+* @param fn func(data et.Json) error
 * @return *Flow
 **/
-func (s *Flow) OnSave(fn func(flow *Flow) error) *Flow {
-	if s.onSave == nil {
-		s.onSave = make([]func(flow *Flow) error, 0)
+func (s *Flow) OnChange(fn func(data et.Json) error) *Flow {
+	if s.onChange == nil {
+		s.onChange = make([]func(data et.Json) error, 0)
 	}
-	s.onSave = append(s.onSave, fn)
+	s.onChange = append(s.onChange, fn)
 	return s
-}
-
-/**
-* OnDelete
-* @param fn func(flow *Flow) error
-* @return *Step
-**/
-func (s *Flow) OnDelete(fn func(flow *Flow) error) *Flow {
-	if s.onDelete == nil {
-		s.onDelete = make([]func(flow *Flow) error, 0)
-	}
-	s.onDelete = append(s.onDelete, fn)
-	return s
-}
-
-/**
-* save
-* @return error
-**/
-func (s *Flow) Save() error {
-	s.isChanged = false
-	data := s.ToJson()
-
-	if s.isDebug {
-		logs.Log(packageName, "save:", data.ToString())
-	}
-
-	if s.store != nil {
-		err := s.store.Set(storeFlows, s.Tag, s.WorkflowId, s)
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, onSave := range s.onSave {
-		err := onSave(s)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-/**
-* ToJson
-* @return et.Json
-**/
-func (s *Flow) ref() et.Json {
-	steps := []et.Json{}
-	for _, step := range s.Steps {
-		steps = append(steps, step.ref())
-	}
-	return et.Json{
-		"id":    s.ID,
-		"tag":   s.Tag,
-		"name":  s.Name,
-		"steps": steps,
-	}
 }
 
 /**
@@ -287,7 +208,7 @@ func (s *Flow) ToJson() et.Json {
 	return et.Json{
 		"created_at":     timezone.Format(s.CreatedAt, timezone.RFC3339),
 		"updated_at":     timezone.Format(s.UpdatedAt, timezone.RFC3339),
-		"workflow_id":    s.WorkflowId,
+		"owner_id":       s.OwnerId,
 		"id":             s.ID,
 		"tag":            s.Tag,
 		"name":           s.Name,
@@ -295,8 +216,11 @@ func (s *Flow) ToJson() et.Json {
 		"version":        s.Version,
 		"steps":          s.Steps,
 		"connections":    s.Connections,
+		"triggers":       s.Triggers,
 		"total_attempts": s.TotalAttempts,
 		"time_attempts":  s.TimeAttempts.String(),
+		"time_await":     s.TimeAwait.String(),
+		"resources":      s.Resources,
 		"published":      s.Published,
 		"audit_log":      s.AuditLog,
 	}
@@ -339,86 +263,47 @@ func (s *Flow) getTrigger(tag string) (*Trigger, bool) {
 }
 
 /**
-* getTarget
-* @param stepId string
-* @return *Connection, error
-**/
-func (s *Flow) getTarget(stepId string, index int) (*Step, bool) {
-	idx := slices.IndexFunc(s.Connections, func(connection *Connection) bool {
-		return connection.Kind == PortOutput && connection.Source.StepId == stepId && connection.Target.Index == index
-	})
-
-	if idx == -1 {
-		return nil, false
-	}
-
-	conn := s.Connections[idx]
-	step, exists := s.getStep(conn.Target.StepId)
-	if !exists {
-		return nil, false
-	}
-
-	return step, true
-}
-
-/**
-* getSource
-* @param stepId string, index int
-* @return *Connection, bool
-**/
-func (s *Flow) getSource(stepId string, index int) (*Step, bool) {
-	idx := slices.IndexFunc(s.Connections, func(connection *Connection) bool {
-		return connection.Kind == PortOutput && connection.Target.StepId == stepId && connection.Target.Index == index
-	})
-
-	if idx == -1 {
-		return nil, false
-	}
-
-	conn := s.Connections[idx]
-	step, exists := s.getStep(conn.Source.StepId)
-	if !exists {
-		return nil, false
-	}
-
-	return step, true
-}
-
-/**
-* getError
-* @param stepId string, index int
-* @return *Connection, bool
-**/
-func (s *Flow) getError(stepId string, index int) (*Step, bool) {
-	idx := slices.IndexFunc(s.Connections, func(connection *Connection) bool {
-		return connection.Kind == PortError && connection.Source.StepId == stepId && connection.Target.Index == index
-	})
-
-	if idx == -1 {
-		return nil, false
-	}
-
-	conn := s.Connections[idx]
-	step, exists := s.getStep(conn.Target.StepId)
-	if !exists {
-		return nil, false
-	}
-
-	return step, true
-}
-
-/**
 * getStep
 * @param stepId string
 * @return *Step, bool
 **/
 func (s *Flow) getStep(stepId string) (*Step, bool) {
 	step, exists := s.Steps[stepId]
-	if !exists {
-		return nil, false
+	if exists {
+		return step, true
 	}
 
-	return step, true
+	return nil, false
+}
+
+/**
+* getOutput
+* @param stepId string, index int
+* @return *Connection, bool
+**/
+func (s *Flow) getOutput(stepId string, index int) (*Connection, bool) {
+	for _, connection := range s.Connections {
+		if connection.Kind == PortOutput && connection.Source.StepId == stepId && connection.Source.Index == index {
+			return connection, true
+		}
+	}
+
+	return nil, false
+}
+
+/**
+* getError
+* @param stepId string
+* @return *Connection, bool
+**/
+func (s *Flow) getError(stepId string) (*Connection, bool) {
+	for _, connection := range s.Connections {
+		if connection.Kind == PortError && connection.Source.StepId == stepId && connection.Source.Index == 0 {
+			return connection, true
+		}
+	}
+
+	return nil, false
 }
 
 /**
@@ -466,12 +351,12 @@ func (s *Flow) addConnection(sourceId string, targetId string, index int, kind P
 
 /**
 * addStep
-* @param tag, version, title string, kind Port, fn fnStep, userId string
+* @param tag, version, title string, kind Port, fn fnStep
 * @return *Flow
 **/
-func (s *Flow) addStep(kind Kind, tag, version, title string, port Port, fn fnStep, userId string) *Flow {
-	result := s.workflow.newStep(kind, "", tag, version, title, userId)
-	result.definition = fn
+func (s *Flow) addStep(kind Kind, tag, version, title string, port Port, fn fnStep) *Flow {
+	result := newStep(s.ID, "", kind, tag, version, title)
+	result.fn = fn
 	s.Steps[result.ID] = result
 
 	if s.step == nil {
@@ -481,7 +366,6 @@ func (s *Flow) addStep(kind Kind, tag, version, title string, port Port, fn fnSt
 
 	_, exists := s.addConnection(s.step.ID, result.ID, 0, port)
 	if !exists {
-		s.err = errors.New(MSG_INVALID_SOURCE)
 		return s
 	}
 
@@ -497,8 +381,8 @@ func (s *Flow) addStep(kind Kind, tag, version, title string, port Port, fn fnSt
 **/
 func (s *Flow) Step(tag, title string, fn fnStep) *Flow {
 	if len(s.Steps) == 0 {
-		result := s.workflow.newStep(KindTrigger, "", tag, "1.0.0", title, s.ID)
-		result.definition = fn
+		result := newStep(s.ID, "", KindTrigger, tag, "1.0.0", title)
+		result.fn = fn
 		s.Steps[result.ID] = result
 		s.step = result
 
@@ -509,7 +393,7 @@ func (s *Flow) Step(tag, title string, fn fnStep) *Flow {
 		return s
 	}
 
-	return s.addStep(KindAction, tag, "1.0.0", title, PortOutput, fn, s.ID)
+	return s.addStep(KindAction, tag, "1.0.0", title, PortOutput, fn)
 }
 
 /**
@@ -519,19 +403,10 @@ func (s *Flow) Step(tag, title string, fn fnStep) *Flow {
 **/
 func (s *Flow) Error(tag, version, title string, fn fnStep) *Flow {
 	if len(s.Steps) == 0 {
-		s.err = errors.New(MSG_INVALID_SOURCE)
 		return s
 	}
 
-	return s.addStep(KindAction, tag, version, title, PortError, fn, s.ID)
-}
-
-/**
-* IsError
-* @return error
-**/
-func (s *Flow) IsError() error {
-	return s.err
+	return s.addStep(KindAction, tag, version, title, PortError, fn)
 }
 
 /**
@@ -552,7 +427,6 @@ func (s *Flow) AddStep(stepDef et.Json, userId string) (*Flow, error) {
 	}
 
 	step.ID = reg.UUID()
-	step.up(s.workflow)
 	step.OwnerId = s.ID
 	s.addAuditLog(userId, "add_step")
 	s.Steps[step.ID] = step

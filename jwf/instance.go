@@ -1,6 +1,7 @@
 package jwf
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -10,13 +11,11 @@ import (
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/resilience"
 	"github.com/cgalvisleon/et/timezone"
-	"github.com/redis/go-redis/v9"
 )
 
 type Status string
@@ -37,7 +36,6 @@ const (
 	DONE     Status = "done"
 	FAILED   Status = "failed"
 	CANCEL   Status = "cancel"
-	STOP     Status = "stop"
 )
 
 var (
@@ -50,7 +48,6 @@ var (
 		DONE:     true,
 		FAILED:   true,
 		CANCEL:   true,
-		STOP:     true,
 	}
 )
 
@@ -61,6 +58,11 @@ type Result struct {
 	Error  string  `json:"error"`
 }
 
+type Owner struct {
+	From jsql.From
+	Id   string `json:"id"`
+}
+
 type Current struct {
 	SourceId   string `json:"source_id"`
 	TargetId   string `json:"target_id"`
@@ -69,218 +71,98 @@ type Current struct {
 	IsFinished bool   `json:"is_finished"`
 }
 
-type Owner struct {
-	From jsql.From
-	Id   string `json:"id"`
-}
-
 type Instance struct {
-	StartedAt    time.Time                        `json:"started_at"`
-	UpdatedAt    time.Time                        `json:"updated_at"`
-	DoneAt       time.Time                        `json:"done_at"`
-	WorkflowId   string                           `json:"workflow_id"`
-	ProjectId    string                           `json:"project_id"`
-	ID           string                           `json:"id"`
-	FlowId       string                           `json:"flow_id"`
-	FlowTag      string                           `json:"flow_tag"`
-	Code         string                           `json:"code"`
-	Name         string                           `json:"name"`
-	Status       Status                           `json:"status"`
-	Ctx          et.Json                          `json:"ctx"`
-	Ctxs         map[string]et.Json               `json:"ctxs"`
-	Params       et.Json                          `json:"params"`
-	Results      map[string]*Result               `json:"results"`
-	Owners       []*Owner                         `json:"owners"`
-	Tags         et.Json                          `json:"tags"`
-	TriggerTag   string                           `json:"trigger_tag"`
-	Trigger      *Trigger                         `json:"trigger"`
-	Current      *Step                            `json:"current"`
-	CurrentIndex int                              `json:"current_index"`
-	IsDone       bool                             `json:"is_done"`
-	IsStop       bool                             `json:"is_stop"`
-	AuditLog     []et.Json                        `json:"audit_log"`
-	isDebug      bool                             `json:"-"`
-	isChanged    bool                             `json:"-"`
-	store        Store                            `json:"-"`
-	workflow     *WorkFlow                        `json:"-"`
-	flow         *Flow                            `json:"-"`
-	bindings     map[string]interface{}           `json:"-"`
-	resilience   *resilience.Resilience           `json:"-"`
-	onSave       []func(instance *Instance) error `json:"-"`
-	onDelete     []func(instance *Instance) error `json:"-"`
-	onDone       []func(instance *Instance) error `json:"-"`
-	mu           sync.Mutex                       `json:"-"`
+	StartedAt  time.Time                  `json:"started_at"`
+	UpdatedAt  time.Time                  `json:"updated_at"`
+	DoneAt     time.Time                  `json:"done_at"`
+	ID         string                     `json:"id"`
+	FlowId     string                     `json:"flow_id"`
+	FlowTag    string                     `json:"flow_tag"`
+	Code       string                     `json:"code"`
+	Name       string                     `json:"name"`
+	Status     Status                     `json:"status"`
+	Ctx        et.Json                    `json:"ctx"`
+	Ctxs       map[string]et.Json         `json:"ctxs"`
+	Params     et.Json                    `json:"params"`
+	Results    map[string]*Result         `json:"results"`
+	Owners     []*Owner                   `json:"owners"`
+	Tags       et.Json                    `json:"tags"`
+	Trigger    *Trigger                   `json:"trigger"`
+	Current    *Connection                `json:"current"`
+	Step       *Step                      `json:"step"`
+	IsDone     bool                       `json:"is_done"`
+	AuditLog   []et.Json                  `json:"audit_log"`
+	stop       bool                       `json:"-"`
+	isDebug    bool                       `json:"-"`
+	isChanged  bool                       `json:"-"`
+	flow       *Flow                      `json:"-"`
+	bindings   map[string]interface{}     `json:"-"`
+	resilience *resilience.Resilience     `json:"-"`
+	onChange   []func(data et.Json) error `json:"-"`
+	mu         sync.Mutex                 `json:"-"`
 }
 
 /**
-* newInstance
-* @param params InstanceParams
-* @return *Instance, error
+* NewInstance
+* @return *Instance
 **/
-func (s *WorkFlow) newInstance(projectId, tag, triggerTag, id, code, userId string) (*Instance, error) {
-	flow, err := s.loadFlow(tag)
-	if err != nil {
-		return nil, err
-	}
-
-	trigger, exists := flow.getTrigger(triggerTag)
-	if !exists {
-		return nil, errors.New(MSG_TRIGGER_NOT_FOUND)
-	}
-
-	if code == "" {
-		if s.store != nil {
-			serie := fmt.Sprintf("%s:%s", tag, projectId)
-			code, err = s.store.GenSerie(serie)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	name := flow.Name
-	if code != "" {
-		name = fmt.Sprintf("%s %s", flow.Name, code)
-	}
-
+func (s *Flow) NewInstance(id, code, name string, trigger *Trigger) *Instance {
 	now := timezone.Now()
 	id = reg.GetUUID(id)
 	result := &Instance{
-		StartedAt:  now,
-		WorkflowId: s.ID,
-		ProjectId:  projectId,
-		ID:         id,
-		FlowId:     flow.ID,
-		FlowTag:    flow.Tag,
-		Code:       code,
-		Name:       name,
-		Ctx:        et.Json{},
-		Ctxs:       make(map[string]et.Json),
-		Params:     et.Json{},
-		Owners:     make([]*Owner, 0),
-		Results:    make(map[string]*Result),
-		Tags:       et.Json{},
-		TriggerTag: tag,
-		Trigger:    trigger,
-		IsDone:     false,
-		IsStop:     false,
-		AuditLog:   make([]et.Json, 0),
-		store:      s.store,
-		workflow:   s,
-		flow:       flow,
-		bindings:   make(map[string]interface{}),
-		onSave:     make([]func(instance *Instance) error, 0),
-		onDelete:   make([]func(instance *Instance) error, 0),
-		onDone:     make([]func(instance *Instance) error, 0),
-		mu:         sync.Mutex{},
+		StartedAt: now,
+		ID:        id,
+		FlowId:    s.ID,
+		FlowTag:   s.Tag,
+		Code:      code,
+		Name:      name,
+		Ctx:       et.Json{},
+		Ctxs:      make(map[string]et.Json),
+		Params:    et.Json{},
+		Owners:    make([]*Owner, 0),
+		Results:   make(map[string]*Result),
+		Tags:      et.Json{},
+		Trigger:   trigger,
+		IsDone:    false,
+		AuditLog:  make([]et.Json, 0),
+		flow:      s,
+		bindings:  make(map[string]interface{}),
+		onChange:  make([]func(data et.Json) error, 0),
+		mu:        sync.Mutex{},
 	}
-	result.addAuditLog(userId, "new_instance")
-	result.up(flow)
+	result.up()
 	result.setStatus(CREATED)
-	return result, nil
+	return result
 }
 
 /**
-* getInstance
-* @param id, userId string
+* LoadInstance
+* @param def et.Json
 * @return *Instance, error
 **/
-func (s *WorkFlow) getInstance(id, userId string) (*Instance, error) {
-	if id != "" {
-		key := fmt.Sprintf("instance:%s:status", id)
-		status, err := cache.Get(key, "")
-		// A missing key is not an error: the cache answers it with redis.Nil or with its own ErrNotFound
-		if err != nil && !errors.Is(err, redis.Nil) && !errors.Is(err, cache.ErrNotFound) {
-			return nil, err
-		}
-		if status != "" {
-			return nil, fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING, status)
-		}
-	}
-
-	if s.store == nil {
-		return nil, ErrorInstanceNotFound
+func (s *Flow) LoadInstance(def et.Json) (*Instance, error) {
+	bt, err := def.ToByte()
+	if err != nil {
+		return nil, err
 	}
 
 	var result *Instance
-	exists, err := s.store.Get(storeInstances, id, &result)
-	if err != nil {
+	if err := json.Unmarshal(bt, &result); err != nil {
 		return nil, err
 	}
 
-	if !exists {
-		return nil, ErrorInstanceNotFound
-	}
-
-	flow, err := s.loadFlow(result.FlowId)
-	if err != nil {
-		return nil, err
-	}
-
-	trigger, exists := flow.getTrigger(result.TriggerTag)
-	if !exists {
-		return nil, errors.New(MSG_TRIGGER_NOT_FOUND)
-	}
-	result.Trigger = trigger
-
-	result.addAuditLog(userId, "get_instance")
-	return result.up(flow), nil
-}
-
-/**
-* deleteInstance
-* @param id string, userId string
-* @return error
-**/
-func (s *WorkFlow) deleteInstance(id, userId string) error {
-	instance, err := s.getInstance(id, userId)
-	if err != nil {
-		return err
-	}
-
-	key := fmt.Sprintf("instance:%s:status", id)
-	cache.Delete(key)
-
-	if s.store != nil {
-		err = s.store.Delete(storeInstances, id)
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, onDelete := range instance.onDelete {
-		err := onDelete(instance)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return result.up(), nil
 }
 
 /**
 * up
 * @return *Instance
 **/
-func (s *Instance) up(flow *Flow) *Instance {
-	s.flow = flow
-	s.store = flow.store
-	s.workflow = flow.workflow
-	s.isDebug = flow.isDebug
-	s.onSave = make([]func(instance *Instance) error, 0)
-	s.onDelete = make([]func(instance *Instance) error, 0)
+func (s *Instance) up() *Instance {
+	if s.onChange == nil {
+		s.onChange = make([]func(data et.Json) error, 0)
+	}
 	s.wrapper()
-	s.OnSave(func(instance *Instance) error {
-		instance.pushInstance()
-		return nil
-	})
-	s.OnDelete(func(instance *Instance) error {
-		key := fmt.Sprintf("instance:%s:delete", instance.ID)
-		event.Publish(key, et.Json{
-			"id": instance.ID,
-		})
-		return nil
-	})
 	return s
 }
 
@@ -289,11 +171,8 @@ func (s *Instance) up(flow *Flow) *Instance {
 * @param step *Step
 **/
 func (s *Instance) wrapper() {
-	for k, v := range s.flow.workflow.bindings {
-		s.bindings[k] = v
-	}
 	s.bindings["goTo"] = func(idx int) {
-		s.setCurrentIndex(idx)
+		s.goTo(idx)
 	}
 	s.bindings["ctx"] = map[string]interface{}{
 		"set": func(data et.Json) {
@@ -389,73 +268,25 @@ func (s *Instance) addAuditLog(userId string, action interface{}) {
 		s.AuditLog = s.AuditLog[len(s.AuditLog)-maxAuditLog:]
 	}
 	s.isChanged = true
+	for _, fn := range s.onChange {
+		err := fn(s.ToJson())
+		if err != nil {
+			return
+		}
+	}
 }
 
 /**
-* OnSave
+* OnChange
 * @param fn func(instance *Instance) error
 * @return *Instance
 **/
-func (s *Instance) OnSave(fn func(instance *Instance) error) *Instance {
-	if s.onSave == nil {
-		s.onSave = make([]func(instance *Instance) error, 0)
+func (s *Instance) OnChange(fn func(data et.Json) error) *Instance {
+	if s.onChange == nil {
+		s.onChange = make([]func(data et.Json) error, 0)
 	}
-	s.onSave = append(s.onSave, fn)
+	s.onChange = append(s.onChange, fn)
 	return s
-}
-
-/**
-* OnDelete
-* @param fn func(instance *Instance) error
-* @return *Step
-**/
-func (s *Instance) OnDelete(fn func(instance *Instance) error) *Instance {
-	if s.onDelete == nil {
-		s.onDelete = make([]func(instance *Instance) error, 0)
-	}
-	s.onDelete = append(s.onDelete, fn)
-	return s
-}
-
-/**
-* OnDone
-* @param fn func(instance *Instance) error
-* @return *Instance
-**/
-func (s *Instance) OnDone(fn func(instance *Instance) error) *Instance {
-	if s.onDone == nil {
-		s.onDone = make([]func(instance *Instance) error, 0)
-	}
-	s.onDone = append(s.onDone, fn)
-	return s
-}
-
-/**
-* save
-* @return error
-**/
-func (s *Instance) save() error {
-	s.isChanged = false
-
-	if s.isDebug {
-		logs.Log(packageName, "save:", s.ToString())
-	}
-
-	if s.store != nil {
-		err := s.store.SetInstance(s.ID, s.WorkflowId, s.ProjectId, s.FlowId, s.FlowTag, s.Code, s.Name, s.Status, s)
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, onSave := range s.onSave {
-		err := onSave(s)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 /**
@@ -464,25 +295,26 @@ func (s *Instance) save() error {
 **/
 func (s *Instance) ToJson() et.Json {
 	return et.Json{
-		"started_at":  timezone.Format(s.StartedAt, timezone.RFC3339),
-		"updated_at":  timezone.Format(s.UpdatedAt, timezone.RFC3339),
-		"done_at":     timezone.Format(s.DoneAt, timezone.RFC3339),
-		"workflow_id": s.WorkflowId,
-		"project_id":  s.ProjectId,
-		"id":          s.ID,
-		"code":        s.Code,
-		"name":        s.Name,
-		"status":      s.Status,
-		"ctx":         s.Ctx,
-		"ctxs":        s.Ctxs,
-		"results":     s.Results,
-		"tags":        s.Tags,
-		"trigger_tag": s.TriggerTag,
-		"trigger":     s.Trigger,
-		"current":     s.Current,
-		"is_done":     s.IsDone,
-		"is_stop":     s.IsStop,
-		"audit_log":   s.AuditLog,
+		"started_at": timezone.Format(s.StartedAt, timezone.RFC3339),
+		"updated_at": timezone.Format(s.UpdatedAt, timezone.RFC3339),
+		"done_at":    timezone.Format(s.DoneAt, timezone.RFC3339),
+		"id":         s.ID,
+		"flow_id":    s.FlowId,
+		"flow_tag":   s.FlowTag,
+		"code":       s.Code,
+		"name":       s.Name,
+		"status":     s.Status,
+		"ctx":        s.Ctx,
+		"ctxs":       s.Ctxs,
+		"params":     s.Params,
+		"results":    s.Results,
+		"owners":     s.Owners,
+		"tags":       s.Tags,
+		"trigger":    s.Trigger,
+		"current":    s.Current,
+		"step":       s.Step,
+		"is_done":    s.IsDone,
+		"audit_log":  s.AuditLog,
 	}
 }
 
@@ -495,22 +327,16 @@ func (s *Instance) ToString() string {
 }
 
 /**
-* pushInstance
+* push
 * @return error
 **/
-func (s *Instance) pushInstance() {
-	key := fmt.Sprintf("instance:%s", s.ID)
-	event.Publish(key, s.ToJson())
-}
-
-/**
-* pushStatus
-* @return *Instance
-**/
-func (s *Instance) pushStatus(status Status) *Instance {
-	key := fmt.Sprintf("instance:%s:status", s.ID)
-	cache.SetObject(key, status, s.flow.TimeAwait)
-	return s
+func (s *Instance) push() {
+	for _, fn := range s.onChange {
+		err := fn(s.ToJson())
+		if err != nil {
+			return
+		}
+	}
 }
 
 /**
@@ -528,32 +354,23 @@ func (s *Instance) getStatus() Status {
 * @param status Status
 * @return error
 **/
-func (s *Instance) setStatus(status Status) error {
+func (s *Instance) setStatus(status Status) {
 	curStatus := s.getStatus()
 	if curStatus == status {
-		return nil
+		return
 	}
 
-	s.pushStatus(status)
-	s.pushInstance()
 	s.UpdatedAt = timezone.Now()
 	s.mu.Lock()
 	s.Status = status
-	s.IsStop = status == STOP
 	s.mu.Unlock()
 	switch status {
 	case DONE:
 		s.DoneAt = s.UpdatedAt
 		s.IsDone = true
-		for _, onDone := range s.onDone {
-			err := onDone(s)
-			if err != nil {
-				return err
-			}
-		}
 	}
 
-	return s.save()
+	s.push()
 }
 
 /**
@@ -561,7 +378,7 @@ func (s *Instance) setStatus(status Status) error {
 * @param step int, result et.Json, err error
 * @return error
 **/
-func (s *Instance) setTrace(stepId string, result et.Json, err error, userId string) error {
+func (s *Instance) setTrace(stepId string, result et.Json, err error, userId string) {
 	errMessage := ""
 	if err != nil {
 		errMessage = err.Error()
@@ -574,7 +391,7 @@ func (s *Instance) setTrace(stepId string, result et.Json, err error, userId str
 		"result":  result,
 		"error":   errMessage,
 	})
-	return s.save()
+	s.push()
 }
 
 /**
@@ -607,11 +424,10 @@ func (s *Instance) setResult(result et.Json, err error) *Instance {
 		s.setStatus(FAILED)
 		logs.Logf(packageName, MSG_INSTANCE_ERROR, s.ID, s.FlowId, stepId, err.Error())
 	} else {
-		s.pushStatus(s.Status)
+		s.push()
 		logs.Logf(packageName, MSG_INSTANCE_STATUS, s.ID, s.FlowId, stepId, s.Status)
 	}
 
-	s.pushInstance()
 	return s
 }
 
@@ -622,7 +438,7 @@ func (s *Instance) setResult(result et.Json, err error) *Instance {
 **/
 func (s *Instance) setTag(tags et.Json) et.Json {
 	maps.Copy(s.Tags, tags)
-	s.pushInstance()
+	s.push()
 	return s.Tags
 }
 
@@ -637,7 +453,7 @@ func (s *Instance) setCtx(ctx et.Json) et.Json {
 		stepId := s.Current.ID
 		s.Ctxs[stepId] = ctx
 	}
-	s.pushInstance()
+	s.push()
 	return s.Ctx
 }
 
@@ -648,7 +464,7 @@ func (s *Instance) setCtx(ctx et.Json) et.Json {
 **/
 func (s *Instance) SetParams(params et.Json) et.Json {
 	maps.Copy(s.Params, params)
-	s.pushInstance()
+	s.push()
 	return s.Params
 }
 
@@ -662,31 +478,51 @@ func (s *Instance) Done() *Instance {
 }
 
 /**
-* setCurrent
+* setBySource
 * @param step *Step
 * @return error
 **/
-func (s *Instance) setCurrent(step *Step) {
-	s.Current = step
-	s.pushInstance()
+func (s *Instance) setBySource(connection *Connection) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Current = connection
+	s.Step, _ = s.flow.getStep(connection.Source.StepId)
+	go s.push()
 }
 
 /**
-* setCurrentIndex
-* @param idx int
-* @return *Instance
-**/
-func (s *Instance) setCurrentIndex(idx int) {
-	s.CurrentIndex = idx
-	s.pushInstance()
-}
-
-/**
-* next
+* isStop
 * @return bool
 **/
-func (s *Instance) next() bool {
-	if s.IsStop {
+func (s *Instance) isStop() bool {
+	if s.Step != nil && s.Step.Stop {
+		return true
+	}
+
+	if s.stop {
+		return true
+	}
+
+	key := fmt.Sprintf("instance:%s:stop", s.ID)
+	stop, err := cache.Get(key, "")
+	if err != nil {
+		return false
+	}
+
+	if stop == "true" {
+		return true
+	}
+
+	return false
+}
+
+/**
+* goTo
+* @param idx int
+* @return bool
+**/
+func (s *Instance) goTo(idx int) bool {
+	if s.isStop() {
 		return false
 	}
 
@@ -697,33 +533,39 @@ func (s *Instance) next() bool {
 	status := s.getStatus()
 	if status == CANCEL {
 		return false
-	} else if status == STOP {
-		return false
 	}
 
 	if s.Current == nil {
-		step, exists := s.flow.getStep(s.Trigger.StartId)
+		step, exists := s.flow.getOutput(s.Trigger.StartId, idx)
 		if !exists {
 			return false
 		}
-		s.setCurrent(step)
+		s.setBySource(step)
 	} else {
-		target, exists := s.flow.getTarget(s.Current.ID, s.CurrentIndex)
+		step, exists := s.flow.getOutput(s.Current.Target.StepId, idx)
 		if !exists {
 			return false
 		}
-		s.setCurrent(target)
+		s.setBySource(step)
 	}
 
-	return true
+	return s.Step != nil
+}
+
+/**
+* next
+* @return bool
+**/
+func (s *Instance) next() bool {
+	return s.goTo(0)
 }
 
 /**
 * run
-* @param ctx et.Json, await bool, userId string
+* @param ctx, tags et.Json, await bool, userId string
 * @return et.Json, error
 **/
-func (s *Instance) run(ctx et.Json, await bool, userId string) (et.Json, error) {
+func (s *Instance) Run(ctx et.Json, await bool, userId string) (et.Json, error) {
 	var err error
 	defer func() {
 		if s.Current != nil {
@@ -749,7 +591,7 @@ func (s *Instance) run(ctx et.Json, await bool, userId string) (et.Json, error) 
 	runing := func() (et.Json, error) {
 		var result et.Json
 		for s.next() {
-			step := s.Current
+			step := s.Step
 			if step == nil {
 				return et.Json{}, errors.New(MSG_STEP_NOT_FOUND)
 			}
@@ -769,10 +611,6 @@ func (s *Instance) run(ctx et.Json, await bool, userId string) (et.Json, error) 
 			}
 
 			if s.IsDone {
-				return result, nil
-			}
-
-			if s.IsStop || step.Stop {
 				return result, nil
 			}
 		}
@@ -810,7 +648,7 @@ func (s *Instance) runResilence(ctx et.Json, err error, userId string) (et.Json,
 	}
 
 	if s.resilience == nil {
-		resilience, err := resilience.New(s.workflow.store)
+		resilience, err := resilience.New()
 		if err != nil {
 			return et.Json{}, err
 		}
@@ -818,17 +656,21 @@ func (s *Instance) runResilence(ctx et.Json, err error, userId string) (et.Json,
 	}
 
 	description := fmt.Sprintf("flow: %s,  %s", s.flow.Name, s.flow.Description)
-	resilence := s.resilience.LoadInstance(resilience.Params{
+	resilence, err := s.resilience.LoadInstance(resilience.Params{
 		Id:            s.ID,
 		Tag:           "workflow",
 		Description:   description,
 		TotalAttempts: s.flow.TotalAttempts,
 		Interval:      s.flow.TimeAttempts,
 		Tags:          s.Tags,
-		Fn:            s.run,
+		Fn:            s.Run,
 		FnArgs:        []interface{}{ctx, userId},
 	})
-	res, err := resilence.Run(userId)
+	if err != nil {
+		return et.Json{}, err
+	}
+
+	res, err := resilence.Run()
 	if err != nil {
 		return et.Json{}, err
 	}
@@ -850,7 +692,16 @@ func (s *Instance) runResilence(ctx et.Json, err error, userId string) (et.Json,
 * @return et.Json, error
 **/
 func (s *Instance) runError(ctx et.Json, err error) (et.Json, error) {
-	step, exists := s.flow.getError(s.Current.ID, 0)
+	if s.Step == nil {
+		return et.Json{}, err
+	}
+
+	connection, exists := s.flow.getError(s.Step.ID)
+	if !exists {
+		return et.Json{}, err
+	}
+
+	step, exists := s.flow.getStep(connection.Target.StepId)
 	if !exists {
 		return et.Json{}, err
 	}

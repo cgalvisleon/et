@@ -5,9 +5,10 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
+	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
@@ -28,8 +29,11 @@ type Api struct {
 	Rpc                 int
 	Addr                string
 	Router              *chi.Mux
+	LimitRate           int64
 	authentication      []func(http.Handler) http.Handler
+	idenpotency         []func(http.Handler) http.Handler
 	authorization       func(method, path string) func(http.Handler) http.Handler
+	registerEndpoint    func(packageName, group, method, path, name string) error
 	errorStatusNotFound []string
 }
 
@@ -54,8 +58,23 @@ func NewApi(name, path, host string, port, rpc int, version int) *Api {
 		Rpc:            rpc,
 		Addr:           addr,
 		Router:         r,
+		LimitRate:      1000,
 		authentication: make([]func(http.Handler) http.Handler, 0),
 	}
+}
+
+func (s *Api) rateLimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		key := r.Method + ":" + r.URL.Path
+		duration := 1 * time.Second
+		count := cache.Incr(key, duration)
+		if count > s.LimitRate {
+			http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 /**
@@ -67,11 +86,27 @@ func (s *Api) AddErrorStatusNotFound(statuses ...string) {
 }
 
 /**
+* UseLimitRate
+* @param limitRate int64
+**/
+func (s *Api) UseLimitRate(limitRate int64) {
+	s.LimitRate = limitRate
+}
+
+/**
 * Authentication
 * @param middlewares ...func(http.Handler) http.Handler
 **/
 func (s *Api) UseAuthentication(middlewares ...func(http.Handler) http.Handler) {
 	s.authentication = append(s.authentication, middlewares...)
+}
+
+/**
+* UseIdenpotency
+* @param middlewares ...func(http.Handler) http.Handler
+**/
+func (s *Api) UseIdenpotency(middlewares ...func(http.Handler) http.Handler) {
+	s.idenpotency = append(s.idenpotency, middlewares...)
 }
 
 /**
@@ -90,19 +125,23 @@ func (s *Api) getPath(path string) string {
 }
 
 /**
-* registerEndpoint
+* UseRegisterEndpoint
+* @param registerEndpoint func(packageName, group, method, path, name string) error
+**/
+func (s *Api) UseRegisterEndpoint(registerEndpoint func(packageName, group, method, path, name string) error) {
+	s.registerEndpoint = registerEndpoint
+}
+
+/**
+* RegisterEndpoint
 * @param packageName, group, method, path, name string
 * @return error
 **/
 func (s *Api) RegisterEndpoint(packageName, group, method, path, name string) error {
-	data := et.Json{
-		"package_name": packageName,
-		"group_name":   group,
-		"method":       method,
-		"path":         path,
-		"name":         name,
+	if s.registerEndpoint != nil {
+		return s.registerEndpoint(packageName, group, method, path, name)
 	}
-	return event.Publish(EVENT_SET_ENDPOINT, data)
+	return nil
 }
 
 /**
@@ -112,13 +151,18 @@ func (s *Api) RegisterEndpoint(packageName, group, method, path, name string) er
 func (s *Api) Public(method, path, name string, handler http.HandlerFunc) {
 	path = s.getPath(path)
 	s.RegisterEndpoint(s.Name, "", method, path, name)
+	middlewares := make([]func(http.Handler) http.Handler, 0)
+	middlewares = append(middlewares, s.rateLimitMiddleware)
+	if s.idenpotency != nil {
+		middlewares = append(middlewares, s.idenpotency...)
+	}
 	With(s.Router, Route{
 		Method:      method,
 		Path:        path,
 		Handler:     handler,
 		Host:        s.Addr,
 		PackageName: s.Name,
-	}, []func(http.Handler) http.Handler{})
+	}, middlewares)
 }
 
 /**
@@ -128,6 +172,14 @@ func (s *Api) Public(method, path, name string, handler http.HandlerFunc) {
 func (s *Api) Session(method, path, name string, handler http.HandlerFunc) {
 	path = s.getPath(path)
 	s.RegisterEndpoint(s.Name, "", method, path, name)
+	middlewares := make([]func(http.Handler) http.Handler, 0)
+	middlewares = append(middlewares, s.rateLimitMiddleware)
+	if s.authentication != nil {
+		middlewares = append(middlewares, s.authentication...)
+	}
+	if s.idenpotency != nil {
+		middlewares = append(middlewares, s.idenpotency...)
+	}
 	With(s.Router, Route{
 		Method:      method,
 		Path:        path,
@@ -135,7 +187,7 @@ func (s *Api) Session(method, path, name string, handler http.HandlerFunc) {
 		Host:        s.Addr,
 		PackageName: s.Name,
 		Version:     s.Version,
-	}, s.authentication)
+	}, middlewares)
 }
 
 /**
@@ -145,10 +197,16 @@ func (s *Api) Session(method, path, name string, handler http.HandlerFunc) {
 func (s *Api) Protected(group, method, path, name string, handler http.HandlerFunc) {
 	path = s.getPath(path)
 	s.RegisterEndpoint(s.Name, group, method, path, name)
-	authorize := make([]func(http.Handler) http.Handler, 0)
-	authorize = append(authorize, s.authentication...)
+	middlewares := make([]func(http.Handler) http.Handler, 0)
+	middlewares = append(middlewares, s.rateLimitMiddleware)
+	if s.authentication != nil {
+		middlewares = append(middlewares, s.authentication...)
+	}
+	if s.idenpotency != nil {
+		middlewares = append(middlewares, s.idenpotency...)
+	}
 	if s.authorization != nil {
-		authorize = append(authorize, s.authorization(method, path))
+		middlewares = append(middlewares, s.authorization(method, path))
 	}
 	With(s.Router, Route{
 		Method:      method,
@@ -156,7 +214,8 @@ func (s *Api) Protected(group, method, path, name string, handler http.HandlerFu
 		Handler:     handler,
 		Host:        s.Addr,
 		PackageName: s.Name,
-	}, authorize)
+		Version:     s.Version,
+	}, middlewares)
 }
 
 // ---------- Helpers ----------

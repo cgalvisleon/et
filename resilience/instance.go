@@ -1,13 +1,14 @@
 package resilience
 
 import (
+	"fmt"
 	"reflect"
 	"time"
 
+	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -46,7 +47,6 @@ type Instance struct {
 	fnArgs        []interface{}   `json:"-"`
 	fnResult      []reflect.Value `json:"-"`
 	isDebug       bool            `json:"-"`
-	store         Store           `json:"-"`
 }
 
 /**
@@ -75,7 +75,6 @@ func (s *Instance) ToJson() et.Json {
 		"error":           errMsg,
 		"result":          s.Result,
 	}
-
 	for k, v := range s.Tags {
 		result.Set(k, v)
 	}
@@ -90,40 +89,6 @@ func (s *Instance) ToJson() et.Json {
 func (s *Instance) ToString() string {
 	result := s.ToJson()
 	return result.ToString()
-}
-
-/**
-* save
-* @return error
-**/
-func (s *Instance) save() error {
-	data := s.ToJson()
-	if s.isDebug {
-		logs.Log(packageName, "save:", data.ToString())
-	}
-
-	if s.store != nil {
-		err := s.store.Set(storeResilience, s.ID, s.ResilienceId, data)
-		if err != nil {
-			return err
-		}
-	}
-
-	event.Publish(EVENT_INSTANCE_SET, data)
-
-	return nil
-}
-
-/**
-* up
-* @param resilience *Resilience
-* @return *Instance
-**/
-func (s *Instance) up(resilience *Resilience) *Instance {
-	s.resilience = resilience
-	s.store = resilience.store
-	s.isDebug = resilience.isDebug
-	return s
 }
 
 /**
@@ -151,7 +116,19 @@ func (s *Instance) setStatus(status Status) error {
 		}
 	}
 
-	return s.save()
+	data := s.ToJson()
+	if s.isDebug {
+		logs.Log(packageName, "save:", data.ToString())
+	}
+
+	event.Publish(EVENT_INSTANCE_SET, data)
+	bt, err := data.ToByte()
+	if err != nil {
+		return err
+	}
+
+	cache.Set(s.ID, bt, s.Interval)
+	return nil
 }
 
 /**
@@ -166,50 +143,47 @@ func (s *Instance) setError(err error) {
 /**
 * setDone
 **/
-func (s *Instance) setDone(userId string) {
+func (s *Instance) setDone() {
 	s.setStatus(DONE)
-
-	time.AfterFunc(300*time.Millisecond, func() {
-		s.resilience.removeInstance(s.ID)
-	})
 }
 
 /**
 * setStop
 * @return et.Item
 **/
-func (s *Instance) setStop() et.Item {
+func (s *Instance) setStop() {
 	s.stop = true
 	s.setStatus(STOP)
-
-	return et.Item{
-		Ok: true,
-		Result: et.Json{
-			"message": msg.MSG_INSTANCE_STOPPED,
-		},
-	}
 }
 
 /**
-* setRestart
-* @return et.Item
+* isStop
+* @return bool
 **/
-func (s *Instance) setRestart(userId string) ([]any, error) {
-	s.stop = false
-	s.setStatus(PENDING)
-	return s.Run(userId)
+func (s *Instance) isStop() bool {
+	if s.stop {
+		return true
+	}
+
+	key := fmt.Sprintf("resilience:%s:stop", s.ID)
+	str, err := cache.Get(key, "")
+	if err != nil {
+		return false
+	}
+
+	return str == "true"
 }
 
 /**
 * runAttempt
 * @return []reflect.Value, error
 **/
-func (s *Instance) runAttempt(userId string) ([]any, error) {
+func (s *Instance) runAttempt() ([]any, error) {
 	if s.Status == DONE {
 		return s.Result, s.Error
 	}
 
-	if s.stop {
+	if s.isStop() {
 		return s.Result, s.Error
 	}
 
@@ -237,26 +211,31 @@ func (s *Instance) runAttempt(userId string) ([]any, error) {
 	if failed {
 		s.setError(err)
 	} else {
-		s.setDone(userId)
+		s.setDone()
 	}
 
-	return s.Result, err
+	return s.Result, s.Error
 }
 
 /**
 * Run
 * @return error
 **/
-func (s *Instance) Run(userId string) ([]any, error) {
+func (s *Instance) Run() ([]any, error) {
+	defer func() {
+		s.resilience.removeInstance(s.ID)
+		cache.Delete(s.ID)
+	}()
+
 	if s.Interval == 0 {
 		return s.Result, s.Error
 	}
 
 	time.AfterFunc(s.Interval, func() {
 		if s.Status != DONE && s.Attempt < s.TotalAttempts {
-			_, err := s.runAttempt(userId)
+			_, err := s.runAttempt()
 			if err != nil {
-				s.Run(userId)
+				s.Run()
 			}
 		}
 	})

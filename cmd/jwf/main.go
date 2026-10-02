@@ -7,12 +7,14 @@ import (
 )
 
 func main() {
-	wf, err := jwf.New(nil, "", "cgalvisl")
+	wf, err := jwf.New("")
 	if err != nil {
 		logs.Panic(err)
 	}
 
-	wf.NewFloW("add", "add item", "1.0.0", "cgalvisl").
+	ownerId := ""
+	userId := "cgalvisl"
+	wf.NewFlow("add", "add item", "1.0.0", ownerId, userId).
 		Step("add", "add item", func(instance *jwf.Instance, ctx et.Json) (et.Json, error) {
 			result := et.Json{
 				"step1": "step1",
@@ -28,7 +30,7 @@ func main() {
 			return params, nil
 		})
 
-	result, err := wf.Run("add", "add", "", "37860631", "0001", et.Json{}, et.Json{}, true, "cgalvisl")
+	result, err := wf.Run("add", "add", "", "0001", et.Json{}, et.Json{}, true, userId)
 	if err != nil {
 		logs.Panic(err)
 	}

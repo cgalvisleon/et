@@ -1433,57 +1433,57 @@ func (s *Command) AfterDelete(fn TriggerFunction) *Command {
 }
 
 /**
-* DefineBeforeInsert: Defines a new before insert hook for the model.
-* @param name string
+* DefineBeforeInsert: Defines (or replaces, by name) a JavaScript before insert hook for the model.
+* @param name, code string, version int
 * @return *Model
 **/
-func (s *Model) DefineBeforeInsert(name string) *Model {
-	return s.defineBeforeInsert(name)
+func (s *Model) DefineBeforeInsert(name, code string, version int) *Model {
+	return s.defineBeforeInsert(name, code, version)
 }
 
 /**
-* DefineBeforeUpdate: Defines a new before update hook for the model using a bytecode definition.
-* @param module string
+* DefineBeforeUpdate: Defines (or replaces, by name) a JavaScript before update hook for the model.
+* @param name, code string, version int
 * @return *Model
 **/
-func (s *Model) DefineBeforeUpdate(name, code string) *Model {
-	return s.defineBeforeUpdate(name, code)
+func (s *Model) DefineBeforeUpdate(name, code string, version int) *Model {
+	return s.defineBeforeUpdate(name, code, version)
 }
 
 /**
-* DefineBeforeDelete: Defines a new before delete hook for the model using a bytecode definition.
-* @param module string
+* DefineBeforeDelete: Defines (or replaces, by name) a JavaScript before delete hook for the model.
+* @param name, code string, version int
 * @return *Model
 **/
-func (s *Model) DefineBeforeDelete(name, code string) *Model {
-	return s.defineBeforeDelete(name, code)
+func (s *Model) DefineBeforeDelete(name, code string, version int) *Model {
+	return s.defineBeforeDelete(name, code, version)
 }
 
 /**
-* DefineAfterInsert: Defines a new after insert hook for the model using a bytecode definition.
-* @param module string
+* DefineAfterInsert: Defines (or replaces, by name) a JavaScript after insert hook for the model.
+* @param name, code string, version int
 * @return *Model
 **/
-func (s *Model) DefineAfterInsert(name, code string) *Model {
-	return s.defineAfterInsert(name, code)
+func (s *Model) DefineAfterInsert(name, code string, version int) *Model {
+	return s.defineAfterInsert(name, code, version)
 }
 
 /**
-* DefineAfterUpdate: Defines a new after update hook for the model using a bytecode definition.
-* @param module string
+* DefineAfterUpdate: Defines (or replaces, by name) a JavaScript after update hook for the model.
+* @param name, code string, version int
 * @return *Model
 **/
-func (s *Model) DefineAfterUpdate(name, code string) *Model {
-	return s.defineAfterUpdate(name, code)
+func (s *Model) DefineAfterUpdate(name, code string, version int) *Model {
+	return s.defineAfterUpdate(name, code, version)
 }
 
 /**
-* DefineAfterDelete: Defines a new after delete hook for the model using a bytecode definition.
-* @param module string
+* DefineAfterDelete: Defines (or replaces, by name) a JavaScript after delete hook for the model.
+* @param name, code string, version int
 * @return *Model
 **/
-func (s *Model) DefineAfterDelete(name, code string) *Model {
-	return s.defineAfterDelete(name, code)
+func (s *Model) DefineAfterDelete(name, code string, version int) *Model {
+	return s.defineAfterDelete(name, code, version)
 }
 
 /**

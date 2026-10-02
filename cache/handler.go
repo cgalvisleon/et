@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/cgalvisleon/et/envar"
@@ -136,7 +137,7 @@ func SetWithDuration(key string, val interface{}, expiration time.Duration) inte
 	case int64:
 		return SetCtx(bg(), key, fmt.Sprintf(`%d`, v), expiration)
 	case float64:
-		return SetCtx(bg(), key, fmt.Sprintf(`%f`, v), expiration)
+		return SetCtx(bg(), key, strconv.FormatFloat(v, 'f', -1, 64), expiration)
 	case bool:
 		return SetCtx(bg(), key, fmt.Sprintf(`%t`, v), expiration)
 	case []byte:
@@ -237,11 +238,11 @@ func SetObject(key string, val interface{}, expiration time.Duration) (interface
 /**
 * Get
 * @params key string, defaultvalue string
-* @return string, error
+* @return string, bool, error
 **/
-func Get(key, defaultvalue string) (string, error) {
+func Get(key, defaultvalue string) (string, bool, error) {
 	if !IsLoad() {
-		return defaultvalue, errors.New(msg.MSG_NOT_CACHE_SERVICE)
+		return defaultvalue, false, errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
 	return GetCtx(bg(), key, defaultvalue)
@@ -250,14 +251,16 @@ func Get(key, defaultvalue string) (string, error) {
 /**
 * GetObject
 * @params key string, dest any
-* @return error
+* @return bool, error
 **/
 func GetObject(key string, dest any) (bool, error) {
-	result, err := Get(key, "")
-	if err == redis.Nil || errors.Is(err, ErrNotFound) {
-		return false, nil
-	} else if err != nil {
+	result, exists, err := Get(key, "")
+	if err != nil {
 		return false, err
+	}
+
+	if !exists {
+		return false, nil
 	}
 
 	err = json.Unmarshal([]byte(result), dest)
@@ -482,25 +485,20 @@ func CollectionPut(name, key, val string) error {
 /**
 * CollectionFind
 * @params name string, key string
-* @return string, error
+* @return string, bool, error
 **/
-func CollectionFind(name, key string) (string, error) {
+func CollectionFind(name, key string) (string, bool, error) {
 	if !IsLoad() {
-		return "", errors.New(msg.MSG_NOT_CACHE_SERVICE)
+		return "", false, errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
 	atribs, err := HGetCtx(bg(), name)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 
-	for k, v := range atribs {
-		if k == key {
-			return v, nil
-		}
-	}
-
-	return "", nil
+	result, exists := atribs[key]
+	return result, exists, nil
 }
 
 /**
@@ -541,21 +539,25 @@ func ObjetSet(name string, key string, obj et.Json) error {
 /**
 * ObjetGet
 * @params name string, key string, v any
-* @return error
+* @return et.Json, bool, error
 **/
-func ObjetGet(name, key string) (et.Json, error) {
-	scr, err := CollectionFind(name, key)
+func ObjetGet(name, key string) (et.Json, bool, error) {
+	scr, exists, err := CollectionFind(name, key)
 	if err != nil {
-		return et.Json{}, err
+		return et.Json{}, false, err
+	}
+
+	if !exists {
+		return et.Json{}, false, nil
 	}
 
 	var result et.Json
 	err = json.Unmarshal([]byte(scr), &result)
 	if err != nil {
-		return et.Json{}, err
+		return et.Json{}, false, err
 	}
 
-	return result, nil
+	return result, true, nil
 }
 
 /**
@@ -590,18 +592,20 @@ func SetVerify(device, key, val string, expiration time.Duration) interface{} {
 /**
 * GetVerify
 * @params device string, key string
-* @return string, error
+* @return string, bool, error
 **/
-func GetVerify(device string, key string) (string, error) {
+func GetVerify(device string, key string) (string, bool, error) {
 	key = genKey("verify", device, key)
-	result, err := Get(key, "")
+	result, exists, err := Get(key, "")
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 
-	Delete(key)
+	if exists {
+		Delete(key)
+	}
 
-	return result, nil
+	return result, exists, nil
 }
 
 /**
@@ -677,86 +681,154 @@ func scanKeys(match string) ([]string, error) {
 /**
 * GetJson
 * @params key string
-* @return Json, error
+* @return et.Json, bool, error
 **/
-func GetJson(key string) (et.Json, error) {
-	if !IsLoad() {
-		return et.Json{}, errors.New(msg.MSG_NOT_CACHE_SERVICE)
-	}
-
-	defaultVal := ""
-	val, err := Get(key, defaultVal)
-	if err != nil {
-		return et.Json{}, err
-	}
-
-	if val == defaultVal {
-		return et.Json{}, IsNil
-	}
-
-	var result et.Json
-	err = json.Unmarshal([]byte(val), &result)
-	if err != nil {
-		return et.Json{}, err
-	}
-
-	return result, nil
+func GetJson(key string) (et.Json, bool, error) {
+	return getParsed(key, et.Json{}, func(s string) (et.Json, error) {
+		var result et.Json
+		err := json.Unmarshal([]byte(s), &result)
+		return result, err
+	})
 }
 
 /**
 * GetItem
 * @params key string
-* @return Item, error
+* @return et.Item, bool, error
 **/
-func GetItem(key string) (et.Item, error) {
-	if !IsLoad() {
-		return et.Item{}, errors.New(msg.MSG_NOT_CACHE_SERVICE)
-	}
-
-	defaultVal := ""
-	val, err := Get(key, defaultVal)
-	if err != nil {
-		return et.Item{}, err
-	}
-
-	if val == defaultVal {
-		return et.Item{}, IsNil
-	}
-
-	var result et.Item
-	err = json.Unmarshal([]byte(val), &result)
-	if err != nil {
-		return et.Item{}, err
-	}
-
-	return result, nil
+func GetItem(key string) (et.Item, bool, error) {
+	return getParsed(key, et.Item{}, func(s string) (et.Item, error) {
+		var result et.Item
+		err := json.Unmarshal([]byte(s), &result)
+		return result, err
+	})
 }
 
 /**
 * GetItems
 * @params key string
-* @return Items, error
+* @return et.Items, bool, error
 **/
-func GetItems(key string) (et.Items, error) {
-	if !IsLoad() {
-		return et.Items{}, errors.New(msg.MSG_NOT_CACHE_SERVICE)
-	}
+func GetItems(key string) (et.Items, bool, error) {
+	return getParsed(key, et.Items{}, func(s string) (et.Items, error) {
+		var result et.Items
+		err := json.Unmarshal([]byte(s), &result)
+		return result, err
+	})
+}
 
-	defaultVal := ""
-	val, err := Get(key, defaultVal)
+/**
+* getParsed: Reads key and converts its value with parse.
+* @param key string, def T, parse func(string) (T, error)
+* @return T, bool, error (def when the key is missing or the value does not parse)
+**/
+func getParsed[T any](key string, def T, parse func(string) (T, error)) (T, bool, error) {
+	val, exists, err := Get(key, "")
 	if err != nil {
-		return et.Items{}, err
+		return def, false, err
 	}
 
-	if val == defaultVal {
-		return et.Items{}, IsNil
+	if !exists {
+		return def, false, nil
 	}
 
-	var result et.Items
-	err = json.Unmarshal([]byte(val), &result)
+	result, err := parse(val)
 	if err != nil {
-		return et.Items{}, err
+		return def, true, err
 	}
 
-	return result, nil
+	return result, true, nil
+}
+
+/**
+* GetStr
+* @params key string, def string
+* @return string, bool, error
+**/
+func GetStr(key, def string) (string, bool, error) {
+	return Get(key, def)
+}
+
+/**
+* GetInt
+* @params key string, def int
+* @return int, bool, error
+**/
+func GetInt(key string, def int) (int, bool, error) {
+	return getParsed(key, def, strconv.Atoi)
+}
+
+/**
+* GetInt64
+* @params key string, def int64
+* @return int64, bool, error
+**/
+func GetInt64(key string, def int64) (int64, bool, error) {
+	return getParsed(key, def, func(s string) (int64, error) {
+		return strconv.ParseInt(s, 10, 64)
+	})
+}
+
+/**
+* GetFloat
+* @params key string, def float64
+* @return float64, bool, error
+**/
+func GetFloat(key string, def float64) (float64, bool, error) {
+	return getParsed(key, def, func(s string) (float64, error) {
+		return strconv.ParseFloat(s, 64)
+	})
+}
+
+/**
+* GetBool
+* @params key string, def bool
+* @return bool, bool, error
+**/
+func GetBool(key string, def bool) (bool, bool, error) {
+	return getParsed(key, def, strconv.ParseBool)
+}
+
+/**
+* GetTime: Reads a value stored by Set as RFC3339.
+* @params key string, def time.Time
+* @return time.Time, bool, error
+**/
+func GetTime(key string, def time.Time) (time.Time, bool, error) {
+	return getParsed(key, def, func(s string) (time.Time, error) {
+		return time.Parse(time.RFC3339, s)
+	})
+}
+
+/**
+* GetDuration: Reads a value stored by Set as time.Duration.String().
+* @params key string, def time.Duration
+* @return time.Duration, bool, error
+**/
+func GetDuration(key string, def time.Duration) (time.Duration, bool, error) {
+	return getParsed(key, def, time.ParseDuration)
+}
+
+/**
+* GetBytes
+* @params key string
+* @return []byte, bool, error
+**/
+func GetBytes(key string) ([]byte, bool, error) {
+	return getParsed(key, nil, func(s string) ([]byte, error) {
+		return []byte(s), nil
+	})
+}
+
+/**
+* GetList
+* @params key string
+* @return et.List, bool, error
+**/
+func GetList(key string) (et.List, bool, error) {
+	return getParsed(key, et.List{}, func(s string) (et.List, error) {
+		var result et.List
+		err := json.Unmarshal([]byte(s), &result)
+		return result, err
+	})
 }

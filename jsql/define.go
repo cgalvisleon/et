@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/jwf"
 )
 
 type DefIndex struct {
@@ -403,91 +404,151 @@ func (s *Model) defineCalc(name, script string) *Model {
 }
 
 /**
-* defineBeforeInsert: (stores the JS code; name is used when code is empty) Defines a new before insert hook for the model.
-* @param name string
+* defineBeforeInsert: Defines a JavaScript before insert hook for the model; a hook with the same name is replaced.
+* @param name, code string, version int
 * @return *Model
 **/
-func (s *Model) defineBeforeInsert(name string) *Model {
-	idx := slices.IndexFunc(s.BeforeInserts, func(r string) bool { return r == name })
+func (s *Model) defineBeforeInsert(name, code string, version int) *Model {
+	idx := slices.IndexFunc(s.BeforeInserts, func(r *jwf.Script) bool { return r.Name == name })
 	if idx != -1 {
-		s.BeforeInserts[idx] = name
+		s.BeforeInserts[idx] = &jwf.Script{
+			Language: jwf.LANGUAGE_JAVASCRIPT,
+			Name:     name,
+			Code:     code,
+			Version:  version,
+		}
 	} else {
-		s.BeforeInserts = append(s.BeforeInserts, name)
+		s.BeforeInserts = append(s.BeforeInserts, &jwf.Script{
+			Language: jwf.LANGUAGE_JAVASCRIPT,
+			Name:     name,
+			Code:     code,
+			Version:  version,
+		})
 	}
 	return s
 }
 
 /**
-* defineBeforeUpdate: (stores the JS code; name is used when code is empty) Defines a new before update hook for the model using a bytecode definition.
-* @param module string
+* defineBeforeUpdate: Defines a JavaScript before update hook for the model; a hook with the same name is replaced.
+* @param name, code string, version int
 * @return *Model
 **/
-func (s *Model) defineBeforeUpdate(name, code string) *Model {
-	if code == "" {
-		code = name
-	}
-	if !slices.Contains(s.BeforeUpdates, code) {
-		s.BeforeUpdates = append(s.BeforeUpdates, code)
+func (s *Model) defineBeforeUpdate(name, code string, version int) *Model {
+	idx := slices.IndexFunc(s.BeforeUpdates, func(r *jwf.Script) bool { return r.Name == name })
+	if idx != -1 {
+		s.BeforeUpdates[idx] = &jwf.Script{
+			Language: jwf.LANGUAGE_JAVASCRIPT,
+			Name:     name,
+			Code:     code,
+			Version:  version,
+		}
+	} else {
+		s.BeforeUpdates = append(s.BeforeUpdates, &jwf.Script{
+			Language: jwf.LANGUAGE_JAVASCRIPT,
+			Name:     name,
+			Code:     code,
+			Version:  version,
+		})
 	}
 	return s
 }
 
 /**
-* defineBeforeDelete: (stores the JS code; name is used when code is empty) Defines a new before delete hook for the model using a bytecode definition.
-* @param module string
+* defineBeforeDelete: Defines a JavaScript before delete hook for the model; a hook with the same name is replaced.
+* @param name, code string, version int
 * @return *Model
 **/
-func (s *Model) defineBeforeDelete(name, code string) *Model {
-	if code == "" {
-		code = name
-	}
-	if !slices.Contains(s.BeforeDeletes, code) {
-		s.BeforeDeletes = append(s.BeforeDeletes, code)
+func (s *Model) defineBeforeDelete(name, code string, version int) *Model {
+	idx := slices.IndexFunc(s.BeforeDeletes, func(r *jwf.Script) bool { return r.Name == name })
+	if idx != -1 {
+		s.BeforeDeletes[idx] = &jwf.Script{
+			Language: jwf.LANGUAGE_JAVASCRIPT,
+			Name:     name,
+			Code:     code,
+			Version:  version,
+		}
+	} else {
+		s.BeforeDeletes = append(s.BeforeDeletes, &jwf.Script{
+			Language: jwf.LANGUAGE_JAVASCRIPT,
+			Name:     name,
+			Code:     code,
+			Version:  version,
+		})
 	}
 	return s
 }
 
 /**
-* defineAfterInsert: (stores the JS code; name is used when code is empty) Defines a new after insert hook for the model using a bytecode definition.
-* @param module string
+* defineAfterInsert: Defines a JavaScript after insert hook for the model; a hook with the same name is replaced.
+* @param name, code string, version int
 * @return *Model
 **/
-func (s *Model) defineAfterInsert(name, code string) *Model {
-	if code == "" {
-		code = name
-	}
-	if !slices.Contains(s.AfterInserts, code) {
-		s.AfterInserts = append(s.AfterInserts, code)
+func (s *Model) defineAfterInsert(name, code string, version int) *Model {
+	idx := slices.IndexFunc(s.AfterInserts, func(r *jwf.Script) bool { return r.Name == name })
+	if idx != -1 {
+		s.AfterInserts[idx] = &jwf.Script{
+			Language: jwf.LANGUAGE_JAVASCRIPT,
+			Name:     name,
+			Code:     code,
+			Version:  version,
+		}
+	} else {
+		s.AfterInserts = append(s.AfterInserts, &jwf.Script{
+			Language: jwf.LANGUAGE_JAVASCRIPT,
+			Name:     name,
+			Code:     code,
+			Version:  version,
+		})
 	}
 	return s
 }
 
 /**
-* defineAfterUpdate: (stores the JS code; name is used when code is empty) Defines a new after update hook for the model using a bytecode definition.
-* @param module string
+* defineAfterUpdate: Defines a JavaScript after update hook for the model; a hook with the same name is replaced.
+* @param name, code string, version int
 * @return *Model
 **/
-func (s *Model) defineAfterUpdate(name, code string) *Model {
-	if code == "" {
-		code = name
-	}
-	if !slices.Contains(s.AfterUpdates, code) {
-		s.AfterUpdates = append(s.AfterUpdates, code)
+func (s *Model) defineAfterUpdate(name, code string, version int) *Model {
+	idx := slices.IndexFunc(s.AfterUpdates, func(r *jwf.Script) bool { return r.Name == name })
+	if idx != -1 {
+		s.AfterUpdates[idx] = &jwf.Script{
+			Language: jwf.LANGUAGE_JAVASCRIPT,
+			Name:     name,
+			Code:     code,
+			Version:  version,
+		}
+	} else {
+		s.AfterUpdates = append(s.AfterUpdates, &jwf.Script{
+			Language: jwf.LANGUAGE_JAVASCRIPT,
+			Name:     name,
+			Code:     code,
+			Version:  version,
+		})
 	}
 	return s
 }
 
 /**
-* defineAfterDelete: (stores the JS code; name is used when code is empty) Defines a new after delete hook for the model using a bytecode definition.
-* @param module string
+* defineAfterDelete: Defines a JavaScript after delete hook for the model; a hook with the same name is replaced.
+* @param name, code string, version int
 * @return *Model
 **/
-func (s *Model) defineAfterDelete(name, code string) *Model {
-	if code == "" {
-		code = name
-	}
-	if !slices.Contains(s.AfterDeletes, code) {
-		s.AfterDeletes = append(s.AfterDeletes, code)
+func (s *Model) defineAfterDelete(name, code string, version int) *Model {
+	idx := slices.IndexFunc(s.AfterDeletes, func(r *jwf.Script) bool { return r.Name == name })
+	if idx != -1 {
+		s.AfterDeletes[idx] = &jwf.Script{
+			Language: jwf.LANGUAGE_JAVASCRIPT,
+			Name:     name,
+			Code:     code,
+			Version:  version,
+		}
+	} else {
+		s.AfterDeletes = append(s.AfterDeletes, &jwf.Script{
+			Language: jwf.LANGUAGE_JAVASCRIPT,
+			Name:     name,
+			Code:     code,
+			Version:  version,
+		})
 	}
 	return s
 }

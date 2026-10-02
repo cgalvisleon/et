@@ -145,12 +145,12 @@ func (s *Resilience) readInstance(id string) (*Instance, bool) {
 		return nil, false
 	}
 
-	str, err := cache.Get(id, "")
+	str, exists, err := cache.Get(id, "")
 	if err != nil {
 		return nil, false
 	}
 
-	if str == "" {
+	if !exists || str == "" {
 		return nil, false
 	}
 

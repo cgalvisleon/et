@@ -50,12 +50,12 @@ func (s *Server) GetTokenByKey(key string) (et.Item, error) {
 		return et.Item{}, logs.Alertf(msg.MSG_ATRIB_REQUIRED, "key")
 	}
 
-	result, err := cache.Get(key, "")
+	result, exists, err := cache.Get(key, "")
 	if err != nil {
 		return et.Item{}, err
 	}
 
-	if result == "" {
+	if !exists || result == "" {
 		return et.Item{}, errors.New(msg.MSG_RECORD_NOT_FOUND)
 	}
 
@@ -85,12 +85,12 @@ func (s *Server) HandlerValidToken(key string) (et.Item, error) {
 		return et.Item{}, logs.Alertf(msg.MSG_ATRIB_REQUIRED, "key")
 	}
 
-	result, err := cache.Get(key, "")
+	result, exists, err := cache.Get(key, "")
 	if err != nil {
 		return et.Item{}, err
 	}
 
-	if result == "" {
+	if !exists || result == "" {
 		return et.Item{}, errors.New(msg.MSG_RECORD_NOT_FOUND)
 	}
 

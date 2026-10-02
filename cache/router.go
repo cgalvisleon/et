@@ -3,6 +3,7 @@ package cache
 import (
 	"net/http"
 
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/response"
 )
 
@@ -47,13 +48,19 @@ func HttpAll(w http.ResponseWriter, r *http.Request) {
 func HttpGet(w http.ResponseWriter, r *http.Request) {
 	key := response.GetParam(r, "key")
 
-	result, err := Get(key, "")
+	result, exists, err := Get(key, "")
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	response.JSON(w, r, http.StatusOK, result)
+	response.JSON(w, r, http.StatusOK, et.Item{
+		Ok: exists,
+		Result: et.Json{
+			"key":   key,
+			"value": result,
+		},
+	})
 }
 
 /**

@@ -83,6 +83,8 @@ type Flow struct {
 	TotalAttempts int                        `json:"total_attempts"`
 	TimeAttempts  time.Duration              `json:"time_attempts"`
 	TimeAwait     time.Duration              `json:"time_await"`
+	Constants     et.Json                    `json:"constants"`
+	Variables     et.Json                    `json:"variables"`
 	Resources     []et.Json                  `json:"resources"`
 	Published     bool                       `json:"published"`
 	AuditLog      []et.Json                  `json:"audit_log"`
@@ -118,6 +120,8 @@ func NewFlow(tag, name, version, ownerId, userId string) *Flow {
 		TotalAttempts: 0,
 		TimeAttempts:  0,
 		TimeAwait:     10 * time.Minute,
+		Constants:     make(et.Json),
+		Variables:     make(et.Json),
 		Resources:     make([]et.Json, 0),
 		Published:     false,
 		AuditLog:      make([]et.Json, 0),
@@ -154,6 +158,15 @@ func LoadFlow(def et.Json) (*Flow, error) {
 func (s *Flow) up() *Flow {
 	if s.onChange == nil {
 		s.onChange = make([]func(data et.Json) error, 0)
+	}
+	if s.Constants == nil {
+		s.Constants = make(et.Json)
+	}
+	if s.Variables == nil {
+		s.Variables = make(et.Json)
+	}
+	if s.Resources == nil {
+		s.Resources = make([]et.Json, 0)
 	}
 	return s
 }

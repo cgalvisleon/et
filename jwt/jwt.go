@@ -152,14 +152,7 @@ func NewEphemeralToken(app, device, userId, name string, duration time.Duration)
 * @return string, bool, error
 **/
 func GetToken(key string) (string, bool, error) {
-	result, err := cache.Get(key, "")
-	if err == cache.ErrNotFound {
-		return "", false, nil
-	} else if err != nil {
-		return "", false, err
-	}
-
-	return result, true, nil
+	return cache.Get(key, "")
 }
 
 /**

@@ -182,28 +182,28 @@ func wrapperCache(instance *Instance) {
 			return cache.Set(key, value, expiration)
 		},
 		"get": func(key string, defaultValue string) string {
-			result, err := cache.Get(key, defaultValue)
+			result, _, err := cache.Get(key, defaultValue)
 			if err != nil {
 				return defaultValue
 			}
 			return result
 		},
 		"json": func(key string) et.Json {
-			result, err := cache.GetJson(key)
+			result, _, err := cache.GetJson(key)
 			if err != nil {
 				return et.Json{}
 			}
 			return result
 		},
 		"items": func(key string) et.Items {
-			result, err := cache.GetItems(key)
+			result, _, err := cache.GetItems(key)
 			if err != nil {
 				return et.Items{}
 			}
 			return result
 		},
 		"item": func(key string) et.Item {
-			result, err := cache.GetItem(key)
+			result, _, err := cache.GetItem(key)
 			if err != nil {
 				return et.Item{}
 			}

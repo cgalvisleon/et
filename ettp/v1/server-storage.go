@@ -35,7 +35,7 @@ func (s *Server) migrate() error {
 	}
 
 	storageBeforeKey := fmt.Sprintf("%s-v0.0.0", s.Name)
-	strs, err := cache.Get(storageBeforeKey, string(bt))
+	strs, _, err := cache.Get(storageBeforeKey, string(bt))
 	if err != nil {
 		return err
 	}
@@ -111,7 +111,7 @@ func (s *Server) load() error {
 		return err
 	}
 
-	strs, err := cache.Get(s.storageKey, string(bt))
+	strs, _, err := cache.Get(s.storageKey, string(bt))
 	if err != nil {
 		return err
 	}

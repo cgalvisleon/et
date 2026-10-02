@@ -673,7 +673,7 @@ func (s *suite) relations() {
 			return nil, err
 		}
 		model.DefineOmitUpdate("created_by", "meta")
-		model.DefineBeforeUpdate("force_code", `NEW.code = "C3";`)
+		model.DefineBeforeUpdate("force_code", `NEW.code = "C3";`, 1)
 		if err := model.Init(); err != nil {
 			return nil, err
 		}
@@ -1433,8 +1433,8 @@ func (s *suite) triggers() {
 		return got, expect("command trigger", et.Json{"source": "command", "aborted_exists": false}, got)
 	})
 	s.run(7, "Triggers JS (DefineBeforeInsert / DefineAfterUpdate…)", func() (any, error) {
-		events.DefineBeforeInsert(`NEW.js = "before_insert";`)
-		events.DefineBeforeUpdate("js_update", `NEW.js = "before_update";`)
+		events.DefineBeforeInsert("js_insert", `NEW.js = "before_insert";`, 1)
+		events.DefineBeforeUpdate("js_update", `NEW.js = "before_update";`, 1)
 		row, err := events.Insert(et.Json{"id": "e4", "name": "js"}).One()
 		if err != nil {
 			return nil, err

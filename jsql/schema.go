@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/jwf"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/utility"
 )
@@ -104,12 +105,12 @@ func (s *Schema) newModel(id, name string, version int, userId string) *Model {
 		Masters:       make(map[string]*Master, 0),
 		Rollups:       make(map[string]*Rollups, 0),
 		Version:       version,
-		BeforeInserts: make([]string, 0),
-		BeforeUpdates: make([]string, 0),
-		BeforeDeletes: make([]string, 0),
-		AfterInserts:  make([]string, 0),
-		AfterUpdates:  make([]string, 0),
-		AfterDeletes:  make([]string, 0),
+		BeforeInserts: make([]*jwf.Script, 0),
+		BeforeUpdates: make([]*jwf.Script, 0),
+		BeforeDeletes: make([]*jwf.Script, 0),
+		AfterInserts:  make([]*jwf.Script, 0),
+		AfterUpdates:  make([]*jwf.Script, 0),
+		AfterDeletes:  make([]*jwf.Script, 0),
 		AuditLog:      &et.SafeData{},
 		calcs:         make(map[string]CalcFunction, 0),
 		calcScripts:   make(map[string]string, 0),
@@ -132,27 +133,27 @@ func (s *Schema) newModel(id, name string, version int, userId string) *Model {
 * @param params et.Json
 * @return *Model, error
 **/
-func (s *Schema) loadModel(params et.Json) (*Model, error) {
-	if params.IsEmpty() {
+func (s *Schema) loadModel(def et.Json) (*Model, error) {
+	if def.IsEmpty() {
 		return nil, errors.New(MSG_PARAMS_IS_EMPTY)
 	}
 
-	id := params.Str("id")
+	id := def.Str("id")
 	if !utility.ValidStr(id, 0, []string{""}) {
 		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "id")
 	}
 
-	name := params.Str("name")
+	name := def.Str("name")
 	if !utility.ValidStr(name, 0, []string{""}) {
 		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "name")
 	}
 
-	table := params.Str("table")
+	table := def.Str("table")
 	if !utility.ValidStr(table, 0, []string{""}) {
 		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "table")
 	}
 
-	version := params.ValInt(0, "version")
+	version := def.ValInt(0, "version")
 
 	result := &Model{
 		ID:            id,
@@ -172,12 +173,12 @@ func (s *Schema) loadModel(params et.Json) (*Model, error) {
 		Masters:       make(map[string]*Master, 0),
 		Rollups:       make(map[string]*Rollups, 0),
 		Version:       version,
-		BeforeInserts: make([]string, 0),
-		BeforeUpdates: make([]string, 0),
-		BeforeDeletes: make([]string, 0),
-		AfterInserts:  make([]string, 0),
-		AfterUpdates:  make([]string, 0),
-		AfterDeletes:  make([]string, 0),
+		BeforeInserts: make([]*jwf.Script, 0),
+		BeforeUpdates: make([]*jwf.Script, 0),
+		BeforeDeletes: make([]*jwf.Script, 0),
+		AfterInserts:  make([]*jwf.Script, 0),
+		AfterUpdates:  make([]*jwf.Script, 0),
+		AfterDeletes:  make([]*jwf.Script, 0),
 		AuditLog:      &et.SafeData{},
 		calcs:         make(map[string]CalcFunction, 0),
 		calcScripts:   make(map[string]string, 0),
@@ -189,8 +190,8 @@ func (s *Schema) loadModel(params et.Json) (*Model, error) {
 		afterDeletes:  make([]TriggerFunction, 0),
 		db:            s.db,
 	}
-	result.OmitUpdates = append(result.OmitUpdates, params.ArrayStr("omit_updates")...)
-	columns := params.ArrayJson("columns")
+	result.OmitUpdates = append(result.OmitUpdates, def.ArrayStr("omit_updates")...)
+	columns := def.ArrayJson("columns")
 	result.loadColumns(columns)
 
 	for _, foreignKey := range result.ForeignKeys {

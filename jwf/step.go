@@ -13,13 +13,14 @@ import (
 type Kind string
 
 const (
-	KindFunction  Kind = "function"
-	KindTrigger   Kind = "trigger"
-	KindAction    Kind = "action"
-	KindCondition Kind = "condition"
-	KindDelay     Kind = "delay"
-	KindBucle     Kind = "bucle"
-	KindIAAgent   Kind = "ia_agent"
+	KindFunction        Kind = "function"
+	KindTrigger         Kind = "trigger"
+	KindAction          Kind = "action"
+	KindCondition       Kind = "condition"
+	KindDelay           Kind = "delay"
+	KindBucle           Kind = "bucle"
+	KindIAAgent         Kind = "ia_agent"
+	LANGUAGE_JAVASCRIPT      = "javascript"
 )
 
 var (
@@ -41,6 +42,14 @@ var (
 
 type fnPublish func(flow *Flow, ctx et.Json) (et.Json, error)
 
+type Script struct {
+	Code        string `json:"code"`
+	Language    string `json:"language"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Version     int    `json:"version"`
+}
+
 type Step struct {
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
@@ -50,9 +59,9 @@ type Step struct {
 	Tag         string         `json:"tag"`
 	Version     string         `json:"version"`
 	Status      Status         `json:"status"`
-	Name        string         `json:"name"`
+	Title       string         `json:"title"`
 	Description string         `json:"description"`
-	Definition  string         `json:"definition"`
+	Definition  []*Script      `json:"definition"`
 	OnPublish   string         `json:"on_publish"`
 	Config      et.Json        `json:"config"`
 	Params      et.Json        `json:"params"`
@@ -68,10 +77,10 @@ type Step struct {
 
 /**
 * newStep
-* @param ownerId, id string, kind Kind, tag, version, name string
+* @param ownerId, id string, kind Kind, tag, version, title string
 * @return *Step
 **/
-func newStep(ownerId, id string, kind Kind, tag, version, name string) *Step {
+func newStep(ownerId, id string, kind Kind, tag, version, title string) *Step {
 	if version == "" {
 		version = "1.0.0"
 	}
@@ -87,9 +96,9 @@ func newStep(ownerId, id string, kind Kind, tag, version, name string) *Step {
 		Tag:         tag,
 		Version:     version,
 		Status:      ACTIVE,
-		Name:        name,
+		Title:       title,
 		Description: "",
-		Definition:  "",
+		Definition:  []*Script{},
 		OnPublish:   "",
 		Config:      et.Json{},
 		Params:      et.Json{},
@@ -115,7 +124,7 @@ func (s *Step) ToJson() et.Json {
 		"tag":         s.Tag,
 		"version":     s.Version,
 		"status":      s.Status,
-		"name":        s.Name,
+		"title":       s.Title,
 		"description": s.Description,
 		"definition":  s.Definition,
 		"on_publish":  s.OnPublish,
@@ -176,7 +185,15 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 	}
 
 	rex := initJrex()
-	return runJrex(rex, s.Definition)
+	result := et.Json{}
+	var err error
+	for _, script := range s.Definition {
+		result, err = runJrex(rex, script.Code)
+		if err != nil {
+			return et.Json{}, err
+		}
+	}
+	return result, nil
 }
 
 /**

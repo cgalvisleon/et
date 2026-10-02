@@ -166,12 +166,12 @@ func (s *Instance) isStop() bool {
 	}
 
 	key := fmt.Sprintf("resilience:%s:stop", s.ID)
-	str, err := cache.Get(key, "")
+	stop, _, err := cache.GetBool(key, false)
 	if err != nil {
 		return false
 	}
 
-	return str == "true"
+	return stop
 }
 
 /**

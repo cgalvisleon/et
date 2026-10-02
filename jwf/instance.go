@@ -11,7 +11,6 @@ import (
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/resilience"
@@ -58,11 +57,6 @@ type Result struct {
 	Error  string  `json:"error"`
 }
 
-type Owner struct {
-	From jsql.From
-	Id   string `json:"id"`
-}
-
 type Current struct {
 	SourceId   string `json:"source_id"`
 	TargetId   string `json:"target_id"`
@@ -85,7 +79,6 @@ type Instance struct {
 	Ctxs       map[string]et.Json         `json:"ctxs"`
 	Params     et.Json                    `json:"params"`
 	Results    map[string]*Result         `json:"results"`
-	Owners     []*Owner                   `json:"owners"`
 	Tags       et.Json                    `json:"tags"`
 	Trigger    *Trigger                   `json:"trigger"`
 	Current    *Connection                `json:"current"`
@@ -119,7 +112,6 @@ func (s *Flow) NewInstance(id, code, name string, trigger *Trigger) *Instance {
 		Ctx:       et.Json{},
 		Ctxs:      make(map[string]et.Json),
 		Params:    et.Json{},
-		Owners:    make([]*Owner, 0),
 		Results:   make(map[string]*Result),
 		Tags:      et.Json{},
 		Trigger:   trigger,
@@ -218,33 +210,6 @@ func (s *Instance) wrapper() {
 			return s.Params.ArrayJson(key)
 		},
 	}
-	s.bindings["owner"] = map[string]interface{}{
-		"add": func(from jsql.From, id string) {
-			s.Owners = append(s.Owners, &Owner{
-				From: from,
-				Id:   id,
-			})
-		},
-		"get": func(id string) *Owner {
-			for _, owner := range s.Owners {
-				if owner.Id == id {
-					return owner
-				}
-			}
-			return nil
-		},
-		"remove": func(id string) {
-			for i, owner := range s.Owners {
-				if owner.Id == id {
-					s.Owners = append(s.Owners[:i], s.Owners[i+1:]...)
-					break
-				}
-			}
-		},
-		"list": func() []*Owner {
-			return s.Owners
-		},
-	}
 }
 
 /**
@@ -308,7 +273,6 @@ func (s *Instance) ToJson() et.Json {
 		"ctxs":       s.Ctxs,
 		"params":     s.Params,
 		"results":    s.Results,
-		"owners":     s.Owners,
 		"tags":       s.Tags,
 		"trigger":    s.Trigger,
 		"current":    s.Current,
@@ -504,16 +468,12 @@ func (s *Instance) isStop() bool {
 	}
 
 	key := fmt.Sprintf("instance:%s:stop", s.ID)
-	stop, err := cache.Get(key, "")
+	stop, _, err := cache.GetBool(key, false)
 	if err != nil {
 		return false
 	}
 
-	if stop == "true" {
-		return true
-	}
-
-	return false
+	return stop
 }
 
 /**

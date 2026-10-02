@@ -426,11 +426,17 @@ func (s *Server) getCache(w http.ResponseWriter, r *http.Request) {
 	metric := middleware.GetMetrics(r)
 
 	key := r.PathValue("key")
-	result, err := cache.Get(key, "")
+	result, exists, err := cache.Get(key, "")
 	if err != nil {
 		metric.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	metric.JSON(w, r, http.StatusOK, result)
+	metric.JSON(w, r, http.StatusOK, et.Item{
+		Ok: exists,
+		Result: et.Json{
+			"key":   key,
+			"value": result,
+		},
+	})
 }

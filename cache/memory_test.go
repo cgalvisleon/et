@@ -20,13 +20,13 @@ func TestLoadFallsBackToMemory(t *testing.T) {
 	}
 
 	Set("token:a", "value", time.Hour)
-	got, err := Get("token:a", "")
-	if err != nil || got != "value" {
-		t.Fatalf("Get = %q, %v; want value", got, err)
+	got, exists, err := Get("token:a", "")
+	if err != nil || !exists || got != "value" {
+		t.Fatalf("Get = %q, %v, %v; want value, true", got, exists, err)
 	}
 
-	if _, err := Get("token:missing", ""); err != ErrNotFound {
-		t.Fatalf("Get of a missing key: err = %v, want ErrNotFound", err)
+	if got, exists, err := Get("token:missing", "def"); err != nil || exists || got != "def" {
+		t.Fatalf("Get of a missing key = %q, %v, %v; want def, false, nil", got, exists, err)
 	}
 
 	if n, _ := Delete("token:a"); n != 1 || Exists("token:a") {

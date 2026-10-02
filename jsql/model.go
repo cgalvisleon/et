@@ -9,6 +9,7 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jrex"
+	"github.com/cgalvisleon/et/jwf"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -49,12 +50,12 @@ type Model struct {
 	Version       int                     `json:"version"`
 	IsDebug       bool                    `json:"-"`
 	isInit        bool                    `json:"-"`
-	BeforeInserts []string                `json:"before_inserts"`
-	BeforeUpdates []string                `json:"before_updates"`
-	BeforeDeletes []string                `json:"before_deletes"`
-	AfterInserts  []string                `json:"after_inserts"`
-	AfterUpdates  []string                `json:"after_updates"`
-	AfterDeletes  []string                `json:"after_deletes"`
+	BeforeInserts []*jwf.Script           `json:"before_inserts"`
+	BeforeUpdates []*jwf.Script           `json:"before_updates"`
+	BeforeDeletes []*jwf.Script           `json:"before_deletes"`
+	AfterInserts  []*jwf.Script           `json:"after_inserts"`
+	AfterUpdates  []*jwf.Script           `json:"after_updates"`
+	AfterDeletes  []*jwf.Script           `json:"after_deletes"`
 	AuditLog      *et.SafeData            `json:"audit_log"`
 	isChanged     bool                    `json:"-"`
 	calcs         map[string]CalcFunction `json:"-"`
@@ -640,7 +641,7 @@ func (s *Model) upsert(data et.Json) *Command {
 * @return *Query
 **/
 func (s *Model) queryTx(tx *Tx, query et.Json) *Query {
-	result := s.As("")	
+	result := s.As("")
 	_, result.err = result.loadQuery(query)
 	return result
 }

@@ -82,11 +82,6 @@ func loadDb(params et.Json) (*DB, error) {
 		return nil, errors.New(MSG_PARAMS_IS_EMPTY)
 	}
 
-	id := params.Str("id")
-	if !utility.ValidStr(id, 0, []string{""}) {
-		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "id")
-	}
-
 	host := params.Str("host")
 	if !utility.ValidStr(host, 0, []string{""}) {
 		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "host")

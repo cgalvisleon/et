@@ -15,8 +15,6 @@ import (
 **/
 const minExpiration = time.Millisecond
 
-var ErrNotFound = errors.New("not found")
-
 /**
 * clampExpiration: Returns d clamped to the Redis minimum TTL.
 * @param d time.Duration
@@ -126,29 +124,29 @@ func DecrCtx(ctx context.Context, key string) int64 {
 /**
 * GetCtx
 * @params ctx context.Context, key string, def string
-* @return string, error
+* @return string, bool, error (bool: the key exists in the cache)
 **/
-func GetCtx(ctx context.Context, key, def string) (string, error) {
+func GetCtx(ctx context.Context, key, def string) (string, bool, error) {
 	if local != nil {
 		result, ok := local.get(key)
 		if !ok {
-			return def, ErrNotFound
+			return def, false, nil
 		}
-		return result, nil
+		return result, true, nil
 	}
 
 	if conn == nil {
-		return def, errors.New(msg.MSG_NOT_CACHE_SERVICE)
+		return def, false, errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
 	result, err := conn.Get(ctx, key).Result()
 	if err == redis.Nil {
-		return def, ErrNotFound
+		return def, false, nil
 	} else if err != nil {
-		return def, err
+		return def, false, err
 	}
 
-	return result, nil
+	return result, true, nil
 }
 
 /**

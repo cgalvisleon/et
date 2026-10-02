@@ -14,12 +14,12 @@ import (
 * @response bool, error
 **/
 func (s *Send) VerifyOTP(key string, otp string) (bool, error) {
-	otpCache, err := cache.Get(key, "")
+	otpCache, exists, err := cache.Get(key, "")
 	if err != nil {
 		return false, err
 	}
 
-	if otpCache != otp {
+	if !exists || otpCache != otp {
 		return false, nil
 	}
 

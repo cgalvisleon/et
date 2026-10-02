@@ -8,6 +8,7 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jrex"
+	"github.com/cgalvisleon/et/jwf"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 )
@@ -33,12 +34,12 @@ type Command struct {
 	Returns        []string          `json:"returns"`
 	RowsLimit      *int              `json:"limit,omitempty"`
 	UseSourceField bool              `json:"use_source_field"`
-	BeforeInserts  []string          `json:"before_inserts"`
-	BeforeUpdates  []string          `json:"before_updates"`
-	BeforeDeletes  []string          `json:"before_deletes"`
-	AfterInserts   []string          `json:"after_inserts"`
-	AfterUpdates   []string          `json:"after_updates"`
-	AfterDeletes   []string          `json:"after_deletes"`
+	BeforeInserts  []*jwf.Script     `json:"before_inserts"`
+	BeforeUpdates  []*jwf.Script     `json:"before_updates"`
+	BeforeDeletes  []*jwf.Script     `json:"before_deletes"`
+	AfterInserts   []*jwf.Script     `json:"after_inserts"`
+	AfterUpdates   []*jwf.Script     `json:"after_updates"`
+	AfterDeletes   []*jwf.Script     `json:"after_deletes"`
 	beforeInserts  []TriggerFunction `json:"-"`
 	beforeUpdates  []TriggerFunction `json:"-"`
 	beforeDeletes  []TriggerFunction `json:"-"`
@@ -67,12 +68,12 @@ func newCommand(model *Model, tp CommandType) *Command {
 		Conditions:     []*et.Condition{},
 		Returns:        []string{},
 		UseSourceField: model.SourceField != "",
-		BeforeInserts:  make([]string, 0),
-		BeforeUpdates:  make([]string, 0),
-		BeforeDeletes:  make([]string, 0),
-		AfterInserts:   make([]string, 0),
-		AfterUpdates:   make([]string, 0),
-		AfterDeletes:   make([]string, 0),
+		BeforeInserts:  make([]*jwf.Script, 0),
+		BeforeUpdates:  make([]*jwf.Script, 0),
+		BeforeDeletes:  make([]*jwf.Script, 0),
+		AfterInserts:   make([]*jwf.Script, 0),
+		AfterUpdates:   make([]*jwf.Script, 0),
+		AfterDeletes:   make([]*jwf.Script, 0),
 		beforeInserts:  []TriggerFunction{},
 		beforeUpdates:  []TriggerFunction{},
 		beforeDeletes:  []TriggerFunction{},
@@ -525,7 +526,7 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 
 		for _, script := range s.BeforeInserts {
 			instance := jrex.NewInstance()
-			instance.SetCode(script)
+			instance.SetCode(script.Code)
 			model.wrapper(instance)
 			setTriggerRecords(instance, s.Old, s.New)
 			_, err := instance.Run()
@@ -561,7 +562,7 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 
 		for _, script := range s.AfterInserts {
 			instance := jrex.NewInstance()
-			instance.SetCode(script)
+			instance.SetCode(script.Code)
 			model.wrapper(instance)
 			setTriggerRecords(instance, s.Old, s.New)
 			_, err := instance.Run()
@@ -608,7 +609,7 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 
 		for _, script := range s.BeforeUpdates {
 			instance := jrex.NewInstance()
-			instance.SetCode(script)
+			instance.SetCode(script.Code)
 			model.wrapper(instance)
 			setTriggerRecords(instance, s.Old, s.New)
 			_, err := instance.Run()
@@ -645,7 +646,7 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 
 		for _, script := range s.AfterUpdates {
 			instance := jrex.NewInstance()
-			instance.SetCode(script)
+			instance.SetCode(script.Code)
 			model.wrapper(instance)
 			setTriggerRecords(instance, s.Old, s.New)
 			_, err := instance.Run()
@@ -691,7 +692,7 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 
 		for _, script := range s.BeforeDeletes {
 			instance := jrex.NewInstance()
-			instance.SetCode(script)
+			instance.SetCode(script.Code)
 			model.wrapper(instance)
 			setTriggerRecords(instance, s.Old, s.New)
 			_, err := instance.Run()
@@ -726,7 +727,7 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 
 		for _, script := range s.AfterDeletes {
 			instance := jrex.NewInstance()
-			instance.SetCode(script)
+			instance.SetCode(script.Code)
 			model.wrapper(instance)
 			setTriggerRecords(instance, s.Old, s.New)
 			_, err := instance.Run()

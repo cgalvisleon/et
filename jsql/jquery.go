@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/jwf"
 )
 
 // keywordsCommand are the keys of a command descriptor, in the order they are checked.
@@ -218,8 +219,8 @@ func (s *DB) parseCommand(tx *Tx, kind string, value any) (et.Items, error) {
 		command.Limit(desc.Int("limit"))
 	}
 
-	scripts := func(key string) []string {
-		return desc.ArrayStr(key)
+	scripts := func(key string) []*jwf.Script {
+		return toScripts(desc.Array(key))
 	}
 	command.BeforeInserts = append(command.BeforeInserts, scripts("before_insert")...)
 	command.AfterInserts = append(command.AfterInserts, scripts("after_insert")...)
@@ -281,4 +282,37 @@ func toJson(value any) (et.Json, bool) {
 		return et.Json(v), true
 	}
 	return nil, false
+}
+
+/**
+* toScripts: Converts a descriptor's script list into jwf.Script. Each entry is either the
+* JavaScript code as a string or an object {name, code, language, description, version}.
+* @param values []interface{}
+* @return []*jwf.Script
+**/
+func toScripts(values []interface{}) []*jwf.Script {
+	result := make([]*jwf.Script, 0, len(values))
+	for _, value := range values {
+		switch v := value.(type) {
+		case string:
+			result = append(result, &jwf.Script{
+				Language: jwf.LANGUAGE_JAVASCRIPT,
+				Code:     v,
+			})
+		case map[string]interface{}:
+			item := et.Json(v)
+			result = append(result, &jwf.Script{
+				Language:    item.ValStr(jwf.LANGUAGE_JAVASCRIPT, "language"),
+				Name:        item.Str("name"),
+				Description: item.Str("description"),
+				Code:        item.Str("code"),
+				Version:     item.Int("version"),
+			})
+		case et.Json:
+			result = append(result, toScripts([]interface{}{map[string]interface{}(v)})...)
+		case *jwf.Script:
+			result = append(result, v)
+		}
+	}
+	return result
 }

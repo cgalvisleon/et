@@ -51,28 +51,29 @@ type Script struct {
 }
 
 type Step struct {
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	OwnerId     string         `json:"owner_id"`
-	ID          string         `json:"id"`
-	Kind        Kind           `json:"kind"`
-	Tag         string         `json:"tag"`
-	Version     string         `json:"version"`
-	Status      Status         `json:"status"`
-	Title       string         `json:"title"`
-	Description string         `json:"description"`
-	Definition  []*Script      `json:"definition"`
-	OnPublish   string         `json:"on_publish"`
-	Config      et.Json        `json:"config"`
-	Params      et.Json        `json:"params"`
-	Inputs      int            `json:"inputs"`
-	Outputs     int            `json:"outputs"`
-	Stop        bool           `json:"stop"`
-	fn          fnStep         `json:"-"`
-	onPublish   fnPublish      `json:"-"`
-	isDebug     bool           `json:"-"`
-	isChanged   bool           `json:"-"`
-	bindings    map[string]any `json:"-"`
+	CreatedAt   time.Time           `json:"created_at"`
+	UpdatedAt   time.Time           `json:"updated_at"`
+	OwnerId     string              `json:"owner_id"`
+	ID          string              `json:"id"`
+	Kind        Kind                `json:"kind"`
+	Tag         string              `json:"tag"`
+	Version     string              `json:"version"`
+	Status      Status              `json:"status"`
+	Title       string              `json:"title"`
+	Description string              `json:"description"`
+	Definition  []*Script           `json:"definition"`
+	OnPublish   []*Script           `json:"on_publish"`
+	Config      et.Json             `json:"config"`
+	Params      et.Json             `json:"params"`
+	Inputs      int                 `json:"inputs"`
+	Outputs     int                 `json:"outputs"`
+	Stop        bool                `json:"stop"`
+	fn          fnStep              `json:"-"`
+	onPublish   fnPublish           `json:"-"`
+	isDebug     bool                `json:"-"`
+	isChanged   bool                `json:"-"`
+	bindings    map[string]any      `json:"-"`
+	onStatus    func(status Status) `json:"-"`
 }
 
 /**
@@ -99,13 +100,14 @@ func newStep(ownerId, id string, kind Kind, tag, version, title string) *Step {
 		Title:       title,
 		Description: "",
 		Definition:  []*Script{},
-		OnPublish:   "",
+		OnPublish:   []*Script{},
 		Config:      et.Json{},
 		Params:      et.Json{},
 		Inputs:      0,
 		Outputs:     1,
 		Stop:        false,
 		bindings:    make(map[string]any),
+		onStatus:    nil,
 	}
 	return result
 }
@@ -145,24 +147,55 @@ func (s *Step) ToString() string {
 }
 
 /**
-* run
-* @param instance *Instance, ctx et.Json
-* @return error
+* OnStatus
+* @param fn func(status Status)
 **/
-func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
+func (s *Step) OnStatus(fn func(status Status)) {
+	s.onStatus = fn
+}
+
+/**
+* setStatus
+* @param status Status
+**/
+func (s *Step) setStatus(status Status) {
+	if s.onStatus == nil {
+		return
+	}
+	s.onStatus(status)
+}
+
+/**
+* RunFunction
+* @param instance *Instance, ctx et.Json
+* @return et.Json, error
+**/
+func (s *Step) RunFunction(instance *Instance, ctx et.Json) (et.Json, error) {
+	if s.fn == nil {
+		return et.Json{}, nil
+	}
+	s.setStatus(RUNNING)
+	result, err := s.fn(instance, ctx)
+	if err != nil {
+		s.setStatus(FAILED)
+		return et.Json{}, err
+	}
+	return result, nil
+}
+
+/**
+* RunScript
+* @param ctx et.Json
+* @return et.Json, error
+**/
+func (s *Step) RunScript(ctx et.Json, bindings map[string]any) (et.Json, error) {
 	if s.fn != nil {
-		instance.setStatus(RUNNING)
-		result, err := s.fn(instance, ctx)
-		if err != nil {
-			instance.setStatus(FAILED)
-			return et.Json{}, err
-		}
-		return result, nil
+		return et.Json{}, nil
 	}
 
 	initJrex := func() *jrex.Instance {
 		result := jrex.NewInstance()
-		for name, binding := range instance.bindings {
+		for name, binding := range bindings {
 			result.Set(name, binding)
 		}
 		result.Set("params", s.Params)
@@ -170,7 +203,6 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 	}
 
 	runJrex := func(rex *jrex.Instance, script string) (et.Json, error) {
-		instance.setStatus(RUNNING)
 		if script == "" {
 			return et.Json{}, nil
 		}
@@ -178,7 +210,6 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 		rex.SetCode(script)
 		_, err := rex.Run()
 		if err != nil {
-			instance.setStatus(FAILED)
 			return et.Json{}, err
 		}
 		return rex.Ctx, nil
@@ -186,14 +217,28 @@ func (s *Step) run(instance *Instance, ctx et.Json) (et.Json, error) {
 
 	rex := initJrex()
 	result := et.Json{}
-	var err error
+	s.setStatus(RUNNING)
 	for _, script := range s.Definition {
+		var err error
 		result, err = runJrex(rex, script.Code)
 		if err != nil {
+			s.setStatus(FAILED)
 			return et.Json{}, err
 		}
 	}
 	return result, nil
+}
+
+/**
+* Run
+* @param instance *Instance, ctx et.Json
+* @return error
+**/
+func (s *Step) Run(instance *Instance, ctx et.Json) (et.Json, error) {
+	if s.fn != nil {
+		return s.RunFunction(instance, ctx)
+	}
+	return s.RunScript(ctx, instance.bindings)
 }
 
 /**
@@ -228,5 +273,13 @@ func (s *Step) runOnPublish(flow *Flow, ctx et.Json) (et.Json, error) {
 	}
 
 	rex := initJrex()
-	return runJrex(rex, s.OnPublish)
+	result := et.Json{}
+	var err error
+	for _, script := range s.OnPublish {
+		result, err = runJrex(rex, script.Code)
+		if err != nil {
+			return et.Json{}, err
+		}
+	}
+	return result, nil
 }

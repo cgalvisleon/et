@@ -50,7 +50,10 @@ type Node struct {
 	ErrorId string `json:"error_id"`
 }
 
+const TRIGGER_MANUAL = "manual"
+
 type Trigger struct {
+	Type    string `json:"type"`
 	Tag     string `json:"tag"`
 	StartId string `json:"start_id"`
 }
@@ -91,6 +94,7 @@ type Flow struct {
 	isDebug       bool                       `json:"-"`
 	isChanged     bool                       `json:"-"`
 	onChange      []func(data et.Json) error `json:"-"`
+	bindings      map[string]interface{}     `json:"-"`
 	step          *Step                      `json:"-"`
 }
 
@@ -125,6 +129,7 @@ func NewFlow(tag, name, version, ownerId, userId string) *Flow {
 		Resources:     make([]et.Json, 0),
 		Published:     false,
 		AuditLog:      make([]et.Json, 0),
+		bindings:      make(map[string]interface{}),
 	}
 	result.up()
 	result.addAuditLog(userId, "new_flow")
@@ -167,6 +172,9 @@ func (s *Flow) up() *Flow {
 	}
 	if s.Resources == nil {
 		s.Resources = make([]et.Json, 0)
+	}
+	if s.bindings == nil {
+		s.bindings = make(map[string]interface{})
 	}
 	return s
 }
@@ -255,6 +263,16 @@ func (s *Flow) ToString() string {
 func (s *Flow) SetTimeAwait(time time.Duration, userId string) *Flow {
 	s.TimeAwait = time
 	s.addAuditLog(userId, "set_time_await")
+	return s
+}
+
+/**
+* SetBinding
+* @param key string, value interface{}
+* @return *Flow
+**/
+func (s *Flow) SetBinding(key string, value interface{}) *Flow {
+	s.bindings[key] = value
 	return s
 }
 
@@ -400,6 +418,7 @@ func (s *Flow) Step(tag, title string, fn fnStep) *Flow {
 		s.step = result
 
 		s.Triggers = append(s.Triggers, &Trigger{
+			Type:    TRIGGER_MANUAL,
 			Tag:     tag,
 			StartId: result.ID,
 		})
@@ -445,6 +464,7 @@ func (s *Flow) AddStep(stepDef et.Json, userId string) (*Flow, error) {
 	s.Steps[step.ID] = step
 	if step.Kind == KindTrigger {
 		s.Triggers = append(s.Triggers, &Trigger{
+			Type:    step.Config.ValStr(TRIGGER_MANUAL, "type"),
 			Tag:     step.Tag,
 			StartId: step.ID,
 		})

@@ -16,6 +16,7 @@ const (
 	CREATED_AT string = "created_at"
 	UPDATED_AT string = "updated_at"
 	CODE       string = "code"
+	KIND       string = "kind"
 )
 
 /**
@@ -66,7 +67,8 @@ var Status = map[string]bool{
 	REJECTED:   true,
 }
 
-var IsEditableStatus = []interface{}{ACTIVE, PENDING}
+var IsEditableStatus = []string{ACTIVE, PENDING}
+var IsExcludedStatus = []string{ARCHIVED, OF_SYSTEM}
 
 func statusList() []interface{} {
 	return []interface{}{ACTIVE, ARCHIVED, CANCELED, OF_SYSTEM, FOR_DELETE, PENDING, APPROVED, REJECTED}

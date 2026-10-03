@@ -266,7 +266,7 @@ func (s *WorkFlow) getInstance(id string) (*Instance, bool) {
 * @param params InstanceParams
 * @return *Instance, error
 **/
-func (s *WorkFlow) newInstance(tag, triggerTag, id, code, userId string) (*Instance, error) {
+func (s *WorkFlow) newInstance(tag, triggerTag, id, code string, tags et.Json, userId string) (*Instance, error) {
 	flow, exists := s.getFlow(tag)
 	if !exists {
 		return nil, ErrrFlowNotFound
@@ -284,7 +284,7 @@ func (s *WorkFlow) newInstance(tag, triggerTag, id, code, userId string) (*Insta
 
 	id = reg.GetUUID(id)
 	key := fmt.Sprintf("instance:%s", id)
-	result := flow.NewInstance(id, code, name, trigger)
+	result := flow.NewInstance(id, code, name, tags, trigger, userId)
 
 	result.OnChange(func(data et.Json) error {
 		_, err := cache.SetObject(key, data, 0)
@@ -300,11 +300,11 @@ func (s *WorkFlow) newInstance(tag, triggerTag, id, code, userId string) (*Insta
 * @param tag, triggerTag, id, projectId, code, userId string
 * @return *Instance, error
 **/
-func (s *WorkFlow) GetInstance(tag, triggerTag, id, code, userId string) (*Instance, error) {
+func (s *WorkFlow) GetInstance(tag, triggerTag, id, code string, tags et.Json, userId string) (*Instance, error) {
 	id = reg.GetULID(id)
 	instance, exists := s.getInstance(id)
 	if !exists {
-		instance, err := s.newInstance(tag, triggerTag, id, code, userId)
+		instance, err := s.newInstance(tag, triggerTag, id, code, tags, userId)
 		if err != nil {
 			return nil, err
 		}
@@ -334,8 +334,9 @@ func (s *WorkFlow) RunInstance(instance *Instance, ctx, tags et.Json, await bool
 		cache.Delete(key)
 	}()
 
+	instance.UserId = userId
 	instance.setTag(tags)
-	result, err := instance.Run(ctx, await, userId)
+	result, err := instance.Run(ctx, await)
 	if err != nil {
 		return et.Json{}, err
 	}
@@ -349,7 +350,7 @@ func (s *WorkFlow) RunInstance(instance *Instance, ctx, tags et.Json, await bool
 * @return *Instance, error
 **/
 func (s *WorkFlow) Run(tag, triggerTag, id, code string, ctx, tags et.Json, await bool, userId string) (et.Json, error) {
-	instance, err := s.GetInstance(tag, triggerTag, id, code, userId)
+	instance, err := s.GetInstance(tag, triggerTag, id, code, tags, userId)
 	if err != nil {
 		return et.Json{}, err
 	}

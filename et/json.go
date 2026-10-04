@@ -901,6 +901,33 @@ func (s Json) ArrayJson(atribs ...string) []Json {
 }
 
 /**
+* TrimString trim the string value of the key
+* @param atribs ...string
+* @return string
+**/
+func (s Json) TrimString(atribs ...string) string {
+	return strings.TrimSpace(s.Str(atribs...))
+}
+
+/**
+* LowerString convert the trimmed string value of the key to lowercase
+* @param atribs ...string
+* @return string
+**/
+func (s Json) LowerString(atribs ...string) string {
+	return strings.ToLower(s.TrimString(atribs...))
+}
+
+/**
+* UpperString convert the trimmed string value of the key to uppercase
+* @param atribs ...string
+* @return string
+**/
+func (s Json) UpperString(atribs ...string) string {
+	return strings.ToUpper(s.TrimString(atribs...))
+}
+
+/**
 * Update: This method update s with values in from. If the key exist in s, the value is replaced with the value in from.
 * @param fromJson Json
 * @return error

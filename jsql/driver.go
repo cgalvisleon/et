@@ -24,6 +24,7 @@ type Driver interface {
 	Connect(db *DB, timeout ...time.Duration) (*sql.DB, error)
 	ExistModel(db *sql.DB, model *Model, timeout ...time.Duration) (bool, error)
 	Load(model *Model, timeout ...time.Duration) (string, error)
+	Drop(model *Model, timeout ...time.Duration) error
 	Query(query *Query, timeout ...time.Duration) (string, error)
 	Command(command *Command, timeout ...time.Duration) (string, error)
 }

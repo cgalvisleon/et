@@ -51,14 +51,6 @@ var (
 	}
 )
 
-type Result struct {
-	StepId string  `json:"step_id"`
-	Status Status  `json:"status"`
-	Ctx    et.Json `json:"ctx"`
-	Result et.Json `json:"result"`
-	Error  string  `json:"error"`
-}
-
 type Current struct {
 	SourceId   string `json:"source_id"`
 	TargetId   string `json:"target_id"`
@@ -79,9 +71,8 @@ type Instance struct {
 	Name        string                     `json:"name"`
 	Status      Status                     `json:"status"`
 	Ctx         et.Json                    `json:"ctx"`
-	Ctxs        map[string]et.Json         `json:"ctxs"`
 	Params      et.Json                    `json:"params"`
-	Results     map[string]*Result         `json:"results"`
+	Steps       []et.Json                  `json:"steps"`
 	Tags        et.Json                    `json:"tags"`
 	Trigger     *Trigger                   `json:"trigger"`
 	Current     *Connection                `json:"current"`
@@ -118,10 +109,9 @@ func (s *Flow) NewInstance(id, code, name string, tags et.Json, trigger *Trigger
 		Code:        code,
 		Name:        name,
 		Status:      CREATED,
-		Ctx:         et.Json{},
-		Ctxs:        make(map[string]et.Json),
 		Params:      et.Json{},
-		Results:     make(map[string]*Result),
+		Ctx:         et.Json{},
+		Steps:       make([]et.Json, 0),
 		Tags:        tags,
 		Trigger:     trigger,
 		IsDone:      false,
@@ -168,11 +158,8 @@ func (s *Flow) LoadInstance(def et.Json) (*Instance, error) {
 * @return *Instance
 **/
 func (s *Instance) up() *Instance {
-	if s.Results == nil {
-		s.Results = make(map[string]*Result)
-	}
-	if s.Ctxs == nil {
-		s.Ctxs = make(map[string]et.Json)
+	if s.Steps == nil {
+		s.Steps = make([]et.Json, 0)
 	}
 	if s.onChange == nil {
 		s.onChange = make([]func(data et.Json) error, 0)
@@ -264,7 +251,7 @@ func (s *Instance) wrapper() {
 * @return error
 **/
 func (s *Instance) push() {
-	stepId := s.currentStepId()
+	stepId := s.StepId
 	if stepId == "" {
 		stepId = "unknown"
 	}
@@ -313,19 +300,6 @@ func (s *Instance) ref() et.Json {
 		}
 	}
 
-	steps := et.Json{}
-	for stepId, result := range s.Results {
-		var res any
-		if result.Result != nil {
-			res = result.Result
-		}
-		steps[stepId] = et.Json{
-			"status": result.Status,
-			"result": res,
-			"error":  nilIfEmpty(result.Error),
-		}
-	}
-
 	return et.Json{
 		"id":           s.ID,
 		"code":         s.Code,
@@ -339,7 +313,8 @@ func (s *Instance) ref() et.Json {
 		"trigger":      s.Trigger,
 		"params":       s.Params,
 		"ctx":          s.Ctx,
-		"steps":        steps,
+		"steps":        s.Steps,
+		"tags":         s.Tags,
 		"step_id":      s.StepId,
 		"is_done":      s.IsDone,
 		"is_end":       s.IsEnd,
@@ -361,17 +336,6 @@ func nilIfEmpty(value string) any {
 }
 
 /**
-* currentStepId: Returns the id of the step being run, or "" before the first one.
-* @return string
-**/
-func (s *Instance) currentStepId() string {
-	if s.Step == nil {
-		return ""
-	}
-	return s.Step.ID
-}
-
-/**
 * ToJson
 * @return et.Json
 **/
@@ -388,9 +352,8 @@ func (s *Instance) ToJson() et.Json {
 		"name":         s.Name,
 		"status":       s.Status,
 		"ctx":          s.Ctx,
-		"ctxs":         s.Ctxs,
 		"params":       s.Params,
-		"results":      s.Results,
+		"steps":        s.Steps,
 		"tags":         s.Tags,
 		"trigger":      s.Trigger,
 		"current":      s.Current,
@@ -447,6 +410,68 @@ func (s *Instance) setStatus(status Status) {
 }
 
 /**
+* setCtx
+* @param ctx et.Json, step int
+* @return et.Json
+**/
+func (s *Instance) setCtx(ctx et.Json) et.Json {
+	for k, v := range ctx {
+		s.Ctx[k] = v
+	}
+
+	stepId := s.StepId
+	if stepId == "" {
+		return ctx
+	}
+
+	cp := et.Json{}
+	maps.Copy(cp, ctx)
+	s.Steps = append(s.Steps, et.Json{
+		"step_id": stepId,
+		"status":  s.getStatus(),
+		"ctx":     cp,
+		"result":  et.Json{},
+		"error":   et.Json{},
+	})
+
+	s.push()
+	return s.Ctx
+}
+
+/**
+* setResult
+* @param result et.Json, err error
+* @return et.Json, error
+**/
+func (s *Instance) setResult(result et.Json, err error) *Instance {
+	errMessage := et.Json{}
+	if err != nil {
+		errMessage = et.Json{
+			"message": err.Error(),
+		}
+	}
+
+	stepId := s.StepId
+	if stepId == "" {
+		return s
+	}
+
+	cp := et.Json{}
+	maps.Copy(cp, result)
+	for _, step := range s.Steps {
+		if step.Str("step_id") == stepId {
+			step["status"] = s.getStatus()
+			step["result"] = cp
+			step["error"] = errMessage
+			break
+		}
+	}
+
+	s.push()
+	return s
+}
+
+/**
 * setError
 * @param err error
 * @return error
@@ -459,43 +484,6 @@ func (s *Instance) setError(err error) {
 }
 
 /**
-* setResult
-* @param result et.Json, err error
-* @return et.Json, error
-**/
-func (s *Instance) setResult(result et.Json, err error) *Instance {
-	errMessage := ""
-	if err != nil {
-		errMessage = err.Error()
-	}
-	stepId := s.currentStepId()
-	if stepId == "" {
-		return s
-	}
-
-	status := COMPLETED
-	if err != nil {
-		status = FAILED
-	}
-	s.Results[stepId] = &Result{
-		StepId: stepId,
-		Status: status,
-		Ctx:    s.Ctx,
-		Result: result,
-		Error:  errMessage,
-	}
-
-	if err != nil {
-		s.Error = errMessage
-		s.setStatus(FAILED)
-	} else {
-		s.push()
-	}
-
-	return s
-}
-
-/**
 * setTag
 * @param tags et.Json
 * @return et.Json
@@ -504,20 +492,6 @@ func (s *Instance) setTag(tags et.Json) et.Json {
 	maps.Copy(s.Tags, tags)
 	s.push()
 	return s.Tags
-}
-
-/**
-* setCtx
-* @param ctx et.Json, step int
-* @return et.Json
-**/
-func (s *Instance) setCtx(ctx et.Json) et.Json {
-	maps.Copy(s.Ctx, ctx)
-	if stepId := s.currentStepId(); stepId != "" {
-		s.Ctxs[stepId] = ctx
-	}
-	s.push()
-	return s.Ctx
 }
 
 /**
@@ -645,9 +619,19 @@ func (s *Instance) next() bool {
 **/
 func (s *Instance) Run(ctx et.Json, await bool) (et.Json, error) {
 	var err error
+	var result et.Json
 	defer func() {
 		if err != nil {
 			s.setError(err)
+		}
+		result["instance_wf"] = et.Json{
+			"instance_id": s.ID,
+			"flow_id":     s.FlowId,
+			"flow_tag":    s.FlowTag,
+			"code":        s.Code,
+			"name":        s.Name,
+			"status":      RUNNING,
+			"ctx":         ctx,
 		}
 	}()
 
@@ -667,7 +651,6 @@ func (s *Instance) Run(ctx et.Json, await bool) (et.Json, error) {
 	}
 
 	runing := func() (et.Json, error) {
-		var result et.Json
 		for s.next() {
 			step := s.Step
 			if step == nil {
@@ -677,6 +660,7 @@ func (s *Instance) Run(ctx et.Json, await bool) (et.Json, error) {
 			step.OnStatus(func(status Status) {
 				s.setStatus(status)
 			})
+
 			ctx = s.setCtx(ctx)
 			result, err = step.Run(s, ctx)
 			if err != nil {
@@ -701,21 +685,12 @@ func (s *Instance) Run(ctx et.Json, await bool) (et.Json, error) {
 	go func() {
 		_, err := runing()
 		if err != nil {
-			logs.Logf(packageName, MSG_INSTANCE_ERROR, s.ID, s.FlowId, s.currentStepId(), err.Error())
+			logs.Logf(packageName, MSG_INSTANCE_ERROR, s.ID, s.FlowId, s.StepId, err.Error())
 		}
 	}()
 
-	return et.Json{
-		"instance_wf": et.Json{
-			"instance_id": s.ID,
-			"flow_id":     s.FlowId,
-			"flow_tag":    s.FlowTag,
-			"code":        s.Code,
-			"name":        s.Name,
-			"status":      RUNNING,
-			"ctx":         ctx,
-		},
-	}, nil
+	result = et.Json{}
+	return result, nil
 }
 
 /**

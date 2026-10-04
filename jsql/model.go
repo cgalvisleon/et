@@ -48,8 +48,8 @@ type Model struct {
 	OmitUpdates   []string                `json:"omit_updates"`
 	IsStrict      bool                    `json:"is_strict"`
 	Version       int                     `json:"version"`
+	IsInit        bool                    `json:"is_init"`
 	IsDebug       bool                    `json:"-"`
-	isInit        bool                    `json:"-"`
 	BeforeInserts []*jwf.Script           `json:"before_inserts"`
 	BeforeUpdates []*jwf.Script           `json:"before_updates"`
 	BeforeDeletes []*jwf.Script           `json:"before_deletes"`
@@ -213,7 +213,7 @@ func (s *Model) wrapper(instance *jrex.Instance) {
 * @return error
 **/
 func (s *Model) init() error {
-	if s.isInit {
+	if s.IsInit {
 		return nil
 	}
 
@@ -224,11 +224,11 @@ func (s *Model) init() error {
 
 	// Marked before the relations: a master is registered on both models, so initializing
 	// it calls back into this model, which must not start over.
-	s.isInit = true
+	s.IsInit = true
 	for _, detail := range s.Details {
 		err = detail.init()
 		if err != nil {
-			s.isInit = false
+			s.IsInit = false
 			return err
 		}
 	}
@@ -236,7 +236,7 @@ func (s *Model) init() error {
 	for _, master := range s.Masters {
 		err = master.init()
 		if err != nil {
-			s.isInit = false
+			s.IsInit = false
 			return err
 		}
 	}
@@ -264,7 +264,7 @@ func (s *Model) getDb() *DB {
 * @param db *DB
 **/
 func (s *Model) setDb(db *DB) {
-	s.isInit = false
+	s.IsInit = false
 	s.db = db
 }
 

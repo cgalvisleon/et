@@ -2,6 +2,7 @@ package mssql
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -172,6 +173,26 @@ func (s *Mssql) ExistModel(db *sql.DB, model *jsql.Model, timeout ...time.Durati
 		return false, nil
 	}
 	return items.Bool(0, "exists"), nil
+}
+
+/**
+* Drop: Drops the model's table from the database; a missing table is not an error.
+* @param model *jsql.Model, timeout ...time.Duration
+* @return error
+**/
+func (s *Mssql) Drop(model *jsql.Model, timeout ...time.Duration) error {
+	if model.Db() == nil || model.SqlDB() == nil {
+		return errors.New(jsql.MSG_DB_IS_NIL)
+	}
+
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
+
+	db := model.SqlDB()
+	table := ddlTable(model)
+	query := fmt.Sprintf("IF OBJECT_ID(%s, N'U') IS NOT NULL DROP TABLE %s", msQuoteText(table), table)
+	_, err := db.ExecContext(ctx, query)
+	return err
 }
 
 /**

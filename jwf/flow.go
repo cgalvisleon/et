@@ -87,6 +87,7 @@ type Flow struct {
 	TimeAttempts  time.Duration              `json:"time_attempts"`
 	TimeAwait     time.Duration              `json:"time_await"`
 	Constants     et.Json                    `json:"constants"`
+	SaveInstances bool                       `json:"save_instances"`
 	Variables     et.Json                    `json:"variables"`
 	Resources     []et.Json                  `json:"resources"`
 	Published     bool                       `json:"published"`
@@ -124,6 +125,7 @@ func NewFlow(tag, name, version, ownerId, userId string) *Flow {
 		TotalAttempts: 0,
 		TimeAttempts:  0,
 		TimeAwait:     10 * time.Minute,
+		SaveInstances: true,
 		Constants:     make(et.Json),
 		Variables:     make(et.Json),
 		Resources:     make([]et.Json, 0),

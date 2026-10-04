@@ -366,7 +366,7 @@ func (s *DB) newModel(schema, name string, version int, userId string) *Model {
 }
 
 /**
-* removeModel: Removes a model from the database.
+* removeModel: Drops the model's table through the driver and removes the model from its schema.
 * @param schema, name string
 * @return error
 **/
@@ -377,7 +377,21 @@ func (s *DB) removeModel(schema, name string) error {
 		return fmt.Errorf(MSG_SCHEMA_NOT_FOUND, schema)
 	}
 
-	sch.removeModel(name)
+	model, err := sch.getModel(name)
+	if err != nil {
+		return err
+	}
+
+	if s.driver == nil {
+		return errors.New(MSG_DRIVER_NOT_FOUND)
+	}
+
+	err = s.driver.Drop(model, s.timeout)
+	if err != nil {
+		return err
+	}
+
+	sch.removeModel(model.Name)
 	return nil
 }
 

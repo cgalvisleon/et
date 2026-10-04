@@ -1,6 +1,7 @@
 package jwf
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -112,6 +113,31 @@ func newStep(ownerId, id string, kind Kind, tag, version, title string) *Step {
 	return result
 }
 
+func LoadStep(def et.Json) (*Step, error) {
+	bt, err := def.ToByte()
+	if err != nil {
+		return nil, err
+	}
+
+	var result *Step
+	if err := json.Unmarshal(bt, &result); err != nil {
+		return nil, err
+	}
+
+	return result.up(), nil
+}
+
+/**
+* up
+* @return *Step
+**/
+func (s *Step) up() *Step {
+	if s.onStatus == nil {
+		s.onStatus = func(status Status) {}
+	}
+	return s
+}
+
 /**
 * ToJson
 * @return et.Json
@@ -189,10 +215,6 @@ func (s *Step) RunFunction(instance *Instance, ctx et.Json) (et.Json, error) {
 * @return et.Json, error
 **/
 func (s *Step) RunScript(ctx et.Json, bindings map[string]any) (et.Json, error) {
-	if s.fn != nil {
-		return et.Json{}, nil
-	}
-
 	initJrex := func() *jrex.Instance {
 		result := jrex.NewInstance()
 		for name, binding := range bindings {

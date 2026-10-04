@@ -148,9 +148,9 @@ func (s *Api) RegisterEndpoint(packageName, group, method, path, name string) er
 * Public: A route without token; it is published to the endpoint catalog with its name.
 * @param method, path, name string, handler http.HandlerFunc
 **/
-func (s *Api) Public(method, path, name string, handler http.HandlerFunc) {
+func (s *Api) Public(group, method, path, name string, handler http.HandlerFunc) {
 	path = s.getPath(path)
-	s.RegisterEndpoint(s.Name, "", method, path, name)
+	s.RegisterEndpoint(s.Name, group, method, path, name)
 	middlewares := make([]func(http.Handler) http.Handler, 0)
 	middlewares = append(middlewares, s.rateLimitMiddleware)
 	if s.idenpotency != nil {
@@ -169,9 +169,9 @@ func (s *Api) Public(method, path, name string, handler http.HandlerFunc) {
 * Session: A route with token that does not check the role; it is published to the endpoint catalog with its name.
 * @param method, path, name string, handler http.HandlerFunc
 **/
-func (s *Api) Session(method, path, name string, handler http.HandlerFunc) {
+func (s *Api) Session(group, method, path, name string, handler http.HandlerFunc) {
 	path = s.getPath(path)
-	s.RegisterEndpoint(s.Name, "", method, path, name)
+	s.RegisterEndpoint(s.Name, group, method, path, name)
 	middlewares := make([]func(http.Handler) http.Handler, 0)
 	middlewares = append(middlewares, s.rateLimitMiddleware)
 	if s.authentication != nil {

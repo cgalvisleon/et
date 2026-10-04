@@ -271,7 +271,7 @@ func (s *DB) NewModel(schema, name string, version int, userId string) *Model {
 }
 
 /**
-* RemoveModel: Removes a model from the database.
+* RemoveModel: Drops the model's table and removes the model from its schema.
 * @param schema, name string
 * @return error
 **/

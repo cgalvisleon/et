@@ -2,6 +2,7 @@ package oracle
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -179,6 +180,35 @@ func (s *Oracle) ExistModel(db *sql.DB, model *jsql.Model, timeout ...time.Durat
 	}
 
 	return items.Bool(0, "exists"), nil
+}
+
+/**
+* Drop: Drops the model's table from the database; a missing table is not an error.
+* @param model *jsql.Model, timeout ...time.Duration
+* @return error
+**/
+func (s *Oracle) Drop(model *jsql.Model, timeout ...time.Duration) error {
+	if model.Db() == nil || model.SqlDB() == nil {
+		return errors.New(jsql.MSG_DB_IS_NIL)
+	}
+
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
+
+	db := model.SqlDB()
+	// Oracle has no DROP TABLE IF EXISTS: check first
+	exists, err := s.ExistModel(db, model, timeout...)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		return nil
+	}
+
+	query := fmt.Sprintf("DROP TABLE %s", ddlTable(model))
+	_, err = db.ExecContext(ctx, query)
+	return err
 }
 
 /**

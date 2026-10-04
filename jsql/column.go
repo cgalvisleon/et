@@ -68,10 +68,23 @@ var Status = map[string]bool{
 }
 
 var IsEditableStatus = []string{ACTIVE, PENDING}
-var IsExcludedStatus = []string{ARCHIVED, OF_SYSTEM}
+var IsExcludedStatus = []string{ACTIVE, OF_SYSTEM}
 
 func statusList() []interface{} {
 	return []interface{}{ACTIVE, ARCHIVED, CANCELED, OF_SYSTEM, FOR_DELETE, PENDING, APPROVED, REJECTED}
+}
+
+/**
+* ToArrayAny: Converts a slice of strings to a slice of interfaces.
+* @param statuses []string
+* @return []interface{}
+**/
+func ToArrayAny(statuses []string) []interface{} {
+	result := []interface{}{}
+	for _, status := range statuses {
+		result = append(result, status)
+	}
+	return result
 }
 
 /**

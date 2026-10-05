@@ -176,7 +176,9 @@ func (s *Instance) up() *Instance {
 		s.onChange = make([]func(data et.Json), 0)
 	}
 	s.hostname = hostname
-	s.wrapper()
+	s.wrapperConsole()
+	s.wrapperCtx()
+	s.wrapperGoTo()
 	return s
 }
 
@@ -199,23 +201,6 @@ func (s *Instance) SetBinding(key string, value any) *Instance {
 **/
 func (s *Instance) setGoto(idx int) {
 	s.goTo = idx
-}
-
-/**
-* wrapper
-* @param step *Step
-**/
-func (s *Instance) wrapper() {
-	s.bindings["goTo"] = func(idx int) error {
-		if s.Step == nil {
-			return errors.New(MSG_STEP_NOT_FOUND)
-		}
-		if idx < 0 || idx >= s.Step.Outputs {
-			return errors.New(MSG_INVALID_INDEX)
-		}
-		s.setGoto(idx)
-		return nil
-	}
 }
 
 /**

@@ -2,6 +2,7 @@ package jwf
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"maps"
 	"time"
@@ -29,117 +30,55 @@ func GetArgs(args []goja.Value, idx int, defaultValue any) any {
 * wrap: Wraps the runtime
 * @param vm *VM
 **/
-func wrapper(instance *Instance) {
-	wrapperBasic(instance)
-	wrapperVar(instance)
-	wrapperConsole(instance)
-	wrapperFetch(instance)
-	wrapperJrpc(instance)
-	wrapperCache(instance)
-	wrapperEvent(instance)
-}
-
-/**
-* wrapperBasic: Wraps the basic
-* @param instance *Instance
-**/
-func wrapperBasic(instance *Instance) {
-	instance.SetBinding("UUID", reg.UUID)
-	instance.SetBinding("ULID", reg.ULID)
-	instance.SetBinding("XID", reg.XID)
-	instance.SetBinding("GetUUID", reg.GetUUID)
-	instance.SetBinding("GetULID", reg.GetULID)
-	instance.SetBinding("GetXID", reg.GetXID)
-	instance.SetBinding("timeNow", timezone.Now)
-}
-
-/**
-* wrapperCtx: Wraps the ctx
-* @param instance *Instance
-**/
-func wrapperVar(instance *Instance) {
-	instance.SetBinding("ctx", map[string]interface{}{
-		"set": func(data et.Json) {
-			maps.Copy(instance.Ctx, data)
-		},
-		"get": func(keys ...string) interface{} {
-			return instance.Ctx.Get(keys...)
-		},
-		"str": func(keys ...string) string {
-			return instance.Ctx.Str(keys...)
-		},
-		"int": func(keys ...string) int {
-			return instance.Ctx.Int(keys...)
-		},
-		"int64": func(keys ...string) int64 {
-			return instance.Ctx.Int64(keys...)
-		},
-		"num": func(keys ...string) float64 {
-			return instance.Ctx.Num(keys...)
-		},
-		"bool": func(keys ...string) bool {
-			return instance.Ctx.Bool(keys...)
-		},
-		"time": func(keys ...string) time.Time {
-			return instance.Ctx.Time(keys...)
-		},
-		"json": func(key string) et.Json {
-			return instance.Ctx.Json(key)
-		},
-		"array": func(key string) []interface{} {
-			return instance.Ctx.Array(key)
-		},
-		"arrayStr": func(key string) []string {
-			return instance.Ctx.ArrayStr(key)
-		},
-		"arrayInt": func(key string) []int {
-			return instance.Ctx.ArrayInt(key)
-		},
-		"arrayInt64": func(key string) []int64 {
-			return instance.Ctx.ArrayInt64(key)
-		},
-		"arrayJson": func(key string) []et.Json {
-			return instance.Ctx.ArrayJson(key)
-		},
-	})
+func wrapper(bindings map[string]interface{}) map[string]interface{} {
+	if bindings == nil {
+		bindings = make(map[string]interface{})
+	}
+	bindings = wrapperConsole(bindings)
+	bindings = wrapperBasic(bindings)
+	bindings = wrapperFetch(bindings)
+	bindings = wrapperJrpc(bindings)
+	bindings = wrapperCache(bindings)
+	bindings = wrapperEvent(bindings)
+	return bindings
 }
 
 /**
 * wrapperConsole:
 * @param instance *Instance
 **/
-func wrapperConsole(instance *Instance) {
-	instance.SetBinding("console", map[string]interface{}{
+func wrapperConsole(bindings map[string]interface{}) map[string]interface{} {
+	bindings["console"] = map[string]interface{}{
 		"log": func(args ...interface{}) {
 			kind := "LOG"
-			_args := make([]interface{}, 0)
-			_args = append(_args, fmt.Sprintf(`host:%s - instance:%s`, instance.hostname, instance.ID))
-			for _, arg := range args {
-				_args = append(_args, arg)
-			}
-			logs.Log(kind, _args...)
+			logs.Log(kind, args...)
 		},
 		"debug": func(args ...interface{}) {
-			_args := make([]interface{}, 0)
-			_args = append(_args, fmt.Sprintf(`host:%s - instance:%s`, instance.hostname, instance.ID))
-			for _, arg := range args {
-				_args = append(_args, arg)
-			}
-			logs.Debug(_args...)
+			logs.Debug(args...)
 		},
 		"info": func(args ...interface{}) {
-			_args := make([]interface{}, 0)
-			_args = append(_args, fmt.Sprintf(`host:%s - instance:%s`, instance.hostname, instance.ID))
-			for _, arg := range args {
-				_args = append(_args, arg)
-			}
-			logs.Info(_args...)
+			logs.Info(args...)
 		},
 		"error": func(args string) {
-			err := fmt.Errorf(`host:%s - instance:%s - %s`, instance.hostname, instance.ID, args)
-			logs.Error(err)
+			logs.Error(errors.New(args))
 		},
-	})
+	}
+	return bindings
+}
+
+/**
+* wrapperBasic: Wraps the basic
+* @param instance *Instance
+**/
+func wrapperBasic(bindings map[string]interface{}) map[string]interface{} {
+	bindings["UUID"] = reg.UUID
+	bindings["ULID"] = reg.ULID
+	bindings["XID"] = reg.XID
+	bindings["GetUUID"] = reg.GetUUID
+	bindings["GetULID"] = reg.GetULID
+	bindings["GetXID"] = reg.GetXID
+	bindings["timeNow"] = timezone.Now
+	return bindings
 }
 
 type Fetch struct {
@@ -151,10 +90,10 @@ type Fetch struct {
 
 /**
 * wrapperFetch: Wraps the fetch
-* @param instance *Instance
+* @param bindings map[string]interface{}
 **/
-func wrapperFetch(instance *Instance) {
-	instance.SetBinding("fetch", func(call goja.FunctionCall) *Fetch {
+func wrapperFetch(bindings map[string]interface{}) map[string]interface{} {
+	bindings["fetch"] = func(call goja.FunctionCall) *Fetch {
 		args := call.Arguments
 		if len(args) != 4 {
 			panic(fmt.Errorf(msg.MSG_ARG_REQUIRED, "method, url, headers, body"))
@@ -174,8 +113,8 @@ func wrapperFetch(instance *Instance) {
 			Message: status.Message,
 		}
 		return res
-	})
-	instance.SetBinding("fetchTls", func(call goja.FunctionCall) *Fetch {
+	}
+	bindings["fetchTls"] = func(call goja.FunctionCall) *Fetch {
 		args := call.Arguments
 		if len(args) != 4 {
 			panic(fmt.Errorf(msg.MSG_ARG_REQUIRED, "method, url, headers, body"))
@@ -196,15 +135,16 @@ func wrapperFetch(instance *Instance) {
 			Message: status.Message,
 		}
 		return res
-	})
+	}
+	return bindings
 }
 
 /**
 * wrapperJrpc: Wraps the jrpc
-* @param instance *Instance
+* @param bindings map[string]interface{}
 **/
-func wrapperJrpc(instance *Instance) {
-	instance.SetBinding("jrpc", map[string]interface{}{
+func wrapperJrpc(bindings map[string]interface{}) map[string]interface{} {
+	bindings["jrpc"] = map[string]interface{}{
 		"call": func(method string, args any) (any, error) {
 			return jrpc.Call(method, args)
 		},
@@ -217,15 +157,16 @@ func wrapperJrpc(instance *Instance) {
 		"callItem": func(method string, args et.Json) (et.Item, error) {
 			return jrpc.CallItem(method, args)
 		},
-	})
+	}
+	return bindings
 }
 
 /**
 * wrapperCache: Wraps the cache
 * @param instance *Instance
 **/
-func wrapperCache(instance *Instance) {
-	instance.SetBinding("cache", map[string]interface{}{
+func wrapperCache(bindings map[string]interface{}) map[string]interface{} {
+	bindings["cache"] = map[string]interface{}{
 		"set": func(key string, value interface{}, expiration time.Duration) interface{} {
 			return cache.Set(key, value, expiration)
 		},
@@ -267,20 +208,128 @@ func wrapperCache(instance *Instance) {
 			}
 			return true
 		},
-	})
+	}
+	return bindings
 }
 
 /**
 * wrapperEvent: Wraps the event
 * @param instance *Instance
 **/
-func wrapperEvent(instance *Instance) {
-	instance.SetBinding("event", map[string]interface{}{
+func wrapperEvent(bindings map[string]interface{}) map[string]interface{} {
+	bindings["event"] = map[string]interface{}{
 		"publish": func(channel string, data et.Json) {
 			event.Publish(channel, data)
 		},
 		"subscribe": func(channel string, fn func(event.Message)) {
 			event.Subscribe(channel, fn)
 		},
+	}
+	return bindings
+}
+
+/**
+* wrapperCtx:
+* @param s *Instance
+**/
+func (s *Instance) wrapperConsole() {
+	s.SetBinding("console", map[string]interface{}{
+		"log": func(args ...interface{}) {
+			kind := "LOG"
+			_args := make([]interface{}, 0)
+			_args = append(_args, fmt.Sprintf(`host:%s - instance:%s`, s.hostname, s.ID))
+			for _, arg := range args {
+				_args = append(_args, arg)
+			}
+			logs.Log(kind, _args...)
+		},
+		"debug": func(args ...interface{}) {
+			_args := make([]interface{}, 0)
+			_args = append(_args, fmt.Sprintf(`host:%s - instance:%s`, s.hostname, s.ID))
+			for _, arg := range args {
+				_args = append(_args, arg)
+			}
+			logs.Debug(_args...)
+		},
+		"info": func(args ...interface{}) {
+			_args := make([]interface{}, 0)
+			_args = append(_args, fmt.Sprintf(`host:%s - instance:%s`, s.hostname, s.ID))
+			for _, arg := range args {
+				_args = append(_args, arg)
+			}
+			logs.Info(_args...)
+		},
+		"error": func(args string) {
+			err := fmt.Errorf(`host:%s - instance:%s - %s`, s.hostname, s.ID, args)
+			logs.Error(err)
+		},
+	})
+}
+
+/**
+* wrapperCtx: Wraps the ctx
+* @param instance *Instance
+**/
+func (s *Instance) wrapperCtx() {
+	s.SetBinding("ctx", map[string]interface{}{
+		"set": func(data et.Json) {
+			maps.Copy(s.Ctx, data)
+		},
+		"get": func(keys ...string) interface{} {
+			return s.Ctx.Get(keys...)
+		},
+		"str": func(keys ...string) string {
+			return s.Ctx.Str(keys...)
+		},
+		"int": func(keys ...string) int {
+			return s.Ctx.Int(keys...)
+		},
+		"int64": func(keys ...string) int64 {
+			return s.Ctx.Int64(keys...)
+		},
+		"num": func(keys ...string) float64 {
+			return s.Ctx.Num(keys...)
+		},
+		"bool": func(keys ...string) bool {
+			return s.Ctx.Bool(keys...)
+		},
+		"time": func(keys ...string) time.Time {
+			return s.Ctx.Time(keys...)
+		},
+		"json": func(key string) et.Json {
+			return s.Ctx.Json(key)
+		},
+		"array": func(key string) []interface{} {
+			return s.Ctx.Array(key)
+		},
+		"arrayStr": func(key string) []string {
+			return s.Ctx.ArrayStr(key)
+		},
+		"arrayInt": func(key string) []int {
+			return s.Ctx.ArrayInt(key)
+		},
+		"arrayInt64": func(key string) []int64 {
+			return s.Ctx.ArrayInt64(key)
+		},
+		"arrayJson": func(key string) []et.Json {
+			return s.Ctx.ArrayJson(key)
+		},
+	})
+}
+
+/**
+* wrapper
+* @param step *Step
+**/
+func (s *Instance) wrapperGoTo() {
+	s.SetBinding("goTo", func(idx int) error {
+		if s.Step == nil {
+			return errors.New(MSG_STEP_NOT_FOUND)
+		}
+		if idx < 0 || idx >= s.Step.Outputs {
+			return errors.New(MSG_INVALID_INDEX)
+		}
+		s.setGoto(idx)
+		return nil
 	})
 }

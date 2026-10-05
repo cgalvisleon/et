@@ -7,7 +7,6 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/reg"
-	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -122,6 +121,7 @@ func (s *Step) up() *Step {
 	if s.onStatus == nil {
 		s.onStatus = func(status Status) {}
 	}
+	s.bindings = wrapper(s.bindings)
 	return s
 }
 
@@ -226,11 +226,7 @@ func (s *Step) RunFunction(instance *Instance, ctx et.Json) (et.Json, error) {
 func (s *Step) RunScript(ctx et.Json, instance *Instance) (et.Json, error) {
 	result := et.Json{}
 	s.setStatus(RUNNING)
-	script := ""
-	for _, scr := range s.Definition {
-		script = strs.Append(script, scr.Code, "\n")
-	}
-	_, err := RunScript(script, ctx, s.bindings)
+	_, err := RunScripts(s.Definition, ctx, s.bindings)
 	if err != nil {
 		s.setStatus(FAILED)
 		return et.Json{}, err

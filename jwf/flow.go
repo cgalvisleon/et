@@ -490,7 +490,7 @@ func (s *Flow) Publish() error {
 	for _, script := range s.OnPublish {
 		code += script.Code + "\n"
 	}
-	_, err := RunScript(code, et.Json{}, s.bindings)
+	_, err := RunScripts(s.OnPublish, et.Json{}, s.bindings)
 	if err != nil {
 		return err
 	}

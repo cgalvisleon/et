@@ -178,6 +178,7 @@ func (s *Instance) up() *Instance {
 	s.hostname = hostname
 	s.wrapperConsole()
 	s.wrapperCtx()
+	s.wrapperParams()
 	s.wrapperGoTo()
 	return s
 }

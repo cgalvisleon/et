@@ -88,6 +88,68 @@ interface JsqlColumn {
   default: any;
 }
 
+/** Reference of a model in a relation or a query. */
+interface JsqlFromRef {
+  database: string;
+  schema: string;
+  name: string;
+  table: string;
+  as: string;
+}
+
+/** A model in a relation or a query. */
+interface JsqlFrom {
+  ref(): JsqlFromRef;
+  /** The model, or null. */
+  model(): JsqlModel | null;
+}
+
+/** Foreign key relation of a model (defineForeignKeys, defineDetail). */
+interface JsqlDetail {
+  ref(): { to: JsqlFromRef | null };
+  /** to, keys, select, on_delete_cascade, on_update_cascade, rows. */
+  toJson(): JsqlRecord;
+  to(): JsqlFrom | null;
+  /** Query of the detail rows of item (a record of the model). */
+  getQuery(item: JsqlRecord, page: number, rows: number): JsqlQuery;
+}
+
+/** Relation through a bridge model (defineMaster). */
+interface JsqlMaster {
+  ref(): { to: JsqlFromRef | null; bridge: JsqlFromRef | null };
+  /** from, to, bridge, keys, to_keys, select, rows. */
+  toJson(): JsqlRecord;
+  from(): JsqlFrom | null;
+  to(): JsqlFrom | null;
+  bridge(): JsqlFrom | null;
+}
+
+/** Aggregate over a related model (defineRollup). */
+interface JsqlRollups {
+  /** to, keys, select, operation. */
+  toJson(): JsqlRecord;
+  to(): JsqlFrom | null;
+}
+
+/** Detail or master resolved for a query (query.detail(...), query.master(...)). */
+interface JsqlQueryDetail {
+  /** to, bridge, to_keys, keys, select, page, rows. */
+  toJson(): JsqlRecord;
+  to(): JsqlFrom | null;
+  bridge(): JsqlFrom | null;
+  /** Query of the related rows of item (a row of the query). */
+  getQuery(item: JsqlRecord): JsqlQuery;
+}
+
+/** Rollup resolved for a query (when the query runs). */
+interface JsqlQueryRollups {
+  /** to, keys, select, operation. */
+  toJson(): JsqlRecord;
+  to(): JsqlFrom | null;
+  /** Query of the rollup for item, or null when item lacks any of the keys. */
+  getQuery(item: JsqlRecord): JsqlQuery | null;
+}
+
 /** Trigger function: change `newRecord` to change what is saved; throw to abort the command. */
 type JsqlTriggerFunction = (tx: any, oldRecord: JsqlRecord, newRecord: JsqlRecord) => void;
 
@@ -103,6 +165,64 @@ interface JsqlTx {
 /** Query descriptor of db.query / model.query (see jsql/feature.md). */
 interface JsqlQueryDescriptor {
   [key: string]: any;
+}
+
+/** Connection of a driver: the keys of its GetParams. Missing keys are read from DB_*. */
+interface JsqlConnection {
+  /** postgres, mysql, mssql */
+  database?: string;
+  host?: string;
+  port?: number;
+  /** postgres, mysql, mssql */
+  user?: string;
+  password?: string;
+  /** postgres */
+  sslmode?: string;
+  /** postgres, sqlite */
+  app_name?: string;
+  /** postgres, sqlite */
+  record_limit?: number;
+  /** sqlite: path of the database file */
+  file?: string;
+  /** sqlite */
+  pool_max_open?: number;
+  pool_max_idle?: number;
+  pool_lifetime?: number;
+  pool_idle_time?: number;
+  /** oracle, mysql, mssql */
+  id?: string;
+  /** oracle */
+  username?: string;
+  service_name?: string;
+  ssl?: boolean;
+  ssl_verify?: boolean;
+  /** milliseconds */
+  timeout?: number;
+}
+
+/** Connection object of a driver (jsql.newConnection). */
+interface JsqlConnectionObject {
+  /** The connection params (timeout in milliseconds). */
+  getParams(): JsqlConnection & { driver: string };
+  setDatabase(name: string): void;
+  /** database (postgres, mysql, mssql), file (sqlite) or service_name (oracle). */
+  getDatabase(): string;
+  /** oracle, mysql and mssql only. */
+  id?(): string;
+}
+
+/** Params of jsql.newDB / connectTo / createDB. Missing values are read from DB_* (as in loadTo). */
+interface JsqlConnectParams {
+  driver?: "postgres" | "sqlite" | "mysql" | "mssql" | "oracle" | (string & {});
+  host?: string;
+  /** Database to connect to, unless connection names it (database, file or service_name). */
+  name?: string;
+  /** Its JSON, or a connection object from jsql.newConnection. */
+  connection?: JsqlConnection | JsqlConnectionObject;
+  record_limit?: number;
+  /** milliseconds; 0 or none never fails by timeout */
+  timeout?: number;
+  is_debug?: boolean;
 }
 
 /** Define descriptor of db.define: the Define structure in JSON. */
@@ -197,11 +317,11 @@ interface JsqlModel {
   defineRequired(name: string, type: JsqlTypeData, defaultValue: any): JsqlIndex | null;
   defineColumn(name: string, type: JsqlTypeData, defaultValue: any): JsqlColumn | null;
   defineAttrib(name: string, type: JsqlTypeData, defaultValue: any): JsqlColumn | null;
-  defineForeignKeys(to: JsqlModel, keys: JsqlKeys, onDeleteCascade: boolean, onUpdateCascade: boolean): JsqlRecord | null;
+  defineForeignKeys(to: JsqlModel, keys: JsqlKeys, onDeleteCascade: boolean, onUpdateCascade: boolean): JsqlDetail | null;
   defineOmitUpdate(...names: string[]): JsqlModel;
   defineHidden(...names: string[]): JsqlModel;
   defineModel(): JsqlModel;
-  defineRollup(name: string, to: JsqlModel, keys: JsqlKeys, selects: string[], operation: JsqlRollupOperation): any;
+  defineRollup(name: string, to: JsqlModel, keys: JsqlKeys, selects: string[], operation: JsqlRollupOperation): JsqlRollups;
   defineDetail(name: string, keys: JsqlKeys, rows: number, ...selects: string[]): JsqlModel;
   defineMaster(name: string, to: JsqlModel, keys: JsqlKeys, toKeys: JsqlKeys, selects: string[], rows?: number): JsqlModel;
   defineCalcFunc(name: string, calc: JsqlCalcFunction): JsqlModel;
@@ -231,7 +351,11 @@ interface JsqlModel {
   bridge(name: string): JsqlModel | null;
   getColumn(name: string): JsqlColumn | null;
   getField(name: string): any;
-  getFrom(): JsqlRecord | null;
+  getFrom(): JsqlFrom | null;
+  /** Relations of the model, by name. */
+  getDetails(): { [name: string]: JsqlDetail };
+  getMasters(): { [name: string]: JsqlMaster };
+  getRollups(): { [name: string]: JsqlRollups };
 
   // Queries
   as(...as: string[]): JsqlQuery;
@@ -260,6 +384,14 @@ interface JsqlQuery {
   test(): JsqlQuery;
   getField(name: string): any;
   getSelectField(name: string): any;
+  /** Models of the query. */
+  getFroms(): JsqlFrom[];
+  /** Details resolved by detail(...), by name. */
+  getDetails(): { [name: string]: JsqlQueryDetail };
+  /** Masters resolved by master(...), by name. */
+  getMasters(): { [name: string]: JsqlQueryDetail };
+  /** Rollups resolved when the query runs, by name. */
+  getRollups(): { [name: string]: JsqlQueryRollups };
   join(model: JsqlModel, as: string, on: JsqlCondition[]): JsqlQuery;
   leftJoin(model: JsqlModel, as: string, on: JsqlCondition[]): JsqlQuery;
   rightJoin(model: JsqlModel, as: string, on: JsqlCondition[]): JsqlQuery;
@@ -335,6 +467,14 @@ interface JsqlPackage {
   /** Database configured by the DB_* environment variables. */
   load(): JsqlDB;
   loadTo(dbName: string, ...hostName: string[]): JsqlDB;
+  /** Connection of a driver from the keys of its GetParams; missing ones are read from DB_*. */
+  newConnection(driver: "postgres" | "sqlite" | "mysql" | "mssql" | "oracle" | (string & {}), params?: JsqlConnection): JsqlConnectionObject;
+  /** Database from its params, without connecting (call init()). */
+  newDB(params: JsqlConnectParams): JsqlDB;
+  /** Database from its params, connected. */
+  connectTo(params: JsqlConnectParams): JsqlDB;
+  /** Creates the database of the params when it does not exist. timeoutMs: 0 or none never fails by timeout. */
+  createDB(params: JsqlConnectParams, timeoutMs?: number): void;
   /** Database from its JSON (db.toJson()). */
   loadDb(params: JsqlRecord): JsqlDB;
   /** Drops the whole database. timeoutMs: 0 or none never fails by timeout. */

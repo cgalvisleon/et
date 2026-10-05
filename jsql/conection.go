@@ -396,3 +396,70 @@ func (s *MssqlConection) SetDatabase(name string) {
 func (s *MssqlConection) GetDatabase() string {
 	return s.Database
 }
+
+/**
+* connectionFromJson: Builds the Connection of a driver from its JSON, the inverse of GetParams (same keys,
+* timeout in milliseconds). Missing keys keep the values read from the environment (DB_*), as in loadTo.
+* @param driver, host string, params et.Json
+* @return Connection, error
+**/
+func connectionFromJson(driver, host string, params et.Json) (Connection, error) {
+	host = params.ValStr(host, "host")
+	result, err := getConnection(driver, host)
+	if err != nil {
+		return nil, err
+	}
+
+	timeout := func(def time.Duration) time.Duration {
+		if _, ok := params["timeout"]; !ok {
+			return def
+		}
+		return time.Duration(params.Int64("timeout")) * time.Millisecond
+	}
+
+	switch c := result.(type) {
+	case *PgConection:
+		c.Port = params.ValInt(c.Port, "port")
+		c.Database = params.ValStr(c.Database, "database")
+		c.User = params.ValStr(c.User, "user")
+		c.Password = params.ValStr(c.Password, "password")
+		c.Sslmode = params.ValStr(c.Sslmode, "sslmode")
+		c.AppName = params.ValStr(c.AppName, "app_name")
+		c.RecordLimit = params.ValInt(c.RecordLimit, "record_limit")
+		c.Timeout = timeout(c.Timeout)
+	case *SqliteConection:
+		c.File = params.ValStr(c.File, "file")
+		c.RecordLimit = params.ValInt(c.RecordLimit, "record_limit")
+		c.PoolMaxOpen = params.ValInt(c.PoolMaxOpen, "pool_max_open")
+		c.PoolMaxIdle = params.ValInt(c.PoolMaxIdle, "pool_max_idle")
+		c.PoolLifetime = params.ValInt(c.PoolLifetime, "pool_lifetime")
+		c.PoolIdleTime = params.ValInt(c.PoolIdleTime, "pool_idle_time")
+		c.AppName = params.ValStr(c.AppName, "app_name")
+		c.Timeout = timeout(c.Timeout)
+	case *OracleConection:
+		c.Id = params.ValStr(c.Id, "id")
+		c.Port = params.ValInt(c.Port, "port")
+		c.Username = params.ValStr(c.Username, "username")
+		c.Password = params.ValStr(c.Password, "password")
+		c.ServiceName = params.ValStr(c.ServiceName, "service_name")
+		c.SSL = params.ValBool(c.SSL, "ssl")
+		c.SSLVerify = params.ValBool(c.SSLVerify, "ssl_verify")
+		c.Timeout = timeout(c.Timeout)
+	case *MysqlConection:
+		c.Id = params.ValStr(c.Id, "id")
+		c.Port = params.ValInt(c.Port, "port")
+		c.Database = params.ValStr(c.Database, "database")
+		c.User = params.ValStr(c.User, "user")
+		c.Password = params.ValStr(c.Password, "password")
+		c.Timeout = timeout(c.Timeout)
+	case *MssqlConection:
+		c.Id = params.ValStr(c.Id, "id")
+		c.Port = params.ValInt(c.Port, "port")
+		c.Database = params.ValStr(c.Database, "database")
+		c.User = params.ValStr(c.User, "user")
+		c.Password = params.ValStr(c.Password, "password")
+		c.Timeout = timeout(c.Timeout)
+	}
+
+	return result, nil
+}

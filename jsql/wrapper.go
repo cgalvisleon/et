@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -21,7 +22,7 @@ const wrapRef = "__ref"
 * @param db *DB
 * @return map[string]any
 **/
-func wrapper(db *DB) map[string]any {
+func Wrapper(db *DB) map[string]any {
 	return map[string]any{
 		"db":    wrapDB(db),
 		"newTx": func() map[string]any { return wrapTx(NewTx()) },
@@ -140,6 +141,100 @@ func jsonFn(fn func() et.Json) func() map[string]any {
 }
 
 /**
+* msTimeout: Converts an optional timeout in milliseconds into the timeout argument of jsql.
+* @param timeoutMs ...int64
+* @return []time.Duration
+**/
+func msTimeout(timeoutMs ...int64) []time.Duration {
+	if len(timeoutMs) == 0 {
+		return nil
+	}
+	return []time.Duration{time.Duration(timeoutMs[0]) * time.Millisecond}
+}
+
+/**
+* hasAny: Returns true when params has any of the keys.
+* @param params et.Json, keys ...string
+* @return bool
+**/
+func hasAny(params et.Json, keys ...string) bool {
+	for _, key := range keys {
+		if _, ok := params[key]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+/**
+* toConnectParams: Converts the JSON of a ConnectParams into ConnectParams: driver, host, name,
+* record_limit, timeout (milliseconds), is_debug and connection (the keys of the driver's GetParams).
+* Missing values are read from the environment (DB_*), as in loadTo.
+* @param params et.Json
+* @return ConnectParams, error
+**/
+func toConnectParams(params et.Json) (ConnectParams, error) {
+	driver := params.ValStr(envar.GetStr("DB_DRIVER", DriverPostgres), "driver")
+	host := params.ValStr(envar.GetStr("DB_HOST", "localhost"), "host")
+	// connection is either a connection object (jsql.newConnection) or its JSON
+	connection, isObject := unwrap(params["connection"]).(Connection)
+	if !isObject {
+		var err error
+		connection, err = connectionFromJson(driver, host, params.Json("connection"))
+		if err != nil {
+			return ConnectParams{}, err
+		}
+	}
+
+	// name is the database to connect to (as in loadTo), unless the connection names it
+	name := params.Str("name")
+	if name == "" {
+		name = connection.GetDatabase()
+	} else if !isObject && !hasAny(params.Json("connection"), "database", "file", "service_name") {
+		connection.SetDatabase(name)
+	}
+
+	return ConnectParams{
+		Driver:      driver,
+		Host:        host,
+		Name:        name,
+		Connection:  connection,
+		RecordLimit: params.ValInt(envar.GetInt("DB_RECORD_LIMIT", 1000), "record_limit"),
+		Timeout:     time.Duration(params.Int64("timeout")) * time.Millisecond,
+		IsDebug:     params.ValBool(false, "is_debug"),
+	}, nil
+}
+
+/**
+* wrapConnection: Exposes a Connection to JavaScript: getParams (timeout in milliseconds), setDatabase,
+* getDatabase and, for the drivers that have it (oracle, mysql, mssql), id.
+* @param connection Connection
+* @return map[string]any
+**/
+func wrapConnection(connection Connection) map[string]any {
+	if connection == nil {
+		return nil
+	}
+
+	result := map[string]any{
+		wrapRef: connection,
+		"getParams": func() map[string]any {
+			params := toJsMap(connection.GetParams())
+			if timeout, ok := params["timeout"].(time.Duration); ok {
+				params["timeout"] = timeout.Milliseconds()
+			}
+			return params
+		},
+		"setDatabase": connection.SetDatabase,
+		"getDatabase": connection.GetDatabase,
+	}
+	if c, ok := connection.(interface{ ID() string }); ok {
+		result["id"] = c.ID
+	}
+	return result
+}
+
+/**
 * itemsJson: Returns the et.Items of a call as JSON.
 * @param items et.Items, err error
 * @return et.Json, error
@@ -207,6 +302,48 @@ func wrapPackage() map[string]any {
 			}
 			return wrapDB(db), nil
 		},
+		// newConnection: the connection of a driver from the keys of its GetParams (missing ones from DB_*)
+		"newConnection": func(driver string, params ...et.Json) (map[string]any, error) {
+			values := et.Json{}
+			if len(params) > 0 && params[0] != nil {
+				values = params[0]
+			}
+			connection, err := connectionFromJson(driver, envar.GetStr("DB_HOST", "localhost"), values)
+			if err != nil {
+				return nil, err
+			}
+			return wrapConnection(connection), nil
+		},
+		"newDB": func(params et.Json) (map[string]any, error) {
+			connect, err := toConnectParams(params)
+			if err != nil {
+				return nil, err
+			}
+			db, err := NewDB(connect)
+			if err != nil {
+				return nil, err
+			}
+			return wrapDB(db), nil
+		},
+		"connectTo": func(params et.Json) (map[string]any, error) {
+			connect, err := toConnectParams(params)
+			if err != nil {
+				return nil, err
+			}
+			db, err := ConnectTo(connect)
+			if err != nil {
+				return nil, err
+			}
+			return wrapDB(db), nil
+		},
+		// timeoutMs: milliseconds; 0 or none never fails by timeout
+		"createDB": func(params et.Json, timeoutMs ...int64) error {
+			connect, err := toConnectParams(params)
+			if err != nil {
+				return err
+			}
+			return CreateDB(&connect, msTimeout(timeoutMs...)...)
+		},
 		"loadDb": func(params et.Json) (map[string]any, error) {
 			db, err := LoadDb(params)
 			if err != nil {
@@ -216,11 +353,7 @@ func wrapPackage() map[string]any {
 		},
 		// timeoutMs: milliseconds; 0 or none never fails by timeout
 		"dropDB": func(db any, timeoutMs ...int64) error {
-			timeout := []time.Duration{}
-			if len(timeoutMs) > 0 {
-				timeout = append(timeout, time.Duration(timeoutMs[0])*time.Millisecond)
-			}
-			return DropDB(toDB(db), timeout...)
+			return DropDB(toDB(db), msTimeout(timeoutMs...)...)
 		},
 		"newTx": func() map[string]any { return wrapTx(NewTx()) },
 		"newQuery": func(model any, as ...string) map[string]any {
@@ -387,12 +520,8 @@ func wrapModel(m *Model) map[string]any {
 		"defineAttrib": func(name string, tp et.TypeData, deFault any) any {
 			return columnJson(m.DefineAttrib(name, tp, deFault))
 		},
-		"defineForeignKeys": func(to any, keys map[string]string, onDeleteCascade, onUpdateCascade bool) any {
-			detail := m.DefineForeignKeys(toModel(to), keys, onDeleteCascade, onUpdateCascade)
-			if detail == nil {
-				return nil
-			}
-			return toJsMap(detail.Ref())
+		"defineForeignKeys": func(to any, keys map[string]string, onDeleteCascade, onUpdateCascade bool) map[string]any {
+			return wrapDetail(m.DefineForeignKeys(toModel(to), keys, onDeleteCascade, onUpdateCascade))
 		},
 		"defineOmitUpdate": func(names ...string) map[string]any { return chain(m.DefineOmitUpdate(names...)) },
 		"defineHidden": func(names ...string) map[string]any {
@@ -400,8 +529,12 @@ func wrapModel(m *Model) map[string]any {
 			return self
 		},
 		"defineModel": func() map[string]any { return chain(m.DefineModel()) },
-		"defineRollup": func(name string, to any, keys map[string]string, selects []string, operation RollupOperation) (*Rollups, error) {
-			return m.DefineRollup(name, toModel(to), keys, selects, operation)
+		"defineRollup": func(name string, to any, keys map[string]string, selects []string, operation RollupOperation) (map[string]any, error) {
+			rollup, err := m.DefineRollup(name, toModel(to), keys, selects, operation)
+			if err != nil {
+				return nil, err
+			}
+			return wrapRollups(rollup), nil
 		},
 		"defineDetail": func(name string, keys map[string]string, rows int, selects ...string) (map[string]any, error) {
 			return related(m.DefineDetail(name, keys, rows, selects...))
@@ -477,12 +610,11 @@ func wrapModel(m *Model) map[string]any {
 			}
 			return nil
 		},
-		"getFrom": func() any {
-			if from := m.GetFrom(); from != nil {
-				return toJsMap(from.Ref())
-			}
-			return nil
-		},
+		"getFrom": func() map[string]any { return wrapFrom(m.GetFrom()) },
+		// Relations of the model, by name
+		"getDetails": func() map[string]any { return wrapMap(m.Details, wrapDetail) },
+		"getMasters": func() map[string]any { return wrapMap(m.Masters, wrapMaster) },
+		"getRollups": func() map[string]any { return wrapMap(m.Rollups, wrapRollups) },
 		// Queries
 		"as": func(as ...string) map[string]any { return wrapQuery(m.As(as...)) },
 		"join": func(to any, as string, on []*et.Condition) map[string]any {
@@ -536,6 +668,11 @@ func wrapQuery(q *Query) map[string]any {
 			}
 			return nil
 		},
+		// Relations resolved for the query, by name
+		"getFroms":   func() []any { return wrapList(q.Froms, wrapFrom) },
+		"getDetails": func() map[string]any { return wrapMap(q.Details, wrapQueryDetail) },
+		"getMasters": func() map[string]any { return wrapMap(q.Masters, wrapQueryDetail) },
+		"getRollups": func() map[string]any { return wrapMap(q.Rollups, wrapQueryRollups) },
 		"join": func(model any, as string, on []*et.Condition) map[string]any {
 			return chain(q.Join(toModel(model), as, on))
 		},
@@ -652,5 +789,184 @@ func wrapSeries(s *Series) map[string]any {
 		"deleteSeries": s.DeleteSeries,
 		"genSerie":     s.GenSerie,
 		"genValue":     s.GenValue,
+	}
+}
+
+/**
+* wrapMap: Wraps every value of a map of relations with wrap.
+* @param values map[string]T, wrap func(T) map[string]any
+* @return map[string]any
+**/
+func wrapMap[T any](values map[string]T, wrap func(T) map[string]any) map[string]any {
+	result := make(map[string]any, len(values))
+	for name, value := range values {
+		result[name] = wrap(value)
+	}
+	return result
+}
+
+/**
+* wrapList: Wraps every value of a list with wrap.
+* @param values []T, wrap func(T) map[string]any
+* @return []any
+**/
+func wrapList[T any](values []T, wrap func(T) map[string]any) []any {
+	result := make([]any, len(values))
+	for i, value := range values {
+		result[i] = wrap(value)
+	}
+	return result
+}
+
+/**
+* structJson: Returns a struct as a plain map through its json tags (Go-only fields are left out).
+* @param value any
+* @return map[string]any
+**/
+func structJson(value any) map[string]any {
+	bt, err := json.Marshal(value)
+	if err != nil {
+		return map[string]any{}
+	}
+	var result map[string]any
+	if err := json.Unmarshal(bt, &result); err != nil {
+		return map[string]any{}
+	}
+	return result
+}
+
+/**
+* fromRef: Returns the reference of a From as JSON, or nil.
+* @param from *From
+* @return any
+**/
+func fromRef(from *From) any {
+	if from == nil {
+		return nil
+	}
+	return toJsMap(from.Ref())
+}
+
+/**
+* wrapFrom: Exposes a *From (a model in a relation or a query) to JavaScript.
+* @param from *From
+* @return map[string]any
+**/
+func wrapFrom(from *From) map[string]any {
+	if from == nil {
+		return nil
+	}
+
+	return map[string]any{
+		wrapRef: from,
+		"ref":   func() any { return fromRef(from) },
+		"model": func() map[string]any { return wrapModel(from.Model) },
+	}
+}
+
+/**
+* wrapDetail: Exposes a *Detail (a foreign key relation of a model) to JavaScript.
+* @param detail *Detail
+* @return map[string]any
+**/
+func wrapDetail(detail *Detail) map[string]any {
+	if detail == nil {
+		return nil
+	}
+
+	return map[string]any{
+		wrapRef: detail,
+		// ref: {to}, with to as the reference of its From
+		"ref":    func() map[string]any { return map[string]any{"to": fromRef(detail.To)} },
+		"toJson": func() map[string]any { return structJson(detail) },
+		"to":     func() map[string]any { return wrapFrom(detail.To) },
+		// getQuery: the query of the detail rows of item (a record of the model)
+		"getQuery": func(item et.Json, page, rows int) map[string]any {
+			return wrapQuery(detail.GetQuery(item, page, rows))
+		},
+	}
+}
+
+/**
+* wrapMaster: Exposes a *Master (a relation through a bridge model) to JavaScript.
+* @param master *Master
+* @return map[string]any
+**/
+func wrapMaster(master *Master) map[string]any {
+	if master == nil {
+		return nil
+	}
+
+	return map[string]any{
+		wrapRef: master,
+		// ref: {to, bridge}, as references of their From
+		"ref": func() map[string]any {
+			return map[string]any{"to": fromRef(master.To), "bridge": fromRef(master.Bridge)}
+		},
+		"toJson": func() map[string]any { return structJson(master) },
+		"from":   func() map[string]any { return wrapFrom(master.From) },
+		"to":     func() map[string]any { return wrapFrom(master.To) },
+		"bridge": func() map[string]any { return wrapFrom(master.Bridge) },
+	}
+}
+
+/**
+* wrapRollups: Exposes a *Rollups (an aggregate over a related model) to JavaScript.
+* @param rollup *Rollups
+* @return map[string]any
+**/
+func wrapRollups(rollup *Rollups) map[string]any {
+	if rollup == nil {
+		return nil
+	}
+
+	return map[string]any{
+		wrapRef:  rollup,
+		"toJson": func() map[string]any { return structJson(rollup) },
+		"to":     func() map[string]any { return wrapFrom(rollup.To) },
+	}
+}
+
+/**
+* wrapQueryDetail: Exposes a *QueryDetail (a detail or master resolved for a query) to JavaScript.
+* @param detail *QueryDetail
+* @return map[string]any
+**/
+func wrapQueryDetail(detail *QueryDetail) map[string]any {
+	if detail == nil {
+		return nil
+	}
+
+	return map[string]any{
+		wrapRef:  detail,
+		"toJson": func() map[string]any { return structJson(detail) },
+		"to":     func() map[string]any { return wrapFrom(detail.To) },
+		"bridge": func() map[string]any { return wrapFrom(detail.Bridge) },
+		// getQuery: the query of the related rows of item (a row of the query)
+		"getQuery": func(item et.Json) map[string]any { return wrapQuery(detail.GetQuery(item)) },
+	}
+}
+
+/**
+* wrapQueryRollups: Exposes a *QueryRollups (a rollup resolved for a query) to JavaScript.
+* @param rollup *QueryRollups
+* @return map[string]any
+**/
+func wrapQueryRollups(rollup *QueryRollups) map[string]any {
+	if rollup == nil {
+		return nil
+	}
+
+	return map[string]any{
+		wrapRef:  rollup,
+		"toJson": func() map[string]any { return structJson(rollup) },
+		"to":     func() map[string]any { return wrapFrom(rollup.To) },
+		// getQuery: the query of the rollup for item, or null when item lacks any of the keys
+		"getQuery": func(item et.Json) map[string]any {
+			if query, ok := rollup.GetQuery(item); ok {
+				return wrapQuery(query)
+			}
+			return nil
+		},
 	}
 }

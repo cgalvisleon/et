@@ -204,7 +204,7 @@ func (s *Model) initModel(db *DB) (bool, error) {
 * @return void
 **/
 func (s *Model) wrapper(instance *jrex.Instance) {
-	for name, binding := range wrapper(s.db) {
+	for name, binding := range Wrapper(s.db) {
 		instance.SetBinding(name, binding)
 	}
 }

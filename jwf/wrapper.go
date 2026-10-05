@@ -318,6 +318,57 @@ func (s *Instance) wrapperCtx() {
 }
 
 /**
+* wrapperParams: Wraps the params
+* @param instance *Instance
+**/
+func (s *Instance) wrapperParams() {
+	s.SetBinding("params", map[string]interface{}{
+		"set": func(data et.Json) {
+			maps.Copy(s.Params, data)
+		},
+		"get": func(keys ...string) interface{} {
+			return s.Params.Get(keys...)
+		},
+		"str": func(keys ...string) string {
+			return s.Params.Str(keys...)
+		},
+		"int": func(keys ...string) int {
+			return s.Params.Int(keys...)
+		},
+		"int64": func(keys ...string) int64 {
+			return s.Params.Int64(keys...)
+		},
+		"num": func(keys ...string) float64 {
+			return s.Params.Num(keys...)
+		},
+		"bool": func(keys ...string) bool {
+			return s.Params.Bool(keys...)
+		},
+		"time": func(keys ...string) time.Time {
+			return s.Params.Time(keys...)
+		},
+		"json": func(key string) et.Json {
+			return s.Params.Json(key)
+		},
+		"array": func(key string) []interface{} {
+			return s.Params.Array(key)
+		},
+		"arrayStr": func(key string) []string {
+			return s.Params.ArrayStr(key)
+		},
+		"arrayInt": func(key string) []int {
+			return s.Params.ArrayInt(key)
+		},
+		"arrayInt64": func(key string) []int64 {
+			return s.Params.ArrayInt64(key)
+		},
+		"arrayJson": func(key string) []et.Json {
+			return s.Params.ArrayJson(key)
+		},
+	})
+}
+
+/**
 * wrapper
 * @param step *Step
 **/

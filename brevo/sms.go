@@ -73,7 +73,7 @@ func sendSms(sender, organisation string, contactNumbers []string, content strin
 
 		body["recipient"] = phoneNumber
 		body["content"] = message
-		res, status := request.Fetch("POST", url, header, body)
+		res, status := request.Fetch("POST", url, header, body, 0, nil)
 		if !status.Ok {
 			return result, errors.New(status.Message)
 		}

@@ -2,7 +2,6 @@ package jrex
 
 import (
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"maps"
 	"time"
@@ -113,16 +112,32 @@ func wrapperConsole(instance *Instance) {
 	instance.Set("console", map[string]interface{}{
 		"log": func(args ...interface{}) {
 			kind := "LOG"
-			logs.Log(kind, args...)
+			_args := make([]interface{}, 0)
+			_args = append(_args, fmt.Sprintf(`host:%s - instance:%s`, instance.Hostname, instance.ID))
+			for _, arg := range args {
+				_args = append(_args, arg)
+			}
+			logs.Log(kind, _args...)
 		},
 		"debug": func(args ...interface{}) {
-			logs.Debug(args...)
+			_args := make([]interface{}, 0)
+			_args = append(_args, fmt.Sprintf(`host:%s - instance:%s`, instance.Hostname, instance.ID))
+			for _, arg := range args {
+				_args = append(_args, arg)
+			}
+			logs.Debug(_args...)
 		},
 		"info": func(args ...interface{}) {
-			logs.Info(args...)
+			_args := make([]interface{}, 0)
+			_args = append(_args, fmt.Sprintf(`host:%s - instance:%s`, instance.Hostname, instance.ID))
+			for _, arg := range args {
+				_args = append(_args, arg)
+			}
+			logs.Info(_args...)
 		},
 		"error": func(args string) {
-			logs.Error(errors.New(args))
+			err := fmt.Errorf(`host:%s - instance:%s - %s`, instance.Hostname, instance.ID, args)
+			logs.Error(err)
 		},
 	})
 }
@@ -215,8 +230,11 @@ func wrapperCache(instance *Instance) {
 			return cache.Set(key, value, expiration)
 		},
 		"get": func(key string, defaultValue string) string {
-			result, _, err := cache.Get(key, defaultValue)
+			result, exists, err := cache.Get(key, defaultValue)
 			if err != nil {
+				return defaultValue
+			}
+			if !exists {
 				return defaultValue
 			}
 			return result
@@ -260,6 +278,9 @@ func wrapperEvent(instance *Instance) {
 	instance.Set("event", map[string]interface{}{
 		"publish": func(channel string, data et.Json) {
 			event.Publish(channel, data)
+		},
+		"subscribe": func(channel string, fn func(event.Message)) {
+			event.Subscribe(channel, fn)
 		},
 	})
 }

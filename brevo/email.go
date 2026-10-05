@@ -66,7 +66,7 @@ func SendEmail(sender et.Json, to []et.Json, subject string, htmlContent string,
 	}
 
 	result := et.Items{}
-	res, status := request.Fetch("POST", url, header, body)
+	res, status := request.Fetch("POST", url, header, body, 0, nil)
 	if !status.Ok {
 		return result, errors.New(status.Message)
 	}

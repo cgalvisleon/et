@@ -3,6 +3,7 @@ package jrex
 import (
 	"errors"
 	"maps"
+	"os"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/reg"
@@ -10,23 +11,39 @@ import (
 )
 
 type Instance struct {
-	ID    string        `json:"id"`
-	Ctx   et.Json       `json:"ctx"`
-	code  string        `json:"-"`
-	store Store         `json:"-"`
-	vm    *goja.Runtime `json:"-"`
+	ID       string        `json:"id"`
+	Ctx      et.Json       `json:"ctx"`
+	code     string        `json:"-"`
+	store    Store         `json:"-"`
+	vm       *goja.Runtime `json:"-"`
+	Hostname string        `json:"hostname"`
+}
+
+var hostname string
+
+func init() {
+	var err error
+	hostname, err = os.Hostname()
+	if err != nil {
+		hostname = "unknown"
+	}
 }
 
 /**
 * NewInstance
 * @return *Instance
 **/
-func NewInstance() *Instance {
+func NewInstance(id ...string) *Instance {
+	atID := ""
+	if len(id) > 0 {
+		atID = id[0]
+	}
 	result := &Instance{
-		ID:    reg.UUID(),
-		Ctx:   et.Json{},
-		store: nil,
-		vm:    goja.New(),
+		ID:       reg.GetUUID(atID),
+		Ctx:      et.Json{},
+		store:    nil,
+		vm:       goja.New(),
+		Hostname: hostname,
 	}
 	wrapper(result)
 	return result

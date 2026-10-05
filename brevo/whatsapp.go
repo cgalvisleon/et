@@ -67,7 +67,7 @@ func SendWhatsapp(contactNumbers []string, templateId string, params []et.Json, 
 		} else {
 			body["params"] = et.Json{}
 		}
-		res, status := request.Fetch("POST", url, header, body)
+		res, status := request.Fetch("POST", url, header, body, 0, nil)
 		if !status.Ok {
 			return result, errors.New(status.Message)
 		}

@@ -3,6 +3,7 @@ package jwf
 import (
 	"encoding/json"
 	"errors"
+	"os"
 	"slices"
 	"time"
 
@@ -20,9 +21,22 @@ const (
 )
 
 var (
+	hostname            string
 	ErrrFlowNotFound    = errors.New(MSG_FLOW_NOT_FOUND)
 	ErrrTriggerNotFound = errors.New(MSG_TRIGGER_NOT_FOUND)
 )
+
+/**
+* init: Inicializa el hostname del store.
+* @return error
+**/
+func init() {
+	var err error
+	hostname, err = os.Hostname()
+	if err != nil {
+		hostname = "unknown"
+	}
+}
 
 type Port string
 

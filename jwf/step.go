@@ -224,9 +224,17 @@ func (s *Step) RunFunction(instance *Instance, ctx et.Json) (et.Json, error) {
 * @param ctx et.Json
 * @return et.Json, error
 **/
-func (s *Step) RunScript(ctx et.Json, bindings map[string]any) (et.Json, error) {
+func (s *Step) RunScript(ctx et.Json, instance *Instance) (et.Json, error) {
 	initJrex := func() *jrex.Instance {
-		result := jrex.NewInstance()
+		id := ""
+		if instance != nil {
+			id = instance.ID
+		}
+		result := jrex.NewInstance(id)
+		bindings := make(map[string]any)
+		if instance != nil {
+			bindings = instance.bindings
+		}
 		for name, binding := range bindings {
 			result.Set(name, binding)
 		}
@@ -250,13 +258,15 @@ func (s *Step) RunScript(ctx et.Json, bindings map[string]any) (et.Json, error) 
 	rex := initJrex()
 	result := et.Json{}
 	s.setStatus(RUNNING)
-	for _, script := range s.Definition {
-		var err error
-		result, err = runJrex(rex, script.Code)
-		if err != nil {
-			s.setStatus(FAILED)
-			return et.Json{}, err
-		}
+	script := ""
+	for _, scr := range s.Definition {
+		script += scr.Code + "\n"
+	}
+	var err error
+	result, err = runJrex(rex, script)
+	if err != nil {
+		s.setStatus(FAILED)
+		return et.Json{}, err
 	}
 	return result, nil
 }
@@ -270,7 +280,7 @@ func (s *Step) Run(instance *Instance, ctx et.Json) (et.Json, error) {
 	if s.fn != nil {
 		return s.RunFunction(instance, ctx)
 	}
-	return s.RunScript(ctx, instance.bindings)
+	return s.RunScript(ctx, instance)
 }
 
 /**
@@ -306,12 +316,14 @@ func (s *Step) runOnPublish(flow *Flow, ctx et.Json) (et.Json, error) {
 
 	rex := initJrex()
 	result := et.Json{}
+	script := ""
+	for _, scr := range s.OnPublish {
+		script += scr.Code + "\n"
+	}
 	var err error
-	for _, script := range s.OnPublish {
-		result, err = runJrex(rex, script.Code)
-		if err != nil {
-			return et.Json{}, err
-		}
+	result, err = runJrex(rex, script)
+	if err != nil {
+		return et.Json{}, err
 	}
 	return result, nil
 }

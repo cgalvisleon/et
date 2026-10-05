@@ -235,7 +235,7 @@ func (s *Jrex) Set(name string, value interface{}) *Jrex {
 * @return *Instance, error
 **/
 func (s *Jrex) NewInstance(module string) (*Instance, error) {
-	instance := NewInstance()
+	instance := NewInstance("")
 	wrapper(instance)
 	for name, value := range s.bindings {
 		instance.Set(name, value)

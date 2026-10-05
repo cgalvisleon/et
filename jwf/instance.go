@@ -80,7 +80,7 @@ type Instance struct {
 	StepId      string                 `json:"step_id"`
 	IsDone      bool                   `json:"is_done"`
 	IsEnd       bool                   `json:"is_end"`
-	UserId      string                 `json:"user_id"`
+	UserId      string                 `json:"user_id"`	
 	Error       string                 `json:"error"`
 	stop        bool                   `json:"-"`
 	isDebug     bool                   `json:"-"`
@@ -120,7 +120,7 @@ func (s *Flow) NewInstance(id, code, name string, tags et.Json, trigger *Trigger
 		flow:        s,
 		bindings:    make(map[string]interface{}),
 		onChange:    make([]func(data et.Json), 0),
-		mu:          sync.Mutex{},
+		mu:          sync.Mutex{},		
 	}
 	result.up()
 	for name, binding := range s.bindings {

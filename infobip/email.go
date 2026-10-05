@@ -66,7 +66,7 @@ func (s *SenderInfobip) SendEmail(to []string, subject, htmlContent string, para
 		},
 	}
 
-	res, status := request.Fetch("POST", url, header, body)
+	res, status := request.Fetch("POST", url, header, body, 0, nil)
 	if !status.Ok {
 		return et.Item{
 			Ok: false,

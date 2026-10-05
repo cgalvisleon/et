@@ -60,37 +60,37 @@ type Current struct {
 }
 
 type Instance struct {
-	StartedAt   time.Time                  `json:"started_at"`
-	UpdatedAt   time.Time                  `json:"updated_at"`
-	DoneAt      time.Time                  `json:"done_at"`
-	ID          string                     `json:"id"`
-	FlowId      string                     `json:"flow_id"`
-	FlowTag     string                     `json:"flow_tag"`
-	FlowVersion string                     `json:"flow_version"`
-	Code        string                     `json:"code"`
-	Name        string                     `json:"name"`
-	Status      Status                     `json:"status"`
-	Ctx         et.Json                    `json:"ctx"`
-	Params      et.Json                    `json:"params"`
-	Steps       []et.Json                  `json:"steps"`
-	Tags        et.Json                    `json:"tags"`
-	Trigger     *Trigger                   `json:"trigger"`
-	Current     *Connection                `json:"current"`
-	Step        *Step                      `json:"step"`
-	StepId      string                     `json:"step_id"`
-	IsDone      bool                       `json:"is_done"`
-	IsEnd       bool                       `json:"is_end"`
-	UserId      string                     `json:"user_id"`
-	Error       string                     `json:"error"`
-	stop        bool                       `json:"-"`
-	isDebug     bool                       `json:"-"`
-	isChanged   bool                       `json:"-"`
-	flow        *Flow                      `json:"-"`
-	bindings    map[string]interface{}     `json:"-"`
-	resilience  *resilience.Resilience     `json:"-"`
-	goTo        int                        `json:"-"`
-	onChange    []func(data et.Json) error `json:"-"`
-	mu          sync.Mutex                 `json:"-"`
+	StartedAt   time.Time              `json:"started_at"`
+	UpdatedAt   time.Time              `json:"updated_at"`
+	DoneAt      time.Time              `json:"done_at"`
+	ID          string                 `json:"id"`
+	FlowId      string                 `json:"flow_id"`
+	FlowTag     string                 `json:"flow_tag"`
+	FlowVersion string                 `json:"flow_version"`
+	Code        string                 `json:"code"`
+	Name        string                 `json:"name"`
+	Status      Status                 `json:"status"`
+	Ctx         et.Json                `json:"ctx"`
+	Params      et.Json                `json:"params"`
+	Steps       []et.Json              `json:"steps"`
+	Tags        et.Json                `json:"tags"`
+	Trigger     *Trigger               `json:"trigger"`
+	Current     *Connection            `json:"current"`
+	Step        *Step                  `json:"step"`
+	StepId      string                 `json:"step_id"`
+	IsDone      bool                   `json:"is_done"`
+	IsEnd       bool                   `json:"is_end"`
+	UserId      string                 `json:"user_id"`
+	Error       string                 `json:"error"`
+	stop        bool                   `json:"-"`
+	isDebug     bool                   `json:"-"`
+	isChanged   bool                   `json:"-"`
+	flow        *Flow                  `json:"-"`
+	bindings    map[string]any         `json:"-"`
+	resilience  *resilience.Resilience `json:"-"`
+	goTo        int                    `json:"-"`
+	onChange    []func(data et.Json)   `json:"-"`
+	mu          sync.Mutex             `json:"-"`
 }
 
 /**
@@ -119,7 +119,7 @@ func (s *Flow) NewInstance(id, code, name string, tags et.Json, trigger *Trigger
 		UserId:      userId,
 		flow:        s,
 		bindings:    make(map[string]interface{}),
-		onChange:    make([]func(data et.Json) error, 0),
+		onChange:    make([]func(data et.Json), 0),
 		mu:          sync.Mutex{},
 	}
 	result.up()
@@ -162,7 +162,7 @@ func (s *Instance) up() *Instance {
 		s.Steps = make([]et.Json, 0)
 	}
 	if s.onChange == nil {
-		s.onChange = make([]func(data et.Json) error, 0)
+		s.onChange = make([]func(data et.Json), 0)
 	}
 	s.wrapper()
 	return s
@@ -170,10 +170,13 @@ func (s *Instance) up() *Instance {
 
 /**
 * SetBinding
-* @param key string, value interface{}
+* @param key string, value any
 * @return *Instance
 **/
-func (s *Instance) SetBinding(key string, value interface{}) *Instance {
+func (s *Instance) SetBinding(key string, value any) *Instance {
+	if s.bindings == nil {
+		s.bindings = make(map[string]any)
+	}
 	s.bindings[key] = value
 	return s
 }
@@ -191,58 +194,15 @@ func (s *Instance) setGoto(idx int) {
 * @param step *Step
 **/
 func (s *Instance) wrapper() {
-	s.bindings["goTo"] = func(idx int) {
+	s.bindings["goTo"] = func(idx int) error {
 		if s.Step == nil {
-			return
+			return errors.New(MSG_STEP_NOT_FOUND)
 		}
 		if idx < 0 || idx >= s.Step.Outputs {
-			return
+			return errors.New(MSG_INVALID_INDEX)
 		}
 		s.setGoto(idx)
-	}
-	s.bindings["ctx"] = map[string]interface{}{
-		"set": func(data et.Json) {
-			maps.Copy(s.Params, data)
-		},
-		"get": func(keys ...string) interface{} {
-			return s.Params.Get(keys...)
-		},
-		"str": func(keys ...string) string {
-			return s.Params.Str(keys...)
-		},
-		"int": func(keys ...string) int {
-			return s.Params.Int(keys...)
-		},
-		"int64": func(keys ...string) int64 {
-			return s.Params.Int64(keys...)
-		},
-		"num": func(keys ...string) float64 {
-			return s.Params.Num(keys...)
-		},
-		"bool": func(keys ...string) bool {
-			return s.Params.Bool(keys...)
-		},
-		"time": func(keys ...string) time.Time {
-			return s.Params.Time(keys...)
-		},
-		"json": func(key string) et.Json {
-			return s.Params.Json(key)
-		},
-		"array": func(key string) []interface{} {
-			return s.Params.Array(key)
-		},
-		"arrayStr": func(key string) []string {
-			return s.Params.ArrayStr(key)
-		},
-		"arrayInt": func(key string) []int {
-			return s.Params.ArrayInt(key)
-		},
-		"arrayInt64": func(key string) []int64 {
-			return s.Params.ArrayInt64(key)
-		},
-		"arrayJson": func(key string) []et.Json {
-			return s.Params.ArrayJson(key)
-		},
+		return nil
 	}
 }
 
@@ -263,22 +223,18 @@ func (s *Instance) push() {
 	}
 
 	for _, fn := range s.onChange {
-		err := fn(s.ref())
-		if err != nil {
-			s.Error = err.Error()
-			return
-		}
+		fn(s.ref())
 	}
 }
 
 /**
 * OnChange
-* @param fn func(instance *Instance) error
+* @param fn func(instance *Instance)
 * @return *Instance
 **/
-func (s *Instance) OnChange(fn func(data et.Json) error) *Instance {
+func (s *Instance) OnChange(fn func(data et.Json)) *Instance {
 	if s.onChange == nil {
-		s.onChange = make([]func(data et.Json) error, 0)
+		s.onChange = make([]func(data et.Json), 0)
 	}
 	s.onChange = append(s.onChange, fn)
 	return s

@@ -253,9 +253,8 @@ func (s *WorkFlow) getInstance(id string) (*Instance, bool) {
 		return nil, false
 	}
 
-	result.OnChange(func(data et.Json) error {
-		_, err := cache.SetObject(key, data, 0)
-		return err
+	result.OnChange(func(data et.Json) {
+		cache.SetObject(key, data, 0)
 	})
 
 	return result, true
@@ -286,9 +285,8 @@ func (s *WorkFlow) newInstance(tag, triggerTag, id, code string, tags et.Json, u
 	key := fmt.Sprintf("instance:%s", id)
 	result := flow.NewInstance(id, code, name, tags, trigger, userId)
 
-	result.OnChange(func(data et.Json) error {
-		_, err := cache.SetObject(key, data, 0)
-		return err
+	result.OnChange(func(data et.Json) {
+		cache.SetObject(key, data, 0)
 	})
 
 	s.addAuditLog(userId, "new_instance")

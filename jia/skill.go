@@ -90,7 +90,7 @@ func (s *ApiSkill) Description() string {
 * @return et.Json, error
 **/
 func (s *ApiSkill) Execute(ctx context.Context, input et.Json) (et.Json, error) {
-	response, status := request.Fetch(s.Method, s.Url, s.Headers, s.Body)
+	response, status := request.Fetch(s.Method, s.Url, s.Headers, s.Body, 0, nil)
 	if !status.Ok {
 		return nil, errors.New(status.Message)
 	}

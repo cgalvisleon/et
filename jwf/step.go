@@ -75,6 +75,7 @@ type Step struct {
 	isChanged   bool                `json:"-"`
 	bindings    map[string]any      `json:"-"`
 	onStatus    func(status Status) `json:"-"`
+	onChange    func(data et.Json)  `json:"-"`
 }
 
 /**
@@ -108,7 +109,6 @@ func newStep(ownerId, id string, kind Kind, tag, version, title string) *Step {
 		Outputs:     1,
 		Stop:        false,
 		bindings:    make(map[string]any),
-		onStatus:    nil,
 	}
 	return result
 }
@@ -181,14 +181,24 @@ func (s *Step) OnStatus(fn func(status Status)) {
 }
 
 /**
+* OnChange
+* @param fn func(data et.Json) error
+**/
+func (s *Step) OnChange(fn func(data et.Json)) {
+	s.onChange = fn
+}
+
+/**
 * setStatus
 * @param status Status
 **/
 func (s *Step) setStatus(status Status) {
-	if s.onStatus == nil {
-		return
+	if s.onStatus != nil {
+		s.onStatus(status)
 	}
-	s.onStatus(status)
+	if s.onChange != nil {
+		s.onChange(s.ToJson())
+	}
 }
 
 /**

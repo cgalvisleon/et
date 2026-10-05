@@ -101,7 +101,7 @@ func (s *SenderInfobip) SendSMS(contactNumbers []string, content string, params 
 		},
 	}
 
-	res, status := request.Fetch("POST", url, header, body)
+	res, status := request.Fetch("POST", url, header, body, 0, nil)
 	if !status.Ok {
 		return et.Item{
 			Ok: false,

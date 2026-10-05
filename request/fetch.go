@@ -257,8 +257,17 @@ func Http(method, uRL string, header, body et.Json, tlsConfig *tls.Config) (*Bod
 * @param method, uRL string, header, body et.Json
 * @return *Body, Status
 **/
-func Fetch(method, uRL string, header, body et.Json) (*Body, Status) {
-	return Http(method, uRL, header, body, nil)
+func Fetch(method, uRL string, header, body et.Json, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+	return HttpWithContext(context.Background(), method, uRL, header, body, nil, timeout, defaultValue)
+}
+
+/**
+* FetchWithTls
+* @param method, uRL string, header, body et.Json, tlsConfig *tls.Config
+* @return *Body, Status
+**/
+func FetchWithTls(method, uRL string, header, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status) {
+	return HttpWithContext(context.Background(), method, uRL, header, body, tlsConfig, timeout, defaultValue)
 }
 
 /**

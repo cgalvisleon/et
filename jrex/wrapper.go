@@ -1,6 +1,7 @@
 package jrex
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"maps"
@@ -17,6 +18,13 @@ import (
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/dop251/goja"
 )
+
+func GetArgs(args []goja.Value, idx int, defaultValue any) any {
+	if idx < 0 || idx >= len(args) {
+		return defaultValue
+	}
+	return args[idx].Export()
+}
 
 /**
 * wrap: Wraps the runtime
@@ -140,7 +148,32 @@ func wrapperFetch(instance *Instance) {
 		url := args[1].String()
 		headers := args[2].Export().(map[string]interface{})
 		body := args[3].Export().(map[string]interface{})
-		result, status := request.Fetch(method, url, headers, body)
+		duration, _ := GetArgs(args, 4, 0).(int64)
+		timeout := time.Duration(duration) * time.Second
+		defaultValue := GetArgs(args, 5, nil).([]byte)
+		result, status := request.Fetch(method, url, headers, body, timeout, defaultValue)
+		res := &Fetch{
+			Ok:      status.Ok,
+			Result:  result,
+			Status:  status.Code,
+			Message: status.Message,
+		}
+		return res
+	})
+	instance.Set("fetchTls", func(call goja.FunctionCall) *Fetch {
+		args := call.Arguments
+		if len(args) != 4 {
+			panic(instance.Error(fmt.Errorf(msg.MSG_ARG_REQUIRED, "method, url, headers, body")))
+		}
+		method := args[0].String()
+		url := args[1].String()
+		headers := args[2].Export().(map[string]interface{})
+		body := args[3].Export().(map[string]interface{})
+		tlsConfig := GetArgs(args, 4, nil).(*tls.Config)
+		duration, _ := GetArgs(args, 5, 0).(int64)
+		timeout := time.Duration(duration) * time.Second
+		defaultValue := GetArgs(args, 6, nil).([]byte)
+		result, status := request.FetchWithTls(method, url, headers, body, tlsConfig, timeout, defaultValue)
 		res := &Fetch{
 			Ok:      status.Ok,
 			Result:  result,

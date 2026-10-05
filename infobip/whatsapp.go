@@ -66,7 +66,7 @@ func (s *SenderInfobip) SendWhatsApp(contactNumbers []string, templateName, lang
 			},
 		}
 
-		res, status := request.Fetch("POST", url, header, body)
+		res, status := request.Fetch("POST", url, header, body, 0, nil)
 		if !status.Ok {
 			return result, errors.New(status.Message)
 		}

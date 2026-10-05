@@ -95,7 +95,7 @@ type Flow struct {
 	isDebug       bool                       `json:"-"`
 	isChanged     bool                       `json:"-"`
 	onChange      []func(data et.Json) error `json:"-"`
-	bindings      map[string]interface{}     `json:"-"`
+	bindings      map[string]any             `json:"-"`
 	step          *Step                      `json:"-"`
 }
 
@@ -274,6 +274,9 @@ func (s *Flow) SetTimeAwait(time time.Duration, userId string) *Flow {
 * @return *Flow
 **/
 func (s *Flow) SetBinding(key string, value interface{}) *Flow {
+	if s.bindings == nil {
+		s.bindings = make(map[string]interface{})
+	}
 	s.bindings[key] = value
 	return s
 }

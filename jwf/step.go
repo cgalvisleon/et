@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/jrex"
 	"github.com/cgalvisleon/et/reg"
+	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -41,16 +41,6 @@ var (
 	}
 )
 
-type fnPublish func(flow *Flow, ctx et.Json) (et.Json, error)
-
-type Script struct {
-	Code        string `json:"code"`
-	Language    string `json:"language"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Version     int    `json:"version"`
-}
-
 type Step struct {
 	CreatedAt   time.Time           `json:"created_at"`
 	UpdatedAt   time.Time           `json:"updated_at"`
@@ -63,14 +53,12 @@ type Step struct {
 	Title       string              `json:"title"`
 	Description string              `json:"description"`
 	Definition  []*Script           `json:"definition"`
-	OnPublish   []*Script           `json:"on_publish"`
 	Config      et.Json             `json:"config"`
 	Params      et.Json             `json:"params"`
 	Inputs      int                 `json:"inputs"`
 	Outputs     int                 `json:"outputs"`
 	Stop        bool                `json:"stop"`
 	fn          fnStep              `json:"-"`
-	onPublish   fnPublish           `json:"-"`
 	isDebug     bool                `json:"-"`
 	isChanged   bool                `json:"-"`
 	bindings    map[string]any      `json:"-"`
@@ -102,7 +90,6 @@ func newStep(ownerId, id string, kind Kind, tag, version, title string) *Step {
 		Title:       title,
 		Description: "",
 		Definition:  []*Script{},
-		OnPublish:   []*Script{},
 		Config:      et.Json{},
 		Params:      et.Json{},
 		Inputs:      0,
@@ -155,7 +142,6 @@ func (s *Step) ToJson() et.Json {
 		"title":       s.Title,
 		"description": s.Description,
 		"definition":  s.Definition,
-		"on_publish":  s.OnPublish,
 		"config":      s.Config,
 		"params":      s.Params,
 		"inputs":      s.Inputs,
@@ -202,6 +188,19 @@ func (s *Step) setStatus(status Status) {
 }
 
 /**
+* SetBinding
+* @param name string, value interface{}
+* @return *Step
+**/
+func (s *Step) SetBinding(name string, value interface{}) *Step {
+	if s.bindings == nil {
+		s.bindings = make(map[string]any)
+	}
+	s.bindings[name] = value
+	return s
+}
+
+/**
 * RunFunction
 * @param instance *Instance, ctx et.Json
 * @return et.Json, error
@@ -225,45 +224,13 @@ func (s *Step) RunFunction(instance *Instance, ctx et.Json) (et.Json, error) {
 * @return et.Json, error
 **/
 func (s *Step) RunScript(ctx et.Json, instance *Instance) (et.Json, error) {
-	initJrex := func() *jrex.Instance {
-		id := ""
-		if instance != nil {
-			id = instance.ID
-		}
-		result := jrex.NewInstance(id)
-		bindings := make(map[string]any)
-		if instance != nil {
-			bindings = instance.bindings
-		}
-		for name, binding := range bindings {
-			result.Set(name, binding)
-		}
-		result.Set("params", s.Params)
-		return result
-	}
-
-	runJrex := func(rex *jrex.Instance, script string) (et.Json, error) {
-		if script == "" {
-			return et.Json{}, nil
-		}
-		rex.SetCtx(ctx)
-		rex.SetCode(script)
-		_, err := rex.Run()
-		if err != nil {
-			return et.Json{}, err
-		}
-		return rex.Ctx, nil
-	}
-
-	rex := initJrex()
 	result := et.Json{}
 	s.setStatus(RUNNING)
 	script := ""
 	for _, scr := range s.Definition {
-		script += scr.Code + "\n"
+		script = strs.Append(script, scr.Code, "\n")
 	}
-	var err error
-	result, err = runJrex(rex, script)
+	_, err := RunScript(script, ctx, s.bindings)
 	if err != nil {
 		s.setStatus(FAILED)
 		return et.Json{}, err
@@ -281,49 +248,4 @@ func (s *Step) Run(instance *Instance, ctx et.Json) (et.Json, error) {
 		return s.RunFunction(instance, ctx)
 	}
 	return s.RunScript(ctx, instance)
-}
-
-/**
-* run
-* @param instance *Instance, ctx et.Json
-* @return error
-**/
-func (s *Step) runOnPublish(flow *Flow, ctx et.Json) (et.Json, error) {
-	if s.onPublish != nil {
-		result, err := s.onPublish(flow, ctx)
-		if err != nil {
-			return et.Json{}, err
-		}
-		return result, nil
-	}
-
-	initJrex := func() *jrex.Instance {
-		result := jrex.NewInstance()
-		result.Set("params", s.Params)
-		result.Set("flow", flow)
-		return result
-	}
-
-	runJrex := func(rex *jrex.Instance, script string) (et.Json, error) {
-		rex.SetCtx(ctx)
-		rex.SetCode(script)
-		_, err := rex.Run()
-		if err != nil {
-			return et.Json{}, err
-		}
-		return rex.Ctx, nil
-	}
-
-	rex := initJrex()
-	result := et.Json{}
-	script := ""
-	for _, scr := range s.OnPublish {
-		script += scr.Code + "\n"
-	}
-	var err error
-	result, err = runJrex(rex, script)
-	if err != nil {
-		return et.Json{}, err
-	}
-	return result, nil
 }

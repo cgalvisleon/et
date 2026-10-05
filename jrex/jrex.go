@@ -238,7 +238,7 @@ func (s *Jrex) NewInstance(module string) (*Instance, error) {
 	instance := NewInstance("")
 	wrapper(instance)
 	for name, value := range s.bindings {
-		instance.Set(name, value)
+		instance.SetBinding(name, value)
 	}
 
 	instance.SetCode(requireRuntime)

@@ -1,4 +1,4 @@
-package jrex
+package jwf
 
 import (
 	"crypto/tls"
@@ -105,7 +105,7 @@ func wrapperVar(instance *Instance) {
 }
 
 /**
-* wrapperConsole: Wraps the console
+* wrapperConsole:
 * @param instance *Instance
 **/
 func wrapperConsole(instance *Instance) {
@@ -113,7 +113,7 @@ func wrapperConsole(instance *Instance) {
 		"log": func(args ...interface{}) {
 			kind := "LOG"
 			_args := make([]interface{}, 0)
-			_args = append(_args, fmt.Sprintf(`host:%s - instance:%s`, instance.Hostname, instance.ID))
+			_args = append(_args, fmt.Sprintf(`host:%s - instance:%s`, instance.hostname, instance.ID))
 			for _, arg := range args {
 				_args = append(_args, arg)
 			}
@@ -121,7 +121,7 @@ func wrapperConsole(instance *Instance) {
 		},
 		"debug": func(args ...interface{}) {
 			_args := make([]interface{}, 0)
-			_args = append(_args, fmt.Sprintf(`host:%s - instance:%s`, instance.Hostname, instance.ID))
+			_args = append(_args, fmt.Sprintf(`host:%s - instance:%s`, instance.hostname, instance.ID))
 			for _, arg := range args {
 				_args = append(_args, arg)
 			}
@@ -129,14 +129,14 @@ func wrapperConsole(instance *Instance) {
 		},
 		"info": func(args ...interface{}) {
 			_args := make([]interface{}, 0)
-			_args = append(_args, fmt.Sprintf(`host:%s - instance:%s`, instance.Hostname, instance.ID))
+			_args = append(_args, fmt.Sprintf(`host:%s - instance:%s`, instance.hostname, instance.ID))
 			for _, arg := range args {
 				_args = append(_args, arg)
 			}
 			logs.Info(_args...)
 		},
 		"error": func(args string) {
-			err := fmt.Errorf(`host:%s - instance:%s - %s`, instance.Hostname, instance.ID, args)
+			err := fmt.Errorf(`host:%s - instance:%s - %s`, instance.hostname, instance.ID, args)
 			logs.Error(err)
 		},
 	})
@@ -157,7 +157,7 @@ func wrapperFetch(instance *Instance) {
 	instance.SetBinding("fetch", func(call goja.FunctionCall) *Fetch {
 		args := call.Arguments
 		if len(args) != 4 {
-			panic(instance.Error(fmt.Errorf(msg.MSG_ARG_REQUIRED, "method, url, headers, body")))
+			panic(fmt.Errorf(msg.MSG_ARG_REQUIRED, "method, url, headers, body"))
 		}
 		method := args[0].String()
 		url := args[1].String()
@@ -178,7 +178,7 @@ func wrapperFetch(instance *Instance) {
 	instance.SetBinding("fetchTls", func(call goja.FunctionCall) *Fetch {
 		args := call.Arguments
 		if len(args) != 4 {
-			panic(instance.Error(fmt.Errorf(msg.MSG_ARG_REQUIRED, "method, url, headers, body")))
+			panic(fmt.Errorf(msg.MSG_ARG_REQUIRED, "method, url, headers, body"))
 		}
 		method := args[0].String()
 		url := args[1].String()

@@ -79,11 +79,11 @@ func (s *Instance) GetCode() string {
 }
 
 /**
-* Set
+* SetBinding
 * @param name string, value interface{}
 * @return *Instance
 **/
-func (s *Instance) Set(name string, value interface{}) *Instance {
+func (s *Instance) SetBinding(name string, value interface{}) *Instance {
 	s.vm.Set(name, value)
 	return s
 }

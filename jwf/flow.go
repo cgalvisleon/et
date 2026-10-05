@@ -3,7 +3,6 @@ package jwf
 import (
 	"encoding/json"
 	"errors"
-	"os"
 	"slices"
 	"time"
 
@@ -21,22 +20,9 @@ const (
 )
 
 var (
-	hostname            string
 	ErrrFlowNotFound    = errors.New(MSG_FLOW_NOT_FOUND)
 	ErrrTriggerNotFound = errors.New(MSG_TRIGGER_NOT_FOUND)
 )
-
-/**
-* init: Inicializa el hostname del store.
-* @return error
-**/
-func init() {
-	var err error
-	hostname, err = os.Hostname()
-	if err != nil {
-		hostname = "unknown"
-	}
-}
 
 type Port string
 
@@ -95,6 +81,7 @@ type Flow struct {
 	Description   string                     `json:"description"`
 	Version       string                     `json:"version"`
 	Steps         map[string]*Step           `json:"steps"`
+	OnPublish     []*Script                  `json:"on_publish"`
 	Connections   []*Connection              `json:"connections"`
 	Triggers      []*Trigger                 `json:"triggers"`
 	TotalAttempts int                        `json:"total_attempts"`
@@ -134,6 +121,7 @@ func NewFlow(tag, name, version, ownerId, userId string) *Flow {
 		Description:   "",
 		Version:       version,
 		Steps:         make(map[string]*Step),
+		OnPublish:     make([]*Script, 0),
 		Connections:   make([]*Connection, 0),
 		Triggers:      make([]*Trigger, 0),
 		TotalAttempts: 0,
@@ -495,16 +483,16 @@ func (s *Flow) AddStep(stepDef et.Json, userId string) (*Flow, error) {
 * Publish
 * @return []et.Json, error
 **/
-func (s *Flow) Publish() ([]et.Json, error) {
+func (s *Flow) Publish() error {
 	s.Published = true
 	s.addAuditLog(s.ID, "publish")
-	results := make([]et.Json, 0)
-	for _, step := range s.Steps {
-		result, err := step.runOnPublish(s, et.Json{})
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, result)
+	code := ""
+	for _, script := range s.OnPublish {
+		code += script.Code + "\n"
 	}
-	return results, nil
+	_, err := RunScript(code, et.Json{}, s.bindings)
+	if err != nil {
+		return err
+	}
+	return nil
 }

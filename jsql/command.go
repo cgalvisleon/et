@@ -377,7 +377,7 @@ func setJsJson(instance *jrex.Instance, name string, value et.Json) {
 	if value == nil {
 		value = et.Json{}
 	}
-	instance.Set(name, map[string]any(value))
+	instance.SetBinding(name, map[string]any(value))
 }
 
 /**

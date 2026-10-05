@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"os"
 	"sync"
 	"time"
 
@@ -39,6 +40,7 @@ const (
 )
 
 var (
+	hostname              string
 	ErrorInstanceNotFound                 = errors.New(MSG_INSTANCE_NOT_FOUND)
 	FlowStatusList        map[Status]bool = map[Status]bool{
 		CREATED:  true,
@@ -50,6 +52,14 @@ var (
 		CANCEL:   true,
 	}
 )
+
+func init() {
+	var err error
+	hostname, err = os.Hostname()
+	if err != nil {
+		hostname = "unknown"
+	}
+}
 
 type Current struct {
 	SourceId   string `json:"source_id"`
@@ -80,7 +90,7 @@ type Instance struct {
 	StepId      string                 `json:"step_id"`
 	IsDone      bool                   `json:"is_done"`
 	IsEnd       bool                   `json:"is_end"`
-	UserId      string                 `json:"user_id"`	
+	UserId      string                 `json:"user_id"`
 	Error       string                 `json:"error"`
 	stop        bool                   `json:"-"`
 	isDebug     bool                   `json:"-"`
@@ -91,6 +101,7 @@ type Instance struct {
 	goTo        int                    `json:"-"`
 	onChange    []func(data et.Json)   `json:"-"`
 	mu          sync.Mutex             `json:"-"`
+	hostname    string                 `json:"-"`
 }
 
 /**
@@ -120,7 +131,7 @@ func (s *Flow) NewInstance(id, code, name string, tags et.Json, trigger *Trigger
 		flow:        s,
 		bindings:    make(map[string]interface{}),
 		onChange:    make([]func(data et.Json), 0),
-		mu:          sync.Mutex{},		
+		mu:          sync.Mutex{},
 	}
 	result.up()
 	for name, binding := range s.bindings {
@@ -164,6 +175,7 @@ func (s *Instance) up() *Instance {
 	if s.onChange == nil {
 		s.onChange = make([]func(data et.Json), 0)
 	}
+	s.hostname = hostname
 	s.wrapper()
 	return s
 }

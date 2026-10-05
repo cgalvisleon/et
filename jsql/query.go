@@ -1043,7 +1043,7 @@ func (s *Query) setCalc(tx *Tx, item et.Json) (et.Json, error) {
 		instance.SetCode(code)
 		calc.Model.wrapper(instance)
 		setJsJson(instance, "item", item)
-		instance.Set("tx", tx)
+		instance.SetBinding("tx", tx)
 		_, err := instance.Run()
 		if err != nil {
 			return item, err

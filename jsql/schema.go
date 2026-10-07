@@ -1,7 +1,7 @@
 package jsql
 
 import (
-	"errors"
+	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -15,12 +15,31 @@ import (
 * Schema: Represents a database schema that owns a set of models.
 **/
 type Schema struct {
-	database string            `json:"-"`
 	Name     string            `json:"name"`
 	Models   map[string]*Model `json:"models"`
+	database string            `json:"-"`
 	db       *DB               `json:"-"`
 	isDebug  bool              `json:"-"`
 	mu       *sync.RWMutex     `json:"-"`
+}
+
+/**
+* up: Initializes the schema.
+* @param db *DB
+* @return error
+**/
+func (s *Schema) up(db *DB) error {
+	s.db = db
+	s.database = db.Name
+	s.isDebug = db.isDebug
+	s.mu = &sync.RWMutex{}
+	for _, model := range s.Models {
+		err := model.up(s)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 /**
@@ -88,6 +107,7 @@ func (s *Schema) newModel(id, name string, version int, userId string) *Model {
 	name = utility.Normalize(name)
 	id = reg.GetUUID(id)
 	result := &Model{
+		Kind:          MODEL,
 		ID:            id,
 		database:      s.database,
 		Schema:        s.Name,
@@ -134,65 +154,30 @@ func (s *Schema) newModel(id, name string, version int, userId string) *Model {
 * @return *Model, error
 **/
 func (s *Schema) loadModel(def et.Json) (*Model, error) {
-	if def.IsEmpty() {
-		return nil, errors.New(MSG_PARAMS_IS_EMPTY)
+	bt, err := def.ToByte()
+	if err != nil {
+		return nil, err
 	}
 
-	id := def.Str("id")
-	if !utility.ValidStr(id, 0, []string{""}) {
-		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "id")
+	var result *Model
+	if err := json.Unmarshal(bt, &result); err != nil {
+		return nil, err
 	}
 
-	name := def.Str("name")
-	if !utility.ValidStr(name, 0, []string{""}) {
-		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "name")
+	result.database = s.database
+	result.IsDebug = s.isDebug
+	result.calcs = make(map[string]CalcFunction, 0)
+	result.calcScripts = make(map[string]string, 0)
+	result.beforeInserts = make([]TriggerFunction, 0)
+	result.beforeUpdates = make([]TriggerFunction, 0)
+	result.beforeDeletes = make([]TriggerFunction, 0)
+	result.afterInserts = make([]TriggerFunction, 0)
+	result.afterUpdates = make([]TriggerFunction, 0)
+	result.afterDeletes = make([]TriggerFunction, 0)
+	result.db = s.db
+	for _, column := range result.Columns {
+		column.model = result
 	}
-
-	table := def.Str("table")
-	if !utility.ValidStr(table, 0, []string{""}) {
-		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "table")
-	}
-
-	version := def.ValInt(0, "version")
-
-	result := &Model{
-		ID:            id,
-		database:      s.database,
-		Schema:        s.Name,
-		Name:          name,
-		Table:         table,
-		Columns:       make([]*Column, 0),
-		Indexes:       make([]*Index, 0),
-		PrimaryKeys:   make([]*Index, 0),
-		ForeignKeys:   make([]*Detail, 0),
-		Unique:        make([]*Index, 0),
-		Required:      make([]*Index, 0),
-		Hiddens:       make([]string, 0),
-		OmitUpdates:   make([]string, 0),
-		Details:       make(map[string]*Detail, 0),
-		Masters:       make(map[string]*Master, 0),
-		Rollups:       make(map[string]*Rollups, 0),
-		Version:       version,
-		BeforeInserts: make([]*jwf.Script, 0),
-		BeforeUpdates: make([]*jwf.Script, 0),
-		BeforeDeletes: make([]*jwf.Script, 0),
-		AfterInserts:  make([]*jwf.Script, 0),
-		AfterUpdates:  make([]*jwf.Script, 0),
-		AfterDeletes:  make([]*jwf.Script, 0),
-		AuditLog:      &et.SafeData{},
-		calcs:         make(map[string]CalcFunction, 0),
-		calcScripts:   make(map[string]string, 0),
-		beforeInserts: make([]TriggerFunction, 0),
-		beforeUpdates: make([]TriggerFunction, 0),
-		beforeDeletes: make([]TriggerFunction, 0),
-		afterInserts:  make([]TriggerFunction, 0),
-		afterUpdates:  make([]TriggerFunction, 0),
-		afterDeletes:  make([]TriggerFunction, 0),
-		db:            s.db,
-	}
-	result.OmitUpdates = append(result.OmitUpdates, def.ArrayStr("omit_updates")...)
-	columns := def.ArrayJson("columns")
-	result.loadColumns(columns)
 
 	for _, foreignKey := range result.ForeignKeys {
 		to := foreignKey.To

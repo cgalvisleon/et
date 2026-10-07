@@ -430,6 +430,14 @@ func (s *DB) DefineProjectModel(schema, name string, version int, userId string)
 }
 
 /**
+* GetKind: Returns the kind of the model.
+* @return string
+**/
+func (s *Model) GetKind() string {
+	return s.getKind()
+}
+
+/**
 * Init: Runs DDL for the model the first time it is called; subsequent calls are no-ops.
 * @return error
 **/

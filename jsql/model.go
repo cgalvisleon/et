@@ -13,6 +13,11 @@ import (
 	"github.com/cgalvisleon/et/timezone"
 )
 
+const (
+	MODEL = "model:model"
+	TABLE = "model:table"
+)
+
 /**
 * TriggerFunction: Callback invoked before or after a data-mutation command.
 **/
@@ -28,8 +33,8 @@ type Index struct {
 }
 
 type Model struct {
+	Kind          string                  `json:"kind"`
 	ID            string                  `json:"id"`
-	database      string                  `json:"-"`
 	Schema        string                  `json:"schema"`
 	Name          string                  `json:"name"`
 	Table         string                  `json:"table"`
@@ -48,8 +53,7 @@ type Model struct {
 	OmitUpdates   []string                `json:"omit_updates"`
 	IsStrict      bool                    `json:"is_strict"`
 	Version       int                     `json:"version"`
-	IsInit        bool                    `json:"is_init"`
-	IsDebug       bool                    `json:"-"`
+	Deployed      bool                    `json:"deployed"`
 	BeforeInserts []*jwf.Script           `json:"before_inserts"`
 	BeforeUpdates []*jwf.Script           `json:"before_updates"`
 	BeforeDeletes []*jwf.Script           `json:"before_deletes"`
@@ -57,6 +61,9 @@ type Model struct {
 	AfterUpdates  []*jwf.Script           `json:"after_updates"`
 	AfterDeletes  []*jwf.Script           `json:"after_deletes"`
 	AuditLog      *et.SafeData            `json:"audit_log"`
+	IsDebug       bool                    `json:"-"`
+	IsInit        bool                    `json:"-"`
+	database      string                  `json:"-"`
 	isChanged     bool                    `json:"-"`
 	calcs         map[string]CalcFunction `json:"-"`
 	calcScripts   map[string]string       `json:"-"`
@@ -68,6 +75,55 @@ type Model struct {
 	afterDeletes  []TriggerFunction       `json:"-"`
 	db            *DB                     `json:"-"`
 	muIdx         sync.Mutex              `json:"-"`
+}
+
+/**
+* up: Initializes the model.
+* @param db *DB
+* @return void
+**/
+func (s *Model) up(schema *Schema) error {
+	s.database = schema.database
+	s.IsDebug = schema.isDebug
+	s.calcs = make(map[string]CalcFunction, 0)
+	s.calcScripts = make(map[string]string, 0)
+	s.beforeInserts = make([]TriggerFunction, 0)
+	s.beforeUpdates = make([]TriggerFunction, 0)
+	s.beforeDeletes = make([]TriggerFunction, 0)
+	s.afterInserts = make([]TriggerFunction, 0)
+	s.afterUpdates = make([]TriggerFunction, 0)
+	s.afterDeletes = make([]TriggerFunction, 0)
+	s.db = schema.db
+	for _, foreignKey := range s.ForeignKeys {
+		to := foreignKey.To
+		toModel, err := s.db.GetModel(to.Schema, to.Name)
+		if err != nil {
+			return err
+		}
+		foreignKey.To.Model = toModel
+	}
+
+	for _, detail := range s.Details {
+		to := detail.To
+		toModel, err := s.db.GetModel(to.Schema, to.Name)
+		if err != nil {
+			return err
+		}
+		detail.To.Model = toModel
+	}
+
+	for _, rollup := range s.Rollups {
+		to := rollup.To
+		toModel, err := s.db.GetModel(to.Schema, to.Name)
+		if err != nil {
+			return err
+		}
+		rollup.To.Model = toModel
+	}
+
+	s.defaultTrigger()
+	schema.addModel(s)
+	return nil
 }
 
 /**
@@ -104,6 +160,14 @@ func (s *Model) addAuditLog(userId string, action string) {
 	if s.db != nil {
 		s.db.addAuditLog(userId, action)
 	}
+}
+
+/**
+* getKind: Returns the kind of the model.
+* @return string
+**/
+func (s *Model) getKind() string {
+	return s.Kind
 }
 
 /**

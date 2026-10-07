@@ -223,9 +223,17 @@ func (s *Step) RunFunction(instance *Instance, ctx et.Json) (et.Json, error) {
 * @param ctx et.Json
 * @return et.Json, error
 **/
-func (s *Step) RunScript(ctx et.Json, instance *Instance) (et.Json, error) {
+func (s *Step) RunScript(instance *Instance, ctx et.Json) (et.Json, error) {
 	result := et.Json{}
 	s.setStatus(RUNNING)
+	if instance != nil {
+		if instance.bindings == nil {
+			instance.bindings = make(map[string]any, 0)
+		}
+		for key, value := range instance.bindings {
+			s.SetBinding(key, value)
+		}
+	}
 	_, err := RunScripts(s.Definition, ctx, s.bindings)
 	if err != nil {
 		s.setStatus(FAILED)
@@ -243,5 +251,5 @@ func (s *Step) Run(instance *Instance, ctx et.Json) (et.Json, error) {
 	if s.fn != nil {
 		return s.RunFunction(instance, ctx)
 	}
-	return s.RunScript(ctx, instance)
+	return s.RunScript(instance, ctx)
 }

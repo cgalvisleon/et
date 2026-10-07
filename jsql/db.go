@@ -2,6 +2,7 @@ package jsql
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -77,74 +78,31 @@ func newDB(params ConnectParams) (*DB, error) {
 * @param params et.Json
 * @return *DB, error
 **/
-func loadDb(params et.Json) (*DB, error) {
-	if params.IsEmpty() {
-		return nil, errors.New(MSG_PARAMS_IS_EMPTY)
+func loadDb(def et.Json) (*DB, error) {
+	bt, err := def.ToByte()
+	if err != nil {
+		return nil, err
 	}
 
-	host := params.Str("host")
-	if !utility.ValidStr(host, 0, []string{""}) {
-		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "host")
+	var result *DB
+	if err := json.Unmarshal(bt, &result); err != nil {
+		return nil, err
 	}
 
-	driver := params.Str("driver")
-	if !utility.ValidStr(driver, 0, []string{""}) {
-		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "driver")
-	}
-
-	drv, ok := drivers[driver]
-	if !ok {
-		return nil, errors.New(MSG_DRIVER_NOT_FOUND)
-	}
-
-	name := params.Str("name")
-	if !utility.ValidStr(name, 0, []string{""}) {
-		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "name")
-	}
-
-	connection := params.Json("params")
-	if connection.IsEmpty() {
-		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "params")
-	}
-
-	recordLimit := params.ValInt(1000, "record_limit")
-	result := &DB{
-		Host:        host,
-		Driver:      driver,
-		Name:        name,
-		Params:      connection,
-		Schemas:     make(map[string]*Schema),
-		RecordLimit: recordLimit,
-		AuditLog:    &et.SafeData{},
-		isDebug:     envar.GetBool("DEBUG", false),
-		driver:      drv,
-	}
-
-	schemas := params.Json("schemas")
-	for k := range schemas {
-		schemaRef := schemas.Json(k)
-		name := schemaRef.Str("name")
-		schema, ok := result.Schemas[name]
-		if !ok {
-			schema = result.newSchema(name)
-		}
-		models := schemaRef.Json("models")
-		for k := range models {
-			modelRef := models.Json(k)
-			modelId := modelRef.Str("id")
-			_, ok := schema.Models[modelId]
-			if !ok {
-				_, err := schema.loadModel(modelRef)
-				if err != nil {
-					return nil, err
-				}
-			}
+	for _, schema := range result.Schemas {
+		err := schema.up(result)
+		if err != nil {
+			return nil, err
 		}
 	}
 
 	return result, nil
 }
 
+/**
+* setOnAuditLog: Sets the audit log function.
+* @param fn func(userId string, action string) error
+**/
 func (s *DB) setOnAuditLog(fn func(userId string, action string) error) {
 	s.onAuditLog = fn
 }

@@ -88,9 +88,8 @@ type Flow struct {
 	TimeAttempts  time.Duration              `json:"time_attempts"`
 	TimeAwait     time.Duration              `json:"time_await"`
 	Constants     et.Json                    `json:"constants"`
-	SaveInstances bool                       `json:"save_instances"`
-	Variables     et.Json                    `json:"variables"`
 	Resources     []et.Json                  `json:"resources"`
+	SaveInstances bool                       `json:"save_instances"`
 	Published     bool                       `json:"published"`
 	AuditLog      []et.Json                  `json:"audit_log"`
 	isDebug       bool                       `json:"-"`
@@ -127,10 +126,9 @@ func NewFlow(tag, name, version, ownerId, userId string) *Flow {
 		TotalAttempts: 0,
 		TimeAttempts:  0,
 		TimeAwait:     10 * time.Minute,
-		SaveInstances: true,
 		Constants:     make(et.Json),
-		Variables:     make(et.Json),
 		Resources:     make([]et.Json, 0),
+		SaveInstances: true,
 		Published:     false,
 		AuditLog:      make([]et.Json, 0),
 		bindings:      make(map[string]interface{}),
@@ -170,9 +168,6 @@ func (s *Flow) up() *Flow {
 	}
 	if s.Constants == nil {
 		s.Constants = make(et.Json)
-	}
-	if s.Variables == nil {
-		s.Variables = make(et.Json)
 	}
 	if s.Resources == nil {
 		s.Resources = make([]et.Json, 0)
@@ -246,7 +241,6 @@ func (s *Flow) ToJson() et.Json {
 		"time_attempts":  s.TimeAttempts.String(),
 		"time_await":     s.TimeAwait.String(),
 		"constants":      s.Constants,
-		"variables":      s.Variables,
 		"on_publish":     s.OnPublish,
 		"resources":      s.Resources,
 		"published":      s.Published,

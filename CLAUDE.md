@@ -14,17 +14,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 go build ./...                       # build + vet are currently clean
 go vet ./...
 gofmt -w .
-go test ./jwf/ -run TestName -race   # prefer one package over go test ./...
+go test ./queue/ -run Example_queue -race   # prefer one package over go test ./...
 
 go run ./cmd/server   # TCP node (port 1377, -port flag)
 go run ./cmd/jrex     # JS runtime, hot-reload from ./cmd/jrex/src/
 go run ./cmd/jsql     # jsql driver demo
 go run ./cmd/ia       # RAG HTTP API (PORT, default 3300)
+docker compose up -d  # optional local Ollama on 11434 (see docker-compose.yml header)
 
 ./version.sh --major | --minor | --request   # bumps git tag, updates README.md, pushes
 ```
 
-Tests exist only in `queue/` (`Example_queue`), `ia/loader_test.go`, `jwf/workflow_test.go` (use `-race`), and `jrpc/`, `jws/`, `cache/`, `aws/`, `brevo/` — the latter need live Redis/AWS/Brevo and fail or hang without them. The sqlite driver and `ia`'s ingest/ask path have no tests.
+Tests exist only in `queue/` (`Example_queue`), `ia/loader_test.go`, `jsql/drivers/test/`, and `jrpc/`, `jws/`, `cache/`, `aws/`, `brevo/` — the latter need live Redis/AWS/Brevo and fail or hang without them. `jwf` and `ia`'s ingest/ask path have no tests.
+
+`jsql/drivers/test/` is the cross-driver suite (`TestCatalog`, `TestInsertUpdate`, `TestJoinGroupHaving`, `TestWrapper`, `TestCreateDropDB`): it runs every case against sqlite (temp file), postgres, mysql, mssql and oracle, reading connection settings from `et/.env` (`DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`, `ORACLE_HOST`/`ORACLE_SERVICE`/`ORACLE_USER`…) and `t.Skip`-ing any engine it can't reach, so a green run may have only exercised sqlite — check the skip lines with `-v`. `JSQL_DEBUG=1` logs the generated SQL. `result/<driver>.sql|.json` hold per-driver outputs.
+
+```bash
+cd jsql/drivers/test && go test -v -run 'TestInsertUpdate/sqlite' .
+```
 
 ## Code style
 
@@ -41,7 +48,9 @@ Modular utility library for Go microservices: every directory is an independent 
 ### SQL builder / ORM: `jsql/`
 
 - `jsql.Load()` / `jsql.LoadTo(name)` → `*DB`; config and tenant (`DB_TENANT_ID`, default `tenant:root`) are read internally via `envar`.
-- Drivers in `jsql/drivers/<name>/`, self-register via `init()`, imported as side effect: `postgres` (`lib/pq`) and `sqlite` (`modernc.org/sqlite`). `mysql`/`mssql`/`oracle`/`josefina` are constants only, no implementation.
+- Drivers in `jsql/drivers/<name>/`, self-register via `init()`, imported as side effect: `postgres` (`lib/pq`), `sqlite` (`modernc.org/sqlite`), `mysql`, `mssql`, `oracle` — each with the same file set (`connect`, `load` = DDL, `query`, `command`, `quoted`, `types`, `test`). `josefina` is a constant only. A change to SQL generation usually has to be mirrored in all five.
+- `jsql/catalog.go` is the whole public API in one file: every exported function/method is a thin wrapper over a private implementation elsewhere in the package, grouped into numbered sections. New public API goes there (and `TestCatalog` checks the sections). `jsql/spec.md` is the formal spec with a numbered gap list ("brechas", e.g. B8); `feature.md` is its source.
+- `jsql/jquery.go` parses JSON query/command descriptors (`select`/`from`/`join`/`where`/…, `insert`/`update`/`delete`/`upsert`/`bulk`); `jsql/wrapper.go` `Wrapper(db)` exposes jsql to goja scripts (triggers, `DefineCalc`) and `jsql/jsql.d.ts` is the matching TypeScript declaration — keep both in sync when changing the wrapper.
 - `Driver` interface (`jsql/driver.go`): `Connect(db)`, `Load(model)` (DDL), `Query(query)` (SELECT), `Command(command)` (DML) — each returns SQL text.
 - sqlite quirk: queries return each row as one JSON object; a nested JSON column inside it comes back double-encoded (see `ia/similarity.go` `chunkEmbedding`).
 
@@ -66,7 +75,7 @@ _, _ = model.Insert(et.Json{...}).ExecTx(nil)   // also Update(...).Where(...), 
 
 Manual alternative: `db.NewModel(...)` + `DefineColumn`/`DefinePrimaryKey`/`DefineUnique`/`DefineAttrib`/`DefineForeignKeys`. Package-level `jsql.Define(dbName, def)` uses the DB registry.
 
-- **`TypeColumn`**: `COLUMN` (real column), `ATTRIB` (key inside `_source` JSONB, cast on read), `DETAIL`/`ROLLUP` (virtual relations), `CALCFUNC` (`CalcFunction` callback), `CALC` (query-time expression), `AGG`.
+- **`TypeColumn`**: `COLUMN` (real column), `ATTRIB` (key inside `_source` JSONB, cast on read), `DETAIL`/`MASTER`/`ROLLUP` (virtual relations; `MASTER` goes through a bridge table), `CALCFUNC` (`CalcFunction` callback), `CALC` (query-time expression), `AGG`.
 - **Column constants** (`jsql/column.go`): `ID`, `IDX` (`_idx`), `IDT`, `SOURCE` (`_source`), `STATUS`, `TENANT_ID`, `PROJECT_ID`, `CREATED_AT`, `UPDATED_AT`. `_idx` is a `reg.UUID()` set by an auto `BeforeInsert` trigger, not a sequence.
 - **Status constants**: `ACTIVE`, `ARCHIVED`, `CANCELED`, `PENDING`, `APPROVED`, `REJECTED`, `OF_SYSTEM`, `FOR_DELETE`; extend `jsql.Status` with `jsql.SetStatus`.
 - **Triggers**: before/after × insert/update/delete, `TriggerFunction func(tx *Tx, old, new et.Json) error`.
@@ -93,7 +102,7 @@ Manual alternative: `db.NewModel(...)` + `DefineColumn`/`DefinePrimaryKey`/`Defi
 - **`logs/`** (`Info`, `Alert`, `Error`, `Debug`, `Fatal`→`os.Exit(1)`, `…f` variants) over **`stdrout/`**.
 - **`jwt/`** (tokens stored in `cache`) over **`claim/`** (HS256, `SECRET`).
 - **`crontab/`** — event-driven; `crontab.Load(tag, store)` sets a package singleton, then `crontab.CronJob(tag, ownerId, Cron{...}, repetitions, params, fn)` / `ScheduleJob(tag, ownerId, time.Time, params, fn)`. HTTP handlers publish control events.
-- **`jval/`** and **`validator/`** — two unrelated fluent validators; don't mix types. `validator` conditions: `Required`/`Min`/`Max`/`Between`/`MinLength`/`MaxLength`/`Pattern`/`NotEmpty` and "at least one" checks `IsLetters`/`IsNumbers`/`IsSpecialCharacters`; handles `[]any` from decoded JSON, objects (`et.Json`, `map[string]any`, `[]et.Json`; `Required` means non-empty, like arrays) and `nil`. `Validate` fails a `Required` field that is missing from the json (2026-09-28; before, it only checked the keys present).
+- **`validator/`** — fluent validator (`jval/` no longer exists). Conditions: `Required`/`Min`/`Max`/`Between`/`MinLength`/`MaxLength`/`Pattern`/`NotEmpty` and "at least one" checks `IsLetters`/`IsNumbers`/`IsSpecialCharacters`; handles `[]any` from decoded JSON, objects (`et.Json`, `map[string]any`, `[]et.Json`; `Required` means non-empty, like arrays) and `nil`. `Validate` fails a `Required` field that is missing from the json (2026-09-28; before, it only checked the keys present).
 - **`queue/`** — `queue.New[T](queueSize, maxEvents, period, handler)`; flushes on `maxEvents` or `period`, `.Close()` flushes.
 - **`request/`** (`URLParam`, `GetBody`, outbound `Fetch` — JSON/form only), **`response/`** (`ITEM`, `ITEMS`, `HTTPError`), **`middleware/`**, **`msg/`** (shared message constants).
 - **`xls/`**, **`csv/`** — same API shape: `Read*(data|multipart|file)` → reader; `New*(data, columns)` → `ToFile`/`ToWriter`/`ToHttp` (columns derived from keys if omitted).

@@ -566,14 +566,30 @@ func msSelects(query *jsql.Query) string {
 		return fmt.Sprintf("%s AS %s", msObject(pairs), msIdent(jsql.RESULT))
 	}
 
+	// "*" son las columnas de los from (StarFields); se le suman los demás campos de selects
 	pairs := make([]string, 0, len(query.Selects))
-	for _, field := range query.Selects {
-		if slices.Contains(query.Hiddens, field) || field == jsql.SOURCE {
-			continue
-		}
+	add := func(field string) {
 		if expr, ok := msSelectExpr(query, field); ok {
 			pairs = append(pairs, expr)
 		}
+	}
+	for _, field := range query.Selects {
+		if field == jsql.STAR {
+			for _, name := range query.StarFields() {
+				add(name)
+			}
+			continue
+		}
+		if slices.Contains(query.Hiddens, field) || field == jsql.SOURCE {
+			continue
+		}
+		add(field)
+	}
+
+	// Con "*" y campo fuente, los atributos del primer from y encima los campos
+	if from := query.Froms[0]; query.HasStar() && from.Model != nil && from.Model.SourceField != "" {
+		source := msSourceExpr(msColumnRef(msAlias(from), from.Model.SourceField), query.SourceHiddens(from))
+		return fmt.Sprintf("%s AS %s", msMergeObject(source, pairs), msIdent(jsql.RESULT))
 	}
 	return fmt.Sprintf("%s AS %s", msObject(pairs), msIdent(jsql.RESULT))
 }

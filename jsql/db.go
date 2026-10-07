@@ -17,6 +17,7 @@ import (
 )
 
 type DB struct {
+	ID          string                                   `json:"id"`
 	Host        string                                   `json:"host"`
 	Driver      string                                   `json:"driver"`
 	Name        string                                   `json:"name"`
@@ -57,7 +58,9 @@ func newDB(params ConnectParams) (*DB, error) {
 	}
 
 	connection := params.Connection.GetParams()
+	id := connection.Str("id")
 	result := &DB{
+		ID:          reg.GetUUID(id),
 		Host:        params.Host,
 		Driver:      params.Driver,
 		Name:        params.Name,
@@ -198,13 +201,13 @@ func (s *DB) init() error {
 * @param name string
 * @return *Schema, error
 **/
-func (s *DB) getSchema(name string) (*Schema, error) {
+func (s *DB) getSchema(name string) *Schema {
 	result, ok := s.Schemas[name]
 	if ok {
-		return result, nil
+		return result
 	}
 
-	return nil, fmt.Errorf(MSG_SCHEMA_NOT_FOUND, name)
+	return s.newSchema(name)
 }
 
 /**
@@ -374,11 +377,7 @@ func (s *DB) debug() {
 * @return *Model, error
 **/
 func (s *DB) getModel(schema, name string) (*Model, error) {
-	sch, err := s.getSchema(schema)
-	if err != nil {
-		return nil, err
-	}
-
+	sch := s.getSchema(schema)
 	result, err := sch.getModel(name)
 	if err != nil {
 		return nil, err

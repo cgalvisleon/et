@@ -36,12 +36,15 @@ func getConnection(driver, host string) (Connection, error) {
 }
 
 type Connection interface {
+	ID() string
+	SetId(string)
 	GetParams() et.Json
 	SetDatabase(string)
 	GetDatabase() string
 }
 
 type PgConection struct {
+	Id          string
 	Host        string
 	Port        int
 	Database    string
@@ -62,6 +65,7 @@ func pgConection(host string) *PgConection {
 	appName := envar.GetStr("DB_APP_NAME", "josephine")
 	recordLimit := envar.GetInt("DB_RECORD_LIMIT", 1000)
 	return &PgConection{
+		Id:          fmt.Sprintf("db:%s:%s:%s", DriverPostgres, host, database),
 		Host:        host,
 		Port:        port,
 		Database:    database,
@@ -80,6 +84,7 @@ func pgConection(host string) *PgConection {
 **/
 func (s *PgConection) getParams() et.Json {
 	return et.Json{
+		"id":           s.Id,
 		"driver":       DriverPostgres,
 		"host":         s.Host,
 		"port":         s.Port,
@@ -91,6 +96,22 @@ func (s *PgConection) getParams() et.Json {
 		"record_limit": s.RecordLimit,
 		"timeout":      s.Timeout,
 	}
+}
+
+/**
+* ID: Returns the connection ID.
+* @return string
+**/
+func (s *PgConection) ID() string {
+	return s.Id
+}
+
+/**
+* SetId: Sets the connection ID.
+* @param id string
+**/
+func (s *PgConection) SetId(id string) {
+	s.Id = id
 }
 
 /**
@@ -110,6 +131,7 @@ func (s *PgConection) getDatabase() string {
 }
 
 type SqliteConection struct {
+	Id           string
 	File         string
 	RecordLimit  int
 	PoolMaxOpen  int
@@ -132,6 +154,7 @@ func sqliteConection(path string) *SqliteConection {
 	poolIdleTime := envar.GetInt("DB_POOL_IDLE_TIME", 10)
 	appName := envar.GetStr("DB_APP_NAME", "josephine")
 	return &SqliteConection{
+		Id:           fmt.Sprintf("db:%s:%s", DriverSqlite, file),
 		File:         file,
 		RecordLimit:  recordLimit,
 		PoolMaxOpen:  poolMaxOpen,
@@ -141,6 +164,22 @@ func sqliteConection(path string) *SqliteConection {
 		AppName:      appName,
 		Timeout:      1 * time.Hour,
 	}
+}
+
+/**
+* ID: Returns the connection ID.
+* @return string
+**/
+func (s *SqliteConection) ID() string {
+	return s.Id
+}
+
+/**
+* SetId: Sets the connection ID.
+* @param id string
+**/
+func (s *SqliteConection) SetId(id string) {
+	s.Id = id
 }
 
 /**
@@ -211,6 +250,22 @@ func oracleConection(host string) *OracleConection {
 }
 
 /**
+* ID: Returns the connection ID.
+* @return string
+**/
+func (s *OracleConection) ID() string {
+	return s.Id
+}
+
+/**
+* SetId: Sets the connection ID.
+* @param id string
+**/
+func (s *OracleConection) SetId(id string) {
+	s.Id = id
+}
+
+/**
 * getParams: Returns the connection parameters as a JSON object.
 * @return et.Json
 **/
@@ -227,14 +282,6 @@ func (s *OracleConection) getParams() et.Json {
 		"ssl_verify":   s.SSLVerify,
 		"timeout":      s.Timeout,
 	}
-}
-
-/**
-* id: Returns the connection ID.
-* @return string
-**/
-func (s *OracleConection) id() string {
-	return s.Id
 }
 
 /**
@@ -290,6 +337,14 @@ func mysqlConection(host string) *MysqlConection {
 **/
 func (s *MysqlConection) ID() string {
 	return s.Id
+}
+
+/**
+* SetId: Sets the connection ID.
+* @param id string
+**/
+func (s *MysqlConection) SetId(id string) {
+	s.Id = id
 }
 
 /**
@@ -365,6 +420,14 @@ func (s *MssqlConection) ID() string {
 }
 
 /**
+* SetId: Sets the connection ID.
+* @param id string
+**/
+func (s *MssqlConection) SetId(id string) {
+	s.Id = id
+}
+
+/**
 * GetParams: Returns the connection parameters as a JSON object.
 * @return et.Json
 **/
@@ -419,6 +482,7 @@ func connectionFromJson(driver, host string, params et.Json) (Connection, error)
 
 	switch c := result.(type) {
 	case *PgConection:
+		c.Id = params.ValStr(c.Id, "id")
 		c.Port = params.ValInt(c.Port, "port")
 		c.Database = params.ValStr(c.Database, "database")
 		c.User = params.ValStr(c.User, "user")
@@ -428,6 +492,7 @@ func connectionFromJson(driver, host string, params et.Json) (Connection, error)
 		c.RecordLimit = params.ValInt(c.RecordLimit, "record_limit")
 		c.Timeout = timeout(c.Timeout)
 	case *SqliteConection:
+		c.Id = params.ValStr(c.Id, "id")
 		c.File = params.ValStr(c.File, "file")
 		c.RecordLimit = params.ValInt(c.RecordLimit, "record_limit")
 		c.PoolMaxOpen = params.ValInt(c.PoolMaxOpen, "pool_max_open")

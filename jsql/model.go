@@ -74,6 +74,7 @@ type Model struct {
 	afterUpdates  []TriggerFunction       `json:"-"`
 	afterDeletes  []TriggerFunction       `json:"-"`
 	db            *DB                     `json:"-"`
+	schema        *Schema                 `json:"-"`
 	muIdx         sync.Mutex              `json:"-"`
 }
 
@@ -83,6 +84,7 @@ type Model struct {
 * @return void
 **/
 func (s *Model) up(schema *Schema) error {
+	s.schema = schema
 	s.database = schema.database
 	s.IsDebug = schema.isDebug
 	s.calcs = make(map[string]CalcFunction, 0)
@@ -94,6 +96,15 @@ func (s *Model) up(schema *Schema) error {
 	s.afterUpdates = make([]TriggerFunction, 0)
 	s.afterDeletes = make([]TriggerFunction, 0)
 	s.db = schema.db
+
+	if s.AuditLog == nil {
+		s.AuditLog = et.NewSafeData()
+	}
+
+	if s.AuditLog.Data == nil {
+		s.AuditLog.Data = make([]et.Json, 0)
+	}
+
 	for _, foreignKey := range s.ForeignKeys {
 		to := foreignKey.To
 		toModel, err := s.db.GetModel(to.Schema, to.Name)
@@ -124,6 +135,69 @@ func (s *Model) up(schema *Schema) error {
 	s.defaultTrigger()
 	schema.addModel(s)
 	return nil
+}
+
+/**
+* getSchema: Returns the schema of the model.
+* @return *Schema
+**/
+func (s *Model) getSchema() *Schema {
+	return s.schema
+}
+
+/**
+* Replace: Replaces the content of the model with other's, keeping its pointer and its mutex.
+* @param other *Model
+**/
+func (s *Model) Replace(other *Model) {
+	if other == nil || other == s {
+		return
+	}
+
+	s.muIdx.Lock()
+	defer s.muIdx.Unlock()
+	s.Kind = other.Kind
+	s.ID = other.ID
+	s.Schema = other.Schema
+	s.Name = other.Name
+	s.Table = other.Table
+	s.Columns = other.Columns
+	s.SourceField = other.SourceField
+	s.IdxField = other.IdxField
+	s.Indexes = other.Indexes
+	s.PrimaryKeys = other.PrimaryKeys
+	s.ForeignKeys = other.ForeignKeys
+	s.Unique = other.Unique
+	s.Required = other.Required
+	s.Hiddens = other.Hiddens
+	s.Details = other.Details
+	s.Masters = other.Masters
+	s.Rollups = other.Rollups
+	s.OmitUpdates = other.OmitUpdates
+	s.IsStrict = other.IsStrict
+	s.Version = other.Version
+	s.Deployed = other.Deployed
+	s.BeforeInserts = other.BeforeInserts
+	s.BeforeUpdates = other.BeforeUpdates
+	s.BeforeDeletes = other.BeforeDeletes
+	s.AfterInserts = other.AfterInserts
+	s.AfterUpdates = other.AfterUpdates
+	s.AfterDeletes = other.AfterDeletes
+	s.AuditLog = other.AuditLog
+	s.IsDebug = other.IsDebug
+	s.IsInit = other.IsInit
+	s.database = other.database
+	s.isChanged = other.isChanged
+	s.calcs = other.calcs
+	s.calcScripts = other.calcScripts
+	s.beforeInserts = other.beforeInserts
+	s.beforeUpdates = other.beforeUpdates
+	s.beforeDeletes = other.beforeDeletes
+	s.afterInserts = other.afterInserts
+	s.afterUpdates = other.afterUpdates
+	s.afterDeletes = other.afterDeletes
+	s.db = other.db
+	s.schema = other.schema
 }
 
 /**
@@ -181,6 +255,7 @@ func (s *Model) toJson() et.Json {
 	}
 
 	return et.Json{
+		"kind":           s.Kind,
 		"id":             s.ID,
 		"schema":         s.Schema,
 		"name":           s.Name,
@@ -206,19 +281,7 @@ func (s *Model) toJson() et.Json {
 		"after_inserts":  s.AfterInserts,
 		"after_updates":  s.AfterUpdates,
 		"after_deletes":  s.AfterDeletes,
-		"audit_log":      s.AuditLog.Data,
-	}
-}
-
-/**
-* loadColumns: Loads the columns from a JSON object.
-* @param columns []et.Json
-* @return void
-**/
-func (s *Model) loadColumns(columns []et.Json) {
-	for _, column := range columns {
-		col := loadColumn(column)
-		s.Columns = append(s.Columns, col)
+		"audit_log":      s.AuditLog,
 	}
 }
 

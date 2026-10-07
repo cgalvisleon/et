@@ -80,14 +80,6 @@ func (s *SqliteConection) GetDatabase() string {
 }
 
 /**
-* ID: Returns the connection ID.
-* @return string
-**/
-func (s *OracleConection) ID() string {
-	return s.id()
-}
-
-/**
 * GetParams: Returns the connection parameters as a JSON object.
 * @return et.Json
 **/
@@ -127,6 +119,15 @@ func NewDB(params ConnectParams) (*DB, error) {
 **/
 func LoadDb(params et.Json) (*DB, error) {
 	return loadDb(params)
+}
+
+/**
+* GetConnection: Returns the connection by driver and host.
+* @param driver, host string
+* @return Connection, error
+**/
+func GetConnection(driver, host string) (Connection, error) {
+	return getConnection(driver, host)
 }
 
 /**
@@ -435,6 +436,14 @@ func (s *DB) DefineProjectModel(schema, name string, version int, userId string)
 **/
 func (s *Model) GetKind() string {
 	return s.getKind()
+}
+
+/**
+* GetSchema: Returns the schema of the model.
+* @return *Schema
+**/
+func (s *Model) GetSchema() *Schema {
+	return s.getSchema()
 }
 
 /**
@@ -1856,4 +1865,32 @@ func (s *Model) GetModel(schema, name string) (*Model, error) {
 **/
 func (s *Schema) ToJson() et.Json {
 	return s.toJson()
+}
+
+/**
+* GetModel: Returns the model for the given name.
+* @param name string
+* @return *Model, error
+**/
+func (s *Schema) GetModel(name string) (*Model, error) {
+	return s.getModel(name)
+}
+
+/**
+* LoadModel: Loads a model from the database catalog by name.
+* @param def et.Json
+* @return *Model, error
+**/
+func (s *Schema) LoadModel(def et.Json) (*Model, error) {
+	return s.loadModel(def)
+}
+
+/**
+* LoadModel: Loads a model from the database catalog by schema and name.
+* @param schema string, def et.Json
+* @return *Model, error
+**/
+func (s *DB) LoadModel(schema string, def et.Json) (*Model, error) {
+	sch := s.getSchema(schema)
+	return sch.loadModel(def)
 }

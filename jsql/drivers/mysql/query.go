@@ -466,16 +466,59 @@ func mySelects(query *jsql.Query) string {
 		return fmt.Sprintf("JSON_OBJECT(%s) AS %s", strings.Join(pairs, ",\n"), myIdent(jsql.RESULT))
 	}
 
-	pairs := make([]string, 0, len(query.Selects))
+	// "*" son las columnas de los from (StarFields); se le suman los demás campos de selects
+	fields := make([]string, 0, len(query.Selects))
 	for _, field := range query.Selects {
+		if field == jsql.STAR {
+			fields = append(fields, query.StarFields()...)
+			continue
+		}
 		if slices.Contains(query.Hiddens, field) || field == jsql.SOURCE {
 			continue
 		}
+		fields = append(fields, field)
+	}
+
+	// Con "*" y campo fuente, los atributos del primer from y encima los campos (JSON_SET, que conserva los null)
+	if from := query.Froms[0]; query.HasStar() && from.Model != nil && from.Model.SourceField != "" {
+		pairs := make([]string, 0, len(fields))
+		for _, field := range fields {
+			if pair, ok := mySetPair(query, field); ok {
+				pairs = append(pairs, pair)
+			}
+		}
+		source := mySourceExpr(myColumnRef(myAlias(from), from.Model.SourceField), query.SourceHiddens(from))
+		return fmt.Sprintf("%s AS %s", mySetObject(source, pairs), myIdent(jsql.RESULT))
+	}
+
+	pairs := make([]string, 0, len(fields))
+	for _, field := range fields {
 		if expr, ok := mySelectExpr(query, field); ok {
 			pairs = append(pairs, expr)
 		}
 	}
 	return fmt.Sprintf("JSON_OBJECT(\n%s\n) AS %s", strings.Join(pairs, ",\n"), myIdent(jsql.RESULT))
+}
+
+/**
+* mySetPair: El par de JSON_SET ('$."clave"', valor) de un campo: el de mySelectExpr ('clave', valor) con la ruta
+* @param query *jsql.Query, field string
+* @return string, bool
+**/
+func mySetPair(query *jsql.Query, field string) (string, bool) {
+	pair, ok := mySelectExpr(query, field)
+	if !ok {
+		return "", false
+	}
+	fld, ok := query.GetField(field)
+	if !ok {
+		return "", false
+	}
+	key := myQuoteKey(fld.As) + ", "
+	if !strings.HasPrefix(pair, key) {
+		return "", false
+	}
+	return myJsonPath([]string{fld.As}) + ", " + strings.TrimPrefix(pair, key), true
 }
 
 /**

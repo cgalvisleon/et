@@ -467,8 +467,21 @@ func oraSelectExpr(query *jsql.Query, field string) (string, bool) {
 **/
 func oraSelects(query *jsql.Query) string {
 	exprs := make([]string, 0)
+	// Las columnas de los from (sin selects, o "*" en selects): StarFields, sin las ocultas
+	addColumns := func() {
+		for _, name := range query.StarFields() {
+			if expr, ok := oraSelectExpr(query, name); ok {
+				exprs = append(exprs, expr)
+			}
+		}
+	}
+
 	if len(query.Selects) > 0 {
 		for _, field := range query.Selects {
+			if field == jsql.STAR {
+				addColumns()
+				continue
+			}
 			if slices.Contains(query.Hiddens, field) || field == jsql.SOURCE {
 				continue
 			}
@@ -477,40 +490,20 @@ func oraSelects(query *jsql.Query) string {
 			}
 		}
 	} else {
-		for _, from := range query.Froms {
-			model := from.Model
-			for _, col := range model.Columns {
-				if col.TypeColumn != jsql.COLUMN || col.Name == model.SourceField {
-					continue
-				}
-				if slices.Contains(query.Hiddens, col.Name) || slices.Contains(model.Hiddens, col.Name) {
-					continue
-				}
-				name := col.Name
-				if len(query.Froms) > 1 {
-					name = fmt.Sprintf("%s.%s", from.As, col.Name)
-				}
-				if expr, ok := oraSelectExpr(query, name); ok {
-					exprs = append(exprs, expr)
-				}
-			}
-		}
+		addColumns()
 	}
 
 	// Rows always come back as one JSON "result" (also without a SourceField): go-ora returns
 	// NUMBER columns as text, while JSON_OBJECT keeps numbers, booleans and nested JSON typed.
 	source := ""
-	if query.UseSourceField && len(query.Selects) == 0 && len(query.Froms) > 0 {
+	// Sin selects o con "*", también los atributos del campo fuente del primer from
+	if query.UseSourceField && (len(query.Selects) == 0 || query.HasStar()) && len(query.Froms) > 0 {
 		from := query.Froms[0]
 		sourceField := jsql.SOURCE
-		hiddens := slices.Clone(query.Hiddens)
-		if from.Model != nil {
-			if from.Model.SourceField != "" {
-				sourceField = from.Model.SourceField
-			}
-			hiddens = append(hiddens, from.Model.Hiddens...)
+		if from.Model != nil && from.Model.SourceField != "" {
+			sourceField = from.Model.SourceField
 		}
-		source = oraSourceExpr(oraColumnRef(oraAlias(from), sourceField), hiddens)
+		source = oraSourceExpr(oraColumnRef(oraAlias(from), sourceField), query.SourceHiddens(from))
 	}
 	return fmt.Sprintf("%s AS %s", oraMergeObject(source, exprs), oraIdent(jsql.RESULT))
 }

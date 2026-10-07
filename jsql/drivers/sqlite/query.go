@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"cmp"
 	"fmt"
 	"reflect"
 	"slices"
@@ -443,18 +444,40 @@ func sqliteSelectExpr(query *jsql.Query, field string) (string, bool) {
 func sqliteSelects(query *jsql.Query) []string {
 	var selectExprs []string
 	if len(query.Selects) > 0 {
+		// "*" son las columnas de los from (StarFields); se le suman los demás campos de selects
+		fields := make([]string, 0, len(query.Selects))
 		for _, field := range query.Selects {
-			if slices.Contains(query.Hiddens, field) {
+			if field == jsql.STAR {
+				fields = append(fields, query.StarFields()...)
 				continue
 			}
-			if field == jsql.SOURCE {
+			if slices.Contains(query.Hiddens, field) || field == jsql.SOURCE {
 				continue
 			}
-			selectExpr, ok := sqliteSelectExpr(query, field)
-			if !ok {
-				continue
+			fields = append(fields, field)
+		}
+
+		// Con "*" y campo fuente, los atributos del primer from y encima los campos (json_set, que conserva los null)
+		if from := query.Froms[0]; query.UseSourceField && query.HasStar() && from.Model != nil {
+			pairs := make([]string, 0, len(fields))
+			for _, field := range fields {
+				if pair, ok := sqliteSetPair(query, field); ok {
+					pairs = append(pairs, pair)
+				}
 			}
-			selectExprs = append(selectExprs, selectExpr)
+			alias := from.As
+			if alias == from.Table {
+				alias = ""
+			}
+			sourceField := cmp.Or(from.Model.SourceField, jsql.SOURCE)
+			source := sqliteSourceExpr(strs.Append(alias, sourceField, "."), query.SourceHiddens(from))
+			return []string{fmt.Sprintf("%s AS %s", sqliteSetObject(source, pairs), jsql.RESULT)}
+		}
+
+		for _, field := range fields {
+			if selectExpr, ok := sqliteSelectExpr(query, field); ok {
+				selectExprs = append(selectExprs, selectExpr)
+			}
 		}
 		if query.UseSourceField {
 			return []string{fmt.Sprintf("json_object(\n%s\n) AS %s", strings.Join(selectExprs, ",\n"), jsql.RESULT)}
@@ -504,6 +527,27 @@ func sqliteSelects(query *jsql.Query) []string {
 	}
 	source := sqliteSourceExpr(strs.Append(alias, sourceField, "."), hiddens)
 	return []string{fmt.Sprintf("%s AS %s", sqliteSetObject(source, pairs), jsql.RESULT)}
+}
+
+/**
+* sqliteSetPair: El par de json_set ('$."clave"', valor) de un campo: el de sqliteSelectExpr ('clave', valor) con la ruta
+* @param query *jsql.Query, field string
+* @return string, bool
+**/
+func sqliteSetPair(query *jsql.Query, field string) (string, bool) {
+	pair, ok := sqliteSelectExpr(query, field)
+	if !ok {
+		return "", false
+	}
+	fld, ok := findField(query, field)
+	if !ok {
+		return "", false
+	}
+	key := sqliteQuoteKey(fld.As) + ", "
+	if !strings.HasPrefix(pair, key) {
+		return "", false
+	}
+	return sqlitePath([]string{fld.As}) + ", " + strings.TrimPrefix(pair, key), true
 }
 
 /**

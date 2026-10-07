@@ -30,8 +30,15 @@ func (m *SafeMap) Delete(key string) {
 }
 
 type SafeData struct {
-	mu   sync.RWMutex
-	Data []Json
+	Data []Json       `json:"data"`
+	mu   sync.RWMutex `json:"-"`
+}
+
+func NewSafeData() *SafeData {
+	return &SafeData{
+		Data: make([]Json, 0),
+		mu:   sync.RWMutex{},
+	}
 }
 
 func (s *SafeData) Len() int {

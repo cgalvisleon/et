@@ -165,51 +165,11 @@ func (s *Schema) loadModel(def et.Json) (*Model, error) {
 		return nil, err
 	}
 
-	result.database = s.database
-	result.IsDebug = s.isDebug
-	result.calcs = make(map[string]CalcFunction, 0)
-	result.calcScripts = make(map[string]string, 0)
-	result.beforeInserts = make([]TriggerFunction, 0)
-	result.beforeUpdates = make([]TriggerFunction, 0)
-	result.beforeDeletes = make([]TriggerFunction, 0)
-	result.afterInserts = make([]TriggerFunction, 0)
-	result.afterUpdates = make([]TriggerFunction, 0)
-	result.afterDeletes = make([]TriggerFunction, 0)
-	result.db = s.db
-	for _, column := range result.Columns {
-		column.model = result
+	err = result.up(s)
+	if err != nil {
+		return nil, err
 	}
 
-	for _, foreignKey := range result.ForeignKeys {
-		to := foreignKey.To
-		toModel, err := s.db.GetModel(to.Schema, to.Name)
-		if err != nil {
-			return nil, err
-		}
-		foreignKey.To.Model = toModel
-	}
-
-	for _, detail := range result.Details {
-		to := detail.To
-		toModel, err := s.db.GetModel(to.Schema, to.Name)
-		if err != nil {
-			return nil, err
-		}
-		detail.To.Model = toModel
-	}
-
-	for _, rollup := range result.Rollups {
-		to := rollup.To
-		toModel, err := s.db.GetModel(to.Schema, to.Name)
-		if err != nil {
-			return nil, err
-		}
-		rollup.To.Model = toModel
-	}
-
-	result.defaultTrigger()
-
-	s.addModel(result)
 	return result, nil
 }
 

@@ -540,8 +540,22 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 **/
 func pgSelects(query *jsql.Query) []string {
 	var selectExprs []string
+
+	// Las columnas de los from (sin selects, o "*" en selects): StarFields, sin las ocultas
+	addColumns := func() {
+		for _, name := range query.StarFields() {
+			if columnExpr, ok := pgSelectExpr(query, name); ok {
+				selectExprs = append(selectExprs, columnExpr)
+			}
+		}
+	}
+
 	if len(query.Selects) > 0 {
 		for _, field := range query.Selects {
+			if field == jsql.STAR {
+				addColumns()
+				continue
+			}
 			if slices.Contains(query.Hiddens, field) {
 				continue
 			}
@@ -555,34 +569,13 @@ func pgSelects(query *jsql.Query) []string {
 			selectExprs = append(selectExprs, selectExpr)
 		}
 	} else {
-		for _, from := range query.Froms {
-			model := from.Model
-			for _, col := range model.Columns {
-				if slices.Contains(query.Hiddens, col.Name) {
-					continue
-				}
-				if slices.Contains(model.Hiddens, col.Name) {
-					continue
-				}
-				if col.TypeColumn != jsql.COLUMN || col.Name == model.SourceField {
-					continue
-				}
-				name := col.Name
-				if len(query.Froms) > 1 {
-					name = fmt.Sprintf("%s.%s", from.As, col.Name)
-				}
-				columnExpr, ok := pgSelectExpr(query, name)
-				if !ok {
-					continue
-				}
-				selectExprs = append(selectExprs, columnExpr)
-			}
-		}
+		addColumns()
 	}
 
 	if query.UseSourceField {
 		source := ""
-		if len(query.Selects) == 0 && len(query.Froms) > 0 {
+		// Sin selects o con "*", también los atributos del campo fuente del primer from
+		if (len(query.Selects) == 0 || query.HasStar()) && len(query.Froms) > 0 {
 			from := query.Froms[0]
 			sourceField := jsql.SOURCE
 			if from.Model != nil && from.Model.SourceField != "" {
@@ -592,11 +585,7 @@ func pgSelects(query *jsql.Query) []string {
 			if alias == from.Table {
 				alias = ""
 			}
-			hiddens := slices.Clone(query.Hiddens)
-			if from.Model != nil {
-				hiddens = append(hiddens, from.Model.Hiddens...)
-			}
-			source = pgSourceExpr(strs.Append(alias, sourceField, "."), hiddens)
+			source = pgSourceExpr(strs.Append(alias, sourceField, "."), query.SourceHiddens(from))
 		}
 		return []string{fmt.Sprintf("%s AS %s", pgMergeObject(source, selectExprs), jsql.RESULT)}
 	}

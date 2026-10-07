@@ -17,8 +17,11 @@ const (
 
 /**
 * Driver: Interface that every database backend must implement to generate SQL and manage connections.
+* UseSchema tells whether the engine has schemas: with them a model's Table is schema.name, without
+* them schema_name (see Model.setTable).
 **/
 type Driver interface {
+	UseSchema() bool
 	CreateDB(connection *ConnectParams, timeout ...time.Duration) error
 	DropDB(db *DB, timeout ...time.Duration) error
 	Connect(db *DB, timeout ...time.Duration) (*sql.DB, error)

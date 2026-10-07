@@ -50,24 +50,12 @@ func myObjectName(parts ...string) string {
 }
 
 /**
-* myTableRef: Returns `schema`.`name` (a model schema is a MySQL database).
-* @param schema, name string
-* @return string
-**/
-func myTableRef(schema, name string) string {
-	if schema == "" {
-		return myIdent(name)
-	}
-	return fmt.Sprintf("%s.%s", myIdent(schema), myIdent(name))
-}
-
-/**
-* myFromRef: Returns the table reference of a From.
+* myFromRef: Returns the quoted table reference of a From: its Table (schema_name).
 * @param from *jsql.From
 * @return string
 **/
 func myFromRef(from *jsql.From) string {
-	return myTableRef(from.Schema, from.Name)
+	return myIdent(from.Table)
 }
 
 /**

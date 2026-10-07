@@ -24,16 +24,11 @@ func ddlSchema(model *jsql.Model) string {
 }
 
 /**
-* ddlTable: Builds the full qualified table identifier.
+* ddlTable: Returns the qualified table identifier, model.Table (schema.name).
 * @param model *jsql.Model
 * @return string
 **/
 func ddlTable(model *jsql.Model) string {
-	if model.Schema != "" {
-		model.Table = fmt.Sprintf("%s.%s", model.Schema, model.Name)
-	} else {
-		model.Table = fmt.Sprintf("%s", model.Name)
-	}
 	return model.Table
 }
 
@@ -141,10 +136,7 @@ func ddlForeignKeys(model *jsql.Model, table string) []string {
 			continue
 		}
 
-		foreignTable := fk.To.Name
-		if fk.To.Schema != "" {
-			foreignTable = fmt.Sprintf("%s.%s", fk.To.Schema, fk.To.Name)
-		}
+		foreignTable := fk.To.Table
 		foreignBase := strings.ReplaceAll(foreignTable, ".", "_")
 
 		localCols := make([]string, 0, len(fk.Keys))

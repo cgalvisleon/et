@@ -12,13 +12,11 @@ import (
 )
 
 /**
-* ddlTable: Returns the table identifier. SQLite has no schema concept in the
-* sense Postgres does, so model.Schema is ignored and the table is unqualified.
+* ddlTable: Returns the table identifier, model.Table (schema_name, since SQLite has no schemas).
 * @param model *jsql.Model
 * @return string
 **/
 func ddlTable(model *jsql.Model) string {
-	model.Table = model.Name
 	return model.Table
 }
 
@@ -79,7 +77,7 @@ func ddlForeignKeys(model *jsql.Model) []string {
 			continue
 		}
 
-		foreignTable := fk.To.Name
+		foreignTable := fk.To.Table
 
 		localCols := make([]string, 0, len(fk.Keys))
 		for local := range fk.Keys {

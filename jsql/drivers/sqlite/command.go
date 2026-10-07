@@ -220,7 +220,7 @@ func sqlitePKWhere(model *jsql.Model, data et.Json) string {
 * @return string, error
 **/
 func sqliteInsertSQL(command *jsql.Command) (string, error) {
-	table := command.From.Name
+	table := sqliteFromRef(command.From)
 	model := command.From.Model
 
 	var cols, vals []string
@@ -267,7 +267,7 @@ func sqliteInsertSQL(command *jsql.Command) (string, error) {
 * @return string, error
 **/
 func sqliteUpdateSQL(command *jsql.Command) (string, error) {
-	table := command.From.Name
+	table := sqliteFromRef(command.From)
 	model := command.From.Model
 
 	var setCols []string
@@ -326,7 +326,7 @@ func sqliteUpdateSQL(command *jsql.Command) (string, error) {
 * @return string, error
 **/
 func sqliteDeleteSQL(command *jsql.Command) (string, error) {
-	table := command.From.Name
+	table := sqliteFromRef(command.From)
 	model := command.From.Model
 
 	var sb strings.Builder

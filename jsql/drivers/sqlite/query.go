@@ -13,13 +13,12 @@ import (
 )
 
 /**
-* sqliteFromRef: Returns the table reference for FROM/JOIN clauses. SQLite has no
-* schema qualification, so this is simply the table name.
+* sqliteFromRef: Returns the table reference for FROM/JOIN clauses: the From Table (schema_name).
 * @param f *jsql.From
 * @return string
 **/
 func sqliteFromRef(f *jsql.From) string {
-	return f.Name
+	return f.Table
 }
 
 /**

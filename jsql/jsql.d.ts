@@ -255,7 +255,6 @@ interface JsqlDefine {
     primary_keys?: { name: string; sorted?: boolean }[];
     indexes?: { name: string; sorted?: boolean }[];
     idx_field?: string;
-    idt_field?: string;
   }[];
   master?: {
     name: string;

@@ -15,3 +15,11 @@ type Mssql struct{}
 func init() {
 	jsql.Register(jsql.DriverMssql, &Mssql{})
 }
+
+/**
+* UseSchema: SQL Server has schemas: a model table is [schema].[name].
+* @return bool
+**/
+func (s *Mssql) UseSchema() bool {
+	return true
+}

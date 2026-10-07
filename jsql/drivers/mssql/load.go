@@ -14,16 +14,11 @@ import (
 )
 
 /**
-* ddlTable: Sets model.Table (schema.name) and returns the quoted table reference.
+* ddlTable: Returns the quoted table reference of the model ([schema].[name], the parts of model.Table).
 * @param model *jsql.Model
 * @return string
 **/
 func ddlTable(model *jsql.Model) string {
-	if model.Schema != "" {
-		model.Table = fmt.Sprintf("%s.%s", model.Schema, model.Name)
-	} else {
-		model.Table = model.Name
-	}
 	return msTableRef(model.Schema, model.Name)
 }
 

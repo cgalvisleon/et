@@ -3,7 +3,6 @@ package jsql
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
@@ -91,42 +90,6 @@ func (s *DB) queryJsonTx(tx *Tx, sql et.Json) (et.Items, error) {
 }
 
 /**
-* findModel: Resolves "schema.table" (an alias after ":" is ignored). Without schema, the table is
-* looked up in every schema of the DB and must be unique.
-* @param ref string
-* @return *Model, error
-**/
-func (s *DB) findModel(ref string) (*Model, error) {
-	schema, table, _, ok := splitFromRef(ref)
-	if !ok {
-		return nil, fmt.Errorf(MSG_INVALID_FROM, ref)
-	}
-	if schema != "" {
-		model, err := s.GetModel(schema, table)
-		if err != nil {
-			return nil, fmt.Errorf(MSG_INVALID_FROM, ref)
-		}
-		return model, nil
-	}
-
-	var result *Model
-	for name := range s.Schemas {
-		model, err := s.GetModel(name, table)
-		if err != nil {
-			continue
-		}
-		if result != nil {
-			return nil, fmt.Errorf("invalid from: %s exists in more than one schema, use schema.table", ref)
-		}
-		result = model
-	}
-	if result == nil {
-		return nil, fmt.Errorf(MSG_INVALID_FROM, ref)
-	}
-	return result, nil
-}
-
-/**
 * parseQuery: Runs a query descriptor: from (required) plus the keys of spec §5.4, also accepted
 * with the SQL-like spelling (select, group by, order by, having, left join…) and offset.
 * @param tx *Tx, sql et.Json
@@ -134,26 +97,17 @@ func (s *DB) findModel(ref string) (*Model, error) {
 **/
 func (s *DB) parseQuery(tx *Tx, sql et.Json) (et.Items, error) {
 	query := normalizeQuery(sql)
-	var first string
-	switch v := query["from"].(type) {
-	case string:
-		first = v
-	case []any:
-		if len(v) > 0 {
-			first, _ = v[0].(string)
-		}
-	case []string:
-		if len(v) > 0 {
-			first = v[0]
-		}
+	refs, err := fromRefs(query["from"])
+	if err != nil {
+		return et.Items{}, err
 	}
-	if first == "" {
+	if len(refs) == 0 {
 		return et.Items{}, errJsonFromRequired
 	}
 
 	// The primary model is resolved here (also without schema); loadFrom then applies the from
 	// references using its schema as the default one.
-	model, err := s.findModel(first)
+	model, err := s.modelOf(refs[0], "")
 	if err != nil {
 		return et.Items{}, err
 	}
@@ -180,11 +134,14 @@ func (s *DB) parseCommand(tx *Tx, kind string, value any) (et.Items, error) {
 	}
 	desc = normalizeQuery(desc)
 
-	from := desc.Str("from")
-	if from == "" {
+	refs, err := fromRefs(desc["from"])
+	if err != nil {
+		return et.Items{}, err
+	}
+	if len(refs) == 0 {
 		return et.Items{}, errJsonFromRequired
 	}
-	model, err := s.findModel(from)
+	model, err := s.modelOf(refs[0], "")
 	if err != nil {
 		return et.Items{}, err
 	}

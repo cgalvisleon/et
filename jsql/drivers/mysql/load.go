@@ -14,17 +14,12 @@ import (
 )
 
 /**
-* ddlTable: Sets model.Table (schema.name) and returns the quoted table reference.
+* ddlTable: Returns the quoted table reference of model.Table (schema_name).
 * @param model *jsql.Model
 * @return string
 **/
 func ddlTable(model *jsql.Model) string {
-	if model.Schema != "" {
-		model.Table = fmt.Sprintf("%s.%s", model.Schema, model.Name)
-	} else {
-		model.Table = model.Name
-	}
-	return myTableRef(model.Schema, model.Name)
+	return myIdent(model.Table)
 }
 
 /**
@@ -132,7 +127,7 @@ func ddlForeignKeys(model *jsql.Model, table string) []string {
 		}
 		stmt := fmt.Sprintf("ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s)",
 			table, myObjectName("fk", model.Name, fk.To.Name), strings.Join(locals, ", "),
-			myTableRef(fk.To.Schema, fk.To.Name), strings.Join(foreigns, ", "))
+			myIdent(fk.To.Table), strings.Join(foreigns, ", "))
 		if fk.OnDeleteCascade {
 			stmt += " ON DELETE CASCADE"
 		}
@@ -145,7 +140,7 @@ func ddlForeignKeys(model *jsql.Model, table string) []string {
 }
 
 /**
-* ExistModel: Returns true when the model's table exists in its schema (database) or in the current one.
+* ExistModel: Returns true when the model's table (schema_name) exists in the connection database.
 * @param db *sql.DB, model *jsql.Model
 * @return bool, error
 **/
@@ -153,13 +148,8 @@ func (s *Mysql) ExistModel(db *sql.DB, model *jsql.Model, timeout ...time.Durati
 	ctx, cancel := jsql.TimeoutContext(timeout...)
 	defer cancel()
 
-	ddlTable(model)
-	schema := "DATABASE()"
-	if model.Schema != "" {
-		schema = myQuoteText(sanitizeIdent(model.Schema))
-	}
-	query := fmt.Sprintf("SELECT CASE WHEN EXISTS(SELECT 1 FROM information_schema.tables WHERE table_schema = %s AND table_name = %s) THEN 'true' ELSE 'false' END AS `exists`",
-		schema, myQuoteText(sanitizeIdent(model.Name)))
+	query := fmt.Sprintf("SELECT CASE WHEN EXISTS(SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = %s) THEN 'true' ELSE 'false' END AS `exists`",
+		myQuoteText(sanitizeIdent(model.Table)))
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return false, err
@@ -191,8 +181,8 @@ func (s *Mysql) Drop(model *jsql.Model, timeout ...time.Duration) error {
 }
 
 /**
-* Load: Generates the DDL of the model as one batch: CREATE SCHEMA (a MySQL database), CREATE TABLE with
-* its primary key, unique indexes, indexes and foreign keys.
+* Load: Generates the DDL of the model as one batch: CREATE TABLE with its primary key, unique indexes,
+* indexes and foreign keys. The schema is not created: the table is schema_name in the connection database.
 * @param model *jsql.Model
 * @return string, error
 **/
@@ -203,11 +193,7 @@ func (s *Mysql) Load(model *jsql.Model, timeout ...time.Duration) (string, error
 		return "", fmt.Errorf("model %s has no columns", model.Table)
 	}
 
-	stmts := []string{}
-	if model.Schema != "" {
-		stmts = append(stmts, fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", myIdent(model.Schema)))
-	}
-	stmts = append(stmts, fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n%s\n)", table, strings.Join(cols, ",\n")))
+	stmts := []string{fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n%s\n)", table, strings.Join(cols, ",\n"))}
 	stmts = append(stmts, ddlIndexes(model, table)...)
 	stmts = append(stmts, ddlForeignKeys(model, table)...)
 	return strings.Join(stmts, ";\n") + ";", nil

@@ -14,17 +14,12 @@ import (
 )
 
 /**
-* ddlTable: Sets model.Table (schema.name, as the other drivers do) and returns the quoted table reference.
+* ddlTable: Returns the quoted table reference of model.Table (schema_name).
 * @param model *jsql.Model
 * @return string
 **/
 func ddlTable(model *jsql.Model) string {
-	if model.Schema != "" {
-		model.Table = fmt.Sprintf("%s.%s", model.Schema, model.Name)
-	} else {
-		model.Table = model.Name
-	}
-	return oraTableRef(model.Schema, model.Name)
+	return oraIdent(model.Table)
 }
 
 /**
@@ -74,7 +69,7 @@ func columnType(model *jsql.Model, name string) et.TypeData {
 * @return []string
 **/
 func ddlIndexes(model *jsql.Model, table string) []string {
-	base := strings.ReplaceAll(model.Table, ".", "_")
+	base := model.Table
 	stmts := make([]string, 0)
 	indexed := make([]string, 0)
 
@@ -118,7 +113,7 @@ func ddlIndexes(model *jsql.Model, table string) []string {
 * @return []string
 **/
 func ddlForeignKeys(model *jsql.Model, table string) []string {
-	base := strings.ReplaceAll(model.Table, ".", "_")
+	base := model.Table
 	stmts := make([]string, 0, len(model.ForeignKeys))
 	for _, fk := range model.ForeignKeys {
 		if fk.To == nil || len(fk.Keys) == 0 {
@@ -138,10 +133,10 @@ func ddlForeignKeys(model *jsql.Model, table string) []string {
 			foreigns[i] = oraIdent(fk.Keys[local])
 		}
 
-		foreignBase := strings.ReplaceAll(fk.To.Schema+"_"+fk.To.Name, ".", "_")
+		foreignBase := fk.To.Table
 		stmt := fmt.Sprintf("ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s)",
 			table, oraObjectName("fk", base, foreignBase), strings.Join(locals, ", "),
-			oraTableRef(fk.To.Schema, fk.To.Name), strings.Join(foreigns, ", "))
+			oraIdent(fk.To.Table), strings.Join(foreigns, ", "))
 		if fk.OnDeleteCascade {
 			stmt += " ON DELETE CASCADE"
 		}
@@ -151,7 +146,7 @@ func ddlForeignKeys(model *jsql.Model, table string) []string {
 }
 
 /**
-* ExistModel: Returns true when the model's table exists in its schema (or in the current schema).
+* ExistModel: Returns true when the model's table (schema_name) exists in the connection schema.
 * @param db *sql.DB, model *jsql.Model
 * @return bool, error
 **/
@@ -159,16 +154,11 @@ func (s *Oracle) ExistModel(db *sql.DB, model *jsql.Model, timeout ...time.Durat
 	ctx, cancel := jsql.TimeoutContext(timeout...)
 	defer cancel()
 
-	ddlTable(model)
-	owner := "SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')"
-	if model.Schema != "" {
-		owner = fmt.Sprintf("'%s'", oraSchema(model.Schema))
-	}
 	query := fmt.Sprintf(`SELECT CASE WHEN EXISTS(
 	SELECT 1 FROM ALL_TABLES
-	WHERE OWNER = %s
+	WHERE OWNER = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
 	AND TABLE_NAME = '%s') THEN 'true' ELSE 'false' END AS "exists" FROM DUAL`,
-		owner, jsql.EscapeSQLString(sanitizeIdent(model.Name)))
+		jsql.EscapeSQLString(sanitizeIdent(model.Table)))
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return false, err
@@ -214,7 +204,7 @@ func (s *Oracle) Drop(model *jsql.Model, timeout ...time.Duration) error {
 /**
 * Load: Generates the DDL for the given model as one PL/SQL block (go-ora runs one statement per call):
 * CREATE TABLE, primary key, unique indexes, indexes and foreign keys, each through EXECUTE IMMEDIATE.
-* The schema is not created: in Oracle it is a user and must already exist.
+* The schema is not used (in Oracle it is a user): the table is schema_name in the connection schema.
 * @param model *jsql.Model
 * @return string, error
 **/

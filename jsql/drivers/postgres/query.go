@@ -13,15 +13,12 @@ import (
 )
 
 /**
-* pgFromRef: Returns the qualified table reference (schema.name) for FROM/JOIN clauses.
-* @param f *jsql.F
+* pgFromRef: Returns the qualified table reference for FROM/JOIN clauses: the From Table (schema.name).
+* @param f *jsql.From
 * @return string
 **/
 func pgFromRef(f *jsql.From) string {
-	if f.Schema != "" {
-		return fmt.Sprintf("%s.%s", f.Schema, f.Name)
-	}
-	return f.Name
+	return f.Table
 }
 
 /**

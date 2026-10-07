@@ -36,7 +36,6 @@ type DefDetail struct {
 	Indexes     []DefIndex        `json:"indexes"`
 	Rollups     []DefRollup       `json:"rollups"`
 	IdxField    string            `json:"idx_field"`
-	IdtField    string            `json:"idt_field"`
 }
 
 type DefMaster struct {

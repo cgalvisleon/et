@@ -774,6 +774,28 @@ func normalizeQuery(query et.Json) et.Json {
 }
 
 /**
+* jsonFrom: A "from" or join "to" reference: database, schema, model and alias (as). text is the
+* reference as written, for error messages.
+**/
+type jsonFrom struct {
+	Database string
+	Schema   string
+	Model    string
+	As       string
+	text     string
+}
+
+/**
+* String: Returns the reference as written.
+* @return string
+**/
+func (s jsonFrom) String() string {
+	return s.text
+}
+
+var fromIdent = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
+
+/**
 * splitFromRef: Splits a from reference "schema.table:alias", "table:alias", "schema.table" or "table"
 * into its parts; the schema is empty when not given.
 * @param ref string
@@ -800,35 +822,134 @@ func splitFromRef(ref string) (schema, table, alias string, ok bool) {
 	return schema, table, alias, true
 }
 
-var fromIdent = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
+/**
+* parseFromRef: Reads one reference in the standard form, an object {database, schema, model, as}
+* (only model is required), or in the short form, the text "schema.model:as", "model:as",
+* "schema.model" or "model".
+* @param value any
+* @return jsonFrom, bool
+**/
+func parseFromRef(value any) (jsonFrom, bool) {
+	switch v := value.(type) {
+	case string:
+		schema, model, as, ok := splitFromRef(v)
+		return jsonFrom{Schema: schema, Model: model, As: as, text: v}, ok
+	case map[string]any:
+		return parseFromRef(et.Json(v))
+	case et.Json:
+		result := jsonFrom{
+			Database: strings.TrimSpace(v.Str("database")),
+			Schema:   strings.TrimSpace(v.Str("schema")),
+			Model:    strings.TrimSpace(v.Str("model")),
+			As:       strings.TrimSpace(v.Str("as")),
+			text:     v.ToString(),
+		}
+		if !fromIdent.MatchString(result.Model) {
+			return result, false
+		}
+		if result.Schema != "" && !fromIdent.MatchString(result.Schema) {
+			return result, false
+		}
+		if result.As != "" && !fromIdent.MatchString(result.As) {
+			return result, false
+		}
+		return result, true
+	}
+	return jsonFrom{text: fmt.Sprint(value)}, false
+}
 
 /**
-* loadFrom: Applies the "from" of a JSON query. It is a reference ("schema.table:alias",
-* "table:alias", "schema.table" or "table") or a list of them: the first one replaces the primary
-* origin of the query and the others are added as more origins. Without schema, the schema of the
-* model that runs the query is used; without alias, the primary origin is "A".
+* fromRefs: Reads a "from": one reference (object or text, see parseFromRef) or a list of them.
+* @param value any
+* @return []jsonFrom, error
+**/
+func fromRefs(value any) ([]jsonFrom, error) {
+	items := []any{}
+	switch v := value.(type) {
+	case nil:
+		return []jsonFrom{}, nil
+	case string:
+		if strings.TrimSpace(v) == "" {
+			return []jsonFrom{}, nil
+		}
+		items = append(items, v)
+	case []any:
+		items = v
+	case []string:
+		for _, item := range v {
+			items = append(items, item)
+		}
+	case []et.Json:
+		for _, item := range v {
+			items = append(items, item)
+		}
+	default:
+		items = append(items, v)
+	}
+
+	result := make([]jsonFrom, 0, len(items))
+	for _, item := range items {
+		ref, ok := parseFromRef(item)
+		if !ok {
+			return nil, fmt.Errorf(MSG_INVALID_FROM, ref)
+		}
+		result = append(result, ref)
+	}
+	return result, nil
+}
+
+/**
+* modelOf: Resolves the model of a reference. Its database, when given, must be the one of the
+* connection. Without schema, defaultSchema is used; when that is empty too, the model is looked up
+* in every schema of the DB and must be unique.
+* @param ref jsonFrom, defaultSchema string
+* @return *Model, error
+**/
+func (s *DB) modelOf(ref jsonFrom, defaultSchema string) (*Model, error) {
+	if ref.Database != "" && ref.Database != s.Name {
+		return nil, fmt.Errorf(MSG_INVALID_DATABASE, ref.Database, ref)
+	}
+	schema := ref.Schema
+	if schema == "" {
+		schema = defaultSchema
+	}
+	if schema != "" {
+		model, err := s.GetModel(schema, ref.Model)
+		if err != nil {
+			return nil, fmt.Errorf(MSG_INVALID_FROM, ref)
+		}
+		return model, nil
+	}
+
+	var result *Model
+	for name := range s.Schemas {
+		model, err := s.GetModel(name, ref.Model)
+		if err != nil {
+			continue
+		}
+		if result != nil {
+			return nil, fmt.Errorf(MSG_FROM_IN_MANY_SCHEMAS, ref)
+		}
+		result = model
+	}
+	if result == nil {
+		return nil, fmt.Errorf(MSG_INVALID_FROM, ref)
+	}
+	return result, nil
+}
+
+/**
+* loadFrom: Applies the "from" of a JSON query: one reference (the object {database, schema, model,
+* as} or the text "schema.model:as", see parseFromRef) or a list of them. The first one replaces the
+* primary origin of the query and the others are added as more origins. Without schema, the schema of
+* the model that runs the query is used; without alias, the primary origin is "A".
 * @param value any
 * @return error
 **/
 func (s *Query) loadFrom(value any) error {
-	refs := []string{}
-	switch v := value.(type) {
-	case nil:
-		return nil
-	case string:
-		refs = append(refs, v)
-	case []string:
-		refs = v
-	case []any:
-		for _, item := range v {
-			str, ok := item.(string)
-			if !ok {
-				return fmt.Errorf(MSG_INVALID_FROM, fmt.Sprint(item))
-			}
-			refs = append(refs, str)
-		}
-	default:
-		return fmt.Errorf(MSG_INVALID_FROM, fmt.Sprint(value))
+	refs, err := fromRefs(value)
+	if err != nil {
+		return err
 	}
 	if len(refs) == 0 || len(s.Froms) == 0 {
 		return nil
@@ -837,17 +958,11 @@ func (s *Query) loadFrom(value any) error {
 	defaultSchema := s.Froms[0].Schema
 	froms := make([]*From, 0, len(refs))
 	for i, ref := range refs {
-		schema, table, alias, ok := splitFromRef(ref)
-		if !ok {
-			return fmt.Errorf(MSG_INVALID_FROM, ref)
-		}
-		if schema == "" {
-			schema = defaultSchema
-		}
-		model, err := s.db.GetModel(schema, table)
+		model, err := s.db.modelOf(ref, defaultSchema)
 		if err != nil {
-			return fmt.Errorf(MSG_INVALID_FROM, ref)
+			return err
 		}
+		alias := ref.As
 		if alias == "" && i == 0 {
 			alias = "A"
 		}
@@ -860,6 +975,44 @@ func (s *Query) loadFrom(value any) error {
 		if from.Model.SourceField != "" {
 			s.UseSourceField = true
 		}
+	}
+	return nil
+}
+
+/**
+* loadJoins: Applies the joins of a JSON query under key (join, left_join, right_join, full_join).
+* Each "to" is a reference like a "from" (object or text) whose alias is required; without schema,
+* the schema of the primary origin is used.
+* @param query et.Json, key string, tp JoinType
+* @return error
+**/
+func (s *Query) loadJoins(query et.Json, key string, tp JoinType) error {
+	defaultSchema := ""
+	if len(s.Froms) > 0 {
+		defaultSchema = s.Froms[0].Schema
+	}
+	for _, js := range query.ArrayJson(key) {
+		value, ok := js["to"]
+		if !ok || value == nil {
+			return fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, js.ToString())
+		}
+		to, ok := parseFromRef(value)
+		if !ok {
+			return fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
+		}
+		if to.As == "" {
+			return fmt.Errorf(MSG_AS_REQUIRED_IN_JOIN, to)
+		}
+		modelTo, err := s.db.modelOf(to, defaultSchema)
+		if err != nil {
+			return err
+		}
+
+		conditions, err := et.ToConditions(js.ArrayJson("on"))
+		if err != nil {
+			return err
+		}
+		s.join(modelTo, to.As, tp, conditions)
 	}
 	return nil
 }
@@ -1291,120 +1444,14 @@ func (s *Query) loadQuery(query et.Json) (*Query, error) {
 		return s, err
 	}
 
-	join := query.ArrayJson("join")
-	for _, js := range join {
-		to := js.Str("to")
-		as := ""
-		args, ok := ArgWhitAs(to)
-		if !ok {
-			return s, fmt.Errorf(MSG_AS_REQUIRED_IN_JOIN, to)
-		}
-		to = args[0]
-		as = args[1]
-		args, ok = ArgWhitSchema(to)
-		if !ok {
-			return s, fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
-		}
-		schema := args[0]
-		table := args[1]
-		modelTo, err := s.db.GetModel(schema, table)
-		if err != nil {
-			return s, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
-		}
-
-		on := js.ArrayJson("on")
-		conditions, err := et.ToConditions(on)
-		if err != nil {
+	joins := []struct {
+		key string
+		tp  JoinType
+	}{{"join", INNER_JOIN}, {"left_join", LEFT_JOIN}, {"right_join", RIGHT_JOIN}, {"full_join", FULL_JOIN}}
+	for _, j := range joins {
+		if err := s.loadJoins(query, j.key, j.tp); err != nil {
 			return s, err
 		}
-		s.join(modelTo, as, INNER_JOIN, conditions)
-	}
-
-	leftJoin := query.ArrayJson("left_join")
-	for _, js := range leftJoin {
-		to := js.Str("to")
-		as := ""
-		args, ok := ArgWhitAs(to)
-		if !ok {
-			return s, fmt.Errorf(MSG_AS_REQUIRED_IN_JOIN, to)
-		}
-		to = args[0]
-		as = args[1]
-		args, ok = ArgWhitSchema(to)
-		if !ok {
-			return s, fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
-		}
-		schema := args[0]
-		table := args[1]
-		modelTo, err := s.db.GetModel(schema, table)
-		if err != nil {
-			return s, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
-		}
-
-		on := js.ArrayJson("on")
-		conditions, err := et.ToConditions(on)
-		if err != nil {
-			return s, err
-		}
-		s.join(modelTo, as, LEFT_JOIN, conditions)
-	}
-
-	rightJoin := query.ArrayJson("right_join")
-	for _, js := range rightJoin {
-		to := js.Str("to")
-		as := ""
-		args, ok := ArgWhitAs(to)
-		if !ok {
-			return s, fmt.Errorf(MSG_AS_REQUIRED_IN_JOIN, to)
-		}
-		to = args[0]
-		as = args[1]
-		args, ok = ArgWhitSchema(to)
-		if !ok {
-			return s, fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
-		}
-		schema := args[0]
-		table := args[1]
-		modelTo, err := s.db.GetModel(schema, table)
-		if err != nil {
-			return s, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
-		}
-
-		on := js.ArrayJson("on")
-		conditions, err := et.ToConditions(on)
-		if err != nil {
-			return s, err
-		}
-		s.join(modelTo, as, RIGHT_JOIN, conditions)
-	}
-
-	fullJoin := query.ArrayJson("full_join")
-	for _, js := range fullJoin {
-		to := js.Str("to")
-		as := ""
-		args, ok := ArgWhitAs(to)
-		if !ok {
-			return s, fmt.Errorf(MSG_AS_REQUIRED_IN_JOIN, to)
-		}
-		to = args[0]
-		as = args[1]
-		args, ok = ArgWhitSchema(to)
-		if !ok {
-			return s, fmt.Errorf(MSG_INVALID_TO_IN_JOIN, to)
-		}
-		schema := args[0]
-		table := args[1]
-		modelTo, err := s.db.GetModel(schema, table)
-		if err != nil {
-			return s, fmt.Errorf(MSG_TO_REQUIRED_IN_JOIN, to)
-		}
-
-		on := js.ArrayJson("on")
-		conditions, err := et.ToConditions(on)
-		if err != nil {
-			return s, err
-		}
-		s.join(modelTo, as, FULL_JOIN, conditions)
 	}
 
 	selects := query.ArrayStr("selects")

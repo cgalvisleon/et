@@ -52,33 +52,12 @@ func oraObjectName(parts ...string) string {
 }
 
 /**
-* oraSchema: Returns the schema as an unquoted identifier (resolved in uppercase by Oracle).
-* @param schema string
-* @return string
-**/
-func oraSchema(schema string) string {
-	return strings.ToUpper(sanitizeIdent(schema))
-}
-
-/**
-* oraTableRef: Returns the qualified table reference (SCHEMA."name") of a model origin.
-* @param schema, name string
-* @return string
-**/
-func oraTableRef(schema, name string) string {
-	if schema == "" {
-		return oraIdent(name)
-	}
-	return fmt.Sprintf("%s.%s", oraSchema(schema), oraIdent(name))
-}
-
-/**
-* oraFromRef: Returns the qualified table reference for a From.
+* oraFromRef: Returns the quoted table reference of a From: its Table (schema_name).
 * @param from *jsql.From
 * @return string
 **/
 func oraFromRef(from *jsql.From) string {
-	return oraTableRef(from.Schema, from.Name)
+	return oraIdent(from.Table)
 }
 
 /**

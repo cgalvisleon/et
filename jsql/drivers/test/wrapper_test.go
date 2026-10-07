@@ -111,6 +111,8 @@ func TestWrapper(t *testing.T) {
 			for _, table := range tables {
 				if tg.name == "postgres" {
 					table = tg.schema + "." + table + " CASCADE"
+				} else {
+					table = tg.schema + "_" + table
 				}
 				db.Sql("DROP TABLE IF EXISTS " + table)
 			}

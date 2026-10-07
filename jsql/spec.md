@@ -202,19 +202,29 @@ Los campos ocultos (`Model.Hiddens` y `Query.Hiddens`) se excluyen cuando el sel
 
 ```json
 {
-  "from": { "database": "josephine", "schema": "public", "model": "users", "as": "A" },
-  "selects": ["id", "name", "last_name"],
-  "hiddens": ["password"],
+  "from": {
+    "database": "josephine",
+    "schema": "public",
+    "model": "users",
+    "as": "A"
+  }, // o "public.users:A"
+  "selects": ["A.id", "A.name", "A.last_name"],
+  "hiddens": ["A.password"],
   "join": [
-    { "to": { "schema": "public", "model": "roles", "as": "R" }, "on": [{ "A.role_id": { "eq": "R.id" } }] }
+    {
+      "to": { "schema": "public", "model": "roles", "as": "R" },
+      "on": [{ "A.role_id": { "eq": "R.id" } }]
+    }
   ],
-  "left_join": [{ "to": "public.areas:B", "on": [{ "A.area_id": { "eq": "B.id" } }] }],
+  "left_join": [
+    { "to": "public.areas:B", "on": [{ "A.area_id": { "eq": "B.id" } }] }
+  ],
   "right_join": [],
   "full_join": [],
   "where": [
-    { "id": { "eq": 1 } },
-    { "and": { "name": { "eq": "Cesar" } } },
-    { "or": { "last_name": { "eq": "Galvis" } } }
+    { "A.id": { "eq": 1 } },
+    { "and": { "A.name": { "eq": "Cesar" } } },
+    { "or": { "A.last_name": { "eq": "Galvis" } } }
   ],
   "groups": ["status"],
   "havings": [{ "count(id)": { "more": 1 } }],
@@ -224,8 +234,8 @@ Los campos ocultos (`Model.Hiddens` y `Query.Hiddens`) se excluyen cuando el sel
 }
 ```
 
-- `from` es el origen. **Forma estándar (feature.md):** un objeto `{database, schema, model, as}`; `database` es la base donde está el modelo (sin él, la de la conexión), sin `schema` el modelo se busca en todos los esquemas y debe ser único, y sin `as` el origen principal es `A`. **Forma corta:** el texto `schema.tabla:alias`, `tabla:alias` (usa el esquema del modelo que ejecuta la consulta), `schema.tabla` o `tabla` (alias `A`). Hoy el código solo acepta la forma corta (brecha B1). También acepta una lista: la primera referencia reemplaza al origen principal y las demás se agregan como orígenes adicionales (`FROM a, b`). En ese caso los orígenes se relacionan en el `where`, donde un valor de texto `alias.campo` que nombra un campo de la consulta se toma como columna, igual que en el `on` de un join. El modelo debe estar definido en la `DB`.
-- `to` en los joins es obligatorio, con la misma estructura de `from` (objeto o forma corta `schema.tabla:alias`), y el alias es obligatorio; el modelo destino debe estar definido en la `DB`. Hoy solo se acepta la forma corta (B1).
+- `from` es el origen. **Forma estándar (feature.md):** un objeto `{database, schema, model, as}`; `database` es la base donde está el modelo (sin él, la de la conexión), sin `schema` el modelo se busca en todos los esquemas y debe ser único, y sin `as` el origen principal es `A`. **Forma corta:** el texto `schema.tabla:alias`, `tabla:alias` (usa el esquema del modelo que ejecuta la consulta), `schema.tabla` o `tabla` (alias `A`). `database`, si viene, debe ser la base de la conexión; si no, es un error (`MSG_INVALID_DATABASE`). También acepta una lista: la primera referencia reemplaza al origen principal y las demás se agregan como orígenes adicionales (`FROM a, b`). En ese caso los orígenes se relacionan en el `where`, donde un valor de texto `alias.campo` que nombra un campo de la consulta se toma como columna, igual que en el `on` de un join. El modelo debe estar definido en la `DB`.
+- `to` en los joins es obligatorio, con la misma estructura de `from` (objeto o forma corta `schema.tabla:alias`), y el alias es obligatorio; el modelo destino debe estar definido en la `DB`. Sin `schema`, se usa el del origen principal.
 - Si el descriptor tiene un error (un `from` o un `to` que no existe, una condición inválida), la consulta lo devuelve al ejecutarse (`All`, `One`, `Count`, `Exists`…) en lugar de correr con lo que se pudo leer.
 - Las claves también se aceptan con su forma SQL (`select`, `group by`, `order by`, `having`…, ver §8.2), además de `offset` y las claves `and` / `or` de primer nivel.
 - `limit` por defecto: `DB.RecordLimit` (`DB_RECORD_LIMIT`, 1000). `page` calcula el `OFFSET`; `offset` lo fija directamente.
@@ -275,22 +285,22 @@ Reglas:
 
 `DB.Query(json)` / `DB.QueryTx(tx, json)` reciben un descriptor JSON independiente de un modelo: el modelo se indica en el propio JSON (`from`). Según la clave principal, el descriptor es un comando (`insert`, `update`, `delete`, `upsert`, `bulk`), una definición (`define`) o una consulta (`select`, `from`); se revisan en ese orden, sin distinguir mayúsculas, y un descriptor con dos comandos o sin ninguna de esas claves devuelve error. El descriptor se traduce a las mismas estructuras de `jsql` (`Query`, `Command`, `Define`), así que sigue las reglas de `SourceField`, `RETURNING` y triggers de las secciones anteriores.
 
-En `from` va el modelo, como objeto `{database, schema, model}` (forma estándar) o como texto `schema.tabla`; sin esquema, la tabla se busca en todos los esquemas de la `DB` y debe ser única. Hoy solo se acepta el texto (B1).
+En `from` va el modelo, como objeto `{database, schema, model}` (forma estándar) o como texto `schema.tabla`; sin esquema, la tabla se busca en todos los esquemas de la `DB` y debe ser única.
 
 ### 8.1 Comandos
 
 Cada comando va bajo una clave con su nombre y contiene:
 
-| Clave                                         | Uso                                                                                                                                      | Comandos                             |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| `from`                                        | Modelo destino: `{database, schema, model}` o `schema.tabla`.                                                                            | todos                                |
-| `data`                                        | Valores a guardar: un objeto (`insert`, `update`, `upsert`) o una lista de objetos (`bulk`). Los campos sin columna van a `SourceField`. | `insert`, `update`, `upsert`, `bulk` |
-| `where`                                       | Condiciones con el formato de §6. En `upsert` nunca puede estar vacío.                                                                   | `update`, `delete`, `upsert`         |
-| `limit`                                       | Máximo de filas afectadas: sin enviar, `DB_RECORD_LIMIT` con tope de 1000; `0`, todas las que cumplen `where`.                           | `update`, `delete`, `upsert`         |
-| `before_insert`, `after_insert`               | Listas de scripts JavaScript (goja) que corren antes y después de cada insert; cada uno es el código como string o `{name, code, language, version, description}`.                                                            | `insert`, `bulk`, `upsert`           |
-| `before_update`, `after_update`               | Ídem, antes y después de actualizar cada registro.                                                                                       | `update`, `upsert`                   |
-| `before_delete`, `after_delete`               | Ídem, antes y después de eliminar cada registro.                                                                                         | `delete`                             |
-| `before_insert_update`, `after_insert_update` | Ídem, tanto si el `upsert` inserta como si actualiza.                                                                                    | `upsert`                             |
+| Clave                                         | Uso                                                                                                                                                                | Comandos                             |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
+| `from`                                        | Modelo destino: `{database, schema, model}` o `schema.tabla`.                                                                                                      | todos                                |
+| `data`                                        | Valores a guardar: un objeto (`insert`, `update`, `upsert`) o una lista de objetos (`bulk`). Los campos sin columna van a `SourceField`.                           | `insert`, `update`, `upsert`, `bulk` |
+| `where`                                       | Condiciones con el formato de §6. En `upsert` nunca puede estar vacío.                                                                                             | `update`, `delete`, `upsert`         |
+| `limit`                                       | Máximo de filas afectadas: sin enviar, `DB_RECORD_LIMIT` con tope de 1000; `0`, todas las que cumplen `where`.                                                     | `update`, `delete`, `upsert`         |
+| `before_insert`, `after_insert`               | Listas de scripts JavaScript (goja) que corren antes y después de cada insert; cada uno es el código como string o `{name, code, language, version, description}`. | `insert`, `bulk`, `upsert`           |
+| `before_update`, `after_update`               | Ídem, antes y después de actualizar cada registro.                                                                                                                 | `update`, `upsert`                   |
+| `before_delete`, `after_delete`               | Ídem, antes y después de eliminar cada registro.                                                                                                                   | `delete`                             |
+| `before_insert_update`, `after_insert_update` | Ídem, tanto si el `upsert` inserta como si actualiza.                                                                                                              | `upsert`                             |
 
 ```json
 {
@@ -342,6 +352,7 @@ type Driver interface {
 - El driver solo **genera SQL** (y abre la conexión); ejecutarlo, manejar transacciones y correr los triggers es trabajo del núcleo.
 - **Timeout:** cada método recibe un `timeout` opcional y el driver arma su contexto con `jsql.TimeoutContext(timeout...)`: sin timeout o con `0` no hay límite, así que la operación nunca falla por timeout; con un valor mayor falla con `context.DeadlineExceeded` al vencerse. El núcleo pasa el `Timeout` de `ConnectParams` (`DB.timeout`). `Load`, `Query` y `Command` solo generan SQL y no lo usan.
 - `CreateDB` y `DropDB` (expuestos como `jsql.CreateDB(connection, timeout...)` y `jsql.DropDB(db, timeout...)`, que antes cierra el pool) son idempotentes. En postgres, mysql y mssql crean/eliminan la base `database` desde la base del servidor (`postgres`, sin base, `master`), y `Connect` usa `CreateDB`; en sqlite crean/borran el archivo (con sus `-wal` y `-shm`); en oracle el servicio no se crea ni se elimina desde una conexión: `CreateDB` solo comprueba que responde y `DropDB` devuelve `MSG_DRIVER_CANNOT_DROP_DB`. Solo postgres está probado (brecha B8).
+- **Nombre de tabla** (`Model.Table`): lo asigna el núcleo al crear el modelo y en `Model.Init`, según `Driver.UseSchema()`. Con esquemas (postgres, mssql) es `schema.nombre`; sin ellos (sqlite, mysql, oracle) es `schema_nombre`, en la base o el usuario de la conexión; sin esquema, `nombre`. Los drivers arman el SQL con `Table` (`From.Table`); mssql cita sus partes como `[schema].[nombre]`.
 - La conexión se describe con `jsql.Connection` (`GetParams`, `SetDatabase`, `GetDatabase`), creada según `DB_DRIVER` en `conection.go`.
 
 | Driver                           | Constante        | Estado                                                                 |
@@ -355,7 +366,7 @@ type Driver interface {
 
 ### 9.1 Particularidades del driver Oracle
 
-- **Nombres**: tablas y columnas se crean como identificadores entre comillas y en minúscula (`JSQL."users"."_source"`), así conservan el nombre del modelo y admiten `_source` o `_idx`. El esquema del modelo es un usuario de Oracle que debe existir (`Load` no lo crea) y se escribe sin comillas, así que se resuelve en mayúscula.
+- **Nombres**: tablas y columnas se crean como identificadores entre comillas y en minúscula (`"public_users"."_source"`), así conservan el nombre del modelo y admiten `_source` o `_idx`. En Oracle un esquema es un usuario, así que jsql no lo usa: la tabla es `schema_nombre` en el esquema de la conexión.
 - **Tipos**: el JSON se guarda en `CLOB` con `CHECK (... IS JSON)`; `BOOL` es `NUMBER(1)`, que en los resultados JSON vuelve como `true`/`false`; `ANY` es `VARCHAR2(4000)`.
 - **Comandos**: Oracle no devuelve filas con `RETURNING`, así que `Command` genera un bloque PL/SQL que ejecuta el DML, recoge los `ROWID` afectados y devuelve esas filas con `DBMS_SQL.RETURN_RESULT`. El `DELETE` abre el cursor antes de borrar.
 - **`SourceField`**: el `UPDATE` fusiona los atributos con `JSON_MERGEPATCH`, que conserva los hermanos anidados; un valor `null` en `data` **borra** la llave, en lugar de guardar `null` como en Postgres. Por la misma razón, las columnas con valor `NULL` no aparecen en el `result`.
@@ -364,7 +375,7 @@ type Driver interface {
 
 ### 9.2 Particularidades del driver MySQL
 
-- **Esquemas**: el esquema de un modelo es una base de datos de MySQL (`CREATE SCHEMA` la crea); tablas y columnas van entre backticks. `Connect` crea la base de `DB_NAME` si no existe.
+- **Esquemas**: en MySQL un esquema es otra base de datos, así que jsql no lo usa: la tabla es `schema_nombre` en la base de la conexión (`Load` no crea esquemas). Tablas y columnas van entre backticks. `Connect` crea la base de `DB_NAME` si no existe.
 - **Tipos**: `SourceField` y las columnas JSON son `JSON`; `BOOL` es `TINYINT(1)`, que en los resultados vuelve como `true`/`false`; `DATETIME` es `DATETIME(6)`; `ANY` es `TEXT`. No se indexan columnas `TEXT`, `BLOB` ni `JSON`.
 - **Comandos**: MySQL no tiene `RETURNING`; la conexión usa `multiStatements` y cada comando es un lote: el DML y un `SELECT` de la fila por su llave primaria (el `DELETE` hace el `SELECT` antes de borrar).
 - **Escapes**: MySQL usa `\` como carácter de escape dentro de las cadenas, así que el driver escapa `\` además de `'`.
@@ -407,22 +418,19 @@ Revisado el 2026-09-28 contra el código y la batería `TestCatalog` (`jsql/driv
 
 **Cumple:** cláusulas de consulta, `SourceField` en insert/update/where/select, `RETURNING` en los tres comandos, `hiddens`, relaciones (detail, master, rollup), campos calculados (Go y JS), triggers en Go y en JS, `limit` de update/delete/upsert (1000 por defecto, `0` = todas), `upsert` con `where` obligatorio, `bulk`, `define` en JSON, campos únicos, `OmitUpdates`, series y auditoría.
 
-| # | Especificación | Código actual | Ubicación | Impacto |
-|---|---|---|---|---|
-| B1 | `from` y `to` como objeto `{database, schema, model, as}` (forma estándar de `feature.md`, en consultas, joins y comandos). | Solo texto: `loadFrom` rechaza un objeto (`MSG_INVALID_FROM`), los joins leen `js.Str("to")`, y `parseQuery` / `parseCommand` leen `from` como texto. Todos los ejemplos de `feature.md` fallan hoy. | `query.go` (`loadFrom`, `loadQuery`), `jquery.go` (`parseQuery`, `parseCommand`, `findModel`) | **Alto** |
-| B2 | `database` en `from`/`to` indica la base del modelo. | No hay registro de bases por nombre: cada `*DB` es una conexión, y `From.Database` solo se informa (los drivers no lo usan). Una consulta entre bases distintas no es posible en un solo SQL. Propuesta: aceptar `database` solo si coincide con la base de la conexión y, si no, devolver error. | `query.go` (`From`), `catalog.go` | Medio |
-| B3 | La clave de maestros en `Define` (JSON) es `masters`, como `details` y `rollups`. | La etiqueta es `json:"master"` (singular). | `define.go` | Bajo |
-| B4 | Driver `mssql` completo (§9). | Genera SQL, pero no se ha corrido nunca contra un SQL Server en la batería. | `drivers/mssql` | Medio |
-| B5 | Driver para varios motores. | `josefina` es solo una constante, sin implementación. | `drivers/` | Bajo |
-| B6 | Los mensajes de error son `MSG_*` de `msg.go`. | `findModel` arma un error con texto fijo («exists in more than one schema»). | `jquery.go` | Bajo |
-| B7 | Probar sin efectos laterales. | `TestCatalog` reescribe `result/*.json`, `result/*.sql` y `result/summary.md` en cada corrida; el resumen deja de reflejar los motores que no estaban disponibles. | `drivers/test/catalog_test.go` | Bajo |
-| B8 | `CreateDB` / `DropDB` probados en todos los drivers (§9). | `TestCreateDropDB` solo corre contra postgres (pasa, 2026-09-30); sqlite, oracle, mysql y mssql se omiten como pendientes (`createDBDrivers`). Su implementación compila pero nunca se ha ejecutado. | `drivers/test/createdb_test.go`, `drivers/{sqlite,oracle,mysql,mssql}/connect.go` | Medio |
+| #   | Especificación                                                                                                              | Código actual                                                                                                                                                                                                                                                                                     | Ubicación                                                                                     | Impacto  |
+| --- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | -------- |
+| B3  | La clave de maestros en `Define` (JSON) es `masters`, como `details` y `rollups`.                                           | La etiqueta es `json:"master"` (singular).                                                                                                                                                                                                                                                        | `define.go`                                                                                   | Bajo     |
+| B4  | Driver `mssql` completo (§9).                                                                                               | Genera SQL, pero no se ha corrido nunca contra un SQL Server en la batería.                                                                                                                                                                                                                       | `drivers/mssql`                                                                               | Medio    |
+| B5  | Driver para varios motores.                                                                                                 | `josefina` es solo una constante, sin implementación.                                                                                                                                                                                                                                             | `drivers/`                                                                                    | Bajo     |
+| B6  | Los mensajes de error son `MSG_*` de `msg.go`.                                                                              | `findModel` arma un error con texto fijo («exists in more than one schema»).                                                                                                                                                                                                                      | `jquery.go`                                                                                   | Bajo     |
+| B7  | Probar sin efectos laterales.                                                                                               | `TestCatalog` reescribe `result/*.json`, `result/*.sql` y `result/summary.md` en cada corrida; el resumen deja de reflejar los motores que no estaban disponibles.                                                                                                                                | `drivers/test/catalog_test.go`                                                                | Bajo     |
+| B8  | `CreateDB` / `DropDB` probados en todos los drivers (§9).                                                                   | `TestCreateDropDB` solo corre contra postgres (pasa, 2026-09-30); sqlite, oracle, mysql y mssql se omiten como pendientes (`createDBDrivers`). Su implementación compila pero nunca se ha ejecutado.                                                                                              | `drivers/test/createdb_test.go`, `drivers/{sqlite,oracle,mysql,mssql}/connect.go`             | Medio    |
 
 ### Orden recomendado
 
-1. **B1 + B2** juntos: un `fromOf(value any)` que acepte objeto, texto o lista y devuelva `(database, schema, model, as)`, usado por `loadFrom`, los cuatro joins, `parseQuery` y `parseCommand`; con `database` validado contra la conexión. Casos nuevos en `TestCatalog` para la forma objeto en consulta, join y comando.
-2. **B3:** aceptar `masters` (y `master` por compatibilidad) al leer el JSON.
-3. **B6** y **B7:** mensajes y un modo de la batería que no escriba resultados (por ejemplo, con una variable de entorno).
-4. **B4:** correr la batería contra un SQL Server 2022 (por ejemplo en Docker) antes de declarar el driver completo.
-5. **B8:** agregar cada driver a `createDBDrivers` en `createdb_test.go` y correr `TestCreateDropDB` contra él (sqlite no necesita servidor; en oracle el caso debe esperar el error de `DropDB`).
-6. **B5:** fuera de alcance hasta que `josefina` tenga su protocolo estable.
+1. **B3:** aceptar `masters` (y `master` por compatibilidad) al leer el JSON.
+2. **B6** y **B7:** mensajes y un modo de la batería que no escriba resultados (por ejemplo, con una variable de entorno).
+3. **B4:** correr la batería contra un SQL Server 2022 (por ejemplo en Docker) antes de declarar el driver completo.
+4. **B8:** agregar cada driver a `createDBDrivers` en `createdb_test.go` y correr `TestCreateDropDB` contra él (sqlite no necesita servidor; en oracle el caso debe esperar el error de `DropDB`).
+5. **B5:** fuera de alcance hasta que `josefina` tenga su protocolo estable.

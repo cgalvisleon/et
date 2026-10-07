@@ -231,7 +231,7 @@ func catalogTargets() []target {
 			tg.cleanup = []string{`DROP SCHEMA IF EXISTS jsql_catalog CASCADE`}
 		case "mysql":
 			tg.schema = "jsql_catalog"
-			tg.cleanup = []string{"DROP SCHEMA IF EXISTS `jsql_catalog`"}
+			tg.cleanup = []string{mysqlDropSchema("jsql_catalog")}
 		case "mssql":
 			tg.schema = "jsql_catalog"
 			tg.cleanup = []string{mssqlDropSchema("jsql_catalog")}
@@ -1013,6 +1013,63 @@ func (s *suite) queries() {
 			return nil, err
 		}
 		return items.Result, expect("rows", []et.Json{{"name": "Ana", "n": 2}, {"name": "Luis", "n": 0}, {"name": "Marta O'Neil", "n": 1}}, items.Result)
+	})
+	s.run(4, "DB.Query consulta con from y to como objeto {database, schema, model, as}", func() (any, error) {
+		// Decoded from JSON text, as a request body arrives (objects are map[string]any)
+		var query et.Json
+		err := json.Unmarshal([]byte(fmt.Sprintf(`{
+			"from": {"database": %q, "schema": %q, "model": "f_users", "as": "U"},
+			"selects": ["U.name", "count(O.id):n"],
+			"left_join": [{"to": {"schema": %q, "model": "f_orders", "as": "O"}, "on": [{"O.user_id": {"eq": "U.id"}}]}],
+			"groups": ["U.name"],
+			"orders": [{"U.name": true}]
+		}`, s.db.Name, s.schema, s.schema)), &query)
+		if err != nil {
+			return nil, err
+		}
+		items, err := s.db.Query(query)
+		if err != nil {
+			return nil, err
+		}
+		return items.Result, expect("rows", []et.Json{{"name": "Ana", "n": 2}, {"name": "Luis", "n": 0}, {"name": "Marta O'Neil", "n": 1}}, items.Result)
+	})
+	s.run(4, "Model.Query con from como objeto sin schema ni as (alias A)", func() (any, error) {
+		items, err := users.Query(et.Json{
+			"from":    et.Json{"model": "f_roles"},
+			"selects": []any{"A.name"},
+			"orders":  []any{et.Json{"A.name": true}},
+		}).All()
+		if err != nil {
+			return nil, err
+		}
+		return items.Result, expect("roles", []et.Json{{"name": "admin"}, {"name": "editor"}}, items.Result)
+	})
+	s.run(4, "DB.Query con from de otra base (devuelve error)", func() (any, error) {
+		_, err := s.db.Query(et.Json{"select": []any{"id"}, "from": et.Json{"database": "otra_base", "schema": s.schema, "model": "f_users"}})
+		if err == nil {
+			return nil, errors.New("a from of another database was accepted")
+		}
+		return err.Error(), nil
+	})
+	s.run(4, "DB.Query join con to como objeto sin as (devuelve error)", func() (any, error) {
+		_, err := s.db.Query(et.Json{
+			"from": s.schema + ".f_users:U",
+			"join": []any{et.Json{"to": et.Json{"schema": s.schema, "model": "f_orders"}, "on": []any{et.Json{"O.user_id": et.Json{"eq": "U.id"}}}}},
+		})
+		if err == nil {
+			return nil, errors.New("a join without as was accepted")
+		}
+		return err.Error(), nil
+	})
+	s.run(4, "DB.Query comando con from como objeto (delete sin filas)", func() (any, error) {
+		items, err := s.db.Query(et.Json{"delete": et.Json{
+			"from":  et.Json{"schema": s.schema, "model": "f_users"},
+			"where": []any{et.Json{"id": et.Json{"eq": "no_existe"}}},
+		}})
+		if err != nil {
+			return nil, err
+		}
+		return items.Result, expect("count", 0, items.Count)
 	})
 	s.run(4, "DB.Query consulta (where + and/or de primer nivel, limit, offset)", func() (any, error) {
 		items, err := s.db.Query(et.Json{

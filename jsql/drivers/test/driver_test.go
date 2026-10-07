@@ -143,7 +143,7 @@ func targets() []target {
 				RecordLimit: 1000,
 			},
 			schema:  "jsql_test",
-			cleanup: []string{"DROP SCHEMA IF EXISTS `jsql_test`"},
+			cleanup: []string{mysqlDropSchema("jsql_test")},
 		},
 		{
 			name: "mssql",
@@ -183,16 +183,32 @@ IF SCHEMA_ID(N'%[1]s') IS NOT NULL EXEC(N'DROP SCHEMA [%[1]s]');`, schema)
 }
 
 /**
-* oracleDrops: Returns one DROP TABLE block per table, ignoring tables that do not exist.
+* oracleDrops: Returns one DROP TABLE block per table (schema_table), ignoring tables that do not exist.
 * @param schema string, tables ...string
 * @return []string
 **/
 func oracleDrops(schema string, tables ...string) []string {
 	result := make([]string, len(tables))
 	for i, table := range tables {
-		result[i] = fmt.Sprintf(`BEGIN EXECUTE IMMEDIATE 'DROP TABLE %s."%s" CASCADE CONSTRAINTS'; EXCEPTION WHEN OTHERS THEN NULL; END;`, schema, table)
+		result[i] = fmt.Sprintf(`BEGIN EXECUTE IMMEDIATE 'DROP TABLE "%s_%s" CASCADE CONSTRAINTS'; EXCEPTION WHEN OTHERS THEN NULL; END;`, schema, table)
 	}
 	return result
+}
+
+/**
+* mysqlDropSchema: Returns a MySQL batch that drops every table of a schema (the schema_* tables of the
+* connection database), with foreign key checks off so the order does not matter.
+* @param schema string
+* @return string
+**/
+func mysqlDropSchema(schema string) string {
+	return fmt.Sprintf(`SET FOREIGN_KEY_CHECKS = 0;
+SET @tables = (SELECT GROUP_CONCAT(CONCAT('`+"`"+`', table_name, '`+"`"+`')) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name LIKE '%s\\_%%');
+SET @stmt = IF(@tables IS NULL, 'SELECT 1', CONCAT('DROP TABLE ', @tables));
+PREPARE drop_stmt FROM @stmt;
+EXECUTE drop_stmt;
+DEALLOCATE PREPARE drop_stmt;
+SET FOREIGN_KEY_CHECKS = 1;`, schema)
 }
 
 /**

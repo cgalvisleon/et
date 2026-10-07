@@ -274,6 +274,22 @@ func (s *Model) wrapper(instance *jrex.Instance) {
 }
 
 /**
+* setTable: Sets Table from Schema and Name according to the driver: schema.name when it has schemas
+* (Driver.UseSchema), schema_name when it doesn't, and just name without schema. Without a driver
+* it keeps schema.name.
+**/
+func (s *Model) setTable() {
+	switch {
+	case s.Schema == "":
+		s.Table = s.Name
+	case s.db != nil && s.db.driver != nil && !s.db.driver.UseSchema():
+		s.Table = s.Schema + "_" + s.Name
+	default:
+		s.Table = s.Schema + "." + s.Name
+	}
+}
+
+/**
 * init: Runs DDL for the model the first time it is called; subsequent calls are no-ops.
 * @return error
 **/
@@ -282,6 +298,7 @@ func (s *Model) init() error {
 		return nil
 	}
 
+	s.setTable()
 	_, err := s.initModel(s.db)
 	if err != nil {
 		return err

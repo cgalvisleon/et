@@ -113,7 +113,7 @@ Ambos `Save` son no-op si `store == nil` — el flujo normal de conexión no lo 
 - `func (s *DB) DefineModel(schema, name string, version int) (*Model, error)`
 - `func (s *DB) NewModel(schema, name string, version int, userId string) *Model` — `jsql/db.go:400`
 - `func (s *DB) Define(define Def) (*Model, error)`
-- `type Def struct { Schema, Name string; Version int; IdxField, IdtField string; PrimaryKeys, ForeignKeys, Indexes, Unique, Required []DefIndex/DefForeignKeys; Columns []Column; SourceField string; Hiddens []string; Details map[string]DefDetail; Rollups map[string]DefRollup; IsCore, IsDebug, IsTest bool }`
+- `type Def struct { Schema, Name string; Version int; IdxField string; PrimaryKeys, ForeignKeys, Indexes, Unique, Required []DefIndex/DefForeignKeys; Columns []Column; SourceField string; Hiddens []string; Details map[string]DefDetail; Rollups map[string]DefRollup; IsCore, IsDebug, IsTest bool }`
 
 **Tipos de columna (`TypeColumn`):** `COLUMN`, `ATTRIB`, `DETAIL`, `ROLLUP`, `CALCFUNC`, `CALC`, `AGG`.
 **Tipos de dato (`TypeData`):** `KEY`, `TEXT`, `MEMO`, `INT`, `FLOAT`, `BOOLEAN`, `DATETIME`, `JSON`, `BYTES`, `GEOMETRY`, `EMBEDDING`, `ANY`.

@@ -142,6 +142,7 @@ func (s *Schema) newModel(id, name string, version int, userId string) *Model {
 		afterDeletes:  make([]TriggerFunction, 0),
 		db:            s.db,
 	}
+	result.setTable()
 	result.defaultTrigger()
 	s.db.addAuditLog(userId, "new_model")
 	s.addModel(result)

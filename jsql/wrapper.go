@@ -180,7 +180,7 @@ func toConnectParams(params et.Json) (ConnectParams, error) {
 	connection, isObject := unwrap(params["connection"]).(Connection)
 	if !isObject {
 		var err error
-		connection, err = connectionFromJson(driver, host, params.Json("connection"))
+		connection, err = ConnectionFromJson(driver, host, params.Json("connection"))
 		if err != nil {
 			return ConnectParams{}, err
 		}
@@ -308,7 +308,7 @@ func wrapPackage() map[string]any {
 			if len(params) > 0 && params[0] != nil {
 				values = params[0]
 			}
-			connection, err := connectionFromJson(driver, envar.GetStr("DB_HOST", "localhost"), values)
+			connection, err := ConnectionFromJson(driver, envar.GetStr("DB_HOST", "localhost"), values)
 			if err != nil {
 				return nil, err
 			}

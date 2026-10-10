@@ -41,6 +41,7 @@ type Connection interface {
 	GetParams() et.Json
 	SetDatabase(string)
 	GetDatabase() string
+	SetPassword(string)
 }
 
 type PgConection struct {
@@ -79,10 +80,10 @@ func pgConection(host string) *PgConection {
 }
 
 /**
-* getParams: Returns the connection parameters as a JSON object.
+* GetParams: Returns the connection parameters as a JSON object.
 * @return et.Json
 **/
-func (s *PgConection) getParams() et.Json {
+func (s *PgConection) GetParams() et.Json {
 	return et.Json{
 		"id":           s.Id,
 		"driver":       DriverPostgres,
@@ -118,15 +119,23 @@ func (s *PgConection) SetId(id string) {
 * setDatabase: Sets the database name in the connection parameters.
 * @param name string
 **/
-func (s *PgConection) setDatabase(name string) {
+func (s *PgConection) SetDatabase(name string) {
 	s.Database = name
 }
 
 /**
-* getDatabase: Returns the database name from the connection parameters.
+* SetPassword: Sets the password in the connection parameters.
+* @param password string
+**/
+func (s *PgConection) SetPassword(password string) {
+	s.Password = password
+}
+
+/**
+* GetDatabase: Returns the database name from the connection parameters.
 * @return string
 **/
-func (s *PgConection) getDatabase() string {
+func (s *PgConection) GetDatabase() string {
 	return s.Database
 }
 
@@ -186,7 +195,7 @@ func (s *SqliteConection) SetId(id string) {
 * getParams: Returns the connection parameters as a JSON object.
 * @return et.Json
 **/
-func (s *SqliteConection) getParams() et.Json {
+func (s *SqliteConection) GetParams() et.Json {
 	return et.Json{
 		"driver":         DriverSqlite,
 		"file":           s.File,
@@ -204,7 +213,7 @@ func (s *SqliteConection) getParams() et.Json {
 * setDatabase: Sets the database name in the connection parameters
 * @param name string
 **/
-func (s *SqliteConection) setDatabase(name string) {
+func (s *SqliteConection) SetDatabase(name string) {
 	s.File = name
 }
 
@@ -212,8 +221,15 @@ func (s *SqliteConection) setDatabase(name string) {
 * getDatabase: Returns the database name from the connection parameters.
 * @return string
 **/
-func (s *SqliteConection) getDatabase() string {
+func (s *SqliteConection) GetDatabase() string {
 	return s.File
+}
+
+/**
+* SetPassword: Sets the password in the connection parameters.
+* @param password string
+**/
+func (s *SqliteConection) SetPassword(password string) {
 }
 
 type OracleConection struct {
@@ -269,7 +285,7 @@ func (s *OracleConection) SetId(id string) {
 * getParams: Returns the connection parameters as a JSON object.
 * @return et.Json
 **/
-func (s *OracleConection) getParams() et.Json {
+func (s *OracleConection) GetParams() et.Json {
 	return et.Json{
 		"id":           s.Id,
 		"driver":       DriverOracle,
@@ -288,7 +304,7 @@ func (s *OracleConection) getParams() et.Json {
 * setDatabase: Sets the database name in the connection parameters
 * @param name string
 **/
-func (s *OracleConection) setDatabase(name string) {
+func (s *OracleConection) SetDatabase(name string) {
 	s.ServiceName = name
 }
 
@@ -296,8 +312,16 @@ func (s *OracleConection) setDatabase(name string) {
 * getDatabase: Returns the database name from the connection parameters.
 * @return string
 **/
-func (s *OracleConection) getDatabase() string {
+func (s *OracleConection) GetDatabase() string {
 	return s.ServiceName
+}
+
+/**
+* SetPassword: Sets the password in the connection parameters.
+* @param password string
+**/
+func (s *OracleConection) SetPassword(password string) {
+	s.Password = password
 }
 
 /**
@@ -381,6 +405,14 @@ func (s *MysqlConection) GetDatabase() string {
 }
 
 /**
+* SetPassword: Sets the password in the connection parameters.
+* @param password string
+**/
+func (s *MysqlConection) SetPassword(password string) {
+	s.Password = password
+}
+
+/**
 * MssqlConection: Connection parameters of a SQL Server (2022 or later) database.
 **/
 type MssqlConection struct {
@@ -461,12 +493,19 @@ func (s *MssqlConection) GetDatabase() string {
 }
 
 /**
-* connectionFromJson: Builds the Connection of a driver from its JSON, the inverse of GetParams (same keys,
-* timeout in milliseconds). Missing keys keep the values read from the environment (DB_*), as in loadTo.
+* SetPassword: Sets the password in the connection parameters.
+* @param password string
+**/
+func (s *MssqlConection) SetPassword(password string) {
+	s.Password = password
+}
+
+/**
+* ConnectionFromJso
 * @param driver, host string, params et.Json
 * @return Connection, error
 **/
-func connectionFromJson(driver, host string, params et.Json) (Connection, error) {
+func ConnectionFromJson(driver, host string, params et.Json) (Connection, error) {
 	host = params.ValStr(host, "host")
 	result, err := getConnection(driver, host)
 	if err != nil {

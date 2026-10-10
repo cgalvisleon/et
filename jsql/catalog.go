@@ -27,82 +27,6 @@ import (
 //	11  Utilidades                      17
 //	    Total                           200
 
-// =============================================================================
-// 1. Conexión y base de datos (26)
-// =============================================================================
-
-/**
-* GetParams: Returns the connection parameters as a JSON object.
-* @return et.Json
-**/
-func (s *PgConection) GetParams() et.Json {
-	return s.getParams()
-}
-
-/**
-* SetDatabase: Sets the database name in the connection parameters.
-* @param name string
-**/
-func (s *PgConection) SetDatabase(name string) {
-	s.setDatabase(name)
-}
-
-/**
-* GetDatabase: Returns the database name from the connection parameters.
-* @return string
-**/
-func (s *PgConection) GetDatabase() string {
-	return s.getDatabase()
-}
-
-/**
-* GetParams: Returns the connection parameters as a JSON object.
-* @return et.Json
-**/
-func (s *SqliteConection) GetParams() et.Json {
-	return s.getParams()
-}
-
-/**
-* SetDatabase: Sets the database name in the connection parameters
-* @param name string
-**/
-func (s *SqliteConection) SetDatabase(name string) {
-	s.setDatabase(name)
-}
-
-/**
-* GetDatabase: Returns the database name from the connection parameters.
-* @return string
-**/
-func (s *SqliteConection) GetDatabase() string {
-	return s.getDatabase()
-}
-
-/**
-* GetParams: Returns the connection parameters as a JSON object.
-* @return et.Json
-**/
-func (s *OracleConection) GetParams() et.Json {
-	return s.getParams()
-}
-
-/**
-* SetDatabase: Sets the database name in the connection parameters
-* @param name string
-**/
-func (s *OracleConection) SetDatabase(name string) {
-	s.setDatabase(name)
-}
-
-/**
-* GetDatabase: Returns the database name from the connection parameters.
-* @return string
-**/
-func (s *OracleConection) GetDatabase() string {
-	return s.getDatabase()
-}
-
 /**
 * NewDB: Creates a new DB instance for the given driver without initializing it (call Init afterwards).
 * @param id, host, name, driver string, showLog ...bool (optional, defaults to true)
@@ -452,6 +376,14 @@ func (s *Model) GetSchema() *Schema {
 **/
 func (s *Model) Init() error {
 	return s.init()
+}
+
+/**
+* SetTable: Sets the model's Table (schema.name, schema_name or name, by the driver) without running DDL, for a model
+* that is only queried
+**/
+func (s *Model) SetTable() {
+	s.setTable()
 }
 
 /**

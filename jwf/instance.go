@@ -73,6 +73,7 @@ type Instance struct {
 	StartedAt   time.Time              `json:"started_at"`
 	UpdatedAt   time.Time              `json:"updated_at"`
 	DoneAt      time.Time              `json:"done_at"`
+	Duration    time.Duration          `json:"duration"`
 	ID          string                 `json:"id"`
 	FlowId      string                 `json:"flow_id"`
 	FlowTag     string                 `json:"flow_tag"`
@@ -567,6 +568,23 @@ func (s *Instance) next() bool {
 }
 
 /**
+* execution
+* @return et.Json
+**/
+func (s *Instance) execution() et.Json {
+	return et.Json{
+		"instance_id": s.ID,
+		"flow_id":     s.FlowId,
+		"flow_tag":    s.FlowTag,
+		"code":        s.Code,
+		"name":        s.Name,
+		"status":      s.Status,
+		"trigger":     s.Trigger,
+		"ctx":         s.Ctx,
+	}
+}
+
+/**
 * run
 * @param ctx, tags et.Json, await bool
 * @return et.Json, error
@@ -575,17 +593,9 @@ func (s *Instance) Run(ctx et.Json, await bool) (et.Json, error) {
 	var err error
 	var result et.Json
 	defer func() {
+		s.Duration = timezone.Now().Sub(s.StartedAt)
 		if err != nil {
 			s.setError(err)
-		}
-		result["instance_wf"] = et.Json{
-			"instance_id": s.ID,
-			"flow_id":     s.FlowId,
-			"flow_tag":    s.FlowTag,
-			"code":        s.Code,
-			"name":        s.Name,
-			"status":      RUNNING,
-			"ctx":         ctx,
 		}
 	}()
 
@@ -643,7 +653,7 @@ func (s *Instance) Run(ctx et.Json, await bool) (et.Json, error) {
 		}
 	}()
 
-	result = et.Json{}
+	result = s.execution()
 	return result, nil
 }
 

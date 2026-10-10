@@ -74,7 +74,6 @@ type fnStep func(instance *Instance, ctx et.Json) (et.Json, error)
 type Flow struct {
 	CreatedAt     time.Time                  `json:"created_at"`
 	UpdatedAt     time.Time                  `json:"updated_at"`
-	OwnerId       string                     `json:"owner_id"`
 	ID            string                     `json:"id"`
 	Tag           string                     `json:"tag"`
 	Name          string                     `json:"name"`
@@ -91,6 +90,7 @@ type Flow struct {
 	Resources     []et.Json                  `json:"resources"`
 	SaveInstances bool                       `json:"save_instances"`
 	Published     bool                       `json:"published"`
+	AppId         string                     `json:"app_id"`
 	AuditLog      []et.Json                  `json:"audit_log"`
 	isDebug       bool                       `json:"-"`
 	isChanged     bool                       `json:"-"`
@@ -113,7 +113,6 @@ func NewFlow(tag, name, version, ownerId, userId string) *Flow {
 	result := &Flow{
 		CreatedAt:     now,
 		UpdatedAt:     now,
-		OwnerId:       ownerId,
 		ID:            reg.UUID(),
 		Tag:           tag,
 		Name:          name,
@@ -228,7 +227,6 @@ func (s *Flow) ToJson() et.Json {
 	return et.Json{
 		"created_at":     timezone.Format(s.CreatedAt, timezone.RFC3339),
 		"updated_at":     timezone.Format(s.UpdatedAt, timezone.RFC3339),
-		"owner_id":       s.OwnerId,
 		"id":             s.ID,
 		"tag":            s.Tag,
 		"name":           s.Name,

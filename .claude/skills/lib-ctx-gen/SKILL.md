@@ -95,9 +95,9 @@ Required rules:
 
 Create:
 
-LIBRARY_CONTEXT.md
+doc/LIBRARY_CONTEXT.md
 
-at repository root.
+(only README.md stays at the repository root).
 
 Required sections:
 
@@ -171,9 +171,9 @@ The generated document must:
 
 Produce:
 
-1. LIBRARY_CONTEXT.md
-2. ARCHITECTURE_SUMMARY.md
-3. COMPONENT_CATALOG.md
-4. AI_USAGE_GUIDE.md
+1. doc/LIBRARY_CONTEXT.md
+2. doc/ARCHITECTURE_SUMMARY.md
+3. doc/COMPONENT_CATALOG.md
+4. doc/AI_USAGE_GUIDE.md
 
 All files must be generated from actual repository analysis.

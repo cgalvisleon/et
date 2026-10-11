@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `github.com/cgalvisleon/et` — Go 1.25, MIT license. Part of the parent workspace `go.work`.
 
-> The codebase changes fast (commits are bare "Backup:" WIP checkpoints) — **read the source before trusting any API shape here**. `README.md`/`README.es.md`, `LIBRARY_CONTEXT.md`, `ARCHITECTURE_SUMMARY.md`, `COMPONENT_CATALOG.md`, `AI_USAGE_GUIDE.md` drift out of sync (README still lists removed packages `ws/`, `ia/`, `workflow/`, `tcp/`, `wsp/`, `instances/`). `NEW_PROJECT_GUIDE.md` has verified templates for starting a new project on `et` (HTTP microservice like `core-studio/api`, CLI like `tick`); `go run ./cmd/create` scaffolds `Project`/`Microservice`/`Modelo`/`Rpc` (`create modelo` prints a manual wiring step since `file.MakeFile` never overwrites).
+> The codebase changes fast (commits are bare "Backup:" WIP checkpoints) — **read the source before trusting any API shape here**. Docs: only `README.md` lives at the root; everything else is in `doc/` — `doc/README.es.md` (Spanish translation of `README.md`, keep both in sync), `doc/LIBRARY_CONTEXT.md` (copied into consumer projects by `go run ./cmd/install`), `doc/ARCHITECTURE_SUMMARY.md`, `doc/COMPONENT_CATALOG.md`, `doc/AI_USAGE_GUIDE.md` (the last four are what the `lib-ctx-gen` skill generates); they can drift from the code. `doc/NEW_PROJECT_GUIDE.md` has verified templates for starting a new project on `et` (HTTP microservice like `core-studio/api`, CLI like `tick`); `go run ./cmd/create` scaffolds `Project`/`Microservice`/`Modelo`/`Rpc` (`create modelo` prints a manual wiring step since `file.MakeFile` never overwrites).
 
 ## Commands
 
@@ -22,12 +22,12 @@ go run ./cmd/jsql     # jsql driver demo
 go run ./cmd/ia       # RAG HTTP API (PORT, default 3300)
 docker compose up -d  # optional local Ollama on 11434 (see docker-compose.yml header)
 
-./version.sh --major | --minor | --request   # bumps git tag, updates README.md, pushes
+./version.sh --major | --minor | --request   # bumps git tag, updates README.md + doc/README.es.md, pushes
 ```
 
 Tests exist only in `queue/` (`Example_queue`), `ia/loader_test.go`, `jsql/drivers/test/`, and `jrpc/`, `jws/`, `cache/`, `aws/`, `brevo/` — the latter need live Redis/AWS/Brevo and fail or hang without them. `jwf` and `ia`'s ingest/ask path have no tests.
 
-`COMPONENT_CATALOG.md` is generated from `go doc` (every exported func/method/interface per package); regenerate it rather than hand-editing when the API changes. `LIBRARY_CONTEXT.md`, `ARCHITECTURE_SUMMARY.md` and `AI_USAGE_GUIDE.md` were re-verified against the code on 2026-10-10.
+`doc/COMPONENT_CATALOG.md` is generated from `go doc` (every exported func/method/interface per package); regenerate it rather than hand-editing when the API changes. `LIBRARY_CONTEXT.md`, `ARCHITECTURE_SUMMARY.md` and `AI_USAGE_GUIDE.md` were re-verified against the code on 2026-10-10.
 
 `jsql/drivers/test/` is the cross-driver suite (`TestCatalog`, `TestInsertUpdate`, `TestJoinGroupHaving`, `TestWrapper`, `TestCreateDropDB`): it runs every case against sqlite (temp file), postgres, mysql, mssql and oracle, reading connection settings from `et/.env` (`DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`, `ORACLE_HOST`/`ORACLE_SERVICE`/`ORACLE_USER`…) and `t.Skip`-ing any engine it can't reach, so a green run may have only exercised sqlite — check the skip lines with `-v`. `JSQL_DEBUG=1` logs the generated SQL in the tests (`DB_IS_DEBUG=true` does it for a regular `DB`). `TestCatalog` rewrites `result/*` on every run (brecha B7). `result/<driver>.sql|.json` hold per-driver outputs.
 
@@ -149,7 +149,7 @@ result, err := wf.Run("add", "add", reg.GetULID(""), "", et.Json{}, et.Json{}, t
 - First `Step` becomes a trigger; the next ones chain through output connections. `Flow.Error(...)` attaches an error-port step to the last step. A step runs a Go `fnStep` or a JS script (`RunCode`/`RunScripts`, goja, with `cache`/`fetch` bindings from `wrapper.go`).
 - Instances are stored in Redis under `instance:<id>` (`cache.SetObject`, no TTL); `GetInstance` loads one or creates it, `RunInstance` runs it, `StopInstance(id)` sets `instance:<id>:stop` for `TimeAwait`. `Run` returns only the result ctx: pass your own id to read the instance afterwards. Status: `CREATED`, `PENDING`, `RUNNING`, `ROLLBACK`, `DONE`, `FAILED`, `CANCEL`, `COMPLETED`.
 - On a step error it retries through `resilience` when `Flow.TotalAttempts != 0`, then follows the error connection.
-- `AuditLog []et.Json` + `onChange` hooks (`MAX_AUDIT_LOG`, default 1000) is a reusable pattern documented in `AUDITLOG.md`.
+- `AuditLog []et.Json` + `onChange` hooks (`MAX_AUDIT_LOG`, default 1000) is a reusable pattern; `jwf/step.go` (`Step`) and `jwf/flow.go` (`Flow`) are the reference implementation.
 
 ### `cmd/` binaries
 
@@ -215,3 +215,9 @@ func (s *T) HttpFoo(w http.ResponseWriter, r *http.Request) {
 - `router.Api.Public/Session/Protected` llevan hoy `group` primero: `(group, method, path, name, handler)`.
 - `jsql/spec.md` §12 recalculado: B6 cerrada; nuevas B9 (`LoadDb` en pánico), B10 (`audit_log` del modelo no es lista) B11 (`TestWrapper` espera `conn.id` indefinido) y B12 (`Define` exige esquema; en sqlite las tablas pasaron a `schema_nombre`).
 - `router.Publish`/`router.With` ya no anteponen `Route.PackageName` al `Path` (rompió postick: rutas montadas en la raíz).
+
+## Cambios del 2026-10-11 (documentación)
+
+- Todos los `.md` salvo `README.md` (y `CLAUDE.md`) pasaron a `doc/`. `doc/README.es.md` es ahora una traducción completa de `README.md`; `version.sh` actualiza la versión en ambos.
+- Se eliminó `AUDITLOG.md` (describía `onSave`/`onDelete`/`store` en `jwf`, que ya no existen).
+- `cmd/install` copia `doc/LIBRARY_CONTEXT.md`; el skill `lib-ctx-gen` genera sus cuatro archivos en `doc/`.

@@ -49,6 +49,7 @@ func Load() error {
 func Close() {
 	if conn != nil {
 		conn.Close()
+		conn = nil
 	}
 }
 

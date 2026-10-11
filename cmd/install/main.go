@@ -59,7 +59,7 @@ func installContext() error {
 		return err
 	}
 
-	src := filepath.Join(modDir, "LIBRARY_CONTEXT.md")
+	src := filepath.Join(modDir, "doc", "LIBRARY_CONTEXT.md")
 	data, err := os.ReadFile(src)
 	if err != nil {
 		return err

@@ -1,6 +1,6 @@
 # ET: Go Services and Tools Library
 
-> [Versión en español](README.es.md)
+> [Versión en español](doc/README.es.md)
 
 ## Installation
 
@@ -293,11 +293,21 @@ Also `cmd/et`, `cmd/daemon`, `cmd/jsql`, `cmd/install`, `cmd/whatcher`, `cmd/res
 gofmt -w .
 go build ./... && go vet ./...
 cd jsql/drivers/test && go test -v   # jsql against every available driver
-./version.sh --minor                 # bump the git tag, update this README and push
+./version.sh --minor                 # bump the git tag, update the READMEs and push
 ```
 
 The jsql suite skips any engine it cannot reach, so check the `SKIP` lines. `cache`, `aws` and `brevo` tests need live services.
 
+## Documentation
+
+More guides (in Spanish) in [`doc/`](doc/):
+
+- [`LIBRARY_CONTEXT.md`](doc/LIBRARY_CONTEXT.md) — context for AI assistants in projects that use `et` (`go run ./cmd/install` copies it into the project).
+- [`ARCHITECTURE_SUMMARY.md`](doc/ARCHITECTURE_SUMMARY.md) — layers, internal dependencies, patterns and known issues.
+- [`COMPONENT_CATALOG.md`](doc/COMPONENT_CATALOG.md) — full public API, generated from `go doc`.
+- [`AI_USAGE_GUIDE.md`](doc/AI_USAGE_GUIDE.md) — rules and pitfalls for AI assistants.
+- [`NEW_PROJECT_GUIDE.md`](doc/NEW_PROJECT_GUIDE.md) — templates for starting a new project on `et`.
+
 ## License
 
-MIT. See `LICENSE`.
+MIT. See [`LICENSE`](LICENSE).

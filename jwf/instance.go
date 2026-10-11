@@ -101,6 +101,7 @@ type Instance struct {
 	resilience  *resilience.Resilience `json:"-"`
 	goTo        int                    `json:"-"`
 	onChange    []func(data et.Json)   `json:"-"`
+	onLog       []func(line et.Json)   `json:"-"`
 	mu          sync.Mutex             `json:"-"`
 	hostname    string                 `json:"-"`
 }
@@ -179,7 +180,6 @@ func (s *Instance) up() *Instance {
 	s.hostname = hostname
 	s.wrapperConsole()
 	s.wrapperCtx()
-	s.wrapperParams()
 	s.wrapperGoTo()
 	return s
 }
@@ -227,8 +227,30 @@ func (s *Instance) push() {
 }
 
 /**
+* OnLog: Receives each console line of the scripts of the instance ({level, message, at, step_id, instance_id})
+* @param fn func(line et.Json)
+* @return *Instance
+**/
+func (s *Instance) OnLog(fn func(line et.Json)) *Instance {
+	s.onLog = append(s.onLog, fn)
+	return s
+}
+
+/**
+* emitLog: Sends a console line of the running step (with its step_id and the instance_id) to the OnLog handlers
+* @param line et.Json
+**/
+func (s *Instance) emitLog(line et.Json) {
+	line["instance_id"] = s.ID
+	line["step_id"] = s.StepId
+	for _, fn := range s.onLog {
+		fn(line)
+	}
+}
+
+/**
 * OnChange
-* @param fn func(instance *Instance)
+* @param fn func(data et.Json)
 * @return *Instance
 **/
 func (s *Instance) OnChange(fn func(data et.Json)) *Instance {

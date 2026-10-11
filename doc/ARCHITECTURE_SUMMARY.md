@@ -85,13 +85,15 @@ Las rutas se guardan en Redis y se propagan entre réplicas por NATS (`EVENT_SET
 2. `wf.NewFlow(tag, name, version, ownerId, userId)`: el primer `Step` es el trigger y los siguientes se encadenan por conexiones de salida. `Flow.Error(...)` agrega un paso al puerto de error.
 3. `wf.Run(tag, triggerTag, id, code, ctx, tags, await, userId)`: busca o crea la instancia (`GetInstance`) y la ejecuta (`RunInstance`).
 4. Si un paso falla y el flujo tiene intentos, reintenta con `resilience`; después sigue la conexión de error.
-5. Un paso puede ser Go (`fnStep`) o JavaScript (`RunCode` con goja).
+5. Un paso puede ser Go (`fnStep`) o JavaScript (`RunCode` con goja). En JavaScript, `params` es un objeto dinámico de goja (`jwf.Binder` + `NewDynamicObject`) y `console.*` (`consoleOf`) escribe en el log y emite cada línea a `Instance.OnLog` / `Step.OnLog`.
 
 ## 6. Problemas conocidos (verificados 2026-10-10)
 
 | Componente | Problema |
 | --- | --- |
 | `jia/ia.go:90` | `Load` llama `store.Get(id, packageName, …)` con los argumentos invertidos. |
+| `router` `rateLimitMiddleware` / `cache.IncrCtx` | El vencimiento del contador se pone solo cuando nace (`result == 1`); si ese `Expire` falla, la clave queda sin TTL y la ruta responde 429 para siempre al pasar `LimitRate` (2026-10-11). |
+| `validator` | `Min`/`Max` solo se aplican si son > 0 y `Pattern` se compila en cada validación (2026-10-11). |
 | `jwsp` `SendReplyVideoMessageByURL` | Asigna `url` a `MessageID`. |
 | `cmds.Step.RunSSH` | Ejecuta el comando localmente, igual que `RunOS`. |
 | `utility.More` | Reinicia el contador del tag a 0 en cada llamada. |

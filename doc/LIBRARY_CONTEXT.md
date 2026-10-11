@@ -43,7 +43,7 @@ Detalle de dependencias y flujos en `ARCHITECTURE_SUMMARY.md`.
 | `ettp/v2` | API gateway con rutas sincronizadas por NATS. |
 | `cache`, `event` | Redis y NATS. |
 | `jwt`, `claim`, `middleware` | Tokens, claims y autenticación HTTP. |
-| `jwf` | Workflows en memoria con pasos Go o JS y reintentos. |
+| `jwf` | Workflows en memoria con pasos Go o JS y reintentos. En un script, `params` es un objeto dinámico (`params.email`, `JSON.stringify(params)`, y siguen `params.str("x")`…); `console.*` va al log del servidor y a `OnLog` de la instancia o del paso; un paso suelto (`RunScript(nil, ctx)`) devuelve el último valor del script si es un objeto. |
 | `crontab`, `resilience`, `queue` | Tareas programadas, reintentos y lotes. |
 | `jrex` | Runtime JavaScript (goja). |
 | `ia`, `jia` | RAG multitenant y agentes OpenAI. |
@@ -174,6 +174,7 @@ api.UseAuthentication(middleware.Authentication)
 api.Protected("users", router.POST, "/", "Create user", api.Item(http.StatusCreated,
     func(r *http.Request, body et.Json) (et.Item, error) {
         ok, err := validator.New().Field("email").Required().IsEmail().Validate(body)
+        // o desde un JSON guardado: v, err := validator.New().ByJson(et.Json{"fields": et.Json{"email": et.Json{"required": true, "is_email": true}}})
         if !ok {
             return et.Item{}, err
         }

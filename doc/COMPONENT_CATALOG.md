@@ -4,7 +4,7 @@
 >
 > Se omiten `cmd/`, `create/` y `jcli/` (WIP huérfano).
 
-Generado: 2026-10-10.
+Generado: 2026-10-10 (`jwf` y `validator` regenerados el 2026-10-11).
 
 ## `aws`
 
@@ -1490,6 +1490,7 @@ func (s *Flow) ToJson() et.Json
 func (s *Flow) ToString() string
 func (s *Instance) Done() *Instance
 func (s *Instance) OnChange(fn func(data et.Json)) *Instance
+func (s *Instance) OnLog(fn func(line et.Json)) *Instance
 func (s *Instance) Run(ctx et.Json, await bool) (et.Json, error)
 func (s *Instance) SetBinding(key string, value any) *Instance
 func (s *Instance) SetParams(params et.Json) et.Json
@@ -1498,6 +1499,7 @@ func (s *Instance) ToString() string
 func (s Status) Str() string
 func LoadStep(def et.Json) (*Step, error)
 func (s *Step) OnChange(fn func(data et.Json))
+func (s *Step) OnLog(fn func(line et.Json))
 func (s *Step) OnStatus(fn func(status Status))
 func (s *Step) Run(instance *Instance, ctx et.Json) (et.Json, error)
 func (s *Step) RunFunction(instance *Instance, ctx et.Json) (et.Json, error)
@@ -1505,6 +1507,7 @@ func (s *Step) RunScript(instance *Instance, ctx et.Json) (et.Json, error)
 func (s *Step) SetBinding(name string, value interface{}) *Step
 func (s *Step) ToJson() et.Json
 func (s *Step) ToString() string
+func (s *Step) Up() *Step
 func New(id string) (*WorkFlow, error)
 func (s *WorkFlow) GetInstance(tag, triggerTag, id, code string, tags et.Json, userId string) (*Instance, error)
 func (s *WorkFlow) NewFlow(tag, name, version, ownerId, userId string) *Flow
@@ -2385,10 +2388,13 @@ func (s *Condition) MinLength(minLength int) *Condition
 func (s *Condition) NotEmpty() *Condition
 func (s *Condition) Pattern(pattern string) *Condition
 func (s *Condition) Required() *Condition
+func (s *Condition) ToJson() et.Json
 func (s *Condition) Validate(value et.Json) (bool, error)
 func New() *Validator
+func (s *Validator) ByJson(params et.Json) (*Validator, error)
 func (s *Validator) Field(name string) *Condition
 func (s *Validator) NotEmpty() *Validator
+func (s *Validator) ToJson() et.Json
 func (s *Validator) Validate(value et.Json) (bool, error)
 ```
 

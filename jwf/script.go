@@ -15,6 +15,9 @@ type Script struct {
 	vm          *goja.Runtime `json:"-"`
 }
 
+// Binder: a binding built with the runtime of the script (a goja dynamic object, like params)
+type Binder func(vm *goja.Runtime) goja.Value
+
 /**
 * RunCode
 * @param code string, ctx et.Json, bindings map[string]any
@@ -27,6 +30,10 @@ func RunCode(code string, ctx et.Json, bindings map[string]any) (any, error) {
 
 	vm := goja.New()
 	for name, value := range bindings {
+		if bind, ok := value.(Binder); ok {
+			vm.Set(name, bind(vm))
+			continue
+		}
 		vm.Set(name, value)
 	}
 

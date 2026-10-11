@@ -3,6 +3,7 @@ package jwf
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/cgalvisleon/et/et"
@@ -63,6 +64,7 @@ type Step struct {
 	bindings    map[string]any      `json:"-"`
 	onStatus    func(status Status) `json:"-"`
 	onChange    func(data et.Json)  `json:"-"`
+	onLog       func(line et.Json)  `json:"-"`
 }
 
 /**
@@ -110,18 +112,19 @@ func LoadStep(def et.Json) (*Step, error) {
 		return nil, err
 	}
 
-	return result.up(), nil
+	return result.Up(), nil
 }
 
 /**
 * up
 * @return *Step
 **/
-func (s *Step) up() *Step {
+func (s *Step) Up() *Step {
 	if s.onStatus == nil {
 		s.onStatus = func(status Status) {}
 	}
 	s.bindings = wrapper(s.bindings)
+	s.wrapperParams()
 	return s
 }
 
@@ -172,6 +175,14 @@ func (s *Step) OnStatus(fn func(status Status)) {
 **/
 func (s *Step) OnChange(fn func(data et.Json)) {
 	s.onChange = fn
+}
+
+/**
+* OnLog: Receives each console line of the step when it runs alone (a Test, without instance): {level, message, at, step_id}
+* @param fn func(line et.Json)
+**/
+func (s *Step) OnLog(fn func(line et.Json)) {
+	s.onLog = fn
 }
 
 /**
@@ -233,13 +244,41 @@ func (s *Step) RunScript(instance *Instance, ctx et.Json) (et.Json, error) {
 		for key, value := range instance.bindings {
 			s.SetBinding(key, value)
 		}
+	} else if s.onLog != nil {
+		// Alone (a Test): its console goes to OnLog
+		prefix := fmt.Sprintf("step:%s", s.ID)
+		s.SetBinding("console", consoleOf(prefix, func(line et.Json) {
+			line["step_id"] = s.ID
+			s.onLog(line)
+		}))
 	}
-	_, err := RunScripts(s.Definition, ctx, s.bindings)
+	value, err := RunScripts(s.Definition, ctx, s.bindings)
 	if err != nil {
 		s.setStatus(FAILED)
 		return et.Json{}, err
 	}
+	if instance != nil {
+		result = instance.Ctx
+	} else if object, ok := objectOf(value); ok {
+		// Alone (a Test): the last value of the script, if it is an object, is the result
+		result = object
+	}
 	return result, nil
+}
+
+/**
+* objectOf: The value of a script as an object (a JavaScript object exports as map[string]any), and whether it is one
+* @param value any
+* @return et.Json, bool
+**/
+func objectOf(value any) (et.Json, bool) {
+	switch v := value.(type) {
+	case et.Json:
+		return v, true
+	case map[string]any:
+		return et.Json(v), true
+	}
+	return et.Json{}, false
 }
 
 /**

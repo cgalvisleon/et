@@ -2,20 +2,22 @@ package jwf
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrpc"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/timezone"
+	"github.com/cgalvisleon/et/validator"
 	"github.com/dop251/goja"
 )
 
@@ -48,21 +50,7 @@ func wrapper(bindings map[string]interface{}) map[string]interface{} {
 * @param instance *Instance
 **/
 func wrapperConsole(bindings map[string]interface{}) map[string]interface{} {
-	bindings["console"] = map[string]interface{}{
-		"log": func(args ...interface{}) {
-			kind := "LOG"
-			logs.Log(kind, args...)
-		},
-		"debug": func(args ...interface{}) {
-			logs.Debug(args...)
-		},
-		"info": func(args ...interface{}) {
-			logs.Info(args...)
-		},
-		"error": func(args string) {
-			logs.Error(errors.New(args))
-		},
-	}
+	bindings["console"] = consoleOf("", nil)
 	return bindings
 }
 
@@ -74,10 +62,12 @@ func wrapperBasic(bindings map[string]interface{}) map[string]interface{} {
 	bindings["UUID"] = reg.UUID
 	bindings["ULID"] = reg.ULID
 	bindings["XID"] = reg.XID
-	bindings["GetUUID"] = reg.GetUUID
-	bindings["GetULID"] = reg.GetULID
-	bindings["GetXID"] = reg.GetXID
+	bindings["getUUID"] = reg.GetUUID
+	bindings["getULID"] = reg.GetULID
+	bindings["getXID"] = reg.GetXID
 	bindings["timeNow"] = timezone.Now
+	bindings["validator"] = validator.New()
+	bindings["Json"] = et.Json{}
 	return bindings
 }
 
@@ -228,42 +218,121 @@ func wrapperEvent(bindings map[string]interface{}) map[string]interface{} {
 	return bindings
 }
 
+// paramsObject: params in JavaScript: the step params as properties (params.email, JSON.stringify(params)) plus, by
+// their name, the methods (str, int, set…); a method hides a param with the same name (read it with params.get)
+type paramsObject struct {
+	step    *Step
+	vm      *goja.Runtime
+	methods map[string]interface{}
+}
+
+func (o *paramsObject) Get(key string) goja.Value {
+	if method, ok := o.methods[key]; ok {
+		return o.vm.ToValue(method)
+	}
+	value, ok := o.step.Params[key]
+	if !ok {
+		return nil
+	}
+	return o.vm.ToValue(value)
+}
+
+func (o *paramsObject) Set(key string, val goja.Value) bool {
+	if o.step.Params == nil {
+		o.step.Params = et.Json{}
+	}
+	o.step.Params[key] = val.Export()
+	return true
+}
+
+func (o *paramsObject) Has(key string) bool {
+	_, ok := o.step.Params[key]
+	return ok
+}
+
+func (o *paramsObject) Delete(key string) bool {
+	delete(o.step.Params, key)
+	return true
+}
+
+func (o *paramsObject) Keys() []string {
+	return slices.Sorted(maps.Keys(o.step.Params))
+}
+
+// String and MarshalJSON: params passed to Go (console.debug(params), a log, a json) shows its values
+func (o *paramsObject) String() string {
+	return o.step.Params.ToString()
+}
+
+func (o *paramsObject) MarshalJSON() ([]byte, error) {
+	return json.Marshal(o.step.Params)
+}
+
+/**
+* wrapperParams: Wraps the params: params.email reads a param and params.str("email") and the other methods still work
+* @param s *Step
+**/
+func (s *Step) wrapperParams() {
+	methods := map[string]interface{}{
+		"set": func(data et.Json) {
+			if s.Params == nil {
+				s.Params = et.Json{}
+			}
+			maps.Copy(s.Params, data)
+		},
+		"get": func(keys ...string) interface{} {
+			return s.Params.Get(keys...)
+		},
+		"str": func(keys ...string) string {
+			return s.Params.Str(keys...)
+		},
+		"int": func(keys ...string) int {
+			return s.Params.Int(keys...)
+		},
+		"int64": func(keys ...string) int64 {
+			return s.Params.Int64(keys...)
+		},
+		"num": func(keys ...string) float64 {
+			return s.Params.Num(keys...)
+		},
+		"bool": func(keys ...string) bool {
+			return s.Params.Bool(keys...)
+		},
+		"time": func(keys ...string) time.Time {
+			return s.Params.Time(keys...)
+		},
+		"json": func(key string) et.Json {
+			return s.Params.Json(key)
+		},
+		"array": func(key string) []interface{} {
+			return s.Params.Array(key)
+		},
+		"arrayStr": func(key string) []string {
+			return s.Params.ArrayStr(key)
+		},
+		"arrayInt": func(key string) []int {
+			return s.Params.ArrayInt(key)
+		},
+		"arrayInt64": func(key string) []int64 {
+			return s.Params.ArrayInt64(key)
+		},
+		"arrayJson": func(key string) []et.Json {
+			return s.Params.ArrayJson(key)
+		},
+	}
+	s.SetBinding("params", Binder(func(vm *goja.Runtime) goja.Value {
+		params := &paramsObject{step: s, vm: vm, methods: methods}
+		return vm.NewDynamicObject(params)
+	}))
+}
+
 /**
 * wrapperCtx:
 * @param s *Instance
 **/
 func (s *Instance) wrapperConsole() {
-	s.SetBinding("console", map[string]interface{}{
-		"log": func(args ...interface{}) {
-			kind := "LOG"
-			_args := make([]interface{}, 0)
-			_args = append(_args, fmt.Sprintf(`host:%s - instance:%s`, s.hostname, s.ID))
-			for _, arg := range args {
-				_args = append(_args, arg)
-			}
-			logs.Log(kind, _args...)
-		},
-		"debug": func(args ...interface{}) {
-			_args := make([]interface{}, 0)
-			_args = append(_args, fmt.Sprintf(`host:%s - instance:%s`, s.hostname, s.ID))
-			for _, arg := range args {
-				_args = append(_args, arg)
-			}
-			logs.Debug(_args...)
-		},
-		"info": func(args ...interface{}) {
-			_args := make([]interface{}, 0)
-			_args = append(_args, fmt.Sprintf(`host:%s - instance:%s`, s.hostname, s.ID))
-			for _, arg := range args {
-				_args = append(_args, arg)
-			}
-			logs.Info(_args...)
-		},
-		"error": func(args string) {
-			err := fmt.Errorf(`host:%s - instance:%s - %s`, s.hostname, s.ID, args)
-			logs.Error(err)
-		},
-	})
+	prefix := fmt.Sprintf(`host:%s - instance:%s`, s.hostname, s.ID)
+	s.SetBinding("console", consoleOf(prefix, s.emitLog))
 }
 
 /**
@@ -313,57 +382,6 @@ func (s *Instance) wrapperCtx() {
 		},
 		"arrayJson": func(key string) []et.Json {
 			return s.Ctx.ArrayJson(key)
-		},
-	})
-}
-
-/**
-* wrapperParams: Wraps the params
-* @param instance *Instance
-**/
-func (s *Instance) wrapperParams() {
-	s.SetBinding("params", map[string]interface{}{
-		"set": func(data et.Json) {
-			maps.Copy(s.Params, data)
-		},
-		"get": func(keys ...string) interface{} {
-			return s.Params.Get(keys...)
-		},
-		"str": func(keys ...string) string {
-			return s.Params.Str(keys...)
-		},
-		"int": func(keys ...string) int {
-			return s.Params.Int(keys...)
-		},
-		"int64": func(keys ...string) int64 {
-			return s.Params.Int64(keys...)
-		},
-		"num": func(keys ...string) float64 {
-			return s.Params.Num(keys...)
-		},
-		"bool": func(keys ...string) bool {
-			return s.Params.Bool(keys...)
-		},
-		"time": func(keys ...string) time.Time {
-			return s.Params.Time(keys...)
-		},
-		"json": func(key string) et.Json {
-			return s.Params.Json(key)
-		},
-		"array": func(key string) []interface{} {
-			return s.Params.Array(key)
-		},
-		"arrayStr": func(key string) []string {
-			return s.Params.ArrayStr(key)
-		},
-		"arrayInt": func(key string) []int {
-			return s.Params.ArrayInt(key)
-		},
-		"arrayInt64": func(key string) []int64 {
-			return s.Params.ArrayInt64(key)
-		},
-		"arrayJson": func(key string) []et.Json {
-			return s.Params.ArrayJson(key)
 		},
 	})
 }

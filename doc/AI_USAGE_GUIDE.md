@@ -31,7 +31,7 @@ Si terminas en 4 o 5, dilo en la respuesta: «No usé `et` para X porque Y».
 | Leer el request | `request` | `request.GetBody(r)`, `request.URLParam(r, "id").Str()` |
 | Responder | `response` | `response.ITEM/ITEMS/LIST/HTTPError(w, r, status, ...)` |
 | Llamar otra API | `request` | `request.Fetch(method, url, header, body, timeout, def)` |
-| Validar un payload | `validator` | `validator.New().Field("x").Required()...Validate(body)` |
+| Validar un payload | `validator` | `validator.New().Field("x").Required()...Validate(body)`; desde un JSON: `validator.New().ByJson(def)` (y `ToJson()` para guardarlo) |
 | Caché / Redis | `cache` | `cache.Set`, `cache.Get` → `(valor, existe, error)` |
 | Pub/Sub | `event` | `event.Publish`, `event.Subscribe` |
 | JWT | `jwt` | `jwt.NewAuthorization(...)`, `jwt.Validate(token)` |
@@ -42,7 +42,8 @@ Si terminas en 4 o 5, dilo en la respuesta: «No usé `et` para X porque Y».
 | Cron | `crontab` | `crontab.Load(tag, store)` + `CronJob` / `ScheduleJob` |
 | Reintentos | `resilience` | `resilience.New()` + `LoadInstance(Params{...})` + `Run()` |
 | Workflow | `jwf` | `jwf.New(id)` + `NewFlow(...).Step(...)` + `wf.Run(...)` |
-| Script JavaScript | `jrex` / `jwf` | `jrex.Load(tag, store)`, `jwf.RunCode(code, ctx, bindings)` |
+| Script JavaScript | `jrex` / `jwf` | `jrex.Load(tag, store)`, `jwf.RunCode(code, ctx, bindings)` (el resultado es el último valor del script; un binding `jwf.Binder` se arma con el runtime) |
+| Ver la consola de un script | `jwf` | `instance.OnLog(fn)` o `step.OnLog(fn)`: cada `console.*` llega como `{level, message, at, step_id}` |
 | RAG sobre documentos | `ia` | `ia.Load(db, schema, ia.Config{})` + `IngestFile` + `Ask` |
 | Agentes OpenAI | `jia` | `jia.New(tag, store, userId)` |
 | Email/SMS/WhatsApp | `brevo`, `infobip`, `aws`, `jwsp`, `service` | ver `COMPONENT_CATALOG.md` |

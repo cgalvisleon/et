@@ -58,6 +58,7 @@ type Step struct {
 	Inputs      int                 `json:"inputs"`
 	Outputs     int                 `json:"outputs"`
 	Stop        bool                `json:"stop"`
+	ctx         et.Json             `json:"-"`
 	fn          fnStep              `json:"-"`
 	isDebug     bool                `json:"-"`
 	isChanged   bool                `json:"-"`
@@ -92,6 +93,7 @@ func newStep(ownerId, id string, kind Kind, tag, version, title string) *Step {
 		Description: "",
 		Definition:  []*Script{},
 		Config:      et.Json{},
+		ctx:         et.Json{},
 		Params:      et.Json{},
 		Inputs:      0,
 		Outputs:     1,
@@ -125,6 +127,7 @@ func (s *Step) Up() *Step {
 	}
 	s.bindings = wrapper(s.bindings)
 	s.wrapperParams()
+	s.wrapperCtx()
 	return s
 }
 

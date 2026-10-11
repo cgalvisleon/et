@@ -1,6 +1,6 @@
 # ARCHITECTURE_SUMMARY.md
 
-> Arquitectura de `github.com/cgalvisleon/et`, verificada contra el código el 2026-10-10. La API exacta está en `COMPONENT_CATALOG.md` (generado desde `go doc`); las reglas para asistentes de IA, en `AI_USAGE_GUIDE.md`.
+> Arquitectura de `github.com/cgalvisleon/et`, verificada contra el código el 2026-10-11. La API exacta está en `COMPONENT_CATALOG.md` (generado desde `go doc`); las reglas para asistentes de IA, en `AI_USAGE_GUIDE.md`.
 
 ## 1. Capas
 
@@ -85,9 +85,9 @@ Las rutas se guardan en Redis y se propagan entre réplicas por NATS (`EVENT_SET
 2. `wf.NewFlow(tag, name, version, ownerId, userId)`: el primer `Step` es el trigger y los siguientes se encadenan por conexiones de salida. `Flow.Error(...)` agrega un paso al puerto de error.
 3. `wf.Run(tag, triggerTag, id, code, ctx, tags, await, userId)`: busca o crea la instancia (`GetInstance`) y la ejecuta (`RunInstance`).
 4. Si un paso falla y el flujo tiene intentos, reintenta con `resilience`; después sigue la conexión de error.
-5. Un paso puede ser Go (`fnStep`) o JavaScript (`RunCode` con goja). En JavaScript, `params` es un objeto dinámico de goja (`jwf.Binder` + `NewDynamicObject`) y `console.*` (`consoleOf`) escribe en el log y emite cada línea a `Instance.OnLog` / `Step.OnLog`.
+5. Un paso puede ser Go (`fnStep`) o JavaScript (`RunCode` con goja). En JavaScript, `params` y `ctx` son objetos dinámicos de goja (`jwf.Binder` + `NewDynamicObject`, `jsonObject`) y `console.*` (`consoleOf`) escribe en el log y emite cada línea a `Instance.OnLog` / `Step.OnLog`.
 
-## 6. Problemas conocidos (verificados 2026-10-10)
+## 6. Problemas conocidos (verificados 2026-10-11)
 
 | Componente | Problema |
 | --- | --- |
@@ -100,4 +100,7 @@ Las rutas se guardan en Redis y se propagan entre réplicas por NATS (`EVENT_SET
 | `dt` con `PRODUCTION=false` | El objeto no se persiste: vive solo en memoria. |
 | `jsql.LoadDb` | Entra en pánico al reconstruir una `DB` desde su `ToJson` (brecha B9 de `jsql/spec.md`). |
 | `jsql` `Model.ToJson` | `audit_log` sale como objeto `{data: [...]}` en vez de lista (brecha B10). |
+| `jsql.Wrapper` | `conn.id` se expone en todos los drivers; `jsql.d.ts` y `TestWrapper` dicen que solo en oracle, mysql y mssql (brecha B11). |
+| `jsql` pool | `DB_POOL_*` solo lo lee la conexión sqlite; los demás drivers usan un pool fijo (brecha B13). |
+| `validator.Pattern` | Una regex inválida entra en pánico al validar (`regexp.MustCompile`); `ByJson` la rechaza con error. |
 | `jcli/` | WIP huérfano (declara `package jrex`). |

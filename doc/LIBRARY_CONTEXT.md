@@ -2,7 +2,7 @@
 
 > Contexto para asistentes de IA (Claude Code, Cursor, ChatGPT, Cline, Windsurf) en proyectos que usan **`github.com/cgalvisleon/et`** (Go 1.25, MIT). Cópialo a la raíz del proyecto consumidor.
 >
-> Regenerado desde el código el 2026-10-10. El repo cambia rápido (commits «Backup:»): si una firma no compila, manda `go doc` y `COMPONENT_CATALOG.md`.
+> Regenerado desde el código el 2026-10-10; revisado el 2026-10-11. El repo cambia rápido (commits «Backup:»): si una firma no compila, manda `go doc` y `COMPONENT_CATALOG.md`.
 
 # Executive Summary
 
@@ -43,7 +43,7 @@ Detalle de dependencias y flujos en `ARCHITECTURE_SUMMARY.md`.
 | `ettp/v2` | API gateway con rutas sincronizadas por NATS. |
 | `cache`, `event` | Redis y NATS. |
 | `jwt`, `claim`, `middleware` | Tokens, claims y autenticación HTTP. |
-| `jwf` | Workflows en memoria con pasos Go o JS y reintentos. En un script, `params` es un objeto dinámico (`params.email`, `JSON.stringify(params)`, y siguen `params.str("x")`…); `console.*` va al log del servidor y a `OnLog` de la instancia o del paso; un paso suelto (`RunScript(nil, ctx)`) devuelve el último valor del script si es un objeto. |
+| `jwf` | Workflows en memoria con pasos Go o JS y reintentos. En un script, `params` y `ctx` son objetos dinámicos (`params.email`, `ctx.total = 5`, `JSON.stringify(ctx)`, y siguen `.str("x")`, `.set({...})`…); `console.*` va al log del servidor y a `OnLog` de la instancia o del paso; un paso suelto (`RunScript(nil, ctx)`) devuelve el último valor del script si es un objeto. |
 | `crontab`, `resilience`, `queue` | Tareas programadas, reintentos y lotes. |
 | `jrex` | Runtime JavaScript (goja). |
 | `ia`, `jia` | RAG multitenant y agentes OpenAI. |
@@ -97,6 +97,8 @@ q := queue.New[T](size, maxEvents, period, handler)
 - Pasar `stores.Instance` como `Store` de `crontab`/`jia`/`jrex` (firma distinta).
 - Copiar ejemplos con APIs eliminadas: `jval`, `config`, `jsql.Store`, `jsql.Def`, `jwf.Load`, `jwf.Store`, `NewFloW`, `resilience.New(store)`, `cache.ErrNotFound`.
 - Confiar en `jsql.LoadDb` (hoy entra en pánico) o en `dt` sin `PRODUCTION=true`.
+- Esperar que `DB_POOL_*` ajuste el pool en postgres, oracle, mysql o mssql: hoy solo lo lee sqlite (brecha B13 de `jsql/spec.md`).
+- Configurar `DB_TENANT_ID` o `DB_POOL_CONN_LIFETIME`: `jsql` no los lee (las de pool son `DB_POOL_LIFETIME` / `DB_POOL_IDLE_TIME`).
 
 # Extension Points
 
@@ -158,6 +160,7 @@ q := queue.New[T](size, maxEvents, period, handler)
 | `resilience.New(store)` | `resilience.New()` |
 | `cache.Get` → `(valor, error)` + `cache.ErrNotFound` | `(valor, existe, error)` |
 | `api.Public(method, path, name, h)` | `api.Public(group, method, path, name, h)` |
+| `DB_TENANT_ID`, `DB_POOL_CONN_LIFETIME`, `DB_POOL_CONN_IDLE_TIME` | Ya no se leen; pool: `DB_POOL_LIFETIME`, `DB_POOL_IDLE_TIME` (solo sqlite) |
 | `ws/`, `wsp/`, `tcp/`, `workflow/`, `instances/` | `jws/`, `jwsp/`, `jtcp/`, `jwf/` |
 
 # Examples

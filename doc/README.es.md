@@ -91,7 +91,7 @@ Cada tabla lista la API pública principal de cada paquete. `go doc github.com/c
 | Paquete | API pública | Ejemplo |
 | --- | --- | --- |
 | `jrex` | `Load(tag, store)` → `Jrex` (`Set`, `Run`, `RunDev`, `RunModule`, `NewModule`); `NewInstance`, `NewStore` | `rt.Set("db", db).Run()` |
-| `jwf` | `New(id)` → `WorkFlow` (`NewFlow`, `Run`, `GetInstance`, `RunInstance`, `StopInstance`, `OnChange`); `Flow.Step`, `Error`, `AddStep`; `LoadFlow`, `RunCode`, `Binder`; `Instance.OnLog` / `Step.OnLog` (console) | `wf.Run("signup", "signup", "", "", ctx, nil, true, userId)` |
+| `jwf` | `New(id)` → `WorkFlow` (`NewFlow`, `Run`, `GetInstance`, `RunInstance`, `StopInstance`, `OnChange`); `Flow.Step`, `Error`, `AddStep`; `LoadFlow`, `RunCode`, `Binder`; `Instance.OnLog` / `Step.OnLog` (consola) | `wf.Run("signup", "signup", "", "", ctx, nil, true, userId)` |
 | `jia` | `New(tag, store, userId)`, `Load(id, store)` → `Ia` (`SetModelAgent`, `SetContextAgent`, `SetSkillAgent`, `Conversation`, `Embed`, `LoadRouter`); `NewApiSkill` | `conv, _ := ai.Conversation(ctx, "support", to, name, prompt)` |
 | `ia` | `Load(db, schema, Config)` → `Rag` (`IngestFile`, `IngestSQL`, `Ask`, `ListDocuments`, `DeleteDocument`, `ListMessages`, `LoadRouter`) | `rag.Ask(ctx, tenant, project, conv, user, "question")` |
 | `cmds` | `NewStage`, `NewStep`, `AppendCmd`, `RunOS`, `RunSSH`, `Load(file)` | `cmds.NewStep("build", "").AppendCmd("go build ./...")` |
@@ -215,6 +215,18 @@ ok, err := validator.New().
     Validate(body)
 ```
 
+Las mismas reglas pueden venir de un JSON (`ByJson`) y guardarse de vuelta con `ToJson`. Una condición desconocida o un patrón inválido devuelven un error.
+
+```go
+v, err := validator.New().ByJson(et.Json{
+    "fields": et.Json{
+        "email": et.Json{"required": true, "is_email": true},
+        "age":   et.Json{"min": 18, "max": 120},
+    },
+})
+ok, err := v.Validate(body)
+```
+
 ### Cola por lotes
 
 El handler se ejecuta cuando se juntan `maxEvents` elementos o pasa `period`; `Close()` vacía la cola.
@@ -238,6 +250,14 @@ wf.NewFlow("signup", "Sign up", "1.0.0", ownerId, userId).
     Step("signup", "send welcome", sendWelcome)
 
 result, err := wf.Run("signup", "signup", "", "", et.Json{"email": "ana@x.com"}, et.Json{}, true, userId)
+```
+
+`OnLog` recibe cada línea de `console` de los pasos JavaScript: `{level, message, at, step_id, instance_id}`.
+
+```go
+instance, _ := wf.GetInstance("signup", "signup", "", "", et.Json{}, userId)
+instance.OnLog(func(line et.Json) { logs.Info(line.ToString()) })
+result, err := wf.RunInstance(instance, et.Json{"email": "ana@x.com"}, et.Json{}, true, userId)
 ```
 
 ### Crontab
@@ -264,7 +284,7 @@ answer, _ := rag.Ask(ctx, tenantId, projectId, conversationId, userId, "How do I
 
 | Paquete | Variables |
 | --- | --- |
-| `jsql` | `DB_DRIVER`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_TENANT_ID`, `DB_POOL_*`, `DB_RECORD_LIMIT` (1000), `DB_SSL`, `DB_SSL_VERIFY` |
+| `jsql` | `DB_DRIVER` (`postgres`), `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_RECORD_LIMIT` (1000), `DB_IS_DEBUG`, `DB_APP_NAME`; postgres `DB_SSLMODE`; oracle `DB_SSL`, `DB_SSL_VERIFY`; solo sqlite `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_LIFETIME`, `DB_POOL_IDLE_TIME` |
 | `cache` | `REDIS_HOST`, `REDIS_PASSWORD`, `REDIS_DB` |
 | `event` | `NATS_HOST`, `NATS_USER`, `NATS_PASSWORD` |
 | `graph` | `NEO4J_HOST`, `NEO4J_USER`, `NEO4J_PASSWORD` |

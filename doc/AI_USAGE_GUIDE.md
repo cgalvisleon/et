@@ -1,6 +1,6 @@
 # AI_USAGE_GUIDE.md
 
-> Guía de bolsillo para asistentes de IA que escriben código sobre `github.com/cgalvisleon/et`. Verificada contra el código el 2026-10-10. Firmas exactas en `COMPONENT_CATALOG.md`; arquitectura en `ARCHITECTURE_SUMMARY.md`; contexto general en `LIBRARY_CONTEXT.md`.
+> Guía de bolsillo para asistentes de IA que escriben código sobre `github.com/cgalvisleon/et`. Verificada contra el código el 2026-10-11. Firmas exactas en `COMPONENT_CATALOG.md`; arquitectura en `ARCHITECTURE_SUMMARY.md`; contexto general en `LIBRARY_CONTEXT.md`.
 
 ## 1. Orden de decisión
 
@@ -43,6 +43,7 @@ Si terminas en 4 o 5, dilo en la respuesta: «No usé `et` para X porque Y».
 | Reintentos | `resilience` | `resilience.New()` + `LoadInstance(Params{...})` + `Run()` |
 | Workflow | `jwf` | `jwf.New(id)` + `NewFlow(...).Step(...)` + `wf.Run(...)` |
 | Script JavaScript | `jrex` / `jwf` | `jrex.Load(tag, store)`, `jwf.RunCode(code, ctx, bindings)` (el resultado es el último valor del script; un binding `jwf.Binder` se arma con el runtime) |
+| Leer o cambiar `ctx`/`params` en un script | `jwf` | `ctx.user.name`, `ctx.total = 5`, `JSON.stringify(ctx)`, `ctx.set({...})`; lo anidado se cambia reasignando la clave de primer nivel |
 | Ver la consola de un script | `jwf` | `instance.OnLog(fn)` o `step.OnLog(fn)`: cada `console.*` llega como `{level, message, at, step_id}` |
 | RAG sobre documentos | `ia` | `ia.Load(db, schema, ia.Config{})` + `IngestFile` + `Ask` |
 | Agentes OpenAI | `jia` | `jia.New(tag, store, userId)` |
@@ -68,6 +69,9 @@ Si terminas en 4 o 5, dilo en la respuesta: «No usé `et` para X porque Y».
 - **`cmds.RunSSH`** ejecuta localmente.
 - **`utility.More`** no acumula: reinicia el contador.
 - **`jsql.LoadDb`** entra en pánico hoy (brecha B9 de `jsql/spec.md`).
+- **`DB_POOL_*`** solo ajusta el pool en sqlite; postgres, oracle, mysql y mssql usan 3/1/30/2 fijos (B13). `DB_TENANT_ID` ya no existe.
+- **`conn.id`** del `jsql.Wrapper` existe en los cinco drivers (es una función), aunque `jsql.d.ts` diga lo contrario (B11).
+- **`validator.Pattern`** con una regex inválida entra en pánico al validar (`regexp.MustCompile`); `ByJson` sí la rechaza con error.
 
 ## 4. Reglas
 

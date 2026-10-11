@@ -4,7 +4,7 @@
 >
 > Se omiten `cmd/`, `create/` y `jcli/` (WIP huérfano).
 
-Generado: 2026-10-10 (`jwf` y `validator` regenerados el 2026-10-11).
+Generado: 2026-10-10; revisado contra `go doc` el 2026-10-11 (sin diferencias en las firmas).
 
 ## `aws`
 

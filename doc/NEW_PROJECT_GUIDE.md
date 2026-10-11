@@ -248,7 +248,6 @@ func Routes(name, version string, db *jsql.DB) http.Handler {
 | --- | --- | --- |
 | `DB_DRIVER` | `postgres` | `jsql.Load`/`LoadTo` |
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | — | conexión |
-| `DB_TENANT_ID` | `tenant:root` (default) | tenant leído internamente por `jsql` |
 | `REDIS_HOST` | — | `cache.Load()` |
 | `NATS_HOST` | — | `event.Load()` |
 | `PORT`, `RPC_PORT` | `3000`, `4000` | `main.go` |

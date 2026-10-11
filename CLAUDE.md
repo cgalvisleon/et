@@ -49,7 +49,7 @@ Modular utility library for Go microservices: every directory is an independent 
 
 ### SQL builder / ORM: `jsql/`
 
-- `jsql.Load()` / `jsql.LoadTo(dbName, hostName...)` → `*DB`; config and tenant (`DB_TENANT_ID`, default `tenant:root`) are read internally via `envar`.
+- `jsql.Load()` / `jsql.LoadTo(dbName, hostName...)` → `*DB`; config is read internally via `envar` (`DB_TENANT_ID` is no longer read; only `create/template/templates.go` still writes it).
 - Drivers in `jsql/drivers/<name>/`, self-register via `init()`, imported as side effect: `postgres` (`lib/pq`), `sqlite` (`modernc.org/sqlite`), `mysql`, `mssql`, `oracle` — each with the same file set (`connect`, `load` = DDL, `query`, `command`, `quoted`, `types`, `test`). `josefina` is a constant only. A change to SQL generation usually has to be mirrored in all five.
 - **Table names**: the core sets `Model.Table` (in `newModel` and `Model.Init`, `Model.setTable`) from `Driver.UseSchema()`: `schema.name` for postgres/mssql, `schema_name` for sqlite/mysql/oracle (no `CREATE SCHEMA`, tables live in the connection's database/user). Drivers build SQL from `model.Table`/`From.Table`, not `Schema`+`Name` (mssql splits it back to quote `[schema].[name]`). Raw SQL against a sqlite table must use the prefixed name (e.g. `main_tasks`).
 - `jsql/catalog.go` is the whole public API in one file: every exported function/method is a thin wrapper over a private implementation elsewhere in the package, grouped into numbered sections. New public API goes there (and `TestCatalog` checks the sections). `jsql/spec.md` is the formal spec with a numbered gap list ("brechas", e.g. B8); `feature.md` is its source.
@@ -146,7 +146,7 @@ wf.NewFlow("add", "add item", "1.0.0", ownerId, userId).
 result, err := wf.Run("add", "add", reg.GetULID(""), "", et.Json{}, et.Json{}, true, userId)
 ```
 
-- **`params` in a step script is a goja dynamic object** (2026-10-11, `paramsObject` in `jwf/wrapper.go`): `params.email` reads and `params.x = …` writes `Step.Params`, `JSON.stringify(params)`/`Object.keys(params)` list the params, and the methods (`str`, `int`, `get`, `set`, `json`…) still work — a method hides a param with the same name (read it with `params.get("str")`). Passed to Go (`console.debug(params)`, an `et.Json` argument) it shows its values (`String`/`MarshalJSON`). It is built per run through `jwf.Binder` (`func(vm *goja.Runtime) goja.Value`): a binding of that type is called by `RunCode` with the runtime instead of being set as is.
+- **`params` and `ctx` in a script are goja dynamic objects** (2026-10-11, `jsonObject` + `jsonMethods` + `jsonBinder` in `jwf/wrapper.go`, over `Step.Params` and `Instance.Ctx`): `ctx.user.name` reads and `ctx.total = …` writes, `JSON.stringify(ctx)`/`Object.keys(ctx)` list the keys, and the methods (`str`, `int`, `get`, `set`, `json`…) still work — a method hides a key with the same name (read it with `ctx.get("str")`). Values go out through `plainOf` (an `et.Json`, nested too, becomes `map[string]any`: goja would expose the named type with its methods and no keys), so a nested change (`ctx.user.name = …`) does not persist: reassign the top key or use `set`. Passed to Go (`console.debug(params)`, an `et.Json` argument) it shows its values (`String`/`MarshalJSON`). It is built per run through `jwf.Binder` (`func(vm *goja.Runtime) goja.Value`): a binding of that type is called by `RunCode` with the runtime instead of being set as is.
 - **Console output** (2026-10-11, `jwf/console.go`): `consoleOf(prefix, emit)` builds the `console` binding (`log`, `debug`, `info`, `warn`, `error`; each argument a string as is or json) that writes to the server log and, with `emit`, sends a line `{level, message, at}` (message cut at `MAX_LOG_MESSAGE`, 4096). `Instance.OnLog(fn)` gets the lines of every step of the instance (with `step_id`, `instance_id`); `Step.OnLog(fn)` the lines of a step run alone (`RunScript(nil, …)`, a Test: it sets its own `console` then). `RunScript` returns the instance `Ctx` when it has one and, alone, the completion value of the scripts (the last expression, `RunScripts` → `RunCode`) when it is an object (`objectOf`: a JS object exports as `map[string]any`); anything else gives `{}`.
 - First `Step` becomes a trigger; the next ones chain through output connections. `Flow.Error(...)` attaches an error-port step to the last step. A step runs a Go `fnStep` or a JS script (`RunCode`/`RunScripts`, goja, with `cache`/`fetch` bindings from `wrapper.go`).
 - Instances are stored in Redis under `instance:<id>` (`cache.SetObject`, no TTL); `GetInstance` loads one or creates it, `RunInstance` runs it, `StopInstance(id)` sets `instance:<id>:stop` for `TimeAwait`. `Run` returns only the result ctx: pass your own id to read the instance afterwards. Status: `CREATED`, `PENDING`, `RUNNING`, `ROLLBACK`, `DONE`, `FAILED`, `CANCEL`, `COMPLETED`.
@@ -182,7 +182,7 @@ func (s *T) HttpFoo(w http.ResponseWriter, r *http.Request) {
 
 | Package | Variables |
 | --- | --- |
-| `jsql` | `DB_DRIVER`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_TENANT_ID` (`tenant:root`), `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_CONN_LIFETIME`, `DB_POOL_CONN_IDLE_TIME`, `DB_RECORD_LIMIT` |
+| `jsql` | `DB_DRIVER`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_RECORD_LIMIT`, `DB_IS_DEBUG`, `DB_APP_NAME`, `DB_SSLMODE` (postgres), `DB_SSL`/`DB_SSL_VERIFY` (oracle); `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_LIFETIME`, `DB_POOL_IDLE_TIME` are read only for sqlite (brecha B13) |
 | `cache` | `REDIS_HOST`, `REDIS_PASSWORD`, `REDIS_DB` |
 | `event` | `NATS_HOST`, `NATS_USER`, `NATS_PASSWORD` |
 | `graph` | `NEO4J_HOST`, `NEO4J_USER`, `NEO4J_PASSWORD` |
@@ -221,7 +221,7 @@ func (s *T) HttpFoo(w http.ResponseWriter, r *http.Request) {
 ## Cambios del 2026-10-11 (código)
 
 - `validator`: `ByJson`/`ToJson`; los mensajes `MSG_VALIDATOR_MIN|MAX|BETWEEN|MIN_LENGTH|MAX_LENGTH` usan `%v` (con `%s` salían `%!s(float64=18)`).
-- `jwf`: `Binder` y `params` como objeto dinámico; `console` con `OnLog` en `Instance` y `Step` y el nivel `warn`, y `console.error` acepta varios argumentos; `Step.RunScript` sin instancia devuelve el último valor de los scripts si es un objeto (`objectOf`) (ver «`jwf/`»).
+- `jwf`: `Binder` y `params` y `ctx` como objetos dinámicos (`jsonObject`); `console` con `OnLog` en `Instance` y `Step` y el nivel `warn`, y `console.error` acepta varios argumentos; `Step.RunScript` sin instancia devuelve el último valor de los scripts si es un objeto (`objectOf`) (ver «`jwf/`»).
 - **`router` rate limit, pendiente**: `rateLimitMiddleware` cuenta por `MÉTODO:ruta` con `cache.Incr(key, 1s)`, y `IncrCtx` solo pone el vencimiento cuando el contador nace (`result == 1`). Si ese `Expire` falla una vez, la clave queda sin TTL, sigue sumando y al pasar `LimitRate` (1000) la ruta responde 429 para siempre (pasó con `POST:/api/tenancy/steps/query` en core-studio; se arregló borrando la clave en Redis). Falta hacerlo atómico (`INCR` + `EXPIRE … NX` en un pipeline) o reponer el TTL cuando es -1.
 
 ## Cambios del 2026-10-11 (documentación)
@@ -231,3 +231,5 @@ func (s *T) HttpFoo(w http.ResponseWriter, r *http.Request) {
 - Todos los `.md` salvo `README.md` (y `CLAUDE.md`) pasaron a `doc/`. `doc/README.es.md` es ahora una traducción completa de `README.md`; `version.sh` actualiza la versión en ambos.
 - Se eliminó `AUDITLOG.md` (describía `onSave`/`onDelete`/`store` en `jwf`, que ya no existen).
 - `cmd/install` copia `doc/LIBRARY_CONTEXT.md`; el skill `lib-ctx-gen` genera sus cuatro archivos en `doc/`.
+- README (en/es): ejemplos de `validator.ByJson` y `jwf` `Instance.OnLog` (verificados con `go vet`); tabla de variables de `jsql` corregida desde el código.
+- `jsql/spec.md` §10 (variables corregidas: pool `DB_POOL_LIFETIME`/`DB_POOL_IDLE_TIME`, `DB_SSLMODE`, `DB_APP_NAME`, sin `DB_TENANT_ID`) y §12 recalculado con la batería del 2026-10-11 (sqlite y postgres: 100/103; sin cambios en B3–B12); nueva B13 (el pool solo se configura en sqlite).

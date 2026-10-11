@@ -397,16 +397,18 @@ type Driver interface {
 
 `jsql.Load()` (base `DB_NAME`) o `jsql.LoadTo(dbName, hostName...)` leen el entorno con `envar`; `jsql.ConnectTo(ConnectParams)` recibe los parámetros explícitos.
 
-| Variable                                                                                  | Uso                                                                   | Defecto                  |
-| ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------ |
-| `DB_DRIVER`                                                                               | Driver: `postgres`, `sqlite`, `oracle`, `mysql` o `mssql`             | `postgres`               |
-| `DB_HOST`, `DB_PORT`                                                                      | Servidor                                                              | `localhost`, 5432 / 1521 |
-| `DB_USER`, `DB_PASSWORD`, `DB_NAME`                                                       | Credenciales y base (en Oracle, el _service name_, p. ej. `FREEPDB1`) | — / `josephine`          |
-| `DB_SSL`, `DB_SSL_VERIFY`                                                                 | TLS (oracle)                                                          | `false`, `true`          |
-| `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_CONN_LIFETIME`, `DB_POOL_CONN_IDLE_TIME` | Pool                                                                  | driver                   |
-| `DB_RECORD_LIMIT`                                                                         | Límite de filas por consulta                                          | 1000                     |
-| `DB_IS_DEBUG`                                                                             | Registra el SQL generado                                              | `false`                  |
-| `MAX_AUDIT_LOG`                                                                           | Entradas de auditoría por modelo                                      | 1000                     |
+| Variable | Uso | Defecto |
+| --- | --- | --- |
+| `DB_DRIVER` | Driver: `postgres`, `sqlite`, `oracle`, `mysql` o `mssql` | `postgres` |
+| `DB_HOST`, `DB_PORT` | Servidor | `localhost`; 5432 (postgres), 1521 (oracle), 3306 (mysql), 1433 (mssql) |
+| `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Credenciales y base (en Oracle, el _service name_, p. ej. `FREEPDB1`; en sqlite, el archivo) | `test` (`root` mysql, `sa` mssql) / `josephine` (`josephine.db` sqlite) |
+| `DB_SSLMODE` | TLS (postgres) | `disable` |
+| `DB_SSL`, `DB_SSL_VERIFY` | TLS (oracle) | `false`, `true` |
+| `DB_APP_NAME` | Nombre de la aplicación en la conexión (postgres, sqlite) | `josephine` |
+| `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_LIFETIME`, `DB_POOL_IDLE_TIME` | Pool; hoy solo los lee la conexión sqlite (brecha B13) | 10 |
+| `DB_RECORD_LIMIT` | Límite de filas por consulta | 1000 |
+| `DB_IS_DEBUG` | Registra el SQL generado | `false` |
+| `MAX_AUDIT_LOG` | Entradas de auditoría por modelo | 1000 |
 
 ## 11. Utilidades
 
@@ -416,7 +418,7 @@ type Driver interface {
 
 ## 12. Brechas entre la especificación y el código
 
-Revisado el 2026-10-10 contra el código y la batería de `jsql/drivers/test` (`go test -count=1 -v .`):
+Revisado el 2026-10-11 contra el código y la batería de `jsql/drivers/test` (`go test -count=1 -v .`). Desde el 2026-10-10 no cambió el código de `jsql`; solo se regeneraron `result/*`.
 
 | Batería | sqlite | postgres | oracle | mysql | mssql |
 | --- | --- | --- | --- | --- | --- |
@@ -425,29 +427,33 @@ Revisado el 2026-10-10 contra el código y la batería de `jsql/drivers/test` (`
 | `TestWrapper` | falla (1) | falla (1) | — | — | — |
 | `TestCreateDropDB` | pendiente | pasa | pendiente | pendiente | pendiente |
 
-El caso omitido es `Load`/`LoadTo`, que lee el entorno. Oracle y MySQL pasaron completos por última vez el 2026-09-27; **SQL Server nunca se ha corrido**. `go build ./...` y `go vet ./...` pasan.
+Los dos fallos de `TestCatalog` son B9 y B10; el de `TestWrapper`, B11. El caso omitido es `Load`/`LoadTo`, que lee el entorno. Oracle y MySQL pasaron completos por última vez el 2026-09-27; **SQL Server nunca se ha corrido**. `go build ./...` y `go vet ./...` pasan.
 
 **Cumple:** cláusulas de consulta, `SourceField` en insert/update/where/select, `RETURNING` en los tres comandos, `hiddens`, relaciones (detail, master, rollup), campos calculados (Go y JS), triggers en Go y en JS, `limit` de update/delete/upsert (1000 por defecto, `0` = todas), `upsert` con `where` obligatorio, `bulk`, `define` en JSON, campos únicos, `OmitUpdates`, series y `TestConnection`.
 
-**Cerrada desde la revisión anterior:** B6 (el error de un modelo en varios esquemas ahora es `MSG_FROM_IN_MANY_SCHEMAS`).
+**Sin cambios desde la revisión anterior:** B3, B4, B5, B7, B8, B9, B10, B11 y B12 siguen abiertas. **Nueva:** B13 (pool configurable solo en sqlite). La §10 se corrigió: las variables de pool son `DB_POOL_LIFETIME` / `DB_POOL_IDLE_TIME` (no `DB_POOL_CONN_*`) y se agregaron `DB_SSLMODE` y `DB_APP_NAME`.
+
+**Brecha:** 10 abiertas (0 altas, 5 medias, 5 bajas). En la batería, 2 de 103 casos de `TestCatalog` fallan en cada motor disponible (98 % de cumplimiento) y 3 de 5 motores no se probaron hoy.
 
 | #   | Especificación | Código actual | Ubicación | Impacto |
 | --- | --- | --- | --- | --- |
 | B3  | La clave de maestros en `Define` (JSON) es `masters`, como `details` y `rollups`. | La etiqueta es `json:"master"` (singular). | `define.go:74` | Bajo |
 | B4  | Driver `mssql` completo (§9). | Genera SQL, pero nunca se ha corrido contra un SQL Server en la batería. | `drivers/mssql` | Medio |
-| B5  | Driver para varios motores. | `josefina` es solo una constante, sin implementación. | `drivers/` | Bajo |
+| B5  | Driver para varios motores. | `josefina` es solo una constante, sin implementación. | `driver.go:15` | Bajo |
 | B7  | Probar sin efectos laterales. | `TestCatalog` reescribe `result/*.json`, `result/*.sql` y `result/summary.md` en cada corrida; el resumen pierde los motores no disponibles. | `drivers/test/catalog_test.go` | Bajo |
-| B8  | `CreateDB` / `DropDB` probados en todos los drivers (§9). | `TestCreateDropDB` solo corre contra postgres; los demás se omiten como pendientes (`createDBDrivers`). | `drivers/test/createdb_test.go` | Medio |
+| B8  | `CreateDB` / `DropDB` probados en todos los drivers (§9). | `TestCreateDropDB` solo corre contra postgres; los demás se omiten como pendientes (`createDBDrivers`). | `drivers/test/createdb_test.go:16` | Medio |
 | B9  | `LoadDb(def)` reconstruye una `DB` desde su `ToJson` (§10). | Entra en pánico (puntero nulo): `loadDb` solo hace `json.Unmarshal` y `schema.up`, sin driver ni conexión. Falla en sqlite y postgres. | `db.go:84` (`loadDb`) | Medio |
-| B10 | La auditoría del modelo se expone en `ToJson()` como lista `audit_log`. | `Model.AuditLog` es `*et.SafeData` y se serializa como objeto `{data: [...]}`; `Array("audit_log")` sale vacío. Falla el caso «OnAuditLog + Model.AddAuditLog». | `model.go:218`, `Model.toJson` | Bajo |
-| B11 | `jsql.d.ts` y la batería describen la misma API de `Wrapper` (§11). | Todas las conexiones tienen `ID()`, así que `wrapConnection` expone `conn.id` también en sqlite y postgres; `TestWrapper` espera `undefined` y `jsql.d.ts` dice «oracle, mysql and mssql only». | `wrapper.go:231`, `jsql.d.ts:212`, `drivers/test/wrapper_test.go:186` | Bajo |
-| B12 | Sin esquema, la tabla es `nombre` (§9). | `DB.define` rechaza un `Schema` vacío con `MSG_SCHEMA_REQUIRED`. En sqlite las tablas pasaron de `nombre` a `schema_nombre` (v1.0.36): las bases sqlite existentes deben renombrar sus tablas. | `db.go:433` | Medio |
+| B10 | La auditoría del modelo se expone en `ToJson()` como lista `audit_log`. | `Model.AuditLog` es `*et.SafeData` y se serializa como objeto `{data: [...]}`; `Array("audit_log")` sale vacío. Falla el caso «OnAuditLog + Model.AddAuditLog». | `model.go:63`, `Model.toJson` (`model.go:251`) | Bajo |
+| B11 | `jsql.d.ts` y la batería describen la misma API de `Wrapper` (§11). | Todas las conexiones tienen `ID()`, así que `wrapConnection` expone `conn.id` (una función) también en sqlite y postgres; `TestWrapper` espera `undefined` y `jsql.d.ts` dice «oracle, mysql and mssql only». | `wrapper.go:232`, `jsql.d.ts:210`, `drivers/test/wrapper_test.go:186` | Bajo |
+| B12 | Sin esquema, la tabla es `nombre` (§9). | `DB.define` rechaza un `Schema` vacío con `MSG_SCHEMA_REQUIRED`. En sqlite las tablas pasaron de `nombre` a `schema_nombre` (v1.0.36): las bases sqlite existentes deben renombrar sus tablas. | `db.go:434` | Medio |
+| B13 | El pool se configura con `DB_POOL_*` en todos los drivers (§10). | Solo `sqliteConection` lee `DB_POOL_*`; postgres y oracle usan `pool_max_open` 3, `pool_max_idle` 1, `pool_lifetime` 30 y `pool_idle_time` 2 fijos (mysql y mssql igual), porque sus `GetParams` no llevan claves de pool. | `conection.go:160`, `drivers/postgres/connect.go:135` | Medio |
 
 ### Orden recomendado
 
 1. **B9** y **B10:** son regresiones que hoy rompen la batería en todos los motores.
 2. **B11:** decidir si `id` se expone en todos los drivers y alinear `jsql.d.ts` y `TestWrapper`.
-3. **B12:** o aceptar un esquema vacío (tabla `nombre`) o corregir §9 y documentar la migración de sqlite.
-4. **B3**, **B7:** aceptar `masters` (y `master` por compatibilidad); un modo de la batería que no escriba resultados.
-5. **B4** y **B8:** correr la batería y `TestCreateDropDB` contra SQL Server, MySQL, Oracle y sqlite.
-6. **B5:** fuera de alcance hasta que `josefina` tenga su protocolo estable.
+3. **B13:** leer `DB_POOL_*` en las cinco conexiones y pasarlas en `GetParams`.
+4. **B12:** o aceptar un esquema vacío (tabla `nombre`) o corregir §9 y documentar la migración de sqlite.
+5. **B3**, **B7:** aceptar `masters` (y `master` por compatibilidad); un modo de la batería que no escriba resultados.
+6. **B4** y **B8:** correr la batería y `TestCreateDropDB` contra SQL Server, MySQL, Oracle y sqlite.
+7. **B5:** fuera de alcance hasta que `josefina` tenga su protocolo estable.

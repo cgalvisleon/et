@@ -215,6 +215,18 @@ ok, err := validator.New().
     Validate(body)
 ```
 
+The same rules can come from JSON (`ByJson`) and be saved back with `ToJson`. An unknown condition or an invalid pattern returns an error.
+
+```go
+v, err := validator.New().ByJson(et.Json{
+    "fields": et.Json{
+        "email": et.Json{"required": true, "is_email": true},
+        "age":   et.Json{"min": 18, "max": 120},
+    },
+})
+ok, err := v.Validate(body)
+```
+
 ### Batching queue
 
 The handler runs when `maxEvents` items gather or `period` elapses; `Close()` flushes.
@@ -238,6 +250,14 @@ wf.NewFlow("signup", "Sign up", "1.0.0", ownerId, userId).
     Step("signup", "send welcome", sendWelcome)
 
 result, err := wf.Run("signup", "signup", "", "", et.Json{"email": "ana@x.com"}, et.Json{}, true, userId)
+```
+
+`OnLog` receives each `console` line of the JavaScript steps: `{level, message, at, step_id, instance_id}`.
+
+```go
+instance, _ := wf.GetInstance("signup", "signup", "", "", et.Json{}, userId)
+instance.OnLog(func(line et.Json) { logs.Info(line.ToString()) })
+result, err := wf.RunInstance(instance, et.Json{"email": "ana@x.com"}, et.Json{}, true, userId)
 ```
 
 ### Crontab
@@ -264,7 +284,7 @@ answer, _ := rag.Ask(ctx, tenantId, projectId, conversationId, userId, "How do I
 
 | Package | Variables |
 | --- | --- |
-| `jsql` | `DB_DRIVER`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_TENANT_ID`, `DB_POOL_*`, `DB_RECORD_LIMIT` (1000), `DB_SSL`, `DB_SSL_VERIFY` |
+| `jsql` | `DB_DRIVER` (`postgres`), `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_RECORD_LIMIT` (1000), `DB_IS_DEBUG`, `DB_APP_NAME`; postgres `DB_SSLMODE`; oracle `DB_SSL`, `DB_SSL_VERIFY`; sqlite only `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_LIFETIME`, `DB_POOL_IDLE_TIME` |
 | `cache` | `REDIS_HOST`, `REDIS_PASSWORD`, `REDIS_DB` |
 | `event` | `NATS_HOST`, `NATS_USER`, `NATS_PASSWORD` |
 | `graph` | `NEO4J_HOST`, `NEO4J_USER`, `NEO4J_PASSWORD` |

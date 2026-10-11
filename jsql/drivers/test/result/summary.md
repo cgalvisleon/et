@@ -4,8 +4,8 @@ Generado por `go test -run TestCatalog` en `jsql/drivers/test`. El detalle de ca
 
 | Driver | Pasan | Fallan | Brechas | Omitidos |
 |---|---|---|---|---|
-| sqlite | 101 | 1 | 0 | 1 |
-| postgres | 101 | 1 | 0 | 1 |
+| sqlite | 100 | 2 | 0 | 1 |
+| postgres | 100 | 2 | 0 | 1 |
 | oracle | no disponible | | | |
 | mysql | no disponible | | | |
 | mssql | no disponible | | | |
@@ -156,7 +156,7 @@ Generado por `go test -run TestCatalog` en `jsql/drivers/test`. El detalle de ca
 
 | Caso | sqlite | postgres | oracle | mysql | mssql |
 |---|---|---|---|---|---|
-| OnAuditLog + Model.AddAuditLog + AddAuditLog | ✅ | ✅ | — | — | — |
+| OnAuditLog + Model.AddAuditLog + AddAuditLog | ❌ | ❌ | — | — | — |
 
 ## 11. Utilidades
 

@@ -338,11 +338,13 @@ El driver recibe un `Model` para el DDL, un `Query` para el SQL de consulta y un
 
 ```go
 type Driver interface {
+	UseSchema() bool                                                    // true: tabla schema.nombre; false: schema_nombre
 	CreateDB(connection *ConnectParams, timeout ...time.Duration) error // crea la base de la conexión si no existe
 	DropDB(db *DB, timeout ...time.Duration) error                      // elimina la base de los params si existe
 	Connect(db *DB, timeout ...time.Duration) (*sql.DB, error)
 	ExistModel(db *sql.DB, model *Model, timeout ...time.Duration) (bool, error)
 	Load(model *Model, timeout ...time.Duration) (string, error)        // DDL: tablas y sus elementos
+	Drop(model *Model, timeout ...time.Duration) error                  // elimina la tabla del modelo
 	Query(query *Query, timeout ...time.Duration) (string, error)       // SQL de consulta
 	Command(command *Command, timeout ...time.Duration) (string, error) // SQL de comando: INSERT, UPDATE, DELETE
 }
@@ -353,7 +355,7 @@ type Driver interface {
 - **Timeout:** cada método recibe un `timeout` opcional y el driver arma su contexto con `jsql.TimeoutContext(timeout...)`: sin timeout o con `0` no hay límite, así que la operación nunca falla por timeout; con un valor mayor falla con `context.DeadlineExceeded` al vencerse. El núcleo pasa el `Timeout` de `ConnectParams` (`DB.timeout`). `Load`, `Query` y `Command` solo generan SQL y no lo usan.
 - `CreateDB` y `DropDB` (expuestos como `jsql.CreateDB(connection, timeout...)` y `jsql.DropDB(db, timeout...)`, que antes cierra el pool) son idempotentes. En postgres, mysql y mssql crean/eliminan la base `database` desde la base del servidor (`postgres`, sin base, `master`), y `Connect` usa `CreateDB`; en sqlite crean/borran el archivo (con sus `-wal` y `-shm`); en oracle el servicio no se crea ni se elimina desde una conexión: `CreateDB` solo comprueba que responde y `DropDB` devuelve `MSG_DRIVER_CANNOT_DROP_DB`. Solo postgres está probado (brecha B8).
 - **Nombre de tabla** (`Model.Table`): lo asigna el núcleo al crear el modelo y en `Model.Init`, según `Driver.UseSchema()`. Con esquemas (postgres, mssql) es `schema.nombre`; sin ellos (sqlite, mysql, oracle) es `schema_nombre`, en la base o el usuario de la conexión; sin esquema, `nombre`. Los drivers arman el SQL con `Table` (`From.Table`); mssql cita sus partes como `[schema].[nombre]`.
-- La conexión se describe con `jsql.Connection` (`GetParams`, `SetDatabase`, `GetDatabase`), creada según `DB_DRIVER` en `conection.go`.
+- La conexión se describe con `jsql.Connection` (`ID`, `SetId`, `GetParams`, `SetDatabase`, `GetDatabase`, `SetPassword`; los cinco drivers la implementan completa), creada según `DB_DRIVER` en `conection.go`.
 
 | Driver                           | Constante        | Estado                                                                 |
 | -------------------------------- | ---------------- | ---------------------------------------------------------------------- |
@@ -393,7 +395,7 @@ type Driver interface {
 
 ## 10. Conexión y configuración
 
-`jsql.Load()` (base `DB_NAME`) o `jsql.LoadTo(nombre, host...)` leen el entorno con `envar`; `jsql.ConnectTo(ConnectParams)` recibe los parámetros explícitos.
+`jsql.Load()` (base `DB_NAME`) o `jsql.LoadTo(dbName, hostName...)` leen el entorno con `envar`; `jsql.ConnectTo(ConnectParams)` recibe los parámetros explícitos.
 
 | Variable                                                                                  | Uso                                                                   | Defecto                  |
 | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------ |
@@ -414,23 +416,38 @@ type Driver interface {
 
 ## 12. Brechas entre la especificación y el código
 
-Revisado el 2026-09-28 contra el código y la batería `TestCatalog` (`jsql/drivers/test`), corrida ese día en una copia de `et`: **sqlite y postgres pasan 97 de 97** (1 omitido: `Load`/`LoadTo`, que lee el entorno). Oracle y MySQL pasaron 97 de 97 el 2026-09-27 y no estaban disponibles el 28; **SQL Server nunca se ha corrido** en la batería. `go build` y `go vet` de `jsql/...` pasan.
+Revisado el 2026-10-10 contra el código y la batería de `jsql/drivers/test` (`go test -count=1 -v .`):
 
-**Cumple:** cláusulas de consulta, `SourceField` en insert/update/where/select, `RETURNING` en los tres comandos, `hiddens`, relaciones (detail, master, rollup), campos calculados (Go y JS), triggers en Go y en JS, `limit` de update/delete/upsert (1000 por defecto, `0` = todas), `upsert` con `where` obligatorio, `bulk`, `define` en JSON, campos únicos, `OmitUpdates`, series y auditoría.
+| Batería | sqlite | postgres | oracle | mysql | mssql |
+| --- | --- | --- | --- | --- | --- |
+| `TestCatalog` (103 casos) | 100 pasan, 2 fallan, 1 omitido | 100 pasan, 2 fallan, 1 omitido | no disponible | no disponible | no disponible |
+| `TestInsertUpdate`, `TestJoinGroupHaving` | pasan | pasan | no disponible | no disponible | no disponible |
+| `TestWrapper` | falla (1) | falla (1) | — | — | — |
+| `TestCreateDropDB` | pendiente | pasa | pendiente | pendiente | pendiente |
 
-| #   | Especificación                                                                                                              | Código actual                                                                                                                                                                                                                                                                                     | Ubicación                                                                                     | Impacto  |
-| --- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | -------- |
-| B3  | La clave de maestros en `Define` (JSON) es `masters`, como `details` y `rollups`.                                           | La etiqueta es `json:"master"` (singular).                                                                                                                                                                                                                                                        | `define.go`                                                                                   | Bajo     |
-| B4  | Driver `mssql` completo (§9).                                                                                               | Genera SQL, pero no se ha corrido nunca contra un SQL Server en la batería.                                                                                                                                                                                                                       | `drivers/mssql`                                                                               | Medio    |
-| B5  | Driver para varios motores.                                                                                                 | `josefina` es solo una constante, sin implementación.                                                                                                                                                                                                                                             | `drivers/`                                                                                    | Bajo     |
-| B6  | Los mensajes de error son `MSG_*` de `msg.go`.                                                                              | `findModel` arma un error con texto fijo («exists in more than one schema»).                                                                                                                                                                                                                      | `jquery.go`                                                                                   | Bajo     |
-| B7  | Probar sin efectos laterales.                                                                                               | `TestCatalog` reescribe `result/*.json`, `result/*.sql` y `result/summary.md` en cada corrida; el resumen deja de reflejar los motores que no estaban disponibles.                                                                                                                                | `drivers/test/catalog_test.go`                                                                | Bajo     |
-| B8  | `CreateDB` / `DropDB` probados en todos los drivers (§9).                                                                   | `TestCreateDropDB` solo corre contra postgres (pasa, 2026-09-30); sqlite, oracle, mysql y mssql se omiten como pendientes (`createDBDrivers`). Su implementación compila pero nunca se ha ejecutado.                                                                                              | `drivers/test/createdb_test.go`, `drivers/{sqlite,oracle,mysql,mssql}/connect.go`             | Medio    |
+El caso omitido es `Load`/`LoadTo`, que lee el entorno. Oracle y MySQL pasaron completos por última vez el 2026-09-27; **SQL Server nunca se ha corrido**. `go build ./...` y `go vet ./...` pasan.
+
+**Cumple:** cláusulas de consulta, `SourceField` en insert/update/where/select, `RETURNING` en los tres comandos, `hiddens`, relaciones (detail, master, rollup), campos calculados (Go y JS), triggers en Go y en JS, `limit` de update/delete/upsert (1000 por defecto, `0` = todas), `upsert` con `where` obligatorio, `bulk`, `define` en JSON, campos únicos, `OmitUpdates`, series y `TestConnection`.
+
+**Cerrada desde la revisión anterior:** B6 (el error de un modelo en varios esquemas ahora es `MSG_FROM_IN_MANY_SCHEMAS`).
+
+| #   | Especificación | Código actual | Ubicación | Impacto |
+| --- | --- | --- | --- | --- |
+| B3  | La clave de maestros en `Define` (JSON) es `masters`, como `details` y `rollups`. | La etiqueta es `json:"master"` (singular). | `define.go:74` | Bajo |
+| B4  | Driver `mssql` completo (§9). | Genera SQL, pero nunca se ha corrido contra un SQL Server en la batería. | `drivers/mssql` | Medio |
+| B5  | Driver para varios motores. | `josefina` es solo una constante, sin implementación. | `drivers/` | Bajo |
+| B7  | Probar sin efectos laterales. | `TestCatalog` reescribe `result/*.json`, `result/*.sql` y `result/summary.md` en cada corrida; el resumen pierde los motores no disponibles. | `drivers/test/catalog_test.go` | Bajo |
+| B8  | `CreateDB` / `DropDB` probados en todos los drivers (§9). | `TestCreateDropDB` solo corre contra postgres; los demás se omiten como pendientes (`createDBDrivers`). | `drivers/test/createdb_test.go` | Medio |
+| B9  | `LoadDb(def)` reconstruye una `DB` desde su `ToJson` (§10). | Entra en pánico (puntero nulo): `loadDb` solo hace `json.Unmarshal` y `schema.up`, sin driver ni conexión. Falla en sqlite y postgres. | `db.go:84` (`loadDb`) | Medio |
+| B10 | La auditoría del modelo se expone en `ToJson()` como lista `audit_log`. | `Model.AuditLog` es `*et.SafeData` y se serializa como objeto `{data: [...]}`; `Array("audit_log")` sale vacío. Falla el caso «OnAuditLog + Model.AddAuditLog». | `model.go:218`, `Model.toJson` | Bajo |
+| B11 | `jsql.d.ts` y la batería describen la misma API de `Wrapper` (§11). | Todas las conexiones tienen `ID()`, así que `wrapConnection` expone `conn.id` también en sqlite y postgres; `TestWrapper` espera `undefined` y `jsql.d.ts` dice «oracle, mysql and mssql only». | `wrapper.go:231`, `jsql.d.ts:212`, `drivers/test/wrapper_test.go:186` | Bajo |
+| B12 | Sin esquema, la tabla es `nombre` (§9). | `DB.define` rechaza un `Schema` vacío con `MSG_SCHEMA_REQUIRED`. En sqlite las tablas pasaron de `nombre` a `schema_nombre` (v1.0.36): las bases sqlite existentes deben renombrar sus tablas. | `db.go:433` | Medio |
 
 ### Orden recomendado
 
-1. **B3:** aceptar `masters` (y `master` por compatibilidad) al leer el JSON.
-2. **B6** y **B7:** mensajes y un modo de la batería que no escriba resultados (por ejemplo, con una variable de entorno).
-3. **B4:** correr la batería contra un SQL Server 2022 (por ejemplo en Docker) antes de declarar el driver completo.
-4. **B8:** agregar cada driver a `createDBDrivers` en `createdb_test.go` y correr `TestCreateDropDB` contra él (sqlite no necesita servidor; en oracle el caso debe esperar el error de `DropDB`).
-5. **B5:** fuera de alcance hasta que `josefina` tenga su protocolo estable.
+1. **B9** y **B10:** son regresiones que hoy rompen la batería en todos los motores.
+2. **B11:** decidir si `id` se expone en todos los drivers y alinear `jsql.d.ts` y `TestWrapper`.
+3. **B12:** o aceptar un esquema vacío (tabla `nombre`) o corregir §9 y documentar la migración de sqlite.
+4. **B3**, **B7:** aceptar `masters` (y `master` por compatibilidad); un modo de la batería que no escriba resultados.
+5. **B4** y **B8:** correr la batería y `TestCreateDropDB` contra SQL Server, MySQL, Oracle y sqlite.
+6. **B5:** fuera de alcance hasta que `josefina` tenga su protocolo estable.

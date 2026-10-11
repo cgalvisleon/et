@@ -2,306 +2,301 @@
 
 > [Versión en español](README.es.md)
 
-Modular Go library for microservices, CLIs and web applications. Every directory is an independent package — import only what you need; there is no central entry point.
-
-- Module: `github.com/cgalvisleon/et` — Go 1.25 — MIT
-
 ## Installation
+
+Requires Go 1.25. Add the module and import only the packages you use:
 
 ```bash
 go get github.com/cgalvisleon/et@latest
-go get github.com/cgalvisleon/et@v1.0.35
+go get github.com/cgalvisleon/et@v1.0.36
 ```
 
 ```go
 import (
     "github.com/cgalvisleon/et/et"
     "github.com/cgalvisleon/et/jsql"
+    _ "github.com/cgalvisleon/et/jsql/drivers/postgres" // SQL drivers register themselves on import
 )
 ```
 
+## What it is
+
+A modular library for Go microservices, CLIs and web apps. Every directory is an independent package; there is no central entry point. Module `github.com/cgalvisleon/et`, MIT license.
+
+`et.Json` (`map[string]interface{}`) is the common currency: almost every API receives or returns it.
+
+Infrastructure packages (`cache`, `event`, `jsql`) read their configuration from environment variables and connect once in `Load()`; later calls are no-ops.
+
+## Upgrading to v1.0.36
+
+- `router.Publish` / `router.With` no longer prefix `Route.PackageName` onto `Route.Path`: put the full path in the route.
+- `jsql` models require a schema. On SQLite, MySQL and Oracle the table is `schema_name` (before, SQLite used the bare name), so existing SQLite databases need their tables renamed.
+- `cache.Get*` return `(value, exists, error)`; `cache.ErrNotFound` is gone.
+- `jwf.New(id)` takes only the id; flows are persisted through `OnChange`.
+- `router.Api.Public` / `Session` / `Protected` take `group` first.
+
 ## Packages
+
+Each table lists the main public API of every package. `go doc github.com/cgalvisleon/et/<package>` shows the full list.
 
 ### Core data
 
-| Package | Description |
-| --- | --- |
-| `et/` | Core types: `Json` (`map[string]interface{}` with typed accessors), `List`, `Item`, `Items`, `Condition`, `Field`, `Aggregate` |
-| `jsql/` | Database-agnostic SQL builder and ORM driven by JSON — see [SQL builder](#sql-builder-jsql) |
-| `stores/` | jsql-backed stores: instances, authorization (ACL), per-tenant config, form state |
-| `mem/`, `ephemeral/` | In-memory cache with expiration; short-lived data |
-| `dt/` | Data store on Redis (`PRODUCTION=true`) or files |
+| Package | Public API | Example |
+| --- | --- | --- |
+| `et` | `Json` (`Str`, `Int`, `Bool`, `Num`, `Time`, `Json`, `ArrayStr`, `ArrayJson`, `ValStr`, `ValInt`, `Set`, `Get`, `Update`, `Clone`, `ToString`, `ToObject`), `Item`, `Items`, `List`, conditions (`Eq`, `More`, `In`, `Between`, `ToCondition`), `From(items).Where(...).All()` | `data.ValStr("Cali", "user", "city")` |
+| `jsql` | `Load`, `LoadTo`, `ConnectTo`, `CreateDB`, `DropDB`, `TestConnection`; `DB.Define`, `DefineModel`, `Query`, `Sql`; `Model.Insert`, `Update`, `Upsert`, `Delete`, `Bulk`, `Select`, `Where`; `Query.All`, `One`, `Limit`, `Count`; `NewTx`, `DefineSeries` | `users.Where(jsql.Eq("id", id)).One()` |
+| `stores` | `DefineInstance` (`Set`, `Get`, `Delete`, `Query`), `DefineAuthorization` (`SetAuthor`, `Author`, `RemoveAuthor`), `DefineConfig` (`SetConfig`, `Get`), `DefineFormState` | `ok, _ := auth.Author(profileId, "GET", "/users")` |
+| `mem` | `Set`, `Get`, `GetStr`, `GetInt`, `GetJson`, `Delete`, `Exists`, `Keys`, `Clear` | `mem.Set("k", "v", time.Minute)` |
+| `ephemeral` | `NewInstance(expiration)`, `Set`, `Get`, `Del` | `e := ephemeral.NewInstance(time.Minute)` |
+| `dt` | `Up(key, data)`, `Get(key).Json()`, `GetObject`, `Drop` | `dt.Up("cfg", et.Json{"a": 1})` |
+| `race` | `NewValue(v)`, `Get`, `Set`, `Int`, `Increase`, `Map`, `Range` | `c := race.NewValue(0); c.Increase(1)` |
 
 ### HTTP and RPC
 
-| Package | Description |
-| --- | --- |
-| `server/` | Lightweight HTTP server on `chi` (no Redis/NATS) |
-| `ettp/v2/` | Full HTTP server/API gateway: `ettp.New(name, *Config)`; router state synced across replicas over NATS. `ettp/v1/` is the older version (proxy, token, cache) |
-| `router/` | Standalone router used by `ettp/v2` |
-| `middleware/` | CORS, authentication, logger, request ID, metrics, panic recovery |
-| `request/`, `response/` | Inbound helpers (`URLParam`, `GetBody`), outbound `Fetch`; unified responses (`ITEM`, `ITEMS`, `HTTPError`) |
-| `jrpc/` | Go `net/rpc` over TCP: `jrpc.Mount(host, port, services, packageName)` |
-| `jtcp/` | Distributed TCP node with Raft-style leader election, balancer and TLS |
-| `jws/` | WebSocket hub |
+| Package | Public API | Example |
+| --- | --- | --- |
+| `router` | `NewApi(name, path, host, port, rpc, version)`, `Api.Public`, `Protected`, `Session`, `Item`, `Items`, `List`, `UseAuthentication`, `UseAuthorization`, `UseLimitRate` | `api.Protected("users", router.GET, "/users/{id}", "Get user", api.Item(200, getUser))` |
+| `server` | `New(name, port)` → `Ettp` (`Mount`, `HandleFunc`, `Use`, `Start`, `Close`); `NewApi` | `srv := server.New("api", 3000); srv.Start()` |
+| `ettp/v2` | `New(name, *Config)` → `Server` (`Public`, `Private`, `SetRouter`, `Use`, `Start`, `Save`, `Reset`) | `ettp.New("gateway", &ettp.Config{Port: 3300})` |
+| `ettp/v1` | Older gateway: `New(*Config)`, `SetRouter`, `SetProxy`, `SetPortForward`, `PublicRoute`, `PrivateRoute` | — |
+| `middleware` | `Authentication`, `Logger`, `Recoverer`, `RequestID`, `AllowAll`, `GetBearerToken`, `NewMetric` | `r.Use(middleware.Logger)` |
+| `request` | Inbound: `GetBody`, `URLParam`, `Query`, `UserID`, `TenantID`; outbound: `Get`, `Post`, `Put`, `Delete`, `Fetch`, `…WithTimeout`, `…WithTls` | `body, status := request.Get(url, header)` |
+| `response` | `ITEM`, `ITEMS`, `LIST`, `JSON`, `RESULT`, `HTTPError`, `Unauthorized`, `Forbidden`, `Stream` | `response.ITEM(w, r, 200, item)` |
+| `jrpc` | `Mount(host, port, services, packageName)`, `Start`, `Call`, `CallJson`, `CallItem`, `CallItems` | `jrpc.CallJson("Users.Get", et.Json{"id": id})` |
+| `jtcp` | `NewNode(port, tls...)` (`Mount`, `Start`, `Request`, `Broadcast`, `LeaderID`), `NewClient(addr)` (`Start`, `Request`, `Send`), TLS helpers | `node := jtcp.NewNode(1377); node.Start()` |
+| `jws` | `New()` → `Hub` (`Start`, `Connect`, `Subscribe`, `Publish`, `SendTo`, `Topic`, `Queue`), `Upgrader` | `hub.Publish("orders", msg)` |
 
 ### Infrastructure
 
-| Package | Description |
-| --- | --- |
-| `cache/` | Redis client (`Set`, `Get`, `Delete`, collections, Pub/Sub) |
-| `event/` | Pub/Sub over NATS (`Publish`, `Subscribe`, `Stack`) |
-| `graph/` | Neo4j connectivity |
-| `queue/` | Generic batching queue: `queue.New[T](size, maxEvents, period, handler)` |
-| `crontab/` | Event-driven cron and one-shot jobs |
-| `resilience/` | Retries with attempts and interval (used by `jwf`) |
+| Package | Public API | Example |
+| --- | --- | --- |
+| `cache` | `Load`, `Set`, `Get`, `GetStr`, `GetInt`, `GetJson`, `GetObject`, `SetObject`, `Delete`, `DeleteByPrefix`, `Incr`, `Exists`, `Expire`, `LPush`, `LRange`, `ObjetSet`/`ObjetGet`, `CollectionPut`/`CollectionFind` | `v, ok, err := cache.Get("key", "")` |
+| `event` | `Load`, `Publish`, `Subscribe`, `Queue`, `Stack`, `Source`, `On`, `Unsubscribe`, `Close` | `event.Publish("user:created", data)` |
+| `graph` | `Load()` → `Conn` (`HealthCheck`, `Close`) | `conn, _ := graph.Load()` |
+| `queue` | `New[T](size, maxEvents, period, handler)`, `Push`, `Len`, `Close` | `q.Push(item)` |
+| `crontab` | `Load(tag, store)`, `CronJob`, `ScheduleJob`, `HttpStartJob`, `HttpStopJob`, `HttpRemoveJob` | `crontab.CronJob(tag, owner, crontab.Cron{Minute: "0"}, 0, nil, fn)` |
+| `resilience` | `New()`, `LoadInstance(Params)`, `Instance.Run`, `IsDone`, `IsFailed`, `Stop` | `inst, _ := r.LoadInstance(resilience.Params{Fn: send, TotalAttempts: 3})` |
 
 ### Security
 
-| Package | Description |
-| --- | --- |
-| `jwt/` | Tokens (`NewToken`, `NewAuthentication`, `NewAuthorization`, `Validate`) stored in `cache` |
-| `claim/` | JWT claims, HS256 signing with `SECRET` |
-| `service/` | OTP by email/SMS |
+| Package | Public API | Example |
+| --- | --- | --- |
+| `jwt` | `NewToken`, `NewAuthentication`, `NewAuthorization`, `NewAppToken`, `NewEphemeralToken`, `Validate`, `RenewToken`, `DeleteToken` | `claim, err := jwt.Validate(token)` |
+| `claim` | `NewToken`, `NewAuthenticationToken`, `ParceToken`, `Claim.ToJson` | `c, _ := claim.ParceToken(token)` |
+| `service` | `LoadSend(tenantId, name, email)` → `Send` (`SendOTPEmail`, `SendOTPSMS`, `VerifyOTP`, `SendEmail`, `SendSMS`, `SendWhatsapp`); `LoadLocalStorage` | `ok, _ := send.VerifyOTP(key, otp)` |
+| `utility` | `Hash`/`Match` (bcrypt), `EncryptAES`/`DecryptAES`, `HashSHA256`, `GetOTP`, `ValidEmail`, `ValidPhone`, `ToBase64` | `h, _ := utility.Hash(password)` |
 
 ### Scripting, workflows and AI
 
-| Package | Description |
-| --- | --- |
-| `jrex/` | Embedded JavaScript runtime (goja) with hot-reload |
-| `jwf/` | Workflow engine: flows, steps (Go or JS), instances, retries and error routes |
-| `jia/` | OpenAI agents: agents, participants, conversations, skills |
-| `ia/` | Multitenant RAG: ingest files/SQL, embeddings, `Ask` |
+| Package | Public API | Example |
+| --- | --- | --- |
+| `jrex` | `Load(tag, store)` → `Jrex` (`Set`, `Run`, `RunDev`, `RunModule`, `NewModule`); `NewInstance`, `NewStore` | `rt.Set("db", db).Run()` |
+| `jwf` | `New(id)` → `WorkFlow` (`NewFlow`, `Run`, `GetInstance`, `RunInstance`, `StopInstance`, `OnChange`); `Flow.Step`, `Error`, `AddStep`; `LoadFlow`, `RunCode` | `wf.Run("signup", "signup", "", "", ctx, nil, true, userId)` |
+| `jia` | `New(tag, store, userId)`, `Load(id, store)` → `Ia` (`SetModelAgent`, `SetContextAgent`, `SetSkillAgent`, `Conversation`, `Embed`, `LoadRouter`); `NewApiSkill` | `conv, _ := ai.Conversation(ctx, "support", to, name, prompt)` |
+| `ia` | `Load(db, schema, Config)` → `Rag` (`IngestFile`, `IngestSQL`, `Ask`, `ListDocuments`, `DeleteDocument`, `ListMessages`, `LoadRouter`) | `rag.Ask(ctx, tenant, project, conv, user, "question")` |
+| `cmds` | `NewStage`, `NewStep`, `AppendCmd`, `RunOS`, `RunSSH`, `Load(file)` | `cmds.NewStep("build", "").AppendCmd("go build ./...")` |
 
 ### Messaging
 
-| Package | Description |
-| --- | --- |
-| `aws/` | S3, SES (email), SMS |
-| `brevo/` | Email, SMS and WhatsApp (transactional and promotional) |
-| `infobip/` | SMS, email and WhatsApp templates |
-| `jwsp/` | WhatsApp Graph API |
+| Package | Public API | Example |
+| --- | --- | --- |
+| `aws` | `NewS3AWS(Params)` (`Uploader`, `UploaderB64`, `UploaderFile`, `Download`, `Delete`), `NewSenderAWS(Params).SendSMS` | `s3.Uploader(bucket, name, "image/png", data)` |
+| `brevo` | `SendEmail…`, `SendSms…`, `SendWhatsapp…` (`Transactional` / `Promotional`) | `brevo.SendEmailTransactional(sender, to, subject, html, params)` |
+| `infobip` | `NewSenderInfobip(Params)` (`SendSMS`, `SendEmail`, `SendWhatsApp`) | `s.SendSMS([]string{"+57..."}, "Hi {{name}}", params, "Transactional")` |
+| `jwsp` | `NewSender(token, phoneId)` → `Whatsapp` (`SendTextMessage`, `SendTemplate`, `SendImageMessageByURL`, `SendDocumentByURL`, `SendList`, `Webhooks`) | `wa.SendTextMessage("57300...", "Hello")` |
 
 ### Utilities
 
-| Package | Description |
-| --- | --- |
-| `envar/` | Environment variables with defaults (`GetStr`, `GetInt`, …) and CLI args |
-| `logs/`, `stdrout/`, `color/` | Leveled, colorized logging |
-| `validator/` | Fluent validation (`Required`, `Min`, `Max`, `Pattern`, …) |
-| `reg/` | IDs: UUID, ULID, Snowflake, XID |
-| `xls/`, `csv/` | Read and write spreadsheets / CSV (file, multipart, HTTP) |
-| `file/` | File helpers and filesystem watcher |
-| `strs/`, `utility/` | String helpers; crypto, hashing, misc |
-| `timezone/`, `units/` | Time zones and dates; unit conversion |
-| `iterate/`, `race/`, `cmds/` | Iteration, race helpers, command/stage execution |
-| `msg/` | Shared message constants |
-| `create/`, `cmd/` | Project scaffolding templates; CLI binaries |
+| Package | Public API | Example |
+| --- | --- | --- |
+| `envar` | `GetStr`, `GetInt`, `GetInt64`, `GetBool`, `GetFloat`, `GetDuration`, `Set*`, `Arg*`, `Validate` | `port := envar.GetInt("PORT", 3000)` |
+| `logs` | `Info`, `Infof`, `Debug`, `Warn`, `Alert`, `Alertf`, `Error`, `Errorf`, `Fatal`, `Panic` | `logs.Errorf("failed: %v", err)` |
+| `stdrout`, `color` | `Printl`, `Traces`, `SetStdout`; `Red`, `Green`, `Yellow`, `Blue`… | `fmt.Println(color.Green("ok"))` |
+| `validator` | `New()`, `Field`, `Required`, `NotEmpty`, `Min`, `Max`, `Between`, `MinLength`, `MaxLength`, `Pattern`, `IsEmail`, `IsPhone`, `Validate` | `validator.New().Field("email").Required().IsEmail().Validate(body)` |
+| `reg` | `UUID`, `ULID`, `XID`, `GenSnowflake`, `GetUUID(id)`, `GenULID(tag)`, `TagULID` | `id := reg.GetULID("")` |
+| `strs` | `Format`, `Parse`, `Titlecase`, `Lowcase`, `RemoveAcents`, `Split`, `IsEmpty`, `HtmlToText` | `strs.Parse("Hi {{name}}", vars)` |
+| `timezone` | `Now`, `NowStr`, `Add`, `Format`, `Parse`, `Location` | `t := timezone.Now()` |
+| `units` | `NewQuantity(val, unit)`, `Load`, `To`, `ToStr` | `q.To(units.UnityKilometer)` |
+| `xls`, `csv` | `ReadXls*` / `ReadCsv*` (`GetSheet`, `GetData`, `GetRows`); `NewXls` / `NewCsv` (`ToFile`, `ToWriter`, `ToHttp`) | `csv.NewCsv(rows).ToHttp(w, "report.csv")` |
+| `file` | `Load[T]`, `Save`, `LoadOrSave[T]`, `MakeFile`, `MakeFolder`, `NewWatcher` (`OnWrite`, `OnCreate`, `Load`) | `file.Save("cfg.json", cfg)` |
+| `iterate` | `Start`, `Segment`, `End` (timings) | `iterate.Start("load")` |
+| `msg` | Shared message constants | — |
 
-## Core type: `et.Json`
+## Usage examples
 
-`et.Json` (`map[string]interface{}`) is the lingua franca of the library, with typed accessors, default values and nested key traversal:
+### `et.Json`
+
+Typed accessors walk nested keys; the `Val*` variants take a default.
 
 ```go
 data := et.Json{"user": et.Json{"name": "Ana", "age": 30}}
-name := data.Str("user", "name")        // "Ana"
-age  := data.Int("user", "age")         // 30
+name := data.Str("user", "name")            // "Ana"
+age := data.Int("user", "age")              // 30
 city := data.ValStr("Cali", "user", "city") // default when missing
 data.Set("active", true)
 ```
 
-`et.List` is the paginated result (`Rows`, `All`, `Count`, `Page`, `Start`, `End`, `Result []Json`); `et.Item` / `et.Items` wrap single and multiple results.
+### `jsql`: models and queries
 
-## Initialization pattern
-
-Infrastructure packages read their configuration from the environment and connect once; later calls are no-ops:
+A model creates its table on `Init()`. Keys without a column are stored in the JSON `_source` column and can be queried like any column.
 
 ```go
-cache.Load() // REDIS_HOST
-event.Load() // NATS_HOST
-```
-
-`ettp.New(name, config)` does **not** call them — the caller must.
-
-## SQL builder: `jsql/`
-
-SQL builder and ORM whose inputs are JSON structures. The public API is gathered in [`jsql/catalog.go`](jsql/catalog.go), grouped in 11 sections (connection, DDL, relations, queries, conditions, commands, triggers, transactions, series, audit, utilities). The behavior is specified in [`jsql/feature.md`](jsql/feature.md) and [`jsql/spec.md`](jsql/spec.md).
-
-**Drivers** — imported for their side effect:
-
-| Driver | Package | Notes |
-| --- | --- | --- |
-| PostgreSQL | `jsql/drivers/postgres` | JSONB `_source` |
-| SQLite | `jsql/drivers/sqlite` | `modernc.org/sqlite`, no CGO |
-| Oracle 19c+ | `jsql/drivers/oracle` | `go-ora`; JSON in CLOB, commands through PL/SQL blocks |
-| MySQL 8.0+ | `jsql/drivers/mysql` | `go-sql-driver/mysql`; JSON column, commands as batches; no `FULL JOIN` |
-| SQL Server 2022+ | `jsql/drivers/mssql` | `go-mssqldb`; JSON in `NVARCHAR(MAX)`, row JSON built by the driver |
-
-**`SourceField`** — a model can have a JSON column (`_source`): any value without a declared column is stored there as an attribute, and can be queried, updated (merged, keeping the other keys) and returned like a column, including nested paths `a->b->c`.
-
-```go
-import _ "github.com/cgalvisleon/et/jsql/drivers/postgres"
-
 db, _ := jsql.Load() // DB_DRIVER, DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
 
-// Model: id, status, created_at, updated_at, _source, _idx
-users, _ := db.DefineModel("public", "users", 1, userId)
+users, _ := db.DefineModel("public", "users", 1, userId) // id, status, created_at, updated_at, _source, _idx
 users.DefineColumn("name", et.TEXT, "")
 users.DefineUnique("email", et.TEXT, "")
-users.DefineAttrib("age", et.INT, 0) // stored in _source
 users.DefineHidden("password")
-users.Init() // creates the table if missing
+users.Init()
 
-// Commands return the affected rows (RETURNING)
-users.Insert(et.Json{"id": "u1", "name": "Ana", "email": "ana@x.com", "age": 30, "city": "Cali"}).One()
+users.Insert(et.Json{"id": "u1", "name": "Ana", "email": "ana@x.com", "city": "Cali"}).One()
 users.Update(et.Json{"addr->zip": "76001"}).Where(jsql.Eq("id", "u1")).One()
-users.Delete().Where(jsql.Eq("status", "archived")).Limit(0).Exec() // 0 = every matching row
-
-// Fluent queries
-items, _ := users.Select("id", "name", "city").
-    Where(jsql.More("age", 18)).
-    OrderBy("name", true).
-    Limit(1, 20) // page, rows
+items, _ := users.Select("id", "name", "city").Where(jsql.Eq("city", "Cali")).OrderBy("name", true).Limit(1, 20)
 ```
 
-**Queries in JSON** — on a model (`Model.Query`) or on the database (`DB.Query`), with SQL-like keys:
+Queries and commands can also be described in JSON:
 
 ```go
 items, _ := db.Query(et.Json{
-    "select":    []any{"U.name", "count(O.id):orders"},
-    "from":      "public.users:U",
+    "select":   []any{"U.name", "count(O.id):orders"},
+    "from":     "public.users:U",
     "left join": []any{et.Json{"to": "public.orders:O", "on": []any{et.Json{"O.user_id": et.Json{"eq": "U.id"}}}}},
-    "where":     []any{et.Json{"U.age": et.Json{"more": 18}}},
-    "group by":  []any{"U.name"},
-    "having":    []any{et.Json{"count(O.id)": et.Json{"more": 1}}},
-    "order by":  []any{et.Json{"U.name": true}},
-    "limit":     20,
+    "group by": []any{"U.name"},
+    "limit":    20,
 })
 ```
 
-**Commands in JSON** — `insert`, `bulk`, `update`, `delete` and `upsert`, with JS triggers:
+Drivers: `postgres`, `sqlite` (no CGO), `oracle` 19c+, `mysql` 8.0+ and `mssql` 2022+. The full behavior is in [`jsql/spec.md`](jsql/spec.md); the public API is gathered in [`jsql/catalog.go`](jsql/catalog.go).
+
+### HTTP API with `router`
 
 ```go
-db.Query(et.Json{"update": et.Json{
-    "from":          "public.users",
-    "data":          et.Json{"name": "Ana María"},
-    "where":         []any{et.Json{"id": et.Json{"eq": "u1"}}},
-    "limit":         100, // default: DB_RECORD_LIMIT, max 1000; 0 = all
-    "before_update": []any{`NEW.updated_by = "api";`},
-}})
+api := router.NewApi("users", "/api/users", "localhost", 3000, 4000, 1)
+api.UseAuthentication(middleware.Authentication)
+api.Public("version", router.GET, "/version", "Get the version", api.Item(http.StatusOK, getVersion))
+api.Protected("users", router.POST, "/query", "Query users", api.List(queryUsers))
+http.ListenAndServe(":3000", api.Router)
 ```
 
-**Other features**: joins (`inner`, `left`, `right`, `full`), aggregates and `having`; relations — details, masters (through a bridge model, 1-to-1 or 1-to-N) and rollups (`row`, `object`, `count`, `sum`, `avg`, `min`, `max`), resolved only when selected by name; calculated fields in Go (`DefineCalcFunc`) or JavaScript (`DefineCalc`); Go and JS triggers (`NEW` / `OLD`); unique fields validated with `ErrRecordAlreadyExists`; transactions (`NewTx`, `ExecTx`, `Commit`, `Rollback`); series (`DefineSeries`, `GenSerie`); `.Debug()` logs the SQL and `.Test()` generates it without running it.
-
-**Tests** — [`jsql/drivers/test`](jsql/drivers/test) runs the whole catalog against the five drivers and writes the results (status, output and SQL per case) to `jsql/drivers/test/result/`:
-
-```bash
-cd jsql/drivers/test && go test -v
-```
-
-SQLite runs in a temporary file; PostgreSQL uses the `DB_*` variables of the repository `.env`; Oracle, MySQL and SQL Server use `ORACLE_*`, `MYSQL_*` and `MSSQL_*`, with defaults for local containers (`gvenzl/oracle-free`, `mysql:8.4`, `mcr.microsoft.com/mssql/server:2022-latest`). A database that is not available is skipped.
-
-## Workflows: `jwf/`
+A plain handler uses `request` to read and `response` to write:
 
 ```go
-wf, _ := jwf.New(db, "", userId) // db *jsql.DB; also calls cache.Load() and event.Load()
-flow := wf.NewFloW("add", "add item", "1.0.0", userId).
-    Step("add", "step 1", func(instance *jwf.Instance, ctx et.Json) (et.Json, error) { return et.Json{}, nil }).
-    Step("add", "step 2", fn)
-result, err := wf.Run(flow.ID, "add", "", projectId, "", et.Json{}, et.Json{}, true, userId)
+func getUser(w http.ResponseWriter, r *http.Request) {
+    id := request.URLParam(r, "id").Str()
+    item, err := users.Where(jsql.Eq("id", id)).One()
+    if err != nil {
+        response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+        return
+    }
+    response.ITEM(w, r, http.StatusOK, item)
+}
 ```
 
-A step can also be a JavaScript body run through `jrex`. Failed steps retry through `resilience` and then follow the error connection.
+### Cache and events
 
-## Crontab
+`cache.Get` returns `(value, exists, error)`: a missing key is `def, false, nil`.
 
 ```go
-crontab.Load("my-service", store) // store implements crontab.Store
+cache.Load() // REDIS_HOST
+cache.Set("session:u1", "token", time.Hour)
+token, ok, _ := cache.Get("session:u1", "")
 
-crontab.CronJob("my-service", ownerId, crontab.Cron{Hour: "*", Minute: "0"}, 0, et.Json{"msg": "hello"},
-    func(params et.Json) error { logs.Info(params.ToString()); return nil })
-
-crontab.ScheduleJob("my-service", ownerId, time.Now().Add(time.Hour), et.Json{}, fn)
+event.Load() // NATS_HOST
+event.Subscribe("user:created", func(m event.Message) { logs.Info(m.ToString()) })
+event.Publish("user:created", et.Json{"id": "u1"})
 ```
 
-Jobs are event-driven; the HTTP handlers (`HttpStartJob`, `HttpStopJob`, `HttpRemoveJob`) publish control events.
-
-## JavaScript runtime: `jrex/`
+### Validation
 
 ```go
-rt, _ := jrex.Load("my-jrex", store) // nil store → files in ./src
-rt.Set("db", db)                      // inject Go bindings
-rt.Run()                              // or rt.RunDev() for hot-reload
+ok, err := validator.New().
+    Field("email").Required().IsEmail().
+    Field("age").Min(18).Max(120).
+    Validate(body)
 ```
 
-Scripts get `console`, `ctx`, `fetch` and `require`.
+### Batching queue
 
-## AI
+The handler runs when `maxEvents` items gather or `period` elapses; `Close()` flushes.
 
 ```go
-agent, _ := jia.New("support", store, userId) // OpenAI agents with conversations and skills
+q := queue.New[et.Json](1000, 100, 5*time.Second, func(ctx context.Context, batch []et.Json) error {
+    return save(batch)
+})
+q.Push(et.Json{"id": 1})
+defer q.Close()
+```
 
-rag, _ := ia.Load(db, "public", ia.Config{}) // RAG over jsql (tenant and project scoped)
+### Workflows with `jwf`
+
+`jwf.New` calls `cache.Load()` and `event.Load()`. The first step is the trigger; the next ones chain in order. Persist flows through `OnChange`.
+
+```go
+wf, _ := jwf.New("")
+wf.NewFlow("signup", "Sign up", "1.0.0", ownerId, userId).
+    Step("signup", "create user", func(i *jwf.Instance, ctx et.Json) (et.Json, error) { return ctx, nil }).
+    Step("signup", "send welcome", sendWelcome)
+
+result, err := wf.Run("signup", "signup", "", "", et.Json{"email": "ana@x.com"}, et.Json{}, true, userId)
+```
+
+### Crontab
+
+```go
+crontab.Load("billing", store) // store implements crontab.Store
+crontab.CronJob("billing", ownerId, crontab.Cron{Hour: "2", Minute: "0"}, 0, et.Json{},
+    func(params et.Json) error { return runBilling() })
+crontab.ScheduleJob("billing", ownerId, time.Now().Add(time.Hour), et.Json{}, fn)
+```
+
+### JavaScript runtime and AI
+
+```go
+rt, _ := jrex.Load("scripts", nil) // nil store → files in ./src
+rt.Set("db", jsql.Wrapper(db)).Run()
+
+rag, _ := ia.Load(db, "public", ia.Config{}) // OPENAI_API_KEY
 rag.IngestFile(ctx, tenantId, projectId, "manual.pdf", data, userId)
-answer, _ := rag.Ask(ctx, tenantId, projectId, conversationId, userId, "¿Cómo reinicio el router?")
-```
-
-Both require `OPENAI_API_KEY`.
-
-## Logging
-
-```go
-logs.Info("message")
-logs.Errorf("failed: %v", err)
-logs.Fatal(err) // calls os.Exit(1)
+answer, _ := rag.Ask(ctx, tenantId, projectId, conversationId, userId, "How do I reset the router?")
 ```
 
 ## Environment variables
 
-| Package | Variables | Purpose |
-| --- | --- | --- |
-| `jsql` | `DB_DRIVER` | `postgres`, `sqlite`, `oracle`, `mysql` or `mssql` |
-| `jsql` | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Connection (`DB_NAME` is the service name in Oracle) |
-| `jsql` | `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_CONN_LIFETIME`, `DB_POOL_CONN_IDLE_TIME` | Connection pool |
-| `jsql` | `DB_RECORD_LIMIT` | Rows per query and default rows per update/delete (1000) |
-| `jsql` | `DB_SSL`, `DB_SSL_VERIFY` | TLS (Oracle) |
-| `cache` | `REDIS_HOST`, `REDIS_PASSWORD`, `REDIS_DB` | Redis |
-| `event` | `NATS_HOST`, `NATS_USER`, `NATS_PASSWORD` | NATS |
-| `graph` | `NEO4J_HOST`, `NEO4J_USER`, `NEO4J_PASSWORD` | Neo4j |
-| `claim` | `SECRET` | JWT signing key (default `"1977"`) |
-| `jia`, `ia` | `OPENAI_API_KEY` | OpenAI |
-| `ia` | `IA_EMBEDDING_MODEL`, `IA_CHAT_MODEL`, `IA_CHUNK_SIZE`, `IA_CHUNK_OVERLAP`, `IA_TOP_K` | RAG settings |
-| `dt` | `PRODUCTION` | `true` stores in Redis |
-| `jwf`, `jsql` | `MAX_AUDIT_LOG` | Audit entries kept (1000) |
-| `jwsp` | `WHATSAPP_API_URL` | WhatsApp Graph API base URL |
-| `validator` | `LANG` | Message language |
+| Package | Variables |
+| --- | --- |
+| `jsql` | `DB_DRIVER`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_TENANT_ID`, `DB_POOL_*`, `DB_RECORD_LIMIT` (1000), `DB_SSL`, `DB_SSL_VERIFY` |
+| `cache` | `REDIS_HOST`, `REDIS_PASSWORD`, `REDIS_DB` |
+| `event` | `NATS_HOST`, `NATS_USER`, `NATS_PASSWORD` |
+| `graph` | `NEO4J_HOST`, `NEO4J_USER`, `NEO4J_PASSWORD` |
+| `claim` | `SECRET` (default `"1977"`) |
+| `jia`, `ia` | `OPENAI_API_KEY`; `ia` also `IA_EMBEDDING_MODEL`, `IA_CHAT_MODEL`, `IA_CHUNK_SIZE`, `IA_CHUNK_OVERLAP`, `IA_TOP_K` |
+| `dt` | `PRODUCTION` (`true` stores in Redis) |
+| `jwf`, `jsql` | `MAX_AUDIT_LOG` (1000) |
+| `jwsp` | `WHATSAPP_API_URL` |
+| `validator` | `LANG` |
 
 ## CLI binaries
 
 ```bash
-go run ./cmd/et          # main CLI (cobra)
 go run ./cmd/create      # scaffolding: project, microservice, model, rpc
 go run ./cmd/apigateway  # API gateway (ettp)
-go run ./cmd/daemon      # background service with systemd integration
-go run ./cmd/server      # TCP node (port 1377, -port flag); ./cmd/client to connect
+go run ./cmd/server      # TCP node (port 1377); ./cmd/client connects to it
 go run ./cmd/jrex        # JS runtime with hot-reload from ./cmd/jrex/src
-go run ./cmd/jsql        # jsql demo
 go run ./cmd/ia          # RAG HTTP API (PORT, default 3300)
 ```
 
-Also `cmd/install`, `cmd/whatcher`, `cmd/resilience`, `cmd/wsp` and `cmd/jwf`.
+Also `cmd/et`, `cmd/daemon`, `cmd/jsql`, `cmd/install`, `cmd/whatcher`, `cmd/resilience`, `cmd/wsp` and `cmd/jwf`.
 
 ## Development
 
 ```bash
-gofmt -w .                            # format
-go build ./... && go vet ./...        # compile and vet
-go test ./jwf/ -race                  # tests of one package
-cd jsql/drivers/test && go test -v    # jsql against sqlite, postgres, oracle, mysql and sql server
-./version.sh --minor                  # bump the git tag, update this README and push
+gofmt -w .
+go build ./... && go vet ./...
+cd jsql/drivers/test && go test -v   # jsql against every available driver
+./version.sh --minor                 # bump the git tag, update this README and push
 ```
 
-Packages with tests: `jsql/drivers/test`, `jwf`, `jrpc`, `jws`, `queue`, `ia`, `cache`, `aws`, `brevo` — some need live Redis, AWS or Brevo credentials.
+The jsql suite skips any engine it cannot reach, so check the `SKIP` lines. `cache`, `aws` and `brevo` tests need live services.
 
 ## License
 

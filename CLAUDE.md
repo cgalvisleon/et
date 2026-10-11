@@ -27,7 +27,9 @@ docker compose up -d  # optional local Ollama on 11434 (see docker-compose.yml h
 
 Tests exist only in `queue/` (`Example_queue`), `ia/loader_test.go`, `jsql/drivers/test/`, and `jrpc/`, `jws/`, `cache/`, `aws/`, `brevo/` — the latter need live Redis/AWS/Brevo and fail or hang without them. `jwf` and `ia`'s ingest/ask path have no tests.
 
-`jsql/drivers/test/` is the cross-driver suite (`TestCatalog`, `TestInsertUpdate`, `TestJoinGroupHaving`, `TestWrapper`, `TestCreateDropDB`): it runs every case against sqlite (temp file), postgres, mysql, mssql and oracle, reading connection settings from `et/.env` (`DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`, `ORACLE_HOST`/`ORACLE_SERVICE`/`ORACLE_USER`…) and `t.Skip`-ing any engine it can't reach, so a green run may have only exercised sqlite — check the skip lines with `-v`. `JSQL_DEBUG=1` logs the generated SQL. `result/<driver>.sql|.json` hold per-driver outputs.
+`COMPONENT_CATALOG.md` is generated from `go doc` (every exported func/method/interface per package); regenerate it rather than hand-editing when the API changes. `LIBRARY_CONTEXT.md`, `ARCHITECTURE_SUMMARY.md` and `AI_USAGE_GUIDE.md` were re-verified against the code on 2026-10-10.
+
+`jsql/drivers/test/` is the cross-driver suite (`TestCatalog`, `TestInsertUpdate`, `TestJoinGroupHaving`, `TestWrapper`, `TestCreateDropDB`): it runs every case against sqlite (temp file), postgres, mysql, mssql and oracle, reading connection settings from `et/.env` (`DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`, `ORACLE_HOST`/`ORACLE_SERVICE`/`ORACLE_USER`…) and `t.Skip`-ing any engine it can't reach, so a green run may have only exercised sqlite — check the skip lines with `-v`. `JSQL_DEBUG=1` logs the generated SQL in the tests (`DB_IS_DEBUG=true` does it for a regular `DB`). `TestCatalog` rewrites `result/*` on every run (brecha B7). `result/<driver>.sql|.json` hold per-driver outputs.
 
 ```bash
 cd jsql/drivers/test && go test -v -run 'TestInsertUpdate/sqlite' .
@@ -47,18 +49,18 @@ Modular utility library for Go microservices: every directory is an independent 
 
 ### SQL builder / ORM: `jsql/`
 
-- `jsql.Load()` / `jsql.LoadTo(name)` → `*DB`; config and tenant (`DB_TENANT_ID`, default `tenant:root`) are read internally via `envar`.
+- `jsql.Load()` / `jsql.LoadTo(dbName, hostName...)` → `*DB`; config and tenant (`DB_TENANT_ID`, default `tenant:root`) are read internally via `envar`.
 - Drivers in `jsql/drivers/<name>/`, self-register via `init()`, imported as side effect: `postgres` (`lib/pq`), `sqlite` (`modernc.org/sqlite`), `mysql`, `mssql`, `oracle` — each with the same file set (`connect`, `load` = DDL, `query`, `command`, `quoted`, `types`, `test`). `josefina` is a constant only. A change to SQL generation usually has to be mirrored in all five.
 - **Table names**: the core sets `Model.Table` (in `newModel` and `Model.Init`, `Model.setTable`) from `Driver.UseSchema()`: `schema.name` for postgres/mssql, `schema_name` for sqlite/mysql/oracle (no `CREATE SCHEMA`, tables live in the connection's database/user). Drivers build SQL from `model.Table`/`From.Table`, not `Schema`+`Name` (mssql splits it back to quote `[schema].[name]`). Raw SQL against a sqlite table must use the prefixed name (e.g. `main_tasks`).
 - `jsql/catalog.go` is the whole public API in one file: every exported function/method is a thin wrapper over a private implementation elsewhere in the package, grouped into numbered sections. New public API goes there (and `TestCatalog` checks the sections). `jsql/spec.md` is the formal spec with a numbered gap list ("brechas", e.g. B8); `feature.md` is its source.
 - `jsql/jquery.go` parses JSON query/command descriptors (`select`/`from`/`join`/`where`/…, `insert`/`update`/`delete`/`upsert`/`bulk`); `from` and join `to` take the standard object `{database, schema, model, as}` or the short text `"schema.model:as"` (one parser, `fromRefs`/`parseFromRef` + `DB.modelOf` in `query.go`; `database` must match the connection's); `jsql/wrapper.go` `Wrapper(db)` exposes jsql to goja scripts (triggers, `DefineCalc`) and `jsql/jsql.d.ts` is the matching TypeScript declaration — keep both in sync when changing the wrapper.
-- `Driver` interface (`jsql/driver.go`): `Connect(db)`, `Load(model)` (DDL), `Query(query)` (SELECT), `Command(command)` (DML) — each returns SQL text.
+- `Driver` interface (`jsql/driver.go`): `UseSchema()`, `CreateDB`, `DropDB`, `Connect(db)`, `ExistModel`, `Load(model)` (DDL text), `Drop(model)`, `Query(query)` (SELECT text), `Command(command)` (DML text); all but `UseSchema` take `timeout ...time.Duration`. Optional `jsql.Tester` (see below).
 - sqlite quirk: queries return each row as one JSON object; a nested JSON column inside it comes back double-encoded (see `ia/similarity.go` `chunkEmbedding`).
 
 ```go
 model, _ := db.DefineModel("public", "users", 1, userId) // adds id, created_at, updated_at, _source, _idx
 
-model, _ := db.Define(jsql.Def{                            // struct-based, preferred for complex models
+model, _ := db.Define(jsql.Define{                            // struct-based, preferred for complex models
     Schema: "public", Name: "users", Version: 1, IdxField: jsql.IDX,
     Columns: []jsql.Column{
         {Name: "email", TypeData: et.TEXT, Default: ""},
@@ -69,27 +71,27 @@ model, _ := db.Define(jsql.Def{                            // struct-based, pref
 })
 model.Init() // runs DDL
 
-items, _ := model.Where(jsql.Eq("status", jsql.ACTIVE)).And(jsql.More("age", 18)).Limit(20).Page(1).All()
+items, _ := model.Where(jsql.Eq("status", jsql.ACTIVE)).And(jsql.More("age", 18)).Limit(1, 20) // page, rows
 item, _  := model.Where(jsql.Eq("id", id)).One()
 _, _ = model.Insert(et.Json{...}).ExecTx(nil)   // also Update(...).Where(...), Upsert(...)
 ```
 
-Manual alternative: `db.NewModel(...)` + `DefineColumn`/`DefinePrimaryKey`/`DefineUnique`/`DefineAttrib`/`DefineForeignKeys`. Package-level `jsql.Define(dbName, def)` uses the DB registry.
+Manual alternative: `db.NewModel(...)` + `DefineColumn`/`DefinePrimaryKey`/`DefineUnique`/`DefineAttrib`/`DefineForeignKeys`. `db.LoadModel(schema, json)` and the JSON `define` descriptor build the same `Define`.
 
-- **`TypeColumn`**: `COLUMN` (real column), `ATTRIB` (key inside `_source` JSONB, cast on read), `DETAIL`/`MASTER`/`ROLLUP` (virtual relations; `MASTER` goes through a bridge table), `CALCFUNC` (`CalcFunction` callback), `CALC` (query-time expression), `AGG`.
-- **Column constants** (`jsql/column.go`): `ID`, `IDX` (`_idx`), `IDT`, `SOURCE` (`_source`), `STATUS`, `TENANT_ID`, `PROJECT_ID`, `CREATED_AT`, `UPDATED_AT`. `_idx` is a `reg.UUID()` set by an auto `BeforeInsert` trigger, not a sequence.
-- **Status constants**: `ACTIVE`, `ARCHIVED`, `CANCELED`, `PENDING`, `APPROVED`, `REJECTED`, `OF_SYSTEM`, `FOR_DELETE`; extend `jsql.Status` with `jsql.SetStatus`.
+- **`TypeColumn`**: `COLUMN` (real column), `ATTRIB` (key inside `_source` JSONB, cast on read), `DETAIL`/`MASTER`/`ROLLUP` (virtual relations; `MASTER` goes through a bridge table), `CALCFUNC` (Go `CalcFunction`), `CALC` (JS script run per row).
+- **Column constants** (`jsql/column.go`): `ID`, `IDX` (`_idx`), `SOURCE` (`_source`), `RESULT`, `STATUS`, `VERSION`, `TENANT_ID`, `PROJECT_ID`, `CREATED_AT`, `UPDATED_AT`, `CODE`, `KIND`. `_idx` is a `reg.UUID()` set by an auto `BeforeInsert` trigger, not a sequence.
+- **Status constants**: `ACTIVE`, `ARCHIVED`, `CANCELED`, `PENDING`, `APPROVED`, `REJECTED`, `OF_SYSTEM`, `FOR_DELETE`, `IN_PROCESS`, `FAILED`; `jsql.Status` is the map of valid ones, `jsql.StatusList()` lists them.
 - **Triggers**: before/after × insert/update/delete, `TriggerFunction func(tx *Tx, old, new et.Json) error`.
 - **Nested JSONB paths**: `"a->b->c"` field names are translated to `->`/`->>` chains with casts on ATTRIB leaves.
 - `.Debug()` logs SQL and skips execution; `.Test()` generates SQL without executing (on `Model`, `Query`, `Command`).
-- `jsql.DefineStore(db, schema)` → `*jsql.Store` (generic `db_catalogs` kind+id store); `jsql.DefineSeries(db, schema)` → series/code generator.
+- `jsql.DefineSeries(db, schema)` → series/code generator (`GenSerie`, `GenValue`, `SetSeries`, `Model()`). There is no `jsql.Store`/`DefineStore` anymore.
 
 ### HTTP servers
 
 - **`server/`** — lightweight `chi.Mux` wrapper, no Redis/NATS.
 - **`ettp/v2/`** — `ettp.New(name, *Config)`; `Config` has `Port`, `RpcPort` (zero = OS-assigned), `Parent`, timeouts, `AllowOrigin`, TLS, `Transport`, `Debug`. It does **not** call `cache.Load()`/`event.Load()` — callers must. Syncs router state across replicas over NATS (`EVENT_SET_ROUTER`/`REMOVE`/`RESET`; `m.Myself` prevents self-processing).
 - **`ettp/v1/`** — older but not dead (has apigateway/proxy/token/cache files with no v2 equivalent); check which version a `cmd/` imports.
-- **`router/`** — standalone router used by `ettp/v2`.
+- **`router/`** — `router.NewApi(name, path, host, port, rpc, version)` → `*Api` over `chi.Mux`; `Public`/`Session`/`Protected(group, method, path, name, handler)`; `Api.Item(status, fn)`/`Items(fn)`/`List(fn)` wrap business functions; `UseAuthentication`, `UseAuthorization`, `UseLimitRate`. Used by `core-studio/api`, `postick/api` and `ettp/v2`.
 
 ### Infrastructure (external services)
 
@@ -107,7 +109,7 @@ Manual alternative: `db.NewModel(...)` + `DefineColumn`/`DefinePrimaryKey`/`Defi
 - **`queue/`** — `queue.New[T](queueSize, maxEvents, period, handler)`; flushes on `maxEvents` or `period`, `.Close()` flushes.
 - **`request/`** (`URLParam`, `GetBody`, outbound `Fetch` — JSON/form only), **`response/`** (`ITEM`, `ITEMS`, `HTTPError`), **`middleware/`**, **`msg/`** (shared message constants).
 - **`xls/`**, **`csv/`** — same API shape: `Read*(data|multipart|file)` → reader; `New*(data, columns)` → `ToFile`/`ToWriter`/`ToHttp` (columns derived from keys if omitted).
-- **`utility/`**, **`reg/`** (IDs: UUID/ULID/Snowflake), **`file/`** (watcher), **`dt/`** (Redis in `PRODUCTION`, file otherwise), **`jws/`** (websocket), **`service/`** (OTP), **`mem/`**, **`ephemeral/`**, **`iterate/`**, **`race/`**, **`cmds/`**, **`timezone/`**, **`units/`**, **`color/`**.
+- **`utility/`**, **`reg/`** (IDs: UUID/ULID/Snowflake), **`file/`** (watcher), **`dt/`** (Redis when `PRODUCTION` is true — the default; otherwise memory only, nothing persisted), **`jws/`** (websocket), **`service/`** (OTP), **`mem/`**, **`ephemeral/`**, **`iterate/`**, **`race/`**, **`cmds/`**, **`timezone/`**, **`units/`**, **`color/`**.
 - Messaging: **`aws/`** (S3/SES/SMS), **`brevo/`**, **`jwsp/`** (WhatsApp Graph API), **`infobip/`** (`NewSenderInfobip(Params{BaseUrl, ApiKey, Sender})`; `SendSMS`/`SendEmail` (API v4 JSON)/`SendWhatsApp` (templates only) take `tpMessage` `"Transactional"|"Promotional"`; `{{key}}` substitution like brevo).
 
 ### Application packages
@@ -116,7 +118,7 @@ Manual alternative: `db.NewModel(...)` + `DefineColumn`/`DefinePrimaryKey`/`Defi
 - **`jia/`** — OpenAI agents (`openai-go/v3`): `jia.New(tag, store, userId)`, `jia.Load(id, store)`; Agents, Participants, Conversations/Messages, Skills (`ApiSkill`); not tenant-scoped. **Bug:** `jia/ia.go:90` calls `store.Get(id, packageName, …)` with args swapped.
 - **`ia/`** — multitenant RAG (unrelated to `jia`). `ia.Load(db, schema, Config)` defines `ia_documents`/`ia_chunks`/`ia_conversations`/`ia_messages`, all with `tenant_id` + `project_id`. `IngestFile` (pdf/docx/xlsx/csv/txt/md loaders in `ia/loader_*.go`) and `IngestSQL` → chunk → embed → store. No pgvector: embeddings are JSON `[]float64`, and `Ask` ranks by cosine similarity in Go over up to `DB_RECORD_LIMIT` (default 1000) chunks, then answers with `Chat.Completions`. `embedFn`/`answerFn` are swappable for tests. `LoadRouter(chi.Router)`; design in `featureIa.md`.
 - **`stores/`** — jsql-backed `DefineInstance`/`LoadInstance` (Json/Bite kinds), `DefineAuthorization` (ACL cached through `dt`), `DefineConfig` (per-tenant settings). `stores.Instance.Get(id, dest)` has one key, so it doesn't satisfy the `Store` interfaces below.
-- **`resilience/`** — retry: `resilience.New(store)`, `LoadInstance(Params{Id, Tag, Description, TotalAttempts, Interval, Tags, Fn, FnArgs})`, `instance.Run(userId)`. Used by `jwf`.
+- **`resilience/`** — retry: `resilience.New()` (calls `event.Load()`, no store), `LoadInstance(Params{Id, Tag, Description, TotalAttempts, Interval, Tags, Fn, FnArgs})`, `instance.Run() ([]any, error)`, `Stop(id)`. Used by `jwf`.
 - **`jwf/`** — workflow engine, detailed below.
 
 - **Crear / eliminar la base** (`Driver.CreateDB` / `Driver.DropDB`, expuestos como `jsql.CreateDB(connection, timeout...)` / `jsql.DropDB(db, timeout...)`; los métodos de `Driver` reciben `timeout ...time.Duration` y usan `jsql.TimeoutContext`: sin timeout o con `0` nunca fallan por timeout): idempotentes, implementados en los cinco drivers (`drivers/<x>/connect.go`); `Connect` de postgres, mysql y mssql usa `CreateDB`; oracle no crea ni elimina el servicio (`DropDB` devuelve `MSG_DRIVER_CANNOT_DROP_DB`). `TestCreateDropDB` (`jsql/drivers/test/createdb_test.go`) solo corre contra postgres; los demás están pendientes (brecha B8 de `jsql/spec.md`).
@@ -124,37 +126,34 @@ Manual alternative: `db.NewModel(...)` + `DefineColumn`/`DefinePrimaryKey`/`Defi
 
 ### `jwf/` (workflows)
 
-`jwf.New(db *jsql.DB, id, userID)` calls `cache.Load()` + `event.Load()`, builds its own `Storage` (schema hard-coded `"workflows"`), uses `reg.GetUUID(id)` (blank → new UUID). `jwf.Load(db, id, userId)` falls back to `New` if not found. A nil db is not supported.
+`jwf.New(id)` calls `cache.Load()` + `event.Load()` and uses `reg.GetUUID(id)` (blank → new UUID). There is **no** store, `jwf.Load`, `DefineStore` or `LoadRouter` anymore: flows live in memory (`WorkFlow.Flows`, keyed by tag) and are persisted by the caller through `WorkFlow.OnChange(fn)` / `Flow.OnChange(fn)`; `jwf.LoadFlow(json)` / `wf.SetFlow` rebuild them.
 
 ```
-WorkFlow (own ID, not tenant-scoped)
-  Steps map[string]*Step           shared step pool
-  Flows map[string]*Flow
-    Steps        subset of the pool, incl. triggers
+WorkFlow (ID, TimeAwait, AuditLog)
+  Flows map[tag]*Flow
+    Steps        map[id]*Step (incl. triggers)
     Connections  Source/Target {StepId, Port, Index} + Kind input/output/error
-    Triggers     Tag -> StartId
+    Triggers     {Type, Tag, StartId}
+    TotalAttempts / TimeAttempts / TimeAwait, Constants, SaveInstances, Published
 ```
 
 ```go
-wf, _ := jwf.New(db, "", userId)
-flow := wf.NewFloW("add", "add item", "1.0.0", userId). // "FloW" typo is the real name
-    Step("add", "step 1", func(instance *jwf.Instance, ctx et.Json) (et.Json, error) { return et.Json{}, nil }).
+wf, _ := jwf.New("")
+wf.NewFlow("add", "add item", "1.0.0", ownerId, userId).
+    Step("add", "step 1", func(instance *jwf.Instance, ctx et.Json) (et.Json, error) { return ctx, nil }).
     Step("add", "step 2", fn)
-// Run(tag, triggerTag, id, projectId, code string, ctx, tags et.Json, await bool, userId string)
-result, err := wf.Run(flow.ID, "add", "", projectId, "", et.Json{}, et.Json{}, true, userId)
+// Run(tag, triggerTag, id, code string, ctx, tags et.Json, await bool, userId string)
+result, err := wf.Run("add", "add", reg.GetULID(""), "", et.Json{}, et.Json{}, true, userId)
 ```
 
-- First `Step` becomes a trigger; the next ones chain through output connections. `flow.Error(...)` attaches an error-port step to the last step. `Step.Definition` can also be a JS body run through `jrex`.
-- Instances are not kept in memory: `Run` creates one (`newInstance`, code from `store.GenSerie(tag+":"+projectId)` when empty) or loads it from `"instances"`; a cache key `instance:<id>:status` (TTL `Flow.TimeAwait`) flags running ones. Status: `CREATED`, `PENDING`, `RUNNING`, `ROLLBACK`, `DONE`, `FAILED`, `CANCEL`, `STOP`. On a step error it retries via `resilience` (if `TotalAttempts != 0`), then follows the error connection.
-- `Run` returns only the result ctx, not the instance id: pass your own id (`reg.GetULID("")`) to read the instance afterwards. `wf.LoadInstance(id)` reads a stored instance as-is (no running check, no flow load, no audit entry) — for status queries; `ErrorInstanceNotFound` if missing. Instances of every workflow share the `instances` table, so filter by `ProjectId` yourself.
-- `jwf.Store`: `Set`/`Get`/`Delete`/`Query(collection, query)` + `SetSeries`/`GetSeries`/`DeleteSeries`/`GenSerie`/`GenValue`. Default impl `jwf.DefineStore(db, schema)` (models `workflows`/`flows`/`steps`/`instances` + `jsql.Series`).
-- `LoadRouter(Router)` registers 11 routes; only the Steps handlers are implemented — the Flows/Instances handler bodies are empty.
-- Quirk: `Flow.Step`/`Error` pass the flow ID as "userId" into step audit logs.
-- `AuditLog []et.Json` + `onSave`/`onDelete` hooks (`MAX_AUDIT_LOG`, default 1000) is a reusable pattern documented in `AUDITLOG.md`.
+- First `Step` becomes a trigger; the next ones chain through output connections. `Flow.Error(...)` attaches an error-port step to the last step. A step runs a Go `fnStep` or a JS script (`RunCode`/`RunScripts`, goja, with `cache`/`fetch` bindings from `wrapper.go`).
+- Instances are stored in Redis under `instance:<id>` (`cache.SetObject`, no TTL); `GetInstance` loads one or creates it, `RunInstance` runs it, `StopInstance(id)` sets `instance:<id>:stop` for `TimeAwait`. `Run` returns only the result ctx: pass your own id to read the instance afterwards. Status: `CREATED`, `PENDING`, `RUNNING`, `ROLLBACK`, `DONE`, `FAILED`, `CANCEL`, `COMPLETED`.
+- On a step error it retries through `resilience` when `Flow.TotalAttempts != 0`, then follows the error connection.
+- `AuditLog []et.Json` + `onChange` hooks (`MAX_AUDIT_LOG`, default 1000) is a reusable pattern documented in `AUDITLOG.md`.
 
 ### `cmd/` binaries
 
-`et` (cobra CLI), `apigateway` (ettp), `daemon` (systemd), `create` (scaffolder, templates in `create/`), `server`/`client` (jtcp), `jrex`, `jsql`, `install`, `whatcher`, `resilience`, `wsp`, `ia` (on `server/`), `jwf` — **stale**: calls `jwf.New(nil, …)`, so it compiles but fails at runtime.
+`et` (cobra CLI), `apigateway` (ettp), `daemon` (systemd), `create` (scaffolder, templates in `create/`), `server`/`client` (jtcp), `jrex`, `jsql`, `install`, `whatcher`, `resilience`, `wsp`, `ia` (on `server/`), `jwf` (current `jwf.New("")` example).
 
 ## Key patterns
 
@@ -208,3 +207,11 @@ func (s *T) HttpFoo(w http.ResponseWriter, r *http.Request) {
 ## Cambios del 2026-10-02 (cache)
 
 - `cache.GetCtx`/`cache.Get` devuelven `(valor, existe, error)`; `cache.ErrNotFound` ya no existe: una clave inexistente es `def, false, nil`. Igual `GetJson`/`GetItem`/`GetItems`/`GetVerify`/`CollectionFind`/`ObjetGet`, y los nuevos `GetStr`/`GetInt`/`GetInt64`/`GetFloat`/`GetBool`/`GetTime`/`GetDuration`/`GetBytes`/`GetList` (valor que no parsea → `def, true, err`). `Set` guarda `float64` con `strconv.FormatFloat(v, 'f', -1, 64)` (antes `%f`, 6 decimales). `HttpGet` de `cache` y de `ettp` v1/v2 responden `et.Item{Ok: existe, Result: {key, value}}`.
+
+## Cambios del 2026-10-10 (documentación)
+
+- `README.md` reescrito: instalación primero, tabla por paquete con API pública y ejemplo, ejemplos verificados con `go vet`.
+- `LIBRARY_CONTEXT.md`, `ARCHITECTURE_SUMMARY.md`, `AI_USAGE_GUIDE.md` reescritos desde el código; `COMPONENT_CATALOG.md` generado desde `go doc`.
+- `router.Api.Public/Session/Protected` llevan hoy `group` primero: `(group, method, path, name, handler)`.
+- `jsql/spec.md` §12 recalculado: B6 cerrada; nuevas B9 (`LoadDb` en pánico), B10 (`audit_log` del modelo no es lista) B11 (`TestWrapper` espera `conn.id` indefinido) y B12 (`Define` exige esquema; en sqlite las tablas pasaron a `schema_nombre`).
+- `router.Publish`/`router.With` ya no anteponen `Route.PackageName` al `Path` (rompió postick: rutas montadas en la raíz).

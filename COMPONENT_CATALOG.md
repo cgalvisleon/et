@@ -1,668 +1,2415 @@
 # COMPONENT_CATALOG.md
 
-> Catálogo exhaustivo de componentes de `github.com/cgalvisleon/et` (Go 1.25). Cada entrada cita archivo:línea real al momento de generar este documento — el repo cambia con frecuencia, verifica contra el código antes de depender de una firma exacta en una decisión crítica. Para la narrativa de arquitectura, ver `ARCHITECTURE_SUMMARY.md`; para reglas de uso por IA, ver `AI_USAGE_GUIDE.md`; para la visión general, ver `LIBRARY_CONTEXT.md`.
+> Catálogo de la API pública de `github.com/cgalvisleon/et`, **generado desde `go doc`** (funciones, métodos e interfaces exportadas). Para regenerarlo: `go doc -all ./<paquete> | grep '^func '`. Contexto narrativo en `LIBRARY_CONTEXT.md`, arquitectura en `ARCHITECTURE_SUMMARY.md`, reglas para IA en `AI_USAGE_GUIDE.md`.
+>
+> Se omiten `cmd/`, `create/` y `jcli/` (WIP huérfano).
 
----
+Generado: 2026-10-10.
 
-## Índice
+## `aws`
 
-1. Núcleo de datos: `et/`
-2. Persistencia: `jsql/`, `stores/`, `dt/`
-3. HTTP: `server/`, `ettp/v1`, `ettp/v2`, `router/`, `middleware/`, `response/`, `request/`, `jws/`
-4. Validación: `jval/`, `validator/`
-5. Infraestructura: `cache/`, `event/`, `graph/`
-6. Entorno y logging: `envar/`, `logs/`, `stdrout/`, `color/`
-7. Identidad/seguridad: `claim/`, `jwt/`, `reg/`, `utility/`, `strs/`
-8. Orquestación: `crontab/`, `jwf/`, `resilience/`, `jia/`, `jrex/`, `service/`
-9. Comunicación de bajo nivel: `jrpc/`, `jtcp/`
-10. Integraciones externas: `aws/`, `brevo/`, `jwsp/`, `infobip/`
-11. Concurrencia/memoria: `mem/`, `ephemeral/`, `race/`, `iterate/`, `queue/`
-12. Tiempo/unidades/archivos: `timezone/`, `units/`, `file/`
-13. Herramientas de desarrollo: `cmds/`, `create/`, `cmd/*`, `jcli/`
-14. Patrón transversal `msg/`
+S3 y SMS.
 
----
+Funciones y métodos:
 
-## 1. Núcleo de datos: `et/`
-
-**Descripción:** tipo de datos universal (`Json`) y wrappers de resultado (`List`, `Item`, `Items`) usados en todas las capas.
-
-**API pública (`et/json.go`):**
-- `func (s *Json) Scan(src interface{}) error` — :32 (implementa `sql.Scanner`)
-- `func (s *Json) ScanRows(rows *sql.Rows) error` — :62
-- `func (s Json) ToByte() ([]byte, error)` — :115
-- `func (s Json) ToString() string` — :128
-- `func (s Json) ToEscapeHTML() string` — :141
-- `func (s Json) ToMap() map[string]interface{}` — :160
-- `func (s Json) IsEmpty() bool` — :168
-- `func (s Json) IsExist(key string) bool` — :177
-- `func (s Json) Clone() Json` — :186
-- `func (s Json) ValAny/ValStr/ValInt/ValInt64/ValNum/ValBool/ValTime/ValDuration/ValJson/ValArray(def, atribs ...string) ...` — :197-554 (patrón "valor con default + ruta anidada", recorre `atribs` como path a través de `Json`/`map[string]interface{}` anidados)
-- `func (s Json) Any/Str/String/Int/Int64/Num/Bool/Byte/Time/Json(atrib) (atribs ...string)` — :562-681
-- `func (s Json) FromBase64/ToBase64(atribs ...string) string` — :589-611
-- `func (s Json) MapStr/MapInt/MapFloat(atrib string) map[string]...` — :688-729
-- `func (s Json) Array/ArrayBytes/ArrayStr/ArrayInt/ArrayInt64/ArrayNumber/ArrayJson(atribs ...string)` — :736-866
-- `func (s Json) Update(from Json)` — :873 (mezcla in-place, `maps.Copy`)
-- `func (s Json) Compare(from Json) Json` — :882 (diff)
-- `func (s Json) Append(from Json) Json` — :897 (solo agrega claves que no existían)
-- `func (s Json) IsChanged(from Json) bool` — :912
-- `func (s Json) IsDeferent(atrib string, val interface{}) bool` — :941
-- `func (s Json) Get(keys ...string) (result interface{})` — :954
-- `func (j Json) SetNested(keys []string, value interface{})` — :989
-- `func (s Json) Set(key string, val interface{})` — :1019 (soporta `key` con `->` como separador de nesting, delega a `SetNested`)
-- `func (s Json) Delete(keys []string) bool` — :1038
-- `func (s Json) Exist(key string) bool` — :1059
-- `func (s Json) Remove(keys ...string)` — :1068
-- `func (s Json) Select(keys []string) Json` — :1079 (whitelist)
-- `func (s Json) Hidden(keys []string) Json` — :1096 (blacklist)
-- `func (s Json) From(as string) *Where` / `ApplyCondition(condition *Condition) bool` — :1117,1126 (integración con el mini-query-builder de `et` sobre slices en memoria, distinto del builder de `jsql`)
-
-**`et/list.go`:** `List{Rows, All, Count, Page, Start, End, Result []Json}`, `.ToJson()/.ToString()/.ToMap()/.From(as)`.
-
-**`et/item.go`:** `Item{Ok bool, Result Json}`, `NewItem(data Json) Item`, mismos accesores tipados que `Json` delegando a `.Result`.
-
-**`et/items.go`:** `Items{Ok bool, Count int, Result []Json}`, `NewItems(data []Json) Items`, `Add(item ...Json)`, `AddMany(items []Json)`, accesores indexados (`Str(idx, atribs...)`, etc.), `One(idx int) (Item, error)` (índice 1-based o negativo desde el final), `First()`/`Last()`, `ToList(all, page, rows int) List`.
-
-**`et/msg.go`:** constantes de error propias del paquete `et` (`MSG_FIELD_NOT_FOUND`, `MSG_INDEX_OUT_OF_RANGE`, `MSG_FAILED_TO_UNMARSHAL_JSON_VALUE`, etc.) — **distinto** del paquete raíz `msg/` (§14).
-
-**Ejemplo:**
 ```go
-data := et.Json{"user": et.Json{"name": "Ana", "age": 30}}
-name := data.Str("user", "name")
-age := data.ValInt(0, "user", "age")
+func NewS3AWS(params Params) (*S3AWS, error)
+func (s *S3AWS) Delete(bucket, filePath string) (et.Item, error)
+func (s *S3AWS) Download(bucket, filePath string) (et.Item, error)
+func (s *S3AWS) Uploader(bucket, filename, contentType string, contentFile []byte) (et.Item, error)
+func (s *S3AWS) UploaderB64(bucket, b64, fileName, contentType string) (et.Item, error)
+func (s *S3AWS) UploaderFile(r *http.Request, bucket, folder, fileName string) (et.Item, error)
+func NewSenderAWS(params Params) (*SenderAWS, error)
+func (s *SenderAWS) SendSMS(contactNumbers []string, content string, params et.Json, tpMessage string) (et.Item, error)
 ```
 
----
+## `brevo`
 
-## 2. Persistencia
+Email, SMS y WhatsApp transaccional/promocional.
 
-### 2.1 `jsql/`
+Funciones y métodos:
 
-**Descripción:** SQL builder agnóstico de motor + ORM ligero con esquema híbrido relacional/JSONB.
-
-**Entrada (`jsql/jsql.go`):**
-- `func Load() (*DB, error)` — conecta a la DB por defecto; **sin `tenantId`**, se lee vía `envar.GetStr("DB_TENANT_ID", "tenant:root")` internamente
-- `func LoadTo(name string) (*DB, error)` — conecta a una DB nombrada; mismo cambio, sin `tenantId`
-- `func GetDb(name string) (*DB, error)`, `func GetModel(db, schema, name string) (*Model, error)`
-- `func Define(dbName string, def Def) (*Model, error)` — atajo de paquete que delega en `(*DB).Define`
-- `func Insert/Update/Delete/Upsert(model *Model, data et.Json) *Command`
-
-**`NewDB(id, host, name, driver string, showLog ...bool) (*DB, error)`** (`jsql/db.go:43`) — constructor de bajo nivel usado internamente por `Load`/`LoadTo`/`ConnectTo`; no inicializa el DDL por sí solo (requiere `Init()` después). `showLog` es variádico y opcional, por defecto `true`. No confundir con conectar directamente.
-
-**`jsql.Store` — es un STRUCT concreto, no una interfaz** (`jsql/store.go:11`):
 ```go
-type Store struct {
-    model *Model
-}
-func DefineStore(db *DB, schema string) (*Store, error)
+func SendEmail(sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp string) (et.Items, error)
+func SendEmailPromotional(sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json) (et.Items, error)
+func SendEmailTransactional(sender et.Json, to []et.Json, subject string, htmlContent string, params et.Json) (et.Items, error)
+func SendSmsPromotional(sender, organisation string, contactNumbers []string, content string, params []et.Json) (et.Items, error)
+func SendSmsTransactional(sender, organisation string, contactNumbers []string, content string, params []et.Json) (et.Items, error)
+func SendWhatsapp(contactNumbers []string, templateId string, params []et.Json, tp string) (et.Items, error)
+func SendWhatsappPromotional(contactNumbers []string, templateId string, params []et.Json) (et.Items, error)
+func SendWhatsappTransactional(contactNumbers []string, templateId string, params []et.Json) (et.Items, error)
 ```
-Es la ex-`stores.Catalog` (tabla genérica `kind`+`id`), movida dentro de `jsql`. Se usa opcionalmente para persistir metadata del propio `*DB`/`*Model`:
-- `func (s *DB) Save(store *Store) error` — `jsql/db.go:158`
-- `func LoadDb(store *Store, id string) (*DB, error)` — `jsql/db.go:87` (nótese "LoadDb")
-- `func (s *Model) Save(store *Store) error` — `jsql/model.go:107`
 
-Ambos `Save` son no-op si `store == nil` — el flujo normal de conexión no lo requiere. **No existe ninguna interfaz `Store` inyectable en `jsql`**, a diferencia de `jia`/`jwf`/`resilience`/`crontab` (una versión previa de este catálogo lo afirmaba incorrectamente).
+## `cache`
 
-**Drivers (`jsql/driver.go`):**
-- Constantes: `DriverPostgres`, `DriverSqlite`, `DriverMysql`, `DriverMssql`, `DriverOracle`, `DriverJosefina` — :9-14
-- `type Driver interface { Connect(db *DB) (*sql.DB, error); Load(model *Model) (string, error); Query(query *Query) (string, error); Command(command *Command) (string, error) }` — :20-26
-- `func Register(name string, driver Driver)` — :39
-- **Solo `jsql/drivers/postgres/` tiene archivos.** `jsql/drivers/mysql/` y `jsql/drivers/josefina/` existen vacíos; **no existe `jsql/drivers/sqlite/`** aunque `DriverSqlite` siga declarada.
+Redis. `Get*` devuelven `(valor, existe, error)`; clave inexistente = `def, false, nil`.
 
-**Definición de modelo (`jsql/define.go`, `jsql/db.go`):**
-- `func (s *DB) DefineModel(schema, name string, version int) (*Model, error)`
-- `func (s *DB) NewModel(schema, name string, version int, userId string) *Model` — `jsql/db.go:400`
-- `func (s *DB) Define(define Def) (*Model, error)`
-- `type Def struct { Schema, Name string; Version int; IdxField string; PrimaryKeys, ForeignKeys, Indexes, Unique, Required []DefIndex/DefForeignKeys; Columns []Column; SourceField string; Hiddens []string; Details map[string]DefDetail; Rollups map[string]DefRollup; IsCore, IsDebug, IsTest bool }`
+Interfaces:
 
-**Tipos de columna (`TypeColumn`):** `COLUMN`, `ATTRIB`, `DETAIL`, `ROLLUP`, `CALCFUNC`, `CALC`, `AGG`.
-**Tipos de dato (`TypeData`):** `KEY`, `TEXT`, `MEMO`, `INT`, `FLOAT`, `BOOLEAN`, `DATETIME`, `JSON`, `BYTES`, `GEOMETRY`, `EMBEDDING`, `ANY`.
-**Constantes de columna:** `ID`, `IDX` (`_idx`), `IDT` (`_idt`), `SOURCE` (`_source`), `STATUS`, `TENANT_ID`, `PROJECT_ID`, `CREATED_AT`, `UPDATED_AT`.
-**Constantes de estado:** `ACTIVE`, `ARCHIVED`, `CANCELED`, `PENDING`, `APPROVED`, `REJECTED`, `OF_SYSTEM`, `FOR_DELETE`; mapa `Status`; `SetStatus(value)`.
-
-**Query/Command fluido:**
 ```go
-items, _ := model.Where(jsql.Eq("status", jsql.ACTIVE)).And(jsql.More("age", 18)).Limit(20).Page(1).All()
-item, _  := model.Where(jsql.Eq("id", id)).One()
-_, _      = model.Insert(et.Json{"email": "a@b.com"}).ExecTx(nil)
-_, _      = model.Update(et.Json{"status": "archived"}).Where(jsql.Eq("id", id)).ExecTx(nil)
-_, _      = model.Upsert(et.Json{"id": id}).ExecTx(nil)
-```
-- `.Debug()` / `.Test()` en `Model`, `Query` y `Command`.
-- Triggers: `beforeInserts/Updates/Deletes`, `afterInserts/Updates/Deletes` (`TriggerFunction = func(tx *Tx, old, new et.Json) error`); columnas calculadas vía `CalcFunction`.
-- Paths anidados JSONB: `"ventas->detalle->precio"` se traduce a `->`/`->>` automáticamente.
-- `jsql.Series` (`jsql/series.go:122`) tiene un método `GenSerie` — no relacionado con ningún `Store` de otro paquete; si ves "GenSerie" mencionado como parte de `jwf.Store`, es un error (ver `ARCHITECTURE_SUMMARY.md` §3.2).
-
-**Errores comunes:**
-- Configurar `DB_DRIVER=sqlite`/`mysql`/`mssql`/`oracle`/`josefina` — falla al resolver driver.
-- Pasar `tenantId` a `jsql.Load`/`LoadTo` — ya no existe ese parámetro.
-- Confundir el `*jsql.Store` (struct concreto, opcional) con una interfaz inyectable de persistencia.
-
-### 2.2 `stores/`
-
-**Descripción:** helpers de persistencia jsql-backed: instancias genéricas, autorización, y configuración por tenant. **Ya no incluye un "Catalog" genérico** — eso se movió a `jsql.Store` (§2.1).
-
-**API:**
-- `func DefineInstance(db *DB, tenantId, schema string) (*Instance, error)` — `stores/instances.go`
-- `func (s *Instance) Set(tag, id, ownerId string, obj any) error`
-- `func (s *Instance) Get(id string, dest any) (bool, error)` — **un solo parámetro de clave**
-- `func (s *Instance) Delete(id string) error`
-- `func (s *Instance) Query(query et.Json) (et.Items, error)`
-- `func DefineAuthorization(db *DB, tenantId, schema string) (*Authorization, error)` — `stores/authorization.go` (ACL tenant/perfil/método/ruta, cacheado vía `dt`)
-- `func DefineConfig(db *DB, tenantId, schema, stage, tag string) (*Config, error)` — `stores/config.go` (reemplazo del viejo `config.Config`): `type Config struct { TenantId, Stage, Tag string; model *Model }` — mucho más simple que el `config.Config` eliminado (ese tenía además `ID`, `OwnerId`, `Params`, `AuditLog`)
-
-**Compatibilidad con la forma unificada de `Store` (`Set(collection, id, ownerId, obj)`/`Get(collection, id, dest) (bool, error)`/`Delete(collection, id)`/`Query`, ver `ARCHITECTURE_SUMMARY.md` §3.2):**
-- `stores.Instance` — **no calza**: `Get`/`Delete` reciben una sola clave string, no dos.
-- Nada en el repo conecta hoy `stores/` con `jia`/`jwf`/`resilience`/`crontab` (todos se ejercitan con `store=nil` en sus ejemplos de `cmd/`).
-- Por contraste, `jsql.Store` (el struct concreto de §2.1) **sí** tiene `Set(collection, id, ownerId, obj) error` / `Get(collection, id, dest) (bool, error)` / `Delete(collection, id) error` / `Query(query et.Json) (et.Items, error)` — calza exactamente con `jia.Store`, pero es un tipo concreto, no algo que implementes tú; conectarlo requeriría un adaptador que delegue en un `*jsql.Store` ya construido.
-
-### 2.3 `dt/`
-
-**Descripción:** cache de objetos liviano sobre `cache/` (Redis), condicionado por `PRODUCTION`.
-
-**API (`dt/handler.go`, `dt/object.go`):**
-- `func Up(key string, data any) Object` — prefixea `"object:"+key`; **solo si `PRODUCTION=true` persiste de verdad** en `cache.Set` — si `PRODUCTION=false` (o no está seteado), el objeto se construye solo en memoria y **nunca se persiste** (no hay fallback a filesystem, a diferencia de lo que sugería documentación previa)
-- `func Get(key string) *Object` — lee vía `cache.GetObject`, `nil` si no existe
-- `func Drop(key string) error` — `cache.Delete("object:"+key)`
-- `func GetObject(key string, dest any) (bool, error)` — deserializa el payload a `dest`
-- `type Object` con `Value any, Ok bool, Type string, Key string, Expire time.Duration` (default 5m vía env `CACHE_DURATION`) y accesores tipados: `Byte, String, Int, Int64, Float, Bool, Time, Duration, Array, Json, Item, Items, List, Array*`
-- **Nota**: pese al nombre del archivo, `dt/handler.go` no contiene handlers HTTP — es la API de acceso a datos completa del paquete.
-
----
-
-## 3. HTTP
-
-### 3.1 `server/`
-
-**Descripción:** servidor HTTP ligero, sin `cache`/`event`, solo `chi` + `http.Server`.
-
-**API (`server/server.go`):**
-- `type Ettp struct { ... }` (envuelve `*chi.Mux`)
-- `func New(name string, port int) *Ettp` — si `port == 0`, el mux queda `nil` y todos los métodos se vuelven no-op
-- `(*Ettp) Use(middlewares ...func(http.Handler) http.Handler)`, `NotFound(fn)`, `HandleFunc(pattern, fn)`, `Mount(pattern, handler)`
-- `(*Ettp) Start()` — arranca en goroutine, corre hooks `OnStart`, imprime tabla de rutas (`chi.Walk`), muestra banner ASCII, bloquea en `utility.AppWait()`
-- `(*Ettp) Close()`, `OnClose(fn)`, `OnStart(fn)`
-
-**`server/api.go`:** un segundo tipo `Api`, `NewApi(name, path, host string, port int, version string) *Api` — instala `middleware.Logger`+`Recoverer`, delega en `router.Publish`/`router.With` para anunciar rutas a un gateway compartido. Casi duplicado del `Api` de `router/api.go` (que además recibe un parámetro `rpc int`) — no son el mismo tipo aunque el nombre coincida.
-
-### 3.2 `ettp/v2`
-
-**Descripción:** servidor HTTP completo con router sincronizado entre réplicas vía NATS; cache/eventos ya **no** son automáticos.
-
-**API (`ettp/v2/server.go`):**
-- `type Config struct { Port, RpcPort int; Parent string; ReadTimeout, WriteTimeout, IdleTimeout, Timeout time.Duration; AllowOrigin []string; IsTLS bool; CertFile, KeyFile string; Transport *TransportConfig; Debug bool }` — **no tiene** `UseCache`/`UseEvent`
-- `func New(name string, cnf *Config) (*Server, error)` — nunca llama `cache.Load()`/`event.Load()` por sí solo
-- Registrar handlers: `(*Server).Public(method, path string, fn http.HandlerFunc, packageName string) (*Solver, error)`, `Private(...)` (igual + middlewares de autenticación)
-- Registrar proxy/API remota: `(*Server).SetRouter(method, path, resolve string, typeHeader int, header et.Json, excludeHeader []string, version int, packageName string, saved bool) (*Solver, error)`
-- Tipos internos clave: `Solver` (definición de ruta persistible), `Package` (agrupa Solvers por nombre), `Router` (trie por segmento de path, uno por método HTTP), `Resolver` (una petición resuelta en curso, con `ServiceId`, `Status`, timer de limpieza)
-- Métodos adicionales: `SetRouter`, `Use`, `UseAutentication` (sic), `RemoveRouterById`, `FindResolver`, `Start`, `Close`, `Reset`, `Save`, `HTTPError`, `HTTPSuccess`
-- Rutas base (`basicRoutes()`): `GET /version`, `GET /reset` (privada), `POST /events`, `GET/POST /routes`, `DELETE /routes/{id}`, `GET /packages`, `DELETE /packages/{name}`, `GET/DELETE /cache`, `GET /cache/{key}`
-- **RPC interno no conectado**: `Config.RpcPort` abre un `net.Listen("tcp", ...)` en `New()` y hay un codec gob (`pipe.go`) listo para atender esas conexiones, pero la función `startPipe()` que haría el `Accept()` loop **nunca es invocada** en ningún punto del código — es una funcionalidad iniciada pero no conectada. El RPC funcional real del repo es `jrpc/` (independiente de `ettp/v2`).
-- Sincronización de router: suscribe (`initEvents()`) a `router.APIGATEWAY_SET_ROUTER`/`APIGATEWAY_REMOVE_ROUTER`/`APIGATEWAY_RESET_ROUTER` (y variantes v0); todo handler chequea `if m.Myself { return }`.
-- Storage: `Save()` persiste todos los `Solvers` (excepto los de tipo `TpHandler`, que se re-registran en código en cada arranque) en `cache` si está cargado, o en un archivo `apigateway.json` si no.
-
-**`ettp/v1/`:** no es simplemente "legado" — recibe commits recientes, y tiene archivos completos sin equivalente en v2 (`server-apigateway.go`, `server-proxy.go`, `server-token.go`, `server-method.go`, `server-cache.go`). Verifica cuál importa el binario que estás tocando antes de asumir "usa siempre v2".
-
-### 3.3 `router/`
-
-**Descripción:** routing standalone con anuncio de rutas vía NATS, usado internamente por `ettp/v2` (la dependencia va en un solo sentido: `ettp/v2` importa `router`, no al revés).
-
-**API (`router/router.go`):**
-- `func PushApiGateway(method, path, resolve string, tpHeader TpHeader, header et.Json, excludeHeader []string, version int, packageName string)`
-- `func RemoveApiGateway(id string)`, `func GetRoutes() map[string]et.Json`
-- `func SetChannels(channels *Channels)`, `func GetChanels() et.Json` (sic — typo confirmado, no "GetChannels")
-- `func UseAutentication(fn func(http.Handler) http.Handler)` (sic — typo confirmado, no "Authentication")
-- `func Public/Private/Protect/With(r *chi.Mux, method, path string, ...) *chi.Mux` — registran la ruta en el `chi.Mux` **y** anuncian la ruta al gateway vía eventos
-- Constantes de evento reales: `APIGATEWAY_SET_ROUTER`, `APIGATEWAY_REMOVE_ROUTER`, `APIGATEWAY_RESET_ROUTER` (v1) y `APIGATEWAY_SET_RESOLVE`/`APIGATEWAY_DELETE_RESOLVE`/`APIGATEWAY_RESET` (v0, heredadas)
-- `router/api.go`: `NewApi(name, path, host string, port, rpc int, version string) *Api`
-- `Router` interface local (`UseAutentication`, `Protect`, `Public`, `With`) — no implementada por ningún tipo en el repo hoy, parece vestigial
-- `router/hadler.go` (sic, no "handler.go"): `HttpSet/HttpGet/HttpDelete` — CRUD HTTP genérico sobre un store externo de solvers (`SetFn`/`GetFn`/`DeleteFn` en `storage.go`)
-- Uso standalone: sí, no depende de `ettp/v2`.
-
-### 3.4 `middleware/`
-
-**Descripción:** middlewares HTTP para `chi`/`net/http`.
-
-**API:**
-- `func AllowAll(allowedOrigins []string) *cors.Cors` — `middleware/cors.go:10`
-- `func RequestID(next http.Handler) http.Handler` — `middleware/request_id.go:67` (+ `GetReqID(ctx)`, `NextRequestID()`)
-- `func Logger(next http.Handler) http.Handler` — `middleware/logger.go:43` (debe registrarse antes que `Recoverer`)
-- `func Authentication(next http.Handler) http.Handler` — `middleware/authentication.go:43` (no "Authenticate"; valida Bearer JWT vía `jwt.Validate`, puebla contexto de `request/`, publica `PushTokenLastUse`)
-- `func Recoverer(next http.Handler) http.Handler` — `middleware/recoverer.go:23` (+ `PrintPrettyStack`)
-- `type Metrics struct{...}` + `NewMetric(r *http.Request) *Metrics` / `NewRpcMetric(method string) *Metrics` / `GetMetrics(r) *Metrics` (auto-crea si no existe) — `middleware/telemetry.go` — métodos `RESULT/JSON/ITEM/ITEMS/HTTPError/WriteResponse` (mismos nombres que `response/`, pero con telemetría añadida — no intercambiables) más `CallSearchTime/CallResponseTime/CallLatency/DoneHTTP/DoneRpc`
-- `wrap_write.go`: `NewWrapResponseWriter`/`WrapResponseWriter` — wrapper de `http.ResponseWriter` estilo chi (`Flush`/`Hijack`/`Push`/`Tee`/`Unwrap`), redundante con el `ResponseWriterWrapper` que ya define `telemetry.go` para el mismo propósito
-- `msg.go`: dos constantes (`ERR_AUTORIZATION_IS_REQUIRED`, `ERR_INVALID_AUTORIZATION_FORMAT`) que **no se usan** — `authentication.go` construye el mensaje de error con un literal duplicado en vez de citarlas
-
-### 3.5 `response/`
-
-**Descripción:** capa de salida HTTP unificada.
-
-**API (`response/response.go`):**
-- Lectura: `ScanBody(r io.Reader)`, `ScanStr(value string)`, `ScanJson(map[string]interface{})`, `GetArray(r) ([]et.Json, error)`, `GetQuery(r) et.Json`, `GetParam(r, key) string`
-- `func WriteResponse(w, statusCode int, e []byte) error` — escritor crudo, fija `Content-Type: application/json; charset=utf-8`
-- `func RESULT(w, r, statusCode int, data interface{}) error` — marshal directo, sin envoltorio
-- `func JSON(w, r, statusCode int, data interface{}) error` — envuelve en `{ok, result}` (`ok = 200<=status<300`)
-- `func ITEM(w, r, statusCode int, data et.Item) error`, `ITEMS(w, r, statusCode int, data et.Items) error`, `DATA(w, r, statusCode int, data et.Json) error`
-- `func ANY(w, r, statusCode int, result interface{}) error` — despacha por tipo a `ITEM`/`ITEMS`/`JSON`
-- `func HTTPError(w, r, statusCode int, message string) error` — envoltorio `{"message": message}`
-- `func HTTPAlert(w, r, message string) error` (= `HTTPError` 400), `Unauthorized(w, r)`, `InternalServerError(w, r, err)`, `Forbidden(w, r)`
-- `func Stream(w, r, rows int, getData DataFunction) error` — `DataFunction = func(page, rows int) (et.Items, error)`, streaming de array JSON paginado con flushing manual
-- **Bug confirmado**: el chequeo interno "está vacío" en `ITEM`/`ITEMS`/`DATA` (`if &data == (&et.Item{})` y análogos) compara punteros de dos valores stack distintos — **siempre falso**, nunca detecta el caso de valor cero. El mismo idiom roto está copiado en `middleware/telemetry.go`.
-- **Colisión de nombres a tener presente**: `response.JSON/ITEM/ITEMS/HTTPError` y `middleware.Metrics.JSON/ITEM/ITEMS/HTTPError` tienen los mismos nombres pero son conjuntos de funciones distintos (uno con telemetría, otro sin ella) — elige uno consistentemente por handler, no los mezcles.
-
-### 3.6 `request/`
-
-**Descripción:** capa de entrada HTTP + propagación de contexto de usuario/tenant + cliente HTTP saliente.
-
-**API inbound (`request/request.go`):**
-- `type Body` con `ToJson/ToItem/ToItems/ToArrayJson/ToString/ToInt/ToInt64/ToFloat/ToBool/ToTime`
-- `func ReadBody(body io.ReadCloser) (*Body, error)`, `func GetBody(r *http.Request) (et.Json, error)`
-- `func URLParam(r *http.Request, key string) *Value` (wrapper de `chi.URLParam`), `func Query(r *http.Request, key string) *Value`
-- `type Value` con `.Str()/.Int()/.Float()/.Bool()/.DateTime()/.Object() et.Json/.Array() []any/.ArrayString()/.ArrayInt()/.ArrayFloat()/.ArrayJson()`
-
-**Contexto (`request/ctx.go`):**
-- Claves: `DurationKey, PayloadKey, ServiceIdKey, AppKey, DeviceKey, UserIdKey, UsernameKey, TenantIdKey, ProfileIdKey, TokenKey`
-- Getters: `Duration(r), Payload(r), ServiceId(r), App(r), Device(r), Username(r)` (default `"Anonimo"`, no "Anonymous" — locale español consistente), `UserId(r), TenantId(r), ProfileId(r)`
-- Setters: `SetDuration/SetPayload/SetServiceId/SetApp/SetDevice/SetUserId/SetUsername/SetTenantId/SetProfileId(ctx, val) context.Context`
-
-**Cliente HTTP saliente (`request/fetch.go`):**
-- `func HttpWithContext(ctx, method, url string, header, body et.Json, tlsConfig *tls.Config) (*Body, Status)` — implementación core
-- `func Http(method, url string, header, body et.Json, tlsConfig *tls.Config) (*Body, Status)`, `func Fetch(method, url string, header, body et.Json) (*Body, Status)`
-- Verbos: `Post/Get/Put/Delete/Patch/Options(url, header[, body] et.Json) (*Body, Status)` + variantes `*WithTls`
-- `func NewTlsConfig(caFile, certFile, keyFile string) (*tls.Config, error)`
-- `type Status struct { Ok bool; Code int; Message string }` con `.ToJson()/.ToString()` — **tipo distinto** de `et.Item`/`et.Json` usados en el resto de la librería para resultados; las llamadas salientes requieren una conversión manual (`body.ToItem()`, etc.) si quieres homogeneizar con el resto del código.
-
-### 3.7 `jws/` (antes `ws/`)
-
-**Descripción:** WebSocket sobre `gorilla/websocket`, modelo de `Hub` con tópicos/colas/pila.
-
-**API:**
-- `func New() *Hub`, `func Upgrader(w, r) (*websocket.Conn, error)` (con `CheckOrigin` siempre `true`)
-- `(*Hub) Start()/Close()`
-- `(*Hub) Connect(socket *websocket.Conn, ctx context.Context) (*Client, error)` — dedupe por username (`ctx.Value("username")`), reconexión reutiliza el mismo `Client`
-- `(*Hub) Topic/Queue/Stack(channel string) *Channel` — broadcast / round-robin single-delivery / round-robin reverso
-- `(*Hub) Publish(channel string, message Message) ([]string, error)`, `(*Hub) SendTo(to []string, message Message) ([]string, error)`
-- `(*Hub) Subscribe/Unsubscribe(channel, subscribe string) error`
-- Callbacks: `OnListener, OnConnection, OnDisconnection, OnChannel, OnRemove, OnPublish, OnSend`
-- `Client` (`jws/client.go`): `read()`/`write()` loops, `Send`, `SendMessage`, `SendError`, `SendHola`
-
----
-
-## 4. Validación
-
-### 4.1 `jval/` (`jval/validate.go`)
-
-**`Rule` interface:** `Validate(et.Json) error`, `Name() string`.
-
-Constructores tipados y encadenables:
-- `Str(name) *StringRule` + `.NotEmpty()`
-- `Int(name) *IntRule` + `.Min(v)/.Max(v)`
-- `Float(name) *FloatRule` + `.Min(v)/.Max(v)`
-- `Array(name) *ArrayRule` + `.NotEmpty()`
-- `Email(name) *EmailRule` (usa `net/mail.ParseAddress`)
-- `Date(name) *DateRule` + `.Layout(layout)` (default `"2006-01-02"`)
-- `Enum(name string, vals ...string) *EnumRule`
-- `Phone(name) *PhoneRule` + `.CountryCode(code)/.Length(n)` (regex E.164-ish)
-- `Between(name string, min, max float64) *BetweenRule`
-- `Validate(name string, rules ...Rule) *ObjectRule` (objeto anidado — nombre de función igual al método `Rule.Validate`, colisión de nombre legal en Go pero confusa)
-
-**No existen constructores `Bool`/`Time`** pese a lo que sugería documentación previa — solo `Date` (basado en layout de string).
-
-**Invocación:**
-- `func Require(data et.Json, rules ...Rule) error` — todas las reglas son obligatorias, retorna el primer error
-- `func Maybe(data et.Json, rules ...Rule) error` — **bug/comportamiento a verificar**: si el primer campo de la lista está ausente en `data`, retorna `nil` inmediatamente **sin seguir evaluando los campos siguientes** de esa misma llamada — no es "salta el que falta y continúa", es "corta al primer ausente". Si necesitas validar varios campos opcionales de forma independiente, llama `Maybe` una vez por campo en vez de agrupar reglas.
-
-Mensajes de error centralizados en el paquete raíz `msg/` (§14).
-
-### 4.2 `validator/`
-
-**Descripción:** un segundo paquete de validación, **no relacionado** con `jval/` (tipos distintos, sin interfaz compartida).
-
-- `type Validator struct { Fields map[string]*Field }`, `func New() *Validator`
-- `type Field struct { Name string; Condition *Condition }`
-- `type Condition struct { required bool; min, max float64; minLength, maxLength int; pattern, name string; validator *Validator }` con builder chainable (`.NotEmpty()`, `.Min()`, `.Max()`, etc. — mismos nombres de método que `jval` por convención, pero tipos distintos)
-- `validator/msg.go`: constantes i18n (`MSG_VALIDATOR_REQUIRED`, etc.), seleccionadas en `init()` según env `LANG` (`"es"` activa mensajes en español; por defecto ya están en español en este archivo, revisar si se agregan más idiomas)
-
-No mezcles instancias/tipos de `jval` y `validator` en la misma validación — son independientes.
-
----
-
-## 5. Infraestructura
-
-### 5.1 `cache/`
-
-**Descripción:** cliente Redis con operaciones tipadas, pub/sub, colecciones, métricas.
-
-**API destacada:**
-- `func Load() error` (idempotente) · `func IsLoad() bool` · `func New() (*Conn, error)` (constructor de bajo nivel; requiere `REDIS_HOST`, valida `runtime.GOOS` ∈ `{linux,darwin,windows}`)
-- **Bug confirmado**: `(*Conn) Close()` se llama a sí mismo en vez de cerrar el `redis.Client` embebido — recursión infinita / stack overflow. No lo uses para shutdown ordenado.
-- `HealthCheck()`, `FromId()`
-- `Set/SetObject(key, val, expiration)`, `Get(key, def) (string, error)`, `GetObject(key, dest) (bool, error)`, `Exists(key) bool`, `Delete(key) (int64, error)`
-- `Incr/Decr`, `Expire`, `LPush/LRem/LRange/LTrim` (listas)
-- `SetH/SetD/SetW/SetM/SetY` (atajos de expiración por hora/día/semana/mes/año)
-- `CollectionSet/Get/Put/Find/Delete` (hash de Redis)
-- `ObjetSet/Get/Delete/All` (sic — "Objet", no "Object"; objetos JSON)
-- `AllCache(search string, page, rows int) (et.List, error)` — SCAN completo + paginación en memoria
-- `GetJson/GetItem/GetItems(key) (et.Json/Item/Items, error)`
-- `SetVerify/GetVerify/DeleteVerify(device, key, ...)` — patrón OTP get-then-delete
-- `Pub(channel, message []byte) error` / `Sub(channel, f func(*redis.Message))` / `Unsub(channel) error`
-- `type Metrics` + `CallMetrics(key string, limit int64) (Metrics, error)` — contadores de rate-limit por segundo/minuto/hora/día
-- HTTP: `GET /cache`, `GET /cache/{key}`, `DELETE /cache` vía `LoadRouter(r Router)`
-
-**Env vars:** `REDIS_HOST` (requerido), `REDIS_PASSWORD`, `REDIS_DB` (opcionales).
-
-### 5.2 `event/`
-
-**Descripción:** pub/sub sobre NATS con logging asíncrono y soporte de colas/pila.
-
-**API:**
-- `func Load() error` (idempotente, requiere `NATS_HOST`) · `Close()/IsLoad()/HealthCheck()`
-- **Mismo bug que `cache`**: `(*Conn) Close()` se llama a sí mismo en vez del `nats.Conn.Close()` embebido.
-- `func Publish(channel string, data et.Json) error`
-- `func Subscribe(channel string, f func(Message)) error` — broadcast (marca `Myself` si el emisor es la propia conexión)
-- `func Queue(channel, queue string, f func(Message)) error` — reparto entre workers (QueueSubscribe)
-- `func Stack(channel string, f func(Message)) error` — alias de `Queue(channel, "stack", f)`
-- `func Source(channel string, f func(Message)) error` — alias de `Subscribe`
-- `func Unsubscribe(channel string) error`
-- `func Log(event string, data et.Json)` / `Overflow(data)` / `Error(event string, err error) error` — logging asíncrono no bloqueante (buffer de 256, se descarta si está lleno)
-- `type Message struct { CreatedAt time.Time; FromId, Id, Channel string; Data et.Json; Myself bool }`
-- `Work(event string, data et.Json) et.Json` / `State(id string, status WorkStatus, data et.Json)` — convención de tracking de trabajo sobre pub/sub, no persistida
-
-### 5.3 `graph/`
-
-**Descripción:** wrapper mínimo del driver Neo4j — prácticamente un stub.
-
-**API (`graph/graph.go`, archivo completo, ~33 líneas):**
-```go
-type Conn struct { driver neo4j.DriverWithContext; id, host string }  // todos los campos sin exportar
-func Load() (*Conn, error) {
-    // URL y credenciales hardcodeadas:
-    // "neo4j://localhost:7687", neo4j.BasicAuth("neo4j", "password", "")
+type Router interface {
+	Protect(method, path string, handler func(http.ResponseWriter, *http.Request))
 }
 ```
-**No lee ninguna variable de entorno** (`NEO4J_HOST`/`USER`/`PASSWORD` no existen en el código, pese a documentación previa) y **`*Conn` no tiene ni un solo método** — ni consulta, ni sesión, ni `Close()`. Para usar Neo4j de verdad hoy hay que usar `neo4j-go-driver/v5` directamente.
 
----
+Funciones y métodos:
+
+```go
+func AllCache(search string, page, rows int) (et.List, error)
+func Close()
+func CollectionDelete(name, key string) error
+func CollectionFind(name, key string) (string, bool, error)
+func CollectionGet(name string) (map[string]string, error)
+func CollectionPut(name, key, val string) error
+func CollectionSet(name string, val map[string]string) error
+func Decr(key string) int64
+func DecrCtx(ctx context.Context, key string) int64
+func Delete(key string) (int64, error)
+func DeleteByPrefix(prefix string) error
+func DeleteByPrefixCtx(ctx context.Context, prefix string) error
+func DeleteCtx(ctx context.Context, key string) (int64, error)
+func DeleteVerify(device string, key string) (int64, error)
+func Empty(match string) error
+func Exists(key string) bool
+func ExistsCtx(ctx context.Context, key string) bool
+func Expire(key string, expiration time.Duration) error
+func ExpireCtx(ctx context.Context, key string, expiration time.Duration) error
+func FromId() string
+func Get(key, defaultvalue string) (string, bool, error)
+func GetBool(key string, def bool) (bool, bool, error)
+func GetBytes(key string) ([]byte, bool, error)
+func GetCtx(ctx context.Context, key, def string) (string, bool, error)
+func GetDuration(key string, def time.Duration) (time.Duration, bool, error)
+func GetFloat(key string, def float64) (float64, bool, error)
+func GetInt(key string, def int) (int, bool, error)
+func GetInt64(key string, def int64) (int64, bool, error)
+func GetItem(key string) (et.Item, bool, error)
+func GetItems(key string) (et.Items, bool, error)
+func GetJson(key string) (et.Json, bool, error)
+func GetList(key string) (et.List, bool, error)
+func GetObject(key string, dest any) (bool, error)
+func GetStr(key, def string) (string, bool, error)
+func GetTime(key string, def time.Time) (time.Time, bool, error)
+func GetVerify(device string, key string) (string, bool, error)
+func HDeleteCtx(ctx context.Context, key, atr string) error
+func HGetCtx(ctx context.Context, key string) (map[string]string, error)
+func HSetCtx(ctx context.Context, key string, val map[string]string) error
+func HealthCheck() bool
+func HttpAll(w http.ResponseWriter, r *http.Request)
+func HttpDelete(w http.ResponseWriter, r *http.Request)
+func HttpGet(w http.ResponseWriter, r *http.Request)
+func Incr(key string, expiration time.Duration) int64
+func IncrCtx(ctx context.Context, key string, expiration time.Duration) int64
+func IncrDuration(key string, expiration time.Duration) int64
+func IsLoad() bool
+func LPush(key, val string) error
+func LPushCtx(ctx context.Context, key string, val string) error
+func LRange(key string, start, stop int64) ([]string, error)
+func LRangeCtx(ctx context.Context, key string, start int64, stop int64) ([]string, error)
+func LRem(key, val string) error
+func LRemCtx(ctx context.Context, key string, val string) error
+func LTrim(key string, start, stop int64) error
+func LTrimCtx(ctx context.Context, key string, start int64, stop int64) error
+func Load() error
+func LoadRouter(r Router)
+func ObjetAll(name string) ([]et.Json, error)
+func ObjetDelete(name, key string) error
+func ObjetGet(name, key string) (et.Json, bool, error)
+func ObjetSet(name string, key string, obj et.Json) error
+func Set(key string, val interface{}, expiration time.Duration) interface{}
+func SetCtx(ctx context.Context, key, val string, expiration time.Duration) string
+func SetD(key string, val interface{}, expiration int) interface{}
+func SetH(key string, val interface{}, expiration int) interface{}
+func SetM(key string, val interface{}, expiration int) interface{}
+func SetObject(key string, val interface{}, expiration time.Duration) (interface{}, error)
+func SetVerify(device, key, val string, expiration time.Duration) interface{}
+func SetW(key string, val interface{}, expiration int) interface{}
+func SetWithDuration(key string, val interface{}, expiration time.Duration) interface{}
+func SetY(key string, val interface{}, expiration int) interface{}
+func New() (*Conn, error)
+func (s *Conn) Close()
+func (s *Conn) HealthCheck() bool
+func (s *Conn) Pub(channel string, message []byte) error
+func (s *Conn) Sub(channel string, f func(*redis.Message))
+func (s *Conn) Unsub(channel string) error
+func (s Message) ToJson() (et.Json, error)
+func (s Message) ToString() string
+func CallMetrics(key string, limit int64) (Metrics, error)
+func (s *Metrics) ToJson() et.Json
+```
+
+## `claim`
+
+Claims JWT firmados HS256 con `SECRET`.
+
+Funciones y métodos:
+
+```go
+func NewAuthenticationToken(app, device, userId, name string, payload et.Json, duration time.Duration) (string, error)
+func NewToken(app, device, userId, tenantId, roleId, name string, payload et.Json, duration time.Duration) (string, error)
+func NewClaim(duration time.Duration) *Claim
+func ParceToken(token string) (*Claim, error)
+func (s *Claim) SetPayload(payload et.Json)
+func (s *Claim) ToJson() (et.Json, error)
+```
+
+## `cmds`
+
+Etapas y pasos de comandos del sistema.
+
+Funciones y métodos:
+
+```go
+func Load(fileName string) (*Stage, error)
+func NewStage(name, description string) *Stage
+func (s *Stage) AppendStep(step *Step) *Stage
+func NewStep(name, description string) *Step
+func (s *Step) AppendCmd(args string) *Step
+func (s *Step) RunOS(idx int, args et.Json) ([]byte, error)
+func (s *Step) RunSSH(idx int, args et.Json) ([]byte, error)
+```
+
+## `color`
+
+Colores ANSI.
+
+Funciones y métodos:
+
+```go
+func Black(str string) string
+func Blue(str string) string
+func Cyan(str string) string
+func Gray(str string) string
+func Green(str string) string
+func Purple(str string) string
+func Red(str string) string
+func White(str string) string
+func Yellow(str string) string
+```
+
+## `crontab`
+
+Cron y tareas programadas guiadas por eventos; singleton por paquete con `Load(tag, store)`.
+
+Interfaces:
+
+```go
+type Store interface {
+	Set(collection, id, ownerId string, obj any) error
+	Get(collection, id string, dest any) (bool, error)
+	Delete(collection, id string) error
+	Query(query et.Json) (et.Items, error)
+}
+```
+
+Funciones y métodos:
+
+```go
+func CronJob(tag, ownerId string, spec Cron, repetitions int, params et.Json, fn func(params et.Json) error) error
+func HttpRemoveJob(w http.ResponseWriter, r *http.Request)
+func HttpStartJob(w http.ResponseWriter, r *http.Request)
+func HttpStopJob(w http.ResponseWriter, r *http.Request)
+func Load(tag string, store Store) error
+func ScheduleJob(tag, ownerId string, spec time.Time, params et.Json, fn func(params et.Json) error) error
+func New(tag string, store Store) (*Crontab, error)
+func (s *Crontab) Debug() *Crontab
+func (s *Job) ToJson() et.Json
+func (s *Job) ToString() string
+```
+
+## `csv`
+
+Leer y escribir hojas de cálculo / CSV.
+
+Funciones y métodos:
+
+```go
+func IndexOf(list []string, value string) int
+func NewCsv(data []et.Json, columns ...Column) *Csv
+func (s *Csv) ToFile(path string) error
+func (s *Csv) ToHttp(w http.ResponseWriter, filename string) error
+func (s *Csv) ToWriter(w io.Writer) error
+func ReadCsv(data []byte, comma rune) (*CsvReader, error)
+func ReadCsvFile(path string, comma rune) (*CsvReader, error)
+func ReadCsvMultipart(fileData multipart.File, comma rune) (*CsvReader, error)
+func (s *CsvReader) GetData(columns []string) ([]et.Json, error)
+func (s *CsvReader) GetRows() ([][]string, error)
+```
+
+## `dt`
+
+Objetos en Redis (`PRODUCTION=true`, por defecto) o solo en memoria.
+
+Funciones y métodos:
+
+```go
+func Drop(key string) error
+func GetObject(key string, dest any) (bool, error)
+func Get(key string) *Object
+func Up(key string, data any) Object
+func (s *Object) Array() ([]any, error)
+func (s *Object) ArrayDuration() ([]time.Duration, error)
+func (s *Object) ArrayFloat() ([]float64, error)
+func (s *Object) ArrayInt() ([]int, error)
+func (s *Object) ArrayInt64() ([]int64, error)
+func (s *Object) ArrayJson() ([]et.Json, error)
+func (s *Object) ArrayStr() ([]string, error)
+func (s *Object) ArrayTime() ([]time.Time, error)
+func (s *Object) Bool() (bool, error)
+func (s *Object) Byte() ([]byte, error)
+func (s *Object) Duration() (time.Duration, error)
+func (s *Object) Float() (float64, error)
+func (s *Object) Int() (int, error)
+func (s *Object) Int64() (int64, error)
+func (s *Object) Item() (et.Item, error)
+func (s *Object) Items() (et.Items, error)
+func (s *Object) Json() (et.Json, error)
+func (s *Object) List() (et.List, error)
+func (s *Object) String() (string, error)
+func (s *Object) Time() (time.Time, error)
+func (s *Object) ToString() string
+```
+
+## `envar`
+
+Variables de entorno con default, args de CLI y validación.
+
+Interfaces:
+
+```go
+type Store interface {
+	Get(name string, def interface{}) (interface{}, bool)
+	Set(name string, value interface{})
+}
+```
+
+Funciones y métodos:
+
+```go
+func ArgBool(name string, defaultVal bool) (bool, bool)
+func ArgFloat64(name string, defaultVal float64) (float64, bool)
+func ArgInt(name string, defaultVal int) (int, bool)
+func ArgInt64(name string, defaultVal int64) (int64, bool)
+func ArgStr(name, defaultVal string) (string, bool)
+func Bool(name string) bool
+func Float(name string) float64
+func Get(name string, def interface{}) interface{}
+func GetBool(name string, def bool) bool
+func GetConfig() map[string]interface{}
+func GetDuration(name string, def time.Duration) time.Duration
+func GetFloat(name string, def float64) float64
+func GetInt(name string, def int) int
+func GetInt64(name string, def int64) int64
+func GetStr(name, def string) string
+func Int(name string) int
+func Int64(name string) int64
+func Load(store Store)
+func Set(name string, value interface{}) interface{}
+func SetBool(name string, value bool) bool
+func SetBoolByArg(arg, name string, def bool) bool
+func SetInt(name string, value int) int
+func SetInt64(name string, value int64) int64
+func SetInt64ByArg(arg, name string, def int64) int64
+func SetIntByArg(arg, name string, def int) int
+func SetNumber(name string, value float64) float64
+func SetStr(name string, value string) string
+func SetStrByArg(arg, name, def string) string
+func Str(name string) string
+func Validate(keys []string) error
+```
+
+## `ephemeral`
+
+Mapa en memoria con expiración por instancia.
+
+Funciones y métodos:
+
+```go
+func NewInstance(expiration time.Duration) *Instance
+func (s *Instance) Del(key string)
+func (s *Instance) Get(key string) (interface{}, bool)
+func (s *Instance) Set(key string, value interface{})
+```
+
+## `et`
+
+Tipo universal `Json`, resultados (`Item`, `Items`, `List`), condiciones y consultas en memoria (`From(...).Where(...)`).
+
+Interfaces:
+
+```go
+type Iterator interface {
+	Next() (Json, bool)
+	As() string
+	Add(item Json)
+	LimitRows() int
+}
+```
+
+Funciones y métodos:
+
+```go
+func EvaluateObject(obj Json, conditions []*Condition) bool
+func EvaluateValue(value any, conditions []*Condition) bool
+func IsTypeValue(v string) bool
+func Serialize(src any) ([]byte, error)
+func Time(val any) *time.Time
+func ToString(vals interface{}) string
+func Avg(value any) Aggregate
+func Day(value any) Aggregate
+func Exp(value any) Aggregate
+func Float(value any) Aggregate
+func Hour(value any) Aggregate
+func Int(value any) Aggregate
+func Max(value any) Aggregate
+func Min(value any) Aggregate
+func Minute(value any) Aggregate
+func Month(value any) Aggregate
+func Second(value any) Aggregate
+func Sum(value any) Aggregate
+func ToAggregate(s string) (Aggregate, bool)
+func Year(value any) Aggregate
+func And(field interface{}, operator Operator, value interface{}) *Condition
+func Between(field string, min, max any) *Condition
+func Eq(field, value interface{}) *Condition
+func In(field string, value []interface{}) *Condition
+func Is(field, value interface{}) *Condition
+func IsNot(field, value interface{}) *Condition
+func Less(field, value interface{}) *Condition
+func LessEq(field, value interface{}) *Condition
+func Like(field, value interface{}) *Condition
+func More(field, value interface{}) *Condition
+func MoreEq(field, value interface{}) *Condition
+func Neg(field, value interface{}) *Condition
+func NotBetween(field string, min, max any) *Condition
+func NotIn(field string, value []interface{}) *Condition
+func NotNull(field string) *Condition
+func Null(field string) *Condition
+func Or(field interface{}, operator Operator, value interface{}) *Condition
+func ToCondition(params Json) (*Condition, error)
+func ToConditions(params []Json) ([]*Condition, error)
+func Where(field, value interface{}) *Condition
+func (s *Condition) And() *Condition
+func (s *Condition) ApplyToIndex(keys []string) []string
+func (s *Condition) ApplyToObject(obj Json) bool
+func (s *Condition) ApplyToValue(val any) bool
+func (s *Condition) Or() *Condition
+func (s *Condition) ToJson() Json
+func ToConnector(s string) Connector
+func (s Connector) Str() string
+func ToField(s string) (Field, bool)
+func ToFunction(s string) Function
+func (s Function) Str() string
+func NewItem(data Json) Item
+func (s Item) Any(def interface{}, atribs ...string) interface{}
+func (s Item) Array(atrib string) []interface{}
+func (s Item) ArrayInt(atribs ...string) []int
+func (s Item) ArrayInt64(atribs ...string) []int64
+func (s Item) ArrayJson(atribs ...string) []Json
+func (s Item) ArrayStr(atribs ...string) []string
+func (s Item) Bool(atribs ...string) bool
+func (s Item) Byte(atribs ...string) ([]byte, error)
+func (s Item) Delete(keys []string) bool
+func (s Item) Exist(key string) bool
+func (s Item) From(as string) *Wheres
+func (s Item) FromBase64(atribs ...string) string
+func (s Item) Get(key string) interface{}
+func (s Item) Int(atribs ...string) int
+func (s Item) Int64(atribs ...string) int64
+func (s *Item) IsEmpty() bool
+func (s Item) Json(atrib string) Json
+func (s Item) Num(atribs ...string) float64
+func (s *Item) Set(key string, val interface{})
+func (s Item) Str(atribs ...string) string
+func (s Item) String(atribs ...string) string
+func (s Item) Time(atribs ...string) time.Time
+func (s Item) ToBase64(atribs ...string) string
+func (s Item) ToByte() ([]byte, error)
+func (s Item) ToJson() Json
+func (s Item) ToMap() map[string]interface{}
+func (s Item) ToObject(dest any) error
+func (s Item) ToString() string
+func (s *Item) ValAny(def interface{}, atribs ...string) interface{}
+func (s Item) ValArray(def []interface{}, atribs ...string) []interface{}
+func (s *Item) ValBool(def bool, atribs ...string) bool
+func (s *Item) ValInt(def int, atribs ...string) int
+func (s Item) ValInt64(def int64, atribs ...string) int64
+func (s *Item) ValJson(def Json, atribs ...string) Json
+func (s *Item) ValNum(def float64, atribs ...string) float64
+func (s *Item) ValStr(def string, atribs ...string) string
+func (s *Item) ValTime(def time.Time, atribs ...string) time.Time
+func NewItems(data []Json) Items
+func (s *Items) Add(item ...Json)
+func (s *Items) AddMany(items []Json)
+func (s *Items) Any(idx int, def interface{}, atribs ...string) interface{}
+func (s Items) Array(idx int, atrib string) []interface{}
+func (s Items) ArrayInt(idx int, atribs ...string) []int
+func (s Items) ArrayInt64(idx int, atribs ...string) []int64
+func (s Items) ArrayJson(idx int, atribs ...string) []Json
+func (s Items) ArrayStr(idx int, atribs ...string) []string
+func (s Items) Bool(idx int, atribs ...string) bool
+func (s *Items) Delete(idx int, keys []string) bool
+func (s Items) Exist(idx int, key string) bool
+func (s *Items) First() (Item, error)
+func (s Items) From(as string) *Wheres
+func (s Items) Get(idx int, key string) interface{}
+func (s Items) Int(idx int, atribs ...string) int
+func (s Items) Int64(idx int, atribs ...string) int64
+func (s Items) Json(idx int, atrib string) Json
+func (s *Items) Last() (Item, error)
+func (s Items) Num(idx int, atribs ...string) float64
+func (s Items) One(idx int) (Item, error)
+func (s *Items) Set(idx int, key string, val interface{})
+func (s Items) Str(dx int, atribs ...string) string
+func (s Items) String(idx int, atribs ...string) string
+func (s Items) Time(idx int, atribs ...string) time.Time
+func (s Items) ToByte() ([]byte, error)
+func (s Items) ToJson() Json
+func (s *Items) ToList(all, page, rows int) List
+func (s *Items) ToMap() map[string]interface{}
+func (s Items) ToString() string
+func (s *Items) ValAny(idx int, def any, atribs ...string) interface{}
+func (s *Items) ValArray(idx int, def []interface{}, atribs ...string) []interface{}
+func (s *Items) ValBool(idx int, def bool, atribs ...string) bool
+func (s *Items) ValInt(idx int, def int, atribs ...string) int
+func (s *Items) ValInt64(idx int, def int64, atribs ...string) int64
+func (s *Items) ValJson(idx int, def Json, atribs ...string) Json
+func (s *Items) ValNum(idx int, def float64, atribs ...string) float64
+func (s *Items) ValStr(idx int, def string, atribs ...string) string
+func (s *Items) ValTime(idx int, def time.Time, atribs ...string) time.Time
+func Joingy(left, right Iterator, keys map[string]string, joinType JoinType) Iterator
+func (j JoinType) String() string
+func MergeToKeyValue(left []Json, key string, value any) []Json
+func MergeToMap(left, right []Json) []Json
+func Prefixer(item Json, as string) Json
+func ToJson(src string) (Json, error)
+func (s Json) Any(def interface{}, atribs ...string) interface{}
+func (s Json) Append(from Json) Json
+func (s Json) Array(atrib ...string) []interface{}
+func (s Json) ArrayBytes(atribs ...string) [][]byte
+func (s Json) ArrayInt(atribs ...string) []int
+func (s Json) ArrayInt64(atribs ...string) []int64
+func (s Json) ArrayJson(atribs ...string) []Json
+func (s Json) ArrayNumber(atribs ...string) []float64
+func (s Json) ArrayStr(atribs ...string) []string
+func (s Json) Bool(atribs ...string) bool
+func (s Json) Byte(atribs ...string) ([]byte, error)
+func (s Json) Clone() Json
+func (s Json) Compare(from Json) Json
+func (s Json) Delete(keys []string) bool
+func (s Json) Exist(key string) bool
+func (s Json) From(as string) *Wheres
+func (s Json) FromBase64(atribs ...string) string
+func (s Json) Get(keys ...string) (result interface{})
+func (s Json) GetItem(items []Json, index int) (Json, bool)
+func (s Json) Hidden(keys []string) Json
+func (s Json) Int(atribs ...string) int
+func (s Json) Int64(atribs ...string) int64
+func (s Json) IsChanged(from Json) bool
+func (s Json) IsDeferent(atrib string, val interface{}) bool
+func (s Json) IsEmpty() bool
+func (s Json) IsExist(key string) bool
+func (s Json) Json(atrib string) Json
+func (s Json) LowerString(atribs ...string) string
+func (s Json) MapFloat(atrib string) map[string]float64
+func (s Json) MapInt(atrib string) map[string]int
+func (s Json) MapStr(atrib string) map[string]string
+func (s Json) Num(atribs ...string) float64
+func (s Json) Query(condition *Condition) bool
+func (s Json) Remove(keys ...string)
+func (s *Json) Scan(src interface{}) error
+func (s *Json) ScanRows(rows *sql.Rows) error
+func (s Json) Select(keys []string) Json
+func (s Json) Set(key string, val interface{})
+func (j Json) SetNested(keys []string, value interface{})
+func (s Json) Str(atribs ...string) string
+func (s Json) String(atribs ...string) string
+func (s Json) Time(atribs ...string) time.Time
+func (s Json) ToBase64(atribs ...string) string
+func (s Json) ToByte() ([]byte, error)
+func (s Json) ToEscapeHTML() string
+func (s Json) ToMap() map[string]interface{}
+func (s Json) ToObject(dest any) error
+func (s Json) ToString() string
+func (s Json) TrimString(atribs ...string) string
+func (s Json) Update(from Json)
+func (s Json) UpperString(atribs ...string) string
+func (s Json) ValAny(def interface{}, atribs ...string) (result interface{})
+func (s Json) ValArray(def []interface{}, atribs ...string) []interface{}
+func (s Json) ValBool(def bool, atribs ...string) bool
+func (s Json) ValDuration(_default time.Duration, atribs ...string) time.Duration
+func (s Json) ValInt(def int, atribs ...string) int
+func (s Json) ValInt64(def int64, atribs ...string) int64
+func (s Json) ValJson(def Json, atribs ...string) Json
+func (s Json) ValNum(def float64, atribs ...string) float64
+func (s Json) ValStr(def string, atribs ...string) string
+func (s Json) ValTime(def time.Time, atribs ...string) time.Time
+func (s List) From(as string) *Wheres
+func (s *List) ToByte() ([]byte, error)
+func (s *List) ToJson() Json
+func (s *List) ToMap() map[string]interface{}
+func (s *List) ToString() string
+func ToOperator(s string) Operator
+func (s Operator) Str() string
+func NewSafeData() *SafeData
+func (s *SafeData) Add(value Json)
+func (s *SafeData) Delete(index int)
+func (s *SafeData) Get(index int) (Json, bool)
+func (s *SafeData) Len() int
+func (s *SafeData) Set(index int, value Json)
+func (m *SafeMap) Delete(key string)
+func (m *SafeMap) Get(key string) (interface{}, bool)
+func (m *SafeMap) Set(key string, value interface{})
+func (s *Source) Add(item Json)
+func (s *Source) As() string
+func (s *Source) Data(index int) Json
+func (s *Source) LimitRows() int
+func (s *Source) Next() (Json, bool)
+func (s TypeData) Str() string
+func NewValue(v any) Value
+func (v Value) Fields() []string
+func (v Value) Is(tpData string) bool
+func (v Value) Raw() any
+func (v Value) String() string
+func ToWheRes(params []Json) (WheRes, error)
+func (s WheRes) Add(condition *Condition)
+func (s WheRes) Len() int
+func (s WheRes) ToJson() []Json
+func From(items []Json, as ...string) *Wheres
+func (s *Wheres) Add(condition *Condition) *Wheres
+func (s *Wheres) AdddResult(item Json) (next bool)
+func (s *Wheres) All() []Json
+func (s *Wheres) And(condition *Condition) *Wheres
+func (s *Wheres) Asc(field string) *Wheres
+func (s *Wheres) Desc(field string) *Wheres
+func (s *Wheres) First() Json
+func (s *Wheres) FullJoin(to []Json, as string, keys map[string]string) *Wheres
+func (s *Wheres) Hidden(fields ...string) *Wheres
+func (s *Wheres) IsDebug() *Wheres
+func (s *Wheres) Join(to []Json, as string, keys map[string]string) *Wheres
+func (s *Wheres) Last() Json
+func (s *Wheres) LeftJoin(to []Json, as string, keys map[string]string) *Wheres
+func (s *Wheres) Limit(page int, rows int) *Wheres
+func (s *Wheres) One(idx int) Json
+func (s *Wheres) Or(condition *Condition) *Wheres
+func (s *Wheres) Order(field string, asc bool) *Wheres
+func (s *Wheres) RightJoin(to []Json, as string, keys map[string]string) *Wheres
+func (s *Wheres) Select(fields ...string) *Wheres
+func (s *Wheres) ToJson() (Json, error)
+func (s *Wheres) Where(condition *Condition) *Wheres
+```
+
+## `ettp/v1`
+
+Gateway anterior (proxy, port-forward, tokens). Aún usado por algunos `cmd/`.
+
+Funciones y métodos:
+
+```go
+func CorsAllowAll(allowedOrigins []string) *cors.Cors
+func NewApiFunc(method, path string, h http.HandlerFunc, packageName string) *ApiFunc
+func (s *Package) ToJson() et.Json
+func NewProxy(id, path, name, description, solver, packageName string, s *Server) *Proxy
+func (s *Proxy) ResetPortForward() error
+func (s *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request)
+func (s *Proxy) StartPortForward() error
+func (s *Proxy) StopPortForward() error
+func (p *Proxy) ToJson() et.Json
+func (s *Resolver) GetResolve() string
+func (s *Resolver) ToJson() et.Json
+func (s *Resolver) ToString() string
+func (r *Router) Connect(path string, handlerFn http.HandlerFunc, packageName string)
+func (r *Router) Delete(path string, handlerFn http.HandlerFunc, packageName string)
+func (r *Router) Get(path string, handlerFn http.HandlerFunc, packageName string)
+func (r *Router) Head(path string, handlerFn http.HandlerFunc, packageName string)
+func (r *Router) Options(path string, handlerFn http.HandlerFunc, packageName string)
+func (r *Router) Patch(path string, handlerFn http.HandlerFunc, packageName string)
+func (r *Router) Post(path string, handlerFn http.HandlerFunc, packageName string)
+func (r *Router) Put(path string, handlerFn http.HandlerFunc, packageName string)
+func (r *Router) ToJson() et.Json
+func (r *Router) Trace(path string, handlerFn http.HandlerFunc, packageName string)
+func (r *Router) With(middlewares ...func(http.Handler) http.Handler) *Router
+func New(cnf *Config) (*Server, error)
+func (s *Server) Close()
+func (s *Server) Connect(path string, handlerFn http.HandlerFunc, packageName string)
+func (s *Server) Delete(path string, handlerFn http.HandlerFunc, packageName string)
+func (s *Server) DeleteProxyById(id string, save bool) error
+func (s *Server) DeleteProxys(w http.ResponseWriter, r *http.Request)
+func (s *Server) DeleteRouteById(id string, save bool) error
+func (s *Server) DeleteTokenByKey(key string) error
+func (s *Server) Get(path string, handlerFn http.HandlerFunc, packageName string)
+func (s *Server) GetPackages(name string) et.Items
+func (s *Server) GetProxys(w http.ResponseWriter, r *http.Request)
+func (s *Server) GetProxysById(w http.ResponseWriter, r *http.Request)
+func (s *Server) GetRouteById(id string) *Router
+func (s *Server) GetTokenByKey(key string) (et.Item, error)
+func (s *Server) HandlerValidToken(key string) (et.Item, error)
+func (s *Server) Head(path string, handlerFn http.HandlerFunc, packageName string)
+func (s *Server) Options(path string, handlerFn http.HandlerFunc, packageName string)
+func (s *Server) Patch(path string, handlerFn http.HandlerFunc, packageName string)
+func (s *Server) Post(path string, handlerFn http.HandlerFunc, packageName string)
+func (s *Server) Private() *Router
+func (s *Server) PrivateRoute(method, path string, h http.HandlerFunc, packageName string)
+func (s *Server) ProtectRoute(method, path string, h http.HandlerFunc, packageName string)
+func (s *Server) PublicRoute(method, path string, h http.HandlerFunc, packageName string)
+func (s *Server) Put(path string, handlerFn http.HandlerFunc, packageName string)
+func (s *Server) Reset() error
+func (s *Server) Save() error
+func (s *Server) SetAddr(port int)
+func (s *Server) SetIdleTimeout(value time.Duration)
+func (s *Server) SetPortForward(id, name, description, remoteHost string, remotePort, localPort int, packageName string, save bool) (*Proxy, error)
+func (s *Server) SetPortForwards(w http.ResponseWriter, r *http.Request)
+func (s *Server) SetProxy(id, path, name, description, solver, packageName string, save bool) (*Proxy, error)
+func (s *Server) SetProxys(w http.ResponseWriter, r *http.Request)
+func (s *Server) SetReadTimeout(value time.Duration)
+func (s *Server) SetRouter(private bool, method, path, resolve string, header et.Json, tpHeader rt.TpHeader, excludeHeader []string, packageName string, saved bool) (*Router, error)
+func (s *Server) SetWriteTimeout(value time.Duration)
+func (s *Server) Start() error
+func (s *Server) Trace(path string, handlerFn http.HandlerFunc, packageName string)
+func (s *Server) Use(middlewares ...func(http.Handler) http.Handler)
+func (s *Server) UseAutentication(middleware func(http.Handler) http.Handler) *Server
+func (s *Server) With(middlewares ...func(http.Handler) http.Handler) *Router
+func NewStorage() *Storage
+func (t TpParams) String() string
+func IntToTypeApi(i int) TypeApi
+func (t TypeApi) String() string
+```
+
+## `ettp/v2`
+
+API gateway: `New(name, *Config)`; sincroniza rutas entre réplicas por NATS. No llama `cache.Load`/`event.Load`.
+
+Funciones y métodos:
+
+```go
+func CorsAllowAll(allowedOrigins []string) *cors.Cors
+func (s *Codec) ReadRequestBody(body interface{}) error
+func (s *Codec) ReadRequestHeader(r *rpc.Request) error
+func (s *Codec) WriteResponse(r *rpc.Response, body interface{}) error
+func (s *Package) ToJson() (et.Json, error)
+func (r *Resolver) ToJson() et.Json
+func (s *Router) ToJson() et.Json
+func New(name string, cnf *Config) (*Server, error)
+func (s *Server) Close()
+func (s *Server) FindResolver(r *http.Request) (*Resolver, error)
+func (s *Server) HTTPError(resolver *Resolver, metric *middleware.Metrics, w http.ResponseWriter, r *http.Request, status int, message string)
+func (s *Server) HTTPSuccess(resolver *Resolver, metric *middleware.Metrics, rw *middleware.ResponseWriterWrapper)
+func (s *Server) Private(method, path string, handlerFn http.HandlerFunc, packageName string) (*Solver, error)
+func (s *Server) Public(method, path string, handlerFn http.HandlerFunc, packageName string) (*Solver, error)
+func (s *Server) RemoveRouterById(id string, save bool) error
+func (s *Server) Reset()
+func (s *Server) Save() error
+func (s *Server) SetRouter(method, path, resolve string, typeHeader int, header et.Json, excludeHeader []string, version int, packageName string, saved bool) (*Solver, error)
+func (s *Server) Start()
+func (s *Server) ToJson() et.Json
+func (s *Server) ToString() string
+func (s *Server) Use(middlewares ...func(http.Handler) http.Handler)
+func (s *Server) UseAutentication(middleware func(http.Handler) http.Handler) *Server
+func (s *Solver) ToJson() et.Json
+func (s Status) String() string
+func (t TpHeader) String() string
+func StringToTypeRouter(s string) TypeRouter
+func (t TypeRouter) String() string
+```
+
+## `event`
+
+Pub/Sub sobre NATS.
+
+Interfaces:
+
+```go
+type Router interface {
+	Protect(method, path string, handler func(http.ResponseWriter, *http.Request))
+}
+```
+
+Funciones y métodos:
+
+```go
+func Close()
+func Emiter(channel string, data et.Json)
+func Error(data et.Json)
+func ErrorContext(tenantId, workflowId, nodeId, customerId string, ctx et.Json)
+func ErrorDetails(tenantId string, statusCode int, provider, providerError, response string, attempt int)
+func ErrorMessage(tenantId, message, method, functionName string)
+func HealthCheck() bool
+func HttpEventPublish(w http.ResponseWriter, r *http.Request)
+func IsLoad() bool
+func Load() error
+func LoadRouter(r Router)
+func Log(event string, data et.Json)
+func On(channel string, handler Handler)
+func Overflow(data et.Json)
+func Publish(channel string, data et.Json) error
+func Queue(channel, queue string, f func(Message)) (err error)
+func Source(channel string, f func(Message)) error
+func Stack(channel string, f func(Message)) error
+func State(id string, status WorkStatus, data et.Json)
+func Subscribe(channel string, f func(Message)) (err error)
+func Unsubscribe(channel string) error
+func Work(event string, data et.Json) et.Json
+func New() (*Conn, error)
+func (s *Conn) Close()
+func (s *Conn) HealthCheck() bool
+func DecodeMessage(data []byte) (Message, error)
+func NewEvenMessage(channel string, data et.Json) Message
+func (m Message) Encode() ([]byte, error)
+func (s Message) Serialize() ([]byte, error)
+func (s Message) ToJson() (et.Json, error)
+func (s Message) ToString() string
+```
+
+## `file`
+
+Archivos JSON, plantillas y watcher del sistema de archivos.
+
+Funciones y métodos:
+
+```go
+func GetExtencion(filename string) string
+func Load[T any](path string, obj *T) (bool, error)
+func LoadOrSave[T any](path string, obj *T) (bool, error)
+func MakeFile(path, name, model string, args ...any) (string, error)
+func MakeFolder(names ...string) (string, error)
+func Remove(path string) (bool, error)
+func Save(path string, obj any) error
+func WatcherPath(root string) error
+func ExistPath(path string) FileInfo
+func (s *FileInfo) Json() et.Json
+func NewWatcher(root string) (*Watcher, error)
+func (s *Watcher) Close() error
+func (s *Watcher) Debug() *Watcher
+func (s *Watcher) Load() error
+func (s *Watcher) OnChmod(fn func(FileInfo, fsnotify.Event)) *Watcher
+func (s *Watcher) OnCreate(fn func(FileInfo, fsnotify.Event)) *Watcher
+func (s *Watcher) OnError(fn func(err error)) *Watcher
+func (s *Watcher) OnReload(fn func(FileInfo, fsnotify.Event)) *Watcher
+func (s *Watcher) OnRemove(fn func(FileInfo, fsnotify.Event)) *Watcher
+func (s *Watcher) OnRename(fn func(FileInfo, fsnotify.Event)) *Watcher
+func (s *Watcher) OnWatching(fn OnWatching) *Watcher
+func (s *Watcher) OnWrite(fn func(FileInfo, fsnotify.Event)) *Watcher
+```
+
+## `graph`
+
+Conexión a Neo4j (`NEO4J_*`).
+
+Funciones y métodos:
+
+```go
+func Load() (*Conn, error)
+func (s *Conn) Close() error
+func (s *Conn) HealthCheck() bool
+```
+
+## `ia`
+
+RAG multitenant sobre `jsql`: ingesta de archivos/SQL, embeddings, `Ask`.
+
+Funciones y métodos:
+
+```go
+func Load(db *jsql.DB, schema string, cnf Config) (*Rag, error)
+func (s *Rag) Ask(ctx context.Context, tenantId, projectId, conversationId, userId, question string) (et.Json, error)
+func (s *Rag) DeleteDocument(tenantId, projectId, id string) error
+func (s *Rag) IngestFile(ctx context.Context, tenantId, projectId, name string, data []byte, userId string) (et.Json, error)
+func (s *Rag) IngestSQL(ctx context.Context, tenantId, projectId, name, query string, sourceDB *jsql.DB, userId string) (et.Json, error)
+func (s *Rag) ListDocuments(tenantId, projectId string) (et.Items, error)
+func (s *Rag) ListMessages(tenantId, projectId, conversationId string) (et.Items, error)
+func (s *Rag) LoadRouter(mux chi.Router)
+```
+
+## `infobip`
+
+SMS, email y plantillas de WhatsApp.
+
+Funciones y métodos:
+
+```go
+func NewSenderInfobip(params Params) (*SenderInfobip, error)
+func (s *SenderInfobip) SendEmail(to []string, subject, htmlContent string, params et.Json, tpMessage string) (et.Item, error)
+func (s *SenderInfobip) SendSMS(contactNumbers []string, content string, params et.Json, tpMessage string) (et.Item, error)
+func (s *SenderInfobip) SendWhatsApp(contactNumbers []string, templateName, language string, placeholders [][]string, tpMessage string) (et.Items, error)
+```
+
+## `iterate`
+
+Medición de tiempos por segmentos.
+
+Funciones y métodos:
+
+```go
+func End(tag, msg string, isDebug bool) time.Duration
+func Segment(tag, msg string, isDebug bool) time.Duration
+func Start(tag string)
+```
+
+## `jia`
+
+Agentes OpenAI: agentes, participantes, conversaciones, skills.
+
+Interfaces:
+
+```go
+type Router interface {
+	Protect(method, path string, handler func(http.ResponseWriter, *http.Request))
+}
+
+type Sender interface {
+	SendTextMessage(to string, content string) (et.Item, error)
+}
+
+type Skill interface {
+	Tag() string
+	Name() string
+	Description() string
+	Execute(
+		ctx context.Context,
+		input et.Json,
+	) (et.Json, error)
+}
+
+type Store interface {
+	Set(collection, id, ownerId string, obj any) error
+	Get(collection, id string, dest any) (bool, error)
+	Delete(collection, id string) error
+	Query(query et.Json) (et.Items, error)
+}
+```
+
+Funciones y métodos:
+
+```go
+func (s *Agent) Debug() *Agent
+func (s *Agent) OnDelete(fn func(agent *Agent) error) *Agent
+func (s *Agent) OnSave(fn func(agent *Agent) error) *Agent
+func (s *Agent) ToJson() et.Json
+func (s *Agent) ToString() string
+func NewApiSkill(tag, name, description, url, method string, headers et.Json, body et.Json) (*ApiSkill, error)
+func (s *ApiSkill) Description() string
+func (s *ApiSkill) Execute(ctx context.Context, input et.Json) (et.Json, error)
+func (s *ApiSkill) Name() string
+func (s *ApiSkill) Tag() string
+func (s *Conversation) AddParticipant(participant *Participant) *Conversation
+func (s *Conversation) OnDelete(fn func(conversation *Conversation) error) *Conversation
+func (s *Conversation) OnSave(fn func(conversation *Conversation) error) *Conversation
+func (s *Conversation) SendTextMessage(content, userId, to string) (*Message, error)
+func (s *Conversation) SetConvId(convId string) *Conversation
+func (s *Conversation) SetLimitMessages(limit int) *Conversation
+func (s *Conversation) ToJson() et.Json
+func (s *Conversation) ToString() string
+func (s *ConversationResult) ToJson() et.Json
+func Load(id string, store Store) (*Ia, error)
+func New(tag string, store Store, userId string) (*Ia, error)
+func (s *Ia) Conversation(ctx context.Context, tagAgent, to, name, prompt string) (*Conversation, error)
+func (s *Ia) Embed(ctx context.Context, agentName string, text string) ([]float64, error)
+func (s *Ia) HttpConversation(w http.ResponseWriter, r *http.Request)
+func (s *Ia) HttpDeleteAgent(w http.ResponseWriter, r *http.Request)
+func (s *Ia) HttpDeleteConversation(w http.ResponseWriter, r *http.Request)
+func (s *Ia) HttpDeleteParticipant(w http.ResponseWriter, r *http.Request)
+func (s *Ia) HttpGetAgent(w http.ResponseWriter, r *http.Request)
+func (s *Ia) HttpGetParticipant(w http.ResponseWriter, r *http.Request)
+func (s *Ia) HttpNewAgent(w http.ResponseWriter, r *http.Request)
+func (s *Ia) HttpNewParticipant(w http.ResponseWriter, r *http.Request)
+func (s *Ia) HttpSetAgent(w http.ResponseWriter, r *http.Request)
+func (s *Ia) HttpSetParticipant(w http.ResponseWriter, r *http.Request)
+func (s *Ia) LoadRouter(r Router)
+func (s *Ia) OnDelete(fn func(ia *Ia) error) *Ia
+func (s *Ia) OnSave(fn func(ia *Ia) error) *Ia
+func (s *Ia) SetContextAgent(tag string, context, userId string) (*Agent, error)
+func (s *Ia) SetModelAgent(tag string, model, userId string) (*Agent, error)
+func (s *Ia) SetSkillAgent(tag string, skill Skill, userId string) (*Agent, error)
+func (s *Ia) ToJson() et.Json
+func (s *Ia) ToString() string
+func (s *Message) OnDelete(fn func(message *Message) error) *Message
+func (s *Message) OnSave(fn func(message *Message) error) *Message
+func (s *Message) ToJson() et.Json
+func (s *Message) ToString() string
+func (s *Participant) OnDelete(fn func(participant *Participant) error) *Participant
+func (s *Participant) OnSave(fn func(participant *Participant) error) *Participant
+func (s *Participant) SetConvId(convId, userId string) *Participant
+func (s *Participant) SetName(name, userId string) *Participant
+func (s *Participant) ToJson() et.Json
+func (s *Participant) ToString() string
+```
+
+## `jrex`
+
+Runtime JavaScript (goja) con módulos, bindings y hot-reload.
+
+Interfaces:
+
+```go
+type Store interface {
+	Set(collection, id, ownerId string, obj any) error
+	Get(collection, id string, dest any) (bool, error)
+}
+```
+
+Funciones y métodos:
+
+```go
+func GetArgs(args []goja.Value, idx int, defaultValue any) any
+func GetVersion(version string, part Part) string
+func NewStore(baseDir string) (*FileStore, error)
+func (s *FileStore) Get(collection, id string, dest any) (bool, error)
+func (s *FileStore) Set(collection, id, ownerId string, obj any) error
+func NewInstance(id ...string) *Instance
+func (s *Instance) Error(err error) *goja.Object
+func (s *Instance) Get(name string) goja.Value
+func (s *Instance) GetCode() string
+func (s *Instance) GetJson(name string) et.Json
+func (s *Instance) Run() (et.Json, error)
+func (s *Instance) Save(store Store) error
+func (s *Instance) SetBinding(name string, value interface{}) *Instance
+func (s *Instance) SetCode(code string) *Instance
+func (s *Instance) SetCtx(ctx et.Json) *Instance
+func (s *Instance) SetStore(store Store) *Instance
+func (s *Instance) Value(value interface{}) goja.Value
+func Load(tag string, store Store) (*Jrex, error)
+func (s *Jrex) Debug() *Jrex
+func (s *Jrex) NewInstance(module string) (*Instance, error)
+func (s *Jrex) NewModule(tag, userId string) (*Module, error)
+func (s *Jrex) Notify(kind, message string)
+func (s *Jrex) OnSave(fn func(jrex *Jrex, userId string) error) *Jrex
+func (s *Jrex) Run() (et.Json, error)
+func (s *Jrex) RunDev() error
+func (s *Jrex) RunInstance(instance *Instance) (et.Json, error)
+func (s *Jrex) RunModule(module string) (et.Json, error)
+func (s *Jrex) Save(userId string) error
+func (s *Jrex) Set(name string, value interface{}) *Jrex
+func (s *Jrex) ToJson() et.Json
+func (s *Jrex) ToString() string
+func (s *Jrex) Up(store Store) *Jrex
+func (s *Module) SetMetadata(metadata et.Json)
+func ToPart(value string) (Part, bool)
+```
+
+## `jrpc`
+
+`net/rpc` sobre TCP con registro de solvers.
+
+Funciones y métodos:
+
+```go
+func Call(method string, args any) (any, error)
+func CallItem(method string, args et.Json) (et.Item, error)
+func CallItems(method string, args et.Json) (et.Items, error)
+func CallJson(method string, args et.Json) (et.Json, error)
+func Close()
+func HttpListRouters(w http.ResponseWriter, r *http.Request)
+func Start(port int) error
+func Mount(host string, port int, services any, packageName string) (*Package, error)
+func (s *Package) Add(method string, imputs []string, output []string) *Solver
+func (s *Package) ToJson() et.Json
+func GetSolver(method string) (*Solver, error)
+```
+
+## `jsql`
+
+SQL builder/ORM guiado por JSON: modelos, consultas, comandos, triggers, transacciones, series. API completa en `jsql/catalog.go`; spec en `jsql/spec.md`.
+
+Interfaces:
+
+```go
+type Connection interface {
+	ID() string
+	SetId(string)
+	GetParams() et.Json
+	SetDatabase(string)
+	GetDatabase() string
+	SetPassword(string)
+}
+
+type Driver interface {
+	UseSchema() bool
+	CreateDB(connection *ConnectParams, timeout ...time.Duration) error
+	DropDB(db *DB, timeout ...time.Duration) error
+	Connect(db *DB, timeout ...time.Duration) (*sql.DB, error)
+	ExistModel(db *sql.DB, model *Model, timeout ...time.Duration) (bool, error)
+	Load(model *Model, timeout ...time.Duration) (string, error)
+	Drop(model *Model, timeout ...time.Duration) error
+	Query(query *Query, timeout ...time.Duration) (string, error)
+	Command(command *Command, timeout ...time.Duration) (string, error)
+}
+
+type Tester interface {
+	Test(ctx context.Context, connection Connection, query string) error
+}
+```
+
+Funciones y métodos:
+
+```go
+func AddAuditLog(auditLog []et.Json, userId string, action string) []et.Json
+func And(field interface{}, operator et.Operator, value interface{}) *et.Condition
+func ArgWhitAs(arg string) ([]string, bool)
+func ArgWhitSchema(arg string) ([]string, bool)
+func Between(field string, min, max any) *et.Condition
+func CreateDB(connection *ConnectParams, timeout ...time.Duration) error
+func DetailKeys(key, foreignKey string) map[string]string
+func DropDB(db *DB, timeout ...time.Duration) error
+func Eq(field string, value interface{}) *et.Condition
+func EscapeSQLString(s string) string
+func In(field string, value []interface{}) *et.Condition
+func Is(field string, value interface{}) *et.Condition
+func IsNot(field string, value interface{}) *et.Condition
+func JsonString(val any) (string, error)
+func Less(field string, value interface{}) *et.Condition
+func LessEq(field string, value interface{}) *et.Condition
+func Like(field string, value interface{}) *et.Condition
+func More(field string, value interface{}) *et.Condition
+func MoreEq(field string, value interface{}) *et.Condition
+func Neg(field string, value interface{}) *et.Condition
+func NotBetween(field string, min, max any) *et.Condition
+func NotIn(field string, value []interface{}) *et.Condition
+func NotNull(field string) *et.Condition
+func Null(field string) *et.Condition
+func Or(field interface{}, operator et.Operator, value interface{}) *et.Condition
+func Probe(ctx context.Context, db *sql.DB, query string) error
+func Quoted(val any) any
+func Register(name string, driver Driver)
+func RollupKeys(key, foreignKey string) map[string]string
+func RowsToItems(rows *sql.Rows) et.Items
+func SQLParse(sql string, args ...any) string
+func StatusList() []interface{}
+func TestConnection(ctx context.Context, connection Connection, query string) error
+func TimeoutContext(timeout ...time.Duration) (context.Context, context.CancelFunc)
+func ToArrayAny(statuses []string) []interface{}
+func Where(field, value interface{}) *et.Condition
+func Wrapper(db *DB) map[string]any
+func (s *Column) ToJson() et.Json
+func (s *Command) AfterDelete(fn TriggerFunction) *Command
+func (s *Command) AfterInsert(fn TriggerFunction) *Command
+func (s *Command) AfterInsertOrUpdate(fn TriggerFunction) *Command
+func (s *Command) AfterUpdate(fn TriggerFunction) *Command
+func (s *Command) And(cond *et.Condition) *Command
+func (s *Command) BeforeDelete(fn TriggerFunction) *Command
+func (s *Command) BeforeInsert(fn TriggerFunction) *Command
+func (s *Command) BeforeInsertOrUpdate(fn TriggerFunction) *Command
+func (s *Command) BeforeUpdate(fn TriggerFunction) *Command
+func (s *Command) Debug() *Command
+func (s *Command) Exec() (et.Items, error)
+func (s *Command) ExecTx(tx *Tx) (et.Items, error)
+func (s *Command) Limit(rows int) *Command
+func (s *Command) One() (et.Item, error)
+func (s *Command) OneTx(tx *Tx) (et.Item, error)
+func (s *Command) Or(cond *et.Condition) *Command
+func (s *Command) Return(fields ...string) *Command
+func (s *Command) Test() *Command
+func (s *Command) ToJson() et.Json
+func (s *Command) Where(cond *et.Condition) *Command
+func ConnectionFromJson(driver, host string, params et.Json) (Connection, error)
+func GetConnection(driver, host string) (Connection, error)
+func ConnectTo(params ConnectParams) (*DB, error)
+func Load() (*DB, error)
+func LoadDb(params et.Json) (*DB, error)
+func LoadTo(dbName string, hostName ...string) (*DB, error)
+func NewDB(params ConnectParams) (*DB, error)
+func (s *DB) Close() error
+func (s *DB) Debug()
+func (s *DB) Define(define Define) (*Model, error)
+func (s *DB) DefineModel(schema, name string, version int, userId string) (*Model, error)
+func (s *DB) DefineProjectModel(schema, name string, version int, userId string) (*Model, error)
+func (s *DB) DefineTenantModel(schema, name string, version int, userId string) (*Model, error)
+func (s *DB) GetModel(schema, name string) (*Model, error)
+func (s *DB) Init() error
+func (s *DB) LoadModel(schema string, def et.Json) (*Model, error)
+func (s *DB) NewModel(schema, name string, version int, userId string) *Model
+func (s *DB) OnAuditLog(fn func(userId string, action string) error)
+func (s *DB) Query(sql et.Json) (et.Items, error)
+func (s *DB) QueryTx(tx *Tx, sql et.Json) (et.Items, error)
+func (s *DB) RemoveModel(schema, name string) error
+func (s *DB) SetDebug(debug bool)
+func (s *DB) Sql(query string, args ...any) (et.Items, error)
+func (s *DB) SqlTx(tx *Tx, query string, arg ...any) (et.Items, error)
+func (s *DB) ToJson() et.Json
+func (s *Detail) GetQuery(item et.Json, page, rows int) *Query
+func (s *Detail) Ref() et.Json
+func (s *From) Ref() et.Json
+func (s *Master) Ref() et.Json
+func (s *Model) AddAuditLog(userId string, action string)
+func (s *Model) AfterDelete(fn TriggerFunction) *Model
+func (s *Model) AfterInsert(fn TriggerFunction) *Model
+func (s *Model) AfterInsertOrUpdate(fn TriggerFunction) *Model
+func (s *Model) AfterUpdate(fn TriggerFunction) *Model
+func (s *Model) As(as ...string) *Query
+func (s *Model) BeforeDelete(fn TriggerFunction) *Model
+func (s *Model) BeforeInsert(fn TriggerFunction) *Model
+func (s *Model) BeforeInsertOrUpdate(fn TriggerFunction) *Model
+func (s *Model) BeforeUpdate(fn TriggerFunction) *Model
+func (s *Model) Bridge(name string) (*Model, bool)
+func (s *Model) Bulk(data []et.Json) *Command
+func (s *Model) Calc(fields ...string) *Query
+func (s *Model) Count() (int, error)
+func (s *Model) Db() *DB
+func (s *Model) Debug() *Model
+func (s *Model) DefineAfterDelete(name, code string, version int) *Model
+func (s *Model) DefineAfterInsert(name, code string, version int) *Model
+func (s *Model) DefineAfterUpdate(name, code string, version int) *Model
+func (s *Model) DefineAttrib(name string, tp et.TypeData, deFault any) *Column
+func (s *Model) DefineBeforeDelete(name, code string, version int) *Model
+func (s *Model) DefineBeforeInsert(name, code string, version int) *Model
+func (s *Model) DefineBeforeUpdate(name, code string, version int) *Model
+func (s *Model) DefineCalc(name, script string) *Model
+func (s *Model) DefineCalcFunc(name string, calc CalcFunction) *Model
+func (s *Model) DefineColumn(name string, tp et.TypeData, deFault any) *Column
+func (s *Model) DefineDetail(name string, keys map[string]string, rows int, selects ...string) (*Model, error)
+func (s *Model) DefineForeignKeys(to *Model, keys map[string]string, onDeleteCascade, onUpdateCascade bool) *Detail
+func (s *Model) DefineHidden(name ...string)
+func (s *Model) DefineIdxField() *Index
+func (s *Model) DefineIndex(name string, tp et.TypeData, deFault any) *Index
+func (s *Model) DefineMaster(name string, to *Model, keys, toKeys map[string]string, selects []string, rows ...int) (*Model, error)
+func (s *Model) DefineModel() *Model
+func (s *Model) DefineOmitUpdate(names ...string) *Model
+func (s *Model) DefinePrimaryKey(name string, tp et.TypeData, deFault any) *Index
+func (s *Model) DefineRequired(name string, tp et.TypeData, deFault any) *Index
+func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, selects []string, operation RollupOperation) (*Rollups, error)
+func (s *Model) DefineSource() *Column
+func (s *Model) DefineUnique(name string, tp et.TypeData, deFault any) *Index
+func (s *Model) Delete() *Command
+func (s *Model) Detail(name string) (*Model, bool)
+func (s *Model) First(n int) (et.Items, error)
+func (s *Model) GetCalcFunc(name string) (CalcFunction, bool)
+func (s *Model) GetColumn(name string) (*Column, bool)
+func (s *Model) GetField(name string) (*Field, bool)
+func (s *Model) GetFrom() *From
+func (s *Model) GetKind() string
+func (s *Model) GetModel(schema, name string) (*Model, error)
+func (s *Model) GetSchema() *Schema
+func (s *Model) Init() error
+func (s *Model) Insert(data et.Json) *Command
+func (s *Model) Join(to *Model, as string, on []*et.Condition) *Query
+func (s *Model) Master(name string) (*Query, bool)
+func (s *Model) Query(query et.Json) *Query
+func (s *Model) QueryTx(tx *Tx, query et.Json) *Query
+func (s *Model) Replace(other *Model)
+func (s *Model) Select(fields ...string) *Query
+func (s *Model) SetDb(db *DB)
+func (s *Model) SetTable()
+func (s *Model) SqlDB() *sql.DB
+func (s *Model) Stricted()
+func (s *Model) ToJson() et.Json
+func (s *Model) Update(data et.Json) *Command
+func (s *Model) Upsert(data et.Json) *Command
+func (s *Model) Where(cond *et.Condition) *Query
+func (s *MssqlConection) GetDatabase() string
+func (s *MssqlConection) GetParams() et.Json
+func (s *MssqlConection) ID() string
+func (s *MssqlConection) SetDatabase(name string)
+func (s *MssqlConection) SetId(id string)
+func (s *MssqlConection) SetPassword(password string)
+func (s *MysqlConection) GetDatabase() string
+func (s *MysqlConection) GetParams() et.Json
+func (s *MysqlConection) ID() string
+func (s *MysqlConection) SetDatabase(name string)
+func (s *MysqlConection) SetId(id string)
+func (s *MysqlConection) SetPassword(password string)
+func (s *OracleConection) GetDatabase() string
+func (s *OracleConection) GetParams() et.Json
+func (s *OracleConection) ID() string
+func (s *OracleConection) SetDatabase(name string)
+func (s *OracleConection) SetId(id string)
+func (s *OracleConection) SetPassword(password string)
+func (s *PgConection) GetDatabase() string
+func (s *PgConection) GetParams() et.Json
+func (s *PgConection) ID() string
+func (s *PgConection) SetDatabase(name string)
+func (s *PgConection) SetId(id string)
+func (s *PgConection) SetPassword(password string)
+func NewQuery(model *Model, as ...string) *Query
+func (s *Query) AddCondition(cond *et.Condition) *Query
+func (s *Query) All() (et.Items, error)
+func (s *Query) AllTx(tx *Tx) (et.Items, error)
+func (s *Query) And(cond *et.Condition) *Query
+func (s *Query) Calc(fields ...string) *Query
+func (s *Query) Count() (int, error)
+func (s *Query) CountTx(tx *Tx) (int, error)
+func (s *Query) Debug() *Query
+func (s *Query) Detail(fields ...string) *Query
+func (s *Query) Exists() (bool, error)
+func (s *Query) ExistsTx(tx *Tx) (bool, error)
+func (s *Query) First(n int) (et.Items, error)
+func (s *Query) FirstTx(tx *Tx, n int) (et.Items, error)
+func (s *Query) FullJoin(model *Model, as string, on []*et.Condition) *Query
+func (s *Query) GetField(field string) (*Field, bool)
+func (s *Query) GetSelectField(name string) (*Field, bool)
+func (s *Query) GroupBy(fields ...string) *Query
+func (s *Query) HasStar() bool
+func (s *Query) Having(cond *et.Condition) *Query
+func (s *Query) Hidden(fields ...string) *Query
+func (s *Query) Join(model *Model, as string, on []*et.Condition) *Query
+func (s *Query) LeftJoin(model *Model, as string, on []*et.Condition) *Query
+func (s *Query) Limit(page, rows int) (et.Items, error)
+func (s *Query) LimitTx(tx *Tx, page, rows int) (et.Items, error)
+func (s *Query) Master(fields ...string) *Query
+func (s *Query) One() (et.Item, error)
+func (s *Query) OneTx(tx *Tx) (et.Item, error)
+func (s *Query) Or(cond *et.Condition) *Query
+func (s *Query) OrderBy(field string, sorted ...bool) *Query
+func (s *Query) Page(page int) *Query
+func (s *Query) RightJoin(model *Model, as string, on []*et.Condition) *Query
+func (s *Query) Select(fields ...string) *Query
+func (s *Query) SourceHiddens(from *From) []string
+func (s *Query) StarFields() []string
+func (s *Query) Test() *Query
+func (s *Query) ToJson() et.Json
+func (s *Query) Where(cond *et.Condition) *Query
+func (s *QueryDetail) GetQuery(item et.Json) *Query
+func (s *QueryRollups) GetQuery(item et.Json) (*Query, bool)
+func (s RollupOperation) IsAggregate() bool
+func (s RollupOperation) IsValid() bool
+func (s *Schema) GetModel(name string) (*Model, error)
+func (s *Schema) LoadModel(def et.Json) (*Model, error)
+func (s *Schema) ToJson() et.Json
+func DefineSeries(db *DB, schema string) (*Series, error)
+func (s *Series) DeleteSeries(tag string) error
+func (s *Series) GenSerie(tag string) (string, error)
+func (s *Series) GenValue(tag string) (int, error)
+func (s *Series) GetSeries(tag string) (et.Item, error)
+func (s *Series) Model() *Model
+func (s *Series) NewSeries(tag, format string) error
+func (s *Series) SetSeries(tag string, format string, value int) error
+func (s *SqliteConection) GetDatabase() string
+func (s *SqliteConection) GetParams() et.Json
+func (s *SqliteConection) ID() string
+func (s *SqliteConection) SetDatabase(name string)
+func (s *SqliteConection) SetId(id string)
+func (s *SqliteConection) SetPassword(password string)
+func NewTx() *Tx
+func (s *Tx) Commit() error
+func (s *Tx) Query(db *sql.DB, query string, args ...any) (*sql.Rows, error)
+func (s *Tx) Rollback() error
+func (s TypeColumn) Str() string
+```
+
+## `jsql/drivers/mssql`
+
+Driver de `jsql`; se registra en `init()` y se importa por efecto lateral.
+
+Funciones y métodos:
+
+```go
+func Quoted(v et.Value) string
+func QuotedAs(tp et.TypeData, val any) string
+func (s *Mssql) Command(command *jsql.Command, timeout ...time.Duration) (string, error)
+func (s *Mssql) Connect(db *jsql.DB, timeout ...time.Duration) (*sql.DB, error)
+func (s *Mssql) CreateDB(connection *jsql.ConnectParams, timeout ...time.Duration) error
+func (s *Mssql) Drop(model *jsql.Model, timeout ...time.Duration) error
+func (s *Mssql) DropDB(db *jsql.DB, timeout ...time.Duration) error
+func (s *Mssql) ExistModel(db *sql.DB, model *jsql.Model, timeout ...time.Duration) (bool, error)
+func (s *Mssql) Load(model *jsql.Model, timeout ...time.Duration) (string, error)
+func (s *Mssql) Query(query *jsql.Query, timeout ...time.Duration) (string, error)
+func (s *Mssql) Test(ctx context.Context, connection jsql.Connection, query string) error
+func (s *Mssql) UseSchema() bool
+```
+
+## `jsql/drivers/mysql`
+
+Driver de `jsql`; se registra en `init()` y se importa por efecto lateral.
+
+Funciones y métodos:
+
+```go
+func Quoted(v et.Value) string
+func QuotedAs(tp et.TypeData, val any) string
+func (s *Mysql) Command(command *jsql.Command, timeout ...time.Duration) (string, error)
+func (s *Mysql) Connect(db *jsql.DB, timeout ...time.Duration) (*sql.DB, error)
+func (s *Mysql) CreateDB(connection *jsql.ConnectParams, timeout ...time.Duration) error
+func (s *Mysql) Drop(model *jsql.Model, timeout ...time.Duration) error
+func (s *Mysql) DropDB(db *jsql.DB, timeout ...time.Duration) error
+func (s *Mysql) ExistModel(db *sql.DB, model *jsql.Model, timeout ...time.Duration) (bool, error)
+func (s *Mysql) Load(model *jsql.Model, timeout ...time.Duration) (string, error)
+func (s *Mysql) Query(query *jsql.Query, timeout ...time.Duration) (string, error)
+func (s *Mysql) Test(ctx context.Context, connection jsql.Connection, query string) error
+func (s *Mysql) UseSchema() bool
+```
+
+## `jsql/drivers/oracle`
+
+Driver de `jsql`; se registra en `init()` y se importa por efecto lateral.
+
+Funciones y métodos:
+
+```go
+func Quoted(v et.Value) string
+func QuotedAs(tp et.TypeData, val any) string
+func (s *Oracle) Command(command *jsql.Command, timeout ...time.Duration) (string, error)
+func (s *Oracle) Connect(db *jsql.DB, timeout ...time.Duration) (*sql.DB, error)
+func (s *Oracle) CreateDB(connection *jsql.ConnectParams, timeout ...time.Duration) error
+func (s *Oracle) Drop(model *jsql.Model, timeout ...time.Duration) error
+func (s *Oracle) DropDB(db *jsql.DB, timeout ...time.Duration) error
+func (s *Oracle) ExistModel(db *sql.DB, model *jsql.Model, timeout ...time.Duration) (bool, error)
+func (s *Oracle) Load(model *jsql.Model, timeout ...time.Duration) (string, error)
+func (s *Oracle) Query(query *jsql.Query, timeout ...time.Duration) (string, error)
+func (s *Oracle) Test(ctx context.Context, connection jsql.Connection, query string) error
+func (s *Oracle) UseSchema() bool
+```
+
+## `jsql/drivers/postgres`
+
+Driver de `jsql`; se registra en `init()` y se importa por efecto lateral.
+
+Funciones y métodos:
+
+```go
+func CreateDatabase(ctx context.Context, db *sql.DB, name string) error
+func DropDatabase(ctx context.Context, db *sql.DB, name string) error
+func ExistDatabase(ctx context.Context, db *sql.DB, name string) (bool, error)
+func Quoted(v et.Value) string
+func (s *Postgres) Command(command *jsql.Command, timeout ...time.Duration) (string, error)
+func (s *Postgres) Connect(db *jsql.DB, timeout ...time.Duration) (*sql.DB, error)
+func (s *Postgres) CreateDB(connection *jsql.ConnectParams, timeout ...time.Duration) error
+func (s *Postgres) Drop(model *jsql.Model, timeout ...time.Duration) error
+func (s *Postgres) DropDB(db *jsql.DB, timeout ...time.Duration) error
+func (s *Postgres) ExistModel(db *sql.DB, model *jsql.Model, timeout ...time.Duration) (bool, error)
+func (s *Postgres) Load(model *jsql.Model, timeout ...time.Duration) (string, error)
+func (s *Postgres) Query(query *jsql.Query, timeout ...time.Duration) (string, error)
+func (s *Postgres) Test(ctx context.Context, connection jsql.Connection, query string) error
+func (s *Postgres) UseSchema() bool
+```
+
+## `jsql/drivers/sqlite`
+
+Driver de `jsql`; se registra en `init()` y se importa por efecto lateral.
+
+Funciones y métodos:
+
+```go
+func Quoted(v et.Value) string
+func (s *Sqlite) Command(command *jsql.Command, timeout ...time.Duration) (string, error)
+func (s *Sqlite) Connect(db *jsql.DB, timeout ...time.Duration) (*sql.DB, error)
+func (s *Sqlite) CreateDB(connection *jsql.ConnectParams, timeout ...time.Duration) error
+func (s *Sqlite) Drop(model *jsql.Model, timeout ...time.Duration) error
+func (s *Sqlite) DropDB(db *jsql.DB, timeout ...time.Duration) error
+func (s *Sqlite) ExistModel(db *sql.DB, model *jsql.Model, timeout ...time.Duration) (bool, error)
+func (s *Sqlite) Load(model *jsql.Model, timeout ...time.Duration) (string, error)
+func (s *Sqlite) Query(query *jsql.Query, timeout ...time.Duration) (string, error)
+func (s *Sqlite) Test(ctx context.Context, connection jsql.Connection, query string) error
+func (s *Sqlite) UseSchema() bool
+```
+
+## `jtcp`
+
+Nodo TCP distribuido con elección de líder tipo Raft, balanceador y TLS.
+
+Interfaces:
+
+```go
+type Service interface {
+	Execute(method string, request *Message) *Response
+}
+```
+
+Funciones y métodos:
+
+```go
+func NewClientTLSConfig(caFile string) (*tls.Config, error)
+func NewMTLSConfig(certFile, keyFile, caFile string) (*tls.Config, error)
+func NewSelfSignedTLS() (*tls.Config, error)
+func NewTLSFromFiles(certFile, keyFile string) (*tls.Config, error)
+func StartConsole(client *Client)
+func (s *Balancer) AddNode(addr string)
+func NewClient(addr string, tlsConfig ...*tls.Config) *Client
+func (s *Client) Close() error
+func (s *Client) Connect() error
+func (s *Client) OnConnect(fn func(*Client))
+func (s *Client) OnDisconnect(fn func(*Client))
+func (s *Client) OnError(fn func(*Client, error))
+func (s *Client) OnInbox(fn func(*Client, *Message))
+func (s *Client) OnSend(fn func(*Client, []byte))
+func (s *Client) Request(method string, args ...any) *Response
+func (s *Client) Send(ms *Message) error
+func (s *Client) SetDebug(debug bool)
+func (s *Client) SetTimeOut(timeout time.Duration)
+func (s *Client) Start() error
+func (s *Client) ToJson() et.Json
+func NewMessage(tp TpMessage, message any) (*Message, error)
+func ToMessage(bt []byte) (*Message, error)
+func (s *Message) Get(dest any) error
+func (s *Message) GetArgs(dest ...any) error
+func (s *Message) Response() (*Response, error)
+func (s *Message) ToJson() et.Json
+func (s *Msg) Get(dest any) error
+func (s *Msg) ID() string
+func NewNode(port int, tlsConfig ...*tls.Config) *Node
+func (s *Node) AddNode(addr string)
+func (s *Node) Broadcast(destination []string, tp TpMessage, message any)
+func (s *Node) Close() error
+func (s *Node) Error(c *Client, err error) error
+func (s *Node) GetMethods() et.Json
+func (s *Node) GetPeers() []*Client
+func (s *Node) LeaderID() (string, bool)
+func (s *Node) Mount(service Service) error
+func (s *Node) Next() *Client
+func (s *Node) OnBecomeLeader(fn func(*Node))
+func (s *Node) OnChangeLeader(fn func(*Node))
+func (s *Node) OnConnect(fn func(*Client))
+func (s *Node) OnDisconnect(fn func(*Client))
+func (s *Node) OnError(fn func(*Client, error))
+func (s *Node) OnInbox(fn func(*Msg))
+func (s *Node) OnSend(fn func(*Msg))
+func (s *Node) RemoveNode(addr string)
+func (s *Node) Request(to *Client, method string, args ...any) *Response
+func (s *Node) ResponseError(msg *Msg, err error) error
+func (s *Node) Send(to *Client, tp TpMessage, message any) error
+func (s *Node) SendError(to *Client, err error) error
+func (s *Node) Start() (err error)
+func (s *Raft) LeaderID() (leader string, imLeader bool)
+func TcpError(msg any) *Response
+func TcpResponse(res ...any) *Response
+func (s *Response) Get(dest ...any) error
+func (s *Response) ToJson() (et.Json, error)
+func (s *Response) ToString() string
+func (s *Tcp) Execute(method string, request *Message) *Response
+```
+
+## `jwf`
+
+Motor de workflows en memoria: flujos, pasos (Go o JS), instancias, reintentos. Persistencia vía `OnChange`.
+
+Funciones y métodos:
+
+```go
+func GetArgs(args []goja.Value, idx int, defaultValue any) any
+func RunCode(code string, ctx et.Json, bindings map[string]any) (any, error)
+func RunScripts(scripts []*Script, ctx et.Json, bindings map[string]any) (any, error)
+func LoadFlow(def et.Json) (*Flow, error)
+func NewFlow(tag, name, version, ownerId, userId string) *Flow
+func (s *Flow) AddStep(stepDef et.Json, userId string) (*Flow, error)
+func (s *Flow) Error(tag, version, title string, fn fnStep) *Flow
+func (s *Flow) LoadInstance(def et.Json) (*Instance, error)
+func (s *Flow) NewInstance(id, code, name string, tags et.Json, trigger *Trigger, userId string) *Instance
+func (s *Flow) OnChange(fn func(data et.Json) error) *Flow
+func (s *Flow) Publish() error
+func (s *Flow) SetBinding(key string, value interface{}) *Flow
+func (s *Flow) SetTimeAwait(time time.Duration, userId string) *Flow
+func (s *Flow) Step(tag, title string, fn fnStep) *Flow
+func (s *Flow) ToJson() et.Json
+func (s *Flow) ToString() string
+func (s *Instance) Done() *Instance
+func (s *Instance) OnChange(fn func(data et.Json)) *Instance
+func (s *Instance) Run(ctx et.Json, await bool) (et.Json, error)
+func (s *Instance) SetBinding(key string, value any) *Instance
+func (s *Instance) SetParams(params et.Json) et.Json
+func (s *Instance) ToJson() et.Json
+func (s *Instance) ToString() string
+func (s Status) Str() string
+func LoadStep(def et.Json) (*Step, error)
+func (s *Step) OnChange(fn func(data et.Json))
+func (s *Step) OnStatus(fn func(status Status))
+func (s *Step) Run(instance *Instance, ctx et.Json) (et.Json, error)
+func (s *Step) RunFunction(instance *Instance, ctx et.Json) (et.Json, error)
+func (s *Step) RunScript(instance *Instance, ctx et.Json) (et.Json, error)
+func (s *Step) SetBinding(name string, value interface{}) *Step
+func (s *Step) ToJson() et.Json
+func (s *Step) ToString() string
+func New(id string) (*WorkFlow, error)
+func (s *WorkFlow) GetInstance(tag, triggerTag, id, code string, tags et.Json, userId string) (*Instance, error)
+func (s *WorkFlow) NewFlow(tag, name, version, ownerId, userId string) *Flow
+func (s *WorkFlow) OnChange(fn func(data et.Json) error) *WorkFlow
+func (s *WorkFlow) Run(tag, triggerTag, id, code string, ctx, tags et.Json, await bool, userId string) (et.Json, error)
+func (s *WorkFlow) RunInstance(instance *Instance, ctx, tags et.Json, await bool, userId string) (et.Json, error)
+func (s *WorkFlow) SetBinding(key string, value any)
+func (s *WorkFlow) SetTimeAwait(time time.Duration, userId string) *WorkFlow
+func (s *WorkFlow) StopInstance(id string)
+func (s *WorkFlow) ToJson() et.Json
+func (s *WorkFlow) ToString() string
+```
+
+## `jws`
+
+Hub de WebSocket con canales (topic, queue, stack).
+
+Funciones y métodos:
+
+```go
+func SendError(socket *websocket.Conn, err error) error
+func Upgrader(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error)
+func (s *Client) Send(tp int, bt []byte)
+func (s *Client) SendError(err error)
+func (s *Client) SendHola()
+func (s *Client) SendMessage(message interface{})
+func (s *Client) ToJson() et.Json
+func New() *Hub
+func (s *Hub) Close()
+func (s *Hub) Connect(socket *websocket.Conn, ctx context.Context) (*Client, error)
+func (s *Hub) OnChannel(fn func(Channel))
+func (s *Hub) OnConnection(fn func(*Client))
+func (s *Hub) OnDisconnection(fn func(*Client))
+func (s *Hub) OnListener(fn func(*Client, []byte))
+func (s *Hub) OnPublish(fn func(ch Channel, ms Message))
+func (s *Hub) OnRemove(fn func(string))
+func (s *Hub) OnSend(fn func(to string, ms Message))
+func (s *Hub) Publish(channel string, message Message) ([]string, error)
+func (s *Hub) Queue(channel string) *Channel
+func (s *Hub) Remove(channel string) error
+func (s *Hub) SendTo(to []string, message Message) ([]string, error)
+func (s *Hub) SetDebug(debug bool)
+func (s *Hub) Stack(channel string) *Channel
+func (s *Hub) Start()
+func (s *Hub) Subscribe(channel string, subscribe string) error
+func (s *Hub) Topic(channel string) *Channel
+func (s *Hub) Unsubscribe(cache string, subscribe string) error
+func DecodeMessage(data []byte) (Message, error)
+func NewMessage(from et.Json, to []string) Message
+func (s *Message) Bytes() ([]byte, error)
+func (s *Message) ToJson() et.Json
+func (s *Message) ToString() string
+```
+
+## `jwsp`
+
+WhatsApp Business (Graph API de Meta).
+
+Funciones y métodos:
+
+```go
+func NewSender(token, phoneNumberId string) *Whatsapp
+func (s *Whatsapp) Debug() *Whatsapp
+func (s *Whatsapp) IsTest() *Whatsapp
+func (s *Whatsapp) SendAudioMessageById(to, audioObjectID string) (et.Json, error)
+func (s *Whatsapp) SendAudioMessageByURL(to, url string) (et.Json, error)
+func (s *Whatsapp) SendCatalog(to, Text, footer, section string) (et.Json, error)
+func (s *Whatsapp) SendCatalogTemplate(to, template, parameter, section string) (et.Json, error)
+func (s *Whatsapp) SendContact(to, address, contact, email, phone, tp, url string) (et.Json, error)
+func (s *Whatsapp) SendDocumentById(to, documentObjectID, documentCaptionText, documentFilename string) (et.Json, error)
+func (s *Whatsapp) SendDocumentByURL(to, url, documentCaptionText string) (et.Json, error)
+func (s *Whatsapp) SendImageMessageById(to, imageObjectID string) (et.Json, error)
+func (s *Whatsapp) SendImageMessageByURL(to, url string) (et.Json, error)
+func (s *Whatsapp) SendList(to, text, header, footer, button, section string) (et.Json, error)
+func (s *Whatsapp) SendLocation(to, location string) (et.Json, error)
+func (s *Whatsapp) SendReplyAudioMessageById(to, audioObjectID, messageID string) (et.Json, error)
+func (s *Whatsapp) SendReplyAudioMessageByURL(to, url, messageID string) (et.Json, error)
+func (s *Whatsapp) SendReplyButton(to, text string, buttons []Button) (et.Json, error)
+func (s *Whatsapp) SendReplyContact(to, messageID, address, contact, email, phone, tp, url string) (et.Json, error)
+func (s *Whatsapp) SendReplyDocumentById(to, messageID, documentObjectID, documentCaptionText, documentFilename string) (et.Json, error)
+func (s *Whatsapp) SendReplyDocumentByURL(to, messageID, url, documentCaptionText string) (et.Json, error)
+func (s *Whatsapp) SendReplyImageMessageById(to, imageObjectID, messageID string) (et.Json, error)
+func (s *Whatsapp) SendReplyImageMessageByURL(to, url, messageID string) (et.Json, error)
+func (s *Whatsapp) SendReplyList(to, messageId, text, header, footer, button, section string) (et.Json, error)
+func (s *Whatsapp) SendReplyLocation(to, messageID, location string) (et.Json, error)
+func (s *Whatsapp) SendReplyStickerMessageById(to, mediaObjectID, messageID string) (et.Json, error)
+func (s *Whatsapp) SendReplyStickerMessageByURL(to, messageID, url string) (et.Json, error)
+func (s *Whatsapp) SendReplyTextMessage(to, message_id, text string) (et.Json, error)
+func (s *Whatsapp) SendReplyVideoMessageById(to, messageID, videoCaptionText, videoObjectID string) (et.Json, error)
+func (s *Whatsapp) SendReplyVideoMessageByURL(to, url, videoCaptionText string) (et.Json, error)
+func (s *Whatsapp) SendReplyWithReactionMessage(to, messageId, emoji string) (et.Json, error)
+func (s *Whatsapp) SendSingleProduct(to, Text, footer, section string) (et.Json, error)
+func (s *Whatsapp) SendStickerMessageById(to, mediaObjectID string) (et.Json, error)
+func (s *Whatsapp) SendStickerMessageByURL(to, url string) (et.Json, error)
+func (s *Whatsapp) SendTemplate(to, parameter, template string) (et.Json, error)
+func (s *Whatsapp) SendTemplateInteractive(to, parameter, template string) (et.Json, error)
+func (s *Whatsapp) SendTemplateMedia(to, parameter, template string) (et.Json, error)
+func (s *Whatsapp) SendTextMessage(to, text string) (et.Json, error)
+func (s *Whatsapp) SendTextMessageWithPreviewURL(to, url string) (et.Json, error)
+func (s *Whatsapp) SendVideoMessageById(to, videoCaptionText, videoObjectID string) (et.Json, error)
+func (s *Whatsapp) SendVideoMessageByURL(to, url, videoCaptionText string) (et.Json, error)
+func (s *Whatsapp) SendmultiProduct(to, Text, header, footer, section string) (et.Json, error)
+func (s *Whatsapp) SetEventHandler(fn func(et.Json)) *Whatsapp
+func (s *Whatsapp) SetEventHandlerError(fn func(error)) *Whatsapp
+func (s *Whatsapp) SetVerifyToken(verifyToken string) *Whatsapp
+func (s *Whatsapp) Webhooks(w http.ResponseWriter, r *http.Request)
+```
+
+## `jwt`
+
+Tokens guardados en `cache`.
+
+Funciones y métodos:
+
+```go
+func DeleteTokeByToken(token string) error
+func DeleteToken(app, device, sessionID string) error
+func GetKey(app, device, userId string) string
+func GetToken(key string) (string, bool, error)
+func NewAppToken(app, device string, duration time.Duration) (string, error)
+func NewAuthentication(app, device, userId, name string, duration time.Duration) (string, error)
+func NewAuthorization(app, device, userId, name, tenantId, roleId string, duration time.Duration) (string, error)
+func NewEphemeralToken(app, device, userId, name string, duration time.Duration) (string, error)
+func NewToken(app, device, userId, name string, payload et.Json, duration time.Duration) (string, error)
+func RenewToken(token string, duration time.Duration) (string, error)
+func SetToken(app, device, sessionID, token string, duration time.Duration) error
+func Validate(token string) (*claim.Claim, error)
+```
+
+## `logs`
+
+Logging por niveles; `Fatal` termina el proceso.
+
+Funciones y métodos:
+
+```go
+func Alert(err error) error
+func Alertf(format string, args ...any) error
+func Alertm(message string) error
+func Debug(v ...any)
+func Debugf(format string, args ...any)
+func Debugger(v ...any)
+func Error(err error) error
+func Errorf(format string, args ...any) error
+func Errorm(message string) error
+func Fatal(err error) error
+func Fatalm(message string) error
+func Info(v ...any)
+func Infof(format string, args ...any)
+func Log(kind string, args ...any) error
+func Logf(kind string, format string, args ...any)
+func Panic(err error) error
+func Panicf(format string, args ...any) error
+func Ping()
+func Pong()
+func Rpc(args ...any) error
+func Tracer(kind string, err error) error
+func Warn(message string)
+```
+
+## `mem`
+
+Caché en memoria con expiración.
+
+Funciones y métodos:
+
+```go
+func Clear(match string)
+func Delete(key string) bool
+func Empty()
+func Exists(key string) bool
+func Get(key string) (interface{}, bool)
+func GetArrayJson(key string) ([]et.Json, bool, error)
+func GetBool(key string) (bool, bool, error)
+func GetDuration(key string) (time.Duration, bool, error)
+func GetFloat64(key string) (float64, bool, error)
+func GetInt(key string) (int, bool, error)
+func GetInt64(key string) (int64, bool, error)
+func GetJson(key string) (et.Json, bool, error)
+func GetStr(key string) (string, bool, error)
+func GetTime(key string) (time.Time, bool, error)
+func Keys() []string
+func Len() int
+func More(key string, expiration time.Duration) (int64, error)
+func Values() []string
+func GetEntry(key string) (*Entry, bool)
+func New(key string, value interface{}, expiration time.Duration) (*Entry, error)
+func Set(key string, value interface{}, expiration time.Duration) (*Entry, error)
+func (s *Entry) ArrayDuration() ([]time.Duration, error)
+func (s *Entry) ArrayFloat() ([]float64, error)
+func (s *Entry) ArrayInt() ([]int, error)
+func (s *Entry) ArrayJson() ([]et.Json, error)
+func (s *Entry) ArrayMap() ([]map[string]interface{}, error)
+func (s *Entry) ArrayStr() ([]string, error)
+func (s *Entry) ArrayTime() ([]time.Time, error)
+func (s *Entry) Bool() (bool, error)
+func (s *Entry) Duration() (time.Duration, error)
+func (s *Entry) Float() (float64, error)
+func (s *Entry) Get() []byte
+func (s *Entry) Int() (int, error)
+func (s *Entry) Int64() (int64, error)
+func (s *Entry) Json() (et.Json, error)
+func (s *Entry) Map() (map[string]interface{}, error)
+func (s *Entry) Set(value interface{}, expiration time.Duration) (*Entry, error)
+func (s *Entry) Str() (string, error)
+func (s *Entry) Time() (time.Time, error)
+func Load() *Mem
+func (s *Mem) Clear(match string)
+func (s *Mem) Delete(key string) bool
+func (s *Mem) Empty()
+func (s *Mem) Exists(key string) bool
+func (s *Mem) Get(key string) (interface{}, bool)
+func (s *Mem) GetArrayFloat(key string, def []float64) ([]float64, bool, error)
+func (s *Mem) GetArrayInt(key string, def []int) ([]int, bool, error)
+func (s *Mem) GetArrayJson(key string, def []et.Json) ([]et.Json, bool, error)
+func (s *Mem) GetArrayStr(key string, def []string) ([]string, bool, error)
+func (s *Mem) GetBool(key string, def bool) (bool, bool, error)
+func (s *Mem) GetDuration(key string, def time.Duration) (time.Duration, bool, error)
+func (s *Mem) GetEntry(key string) (*Entry, bool)
+func (s *Mem) GetFloat(key string, def float64) (float64, bool, error)
+func (s *Mem) GetInt(key string, def int) (int, bool, error)
+func (s *Mem) GetInt64(key string, def int64) (int64, bool, error)
+func (s *Mem) GetJson(key string, def et.Json) (et.Json, bool, error)
+func (s *Mem) GetStr(key string) (string, bool, error)
+func (s *Mem) GetTime(key string, def time.Time) (time.Time, bool, error)
+func (s *Mem) Keys() []string
+func (s *Mem) Len() int
+func (s *Mem) More(key string, expiration time.Duration) (int64, error)
+func (s *Mem) Set(key string, value interface{}, expiration time.Duration) (*Entry, error)
+func (s *Mem) Type() string
+func (s *Mem) Values() []string
+func NewPeticiones(capacity, timeWait int) *Peticiones
+func (c *Peticiones) Ejecucion(executeFc func(params et.Json) (et.Items, error), params et.Json) (et.Items, error)
+func (c *Peticiones) GetConfig() et.Json
+func (c *Peticiones) GetPeticiones() int
+```
+
+## `middleware`
+
+Middlewares HTTP: autenticación, CORS, logger, request id, recoverer, métricas.
+
+Interfaces:
+
+```go
+type LogEntry interface {
+	Write(status, bytes int, header http.Header, elapsed time.Duration, extra interface{})
+	Panic(v interface{}, stack []byte)
+}
+
+type LogFormatter interface {
+	NewLogEntry(r *http.Request) LogEntry
+}
+
+type LoggerInterface interface {
+	Print(v ...interface{})
+}
+
+type WrapResponseWriter interface {
+	http.ResponseWriter
+	// Status returns the HTTP status of the request, or 0 if one has not
+	// yet been sent.
+	Status() int
+	// BytesWritten returns the total number of bytes sent to the client.
+	BytesWritten() int
+	// Tee causes the response body to be written to the given io.Writer in
+	// addition to proxying the writes through. Only one io.Writer can be
+	// tee'd to at once: setting a second one will overwrite the first.
+	// Writes will be sent to the proxy before being written to this
+	// io.Writer. It is illegal for the tee'd writer to be modified
+	// concurrently with writes.
+	Tee(io.Writer)
+	// Unwrap returns the original proxied target.
+	Unwrap() http.ResponseWriter
+}
+```
+
+Funciones y métodos:
+
+```go
+func AllowAll(allowedOrigins []string) *cors.Cors
+func Authentication(next http.Handler) http.Handler
+func GetBearerToken(r *http.Request) (string, error)
+func GetReqID(ctx context.Context) string
+func Logger(next http.Handler) http.Handler
+func NextRequestID() uint64
+func PrintPrettyStack(rvr interface{})
+func PushTelemetry(data et.Json)
+func PushTelemetryLog(data string)
+func PushTelemetryOverflow(data et.Json)
+func PushTokenLastUse(data et.Json)
+func Recoverer(next http.Handler) http.Handler
+func RequestID(next http.Handler) http.Handler
+func RequestLogger(f LogFormatter) func(next http.Handler) http.Handler
+func WithLogEntry(r *http.Request, entry LogEntry) *http.Request
+func (l *DefaultLogFormatter) NewLogEntry(r *http.Request) LogEntry
+func GetLogEntry(r *http.Request) LogEntry
+func GetMetrics(r *http.Request) *Metrics
+func NewMetric(r *http.Request) *Metrics
+func NewRpcMetric(method string) *Metrics
+func (s *Metrics) CallLatency()
+func (s *Metrics) CallResponseTime()
+func (s *Metrics) CallSearchTime()
+func (s *Metrics) DoneHTTP(rw *ResponseWriterWrapper) et.Json
+func (s *Metrics) DoneRpc(r any) et.Json
+func (s *Metrics) HTTPError(w http.ResponseWriter, r *http.Request, statusCode int, message string) error
+func (s *Metrics) ITEM(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Item) error
+func (s *Metrics) ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Items) error
+func (s *Metrics) JSON(w http.ResponseWriter, r *http.Request, statusCode int, dt interface{}) error
+func (s *Metrics) RESULT(w http.ResponseWriter, r *http.Request, statusCode int, data interface{}) error
+func (s *Metrics) SetPath(val string)
+func (s *Metrics) ToJson() et.Json
+func (s *Metrics) WriteResponse(w http.ResponseWriter, r *http.Request, statusCode int, e []byte) error
+func (rw *ResponseWriterWrapper) Write(b []byte) (int, error)
+func (rw *ResponseWriterWrapper) WriteHeader(code int)
+func NewWrapResponseWriter(w http.ResponseWriter, protoMajor int) WrapResponseWriter
+```
+
+## `msg`
+
+Constantes de mensajes compartidas.
+
+Sin funciones exportadas (solo constantes).
+
+## `queue`
+
+Cola genérica por lotes: despacha al juntar `maxEvents` o al pasar `period`.
+
+Funciones y métodos:
+
+```go
+func New[T any](queueSize int, maxEvents int, period time.Duration, handler func(context.Context, []T) error) *Queue[T]
+func (q *Queue[T]) Close()
+func (q *Queue[T]) Len() int
+func (q *Queue[T]) Push(item T)
+```
+
+## `race`
+
+Valor protegido por mutex.
+
+Funciones y métodos:
+
+```go
+func NewValue(value interface{}) *Value
+func (s *Value) Array() []interface{}
+func (s *Value) ArrayRange(f func(key, value interface{}) bool)
+func (s *Value) Bool() bool
+func (s *Value) Delete()
+func (s *Value) Float64() float64
+func (s *Value) Float64Array() []float64
+func (s *Value) Get() interface{}
+func (s *Value) Increase(n int)
+func (s *Value) Int() int
+func (s *Value) IntArray() []int
+func (s *Value) IsNil() bool
+func (s *Value) Map() map[string]interface{}
+func (s *Value) MapRange(f func(key, value interface{}) bool)
+func (s *Value) Range(f func(key, value interface{}) bool)
+func (s *Value) Set(value interface{})
+func (s *Value) String() string
+func (s *Value) StringArray() []string
+func (s *Value) Time() time.Time
+```
+
+## `reg`
+
+IDs: UUID, ULID, XID, Snowflake.
+
+Funciones y métodos:
+
+```go
+func GenHashKey(args ...interface{}) string
+func GenIndex() int64
+func GenKey(args ...interface{}) string
+func GenSnowflake() string
+func GenULID(tag string) string
+func GenUUId(tag string) string
+func GenXID(tag string) string
+func GetULID(id string) string
+func GetUUID(id string) string
+func GetXID(id string) string
+func TagULID(tag, id string) string
+func TagUUID(tag, id string) string
+func TagXID(tag, id string) string
+func ULID() string
+func UUID() string
+func XID() string
+```
+
+## `request`
+
+Lectura del request entrante y cliente HTTP saliente (`Fetch`, `Get`, `Post`…).
+
+Funciones y métodos:
+
+```go
+func App(r *http.Request) string
+func Delete(uRL string, header et.Json) (*Body, Status)
+func DeleteWithTimeout(uRL string, header et.Json, timeout time.Duration, defaultValue []byte) (*Body, Status)
+func DeleteWithTls(uRL string, header et.Json, tlsConfig *tls.Config) (*Body, Status)
+func DeleteWithTlsTimeout(uRL string, header et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status)
+func Device(r *http.Request) string
+func Duration(r *http.Request) time.Duration
+func Fetch(method, uRL string, header, body et.Json, timeout time.Duration, defaultValue []byte) (*Body, Status)
+func FetchWithTls(method, uRL string, header, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status)
+func Get(uRL string, header et.Json) (*Body, Status)
+func GetBody(r *http.Request) (et.Json, error)
+func GetStr(r *http.Request) (string, error)
+func GetWithTimeout(uRL string, header et.Json, timeout time.Duration, defaultValue []byte) (*Body, Status)
+func GetWithTls(uRL string, header et.Json, tlsConfig *tls.Config) (*Body, Status)
+func GetWithTlsTimeout(uRL string, header et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status)
+func Http(method, uRL string, header, body et.Json, tlsConfig *tls.Config) (*Body, Status)
+func HttpCtxWithTimeout(ctx context.Context, method, uRL string, header, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status)
+func HttpWithContext(ctx context.Context, method, uRL string, header, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status)
+func HttpWithTimeout(method, uRL string, header, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status)
+func IsStatusOk(status int) bool
+func Name(r *http.Request) string
+func NewTlsConfig(caFile, certFile, keyFile string) (*tls.Config, error)
+func Options(uRL string, header et.Json) (*Body, Status)
+func OptionsWithTimeout(uRL string, header et.Json, timeout time.Duration, defaultValue []byte) (*Body, Status)
+func OptionsWithTls(uRL string, header et.Json, tlsConfig *tls.Config) (*Body, Status)
+func OptionsWithTlsTimeout(uRL string, header et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status)
+func Patch(uRL string, header, body et.Json) (*Body, Status)
+func PatchWithTimeout(uRL string, header, body et.Json, timeout time.Duration, defaultValue []byte) (*Body, Status)
+func PatchWithTls(uRL string, header, body et.Json, tlsConfig *tls.Config) (*Body, Status)
+func PatchWithTlsTimeout(uRL string, header, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status)
+func Payload(r *http.Request) et.Json
+func Post(uRL string, header, body et.Json) (*Body, Status)
+func PostWithTimeout(uRL string, header, body et.Json, timeout time.Duration, defaultValue []byte) (*Body, Status)
+func PostWithTls(uRL string, header, body et.Json, tlsConfig *tls.Config) (*Body, Status)
+func PostWithTlsTimeout(uRL string, header, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status)
+func Put(uRL string, header, body et.Json) (*Body, Status)
+func PutWithTimeout(uRL string, header, body et.Json, timeout time.Duration, defaultValue []byte) (*Body, Status)
+func PutWithTls(uRL string, header, body et.Json, tlsConfig *tls.Config) (*Body, Status)
+func PutWithTlsTimeout(uRL string, header, body et.Json, tlsConfig *tls.Config, timeout time.Duration, defaultValue []byte) (*Body, Status)
+func RoleID(r *http.Request) string
+func ServiceId(r *http.Request) string
+func SetApp(ctx context.Context, app string) context.Context
+func SetDevice(ctx context.Context, device string) context.Context
+func SetDuration(ctx context.Context, duration time.Duration) context.Context
+func SetName(ctx context.Context, name string) context.Context
+func SetPayload(ctx context.Context, payload et.Json) context.Context
+func SetRoleID(ctx context.Context, roleId string) context.Context
+func SetServiceId(ctx context.Context, serviceId string) context.Context
+func SetTenantID(ctx context.Context, tenantId string) context.Context
+func SetUserID(ctx context.Context, userId string) context.Context
+func TenantID(r *http.Request) string
+func UserID(r *http.Request) string
+func ReadBody(body io.ReadCloser) (*Body, error)
+func (b Body) ToArrayJson() ([]et.Json, error)
+func (b Body) ToBool() (bool, error)
+func (b Body) ToFloat() (float64, error)
+func (b Body) ToInt() (int, error)
+func (b Body) ToInt64() (int64, error)
+func (b Body) ToItem() (et.Item, error)
+func (b Body) ToItems() (et.Items, error)
+func (b Body) ToJson() (et.Json, error)
+func (b Body) ToString() string
+func (b Body) ToTime() (time.Time, error)
+func (s ContextKey) Duration(ctx context.Context, def time.Duration) time.Duration
+func (s ContextKey) Json(ctx context.Context, def et.Json) et.Json
+func (s ContextKey) String(ctx context.Context, def string) string
+func (s Status) ToJson() et.Json
+func (s Status) ToString() string
+func Query(r *http.Request, key string) *Value
+func URLParam(r *http.Request, key string) *Value
+func (s *Value) Array() []any
+func (s *Value) ArrayFloat() []float64
+func (s *Value) ArrayInt() []int
+func (s *Value) ArrayJson() []et.Json
+func (s *Value) ArrayString() []string
+func (s *Value) Bool() bool
+func (s *Value) DateTime() time.Time
+func (s *Value) Float() float64
+func (s *Value) Int() int
+func (s *Value) Object() et.Json
+func (s *Value) Str() string
+```
+
+## `resilience`
+
+Reintentos con intentos e intervalo; usado por `jwf`.
+
+Funciones y métodos:
+
+```go
+func (s *Instance) IsDone() bool
+func (s *Instance) IsFailed() bool
+func (s *Instance) Run() ([]any, error)
+func (s *Instance) ToJson() et.Json
+func (s *Instance) ToString() string
+func New() (*Resilience, error)
+func (s *Resilience) LoadInstance(params Params) (*Instance, error)
+func (s *Resilience) Stop(id string) error
+func (s *Resilience) ToJson() et.Json
+```
+
+## `response`
+
+Respuestas HTTP unificadas (`ITEM`, `ITEMS`, `LIST`, `HTTPError`).
+
+Funciones y métodos:
+
+```go
+func ANY(w http.ResponseWriter, r *http.Request, statusCode int, result interface{}) error
+func DATA(w http.ResponseWriter, r *http.Request, statusCode int, data et.Json) error
+func Forbidden(w http.ResponseWriter, r *http.Request)
+func GetArray(r *http.Request) ([]et.Json, error)
+func GetBody(r *http.Request) (et.Json, error)
+func GetParam(r *http.Request, key string) string
+func GetQuery(r *http.Request) et.Json
+func HTTPAlert(w http.ResponseWriter, r *http.Request, message string) error
+func HTTPError(w http.ResponseWriter, r *http.Request, statusCode int, message string) error
+func ITEM(w http.ResponseWriter, r *http.Request, statusCode int, data et.Item) error
+func ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, data et.Items) error
+func InternalServerError(w http.ResponseWriter, r *http.Request, err error)
+func JSON(w http.ResponseWriter, r *http.Request, statusCode int, data interface{}) error
+func LIST(w http.ResponseWriter, r *http.Request, statusCode int, data et.List) error
+func RESULT(w http.ResponseWriter, r *http.Request, statusCode int, data interface{}) error
+func ScanJson(value map[string]interface{}) (et.Json, error)
+func ScanStr(value string) (et.Json, error)
+func Stream(w http.ResponseWriter, r *http.Request, rows int, getData DataFunction)
+func Unauthorized(w http.ResponseWriter, r *http.Request)
+func WriteResponse(w http.ResponseWriter, statusCode int, e []byte) error
+```
+
+## `router`
+
+Router `chi` con catálogo de endpoints: `NewApi` + `Public`/`Protected`/`Session(group, method, path, name, handler)`.
+
+Interfaces:
+
+```go
+type Router interface {
+	UseAutentication(fn func(http.Handler) http.Handler)
+	Protect(method, path string, handler func(http.ResponseWriter, *http.Request))
+	Public(method, path string, handler func(http.ResponseWriter, *http.Request))
+	With(method, path string, middlewares []func(http.Handler) http.Handler, handler func(http.ResponseWriter, *http.Request))
+}
+```
+
+Funciones y métodos:
+
+```go
+func GetRoutes() map[string]et.Json
+func HttpDelete(w http.ResponseWriter, r *http.Request)
+func HttpGet(w http.ResponseWriter, r *http.Request)
+func HttpSet(w http.ResponseWriter, r *http.Request)
+func OnDelete(f DeleteFn)
+func OnGet(f GetFn)
+func OnSet(f SetFn)
+func Publish(r *chi.Mux, route Route) *chi.Mux
+func PushApiGateway(method, path, resolve string, tpHeader TpHeader, header et.Json, excludeHeader []string, params, body et.Json, version int, packageName string)
+func RemoveApiGateway(id string)
+func With(r *chi.Mux, route Route, middlewares []func(http.Handler) http.Handler) *chi.Mux
+func NewApi(name, path, host string, port, rpc int, version int) *Api
+func (s *Api) AddErrorStatusNotFound(statuses ...string)
+func (s *Api) Item(status int, fn func(r *http.Request, body et.Json) (et.Item, error)) http.HandlerFunc
+func (s *Api) Items(fn func(r *http.Request, body et.Json) (et.Items, error)) http.HandlerFunc
+func (s *Api) List(fn func(r *http.Request) (et.List, error)) http.HandlerFunc
+func (s *Api) Protected(group, method, path, name string, handler http.HandlerFunc)
+func (s *Api) Public(group, method, path, name string, handler http.HandlerFunc)
+func (s *Api) RegisterEndpoint(packageName, group, method, path, name string) error
+func (s *Api) Session(group, method, path, name string, handler http.HandlerFunc)
+func (s *Api) UseAuthentication(middlewares ...func(http.Handler) http.Handler)
+func (s *Api) UseAuthorization(authorization func(method, path string) func(http.Handler) http.Handler)
+func (s *Api) UseIdenpotency(middlewares ...func(http.Handler) http.Handler)
+func (s *Api) UseLimitRate(limitRate int64)
+func (s *Api) UseRegisterEndpoint(registerEndpoint func(packageName, group, method, path, name string) error)
+func IntToTpHeader(tp int) TpHeader
+func ToTpHeader(tp int) TpHeader
+func (t TpHeader) String() string
+```
+
+## `server`
+
+Servidor HTTP ligero sobre `chi`, sin Redis ni NATS.
+
+Funciones y métodos:
+
+```go
+func NewApi(name, path, host string, port int, version string) *Api
+func (s *Api) Authentication(r *chi.Mux, route router.Route)
+func (s *Api) Authorization(r *chi.Mux, route router.Route)
+func (s *Api) Private(r *chi.Mux, route router.Route)
+func (s *Api) Public(r *chi.Mux, route router.Route)
+func (s *Api) Use(middlewares ...func(http.Handler) http.Handler)
+func (s *Api) UseAutentication(middleware func(http.Handler) http.Handler)
+func (s *Api) UseAuthorization(middleware func(http.Handler) http.Handler)
+func New(name string, port int) *Ettp
+func (s *Ettp) Close()
+func (s *Ettp) HandleFunc(pattern string, handlerFn http.HandlerFunc)
+func (s *Ettp) Mount(pattern string, handler http.Handler)
+func (s *Ettp) NotFound(handlerFn http.HandlerFunc)
+func (s *Ettp) OnClose(onClose func())
+func (s *Ettp) OnStart(onStart func())
+func (s *Ettp) Start()
+func (s *Ettp) Use(middlewares ...func(http.Handler) http.Handler)
+```
+
+## `service`
+
+Envío multicanal (email, SMS, WhatsApp) con OTP y almacenamiento local.
+
+Interfaces:
+
+```go
+type SenderEmail interface {
+	SendEmail(from et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tpMessage string) (et.Item, error)
+}
+
+type SenderPushNotification interface {
+	SendPushNotification(deviceToken string, title string, body string, tpMessage string) (et.Item, error)
+}
+
+type SenderSMS interface {
+	SendSMS(contactNumbers []string, content string, params et.Json, tpMessage string) (et.Item, error)
+}
+
+type SenderWhatsapp interface {
+	SendWhatsapp(contactNumbers []string, content string, params []et.Json, tpMessage string) (et.Item, error)
+	SendWhatsappByTemplateId(contactNumbers []string, templateId string, params []et.Json, tpMessage string) (et.Item, error)
+}
+
+type Storage interface {
+	Uploader(bucket, filename, contentType string, contentFile []byte) (et.Item, error)
+	UploaderFile(r *http.Request, folder, name string) (et.Item, error)
+}
+```
+
+Funciones y métodos:
+
+```go
+func LoadLocalStorage(tenantId, path string) *LocalStorage
+func (s *LocalStorage) Delete(bucket, filePath string) (et.Item, error)
+func (s *LocalStorage) UploaderB64(bucket, b64, fileName, contentType string) (et.Item, error)
+func (s *LocalStorage) UploaderFile(r *http.Request, bucket, folder, fileName string) (et.Item, error)
+func GetSender(tenantId string) (*Send, error)
+func LoadSend(tenantId, name, email string) (*Send, error)
+func (s *Send) AddSenderEmail(level Level, sender SenderEmail) *Send
+func (s *Send) AddSenderPushNotification(level Level, sender SenderPushNotification) *Send
+func (s *Send) AddSenderSMS(level Level, sender SenderSMS) *Send
+func (s *Send) AddSenderWhatsapp(level Level, sender SenderWhatsapp) *Send
+func (s *Send) OnSender(fn func(et.Item, error)) *Send
+func (s *Send) SendEmail(from et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tp TpMessage) (et.Item, error)
+func (s *Send) SendOTPEmail(key, sender string, name, email string, length int, duration time.Duration, htmlContent string) (et.Item, error)
+func (s *Send) SendOTPSMS(key, sender, countryCode, phoneNumber string, length int, duration time.Duration, content string) (et.Item, error)
+func (s *Send) SendSMS(contactNumbers []string, content string, params et.Json, tpMessage TpMessage) (et.Item, error)
+func (s *Send) SendWhatsapp(templateId string, contactNumbers []string, params []et.Json, tp TpMessage) (et.Item, error)
+func (s *Send) VerifyOTP(key string, otp string) (bool, error)
+func IntToTpMessage(i int) TpMessage
+func (tp TpMessage) String() string
+```
+
+## `stdrout`
+
+Salida coloreada y trazas usadas por `logs`.
+
+Interfaces:
+
+```go
+type Stdout interface {
+	Notify(kind string, message string)
+}
+```
+
+Funciones y métodos:
+
+```go
+func CW(w io.Writer, color []byte, format string, args ...interface{})
+func Color(s *string, color string, format string, args ...interface{}) *string
+func ErrorTraces(err error) []string
+func GetFunctionName(idx int) string
+func Printl(kind string, color string, args ...any) string
+func SetStdout(v Stdout)
+func Traces(kind, color string, err error) error
+```
+
+## `stores`
+
+Stores sobre `jsql`: instancias, autorización (ACL), config por tenant, estado de formularios.
+
+Funciones y métodos:
+
+```go
+func DefineAuthorization(db *DB, tenantId, schema string) (*Authorization, error)
+func (s *Authorization) Author(profileId, method, path string) (bool, error)
+func (s *Authorization) Query(query et.Json) (et.Items, error)
+func (s *Authorization) RemoveAuthor(profileId, method, path string) error
+func (s *Authorization) SetAuthor(profileId, method, path string) error
+func (s *Authorization) SetPath(method, path string) error
+func DefineConfig(db *DB, tenantId, schema, stage, tag string) (*Config, error)
+func (s *Config) DeleteConfig(tag, stage string) error
+func (s *Config) Get(name string, def interface{}) interface{}
+func (s *Config) SetConfig(tag, stage string, params et.Json) error
+func DefineDbs(db *DB, schema string) (*Dbs, error)
+func DefineFormState(db *DB, tenantId, schema string) (*FormState, error)
+func (s *FormState) Delete(id string) error
+func (s *FormState) Get(id string, dest et.Json) (bool, error)
+func (s *FormState) Query(query et.Json) (et.Items, error)
+func (s *FormState) Set(id, tag, ownerId string, data et.Json) error
+func DefineInstance(db *DB, tenantId, schema string) (*Instance, error)
+func (s *Instance) Delete(id string) error
+func (s *Instance) Get(id string, dest any) (bool, error)
+func (s *Instance) Query(query et.Json) (et.Items, error)
+func (s *Instance) Set(tag, id, ownerId string, obj any) error
+```
+
+## `strs`
+
+Utilidades de texto.
+
+Funciones y métodos:
+
+```go
+func ApendAny(space string, args ...any) string
+func Append(str1, str2, sp string) string
+func AppendAny(val1, val2 interface{}, sp string) interface{}
+func Change(str string, olds []string, news []string) string
+func Contains(str string, substr string) bool
+func DaskSpace(str string) string
+func Format(format string, args ...any) string
+func FormatDateTime(format string, value time.Time) string
+func FormatLowCase(format string, args ...any) string
+func FormatSerie(format string, num int64) string
+func FormatUppCase(format string, args ...any) string
+func GetSplitIndex(str, sep string, idx int) string
+func HtmlToText(html string) string
+func IsEmpty(str string) bool
+func JoinQuoted(items []string, sep string) string
+func Lowcase(s string) string
+func MaskToken(token string, length int) string
+func Name(str string) string
+func NotSpace(str string) string
+func Parse(str string, vars et.Json) string
+func RemoveAcents(str string) string
+func Replace(str string, old string, new string) string
+func ReplaceAll(str string, olds []string, new string) string
+func Same(str1, str2 string) bool
+func Split(str, sep string) []string
+func StrToBool(val string) (bool, error)
+func StrToTime(val string) (time.Time, error)
+func Titlecase(str string) string
+func Trim(str string) string
+func Uppcase(s string) string
+```
+
+## `timezone`
+
+Hora local y formatos.
+
+Funciones y métodos:
+
+```go
+func Add(d time.Duration) time.Time
+func Format(t time.Time, layout Layout) string
+func FormatMDYYYY(value string) string
+func Location() *time.Location
+func Now() time.Time
+func NowStr() string
+func Parse(layout Layout, value string) (time.Time, error)
+```
+
+## `units`
+
+Cantidades y conversión de unidades.
+
+Funciones y métodos:
+
+```go
+func Load(val any) (*Quantity, error)
+func NewQuantity(val float64, unit TypeUnity) *Quantity
+func (s *Quantity) Load(val interface{}) error
+func (s *Quantity) To(un TypeUnity) error
+func (s *Quantity) ToJson() et.Json
+func (s *Quantity) ToStr() string
+func StrToUnity(s string) TypeUnity
+func (s TypeUnity) Str() string
+```
+
+## `utility`
+
+Cripto, hashing, validaciones de formato, base64, algoritmos.
+
+Funciones y métodos:
+
+```go
+func Add[T any](slice []T, item T) []T
+func Address(host string, port int) string
+func App() context.Context
+func AppWait()
+func BannerTitle(name string, size int) string
+func BinarySearch(arr []string, target string) int
+func Contains(v interface{}, vals ...any) bool
+func DecryptAES(value, secret string) (string, error)
+func Dijkstra(graph [][]int, start int) []int
+func DivInt(a, b int64) int64
+func DivNum(a, b float64) float64
+func EncryptAES(value, secret string) (string, error)
+func EncryptMD5(value string) (string, error)
+func ExtractMencion(str string) []string
+func FromBase64(data string) (string, error)
+func FromBase64Raw(data string) string
+func GenId(id string) string
+func GenKey(id string) string
+func GeneratePortNumber() int
+func GetGoMod(atrib string) (string, error)
+func GetOTP(length int) string
+func GetPidByPort(port int) int
+func GetRandom(charset string, length int) string
+func GetRandomString(length int) string
+func Hash(password string) (string, error)
+func HashSHA1(value string) (string, error)
+func HashSHA256(value string) (string, error)
+func HashSHA512(value string) (string, error)
+func InInt(val string, in []string) bool
+func InStr(val string, in []string) bool
+func Match(hashPassword, password string) bool
+func Md5(password string) string
+func MinDistance(dist []int, visited []bool) int
+func More(tag string, expiration time.Duration) int64
+func Normalize(input string) string
+func Now() time.Time
+func NowStr() string
+func ParamQuote(str string, args ...any) string
+func Params(str string, args ...any) string
+func QuickSort(arr []int) []int
+func Quote(val interface{}) any
+func Serialize(v any) ([]byte, error)
+func SetQuotedChar(char string)
+func Sha256(password string) string
+func TimeDifference(dateInt, dateEnd any) time.Duration
+func ToBase64(data string) string
+func ToBase64Raw(data string) string
+func ToJson(v any) et.Json
+func ToSerialize(v any) ([]byte, error)
+func UUID() string
+func UUIndex(tag string) int64
+func Unquote(val interface{}) any
+func ValidCode(val string) bool
+func ValidEmail(val string) bool
+func ValidId(val string) bool
+func ValidIn(val string, min int, in []string) bool
+func ValidInt(val int, notIn []int) bool
+func ValidKey(val string) bool
+func ValidName(val string) bool
+func ValidNum(val float64, notIn []float64) bool
+func ValidPhone(val string) bool
+func ValidStr(val string, min int, notIn []string) bool
+func ValidUUID(val string) bool
+func ValidWord(word string) bool
+func NewList() List
+func (s *List) Add(val interface{})
+func (s *List) Contains(val interface{}) bool
+func (s *List) IndexOf(val interface{}) int
+func (s *List) Remove(val interface{})
+func (s *List) Size() int
+```
+
+## `validator`
+
+Validación fluida de `et.Json` (mensajes según `LANG`).
+
+Funciones y métodos:
+
+```go
+func (s *Condition) Between(min, max float64) *Condition
+func (s *Condition) Field(name string) *Condition
+func (s *Condition) IsEmail() *Condition
+func (s *Condition) IsLetters() *Condition
+func (s *Condition) IsNumbers() *Condition
+func (s *Condition) IsPhone() *Condition
+func (s *Condition) IsSpecialCharacters() *Condition
+func (s *Condition) Max(max float64) *Condition
+func (s *Condition) MaxLength(maxLength int) *Condition
+func (s *Condition) Min(min float64) *Condition
+func (s *Condition) MinLength(minLength int) *Condition
+func (s *Condition) NotEmpty() *Condition
+func (s *Condition) Pattern(pattern string) *Condition
+func (s *Condition) Required() *Condition
+func (s *Condition) Validate(value et.Json) (bool, error)
+func New() *Validator
+func (s *Validator) Field(name string) *Condition
+func (s *Validator) NotEmpty() *Validator
+func (s *Validator) Validate(value et.Json) (bool, error)
+```
+
+## `xls`
+
+Leer y escribir hojas de cálculo / CSV.
+
+Funciones y métodos:
+
+```go
+func IndexOf(list []string, value string) int
+func NewXls(data []et.Json, nameSheet string, columns ...Column) *Xls
+func (s *Xls) Add(data []et.Json, nameSheet string, columns []Column) *Xls
+func (s *Xls) ToFile(path string) error
+func (s *Xls) ToHttp(w http.ResponseWriter, filename string) error
+func (s *Xls) ToWriter(w io.Writer) error
+func ReadXls(data []byte) (*XlsReader, error)
+func ReadXlsFile(path string) (*XlsReader, error)
+func ReadXlsMultipart(fileData multipart.File) (*XlsReader, error)
+func (s *XlsReader) Close() error
+func (s *XlsReader) GetRows(nameSheet string) ([][]string, error)
+func (s *XlsReader) GetSheet(nameSheet string, columns []string) ([]et.Json, error)
+```
 
-## 6. Entorno y logging
-
-### 6.1 `envar/`
-
-**El único paquete de acceso a entorno** — `config/` fue eliminado por completo.
-
-- `GetStr/GetInt/GetInt64/GetFloat/GetBool(name, def)` — lectura de env vars con default
-- `Get(name string, def interface{}) interface{}` / `Set(name string, value interface{}) interface{}` — acceso a nivel de proceso, con un `_store` interno opcional pluggable
-- `ArgStr/ArgInt/ArgInt64/ArgFloat64/ArgBool(name, defaultVal)` — lectura de argumentos CLI
-- `Validate(keys []string) error`
-
-### 6.2 `logs/`, `stdrout/`, `color/`
-
-- `logs/`: `Log, Info(f), Alert(f), Error(f), Debug(f), Fatal, Panic, Tracer`.
-- `stdrout/`: `type Stdout interface { Notify(kind, message string) }`; `SetStdout(v Stdout)`; `Color(s *string, color, format string, args ...) *string`; `CW(w io.Writer, color []byte, format string, args ...)`; `Printl(kind, color string, args ...any) string`; `Traces/ErrorTraces(err error)`; constantes ANSI y `GetFunctionName(idx int) string`.
-- `color/`: `Purple/Green/Red/Yellow/Blue/Cyan/White/Black(str string) string` — envuelven con ANSI + reset.
-
----
-
-## 7. Identidad y seguridad
-
-### 7.1 `claim/`
-
-- `type Claim struct { jwt.StandardClaims; ID, Salt string; Duration time.Duration; App, Device, UserId, Username, TenantId, ProfileId string; Payload et.Json }`
-- `func NewClaim(duration time.Duration) *Claim`
-- `func NewToken(app, device, userId, username, tenantId, profileId string, payload et.Json, duration time.Duration) (string, error)` — HS256 vía `golang-jwt/jwt/v4`; el firmado real ocurre en una función **privada** `genToken(c *Claim, secret string) (string, error)` — **no existe un `GenToken` exportado** pese a documentación previa.
-- `func ParceToken(token string) (*Claim, error)` — sic, "Parce" no "Parse", typo consistente en todo el repo (también en `jwt.go`)
-- Secreto: env `SECRET` (default `"1977"`, inseguro) leído una sola vez vía `sync.Once` en `getSecret()`.
-
-### 7.2 `jwt/`
-
-- `func NewToken(app, device, userId, username, tenantId, profileId string, payload et.Json, duration time.Duration) (string, error)` — requiere `cache.IsLoad()`; delega el firmado a `claim.NewToken`, guarda el token en cache bajo clave `"app:device:username"` con la misma TTL (habilita revocación server-side)
-- `func NewAuthentication(app, device, userId, username string, duration time.Duration) (string, error)` — sin tenant/perfil
-- `func NewAuthorization(app, device, userId, username, tenantId, profileId string, duration time.Duration) (string, error)` — con tenant/perfil
-- `func NewAppToken(app, device string, duration time.Duration) (string, error)` — token de aplicación (usa `app` como userId y username)
-- `func NewEphemeralToken(...) (string, error)` — duración forzada a máx. 15 min
-- `func Validate(token string) (*claim.Claim, error)` — valida firma y confirma contra el valor cacheado (revoca si no coincide)
-- `func RenewToken`, `GetToken`, `DeleteToken(app, device, username) error`, `DeleteTokeByToken(token) error` (logout)
-
-### 7.3 `reg/`
-
-**Solo generación de IDs — no hay descubrimiento de servicios** pese al nombre del paquete.
-- `UUID() / ULID() / XID() string`
-- `GenKey/GenUUId/GenULID/GenXID(tag string) string` (sic: `GenUUId`, no `GenUUID`)
-- `GetUUID/GetULID/GetXID(id string) string` — si `id` es `""`/`"*"`/`"new"` genera uno nuevo, si no retorna `id` tal cual
-- `TagUUID/TagULID/TagXID(tag, id string) string`
-- `GenSnowflake() string` — no usa realmente el generador de `bwmarrin/snowflake` (solo su constante `Epoch` en `init()`) — vestigial/incompleto
-- `GenIndex() int64` (timestamp en nanosegundos), `GenHashKey(args ...interface{}) string` (base64 de `GenKey`)
-
-### 7.4 `utility/`
-
-- IDs: `UUID()`, `GetOTP(length)`, `GetRandomString(length)`, `GenId(id)`, `GenKey(id)` (duplica el concepto de `reg.GenKey` con un set de "vacío" ligeramente distinto)
-- Cripto: `Encrypt(value, cryptoType) (string, error)` (MD5/SHA1/SHA256/SHA512/AES; clave AES = env `SECRET`, default inseguro `"1977"`, sin validar longitud de clave AES-128/192/256), `DecryptoAES(value) (string, error)` (sic, "Decrypto" no "Decrypt"), `Hash(password) (string, error)`/`Match(hash, password) bool` (bcrypt costo 5), `Sha256`, `Md5`
-- Validación: `ValidStr/ValidIn/ValidId/ValidKey/ValidInt/ValidNum/ValidName/ValidEmail/ValidPhone` (exactamente 10 dígitos, no internacional)/`ValidUUID/ValidCode/ValidWord`
-- Misc: `App() context.Context` (contexto sensible a señales), `AppWait()` (bloquea hasta SIGINT/SIGTERM, usado por varios `cmd/*`), `More(tag string, expiration time.Duration) int64` (**bug**: siempre resetea el contador interno a 0 tras leerlo, así que el valor devuelto/almacenado nunca sube más allá de 0/1 pese a llamadas repetidas), `Contains/InStr/InInt`, `ExtractMencion` (@menciones), `Quote/Unquote/ParamQuote/Params`, `ToBase64/FromBase64`, `Normalize`, `Add[T any](slice, item) []T` genérico
-- También: `algorithm.go` (`BinarySearch`, `Dijkstra`, `QuickSort` — utilidades genéricas, poco relacionadas con el resto), `list.go`, `math.go` (`DivNum/DivInt` división segura), `pid.go` (`GetPidByPort(port) int`, cross-platform)
-
-### 7.5 `strs/`
-
-`Format/FormatUppCase/FormatLowCase/FormatDateTime/FormatSerie`, `Contains/Replace/ReplaceAll/Change` (regex cacheado en `sync.Map`), `Name/Trim/NotSpace/DaskSpace` (sic, "Dask" no "Dash"), `Uppcase/Lowcase/Titlecase/Same`, `Split/GetSplitIndex` (soporta índice negativo), `Append/AppendAny/JoinQuoted`, `StrToTime/StrToBool/HtmlToText/RemoveAcents`, `MaskToken(token, length)`, `Parse(str, vars et.Json)` (reemplaza `{{key}}`).
-
----
-
-## 8. Orquestación
-
-### 8.1 `crontab/`
-
-> **Rediseño**: la API pública documentada en versiones anteriores (`AddJob/AddOneShotJob/AddEventJob/DeleteJob/StartJob/StopJob` como métodos de instancia) **ya no existe**. Modelo orientado a eventos con singleton de paquete.
-
-- `type Store interface { Set(collection, id, ownerId string, obj any) error; Get(collection, id string, dest any) (bool, error); Delete(collection, id string) error; Query(query et.Json) (et.Items, error) }` (misma forma que `jia.Store`/`resilience.Store`)
-- `func New(tag string, store Store) (*Crontab, error)` — solo llama `event.Load()`; inicia `cron.New(cron.WithSeconds(), cron.WithLocation(loc))`
-- `func Load(tag string, store Store) error` — crea el `*Crontab` vía `New` y lo guarda en un **singleton de paquete**; llama `eventInit()`
-- `type Cron struct { DayOfWeek, Month, DayOfMonth, Hour, Minute string }` — spec **estructurada**, no un string crudo; `(*Cron).toString()` valida cada campo con regex
-- `func CronJob(tag, ownerId string, spec Cron, repetitions int, params et.Json, fn func(params et.Json) error) error` (reemplaza `AddJob`)
-- `func ScheduleJob(tag, ownerId string, spec time.Time, params et.Json, fn func(params et.Json) error) error` (una sola ejecución, reemplaza `AddOneShotJob`)
-- `func HttpRemoveJob/HttpStopJob/HttpStartJob(w, r)` — publican eventos de control en vez de mutar el job directamente
-- **Nada en el repo importa `crontab` actualmente.**
-
-### 8.2 `jwf/` (workflows — sustituye a `workflow/`/`instances/`, eliminados)
-
-- `type Store interface { Set(collection, id, ownerId string, obj any) error; Get(collection, id string, dest any) (bool, error); Delete(collection, id string) error; Query(collection string, query et.Json) (et.Items, error) }` (`jwf/store.go:12`) — **nótese el `collection` extra en `Query`; NO tiene `GenSerie`**, corrección importante vs. documentación previa
-- `func New(store Store, userID string) (*WorkFlow, error)` — `cache.Load()` + `event.Load()`; `WorkFlow.ID = reg.UUID()`; registra auditoría `"new_workflow"` para `userID`
-- `func Load(store Store, id string) (*WorkFlow, error)` — error si `store == nil`; carga por el propio ID vía `store.Get("workflows", id, &def)`, rehidrata flows/steps
-- **No existe un mapa `WorkFlow.Instances`** — las instancias se crean bajo demanda (`newInstance`) o se cargan por ID vía `store.Get("instances", id, ...)`; un marcador en cache (`instance:<id>:status`, TTL = `Flow.TimeAwait`) solo detecta "ya está corriendo"
-- `(*WorkFlow) NewFloW(tag, title, version, userId string) *Flow` (sic: "FloW")
-- `(*Flow) Step(tag, title string, fn func(*Instance, et.Json) (et.Json, error)) *Flow` — primer `Step` se registra como `KindTrigger`; siguientes se conectan vía `Connection{Kind: PortOutput}`
-- `(*Flow) Error(tag, version, title string, fn func(*Instance, et.Json) (et.Json, error)) *Flow` — puerto de error (`PortError`); si se llama antes de tener algún Step, guarda un error recuperable vía `(*Flow).IsError() error`
-- `(*WorkFlow) Run(flowId, triggerTag, id, projectId, code string, ctx, tags et.Json, userId string) (et.Json, error)` — `id` vacío crea una instancia nueva (vía `reg.GetULID("")`)
-- `(*Instance) SetParams(params et.Json) et.Json` — **existe y funciona**, contradice documentación previa que decía que se había eliminado
-- Estados de `Instance`: `CREATED, PENDING, RUNNING, ROLLBACK, DONE, FAILED, CANCEL, STOP`
-- Reintentos: en error de paso, si `Flow.TotalAttempts != 0`, llama `resilience.New(workflow.store)` + `LoadInstance(resilience.Params{..., Fn: instance.run, ...})` antes de seguir la conexión de puerto `PortError`
-- `(*WorkFlow) LoadRouter(r Router)` — registra `httpGetStep/httpSetStep/httpUpdateStep/httpDeleteStep` (**implementados**) y `httpGetFlow/httpSetFlow/httpStatusFlow/httpDeleteFlow/httpGetInstance/httpDeleteInstance/httpRunInstance` (**cuerpo vacío**, sin implementar)
-- Quirk menor: en `Flow.Step`/`Flow.Error`, el parámetro que llega a `newStep` como "userId" es en realidad `flow.ID` — no afecta la compilación ni la ejecución, solo el audit log de esos steps.
-
-### 8.3 `resilience/`
-
-- `type Store interface { Set(collection, id, ownerId string, obj any) error; Get(collection, id string, dest any) (bool, error); Delete(collection, id string) error; Query(query et.Json) (et.Items, error) }` (misma forma que `jia.Store`/`crontab.Store`)
-- `func New(store Store) (*Resilience, error)` — solo llama `event.Load()`
-- `type Params struct { Id, Tag, Description string; TotalAttempts int; Interval time.Duration; Tags et.Json; Fn interface{}; FnArgs []interface{} }` — sin `TenantId`/`OwnerId`/`UserId`
-- `(*Resilience) LoadInstance(params Params) *Instance` — defaults `TotalAttempts=3`, `Interval=30s` si no se especifican
-- `(*Instance) Run(userId string) ([]any, error)`
-
-### 8.4 `jia/` (antes `ia/`)
-
-- `type Store interface { Set(collection, id, ownerId string, obj any) error; Get(collection, id string, dest any) (bool, error); Delete(collection, id string) error; Query(query et.Json) (et.Items, error) }` (`jia/ia.go:25`, misma forma unificada) — **sin `store.go` separado**, definida directamente en `ia.go`
-- `func New(tag string, store Store, userId string) (*Ia, error)` (`ia.go:58`) — solo `event.Load()`, **sin** `cache.Load()`; `Ia.ID = reg.UUID()`, sin `tenantId`; `OPENAI_API_KEY` vía `envar.GetStr`
-- `func Load(id string, store Store) (*Ia, error)` (`ia.go:84`) — **caveat de orden de argumentos**: llama internamente `store.Get(id, packageName, &result)` — es decir, pasa el `id` recibido como si fuera el `collection` y el literal `"ia"` como si fuera el `id`, en el orden opuesto al resto del paquete (`save()` usa `Set("ia", s.ID, ...)`, orden `collection` primero). Verifica el call site si implementas un `Store` real para `jia`.
-- Estructuras: `Ia{Agents, Participants, Conversations map[string]*...}`, `Agent{IaID, ID, Tag, Name, Skills map[string]Skill, ...}`, `Participant{IAID, ID, To, ConvID, ...}`, `Conversation{IAID, ID, Type, Messages []*Message, Participants, ...}`, `Message{IAID, ConversationID, ID, Type, Content, MessageStatuses, ...}`
-- `Skill` interface (`Tag/Name/Description/Execute(ctx, input et.Json) (et.Json, error)`); `ApiSkill` implementación concreta (`Url, Method, Headers, Body et.Json`)
-- `jia/router.go` — rutas HTTP para agentes/conversaciones/participantes
-- `jia/sender.go` — `Sender` interface (`SendTextMessage(to, content string) (et.Item, error)`), usada por `Conversation.SendTextMessage`; **no hay setter exportado** hoy — efectivamente sin conectar a ninguna implementación real
-- `jia/event.go`/`jia/msg.go` — constantes de evento e i18n
-- **Sin `cmd/jia`** — a diferencia de `jwf`/`jrex`, no hay ejemplo runnable en `cmd/`
-- **Otros bugs de orden de argumentos detectados**: `Agent.save()` usa la colección `"step"` en vez de `"agent"` (copia/pega de `jwf`); `Conversation.loadConversation` y `Message.delete()` también invierten el orden `(collection, id)` en algunas llamadas — revisa el call site exacto antes de asumir consistencia.
-
-### 8.5 `jrex/`
-
-- `func Load(tag string, store Store) (*Jrex, error)` — carga-o-crea un `Jrex` persistido bajo la colección `"jrex"`; `store = nil` usa por defecto un `FileStore` rooted en `./src`
-- `type Store interface { Set(collection, id, ownerId string, obj any) error; Get(collection, id string, dest any) (bool, error) }` — **subconjunto** de 2 métodos (sin `Delete`/`Query`)
-- `(*Jrex) Set(name string, value interface{}) *Jrex` — inyecta un binding Go en cada `Instance` nueva
-- `(*Jrex) Run()` / `RunModule(tag)` — ejecuta el módulo `"index"` (u otro) en una `Instance` `goja` nueva
-- `(*Jrex) RunDev()` — corre una vez y bloquea vía `utility.AppWait()`; con el `FileStore` por defecto, cambios de archivo bajo `BaseDir` disparan un re-run vía `file.NewWatcher` (hot reload)
-- Globales JS: `console.*`, `ctx.*`, `fetch()`, `require()` (`jrex/wrapper.go`, `jrex/lib.go`)
-- **No existen** modos `Develop`/`Production`/`Building` ni métodos `SetModule`/`GetModule`/`DeleteModule` en el código actual.
-
-### 8.6 `service/`
-
-- `func VerifyOTP(channel string, otp, createdBy string) (bool, error)`
-- `func SendOTPSMS(tenantId, serviceId, sender, countryCode, phoneNumber string, length int, duration time.Duration, createdBy string) (et.Items, error)`
-- `func SendOTPEmail(...)`, `func SendOTPByTemplateId(...)`
-- `func SendSms/SendWhatsapp/SendEmail/SendEmailByTemplateId(...)` — delegan en `aws`/`brevo`
-- `type TpMessage` (enum: `TypeNotification, TypeComercial, TypeAutentication`)
-
----
-
-## 9. Comunicación de bajo nivel
-
-### 9.1 `jrpc/`
-
-- `func Mount(host string, port int, services any, packageName string) (*Package, error)` — reflexiona la struct de servicios, la registra con `net/rpc` estándar (`rpc.Register`)
-- `func Start(port int) error` — `rpc.ServeConn(conn)` por conexión entrante
-- `func Call/CallJson/CallItems/CallItem(method string, args ...) (..., error)` — resuelven host/puerto vía el registro global de `Solver`s y llaman por `net/rpc` (gob), con `et.Json/Item/Items/List` pre-registrados vía `gob.Register`
-- `func GetSolver(method string) (*Solver, error)`
-- `type Solver struct { Host, Port string; Inputs, Output []string }` / `type Package struct { Name, Host, Port string; Solvers map[string]*Solver }`
-- **Confirmado: sin balanceador de carga ni Raft** — eso vive en `jtcp/`.
-- Código muerto detectado: `rpcs map[string]et.Json` se inicializa pero nunca se escribe; `listRouters()`/`HttpListRouters` siempre retorna lista vacía.
-
-### 9.2 `jtcp/` (antes `tcp/`)
-
-- `const (Follower, Candidate, Leader, Proxy Mode)` (iota)
-- `func NewNode(port int, tlsConfig ...*tls.Config) *Node` — env `TIMEOUT` (default 10s), `WORKER_COUNT` (default 1000), `CONFIG_FILE` (default `./envar.json`)
-- Elección de líder (`raft.go`): Raft simplificado hecho a mano — timeout aleatorio 1.5-3s sin heartbeat dispara elección, vota por sí mismo, pide votos a los peers; con mayoría pasa a `Leader` y emite heartbeats cada 500ms; cualquier peer viendo un término mayor vuelve a `Follower`. Callbacks `OnBecomeLeader`/`OnChangeLeader`.
-- `balancer.go`: proxy TCP L4 round-robin simple, solo activo cuando `Node.mode == Proxy` — pipa bytes en ambas direcciones vía `io.Copy`.
-- Protocolo de mensaje (`message.go`): frame con prefijo de longitud (4 bytes big-endian) + JSON `Message{ID, Type TpMessage, Method, Payload, Error, Args, IsResponse, Timeout}`; tipos `ACKMessage/CloseMessage/ErrorMessage/Heartbeat/RequestVote/Method`.
-- Otros: `client.go` (Client con pending-requests por ID + timeout), `service.go` (`Service` interface + `Tcp.Ping` built-in), `tls.go` (mTLS/self-signed helpers), `cli.go` (`StartConsole`, REPL interactivo).
-- Nota: `Response.Error` es tipo `error` con tag `json` — `encoding/json` no lo serializa útilmente (produce `{}`), solo el acceso directo al campo Go es confiable.
-
----
-
-## 10. Integraciones externas
-
-### 10.1 `aws/`
-
-**Solo S3 y SNS/SMS — no hay SES** pese al nombre general del paquete.
-- `type Params struct { Region, KeyId, Secret, Token string }`
-- `func NewS3AWS(params Params) (*S3AWS, error)` → `(*S3AWS).Uploader/UploaderFile/UploaderB64/Delete/Download(...)`
-- `func NewSenderAWS(params Params) (*SenderAWS, error)` → `(*SenderAWS).SendSMS(contactNumbers []string, content string, params et.Json, tpMessage string) (et.Item, error)` — `tpMessage` ∈ `{"Transactional","Promotional"}`, plantillado `{{key}}` vía `strs.Replace`
-- Requiere las cuatro credenciales de `Params` no vacías para construir la sesión AWS.
-
-### 10.2 `brevo/`
-
-Pura capa HTTP vía `request.Fetch`/`request.Post` (sin SDK). Auth: env `BREVO_SEND_PATH` (base URL) + `BREVO_SEND_KEY` (header `api-key`).
-- `func SendEmail(sender et.Json, to []et.Json, subject, htmlContent string, params et.Json, tp string) (et.Items, error)` + `SendEmailTransactional/SendEmailPromotional`
-- `func SendSmsTransactional/SendSmsPromotional(...)` (interno `sendSms`)
-- `func SendWhatsapp(contactNumbers []string, templateId string, params []et.Json, tp string) (et.Items, error)` + `SendWhatsappTransactional/SendWhatsappPromotional` — requiere además env `BREVO_SENDER`
-
-### 10.3 `jwsp/` (antes `wsp/`)
-
-- `func NewSender(token, phoneNumberId string) *Whatsapp` — env `WHATSAPP_API_URL` (default `https://graph.facebook.com/v22.0`)
-- Builder: `.Debug()/.IsTest()` (modo test: no llama a la API real, retorna el body construido)/`.SetVerifyToken(...)/.SetEventHandler(fn)/.SetEventHandlerError(fn)`
-- `(*Whatsapp) Webhooks(w, r)` — maneja el handshake GET de Facebook (`hub.mode`/`hub.verify_token`/`hub.challenge`) y el POST de conversación
-- Decenas de `Send*`/`SendReply*` — texto, imagen, audio, video, documento, sticker, ubicación, contacto, plantillas, catálogo, listas/botones interactivos
-- **Bug confirmado**: `SendReplyVideoMessageByURL(to, url, videoCaptionText string)` asigna `url` al campo `MessageID` del mensaje, en vez de recibir un `messageID` separado como su hermano correcto `SendReplyVideoMessageById(to, messageID, videoCaptionText, videoObjectID string)`.
-- `jwsp/event.go` es un stub vacío (solo `package jwsp`, sin código).
-
-### 10.4 `infobip/`
-
-Pura capa HTTP vía `request.Fetch` (sin SDK), mismo estilo de `Params`/constructor que `aws/` en vez de funciones sueltas por env var como `brevo/`. Ya no es un stub — tiene los tres canales implementados.
-- `type Params struct { BaseUrl, ApiKey, Sender string }` — las tres son obligatorias, validadas en el constructor.
-- `func NewSenderInfobip(params Params) (*SenderInfobip, error)` → un solo cliente compartido por los tres canales.
-- `func (*SenderInfobip) SendSMS(contactNumbers []string, content string, params et.Json, tpMessage string) (et.Item, error)` — `POST {baseUrl}/sms/3/messages`.
-- `func (*SenderInfobip) SendEmail(to []string, subject, htmlContent string, params et.Json, tpMessage string) (et.Item, error)` — `POST {baseUrl}/email/4/messages` (Email API v4, JSON; deliberadamente no la v3 `/email/3/send`, que exige `multipart/form-data` y no encaja con `request.Fetch`).
-- `func (*SenderInfobip) SendWhatsApp(contactNumbers []string, templateName, language string, placeholders [][]string, tpMessage string) (et.Items, error)` — `POST {baseUrl}/whatsapp/1/message/template`, una request por destinatario; solo plantillas pre-aprobadas con placeholders posicionales `{{n}}` (`placeholders[i]` para `contactNumbers[i]`), no mensajes de sesión libres.
-- Las tres funciones validan `tpMessage` ∈ `{"Transactional","Promotional"}` y aceptan `params et.Json` con plantillado `{{key}}` vía `strs.Replace` (excepto `SendWhatsApp`, que usa placeholders posicionales por ser plantillas de WhatsApp Business).
-
----
-
-## 11. Concurrencia y memoria
-
-### 11.1 `mem/`
-
-- `(*Mem) Set(key, value, expiration) (*Entry, error)`; getters tipados `(T, bool, error)`: `GetStr/GetInt/GetInt64/GetFloat/GetBool/GetTime/GetDuration/GetJson/GetArrayStr/GetArrayInt/GetArrayFloat/GetArrayJson`
-- `(*Mem) More(key, expiration) (int64, error)` — contador atómico
-- `(*Mem) Clear(match)`, `Empty()`, `Len()`, `Keys()`, `Values()`
-- Package-level: mismas funciones delegando a un singleton (`mem/handler.go`)
-- `mem/sync.go`: `Peticiones` — limitador de concurrencia (`NewPeticiones(capacity, timeWait)`, `(*Peticiones).Ejecucion(fn, params) (et.Items, error)`)
-
-### 11.2 `ephemeral/`
-
-`func NewInstance(expiration time.Duration) *Instance` — `.Set(key, value)` (resetea timer), `.Del(key)`, `.Get(key) (interface{}, bool)` (resetea timer al leer). Más simple que `mem/`: todo `interface{}`, sin accesores tipados.
-
-### 11.3 `race/`
-
-`func NewValue(value interface{}) *Value` — wrapper thread-safe con `sync.RWMutex`. `.Set/.Delete/.Get/.String/.Int/.Float64/.Bool/.Time/.Array/.Map/.StringArray/.IntArray/.Float64Array/.IsNil/.MapRange/.ArrayRange/.Range/.Increase(n)`.
-
-### 11.4 `iterate/`
-
-Medición de tiempo entre checkpoints vía singleton de paquete. `func Start(tag string)`, `func Segment(tag, msg string, isDebug bool) time.Duration`, `func End(tag, msg string, isDebug bool) time.Duration` — logging vía `logs.Infof`.
-
-### 11.5 `queue/`
-
-Cola de batching genérica en memoria. `func New[T any](queueSize, maxEvents int, period time.Duration, handler func(context.Context, []T) error) *Queue[T]` — `.Push(item)` agrupa ítems y despacha el lote a `handler` cuando ocurre primero: `maxEvents` alcanzado o `period` vencido. `.Close()` flushea y detiene. Tiene el único test real del repo (`queue/example_test.go`, `Example_queue`).
-
----
-
-## 12. Tiempo, unidades y archivos
-
-### 12.1 `timezone/`
-
-Constantes de layout (`RFC3339Nano`, `RFC3339`, etc.). `func Now()/NowStr()/Add(d)/Location()/Format(t, layout)/Parse(layout, value) (time.Time, error)/FormatMDYYYY(value string) string`. Zona vía env `TIMEZONE` (default `America/Bogota`), formato por defecto vía `LAYOUT_TIME`.
-
-### 12.2 `units/`
-
-`type TypeUnity` (constantes de distancia/masa/volumen). `func NewQuantity(val float64, unit TypeUnity) *Quantity`, `(*Quantity).Load(val interface{}) error`, `.To(unit) error` (convierte in-place; masa↔volumen tratados 1:1 g/ml), `.ToStr()/.ToJson()`. `func Load(val any) (*Quantity, error)` (factory desde float/map/`et.Json`/string).
-
-### 12.3 `file/`
-
-`type FileInfo struct { Path string; Info os.FileInfo; Error error; IsDir, Exist bool }` + `.Json() et.Json`. `func ExistPath(path string) FileInfo`, `GetExtencion(filename) string` (sic, "Extencion"), `MakeFolder(names ...string) (string, error)`, `MakeFile(path, name, model string, args ...any) (string, error)` (sustituye `$1,$2...`), `Remove(path) (bool, error)`, `Save/Load[T any]/LoadOrSave[T any](path, obj) ...` (persistencia JSON genérica).
-
-`type Watcher` (`fsnotify`-backed): `NewWatcher(root) (*Watcher, error)`, builder `.Debug()/.OnCreate/.OnWrite/.OnRemove/.OnRename/.OnChmod/.OnReload(fn)/.OnError(fn)/.Close()/.Load()` (bloqueante, auto-watch de subdirectorios nuevos). `func WatcherPath(root string) error` — atajo simple sin builder, usado por `cmd/whatcher`.
-
----
-
-## 13. Herramientas de desarrollo
-
-### 13.1 `cmds/`
-
-`Stage{Id, Name, Description, Steps []*Step}`, `Step{Id, Name, Description, Commands []*Cmd}`. `(*Step).RunOS(idx, args et.Json) ([]byte, error)` ejecuta un comando local sustituyendo variables. `(*Step).RunSSH(idx, args et.Json) ([]byte, error)` es **idéntico a `RunOS`** — no implementa SSH real.
-
-### 13.2 `create/`
-
-Scaffolder Cobra + `promptui`, orientado a datos (`create/template/templates.go`, >1000 líneas de plantillas Go raw-string): microservicios, modelos, RPC, deployments de Kubernetes (StatefulSet/Deployment). Punto de entrada: comando `create.Create` (Cobra) → `PrompCreate()` → `MkProject`/`MkMicroservice`/`MkMolue`/`MkRpc`. **Nota de calidad**: la plantilla de `server.New("$2")` (un solo argumento) está desactualizada frente a la firma real `server.New(name string, port int) *Ettp` — si generas un servicio nuevo con `create/`, corrige esa llamada a mano.
-
-### 13.3 `cmd/*` (binarios)
-
-| Binario | Propósito | Dependencias principales |
-|---|---|---|
-| `cmd/et` | CLI principal, demuestra el API tipo LINQ de `et.Json` (`et.From(...).Where(...).Order(...).Join(...)`) | `et`, `logs` |
-| `cmd/apigateway` | Arranca un API Gateway sobre `ettp.New` | `envar`, `ettp/v2`, `logs` |
-| `cmd/daemon` | Servicio en background con integración systemd, patrón `Registry`/plugin | `et`, `os` |
-| `cmd/create` | Shim CLI de `create/`, corre `go mod tidy` al final | `create`, `spf13/cobra` |
-| `cmd/server` | Nodo TCP (`jtcp.NewNode(port)`) | `envar`, `jtcp`, `utility` |
-| `cmd/jrex` | Runner de `jrex` en modo dev con hot-reload, conecta Postgres | `jrex`, `jsql` + driver postgres |
-| `cmd/jsql` | Demo del driver `jsql` (DDL, condiciones, consultas) | `jsql` + driver postgres |
-| `cmd/client` | Cliente TCP de consola (`jtcp.StartConsole`) | `envar`, `jtcp` |
-| `cmd/install` | Bootstrap: instala dependencias fijas + copia `LIBRARY_CONTEXT.md` al proyecto consumidor y lo referencia en su `CLAUDE.md` | stdlib |
-| `cmd/whatcher` | Observa el directorio actual con `file.WatcherPath(".")` | `file` |
-| `cmd/jwf` | Ejemplo de `jwf` (`NewFloW`/`Step`/`Run`) | `et`, `jwf` |
-| `cmd/resilience` | Ejemplo de `resilience` | `et`, `resilience`, `utility` |
-| `cmd/wsp` | Ejemplo de `jwsp` en modo test (conserva el nombre de directorio antiguo) | `jwsp` |
-
-No existe `cmd/jia` — a diferencia de `jwf`/`jrex`, `jia` no tiene ejemplo runnable en el repo.
-
-### 13.4 `jcli/` (huérfano, en progreso)
-
-`jcli/jcli.go` implementa un modelo de CLI Bubble Tea (`cliModel`, interfaz `App{RunCli() error}`) pero **declara `package jrex`** estando en el directorio `jcli/`, y **nada en el repo importa `github.com/cgalvisleon/et/jcli`**. Parece ser una extracción en progreso del CLI de desarrollo de `jrex/` hacia su propio paquete, sin terminar de conectar.
-
----
-
-## 14. Patrón transversal: `msg/`
-
-El paquete raíz `msg/` (`msg/msg.go`) centraliza mensajes de error compartidos entre el resto de paquetes como constantes string (`MSG_*`): `MSG_ATRIB_REQUIRED`, `MSG_RECORD_NOT_FOUND`, `MSG_TOKEN_INVALID`, `MSG_TOKEN_EXPIRED`, etc. Es distinto de `et/msg.go` (§1), que cubre solo los mensajes internos del paquete `et`. La mayoría de los demás paquetes (`jia`, `jwf`, `resilience`, `crontab`, `claim`, `validator`, etc.) además mantienen su **propio** `msg.go` local con constantes específicas de ese paquete, siguiendo el mismo patrón. Al generar código que interactúa con `et`, prefiere comparar/propagar estos mensajes en vez de inventar nuevos strings literales equivalentes.

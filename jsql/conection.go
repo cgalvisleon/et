@@ -44,6 +44,60 @@ type Connection interface {
 	SetPassword(string)
 }
 
+// Pool: the connection pool of a server connection (postgres, oracle, mysql, mssql), from DB_POOL_MAX_OPEN,
+// DB_POOL_MAX_IDLE, DB_POOL_LIFETIME and DB_POOL_IDLE_TIME (minutes). A zero value is left out of GetParams, so the
+// driver keeps its default (3, 1, 30 and 2)
+type Pool struct {
+	PoolMaxOpen  int
+	PoolMaxIdle  int
+	PoolLifetime int
+	PoolIdleTime int
+}
+
+/**
+* poolFromEnv: The pool of DB_POOL_*; 0 (the driver's default) when a variable is not set
+* @return Pool
+**/
+func poolFromEnv() Pool {
+	return Pool{
+		PoolMaxOpen:  envar.GetInt("DB_POOL_MAX_OPEN", 0),
+		PoolMaxIdle:  envar.GetInt("DB_POOL_MAX_IDLE", 0),
+		PoolLifetime: envar.GetInt("DB_POOL_LIFETIME", 0),
+		PoolIdleTime: envar.GetInt("DB_POOL_IDLE_TIME", 0),
+	}
+}
+
+/**
+* withPool: params with the pool keys that are set (> 0)
+* @param params et.Json
+* @return et.Json
+**/
+func (s Pool) withPool(params et.Json) et.Json {
+	values := map[string]int{
+		"pool_max_open":  s.PoolMaxOpen,
+		"pool_max_idle":  s.PoolMaxIdle,
+		"pool_lifetime":  s.PoolLifetime,
+		"pool_idle_time": s.PoolIdleTime,
+	}
+	for key, value := range values {
+		if value > 0 {
+			params[key] = value
+		}
+	}
+	return params
+}
+
+/**
+* readPool: The pool keys of params (ConnectionFromJson), keeping the current values when missing
+* @param params et.Json
+**/
+func (s *Pool) readPool(params et.Json) {
+	s.PoolMaxOpen = params.ValInt(s.PoolMaxOpen, "pool_max_open")
+	s.PoolMaxIdle = params.ValInt(s.PoolMaxIdle, "pool_max_idle")
+	s.PoolLifetime = params.ValInt(s.PoolLifetime, "pool_lifetime")
+	s.PoolIdleTime = params.ValInt(s.PoolIdleTime, "pool_idle_time")
+}
+
 type PgConection struct {
 	Id          string
 	Host        string
@@ -55,6 +109,7 @@ type PgConection struct {
 	AppName     string
 	RecordLimit int
 	Timeout     time.Duration
+	Pool
 }
 
 func pgConection(host string) *PgConection {
@@ -76,6 +131,7 @@ func pgConection(host string) *PgConection {
 		AppName:     appName,
 		RecordLimit: recordLimit,
 		Timeout:     1 * time.Hour,
+		Pool:        poolFromEnv(),
 	}
 }
 
@@ -84,7 +140,7 @@ func pgConection(host string) *PgConection {
 * @return et.Json
 **/
 func (s *PgConection) GetParams() et.Json {
-	return et.Json{
+	return s.withPool(et.Json{
 		"id":           s.Id,
 		"driver":       DriverPostgres,
 		"host":         s.Host,
@@ -96,7 +152,7 @@ func (s *PgConection) GetParams() et.Json {
 		"app_name":     s.AppName,
 		"record_limit": s.RecordLimit,
 		"timeout":      s.Timeout,
-	}
+	})
 }
 
 /**
@@ -242,6 +298,7 @@ type OracleConection struct {
 	SSL         bool
 	SSLVerify   bool
 	Timeout     time.Duration
+	Pool
 }
 
 func oracleConection(host string) *OracleConection {
@@ -262,6 +319,7 @@ func oracleConection(host string) *OracleConection {
 		SSL:         ssl,
 		SSLVerify:   sslVerify,
 		Timeout:     1 * time.Hour,
+		Pool:        poolFromEnv(),
 	}
 }
 
@@ -286,7 +344,7 @@ func (s *OracleConection) SetId(id string) {
 * @return et.Json
 **/
 func (s *OracleConection) GetParams() et.Json {
-	return et.Json{
+	return s.withPool(et.Json{
 		"id":           s.Id,
 		"driver":       DriverOracle,
 		"host":         s.Host,
@@ -297,7 +355,7 @@ func (s *OracleConection) GetParams() et.Json {
 		"ssl":          s.SSL,
 		"ssl_verify":   s.SSLVerify,
 		"timeout":      s.Timeout,
-	}
+	})
 }
 
 /**
@@ -335,6 +393,7 @@ type MysqlConection struct {
 	User     string
 	Password string
 	Timeout  time.Duration
+	Pool
 }
 
 /**
@@ -352,6 +411,7 @@ func mysqlConection(host string) *MysqlConection {
 		User:     envar.GetStr("DB_USER", "root"),
 		Password: envar.GetStr("DB_PASSWORD", ""),
 		Timeout:  1 * time.Hour,
+		Pool:     poolFromEnv(),
 	}
 }
 
@@ -376,7 +436,7 @@ func (s *MysqlConection) SetId(id string) {
 * @return et.Json
 **/
 func (s *MysqlConection) GetParams() et.Json {
-	return et.Json{
+	return s.withPool(et.Json{
 		"id":       s.Id,
 		"driver":   DriverMysql,
 		"host":     s.Host,
@@ -385,7 +445,7 @@ func (s *MysqlConection) GetParams() et.Json {
 		"user":     s.User,
 		"password": s.Password,
 		"timeout":  s.Timeout,
-	}
+	})
 }
 
 /**
@@ -423,6 +483,7 @@ type MssqlConection struct {
 	User     string
 	Password string
 	Timeout  time.Duration
+	Pool
 }
 
 /**
@@ -440,6 +501,7 @@ func mssqlConection(host string) *MssqlConection {
 		User:     envar.GetStr("DB_USER", "sa"),
 		Password: envar.GetStr("DB_PASSWORD", ""),
 		Timeout:  1 * time.Hour,
+		Pool:     poolFromEnv(),
 	}
 }
 
@@ -464,7 +526,7 @@ func (s *MssqlConection) SetId(id string) {
 * @return et.Json
 **/
 func (s *MssqlConection) GetParams() et.Json {
-	return et.Json{
+	return s.withPool(et.Json{
 		"id":       s.Id,
 		"driver":   DriverMssql,
 		"host":     s.Host,
@@ -473,7 +535,7 @@ func (s *MssqlConection) GetParams() et.Json {
 		"user":     s.User,
 		"password": s.Password,
 		"timeout":  s.Timeout,
-	}
+	})
 }
 
 /**
@@ -530,6 +592,7 @@ func ConnectionFromJson(driver, host string, params et.Json) (Connection, error)
 		c.AppName = params.ValStr(c.AppName, "app_name")
 		c.RecordLimit = params.ValInt(c.RecordLimit, "record_limit")
 		c.Timeout = timeout(c.Timeout)
+		c.readPool(params)
 	case *SqliteConection:
 		c.Id = params.ValStr(c.Id, "id")
 		c.File = params.ValStr(c.File, "file")
@@ -549,6 +612,7 @@ func ConnectionFromJson(driver, host string, params et.Json) (Connection, error)
 		c.SSL = params.ValBool(c.SSL, "ssl")
 		c.SSLVerify = params.ValBool(c.SSLVerify, "ssl_verify")
 		c.Timeout = timeout(c.Timeout)
+		c.readPool(params)
 	case *MysqlConection:
 		c.Id = params.ValStr(c.Id, "id")
 		c.Port = params.ValInt(c.Port, "port")
@@ -556,6 +620,7 @@ func ConnectionFromJson(driver, host string, params et.Json) (Connection, error)
 		c.User = params.ValStr(c.User, "user")
 		c.Password = params.ValStr(c.Password, "password")
 		c.Timeout = timeout(c.Timeout)
+		c.readPool(params)
 	case *MssqlConection:
 		c.Id = params.ValStr(c.Id, "id")
 		c.Port = params.ValInt(c.Port, "port")
@@ -563,6 +628,7 @@ func ConnectionFromJson(driver, host string, params et.Json) (Connection, error)
 		c.User = params.ValStr(c.User, "user")
 		c.Password = params.ValStr(c.Password, "password")
 		c.Timeout = timeout(c.Timeout)
+		c.readPool(params)
 	}
 
 	return result, nil

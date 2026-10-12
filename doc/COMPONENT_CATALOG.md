@@ -1476,6 +1476,19 @@ func (s *Tcp) Execute(method string, request *Message) *Response
 
 Motor de workflows en memoria: flujos, pasos (Go o JS), instancias, reintentos. Persistencia vía `OnChange`.
 
+Valores de Go en un script (2026-10-12, `goobject.go`):
+
+```go
+func GoValue(value any) Binder // métodos y campos con su nombre de Go; et.Json/Item/Items como objetos planos; error → throw
+```
+
+```js
+// bindings: {db: jwf.GoValue(db)}
+const users = db.GetModel("tenancy", "users");
+const all = users.Query({ where: [{ "A.status": { eq: "active" } }] }).All(); // {ok, count, result: [...]}
+all.result.forEach((user) => console.log(user.name));
+```
+
 Funciones y métodos:
 
 ```go

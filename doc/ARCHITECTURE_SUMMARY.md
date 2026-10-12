@@ -98,9 +98,5 @@ Las rutas se guardan en Redis y se propagan entre réplicas por NATS (`EVENT_SET
 | `cmds.Step.RunSSH` | Ejecuta el comando localmente, igual que `RunOS`. |
 | `utility.More` | Reinicia el contador del tag a 0 en cada llamada. |
 | `dt` con `PRODUCTION=false` | El objeto no se persiste: vive solo en memoria. |
-| `jsql.LoadDb` | Entra en pánico al reconstruir una `DB` desde su `ToJson` (brecha B9 de `jsql/spec.md`). |
-| `jsql` `Model.ToJson` | `audit_log` sale como objeto `{data: [...]}` en vez de lista (brecha B10). |
-| `jsql.Wrapper` | `conn.id` se expone en todos los drivers; `jsql.d.ts` y `TestWrapper` dicen que solo en oracle, mysql y mssql (brecha B11). |
-| `jsql` pool | `DB_POOL_*` solo lo lee la conexión sqlite; los demás drivers usan un pool fijo (brecha B13). |
 | `validator.Pattern` | Una regex inválida entra en pánico al validar (`regexp.MustCompile`); `ByJson` la rechaza con error. |
 | `jcli/` | WIP huérfano (declara `package jrex`). |

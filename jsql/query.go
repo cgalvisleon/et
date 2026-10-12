@@ -1194,7 +1194,7 @@ func (s *Query) setCalc(tx *Tx, item et.Json) (et.Json, error) {
 		}
 		instance := jrex.NewInstance()
 		instance.SetCode(code)
-		calc.Model.wrapper(instance)
+		calc.Model.wrapper(instance, nil)
 		setJsJson(instance, "item", item)
 		instance.SetBinding("tx", tx)
 		_, err := instance.Run()

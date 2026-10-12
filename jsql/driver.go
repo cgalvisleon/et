@@ -12,7 +12,7 @@ const (
 	DriverMysql    = "mysql"
 	DriverMssql    = "mssql"
 	DriverOracle   = "oracle"
-	DriverJosefina = "josefina"
+	DriverJosefina = "josefina" // pending (spec.md, B5)
 )
 
 /**

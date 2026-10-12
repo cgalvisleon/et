@@ -1,6 +1,7 @@
 package jsql
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -71,9 +72,30 @@ type Define struct {
 	Hiddens     []string         `json:"hiddens"`
 	OmitUpdates []string         `json:"omit_updates"`
 	Details     []DefDetail      `json:"details"`
-	Masters     []DefMaster      `json:"master"`
+	Masters     []DefMaster      `json:"masters"`
 	Rollups     []DefRollup      `json:"rollups"`
 	UserId      string           `json:"user_id"`
+}
+
+/**
+* UnmarshalJSON: A Define from its json; its masters go under "masters", like details and rollups, and "master" (the
+* key before) is still read when "masters" is missing
+* @param data []byte
+* @return error
+**/
+func (s *Define) UnmarshalJSON(data []byte) error {
+	type plain Define
+	value := struct {
+		*plain
+		Master []DefMaster `json:"master"`
+	}{plain: (*plain)(s)}
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if len(s.Masters) == 0 {
+		s.Masters = value.Master
+	}
+	return nil
 }
 
 /**

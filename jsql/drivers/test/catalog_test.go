@@ -3,6 +3,7 @@ package test
 import (
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,6 +22,9 @@ import (
 	"github.com/cgalvisleon/et/jsql/drivers/postgres"
 	"github.com/cgalvisleon/et/jsql/drivers/sqlite"
 )
+
+// update: go test -run TestCatalog -update writes result/; without it the run only reports (B7)
+var update = flag.Bool("update", false, "write result/<driver>.json, result/<driver>.sql and result/summary.md")
 
 // sections are the 11 groups of catalog.go, in the same order.
 var sections = []string{
@@ -245,9 +249,10 @@ func catalogTargets() []target {
 }
 
 /**
-* TestCatalog: Exercises every section of the jsql catalog against sqlite, postgres and oracle.
-* The results (status, output and generated SQL per case) are written to result/<driver>.json and
-* result/<driver>.sql, and a comparison of the three drivers to result/summary.md.
+* TestCatalog: Exercises every section of the jsql catalog against every driver available.
+* With -update, the results (status, output and generated SQL per case) are written to result/<driver>.json and
+* result/<driver>.sql, and a comparison of the drivers to result/summary.md; a driver not available in this run keeps
+* its previous result/<driver>.json in the summary.
 **/
 func TestCatalog(t *testing.T) {
 	all := map[string][]caseResult{}
@@ -268,10 +273,35 @@ func TestCatalog(t *testing.T) {
 			s.audit()
 			s.utilities()
 			all[base.name] = s.results
-			writeResults(t, base.name, s.results)
+			if *update {
+				writeResults(t, base.name, s.results)
+			}
 		})
 	}
+	if !*update {
+		return
+	}
+	for _, base := range catalogTargets() {
+		if len(all[base.name]) == 0 {
+			all[base.name] = readResults(base.name)
+		}
+	}
 	writeSummary(t, all)
+}
+
+/**
+* readResults: The results of a driver from a previous run (result/<driver>.json), or none
+* @param driver string
+* @return []caseResult
+**/
+func readResults(driver string) []caseResult {
+	result := []caseResult{}
+	bt, err := os.ReadFile(filepath.Join("result", driver+".json"))
+	if err != nil {
+		return result
+	}
+	json.Unmarshal(bt, &result)
+	return result
 }
 
 /**
@@ -1736,7 +1766,7 @@ func writeSummary(t *testing.T, all map[string][]caseResult) {
 
 	var sb strings.Builder
 	sb.WriteString("# Resultado de TestCatalog\n\n")
-	sb.WriteString("Generado por `go test -run TestCatalog` en `jsql/drivers/test`. El detalle de cada caso (salida y SQL) está en `<driver>.json` y `<driver>.sql`.\n\n")
+	sb.WriteString("Generado por `go test -run TestCatalog -update` en `jsql/drivers/test`. El detalle de cada caso (salida y SQL) está en `<driver>.json` y `<driver>.sql`.\n\n")
 	sb.WriteString("| Driver | Pasan | Fallan | Brechas | Omitidos |\n|---|---|---|---|---|\n")
 	for _, d := range drivers {
 		if len(all[d]) == 0 {

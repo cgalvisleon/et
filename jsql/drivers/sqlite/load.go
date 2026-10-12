@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/jsql"
+	"github.com/cgalvisleon/et/logs"
 )
 
 /**
@@ -137,7 +139,9 @@ func ddlIndexes(model *jsql.Model, table string) []string {
 }
 
 /**
-* ExistModel: Returns true when a table with the given name exists in the database.
+* ExistModel: Returns true when the model's table exists. Before v1.0.36 a sqlite table was named just "name"; when
+* "schema_name" is missing and "name" exists, it is renamed (ALTER TABLE … RENAME TO) and counts as existing, so a
+* database from then keeps its data
 * @param db *sql.DB, model *jsql.Model
 * @return bool, error
 **/
@@ -146,8 +150,32 @@ func (s *Sqlite) ExistModel(db *sql.DB, model *jsql.Model, timeout ...time.Durat
 	defer cancel()
 
 	table := ddlTable(model)
+	exists, err := tableExists(ctx, db, table)
+	if err != nil || exists || model.Schema == "" || model.Name == table {
+		return exists, err
+	}
+
+	legacy, err := tableExists(ctx, db, model.Name)
+	if err != nil || !legacy {
+		return false, err
+	}
+
+	rename := fmt.Sprintf(`ALTER TABLE "%s" RENAME TO "%s";`, model.Name, table)
+	if _, err := db.ExecContext(ctx, rename); err != nil {
+		return false, err
+	}
+	logs.Logf("SQLITE", "table %s renamed to %s (v1.0.36 names sqlite tables schema_name)", model.Name, table)
+	return true, nil
+}
+
+/**
+* tableExists: Whether sqlite_master has a table with that name
+* @param ctx context.Context, db *sql.DB, name string
+* @return bool, error
+**/
+func tableExists(ctx context.Context, db *sql.DB, name string) (bool, error) {
 	query := `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?) AS "exists";`
-	rows, err := db.QueryContext(ctx, query, table)
+	rows, err := db.QueryContext(ctx, query, name)
 	if err != nil {
 		return false, err
 	}

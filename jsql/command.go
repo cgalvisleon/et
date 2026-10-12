@@ -527,7 +527,7 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 		for _, script := range s.BeforeInserts {
 			instance := jrex.NewInstance()
 			instance.SetCode(script.Code)
-			model.wrapper(instance)
+			model.wrapper(instance, tx)
 			setTriggerRecords(instance, s.Old, s.New)
 			_, err := instance.Run()
 			if err != nil {
@@ -563,7 +563,7 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 		for _, script := range s.AfterInserts {
 			instance := jrex.NewInstance()
 			instance.SetCode(script.Code)
-			model.wrapper(instance)
+			model.wrapper(instance, tx)
 			setTriggerRecords(instance, s.Old, s.New)
 			_, err := instance.Run()
 			if err != nil {
@@ -610,7 +610,7 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 		for _, script := range s.BeforeUpdates {
 			instance := jrex.NewInstance()
 			instance.SetCode(script.Code)
-			model.wrapper(instance)
+			model.wrapper(instance, tx)
 			setTriggerRecords(instance, s.Old, s.New)
 			_, err := instance.Run()
 			if err != nil {
@@ -647,7 +647,7 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 		for _, script := range s.AfterUpdates {
 			instance := jrex.NewInstance()
 			instance.SetCode(script.Code)
-			model.wrapper(instance)
+			model.wrapper(instance, tx)
 			setTriggerRecords(instance, s.Old, s.New)
 			_, err := instance.Run()
 			if err != nil {
@@ -693,7 +693,7 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 		for _, script := range s.BeforeDeletes {
 			instance := jrex.NewInstance()
 			instance.SetCode(script.Code)
-			model.wrapper(instance)
+			model.wrapper(instance, tx)
 			setTriggerRecords(instance, s.Old, s.New)
 			_, err := instance.Run()
 			if err != nil {
@@ -728,7 +728,7 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 		for _, script := range s.AfterDeletes {
 			instance := jrex.NewInstance()
 			instance.SetCode(script.Code)
-			model.wrapper(instance)
+			model.wrapper(instance, tx)
 			setTriggerRecords(instance, s.Old, s.New)
 			_, err := instance.Run()
 			if err != nil {

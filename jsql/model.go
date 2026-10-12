@@ -281,7 +281,7 @@ func (s *Model) toJson() et.Json {
 		"after_inserts":  s.AfterInserts,
 		"after_updates":  s.AfterUpdates,
 		"after_deletes":  s.AfterDeletes,
-		"audit_log":      s.AuditLog,
+		"audit_log":      s.AuditLog.All(),
 	}
 }
 
@@ -330,9 +330,14 @@ func (s *Model) initModel(db *DB) (bool, error) {
 * @param instance *jrex.Instance, model *Model
 * @return void
 **/
-func (s *Model) wrapper(instance *jrex.Instance) {
+func (s *Model) wrapper(instance *jrex.Instance, tx *Tx) {
 	for name, binding := range Wrapper(s.db) {
 		instance.SetBinding(name, binding)
+	}
+	// TX: the transaction of the command that runs the trigger; what the script writes goes in it (with SQLite, a
+	// write outside it would wait for the only connection forever)
+	if tx != nil {
+		instance.SetBinding("TX", wrapTx(tx))
 	}
 }
 

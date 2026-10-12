@@ -162,11 +162,11 @@ func (s *Series) deleteSeries(tag string) error {
 }
 
 /**
-* genSerie
-* @param string tag
+* genSerie: The next code of tag, formatted; in tx when given (inside a trigger, its TX)
+* @param tx *Tx, tag string
 * @return (string, error)
 **/
-func (s *Series) genSerie(tag string) (string, error) {
+func (s *Series) genSerie(tx *Tx, tag string) (string, error) {
 	item, err := s.model.
 		Upsert(et.Json{}).
 		BeforeInsert(func(tx *Tx, old, new et.Json) error {
@@ -181,7 +181,7 @@ func (s *Series) genSerie(tag string) (string, error) {
 			return nil
 		}).
 		Where(Eq("tag", tag)).
-		One()
+		OneTx(tx)
 	if err != nil {
 		return "", err
 	}
@@ -192,11 +192,11 @@ func (s *Series) genSerie(tag string) (string, error) {
 }
 
 /**
-* genValue
-* @param string tag
+* genValue: The next value of tag; in tx when given (inside a trigger, its TX)
+* @param tx *Tx, tag string
 * @return (int, error)
 **/
-func (s *Series) genValue(tag string) (int, error) {
+func (s *Series) genValue(tx *Tx, tag string) (int, error) {
 	item, err := s.model.
 		Update(et.Json{}).
 		BeforeUpdate(func(tx *Tx, old, new et.Json) error {
@@ -204,7 +204,7 @@ func (s *Series) genValue(tag string) (int, error) {
 			return nil
 		}).
 		Where(Eq("tag", tag)).
-		One()
+		OneTx(tx)
 	if err != nil {
 		return 0, err
 	}

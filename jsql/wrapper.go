@@ -2,6 +2,8 @@ package jsql
 
 import (
 	"encoding/json"
+	"fmt"
+	"sync"
 	"time"
 
 	"github.com/cgalvisleon/et/envar"
@@ -16,7 +18,7 @@ const wrapRef = "__ref"
 
 /**
 * wrapper: Returns the bindings a goja (jrex) instance gets to use jsql from JavaScript: db (the model's
-* database), newTx and jsql (constructors, conditions and helpers). Every *DB, *Model, *Query, *Command,
+* database), newTx, jsql (constructors, conditions and helpers) and bind (Bind). Every *DB, *Model, *Query, *Command,
 * *Tx and *Series is exposed as an object with camelCase methods; builders return the wrapped object so
 * calls chain, et.Items/et.Item come back as JSON, and a Go error is thrown as a JavaScript exception.
 * @param db *DB
@@ -27,6 +29,7 @@ func Wrapper(db *DB) map[string]any {
 		"db":    wrapDB(db),
 		"newTx": func() map[string]any { return wrapTx(NewTx()) },
 		"jsql":  wrapPackage(),
+		"bind":  BindWrapper(),
 	}
 }
 
@@ -64,6 +67,18 @@ func unwrap(value any) any {
 func toTx(value any) *Tx {
 	tx, _ := unwrap(value).(*Tx)
 	return tx
+}
+
+/**
+* optionalTx: The *Tx of an optional last argument (a wrapped tx), or nil.
+* @param tx []any
+* @return *Tx
+**/
+func optionalTx(tx []any) *Tx {
+	if len(tx) == 0 {
+		return nil
+	}
+	return toTx(tx[0])
 }
 
 /**
@@ -230,7 +245,7 @@ func wrapConnection(connection Connection) map[string]any {
 		return nil
 	}
 
-	result := map[string]any{
+	return map[string]any{
 		wrapRef: connection,
 		"getParams": func() map[string]any {
 			params := toJsMap(connection.GetParams())
@@ -241,11 +256,9 @@ func wrapConnection(connection Connection) map[string]any {
 		},
 		"setDatabase": connection.SetDatabase,
 		"getDatabase": connection.GetDatabase,
+		// id: every driver has one (Connection.ID)
+		"id": connection.ID,
 	}
-	if c, ok := connection.(interface{ ID() string }); ok {
-		result["id"] = c.ID
-	}
-	return result
 }
 
 /**
@@ -457,6 +470,14 @@ func wrapDB(db *DB) map[string]any {
 		"getModel": func(schema, name string) (map[string]any, error) {
 			return model(db.GetModel(schema, name))
 		},
+		// series: the series of a schema of this database (DefineSeries once per db and schema, then reused)
+		"series": func(schema string) (map[string]any, error) {
+			series, err := seriesFor(db, schema)
+			if err != nil {
+				return nil, err
+			}
+			return wrapSeries(series), nil
+		},
 		"define": func(define et.Json) (map[string]any, error) {
 			def, err := toDefine(define)
 			if err != nil {
@@ -561,33 +582,35 @@ func wrapModel(m *Model) map[string]any {
 			return chain(m.DefineCalcFunc(name, calc))
 		},
 		"defineCalc": func(name, script string) map[string]any { return chain(m.DefineCalc(name, script)) },
-		"defineBeforeInsert": func(name, code string, version int) map[string]any {
+		// Triggers: a script (code) the model keeps and runs with jrex on every insert, update or delete, with OLD and
+		// NEW (it can change NEW before saving; a throw cancels). Not a JavaScript function: the model is shared and
+		// outlives this script's runtime
+		"beforeInsert": func(name, code string, version int) map[string]any {
 			return chain(m.DefineBeforeInsert(name, code, version))
 		},
-		"defineBeforeUpdate": func(name, code string, version int) map[string]any {
+		"beforeUpdate": func(name, code string, version int) map[string]any {
 			return chain(m.DefineBeforeUpdate(name, code, version))
 		},
-		"defineBeforeDelete": func(name, code string, version int) map[string]any {
+		"beforeDelete": func(name, code string, version int) map[string]any {
 			return chain(m.DefineBeforeDelete(name, code, version))
 		},
-		"defineAfterInsert": func(name, code string, version int) map[string]any {
+		"beforeInsertOrUpdate": func(name, code string, version int) map[string]any {
+			m.DefineBeforeInsert(name, code, version)
+			return chain(m.DefineBeforeUpdate(name, code, version))
+		},
+		"afterInsert": func(name, code string, version int) map[string]any {
 			return chain(m.DefineAfterInsert(name, code, version))
 		},
-		"defineAfterUpdate": func(name, code string, version int) map[string]any {
+		"afterUpdate": func(name, code string, version int) map[string]any {
 			return chain(m.DefineAfterUpdate(name, code, version))
 		},
-		"defineAfterDelete": func(name, code string, version int) map[string]any {
+		"afterDelete": func(name, code string, version int) map[string]any {
 			return chain(m.DefineAfterDelete(name, code, version))
 		},
-		// Triggers (JavaScript functions: (tx, old, new) => {})
-		"beforeInsert":         func(fn TriggerFunction) map[string]any { return chain(m.BeforeInsert(fn)) },
-		"beforeUpdate":         func(fn TriggerFunction) map[string]any { return chain(m.BeforeUpdate(fn)) },
-		"beforeDelete":         func(fn TriggerFunction) map[string]any { return chain(m.BeforeDelete(fn)) },
-		"beforeInsertOrUpdate": func(fn TriggerFunction) map[string]any { return chain(m.BeforeInsertOrUpdate(fn)) },
-		"afterInsert":          func(fn TriggerFunction) map[string]any { return chain(m.AfterInsert(fn)) },
-		"afterUpdate":          func(fn TriggerFunction) map[string]any { return chain(m.AfterUpdate(fn)) },
-		"afterDelete":          func(fn TriggerFunction) map[string]any { return chain(m.AfterDelete(fn)) },
-		"afterInsertOrUpdate":  func(fn TriggerFunction) map[string]any { return chain(m.AfterInsertOrUpdate(fn)) },
+		"afterInsertOrUpdate": func(name, code string, version int) map[string]any {
+			m.DefineAfterInsert(name, code, version)
+			return chain(m.DefineAfterUpdate(name, code, version))
+		},
 		// Lookups (null when missing)
 		"getCalcFunc": func(name string) any {
 			if fn, ok := m.GetCalcFunc(name); ok {
@@ -785,6 +808,29 @@ func wrapTx(tx *Tx) map[string]any {
 	}
 }
 
+// seriesCache: the series already defined, by db and schema (db.series in a trigger runs on every insert)
+var seriesCache sync.Map
+
+/**
+* seriesFor: The series of a schema of db: defined (DefineSeries: model and table) the first time, then the same one
+* @param db *DB, schema string
+* @return *Series, error
+**/
+func seriesFor(db *DB, schema string) (*Series, error) {
+	key := fmt.Sprintf("%p:%s", db, schema)
+	if cached, ok := seriesCache.Load(key); ok {
+		return cached.(*Series), nil
+	}
+
+	series, err := DefineSeries(db, schema)
+	if err != nil {
+		return nil, err
+	}
+
+	actual, _ := seriesCache.LoadOrStore(key, series)
+	return actual.(*Series), nil
+}
+
 /**
 * wrapSeries: Exposes a *Series to JavaScript.
 * @param s *Series
@@ -802,8 +848,9 @@ func wrapSeries(s *Series) map[string]any {
 		"setSeries":    s.SetSeries,
 		"getSeries":    func(tag string) (map[string]any, error) { return itemJson(s.GetSeries(tag)) },
 		"deleteSeries": s.DeleteSeries,
-		"genSerie":     s.GenSerie,
-		"genValue":     s.GenValue,
+		// genSerie/genValue(tag, tx?): with a tx (inside a trigger, TX) they run in it
+		"genSerie": func(tag string, tx ...any) (string, error) { return s.GenSerieTx(optionalTx(tx), tag) },
+		"genValue": func(tag string, tx ...any) (int, error) { return s.GenValueTx(optionalTx(tx), tag) },
 	}
 }
 

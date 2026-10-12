@@ -77,24 +77,46 @@ func newDB(params ConnectParams) (*DB, error) {
 }
 
 /**
-* loadDb
-* @param params et.Json
+* loadDb: Rebuilds a DB from its ToJson: the connection from params (its kind in params.driver, so a driver registered
+* under another name works too), the DB with newDB (driver, host, name, record_limit), its schemas and models, and its
+* audit_log. It is not initialized: call Init to connect. A timeout of params (time.Duration in a ToJson) is taken in ms
+* @param def et.Json
 * @return *DB, error
 **/
 func loadDb(def et.Json) (*DB, error) {
-	bt, err := def.ToByte()
+	params := def.Json("params").Clone()
+	if timeout, ok := params["timeout"].(time.Duration); ok {
+		params["timeout"] = timeout.Milliseconds()
+	}
+
+	host := def.Str("host")
+	kind := params.ValStr(def.Str("driver"), "driver")
+	connection, err := ConnectionFromJson(kind, host, params)
 	if err != nil {
 		return nil, err
 	}
 
-	var result *DB
+	result, err := newDB(ConnectParams{
+		Driver:      def.Str("driver"),
+		Host:        host,
+		Name:        def.Str("name"),
+		Connection:  connection,
+		RecordLimit: def.Int("record_limit"),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	bt, err := json.Marshal(et.Json{"schemas": def["schemas"], "audit_log": def["audit_log"]})
+	if err != nil {
+		return nil, err
+	}
 	if err := json.Unmarshal(bt, &result); err != nil {
 		return nil, err
 	}
 
 	for _, schema := range result.Schemas {
-		err := schema.up(result)
-		if err != nil {
+		if err := schema.up(result); err != nil {
 			return nil, err
 		}
 	}
@@ -155,7 +177,7 @@ func (s *DB) toJson() et.Json {
 		"params":       s.Params,
 		"schemas":      schemas,
 		"record_limit": s.RecordLimit,
-		"audit_log":    s.AuditLog.Data,
+		"audit_log":    s.AuditLog.All(),
 	}
 }
 

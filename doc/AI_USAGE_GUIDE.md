@@ -68,9 +68,9 @@ Si terminas en 4 o 5, dilo en la respuesta: «No usé `et` para X porque Y».
 - **`dt` con `PRODUCTION=false`** no persiste nada.
 - **`cmds.RunSSH`** ejecuta localmente.
 - **`utility.More`** no acumula: reinicia el contador.
-- **`jsql.LoadDb`** entra en pánico hoy (brecha B9 de `jsql/spec.md`).
-- **`DB_POOL_*`** solo ajusta el pool en sqlite; postgres, oracle, mysql y mssql usan 3/1/30/2 fijos (B13). `DB_TENANT_ID` ya no existe.
-- **`conn.id`** del `jsql.Wrapper` existe en los cinco drivers (es una función), aunque `jsql.d.ts` diga lo contrario (B11).
+- **`jsql.LoadDb`** reconstruye la `DB` sin conectarla: llama `Init` después.
+- **`DB_POOL_*`** ajusta el pool en las cinco conexiones (sin ellos, sqlite usa 10 y los demás 3/1/30/2). `DB_TENANT_ID` ya no existe.
+- **`conn.id`** del `jsql.Wrapper` existe en los cinco drivers (es una función; B11 cerrada el 2026-10-12).
 - **`validator.Pattern`** con una regex inválida entra en pánico al validar (`regexp.MustCompile`); `ByJson` sí la rechaza con error.
 
 ## 4. Reglas

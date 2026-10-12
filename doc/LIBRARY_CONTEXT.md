@@ -97,7 +97,6 @@ q := queue.New[T](size, maxEvents, period, handler)
 - Pasar `stores.Instance` como `Store` de `crontab`/`jia`/`jrex` (firma distinta).
 - Copiar ejemplos con APIs eliminadas: `jval`, `config`, `jsql.Store`, `jsql.Def`, `jwf.Load`, `jwf.Store`, `NewFloW`, `resilience.New(store)`, `cache.ErrNotFound`.
 - Confiar en `jsql.LoadDb` (hoy entra en pánico) o en `dt` sin `PRODUCTION=true`.
-- Esperar que `DB_POOL_*` ajuste el pool en postgres, oracle, mysql o mssql: hoy solo lo lee sqlite (brecha B13 de `jsql/spec.md`).
 - Configurar `DB_TENANT_ID` o `DB_POOL_CONN_LIFETIME`: `jsql` no los lee (las de pool son `DB_POOL_LIFETIME` / `DB_POOL_IDLE_TIME`).
 
 # Extension Points

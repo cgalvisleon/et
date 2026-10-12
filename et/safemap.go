@@ -1,6 +1,9 @@
 package et
 
-import "sync"
+import (
+	"encoding/json"
+	"sync"
+)
 
 type SafeMap struct {
 	mu   sync.RWMutex
@@ -82,4 +85,52 @@ func (s *SafeData) Delete(index int) {
 	}
 
 	s.Data = append(s.Data[:index], s.Data[index+1:]...)
+}
+
+/**
+* All: A copy of the list (safe to read while others add); empty on a nil SafeData
+* @return []Json
+**/
+func (s *SafeData) All() []Json {
+	if s == nil {
+		return []Json{}
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make([]Json, len(s.Data))
+	copy(result, s.Data)
+	return result
+}
+
+/**
+* MarshalJSON: The list itself ([...]), not {data: [...]}
+* @return []byte, error
+**/
+func (s *SafeData) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.All())
+}
+
+/**
+* UnmarshalJSON: A list, or {data: [...]} as it was saved before
+* @param data []byte
+* @return error
+**/
+func (s *SafeData) UnmarshalJSON(data []byte) error {
+	list := []Json{}
+	if err := json.Unmarshal(data, &list); err != nil {
+		old := struct {
+			Data []Json `json:"data"`
+		}{}
+		if err := json.Unmarshal(data, &old); err != nil {
+			return err
+		}
+		list = old.Data
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Data = list
+	return nil
 }

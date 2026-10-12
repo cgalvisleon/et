@@ -22,7 +22,7 @@ import (
 //	6   Comandos                        17
 //	7   Triggers                        22
 //	8   Transacciones                   4
-//	9   Series                          6
+//	9   Series                          10
 //	10  Auditoría                       3
 //	11  Utilidades                      17
 //	    Total                           200
@@ -1545,7 +1545,7 @@ func (s *Tx) Query(db *sql.DB, query string, args ...any) (*sql.Rows, error) {
 }
 
 // =============================================================================
-// 9. Series (6)
+// 9. Series (10)
 // =============================================================================
 
 /**
@@ -1607,7 +1607,16 @@ func (s *Series) DeleteSeries(tag string) error {
 * @return (string, error)
 **/
 func (s *Series) GenSerie(tag string) (string, error) {
-	return s.genSerie(tag)
+	return s.genSerie(nil, tag)
+}
+
+/**
+* GenSerieTx: GenSerie in tx (inside a trigger, the command's transaction)
+* @param tx *Tx, tag string
+* @return (string, error)
+**/
+func (s *Series) GenSerieTx(tx *Tx, tag string) (string, error) {
+	return s.genSerie(tx, tag)
 }
 
 /**
@@ -1616,7 +1625,16 @@ func (s *Series) GenSerie(tag string) (string, error) {
 * @return (int, error)
 **/
 func (s *Series) GenValue(tag string) (int, error) {
-	return s.genValue(tag)
+	return s.genValue(nil, tag)
+}
+
+/**
+* GenValueTx: GenValue in tx (inside a trigger, the command's transaction)
+* @param tx *Tx, tag string
+* @return (int, error)
+**/
+func (s *Series) GenValueTx(tx *Tx, tag string) (int, error) {
+	return s.genValue(tx, tag)
 }
 
 // =============================================================================

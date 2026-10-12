@@ -183,7 +183,7 @@ func TestWrapper(t *testing.T) {
 				"connFile":           "first.db",
 				"connTimeout":        float64(1500),
 				"connDb":             true,
-				"connId":             "undefined",
+				"connId":             "function",
 				"oraDb":              "svc",
 				"oraId":              "function",
 				"detailNames":        "orders",

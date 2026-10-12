@@ -3,6 +3,7 @@ package test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -11,11 +12,6 @@ import (
 
 // createDBName is the scratch database TestCreateDropDB creates and drops.
 const createDBName = "jsql_createdb_test"
-
-// createDBDrivers are the drivers TestCreateDropDB runs against; the others are pending (spec.md, brecha B8).
-var createDBDrivers = map[string]bool{
-	jsql.DriverPostgres: true,
-}
 
 /**
 * findTarget: Returns a fresh copy of the named target (its Connection is a pointer, so each call has its own).
@@ -32,7 +28,8 @@ func findTarget(name string) target {
 }
 
 /**
-* TestCreateDropDB: CreateDB creates the database of the params and DropDB drops it, both idempotent.
+* TestCreateDropDB: CreateDB creates the database of the params and DropDB drops it, both idempotent, in every
+* driver available (B8).
 * The existence is checked with jsql.TestConnection, which never creates the database. A timeout of 0
 * (or none) never fails by timeout; one that already expired does.
 **/
@@ -40,16 +37,28 @@ func TestCreateDropDB(t *testing.T) {
 	const timeout = 30 * time.Second
 	for _, tg := range targets() {
 		t.Run(tg.name, func(t *testing.T) {
-			if !createDBDrivers[tg.name] {
-				t.Skipf("pendiente: CreateDB/DropDB de %s sin probar (spec.md, brecha B8)", tg.name)
-			}
-
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
 
 			server := findTarget(tg.name).params.Connection
 			if err := jsql.TestConnection(ctx, server, ""); err != nil {
 				t.Skipf("%s not available: %v", tg.name, err)
+			}
+
+			// Oracle: the service is not created nor dropped from a connection (spec §9): CreateDB only checks that it
+			// answers and DropDB fails with MSG_DRIVER_CANNOT_DROP_DB
+			if tg.name == jsql.DriverOracle {
+				if err := jsql.CreateDB(&tg.params, timeout); err != nil {
+					t.Fatalf("CreateDB: %v", err)
+				}
+				db, err := jsql.NewDB(tg.params)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := jsql.DropDB(db, timeout); err == nil || err.Error() != fmt.Sprintf(jsql.MSG_DRIVER_CANNOT_DROP_DB, jsql.DriverOracle) {
+					t.Fatalf("DropDB: got %v, want %s", err, fmt.Sprintf(jsql.MSG_DRIVER_CANNOT_DROP_DB, jsql.DriverOracle))
+				}
+				return
 			}
 
 			params := tg.params
@@ -95,7 +104,7 @@ func TestCreateDropDB(t *testing.T) {
 			if err := db.Init(); err != nil {
 				t.Fatalf("Init: %v", err)
 			}
-			if _, err := db.Sql("SELECT 1"); err != nil {
+			if _, err := db.Sql(rawSelectOne(tg.name)); err != nil {
 				t.Fatalf("Sql: %v", err)
 			}
 

@@ -220,7 +220,7 @@ ALTER TABLE jsql_catalog.f_child ADD CONSTRAINT fk_jsql_catalog_f_child_jsql_cat
 INSERT INTO jsql_catalog.f_parent
   (_idx, id)
 VALUES
-  ('1791742742034', 'p1')
+  ('1791823889766', 'p1')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -233,7 +233,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_child
   (_idx, id, parent_id)
 VALUES
-  ('1791742742041', 'c1', 'p1')
+  ('1791823889768', 'c1', 'p1')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -247,7 +247,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_child
   (_idx, id, parent_id)
 VALUES
-  ('1791742742047', 'c2', 'missing')
+  ('1791823889769', 'c2', 'missing')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -280,7 +280,7 @@ CREATE INDEX IF NOT EXISTS jsql_catalog_f_strict__idx_idx ON jsql_catalog.f_stri
 INSERT INTO jsql_catalog.f_strict
   (_idx, id, name)
 VALUES
-  ('1791742742076', 's1', 'x')
+  ('1791823889777', 's1', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -345,7 +345,7 @@ LIMIT 1;
 INSERT INTO jsql_catalog.f_doc_types
   (_idx, id, title)
 VALUES
-  ('1791742742108', 'CC', 'Cédula de ciudadanía')
+  ('1791823889786', 'CC', 'Cédula de ciudadanía')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -359,7 +359,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_doc_types
   (_idx, id, title)
 VALUES
-  ('1791742742117', 'NIT', 'Número de identificación tributaria')
+  ('1791823889787', 'NIT', 'Número de identificación tributaria')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -378,7 +378,7 @@ WHERE A.email = 'ana@example.com');
 INSERT INTO jsql_catalog.f_users
   (_idx, email, id, name, _source)
 VALUES
-  ('1791742742119', 'ana@example.com', 'u1', 'Ana', '{"age":30,"password":"secret","tp_doc":"CC"}'::jsonb)
+  ('1791823889789', 'ana@example.com', 'u1', 'Ana', '{"age":30,"password":"secret","tp_doc":"CC"}'::jsonb)
 RETURNING (_source - '{"_idx","password"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -398,7 +398,7 @@ WHERE A.email = 'luis@example.com');
 INSERT INTO jsql_catalog.f_users
   (_idx, email, id, name, _source)
 VALUES
-  ('1791742742127', 'luis@example.com', 'u2', 'Luis', '{"age":17}'::jsonb)
+  ('1791823889791', 'luis@example.com', 'u2', 'Luis', '{"age":17}'::jsonb)
 RETURNING (_source - '{"_idx","password"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -418,7 +418,7 @@ WHERE A.email = 'marta@example.com');
 INSERT INTO jsql_catalog.f_users
   (_idx, email, id, name, _source)
 VALUES
-  ('1791742742128', 'marta@example.com', 'u3', 'Marta O''Neil', '{"age":45,"tp_doc":"NIT"}'::jsonb)
+  ('1791823889792', 'marta@example.com', 'u3', 'Marta O''Neil', '{"age":45,"tp_doc":"NIT"}'::jsonb)
 RETURNING (_source - '{"_idx","password"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -433,7 +433,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_roles
   (_idx, id, name)
 VALUES
-  ('1791742742129', 'r1', 'admin')
+  ('1791823889793', 'r1', 'admin')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -447,7 +447,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_roles
   (_idx, id, name)
 VALUES
-  ('1791742742134', 'r2', 'editor')
+  ('1791823889794', 'r2', 'editor')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -461,7 +461,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_orders
   (_idx, id, user_id, _source)
 VALUES
-  ('1791742742135', 'o1', 'u1', '{"amount":100.5}'::jsonb)
+  ('1791823889795', 'o1', 'u1', '{"amount":100.5}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -475,7 +475,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_orders
   (_idx, id, user_id, _source)
 VALUES
-  ('1791742742140', 'o2', 'u1', '{"amount":200}'::jsonb)
+  ('1791823889797', 'o2', 'u1', '{"amount":200}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -489,7 +489,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_orders
   (_idx, id, user_id, _source)
 VALUES
-  ('1791742742141', 'o3', 'u3', '{"amount":50}'::jsonb)
+  ('1791823889798', 'o3', 'u3', '{"amount":50}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -553,21 +553,21 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_users_f_roles
   (_idx, role_id, user_id)
 VALUES
-  ('1791742742150', 'r1', 'u1')
+  ('1791823889805', 'r1', 'u1')
 RETURNING user_id, role_id;
 
 -- INSERT
 INSERT INTO jsql_catalog.f_users_f_roles
   (_idx, role_id, user_id)
 VALUES
-  ('1791742742154', 'r2', 'u1')
+  ('1791823889806', 'r2', 'u1')
 RETURNING user_id, role_id;
 
 -- INSERT
 INSERT INTO jsql_catalog.f_users_f_roles
   (_idx, role_id, user_id)
 VALUES
-  ('1791742742155', 'r2', 'u2')
+  ('1791823889807', 'r2', 'u2')
 RETURNING user_id, role_id;
 
 -- ========== 2. Definición de modelos (DDL) · DefineUnique (rechaza duplicados en insert, bulk y update) [pass]
@@ -586,7 +586,7 @@ WHERE A.email = 'same@example.com');
 INSERT INTO jsql_catalog.f_users
   (_idx, email, id, name)
 VALUES
-  ('1791742742157', 'same@example.com', 'u8', 'Uno')
+  ('1791823889809', 'same@example.com', 'u8', 'Uno')
 RETURNING (_source - '{"_idx","password"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2050,7 +2050,7 @@ CREATE INDEX IF NOT EXISTS jsql_catalog_f_many__idx_idx ON jsql_catalog.f_many U
 INSERT INTO jsql_catalog.f_many
   (_idx, id, name)
 VALUES
-  ('1791742742254', 'm1', 'x')
+  ('1791823889863', 'm1', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2064,7 +2064,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_many
   (_idx, id, name)
 VALUES
-  ('1791742742263', 'm2', 'x')
+  ('1791823889871', 'm2', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2078,7 +2078,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_many
   (_idx, id, name)
 VALUES
-  ('1791742742264', 'm3', 'x')
+  ('1791823889872', 'm3', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2092,7 +2092,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_many
   (_idx, id, name)
 VALUES
-  ('1791742742264', 'm4', 'x')
+  ('1791823889873', 'm4', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2106,7 +2106,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_many
   (_idx, id, name)
 VALUES
-  ('1791742742265', 'm5', 'x')
+  ('1791823889875', 'm5', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2120,7 +2120,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_many
   (_idx, id, name)
 VALUES
-  ('1791742742266', 'm6', 'x')
+  ('1791823889880', 'm6', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2386,7 +2386,7 @@ CREATE INDEX IF NOT EXISTS jsql_catalog_f_events__idx_idx ON jsql_catalog.f_even
 INSERT INTO jsql_catalog.f_events
   (_idx, id, name, _source)
 VALUES
-  ('1791742742296', 'e1', 'alta', '{"stage":"before_insert","touched":true}'::jsonb)
+  ('1791823889892', 'e1', 'alta', '{"stage":"before_insert","touched":true}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2460,7 +2460,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_events
   (_idx, id, name, _source)
 VALUES
-  ('1791742742312', 'e2', 'cmd', '{"source":"command","stage":"before_insert","touched":true}'::jsonb)
+  ('1791823889896', 'e2', 'cmd', '{"source":"command","stage":"before_insert","touched":true}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2481,7 +2481,7 @@ WHERE A.id = 'e3');
 INSERT INTO jsql_catalog.f_events
   (_idx, id, name, _source)
 VALUES
-  ('1791742742318', 'e4', 'js', '{"js":"before_insert","stage":"before_insert","touched":true}'::jsonb)
+  ('1791823889897', 'e4', 'js', '{"js":"before_insert","stage":"before_insert","touched":true}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2621,7 +2621,7 @@ WHERE A.tag = 'invoice');
 INSERT INTO jsql_catalog.series
   (_idx, created_at, format, tag, updated_at, value)
 VALUES
-  ('1791742742336', '2026-10-11 13:19:02', 'FAC-%05d', 'invoice', '2026-10-11 13:19:02', 10)
+  ('1791823889905', '2026-10-12 11:51:29', 'FAC-%05d', 'invoice', '2026-10-12 11:51:29', 10)
 RETURNING created_at, updated_at, tag, format, value;
 
 -- QUERY
@@ -2651,9 +2651,9 @@ LIMIT 1000;
 -- UPDATE
 UPDATE jsql_catalog.series
 SET
-  created_at = '2026-10-11 13:19:02',
+  created_at = '2026-10-12 11:51:29',
   format = 'FAC-%05d',
-  updated_at = '2026-10-11 13:19:02',
+  updated_at = '2026-10-12 11:51:29',
   value = 11
 WHERE tag = 'invoice'
 RETURNING created_at, updated_at, tag, format, value;
@@ -2677,9 +2677,9 @@ LIMIT 1000;
 -- UPDATE
 UPDATE jsql_catalog.series
 SET
-  created_at = '2026-10-11 13:19:02',
+  created_at = '2026-10-12 11:51:29',
   format = 'FAC-%05d',
-  updated_at = '2026-10-11 13:19:02',
+  updated_at = '2026-10-12 11:51:29',
   value = 12
 WHERE tag = 'invoice'
 RETURNING created_at, updated_at, tag, format, value;

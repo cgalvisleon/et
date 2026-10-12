@@ -155,6 +155,13 @@ func (s *Sqlite) DropDB(db *jsql.DB, timeout ...time.Duration) error {
 		return err
 	}
 
+	// Removing a file does not take a context: an expired timeout fails before touching it, like the other drivers
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	for _, suffix := range []string{"", "-wal", "-shm"} {
 		err := os.Remove(path + suffix)
 		if err != nil && !os.IsNotExist(err) {

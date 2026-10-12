@@ -207,8 +207,8 @@ interface JsqlConnectionObject {
   setDatabase(name: string): void;
   /** database (postgres, mysql, mssql), file (sqlite) or service_name (oracle). */
   getDatabase(): string;
-  /** oracle, mysql and mssql only. */
-  id?(): string;
+  /** The id of the connection (every driver has one). */
+  id(): string;
 }
 
 /** Params of jsql.newDB / connectTo / createDB. Missing values are read from DB_* (as in loadTo). */
@@ -290,6 +290,9 @@ interface JsqlDB {
   /** Drops the model's table and removes the model. */
   removeModel(schema: string, name: string): void;
   getModel(schema: string, name: string): JsqlModel;
+  /** The series of a schema of this database (defined once, then reused). In a trigger, pass TX to genSerie/genValue:
+   * NEW.code = db.series("app").genSerie("users", TX) */
+  series(schema: string): JsqlSeries;
   define(define: JsqlDefine): JsqlModel;
   defineModel(schema: string, name: string, version: number, userId: string): JsqlModel;
   defineTenantModel(schema: string, name: string, version: number, userId: string): JsqlModel;
@@ -326,22 +329,20 @@ interface JsqlModel {
   defineCalcFunc(name: string, calc: JsqlCalcFunction): JsqlModel;
   /** Calc field computed by a script that sets `item.<name>`. */
   defineCalc(name: string, script: string): JsqlModel;
-  defineBeforeInsert(name: string, code: string, version: number): JsqlModel;
-  defineBeforeUpdate(name: string, code: string, version: number): JsqlModel;
-  defineBeforeDelete(name: string, code: string, version: number): JsqlModel;
-  defineAfterInsert(name: string, code: string, version: number): JsqlModel;
-  defineAfterUpdate(name: string, code: string, version: number): JsqlModel;
-  defineAfterDelete(name: string, code: string, version: number): JsqlModel;
 
-  // Triggers
-  beforeInsert(fn: JsqlTriggerFunction): JsqlModel;
-  beforeUpdate(fn: JsqlTriggerFunction): JsqlModel;
-  beforeDelete(fn: JsqlTriggerFunction): JsqlModel;
-  beforeInsertOrUpdate(fn: JsqlTriggerFunction): JsqlModel;
-  afterInsert(fn: JsqlTriggerFunction): JsqlModel;
-  afterUpdate(fn: JsqlTriggerFunction): JsqlModel;
-  afterDelete(fn: JsqlTriggerFunction): JsqlModel;
-  afterInsertOrUpdate(fn: JsqlTriggerFunction): JsqlModel;
+  // Triggers: a script the model keeps (replaced by name) and runs on every insert, update or delete, with OLD and NEW;
+  // a before trigger can change NEW and a throw cancels the operation.
+  // users.beforeInsert("normalize", "NEW.name = NEW.name.toUpperCase();", 1)
+  beforeInsert(name: string, code: string, version: number): JsqlModel;
+  beforeUpdate(name: string, code: string, version: number): JsqlModel;
+  beforeDelete(name: string, code: string, version: number): JsqlModel;
+  /** The same script as before insert and before update. */
+  beforeInsertOrUpdate(name: string, code: string, version: number): JsqlModel;
+  afterInsert(name: string, code: string, version: number): JsqlModel;
+  afterUpdate(name: string, code: string, version: number): JsqlModel;
+  afterDelete(name: string, code: string, version: number): JsqlModel;
+  /** The same script as after insert and after update. */
+  afterInsertOrUpdate(name: string, code: string, version: number): JsqlModel;
 
   // Lookups (null when missing)
   getCalcFunc(name: string): JsqlCalcFunction | null;
@@ -456,10 +457,10 @@ interface JsqlSeries {
   setSeries(tag: string, format: string, value: number): void;
   getSeries(tag: string): JsqlItem;
   deleteSeries(tag: string): void;
-  /** Next code of the series, formatted. */
-  genSerie(tag: string): string;
-  /** Next value of the series. */
-  genValue(tag: string): number;
+  /** Next code of the series, formatted; with tx (in a trigger, TX) it runs in that transaction. */
+  genSerie(tag: string, tx?: JsqlTx): string;
+  /** Next value of the series; with tx (in a trigger, TX) it runs in that transaction. */
+  genValue(tag: string, tx?: JsqlTx): number;
 }
 
 interface JsqlPackage {
@@ -524,6 +525,9 @@ interface JsqlPackage {
 
 /** Database of the model that runs the script. */
 declare const db: JsqlDB;
+/** Only in a model trigger (beforeInsert…): the transaction of the command that runs it. What the trigger writes goes in
+ * it: db.getModel(…).insert(…).oneTx(TX), series.genSerie(tag, TX) (with SQLite, outside it waits forever). */
+declare const TX: JsqlTx;
 /** New transaction (same as jsql.newTx()). */
 declare function newTx(): JsqlTx;
 /** Constructors, conditions and helpers of jsql. */

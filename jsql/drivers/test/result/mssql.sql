@@ -184,21 +184,21 @@ ALTER TABLE [jsql_catalog].[f_child] ADD CONSTRAINT [fk_jsql_catalog_f_child_f_p
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_parent]
   ([_idx], [id])
-  VALUES (N'1790553369006', N'p1');
+  VALUES (N'1791823892635', N'p1');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), 2, LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_parent] WHERE [id] = N'p1';
 
 -- INSERT
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_child]
   ([_idx], [id], [parent_id])
-  VALUES (N'1790553369032', N'c1', N'p1');
+  VALUES (N'1791823892650', N'c1', N'p1');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), 2, LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"parent_id":', CASE WHEN [parent_id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([parent_id] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_child] WHERE [id] = N'c1';
 
 -- INSERT
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_child]
   ([_idx], [id], [parent_id])
-  VALUES (N'1790553369040', N'c2', N'missing');
+  VALUES (N'1791823892659', N'c2', N'missing');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), 2, LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"parent_id":', CASE WHEN [parent_id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([parent_id] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_child] WHERE [id] = N'c2';
 
 -- ========== 2. Definición de modelos (DDL) · Stricted (ignora campos desconocidos) [pass]
@@ -222,7 +222,7 @@ CREATE INDEX [f_strict__idx_idx] ON [jsql_catalog].[f_strict] ([_idx]);
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_strict]
   ([_idx], [id], [name])
-  VALUES (N'1790553369102', N's1', N'x');
+  VALUES (N'1791823892671', N's1', N'x');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), 2, LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"name":', CASE WHEN [name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([name] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_strict] WHERE [id] = N's1';
 
 -- QUERY
@@ -265,14 +265,14 @@ OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_doc_types]
   ([_idx], [id], [title])
-  VALUES (N'1790553369138', N'CC', N'Cédula de ciudadanía');
+  VALUES (N'1791823892701', N'CC', N'Cédula de ciudadanía');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), 2, LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"title":', CASE WHEN [title] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([title] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_doc_types] WHERE [id] = N'CC';
 
 -- INSERT
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_doc_types]
   ([_idx], [id], [title])
-  VALUES (N'1790553369144', N'NIT', N'Número de identificación tributaria');
+  VALUES (N'1791823892707', N'NIT', N'Número de identificación tributaria');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), 2, LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"title":', CASE WHEN [title] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([title] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_doc_types] WHERE [id] = N'NIT';
 
 -- QUERY
@@ -284,7 +284,7 @@ WHERE A.[email] = N'ana@example.com') THEN 'true' ELSE 'false' END AS [exists]
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_users]
   ([_idx], [email], [id], [name], [_source])
-  VALUES (N'1790553369154', N'ana@example.com', N'u1', N'Ana', N'{"age":30,"password":"secret","tp_doc":"CC"}');
+  VALUES (N'1791823892716', N'ana@example.com', N'u1', N'Ana', N'{"age":30,"password":"secret","tp_doc":"CC"}');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), N'$."password"', NULL), 2, LEN(JSON_MODIFY(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), N'$."password"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), N'$."password"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"name":', CASE WHEN [name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([name] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"email":', CASE WHEN [email] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([email] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_users] WHERE [id] = N'u1';
 
 -- QUERY
@@ -296,7 +296,7 @@ WHERE A.[email] = N'luis@example.com') THEN 'true' ELSE 'false' END AS [exists]
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_users]
   ([_idx], [email], [id], [name], [_source])
-  VALUES (N'1790553369165', N'luis@example.com', N'u2', N'Luis', N'{"age":17}');
+  VALUES (N'1791823892729', N'luis@example.com', N'u2', N'Luis', N'{"age":17}');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), N'$."password"', NULL), 2, LEN(JSON_MODIFY(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), N'$."password"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), N'$."password"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"name":', CASE WHEN [name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([name] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"email":', CASE WHEN [email] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([email] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_users] WHERE [id] = N'u2';
 
 -- QUERY
@@ -308,42 +308,42 @@ WHERE A.[email] = N'marta@example.com') THEN 'true' ELSE 'false' END AS [exists]
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_users]
   ([_idx], [email], [id], [name], [_source])
-  VALUES (N'1790553369173', N'marta@example.com', N'u3', N'Marta O''Neil', N'{"age":45,"tp_doc":"NIT"}');
+  VALUES (N'1791823892738', N'marta@example.com', N'u3', N'Marta O''Neil', N'{"age":45,"tp_doc":"NIT"}');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), N'$."password"', NULL), 2, LEN(JSON_MODIFY(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), N'$."password"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), N'$."password"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"name":', CASE WHEN [name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([name] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"email":', CASE WHEN [email] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([email] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_users] WHERE [id] = N'u3';
 
 -- INSERT
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_roles]
   ([_idx], [id], [name])
-  VALUES (N'1790553369177', N'r1', N'admin');
+  VALUES (N'1791823892742', N'r1', N'admin');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), 2, LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"name":', CASE WHEN [name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([name] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_roles] WHERE [id] = N'r1';
 
 -- INSERT
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_roles]
   ([_idx], [id], [name])
-  VALUES (N'1790553369185', N'r2', N'editor');
+  VALUES (N'1791823892750', N'r2', N'editor');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), 2, LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"name":', CASE WHEN [name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([name] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_roles] WHERE [id] = N'r2';
 
 -- INSERT
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_orders]
   ([_idx], [id], [user_id], [_source])
-  VALUES (N'1790553369191', N'o1', N'u1', N'{"amount":100.5}');
+  VALUES (N'1791823892756', N'o1', N'u1', N'{"amount":100.5}');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), 2, LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"user_id":', CASE WHEN [user_id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([user_id] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_orders] WHERE [id] = N'o1';
 
 -- INSERT
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_orders]
   ([_idx], [id], [user_id], [_source])
-  VALUES (N'1790553369198', N'o2', N'u1', N'{"amount":200}');
+  VALUES (N'1791823892763', N'o2', N'u1', N'{"amount":200}');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), 2, LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"user_id":', CASE WHEN [user_id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([user_id] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_orders] WHERE [id] = N'o2';
 
 -- INSERT
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_orders]
   ([_idx], [id], [user_id], [_source])
-  VALUES (N'1790553369204', N'o3', N'u3', N'{"amount":50}');
+  VALUES (N'1791823892769', N'o3', N'u3', N'{"amount":50}');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), 2, LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"user_id":', CASE WHEN [user_id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([user_id] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_orders] WHERE [id] = N'o3';
 
 -- INSERT
@@ -385,21 +385,21 @@ SELECT CONCAT('{', SUBSTRING(COALESCE([_source], N'{}'), 2, LEN(COALESCE([_sourc
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_users_f_roles]
   ([_idx], [role_id], [user_id])
-  VALUES (N'1790553369239', N'r1', N'u1');
+  VALUES (N'1791823892797', N'r1', N'u1');
 SELECT CONCAT('{', N'"user_id":', CASE WHEN [user_id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([user_id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"role_id":', CASE WHEN [role_id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([role_id] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_users_f_roles] WHERE [user_id] = N'u1' AND [role_id] = N'r1';
 
 -- INSERT
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_users_f_roles]
   ([_idx], [role_id], [user_id])
-  VALUES (N'1790553369245', N'r2', N'u1');
+  VALUES (N'1791823892802', N'r2', N'u1');
 SELECT CONCAT('{', N'"user_id":', CASE WHEN [user_id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([user_id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"role_id":', CASE WHEN [role_id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([role_id] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_users_f_roles] WHERE [user_id] = N'u1' AND [role_id] = N'r2';
 
 -- INSERT
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_users_f_roles]
   ([_idx], [role_id], [user_id])
-  VALUES (N'1790553369249', N'r2', N'u2');
+  VALUES (N'1791823892805', N'r2', N'u2');
 SELECT CONCAT('{', N'"user_id":', CASE WHEN [user_id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([user_id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"role_id":', CASE WHEN [role_id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([role_id] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_users_f_roles] WHERE [user_id] = N'u2' AND [role_id] = N'r2';
 
 -- ========== 2. Definición de modelos (DDL) · DefineUnique (rechaza duplicados en insert, bulk y update) [pass]
@@ -418,7 +418,7 @@ WHERE A.[email] = N'same@example.com') THEN 'true' ELSE 'false' END AS [exists]
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_users]
   ([_idx], [email], [id], [name])
-  VALUES (N'1790553369320', N'same@example.com', N'u8', N'Uno');
+  VALUES (N'1791823892811', N'same@example.com', N'u8', N'Uno');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), N'$."password"', NULL), 2, LEN(JSON_MODIFY(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), N'$."password"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), N'$."password"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"name":', CASE WHEN [name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([name] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"email":', CASE WHEN [email] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([email] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_users] WHERE [id] = N'u8';
 
 -- QUERY
@@ -465,6 +465,42 @@ SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(JSON_MODIFY(COALESCE([_source], N'{}'),
 -- QUERY
 SELECT COUNT(*) AS [count]
 FROM [jsql_catalog].[f_users] AS A
+
+-- ========== 2. Definición de modelos (DDL) · OmitUpdates (DefineOmitUpdate y Define) [pass]
+
+-- DDL
+IF SCHEMA_ID(N'jsql_catalog') IS NULL EXEC(N'CREATE SCHEMA [jsql_catalog]');
+IF OBJECT_ID(N'[jsql_catalog].[f_omit]', N'U') IS NULL CREATE TABLE [jsql_catalog].[f_omit] (
+  [id] NVARCHAR(80) NOT NULL,
+  [code] NVARCHAR(80) DEFAULT NULL,
+  [name] NVARCHAR(255) DEFAULT NULL,
+  [_source] NVARCHAR(MAX) DEFAULT N'{}' CHECK (ISJSON([_source]) = 1),
+  CONSTRAINT [jsql_catalog_f_omit_pkey] PRIMARY KEY ([id])
+);
+
+-- INSERT
+SET NOCOUNT ON;
+INSERT INTO [jsql_catalog].[f_omit]
+  ([code], [id], [name], [_source])
+  VALUES (N'A1', N'o1', N'antes', N'{"created_by":"ana","meta":{"a":1}}');
+SELECT CONCAT('{', SUBSTRING(COALESCE([_source], N'{}'), 2, LEN(COALESCE([_source], N'{}')) - 2), CASE WHEN LEN(COALESCE([_source], N'{}')) > 2 THEN ',' ELSE '' END, N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"code":', CASE WHEN [code] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([code] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"name":', CASE WHEN [name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([name] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_omit] WHERE [id] = N'o1';
+
+-- QUERY
+SELECT
+CONCAT('{', SUBSTRING(COALESCE(A.[_source], N'{}'), 2, LEN(COALESCE(A.[_source], N'{}')) - 2), CASE WHEN LEN(COALESCE(A.[_source], N'{}')) > 2 THEN ',' ELSE '' END, N'"id":', CASE WHEN A.[id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST(A.[id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"code":', CASE WHEN A.[code] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST(A.[code] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"name":', CASE WHEN A.[name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST(A.[name] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result]
+FROM [jsql_catalog].[f_omit] AS A
+WHERE A.[id] = N'o1'
+ORDER BY (SELECT NULL)
+OFFSET 0 ROWS FETCH NEXT 1000 ROWS ONLY
+
+-- UPDATE
+SET NOCOUNT ON;
+UPDATE [jsql_catalog].[f_omit]
+  SET [code] = N'A1',
+    [name] = N'después',
+    [_source] = JSON_MODIFY(JSON_MODIFY(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."created_by"', N'ana'), N'$."meta"', JSON_QUERY(N'{"a":1}')), N'$."note"', N'nueva')
+  WHERE [id] = N'o1';
+SELECT CONCAT('{', SUBSTRING(COALESCE([_source], N'{}'), 2, LEN(COALESCE([_source], N'{}')) - 2), CASE WHEN LEN(COALESCE([_source], N'{}')) > 2 THEN ',' ELSE '' END, N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"code":', CASE WHEN [code] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([code] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"name":', CASE WHEN [name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([name] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_omit] WHERE [id] = N'o1';
 
 -- ========== 3. Relaciones y campos calculados · Detail en el select (DefineDetail) [pass]
 
@@ -841,6 +877,37 @@ LEFT JOIN [jsql_catalog].[f_orders] AS O
   ON O.[user_id] = U.[id]
 GROUP BY U.[name]
 ORDER BY U.[name] ASC
+OFFSET 0 ROWS FETCH NEXT 1000 ROWS ONLY
+
+-- ========== 4. Consultas · DB.Query consulta con from y to como objeto {database, schema, model, as} [pass]
+
+-- QUERY
+SELECT
+CONCAT('{', N'"name":', CASE WHEN U.[name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST(U.[name] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"n":', COALESCE(CONVERT(NVARCHAR(40), COUNT(O.[id])), 'null'), '}') AS [result]
+FROM [jsql_catalog].[f_users] AS U
+LEFT JOIN [jsql_catalog].[f_orders] AS O
+  ON O.[user_id] = U.[id]
+GROUP BY U.[name]
+ORDER BY U.[name] ASC
+OFFSET 0 ROWS FETCH NEXT 1000 ROWS ONLY
+
+-- ========== 4. Consultas · Model.Query con from como objeto sin schema ni as (alias A) [pass]
+
+-- QUERY
+SELECT
+CONCAT('{', N'"name":', CASE WHEN A.[name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST(A.[name] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result]
+FROM [jsql_catalog].[f_roles] AS A
+ORDER BY A.[name] ASC
+OFFSET 0 ROWS FETCH NEXT 1000 ROWS ONLY
+
+-- ========== 4. Consultas · DB.Query comando con from como objeto (delete sin filas) [pass]
+
+-- QUERY
+SELECT
+CONCAT('{', SUBSTRING(JSON_MODIFY(JSON_MODIFY(COALESCE(A.[_source], N'{}'), N'$."_idx"', NULL), N'$."password"', NULL), 2, LEN(JSON_MODIFY(JSON_MODIFY(COALESCE(A.[_source], N'{}'), N'$."_idx"', NULL), N'$."password"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(JSON_MODIFY(COALESCE(A.[_source], N'{}'), N'$."_idx"', NULL), N'$."password"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN A.[created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), A.[created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN A.[updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), A.[updated_at], 127), '"') END, ',', N'"status":', CASE WHEN A.[status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST(A.[status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN A.[id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST(A.[id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"name":', CASE WHEN A.[name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST(A.[name] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"email":', CASE WHEN A.[email] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST(A.[email] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result]
+FROM [jsql_catalog].[f_users] AS A
+WHERE A.[id] = N'no_existe'
+ORDER BY (SELECT NULL)
 OFFSET 0 ROWS FETCH NEXT 1000 ROWS ONLY
 
 -- ========== 4. Consultas · DB.Query consulta (where + and/or de primer nivel, limit, offset) [pass]
@@ -1342,42 +1409,42 @@ CREATE INDEX [f_many__idx_idx] ON [jsql_catalog].[f_many] ([_idx]);
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_many]
   ([_idx], [id], [name])
-  VALUES (N'1790553369790', N'm1', N'x');
+  VALUES (N'1791823893285', N'm1', N'x');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), 2, LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"name":', CASE WHEN [name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([name] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_many] WHERE [id] = N'm1';
 
 -- INSERT
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_many]
   ([_idx], [id], [name])
-  VALUES (N'1790553369796', N'm2', N'x');
+  VALUES (N'1791823893291', N'm2', N'x');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), 2, LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"name":', CASE WHEN [name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([name] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_many] WHERE [id] = N'm2';
 
 -- INSERT
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_many]
   ([_idx], [id], [name])
-  VALUES (N'1790553369802', N'm3', N'x');
+  VALUES (N'1791823893297', N'm3', N'x');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), 2, LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"name":', CASE WHEN [name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([name] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_many] WHERE [id] = N'm3';
 
 -- INSERT
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_many]
   ([_idx], [id], [name])
-  VALUES (N'1790553369806', N'm4', N'x');
+  VALUES (N'1791823893301', N'm4', N'x');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), 2, LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"name":', CASE WHEN [name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([name] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_many] WHERE [id] = N'm4';
 
 -- INSERT
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_many]
   ([_idx], [id], [name])
-  VALUES (N'1790553369811', N'm5', N'x');
+  VALUES (N'1791823893305', N'm5', N'x');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), 2, LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"name":', CASE WHEN [name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([name] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_many] WHERE [id] = N'm5';
 
 -- INSERT
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_many]
   ([_idx], [id], [name])
-  VALUES (N'1790553369816', N'm6', N'x');
+  VALUES (N'1791823893309', N'm6', N'x');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), 2, LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"name":', CASE WHEN [name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([name] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_many] WHERE [id] = N'm6';
 
 -- QUERY
@@ -1533,7 +1600,7 @@ CREATE INDEX [f_events__idx_idx] ON [jsql_catalog].[f_events] ([_idx]);
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_events]
   ([_idx], [id], [name], [_source])
-  VALUES (N'1790553369913', N'e1', N'alta', N'{"stage":"before_insert","touched":true}');
+  VALUES (N'1791823893386', N'e1', N'alta', N'{"stage":"before_insert","touched":true}');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), 2, LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"name":', CASE WHEN [name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([name] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_events] WHERE [id] = N'e1';
 
 -- QUERY
@@ -1574,7 +1641,7 @@ DELETE FROM [jsql_catalog].[f_events] WHERE [id] = N'e1';
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_events]
   ([_idx], [id], [name], [_source])
-  VALUES (N'1790553369941', N'e2', N'cmd', N'{"source":"command","stage":"before_insert","touched":true}');
+  VALUES (N'1791823893411', N'e2', N'cmd', N'{"source":"command","stage":"before_insert","touched":true}');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), 2, LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"name":', CASE WHEN [name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([name] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_events] WHERE [id] = N'e2';
 
 -- QUERY
@@ -1588,7 +1655,7 @@ WHERE A.[id] = N'e3') THEN 'true' ELSE 'false' END AS [exists]
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[f_events]
   ([_idx], [id], [name], [_source])
-  VALUES (N'1790553369947', N'e4', N'js', N'{"js":"before_insert","stage":"before_insert","touched":true}');
+  VALUES (N'1791823893417', N'e4', N'js', N'{"js":"before_insert","stage":"before_insert","touched":true}');
 SELECT CONCAT('{', SUBSTRING(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL), 2, LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) - 2), CASE WHEN LEN(JSON_MODIFY(COALESCE([_source], N'{}'), N'$."_idx"', NULL)) > 2 THEN ',' ELSE '' END, N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"status":', CASE WHEN [status] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([status] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"id":', CASE WHEN [id] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([id] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"name":', CASE WHEN [name] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([name] AS NVARCHAR(MAX)), 'json'), '"') END, '}') AS [result] FROM [jsql_catalog].[f_events] WHERE [id] = N'e4';
 
 -- QUERY
@@ -1683,7 +1750,7 @@ WHERE A.[tag] = N'invoice') THEN 'true' ELSE 'false' END AS [exists]
 SET NOCOUNT ON;
 INSERT INTO [jsql_catalog].[series]
   ([_idx], [created_at], [format], [tag], [updated_at], [value])
-  VALUES (N'1790553369997', '2026-09-27T18:56:09.9979880', N'FAC-%05d', N'invoice', '2026-09-27T18:56:09.9979880', 10);
+  VALUES (N'1791823893459', '2026-10-12T11:51:33.4595820', N'FAC-%05d', N'invoice', '2026-10-12T11:51:33.4595820', 10);
 SELECT CONCAT('{', N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"tag":', CASE WHEN [tag] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([tag] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"format":', CASE WHEN [format] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([format] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"value":', COALESCE(CONVERT(NVARCHAR(40), [value]), 'null'), '}') AS [result] FROM [jsql_catalog].[series] WHERE [tag] = N'invoice';
 
 -- QUERY
@@ -1707,9 +1774,9 @@ OFFSET 0 ROWS FETCH NEXT 1000 ROWS ONLY
 -- UPDATE
 SET NOCOUNT ON;
 UPDATE [jsql_catalog].[series]
-  SET [created_at] = '2026-09-27T18:56:09.9979880',
+  SET [created_at] = '2026-10-12T11:51:33.4595820',
     [format] = N'FAC-%05d',
-    [updated_at] = '2026-09-27T18:56:10.0135130',
+    [updated_at] = '2026-10-12T11:51:33.4714550',
     [value] = 11
   WHERE [tag] = N'invoice';
 SELECT CONCAT('{', N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"tag":', CASE WHEN [tag] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([tag] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"format":', CASE WHEN [format] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([format] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"value":', COALESCE(CONVERT(NVARCHAR(40), [value]), 'null'), '}') AS [result] FROM [jsql_catalog].[series] WHERE [tag] = N'invoice';
@@ -1730,9 +1797,9 @@ OFFSET 0 ROWS FETCH NEXT 1000 ROWS ONLY
 -- UPDATE
 SET NOCOUNT ON;
 UPDATE [jsql_catalog].[series]
-  SET [created_at] = '2026-09-27T18:56:09.9979880',
+  SET [created_at] = '2026-10-12T11:51:33.4595820',
     [format] = N'FAC-%05d',
-    [updated_at] = '2026-09-27T18:56:10.0189310',
+    [updated_at] = '2026-10-12T11:51:33.4781470',
     [value] = 12
   WHERE [tag] = N'invoice';
 SELECT CONCAT('{', N'"created_at":', CASE WHEN [created_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [created_at], 127), '"') END, ',', N'"updated_at":', CASE WHEN [updated_at] IS NULL THEN 'null' ELSE CONCAT('"', CONVERT(NVARCHAR(40), [updated_at], 127), '"') END, ',', N'"tag":', CASE WHEN [tag] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([tag] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"format":', CASE WHEN [format] IS NULL THEN 'null' ELSE CONCAT('"', STRING_ESCAPE(CAST([format] AS NVARCHAR(MAX)), 'json'), '"') END, ',', N'"value":', COALESCE(CONVERT(NVARCHAR(40), [value]), 'null'), '}') AS [result] FROM [jsql_catalog].[series] WHERE [tag] = N'invoice';

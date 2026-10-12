@@ -805,19 +805,34 @@ func (s *Conn) HealthCheck() bool
 
 ## `ia`
 
-RAG multitenant sobre `jsql`: ingesta de archivos/SQL, embeddings, `Ask`.
+RAG multitenant sobre `jsql`: ingesta de archivos/SQL/texto, embeddings, búsqueda por similitud y `Ask`. `LoadIndex` (2026-10-12) define solo el índice (`ia_documents`, `ia_chunks`) sin clave de OpenAI: cada llamada a `IngestText`/`Search` trae su `Embedder`.
+
+Tipos:
+
+```go
+type Embedder func(ctx context.Context, texts []string) ([][]float64, error)
+type Document struct{ TenantId, ProjectId, Id, Name, Source, SourceId, Text, UserId, Model string; ChunkSize, ChunkOverlap int; Metadata et.Json }
+```
 
 Funciones y métodos:
 
 ```go
+func ExtractFile(name string, data []byte) (string, string, error)
+func HttpEmbedder(baseUrl, apiKey, model string) Embedder
 func Load(db *jsql.DB, schema string, cnf Config) (*Rag, error)
+func LoadIndex(db *jsql.DB, schema string, cnf Config) (*Rag, error)
+func RowsText(rows []et.Json) string
 func (s *Rag) Ask(ctx context.Context, tenantId, projectId, conversationId, userId, question string) (et.Json, error)
 func (s *Rag) DeleteDocument(tenantId, projectId, id string) error
+func (s *Rag) DeleteDocumentsOf(tenantId, projectId, sourceId string) (int, error)
+func (s *Rag) DeleteProject(tenantId, projectId string) (int, error)
 func (s *Rag) IngestFile(ctx context.Context, tenantId, projectId, name string, data []byte, userId string) (et.Json, error)
 func (s *Rag) IngestSQL(ctx context.Context, tenantId, projectId, name, query string, sourceDB *jsql.DB, userId string) (et.Json, error)
+func (s *Rag) IngestText(ctx context.Context, doc Document, embed Embedder) (et.Json, error)
 func (s *Rag) ListDocuments(tenantId, projectId string) (et.Items, error)
 func (s *Rag) ListMessages(tenantId, projectId, conversationId string) (et.Items, error)
 func (s *Rag) LoadRouter(mux chi.Router)
+func (s *Rag) Search(ctx context.Context, tenantId, projectId, query string, topK int, minScore float64, embed Embedder) ([]et.Json, error)
 ```
 
 ## `infobip`

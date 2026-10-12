@@ -412,7 +412,8 @@ type Driver interface {
 
 ## 11. Utilidades
 
-- `jsql.DefineSeries(db, schema)` → `*Series`: consecutivos y códigos (`SetSeries`, `GetSeries`, `DeleteSeries`, `GenSerie`, `GenValue`).
+- `jsql.DefineSeries(db, schema)` → `*Series`: consecutivos y códigos (`SetSeries`, `GetSeries`, `DeleteSeries`, `GenSerie`, `GenValue`; `GenSerieTx`/`GenValueTx` dentro de una transacción, la que debe usar un trigger por script: en sqlite, escribir fuera de ella espera para siempre la única conexión). En scripts: `genSerie(tag, tx?)`, `genValue(tag, tx?)` y `db.series(schema)`.
+- `Bind(source, vars)` (`helpers.go`): aplica variables `{{nombre}}` a un json (`"{{x}}"` toma el valor tal cual; dentro de un texto, su texto; una lista se expande dentro de otra; `{{user.id}}` es una ruta; las desconocidas quedan igual). `BindWrapper()` es su versión para goja (`jsql.bind`). No es para SQL escrito a mano.
 - Helpers (`helpers.go`): `SQLParse` (reemplaza `$1`…`$N` por los argumentos escapados en una sola pasada; `$10` no se confunde con `$1`), `Quoted`, `EscapeSQLString`, `RowsToItems`, `ArgWhitAs` (`campo:alias`), `ArgWhitSchema` (`schema.tabla`), `AddAuditLog`.
 - Estados (`column.go`): `ACTIVE`, `ARCHIVED`, `CANCELED`, `OF_SYSTEM`, `FOR_DELETE`, `PENDING`, `APPROVED`, `REJECTED` (+ `IN_PROCESS`, `FAILED`).
 

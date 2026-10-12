@@ -44,7 +44,7 @@ Each table lists the main public API of every package. `go doc github.com/cgalvi
 | Package | Public API | Example |
 | --- | --- | --- |
 | `et` | `Json` (`Str`, `Int`, `Bool`, `Num`, `Time`, `Json`, `ArrayStr`, `ArrayJson`, `ValStr`, `ValInt`, `Set`, `Get`, `Update`, `Clone`, `ToString`, `ToObject`), `Item`, `Items`, `List`, conditions (`Eq`, `More`, `In`, `Between`, `ToCondition`), `From(items).Where(...).All()` | `data.ValStr("Cali", "user", "city")` |
-| `jsql` | `Load`, `LoadTo`, `ConnectTo`, `CreateDB`, `DropDB`, `TestConnection`; `DB.Define`, `DefineModel`, `Query`, `Sql`; `Model.Insert`, `Update`, `Upsert`, `Delete`, `Bulk`, `Select`, `Where`; `Query.All`, `One`, `Limit`, `Count`; `NewTx`, `DefineSeries` | `users.Where(jsql.Eq("id", id)).One()` |
+| `jsql` | `Load`, `LoadTo`, `ConnectTo`, `CreateDB`, `DropDB`, `TestConnection`; `DB.Define`, `DefineModel`, `Query`, `Sql`; `Model.Insert`, `Update`, `Upsert`, `Delete`, `Bulk`, `Select`, `Where`; `Query.All`, `One`, `Limit`, `Count`; `NewTx`, `DefineSeries` (`GenSerie`, `GenSerieTx`, `GenValue`, `GenValueTx`); `Bind(source, vars)` (`{{name}}` variables); `Wrapper`, `BindWrapper` (goja) | `users.Where(jsql.Eq("id", id)).One()` |
 | `stores` | `DefineInstance` (`Set`, `Get`, `Delete`, `Query`), `DefineAuthorization` (`SetAuthor`, `Author`, `RemoveAuthor`), `DefineConfig` (`SetConfig`, `Get`), `DefineFormState` | `ok, _ := auth.Author(profileId, "GET", "/users")` |
 | `mem` | `Set`, `Get`, `GetStr`, `GetInt`, `GetJson`, `Delete`, `Exists`, `Keys`, `Clear` | `mem.Set("k", "v", time.Minute)` |
 | `ephemeral` | `NewInstance(expiration)`, `Set`, `Get`, `Del` | `e := ephemeral.NewInstance(time.Minute)` |
@@ -91,9 +91,9 @@ Each table lists the main public API of every package. `go doc github.com/cgalvi
 | Package | Public API | Example |
 | --- | --- | --- |
 | `jrex` | `Load(tag, store)` → `Jrex` (`Set`, `Run`, `RunDev`, `RunModule`, `NewModule`); `NewInstance`, `NewStore` | `rt.Set("db", db).Run()` |
-| `jwf` | `New(id)` → `WorkFlow` (`NewFlow`, `Run`, `GetInstance`, `RunInstance`, `StopInstance`, `OnChange`); `Flow.Step`, `Error`, `AddStep`; `LoadFlow`, `RunCode`, `Binder`; `Instance.OnLog` / `Step.OnLog` (console) | `wf.Run("signup", "signup", "", "", ctx, nil, true, userId)` |
+| `jwf` | `New(id)` → `WorkFlow` (`NewFlow`, `Run`, `GetInstance`, `RunInstance`, `StopInstance`, `OnChange`); `Flow.Step`, `Error`, `AddStep`; `LoadFlow`, `RunCode`, `Binder`, `GoValue` (a Go value for scripts); `Instance.OnLog` / `Step.OnLog` (console) | `wf.Run("signup", "signup", "", "", ctx, nil, true, userId)` |
 | `jia` | `New(tag, store, userId)`, `Load(id, store)` → `Ia` (`SetModelAgent`, `SetContextAgent`, `SetSkillAgent`, `Conversation`, `Embed`, `LoadRouter`); `NewApiSkill` | `conv, _ := ai.Conversation(ctx, "support", to, name, prompt)` |
-| `ia` | `Load(db, schema, Config)` → `Rag` (`IngestFile`, `IngestSQL`, `Ask`, `ListDocuments`, `DeleteDocument`, `ListMessages`, `LoadRouter`) | `rag.Ask(ctx, tenant, project, conv, user, "question")` |
+| `ia` | `Load(db, schema, Config)` → `Rag` (`IngestFile`, `IngestSQL`, `Ask`, `ListDocuments`, `DeleteDocument`, `ListMessages`, `LoadRouter`); `LoadIndex` → `IngestText`, `Search`, `DeleteDocumentsOf`, `DeleteProject` with an `Embedder` (`HttpEmbedder`); `ExtractFile`, `RowsText` | `rag.Ask(ctx, tenant, project, conv, user, "question")` |
 | `cmds` | `NewStage`, `NewStep`, `AppendCmd`, `RunOS`, `RunSSH`, `Load(file)` | `cmds.NewStep("build", "").AppendCmd("go build ./...")` |
 
 ### Messaging
@@ -278,18 +278,24 @@ rt.Set("db", jsql.Wrapper(db)).Run()
 rag, _ := ia.Load(db, "public", ia.Config{}) // OPENAI_API_KEY
 rag.IngestFile(ctx, tenantId, projectId, "manual.pdf", data, userId)
 answer, _ := rag.Ask(ctx, tenantId, projectId, conversationId, userId, "How do I reset the router?")
+
+// Index only (no API key): any OpenAI-compatible /embeddings endpoint
+index, _ := ia.LoadIndex(db, "public", ia.Config{})
+embed := ia.HttpEmbedder("http://localhost:11434/v1", "", "nomic-embed-text")
+index.IngestText(ctx, ia.Document{TenantId: tenantId, ProjectId: projectId, Id: "faq-1", Name: "FAQ", Text: text}, embed)
+hits, _ := index.Search(ctx, tenantId, projectId, "reset the router", 5, 0.3, embed)
 ```
 
 ## Environment variables
 
 | Package | Variables |
 | --- | --- |
-| `jsql` | `DB_DRIVER` (`postgres`), `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_RECORD_LIMIT` (1000), `DB_IS_DEBUG`, `DB_APP_NAME`; postgres `DB_SSLMODE`; oracle `DB_SSL`, `DB_SSL_VERIFY`; sqlite only `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_LIFETIME`, `DB_POOL_IDLE_TIME` |
+| `jsql` | `DB_DRIVER` (`postgres`), `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_RECORD_LIMIT` (1000), `DB_IS_DEBUG`, `DB_APP_NAME`; postgres `DB_SSLMODE`; oracle `DB_SSL`, `DB_SSL_VERIFY`; every connection `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_LIFETIME`, `DB_POOL_IDLE_TIME` |
 | `cache` | `REDIS_HOST`, `REDIS_PASSWORD`, `REDIS_DB` |
 | `event` | `NATS_HOST`, `NATS_USER`, `NATS_PASSWORD` |
 | `graph` | `NEO4J_HOST`, `NEO4J_USER`, `NEO4J_PASSWORD` |
 | `claim` | `SECRET` (default `"1977"`) |
-| `jia`, `ia` | `OPENAI_API_KEY`; `ia` also `IA_EMBEDDING_MODEL`, `IA_CHAT_MODEL`, `IA_CHUNK_SIZE`, `IA_CHUNK_OVERLAP`, `IA_TOP_K` |
+| `jia`, `ia` | `OPENAI_API_KEY` (not needed by `ia.LoadIndex`); `ia` also `IA_EMBEDDING_MODEL`, `IA_CHAT_MODEL`, `IA_CHUNK_SIZE`, `IA_CHUNK_OVERLAP`, `IA_TOP_K` |
 | `dt` | `PRODUCTION` (`true` stores in Redis) |
 | `jwf`, `jsql` | `MAX_AUDIT_LOG` (1000) |
 | `jwsp` | `WHATSAPP_API_URL` |

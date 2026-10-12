@@ -19,6 +19,10 @@ var (
 	MSG_DOCUMENT_CREATED       = "document created"
 	MSG_DOCUMENT_DELETED       = "document deleted"
 	MSG_NO_ANSWER              = "No tengo suficiente informacion en el contexto para responder a tu pregunta."
+	MSG_EMBEDDER_REQUIRED      = "an embedder is required"
+	MSG_DOCUMENT_ID_REQUIRED   = "the document id is required"
+	MSG_EMBEDDINGS_FAILED      = "the embeddings provider did not answer: %s"
+	MSG_EMBEDDINGS_COUNT       = "the embeddings provider returned %d vectors for %d texts"
 )
 
 func init() {
@@ -40,5 +44,9 @@ func init() {
 		MSG_CONVERSATION_NOT_FOUND = "conversacion no encontrada"
 		MSG_DOCUMENT_CREATED = "documento creado"
 		MSG_DOCUMENT_DELETED = "documento eliminado"
+		MSG_EMBEDDER_REQUIRED = "se requiere un generador de embeddings"
+		MSG_DOCUMENT_ID_REQUIRED = "el id del documento es requerido"
+		MSG_EMBEDDINGS_FAILED = "el proveedor de embeddings no respondió: %s"
+		MSG_EMBEDDINGS_COUNT = "el proveedor de embeddings devolvió %d vectores para %d textos"
 	}
 }

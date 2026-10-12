@@ -67,3 +67,23 @@ func extractText(source string, data []byte) (string, error) {
 		return "", fmt.Errorf(MSG_UNSUPPORTED_SOURCE, source)
 	}
 }
+
+/**
+* ExtractFile: The plain text of a file and its source, detected by the extension of name (pdf, docx, xlsx, csv, txt,
+* md), with the same loaders as IngestFile.
+* @param name string, data []byte
+* @return string, string, error
+**/
+func ExtractFile(name string, data []byte) (string, string, error) {
+	source, err := sourceFromFilename(name)
+	if err != nil {
+		return "", "", err
+	}
+
+	text, err := extractText(source, data)
+	if err != nil {
+		return "", "", err
+	}
+
+	return source, text, nil
+}

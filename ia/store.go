@@ -52,6 +52,73 @@ func defineTenantProjectModel(db *jsql.DB, schema, name string, version int, use
 }
 
 /**
+* defineIndex: Defines and initializes the index models (documents and chunks) under schema. A document keeps the
+* source it came from (source_id), the hash of what was indexed and free metadata.
+* @param db *jsql.DB, schema string
+* @return *jsql.Model, *jsql.Model, error
+**/
+func defineIndex(db *jsql.DB, schema string) (*jsql.Model, *jsql.Model, error) {
+	documents, err := defineTenantProjectModel(db, schema, tableDocuments, 1, "ia")
+	if err != nil {
+		return nil, nil, err
+	}
+	documents.DefineColumn("name", et.TEXT, "")
+	documents.DefineColumn("source", et.TEXT, "")
+	documents.DefineIndex("source_id", et.KEY, "")
+	documents.DefineColumn("hash", et.KEY, "")
+	documents.DefineColumn("metadata", et.JSON, et.Json{})
+	documents.DefineColumn("chunk_count", et.INT, 0)
+	documents.DefineColumn("created_by", et.KEY, "")
+	if err := documents.Init(); err != nil {
+		return nil, nil, err
+	}
+
+	chunks, err := defineTenantProjectModel(db, schema, tableChunks, 1, "ia")
+	if err != nil {
+		return nil, nil, err
+	}
+	chunks.DefineIndex("document_id", et.KEY, "")
+	chunks.DefineColumn("idx", et.INT, 0)
+	chunks.DefineColumn("content", et.MEMO, "")
+	chunks.DefineColumn("embedding", et.JSON, []any{})
+	if err := chunks.Init(); err != nil {
+		return nil, nil, err
+	}
+
+	return documents, chunks, nil
+}
+
+/**
+* LoadIndex: Defines only the index (documents and chunks) under schema and returns a Rag without an AI provider:
+* no API key is needed because every call gets its own Embedder (IngestText, Search, DeleteDocumentsOf, DeleteProject,
+* ListDocuments, DeleteDocument). Ask and the other ingestion paths need Load.
+* @param db *jsql.DB, schema string, cnf Config
+* @return *Rag, error
+**/
+func LoadIndex(db *jsql.DB, schema string, cnf Config) (*Rag, error) {
+	if db == nil {
+		return nil, errors.New(MSG_DB_REQUIRED)
+	}
+	if schema == "" {
+		schema = "public"
+	}
+
+	cnf = defaultConfig(cnf)
+	documents, chunks, err := defineIndex(db, schema)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Rag{
+		db:        db,
+		schema:    schema,
+		cnf:       cnf,
+		documents: documents,
+		chunks:    chunks,
+	}, nil
+}
+
+/**
 * Load: Defines and initializes the jsql models backing the RAG (documents,
 * chunks, conversations, messages) under the given schema, and returns a
 * ready-to-use Rag engine configured with cnf (missing fields are filled from
@@ -72,27 +139,8 @@ func Load(db *jsql.DB, schema string, cnf Config) (*Rag, error) {
 		return nil, errors.New(MSG_API_KEY_REQUIRED)
 	}
 
-	documents, err := defineTenantProjectModel(db, schema, tableDocuments, 1, "ia")
+	documents, chunks, err := defineIndex(db, schema)
 	if err != nil {
-		return nil, err
-	}
-	documents.DefineColumn("name", et.TEXT, "")
-	documents.DefineColumn("source", et.TEXT, "")
-	documents.DefineColumn("chunk_count", et.INT, 0)
-	documents.DefineColumn("created_by", et.KEY, "")
-	if err := documents.Init(); err != nil {
-		return nil, err
-	}
-
-	chunks, err := defineTenantProjectModel(db, schema, tableChunks, 1, "ia")
-	if err != nil {
-		return nil, err
-	}
-	chunks.DefineIndex("document_id", et.KEY, "")
-	chunks.DefineColumn("idx", et.INT, 0)
-	chunks.DefineColumn("content", et.MEMO, "")
-	chunks.DefineColumn("embedding", et.JSON, []any{})
-	if err := chunks.Init(); err != nil {
 		return nil, err
 	}
 

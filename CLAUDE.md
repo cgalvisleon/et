@@ -224,6 +224,10 @@ func (s *T) HttpFoo(w http.ResponseWriter, r *http.Request) {
 - `validator`: `ByJson`/`ToJson`; los mensajes `MSG_VALIDATOR_MIN|MAX|BETWEEN|MIN_LENGTH|MAX_LENGTH` usan `%v` (con `%s` salían `%!s(float64=18)`).
 - `validator`: `Wrapper()` para goja (el binding `validator` de jwf) y `int32`/`int64`/`float32` en `validate`.
 - `jwf`: `Binder` y `params` y `ctx` como objetos dinámicos (`jsonObject`); `console` con `OnLog` en `Instance` y `Step` y el nivel `warn`, y `console.error` acepta varios argumentos; `Step.RunScript` sin instancia devuelve el último valor de los scripts si es un objeto (`objectOf`) (ver «`jwf/`»).
+## Cambios del 2026-10-12 (código)
+
+- `jsql`: `Bind(source, vars et.Json) et.Json` (`helpers.go`) aplica las variables `{{nombre}}` a un json: `"{{x}}"` solo toma el valor tal cual (número, lista, objeto); dentro de un texto, su texto; en una lista, una lista se expande; `{{user.id}}` es una ruta en vars; las desconocidas quedan igual. No es para SQL escrito a mano (los valores van como parámetros). `BindWrapper()` (`wrapper.go`) es su versión para goja (devuelve un objeto plano, `toJsMap`): `jsql.bind` en `wrapPackage` y el global `bind` de los pasos de core-studio (engine). Declarado en `jsql.d.ts`. Probado con un test temporal (Go y goja).
+
 - **`router` rate limit, pendiente**: `rateLimitMiddleware` cuenta por `MÉTODO:ruta` con `cache.Incr(key, 1s)`, y `IncrCtx` solo pone el vencimiento cuando el contador nace (`result == 1`). Si ese `Expire` falla una vez, la clave queda sin TTL, sigue sumando y al pasar `LimitRate` (1000) la ruta responde 429 para siempre (pasó con `POST:/api/tenancy/steps/query` en core-studio; se arregló borrando la clave en Redis). Falta hacerlo atómico (`INCR` + `EXPIRE … NX` en un pipeline) o reponer el TTL cuando es -1.
 
 ## Cambios del 2026-10-11 (documentación)

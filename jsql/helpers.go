@@ -219,3 +219,111 @@ func addAuditLog(auditLog []et.Json, userId string, action string) []et.Json {
 	}
 	return auditLog
 }
+
+var variable = regexp.MustCompile(`\{\{\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*)\s*\}\}`)
+
+/**
+* Bind: Applies vars to the {{name}} variables of a json (a jsql query, a command…): a string that is only "{{name}}"
+* takes the value as is (number, list, object); inside a longer text it is replaced by its text. In a list, a variable
+* whose value is a list is expanded. A name with dots is a path in vars ({{user.id}}). Unknown variables are left as
+* they are. Values stay values (jsql sends them as parameters): do not bind raw SQL text with it
+* @param source, vars et.Json
+* @return et.Json
+**/
+func Bind(source, vars et.Json) et.Json {
+	result, ok := bindValue(source, vars).(et.Json)
+	if !ok {
+		return et.Json{}
+	}
+	return result
+}
+
+/**
+* bindValue: Bind over any value of a json (object, list, text or other)
+* @param value any, vars et.Json
+* @return any
+**/
+func bindValue(value any, vars et.Json) any {
+	switch v := value.(type) {
+	case et.Json:
+		result := et.Json{}
+		for key, item := range v {
+			result[key] = bindValue(item, vars)
+		}
+		return result
+	case map[string]any:
+		return bindValue(et.Json(v), vars)
+	case []et.Json:
+		result := make([]any, 0, len(v))
+		for _, item := range v {
+			result = append(result, bindValue(item, vars))
+		}
+		return result
+	case []any:
+		result := make([]any, 0, len(v))
+		for _, item := range v {
+			bound := bindValue(item, vars)
+			list, isList := bound.([]any)
+			if isList && isVariable(item) {
+				result = append(result, list...)
+				continue
+			}
+			result = append(result, bound)
+		}
+		return result
+	case string:
+		return bindText(v, vars)
+	default:
+		return v
+	}
+}
+
+/**
+* bindText: A text with variables: only "{{name}}" gives the value as is; otherwise each one is replaced by its text
+* @param text string, vars et.Json
+* @return any
+**/
+func bindText(text string, vars et.Json) any {
+	if isVariable(text) {
+		name := variable.FindStringSubmatch(text)[1]
+		val, ok := varOf(vars, name)
+		if !ok {
+			return text
+		}
+		return val
+	}
+
+	return variable.ReplaceAllStringFunc(text, func(match string) string {
+		name := variable.FindStringSubmatch(match)[1]
+		val, ok := varOf(vars, name)
+		if !ok {
+			return match
+		}
+		return fmt.Sprintf("%v", val)
+	})
+}
+
+/**
+* varOf: The value of a variable; a name with dots is a path (user.id)
+* @param vars et.Json, name string
+* @return any, bool
+**/
+func varOf(vars et.Json, name string) (any, bool) {
+	missing := &struct{}{}
+	path := strings.Split(name, ".")
+	val := vars.ValAny(missing, path...)
+	if val == missing {
+		return nil, false
+	}
+	return val, true
+}
+
+/**
+* isVariable: Whether a value is only one variable ("{{name}}")
+* @param value any
+* @return bool
+**/
+func isVariable(value any) bool {
+	text, ok := value.(string)
+	return ok && text != "" && variable.FindString(text) == text
+}

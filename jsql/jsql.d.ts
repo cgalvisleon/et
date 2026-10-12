@@ -463,6 +463,10 @@ interface JsqlSeries {
 }
 
 interface JsqlPackage {
+  /** A copy of source with its {{name}} variables applied from vars: "{{name}}" alone takes the value as is (number,
+   * list, object), inside a text it is replaced by its text; in a list, a list value is expanded; {{user.id}} is a path.
+   * Unknown variables are left as they are. Not for raw SQL text (values are sent as parameters). */
+  bind<T = Record<string, any>>(source: T, vars: Record<string, any>): T;
   /** Database configured by the DB_* environment variables. */
   load(): JsqlDB;
   loadTo(dbName: string, ...hostName: string[]): JsqlDB;

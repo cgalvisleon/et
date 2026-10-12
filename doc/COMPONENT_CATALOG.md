@@ -1010,6 +1010,13 @@ func GetSolver(method string) (*Solver, error)
 
 SQL builder/ORM guiado por JSON: modelos, consultas, comandos, triggers, transacciones, series. API completa en `jsql/catalog.go`; spec en `jsql/spec.md`.
 
+Variables en un json (2026-10-12, `helpers.go` y `wrapper.go`):
+
+```go
+func Bind(source, vars et.Json) et.Json                    // {{nombre}} → su valor ("{{x}}" solo: el valor tal cual; {{a.b}}: ruta)
+func BindWrapper() func(source, vars et.Json) map[string]any // para goja: jsql.bind / bind
+```
+
 Interfaces:
 
 ```go

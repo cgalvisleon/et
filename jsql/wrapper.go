@@ -31,6 +31,20 @@ func Wrapper(db *DB) map[string]any {
 }
 
 /**
+* BindWrapper: Bind as a script (goja) sees it: bind(source, vars) gives a plain object with the {{name}} variables of
+* source applied (see Bind), so its keys are read as properties
+*
+*	const query = bind(params.query, { status: ["active"], rows: 30 })
+*
+* @return func(source, vars et.Json) map[string]any
+**/
+func BindWrapper() func(source, vars et.Json) map[string]any {
+	return func(source, vars et.Json) map[string]any {
+		return toJsMap(Bind(source, vars))
+	}
+}
+
+/**
 * unwrap: Returns the Go value of a wrapped object, or value itself when it is not wrapped.
 * @param value any
 * @return any
@@ -288,6 +302,7 @@ func columnJson(column *Column) any {
 **/
 func wrapPackage() map[string]any {
 	return map[string]any{
+		"bind": BindWrapper(),
 		"load": func() (map[string]any, error) {
 			db, err := Load()
 			if err != nil {

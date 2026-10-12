@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -88,9 +89,20 @@ func HttpWithContext(ctx context.Context, method, uRL string, header, body et.Js
 			return
 		}
 
-		contentType := header.Str("Content-Type")
+		// Header names are case-insensitive ("content-type" is as valid as
+		// "Content-Type"); with none, a body goes as JSON and no body needs none.
+		contentType := headerValue(header, "Content-Type")
+		if contentType == "" && body != nil {
+			contentType = "application/json"
+			header = header.Clone()
+			header["Content-Type"] = contentType
+		}
 
-		mediaType, _, err := mime.ParseMediaType(contentType)
+		mediaType := ""
+		var err error
+		if contentType != "" {
+			mediaType, _, err = mime.ParseMediaType(contentType)
+		}
 		if err != nil {
 			result <- HttpResult{
 				Body: nil,
@@ -108,6 +120,7 @@ func HttpWithContext(ctx context.Context, method, uRL string, header, body et.Js
 
 		switch mediaType {
 		case "multipart/form-data":
+			buf = new(bytes.Buffer)
 			writer := multipart.NewWriter(buf)
 			for k := range body {
 				v := body.Str(k)
@@ -135,6 +148,14 @@ func HttpWithContext(ctx context.Context, method, uRL string, header, body et.Js
 				return
 			}
 			ioBody = buf
+			// The boundary goes in the Content-Type, or the server can't split the parts.
+			header = header.Clone()
+			for k := range header {
+				if strings.EqualFold(k, "Content-Type") {
+					delete(header, k)
+				}
+			}
+			header["Content-Type"] = writer.FormDataContentType()
 		case "application/x-www-form-urlencoded":
 			data := url.Values{}
 			for k := range body {
@@ -538,4 +559,20 @@ func NewTlsConfig(caFile, certFile, keyFile string) (*tls.Config, error) {
 	}
 
 	return tlsConfig, nil
+}
+
+/**
+* headerValue: Valor de un header buscando su nombre sin distinguir mayúsculas.
+* @param header et.Json, name string
+* @return string
+**/
+func headerValue(header et.Json, name string) string {
+	for k, v := range header {
+		if strings.EqualFold(k, name) {
+			if s, ok := v.(string); ok {
+				return s
+			}
+		}
+	}
+	return ""
 }

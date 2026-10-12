@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 )
 
@@ -25,8 +26,10 @@ func TestSendSmsUsesPerRecipientParams(t *testing.T) {
 	}))
 	defer server.Close()
 
-	t.Setenv("BREVO_SEND_PATH", server.URL)
-	t.Setenv("BREVO_SEND_KEY", "test-key")
+	// envar caches what it read, so a t.Setenv would keep the previous
+	// test's server.
+	envar.Set("BREVO_SEND_PATH", server.URL)
+	envar.Set("BREVO_SEND_KEY", "test-key")
 
 	contactNumbers := []string{"+111", "+222"}
 	content := "Hello {{name}}"

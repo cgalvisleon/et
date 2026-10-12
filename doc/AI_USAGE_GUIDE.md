@@ -31,7 +31,7 @@ Si terminas en 4 o 5, dilo en la respuesta: «No usé `et` para X porque Y».
 | Leer el request | `request` | `request.GetBody(r)`, `request.URLParam(r, "id").Str()` |
 | Responder | `response` | `response.ITEM/ITEMS/LIST/HTTPError(w, r, status, ...)` |
 | Llamar otra API | `request` | `request.Fetch(method, url, header, body, timeout, def)` |
-| Validar un payload | `validator` | `validator.New().Field("x").Required()...Validate(body)`; desde un JSON: `validator.New().ByJson(def)` (y `ToJson()` para guardarlo) |
+| Validar un payload | `validator` | `validator.New().Field("x").Required()...Validate(body)`; desde un JSON: `validator.New().ByJson(def)` (y `ToJson()` para guardarlo); en un script de jwf: `validator(def?).field("x").required().validate(data)` dentro de `try/catch` |
 | Caché / Redis | `cache` | `cache.Set`, `cache.Get` → `(valor, existe, error)` |
 | Pub/Sub | `event` | `event.Publish`, `event.Subscribe` |
 | JWT | `jwt` | `jwt.NewAuthorization(...)`, `jwt.Validate(token)` |

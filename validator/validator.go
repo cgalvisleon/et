@@ -219,6 +219,13 @@ func (s *Condition) validate(value any) (bool, error) {
 		return s.validateString(v)
 	case int:
 		return s.validateInt(v)
+	case int32:
+		return s.validateInt(int(v))
+	case int64:
+		// goja exporta los enteros de JavaScript como int64
+		return s.validateInt(int(v))
+	case float32:
+		return s.validateFloat(float64(v))
 	case float64:
 		return s.validateFloat(v)
 	case bool:

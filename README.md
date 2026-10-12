@@ -112,7 +112,7 @@ Each table lists the main public API of every package. `go doc github.com/cgalvi
 | `envar` | `GetStr`, `GetInt`, `GetInt64`, `GetBool`, `GetFloat`, `GetDuration`, `Set*`, `Arg*`, `Validate` | `port := envar.GetInt("PORT", 3000)` |
 | `logs` | `Info`, `Infof`, `Debug`, `Warn`, `Alert`, `Alertf`, `Error`, `Errorf`, `Fatal`, `Panic` | `logs.Errorf("failed: %v", err)` |
 | `stdrout`, `color` | `Printl`, `Traces`, `SetStdout`; `Red`, `Green`, `Yellow`, `Blue`… | `fmt.Println(color.Green("ok"))` |
-| `validator` | `New()`, `Field`, `Required`, `NotEmpty`, `Min`, `Max`, `Between`, `MinLength`, `MaxLength`, `Pattern`, `IsEmail`, `IsPhone`, `Validate`, `ByJson`, `ToJson` | `validator.New().Field("email").Required().IsEmail().Validate(body)` |
+| `validator` | `New()`, `Field`, `Required`, `NotEmpty`, `Min`, `Max`, `Between`, `MinLength`, `MaxLength`, `Pattern`, `IsEmail`, `IsPhone`, `Validate`, `ByJson`, `ToJson`, `Wrapper` (goja) | `validator.New().Field("email").Required().IsEmail().Validate(body)` |
 | `reg` | `UUID`, `ULID`, `XID`, `GenSnowflake`, `GetUUID(id)`, `GenULID(tag)`, `TagULID` | `id := reg.GetULID("")` |
 | `strs` | `Format`, `Parse`, `Titlecase`, `Lowcase`, `RemoveAcents`, `Split`, `IsEmpty`, `HtmlToText` | `strs.Parse("Hi {{name}}", vars)` |
 | `timezone` | `Now`, `NowStr`, `Add`, `Format`, `Parse`, `Location` | `t := timezone.Now()` |

@@ -177,6 +177,7 @@ api.UseAuthentication(middleware.Authentication)
 api.Protected("users", router.POST, "/", "Create user", api.Item(http.StatusCreated,
     func(r *http.Request, body et.Json) (et.Item, error) {
         ok, err := validator.New().Field("email").Required().IsEmail().Validate(body)
+        // en un script de jwf: try { validator().field("email").required().isEmail().validate(params) } catch (e) { … }
         // o desde un JSON guardado: v, err := validator.New().ByJson(et.Json{"fields": et.Json{"email": et.Json{"required": true, "is_email": true}}})
         if !ok {
             return et.Item{}, err

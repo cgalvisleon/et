@@ -2374,6 +2374,7 @@ Validación fluida de `et.Json` (mensajes según `LANG`).
 Funciones y métodos:
 
 ```go
+func Wrapper() func(def ...et.Json) (map[string]any, error)
 func (s *Condition) Between(min, max float64) *Condition
 func (s *Condition) Field(name string) *Condition
 func (s *Condition) IsEmail() *Condition

@@ -66,9 +66,7 @@ func wrapperBasic(bindings map[string]interface{}) map[string]interface{} {
 	bindings["getULID"] = reg.GetULID
 	bindings["getXID"] = reg.GetXID
 	bindings["timeNow"] = timezone.Now
-	bindings["validator"] = func() *validator.Validator {
-		return validator.New()
-	}
+	bindings["validator"] = validator.Wrapper()
 	bindings["Json"] = et.Json{}
 	return bindings
 }

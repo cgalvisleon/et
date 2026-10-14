@@ -326,6 +326,9 @@ func jsonMethods(data func() et.Json) map[string]any {
 		"set": func(values et.Json) {
 			maps.Copy(data(), values)
 		},
+		"put": func(values et.Json) {
+			data().Put(values)
+		},
 		"get": func(keys ...string) any {
 			return data().Get(keys...)
 		},

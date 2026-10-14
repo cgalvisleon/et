@@ -1014,6 +1014,17 @@ func (s Json) IsDeferent(atrib string, val interface{}) bool {
 }
 
 /**
+* Put
+* @param val Json
+* @return Json
+**/
+func (s Json) Put(val Json) Json {
+	s = Json{}
+	maps.Copy(s, val)
+	return s
+}
+
+/**
 * Get
 * @param keys ...string
 * @return interface{}

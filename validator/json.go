@@ -10,10 +10,10 @@ import (
 
 // conditionKeys: the keys a field's condition accepts in ByJson (the Condition methods in snake_case)
 var conditionKeys = []string{"required", "not_empty", "is_letters", "is_numbers", "is_special_characters", "is_email", "is_phone",
-	"min", "max", "min_length", "max_length", "pattern"}
+	"min", "max", "min_length", "max_length", "pattern", "values"}
 
 /**
-* ByJson: Define the validator from a json: {not_empty, fields: {name: {required, not_empty, is_email, min, max, min_length, max_length, pattern…}}}
+* ByJson: Define the validator from a json: {not_empty, fields: {name: {required, not_empty, is_email, min, max, min_length, max_length, pattern, values…}}}
 * @param params et.Json
 * @return *Validator, error
 **/
@@ -49,6 +49,7 @@ func (s *Validator) ByJson(params et.Json) (*Validator, error) {
 		condition.minLength = def.Int("min_length")
 		condition.maxLength = def.Int("max_length")
 		condition.pattern = pattern
+		condition.values = def.Array("values")
 	}
 
 	return s, nil
@@ -107,6 +108,9 @@ func (s *Condition) ToJson() et.Json {
 	}
 	if s.pattern != "" {
 		result["pattern"] = s.pattern
+	}
+	if len(s.values) > 0 {
+		result["values"] = s.values
 	}
 
 	return result

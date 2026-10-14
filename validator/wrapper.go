@@ -119,6 +119,16 @@ func wrapCondition(s *Condition) map[string]any {
 			s.Pattern(pattern)
 			return result, nil
 		},
+		"values": func(values ...any) map[string]any {
+			// values("a", "b") o values(["a", "b"])
+			if len(values) == 1 {
+				if list, ok := values[0].([]any); ok {
+					values = list
+				}
+			}
+			s.Values(values...)
+			return result
+		},
 		"field": func(name string) map[string]any {
 			return wrapCondition(s.Field(name))
 		},

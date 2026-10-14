@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -208,11 +209,114 @@ func (s *Condition) Pattern(pattern string) *Condition {
 }
 
 /**
-* Validate: Validate the value using the validator.
+* Values: Restrict the value to one of these values; on a list, each of its items.
+* @param values ...any
+* @return *Condition
+**/
+func (s *Condition) Values(values ...any) *Condition {
+	s.values = values
+	return s
+}
+
+/**
+* validate: Validate the value by its type and then against the allowed values.
 * @param value any
-* @return bool
+* @return bool, error
 **/
 func (s *Condition) validate(value any) (bool, error) {
+	ok, err := s.validateType(value)
+	if !ok || err != nil {
+		return ok, err
+	}
+	return s.validateValues(value)
+}
+
+/**
+* validateValues: Validate that the value (or each item of a list) is one of the allowed values; nil passes.
+* @param value any
+* @return bool, error
+**/
+func (s *Condition) validateValues(value any) (bool, error) {
+	if len(s.values) == 0 || value == nil {
+		return true, nil
+	}
+
+	items := []any{value}
+	switch v := value.(type) {
+	case []string:
+		items = toAny(v)
+	case []int:
+		items = toAny(v)
+	case []float64:
+		items = toAny(v)
+	case []any:
+		items = v
+	case et.Json, map[string]any, []et.Json, []byte:
+		return true, nil
+	}
+
+	for _, item := range items {
+		if !slices.ContainsFunc(s.values, func(allowed any) bool { return sameValue(item, allowed) }) {
+			return false, fmt.Errorf(MSG_VALIDATOR_VALUES, s.name, s.values)
+		}
+	}
+	return true, nil
+}
+
+/**
+* toAny: A typed list as []any.
+* @param values []T
+* @return []any
+**/
+func toAny[T any](values []T) []any {
+	result := make([]any, len(values))
+	for i, value := range values {
+		result[i] = value
+	}
+	return result
+}
+
+/**
+* sameValue: Whether two values are equal; numbers compare by value whatever their type (JSON gives float64, goja int64).
+* @param a, b any
+* @return bool
+**/
+func sameValue(a, b any) bool {
+	numA, okA := toFloat(a)
+	numB, okB := toFloat(b)
+	if okA || okB {
+		return okA && okB && numA == numB
+	}
+	return fmt.Sprint(a) == fmt.Sprint(b)
+}
+
+/**
+* toFloat: The number as float64, and whether it is a number.
+* @param value any
+* @return float64, bool
+**/
+func toFloat(value any) (float64, bool) {
+	switch v := value.(type) {
+	case int:
+		return float64(v), true
+	case int32:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	case float32:
+		return float64(v), true
+	case float64:
+		return v, true
+	}
+	return 0, false
+}
+
+/**
+* validateType: Validate the value by its type.
+* @param value any
+* @return bool, error
+**/
+func (s *Condition) validateType(value any) (bool, error) {
 	switch v := value.(type) {
 	case nil:
 		return s.validateNil()

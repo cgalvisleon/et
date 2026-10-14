@@ -26,10 +26,11 @@ const wrapRef = "__ref"
 **/
 func Wrapper(db *DB) map[string]any {
 	return map[string]any{
-		"db":    wrapDB(db),
-		"newTx": func() map[string]any { return wrapTx(NewTx()) },
-		"jsql":  wrapPackage(),
-		"bind":  BindWrapper(),
+		"db":      wrapDB(db),
+		"newTx":   func() map[string]any { return wrapTx(NewTx()) },
+		"jsql":    wrapPackage(),
+		"bind":    BindWrapper(),
+		"toJsMap": ToJsMapWrapper(),
 	}
 }
 
@@ -44,6 +45,19 @@ func Wrapper(db *DB) map[string]any {
 func BindWrapper() func(source, vars et.Json) map[string]any {
 	return func(source, vars et.Json) map[string]any {
 		return toJsMap(Bind(source, vars))
+	}
+}
+
+/**
+* ToJsMapWrapper: ToJsMap as a script (goja) sees it: toJsMap(source) gives a plain object with the keys of source applied to source
+*
+*	const query = toJsMap(params.query)
+*
+* @return func(source et.Json) map[string]any
+**/
+func ToJsMapWrapper() func(source et.Json) map[string]any {
+	return func(source et.Json) map[string]any {
+		return toJsMap(source)
 	}
 }
 

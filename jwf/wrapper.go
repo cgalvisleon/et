@@ -329,6 +329,27 @@ func jsonMethods(data func() et.Json) map[string]any {
 		"put": func(values et.Json) {
 			data().Put(values)
 		},
+		"view": func(view et.Json) {
+			result := et.Json{}
+			org := data()
+			for key, value := range view {
+				as := fmt.Sprintf("%v", value)
+				if as == "" {
+					as = key
+				}
+				if _, ok := org[key]; ok {
+					result[as] = org[key]
+				}
+			}
+			if !result.IsEmpty() {
+				data().Put(result)
+			}
+		},
+		"omit": func(keys ...string) {
+			for _, key := range keys {
+				delete(data(), key)
+			}
+		},
 		"get": func(keys ...string) any {
 			return data().Get(keys...)
 		},

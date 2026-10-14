@@ -20,6 +20,7 @@ var (
 	MSG_VALIDATOR_PHONE              = "the field %s must be a valid phone"
 	MSG_VALIDATOR_UNKNOWN_CONDITION  = "the field %s has an unknown condition %s"
 	MSG_VALIDATOR_INVALID_PATTERN    = "the field %s has an invalid pattern %s"
+	MSG_VALIDATOR_VALUES             = "the field %s must be one of %v"
 )
 
 func init() {
@@ -43,5 +44,6 @@ func init() {
 		MSG_VALIDATOR_PHONE = "el campo %s debe ser un teléfono válido"
 		MSG_VALIDATOR_UNKNOWN_CONDITION = "el campo %s tiene una condición desconocida %s"
 		MSG_VALIDATOR_INVALID_PATTERN = "el campo %s tiene un patrón inválido %s"
+		MSG_VALIDATOR_VALUES = "el campo %s debe ser uno de %v"
 	}
 }

@@ -628,6 +628,22 @@ func (s *Query) where(cond *et.Condition) *Query {
 }
 
 /**
+* whereByJson: Creates a new Query for this model with the given conditions as the WHERE clause.
+* @param cond []et.Json
+* @return *Query
+**/
+func (s *Query) whereByJson(cond []et.Json) *Query {
+	conditions, err := et.ToWheRes(cond)
+	if err != nil {
+		return s
+	}
+	for _, condition := range conditions {
+		s.AddCondition(condition)
+	}
+	return s
+}
+
+/**
 * and: Appends an AND condition to the active clause section (WHERE, JOIN ON, or HAVING).
 * @param cond *et.Condition
 * @return *Query

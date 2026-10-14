@@ -67,6 +67,24 @@ func wrapperBasic(bindings map[string]interface{}) map[string]interface{} {
 	bindings["getXID"] = reg.GetXID
 	bindings["timeNow"] = timezone.Now
 	bindings["validator"] = validator.Wrapper()
+	bindings["isEditableStatus"] = IsEditableStatus
+	bindings["isExcludedStatus"] = IsExcludedStatus
+	bindings["statusList"] = statusList
+	bindings["statusSystem"] = SYSTEM
+	bindings["statusActive"] = ACTIVE
+	bindings["statusArchived"] = ARCHIVED
+	bindings["statusCanceled"] = CANCELED
+	bindings["statusForDelete"] = FOR_DELETE
+	bindings["statusInProcess"] = IN_PROCESS
+	bindings["statusCreated"] = CREATED
+	bindings["statusPending"] = PENDING
+	bindings["statusRunning"] = RUNNING
+	bindings["statusRollback"] = ROLLBACK
+	bindings["statusDone"] = DONE
+	bindings["statusApproved"] = APPROVED
+	bindings["statusRejected"] = REJECTED
+	bindings["statusFailed"] = FAILED
+	bindings["statusCancel"] = CANCEL
 	bindings["Json"] = et.Json{}
 	return bindings
 }
@@ -396,8 +414,7 @@ func (s *Step) wrapperCtx() {
 * @param s *Instance
 **/
 func (s *Instance) wrapperConsole() {
-	prefix := fmt.Sprintf(`host:%s - instance:%s`, s.hostname, s.ID)
-	s.SetBinding("console", consoleOf(prefix, s.emitLog))
+	s.SetBinding("console", consoleOf("", s.emitLog))
 }
 
 /**

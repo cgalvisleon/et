@@ -24,20 +24,44 @@ func (s Status) Str() string {
 }
 
 const (
-	SYSTEM   Status = "system"
-	ACTIVE   Status = "active"
-	ARCHIVED Status = "archived"
+	SYSTEM     Status = "system"
+	ACTIVE     Status = "active"
+	ARCHIVED   Status = "archived"
+	CANCELED   Status = "canceled"
+	FOR_DELETE Status = "for_delete"
 	// Instance Status
-	CREATED  Status = "created"
-	PENDING  Status = "pending"
-	RUNNING  Status = "running"
-	ROLLBACK Status = "rollback"
-	DONE     Status = "done"
-	FAILED   Status = "failed"
-	CANCEL   Status = "cancel"
+	IN_PROCESS string = "in_process"
+	CREATED    Status = "created"
+	PENDING    Status = "pending"
+	RUNNING    Status = "running"
+	ROLLBACK   Status = "rollback"
+	DONE       Status = "done"
+	FAILED     Status = "failed"
+	CANCEL     Status = "cancel"
+	// Process status
+	APPROVED Status = "approved"
+	REJECTED Status = "rejected"
 	// Step Status (inside an instance)
 	COMPLETED Status = "completed"
 )
+
+var StatusList = map[Status]bool{
+	ACTIVE:     true,
+	ARCHIVED:   true,
+	CANCELED:   true,
+	SYSTEM:     true,
+	FOR_DELETE: true,
+	PENDING:    true,
+	APPROVED:   true,
+	REJECTED:   true,
+}
+
+var IsEditableStatus = []Status{ACTIVE, PENDING}
+var IsExcludedStatus = []Status{ACTIVE, SYSTEM}
+
+func statusList() []Status {
+	return []Status{ACTIVE, ARCHIVED, CANCELED, SYSTEM, FOR_DELETE, PENDING, APPROVED, REJECTED}
+}
 
 var (
 	hostname              string

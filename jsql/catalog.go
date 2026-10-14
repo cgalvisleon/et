@@ -643,6 +643,15 @@ func (s *Model) Where(cond *et.Condition) *Query {
 }
 
 /**
+* WhereByJson: Creates a new Query for this model with the given conditions as the WHERE clause.
+* @param cond []et.Json
+* @return *Query
+**/
+func (s *Model) WhereByJson(cond []et.Json) *Query {
+	return s.whereByJson(cond)
+}
+
+/**
 * Count: Returns the count of records in the model.
 * @return (int, error)
 **/
@@ -817,6 +826,15 @@ func (s *Query) AddCondition(cond *et.Condition) *Query {
 **/
 func (s *Query) Where(cond *et.Condition) *Query {
 	return s.where(cond)
+}
+
+/**
+* WhereByJson: Creates a new Query for this model with the given conditions as the WHERE clause.
+* @param cond []et.Json
+* @return *Query
+**/
+func (s *Query) WhereByJson(cond []et.Json) *Query {
+	return s.whereByJson(cond)
 }
 
 /**
@@ -1188,6 +1206,15 @@ func (s *Command) Test() *Command {
 **/
 func (s *Command) Where(cond *et.Condition) *Command {
 	return s.where(cond)
+}
+
+/**
+* WhereByJson: Sets the first WHERE condition and returns the command for chaining.
+* @param cond []et.Json
+* @return *Command
+**/
+func (s *Command) WhereByJson(cond []et.Json) *Command {
+	return s.whereByJson(cond)
 }
 
 /**

@@ -29,6 +29,7 @@ type Condition struct {
 	maxLength           int
 	pattern             string
 	name                string
+	values              []any
 	validator           *Validator
 }
 

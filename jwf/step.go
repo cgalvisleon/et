@@ -3,7 +3,6 @@ package jwf
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/cgalvisleon/et/et"
@@ -248,9 +247,7 @@ func (s *Step) RunScript(instance *Instance, ctx et.Json) (et.Json, error) {
 			s.SetBinding(key, value)
 		}
 	} else if s.onLog != nil {
-		// Alone (a Test): its console goes to OnLog
-		prefix := fmt.Sprintf("step:%s", s.ID)
-		s.SetBinding("console", consoleOf(prefix, func(line et.Json) {
+		s.SetBinding("console", consoleOf("", func(line et.Json) {
 			line["step_id"] = s.ID
 			s.onLog(line)
 		}))
@@ -263,7 +260,6 @@ func (s *Step) RunScript(instance *Instance, ctx et.Json) (et.Json, error) {
 	if instance != nil {
 		result = instance.Ctx
 	} else if object, ok := objectOf(value); ok {
-		// Alone (a Test): the last value of the script, if it is an object, is the result
 		result = object
 	}
 	return result, nil

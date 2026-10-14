@@ -208,6 +208,22 @@ func (s *Command) where(cond *et.Condition) *Command {
 }
 
 /**
+* where: Sets the first WHERE condition and returns the command for chaining.
+* @param cond *et.Condition
+* @return *Command
+**/
+func (s *Command) whereByJson(cond []et.Json) *Command {
+	conditions, err := et.ToWheRes(cond)
+	if err != nil {
+		return s
+	}
+	for _, condition := range conditions {
+		s.addCondition(condition)
+	}
+	return s
+}
+
+/**
 * and: Appends a condition joined with AND to the WHERE clause.
 * @param cond *et.Condition
 * @return *Command
@@ -591,6 +607,7 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 	result := et.NewItems([]et.Json{})
 	model := s.model
 	current, err := s.rowsQuery().
+		setDebug(s.isDebug).
 		AllTx(tx)
 	if err != nil {
 		return et.Items{}, err
@@ -671,6 +688,7 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 	result := et.NewItems([]et.Json{})
 	model := s.model
 	items, err := s.rowsQuery().
+		setDebug(s.isDebug).
 		AllTx(tx)
 	if err != nil {
 		return et.Items{}, err

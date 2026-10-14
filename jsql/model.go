@@ -713,6 +713,17 @@ func (s *Model) where(cond *et.Condition) *Query {
 }
 
 /**
+* whereByJson: Creates a new Query for this model with the given conditions as the WHERE clause.
+* @param cond []et.Json
+* @return *Query
+**/
+func (s *Model) whereByJson(cond []et.Json) *Query {
+	result := s.As("")
+	result.WhereByJson(cond)
+	return result
+}
+
+/**
 * count: Returns the count of records in the model.
 * @return (int, error)
 **/

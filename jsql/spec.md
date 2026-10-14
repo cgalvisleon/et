@@ -442,8 +442,11 @@ El caso omitido es `Load`/`LoadTo`, que lee el entorno. `go build ./...` y `go v
 - **B12:** §9 se corrigió: el esquema es obligatorio en `Define`. En sqlite, una tabla con el nombre de antes de v1.0.36 (`nombre`) se renombra sola a `schema_nombre` al iniciar su modelo si la nueva no existe (`Sqlite.ExistModel`), sin perder datos.
 - **B13:** postgres, oracle, mysql y mssql leen `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_LIFETIME` y `DB_POOL_IDLE_TIME` (`jsql.Pool`, embebido en sus conexiones) y los pasan en `GetParams` cuando valen más de 0; sin ellos, el driver usa sus valores (3, 1, 30 y 2). sqlite sigue con los suyos (10).
 
-**Brecha:** 1 abierta (baja).
+**Revisado el 2026-10-14** (sin correr la batería; `go build` y `go vet` pasan): `Model`/`Query`/`Command` suman `WhereByJson([]et.Json)` (condiciones en JSON, `et.ToWheRes`); `Query.AddCondition` y `Command` usan `et.AddCondition` (pone `AND` si la condición no trae conector y no es la primera); en el wrapper, `where` de modelo, consulta y comando recibe un objeto o una lista (`toWhere`) y se quitaron `and`/`or` (`jsql.d.ts`: `JsqlWhereItem`); `Wrapper` suma `toJsMap` (`ToJsMapWrapper`); `update`/`delete` propagan `Debug` a la consulta de filas. Se detectó B14.
+
+**Brecha:** 2 abiertas (1 alta, 1 baja).
 
 | #   | Especificación | Código actual | Ubicación | Impacto |
 | --- | --- | --- | --- | --- |
 | B5  | Driver para josefina. | Solo la constante `DriverJosefina`, sin implementación. Pendiente por decisión del usuario (2026-10-12): no implementarlo todavía. Josefina hoy solo habla HTTP + JSON, sin SQL ni driver de `database/sql`, y un driver de jsql genera SQL y devuelve un `*sql.DB`. | `driver.go:15` | Bajo |
+| B14 | `where` en scripts acepta `{campo: {op: valor}}` (`JsqlWhere`, `jsql.d.ts`). | `toWhere` (`wrapper.go`), con un objeto, toma sus **valores** y pierde el nombre del campo: `where({status: {eq: "active"}})` da `{eq: "active"}`, `ToWheRes` falla (`invalid condition`) y `whereByJson` ignora el error y deja la consulta **sin condición**. En un `update`/`delete` eso afecta todas las filas. Funcionan `where({where: {…}})` y una lista (`where([{status: {eq: "active"}}, {and: {…}}])`). Comprobado con un test temporal el 2026-10-14. Arreglo sugerido: un objeto sin `where`/`and`/`or` es una condición tal cual, y `whereByJson` debe propagar el error. | `wrapper.go` `toWhere`; `query.go`/`command.go` `whereByJson` | Alto |

@@ -535,6 +535,10 @@ declare const TX: JsqlTx;
 declare function newTx(): JsqlTx;
 /** Constructors, conditions and helpers of jsql. */
 declare const jsql: JsqlPackage;
+/** Same as jsql.bind. */
+declare function bind<T = Record<string, any>>(source: T, vars: Record<string, any>): T;
+/** A plain copy of a Go json (keys readable, JSON.stringify works): const query = toJsMap(params.query). */
+declare function toJsMap(source: Record<string, any>): Record<string, any>;
 
 /** Trigger scripts: the record before the change (empty in an insert). */
 declare var OLD: JsqlRecord;

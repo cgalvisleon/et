@@ -1721,3 +1721,21 @@ func (s WheRes) ToJson() []Json {
 	}
 	return result
 }
+
+/**
+* AddCondition: Appends a condition to the conditions list.
+* @param conditions []*Condition, cond *Condition
+* @return []*Condition
+**/
+func AddCondition(conditions []*Condition, cond *Condition) []*Condition {
+	if cond == nil {
+		return conditions
+	}
+	if conditions == nil {
+		conditions = make([]*Condition, 0)
+	}
+	if len(conditions) > 0 && cond.Connector == NaC {
+		cond.Connector = AND
+	}
+	return append(conditions, cond)
+}

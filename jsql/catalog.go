@@ -816,7 +816,8 @@ func (s *Query) Hidden(fields ...string) *Query {
 * @return *Query
 **/
 func (s *Query) AddCondition(cond *et.Condition) *Query {
-	return s.addOneCondition(cond)
+	s.Conditions = et.AddCondition(s.Conditions, cond)
+	return s
 }
 
 /**

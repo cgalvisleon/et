@@ -601,22 +601,6 @@ func (s *Query) hidden(fields ...string) *Query {
 }
 
 /**
-* addOneCondition: Appends a condition to the WHERE clause.
-* @param cond *et.Condition
-* @return *Query
-**/
-func (s *Query) addOneCondition(cond *et.Condition) *Query {
-	if s.Conditions == nil {
-		s.Conditions = []*et.Condition{}
-	}
-	if len(s.Conditions) > 0 && cond.Connector == et.AND {
-		cond.Connector = et.AND
-	}
-	s.Conditions = append(s.Conditions, cond)
-	return s
-}
-
-/**
 * where: Appends a condition to the WHERE clause and sets the active section to where.
 * @param cond *et.Condition
 * @return *Query

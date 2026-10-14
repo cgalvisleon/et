@@ -73,6 +73,10 @@ interface JsqlCondition {
   readonly __condition: unique symbol;
 }
 
+/** A where condition as JSON: {field: {operator: value}}; with where/and/or in front, its connector. */
+type JsqlWhere = { [field: string]: { [op in JsqlOperator]?: any } };
+type JsqlWhereItem = JsqlWhere | { where: JsqlWhere } | { and: JsqlWhere } | { or: JsqlWhere };
+
 /** Map of local field → foreign field. */
 type JsqlKeys = { [field: string]: string };
 
@@ -362,7 +366,8 @@ interface JsqlModel {
   join(to: JsqlModel, as: string, on: JsqlCondition[]): JsqlQuery;
   select(...fields: string[]): JsqlQuery;
   calc(...fields: string[]): JsqlQuery;
-  where(cond: JsqlCondition): JsqlQuery;
+  /** A query with this where: one condition or a list, as in a query. */
+  where(cond: JsqlWhereItem | JsqlWhereItem[]): JsqlQuery;
   count(): number;
   first(n: number): JsqlItems;
   queryTx(tx: JsqlTx | null, query: JsqlQueryDescriptor): JsqlQuery;
@@ -402,9 +407,8 @@ interface JsqlQuery {
   master(...fields: string[]): JsqlQuery;
   hidden(...fields: string[]): JsqlQuery;
   addCondition(cond: JsqlCondition): JsqlQuery;
-  where(cond: JsqlCondition): JsqlQuery;
-  and(cond: JsqlCondition): JsqlQuery;
-  or(cond: JsqlCondition): JsqlQuery;
+  /** One condition or a list: where([{ status: { eq: "active" } }, { and: { age: { more: 18 } } }]). */
+  where(cond: JsqlWhereItem | JsqlWhereItem[]): JsqlQuery;
   groupBy(...fields: string[]): JsqlQuery;
   having(cond: JsqlCondition): JsqlQuery;
   page(page: number): JsqlQuery;
@@ -430,9 +434,8 @@ interface JsqlCommand {
   debug(): JsqlCommand;
   /** Builds the SQL without running it. */
   test(): JsqlCommand;
-  where(cond: JsqlCondition): JsqlCommand;
-  and(cond: JsqlCondition): JsqlCommand;
-  or(cond: JsqlCondition): JsqlCommand;
+  /** One condition or a list, as in a query. */
+  where(cond: JsqlWhereItem | JsqlWhereItem[]): JsqlCommand;
   /** Fields returned by the command (RETURNING). */
   return(...fields: string[]): JsqlCommand;
   /** Rows an update or delete works on; 0 = every row that matches the where. */

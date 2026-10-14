@@ -102,6 +102,33 @@ func toDB(value any) *DB {
 }
 
 /**
+* toWhere: The where of a script as a list of conditions: an object is one condition, an array is the list.
+* @param cond any
+* @return []et.Json
+**/
+func toWhere(cond any) []et.Json {
+	switch value := cond.(type) {
+	case map[string]any:
+		result := make([]et.Json, 0)
+		for _, item := range value {
+			if obj, ok := item.(map[string]any); ok {
+				result = append(result, obj)
+			}
+		}
+		return result
+	case []any:
+		result := make([]et.Json, 0, len(value))
+		for _, item := range value {
+			if obj, ok := item.(map[string]any); ok {
+				result = append(result, obj)
+			}
+		}
+		return result
+	}
+	return nil
+}
+
+/**
 * toDefine: Converts a define descriptor (its JSON) into a Define.
 * @param value et.Json
 * @return Define, error
@@ -660,7 +687,7 @@ func wrapModel(m *Model) map[string]any {
 		},
 		"select": func(fields ...string) map[string]any { return wrapQuery(m.Select(fields...)) },
 		"calc":   func(fields ...string) map[string]any { return wrapQuery(m.Calc(fields...)) },
-		"where":  func(cond []et.Json) map[string]any { return wrapQuery(m.WhereByJson(cond)) },
+		"where":  func(cond any) map[string]any { return wrapQuery(m.WhereByJson(toWhere(cond))) },
 		"count":  m.Count,
 		"first":  func(n int) (map[string]any, error) { return itemsJson(m.First(n)) },
 		"queryTx": func(tx any, query et.Json) map[string]any {
@@ -729,7 +756,7 @@ func wrapQuery(q *Query) map[string]any {
 		"master":       func(fields ...string) map[string]any { return chain(q.Master(fields...)) },
 		"hidden":       func(fields ...string) map[string]any { return chain(q.Hidden(fields...)) },
 		"addCondition": func(cond *et.Condition) map[string]any { return chain(q.AddCondition(cond)) },
-		"where":        func(cond []et.Json) map[string]any { return chain(q.WhereByJson(cond)) },
+		"where":        func(cond any) map[string]any { return chain(q.WhereByJson(toWhere(cond))) },
 		"groupBy":      func(fields ...string) map[string]any { return chain(q.GroupBy(fields...)) },
 		"having":       func(cond *et.Condition) map[string]any { return chain(q.Having(cond)) },
 		"page":         func(page int) map[string]any { return chain(q.Page(page)) },
@@ -771,7 +798,7 @@ func wrapCommand(c *Command) map[string]any {
 		"toJson": jsonFn(c.ToJson),
 		"debug":  func() map[string]any { return chain(c.Debug()) },
 		"test":   func() map[string]any { return chain(c.Test()) },
-		"where":  func(cond []et.Json) map[string]any { return chain(c.WhereByJson(cond)) },
+		"where":  func(cond any) map[string]any { return chain(c.WhereByJson(toWhere(cond))) },
 		"return": func(fields ...string) map[string]any { return chain(c.Return(fields...)) },
 		"limit":  func(rows int) map[string]any { return chain(c.Limit(rows)) },
 		"execTx": func(tx any) (map[string]any, error) { return itemsJson(c.ExecTx(toTx(tx))) },

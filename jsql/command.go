@@ -194,7 +194,7 @@ func (s *Command) test() *Command {
 * @return *Command
 **/
 func (s *Command) addCondition(cond *et.Condition) *Command {
-	s.Conditions = append(s.Conditions, cond)
+	s.Conditions = et.AddCondition(s.Conditions, cond)
 	return s
 }
 

@@ -1014,12 +1014,21 @@ func (s Json) IsDeferent(atrib string, val interface{}) bool {
 }
 
 /**
+* Clear: This method clear the values of s.
+* @return Json
+**/
+func (s Json) Clear() Json {
+	clear(s)
+	return s
+}
+
+/**
 * Put
 * @param val Json
 * @return Json
 **/
 func (s Json) Put(val Json) Json {
-	s = Json{}
+	s.Clear()
 	maps.Copy(s, val)
 	return s
 }

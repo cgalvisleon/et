@@ -655,6 +655,28 @@ declare function bind<T = Record<string, any>>(
 /** A plain copy of a Go json (keys readable, JSON.stringify works): const query = toJsMap(params.query). */
 declare function toJsMap(source: Record<string, any>): Record<string, any>;
 
+/** A reference to a field of the query (or of the evaluated object), as a condition value: {field: "name"}.
+ * where([{ "A.total": { more: field("A.min_total") } }]) compares two columns; the name must be a field of the query
+ * origins (one that does not resolve makes the condition false, never a text). */
+type JsqlFieldRef = { field: string };
+declare function field(name: string): JsqlFieldRef;
+/** Aggregates over a field: {field: "sum(name)"}. In a query they are SQL aggregates; in evaluateObject they apply to
+ * the attribute (a list: items->price over [{price: 2}, {price: 3}] is [2, 3]). */
+declare function count(name: string): JsqlFieldRef;
+declare function sum(name: string): JsqlFieldRef;
+declare function avg(name: string): JsqlFieldRef;
+declare function min(name: string): JsqlFieldRef;
+declare function max(name: string): JsqlFieldRef;
+/** Parts of a date: {field: "extract_year(name)"}… */
+declare function year(name: string): JsqlFieldRef;
+declare function month(name: string): JsqlFieldRef;
+declare function day(name: string): JsqlFieldRef;
+declare function hour(name: string): JsqlFieldRef;
+declare function minute(name: string): JsqlFieldRef;
+declare function second(name: string): JsqlFieldRef;
+declare function intValue(name: string): JsqlFieldRef;
+declare function floatValue(name: string): JsqlFieldRef;
+
 /** Trigger scripts: the record before the change (empty in an insert). */
 declare var OLD: JsqlRecord;
 /** Trigger scripts: the record being saved; changes made in a before trigger are saved. */

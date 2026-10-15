@@ -186,6 +186,28 @@ func sqliteJoinColumnRef(getField func(string) (*jsql.Field, bool), useSourceFie
 }
 
 /**
+* sqliteFieldValueRef: Resolves a FIELD value (an et.Field, from {"field": "name"} in a JSON condition) as the column or
+* aggregate expression of the query it names. Only fields of the query origins resolve: the name never goes to the SQL.
+* @param getField func(string) (*jsql.Field, bool), useSourceField bool, val et.Value
+* @return string, bool
+**/
+func sqliteFieldValueRef(getField func(string) (*jsql.Field, bool), useSourceField bool, val et.Value) (string, bool) {
+	ref, ok := val.Value.(et.Field)
+	if !ok {
+		return "", false
+	}
+	fld, ok := getField(ref.Str())
+	if !ok || fld.From == nil {
+		return "", false
+	}
+	if fld.Agg != nil {
+		return sqliteAggExpr(fld)
+	}
+	expr := sqliteFieldExpr(fld, useSourceField)
+	return expr, expr != ""
+}
+
+/**
 * sqliteCondExpr: Renders a single Condition as a SQL fragment using alias to
 * qualify the field.
 * @param getField func(string) (*jsql.Field, bool), useSourceField bool, cond *et.Condition, alias string
@@ -208,7 +230,19 @@ func sqliteCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bo
 		}
 		fieldExpr = f
 	}
+	// A FIELD value is a column (or an aggregate) of the query; one that does not resolve never matches
+	fieldRef, isRef := "", cond.Value.Type == et.FIELD
+	if isRef {
+		var ok bool
+		if fieldRef, ok = sqliteFieldValueRef(getField, useSourceField, cond.Value); !ok {
+			return "1 = 0"
+		}
+	}
+
 	value := func() string {
+		if isRef {
+			return fieldRef
+		}
 		if isJoin {
 			if ref, ok := sqliteJoinColumnRef(getField, useSourceField, cond.Value); ok {
 				return ref

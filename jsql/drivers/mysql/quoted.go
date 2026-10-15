@@ -34,6 +34,9 @@ func myQuoteText(s string) string {
 **/
 func Quoted(v et.Value) string {
 	switch v.Type {
+	case et.FIELD:
+		// A field reference is resolved by the condition against the query, never written as a literal
+		return "NULL"
 	case et.AGGREGATE:
 		return myQuoteAggregate(v.Value)
 	case et.VAL_NULL:

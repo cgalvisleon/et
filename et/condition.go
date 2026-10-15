@@ -202,6 +202,11 @@ func NewValue(v any) Value {
 	switch t := v.(type) {
 	case Value:
 		return t
+	case *Field:
+		if t != nil {
+			return Value{Type: FIELD, Value: *t}
+		}
+		return Value{Type: valueType(nil), Value: nil}
 	default:
 		return Value{Type: valueType(v), Value: v}
 	}
@@ -637,7 +642,7 @@ func ToCondition(params Json) (*Condition, error) {
 			return &Condition{
 				Field:     NewValue(fld),
 				Operator:  op,
-				Value:     NewValue(v),
+				Value:     toConditionValue(v),
 				Connector: NaC,
 			}
 		}
@@ -716,7 +721,7 @@ func (s *Condition) ToJson() Json {
 	if s.Connector == NaC {
 		return Json{
 			s.Field.String(): Json{
-				s.Operator.Str(): s.Value.Value,
+				s.Operator.Str(): jsonValue(s.Value),
 			},
 		}
 	}
@@ -724,7 +729,7 @@ func (s *Condition) ToJson() Json {
 	return Json{
 		s.Connector.Str(): Json{
 			s.Field.String(): Json{
-				s.Operator.Str(): s.Value.Value,
+				s.Operator.Str(): jsonValue(s.Value),
 			},
 		},
 	}
@@ -1390,11 +1395,16 @@ func coerceForComparison(val any, cv Value) (any, Value) {
 }
 
 /**
-* ApplyToValue
+* ApplyToValue: Whether val meets the condition. A FIELD value needs an object to read it from (ApplyToObject), so
+* here it is false.
 * @param val any
 * @return bool
 **/
 func (s *Condition) ApplyToValue(val any) bool {
+	if s.Value.Type == FIELD {
+		return false
+	}
+
 	val, cv := coerceForComparison(val, s.Value)
 	tmp := *s
 	tmp.Value = cv
@@ -1436,13 +1446,19 @@ func (s *Condition) ApplyToValue(val any) bool {
 }
 
 /**
-* ApplyToObject
+* ApplyToObject: Whether obj meets the condition. The field may be an aggregate ("sum(items)", applied to the
+* attribute) and the value a FIELD (another attribute of obj, also maybe an aggregate).
 * @param obj Json
 * @return bool
 **/
 func (s *Condition) ApplyToObject(obj Json) bool {
-	val := s.fieldValue(obj)
-	return s.ApplyToValue(val)
+	var val any
+	if fld, ok := ToField(s.Field.String()); ok && fld.Agg != nil {
+		val = fld.ValueOf(obj)
+	} else {
+		val = s.fieldValue(obj)
+	}
+	return s.resolve(obj).ApplyToValue(val)
 }
 
 /**
@@ -1757,4 +1773,31 @@ func AddCondition(conditions []*Condition, cond *Condition) []*Condition {
 		cond.Connector = AND
 	}
 	return append(conditions, cond)
+}
+
+/**
+* ToWhere
+* @param cond any
+* @return []Json
+**/
+func ToWhere(cond any) []Json {
+	switch value := cond.(type) {
+	case map[string]any:
+		result := make([]Json, 0)
+		for _, item := range value {
+			if obj, ok := item.(map[string]any); ok {
+				result = append(result, obj)
+			}
+		}
+		return result
+	case []any:
+		result := make([]Json, 0, len(value))
+		for _, item := range value {
+			if obj, ok := item.(map[string]any); ok {
+				result = append(result, obj)
+			}
+		}
+		return result
+	}
+	return nil
 }

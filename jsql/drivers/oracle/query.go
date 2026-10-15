@@ -240,6 +240,69 @@ func oraFallbackField(field, alias string) string {
 }
 
 /**
+* oraFieldValueRef: Resolves a FIELD value (an et.Field, from {"field": "name"} in a JSON condition) as the column or
+* aggregate expression of the query it names, and its type. An untyped attribute is cast to left, the type of the other
+* side, so a number compares with a number. Only fields of the query origins resolve: the name never goes to the SQL
+* as it comes.
+* @param getField func(string) (*jsql.Field, bool), val et.Value, left et.TypeData
+* @return string, et.TypeData, bool
+**/
+func oraFieldValueRef(getField func(string) (*jsql.Field, bool), val et.Value, left et.TypeData) (string, et.TypeData, bool) {
+	ref, ok := val.Value.(et.Field)
+	if !ok {
+		return "", et.ANY, false
+	}
+	fld, ok := getField(ref.Str())
+	if !ok || fld.From == nil {
+		return "", et.ANY, false
+	}
+	if fld.Agg != nil {
+		expr, ok := oraAggExpr(fld)
+		return expr, et.FLOAT, ok
+	}
+	tp := oraRefType(fld)
+	if tp == et.ANY && left != et.ANY {
+		tp = left
+	}
+	expr := oraScalarExpr(fld, tp)
+	return expr, tp, expr != ""
+}
+
+/**
+* oraRefType: The type a referenced field compares as: FLOAT for an aggregate, ANY for an untyped attribute (it takes
+* the other side's), INT for a boolean column (stored as a number).
+* @param fld *jsql.Field
+* @return et.TypeData
+**/
+func oraRefType(fld *jsql.Field) et.TypeData {
+	tp := fld.TypeData
+	switch {
+	case fld.Agg != nil:
+		return et.FLOAT
+	case fld.TypeColumn == jsql.ATTRIB && (tp == et.ANY || tp == et.TEXT || tp == et.KEY):
+		return et.ANY
+	case fld.TypeColumn == jsql.COLUMN && tp == et.BOOL:
+		return et.INT
+	}
+	return tp
+}
+
+/**
+* oraCondValueType: The type of a condition value: the referenced field's for a FIELD value, otherwise by its Go type.
+* @param getField func(string) (*jsql.Field, bool), val et.Value
+* @return et.TypeData
+**/
+func oraCondValueType(getField func(string) (*jsql.Field, bool), val et.Value) et.TypeData {
+	if ref, ok := val.Value.(et.Field); ok && val.Type == et.FIELD {
+		if fld, ok := getField(ref.Str()); ok {
+			return oraRefType(fld)
+		}
+		return et.ANY
+	}
+	return oraValueType(val.Value)
+}
+
+/**
 * oraCondExpr: Renders a single Condition as a SQL fragment.
 * Untyped attributes are read with the type of the compared value (NUMBER, TIMESTAMP, or
 * 'true'/'false' text for booleans).
@@ -255,7 +318,7 @@ func oraCondExpr(getField func(string) (*jsql.Field, bool), cond *et.Condition, 
 	} else if ok {
 		tp = fld.TypeData
 		if fld.TypeColumn == jsql.ATTRIB && (tp == et.ANY || tp == et.TEXT || tp == et.KEY) {
-			if vt := oraValueType(cond.Value.Value); vt != et.ANY {
+			if vt := oraCondValueType(getField, cond.Value); vt != et.ANY {
 				tp = vt
 			}
 		}
@@ -271,7 +334,19 @@ func oraCondExpr(getField func(string) (*jsql.Field, bool), cond *et.Condition, 
 		}
 	}
 
+	// A FIELD value is a column (or an aggregate) of the query; one that does not resolve never matches
+	fieldRef, isRef := "", cond.Value.Type == et.FIELD
+	if isRef {
+		var ok bool
+		if fieldRef, _, ok = oraFieldValueRef(getField, cond.Value, tp); !ok {
+			return "1 = 0"
+		}
+	}
+
 	value := func() string {
+		if isRef {
+			return fieldRef
+		}
 		if isJoin {
 			if ref, ok := oraJoinColumnRef(getField, cond.Value); ok {
 				return ref

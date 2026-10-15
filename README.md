@@ -44,7 +44,7 @@ Each table lists the main public API of every package. `go doc github.com/cgalvi
 
 | Package | Public API | Example |
 | --- | --- | --- |
-| `et` | `Json` (`Str`, `Int`, `Bool`, `Num`, `Time`, `Json`, `ArrayStr`, `ArrayJson`, `ValStr`, `ValInt`, `Set`, `Put`, `Clear`, `Get`, `Update`, `Clone`, `ToString`, `ToObject`), `Item`, `Items`, `List`, conditions (`Eq`, `More`, `In`, `Between`, `ToCondition`, `AddCondition`), `From(items).Where(...).All()` | `data.ValStr("Cali", "user", "city")` |
+| `et` | `Json` (`Str`, `Int`, `Bool`, `Num`, `Time`, `Json`, `ArrayStr`, `ArrayJson`, `ValStr`, `ValInt`, `Set`, `Put`, `Clear`, `Get`, `Update`, `Clone`, `ToString`, `ToObject`), `Item`, `Items`, `List`, conditions (`Eq`, `More`, `In`, `Between`, `ToCondition`, `AddCondition`, `EvaluateObject`, `EvaluateValue`, `Fld` (a field reference, `{field: "name"}` in JSON)), `From(items).Where(...).All()` | `data.ValStr("Cali", "user", "city")` |
 | `jsql` | `Load`, `LoadTo`, `ConnectTo`, `CreateDB`, `DropDB`, `TestConnection`; `DB.Define`, `DefineModel`, `Query`, `Sql`; `Model.Insert`, `Update`, `Upsert`, `Delete`, `Bulk`, `Select`, `Where`, `WhereByJson`; `Query.All`, `One`, `Limit`, `Count`; `NewTx`, `DefineSeries` (`GenSerie`, `GenSerieTx`, `GenValue`, `GenValueTx`); `Bind(source, vars)` (`{{name}}` variables); `Wrapper`, `BindWrapper`, `ToJsMapWrapper` (goja) | `users.Where(jsql.Eq("id", id)).One()` |
 | `stores` | `DefineInstance` (`Set`, `Get`, `Delete`, `Query`), `DefineAuthorization` (`SetAuthor`, `Author`, `RemoveAuthor`), `DefineConfig` (`SetConfig`, `Get`), `DefineFormState` | `ok, _ := auth.Author(profileId, "GET", "/users")` |
 | `mem` | `Set`, `Get`, `GetStr`, `GetInt`, `GetJson`, `Delete`, `Exists`, `Keys`, `Clear` | `mem.Set("k", "v", time.Minute)` |
@@ -92,7 +92,7 @@ Each table lists the main public API of every package. `go doc github.com/cgalvi
 | Package | Public API | Example |
 | --- | --- | --- |
 | `jrex` | `Load(tag, store)` → `Jrex` (`Set`, `Run`, `RunDev`, `RunModule`, `NewModule`); `NewInstance`, `NewStore` | `rt.Set("db", db).Run()` |
-| `jwf` | `New(id)` → `WorkFlow` (`NewFlow`, `Run`, `GetInstance`, `RunInstance`, `StopInstance`, `OnChange`); `Flow.Step`, `Error`, `AddStep`; `LoadFlow`, `RunCode`, `Binder`, `GoValue` (a Go value for scripts); `Instance.OnLog` / `Step.OnLog` (console); script `ctx`/`params` (`set`, `put`, `view`, `omit`, `get`…) and status bindings (`statusActive`, `statusList()`…) | `wf.Run("signup", "signup", "", "", ctx, nil, true, userId)` |
+| `jwf` | `New(id)` → `WorkFlow` (`NewFlow`, `Run`, `GetInstance`, `RunInstance`, `StopInstance`, `OnChange`); `Flow.Step`, `Error`, `AddStep`; `LoadFlow`, `RunCode`, `Binder`, `GoValue` (a Go value for scripts); `Instance.OnLog` / `Step.OnLog` (console); script `ctx`/`params` (`set`, `put`, `view`, `omit`, `get`…) and status bindings (`statusActive`, `statusList()`…); `evaluateObject`/`evaluateValue` and field references (`field`, `sum`, `year`…) | `wf.Run("signup", "signup", "", "", ctx, nil, true, userId)` |
 | `jia` | `New(tag, store, userId)`, `Load(id, store)` → `Ia` (`SetModelAgent`, `SetContextAgent`, `SetSkillAgent`, `Conversation`, `Embed`, `LoadRouter`); `NewApiSkill` | `conv, _ := ai.Conversation(ctx, "support", to, name, prompt)` |
 | `ia` | `Load(db, schema, Config)` → `Rag` (`IngestFile`, `IngestSQL`, `Ask`, `ListDocuments`, `DeleteDocument`, `ListMessages`, `LoadRouter`); `LoadIndex` → `IngestText`, `Search`, `DeleteDocumentsOf`, `DeleteProject` with an `Embedder` (`HttpEmbedder`); `ExtractFile`, `RowsText` | `rag.Ask(ctx, tenant, project, conv, user, "question")` |
 | `cmds` | `NewStage`, `NewStep`, `AppendCmd`, `RunOS`, `RunSSH`, `Load(file)` | `cmds.NewStep("build", "").AppendCmd("go build ./...")` |
@@ -205,6 +205,29 @@ token, ok, _ := cache.Get("session:u1", "")
 event.Load() // NATS_HOST
 event.Subscribe("user:created", func(m event.Message) { logs.Info(m.ToString()) })
 event.Publish("user:created", et.Json{"id": "u1"})
+```
+
+### Conditions with field references
+
+**Compare against another field, not a literal.** A condition value `{"field": "name"}` names a field: in memory it is another attribute of the evaluated object (an aggregate such as `sum(items->price)` applies to it); in a jsql query it is a column of the query, also in `havings`.
+
+```go
+conds, _ := et.ToConditions([]et.Json{
+    {"spent": et.Json{"more": et.Json{"field": "budget"}}},
+    {"or": et.Json{"total": et.Json{"less": et.Json{"field": "sum(items->price)"}}}},
+})
+ok := et.EvaluateObject(row, conds)
+
+over, _ := budgets.Query(et.Json{
+    "selects": []any{"A.id"},
+    "where":   []any{et.Json{"A.spent": et.Json{"more": et.Json{"field": "A.budget"}}}},
+}).All()
+```
+
+In jwf and jsql scripts, `field`, `sum`, `count`, `year`… build the reference:
+
+```js
+evaluateObject(params, [{age: {more_eq: field("min_age")}}, {and: {total: {eq: sum("items->price")}}}])
 ```
 
 ### Validation

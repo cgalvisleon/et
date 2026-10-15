@@ -802,5 +802,7 @@ func (s *Model) upsert(data et.Json) *Command {
 * @return *Query
 **/
 func (s *Model) query(query et.Json) *Query {
-	return s.Query(query)
+	result := s.As("")
+	_, result.err = result.loadQuery(query)
+	return result
 }

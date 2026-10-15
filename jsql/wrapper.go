@@ -18,20 +18,25 @@ const wrapRef = "__ref"
 
 /**
 * wrapper: Returns the bindings a goja (jrex) instance gets to use jsql from JavaScript: db (the model's
-* database), newTx, jsql (constructors, conditions and helpers) and bind (Bind). Every *DB, *Model, *Query, *Command,
+* database), newTx, jsql (constructors, conditions and helpers), bind (Bind) and the field references of et.FieldWrapper
+* (field, sum, count, year… → {field: "sum(x)"}, a column of the query in a where). Every *DB, *Model, *Query, *Command,
 * *Tx and *Series is exposed as an object with camelCase methods; builders return the wrapped object so
 * calls chain, et.Items/et.Item come back as JSON, and a Go error is thrown as a JavaScript exception.
 * @param db *DB
 * @return map[string]any
 **/
 func Wrapper(db *DB) map[string]any {
-	return map[string]any{
+	result := map[string]any{
 		"db":      wrapDB(db),
 		"newTx":   func() map[string]any { return wrapTx(NewTx()) },
 		"jsql":    wrapPackage(),
 		"bind":    BindWrapper(),
 		"toJsMap": ToJsMapWrapper(),
 	}
+	for name, fn := range et.FieldWrapper() {
+		result[name] = fn
+	}
+	return result
 }
 
 /**
@@ -113,33 +118,6 @@ func toModel(value any) *Model {
 func toDB(value any) *DB {
 	db, _ := unwrap(value).(*DB)
 	return db
-}
-
-/**
-* toWhere: The where of a script as a list of conditions: an object is one condition, an array is the list.
-* @param cond any
-* @return []et.Json
-**/
-func toWhere(cond any) []et.Json {
-	switch value := cond.(type) {
-	case map[string]any:
-		result := make([]et.Json, 0)
-		for _, item := range value {
-			if obj, ok := item.(map[string]any); ok {
-				result = append(result, obj)
-			}
-		}
-		return result
-	case []any:
-		result := make([]et.Json, 0, len(value))
-		for _, item := range value {
-			if obj, ok := item.(map[string]any); ok {
-				result = append(result, obj)
-			}
-		}
-		return result
-	}
-	return nil
 }
 
 /**
@@ -701,7 +679,7 @@ func wrapModel(m *Model) map[string]any {
 		},
 		"select": func(fields ...string) map[string]any { return wrapQuery(m.Select(fields...)) },
 		"calc":   func(fields ...string) map[string]any { return wrapQuery(m.Calc(fields...)) },
-		"where":  func(cond any) map[string]any { return wrapQuery(m.WhereByJson(toWhere(cond))) },
+		"where":  func(cond any) map[string]any { return wrapQuery(m.WhereByJson(et.ToWhere(cond))) },
 		"count":  m.Count,
 		"first":  func(n int) (map[string]any, error) { return itemsJson(m.First(n)) },
 		"query":  func(query et.Json) map[string]any { return wrapQuery(m.Query(query)) },
@@ -767,7 +745,7 @@ func wrapQuery(q *Query) map[string]any {
 		"master":       func(fields ...string) map[string]any { return chain(q.Master(fields...)) },
 		"hidden":       func(fields ...string) map[string]any { return chain(q.Hidden(fields...)) },
 		"addCondition": func(cond *et.Condition) map[string]any { return chain(q.AddCondition(cond)) },
-		"where":        func(cond any) map[string]any { return chain(q.WhereByJson(toWhere(cond))) },
+		"where":        func(cond any) map[string]any { return chain(q.WhereByJson(et.ToWhere(cond))) },
 		"groupBy":      func(fields ...string) map[string]any { return chain(q.GroupBy(fields...)) },
 		"having":       func(cond *et.Condition) map[string]any { return chain(q.Having(cond)) },
 		"page":         func(page int) map[string]any { return chain(q.Page(page)) },
@@ -805,17 +783,17 @@ func wrapCommand(c *Command) map[string]any {
 	var self map[string]any
 	chain := func(*Command) map[string]any { return self }
 	self = map[string]any{
-		wrapRef:  c,
-		"toJson": jsonFn(c.ToJson),
-		"debug":  func() map[string]any { return chain(c.Debug()) },
-		"test":   func() map[string]any { return chain(c.Test()) },
-		"where":  func(cond any) map[string]any { return chain(c.WhereByJson(toWhere(cond))) },
+		wrapRef:     c,
+		"toJson":    jsonFn(c.ToJson),
+		"debug":     func() map[string]any { return chain(c.Debug()) },
+		"test":      func() map[string]any { return chain(c.Test()) },
+		"where":     func(cond any) map[string]any { return chain(c.WhereByJson(et.ToWhere(cond))) },
 		"returning": func(fields ...string) map[string]any { return chain(c.Return(fields...)) },
-		"limit":  func(rows int) map[string]any { return chain(c.Limit(rows)) },
-		"execTx": func(tx any) (map[string]any, error) { return itemsJson(c.ExecTx(toTx(tx))) },
-		"exec":   func() (map[string]any, error) { return itemsJson(c.Exec()) },
-		"oneTx":  func(tx any) (map[string]any, error) { return itemJson(c.OneTx(toTx(tx))) },
-		"one":    func() (map[string]any, error) { return itemJson(c.One()) },
+		"limit":     func(rows int) map[string]any { return chain(c.Limit(rows)) },
+		"execTx":    func(tx any) (map[string]any, error) { return itemsJson(c.ExecTx(toTx(tx))) },
+		"exec":      func() (map[string]any, error) { return itemsJson(c.Exec()) },
+		"oneTx":     func(tx any) (map[string]any, error) { return itemJson(c.OneTx(toTx(tx))) },
+		"one":       func() (map[string]any, error) { return itemJson(c.One()) },
 		// Triggers (JavaScript functions: (tx, old, new) => {})
 		"beforeInsert":         func(fn TriggerFunction) map[string]any { return chain(c.BeforeInsert(fn)) },
 		"beforeUpdate":         func(fn TriggerFunction) map[string]any { return chain(c.BeforeUpdate(fn)) },

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
@@ -17,6 +18,7 @@ import (
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/timezone"
+	"github.com/cgalvisleon/et/utility"
 	"github.com/cgalvisleon/et/validator"
 	"github.com/dop251/goja"
 )
@@ -67,8 +69,19 @@ func wrapperBasic(bindings map[string]interface{}) map[string]interface{} {
 	bindings["getXID"] = reg.GetXID
 	bindings["timeNow"] = timezone.Now
 	bindings["validator"] = validator.Wrapper()
-	bindings["evaluateObject"] = et.EvaluateObjectWrapper()
-	bindings["evaluateValue"] = et.EvaluateValueWrapper()
+	evaluateObject := et.EvaluateObjectWrapper()
+	bindings["evaluateObject"] = func(obj et.Json, where map[string]any) (bool, error) {
+		list := et.ToWhere(where)
+		return evaluateObject(obj, list)
+	}
+	evaluateValue := et.EvaluateValueWrapper()
+	bindings["evaluateValue"] = func(value any, where map[string]any, obj ...et.Json) (bool, error) {
+		list := et.ToWhere(where)
+		return evaluateValue(value, list, obj...)
+	}
+	for name, fn := range et.FieldWrapper() {
+		bindings[name] = fn
+	}
 	bindings["isEditableStatus"] = IsEditableStatus
 	bindings["isExcludedStatus"] = IsExcludedStatus
 	bindings["statusList"] = statusList
@@ -88,6 +101,16 @@ func wrapperBasic(bindings map[string]interface{}) map[string]interface{} {
 	bindings["statusFailed"] = FAILED
 	bindings["statusCancel"] = CANCEL
 	bindings["Json"] = et.Json{}
+	bindings["replace"] = func(value string, obj et.Json) string {
+		result := value
+		for k, v := range obj {
+			result = strings.ReplaceAll(result, fmt.Sprintf(`{{%v}}`, k), fmt.Sprintf(`%v`, v))
+		}
+		return result
+	}
+	bindings["hash"] = func(value string) string {
+		return utility.Sha256(value)
+	}
 	return bindings
 }
 

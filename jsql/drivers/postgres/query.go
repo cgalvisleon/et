@@ -180,6 +180,37 @@ func pgJoinColumnRef(getField func(string) (*jsql.Field, bool), useSourceField b
 }
 
 /**
+* pgFieldValueRef: Resolves a FIELD value (an et.Field, from {"field": "name"} in a JSON condition) as the column or
+* aggregate expression of the query it names, and its type. An untyped attribute (text in JSONB) is cast to left, the
+* type of the other side, so a number compares with a number. Only fields of the query origins resolve: the name never
+* goes to the SQL as it comes.
+* @param getField func(string) (*jsql.Field, bool), useSourceField bool, val et.Value, left et.TypeData
+* @return string, et.TypeData, bool
+**/
+func pgFieldValueRef(getField func(string) (*jsql.Field, bool), useSourceField bool, val et.Value, left et.TypeData) (string, et.TypeData, bool) {
+	ref, ok := val.Value.(et.Field)
+	if !ok {
+		return "", et.ANY, false
+	}
+	fld, ok := getField(ref.Str())
+	if !ok || fld.From == nil {
+		return "", et.ANY, false
+	}
+	if fld.Agg != nil {
+		expr, ok := pgAggExpr(fld)
+		return expr, et.FLOAT, ok
+	}
+	expr := pgFieldExpr(fld, useSourceField)
+	tp := fld.TypeData
+	if fld.TypeColumn == jsql.ATTRIB && pgAttribCast(tp) == "" {
+		if cast := pgAttribCast(left); cast != "" && expr != "" {
+			expr, tp = fmt.Sprintf("(%s)::%s", expr, cast), left
+		}
+	}
+	return expr, tp, expr != ""
+}
+
+/**
 * pgCondExpr: Renders a single Condition as a SQL fragment using alias to qualify the field.
 * Untyped ATTRIB fields (->> text) are cast according to the compared value, so numbers,
 * booleans and times compare by value instead of failing with text = integer.
@@ -214,7 +245,31 @@ func pgCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bool, 
 		fieldExpr = f
 	}
 
+	// A FIELD value is a column (or an aggregate) of the query; one that does not resolve never matches
+	fieldRef, isRef := "", cond.Value.Type == et.FIELD
+	if isRef {
+		left, untyped := et.ANY, false
+		if lf, ok := getField(cond.Field.String()); ok && lf.Agg != nil {
+			left = et.FLOAT
+		} else if ok {
+			left = lf.TypeData
+			untyped = lf.TypeColumn == jsql.ATTRIB && useSourceField && pgAttribCast(lf.TypeData) == ""
+		}
+		var refType et.TypeData
+		var ok bool
+		if fieldRef, refType, ok = pgFieldValueRef(getField, useSourceField, cond.Value, left); !ok {
+			return "1 = 0"
+		}
+		// An untyped attribute on the left compares as the type of the field it is compared with
+		if cast := pgAttribCast(refType); untyped && cast != "" {
+			fieldExpr = fmt.Sprintf("(%s)::%s", fieldExpr, cast)
+		}
+	}
+
 	value := func() string {
+		if isRef {
+			return fieldRef
+		}
 		if isJoin {
 			if ref, ok := pgJoinColumnRef(getField, useSourceField, cond.Value); ok {
 				return ref

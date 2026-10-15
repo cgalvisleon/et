@@ -28,6 +28,9 @@ var timeLayouts = []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999", "2
 **/
 func Quoted(v et.Value) string {
 	switch v.Type {
+	case et.FIELD:
+		// A field reference is resolved by the condition against the query, never written as a literal
+		return "NULL"
 	case et.AGGREGATE:
 		return oraQuoteAggregate(v.Value)
 	case et.VAL_NULL:

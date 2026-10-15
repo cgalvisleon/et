@@ -602,6 +602,12 @@ func (s *Instance) next() bool {
 		}
 		return s.setCurrent(connection)
 	} else {
+		if s.Current.Source.Index != s.goTo {
+			connection, exists := s.flow.getOutput(s.Current.Source.StepId, s.goTo)
+			if exists {
+				s.setCurrent(connection)
+			}
+		}
 		connection, exists := s.flow.getOutput(s.Current.Target.StepId, s.goTo)
 		if !exists {
 			step, exists := s.flow.GetStep(s.Current.Target.StepId)

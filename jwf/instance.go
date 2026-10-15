@@ -540,7 +540,7 @@ func (s *Instance) setEnd(step *Step, stepId string) bool {
 func (s *Instance) setCurrent(connection *Connection) bool {
 	s.mu.Lock()
 	s.Current = connection
-	s.Step, _ = s.flow.getStep(connection.Source.StepId)
+	s.Step, _ = s.flow.GetStep(connection.Source.StepId)
 	s.StepId = connection.Source.StepId
 	s.goTo = 0
 	ok := s.Step != nil
@@ -577,6 +577,7 @@ func (s *Instance) isStop() bool {
 **/
 func (s *Instance) next() bool {
 	if s.isStop() {
+		s.setStatus(PENDING)
 		return false
 	}
 
@@ -603,7 +604,7 @@ func (s *Instance) next() bool {
 	} else {
 		connection, exists := s.flow.getOutput(s.Current.Target.StepId, s.goTo)
 		if !exists {
-			step, exists := s.flow.getStep(s.Current.Target.StepId)
+			step, exists := s.flow.GetStep(s.Current.Target.StepId)
 			if !exists {
 				return false
 			}
@@ -766,7 +767,7 @@ func (s *Instance) runError(ctx et.Json, err error) (et.Json, error) {
 		return et.Json{}, err
 	}
 
-	step, exists := s.flow.getStep(connection.Target.StepId)
+	step, exists := s.flow.GetStep(connection.Target.StepId)
 	if !exists {
 		return et.Json{}, err
 	}

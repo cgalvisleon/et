@@ -45,7 +45,14 @@ type JsqlTypeData =
   | "array_datetime";
 
 /** Kind of a column. */
-type JsqlTypeColumn = "column" | "atrib" | "detail" | "master" | "rollup" | "calc_func" | "calc";
+type JsqlTypeColumn =
+  | "column"
+  | "atrib"
+  | "detail"
+  | "master"
+  | "rollup"
+  | "calc_func"
+  | "calc";
 
 /** Comparison operator of a condition. */
 type JsqlOperator =
@@ -66,7 +73,14 @@ type JsqlOperator =
   | "not_between";
 
 /** Aggregate of a rollup. */
-type JsqlRollupOperation = "count" | "sum" | "avg" | "min" | "max" | "row" | "object";
+type JsqlRollupOperation =
+  | "count"
+  | "sum"
+  | "avg"
+  | "min"
+  | "max"
+  | "row"
+  | "object";
 
 /** A where condition, built with the jsql.* functions (eq, more, like…). Opaque. */
 interface JsqlCondition {
@@ -75,7 +89,11 @@ interface JsqlCondition {
 
 /** A where condition as JSON: {field: {operator: value}}; with where/and/or in front, its connector. */
 type JsqlWhere = { [field: string]: { [op in JsqlOperator]?: any } };
-type JsqlWhereItem = JsqlWhere | { where: JsqlWhere } | { and: JsqlWhere } | { or: JsqlWhere };
+type JsqlWhereItem =
+  | JsqlWhere
+  | { where: JsqlWhere }
+  | { and: JsqlWhere }
+  | { or: JsqlWhere };
 
 /** Map of local field → foreign field. */
 type JsqlKeys = { [field: string]: string };
@@ -155,7 +173,11 @@ interface JsqlQueryRollups {
 }
 
 /** Trigger function: change `newRecord` to change what is saved; throw to abort the command. */
-type JsqlTriggerFunction = (tx: any, oldRecord: JsqlRecord, newRecord: JsqlRecord) => void;
+type JsqlTriggerFunction = (
+  tx: any,
+  oldRecord: JsqlRecord,
+  newRecord: JsqlRecord,
+) => void;
 
 /** Calc function: set the calculated fields on `data`. */
 type JsqlCalcFunction = (tx: any, data: JsqlRecord) => void;
@@ -247,7 +269,12 @@ interface JsqlDefine {
   indexes?: { name: string; sorted?: boolean }[];
   unique?: { name: string; sorted?: boolean }[];
   required?: { name: string; sorted?: boolean }[];
-  columns?: { name: string; type_column?: JsqlTypeColumn; type_data: JsqlTypeData; default?: any }[];
+  columns?: {
+    name: string;
+    type_column?: JsqlTypeColumn;
+    type_data: JsqlTypeData;
+    default?: any;
+  }[];
   hiddens?: string[];
   omit_updates?: string[];
   details?: {
@@ -255,7 +282,12 @@ interface JsqlDefine {
     keys: JsqlKeys;
     rows?: number;
     select?: string[];
-    columns?: { name: string; type_column?: JsqlTypeColumn; type_data: JsqlTypeData; default?: any }[];
+    columns?: {
+      name: string;
+      type_column?: JsqlTypeColumn;
+      type_data: JsqlTypeData;
+      default?: any;
+    }[];
     primary_keys?: { name: string; sorted?: boolean }[];
     indexes?: { name: string; sorted?: boolean }[];
     idx_field?: string;
@@ -290,7 +322,12 @@ interface JsqlDB {
   /** Runs a JSON descriptor (query, command or define). */
   query(query: JsqlQueryDescriptor): JsqlItems;
   queryTx(tx: JsqlTx | null, query: JsqlQueryDescriptor): JsqlItems;
-  newModel(schema: string, name: string, version: number, userId: string): JsqlModel;
+  newModel(
+    schema: string,
+    name: string,
+    version: number,
+    userId: string,
+  ): JsqlModel;
   /** Drops the model's table and removes the model. */
   removeModel(schema: string, name: string): void;
   getModel(schema: string, name: string): JsqlModel;
@@ -298,9 +335,24 @@ interface JsqlDB {
    * NEW.code = db.series("app").genSerie("users", TX) */
   series(schema: string): JsqlSeries;
   define(define: JsqlDefine): JsqlModel;
-  defineModel(schema: string, name: string, version: number, userId: string): JsqlModel;
-  defineTenantModel(schema: string, name: string, version: number, userId: string): JsqlModel;
-  defineProjectModel(schema: string, name: string, version: number, userId: string): JsqlModel;
+  defineModel(
+    schema: string,
+    name: string,
+    version: number,
+    userId: string,
+  ): JsqlModel;
+  defineTenantModel(
+    schema: string,
+    name: string,
+    version: number,
+    userId: string,
+  ): JsqlModel;
+  defineProjectModel(
+    schema: string,
+    name: string,
+    version: number,
+    userId: string,
+  ): JsqlModel;
   onAuditLog(fn: (userId: string, action: string) => void): void;
 }
 
@@ -317,19 +369,66 @@ interface JsqlModel {
   // Definition
   defineSource(): JsqlColumn | null;
   defineIdxField(): JsqlIndex | null;
-  defineIndex(name: string, type: JsqlTypeData, defaultValue: any): JsqlIndex | null;
-  definePrimaryKey(name: string, type: JsqlTypeData, defaultValue: any): JsqlIndex | null;
-  defineUnique(name: string, type: JsqlTypeData, defaultValue: any): JsqlIndex | null;
-  defineRequired(name: string, type: JsqlTypeData, defaultValue: any): JsqlIndex | null;
-  defineColumn(name: string, type: JsqlTypeData, defaultValue: any): JsqlColumn | null;
-  defineAttrib(name: string, type: JsqlTypeData, defaultValue: any): JsqlColumn | null;
-  defineForeignKeys(to: JsqlModel, keys: JsqlKeys, onDeleteCascade: boolean, onUpdateCascade: boolean): JsqlDetail | null;
+  defineIndex(
+    name: string,
+    type: JsqlTypeData,
+    defaultValue: any,
+  ): JsqlIndex | null;
+  definePrimaryKey(
+    name: string,
+    type: JsqlTypeData,
+    defaultValue: any,
+  ): JsqlIndex | null;
+  defineUnique(
+    name: string,
+    type: JsqlTypeData,
+    defaultValue: any,
+  ): JsqlIndex | null;
+  defineRequired(
+    name: string,
+    type: JsqlTypeData,
+    defaultValue: any,
+  ): JsqlIndex | null;
+  defineColumn(
+    name: string,
+    type: JsqlTypeData,
+    defaultValue: any,
+  ): JsqlColumn | null;
+  defineAttrib(
+    name: string,
+    type: JsqlTypeData,
+    defaultValue: any,
+  ): JsqlColumn | null;
+  defineForeignKeys(
+    to: JsqlModel,
+    keys: JsqlKeys,
+    onDeleteCascade: boolean,
+    onUpdateCascade: boolean,
+  ): JsqlDetail | null;
   defineOmitUpdate(...names: string[]): JsqlModel;
   defineHidden(...names: string[]): JsqlModel;
   defineModel(): JsqlModel;
-  defineRollup(name: string, to: JsqlModel, keys: JsqlKeys, selects: string[], operation: JsqlRollupOperation): JsqlRollups;
-  defineDetail(name: string, keys: JsqlKeys, rows: number, ...selects: string[]): JsqlModel;
-  defineMaster(name: string, to: JsqlModel, keys: JsqlKeys, toKeys: JsqlKeys, selects: string[], rows?: number): JsqlModel;
+  defineRollup(
+    name: string,
+    to: JsqlModel,
+    keys: JsqlKeys,
+    selects: string[],
+    operation: JsqlRollupOperation,
+  ): JsqlRollups;
+  defineDetail(
+    name: string,
+    keys: JsqlKeys,
+    rows: number,
+    ...selects: string[]
+  ): JsqlModel;
+  defineMaster(
+    name: string,
+    to: JsqlModel,
+    keys: JsqlKeys,
+    toKeys: JsqlKeys,
+    selects: string[],
+    rows?: number,
+  ): JsqlModel;
   defineCalcFunc(name: string, calc: JsqlCalcFunction): JsqlModel;
   /** Calc field computed by a script that sets `item.<name>`. */
   defineCalc(name: string, script: string): JsqlModel;
@@ -437,7 +536,7 @@ interface JsqlCommand {
   /** One condition or a list, as in a query. */
   where(cond: JsqlWhereItem | JsqlWhereItem[]): JsqlCommand;
   /** Fields returned by the command (RETURNING). */
-  return(...fields: string[]): JsqlCommand;
+  returning(...fields: string[]): JsqlCommand;
   /** Rows an update or delete works on; 0 = every row that matches the where. */
   limit(rows: number): JsqlCommand;
   execTx(tx: JsqlTx | null): JsqlItems;
@@ -475,7 +574,16 @@ interface JsqlPackage {
   load(): JsqlDB;
   loadTo(dbName: string, ...hostName: string[]): JsqlDB;
   /** Connection of a driver from the keys of its GetParams; missing ones are read from DB_*. */
-  newConnection(driver: "postgres" | "sqlite" | "mysql" | "mssql" | "oracle" | (string & {}), params?: JsqlConnection): JsqlConnectionObject;
+  newConnection(
+    driver:
+      | "postgres"
+      | "sqlite"
+      | "mysql"
+      | "mssql"
+      | "oracle"
+      | (string & {}),
+    params?: JsqlConnection,
+  ): JsqlConnectionObject;
   /** Database from its params, without connecting (call init()). */
   newDB(params: JsqlConnectParams): JsqlDB;
   /** Database from its params, connected. */
@@ -513,7 +621,11 @@ interface JsqlPackage {
   notBetween(field: string, min: any, max: any): JsqlCondition;
 
   // Helpers
-  addAuditLog(auditLog: JsqlRecord[], userId: string, action: string): JsqlRecord[];
+  addAuditLog(
+    auditLog: JsqlRecord[],
+    userId: string,
+    action: string,
+  ): JsqlRecord[];
   statusList(): string[];
   /** Replaces $1, $2… in sql by the quoted args. */
   sqlParse(sql: string, ...args: any[]): string;
@@ -536,7 +648,10 @@ declare function newTx(): JsqlTx;
 /** Constructors, conditions and helpers of jsql. */
 declare const jsql: JsqlPackage;
 /** Same as jsql.bind. */
-declare function bind<T = Record<string, any>>(source: T, vars: Record<string, any>): T;
+declare function bind<T = Record<string, any>>(
+  source: T,
+  vars: Record<string, any>,
+): T;
 /** A plain copy of a Go json (keys readable, JSON.stringify works): const query = toJsMap(params.query). */
 declare function toJsMap(source: Record<string, any>): Record<string, any>;
 

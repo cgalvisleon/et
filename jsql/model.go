@@ -797,21 +797,10 @@ func (s *Model) upsert(data et.Json) *Command {
 }
 
 /**
-* queryTx: Creates a new Query for this model with the given condition as the first WHERE clause.
-* @param query et.Json
-* @return *Query
-**/
-func (s *Model) queryTx(tx *Tx, query et.Json) *Query {
-	result := s.As("")
-	_, result.err = result.loadQuery(query)
-	return result
-}
-
-/**
 * query: Creates a new Query for this model with the given condition as the first WHERE clause.
 * @param query et.Json
 * @return *Query
 **/
 func (s *Model) query(query et.Json) *Query {
-	return s.QueryTx(nil, query)
+	return s.Query(query)
 }

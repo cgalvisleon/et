@@ -668,15 +668,6 @@ func (s *Model) First(n int) (et.Items, error) {
 }
 
 /**
-* QueryTx: Creates a new Query for this model with the given condition as the first WHERE clause.
-* @param query et.Json
-* @return *Query
-**/
-func (s *Model) QueryTx(tx *Tx, query et.Json) *Query {
-	return s.queryTx(tx, query)
-}
-
-/**
 * Query: Creates a new Query for this model with the given condition as the first WHERE clause.
 * @param query et.Json
 * @return *Query

@@ -300,7 +300,7 @@ func (s *Flow) getTrigger(tag string) (*Trigger, bool) {
 * @param stepId string
 * @return *Step, bool
 **/
-func (s *Flow) getStep(stepId string) (*Step, bool) {
+func (s *Flow) GetStep(stepId string) (*Step, bool) {
 	step, exists := s.Steps[stepId]
 	if exists {
 		return step, true
@@ -353,12 +353,12 @@ func (s *Flow) addConnection(sourceId string, targetId string, index int, kind P
 		return s.Connections[idx], false
 	}
 
-	_, exists := s.getStep(sourceId)
+	_, exists := s.GetStep(sourceId)
 	if !exists {
 		return nil, false
 	}
 
-	_, exists = s.getStep(targetId)
+	_, exists = s.GetStep(targetId)
 	if !exists {
 		return nil, false
 	}

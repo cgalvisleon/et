@@ -244,6 +244,10 @@ func (s *T) HttpFoo(w http.ResponseWriter, r *http.Request) {
 - `validator`: `Values(...any)` (ver «Utility packages»), probado con un test temporal (ByJson, número `float64` contra `1, 2`, mensaje de error).
 - `request`: `Fetch`/`HttpWithContext` buscan `Content-Type` sin distinguir mayúsculas, sin él mandan un cuerpo como JSON, y en `multipart/form-data` ponen el `boundary` en el header (`request/fetch_test.go`).
 
+## Cambios del 2026-10-15 (código)
+
+- `et/wrapper.go`: `EvaluateObjectWrapper()` y `EvaluateValueWrapper()`, enlazados en los scripts de `jwf` como `evaluateObject(obj, where)` y `evaluateValue(value, where)`. `where` es un arreglo de condiciones en JSON como en un where de jsql (`[{status: {eq: "active"}}, {or: {role: {eq: "admin"}}}]`; en `evaluateValue` el nombre del campo no se usa: `[{value: {more_eq: 18}}, {and: {value: {less: 65}}}]`), convertido con `ToConditions` + `AddCondition` (sin conector después de la primera = `AND`). Una condición inválida se lanza como `Error`; una lista vacía da `true`. Probado con goja en un test temporal.
+
 ## Cambios del 2026-10-11 (documentación)
 
 - `doc/COMPONENT_CATALOG.md`: secciones `jwf` y `validator` regeneradas desde `go doc` (ByJson, ToJson, OnLog, Binder…). `LIBRARY_CONTEXT.md`, `AI_USAGE_GUIDE.md`, `ARCHITECTURE_SUMMARY.md` (flujo de `jwf` y dos problemas conocidos: el TTL del límite de peticiones y `validator`) y la tabla de paquetes de `README.md` / `doc/README.es.md` al día con los cambios de código del 2026-10-11.

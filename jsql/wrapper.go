@@ -704,10 +704,7 @@ func wrapModel(m *Model) map[string]any {
 		"where":  func(cond any) map[string]any { return wrapQuery(m.WhereByJson(toWhere(cond))) },
 		"count":  m.Count,
 		"first":  func(n int) (map[string]any, error) { return itemsJson(m.First(n)) },
-		"queryTx": func(tx any, query et.Json) map[string]any {
-			return wrapQuery(m.QueryTx(toTx(tx), query))
-		},
-		"query": func(query et.Json) map[string]any { return wrapQuery(m.Query(query)) },
+		"query":  func(query et.Json) map[string]any { return wrapQuery(m.Query(query)) },
 		// Commands
 		"insert": func(data et.Json) map[string]any { return wrapCommand(m.Insert(data)) },
 		"bulk":   func(data []et.Json) map[string]any { return wrapCommand(m.Bulk(data)) },
@@ -813,7 +810,7 @@ func wrapCommand(c *Command) map[string]any {
 		"debug":  func() map[string]any { return chain(c.Debug()) },
 		"test":   func() map[string]any { return chain(c.Test()) },
 		"where":  func(cond any) map[string]any { return chain(c.WhereByJson(toWhere(cond))) },
-		"return": func(fields ...string) map[string]any { return chain(c.Return(fields...)) },
+		"returning": func(fields ...string) map[string]any { return chain(c.Return(fields...)) },
 		"limit":  func(rows int) map[string]any { return chain(c.Limit(rows)) },
 		"execTx": func(tx any) (map[string]any, error) { return itemsJson(c.ExecTx(toTx(tx))) },
 		"exec":   func() (map[string]any, error) { return itemsJson(c.Exec()) },

@@ -67,6 +67,8 @@ func wrapperBasic(bindings map[string]interface{}) map[string]interface{} {
 	bindings["getXID"] = reg.GetXID
 	bindings["timeNow"] = timezone.Now
 	bindings["validator"] = validator.Wrapper()
+	bindings["evaluateObject"] = et.EvaluateObjectWrapper()
+	bindings["evaluateValue"] = et.EvaluateValueWrapper()
 	bindings["isEditableStatus"] = IsEditableStatus
 	bindings["isExcludedStatus"] = IsExcludedStatus
 	bindings["statusList"] = statusList

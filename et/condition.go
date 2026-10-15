@@ -112,6 +112,7 @@ const (
 	VAL_BETWEEN    TypeData = "between"
 	VAL_NULL       TypeData = "null"
 	AGGREGATE      TypeData = "aggregate"
+	FIELD          TypeData = "field"
 )
 
 func (s TypeData) Str() string {
@@ -236,6 +237,8 @@ func valueType(v any) TypeData {
 		return JSON
 	case BetweenValue:
 		return VAL_BETWEEN
+	case Field:
+		return FIELD
 	case Aggregate, *Aggregate:
 		return AGGREGATE
 	case []interface{}:
@@ -458,6 +461,22 @@ func ToField(s string) (Field, bool) {
 		As:     as,
 		Page:   page,
 	}, true
+}
+
+/**
+* Fld: Returns a Field.
+* @param name string
+* @return Field
+**/
+func Fld(name string) Field {
+	result, ok := ToField(name)
+	if !ok {
+		return Field{
+			Name: name,
+			As:   name,
+		}
+	}
+	return result
 }
 
 /**

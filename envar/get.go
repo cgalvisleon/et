@@ -10,10 +10,10 @@ import (
 
 /**
 * getValueConfig
-* @param name string, def interface{}
+* @param name string
 * @return interface{}, bool
 **/
-func getValueConfig(name string, def interface{}) (interface{}, bool) {
+func getValueConfig(name string) (interface{}, bool) {
 	_mu.RLock()
 	result, exists := _config[name]
 	_mu.RUnlock()
@@ -26,7 +26,7 @@ func getValueConfig(name string, def interface{}) (interface{}, bool) {
 * @return interface{}
 **/
 func Get(name string, def interface{}) interface{} {
-	result, exists := getValueConfig(name, def)
+	result, exists := getValueConfig(name)
 	if exists {
 		return result
 	}
@@ -34,10 +34,12 @@ func Get(name string, def interface{}) interface{} {
 	name = strings.ToUpper(name)
 	result = os.Getenv(name)
 	if _store != nil {
-		result, exists := _store.Get(name, def)
+		value, exists := _store.Get(name, def)
 		if !exists {
 			setValueConfig(name, result)
 			_store.Set(name, result)
+		} else {
+			result = value
 		}
 	}
 

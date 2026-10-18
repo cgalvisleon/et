@@ -8,6 +8,17 @@ import (
 )
 
 /**
+* setValueConfig
+* @param name string, value interface{}
+* @return void
+**/
+func setValueConfig(name string, value interface{}) {
+	_mu.Lock()
+	_config[name] = value
+	_mu.Unlock()
+}
+
+/**
 * setEnvar
 * @param name string, value interface{}
 * @return error
@@ -18,17 +29,6 @@ func setEnvar(name string, value interface{}) {
 	os.Setenv(name, val)
 
 	setValueConfig(name, value)
-}
-
-/**
-* setValueConfig
-* @param name string, value interface{}
-* @return void
-**/
-func setValueConfig(name string, value interface{}) {
-	_mu.Lock()
-	_config[name] = value
-	_mu.Unlock()
 }
 
 /**

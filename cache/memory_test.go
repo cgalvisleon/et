@@ -2,6 +2,7 @@ package cache
 
 import (
 	"slices"
+	"sync"
 	"testing"
 	"time"
 )
@@ -107,5 +108,34 @@ func TestMemStoreHashesAndKeys(t *testing.T) {
 	s.del(s.keys("app:*")...)
 	if got := s.keys(""); !slices.Equal(got, []string{"h", "other"}) {
 		t.Fatalf("keys after del = %v", got)
+	}
+}
+
+/**
+* TestMemStoreCounterKeepsExpiring: A counter incremented concurrently with a
+* short TTL (as IncrCtx does for et/router's rate limit) always ends up expiring:
+* a key that expired during incrBy used to be recreated without a TTL.
+**/
+func TestMemStoreCounterKeepsExpiring(t *testing.T) {
+	s := newMemStore()
+	defer s.close()
+
+	stop := time.Now().Add(time.Second)
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			for time.Now().Before(stop) {
+				if _, created := s.incrBy("rate", 1); created {
+					s.expire("rate", time.Millisecond)
+				}
+			}
+		})
+	}
+	wg.Wait()
+
+	time.Sleep(20 * time.Millisecond)
+	if s.exists("rate") {
+		n, _ := s.incrBy("rate", 0)
+		t.Fatalf("counter never expires: %d", n)
 	}
 }

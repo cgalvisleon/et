@@ -163,8 +163,14 @@ func (s *memStore) get(key string) (string, bool) {
 func (s *memStore) incrBy(key string, delta int64) (int64, bool) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	_, existed := s.item(key)
-	result := s.itemOrNew(key)
+	// One lookup: with two (item, then itemOrNew) a key expiring between them was
+	// recreated without expiration while reporting existed, so IncrCtx never set
+	// its TTL and the counter (e.g. et/router's rate limit) grew forever
+	result, existed := s.item(key)
+	if !existed {
+		result = &memItem{}
+		s.items[key] = result
+	}
 	n, _ := strconv.ParseInt(result.str, 10, 64)
 	n += delta
 	result.str = strconv.FormatInt(n, 10)

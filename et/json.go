@@ -272,6 +272,18 @@ func (s Json) ValStr(def string, atribs ...string) string {
 	switch v := val.(type) {
 	case string:
 		return v
+	case int, int16, int32, int64:
+		return fmt.Sprintf(`%d`, v)
+	case float64, float32:
+		return fmt.Sprintf(`%f`, v)
+	case bool:
+		return fmt.Sprintf(`%v`, v)
+	case time.Time:
+		return v.Format(time.RFC3339)
+	case time.Duration:
+		return v.String()
+	case []byte:
+		return string(v)
 	default:
 		return fmt.Sprintf(`%v`, v)
 	}

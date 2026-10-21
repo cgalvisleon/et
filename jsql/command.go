@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/jrex"
 	"github.com/cgalvisleon/et/jwf"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
@@ -364,51 +363,30 @@ func returnedOr(returned, data et.Json) et.Json {
 }
 
 /**
-* setTriggerRecords: Exposes the records to a JS trigger as OLD and NEW ("new" is a reserved word in
-* JavaScript, so a script cannot use it; "old" and "new" are still set for compatibility).
-* @param instance *jrex.Instance, old, new et.Json
+* runTrigger: Runs a JS trigger with the standard bindings of jwf, those of the model (db, jsql, TX…) and the records as
+* OLD and NEW ("new" is a reserved word in JavaScript, so a script cannot use it; "old" and "new" are still set for
+* compatibility). The records are objects over the same maps, so the changes of the script are already in them; one
+* reassigned by the script (NEW = {...}) is read back
+* @param model *Model, tx *Tx, code string, old, new et.Json
+* @return et.Json, et.Json, error
 **/
-func setTriggerRecords(instance *jrex.Instance, old, new et.Json) {
-	setJsJson(instance, "OLD", old)
-	setJsJson(instance, "NEW", new)
-	setJsJson(instance, "old", old)
-	setJsJson(instance, "new", new)
-}
-
-/**
-* getTriggerRecords: Reads back the records a JS trigger may have changed (OLD and NEW).
-* @param instance *jrex.Instance
-* @return et.Json, et.Json
-**/
-func getTriggerRecords(instance *jrex.Instance) (et.Json, et.Json) {
-	return getJsJson(instance, "OLD"), getJsJson(instance, "NEW")
-}
-
-/**
-* setJsJson: Sets a record in a JS instance as a plain map, so the script reads and writes its keys
-* as properties (goja exposes the methods of et.Json instead of its keys).
-* @param instance *jrex.Instance, name string, value et.Json
-**/
-func setJsJson(instance *jrex.Instance, name string, value et.Json) {
-	if value == nil {
-		value = et.Json{}
+func runTrigger(model *Model, tx *Tx, code string, old, new et.Json) (et.Json, et.Json, error) {
+	if old == nil {
+		old = et.Json{}
 	}
-	instance.SetBinding(name, map[string]any(value))
-}
-
-/**
-* getJsJson: Reads back a record set with setJsJson, including the changes made by the script.
-* @param instance *jrex.Instance, name string
-* @return et.Json
-**/
-func getJsJson(instance *jrex.Instance, name string) et.Json {
-	switch v := instance.Get(name).Export().(type) {
-	case map[string]any:
-		return et.Json(v)
-	case et.Json:
-		return v
+	if new == nil {
+		new = et.Json{}
 	}
-	return et.Json{}
+	bindings := model.bindings(tx)
+	bindings["OLD"] = old
+	bindings["NEW"] = new
+	bindings["old"] = old
+	bindings["new"] = new
+	_, globals, err := jwf.Run(code, bindings, "OLD", "NEW")
+	if err != nil {
+		return old, new, err
+	}
+	return globals.Json("OLD"), globals.Json("NEW"), nil
 }
 
 // maxDefaultCommandRows caps the default number of rows an update or delete works on when no limit is set.
@@ -541,15 +519,11 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 		}
 
 		for _, script := range s.BeforeInserts {
-			instance := jrex.NewInstance()
-			instance.SetCode(script.Code)
-			model.wrapper(instance, tx)
-			setTriggerRecords(instance, s.Old, s.New)
-			_, err := instance.Run()
+			old, new, err := runTrigger(model, tx, script.Code, s.Old, s.New)
 			if err != nil {
 				return et.Items{}, err
 			}
-			s.Old, s.New = getTriggerRecords(instance)
+			s.Old, s.New = old, new
 		}
 
 		sql, err := s.db.command(s)
@@ -577,15 +551,11 @@ func (s *Command) insert(tx *Tx) (et.Items, error) {
 		}
 
 		for _, script := range s.AfterInserts {
-			instance := jrex.NewInstance()
-			instance.SetCode(script.Code)
-			model.wrapper(instance, tx)
-			setTriggerRecords(instance, s.Old, s.New)
-			_, err := instance.Run()
+			old, new, err := runTrigger(model, tx, script.Code, s.Old, s.New)
 			if err != nil {
 				return et.Items{}, err
 			}
-			s.Old, s.New = getTriggerRecords(instance)
+			s.Old, s.New = old, new
 		}
 
 		result.Add(returnedOr(returned, s.New))
@@ -625,15 +595,11 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 		}
 
 		for _, script := range s.BeforeUpdates {
-			instance := jrex.NewInstance()
-			instance.SetCode(script.Code)
-			model.wrapper(instance, tx)
-			setTriggerRecords(instance, s.Old, s.New)
-			_, err := instance.Run()
+			old, new, err := runTrigger(model, tx, script.Code, s.Old, s.New)
 			if err != nil {
 				return et.Items{}, err
 			}
-			s.Old, s.New = getTriggerRecords(instance)
+			s.Old, s.New = old, new
 		}
 		model.restoreOmitUpdates(s.Old, s.New)
 
@@ -662,15 +628,11 @@ func (s *Command) update(tx *Tx) (et.Items, error) {
 		}
 
 		for _, script := range s.AfterUpdates {
-			instance := jrex.NewInstance()
-			instance.SetCode(script.Code)
-			model.wrapper(instance, tx)
-			setTriggerRecords(instance, s.Old, s.New)
-			_, err := instance.Run()
+			old, new, err := runTrigger(model, tx, script.Code, s.Old, s.New)
 			if err != nil {
 				return et.Items{}, err
 			}
-			s.Old, s.New = getTriggerRecords(instance)
+			s.Old, s.New = old, new
 		}
 
 		result.Add(returnedOr(returned, s.New))
@@ -709,15 +671,11 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 		}
 
 		for _, script := range s.BeforeDeletes {
-			instance := jrex.NewInstance()
-			instance.SetCode(script.Code)
-			model.wrapper(instance, tx)
-			setTriggerRecords(instance, s.Old, s.New)
-			_, err := instance.Run()
+			old, new, err := runTrigger(model, tx, script.Code, s.Old, s.New)
 			if err != nil {
 				return et.Items{}, err
 			}
-			s.Old, s.New = getTriggerRecords(instance)
+			s.Old, s.New = old, new
 		}
 
 		sql, err := s.db.command(s)
@@ -744,15 +702,11 @@ func (s *Command) delete(tx *Tx) (et.Items, error) {
 		}
 
 		for _, script := range s.AfterDeletes {
-			instance := jrex.NewInstance()
-			instance.SetCode(script.Code)
-			model.wrapper(instance, tx)
-			setTriggerRecords(instance, s.Old, s.New)
-			_, err := instance.Run()
+			old, new, err := runTrigger(model, tx, script.Code, s.Old, s.New)
 			if err != nil {
 				return et.Items{}, err
 			}
-			s.Old, s.New = getTriggerRecords(instance)
+			s.Old, s.New = old, new
 		}
 
 		result.Add(returnedOr(returned, s.Old))

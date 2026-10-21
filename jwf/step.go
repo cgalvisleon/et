@@ -124,7 +124,7 @@ func (s *Step) Up() *Step {
 	if s.onStatus == nil {
 		s.onStatus = func(status Status) {}
 	}
-	s.bindings = wrapper(s.bindings)
+	s.bindings = Bindings(s.bindings)
 	s.wrapperParams()
 	s.wrapperCtx()
 	return s

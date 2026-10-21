@@ -18,8 +18,7 @@ const (
 )
 
 var (
-	hostName, _  = os.Hostname()
-	ErrJobExists = fmt.Errorf("job already exists")
+	hostName, _ = os.Hostname()
 )
 
 type Store interface {
@@ -91,12 +90,8 @@ func (s *Crontab) Debug() *Crontab {
 * @return *Job, error
 **/
 func (s *Crontab) addJob(job *Job) error {
-	s.mu.Lock()
-	_, exists := s.Jobs[job.ID]
-	s.mu.Unlock()
-	if exists {
-		return ErrJobExists
-	}
+	// Un job con el mismo id (tag) es un registro anterior: se reemplaza
+	s.removeJob(job.ID, job.Rev)
 
 	s.mu.Lock()
 	s.Jobs[job.ID] = job
@@ -119,15 +114,15 @@ func (s *Crontab) addJob(job *Job) error {
 }
 
 /**
-* removeJob
-* @param tag string
+* removeJob: Quita el job salvo que sea la revisión keep (el registro que lo reemplaza)
+* @param id, keep string
 * @return bool
 **/
-func (s *Crontab) removeJob(id string) bool {
+func (s *Crontab) removeJob(id, keep string) bool {
 	s.mu.Lock()
 	job, exists := s.Jobs[id]
 	s.mu.Unlock()
-	if !exists {
+	if !exists || (keep != "" && job.Rev == keep) {
 		return false
 	}
 

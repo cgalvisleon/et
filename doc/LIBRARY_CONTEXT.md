@@ -8,7 +8,7 @@
 
 `et` es una librería modular para microservicios, CLIs y aplicaciones web en Go. Son unos 50 paquetes independientes; cada servicio importa solo los que usa.
 
-Cubre el backend completo: datos (`et.Json`), persistencia SQL multi-motor (`jsql`), HTTP (`router`, `server`, `ettp`), infraestructura (`cache`, `event`), seguridad (`jwt`, `claim`), orquestación (`jwf`, `crontab`, `resilience`, `queue`), scripting (`jrex`), IA (`ia`, `jia`) y mensajería (`brevo`, `infobip`, `aws`, `jwsp`).
+Cubre el backend completo: datos (`et.Json`), persistencia SQL multi-motor (`jsql`), HTTP (`router`, `server`, `ettp`), infraestructura (`cache`, `event`), seguridad (`jwt`, `claim`), orquestación (`jwf`, `crontab`, `resilience`, `queue`), scripting (`jwf` con `et.ToJS`), IA (`ia`, `jia`) y mensajería (`brevo`, `infobip`, `aws`, `jwsp`).
 
 Lo consumen `core-studio/api`, `postick/api`, `tick` y otros proyectos del mismo autor.
 
@@ -24,7 +24,7 @@ Lo consumen `core-studio/api`, `postick/api`, `tick` y otros proyectos del mismo
 
 ```
 Aplicación     router · server · ettp/v2 · ettp/v1 · jrpc · jtcp · jws
-Orquestación   jwf · jrex · jia · ia · crontab · resilience · queue · service
+Orquestación   jwf · jia · ia · crontab · resilience · queue · service
 Persistencia   jsql (+ drivers) · stores · cache · dt · mem · ephemeral · graph
 Mensajería     event (NATS) · aws · brevo · infobip · jwsp
 Base           et · envar · logs · stdrout · reg · strs · utility · timezone · validator · msg
@@ -45,7 +45,6 @@ Detalle de dependencias y flujos en `ARCHITECTURE_SUMMARY.md`.
 | `jwt`, `claim`, `middleware` | Tokens, claims y autenticación HTTP. |
 | `jwf` | Workflows en memoria con pasos Go o JS y reintentos. En un script, `params` y `ctx` son objetos dinámicos (`params.email`, `ctx.total = 5`, `JSON.stringify(ctx)`, y siguen `.str("x")`, `.set({...})`…); `console.*` va al log del servidor y a `OnLog` de la instancia o del paso; un paso suelto (`RunScript(nil, ctx)`) devuelve el último valor del script si es un objeto. |
 | `crontab`, `resilience`, `queue` | Tareas programadas, reintentos y lotes. |
-| `jrex` | Runtime JavaScript (goja). |
 | `ia`, `jia` | RAG multitenant y agentes OpenAI. |
 
 # Public APIs
@@ -94,7 +93,7 @@ q := queue.New[T](size, maxEvents, period, handler)
 - Escribir `json.Marshal` + `w.Write` en lugar de `response.*`.
 - Concatenar SQL a mano fuera de un driver.
 - Llamar `cache.Load()`/`event.Load()` en cada request.
-- Pasar `stores.Instance` como `Store` de `crontab`/`jia`/`jrex` (firma distinta).
+- Pasar `stores.Instance` como `Store` de `crontab`/`jia` (firma distinta).
 - Copiar ejemplos con APIs eliminadas: `jval`, `config`, `jsql.Store`, `jsql.Def`, `jwf.Load`, `jwf.Store`, `NewFloW`, `resilience.New(store)`, `cache.ErrNotFound`.
 - Confiar en `jsql.LoadDb` (hoy entra en pánico) o en `dt` sin `PRODUCTION=true`.
 - Configurar `DB_TENANT_ID` o `DB_POOL_CONN_LIFETIME`: `jsql` no los lee (las de pool son `DB_POOL_LIFETIME` / `DB_POOL_IDLE_TIME`).
@@ -106,7 +105,7 @@ q := queue.New[T](size, maxEvents, period, handler)
 | Nuevo motor SQL | `jsql.Driver` (+ `jsql.Tester` opcional) | `jsql/drivers/<nombre>`, registro en `init()` |
 | Lógica antes/después de un comando | `jsql.TriggerFunction func(tx *Tx, old, new et.Json) error` o script JS | `Model.BeforeInsert(...)`, `DefineBeforeInsert(name, code, version)` |
 | Campo calculado | `jsql.CalcFunction` o script JS | `DefineCalcFunc`, `DefineCalc` |
-| Persistencia de cron / agentes / scripts | `crontab.Store`, `jia.Store`, `jrex.Store` | implementación propia |
+| Persistencia de cron / agentes / scripts | `crontab.Store`, `jia.Store` | implementación propia |
 | Persistencia de workflows | `WorkFlow.OnChange(fn)` / `Flow.OnChange(fn)` | hook |
 | Skill de agente | `jia.Skill` | `jia.NewApiSkill(...)` o propia |
 | Autenticación / autorización | `func(http.Handler) http.Handler` | `api.UseAuthentication`, `api.UseAuthorization` |
@@ -141,7 +140,7 @@ q := queue.New[T](size, maxEvents, period, handler)
 | Cron | `crontab` | robfig/cron | Sin NATS disponible |
 | Reintentos | `resilience` | cenkalti/backoff | Backoff exponencial con jitter |
 | Workflows | `jwf` | Temporal | Durabilidad fuerte entre reinicios |
-| JS embebido | `jrex` | goja directo | Nunca |
+| JS embebido | `jwf.Run` / `jwf.RunCode` con `et.ToJS`/`et.FromJS` | goja directo | Nunca |
 | LLM | `ia`, `jia` (OpenAI) | SDK de otro proveedor | Proveedor distinto de OpenAI |
 | Excel / CSV | `xls`, `csv` | excelize directo | Formato o estilos avanzados |
 

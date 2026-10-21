@@ -17,7 +17,7 @@ import (
 const wrapRef = "__ref"
 
 /**
-* wrapper: Returns the bindings a goja (jrex) instance gets to use jsql from JavaScript: db (the model's
+* wrapper: Returns the bindings a goja (jwf) script gets to use jsql from JavaScript: db (the model's
 * database), newTx, jsql (constructors, conditions and helpers), bind (Bind) and the field references of et.FieldWrapper
 * (field, sum, count, year… → {field: "sum(x)"}, a column of the query in a where). Every *DB, *Model, *Query, *Command,
 * *Tx and *Series is exposed as an object with camelCase methods; builders return the wrapped object so
@@ -40,16 +40,17 @@ func Wrapper(db *DB) map[string]any {
 }
 
 /**
-* BindWrapper: Bind as a script (goja) sees it: bind(source, vars) gives a plain object with the {{name}} variables of
-* source applied (see Bind), so its keys are read as properties
+* BindWrapper: Bind as a script (goja) sees it: bind(source, vars) gives source (an object or a list, as a where) with
+* its {{name}} variables applied (see Bind)
 *
 *	const query = bind(params.query, { status: ["active"], rows: 30 })
+*	const where = bind(params.where, ctx) // [{id: {eq: "{{id}}"}}]
 *
-* @return func(source, vars et.Json) map[string]any
+* @return func(source any, vars et.Json) any
 **/
-func BindWrapper() func(source, vars et.Json) map[string]any {
-	return func(source, vars et.Json) map[string]any {
-		return toJsMap(Bind(source, vars))
+func BindWrapper() func(source any, vars et.Json) any {
+	return func(source any, vars et.Json) any {
+		return toJs(bindValue(source, vars))
 	}
 }
 
@@ -72,8 +73,11 @@ func ToJsMapWrapper() func(source et.Json) map[string]any {
 * @return any
 **/
 func unwrap(value any) any {
-	if m, ok := value.(map[string]any); ok {
-		return m[wrapRef]
+	switch v := value.(type) {
+	case map[string]any:
+		return v[wrapRef]
+	case et.Json:
+		return v[wrapRef]
 	}
 	return value
 }
@@ -601,7 +605,7 @@ func wrapModel(m *Model) map[string]any {
 			return chain(m.DefineCalcFunc(name, calc))
 		},
 		"defineCalc": func(name, script string) map[string]any { return chain(m.DefineCalc(name, script)) },
-		// Triggers: a script (code) the model keeps and runs with jrex on every insert, update or delete, with OLD and
+		// Triggers: a script (code) the model keeps and runs with jwf on every insert, update or delete, with OLD and
 		// NEW (it can change NEW before saving; a throw cancels). Not a JavaScript function: the model is shared and
 		// outlives this script's runtime
 		"beforeInsert": func(name, code string, version int) map[string]any {

@@ -111,7 +111,7 @@ func (s *Wheres) ToJson() (Json, error) {
 	}
 
 	var result Json
-	err = json.Unmarshal(bt, &result)
+	err = decodeJSON(bt, &result)
 	if err != nil {
 		return nil, err
 	}

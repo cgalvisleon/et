@@ -37,6 +37,7 @@ type Job struct {
 	UpdatedAt   time.Time     `json:"updated_at"`
 	OwnerId     string        `json:"owner_id"`
 	ID          string        `json:"id"`
+	Rev         string        `json:"rev"`
 	Type        TypeJob       `json:"type"`
 	Tag         string        `json:"tag"`
 	Spec        string        `json:"spec"`
@@ -57,18 +58,18 @@ type Job struct {
 }
 
 /**
-* newJob
+* newJob: El id del job es su tag (registrar el mismo tag lo reemplaza); rev distingue cada registro
 * @param tp TypeJob, tag, ownerId, spec string, params et.Json, repetitions int
 * @return *Job
 **/
 func newJob(tp TypeJob, tag, ownerId, spec string, params et.Json, repetitions int) *Job {
 	now := timezone.Now()
-	id := reg.UUID()
 	result := &Job{
 		CreatedAt:   now,
 		UpdatedAt:   now,
 		OwnerId:     ownerId,
-		ID:          id,
+		ID:          tag,
+		Rev:         reg.UUID(),
 		Type:        tp,
 		Tag:         tag,
 		Spec:        spec,
@@ -77,7 +78,6 @@ func newJob(tp TypeJob, tag, ownerId, spec string, params et.Json, repetitions i
 		Repetitions: repetitions,
 		idx:         -1,
 	}
-	event.Publish(EVENT_CRONTAB_SET, result.ToJson())
 	return result
 }
 
@@ -91,6 +91,7 @@ func (s *Job) ToJson() et.Json {
 		"updated_at":  timezone.Format(s.UpdatedAt, timezone.RFC3339),
 		"owner_id":    s.OwnerId,
 		"id":          s.ID,
+		"rev":         s.Rev,
 		"type":        s.Type,
 		"tag":         s.Tag,
 		"spec":        s.Spec,
@@ -238,7 +239,7 @@ func (s *Job) start() error {
 	}
 
 	now := timezone.Now()
-	shotTime, err := timezone.Parse(time.RFC3339, s.Spec)
+	shotTime, err := time.Parse(time.RFC3339, s.Spec)
 	if err != nil {
 		return err
 	}

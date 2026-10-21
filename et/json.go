@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"math"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -31,22 +31,28 @@ type Json map[string]interface{}
 * @return error
 **/
 func (s *Json) Scan(src interface{}) error {
-	var ba []byte
+	var text string
 	switch v := src.(type) {
+	case nil:
+		// A NULL column.
+		*s = Json{}
+		return nil
 	case []byte:
-		ba = v
+		text = string(v)
 	case string:
-		ba = []byte(v)
+		text = v
+	case Json:
+		*s = v
+		return nil
 	case map[string]interface{}:
 		*s = Json(v)
 		return nil
 	default:
-		return fmt.Errorf(MSG_FAILED_TO_UNMARSHAL_JSON_VALUE, src)
+		return fmt.Errorf(MSG_FAILED_TO_UNMARSHAL_JSON_VALUE, fmt.Sprintf("%v", src))
 	}
 
 	t := map[string]interface{}{}
-	err := json.Unmarshal(ba, &t)
-	if err != nil {
+	if err := parseJSON(text, &t); err != nil {
 		return err
 	}
 
@@ -93,7 +99,7 @@ func (s *Json) ScanRows(rows *sql.Rows) error {
 			result[col] = nil
 		case []byte:
 			var bt interface{}
-			err = json.Unmarshal(v, &bt)
+			err = decodeJSON(v, &bt)
 			if err != nil {
 				result[col] = byteVal(v)
 				continue
@@ -110,7 +116,7 @@ func (s *Json) ScanRows(rows *sql.Rows) error {
 				continue
 			}
 			var bt interface{}
-			if err := json.Unmarshal([]byte(v), &bt); err != nil {
+			if err := parseJSON(v, &bt); err != nil {
 				result[col] = v
 				continue
 			}
@@ -144,7 +150,7 @@ func (s Json) ToByte() ([]byte, error) {
 * @return error
 **/
 func (s Json) ToObject(dest any) error {
-	bt, err := json.Marshal(s.ToString())
+	bt, err := json.Marshal(s)
 	if err != nil {
 		return err
 	}
@@ -178,7 +184,7 @@ func (s Json) ToEscapeHTML() string {
 	encoder.SetEscapeHTML(false)
 	err := encoder.Encode(s)
 	if err != nil {
-		panic(err)
+		return ""
 	}
 
 	return strings.TrimSuffix(buf.String(), "\n")
@@ -249,6 +255,13 @@ func (s Json) ValAny(def interface{}, atribs ...string) (result interface{}) {
 				return
 			}
 			src = result
+		case interface{ JsonValue() Json }:
+			result, ok = v.JsonValue()[atrib]
+			if !ok {
+				result = def
+				return
+			}
+			src = result
 		default:
 			result = def
 			return
@@ -270,22 +283,11 @@ func (s Json) ValStr(def string, atribs ...string) string {
 	}
 
 	switch v := val.(type) {
-	case string:
-		return v
-	case int, int16, int32, int64:
-		return fmt.Sprintf(`%d`, v)
-	case float64, float32:
-		return fmt.Sprintf(`%f`, v)
-	case bool:
-		return fmt.Sprintf(`%v`, v)
 	case time.Time:
 		return v.Format(time.RFC3339)
-	case time.Duration:
-		return v.String()
-	case []byte:
-		return string(v)
 	default:
-		return fmt.Sprintf(`%v`, v)
+		// Numbers keep their own decimals: 1 → "1", 3.10 → "3.1".
+		return stringOf(v)
 	}
 }
 
@@ -300,28 +302,12 @@ func (s Json) ValInt(def int, atribs ...string) int {
 		return def
 	}
 
-	switch v := val.(type) {
-	case int:
-		return v
-	case float64:
-		return int(v)
-	case float32:
-		return int(v)
-	case int16:
-		return int(v)
-	case int32:
-		return int(v)
-	case int64:
-		return int(v)
-	case string:
-		i, err := strconv.Atoi(v)
-		if err != nil {
-			return def
-		}
-		return i
-	default:
+	i, ok := intOf(val)
+	if !ok || i > math.MaxInt || i < math.MinInt {
 		return def
 	}
+
+	return int(i)
 }
 
 /**
@@ -335,28 +321,12 @@ func (s Json) ValInt64(def int64, atribs ...string) int64 {
 		return def
 	}
 
-	switch v := val.(type) {
-	case int:
-		return int64(v)
-	case float64:
-		return int64(v)
-	case float32:
-		return int64(v)
-	case int16:
-		return int64(v)
-	case int32:
-		return int64(v)
-	case int64:
-		return v
-	case string:
-		i, err := strconv.ParseInt(v, 10, 64)
-		if err != nil {
-			return def
-		}
-		return i
-	default:
+	i, ok := intOf(val)
+	if !ok {
 		return def
 	}
+
+	return i
 }
 
 /**
@@ -370,28 +340,12 @@ func (s Json) ValNum(def float64, atribs ...string) float64 {
 		return def
 	}
 
-	switch v := val.(type) {
-	case int:
-		return float64(v)
-	case float64:
-		return v
-	case float32:
-		return float64(v)
-	case int16:
-		return float64(v)
-	case int32:
-		return float64(v)
-	case int64:
-		return float64(v)
-	case string:
-		i, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return def
-		}
-		return i
-	default:
+	f, ok := floatOfAny(val)
+	if !ok {
 		return def
 	}
+
+	return f
 }
 
 /**
@@ -405,26 +359,13 @@ func (s Json) ValBool(def bool, atribs ...string) bool {
 		return def
 	}
 
-	switch v := val.(type) {
-	case bool:
-		return v
-	case int:
-		return v == 1
-	case int64:
-		// SQLite has no boolean type: EXISTS and 0/1 columns come back as int64.
-		return v == 1
-	case string:
-		switch strings.ToLower(v) {
-		case "true":
-			return true
-		case "false":
-			return false
-		default:
-			return def
-		}
-	default:
+	// SQLite has no boolean type: EXISTS and 0/1 columns come back as numbers.
+	b, ok := boolOf(val)
+	if !ok {
 		return def
 	}
+
+	return b
 }
 
 /**
@@ -440,11 +381,15 @@ func (s Json) ValTime(def time.Time, atribs ...string) time.Time {
 
 	switch v := val.(type) {
 	case string:
-		layouts := []string{time.RFC3339, time.RFC3339Nano, "2006-01-02T15:04:05.000Z"}
+		layouts := []string{time.RFC3339, time.RFC3339Nano, "2006-01-02T15:04:05.000Z", "2006-01-02T15:04:05"}
+		v = strings.TrimSpace(v)
 		for _, layout := range layouts {
 			if result, err := time.Parse(layout, v); err == nil {
 				return result
 			}
+		}
+		if result, ok := parseDate(v); ok {
+			return result
 		}
 		return def
 	case time.Time:
@@ -495,10 +440,11 @@ func (s Json) ValJson(def Json, atribs ...string) Json {
 		return v
 	case map[string]interface{}:
 		return Json(v)
+	case interface{ JsonValue() Json }:
+		return v.JsonValue()
 	case string:
 		var result Json
-		err := json.Unmarshal([]byte(v), &result)
-		if err != nil {
+		if err := parseJSON(v, &result); err != nil || result == nil {
 			return def
 		}
 
@@ -510,7 +456,7 @@ func (s Json) ValJson(def Json, atribs ...string) Json {
 		}
 
 		var result Json
-		err = json.Unmarshal(src, &result)
+		err = decodeJSON(src, &result)
 		if err != nil {
 			return def
 		}
@@ -587,13 +533,20 @@ func (s Json) ValArray(def []interface{}, atribs ...string) []interface{} {
 			result[i] = item
 		}
 		return result
+	case string:
+		// A list that arrives as JSON text.
+		result := []interface{}{}
+		if err := parseJSON(v, &result); err != nil {
+			return def
+		}
+		return result
 	default:
 		result := []interface{}{}
 		bt, err := json.Marshal(v)
 		if err != nil {
 			return def
 		}
-		if err := json.Unmarshal(bt, &result); err != nil {
+		if err := decodeJSON(bt, &result); err != nil {
 			return def
 		}
 		return result
@@ -640,6 +593,12 @@ func (s Json) FromBase64(atribs ...string) string {
 		return result
 	}
 
+	// Values encoded before ToBase64 stopped quoting them hold a JSON string.
+	var quoted string
+	if len(bt) >= 2 && bt[0] == '"' && json.Unmarshal(bt, &quoted) == nil {
+		return quoted
+	}
+
 	return string(bt)
 }
 
@@ -649,13 +608,7 @@ func (s Json) FromBase64(atribs ...string) string {
 * @return string
 **/
 func (s Json) ToBase64(atribs ...string) string {
-	result := s.Str(atribs...)
-	bt, err := json.Marshal(result)
-	if err != nil {
-		return result
-	}
-
-	return base64.StdEncoding.EncodeToString(bt)
+	return base64.StdEncoding.EncodeToString([]byte(s.Str(atribs...)))
 }
 
 /**
@@ -701,6 +654,14 @@ func (s Json) Bool(atribs ...string) bool {
 **/
 func (s Json) Byte(atribs ...string) ([]byte, error) {
 	value := s.ValAny([]byte{}, atribs...)
+	switch v := value.(type) {
+	case []byte:
+		return v, nil
+	case string:
+		// A text (e.g. JSON saved as text) as it is, not quoted again.
+		return []byte(v), nil
+	}
+
 	bytes, err := json.Marshal(value)
 	if err != nil {
 		return nil, err
@@ -736,7 +697,7 @@ func (s Json) MapStr(atrib string) map[string]string {
 	result := map[string]string{}
 	jsonValue := s.ValJson(Json{}, atrib)
 	for k, v := range jsonValue {
-		result[k] = fmt.Sprintf("%v", v)
+		result[k] = stringOf(v)
 	}
 	return result
 }
@@ -750,9 +711,8 @@ func (s Json) MapInt(atrib string) map[string]int {
 	result := map[string]int{}
 	jsonValue := s.ValJson(Json{}, atrib)
 	for k, v := range jsonValue {
-		val, err := strconv.Atoi(fmt.Sprintf("%v", v))
-		if err == nil {
-			result[k] = val
+		if val, ok := intOf(v); ok {
+			result[k] = int(val)
 		}
 	}
 	return result
@@ -767,8 +727,7 @@ func (s Json) MapFloat(atrib string) map[string]float64 {
 	result := map[string]float64{}
 	jsonValue := s.ValJson(Json{}, atrib)
 	for k, v := range jsonValue {
-		val, err := strconv.ParseFloat(fmt.Sprintf("%v", v), 64)
-		if err == nil {
+		if val, ok := floatOfAny(v); ok {
 			result[k] = val
 		}
 	}
@@ -793,12 +752,7 @@ func (s Json) ArrayBytes(atribs ...string) [][]byte {
 	vals := s.Array(atribs...)
 	result := make([][]byte, 0, len(vals))
 	for _, val := range vals {
-		switch v := val.(type) {
-		case string:
-			result = append(result, []byte(v))
-		default:
-			result = append(result, []byte(fmt.Sprintf(`%v`, v)))
-		}
+		result = append(result, []byte(stringOf(val)))
 	}
 
 	return result
@@ -812,12 +766,7 @@ func (s Json) ArrayStr(atribs ...string) []string {
 	vals := s.Array(atribs...)
 	result := make([]string, 0, len(vals))
 	for _, val := range vals {
-		switch v := val.(type) {
-		case string:
-			result = append(result, v)
-		default:
-			result = append(result, fmt.Sprintf(`%v`, v))
-		}
+		result = append(result, stringOf(val))
 	}
 
 	return result
@@ -832,9 +781,8 @@ func (s Json) ArrayInt(atribs ...string) []int {
 	vals := s.Array(atribs...)
 	result := make([]int, 0, len(vals))
 	for _, val := range vals {
-		v, ok := val.(int)
-		if ok {
-			result = append(result, v)
+		if v, ok := intOf(val); ok {
+			result = append(result, int(v))
 		}
 	}
 
@@ -850,8 +798,7 @@ func (s Json) ArrayInt64(atribs ...string) []int64 {
 	vals := s.Array(atribs...)
 	result := make([]int64, 0, len(vals))
 	for _, val := range vals {
-		v, ok := val.(int64)
-		if ok {
+		if v, ok := intOf(val); ok {
 			result = append(result, v)
 		}
 	}
@@ -868,8 +815,7 @@ func (s Json) ArrayNumber(atribs ...string) []float64 {
 	vals := s.Array(atribs...)
 	result := make([]float64, 0, len(vals))
 	for _, val := range vals {
-		v, ok := val.(float64)
-		if ok {
+		if v, ok := floatOfAny(val); ok {
 			result = append(result, v)
 		}
 	}
@@ -891,21 +837,21 @@ func (s Json) ArrayJson(atribs ...string) []Json {
 			result = append(result, v)
 		case map[string]interface{}:
 			result = append(result, v)
+		case interface{ JsonValue() Json }:
+			result = append(result, v.JsonValue())
 		case string:
 			var item Json
-			err := json.Unmarshal([]byte(v), &item)
-			if err == nil {
+			if err := parseJSON(v, &item); err == nil && item != nil {
 				result = append(result, item)
 				continue
 			}
 			var items []Json
-			err = json.Unmarshal([]byte(v), &items)
-			if err == nil {
+			if err := parseJSON(v, &items); err == nil {
 				result = append(result, items...)
-				continue
 			}
 		default:
-			return result
+			// Not an object: skipped, the rest of the list still counts.
+			continue
 		}
 	}
 
@@ -1073,6 +1019,13 @@ func (s Json) Get(keys ...string) (result interface{}) {
 				return
 			}
 			result = val
+		case interface{ JsonValue() Json }:
+			val, ok = v.JsonValue()[key]
+			if !ok {
+				result = nil
+				return
+			}
+			result = val
 		default:
 			result = nil
 		}
@@ -1097,7 +1050,7 @@ func (j Json) SetNested(keys []string, value interface{}) {
 		}
 
 		// aseguramos que sea map
-		next, ok := m[k].(map[string]interface{})
+		next, ok := asJson(m[k])
 		if !ok {
 			next = map[string]interface{}{}
 			m[k] = next

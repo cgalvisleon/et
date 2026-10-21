@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/jrex"
+	"github.com/cgalvisleon/et/jwf"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 )
@@ -1192,16 +1192,14 @@ func (s *Query) setCalc(tx *Tx, item et.Json) (et.Json, error) {
 		if code == "" {
 			continue
 		}
-		instance := jrex.NewInstance()
-		instance.SetCode(code)
-		calc.Model.wrapper(instance, nil)
-		setJsJson(instance, "item", item)
-		instance.SetBinding("tx", tx)
-		_, err := instance.Run()
+		bindings := calc.Model.bindings(nil)
+		bindings["item"] = item
+		bindings["tx"] = tx
+		_, globals, err := jwf.Run(code, bindings, "item")
 		if err != nil {
 			return item, err
 		}
-		item = getJsJson(instance, "item")
+		item = globals.Json("item")
 	}
 
 	return item, nil

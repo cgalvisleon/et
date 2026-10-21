@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -14,25 +13,65 @@ import (
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
+	"github.com/cgalvisleon/et/timezone"
+	"github.com/robfig/cron/v3"
 )
 
 var crontab *Crontab
 
+// QUEUE_JOBS: la cola de job:<tag>; entre varias instancias, cada disparo lo atiende una sola
+const QUEUE_JOBS = "crontab:jobs"
+
+// specParser: el formato de los jobs cron (con segundos, como cron.WithSeconds) y los descriptores (@daily, @every 1h)
+var specParser = cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+
 /**
-* eventFunc
+* channelOf: El canal en que se publica cada disparo de un job
+* @param tag string
+* @return string
+**/
+func channelOf(tag string) string {
+	return fmt.Sprintf("job:%s", tag)
+}
+
+/**
+* listen: Atiende los disparos de un job con fn, en la cola QUEUE_JOBS y con una sola suscripción por tag
 * @param job *Job, fn func(params et.Json) error
 * @return error
 **/
-func eventFunc(job *Job, fn func(params et.Json) error) error {
-	channel := fmt.Sprintf("job:%s", job.Tag)
-	event.Subscribe(channel, func(msg event.Message) {
+func listen(job *Job, fn func(params et.Json) error) error {
+	channel := channelOf(job.Tag)
+	// event guarda una suscripción por canal: la anterior se cancela antes, o quedaría viva y repetiría cada disparo
+	if err := event.Unsubscribe(channel); err != nil {
+		return err
+	}
+
+	return event.Queue(channel, QUEUE_JOBS, func(msg event.Message) {
 		params := msg.Data
 		err := fn(params)
 		if err != nil {
 			logs.Log(packageName, fmt.Sprintf(MSG_ERROR_EXECUTING_JOB, job.Type, job.Tag, err))
 		}
 	})
-	return nil
+}
+
+/**
+* register: Escucha los disparos del job y lo programa en esta instancia (la que lo registra, así quien lleva su estado
+* es quien lo tiene); las demás quitan el registro anterior con el mismo tag (salvo esta revisión)
+* @param job *Job, fn func(params et.Json) error
+* @return error
+**/
+func register(job *Job, fn func(params et.Json) error) error {
+	if err := listen(job, fn); err != nil {
+		return err
+	}
+
+	replaced := et.Json{"id": job.ID, "keep": job.Rev}
+	if err := event.Publish(EVENT_CRONTAB_REMOVE, replaced); err != nil {
+		return err
+	}
+
+	return crontab.addJob(job)
 }
 
 /**
@@ -50,120 +89,113 @@ func Load(tag string, store Store) error {
 	return nil
 }
 
-type Cron struct {
-	DayOfWeek  string `json:"day_of_week"`
-	Month      string `json:"mes"`
-	DayOfMonth string `json:"day_of_month"`
-	Hour       string `json:"hora"`
-	Minute     string `json:"minuto"`
+/**
+* ParseSpec: Valida una expresión cron y la devuelve con segundos: 5 campos (minuto hora día mes día-semana) toman el
+* segundo 0; también 6 campos y descriptores (@daily, @every 1h)
+* @param spec string
+* @return string, error
+**/
+func ParseSpec(spec string) (string, error) {
+	fields := strings.Fields(spec)
+	if len(fields) == 5 {
+		fields = append([]string{"0"}, fields...)
+	}
+
+	result := strings.Join(fields, " ")
+	if _, err := specParser.Parse(result); err != nil {
+		return "", fmt.Errorf(MSG_ERROR_SPEC_INVALID, spec, err)
+	}
+
+	return result, nil
 }
 
 /**
-* isValidCronNumber reports whether s is an integer within [min, max].
-* @param s string, min, max int
-* @return bool
+* NextOf: La siguiente ejecución de una expresión cron después de from (en la zona de from)
+* @param spec string, from time.Time
+* @return time.Time, error
 **/
-func isValidCronNumber(s string, min, max int) bool {
-	n, err := strconv.Atoi(s)
+func NextOf(spec string, from time.Time) (time.Time, error) {
+	normal, err := ParseSpec(spec)
 	if err != nil {
-		return false
+		return time.Time{}, err
 	}
-	return n >= min && n <= max
+
+	schedule, err := specParser.Parse(normal)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return schedule.Next(from), nil
 }
 
 /**
-* isValidCronField reports whether value is a valid cron field for the [min, max]
-* range: a wildcard, a wildcard step, a single number, a range, or a comma list.
-* @param value string, min, max int
-* @return bool
+* CronJob: Programa un job repetitivo; el id del job es tag y registrarlo de nuevo lo reemplaza. En cada disparo fn
+* recibe params (en una sola instancia); repetitions 0 es sin límite
+* @param tag, ownerId, spec string, repetitions int, params et.Json, fn func(params et.Json) error
+* @return *Job, error
 **/
-func isValidCronField(value string, min, max int) bool {
-	if value == "*" {
-		return true
+func CronJob(tag, ownerId, spec string, repetitions int, params et.Json, fn func(params et.Json) error) (*Job, error) {
+	if crontab == nil {
+		return nil, errors.New(msg.MSG_CRONTAB_UNLOAD)
 	}
 
-	for _, part := range strings.Split(value, ",") {
-		if step, ok := strings.CutPrefix(part, "*/"); ok {
-			if !isValidCronNumber(step, 1, max) {
-				return false
-			}
-			continue
-		}
-
-		if from, to, ok := strings.Cut(part, "-"); ok {
-			if !isValidCronNumber(from, min, max) || !isValidCronNumber(to, min, max) {
-				return false
-			}
-			continue
-		}
-
-		if !isValidCronNumber(part, min, max) {
-			return false
-		}
+	tag = strings.TrimSpace(tag)
+	if tag == "" {
+		return nil, errors.New(MSG_ERROR_TAG_REQUIRED)
 	}
 
-	return true
-}
-
-func (s *Cron) toString() (string, error) {
-	if !isValidCronField(s.DayOfWeek, 0, 7) {
-		return "", errors.New(MSG_ERROR_DAY_OF_WEEK_INVALID)
+	spec, err := ParseSpec(spec)
+	if err != nil {
+		return nil, err
 	}
 
-	if !isValidCronField(s.Month, 1, 12) {
-		return "", errors.New(MSG_ERROR_MONTH_INVALID)
-	}
-
-	if !isValidCronField(s.DayOfMonth, 1, 31) {
-		return "", errors.New(MSG_ERROR_DAY_OF_MONTH_INVALID)
-	}
-
-	if !isValidCronField(s.Hour, 0, 23) {
-		return "", errors.New(MSG_ERROR_HOUR_INVALID)
-	}
-
-	if !isValidCronField(s.Minute, 0, 59) {
-		return "", errors.New(MSG_ERROR_MINUTE_INVALID)
-	}
-
-	return fmt.Sprintf("0 %s %s %s %s %s", s.Minute, s.Hour, s.DayOfMonth, s.Month, s.DayOfWeek), nil
+	job := newJob(CRONJOB, tag, ownerId, spec, params, repetitions)
+	return job, register(job, fn)
 }
 
 /**
-* NewCronJob
-* @param tag, ownerId string, spec Cron, repetitions int, params et.Json, fn func(params et.Json) error
+* ScheduleJob: Programa un job de una sola vez en at (futura); el id del job es tag y registrarlo de nuevo lo reemplaza
+* @param tag, ownerId string, at time.Time, params et.Json, fn func(params et.Json) error
+* @return *Job, error
+**/
+func ScheduleJob(tag, ownerId string, at time.Time, params et.Json, fn func(params et.Json) error) (*Job, error) {
+	if crontab == nil {
+		return nil, errors.New(msg.MSG_CRONTAB_UNLOAD)
+	}
+
+	tag = strings.TrimSpace(tag)
+	if tag == "" {
+		return nil, errors.New(MSG_ERROR_TAG_REQUIRED)
+	}
+
+	if !at.After(timezone.Now()) {
+		return nil, fmt.Errorf(MSG_ERROR_SCHEDULE_PAST, at.Format(time.RFC3339))
+	}
+
+	job := newJob(SCHEDULEJOB, tag, ownerId, at.Format(time.RFC3339), params, 0)
+	return job, register(job, fn)
+}
+
+/**
+* RemoveJob: Quita el job de tag en todas las instancias y deja de atender sus disparos en esta
+* @param tag string
 * @return error
 **/
-func CronJob(tag, ownerId string, spec Cron, repetitions int, params et.Json, fn func(params et.Json) error) error {
+func RemoveJob(tag string) error {
 	if crontab == nil {
 		return errors.New(msg.MSG_CRONTAB_UNLOAD)
 	}
 
-	specStr, err := spec.toString()
-	if err != nil {
+	channel := channelOf(tag)
+	if err := event.Unsubscribe(channel); err != nil {
 		return err
 	}
 
-	job := newJob(CRONJOB, tag, ownerId, specStr, params, repetitions)
-	return eventFunc(job, fn)
+	return event.Publish(EVENT_CRONTAB_REMOVE, et.Json{"id": tag})
 }
 
 /**
-* AddCronJob
-* @param tag, ownerId string, spec time.Time, repetitions int, params et.Json, fn func(params et.Json) error
-* @return error
-**/
-func ScheduleJob(tag, ownerId string, spec time.Time, params et.Json, fn func(params et.Json) error) error {
-	if crontab == nil {
-		return errors.New(msg.MSG_CRONTAB_UNLOAD)
-	}
-
-	job := newJob(SCHEDULEJOB, tag, ownerId, spec.Format(time.RFC3339), params, 0)
-	return eventFunc(job, fn)
-}
-
-/**
-* HttpSet
+* HttpRemoveJob
 * @params w http.ResponseWriter, r *http.Request
 **/
 func HttpRemoveJob(w http.ResponseWriter, r *http.Request) {
@@ -173,7 +205,7 @@ func HttpRemoveJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := request.URLParam(r, "id").Str()
-	event.Publish(EVENT_CRONTAB_SET, et.Json{"id": id})
+	event.Publish(EVENT_CRONTAB_REMOVE, et.Json{"id": id})
 
 	response.ITEM(w, r, http.StatusOK, et.Item{
 		Ok:     true,

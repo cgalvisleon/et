@@ -28,7 +28,7 @@ func (s *List) ToJson() Json {
 	}
 
 	var result Json
-	err = json.Unmarshal(bt, &result)
+	err = decodeJSON(bt, &result)
 	if err != nil {
 		return Json{}
 	}

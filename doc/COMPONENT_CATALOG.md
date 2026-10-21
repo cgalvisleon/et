@@ -2,7 +2,7 @@
 
 > Catálogo de la API pública de `github.com/cgalvisleon/et`, **generado desde `go doc`** (funciones, métodos e interfaces exportadas). Para regenerarlo: `go doc -all ./<paquete> | grep '^func '`. Contexto narrativo en `LIBRARY_CONTEXT.md`, arquitectura en `ARCHITECTURE_SUMMARY.md`, reglas para IA en `AI_USAGE_GUIDE.md`.
 >
-> Se omiten `cmd/`, `create/` y `jcli/` (WIP huérfano).
+> Se omiten `cmd/` y `create/`.
 
 Generado: 2026-10-10; revisado contra `go doc` el 2026-10-11 (sin diferencias en las firmas).
 
@@ -205,12 +205,15 @@ type Store interface {
 Funciones y métodos:
 
 ```go
-func CronJob(tag, ownerId string, spec Cron, repetitions int, params et.Json, fn func(params et.Json) error) error
+func CronJob(tag, ownerId, spec string, repetitions int, params et.Json, fn func(params et.Json) error) (*Job, error)
 func HttpRemoveJob(w http.ResponseWriter, r *http.Request)
 func HttpStartJob(w http.ResponseWriter, r *http.Request)
 func HttpStopJob(w http.ResponseWriter, r *http.Request)
 func Load(tag string, store Store) error
-func ScheduleJob(tag, ownerId string, spec time.Time, params et.Json, fn func(params et.Json) error) error
+func NextOf(spec string, from time.Time) (time.Time, error)
+func ParseSpec(spec string) (string, error)
+func RemoveJob(tag string) error
+func ScheduleJob(tag, ownerId string, at time.Time, params et.Json, fn func(params et.Json) error) (*Job, error)
 func New(tag string, store Store) (*Crontab, error)
 func (s *Crontab) Debug() *Crontab
 func (s *Job) ToJson() et.Json
@@ -947,58 +950,6 @@ func (s *Participant) SetConvId(convId, userId string) *Participant
 func (s *Participant) SetName(name, userId string) *Participant
 func (s *Participant) ToJson() et.Json
 func (s *Participant) ToString() string
-```
-
-## `jrex`
-
-Runtime JavaScript (goja) con módulos, bindings y hot-reload.
-
-Interfaces:
-
-```go
-type Store interface {
-	Set(collection, id, ownerId string, obj any) error
-	Get(collection, id string, dest any) (bool, error)
-}
-```
-
-Funciones y métodos:
-
-```go
-func GetArgs(args []goja.Value, idx int, defaultValue any) any
-func GetVersion(version string, part Part) string
-func NewStore(baseDir string) (*FileStore, error)
-func (s *FileStore) Get(collection, id string, dest any) (bool, error)
-func (s *FileStore) Set(collection, id, ownerId string, obj any) error
-func NewInstance(id ...string) *Instance
-func (s *Instance) Error(err error) *goja.Object
-func (s *Instance) Get(name string) goja.Value
-func (s *Instance) GetCode() string
-func (s *Instance) GetJson(name string) et.Json
-func (s *Instance) Run() (et.Json, error)
-func (s *Instance) Save(store Store) error
-func (s *Instance) SetBinding(name string, value interface{}) *Instance
-func (s *Instance) SetCode(code string) *Instance
-func (s *Instance) SetCtx(ctx et.Json) *Instance
-func (s *Instance) SetStore(store Store) *Instance
-func (s *Instance) Value(value interface{}) goja.Value
-func Load(tag string, store Store) (*Jrex, error)
-func (s *Jrex) Debug() *Jrex
-func (s *Jrex) NewInstance(module string) (*Instance, error)
-func (s *Jrex) NewModule(tag, userId string) (*Module, error)
-func (s *Jrex) Notify(kind, message string)
-func (s *Jrex) OnSave(fn func(jrex *Jrex, userId string) error) *Jrex
-func (s *Jrex) Run() (et.Json, error)
-func (s *Jrex) RunDev() error
-func (s *Jrex) RunInstance(instance *Instance) (et.Json, error)
-func (s *Jrex) RunModule(module string) (et.Json, error)
-func (s *Jrex) Save(userId string) error
-func (s *Jrex) Set(name string, value interface{}) *Jrex
-func (s *Jrex) ToJson() et.Json
-func (s *Jrex) ToString() string
-func (s *Jrex) Up(store Store) *Jrex
-func (s *Module) SetMetadata(metadata et.Json)
-func ToPart(value string) (Part, bool)
 ```
 
 ## `jrpc`

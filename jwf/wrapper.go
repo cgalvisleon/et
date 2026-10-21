@@ -2,11 +2,9 @@ package jwf
 
 import (
 	"crypto/tls"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
-	"slices"
 	"strings"
 	"time"
 
@@ -31,10 +29,13 @@ func GetArgs(args []goja.Value, idx int, defaultValue any) any {
 }
 
 /**
-* wrap: Wraps the runtime
-* @param vm *VM
+* Bindings: The standard bindings of a script added to bindings (created if nil): console, the basic functions
+* (UUID, timeNow, validator, evaluateObject, the status constants…), fetch, jrpc, cache and event; a key that bindings
+* already has is replaced
+* @param bindings map[string]interface{}
+* @return map[string]interface{}
 **/
-func wrapper(bindings map[string]interface{}) map[string]interface{} {
+func Bindings(bindings map[string]interface{}) map[string]interface{} {
 	if bindings == nil {
 		bindings = make(map[string]interface{})
 	}
@@ -70,12 +71,12 @@ func wrapperBasic(bindings map[string]interface{}) map[string]interface{} {
 	bindings["timeNow"] = timezone.Now
 	bindings["validator"] = validator.Wrapper()
 	evaluateObject := et.EvaluateObjectWrapper()
-	bindings["evaluateObject"] = func(obj et.Json, where map[string]any) (bool, error) {
+	bindings["evaluateObject"] = func(obj et.Json, where any) (bool, error) {
 		list := et.ToWhere(where)
 		return evaluateObject(obj, list)
 	}
 	evaluateValue := et.EvaluateValueWrapper()
-	bindings["evaluateValue"] = func(value any, where map[string]any, obj ...et.Json) (bool, error) {
+	bindings["evaluateValue"] = func(value any, where any, obj ...et.Json) (bool, error) {
 		list := et.ToWhere(where)
 		return evaluateValue(value, list, obj...)
 	}
@@ -133,8 +134,8 @@ func wrapperFetch(bindings map[string]interface{}) map[string]interface{} {
 		}
 		method := args[0].String()
 		url := args[1].String()
-		headers := args[2].Export().(map[string]interface{})
-		body := args[3].Export().(map[string]interface{})
+		headers, _ := et.JsonOf(args[2])
+		body, _ := et.JsonOf(args[3])
 		duration, _ := GetArgs(args, 4, 0).(int64)
 		timeout := time.Duration(duration) * time.Second
 		defaultValue := GetArgs(args, 5, nil).([]byte)
@@ -154,8 +155,8 @@ func wrapperFetch(bindings map[string]interface{}) map[string]interface{} {
 		}
 		method := args[0].String()
 		url := args[1].String()
-		headers := args[2].Export().(map[string]interface{})
-		body := args[3].Export().(map[string]interface{})
+		headers, _ := et.JsonOf(args[2])
+		body, _ := et.JsonOf(args[3])
 		tlsConfig := GetArgs(args, 4, nil).(*tls.Config)
 		duration, _ := GetArgs(args, 5, 0).(int64)
 		timeout := time.Duration(duration) * time.Second
@@ -261,172 +262,70 @@ func wrapperEvent(bindings map[string]interface{}) map[string]interface{} {
 	return bindings
 }
 
-// jsonObject: an et.Json in JavaScript (params of a step, ctx of an instance): its keys as properties (params.email,
-// JSON.stringify(ctx)) plus, by their name, the methods of jsonMethods (str, int, set…); a method hides a key with the
-// same name (read it with get). data gives the json it reads and writes (created if missing)
-type jsonObject struct {
-	data    func() et.Json
-	vm      *goja.Runtime
-	methods map[string]any
-}
-
-func (o *jsonObject) Get(key string) goja.Value {
-	if method, ok := o.methods[key]; ok {
-		return o.vm.ToValue(method)
-	}
-	value, ok := o.data()[key]
-	if !ok {
-		return nil
-	}
-	return o.vm.ToValue(plainOf(value))
-}
-
 /**
-* plainOf: The value with its et.Json (also nested or in lists) as map[string]any: goja wraps the named type et.Json
-* as a Go object with its methods, so its keys would not be readable from JavaScript (ctx.user.name)
-* @param value any
-* @return any
+* aliasJson: The names of the methods of the params and ctx of before (str, int, json, arrayJson…), on the prototype of
+* et.Json of the runtime, so the scripts written with them keep working: set merges an object (Set of et.Json sets a key),
+* view keeps keys under another name and omit removes keys
+* @param vm *goja.Runtime
 **/
-func plainOf(value any) any {
-	switch v := value.(type) {
-	case et.Json:
-		return plainOf(map[string]any(v))
-	case map[string]any:
-		result := make(map[string]any, len(v))
-		for key, item := range v {
-			result[key] = plainOf(item)
-		}
-		return result
-	case []et.Json:
-		result := make([]any, len(v))
-		for i, item := range v {
-			result[i] = plainOf(item)
-		}
-		return result
-	case []any:
-		result := make([]any, len(v))
-		for i, item := range v {
-			result[i] = plainOf(item)
-		}
-		return result
+func aliasJson(vm *goja.Runtime) {
+	proto := et.JsonPrototype(vm)
+	names := map[string]string{
+		"put": "Put", "get": "Get", "str": "Str", "int": "Int", "int64": "Int64", "num": "Num", "bool": "Bool", "time": "Time",
+		"json": "Json", "array": "Array", "arrayStr": "ArrayStr", "arrayInt": "ArrayInt", "arrayInt64": "ArrayInt64", "arrayJson": "ArrayJson",
 	}
-	return value
-}
+	for alias, name := range names {
+		proto.Set(alias, proto.Get(name))
+	}
 
-func (o *jsonObject) Set(key string, val goja.Value) bool {
-	o.data()[key] = val.Export()
-	return true
-}
-
-func (o *jsonObject) Has(key string) bool {
-	_, ok := o.data()[key]
-	return ok
-}
-
-func (o *jsonObject) Delete(key string) bool {
-	delete(o.data(), key)
-	return true
-}
-
-func (o *jsonObject) Keys() []string {
-	return slices.Sorted(maps.Keys(o.data()))
-}
-
-// String and MarshalJSON: the object passed to Go (console.debug(params), a log, a json) shows its values
-func (o *jsonObject) String() string {
-	return o.data().ToString()
-}
-
-func (o *jsonObject) MarshalJSON() ([]byte, error) {
-	return json.Marshal(o.data())
+	this := func(call goja.FunctionCall) et.Json {
+		data, ok := et.JsonOf(call.This)
+		if !ok {
+			panic(vm.NewTypeError("this is not an et.Json"))
+		}
+		return data
+	}
+	proto.Set("set", func(call goja.FunctionCall) goja.Value {
+		values, _ := et.JsonOf(call.Argument(0))
+		maps.Copy(this(call), values)
+		return goja.Undefined()
+	})
+	proto.Set("view", func(call goja.FunctionCall) goja.Value {
+		org := this(call)
+		view, _ := et.JsonOf(call.Argument(0))
+		result := et.Json{}
+		for key, value := range view {
+			as := fmt.Sprintf("%v", value)
+			if as == "" {
+				as = key
+			}
+			if _, ok := org[key]; ok {
+				result[as] = org[key]
+			}
+		}
+		if !result.IsEmpty() {
+			org.Put(result)
+		}
+		return goja.Undefined()
+	})
+	proto.Set("omit", func(call goja.FunctionCall) goja.Value {
+		org := this(call)
+		for _, key := range call.Arguments {
+			delete(org, key.String())
+		}
+		return goja.Undefined()
+	})
 }
 
 /**
-* jsonMethods: The methods of a jsonObject over the json that data gives: set (merge) and the typed reads of et.Json
-* @param data func() et.Json
-* @return map[string]any
-**/
-func jsonMethods(data func() et.Json) map[string]any {
-	return map[string]any{
-		"set": func(values et.Json) {
-			maps.Copy(data(), values)
-		},
-		"put": func(values et.Json) {
-			data().Put(values)
-		},
-		"view": func(view et.Json) {
-			result := et.Json{}
-			org := data()
-			for key, value := range view {
-				as := fmt.Sprintf("%v", value)
-				if as == "" {
-					as = key
-				}
-				if _, ok := org[key]; ok {
-					result[as] = org[key]
-				}
-			}
-			if !result.IsEmpty() {
-				data().Put(result)
-			}
-		},
-		"omit": func(keys ...string) {
-			for _, key := range keys {
-				delete(data(), key)
-			}
-		},
-		"get": func(keys ...string) any {
-			return data().Get(keys...)
-		},
-		"str": func(keys ...string) string {
-			return data().Str(keys...)
-		},
-		"int": func(keys ...string) int {
-			return data().Int(keys...)
-		},
-		"int64": func(keys ...string) int64 {
-			return data().Int64(keys...)
-		},
-		"num": func(keys ...string) float64 {
-			return data().Num(keys...)
-		},
-		"bool": func(keys ...string) bool {
-			return data().Bool(keys...)
-		},
-		"time": func(keys ...string) time.Time {
-			return data().Time(keys...)
-		},
-		"json": func(key string) et.Json {
-			return data().Json(key)
-		},
-		"array": func(key string) []any {
-			return data().Array(key)
-		},
-		"arrayStr": func(key string) []string {
-			return data().ArrayStr(key)
-		},
-		"arrayInt": func(key string) []int {
-			return data().ArrayInt(key)
-		},
-		"arrayInt64": func(key string) []int64 {
-			return data().ArrayInt64(key)
-		},
-		"arrayJson": func(key string) []et.Json {
-			return data().ArrayJson(key)
-		},
-	}
-}
-
-/**
-* jsonBinder: The binding of a jsonObject over the json that data gives, built per run with its runtime
+* jsonBinder: The binding of the json that data gives (created if missing), built per run with et.ToJS: an object over
+* the same map, its keys as properties and the methods of et.Json
 * @param data func() et.Json
 * @return Binder
 **/
 func jsonBinder(data func() et.Json) Binder {
-	methods := jsonMethods(data)
 	return func(vm *goja.Runtime) goja.Value {
-		object := &jsonObject{data: data, vm: vm, methods: methods}
-		return vm.NewDynamicObject(object)
+		return et.ToJS(vm, data())
 	}
 }
 

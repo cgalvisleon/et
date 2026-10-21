@@ -8,7 +8,7 @@ Requiere Go 1.25. Agrega el módulo e importa solo los paquetes que uses:
 
 ```bash
 go get github.com/cgalvisleon/et@latest
-go get github.com/cgalvisleon/et@v1.0.38
+go get github.com/cgalvisleon/et@v1.0.39
 ```
 
 ```go
@@ -27,7 +27,7 @@ Una librería modular para microservicios, CLIs y aplicaciones web en Go. Cada d
 
 Los paquetes de infraestructura (`cache`, `event`, `jsql`) leen su configuración de variables de entorno y se conectan una sola vez en `Load()`; las llamadas siguientes no hacen nada.
 
-## Actualizar a v1.0.38
+## Actualizar a v1.0.39
 
 - `router.Publish` / `router.With` ya no anteponen `Route.PackageName` a `Route.Path`: pon la ruta completa en la ruta.
 - Los modelos de `jsql` exigen un esquema. En SQLite, MySQL y Oracle la tabla se llama `schema_nombre` (antes SQLite usaba el nombre a secas), así que las bases SQLite existentes necesitan renombrar sus tablas.
@@ -44,7 +44,7 @@ Cada tabla lista la API pública principal de cada paquete. `go doc github.com/c
 
 | Paquete | API pública | Ejemplo |
 | --- | --- | --- |
-| `et` | `Json` (`Str`, `Int`, `Bool`, `Num`, `Time`, `Json`, `ArrayStr`, `ArrayJson`, `ValStr`, `ValInt`, `Set`, `Put`, `Clear`, `Get`, `Update`, `Clone`, `ToString`, `ToObject`), `Item`, `Items`, `List`, condiciones (`Eq`, `More`, `In`, `Between`, `ToCondition`, `AddCondition`, `EvaluateObject`, `EvaluateValue`, `Fld` (una referencia a un campo, `{field: "nombre"}` en JSON)), `From(items).Where(...).All()` | `data.ValStr("Cali", "user", "city")` |
+| `et` | `Json` (`Str`, `Int`, `Bool`, `Num`, `Time`, `Json`, `ArrayStr`, `ArrayJson`, `ValStr`, `ValInt`, `Set`, `Put`, `Clear`, `Get`, `Update`, `Clone`, `ToString`, `ToObject`), `ToJS`/`FromJS`/`JsonOf`/`GoArg` (un `Json` en scripts de goja: un objeto sobre el mismo mapa, claves como propiedades y sus métodos con su nombre de Go), `Item`, `Items`, `List`, condiciones (`Eq`, `More`, `In`, `Between`, `ToCondition`, `AddCondition`, `EvaluateObject`, `EvaluateValue`, `Fld` (una referencia a un campo, `{field: "nombre"}` en JSON)), `From(items).Where(...).All()` | `data.ValStr("Cali", "user", "city")` |
 | `jsql` | `Load`, `LoadTo`, `ConnectTo`, `CreateDB`, `DropDB`, `TestConnection`; `DB.Define`, `DefineModel`, `Query`, `Sql`; `Model.Insert`, `Update`, `Upsert`, `Delete`, `Bulk`, `Select`, `Where`, `WhereByJson`; `Query.All`, `One`, `Limit`, `Count`; `NewTx`, `DefineSeries` (`GenSerie`, `GenSerieTx`, `GenValue`, `GenValueTx`); `Bind(source, vars)` (variables `{{name}}`); `Wrapper`, `BindWrapper`, `ToJsMapWrapper` (goja) | `users.Where(jsql.Eq("id", id)).One()` |
 | `stores` | `DefineInstance` (`Set`, `Get`, `Delete`, `Query`), `DefineAuthorization` (`SetAuthor`, `Author`, `RemoveAuthor`), `DefineConfig` (`SetConfig`, `Get`), `DefineFormState` | `ok, _ := auth.Author(profileId, "GET", "/users")` |
 | `mem` | `Set`, `Get`, `GetStr`, `GetInt`, `GetJson`, `Delete`, `Exists`, `Keys`, `Clear` | `mem.Set("k", "v", time.Minute)` |
@@ -75,7 +75,7 @@ Cada tabla lista la API pública principal de cada paquete. `go doc github.com/c
 | `event` | `Load`, `Publish`, `Subscribe`, `Queue`, `Stack`, `Source`, `On`, `Unsubscribe`, `Close` | `event.Publish("user:created", data)` |
 | `graph` | `Load()` → `Conn` (`HealthCheck`, `Close`) | `conn, _ := graph.Load()` |
 | `queue` | `New[T](size, maxEvents, period, handler)`, `Push`, `Len`, `Close` | `q.Push(item)` |
-| `crontab` | `Load(tag, store)`, `CronJob`, `ScheduleJob`, `HttpStartJob`, `HttpStopJob`, `HttpRemoveJob` | `crontab.CronJob(tag, owner, crontab.Cron{Minute: "0"}, 0, nil, fn)` |
+| `crontab` | `Load(tag, store)`, `CronJob`, `ScheduleJob`, `HttpStartJob`, `HttpStopJob`, `HttpRemoveJob` | `crontab.CronJob(tag, owner, "0 * * * *", 0, nil, fn)` |
 | `resilience` | `New()`, `LoadInstance(Params)`, `Instance.Run`, `IsDone`, `IsFailed`, `Stop` | `inst, _ := r.LoadInstance(resilience.Params{Fn: send, TotalAttempts: 3})` |
 
 ### Seguridad
@@ -91,8 +91,7 @@ Cada tabla lista la API pública principal de cada paquete. `go doc github.com/c
 
 | Paquete | API pública | Ejemplo |
 | --- | --- | --- |
-| `jrex` | `Load(tag, store)` → `Jrex` (`Set`, `Run`, `RunDev`, `RunModule`, `NewModule`); `NewInstance`, `NewStore` | `rt.Set("db", db).Run()` |
-| `jwf` | `New(id)` → `WorkFlow` (`NewFlow`, `Run`, `GetInstance`, `RunInstance`, `StopInstance`, `OnChange`); `Flow.Step`, `Error`, `AddStep`; `LoadFlow`, `RunCode`, `Binder`, `GoValue` (un valor de Go para los scripts); `Instance.OnLog` / `Step.OnLog` (consola); `ctx`/`params` en los scripts (`set`, `put`, `view`, `omit`, `get`…) y bindings de estado (`statusActive`, `statusList()`…); `evaluateObject`/`evaluateValue` y referencias a campos (`field`, `sum`, `year`…) | `wf.Run("signup", "signup", "", "", ctx, nil, true, userId)` |
+| `jwf` | `New(id)` → `WorkFlow` (`NewFlow`, `Run`, `GetInstance`, `RunInstance`, `StopInstance`, `OnChange`); `Flow.Step`, `Error`, `AddStep`; `LoadFlow`, `Run` (código, bindings, lecturas → último valor y las variables leídas), `RunCode`, `RunScripts`, `Bindings` (los bindings estándar: console, fetch, cache, event, jrpc…), `Binder`, `GoValue` (un valor de Go para los scripts); `Instance.OnLog` / `Step.OnLog` (consola); `ctx`/`params` en los scripts (`set`, `put`, `view`, `omit`, `get`…) y bindings de estado (`statusActive`, `statusList()`…); `evaluateObject`/`evaluateValue` y referencias a campos (`field`, `sum`, `year`…) | `wf.Run("signup", "signup", "", "", ctx, nil, true, userId)` |
 | `jia` | `New(tag, store, userId)`, `Load(id, store)` → `Ia` (`SetModelAgent`, `SetContextAgent`, `SetSkillAgent`, `Conversation`, `Embed`, `LoadRouter`); `NewApiSkill` | `conv, _ := ai.Conversation(ctx, "support", to, name, prompt)` |
 | `ia` | `Load(db, schema, Config)` → `Rag` (`IngestFile`, `IngestSQL`, `Ask`, `ListDocuments`, `DeleteDocument`, `ListMessages`, `LoadRouter`); `LoadIndex` → `IngestText`, `Search`, `DeleteDocumentsOf`, `DeleteProject` con un `Embedder` (`HttpEmbedder`); `ExtractFile`, `RowsText` | `rag.Ask(ctx, tenant, project, conv, user, "question")` |
 | `cmds` | `NewStage`, `NewStep`, `AppendCmd`, `RunOS`, `RunSSH`, `Load(file)` | `cmds.NewStep("build", "").AppendCmd("go build ./...")` |
@@ -135,6 +134,15 @@ name := data.Str("user", "name")            // "Ana"
 age := data.Int("user", "age")              // 30
 city := data.ValStr("Cali", "user", "city") // valor por defecto si no existe
 data.Set("active", true)
+```
+
+El texto JSON se lee de forma tolerante: `et.ToJson`, `Scan`, `Json(clave)`, `Array`/`ArrayJson` también aceptan saltos de línea reales dentro de los textos, texto escapado una vez más (`{\"a\":1}`) o codificado dos veces. Los números conservan su forma: `Str` da `"1"` para un entero y `"3.1"` para `3.10` (sin decimales agregados ni perdidos), los enteros mayores que 2^53 se mantienen exactos (`int64`), y `ArrayInt`, `MapInt`… leen cualquier número o texto numérico. `Bool` acepta `true`/`false`, `1`/`0` y los textos `yes`/`no`, `si`/`no`, `on`/`off`.
+
+```go
+j, _ := et.ToJson("{\"note\": \"línea 1\nlínea 2\", \"id\": 9007199254740993, \"price\": 3.10, \"active\": \"1\"}")
+j.Str("id")      // "9007199254740993"
+j.Str("price")   // "3.1"
+j.Bool("active") // true
 ```
 
 ### `jsql`: modelos y consultas
@@ -289,16 +297,18 @@ result, err := wf.RunInstance(instance, et.Json{"email": "ana@x.com"}, et.Json{}
 
 ```go
 crontab.Load("billing", store) // store implementa crontab.Store
-crontab.CronJob("billing", ownerId, crontab.Cron{Hour: "2", Minute: "0"}, 0, et.Json{},
-    func(params et.Json) error { return runBilling() })
-crontab.ScheduleJob("billing", ownerId, time.Now().Add(time.Hour), et.Json{}, fn)
+job, err := crontab.CronJob("billing", ownerId, "0 2 * * *", 0, et.Json{},
+    func(params et.Json) error { return runBilling() }) // id = tag; registrarlo de nuevo lo reemplaza
+crontab.ScheduleJob("billing:once", ownerId, time.Now().Add(time.Hour), et.Json{}, fn)
+crontab.RemoveJob("billing")
 ```
 
-### Runtime JavaScript e IA
+### Scripts JavaScript e IA
 
 ```go
-rt, _ := jrex.Load("scripts", nil) // store nil → archivos en ./src
-rt.Set("db", jsql.Wrapper(db)).Run()
+bindings := jwf.Bindings(jsql.Wrapper(db)) // console, fetch, cache… más db, jsql
+bindings["NEW"] = record                    // un et.Json: NEW.name = "x" cambia record
+result, globals, err := jwf.Run(`NEW.code = NEW.Str("name").toUpperCase(); NEW`, bindings, "NEW")
 
 rag, _ := ia.Load(db, "public", ia.Config{}) // OPENAI_API_KEY
 rag.IngestFile(ctx, tenantId, projectId, "manual.pdf", data, userId)
@@ -332,7 +342,6 @@ hits, _ := index.Search(ctx, tenantId, projectId, "reset the router", 5, 0.3, em
 go run ./cmd/create      # scaffolding: proyecto, microservicio, modelo, rpc
 go run ./cmd/apigateway  # API gateway (ettp)
 go run ./cmd/server      # nodo TCP (puerto 1377); ./cmd/client se conecta a él
-go run ./cmd/jrex        # runtime JS con hot-reload desde ./cmd/jrex/src
 go run ./cmd/ia          # API HTTP de RAG (PORT, por defecto 3300)
 ```
 

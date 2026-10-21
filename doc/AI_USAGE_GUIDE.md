@@ -42,7 +42,7 @@ Si terminas en 4 o 5, dilo en la respuesta: «No usé `et` para X porque Y».
 | Cron | `crontab` | `crontab.Load(tag, store)` + `CronJob` / `ScheduleJob` |
 | Reintentos | `resilience` | `resilience.New()` + `LoadInstance(Params{...})` + `Run()` |
 | Workflow | `jwf` | `jwf.New(id)` + `NewFlow(...).Step(...)` + `wf.Run(...)` |
-| Script JavaScript | `jrex` / `jwf` | `jrex.Load(tag, store)`, `jwf.RunCode(code, ctx, bindings)` (el resultado es el último valor del script; un binding `jwf.Binder` se arma con el runtime) |
+| Script JavaScript | `jwf` | `jwf.Run(code, bindings, reads...)`, `jwf.RunCode(code, ctx, bindings)` (el resultado es el último valor del script; un binding `jwf.Binder` se arma con el runtime) |
 | Leer o cambiar `ctx`/`params` en un script | `jwf` | `ctx.user.name`, `ctx.total = 5`, `JSON.stringify(ctx)`, `ctx.set({...})`; lo anidado se cambia reasignando la clave de primer nivel |
 | Ver la consola de un script | `jwf` | `instance.OnLog(fn)` o `step.OnLog(fn)`: cada `console.*` llega como `{level, message, at, step_id}` |
 | RAG sobre documentos | `ia` | `ia.Load(db, schema, ia.Config{})` + `IngestFile` + `Ask` |
@@ -63,7 +63,7 @@ Si terminas en 4 o 5, dilo en la respuesta: «No usé `et` para X porque Y».
 - **`jsql.LoadTo(dbName, hostName...)`**, no `LoadTo(name)` a secas.
 - **`jsql.Define`** es el struct de definición (no `jsql.Def`).
 - **No existen** `jval/`, `config/`, `jsql.Store`, `stores.Catalog`, `ws/`, `wsp/`, `tcp/`, `workflow/`, `instances/`.
-- **`stores.Instance.Get(id, dest)`** tiene una sola clave: no cumple los `Store` de `crontab`, `jia` ni `jrex`.
+- **`stores.Instance.Get(id, dest)`** tiene una sola clave: no cumple los `Store` de `crontab` ni `jia`.
 - **`jia.Load`** tiene los argumentos de `store.Get` invertidos (`jia/ia.go:90`).
 - **`dt` con `PRODUCTION=false`** no persiste nada.
 - **`cmds.RunSSH`** ejecuta localmente.

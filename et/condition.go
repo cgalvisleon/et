@@ -1781,23 +1781,26 @@ func AddCondition(conditions []*Condition, cond *Condition) []*Condition {
 * @return []Json
 **/
 func ToWhere(cond any) []Json {
-	switch value := cond.(type) {
-	case map[string]any:
+	if value, ok := asJson(cond); ok {
 		result := make([]Json, 0)
 		for _, item := range value {
-			if obj, ok := item.(map[string]any); ok {
+			if obj, ok := asJson(item); ok {
 				result = append(result, obj)
 			}
 		}
 		return result
-	case []any:
+	}
+	if value, ok := cond.([]any); ok {
 		result := make([]Json, 0, len(value))
 		for _, item := range value {
-			if obj, ok := item.(map[string]any); ok {
+			if obj, ok := asJson(item); ok {
 				result = append(result, obj)
 			}
 		}
 		return result
+	}
+	if value, ok := cond.([]Json); ok {
+		return value
 	}
 	return nil
 }

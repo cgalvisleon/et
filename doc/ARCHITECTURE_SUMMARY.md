@@ -8,7 +8,7 @@
 
 ```
 Aplicación     router · server · ettp/v2 · ettp/v1 · jrpc · jtcp · jws
-Orquestación   jwf · jrex · jia · ia · crontab · resilience · queue · service
+Orquestación   jwf · jia · ia · crontab · resilience · queue · service
 Persistencia   jsql (+ drivers) · stores · cache · dt · mem · ephemeral · graph
 Mensajería     event (NATS) · aws · brevo · infobip · jwsp
 Base           et · envar · logs · stdrout · reg · strs · utility · timezone · validator · msg
@@ -20,9 +20,8 @@ Calculadas con `go list -f '{{.Imports}}'`. La flecha indica "importa".
 
 | Paquete | Importa de `et` |
 | --- | --- |
-| `jsql` | `et`, `envar`, `jrex`, `jwf`, `logs`, `reg`, `strs`, `timezone`, `utility` |
+| `jsql` | `et`, `envar`, `jwf`, `logs`, `reg`, `strs`, `timezone`, `utility` |
 | `jwf` | `cache`, `event`, `resilience`, `jrpc`, `request`, `et`, `envar`, `reg`, `timezone` |
-| `jrex` | `cache`, `event`, `file`, `jrpc`, `request`, `et` |
 | `ia` | `jsql`, `csv`, `request`, `response`, `et` |
 | `stores` | `jsql`, `dt`, `event`, `et` |
 | `router` | `cache`, `event`, `middleware`, `request`, `response`, `et` |
@@ -32,7 +31,7 @@ Calculadas con `go list -f '{{.Imports}}'`. La flecha indica "importa".
 | `dt` | `cache`, `et` |
 | `cache`, `event` | `envar`, `et`, `logs`, `response` |
 
-Consecuencia: importar `jsql` arrastra `jwf` y `jrex` (triggers y campos calculados en JavaScript), y con ellos `cache` y `event` como dependencias de compilación, aunque no se conecten.
+Consecuencia: importar `jsql` arrastra `jwf` (triggers y campos calculados en JavaScript), y con ellos `cache` y `event` como dependencias de compilación, aunque no se conecten.
 
 ## 3. Patrones
 
@@ -49,7 +48,6 @@ Cada paquete de orquestación define su propia interfaz `Store` y el llamador la
 | Paquete | Métodos |
 | --- | --- |
 | `crontab`, `jia` | `Set(collection, id, ownerId, obj)`, `Get(collection, id, dest)`, `Delete(collection, id)`, `Query(query)` |
-| `jrex` | `Set(collection, id, ownerId, obj)`, `Get(collection, id, dest)` |
 | `envar` | `Get(name, def) (any, bool)`, `Set(name, value)` |
 
 `jwf` ya no tiene `Store`: los flujos viven en memoria y se persisten desde fuera con `WorkFlow.OnChange` / `Flow.OnChange`. `stores.Instance.Get(id, dest)` tiene una sola clave, así que no cumple ninguna de estas interfaces sin un adaptador.
@@ -99,4 +97,3 @@ Las rutas se guardan en Redis y se propagan entre réplicas por NATS (`EVENT_SET
 | `utility.More` | Reinicia el contador del tag a 0 en cada llamada. |
 | `dt` con `PRODUCTION=false` | El objeto no se persiste: vive solo en memoria. |
 | `validator.Pattern` | Una regex inválida entra en pánico al validar (`regexp.MustCompile`); `ByJson` la rechaza con error. |
-| `jcli/` | WIP huérfano (declara `package jrex`). |

@@ -8,7 +8,6 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/jrex"
 	"github.com/cgalvisleon/et/jwf"
 	"github.com/cgalvisleon/et/timezone"
 )
@@ -326,19 +325,24 @@ func (s *Model) initModel(db *DB) (bool, error) {
 }
 
 /**
-* wrapper: Wraps the jrex with the model
-* @param instance *jrex.Instance, model *Model
-* @return void
+* bindings: What a script of the model sees: the standard bindings of jwf, the jsql wrapper of its db and, in a trigger,
+* TX, the transaction of the command that runs it; what the script writes goes in it (with SQLite, a write outside it
+* would wait for the only connection forever)
+* @param tx *Tx
+* @return map[string]any
 **/
-func (s *Model) wrapper(instance *jrex.Instance, tx *Tx) {
+func (s *Model) bindings(tx *Tx) map[string]any {
+	result := jwf.Bindings(nil)
+	if s == nil {
+		return result
+	}
 	for name, binding := range Wrapper(s.db) {
-		instance.SetBinding(name, binding)
+		result[name] = binding
 	}
-	// TX: the transaction of the command that runs the trigger; what the script writes goes in it (with SQLite, a
-	// write outside it would wait for the only connection forever)
 	if tx != nil {
-		instance.SetBinding("TX", wrapTx(tx))
+		result["TX"] = wrapTx(tx)
 	}
+	return result
 }
 
 /**

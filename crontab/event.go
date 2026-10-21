@@ -79,7 +79,8 @@ func (s *Crontab) eventSet(msg event.Message) {
 func (s *Crontab) eventRemove(msg event.Message) {
 	data := msg.Data
 	id := data.Str("id")
-	s.removeJob(id)
+	keep := data.Str("keep")
+	s.removeJob(id, keep)
 }
 
 /**

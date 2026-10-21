@@ -32,7 +32,7 @@ func Serialize(src any) ([]byte, error) {
 **/
 func ToJson(src string) (Json, error) {
 	var result map[string]interface{}
-	if err := json.Unmarshal([]byte(src), &result); err != nil {
+	if err := parseJSON(src, &result); err != nil {
 		return result, err
 	}
 
@@ -50,7 +50,7 @@ func ToString(vals interface{}) string {
 	encoder.SetEscapeHTML(false)
 
 	if err := encoder.Encode(vals); err != nil {
-		panic(err)
+		return ""
 	}
 
 	return strings.TrimSuffix(buf.String(), "\n")
@@ -62,6 +62,11 @@ func ToString(vals interface{}) string {
 * @return float64, reflect.Kind, bool
 **/
 func numberToFloat64(v any) (float64, reflect.Kind, bool) {
+	if n, ok := v.(json.Number); ok {
+		f, err := n.Float64()
+		return f, reflect.Float64, err == nil
+	}
+
 	rv := reflect.ValueOf(v)
 	if !rv.IsValid() {
 		return 0, reflect.Invalid, false
@@ -96,6 +101,11 @@ func numberToFloat64(v any) (float64, reflect.Kind, bool) {
 * @return int64, bool
 **/
 func numberToInt64(v any) (int64, bool) {
+	if n, ok := v.(json.Number); ok {
+		i, err := n.Int64()
+		return i, err == nil
+	}
+
 	rv := reflect.ValueOf(v)
 	if !rv.IsValid() {
 		return 0, false

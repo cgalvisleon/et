@@ -64,8 +64,8 @@ Each table lists the main public API of every package. `go doc github.com/cgalvi
 | `request` | Inbound: `GetBody`, `URLParam`, `Query`, `UserID`, `TenantID`; outbound: `Get`, `Post`, `Put`, `Delete`, `Fetch`, `…WithTimeout`, `…WithTls` | `body, status := request.Get(url, header)` |
 | `response` | `ITEM`, `ITEMS`, `LIST`, `JSON`, `RESULT`, `HTTPError`, `Unauthorized`, `Forbidden`, `Stream` | `response.ITEM(w, r, 200, item)` |
 | `jrpc` | `Mount(host, port, services, packageName)`, `Start`, `Call`, `CallJson`, `CallItem`, `CallItems` | `jrpc.CallJson("Users.Get", et.Json{"id": id})` |
-| `jtcp` | `NewNode(port, tls...)` (`Mount`, `Start`, `Request`, `Broadcast`, `LeaderID`), `NewClient(addr)` (`Start`, `Request`, `Send`), TLS helpers | `node := jtcp.NewNode(1377); node.Start()` |
-| `jws` | `New()` → `Hub` (`Start`, `Connect`, `Subscribe`, `Publish`, `SendTo`, `Topic`, `Queue`), `Upgrader` | `hub.Publish("orders", msg)` |
+| `tcp` | `NewServer(id, name)` / `NewClient(id, name)` (`Listen`, `ConnectTo`, `Send`, `Request`, streams), `NewHub(id, name)` (`LoadServer`, `ConnectTo`, `Send`, `SendTo`, `Heartbeat`), `SetSecurity`, `NewTLS` | `srv, _ := tcp.NewServer("", "api"); srv.Listen(":1377")` |
+| `websocket` | `NewServer()` (topics, queues, `OnConnect`/`OnSubscribe` with rejection), `NewClient`/`Connect` → `Client` (`Subscribe`, `Publish`) | `srv.Publish("orders", msg)` |
 
 ### Infrastructure
 

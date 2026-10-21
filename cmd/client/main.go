@@ -1,19 +1,36 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
+	"os"
+
 	"github.com/cgalvisleon/et/envar"
-	"github.com/cgalvisleon/et/jtcp"
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/tcp"
 )
 
 func main() {
 	addr := envar.SetStrByArg("-addr", "ADDR", "localhost:1377")
 
-	client := jtcp.NewClient(addr)
-	err := client.Connect()
+	client, err := tcp.NewClient("", "client")
 	if err != nil {
 		logs.Panic(err)
 	}
 
-	jtcp.StartConsole(client)
+	err = client.ConnectTo(addr)
+	if err != nil {
+		logs.Panic(err)
+	}
+	defer client.Close()
+
+	scanner := bufio.NewScanner(os.Stdin)
+	for fmt.Print("> "); scanner.Scan(); fmt.Print("> ") {
+		res, err := client.Request(scanner.Bytes())
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		fmt.Println(string(res))
+	}
 }

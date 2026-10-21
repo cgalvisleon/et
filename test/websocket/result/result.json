@@ -1,0 +1,331 @@
+{
+  "cases": [
+    {
+      "name": "Conexión: Listen, ServeHTTP y Close",
+      "requirements": [
+        "WS-01",
+        "WS-02"
+      ],
+      "methods": [
+        "NewServer",
+        "Server.Listen",
+        "Server.Addr",
+        "Server.Count",
+        "Server.ServeHTTP",
+        "Server.Close"
+      ],
+      "ok": true,
+      "duration": "7ms",
+      "details": [
+        "Listen en 127.0.0.1:55347",
+        "segundo Listen -\u003e websocket: server already listening",
+        "3 clientes Gorilla conectados: Count=3",
+        "montado en http.ServeMux en /ws: conecta (Count=1)",
+        "Close cerró los 3 clientes; Count=0",
+        "upgrade después de Close -\u003e HTTP 503"
+      ]
+    },
+    {
+      "name": "Suscripción topic",
+      "requirements": [
+        "WS-03",
+        "WS-06"
+      ],
+      "methods": [
+        "Server.Publish",
+        "Server.OnConnect",
+        "Conn.Subscriptions"
+      ],
+      "ok": true,
+      "duration": "4ms",
+      "details": [
+        "repetir la misma suscripción -\u003e ack",
+        "Publish del servidor -\u003e delivered=3; los 3 suscriptores topic lo recibieron (from=\"\")",
+        "Subscriptions() = [{Channel:news Queue: Type:topic}]"
+      ]
+    },
+    {
+      "name": "Suscripción queue: reparto por turnos",
+      "requirements": [
+        "WS-04",
+        "WS-06"
+      ],
+      "methods": [
+        "Server.Publish"
+      ],
+      "ok": true,
+      "duration": "619ms",
+      "details": [
+        "30 mensajes: grupo a (3 miembros) [10 10 10], grupo b (2 miembros) [15 15], topic 30",
+        "cada grupo recibió cada mensaje exactamente una vez; el topic los 30"
+      ]
+    },
+    {
+      "name": "Desuscribirse y reglas de suscripción",
+      "requirements": [
+        "WS-05",
+        "WS-03",
+        "WS-04"
+      ],
+      "methods": [
+        "Server.Publish"
+      ],
+      "ok": true,
+      "duration": "157ms",
+      "details": [
+        "queue sobre canal ya suscrito como topic -\u003e websocket: already subscribed to x",
+        "después de unsubscribe no llega nada (delivered=0)",
+        "unsubscribe no suscrito -\u003e websocket: not subscribed to x",
+        "canal vacío -\u003e websocket: channel is required",
+        "tras desuscribirse, se puede suscribir como queue"
+      ]
+    },
+    {
+      "name": "Publicar desde un cliente y mensajes directos",
+      "requirements": [
+        "WS-06"
+      ],
+      "methods": [
+        "Conn.ID",
+        "Conn.Send",
+        "Server.OnConnect"
+      ],
+      "ok": true,
+      "duration": "5ms",
+      "details": [
+        "Client.Send en OnConnect -\u003e cada cliente recibió su mensaje direct",
+        "publish de A -\u003e B lo recibe con from=01M5G0E8…; ack delivered=1",
+        "publish en canal sin suscriptores -\u003e ack delivered=0"
+      ]
+    },
+    {
+      "name": "Protocolo: mensajes inválidos",
+      "requirements": [
+        "WS-02"
+      ],
+      "methods": null,
+      "ok": true,
+      "duration": "3ms",
+      "details": [
+        "inválido -\u003e error \"websocket: invalid message\"",
+        "inválido -\u003e error \"websocket: invalid message\"",
+        "tipo desconocido -\u003e websocket: unknown message type otro",
+        "la conexión sigue abierta: subscribe -\u003e ack"
+      ]
+    },
+    {
+      "name": "OnConnect: autenticar y rechazar",
+      "requirements": [
+        "WS-07",
+        "WS-13"
+      ],
+      "methods": [
+        "Server.OnConnect",
+        "Conn.Request",
+        "Conn.Subscribe",
+        "Conn.SubscribeQueue",
+        "Server.Count"
+      ],
+      "ok": true,
+      "duration": "55ms",
+      "details": [
+        "token inválido -\u003e cierre 1008 \"token inválido\"",
+        "panic en OnConnect -\u003e rechazada: \"websocket: handler panic: token malo\"",
+        "token válido -\u003e conectado (Count=1) y suscrito desde OnConnect a un topic y a una queue"
+      ]
+    },
+    {
+      "name": "OnDisconnect: cierre del cliente, del servidor y Server.Close",
+      "requirements": [
+        "WS-08",
+        "WS-10"
+      ],
+      "methods": [
+        "Server.OnDisconnect",
+        "Server.OnUnsubscribe",
+        "Conn.Close",
+        "Server.Close"
+      ],
+      "ok": true,
+      "duration": "5ms",
+      "details": [
+        "el cliente cierra -\u003e [unsubscribe:dos unsubscribe:uno disconnect:websocket: connection closed]",
+        "el servidor cierra al cliente (Client.Close) -\u003e disconnect:websocket: connection closed; el cliente recibió websocket: close 1000 (normal)",
+        "Server.Close espera a OnUnsubscribe y OnDisconnect -\u003e [unsubscribe:tres disconnect:websocket: connection closed]"
+      ]
+    },
+    {
+      "name": "OnSubscribe: rechazar y ampliar",
+      "requirements": [
+        "WS-09",
+        "WS-10",
+        "WS-13"
+      ],
+      "methods": [
+        "Server.OnSubscribe",
+        "Server.OnUnsubscribe",
+        "Conn.Subscribe",
+        "Conn.Unsubscribe",
+        "Conn.Subscriptions"
+      ],
+      "ok": true,
+      "duration": "3ms",
+      "details": [
+        "OnSubscribe rechaza -\u003e el cliente recibe \"sin permiso para privado\" y no queda suscrito",
+        "panic en OnSubscribe -\u003e websocket: handler panic: boom",
+        "OnSubscribe recibe el tipo y el grupo: {Channel:cola Queue:g Type:queue}",
+        "OnSubscribe amplía: subscribe a sala -\u003e también sala.presencia (Subscriptions=3)",
+        "OnUnsubscribe amplía: unsubscribe de sala -\u003e también sala.presencia (panic en OnUnsubscribe registrado, sin efecto)"
+      ]
+    },
+    {
+      "name": "Concurrencia: 20 clientes y 5 publicadores",
+      "requirements": [
+        "WS-12",
+        "WS-03",
+        "WS-04",
+        "WS-06"
+      ],
+      "methods": [
+        "Server.Publish"
+      ],
+      "ok": true,
+      "duration": "358ms",
+      "details": [
+        "500 publicaciones concurrentes en 338ms",
+        "10 topic: cada uno recibió las 500 en orden por publicador; queue (10 miembros): 500 en total"
+      ]
+    },
+    {
+      "name": "Consumidor lento",
+      "requirements": [
+        "WS-12"
+      ],
+      "methods": [
+        "Server.Publish",
+        "Server.OnDisconnect"
+      ],
+      "ok": true,
+      "duration": "969ms",
+      "details": [
+        "tras 267 mensajes de 64 KiB, el lector lento se desconectó: websocket: connection closed: websocket: slow consumer, send buffer full",
+        "Publish nunca se bloqueó (747ms en total)",
+        "el cliente rápido recibió los 267"
+      ]
+    },
+    {
+      "name": "Cliente Go: NewClient, Connect y rechazo",
+      "requirements": [
+        "WS-14",
+        "WS-17",
+        "WS-07"
+      ],
+      "methods": [
+        "NewClient",
+        "Client.Connect",
+        "Client.ID",
+        "Client.Close",
+        "Client.OnConnect",
+        "Conn.ID"
+      ],
+      "ok": true,
+      "duration": "2ms",
+      "details": [
+        "Connect rechazado por OnConnect del servidor -\u003e websocket: connection rejected: token inválido",
+        "Connect aceptado: Client.ID()=01M5G0EA… coincide con Conn.ID() del servidor; OnConnect del cliente llamado",
+        "segundo Connect -\u003e websocket: already connected",
+        "Close; operación sin conexión -\u003e websocket: not connected",
+        "Connect a un servidor cerrado -\u003e dial tcp 127.0.0.1:55425: connect: connection refused"
+      ]
+    },
+    {
+      "name": "Cliente Go: suscribir, queue, publicar y recibir en orden",
+      "requirements": [
+        "WS-15",
+        "WS-16",
+        "WS-03",
+        "WS-04",
+        "WS-06",
+        "WS-09"
+      ],
+      "methods": [
+        "Client.Subscribe",
+        "Client.SubscribeQueue",
+        "Client.Unsubscribe",
+        "Client.Publish",
+        "Client.Subscriptions",
+        "Client.OnMessage",
+        "Client.OnDirect",
+        "Conn.Send"
+      ],
+      "ok": true,
+      "duration": "85ms",
+      "details": [
+        "OnDirect recibió el Conn.Send del servidor: \"bienvenido\"",
+        "Subscribe rechazado por el servidor -\u003e sin permiso",
+        "500 Publish desde un Client (delivered=1500): los topic recibieron 500 en orden con From=ID del publicador; la queue repartió 250/250",
+        "Unsubscribe confirmado: la siguiente publicación llega a 2 (el publicador y la queue)",
+        "Subscribe desde dentro de OnMessage -\u003e ok (sin bloqueo)"
+      ]
+    },
+    {
+      "name": "Cliente Go: desconexión y reconexión",
+      "requirements": [
+        "WS-17",
+        "WS-08"
+      ],
+      "methods": [
+        "Client.OnDisconnect",
+        "Client.Connect",
+        "Client.Subscriptions",
+        "Conn.Close"
+      ],
+      "ok": true,
+      "duration": "7ms",
+      "details": [
+        "el servidor cierra la conexión -\u003e OnDisconnect: websocket: connection closed",
+        "se reconectó desde OnDisconnect con otro ID; las suscripciones se limpian y se vuelven a hacer",
+        "el servidor se apaga -\u003e OnDisconnect: websocket: connection closed"
+      ]
+    },
+    {
+      "name": "Modelo catalog (análisis del código)",
+      "requirements": [
+        "WS-11",
+        "WS-01"
+      ],
+      "methods": null,
+      "ok": true,
+      "duration": "9ms",
+      "details": [
+        "usa github.com/gorilla/websocket: true",
+        "32 métodos públicos, todos en catalog.go como envoltorios de su versión privada"
+      ]
+    }
+  ],
+  "date": "2026-10-21T14:54:04-05:00",
+  "duration": "2.288s",
+  "go": "go1.25.0",
+  "missing": null,
+  "passed": 15,
+  "requirements": {
+    "WS-01": "ok",
+    "WS-02": "ok",
+    "WS-03": "ok",
+    "WS-04": "ok",
+    "WS-05": "ok",
+    "WS-06": "ok",
+    "WS-07": "ok",
+    "WS-08": "ok",
+    "WS-09": "ok",
+    "WS-10": "ok",
+    "WS-11": "ok",
+    "WS-12": "ok",
+    "WS-13": "ok",
+    "WS-14": "ok",
+    "WS-15": "ok",
+    "WS-16": "ok",
+    "WS-17": "ok"
+  },
+  "total": 15
+}

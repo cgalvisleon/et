@@ -1,10 +1,10 @@
 # Resultados: `tcp`
 
-- Fecha: 2026-10-21 14:54:00 -05
+- Fecha: 2026-10-21 16:22:18 -05
 - Go: go1.25.0, darwin/arm64
-- Casos: **25/25 correctos**
+- Casos: **26/26 correctos**
 - Métodos públicos probados: **70/70**
-- Duración total: 2.041s
+- Duración total: 2.433s
 
 Generado con `go run ./test/tcp` (desde la raíz del repo).
 
@@ -15,28 +15,29 @@ Generado con `go run ./test/tcp` (desde la raíz del repo).
 | 1 | Servidor: ciclo de vida | ✅ PASS | 2ms |
 | 2 | Identificación: saludo, ID, Name y ToJson | ✅ PASS | 1ms |
 | 3 | Saludo fallido | ✅ PASS | 303ms |
-| 4 | Cliente: conexión | ✅ PASS | 3ms |
-| 5 | Timeout | ✅ PASS | 253ms |
-| 6 | Send y OnSend en los dos sentidos | ✅ PASS | 12ms |
-| 7 | Request y OnRequest: orden, error, sin handler y panic | ✅ PASS | 2ms |
-| 8 | Concurrencia: 5 clientes, en los dos sentidos | ✅ PASS | 71ms |
-| 9 | OnConnect y OnDisconnect en los dos lados | ✅ PASS | 13ms |
-| 10 | Reconexión desde OnDisconnect | ✅ PASS | 6ms |
-| 11 | SendStream: orden y control de flujo | ✅ PASS | 225ms |
-| 12 | RequestStream: 20 a la vez | ✅ PASS | 78ms |
-| 13 | ReceiveStream en los dos sentidos | ✅ PASS | 130ms |
+| 4 | Cliente: conexión | ✅ PASS | 2ms |
+| 5 | Timeout | ✅ PASS | 252ms |
+| 6 | Send y OnSend en los dos sentidos | ✅ PASS | 9ms |
+| 7 | Request y OnRequest: orden, error, sin handler y panic | ✅ PASS | 3ms |
+| 8 | Concurrencia: 5 clientes, en los dos sentidos | ✅ PASS | 108ms |
+| 9 | OnConnect y OnDisconnect en los dos lados | ✅ PASS | 26ms |
+| 10 | Reconexión desde OnDisconnect | ✅ PASS | 10ms |
+| 11 | SendStream: orden y control de flujo | ✅ PASS | 394ms |
+| 12 | RequestStream: 20 a la vez | ✅ PASS | 98ms |
+| 13 | ReceiveStream en los dos sentidos | ✅ PASS | 149ms |
 | 14 | Streams del servidor al cliente | ✅ PASS | 1ms |
-| 15 | Streams: errores y cancelación | ✅ PASS | 52ms |
-| 16 | Hub: creación, servidores y baja (HUB-01, 02, 03) | ✅ PASS | 22ms |
-| 17 | Hub: mensajes tipados, orden y eventos (HUB-04, 05, 06, 11) | ✅ PASS | 39ms |
+| 15 | Streams: errores y cancelación | ✅ PASS | 51ms |
+| 16 | Hub: creación, servidores y baja (HUB-01, 02, 03) | ✅ PASS | 27ms |
+| 17 | Hub: mensajes tipados, orden y eventos (HUB-04, 05, 06, 11) | ✅ PASS | 37ms |
 | 18 | Hub: métricas y ToJson (HUB-08) | ✅ PASS | 14ms |
-| 19 | Hub: clientes, caída, reconexión y Disconnect (HUB-07, 09) | ✅ PASS | 15ms |
-| 20 | Hub: heartbeat, Status y timeouts compartidos (HUB-10, 12) | ✅ PASS | 414ms |
-| 21 | Hub: mensajes ilegibles, panics y Close (HUB-13, 14) | ✅ PASS | 15ms |
-| 22 | Seguridad: secreto en el saludo (§7.4) | ✅ PASS | 107ms |
-| 23 | Seguridad: TLS, TLS mutuo y canal ligado (§7.4) | ✅ PASS | 64ms |
+| 19 | Hub: clientes, caída, reconexión y Disconnect (HUB-07, 09) | ✅ PASS | 13ms |
+| 20 | Hub: heartbeat, Status y timeouts compartidos (HUB-10, 12) | ✅ PASS | 420ms |
+| 21 | Hub: mensajes ilegibles, panics y Close (HUB-13, 14) | ✅ PASS | 43ms |
+| 22 | Seguridad: secreto en el saludo (§7.4) | ✅ PASS | 150ms |
+| 23 | Seguridad: TLS, TLS mutuo y canal ligado (§7.4) | ✅ PASS | 56ms |
 | 24 | Seguridad: Hub (§7.4, §14) | ✅ PASS | 12ms |
-| 25 | Seguridad: rotación del secreto, dos secretos durante una ventana (§7.4) | ✅ PASS | 186ms |
+| 25 | Seguridad: rotación del secreto, dos secretos durante una ventana (§7.4) | ✅ PASS | 187ms |
+| 26 | Seguridad: el certificado y la CA se recargan sin reiniciar (§7.4) | ✅ PASS | 63ms |
 
 ## Detalle
 
@@ -44,28 +45,28 @@ Generado con `go run ./test/tcp` (desde la raíz del repo).
 
 Métodos: `NewServer`, `Server.Listen`, `Server.Addr`, `Server.Count`, `Server.Close`
 
-- escuchando en 127.0.0.1:55208
+- escuchando en 127.0.0.1:60865
 - segundo Listen -> tcp: server already listening
 - Count con 3 clientes = 3
 - después de Close: Count=0, Addr vacío
-- volvió a escuchar en 127.0.0.1:55212
+- volvió a escuchar en 127.0.0.1:60869
 
 ### 2. Identificación: saludo, ID, Name y ToJson
 
 Métodos: `NewClient`, `Client.ID`, `Client.Name`, `Client.To`, `Client.ServerID`, `Client.ServerName`, `Client.ToJson`, `NewServer`, `Server.ID`, `Server.Name`, `Server.SetName`, `Server.ToJson`, `Server.OnConnect`, `Server.OnSend`
 
-- NewServer/NewClient conservan id y nombre; con id vacío generan uno (01a16007…)
-- el cliente conoce al servidor por el saludo: ServerID=nodo-1 ServerName=nodo-a To=127.0.0.1:55213
+- NewServer/NewClient conservan id y nombre; con id vacío generan uno (01a16057…)
+- el cliente conoce al servidor por el saludo: ServerID=nodo-1 ServerName=nodo-a To=127.0.0.1:60870
 - en OnConnect del servidor, la conexión trae la identidad del cliente: cliente-1/replica
 - OnSend del servidor sabe quién envió: cliente-1/replica
-- Server.ToJson -> map[addr:127.0.0.1:55213 id:nodo-1 name:nodo-a peers:[map[auth:false id:cliente-1 name:replica server:map[id:nodo-1 name:nodo-a] tls:false to:127.0.0.1:55214]]]
-- Client.ToJson -> map[auth:false id:cliente-1 name:replica server:map[id:nodo-1 name:nodo-a] tls:false to:127.0.0.1:55213]
+- Server.ToJson -> map[addr:127.0.0.1:60870 id:nodo-1 name:nodo-a peers:[map[auth:false id:cliente-1 name:replica server:map[id:nodo-1 name:nodo-a] tls:false to:127.0.0.1:60872]]]
+- Client.ToJson -> map[auth:false id:cliente-1 name:replica server:map[id:nodo-1 name:nodo-a] tls:false to:127.0.0.1:60870]
 
 ### 3. Saludo fallido
 
 Métodos: `Client.ConnectTo`, `Client.SetTimeout`, `Server.SetTimeout`, `Server.Count`
 
-- servidor que no saluda -> ConnectTo: tcp: handshake failed: read tcp 127.0.0.1:55217->127.0.0.1:55216: i/o timeout
+- servidor que no saluda -> ConnectTo: tcp: handshake failed: read tcp 127.0.0.1:60875->127.0.0.1:60874: i/o timeout
 - cliente que no saluda -> el servidor lo cierra (EOF); Count=0, sin OnConnect
 
 ### 4. Cliente: conexión
@@ -106,7 +107,7 @@ Métodos: `Client.Request`, `Server.OnRequest`, `Client.OnRequest`
 
 Métodos: `Client.Send`, `Client.Request`, `Server.OnRequest`, `Server.OnSend`, `Client.OnRequest`, `Client.OnSend`, `Server.OnConnect`
 
-- 1000 Request y 1000 Send en cada sentido en 32ms
+- 1000 Request y 1000 Send en cada sentido en 34ms
 
 ### 9. OnConnect y OnDisconnect en los dos lados
 
@@ -127,8 +128,8 @@ Métodos: `Client.OnDisconnect`, `Client.ConnectTo`, `Server.OnConnect`
 Métodos: `Client.SendStream`, `Server.OnSendStream`, `StreamWriter.Write`, `StreamWriter.Close`, `StreamReader.Read`
 
 - 2000 trozos en orden
-- escritor frenado por el lector lento: 224ms
-- Request atendidos mientras tanto por la misma conexión: 4153
+- escritor frenado por el lector lento: 371ms
+- Request atendidos mientras tanto por la misma conexión: 1057
 
 ### 12. RequestStream: 20 a la vez
 
@@ -167,8 +168,8 @@ Métodos: `StreamWriter.CloseWithError`, `StreamReader.Close`, `Server.OnSendStr
 
 Métodos: `NewHub`, `Hub.ID`, `Hub.Name`, `Hub.LoadServer`, `Hub.DownServer`, `Hub.Servers`, `Hub.Metrics`
 
-- NewHub sin id -> 01a16007-1463-7be6-a92c-77811eb7ea97; no arranca goroutines ni escucha
-- LoadServer(0) en :55267 y :[::]:55268; repetido -> MSG_HUB_SERVER_EXISTS
+- NewHub sin id -> 01a16057-edf9-7952-8914-9c0534ac2f02; no arranca goroutines ni escucha
+- LoadServer(0) en :60934 y :[::]:60935; repetido -> MSG_HUB_SERVER_EXISTS
 - DownServer cierra las conexiones; repetido y Metrics -> MSG_HUB_SERVER_NOT_FOUND
 
 ### 17. Hub: mensajes tipados, orden y eventos (HUB-04, 05, 06, 11)
@@ -185,7 +186,7 @@ Métodos: `Hub.ConnectTo`, `Hub.Send`, `Hub.SendTo`, `Hub.OnMessage`, `Hub.OnCon
 
 Métodos: `Hub.Metrics`, `Hub.ToJson`
 
-- Metrics: {"addr":"127.0.0.1:55273","bytes_in":851,"bytes_out":80,"connected_at":"2026-10-21T14:53:59.201462-05:00","id":"hub-b","last_beat":null,"last_message":"2026-10-21T14:53:59.203204-05:00","messages_in":10,"messages_out":1,"name":"nodo-b"}
+- Metrics: {"addr":"127.0.0.1:60941","bytes_in":851,"bytes_out":80,"connected_at":"2026-10-21T16:22:17.785877-05:00","id":"hub-b","last_beat":null,"last_message":"2026-10-21T16:22:17.787069-05:00","messages_in":10,"messages_out":1,"name":"nodo-b"}
 - al cerrarse, la conexión sale de las métricas
 
 ### 19. Hub: clientes, caída, reconexión y Disconnect (HUB-07, 09)
@@ -200,7 +201,7 @@ Métodos: `Hub.ConnectTo`, `Hub.Disconnect`, `Hub.Clients`, `Hub.OnDisconnect`, 
 
 Métodos: `Hub.Heartbeat`, `Hub.Status`, `Hub.SetTimeoutClient`, `Hub.SetTimeoutServer`
 
-- Status: {"addr":"127.0.0.1:55278","connected_at":"2026-10-21T14:53:59.231261-05:00","failures":0,"last_beat":"2026-10-21T14:53:59.251947-05:00","latency_ms":0.259,"server":{"id":"hub-a","name":"nodo-a"},"state":"up"}
+- Status: {"addr":"127.0.0.1:60946","connected_at":"2026-10-21T16:22:17.812494-05:00","failures":0,"last_beat":"2026-10-21T16:22:17.833381-05:00","latency_ms":0.477,"server":{"id":"hub-a","name":"nodo-a"},"state":"up"}
 - 3 latidos sin respuesta -> cierre con hub: no heartbeat response
 - Heartbeat(0) lo detiene
 
@@ -212,7 +213,7 @@ Métodos: `Hub.Close`, `Hub.OnMessage`, `Hub.Servers`, `Hub.Clients`
 - seq 1 inválido se descarta y cuenta; seq 2 (llegado antes) se entrega
 - Data sin seq legible -> el Hub cierra la conexión con hub: invalid message
 - un Request con JSON que no es latido (sin from.id) llega al OnRequest del usuario
-- Close vacía el Hub y se puede volver a usar (LoadServer en [::]:55284)
+- Close vacía el Hub y se puede volver a usar (LoadServer en [::]:60961)
 
 ### 22. Seguridad: secreto en el saludo (§7.4)
 
@@ -232,7 +233,7 @@ Métodos: `NewTLS`, `Client.SetSecurity`, `Server.SetSecurity`, `Client.ToJson`
 - intermediario TLS que reenvía el saludo -> tcp: handshake failed: tcp: authentication failed
 - contraprueba: sin secreto (TLS sin CA) el intermediario pasa
 - TLS mutuo con CA (certificado para 127.0.0.1): conecta
-- cliente con certificado ajeno a la CA -> tcp: handshake failed: remote error: tls: certificate required
+- cliente con certificado ajeno a la CA -> tcp: handshake failed: remote error: tls: bad certificate
 - NewTLS con certificado sin llave -> tcp: TLS needs both the certificate and the key
 
 ### 24. Seguridad: Hub (§7.4, §14)
@@ -254,6 +255,13 @@ Métodos: `Client.SetSecurity`, `Server.SetSecurity`, `Client.ToJson`
 - servidor solo con el nuevo, cliente solo con el viejo -> tcp: handshake failed: tcp: authentication failed
 - servidor solo con el viejo, cliente solo con el nuevo -> tcp: handshake failed: tcp: authentication failed
 - dos secretos en cada lado, ninguno en común -> tcp: handshake failed: tcp: authentication failed
+
+### 26. Seguridad: el certificado y la CA se recargan sin reiniciar (§7.4)
+
+Métodos: `NewTLS`, `Server.SetSecurity`, `Client.SetSecurity`
+
+- TLS mutuo desde archivos: conecta; se reescriben CA, certificado y llave: la conexión nueva usa los nuevos (otra CA emisora) sin reiniciar el servidor, y un cliente con la CA vieja ya no entra
+- un certificado roto en disco no corta nada: sigue el último válido
 
 ## Cobertura de métodos públicos
 
@@ -325,7 +333,7 @@ Métodos: `Client.SetSecurity`, `Server.SetSecurity`, `Client.ToJson`
 | `Hub.SetTimeoutServer` | 20 |
 | `Hub.SetTimeoutClient` | 20 |
 | `Hub.Close` | 21 |
-| `Client.SetSecurity` | 22, 23, 25 |
-| `Server.SetSecurity` | 22, 23, 25 |
+| `Client.SetSecurity` | 22, 23, 25, 26 |
+| `Server.SetSecurity` | 22, 23, 25, 26 |
 | `Hub.SetSecurity` | 24 |
-| `NewTLS` | 23 |
+| `NewTLS` | 23, 26 |

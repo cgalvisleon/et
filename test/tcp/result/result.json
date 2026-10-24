@@ -12,11 +12,11 @@
       "ok": true,
       "duration": "2ms",
       "details": [
-        "escuchando en 127.0.0.1:55208",
+        "escuchando en 127.0.0.1:60865",
         "segundo Listen -\u003e tcp: server already listening",
         "Count con 3 clientes = 3",
         "después de Close: Count=0, Addr vacío",
-        "volvió a escuchar en 127.0.0.1:55212"
+        "volvió a escuchar en 127.0.0.1:60869"
       ]
     },
     {
@@ -40,12 +40,12 @@
       "ok": true,
       "duration": "1ms",
       "details": [
-        "NewServer/NewClient conservan id y nombre; con id vacío generan uno (01a16007…)",
-        "el cliente conoce al servidor por el saludo: ServerID=nodo-1 ServerName=nodo-a To=127.0.0.1:55213",
+        "NewServer/NewClient conservan id y nombre; con id vacío generan uno (01a16057…)",
+        "el cliente conoce al servidor por el saludo: ServerID=nodo-1 ServerName=nodo-a To=127.0.0.1:60870",
         "en OnConnect del servidor, la conexión trae la identidad del cliente: cliente-1/replica",
         "OnSend del servidor sabe quién envió: cliente-1/replica",
-        "Server.ToJson -\u003e map[addr:127.0.0.1:55213 id:nodo-1 name:nodo-a peers:[map[auth:false id:cliente-1 name:replica server:map[id:nodo-1 name:nodo-a] tls:false to:127.0.0.1:55214]]]",
-        "Client.ToJson -\u003e map[auth:false id:cliente-1 name:replica server:map[id:nodo-1 name:nodo-a] tls:false to:127.0.0.1:55213]"
+        "Server.ToJson -\u003e map[addr:127.0.0.1:60870 id:nodo-1 name:nodo-a peers:[map[auth:false id:cliente-1 name:replica server:map[id:nodo-1 name:nodo-a] tls:false to:127.0.0.1:60872]]]",
+        "Client.ToJson -\u003e map[auth:false id:cliente-1 name:replica server:map[id:nodo-1 name:nodo-a] tls:false to:127.0.0.1:60870]"
       ]
     },
     {
@@ -59,7 +59,7 @@
       "ok": true,
       "duration": "303ms",
       "details": [
-        "servidor que no saluda -\u003e ConnectTo: tcp: handshake failed: read tcp 127.0.0.1:55217-\u003e127.0.0.1:55216: i/o timeout",
+        "servidor que no saluda -\u003e ConnectTo: tcp: handshake failed: read tcp 127.0.0.1:60875-\u003e127.0.0.1:60874: i/o timeout",
         "cliente que no saluda -\u003e el servidor lo cierra (EOF); Count=0, sin OnConnect"
       ]
     },
@@ -73,7 +73,7 @@
         "Client.Request"
       ],
       "ok": true,
-      "duration": "3ms",
+      "duration": "2ms",
       "details": [
         "Send sin conexión -\u003e tcp: not connected",
         "Request sin conexión -\u003e tcp: not connected",
@@ -88,7 +88,7 @@
         "Server.SetTimeout"
       ],
       "ok": true,
-      "duration": "253ms",
+      "duration": "252ms",
       "details": [
         "Client.SetTimeout(0) -\u003e tcp: timeout must be greater than zero",
         "Server.SetTimeout(-1s) -\u003e tcp: timeout must be greater than zero",
@@ -105,7 +105,7 @@
         "Server.OnConnect"
       ],
       "ok": true,
-      "duration": "12ms",
+      "duration": "9ms",
       "details": [
         "cliente→servidor: 100, servidor→cliente: 100, segunda función del servidor: 100"
       ]
@@ -118,7 +118,7 @@
         "Client.OnRequest"
       ],
       "ok": true,
-      "duration": "2ms",
+      "duration": "3ms",
       "details": [
         "(nil, nil) cede a la siguiente -\u003e \"segunda\"",
         "error del handler -\u003e falló a propósito",
@@ -139,9 +139,9 @@
         "Server.OnConnect"
       ],
       "ok": true,
-      "duration": "71ms",
+      "duration": "108ms",
       "details": [
-        "1000 Request y 1000 Send en cada sentido en 32ms"
+        "1000 Request y 1000 Send en cada sentido en 34ms"
       ]
     },
     {
@@ -155,7 +155,7 @@
         "Server.Close"
       ],
       "ok": true,
-      "duration": "13ms",
+      "duration": "26ms",
       "details": [
         "OnConnect: cliente 2, servidor 2 (con un panic en otra función)",
         "cierra el cliente -\u003e OnDisconnect en ambos lados",
@@ -170,7 +170,7 @@
         "Server.OnConnect"
       ],
       "ok": true,
-      "duration": "6ms",
+      "duration": "10ms",
       "details": [
         "el servidor cortó, el cliente se reconectó solo y respondió \"de nuevo\""
       ]
@@ -185,11 +185,11 @@
         "StreamReader.Read"
       ],
       "ok": true,
-      "duration": "225ms",
+      "duration": "394ms",
       "details": [
         "2000 trozos en orden",
-        "escritor frenado por el lector lento: 224ms",
-        "Request atendidos mientras tanto por la misma conexión: 4153"
+        "escritor frenado por el lector lento: 371ms",
+        "Request atendidos mientras tanto por la misma conexión: 1057"
       ]
     },
     {
@@ -202,7 +202,7 @@
         "StreamReader.Read"
       ],
       "ok": true,
-      "duration": "78ms",
+      "duration": "98ms",
       "details": [
         "20 RequestStream de 300 trozos, cada uno con su suma correcta",
         "CloseAndReceive en un SendStream -\u003e tcp: not a request stream"
@@ -218,7 +218,7 @@
         "StreamReader.Read"
       ],
       "ok": true,
-      "duration": "130ms",
+      "duration": "149ms",
       "details": [
         "20 ReceiveStream de 500 trozos a la vez: 10 del cliente al servidor y 10 del servidor al cliente"
       ]
@@ -255,7 +255,7 @@
         "Client.ReceiveStream"
       ],
       "ok": true,
-      "duration": "52ms",
+      "duration": "51ms",
       "details": [
         "RequestStream sin handler -\u003e tcp: no request handler",
         "ReceiveStream sin handler -\u003e tcp: no request handler",
@@ -279,10 +279,10 @@
         "Hub.Metrics"
       ],
       "ok": true,
-      "duration": "22ms",
+      "duration": "27ms",
       "details": [
-        "NewHub sin id -\u003e 01a16007-1463-7be6-a92c-77811eb7ea97; no arranca goroutines ni escucha",
-        "LoadServer(0) en :55267 y :[::]:55268; repetido -\u003e MSG_HUB_SERVER_EXISTS",
+        "NewHub sin id -\u003e 01a16057-edf9-7952-8914-9c0534ac2f02; no arranca goroutines ni escucha",
+        "LoadServer(0) en :60934 y :[::]:60935; repetido -\u003e MSG_HUB_SERVER_EXISTS",
         "DownServer cierra las conexiones; repetido y Metrics -\u003e MSG_HUB_SERVER_NOT_FOUND"
       ]
     },
@@ -296,7 +296,7 @@
         "Hub.OnConnect"
       ],
       "ok": true,
-      "duration": "39ms",
+      "duration": "37ms",
       "details": [
         "500 TypeInt en orden, como int64, con From del Hub (el From del llamador se ignora)",
         "OnConnect: servidor ve al cliente \"nodo-b\"; cliente ve al servidor \"nodo-a\"",
@@ -314,7 +314,7 @@
       "ok": true,
       "duration": "14ms",
       "details": [
-        "Metrics: {\"addr\":\"127.0.0.1:55273\",\"bytes_in\":851,\"bytes_out\":80,\"connected_at\":\"2026-10-21T14:53:59.201462-05:00\",\"id\":\"hub-b\",\"last_beat\":null,\"last_message\":\"2026-10-21T14:53:59.203204-05:00\",\"messages_in\":10,\"messages_out\":1,\"name\":\"nodo-b\"}",
+        "Metrics: {\"addr\":\"127.0.0.1:60941\",\"bytes_in\":851,\"bytes_out\":80,\"connected_at\":\"2026-10-21T16:22:17.785877-05:00\",\"id\":\"hub-b\",\"last_beat\":null,\"last_message\":\"2026-10-21T16:22:17.787069-05:00\",\"messages_in\":10,\"messages_out\":1,\"name\":\"nodo-b\"}",
         "al cerrarse, la conexión sale de las métricas"
       ]
     },
@@ -328,7 +328,7 @@
         "Hub.Status"
       ],
       "ok": true,
-      "duration": "15ms",
+      "duration": "13ms",
       "details": [
         "el servidor cae -\u003e el cliente queda registrado en down; Send -\u003e tcp: not connected",
         "ConnectTo sobre un cliente caído reconecta el mismo *Client",
@@ -344,9 +344,9 @@
         "Hub.SetTimeoutServer"
       ],
       "ok": true,
-      "duration": "414ms",
+      "duration": "420ms",
       "details": [
-        "Status: {\"addr\":\"127.0.0.1:55278\",\"connected_at\":\"2026-10-21T14:53:59.231261-05:00\",\"failures\":0,\"last_beat\":\"2026-10-21T14:53:59.251947-05:00\",\"latency_ms\":0.259,\"server\":{\"id\":\"hub-a\",\"name\":\"nodo-a\"},\"state\":\"up\"}",
+        "Status: {\"addr\":\"127.0.0.1:60946\",\"connected_at\":\"2026-10-21T16:22:17.812494-05:00\",\"failures\":0,\"last_beat\":\"2026-10-21T16:22:17.833381-05:00\",\"latency_ms\":0.477,\"server\":{\"id\":\"hub-a\",\"name\":\"nodo-a\"},\"state\":\"up\"}",
         "3 latidos sin respuesta -\u003e cierre con hub: no heartbeat response",
         "Heartbeat(0) lo detiene"
       ]
@@ -360,13 +360,13 @@
         "Hub.Clients"
       ],
       "ok": true,
-      "duration": "15ms",
+      "duration": "43ms",
       "details": [
         "un panic en OnMessage se registra; la siguiente función y el siguiente mensaje siguen",
         "seq 1 inválido se descarta y cuenta; seq 2 (llegado antes) se entrega",
         "Data sin seq legible -\u003e el Hub cierra la conexión con hub: invalid message",
         "un Request con JSON que no es latido (sin from.id) llega al OnRequest del usuario",
-        "Close vacía el Hub y se puede volver a usar (LoadServer en [::]:55284)"
+        "Close vacía el Hub y se puede volver a usar (LoadServer en [::]:60961)"
       ]
     },
     {
@@ -377,7 +377,7 @@
         "Client.ToJson"
       ],
       "ok": true,
-      "duration": "107ms",
+      "duration": "150ms",
       "details": [
         "mismo secreto: conecta, auth=true en los dos lados, el mensaje pasa",
         "secreto distinto -\u003e tcp: handshake failed: tcp: authentication failed",
@@ -394,14 +394,14 @@
         "Client.ToJson"
       ],
       "ok": true,
-      "duration": "64ms",
+      "duration": "56ms",
       "details": [
         "TLS 1.3 autofirmado + secreto: conecta, tls=true y auth=true, Request pasa",
         "cliente sin TLS contra servidor TLS -\u003e tcp: handshake failed: EOF",
         "intermediario TLS que reenvía el saludo -\u003e tcp: handshake failed: tcp: authentication failed",
         "contraprueba: sin secreto (TLS sin CA) el intermediario pasa",
         "TLS mutuo con CA (certificado para 127.0.0.1): conecta",
-        "cliente con certificado ajeno a la CA -\u003e tcp: handshake failed: remote error: tls: certificate required",
+        "cliente con certificado ajeno a la CA -\u003e tcp: handshake failed: remote error: tls: bad certificate",
         "NewTLS con certificado sin llave -\u003e tcp: TLS needs both the certificate and the key"
       ]
     },
@@ -428,7 +428,7 @@
         "Client.ToJson"
       ],
       "ok": true,
-      "duration": "186ms",
+      "duration": "187ms",
       "details": [
         "servidor con los dos, cliente con el viejo: conecta, auth=true en los dos lados",
         "servidor con el viejo, cliente con los dos: conecta, auth=true en los dos lados",
@@ -439,13 +439,27 @@
         "servidor solo con el viejo, cliente solo con el nuevo -\u003e tcp: handshake failed: tcp: authentication failed",
         "dos secretos en cada lado, ninguno en común -\u003e tcp: handshake failed: tcp: authentication failed"
       ]
+    },
+    {
+      "name": "Seguridad: el certificado y la CA se recargan sin reiniciar (§7.4)",
+      "methods": [
+        "NewTLS",
+        "Server.SetSecurity",
+        "Client.SetSecurity"
+      ],
+      "ok": true,
+      "duration": "63ms",
+      "details": [
+        "TLS mutuo desde archivos: conecta; se reescriben CA, certificado y llave: la conexión nueva usa los nuevos (otra CA emisora) sin reiniciar el servidor, y un cliente con la CA vieja ya no entra",
+        "un certificado roto en disco no corta nada: sigue el último válido"
+      ]
     }
   ],
-  "date": "2026-10-21T14:54:00-05:00",
-  "duration": "2.041s",
+  "date": "2026-10-21T16:22:18-05:00",
+  "duration": "2.433s",
   "go": "go1.25.0",
   "methods": 70,
   "missing": null,
-  "passed": 25,
-  "total": 25
+  "passed": 26,
+  "total": 26
 }

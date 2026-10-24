@@ -124,6 +124,7 @@ type Instance struct {
 	bindings    map[string]any         `json:"-"`
 	resilience  *resilience.Resilience `json:"-"`
 	goTo        int                    `json:"-"`
+	again       *Connection            `json:"-"`
 	onChange    []func(data et.Json)   `json:"-"`
 	onLog       []func(line et.Json)   `json:"-"`
 	mu          sync.Mutex             `json:"-"`
@@ -205,6 +206,7 @@ func (s *Instance) up() *Instance {
 	s.wrapperConsole()
 	s.wrapperCtx()
 	s.wrapperGoTo()
+	s.wrapperAgain()
 	return s
 }
 
@@ -219,14 +221,6 @@ func (s *Instance) SetBinding(key string, value any) *Instance {
 	}
 	s.bindings[key] = value
 	return s
-}
-
-/**
-* setGoto
-* @param idx int
-**/
-func (s *Instance) setGoto(idx int) {
-	s.goTo = idx
 }
 
 /**
@@ -638,6 +632,29 @@ func (s *Instance) execution() et.Json {
 }
 
 /**
+* setGoto
+* @param idx int
+**/
+func (s *Instance) setGoto(idx int) {
+	s.goTo = idx
+	s.again = nil
+}
+
+/**
+* setAgain
+* @param connection *Connection
+**/
+func (s *Instance) setAgain() {
+	if s.again == nil {
+		s.again = s.Current
+		s.next()
+	} else {
+		s.setCurrent(s.again)
+		s.runing(s.Ctx)
+	}
+}
+
+/**
 * run
 * @param ctx, tags et.Json, await bool
 * @return et.Json, error
@@ -667,40 +684,12 @@ func (s *Instance) Run(ctx et.Json, await bool) (et.Json, error) {
 		return et.Json{}, err
 	}
 
-	runing := func() (et.Json, error) {
-		for s.next() {
-			step := s.Step
-			if step == nil {
-				return et.Json{}, errors.New(MSG_STEP_NOT_FOUND)
-			}
-
-			step.OnStatus(func(status Status) {
-				s.setStatus(status)
-			})
-
-			ctx = s.setCtx(ctx)
-			result, err = step.Run(s, ctx)
-			if err != nil {
-				result, err = s.runResilence(ctx, await, err)
-				if err != nil {
-					result, err = s.runError(ctx, err)
-				}
-			}
-
-			s.setResult(result, err)
-			if err != nil {
-				return result, err
-			}
-		}
-		return result, nil
-	}
-
 	if await {
-		return runing()
+		return s.runing(ctx)
 	}
 
 	go func() {
-		_, err := runing()
+		_, err := s.runing(ctx)
 		if err != nil {
 			logs.Logf(packageName, MSG_INSTANCE_ERROR, s.ID, s.FlowId, s.StepId, err.Error())
 		}
@@ -711,10 +700,46 @@ func (s *Instance) Run(ctx et.Json, await bool) (et.Json, error) {
 }
 
 /**
+* runing: Runs the instance
+* @param ctx et.Json
+* @return (et.Json, error)
+**/
+func (s *Instance) runing(ctx et.Json) (et.Json, error) {
+	var result et.Json
+	var err error
+	for s.next() {
+		step := s.Step
+		if step == nil {
+			return et.Json{}, errors.New(MSG_STEP_NOT_FOUND)
+		}
+
+		step.OnStatus(func(status Status) {
+			s.setStatus(status)
+		})
+
+		ctx = s.setCtx(ctx)
+		result, err = step.Run(s, ctx)
+		if err != nil {
+			result, err = s.runResilence(ctx, err)
+			if err != nil {
+				result, err = s.runError(ctx, err)
+			}
+		}
+
+		s.setResult(result, err)
+		if err != nil {
+			return result, err
+		}
+	}
+	return result, nil
+}
+
+/**
 * runResilence
+* @param ctx et.Json, err error
 * @return (bool, error)
 **/
-func (s *Instance) runResilence(ctx et.Json, await bool, err error) (et.Json, error) {
+func (s *Instance) runResilence(ctx et.Json, err error) (et.Json, error) {
 	if s.flow.TotalAttempts == 0 {
 		return et.Json{}, err
 	}
@@ -735,8 +760,8 @@ func (s *Instance) runResilence(ctx et.Json, await bool, err error) (et.Json, er
 		TotalAttempts: s.flow.TotalAttempts,
 		Interval:      s.flow.TimeAttempts,
 		Tags:          s.Tags,
-		Fn:            s.Run,
-		FnArgs:        []interface{}{ctx, await},
+		Fn:            s.runing,
+		FnArgs:        []interface{}{ctx},
 	})
 	if err != nil {
 		return et.Json{}, err

@@ -69,6 +69,10 @@ func wrapperBasic(bindings map[string]interface{}) map[string]interface{} {
 	bindings["getULID"] = reg.GetULID
 	bindings["getXID"] = reg.GetXID
 	bindings["timeNow"] = timezone.Now
+	// sleep(ms): detiene el script esos milisegundos (el paso delay)
+	bindings["sleep"] = func(ms int) {
+		time.Sleep(time.Duration(ms) * time.Millisecond)
+	}
 	bindings["validator"] = validator.Wrapper()
 	evaluateObject := et.EvaluateObjectWrapper()
 	bindings["evaluateObject"] = func(obj et.Json, where any) (bool, error) {
@@ -392,6 +396,20 @@ func (s *Instance) wrapperGoTo() {
 			return errors.New(MSG_INVALID_INDEX)
 		}
 		s.setGoto(idx)
+		return nil
+	})
+}
+
+/**
+* wrapperAgain: Wraps the again
+* @param instance *Instance
+**/
+func (s *Instance) wrapperAgain() {
+	s.SetBinding("again", func() error {
+		if s.Step == nil {
+			return errors.New(MSG_STEP_NOT_FOUND)
+		}
+		s.setAgain()
 		return nil
 	})
 }

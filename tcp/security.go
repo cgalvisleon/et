@@ -205,7 +205,9 @@ func tlsHandshake(conn *tls.Conn, timeout time.Duration) error {
 * @return *tls.Config
 **/
 func clientTLS(cfg *tls.Config, addr string) *tls.Config {
-	if cfg.ServerName != "" || cfg.InsecureSkipVerify {
+	// A config from NewTLS with a CA verifies in VerifyConnection (InsecureSkipVerify
+	// only turns off the built-in check, which cannot reload the CA): it needs the host too
+	if cfg.ServerName != "" || cfg.InsecureSkipVerify && cfg.VerifyConnection == nil {
 		return cfg
 	}
 	result := cfg.Clone()
@@ -246,47 +248,152 @@ func selfSigned(name string) (tls.Certificate, error) {
 }
 
 /**
+* tlsFiles: Certificado, llave y CA de NewTLS, que se vuelven a leer cuando cambia
+* alguno de los archivos (fecha o tamaño). Cada handshake pide lo vigente; un archivo
+* que no se puede leer o no sirve deja lo último válido (§7.4).
+**/
+type tlsFiles struct {
+	certFile, keyFile, caFile string
+	mu                        sync.Mutex
+	stamp                     string           // fecha y tamaño de los archivos de lo cargado
+	cert                      *tls.Certificate // nil: autofirmado
+	pool                      *x509.CertPool   // nil: sin CA
+}
+
+/**
+* fileStamp: Fecha y tamaño de los archivos (vacíos se saltan)
+* @param files ...string
+* @return string, error
+**/
+func fileStamp(files ...string) (string, error) {
+	result := ""
+	for _, file := range files {
+		if file == "" {
+			continue
+		}
+		info, err := os.Stat(file)
+		if err != nil {
+			return "", err
+		}
+		result += fmt.Sprintf("%s:%d:%d;", file, info.ModTime().UnixNano(), info.Size())
+	}
+	return result, nil
+}
+
+/**
+* load: Lee el certificado y la CA de los archivos
+* @return *tls.Certificate, *x509.CertPool, error
+**/
+func (s *tlsFiles) load() (*tls.Certificate, *x509.CertPool, error) {
+	var cert *tls.Certificate
+	if s.certFile != "" {
+		c, err := tls.LoadX509KeyPair(s.certFile, s.keyFile)
+		if err != nil {
+			return nil, nil, err
+		}
+		cert = &c
+	}
+	var pool *x509.CertPool
+	if s.caFile != "" {
+		data, err := os.ReadFile(s.caFile)
+		if err != nil {
+			return nil, nil, err
+		}
+		pool = x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(data) {
+			return nil, nil, fmt.Errorf(msg.MSG_TCP_TLS_CA, s.caFile)
+		}
+	}
+	return cert, pool, nil
+}
+
+/**
+* current: El certificado y la CA vigentes, releídos si cambió un archivo
+* @return *tls.Certificate, *x509.CertPool
+**/
+func (s *tlsFiles) current() (*tls.Certificate, *x509.CertPool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	stamp, err := fileStamp(s.certFile, s.keyFile, s.caFile)
+	if err == nil && stamp != s.stamp {
+		if cert, pool, err := s.load(); err == nil {
+			s.cert, s.pool, s.stamp = cert, pool, stamp
+		}
+	}
+	return s.cert, s.pool
+}
+
+/**
+* verify: Verifica la cadena del otro lado contra la CA vigente (y el nombre, si hay)
+* @param certs []*x509.Certificate, name string, usage x509.ExtKeyUsage
+* @return error
+**/
+func (s *tlsFiles) verify(certs []*x509.Certificate, name string, usage x509.ExtKeyUsage) error {
+	_, pool := s.current()
+	if len(certs) == 0 {
+		return errors.New("tls: no certificate from the other side")
+	}
+	opts := x509.VerifyOptions{Roots: pool, DNSName: name, Intermediates: x509.NewCertPool(), KeyUsages: []x509.ExtKeyUsage{usage}}
+	for _, c := range certs[1:] {
+		opts.Intermediates.AddCert(c)
+	}
+	_, err := certs[0].Verify(opts)
+	return err
+}
+
+/**
 * newTLS: Configuraciones TLS 1.3 de servidor y de cliente.
 * Sin certFile/keyFile se usa un certificado autofirmado en memoria. Sin caFile no se
 * verifica el certificado del otro lado (la autenticación queda en el secreto del
 * saludo, ligado al canal); con caFile, los dos lados presentan certificado y se
-* verifican contra esa CA (TLS mutuo).
+* verifican contra esa CA (TLS mutuo). Los archivos se vuelven a leer cuando cambian:
+* una conexión nueva usa el certificado y la CA vigentes, sin reiniciar (§7.4).
 * @param certFile, keyFile, caFile string
 * @return *tls.Config, *tls.Config, error
 **/
 func newTLS(certFile, keyFile, caFile string) (*tls.Config, *tls.Config, error) {
-	var cert tls.Certificate
-	var err error
-	switch {
-	case certFile != "" && keyFile != "":
-		cert, err = tls.LoadX509KeyPair(certFile, keyFile)
-	case certFile == "" && keyFile == "":
-		cert, err = selfSigned("josefina")
-	default:
-		err = errors.New(msg.MSG_TCP_TLS_KEYPAIR)
+	if (certFile == "") != (keyFile == "") {
+		return nil, nil, errors.New(msg.MSG_TCP_TLS_KEYPAIR)
 	}
+	files := &tlsFiles{certFile: certFile, keyFile: keyFile, caFile: caFile}
+	cert, pool, err := files.load()
 	if err != nil {
 		return nil, nil, err
 	}
+	files.cert, files.pool = cert, pool
+	files.stamp, _ = fileStamp(certFile, keyFile, caFile)
 
-	server := &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{cert}}
-	client := &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{cert}}
+	var self tls.Certificate
+	if cert == nil {
+		if self, err = selfSigned("josefina"); err != nil {
+			return nil, nil, err
+		}
+	}
+	pick := func() *tls.Certificate {
+		if c, _ := files.current(); c != nil {
+			return c
+		}
+		return &self
+	}
+
+	server := &tls.Config{MinVersion: tls.VersionTLS13, GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) { return pick(), nil }}
+	client := &tls.Config{MinVersion: tls.VersionTLS13, GetClientCertificate: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) { return pick(), nil }}
 	if caFile == "" {
 		client.InsecureSkipVerify = true
 		return server, client, nil
 	}
 
-	data, err := os.ReadFile(caFile)
-	if err != nil {
-		return nil, nil, err
+	// Mutual TLS against the CA in force at each handshake: the server asks for a
+	// client certificate and checks it itself; the client turns off the built-in check
+	// (fixed RootCAs) and verifies the server's chain and name in VerifyConnection
+	server.ClientAuth = tls.RequireAnyClientCert
+	server.VerifyConnection = func(cs tls.ConnectionState) error {
+		return files.verify(cs.PeerCertificates, "", x509.ExtKeyUsageClientAuth)
 	}
-	pool := x509.NewCertPool()
-	if !pool.AppendCertsFromPEM(data) {
-		return nil, nil, fmt.Errorf(msg.MSG_TCP_TLS_CA, caFile)
+	client.InsecureSkipVerify = true
+	client.VerifyConnection = func(cs tls.ConnectionState) error {
+		return files.verify(cs.PeerCertificates, cs.ServerName, x509.ExtKeyUsageServerAuth)
 	}
-	server.ClientCAs = pool
-	server.ClientAuth = tls.RequireAndVerifyClientCert
-	client.RootCAs = pool
 	return server, client, nil
 }
 

@@ -49,6 +49,7 @@ Hallazgos de la implementación (ya resueltos):
 
 | Fecha | Cambio | Requisitos cumplidos |
 |---|---|---|
+| 2026-10-21 | Recarga de certificados (spec v9 §7.4): `NewTLS` con archivos lee el certificado, la llave y la CA en cada handshake y los vuelve a leer cuando cambian (fecha o tamaño); un archivo roto deja el último válido. TLS mutuo verificado en `VerifyConnection` contra la CA vigente. Caso 26. `go run -race ./test/tcp`: 26/26 casos, 70/70 métodos. | 14/14 |
 | 2026-10-21 | Movido de josefina (`internal/tcp`) a `et/tcp`: mensajes `MSG_TCP_*`/`MSG_HUB_*` en `et/msg`, verificador en `et/test/tcp`; reemplaza al `jtcp` anterior. Sin cambios de protocolo ni de API. `go run -race ./test/tcp`: 25/25 casos, 70/70 métodos. | 14/14 |
 | 2026-10-19 | Rotación del secreto (spec v7 §7.4): `Security.Previous`, `kids` en el primer saludo y `pickSecret` en el servidor; el cliente valida la prueba con cualquiera de sus secretos. Caso 25 (cinco combinaciones que entran, tres que no). Sale de "Fuera del feature". | 14/14 |
 | 2026-10-16 | Seguridad (spec v6 §7.4, `security.go`): secreto compartido con prueba HMAC-SHA256 en un saludo de tres tramas, ligada a la sesión TLS (RFC 5705) y a los dos ids; TLS 1.3 con `NewTLS` (autofirmado en memoria, o archivos con CA para TLS mutuo); `SetSecurity` en `Client`, `Server` y `Hub`; `tls`/`auth` en `ToJson`. Casos 22–24. Contraprueba: sin el canal en la prueba, el caso 23 falla (el intermediario TLS pasa). 24/24, 70/70. | 14/14 + §7.4 |

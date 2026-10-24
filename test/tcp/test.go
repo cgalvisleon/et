@@ -1702,6 +1702,96 @@ var rotationCases = []testCase{
 			return nil
 		},
 	},
+	{
+		Name:    "Seguridad: el certificado y la CA se recargan sin reiniciar (§7.4)",
+		Methods: []string{"NewTLS", "Server.SetSecurity", "Client.SetSecurity"},
+		run: func(r *report) error {
+			dir, err := os.MkdirTemp("", "tcp-reload")
+			if err != nil {
+				return err
+			}
+			defer os.RemoveAll(dir)
+			cert, key, ca, err := writeCA(dir)
+			if err != nil {
+				return err
+			}
+			// The CA and certificate a client keeps from before the change
+			oldDir := filepath.Join(dir, "old")
+			os.Mkdir(oldDir, 0o700)
+			for _, name := range []string{"ca.pem", "cert.pem", "key.pem"} {
+				data, _ := os.ReadFile(filepath.Join(dir, name))
+				os.WriteFile(filepath.Join(oldDir, name), data, 0o600)
+			}
+
+			srvTLS, cliTLS, err := tcp.NewTLS(cert, key, ca)
+			if err != nil {
+				return err
+			}
+			srv, _ := tcp.NewServer("srv-reload", "servidor")
+			srv.SetSecurity(tcp.Security{ServerTLS: srvTLS})
+			if err := srv.Listen("127.0.0.1:0"); err != nil {
+				return err
+			}
+			defer srv.Close()
+			// served: the issuer of the certificate the server presents now
+			served := func() (string, error) {
+				conn, err := tls.Dial("tcp", srv.Addr(), &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS13, GetClientCertificate: cliTLS.GetClientCertificate})
+				if err != nil {
+					return "", err
+				}
+				defer conn.Close()
+				state := conn.ConnectionState()
+				return fmt.Sprintf("%x", state.PeerCertificates[0].AuthorityKeyId), nil
+			}
+			dial := func(cfg *tls.Config) error {
+				c, _ := tcp.NewClient("cli-reload", "cliente")
+				c.SetSecurity(tcp.Security{ClientTLS: cfg})
+				err := c.ConnectTo(srv.Addr())
+				c.Close()
+				return err
+			}
+
+			if err := check(dial(cliTLS) == nil, "conectar con la CA del arranque"); err != nil {
+				return err
+			}
+			before, err := served()
+			if err != nil {
+				return err
+			}
+
+			// New CA and certificate written over the same files
+			time.Sleep(20 * time.Millisecond)
+			if _, _, _, err := writeCA(dir); err != nil {
+				return err
+			}
+			if err := check(dial(cliTLS) == nil, "conectar después de cambiar los archivos"); err != nil {
+				return err
+			}
+			after, err := served()
+			if err != nil {
+				return err
+			}
+			if err := check(after != before, "el servidor sigue presentando el certificado de la CA vieja"); err != nil {
+				return err
+			}
+			_, oldCli, err := tcp.NewTLS(filepath.Join(oldDir, "cert.pem"), filepath.Join(oldDir, "key.pem"), filepath.Join(oldDir, "ca.pem"))
+			if err != nil {
+				return err
+			}
+			if err := check(dial(oldCli) != nil, "un cliente con la CA vieja todavía entra"); err != nil {
+				return err
+			}
+
+			// A broken file keeps the last valid certificate
+			os.WriteFile(cert, []byte("no es un certificado"), 0o600)
+			if err := check(dial(cliTLS) == nil, "con un archivo roto debe seguir el último certificado válido"); err != nil {
+				return err
+			}
+			r.logf("TLS mutuo desde archivos: conecta; se reescriben CA, certificado y llave: la conexión nueva usa los nuevos (otra CA emisora) sin reiniciar el servidor, y un cliente con la CA vieja ya no entra")
+			r.logf("un certificado roto en disco no corta nada: sigue el último válido")
+			return nil
+		},
+	},
 }
 
 /**

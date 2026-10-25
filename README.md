@@ -77,6 +77,7 @@ Each table lists the main public API of every package. `go doc github.com/cgalvi
 | `queue` | `New[T](size, maxEvents, period, handler)`, `Push`, `Len`, `Close` | `q.Push(item)` |
 | `crontab` | `Load(tag, store)`, `CronJob`, `ScheduleJob`, `HttpStartJob`, `HttpStopJob`, `HttpRemoveJob` | `crontab.CronJob(tag, owner, "0 * * * *", 0, nil, fn)` |
 | `resilience` | `New()`, `LoadInstance(Params)`, `Instance.Run`, `IsDone`, `IsFailed`, `Stop` | `inst, _ := r.LoadInstance(resilience.Params{Fn: send, TotalAttempts: 3})` |
+| `store` | `Open(pathData, pathWal, name, mode)` → `FileStore` (`Insert`, `Update`, `Delete`, `Get`, `GetVersion`, `ForEach`, `Keys`, `Deferred`/`WaitDurable`, `Compact`, `Sync`, `WalSince`/`ApplyWalEntry`, `Stats`), `Recover` | `fs, _ := store.Open("./data", "./wal", "customers", store.ReadWrite)` |
 
 ### Security
 
@@ -272,6 +273,25 @@ q.Push(et.Json{"id": 1})
 defer q.Close()
 ```
 
+### Embedded key/value store
+
+`store` is a single-node, append-only store of `id → []byte` in segment files, with an in-memory index; it repairs itself on `Open` after a crash. There is no upsert: call `Update`, then `Insert` if the id did not exist. Format and guarantees: `store/spec.md`.
+
+```go
+fs, err := store.Open("./data/collections", "./data/wal", "customers", store.ReadWrite)
+if err != nil {
+    return err
+}
+defer fs.Close()
+
+ok, err := fs.Insert("c-001", []byte(`{"name":"Ana"}`)) // false if it already existed
+ok, err = fs.Update("c-001", []byte(`{"name":"Ana María"}`))
+data, exists, err := fs.Get("c-001")
+err = fs.ForEach(func(id string, data []byte) (bool, error) {
+    return true, nil // false stops
+}, true, 0, 100)
+```
+
 ### Workflows with `jwf`
 
 `jwf.New` calls `cache.Load()` and `event.Load()`. The first step is the trigger; the next ones chain in order. Persist flows through `OnChange`.
@@ -334,6 +354,7 @@ hits, _ := index.Search(ctx, tenantId, projectId, "reset the router", 5, 0.3, em
 | `dt` | `PRODUCTION` (`true` stores in Redis) |
 | `jwf`, `jsql` | `MAX_AUDIT_LOG` (1000) |
 | `jwsp` | `WHATSAPP_API_URL` |
+| `store` | `RELSEG_SIZE` (segment MB, 128), `SYNC_ON_WRITE` (true), `MIN_THRESHOLD_COMPACT` (1000) |
 | `validator` | `LANG` |
 
 ## CLI binaries
@@ -353,6 +374,7 @@ Also `cmd/et`, `cmd/daemon`, `cmd/jsql`, `cmd/install`, `cmd/whatcher`, `cmd/res
 gofmt -w .
 go build ./... && go vet ./...
 cd jsql/drivers/test && go test -v   # jsql against every available driver
+go run ./test/storebench -d 10s      # load on store (workers, readers)
 ./version.sh --minor                 # bump the git tag, update the READMEs and push
 ```
 

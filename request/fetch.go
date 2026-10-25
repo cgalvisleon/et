@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -186,7 +187,7 @@ func HttpWithContext(ctx context.Context, method, uRL string, header, body et.Js
 		}
 
 		for k, v := range header {
-			req.Header.Set(k, v.(string))
+			req.Header.Set(k, fmt.Sprint(v))
 		}
 
 		client := defaultClient

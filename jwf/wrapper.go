@@ -2,6 +2,7 @@ package jwf
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -12,7 +13,6 @@ import (
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrpc"
-	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/timezone"
@@ -127,52 +127,49 @@ type Fetch struct {
 }
 
 /**
-* wrapperFetch: Wraps the fetch
+* fetchOptions: The optional arguments of fetch after method, url, headers and body: the timeout in seconds (0: no
+* limit) and the body returned when the request fails (a text, or any value as its JSON)
+* @param options []any
+* @return time.Duration, []byte
+**/
+func fetchOptions(options []any) (time.Duration, []byte) {
+	timeout := time.Duration(0)
+	if len(options) > 0 {
+		switch value := options[0].(type) {
+		case int64:
+			timeout = time.Duration(value) * time.Second
+		case float64:
+			timeout = time.Duration(value * float64(time.Second))
+		}
+	}
+
+	var defaultValue []byte
+	if len(options) > 1 && options[1] != nil {
+		switch value := options[1].(type) {
+		case string:
+			defaultValue = []byte(value)
+		default:
+			defaultValue, _ = json.Marshal(value)
+		}
+	}
+	return timeout, defaultValue
+}
+
+/**
+* wrapperFetch: Wraps the fetch: fetch(method, url, headers, body, timeout?, defaultValue?) and
+* fetchTls(method, url, headers, body, tlsConfig, timeout?, defaultValue?)
 * @param bindings map[string]interface{}
 **/
 func wrapperFetch(bindings map[string]interface{}) map[string]interface{} {
-	bindings["fetch"] = func(call goja.FunctionCall) *Fetch {
-		args := call.Arguments
-		if len(args) != 4 {
-			panic(fmt.Errorf(msg.MSG_ARG_REQUIRED, "method, url, headers, body"))
-		}
-		method := args[0].String()
-		url := args[1].String()
-		headers, _ := et.JsonOf(args[2])
-		body, _ := et.JsonOf(args[3])
-		duration, _ := GetArgs(args, 4, 0).(int64)
-		timeout := time.Duration(duration) * time.Second
-		defaultValue := GetArgs(args, 5, nil).([]byte)
+	bindings["fetch"] = func(method, url string, headers, body et.Json, options ...any) *Fetch {
+		timeout, defaultValue := fetchOptions(options)
 		result, status := request.Fetch(method, url, headers, body, timeout, defaultValue)
-		res := &Fetch{
-			Ok:      status.Ok,
-			Result:  result,
-			Status:  status.Code,
-			Message: status.Message,
-		}
-		return res
+		return &Fetch{Ok: status.Ok, Result: result, Status: status.Code, Message: status.Message}
 	}
-	bindings["fetchTls"] = func(call goja.FunctionCall) *Fetch {
-		args := call.Arguments
-		if len(args) != 4 {
-			panic(fmt.Errorf(msg.MSG_ARG_REQUIRED, "method, url, headers, body"))
-		}
-		method := args[0].String()
-		url := args[1].String()
-		headers, _ := et.JsonOf(args[2])
-		body, _ := et.JsonOf(args[3])
-		tlsConfig := GetArgs(args, 4, nil).(*tls.Config)
-		duration, _ := GetArgs(args, 5, 0).(int64)
-		timeout := time.Duration(duration) * time.Second
-		defaultValue := GetArgs(args, 6, nil).([]byte)
+	bindings["fetchTls"] = func(method, url string, headers, body et.Json, tlsConfig *tls.Config, options ...any) *Fetch {
+		timeout, defaultValue := fetchOptions(options)
 		result, status := request.FetchWithTls(method, url, headers, body, tlsConfig, timeout, defaultValue)
-		res := &Fetch{
-			Ok:      status.Ok,
-			Result:  result,
-			Status:  status.Code,
-			Message: status.Message,
-		}
-		return res
+		return &Fetch{Ok: status.Ok, Result: result, Status: status.Code, Message: status.Message}
 	}
 	return bindings
 }

@@ -19,14 +19,14 @@ El SQL concreto lo genera un `Driver` por motor (ver §9); el núcleo de `jsql` 
 | Concepto      | Tipo Go                                                     | Descripción                                                                                                                                                                   |
 | ------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Base de datos | `*jsql.DB` (`db.go`)                                        | Conexión (`*sql.DB`), driver, esquemas y límite de registros (`RecordLimit`).                                                                                                 |
-| Esquema       | `*jsql.Schema` (`schema.go`)                                | Agrupa modelos por nombre.                                                                                                                                                    |
+| Esquema       | `*jsql.Schema` (`db.go`)                                    | Agrupa modelos por nombre.                                                                                                                                                    |
 | Modelo        | `*jsql.Model` (`model.go`)                                  | Definición de una tabla: columnas, índices, llaves, `SourceField`, relaciones y triggers.                                                                                     |
-| Columna       | `*jsql.Column` (`column.go`)                                | `Name`, `TypeColumn`, `TypeData` (`et.TypeData`), `Default`.                                                                                                                  |
+| Columna       | `*jsql.Column` (`define.go`)                                | `Name`, `TypeColumn`, `TypeData` (`et.TypeData`), `Default`.                                                                                                                  |
 | Origen        | `*jsql.From` (`query.go`)                                   | Ubicación de un modelo (`Database`, `Schema`, `Name`, `Table`) y su **alias** `As`.                                                                                           |
 | Campo         | `et.Field` (`et/condition.go`) / `*jsql.Field` (`query.go`) | `et.Field` es la referencia sintáctica (`Source`, `Name`, `As`, `Agg`, `Page`), sin modelo. `jsql.Field` la embebe y le agrega el `From` resuelto, `TypeColumn` y `TypeData`. |
 | Consulta      | `*jsql.Query` (`query.go`)                                  | SQL de tipo consulta (`SELECT`).                                                                                                                                              |
 | Comando       | `*jsql.Command` (`command.go`)                              | SQL de tipo comando: `INSERT`, `UPDATE`, `DELETE`, `UPSERT`, `BULK`.                                                                                                          |
-| Transacción   | `*jsql.Tx` (`tx.go`)                                        | Envoltura de `*sql.Tx`; `nil` = transacción propia con auto-commit.                                                                                                           |
+| Transacción   | `*jsql.Tx` (`db.go`)                                        | Envoltura de `*sql.Tx`; `nil` = transacción propia con auto-commit.                                                                                                           |
 
 ### 2.1 Tipos de columna (`TypeColumn`)
 
@@ -42,7 +42,7 @@ El SQL concreto lo genera un `Driver` por motor (ver §9); el núcleo de `jsql` 
 
 Las columnas `DETAIL`, `MASTER`, `ROLLUP`, `CALCFUNC` y `CALC` solo se ejecutan si se incluyen de manera literal en el select (o con `Query.Detail`, `Query.Master` y `Query.Calc`). Con el select vacío solo se incluyen las columnas `COLUMN` y, si el modelo tiene `SourceField`, sus atributos (§5.3).
 
-Estructura de una columna (`column.go`):
+Estructura de una columna (`define.go`):
 
 ```go
 type Column struct {
@@ -54,7 +54,7 @@ type Column struct {
 }
 ```
 
-### 2.2 Columnas estándar (`column.go`)
+### 2.2 Columnas estándar (`define.go`)
 
 `id`, `_idx`, `_source`, `status`, `version`, `tenant_id`, `project_id`, `created_at`, `updated_at` y `result` (alias de la columna JSON devuelta por los `SELECT` con `SourceField`).
 
@@ -64,7 +64,7 @@ type Column struct {
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Detalle  | `model.DefineDetail(name, keys, rows, selects...)` crea el modelo `<modelo>_<name>` con la llave foránea. `keys` va del campo del maestro al del detalle, `rows` es cuántos registros se muestran y `selects` (opcional) los campos que se muestran.   | `name` es la lista de registros del detalle (hasta `rows`), con los campos de `selects` o, sin ellos, todos.                                                                                                                                                                                                |
 | Maestro  | `model.DefineMaster(name, to, keys, toKeys, selects, rows...)` crea el modelo puente `<modelo>_<to>`. `keys` va del maestro al puente, `toKeys` del destino al puente, `selects` son los campos que se muestran y `rows` (opcional) cuántos registros. | Con `rows = 1` la relación es 1 a 1 y `name` es el registro enlazado como objeto (o `null`). Con `rows > 1`, o sin `rows`, `name` es la lista de registros enlazados (hasta `rows` o `DB_RECORD_LIMIT`). `Model.Bridge(name)` devuelve el puente para crear los enlaces y `Model.Master(name)` la consulta. |
-| Rollup   | `model.DefineRollup(name, to, keys, selects, operation)`. `keys` va del campo de la fila al campo de `to`.                                                                                                                                             | Depende de la operación (tabla siguiente).                                                                                                                                                                                                                                                                  |
+| Rollup   | `model.DefineRollup(name, to, keys, selects, operation, where...)`. `keys` va del campo de la fila al campo de `to`; `where` (opcional, `*et.Condition`) filtra `to` (ver abajo).                                                                     | Depende de la operación (tabla siguiente).                                                                                                                                                                                                                                                                  |
 
 | Operación                  | Resultado                                                                                                                                           |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -74,6 +74,8 @@ type Column struct {
 | `object`                   | El primer registro con los campos de `selects`, como objeto asignado a `name`.                                                                      |
 
 No hace falta seleccionar los campos llave de una relación: si la consulta pide un detalle, un maestro o un rollup y no incluye sus llaves (por ejemplo `tp_documento`), `jsql` las agrega para resolver la relación y las quita del resultado.
+
+**Condiciones de un rollup.** `where` filtra el modelo `to` y se une a las llaves con `AND`: `DefineRollup("pedidos_pagados", pedidos, keys, nil, RollupCount, jsql.Eq("status", "paid"))` cuenta solo los pedidos pagados de cada fila. Un valor `{field: "x"}` (`et.Fld("x")` en Go, `field("x")` en scripts) **se lee de la fila resultante**, no de `to`: `jsql.More("amount", et.Fld("limite"))` compara cada pedido con el `limite` de su fila. Si la fila no trae un campo referenciado, el rollup no se aplica (como con una llave que falta), y si la consulta no lo seleccionó, `jsql` lo agrega y lo quita del resultado, igual que las llaves. No acepta `OR`: los drivers no agrupan condiciones, así que `llave AND a OR b` perdería el filtro de la llave; `DefineRollup` devuelve `MSG_ROLLUP_WHERE_OR` (B15). En JSON (`DefRollup`, el `ToJson` del modelo, `QueryRollups`) va como lista: `"where": [{"status": {"eq": "paid"}}, {"and": {"amount": {"more": {"field": "limite"}}}}]`. En scripts, `defineRollup(name, to, keys, selects, operation, where?)` recibe un objeto, una lista o `null`.
 
 Ejemplo: el atributo `tp_documento` guarda `CC`, `NIT` o `RUT`, y su significado está en el modelo `tipo_documentos` (`id`, `title`). Un rollup `row` con `selects: ["title"]` consulta la columna `title` con `limit 1` y la asigna al atributo que lleva el nombre del rollup; uno `object` con `selects: ["id", "title"]` asigna el objeto completo a ese atributo.
 
@@ -357,7 +359,7 @@ type Driver interface {
 - **Timeout:** cada método recibe un `timeout` opcional y el driver arma su contexto con `jsql.TimeoutContext(timeout...)`: sin timeout o con `0` no hay límite, así que la operación nunca falla por timeout; con un valor mayor falla con `context.DeadlineExceeded` al vencerse. El núcleo pasa el `Timeout` de `ConnectParams` (`DB.timeout`). `Load`, `Query` y `Command` solo generan SQL y no lo usan.
 - `CreateDB` y `DropDB` (expuestos como `jsql.CreateDB(connection, timeout...)` y `jsql.DropDB(db, timeout...)`, que antes cierra el pool) son idempotentes. En postgres, mysql y mssql crean/eliminan la base `database` desde la base del servidor (`postgres`, sin base, `master`), y `Connect` usa `CreateDB`; en sqlite crean/borran el archivo (con sus `-wal` y `-shm`); en oracle el servicio no se crea ni se elimina desde una conexión: `CreateDB` solo comprueba que responde y `DropDB` devuelve `MSG_DRIVER_CANNOT_DROP_DB`. Probado en los cinco drivers (`TestCreateDropDB`).
 - **Nombre de tabla** (`Model.Table`): lo asigna el núcleo al crear el modelo y en `Model.Init`, según `Driver.UseSchema()`. Con esquemas (postgres, mssql) es `schema.nombre`; sin ellos (sqlite, mysql, oracle) es `schema_nombre`, en la base o el usuario de la conexión. El esquema es obligatorio en `Define` (`MSG_SCHEMA_REQUIRED`). En sqlite, una tabla de antes de v1.0.36 (llamada solo `nombre`) se renombra a `schema_nombre` al iniciar su modelo. Los drivers arman el SQL con `Table` (`From.Table`); mssql cita sus partes como `[schema].[nombre]`.
-- La conexión se describe con `jsql.Connection` (`ID`, `SetId`, `GetParams`, `SetDatabase`, `GetDatabase`, `SetPassword`; los cinco drivers la implementan completa), creada según `DB_DRIVER` en `conection.go`.
+- La conexión se describe con `jsql.Connection` (`ID`, `SetId`, `GetParams`, `SetDatabase`, `GetDatabase`, `SetPassword`; los drivers la implementan completa; `josefina` usa la de Postgres, `PgConection`), creada según `DB_DRIVER` en `conection.go`.
 
 | Driver                           | Constante        | Estado                                                                 |
 | -------------------------------- | ---------------- | ---------------------------------------------------------------------- |
@@ -366,7 +368,7 @@ type Driver interface {
 | `oracle` (`go-ora/v2`)           | `DriverOracle`   | Completo, para Oracle 19c o superior (probado en 23ai Free). Ver §9.1. |
 | `mysql` (`go-sql-driver/mysql`)  | `DriverMysql`    | Completo, para MySQL 8.0 o superior (probado en 8.4). Ver §9.2.        |
 | `mssql` (`microsoft/go-mssqldb`) | `DriverMssql`    | Completo, para SQL Server 2022 o superior (probado en 2022). Ver §9.3. |
-| `josefina`                       | `DriverJosefina` | Pendiente (B5): solo la constante.                                     |
+| `josefina` (`lib/pq`)            | `DriverJosefina` | Completo, sobre el protocolo de Postgres de Josefina con `language=jql`. Ver §9.4. |
 
 ### 9.1 Particularidades del driver Oracle
 
@@ -395,6 +397,13 @@ type Driver interface {
 - **`SourceField`**: el `UPDATE` fusiona los atributos con `JSON_MODIFY` y crea antes los objetos padre; como en Oracle, un valor `null` **borra** la llave.
 - **Consultas**: la paginación usa `OFFSET … ROWS FETCH NEXT … ROWS ONLY`, que exige un `ORDER BY` (`ORDER BY (SELECT NULL)` si la consulta no tiene); `IS [NOT] DISTINCT FROM` requiere SQL Server 2022.
 
+### 9.4 Particularidades del driver Josefina
+
+- Paquete `jsql/drivers/josefina` (`DriverJosefina`): Josefina (base de datos de documentos del espacio de trabajo) habla el protocolo de PostgreSQL en su `PG_PORT` y entiende SQL con su lenguaje `jql`, que la conexión elige con `options=-c language=jql`. El driver embebe al de Postgres: el SQL (DDL con `_source JSONB`, consultas, comandos con `jsonb_set`, `jsonb_build_object` y `||`) es el mismo, y la conexión es la de `lib/pq` con `PgConection` (por omisión `sslmode=disable`; usar `require` con un usuario de Josefina sin verificador SCRAM).
+- Josefina no crea ni borra bases ni modelos por SQL: `Connect` y `CreateDB` solo comprueban que la base exista (se crea con la API de Josefina), `DropDB` responde `MSG_DRIVER_CANNOT_DROP_DB` (como Oracle) y `Drop` de un modelo responde `josefina.ErrCannotDrop`.
+- Lo que PostgreSQL verifica y Josefina no (el padre de una llave foránea, una llave primaria compuesta repetida) lo verifica el lenguaje de Josefina al insertar, leyendo antes de escribir.
+- Probado con `jsql/drivers/test` contra un nodo de Josefina (`JOSEFINA_HOST`, `JOSEFINA_PORT` (5433, el clúster de docker compose), `JOSEFINA_SSLMODE` (`require`), `JOSEFINA_USER`, `JOSEFINA_PASSWORD`, `JOSEFINA_DATABASE`): `TestCatalog` 102 de 102 (el caso de `RemoveModel` espera `ErrCannotDrop`), `TestInsertUpdate`, `TestJoinGroupHaving`, `TestFieldValue` y `TestCreateDropDB`. Cada corrida usa un schema nuevo (`jsql_t<n>`): Josefina no borra schemas.
+
 ## 10. Conexión y configuración
 
 `jsql.Load()` (base `DB_NAME`) o `jsql.LoadTo(dbName, hostName...)` leen el entorno con `envar`; `jsql.ConnectTo(ConnectParams)` recibe los parámetros explícitos.
@@ -417,7 +426,7 @@ type Driver interface {
 - `jsql.DefineSeries(db, schema)` → `*Series`: consecutivos y códigos (`SetSeries`, `GetSeries`, `DeleteSeries`, `GenSerie`, `GenValue`; `GenSerieTx`/`GenValueTx` dentro de una transacción, la que debe usar un trigger por script: en sqlite, escribir fuera de ella espera para siempre la única conexión). En scripts: `genSerie(tag, tx?)`, `genValue(tag, tx?)` y `db.series(schema)`.
 - `Bind(source, vars)` (`helpers.go`): aplica variables `{{nombre}}` a un json (`"{{x}}"` toma el valor tal cual; dentro de un texto, su texto; una lista se expande dentro de otra; `{{user.id}}` es una ruta; las desconocidas quedan igual). `BindWrapper()` es su versión para goja (`jsql.bind`). No es para SQL escrito a mano.
 - Helpers (`helpers.go`): `SQLParse` (reemplaza `$1`…`$N` por los argumentos escapados en una sola pasada; `$10` no se confunde con `$1`), `Quoted`, `EscapeSQLString`, `RowsToItems`, `ArgWhitAs` (`campo:alias`), `ArgWhitSchema` (`schema.tabla`), `AddAuditLog`.
-- Estados (`column.go`): `ACTIVE`, `ARCHIVED`, `CANCELED`, `OF_SYSTEM`, `FOR_DELETE`, `PENDING`, `APPROVED`, `REJECTED` (+ `IN_PROCESS`, `FAILED`).
+- Estados (`define.go`): `ACTIVE`, `ARCHIVED`, `CANCELED`, `OF_SYSTEM`, `FOR_DELETE`, `PENDING`, `APPROVED`, `REJECTED` (+ `IN_PROCESS`, `FAILED`).
 
 ## 12. Brechas entre la especificación y el código
 
@@ -448,9 +457,12 @@ El caso omitido es `Load`/`LoadTo`, que lee el entorno. `go build ./...` y `go v
 
 **Revisado el 2026-10-15** con la batería completa en los cinco motores (contenedores desechables): `TestCatalog`, `TestInsertUpdate`, `TestJoinGroupHaving`, `TestCreateDropDB` y el nuevo `TestFieldValue` pasan; `TestWrapper` falla en sqlite y postgres por B14 (ver abajo). Se corrigió la recursión `Model.Query` ↔ `Model.query` (desde `454e6bc` todo `model.Query(json)` reventaba la pila).
 
-**Brecha:** 2 abiertas (1 alta, 1 baja).
+**Revisado el 2026-10-27** (condiciones en rollups): `Rollups` y `QueryRollups` suman `Where []*et.Condition` (JSON como lista de condiciones), `DefineRollup(..., where ...*et.Condition)`, `DefRollup.Where`, `Rollups.QueryRollups()` (lo usan los cinco drivers) y `where` en `defineRollup` del wrapper. `TestCatalog` suma dos casos en §3 (where con valor fijo y con campo de la fila; `OR` rechazado y round trip JSON): pasa en sqlite, postgres y josefina; oracle, mysql y mssql no estaban disponibles (omitidos). Se abre B15. El mismo día se reagruparon los archivos del paquete (24 → 13, solo se movió código): `conection.go` absorbe `driver.go`, `tester.go` y `jsql.go`; `db.go` absorbe `schema.go`, `tx.go` y `event.go`; `define.go` absorbe `column.go`; `model.go` absorbe `trigger.go`; `relation.go` (antes `detail.go`) absorbe `master.go`; `query.go` absorbe `query_star.go`; `helpers.go` absorbe `condition.go`. Con eso, `TestCatalog`, `TestInsertUpdate`, `TestJoinGroupHaving`, `TestFieldValue`, `TestCreateDropDB`, `TestStepScript` y `TestWrapper` pasan en sqlite, postgres y josefina (`TestWrapper` solo corre en sqlite y postgres).
+
+**Brecha:** 1 abierta (1 baja, B15). Cerradas el 2026-10-27: B5 (driver para josefina, §9.4) y B14.
+
+**B14, cerrada el 2026-10-27:** un `where` de un script perdía su condición. `et.ToWhere` tomaba los valores de un objeto `{campo: {op: valor}}` (perdía el nombre del campo) y no reconocía un `*et.Condition` (`jsql.eq(...)`), y `whereByJson` ignoraba el error de `ToWheRes`: la consulta leía todas las filas y un `update`/`delete` tocaba todas. Ahora `ToWhere` da una condición por llave del objeto (con `where` primero), acepta `*Condition`, `[]*Condition`, `WheRes` y listas de cualquiera de ellos, y `Query`/`Command.whereByJson` guardan el error y la operación falla al correr (`Command.err`). `TestToWhere` (`et/towhere_test.go`) y `TestWrapper` pasan en sqlite y postgres.
 
 | #   | Especificación | Código actual | Ubicación | Impacto |
 | --- | --- | --- | --- | --- |
-| B5  | Driver para josefina. | Solo la constante `DriverJosefina`, sin implementación. Pendiente por decisión del usuario (2026-10-12): no implementarlo todavía. Josefina hoy solo habla HTTP + JSON, sin SQL ni driver de `database/sql`, y un driver de jsql genera SQL y devuelve un `*sql.DB`. | `driver.go:15` | Bajo |
-| B14 | `where` en scripts acepta `{campo: {op: valor}}` (`JsqlWhere`, `jsql.d.ts`). | `toWhere` (`wrapper.go`), con un objeto, toma sus **valores** y pierde el nombre del campo: `where({status: {eq: "active"}})` da `{eq: "active"}`, `ToWheRes` falla (`invalid condition`) y `whereByJson` ignora el error y deja la consulta **sin condición**. En un `update`/`delete` eso afecta todas las filas. Funcionan `where({where: {…}})` y una lista (`where([{status: {eq: "active"}}, {and: {…}}])`). Comprobado con un test temporal el 2026-10-14. Lo mismo con un `*et.Condition` (`where(jsql.eq("id", "c1"))`, la forma que aún usa `TestWrapper`): `toWhere` no lo reconoce y la condición se pierde; en `TestWrapper` (2026-10-15) `clients.update({name: "Ana M"}).where(jsql.eq("id", "c1"))` renombró **todas** las filas (fallan `missing`, `rolledBack` y `query`). Arreglo sugerido: un objeto sin `where`/`and`/`or` es una condición tal cual, y `whereByJson` debe propagar el error. | `wrapper.go` `toWhere`; `query.go`/`command.go` `whereByJson` | Alto |
+| B15 | El `where` de un rollup admite cualquier condición (§2.3). | `DefineRollup` rechaza `OR` (`MSG_ROLLUP_WHERE_OR`): los drivers unen las condiciones en orden sin paréntesis, y `llave AND a OR b` mezclaría filas de otros padres. Soportarlo exige agrupar condiciones en los cinco drivers. | `relation.go` `rollupWhere`; `drivers/<x>/query.go` | Bajo |

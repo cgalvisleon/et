@@ -400,12 +400,13 @@ func (s *Model) Stricted() {
 /**
 * DefineRollup: Defines a new rollup for the model.
 * Selects are required except for RollupCount (counts rows) and RollupObject (whole row).
-* An empty operation defaults to RollupObject.
-* @param name string, to *Model, keys map[string]string, selects []string, operation RollupOperation
+* An empty operation defaults to RollupObject. where filters the To model (joined to the keys with AND,
+* so it does not accept OR); a {field: "..."} value (et.FIELD) is read from the resulting row.
+* @param name string, to *Model, keys map[string]string, selects []string, operation RollupOperation, where ...*et.Condition
 * @return (*Rollups, error)
 **/
-func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, selects []string, operation RollupOperation) (*Rollups, error) {
-	return s.defineRollup(name, to, keys, selects, operation)
+func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, selects []string, operation RollupOperation, where ...*et.Condition) (*Rollups, error) {
+	return s.defineRollup(name, to, keys, selects, operation, where)
 }
 
 /**
@@ -548,13 +549,23 @@ func (s *From) Ref() et.Json {
 }
 
 /**
-* GetQuery: Returns the query for the rollup filtered by the keys of the given row.
-* Returns false when the row lacks any of the keys, so the rollup is not applied.
+* GetQuery: Returns the query for the rollup filtered by the keys and the where of the given row
+* ({field: "..."} values are read from the row).
+* Returns false when the row lacks any of the keys or of the fields its where references, so the rollup is not applied.
 * @param item et.Json
 * @return *Query, bool
 **/
 func (s *QueryRollups) GetQuery(item et.Json) (*Query, bool) {
 	return s.getQuery(item)
+}
+
+/**
+* QueryRollups: Returns the rollup resolved for a query (to, keys, select, operation and where); used by the drivers
+* when the select asks for it.
+* @return *QueryRollups
+**/
+func (s *Rollups) QueryRollups() *QueryRollups {
+	return s.queryRollups()
 }
 
 /**

@@ -16,6 +16,7 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
+	"github.com/cgalvisleon/et/jsql/drivers/josefina"
 	"github.com/cgalvisleon/et/jsql/drivers/mssql"
 	"github.com/cgalvisleon/et/jsql/drivers/mysql"
 	"github.com/cgalvisleon/et/jsql/drivers/oracle"
@@ -200,6 +201,8 @@ func recorded(tg target) (target, *recorder) {
 	switch tg.name {
 	case "postgres":
 		drv = &postgres.Postgres{}
+	case "josefina":
+		drv = &josefina.Josefina{}
 	case "oracle":
 		drv = &oracle.Oracle{}
 	case "mysql":
@@ -471,6 +474,12 @@ func (s *suite) ddl() {
 		if _, err := users.DefineRollup("last_order", orders, map[string]string{"id": "user_id"}, []string{"id", "amount"}, jsql.RollupObject); err != nil {
 			return nil, err
 		}
+		if _, err := users.DefineRollup("orders_big", orders, map[string]string{"id": "user_id"}, nil, jsql.RollupCount, jsql.More("amount", 150)); err != nil {
+			return nil, err
+		}
+		if _, err := users.DefineRollup("orders_over_age", orders, map[string]string{"id": "user_id"}, nil, jsql.RollupCount, jsql.More("amount", et.Fld("age"))); err != nil {
+			return nil, err
+		}
 		users.DefineCalcFunc("label", func(tx *jsql.Tx, data et.Json) {
 			data["label"] = fmt.Sprintf("%s <%s>", data.Str("name"), data.Str("email"))
 		})
@@ -578,6 +587,10 @@ func (s *suite) ddl() {
 			return nil, err
 		}
 		if err := db.RemoveModel(s.schema, tmp.Name); err != nil {
+			// Josefina no borra modelos por SQL: RemoveModel responde ErrCannotDrop
+			if s.tg.name == jsql.DriverJosefina && errors.Is(err, josefina.ErrCannotDrop) {
+				return "ok", nil
+			}
 			return nil, err
 		}
 		if _, err := db.GetModel(s.schema, tmp.Name); err == nil {
@@ -807,6 +820,38 @@ func (s *suite) relations() {
 		r := row.Result
 		got := et.Json{"orders_count": r["orders_count"], "orders_total": r["orders_total"], "last_order": r.Json("last_order").Str("id")}
 		return r, expect("rollups", et.Json{"orders_count": 1, "orders_total": 50, "last_order": "o3"}, got)
+	})
+	s.run(3, "DefineRollup con where (valor fijo y campo de la fila)", func() (any, error) {
+		items, err := users.Select("id", "orders_big", "orders_over_age").OrderBy("id", true).All()
+		if err != nil {
+			return nil, err
+		}
+		got := []any{}
+		for _, row := range items.Result {
+			if _, ok := row["age"]; ok {
+				return items.Result, errors.New("age (referenced by the where) should not be in the result")
+			}
+			got = append(got, []any{row.Int("orders_big"), row.Int("orders_over_age")})
+		}
+		// u1: 100.5 and 200 (age 30), u2: none, u3: 50 (age 45)
+		return items.Result, expect("orders_big, orders_over_age", []any{[]any{1, 2}, []any{0, 0}, []any{0, 1}}, got)
+	})
+	s.run(3, "DefineRollup con where or (rechazado) y round trip JSON", func() (any, error) {
+		_, err := users.DefineRollup("orders_or", s.models["f_orders"], map[string]string{"id": "user_id"}, nil, jsql.RollupCount,
+			jsql.More("amount", 150), jsql.Or("amount", et.LESS, 10))
+		if err == nil {
+			return nil, errors.New("a rollup where with or should fail")
+		}
+		bt, err := json.Marshal(users.Rollups["orders_over_age"])
+		if err != nil {
+			return nil, err
+		}
+		var back jsql.Rollups
+		if err := json.Unmarshal(bt, &back); err != nil {
+			return nil, err
+		}
+		got := back.Where[0].ToJson()
+		return string(bt), expect("where", et.Json{"amount": et.Json{"more": et.Json{"field": "age"}}}, got)
 	})
 	s.run(3, "DefineCalcFunc + Model.Calc", func() (any, error) {
 		row, err := users.Calc("label").Where(jsql.Eq("id", "u1")).One()
@@ -1741,7 +1786,7 @@ func writeResults(t *testing.T, driver string, results []caseResult) {
 **/
 func writeSummary(t *testing.T, all map[string][]caseResult) {
 	t.Helper()
-	drivers := []string{"sqlite", "postgres", "oracle", "mysql", "mssql"}
+	drivers := []string{"sqlite", "postgres", "josefina", "oracle", "mysql", "mssql"}
 	status := map[string]map[string]string{}
 	order := []string{}
 	sectionOf := map[string]string{}

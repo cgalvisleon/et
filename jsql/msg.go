@@ -38,6 +38,7 @@ var (
 	MSG_RECORD_NOT_FOUND          = "record not found"
 	MSG_STORE_IS_NIL              = "store is nil"
 	MSG_INVALID_ROLLUP_OPERATION  = "invalid rollup operation: %s"
+	MSG_ROLLUP_WHERE_OR           = "the where of a rollup does not accept or: it is joined to its keys with and"
 )
 
 func init() {
@@ -77,5 +78,6 @@ func init() {
 		MSG_RECORD_NOT_FOUND = "registro no encontrado"
 		MSG_STORE_IS_NIL = "store es nulo"
 		MSG_INVALID_ROLLUP_OPERATION = "operación de rollup inválida: %s"
+		MSG_ROLLUP_WHERE_OR = "el where de un rollup no acepta or: se une a sus llaves con and"
 	}
 }

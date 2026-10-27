@@ -30,6 +30,9 @@ func main() {
 		Fn:            suma,
 		FnArgs:        []interface{}{1, 2},
 	})
+	if err != nil {
+		logs.Panic(err)
+	}
 	ins.Run()
 
 	utility.AppWait()

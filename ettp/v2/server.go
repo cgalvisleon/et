@@ -262,7 +262,7 @@ func (s *Server) setSolver(kind TypeRouter, method, path, solver string, typeHea
 
 	action := "Create"
 	key := fmt.Sprintf("%s:%s", method, path)
-	result, ok := s.Solvers[key]
+	_, ok = s.Solvers[key]
 	if ok {
 		action = "Update"
 	}

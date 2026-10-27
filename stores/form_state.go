@@ -145,7 +145,9 @@ func (s *FormState) Get(id string, dest et.Json) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		dest = result
+		if dest != nil {
+			dest.Put(result)
+		}
 		return true, nil
 	}
 
@@ -172,8 +174,10 @@ func (s *FormState) Get(id string, dest et.Json) (bool, error) {
 		result.Set("owners", owners.Result)
 	}
 
-	dest = result.Result
-	dt.Up(id, result.Result)
+	if dest != nil {
+		dest.Put(result.Result)
+	}
+	dt.Up(key, result.Result)
 
 	return true, nil
 }
@@ -184,6 +188,7 @@ func (s *FormState) Get(id string, dest et.Json) (bool, error) {
 * @return error
 **/
 func (s *FormState) Delete(id string) error {
+	key := fmt.Sprintf("form_state:%s", id)
 	_, err := s.model.
 		Delete().
 		Where(Eq(ID, id)).
@@ -192,7 +197,7 @@ func (s *FormState) Delete(id string) error {
 		return err
 	}
 
-	dt.Drop(id)
+	dt.Drop(key)
 
 	return nil
 }

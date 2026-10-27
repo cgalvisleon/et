@@ -56,7 +56,7 @@ func (s *Rag) embed(ctx context.Context, text string) ([]float64, error) {
 * @return string, error
 **/
 func (s *Rag) answer(ctx context.Context, question string, contextChunks []string) (string, error) {
-	systemPrompt := systemPromptTemplate
+	var systemPrompt string
 	if len(contextChunks) > 0 {
 		systemPrompt = strings.Replace(systemPromptTemplate, "%s", strings.Join(contextChunks, "\n---\n"), 1)
 	} else {

@@ -172,7 +172,7 @@ func (s *Server) SetRouter(private bool, method, path, resolve string, header et
 
 	route, err := s.setRouter(method, path, resolve, TpApiRest, header, tpHeader, excludeHeader, private, packageName, saved)
 	if err != nil {
-		return nil, fmt.Errorf(MSG_ROUTE_NOT_REGISTER)
+		return nil, errors.New(MSG_ROUTE_NOT_REGISTER)
 	}
 
 	router := et.Json{

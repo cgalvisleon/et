@@ -521,7 +521,7 @@ func oraSelectExpr(query *jsql.Query, field string) (string, bool) {
 		}
 	case jsql.ROLLUP:
 		if rollup, ok := model.Rollups[fld.Name]; ok {
-			query.Rollups[fld.Name] = &jsql.QueryRollups{To: rollup.To, Keys: rollup.Keys, Select: rollup.Select, Operation: rollup.Operation}
+			query.Rollups[fld.Name] = rollup.QueryRollups()
 		}
 	case jsql.CALC:
 		query.Calcs[fld.Name] = &jsql.Calc{Model: model, Module: ""}

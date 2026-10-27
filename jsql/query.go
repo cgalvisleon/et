@@ -3,7 +3,9 @@ package jsql
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
@@ -135,6 +137,54 @@ type QueryRollups struct {
 	Keys      map[string]string `json:"keys"`
 	Select    []string          `json:"select"`
 	Operation RollupOperation   `json:"operation"`
+	Where     []*et.Condition   `json:"where"`
+}
+
+/**
+* MarshalJSON: Writes the rollup with its conditions as a where list.
+* @return []byte, error
+**/
+func (s QueryRollups) MarshalJSON() ([]byte, error) {
+	return json.Marshal(rollupJson{To: s.To, Keys: s.Keys, Select: s.Select, Operation: s.Operation, Where: whereToJson(s.Where)})
+}
+
+/**
+* UnmarshalJSON: Reads a rollup whose conditions come as a where list.
+* @param data []byte
+* @return error
+**/
+func (s *QueryRollups) UnmarshalJSON(data []byte) error {
+	var v Rollups
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	*s = *v.queryRollups()
+	return nil
+}
+
+/**
+* resolveWhere: Returns the conditions of the rollup for item: a {field: "..."} value is read from item.
+* Returns false when item lacks a referenced field, so the rollup is not applied (as with a missing key).
+* @param item et.Json
+* @return []*et.Condition, bool
+**/
+func (s *QueryRollups) resolveWhere(item et.Json) ([]*et.Condition, bool) {
+	result := make([]*et.Condition, 0, len(s.Where))
+	for _, cond := range s.Where {
+		if cond == nil {
+			continue
+		}
+		tmp := *cond
+		if ref, ok := rowRef(cond); ok {
+			name, _, _ := strings.Cut(ref.Name, "->")
+			if _, exists := item[name]; !exists {
+				return nil, false
+			}
+			tmp.Value = et.NewValue(ref.ValueOf(item))
+		}
+		result = append(result, &tmp)
+	}
+	return result, true
 }
 
 /**
@@ -165,6 +215,11 @@ func (s *QueryRollups) getQuery(item et.Json) (*Query, bool) {
 		return nil, false
 	}
 
+	where, ok := s.resolveWhere(item)
+	if !ok {
+		return nil, false
+	}
+
 	q := NewQuery(s.To.Model, "A")
 	for k, fk := range s.Keys {
 		v, exists := item[k]
@@ -172,6 +227,9 @@ func (s *QueryRollups) getQuery(item et.Json) (*Query, bool) {
 			return nil, false
 		}
 		q.Where(Eq(fk, v))
+	}
+	for _, cond := range where {
+		q.AddCondition(cond)
 	}
 
 	if s.Operation.IsAggregate() {
@@ -244,7 +302,7 @@ type Query struct {
 	Details        map[string]*QueryDetail  `json:"details"`
 	Masters        map[string]*QueryDetail  `json:"masters"`
 	Rollups        map[string]*QueryRollups `json:"rollups"`
-	CalcFuns       map[string]CalcFunction  `json:"calc_funs"`
+	CalcFuns       map[string]CalcFunction  `json:"-"`
 	Calcs          map[string]*Calc         `json:"calcs"`
 	IsExists       bool                     `json:"is_exists"`
 	IsCount        bool                     `json:"is_count"`
@@ -619,6 +677,10 @@ func (s *Query) where(cond *et.Condition) *Query {
 func (s *Query) whereByJson(cond []et.Json) *Query {
 	conditions, err := et.ToWheRes(cond)
 	if err != nil {
+		// The query fails when it runs: without its condition it would read every row (B14)
+		if s.err == nil {
+			s.err = err
+		}
 		return s
 	}
 	for _, condition := range conditions {
@@ -1038,22 +1100,22 @@ func (s *Query) addRelationKeys() {
 			continue
 		}
 		model := fld.From.Model
-		var keys map[string]string
+		var keys []string
 		switch fld.TypeColumn {
 		case DETAIL:
 			if detail, ok := model.Details[fld.Name]; ok {
-				keys = detail.Keys
+				keys = slices.Collect(maps.Keys(detail.Keys))
 			}
 		case MASTER:
 			if master, ok := model.Masters[fld.Name]; ok {
-				keys = master.Keys
+				keys = slices.Collect(maps.Keys(master.Keys))
 			}
 		case ROLLUP:
 			if rollup, ok := model.Rollups[fld.Name]; ok {
-				keys = rollup.Keys
+				keys = rollup.rowFields()
 			}
 		}
-		for key := range keys {
+		for _, key := range keys {
 			if selected[key] {
 				continue
 			}
@@ -1518,4 +1580,73 @@ func (s *Query) loadQuery(query et.Json) (*Query, error) {
 	}
 
 	return s, nil
+}
+
+// STAR: en selects, todas las columnas de los from; se le suman otros campos (rollups, atributos, detalles, maestros…)
+const STAR = "*"
+
+/**
+* HasStar: Si selects trae "*"
+* @return bool
+**/
+func (s *Query) HasStar() bool {
+	return slices.Contains(s.Selects, STAR)
+}
+
+/**
+* hiddenIn: Si una columna de un from está oculta en la consulta: por su nombre o con el alias del from (A.password)
+* @param from *From, column string
+* @return bool
+**/
+func (s *Query) hiddenIn(from *From, column string) bool {
+	return slices.Contains(s.Hiddens, column) || slices.Contains(s.Hiddens, fmt.Sprintf("%s.%s", from.As, column))
+}
+
+/**
+* StarFields: Los campos que trae "*": las columnas COLUMN de cada from (alias.nombre con varios from), sin las ocultas
+* de la consulta (por nombre o con alias) ni las del modelo, ni el campo fuente
+* @return []string
+**/
+func (s *Query) StarFields() []string {
+	result := []string{}
+	for _, from := range s.Froms {
+		model := from.Model
+		if model == nil {
+			continue
+		}
+		for _, col := range model.Columns {
+			if col.TypeColumn != COLUMN || col.Name == model.SourceField {
+				continue
+			}
+			if slices.Contains(model.Hiddens, col.Name) || s.hiddenIn(from, col.Name) {
+				continue
+			}
+			name := col.Name
+			if len(s.Froms) > 1 {
+				name = fmt.Sprintf("%s.%s", from.As, col.Name)
+			}
+			result = append(result, name)
+		}
+	}
+
+	return result
+}
+
+/**
+* SourceHiddens: Las claves que se quitan del campo fuente de un from: las ocultas de la consulta (sin el alias de ese
+* from, A.password → password) y las del modelo
+* @param from *From
+* @return []string
+**/
+func (s *Query) SourceHiddens(from *From) []string {
+	result := []string{}
+	prefix := from.As + "."
+	for _, hidden := range s.Hiddens {
+		result = append(result, strings.TrimPrefix(hidden, prefix))
+	}
+	if from.Model != nil {
+		result = append(result, from.Model.Hiddens...)
+	}
+
+	return result
 }

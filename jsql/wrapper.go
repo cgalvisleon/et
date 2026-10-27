@@ -2,6 +2,7 @@ package jsql
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -588,8 +589,16 @@ func wrapModel(m *Model) map[string]any {
 			return self
 		},
 		"defineModel": func() map[string]any { return chain(m.DefineModel()) },
-		"defineRollup": func(name string, to any, keys map[string]string, selects []string, operation RollupOperation) (map[string]any, error) {
-			rollup, err := m.DefineRollup(name, toModel(to), keys, selects, operation)
+		"defineRollup": func(name string, to any, keys map[string]string, selects []string, operation RollupOperation, where ...any) (map[string]any, error) {
+			var conds []*et.Condition
+			if len(where) > 0 {
+				var err error
+				conds, err = rollupWhereOf(where[0])
+				if err != nil {
+					return nil, err
+				}
+			}
+			rollup, err := m.DefineRollup(name, toModel(to), keys, selects, operation, conds...)
 			if err != nil {
 				return nil, err
 			}
@@ -1006,6 +1015,34 @@ func wrapRollups(rollup *Rollups) map[string]any {
 }
 
 /**
+* rollupWhereOf: Reads the where of defineRollup: a condition object ({field: {op: value}}, also with
+* where/and in front), a list of them or a *et.Condition; null gives none. An invalid condition is an error.
+* @param cond any
+* @return []*et.Condition, error
+**/
+func rollupWhereOf(cond any) ([]*et.Condition, error) {
+	switch v := cond.(type) {
+	case nil:
+		return nil, nil
+	case *et.Condition:
+		return []*et.Condition{v}, nil
+	case []*et.Condition:
+		return v, nil
+	case et.Json:
+		return et.ToWheRes([]et.Json{v})
+	case map[string]any:
+		return et.ToWheRes([]et.Json{et.Json(v)})
+	case interface{ JsonValue() et.Json }:
+		return et.ToWheRes([]et.Json{v.JsonValue()})
+	}
+	list := et.ToWhere(cond)
+	if list == nil {
+		return nil, errors.New(et.MSG_INVALID_CONDITION)
+	}
+	return et.ToWheRes(list)
+}
+
+/**
 * wrapQueryDetail: Exposes a *QueryDetail (a detail or master resolved for a query) to JavaScript.
 * @param detail *QueryDetail
 * @return map[string]any
@@ -1039,7 +1076,7 @@ func wrapQueryRollups(rollup *QueryRollups) map[string]any {
 		wrapRef:  rollup,
 		"toJson": func() map[string]any { return structJson(rollup) },
 		"to":     func() map[string]any { return wrapFrom(rollup.To) },
-		// getQuery: the query of the rollup for item, or null when item lacks any of the keys
+		// getQuery: the query of the rollup for item, or null when item lacks any of the keys or of the fields its where references
 		"getQuery": func(item et.Json) map[string]any {
 			if query, ok := rollup.GetQuery(item); ok {
 				return wrapQuery(query)

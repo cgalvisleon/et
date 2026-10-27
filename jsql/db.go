@@ -10,6 +10,7 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/jwf"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/timezone"
@@ -571,7 +572,12 @@ func (s *DB) define(define Define) (*Model, error) {
 				return nil, err
 			}
 
-			_, err = detail.DefineRollup(rollup.Name, to, rollup.Keys, rollup.Select, rollup.Operation)
+			where, err := et.ToWheRes(rollup.Where)
+			if err != nil {
+				return nil, err
+			}
+
+			_, err = detail.DefineRollup(rollup.Name, to, rollup.Keys, rollup.Select, rollup.Operation, where...)
 			if err != nil {
 				return nil, err
 			}
@@ -596,7 +602,12 @@ func (s *DB) define(define Define) (*Model, error) {
 			return nil, err
 		}
 
-		_, err = result.DefineRollup(rollup.Name, to, rollup.Keys, rollup.Select, rollup.Operation)
+		where, err := et.ToWheRes(rollup.Where)
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = result.DefineRollup(rollup.Name, to, rollup.Keys, rollup.Select, rollup.Operation, where...)
 		if err != nil {
 			return nil, err
 		}
@@ -606,3 +617,317 @@ func (s *DB) define(define Define) (*Model, error) {
 
 	return result, nil
 }
+
+/**
+* Schema: Represents a database schema that owns a set of models.
+**/
+type Schema struct {
+	Name     string            `json:"name"`
+	Models   map[string]*Model `json:"models"`
+	database string            `json:"-"`
+	db       *DB               `json:"-"`
+	isDebug  bool              `json:"-"`
+	mu       *sync.RWMutex     `json:"-"`
+}
+
+/**
+* up: Initializes the schema.
+* @param db *DB
+* @return error
+**/
+func (s *Schema) up(db *DB) error {
+	s.db = db
+	s.database = db.Name
+	s.isDebug = db.isDebug
+	s.mu = &sync.RWMutex{}
+	for _, model := range s.Models {
+		err := model.up(s)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+/**
+* toJson: Returns the schema metadata as an et.Json map.
+* @return et.Json
+**/
+func (s *Schema) toJson() et.Json {
+	models := et.Json{}
+	for name, model := range s.Models {
+		models[name] = model.ToJson()
+	}
+
+	return et.Json{
+		"name":   s.Name,
+		"models": models,
+	}
+}
+
+/**
+* addModel: Adds a model to the schema.
+* @param model *Model
+* @return void
+**/
+func (s *Schema) addModel(model *Model) {
+	s.mu.Lock()
+	s.Models[model.Name] = model
+	s.mu.Unlock()
+}
+
+/**
+* removeModel: Removes a model from the schema.
+* @param name string
+* @return void
+**/
+func (s *Schema) removeModel(name string) {
+	s.mu.Lock()
+	delete(s.Models, name)
+	s.mu.Unlock()
+}
+
+/**
+* getModel: Returns the named model or an error if it does not exist in this schema.
+* @param name string
+* @return *Model, error
+**/
+func (s *Schema) getModel(name string) (*Model, error) {
+	name = utility.Normalize(name)
+	s.mu.RLock()
+	result, exists := s.Models[name]
+	s.mu.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf(MSG_MODEL_NOT_FOUND, name)
+	}
+
+	return result, nil
+}
+
+/**
+* newModel: Constructs a new Model with initialized fields and default triggers.
+* @param id string, name string, version int, userId string
+* @return *Model
+**/
+func (s *Schema) newModel(id, name string, version int, userId string) *Model {
+	name = utility.Normalize(name)
+	id = reg.GetUUID(id)
+	result := &Model{
+		Kind:          MODEL,
+		ID:            id,
+		database:      s.database,
+		Schema:        s.Name,
+		Name:          name,
+		Table:         name,
+		Columns:       make([]*Column, 0),
+		Indexes:       make([]*Index, 0),
+		PrimaryKeys:   make([]*Index, 0),
+		ForeignKeys:   make([]*Detail, 0),
+		Unique:        make([]*Index, 0),
+		Required:      make([]*Index, 0),
+		Hiddens:       make([]string, 0),
+		OmitUpdates:   make([]string, 0),
+		Details:       make(map[string]*Detail, 0),
+		Masters:       make(map[string]*Master, 0),
+		Rollups:       make(map[string]*Rollups, 0),
+		Version:       version,
+		BeforeInserts: make([]*jwf.Script, 0),
+		BeforeUpdates: make([]*jwf.Script, 0),
+		BeforeDeletes: make([]*jwf.Script, 0),
+		AfterInserts:  make([]*jwf.Script, 0),
+		AfterUpdates:  make([]*jwf.Script, 0),
+		AfterDeletes:  make([]*jwf.Script, 0),
+		AuditLog:      &et.SafeData{},
+		calcs:         make(map[string]CalcFunction, 0),
+		calcScripts:   make(map[string]string, 0),
+		beforeInserts: make([]TriggerFunction, 0),
+		beforeUpdates: make([]TriggerFunction, 0),
+		beforeDeletes: make([]TriggerFunction, 0),
+		afterInserts:  make([]TriggerFunction, 0),
+		afterUpdates:  make([]TriggerFunction, 0),
+		afterDeletes:  make([]TriggerFunction, 0),
+		db:            s.db,
+	}
+	result.setTable()
+	result.defaultTrigger()
+	s.db.addAuditLog(userId, "new_model")
+	s.addModel(result)
+	return result
+}
+
+/**
+* loadModel: Loads a Model from the database catalog by name.
+* @param params et.Json
+* @return *Model, error
+**/
+func (s *Schema) loadModel(def et.Json) (*Model, error) {
+	bt, err := def.ToByte()
+	if err != nil {
+		return nil, err
+	}
+
+	var result *Model
+	if err := json.Unmarshal(bt, &result); err != nil {
+		return nil, err
+	}
+
+	err = result.up(s)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+/**
+* init: Initializes the schema.
+* @return error
+**/
+func (s *Schema) init() error {
+	for _, model := range s.Models {
+		err := model.Init()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+type TxStatus string
+
+const (
+	TxStatusPending    TxStatus = "pending"
+	TxStatusCommitted  TxStatus = "committed"
+	TxStatusRolledBack TxStatus = "rolled_back"
+)
+
+type Tx struct {
+	CreatedAt    time.Time `json:"created_at"`
+	LastUpdateAt time.Time `json:"last_update_at"`
+	Id           string    `json:"id"`
+	Status       string    `json:"status"`
+	Tx           *sql.Tx   `json:"-"`
+}
+
+/**
+* newTx: Creates a new transaction
+* @return *Tx
+**/
+func newTx() *Tx {
+	now := timezone.Now()
+	return &Tx{
+		CreatedAt:    now,
+		LastUpdateAt: now,
+		Id:           reg.UUID(),
+		Status:       string(TxStatusPending),
+	}
+}
+
+/**
+* getTx: Returns the given Tx unchanged, or creates a new auto-commit Tx when nil.
+* The second return value is true when the caller must commit after the operation.
+* @param tx *Tx
+* @return *Tx, bool
+**/
+func getTx(tx *Tx) (*Tx, bool) {
+	if tx == nil {
+		return NewTx(), true
+	}
+
+	return tx, false
+}
+
+/**
+* begin: Opens a database transaction on the underlying *sql.DB if not already open.
+* @param db *sql.DB
+* @return error
+**/
+func (s *Tx) begin(db *sql.DB) error {
+	if s.Tx != nil {
+		return nil
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	s.Tx = tx
+	return nil
+}
+
+/**
+* setStatus: Updates the transaction status and records the change time.
+* @param status TxStatus
+**/
+func (s *Tx) setStatus(status TxStatus) {
+	s.Status = string(status)
+	s.LastUpdateAt = timezone.Now()
+}
+
+/**
+* commit: Commits the transaction and marks it as committed.
+* @return error
+**/
+func (s *Tx) commit() error {
+	if s.Tx == nil {
+		return nil
+	}
+
+	err := s.Tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	s.setStatus(TxStatusCommitted)
+
+	return nil
+}
+
+/**
+* rollback: Rolls back the transaction and marks it as rolled back.
+* @return error
+**/
+func (s *Tx) rollback() error {
+	if s.Tx == nil {
+		return nil
+	}
+
+	err := s.Tx.Rollback()
+	if err != nil {
+		return err
+	}
+
+	s.setStatus(TxStatusRolledBack)
+
+	return nil
+}
+
+/**
+* query: Executes a query within the transaction.
+* @param db *sql.DB, query string, args ...any
+* @return *sql.Rows, error
+**/
+func (s *Tx) query(db *sql.DB, query string, args ...any) (*sql.Rows, error) {
+	err := s.begin(db)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := s.Tx.Query(query, args...)
+	if err != nil {
+		errR := s.Rollback()
+		if errR != nil {
+			err = fmt.Errorf(MSG_ROLLBACK_ERROR, errR)
+		}
+		return nil, err
+	}
+
+	return rows, nil
+}
+
+const (
+	EVENT_MODEL_SET = "jsql:model:set"
+)

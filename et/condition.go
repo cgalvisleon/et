@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -1740,8 +1741,8 @@ func (s WheRes) Len() int {
 * Add
 * @param condition *Condition
 **/
-func (s WheRes) Add(condition *Condition) {
-	s = append(s, condition)
+func (s *WheRes) Add(condition *Condition) {
+	*s = append(*s, condition)
 }
 
 /**
@@ -1781,26 +1782,49 @@ func AddCondition(conditions []*Condition, cond *Condition) []*Condition {
 * @return []Json
 **/
 func ToWhere(cond any) []Json {
-	if value, ok := asJson(cond); ok {
-		result := make([]Json, 0)
-		for _, item := range value {
-			if obj, ok := asJson(item); ok {
-				result = append(result, obj)
-			}
+	switch value := cond.(type) {
+	case *Condition:
+		if value == nil {
+			return nil
+		}
+		return []Json{value.ToJson()}
+	case []*Condition:
+		result := make([]Json, 0, len(value))
+		for _, c := range value {
+			result = append(result, ToWhere(c)...)
 		}
 		return result
-	}
-	if value, ok := cond.([]any); ok {
+	case WheRes:
+		return value.ToJson()
+	case []Json:
+		return value
+	case []any:
 		result := make([]Json, 0, len(value))
 		for _, item := range value {
-			if obj, ok := asJson(item); ok {
-				result = append(result, obj)
-			}
+			result = append(result, ToWhere(item)...)
 		}
 		return result
 	}
-	if value, ok := cond.([]Json); ok {
-		return value
+	obj, ok := asJson(cond)
+	if !ok {
+		return nil
 	}
-	return nil
+	// One object is one condition per key ({field: {op: value}} or {where|and|or: {...}}),
+	// with where first: the field names are kept (B14)
+	keys := make([]string, 0, len(obj))
+	for k := range obj {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		wi, wj := strings.EqualFold(keys[i], "where"), strings.EqualFold(keys[j], "where")
+		if wi != wj {
+			return wi
+		}
+		return keys[i] < keys[j]
+	})
+	result := make([]Json, 0, len(keys))
+	for _, k := range keys {
+		result = append(result, Json{k: obj[k]})
+	}
+	return result
 }

@@ -185,7 +185,7 @@ func (s *Resilience) LoadInstance(params Params) (*Instance, error) {
 		return instance, nil
 	}
 
-	instance, exist = s.readInstance(params.Id)
+	_, exist = s.readInstance(params.Id)
 	if exist {
 		return nil, errors.New(MSG_INSTANCE_IS_RUNNING)
 	}

@@ -8,9 +8,11 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
+	_ "github.com/cgalvisleon/et/jsql/drivers/josefina"
 	_ "github.com/cgalvisleon/et/jsql/drivers/mssql"
 	_ "github.com/cgalvisleon/et/jsql/drivers/mysql"
 	_ "github.com/cgalvisleon/et/jsql/drivers/oracle"
@@ -108,6 +110,28 @@ func targets() []target {
 			},
 			schema:  "jsql_test",
 			cleanup: []string{`DROP SCHEMA IF EXISTS jsql_test CASCADE`},
+		},
+		{
+			// Josefina por su protocolo de Postgres (JOSEFINA_*: por omisión el clúster de
+			// docker compose en 5433 con TLS). No borra schemas: cada corrida usa uno nuevo
+			name: "josefina",
+			params: jsql.ConnectParams{
+				Driver: jsql.DriverJosefina,
+				Host:   getEnv("JOSEFINA_HOST", "localhost"),
+				Name:   getEnv("JOSEFINA_DATABASE", "josefina"),
+				Connection: &jsql.PgConection{
+					Host:        getEnv("JOSEFINA_HOST", "localhost"),
+					Port:        getEnvInt("JOSEFINA_PORT", 5433),
+					Database:    getEnv("JOSEFINA_DATABASE", "josefina"),
+					User:        getEnv("JOSEFINA_USER", "admin"),
+					Password:    getEnv("JOSEFINA_PASSWORD", "admin"),
+					Sslmode:     getEnv("JOSEFINA_SSLMODE", "require"),
+					AppName:     "jsql_test",
+					RecordLimit: 1000,
+				},
+				RecordLimit: 1000,
+			},
+			schema: fmt.Sprintf("jsql_t%d", time.Now().UnixNano()%1000000000),
 		},
 		{
 			name: "oracle",

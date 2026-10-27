@@ -47,7 +47,8 @@ func TestCreateDropDB(t *testing.T) {
 
 			// Oracle: the service is not created nor dropped from a connection (spec §9): CreateDB only checks that it
 			// answers and DropDB fails with MSG_DRIVER_CANNOT_DROP_DB
-			if tg.name == jsql.DriverOracle {
+			// Josefina: lo mismo (sus bases se crean con su API, no por SQL)
+			if tg.name == jsql.DriverOracle || tg.name == jsql.DriverJosefina {
 				if err := jsql.CreateDB(&tg.params, timeout); err != nil {
 					t.Fatalf("CreateDB: %v", err)
 				}
@@ -55,8 +56,8 @@ func TestCreateDropDB(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := jsql.DropDB(db, timeout); err == nil || err.Error() != fmt.Sprintf(jsql.MSG_DRIVER_CANNOT_DROP_DB, jsql.DriverOracle) {
-					t.Fatalf("DropDB: got %v, want %s", err, fmt.Sprintf(jsql.MSG_DRIVER_CANNOT_DROP_DB, jsql.DriverOracle))
+				if err := jsql.DropDB(db, timeout); err == nil || err.Error() != fmt.Sprintf(jsql.MSG_DRIVER_CANNOT_DROP_DB, tg.name) {
+					t.Fatalf("DropDB: got %v, want %s", err, fmt.Sprintf(jsql.MSG_DRIVER_CANNOT_DROP_DB, tg.name))
 				}
 				return
 			}

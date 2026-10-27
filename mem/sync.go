@@ -70,4 +70,3 @@ func (c *Peticiones) GetConfig() et.Json {
 		"sizeStack":  c.SizeStack,
 	}
 }
-

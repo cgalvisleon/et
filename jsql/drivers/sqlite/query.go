@@ -437,12 +437,7 @@ func sqliteSelectExpr(query *jsql.Query, field string) (string, bool) {
 		if !ok {
 			return "", false
 		}
-		query.Rollups[fld.Name] = &jsql.QueryRollups{
-			To:        rollup.To,
-			Keys:      rollup.Keys,
-			Select:    rollup.Select,
-			Operation: rollup.Operation,
-		}
+		query.Rollups[fld.Name] = rollup.QueryRollups()
 	} else if fld.TypeColumn == jsql.CALC {
 		if fld.From == nil {
 			return "", false

@@ -49,6 +49,7 @@ type Command struct {
 	model          *Model            `json:"-"`
 	isDebug        bool              `json:"-"`
 	isTest         bool              `json:"-"`
+	err            error             `json:"-"` // a where that could not be read (B14): the command fails when it runs
 }
 
 /**
@@ -214,6 +215,11 @@ func (s *Command) where(cond *et.Condition) *Command {
 func (s *Command) whereByJson(cond []et.Json) *Command {
 	conditions, err := et.ToWheRes(cond)
 	if err != nil {
+		// The command fails when it runs: without its condition an update or a delete would
+		// touch every row (B14)
+		if s.err == nil {
+			s.err = err
+		}
 		return s
 	}
 	for _, condition := range conditions {
@@ -748,6 +754,9 @@ func (s *Command) upsert(tx *Tx) (et.Items, error) {
 * @return et.Items, error
 **/
 func (s *Command) execTx(tx *Tx) (result et.Items, err error) {
+	if s.err != nil {
+		return et.Items{}, s.err
+	}
 	tx, commit := getTx(tx)
 	if commit {
 		// The command owns the transaction: roll it back on any error or panic, so the

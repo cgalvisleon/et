@@ -64,6 +64,9 @@ func (s *Rag) IngestSQL(ctx context.Context, tenantId, projectId, name, query st
 * @return et.Json, error
 **/
 func (s *Rag) ingest(ctx context.Context, tenantId, projectId, name, source, text, userId string) (et.Json, error) {
+	if s.embedFn == nil {
+		return nil, errors.New(MSG_API_KEY_REQUIRED)
+	}
 	if !utility.ValidStr(tenantId, 0, []string{""}) {
 		return nil, errors.New(MSG_TENANT_ID_REQUIRED)
 	}

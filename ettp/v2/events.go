@@ -29,12 +29,12 @@ func (s *Server) initEvents() error {
 		return err
 	}
 
-	err = event.Subscribe(router.APIGATEWAY_REMOVE_ROUTER, s.eventRemoveRouterById)
+	err = event.Subscribe(router.APIGATEWAY_DELETE_RESOLVE, s.eventRemoveRouterById)
 	if err != nil {
 		return err
 	}
 
-	err = event.Subscribe(router.APIGATEWAY_RESET_ROUTER, s.eventReset)
+	err = event.Subscribe(router.APIGATEWAY_RESET, s.eventReset)
 	if err != nil {
 		return err
 	}

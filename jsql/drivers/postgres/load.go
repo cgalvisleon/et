@@ -33,11 +33,8 @@ func ddlTable(model *jsql.Model) string {
 }
 
 /**
-* ddlColumns: Builds the column definition list for CREATE TABLE.
-* Emits:
-*   - _idx BIGSERIAL             (when IdxField is set)
-*   - real PG columns for COLUMN type
-*   - _source JSONB DEFAULT '{}'  (when SourceField is set)
+* ddlColumns: Builds the column definitions of CREATE TABLE: one per COLUMN column (type and default), the
+* SourceField as JSONB DEFAULT '{}'.
 * @param model *jsql.Model
 * @return []string
 **/
@@ -169,8 +166,8 @@ func ddlForeignKeys(model *jsql.Model, table string) []string {
 }
 
 /**
-* ExistModel: Returns true when a table with the given schema and name exists in the database.
-* @param db *sql.DB @param schema string @param name string
+* ExistModel: Returns true when the table of model (its schema and name) exists in the database.
+* @param db *sql.DB, model *jsql.Model, timeout ...time.Duration
 * @return bool, error
 **/
 func (s *Postgres) ExistModel(db *sql.DB, model *jsql.Model, timeout ...time.Duration) (bool, error) {

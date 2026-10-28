@@ -276,7 +276,7 @@ func (s *Client) dispatch(sess *session, dispatched chan struct{}) {
 /**
 * request: Envía una operación al servidor y espera su ack o error.
 * @param in inbound
-* @return serverFrame, error
+* @return serverFrame, *session (la sesión usada), error
 **/
 func (s *Client) request(in inbound) (serverFrame, *session, error) {
 	sess, err := s.current()

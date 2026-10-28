@@ -1,3 +1,12 @@
+// Package jwf is the workflow engine: flows made of steps (Go functions or goja scripts) run as instances.
+//
+// Invariants:
+//   - Redis keys: an instance lives in "instance:<id>" without TTL (set through the instance's OnChange hook, deleted
+//     when RunInstance ends); "instance:<id>:stop" asks it to stop and expires after WorkFlow.TimeAwait.
+//   - Instance.mu protects Status and Step (setStatus, setEnd, setCurrent), but next() and isStop() read the instance
+//     without it: an instance is not meant to be run concurrently.
+//   - Nothing else is persisted here: flows and workflows live in memory and the caller stores them through
+//     WorkFlow.OnChange / Flow.OnChange and rebuilds them with LoadFlow / SetFlow.
 package jwf
 
 import (
@@ -34,9 +43,9 @@ type WorkFlow struct {
 }
 
 /**
-* New
-* @param db *jsql.DB, id, userID string
-* @return *WorkFlow
+* New: Creates a workflow (loads cache and event first); a blank id gets a new UUID.
+* @param id string
+* @return *WorkFlow, error
 **/
 func New(id string) (*WorkFlow, error) {
 	err := cache.Load()
@@ -67,8 +76,7 @@ func New(id string) (*WorkFlow, error) {
 }
 
 /**
-* up
-* @param store Store
+* up: Restores the private state after creation or json.Unmarshal (debug flag, bindings, hooks).
 * @return *WorkFlow
 **/
 func (s *WorkFlow) up() *WorkFlow {
@@ -268,12 +276,12 @@ func (s *WorkFlow) getInstance(id string) (*Instance, bool) {
 func (s *WorkFlow) newInstance(tag, triggerTag, id, code string, tags et.Json, userId string) (*Instance, error) {
 	flow, exists := s.getFlow(tag)
 	if !exists {
-		return nil, ErrrFlowNotFound
+		return nil, ErrFlowNotFound
 	}
 
 	trigger, exists := flow.getTrigger(triggerTag)
 	if !exists {
-		return nil, ErrrTriggerNotFound
+		return nil, ErrTriggerNotFound
 	}
 
 	name := flow.Name
@@ -294,8 +302,8 @@ func (s *WorkFlow) newInstance(tag, triggerTag, id, code string, tags et.Json, u
 }
 
 /**
-* GetFlow
-* @param tag, triggerTag, id, projectId, code, userId string
+* GetInstance: Loads the instance id from Redis or creates a new one for the flow tag and trigger triggerTag.
+* @param tag, triggerTag, id, code string, tags et.Json, userId string
 * @return *Instance, error
 **/
 func (s *WorkFlow) GetInstance(tag, triggerTag, id, code string, tags et.Json, userId string) (*Instance, error) {

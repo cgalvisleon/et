@@ -45,7 +45,7 @@ func HashSHA256(value string) (string, error) {
 }
 
 /**
-* CryptoSHA512 return a string with the value encrypted in sha512
+* HashSHA512 return the sha512 hash of value in hex
 * @param value string
 * @return string, error
 **/
@@ -55,8 +55,8 @@ func HashSHA512(value string) (string, error) {
 }
 
 /**
-* EncryptAES return a string with the value encrypted in aes
-* @param value string
+* EncryptAES return value encrypted with AES-CFB and secret, as base64 of iv + ciphertext
+* @param value, secret string
 * @return string, error
 **/
 func EncryptAES(value, secret string) (string, error) {
@@ -82,8 +82,8 @@ func EncryptAES(value, secret string) (string, error) {
 }
 
 /**
-* DecryptoAES return a string with the value decrypted in aes
-* @param value string
+* DecryptAES return the value (base64 of iv + AES-CFB ciphertext) decrypted with secret
+* @param value, secret string
 * @return string, error
 **/
 func DecryptAES(value, secret string) (string, error) {

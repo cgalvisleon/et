@@ -26,9 +26,13 @@ type Condition struct {
 	isPhone             bool
 	min                 float64
 	max                 float64
+	hasMin              bool
+	hasMax              bool
 	minLength           int
 	maxLength           int
 	pattern             string
+	re                  *regexp.Regexp
+	patternErr          error
 	name                string
 	values              []any
 	validator           *Validator
@@ -44,6 +48,10 @@ type Validator struct {
 	notEmpty bool
 }
 
+/**
+* New: An empty validator; add fields with Field.
+* @return *Validator
+**/
 func New() *Validator {
 	return &Validator{
 		Fields: make(map[string]*Field),
@@ -60,9 +68,9 @@ func (s *Validator) NotEmpty() *Validator {
 }
 
 /**
-* AddField: Add a field to the validator.
-* @param name string, validator *Condition
-* @return *Validator
+* Field: Adds a field to the validator and returns its condition to chain the checks.
+* @param name string
+* @return *Condition
 **/
 func (s *Validator) Field(name string) *Condition {
 	s.Fields[name] = &Field{
@@ -76,17 +84,17 @@ func (s *Validator) Field(name string) *Condition {
 }
 
 /**
-* Fields: Get the fields of the validator.
-* @return map[string]*Field
+* Field: Adds another field to the same validator, to keep chaining.
+* @param name string
+* @return *Condition
 **/
 func (s *Condition) Field(name string) *Condition {
 	return s.validator.Field(name)
 }
 
 /**
-* Required: Set the required flag for the validator.
-* @param required bool
-* @return *Validator
+* Required: Require the field to be present and not empty.
+* @return *Condition
 **/
 func (s *Condition) Required() *Condition {
 	s.required = true
@@ -148,22 +156,24 @@ func (s *Condition) IsPhone() *Condition {
 }
 
 /**
-* Min: Set the minimum value for the validator.
-* @param min int
-* @return *Validator
+* Min: Require a numeric value to be at least min.
+* @param min float64
+* @return *Condition
 **/
 func (s *Condition) Min(min float64) *Condition {
 	s.min = min
+	s.hasMin = true
 	return s
 }
 
 /**
-* Max: Set the maximum value for the validator.
-* @param max int
-* @return *Validator
+* Max: Require a numeric value to be at most max.
+* @param max float64
+* @return *Condition
 **/
 func (s *Condition) Max(max float64) *Condition {
 	s.max = max
+	s.hasMax = true
 	return s
 }
 
@@ -173,9 +183,7 @@ func (s *Condition) Max(max float64) *Condition {
 * @return *Validator
 **/
 func (s *Condition) Between(min, max float64) *Condition {
-	s.min = min
-	s.max = max
-	return s
+	return s.Min(min).Max(max)
 }
 
 /**
@@ -199,12 +207,16 @@ func (s *Condition) MaxLength(maxLength int) *Condition {
 }
 
 /**
-* Pattern: Set the pattern for the validator.
+* Pattern: Set the regular expression the value must match; compiled once here, an invalid one fails every validation.
 * @param pattern string
-* @return *Validator
+* @return *Condition
 **/
 func (s *Condition) Pattern(pattern string) *Condition {
 	s.pattern = pattern
+	s.re, s.patternErr = regexp.Compile(pattern)
+	if s.patternErr != nil {
+		s.patternErr = fmt.Errorf(MSG_VALIDATOR_INVALID_PATTERN, s.name, pattern)
+	}
 	return s
 }
 
@@ -371,7 +383,9 @@ func (s *Condition) validateString(value string) (bool, error) {
 		return false, fmt.Errorf(MSG_VALIDATOR_MIN_LENGTH, s.name, s.minLength)
 	} else if s.maxLength > 0 && len(value) > s.maxLength {
 		return false, fmt.Errorf(MSG_VALIDATOR_MAX_LENGTH, s.name, s.maxLength)
-	} else if s.pattern != "" && !regexp.MustCompile(s.pattern).MatchString(value) {
+	} else if s.patternErr != nil {
+		return false, s.patternErr
+	} else if s.re != nil && !s.re.MatchString(value) {
 		return false, fmt.Errorf(MSG_VALIDATOR_PATTERN, s.name, s.pattern)
 	} else if s.isLetters && !letterPattern.MatchString(value) {
 		return false, fmt.Errorf(MSG_VALIDATOR_LETTERS, s.name)
@@ -395,9 +409,9 @@ func (s *Condition) validateString(value string) (bool, error) {
 func (s *Condition) validateInt(value int) (bool, error) {
 	if s.required && value == 0 {
 		return false, fmt.Errorf(MSG_VALIDATOR_REQUIRED, s.name)
-	} else if s.min > 0 && float64(value) < s.min {
+	} else if s.hasMin && float64(value) < s.min {
 		return false, fmt.Errorf(MSG_VALIDATOR_MIN, s.name, s.min)
-	} else if s.max > 0 && float64(value) > s.max {
+	} else if s.hasMax && float64(value) > s.max {
 		return false, fmt.Errorf(MSG_VALIDATOR_MAX, s.name, s.max)
 	}
 	return true, nil
@@ -411,9 +425,9 @@ func (s *Condition) validateInt(value int) (bool, error) {
 func (s *Condition) validateFloat(value float64) (bool, error) {
 	if s.required && value == 0 {
 		return false, fmt.Errorf(MSG_VALIDATOR_REQUIRED, s.name)
-	} else if s.min > 0 && value < s.min {
+	} else if s.hasMin && value < s.min {
 		return false, fmt.Errorf(MSG_VALIDATOR_MIN, s.name, s.min)
-	} else if s.max > 0 && value > s.max {
+	} else if s.hasMax && value > s.max {
 		return false, fmt.Errorf(MSG_VALIDATOR_MAX, s.name, s.max)
 	}
 	return true, nil

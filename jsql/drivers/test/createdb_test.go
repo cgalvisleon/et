@@ -47,7 +47,7 @@ func TestCreateDropDB(t *testing.T) {
 
 			// Oracle: the service is not created nor dropped from a connection (spec §9): CreateDB only checks that it
 			// answers and DropDB fails with MSG_DRIVER_CANNOT_DROP_DB
-			// Josefina: lo mismo (sus bases se crean con su API, no por SQL)
+			// Josefina: the same (its databases are created with its API, not through SQL)
 			if tg.name == jsql.DriverOracle || tg.name == jsql.DriverJosefina {
 				if err := jsql.CreateDB(&tg.params, timeout); err != nil {
 					t.Fatalf("CreateDB: %v", err)

@@ -64,12 +64,7 @@ func Alert(err error) error {
 * @return error
 **/
 func Alertm(message string) error {
-	err := errors.New(message)
-	if err != nil {
-		Alert(err)
-	}
-
-	return err
+	return Alert(errors.New(message))
 }
 
 /**
@@ -205,14 +200,14 @@ func Panicf(format string, args ...any) error {
 }
 
 /**
-* Ping
+* Ping: Logs a PING line (prints PONG).
 **/
 func Ping() {
 	Log("PING", "PONG")
 }
 
 /**
-* Pong
+* Pong: Logs a PONG line (prints PING).
 **/
 func Pong() {
 	Log("PoNG", "PING")

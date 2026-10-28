@@ -68,14 +68,13 @@ Si terminas en 4 o 5, dilo en la respuesta: «No usé `et` para X porque Y».
 - **`jsql.Define`** es el struct de definición (no `jsql.Def`).
 - **No existen** `jval/`, `config/`, `jsql.Store`, `stores.Catalog`, `ws/`, `wsp/`, `jtcp/`, `jws/`, `jrex/`, `jcli/`, `workflow/`, `instances/`.
 - **`stores.Instance.Get(id, dest)`** tiene una sola clave: no cumple los `Store` de `crontab` ni `jia`.
-- **`jia.Load`** tiene los argumentos de `store.Get` invertidos (`jia/ia.go:90`).
 - **`dt` con `PRODUCTION=false`** no persiste nada.
 - **`cmds.RunSSH`** ejecuta localmente.
-- **`utility.More`** no acumula: reinicia el contador.
 - **`jsql.LoadDb`** reconstruye la `DB` sin conectarla: llama `Init` después.
 - **`DB_POOL_*`** ajusta el pool en las cinco conexiones (sin ellos, sqlite usa 10 y los demás 3/1/30/2). `DB_TENANT_ID` ya no existe.
 - **`conn.id`** del `jsql.Wrapper` existe en los cinco drivers (es una función; B11 cerrada el 2026-10-12).
-- **`validator.Pattern`** con una regex inválida entra en pánico al validar (`regexp.MustCompile`); `ByJson` sí la rechaza con error.
+- **`validator.Pattern`** compila la regex una vez; una inválida hace fallar cada validación de ese campo (sin pánico) y `ByJson` la rechaza con error.
+- **`resilience.Instance.Run`** es síncrono: espera los reintentos y devuelve el resultado del último intento.
 
 ## 4. Reglas
 

@@ -116,171 +116,6 @@ const (
 	havingSection
 )
 
-/**
-* QueryDetail: Defines a relationship to another model, including join keys and cascade rules.
-**/
-type QueryDetail struct {
-	To     *From             `json:"to"`
-	Bridge *From             `json:"bridge,omitempty"`
-	ToKeys map[string]string `json:"to_keys,omitempty"`
-	Keys   map[string]string `json:"keys"`
-	Select []string          `json:"select"`
-	Page   int               `json:"page"`
-	Rows   int               `json:"rows"`
-}
-
-/**
-* QueryRollups: Rollup resolved for a query; executed per resulting row after the main SQL.
-**/
-type QueryRollups struct {
-	To        *From             `json:"to"`
-	Keys      map[string]string `json:"keys"`
-	Select    []string          `json:"select"`
-	Operation RollupOperation   `json:"operation"`
-	Where     []*et.Condition   `json:"where"`
-	OrdersBy  []*Index          `json:"order_by"`
-}
-
-/**
-* MarshalJSON: Writes the rollup with its conditions as a where list.
-* @return []byte, error
-**/
-func (s QueryRollups) MarshalJSON() ([]byte, error) {
-	return json.Marshal(rollupJson{To: s.To, Keys: s.Keys, Select: s.Select, Operation: s.Operation, Where: whereToJson(s.Where), OrdersBy: s.OrdersBy})
-}
-
-/**
-* UnmarshalJSON: Reads a rollup whose conditions come as a where list.
-* @param data []byte
-* @return error
-**/
-func (s *QueryRollups) UnmarshalJSON(data []byte) error {
-	var v Rollups
-	if err := json.Unmarshal(data, &v); err != nil {
-		return err
-	}
-	*s = *v.queryRollups()
-	return nil
-}
-
-/**
-* resolveWhere: Returns the conditions of the rollup for item: a {field: "..."} value is read from item.
-* Returns false when item lacks a referenced field, so the rollup is not applied (as with a missing key).
-* @param item et.Json
-* @return []*et.Condition, bool
-**/
-func (s *QueryRollups) resolveWhere(item et.Json) ([]*et.Condition, bool) {
-	result := make([]*et.Condition, 0, len(s.Where))
-	for _, cond := range s.Where {
-		if cond == nil {
-			continue
-		}
-		tmp := *cond
-		if ref, ok := rowRef(cond); ok {
-			name, _, _ := strings.Cut(ref.Name, "->")
-			if _, exists := item[name]; !exists {
-				return nil, false
-			}
-			tmp.Value = et.NewValue(ref.ValueOf(item))
-		}
-		result = append(result, &tmp)
-	}
-	return result, true
-}
-
-/**
-* rollupAggSelect: Wraps a select field as an aggregate expression "op(field):as" understood by GetField.
-* @param op RollupOperation, field string
-* @return string
-**/
-func rollupAggSelect(op RollupOperation, field string) string {
-	name, as := field, field
-	if i := strings.LastIndex(field, ":"); i != -1 {
-		name, as = field[:i], field[i+1:]
-	}
-	if i := strings.LastIndex(as, "."); i != -1 {
-		as = as[i+1:]
-	}
-	as = strings.ReplaceAll(as, "->", "_")
-	return fmt.Sprintf("%s(%s):%s", op, name, as)
-}
-
-/**
-* getQuery: Returns the query for the rollup filtered by the keys of the given row.
-* Returns false when the row lacks any of the keys, so the rollup is not applied.
-* @param item et.Json
-* @return *Query, bool
-**/
-func (s *QueryRollups) getQuery(item et.Json) (*Query, bool) {
-	if s.To == nil || s.To.Model == nil {
-		return nil, false
-	}
-
-	where, ok := s.resolveWhere(item)
-	if !ok {
-		return nil, false
-	}
-
-	keys := make([]*et.Condition, 0, len(s.Keys))
-	for k, fk := range s.Keys {
-		v, exists := item[k]
-		if !exists {
-			return nil, false
-		}
-		keys = append(keys, Eq(fk, v))
-	}
-	q := NewQuery(s.To.Model, "A")
-	q.addCondition(rollupConditions(keys, where))
-
-	if s.Operation.IsAggregate() {
-		for _, field := range s.Select {
-			q.Select(rollupAggSelect(s.Operation, field))
-		}
-		return q, true
-	}
-
-	q.Select(s.Select...)
-	for _, order := range s.OrdersBy {
-		q.OrderBy(order.Name, order.Sorted)
-	}
-	q.Rows = 1
-	return q, true
-}
-
-/**
-* getQuery: Returns the query for the detail.
-* @param item et.Json
-* @return *Query
-**/
-func (s *QueryDetail) getQuery(item et.Json) *Query {
-	q := NewQuery(s.To.Model, "A")
-	if s.Bridge != nil && s.Bridge.Model != nil {
-		// Master: the To rows linked to the item through the bridge (A = To, B = bridge).
-		on := make([]*et.Condition, 0, len(s.ToKeys))
-		for k, fk := range s.ToKeys {
-			on = append(on, Eq("B."+fk, "A."+k))
-		}
-		q.Join(s.Bridge.Model, "B", on)
-		for k, fk := range s.Keys {
-			q.Where(Eq("B."+fk, item[k]))
-		}
-		q.Select(s.Select...)
-		q.Rows = s.Rows
-		return q
-	}
-	for k, fk := range s.Keys {
-		v, exists := item[k]
-		if !exists {
-			continue
-		}
-		q.Where(Eq(fk, v))
-	}
-	q.Select(s.Select...)
-	q.Rows = s.Rows
-	q.setPage(s.Page)
-	return q
-}
-
 type Calc struct {
 	Model  *Model `json:"model"`
 	Module string `json:"module"`
@@ -550,6 +385,16 @@ func (s *Query) fullJoin(model *Model, as string, on []*et.Condition) *Query {
 }
 
 /**
+* addOneCondition: Appends one condition to the WHERE list; without a connector it joins with AND (et.AddCondition).
+* @param cond *et.Condition
+* @return *Query
+**/
+func (s *Query) addOneCondition(cond *et.Condition) *Query {
+	s.Conditions = et.AddCondition(s.Conditions, cond)
+	return s
+}
+
+/**
 * addCondition: Appends a slice of conditions directly to the WHERE clause list.
 * @param conds []*et.Condition
 * @return *Query
@@ -570,7 +415,7 @@ func (s *Query) selects(fields ...string) *Query {
 }
 
 /**
-* calc: Appends fields to the DETAIL clause.
+* calc: Adds CALC/CALCFUNC columns of the from models to the query; an unknown field is ignored.
 * @param fields ...string
 * @return *Query
 **/
@@ -772,15 +617,6 @@ func (s *Query) setLimit(rows int) *Query {
 func (s *Query) setPage(page int) *Query {
 	s.Offset = (page - 1) * s.Rows
 	return s
-}
-
-/**
-* page: Sets the result offset based on the 1-based page number and current Rows limit.
-* @param page int
-* @return *Query
-**/
-func (s *Query) page(page int) *Query {
-	return s.setPage(page)
 }
 
 /**
@@ -1307,8 +1143,9 @@ func (s *Query) limit(page, rows int) (et.Items, error) {
 }
 
 /**
-* existsTx: Returns the Model for the primary FROM source, or nil if not found.
-* @return *Model
+* existsTx: Whether any row matches the query, within the transaction tx.
+* @param tx *Tx
+* @return bool, error
 **/
 func (s *Query) existsTx(tx *Tx) (bool, error) {
 	if s.err != nil {
@@ -1493,11 +1330,11 @@ func (s *Query) loadQuery(query et.Json) (*Query, error) {
 	return s, nil
 }
 
-// STAR: en selects, todas las columnas de los from; se le suman otros campos (rollups, atributos, detalles, maestros…)
+// STAR: in selects, every column of the froms; other fields (rollups, attributes, details, masters...) add to it
 const STAR = "*"
 
 /**
-* HasStar: Si selects trae "*"
+* HasStar: Whether selects contains "*"
 * @return bool
 **/
 func (s *Query) HasStar() bool {
@@ -1505,7 +1342,7 @@ func (s *Query) HasStar() bool {
 }
 
 /**
-* hiddenIn: Si una columna de un from está oculta en la consulta: por su nombre o con el alias del from (A.password)
+* hiddenIn: Whether a column of from is hidden in the query, by its name or with the alias of the from (A.password)
 * @param from *From, column string
 * @return bool
 **/
@@ -1514,8 +1351,8 @@ func (s *Query) hiddenIn(from *From, column string) bool {
 }
 
 /**
-* StarFields: Los campos que trae "*": las columnas COLUMN de cada from (alias.nombre con varios from), sin las ocultas
-* de la consulta (por nombre o con alias) ni las del modelo, ni el campo fuente
+* StarFields: The fields that "*" brings: the COLUMN columns of each from (alias.name with several froms), without the
+* hidden ones of the query (by name or with alias), those of the model, and the source field
 * @return []string
 **/
 func (s *Query) StarFields() []string {
@@ -1544,8 +1381,8 @@ func (s *Query) StarFields() []string {
 }
 
 /**
-* SourceHiddens: Las claves que se quitan del campo fuente de un from: las ocultas de la consulta (sin el alias de ese
-* from, A.password → password) y las del modelo
+* SourceHiddens: The keys removed from the source field of a from: the hidden ones of the query (without the alias of
+* that from, A.password -> password) and those of the model
 * @param from *From
 * @return []string
 **/

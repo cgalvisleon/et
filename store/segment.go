@@ -12,6 +12,10 @@ import (
 	"github.com/cgalvisleon/et/msg"
 )
 
+/**
+* recordHeader: Encabezado de un registro del log: LSN, tamaño y CRC de los datos, id
+* y estado (Active o Deleted).
+**/
 type recordHeader struct {
 	LSN     uint64 `json:"lsn"`
 	DataLen uint32 `json:"data_len"`
@@ -37,6 +41,10 @@ func (s *recordHeader) recordSize() int64 {
 	return s.headerSize() + int64(s.DataLen)
 }
 
+/**
+* recordRef: Ubicación de la versión vigente de un id en los segmentos (entrada del
+* índice en memoria).
+**/
 type recordRef struct {
 	segment int
 	offset  int64
@@ -355,7 +363,7 @@ func (s *segment) writeRecord(lsn uint64, id string, data []byte, status byte) (
 /**
 * decodeFixedHeader: Decodifica la parte fija del encabezado.
 * Formato: [LSN:8][DataLen:4][CRC:4][IDLen:2][ID][Status:1][Data]
-* @param b []byte (at least 18 bytes)
+* @param b []byte (al menos 18 bytes)
 * @return recordHeader
 **/
 func decodeFixedHeader(b []byte) recordHeader {

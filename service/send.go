@@ -1,41 +1,67 @@
+// Package service groups the message senders (SMS, WhatsApp, email, push) behind one Send, the OTP flow over them and
+// a local file storage.
+//
+// Invariant: an OTP is stored in the cache under the key the caller passes to SendOTPSMS / SendOTPEmail / VerifyOTP;
+// the package never builds or prefixes it.
 package service
 
 import (
 	"errors"
+	"sync"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/validator"
 )
 
+// SenderSMS: sends a text to a list of phone numbers.
 type SenderSMS interface {
 	SendSMS(contactNumbers []string, content string, params et.Json, tpMessage string) (et.Item, error)
 }
 
+// SenderWhatsapp: sends WhatsApp messages, free text or by template id.
 type SenderWhatsapp interface {
 	SendWhatsapp(contactNumbers []string, content string, params []et.Json, tpMessage string) (et.Item, error)
 	SendWhatsappByTemplateId(contactNumbers []string, templateId string, params []et.Json, tpMessage string) (et.Item, error)
 }
 
+// SenderEmail: sends an HTML email.
 type SenderEmail interface {
 	SendEmail(from et.Json, to []et.Json, subject string, htmlContent string, params et.Json, tpMessage string) (et.Item, error)
 }
 
+// SenderPushNotification: sends a push notification to a device token.
 type SenderPushNotification interface {
 	SendPushNotification(deviceToken string, title string, body string, tpMessage string) (et.Item, error)
 }
 
+// TpMessage: the kind of message (notification, commercial or authentication) a sender is asked for.
 type TpMessage int
 
 const (
 	TypeNotification TpMessage = iota
-	TypeComercial
-	TypeAutentication
+	TypeCommercial
+	TypeAuthentication
 )
 
+// Deprecated: use TypeCommercial and TypeAuthentication.
+const (
+	TypeComercial     = TypeCommercial
+	TypeAutentication = TypeAuthentication
+)
+
+/**
+* String: The name of the kind of message.
+* @return string
+**/
 func (tp TpMessage) String() string {
 	return [...]string{"Notification", "Comercial", "Autentication"}[tp]
 }
 
+/**
+* IntToTpMessage: The TpMessage with that ordinal.
+* @param i int
+* @return TpMessage
+**/
 func IntToTpMessage(i int) TpMessage {
 	return TpMessage(i)
 }
@@ -59,6 +85,7 @@ type Send struct {
 }
 
 var senders = make(map[string]*Send)
+var sendersMu sync.Mutex
 
 /**
 * LoadSend
@@ -66,12 +93,14 @@ var senders = make(map[string]*Send)
 * @return *Send
 **/
 func LoadSend(tenantId, name, email string) (*Send, error) {
+	sendersMu.Lock()
+	defer sendersMu.Unlock()
 	result, exists := senders[tenantId]
 	if exists {
 		return result, nil
 	}
 
-	valid, err := validator.New().
+	_, err := validator.New().
 		Field("tenant_id").
 		Required().
 		Field("name").
@@ -84,9 +113,6 @@ func LoadSend(tenantId, name, email string) (*Send, error) {
 			"email":     email,
 		})
 	if err != nil {
-		return nil, err
-	}
-	if !valid {
 		return nil, err
 	}
 
@@ -111,6 +137,8 @@ func LoadSend(tenantId, name, email string) (*Send, error) {
 * @return *Send, error
 **/
 func GetSender(tenantId string) (*Send, error) {
+	sendersMu.Lock()
+	defer sendersMu.Unlock()
 	result, exists := senders[tenantId]
 	if !exists {
 		return nil, errors.New(MSG_SEND_NOT_FOUND)

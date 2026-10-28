@@ -234,7 +234,7 @@ func (s *Watcher) addWatch(path string) error {
 * @return error
 **/
 func (s *Watcher) Load() error {
-	// Registrar directorio raíz y subdirectorios
+	// Watch the root directory and its subdirectories
 	err := filepath.WalkDir(s.root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -272,7 +272,7 @@ func (s *Watcher) Load() error {
 					s.onEvent(event)
 				}
 
-				// Si se crea un nuevo directorio → empezar a observarlo
+				// A new directory was created: start watching it
 				if event.Op&fsnotify.Create == fsnotify.Create {
 					info, err := os.Stat(event.Name)
 					if err == nil && info.IsDir() {
@@ -296,13 +296,18 @@ func (s *Watcher) Load() error {
 	return nil
 }
 
+/**
+* WatcherPath: Watches root and its subdirectories recursively, logging every event; it blocks forever.
+* @param root string
+* @return error
+**/
 func WatcherPath(root string) error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return err
 	}
 
-	// Registrar directorio raíz y subdirectorios
+	// Watch the root directory and its subdirectories
 	err = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -325,7 +330,7 @@ func WatcherPath(root string) error {
 			case event := <-watcher.Events:
 				logs.Log(watcherPrefix, "Event:", event)
 
-				// Si se crea un nuevo directorio → empezar a observarlo
+				// A new directory was created: start watching it
 				if event.Op&fsnotify.Create == fsnotify.Create {
 					info, err := os.Stat(event.Name)
 					if err == nil && info.IsDir() {

@@ -44,11 +44,17 @@ func (s *Validator) ByJson(params et.Json) (*Validator, error) {
 		condition.isSpecialCharacters = def.Bool("is_special_characters")
 		condition.isEmail = def.Bool("is_email")
 		condition.isPhone = def.Bool("is_phone")
-		condition.min = def.Num("min")
-		condition.max = def.Num("max")
+		if def.IsExist("min") {
+			condition.Min(def.Num("min"))
+		}
+		if def.IsExist("max") {
+			condition.Max(def.Num("max"))
+		}
 		condition.minLength = def.Int("min_length")
 		condition.maxLength = def.Int("max_length")
-		condition.pattern = pattern
+		if pattern != "" {
+			condition.Pattern(pattern)
+		}
 		condition.values = def.Array("values")
 	}
 
@@ -94,10 +100,10 @@ func (s *Condition) ToJson() et.Json {
 		}
 	}
 
-	if s.min != 0 {
+	if s.hasMin {
 		result["min"] = s.min
 	}
-	if s.max != 0 {
+	if s.hasMax {
 		result["max"] = s.max
 	}
 	if s.minLength != 0 {

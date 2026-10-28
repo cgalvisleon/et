@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -541,7 +542,7 @@ func mySelects(query *jsql.Query) string {
 		return fmt.Sprintf("JSON_OBJECT(%s) AS %s", strings.Join(pairs, ",\n"), myIdent(jsql.RESULT))
 	}
 
-	// "*" son las columnas de los from (StarFields); se le suman los demás campos de selects
+	// "*" is the columns of the froms (StarFields); the other fields of selects add to it
 	fields := make([]string, 0, len(query.Selects))
 	for _, field := range query.Selects {
 		if field == jsql.STAR {
@@ -554,7 +555,7 @@ func mySelects(query *jsql.Query) string {
 		fields = append(fields, field)
 	}
 
-	// Con "*" y campo fuente, los atributos del primer from y encima los campos (JSON_SET, que conserva los null)
+	// With "*" and a source field, the attributes of the first from with the fields on top (JSON_SET keeps the nulls)
 	if from := query.Froms[0]; query.HasStar() && from.Model != nil && from.Model.SourceField != "" {
 		pairs := make([]string, 0, len(fields))
 		for _, field := range fields {
@@ -576,7 +577,7 @@ func mySelects(query *jsql.Query) string {
 }
 
 /**
-* mySetPair: El par de JSON_SET ('$."clave"', valor) de un campo: el de mySelectExpr ('clave', valor) con la ruta
+* mySetPair: The JSON_SET pair ('$."key"', value) of a field: the one of mySelectExpr ('key', value) with the path
 * @param query *jsql.Query, field string
 * @return string, bool
 **/
@@ -641,7 +642,7 @@ func myOrderExpr(query *jsql.Query, name string) (string, bool) {
 **/
 func (s *Mysql) Query(query *jsql.Query, timeout ...time.Duration) (string, error) {
 	if len(query.Froms) == 0 {
-		return "", fmt.Errorf("query has no FROM source")
+		return "", errors.New(jsql.MSG_QUERY_NO_FROM)
 	}
 	for _, join := range query.Joins {
 		if join.Type == jsql.FULL_JOIN {

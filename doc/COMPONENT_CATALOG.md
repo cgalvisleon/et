@@ -4,7 +4,7 @@
 >
 > Se omiten `cmd/` y `create/`.
 
-Generado: 2026-10-10; revisado contra `go doc` el 2026-10-11 (sin diferencias en las firmas); secciones `jsql` y `jwf` regeneradas el 2026-10-27.
+Generado: 2026-10-10; regenerado entero desde `go doc` el 2026-10-27 (funciones y métodos de cada paquete; se quitaron `jtcp` y `jws`, que ya no existen).
 
 ## `aws`
 
@@ -112,6 +112,10 @@ func LTrim(key string, start, stop int64) error
 func LTrimCtx(ctx context.Context, key string, start int64, stop int64) error
 func Load() error
 func LoadRouter(r Router)
+func ObjectAll(name string) ([]et.Json, error)
+func ObjectDelete(name, key string) error
+func ObjectGet(name, key string) (et.Json, bool, error)
+func ObjectSet(name string, key string, obj et.Json) error
 func ObjetAll(name string) ([]et.Json, error)
 func ObjetDelete(name, key string) error
 func ObjetGet(name, key string) (et.Json, bool, error)
@@ -149,6 +153,7 @@ func NewAuthenticationToken(app, device, userId, name string, payload et.Json, d
 func NewToken(app, device, userId, tenantId, roleId, name string, payload et.Json, duration time.Duration) (string, error)
 func NewClaim(duration time.Duration) *Claim
 func ParceToken(token string) (*Claim, error)
+func ParseToken(token string) (*Claim, error)
 func (s *Claim) SetPayload(payload et.Json)
 func (s *Claim) ToJson() (et.Json, error)
 ```
@@ -205,7 +210,6 @@ type Store interface {
 Funciones y métodos:
 
 ```go
-func CronJob(tag, ownerId, spec string, repetitions int, params et.Json, fn func(params et.Json) error) (*Job, error)
 func HttpRemoveJob(w http.ResponseWriter, r *http.Request)
 func HttpStartJob(w http.ResponseWriter, r *http.Request)
 func HttpStopJob(w http.ResponseWriter, r *http.Request)
@@ -213,9 +217,10 @@ func Load(tag string, store Store) error
 func NextOf(spec string, from time.Time) (time.Time, error)
 func ParseSpec(spec string) (string, error)
 func RemoveJob(tag string) error
-func ScheduleJob(tag, ownerId string, at time.Time, params et.Json, fn func(params et.Json) error) (*Job, error)
 func New(tag string, store Store) (*Crontab, error)
 func (s *Crontab) Debug() *Crontab
+func CronJob(tag, ownerId, spec string, repetitions int, params et.Json, fn func(params et.Json) error) (*Job, error)
+func ScheduleJob(tag, ownerId string, at time.Time, params et.Json, fn func(params et.Json) error) (*Job, error)
 func (s *Job) ToJson() et.Json
 func (s *Job) ToString() string
 ```
@@ -527,6 +532,7 @@ func (s Json) Int(atribs ...string) int
 func (s Json) Int64(atribs ...string) int64
 func (s Json) IsChanged(from Json) bool
 func (s Json) IsDeferent(atrib string, val interface{}) bool
+func (s Json) IsDifferent(atrib string, val interface{}) bool
 func (s Json) IsEmpty() bool
 func (s Json) IsExist(key string) bool
 func (s Json) Json(atrib string) Json
@@ -694,7 +700,7 @@ func (s *Server) SetWriteTimeout(value time.Duration)
 func (s *Server) Start() error
 func (s *Server) Trace(path string, handlerFn http.HandlerFunc, packageName string)
 func (s *Server) Use(middlewares ...func(http.Handler) http.Handler)
-func (s *Server) UseAutentication(middleware func(http.Handler) http.Handler) *Server
+func (s *Server) UseAuthentication(middleware func(http.Handler) http.Handler) *Server
 func (s *Server) With(middlewares ...func(http.Handler) http.Handler) *Router
 func NewStorage() *Storage
 func (t TpParams) String() string
@@ -731,7 +737,7 @@ func (s *Server) Start()
 func (s *Server) ToJson() et.Json
 func (s *Server) ToString() string
 func (s *Server) Use(middlewares ...func(http.Handler) http.Handler)
-func (s *Server) UseAutentication(middleware func(http.Handler) http.Handler) *Server
+func (s *Server) UseAuthentication(middleware func(http.Handler) http.Handler) *Server
 func (s *Solver) ToJson() et.Json
 func (s Status) String() string
 func (t TpHeader) String() string
@@ -755,7 +761,7 @@ Funciones y métodos:
 
 ```go
 func Close()
-func Emiter(channel string, data et.Json)
+func Emitter(channel string, data et.Json)
 func Error(data et.Json)
 func ErrorContext(tenantId, workflowId, nodeId, customerId string, ctx et.Json)
 func ErrorDetails(tenantId string, statusCode int, provider, providerError, response string, attempt int)
@@ -780,7 +786,7 @@ func New() (*Conn, error)
 func (s *Conn) Close()
 func (s *Conn) HealthCheck() bool
 func DecodeMessage(data []byte) (Message, error)
-func NewEvenMessage(channel string, data et.Json) Message
+func NewEventMessage(channel string, data et.Json) Message
 func (m Message) Encode() ([]byte, error)
 func (s Message) Serialize() ([]byte, error)
 func (s Message) ToJson() (et.Json, error)
@@ -795,6 +801,7 @@ Funciones y métodos:
 
 ```go
 func GetExtencion(filename string) string
+func GetExtension(filename string) string
 func Load[T any](path string, obj *T) (bool, error)
 func LoadOrSave[T any](path string, obj *T) (bool, error)
 func MakeFile(path, name, model string, args ...any) (string, error)
@@ -845,10 +852,10 @@ Funciones y métodos:
 
 ```go
 func ExtractFile(name string, data []byte) (string, string, error)
+func RowsText(rows []et.Json) string
 func HttpEmbedder(baseUrl, apiKey, model string) Embedder
 func Load(db *jsql.DB, schema string, cnf Config) (*Rag, error)
 func LoadIndex(db *jsql.DB, schema string, cnf Config) (*Rag, error)
-func RowsText(rows []et.Json) string
 func (s *Rag) Ask(ctx context.Context, tenantId, projectId, conversationId, userId, question string) (et.Json, error)
 func (s *Rag) DeleteDocument(tenantId, projectId, id string) error
 func (s *Rag) DeleteDocumentsOf(tenantId, projectId, sourceId string) (int, error)
@@ -991,7 +998,7 @@ func Close()
 func HttpListRouters(w http.ResponseWriter, r *http.Request)
 func Start(port int) error
 func Mount(host string, port int, services any, packageName string) (*Package, error)
-func (s *Package) Add(method string, imputs []string, output []string) *Solver
+func (s *Package) Add(method string, inputs []string, output []string) *Solver
 func (s *Package) ToJson() et.Json
 func GetSolver(method string) (*Solver, error)
 ```
@@ -1043,6 +1050,8 @@ func AddAuditLog(auditLog []et.Json, userId string, action string) []et.Json
 func And(field interface{}, operator et.Operator, value interface{}) *et.Condition
 func ArgWhitAs(arg string) ([]string, bool)
 func ArgWhitSchema(arg string) ([]string, bool)
+func ArgWithAs(arg string) ([]string, bool)
+func ArgWithSchema(arg string) ([]string, bool)
 func Between(field string, min, max any) *et.Condition
 func Bind(source, vars et.Json) et.Json
 func BindWrapper() func(source any, vars et.Json) any
@@ -1150,26 +1159,26 @@ func (s *Model) Debug() *Model
 func (s *Model) DefineAfterDelete(name, code string, version int) *Model
 func (s *Model) DefineAfterInsert(name, code string, version int) *Model
 func (s *Model) DefineAfterUpdate(name, code string, version int) *Model
-func (s *Model) DefineAttrib(name string, tp et.TypeData, deFault any) *Column
+func (s *Model) DefineAttrib(name string, tp et.TypeData, defaultValue any) *Column
 func (s *Model) DefineBeforeDelete(name, code string, version int) *Model
 func (s *Model) DefineBeforeInsert(name, code string, version int) *Model
 func (s *Model) DefineBeforeUpdate(name, code string, version int) *Model
 func (s *Model) DefineCalc(name, script string) *Model
 func (s *Model) DefineCalcFunc(name string, calc CalcFunction) *Model
-func (s *Model) DefineColumn(name string, tp et.TypeData, deFault any) *Column
+func (s *Model) DefineColumn(name string, tp et.TypeData, defaultValue any) *Column
 func (s *Model) DefineDetail(name string, keys map[string]string, rows int, selects ...string) (*Model, error)
 func (s *Model) DefineForeignKeys(to *Model, keys map[string]string, onDeleteCascade, onUpdateCascade bool) *Detail
 func (s *Model) DefineHidden(name ...string)
 func (s *Model) DefineIdxField() *Index
-func (s *Model) DefineIndex(name string, tp et.TypeData, deFault any) *Index
+func (s *Model) DefineIndex(name string, tp et.TypeData, defaultValue any) *Index
 func (s *Model) DefineMaster(name string, to *Model, keys, toKeys map[string]string, selects []string, rows ...int) (*Model, error)
 func (s *Model) DefineModel() *Model
 func (s *Model) DefineOmitUpdate(names ...string) *Model
-func (s *Model) DefinePrimaryKey(name string, tp et.TypeData, deFault any) *Index
-func (s *Model) DefineRequired(name string, tp et.TypeData, deFault any) *Index
+func (s *Model) DefinePrimaryKey(name string, tp et.TypeData, defaultValue any) *Index
+func (s *Model) DefineRequired(name string, tp et.TypeData, defaultValue any) *Index
 func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, selects []string, operation RollupOperation, where ...*et.Condition) (*Rollups, error)
 func (s *Model) DefineSource() *Column
-func (s *Model) DefineUnique(name string, tp et.TypeData, deFault any) *Index
+func (s *Model) DefineUnique(name string, tp et.TypeData, defaultValue any) *Index
 func (s *Model) Delete() *Command
 func (s *Model) Detail(name string) (*Model, bool)
 func (s *Model) First(n int) (et.Items, error)
@@ -1402,81 +1411,6 @@ func (s *Sqlite) Test(ctx context.Context, connection jsql.Connection, query str
 func (s *Sqlite) UseSchema() bool
 ```
 
-## `jtcp`
-
-Nodo TCP distribuido con elección de líder tipo Raft, balanceador y TLS.
-
-Interfaces:
-
-```go
-type Service interface {
-	Execute(method string, request *Message) *Response
-}
-```
-
-Funciones y métodos:
-
-```go
-func NewClientTLSConfig(caFile string) (*tls.Config, error)
-func NewMTLSConfig(certFile, keyFile, caFile string) (*tls.Config, error)
-func NewSelfSignedTLS() (*tls.Config, error)
-func NewTLSFromFiles(certFile, keyFile string) (*tls.Config, error)
-func StartConsole(client *Client)
-func (s *Balancer) AddNode(addr string)
-func NewClient(addr string, tlsConfig ...*tls.Config) *Client
-func (s *Client) Close() error
-func (s *Client) Connect() error
-func (s *Client) OnConnect(fn func(*Client))
-func (s *Client) OnDisconnect(fn func(*Client))
-func (s *Client) OnError(fn func(*Client, error))
-func (s *Client) OnInbox(fn func(*Client, *Message))
-func (s *Client) OnSend(fn func(*Client, []byte))
-func (s *Client) Request(method string, args ...any) *Response
-func (s *Client) Send(ms *Message) error
-func (s *Client) SetDebug(debug bool)
-func (s *Client) SetTimeOut(timeout time.Duration)
-func (s *Client) Start() error
-func (s *Client) ToJson() et.Json
-func NewMessage(tp TpMessage, message any) (*Message, error)
-func ToMessage(bt []byte) (*Message, error)
-func (s *Message) Get(dest any) error
-func (s *Message) GetArgs(dest ...any) error
-func (s *Message) Response() (*Response, error)
-func (s *Message) ToJson() et.Json
-func (s *Msg) Get(dest any) error
-func (s *Msg) ID() string
-func NewNode(port int, tlsConfig ...*tls.Config) *Node
-func (s *Node) AddNode(addr string)
-func (s *Node) Broadcast(destination []string, tp TpMessage, message any)
-func (s *Node) Close() error
-func (s *Node) Error(c *Client, err error) error
-func (s *Node) GetMethods() et.Json
-func (s *Node) GetPeers() []*Client
-func (s *Node) LeaderID() (string, bool)
-func (s *Node) Mount(service Service) error
-func (s *Node) Next() *Client
-func (s *Node) OnBecomeLeader(fn func(*Node))
-func (s *Node) OnChangeLeader(fn func(*Node))
-func (s *Node) OnConnect(fn func(*Client))
-func (s *Node) OnDisconnect(fn func(*Client))
-func (s *Node) OnError(fn func(*Client, error))
-func (s *Node) OnInbox(fn func(*Msg))
-func (s *Node) OnSend(fn func(*Msg))
-func (s *Node) RemoveNode(addr string)
-func (s *Node) Request(to *Client, method string, args ...any) *Response
-func (s *Node) ResponseError(msg *Msg, err error) error
-func (s *Node) Send(to *Client, tp TpMessage, message any) error
-func (s *Node) SendError(to *Client, err error) error
-func (s *Node) Start() (err error)
-func (s *Raft) LeaderID() (leader string, imLeader bool)
-func TcpError(msg any) *Response
-func TcpResponse(res ...any) *Response
-func (s *Response) Get(dest ...any) error
-func (s *Response) ToJson() (et.Json, error)
-func (s *Response) ToString() string
-func (s *Tcp) Execute(method string, request *Message) *Response
-```
-
 ## `jwf`
 
 Motor de workflows en memoria: flujos, pasos (Go o JS), instancias, reintentos. Persistencia vía `OnChange`.
@@ -1552,47 +1486,6 @@ func (s *WorkFlow) ToJson() et.Json
 func (s *WorkFlow) ToString() string
 ```
 
-## `jws`
-
-Hub de WebSocket con canales (topic, queue, stack).
-
-Funciones y métodos:
-
-```go
-func SendError(socket *websocket.Conn, err error) error
-func Upgrader(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error)
-func (s *Client) Send(tp int, bt []byte)
-func (s *Client) SendError(err error)
-func (s *Client) SendHola()
-func (s *Client) SendMessage(message interface{})
-func (s *Client) ToJson() et.Json
-func New() *Hub
-func (s *Hub) Close()
-func (s *Hub) Connect(socket *websocket.Conn, ctx context.Context) (*Client, error)
-func (s *Hub) OnChannel(fn func(Channel))
-func (s *Hub) OnConnection(fn func(*Client))
-func (s *Hub) OnDisconnection(fn func(*Client))
-func (s *Hub) OnListener(fn func(*Client, []byte))
-func (s *Hub) OnPublish(fn func(ch Channel, ms Message))
-func (s *Hub) OnRemove(fn func(string))
-func (s *Hub) OnSend(fn func(to string, ms Message))
-func (s *Hub) Publish(channel string, message Message) ([]string, error)
-func (s *Hub) Queue(channel string) *Channel
-func (s *Hub) Remove(channel string) error
-func (s *Hub) SendTo(to []string, message Message) ([]string, error)
-func (s *Hub) SetDebug(debug bool)
-func (s *Hub) Stack(channel string) *Channel
-func (s *Hub) Start()
-func (s *Hub) Subscribe(channel string, subscribe string) error
-func (s *Hub) Topic(channel string) *Channel
-func (s *Hub) Unsubscribe(cache string, subscribe string) error
-func DecodeMessage(data []byte) (Message, error)
-func NewMessage(from et.Json, to []string) Message
-func (s *Message) Bytes() ([]byte, error)
-func (s *Message) ToJson() et.Json
-func (s *Message) ToString() string
-```
-
 ## `jwsp`
 
 WhatsApp Business (Graph API de Meta).
@@ -1628,7 +1521,7 @@ func (s *Whatsapp) SendReplyStickerMessageById(to, mediaObjectID, messageID stri
 func (s *Whatsapp) SendReplyStickerMessageByURL(to, messageID, url string) (et.Json, error)
 func (s *Whatsapp) SendReplyTextMessage(to, message_id, text string) (et.Json, error)
 func (s *Whatsapp) SendReplyVideoMessageById(to, messageID, videoCaptionText, videoObjectID string) (et.Json, error)
-func (s *Whatsapp) SendReplyVideoMessageByURL(to, url, videoCaptionText string) (et.Json, error)
+func (s *Whatsapp) SendReplyVideoMessageByURL(to, messageID, url, videoCaptionText string) (et.Json, error)
 func (s *Whatsapp) SendReplyWithReactionMessage(to, messageId, emoji string) (et.Json, error)
 func (s *Whatsapp) SendSingleProduct(to, Text, footer, section string) (et.Json, error)
 func (s *Whatsapp) SendStickerMessageById(to, mediaObjectID string) (et.Json, error)
@@ -1656,6 +1549,7 @@ Funciones y métodos:
 ```go
 func DeleteTokeByToken(token string) error
 func DeleteToken(app, device, sessionID string) error
+func DeleteTokenByToken(token string) error
 func GetKey(app, device, userId string) string
 func GetToken(key string) (string, bool, error)
 func NewAppToken(app, device string, duration time.Duration) (string, error)
@@ -1818,7 +1712,6 @@ type WrapResponseWriter interface {
 Funciones y métodos:
 
 ```go
-func AllowAll(allowedOrigins []string) *cors.Cors
 func Authentication(next http.Handler) http.Handler
 func GetBearerToken(r *http.Request) (string, error)
 func GetReqID(ctx context.Context) string
@@ -1869,7 +1762,7 @@ Cola genérica por lotes: despacha al juntar `maxEvents` o al pasar `period`.
 Funciones y métodos:
 
 ```go
-func New[T any](queueSize int, maxEvents int, period time.Duration, handler func(context.Context, []T) error) *Queue[T]
+func New[T any](
 func (q *Queue[T]) Close()
 func (q *Queue[T]) Len() int
 func (q *Queue[T]) Push(item T)
@@ -1915,6 +1808,7 @@ func GenIndex() int64
 func GenKey(args ...interface{}) string
 func GenSnowflake() string
 func GenULID(tag string) string
+func GenUUID(tag string) string
 func GenUUId(tag string) string
 func GenXID(tag string) string
 func GetULID(id string) string
@@ -2105,6 +1999,7 @@ func (s *Api) RegisterEndpoint(packageName, group, method, path, name string) er
 func (s *Api) Session(group, method, path, name string, handler http.HandlerFunc)
 func (s *Api) UseAuthentication(middlewares ...func(http.Handler) http.Handler)
 func (s *Api) UseAuthorization(authorization func(method, path string) func(http.Handler) http.Handler)
+func (s *Api) UseIdempotency(middlewares ...func(http.Handler) http.Handler)
 func (s *Api) UseIdenpotency(middlewares ...func(http.Handler) http.Handler)
 func (s *Api) UseLimitRate(limitRate int64)
 func (s *Api) UseRegisterEndpoint(registerEndpoint func(packageName, group, method, path, name string) error)
@@ -2126,7 +2021,7 @@ func (s *Api) Authorization(r *chi.Mux, route router.Route)
 func (s *Api) Private(r *chi.Mux, route router.Route)
 func (s *Api) Public(r *chi.Mux, route router.Route)
 func (s *Api) Use(middlewares ...func(http.Handler) http.Handler)
-func (s *Api) UseAutentication(middleware func(http.Handler) http.Handler)
+func (s *Api) UseAuthentication(middleware func(http.Handler) http.Handler)
 func (s *Api) UseAuthorization(middleware func(http.Handler) http.Handler)
 func New(name string, port int) *Ettp
 func (s *Ettp) Close()
@@ -2230,10 +2125,6 @@ func (s *Authorization) Query(query et.Json) (et.Items, error)
 func (s *Authorization) RemoveAuthor(profileId, method, path string) error
 func (s *Authorization) SetAuthor(profileId, method, path string) error
 func (s *Authorization) SetPath(method, path string) error
-func DefineConfig(db *DB, tenantId, schema, stage, tag string) (*Config, error)
-func (s *Config) DeleteConfig(tag, stage string) error
-func (s *Config) Get(name string, def interface{}) interface{}
-func (s *Config) SetConfig(tag, stage string, params et.Json) error
 func DefineDbs(db *DB, schema string) (*Dbs, error)
 func DefineFormState(db *DB, tenantId, schema string) (*FormState, error)
 func (s *FormState) Delete(id string) error
@@ -2259,6 +2150,7 @@ func Append(str1, str2, sp string) string
 func AppendAny(val1, val2 interface{}, sp string) interface{}
 func Change(str string, olds []string, news []string) string
 func Contains(str string, substr string) bool
+func DashSpace(str string) string
 func DaskSpace(str string) string
 func Format(format string, args ...any) string
 func FormatDateTime(format string, value time.Time) string
@@ -2268,12 +2160,14 @@ func FormatUppCase(format string, args ...any) string
 func GetSplitIndex(str, sep string, idx int) string
 func HtmlToText(html string) string
 func IsEmpty(str string) bool
+func JoinAny(space string, args ...any) string
 func JoinQuoted(items []string, sep string) string
 func Lowcase(s string) string
 func MaskToken(token string, length int) string
 func Name(str string) string
 func NotSpace(str string) string
 func Parse(str string, vars et.Json) string
+func RemoveAccents(str string) string
 func RemoveAcents(str string) string
 func Replace(str string, old string, new string) string
 func ReplaceAll(str string, olds []string, new string) string
@@ -2340,6 +2234,7 @@ func DivNum(a, b float64) float64
 func EncryptAES(value, secret string) (string, error)
 func EncryptMD5(value string) (string, error)
 func ExtractMencion(str string) []string
+func ExtractMention(str string) []string
 func FromBase64(data string) (string, error)
 func FromBase64Raw(data string) string
 func GenId(id string) string
@@ -2359,7 +2254,6 @@ func InStr(val string, in []string) bool
 func Match(hashPassword, password string) bool
 func Md5(password string) string
 func MinDistance(dist []int, visited []bool) int
-func More(tag string, expiration time.Duration) int64
 func Normalize(input string) string
 func Now() time.Time
 func NowStr() string
@@ -2376,7 +2270,6 @@ func ToBase64Raw(data string) string
 func ToJson(v any) et.Json
 func ToSerialize(v any) ([]byte, error)
 func UUID() string
-func UUIndex(tag string) int64
 func Unquote(val interface{}) any
 func ValidCode(val string) bool
 func ValidEmail(val string) bool
@@ -2390,12 +2283,6 @@ func ValidPhone(val string) bool
 func ValidStr(val string, min int, notIn []string) bool
 func ValidUUID(val string) bool
 func ValidWord(word string) bool
-func NewList() List
-func (s *List) Add(val interface{})
-func (s *List) Contains(val interface{}) bool
-func (s *List) IndexOf(val interface{}) int
-func (s *List) Remove(val interface{})
-func (s *List) Size() int
 ```
 
 ## `validator`
@@ -2422,6 +2309,7 @@ func (s *Condition) Pattern(pattern string) *Condition
 func (s *Condition) Required() *Condition
 func (s *Condition) ToJson() et.Json
 func (s *Condition) Validate(value et.Json) (bool, error)
+func (s *Condition) Values(values ...any) *Condition
 func New() *Validator
 func (s *Validator) ByJson(params et.Json) (*Validator, error)
 func (s *Validator) Field(name string) *Condition

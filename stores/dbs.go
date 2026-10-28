@@ -1,17 +1,13 @@
 package stores
 
 import (
-	"errors"
-
 	"github.com/cgalvisleon/et/et"
 	. "github.com/cgalvisleon/et/jsql"
 	"github.com/cgalvisleon/et/timezone"
 )
 
 /**
-* Dbs
-* @param db *DB,
-* @return *Dbs
+* Dbs: The model of database connections and the connections already opened, by id.
 **/
 type Dbs struct {
 	model *Model
@@ -68,7 +64,7 @@ func DefineDbs(db *DB, schema string) (*Dbs, error) {
 		}
 
 		if exists {
-			return errors.New(MSG_RECORD_EXISTS)
+			return ErrRecordExists
 		}
 
 		now := timezone.Now()

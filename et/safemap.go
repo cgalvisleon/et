@@ -5,6 +5,9 @@ import (
 	"sync"
 )
 
+/**
+* SafeMap: A Json guarded by a RWMutex, for concurrent Get/Set/Delete.
+**/
 type SafeMap struct {
 	mu   sync.RWMutex
 	Data Json
@@ -18,6 +21,11 @@ func NewSafeMap() *SafeMap {
 	return &SafeMap{Data: Json{}}
 }
 
+/**
+* Get: The value of key and whether it exists.
+* @param key string
+* @return interface{}, bool
+**/
 func (m *SafeMap) Get(key string) (interface{}, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -26,6 +34,10 @@ func (m *SafeMap) Get(key string) (interface{}, bool) {
 	return value, ok
 }
 
+/**
+* Set: Stores value under key (a nil map is created).
+* @param key string, value interface{}
+**/
 func (m *SafeMap) Set(key string, value interface{}) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -36,6 +48,10 @@ func (m *SafeMap) Set(key string, value interface{}) {
 	m.Data[key] = value
 }
 
+/**
+* Delete: Removes key.
+* @param key string
+**/
 func (m *SafeMap) Delete(key string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -43,11 +59,18 @@ func (m *SafeMap) Delete(key string) {
 	delete(m.Data, key)
 }
 
+/**
+* SafeData: A list of Json guarded by a RWMutex (a log: Add, Trim); serialized as the list itself.
+**/
 type SafeData struct {
 	Data []Json       `json:"data"`
 	mu   sync.RWMutex `json:"-"`
 }
 
+/**
+* NewSafeData: An empty SafeData ready to use.
+* @return *SafeData
+**/
 func NewSafeData() *SafeData {
 	return &SafeData{
 		Data: make([]Json, 0),
@@ -55,6 +78,10 @@ func NewSafeData() *SafeData {
 	}
 }
 
+/**
+* Len: How many items the list has.
+* @return int
+**/
 func (s *SafeData) Len() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -62,6 +89,11 @@ func (s *SafeData) Len() int {
 	return len(s.Data)
 }
 
+/**
+* Get: The item at index (0-based) and whether it exists.
+* @param index int
+* @return Json, bool
+**/
 func (s *SafeData) Get(index int) (Json, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -90,6 +122,10 @@ func (s *SafeData) Set(index int, value Json) bool {
 	return true
 }
 
+/**
+* Add: Appends value to the list.
+* @param value Json
+**/
 func (s *SafeData) Add(value Json) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -97,6 +133,10 @@ func (s *SafeData) Add(value Json) {
 	s.Data = append(s.Data, value)
 }
 
+/**
+* Delete: Removes the item at index; out of range is ignored.
+* @param index int
+**/
 func (s *SafeData) Delete(index int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -94,35 +94,10 @@ func (s *Step) RunOS(idx int, args et.Json) ([]byte, error) {
 }
 
 /**
-* RunSSH
-* @parms idx int
-* @parms args et.Json
-* @return []byte
-* @return error
+* RunSSH: Deprecated: it runs the command locally, exactly like RunOS; use RunOS.
+* @param idx int, args et.Json
+* @return []byte, error
 **/
 func (s *Step) RunSSH(idx int, args et.Json) ([]byte, error) {
-	if idx < 0 || idx >= len(s.Commands) {
-		return nil, errors.New(MSG_INDEX_NOT_FOUND)
-	}
-
-	cmd := s.Commands[idx]
-	for k, v := range args {
-		idx := slices.IndexFunc(cmd.Args, func(a string) bool { return strings.HasPrefix(a, k) })
-		if idx != -1 {
-			s, ok := v.(string)
-			if !ok {
-				return nil, errors.New(MSG_INVALID_TYPE)
-			}
-			cmd.Args[idx] = s
-		}
-	}
-
-	result := exec.Command(cmd.Name, cmd.Args...)
-
-	output, err := result.Output()
-	if err != nil {
-		return nil, err
-	}
-
-	return output, nil
+	return s.RunOS(idx, args)
 }

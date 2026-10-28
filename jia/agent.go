@@ -3,7 +3,6 @@ package jia
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/cgalvisleon/et/envar"
@@ -84,11 +83,11 @@ func (s *Ia) newAgent(tag, name, description, userId string) *Agent {
 }
 
 /**
-* loadAgend
+* loadAgent
 * @param id string
 * @return *Agent, error
 **/
-func (s *Ia) loadAgend(id string) (*Agent, error) {
+func (s *Ia) loadAgent(id string) (*Agent, error) {
 	if s.store == nil {
 		return nil, errors.New(MSG_STORE_IS_NIL)
 	}
@@ -271,7 +270,7 @@ func (s *Agent) delete() error {
 		return errors.New(MSG_STORE_IS_NIL)
 	}
 
-	err := s.store.Delete("agent", s.ID)
+	err := s.store.Delete(storeAgents, s.ID)
 	if err != nil {
 		return err
 	}
@@ -363,13 +362,15 @@ func (s *ConversationResult) ToJson() et.Json {
 func (s *Agent) conversation(ctx context.Context, participant *Participant, prompt string) (ConversationResult, error) {
 	convID := participant.ConvID
 	if convID == "" {
-		conv, _ := s.client.Conversations.New(ctx, conversations.ConversationNewParams{})
+		conv, err := s.client.Conversations.New(ctx, conversations.ConversationNewParams{})
+		if err != nil {
+			return ConversationResult{}, err
+		}
 		convID = conv.ID
 		participant.SetConvId(convID, s.ID)
 	}
 
-	contextStr := string(s.Context)
-	prompt = fmt.Sprintf(contextStr, prompt)
+	prompt = string(s.Context) + "\n" + prompt
 	result, err := s.client.Responses.New(ctx, responses.ResponseNewParams{
 		Model: s.Model,
 		Input: responses.ResponseNewParamsInputUnion{

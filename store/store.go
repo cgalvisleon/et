@@ -96,13 +96,20 @@ func newRecordHeaderAt(lsn uint64, id string, data []byte, status byte) (recordH
 	return result, header, nil
 }
 
+/**
+* Mode: Modo de apertura del store.
+**/
 type Mode int
 
 const (
-	ReadOnly Mode = iota
-	ReadWrite
+	ReadOnly  Mode = iota // solo lecturas; toda escritura falla con MSG_STORE_IS_READ_ONLY
+	ReadWrite             // lecturas y escrituras; repara el segmento activo al abrir
 )
 
+/**
+* FileStore: Store de un solo nodo, id → []byte, en un log de solo anexar (WAL) por
+* segmentos, con índice en memoria y snapshot opcional.
+**/
 type FileStore struct {
 	ID                  string          `json:"id"`
 	Name                string          `json:"name"`
@@ -124,7 +131,7 @@ type FileStore struct {
 	mode                Mode            `json:"-"` // modo de operación
 	compacting          int32           `json:"-"` // 0 = idle, 1 = running
 	compactWg           sync.WaitGroup  `json:"-"` // espera que termine la goroutine de compaction
-	compactMu           sync.Mutex      `json:"-"` // una sola compaction a la vez (automática o Prune)
+	compactMu           sync.Mutex      `json:"-"` // una sola compaction a la vez (automática o Compact)
 	debug               bool            `json:"-"`
 	reading             counter[int]    `json:"-"` // Get/ForEach en ejecución
 	inserting           counter[int]    `json:"-"` // Insert en ejecución (incluye los que esperan writeMu)
@@ -375,7 +382,7 @@ func (s *FileStore) countIndex() int {
 * indexMu compartido: las escrituras ya se serializan con writeMu, y el fragmento de id
 * basta para separarla de los lectores.
 * @param id string, ref *recordRef
-* @return bool (true if id already existed)
+* @return bool (true si id ya existía)
 **/
 func (s *FileStore) setIndex(id string, ref *recordRef) bool {
 	s.indexMu.RLock()
@@ -386,7 +393,7 @@ func (s *FileStore) setIndex(id string, ref *recordRef) bool {
 /**
 * setIndexLocked: Igual que setIndex, pero requiere indexMu tomado.
 * @param id string, ref *recordRef
-* @return bool (true if id already existed)
+* @return bool (true si id ya existía)
 **/
 func (s *FileStore) setIndexLocked(id string, ref *recordRef) bool {
 	exists := s.index.set(id, ref)
@@ -399,7 +406,7 @@ func (s *FileStore) setIndexLocked(id string, ref *recordRef) bool {
 /**
 * deleteIndex: Quita id del índice; retorna true si existía.
 * @param id string
-* @return bool (true if id existed)
+* @return bool (true si id existía)
 **/
 func (s *FileStore) deleteIndex(id string) bool {
 	s.indexMu.RLock()
@@ -410,7 +417,7 @@ func (s *FileStore) deleteIndex(id string) bool {
 /**
 * deleteIndexLocked: Igual que deleteIndex, pero requiere indexMu tomado.
 * @param id string
-* @return bool (true if id existed)
+* @return bool (true si id existía)
 **/
 func (s *FileStore) deleteIndexLocked(id string) bool {
 	return s.index.remove(id)
@@ -538,7 +545,7 @@ func (s *FileStore) close() error {
 	s.stopStats()
 	s.compactWg.Wait()
 
-	// compactMu también espera una Compact() lanzada por Prune.
+	// compactMu también espera una Compact() manual en curso.
 	s.compactMu.Lock()
 	defer s.compactMu.Unlock()
 
@@ -577,13 +584,12 @@ func (s *FileStore) empty() error {
 	s.TombStones.set(0)
 	s.Size.set(0)
 
-	// Without its snapshot, the next Open with this name starts empty (the snapshot
-	// would bring back the old index and the old WAL counter)
+	// Sin su snapshot, el próximo Open con este nombre arranca vacío (el snapshot
+	// traería de vuelta el índice y el contador WAL anteriores)
 	if err := s.removeSnapshot(); err != nil {
 		return err
 	}
-	defer os.RemoveAll(s.Path)
-	return nil
+	return os.RemoveAll(s.Path)
 }
 
 /**
@@ -606,7 +612,7 @@ func (s *FileStore) checkWrite(id string) error {
 /**
 * put: Escribe data en el log y actualiza el índice (requiere writeMu); retorna true si id ya existía.
 * @param id string, data []byte
-* @return bool (true if id already existed), uint64 (LSN), error
+* @return bool (true si id ya existía), uint64 (LSN), error
 **/
 func (s *FileStore) put(id string, data []byte) (bool, uint64, error) {
 	ref, lsn, err := s.appendRecordLocked(0, id, data, Active)
@@ -625,7 +631,7 @@ func (s *FileStore) put(id string, data []byte) (bool, uint64, error) {
 /**
 * insert: Guarda data solo si id no existe; retorna true si insertó.
 * @param id string, data []byte, wait bool (false: no espera el fsync)
-* @return bool (true if inserted), error
+* @return bool (true si insertó), error
 **/
 func (s *FileStore) insert(id string, data []byte, wait bool) (bool, error) {
 	if err := s.checkWrite(id); err != nil {
@@ -653,7 +659,7 @@ func (s *FileStore) insert(id string, data []byte, wait bool) (bool, error) {
 /**
 * update: Reemplaza data solo si id existe y el valor cambió; retorna true si actualizó.
 * @param id string, data []byte, wait bool (false: no espera el fsync)
-* @return bool (true if updated), error
+* @return bool (true si actualizó), error
 **/
 func (s *FileStore) update(id string, data []byte, wait bool) (bool, error) {
 	if err := s.checkWrite(id); err != nil {
@@ -694,7 +700,7 @@ func (s *FileStore) update(id string, data []byte, wait bool) (bool, error) {
 /**
 * delete: Elimina id solo si existe; retorna true si eliminó.
 * @param id string, wait bool (false: no espera el fsync)
-* @return bool (true if deleted), error
+* @return bool (true si eliminó), error
 **/
 func (s *FileStore) delete(id string, wait bool) (bool, error) {
 	if err := s.checkWrite(id); err != nil {
@@ -765,7 +771,7 @@ func (s *FileStore) readPinned(ref *recordRef, id string) ([]byte, error) {
 /**
 * get: Retorna los datos de id, si existe.
 * @param id string
-* @return []byte, bool (true if id exists), error
+* @return []byte, bool (true si id existe), error
 **/
 func (s *FileStore) get(id string) ([]byte, bool, error) {
 	defer s.track(&s.reading)()
@@ -969,6 +975,7 @@ func (s *FileStore) keys(asc bool, offset, limit int) []string {
 func newFileStore(pathData, pathWald, name string, mode Mode) *FileStore {
 	name = normalize(name)
 	result := &FileStore{
+		ID:                  name,
 		Name:                name,
 		Path:                filepath.Join(pathData, "segments", name),
 		PathSnapshot:        filepath.Join(pathWald, "snapshot", name),

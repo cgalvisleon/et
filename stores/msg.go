@@ -1,6 +1,13 @@
 package stores
 
-import "github.com/cgalvisleon/et/envar"
+import (
+	"errors"
+
+	"github.com/cgalvisleon/et/envar"
+)
+
+// ErrRecordExists: the record already exists (compare with errors.Is; its text is the English one).
+var ErrRecordExists = errors.New("record already exists")
 
 var (
 	MSG_RECORD_EXISTS      = "record already exists"

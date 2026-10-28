@@ -19,7 +19,7 @@ func NewClient(id, name string) (*Client, error) {
 }
 
 /**
-* ToJson: Retorna el cliente en formato JSON: id, name, to y server (id y name).
+* ToJson: Retorna el cliente en formato JSON: id, name, to, server (id y name), tls y auth.
 * @return et.Json
 **/
 func (s *Client) ToJson() et.Json {

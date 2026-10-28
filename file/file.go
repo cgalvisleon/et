@@ -62,12 +62,17 @@ func joinSep(str1, str2, sp string) string {
 	return fmt.Sprintf(`%s%s%s`, str1, sp, str2)
 }
 
+// GetExtencion: Deprecated: use GetExtension.
+func GetExtencion(filename string) string {
+	return GetExtension(filename)
+}
+
 /**
-* GetExtencion
+* GetExtension
 * @param filename string
 * @return string
 **/
-func GetExtencion(filename string) string {
+func GetExtension(filename string) string {
 	lst := strings.Split(filename, ".")
 	n := len(lst)
 	if n > 1 {
@@ -78,9 +83,9 @@ func GetExtencion(filename string) string {
 }
 
 /**
-* ExistPath
+* ExistPath: Stats path; the result tells whether it exists, whether it is a directory and the stat error.
 * @param path string
-* @return bool
+* @return FileInfo
 **/
 func ExistPath(path string) FileInfo {
 	result := FileInfo{
@@ -170,8 +175,8 @@ func MakeFile(path, name, model string, args ...any) (string, error) {
 		return "", err
 	}
 
-	logs.Log("file", "make file:", path)
-	return path, nil
+	logs.Log("file", "make file:", info.Path)
+	return info.Path, nil
 }
 
 /**
@@ -182,7 +187,6 @@ func MakeFile(path, name, model string, args ...any) (string, error) {
 func Remove(path string) (bool, error) {
 	file := path
 	if _, err := os.Stat(file); os.IsNotExist(err) {
-		logs.Log("file", "remove file:", file)
 		return true, nil
 	} else if err != nil {
 		return false, err
@@ -192,6 +196,7 @@ func Remove(path string) (bool, error) {
 		return false, err
 	}
 
+	logs.Log("file", "remove file:", file)
 	return true, nil
 }
 
@@ -201,7 +206,7 @@ func Remove(path string) (bool, error) {
 * @return error
 **/
 func Save(path string, obj any) error {
-	// Crear los directorios si no existen.
+	// Create the directories if they do not exist.
 	dir := filepath.Dir(path)
 	if dir != "." {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -214,7 +219,7 @@ func Save(path string, obj any) error {
 		return err
 	}
 
-	// WriteFile crea el archivo si no existe y lo sobrescribe si existe.
+	// WriteFile creates the file if it does not exist and overwrites it if it does.
 	return os.WriteFile(path, data, 0644)
 }
 

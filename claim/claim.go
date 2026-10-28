@@ -16,6 +16,14 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
+/**
+* Invariants of the claim package.
+*
+* The signing secret comes from SECRET (no default): the first NewToken or ParseToken
+* without it ends the process (getSecret calls logs.Fatal).
+* Tokens are signed with HS256; ParseToken rejects a token whose method is not HMAC.
+**/
+
 var (
 	jwtSecret     string
 	jwtSecretOnce sync.Once
@@ -36,8 +44,8 @@ func getSecret() string {
 }
 
 /**
-* Claim JWT payload with standard claims and application-specific fields.
-* tenantId is stored inside Payload; use claim.TenantId(r) to extract it.
+* Claim: JWT payload with the standard claims and the application fields
+* (app, device, user, tenant, role, name and a free Payload).
 **/
 type Claim struct {
 	jwt.StandardClaims
@@ -166,19 +174,19 @@ func NewToken(app, device, userId, tenantId, roleId, name string, payload et.Jso
 * @return string, error
 **/
 func NewAuthenticationToken(app, device, userId, name string, payload et.Json, duration time.Duration) (string, error) {
-	return NewToken(app, device, userId, name, "", "", payload, duration)
+	return NewToken(app, device, userId, "", "", name, payload, duration)
 }
 
 /**
-* ParceToken
+* ParseToken
 * @param token string
 * @return *Claim, error
 **/
-func ParceToken(token string) (*Claim, error) {
+func ParseToken(token string) (*Claim, error) {
 	secret := getSecret()
 	jToken, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+			return nil, fmt.Errorf(msg.MSG_UNEXPECTED_SIGNING_METHOD, t.Header["alg"])
 		}
 		return []byte(secret), nil
 	})
@@ -274,4 +282,9 @@ func ParceToken(token string) (*Claim, error) {
 	}
 
 	return result, nil
+}
+
+// ParceToken: Deprecated: use ParseToken.
+func ParceToken(token string) (*Claim, error) {
+	return ParseToken(token)
 }

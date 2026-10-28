@@ -86,7 +86,7 @@ func (s *Ia) newConversation(to *Participant, title string, conversationType Typ
 **/
 func (s *Ia) loadConversation(to *Participant) (*Conversation, error) {
 	var result *Conversation
-	exists, err := s.store.Get(to.To, "conversation", &result)
+	exists, err := s.store.Get(storeConversations, to.To, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -117,6 +117,10 @@ func (s *Conversation) ToJson() et.Json {
 		"to":   s.To.To,
 		"name": s.To.Name,
 	}
+	var lastMessage any
+	if s.LastMessage != nil {
+		lastMessage = s.LastMessage.ToJson()
+	}
 	return et.Json{
 		"created_at":     timezone.Format(s.CreatedAt, timezone.RFC3339),
 		"updated_at":     timezone.Format(s.UpdatedAt, timezone.RFC3339),
@@ -125,7 +129,7 @@ func (s *Conversation) ToJson() et.Json {
 		"conv_id":        s.ConvID,
 		"title":          s.Title,
 		"type":           s.Type,
-		"last_message":   s.LastMessage.ToJson(),
+		"last_message":   lastMessage,
 		"limit_messages": s.LimitMessages,
 		"messages":       messages,
 		"participants":   participants,
@@ -164,10 +168,6 @@ func (s *Conversation) up(ia *Ia) error {
 		})
 		return nil
 	})
-	for _, message := range s.Messages {
-		s.Messages = append(s.Messages, message)
-	}
-
 	return nil
 }
 
@@ -236,7 +236,7 @@ func (s *Conversation) delete() error {
 		return errors.New(MSG_STORE_IS_NIL)
 	}
 
-	err := s.store.Delete("conversation", s.ID)
+	err := s.store.Delete(storeConversations, s.ID)
 	if err != nil {
 		return err
 	}

@@ -15,6 +15,9 @@ import (
 	"github.com/cgalvisleon/et/msg"
 )
 
+/**
+* Codec: gob rpc.ServerCodec of the pipe: one request per connection, answered by jrpc.Call.
+**/
 type Codec struct {
 	rwc io.ReadWriteCloser
 	dec *gob.Decoder
@@ -114,7 +117,7 @@ func (s *Server) handlerPipe(conn net.Conn) {
 
 	result, err := jrpc.Call(req.ServiceMethod, args)
 	if err != nil {
-		logs.Error(fmt.Errorf("error llamando al servicio: %v", err))
+		logs.Error(fmt.Errorf(MSG_ERROR_CALLING_SERVICE, err))
 		resp := rpc.Response{
 			ServiceMethod: req.ServiceMethod,
 			Seq:           req.Seq,

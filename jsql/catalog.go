@@ -11,25 +11,34 @@ import (
 // here as a thin wrapper over its private implementation in the rest of the package,
 // so the whole surface of the package can be read in one place, grouped by functionality.
 //
-// Índice de la API pública (funciones y métodos por sección):
+// Índice de la API pública (funciones y métodos por sección; cuenta del 2026-10-27):
 //
 //	#   Sección                         Cantidad
-//	1   Conexión y base de datos        26
-//	2   Definición de modelos (DDL)     21
-//	3   Relaciones y campos calculados  19
-//	4   Consultas                       47
+//	1   Conexión y base de datos        18
+//	2   Definición de modelos (DDL)     24
+//	3   Relaciones y campos calculados  21
+//	4   Consultas                       48
 //	5   Condiciones                     18
-//	6   Comandos                        17
+//	6   Comandos                        18
 //	7   Triggers                        22
 //	8   Transacciones                   4
 //	9   Series                          10
 //	10  Auditoría                       3
-//	11  Utilidades                      17
-//	    Total                           200
+//	11  Utilidades                      22
+//	    Total                           208
+//
+// Exportan directo, fuera de este archivo, lo que es de su propio archivo: connection.go (los tipos de
+// conexión, ConnectionFromJson, TimeoutContext, Tester, TestConnection, Probe), wrapper.go (Wrapper,
+// BindWrapper, ToJsMapWrapper), define.go (ToArrayAny), helpers.go (Bind), model.go (Replace) y
+// query.go (HasStar, StarFields, SourceHiddens).
+
+// =============================================================================
+// 1. Conexión y base de datos (18)
+// =============================================================================
 
 /**
-* NewDB: Creates a new DB instance for the given driver without initializing it (call Init afterwards).
-* @param id, host, name, driver string, showLog ...bool (optional, defaults to true)
+* NewDB: Creates a DB for the driver of params without initializing it (call Init afterwards).
+* @param params ConnectParams
 * @return *DB, error
 **/
 func NewDB(params ConnectParams) (*DB, error) {
@@ -37,7 +46,7 @@ func NewDB(params ConnectParams) (*DB, error) {
 }
 
 /**
-* LoadDb
+* LoadDb: Rebuilds a DB (connection, schemas and audit log) from its ToJson, without Init.
 * @param params et.Json
 * @return *DB, error
 **/
@@ -63,7 +72,7 @@ func (s *DB) ToJson() et.Json {
 }
 
 /**
-* Init: Opens the driver connection and, when UseCore is set, initializes core tables.
+* Init: Opens the driver connection and initializes every schema already defined; a no-op once connected.
 * @return error
 **/
 func (s *DB) Init() error {
@@ -130,8 +139,8 @@ func (s *DB) Query(sql et.Json) (et.Items, error) {
 }
 
 /**
-* QueryTx: Executes a query with a transaction.
-* @param tx *Tx, sql ry.Json
+* QueryTx: Runs a query or command described in JSON within the transaction tx.
+* @param tx *Tx, sql et.Json
 * @return et.Items, error
 **/
 func (s *DB) QueryTx(tx *Tx, sql et.Json) (et.Items, error) {
@@ -139,8 +148,8 @@ func (s *DB) QueryTx(tx *Tx, sql et.Json) (et.Items, error) {
 }
 
 /**
-* ConnectTo: Returns an existing DB by name, or creates and initialises a new one from params.
-* @param tenantId, host, driver, name string, showLog bool
+* ConnectTo: Creates the DB from params and opens its connection (Init).
+* @param params ConnectParams
 * @return *DB, error
 **/
 func ConnectTo(params ConnectParams) (*DB, error) {
@@ -148,8 +157,8 @@ func ConnectTo(params ConnectParams) (*DB, error) {
 }
 
 /**
-* LoadTo: Returns an existing DB by name.
-* @param name, hostName string
+* LoadTo: Connects to the database dbName with the DB_* settings; hostName overrides DB_HOST.
+* @param dbName string, hostName ...string
 * @return *DB, error
 **/
 func LoadTo(dbName string, hostName ...string) (*DB, error) {
@@ -183,7 +192,7 @@ func DropDB(db *DB, timeout ...time.Duration) error {
 }
 
 // =============================================================================
-// 2. Definición de modelos (DDL) (21)
+// 2. Definición de modelos (DDL) (24)
 // =============================================================================
 
 /**
@@ -214,8 +223,8 @@ func (s *DB) GetModel(schema, name string) (*Model, error) {
 }
 
 /**
-* Define: Creates a model from a declarative definition (delegates to DefineModel).
-* @param definition Define
+* Define: Creates (or replaces) a model from a declarative definition.
+* @param define Define
 * @return *Model, error
 **/
 func (s *DB) Define(define Define) (*Model, error) {
@@ -240,20 +249,20 @@ func (s *Model) DefineIdxField() *Index {
 
 /**
 * DefineIndex: Defines a new index column for the model.
-* @param name string, tp et.TypeData, deFault any
+* @param name string, tp et.TypeData, defaultValue any
 * @return *Index
 **/
-func (s *Model) DefineIndex(name string, tp et.TypeData, deFault any) *Index {
-	return s.defineIndex(name, tp, deFault)
+func (s *Model) DefineIndex(name string, tp et.TypeData, defaultValue any) *Index {
+	return s.defineIndex(name, tp, defaultValue)
 }
 
 /**
 * DefinePrimaryKey: Defines a new primary key column for the model.
-* @param name string, tp et.TypeData, deFault any
+* @param name string, tp et.TypeData, defaultValue any
 * @return *Index
 **/
-func (s *Model) DefinePrimaryKey(name string, tp et.TypeData, deFault any) *Index {
-	return s.definePrimaryKey(name, tp, deFault)
+func (s *Model) DefinePrimaryKey(name string, tp et.TypeData, defaultValue any) *Index {
+	return s.definePrimaryKey(name, tp, defaultValue)
 }
 
 /**
@@ -267,20 +276,20 @@ func (s *Model) DefineForeignKeys(to *Model, keys map[string]string, onDeleteCas
 
 /**
 * DefineUnique: Defines a new unique index for the model.
-* @param name string, tp et.TypeData, deFault any
+* @param name string, tp et.TypeData, defaultValue any
 * @return *Index
 **/
-func (s *Model) DefineUnique(name string, tp et.TypeData, deFault any) *Index {
-	return s.defineUnique(name, tp, deFault)
+func (s *Model) DefineUnique(name string, tp et.TypeData, defaultValue any) *Index {
+	return s.defineUnique(name, tp, defaultValue)
 }
 
 /**
 * DefineRequired: Defines a new required column for the model.
-* @param name string, tp et.TypeData, deFault any
+* @param name string, tp et.TypeData, defaultValue any
 * @return *Index
 **/
-func (s *Model) DefineRequired(name string, tp et.TypeData, deFault any) *Index {
-	return s.defineRequired(name, tp, deFault)
+func (s *Model) DefineRequired(name string, tp et.TypeData, defaultValue any) *Index {
+	return s.defineRequired(name, tp, defaultValue)
 }
 
 /**
@@ -303,20 +312,20 @@ func (s *Model) DefineHidden(name ...string) {
 
 /**
 * DefineColumn: Defines a new column for the model.
-* @param name string, tp et.TypeData, deFault any
+* @param name string, tp et.TypeData, defaultValue any
 * @return *Column
 **/
-func (s *Model) DefineColumn(name string, tp et.TypeData, deFault any) *Column {
-	return s.defineRealColumn(name, tp, deFault)
+func (s *Model) DefineColumn(name string, tp et.TypeData, defaultValue any) *Column {
+	return s.defineRealColumn(name, tp, defaultValue)
 }
 
 /**
 * DefineAttrib: Defines a new attribute for the model.
-* @param name string, tp et.TypeData, deFault any
+* @param name string, tp et.TypeData, defaultValue any
 * @return *Column
 **/
-func (s *Model) DefineAttrib(name string, tp et.TypeData, deFault any) *Column {
-	return s.defineAttrib(name, tp, deFault)
+func (s *Model) DefineAttrib(name string, tp et.TypeData, defaultValue any) *Column {
+	return s.defineAttrib(name, tp, defaultValue)
 }
 
 /**
@@ -394,7 +403,7 @@ func (s *Model) Stricted() {
 }
 
 // =============================================================================
-// 3. Relaciones y campos calculados (19)
+// 3. Relaciones y campos calculados (21)
 // =============================================================================
 
 /**
@@ -441,8 +450,8 @@ func (s *Model) DefineCalcFunc(name string, calc CalcFunction) *Model {
 }
 
 /**
-* DefineCalc: Defines a new calculation for the model using a bytecode definition.
-* @param name string, code string
+* DefineCalc: Defines a CALC column: a JavaScript script run on each row that selects it.
+* @param name, script string
 * @return *Model
 **/
 func (s *Model) DefineCalc(name, script string) *Model {
@@ -450,14 +459,18 @@ func (s *Model) DefineCalc(name, script string) *Model {
 }
 
 /**
-* DetailKeys
+* DetailKeys: The keys of a DETAIL relation: the parent key mapped to the foreign key of the detail.
+* @param key, foreignKey string
+* @return map[string]string
 **/
 func DetailKeys(key, foreignKey string) map[string]string {
 	return detailKeys(key, foreignKey)
 }
 
 /**
-* RollupKeys
+* RollupKeys: The keys of a ROLLUP relation: the foreign key of the model mapped to the key of the related model.
+* @param key, foreignKey string
+* @return map[string]string
 **/
 func RollupKeys(key, foreignKey string) map[string]string {
 	return rollupKeys(key, foreignKey)
@@ -588,7 +601,7 @@ func (s *QueryDetail) GetQuery(item et.Json) *Query {
 }
 
 // =============================================================================
-// 4. Consultas (47)
+// 4. Consultas (48)
 // =============================================================================
 
 /**
@@ -646,7 +659,7 @@ func (s *Model) Select(fields ...string) *Query {
 }
 
 /**
-* Calc: Creates a new Query for this model with the given fields as the CALC clause.
+* Calc: Creates a new Query for this model that adds its CALC/CALCFUNC columns named in fields.
 * @param fields ...string
 * @return *Query
 **/
@@ -664,7 +677,7 @@ func (s *Model) Where(cond *et.Condition) *Query {
 }
 
 /**
-* WhereByJson: Creates a new Query for this model with the given conditions as the WHERE clause.
+* WhereByJson: Creates a new Query for this model with the conditions described in JSON ({field: {op: value}}, or/and).
 * @param cond []et.Json
 * @return *Query
 **/
@@ -828,8 +841,7 @@ func (s *Query) Hidden(fields ...string) *Query {
 * @return *Query
 **/
 func (s *Query) AddCondition(cond *et.Condition) *Query {
-	s.Conditions = et.AddCondition(s.Conditions, cond)
-	return s
+	return s.addOneCondition(cond)
 }
 
 /**
@@ -842,7 +854,7 @@ func (s *Query) Where(cond *et.Condition) *Query {
 }
 
 /**
-* WhereByJson: Creates a new Query for this model with the given conditions as the WHERE clause.
+* WhereByJson: Appends the conditions described in JSON ({field: {op: value}}, or/and) to the WHERE clause.
 * @param cond []et.Json
 * @return *Query
 **/
@@ -902,7 +914,7 @@ func (s *Query) Having(cond *et.Condition) *Query {
 * @return *Query
 **/
 func (s *Query) Page(page int) *Query {
-	return s.page(page)
+	return s.setPage(page)
 }
 
 /**
@@ -986,8 +998,9 @@ func (s *Query) Limit(page, rows int) (et.Items, error) {
 }
 
 /**
-* ExistsTx: Returns the Model for the primary FROM source, or nil if not found.
-* @return *Model
+* ExistsTx: Whether any row matches the query, within the transaction tx.
+* @param tx *Tx
+* @return bool, error
 **/
 func (s *Query) ExistsTx(tx *Tx) (bool, error) {
 	return s.existsTx(tx)
@@ -1185,7 +1198,7 @@ func NotBetween(field string, min, max any) *et.Condition {
 }
 
 // =============================================================================
-// 6. Comandos (17)
+// 6. Comandos (18)
 // =============================================================================
 
 /**
@@ -1589,9 +1602,9 @@ func (s *Tx) Query(db *sql.DB, query string, args ...any) (*sql.Rows, error) {
 // =============================================================================
 
 /**
-* DefineSeries
-* @param schema string
-* @return error
+* DefineSeries: Defines and initializes the series table of schema (tag, format, value) and returns its generator.
+* @param db *DB, schema string
+* @return *Series, error
 **/
 func DefineSeries(db *DB, schema string) (*Series, error) {
 	return defineSeries(db, schema)
@@ -1606,8 +1619,8 @@ func (s *Series) Model() *Model {
 }
 
 /**
-* NewSeries
-* @param string tag, format string
+* NewSeries: Creates the series tag with value 0 when it does not exist (format "%08d" by default).
+* @param tag, format string
 * @return error
 **/
 func (s *Series) NewSeries(tag, format string) error {
@@ -1615,8 +1628,8 @@ func (s *Series) NewSeries(tag, format string) error {
 }
 
 /**
-* SetSeries
-* @param string tag, format string, value int
+* SetSeries: Creates or replaces the series tag with the given format and value.
+* @param tag, format string, value int
 * @return error
 **/
 func (s *Series) SetSeries(tag string, format string, value int) error {
@@ -1624,17 +1637,17 @@ func (s *Series) SetSeries(tag string, format string, value int) error {
 }
 
 /**
-* GetSeries
-* @param string tag, ownerId string
-* @return (et.Item, error)
+* GetSeries: Returns the series tag (tag, format, value).
+* @param tag string
+* @return et.Item, error
 **/
 func (s *Series) GetSeries(tag string) (et.Item, error) {
 	return s.getSeries(tag)
 }
 
 /**
-* DeleteSeries
-* @param string tag, ownerId string
+* DeleteSeries: Deletes the series tag.
+* @param tag string
 * @return error
 **/
 func (s *Series) DeleteSeries(tag string) error {
@@ -1642,9 +1655,9 @@ func (s *Series) DeleteSeries(tag string) error {
 }
 
 /**
-* GenSerie
-* @param string tag
-* @return (string, error)
+* GenSerie: Increments the series tag and returns the new value with its format.
+* @param tag string
+* @return string, error
 **/
 func (s *Series) GenSerie(tag string) (string, error) {
 	return s.genSerie(nil, tag)
@@ -1660,9 +1673,9 @@ func (s *Series) GenSerieTx(tx *Tx, tag string) (string, error) {
 }
 
 /**
-* GenValue
-* @param string tag
-* @return (int, error)
+* GenValue: Increments the series tag and returns the new value.
+* @param tag string
+* @return int, error
 **/
 func (s *Series) GenValue(tag string) (int, error) {
 	return s.genValue(nil, tag)
@@ -1682,15 +1695,17 @@ func (s *Series) GenValueTx(tx *Tx, tag string) (int, error) {
 // =============================================================================
 
 /**
-* OnAuditLog
+* OnAuditLog: Sets the function called with every audit log entry of the DB.
+* @param fn func(userId string, action string) error
 **/
 func (s *DB) OnAuditLog(fn func(userId string, action string) error) {
 	s.setOnAuditLog(fn)
 }
 
 /**
-* AddAuditLog
-* @param userId string, action string
+* AddAuditLog: Appends an entry {created_at, user_id, action} to auditLog (created when nil).
+* @param auditLog []et.Json, userId string, action string
+* @return []et.Json
 **/
 func AddAuditLog(auditLog []et.Json, userId string, action string) []et.Json {
 	return addAuditLog(auditLog, userId, action)
@@ -1705,7 +1720,7 @@ func (s *Model) AddAuditLog(userId string, action string) {
 }
 
 // =============================================================================
-// 11. Utilidades (17)
+// 11. Utilidades (22)
 // =============================================================================
 
 /**
@@ -1717,7 +1732,8 @@ func (s TypeColumn) Str() string {
 }
 
 /**
-* StatusList
+* StatusList: The valid record statuses, as values for an IN condition.
+* @return []interface{}
 **/
 func StatusList() []interface{} {
 	return statusList()
@@ -1782,21 +1798,35 @@ func RowsToItems(rows *sql.Rows) et.Items {
 }
 
 /**
-* ArgWhitAs: Returns an array with the argument and its alias.
+* ArgWithAs: Returns an array with the argument and its alias.
 * @param arg string
 * @return []string, bool
 **/
-func ArgWhitAs(arg string) ([]string, bool) {
-	return argWhitAs(arg)
+func ArgWithAs(arg string) ([]string, bool) {
+	return argWithAs(arg)
 }
 
 /**
-* ArgWhitSchema: Returns an array with the argument and its schema.
+* ArgWhitAs: Deprecated: use ArgWithAs.
+**/
+func ArgWhitAs(arg string) ([]string, bool) {
+	return argWithAs(arg)
+}
+
+/**
+* ArgWithSchema: Returns an array with the argument and its schema.
 * @param arg string
 * @return []string, bool
 **/
+func ArgWithSchema(arg string) ([]string, bool) {
+	return argWithSchema(arg)
+}
+
+/**
+* ArgWhitSchema: Deprecated: use ArgWithSchema.
+**/
 func ArgWhitSchema(arg string) ([]string, bool) {
-	return argWhitSchema(arg)
+	return argWithSchema(arg)
 }
 
 /**
@@ -1816,8 +1846,8 @@ func (s *Model) Debug() *Model {
 }
 
 /**
-* Db: Returns the underlying *sql.DB connection pool.
-* @return *sql.DB
+* Db: Returns the DB the model belongs to.
+* @return *DB
 **/
 func (s *Model) Db() *DB {
 	return s.getDb()
@@ -1867,7 +1897,7 @@ func (s *Schema) GetModel(name string) (*Model, error) {
 }
 
 /**
-* LoadModel: Loads a model from the database catalog by name.
+* LoadModel: Rebuilds a model of the schema from its ToJson (without Init).
 * @param def et.Json
 * @return *Model, error
 **/
@@ -1876,11 +1906,10 @@ func (s *Schema) LoadModel(def et.Json) (*Model, error) {
 }
 
 /**
-* LoadModel: Loads a model from the database catalog by schema and name.
+* LoadModel: Rebuilds a model of the schema from its ToJson (without Init), creating the schema if needed.
 * @param schema string, def et.Json
 * @return *Model, error
 **/
 func (s *DB) LoadModel(schema string, def et.Json) (*Model, error) {
-	sch := s.getSchema(schema)
-	return sch.loadModel(def)
+	return s.loadModel(schema, def)
 }

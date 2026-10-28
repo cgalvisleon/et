@@ -6,7 +6,7 @@ Este documento es la referencia del paquete `tcp`: define el protocolo en la con
 
 Las secciones 1–13 describen el cliente, el servidor y los streams; la §14, el Hub (`hub.go`, `message.go`). Todo está implementado.
 
-Versión del documento: 9 — 2026-10-21 (§7.4: `NewTLS` vuelve a leer el certificado, la llave y la CA cuando cambian los archivos, sin reiniciar; versión 8: el paquete pasa de josefina `internal/tcp` a `github.com/cgalvisleon/et/tcp`, con sus mensajes en `et/msg` y el verificador en `test/tcp`; sin cambios de protocolo ni de API; versión 7: §7.4 rotación del secreto: `Security.Previous`, `kids` en el primer saludo, el servidor prueba con el secreto que los dos conocen; versión 6: §7.4 seguridad: secreto compartido con autenticación mutua en el saludo, ligada al canal TLS; TLS 1.3 opcional, autofirmado o con CA; `SetSecurity` en `Client`, `Server` y `Hub`, `NewTLS`; `tls`/`auth` en `ToJson`; §12 sin "sin autenticación ni cifrado").
+Versión del documento: 10 — 2026-10-27 (§14.2: los campos reales de `Hub` y el orden de sus locks; §13: casos 22–26; `et/msg` en vez de `internal/msg`; §11: `MSG_TCP_TLS_NO_CERT`, el único texto de error que estaba escrito a mano en `security.go`; §14.9: `Hub.send` distingue "sin conexión" y "mensaje demasiado grande" con `errors.Is` sobre errores centinela del paquete, no comparando textos; sin cambios de protocolo ni de API; versión 9: 2026-10-21, §7.4: `NewTLS` vuelve a leer el certificado, la llave y la CA cuando cambian los archivos, sin reiniciar; versión 8: el paquete pasa de josefina `internal/tcp` a `github.com/cgalvisleon/et/tcp`, con sus mensajes en `et/msg` y el verificador en `test/tcp`; sin cambios de protocolo ni de API; versión 7: §7.4 rotación del secreto: `Security.Previous`, `kids` en el primer saludo, el servidor prueba con el secreto que los dos conocen; versión 6: §7.4 seguridad: secreto compartido con autenticación mutua en el saludo, ligada al canal TLS; TLS 1.3 opcional, autofirmado o con CA; `SetSecurity` en `Client`, `Server` y `Hub`, `NewTLS`; `tls`/`auth` en `ToJson`; §12 sin "sin autenticación ni cifrado").
 
 Historial: v5 — 2026-10-12 (§14.3: un request es latido solo si trae `from.id`; antes cualquier JSON sin `type` se tomaba por latido y no llegaba al `OnRequest` del usuario). v4 — 2026-10-12 (§14 Hub implementado: HUB-01…HUB-14; §7.3 cierre con un motivo propio; §14.11.1 detalles).
 ; v3 — 2026-09-29 (§14 Hub especificado, sin implementar). v2 — 2026-09-28 (identidad: `NewClient(id, name)`, `NewServer(id, name)`, saludo `msgHello` al conectar, `ID`/`Name`/`To`/`ServerID`/`ServerName`, `ToJson`, `SetName`).
@@ -239,7 +239,7 @@ Ningún panic en una función del usuario detiene el proceso ni la conexión. Se
 
 ## 11. Errores
 
-Textos en `internal/msg`, en inglés o español según `LANG`. Los errores que viajan por la red (`msgError`, `msgFail`, `msgCancel`) llevan el texto en el idioma de quien los envía.
+Textos en `et/msg`, en inglés o español según `LANG`. Los errores que viajan por la red (`msgError`, `msgFail`, `msgCancel`) llevan el texto en el idioma de quien los envía.
 
 | Constante | Cuándo |
 |---|---|
@@ -260,6 +260,7 @@ Textos en `internal/msg`, en inglés o español según `LANG`. Los errores que v
 | `MSG_TCP_AUTH_FAILED` | §7.4: una prueba no validó, o el cliente tiene secreto y el servidor no. |
 | `MSG_TCP_TLS_KEYPAIR` | `NewTLS` con el certificado sin la llave o al revés. |
 | `MSG_TCP_TLS_CA` | `NewTLS` con un archivo de CA sin certificados. |
+| `MSG_TCP_TLS_NO_CERT` | §7.4 TLS mutuo: el otro lado no presentó certificado. |
 | `MSG_DATA_TOO_LARGE` | Mensaje o trozo de más de 64 MiB. |
 
 ## 12. Límites conocidos
@@ -278,7 +279,7 @@ Textos en `internal/msg`, en inglés o español según `LANG`. Los errores que v
 go run -race ./test/tcp   # resultados en test/tcp/result/
 ```
 
-Los casos 16–21 cubren el Hub (HUB-01…HUB-14) y sus 21 métodos públicos. Los casos 22–24 cubren §7.4: secreto (aceptación y los tres rechazos), TLS autofirmado, cliente plano contra servidor TLS, intermediario TLS que reenvía el saludo (falla con secreto y pasa sin él, como contraprueba), TLS mutuo con CA y certificado ajeno, y dos Hubs con `SetSecurity`. `brecha.md` registra cada corrida.
+Los casos 16–21 cubren el Hub (HUB-01…HUB-14) y sus 21 métodos públicos. Los casos 22–26 cubren §7.4: secreto (aceptación y los tres rechazos), TLS autofirmado, cliente plano contra servidor TLS, intermediario TLS que reenvía el saludo (falla con secreto y pasa sin él, como contraprueba), TLS mutuo con CA y certificado ajeno, dos Hubs con `SetSecurity` (22–24), rotación del secreto (25) y recarga de certificados sin reiniciar (26). `brecha.md` registra cada corrida.
 
 ## 14. Hub
 
@@ -322,16 +323,23 @@ type Message struct {
 }
 
 type Hub struct {
-	mu            sync.RWMutex       // protege clients, servers, metrics y el estado del heartbeat
-	hubID         string             // fijo desde NewHub
+	mu            sync.RWMutex           // protege solo los mapas: clientMap, infoMap, connecting, serverMap, conns
+	hubID         string                 // fijo desde NewHub
 	hubName       string
-	clients       map[string]*Client // clave: addr tal como se pasó a ConnectTo
-	servers       map[string]*Server // clave: puerto en decimal ("1377")
-	timeoutServer *duration          // el mismo puntero en todos los servidores del Hub
-	timeoutClient *duration          // el mismo puntero en todos los clientes del Hub
-	// + funciones On…, métricas por conexión y estado del heartbeat (privados)
+	clientMap     map[string]*Client     // clave: addr tal como se pasó a ConnectTo
+	infoMap       map[string]*clientInfo // clave: addr; nombre e id remotos, con su propio mu
+	connecting    map[string]bool        // addr con un ConnectTo en curso
+	serverMap     map[string]*Server     // clave: puerto en decimal ("1377")
+	conns         map[*Client]*connState // seq, métricas y tiempos por conexión (timesMu)
+	timeoutServer *duration              // el mismo puntero en todos los servidores del Hub
+	timeoutClient *duration              // el mismo puntero en todos los clientes del Hub
+	sec           *security              // el mismo puntero en todos los servidores y clientes del Hub
+	fnMu          sync.RWMutex           // funciones On…
+	beatMu        sync.Mutex             // estado del heartbeat (beatStop)
 }
 ```
+
+Orden de locks: bajo `mu` se toman, cada uno por separado y nunca uno dentro de otro, `Client.mu`, `clientInfo.mu` y `connState.timesMu`. `connState.sendMu` se sostiene mientras se escribe en la conexión, así que anida `Client.mu` (`sendMu` → `Client.mu`). `recvMu` (se suelta antes de entregar el mensaje), `beatMu` y `fnMu` (solo copia la lista de funciones) no se anidan con ningún otro.
 
 **Tipo y valor** (lo valida `Send`/`SendTo`; si no cumple, `MSG_HUB_INVALID_MESSAGE` y no se envía):
 
@@ -410,13 +418,14 @@ Todas las funciones son del Hub, se agregan con `On…` y se llaman en el orden 
 - `SendTo(port int, clientID string, msg *Message) error`: a **cada** conexión de ese servidor cuyo `ID()` sea `clientID` (el servidor no verifica ids únicos, §7.0). Puerto no cargado → `MSG_HUB_SERVER_NOT_FOUND`; ninguna conexión con ese id → `MSG_HUB_CLIENT_NOT_FOUND`.
 - Los dos validan el mensaje (§14.2), ponen `From` y el `seq` de la conexión, y retornan al escribir la trama (sin confirmación de entrega, como §4). No modifican el `*Message` del llamador.
 - Asignar `seq` y escribir la trama ocurren bajo un mismo lock por conexión, para que el orden de `seq` sea el de escritura.
+- Si la escritura falla sin haber escrito nada (`MSG_TCP_NOT_CONNECTED`, `MSG_DATA_TOO_LARGE`; errores centinela de `link.go` reconocidos con `errors.Is`), la conexión sigue viva; cualquier otro error la cierra.
 
 ### 14.10 Timeouts y cierre
 
 - `timeoutServer` y `timeoutClient` empiezan en 10 s (§8). `SetTimeoutServer(d)`/`SetTimeoutClient(d)` exigen `d > 0` (`MSG_TCP_INVALID_TIMEOUT`) y aplican de inmediato a todo lo del Hub, porque todos comparten el mismo `*duration`. Llamar `SetTimeout` sobre un servidor o cliente del Hub cambia también el del Hub.
 - `Close() error`: detiene el heartbeat, cierra todos los clientes, da de baja todos los servidores y vacía los mapas. Después el Hub se puede volver a usar. Retorna el primer error encontrado.
 
-### 14.11 Errores nuevos (`internal/msg`, inglés/español)
+### 14.11 Errores nuevos (`et/msg`, inglés/español)
 
 | Constante | Cuándo |
 |---|---|

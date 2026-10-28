@@ -41,6 +41,9 @@ func truncate(s string, n int) string {
 * @return et.Json, error
 **/
 func (s *Rag) Ask(ctx context.Context, tenantId, projectId, conversationId, userId, question string) (et.Json, error) {
+	if s.embedFn == nil || s.answerFn == nil {
+		return nil, errors.New(MSG_API_KEY_REQUIRED)
+	}
 	if !utility.ValidStr(tenantId, 0, []string{""}) {
 		return nil, errors.New(MSG_TENANT_ID_REQUIRED)
 	}

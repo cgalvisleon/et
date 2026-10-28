@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/cgalvisleon/et/envar"
@@ -25,13 +26,19 @@ type TriggerFunction func(tx *Tx, old, new et.Json) error
 type CalcFunction func(tx *Tx, data et.Json)
 
 /**
-* Index: Represents a named index or primary-key field; Sorted selects BTREE over HASH.
+* Model: The definition of a table: columns, indexes, keys, SourceField, relations and triggers.
+*
+* Concurrency (the one place for these rules):
+*   - DB.muSchemas guards DB.Schemas and DB.muAudit the DB audit log; getModel never creates a schema.
+*   - Model.muDef serializes definitions. Columns, Details, Masters, Rollups and the calcs are copy on
+*     write (defineColumn, defineDetail, defineMaster, defineRollup, defineCalc, defineCalcFunc, withEntry):
+*     a query that already read them keeps a consistent value, because the drivers read without locks.
+*   - Not copy on write yet (append in place, without muDef): Indexes, PrimaryKeys, Unique, Required,
+*     ForeignKeys, Hiddens, OmitUpdates, IdxField and the before/after trigger scripts. Define them before the
+*     model is queried concurrently (at start-up, as every consumer does).
+*   - Model.muReplace serializes Replace. Lock order: DB.muSchemas → Model.muDef; defineMaster takes the
+*     muDef of each model one after the other, never both at once.
 **/
-type Index struct {
-	Name   string `json:"name"`
-	Sorted bool   `json:"sorted"`
-}
-
 type Model struct {
 	Kind          string                  `json:"kind"`
 	ID            string                  `json:"id"`
@@ -75,7 +82,7 @@ type Model struct {
 	afterDeletes  []TriggerFunction       `json:"-"`
 	db            *DB                     `json:"-"`
 	schema        *Schema                 `json:"-"`
-	muIdx         sync.Mutex              `json:"-"`
+	muReplace     sync.Mutex              `json:"-"`
 	muDef         sync.Mutex              `json:"-"` // serializes definitions; they replace maps and slices (copy on write)
 }
 
@@ -176,8 +183,8 @@ func (s *Model) Replace(other *Model) {
 		return
 	}
 
-	s.muIdx.Lock()
-	defer s.muIdx.Unlock()
+	s.muReplace.Lock()
+	defer s.muReplace.Unlock()
 	s.Kind = other.Kind
 	s.ID = other.ID
 	s.Schema = other.Schema
@@ -227,8 +234,6 @@ func (s *Model) Replace(other *Model) {
 * @return string
 **/
 func (s *Model) getIdx() string {
-	s.muIdx.Lock()
-	defer s.muIdx.Unlock()
 	now := timezone.Now()
 	return fmt.Sprintf("%d", now.UnixMilli())
 }
@@ -427,8 +432,8 @@ func (s *Model) stricted() {
 }
 
 /**
-* getDb: Returns the underlying *sql.DB connection pool.
-* @return *sql.DB
+* getDb: Returns the DB the model belongs to.
+* @return *DB
 **/
 func (s *Model) getDb() *DB {
 	return s.db
@@ -861,7 +866,7 @@ func (s *Model) defaultTrigger() *Model {
 	s.BeforeUpdate(func(tx *Tx, old, new et.Json) error {
 		for _, unique := range s.Unique {
 			value, ok := new[unique.Name]
-			if !ok || isEmptyUnique(value) || !old.IsDeferent(unique.Name, value) {
+			if !ok || isEmptyUnique(value) || !old.IsDifferent(unique.Name, value) {
 				continue
 			}
 			// Other rows with the value; the row being updated is told apart by its primary key.
@@ -914,4 +919,57 @@ func isEmptyUnique(value any) bool {
 **/
 func uniqueError(field string, value any) error {
 	return fmt.Errorf("%w: %s = %v", ErrRecordAlreadyExists, field, value)
+}
+
+/**
+* withoutOmitUpdates: Returns data without the fields of OmitUpdates (and their nested paths "field->…").
+* @param data et.Json
+* @return et.Json
+**/
+func (s *Model) withoutOmitUpdates(data et.Json) et.Json {
+	if len(s.OmitUpdates) == 0 {
+		return data
+	}
+	result := et.Json{}
+	for key, value := range data {
+		if s.isOmitUpdate(key) {
+			continue
+		}
+		result[key] = value
+	}
+	return result
+}
+
+/**
+* isOmitUpdate: Reports whether key is an OmitUpdates field or a nested path of one.
+* @param key string
+* @return bool
+**/
+func (s *Model) isOmitUpdate(key string) bool {
+	for _, name := range s.OmitUpdates {
+		if key == name || strings.HasPrefix(key, name+"->") {
+			return true
+		}
+	}
+	return false
+}
+
+/**
+* restoreOmitUpdates: Puts back in new the value that old had for each OmitUpdates field (or removes it
+* when old did not have it), undoing the changes a before-update trigger made to them.
+* @param old, new et.Json
+**/
+func (s *Model) restoreOmitUpdates(old, new et.Json) {
+	for _, name := range s.OmitUpdates {
+		if value, ok := old[name]; ok {
+			new[name] = value
+			continue
+		}
+		delete(new, name)
+	}
+	for key := range new {
+		if strings.Contains(key, "->") && s.isOmitUpdate(key) {
+			delete(new, key)
+		}
+	}
 }

@@ -25,6 +25,7 @@ func (s *Sqlite) Test(ctx context.Context, connection jsql.Connection, query str
 		return err
 	}
 
+	// Not connectTo: that one creates the directory of the file (MkdirAll), and a test must not touch the disk
 	db, err := sql.Open("sqlite", dsn(path))
 	if err != nil {
 		return err

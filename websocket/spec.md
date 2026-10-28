@@ -4,13 +4,13 @@ Referencia del paquete `websocket`: define el protocolo y lo que garantiza cada 
 
 **Regla de mantenimiento:** todo cambio en `websocket` que altere el protocolo, la API pública o un comportamiento descrito aquí actualiza este archivo en el mismo cambio, junto con `brecha.md` y, si cambia la API pública, `test/websocket/test.go` (lista `publicAPI` y casos).
 
-Versión del documento: 4 — 2026-10-21 (el paquete pasa de josefina `internal/websocket` a `github.com/cgalvisleon/et/websocket`, con sus mensajes en `et/msg` y el verificador en `test/websocket`; sin cambios de API; versión 3: cliente Go: `NewClient`/`Connect` devuelven un `Client`; la conexión vista desde el servidor pasa a llamarse `Conn`; mensaje `connected`).
+Versión del documento: 5 — 2026-10-27 (solo documentación: `et/msg` en vez de `internal/msg` en §11, la decisión de §1 ya no presenta a `jws` como existente; versión 4: 2026-10-21, el paquete pasa de josefina `internal/websocket` a `github.com/cgalvisleon/et/websocket`, con sus mensajes en `et/msg` y el verificador en `test/websocket`; sin cambios de API; versión 3: cliente Go: `NewClient`/`Connect` devuelven un `Client`; la conexión vista desde el servidor pasa a llamarse `Conn`; mensaje `connected`).
 
 ## 1. Objetivo (de `feature.md`)
 
 Servidor WebSocket sobre `github.com/gorilla/websocket` que permita conectarse, suscribirse (topic), suscribirse de tipo queue (un miembro por grupo, por turnos), desuscribirse y publicar desde el servidor o un cliente; con `OnConnect`, `OnDisconnect`, `OnSubscribe` y `OnUnsubscribe` para ampliar sus capacidades (`OnConnect` y `OnSubscribe` pueden rechazar); montable en cualquier router o escuchando solo; sin que un cliente lento frene a los demás; con un cliente Go (`NewClient` y `Connect` devuelven un `Client`) para usar el servidor; y con los métodos públicos agrupados en `catalog.go`.
 
-**Decisión:** `et/jws` ya tiene un hub WebSocket (canales topic/queue/stack), pero no tiene `OnSubscribe`/`OnUnsubscribe` ni permite rechazar una conexión o suscripción. Este paquete es propio, sobre Gorilla directamente, y sigue el modelo de `tcp` (implementación privada + `catalog.go`).
+**Decisión:** el antiguo `et/jws` (hub WebSocket con canales topic/queue/stack) no tenía `OnSubscribe`/`OnUnsubscribe` ni permitía rechazar una conexión o suscripción; este paquete lo reemplazó (`jws` ya no existe). Es propio, sobre Gorilla directamente, y sigue el modelo de `tcp` (implementación privada + `catalog.go`).
 
 ## 2. Requisitos
 
@@ -147,7 +147,7 @@ Una conexión termina cuando el cliente cierra, falla la red, se vence el keepal
 
 ## 11. Errores
 
-Textos en `internal/msg`, en inglés o español según `LANG`.
+Textos en `et/msg`, en inglés o español según `LANG`.
 
 | Constante | Cuándo |
 |---|---|

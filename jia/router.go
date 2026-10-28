@@ -19,12 +19,16 @@ type Router interface {
 	Protect(method, path string, handler func(http.ResponseWriter, *http.Request))
 }
 
+/**
+* LoadRouter: Mounts the protected routes of agents, conversations and participants on r.
+* @param r Router
+**/
 func (s *Ia) LoadRouter(r Router) {
 	r.Protect(GET, "/agents/{tag}", s.HttpGetAgent)
 	r.Protect(POST, "/agents", s.HttpNewAgent)
 	r.Protect(DELETE, "/agents/{tag}", s.HttpDeleteAgent)
 	r.Protect(PUT, "/agents/{tag}", s.HttpSetAgent)
-	r.Protect(POST, "/conversation", s.HttpConversation)
+	r.Protect(POST, "/agents/{tag}/conversation", s.HttpConversation)
 	r.Protect(DELETE, "/conversations/{to}", s.HttpDeleteConversation)
 	r.Protect(GET, "/participants/{to}", s.HttpGetParticipant)
 	r.Protect(POST, "/participants", s.HttpNewParticipant)
@@ -177,10 +181,10 @@ func (s *Ia) HttpConversation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	to := body.Str("to")
+	name := body.Str("name")
 	prompt := body.Str("prompt")
-	userId := request.UserID(r)
 	ctx := r.Context()
-	conversation, err := s.Conversation(ctx, tagAgent, to, prompt, userId)
+	conversation, err := s.Conversation(ctx, tagAgent, to, name, prompt)
 	if err != nil {
 		response.HTTPError(w, r, http.StatusInternalServerError, err.Error())
 		return

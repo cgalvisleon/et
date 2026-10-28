@@ -172,12 +172,17 @@ func NotSpace(str string) string {
 	return Replace(str, " ", "")
 }
 
+// DaskSpace: Deprecated: use DashSpace.
+func DaskSpace(str string) string {
+	return DashSpace(str)
+}
+
 /**
-* DaskSpace
+* DashSpace: Replaces every space with a dash.
 * @param str string
 * @return string
 **/
-func DaskSpace(str string) string {
+func DashSpace(str string) string {
 	return Replace(str, " ", "-")
 }
 
@@ -301,12 +306,17 @@ func GetSplitIndex(str, sep string, idx int) string {
 	return ""
 }
 
+// ApendAny: Deprecated: use JoinAny.
+func ApendAny(space string, args ...any) string {
+	return JoinAny(space, args...)
+}
+
 /**
-* ApendAny
+* JoinAny: Joins the non-empty args with space between them.
 * @param space string, args ...any
 * @return string
 **/
-func ApendAny(space string, args ...any) string {
+func JoinAny(space string, args ...any) string {
 	var result string
 	for i, a := range args {
 		s := fmt.Sprint(a)
@@ -365,12 +375,17 @@ func HtmlToText(html string) string {
 	return reHTML.ReplaceAllString(html, "")
 }
 
+// RemoveAcents: Deprecated: use RemoveAccents.
+func RemoveAcents(str string) string {
+	return RemoveAccents(str)
+}
+
 /**
-* RemoveAcents
+* RemoveAccents
 * @param str string
 * @return string
 **/
-func RemoveAcents(str string) string {
+func RemoveAccents(str string) string {
 	str = strings.ReplaceAll(str, "á", "a")
 	str = strings.ReplaceAll(str, "é", "e")
 	str = strings.ReplaceAll(str, "í", "i")

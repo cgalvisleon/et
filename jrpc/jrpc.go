@@ -33,8 +33,8 @@ func init() {
 }
 
 /**
-* Mount
-* @param host string, services any
+* Mount: Registers the methods of services in the package (created on the first call) and in net/rpc.
+* @param host string, port int, services any, packageName string
 * @return (*Package, error)
 **/
 func Mount(host string, port int, services any, packageName string) (*Package, error) {

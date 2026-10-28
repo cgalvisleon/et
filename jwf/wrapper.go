@@ -21,6 +21,11 @@ import (
 	"github.com/dop251/goja"
 )
 
+/**
+* GetArgs: The argument at idx of a goja call exported to Go, or defaultValue when idx is out of range.
+* @param args []goja.Value, idx int, defaultValue any
+* @return any
+**/
 func GetArgs(args []goja.Value, idx int, defaultValue any) any {
 	if idx < 0 || idx >= len(args) {
 		return defaultValue
@@ -49,8 +54,9 @@ func Bindings(bindings map[string]interface{}) map[string]interface{} {
 }
 
 /**
-* wrapperConsole:
-* @param instance *Instance
+* wrapperConsole: Adds the console binding (server log only, no emitter).
+* @param bindings map[string]interface{}
+* @return map[string]interface{}
 **/
 func wrapperConsole(bindings map[string]interface{}) map[string]interface{} {
 	bindings["console"] = consoleOf("", nil)
@@ -58,8 +64,9 @@ func wrapperConsole(bindings map[string]interface{}) map[string]interface{} {
 }
 
 /**
-* wrapperBasic: Wraps the basic
-* @param instance *Instance
+* wrapperBasic: Adds the basic bindings (ids, time, validator, evaluate*, field references, status constants…).
+* @param bindings map[string]interface{}
+* @return map[string]interface{}
 **/
 func wrapperBasic(bindings map[string]interface{}) map[string]interface{} {
 	bindings["UUID"] = reg.UUID
@@ -105,7 +112,7 @@ func wrapperBasic(bindings map[string]interface{}) map[string]interface{} {
 	bindings["statusRejected"] = REJECTED
 	bindings["statusFailed"] = FAILED
 	bindings["statusCancel"] = CANCEL
-	bindings["Json"] = et.Json{}
+	bindings["Json"] = Binder(func(vm *goja.Runtime) goja.Value { return et.ToJS(vm, et.Json{}) })
 	bindings["replace"] = func(value string, obj et.Json) string {
 		result := value
 		for k, v := range obj {
@@ -197,8 +204,9 @@ func wrapperJrpc(bindings map[string]interface{}) map[string]interface{} {
 }
 
 /**
-* wrapperCache: Wraps the cache
-* @param instance *Instance
+* wrapperCache: Adds the cache binding (set, get, json, items, item, delete over the Redis cache).
+* @param bindings map[string]interface{}
+* @return map[string]interface{}
 **/
 func wrapperCache(bindings map[string]interface{}) map[string]interface{} {
 	bindings["cache"] = map[string]interface{}{
@@ -245,8 +253,9 @@ func wrapperCache(bindings map[string]interface{}) map[string]interface{} {
 }
 
 /**
-* wrapperEvent: Wraps the event
-* @param instance *Instance
+* wrapperEvent: Adds the event binding (publish and subscribe over NATS).
+* @param bindings map[string]interface{}
+* @return map[string]interface{}
 **/
 func wrapperEvent(bindings map[string]interface{}) map[string]interface{} {
 	bindings["event"] = map[string]interface{}{
@@ -356,16 +365,14 @@ func (s *Step) wrapperCtx() {
 }
 
 /**
-* wrapperCtx:
-* @param s *Instance
+* wrapperConsole: Sets the console binding of the instance; its lines also go to the OnLog hooks through emitLog.
 **/
 func (s *Instance) wrapperConsole() {
 	s.SetBinding("console", consoleOf("", s.emitLog))
 }
 
 /**
-* wrapperCtx: Wraps the ctx
-* @param instance *Instance
+* wrapperCtx: Sets the ctx binding of the instance over Instance.Ctx (created if nil).
 **/
 func (s *Instance) wrapperCtx() {
 	ctx := func() et.Json {
@@ -378,8 +385,7 @@ func (s *Instance) wrapperCtx() {
 }
 
 /**
-* wrapper
-* @param step *Step
+* wrapperGoTo: Sets the goTo(idx) binding, which picks the output port the current step continues through.
 **/
 func (s *Instance) wrapperGoTo() {
 	s.SetBinding("goTo", func(idx int) error {

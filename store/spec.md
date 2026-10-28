@@ -4,7 +4,7 @@ Este documento es la referencia del paquete `github.com/cgalvisleon/et/store` (h
 
 **Regla de mantenimiento:** todo cambio en `store` que altere el formato en disco, la API pública o un comportamiento descrito aquí actualiza este archivo en el mismo cambio, junto con la sección del store en `README.md`, `doc/README.es.md` y `CLAUDE.md` de `et` cuando cambie la API.
 
-Versión del documento: 9 — 2026-10-25 (el paquete pasa de `josefina/internal/store` a `et/store`; los mensajes de error son `MSG_STORE_*` de `et/msg`; el verificador de carga es `go run ./test/storebench` de `et`; versión 8: funciones privadas sin uso quitadas: `segment.readHeader`, `FileStore.syncRef`, `read`, `readHeader` y `prune`; ninguna estaba en la API ni en el comportamiento descrito; versión 7: 2026-10-18, `Open` se recupera solo: restaura una compactación interrumpida y trunca la cola cortada del segmento activo; versión 6: `mmap` también del segmento activo; versión 5: escrituras diferidas, `Deferred` y `WaitDurable`; versión 4: índice por fragmentos, `mmap` de segmentos sellados, CRC en el índice para `Update`, contadores atómicos; versión 3: group commit).
+Versión del documento: 10 — 2026-10-27 (`Debug()` es el nombre del activador de logs, `IsDebug()` queda como alias en desuso; nombres de los mensajes `MSG_STORE_*` y el momento en que se lee la configuración corregidos en §7, §8 y §10; `Empty` devuelve el error de borrar el directorio de segmentos, antes lo perdía en un `defer`; `FileStore.ID` es el nombre normalizado, antes quedaba vacío en `ToJson`; versión 9: 2026-10-25, el paquete pasa de `josefina/internal/store` a `et/store`; los mensajes de error son `MSG_STORE_*` de `et/msg`; el verificador de carga es `go run ./test/storebench` de `et`; versión 8: funciones privadas sin uso quitadas: `segment.readHeader`, `FileStore.syncRef`, `read`, `readHeader` y `prune`; ninguna estaba en la API ni en el comportamiento descrito; versión 7: 2026-10-18, `Open` se recupera solo: restaura una compactación interrumpida y trunca la cola cortada del segmento activo; versión 6: `mmap` también del segmento activo; versión 5: escrituras diferidas, `Deferred` y `WaitDurable`; versión 4: índice por fragmentos, `mmap` de segmentos sellados, CRC en el índice para `Update`, contadores atómicos; versión 3: group commit).
 
 ## 1. Alcance
 
@@ -86,7 +86,7 @@ CRC:uint32   (de todo lo anterior)
    - con snapshot válido: lo carga y aplica encima el segmento activo;
    - sin snapshot: recorre todos los segmentos. En ambos casos, en orden: un registro `Active` apunta el id a él; un `Deleted` lo quita.
 4. `ReadWrite`: si el segmento **activo** tiene bytes después de su último registro válido (un registro cortado por una caída), los copia a `pathWald/recover/<name>/<segmento>.<fecha>.corrupt`, trunca el activo en ese punto con fsync y deja escribir desde ahí; lo registra en el log (`open:repair`). Solo el activo puede quedar cortado: la rotación hace fsync del anterior antes de crear el siguiente (§4). Un registro corrupto en medio del activo se trata igual (lo que sigue queda en la cuarentena, no se borra); uno en un segmento sellado no se toca y ahí el recorrido se detiene como siempre (eso es para `Recover`).
-5. Lee la configuración (§11) en este momento.
+5. La configuración (§11) se lee al construir el store, antes del paso 1 (`newFileStore`).
 
 - Tras un apagado inesperado ya no hace falta `Recover` antes de `Open`: lo escrito y confirmado después de reabrir queda a continuación de lo válido, no detrás de la basura. `Recover` sigue sirviendo para revisar **todos** los segmentos con el store cerrado.
 - El contador de tombstones empieza en 0 al abrir: no se persiste.
@@ -97,7 +97,7 @@ Detiene `OnStats`, espera cualquier compactación en curso, hace fsync de todos 
 
 ### `Empty`
 
-Cierra el store, deja el índice y los contadores en cero, borra el snapshot y borra sus segmentos: al volver a abrirlo con el mismo nombre queda vacío y con el contador `WAL` en 0 (antes el snapshot traía de vuelta el índice y el contador viejos; una réplica que vaciaba un store para una copia completa descartaba como ya aplicadas las entradas con LSN menor que el contador viejo).
+Cierra el store, deja el índice y los contadores en cero, borra el snapshot y borra sus segmentos (si borrar el directorio falla, devuelve ese error): al volver a abrirlo con el mismo nombre queda vacío y con el contador `WAL` en 0 (antes el snapshot traía de vuelta el índice y el contador viejos; una réplica que vaciaba un store para una copia completa descartaba como ya aplicadas las entradas con LSN menor que el contador viejo).
 
 ## 8. Escritura
 
@@ -110,7 +110,7 @@ Todas las escrituras se serializan. Para cada una, la verificación de existenci
 | `Delete(id)` | `id` existe | `true` si eliminó; `false` si no existía | `Deleted` |
 
 - No hay upsert: se compone con `Update` y luego `Insert` (y `Update` de nuevo si el `Insert` perdió una carrera).
-- Errores: `id` vacío → `MSG_ID_IS_REQUIRED`; id de más de 65535 bytes → `MSG_INVALID_ID_LENGTH`; datos de más de 4 GiB → `MSG_DATA_TOO_LARGE`; store `ReadOnly` → `MSG_STORE_IS_READ_ONLY`.
+- Errores: `id` vacío → `MSG_STORE_ID_IS_REQUIRED`; id de más de 65535 bytes → `MSG_STORE_INVALID_ID_LENGTH`; datos de más de 4 GiB → `MSG_DATA_TOO_LARGE`; store `ReadOnly` → `MSG_STORE_IS_READ_ONLY`.
 - **Durabilidad:** con `SYNC_ON_WRITE=true` (por defecto) cada escritura retorna cuando su registro ya está en disco (fsync). Con `false`, lo escrito puede perderse ante un corte de energía (no ante una caída del proceso).
 - **Group commit:** el fsync no se hace dentro de la escritura serializada. Cada escritura (también `ApplyWalEntry`) escribe en el log, actualiza el índice y avisa a `Sync`; suelta el turno y luego espera el fsync. Si no hay uno en curso, ella misma lo hace (líder) sobre el segmento activo y cubre todo lo escrito hasta ese momento; si lo hay, espera a que termine y, si no la cubrió, repite. Un fsync atiende así a todas las escrituras que llegaron mientras corría el anterior. Lo que estaba en segmentos sellados ya está en disco (la rotación y la compactación hacen fsync antes de cambiar el activo; `Close` sella todo).
 - **Escrituras diferidas:** `Deferred()` retorna una vista con `Insert`, `Update` y `Delete` idénticos a los de arriba (mismas condiciones, mismo resultado, mismo registro, misma visibilidad y mismo aviso a `Sync`), salvo que retornan sin esperar el fsync. `WaitDurable()` espera a que esté en disco todo lo escrito hasta el momento de la llamada (diferido o no), con el mismo group commit; sin `SYNC_ON_WRITE` retorna de inmediato, y si hubo un error de fsync lo retorna. Llamarlo después de `Close` no falla (`Close` ya forzó todo a disco). Quien escribe diferido debe llamar `WaitDurable` antes de confirmar su escritura: es lo que permite a una capa superior escribir varias cosas bajo su propio lock y esperar el disco después de soltarlo.
@@ -134,7 +134,7 @@ Todas las escrituras se serializan. Para cada una, la verificación de existenci
 
 ## 10. Lectura
 
-- `Get(id)` → `(datos, existe, error)`. Los datos son una copia nueva: quien llama puede guardarlos. Si el registro en disco no coincide con el índice (id, longitud, estado o CRC), `MSG_CORRUPTED_RECORD`.
+- `Get(id)` → `(datos, existe, error)`. Los datos son una copia nueva: quien llama puede guardarlos. Si el registro en disco no coincide con el índice (id, longitud, estado o CRC), `MSG_STORE_CORRUPTED_RECORD`.
 - `GetVersion(id)` → `(datos, versión, existe, error)`: como `Get`, más la **versión** de `id`: el LSN de su último registro (`0` si no existe). Cambia con cada `Insert`, `Update` o `Delete` que escribe, y se conserva al compactar y al replicar (`ApplyWalEntry` mantiene el LSN). Sirve para concurrencia optimista: si la versión no cambió, nadie escribió `id` (así lo usaban las transacciones interactivas de Josefina).
 - `IsExist(id)`, `Count()`, `Keys(asc, offset, limit)` usan solo el índice en memoria, sin leer el disco.
 - **Orden:** `Keys` y `ForEach` ordenan por id como texto (orden de bytes), ascendente o descendente. `offset < 0` cuenta como 0; `limit <= 0` es sin límite.

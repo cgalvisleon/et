@@ -15,7 +15,7 @@ const (
 	UnityMeter
 	UnityCentimeter
 	UnityMillimeter
-	UnityMiligram
+	UnityMilligram
 	UnityGram
 	UnityKilogram
 	UnityTon
@@ -27,13 +27,16 @@ const (
 	UnityCubicMeter
 )
 
+// Deprecated: use UnityMilligram.
+const UnityMiligram = UnityMilligram
+
 var UnityMap = map[string]TypeUnity{
 	"und": UnityUnit,
 	"km":  UnityKilometer,
 	"m":   UnityMeter,
 	"cm":  UnityCentimeter,
 	"mm":  UnityMillimeter,
-	"mg":  UnityMiligram,
+	"mg":  UnityMilligram,
 	"g":   UnityGram,
 	"kg":  UnityKilogram,
 	"t":   UnityTon,
@@ -72,7 +75,7 @@ func (s TypeUnity) Str() string {
 		return "cm"
 	case UnityMillimeter:
 		return "mm"
-	case UnityMiligram:
+	case UnityMilligram:
 		return "mg"
 	case UnityGram:
 		return "g"
@@ -215,7 +218,7 @@ func (s *Quantity) To(un TypeUnity) error {
 		}
 	}
 
-	if s.Unity == UnityMiligram {
+	if s.Unity == UnityMilligram {
 		switch un {
 		case UnityGram:
 			return multiply(0.001)
@@ -240,7 +243,7 @@ func (s *Quantity) To(un TypeUnity) error {
 
 	if s.Unity == UnityGram {
 		switch un {
-		case UnityMiligram:
+		case UnityMilligram:
 			return multiply(1000)
 		case UnityKilogram:
 			return multiply(0.001)
@@ -263,7 +266,7 @@ func (s *Quantity) To(un TypeUnity) error {
 
 	if s.Unity == UnityKilogram {
 		switch un {
-		case UnityMiligram:
+		case UnityMilligram:
 			return multiply(1000000)
 		case UnityGram:
 			return multiply(1000)
@@ -286,7 +289,7 @@ func (s *Quantity) To(un TypeUnity) error {
 
 	if s.Unity == UnityTon {
 		switch un {
-		case UnityMiligram:
+		case UnityMilligram:
 			return multiply(1000000000)
 		case UnityGram:
 			return multiply(1000000)
@@ -309,7 +312,7 @@ func (s *Quantity) To(un TypeUnity) error {
 
 	if s.Unity == UnityPound {
 		switch un {
-		case UnityMiligram:
+		case UnityMilligram:
 			return multiply(453592)
 		case UnityGram:
 			return multiply(453.592)
@@ -332,7 +335,7 @@ func (s *Quantity) To(un TypeUnity) error {
 
 	if s.Unity == UnityOunce {
 		switch un {
-		case UnityMiligram:
+		case UnityMilligram:
 			return multiply(28349.5)
 		case UnityGram:
 			return multiply(28.3495)
@@ -355,7 +358,7 @@ func (s *Quantity) To(un TypeUnity) error {
 
 	if s.Unity == UnityMilliliter {
 		switch un {
-		case UnityMiligram:
+		case UnityMilligram:
 			return multiply(1000)
 		case UnityGram:
 			return multiply(1)
@@ -378,7 +381,7 @@ func (s *Quantity) To(un TypeUnity) error {
 
 	if s.Unity == UnityCentiliter {
 		switch un {
-		case UnityMiligram:
+		case UnityMilligram:
 			return multiply(10000)
 		case UnityGram:
 			return multiply(10)
@@ -401,7 +404,7 @@ func (s *Quantity) To(un TypeUnity) error {
 
 	if s.Unity == UnityLiter {
 		switch un {
-		case UnityMiligram:
+		case UnityMilligram:
 			return multiply(1000000)
 		case UnityGram:
 			return multiply(1000)
@@ -424,7 +427,7 @@ func (s *Quantity) To(un TypeUnity) error {
 
 	if s.Unity == UnityCubicMeter {
 		switch un {
-		case UnityMiligram:
+		case UnityMilligram:
 			return multiply(1000000000)
 		case UnityGram:
 			return multiply(1000000)

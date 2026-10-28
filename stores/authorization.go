@@ -18,9 +18,8 @@ type Authorization struct {
 	model    *Model
 }
 
-var (
-	ErrorSetAuthor = errors.New(msg.MSG_RECORD_NOT_FOUND)
-)
+// ErrorSetAuthor: Deprecated: use ErrRecordExists.
+var ErrorSetAuthor = ErrRecordExists
 
 /**
 * DefineAuthorization
@@ -77,7 +76,7 @@ func DefineAuthorization(db *DB, tenantId, schema string) (*Authorization, error
 		}
 
 		if exists {
-			return errors.New(MSG_RECORD_EXISTS)
+			return ErrRecordExists
 		}
 
 		now := timezone.Now()
@@ -139,7 +138,7 @@ func (s *Authorization) SetAuthor(profileId, method, path string) error {
 **/
 func (s *Authorization) SetPath(method, path string) error {
 	err := s.SetAuthor("", method, path)
-	if err != nil && !errors.Is(err, ErrorSetAuthor) {
+	if err != nil && !errors.Is(err, ErrRecordExists) {
 		return err
 	}
 

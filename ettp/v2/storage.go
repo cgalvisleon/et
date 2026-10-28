@@ -11,6 +11,9 @@ import (
 	"github.com/cgalvisleon/et/logs"
 )
 
+/**
+* Storage: What Save persists (in the cache under <name>:<version>, or in apigateway.json).
+**/
 type Storage struct {
 	Solvers map[string]*Solver
 	Version string

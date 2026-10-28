@@ -13,6 +13,11 @@ type Value struct {
 	mutex sync.RWMutex
 }
 
+/**
+* NewValue: A value guarded by a RWMutex.
+* @param value interface{}
+* @return *Value
+**/
 func NewValue(value interface{}) *Value {
 	return &Value{
 		value: value,
@@ -178,16 +183,16 @@ func (s *Value) Float64Array() []float64 {
 }
 
 /**
-* BoolArray: Get value as []bool
-* @return []bool
+* IsNil: Check if value is nil
+* @return bool
 **/
 func (s *Value) IsNil() bool {
 	return s.Get() == nil
 }
 
 /**
-* IsNil: Check if value is nil
-* @return bool
+* MapRange: Iterate over map
+* @param func (key, value interface{}) bool
 **/
 func (s *Value) MapRange(f func(key, value interface{}) bool) {
 	if s.IsNil() {
@@ -202,7 +207,7 @@ func (s *Value) MapRange(f func(key, value interface{}) bool) {
 }
 
 /**
-* MapRange: Iterate over map
+* ArrayRange: Iterate over array
 * @param func (key, value interface{}) bool
 **/
 func (s *Value) ArrayRange(f func(key, value interface{}) bool) {
@@ -218,7 +223,7 @@ func (s *Value) ArrayRange(f func(key, value interface{}) bool) {
 }
 
 /**
-* ArrayRange: Iterate over array
+* Range: Iterate over a map or an array, whichever the value is
 * @param func (key, value interface{}) bool
 **/
 func (s *Value) Range(f func(key, value interface{}) bool) {
@@ -234,6 +239,10 @@ func (s *Value) Range(f func(key, value interface{}) bool) {
 	}
 }
 
+/**
+* Increase: Add n to an int or float64 value; other types are left as they are
+* @param n int
+**/
 func (s *Value) Increase(n int) {
 	switch v := s.Get().(type) {
 	case int:

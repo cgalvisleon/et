@@ -93,13 +93,10 @@ Las rutas se guardan en Redis y se propagan entre réplicas por NATS (`EVENT_SET
 
 | Componente | Problema |
 | --- | --- |
-| `jia/ia.go:90` | `Load` llama `store.Get(id, packageName, …)` con los argumentos invertidos. |
-| `validator` | `Min`/`Max` solo se aplican si son > 0 y `Pattern` se compila en cada validación (2026-10-11). |
-| `jwsp` `SendReplyVideoMessageByURL` | Asigna `url` a `MessageID`. |
-| `cmds.Step.RunSSH` | Ejecuta el comando localmente, igual que `RunOS`. |
-| `utility.More` | Reinicia el contador del tag a 0 en cada llamada. |
+| `cmds.Step.RunSSH` | Ejecuta el comando localmente, igual que `RunOS` (en desuso desde el 2026-10-27). |
 | `dt` con `PRODUCTION=false` | El objeto no se persiste: vive solo en memoria. |
-| `validator.Pattern` | Una regex inválida entra en pánico al validar (`regexp.MustCompile`); `ByJson` la rechaza con error. |
 | `et` en memoria | `neg`, `not_in` e `is_not` con un valor nil dan `true` (en SQL, `NULL <> x` no es verdadero). |
+
+Resuelto el 2026-10-27 (fase 0 del plan de estabilidad, `spec.md` en la raíz): `jia` con los argumentos de `Store.Get`/`Delete` invertidos; `validator` (`Min`/`Max` con 0 o negativos, `Pattern` compilado una vez y sin pánico); `jwsp.SendReplyVideoMessageByURL` (ahora recibe `messageID`); `utility.More` eliminado; `resilience.Run` síncrono; `event.Log` respeta el canal; `utility.ValidStr`/`ValidIn` excluyen la lista.
 
 Resuelto el 2026-10-27: el contador del límite de peticiones de `router` podía quedar sin TTL y dejar una ruta en 429 para siempre; `cache.IncrCtx` repone el vencimiento en un script atómico y la clave lleva el prefijo `ratelimit:`.

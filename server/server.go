@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"github.com/cgalvisleon/et/msg"
 	"net/http"
 	"time"
 
@@ -16,6 +17,10 @@ import (
 
 var packageName = "Ettp"
 
+/**
+* Ettp: Minimal HTTP server over chi.Mux (no cache, events or gateway) with start/close hooks;
+* with port 0 nothing is served and the mux is nil.
+**/
 type Ettp struct {
 	*chi.Mux
 	http    *http.Server
@@ -42,6 +47,7 @@ func New(name string, port int) *Ettp {
 
 	if result.port != 0 {
 		result.Mux = chi.NewRouter()
+		// Own 404: a JSON error in the library's format instead of chi's plain text
 		result.NotFound(func(w http.ResponseWriter, r *http.Request) {
 			response.HTTPError(w, r, http.StatusNotFound, "404 Not Found")
 		})
@@ -59,7 +65,8 @@ func New(name string, port int) *Ettp {
 }
 
 /**
-* banner
+* banner: Prints the name banner. It waits 3 s first so the banner comes out after the
+* startup logs of the server and of the OnStart hooks.
 **/
 func (s *Ettp) banner() {
 	time.Sleep(3 * time.Second)
@@ -187,7 +194,7 @@ func (s *Ettp) Start() {
 * printRoutes
 **/
 func (s *Ettp) printRoutes() {
-	logs.Log(packageName, "📌 Rutas cargadas:")
+	logs.Log(packageName, "📌 "+msg.MSG_ROUTES_LOADED)
 	chi.Walk(s.Mux, func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
 		logs.Logf(packageName, "%s:%s", method, route)
 		return nil

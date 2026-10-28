@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"strings"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jwf"
@@ -138,9 +137,9 @@ func (s *Command) toJson() et.Json {
 }
 
 /**
-* setDebug: Sets the debug flag for the query.
+* setDebug: Sets the debug flag of the command.
 * @param debug bool
-* @return *Query
+* @return *Command
 **/
 func (s *Command) setDebug(debug bool) *Command {
 	s.isDebug = debug
@@ -184,8 +183,8 @@ func (s *Command) where(cond *et.Condition) *Command {
 }
 
 /**
-* where: Sets the first WHERE condition and returns the command for chaining.
-* @param cond *et.Condition
+* whereByJson: Adds the conditions of a JSON where; a condition that cannot be read fails the command when it runs.
+* @param cond []et.Json
 * @return *Command
 **/
 func (s *Command) whereByJson(cond []et.Json) *Command {
@@ -417,59 +416,6 @@ func (s *Command) rowsQuery() *Query {
 		query.unlimited = true
 	}
 	return query
-}
-
-/**
-* withoutOmitUpdates: Returns data without the fields of OmitUpdates (and their nested paths "field->…").
-* @param data et.Json
-* @return et.Json
-**/
-func (s *Model) withoutOmitUpdates(data et.Json) et.Json {
-	if len(s.OmitUpdates) == 0 {
-		return data
-	}
-	result := et.Json{}
-	for key, value := range data {
-		if s.isOmitUpdate(key) {
-			continue
-		}
-		result[key] = value
-	}
-	return result
-}
-
-/**
-* isOmitUpdate: Reports whether key is an OmitUpdates field or a nested path of one.
-* @param key string
-* @return bool
-**/
-func (s *Model) isOmitUpdate(key string) bool {
-	for _, name := range s.OmitUpdates {
-		if key == name || strings.HasPrefix(key, name+"->") {
-			return true
-		}
-	}
-	return false
-}
-
-/**
-* restoreOmitUpdates: Puts back in new the value that old had for each OmitUpdates field (or removes it
-* when old did not have it), undoing the changes a before-update trigger made to them.
-* @param old, new et.Json
-**/
-func (s *Model) restoreOmitUpdates(old, new et.Json) {
-	for _, name := range s.OmitUpdates {
-		if value, ok := old[name]; ok {
-			new[name] = value
-			continue
-		}
-		delete(new, name)
-	}
-	for key := range new {
-		if strings.Contains(key, "->") && s.isOmitUpdate(key) {
-			delete(new, key)
-		}
-	}
 }
 
 /**

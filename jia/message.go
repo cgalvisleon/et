@@ -189,7 +189,7 @@ func (s *Message) save() error {
 **/
 func (s *Message) delete() error {
 	if s.ia != nil && s.ia.store != nil {
-		err := s.ia.store.Delete(s.ID, "message")
+		err := s.ia.store.Delete(storeMessages, s.ID)
 		if err != nil {
 			return err
 		}

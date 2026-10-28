@@ -9,6 +9,10 @@ import (
 	"github.com/cgalvisleon/et/timezone"
 )
 
+/**
+* Message: What travels on a channel: the payload with its id, channel and sender;
+* Myself is set on reception when the sender is this connection.
+**/
 type Message struct {
 	CreatedAt time.Time `json:"created_at"`
 	FromId    string    `json:"from_id"`
@@ -19,12 +23,12 @@ type Message struct {
 }
 
 /**
-* NewEvenMessage
+* NewEventMessage
 * @param string channel
 * @param et.Json data
 * @return Message
 **/
-func NewEvenMessage(channel string, data et.Json) Message {
+func NewEventMessage(channel string, data et.Json) Message {
 	now := timezone.Now()
 	id := reg.UUID()
 	return Message{

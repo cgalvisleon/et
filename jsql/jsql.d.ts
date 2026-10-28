@@ -640,9 +640,13 @@ interface JsqlPackage {
   quoted(value: any): any;
   escapeSQLString(value: string): string;
   jsonString(value: any): string;
-  /** Splits "name as alias"; returns [parts, ok]. */
-  argWhitAs(arg: string): [string[], boolean];
+  /** Splits "name:alias"; returns [parts, ok]. */
+  argWithAs(arg: string): [string[], boolean];
   /** Splits "schema.name"; returns [parts, ok]. */
+  argWithSchema(arg: string): [string[], boolean];
+  /** @deprecated use argWithAs */
+  argWhitAs(arg: string): [string[], boolean];
+  /** @deprecated use argWithSchema */
   argWhitSchema(arg: string): [string[], boolean];
 }
 

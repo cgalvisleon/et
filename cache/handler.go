@@ -17,6 +17,26 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+/**
+* Invariants of the cache package.
+*
+* Keys the library writes to Redis (one place to look them up):
+*   ratelimit:<METHOD>:<path>            router (rate limit, 1 s)
+*   telemetry:requests                   middleware (list of in-flight <METHOD>:<path>)
+*   <app>:<device>:<userId>              jwt (the token itself)
+*   base64("verify:<device>:<key>")      SetVerify/GetVerify/DeleteVerify
+*   base64("<METHOD>:<path>:<period>")   CallMetrics, one per second/minute/hour/day
+*   instance:<id>, instance:<id>:stop    jwf
+*   resilience:instance:<id>             resilience
+*   object:<key>                         dt
+*   <name>:<version>, Apigateway-v0.0.1  ettp/v2 (routes; the second is the legacy storage it migrates)
+*
+* Set stores every value as text: float64 with strconv.FormatFloat(v, 'f', -1, 64), time.Time as
+* RFC3339, time.Duration as Duration.String(); et.Json/Item/Items/List as their JSON.
+* Expirations are clamped to the Redis minimum of 1 ms (clampExpiration).
+* Without REDIS_HOST, Load keeps the cache in this process (memory.go): nothing is shared or persisted.
+**/
+
 const IsNil = redis.Nil
 
 /**
@@ -114,8 +134,8 @@ func HealthCheck() bool {
 }
 
 /**
-* SetWithDuration
-* @params key string, val interface{}, expMilisecond int64
+* SetWithDuration: Stores val as text under key for the given expiration.
+* @params key string, val interface{}, expiration time.Duration
 * @return interface{}
 **/
 func SetWithDuration(key string, val interface{}, expiration time.Duration) interface{} {
@@ -157,7 +177,7 @@ func SetWithDuration(key string, val interface{}, expiration time.Duration) inte
 }
 
 /**
-* Incr
+* IncrDuration: Increments key and sets its expiration when missing.
 * @params key string, expiration time.Duration
 * @return int64
 **/
@@ -170,8 +190,8 @@ func IncrDuration(key string, expiration time.Duration) int64 {
 }
 
 /**
-* Expire
-* @params key string, expSecond int
+* Expire: Sets the expiration of key.
+* @params key string, expiration time.Duration
 * @return error
 **/
 func Expire(key string, expiration time.Duration) error {
@@ -431,7 +451,7 @@ func Empty(match string) error {
 }
 
 /**
-* ColectionSet
+* CollectionSet
 * @params key string, val map[string]string
 * @return error
 **/
@@ -502,11 +522,11 @@ func CollectionFind(name, key string) (string, bool, error) {
 }
 
 /**
-* Objets
+* ObjectAll
 * @params name string
 * @return []et.Json, error
 **/
-func ObjetAll(name string) ([]et.Json, error) {
+func ObjectAll(name string) ([]et.Json, error) {
 	result := []et.Json{}
 	items, err := CollectionGet(name)
 	if err != nil {
@@ -527,21 +547,21 @@ func ObjetAll(name string) ([]et.Json, error) {
 }
 
 /**
-* ObjetSet
+* ObjectSet
 * @params name string, key string, val []byte
 * @return error
 **/
-func ObjetSet(name string, key string, obj et.Json) error {
+func ObjectSet(name string, key string, obj et.Json) error {
 	val := obj.ToString()
 	return CollectionPut(name, key, val)
 }
 
 /**
-* ObjetGet
+* ObjectGet
 * @params name string, key string, v any
 * @return et.Json, bool, error
 **/
-func ObjetGet(name, key string) (et.Json, bool, error) {
+func ObjectGet(name, key string) (et.Json, bool, error) {
 	scr, exists, err := CollectionFind(name, key)
 	if err != nil {
 		return et.Json{}, false, err
@@ -561,13 +581,25 @@ func ObjetGet(name, key string) (et.Json, bool, error) {
 }
 
 /**
-* ObjetDelete
+* ObjectDelete
 * @params name string, key string
 * @return error
 **/
-func ObjetDelete(name, key string) error {
+func ObjectDelete(name, key string) error {
 	return CollectionDelete(name, key)
 }
+
+// ObjetAll: Deprecated: use ObjectAll.
+func ObjetAll(name string) ([]et.Json, error) { return ObjectAll(name) }
+
+// ObjetSet: Deprecated: use ObjectSet.
+func ObjetSet(name string, key string, obj et.Json) error { return ObjectSet(name, key, obj) }
+
+// ObjetGet: Deprecated: use ObjectGet.
+func ObjetGet(name, key string) (et.Json, bool, error) { return ObjectGet(name, key) }
+
+// ObjetDelete: Deprecated: use ObjectDelete.
+func ObjetDelete(name, key string) error { return ObjectDelete(name, key) }
 
 /**
 * genKey

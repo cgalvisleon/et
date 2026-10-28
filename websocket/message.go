@@ -27,6 +27,10 @@ const (
 	typeConnected   = "connected" // conexión aceptada; id es el del cliente
 )
 
+/**
+* SubscriptionType: Tipo de suscripción a un canal: topic (todos reciben) o queue
+* (un miembro del grupo por mensaje, por turnos).
+**/
 type SubscriptionType string
 
 const (
@@ -76,7 +80,7 @@ type envelope struct {
 }
 
 /**
-* direct: Mensaje enviado a un solo cliente con Client.Send.
+* direct: Mensaje enviado a un solo cliente con Conn.Send.
 **/
 type direct struct {
 	Type string          `json:"type"`

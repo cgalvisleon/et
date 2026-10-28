@@ -16,10 +16,24 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+/**
+* Invariants of the router package.
+*
+* Call event.Load() and cache.Load() before the first Public/Session/Protected: the first route
+* subscribes the reset channels (initRouter) and every route is published to the gateway over
+* NATS; without a connection they are silently skipped. initRouter ignores the error of
+* event.Stack and never retries.
+* Without a cache, Incr returns 0 and the rate limit never triggers.
+**/
+
 var (
 	EVENT_SET_ENDPOINT = "event:set:endpoint"
 )
 
+/**
+* Api: A chi router of one service: routes by group (Public, Session, Protected), each rate
+* limited and published to the gateway and to the endpoint catalog.
+**/
 type Api struct {
 	Name                string
 	Path                string
@@ -31,15 +45,15 @@ type Api struct {
 	Router              *chi.Mux
 	LimitRate           int64
 	authentication      []func(http.Handler) http.Handler
-	idenpotency         []func(http.Handler) http.Handler
+	idempotency         []func(http.Handler) http.Handler
 	authorization       func(method, path string) func(http.Handler) http.Handler
 	registerEndpoint    func(packageName, group, method, path, name string) error
 	errorStatusNotFound []string
 }
 
 /**
-* NewApi
-* @param name, path, host, port, rpc, version int
+* NewApi: Builds the Api with Logger and Recoverer and a rate limit of 1000 requests per second per route.
+* @param name, path, host string, port, rpc, version int
 * @return *Api
 **/
 func NewApi(name, path, host string, port, rpc int, version int) *Api {
@@ -102,11 +116,11 @@ func (s *Api) UseAuthentication(middlewares ...func(http.Handler) http.Handler) 
 }
 
 /**
-* UseIdenpotency
+* UseIdempotency
 * @param middlewares ...func(http.Handler) http.Handler
 **/
-func (s *Api) UseIdenpotency(middlewares ...func(http.Handler) http.Handler) {
-	s.idenpotency = append(s.idenpotency, middlewares...)
+func (s *Api) UseIdempotency(middlewares ...func(http.Handler) http.Handler) {
+	s.idempotency = append(s.idempotency, middlewares...)
 }
 
 /**
@@ -153,8 +167,8 @@ func (s *Api) Public(group, method, path, name string, handler http.HandlerFunc)
 	s.RegisterEndpoint(s.Name, group, method, path, name)
 	middlewares := make([]func(http.Handler) http.Handler, 0)
 	middlewares = append(middlewares, s.rateLimitMiddleware)
-	if s.idenpotency != nil {
-		middlewares = append(middlewares, s.idenpotency...)
+	if s.idempotency != nil {
+		middlewares = append(middlewares, s.idempotency...)
 	}
 	With(s.Router, Route{
 		Method:      method,
@@ -177,8 +191,8 @@ func (s *Api) Session(group, method, path, name string, handler http.HandlerFunc
 	if s.authentication != nil {
 		middlewares = append(middlewares, s.authentication...)
 	}
-	if s.idenpotency != nil {
-		middlewares = append(middlewares, s.idenpotency...)
+	if s.idempotency != nil {
+		middlewares = append(middlewares, s.idempotency...)
 	}
 	With(s.Router, Route{
 		Method:      method,
@@ -202,8 +216,8 @@ func (s *Api) Protected(group, method, path, name string, handler http.HandlerFu
 	if s.authentication != nil {
 		middlewares = append(middlewares, s.authentication...)
 	}
-	if s.idenpotency != nil {
-		middlewares = append(middlewares, s.idenpotency...)
+	if s.idempotency != nil {
+		middlewares = append(middlewares, s.idempotency...)
 	}
 	if s.authorization != nil {
 		middlewares = append(middlewares, s.authorization(method, path))
@@ -309,4 +323,9 @@ func (s *Api) List(fn func(r *http.Request) (et.List, error)) http.HandlerFunc {
 
 		response.LIST(w, r, http.StatusOK, result)
 	}
+}
+
+// UseIdenpotency: Deprecated: use UseIdempotency.
+func (s *Api) UseIdenpotency(middlewares ...func(http.Handler) http.Handler) {
+	s.UseIdempotency(middlewares...)
 }

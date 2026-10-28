@@ -1,6 +1,7 @@
 package dt
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -112,11 +113,14 @@ func (s *Object) drop() error {
 * @return []byte
 **/
 func (s *Object) Byte() ([]byte, error) {
-	result, ok := s.Value.([]byte)
-	if !ok {
+	switch v := s.Value.(type) {
+	case []byte:
+		return v, nil
+	case string: // bytes come back from JSON as base64 text
+		return base64.StdEncoding.DecodeString(v)
+	default:
 		return nil, errors.New(MSG_VALUE_IS_NOT_BYTE)
 	}
-	return result, nil
 }
 
 /**
@@ -220,11 +224,14 @@ func (s *Object) Array() ([]any, error) {
 * @return et.Json
 **/
 func (s *Object) Json() (et.Json, error) {
-	result, ok := s.Value.(et.Json)
-	if !ok {
+	switch v := s.Value.(type) {
+	case et.Json:
+		return v, nil
+	case map[string]any: // an object comes back from JSON as a plain map
+		return et.Json(v), nil
+	default:
 		return et.Json{}, errors.New(MSG_VALUE_IS_NOT_JSON)
 	}
-	return result, nil
 }
 
 /**

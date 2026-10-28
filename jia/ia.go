@@ -1,3 +1,8 @@
+// Package jia manages OpenAI agents, participants and their conversations over a caller-provided Store.
+//
+// Invariants:
+//   - addAuditLog (Ia, Agent, Participant) runs without any mutex; callers do not run them concurrently.
+//   - Only Agent, Participant and Message are persisted (their save()); the Ia and the Conversation live in memory.
 package jia
 
 import (
@@ -77,9 +82,9 @@ func New(tag string, store Store, userId string) (*Ia, error) {
 }
 
 /**
-* New
+* Load: Reads the Ia with that id from the store and wires it up.
 * @param id string, store Store
-* @return error
+* @return *Ia, error
 **/
 func Load(id string, store Store) (*Ia, error) {
 	if store == nil {
@@ -87,7 +92,7 @@ func Load(id string, store Store) (*Ia, error) {
 	}
 
 	var result *Ia
-	exists, err := store.Get(id, packageName, &result)
+	exists, err := store.Get(storeIa, id, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +111,7 @@ func Load(id string, store Store) (*Ia, error) {
 **/
 func (s *Ia) up(store Store) (*Ia, error) {
 	key := envar.GetStr("OPENAI_API_KEY", "")
-	isDebug := envar.GetBool("DEBUG", true)
+	isDebug := envar.GetBool("DEBUG", false)
 	s.store = store
 	s.key = key
 	s.isDebug = isDebug
@@ -129,7 +134,7 @@ func (s *Ia) up(store Store) (*Ia, error) {
 	})
 
 	for id := range s.Agents {
-		_, err := s.loadAgend(id)
+		_, err := s.loadAgent(id)
 		if err != nil {
 			return nil, err
 		}
@@ -226,7 +231,7 @@ func (s *Ia) delete() error {
 		return errors.New(MSG_STORE_IS_NIL)
 	}
 
-	err := s.store.Delete("ia", s.ID)
+	err := s.store.Delete(storeIa, s.ID)
 	if err != nil {
 		return err
 	}
@@ -494,7 +499,7 @@ func (s *Ia) Embed(ctx context.Context, agentName string, text string) ([]float6
 
 	result, exists := s.getAgent(agentName)
 	if !exists {
-		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, agentName)
+		return nil, errors.New(MSG_AGENT_NOT_FOUND)
 	}
 
 	client := result.client
@@ -529,7 +534,7 @@ func (s *Ia) Conversation(ctx context.Context, tagAgent, to, name, prompt string
 
 	agent, exists := s.getAgent(tagAgent)
 	if !exists {
-		return nil, fmt.Errorf(MSG_AGENT_NOT_FOUND, tagAgent)
+		return nil, errors.New(MSG_AGENT_NOT_FOUND)
 	}
 
 	participant, exists := s.getParticipant(to)

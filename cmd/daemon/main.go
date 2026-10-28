@@ -6,6 +6,7 @@ import (
 	"github.com/cgalvisleon/et/et"
 )
 
+// TypeCommand: a daemon sub-command (help, version, status, start, stop, restart, conf).
 type TypeCommand string
 
 const (
@@ -18,6 +19,11 @@ const (
 	CMD_Conf    TypeCommand = "conf"
 )
 
+/**
+* ToTypeCommand: The command named by a CLI argument (long or short form); unknown gives CMD_Help.
+* @param val string
+* @return TypeCommand
+**/
 func ToTypeCommand(val string) TypeCommand {
 	switch val {
 	case "version", "--v":
@@ -37,6 +43,7 @@ func ToTypeCommand(val string) TypeCommand {
 	return CMD_Help
 }
 
+// RepositoryCMD: what a daemon implementation must offer to the CLI.
 type RepositoryCMD interface {
 	Help(key string)
 	Version() string
@@ -50,6 +57,9 @@ type RepositoryCMD interface {
 var apps map[string]RepositoryCMD
 var app string = "systemd"
 
+/**
+* main: Dispatches os.Args[1] to the registered app.
+**/
 func main() {
 	_app := apps[app]
 
@@ -84,6 +94,10 @@ func main() {
 	}
 }
 
+/**
+* Registry: Registers a daemon implementation under name and makes it the current app.
+* @param name string, cmd RepositoryCMD
+**/
 func Registry(name string, cmd RepositoryCMD) {
 	if apps == nil {
 		apps = make(map[string]RepositoryCMD)

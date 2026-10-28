@@ -17,7 +17,7 @@
       "ok": true,
       "duration": "7ms",
       "details": [
-        "Listen en 127.0.0.1:55347",
+        "Listen en 127.0.0.1:50814",
         "segundo Listen -\u003e websocket: server already listening",
         "3 clientes Gorilla conectados: Count=3",
         "montado en http.ServeMux en /ws: conecta (Count=1)",
@@ -54,7 +54,7 @@
         "Server.Publish"
       ],
       "ok": true,
-      "duration": "619ms",
+      "duration": "614ms",
       "details": [
         "30 mensajes: grupo a (3 miembros) [10 10 10], grupo b (2 miembros) [15 15], topic 30",
         "cada grupo recibió cada mensaje exactamente una vez; el topic los 30"
@@ -71,7 +71,7 @@
         "Server.Publish"
       ],
       "ok": true,
-      "duration": "157ms",
+      "duration": "156ms",
       "details": [
         "queue sobre canal ya suscrito como topic -\u003e websocket: already subscribed to x",
         "después de unsubscribe no llega nada (delivered=0)",
@@ -91,10 +91,10 @@
         "Server.OnConnect"
       ],
       "ok": true,
-      "duration": "5ms",
+      "duration": "3ms",
       "details": [
         "Client.Send en OnConnect -\u003e cada cliente recibió su mensaje direct",
-        "publish de A -\u003e B lo recibe con from=01M5G0E8…; ack delivered=1",
+        "publish de A -\u003e B lo recibe con from=01M605XM…; ack delivered=1",
         "publish en canal sin suscriptores -\u003e ack delivered=0"
       ]
     },
@@ -105,7 +105,7 @@
       ],
       "methods": null,
       "ok": true,
-      "duration": "3ms",
+      "duration": "1ms",
       "details": [
         "inválido -\u003e error \"websocket: invalid message\"",
         "inválido -\u003e error \"websocket: invalid message\"",
@@ -127,7 +127,7 @@
         "Server.Count"
       ],
       "ok": true,
-      "duration": "55ms",
+      "duration": "53ms",
       "details": [
         "token inválido -\u003e cierre 1008 \"token inválido\"",
         "panic en OnConnect -\u003e rechazada: \"websocket: handler panic: token malo\"",
@@ -190,9 +190,9 @@
         "Server.Publish"
       ],
       "ok": true,
-      "duration": "358ms",
+      "duration": "381ms",
       "details": [
-        "500 publicaciones concurrentes en 338ms",
+        "500 publicaciones concurrentes en 354ms",
         "10 topic: cada uno recibió las 500 en orden por publicador; queue (10 miembros): 500 en total"
       ]
     },
@@ -206,10 +206,10 @@
         "Server.OnDisconnect"
       ],
       "ok": true,
-      "duration": "969ms",
+      "duration": "1.591s",
       "details": [
         "tras 267 mensajes de 64 KiB, el lector lento se desconectó: websocket: connection closed: websocket: slow consumer, send buffer full",
-        "Publish nunca se bloqueó (747ms en total)",
+        "Publish nunca se bloqueó (1.104s en total)",
         "el cliente rápido recibió los 267"
       ]
     },
@@ -229,13 +229,13 @@
         "Conn.ID"
       ],
       "ok": true,
-      "duration": "2ms",
+      "duration": "6ms",
       "details": [
         "Connect rechazado por OnConnect del servidor -\u003e websocket: connection rejected: token inválido",
-        "Connect aceptado: Client.ID()=01M5G0EA… coincide con Conn.ID() del servidor; OnConnect del cliente llamado",
+        "Connect aceptado: Client.ID()=01M605XP… coincide con Conn.ID() del servidor; OnConnect del cliente llamado",
         "segundo Connect -\u003e websocket: already connected",
-        "Close; operación sin conexión -\u003e websocket: not connected",
-        "Connect a un servidor cerrado -\u003e dial tcp 127.0.0.1:55425: connect: connection refused"
+        "Close; operación sin conexión -\u003e websocket: close sent",
+        "Connect a un servidor cerrado -\u003e dial tcp 127.0.0.1:50874: connect: connection refused"
       ]
     },
     {
@@ -259,7 +259,7 @@
         "Conn.Send"
       ],
       "ok": true,
-      "duration": "85ms",
+      "duration": "137ms",
       "details": [
         "OnDirect recibió el Conn.Send del servidor: \"bienvenido\"",
         "Subscribe rechazado por el servidor -\u003e sin permiso",
@@ -281,7 +281,7 @@
         "Conn.Close"
       ],
       "ok": true,
-      "duration": "7ms",
+      "duration": "9ms",
       "details": [
         "el servidor cierra la conexión -\u003e OnDisconnect: websocket: connection closed",
         "se reconectó desde OnDisconnect con otro ID; las suscripciones se limpian y se vuelven a hacer",
@@ -296,15 +296,15 @@
       ],
       "methods": null,
       "ok": true,
-      "duration": "9ms",
+      "duration": "21ms",
       "details": [
         "usa github.com/gorilla/websocket: true",
         "32 métodos públicos, todos en catalog.go como envoltorios de su versión privada"
       ]
     }
   ],
-  "date": "2026-10-21T14:54:04-05:00",
-  "duration": "2.288s",
+  "date": "2026-10-27T21:37:42-05:00",
+  "duration": "2.993s",
   "go": "go1.25.0",
   "missing": null,
   "passed": 15,

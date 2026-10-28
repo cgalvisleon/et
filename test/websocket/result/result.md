@@ -1,11 +1,11 @@
 # Resultados: `websocket`
 
-- Fecha: 2026-10-21 14:54:04 -05
+- Fecha: 2026-10-27 21:37:42 -05
 - Go: go1.25.0, darwin/arm64
 - Casos: **15/15 correctos**
 - Requisitos de `spec.md`: **17/17 cumplidos**
 - Métodos públicos probados: **32/32**
-- Duración total: 2.288s
+- Duración total: 2.993s
 
 Generado con `go run ./test/websocket` (desde la raíz del repo).
 
@@ -37,19 +37,19 @@ Generado con `go run ./test/websocket` (desde la raíz del repo).
 |---|---|---|---|---|
 | 1 | Conexión: Listen, ServeHTTP y Close | WS-01, WS-02 | ✅ PASS | 7ms |
 | 2 | Suscripción topic | WS-03, WS-06 | ✅ PASS | 4ms |
-| 3 | Suscripción queue: reparto por turnos | WS-04, WS-06 | ✅ PASS | 619ms |
-| 4 | Desuscribirse y reglas de suscripción | WS-05, WS-03, WS-04 | ✅ PASS | 157ms |
-| 5 | Publicar desde un cliente y mensajes directos | WS-06 | ✅ PASS | 5ms |
-| 6 | Protocolo: mensajes inválidos | WS-02 | ✅ PASS | 3ms |
-| 7 | OnConnect: autenticar y rechazar | WS-07, WS-13 | ✅ PASS | 55ms |
+| 3 | Suscripción queue: reparto por turnos | WS-04, WS-06 | ✅ PASS | 614ms |
+| 4 | Desuscribirse y reglas de suscripción | WS-05, WS-03, WS-04 | ✅ PASS | 156ms |
+| 5 | Publicar desde un cliente y mensajes directos | WS-06 | ✅ PASS | 3ms |
+| 6 | Protocolo: mensajes inválidos | WS-02 | ✅ PASS | 1ms |
+| 7 | OnConnect: autenticar y rechazar | WS-07, WS-13 | ✅ PASS | 53ms |
 | 8 | OnDisconnect: cierre del cliente, del servidor y Server.Close | WS-08, WS-10 | ✅ PASS | 5ms |
 | 9 | OnSubscribe: rechazar y ampliar | WS-09, WS-10, WS-13 | ✅ PASS | 3ms |
-| 10 | Concurrencia: 20 clientes y 5 publicadores | WS-12, WS-03, WS-04, WS-06 | ✅ PASS | 358ms |
-| 11 | Consumidor lento | WS-12 | ✅ PASS | 969ms |
-| 12 | Cliente Go: NewClient, Connect y rechazo | WS-14, WS-17, WS-07 | ✅ PASS | 2ms |
-| 13 | Cliente Go: suscribir, queue, publicar y recibir en orden | WS-15, WS-16, WS-03, WS-04, WS-06, WS-09 | ✅ PASS | 85ms |
-| 14 | Cliente Go: desconexión y reconexión | WS-17, WS-08 | ✅ PASS | 7ms |
-| 15 | Modelo catalog (análisis del código) | WS-11, WS-01 | ✅ PASS | 9ms |
+| 10 | Concurrencia: 20 clientes y 5 publicadores | WS-12, WS-03, WS-04, WS-06 | ✅ PASS | 381ms |
+| 11 | Consumidor lento | WS-12 | ✅ PASS | 1.591s |
+| 12 | Cliente Go: NewClient, Connect y rechazo | WS-14, WS-17, WS-07 | ✅ PASS | 6ms |
+| 13 | Cliente Go: suscribir, queue, publicar y recibir en orden | WS-15, WS-16, WS-03, WS-04, WS-06, WS-09 | ✅ PASS | 137ms |
+| 14 | Cliente Go: desconexión y reconexión | WS-17, WS-08 | ✅ PASS | 9ms |
+| 15 | Modelo catalog (análisis del código) | WS-11, WS-01 | ✅ PASS | 21ms |
 
 ## Detalle
 
@@ -57,7 +57,7 @@ Generado con `go run ./test/websocket` (desde la raíz del repo).
 
 Métodos: `NewServer`, `Server.Listen`, `Server.Addr`, `Server.Count`, `Server.ServeHTTP`, `Server.Close`
 
-- Listen en 127.0.0.1:55347
+- Listen en 127.0.0.1:50814
 - segundo Listen -> websocket: server already listening
 - 3 clientes Gorilla conectados: Count=3
 - montado en http.ServeMux en /ws: conecta (Count=1)
@@ -94,7 +94,7 @@ Métodos: `Server.Publish`
 Métodos: `Conn.ID`, `Conn.Send`, `Server.OnConnect`
 
 - Client.Send en OnConnect -> cada cliente recibió su mensaje direct
-- publish de A -> B lo recibe con from=01M5G0E8…; ack delivered=1
+- publish de A -> B lo recibe con from=01M605XM…; ack delivered=1
 - publish en canal sin suscriptores -> ack delivered=0
 
 ### 6. Protocolo: mensajes inválidos
@@ -134,7 +134,7 @@ Métodos: `Server.OnSubscribe`, `Server.OnUnsubscribe`, `Conn.Subscribe`, `Conn.
 
 Métodos: `Server.Publish`
 
-- 500 publicaciones concurrentes en 338ms
+- 500 publicaciones concurrentes en 354ms
 - 10 topic: cada uno recibió las 500 en orden por publicador; queue (10 miembros): 500 en total
 
 ### 11. Consumidor lento
@@ -142,7 +142,7 @@ Métodos: `Server.Publish`
 Métodos: `Server.Publish`, `Server.OnDisconnect`
 
 - tras 267 mensajes de 64 KiB, el lector lento se desconectó: websocket: connection closed: websocket: slow consumer, send buffer full
-- Publish nunca se bloqueó (747ms en total)
+- Publish nunca se bloqueó (1.104s en total)
 - el cliente rápido recibió los 267
 
 ### 12. Cliente Go: NewClient, Connect y rechazo
@@ -150,10 +150,10 @@ Métodos: `Server.Publish`, `Server.OnDisconnect`
 Métodos: `NewClient`, `Client.Connect`, `Client.ID`, `Client.Close`, `Client.OnConnect`, `Conn.ID`
 
 - Connect rechazado por OnConnect del servidor -> websocket: connection rejected: token inválido
-- Connect aceptado: Client.ID()=01M5G0EA… coincide con Conn.ID() del servidor; OnConnect del cliente llamado
+- Connect aceptado: Client.ID()=01M605XP… coincide con Conn.ID() del servidor; OnConnect del cliente llamado
 - segundo Connect -> websocket: already connected
-- Close; operación sin conexión -> websocket: not connected
-- Connect a un servidor cerrado -> dial tcp 127.0.0.1:55425: connect: connection refused
+- Close; operación sin conexión -> websocket: close sent
+- Connect a un servidor cerrado -> dial tcp 127.0.0.1:50874: connect: connection refused
 
 ### 13. Cliente Go: suscribir, queue, publicar y recibir en orden
 

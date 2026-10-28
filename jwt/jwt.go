@@ -13,7 +13,18 @@ import (
 )
 
 /**
-* GetTokenKey
+* Invariants of the jwt package.
+*
+* The cache holds one token per app:device:userId (GetKey); a new token for the same key
+* replaces the previous one.
+* Validate returns (nil, nil) when the token is well formed but its key is not in the cache
+* (expired or deleted): callers must check both values.
+* A valid token different from the stored one deletes the key, so the stored session ends too.
+* RenewToken stores the new token twice (NewToken already stores it).
+**/
+
+/**
+* GetKey: Builds the cache key of a token.
 * @param app, device, userId string
 * @return string
 **/
@@ -28,7 +39,7 @@ func GetKey(app, device, userId string) string {
 **/
 func NewToken(app, device, userId, name string, payload et.Json, duration time.Duration) (string, error) {
 	if err := cache.Load(); err != nil {
-		return "", errors.New(msg.MSG_CACHE_NOT_LOAD)
+		return "", errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
 	result, err := claim.NewToken(app, device, userId, "", "", name, payload, duration)
@@ -89,7 +100,7 @@ func NewAuthorization(app, device, userId, name, tenantId, roleId string, durati
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "roleId")
 	}
 	if err := cache.Load(); err != nil {
-		return "", errors.New(msg.MSG_CACHE_NOT_LOAD)
+		return "", errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
 	result, err := claim.NewToken(app, device, userId, tenantId, roleId, name, et.Json{}, duration)
@@ -171,12 +182,12 @@ func DeleteToken(app, device, sessionID string) error {
 }
 
 /**
-* DeleteTokeByToken
+* DeleteTokenByToken
 * @param token string
 * @return error
 **/
-func DeleteTokeByToken(token string) error {
-	parce, err := claim.ParceToken(token)
+func DeleteTokenByToken(token string) error {
+	parce, err := claim.ParseToken(token)
 	if err != nil {
 		return err
 	}
@@ -188,12 +199,13 @@ func DeleteTokeByToken(token string) error {
 }
 
 /**
-* Validate
-* @param ctx context.Context, token string
-* @return *Claim, error
+* Validate: Parses the token and checks it is the one stored for its key.
+* Returns (nil, nil) when the key is not in the cache; a different stored token deletes the key.
+* @param token string
+* @return *claim.Claim, error
 **/
 func Validate(token string) (*claim.Claim, error) {
-	clm, err := claim.ParceToken(token)
+	clm, err := claim.ParseToken(token)
 	if err != nil {
 		return nil, err
 	}
@@ -258,4 +270,9 @@ func RenewToken(token string, duration time.Duration) (string, error) {
 	key := GetKey(app, device, userId)
 	cache.Set(key, result, duration)
 	return result, nil
+}
+
+// DeleteTokeByToken: Deprecated: use DeleteTokenByToken.
+func DeleteTokeByToken(token string) error {
+	return DeleteTokenByToken(token)
 }

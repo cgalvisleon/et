@@ -7,6 +7,12 @@ import (
 	"github.com/rs/cors"
 )
 
+/**
+* CorsAllowAll: CORS handler that accepts the given origins (any when empty) and every header;
+* credentials only with an explicit allowlist.
+* @param allowedOrigins []string
+* @return *cors.Cors
+**/
 func CorsAllowAll(allowedOrigins []string) *cors.Cors {
 	return cors.New(cors.Options{
 		AllowOriginFunc: func(origin string) bool {

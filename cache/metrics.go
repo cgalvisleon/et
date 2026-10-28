@@ -10,6 +10,10 @@ import (
 	"github.com/cgalvisleon/et/timezone"
 )
 
+/**
+* Metrics: Request counters of one key per second, minute, hour and day, and whether
+* the per-second count is over the limit (see CallMetrics).
+**/
 type Metrics struct {
 	TimeStamp         string `json:"timestamp"`
 	Key               string `json:"key"`

@@ -133,7 +133,8 @@ func (s *FormState) Set(id, tag, ownerId string, data et.Json) error {
 }
 
 /**
-* Get
+* Get: Loads the state of id into dest, from the dt cache or the model. Unlike Instance.Get, a missing id gives
+* (false, nil), not an error.
 * @param id string, dest et.Json
 * @return (bool, error)
 **/

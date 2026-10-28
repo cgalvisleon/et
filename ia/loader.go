@@ -69,10 +69,10 @@ func extractText(source string, data []byte) (string, error) {
 }
 
 /**
-* ExtractFile: The plain text of a file and its source, detected by the extension of name (pdf, docx, xlsx, csv, txt,
-* md), with the same loaders as IngestFile.
+* ExtractFile: The source (detected by the extension of name: pdf, docx, xlsx, csv, txt, md) and the plain text of a
+* file, with the same loaders as IngestFile.
 * @param name string, data []byte
-* @return string, string, error
+* @return source string, text string, error
 **/
 func ExtractFile(name string, data []byte) (string, string, error) {
 	source, err := sourceFromFilename(name)

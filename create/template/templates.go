@@ -325,7 +325,7 @@ func Define$2(db *jsql.DB) error {
 		return nil
 	}
 
-	def := jsql.Def{
+	def := jsql.Define{
 		Schema:  "$4",
 		Name:    "$3",
 		Version: 1,
@@ -464,7 +464,7 @@ func Query$2(query et.Json) (et.Items, error) {
 		return et.Items{}, errors.New(MSG_MODEL_NOT_DEFINED)
 	}
 
-	return $2.Query(query)
+	return $2.Query(query).All()
 }
 `
 
@@ -673,7 +673,6 @@ import (
 	"github.com/cgalvisleon/et/logs"
 )
 
-var PackageName = "$1"
 var initRpc bool
 
 type Service et.Item
@@ -943,7 +942,6 @@ DB_PORT=5432
 DB_NAME=test
 DB_USER=test
 DB_PASSWORD=test
-DB_TENANT_ID=tenant:root
 
 # REDIS
 REDIS_HOST=localhost:6379

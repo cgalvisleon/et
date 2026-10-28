@@ -7,6 +7,11 @@ import (
 	"github.com/cgalvisleon/et/file"
 )
 
+/**
+* MakeScripts: scaffolds scripts/<name>.http with sample requests.
+* @param name string
+* @return error
+**/
 func MakeScripts(name string) error {
 	path, err := file.MakeFolder("scripts")
 	if err != nil {

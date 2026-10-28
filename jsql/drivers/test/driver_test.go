@@ -112,8 +112,8 @@ func targets() []target {
 			cleanup: []string{`DROP SCHEMA IF EXISTS jsql_test CASCADE`},
 		},
 		{
-			// Josefina por su protocolo de Postgres (JOSEFINA_*: por omisión el clúster de
-			// docker compose en 5433 con TLS). No borra schemas: cada corrida usa uno nuevo
+			// Josefina through its Postgres protocol (JOSEFINA_*: by default the docker compose
+			// cluster on 5433 with TLS). It does not drop schemas: each run uses a new one
 			name: "josefina",
 			params: jsql.ConnectParams{
 				Driver: jsql.DriverJosefina,

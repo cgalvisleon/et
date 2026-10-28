@@ -205,8 +205,8 @@ func tlsHandshake(conn *tls.Conn, timeout time.Duration) error {
 * @return *tls.Config
 **/
 func clientTLS(cfg *tls.Config, addr string) *tls.Config {
-	// A config from NewTLS with a CA verifies in VerifyConnection (InsecureSkipVerify
-	// only turns off the built-in check, which cannot reload the CA): it needs the host too
+	// Una configuración de NewTLS con CA verifica en VerifyConnection (InsecureSkipVerify
+	// solo apaga la comprobación integrada, que no puede recargar la CA): también necesita el host
 	if cfg.ServerName != "" || cfg.InsecureSkipVerify && cfg.VerifyConnection == nil {
 		return cfg
 	}
@@ -331,7 +331,7 @@ func (s *tlsFiles) current() (*tls.Certificate, *x509.CertPool) {
 func (s *tlsFiles) verify(certs []*x509.Certificate, name string, usage x509.ExtKeyUsage) error {
 	_, pool := s.current()
 	if len(certs) == 0 {
-		return errors.New("tls: no certificate from the other side")
+		return errors.New(msg.MSG_TCP_TLS_NO_CERT)
 	}
 	opts := x509.VerifyOptions{Roots: pool, DNSName: name, Intermediates: x509.NewCertPool(), KeyUsages: []x509.ExtKeyUsage{usage}}
 	for _, c := range certs[1:] {
@@ -383,9 +383,9 @@ func newTLS(certFile, keyFile, caFile string) (*tls.Config, *tls.Config, error) 
 		return server, client, nil
 	}
 
-	// Mutual TLS against the CA in force at each handshake: the server asks for a
-	// client certificate and checks it itself; the client turns off the built-in check
-	// (fixed RootCAs) and verifies the server's chain and name in VerifyConnection
+	// TLS mutuo contra la CA vigente en cada handshake: el servidor pide certificado al
+	// cliente y lo comprueba él mismo; el cliente apaga la comprobación integrada
+	// (RootCAs fijos) y verifica la cadena y el nombre del servidor en VerifyConnection
 	server.ClientAuth = tls.RequireAnyClientCert
 	server.VerifyConnection = func(cs tls.ConnectionState) error {
 		return files.verify(cs.PeerCertificates, "", x509.ExtKeyUsageClientAuth)

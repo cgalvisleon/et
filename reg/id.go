@@ -59,12 +59,17 @@ func GenKey(args ...interface{}) string {
 	return strings.Join(keys, ":")
 }
 
+// GenUUId: Deprecated: use GenUUID.
+func GenUUId(tag string) string {
+	return GenUUID(tag)
+}
+
 /**
-* GenUUId
+* GenUUID
 * @params tag string
 * @return string
 **/
-func GenUUId(tag string) string {
+func GenUUID(tag string) string {
 	return fmt.Sprintf(`%s:%s`, tag, UUID())
 }
 

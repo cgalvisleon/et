@@ -600,7 +600,7 @@ func (s *suite) ddl() {
 			return nil, err
 		}
 		if err := db.RemoveModel(s.schema, tmp.Name); err != nil {
-			// Josefina no borra modelos por SQL: RemoveModel responde ErrCannotDrop
+			// Josefina does not drop models through SQL: RemoveModel answers ErrCannotDrop
 			if s.tg.name == jsql.DriverJosefina && errors.Is(err, josefina.ErrCannotDrop) {
 				return "ok", nil
 			}
@@ -711,6 +711,13 @@ func (s *suite) relations() {
 		}
 		if count != 3 {
 			return nil, fmt.Errorf("the rejected inserts changed the table: %d users", count)
+		}
+		ordered, err := users.Select("id").OrderBy("name", true).Count()
+		if err != nil {
+			return nil, fmt.Errorf("count with order by: %w", err)
+		}
+		if ordered != count {
+			return nil, fmt.Errorf("count with order by: want %d, got %d", count, ordered)
 		}
 		return []string{errInsert.Error(), errBulk.Error(), errUpdate.Error()}, nil
 	})
@@ -1776,9 +1783,9 @@ func (s *suite) utilities() {
 		got := jsql.SQLParse("x = $1 AND y = $2 AND z = $10 AND w = $11 AND v = $12", args...)
 		return got, expect("sql", "x = 'a' AND y = 'costs $3' AND z = 10 AND w = 11 AND v = $12", got)
 	})
-	s.run(11, "ArgWhitAs / ArgWhitSchema / StatusList / TypeColumn.Str", func() (any, error) {
-		as, _ := jsql.ArgWhitAs("public.users:U")
-		schema, _ := jsql.ArgWhitSchema("public.users")
+	s.run(11, "ArgWithAs / ArgWithSchema / StatusList / TypeColumn.Str", func() (any, error) {
+		as, _ := jsql.ArgWithAs("public.users:U")
+		schema, _ := jsql.ArgWithSchema("public.users")
 		got := et.Json{"as": as, "schema": schema, "status": len(jsql.StatusList()) > 0, "type": jsql.ATTRIB.Str()}
 		return got, expect("helpers", et.Json{"as": []string{"public.users", "U"}, "schema": []string{"public", "users"}, "status": true, "type": "atrib"}, got)
 	})

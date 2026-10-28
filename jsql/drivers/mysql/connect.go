@@ -3,7 +3,6 @@ package mysql
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"time"
 
@@ -130,7 +129,7 @@ func execServer(ctx context.Context, params et.Json, statement string) error {
 func createDB(ctx context.Context, params et.Json) error {
 	database := params.ValStr("", "database")
 	if database == "" {
-		return errors.New("database is required")
+		return fmt.Errorf(jsql.MSG_ATRIB_REQUIRED, "database")
 	}
 
 	return execServer(ctx, params, fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", myIdent(database)))
@@ -162,7 +161,7 @@ func (s *Mysql) CreateDB(connection *jsql.ConnectParams, timeout ...time.Duratio
 func (s *Mysql) DropDB(db *jsql.DB, timeout ...time.Duration) error {
 	database := db.Params.ValStr("", "database")
 	if database == "" {
-		return errors.New("database is required")
+		return fmt.Errorf(jsql.MSG_ATRIB_REQUIRED, "database")
 	}
 
 	ctx, cancel := jsql.TimeoutContext(timeout...)

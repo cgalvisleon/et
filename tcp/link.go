@@ -16,6 +16,12 @@ import (
 	"github.com/cgalvisleon/et/msg"
 )
 
+// Errores que Hub.send reconoce con errors.Is: con ellos no se escribió nada y la conexión sigue viva.
+var (
+	errNotConnected = errors.New(msg.MSG_TCP_NOT_CONNECTED)
+	errDataTooLarge = errors.New(msg.MSG_DATA_TOO_LARGE)
+)
+
 type msgType byte
 
 const (
@@ -305,7 +311,7 @@ func newLink(conn net.Conn, timeout *duration) *link {
 **/
 func (l *link) write(f frame) error {
 	if len(f.data) > maxMessageSize {
-		return errors.New(msg.MSG_DATA_TOO_LARGE)
+		return errDataTooLarge
 	}
 
 	buf := make([]byte, headerSize+len(f.data))
@@ -493,7 +499,7 @@ func readFrame(r io.Reader) (frame, error) {
 
 	size := binary.BigEndian.Uint32(header[0:4])
 	if size > maxMessageSize {
-		return frame{}, errors.New(msg.MSG_DATA_TOO_LARGE)
+		return frame{}, errDataTooLarge
 	}
 
 	f := frame{

@@ -169,7 +169,7 @@ func oraWhere(command *jsql.Command, rows ...et.Json) (string, error) {
 			return where, nil
 		}
 	}
-	return "", fmt.Errorf("refusing to %s %s without a WHERE clause (missing primary key value and no Conditions set)", strings.ToUpper(string(command.Type)), oraFromRef(command.From))
+	return "", fmt.Errorf(jsql.MSG_REFUSE_WITHOUT_WHERE, strings.ToUpper(string(command.Type)), oraFromRef(command.From))
 }
 
 /**
@@ -220,7 +220,7 @@ func oraInsertSQL(command *jsql.Command) (string, error) {
 	}
 
 	if len(cols) == 0 {
-		return "", fmt.Errorf("no columns to insert into %s", table)
+		return "", fmt.Errorf(jsql.MSG_NO_COLUMNS_INSERT, table)
 	}
 
 	dml := fmt.Sprintf("INSERT INTO %s\n  (%s)\n  VALUES (%s)", table, strings.Join(cols, ", "), strings.Join(vals, ", "))
@@ -259,7 +259,7 @@ func oraUpdateSQL(command *jsql.Command) (string, error) {
 	}
 
 	if len(sets) == 0 {
-		return "", fmt.Errorf("no columns to update in %s", table)
+		return "", fmt.Errorf(jsql.MSG_NO_COLUMNS_UPDATE, table)
 	}
 
 	where, err := oraWhere(command, command.Old, command.New)
@@ -308,6 +308,6 @@ func (s *Oracle) Command(command *jsql.Command, timeout ...time.Duration) (strin
 	case jsql.DELETE:
 		return oraDeleteSQL(command)
 	default:
-		return "", fmt.Errorf("unsupported command type: %s", command.Type)
+		return "", fmt.Errorf(jsql.MSG_UNSUPPORTED_COMMAND, command.Type)
 	}
 }

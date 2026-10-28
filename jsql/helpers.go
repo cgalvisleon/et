@@ -150,11 +150,11 @@ func rowsToItems(rows *sql.Rows) et.Items {
 }
 
 /**
-* argWhitAs: Returns an array with the argument and its alias.
+* argWithAs: Returns an array with the argument and its alias.
 * @param arg string
 * @return []string, bool
 **/
-func argWhitAs(arg string) ([]string, bool) {
+func argWithAs(arg string) ([]string, bool) {
 	pattern := regexp.MustCompile(`^([A-Za-z0-9_.>-]+):([A-Za-z0-9_]+)$`) // field:as, or schema.field:as
 	ok := pattern.MatchString(arg)
 	if ok {
@@ -167,11 +167,11 @@ func argWhitAs(arg string) ([]string, bool) {
 }
 
 /**
-* argWhitSchema: Returns an array with the argument and its schema.
+* argWithSchema: Returns an array with the argument and its schema.
 * @param arg string
 * @return []string, bool
 **/
-func argWhitSchema(arg string) ([]string, bool) {
+func argWithSchema(arg string) ([]string, bool) {
 	pattern := regexp.MustCompile(`^([A-Za-z0-9_>-]+)\.([A-Za-z0-9_]+)$`) // schema.table
 	ok := pattern.MatchString(arg)
 	if ok {
@@ -184,8 +184,9 @@ func argWhitSchema(arg string) ([]string, bool) {
 }
 
 /**
-* addAuditLog
-* @param userId string, action string
+* addAuditLog: Appends an entry {created_at, user_id, action} to auditLog (created when nil).
+* @param auditLog []et.Json, userId string, action string
+* @return []et.Json
 **/
 func addAuditLog(auditLog []et.Json, userId string, action string) []et.Json {
 	if auditLog == nil {

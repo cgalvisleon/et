@@ -15,6 +15,9 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+/**
+* Conn: The NATS connection of the package plus its id and one subscription per channel.
+**/
 type Conn struct {
 	*nats.Conn
 	id     string
@@ -52,8 +55,8 @@ func init() {
 }
 
 /**
-* LoadTo loads the event connection from a Config struct.
-* @return error
+* New: Opens the NATS connection from NATS_HOST, NATS_USER and NATS_PASSWORD.
+* @return *Conn, error
 **/
 func New() (*Conn, error) {
 	if !slices.Contains([]string{"linux", "darwin", "windows"}, oS) {

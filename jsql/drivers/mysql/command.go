@@ -177,7 +177,7 @@ func myWhere(command *jsql.Command, rows ...et.Json) (string, error) {
 			return where, nil
 		}
 	}
-	return "", fmt.Errorf("refusing to %s %s without a WHERE clause (missing primary key value and no Conditions set)", strings.ToUpper(string(command.Type)), myFromRef(command.From))
+	return "", fmt.Errorf(jsql.MSG_REFUSE_WITHOUT_WHERE, strings.ToUpper(string(command.Type)), myFromRef(command.From))
 }
 
 /**
@@ -194,7 +194,7 @@ func myInsertSQL(command *jsql.Command) (string, error) {
 		vals = append(vals, myQuoteJson(myNestSource(source)))
 	}
 	if len(cols) == 0 {
-		return "", fmt.Errorf("no columns to insert into %s", table)
+		return "", fmt.Errorf(jsql.MSG_NO_COLUMNS_INSERT, table)
 	}
 	sql := fmt.Sprintf("INSERT INTO %s\n  (%s)\n  VALUES (%s);", table, strings.Join(cols, ", "), strings.Join(vals, ", "))
 	if where := myPKWhere(model, command.New); where != "" {
@@ -222,7 +222,7 @@ func myUpdateSQL(command *jsql.Command) (string, error) {
 		sets = append(sets, fmt.Sprintf("%s = %s", src, myJsonSet(src, source)))
 	}
 	if len(sets) == 0 {
-		return "", fmt.Errorf("no columns to update in %s", table)
+		return "", fmt.Errorf(jsql.MSG_NO_COLUMNS_UPDATE, table)
 	}
 	where, err := myWhere(command, command.Old, command.New)
 	if err != nil {
@@ -265,6 +265,6 @@ func (s *Mysql) Command(command *jsql.Command, timeout ...time.Duration) (string
 	case jsql.DELETE:
 		return myDeleteSQL(command)
 	default:
-		return "", fmt.Errorf("unsupported command type: %s", command.Type)
+		return "", fmt.Errorf(jsql.MSG_UNSUPPORTED_COMMAND, command.Type)
 	}
 }

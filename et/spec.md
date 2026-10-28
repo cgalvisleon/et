@@ -1,6 +1,6 @@
 # Especificación del paquete `et`
 
-Versión del documento: 1.1 (2026-10-27: archivos reagrupados, ver §8; `MatchLike` pública)
+Versión del documento: 1.2 (2026-10-27: §3.2 aclara que las fechas solo se convierten frente a un valor escalar; `IsDifferent` y `Exist` delega en `IsExist`; versión 1.1: archivos reagrupados, ver §8; `MatchLike` pública)
 
 `et` es el núcleo de la librería: el tipo `Json`, los resultados (`Item`, `Items`, `List`), las condiciones (`Condition`) y su evaluación en memoria (`EvaluateObject`, `EvaluateValue`, `From(...).Where(...)`). Las mismas condiciones las traduce `jsql` a SQL; la regla de este documento es que **una condición da el mismo resultado en memoria que en SQL**. Lo comprueba `TestMemoryMatchesSql` (`jsql/drivers/test/evaluate_test.go`) en cada motor disponible.
 
@@ -38,7 +38,7 @@ Una condición es `{campo: {operador: valor}}`, precedida opcionalmente por un c
 
 Un valor nil a la izquierda es `false` en todo operador salvo `null`, `is` y los negados (`neg`, `not_in`, `is_not`), que dan `true`. Diferencia conocida con SQL: allí `NULL <> x` y `NULL NOT IN (...)` no son verdaderos.
 
-Fechas: un `time.Time` se compara con un texto en `RFC3339`, `RFC3339Nano`, `2006-01-02 15:04:05` o `2006-01-02`.
+Fechas: un `time.Time` se compara con un texto en `RFC3339`, `RFC3339Nano`, `2006-01-02 15:04:05` o `2006-01-02`. La conversión solo se hace cuando el valor de la condición es un escalar (`coerceForComparison`): en `in`/`not_in` y `between`/`not_between`, la lista o el rango no se convierten, así que los dos lados deben ser `time.Time`.
 
 ### 3.3 `like`
 

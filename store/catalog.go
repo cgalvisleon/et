@@ -43,7 +43,7 @@ func Recover(pathData, pathWald, name string) (et.Json, error) {
 /**
 * Insert: Guarda data solo si id no existe; retorna true si insertó.
 * @param id string, data []byte
-* @return bool (true if inserted), error
+* @return bool (true si insertó), error
 **/
 func (s *FileStore) Insert(id string, data []byte) (bool, error) {
 	return s.insert(id, data, true)
@@ -52,7 +52,7 @@ func (s *FileStore) Insert(id string, data []byte) (bool, error) {
 /**
 * Update: Reemplaza data solo si id existe y el valor cambió; retorna true si actualizó.
 * @param id string, data []byte
-* @return bool (true if updated), error
+* @return bool (true si actualizó), error
 **/
 func (s *FileStore) Update(id string, data []byte) (bool, error) {
 	return s.update(id, data, true)
@@ -61,7 +61,7 @@ func (s *FileStore) Update(id string, data []byte) (bool, error) {
 /**
 * Delete: Elimina id solo si existe; retorna true si eliminó.
 * @param id string
-* @return bool (true if deleted), error
+* @return bool (true si eliminó), error
 **/
 func (s *FileStore) Delete(id string) (bool, error) {
 	return s.delete(id, true)
@@ -86,7 +86,7 @@ func (s *FileStore) Deferred() Deferred {
 /**
 * Insert: Insert sin esperar el fsync.
 * @param id string, data []byte
-* @return bool (true if inserted), error
+* @return bool (true si insertó), error
 **/
 func (s Deferred) Insert(id string, data []byte) (bool, error) {
 	return s.s.insert(id, data, false)
@@ -95,7 +95,7 @@ func (s Deferred) Insert(id string, data []byte) (bool, error) {
 /**
 * Update: Update sin esperar el fsync.
 * @param id string, data []byte
-* @return bool (true if updated), error
+* @return bool (true si actualizó), error
 **/
 func (s Deferred) Update(id string, data []byte) (bool, error) {
 	return s.s.update(id, data, false)
@@ -104,7 +104,7 @@ func (s Deferred) Update(id string, data []byte) (bool, error) {
 /**
 * Delete: Delete sin esperar el fsync.
 * @param id string
-* @return bool (true if deleted), error
+* @return bool (true si eliminó), error
 **/
 func (s Deferred) Delete(id string) (bool, error) {
 	return s.s.delete(id, false)
@@ -124,7 +124,7 @@ func (s *FileStore) WaitDurable() error {
 /**
 * Get: Retorna los datos de id, si existe.
 * @param id string
-* @return []byte, bool (true if id exists), error
+* @return []byte, bool (true si id existe), error
 **/
 func (s *FileStore) Get(id string) ([]byte, bool, error) {
 	return s.get(id)
@@ -134,7 +134,7 @@ func (s *FileStore) Get(id string) ([]byte, bool, error) {
 * GetVersion: Como Get, más la versión de id: el LSN de su último registro (0 si no
 * existe). Sirve para concurrencia optimista: si la versión no cambió, nadie escribió id.
 * @param id string
-* @return []byte, uint64 (versión), bool (true if id exists), error
+* @return []byte, uint64 (versión), bool (true si id existe), error
 **/
 func (s *FileStore) GetVersion(id string) ([]byte, uint64, bool, error) {
 	return s.getVersion(id)
@@ -221,9 +221,14 @@ func (s *FileStore) ToString() string {
 }
 
 /**
-* IsDebug: Activa los logs de depuración.
+* Debug: Activa los logs de depuración.
 * @return *FileStore
 **/
+func (s *FileStore) Debug() *FileStore {
+	return s.isDebug()
+}
+
+// IsDebug: Deprecated: es un setter; usar Debug.
 func (s *FileStore) IsDebug() *FileStore {
 	return s.isDebug()
 }

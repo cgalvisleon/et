@@ -12,7 +12,8 @@ import (
 )
 
 /**
-* getConnection: Returns a Connection object based on the specified driver and environment variables.
+* getConnection: Returns the Connection of driver read from the environment variables. There is no case for
+* DriverJosefina (it uses PgConection): GetConnection("josefina") or DB_DRIVER=josefina gives MSG_UNSUPPORTED_DRIVER.
 * @param driver, host string
 * @return Connection, error
 **/
@@ -175,7 +176,7 @@ func (s *PgConection) SetId(id string) {
 }
 
 /**
-* setDatabase: Sets the database name in the connection parameters.
+* SetDatabase: Sets the database name in the connection parameters.
 * @param name string
 **/
 func (s *PgConection) SetDatabase(name string) {
@@ -251,11 +252,12 @@ func (s *SqliteConection) SetId(id string) {
 }
 
 /**
-* getParams: Returns the connection parameters as a JSON object.
+* GetParams: Returns the connection parameters as a JSON object.
 * @return et.Json
 **/
 func (s *SqliteConection) GetParams() et.Json {
 	return et.Json{
+		"id":             s.Id,
 		"driver":         DriverSqlite,
 		"file":           s.File,
 		"record_limit":   s.RecordLimit,
@@ -269,7 +271,7 @@ func (s *SqliteConection) GetParams() et.Json {
 }
 
 /**
-* setDatabase: Sets the database name in the connection parameters
+* SetDatabase: Sets the database file in the connection parameters.
 * @param name string
 **/
 func (s *SqliteConection) SetDatabase(name string) {
@@ -277,7 +279,7 @@ func (s *SqliteConection) SetDatabase(name string) {
 }
 
 /**
-* getDatabase: Returns the database name from the connection parameters.
+* GetDatabase: Returns the database file from the connection parameters.
 * @return string
 **/
 func (s *SqliteConection) GetDatabase() string {
@@ -343,7 +345,7 @@ func (s *OracleConection) SetId(id string) {
 }
 
 /**
-* getParams: Returns the connection parameters as a JSON object.
+* GetParams: Returns the connection parameters as a JSON object.
 * @return et.Json
 **/
 func (s *OracleConection) GetParams() et.Json {
@@ -362,7 +364,7 @@ func (s *OracleConection) GetParams() et.Json {
 }
 
 /**
-* setDatabase: Sets the database name in the connection parameters
+* SetDatabase: Sets the service name in the connection parameters.
 * @param name string
 **/
 func (s *OracleConection) SetDatabase(name string) {
@@ -370,7 +372,7 @@ func (s *OracleConection) SetDatabase(name string) {
 }
 
 /**
-* getDatabase: Returns the database name from the connection parameters.
+* GetDatabase: Returns the service name from the connection parameters.
 * @return string
 **/
 func (s *OracleConection) GetDatabase() string {
@@ -566,7 +568,7 @@ func (s *MssqlConection) SetPassword(password string) {
 }
 
 /**
-* ConnectionFromJso
+* ConnectionFromJson: Builds the Connection of driver from params (host, port, user, pool...); host is the default host.
 * @param driver, host string, params et.Json
 * @return Connection, error
 **/
@@ -643,7 +645,7 @@ const (
 	DriverMysql    = "mysql"
 	DriverMssql    = "mssql"
 	DriverOracle   = "oracle"
-	DriverJosefina = "josefina" // pending (spec.md, B5)
+	DriverJosefina = "josefina" // jsql/drivers/josefina, over the postgres connection (PgConection)
 )
 
 /**
@@ -757,8 +759,8 @@ type ConnectParams struct {
 }
 
 /**
-* connectTo: Returns an existing DB by name, or creates and initialises a new one from params.
-* @param tenantId, host, driver, name string, showLog bool
+* connectTo: Creates a DB from params and initializes it (opens the connection).
+* @param params ConnectParams
 * @return *DB, error
 **/
 func connectTo(params ConnectParams) (*DB, error) {
@@ -776,8 +778,8 @@ func connectTo(params ConnectParams) (*DB, error) {
 }
 
 /**
-* loadTo: Returns an existing DB by name.
-* @param name, hostName string
+* loadTo: Connects to dbName with the driver and settings of the environment (DB_*); hostName overrides DB_HOST.
+* @param dbName string, hostName ...string
 * @return *DB, error
 **/
 func loadTo(dbName string, hostName ...string) (*DB, error) {

@@ -37,8 +37,8 @@ func Work(event string, data et.Json) et.Json {
 }
 
 /**
-* State
-* @param id string, status WorkStatus
+* State: Publishes the new status of a work on EVENT_WORK_STATE and on its id.
+* @param id string, status WorkStatus, data et.Json
 **/
 func State(id string, status WorkStatus, data et.Json) {
 	now := timezone.NowStr()

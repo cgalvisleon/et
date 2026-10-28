@@ -9,7 +9,7 @@ import (
 )
 
 var CmdProject = &cobra.Command{
-	Use:   "micro [name author schema]",
+	Use:   "project [name author schema]",
 	Short: "Create project base type microservice.",
 	Long:  "Template project to microservice include folder cmd, deployments, pkg, rest, test and web, with files .go required for making a microservice.",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -19,19 +19,19 @@ var CmdProject = &cobra.Command{
 			return
 		}
 
-		name, err := PrompStr("Name", true)
+		name, err := PromptStr("Name", true)
 		if err != nil {
 			fmt.Printf("Prompt failed %v\n", err)
 			return
 		}
 
-		author, err := PrompStr("Author", true)
+		author, err := PromptStr("Author", true)
 		if err != nil {
 			fmt.Printf("Prompt failed %v\n", err)
 			return
 		}
 
-		schema, err := PrompStr("Schema", false)
+		schema, err := PromptStr("Schema", false)
 		if err != nil {
 			fmt.Printf("Prompt failed %v\n", err)
 			return
@@ -56,13 +56,13 @@ var CmdMicro = &cobra.Command{
 			return
 		}
 
-		name, err := PrompStr("Name", true)
+		name, err := PromptStr("Name", true)
 		if err != nil {
 			fmt.Printf("Prompt failed %v\n", err)
 			return
 		}
 
-		schema, err := PrompStr("Schema", false)
+		schema, err := PromptStr("Schema", false)
 		if err != nil {
 			fmt.Printf("Prompt failed %v\n", err)
 			return
@@ -87,25 +87,25 @@ var CmdModelo = &cobra.Command{
 			return
 		}
 
-		packageName, err := PrompStr("Package", true)
+		packageName, err := PromptStr("Package", true)
 		if err != nil {
 			fmt.Printf("Prompt failed %v\n", err)
 			return
 		}
 
-		modelo, err := PrompStr("Model", true)
+		modelo, err := PromptStr("Model", true)
 		if err != nil {
 			fmt.Printf("Prompt failed %v\n", err)
 			return
 		}
 
-		schema, err := PrompStr("Schema", false)
+		schema, err := PromptStr("Schema", false)
 		if err != nil {
 			fmt.Printf("Prompt failed %v\n", err)
 			return
 		}
 
-		err = MkMolue(projectName, packageName, modelo, schema)
+		err = MkModel(projectName, packageName, modelo, schema)
 		if err != nil {
 			fmt.Printf("Command failed %v\n", err)
 			return
@@ -131,7 +131,7 @@ var CmdRpc = &cobra.Command{
 	Short: "Create rpc model to microservice.",
 	Long:  "Template rpc model to microservice include function handler model.",
 	Run: func(cmd *cobra.Command, args []string) {
-		name, err := PrompStr("Package", true)
+		name, err := PromptStr("Package", true)
 		if err != nil {
 			fmt.Printf("Prompt failed %v\n", err)
 			return

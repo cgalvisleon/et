@@ -38,8 +38,9 @@ type DB struct {
 }
 
 /**
-* newDB: Creates a new DB instance for the given driver without initializing it (call Init afterwards).
-* @param id, host, name, driver string, showLog ...bool (optional, defaults to true)
+* newDB: Creates a DB for the driver of params without initializing it (call Init afterwards); the id is
+* params.ID or the connection's, and debug is params.IsDebug (DB_IS_DEBUG) or DEBUG.
+* @param params ConnectParams
 * @return *DB, error
 **/
 func newDB(params ConnectParams) (*DB, error) {
@@ -61,7 +62,10 @@ func newDB(params ConnectParams) (*DB, error) {
 	}
 
 	connection := params.Connection.GetParams()
-	id := connection.Str("id")
+	id := params.ID
+	if id == "" {
+		id = connection.Str("id")
+	}
 	result := &DB{
 		ID:          reg.GetUUID(id),
 		Host:        params.Host,
@@ -71,7 +75,7 @@ func newDB(params ConnectParams) (*DB, error) {
 		Schemas:     make(map[string]*Schema),
 		RecordLimit: params.RecordLimit,
 		AuditLog:    &et.SafeData{},
-		isDebug:     envar.GetBool("DEBUG", false),
+		isDebug:     params.IsDebug || envar.GetBool("DEBUG", false),
 		driver:      drv,
 		timeout:     params.Timeout,
 	}
@@ -128,7 +132,7 @@ func loadDb(def et.Json) (*DB, error) {
 }
 
 /**
-* setOnAuditLog: Sets the audit log function.
+* setOnAuditLog: Sets the function called with every audit log entry of the DB.
 * @param fn func(userId string, action string) error
 **/
 func (s *DB) setOnAuditLog(fn func(userId string, action string) error) {
@@ -136,7 +140,7 @@ func (s *DB) setOnAuditLog(fn func(userId string, action string) error) {
 }
 
 /**
-* addAuditLog: Adds an audit log entry to the DB.
+* addAuditLog: Adds an entry {created_at, user_id, action} to the DB audit log and notifies onAuditLog.
 * @param userId string, action string
 **/
 func (s *DB) addAuditLog(userId string, action string) {
@@ -189,7 +193,7 @@ func (s *DB) toJson() et.Json {
 }
 
 /**
-* init: Opens the driver connection and, when UseCore is set, initializes core tables.
+* init: Opens the driver connection and initializes every schema already defined; a no-op once connected.
 * @return error
 **/
 func (s *DB) init() error {
@@ -270,8 +274,8 @@ func (s *DB) schemaList() []*Schema {
 }
 
 /**
-* existModel: Checks if a table exists in the database.
-* @param schema string, name string
+* existModel: Checks whether the table of model exists in the database.
+* @param model *Model
 * @return bool, error
 **/
 func (s *DB) existModel(model *Model) (bool, error) {
@@ -478,8 +482,8 @@ func (s *DB) sql(query string, args ...any) (et.Items, error) {
 }
 
 /**
-* define: Creates a model from a declarative definition (delegates to DefineModel).
-* @param definition Define
+* define: Builds a model from a declarative definition: columns, keys, indexes, relations and hooks; Init runs the DDL.
+* @param define Define
 * @return *Model, error
 **/
 func (s *DB) define(define Define) (*Model, error) {
@@ -814,8 +818,8 @@ func (s *Schema) newModel(id, name string, version int, userId string) *Model {
 }
 
 /**
-* loadModel: Loads a Model from the database catalog by name.
-* @param params et.Json
+* loadModel: Rebuilds a Model from its ToJson and registers it in the schema (without Init).
+* @param def et.Json
 * @return *Model, error
 **/
 func (s *Schema) loadModel(def et.Json) (*Model, error) {
@@ -835,6 +839,15 @@ func (s *Schema) loadModel(def et.Json) (*Model, error) {
 	}
 
 	return result, nil
+}
+
+/**
+* loadModel: Loads (defines without Init) the model described by def in the schema, creating the schema if needed.
+* @param schema string, def et.Json
+* @return *Model, error
+**/
+func (s *DB) loadModel(schema string, def et.Json) (*Model, error) {
+	return s.getSchema(schema).loadModel(def)
 }
 
 /**

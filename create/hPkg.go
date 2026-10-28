@@ -8,6 +8,12 @@ import (
 	"github.com/cgalvisleon/et/strs"
 )
 
+/**
+* MakePkg: scaffolds pkg/<name>/ (event, config, rpc, controller, handler and router files); with a schema
+* it uses the db templates and adds model.go.
+* @param projectName, name, schema string
+* @return error
+**/
 func MakePkg(projectName, name, schema string) error {
 	pathPkg, err := file.MakeFolder("pkg", name)
 	if err != nil {
@@ -74,6 +80,12 @@ func MakePkg(projectName, name, schema string) error {
 	return nil
 }
 
+/**
+* MakeModel: scaffolds the handler file of a model in pkg/<packageName>/ (router-<modelo>.go with schema,
+* h<Modelo>.go without); never overwrites an existing file.
+* @param projectName, packageName, modelo, schema string
+* @return error
+**/
 func MakeModel(projectName, packageName, modelo, schema string) error {
 	pathPkg := fmt.Sprintf(`./pkg/%s`, packageName)
 
@@ -100,6 +112,11 @@ func MakeModel(projectName, packageName, modelo, schema string) error {
 	return nil
 }
 
+/**
+* MakeRpc: scaffolds pkg/<name>/hRpc.go.
+* @param name string
+* @return error
+**/
 func MakeRpc(name string) error {
 	path, err := file.MakeFolder("pkg", name)
 	if err != nil {

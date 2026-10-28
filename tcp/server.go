@@ -13,6 +13,10 @@ import (
 	"github.com/cgalvisleon/et/reg"
 )
 
+/**
+* Server: Escucha en un puerto y atiende cada conexión aceptada como un Client, con
+* funciones de mensajes compartidas por todas.
+**/
 type Server struct {
 	timeout     *duration             // compartido con todas las conexiones
 	hs          *handlers             // funciones compartidas por todas las conexiones

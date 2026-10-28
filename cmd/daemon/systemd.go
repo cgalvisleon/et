@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// Systemd: the default daemon, a minimal HTTP server that answers at /.
 type Systemd struct {
 	serviceName string
 	port        int
@@ -24,6 +25,10 @@ type Systemd struct {
 	wg          sync.WaitGroup
 }
 
+/**
+* New: A stopped Systemd daemon.
+* @return RepositoryCMD
+**/
 func New() RepositoryCMD {
 	return &Systemd{
 		serviceName: "systemd",
@@ -32,6 +37,10 @@ func New() RepositoryCMD {
 	}
 }
 
+/**
+* Version: Prints and returns the version.
+* @return string
+**/
 func (s *Systemd) Version() string {
 	result := "Version: 1.0.0"
 	println(result)
@@ -39,6 +48,10 @@ func (s *Systemd) Version() string {
 	return result
 }
 
+/**
+* Help: Prints the usage when key is empty.
+* @param key string
+**/
 func (s *Systemd) Help(key string) {
 	if key == "" {
 		println("Uso: daemon [opciones]")
@@ -53,6 +66,10 @@ func (s *Systemd) Help(key string) {
 	}
 }
 
+/**
+* SetConfig: Reads the port from PORT (1377 by default); an empty cfg only prints a message.
+* @param cfg string
+**/
 func (s *Systemd) SetConfig(cfg string) {
 	if cfg == "" {
 		println(MSG_CONFIG_REQUIRED)
@@ -62,10 +79,18 @@ func (s *Systemd) SetConfig(cfg string) {
 	s.port = envar.GetInt("PORT", 1377)
 }
 
+/**
+* Status: The daemon status (empty for now).
+* @return et.Json
+**/
 func (s *Systemd) Status() et.Json {
 	return et.Json{}
 }
 
+/**
+* Start: Starts the HTTP server in the background and stops it on SIGINT/SIGTERM; returns at once.
+* @return et.Item
+**/
 func (s *Systemd) Start() et.Item {
 	if s.isRunning {
 		return et.Item{
@@ -108,6 +133,10 @@ func (s *Systemd) Start() et.Item {
 	}
 }
 
+/**
+* Stop: Shuts the HTTP server down if it is running.
+* @return et.Item
+**/
 func (s *Systemd) Stop() et.Item {
 	if !s.isRunning {
 		return et.Item{
@@ -130,6 +159,10 @@ func (s *Systemd) Stop() et.Item {
 	}
 }
 
+/**
+* Restart: Not implemented; returns an empty item.
+* @return et.Item
+**/
 func (s *Systemd) Restart() et.Item {
 	return et.Item{}
 }

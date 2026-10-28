@@ -15,6 +15,10 @@ const (
 	TpApiRest
 )
 
+/**
+* String: Name of the route kind ("handler" or "app").
+* @return string
+**/
 func (t TypeRouter) String() string {
 	switch t {
 	case TpHandler:
@@ -60,6 +64,10 @@ func (t TpHeader) String() string {
 	}
 }
 
+/**
+* Solver: One route of the gateway (ID = METHOD:path): a local handler (TpHandler) or
+* a proxied URL (TpApiRest) with its header policy, version and package.
+**/
 type Solver struct {
 	ID            string                            `json:"id"`
 	Kind          TypeRouter                        `json:"kind"`

@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -125,11 +126,11 @@ func findField(query *jsql.Query, field string) (*jsql.Field, bool) {
 func sqliteInValues(val any) string {
 	rv := reflect.ValueOf(val)
 	if !rv.IsValid() || (rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array) {
-		return fmt.Sprintf("%v", jsql.Quoted(val))
+		return Quoted(et.NewValue(val))
 	}
 	parts := make([]string, rv.Len())
 	for i := 0; i < rv.Len(); i++ {
-		parts[i] = fmt.Sprintf("%v", jsql.Quoted(rv.Index(i).Interface()))
+		parts[i] = Quoted(et.NewValue(rv.Index(i).Interface()))
 	}
 	return strings.Join(parts, ", ")
 }
@@ -210,7 +211,7 @@ func sqliteFieldValueRef(getField func(string) (*jsql.Field, bool), useSourceFie
 /**
 * sqliteCondExpr: Renders a single Condition as a SQL fragment using alias to
 * qualify the field.
-* @param getField func(string) (*jsql.Field, bool), useSourceField bool, cond *et.Condition, alias string
+* @param getField func(string) (*jsql.Field, bool), useSourceField bool, cond *et.Condition, alias string, isJoin bool
 * @return string
 **/
 func sqliteCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bool, cond *et.Condition, alias string, isJoin bool) string {
@@ -260,18 +261,16 @@ func sqliteCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bo
 		return fmt.Sprintf("%s IN (%s)", fieldExpr, sqliteInValues(cond.Value.Value))
 	case et.NOT_IN:
 		return fmt.Sprintf("%s NOT IN (%s)", fieldExpr, sqliteInValues(cond.Value.Value))
-	case et.BETWEEN:
+	case et.BETWEEN, et.NOT_BETWEEN:
 		bv, ok := et.ToBetween(cond.Value.Value)
 		if !ok {
 			return "1 = 0"
 		}
-		return fmt.Sprintf("%s BETWEEN %v AND %v", fieldExpr, jsql.Quoted(bv.Min), jsql.Quoted(bv.Max))
-	case et.NOT_BETWEEN:
-		bv, ok := et.ToBetween(cond.Value.Value)
-		if !ok {
-			return "1 = 0"
+		op := "BETWEEN"
+		if cond.Operator == et.NOT_BETWEEN {
+			op = "NOT BETWEEN"
 		}
-		return fmt.Sprintf("%s NOT BETWEEN %v AND %v", fieldExpr, jsql.Quoted(bv.Min), jsql.Quoted(bv.Max))
+		return fmt.Sprintf("%s %s %s AND %s", fieldExpr, op, Quoted(et.NewValue(bv.Min)), Quoted(et.NewValue(bv.Max)))
 	case et.LIKE:
 		return fmt.Sprintf("%s LIKE %s", fieldExpr, value())
 	case et.IS:
@@ -473,7 +472,7 @@ func sqliteSelectExpr(query *jsql.Query, field string) (string, bool) {
 func sqliteSelects(query *jsql.Query) []string {
 	var selectExprs []string
 	if len(query.Selects) > 0 {
-		// "*" son las columnas de los from (StarFields); se le suman los demás campos de selects
+		// "*" is the columns of the froms (StarFields); the other fields of selects add to it
 		fields := make([]string, 0, len(query.Selects))
 		for _, field := range query.Selects {
 			if field == jsql.STAR {
@@ -486,7 +485,7 @@ func sqliteSelects(query *jsql.Query) []string {
 			fields = append(fields, field)
 		}
 
-		// Con "*" y campo fuente, los atributos del primer from y encima los campos (json_set, que conserva los null)
+		// With "*" and a source field, the attributes of the first from with the fields on top (json_set keeps the nulls)
 		if from := query.Froms[0]; query.UseSourceField && query.HasStar() && from.Model != nil {
 			pairs := make([]string, 0, len(fields))
 			for _, field := range fields {
@@ -559,7 +558,7 @@ func sqliteSelects(query *jsql.Query) []string {
 }
 
 /**
-* sqliteSetPair: El par de json_set ('$."clave"', valor) de un campo: el de sqliteSelectExpr ('clave', valor) con la ruta
+* sqliteSetPair: The json_set pair ('$."key"', value) of a field: the one of sqliteSelectExpr ('key', value) with the path
 * @param query *jsql.Query, field string
 * @return string, bool
 **/
@@ -613,7 +612,7 @@ func sqliteFrom(query *jsql.Query) []string {
 **/
 func (s *Sqlite) Query(query *jsql.Query, timeout ...time.Duration) (string, error) {
 	if len(query.Froms) == 0 {
-		return "", fmt.Errorf("query has no FROM source")
+		return "", errors.New(jsql.MSG_QUERY_NO_FROM)
 	}
 
 	primary := query.Froms[0]
@@ -670,6 +669,12 @@ func (s *Sqlite) Query(query *jsql.Query, timeout ...time.Duration) (string, err
 		if havingSQL != "" {
 			sb.WriteString("\nHAVING " + havingSQL)
 		}
+	}
+
+	// COUNT(*) takes no ORDER BY or LIMIT (a LIMIT with OFFSET would hide the only row).
+	if query.IsCount {
+		sb.WriteString(";")
+		return sb.String(), nil
 	}
 
 	if len(query.OrdersBy) > 0 {

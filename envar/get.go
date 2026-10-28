@@ -26,12 +26,12 @@ func getValueConfig(name string) (interface{}, bool) {
 * @return interface{}
 **/
 func Get(name string, def interface{}) interface{} {
+	name = strings.ToUpper(name)
 	result, exists := getValueConfig(name)
 	if exists {
 		return result
 	}
 
-	name = strings.ToUpper(name)
 	result = os.Getenv(name)
 	if _store != nil {
 		value, exists := _store.Get(name, def)

@@ -7,7 +7,7 @@ set -e                                                                    # Sali
 
 # Variables de configuración
 CURRENT_DATETIME=$(date '+%Y%m%d%H%M%S')                                  # Fecha y hora actual
-TEMPLATE_FILE="./deployments/statefulset_tempalte.yml"                         # Archivo de plantilla
+TEMPLATE_FILE="./deployments/statefulset_template.yml"                         # Archivo de plantilla
 OUTPUT_FILE="./deployments/deployment_template.yml"                                    # Archivo de salida
 PORT=3300                                                                 # Puerto de la aplicación
 HOST="http://service-$1"                                             

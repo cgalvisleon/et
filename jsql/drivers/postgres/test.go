@@ -14,11 +14,12 @@ import (
 **/
 func (s *Postgres) Test(ctx context.Context, connection jsql.Connection, query string) error {
 	params := connection.GetParams()
-	if params.Str("database") == "" {
-		params["database"] = "postgres"
+	database := params.Str("database")
+	if database == "" {
+		database = "postgres"
 	}
 
-	db, err := connectTo(ctx, chain(params))
+	db, err := connectTo(ctx, chain(params, database))
 	if err != nil {
 		return err
 	}

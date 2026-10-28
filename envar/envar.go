@@ -33,7 +33,7 @@ func init() {
 * @return void
 **/
 func Load(store Store) {
-	if store != nil {
+	if store == nil {
 		return
 	}
 

@@ -5,6 +5,7 @@ import "github.com/cgalvisleon/et/envar"
 var (
 	MSG_UNSUPPORTED_OS     = "unsupported os: %s"
 	MSG_PANIC_IN_SUBSCRIBE = "panic in Subscribe channel:%s err:%v"
+	MSG_PANIC_IN_QUEUE     = "panic in Queue channel:%s err:%v"
 )
 
 func init() {
@@ -13,5 +14,6 @@ func init() {
 	if lang == "es" {
 		MSG_UNSUPPORTED_OS = "sistema operativo no soportado: %s"
 		MSG_PANIC_IN_SUBSCRIBE = "panic en Subscribe canal:%s err:%v"
+		MSG_PANIC_IN_QUEUE = "panic en Queue canal:%s err:%v"
 	}
 }

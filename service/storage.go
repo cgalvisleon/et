@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"sync"
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
@@ -26,6 +27,7 @@ type LocalStorage struct {
 }
 
 var storages = make(map[string]*LocalStorage)
+var storagesMu sync.Mutex
 
 /**
 * LoadLocalStorage
@@ -33,6 +35,8 @@ var storages = make(map[string]*LocalStorage)
 * @return *LocalStorage
 **/
 func LoadLocalStorage(tenantId, path string) *LocalStorage {
+	storagesMu.Lock()
+	defer storagesMu.Unlock()
 	result, exists := storages[tenantId]
 	if exists {
 		return result
@@ -60,7 +64,7 @@ func (s *LocalStorage) UploaderFile(r *http.Request, bucket, folder, fileName st
 	}
 	defer fileparts.Close()
 
-	ext := file.GetExtencion(fileInfo.Filename)
+	ext := file.GetExtension(fileInfo.Filename)
 	filename := fileInfo.Filename
 	if len(fileName) > 0 {
 		filename = fmt.Sprintf(`%s.%s`, fileName, ext)
@@ -69,8 +73,9 @@ func (s *LocalStorage) UploaderFile(r *http.Request, bucket, folder, fileName st
 		filename = fmt.Sprintf(`%s/%s`, folder, filename)
 	}
 
-	file.MakeFolder(bucket)
-	outputFile := fmt.Sprintf(`%s/%s`, bucket, filename)
+	bucketPath := path.Join(s.Path, bucket)
+	file.MakeFolder(bucketPath)
+	outputFile := path.Join(bucketPath, filename)
 
 	output, err := os.OpenFile(outputFile, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
@@ -146,9 +151,9 @@ func (s *LocalStorage) UploaderB64(bucket, b64, fileName, contentType string) (e
 }
 
 /**
-* DeleteS3
-* @param bucket, key string
-* @return *s3.DeleteObjectOutput, error
+* Delete: Removes the file filePath of bucket under the storage path.
+* @param bucket, filePath string
+* @return et.Item, error
 **/
 func (s *LocalStorage) Delete(bucket, filePath string) (et.Item, error) {
 	url := path.Join(s.Path, bucket, filePath)

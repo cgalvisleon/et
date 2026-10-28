@@ -12,12 +12,7 @@ import (
 )
 
 /**
-* Quoted: Formats an et.Value as the SQL literal that PostgreSQL expects,
-* chosen according to the value's declared Type (et.TEXT, et.KEY, et.MEMO, et.INT, et.DATETIME,
-* et.JSON, the ARRAY_* types, et.VAL_BETWEEN, et.VAL_NULL, etc.).
-* et.AGGREGATE is not quoted: it carries an et.Aggregate whose operand is a raw SQL
-* fragment (a field reference or expression), rendered as the function applied to it,
-* e.g. COUNT(A.id); et.EXP returns the operand verbatim.
+* Quoted: Formats an et.Value as the SQL literal PostgreSQL expects, chosen by the value's declared Type.
 * @param v et.Value
 * @return string
 **/
@@ -191,7 +186,7 @@ func pgQuoteAggregate(val any) string {
 	case et.COUNT:
 		return fmt.Sprintf("COUNT(%s)", expr)
 	case et.SUM:
-		return fmt.Sprintf("SUM(%s)", expr)
+		return fmt.Sprintf("COALESCE(SUM(%s), 0)", expr)
 	case et.AVG:
 		return fmt.Sprintf("AVG(%s)", expr)
 	case et.MIN:

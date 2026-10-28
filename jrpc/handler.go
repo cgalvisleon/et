@@ -2,6 +2,8 @@ package jrpc
 
 import (
 	"errors"
+	"fmt"
+	"github.com/cgalvisleon/et/msg"
 	"net/http"
 
 	"github.com/cgalvisleon/et/et"
@@ -30,7 +32,7 @@ func GetSolver(method string) (*Solver, error) {
 
 	solver, ok := pkg.Solvers[method]
 	if !ok {
-		return nil, errors.New("solver not found")
+		return nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, method)
 	}
 	return solver, nil
 }
@@ -50,9 +52,8 @@ func Close() {
 }
 
 /**
-* listRouters
-* @return []et.Json
-* @return error
+* listRouters: Lists the mounted packages.
+* @return []et.Json, error
 **/
 func listRouters() ([]et.Json, error) {
 	mu.RLock()
@@ -78,6 +79,7 @@ func HttpListRouters(w http.ResponseWriter, r *http.Request) {
 	item, err := listRouters()
 	if err != nil {
 		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	result := et.Items{}

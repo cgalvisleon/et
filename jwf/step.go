@@ -24,7 +24,8 @@ const (
 )
 
 var (
-	ErrrStepNotFound               = errors.New(MSG_STEP_NOT_FOUND)
+	ErrStepNotFound                = errors.New(MSG_STEP_NOT_FOUND)
+	ErrrStepNotFound               = ErrStepNotFound // Deprecated: use ErrStepNotFound
 	KindList         map[Kind]bool = map[Kind]bool{
 		KindFunction:  true,
 		KindTrigger:   true,
@@ -102,6 +103,11 @@ func newStep(ownerId, id string, kind Kind, tag, version, title string) *Step {
 	return result
 }
 
+/**
+* LoadStep: Rebuilds a step from its JSON definition and wires it up (bindings, params and ctx).
+* @param def et.Json
+* @return *Step, error
+**/
 func LoadStep(def et.Json) (*Step, error) {
 	bt, err := def.ToByte()
 	if err != nil {
@@ -117,7 +123,8 @@ func LoadStep(def et.Json) (*Step, error) {
 }
 
 /**
-* up
+* Up: Restores what json.Unmarshal cannot (onStatus, bindings, params and ctx wrappers). Exported, unlike
+* Flow.up, because the consumer rebuilds steps from JSON on its own and has to call it afterwards.
 * @return *Step
 **/
 func (s *Step) Up() *Step {

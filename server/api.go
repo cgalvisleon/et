@@ -46,10 +46,10 @@ func NewApi(name, path, host string, port int, version string) *Api {
 }
 
 /**
-* UseAutentication
+* UseAuthentication
 * @param middleware func(http.Handler) http.Handler
 **/
-func (s *Api) UseAutentication(middleware func(http.Handler) http.Handler) {
+func (s *Api) UseAuthentication(middleware func(http.Handler) http.Handler) {
 	s.autentication = append(s.autentication, middleware)
 }
 

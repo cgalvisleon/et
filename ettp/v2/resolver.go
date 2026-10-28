@@ -27,6 +27,10 @@ const (
 	TpStatusSuccess
 )
 
+/**
+* String: Name of the resolver status ("pending", "failed", "success").
+* @return string
+**/
 func (s Status) String() string {
 	switch s {
 	case TpStatusPending:
@@ -40,6 +44,10 @@ func (s Status) String() string {
 	return "unknown"
 }
 
+/**
+* Resolver: A request matched to a Solver: the target URL with the path params applied, the headers
+* already merged and its status, published on EVENT_RESOLVER_STATUS at each change.
+**/
 type Resolver struct {
 	*http.Request
 	CreatedAt   time.Time                         `json:"created_at"`

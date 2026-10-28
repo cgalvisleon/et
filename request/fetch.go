@@ -64,6 +64,9 @@ var bufPool = sync.Pool{
 	},
 }
 
+/**
+* HttpResult: Body and Status of an outbound request (what HttpWithContext returns).
+**/
 type HttpResult struct {
 	Body   *Body
 	Status Status

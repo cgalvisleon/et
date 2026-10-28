@@ -1,5 +1,11 @@
 package create
 
+/**
+* MkMicroservice: scaffolds a whole microservice (cmd, deployments, internal, pkg, scripts, test)
+* reporting progress on the bar.
+* @param projectName, name, schema string
+* @return error
+**/
 func MkMicroservice(projectName, name, schema string) error {
 	ProgressAdd(6)
 	err := MakeCmd(projectName, name)
@@ -42,7 +48,12 @@ func MkMicroservice(projectName, name, schema string) error {
 	return nil
 }
 
-func MkMolue(projectName, packageName, modelo, schema string) error {
+/**
+* MkModel: scaffolds a model in an existing microservice: its internal model (with schema) and its pkg handler.
+* @param projectName, packageName, modelo, schema string
+* @return error
+**/
+func MkModel(projectName, packageName, modelo, schema string) error {
 	ProgressAdd(2)
 	if len(schema) > 0 {
 		if err := MakeInternalModel(modelo, schema); err != nil {
@@ -61,6 +72,11 @@ func MkMolue(projectName, packageName, modelo, schema string) error {
 	return nil
 }
 
+/**
+* MkRpc: scaffolds the rpc handler of a package reporting progress on the bar.
+* @param name string
+* @return error
+**/
 func MkRpc(name string) error {
 	ProgressAdd(1)
 	err := MakeRpc(name)

@@ -3,7 +3,6 @@ package oracle
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -96,7 +95,7 @@ func connectWithRetry(ctx context.Context, dsn string, maxRetries int) (*sql.DB,
 func (s *Oracle) Connect(db *jsql.DB, timeout ...time.Duration) (*sql.DB, error) {
 	params := db.Params
 	if params.ValStr("", "service_name") == "" {
-		return nil, errors.New("service_name is required")
+		return nil, fmt.Errorf(jsql.MSG_ATRIB_REQUIRED, "service_name")
 	}
 
 	ctx, cancel := jsql.TimeoutContext(timeout...)
@@ -133,7 +132,7 @@ func (s *Oracle) CreateDB(connection *jsql.ConnectParams, timeout ...time.Durati
 
 	params := connection.Connection.GetParams()
 	if params.ValStr("", "service_name") == "" {
-		return errors.New("service_name is required")
+		return fmt.Errorf(jsql.MSG_ATRIB_REQUIRED, "service_name")
 	}
 
 	ctx, cancel := jsql.TimeoutContext(timeout...)

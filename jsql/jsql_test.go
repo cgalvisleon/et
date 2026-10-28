@@ -3,6 +3,8 @@ package jsql
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -258,5 +260,34 @@ func TestDefineConcurrent(t *testing.T) {
 		if model.indexColumn(fmt.Sprintf("r%d", i)) == -1 || model.indexColumn(fmt.Sprintf("c%d", i)) == -1 {
 			t.Fatalf("column %d lost", i)
 		}
+	}
+}
+
+/**
+* TestWrapperDeclared: every key the goja wrapper exposes (wrapper.go) is declared in jsql.d.ts.
+**/
+func TestWrapperDeclared(t *testing.T) {
+	src, err := os.ReadFile("wrapper.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dts, err := os.ReadFile("jsql.d.ts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := regexp.MustCompile(`(?m)^\t\t"([a-zA-Z][a-zA-Z0-9]*)":`).FindAllStringSubmatch(string(src), -1)
+	if len(keys) == 0 {
+		t.Fatal("no wrapper keys found in wrapper.go")
+	}
+	declared := string(dts)
+	missing := []string{}
+	for _, k := range keys {
+		name := k[1]
+		if !regexp.MustCompile(`\b` + name + `\??\s*[(:<]`).MatchString(declared) {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		t.Fatalf("wrapper keys not declared in jsql.d.ts: %v", missing)
 	}
 }

@@ -11,7 +11,7 @@ import (
 )
 
 type Router interface {
-	UseAutentication(fn func(http.Handler) http.Handler)
+	UseAuthentication(fn func(http.Handler) http.Handler)
 	Protect(method, path string, handler func(http.ResponseWriter, *http.Request))
 	Public(method, path string, handler func(http.ResponseWriter, *http.Request))
 	With(method, path string, middlewares []func(http.Handler) http.Handler, handler func(http.ResponseWriter, *http.Request))
@@ -36,6 +36,9 @@ const (
 	TpReplaceHeader
 )
 
+/**
+* Routes: The routes this service has published to the gateway, by METHOD:path.
+**/
 type Routes struct {
 	Name   string
 	Routes map[string]et.Json
@@ -196,14 +199,17 @@ func GetRoutes() map[string]et.Json {
 }
 
 /**
-* PushApiGateway
-* @param method, path, host string, header et.Json, excludeHeader []string, params, body et.Json, version int, packageName string
+* pushApiGateway: Publishes a Route to the gateway with Host+Path as resolve and TpReplaceHeader.
+* @param route Route
 **/
 func pushApiGateway(route Route) {
 	resolve := route.Host + route.Path
 	PushApiGateway(route.Method, route.Path, resolve, TpReplaceHeader, route.Header, route.ExcludeHeader, route.Params, route.Body, route.Version, route.PackageName)
 }
 
+/**
+* Route: A route to mount (Publish, With) and publish to the gateway.
+**/
 type Route struct {
 	Method        string
 	Path          string

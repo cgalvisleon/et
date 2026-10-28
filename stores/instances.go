@@ -126,7 +126,8 @@ func (s *Instance) Set(tag, id, ownerId string, obj any) error {
 }
 
 /**
-* Get
+* Get: Loads the definition of id into dest, from the dt cache or the model. Unlike FormState.Get, a missing id is an
+* error (MSG_RECORD_NOT_FOUND), not (false, nil).
 * @param id string, dest any
 * @return (bool, error)
 **/

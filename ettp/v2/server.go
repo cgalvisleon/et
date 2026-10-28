@@ -26,6 +26,19 @@ const (
 	Version = "v0.0.2"
 )
 
+/**
+* Invariants of the ettp/v2 server.
+*
+* Save takes muRoutes itself (read lock): call it after releasing muRoutes, never while holding it.
+* New opens the RPC listener (RpcPort) in the constructor, before Start: a port in use fails New.
+* Config.IdleTimeout + 300 ms is how long a Resolver stays in Requests after FindResolver.
+* Cache and events are not loaded here: call cache.Load() and event.Load() before Start.
+**/
+
+/**
+* TransportConfig: Settings of the proxy's http.Transport; the timeouts are in seconds and
+* zero values keep the net/http defaults.
+**/
 type TransportConfig struct {
 	InsecureSkipVerify  bool `json:"insecure_skip_verify"`
 	MaxIdleConns        int  `json:"max_idle_conns"`
@@ -36,22 +49,29 @@ type TransportConfig struct {
 	ForceAttemptHTTP2   bool `json:"force_attempt_http2"`
 }
 
+/**
+* Config: Settings of New.
+**/
 type Config struct {
-	Port         int              `json:"port"`
-	RpcPort      int              `json:"rpc_port"`
-	Parent       string           `json:"parent"`
-	ReadTimeout  time.Duration    `json:"read_timeout"`
+	Port         int              `json:"port"`         // HTTP port
+	RpcPort      int              `json:"rpc_port"`     // RPC (pipe) port; 0 = assigned by the OS
+	Parent       string           `json:"parent"`       // path prefix of the handlers registered with Public/Private
+	ReadTimeout  time.Duration    `json:"read_timeout"` // http.Server.ReadTimeout
 	WriteTimeout time.Duration    `json:"write_timeout"`
-	IdleTimeout  time.Duration    `json:"idle_timeout"`
-	Timeout      time.Duration    `json:"timeout"`
-	AllowOrigin  []string         `json:"allow_origin"`
-	IsTLS        bool             `json:"is_tls"`
+	IdleTimeout  time.Duration    `json:"idle_timeout"` // http.Server.IdleTimeout; + 300 ms = life of a Resolver in Requests
+	Timeout      time.Duration    `json:"timeout"`      // timeout of the proxy http.Client
+	AllowOrigin  []string         `json:"allow_origin"` // CORS allowlist; empty = any origin, without credentials
+	IsTLS        bool             `json:"is_tls"`       // serve HTTPS with CertFile and KeyFile
 	CertFile     string           `json:"cert_file"`
 	KeyFile      string           `json:"key_file"`
-	Transport    *TransportConfig `json:"transport"`
-	Debug        bool             `json:"debug"`
+	Transport    *TransportConfig `json:"transport"` // nil = built-in transport (100 conns, 90 s idle, HTTP/2)
+	Debug        bool             `json:"debug"`     // log the route table and the server state
 }
 
+/**
+* Server: API gateway: routes (Solvers, by METHOD:path) grouped in Packages, resolved per request
+* into Requests, served over HTTP and over a gob RPC pipe; routes persist through Save/load.
+**/
 type Server struct {
 	CreatedAt     time.Time                         `json:"created_at"`
 	Name          string                            `json:"name"`
@@ -83,8 +103,8 @@ type Server struct {
 }
 
 /**
-* New
-* @param name string
+* New: Builds the server, its proxy client and opens the RPC listener; Start serves it.
+* @param name string, cnf *Config
 * @return (*Server, error)
 **/
 func New(name string, cnf *Config) (*Server, error) {
@@ -397,11 +417,11 @@ func (s *Server) Use(middlewares ...func(http.Handler) http.Handler) {
 }
 
 /**
-* UseAutentication
+* UseAuthentication
 * @param middleware func(http.HandlerFunc) http.HandlerFunc
 * @return *Server
 **/
-func (s *Server) UseAutentication(middleware func(http.Handler) http.Handler) *Server {
+func (s *Server) UseAuthentication(middleware func(http.Handler) http.Handler) *Server {
 	if s.authenticator == nil {
 		s.authenticator = make([]func(http.Handler) http.Handler, 0)
 	}
@@ -446,7 +466,7 @@ func (s *Server) FindResolver(r *http.Request) (*Resolver, error) {
 	router, ok := s.router[method]
 	if !ok {
 		s.muRoutes.RUnlock()
-		return nil, errors.New("router not found")
+		return nil, errors.New(MSG_ROUTER_NOT_FOUND)
 	}
 
 	result, err := router.findResolver(r)

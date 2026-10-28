@@ -6,6 +6,9 @@ import (
 	"github.com/cgalvisleon/et/et"
 )
 
+/**
+* Package: Routes registered by one service, by solver id.
+**/
 type Package struct {
 	Name   string  `json:"name"`
 	Routes et.Json `json:"routes"`

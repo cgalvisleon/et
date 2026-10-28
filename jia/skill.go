@@ -36,16 +36,16 @@ type ApiSkill struct {
 * @return *ApiSkill, error
 **/
 func NewApiSkill(tag, name, description, url, method string, headers et.Json, body et.Json) (*ApiSkill, error) {
-	if utility.ValidStr(tag, 1, []string{}) {
+	if !utility.ValidStr(tag, 1, []string{}) {
 		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "tag")
 	}
-	if utility.ValidStr(name, 1, []string{}) {
+	if !utility.ValidStr(name, 1, []string{}) {
 		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "name")
 	}
-	if utility.ValidStr(url, 1, []string{}) {
+	if !utility.ValidStr(url, 1, []string{}) {
 		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "url")
 	}
-	if utility.ValidStr(method, 1, []string{}) {
+	if !utility.ValidStr(method, 1, []string{}) {
 		return nil, fmt.Errorf(MSG_ATRIB_REQUIRED, "method")
 	}
 	result := &ApiSkill{

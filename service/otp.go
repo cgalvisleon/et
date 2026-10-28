@@ -47,7 +47,7 @@ func (s *Send) SendOTPSMS(key, sender, countryCode, phoneNumber string, length i
 		"duration": duration.Minutes(),
 	}
 
-	result, err := s.SendSMS([]string{countryCode + phoneNumber}, content, params, TypeAutentication)
+	result, err := s.SendSMS([]string{countryCode + phoneNumber}, content, params, TypeAuthentication)
 	if err != nil {
 		return et.Item{}, err
 	}
@@ -85,7 +85,7 @@ func (s *Send) SendOTPEmail(key, sender string, name, email string, length int, 
 		"name":  name,
 		"email": email,
 	}}
-	result, err := s.SendEmail(from, to, MSG_VERIFY_EMAIL, htmlContent, params, TypeAutentication)
+	result, err := s.SendEmail(from, to, MSG_VERIFY_EMAIL, htmlContent, params, TypeAuthentication)
 	if err != nil {
 		return et.Item{}, err
 	}

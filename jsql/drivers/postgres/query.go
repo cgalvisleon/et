@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -146,11 +147,11 @@ func findField(query *jsql.Query, field string) (*jsql.Field, bool) {
 func pgInValues(val any) string {
 	rv := reflect.ValueOf(val)
 	if !rv.IsValid() || (rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array) {
-		return fmt.Sprintf("%v", jsql.Quoted(val))
+		return Quoted(et.NewValue(val))
 	}
 	parts := make([]string, rv.Len())
 	for i := 0; i < rv.Len(); i++ {
-		parts[i] = fmt.Sprintf("%v", jsql.Quoted(rv.Index(i).Interface()))
+		parts[i] = Quoted(et.NewValue(rv.Index(i).Interface()))
 	}
 	return strings.Join(parts, ", ")
 }
@@ -287,18 +288,16 @@ func pgCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bool, 
 		return fmt.Sprintf("%s IN (%s)", fieldExpr, pgInValues(cond.Value.Value))
 	case et.NOT_IN:
 		return fmt.Sprintf("%s NOT IN (%s)", fieldExpr, pgInValues(cond.Value.Value))
-	case et.BETWEEN:
+	case et.BETWEEN, et.NOT_BETWEEN:
 		bv, ok := et.ToBetween(cond.Value.Value)
 		if !ok {
 			return "1 = 0"
 		}
-		return fmt.Sprintf("%s BETWEEN %v AND %v", fieldExpr, jsql.Quoted(bv.Min), jsql.Quoted(bv.Max))
-	case et.NOT_BETWEEN:
-		bv, ok := et.ToBetween(cond.Value.Value)
-		if !ok {
-			return "1 = 0"
+		op := "BETWEEN"
+		if cond.Operator == et.NOT_BETWEEN {
+			op = "NOT BETWEEN"
 		}
-		return fmt.Sprintf("%s NOT BETWEEN %v AND %v", fieldExpr, jsql.Quoted(bv.Min), jsql.Quoted(bv.Max))
+		return fmt.Sprintf("%s %s %s AND %s", fieldExpr, op, Quoted(et.NewValue(bv.Min)), Quoted(et.NewValue(bv.Max)))
 	case et.LIKE:
 		return fmt.Sprintf("%s ILIKE %s", fieldExpr, value())
 	case et.IS:
@@ -584,14 +583,14 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 }
 
 /**
-* pgSelects: Generates the SQL SELECT string for the given Query descriptor.
+* pgSelects: Generates the SELECT expressions of the query (one "result" object when UseSourceField is set).
 * @param query *jsql.Query
-* @return string
+* @return []string
 **/
 func pgSelects(query *jsql.Query) []string {
 	var selectExprs []string
 
-	// Las columnas de los from (sin selects, o "*" en selects): StarFields, sin las ocultas
+	// The columns of the froms (no selects, or "*" in selects): StarFields, without the hidden ones
 	addColumns := func() {
 		for _, name := range query.StarFields() {
 			if columnExpr, ok := pgSelectExpr(query, name); ok {
@@ -624,7 +623,7 @@ func pgSelects(query *jsql.Query) []string {
 
 	if query.UseSourceField {
 		source := ""
-		// Sin selects o con "*", también los atributos del campo fuente del primer from
+		// Without selects or with "*", also the attributes of the source field of the first from
 		if (len(query.Selects) == 0 || query.HasStar()) && len(query.Froms) > 0 {
 			from := query.Froms[0]
 			sourceField := jsql.SOURCE
@@ -644,9 +643,9 @@ func pgSelects(query *jsql.Query) []string {
 }
 
 /**
-* pgFrom: Generates the SQL FROM string for the given Query descriptor.
+* pgFrom: Generates the FROM clause of the query, one entry per from (with alias when it differs from the table).
 * @param query *jsql.Query
-* @return strings.Builder
+* @return []string
 **/
 func pgFrom(query *jsql.Query) []string {
 	result := []string{}
@@ -671,13 +670,12 @@ func pgFrom(query *jsql.Query) []string {
 
 /**
 * Query: Generates the SQL SELECT string for the given Query descriptor.
-* @param query *jsql.Query
+* @param query *jsql.Query, timeout ...time.Duration
 * @return string, error
-*
- */
+**/
 func (s *Postgres) Query(query *jsql.Query, timeout ...time.Duration) (string, error) {
 	if len(query.Froms) == 0 {
-		return "", fmt.Errorf("query has no FROM source")
+		return "", errors.New(jsql.MSG_QUERY_NO_FROM)
 	}
 
 	primary := query.Froms[0]
@@ -740,6 +738,12 @@ func (s *Postgres) Query(query *jsql.Query, timeout ...time.Duration) (string, e
 		if havingSQL != "" {
 			sb.WriteString("\nHAVING " + havingSQL)
 		}
+	}
+
+	// COUNT(*) takes no ORDER BY or LIMIT: postgres rejects an ORDER BY over a non-grouped column.
+	if query.IsCount {
+		sb.WriteString(";")
+		return sb.String(), nil
 	}
 
 	// ORDER BY

@@ -8,8 +8,11 @@ import (
 
 var bar *progressbar.ProgressBar
 var totalSteps int
-var currentStep int
 
+/**
+* ProgressAdd: creates the progress bar if needed and adds step to the total number of steps.
+* @param step int
+**/
 func ProgressAdd(step int) {
 	if bar == nil {
 		bar = progressbar.Default(100)
@@ -18,14 +21,15 @@ func ProgressAdd(step int) {
 	totalSteps += step
 }
 
+/**
+* ProgressNext: advances the bar one step (100/totalSteps) with a short pause so it is visible.
+**/
 func ProgressNext() {
 	if bar == nil {
 		bar = progressbar.Default(100)
 		totalSteps = 100
-		currentStep = 0
 	}
 
-	currentStep++
-	bar.Add(100 / totalSteps * currentStep)
+	bar.Add(100 / totalSteps)
 	time.Sleep(40 * time.Millisecond)
 }

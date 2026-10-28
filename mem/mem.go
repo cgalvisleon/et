@@ -1,3 +1,6 @@
+// Package mem is a key/value store in the memory of the process whose entries expire after a TTL (one timer per
+// entry). Use it for state that only this process needs and may be lost on restart; dt uses Redis when PRODUCTION is
+// true (memory otherwise) and ephemeral expires a key only when nobody reads it.
 package mem
 
 import (
@@ -20,6 +23,10 @@ var (
 	clearReCache sync.Map
 )
 
+/**
+* Load: A new, empty store.
+* @return *Mem
+**/
 func Load() *Mem {
 	return &Mem{
 		items: make(map[string]*Entry),
@@ -114,9 +121,9 @@ func (s *Mem) Exists(key string) bool {
 }
 
 /**
-* GetEntry
-* @param key string, dest *Entry
-* @return bool, error
+* GetEntry: The entry of key, if it exists.
+* @param key string
+* @return *Entry, bool
 **/
 func (s *Mem) GetEntry(key string) (*Entry, bool) {
 	s.mu.RLock()
@@ -130,9 +137,9 @@ func (s *Mem) GetEntry(key string) (*Entry, bool) {
 }
 
 /**
-* Get
+* Get: The value of key, if it exists.
 * @param key string
-* @return interfase{}, error
+* @return interface{}, bool
 **/
 func (s *Mem) Get(key string) (interface{}, bool) {
 	item, exists := s.GetEntry(key)
@@ -451,6 +458,9 @@ func (s *Mem) Clear(match string) {
 	}
 }
 
+/**
+* Empty: Removes every entry and stops its timer.
+**/
 func (s *Mem) Empty() {
 	s.mu.Lock()
 	defer s.mu.Unlock()

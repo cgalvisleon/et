@@ -4,7 +4,7 @@ Distancia entre el objetivo (`feature.md`, detallado en `spec.md`) y lo implemen
 
 ## Estado actual
 
-**Objetivo del feature: cumplido.** 17/17 requisitos de `spec.md` verificados; 15/15 casos correctos; 32/32 métodos públicos probados (corrida del 2026-09-27, `-race`, 3 veces seguidas).
+**Objetivo del feature: cumplido.** 17/17 requisitos de `spec.md` verificados; 15/15 casos correctos; 32/32 métodos públicos probados (última corrida el 2026-10-27, `-race`; la historia registra cada una).
 
 | ID | Requisito | Estado | Evidencia (caso en `result.md`) |
 |---|---|---|---|
@@ -34,8 +34,8 @@ Ningún requisito del feature está pendiente. Lo que sigue **no** lo pide el fe
 |---|---|---|
 | Reconexión automática del cliente | Se hace a mano desde `OnDisconnect`, y hay que volver a suscribirse. | Opción de reconectar y volver a suscribir sola. |
 | Encabezados en `Connect` | El token va en la URL (query); `Connect` no recibe encabezados. | `Connect` con `http.Header` (p. ej. `Authorization`). |
-| Integración en el servidor de Josefina | El paquete no está montado en `pkg/server` ni en `internal/server`. | Montar `Server` como ruta (p. ej. `GET /ws`) en el router de `et`, y decidir su ciclo de vida junto con `jdb`. |
-| Autenticación | Se puede hacer en `OnConnect` con `Request()`, pero no está conectada a las sesiones de `jdb` ni a `et/claim`. | `OnConnect` que valide el bearer token con `et/claim` y la sesión de `jdb`. |
+| Integración en un servidor | Ningún consumidor del workspace lo monta (josefina tampoco, desde que el paquete vive en `et`). | Montar `Server` como ruta (p. ej. `GET /ws`) en el router del consumidor y decidir su ciclo de vida allí. |
+| Autenticación | Se puede hacer en `OnConnect` con `Request()`, pero el paquete no valida tokens. | `OnConnect` que valide el bearer token con `et/claim` y la sesión del consumidor. |
 | Origen (CORS) | Regla por defecto de Gorilla (mismo origen o sin `Origin`); no configurable. | Exponer la configuración de `CheckOrigin`. |
 | Persistencia y reintentos | Entrega a lo sumo una vez, en memoria. | Solo si se necesita: guardar mensajes de queue o reintentar. |
 | Varios nodos | Los canales viven en un solo proceso. | Puente con `et/event` (NATS) para publicar entre nodos. |
@@ -46,6 +46,7 @@ Ningún requisito del feature está pendiente. Lo que sigue **no** lo pide el fe
 
 | Fecha | Cambio | Requisitos cumplidos |
 |---|---|---|
+| 2026-10-27 | Solo documentación (spec v5): `et/msg`, decisión de §1 sin `jws`, estado actual y próximos pasos sin referencias a josefina. `go run -race ./test/websocket`: 15/15 casos, 17/17 requisitos, 32/32 métodos. | 17/17 |
 | 2026-10-21 | Movido de josefina (`internal/websocket`) a `et/websocket`: mensajes `MSG_WS_*` en `et/msg`, verificador en `et/test/websocket`; reemplaza al `jws` anterior. Sin cambios de API. `go run -race ./test/websocket`: 15/15 casos, 17/17 requisitos, 32/32 métodos. | 17/17 |
 | 2026-09-27 | Cliente Go (`NewClient`, `Connect` → `Client`) con WS-14 a WS-17; la conexión del lado del servidor pasa a llamarse `Conn` (cambia la firma de los eventos del servidor); el servidor envía `connected` con el id al aceptar. Spec v3. Primera corrida: 15/15. | 17/17 |
 | 2026-09-27 | `feature.md` actualizado con lo implementado (publicar, topic/queue, rechazo en eventos, montaje, cliente lento); spec v2 solo cambia el origen de los requisitos WS-06, WS-07, WS-09 y WS-12. Sin cambios de código. | 13/13 |

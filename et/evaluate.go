@@ -3,7 +3,6 @@ package et
 import (
 	"cmp"
 	"encoding/json"
-	"fmt"
 	"math"
 	"reflect"
 	"sort"
@@ -13,134 +12,114 @@ import (
 )
 
 /**
-* Str: The field reference as text, as ToField reads it: [function(][source.]name[)][:as]
-* @return string
+* ApplyToValue: Whether val meets the condition. A FIELD value needs an object to read it from (ApplyToObject), so
+* here it is false.
+* @param val any
+* @return bool
 **/
-func (s Field) Str() string {
-	name := s.Name
-	if s.Source != "" {
-		name = s.Source + "." + name
+func (s *Condition) ApplyToValue(val any) bool {
+	if s.Value.Type == FIELD {
+		return false
 	}
-	if s.Agg != nil {
-		fn := s.Agg.Function.Str()
-		name = fmt.Sprintf("%s(%s)", fn, name)
-		if s.As != "" && s.As != fn {
-			name += ":" + s.As
-		}
-		return name
+
+	val, cv := coerceForComparison(val, s.Value)
+	tmp := *s
+	tmp.Value = cv
+
+	switch tmp.Operator {
+	case EQ:
+		return tmp.applyOpEq(val)
+	case NEG:
+		return tmp.applyOpNeg(val)
+	case LESS:
+		return tmp.applyOpLess(val)
+	case LESS_EQ:
+		return tmp.applyOpLessEq(val)
+	case MORE:
+		return tmp.applyOpMore(val)
+	case MORE_EQ:
+		return tmp.applyOpMoreEq(val)
+	case LIKE:
+		return tmp.applyOpLike(val)
+	case IN:
+		return tmp.applyOpIn(val)
+	case NOT_IN:
+		return tmp.applyOpNotIn(val)
+	case IS:
+		return tmp.applyOpIs(val)
+	case IS_NOT:
+		return !tmp.applyOpIs(val)
+	case NULL:
+		return tmp.applyOpNull(val)
+	case NOT_NULL:
+		return tmp.applyOpNotNull(val)
+	case BETWEEN:
+		return tmp.applyOpBetween(val)
+	case NOT_BETWEEN:
+		return tmp.applyOpNotBetween(val)
+	default:
+		return false
 	}
-	if s.As != "" && s.As != s.Name {
-		name += ":" + s.As
-	}
-	return name
 }
 
 /**
-* ValueOf: The value of the field in obj: the attribute of its path (name->a->b; the source is not used) with its
-* function applied when it is an aggregate.
+* ApplyToObject: Whether obj meets the condition. The field may be an aggregate ("sum(items)", applied to the
+* attribute) and the value a FIELD (another attribute of obj, also maybe an aggregate).
 * @param obj Json
-* @return any
+* @return bool
 **/
-func (s Field) ValueOf(obj Json) any {
-	val := pathValue(obj, s.Name)
-	if s.Agg != nil {
-		return applyFunction(s.Agg.Function, val)
-	}
-	return val
-}
-
-/**
-* pathValue: The value of a path "a->b->c" in obj; nil when a key is missing. A list on the way gives the list of the
-* rest of the path in each item ("items->price" over [{price: 2}, {price: 3}] is [2, 3]), for the aggregates.
-* @param obj Json, path string
-* @return any
-**/
-func pathValue(obj any, path string) any {
-	key, rest, more := strings.Cut(path, "->")
+func (s *Condition) ApplyToObject(obj Json) bool {
 	var val any
-	switch v := obj.(type) {
-	case Json:
-		val = v[key]
-	case map[string]any:
-		val = v[key]
-	default:
-		if _, ok := obj.([]byte); ok || obj == nil {
-			return nil
-		}
-		rv := reflect.ValueOf(obj)
-		if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
-			return nil
-		}
-		result := make([]any, 0, rv.Len())
-		for i := 0; i < rv.Len(); i++ {
-			if item := pathValue(rv.Index(i).Interface(), path); item != nil {
-				result = append(result, item)
+	if fld, ok := ToField(s.Field.String()); ok && fld.Agg != nil {
+		val = fld.ValueOf(obj)
+	} else {
+		val = s.fieldValue(obj)
+	}
+	return s.resolve(obj).ApplyToValue(val)
+}
+
+/**
+* evaluate: Combines the conditions with SQL precedence (AND before OR).
+* @param conditions []*Condition, apply func(*Condition) bool
+* @return bool
+**/
+func evaluate(conditions []*Condition, apply func(*Condition) bool) bool {
+	if len(conditions) == 0 {
+		return true
+	}
+
+	term := true
+	for i, cond := range conditions {
+		if i > 0 && cond.Connector == OR {
+			if term {
+				return true
 			}
+			term = true
 		}
-		return result
-	}
-	if !more {
-		return val
-	}
-	return pathValue(val, rest)
-}
-
-/**
-* fieldRef: Whether v is a field reference: a Field, or the JSON {"field": "reference"} (its only key, a text).
-* A reference that ToField does not read is kept by name (Fld).
-* @param v any
-* @return Field, bool
-**/
-func fieldRef(v any) (Field, bool) {
-	var obj map[string]any
-	switch t := v.(type) {
-	case Field:
-		return t, true
-	case *Field:
-		if t == nil {
-			return Field{}, false
+		if term {
+			term = apply(cond)
 		}
-		return *t, true
-	case Json:
-		obj = t
-	case map[string]any:
-		obj = t
-	default:
-		return Field{}, false
 	}
-	if len(obj) != 1 {
-		return Field{}, false
-	}
-	ref, ok := obj[FIELD.Str()].(string)
-	if !ok || strings.TrimSpace(ref) == "" {
-		return Field{}, false
-	}
-	return Fld(strings.TrimSpace(ref)), true
+
+	return term
 }
 
 /**
-* toConditionValue: The value of a JSON condition: a field reference {"field": "name"} is a FIELD value; anything
-* else, the value as it is.
-* @param v any
-* @return Value
+* EvaluateObject: Evaluates the conditions on an object, with SQL precedence.
+* @param obj Json, conditions []*Condition
+* @return bool
 **/
-func toConditionValue(v any) Value {
-	if ref, ok := fieldRef(v); ok {
-		return NewValue(ref)
-	}
-	return NewValue(v)
+func EvaluateObject(obj Json, conditions []*Condition) bool {
+	return evaluate(conditions, func(cond *Condition) bool { return cond.ApplyToObject(obj) })
 }
 
 /**
-* jsonValue: The value of a condition as JSON: a FIELD value is {"field": "reference"}.
-* @param v Value
-* @return any
+* EvaluateValue: Evaluates the conditions on a value, with SQL precedence.
+* @param value any, conditions []*Condition
+* @return bool
 **/
-func jsonValue(v Value) any {
-	if ref, ok := v.Value.(Field); ok && v.Type == FIELD {
-		return Json{FIELD.Str(): ref.Str()}
-	}
-	return v.Value
+func EvaluateValue(value any, conditions []*Condition) bool {
+	return evaluate(conditions, func(cond *Condition) bool { return cond.ApplyToValue(value) })
 }
 
 /**
@@ -638,28 +617,42 @@ func ToBetween(v any) (BetweenValue, bool) {
 }
 
 /**
-* dateLayouts: Layouts tried when coercing a string into a time.Time for comparison.
+* getBetweenRange: Gets the min and max values from a between range
+* @param v any
+* @return min any, max any, ok bool
 **/
-var dateLayouts = []string{
-	time.RFC3339,
-	time.RFC3339Nano,
-	"2006-01-02 15:04:05",
-	"2006-01-02",
-}
-
-/**
-* parseDate: Tries to parse a string into a time.Time using dateLayouts.
-* @param s string
-* @return time.Time, bool
-**/
-func parseDate(s string) (time.Time, bool) {
-	for _, layout := range dateLayouts {
-		if t, err := time.Parse(layout, s); err == nil {
-			return t, true
-		}
+func getBetweenRange(v any) (min any, max any, ok bool) {
+	if r, ok := v.(BetweenValue); ok {
+		return r.Min, r.Max, true
 	}
 
-	return time.Time{}, false
+	// {min, max} or {Min, Max}
+	if m, ok := asJson(v); ok {
+		min, okMin := m["min"]
+		if !okMin {
+			min, okMin = m["Min"]
+		}
+		max, okMax := m["max"]
+		if !okMax {
+			max, okMax = m["Max"]
+		}
+		return min, max, okMin && okMax
+	}
+
+	// [min, max]
+	rv := reflect.ValueOf(v)
+	if !rv.IsValid() {
+		return nil, nil, false
+	}
+
+	if rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array {
+		if rv.Len() != 2 {
+			return nil, nil, false
+		}
+		return rv.Index(0).Interface(), rv.Index(1).Interface(), true
+	}
+
+	return nil, nil, false
 }
 
 /**
@@ -689,73 +682,6 @@ func coerceForComparison(val any, cv Value) (any, Value) {
 }
 
 /**
-* ApplyToValue: Whether val meets the condition. A FIELD value needs an object to read it from (ApplyToObject), so
-* here it is false.
-* @param val any
-* @return bool
-**/
-func (s *Condition) ApplyToValue(val any) bool {
-	if s.Value.Type == FIELD {
-		return false
-	}
-
-	val, cv := coerceForComparison(val, s.Value)
-	tmp := *s
-	tmp.Value = cv
-
-	switch tmp.Operator {
-	case EQ:
-		return tmp.applyOpEq(val)
-	case NEG:
-		return tmp.applyOpNeg(val)
-	case LESS:
-		return tmp.applyOpLess(val)
-	case LESS_EQ:
-		return tmp.applyOpLessEq(val)
-	case MORE:
-		return tmp.applyOpMore(val)
-	case MORE_EQ:
-		return tmp.applyOpMoreEq(val)
-	case LIKE:
-		return tmp.applyOpLike(val)
-	case IN:
-		return tmp.applyOpIn(val)
-	case NOT_IN:
-		return tmp.applyOpNotIn(val)
-	case IS:
-		return tmp.applyOpIs(val)
-	case IS_NOT:
-		return !tmp.applyOpIs(val)
-	case NULL:
-		return tmp.applyOpNull(val)
-	case NOT_NULL:
-		return tmp.applyOpNotNull(val)
-	case BETWEEN:
-		return tmp.applyOpBetween(val)
-	case NOT_BETWEEN:
-		return tmp.applyOpNotBetween(val)
-	default:
-		return false
-	}
-}
-
-/**
-* ApplyToObject: Whether obj meets the condition. The field may be an aggregate ("sum(items)", applied to the
-* attribute) and the value a FIELD (another attribute of obj, also maybe an aggregate).
-* @param obj Json
-* @return bool
-**/
-func (s *Condition) ApplyToObject(obj Json) bool {
-	var val any
-	if fld, ok := ToField(s.Field.String()); ok && fld.Agg != nil {
-		val = fld.ValueOf(obj)
-	} else {
-		val = s.fieldValue(obj)
-	}
-	return s.resolve(obj).ApplyToValue(val)
-}
-
-/**
 * ApplyToIndex
 * @param keys []string
 * @return []string
@@ -775,50 +701,6 @@ func (s *Condition) ApplyToIndex(keys []string) []string {
 	}
 
 	return result
-}
-
-/**
-* evaluate: Combines the conditions with SQL precedence (AND before OR).
-* @param conditions []*Condition, apply func(*Condition) bool
-* @return bool
-**/
-func evaluate(conditions []*Condition, apply func(*Condition) bool) bool {
-	if len(conditions) == 0 {
-		return true
-	}
-
-	term := true
-	for i, cond := range conditions {
-		if i > 0 && cond.Connector == OR {
-			if term {
-				return true
-			}
-			term = true
-		}
-		if term {
-			term = apply(cond)
-		}
-	}
-
-	return term
-}
-
-/**
-* EvaluateObject: Evaluates the conditions on an object, with SQL precedence.
-* @param obj Json, conditions []*Condition
-* @return bool
-**/
-func EvaluateObject(obj Json, conditions []*Condition) bool {
-	return evaluate(conditions, func(cond *Condition) bool { return cond.ApplyToObject(obj) })
-}
-
-/**
-* EvaluateValue: Evaluates the conditions on a value, with SQL precedence.
-* @param value any, conditions []*Condition
-* @return bool
-**/
-func EvaluateValue(value any, conditions []*Condition) bool {
-	return evaluate(conditions, func(cond *Condition) bool { return cond.ApplyToValue(value) })
 }
 
 /**
@@ -1096,45 +978,6 @@ func compareAnyOrdered(a, b any) (int, bool) {
 }
 
 /**
-* getBetweenRange: Gets the min and max values from a between range
-* @param v any
-* @return min any, max any, ok bool
-**/
-func getBetweenRange(v any) (min any, max any, ok bool) {
-	if r, ok := v.(BetweenValue); ok {
-		return r.Min, r.Max, true
-	}
-
-	// {min, max} or {Min, Max}
-	if m, ok := asJson(v); ok {
-		min, okMin := m["min"]
-		if !okMin {
-			min, okMin = m["Min"]
-		}
-		max, okMax := m["max"]
-		if !okMax {
-			max, okMax = m["Max"]
-		}
-		return min, max, okMin && okMax
-	}
-
-	// [min, max]
-	rv := reflect.ValueOf(v)
-	if !rv.IsValid() {
-		return nil, nil, false
-	}
-
-	if rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array {
-		if rv.Len() != 2 {
-			return nil, nil, false
-		}
-		return rv.Index(0).Interface(), rv.Index(1).Interface(), true
-	}
-
-	return nil, nil, false
-}
-
-/**
 * firstOfSlice: Returns the first element of a slice/array value.
 * @param v any
 * @return any, bool
@@ -1153,11 +996,8 @@ func firstOfSlice(v any) (any, bool) {
 }
 
 /**
-* firstMapValueSorted: Deterministically returns the value of the
-* alphabetically-first key in m. Go's map iteration order is randomized, so
-* callers that need to pick "the" value out of a single/multi-key map (e.g.
-* unwrapping a Json wrapper) must go through this instead of `range`-ing the
-* map directly, or the result varies from call to call.
+* firstMapValueSorted: The value of the alphabetically first key of m, so unwrapping a map is deterministic
+* (range order is random); false when m is empty.
 * @param m map[string]interface{}
 * @return any, bool
 **/

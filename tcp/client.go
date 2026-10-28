@@ -13,6 +13,10 @@ import (
 	"github.com/cgalvisleon/et/reg"
 )
 
+/**
+* Client: Extremo de una conexión TCP: el que marca a un servidor o, del lado del
+* servidor, cada conexión aceptada. Envía, solicita y recibe en las dos direcciones.
+**/
 type Client struct {
 	timeout    *duration
 	nextID     atomic.Uint64
@@ -229,7 +233,7 @@ func (s *Client) current() (*link, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.link == nil {
-		return nil, errors.New(msg.MSG_TCP_NOT_CONNECTED)
+		return nil, errNotConnected
 	}
 	return s.link, nil
 }

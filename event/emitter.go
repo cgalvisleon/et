@@ -10,24 +10,24 @@ import (
 )
 
 var (
-	emiter     *EventEmiter
+	emitter    *EventEmitter
 	emiterOnce sync.Once
 )
 
 type Handler func(message *Message)
 
-type EventEmiter struct {
+type EventEmitter struct {
 	mu     sync.RWMutex
 	events map[string]Handler `json:"-"`
 	ch     chan *Message      `json:"-"`
 }
 
 /**
-* newEventEmiter
-* @return *EventEmiter
+* newEventEmitter
+* @return *EventEmitter
 **/
-func newEventEmiter() *EventEmiter {
-	result := &EventEmiter{
+func newEventEmitter() *EventEmitter {
+	result := &EventEmitter{
 		events: make(map[string]Handler),
 		ch:     make(chan *Message),
 	}
@@ -38,9 +38,9 @@ func newEventEmiter() *EventEmiter {
 }
 
 /**
-* start
+* loop: Delivers each message of the channel to the handler of its channel name.
 **/
-func (s *EventEmiter) loop() {
+func (s *EventEmitter) loop() {
 	for message := range s.ch {
 		if message == nil {
 			continue
@@ -61,7 +61,7 @@ func (s *EventEmiter) loop() {
 * on
 * @param channel string, handler Handler
 **/
-func (s *EventEmiter) on(channel string, handler Handler) {
+func (s *EventEmitter) on(channel string, handler Handler) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -73,10 +73,10 @@ func (s *EventEmiter) on(channel string, handler Handler) {
 }
 
 /**
-* emit
+* emitter: Queues a message for the handler of channel (blocks until loop takes it).
 * @param channel string, data et.Json
 **/
-func (s *EventEmiter) emiter(channel string, data et.Json) {
+func (s *EventEmitter) emitter(channel string, data et.Json) {
 	if s.ch == nil {
 		return
 	}
@@ -97,20 +97,20 @@ func (s *EventEmiter) emiter(channel string, data et.Json) {
 **/
 func On(channel string, handler Handler) {
 	emiterOnce.Do(func() {
-		emiter = newEventEmiter()
+		emitter = newEventEmitter()
 	})
 
-	emiter.on(channel, handler)
+	emitter.on(channel, handler)
 }
 
 /**
-* emit
+* Emitter: Emits data on channel through the in-process emitter (see On).
 * @param channel string, data et.Json
 **/
-func Emiter(channel string, data et.Json) {
+func Emitter(channel string, data et.Json) {
 	emiterOnce.Do(func() {
-		emiter = newEventEmiter()
+		emitter = newEventEmitter()
 	})
 
-	emiter.emiter(channel, data)
+	emitter.emitter(channel, data)
 }

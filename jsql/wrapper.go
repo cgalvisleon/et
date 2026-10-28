@@ -446,8 +446,10 @@ func wrapPackage() map[string]any {
 		"quoted":          Quoted,
 		"escapeSQLString": EscapeSQLString,
 		"jsonString":      JsonString,
-		"argWhitAs":       ArgWhitAs,
-		"argWhitSchema":   ArgWhitSchema,
+		"argWithAs":       ArgWithAs,
+		"argWithSchema":   ArgWithSchema,
+		"argWhitAs":       ArgWithAs,     // Deprecated: use argWithAs
+		"argWhitSchema":   ArgWithSchema, // Deprecated: use argWithSchema
 	}
 }
 
@@ -562,23 +564,23 @@ func wrapModel(m *Model) map[string]any {
 		// Definition
 		"defineSource":   func() any { return columnJson(m.DefineSource()) },
 		"defineIdxField": func() any { return indexJson(m.DefineIdxField()) },
-		"defineIndex": func(name string, tp et.TypeData, deFault any) any {
-			return indexJson(m.DefineIndex(name, tp, deFault))
+		"defineIndex": func(name string, tp et.TypeData, defaultValue any) any {
+			return indexJson(m.DefineIndex(name, tp, defaultValue))
 		},
-		"definePrimaryKey": func(name string, tp et.TypeData, deFault any) any {
-			return indexJson(m.DefinePrimaryKey(name, tp, deFault))
+		"definePrimaryKey": func(name string, tp et.TypeData, defaultValue any) any {
+			return indexJson(m.DefinePrimaryKey(name, tp, defaultValue))
 		},
-		"defineUnique": func(name string, tp et.TypeData, deFault any) any {
-			return indexJson(m.DefineUnique(name, tp, deFault))
+		"defineUnique": func(name string, tp et.TypeData, defaultValue any) any {
+			return indexJson(m.DefineUnique(name, tp, defaultValue))
 		},
-		"defineRequired": func(name string, tp et.TypeData, deFault any) any {
-			return indexJson(m.DefineRequired(name, tp, deFault))
+		"defineRequired": func(name string, tp et.TypeData, defaultValue any) any {
+			return indexJson(m.DefineRequired(name, tp, defaultValue))
 		},
-		"defineColumn": func(name string, tp et.TypeData, deFault any) any {
-			return columnJson(m.DefineColumn(name, tp, deFault))
+		"defineColumn": func(name string, tp et.TypeData, defaultValue any) any {
+			return columnJson(m.DefineColumn(name, tp, defaultValue))
 		},
-		"defineAttrib": func(name string, tp et.TypeData, deFault any) any {
-			return columnJson(m.DefineAttrib(name, tp, deFault))
+		"defineAttrib": func(name string, tp et.TypeData, defaultValue any) any {
+			return columnJson(m.DefineAttrib(name, tp, defaultValue))
 		},
 		"defineForeignKeys": func(to any, keys map[string]string, onDeleteCascade, onUpdateCascade bool) map[string]any {
 			return wrapDetail(m.DefineForeignKeys(toModel(to), keys, onDeleteCascade, onUpdateCascade))

@@ -91,7 +91,7 @@ func (s *S3AWS) UploaderFile(r *http.Request, bucket, folder, fileName string) (
 	defer fileparts.Close()
 
 	contentType := fileInfo.Header.Get("Content-Type")
-	ext := file.GetExtencion(fileInfo.Filename)
+	ext := file.GetExtension(fileInfo.Filename)
 	filename := fileInfo.Filename
 	if len(fileName) > 0 {
 		filename = fmt.Sprintf(`%s.%s`, fileName, ext)
@@ -146,9 +146,9 @@ func (s *S3AWS) UploaderB64(bucket, b64, fileName, contentType string) (et.Item,
 }
 
 /**
-* DeleteS3
-* @param bucket, key string
-* @return *s3.DeleteObjectOutput, error
+* Delete: Deletes the object filePath of bucket.
+* @param bucket, filePath string
+* @return et.Item, error
 **/
 func (s *S3AWS) Delete(bucket, filePath string) (et.Item, error) {
 	s3client := s3.New(s.sess)
@@ -175,9 +175,9 @@ func (s *S3AWS) Delete(bucket, filePath string) (et.Item, error) {
 }
 
 /**
-* DownloadS3
-* @param bucket, key string
-* @return *s3.GetObjectOutput, error
+* Download: Gets the object filePath of bucket; the S3 output goes in result.
+* @param bucket, filePath string
+* @return et.Item, error
 **/
 func (s *S3AWS) Download(bucket, filePath string) (et.Item, error) {
 	s3client := s3.New(s.sess)

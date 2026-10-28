@@ -1,6 +1,14 @@
+// Package crontab schedules jobs (cron spec or a single time) across instances through NATS events.
+//
+// Invariants:
+//   - Job.mu is held during setStatus, including its save() (the Store call runs under the lock).
+//   - Job.trigger increments Attempts outside the lock, between two setStatus calls.
+//   - A job is persisted only through Store.Set("jobs", id, ownerId, job), called by save(); nothing is reloaded from
+//     the Store on start, the caller registers the jobs again.
 package crontab
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -146,7 +154,7 @@ func (s *Crontab) startJob(id string) error {
 	job, exists := s.Jobs[id]
 	s.mu.Unlock()
 	if !exists {
-		return fmt.Errorf("job not found")
+		return errors.New(MSG_JOB_NOT_FOUND)
 	}
 
 	err := job.start()
@@ -167,7 +175,7 @@ func (s *Crontab) stopJob(tag string) error {
 	job, exists := s.Jobs[tag]
 	s.mu.Unlock()
 	if !exists {
-		return fmt.Errorf("job not found")
+		return errors.New(MSG_JOB_NOT_FOUND)
 	}
 
 	job.stop()

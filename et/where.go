@@ -8,6 +8,10 @@ import (
 	"strings"
 )
 
+/**
+* Iterator: A source of rows for Wheres and Joingy: Next gives them in order, As is its alias,
+* Add appends one and LimitRows is its default page size.
+**/
 type Iterator interface {
 	Next() (Json, bool)
 	As() string
@@ -15,6 +19,9 @@ type Iterator interface {
 	LimitRows() int
 }
 
+/**
+* JoinType: Kind of join: inner, left, right or full.
+**/
 type JoinType int
 
 const (
@@ -43,19 +50,26 @@ func (j JoinType) String() string {
 	}
 }
 
+/**
+* Join: A join of a Wheres: the right side To, the left→right key map Keys and its Type.
+**/
 type Join struct {
 	To   Iterator          `json:"to"`
 	Keys map[string]string `json:"keys"`
 	Type JoinType          `json:"type"`
 }
 
+/**
+* OrderField: One field of the order of a Wheres, ascending or descending.
+**/
 type OrderField struct {
 	Field string
 	Asc   bool
 }
 
 /**
-* Where
+* Wheres: An in-memory query over an Iterator (From): conditions, selects, joins, hidden fields, order,
+* offset and limit; All runs it into Result.
 **/
 type Wheres struct {
 	From       Iterator     `json:"from"`
@@ -72,8 +86,8 @@ type Wheres struct {
 }
 
 /**
-* newWhere
-* @param from []Json, as string
+* newWhere: A Wheres over from, with its LimitRows as limit.
+* @param from Iterator
 * @return *Wheres
 **/
 func newWhere(from Iterator) *Wheres {
@@ -94,7 +108,7 @@ func newWhere(from Iterator) *Wheres {
 }
 
 /**
-* IsDebug: Returns the debug mode
+* IsDebug: Turns debug mode on.
 * @return *Wheres
 **/
 func (s *Wheres) IsDebug() *Wheres {
@@ -451,7 +465,8 @@ func (s *Wheres) All() []Json {
 }
 
 /**
-* One
+* One: The row at idx of All, 0-based (a negative counts from the end, -1 is the last).
+* Unlike Items.One, which is 1-based. Empty Json when out of range.
 * @param idx int
 * @return Json
 **/
@@ -489,6 +504,9 @@ func (s *Wheres) Last() Json {
 	return s.One(-1)
 }
 
+/**
+* Source: The Iterator over a []Json, used by From and Joingy.
+**/
 type Source struct {
 	data      []Json `json:"-"`
 	as        string `json:"-"`
@@ -549,9 +567,9 @@ func (s *Source) LimitRows() int {
 }
 
 /**
-* From
-* @param itmes []Json, as ...string
-* @return *Where
+* From: An in-memory query (Wheres) over items, with alias as ("A" by default).
+* @param items []Json, as ...string
+* @return *Wheres
 **/
 func From(items []Json, as ...string) *Wheres {
 	asStr := "A"
@@ -644,7 +662,7 @@ func MergeToKeyValue(left []Json, key string, value any) []Json {
 }
 
 /**
-* MergeToMap
+* MergeToMap: Cartesian product of left and right: one merged row per pair, the keys of left winning.
 * @params left, right []Json
 * @return []Json
 **/
@@ -754,8 +772,8 @@ func Joingy(left, right Iterator, keys map[string]string, joinType JoinType) Ite
 }
 
 /**
-* merge
-* @params left, right Json, as string
+* merge: A copy of left plus the keys of right that left does not have.
+* @params left, right Json
 * @return Json
 **/
 func merge(left, right Json) Json {

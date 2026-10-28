@@ -20,16 +20,16 @@ import (
 func GetBearerToken(r *http.Request) (string, error) {
 	_, ok := r.Header["Authorization"]
 	if !ok {
-		return "", logs.Alertm("Autorization is required")
+		return "", logs.Alertm(MSG_AUTHORIZATION_REQUIRED)
 	}
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
-		return "", logs.Alertm("Autorization is required")
+		return "", logs.Alertm(MSG_AUTHORIZATION_REQUIRED)
 	}
 
 	if !strings.HasPrefix(token, "Bearer ") {
-		return "", logs.Alertm("Autorization is required")
+		return "", logs.Alertm(MSG_INVALID_AUTHORIZATION_FORMAT)
 	}
 
 	token = strings.TrimPrefix(token, "Bearer ")

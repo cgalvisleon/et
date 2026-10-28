@@ -247,7 +247,7 @@ func sqliteInsertSQL(command *jsql.Command) (string, error) {
 	}
 
 	if len(cols) == 0 {
-		return "", fmt.Errorf("no columns to insert into %s", table)
+		return "", fmt.Errorf(jsql.MSG_NO_COLUMNS_INSERT, table)
 	}
 
 	var sb strings.Builder
@@ -292,7 +292,7 @@ func sqliteUpdateSQL(command *jsql.Command) (string, error) {
 	}
 
 	if len(setCols) == 0 {
-		return "", fmt.Errorf("no columns to update in %s", table)
+		return "", fmt.Errorf(jsql.MSG_NO_COLUMNS_UPDATE, table)
 	}
 
 	var sb strings.Builder
@@ -310,7 +310,7 @@ func sqliteUpdateSQL(command *jsql.Command) (string, error) {
 		whereSQL = sqliteCondsSQL(model.GetField, model.SourceField != "", command.Conditions, "")
 	}
 	if whereSQL == "" {
-		return "", fmt.Errorf("refusing to UPDATE %s without a WHERE clause (missing primary key value in New and no Conditions set)", table)
+		return "", fmt.Errorf(jsql.MSG_REFUSE_WITHOUT_WHERE, "UPDATE", table)
 	}
 	sb.WriteString("\nWHERE " + whereSQL)
 
@@ -340,7 +340,7 @@ func sqliteDeleteSQL(command *jsql.Command) (string, error) {
 		whereSQL = sqliteCondsSQL(model.GetField, model.SourceField != "", command.Conditions, "")
 	}
 	if whereSQL == "" {
-		return "", fmt.Errorf("refusing to DELETE from %s without a WHERE clause (missing primary key value in Old and no Conditions set)", table)
+		return "", fmt.Errorf(jsql.MSG_REFUSE_WITHOUT_WHERE, "DELETE FROM", table)
 	}
 	sb.WriteString("\nWHERE " + whereSQL)
 
@@ -364,6 +364,6 @@ func (s *Sqlite) Command(command *jsql.Command, timeout ...time.Duration) (strin
 	case jsql.DELETE:
 		return sqliteDeleteSQL(command)
 	default:
-		return "", fmt.Errorf("unsupported command type: %s", command.Type)
+		return "", fmt.Errorf(jsql.MSG_UNSUPPORTED_COMMAND, command.Type)
 	}
 }

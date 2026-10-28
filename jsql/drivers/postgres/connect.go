@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/cgalvisleon/et/et"
@@ -13,51 +14,29 @@ import (
 )
 
 /**
-* defaultChain: Returns the default connection string for PostgreSQL
-* @param params et.Json
+* chain: Returns the PostgreSQL connection string, with user, password and database escaped.
+* @param params et.Json, database string (empty = params.database)
 * @return string
 **/
-func defaultChain(params et.Json) string {
-	host := params.ValStr("localhost", "host")
-	port := params.ValInt(5432, "port")
-	user := params.ValStr("", "user")
-	password := params.ValStr("", "password")
-	database := "postgres"
+func chain(params et.Json, database string) string {
+	if database == "" {
+		database = params.ValStr("", "database")
+	}
 	sslMode := params.ValStr("disable", "sslmode")
 	if sslMode == "" {
 		sslMode = "disable"
 	}
-	appName := params.ValStr("et", "app_name")
-
-	dsn := fmt.Sprintf(
-		"postgres://%s:%s@%s:%d/%s?sslmode=%s&application_name=%s",
-		user, password, host, port, database, sslMode, appName,
-	)
-	return dsn
-}
-
-/**
-* chain: Returns the connection string for the named database specified in DB_NAME.
-* @param params et.Json
-* @return string
-**/
-func chain(params et.Json) string {
-	host := params.ValStr("localhost", "host")
-	port := params.ValInt(5432, "port")
-	user := params.ValStr("postgres", "user")
-	password := params.ValStr("", "password")
-	database := params.ValStr("", "database")
-	sslMode := params.ValStr("disable", "sslmode")
-	if sslMode == "" {
-		sslMode = "disable"
+	query := url.Values{}
+	query.Set("sslmode", sslMode)
+	query.Set("application_name", params.ValStr("et", "app_name"))
+	dsn := url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(params.ValStr("postgres", "user"), params.ValStr("", "password")),
+		Host:     fmt.Sprintf("%s:%d", params.ValStr("localhost", "host"), params.ValInt(5432, "port")),
+		Path:     "/" + database,
+		RawQuery: query.Encode(),
 	}
-	appName := params.ValStr("et", "app_name")
-
-	dsn := fmt.Sprintf(
-		"postgres://%s:%s@%s:%d/%s?sslmode=%s&application_name=%s",
-		user, password, host, port, database, sslMode, appName,
-	)
-	return dsn
+	return dsn.String()
 }
 
 /**
@@ -128,7 +107,7 @@ func (s *Postgres) Connect(db *jsql.DB, timeout ...time.Duration) (*sql.DB, erro
 		return nil, err
 	}
 
-	result, err := connectWithRetry(ctx, chain(params), 5)
+	result, err := connectWithRetry(ctx, chain(params, ""), 5)
 	if err != nil {
 		return nil, err
 	}
@@ -155,10 +134,10 @@ func (s *Postgres) Connect(db *jsql.DB, timeout ...time.Duration) (*sql.DB, erro
 func createDB(ctx context.Context, params et.Json) error {
 	database := params.ValStr("", "database")
 	if database == "" {
-		return fmt.Errorf("database is required")
+		return fmt.Errorf(jsql.MSG_ATRIB_REQUIRED, "database")
 	}
 
-	server, err := connectWithRetry(ctx, defaultChain(params), 5)
+	server, err := connectWithRetry(ctx, chain(params, "postgres"), 5)
 	if err != nil {
 		return err
 	}
@@ -198,10 +177,10 @@ func (s *Postgres) DropDB(db *jsql.DB, timeout ...time.Duration) error {
 	params := db.Params
 	database := params.ValStr("", "database")
 	if database == "" {
-		return fmt.Errorf("database is required")
+		return fmt.Errorf(jsql.MSG_ATRIB_REQUIRED, "database")
 	}
 
-	server, err := connectWithRetry(ctx, defaultChain(params), 5)
+	server, err := connectWithRetry(ctx, chain(params, "postgres"), 5)
 	if err != nil {
 		return err
 	}

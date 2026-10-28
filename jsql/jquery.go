@@ -128,7 +128,7 @@ func (s *DB) parseQuery(tx *Tx, sql et.Json) (et.Items, error) {
 * @return et.Items, error
 **/
 func (s *DB) parseCommand(tx *Tx, kind string, value any) (et.Items, error) {
-	desc, ok := toJson(value)
+	desc, ok := jsonOf(value)
 	if !ok {
 		return et.Items{}, errJsonCommandInvalid
 	}
@@ -227,11 +227,11 @@ func (s *DB) parseDDL(value any) (et.Items, error) {
 }
 
 /**
-* toJson: Converts a descriptor value (et.Json or map) to et.Json.
+* jsonOf: Converts a descriptor value (et.Json or map) to et.Json.
 * @param value any
 * @return et.Json, bool
 **/
-func toJson(value any) (et.Json, bool) {
+func jsonOf(value any) (et.Json, bool) {
 	switch v := value.(type) {
 	case et.Json:
 		return v, true

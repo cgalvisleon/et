@@ -131,7 +131,7 @@ func (s *Model) defineOmitUpdate(names ...string) *Model {
 * @param name string, tpColumn TypeColumn, tpData et.TypeData, default any
 * @return *Column
 **/
-func (s *Model) defineColumn(name string, tpColumn TypeColumn, tpData et.TypeData, deFault any) *Column {
+func (s *Model) defineColumn(name string, tpColumn TypeColumn, tpData et.TypeData, defaultValue any) *Column {
 	// Copy on write: a query reading the columns never sees the slice change under it.
 	s.muDef.Lock()
 	defer s.muDef.Unlock()
@@ -144,7 +144,7 @@ func (s *Model) defineColumn(name string, tpColumn TypeColumn, tpData et.TypeDat
 		Name:       name,
 		TypeColumn: tpColumn,
 		TypeData:   tpData,
-		Default:    deFault,
+		Default:    defaultValue,
 		model:      s,
 	}
 
@@ -197,11 +197,11 @@ func (s *Model) defineIdxField() *Index {
 
 /**
 * defineIndex: Defines a new index column for the model.
-* @param name string, tp et.TypeData, deFault any
+* @param name string, tp et.TypeData, defaultValue any
 * @return *Index
 **/
-func (s *Model) defineIndex(name string, tp et.TypeData, deFault any) *Index {
-	s.defineColumn(name, COLUMN, tp, deFault)
+func (s *Model) defineIndex(name string, tp et.TypeData, defaultValue any) *Index {
+	s.defineColumn(name, COLUMN, tp, defaultValue)
 	idx := slices.IndexFunc(s.Indexes, func(idx *Index) bool { return idx.Name == name })
 	if idx != -1 {
 		return s.Indexes[idx]
@@ -216,11 +216,11 @@ func (s *Model) defineIndex(name string, tp et.TypeData, deFault any) *Index {
 
 /**
 * definePrimaryKey: Defines a new primary key column for the model.
-* @param name string, tp et.TypeData, deFault any
+* @param name string, tp et.TypeData, defaultValue any
 * @return *Index
 **/
-func (s *Model) definePrimaryKey(name string, tp et.TypeData, deFault any) *Index {
-	s.defineColumn(name, COLUMN, tp, deFault)
+func (s *Model) definePrimaryKey(name string, tp et.TypeData, defaultValue any) *Index {
+	s.defineColumn(name, COLUMN, tp, defaultValue)
 	idx := slices.IndexFunc(s.PrimaryKeys, func(idx *Index) bool { return idx.Name == name })
 	if idx != -1 {
 		return s.PrimaryKeys[idx]
@@ -250,11 +250,11 @@ func (s *Model) defineForeignKeys(to *Model, keys map[string]string, onDeleteCas
 
 /**
 * defineUnique: Defines a new unique index for the model.
-* @param name string, tp et.TypeData, deFault any
+* @param name string, tp et.TypeData, defaultValue any
 * @return *Index
 **/
-func (s *Model) defineUnique(name string, tp et.TypeData, deFault any) *Index {
-	s.defineColumn(name, COLUMN, tp, deFault)
+func (s *Model) defineUnique(name string, tp et.TypeData, defaultValue any) *Index {
+	s.defineColumn(name, COLUMN, tp, defaultValue)
 	idx := slices.IndexFunc(s.Unique, func(idx *Index) bool { return idx.Name == name })
 	if idx != -1 {
 		return s.Unique[idx]
@@ -269,11 +269,11 @@ func (s *Model) defineUnique(name string, tp et.TypeData, deFault any) *Index {
 
 /**
 * defineRequired: Defines a new required column for the model.
-* @param name string, tp et.TypeData, deFault any
+* @param name string, tp et.TypeData, defaultValue any
 * @return *Index
 **/
-func (s *Model) defineRequired(name string, tp et.TypeData, deFault any) *Index {
-	s.defineColumn(name, COLUMN, tp, deFault)
+func (s *Model) defineRequired(name string, tp et.TypeData, defaultValue any) *Index {
+	s.defineColumn(name, COLUMN, tp, defaultValue)
 	idx := slices.IndexFunc(s.Required, func(idx *Index) bool { return idx.Name == name })
 	if idx != -1 {
 		return s.Required[idx]
@@ -296,20 +296,20 @@ func (s *Model) defineHidden(name ...string) {
 
 /**
 * defineRealColumn: Defines a new column for the model.
-* @param name string, tp et.TypeData, deFault any
+* @param name string, tp et.TypeData, defaultValue any
 * @return *Column
 **/
-func (s *Model) defineRealColumn(name string, tp et.TypeData, deFault any) *Column {
-	return s.defineColumn(name, COLUMN, tp, deFault)
+func (s *Model) defineRealColumn(name string, tp et.TypeData, defaultValue any) *Column {
+	return s.defineColumn(name, COLUMN, tp, defaultValue)
 }
 
 /**
 * defineAttrib: Defines a new attribute for the model.
-* @param name string, tp et.TypeData, deFault any
+* @param name string, tp et.TypeData, defaultValue any
 * @return *Column
 **/
-func (s *Model) defineAttrib(name string, tp et.TypeData, deFault any) *Column {
-	return s.defineColumn(name, ATTRIB, tp, deFault)
+func (s *Model) defineAttrib(name string, tp et.TypeData, defaultValue any) *Column {
+	return s.defineColumn(name, ATTRIB, tp, defaultValue)
 }
 
 /**
@@ -451,8 +451,8 @@ func (s *Model) defineCalcFunc(name string, calc CalcFunction) *Model {
 }
 
 /**
-* defineCalc: Defines a new calculation for the model using a bytecode definition.
-* @param name string, code string
+* defineCalc: Defines a CALC column computed per row by a JavaScript script (jwf).
+* @param name, script string
 * @return *Model
 **/
 func (s *Model) defineCalc(name, script string) *Model {
@@ -732,6 +732,10 @@ var Status = map[string]bool{
 var IsEditableStatus = []string{ACTIVE, PENDING}
 var IsExcludedStatus = []string{ACTIVE, OF_SYSTEM}
 
+/**
+* statusList: The valid record statuses, as values for an IN condition.
+* @return []interface{}
+**/
 func statusList() []interface{} {
 	return []interface{}{ACTIVE, ARCHIVED, CANCELED, OF_SYSTEM, FOR_DELETE, PENDING, APPROVED, REJECTED}
 }
@@ -758,6 +762,14 @@ type Column struct {
 	TypeData   et.TypeData `json:"type_data"`
 	Default    any         `json:"default"`
 	model      *Model      `json:"-"`
+}
+
+/**
+* Index: Represents a named index or primary-key field; Sorted selects BTREE over HASH.
+**/
+type Index struct {
+	Name   string `json:"name"`
+	Sorted bool   `json:"sorted"`
 }
 
 /**

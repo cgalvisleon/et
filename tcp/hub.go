@@ -15,7 +15,9 @@ import (
 	"github.com/cgalvisleon/et/reg"
 )
 
-// beatMaxFailures: latidos seguidos sin respuesta que cierran la conexión (§14.7).
+/**
+* beatMaxFailures: Latidos seguidos sin respuesta que cierran la conexión (§14.7).
+**/
 const beatMaxFailures = 3
 
 /**
@@ -58,6 +60,13 @@ type clientInfo struct {
 * Hub: Agrupa varios servidores y varios clientes de este paquete para llevar
 * mensajes tipados entre nodos (spec §14). Los dos extremos de una conexión del Hub
 * son Hubs.
+*
+* Orden de locks: mu solo protege los mapas (clientMap, infoMap, connecting, serverMap,
+* conns) y bajo él se toman, cada uno por separado y nunca uno dentro de otro,
+* Client.mu (id, name, to, current), clientInfo.mu y connState.timesMu. connState.sendMu
+* se sostiene mientras se escribe en la conexión, así que anida Client.mu (sendMu →
+* Client.mu). recvMu, beatMu y fnMu no se anidan con ningún otro lock: recvMu se
+* suelta antes de llamar a las funciones de onMessage y fnMu solo copia la lista.
 **/
 type Hub struct {
 	mu            sync.RWMutex           // protege los mapas
@@ -340,7 +349,7 @@ func (h *Hub) sendOn(conn *Client, st *connState, m *Message) error {
 
 	if err := conn.send(data); err != nil {
 		// Sin conexión o mensaje demasiado grande: no se escribió nada
-		if err.Error() != msg.MSG_TCP_NOT_CONNECTED && err.Error() != msg.MSG_DATA_TOO_LARGE {
+		if !errors.Is(err, errNotConnected) && !errors.Is(err, errDataTooLarge) {
 			conn.closeWith(err)
 		}
 		return err
@@ -650,7 +659,7 @@ func (h *Hub) send(addr string, m *Message) error {
 
 	st := h.state(nil, c)
 	if st == nil {
-		return errors.New(msg.MSG_TCP_NOT_CONNECTED)
+		return errNotConnected
 	}
 	return h.sendOn(c, st, m)
 }

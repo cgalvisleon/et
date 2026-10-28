@@ -28,7 +28,10 @@ const NOT_FOUND = "Not found"
 const FOUND = "Found"
 const CACHE_TIME = 60 * 60 * 24 * 1
 const DAY_SECOND = 60 * 60 * 24 * 1
-const SELECt = "SELECT"
+const SELECT = "SELECT"
+
+// Deprecated: use SELECT.
+const SELECt = SELECT
 const INSERT = "INSERT"
 const UPDATE = "UPDATE"
 const DELETE = "DELETE"
@@ -40,12 +43,9 @@ const BEFORE_STATE = "BEFORE_STATE"
 const AFTER_STATE = "AFTER_STATE"
 const BEFORE_DELETE = "BEFORE_DELETE"
 const AFTER_DELETE = "AFTER_DELETE"
-const VALUE_NOT_BOOL = "Value is not bolean"
+const VALUE_NOT_BOOL = "Value is not boolean"
 const ROWS = 30
 const QUEUE_STACK = "stack"
-
-var locks = make(map[string]*sync.RWMutex)
-var count = make(map[string]int64)
 
 /**
 * App
@@ -71,7 +71,7 @@ func AppWait() {
 }
 
 /**
-* NowTime
+* Now: The current time in the configured time zone.
 * @return time.Time
 **/
 func Now() time.Time {
@@ -84,57 +84,6 @@ func Now() time.Time {
 **/
 func NowStr() string {
 	return timezone.NowStr()
-}
-
-/**
-* More return the next value of a serie
-* @param tag string
-* @return int
-**/
-func More(tag string, expiration time.Duration) int64 {
-	lock := locks[tag]
-	if lock == nil {
-		lock = &sync.RWMutex{}
-		locks[tag] = lock
-	}
-
-	lock.Lock()
-	defer lock.Unlock()
-
-	n, ok := count[tag]
-	if !ok {
-		n = 0
-	} else {
-		n++
-	}
-	count[tag] = 0
-
-	clean := func() {
-		delete(count, tag)
-		delete(locks, tag)
-	}
-
-	duration := expiration * time.Second
-	if duration != 0 {
-		go time.AfterFunc(duration, clean)
-	}
-
-	return n
-}
-
-/**
-* UUIndex return the next value of a serie
-* @param tag string
-* @return int64
-**/
-func UUIndex(tag string) int64 {
-	now := timezone.Now()
-	result := now.UnixMilli() * 10000
-	key := fmt.Sprintf("%s:%d", tag, result)
-	n := More(key, 1*time.Second)
-	result = result + int64(n)
-
-	return result
 }
 
 /**
@@ -211,12 +160,17 @@ func GeneratePortNumber() int {
 	return port
 }
 
+// ExtractMencion: Deprecated: use ExtractMention.
+func ExtractMencion(str string) []string {
+	return ExtractMention(str)
+}
+
 /**
-* ExtractMencion return the mentions in a string
+* ExtractMention return the mentions in a string
 * @param str string
 * @return []string
 **/
-func ExtractMencion(str string) []string {
+func ExtractMention(str string) []string {
 	patron := `@([a-zA-Z0-9_]+)`
 	expresionRegular := regexp.MustCompile(patron)
 	mencions := expresionRegular.FindAllString(str, -1)
@@ -512,23 +466,24 @@ func FromBase64Raw(data string) string {
 * @return string
 **/
 func Normalize(input string) string {
-	// 1. Quitar espacios al inicio y final
+	// 1. Trim leading and trailing spaces
 	s := strings.TrimSpace(input)
 
-	// 2. Reemplazar uno o más espacios por _
+	// 2. Replace one or more spaces with _
 	s = regexp.MustCompile(`\s+`).ReplaceAllString(s, "_")
 
-	// 3. Eliminar todo lo que no sea letra, número o _
+	// 3. Remove everything that is not a letter, a digit or _
 	s = regexp.MustCompile(`[^a-zA-Z0-9_]`).ReplaceAllString(s, "")
 
-	// 4. Garantizar que no empiece con número
+	// 4. Make sure it does not start with a digit
 	s = regexp.MustCompile(`^[0-9]+`).ReplaceAllString(s, "")
 
 	return s
 }
 
 /**
-* Serialize
+* ToSerialize: Encodes v as JSON.
+* @param v any
 * @return []byte, error
 **/
 func ToSerialize(v any) ([]byte, error) {
@@ -584,7 +539,7 @@ var instanceBufPool = sync.Pool{
 }
 
 /**
-* Serialize
+* Serialize: Encodes v as JSON (with a trailing newline) through a pooled buffer.
 * @param v any
 * @return []byte, error
 **/

@@ -6,6 +6,9 @@ import (
 	"github.com/cgalvisleon/et/et"
 )
 
+/**
+* Solver: Where a method is served and its input and output types.
+**/
 type Solver struct {
 	Host   string   `json:"host"`
 	Port   int      `json:"port"`
@@ -13,6 +16,9 @@ type Solver struct {
 	Output []string `json:"output"`
 }
 
+/**
+* Package: The methods mounted by one service, by "Struct.Method".
+**/
 type Package struct {
 	Name    string             `json:"name"`
 	Host    string             `json:"host"`
@@ -55,14 +61,14 @@ func (s *Package) ToJson() et.Json {
 
 /**
 * Add
-* @param method string, imputs []string, output []string
+* @param method string, inputs []string, output []string
 * @return *Solver
 **/
-func (s *Package) Add(method string, imputs []string, output []string) *Solver {
+func (s *Package) Add(method string, inputs []string, output []string) *Solver {
 	result := &Solver{
 		Host:   s.Host,
 		Port:   s.Port,
-		Inputs: imputs,
+		Inputs: inputs,
 		Output: output,
 	}
 	s.Solvers[method] = result

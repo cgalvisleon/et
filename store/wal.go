@@ -4,6 +4,10 @@ import (
 	"github.com/cgalvisleon/et/et"
 )
 
+/**
+* WalEntry: Entrada del log para replicación (WalSince / ApplyWalEntry): Status es
+* Active o Deleted y Data va vacío en un tombstone.
+**/
 type WalEntry struct {
 	LSN    uint64 `json:"lsn"`
 	ID     string `json:"id"`

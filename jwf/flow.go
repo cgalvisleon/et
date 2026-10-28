@@ -20,8 +20,10 @@ const (
 )
 
 var (
-	ErrrFlowNotFound    = errors.New(MSG_FLOW_NOT_FOUND)
-	ErrrTriggerNotFound = errors.New(MSG_TRIGGER_NOT_FOUND)
+	ErrFlowNotFound     = errors.New(MSG_FLOW_NOT_FOUND)
+	ErrTriggerNotFound  = errors.New(MSG_TRIGGER_NOT_FOUND)
+	ErrrFlowNotFound    = ErrFlowNotFound    // Deprecated: use ErrFlowNotFound
+	ErrrTriggerNotFound = ErrTriggerNotFound // Deprecated: use ErrTriggerNotFound
 )
 
 type Port string
@@ -157,8 +159,7 @@ func LoadFlow(def et.Json) (*Flow, error) {
 }
 
 /**
-* up
-* @param workflow *WorkFlow
+* up: Restores the private state after creation or json.Unmarshal (hooks, constants, resources, bindings).
 * @return *Flow
 **/
 func (s *Flow) up() *Flow {
@@ -242,6 +243,8 @@ func (s *Flow) ToJson() et.Json {
 		"on_publish":     s.OnPublish,
 		"resources":      s.Resources,
 		"published":      s.Published,
+		"app_id":         s.AppId,
+		"save_instances": s.SaveInstances,
 		"audit_log":      s.AuditLog,
 	}
 }
@@ -279,9 +282,9 @@ func (s *Flow) SetBinding(key string, value interface{}) *Flow {
 }
 
 /**
-* getTrigger
+* getTrigger: The trigger with that tag.
 * @param tag string
-* @return *Trigger, error
+* @return *Trigger, bool
 **/
 func (s *Flow) getTrigger(tag string) (*Trigger, bool) {
 	idx := slices.IndexFunc(s.Triggers, func(trigger *Trigger) bool {
@@ -296,7 +299,7 @@ func (s *Flow) getTrigger(tag string) (*Trigger, bool) {
 }
 
 /**
-* getStep
+* GetStep: The step with that id.
 * @param stepId string
 * @return *Step, bool
 **/

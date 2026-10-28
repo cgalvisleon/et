@@ -34,9 +34,8 @@ var (
 )
 
 /**
-* Logger middleware logs the start and end of each request with method, path,
-* status, size, and elapsed time. Outputs color when stdout is a TTY.
-* Must be registered before Recoverer in the middleware chain.
+* Logger: DefaultLogger middleware: per request, creates its Metrics (CallMetrics in the cache),
+* sets the ServiceId header and logs the request with its status, size and latency when done.
 * @param next http.Handler
 * @return http.Handler
 **/

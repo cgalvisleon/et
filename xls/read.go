@@ -123,9 +123,8 @@ func (s *XlsReader) GetSheet(nameSheet string, columns []string) ([]et.Json, err
 }
 
 /**
-* indexOf: Returns the index of value inside list, or -1 if not found.
-* @param list []string
-* @param value string
+* IndexOf: Returns the index of value inside list, or -1 if not found.
+* @param list []string, value string
 * @return int
 **/
 func IndexOf(list []string, value string) int {

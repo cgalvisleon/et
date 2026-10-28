@@ -22,7 +22,7 @@ func sqliteType(tp et.TypeData) string {
 	case et.KEY, et.TEXT, et.MEMO, et.DATETIME:
 		return "TEXT"
 	case et.JSON, et.ARRAY, et.ARRAY_JSON, et.ARRAY_STRING, et.ARRAY_INT, et.ARRAY_FLOAT, et.ARRAY_BOOL, et.ARRAY_DATETIME, et.VAL_BETWEEN:
-		// SQLite no tiene arreglos: se guardan como JSON en texto
+		// SQLite has no arrays: they are stored as JSON text
 		return "TEXT"
 	default: // ANY
 		return "TEXT"

@@ -19,6 +19,10 @@ import (
 
 type Status string
 
+/**
+* Str: The status as a string.
+* @return string
+**/
 func (s Status) Str() string {
 	return string(s)
 }
@@ -65,7 +69,8 @@ func statusList() []Status {
 
 var (
 	hostname              string
-	ErrorInstanceNotFound                 = errors.New(MSG_INSTANCE_NOT_FOUND)
+	ErrInstanceNotFound                   = errors.New(MSG_INSTANCE_NOT_FOUND)
+	ErrorInstanceNotFound                 = ErrInstanceNotFound // Deprecated: use ErrInstanceNotFound
 	FlowStatusList        map[Status]bool = map[Status]bool{
 		CREATED:  true,
 		PENDING:  true,
@@ -280,7 +285,7 @@ func (s *Instance) OnChange(fn func(data et.Json)) *Instance {
 }
 
 /**
-* Ref
+* ref: The summary of the instance sent to the OnChange hooks (ids, status, current step, error).
 * @return et.Json
 **/
 func (s *Instance) ref() et.Json {
@@ -299,7 +304,10 @@ func (s *Instance) ref() et.Json {
 		"id":           s.ID,
 		"code":         s.Code,
 		"flow_id":      s.FlowId,
+		"flow_tag":     s.FlowTag,
 		"flow_version": s.FlowVersion,
+		"name":         s.Name,
+		"duration":     s.Duration,
 		"status":       s.getStatus(),
 		"started_at":   timezone.Format(s.StartedAt, timezone.RFC3339),
 		"updated_at":   timezone.Format(s.UpdatedAt, timezone.RFC3339),
@@ -490,7 +498,7 @@ func (s *Instance) setTag(tags et.Json) et.Json {
 }
 
 /**
-* setParams
+* SetParams: Merges params into the instance params and notifies the change.
 * @param params et.Json
 * @return et.Json
 **/
@@ -510,8 +518,9 @@ func (s *Instance) Done() *Instance {
 }
 
 /**
-* setStep
-* @param step *Step
+* setEnd: Makes step the last one of the run (no current connection, IsEnd) and notifies the change.
+* @param step *Step, stepId string
+* @return bool
 **/
 func (s *Instance) setEnd(step *Step, stepId string) bool {
 	s.mu.Lock()
@@ -527,9 +536,9 @@ func (s *Instance) setEnd(step *Step, stepId string) bool {
 }
 
 /**
-* setCurrent
-* @param step *Step
-* @return error
+* setCurrent: Moves the instance to connection, whose source step becomes the current one, and notifies the change.
+* @param connection *Connection
+* @return bool
 **/
 func (s *Instance) setCurrent(connection *Connection) bool {
 	s.mu.Lock()
@@ -650,7 +659,7 @@ func (s *Instance) setAgain() {
 		s.next()
 	} else {
 		s.setCurrent(s.again)
-		s.runing(s.Ctx)
+		s.running(s.Ctx)
 	}
 }
 
@@ -674,7 +683,7 @@ func (s *Instance) Run(ctx et.Json, await bool) (et.Json, error) {
 		err = fmt.Errorf(MSG_INSTANCE_ALREADY_DONE, s.ID)
 		return et.Json{}, err
 	} else if status == RUNNING {
-		err = fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING, s.ID)
+		err = fmt.Errorf(MSG_INSTANCE_ALREADY_RUNNING, status)
 		return et.Json{}, err
 	} else if status == ROLLBACK {
 		err = fmt.Errorf(MSG_INSTANCE_ROLLBACK, s.ID)
@@ -685,11 +694,11 @@ func (s *Instance) Run(ctx et.Json, await bool) (et.Json, error) {
 	}
 
 	if await {
-		return s.runing(ctx)
+		return s.running(ctx)
 	}
 
 	go func() {
-		_, err := s.runing(ctx)
+		_, err := s.running(ctx)
 		if err != nil {
 			logs.Logf(packageName, MSG_INSTANCE_ERROR, s.ID, s.FlowId, s.StepId, err.Error())
 		}
@@ -700,11 +709,11 @@ func (s *Instance) Run(ctx et.Json, await bool) (et.Json, error) {
 }
 
 /**
-* runing: Runs the instance
+* running: Runs the instance
 * @param ctx et.Json
 * @return (et.Json, error)
 **/
-func (s *Instance) runing(ctx et.Json) (et.Json, error) {
+func (s *Instance) running(ctx et.Json) (et.Json, error) {
 	var result et.Json
 	var err error
 	for s.next() {
@@ -720,7 +729,7 @@ func (s *Instance) runing(ctx et.Json) (et.Json, error) {
 		ctx = s.setCtx(ctx)
 		result, err = step.Run(s, ctx)
 		if err != nil {
-			result, err = s.runResilence(ctx, err)
+			result, err = s.runResilience(ctx, err)
 			if err != nil {
 				result, err = s.runError(ctx, err)
 			}
@@ -735,11 +744,11 @@ func (s *Instance) runing(ctx et.Json) (et.Json, error) {
 }
 
 /**
-* runResilence
+* runResilience
 * @param ctx et.Json, err error
 * @return (bool, error)
 **/
-func (s *Instance) runResilence(ctx et.Json, err error) (et.Json, error) {
+func (s *Instance) runResilience(ctx et.Json, err error) (et.Json, error) {
 	if s.flow.TotalAttempts == 0 {
 		return et.Json{}, err
 	}
@@ -753,21 +762,21 @@ func (s *Instance) runResilence(ctx et.Json, err error) (et.Json, error) {
 	}
 
 	description := fmt.Sprintf("flow: %s,  %s", s.flow.Name, s.flow.Description)
-	resilence, err := s.resilience.LoadInstance(resilience.Params{
+	attempt, err := s.resilience.LoadInstance(resilience.Params{
 		Id:            s.ID,
 		Tag:           "workflow",
 		Description:   description,
 		TotalAttempts: s.flow.TotalAttempts,
 		Interval:      s.flow.TimeAttempts,
 		Tags:          s.Tags,
-		Fn:            s.runing,
+		Fn:            s.running,
 		FnArgs:        []interface{}{ctx},
 	})
 	if err != nil {
 		return et.Json{}, err
 	}
 
-	res, err := resilence.Run()
+	res, err := attempt.Run()
 	if err != nil {
 		return et.Json{}, err
 	}
@@ -785,7 +794,8 @@ func (s *Instance) runResilence(ctx et.Json, err error) (et.Json, error) {
 }
 
 /**
-* rollback
+* runError: Runs the step attached to the error port of the current step and returns the original err.
+* @param ctx et.Json, err error
 * @return et.Json, error
 **/
 func (s *Instance) runError(ctx et.Json, err error) (et.Json, error) {

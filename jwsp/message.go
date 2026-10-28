@@ -4,16 +4,26 @@ import (
 	"github.com/cgalvisleon/et/et"
 )
 
+/**
+* Button: a reply button of an interactive message (id and label).
+**/
 type Button struct {
 	ID   string `json:"id"`
 	Text string `json:"text"`
 }
 
+/**
+* Header: the header of an interactive message (type and content).
+**/
 type Header struct {
 	Type    string `json:"type"`
 	Content string `json:"content"`
 }
 
+/**
+* body: the header as the JSON WhatsApp expects.
+* @return et.Json
+**/
 func (s *Header) body() et.Json {
 	return et.Json{
 		"type": s.Type,
@@ -21,21 +31,33 @@ func (s *Header) body() et.Json {
 	}
 }
 
+/**
+* Footer: the footer text of an interactive message.
+**/
 type Footer struct {
 	Text string `json:"text"`
 }
 
+/**
+* Row: an option of a list section (id, title, description).
+**/
 type Row struct {
 	ID          string `json:"id"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
 }
 
+/**
+* Section: a titled group of rows in a list message.
+**/
 type Section struct {
 	Title string `json:"title"`
 	Rows  []Row  `json:"rows"`
 }
 
+/**
+* TpAddress: the kind of a contact field (home or work).
+**/
 type TpAddress string
 
 const (
@@ -43,6 +65,9 @@ const (
 	WORK TpAddress = "work"
 )
 
+/**
+* Address: a postal address of a contact card.
+**/
 type Address struct {
 	Street      string    `json:"street"`
 	City        string    `json:"city"`
@@ -53,22 +78,34 @@ type Address struct {
 	Type        TpAddress `json:"type"`
 }
 
+/**
+* Email: an email of a contact card.
+**/
 type Email struct {
 	Email string    `json:"email"`
 	Type  TpAddress `json:"type"`
 }
 
+/**
+* Phone: a phone (and WhatsApp id) of a contact card.
+**/
 type Phone struct {
 	Phone string    `json:"phone"`
 	WaID  string    `json:"wa_id"`
 	Type  TpAddress `json:"type"`
 }
 
+/**
+* Url: a link, either a media/preview URL or a URL of a contact card.
+**/
 type Url struct {
 	Url  string    `json:"url"`
 	Type TpAddress `json:"type"`
 }
 
+/**
+* Contact: a contact card (name, birthday, organization, addresses, emails, phones, urls).
+**/
 type Contact struct {
 	Address       []Address `json:"Address"`
 	Birthday      string    `json:"birthday"`
@@ -86,11 +123,17 @@ type Contact struct {
 	Urls          []Url     `json:"urls"`
 }
 
+/**
+* Action: the action of an interactive message (button label and sections).
+**/
 type Action struct {
 	Button   string        `json:"button"`
 	Sections ActionSection `json:"sections"`
 }
 
+/**
+* ActionSection: a section of an action, with its rows and the catalog/product ids used by product messages.
+**/
 type ActionSection struct {
 	Title                      string    `json:"title"`
 	Rows                       ActionRow `json:"rows"`
@@ -99,12 +142,18 @@ type ActionSection struct {
 	ThumbnailProductRetailerID string    `json:"thumbnail_product_retailer_id"`
 }
 
+/**
+* ActionRow: a row of an action section (id, title, description).
+**/
 type ActionRow struct {
 	ID          string `json:"id"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
 }
 
+/**
+* Parameter: the values of a template component (text, currency, date_time, image, button payload and index).
+**/
 type Parameter struct {
 	Header        string `json:"header"`
 	Body          string `json:"body"`
@@ -131,11 +180,17 @@ type Parameter struct {
 	Index         string `json:"index"`
 }
 
+/**
+* Component: a template component (type and its parameters).
+**/
 type Component struct {
 	Type      string    `json:"type"`
 	Parameter Parameter `json:"parameter"`
 }
 
+/**
+* Location: a geographic location message (latitude, longitude, name, address).
+**/
 type Location struct {
 	Latitude  string `json:"latitude"`
 	Longitude string `json:"longitude"`
@@ -143,6 +198,9 @@ type Location struct {
 	Address   string `json:"address"`
 }
 
+/**
+* Template: a message template (name, language code and components).
+**/
 type Template struct {
 	Name       string      `json:"name"`
 	Language   string      `json:"language"`
@@ -150,6 +208,9 @@ type Template struct {
 	Components []Component `json:"components"`
 }
 
+/**
+* MessageType: the kind of WhatsApp message a Message builds.
+**/
 type MessageType string
 
 const (
@@ -193,6 +254,9 @@ const (
 	MessageTypeReplyButton             MessageType = "reply_button"
 )
 
+/**
+* Message: every value a WhatsApp message can carry; kind selects which JSON body is built.
+**/
 type Message struct {
 	kind                MessageType   `json:"-"`
 	To                  string        `json:"to"`
@@ -243,6 +307,10 @@ func (m *Message) btns() []et.Json {
 	return result
 }
 
+/**
+* sections: the list sections as the JSON WhatsApp expects.
+* @return []et.Json
+**/
 func (m *Message) sections() []et.Json {
 	result := []et.Json{}
 	for _, section := range m.Sections {
@@ -1097,7 +1165,7 @@ func (s *Message) body() et.Json {
 							{
 								"type": "action",
 								"action": et.Json{
-									"tumbnail_product_retailer_id": sections.ThumbnailProductRetailerID,
+									"thumbnail_product_retailer_id": sections.ThumbnailProductRetailerID,
 								},
 							},
 						},

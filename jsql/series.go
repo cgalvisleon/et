@@ -13,9 +13,9 @@ type Series struct {
 }
 
 /**
-* defineSeries
-* @param schema string
-* @return error
+* defineSeries: Defines and initializes the series table of schema (tag, format, value) and returns its generator.
+* @param db *DB, schema string
+* @return *Series, error
 **/
 func defineSeries(db *DB, schema string) (*Series, error) {
 	columns := []Column{
@@ -67,9 +67,9 @@ func defineSeries(db *DB, schema string) (*Series, error) {
 }
 
 /**
-* exists
-* @param string tag
-* @return (bool, error)
+* exists: Whether the series tag is defined.
+* @param tag string
+* @return bool, error
 **/
 func (s *Series) exists(tag string) (bool, error) {
 	exists, err := s.model.
@@ -82,8 +82,8 @@ func (s *Series) exists(tag string) (bool, error) {
 }
 
 /**
-* newSeries
-* @param string tag, format string
+* newSeries: Creates the series tag with value 0 when it does not exist (format "%08d" by default).
+* @param tag, format string
 * @return error
 **/
 func (s *Series) newSeries(tag, format string) error {
@@ -111,8 +111,8 @@ func (s *Series) newSeries(tag, format string) error {
 }
 
 /**
-* setSeries
-* @param string tag, format string, value int
+* setSeries: Creates or replaces the series tag with the given format and value.
+* @param tag, format string, value int
 * @return error
 **/
 func (s *Series) setSeries(tag string, format string, value int) error {
@@ -131,9 +131,9 @@ func (s *Series) setSeries(tag string, format string, value int) error {
 }
 
 /**
-* getSeries
-* @param string tag, ownerId string
-* @return (et.Item, error)
+* getSeries: Returns the series tag (tag, format, value).
+* @param tag string
+* @return et.Item, error
 **/
 func (s *Series) getSeries(tag string) (et.Item, error) {
 	result, err := s.model.
@@ -146,8 +146,8 @@ func (s *Series) getSeries(tag string) (et.Item, error) {
 }
 
 /**
-* deleteSeries
-* @param string tag, ownerId string
+* deleteSeries: Deletes the series tag.
+* @param tag string
 * @return error
 **/
 func (s *Series) deleteSeries(tag string) error {

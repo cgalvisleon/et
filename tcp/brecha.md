@@ -43,12 +43,12 @@ Hallazgos de la implementación (ya resueltos):
 |---|---|---|
 | Broadcast | `SendTo` apunta a un id. | `Broadcast(port, msg)` a todas las conexiones. |
 | Confirmación de entrega | `Send` retorna al escribir (como §4). | Mensajes con ack sobre `Request`. |
-| Certificados que vencen | Con CA, un certificado vencido corta las conexiones nuevas. | Recargar los archivos sin reiniciar. |
 
 ## Historial
 
 | Fecha | Cambio | Requisitos cumplidos |
 |---|---|---|
+| 2026-10-27 | `Hub.send` reconoce `MSG_TCP_NOT_CONNECTED` y `MSG_DATA_TOO_LARGE` con `errors.Is` sobre centinelas (`errNotConnected`, `errDataTooLarge` en `link.go`) en vez de comparar `err.Error()`. Spec v10 (§14.9, §11: `MSG_TCP_TLS_NO_CERT`). Sin cambios de protocolo ni de API. | 14/14 |
 | 2026-10-21 | Recarga de certificados (spec v9 §7.4): `NewTLS` con archivos lee el certificado, la llave y la CA en cada handshake y los vuelve a leer cuando cambian (fecha o tamaño); un archivo roto deja el último válido. TLS mutuo verificado en `VerifyConnection` contra la CA vigente. Caso 26. `go run -race ./test/tcp`: 26/26 casos, 70/70 métodos. | 14/14 |
 | 2026-10-21 | Movido de josefina (`internal/tcp`) a `et/tcp`: mensajes `MSG_TCP_*`/`MSG_HUB_*` en `et/msg`, verificador en `et/test/tcp`; reemplaza al `jtcp` anterior. Sin cambios de protocolo ni de API. `go run -race ./test/tcp`: 25/25 casos, 70/70 métodos. | 14/14 |
 | 2026-10-19 | Rotación del secreto (spec v7 §7.4): `Security.Previous`, `kids` en el primer saludo y `pickSecret` en el servidor; el cliente valida la prueba con cualquiera de sus secretos. Caso 25 (cinco combinaciones que entran, tres que no). Sale de "Fuera del feature". | 14/14 |

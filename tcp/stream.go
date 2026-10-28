@@ -38,10 +38,18 @@ type stream struct {
 	response   chan frame // solo RequestStream: la respuesta final
 }
 
+/**
+* StreamWriter: Extremo que escribe un stream (SendStream / RequestStream), con control
+* de flujo por créditos.
+**/
 type StreamWriter struct {
 	st *stream
 }
 
+/**
+* StreamReader: Extremo que lee un stream recibido (ReceiveStream); al terminar puede
+* responder.
+**/
 type StreamReader struct {
 	st *stream
 }

@@ -322,11 +322,11 @@ func (s *Server) With(middlewares ...func(http.Handler) http.Handler) *Router {
 }
 
 /**
-* UseAutentication
+* UseAuthentication
 * @param middleware func(http.HandlerFunc) http.HandlerFunc
 * @return *Server
 **/
-func (s *Server) UseAutentication(middleware func(http.Handler) http.Handler) *Server {
+func (s *Server) UseAuthentication(middleware func(http.Handler) http.Handler) *Server {
 	if s.authenticator == nil {
 		s.authenticator = make([]func(http.Handler) http.Handler, 0)
 	}

@@ -6,6 +6,9 @@ import (
 	"time"
 )
 
+/**
+* Item: The result of one record: Ok and the record in Result.
+**/
 type Item struct {
 	Ok     bool `json:"ok"`
 	Result Json `json:"result"`
@@ -24,8 +27,9 @@ func NewItem(data Json) Item {
 }
 
 /**
-* ToObject convert a json to a object
-* @return []byte, error
+* ToObject: Decodes Result into dest.
+* @param dest any
+* @return error
 **/
 func (s Item) ToObject(dest any) error {
 	return s.Result.ToObject(dest)
@@ -194,18 +198,18 @@ func (s Item) String(atribs ...string) string {
 }
 
 /**
-* ToBase64 return the value of the key
+* ToBase64: The text at the path encoded in base64.
 * @param atribs ...string
-* @return []string
+* @return string
 **/
 func (s Item) ToBase64(atribs ...string) string {
 	return s.Result.ToBase64(atribs...)
 }
 
 /**
-* FromBase64 return the value of the key
+* FromBase64: The text at the path decoded from base64 (as it is when it is not base64).
 * @param atribs ...string
-* @return []string
+* @return string
 **/
 func (s Item) FromBase64(atribs ...string) string {
 	return s.Result.FromBase64(atribs...)
@@ -275,9 +279,9 @@ func (s Item) Json(atrib string) Json {
 }
 
 /**
-* Array return the value of the key
+* Array: The list at the key; empty when missing.
 * @param atrib string
-* @return []Json
+* @return []interface{}
 **/
 func (s Item) Array(atrib string) []interface{} {
 	return s.Result.Array(atrib)
@@ -343,9 +347,9 @@ func (s *Item) Set(key string, val interface{}) {
 }
 
 /**
-* Delete a value in the key
-* @param key string
-* @return bool
+* Delete: Removes the keys from Result.
+* @param keys []string
+* @return bool: true when at least one existed
 **/
 func (s Item) Delete(keys []string) bool {
 	return s.Result.Delete(keys)
@@ -361,9 +365,9 @@ func (s Item) Exist(key string) bool {
 }
 
 /**
-* From
+* From: An in-memory query (Wheres) over Result as its only row, with alias as.
 * @param as string
-* @return *Where
+* @return *Wheres
 **/
 func (s Item) From(as string) *Wheres {
 	return From([]Json{s.Result}, as)
@@ -375,6 +379,11 @@ type Items struct {
 	Result []Json `json:"result"`
 }
 
+/**
+* NewItems: Wraps a list of records; Ok is true when there is at least one.
+* @param data []Json
+* @return Items
+**/
 func NewItems(data []Json) Items {
 	result := Items{
 		Count:  len(data),
@@ -711,9 +720,9 @@ func (s Items) Json(idx int, atrib string) Json {
 }
 
 /**
-* Array return the value of the key
+* Array: The list at the key of item idx; empty when missing.
 * @param idx int, atrib string
-* @return []Json
+* @return []interface{}
 **/
 func (s Items) Array(idx int, atrib string) []interface{} {
 	item := s.at(idx)
@@ -823,7 +832,7 @@ func (s *Items) Delete(idx int, keys []string) bool {
 }
 
 /**
-* ExistKey return if the key exist
+* Exist: Whether item idx has the key.
 * @param idx int, key string
 * @return bool
 **/
@@ -837,7 +846,8 @@ func (s Items) Exist(idx int, key string) bool {
 }
 
 /**
-* One
+* One: The item at idx, 1-based: 1 is the first (so is 0), a negative counts from the end (-1 is the last).
+* Unlike Wheres.One, which is 0-based. Error when out of range.
 * @param idx int
 * @return Item, error
 **/
@@ -921,9 +931,9 @@ func (s *Items) ToList(all, page, rows int) List {
 }
 
 /**
-* From
+* From: An in-memory query (Wheres) over Result, with alias as.
 * @param as string
-* @return *Where
+* @return *Wheres
 **/
 func (s Items) From(as string) *Wheres {
 	return From(s.Result, as)
@@ -940,6 +950,10 @@ type List struct {
 	Result []Json `json:"result"`
 }
 
+/**
+* ToByte: The list encoded as JSON.
+* @return []byte, error
+**/
 func (s *List) ToByte() ([]byte, error) {
 	return json.Marshal(s)
 }
@@ -987,9 +1001,9 @@ func (s *List) ToMap() map[string]interface{} {
 }
 
 /**
-* From
+* From: An in-memory query (Wheres) over Result, with alias as.
 * @param as string
-* @return *Where
+* @return *Wheres
 **/
 func (s List) From(as string) *Wheres {
 	return From(s.Result, as)

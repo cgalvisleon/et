@@ -149,8 +149,8 @@ func (s *Participant) addAuditLog(userId string, action string) {
 }
 
 /**
-* OnSave
-* @param fn func(step *Step, userId string) error
+* OnSave: Adds a hook called when the participant is saved.
+* @param fn func(participant *Participant) error
 * @return *Participant
 **/
 func (s *Participant) OnSave(fn func(participant *Participant) error) *Participant {
@@ -162,9 +162,9 @@ func (s *Participant) OnSave(fn func(participant *Participant) error) *Participa
 }
 
 /**
-* OnDelete
-* @param fn func(step *Step, userId string) error
-* @return *Step
+* OnDelete: Adds a hook called when the participant is deleted.
+* @param fn func(participant *Participant) error
+* @return *Participant
 **/
 func (s *Participant) OnDelete(fn func(participant *Participant) error) *Participant {
 	if s.onDelete == nil {
@@ -239,7 +239,7 @@ func (s *Participant) delete() error {
 		return errors.New(MSG_STORE_IS_NIL)
 	}
 
-	err := s.store.Delete("participant", s.ID)
+	err := s.store.Delete(storeParticipants, s.ID)
 	if err != nil {
 		return err
 	}

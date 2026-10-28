@@ -39,28 +39,7 @@ var (
 	BReset   = []byte{'\033', '[', '0', 'm'}
 	IsTTY    bool
 	useColor = true
-	colors   = map[string]string{
-		"Reset":  Reset,
-		"Black":  Black,
-		"Red":    Red,
-		"Green":  Green,
-		"Yellow": Yellow,
-		"Blue":   Blue,
-		"Purple": Purple,
-		"Cyan":   Cyan,
-		"Gray":   Gray,
-		"White":  White,
-		Reset:    Reset,
-		Black:    Black,
-		Red:      Red,
-		Green:    Green,
-		Yellow:   Yellow,
-		Blue:     Blue,
-		Purple:   Purple,
-		Cyan:     Cyan,
-		Gray:     Gray,
-		White:    White,
-	}
+	colors   map[string]string
 )
 
 func init() {
@@ -75,6 +54,13 @@ func init() {
 		Cyan = ""
 		Gray = ""
 		White = ""
+	}
+	// Built after the Windows blanking, so the map carries the final codes
+	colors = map[string]string{
+		"Reset": Reset, "Black": Black, "Red": Red, "Green": Green, "Yellow": Yellow,
+		"Blue": Blue, "Purple": Purple, "Cyan": Cyan, "Gray": Gray, "White": White,
+		Reset: Reset, Black: Black, Red: Red, Green: Green, Yellow: Yellow,
+		Blue: Blue, Purple: Purple, Cyan: Cyan, Gray: Gray, White: White,
 	}
 
 	fi, err := os.Stdout.Stat()
@@ -191,7 +177,7 @@ func Traces(kind, color string, err error) error {
 		if len(list) > 0 {
 			name = list[len(list)-1]
 		}
-		if !slices.Contains([]string{"ErrorM", "ErrorF"}, name) {
+		if !slices.Contains([]string{"Errorm", "Errorf"}, name) {
 			Printl("TRACE", color, fmt.Sprintf("%s:%d func:%s", file, line, name))
 		}
 	}
@@ -233,7 +219,7 @@ func ErrorTraces(err error) []string {
 		if len(list) > 0 {
 			name = list[len(list)-1]
 		}
-		if !slices.Contains([]string{"ErrorM", "ErrorF"}, name) {
+		if !slices.Contains([]string{"Errorm", "Errorf"}, name) {
 			trace := fmt.Sprintf("%s:%d func:%s", file, line, name)
 			traces = append(traces, trace)
 		}

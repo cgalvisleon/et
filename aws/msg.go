@@ -15,7 +15,7 @@ func init() {
 	if lang == "es" {
 		MSG_REGION_REQUIRED = "la región es requerida"
 		MSG_KEY_ID_REQUIRED = "la clave de acceso es requerida"
-		MSG_SECRET_REQUIRED = "la clave de secret es requerida"
+		MSG_SECRET_REQUIRED = "la clave secreta es requerida"
 		MSG_TOKEN_REQUIRED = "el token es requerido"
 	}
 }

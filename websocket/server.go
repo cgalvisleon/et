@@ -187,7 +187,7 @@ func (s *Server) removeSub(c *Conn, sub Subscription) {
 * publishRaw: Entrega data a los suscriptores del canal: a cada topic, y a un miembro
 * por grupo queue (el siguiente en turno con espacio). Los suscriptores topic con el
 * buffer lleno se desconectan. Retorna cuántos lo recibieron.
-* @param channel string, data json.RawMessage, from string
+* @param channelName string, data json.RawMessage, from string
 * @return int, error
 **/
 func (s *Server) publishRaw(channelName string, data json.RawMessage, from string) (int, error) {
@@ -242,7 +242,7 @@ func (s *Server) publishRaw(channelName string, data json.RawMessage, from strin
 
 /**
 * publish: Publica data (codificada en JSON) en el canal desde el servidor.
-* @param channel string, data any
+* @param channelName string, data any
 * @return int, error
 **/
 func (s *Server) publish(channelName string, data any) (int, error) {

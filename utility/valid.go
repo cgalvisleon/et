@@ -2,6 +2,7 @@ package utility
 
 import (
 	"regexp"
+	"slices"
 
 	"github.com/cgalvisleon/et/strs"
 )
@@ -23,8 +24,7 @@ func validate(expr, val string) bool {
 **/
 func ValidStr(val string, min int, notIn []string) bool {
 	v := strs.Replace(val, " ", "")
-	ok := len(v) > min && !Contains(val, notIn)
-	return ok
+	return len(v) > min && !slices.Contains(notIn, val)
 }
 
 /**
@@ -34,8 +34,7 @@ func ValidStr(val string, min int, notIn []string) bool {
 **/
 func ValidIn(val string, min int, in []string) bool {
 	v := strs.Replace(val, " ", "")
-	ok := len(v) > min && Contains(val, in)
-	return ok
+	return len(v) > min && slices.Contains(in, val)
 }
 
 /**
@@ -62,9 +61,7 @@ func ValidKey(val string) bool {
 * @return bool
 **/
 func ValidInt(val int, notIn []int) bool {
-	ok := Contains(val, notIn)
-
-	return !ok
+	return !slices.Contains(notIn, val)
 }
 
 /**
@@ -73,9 +70,7 @@ func ValidInt(val int, notIn []int) bool {
 * @return bool
 **/
 func ValidNum(val float64, notIn []float64) bool {
-	ok := Contains(val, notIn)
-
-	return !ok
+	return !slices.Contains(notIn, val)
 }
 
 /**

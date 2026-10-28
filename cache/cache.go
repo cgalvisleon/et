@@ -24,6 +24,9 @@ func init() {
 	os = runtime.GOOS
 }
 
+/**
+* Conn: The Redis client of the package plus its id, context and pub/sub channels.
+**/
 type Conn struct {
 	*redis.Client
 	Id       string
@@ -35,9 +38,8 @@ type Conn struct {
 }
 
 /**
-* LoadTo: Initializes the Redis connection from a Config struct.
-* @param cfg Config
-* @return error
+* New: Opens the Redis connection from REDIS_HOST, REDIS_PASSWORD and REDIS_DB and pings it.
+* @return *Conn, error
 **/
 func New() (*Conn, error) {
 	if !slices.Contains([]string{"linux", "darwin", "windows"}, os) {

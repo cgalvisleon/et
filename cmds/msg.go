@@ -5,4 +5,5 @@ const (
 	MSG_INVALID_TYPE    = "invalid type"
 	MSG_FILE_NOT_FOUND  = "file not found"
 	MSG_INVALID_JSON    = "invalid json"
+	MSG_NOT_IMPLEMENTED = "load from file is not implemented"
 )

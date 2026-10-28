@@ -26,8 +26,8 @@ func init() {
 }
 
 /**
-* StatusResolver
-* @param r *Resolver, status Status
+* HTTPError: Marks the resolver as failed, drops it from Requests and writes the error through the metric.
+* @param resolver *Resolver, metric *middleware.Metrics, w http.ResponseWriter, r *http.Request, status int, message string
 **/
 func (s *Server) HTTPError(resolver *Resolver, metric *middleware.Metrics, w http.ResponseWriter, r *http.Request, status int, message string) {
 	if resolver != nil {

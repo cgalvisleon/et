@@ -1,6 +1,7 @@
 package mssql
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -641,7 +642,7 @@ func msSelects(query *jsql.Query) string {
 		return fmt.Sprintf("%s AS %s", msObject(pairs), msIdent(jsql.RESULT))
 	}
 
-	// "*" son las columnas de los from (StarFields); se le suman los demás campos de selects
+	// "*" is the columns of the froms (StarFields); the other fields of selects add to it
 	pairs := make([]string, 0, len(query.Selects))
 	add := func(field string) {
 		if expr, ok := msSelectExpr(query, field); ok {
@@ -661,7 +662,7 @@ func msSelects(query *jsql.Query) string {
 		add(field)
 	}
 
-	// Con "*" y campo fuente, los atributos del primer from y encima los campos
+	// With "*" and a source field, the attributes of the first from with the fields on top
 	if from := query.Froms[0]; query.HasStar() && from.Model != nil && from.Model.SourceField != "" {
 		source := msSourceExpr(msColumnRef(msAlias(from), from.Model.SourceField), query.SourceHiddens(from))
 		return fmt.Sprintf("%s AS %s", msMergeObject(source, pairs), msIdent(jsql.RESULT))
@@ -715,7 +716,7 @@ func msOrderExpr(query *jsql.Query, name string) (string, bool) {
 **/
 func (s *Mssql) Query(query *jsql.Query, timeout ...time.Duration) (string, error) {
 	if len(query.Froms) == 0 {
-		return "", fmt.Errorf("query has no FROM source")
+		return "", errors.New(jsql.MSG_QUERY_NO_FROM)
 	}
 	primary := query.Froms[0]
 	alias := msAlias(primary)

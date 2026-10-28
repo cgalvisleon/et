@@ -1,9 +1,15 @@
+// Package resilience retries a Go function until it succeeds, up to TotalAttempts, waiting Interval between attempts.
+//
+// Invariants:
+//   - Redis keys: the state of a running instance is in "resilience:instance:<id>" and the stop request in
+//     "resilience:<id>:stop"; both expire after the instance's Interval.
+//   - Instance.Run is synchronous: it blocks until the function succeeds, the attempts run out or Stop is called.
+//   - Instance has no lock; only the instances map of Resilience is protected (mu). An instance is run by one caller.
 package resilience
 
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"reflect"
 	"sync"
 	"time"
@@ -55,6 +61,10 @@ func New() (*Resilience, error) {
 	return result, nil
 }
 
+/**
+* ToJson: The resilience as json (ids, dates, running instances and their count).
+* @return et.Json
+**/
 func (s *Resilience) ToJson() et.Json {
 	return et.Json{
 		"created_at": s.CreatedAt,
@@ -145,7 +155,7 @@ func (s *Resilience) readInstance(id string) (*Instance, bool) {
 		return nil, false
 	}
 
-	str, exists, err := cache.Get(id, "")
+	str, exists, err := cache.Get(instanceKey(id), "")
 	if err != nil {
 		return nil, false
 	}
@@ -160,7 +170,7 @@ func (s *Resilience) readInstance(id string) (*Instance, bool) {
 		return nil, false
 	}
 
-	return nil, false
+	return result, true
 }
 
 type Params struct {
@@ -175,9 +185,10 @@ type Params struct {
 }
 
 /**
-* RunInstance
-* @param id, tag, description string, totalAttempts int, interval time.Duration, tags et.Json, fn interface{}, fnArgs ...interface{}
-* @return *Instance
+* LoadInstance: The instance with params.Id if it is already in memory, or a new one (3 attempts and 30s by default);
+* an id still running in Redis from another process is an error.
+* @param params Params
+* @return *Instance, error
 **/
 func (s *Resilience) LoadInstance(params Params) (*Instance, error) {
 	instance, exist := s.getInstance(params.Id)
@@ -222,7 +233,6 @@ func (s *Resilience) Stop(id string) error {
 		return errors.New(MSG_ID_NOT_FOUND)
 	}
 
-	key := fmt.Sprintf("resilience:%s:stop", id)
-	cache.Set(key, true, instance.Interval)
+	cache.Set(stopKey(id), true, instance.Interval)
 	return nil
 }

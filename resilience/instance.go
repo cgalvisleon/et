@@ -14,6 +14,24 @@ import (
 
 var errorInterface = reflect.TypeOf((*error)(nil)).Elem()
 
+/**
+* instanceKey: The Redis key of an instance (its state while it runs).
+* @param id string
+* @return string
+**/
+func instanceKey(id string) string {
+	return fmt.Sprintf("resilience:instance:%s", id)
+}
+
+/**
+* stopKey: The Redis key that asks an instance to stop.
+* @param id string
+* @return string
+**/
+func stopKey(id string) string {
+	return fmt.Sprintf("resilience:%s:stop", id)
+}
+
 type Status string
 
 const (
@@ -83,7 +101,7 @@ func (s *Instance) ToJson() et.Json {
 }
 
 /**
-* String
+* ToString: The instance as a json string.
 * @return string
 **/
 func (s *Instance) ToString() string {
@@ -127,7 +145,7 @@ func (s *Instance) setStatus(status Status) error {
 		return err
 	}
 
-	cache.Set(s.ID, bt, s.Interval)
+	cache.Set(instanceKey(s.ID), bt, s.Interval)
 	return nil
 }
 
@@ -144,6 +162,7 @@ func (s *Instance) setError(err error) {
 * setDone
 **/
 func (s *Instance) setDone() {
+	s.Error = nil
 	s.setStatus(DONE)
 }
 
@@ -165,8 +184,7 @@ func (s *Instance) isStop() bool {
 		return true
 	}
 
-	key := fmt.Sprintf("resilience:%s:stop", s.ID)
-	stop, _, err := cache.GetBool(key, false)
+	stop, _, err := cache.GetBool(stopKey(s.ID), false)
 	if err != nil {
 		return false
 	}
@@ -175,8 +193,8 @@ func (s *Instance) isStop() bool {
 }
 
 /**
-* runAttempt
-* @return []reflect.Value, error
+* runAttempt: Calls the function once (unless done or stopped), collects its results and marks the instance done or failed.
+* @return []any, error
 **/
 func (s *Instance) runAttempt() ([]any, error) {
 	if s.Status == DONE {
@@ -199,6 +217,7 @@ func (s *Instance) runAttempt() ([]any, error) {
 	var err error
 	var failed bool
 	fn := reflect.ValueOf(s.fn)
+	s.Result = make([]any, 0)
 	s.fnResult = fn.Call(argsValues)
 	for _, r := range s.fnResult {
 		if r.Type().Implements(errorInterface) {
@@ -218,33 +237,27 @@ func (s *Instance) runAttempt() ([]any, error) {
 }
 
 /**
-* Run
-* @return error
+* Run: Runs the function now and, while it fails, again every Interval up to TotalAttempts (or until stopped);
+* it blocks until done and returns the result of the last attempt.
+* @return []any, error
 **/
 func (s *Instance) Run() ([]any, error) {
 	defer func() {
 		s.resilience.removeInstance(s.ID)
-		cache.Delete(s.ID)
+		cache.Delete(instanceKey(s.ID))
 	}()
 
-	if s.Interval == 0 {
-		return s.Result, s.Error
+	_, err := s.runAttempt()
+	for err != nil && s.Attempt < s.TotalAttempts && !s.isStop() {
+		time.Sleep(s.Interval)
+		_, err = s.runAttempt()
 	}
-
-	time.AfterFunc(s.Interval, func() {
-		if s.Status != DONE && s.Attempt < s.TotalAttempts {
-			_, err := s.runAttempt()
-			if err != nil {
-				s.Run()
-			}
-		}
-	})
 
 	return s.Result, s.Error
 }
 
 /**
-* isFailed
+* IsFailed: Whether the last attempt failed.
 * @return bool
 **/
 func (s *Instance) IsFailed() bool {

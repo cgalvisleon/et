@@ -35,6 +35,10 @@ var methods = map[string]bool{
 	RPC:     true,
 }
 
+/**
+* Router: Node of the route tree of one method: one segment per level (Param when it is {name}),
+* with the Solver at the leaf.
+**/
 type Router struct {
 	Tag    string             `json:"tag"`
 	Param  string             `json:"param"`
@@ -94,7 +98,7 @@ func (s *Router) add(tag string) *Router {
 func (s *Router) set(kind TypeRouter, method, path, solver string, typeHeader TpHeader, header map[string]string, excludeHeader []string, version int) (*Solver, error) {
 	tags := strings.Split(path, "/")
 	if len(tags) == 0 {
-		return nil, fmt.Errorf("path %s is invalid", path)
+		return nil, fmt.Errorf(msg.MSG_PATH_INVALID, path)
 	}
 
 	isParam := func(tag string) bool {

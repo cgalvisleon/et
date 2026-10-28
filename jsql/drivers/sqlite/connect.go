@@ -4,12 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/cgalvisleon/et/et"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/jsql"
 	_ "modernc.org/sqlite"
 )
@@ -20,10 +20,10 @@ import (
 * @return string, error
 **/
 func dbPath(params et.Json) (string, error) {
-	// "file" es la clave de SqliteConection; "name" era la de antes (un DB guardado con ToJson antes del cambio)
+	// "file" is the key of SqliteConection; "name" was the former one (a DB saved with ToJson before the change)
 	path := params.ValStr(params.ValStr("", "name"), "file")
 	if path == "" {
-		return "", fmt.Errorf("database is required")
+		return "", fmt.Errorf(jsql.MSG_ATRIB_REQUIRED, "database")
 	}
 	return path, nil
 }

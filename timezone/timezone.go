@@ -107,8 +107,8 @@ func Parse(layout Layout, value string) (time.Time, error) {
 }
 
 /**
-* FormatMDYYYY
-* @param layout, value string
+* FormatMDYYYY: Formats a "2006-01-02T15:04:05" value as "Mon DD YYYY" with Spanish month abbreviations.
+* @param value string
 * @return string
 **/
 func FormatMDYYYY(value string) string {

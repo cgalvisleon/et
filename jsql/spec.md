@@ -28,6 +28,24 @@ El SQL concreto lo genera un `Driver` por motor (ver §9); el núcleo de `jsql` 
 | Comando       | `*jsql.Command` (`command.go`)                              | SQL de tipo comando: `INSERT`, `UPDATE`, `DELETE`, `UPSERT`, `BULK`.                                                                                                          |
 | Transacción   | `*jsql.Tx` (`db.go`)                                        | Envoltura de `*sql.Tx`; `nil` = transacción propia con auto-commit.                                                                                                           |
 
+Archivos del paquete (13) y qué contiene cada uno:
+
+| Archivo | Contenido |
+|---|---|
+| `catalog.go` | Toda la API pública, como envolturas delgadas sobre las funciones privadas, por secciones (ver su encabezado). |
+| `connection.go` | Interfaz `Driver` y `Tester`, conexiones por motor (`PgConection`, `SqliteConection`, …), `ConnectionFromJson`, `Load`/`LoadTo`, `CreateDB`/`DropDB`, `TestConnection`/`Probe`, `TimeoutContext`. |
+| `db.go` | `DB`, `Schema`, `Tx`; `define` desde `Define`; `LoadDb`. |
+| `define.go` | `Column`, `Index`, `TypeColumn`, `Define`, `DefIndex`; definición de columnas, índices, llaves, hiddens, triggers por script. |
+| `model.go` | `Model` (con su bloque `Concurrency`); `Init`, `Replace`, triggers por defecto, `getIdx`, `omit_updates`, auditoría del modelo. |
+| `relation.go` | `Detail`, `Master`, `Rollups`, `QueryDetail`/`QueryRollups`, resolución de relaciones por lotes y joins. |
+| `query.go` | `Query`, `From`, `Field`, `JoinType`, armado y ejecución de consultas. |
+| `command.go` | `Command`: insert/update/delete/upsert/bulk, triggers y `runTrigger`. |
+| `jquery.go` | Consultas, comandos y definiciones descritos en JSON sobre la `DB`. |
+| `helpers.go` | Constructores de condiciones (`Eq`, `More`, …), `Quoted`, `Bind`, `ArgWithAs`/`ArgWithSchema`, `addAuditLog`. |
+| `series.go` | `Series`: generador de series y códigos. |
+| `wrapper.go` | `Wrapper(db)`, `BindWrapper`, `ToJsMapWrapper`: jsql para los scripts de goja (`jsql.d.ts` lo declara). |
+| `msg.go` | Mensajes `MSG_*` en inglés y español. |
+
 ### 2.1 Tipos de columna (`TypeColumn`)
 
 | Constante  | Valor       | Persistencia                                                                                                                                                                                                                             |
@@ -38,7 +56,7 @@ El SQL concreto lo genera un `Driver` por motor (ver §9); el núcleo de `jsql` 
 | `MASTER`   | `master`    | Relación a través de una tabla intermedia: el modelo destino, el modelo puente, las keys del maestro al puente y del puente al destino, los campos que se muestran y cuántos registros se muestran; con un registro es 1 a 1 (ver §2.3). |
 | `ROLLUP`   | `rollup`    | Consulta hacia otro modelo que devuelve un solo registro (`row`, `object`) o un agregado (`count`, `sum`, `avg`, `min`, `max`) y lo asigna al atributo del rollup (ver §2.3).                                                            |
 | `CALCFUNC` | `calc_func` | Función de Go (`CalcFunction`) que se ejecuta sobre cada fila cuando la columna está incluida en el select.                                                                                                                              |
-| `CALC`     | `calc`      | Script de JavaScript que se ejecuta con goja (`jrex`) sobre cada fila cuando la columna está incluida en el select.                                                                                                                      |
+| `CALC`     | `calc`      | Script de JavaScript que se ejecuta con goja (`jwf`) sobre cada fila cuando la columna está incluida en el select.                                                                                                                      |
 
 Las columnas `DETAIL`, `MASTER`, `ROLLUP`, `CALCFUNC` y `CALC` solo se ejecutan si se incluyen de manera literal en el select (o con `Query.Detail`, `Query.Master` y `Query.Calc`). Con el select vacío solo se incluyen las columnas `COLUMN` y, si el modelo tiene `SourceField`, sus atributos (§5.3).
 
@@ -286,7 +304,7 @@ Reglas:
 - **Filtros**: `Where`/`And`/`Or` reciben `*et.Condition` y admiten el mismo `[]Json` de §6.
 - **Ejecución**: `Exec()`, `ExecTx(tx)` → `et.Items`; `One()`, `OneTx(tx)` → `et.Item`. Con `tx == nil`, el comando abre su propia transacción y hace commit.
 - **Campos únicos**: antes de cada insert y update, `jsql` verifica los campos definidos con `DefineUnique` (sin contar los vacíos) dentro de la transacción del comando, así que también detecta duplicados dentro de un mismo `bulk`. En un update solo revisa el campo si cambia, y excluye la fila que se actualiza por su llave primaria. Un duplicado devuelve `ErrRecordAlreadyExists` con el campo y el valor (`record already exists: email = ana@example.com`), que se puede comprobar con `errors.Is`. El índice único de la base de datos se mantiene como garantía final.
-- **Triggers**: `TriggerFunction func(tx *Tx, old, new et.Json) error` para `Before/After × Insert/Update/Delete` (en `Model` o por `Command`), y scripts JS (`jrex`) registrados con `DefineBeforeInsert(name, code, version)`, `DefineBeforeUpdate(name, code, version)`, etc. (se guardan como `[]*jwf.Script`; uno con el mismo `name` se reemplaza) En el script los registros son `OLD` y `NEW` (`new` es palabra reservada de JavaScript), por ejemplo `NEW.estado = "revisado";`. Un error en un trigger aborta el comando y, si el comando abrió su propia transacción, la revierte.
+- **Triggers**: `TriggerFunction func(tx *Tx, old, new et.Json) error` para `Before/After × Insert/Update/Delete` (en `Model` o por `Command`), y scripts JS (`jwf`) registrados con `DefineBeforeInsert(name, code, version)`, `DefineBeforeUpdate(name, code, version)`, etc. (se guardan como `[]*jwf.Script`; uno con el mismo `name` se reemplaza) En el script los registros son `OLD` y `NEW` (`new` es palabra reservada de JavaScript), por ejemplo `NEW.estado = "revisado";`. Un error en un trigger aborta el comando y, si el comando abrió su propia transacción, la revierte.
 - **Campos calculados**: `DefineCalcFunc(name, fn)` en Go y `DefineCalc(name, script)` en JS, que recibe la fila como `item` (por ejemplo `item.inicial = item.name.substring(0, 1);`).
 
 ## 8. Consultas y comandos descritos en JSON sobre la `DB` (`jquery.go`)
@@ -390,6 +408,7 @@ type Driver interface {
 - **Comandos**: MySQL no tiene `RETURNING`; la conexión usa `multiStatements` y cada comando es un lote: el DML y un `SELECT` de la fila por su llave primaria (el `DELETE` hace el `SELECT` antes de borrar).
 - **Escapes**: MySQL usa `\` como carácter de escape dentro de las cadenas, así que el driver escapa `\` además de `'`.
 - **`SourceField`**: el `UPDATE` fusiona los atributos con `JSON_SET` (conserva los `null`) y crea antes los objetos padre de las rutas anidadas.
+- **Comandos sin modelo**: un `Command` cuyo `From` no resuelve a un modelo (tabla escrita a mano) devuelve error en MySQL (`command without model`); postgres, sqlite y oracle lo ejecutan.
 - **Consultas**: `FULL JOIN` no existe en MySQL y devuelve `mysql.ErrFullJoin`. En consultas agrupadas, los campos seleccionados se envuelven en `ANY_VALUE`, porque `only_full_group_by` no reconoce la expresión JSON del `GROUP BY`. `LIKE` compara en minúsculas.
 
 ### 9.3 Particularidades del driver SQL Server
@@ -399,6 +418,7 @@ type Driver interface {
 - **Resultados**: SQL Server no tiene una función que arme objetos JSON conservando los tipos, así que el driver construye el JSON de cada fila como texto (`STRING_ESCAPE` para los textos, números, `true`/`false`, fechas ISO 8601) y lee los atributos de `SourceField` con `OPENJSON` para conservar su tipo.
 - **Comandos**: cada comando es un lote con `SET NOCOUNT ON`: el DML y un `SELECT` de la fila por su llave primaria (el `DELETE` hace el `SELECT` antes de borrar).
 - **`SourceField`**: el `UPDATE` fusiona los atributos con `JSON_MODIFY` y crea antes los objetos padre; como en Oracle, un valor `null` **borra** la llave.
+- **Comandos sin modelo**: como MySQL, un `Command` sin modelo devuelve error (`command without model`).
 - **Consultas**: la paginación usa `OFFSET … ROWS FETCH NEXT … ROWS ONLY`, que exige un `ORDER BY` (`ORDER BY (SELECT NULL)` si la consulta no tiene); `IS [NOT] DISTINCT FROM` requiere SQL Server 2022.
 
 ### 9.4 Particularidades del driver Josefina
@@ -422,7 +442,7 @@ type Driver interface {
 | `DB_APP_NAME` | Nombre de la aplicación en la conexión (postgres, sqlite) | `josephine` |
 | `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_LIFETIME`, `DB_POOL_IDLE_TIME` | Pool (minutos en `LIFETIME` e `IDLE_TIME`); todas las conexiones. Sin ellos: sqlite 10, los demás los del driver (3, 1, 30, 2) | 10 / del driver |
 | `DB_RECORD_LIMIT` | Límite de filas por consulta | 1000 |
-| `DB_IS_DEBUG` | Registra el SQL generado | `false` |
+| `DB_IS_DEBUG` | Registra el SQL generado (también con `DEBUG=true`; `LoadTo` lo pasa en `ConnectParams.IsDebug`, que `newDB` lee desde el 2026-10-27) | `false` |
 | `MAX_AUDIT_LOG` | Entradas de auditoría por modelo | 1000 |
 
 ## 11. Utilidades
@@ -468,6 +488,8 @@ El caso omitido es `Load`/`LoadTo`, que lee el entorno. `go build ./...` y `go v
 **Revisado el 2026-10-27** (revisión del núcleo `et`, ver `et/spec.md` §7): un `where` JSON con una condición sin conector después de la primera armaba SQL inválido (`... AND x = 1 A.y = 2`): `et.ToConditions` le pone ahora `AND`. `between`/`not_between` con `[min, max]` o `{min, max}` desde JSON devolvían `""` (SQL roto): los cinco drivers leen el rango con `et.ToBetween` y uno ilegible da `1 = 0`. El `AuditLog` del `DB` y del modelo se recorta con `et.SafeData.Trim` (antes borraba la entrada recién agregada al llegar a `MAX_AUDIT_LOG`). Nuevo `TestMemoryMatchesSql` (`drivers/test/evaluate_test.go`): el mismo where da las mismas filas en SQL y en memoria (precedencia, sin conector, `like`, `between`); con toda la batería pasa en los seis motores: sqlite, postgres, josefina, oracle, mysql y mssql (contenedores desechables `jsql-oracle`, `jsql-mysql`, `jsql-mssql`).
 
 **Brecha:** ninguna abierta. Cerradas el 2026-10-27: B5 (driver para josefina, §9.4), B14 y B15.
+
+**Revisado el 2026-10-27 (drivers, plan de estabilidad fase 0):** `Count()` ya no emite `ORDER BY`/`LIMIT` en postgres y sqlite (un `OrderBy` sobre una columna sin agrupar hacía fallar el `COUNT(*)` en postgres; los otros tres ya retornaban antes); oracle compara `is`/`is_not` con valor con `DECODE(a, b, 1, 0)`, seguro ante `NULL` como el `IS NOT DISTINCT FROM`/`<=>` de los demás; la cadena de conexión de postgres (una sola `chain(params, database)`) escapa usuario, contraseña y base con `net/url` (una contraseña con `@`, `/` o `#` la rompía), igual que la de josefina; `SUM` de un `et.AGGREGATE` lleva `COALESCE(…, 0)` también en postgres y sqlite; `between`/`in` citan con el `Quoted` del driver (un `bool` salía como `true` y una fecha no pasaba por el formato del motor). `TestCatalog` suma el caso "count con order by". Batería verde en sqlite, postgres, oracle, mysql y mssql (josefina pendiente de revisión aparte).
 
 **B15, cerrada el 2026-10-27:** el `where` de un rollup rechazaba `OR` porque los drivers no agrupan condiciones y `llave AND a OR b` mezclaba filas de otros padres. Ahora las llaves se repiten en cada término `OR` (`rollupConditions`, §2.3); `TestCatalog` («DefineRollup con where or») lo comprueba por lotes y fila por fila.
 

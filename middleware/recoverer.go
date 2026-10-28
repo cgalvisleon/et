@@ -42,6 +42,8 @@ func Recoverer(next http.Handler) http.Handler {
 	return http.HandlerFunc(fn)
 }
 
+// PrintPrettyStack writes the recovered value and the current stack to stderr,
+// formatted when it can be parsed, raw otherwise.
 func PrintPrettyStack(rvr interface{}) {
 	debugStack := debug.Stack()
 	s := prettyStack{}
@@ -119,7 +121,6 @@ func (s prettyStack) decorateFuncCallLine(line string, num int) (string, error) 
 		return "", errors.New("not a func call line")
 	}
 
-	buf := &bytes.Buffer{}
 	pkg := line[0:idx]
 	addr := line[idx:]
 	method := ""
@@ -136,7 +137,7 @@ func (s prettyStack) decorateFuncCallLine(line string, num int) (string, error) 
 		pkg += method[0:idx]
 		method = method[idx:]
 	}
-	var w *string
+	w := new(string)
 	pkgColor := lg.Yellow
 	methodColor := lg.Green
 
@@ -151,7 +152,7 @@ func (s prettyStack) decorateFuncCallLine(line string, num int) (string, error) 
 	lg.Color(w, methodColor, "%s\n", method)
 	lg.Color(w, lg.Black, "%s", addr)
 
-	return buf.String(), nil
+	return *w, nil
 }
 
 func (s prettyStack) decorateSourceLine(line string, num int) (string, error) {
@@ -160,7 +161,6 @@ func (s prettyStack) decorateSourceLine(line string, num int) (string, error) {
 		return "", errors.New("not a source line")
 	}
 
-	buf := &bytes.Buffer{}
 	path := line[0 : idx+3]
 	lineno := line[idx+3:]
 
@@ -172,7 +172,7 @@ func (s prettyStack) decorateSourceLine(line string, num int) (string, error) {
 	if idx > 0 {
 		lineno = lineno[0:idx]
 	}
-	var w *string
+	w := new(string)
 	fileColor := lg.Cyan
 	lineColor := lg.Green
 
@@ -191,5 +191,5 @@ func (s prettyStack) decorateSourceLine(line string, num int) (string, error) {
 	}
 	lg.Color(w, lg.White, "\n")
 
-	return buf.String(), nil
+	return *w, nil
 }

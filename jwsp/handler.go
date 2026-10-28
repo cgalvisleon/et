@@ -162,6 +162,11 @@ func (s *Whatsapp) SendReplyWithReactionMessage(to, messageId, emoji string) (et
 	return s.sendRequest(message)
 }
 
+/**
+* SendImageMessageById: sends an image already uploaded to WhatsApp, by its media id.
+* @param to, imageObjectID string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendImageMessageById(to, imageObjectID string) (et.Json, error) {
 	message := &Message{
 		To:            to,
@@ -172,6 +177,11 @@ func (s *Whatsapp) SendImageMessageById(to, imageObjectID string) (et.Json, erro
 	return s.sendRequest(message)
 }
 
+/**
+* SendReplyImageMessageById: replies to a message with an uploaded image, by its media id.
+* @param to, imageObjectID, messageID string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendReplyImageMessageById(to, imageObjectID, messageID string) (et.Json, error) {
 	message := &Message{
 		To:            to,
@@ -183,6 +193,11 @@ func (s *Whatsapp) SendReplyImageMessageById(to, imageObjectID, messageID string
 	return s.sendRequest(message)
 }
 
+/**
+* SendImageMessageByURL: sends an image hosted at a public URL.
+* @param to, url string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendImageMessageByURL(to, url string) (et.Json, error) {
 	message := &Message{
 		To:  to,
@@ -193,6 +208,11 @@ func (s *Whatsapp) SendImageMessageByURL(to, url string) (et.Json, error) {
 	return s.sendRequest(message)
 }
 
+/**
+* SendReplyImageMessageByURL: replies to a message with an image hosted at a public URL.
+* @param to, url, messageID string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendReplyImageMessageByURL(to, url, messageID string) (et.Json, error) {
 	message := &Message{
 		To:        to,
@@ -204,6 +224,11 @@ func (s *Whatsapp) SendReplyImageMessageByURL(to, url, messageID string) (et.Jso
 	return s.sendRequest(message)
 }
 
+/**
+* SendAudioMessageById: sends an audio already uploaded to WhatsApp, by its media id.
+* @param to, audioObjectID string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendAudioMessageById(to, audioObjectID string) (et.Json, error) {
 	message := &Message{
 		To:            to,
@@ -214,6 +239,11 @@ func (s *Whatsapp) SendAudioMessageById(to, audioObjectID string) (et.Json, erro
 	return s.sendRequest(message)
 }
 
+/**
+* SendReplyAudioMessageById: replies to a message with an uploaded audio, by its media id.
+* @param to, audioObjectID, messageID string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendReplyAudioMessageById(to, audioObjectID, messageID string) (et.Json, error) {
 	message := &Message{
 		To:            to,
@@ -225,6 +255,11 @@ func (s *Whatsapp) SendReplyAudioMessageById(to, audioObjectID, messageID string
 	return s.sendRequest(message)
 }
 
+/**
+* SendAudioMessageByURL: sends an audio hosted at a public URL.
+* @param to, url string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendAudioMessageByURL(to, url string) (et.Json, error) {
 	message := &Message{
 		To:  to,
@@ -235,6 +270,11 @@ func (s *Whatsapp) SendAudioMessageByURL(to, url string) (et.Json, error) {
 	return s.sendRequest(message)
 }
 
+/**
+* SendReplyAudioMessageByURL: replies to a message with an audio hosted at a public URL.
+* @param to, url, messageID string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendReplyAudioMessageByURL(to, url, messageID string) (et.Json, error) {
 	message := &Message{
 		To:        to,
@@ -246,6 +286,11 @@ func (s *Whatsapp) SendReplyAudioMessageByURL(to, url, messageID string) (et.Jso
 	return s.sendRequest(message)
 }
 
+/**
+* SendDocumentById: sends an uploaded document by its media id, with caption and file name.
+* @param to, documentObjectID, documentCaptionText, documentFilename string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendDocumentById(to, documentObjectID, documentCaptionText, documentFilename string) (et.Json, error) {
 	message := &Message{
 		To:                  to,
@@ -258,6 +303,11 @@ func (s *Whatsapp) SendDocumentById(to, documentObjectID, documentCaptionText, d
 	return s.sendRequest(message)
 }
 
+/**
+* SendReplyDocumentById: replies to a message with an uploaded document by its media id, with caption and file name.
+* @param to, messageID, documentObjectID, documentCaptionText, documentFilename string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendReplyDocumentById(to, messageID, documentObjectID, documentCaptionText, documentFilename string) (et.Json, error) {
 	message := &Message{
 		To:                  to,
@@ -271,6 +321,11 @@ func (s *Whatsapp) SendReplyDocumentById(to, messageID, documentObjectID, docume
 	return s.sendRequest(message)
 }
 
+/**
+* SendDocumentByURL: sends a document hosted at a public URL, with a caption.
+* @param to, url, documentCaptionText string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendDocumentByURL(to, url, documentCaptionText string) (et.Json, error) {
 	message := &Message{
 		To:                  to,
@@ -282,6 +337,11 @@ func (s *Whatsapp) SendDocumentByURL(to, url, documentCaptionText string) (et.Js
 	return s.sendRequest(message)
 }
 
+/**
+* SendReplyDocumentByURL: replies to a message with a document hosted at a public URL, with a caption.
+* @param to, messageID, url, documentCaptionText string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendReplyDocumentByURL(to, messageID, url, documentCaptionText string) (et.Json, error) {
 	message := &Message{
 		To:                  to,
@@ -294,6 +354,11 @@ func (s *Whatsapp) SendReplyDocumentByURL(to, messageID, url, documentCaptionTex
 	return s.sendRequest(message)
 }
 
+/**
+* SendStickerMessageById: sends an uploaded sticker by its media id.
+* @param to, mediaObjectID string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendStickerMessageById(to, mediaObjectID string) (et.Json, error) {
 	message := &Message{
 		To:            to,
@@ -303,6 +368,11 @@ func (s *Whatsapp) SendStickerMessageById(to, mediaObjectID string) (et.Json, er
 	return s.sendRequest(message)
 }
 
+/**
+* SendReplyStickerMessageById: replies to a message with an uploaded sticker by its media id.
+* @param to, mediaObjectID, messageID string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendReplyStickerMessageById(to, mediaObjectID, messageID string) (et.Json, error) {
 	message := &Message{
 		To:            to,
@@ -314,6 +384,11 @@ func (s *Whatsapp) SendReplyStickerMessageById(to, mediaObjectID, messageID stri
 	return s.sendRequest(message)
 }
 
+/**
+* SendStickerMessageByURL: sends a sticker hosted at a public URL.
+* @param to, url string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendStickerMessageByURL(to, url string) (et.Json, error) {
 	message := &Message{
 		To:  to,
@@ -324,6 +399,11 @@ func (s *Whatsapp) SendStickerMessageByURL(to, url string) (et.Json, error) {
 	return s.sendRequest(message)
 }
 
+/**
+* SendReplyStickerMessageByURL: replies to a message with a sticker hosted at a public URL.
+* @param to, messageID, url string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendReplyStickerMessageByURL(to, messageID, url string) (et.Json, error) {
 	message := &Message{
 		To:        to,
@@ -335,6 +415,11 @@ func (s *Whatsapp) SendReplyStickerMessageByURL(to, messageID, url string) (et.J
 	return s.sendRequest(message)
 }
 
+/**
+* SendVideoMessageById: sends an uploaded video by its media id, with a caption.
+* @param to, videoCaptionText, videoObjectID string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendVideoMessageById(to, videoCaptionText, videoObjectID string) (et.Json, error) {
 	message := &Message{
 		To:               to,
@@ -345,6 +430,11 @@ func (s *Whatsapp) SendVideoMessageById(to, videoCaptionText, videoObjectID stri
 	return s.sendRequest(message)
 }
 
+/**
+* SendReplyVideoMessageById: replies to a message with an uploaded video by its media id, with a caption.
+* @param to, messageID, videoCaptionText, videoObjectID string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendReplyVideoMessageById(to, messageID, videoCaptionText, videoObjectID string) (et.Json, error) {
 	message := &Message{
 		To:               to,
@@ -356,6 +446,11 @@ func (s *Whatsapp) SendReplyVideoMessageById(to, messageID, videoCaptionText, vi
 	return s.sendRequest(message)
 }
 
+/**
+* SendVideoMessageByURL: sends a video hosted at a public URL, with a caption.
+* @param to, url, videoCaptionText string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendVideoMessageByURL(to, url, videoCaptionText string) (et.Json, error) {
 	message := &Message{
 		To:               to,
@@ -366,10 +461,15 @@ func (s *Whatsapp) SendVideoMessageByURL(to, url, videoCaptionText string) (et.J
 	return s.sendRequest(message)
 }
 
-func (s *Whatsapp) SendReplyVideoMessageByURL(to, url, videoCaptionText string) (et.Json, error) {
+/**
+* SendReplyVideoMessageByURL: replies to a message with a video hosted at a public URL, with a caption.
+* @param to, messageID (the message replied to), url (the video link), videoCaptionText string
+* @return et.Json, error
+**/
+func (s *Whatsapp) SendReplyVideoMessageByURL(to, messageID, url, videoCaptionText string) (et.Json, error) {
 	message := &Message{
 		To:               to,
-		MessageID:        url,
+		MessageID:        messageID,
 		Url:              Url{Url: url},
 		VideoCaptionText: videoCaptionText,
 	}
@@ -377,6 +477,11 @@ func (s *Whatsapp) SendReplyVideoMessageByURL(to, url, videoCaptionText string) 
 	return s.sendRequest(message)
 }
 
+/**
+* SendContact: sends a contact card; address, contact, email, phone and url fill every field of their section and tp is the home/work type.
+* @param to, address, contact, email, phone, tp, url string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendContact(to, address, contact, email, phone, tp, url string) (et.Json, error) {
 
 	message := &Message{
@@ -418,6 +523,11 @@ func (s *Whatsapp) SendContact(to, address, contact, email, phone, tp, url strin
 	return s.sendRequest(message)
 }
 
+/**
+* SendReplyContact: replies to a message with a contact card; address, contact, email, phone and url fill every field of their section and tp is the home/work type.
+* @param to, messageID, address, contact, email, phone, tp, url string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendReplyContact(to, messageID, address, contact, email, phone, tp, url string) (et.Json, error) {
 	message := &Message{
 		To:        to,
@@ -459,6 +569,11 @@ func (s *Whatsapp) SendReplyContact(to, messageID, address, contact, email, phon
 	return s.sendRequest(message)
 }
 
+/**
+* SendLocation: sends a location message; location fills latitude, longitude, name and address.
+* @param to, location string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendLocation(to, location string) (et.Json, error) {
 	message := &Message{
 		To: to,
@@ -473,6 +588,11 @@ func (s *Whatsapp) SendLocation(to, location string) (et.Json, error) {
 	return s.sendRequest(message)
 }
 
+/**
+* SendReplyLocation: replies to a message with a location; location fills latitude, longitude, name and address.
+* @param to, messageID, location string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendReplyLocation(to, messageID, location string) (et.Json, error) {
 	message := &Message{
 		To:        to,
@@ -488,6 +608,11 @@ func (s *Whatsapp) SendReplyLocation(to, messageID, location string) (et.Json, e
 	return s.sendRequest(message)
 }
 
+/**
+* SendTemplate: sends a text template message; template is its name and language, parameter fills the body parameters (text, currency, date_time).
+* @param to, parameter, template string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendTemplate(to, parameter, template string) (et.Json, error) {
 	message := &Message{
 		To: to,
@@ -513,6 +638,11 @@ func (s *Whatsapp) SendTemplate(to, parameter, template string) (et.Json, error)
 	return s.sendRequest(message)
 }
 
+/**
+* SendTemplateMedia: sends a template message with an image header; parameter fills the image link and the body parameters.
+* @param to, parameter, template string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendTemplateMedia(to, parameter, template string) (et.Json, error) {
 	message := &Message{
 		To: to,
@@ -540,6 +670,11 @@ func (s *Whatsapp) SendTemplateMedia(to, parameter, template string) (et.Json, e
 	return s.sendRequest(message)
 }
 
+/**
+* SendTemplateInteractive: sends a template message with image header, body parameters and quick-reply buttons (index, payload).
+* @param to, parameter, template string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendTemplateInteractive(to, parameter, template string) (et.Json, error) {
 	message := &Message{
 		To: to,
@@ -569,6 +704,11 @@ func (s *Whatsapp) SendTemplateInteractive(to, parameter, template string) (et.J
 	return s.sendRequest(message)
 }
 
+/**
+* SendSingleProduct: sends an interactive single product message; section is the catalog id and product retailer id.
+* @param to, Text, footer, section string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendSingleProduct(to, Text, footer, section string) (et.Json, error) {
 	message := &Message{
 		To:   to,
@@ -585,6 +725,11 @@ func (s *Whatsapp) SendSingleProduct(to, Text, footer, section string) (et.Json,
 	return s.sendRequest(message)
 }
 
+/**
+* SendmultiProduct: sends an interactive product list message with header and footer; section is the catalog id and product retailer id.
+* @param to, Text, header, footer, section string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendmultiProduct(to, Text, header, footer, section string) (et.Json, error) {
 	message := &Message{
 		To:   to,
@@ -604,6 +749,11 @@ func (s *Whatsapp) SendmultiProduct(to, Text, header, footer, section string) (e
 	return s.sendRequest(message)
 }
 
+/**
+* SendCatalog: sends an interactive catalog message; section is the thumbnail product retailer id.
+* @param to, Text, footer, section string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendCatalog(to, Text, footer, section string) (et.Json, error) {
 	message := &Message{
 		To:   to,
@@ -619,6 +769,11 @@ func (s *Whatsapp) SendCatalog(to, Text, footer, section string) (et.Json, error
 	return s.sendRequest(message)
 }
 
+/**
+* SendCatalogTemplate: sends a catalog template message with body text parameters and a CATALOG button; section is the thumbnail product retailer id.
+* @param to, template, parameter, section string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendCatalogTemplate(to, template, parameter, section string) (et.Json, error) {
 	message := &Message{
 		To: to,
@@ -639,6 +794,11 @@ func (s *Whatsapp) SendCatalogTemplate(to, template, parameter, section string) 
 	return s.sendRequest(message)
 }
 
+/**
+* SendList: sends an interactive list message with header, body text, footer and button label; section is not used yet (sections go empty).
+* @param to, text, header, footer, button, section string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendList(to, text, header, footer, button, section string) (et.Json, error) {
 	message := &Message{
 		To: to,
@@ -657,6 +817,11 @@ func (s *Whatsapp) SendList(to, text, header, footer, button, section string) (e
 	return s.sendRequest(message)
 }
 
+/**
+* SendReplyList: replies to a message with an interactive list (header, body text, footer, button label); section is not used yet (sections go empty).
+* @param to, messageId, text, header, footer, button, section string
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendReplyList(to, messageId, text, header, footer, button, section string) (et.Json, error) {
 	message := &Message{
 		To:        to,
@@ -676,6 +841,11 @@ func (s *Whatsapp) SendReplyList(to, messageId, text, header, footer, button, se
 	return s.sendRequest(message)
 }
 
+/**
+* SendReplyButton: sends an interactive message with reply buttons.
+* @param to, text string, buttons []Button
+* @return et.Json, error
+**/
 func (s *Whatsapp) SendReplyButton(to, text string, buttons []Button) (et.Json, error) {
 	message := &Message{
 		To:      to,

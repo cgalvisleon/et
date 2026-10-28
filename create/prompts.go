@@ -7,7 +7,10 @@ import (
 	"github.com/manifoldco/promptui"
 )
 
-func PrompCreate() {
+/**
+* PromptCreate: asks what to create (Project, Microservice, Modelo, Rpc) and runs the matching command.
+**/
+func PromptCreate() {
 	prompt := promptui.Select{
 		Label: "What do you want created?",
 		Items: []string{"Project", "Microservice", "Modelo", "Rpc"},
@@ -51,7 +54,12 @@ func PrompCreate() {
 	}
 }
 
-func PrompStr(label string, require bool) (string, error) {
+/**
+* PromptStr: asks for a text value; with require, an empty answer is rejected.
+* @param label string, require bool
+* @return string, error
+**/
+func PromptStr(label string, require bool) (string, error) {
 	validate := func(input string) error {
 		if len(input) == 0 && require {
 			return fmt.Errorf("invalid %s", label)
@@ -74,7 +82,12 @@ func PrompStr(label string, require bool) (string, error) {
 	return result, nil
 }
 
-func PrompInt(label string, require bool) (int, error) {
+/**
+* PromptInt: asks for an integer value; non-numeric answers are rejected.
+* @param label string, require bool
+* @return int, error
+**/
+func PromptInt(label string, require bool) (int, error) {
 	validate := func(input string) error {
 		if len(input) == 0 && require {
 			return fmt.Errorf("invalid %s", label)

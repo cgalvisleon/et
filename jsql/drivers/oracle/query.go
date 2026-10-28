@@ -1,6 +1,7 @@
 package oracle
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -380,12 +381,13 @@ func oraCondExpr(getField func(string) (*jsql.Field, bool), cond *et.Condition, 
 		if cond.Value.Value == nil {
 			return fmt.Sprintf("%s IS NULL", fieldExpr)
 		}
-		return fmt.Sprintf("%s = %s", fieldExpr, value())
+		// DECODE treats two NULLs as equal: the null-safe comparison of the other drivers.
+		return fmt.Sprintf("DECODE(%s, %s, 1, 0) = 1", fieldExpr, value())
 	case et.IS_NOT:
 		if cond.Value.Value == nil {
 			return fmt.Sprintf("%s IS NOT NULL", fieldExpr)
 		}
-		return fmt.Sprintf("%s != %s", fieldExpr, value())
+		return fmt.Sprintf("DECODE(%s, %s, 1, 0) = 0", fieldExpr, value())
 	case et.NEG:
 		return fmt.Sprintf("%s != %s", fieldExpr, value())
 	case et.LESS:
@@ -542,7 +544,7 @@ func oraSelectExpr(query *jsql.Query, field string) (string, bool) {
 **/
 func oraSelects(query *jsql.Query) string {
 	exprs := make([]string, 0)
-	// Las columnas de los from (sin selects, o "*" en selects): StarFields, sin las ocultas
+	// The columns of the froms (no selects, or "*" in selects): StarFields, without the hidden ones
 	addColumns := func() {
 		for _, name := range query.StarFields() {
 			if expr, ok := oraSelectExpr(query, name); ok {
@@ -571,7 +573,7 @@ func oraSelects(query *jsql.Query) string {
 	// Rows always come back as one JSON "result" (also without a SourceField): go-ora returns
 	// NUMBER columns as text, while JSON_OBJECT keeps numbers, booleans and nested JSON typed.
 	source := ""
-	// Sin selects o con "*", también los atributos del campo fuente del primer from
+	// Without selects or with "*", also the attributes of the source field of the first from
 	if query.UseSourceField && (len(query.Selects) == 0 || query.HasStar()) && len(query.Froms) > 0 {
 		from := query.Froms[0]
 		sourceField := jsql.SOURCE
@@ -609,7 +611,7 @@ func oraFrom(query *jsql.Query) string {
 **/
 func (s *Oracle) Query(query *jsql.Query, timeout ...time.Duration) (string, error) {
 	if len(query.Froms) == 0 {
-		return "", fmt.Errorf("query has no FROM source")
+		return "", errors.New(jsql.MSG_QUERY_NO_FROM)
 	}
 
 	primary := query.Froms[0]

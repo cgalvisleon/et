@@ -112,32 +112,6 @@ func newJsObject(vm *goja.Runtime, data Json) *jsObject {
 }
 
 /**
-* sameMap: Whether a and b are the same Go map (not just equal)
-* @param a, b Json
-* @return bool
-**/
-func sameMap(a, b Json) bool {
-	return reflect.ValueOf(a).UnsafePointer() == reflect.ValueOf(b).UnsafePointer()
-}
-
-/**
-* asJson: The Json of a value that is one: a Json, a map[string]any or an object of a script (its same map)
-* @param value any
-* @return Json, bool
-**/
-func asJson(value any) (Json, bool) {
-	switch v := value.(type) {
-	case Json:
-		return v, v != nil
-	case map[string]any:
-		return Json(v), v != nil
-	case interface{ JsonValue() Json }:
-		return v.JsonValue(), true
-	}
-	return nil, false
-}
-
-/**
 * ToJS: A Go value as JavaScript: a Json, a map[string]any, an Item, an Items or a List as an object over its map with
 * the methods of Json; a list as an array of values converted the same way; the rest as goja converts it
 * @param vm *goja.Runtime, value any

@@ -5,6 +5,7 @@ import (
 	"hash/crc32"
 )
 
+// Estado de un registro en el log: Active guarda datos; Deleted es un tombstone sin datos.
 const (
 	Active  byte = 1
 	Deleted byte = 2

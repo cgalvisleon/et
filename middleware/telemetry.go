@@ -491,7 +491,7 @@ func (s *Metrics) JSON(w http.ResponseWriter, r *http.Request, statusCode int, d
 		Ok     bool        `json:"ok"`
 		Result interface{} `json:"result"`
 	}{
-		Ok:     statusCode == http.StatusOK,
+		Ok:     request.IsStatusOk(statusCode),
 		Result: dt,
 	}
 	e, err := json.Marshal(result)
@@ -507,11 +507,6 @@ func (s *Metrics) JSON(w http.ResponseWriter, r *http.Request, statusCode int, d
 * @return error
 **/
 func (s *Metrics) ITEM(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Item) error {
-	if &dt == (&et.Item{}) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(statusCode)
-		return nil
-	}
 	e, err := json.Marshal(dt)
 	if err != nil {
 		return err
@@ -525,11 +520,6 @@ func (s *Metrics) ITEM(w http.ResponseWriter, r *http.Request, statusCode int, d
 * @return error
 **/
 func (s *Metrics) ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, dt et.Items) error {
-	if &dt == (&et.Items{}) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(statusCode)
-		return nil
-	}
 	e, err := json.Marshal(dt)
 	if err != nil {
 		return err

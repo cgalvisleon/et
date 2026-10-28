@@ -11,6 +11,9 @@ import (
 	"github.com/cgalvisleon/et/request"
 )
 
+/**
+* Result: Envelope of a JSON response: ok and the result.
+**/
 type Result struct {
 	Ok     bool        `json:"ok"`
 	Result interface{} `json:"result"`
@@ -160,7 +163,7 @@ func JSON(w http.ResponseWriter, r *http.Request, statusCode int, data interface
 	}
 
 	result := Result{
-		Ok:     statusCode >= 200 && statusCode < 300,
+		Ok:     request.IsStatusOk(statusCode),
 		Result: data,
 	}
 
@@ -178,12 +181,6 @@ func JSON(w http.ResponseWriter, r *http.Request, statusCode int, data interface
 * @return error
 **/
 func ITEM(w http.ResponseWriter, r *http.Request, statusCode int, data et.Item) error {
-	if &data == (&et.Item{}) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(statusCode)
-		return nil
-	}
-
 	e, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -198,12 +195,6 @@ func ITEM(w http.ResponseWriter, r *http.Request, statusCode int, data et.Item) 
 * @return error
 **/
 func ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, data et.Items) error {
-	if &data == (&et.Items{}) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(statusCode)
-		return nil
-	}
-
 	e, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -218,12 +209,6 @@ func ITEMS(w http.ResponseWriter, r *http.Request, statusCode int, data et.Items
 * @return error
 **/
 func LIST(w http.ResponseWriter, r *http.Request, statusCode int, data et.List) error {
-	if &data == (&et.List{}) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(statusCode)
-		return nil
-	}
-
 	e, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -238,12 +223,6 @@ func LIST(w http.ResponseWriter, r *http.Request, statusCode int, data et.List) 
 * @return error
 **/
 func DATA(w http.ResponseWriter, r *http.Request, statusCode int, data et.Json) error {
-	if &data == (&et.Json{}) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(statusCode)
-		return nil
-	}
-
 	e, err := json.Marshal(data)
 	if err != nil {
 		return err

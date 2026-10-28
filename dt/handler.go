@@ -1,3 +1,6 @@
+// Package dt caches objects by key: in memory always and, when PRODUCTION is true (the default), also in Redis under
+// "object:<key>" for CACHE_DURATION (5 minutes by default). With PRODUCTION false nothing reaches Redis. Use it for
+// records read often from a database (stores does); mem is memory only with a TTL and ephemeral expires unread keys.
 package dt
 
 import (
@@ -62,7 +65,7 @@ func Get(key string) *Object {
 	var result *Object
 	exists, err := cache.GetObject(key, &result)
 	if err != nil {
-		return nil
+		return newObject(key)
 	}
 
 	if !exists {

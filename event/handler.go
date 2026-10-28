@@ -9,6 +9,19 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+/**
+* Invariants of the event package.
+*
+* One subscription per channel: Subscribe and Queue store the new subscription under the channel
+* without unsubscribing the previous one, which keeps receiving; call Unsubscribe before
+* subscribing the same channel again.
+* Close iterates the subscriptions without taking the mutex: do not subscribe while closing.
+* Log and Overflow are fire-and-forget through a buffer of 256 messages (asyncPublishBufSize):
+* when it is full the message is dropped.
+* Publish and Subscribe are no-ops without a connection (Load not called or failed); Queue and
+* Unsubscribe return MSG_ERR_NOT_CONNECT.
+**/
+
 type EventStatus string
 
 const (
@@ -83,7 +96,7 @@ func publish(channel string, data et.Json) error {
 		return nil
 	}
 
-	msg := NewEvenMessage(channel, data)
+	msg := NewEventMessage(channel, data)
 	msg.FromId = conn.id
 	dt, err := msg.Encode()
 	if err != nil {
@@ -202,7 +215,7 @@ func Queue(channel, queue string, f func(Message)) (err error) {
 		func(m *nats.Msg) {
 			defer func() {
 				if r := recover(); r != nil {
-					logs.Errorf("panic in Queue channel:%s err:%v", channel, r)
+					logs.Errorf(MSG_PANIC_IN_QUEUE, channel, r)
 				}
 			}()
 
@@ -252,12 +265,12 @@ func Source(channel string, f func(Message)) error {
 }
 
 /**
-* Log
+* Log: Publishes data on the event channel without blocking (dropped if the buffer is full).
 * @param event string, data et.Json
 **/
 func Log(event string, data et.Json) {
 	select {
-	case asyncPublishCh <- asyncMsg{EVENT_LOG, data}:
+	case asyncPublishCh <- asyncMsg{event, data}:
 	default:
 	}
 }
@@ -282,6 +295,10 @@ func Error(data et.Json) {
 	Log(EVENT_SET_ERROR, data)
 }
 
+/**
+* ErrorMessage: Publishes an error with its method and function on EVENT_SET_ERROR (see Error).
+* @param tenantId, message, method, functionName string
+**/
 func ErrorMessage(tenantId, message, method, functionName string) {
 	Error(et.Json{
 		"tenant_id":     tenantId,
@@ -291,6 +308,10 @@ func ErrorMessage(tenantId, message, method, functionName string) {
 	})
 }
 
+/**
+* ErrorDetails: Publishes a provider error with its status, response and attempt (see Error).
+* @param tenantId string, statusCode int, provider, providerError, response string, attempt int
+**/
 func ErrorDetails(tenantId string, statusCode int, provider, providerError, response string, attempt int) {
 	Error(et.Json{
 		"tenant_id":   tenantId,
@@ -302,6 +323,10 @@ func ErrorDetails(tenantId string, statusCode int, provider, providerError, resp
 	})
 }
 
+/**
+* ErrorContext: Publishes ctx as an error after setting the tenant, workflow, node and customer ids on it (see Error).
+* @param tenantId, workflowId, nodeId, customerId string, ctx et.Json
+**/
 func ErrorContext(tenantId, workflowId, nodeId, customerId string, ctx et.Json) {
 	ctx.Set("tenant_id", tenantId)
 	ctx.Set("workflow_id", workflowId)

@@ -6,6 +6,9 @@ import (
 	"github.com/cgalvisleon/et/et"
 )
 
+/**
+* Op: Operación de un Change entregado a Sync.
+**/
 type Op string
 
 const (

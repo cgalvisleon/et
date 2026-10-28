@@ -3,6 +3,7 @@ package et
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -15,6 +16,12 @@ var (
 	ErrorDataNotFound  = errors.New(MSG_DATA_NOT_FOUND)
 )
 
+/**
+* Operator: Comparison operator of a Condition, as written in JSON ("eq", "less_eq", "not_between"...).
+* Adding one: the constants, ToOperator and a constructor here (condition.go); ApplyToValue in evaluate.go;
+* et/spec.md §3.2; the five jsql/drivers/<x>/query.go; the constructor in jsql/catalog.go and jsql/wrapper.go;
+* jsql/jsql.d.ts (JsqlOperator); the tests condition_test.go and jsql/drivers/test/evaluate_test.go.
+**/
 type Operator string
 
 const (
@@ -35,10 +42,19 @@ const (
 	NOT_BETWEEN Operator = "not_between"
 )
 
+/**
+* Str: The operator as text ("eq").
+* @return string
+**/
 func (s Operator) Str() string {
 	return string(s)
 }
 
+/**
+* ToOperator: Reads an operator from its text, case insensitive; an unknown one is EQ.
+* @param s string
+* @return Operator
+**/
 func ToOperator(s string) Operator {
 	s = strings.ToLower(s)
 	values := map[string]Operator{
@@ -68,9 +84,9 @@ func ToOperator(s string) Operator {
 }
 
 /**
-* Time: Converts a value to a time.Time
+* Time: Converts a time.Time, *time.Time or RFC3339 text to a time.
 * @param val any
-* @return time.Time
+* @return *time.Time (nil when it cannot be converted)
 **/
 func Time(val any) *time.Time {
 	switch v := val.(type) {
@@ -89,6 +105,11 @@ func Time(val any) *time.Time {
 	}
 }
 
+/**
+* TypeData: Logical type of a Value or a column (TEXT, INT, ARRAY_JSON...); valueType infers it from a Go value.
+* Adding one: the constants, TypeValues and valueType here (condition.go); the five jsql/drivers/<x>/types.go and
+* quoted.go (sqlite also condition.go); jsql/jsql.d.ts (JsqlTypeData).
+**/
 type TypeData string
 
 const (
@@ -115,10 +136,17 @@ const (
 	FIELD          TypeData = "field"
 )
 
+/**
+* Str: The type as text ("int").
+* @return string
+**/
 func (s TypeData) Str() string {
 	return string(s)
 }
 
+/**
+* TypeValues: Every TypeData by its text, for IsTypeValue and Value.Is; FIELD is not listed.
+**/
 var TypeValues = map[string]TypeData{
 	ANY.Str():            ANY,
 	BYTE.Str():           BYTE,
@@ -142,12 +170,20 @@ var TypeValues = map[string]TypeData{
 	AGGREGATE.Str():      AGGREGATE,
 }
 
+/**
+* IsTypeValue: Whether v (case insensitive) is the text of a TypeData in TypeValues.
+* @param v string
+* @return bool
+**/
 func IsTypeValue(v string) bool {
 	v = strings.ToLower(v)
 	_, exists := TypeValues[v]
 	return exists
 }
 
+/**
+* Value: A raw value with its logical Type; the field and the value of a Condition are both a Value.
+**/
 type Value struct {
 	Type  TypeData `json:"type"`
 	Value any      `json:"value"`
@@ -265,11 +301,20 @@ func valueType(v any) TypeData {
 	}
 }
 
+/**
+* BetweenValue: The inclusive range of a between/not_between condition (ToBetween reads it from JSON).
+**/
 type BetweenValue struct {
 	Min any `json:"Min"`
 	Max any `json:"Max"`
 }
 
+/**
+* Function: Aggregate or scalar function of an Aggregate (count, sum, extract_year, int_value...), by position.
+* Adding one: the constants, ToFunction, Str and a constructor here (condition.go); applyFunction in evaluate.go;
+* FieldWrapper in goja.go; et/spec.md §3.6; the five jsql/drivers/<x>/quoted.go; jsql/jsql.d.ts (declare function);
+* the test evaluate_test.go.
+**/
 type Function int
 
 const (
@@ -289,6 +334,11 @@ const (
 	FLOAT_VALUE
 )
 
+/**
+* ToFunction: Reads a function from its lowercase name; an unknown one is COUNT (ToAggregate detects it with Str).
+* @param s string
+* @return Function
+**/
 func ToFunction(s string) Function {
 	switch s {
 	case "count":
@@ -323,6 +373,10 @@ func ToFunction(s string) Function {
 	return COUNT
 }
 
+/**
+* Str: The function name ("sum"); an unknown value gives its number.
+* @return string
+**/
 func (s Function) Str() string {
 	switch s {
 	case COUNT:
@@ -358,6 +412,9 @@ func (s Function) Str() string {
 	}
 }
 
+/**
+* Aggregate: A Function applied to a Value (a field or an expression), with an optional alias As.
+**/
 type Aggregate struct {
 	Function Function `json:"function"`
 	Value    Value    `json:"field"`
@@ -485,9 +542,140 @@ func Fld(name string) Field {
 }
 
 /**
-* Exp: Wraps an expression into a Value.
-* @param value any
+* Str: The field reference as text, as ToField reads it: [function(][source.]name[)][:as]
+* @return string
+**/
+func (s Field) Str() string {
+	name := s.Name
+	if s.Source != "" {
+		name = s.Source + "." + name
+	}
+	if s.Agg != nil {
+		fn := s.Agg.Function.Str()
+		name = fmt.Sprintf("%s(%s)", fn, name)
+		if s.As != "" && s.As != fn {
+			name += ":" + s.As
+		}
+		return name
+	}
+	if s.As != "" && s.As != s.Name {
+		name += ":" + s.As
+	}
+	return name
+}
+
+/**
+* ValueOf: The value of the field in obj: the attribute of its path (name->a->b; the source is not used) with its
+* function applied when it is an aggregate.
+* @param obj Json
+* @return any
+**/
+func (s Field) ValueOf(obj Json) any {
+	val := pathValue(obj, s.Name)
+	if s.Agg != nil {
+		return applyFunction(s.Agg.Function, val)
+	}
+	return val
+}
+
+/**
+* pathValue: The value of a path "a->b->c" in obj; nil when a key is missing. A list on the way gives the list of the
+* rest of the path in each item ("items->price" over [{price: 2}, {price: 3}] is [2, 3]), for the aggregates.
+* @param obj Json, path string
+* @return any
+**/
+func pathValue(obj any, path string) any {
+	key, rest, more := strings.Cut(path, "->")
+	var val any
+	switch v := obj.(type) {
+	case Json:
+		val = v[key]
+	case map[string]any:
+		val = v[key]
+	default:
+		if _, ok := obj.([]byte); ok || obj == nil {
+			return nil
+		}
+		rv := reflect.ValueOf(obj)
+		if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
+			return nil
+		}
+		result := make([]any, 0, rv.Len())
+		for i := 0; i < rv.Len(); i++ {
+			if item := pathValue(rv.Index(i).Interface(), path); item != nil {
+				result = append(result, item)
+			}
+		}
+		return result
+	}
+	if !more {
+		return val
+	}
+	return pathValue(val, rest)
+}
+
+/**
+* fieldRef: Whether v is a field reference: a Field, or the JSON {"field": "reference"} (its only key, a text).
+* A reference that ToField does not read is kept by name (Fld).
+* @param v any
+* @return Field, bool
+**/
+func fieldRef(v any) (Field, bool) {
+	var obj map[string]any
+	switch t := v.(type) {
+	case Field:
+		return t, true
+	case *Field:
+		if t == nil {
+			return Field{}, false
+		}
+		return *t, true
+	case Json:
+		obj = t
+	case map[string]any:
+		obj = t
+	default:
+		return Field{}, false
+	}
+	if len(obj) != 1 {
+		return Field{}, false
+	}
+	ref, ok := obj[FIELD.Str()].(string)
+	if !ok || strings.TrimSpace(ref) == "" {
+		return Field{}, false
+	}
+	return Fld(strings.TrimSpace(ref)), true
+}
+
+/**
+* toConditionValue: The value of a JSON condition: a field reference {"field": "name"} is a FIELD value; anything
+* else, the value as it is.
+* @param v any
 * @return Value
+**/
+func toConditionValue(v any) Value {
+	if ref, ok := fieldRef(v); ok {
+		return NewValue(ref)
+	}
+	return NewValue(v)
+}
+
+/**
+* jsonValue: The value of a condition as JSON: a FIELD value is {"field": "reference"}.
+* @param v Value
+* @return any
+**/
+func jsonValue(v Value) any {
+	if ref, ok := v.Value.(Field); ok && v.Type == FIELD {
+		return Json{FIELD.Str(): ref.Str()}
+	}
+	return v.Value
+}
+
+/**
+* Exp: Returns an EXP aggregate over a raw expression.
+* @param value any
+* @return Aggregate
 **/
 func Exp(value any) Aggregate {
 	return Aggregate{Function: EXP, Value: NewValue(value)}
@@ -530,7 +718,7 @@ func Max(value any) Aggregate {
 }
 
 /**
-* ExtractYear: Returns a EXTRACT_YEAR aggregate.
+* Year: Returns an EXTRACT_YEAR aggregate.
 * @param value any
 * @return Aggregate
 **/
@@ -539,7 +727,7 @@ func Year(value any) Aggregate {
 }
 
 /**
-* ExtractMonth: Returns a EXTRACT_MONTH aggregate.
+* Month: Returns an EXTRACT_MONTH aggregate.
 * @param value any
 * @return Aggregate
 **/
@@ -548,7 +736,7 @@ func Month(value any) Aggregate {
 }
 
 /**
-* ExtractDay: Returns a EXTRACT_DAY aggregate.
+* Day: Returns an EXTRACT_DAY aggregate.
 * @param value any
 * @return Aggregate
 **/
@@ -557,7 +745,7 @@ func Day(value any) Aggregate {
 }
 
 /**
-* ExtractHour: Returns a EXTRACT_HOUR aggregate.
+* Hour: Returns an EXTRACT_HOUR aggregate.
 * @param value any
 * @return Aggregate
 **/
@@ -566,7 +754,7 @@ func Hour(value any) Aggregate {
 }
 
 /**
-* ExtractMinute: Returns a EXTRACT_MINUTE aggregate.
+* Minute: Returns an EXTRACT_MINUTE aggregate.
 * @param value any
 * @return Aggregate
 **/
@@ -575,7 +763,7 @@ func Minute(value any) Aggregate {
 }
 
 /**
-* ExtractSecond: Returns a EXTRACT_SECOND aggregate.
+* Second: Returns an EXTRACT_SECOND aggregate.
 * @param value any
 * @return Aggregate
 **/
@@ -584,7 +772,7 @@ func Second(value any) Aggregate {
 }
 
 /**
-* Int: Returns a INT_VALUE aggregate.
+* Int: Returns an INT_VALUE aggregate.
 * @param value any
 * @return Aggregate
 **/
@@ -601,6 +789,9 @@ func Float(value any) Aggregate {
 	return Aggregate{Function: FLOAT_VALUE, Value: NewValue(value)}
 }
 
+/**
+* Connector: How a Condition joins the previous one: AND, OR or NaC (none, the first of a list).
+**/
 type Connector string
 
 const (
@@ -609,6 +800,11 @@ const (
 	OR  Connector = "or"
 )
 
+/**
+* ToConnector: Reads a connector from "and"/"or"; anything else is NaC.
+* @param s string
+* @return Connector
+**/
 func ToConnector(s string) Connector {
 	switch s {
 	case "and":
@@ -619,10 +815,18 @@ func ToConnector(s string) Connector {
 	return NaC
 }
 
+/**
+* Str: The connector as text ("and"); empty for NaC.
+* @return string
+**/
 func (s Connector) Str() string {
 	return string(s)
 }
 
+/**
+* Condition: One comparison, Field Operator Value, joined to the previous condition by Connector.
+* ToCondition reads it from {field: {op: value}} or {where|and|or: {field: {op: value}}}.
+**/
 type Condition struct {
 	Field     Value     `json:"field"`
 	Operator  Operator  `json:"operator"`
@@ -631,12 +835,24 @@ type Condition struct {
 }
 
 /**
+* Command: Kind of a write command: insert, update, delete or upsert.
+**/
+type Command string
+
+const (
+	INSERT Command = "insert"
+	UPDATE Command = "update"
+	DELETE Command = "delete"
+	UPSERT Command = "upsert"
+)
+
+/**
 * ToCondition: Converts a JSON object into a Condition.
 * @param params Json
 * @return *Condition, error
 **/
 func ToCondition(params Json) (*Condition, error) {
-	condition := func(fld string, wr Json) *Condition {
+	conditionOf := func(fld string, wr Json) *Condition {
 		for k, v := range wr {
 			op := ToOperator(k)
 			value := toConditionValue(v)
@@ -655,14 +871,9 @@ func ToCondition(params Json) (*Condition, error) {
 		return nil
 	}
 
-	fldCondition := func(wr Json) *Condition {
+	firstConditionOf := func(wr Json) *Condition {
 		for k := range wr {
-			cmd := wr.Json(k)
-			result := condition(k, cmd)
-			if result != nil {
-				return result
-			}
-			return result
+			return conditionOf(k, wr.Json(k))
 		}
 		return nil
 	}
@@ -672,27 +883,27 @@ func ToCondition(params Json) (*Condition, error) {
 		case "where":
 			// The first condition of a list: {"where": {field: {operator: value}}}, without a connector
 			value := params.Json(key)
-			result := fldCondition(value)
+			result := firstConditionOf(value)
 			if result != nil {
 				return result, nil
 			}
 		case "and":
 			value := params.Json(key)
-			result := fldCondition(value)
+			result := firstConditionOf(value)
 			if result != nil {
 				result.Connector = AND
 				return result, nil
 			}
 		case "or":
 			value := params.Json(key)
-			result := fldCondition(value)
+			result := firstConditionOf(value)
 			if result != nil {
 				result.Connector = OR
 				return result, nil
 			}
 		default:
 			value := params.Json(key)
-			result := condition(key, value)
+			result := conditionOf(key, value)
 			if result != nil {
 				return result, nil
 			}
@@ -939,6 +1150,10 @@ func NotBetween(field string, min, max any) *Condition {
 	return condition(field, BetweenValue{Min: min, Max: max}, NOT_BETWEEN)
 }
 
+/**
+* WheRes: A list of conditions read from JSON (ToWheRes). Unlike ToConditions it keeps the connectors as they
+* came: a missing one after the first is not turned into AND (the jsql callers do it).
+**/
 type WheRes []*Condition
 
 /**
@@ -1057,12 +1272,3 @@ func ToWhere(cond any) []Json {
 	}
 	return result
 }
-
-type Command string
-
-const (
-	INSERT Command = "insert"
-	UPDATE Command = "update"
-	DELETE Command = "delete"
-	UPSERT Command = "upsert"
-)

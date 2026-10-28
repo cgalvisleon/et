@@ -14,5 +14,5 @@ func Load(fileName string) (*Stage, error) {
 		return nil, errors.New(MSG_FILE_NOT_FOUND)
 	}
 
-	return nil, nil
+	return nil, errors.New(MSG_NOT_IMPLEMENTED)
 }

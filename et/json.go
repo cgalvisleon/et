@@ -24,12 +24,13 @@ var escapeHTMLPool = sync.Pool{
 }
 
 /**
-* Json type
+* Json: The object of the whole library, a map read with typed accessors (Str, Int, Json...) and
+* nested paths given as variadic keys or "a->b".
 **/
 type Json map[string]interface{}
 
 /**
-* Scan load rows to a json
+* Scan: Loads a database value (NULL, []byte, text, Json or map) into s; implements sql.Scanner.
 * @param src interface{}
 * @return error
 **/
@@ -65,7 +66,7 @@ func (s *Json) Scan(src interface{}) error {
 }
 
 /**
-* ScanRows load rows to a json
+* ScanRows: Loads the current row of rows into s, one key per column; []byte and JSON-looking texts are decoded.
 * @param rows *sql.Rows
 * @return error
 **/
@@ -109,10 +110,8 @@ func (s *Json) ScanRows(rows *sql.Rows) error {
 			}
 			result[col] = bt
 		case string:
-			// Drivers without a native JSON/bytea type (e.g. SQLite) return JSON
-			// column values as plain strings instead of []byte. Only attempt to
-			// decode strings that look like a JSON object or array, so an
-			// ordinary text value (e.g. "123" or "true") is left untouched.
+			// Drivers without a native JSON type (SQLite) return JSON columns as text: only decode
+			// what looks like an object or a list, so a plain "123" or "true" stays as it is.
 			trimmed := strings.TrimSpace(v)
 			if len(trimmed) == 0 || (trimmed[0] != '{' && trimmed[0] != '[') {
 				result[col] = v
@@ -194,7 +193,7 @@ func (s Json) ToEscapeHTML() string {
 }
 
 /**
-* ToMap convert a json to a map
+* ToMap: The same map as a map[string]interface{} (no copy).
 * @return map[string]interface{}
 **/
 func (s Json) ToMap() map[string]interface{} {
@@ -448,9 +447,9 @@ func (s Json) ValTime(def time.Time, atribs ...string) time.Time {
 }
 
 /**
-* ValDuration
+* ValDuration: The duration at the path, a time.Duration or a text like "1h30m"; _default when missing, zero or unreadable.
 * @param _default time.Duration, atribs ...string
-* @return string
+* @return time.Duration
 **/
 func (s Json) ValDuration(_default time.Duration, atribs ...string) time.Duration {
 	val := s.ValAny(_default, atribs...)
@@ -783,9 +782,9 @@ func (s Json) MapFloat(atrib string) map[string]float64 {
 }
 
 /**
-* Array return the value of the key
-* @param atrib string
-* @return []Json
+* Array: The list at the path; empty when missing.
+* @param atrib ...string
+* @return []interface{}
 **/
 func (s Json) Array(atrib ...string) []interface{} {
 	return s.ValArray([]interface{}{}, atrib...)
@@ -934,69 +933,17 @@ func (s Json) UpperString(atribs ...string) string {
 }
 
 /**
-* Update: This method update s with values in from. If the key exist in s, the value is replaced with the value in from.
-* @param fromJson Json
-* @return error
+* Update: Copies every key of from into s, replacing the ones that already exist.
+* @param from Json
 **/
 func (s Json) Update(from Json) {
 	maps.Copy(s, from)
 }
 
 /**
-* deepEqualValue reports whether a and b represent the same JSON value.
-* It compares via their JSON encoding so that nested maps/slices never panic
-* on uncomparable types and named vs. unnamed map types (e.g. Json vs.
-* map[string]interface{}) don't cause spurious mismatches.
-* @param a, b interface{}
-* @return bool
-**/
-func deepEqualValue(a, b interface{}) bool {
-	if equal, ok := equalScalar(a, b); ok {
-		return equal
-	}
-
-	ab, errA := json.Marshal(a)
-	bb, errB := json.Marshal(b)
-	if errA != nil || errB != nil {
-		return reflect.DeepEqual(a, b)
-	}
-	return bytes.Equal(ab, bb)
-}
-
-/**
-* equalScalar: Compares scalars without encoding them; ok is false for objects, lists and times.
-* @param a, b interface{}
-* @return equal bool, ok bool
-**/
-func equalScalar(a, b interface{}) (equal bool, ok bool) {
-	if a == nil || b == nil {
-		return a == nil && b == nil, true
-	}
-
-	switch va := a.(type) {
-	case string:
-		vb, ok := b.(string)
-		return ok && va == vb, true
-	case bool:
-		vb, ok := b.(bool)
-		return ok && va == vb, true
-	}
-
-	if _, isNum := numberOf(a); isNum {
-		if _, isNum := numberOf(b); !isNum {
-			return false, true
-		}
-		c, ok := compareNumbers(a, b)
-		return ok && c == 0, true
-	}
-
-	return false, false
-}
-
-/**
-* Compare: This method return a new json with the diferent values between s and from. Also include the keys that not exist in s.
+* Compare: A new Json with the keys of from whose value differs from s or is missing in s.
 * @param from Json
-* @return bool
+* @return Json
 **/
 func (s Json) Compare(from Json) Json {
 	result := Json{}
@@ -1040,17 +987,24 @@ func (s Json) IsChanged(from Json) bool {
 }
 
 /**
-* IsDeferent return true if the attribute does not exist or its value differs from val
+* IsDifferent return true if the attribute does not exist or its value differs from val
 * @param atrib string
 * @param val interface{}
 * @return bool
 **/
-func (s Json) IsDeferent(atrib string, val interface{}) bool {
+func (s Json) IsDifferent(atrib string, val interface{}) bool {
 	current, ok := s[atrib]
 	if !ok {
 		return true
 	}
 	return !deepEqualValue(current, val)
+}
+
+/**
+* IsDeferent: Deprecated: use IsDifferent.
+**/
+func (s Json) IsDeferent(atrib string, val interface{}) bool {
+	return s.IsDifferent(atrib, val)
 }
 
 /**
@@ -1134,12 +1088,12 @@ func (j Json) SetNested(keys []string, value interface{}) {
 	for i := 0; i < len(keys)-1; i++ {
 		k := keys[i]
 
-		// si no existe lo creamos
+		// a missing step is created
 		if _, ok := m[k]; !ok {
 			m[k] = map[string]interface{}{}
 		}
 
-		// aseguramos que sea map
+		// a step that is not an object is replaced by one
 		next, ok := asJson(m[k])
 		if !ok {
 			next = map[string]interface{}{}
@@ -1172,9 +1126,9 @@ func (s Json) Set(key string, val interface{}) {
 }
 
 /**
-* Delete a value in the key
-* @param key string
-* @return bool
+* Delete: Removes the keys from s.
+* @param keys []string
+* @return bool: true when at least one existed
 **/
 func (s Json) Delete(keys []string) bool {
 	if len(keys) == 0 {
@@ -1193,13 +1147,10 @@ func (s Json) Delete(keys []string) bool {
 }
 
 /**
-* Exist return if the key exist
-* @param key string
-* @return bool
+* Exist: Deprecated: use IsExist.
 **/
 func (s Json) Exist(key string) bool {
-	_, ok := s[key]
-	return ok
+	return s.IsExist(key)
 }
 
 /**
@@ -1251,9 +1202,9 @@ func (s Json) Hidden(keys []string) Json {
 }
 
 /**
-* From
+* From: An in-memory query (Wheres) over this object as its only row, with alias as.
 * @param as string
-* @return *Where
+* @return *Wheres
 **/
 func (s Json) From(as string) *Wheres {
 	return From([]Json{s}, as)
@@ -1672,8 +1623,8 @@ func ToJson(src string) (Json, error) {
 }
 
 /**
-* ToString
-* @param vals []Json
+* ToString: Encodes any value as JSON text without escaping HTML; empty on error.
+* @param vals interface{}
 * @return string
 **/
 func ToString(vals interface{}) string {
@@ -1686,4 +1637,104 @@ func ToString(vals interface{}) string {
 	}
 
 	return strings.TrimSuffix(buf.String(), "\n")
+}
+
+/**
+* sameMap: Whether a and b are the same Go map (not just equal)
+* @param a, b Json
+* @return bool
+**/
+func sameMap(a, b Json) bool {
+	return reflect.ValueOf(a).UnsafePointer() == reflect.ValueOf(b).UnsafePointer()
+}
+
+/**
+* asJson: The Json of a value that is one: a Json, a map[string]any or an object of a script (its same map)
+* @param value any
+* @return Json, bool
+**/
+func asJson(value any) (Json, bool) {
+	switch v := value.(type) {
+	case Json:
+		return v, v != nil
+	case map[string]any:
+		return Json(v), v != nil
+	case interface{ JsonValue() Json }:
+		return v.JsonValue(), true
+	}
+	return nil, false
+}
+
+/**
+* dateLayouts: Layouts tried when coercing a string into a time.Time for comparison.
+**/
+var dateLayouts = []string{
+	time.RFC3339,
+	time.RFC3339Nano,
+	"2006-01-02 15:04:05",
+	"2006-01-02",
+}
+
+/**
+* parseDate: Tries to parse a string into a time.Time using dateLayouts.
+* @param s string
+* @return time.Time, bool
+**/
+func parseDate(s string) (time.Time, bool) {
+	for _, layout := range dateLayouts {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t, true
+		}
+	}
+
+	return time.Time{}, false
+}
+
+/**
+* deepEqualValue: Whether a and b are the same JSON value: scalars by value (equalScalar), the rest by their
+* JSON encoding, so Json and map[string]interface{} compare equal and nothing panics.
+* @param a, b interface{}
+* @return bool
+**/
+func deepEqualValue(a, b interface{}) bool {
+	if equal, ok := equalScalar(a, b); ok {
+		return equal
+	}
+
+	ab, errA := json.Marshal(a)
+	bb, errB := json.Marshal(b)
+	if errA != nil || errB != nil {
+		return reflect.DeepEqual(a, b)
+	}
+	return bytes.Equal(ab, bb)
+}
+
+/**
+* equalScalar: Compares scalars without encoding them; ok is false for objects, lists and times.
+* @param a, b interface{}
+* @return equal bool, ok bool
+**/
+func equalScalar(a, b interface{}) (equal bool, ok bool) {
+	if a == nil || b == nil {
+		return a == nil && b == nil, true
+	}
+
+	switch va := a.(type) {
+	case string:
+		vb, ok := b.(string)
+		return ok && va == vb, true
+	case bool:
+		vb, ok := b.(bool)
+		return ok && va == vb, true
+	}
+
+	if _, isNum := numberOf(a); isNum {
+		if _, isNum := numberOf(b); !isNum {
+			return false, true
+		}
+		c, ok := compareNumbers(a, b)
+		return ok && c == 0, true
+	}
+
+	return false, false
 }

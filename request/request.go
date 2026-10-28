@@ -23,6 +23,8 @@ var (
 	}
 )
 
+// Status is the outcome of an outbound request: Ok, HTTP code and message
+// (a transport error is reported with code 400, a timeout with 408).
 type Status struct {
 	Ok      bool   `json:"ok"`
 	Code    int    `json:"code"`
@@ -234,9 +236,9 @@ func ReadBody(body io.ReadCloser) (*Body, error) {
 }
 
 /**
-* GetStr
+* GetStr: Reads the request body as text.
 * @param r *http.Request
-* @return et.Json, error
+* @return string, error
 **/
 func GetStr(r *http.Request) (string, error) {
 	body, err := ReadBody(r.Body)
@@ -267,6 +269,11 @@ func GetBody(r *http.Request) (et.Json, error) {
 	return result, nil
 }
 
+/**
+* Value: A URL or query parameter (URLParam, Query). Its value is always a string, so only
+* Str is meaningful: Int, Float, Bool, DateTime, Object and the Array* accessors type-assert
+* other types and always return their zero value.
+**/
 type Value struct {
 	value any
 }

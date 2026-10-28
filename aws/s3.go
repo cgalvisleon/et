@@ -202,3 +202,66 @@ func (s *S3AWS) Download(bucket, filePath string) (et.Item, error) {
 		},
 	}, nil
 }
+
+/**
+* UploadStream: Uploads the object key of bucket from r in parts, without holding it in memory (large files, e.g.
+* backups); private (no ACL). An error reading r aborts the upload and nothing is left in the bucket.
+* @param bucket, key, contentType string, r io.Reader
+* @return et.Item, error
+**/
+func (s *S3AWS) UploadStream(bucket, key, contentType string, r io.Reader) (et.Item, error) {
+	uploader := s3manager.NewUploader(s.sess)
+	input := &s3manager.UploadInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+		Body:   r,
+	}
+	if contentType != "" {
+		input.ContentType = aws.String(contentType)
+	}
+	result, err := uploader.UploadWithContext(context.Background(), input)
+	if err != nil {
+		return et.Item{}, err
+	}
+	return et.Item{
+		Ok: true,
+		Result: et.Json{
+			"provider": "AWS S3",
+			"bucket":   bucket,
+			"key":      key,
+			"url":      result.Location,
+		},
+	}, nil
+}
+
+/**
+* List: The keys of bucket that start with prefix, in order.
+* @param bucket, prefix string
+* @return []string, error
+**/
+func (s *S3AWS) List(bucket, prefix string) ([]string, error) {
+	s3client := s3.New(s.sess)
+	result := []string{}
+	err := s3client.ListObjectsV2Pages(&s3.ListObjectsV2Input{Bucket: aws.String(bucket), Prefix: aws.String(prefix)},
+		func(page *s3.ListObjectsV2Output, last bool) bool {
+			for _, obj := range page.Contents {
+				result = append(result, aws.StringValue(obj.Key))
+			}
+			return true
+		})
+	return result, err
+}
+
+/**
+* Open: Reads the object key of bucket as a stream; the caller closes it.
+* @param bucket, key string
+* @return io.ReadCloser, error
+**/
+func (s *S3AWS) Open(bucket, key string) (io.ReadCloser, error) {
+	s3client := s3.New(s.sess)
+	result, err := s3client.GetObject(&s3.GetObjectInput{Bucket: aws.String(bucket), Key: aws.String(key)})
+	if err != nil {
+		return nil, err
+	}
+	return result.Body, nil
+}

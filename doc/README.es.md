@@ -8,7 +8,7 @@ Requiere Go 1.25. Agrega el módulo e importa solo los paquetes que uses:
 
 ```bash
 go get github.com/cgalvisleon/et@latest
-go get github.com/cgalvisleon/et@v1.0.41
+go get github.com/cgalvisleon/et@v1.0.42
 ```
 
 ```go
@@ -27,7 +27,7 @@ Una librería modular para microservicios, CLIs y aplicaciones web en Go. Cada d
 
 Los paquetes de infraestructura (`cache`, `event`, `jsql`) leen su configuración de variables de entorno y se conectan una sola vez en `Load()`; las llamadas siguientes no hacen nada.
 
-## Actualizar a v1.0.41
+## Actualizar a v1.0.42
 
 - `router.Publish` / `router.With` ya no anteponen `Route.PackageName` a `Route.Path`: pon la ruta completa en la ruta.
 - Los modelos de `jsql` exigen un esquema. En SQLite, MySQL y Oracle la tabla se llama `schema_nombre` (antes SQLite usaba el nombre a secas), así que las bases SQLite existentes necesitan renombrar sus tablas.

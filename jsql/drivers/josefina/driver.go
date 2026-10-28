@@ -125,6 +125,15 @@ func (s *Josefina) DropDB(db *jsql.DB, timeout ...time.Duration) error {
 	return fmt.Errorf(jsql.MSG_DRIVER_CANNOT_DROP_DB, jsql.DriverJosefina)
 }
 
+/**
+* RootAttribs: Josefina keeps the ATTRIB fields of a model at the root of the document, not inside its SourceField
+* (josefina spec §22, D52): the Postgres SQL names them by their path and reads the row with to_jsonb.
+* @return bool
+**/
+func (s *Josefina) RootAttribs() bool {
+	return true
+}
+
 // ErrCannotDrop: Josefina does not drop models (tables) through SQL
 var ErrCannotDrop = fmt.Errorf("josefina: models are not dropped through SQL (Josefina keeps them; empty them with DELETE ... WHERE true)")
 

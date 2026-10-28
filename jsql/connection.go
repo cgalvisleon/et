@@ -703,6 +703,27 @@ type Tester interface {
 }
 
 /**
+* RootAttribs: A driver of a document database that keeps the ATTRIB fields of a model with a SourceField at the
+* root of the document instead of inside the SourceField (josefina). The model and the application do not change.
+**/
+type RootAttribs interface {
+	RootAttribs() bool
+}
+
+/**
+* AttribsAtRoot: Whether the driver of the model's DB keeps its ATTRIB fields at the root (RootAttribs).
+* @param model *Model
+* @return bool
+**/
+func AttribsAtRoot(model *Model) bool {
+	if model == nil || model.db == nil {
+		return false
+	}
+	driver, ok := model.db.driver.(RootAttribs)
+	return ok && driver.RootAttribs()
+}
+
+/**
 * TestConnection: Tests a connection with its driver (the "driver" of its params), without creating anything; the
 * context bounds how long it may take. A driver that does not implement Tester answers MSG_DRIVER_CANNOT_TEST.
 * @param ctx context.Context, connection Connection, query string

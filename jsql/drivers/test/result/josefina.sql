@@ -1,24 +1,24 @@
 -- ========== 2. Definición de modelos (DDL) · Define (declarativo) [pass]
 
 -- DDL
-CREATE SCHEMA IF NOT EXISTS jsql_t794364000;
+CREATE SCHEMA IF NOT EXISTS jsql_t373700000;
 
-CREATE TABLE IF NOT EXISTS jsql_t794364000.f_products (
+CREATE TABLE IF NOT EXISTS jsql_t373700000.f_products (
   id VARCHAR(80) DEFAULT NULL,
   name VARCHAR(255) DEFAULT NULL,
   category VARCHAR(80) DEFAULT NULL,
   _source JSONB DEFAULT '{}'
 );
 
-ALTER TABLE jsql_t794364000.f_products ADD CONSTRAINT jsql_t794364000_f_products_pkey PRIMARY KEY (id);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_products_category_idx ON jsql_t794364000.f_products USING BTREE (category);
+ALTER TABLE jsql_t373700000.f_products ADD CONSTRAINT jsql_t373700000_f_products_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_products_category_idx ON jsql_t373700000.f_products USING BTREE (category);
 
 -- ========== 2. Definición de modelos (DDL) · DefineModel + DefineColumn / DefineAttrib / DefineUnique / DefineHidden [pass]
 
 -- DDL
-CREATE SCHEMA IF NOT EXISTS jsql_t794364000;
+CREATE SCHEMA IF NOT EXISTS jsql_t373700000;
 
-CREATE TABLE IF NOT EXISTS jsql_t794364000.f_roles (
+CREATE TABLE IF NOT EXISTS jsql_t373700000.f_roles (
   created_at TIMESTAMP DEFAULT NULL,
   updated_at TIMESTAMP DEFAULT NULL,
   status VARCHAR(255) DEFAULT 'active',
@@ -28,14 +28,14 @@ CREATE TABLE IF NOT EXISTS jsql_t794364000.f_roles (
   _idx VARCHAR(80) DEFAULT NULL
 );
 
-ALTER TABLE jsql_t794364000.f_roles ADD CONSTRAINT jsql_t794364000_f_roles_pkey PRIMARY KEY (id);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_roles_status_idx ON jsql_t794364000.f_roles USING BTREE (status);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_roles__idx_idx ON jsql_t794364000.f_roles USING BTREE (_idx);
+ALTER TABLE jsql_t373700000.f_roles ADD CONSTRAINT jsql_t373700000_f_roles_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_roles_status_idx ON jsql_t373700000.f_roles USING BTREE (status);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_roles__idx_idx ON jsql_t373700000.f_roles USING BTREE (_idx);
 
 -- DDL
-CREATE SCHEMA IF NOT EXISTS jsql_t794364000;
+CREATE SCHEMA IF NOT EXISTS jsql_t373700000;
 
-CREATE TABLE IF NOT EXISTS jsql_t794364000.f_users (
+CREATE TABLE IF NOT EXISTS jsql_t373700000.f_users (
   created_at TIMESTAMP DEFAULT NULL,
   updated_at TIMESTAMP DEFAULT NULL,
   status VARCHAR(255) DEFAULT 'active',
@@ -46,35 +46,35 @@ CREATE TABLE IF NOT EXISTS jsql_t794364000.f_users (
   _idx VARCHAR(80) DEFAULT NULL
 );
 
-ALTER TABLE jsql_t794364000.f_users ADD CONSTRAINT jsql_t794364000_f_users_pkey PRIMARY KEY (id);
-CREATE UNIQUE INDEX IF NOT EXISTS jsql_t794364000_f_users_email_key ON jsql_t794364000.f_users (email);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_users_status_idx ON jsql_t794364000.f_users USING BTREE (status);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_users__idx_idx ON jsql_t794364000.f_users USING BTREE (_idx);
+ALTER TABLE jsql_t373700000.f_users ADD CONSTRAINT jsql_t373700000_f_users_pkey PRIMARY KEY (id);
+CREATE UNIQUE INDEX IF NOT EXISTS jsql_t373700000_f_users_email_key ON jsql_t373700000.f_users (email);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_users_status_idx ON jsql_t373700000.f_users USING BTREE (status);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_users__idx_idx ON jsql_t373700000.f_users USING BTREE (_idx);
 
 -- DDL
-CREATE SCHEMA IF NOT EXISTS jsql_t794364000;
+CREATE SCHEMA IF NOT EXISTS jsql_t373700000;
 
-CREATE TABLE IF NOT EXISTS jsql_t794364000.f_users_f_roles (
+CREATE TABLE IF NOT EXISTS jsql_t373700000.f_users_f_roles (
   user_id VARCHAR(80) DEFAULT NULL,
   role_id VARCHAR(80) DEFAULT NULL,
   _idx VARCHAR(80) DEFAULT NULL
 );
 
-ALTER TABLE jsql_t794364000.f_users_f_roles ADD CONSTRAINT jsql_t794364000_f_users_f_roles_pkey PRIMARY KEY (user_id, role_id);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_users_f_roles__idx_idx ON jsql_t794364000.f_users_f_roles USING BTREE (_idx);
-ALTER TABLE jsql_t794364000.f_users_f_roles ADD CONSTRAINT fk_jsql_t794364000_f_users_f_roles_jsql_t794364000_f_users
+ALTER TABLE jsql_t373700000.f_users_f_roles ADD CONSTRAINT jsql_t373700000_f_users_f_roles_pkey PRIMARY KEY (user_id, role_id);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_users_f_roles__idx_idx ON jsql_t373700000.f_users_f_roles USING BTREE (_idx);
+ALTER TABLE jsql_t373700000.f_users_f_roles ADD CONSTRAINT fk_jsql_t373700000_f_users_f_roles_jsql_t373700000_f_users
   FOREIGN KEY (user_id)
-  REFERENCES jsql_t794364000.f_users (id)
+  REFERENCES jsql_t373700000.f_users (id)
   ON DELETE CASCADE;
-ALTER TABLE jsql_t794364000.f_users_f_roles ADD CONSTRAINT fk_jsql_t794364000_f_users_f_roles_jsql_t794364000_f_roles
+ALTER TABLE jsql_t373700000.f_users_f_roles ADD CONSTRAINT fk_jsql_t373700000_f_users_f_roles_jsql_t373700000_f_roles
   FOREIGN KEY (role_id)
-  REFERENCES jsql_t794364000.f_roles (id)
+  REFERENCES jsql_t373700000.f_roles (id)
   ON DELETE CASCADE;
 
 -- DDL
-CREATE SCHEMA IF NOT EXISTS jsql_t794364000;
+CREATE SCHEMA IF NOT EXISTS jsql_t373700000;
 
-CREATE TABLE IF NOT EXISTS jsql_t794364000.f_doc_types (
+CREATE TABLE IF NOT EXISTS jsql_t373700000.f_doc_types (
   created_at TIMESTAMP DEFAULT NULL,
   updated_at TIMESTAMP DEFAULT NULL,
   status VARCHAR(255) DEFAULT 'active',
@@ -84,14 +84,14 @@ CREATE TABLE IF NOT EXISTS jsql_t794364000.f_doc_types (
   _idx VARCHAR(80) DEFAULT NULL
 );
 
-ALTER TABLE jsql_t794364000.f_doc_types ADD CONSTRAINT jsql_t794364000_f_doc_types_pkey PRIMARY KEY (id);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_doc_types_status_idx ON jsql_t794364000.f_doc_types USING BTREE (status);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_doc_types__idx_idx ON jsql_t794364000.f_doc_types USING BTREE (_idx);
+ALTER TABLE jsql_t373700000.f_doc_types ADD CONSTRAINT jsql_t373700000_f_doc_types_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_doc_types_status_idx ON jsql_t373700000.f_doc_types USING BTREE (status);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_doc_types__idx_idx ON jsql_t373700000.f_doc_types USING BTREE (_idx);
 
 -- DDL
-CREATE SCHEMA IF NOT EXISTS jsql_t794364000;
+CREATE SCHEMA IF NOT EXISTS jsql_t373700000;
 
-CREATE TABLE IF NOT EXISTS jsql_t794364000.f_orders (
+CREATE TABLE IF NOT EXISTS jsql_t373700000.f_orders (
   created_at TIMESTAMP DEFAULT NULL,
   updated_at TIMESTAMP DEFAULT NULL,
   status VARCHAR(255) DEFAULT 'active',
@@ -101,31 +101,31 @@ CREATE TABLE IF NOT EXISTS jsql_t794364000.f_orders (
   _idx VARCHAR(80) DEFAULT NULL
 );
 
-ALTER TABLE jsql_t794364000.f_orders ADD CONSTRAINT jsql_t794364000_f_orders_pkey PRIMARY KEY (id);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_orders_status_idx ON jsql_t794364000.f_orders USING BTREE (status);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_orders__idx_idx ON jsql_t794364000.f_orders USING BTREE (_idx);
+ALTER TABLE jsql_t373700000.f_orders ADD CONSTRAINT jsql_t373700000_f_orders_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_orders_status_idx ON jsql_t373700000.f_orders USING BTREE (status);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_orders__idx_idx ON jsql_t373700000.f_orders USING BTREE (_idx);
 
 -- DDL
-CREATE SCHEMA IF NOT EXISTS jsql_t794364000;
+CREATE SCHEMA IF NOT EXISTS jsql_t373700000;
 
-CREATE TABLE IF NOT EXISTS jsql_t794364000.f_orders_items (
+CREATE TABLE IF NOT EXISTS jsql_t373700000.f_orders_items (
   order_id VARCHAR(80) DEFAULT NULL,
   id VARCHAR(80) DEFAULT NULL,
   product VARCHAR(255) DEFAULT NULL
 );
 
-ALTER TABLE jsql_t794364000.f_orders_items ADD CONSTRAINT jsql_t794364000_f_orders_items_pkey PRIMARY KEY (id);
-ALTER TABLE jsql_t794364000.f_orders_items ADD CONSTRAINT fk_jsql_t794364000_f_orders_items_jsql_t794364000_f_orders
+ALTER TABLE jsql_t373700000.f_orders_items ADD CONSTRAINT jsql_t373700000_f_orders_items_pkey PRIMARY KEY (id);
+ALTER TABLE jsql_t373700000.f_orders_items ADD CONSTRAINT fk_jsql_t373700000_f_orders_items_jsql_t373700000_f_orders
   FOREIGN KEY (order_id)
-  REFERENCES jsql_t794364000.f_orders (id)
+  REFERENCES jsql_t373700000.f_orders (id)
   ON DELETE CASCADE;
 
 -- ========== 2. Definición de modelos (DDL) · DefineTenantModel / DefineProjectModel [pass]
 
 -- DDL
-CREATE SCHEMA IF NOT EXISTS jsql_t794364000;
+CREATE SCHEMA IF NOT EXISTS jsql_t373700000;
 
-CREATE TABLE IF NOT EXISTS jsql_t794364000.f_tenant (
+CREATE TABLE IF NOT EXISTS jsql_t373700000.f_tenant (
   created_at TIMESTAMP DEFAULT NULL,
   updated_at TIMESTAMP DEFAULT NULL,
   status VARCHAR(255) DEFAULT 'active',
@@ -135,15 +135,15 @@ CREATE TABLE IF NOT EXISTS jsql_t794364000.f_tenant (
   _idx VARCHAR(80) DEFAULT NULL
 );
 
-ALTER TABLE jsql_t794364000.f_tenant ADD CONSTRAINT jsql_t794364000_f_tenant_pkey PRIMARY KEY (id);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_tenant_status_idx ON jsql_t794364000.f_tenant USING BTREE (status);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_tenant__idx_idx ON jsql_t794364000.f_tenant USING BTREE (_idx);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_tenant_tenant_id_idx ON jsql_t794364000.f_tenant USING BTREE (tenant_id);
+ALTER TABLE jsql_t373700000.f_tenant ADD CONSTRAINT jsql_t373700000_f_tenant_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_tenant_status_idx ON jsql_t373700000.f_tenant USING BTREE (status);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_tenant__idx_idx ON jsql_t373700000.f_tenant USING BTREE (_idx);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_tenant_tenant_id_idx ON jsql_t373700000.f_tenant USING BTREE (tenant_id);
 
 -- DDL
-CREATE SCHEMA IF NOT EXISTS jsql_t794364000;
+CREATE SCHEMA IF NOT EXISTS jsql_t373700000;
 
-CREATE TABLE IF NOT EXISTS jsql_t794364000.f_project (
+CREATE TABLE IF NOT EXISTS jsql_t373700000.f_project (
   created_at TIMESTAMP DEFAULT NULL,
   updated_at TIMESTAMP DEFAULT NULL,
   status VARCHAR(255) DEFAULT 'active',
@@ -153,17 +153,17 @@ CREATE TABLE IF NOT EXISTS jsql_t794364000.f_project (
   _idx VARCHAR(80) DEFAULT NULL
 );
 
-ALTER TABLE jsql_t794364000.f_project ADD CONSTRAINT jsql_t794364000_f_project_pkey PRIMARY KEY (id);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_project_status_idx ON jsql_t794364000.f_project USING BTREE (status);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_project__idx_idx ON jsql_t794364000.f_project USING BTREE (_idx);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_project_project_id_idx ON jsql_t794364000.f_project USING BTREE (project_id);
+ALTER TABLE jsql_t373700000.f_project ADD CONSTRAINT jsql_t373700000_f_project_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_project_status_idx ON jsql_t373700000.f_project USING BTREE (status);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_project__idx_idx ON jsql_t373700000.f_project USING BTREE (_idx);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_project_project_id_idx ON jsql_t373700000.f_project USING BTREE (project_id);
 
 -- ========== 2. Definición de modelos (DDL) · DefineRequired (rechaza el insert sin el campo) [pass]
 
 -- DDL
-CREATE SCHEMA IF NOT EXISTS jsql_t794364000;
+CREATE SCHEMA IF NOT EXISTS jsql_t373700000;
 
-CREATE TABLE IF NOT EXISTS jsql_t794364000.f_required (
+CREATE TABLE IF NOT EXISTS jsql_t373700000.f_required (
   created_at TIMESTAMP DEFAULT NULL,
   updated_at TIMESTAMP DEFAULT NULL,
   status VARCHAR(255) DEFAULT 'active',
@@ -173,16 +173,16 @@ CREATE TABLE IF NOT EXISTS jsql_t794364000.f_required (
   _idx VARCHAR(80) DEFAULT NULL
 );
 
-ALTER TABLE jsql_t794364000.f_required ADD CONSTRAINT jsql_t794364000_f_required_pkey PRIMARY KEY (id);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_required_status_idx ON jsql_t794364000.f_required USING BTREE (status);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_required__idx_idx ON jsql_t794364000.f_required USING BTREE (_idx);
+ALTER TABLE jsql_t373700000.f_required ADD CONSTRAINT jsql_t373700000_f_required_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_required_status_idx ON jsql_t373700000.f_required USING BTREE (status);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_required__idx_idx ON jsql_t373700000.f_required USING BTREE (_idx);
 
 -- ========== 2. Definición de modelos (DDL) · DefineForeignKeys (rechaza un hijo sin padre) [pass]
 
 -- DDL
-CREATE SCHEMA IF NOT EXISTS jsql_t794364000;
+CREATE SCHEMA IF NOT EXISTS jsql_t373700000;
 
-CREATE TABLE IF NOT EXISTS jsql_t794364000.f_parent (
+CREATE TABLE IF NOT EXISTS jsql_t373700000.f_parent (
   created_at TIMESTAMP DEFAULT NULL,
   updated_at TIMESTAMP DEFAULT NULL,
   status VARCHAR(255) DEFAULT 'active',
@@ -191,14 +191,14 @@ CREATE TABLE IF NOT EXISTS jsql_t794364000.f_parent (
   _idx VARCHAR(80) DEFAULT NULL
 );
 
-ALTER TABLE jsql_t794364000.f_parent ADD CONSTRAINT jsql_t794364000_f_parent_pkey PRIMARY KEY (id);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_parent_status_idx ON jsql_t794364000.f_parent USING BTREE (status);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_parent__idx_idx ON jsql_t794364000.f_parent USING BTREE (_idx);
+ALTER TABLE jsql_t373700000.f_parent ADD CONSTRAINT jsql_t373700000_f_parent_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_parent_status_idx ON jsql_t373700000.f_parent USING BTREE (status);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_parent__idx_idx ON jsql_t373700000.f_parent USING BTREE (_idx);
 
 -- DDL
-CREATE SCHEMA IF NOT EXISTS jsql_t794364000;
+CREATE SCHEMA IF NOT EXISTS jsql_t373700000;
 
-CREATE TABLE IF NOT EXISTS jsql_t794364000.f_child (
+CREATE TABLE IF NOT EXISTS jsql_t373700000.f_child (
   created_at TIMESTAMP DEFAULT NULL,
   updated_at TIMESTAMP DEFAULT NULL,
   status VARCHAR(255) DEFAULT 'active',
@@ -208,19 +208,19 @@ CREATE TABLE IF NOT EXISTS jsql_t794364000.f_child (
   _idx VARCHAR(80) DEFAULT NULL
 );
 
-ALTER TABLE jsql_t794364000.f_child ADD CONSTRAINT jsql_t794364000_f_child_pkey PRIMARY KEY (id);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_child_status_idx ON jsql_t794364000.f_child USING BTREE (status);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_child__idx_idx ON jsql_t794364000.f_child USING BTREE (_idx);
-ALTER TABLE jsql_t794364000.f_child ADD CONSTRAINT fk_jsql_t794364000_f_child_jsql_t794364000_f_parent
+ALTER TABLE jsql_t373700000.f_child ADD CONSTRAINT jsql_t373700000_f_child_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_child_status_idx ON jsql_t373700000.f_child USING BTREE (status);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_child__idx_idx ON jsql_t373700000.f_child USING BTREE (_idx);
+ALTER TABLE jsql_t373700000.f_child ADD CONSTRAINT fk_jsql_t373700000_f_child_jsql_t373700000_f_parent
   FOREIGN KEY (parent_id)
-  REFERENCES jsql_t794364000.f_parent (id)
+  REFERENCES jsql_t373700000.f_parent (id)
   ON DELETE CASCADE;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_parent
+INSERT INTO jsql_t373700000.f_parent
   (_idx, id)
 VALUES
-  ('1793111358375', 'p1')
+  ('1793213765104', 'p1')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -230,10 +230,10 @@ jsonb_build_object(
 ) AS result;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_child
+INSERT INTO jsql_t373700000.f_child
   (_idx, id, parent_id)
 VALUES
-  ('1793111358388', 'c1', 'p1')
+  ('1793213765117', 'c1', 'p1')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -244,10 +244,10 @@ jsonb_build_object(
 ) AS result;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_child
+INSERT INTO jsql_t373700000.f_child
   (_idx, id, parent_id)
 VALUES
-  ('1793111358400', 'c2', 'missing')
+  ('1793213765131', 'c2', 'missing')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -260,9 +260,9 @@ jsonb_build_object(
 -- ========== 2. Definición de modelos (DDL) · Stricted (ignora campos desconocidos) [pass]
 
 -- DDL
-CREATE SCHEMA IF NOT EXISTS jsql_t794364000;
+CREATE SCHEMA IF NOT EXISTS jsql_t373700000;
 
-CREATE TABLE IF NOT EXISTS jsql_t794364000.f_strict (
+CREATE TABLE IF NOT EXISTS jsql_t373700000.f_strict (
   created_at TIMESTAMP DEFAULT NULL,
   updated_at TIMESTAMP DEFAULT NULL,
   status VARCHAR(255) DEFAULT 'active',
@@ -272,15 +272,15 @@ CREATE TABLE IF NOT EXISTS jsql_t794364000.f_strict (
   _idx VARCHAR(80) DEFAULT NULL
 );
 
-ALTER TABLE jsql_t794364000.f_strict ADD CONSTRAINT jsql_t794364000_f_strict_pkey PRIMARY KEY (id);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_strict_status_idx ON jsql_t794364000.f_strict USING BTREE (status);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_strict__idx_idx ON jsql_t794364000.f_strict USING BTREE (_idx);
+ALTER TABLE jsql_t373700000.f_strict ADD CONSTRAINT jsql_t373700000_f_strict_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_strict_status_idx ON jsql_t373700000.f_strict USING BTREE (status);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_strict__idx_idx ON jsql_t373700000.f_strict USING BTREE (_idx);
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_strict
+INSERT INTO jsql_t373700000.f_strict
   (_idx, id, name)
 VALUES
-  ('1793111358449', 's1', 'x')
+  ('1793213765174', 's1', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -300,25 +300,25 @@ jsonb_build_object(
 'id', A.id,
 'name', A.name
 ) AS result
-FROM jsql_t794364000.f_strict AS A
+FROM jsql_t373700000.f_strict AS A
 WHERE A.id = 's1'
 LIMIT 1;
 
 -- ========== 2. Definición de modelos (DDL) · DB.Query define (Define en JSON) [pass]
 
 -- DDL
-CREATE SCHEMA IF NOT EXISTS jsql_t794364000;
+CREATE SCHEMA IF NOT EXISTS jsql_t373700000;
 
-CREATE TABLE IF NOT EXISTS jsql_t794364000.f_json_model (
+CREATE TABLE IF NOT EXISTS jsql_t373700000.f_json_model (
   id VARCHAR(80) DEFAULT NULL,
   title VARCHAR(255) DEFAULT NULL,
   _source JSONB DEFAULT '{}'
 );
 
-ALTER TABLE jsql_t794364000.f_json_model ADD CONSTRAINT jsql_t794364000_f_json_model_pkey PRIMARY KEY (id);
+ALTER TABLE jsql_t373700000.f_json_model ADD CONSTRAINT jsql_t373700000_f_json_model_pkey PRIMARY KEY (id);
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_json_model
+INSERT INTO jsql_t373700000.f_json_model
   (id, title, _source)
 VALUES
   ('j1', 'desde define', '{"extra":1}'::jsonb)
@@ -335,17 +335,17 @@ jsonb_build_object(
 'id', A.id,
 'title', A.title
 ) AS result
-FROM jsql_t794364000.f_json_model AS A
+FROM jsql_t373700000.f_json_model AS A
 WHERE A.id = 'j1'
 LIMIT 1;
 
 -- ========== 2. Definición de modelos (DDL) · Insert (datos base) [pass]
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_doc_types
+INSERT INTO jsql_t373700000.f_doc_types
   (_idx, id, title)
 VALUES
-  ('1793111358512', 'CC', 'Cédula de ciudadanía')
+  ('1793213765230', 'CC', 'Cédula de ciudadanía')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -356,10 +356,10 @@ jsonb_build_object(
 ) AS result;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_doc_types
+INSERT INTO jsql_t373700000.f_doc_types
   (_idx, id, title)
 VALUES
-  ('1793111358524', 'NIT', 'Número de identificación tributaria')
+  ('1793213765243', 'NIT', 'Número de identificación tributaria')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -371,14 +371,14 @@ jsonb_build_object(
 
 -- QUERY
 SELECT EXISTS(SELECT 1
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.email = 'ana@example.com');
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_users
+INSERT INTO jsql_t373700000.f_users
   (_idx, email, id, name, _source)
 VALUES
-  ('1793111358535', 'ana@example.com', 'u1', 'Ana', '{"age":30,"password":"secret","tp_doc":"CC"}'::jsonb)
+  ('1793213765254', 'ana@example.com', 'u1', 'Ana', '{"age":30,"password":"secret","tp_doc":"CC"}'::jsonb)
 RETURNING (_source - '{"_idx","password"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -391,14 +391,14 @@ jsonb_build_object(
 
 -- QUERY
 SELECT EXISTS(SELECT 1
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.email = 'luis@example.com');
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_users
+INSERT INTO jsql_t373700000.f_users
   (_idx, email, id, name, _source)
 VALUES
-  ('1793111358548', 'luis@example.com', 'u2', 'Luis', '{"age":17}'::jsonb)
+  ('1793213765267', 'luis@example.com', 'u2', 'Luis', '{"age":17}'::jsonb)
 RETURNING (_source - '{"_idx","password"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -411,14 +411,14 @@ jsonb_build_object(
 
 -- QUERY
 SELECT EXISTS(SELECT 1
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.email = 'marta@example.com');
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_users
+INSERT INTO jsql_t373700000.f_users
   (_idx, email, id, name, _source)
 VALUES
-  ('1793111358557', 'marta@example.com', 'u3', 'Marta O''Neil', '{"age":45,"tp_doc":"NIT"}'::jsonb)
+  ('1793213765277', 'marta@example.com', 'u3', 'Marta O''Neil', '{"age":45,"tp_doc":"NIT"}'::jsonb)
 RETURNING (_source - '{"_idx","password"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -430,10 +430,10 @@ jsonb_build_object(
 ) AS result;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_roles
+INSERT INTO jsql_t373700000.f_roles
   (_idx, id, name)
 VALUES
-  ('1793111358567', 'r1', 'admin')
+  ('1793213765286', 'r1', 'admin')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -444,10 +444,10 @@ jsonb_build_object(
 ) AS result;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_roles
+INSERT INTO jsql_t373700000.f_roles
   (_idx, id, name)
 VALUES
-  ('1793111358580', 'r2', 'editor')
+  ('1793213765299', 'r2', 'editor')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -458,10 +458,10 @@ jsonb_build_object(
 ) AS result;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_orders
+INSERT INTO jsql_t373700000.f_orders
   (_idx, id, user_id, _source)
 VALUES
-  ('1793111358590', 'o1', 'u1', '{"amount":100.5}'::jsonb)
+  ('1793213765309', 'o1', 'u1', '{"amount":100.5}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -472,10 +472,10 @@ jsonb_build_object(
 ) AS result;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_orders
+INSERT INTO jsql_t373700000.f_orders
   (_idx, id, user_id, _source)
 VALUES
-  ('1793111358604', 'o2', 'u1', '{"amount":200}'::jsonb)
+  ('1793213765322', 'o2', 'u1', '{"amount":200}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -486,10 +486,10 @@ jsonb_build_object(
 ) AS result;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_orders
+INSERT INTO jsql_t373700000.f_orders
   (_idx, id, user_id, _source)
 VALUES
-  ('1793111358614', 'o3', 'u3', '{"amount":50}'::jsonb)
+  ('1793213765332', 'o3', 'u3', '{"amount":50}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -500,21 +500,21 @@ jsonb_build_object(
 ) AS result;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_orders_items
+INSERT INTO jsql_t373700000.f_orders_items
   (id, order_id, product)
 VALUES
   ('i1', 'o1', 'router')
 RETURNING id, product;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_orders_items
+INSERT INTO jsql_t373700000.f_orders_items
   (id, order_id, product)
 VALUES
   ('i2', 'o1', 'cable')
 RETURNING id, product;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_products
+INSERT INTO jsql_t373700000.f_products
   (category, id, name, _source)
 VALUES
   ('internet', 'p1', 'Plan 200', '{"price":90000}'::jsonb)
@@ -526,7 +526,7 @@ jsonb_build_object(
 ) AS result;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_products
+INSERT INTO jsql_t373700000.f_products
   (category, id, name, _source)
 VALUES
   ('internet', 'p2', 'Plan 500', '{"price":150000}'::jsonb)
@@ -538,7 +538,7 @@ jsonb_build_object(
 ) AS result;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_products
+INSERT INTO jsql_t373700000.f_products
   (category, id, name, _source)
 VALUES
   ('tv', 'p3', 'Decoder', '{"price":20000}'::jsonb)
@@ -550,43 +550,43 @@ jsonb_build_object(
 ) AS result;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_users_f_roles
+INSERT INTO jsql_t373700000.f_users_f_roles
   (_idx, role_id, user_id)
 VALUES
-  ('1793111358676', 'r1', 'u1')
+  ('1793213765396', 'r1', 'u1')
 RETURNING user_id, role_id;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_users_f_roles
+INSERT INTO jsql_t373700000.f_users_f_roles
   (_idx, role_id, user_id)
 VALUES
-  ('1793111358689', 'r2', 'u1')
+  ('1793213765409', 'r2', 'u1')
 RETURNING user_id, role_id;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_users_f_roles
+INSERT INTO jsql_t373700000.f_users_f_roles
   (_idx, role_id, user_id)
 VALUES
-  ('1793111358699', 'r2', 'u2')
+  ('1793213765419', 'r2', 'u2')
 RETURNING user_id, role_id;
 
 -- ========== 2. Definición de modelos (DDL) · DefineUnique (rechaza duplicados en insert, bulk y update) [pass]
 
 -- QUERY
 SELECT EXISTS(SELECT 1
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.email = 'ana@example.com');
 
 -- QUERY
 SELECT EXISTS(SELECT 1
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.email = 'same@example.com');
 
 -- BULK
-INSERT INTO jsql_t794364000.f_users
+INSERT INTO jsql_t373700000.f_users
   (_idx, email, id, name)
 VALUES
-  ('1793111358712', 'same@example.com', 'u8', 'Uno')
+  ('1793213765431', 'same@example.com', 'u8', 'Uno')
 RETURNING (_source - '{"_idx","password"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -599,7 +599,7 @@ jsonb_build_object(
 
 -- QUERY
 SELECT EXISTS(SELECT 1
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.email = 'same@example.com');
 
 -- QUERY
@@ -613,7 +613,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.id = 'u2'
 LIMIT 1000;
 
@@ -628,7 +628,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.email = 'ana@example.com'
 LIMIT 2;
 
@@ -643,12 +643,12 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.id = 'u2'
 LIMIT 1000;
 
 -- UPDATE
-UPDATE jsql_t794364000.f_users
+UPDATE jsql_t373700000.f_users
 SET
   created_at = NULL,
   email = 'luis@example.com',
@@ -669,24 +669,28 @@ jsonb_build_object(
 
 -- QUERY
 SELECT COUNT(*)
-FROM jsql_t794364000.f_users AS A;
+FROM jsql_t373700000.f_users AS A;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_t373700000.f_users AS A;
 
 -- ========== 2. Definición de modelos (DDL) · OmitUpdates (DefineOmitUpdate y Define) [pass]
 
 -- DDL
-CREATE SCHEMA IF NOT EXISTS jsql_t794364000;
+CREATE SCHEMA IF NOT EXISTS jsql_t373700000;
 
-CREATE TABLE IF NOT EXISTS jsql_t794364000.f_omit (
+CREATE TABLE IF NOT EXISTS jsql_t373700000.f_omit (
   id VARCHAR(80) DEFAULT NULL,
   code VARCHAR(80) DEFAULT NULL,
   name VARCHAR(255) DEFAULT NULL,
   _source JSONB DEFAULT '{}'
 );
 
-ALTER TABLE jsql_t794364000.f_omit ADD CONSTRAINT jsql_t794364000_f_omit_pkey PRIMARY KEY (id);
+ALTER TABLE jsql_t373700000.f_omit ADD CONSTRAINT jsql_t373700000_f_omit_pkey PRIMARY KEY (id);
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_omit
+INSERT INTO jsql_t373700000.f_omit
   (code, id, name, _source)
 VALUES
   ('A1', 'o1', 'antes', '{"created_by":"ana","meta":{"a":1}}'::jsonb)
@@ -705,12 +709,12 @@ jsonb_build_object(
 'code', A.code,
 'name', A.name
 ) AS result
-FROM jsql_t794364000.f_omit AS A
+FROM jsql_t373700000.f_omit AS A
 WHERE A.id = 'o1'
 LIMIT 1000;
 
 -- UPDATE
-UPDATE jsql_t794364000.f_omit
+UPDATE jsql_t373700000.f_omit
 SET
   code = 'A1',
   name = 'después',
@@ -730,14 +734,14 @@ SELECT
 jsonb_build_object(
 'id', A.id
 ) AS result
-FROM jsql_t794364000.f_orders AS A
+FROM jsql_t373700000.f_orders AS A
 WHERE A.id = 'o1'
 LIMIT 1;
 
 -- QUERY
 SELECT
 A.product
-FROM jsql_t794364000.f_orders_items AS A
+FROM jsql_t373700000.f_orders_items AS A
 WHERE A.order_id = 'o1'
 LIMIT 30;
 
@@ -753,14 +757,14 @@ jsonb_build_object(
 'id', A.id,
 'user_id', A.user_id
 ) AS result
-FROM jsql_t794364000.f_orders AS A
+FROM jsql_t373700000.f_orders AS A
 WHERE A.id = 'o1'
 LIMIT 1;
 
 -- QUERY
 SELECT
 A.product
-FROM jsql_t794364000.f_orders_items AS A
+FROM jsql_t373700000.f_orders_items AS A
 WHERE A.order_id = 'o1'
 LIMIT 30;
 
@@ -771,7 +775,7 @@ SELECT
 jsonb_build_object(
 'id', A.id
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.id = 'u1'
 LIMIT 1;
 
@@ -780,8 +784,8 @@ SELECT
 jsonb_build_object(
 'name', A.name
 ) AS result
-FROM jsql_t794364000.f_roles AS A
-INNER JOIN jsql_t794364000.f_users_f_roles AS B
+FROM jsql_t373700000.f_roles AS A
+INNER JOIN jsql_t373700000.f_users_f_roles AS B
   ON B.role_id = A.id
 WHERE B.user_id = 'u1'
 LIMIT 1000;
@@ -793,7 +797,7 @@ SELECT
 jsonb_build_object(
 'id', A.id
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.id = 'u2'
 LIMIT 1;
 
@@ -802,8 +806,8 @@ SELECT
 jsonb_build_object(
 'name', A.name
 ) AS result
-FROM jsql_t794364000.f_roles AS A
-INNER JOIN jsql_t794364000.f_users_f_roles AS B
+FROM jsql_t373700000.f_roles AS A
+INNER JOIN jsql_t373700000.f_users_f_roles AS B
   ON B.role_id = A.id
 WHERE B.user_id = 'u2'
 LIMIT 1;
@@ -820,8 +824,8 @@ jsonb_build_object(
 'id', A.id,
 'name', A.name
 ) AS result
-FROM jsql_t794364000.f_roles AS A
-INNER JOIN jsql_t794364000.f_users_f_roles AS B
+FROM jsql_t373700000.f_roles AS A
+INNER JOIN jsql_t373700000.f_users_f_roles AS B
   ON A.id = B.role_id
 WHERE B.user_id = 'u2'
 LIMIT 1000;
@@ -834,36 +838,18 @@ jsonb_build_object(
 'id', A.id,
 'tp_doc', A._source->'tp_doc'
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 ORDER BY A.id ASC
 LIMIT 1000;
 
 -- QUERY
 SELECT
 jsonb_build_object(
-'title', A.title
+'title', A.title,
+'_jsql_key', A.id
 ) AS result
-FROM jsql_t794364000.f_doc_types AS A
-WHERE A.id = 'CC'
-LIMIT 1;
-
--- QUERY
-SELECT
-jsonb_build_object(
-'title', A.title
-) AS result
-FROM jsql_t794364000.f_doc_types AS A
-WHERE A.id = NULL
-LIMIT 1;
-
--- QUERY
-SELECT
-jsonb_build_object(
-'title', A.title
-) AS result
-FROM jsql_t794364000.f_doc_types AS A
-WHERE A.id = 'NIT'
-LIMIT 1;
+FROM jsql_t373700000.f_doc_types AS A
+WHERE A.id IN ('CC', 'NIT');
 
 -- ========== 3. Relaciones y campos calculados · DefineRollup (count, sum, object) [pass]
 
@@ -872,13 +858,13 @@ SELECT
 jsonb_build_object(
 'id', A.id
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.id = 'u3'
 LIMIT 1;
 
 -- QUERY
 SELECT COUNT(*)
-FROM jsql_t794364000.f_orders AS A
+FROM jsql_t373700000.f_orders AS A
 WHERE A.user_id = 'u3';
 
 -- QUERY
@@ -886,7 +872,7 @@ SELECT
 jsonb_build_object(
 'amount', COALESCE(SUM((A._source->>'amount')::double precision), 0)::double precision
 ) AS result
-FROM jsql_t794364000.f_orders AS A
+FROM jsql_t373700000.f_orders AS A
 WHERE A.user_id = 'u3'
 LIMIT 1000;
 
@@ -896,9 +882,567 @@ jsonb_build_object(
 'id', A.id,
 'amount', (A._source->>'amount')::double precision
 ) AS result
-FROM jsql_t794364000.f_orders AS A
+FROM jsql_t373700000.f_orders AS A
 WHERE A.user_id = 'u3'
 LIMIT 1;
+
+-- ========== 3. Relaciones y campos calculados · DefineRollup con where (valor fijo y campo de la fila) [pass]
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'age', (A._source->>'age')::bigint
+) AS result
+FROM jsql_t373700000.f_users AS A
+ORDER BY A.id ASC
+LIMIT 1000;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'_jsql_key', A.user_id,
+'orders_big', COUNT(A.user_id)::bigint
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+  AND (A._source->>'amount')::double precision > 150
+GROUP BY A.user_id;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u1'
+  AND (A._source->>'amount')::double precision > 30;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u2'
+  AND (A._source->>'amount')::double precision > 17;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u3'
+  AND (A._source->>'amount')::double precision > 45;
+
+-- ========== 3. Relaciones y campos calculados · DefineRollup con where or (conserva la llave) y round trip JSON [pass]
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_t373700000.f_users AS A
+ORDER BY A.id ASC
+LIMIT 1000;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'_jsql_key', A.user_id,
+'orders_edge', COUNT(A.user_id)::bigint
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+  AND (A._source->>'amount')::double precision > 150
+  OR A.user_id IN ('u1', 'u2', 'u3')
+  AND (A._source->>'amount')::double precision < 60
+GROUP BY A.user_id;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_t373700000.f_users AS A
+WHERE A.id = 'u3'
+LIMIT 1;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u3'
+  AND (A._source->>'amount')::double precision > 150
+  OR A.user_id = 'u3'
+  AND (A._source->>'amount')::double precision < 60;
+
+-- ========== 3. Relaciones y campos calculados · Rollups.OrderBy (primer registro de un object) [pass]
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_t373700000.f_users AS A
+WHERE A.id = 'u1'
+  OR A.id = 'u2'
+ORDER BY A.id ASC
+LIMIT 1000;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'amount', (A._source->>'amount')::double precision,
+'_jsql_key', A.user_id
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id IN ('u1', 'u2')
+ORDER BY A.id ASC;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'_jsql_key', A.user_id
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id IN ('u1', 'u2')
+ORDER BY (A._source->>'amount')::double precision DESC;
+
+-- ========== 3. Relaciones y campos calculados · Relaciones por lotes = fila por fila [pass]
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'tp_doc', A._source->'tp_doc'
+) AS result
+FROM jsql_t373700000.f_users AS A
+ORDER BY A.id ASC
+LIMIT 1000;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'name', A.name,
+'_jsql_key', B.user_id
+) AS result
+FROM jsql_t373700000.f_roles AS A
+INNER JOIN jsql_t373700000.f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id IN ('u1', 'u2', 'u3');
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'name', A.name,
+'_jsql_key', B.user_id
+) AS result
+FROM jsql_t373700000.f_roles AS A
+INNER JOIN jsql_t373700000.f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id IN ('u1', 'u2', 'u3');
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'title', A.title,
+'_jsql_key', A.id
+) AS result
+FROM jsql_t373700000.f_doc_types AS A
+WHERE A.id IN ('CC', 'NIT');
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'_jsql_key', A.user_id,
+'orders_count', COUNT(A.user_id)::bigint
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+GROUP BY A.user_id;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'_jsql_key', A.user_id,
+'amount', COALESCE(SUM((A._source->>'amount')::double precision), 0)::double precision
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+GROUP BY A.user_id;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'_jsql_key', A.user_id,
+'orders_big', COUNT(A.user_id)::bigint
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+  AND (A._source->>'amount')::double precision > 150
+GROUP BY A.user_id;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'_jsql_key', A.user_id,
+'orders_edge', COUNT(A.user_id)::bigint
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+  AND (A._source->>'amount')::double precision > 150
+  OR A.user_id IN ('u1', 'u2', 'u3')
+  AND (A._source->>'amount')::double precision < 60
+GROUP BY A.user_id;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'amount', (A._source->>'amount')::double precision,
+'_jsql_key', A.user_id
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+ORDER BY A.id ASC;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'_jsql_key', A.user_id
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+ORDER BY (A._source->>'amount')::double precision DESC;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'tp_doc', A._source->'tp_doc'
+) AS result
+FROM jsql_t373700000.f_users AS A
+WHERE A.id = 'u1'
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'name', A.name
+) AS result
+FROM jsql_t373700000.f_roles AS A
+INNER JOIN jsql_t373700000.f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id = 'u1'
+LIMIT 1000;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'name', A.name
+) AS result
+FROM jsql_t373700000.f_roles AS A
+INNER JOIN jsql_t373700000.f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id = 'u1'
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u1'
+ORDER BY (A._source->>'amount')::double precision DESC
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'title', A.title
+) AS result
+FROM jsql_t373700000.f_doc_types AS A
+WHERE A.id = 'CC'
+LIMIT 1;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u1';
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'amount', COALESCE(SUM((A._source->>'amount')::double precision), 0)::double precision
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u1'
+LIMIT 1000;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u1'
+  AND (A._source->>'amount')::double precision > 150;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u1'
+  AND (A._source->>'amount')::double precision > 150
+  OR A.user_id = 'u1'
+  AND (A._source->>'amount')::double precision < 60;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'amount', (A._source->>'amount')::double precision
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u1'
+ORDER BY A.id ASC
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'tp_doc', A._source->'tp_doc'
+) AS result
+FROM jsql_t373700000.f_users AS A
+WHERE A.id = 'u2'
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'name', A.name
+) AS result
+FROM jsql_t373700000.f_roles AS A
+INNER JOIN jsql_t373700000.f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id = 'u2'
+LIMIT 1000;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'name', A.name
+) AS result
+FROM jsql_t373700000.f_roles AS A
+INNER JOIN jsql_t373700000.f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id = 'u2'
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'title', A.title
+) AS result
+FROM jsql_t373700000.f_doc_types AS A
+WHERE A.id = NULL
+LIMIT 1;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u2';
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'amount', COALESCE(SUM((A._source->>'amount')::double precision), 0)::double precision
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u2'
+LIMIT 1000;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u2'
+  AND (A._source->>'amount')::double precision > 150;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u2'
+  AND (A._source->>'amount')::double precision > 150
+  OR A.user_id = 'u2'
+  AND (A._source->>'amount')::double precision < 60;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'amount', (A._source->>'amount')::double precision
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u2'
+ORDER BY A.id ASC
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u2'
+ORDER BY (A._source->>'amount')::double precision DESC
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'tp_doc', A._source->'tp_doc'
+) AS result
+FROM jsql_t373700000.f_users AS A
+WHERE A.id = 'u3'
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'name', A.name
+) AS result
+FROM jsql_t373700000.f_roles AS A
+INNER JOIN jsql_t373700000.f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id = 'u3'
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'name', A.name
+) AS result
+FROM jsql_t373700000.f_roles AS A
+INNER JOIN jsql_t373700000.f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id = 'u3'
+LIMIT 1000;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'amount', (A._source->>'amount')::double precision
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u3'
+ORDER BY A.id ASC
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u3'
+ORDER BY (A._source->>'amount')::double precision DESC
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'title', A.title
+) AS result
+FROM jsql_t373700000.f_doc_types AS A
+WHERE A.id = 'NIT'
+LIMIT 1;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u3';
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'amount', COALESCE(SUM((A._source->>'amount')::double precision), 0)::double precision
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u3'
+LIMIT 1000;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u3'
+  AND (A._source->>'amount')::double precision > 150;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_t373700000.f_orders AS A
+WHERE A.user_id = 'u3'
+  AND (A._source->>'amount')::double precision > 150
+  OR A.user_id = 'u3'
+  AND (A._source->>'amount')::double precision < 60;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_t373700000.f_orders AS A
+ORDER BY A.id ASC
+LIMIT 1000;
+
+-- QUERY
+SELECT
+A.product,
+A.order_id AS _jsql_key
+FROM jsql_t373700000.f_orders_items AS A
+WHERE A.order_id IN ('o1', 'o2', 'o3');
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.id = 'o1'
+LIMIT 1;
+
+-- QUERY
+SELECT
+A.product
+FROM jsql_t373700000.f_orders_items AS A
+WHERE A.order_id = 'o1'
+LIMIT 30;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.id = 'o2'
+LIMIT 1;
+
+-- QUERY
+SELECT
+A.product
+FROM jsql_t373700000.f_orders_items AS A
+WHERE A.order_id = 'o2'
+LIMIT 30;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_t373700000.f_orders AS A
+WHERE A.id = 'o3'
+LIMIT 1;
+
+-- QUERY
+SELECT
+A.product
+FROM jsql_t373700000.f_orders_items AS A
+WHERE A.order_id = 'o3'
+LIMIT 30;
 
 -- ========== 3. Relaciones y campos calculados · DefineCalcFunc + Model.Calc [pass]
 
@@ -913,7 +1457,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.id = 'u1'
 LIMIT 1;
 
@@ -930,7 +1474,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.id = 'u3'
 LIMIT 1;
 
@@ -942,7 +1486,7 @@ jsonb_build_object(
 'id', A.id,
 'name', A.name
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.id = 'u3'
 LIMIT 1;
 
@@ -955,7 +1499,7 @@ jsonb_build_object(
 'name', A.name,
 'age', (A._source->>'age')::bigint
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE (A._source->>'age')::bigint > 18
 ORDER BY (A._source->>'age')::bigint DESC
 LIMIT 1000;
@@ -973,7 +1517,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.id = 'u2'
 LIMIT 1;
 
@@ -988,17 +1532,17 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 ORDER BY A.id ASC
 LIMIT 2;
 
 -- QUERY
 SELECT COUNT(*)
-FROM jsql_t794364000.f_users AS A;
+FROM jsql_t373700000.f_users AS A;
 
 -- QUERY
 SELECT EXISTS(SELECT 1
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.id = 'u9');
 
 -- ========== 4. Consultas · Limit (paginación) / Page [pass]
@@ -1014,7 +1558,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 ORDER BY A.id ASC
 LIMIT 1
 OFFSET 1;
@@ -1031,7 +1575,7 @@ jsonb_build_object(
 'id', A.id,
 'name', A.name
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.id = 'u1'
 LIMIT 1;
 
@@ -1043,7 +1587,7 @@ jsonb_build_object(
 'id', A.id,
 'password', A._source->'password'
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.id = 'u1'
 LIMIT 1;
 
@@ -1055,8 +1599,8 @@ jsonb_build_object(
 'id', A.id,
 'user', U.name
 ) AS result
-FROM jsql_t794364000.f_orders AS A
-INNER JOIN jsql_t794364000.f_users AS U
+FROM jsql_t373700000.f_orders AS A
+INNER JOIN jsql_t373700000.f_users AS U
   ON A.user_id = U.id
 ORDER BY A.id ASC
 LIMIT 1000;
@@ -1069,8 +1613,8 @@ jsonb_build_object(
 'id', A.id,
 'n', COUNT(O.id)::bigint
 ) AS result
-FROM jsql_t794364000.f_users AS A
-LEFT JOIN jsql_t794364000.f_orders AS O
+FROM jsql_t373700000.f_users AS A
+LEFT JOIN jsql_t373700000.f_orders AS O
   ON O.user_id = A.id
 GROUP BY A.id
 ORDER BY A.id ASC
@@ -1084,8 +1628,8 @@ jsonb_build_object(
 'id', U.id,
 'n', COUNT(A.id)::bigint
 ) AS result
-FROM jsql_t794364000.f_orders AS A
-RIGHT JOIN jsql_t794364000.f_users AS U
+FROM jsql_t373700000.f_orders AS A
+RIGHT JOIN jsql_t373700000.f_users AS U
   ON A.user_id = U.id
 GROUP BY U.id
 ORDER BY U.id ASC
@@ -1097,8 +1641,8 @@ jsonb_build_object(
 'id', A.id,
 'n', COUNT(O.id)::bigint
 ) AS result
-FROM jsql_t794364000.f_users AS A
-FULL JOIN jsql_t794364000.f_orders AS O
+FROM jsql_t373700000.f_users AS A
+FULL JOIN jsql_t373700000.f_orders AS O
   ON O.user_id = A.id
 GROUP BY A.id
 ORDER BY A.id ASC
@@ -1113,7 +1657,7 @@ jsonb_build_object(
 'n', COUNT(A.id)::bigint,
 'total', COALESCE(SUM((A._source->>'amount')::double precision), 0)::double precision
 ) AS result
-FROM jsql_t794364000.f_orders AS A
+FROM jsql_t373700000.f_orders AS A
 GROUP BY A.user_id
 HAVING COUNT(A.id)::bigint > 1
 LIMIT 1000;
@@ -1126,7 +1670,7 @@ jsonb_build_object(
 'user_id', A.user_id,
 'n', COUNT(A.id)::bigint
 ) AS result
-FROM jsql_t794364000.f_orders AS A
+FROM jsql_t373700000.f_orders AS A
 GROUP BY A.user_id
 ORDER BY COUNT(A.id)::bigint DESC
 LIMIT 1000;
@@ -1139,7 +1683,7 @@ jsonb_build_object(
 'id', A.id,
 'name', A.name
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE (A._source->>'age')::bigint >= 18
 ORDER BY A.name DESC
 LIMIT 10;
@@ -1152,7 +1696,7 @@ jsonb_build_object(
 'id', U.id,
 'name', U.name
 ) AS result
-FROM jsql_t794364000.f_users AS U
+FROM jsql_t373700000.f_users AS U
 WHERE (U._source->>'age')::bigint > 18
 ORDER BY U.id ASC
 LIMIT 1000;
@@ -1165,8 +1709,8 @@ jsonb_build_object(
 'name', U.name,
 'order', O.id
 ) AS result
-FROM jsql_t794364000.f_users AS U,
-jsql_t794364000.f_orders AS O
+FROM jsql_t373700000.f_users AS U,
+jsql_t373700000.f_orders AS O
 WHERE O.user_id = U.id
 ORDER BY O.id ASC
 LIMIT 1000;
@@ -1178,7 +1722,7 @@ SELECT
 jsonb_build_object(
 'name', R.name
 ) AS result
-FROM jsql_t794364000.f_roles AS R
+FROM jsql_t373700000.f_roles AS R
 ORDER BY R.name ASC
 LIMIT 1000;
 
@@ -1190,8 +1734,8 @@ jsonb_build_object(
 'name', U.name,
 'n', COUNT(O.id)::bigint
 ) AS result
-FROM jsql_t794364000.f_users AS U
-INNER JOIN jsql_t794364000.f_orders AS O
+FROM jsql_t373700000.f_users AS U
+INNER JOIN jsql_t373700000.f_orders AS O
   ON O.user_id = U.id
 GROUP BY U.name
 ORDER BY U.name ASC
@@ -1205,8 +1749,8 @@ jsonb_build_object(
 'name', U.name,
 'n', COUNT(O.id)::bigint
 ) AS result
-FROM jsql_t794364000.f_users AS U
-LEFT JOIN jsql_t794364000.f_orders AS O
+FROM jsql_t373700000.f_users AS U
+LEFT JOIN jsql_t373700000.f_orders AS O
   ON O.user_id = U.id
 GROUP BY U.name
 ORDER BY U.name ASC
@@ -1220,8 +1764,8 @@ jsonb_build_object(
 'name', U.name,
 'n', COUNT(O.id)::bigint
 ) AS result
-FROM jsql_t794364000.f_users AS U
-LEFT JOIN jsql_t794364000.f_orders AS O
+FROM jsql_t373700000.f_users AS U
+LEFT JOIN jsql_t373700000.f_orders AS O
   ON O.user_id = U.id
 GROUP BY U.name
 ORDER BY U.name ASC
@@ -1234,7 +1778,7 @@ SELECT
 jsonb_build_object(
 'name', A.name
 ) AS result
-FROM jsql_t794364000.f_roles AS A
+FROM jsql_t373700000.f_roles AS A
 ORDER BY A.name ASC
 LIMIT 1000;
 
@@ -1251,7 +1795,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.id = 'no_existe'
 LIMIT 1000;
 
@@ -1262,7 +1806,7 @@ SELECT
 jsonb_build_object(
 'id', A.id
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE (A._source->>'age')::bigint > 18
   OR A.name = 'Luis'
 ORDER BY A.id ASC
@@ -1277,7 +1821,7 @@ jsonb_build_object(
 'user_id', A.user_id,
 'n', COUNT(A.id)::bigint
 ) AS result
-FROM jsql_t794364000.f_orders AS A
+FROM jsql_t373700000.f_orders AS A
 GROUP BY A.user_id
 HAVING COUNT(A.id)::bigint > 1
 ORDER BY A.user_id ASC
@@ -1296,7 +1840,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.id = 'u1'
 LIMIT 1000;
 
@@ -1313,7 +1857,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.name = 'Ana'
 ORDER BY A.id ASC
 LIMIT 1000;
@@ -1331,7 +1875,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.name != 'Ana'
 ORDER BY A.id ASC
 LIMIT 1000;
@@ -1349,7 +1893,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE (A._source->>'age')::bigint < 30
 ORDER BY A.id ASC
 LIMIT 1000;
@@ -1367,7 +1911,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE (A._source->>'age')::bigint <= 30
 ORDER BY A.id ASC
 LIMIT 1000;
@@ -1385,7 +1929,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE (A._source->>'age')::bigint > 30
 ORDER BY A.id ASC
 LIMIT 1000;
@@ -1403,7 +1947,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE (A._source->>'age')::bigint >= 30
 ORDER BY A.id ASC
 LIMIT 1000;
@@ -1421,7 +1965,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.name ILIKE '%an%'
 ORDER BY A.id ASC
 LIMIT 1000;
@@ -1439,7 +1983,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.id IN ('u1', 'u3')
 ORDER BY A.id ASC
 LIMIT 1000;
@@ -1457,7 +2001,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.id NOT IN ('u1', 'u3')
 ORDER BY A.id ASC
 LIMIT 1000;
@@ -1475,7 +2019,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A._source->>'nickname' IS NULL
 ORDER BY A.id ASC
 LIMIT 1000;
@@ -1493,7 +2037,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE (A._source->>'age')::bigint IS NOT NULL
 ORDER BY A.id ASC
 LIMIT 1000;
@@ -1511,7 +2055,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A._source->>'nickname' IS NULL
 ORDER BY A.id ASC
 LIMIT 1000;
@@ -1529,7 +2073,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.email IS NOT NULL
 ORDER BY A.id ASC
 LIMIT 1000;
@@ -1547,7 +2091,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE (A._source->>'age')::bigint BETWEEN 18 AND 40
 ORDER BY A.id ASC
 LIMIT 1000;
@@ -1565,7 +2109,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE (A._source->>'age')::bigint NOT BETWEEN 18 AND 40
 ORDER BY A.id ASC
 LIMIT 1000;
@@ -1583,7 +2127,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.name = 'Luis'
 ORDER BY A.id ASC
 LIMIT 1000;
@@ -1601,7 +2145,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.name IS NOT DISTINCT FROM 'Ana'
 ORDER BY A.id ASC
 LIMIT 1000;
@@ -1617,7 +2161,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.name IS DISTINCT FROM 'Ana'
 ORDER BY A.id ASC
 LIMIT 1000;
@@ -1635,7 +2179,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE A.name = 'Ana'
   OR A.name = 'Luis'
 ORDER BY A.id ASC
@@ -1652,7 +2196,7 @@ jsonb_build_object(
 'name', A.name,
 'email', A.email
 ) AS result
-FROM jsql_t794364000.f_users AS A
+FROM jsql_t373700000.f_users AS A
 WHERE (A._source->>'age')::bigint > 18
   AND A.name ILIKE '%neil%'
 LIMIT 1000;
@@ -1660,7 +2204,7 @@ LIMIT 1000;
 -- ========== 6. Comandos · Insert (RETURNING) [pass]
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_products
+INSERT INTO jsql_t373700000.f_products
   (category, id, name, _source)
 VALUES
   ('equipos', 'p4', 'Router Wi-Fi 6', '{"price":350000}'::jsonb)
@@ -1674,7 +2218,7 @@ jsonb_build_object(
 -- ========== 6. Comandos · Bulk [pass]
 
 -- BULK
-INSERT INTO jsql_t794364000.f_products
+INSERT INTO jsql_t373700000.f_products
   (category, id, name, _source)
 VALUES
   ('tv', 'p5', 'Cable HDMI', '{"price":15000}'::jsonb)
@@ -1686,7 +2230,7 @@ jsonb_build_object(
 ) AS result;
 
 -- BULK
-INSERT INTO jsql_t794364000.f_products
+INSERT INTO jsql_t373700000.f_products
   (category, id, name, _source)
 VALUES
   ('tv', 'p6', 'Control', '{"price":10000}'::jsonb)
@@ -1707,12 +2251,12 @@ jsonb_build_object(
 'name', A.name,
 'category', A.category
 ) AS result
-FROM jsql_t794364000.f_products AS A
+FROM jsql_t373700000.f_products AS A
 WHERE A.id = 'p1'
 LIMIT 1000;
 
 -- UPDATE
-UPDATE jsql_t794364000.f_products
+UPDATE jsql_t373700000.f_products
 SET
   category = 'internet',
   name = 'Plan 200',
@@ -1735,13 +2279,13 @@ jsonb_build_object(
 'name', A.name,
 'category', A.category
 ) AS result
-FROM jsql_t794364000.f_products AS A
+FROM jsql_t373700000.f_products AS A
 WHERE A.id = 'p5'
   OR A.id = 'p6'
 LIMIT 1000;
 
 -- UPDATE
-UPDATE jsql_t794364000.f_products
+UPDATE jsql_t373700000.f_products
 SET
   category = 'tv',
   name = 'Cable HDMI',
@@ -1755,7 +2299,7 @@ jsonb_build_object(
 ) AS result;
 
 -- UPDATE
-UPDATE jsql_t794364000.f_products
+UPDATE jsql_t373700000.f_products
 SET
   category = 'tv',
   name = 'Control',
@@ -1772,11 +2316,11 @@ jsonb_build_object(
 
 -- QUERY
 SELECT EXISTS(SELECT 1
-FROM jsql_t794364000.f_products AS A
+FROM jsql_t373700000.f_products AS A
 WHERE A.id = 'p7');
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_products
+INSERT INTO jsql_t373700000.f_products
   (category, id, name)
 VALUES
   ('tv', 'p7', 'Antena')
@@ -1789,7 +2333,7 @@ jsonb_build_object(
 
 -- QUERY
 SELECT EXISTS(SELECT 1
-FROM jsql_t794364000.f_products AS A
+FROM jsql_t373700000.f_products AS A
 WHERE A.id = 'p7');
 
 -- QUERY
@@ -1800,12 +2344,12 @@ jsonb_build_object(
 'name', A.name,
 'category', A.category
 ) AS result
-FROM jsql_t794364000.f_products AS A
+FROM jsql_t373700000.f_products AS A
 WHERE A.id = 'p7'
 LIMIT 1000;
 
 -- UPDATE
-UPDATE jsql_t794364000.f_products
+UPDATE jsql_t373700000.f_products
 SET
   category = 'tv',
   name = 'Antena HD'
@@ -1827,12 +2371,12 @@ jsonb_build_object(
 'name', A.name,
 'category', A.category
 ) AS result
-FROM jsql_t794364000.f_products AS A
+FROM jsql_t373700000.f_products AS A
 WHERE A.id = 'p4'
 LIMIT 1000;
 
 -- UPDATE
-UPDATE jsql_t794364000.f_products
+UPDATE jsql_t373700000.f_products
 SET
   category = 'equipos',
   name = 'Router Wi-Fi 6',
@@ -1855,12 +2399,12 @@ jsonb_build_object(
 'name', A.name,
 'category', A.category
 ) AS result
-FROM jsql_t794364000.f_products AS A
+FROM jsql_t373700000.f_products AS A
 WHERE A.id = 'p6'
 LIMIT 1000;
 
 -- DELETE
-DELETE FROM jsql_t794364000.f_products
+DELETE FROM jsql_t373700000.f_products
 WHERE id = 'p6'
 RETURNING _source ||
 jsonb_build_object(
@@ -1871,13 +2415,13 @@ jsonb_build_object(
 
 -- QUERY
 SELECT EXISTS(SELECT 1
-FROM jsql_t794364000.f_products AS A
+FROM jsql_t373700000.f_products AS A
 WHERE A.id = 'p6');
 
 -- ========== 6. Comandos · DB.Query insert + bulk (con triggers JS) [pass]
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_products
+INSERT INTO jsql_t373700000.f_products
   (category, id, name, _source)
 VALUES
   ('equipos', 'j1', 'Mesh', '{"origin":"json","price":450000}'::jsonb)
@@ -1889,7 +2433,7 @@ jsonb_build_object(
 ) AS result;
 
 -- BULK
-INSERT INTO jsql_t794364000.f_products
+INSERT INTO jsql_t373700000.f_products
   (category, id, name)
 VALUES
   ('equipos', 'j2', 'Extensor')
@@ -1901,7 +2445,7 @@ jsonb_build_object(
 ) AS result;
 
 -- BULK
-INSERT INTO jsql_t794364000.f_products
+INSERT INTO jsql_t373700000.f_products
   (category, id, name)
 VALUES
   ('equipos', 'j3', 'Splitter')
@@ -1922,13 +2466,13 @@ jsonb_build_object(
 'name', A.name,
 'category', A.category
 ) AS result
-FROM jsql_t794364000.f_products AS A
+FROM jsql_t373700000.f_products AS A
 WHERE A.category = 'equipos'
   AND A.id IN ('j2', 'j3')
 LIMIT 1000;
 
 -- UPDATE
-UPDATE jsql_t794364000.f_products
+UPDATE jsql_t373700000.f_products
 SET
   category = 'equipos',
   name = 'Extensor',
@@ -1942,7 +2486,7 @@ jsonb_build_object(
 ) AS result;
 
 -- UPDATE
-UPDATE jsql_t794364000.f_products
+UPDATE jsql_t373700000.f_products
 SET
   category = 'equipos',
   name = 'Splitter',
@@ -1963,12 +2507,12 @@ jsonb_build_object(
 'name', A.name,
 'category', A.category
 ) AS result
-FROM jsql_t794364000.f_products AS A
+FROM jsql_t373700000.f_products AS A
 WHERE A.id = 'j3'
 LIMIT 1000;
 
 -- DELETE
-DELETE FROM jsql_t794364000.f_products
+DELETE FROM jsql_t373700000.f_products
 WHERE id = 'j3'
 RETURNING _source ||
 jsonb_build_object(
@@ -1981,11 +2525,11 @@ jsonb_build_object(
 
 -- QUERY
 SELECT EXISTS(SELECT 1
-FROM jsql_t794364000.f_products AS A
+FROM jsql_t373700000.f_products AS A
 WHERE A.id = 'j4');
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_products
+INSERT INTO jsql_t373700000.f_products
   (id, name, _source)
 VALUES
   ('j4', 'Repetidor', '{"both":true,"path":"insert"}'::jsonb)
@@ -1998,7 +2542,7 @@ jsonb_build_object(
 
 -- QUERY
 SELECT EXISTS(SELECT 1
-FROM jsql_t794364000.f_products AS A
+FROM jsql_t373700000.f_products AS A
 WHERE A.id = 'j4');
 
 -- QUERY
@@ -2009,12 +2553,12 @@ jsonb_build_object(
 'name', A.name,
 'category', A.category
 ) AS result
-FROM jsql_t794364000.f_products AS A
+FROM jsql_t373700000.f_products AS A
 WHERE A.id = 'j4'
 LIMIT 1000;
 
 -- UPDATE
-UPDATE jsql_t794364000.f_products
+UPDATE jsql_t373700000.f_products
 SET
   category = NULL,
   name = 'Repetidor Pro',
@@ -2030,9 +2574,9 @@ jsonb_build_object(
 -- ========== 6. Comandos · Update / Delete con limit (por defecto, n y 0 = todas) [pass]
 
 -- DDL
-CREATE SCHEMA IF NOT EXISTS jsql_t794364000;
+CREATE SCHEMA IF NOT EXISTS jsql_t373700000;
 
-CREATE TABLE IF NOT EXISTS jsql_t794364000.f_many (
+CREATE TABLE IF NOT EXISTS jsql_t373700000.f_many (
   created_at TIMESTAMP DEFAULT NULL,
   updated_at TIMESTAMP DEFAULT NULL,
   status VARCHAR(255) DEFAULT 'active',
@@ -2042,15 +2586,15 @@ CREATE TABLE IF NOT EXISTS jsql_t794364000.f_many (
   _idx VARCHAR(80) DEFAULT NULL
 );
 
-ALTER TABLE jsql_t794364000.f_many ADD CONSTRAINT jsql_t794364000_f_many_pkey PRIMARY KEY (id);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_many_status_idx ON jsql_t794364000.f_many USING BTREE (status);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_many__idx_idx ON jsql_t794364000.f_many USING BTREE (_idx);
+ALTER TABLE jsql_t373700000.f_many ADD CONSTRAINT jsql_t373700000_f_many_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_many_status_idx ON jsql_t373700000.f_many USING BTREE (status);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_many__idx_idx ON jsql_t373700000.f_many USING BTREE (_idx);
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_many
+INSERT INTO jsql_t373700000.f_many
   (_idx, id, name)
 VALUES
-  ('1793111359024', 'm1', 'x')
+  ('1793213765751', 'm1', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2061,10 +2605,10 @@ jsonb_build_object(
 ) AS result;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_many
+INSERT INTO jsql_t373700000.f_many
   (_idx, id, name)
 VALUES
-  ('1793111359036', 'm2', 'x')
+  ('1793213765763', 'm2', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2075,10 +2619,10 @@ jsonb_build_object(
 ) AS result;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_many
+INSERT INTO jsql_t373700000.f_many
   (_idx, id, name)
 VALUES
-  ('1793111359045', 'm3', 'x')
+  ('1793213765772', 'm3', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2089,10 +2633,10 @@ jsonb_build_object(
 ) AS result;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_many
+INSERT INTO jsql_t373700000.f_many
   (_idx, id, name)
 VALUES
-  ('1793111359054', 'm4', 'x')
+  ('1793213765779', 'm4', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2103,10 +2647,10 @@ jsonb_build_object(
 ) AS result;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_many
+INSERT INTO jsql_t373700000.f_many
   (_idx, id, name)
 VALUES
-  ('1793111359061', 'm5', 'x')
+  ('1793213765787', 'm5', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2117,10 +2661,10 @@ jsonb_build_object(
 ) AS result;
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_many
+INSERT INTO jsql_t373700000.f_many
   (_idx, id, name)
 VALUES
-  ('1793111359071', 'm6', 'x')
+  ('1793213765796', 'm6', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2140,12 +2684,12 @@ jsonb_build_object(
 'id', A.id,
 'name', A.name
 ) AS result
-FROM jsql_t794364000.f_many AS A
+FROM jsql_t373700000.f_many AS A
 WHERE A.name = 'x'
 LIMIT 2;
 
 -- UPDATE
-UPDATE jsql_t794364000.f_many
+UPDATE jsql_t373700000.f_many
 SET
   created_at = NULL,
   name = 'y',
@@ -2162,7 +2706,7 @@ jsonb_build_object(
 ) AS result;
 
 -- UPDATE
-UPDATE jsql_t794364000.f_many
+UPDATE jsql_t373700000.f_many
 SET
   created_at = NULL,
   name = 'y',
@@ -2188,12 +2732,12 @@ jsonb_build_object(
 'id', A.id,
 'name', A.name
 ) AS result
-FROM jsql_t794364000.f_many AS A
+FROM jsql_t373700000.f_many AS A
 WHERE A.name = 'x'
 LIMIT 3;
 
 -- UPDATE
-UPDATE jsql_t794364000.f_many
+UPDATE jsql_t373700000.f_many
 SET
   created_at = NULL,
   name = 'y',
@@ -2210,7 +2754,7 @@ jsonb_build_object(
 ) AS result;
 
 -- UPDATE
-UPDATE jsql_t794364000.f_many
+UPDATE jsql_t373700000.f_many
 SET
   created_at = NULL,
   name = 'y',
@@ -2227,7 +2771,7 @@ jsonb_build_object(
 ) AS result;
 
 -- UPDATE
-UPDATE jsql_t794364000.f_many
+UPDATE jsql_t373700000.f_many
 SET
   created_at = NULL,
   name = 'y',
@@ -2245,7 +2789,7 @@ jsonb_build_object(
 
 -- QUERY
 SELECT COUNT(*)
-FROM jsql_t794364000.f_many AS A
+FROM jsql_t373700000.f_many AS A
 WHERE A.name = 'x';
 
 -- QUERY
@@ -2258,11 +2802,11 @@ jsonb_build_object(
 'id', A.id,
 'name', A.name
 ) AS result
-FROM jsql_t794364000.f_many AS A
+FROM jsql_t373700000.f_many AS A
 WHERE A.name IN ('x', 'y');
 
 -- DELETE
-DELETE FROM jsql_t794364000.f_many
+DELETE FROM jsql_t373700000.f_many
 WHERE id = 'm1'
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
@@ -2274,7 +2818,7 @@ jsonb_build_object(
 ) AS result;
 
 -- DELETE
-DELETE FROM jsql_t794364000.f_many
+DELETE FROM jsql_t373700000.f_many
 WHERE id = 'm2'
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
@@ -2286,7 +2830,7 @@ jsonb_build_object(
 ) AS result;
 
 -- DELETE
-DELETE FROM jsql_t794364000.f_many
+DELETE FROM jsql_t373700000.f_many
 WHERE id = 'm3'
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
@@ -2298,7 +2842,7 @@ jsonb_build_object(
 ) AS result;
 
 -- DELETE
-DELETE FROM jsql_t794364000.f_many
+DELETE FROM jsql_t373700000.f_many
 WHERE id = 'm4'
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
@@ -2310,7 +2854,7 @@ jsonb_build_object(
 ) AS result;
 
 -- DELETE
-DELETE FROM jsql_t794364000.f_many
+DELETE FROM jsql_t373700000.f_many
 WHERE id = 'm5'
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
@@ -2322,7 +2866,7 @@ jsonb_build_object(
 ) AS result;
 
 -- DELETE
-DELETE FROM jsql_t794364000.f_many
+DELETE FROM jsql_t373700000.f_many
 WHERE id = 'm6'
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
@@ -2335,19 +2879,19 @@ jsonb_build_object(
 
 -- QUERY
 SELECT COUNT(*)
-FROM jsql_t794364000.f_many AS A;
+FROM jsql_t373700000.f_many AS A;
 
 -- ========== 6. Comandos · Upsert fluido sin where (devuelve error) [pass]
 
 -- QUERY
 SELECT EXISTS(SELECT 1
-FROM jsql_t794364000.f_products AS A
+FROM jsql_t373700000.f_products AS A
 WHERE A.id = 'p9');
 
 -- ========== 6. Comandos · Test (no ejecuta) + ToJson [pass]
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_products
+INSERT INTO jsql_t373700000.f_products
   (id, name)
 VALUES
   ('p8', 'No se guarda')
@@ -2360,15 +2904,15 @@ jsonb_build_object(
 
 -- QUERY
 SELECT EXISTS(SELECT 1
-FROM jsql_t794364000.f_products AS A
+FROM jsql_t373700000.f_products AS A
 WHERE A.id = 'p8');
 
 -- ========== 7. Triggers · Before/After Insert, Update, Delete e InsertOrUpdate [pass]
 
 -- DDL
-CREATE SCHEMA IF NOT EXISTS jsql_t794364000;
+CREATE SCHEMA IF NOT EXISTS jsql_t373700000;
 
-CREATE TABLE IF NOT EXISTS jsql_t794364000.f_events (
+CREATE TABLE IF NOT EXISTS jsql_t373700000.f_events (
   created_at TIMESTAMP DEFAULT NULL,
   updated_at TIMESTAMP DEFAULT NULL,
   status VARCHAR(255) DEFAULT 'active',
@@ -2378,15 +2922,15 @@ CREATE TABLE IF NOT EXISTS jsql_t794364000.f_events (
   _idx VARCHAR(80) DEFAULT NULL
 );
 
-ALTER TABLE jsql_t794364000.f_events ADD CONSTRAINT jsql_t794364000_f_events_pkey PRIMARY KEY (id);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_events_status_idx ON jsql_t794364000.f_events USING BTREE (status);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_f_events__idx_idx ON jsql_t794364000.f_events USING BTREE (_idx);
+ALTER TABLE jsql_t373700000.f_events ADD CONSTRAINT jsql_t373700000_f_events_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_events_status_idx ON jsql_t373700000.f_events USING BTREE (status);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_f_events__idx_idx ON jsql_t373700000.f_events USING BTREE (_idx);
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_events
+INSERT INTO jsql_t373700000.f_events
   (_idx, id, name, _source)
 VALUES
-  ('1793111359166', 'e1', 'alta', '{"stage":"before_insert","touched":true}'::jsonb)
+  ('1793213765885', 'e1', 'alta', '{"stage":"before_insert","touched":true}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2406,12 +2950,12 @@ jsonb_build_object(
 'id', A.id,
 'name', A.name
 ) AS result
-FROM jsql_t794364000.f_events AS A
+FROM jsql_t373700000.f_events AS A
 WHERE A.id = 'e1'
 LIMIT 1000;
 
 -- UPDATE
-UPDATE jsql_t794364000.f_events
+UPDATE jsql_t373700000.f_events
 SET
   created_at = NULL,
   name = 'cambio',
@@ -2438,12 +2982,12 @@ jsonb_build_object(
 'id', A.id,
 'name', A.name
 ) AS result
-FROM jsql_t794364000.f_events AS A
+FROM jsql_t373700000.f_events AS A
 WHERE A.id = 'e1'
 LIMIT 1000;
 
 -- DELETE
-DELETE FROM jsql_t794364000.f_events
+DELETE FROM jsql_t373700000.f_events
 WHERE id = 'e1'
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
@@ -2457,10 +3001,10 @@ jsonb_build_object(
 -- ========== 7. Triggers · Trigger del comando + error que aborta [pass]
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_events
+INSERT INTO jsql_t373700000.f_events
   (_idx, id, name, _source)
 VALUES
-  ('1793111359202', 'e2', 'cmd', '{"source":"command","stage":"before_insert","touched":true}'::jsonb)
+  ('1793213765920', 'e2', 'cmd', '{"source":"command","stage":"before_insert","touched":true}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2472,16 +3016,16 @@ jsonb_build_object(
 
 -- QUERY
 SELECT EXISTS(SELECT 1
-FROM jsql_t794364000.f_events AS A
+FROM jsql_t373700000.f_events AS A
 WHERE A.id = 'e3');
 
 -- ========== 7. Triggers · Triggers JS (DefineBeforeInsert / DefineAfterUpdate…) [pass]
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_events
+INSERT INTO jsql_t373700000.f_events
   (_idx, id, name, _source)
 VALUES
-  ('1793111359211', 'e4', 'js', '{"js":"before_insert","stage":"before_insert","touched":true}'::jsonb)
+  ('1793213765930', 'e4', 'js', '{"js":"before_insert","stage":"before_insert","touched":true}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2501,12 +3045,12 @@ jsonb_build_object(
 'id', A.id,
 'name', A.name
 ) AS result
-FROM jsql_t794364000.f_events AS A
+FROM jsql_t373700000.f_events AS A
 WHERE A.id = 'e4'
 LIMIT 1000;
 
 -- UPDATE
-UPDATE jsql_t794364000.f_events
+UPDATE jsql_t373700000.f_events
 SET
   created_at = NULL,
   name = 'js2',
@@ -2526,7 +3070,7 @@ jsonb_build_object(
 -- ========== 8. Transacciones · NewTx + ExecTx + Rollback [pass]
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_products
+INSERT INTO jsql_t373700000.f_products
   (id, name)
 VALUES
   ('t1', 'rollback')
@@ -2539,13 +3083,13 @@ jsonb_build_object(
 
 -- QUERY
 SELECT EXISTS(SELECT 1
-FROM jsql_t794364000.f_products AS A
+FROM jsql_t373700000.f_products AS A
 WHERE A.id = 't1');
 
 -- ========== 8. Transacciones · NewTx + ExecTx + Commit [pass]
 
 -- INSERT
-INSERT INTO jsql_t794364000.f_products
+INSERT INTO jsql_t373700000.f_products
   (id, name)
 VALUES
   ('t2', 'commit')
@@ -2564,12 +3108,12 @@ jsonb_build_object(
 'name', A.name,
 'category', A.category
 ) AS result
-FROM jsql_t794364000.f_products AS A
+FROM jsql_t373700000.f_products AS A
 WHERE A.id = 't2'
 LIMIT 1000;
 
 -- UPDATE
-UPDATE jsql_t794364000.f_products
+UPDATE jsql_t373700000.f_products
 SET
   category = NULL,
   name = 'commit 2'
@@ -2589,16 +3133,16 @@ jsonb_build_object(
 'name', A.name,
 'category', A.category
 ) AS result
-FROM jsql_t794364000.f_products AS A
+FROM jsql_t373700000.f_products AS A
 WHERE A.id = 't2'
 LIMIT 1;
 
 -- ========== 9. Series · DefineSeries [pass]
 
 -- DDL
-CREATE SCHEMA IF NOT EXISTS jsql_t794364000;
+CREATE SCHEMA IF NOT EXISTS jsql_t373700000;
 
-CREATE TABLE IF NOT EXISTS jsql_t794364000.series (
+CREATE TABLE IF NOT EXISTS jsql_t373700000.series (
   created_at TIMESTAMP DEFAULT NULL,
   updated_at TIMESTAMP DEFAULT NULL,
   tag VARCHAR(80) DEFAULT NULL,
@@ -2607,21 +3151,21 @@ CREATE TABLE IF NOT EXISTS jsql_t794364000.series (
   _idx VARCHAR(80) DEFAULT NULL
 );
 
-ALTER TABLE jsql_t794364000.series ADD CONSTRAINT jsql_t794364000_series_pkey PRIMARY KEY (tag);
-CREATE INDEX IF NOT EXISTS jsql_t794364000_series__idx_idx ON jsql_t794364000.series USING BTREE (_idx);
+ALTER TABLE jsql_t373700000.series ADD CONSTRAINT jsql_t373700000_series_pkey PRIMARY KEY (tag);
+CREATE INDEX IF NOT EXISTS jsql_t373700000_series__idx_idx ON jsql_t373700000.series USING BTREE (_idx);
 
 -- ========== 9. Series · SetSeries + GetSeries [pass]
 
 -- QUERY
 SELECT EXISTS(SELECT 1
-FROM jsql_t794364000.series AS A
+FROM jsql_t373700000.series AS A
 WHERE A.tag = 'invoice');
 
 -- INSERT
-INSERT INTO jsql_t794364000.series
+INSERT INTO jsql_t373700000.series
   (_idx, created_at, format, tag, updated_at, value)
 VALUES
-  ('1793111359286', '2026-10-27 09:29:19', 'FAC-%05d', 'invoice', '2026-10-27 09:29:19', 10)
+  ('1793213765996', '2026-10-28 13:56:05', 'FAC-%05d', 'invoice', '2026-10-28 13:56:05', 10)
 RETURNING created_at, updated_at, tag, format, value;
 
 -- QUERY
@@ -2631,7 +3175,7 @@ A.updated_at,
 A.tag,
 A.format,
 A.value
-FROM jsql_t794364000.series AS A
+FROM jsql_t373700000.series AS A
 WHERE A.tag = 'invoice'
 LIMIT 1;
 
@@ -2644,23 +3188,23 @@ A.updated_at,
 A.tag,
 A.format,
 A.value
-FROM jsql_t794364000.series AS A
+FROM jsql_t373700000.series AS A
 WHERE A.tag = 'invoice'
 LIMIT 1000;
 
 -- UPDATE
-UPDATE jsql_t794364000.series
+UPDATE jsql_t373700000.series
 SET
-  created_at = '2026-10-27 09:29:19',
+  created_at = '2026-10-28 13:56:05',
   format = 'FAC-%05d',
-  updated_at = '2026-10-27 09:29:19',
+  updated_at = '2026-10-28 13:56:06',
   value = 11
 WHERE tag = 'invoice'
 RETURNING created_at, updated_at, tag, format, value;
 
 -- QUERY
 SELECT EXISTS(SELECT 1
-FROM jsql_t794364000.series AS A
+FROM jsql_t373700000.series AS A
 WHERE A.tag = 'invoice');
 
 -- QUERY
@@ -2670,16 +3214,16 @@ A.updated_at,
 A.tag,
 A.format,
 A.value
-FROM jsql_t794364000.series AS A
+FROM jsql_t373700000.series AS A
 WHERE A.tag = 'invoice'
 LIMIT 1000;
 
 -- UPDATE
-UPDATE jsql_t794364000.series
+UPDATE jsql_t373700000.series
 SET
-  created_at = '2026-10-27 09:29:19',
+  created_at = '2026-10-28 13:56:05',
   format = 'FAC-%05d',
-  updated_at = '2026-10-27 09:29:19',
+  updated_at = '2026-10-28 13:56:06',
   value = 12
 WHERE tag = 'invoice'
 RETURNING created_at, updated_at, tag, format, value;
@@ -2693,12 +3237,12 @@ A.updated_at,
 A.tag,
 A.format,
 A.value
-FROM jsql_t794364000.series AS A
+FROM jsql_t373700000.series AS A
 WHERE A.tag = 'invoice'
 LIMIT 1000;
 
 -- DELETE
-DELETE FROM jsql_t794364000.series
+DELETE FROM jsql_t373700000.series
 WHERE tag = 'invoice'
 RETURNING created_at, updated_at, tag, format, value;
 
@@ -2709,7 +3253,7 @@ A.updated_at,
 A.tag,
 A.format,
 A.value
-FROM jsql_t794364000.series AS A
+FROM jsql_t373700000.series AS A
 WHERE A.tag = 'invoice'
 LIMIT 1;
 

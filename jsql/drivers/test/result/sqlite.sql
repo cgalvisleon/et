@@ -184,7 +184,7 @@ CREATE INDEX IF NOT EXISTS jsql_catalog_f_child__idx_idx ON jsql_catalog_f_child
 INSERT INTO jsql_catalog_f_parent
   (_idx, id)
 VALUES
-  ('1791823889592', 'p1')
+  ('1793213764385', 'p1')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -196,7 +196,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO jsql_catalog_f_child
   (_idx, id, parent_id)
 VALUES
-  ('1791823889592', 'c1', 'p1')
+  ('1793213764386', 'c1', 'p1')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -209,7 +209,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO jsql_catalog_f_child
   (_idx, id, parent_id)
 VALUES
-  ('1791823889593', 'c2', 'missing')
+  ('1793213764386', 'c2', 'missing')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -239,7 +239,7 @@ CREATE INDEX IF NOT EXISTS jsql_catalog_f_strict__idx_idx ON jsql_catalog_f_stri
 INSERT INTO jsql_catalog_f_strict
   (_idx, id, name)
 VALUES
-  ('1791823889594', 's1', 'x')
+  ('1793213764386', 's1', 'x')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -298,7 +298,7 @@ LIMIT 1;
 INSERT INTO jsql_catalog_f_doc_types
   (_idx, id, title)
 VALUES
-  ('1791823889595', 'CC', 'Cédula de ciudadanía')
+  ('1793213764387', 'CC', 'Cédula de ciudadanía')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -311,7 +311,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO jsql_catalog_f_doc_types
   (_idx, id, title)
 VALUES
-  ('1791823889595', 'NIT', 'Número de identificación tributaria')
+  ('1793213764388', 'NIT', 'Número de identificación tributaria')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -329,7 +329,7 @@ WHERE A.email = 'ana@example.com') AS "exists";
 INSERT INTO jsql_catalog_f_users
   (_idx, email, id, name, _source)
 VALUES
-  ('1791823889596', 'ana@example.com', 'u1', 'Ana', '{"age":30,"password":"secret","tp_doc":"CC"}')
+  ('1793213764388', 'ana@example.com', 'u1', 'Ana', '{"age":30,"password":"secret","tp_doc":"CC"}')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"', '$."password"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -348,7 +348,7 @@ WHERE A.email = 'luis@example.com') AS "exists";
 INSERT INTO jsql_catalog_f_users
   (_idx, email, id, name, _source)
 VALUES
-  ('1791823889596', 'luis@example.com', 'u2', 'Luis', '{"age":17}')
+  ('1793213764388', 'luis@example.com', 'u2', 'Luis', '{"age":17}')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"', '$."password"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -367,7 +367,7 @@ WHERE A.email = 'marta@example.com') AS "exists";
 INSERT INTO jsql_catalog_f_users
   (_idx, email, id, name, _source)
 VALUES
-  ('1791823889596', 'marta@example.com', 'u3', 'Marta O''Neil', '{"age":45,"tp_doc":"NIT"}')
+  ('1793213764388', 'marta@example.com', 'u3', 'Marta O''Neil', '{"age":45,"tp_doc":"NIT"}')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"', '$."password"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -381,7 +381,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"', '$."password
 INSERT INTO jsql_catalog_f_roles
   (_idx, id, name)
 VALUES
-  ('1791823889596', 'r1', 'admin')
+  ('1793213764389', 'r1', 'admin')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -394,7 +394,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO jsql_catalog_f_roles
   (_idx, id, name)
 VALUES
-  ('1791823889596', 'r2', 'editor')
+  ('1793213764389', 'r2', 'editor')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -407,7 +407,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO jsql_catalog_f_orders
   (_idx, id, user_id, _source)
 VALUES
-  ('1791823889597', 'o1', 'u1', '{"amount":100.5}')
+  ('1793213764389', 'o1', 'u1', '{"amount":100.5}')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -420,7 +420,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO jsql_catalog_f_orders
   (_idx, id, user_id, _source)
 VALUES
-  ('1791823889597', 'o2', 'u1', '{"amount":200}')
+  ('1793213764389', 'o2', 'u1', '{"amount":200}')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -433,7 +433,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO jsql_catalog_f_orders
   (_idx, id, user_id, _source)
 VALUES
-  ('1791823889598', 'o3', 'u3', '{"amount":50}')
+  ('1793213764389', 'o3', 'u3', '{"amount":50}')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -493,21 +493,21 @@ RETURNING json_set(COALESCE(_source, '{}'),
 INSERT INTO jsql_catalog_f_users_f_roles
   (_idx, role_id, user_id)
 VALUES
-  ('1791823889599', 'r1', 'u1')
+  ('1793213764390', 'r1', 'u1')
 RETURNING user_id, role_id;
 
 -- INSERT
 INSERT INTO jsql_catalog_f_users_f_roles
   (_idx, role_id, user_id)
 VALUES
-  ('1791823889599', 'r2', 'u1')
+  ('1793213764391', 'r2', 'u1')
 RETURNING user_id, role_id;
 
 -- INSERT
 INSERT INTO jsql_catalog_f_users_f_roles
   (_idx, role_id, user_id)
 VALUES
-  ('1791823889599', 'r2', 'u2')
+  ('1793213764391', 'r2', 'u2')
 RETURNING user_id, role_id;
 
 -- ========== 2. Definición de modelos (DDL) · DefineUnique (rechaza duplicados en insert, bulk y update) [pass]
@@ -526,7 +526,7 @@ WHERE A.email = 'same@example.com') AS "exists";
 INSERT INTO jsql_catalog_f_users
   (_idx, email, id, name)
 VALUES
-  ('1791823889599', 'same@example.com', 'u8', 'Uno')
+  ('1793213764391', 'same@example.com', 'u8', 'Uno')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"', '$."password"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -603,6 +603,10 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"', '$."password
 '$."name"', name,
 '$."email"', email
 ) AS result;
+
+-- QUERY
+SELECT COUNT(*) AS count
+FROM jsql_catalog_f_users AS A;
 
 -- QUERY
 SELECT COUNT(*) AS count
@@ -775,29 +779,11 @@ LIMIT 1000;
 -- QUERY
 SELECT
 json_object(
-'title', A.title
+'title', A.title,
+'_jsql_key', A.id
 ) AS result
 FROM jsql_catalog_f_doc_types AS A
-WHERE A.id = 'CC'
-LIMIT 1;
-
--- QUERY
-SELECT
-json_object(
-'title', A.title
-) AS result
-FROM jsql_catalog_f_doc_types AS A
-WHERE A.id = NULL
-LIMIT 1;
-
--- QUERY
-SELECT
-json_object(
-'title', A.title
-) AS result
-FROM jsql_catalog_f_doc_types AS A
-WHERE A.id = 'NIT'
-LIMIT 1;
+WHERE A.id IN ('CC', 'NIT');
 
 -- ========== 3. Relaciones y campos calculados · DefineRollup (count, sum, object) [pass]
 
@@ -833,6 +819,564 @@ json_object(
 FROM jsql_catalog_f_orders AS A
 WHERE A.user_id = 'u3'
 LIMIT 1;
+
+-- ========== 3. Relaciones y campos calculados · DefineRollup con where (valor fijo y campo de la fila) [pass]
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id,
+'age', json(A._source -> '$."age"')
+) AS result
+FROM jsql_catalog_f_users AS A
+ORDER BY A.id ASC
+LIMIT 1000;
+
+-- QUERY
+SELECT
+json_object(
+'_jsql_key', A.user_id,
+'orders_big', COUNT(A.user_id)
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+  AND CAST(json_extract(A._source, '$."amount"') AS REAL) > 150
+GROUP BY A.user_id;
+
+-- QUERY
+SELECT COUNT(*) AS count
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u1'
+  AND CAST(json_extract(A._source, '$."amount"') AS REAL) > 30;
+
+-- QUERY
+SELECT COUNT(*) AS count
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u2'
+  AND CAST(json_extract(A._source, '$."amount"') AS REAL) > 17;
+
+-- QUERY
+SELECT COUNT(*) AS count
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u3'
+  AND CAST(json_extract(A._source, '$."amount"') AS REAL) > 45;
+
+-- ========== 3. Relaciones y campos calculados · DefineRollup con where or (conserva la llave) y round trip JSON [pass]
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id
+) AS result
+FROM jsql_catalog_f_users AS A
+ORDER BY A.id ASC
+LIMIT 1000;
+
+-- QUERY
+SELECT
+json_object(
+'_jsql_key', A.user_id,
+'orders_edge', COUNT(A.user_id)
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+  AND CAST(json_extract(A._source, '$."amount"') AS REAL) > 150
+  OR A.user_id IN ('u1', 'u2', 'u3')
+  AND CAST(json_extract(A._source, '$."amount"') AS REAL) < 60
+GROUP BY A.user_id;
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id
+) AS result
+FROM jsql_catalog_f_users AS A
+WHERE A.id = 'u3'
+LIMIT 1;
+
+-- QUERY
+SELECT COUNT(*) AS count
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u3'
+  AND CAST(json_extract(A._source, '$."amount"') AS REAL) > 150
+  OR A.user_id = 'u3'
+  AND CAST(json_extract(A._source, '$."amount"') AS REAL) < 60;
+
+-- ========== 3. Relaciones y campos calculados · Rollups.OrderBy (primer registro de un object) [pass]
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id
+) AS result
+FROM jsql_catalog_f_users AS A
+WHERE A.id = 'u1'
+  OR A.id = 'u2'
+ORDER BY A.id ASC
+LIMIT 1000;
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id,
+'amount', json(A._source -> '$."amount"'),
+'_jsql_key', A.user_id
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id IN ('u1', 'u2')
+ORDER BY A.id ASC;
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id,
+'_jsql_key', A.user_id
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id IN ('u1', 'u2')
+ORDER BY CAST(json_extract(A._source, '$."amount"') AS REAL) DESC;
+
+-- ========== 3. Relaciones y campos calculados · Relaciones por lotes = fila por fila [pass]
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id,
+'tp_doc', json(A._source -> '$."tp_doc"')
+) AS result
+FROM jsql_catalog_f_users AS A
+ORDER BY A.id ASC
+LIMIT 1000;
+
+-- QUERY
+SELECT
+json_object(
+'name', A.name,
+'_jsql_key', B.user_id
+) AS result
+FROM jsql_catalog_f_roles AS A
+INNER JOIN jsql_catalog_f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id IN ('u1', 'u2', 'u3');
+
+-- QUERY
+SELECT
+json_object(
+'name', A.name,
+'_jsql_key', B.user_id
+) AS result
+FROM jsql_catalog_f_roles AS A
+INNER JOIN jsql_catalog_f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id IN ('u1', 'u2', 'u3');
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id,
+'_jsql_key', A.user_id
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+ORDER BY CAST(json_extract(A._source, '$."amount"') AS REAL) DESC;
+
+-- QUERY
+SELECT
+json_object(
+'title', A.title,
+'_jsql_key', A.id
+) AS result
+FROM jsql_catalog_f_doc_types AS A
+WHERE A.id IN ('CC', 'NIT');
+
+-- QUERY
+SELECT
+json_object(
+'_jsql_key', A.user_id,
+'orders_count', COUNT(A.user_id)
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+GROUP BY A.user_id;
+
+-- QUERY
+SELECT
+json_object(
+'_jsql_key', A.user_id,
+'amount', COALESCE(SUM(CAST(json_extract(A._source, '$."amount"') AS REAL)), 0)
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+GROUP BY A.user_id;
+
+-- QUERY
+SELECT
+json_object(
+'_jsql_key', A.user_id,
+'orders_big', COUNT(A.user_id)
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+  AND CAST(json_extract(A._source, '$."amount"') AS REAL) > 150
+GROUP BY A.user_id;
+
+-- QUERY
+SELECT
+json_object(
+'_jsql_key', A.user_id,
+'orders_edge', COUNT(A.user_id)
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+  AND CAST(json_extract(A._source, '$."amount"') AS REAL) > 150
+  OR A.user_id IN ('u1', 'u2', 'u3')
+  AND CAST(json_extract(A._source, '$."amount"') AS REAL) < 60
+GROUP BY A.user_id;
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id,
+'amount', json(A._source -> '$."amount"'),
+'_jsql_key', A.user_id
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+ORDER BY A.id ASC;
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id,
+'tp_doc', json(A._source -> '$."tp_doc"')
+) AS result
+FROM jsql_catalog_f_users AS A
+WHERE A.id = 'u1'
+LIMIT 1;
+
+-- QUERY
+SELECT
+json_object(
+'name', A.name
+) AS result
+FROM jsql_catalog_f_roles AS A
+INNER JOIN jsql_catalog_f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id = 'u1'
+LIMIT 1000;
+
+-- QUERY
+SELECT
+json_object(
+'name', A.name
+) AS result
+FROM jsql_catalog_f_roles AS A
+INNER JOIN jsql_catalog_f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id = 'u1'
+LIMIT 1;
+
+-- QUERY
+SELECT
+json_object(
+'amount', COALESCE(SUM(CAST(json_extract(A._source, '$."amount"') AS REAL)), 0)
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u1'
+LIMIT 1000;
+
+-- QUERY
+SELECT COUNT(*) AS count
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u1'
+  AND CAST(json_extract(A._source, '$."amount"') AS REAL) > 150;
+
+-- QUERY
+SELECT COUNT(*) AS count
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u1'
+  AND CAST(json_extract(A._source, '$."amount"') AS REAL) > 150
+  OR A.user_id = 'u1'
+  AND CAST(json_extract(A._source, '$."amount"') AS REAL) < 60;
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id,
+'amount', json(A._source -> '$."amount"')
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u1'
+ORDER BY A.id ASC
+LIMIT 1;
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u1'
+ORDER BY CAST(json_extract(A._source, '$."amount"') AS REAL) DESC
+LIMIT 1;
+
+-- QUERY
+SELECT
+json_object(
+'title', A.title
+) AS result
+FROM jsql_catalog_f_doc_types AS A
+WHERE A.id = 'CC'
+LIMIT 1;
+
+-- QUERY
+SELECT COUNT(*) AS count
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u1';
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id,
+'tp_doc', json(A._source -> '$."tp_doc"')
+) AS result
+FROM jsql_catalog_f_users AS A
+WHERE A.id = 'u2'
+LIMIT 1;
+
+-- QUERY
+SELECT
+json_object(
+'name', A.name
+) AS result
+FROM jsql_catalog_f_roles AS A
+INNER JOIN jsql_catalog_f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id = 'u2'
+LIMIT 1000;
+
+-- QUERY
+SELECT
+json_object(
+'name', A.name
+) AS result
+FROM jsql_catalog_f_roles AS A
+INNER JOIN jsql_catalog_f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id = 'u2'
+LIMIT 1;
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id,
+'amount', json(A._source -> '$."amount"')
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u2'
+ORDER BY A.id ASC
+LIMIT 1;
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u2'
+ORDER BY CAST(json_extract(A._source, '$."amount"') AS REAL) DESC
+LIMIT 1;
+
+-- QUERY
+SELECT
+json_object(
+'title', A.title
+) AS result
+FROM jsql_catalog_f_doc_types AS A
+WHERE A.id = NULL
+LIMIT 1;
+
+-- QUERY
+SELECT COUNT(*) AS count
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u2';
+
+-- QUERY
+SELECT
+json_object(
+'amount', COALESCE(SUM(CAST(json_extract(A._source, '$."amount"') AS REAL)), 0)
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u2'
+LIMIT 1000;
+
+-- QUERY
+SELECT COUNT(*) AS count
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u2'
+  AND CAST(json_extract(A._source, '$."amount"') AS REAL) > 150;
+
+-- QUERY
+SELECT COUNT(*) AS count
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u2'
+  AND CAST(json_extract(A._source, '$."amount"') AS REAL) > 150
+  OR A.user_id = 'u2'
+  AND CAST(json_extract(A._source, '$."amount"') AS REAL) < 60;
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id,
+'tp_doc', json(A._source -> '$."tp_doc"')
+) AS result
+FROM jsql_catalog_f_users AS A
+WHERE A.id = 'u3'
+LIMIT 1;
+
+-- QUERY
+SELECT
+json_object(
+'name', A.name
+) AS result
+FROM jsql_catalog_f_roles AS A
+INNER JOIN jsql_catalog_f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id = 'u3'
+LIMIT 1000;
+
+-- QUERY
+SELECT
+json_object(
+'name', A.name
+) AS result
+FROM jsql_catalog_f_roles AS A
+INNER JOIN jsql_catalog_f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id = 'u3'
+LIMIT 1;
+
+-- QUERY
+SELECT
+json_object(
+'title', A.title
+) AS result
+FROM jsql_catalog_f_doc_types AS A
+WHERE A.id = 'NIT'
+LIMIT 1;
+
+-- QUERY
+SELECT COUNT(*) AS count
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u3';
+
+-- QUERY
+SELECT
+json_object(
+'amount', COALESCE(SUM(CAST(json_extract(A._source, '$."amount"') AS REAL)), 0)
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u3'
+LIMIT 1000;
+
+-- QUERY
+SELECT COUNT(*) AS count
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u3'
+  AND CAST(json_extract(A._source, '$."amount"') AS REAL) > 150;
+
+-- QUERY
+SELECT COUNT(*) AS count
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u3'
+  AND CAST(json_extract(A._source, '$."amount"') AS REAL) > 150
+  OR A.user_id = 'u3'
+  AND CAST(json_extract(A._source, '$."amount"') AS REAL) < 60;
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id,
+'amount', json(A._source -> '$."amount"')
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u3'
+ORDER BY A.id ASC
+LIMIT 1;
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.user_id = 'u3'
+ORDER BY CAST(json_extract(A._source, '$."amount"') AS REAL) DESC
+LIMIT 1;
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id
+) AS result
+FROM jsql_catalog_f_orders AS A
+ORDER BY A.id ASC
+LIMIT 1000;
+
+-- QUERY
+SELECT
+A.product,
+A.order_id AS _jsql_key
+FROM jsql_catalog_f_orders_items AS A
+WHERE A.order_id IN ('o1', 'o2', 'o3');
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.id = 'o1'
+LIMIT 1;
+
+-- QUERY
+SELECT
+A.product
+FROM jsql_catalog_f_orders_items AS A
+WHERE A.order_id = 'o1'
+LIMIT 30;
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.id = 'o2'
+LIMIT 1;
+
+-- QUERY
+SELECT
+A.product
+FROM jsql_catalog_f_orders_items AS A
+WHERE A.order_id = 'o2'
+LIMIT 30;
+
+-- QUERY
+SELECT
+json_object(
+'id', A.id
+) AS result
+FROM jsql_catalog_f_orders AS A
+WHERE A.id = 'o3'
+LIMIT 1;
+
+-- QUERY
+SELECT
+A.product
+FROM jsql_catalog_f_orders_items AS A
+WHERE A.order_id = 'o3'
+LIMIT 30;
 
 -- ========== 3. Relaciones y campos calculados · DefineCalcFunc + Model.Calc [pass]
 
@@ -1951,7 +2495,7 @@ CREATE INDEX IF NOT EXISTS jsql_catalog_f_many__idx_idx ON jsql_catalog_f_many (
 INSERT INTO jsql_catalog_f_many
   (_idx, id, name)
 VALUES
-  ('1791823889608', 'm1', 'x')
+  ('1793213764405', 'm1', 'x')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -1964,7 +2508,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO jsql_catalog_f_many
   (_idx, id, name)
 VALUES
-  ('1791823889608', 'm2', 'x')
+  ('1793213764406', 'm2', 'x')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -1977,7 +2521,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO jsql_catalog_f_many
   (_idx, id, name)
 VALUES
-  ('1791823889609', 'm3', 'x')
+  ('1793213764406', 'm3', 'x')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -1990,7 +2534,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO jsql_catalog_f_many
   (_idx, id, name)
 VALUES
-  ('1791823889609', 'm4', 'x')
+  ('1793213764406', 'm4', 'x')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -2003,7 +2547,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO jsql_catalog_f_many
   (_idx, id, name)
 VALUES
-  ('1791823889609', 'm5', 'x')
+  ('1793213764406', 'm5', 'x')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -2016,7 +2560,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO jsql_catalog_f_many
   (_idx, id, name)
 VALUES
-  ('1791823889610', 'm6', 'x')
+  ('1793213764406', 'm6', 'x')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -2264,7 +2808,7 @@ CREATE INDEX IF NOT EXISTS jsql_catalog_f_events__idx_idx ON jsql_catalog_f_even
 INSERT INTO jsql_catalog_f_events
   (_idx, id, name, _source)
 VALUES
-  ('1791823889612', 'e1', 'alta', '{"stage":"before_insert","touched":true}')
+  ('1793213764408', 'e1', 'alta', '{"stage":"before_insert","touched":true}')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -2336,7 +2880,7 @@ RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 INSERT INTO jsql_catalog_f_events
   (_idx, id, name, _source)
 VALUES
-  ('1791823889613', 'e2', 'cmd', '{"source":"command","stage":"before_insert","touched":true}')
+  ('1793213764409', 'e2', 'cmd', '{"source":"command","stage":"before_insert","touched":true}')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -2356,7 +2900,7 @@ WHERE A.id = 'e3') AS "exists";
 INSERT INTO jsql_catalog_f_events
   (_idx, id, name, _source)
 VALUES
-  ('1791823889613', 'e4', 'js', '{"js":"before_insert","stage":"before_insert","touched":true}')
+  ('1793213764409', 'e4', 'js', '{"js":"before_insert","stage":"before_insert","touched":true}')
 RETURNING json_set(json_remove(COALESCE(_source, '{}'), '$."_idx"'),
 '$."created_at"', created_at,
 '$."updated_at"', updated_at,
@@ -2490,7 +3034,7 @@ WHERE A.tag = 'invoice') AS "exists";
 INSERT INTO jsql_catalog_series
   (_idx, created_at, format, tag, updated_at, value)
 VALUES
-  ('1791823889615', '2026-10-12 11:51:29', 'FAC-%05d', 'invoice', '2026-10-12 11:51:29', 10)
+  ('1793213764411', '2026-10-28 13:56:04', 'FAC-%05d', 'invoice', '2026-10-28 13:56:04', 10)
 RETURNING created_at, updated_at, tag, format, value;
 
 -- QUERY
@@ -2520,9 +3064,9 @@ LIMIT 1000;
 -- UPDATE
 UPDATE jsql_catalog_series
 SET
-  created_at = '2026-10-12 11:51:29',
+  created_at = '2026-10-28 13:56:04',
   format = 'FAC-%05d',
-  updated_at = '2026-10-12 11:51:29',
+  updated_at = '2026-10-28 13:56:04',
   value = 11
 WHERE tag = 'invoice'
 RETURNING created_at, updated_at, tag, format, value;
@@ -2546,9 +3090,9 @@ LIMIT 1000;
 -- UPDATE
 UPDATE jsql_catalog_series
 SET
-  created_at = '2026-10-12 11:51:29',
+  created_at = '2026-10-28 13:56:04',
   format = 'FAC-%05d',
-  updated_at = '2026-10-12 11:51:29',
+  updated_at = '2026-10-28 13:56:04',
   value = 12
 WHERE tag = 'invoice'
 RETURNING created_at, updated_at, tag, format, value;

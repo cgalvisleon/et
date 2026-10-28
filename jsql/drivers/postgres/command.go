@@ -118,6 +118,113 @@ func pgNestSource(source et.Json) et.Json {
 }
 
 /**
+* pgSortedKeys: The keys of data in order, so the generated SQL is always the same.
+* @param data et.Json
+* @return []string
+**/
+func pgSortedKeys(data et.Json) []string {
+	keys := make([]string, 0, len(data))
+	for k := range data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+/**
+* pgAttribValue: The SQL value of an attribute stored at the root: objects and lists as jsonb, the rest quoted.
+* @param val any
+* @return string
+**/
+func pgAttribValue(val any) string {
+	switch val.(type) {
+	case et.Json, map[string]any, []any, []et.Json:
+		return pgJsonbValue(val)
+	}
+	return fmt.Sprintf("%v", jsql.Quoted(val))
+}
+
+/**
+* pgSetPaths: A copy of the object val with each "a->b" key of paths set, creating the missing parents. A value
+* that is not an object cannot hold nested keys and is returned as it is.
+* @param val any, paths et.Json
+* @return any
+**/
+func pgSetPaths(val any, paths et.Json) any {
+	var obj et.Json
+	switch v := val.(type) {
+	case et.Json:
+		obj = v.DeepClone()
+	case map[string]any:
+		obj = et.Json(v).DeepClone()
+	default:
+		return val
+	}
+	for _, k := range pgSortedKeys(paths) {
+		parts := strings.Split(k, "->")
+		node := obj
+		for _, part := range parts[:len(parts)-1] {
+			var child et.Json
+			switch c := node[part].(type) {
+			case et.Json:
+				child = c
+			case map[string]any:
+				child = et.Json(c)
+			default:
+				child = et.Json{}
+			}
+			node[part] = child
+			node = child
+		}
+		node[parts[len(parts)-1]] = paths[k]
+	}
+	return obj
+}
+
+/**
+* pgRootSets:The SET items of an UPDATE for attributes stored at the root: "a" = value for a top-level key, and
+* for nested keys ("a->b") the root field merged with jsonb_set, so the other keys of "a" stay. When the same data
+* also sets the root whole (an update carries the merged record), the nested keys are applied over that value.
+* @param source et.Json
+* @return []string
+**/
+func pgRootSets(source et.Json) []string {
+	top := et.Json{}
+	nested := map[string]et.Json{}
+	for k, v := range source {
+		root, rest, ok := strings.Cut(k, "->")
+		if !ok {
+			top[k] = v
+			continue
+		}
+		if nested[root] == nil {
+			nested[root] = et.Json{}
+		}
+		nested[root][rest] = v
+	}
+
+	result := []string{}
+	for _, k := range pgSortedKeys(top) {
+		val := top[k]
+		if paths, ok := nested[k]; ok {
+			val = pgSetPaths(val, paths)
+		}
+		result = append(result, fmt.Sprintf("%s = %s", pgIdent(k), pgAttribValue(val)))
+	}
+	roots := make([]string, 0, len(nested))
+	for root := range nested {
+		if _, ok := top[root]; !ok {
+			roots = append(roots, root)
+		}
+	}
+	sort.Strings(roots)
+	for _, root := range roots {
+		result = append(result, fmt.Sprintf("%s = %s", pgIdent(root), pgJsonbSet(pgIdent(root), nested[root])))
+	}
+	return result
+}
+
+/**
 * pgColsVals: Separates data into sorted parallel (column names, quoted value strings) slices
 * and a source et.Json for ATTRIB fields destined for the _source JSONB column.
 * When excludePKs is true, primary key columns are omitted from the column lists (for SET clauses).
@@ -208,6 +315,9 @@ func pgReturningClause(command *jsql.Command) string {
 
 	if model.SourceField != "" {
 		source := pgSourceExpr(model.SourceField, model.Hiddens)
+		if jsql.AttribsAtRoot(model) {
+			source = pgRowExpr(model, pgTableRef(model.Table), model.Hiddens)
+		}
 		return fmt.Sprintf("\nRETURNING %s AS %s", pgMergeObject(source, pairs), jsql.RESULT)
 	}
 
@@ -275,8 +385,17 @@ func pgInsertSQL(command *jsql.Command) (string, error) {
 	if model != nil {
 		cols, vals, source = pgColsVals(model, command.New, false)
 		if model.SourceField != "" && len(source) > 0 {
-			cols = append(cols, model.SourceField)
-			vals = append(vals, pgJsonbValue(pgNestSource(source)))
+			if jsql.AttribsAtRoot(model) {
+				// Each attribute is a field of the document's root
+				nested := pgNestSource(source)
+				for _, key := range pgSortedKeys(nested) {
+					cols = append(cols, pgIdent(key))
+					vals = append(vals, pgAttribValue(nested[key]))
+				}
+			} else {
+				cols = append(cols, model.SourceField)
+				vals = append(vals, pgJsonbValue(pgNestSource(source)))
+			}
 		}
 	} else {
 		keys := make([]string, 0, len(command.New))
@@ -324,7 +443,11 @@ func pgUpdateSQL(command *jsql.Command) (string, error) {
 			setCols = append(setCols, fmt.Sprintf("%s = %s", col, vals[i]))
 		}
 		if model.SourceField != "" && len(source) > 0 {
-			setCols = append(setCols, fmt.Sprintf("%s = %s", model.SourceField, pgJsonbSet(model.SourceField, source)))
+			if jsql.AttribsAtRoot(model) {
+				setCols = append(setCols, pgRootSets(source)...)
+			} else {
+				setCols = append(setCols, fmt.Sprintf("%s = %s", model.SourceField, pgJsonbSet(model.SourceField, source)))
+			}
 		}
 	} else {
 		keys := make([]string, 0, len(command.New))

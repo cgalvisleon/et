@@ -34,7 +34,7 @@ func ddlTable(model *jsql.Model) string {
 
 /**
 * ddlColumns: Builds the column definitions of CREATE TABLE: one per COLUMN column (type and default), the
-* SourceField as JSONB DEFAULT '{}'.
+* SourceField as JSONB DEFAULT '{}' (none when the driver keeps the attributes at the root, jsql.AttribsAtRoot).
 * @param model *jsql.Model
 * @return []string
 **/
@@ -46,6 +46,9 @@ func ddlColumns(model *jsql.Model) []string {
 			continue
 		}
 		if col.Name == model.SourceField {
+			if jsql.AttribsAtRoot(model) {
+				continue
+			}
 			cols = append(cols, fmt.Sprintf("  %s JSONB DEFAULT '{}'", model.SourceField))
 			continue
 		}

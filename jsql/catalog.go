@@ -28,7 +28,7 @@ import (
 //	    Total                           208
 //
 // Exportan directo, fuera de este archivo, lo que es de su propio archivo: connection.go (los tipos de
-// conexión, ConnectionFromJson, TimeoutContext, Tester, TestConnection, Probe), wrapper.go (Wrapper,
+// conexión, ConnectionFromJson, TimeoutContext, Tester, TestConnection, Probe, RootAttribs, AttribsAtRoot), wrapper.go (Wrapper,
 // BindWrapper, ToJsMapWrapper), define.go (ToArrayAny), helpers.go (Bind), model.go (Replace) y
 // query.go (HasStar, StarFields, SourceHiddens).
 

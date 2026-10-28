@@ -39,6 +39,16 @@ func sanitizeQualifiedIdent(s string) string {
 }
 
 /**
+* pgIdent: Quotes an identifier ("name"), doubling inner double quotes, so an attribute stored at the root keeps
+* its exact name (lastName, not lastname) and can never break out of its position.
+* @param name string
+* @return string
+**/
+func pgIdent(name string) string {
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
+/**
 * pgQuoteKey: Quotes a JSON key as a PostgreSQL string literal ('key'), escaping single quotes.
 * Used for ->'key', ->>'key' and the keys of jsonb_build_object.
 * @param key string

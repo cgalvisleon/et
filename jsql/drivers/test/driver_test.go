@@ -589,3 +589,129 @@ func TestJoinGroupHaving(t *testing.T) {
 		})
 	}
 }
+
+/**
+* TestAttribsAtRoot: Attributes without a column (ATTRIB) on every engine: insert, query by them and by a nested path,
+* update a nested key without losing its siblings, select by path, hidden attributes and a strict model that drops
+* them. In Josefina (jsql.AttribsAtRoot) they are stored at the root of the document and the document has no
+* _source; in Postgres they stay inside _source (josefina spec §22, JOS-70/71).
+**/
+func TestAttribsAtRoot(t *testing.T) {
+	for _, tg := range targets() {
+		t.Run(tg.name, func(t *testing.T) {
+			db := connect(t, tg)
+			model, err := db.DefineModel(tg.schema, "attribs", 1, "test")
+			if err != nil {
+				t.Fatal(err)
+			}
+			model.DefineColumn("kind", et.KEY, "")
+			model.DefineHidden("secret")
+			if err := model.Init(); err != nil {
+				t.Fatal(err)
+			}
+
+			doc := et.Json{
+				"id":       "a1",
+				"kind":     "item",
+				"color":    "red",
+				"lastName": "Pérez",
+				"n":        5,
+				"meta":     et.Json{"a": et.Json{"b": 1}},
+				"secret":   "x",
+			}
+			if _, err := model.Insert(doc).One(); err != nil {
+				t.Fatal("insert:", err)
+			}
+			if _, err := model.Insert(et.Json{"id": "a2", "kind": "item", "color": "blue", "n": 2}).One(); err != nil {
+				t.Fatal("insert:", err)
+			}
+
+			read, err := model.Where(jsql.Eq("id", "a1")).One()
+			if err != nil {
+				t.Fatal("read:", err)
+			}
+			if read.Result.Str("lastName") != "Pérez" || read.Result.Int("n") != 5 || read.Result.Int("meta", "a", "b") != 1 {
+				t.Errorf("read: %s", read.Result.ToString())
+			}
+			if _, ok := read.Result["secret"]; ok {
+				t.Errorf("read: the hidden attribute came back: %s", read.Result.ToString())
+			}
+
+			found, err := model.Where(jsql.Eq("color", "red")).And(jsql.More("n", 3)).And(jsql.Eq("meta->a->b", 1)).All()
+			if err != nil {
+				t.Fatal("query:", err)
+			}
+			if found.Count != 1 || found.Result[0].Str("id") != "a1" {
+				t.Errorf("query by attributes: %v", found.Result)
+			}
+
+			ordered, err := model.Where(jsql.Eq("kind", "item")).OrderBy("n", true).All()
+			if err != nil {
+				t.Fatal("order:", err)
+			}
+			if ordered.Count != 2 || ordered.Result[0].Str("id") != "a2" {
+				t.Errorf("order by attribute: %v", ordered.Result)
+			}
+
+			updated, err := model.Update(et.Json{"color": "green", "meta->a->c": 2}).Where(jsql.Eq("id", "a1")).One()
+			if err != nil {
+				t.Fatal("update:", err)
+			}
+			if updated.Result.Str("color") != "green" || updated.Result.Int("meta", "a", "b") != 1 || updated.Result.Int("meta", "a", "c") != 2 {
+				t.Errorf("update: %s", updated.Result.ToString())
+			}
+
+			selected, err := model.Where(jsql.Eq("id", "a1")).Select("lastName", "meta->a->c:c").One()
+			if err != nil {
+				t.Fatal("select:", err)
+			}
+			if selected.Result.Str("lastName") != "Pérez" || selected.Result.Int("c") != 2 {
+				t.Errorf("select by path: %s", selected.Result.ToString())
+			}
+
+			// Where the attributes are stored
+			switch tg.name {
+			case "josefina":
+				raw, err := db.Sql(fmt.Sprintf("SELECT to_jsonb(A) AS result FROM %s AS A WHERE A.id = 'a1'", model.Table))
+				if err != nil {
+					t.Fatal("raw:", err)
+				}
+				first, _ := raw.First()
+				stored := first.Result
+				if _, ok := stored[jsql.SOURCE]; ok || stored.Str("color") != "green" || stored.Str("lastName") != "Pérez" {
+					t.Errorf("josefina keeps the attributes at the root without %s: %s", jsql.SOURCE, stored.ToString())
+				}
+			case "postgres":
+				raw, err := db.Sql(fmt.Sprintf("SELECT %s AS result FROM %s WHERE id = 'a1'", jsql.SOURCE, model.Table))
+				if err != nil {
+					t.Fatal("raw:", err)
+				}
+				first, _ := raw.First()
+				if stored := first.Result; stored.Str("color") != "green" {
+					t.Errorf("postgres keeps the attributes in %s: %s", jsql.SOURCE, stored.ToString())
+				}
+			}
+
+			// A strict model drops what is not a column
+			strict, err := db.DefineModel(tg.schema, "attribs_strict", 1, "test")
+			if err != nil {
+				t.Fatal(err)
+			}
+			strict.DefineColumn("kind", et.KEY, "")
+			strict.Stricted()
+			if err := strict.Init(); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := strict.Insert(et.Json{"id": "s1", "kind": "item", "extra": "x"}).One(); err != nil {
+				t.Fatal("strict insert:", err)
+			}
+			kept, err := strict.Where(jsql.Eq("id", "s1")).One()
+			if err != nil {
+				t.Fatal("strict read:", err)
+			}
+			if _, ok := kept.Result["extra"]; ok || kept.Result.Str("kind") != "item" {
+				t.Errorf("strict model: %s", kept.Result.ToString())
+			}
+		})
+	}
+}

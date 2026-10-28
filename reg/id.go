@@ -27,13 +27,13 @@ func UUID() string {
 }
 
 /**
-* ULID
+* ULID: Un ULID ordenable por tiempo que no se repite en el proceso: ulid.Make usa una
+* entropía monotónica compartida y segura entre goroutines (antes se sembraba con el
+* reloj en cada llamada y dos llamadas en el mismo instante daban el mismo valor)
 * @return string
 **/
 func ULID() string {
-	t := timezone.Now()
-	entropy := ulid.Monotonic(rand.New(rand.NewSource(t.UnixNano())), 0)
-	return ulid.MustNew(ulid.Timestamp(t), entropy).String()
+	return ulid.Make().String()
 }
 
 /**
@@ -74,7 +74,7 @@ func GenUUID(tag string) string {
 }
 
 /**
-* GenULID (Universally locally identifier)
+* GenULID: tag:ULID (Universally Unique Lexicographically Sortable Identifier)
 * @params tag string
 * @return string
 **/

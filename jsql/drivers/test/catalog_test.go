@@ -1895,7 +1895,7 @@ func writeSummary(t *testing.T, all map[string][]caseResult) {
 	for _, key := range order {
 		if sectionOf[key] != current {
 			current = sectionOf[key]
-			sb.WriteString(fmt.Sprintf("\n## %s\n\n| Caso | sqlite | postgres | oracle | mysql | mssql |\n|---|---|---|---|---|---|\n", current))
+			sb.WriteString(fmt.Sprintf("\n## %s\n\n| Caso | sqlite | postgres | josefina | oracle | mysql | mssql |\n|---|---|---|---|---|---|---|\n", current))
 		}
 		name := strings.TrimPrefix(key, current+" · ")
 		cells := []string{}

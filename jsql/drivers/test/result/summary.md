@@ -4,17 +4,17 @@ Generado por `go test -run TestCatalog -update` en `jsql/drivers/test`. El detal
 
 | Driver | Pasan | Fallan | Brechas | Omitidos |
 |---|---|---|---|---|
-| sqlite | 102 | 0 | 0 | 1 |
-| postgres | 102 | 0 | 0 | 1 |
-| josefina | 102 | 0 | 0 | 1 |
+| sqlite | 106 | 0 | 0 | 1 |
+| postgres | 106 | 0 | 0 | 1 |
+| josefina | 106 | 0 | 0 | 1 |
 | oracle | 102 | 0 | 0 | 1 |
 | mysql | 102 | 0 | 0 | 1 |
 | mssql | 102 | 0 | 0 | 1 |
 
 ## 1. Conexión y base de datos
 
-| Caso | sqlite | postgres | oracle | mysql | mssql |
-|---|---|---|---|---|---|
+| Caso | sqlite | postgres | josefina | oracle | mysql | mssql |
+|---|---|---|---|---|---|---|
 | Register + ConnectTo | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Init (idempotente) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | NewDB | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -28,8 +28,8 @@ Generado por `go test -run TestCatalog -update` en `jsql/drivers/test`. El detal
 
 ## 2. Definición de modelos (DDL)
 
-| Caso | sqlite | postgres | oracle | mysql | mssql |
-|---|---|---|---|---|---|
+| Caso | sqlite | postgres | josefina | oracle | mysql | mssql |
+|---|---|---|---|---|---|---|
 | Define (declarativo) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | DefineModel + DefineColumn / DefineAttrib / DefineUnique / DefineHidden | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | DefineTenantModel / DefineProjectModel | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -44,8 +44,8 @@ Generado por `go test -run TestCatalog -update` en `jsql/drivers/test`. El detal
 
 ## 3. Relaciones y campos calculados
 
-| Caso | sqlite | postgres | oracle | mysql | mssql |
-|---|---|---|---|---|---|
+| Caso | sqlite | postgres | josefina | oracle | mysql | mssql |
+|---|---|---|---|---|---|---|
 | Detail en el select (DefineDetail) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Model.Detail + Query.Detail | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Master en el select (DefineMaster) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -53,14 +53,18 @@ Generado por `go test -run TestCatalog -update` en `jsql/drivers/test`. El detal
 | Model.Master + Model.Bridge | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | DefineRollup row (tp_doc → title) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | DefineRollup (count, sum, object) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| DefineRollup con where (valor fijo y campo de la fila) | ✅ | ✅ | ✅ | — | — | — |
+| DefineRollup con where or (conserva la llave) y round trip JSON | ✅ | ✅ | ✅ | — | — | — |
+| Rollups.OrderBy (primer registro de un object) | ✅ | ✅ | ✅ | — | — | — |
+| Relaciones por lotes = fila por fila | ✅ | ✅ | ✅ | — | — | — |
 | DefineCalcFunc + Model.Calc | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Query.Calc con script JS (DefineCalc) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | DefineCalc (script JS) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ## 4. Consultas
 
-| Caso | sqlite | postgres | oracle | mysql | mssql |
-|---|---|---|---|---|---|
+| Caso | sqlite | postgres | josefina | oracle | mysql | mssql |
+|---|---|---|---|---|---|---|
 | Select + Where + OrderBy + All | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | One / First / Count / Exists | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Limit (paginación) / Page | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -90,8 +94,8 @@ Generado por `go test -run TestCatalog -update` en `jsql/drivers/test`. El detal
 
 ## 5. Condiciones
 
-| Caso | sqlite | postgres | oracle | mysql | mssql |
-|---|---|---|---|---|---|
+| Caso | sqlite | postgres | josefina | oracle | mysql | mssql |
+|---|---|---|---|---|---|---|
 | Eq | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Neg | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Less | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -113,8 +117,8 @@ Generado por `go test -run TestCatalog -update` en `jsql/drivers/test`. El detal
 
 ## 6. Comandos
 
-| Caso | sqlite | postgres | oracle | mysql | mssql |
-|---|---|---|---|---|---|
+| Caso | sqlite | postgres | josefina | oracle | mysql | mssql |
+|---|---|---|---|---|---|---|
 | Insert (RETURNING) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Bulk | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Update + Where | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -131,23 +135,23 @@ Generado por `go test -run TestCatalog -update` en `jsql/drivers/test`. El detal
 
 ## 7. Triggers
 
-| Caso | sqlite | postgres | oracle | mysql | mssql |
-|---|---|---|---|---|---|
+| Caso | sqlite | postgres | josefina | oracle | mysql | mssql |
+|---|---|---|---|---|---|---|
 | Before/After Insert, Update, Delete e InsertOrUpdate | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Trigger del comando + error que aborta | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Triggers JS (DefineBeforeInsert / DefineAfterUpdate…) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ## 8. Transacciones
 
-| Caso | sqlite | postgres | oracle | mysql | mssql |
-|---|---|---|---|---|---|
+| Caso | sqlite | postgres | josefina | oracle | mysql | mssql |
+|---|---|---|---|---|---|---|
 | NewTx + ExecTx + Rollback | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | NewTx + ExecTx + Commit | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ## 9. Series
 
-| Caso | sqlite | postgres | oracle | mysql | mssql |
-|---|---|---|---|---|---|
+| Caso | sqlite | postgres | josefina | oracle | mysql | mssql |
+|---|---|---|---|---|---|---|
 | DefineSeries | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | SetSeries + GetSeries | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | GenValue + GenSerie | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -155,16 +159,17 @@ Generado por `go test -run TestCatalog -update` en `jsql/drivers/test`. El detal
 
 ## 10. Auditoría
 
-| Caso | sqlite | postgres | oracle | mysql | mssql |
-|---|---|---|---|---|---|
+| Caso | sqlite | postgres | josefina | oracle | mysql | mssql |
+|---|---|---|---|---|---|---|
 | OnAuditLog + Model.AddAuditLog + AddAuditLog | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ## 11. Utilidades
 
-| Caso | sqlite | postgres | oracle | mysql | mssql |
-|---|---|---|---|---|---|
+| Caso | sqlite | postgres | josefina | oracle | mysql | mssql |
+|---|---|---|---|---|---|---|
 | Quoted / EscapeSQLString / SQLParse / JsonString | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | SQLParse con 10 o más parámetros | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| ArgWhitAs / ArgWhitSchema / StatusList / TypeColumn.Str | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| ArgWithAs / ArgWithSchema / StatusList / TypeColumn.Str | ✅ | ✅ | ✅ | — | — | — |
 | RowsToItems | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Model.Db / SetDb / GetModel / ToJson, Column.ToJson, Schema.ToJson | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| ArgWhitAs / ArgWhitSchema / StatusList / TypeColumn.Str | — | — | — | ✅ | ✅ | ✅ |

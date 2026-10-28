@@ -57,17 +57,88 @@ func pgJsonbPath(field string) string {
 	} else {
 		root = sanitizeIdent(root)
 	}
+	return root + pgJsonbTail(parts[1:])
+}
+
+/**
+* pgJsonbTail: The '->' steps of a JSONB path after its root: ->'key' for the intermediate levels, ->>'key' for the last.
+* @param keys []string
+* @return string
+**/
+func pgJsonbTail(keys []string) string {
 	var sb strings.Builder
-	sb.WriteString(root)
-	for i, p := range parts[1:] {
+	for i, p := range keys {
 		p = jsql.EscapeSQLString(p)
-		if i == len(parts)-2 {
+		if i == len(keys)-1 {
 			sb.WriteString(fmt.Sprintf("->>'%s'", p))
 		} else {
 			sb.WriteString(fmt.Sprintf("->'%s'", p))
 		}
 	}
 	return sb.String()
+}
+
+/**
+* pgSourceOf: The field that holds the ATTRIB fields of model: "" when its driver keeps them at the root of the
+* document (jsql.AttribsAtRoot, josefina), else its SourceField (jsql.SOURCE when it names none).
+* @param model *jsql.Model
+* @return string
+**/
+func pgSourceOf(model *jsql.Model) string {
+	if jsql.AttribsAtRoot(model) {
+		return ""
+	}
+	if model != nil && model.SourceField != "" {
+		return model.SourceField
+	}
+	return jsql.SOURCE
+}
+
+/**
+* pgAttribPath: The expression of an ATTRIB field (a nested one as a->b): inside the source field
+* (alias._source->'a'->>'b') or, at the root, the field itself ("a"->>'b'), qualified with alias.
+* @param model *jsql.Model, name, alias string
+* @return string
+**/
+func pgAttribPath(model *jsql.Model, name, alias string) string {
+	var path string
+	if source := pgSourceOf(model); source != "" {
+		path = pgJsonbPath(source + "->" + name)
+	} else {
+		parts := strings.Split(name, "->")
+		path = pgIdent(parts[0]) + pgJsonbTail(parts[1:])
+	}
+	if alias != "" {
+		path = alias + "." + path
+	}
+	return path
+}
+
+/**
+* pgRowExpr: The whole row of a model whose attributes are at the root, as one JSON: to_jsonb(ref) without the
+* document id (jid, unless the model has that column) and the hidden keys.
+* @param model *jsql.Model, ref string, hiddens []string
+* @return string
+**/
+func pgRowExpr(model *jsql.Model, ref string, hiddens []string) string {
+	drop := []string{}
+	if !slices.ContainsFunc(model.Columns, func(col *jsql.Column) bool { return col.Name == "jid" }) {
+		drop = append(drop, "jid")
+	}
+	drop = append(drop, hiddens...)
+	return pgSourceExpr(fmt.Sprintf("to_jsonb(%s)", ref), drop)
+}
+
+/**
+* pgTableRef: The name a statement uses for the row of a table without alias: the table without its schema.
+* @param table string
+* @return string
+**/
+func pgTableRef(table string) string {
+	if i := strings.LastIndex(table, "."); i != -1 {
+		return table[i+1:]
+	}
+	return table
 }
 
 /**
@@ -91,15 +162,7 @@ func pgFieldExpr(field *jsql.Field, useSource bool) string {
 		return fmt.Sprintf("%s.%s", alias, field.Name)
 	} else if field.TypeColumn == jsql.ATTRIB {
 		if useSource {
-			sourceField := jsql.SOURCE
-			if field.From.Model != nil && field.From.Model.SourceField != "" {
-				sourceField = field.From.Model.SourceField
-			}
-			fullPath := pgJsonbPath(sourceField + "->" + field.Name)
-			path := fullPath
-			if alias != "" {
-				path = alias + "." + fullPath
-			}
+			path := pgAttribPath(field.From.Model, field.Name, alias)
 			switch field.TypeData {
 			case et.INT:
 				return fmt.Sprintf("(%s)::bigint", path)
@@ -478,15 +541,7 @@ func pgSelectExpr(query *jsql.Query, field string) (string, bool) {
 		}
 	}
 	if fld.TypeColumn == jsql.ATTRIB {
-		sourceField := jsql.SOURCE
-		if fld.From.Model != nil && fld.From.Model.SourceField != "" {
-			sourceField = fld.From.Model.SourceField
-		}
-		fullPath := pgJsonbPath(sourceField + "->" + fld.Name)
-		path := fullPath
-		if alias != "" {
-			path = alias + "." + fullPath
-		}
+		path := pgAttribPath(fld.From.Model, fld.Name, alias)
 		switch fld.TypeData {
 		case et.INT:
 			return fmt.Sprintf("%s, (%s)::bigint", pgQuoteKey(fld.As), path), true
@@ -626,15 +681,17 @@ func pgSelects(query *jsql.Query) []string {
 		// Without selects or with "*", also the attributes of the source field of the first from
 		if (len(query.Selects) == 0 || query.HasStar()) && len(query.Froms) > 0 {
 			from := query.Froms[0]
-			sourceField := jsql.SOURCE
-			if from.Model != nil && from.Model.SourceField != "" {
-				sourceField = from.Model.SourceField
-			}
 			alias := from.As
 			if alias == from.Table {
 				alias = ""
 			}
-			source = pgSourceExpr(strs.Append(alias, sourceField, "."), query.SourceHiddens(from))
+			if sourceField := pgSourceOf(from.Model); sourceField != "" {
+				source = pgSourceExpr(strs.Append(alias, sourceField, "."), query.SourceHiddens(from))
+			} else if alias != "" {
+				source = pgRowExpr(from.Model, alias, query.SourceHiddens(from))
+			} else {
+				source = pgRowExpr(from.Model, pgTableRef(from.Table), query.SourceHiddens(from))
+			}
 		}
 		return []string{fmt.Sprintf("%s AS %s", pgMergeObject(source, selectExprs), jsql.RESULT)}
 	}

@@ -122,7 +122,7 @@ Cada tabla lista la API pública principal de cada paquete. `go doc github.com/c
 | `logs` | `Info`, `Infof`, `Debug`, `Warn`, `Alert`, `Alertf`, `Error`, `Errorf`, `Fatal`, `Panic` | `logs.Errorf("failed: %v", err)` |
 | `stdrout`, `color` | `Printl`, `Traces`, `SetStdout`; `Red`, `Green`, `Yellow`, `Blue`… | `fmt.Println(color.Green("ok"))` |
 | `validator` | `New()`, `Field`, `Required`, `NotEmpty`, `Min`, `Max`, `Between`, `MinLength`, `MaxLength`, `Pattern`, `Values`, `IsEmail`, `IsPhone`, `Validate`, `ByJson`, `ToJson`, `Wrapper` (goja) | `validator.New().Field("email").Required().IsEmail().Validate(body)` |
-| `reg` | `UUID`, `ULID`, `XID`, `GenSnowflake`, `GetUUID(id)`, `GenULID(tag)`, `TagULID` | `id := reg.GetULID("")` |
+| `reg` | `UUID` (v7, ordenable), `ULID`, `XID`, `GenSnowflake`, `GetUUID(id)`, `GenULID(tag)`, `TagULID` | `id := reg.GetULID("")` |
 | `strs` | `Format`, `Parse`, `Titlecase`, `Lowcase`, `RemoveAccents`, `Split`, `IsEmpty`, `HtmlToText` | `strs.Parse("Hi {{name}}", vars)` |
 | `timezone` | `Now`, `NowStr`, `Add`, `Format`, `Parse`, `Location` | `t := timezone.Now()` |
 | `units` | `NewQuantity(val, unit)`, `Load`, `To`, `ToStr` | `q.To(units.UnityKilometer)` |
@@ -184,7 +184,7 @@ items, _ := db.Query(et.Json{
 })
 ```
 
-Drivers: `postgres`, `sqlite` (sin CGO), `oracle` 19c+, `mysql` 8.0+, `mssql` 2022+ y `josefina` (protocolo Postgres de Josefina; no crea ni elimina bases). El comportamiento completo está en [`jsql/spec.md`](../jsql/spec.md); la API pública está reunida en [`jsql/catalog.go`](../jsql/catalog.go).
+Drivers: `postgres`, `sqlite` (sin CGO), `oracle` 19c+, `mysql` 8.0+, `mssql` 2022+ y `josefina` (protocolo Postgres de Josefina; no crea ni elimina bases, y guarda los atributos de un modelo en la raíz del documento en lugar de en `_source`). El comportamiento completo está en [`jsql/spec.md`](../jsql/spec.md); la API pública está reunida en [`jsql/catalog.go`](../jsql/catalog.go).
 
 ### API HTTP con `router`
 

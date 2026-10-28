@@ -220,7 +220,7 @@ ALTER TABLE jsql_catalog.f_child ADD CONSTRAINT fk_jsql_catalog_f_child_jsql_cat
 INSERT INTO jsql_catalog.f_parent
   (_idx, id)
 VALUES
-  ('1791823889766', 'p1')
+  ('1793213764489', 'p1')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -233,7 +233,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_child
   (_idx, id, parent_id)
 VALUES
-  ('1791823889768', 'c1', 'p1')
+  ('1793213764490', 'c1', 'p1')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -247,7 +247,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_child
   (_idx, id, parent_id)
 VALUES
-  ('1791823889769', 'c2', 'missing')
+  ('1793213764491', 'c2', 'missing')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -280,7 +280,7 @@ CREATE INDEX IF NOT EXISTS jsql_catalog_f_strict__idx_idx ON jsql_catalog.f_stri
 INSERT INTO jsql_catalog.f_strict
   (_idx, id, name)
 VALUES
-  ('1791823889777', 's1', 'x')
+  ('1793213764496', 's1', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -345,7 +345,7 @@ LIMIT 1;
 INSERT INTO jsql_catalog.f_doc_types
   (_idx, id, title)
 VALUES
-  ('1791823889786', 'CC', 'Cédula de ciudadanía')
+  ('1793213764502', 'CC', 'Cédula de ciudadanía')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -359,7 +359,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_doc_types
   (_idx, id, title)
 VALUES
-  ('1791823889787', 'NIT', 'Número de identificación tributaria')
+  ('1793213764502', 'NIT', 'Número de identificación tributaria')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -378,7 +378,7 @@ WHERE A.email = 'ana@example.com');
 INSERT INTO jsql_catalog.f_users
   (_idx, email, id, name, _source)
 VALUES
-  ('1791823889789', 'ana@example.com', 'u1', 'Ana', '{"age":30,"password":"secret","tp_doc":"CC"}'::jsonb)
+  ('1793213764503', 'ana@example.com', 'u1', 'Ana', '{"age":30,"password":"secret","tp_doc":"CC"}'::jsonb)
 RETURNING (_source - '{"_idx","password"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -398,7 +398,7 @@ WHERE A.email = 'luis@example.com');
 INSERT INTO jsql_catalog.f_users
   (_idx, email, id, name, _source)
 VALUES
-  ('1791823889791', 'luis@example.com', 'u2', 'Luis', '{"age":17}'::jsonb)
+  ('1793213764504', 'luis@example.com', 'u2', 'Luis', '{"age":17}'::jsonb)
 RETURNING (_source - '{"_idx","password"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -418,7 +418,7 @@ WHERE A.email = 'marta@example.com');
 INSERT INTO jsql_catalog.f_users
   (_idx, email, id, name, _source)
 VALUES
-  ('1791823889792', 'marta@example.com', 'u3', 'Marta O''Neil', '{"age":45,"tp_doc":"NIT"}'::jsonb)
+  ('1793213764505', 'marta@example.com', 'u3', 'Marta O''Neil', '{"age":45,"tp_doc":"NIT"}'::jsonb)
 RETURNING (_source - '{"_idx","password"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -433,7 +433,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_roles
   (_idx, id, name)
 VALUES
-  ('1791823889793', 'r1', 'admin')
+  ('1793213764505', 'r1', 'admin')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -447,7 +447,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_roles
   (_idx, id, name)
 VALUES
-  ('1791823889794', 'r2', 'editor')
+  ('1793213764506', 'r2', 'editor')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -461,7 +461,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_orders
   (_idx, id, user_id, _source)
 VALUES
-  ('1791823889795', 'o1', 'u1', '{"amount":100.5}'::jsonb)
+  ('1793213764507', 'o1', 'u1', '{"amount":100.5}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -475,7 +475,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_orders
   (_idx, id, user_id, _source)
 VALUES
-  ('1791823889797', 'o2', 'u1', '{"amount":200}'::jsonb)
+  ('1793213764507', 'o2', 'u1', '{"amount":200}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -489,7 +489,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_orders
   (_idx, id, user_id, _source)
 VALUES
-  ('1791823889798', 'o3', 'u3', '{"amount":50}'::jsonb)
+  ('1793213764508', 'o3', 'u3', '{"amount":50}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -553,21 +553,21 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_users_f_roles
   (_idx, role_id, user_id)
 VALUES
-  ('1791823889805', 'r1', 'u1')
+  ('1793213764512', 'r1', 'u1')
 RETURNING user_id, role_id;
 
 -- INSERT
 INSERT INTO jsql_catalog.f_users_f_roles
   (_idx, role_id, user_id)
 VALUES
-  ('1791823889806', 'r2', 'u1')
+  ('1793213764513', 'r2', 'u1')
 RETURNING user_id, role_id;
 
 -- INSERT
 INSERT INTO jsql_catalog.f_users_f_roles
   (_idx, role_id, user_id)
 VALUES
-  ('1791823889807', 'r2', 'u2')
+  ('1793213764513', 'r2', 'u2')
 RETURNING user_id, role_id;
 
 -- ========== 2. Definición de modelos (DDL) · DefineUnique (rechaza duplicados en insert, bulk y update) [pass]
@@ -586,7 +586,7 @@ WHERE A.email = 'same@example.com');
 INSERT INTO jsql_catalog.f_users
   (_idx, email, id, name)
 VALUES
-  ('1791823889809', 'same@example.com', 'u8', 'Uno')
+  ('1793213764515', 'same@example.com', 'u8', 'Uno')
 RETURNING (_source - '{"_idx","password"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -666,6 +666,10 @@ jsonb_build_object(
 'name', name,
 'email', email
 ) AS result;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_catalog.f_users AS A;
 
 -- QUERY
 SELECT COUNT(*)
@@ -841,29 +845,11 @@ LIMIT 1000;
 -- QUERY
 SELECT
 jsonb_build_object(
-'title', A.title
+'title', A.title,
+'_jsql_key', A.id
 ) AS result
 FROM jsql_catalog.f_doc_types AS A
-WHERE A.id = 'CC'
-LIMIT 1;
-
--- QUERY
-SELECT
-jsonb_build_object(
-'title', A.title
-) AS result
-FROM jsql_catalog.f_doc_types AS A
-WHERE A.id = NULL
-LIMIT 1;
-
--- QUERY
-SELECT
-jsonb_build_object(
-'title', A.title
-) AS result
-FROM jsql_catalog.f_doc_types AS A
-WHERE A.id = 'NIT'
-LIMIT 1;
+WHERE A.id IN ('CC', 'NIT');
 
 -- ========== 3. Relaciones y campos calculados · DefineRollup (count, sum, object) [pass]
 
@@ -875,11 +861,6 @@ jsonb_build_object(
 FROM jsql_catalog.f_users AS A
 WHERE A.id = 'u3'
 LIMIT 1;
-
--- QUERY
-SELECT COUNT(*)
-FROM jsql_catalog.f_orders AS A
-WHERE A.user_id = 'u3';
 
 -- QUERY
 SELECT
@@ -899,6 +880,569 @@ jsonb_build_object(
 FROM jsql_catalog.f_orders AS A
 WHERE A.user_id = 'u3'
 LIMIT 1;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u3';
+
+-- ========== 3. Relaciones y campos calculados · DefineRollup con where (valor fijo y campo de la fila) [pass]
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'age', (A._source->>'age')::bigint
+) AS result
+FROM jsql_catalog.f_users AS A
+ORDER BY A.id ASC
+LIMIT 1000;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'_jsql_key', A.user_id,
+'orders_big', COUNT(A.user_id)::bigint
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+  AND (A._source->>'amount')::double precision > 150
+GROUP BY A.user_id;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u1'
+  AND (A._source->>'amount')::double precision > 30;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u2'
+  AND (A._source->>'amount')::double precision > 17;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u3'
+  AND (A._source->>'amount')::double precision > 45;
+
+-- ========== 3. Relaciones y campos calculados · DefineRollup con where or (conserva la llave) y round trip JSON [pass]
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_catalog.f_users AS A
+ORDER BY A.id ASC
+LIMIT 1000;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'_jsql_key', A.user_id,
+'orders_edge', COUNT(A.user_id)::bigint
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+  AND (A._source->>'amount')::double precision > 150
+  OR A.user_id IN ('u1', 'u2', 'u3')
+  AND (A._source->>'amount')::double precision < 60
+GROUP BY A.user_id;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_catalog.f_users AS A
+WHERE A.id = 'u3'
+LIMIT 1;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u3'
+  AND (A._source->>'amount')::double precision > 150
+  OR A.user_id = 'u3'
+  AND (A._source->>'amount')::double precision < 60;
+
+-- ========== 3. Relaciones y campos calculados · Rollups.OrderBy (primer registro de un object) [pass]
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_catalog.f_users AS A
+WHERE A.id = 'u1'
+  OR A.id = 'u2'
+ORDER BY A.id ASC
+LIMIT 1000;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'_jsql_key', A.user_id
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id IN ('u1', 'u2')
+ORDER BY (A._source->>'amount')::double precision DESC;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'amount', (A._source->>'amount')::double precision,
+'_jsql_key', A.user_id
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id IN ('u1', 'u2')
+ORDER BY A.id ASC;
+
+-- ========== 3. Relaciones y campos calculados · Relaciones por lotes = fila por fila [pass]
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'tp_doc', A._source->'tp_doc'
+) AS result
+FROM jsql_catalog.f_users AS A
+ORDER BY A.id ASC
+LIMIT 1000;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'name', A.name,
+'_jsql_key', B.user_id
+) AS result
+FROM jsql_catalog.f_roles AS A
+INNER JOIN jsql_catalog.f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id IN ('u1', 'u2', 'u3');
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'name', A.name,
+'_jsql_key', B.user_id
+) AS result
+FROM jsql_catalog.f_roles AS A
+INNER JOIN jsql_catalog.f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id IN ('u1', 'u2', 'u3');
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'_jsql_key', A.user_id,
+'orders_big', COUNT(A.user_id)::bigint
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+  AND (A._source->>'amount')::double precision > 150
+GROUP BY A.user_id;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'_jsql_key', A.user_id,
+'orders_edge', COUNT(A.user_id)::bigint
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+  AND (A._source->>'amount')::double precision > 150
+  OR A.user_id IN ('u1', 'u2', 'u3')
+  AND (A._source->>'amount')::double precision < 60
+GROUP BY A.user_id;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'amount', (A._source->>'amount')::double precision,
+'_jsql_key', A.user_id
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+ORDER BY A.id ASC;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'_jsql_key', A.user_id
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+ORDER BY (A._source->>'amount')::double precision DESC;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'title', A.title,
+'_jsql_key', A.id
+) AS result
+FROM jsql_catalog.f_doc_types AS A
+WHERE A.id IN ('CC', 'NIT');
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'_jsql_key', A.user_id,
+'orders_count', COUNT(A.user_id)::bigint
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+GROUP BY A.user_id;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'_jsql_key', A.user_id,
+'amount', COALESCE(SUM((A._source->>'amount')::double precision), 0)::double precision
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id IN ('u1', 'u2', 'u3')
+GROUP BY A.user_id;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'tp_doc', A._source->'tp_doc'
+) AS result
+FROM jsql_catalog.f_users AS A
+WHERE A.id = 'u1'
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'name', A.name
+) AS result
+FROM jsql_catalog.f_roles AS A
+INNER JOIN jsql_catalog.f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id = 'u1'
+LIMIT 1000;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'name', A.name
+) AS result
+FROM jsql_catalog.f_roles AS A
+INNER JOIN jsql_catalog.f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id = 'u1'
+LIMIT 1;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u1'
+  AND (A._source->>'amount')::double precision > 150
+  OR A.user_id = 'u1'
+  AND (A._source->>'amount')::double precision < 60;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'amount', (A._source->>'amount')::double precision
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u1'
+ORDER BY A.id ASC
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u1'
+ORDER BY (A._source->>'amount')::double precision DESC
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'title', A.title
+) AS result
+FROM jsql_catalog.f_doc_types AS A
+WHERE A.id = 'CC'
+LIMIT 1;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u1';
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'amount', COALESCE(SUM((A._source->>'amount')::double precision), 0)::double precision
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u1'
+LIMIT 1000;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u1'
+  AND (A._source->>'amount')::double precision > 150;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'tp_doc', A._source->'tp_doc'
+) AS result
+FROM jsql_catalog.f_users AS A
+WHERE A.id = 'u2'
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'name', A.name
+) AS result
+FROM jsql_catalog.f_roles AS A
+INNER JOIN jsql_catalog.f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id = 'u2'
+LIMIT 1000;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'name', A.name
+) AS result
+FROM jsql_catalog.f_roles AS A
+INNER JOIN jsql_catalog.f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id = 'u2'
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'amount', (A._source->>'amount')::double precision
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u2'
+ORDER BY A.id ASC
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u2'
+ORDER BY (A._source->>'amount')::double precision DESC
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'title', A.title
+) AS result
+FROM jsql_catalog.f_doc_types AS A
+WHERE A.id = NULL
+LIMIT 1;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u2';
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'amount', COALESCE(SUM((A._source->>'amount')::double precision), 0)::double precision
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u2'
+LIMIT 1000;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u2'
+  AND (A._source->>'amount')::double precision > 150;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u2'
+  AND (A._source->>'amount')::double precision > 150
+  OR A.user_id = 'u2'
+  AND (A._source->>'amount')::double precision < 60;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'tp_doc', A._source->'tp_doc'
+) AS result
+FROM jsql_catalog.f_users AS A
+WHERE A.id = 'u3'
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'name', A.name
+) AS result
+FROM jsql_catalog.f_roles AS A
+INNER JOIN jsql_catalog.f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id = 'u3'
+LIMIT 1000;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'name', A.name
+) AS result
+FROM jsql_catalog.f_roles AS A
+INNER JOIN jsql_catalog.f_users_f_roles AS B
+  ON B.role_id = A.id
+WHERE B.user_id = 'u3'
+LIMIT 1;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u3'
+  AND (A._source->>'amount')::double precision > 150
+  OR A.user_id = 'u3'
+  AND (A._source->>'amount')::double precision < 60;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id,
+'amount', (A._source->>'amount')::double precision
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u3'
+ORDER BY A.id ASC
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u3'
+ORDER BY (A._source->>'amount')::double precision DESC
+LIMIT 1;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'title', A.title
+) AS result
+FROM jsql_catalog.f_doc_types AS A
+WHERE A.id = 'NIT'
+LIMIT 1;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u3';
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'amount', COALESCE(SUM((A._source->>'amount')::double precision), 0)::double precision
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u3'
+LIMIT 1000;
+
+-- QUERY
+SELECT COUNT(*)
+FROM jsql_catalog.f_orders AS A
+WHERE A.user_id = 'u3'
+  AND (A._source->>'amount')::double precision > 150;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_catalog.f_orders AS A
+ORDER BY A.id ASC
+LIMIT 1000;
+
+-- QUERY
+SELECT
+A.product,
+A.order_id AS _jsql_key
+FROM jsql_catalog.f_orders_items AS A
+WHERE A.order_id IN ('o1', 'o2', 'o3');
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.id = 'o1'
+LIMIT 1;
+
+-- QUERY
+SELECT
+A.product
+FROM jsql_catalog.f_orders_items AS A
+WHERE A.order_id = 'o1'
+LIMIT 30;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.id = 'o2'
+LIMIT 1;
+
+-- QUERY
+SELECT
+A.product
+FROM jsql_catalog.f_orders_items AS A
+WHERE A.order_id = 'o2'
+LIMIT 30;
+
+-- QUERY
+SELECT
+jsonb_build_object(
+'id', A.id
+) AS result
+FROM jsql_catalog.f_orders AS A
+WHERE A.id = 'o3'
+LIMIT 1;
+
+-- QUERY
+SELECT
+A.product
+FROM jsql_catalog.f_orders_items AS A
+WHERE A.order_id = 'o3'
+LIMIT 30;
 
 -- ========== 3. Relaciones y campos calculados · DefineCalcFunc + Model.Calc [pass]
 
@@ -2050,7 +2594,7 @@ CREATE INDEX IF NOT EXISTS jsql_catalog_f_many__idx_idx ON jsql_catalog.f_many U
 INSERT INTO jsql_catalog.f_many
   (_idx, id, name)
 VALUES
-  ('1791823889863', 'm1', 'x')
+  ('1793213764566', 'm1', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2064,7 +2608,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_many
   (_idx, id, name)
 VALUES
-  ('1791823889871', 'm2', 'x')
+  ('1793213764566', 'm2', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2078,7 +2622,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_many
   (_idx, id, name)
 VALUES
-  ('1791823889872', 'm3', 'x')
+  ('1793213764567', 'm3', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2092,7 +2636,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_many
   (_idx, id, name)
 VALUES
-  ('1791823889873', 'm4', 'x')
+  ('1793213764567', 'm4', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2106,7 +2650,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_many
   (_idx, id, name)
 VALUES
-  ('1791823889875', 'm5', 'x')
+  ('1793213764568', 'm5', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2120,7 +2664,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_many
   (_idx, id, name)
 VALUES
-  ('1791823889880', 'm6', 'x')
+  ('1793213764569', 'm6', 'x')
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2386,7 +2930,7 @@ CREATE INDEX IF NOT EXISTS jsql_catalog_f_events__idx_idx ON jsql_catalog.f_even
 INSERT INTO jsql_catalog.f_events
   (_idx, id, name, _source)
 VALUES
-  ('1791823889892', 'e1', 'alta', '{"stage":"before_insert","touched":true}'::jsonb)
+  ('1793213764577', 'e1', 'alta', '{"stage":"before_insert","touched":true}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2460,7 +3004,7 @@ jsonb_build_object(
 INSERT INTO jsql_catalog.f_events
   (_idx, id, name, _source)
 VALUES
-  ('1791823889896', 'e2', 'cmd', '{"source":"command","stage":"before_insert","touched":true}'::jsonb)
+  ('1793213764579', 'e2', 'cmd', '{"source":"command","stage":"before_insert","touched":true}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2481,7 +3025,7 @@ WHERE A.id = 'e3');
 INSERT INTO jsql_catalog.f_events
   (_idx, id, name, _source)
 VALUES
-  ('1791823889897', 'e4', 'js', '{"js":"before_insert","stage":"before_insert","touched":true}'::jsonb)
+  ('1793213764580', 'e4', 'js', '{"js":"before_insert","stage":"before_insert","touched":true}'::jsonb)
 RETURNING (_source - '{"_idx"}'::text[]) ||
 jsonb_build_object(
 'created_at', created_at,
@@ -2621,7 +3165,7 @@ WHERE A.tag = 'invoice');
 INSERT INTO jsql_catalog.series
   (_idx, created_at, format, tag, updated_at, value)
 VALUES
-  ('1791823889905', '2026-10-12 11:51:29', 'FAC-%05d', 'invoice', '2026-10-12 11:51:29', 10)
+  ('1793213764586', '2026-10-28 13:56:04', 'FAC-%05d', 'invoice', '2026-10-28 13:56:04', 10)
 RETURNING created_at, updated_at, tag, format, value;
 
 -- QUERY
@@ -2651,9 +3195,9 @@ LIMIT 1000;
 -- UPDATE
 UPDATE jsql_catalog.series
 SET
-  created_at = '2026-10-12 11:51:29',
+  created_at = '2026-10-28 13:56:04',
   format = 'FAC-%05d',
-  updated_at = '2026-10-12 11:51:29',
+  updated_at = '2026-10-28 13:56:04',
   value = 11
 WHERE tag = 'invoice'
 RETURNING created_at, updated_at, tag, format, value;
@@ -2677,9 +3221,9 @@ LIMIT 1000;
 -- UPDATE
 UPDATE jsql_catalog.series
 SET
-  created_at = '2026-10-12 11:51:29',
+  created_at = '2026-10-28 13:56:04',
   format = 'FAC-%05d',
-  updated_at = '2026-10-12 11:51:29',
+  updated_at = '2026-10-28 13:56:04',
   value = 12
 WHERE tag = 'invoice'
 RETURNING created_at, updated_at, tag, format, value;

@@ -1,15 +1,15 @@
 # ARCHITECTURE_SUMMARY.md
 
-> Arquitectura de `github.com/cgalvisleon/et`, verificada contra el código el 2026-10-11. La API exacta está en `COMPONENT_CATALOG.md` (generado desde `go doc`); las reglas para asistentes de IA, en `AI_USAGE_GUIDE.md`.
+> Arquitectura de `github.com/cgalvisleon/et`, verificada contra el código el 2026-10-27. La API exacta está en `COMPONENT_CATALOG.md` (generado desde `go doc`); las reglas para asistentes de IA, en `AI_USAGE_GUIDE.md`.
 
 ## 1. Capas
 
 `et` es un conjunto de paquetes independientes. Ninguno es punto de entrada; cada servicio importa solo lo que usa.
 
 ```
-Aplicación     router · server · ettp/v2 · ettp/v1 · jrpc · jtcp · jws
+Aplicación     router · server · ettp/v2 · ettp/v1 · jrpc · tcp · websocket
 Orquestación   jwf · jia · ia · crontab · resilience · queue · service
-Persistencia   jsql (+ drivers) · stores · cache · dt · mem · ephemeral · graph
+Persistencia   jsql (+ drivers) · store · stores · cache · dt · mem · ephemeral · graph
 Mensajería     event (NATS) · aws · brevo · infobip · jwsp
 Base           et · envar · logs · stdrout · reg · strs · utility · timezone · validator · msg
 ```
@@ -56,7 +56,11 @@ Cada paquete de orquestación define su propia interfaz `Store` y el llamador la
 
 Cada driver vive en `jsql/drivers/<nombre>` y se registra en `init()` con `jsql.Register`. Se importan por efecto lateral. La interfaz `jsql.Driver` es `UseSchema`, `CreateDB`, `DropDB`, `Connect`, `ExistModel`, `Load` (DDL), `Drop`, `Query` y `Command`; los dos últimos solo devuelven SQL. La interfaz opcional `jsql.Tester` prueba una conexión sin crear la base.
 
-Un cambio en la generación de SQL casi siempre se repite en los cinco drivers (`postgres`, `sqlite`, `mysql`, `mssql`, `oracle`).
+Un cambio en la generación de SQL casi siempre se repite en los cinco drivers (`postgres`, `sqlite`, `mysql`, `mssql`, `oracle`); `josefina` hereda el de postgres.
+
+### 3.3.1 Condiciones (`et`)
+
+Una sola evaluación (`evaluate` en `et/evaluate.go`) sirve a `EvaluateObject`, `EvaluateValue` y `Wheres`, con la precedencia de SQL. Los drivers traducen las mismas condiciones, y `TestMemoryMatchesSql` (`jsql/drivers/test`) comprueba que memoria y SQL dan las mismas filas. Reglas en `et/spec.md`.
 
 ### 3.4 Builders fluidos
 
@@ -85,16 +89,17 @@ Las rutas se guardan en Redis y se propagan entre réplicas por NATS (`EVENT_SET
 4. Si un paso falla y el flujo tiene intentos, reintenta con `resilience`; después sigue la conexión de error.
 5. Un paso puede ser Go (`fnStep`) o JavaScript (`RunCode` con goja). En JavaScript, `params` y `ctx` son objetos dinámicos de goja (`jwf.Binder` + `NewDynamicObject`, `jsonObject`) y `console.*` (`consoleOf`) escribe en el log y emite cada línea a `Instance.OnLog` / `Step.OnLog`.
 
-## 6. Problemas conocidos (verificados 2026-10-11)
+## 6. Problemas conocidos (verificados 2026-10-27)
 
 | Componente | Problema |
 | --- | --- |
 | `jia/ia.go:90` | `Load` llama `store.Get(id, packageName, …)` con los argumentos invertidos. |
 | `validator` | `Min`/`Max` solo se aplican si son > 0 y `Pattern` se compila en cada validación (2026-10-11). |
 | `jwsp` `SendReplyVideoMessageByURL` | Asigna `url` a `MessageID`. |
-
-Resuelto el 2026-10-27: el contador del límite de peticiones de `router` podía quedar sin TTL y dejar una ruta en 429 para siempre; `cache.IncrCtx` repone el vencimiento en un script atómico y la clave lleva el prefijo `ratelimit:`.
 | `cmds.Step.RunSSH` | Ejecuta el comando localmente, igual que `RunOS`. |
 | `utility.More` | Reinicia el contador del tag a 0 en cada llamada. |
 | `dt` con `PRODUCTION=false` | El objeto no se persiste: vive solo en memoria. |
 | `validator.Pattern` | Una regex inválida entra en pánico al validar (`regexp.MustCompile`); `ByJson` la rechaza con error. |
+| `et` en memoria | `neg`, `not_in` e `is_not` con un valor nil dan `true` (en SQL, `NULL <> x` no es verdadero). |
+
+Resuelto el 2026-10-27: el contador del límite de peticiones de `router` podía quedar sin TTL y dejar una ruta en 429 para siempre; `cache.IncrCtx` repone el vencimiento en un script atómico y la clave lleva el prefijo `ratelimit:`.

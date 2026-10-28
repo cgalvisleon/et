@@ -36,7 +36,7 @@ cd jsql/drivers/test && go test -v -run 'TestInsertUpdate/sqlite' .
 
 ## Code style
 
-GoDoc for every function, in English: starts with the function name + brief description, one line for params, one for returns. **But** most existing files (`et/json.go`, `jwf/`, `resilience/`, `stores/`) use a `/** ... @param ... @return ... **/` block style — match whatever the surrounding file uses.
+Code must be understandable, maintainable and scalable by a human: clear names, short functions, one place per rule. GoDoc for every function, in English and **brief**: the function name + one or two lines on what it does (and why, when not obvious), one line for params, one for returns; no narration of the code or of the fix history (that goes in the spec). **But** most existing files (`et/json.go`, `jwf/`, `resilience/`, `stores/`) use a `/** ... @param ... @return ... **/` block style — match whatever the surrounding file uses.
 
 ## Architecture
 

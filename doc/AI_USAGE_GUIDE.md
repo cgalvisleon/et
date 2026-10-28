@@ -1,6 +1,6 @@
 # AI_USAGE_GUIDE.md
 
-> Guía de bolsillo para asistentes de IA que escriben código sobre `github.com/cgalvisleon/et`. Verificada contra el código el 2026-10-11. Firmas exactas en `COMPONENT_CATALOG.md`; arquitectura en `ARCHITECTURE_SUMMARY.md`; contexto general en `LIBRARY_CONTEXT.md`.
+> Guía de bolsillo para asistentes de IA que escriben código sobre `github.com/cgalvisleon/et`. Verificada contra el código el 2026-10-27. Firmas exactas en `COMPONENT_CATALOG.md`; arquitectura en `ARCHITECTURE_SUMMARY.md`; contexto general en `LIBRARY_CONTEXT.md`.
 
 ## 1. Orden de decisión
 
@@ -18,6 +18,9 @@ Si terminas en 4 o 5, dilo en la respuesta: «No usé `et` para X porque Y».
 | --- | --- | --- |
 | Datos JSON dinámicos | `et` | `et.Json{}`, `.Str(keys...)`, `.ValStr(def, keys...)` |
 | Resultado paginado | `et` | `et.List` |
+| Filtrar en memoria | `et` | `et.EvaluateObject(obj, conds)`, `et.From(items).Where(...).All()` (mismas reglas que SQL) |
+| Comparar con un patrón LIKE | `et` | `et.MatchLike(value, pattern)` |
+| Copiar un `Json` con lo anidado | `et` | `data.DeepClone()` (`Clone` es superficial) |
 | Conectar a una base | `jsql` | `jsql.Load()` + `import _ ".../jsql/drivers/<driver>"` |
 | Probar una conexión sin crear la base | `jsql` | `jsql.TestConnection(ctx, connection, query)` |
 | Definir una tabla | `jsql` | `db.Define(jsql.Define{...})` o `db.DefineModel(schema, name, version, userId)` |
@@ -56,13 +59,14 @@ Si terminas en 4 o 5, dilo en la respuesta: «No usé `et` para X porque Y».
 - **`jwf.New(id)`** recibe solo el id. No hay `jwf.Load`, `jwf.Store` ni `DefineStore`: persiste con `OnChange`. El método es `NewFlow` (ya no `NewFloW`) y recibe `ownerId`.
 - **`resilience.New()`** no recibe store.
 - **`router.Api.Public/Session/Protected`** reciben `group` primero: `(group, method, path, name, handler)`.
-- **`jsql` acepta cinco drivers**: `postgres`, `sqlite`, `mysql`, `mssql`, `oracle`. Hay que importar el driver por efecto lateral.
+- **`jsql` acepta seis drivers**: `postgres`, `sqlite`, `mysql`, `mssql`, `oracle` y `josefina` (no crea ni elimina bases). Hay que importar el driver por efecto lateral.
+- **Condiciones**: `AND` liga más que `OR` (en memoria y en SQL); una condición sin conector después de la primera es `AND`; `like` usa `%`/`_` sin distinguir mayúsculas; `between` acepta `[min, max]` o `{min, max}`. En memoria, `neg`/`not_in`/`is_not` con nil dan `true` (en SQL no).
 - **Tablas sin esquema**: en sqlite, mysql y oracle la tabla se llama `schema_nombre`. El SQL crudo debe usar ese nombre (`main_tasks`).
 - **`router.Publish`/`router.With`** ya no anteponen `Route.PackageName` al `Path`: la ruta debe venir completa.
 - **`jsql` exige esquema** (`MSG_SCHEMA_REQUIRED`); en sqlite las tablas son `schema_nombre` desde v1.0.36.
 - **`jsql.LoadTo(dbName, hostName...)`**, no `LoadTo(name)` a secas.
 - **`jsql.Define`** es el struct de definición (no `jsql.Def`).
-- **No existen** `jval/`, `config/`, `jsql.Store`, `stores.Catalog`, `ws/`, `wsp/`, `tcp/`, `workflow/`, `instances/`.
+- **No existen** `jval/`, `config/`, `jsql.Store`, `stores.Catalog`, `ws/`, `wsp/`, `jtcp/`, `jws/`, `jrex/`, `jcli/`, `workflow/`, `instances/`.
 - **`stores.Instance.Get(id, dest)`** tiene una sola clave: no cumple los `Store` de `crontab` ni `jia`.
 - **`jia.Load`** tiene los argumentos de `store.Get` invertidos (`jia/ia.go:90`).
 - **`dt` con `PRODUCTION=false`** no persiste nada.
@@ -83,3 +87,4 @@ Si terminas en 4 o 5, dilo en la respuesta: «No usé `et` para X porque Y».
 6. Los mensajes de error van en un `msg.go` local.
 7. En desarrollo, `.Debug()` registra el SQL y `.Test()` lo genera sin ejecutarlo.
 8. Si una firma de este documento no compila, confía en el código (`go doc`) y corrige el documento.
+9. El código debe poder entenderlo, mantenerlo y extenderlo un humano; los comentarios son resumidos (una o dos líneas, sin narrar el código).

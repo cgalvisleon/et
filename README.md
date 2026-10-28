@@ -33,8 +33,16 @@ Infrastructure packages (`cache`, `event`, `jsql`) read their configuration from
 - `jsql` models require a schema. On SQLite, MySQL and Oracle the table is `schema_name` (before, SQLite used the bare name), so existing SQLite databases need their tables renamed.
 - `cache.Get*` return `(value, exists, error)`; `cache.ErrNotFound` is gone.
 - `jwf.New(id)` takes only the id; flows are persisted through `OnChange`.
-- jsql scripts (goja): `where` of a model, query or command takes a JSON condition or a list (`[{status: {eq: "active"}}, {and: {age: {more: 18}}}]`); `and`/`or` are gone. A single object must be wrapped in `where` (`{where: {status: {eq: "active"}}}`) — a bare `{status: {…}}` is ignored for now (`jsql/spec.md` B14).
+- jsql scripts (goja): `where` of a model, query or command takes a JSON condition or a list (`[{status: {eq: "active"}}, {and: {age: {more: 18}}}]`); `and`/`or` are gone. A bare object (`{status: {eq: "active"}}`) or one wrapped in `where` both work.
 - `router.Api.Public` / `Session` / `Protected` take `group` first.
+
+## Changes after v1.0.43
+
+- Conditions evaluate in memory as in SQL: `AND` binds tighter than `OR`, and a condition without connector after the first one is an `AND` (before, it was ignored in memory). Review in-memory filters that relied on left-to-right order.
+- `like` in memory takes `%` and `_` and ignores case; `*` still works as `%`.
+- `et.Wheres.AdddResult` is deprecated: use `AddResult`.
+- The `router` rate limit keys are `ratelimit:<METHOD>:<path>`; old keys without TTL can be deleted by hand.
+- `jsql` has a sixth driver, `josefina`, that connects to Josefina's Postgres protocol.
 
 ## Packages
 
@@ -176,7 +184,7 @@ items, _ := db.Query(et.Json{
 })
 ```
 
-Drivers: `postgres`, `sqlite` (no CGO), `oracle` 19c+, `mysql` 8.0+ and `mssql` 2022+. The full behavior is in [`jsql/spec.md`](jsql/spec.md); the public API is gathered in [`jsql/catalog.go`](jsql/catalog.go).
+Drivers: `postgres`, `sqlite` (no CGO), `oracle` 19c+, `mysql` 8.0+, `mssql` 2022+ and `josefina` (Josefina's Postgres protocol; it cannot create or drop databases). The full behavior is in [`jsql/spec.md`](jsql/spec.md); the public API is gathered in [`jsql/catalog.go`](jsql/catalog.go).
 
 ### HTTP API with `router`
 
@@ -386,12 +394,13 @@ Also `cmd/et`, `cmd/daemon`, `cmd/jsql`, `cmd/install`, `cmd/whatcher`, `cmd/res
 ```bash
 gofmt -w .
 go build ./... && go vet ./...
+go test -race ./et/ ./jsql/ ./jwf/   # core, jsql helpers and scripts (no services)
 cd jsql/drivers/test && go test -v   # jsql against every available driver
 go run ./test/storebench -d 10s      # load on store (workers, readers)
 ./version.sh --minor                 # bump the git tag, update the READMEs and push
 ```
 
-The jsql suite skips any engine it cannot reach, so check the `SKIP` lines. `cache`, `aws` and `brevo` tests need live services.
+The jsql suite skips any engine it cannot reach, so check the `SKIP` lines. `cache`, `aws` and `brevo` tests need live services. Each package with a spec (`et/spec.md`, `jsql/spec.md`, `store/spec.md`, `tcp/spec.md`, `websocket/spec.md`) is updated in the same change as its code.
 
 ## Documentation
 

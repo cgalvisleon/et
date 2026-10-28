@@ -33,8 +33,16 @@ Los paquetes de infraestructura (`cache`, `event`, `jsql`) leen su configuració
 - Los modelos de `jsql` exigen un esquema. En SQLite, MySQL y Oracle la tabla se llama `schema_nombre` (antes SQLite usaba el nombre a secas), así que las bases SQLite existentes necesitan renombrar sus tablas.
 - `cache.Get*` devuelven `(valor, existe, error)`; `cache.ErrNotFound` ya no existe.
 - `jwf.New(id)` recibe solo el id; los flujos se persisten mediante `OnChange`.
-- Scripts de jsql (goja): `where` de un modelo, consulta o comando recibe una condición en JSON o una lista (`[{status: {eq: "active"}}, {and: {age: {more: 18}}}]`); ya no hay `and`/`or`. Un objeto solo debe ir dentro de `where` (`{where: {status: {eq: "active"}}}`): por ahora un `{status: {…}}` a secas se ignora (`jsql/spec.md` B14).
+- Scripts de jsql (goja): `where` de un modelo, consulta o comando recibe una condición en JSON o una lista (`[{status: {eq: "active"}}, {and: {age: {more: 18}}}]`); ya no hay `and`/`or`. Sirve un objeto a secas (`{status: {eq: "active"}}`) o dentro de `where`.
 - `router.Api.Public` / `Session` / `Protected` reciben `group` primero.
+
+## Cambios después de v1.0.43
+
+- Las condiciones se evalúan en memoria como en SQL: `AND` liga más que `OR`, y una condición sin conector después de la primera es un `AND` (antes se ignoraba en memoria). Revisa los filtros en memoria que dependían del orden de izquierda a derecha.
+- `like` en memoria acepta `%` y `_` y no distingue mayúsculas; `*` sigue valiendo como `%`.
+- `et.Wheres.AdddResult` queda obsoleto: usa `AddResult`.
+- Las claves del límite de peticiones de `router` son `ratelimit:<MÉTODO>:<ruta>`; las claves viejas sin TTL se pueden borrar a mano.
+- `jsql` tiene un sexto driver, `josefina`, que se conecta al protocolo Postgres de Josefina.
 
 ## Paquetes
 
@@ -176,7 +184,7 @@ items, _ := db.Query(et.Json{
 })
 ```
 
-Drivers: `postgres`, `sqlite` (sin CGO), `oracle` 19c+, `mysql` 8.0+ y `mssql` 2022+. El comportamiento completo está en [`jsql/spec.md`](../jsql/spec.md); la API pública está reunida en [`jsql/catalog.go`](../jsql/catalog.go).
+Drivers: `postgres`, `sqlite` (sin CGO), `oracle` 19c+, `mysql` 8.0+, `mssql` 2022+ y `josefina` (protocolo Postgres de Josefina; no crea ni elimina bases). El comportamiento completo está en [`jsql/spec.md`](../jsql/spec.md); la API pública está reunida en [`jsql/catalog.go`](../jsql/catalog.go).
 
 ### API HTTP con `router`
 
@@ -386,12 +394,13 @@ También `cmd/et`, `cmd/daemon`, `cmd/jsql`, `cmd/install`, `cmd/whatcher`, `cmd
 ```bash
 gofmt -w .
 go build ./... && go vet ./...
+go test -race ./et/ ./jsql/ ./jwf/   # núcleo, helpers de jsql y scripts (sin servicios)
 cd jsql/drivers/test && go test -v   # jsql contra cada driver disponible
 go run ./test/storebench -d 10s      # carga sobre store (escritores, lectores)
 ./version.sh --minor                 # sube el tag de git, actualiza los README y hace push
 ```
 
-La suite de jsql omite cualquier motor al que no pueda conectarse, así que revisa las líneas `SKIP`. Las pruebas de `cache`, `aws` y `brevo` necesitan servicios en vivo.
+La suite de jsql omite cualquier motor al que no pueda conectarse, así que revisa las líneas `SKIP`. Las pruebas de `cache`, `aws` y `brevo` necesitan servicios en vivo. Cada paquete con spec (`et/spec.md`, `jsql/spec.md`, `store/spec.md`, `tcp/spec.md`, `websocket/spec.md`) se actualiza en el mismo cambio que su código.
 
 ## Documentación
 

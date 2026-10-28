@@ -2,7 +2,7 @@
 
 > Contexto para asistentes de IA (Claude Code, Cursor, ChatGPT, Cline, Windsurf) en proyectos que usan **`github.com/cgalvisleon/et`** (Go 1.25, MIT). Cópialo a la raíz del proyecto consumidor.
 >
-> Regenerado desde el código el 2026-10-10; revisado el 2026-10-11. El repo cambia rápido (commits «Backup:»): si una firma no compila, manda `go doc` y `COMPONENT_CATALOG.md`.
+> Regenerado desde el código el 2026-10-10; revisado el 2026-10-27. El repo cambia rápido (commits «Backup:»): si una firma no compila, manda `go doc` y `COMPONENT_CATALOG.md`.
 
 # Executive Summary
 
@@ -23,9 +23,9 @@ Lo consumen `core-studio/api`, `postick/api`, `tick` y otros proyectos del mismo
 # Architecture Overview
 
 ```
-Aplicación     router · server · ettp/v2 · ettp/v1 · jrpc · jtcp · jws
+Aplicación     router · server · ettp/v2 · ettp/v1 · jrpc · tcp · websocket
 Orquestación   jwf · jia · ia · crontab · resilience · queue · service
-Persistencia   jsql (+ drivers) · stores · cache · dt · mem · ephemeral · graph
+Persistencia   jsql (+ drivers) · store · stores · cache · dt · mem · ephemeral · graph
 Mensajería     event (NATS) · aws · brevo · infobip · jwsp
 Base           et · envar · logs · stdrout · reg · strs · utility · timezone · validator · msg
 ```
@@ -36,8 +36,10 @@ Detalle de dependencias y flujos en `ARCHITECTURE_SUMMARY.md`.
 
 | Componente | Para qué |
 | --- | --- |
-| `et` | `Json` con accesores tipados y rutas anidadas; `Item`, `Items`, `List`; condiciones y consultas en memoria. |
-| `jsql` | Modelos, DDL, consultas, comandos con `RETURNING`, triggers Go/JS, relaciones, series. Drivers: postgres, sqlite, mysql, mssql, oracle. |
+| `et` | `Json` con accesores tipados y rutas anidadas; `Item`, `Items`, `List`; condiciones que dan lo mismo en memoria (`EvaluateObject`, `From(...).Where(...)`) que en SQL. Reglas en `et/spec.md`. |
+| `jsql` | Modelos, DDL, consultas, comandos con `RETURNING`, triggers Go/JS, relaciones (en lotes), series. Drivers: postgres, sqlite, mysql, mssql, oracle, josefina. |
+| `store` | Almacén clave/valor append-only (WAL) de un nodo, con replicación por LSN. |
+| `tcp`, `websocket` | Cliente/servidor TCP con hub, y pub/sub por WebSocket. |
 | `stores` | Instancias, ACL, configuración por tenant y estado de formularios sobre `jsql`. |
 | `router` | API HTTP por servicio con catálogo de endpoints y envoltorios `Item`/`Items`/`List`. |
 | `ettp/v2` | API gateway con rutas sincronizadas por NATS. |
@@ -62,6 +64,10 @@ m.Init()
 m.Insert(data).One(); m.Update(data).Where(cond).One(); m.Upsert(data).Where(cond).One(); m.Delete().Where(cond).Exec()
 m.Select(fields...).Where(cond).OrderBy(f, true).Limit(page, rows)
 db.Query(et.Json{...})                                   // consulta o comando en JSON
+
+// Condiciones en memoria (mismas reglas que SQL: AND antes que OR, like con % y _)
+conds, _ := et.ToConditions([]et.Json{{"status": et.Json{"eq": "active"}}, {"or": et.Json{"vip": et.Json{"eq": true}}}})
+ok := et.EvaluateObject(row, conds)
 
 // HTTP
 api := router.NewApi(name, path, host, port, rpc, version)
@@ -95,8 +101,10 @@ q := queue.New[T](size, maxEvents, period, handler)
 - Llamar `cache.Load()`/`event.Load()` en cada request.
 - Pasar `stores.Instance` como `Store` de `crontab`/`jia` (firma distinta).
 - Copiar ejemplos con APIs eliminadas: `jval`, `config`, `jsql.Store`, `jsql.Def`, `jwf.Load`, `jwf.Store`, `NewFloW`, `resilience.New(store)`, `cache.ErrNotFound`.
-- Confiar en `jsql.LoadDb` (hoy entra en pánico) o en `dt` sin `PRODUCTION=true`.
+- Confiar en `dt` sin `PRODUCTION=true` (no persiste) o usar `jsql.LoadDb` sin llamar `Init` después (reconstruye la `DB` sin conectarla).
 - Configurar `DB_TENANT_ID` o `DB_POOL_CONN_LIFETIME`: `jsql` no los lee (las de pool son `DB_POOL_LIFETIME` / `DB_POOL_IDLE_TIME`).
+- Filtrar en memoria contando con el orden de izquierda a derecha: `a OR b AND c` es `a OR (b AND c)`, como en SQL.
+- Usar `*` como comodín de `like`: funciona, pero lo estándar es `%` y `_`.
 
 # Extension Points
 
@@ -121,7 +129,8 @@ q := queue.New[T](size, maxEvents, period, handler)
 
 # Code Generation Guidelines
 
-- GoDoc en inglés; en este repo predomina el estilo `/** ... @param ... @return ... **/`. Imita el archivo vecino.
+- Código entendible, mantenible y escalable por un humano: nombres claros, funciones cortas, cada regla en un solo lugar.
+- GoDoc en inglés y **resumido** (una o dos líneas: qué hace y, si no es obvio, por qué; sin narrar el código ni la historia del arreglo). En este repo predomina el estilo `/** ... @param ... @return ... **/`; imita el archivo vecino.
 - `gofmt -w .` antes de terminar.
 - Nombres de constantes de mensaje `MSG_*` en `msg.go`.
 - Responde `http.StatusCreated` en los POST que crean.
@@ -158,8 +167,12 @@ q := queue.New[T](size, maxEvents, period, handler)
 | `resilience.New(store)` | `resilience.New()` |
 | `cache.Get` → `(valor, error)` + `cache.ErrNotFound` | `(valor, existe, error)` |
 | `api.Public(method, path, name, h)` | `api.Public(group, method, path, name, h)` |
-| `DB_TENANT_ID`, `DB_POOL_CONN_LIFETIME`, `DB_POOL_CONN_IDLE_TIME` | Ya no se leen; pool: `DB_POOL_LIFETIME`, `DB_POOL_IDLE_TIME` (solo sqlite) |
-| `ws/`, `wsp/`, `tcp/`, `workflow/`, `instances/` | `jws/`, `jwsp/`, `jtcp/`, `jwf/` |
+| `DB_TENANT_ID`, `DB_POOL_CONN_LIFETIME`, `DB_POOL_CONN_IDLE_TIME` | Ya no se leen; pool: `DB_POOL_*` en todas las conexiones |
+| `wsp/`, `workflow/`, `instances/` | `jwsp/`, `jwf/` |
+| `jtcp/`, `jws/` | `tcp/`, `websocket/` |
+| `jrex`, `jcli` | `jwf.Run` / `jwf.RunCode` |
+| `like` con `*` | `like` con `%` y `_` (`*` sigue como alias) |
+| `Wheres.AdddResult` | `Wheres.AddResult` |
 
 # Examples
 

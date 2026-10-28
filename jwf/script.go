@@ -26,11 +26,27 @@ type Binder func(vm *goja.Runtime) goja.Value
 * @return any, et.Json, error
 **/
 func Run(code string, bindings map[string]any, reads ...string) (any, et.Json, error) {
-	globals := et.Json{}
 	if code == "" {
-		return et.Json{}, globals, nil
+		return et.Json{}, et.Json{}, nil
 	}
+	return NewRunner(bindings).Run(code, nil, reads...)
+}
 
+/**
+* Runner: A runtime with its bindings set once, to run scripts many times (e.g. once per row) without
+* building a new runtime each time. Globals a script leaves stay for the next run. Not safe for concurrent use.
+**/
+type Runner struct {
+	vm       *goja.Runtime
+	programs map[string]*goja.Program
+}
+
+/**
+* NewRunner: Creates a runtime with the bindings, set as Run sets them.
+* @param bindings map[string]any
+* @return *Runner
+**/
+func NewRunner(bindings map[string]any) *Runner {
 	vm := goja.New()
 	aliasJson(vm)
 	for name, value := range bindings {
@@ -40,14 +56,42 @@ func Run(code string, bindings map[string]any, reads ...string) (any, et.Json, e
 		}
 		vm.Set(name, et.ToJS(vm, value))
 	}
+	return &Runner{vm: vm, programs: map[string]*goja.Program{}}
+}
 
-	result, err := vm.RunString(code)
+/**
+* Run: Sets the values of set as globals (with et.ToJS), runs code (compiled once per Runner) and gives back
+* its last value and the globals named in reads.
+* @param code string, set map[string]any, reads ...string
+* @return any, et.Json, error
+**/
+func (s *Runner) Run(code string, set map[string]any, reads ...string) (any, et.Json, error) {
+	globals := et.Json{}
+	if code == "" {
+		return et.Json{}, globals, nil
+	}
+
+	program, ok := s.programs[code]
+	if !ok {
+		var err error
+		program, err = goja.Compile("", code, false)
+		if err != nil {
+			return et.Json{}, globals, err
+		}
+		s.programs[code] = program
+	}
+
+	for name, value := range set {
+		s.vm.Set(name, et.ToJS(s.vm, value))
+	}
+
+	result, err := s.vm.RunProgram(program)
 	if err != nil {
 		return et.Json{}, globals, err
 	}
 
 	for _, name := range reads {
-		globals[name] = et.FromJS(vm.Get(name))
+		globals[name] = et.FromJS(s.vm.Get(name))
 	}
 
 	return et.FromJS(result), globals, nil

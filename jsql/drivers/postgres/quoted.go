@@ -50,7 +50,7 @@ func Quoted(v et.Value) string {
 	case et.ARRAY_STRING, et.ARRAY_INT, et.ARRAY_FLOAT, et.ARRAY_BOOL, et.ARRAY_DATETIME, et.ARRAY_JSON:
 		return pgQuoteArray(v)
 	case et.VAL_BETWEEN:
-		bv, ok := v.Value.(et.BetweenValue)
+		bv, ok := et.ToBetween(v.Value)
 		if !ok {
 			return "NULL"
 		}

@@ -44,7 +44,7 @@ Cada tabla lista la API pública principal de cada paquete. `go doc github.com/c
 
 | Paquete | API pública | Ejemplo |
 | --- | --- | --- |
-| `et` | `Json` (`Str`, `Int`, `Bool`, `Num`, `Time`, `Json`, `ArrayStr`, `ArrayJson`, `ValStr`, `ValInt`, `Set`, `Put`, `Clear`, `Get`, `Update`, `Clone`, `ToString`, `ToObject`), `ToJS`/`FromJS`/`JsonOf`/`GoArg` (un `Json` en scripts de goja: un objeto sobre el mismo mapa, claves como propiedades y sus métodos con su nombre de Go), `Item`, `Items`, `List`, condiciones (`Eq`, `More`, `In`, `Between`, `ToCondition`, `AddCondition`, `EvaluateObject`, `EvaluateValue`, `Fld` (una referencia a un campo, `{field: "nombre"}` en JSON)), `From(items).Where(...).All()` | `data.ValStr("Cali", "user", "city")` |
+| `et` | `Json` (`Str`, `Int`, `Bool`, `Num`, `Time`, `Json`, `ArrayStr`, `ArrayJson`, `ValStr`, `ValInt`, `Set`, `Put`, `Clear`, `Get`, `Update`, `Clone`, `DeepClone`, `ToString`, `ToObject`), `ToJS`/`FromJS`/`JsonOf`/`GoArg` (un `Json` en scripts de goja: un objeto sobre el mismo mapa, claves como propiedades y sus métodos con su nombre de Go), `Item`, `Items`, `List`, condiciones (`Eq`, `More`, `In`, `Between`, `ToCondition`, `AddCondition`, `EvaluateObject`, `EvaluateValue`, `Fld` (una referencia a un campo, `{field: "nombre"}` en JSON)), `From(items).Where(...).All()` | `data.ValStr("Cali", "user", "city")` |
 | `jsql` | `Load`, `LoadTo`, `ConnectTo`, `CreateDB`, `DropDB`, `TestConnection`; `DB.Define`, `DefineModel`, `Query`, `Sql`; `Model.Insert`, `Update`, `Upsert`, `Delete`, `Bulk`, `Select`, `Where`, `WhereByJson`; `Query.All`, `One`, `Limit`, `Count`; `NewTx`, `DefineSeries` (`GenSerie`, `GenSerieTx`, `GenValue`, `GenValueTx`); `Bind(source, vars)` (variables `{{name}}`); `Wrapper`, `BindWrapper`, `ToJsMapWrapper` (goja) | `users.Where(jsql.Eq("id", id)).One()` |
 | `stores` | `DefineInstance` (`Set`, `Get`, `Delete`, `Query`), `DefineAuthorization` (`SetAuthor`, `Author`, `RemoveAuthor`), `DefineConfig` (`SetConfig`, `Get`), `DefineFormState` | `ok, _ := auth.Author(profileId, "GET", "/users")` |
 | `mem` | `Set`, `Get`, `GetStr`, `GetInt`, `GetJson`, `Delete`, `Exists`, `Keys`, `Clear` | `mem.Set("k", "v", time.Minute)` |
@@ -214,6 +214,19 @@ token, ok, _ := cache.Get("session:u1", "")
 event.Load() // NATS_HOST
 event.Subscribe("user:created", func(m event.Message) { logs.Info(m.ToString()) })
 event.Publish("user:created", et.Json{"id": "u1"})
+```
+
+### Condiciones en memoria y en SQL
+
+**Un where da las mismas filas en memoria que en la base.** `et.EvaluateObject`, `et.EvaluateValue` y `et.From(...).Where(...)` siguen a SQL: `AND` liga más que `OR`, una condición sin conector después de la primera es un `AND`, los enteros se comparan exactos (también IDs más allá de 2^53), `like` acepta `%` y `_` sin distinguir mayúsculas, y `between` acepta `[min, max]` o `{min, max}`. Las reglas están en `et/spec.md`.
+
+```go
+conds, _ := et.ToConditions([]et.Json{
+    {"name": et.Json{"like": "%maria%"}},
+    {"or": et.Json{"vip": et.Json{"eq": true}}},
+    {"and": et.Json{"age": et.Json{"between": []any{18, 65}}}},
+})
+ok := et.EvaluateObject(row, conds) // name LIKE '%maria%' OR (vip AND age BETWEEN 18 AND 65)
 ```
 
 ### Condiciones con referencias a campos

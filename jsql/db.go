@@ -33,6 +33,8 @@ type DB struct {
 	db          *sql.DB                                  `json:"-"`
 	timeout     time.Duration                            `json:"-"`
 	onAuditLog  func(userId string, action string) error `json:"-"`
+	muSchemas   sync.RWMutex                             `json:"-"`
+	muAudit     sync.Mutex                               `json:"-"`
 }
 
 /**
@@ -138,6 +140,7 @@ func (s *DB) setOnAuditLog(fn func(userId string, action string) error) {
 * @param userId string, action string
 **/
 func (s *DB) addAuditLog(userId string, action string) {
+	s.muAudit.Lock()
 	if s.AuditLog == nil {
 		s.AuditLog = &et.SafeData{}
 	}
@@ -149,15 +152,15 @@ func (s *DB) addAuditLog(userId string, action string) {
 		"action":     action,
 	})
 
-	maxAuditLog := envar.GetInt("MAX_AUDIT_LOG", 1000)
-	if s.AuditLog.Len() > maxAuditLog {
-		s.AuditLog.Delete(maxAuditLog)
-	}
+	s.AuditLog.Trim(envar.GetInt("MAX_AUDIT_LOG", 1000))
 
 	s.isChanged = true
+	onAuditLog := s.onAuditLog
+	s.muAudit.Unlock()
 
-	if s.onAuditLog != nil {
-		s.onAuditLog(userId, action)
+	// Outside the lock: the hook may log again.
+	if onAuditLog != nil {
+		onAuditLog(userId, action)
 	}
 }
 
@@ -167,9 +170,12 @@ func (s *DB) addAuditLog(userId string, action string) {
 **/
 func (s *DB) toJson() et.Json {
 	schemas := et.Json{}
-	for name, schema := range s.Schemas {
-		schemas[name] = schema.ToJson()
+	for _, schema := range s.schemaList() {
+		schemas[schema.Name] = schema.ToJson()
 	}
+	s.muAudit.Lock()
+	auditLog := s.AuditLog
+	s.muAudit.Unlock()
 
 	return et.Json{
 		"host":         s.Host,
@@ -178,7 +184,7 @@ func (s *DB) toJson() et.Json {
 		"params":       s.Params,
 		"schemas":      schemas,
 		"record_limit": s.RecordLimit,
-		"audit_log":    s.AuditLog.All(),
+		"audit_log":    auditLog.All(),
 	}
 }
 
@@ -206,7 +212,7 @@ func (s *DB) init() error {
 
 	s.db = db
 
-	for _, schema := range s.Schemas {
+	for _, schema := range s.schemaList() {
 		err := schema.init()
 		if err != nil {
 			return err
@@ -220,17 +226,47 @@ func (s *DB) init() error {
 }
 
 /**
-* getSchema: Returns the named Schema or an error if it does not exist.
+* getSchema: Returns the named Schema, creating it when it does not exist (to define models in it).
 * @param name string
-* @return *Schema, error
+* @return *Schema
 **/
 func (s *DB) getSchema(name string) *Schema {
+	name = utility.Normalize(name)
+	s.muSchemas.Lock()
+	defer s.muSchemas.Unlock()
 	result, ok := s.Schemas[name]
 	if ok {
 		return result
 	}
 
 	return s.newSchema(name)
+}
+
+/**
+* lookupSchema: Returns the named Schema without creating it.
+* @param name string
+* @return *Schema, bool
+**/
+func (s *DB) lookupSchema(name string) (*Schema, bool) {
+	name = utility.Normalize(name)
+	s.muSchemas.RLock()
+	defer s.muSchemas.RUnlock()
+	result, ok := s.Schemas[name]
+	return result, ok
+}
+
+/**
+* schemaList: Returns the schemas of the DB, a copy safe to range over while others are added.
+* @return []*Schema
+**/
+func (s *DB) schemaList() []*Schema {
+	s.muSchemas.RLock()
+	defer s.muSchemas.RUnlock()
+	result := make([]*Schema, 0, len(s.Schemas))
+	for _, schema := range s.Schemas {
+		result = append(result, schema)
+	}
+	return result
 }
 
 /**
@@ -316,7 +352,7 @@ func (s *DB) close() error {
 }
 
 /**
-* newSchema: Constructs a new Schema with initialized fields.
+* newSchema: Constructs a new Schema with initialized fields and adds it to the DB; muSchemas must be held.
 * @param name string
 * @return *Schema
 **/
@@ -339,12 +375,7 @@ func (s *DB) newSchema(name string) *Schema {
 * @return *Model, error
 **/
 func (s *DB) newModel(schema, name string, version int, userId string) *Model {
-	schema = utility.Normalize(schema)
-	sch, ok := s.Schemas[schema]
-	if !ok {
-		sch = s.newSchema(schema)
-	}
-
+	sch := s.getSchema(schema)
 	result := sch.newModel("", name, version, userId)
 	return result
 }
@@ -355,10 +386,9 @@ func (s *DB) newModel(schema, name string, version int, userId string) *Model {
 * @return error
 **/
 func (s *DB) removeModel(schema, name string) error {
-	schema = utility.Normalize(schema)
-	sch, ok := s.Schemas[schema]
+	sch, ok := s.lookupSchema(schema)
 	if !ok {
-		return fmt.Errorf(MSG_SCHEMA_NOT_FOUND, schema)
+		return fmt.Errorf(MSG_SCHEMA_NOT_FOUND, utility.Normalize(schema))
 	}
 
 	model, err := sch.getModel(name)
@@ -400,7 +430,10 @@ func (s *DB) debug() {
 * @return *Model, error
 **/
 func (s *DB) getModel(schema, name string) (*Model, error) {
-	sch := s.getSchema(schema)
+	sch, ok := s.lookupSchema(schema)
+	if !ok {
+		return nil, fmt.Errorf(MSG_MODEL_NOT_FOUND, utility.Normalize(schema)+"."+utility.Normalize(name))
+	}
 	result, err := sch.getModel(name)
 	if err != nil {
 		return nil, err
@@ -577,9 +610,14 @@ func (s *DB) define(define Define) (*Model, error) {
 				return nil, err
 			}
 
-			_, err = detail.DefineRollup(rollup.Name, to, rollup.Keys, rollup.Select, rollup.Operation, where...)
+			defined, err := detail.DefineRollup(rollup.Name, to, rollup.Keys, rollup.Select, rollup.Operation, where...)
 			if err != nil {
 				return nil, err
+			}
+			if len(defined.OrdersBy) == 0 {
+				for _, order := range rollup.OrderBy {
+					defined.OrderBy(order.Name, order.Sorted)
+				}
 			}
 		}
 	}
@@ -607,9 +645,14 @@ func (s *DB) define(define Define) (*Model, error) {
 			return nil, err
 		}
 
-		_, err = result.DefineRollup(rollup.Name, to, rollup.Keys, rollup.Select, rollup.Operation, where...)
+		defined, err := result.DefineRollup(rollup.Name, to, rollup.Keys, rollup.Select, rollup.Operation, where...)
 		if err != nil {
 			return nil, err
+		}
+		if len(defined.OrdersBy) == 0 {
+			for _, order := range rollup.OrderBy {
+				defined.OrderBy(order.Name, order.Sorted)
+			}
 		}
 	}
 
@@ -650,13 +693,27 @@ func (s *Schema) up(db *DB) error {
 }
 
 /**
+* modelList: Returns the models of the schema, a copy safe to range over while others are added.
+* @return []*Model
+**/
+func (s *Schema) modelList() []*Model {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]*Model, 0, len(s.Models))
+	for _, model := range s.Models {
+		result = append(result, model)
+	}
+	return result
+}
+
+/**
 * toJson: Returns the schema metadata as an et.Json map.
 * @return et.Json
 **/
 func (s *Schema) toJson() et.Json {
 	models := et.Json{}
-	for name, model := range s.Models {
-		models[name] = model.ToJson()
+	for _, model := range s.modelList() {
+		models[model.Name] = model.ToJson()
 	}
 
 	return et.Json{
@@ -785,7 +842,7 @@ func (s *Schema) loadModel(def et.Json) (*Model, error) {
 * @return error
 **/
 func (s *Schema) init() error {
-	for _, model := range s.Models {
+	for _, model := range s.modelList() {
 		err := model.Init()
 		if err != nil {
 			return err

@@ -480,6 +480,19 @@ func (s *suite) ddl() {
 		if _, err := users.DefineRollup("orders_over_age", orders, map[string]string{"id": "user_id"}, nil, jsql.RollupCount, jsql.More("amount", et.Fld("age"))); err != nil {
 			return nil, err
 		}
+		if _, err := users.DefineRollup("orders_edge", orders, map[string]string{"id": "user_id"}, nil, jsql.RollupCount, jsql.More("amount", 150), jsql.Or("amount", et.LESS, 60)); err != nil {
+			return nil, err
+		}
+		first, err := users.DefineRollup("first_order", orders, map[string]string{"id": "user_id"}, []string{"id", "amount"}, jsql.RollupObject)
+		if err != nil {
+			return nil, err
+		}
+		first.OrderBy("id", true)
+		biggest, err := users.DefineRollup("biggest_order", orders, map[string]string{"id": "user_id"}, []string{"id"}, jsql.RollupRow)
+		if err != nil {
+			return nil, err
+		}
+		biggest.OrderBy("amount", false)
 		users.DefineCalcFunc("label", func(tx *jsql.Tx, data et.Json) {
 			data["label"] = fmt.Sprintf("%s <%s>", data.Str("name"), data.Str("email"))
 		})
@@ -836,11 +849,25 @@ func (s *suite) relations() {
 		// u1: 100.5 and 200 (age 30), u2: none, u3: 50 (age 45)
 		return items.Result, expect("orders_big, orders_over_age", []any{[]any{1, 2}, []any{0, 0}, []any{0, 1}}, got)
 	})
-	s.run(3, "DefineRollup con where or (rechazado) y round trip JSON", func() (any, error) {
-		_, err := users.DefineRollup("orders_or", s.models["f_orders"], map[string]string{"id": "user_id"}, nil, jsql.RollupCount,
-			jsql.More("amount", 150), jsql.Or("amount", et.LESS, 10))
-		if err == nil {
-			return nil, errors.New("a rollup where with or should fail")
+	s.run(3, "DefineRollup con where or (conserva la llave) y round trip JSON", func() (any, error) {
+		got := []any{}
+		items, err := users.Select("id", "orders_edge").OrderBy("id", true).All()
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range items.Result {
+			got = append(got, row.Int("orders_edge"))
+		}
+		// amount > 150 or amount < 60: u1 has 200, u3 has 50; an OR that dropped the key would give 2 to everyone
+		if err := expect("orders_edge", []any{1, 0, 1}, got); err != nil {
+			return items.Result, err
+		}
+		one, err := users.Select("id", "orders_edge").Where(jsql.Eq("id", "u3")).One()
+		if err != nil {
+			return nil, err
+		}
+		if err := expect("orders_edge u3", 1, one.Result.Int("orders_edge")); err != nil {
+			return one.Result, err
 		}
 		bt, err := json.Marshal(users.Rollups["orders_over_age"])
 		if err != nil {
@@ -850,8 +877,45 @@ func (s *suite) relations() {
 		if err := json.Unmarshal(bt, &back); err != nil {
 			return nil, err
 		}
-		got := back.Where[0].ToJson()
-		return string(bt), expect("where", et.Json{"amount": et.Json{"more": et.Json{"field": "age"}}}, got)
+		return string(bt), expect("where", et.Json{"amount": et.Json{"more": et.Json{"field": "age"}}}, back.Where[0].ToJson())
+	})
+	s.run(3, "Rollups.OrderBy (primer registro de un object)", func() (any, error) {
+		items, err := users.Select("id", "first_order", "biggest_order").Where(jsql.Eq("id", "u1")).Or(jsql.Eq("id", "u2")).OrderBy("id", true).All()
+		if err != nil {
+			return nil, err
+		}
+		got := []any{}
+		for _, row := range items.Result {
+			got = append(got, []any{row.Json("first_order").Str("id"), row["biggest_order"]})
+		}
+		return items.Result, expect("first_order, biggest_order", []any{[]any{"o1", "o2"}, []any{"", nil}}, got)
+	})
+	s.run(3, "Relaciones por lotes = fila por fila", func() (any, error) {
+		// With several rows, details, masters and rollups are resolved with one query per relation
+		// (WHERE fk IN (...)); each row must be the same as when it is read alone (one query per row).
+		check := func(model *jsql.Model, fields ...string) error {
+			all, err := model.Select(fields...).OrderBy("id", true).All()
+			if err != nil {
+				return err
+			}
+			if len(all.Result) < 2 {
+				return fmt.Errorf("%s: want several rows, got %d", model.Name, len(all.Result))
+			}
+			for _, row := range all.Result {
+				one, err := model.Select(fields...).Where(jsql.Eq("id", row["id"])).One()
+				if err != nil {
+					return err
+				}
+				if err := expect(fmt.Sprintf("%s %v", model.Name, row["id"]), one.Result, row); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		if err := check(users, "id", "roles", "main_role", "tp_doc_title", "orders_count", "orders_total", "orders_big", "orders_edge", "first_order", "biggest_order"); err != nil {
+			return nil, err
+		}
+		return nil, check(orders, "id", "items")
 	})
 	s.run(3, "DefineCalcFunc + Model.Calc", func() (any, error) {
 		row, err := users.Calc("label").Where(jsql.Eq("id", "u1")).One()

@@ -149,7 +149,7 @@ func targets() []target {
 				RecordLimit: 1000,
 			},
 			schema:  oraUser,
-			cleanup: oracleDrops(oraUser, "transfers", "subscriptions", "clients", "plans", "budgets"),
+			cleanup: oracleDrops(oraUser, "transfers", "subscriptions", "clients", "plans", "budgets", "evaluates"),
 		},
 		{
 			name: "mysql",

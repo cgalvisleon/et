@@ -261,15 +261,15 @@ func sqliteCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bo
 	case et.NOT_IN:
 		return fmt.Sprintf("%s NOT IN (%s)", fieldExpr, sqliteInValues(cond.Value.Value))
 	case et.BETWEEN:
-		bv, ok := cond.Value.Value.(et.BetweenValue)
+		bv, ok := et.ToBetween(cond.Value.Value)
 		if !ok {
-			return ""
+			return "1 = 0"
 		}
 		return fmt.Sprintf("%s BETWEEN %v AND %v", fieldExpr, jsql.Quoted(bv.Min), jsql.Quoted(bv.Max))
 	case et.NOT_BETWEEN:
-		bv, ok := cond.Value.Value.(et.BetweenValue)
+		bv, ok := et.ToBetween(cond.Value.Value)
 		if !ok {
-			return ""
+			return "1 = 0"
 		}
 		return fmt.Sprintf("%s NOT BETWEEN %v AND %v", fieldExpr, jsql.Quoted(bv.Min), jsql.Quoted(bv.Max))
 	case et.LIKE:

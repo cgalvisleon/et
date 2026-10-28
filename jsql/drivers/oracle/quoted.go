@@ -51,7 +51,7 @@ func Quoted(v et.Value) string {
 	case et.ARRAY_STRING, et.ARRAY_INT, et.ARRAY_FLOAT, et.ARRAY_BOOL, et.ARRAY_DATETIME, et.ARRAY_JSON:
 		return oraQuoteArray(v)
 	case et.VAL_BETWEEN:
-		bv, ok := v.Value.(et.BetweenValue)
+		bv, ok := et.ToBetween(v.Value)
 		if !ok {
 			return "NULL"
 		}
@@ -313,7 +313,7 @@ func oraAggregate(fn et.Function, expr string) string {
 	case et.COUNT:
 		return fmt.Sprintf("COUNT(%s)", expr)
 	case et.SUM:
-		return fmt.Sprintf("SUM(%s)", expr)
+		return fmt.Sprintf("COALESCE(SUM(%s), 0)", expr)
 	case et.AVG:
 		return fmt.Sprintf("AVG(%s)", expr)
 	case et.MIN:

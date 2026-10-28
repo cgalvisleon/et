@@ -10,6 +10,14 @@ type SafeMap struct {
 	Data Json
 }
 
+/**
+* NewSafeMap: A SafeMap ready to use
+* @return *SafeMap
+**/
+func NewSafeMap() *SafeMap {
+	return &SafeMap{Data: Json{}}
+}
+
 func (m *SafeMap) Get(key string) (interface{}, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -22,6 +30,9 @@ func (m *SafeMap) Set(key string, value interface{}) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if m.Data == nil {
+		m.Data = Json{}
+	}
 	m.Data[key] = value
 }
 
@@ -62,11 +73,21 @@ func (s *SafeData) Get(index int) (Json, bool) {
 	return s.Data[index], true
 }
 
-func (s *SafeData) Set(index int, value Json) {
+/**
+* Set: Replaces the item at index; an index out of range is ignored (false)
+* @param index int, value Json
+* @return bool
+**/
+func (s *SafeData) Set(index int, value Json) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if index < 0 || index >= len(s.Data) {
+		return false
+	}
+
 	s.Data[index] = value
+	return true
 }
 
 func (s *SafeData) Add(value Json) {
@@ -85,6 +106,27 @@ func (s *SafeData) Delete(index int) {
 	}
 
 	s.Data = append(s.Data[:index], s.Data[index+1:]...)
+}
+
+/**
+* Trim: Keeps only the last max items (the newest ones, for a log); max <= 0 empties the list
+* @param max int
+* @return int: how many were removed
+**/
+func (s *SafeData) Trim(max int) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if max < 0 {
+		max = 0
+	}
+	removed := len(s.Data) - max
+	if removed <= 0 {
+		return 0
+	}
+
+	s.Data = append(s.Data[:0:0], s.Data[removed:]...)
+	return removed
 }
 
 /**

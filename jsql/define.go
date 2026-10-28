@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/cgalvisleon/et/et"
@@ -55,6 +56,7 @@ type DefRollup struct {
 	Select    []string          `json:"select"`
 	Operation RollupOperation   `json:"operation"`
 	Where     []et.Json         `json:"where"`
+	OrderBy   []DefIndex        `json:"order_by"`
 }
 
 type Define struct {
@@ -130,6 +132,9 @@ func (s *Model) defineOmitUpdate(names ...string) *Model {
 * @return *Column
 **/
 func (s *Model) defineColumn(name string, tpColumn TypeColumn, tpData et.TypeData, deFault any) *Column {
+	// Copy on write: a query reading the columns never sees the slice change under it.
+	s.muDef.Lock()
+	defer s.muDef.Unlock()
 	idx := s.indexColumn(name)
 	if idx != -1 {
 		return s.Columns[idx]
@@ -143,16 +148,27 @@ func (s *Model) defineColumn(name string, tpColumn TypeColumn, tpData et.TypeDat
 		model:      s,
 	}
 
+	pos := len(s.Columns)
 	if s.IdxField != "" {
-		pos := s.indexColumn(s.IdxField)
-		if pos != -1 {
-			s.Columns = append(s.Columns[:pos], append([]*Column{result}, s.Columns[pos:]...)...)
-		} else {
-			s.Columns = append(s.Columns, result)
+		if idx := s.indexColumn(s.IdxField); idx != -1 {
+			pos = idx
 		}
-	} else {
-		s.Columns = append(s.Columns, result)
 	}
+	s.Columns = slices.Insert(slices.Clone(s.Columns), pos, result)
+	return result
+}
+
+/**
+* withEntry: Returns a copy of m with key set to value. Definitions replace the maps of a model instead of
+* writing into them, so a query that is reading them (the drivers read them without locks) never sees a
+* map being written, which would make the runtime fail with "concurrent map read and map write".
+* @param m map[string]V, key string, value V
+* @return map[string]V
+**/
+func withEntry[V any](m map[string]V, key string, value V) map[string]V {
+	result := make(map[string]V, len(m)+1)
+	maps.Copy(result, m)
+	result[key] = value
 	return result
 }
 
@@ -302,12 +318,14 @@ func (s *Model) defineAttrib(name string, tp et.TypeData, deFault any) *Column {
 * defineRollup: Defines a new rollup for the model.
 * Selects are required except for RollupCount (counts rows) and RollupObject (whole row).
 * An empty operation defaults to RollupObject. where filters the To model (joined to the keys with AND,
-* so it does not accept OR); a {field: "..."} value is read from the resulting row.
+* also when it has OR: see rollupConditions); a {field: "..."} value is read from the resulting row.
 * @param name string, to *Model, keys map[string]string, selects []string, operation RollupOperation, where []*et.Condition
 * @return (*Rollups, error)
 **/
 func (s *Model) defineRollup(name string, to *Model, keys map[string]string, selects []string, operation RollupOperation, where []*et.Condition) (*Rollups, error) {
+	s.muDef.Lock()
 	result, ok := s.Rollups[name]
+	s.muDef.Unlock()
 	if ok {
 		return result, nil
 	}
@@ -332,14 +350,11 @@ func (s *Model) defineRollup(name string, to *Model, keys map[string]string, sel
 		return nil, errors.New(MSG_SELECTS_REQUIRED)
 	}
 
-	where, err := rollupWhere(where)
-	if err != nil {
-		return nil, err
-	}
-
 	s.defineColumn(name, ROLLUP, et.ANY, nil)
-	result = newRollup(to, keys, selects, operation, where)
-	s.Rollups[name] = result
+	result = newRollup(to, keys, selects, operation, rollupWhere(where))
+	s.muDef.Lock()
+	s.Rollups = withEntry(s.Rollups, name, result)
+	s.muDef.Unlock()
 	return result, nil
 }
 
@@ -349,7 +364,9 @@ func (s *Model) defineRollup(name string, to *Model, keys map[string]string, sel
 * @return (*Model, error)
 **/
 func (s *Model) defineDetail(name string, keys map[string]string, rows int, selects ...string) (*Model, error) {
+	s.muDef.Lock()
 	result, ok := s.Details[name]
+	s.muDef.Unlock()
 	if ok {
 		return result.To.Model, nil
 	}
@@ -369,7 +386,9 @@ func (s *Model) defineDetail(name string, keys map[string]string, rows int, sele
 	s.defineColumn(name, DETAIL, et.ANY, nil)
 	detail := newDetail(to, keys, selects, true, true)
 	detail.Rows = rows
-	s.Details[name] = detail
+	s.muDef.Lock()
+	s.Details = withEntry(s.Details, name, detail)
+	s.muDef.Unlock()
 	return to, nil
 }
 
@@ -379,7 +398,9 @@ func (s *Model) defineDetail(name string, keys map[string]string, rows int, sele
 * @return (*Master, error)
 **/
 func (s *Model) defineMaster(name string, to *Model, keys, toKeys map[string]string, selects []string, rows ...int) (*Model, error) {
+	s.muDef.Lock()
 	result, ok := s.Masters[name]
+	s.muDef.Unlock()
 	if ok {
 		return result.To.Model, nil
 	}
@@ -404,8 +425,17 @@ func (s *Model) defineMaster(name string, to *Model, keys, toKeys map[string]str
 	if len(rows) > 0 {
 		master.Rows = rows[0]
 	}
-	s.Masters[name] = master
-	to.Masters[s.Name] = master
+	s.muDef.Lock()
+	s.Masters = withEntry(s.Masters, name, master)
+	s.muDef.Unlock()
+	if to != s {
+		to.muDef.Lock()
+		defer to.muDef.Unlock()
+	} else {
+		s.muDef.Lock()
+		defer s.muDef.Unlock()
+	}
+	to.Masters = withEntry(to.Masters, s.Name, master)
 	return bridge, nil
 }
 
@@ -416,7 +446,9 @@ func (s *Model) defineMaster(name string, to *Model, keys, toKeys map[string]str
 **/
 func (s *Model) defineCalcFunc(name string, calc CalcFunction) *Model {
 	s.defineColumn(name, CALCFUNC, et.ANY, nil)
-	s.calcs[name] = calc
+	s.muDef.Lock()
+	s.calcs = withEntry(s.calcs, name, calc)
+	s.muDef.Unlock()
 	return s
 }
 
@@ -427,7 +459,9 @@ func (s *Model) defineCalcFunc(name string, calc CalcFunction) *Model {
 **/
 func (s *Model) defineCalc(name, script string) *Model {
 	s.defineColumn(name, CALC, et.ANY, nil)
-	s.calcScripts[name] = script
+	s.muDef.Lock()
+	s.calcScripts = withEntry(s.calcScripts, name, script)
+	s.muDef.Unlock()
 	return s
 }
 

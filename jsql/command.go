@@ -85,46 +85,22 @@ func newCommand(model *Model, tp CommandType) *Command {
 		isDebug:        model.IsDebug,
 	}
 	if map[CommandType]bool{INSERT: true, BULK: true, UPSERT: true}[tp] {
-		for _, fn := range model.beforeInserts {
-			result.beforeInserts = append(result.beforeInserts, fn)
-		}
-		for _, fn := range model.afterInserts {
-			result.afterInserts = append(result.afterInserts, fn)
-		}
-		for _, module := range model.BeforeInserts {
-			result.BeforeInserts = append(result.BeforeInserts, module)
-		}
-		for _, module := range model.AfterInserts {
-			result.AfterInserts = append(result.AfterInserts, module)
-		}
+		result.beforeInserts = append(result.beforeInserts, model.beforeInserts...)
+		result.afterInserts = append(result.afterInserts, model.afterInserts...)
+		result.BeforeInserts = append(result.BeforeInserts, model.BeforeInserts...)
+		result.AfterInserts = append(result.AfterInserts, model.AfterInserts...)
 	}
 	if map[CommandType]bool{UPDATE: true, UPSERT: true}[tp] {
-		for _, fn := range model.beforeUpdates {
-			result.beforeUpdates = append(result.beforeUpdates, fn)
-		}
-		for _, fn := range model.afterUpdates {
-			result.afterUpdates = append(result.afterUpdates, fn)
-		}
-		for _, module := range model.BeforeUpdates {
-			result.BeforeUpdates = append(result.BeforeUpdates, module)
-		}
-		for _, module := range model.AfterUpdates {
-			result.AfterUpdates = append(result.AfterUpdates, module)
-		}
+		result.beforeUpdates = append(result.beforeUpdates, model.beforeUpdates...)
+		result.afterUpdates = append(result.afterUpdates, model.afterUpdates...)
+		result.BeforeUpdates = append(result.BeforeUpdates, model.BeforeUpdates...)
+		result.AfterUpdates = append(result.AfterUpdates, model.AfterUpdates...)
 	}
 	if map[CommandType]bool{DELETE: true}[tp] {
-		for _, fn := range model.beforeDeletes {
-			result.beforeDeletes = append(result.beforeDeletes, fn)
-		}
-		for _, fn := range model.afterDeletes {
-			result.afterDeletes = append(result.afterDeletes, fn)
-		}
-		for _, module := range model.BeforeDeletes {
-			result.BeforeDeletes = append(result.BeforeDeletes, module)
-		}
-		for _, module := range model.AfterDeletes {
-			result.AfterDeletes = append(result.AfterDeletes, module)
-		}
+		result.beforeDeletes = append(result.beforeDeletes, model.beforeDeletes...)
+		result.afterDeletes = append(result.afterDeletes, model.afterDeletes...)
+		result.BeforeDeletes = append(result.BeforeDeletes, model.BeforeDeletes...)
+		result.AfterDeletes = append(result.AfterDeletes, model.AfterDeletes...)
 	}
 	return result
 }

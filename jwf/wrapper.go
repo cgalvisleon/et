@@ -238,10 +238,7 @@ func wrapperCache(bindings map[string]interface{}) map[string]interface{} {
 		},
 		"delete": func(key string) bool {
 			_, err := cache.Delete(key)
-			if err != nil {
-				return false
-			}
-			return true
+			return err == nil
 		},
 	}
 	return bindings

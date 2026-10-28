@@ -15,7 +15,6 @@ import (
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
-	"github.com/cgalvisleon/et/strs"
 	"github.com/cgalvisleon/et/timezone"
 )
 
@@ -44,6 +43,8 @@ var placeholder = regexp.MustCompile(`\$\d+`)
 
 /**
 * quoted: Returns val formatted as a SQL literal (quoted string, bare number, NULL, etc.).
+* Pointers are dereferenced (nil is NULL); lists and any other value go as their JSON text in a quoted
+* literal, never as Go's %v of the value (which is not SQL).
 * @param val any
 * @return any
 **/
@@ -52,45 +53,30 @@ func quoted(val any) any {
 	switch v := val.(type) {
 	case string:
 		return fmt.Sprintf(format, EscapeSQLString(v))
-	case int:
-		return v
-	case float64:
-		return v
-	case float32:
-		return v
-	case int16:
-		return v
-	case int32:
-		return v
-	case int64:
-		return v
-	case bool:
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, bool:
 		return v
 	case time.Time:
 		return fmt.Sprintf(format, v.Format("2006-01-02 15:04:05"))
-	case et.Json, map[string]interface{}:
-		str, err := JsonString(v)
-		if err != nil {
-			logs.Errorf("Quote, type:%v, value:%v, error marshalling json: %v", reflect.TypeOf(v), v, err)
-			return fmt.Sprintf(format, `{}`)
-		}
-		return fmt.Sprintf(format, EscapeSQLString(str))
-	case []string, []et.Json, []interface{}, []map[string]interface{}:
-		str, err := JsonString(v)
-		if err != nil {
-			logs.Errorf("Quote, type:%v, value:%v, error marshalling array: %v", reflect.TypeOf(v), v, err)
-			return strs.Format(format, `[]`)
-		}
-		return fmt.Sprintf(format, EscapeSQLString(str))
 	case []uint8:
-		b := []byte(val.([]uint8))
-		return fmt.Sprintf("'\\x%s'", hex.EncodeToString(b))
+		return fmt.Sprintf("'\\x%s'", hex.EncodeToString(v))
 	case nil:
-		return fmt.Sprintf(`%s`, "NULL")
-	default:
-		logs.Errorf("Quote, type:%v, value:%v", reflect.TypeOf(v), v)
-		return val
+		return "NULL"
 	}
+
+	rv := reflect.ValueOf(val)
+	if rv.Kind() == reflect.Pointer {
+		if rv.IsNil() {
+			return "NULL"
+		}
+		return quoted(rv.Elem().Interface())
+	}
+
+	str, err := JsonString(val)
+	if err != nil {
+		logs.Errorf("Quote, type:%v, value:%v, error marshalling: %v", reflect.TypeOf(val), val, err)
+		return "NULL"
+	}
+	return fmt.Sprintf(format, EscapeSQLString(str))
 }
 
 /**

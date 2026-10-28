@@ -6,6 +6,369 @@ import (
 	"time"
 )
 
+type Item struct {
+	Ok     bool `json:"ok"`
+	Result Json `json:"result"`
+}
+
+/**
+* NewItem
+* @param data Json
+* @return Item
+**/
+func NewItem(data Json) Item {
+	return Item{
+		Ok:     true,
+		Result: data,
+	}
+}
+
+/**
+* ToObject convert a json to a object
+* @return []byte, error
+**/
+func (s Item) ToObject(dest any) error {
+	return s.Result.ToObject(dest)
+}
+
+/**
+* ToByte convert a json to a []byte
+* @return []byte, error
+**/
+func (s Item) ToByte() ([]byte, error) {
+	return json.Marshal(s)
+}
+
+/**
+* ToJson convert a json to a Json
+* @return Json
+**/
+func (s Item) ToJson() Json {
+	bt, err := s.ToByte()
+	if err != nil {
+		return Json{}
+	}
+
+	var result Json
+	err = decodeJSON(bt, &result)
+	if err != nil {
+		return Json{}
+	}
+	return result
+}
+
+/**
+* ToString convert a json to a string
+* @return string
+**/
+func (s Item) ToString() string {
+	return s.ToJson().ToString()
+}
+
+/**
+* IsEmpty return true if the json is empty
+* @return bool
+**/
+func (s *Item) IsEmpty() bool {
+	return s.Result.IsEmpty()
+}
+
+/**
+* ToMap convert a json to a map
+* @return map[string]interface{}
+**/
+func (s Item) ToMap() map[string]interface{} {
+	result := make(map[string]interface{})
+	result["ok"] = s.Ok
+	result["result"] = s.Result.ToMap()
+
+	return result
+}
+
+/**
+* ValAny return any value of the key
+* @param def interface{}, atribs ...string
+* @return interface{}
+**/
+func (s *Item) ValAny(def interface{}, atribs ...string) interface{} {
+	return s.Result.ValAny(def, atribs...)
+}
+
+/**
+* ValStr return string value of the key
+* @param def string, atribs ...string
+* @return string
+**/
+func (s *Item) ValStr(def string, atribs ...string) string {
+	return s.Result.ValStr(def, atribs...)
+}
+
+/**
+* ValInt return int value of the key
+* @param def int, atribs ...string
+* @return int
+**/
+func (s *Item) ValInt(def int, atribs ...string) int {
+	return s.Result.ValInt(def, atribs...)
+}
+
+/**
+* ValInt64 return int64 value of the key
+* @param def int64, atribs ...string
+* @return int64
+**/
+func (s Item) ValInt64(def int64, atribs ...string) int64 {
+	return s.Result.ValInt64(def, atribs...)
+}
+
+/**
+* ValNum return float64 value of the key
+* @param def float64, atribs ...string
+* @return float64
+**/
+func (s *Item) ValNum(def float64, atribs ...string) float64 {
+	return s.Result.ValNum(def, atribs...)
+}
+
+/**
+* ValBool return bool value of the key
+* @param def bool, atribs ...string
+* @return bool
+**/
+func (s *Item) ValBool(def bool, atribs ...string) bool {
+	return s.Result.ValBool(def, atribs...)
+}
+
+/**
+* ValTime return time.Time value of the key
+* @param def time.Time, atribs ...string
+* @return time.Time
+**/
+func (s *Item) ValTime(def time.Time, atribs ...string) time.Time {
+	return s.Result.ValTime(def, atribs...)
+}
+
+/**
+* ValJson return Json value of the key
+* @param def Json, atribs ...string
+* @return Json
+**/
+func (s *Item) ValJson(def Json, atribs ...string) Json {
+	return s.Result.ValJson(def, atribs...)
+}
+
+/**
+* ValArray return []interface{} value of the key
+* @param def []interface{}, atribs ...string
+* @return []interface{}
+**/
+func (s Item) ValArray(def []interface{}, atribs ...string) []interface{} {
+	return s.Result.ValArray(def, atribs...)
+}
+
+/**
+* Any return any value of the key
+* @param def interface{}, atribs ...string
+* @return interface{}
+**/
+func (s Item) Any(def interface{}, atribs ...string) interface{} {
+	return s.Result.Any(def, atribs...)
+}
+
+/**
+* Str return the value of the key
+* @param atribs ...string
+* @return string
+**/
+func (s Item) Str(atribs ...string) string {
+	return s.Result.Str(atribs...)
+}
+
+/**
+* String return the value of the key
+* @param atribs ...string
+* @return string
+**/
+func (s Item) String(atribs ...string) string {
+	return s.Result.String(atribs...)
+}
+
+/**
+* ToBase64 return the value of the key
+* @param atribs ...string
+* @return []string
+**/
+func (s Item) ToBase64(atribs ...string) string {
+	return s.Result.ToBase64(atribs...)
+}
+
+/**
+* FromBase64 return the value of the key
+* @param atribs ...string
+* @return []string
+**/
+func (s Item) FromBase64(atribs ...string) string {
+	return s.Result.FromBase64(atribs...)
+}
+
+/**
+* Int return the value of the key
+* @param atribs ...string
+* @return int
+**/
+func (s Item) Int(atribs ...string) int {
+	return s.Result.Int(atribs...)
+}
+
+/**
+* Int64 return the value of the key
+* @param atribs ...string
+* @return int64
+**/
+func (s Item) Int64(atribs ...string) int64 {
+	return s.Result.Int64(atribs...)
+}
+
+/**
+* Num return the value of the key
+* @param atribs ...string
+* @return float64
+**/
+func (s Item) Num(atribs ...string) float64 {
+	return s.Result.Num(atribs...)
+}
+
+/**
+* Bool return the value of the key
+* @param atribs ...string
+* @return bool
+**/
+func (s Item) Bool(atribs ...string) bool {
+	return s.Result.Bool(atribs...)
+}
+
+/**
+* Byte return the value of the key
+* @param atribs ...string
+* @return []byte
+**/
+func (s Item) Byte(atribs ...string) ([]byte, error) {
+	return s.Result.Byte(atribs...)
+}
+
+/**
+* Time return the value of the key
+* @param atribs ...string
+* @return time.Time
+**/
+func (s Item) Time(atribs ...string) time.Time {
+	return s.Result.Time(atribs...)
+}
+
+/**
+* Json return the value of the key
+* @param atrib string
+* @return Json
+**/
+func (s Item) Json(atrib string) Json {
+	return s.Result.Json(atrib)
+}
+
+/**
+* Array return the value of the key
+* @param atrib string
+* @return []Json
+**/
+func (s Item) Array(atrib string) []interface{} {
+	return s.Result.Array(atrib)
+}
+
+/**
+* ArrayStr
+* @param atribs ...string
+* @return []string
+**/
+func (s Item) ArrayStr(atribs ...string) []string {
+	return s.Result.ArrayStr(atribs...)
+}
+
+/**
+* ArrayInt
+* @param atribs ...string
+* @return []int
+**/
+func (s Item) ArrayInt(atribs ...string) []int {
+	return s.Result.ArrayInt(atribs...)
+}
+
+/**
+* ArrayInt64
+* @param atribs ...string
+* @return []int64
+**/
+func (s Item) ArrayInt64(atribs ...string) []int64 {
+	return s.Result.ArrayInt64(atribs...)
+}
+
+/**
+* ArrayJson
+* @param atribs ...string
+* @return []Json
+**/
+func (s Item) ArrayJson(atribs ...string) []Json {
+	return s.Result.ArrayJson(atribs...)
+}
+
+/**
+* Get
+* @param key string
+* @return interface{}
+**/
+func (s Item) Get(key string) interface{} {
+	return s.Result.Get(key)
+}
+
+/**
+* Set a value in the key
+* @param key string
+* @param val interface{}
+* @return bool
+**/
+func (s *Item) Set(key string, val interface{}) {
+	if s.Result == nil {
+		s.Result = Json{}
+	}
+
+	s.Result.Set(key, val)
+}
+
+/**
+* Delete a value in the key
+* @param key string
+* @return bool
+**/
+func (s Item) Delete(keys []string) bool {
+	return s.Result.Delete(keys)
+}
+
+/**
+* Exist return if the key exist
+* @param key string
+* @return bool
+**/
+func (s Item) Exist(key string) bool {
+	return s.Result.Exist(key)
+}
+
+/**
+* From
+* @param as string
+* @return *Where
+**/
+func (s Item) From(as string) *Wheres {
+	return From([]Json{s.Result}, as)
+}
+
 type Items struct {
 	Ok     bool   `json:"ok"`
 	Count  int    `json:"count"`
@@ -63,9 +426,7 @@ func (s *Items) Add(item ...Json) {
 	if s.Result == nil {
 		s.Result = make([]Json, 0)
 	}
-	for _, i := range item {
-		s.Result = append(s.Result, i)
-	}
+	s.Result = append(s.Result, item...)
 	s.Count = len(s.Result)
 	s.Ok = s.Count > 0
 }
@@ -109,7 +470,7 @@ func (s *Items) ToMap() map[string]interface{} {
 * @return any
 **/
 func (s *Items) ValAny(idx int, def any, atribs ...string) interface{} {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return def
 	}
@@ -123,7 +484,7 @@ func (s *Items) ValAny(idx int, def any, atribs ...string) interface{} {
 * @return string
 **/
 func (s *Items) ValStr(idx int, def string, atribs ...string) string {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return def
 	}
@@ -137,7 +498,7 @@ func (s *Items) ValStr(idx int, def string, atribs ...string) string {
 * @return int
 **/
 func (s *Items) ValInt(idx int, def int, atribs ...string) int {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return def
 	}
@@ -151,7 +512,7 @@ func (s *Items) ValInt(idx int, def int, atribs ...string) int {
 * @return int64
 **/
 func (s *Items) ValInt64(idx int, def int64, atribs ...string) int64 {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return def
 	}
@@ -165,7 +526,7 @@ func (s *Items) ValInt64(idx int, def int64, atribs ...string) int64 {
 * @return float64
 **/
 func (s *Items) ValNum(idx int, def float64, atribs ...string) float64 {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return def
 	}
@@ -179,7 +540,7 @@ func (s *Items) ValNum(idx int, def float64, atribs ...string) float64 {
 * @return bool
 **/
 func (s *Items) ValBool(idx int, def bool, atribs ...string) bool {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return def
 	}
@@ -193,7 +554,7 @@ func (s *Items) ValBool(idx int, def bool, atribs ...string) bool {
 * @return time.Time
 **/
 func (s *Items) ValTime(idx int, def time.Time, atribs ...string) time.Time {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return def
 	}
@@ -207,7 +568,7 @@ func (s *Items) ValTime(idx int, def time.Time, atribs ...string) time.Time {
 * @return Json
 **/
 func (s *Items) ValJson(idx int, def Json, atribs ...string) Json {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return def
 	}
@@ -221,11 +582,11 @@ func (s *Items) ValJson(idx int, def Json, atribs ...string) Json {
 * @return []interface{}
 **/
 func (s *Items) ValArray(idx int, def []interface{}, atribs ...string) []interface{} {
-	if s.Result[idx] == nil {
+	if s.at(idx) == nil {
 		return def
 	}
 
-	return s.Result[idx].ValArray(def, atribs...)
+	return s.at(idx).ValArray(def, atribs...)
 }
 
 /**
@@ -234,7 +595,7 @@ func (s *Items) ValArray(idx int, def []interface{}, atribs ...string) []interfa
 * @return interface{}
 **/
 func (s *Items) Any(idx int, def interface{}, atribs ...string) interface{} {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return def
 	}
@@ -248,7 +609,7 @@ func (s *Items) Any(idx int, def interface{}, atribs ...string) interface{} {
 * @return string
 **/
 func (s Items) Str(dx int, atribs ...string) string {
-	item := s.Result[dx]
+	item := s.at(dx)
 	if item == nil {
 		return ""
 	}
@@ -271,7 +632,7 @@ func (s Items) String(idx int, atribs ...string) string {
 * @return int
 **/
 func (s Items) Int(idx int, atribs ...string) int {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return 0
 	}
@@ -285,7 +646,7 @@ func (s Items) Int(idx int, atribs ...string) int {
 * @return int64
 **/
 func (s Items) Int64(idx int, atribs ...string) int64 {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return 0
 	}
@@ -299,7 +660,7 @@ func (s Items) Int64(idx int, atribs ...string) int64 {
 * @return float64
 **/
 func (s Items) Num(idx int, atribs ...string) float64 {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return 0
 	}
@@ -313,7 +674,7 @@ func (s Items) Num(idx int, atribs ...string) float64 {
 * @return bool
 **/
 func (s Items) Bool(idx int, atribs ...string) bool {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return false
 	}
@@ -327,7 +688,7 @@ func (s Items) Bool(idx int, atribs ...string) bool {
 * @return time.Time
 **/
 func (s Items) Time(idx int, atribs ...string) time.Time {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return time.Time{}
 	}
@@ -341,7 +702,7 @@ func (s Items) Time(idx int, atribs ...string) time.Time {
 * @return Json
 **/
 func (s Items) Json(idx int, atrib string) Json {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return Json{}
 	}
@@ -355,7 +716,7 @@ func (s Items) Json(idx int, atrib string) Json {
 * @return []Json
 **/
 func (s Items) Array(idx int, atrib string) []interface{} {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return []interface{}{}
 	}
@@ -369,7 +730,7 @@ func (s Items) Array(idx int, atrib string) []interface{} {
 * @return []string
 **/
 func (s Items) ArrayStr(idx int, atribs ...string) []string {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return []string{}
 	}
@@ -383,7 +744,7 @@ func (s Items) ArrayStr(idx int, atribs ...string) []string {
 * @return []int
 **/
 func (s Items) ArrayInt(idx int, atribs ...string) []int {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return []int{}
 	}
@@ -397,7 +758,7 @@ func (s Items) ArrayInt(idx int, atribs ...string) []int {
 * @return []int64
 **/
 func (s Items) ArrayInt64(idx int, atribs ...string) []int64 {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return []int64{}
 	}
@@ -411,7 +772,7 @@ func (s Items) ArrayInt64(idx int, atribs ...string) []int64 {
 * @return []Json
 **/
 func (s Items) ArrayJson(idx int, atribs ...string) []Json {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return []Json{}
 	}
@@ -425,7 +786,7 @@ func (s Items) ArrayJson(idx int, atribs ...string) []Json {
 * @return interface{}
 **/
 func (s Items) Get(idx int, key string) interface{} {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return nil
 	}
@@ -439,7 +800,7 @@ func (s Items) Get(idx int, key string) interface{} {
 * @return bool
 **/
 func (s *Items) Set(idx int, key string, val interface{}) {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return
 	}
@@ -453,7 +814,7 @@ func (s *Items) Set(idx int, key string, val interface{}) {
 * @return bool
 **/
 func (s *Items) Delete(idx int, keys []string) bool {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return false
 	}
@@ -467,7 +828,7 @@ func (s *Items) Delete(idx int, keys []string) bool {
 * @return bool
 **/
 func (s Items) Exist(idx int, key string) bool {
-	item := s.Result[idx]
+	item := s.at(idx)
 	if item == nil {
 		return false
 	}
@@ -481,7 +842,7 @@ func (s Items) Exist(idx int, key string) bool {
 * @return Item, error
 **/
 func (s Items) One(idx int) (Item, error) {
-	n := s.Count
+	n := len(s.Result)
 	if idx < 0 {
 		idx = n + idx
 	} else if idx > 0 {
@@ -509,6 +870,19 @@ func (s *Items) First() (Item, error) {
 **/
 func (s *Items) Last() (Item, error) {
 	return s.One(-1)
+}
+
+/**
+* at: The item at index idx (0-based) of Result, or nil when it is out of range, so the accessors give their default
+* value instead of a panic
+* @param idx int
+* @return Json
+**/
+func (s Items) at(idx int) Json {
+	if idx < 0 || idx >= len(s.Result) {
+		return nil
+	}
+	return s.Result[idx]
 }
 
 /**
@@ -553,5 +927,71 @@ func (s *Items) ToList(all, page, rows int) List {
 * @return *Where
 **/
 func (s Items) From(as string) *Wheres {
+	return From(s.Result, as)
+}
+
+/* List struct to use in et */
+type List struct {
+	Rows   int    `json:"rows"`
+	All    int    `json:"all"`
+	Count  int    `json:"count"`
+	Page   int    `json:"page"`
+	Start  int    `json:"start"`
+	End    int    `json:"end"`
+	Result []Json `json:"result"`
+}
+
+func (s *List) ToByte() ([]byte, error) {
+	return json.Marshal(s)
+}
+
+/**
+* ToJson
+* @return Json
+**/
+func (s *List) ToJson() Json {
+	bt, err := s.ToByte()
+	if err != nil {
+		return Json{}
+	}
+
+	var result Json
+	err = decodeJSON(bt, &result)
+	if err != nil {
+		return Json{}
+	}
+	return result
+}
+
+/**
+* ToString
+* @return string
+**/
+func (s *List) ToString() string {
+	return s.ToJson().ToString()
+}
+
+/**
+* ToMap
+* @return map[string]interface{}
+**/
+func (s *List) ToMap() map[string]interface{} {
+	return map[string]interface{}{
+		"rows":   s.Rows,
+		"all":    s.All,
+		"count":  s.Count,
+		"page":   s.Page,
+		"start":  s.Start,
+		"end":    s.End,
+		"result": s.Result,
+	}
+}
+
+/**
+* From
+* @param as string
+* @return *Where
+**/
+func (s List) From(as string) *Wheres {
 	return From(s.Result, as)
 }

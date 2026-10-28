@@ -4,7 +4,7 @@
 >
 > Se omiten `cmd/` y `create/`.
 
-Generado: 2026-10-10; revisado contra `go doc` el 2026-10-11 (sin diferencias en las firmas).
+Generado: 2026-10-10; revisado contra `go doc` el 2026-10-11 (sin diferencias en las firmas); secciones `jsql` y `jwf` regeneradas el 2026-10-27.
 
 ## `aws`
 
@@ -353,10 +353,18 @@ Funciones y métodos:
 
 ```go
 func EvaluateObject(obj Json, conditions []*Condition) bool
+func EvaluateObjectWrapper() func(obj Json, where []Json) (bool, error)
 func EvaluateValue(value any, conditions []*Condition) bool
+func EvaluateValueWrapper() func(value any, where []Json, obj ...Json) (bool, error)
+func FieldWrapper() map[string]any
+func FromJS(value goja.Value) any
+func GoArg(vm *goja.Runtime, arg goja.Value, tp reflect.Type) reflect.Value
 func IsTypeValue(v string) bool
+func JsonPrototype(vm *goja.Runtime) *goja.Object
+func MatchLike(value, pattern string) bool
 func Serialize(src any) ([]byte, error)
 func Time(val any) *time.Time
+func ToJS(vm *goja.Runtime, value any) goja.Value
 func ToString(vals interface{}) string
 func Avg(value any) Aggregate
 func Day(value any) Aggregate
@@ -372,6 +380,8 @@ func Second(value any) Aggregate
 func Sum(value any) Aggregate
 func ToAggregate(s string) (Aggregate, bool)
 func Year(value any) Aggregate
+func ToBetween(v any) (BetweenValue, bool)
+func AddCondition(conditions []*Condition, cond *Condition) []*Condition
 func And(field interface{}, operator Operator, value interface{}) *Condition
 func Between(field string, min, max any) *Condition
 func Eq(field, value interface{}) *Condition
@@ -400,7 +410,10 @@ func (s *Condition) Or() *Condition
 func (s *Condition) ToJson() Json
 func ToConnector(s string) Connector
 func (s Connector) Str() string
+func Fld(name string) Field
 func ToField(s string) (Field, bool)
+func (s Field) Str() string
+func (s Field) ValueOf(obj Json) any
 func ToFunction(s string) Function
 func (s Function) Str() string
 func NewItem(data Json) Item
@@ -482,10 +495,12 @@ func (s *Items) ValStr(idx int, def string, atribs ...string) string
 func (s *Items) ValTime(idx int, def time.Time, atribs ...string) time.Time
 func Joingy(left, right Iterator, keys map[string]string, joinType JoinType) Iterator
 func (j JoinType) String() string
+func JsonOf(value goja.Value) (Json, bool)
 func MergeToKeyValue(left []Json, key string, value any) []Json
 func MergeToMap(left, right []Json) []Json
 func Prefixer(item Json, as string) Json
 func ToJson(src string) (Json, error)
+func ToWhere(cond any) []Json
 func (s Json) Any(def interface{}, atribs ...string) interface{}
 func (s Json) Append(from Json) Json
 func (s Json) Array(atrib ...string) []interface{}
@@ -497,8 +512,10 @@ func (s Json) ArrayNumber(atribs ...string) []float64
 func (s Json) ArrayStr(atribs ...string) []string
 func (s Json) Bool(atribs ...string) bool
 func (s Json) Byte(atribs ...string) ([]byte, error)
+func (s Json) Clear() Json
 func (s Json) Clone() Json
 func (s Json) Compare(from Json) Json
+func (s Json) DeepClone() Json
 func (s Json) Delete(keys []string) bool
 func (s Json) Exist(key string) bool
 func (s Json) From(as string) *Wheres
@@ -518,6 +535,7 @@ func (s Json) MapFloat(atrib string) map[string]float64
 func (s Json) MapInt(atrib string) map[string]int
 func (s Json) MapStr(atrib string) map[string]string
 func (s Json) Num(atribs ...string) float64
+func (s Json) Put(val Json) Json
 func (s Json) Query(condition *Condition) bool
 func (s Json) Remove(keys ...string)
 func (s *Json) Scan(src interface{}) error
@@ -556,10 +574,15 @@ func ToOperator(s string) Operator
 func (s Operator) Str() string
 func NewSafeData() *SafeData
 func (s *SafeData) Add(value Json)
+func (s *SafeData) All() []Json
 func (s *SafeData) Delete(index int)
 func (s *SafeData) Get(index int) (Json, bool)
 func (s *SafeData) Len() int
-func (s *SafeData) Set(index int, value Json)
+func (s *SafeData) MarshalJSON() ([]byte, error)
+func (s *SafeData) Set(index int, value Json) bool
+func (s *SafeData) Trim(max int) int
+func (s *SafeData) UnmarshalJSON(data []byte) error
+func NewSafeMap() *SafeMap
 func (m *SafeMap) Delete(key string)
 func (m *SafeMap) Get(key string) (interface{}, bool)
 func (m *SafeMap) Set(key string, value interface{})
@@ -575,11 +598,12 @@ func (v Value) Is(tpData string) bool
 func (v Value) Raw() any
 func (v Value) String() string
 func ToWheRes(params []Json) (WheRes, error)
-func (s WheRes) Add(condition *Condition)
+func (s *WheRes) Add(condition *Condition)
 func (s WheRes) Len() int
 func (s WheRes) ToJson() []Json
 func From(items []Json, as ...string) *Wheres
 func (s *Wheres) Add(condition *Condition) *Wheres
+func (s *Wheres) AddResult(item Json) (next bool)
 func (s *Wheres) AdddResult(item Json) (next bool)
 func (s *Wheres) All() []Json
 func (s *Wheres) And(condition *Condition) *Wheres
@@ -1020,6 +1044,8 @@ func And(field interface{}, operator et.Operator, value interface{}) *et.Conditi
 func ArgWhitAs(arg string) ([]string, bool)
 func ArgWhitSchema(arg string) ([]string, bool)
 func Between(field string, min, max any) *et.Condition
+func Bind(source, vars et.Json) et.Json
+func BindWrapper() func(source any, vars et.Json) any
 func CreateDB(connection *ConnectParams, timeout ...time.Duration) error
 func DetailKeys(key, foreignKey string) map[string]string
 func DropDB(db *DB, timeout ...time.Duration) error
@@ -1050,6 +1076,7 @@ func StatusList() []interface{}
 func TestConnection(ctx context.Context, connection Connection, query string) error
 func TimeoutContext(timeout ...time.Duration) (context.Context, context.CancelFunc)
 func ToArrayAny(statuses []string) []interface{}
+func ToJsMapWrapper() func(source et.Json) map[string]any
 func Where(field, value interface{}) *et.Condition
 func Wrapper(db *DB) map[string]any
 func (s *Column) ToJson() et.Json
@@ -1073,6 +1100,7 @@ func (s *Command) Return(fields ...string) *Command
 func (s *Command) Test() *Command
 func (s *Command) ToJson() et.Json
 func (s *Command) Where(cond *et.Condition) *Command
+func (s *Command) WhereByJson(cond []et.Json) *Command
 func ConnectionFromJson(driver, host string, params et.Json) (Connection, error)
 func GetConnection(driver, host string) (Connection, error)
 func ConnectTo(params ConnectParams) (*DB, error)
@@ -1098,6 +1126,7 @@ func (s *DB) SetDebug(debug bool)
 func (s *DB) Sql(query string, args ...any) (et.Items, error)
 func (s *DB) SqlTx(tx *Tx, query string, arg ...any) (et.Items, error)
 func (s *DB) ToJson() et.Json
+func (s *Define) UnmarshalJSON(data []byte) error
 func (s *Detail) GetQuery(item et.Json, page, rows int) *Query
 func (s *Detail) Ref() et.Json
 func (s *From) Ref() et.Json
@@ -1138,7 +1167,7 @@ func (s *Model) DefineModel() *Model
 func (s *Model) DefineOmitUpdate(names ...string) *Model
 func (s *Model) DefinePrimaryKey(name string, tp et.TypeData, deFault any) *Index
 func (s *Model) DefineRequired(name string, tp et.TypeData, deFault any) *Index
-func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, selects []string, operation RollupOperation) (*Rollups, error)
+func (s *Model) DefineRollup(name string, to *Model, keys map[string]string, selects []string, operation RollupOperation, where ...*et.Condition) (*Rollups, error)
 func (s *Model) DefineSource() *Column
 func (s *Model) DefineUnique(name string, tp et.TypeData, deFault any) *Index
 func (s *Model) Delete() *Command
@@ -1156,7 +1185,6 @@ func (s *Model) Insert(data et.Json) *Command
 func (s *Model) Join(to *Model, as string, on []*et.Condition) *Query
 func (s *Model) Master(name string) (*Query, bool)
 func (s *Model) Query(query et.Json) *Query
-func (s *Model) QueryTx(tx *Tx, query et.Json) *Query
 func (s *Model) Replace(other *Model)
 func (s *Model) Select(fields ...string) *Query
 func (s *Model) SetDb(db *DB)
@@ -1164,9 +1192,11 @@ func (s *Model) SetTable()
 func (s *Model) SqlDB() *sql.DB
 func (s *Model) Stricted()
 func (s *Model) ToJson() et.Json
+func (s *Model) UnmarshalJSON(data []byte) error
 func (s *Model) Update(data et.Json) *Command
 func (s *Model) Upsert(data et.Json) *Command
 func (s *Model) Where(cond *et.Condition) *Query
+func (s *Model) WhereByJson(cond []et.Json) *Query
 func (s *MssqlConection) GetDatabase() string
 func (s *MssqlConection) GetParams() et.Json
 func (s *MssqlConection) ID() string
@@ -1229,17 +1259,26 @@ func (s *Query) StarFields() []string
 func (s *Query) Test() *Query
 func (s *Query) ToJson() et.Json
 func (s *Query) Where(cond *et.Condition) *Query
+func (s *Query) WhereByJson(cond []et.Json) *Query
 func (s *QueryDetail) GetQuery(item et.Json) *Query
 func (s *QueryRollups) GetQuery(item et.Json) (*Query, bool)
+func (s QueryRollups) MarshalJSON() ([]byte, error)
+func (s *QueryRollups) UnmarshalJSON(data []byte) error
 func (s RollupOperation) IsAggregate() bool
 func (s RollupOperation) IsValid() bool
+func (s Rollups) MarshalJSON() ([]byte, error)
+func (s *Rollups) OrderBy(field string, sorted ...bool) *Rollups
+func (s *Rollups) QueryRollups() *QueryRollups
+func (s *Rollups) UnmarshalJSON(data []byte) error
 func (s *Schema) GetModel(name string) (*Model, error)
 func (s *Schema) LoadModel(def et.Json) (*Model, error)
 func (s *Schema) ToJson() et.Json
 func DefineSeries(db *DB, schema string) (*Series, error)
 func (s *Series) DeleteSeries(tag string) error
 func (s *Series) GenSerie(tag string) (string, error)
+func (s *Series) GenSerieTx(tx *Tx, tag string) (string, error)
 func (s *Series) GenValue(tag string) (int, error)
+func (s *Series) GenValueTx(tx *Tx, tag string) (int, error)
 func (s *Series) GetSeries(tag string) (et.Item, error)
 func (s *Series) Model() *Model
 func (s *Series) NewSeries(tag, format string) error
@@ -1458,13 +1497,17 @@ all.result.forEach((user) => console.log(user.name));
 Funciones y métodos:
 
 ```go
+func Bindings(bindings map[string]interface{}) map[string]interface{}
 func GetArgs(args []goja.Value, idx int, defaultValue any) any
+func Run(code string, bindings map[string]any, reads ...string) (any, et.Json, error)
 func RunCode(code string, ctx et.Json, bindings map[string]any) (any, error)
 func RunScripts(scripts []*Script, ctx et.Json, bindings map[string]any) (any, error)
+func GoValue(value any) Binder
 func LoadFlow(def et.Json) (*Flow, error)
 func NewFlow(tag, name, version, ownerId, userId string) *Flow
 func (s *Flow) AddStep(stepDef et.Json, userId string) (*Flow, error)
 func (s *Flow) Error(tag, version, title string, fn fnStep) *Flow
+func (s *Flow) GetStep(stepId string) (*Step, bool)
 func (s *Flow) LoadInstance(def et.Json) (*Instance, error)
 func (s *Flow) NewInstance(id, code, name string, tags et.Json, trigger *Trigger, userId string) *Instance
 func (s *Flow) OnChange(fn func(data et.Json) error) *Flow
@@ -1482,6 +1525,8 @@ func (s *Instance) SetBinding(key string, value any) *Instance
 func (s *Instance) SetParams(params et.Json) et.Json
 func (s *Instance) ToJson() et.Json
 func (s *Instance) ToString() string
+func NewRunner(bindings map[string]any) *Runner
+func (s *Runner) Run(code string, set map[string]any, reads ...string) (any, et.Json, error)
 func (s Status) Str() string
 func LoadStep(def et.Json) (*Step, error)
 func (s *Step) OnChange(fn func(data et.Json))

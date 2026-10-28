@@ -2,6 +2,8 @@ package et
 
 import (
 	"encoding/json"
+	"fmt"
+	"maps"
 	"sort"
 	"strings"
 )
@@ -172,9 +174,7 @@ func (s *Wheres) Select(fields ...string) *Wheres {
 		return s
 	}
 
-	for _, field := range fields {
-		s.Selects = append(s.Selects, field)
-	}
+	s.Selects = append(s.Selects, fields...)
 
 	return s
 }
@@ -248,9 +248,7 @@ func (s *Wheres) Hidden(fields ...string) *Wheres {
 		return s
 	}
 
-	for _, field := range fields {
-		s.Hiddens = append(s.Hiddens, field)
-	}
+	s.Hiddens = append(s.Hiddens, fields...)
 
 	return s
 }
@@ -329,11 +327,11 @@ func (s *Wheres) addItem(item Json) {
 }
 
 /**
-* AdddResult
+* AddResult: Adds item to the result; next is false when the limit is reached
 * @param item Json
 * @return next bool
 **/
-func (s *Wheres) AdddResult(item Json) (next bool) {
+func (s *Wheres) AddResult(item Json) (next bool) {
 	s.addItem(item)
 
 	if s.Limits == 0 {
@@ -343,6 +341,15 @@ func (s *Wheres) AdddResult(item Json) (next bool) {
 	}
 
 	return
+}
+
+/**
+* AdddResult: Deprecated: use AddResult.
+* @param item Json
+* @return next bool
+**/
+func (s *Wheres) AdddResult(item Json) (next bool) {
+	return s.AddResult(item)
 }
 
 /**
@@ -406,7 +413,7 @@ func (s *Wheres) All() []Json {
 		if !ok {
 			break
 		}
-		ok = evaluateObject(item, s.Conditions)
+		ok = EvaluateObject(item, s.Conditions)
 		if !ok {
 			continue
 		}
@@ -418,7 +425,7 @@ func (s *Wheres) All() []Json {
 				skipped++
 				continue
 			}
-			next := s.AdddResult(item)
+			next := s.AddResult(item)
 			if !next {
 				break
 			}
@@ -441,29 +448,6 @@ func (s *Wheres) All() []Json {
 	}
 
 	return s.Result
-}
-
-/**
-* evaluateObject
-* @param item Json, conditions []*Condition
-* @return bool
-**/
-func evaluateObject(item Json, conditions []*Condition) bool {
-	if len(conditions) == 0 {
-		return true
-	}
-
-	result := conditions[0].ApplyToObject(item)
-	for _, cond := range conditions[1:] {
-		ok := cond.ApplyToObject(item)
-		if cond.Connector == AND {
-			result = result && ok
-		} else if cond.Connector == OR {
-			result = result || ok
-		}
-	}
-
-	return result
 }
 
 /**
@@ -503,4 +487,320 @@ func (s *Wheres) First() Json {
 **/
 func (s *Wheres) Last() Json {
 	return s.One(-1)
+}
+
+type Source struct {
+	data      []Json `json:"-"`
+	as        string `json:"-"`
+	pos       int    `json:"-"`
+	limitRows int    `json:"-"`
+}
+
+/**
+* Next
+* @return (Json, bool)
+**/
+func (s *Source) Next() (Json, bool) {
+	if s.pos >= len(s.data) {
+		return Json{}, false
+	}
+	item := s.data[s.pos]
+	s.pos++
+	return item, true
+}
+
+/**
+* As
+* @return string
+**/
+func (s *Source) As() string {
+	return s.as
+}
+
+/**
+* Add
+* @param item Json
+**/
+func (s *Source) Add(item Json) {
+	s.data = append(s.data, item)
+}
+
+/**
+* Data
+* @param index int
+* @return Json
+**/
+func (s *Source) Data(index int) Json {
+	if index < 0 || index >= len(s.data) {
+		return Json{}
+	}
+	return s.data[index]
+}
+
+/**
+* LimitRows
+* @return int
+**/
+func (s *Source) LimitRows() int {
+	if s.limitRows == 0 {
+		s.limitRows = 1000
+	}
+	return s.limitRows
+}
+
+/**
+* From
+* @param itmes []Json, as ...string
+* @return *Where
+**/
+func From(items []Json, as ...string) *Wheres {
+	asStr := "A"
+	if len(as) == 1 {
+		asStr = as[0]
+	}
+
+	return newWhere(&Source{
+		data: items,
+		as:   asStr,
+	})
+}
+
+/**
+* getField
+* @param field string
+* @return keys []string, as string
+**/
+func getField(field string) ([]string, string) {
+	if strings.Contains(field, ":") {
+		parts := strings.Split(field, ":")
+		return strings.Split(parts[0], "->"), parts[1]
+	}
+	return strings.Split(field, "->"), field
+}
+
+/**
+* selects
+* @param fields []string, object Json
+* @return Json
+**/
+func selects(fields []string, object Json) Json {
+	result := Json{}
+	for _, field := range fields {
+		keys, as := getField(field)
+		val := object.Get(keys...)
+		if val != nil {
+			result[as] = val
+		}
+	}
+
+	return result
+}
+
+/**
+* hidden
+* @param fields []string, object Json
+* @return Json
+**/
+func hidden(fields []string, object Json) Json {
+	if len(fields) == 0 {
+		return object
+	}
+
+	hide := make(map[string]struct{}, len(fields))
+	for _, f := range fields {
+		hide[f] = struct{}{}
+	}
+
+	result := Json{}
+	for key, value := range object {
+		if _, ok := hide[key]; ok {
+			continue
+		}
+		result[key] = value
+	}
+
+	return result
+}
+
+/**
+* MergeToKeyValue
+* @params left []Json, key string, value any
+* @return []Json
+**/
+func MergeToKeyValue(left []Json, key string, value any) []Json {
+	if len(left) == 0 {
+		return []Json{
+			{key: value},
+		}
+	}
+
+	result := make([]Json, 0, len(left))
+	for _, item := range left {
+		item[key] = value
+		result = append(result, item)
+	}
+
+	return result
+}
+
+/**
+* MergeToMap
+* @params left, right []Json
+* @return []Json
+**/
+func MergeToMap(left, right []Json) []Json {
+	result := make([]Json, 0, len(left)*len(right))
+	for _, itemL := range left {
+		for _, itemR := range right {
+			merged := make(Json, len(itemR)+len(itemL))
+			maps.Copy(merged, itemR)
+			maps.Copy(merged, itemL)
+			result = append(result, merged)
+		}
+	}
+
+	return result
+}
+
+/**
+* applyPrefix: Builds a new Json with lowercased keys and an already-lowercase prefix.
+* @param item Json, prefix string
+* @return Json
+**/
+func applyPrefix(item Json, prefix string) Json {
+	result := Json{}
+	for k, v := range item {
+		k = strings.ToLower(k)
+		if prefix != "" {
+			result[prefix+"."+k] = v
+		} else {
+			result[k] = v
+		}
+	}
+	return result
+}
+
+/**
+* Prefixer
+* @param item Json, as string
+* @return Json
+**/
+func Prefixer(item Json, as string) Json {
+	return applyPrefix(item, strings.ToLower(as))
+}
+
+/**
+* Joingy
+* @params left, right Iterator, keys map[string]string, joinType JoinType
+* @return Iterator
+**/
+func Joingy(left, right Iterator, keys map[string]string, joinType JoinType) Iterator {
+	result := []Json{}
+	rightIndex := map[string][]int{}
+	matchedRight := map[int]bool{}
+	rightItems := []Json{}
+
+	rightAs := strings.ToLower(right.As())
+	leftAs := strings.ToLower(left.As())
+
+	// indexar RIGHT: prefijamos y guardamos cada ítem en rightItems para
+	// no depender del estado del iterador después de consumirlo.
+	for {
+		r, ok := right.Next()
+		if !ok {
+			break
+		}
+		r = applyPrefix(r, rightAs)
+		i := len(rightItems)
+		rightItems = append(rightItems, r)
+		key := buildKey(r, keys, false)
+		rightIndex[key] = append(rightIndex[key], i)
+	}
+
+	// recorrer LEFT
+	for {
+		l, ok := left.Next()
+		if !ok {
+			break
+		}
+
+		l = applyPrefix(l, leftAs)
+		key := buildKey(l, keys, true)
+		ridxs, ok := rightIndex[key]
+		if ok {
+			for _, ri := range ridxs {
+				matchedRight[ri] = true
+				result = append(result, merge(l, rightItems[ri]))
+			}
+		} else {
+			if joinType == LeftJoin || joinType == FullJoin {
+				result = append(result, merge(l, nil))
+			}
+		}
+	}
+
+	// RIGHT JOIN o FULL JOIN: filas del lado derecho sin emparejamiento
+	if joinType == RightJoin || joinType == FullJoin {
+		for i, r := range rightItems {
+			if !matchedRight[i] {
+				result = append(result, merge(nil, r))
+			}
+		}
+	}
+
+	return &Source{
+		data: result,
+		as:   leftAs,
+	}
+}
+
+/**
+* merge
+* @params left, right Json, as string
+* @return Json
+**/
+func merge(left, right Json) Json {
+	out := Json{}
+
+	if left != nil {
+		maps.Copy(out, left)
+	}
+
+	for k, v := range right {
+		if _, exists := out[k]; exists {
+			continue
+		}
+
+		out[k] = v
+	}
+
+	return out
+}
+
+/**
+* buildKey
+* @params j Json, keys map[string]string, fromLeft bool
+* @return string
+**/
+func buildKey(j Json, keys map[string]string, fromLeft bool) string {
+	lks := make([]string, 0, len(keys))
+	for lk := range keys {
+		lks = append(lks, lk)
+	}
+	sort.Strings(lks)
+
+	var sb strings.Builder
+	for _, lk := range lks {
+		field := keys[lk]
+		if fromLeft {
+			field = lk
+		}
+		if v, ok := j[field]; ok {
+			sb.WriteByte('|')
+			fmt.Fprintf(&sb, "%v", v)
+		} else {
+			sb.WriteString("|NULL")
+		}
+	}
+	return sb.String()
 }

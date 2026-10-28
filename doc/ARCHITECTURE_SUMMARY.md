@@ -90,9 +90,10 @@ Las rutas se guardan en Redis y se propagan entre réplicas por NATS (`EVENT_SET
 | Componente | Problema |
 | --- | --- |
 | `jia/ia.go:90` | `Load` llama `store.Get(id, packageName, …)` con los argumentos invertidos. |
-| `router` `rateLimitMiddleware` / `cache.IncrCtx` | El vencimiento del contador se pone solo cuando nace (`result == 1`); si ese `Expire` falla, la clave queda sin TTL y la ruta responde 429 para siempre al pasar `LimitRate` (2026-10-11). |
 | `validator` | `Min`/`Max` solo se aplican si son > 0 y `Pattern` se compila en cada validación (2026-10-11). |
 | `jwsp` `SendReplyVideoMessageByURL` | Asigna `url` a `MessageID`. |
+
+Resuelto el 2026-10-27: el contador del límite de peticiones de `router` podía quedar sin TTL y dejar una ruta en 429 para siempre; `cache.IncrCtx` repone el vencimiento en un script atómico y la clave lleva el prefijo `ratelimit:`.
 | `cmds.Step.RunSSH` | Ejecuta el comando localmente, igual que `RunOS`. |
 | `utility.More` | Reinicia el contador del tag a 0 en cada llamada. |
 | `dt` con `PRODUCTION=false` | El objeto no se persiste: vive solo en memoria. |

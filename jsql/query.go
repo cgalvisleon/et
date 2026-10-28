@@ -138,6 +138,7 @@ type QueryRollups struct {
 	Select    []string          `json:"select"`
 	Operation RollupOperation   `json:"operation"`
 	Where     []*et.Condition   `json:"where"`
+	OrdersBy  []*Index          `json:"order_by"`
 }
 
 /**
@@ -145,7 +146,7 @@ type QueryRollups struct {
 * @return []byte, error
 **/
 func (s QueryRollups) MarshalJSON() ([]byte, error) {
-	return json.Marshal(rollupJson{To: s.To, Keys: s.Keys, Select: s.Select, Operation: s.Operation, Where: whereToJson(s.Where)})
+	return json.Marshal(rollupJson{To: s.To, Keys: s.Keys, Select: s.Select, Operation: s.Operation, Where: whereToJson(s.Where), OrdersBy: s.OrdersBy})
 }
 
 /**
@@ -220,17 +221,16 @@ func (s *QueryRollups) getQuery(item et.Json) (*Query, bool) {
 		return nil, false
 	}
 
-	q := NewQuery(s.To.Model, "A")
+	keys := make([]*et.Condition, 0, len(s.Keys))
 	for k, fk := range s.Keys {
 		v, exists := item[k]
 		if !exists {
 			return nil, false
 		}
-		q.Where(Eq(fk, v))
+		keys = append(keys, Eq(fk, v))
 	}
-	for _, cond := range where {
-		q.AddCondition(cond)
-	}
+	q := NewQuery(s.To.Model, "A")
+	q.addCondition(rollupConditions(keys, where))
 
 	if s.Operation.IsAggregate() {
 		for _, field := range s.Select {
@@ -240,6 +240,9 @@ func (s *QueryRollups) getQuery(item et.Json) (*Query, bool) {
 	}
 
 	q.Select(s.Select...)
+	for _, order := range s.OrdersBy {
+		q.OrderBy(order.Name, order.Sorted)
+	}
 	q.Rows = 1
 	return q, true
 }
@@ -984,8 +987,8 @@ func (s *DB) modelOf(ref jsonFrom, defaultSchema string) (*Model, error) {
 	}
 
 	var result *Model
-	for name := range s.Schemas {
-		model, err := s.GetModel(name, ref.Model)
+	for _, schema := range s.schemaList() {
+		model, err := s.GetModel(schema.Name, ref.Model)
 		if err != nil {
 			continue
 		}
@@ -1131,106 +1134,6 @@ func (s *Query) addRelationKeys() {
 }
 
 /**
-* setDetails: Sets the details for the query.
-* @param tx *Tx
-* @param item et.Json
-* @return et.Json
-**/
-func (s *Query) setDetails(tx *Tx, item et.Json) et.Json {
-	for name, detail := range s.Details {
-		qry := detail.GetQuery(item)
-		detailResult, err := qry.AllTx(tx)
-		if err != nil {
-			return item
-		}
-		item[name] = detailResult.Result
-	}
-	for name, master := range s.Masters {
-		qry := master.GetQuery(item)
-		masterResult, err := qry.AllTx(tx)
-		if err != nil {
-			return item
-		}
-		if master.Rows == 1 {
-			// 1 to 1 relation: the row gets the linked record as an object.
-			var first et.Json
-			if len(masterResult.Result) > 0 {
-				first = masterResult.Result[0]
-			}
-			item[name] = first
-			continue
-		}
-		item[name] = masterResult.Result
-	}
-	return item
-}
-
-/**
-* setRollup: Executes each rollup query for the row and applies its result by operation:
-* aggregates set item[name] (a value for one select, an object for several),
-* RollupRow sets item[name] to the value of its single selected field (or to the record when it selects
-* several fields) and RollupObject sets item[name] to the resulting object.
-* @param tx *Tx
-* @param item et.Json
-* @return et.Json
-**/
-func (s *Query) setRollup(tx *Tx, item et.Json) et.Json {
-	for name, rollup := range s.Rollups {
-		qry, ok := rollup.GetQuery(item)
-		if !ok {
-			continue
-		}
-
-		if rollup.Operation == RollupCount && len(rollup.Select) == 0 {
-			count, err := qry.CountTx(tx)
-			if err != nil {
-				continue
-			}
-			item[name] = count
-			continue
-		}
-
-		result, err := qry.AllTx(tx)
-		if err != nil {
-			continue
-		}
-
-		var first et.Json
-		if result.Ok && len(result.Result) > 0 {
-			first = result.Result[0]
-		}
-
-		switch rollup.Operation {
-		case RollupRow:
-			// The value of the selected field is assigned to the rollup attribute; with several
-			// fields, the record is assigned as an object.
-			if len(rollup.Select) == 1 {
-				var val any
-				for _, v := range first {
-					val = v
-				}
-				item[name] = val
-				continue
-			}
-			item[name] = first
-		case RollupObject:
-			item[name] = first
-		default:
-			if len(rollup.Select) == 1 {
-				var val any
-				for _, v := range first {
-					val = v
-				}
-				item[name] = val
-				continue
-			}
-			item[name] = first
-		}
-	}
-	return item
-}
-
-/**
 * setCalcFuns: Sets the calculations for the query.
 * @param tx *Tx, item et.Json
 **/
@@ -1242,10 +1145,13 @@ func (s *Query) setCalcFuns(tx *Tx, item et.Json) {
 
 /**
 * setCalc: Runs the JS scripts of the CALC fields (defined with DefineCalc) over the item, which they
-* receive as "item", and returns the item they leave.
-* @param tx *Tx, item et.Json
+* receive as "item", and returns the item they leave. runners keeps one runtime per model for the whole
+* query (built on the first row), so the bindings are not rebuilt and the scripts not compiled for every row;
+* each script runs inside a function, so its declarations do not clash from one row to the next.
+* @param tx *Tx, item et.Json, runners map[*Model]*jwf.Runner
+* @return et.Json, error
 **/
-func (s *Query) setCalc(tx *Tx, item et.Json) (et.Json, error) {
+func (s *Query) setCalc(tx *Tx, item et.Json, runners map[*Model]*jwf.Runner) (et.Json, error) {
 	for name, calc := range s.Calcs {
 		code := calc.Module
 		if code == "" && calc.Model != nil {
@@ -1254,10 +1160,14 @@ func (s *Query) setCalc(tx *Tx, item et.Json) (et.Json, error) {
 		if code == "" {
 			continue
 		}
-		bindings := calc.Model.bindings(nil)
-		bindings["item"] = item
-		bindings["tx"] = tx
-		_, globals, err := jwf.Run(code, bindings, "item")
+		runner, ok := runners[calc.Model]
+		if !ok {
+			bindings := calc.Model.bindings(nil)
+			bindings["tx"] = tx
+			runner = jwf.NewRunner(bindings)
+			runners[calc.Model] = runner
+		}
+		_, globals, err := runner.Run("(function () {\n"+code+"\n})();", et.Json{"item": item}, "item")
 		if err != nil {
 			return item, err
 		}
@@ -1299,14 +1209,17 @@ func (s *Query) allTx(tx *Tx) (et.Items, error) {
 		return et.Items{}, err
 	}
 
+	if err := s.setRelations(tx, result.Result); err != nil {
+		return et.Items{}, err
+	}
+
+	runners := map[*Model]*jwf.Runner{}
 	for i, item := range result.Result {
-		item = s.setDetails(tx, item)
-		item = s.setRollup(tx, item)
 		for _, key := range s.relationKeys {
 			delete(item, key)
 		}
 		s.setCalcFuns(tx, item)
-		item, err = s.setCalc(tx, item)
+		item, err = s.setCalc(tx, item, runners)
 		if err != nil {
 			return et.Items{}, err
 		}
@@ -1531,17 +1444,19 @@ func (s *Query) loadQuery(query et.Json) (*Query, error) {
 	}
 	s.Conditions = conditions
 
-	// "and" / "or" at the first level add conditions joined with that connector.
+	// "and" / "or" at the first level add conditions joined with that connector: each one without its own
+	// connector takes it ("or": [a, b] is OR a OR b), so they are read one by one and not with ToConditions,
+	// which would give b an AND.
 	for _, group := range []struct {
 		key       string
 		connector et.Connector
 	}{{"and", et.AND}, {"or", et.OR}} {
 		key, connector := group.key, group.connector
-		extra, err := et.ToConditions(query.ArrayJson(key))
-		if err != nil {
-			return s, err
-		}
-		for _, cond := range extra {
+		for _, param := range query.ArrayJson(key) {
+			cond, err := et.ToCondition(param)
+			if err != nil {
+				return s, err
+			}
 			if cond.Connector == et.NaC {
 				cond.Connector = connector
 			}

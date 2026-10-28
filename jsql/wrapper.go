@@ -1007,33 +1007,30 @@ func wrapRollups(rollup *Rollups) map[string]any {
 		return nil
 	}
 
-	return map[string]any{
+	var self map[string]any
+	self = map[string]any{
 		wrapRef:  rollup,
 		"toJson": func() map[string]any { return structJson(rollup) },
 		"to":     func() map[string]any { return wrapFrom(rollup.To) },
+		// orderBy: the order that picks the first record of a row or object rollup
+		"orderBy": func(field string, sorted ...bool) map[string]any {
+			rollup.OrderBy(field, sorted...)
+			return self
+		},
 	}
+	return self
 }
 
 /**
-* rollupWhereOf: Reads the where of defineRollup: a condition object ({field: {op: value}}, also with
-* where/and in front), a list of them or a *et.Condition; null gives none. An invalid condition is an error.
+* rollupWhereOf: Reads the where of defineRollup as a where of a query does (et.ToWhere: a condition object,
+* also with where/and/or in front, a list of them or a *et.Condition); null gives none. An invalid
+* condition is an error.
 * @param cond any
 * @return []*et.Condition, error
 **/
 func rollupWhereOf(cond any) ([]*et.Condition, error) {
-	switch v := cond.(type) {
-	case nil:
+	if cond == nil {
 		return nil, nil
-	case *et.Condition:
-		return []*et.Condition{v}, nil
-	case []*et.Condition:
-		return v, nil
-	case et.Json:
-		return et.ToWheRes([]et.Json{v})
-	case map[string]any:
-		return et.ToWheRes([]et.Json{et.Json(v)})
-	case interface{ JsonValue() et.Json }:
-		return et.ToWheRes([]et.Json{v.JsonValue()})
 	}
 	list := et.ToWhere(cond)
 	if list == nil {

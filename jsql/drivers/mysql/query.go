@@ -334,9 +334,9 @@ func myCondExpr(getField func(string) (*jsql.Field, bool), cond *et.Condition, a
 	case et.NOT_IN:
 		return fmt.Sprintf("%s NOT IN (%s)", fieldExpr, myInValues(cond.Value.Value, tp))
 	case et.BETWEEN, et.NOT_BETWEEN:
-		bv, ok := cond.Value.Value.(et.BetweenValue)
+		bv, ok := et.ToBetween(cond.Value.Value)
 		if !ok {
-			return ""
+			return "1 = 0"
 		}
 		op := "BETWEEN"
 		if cond.Operator == et.NOT_BETWEEN {

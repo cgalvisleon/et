@@ -401,7 +401,7 @@ func (s *Model) Stricted() {
 * DefineRollup: Defines a new rollup for the model.
 * Selects are required except for RollupCount (counts rows) and RollupObject (whole row).
 * An empty operation defaults to RollupObject. where filters the To model (joined to the keys with AND,
-* so it does not accept OR); a {field: "..."} value (et.FIELD) is read from the resulting row.
+* also when it has OR); a {field: "..."} value (et.FIELD) is read from the resulting row.
 * @param name string, to *Model, keys map[string]string, selects []string, operation RollupOperation, where ...*et.Condition
 * @return (*Rollups, error)
 **/
@@ -557,6 +557,16 @@ func (s *From) Ref() et.Json {
 **/
 func (s *QueryRollups) GetQuery(item et.Json) (*Query, bool) {
 	return s.getQuery(item)
+}
+
+/**
+* OrderBy: Adds an order to the rollup, which picks the first record for RollupRow and RollupObject
+* (without one the database returns any). sorted true is ascending (the default).
+* @param field string, sorted ...bool
+* @return *Rollups
+**/
+func (s *Rollups) OrderBy(field string, sorted ...bool) *Rollups {
+	return s.orderBy(field, sorted...)
 }
 
 /**

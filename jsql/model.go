@@ -2,6 +2,7 @@ package jsql
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"sync"
@@ -75,6 +76,28 @@ type Model struct {
 	db            *DB                     `json:"-"`
 	schema        *Schema                 `json:"-"`
 	muIdx         sync.Mutex              `json:"-"`
+	muDef         sync.Mutex              `json:"-"` // serializes definitions; they replace maps and slices (copy on write)
+}
+
+/**
+* UnmarshalJSON: A model from its json; its masters are read from "master" (the key the struct writes)
+* or, when it is missing, from "masters" (the key of Define and of toJson).
+* @param data []byte
+* @return error
+**/
+func (s *Model) UnmarshalJSON(data []byte) error {
+	type plain Model
+	value := struct {
+		*plain
+		Masters map[string]*Master `json:"masters"`
+	}{plain: (*plain)(s)}
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if len(s.Masters) == 0 && len(value.Masters) > 0 {
+		s.Masters = value.Masters
+	}
+	return nil
 }
 
 /**
@@ -225,10 +248,7 @@ func (s *Model) addAuditLog(userId string, action string) {
 		"user_id":    userId,
 		"action":     action,
 	})
-	maxAuditLog := envar.GetInt("MAX_AUDIT_LOG", 1000)
-	if s.AuditLog.Len() > maxAuditLog {
-		s.AuditLog.Delete(maxAuditLog)
-	}
+	s.AuditLog.Trim(envar.GetInt("MAX_AUDIT_LOG", 1000))
 	s.isChanged = true
 	if s.db != nil {
 		s.db.addAuditLog(userId, action)
@@ -270,7 +290,8 @@ func (s *Model) toJson() et.Json {
 		"hiddens":        s.Hiddens,
 		"omit_updates":   s.OmitUpdates,
 		"details":        s.Details,
-		"master":         s.Masters,
+		"masters":        s.Masters,
+		"master":         s.Masters, // the key before "masters", still read by its consumers (core-studio)
 		"rollups":        s.Rollups,
 		"is_strict":      s.IsStrict,
 		"version":        s.Version,

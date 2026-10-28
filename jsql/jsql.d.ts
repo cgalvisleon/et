@@ -148,9 +148,11 @@ interface JsqlMaster {
 
 /** Aggregate over a related model (defineRollup). */
 interface JsqlRollups {
-  /** to, keys, select, operation, where. */
+  /** to, keys, select, operation, where, order_by. */
   toJson(): JsqlRecord;
   to(): JsqlFrom | null;
+  /** Order that picks the first record of a row or object rollup (sorted: ascending, the default). */
+  orderBy(field: string, sorted?: boolean): JsqlRollups;
 }
 
 /** Detail or master resolved for a query (query.detail(...), query.master(...)). */
@@ -165,7 +167,7 @@ interface JsqlQueryDetail {
 
 /** Rollup resolved for a query (when the query runs). */
 interface JsqlQueryRollups {
-  /** to, keys, select, operation, where. */
+  /** to, keys, select, operation, where, order_by. */
   toJson(): JsqlRecord;
   to(): JsqlFrom | null;
   /** Query of the rollup for item, or null when item lacks any of the keys or of the fields its where references. */
@@ -306,8 +308,10 @@ interface JsqlDefine {
     keys: JsqlKeys;
     select?: string[];
     operation: JsqlRollupOperation;
-    /** Filter on `to`, joined to the keys with AND (no `or`); `{field: "x"}` reads x from the row. */
+    /** Filter on `to`, joined to the keys with AND (an `or` keeps them); `{field: "x"}` reads x from the row. */
     where?: JsqlWhereItem[];
+    /** Order that picks the first record of a row or object rollup. */
+    order_by?: { name: string; sorted: boolean }[];
   }[];
   user_id?: string;
 }
@@ -410,7 +414,7 @@ interface JsqlModel {
   defineOmitUpdate(...names: string[]): JsqlModel;
   defineHidden(...names: string[]): JsqlModel;
   defineModel(): JsqlModel;
-  /** where filters `to`, joined to the keys with AND (no `or`); `{field: "x"}` (field("x")) reads x from the row. */
+  /** where filters `to`, joined to the keys with AND (an `or` keeps them); `{field: "x"}` (field("x")) reads x from the row. */
   defineRollup(
     name: string,
     to: JsqlModel,

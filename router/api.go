@@ -65,7 +65,7 @@ func NewApi(name, path, host string, port, rpc int, version int) *Api {
 
 func (s *Api) rateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		key := r.Method + ":" + r.URL.Path
+		key := "ratelimit:" + r.Method + ":" + r.URL.Path
 		duration := 1 * time.Second
 		count := cache.Incr(key, duration)
 		if count > s.LimitRate {

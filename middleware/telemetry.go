@@ -100,7 +100,8 @@ type Metrics struct {
 	ResponseTime float64 `json:"response_time_ms"`
 	// http.server.request.duration — total request latency in milliseconds
 	Latency float64 `json:"latency_ms"`
-	// request over limit
+	// request over limit: more than REQUESTS_LIMIT requests in the current second on this method and path
+	// (cache.CallMetrics); ettp/v2 answers 429 then. Without a cache it stays false.
 	OverLimit bool `json:"over_limit"`
 
 	key     string
@@ -235,6 +236,7 @@ func NewMetric(r *http.Request) *Metrics {
 	}
 	limit := envar.GetInt64("REQUESTS_LIMIT", 400)
 	result.metrics, _ = cache.CallMetrics(result.key, limit)
+	result.OverLimit = result.metrics.OverLimit
 	return result
 }
 
@@ -256,6 +258,7 @@ func NewRpcMetric(method string) *Metrics {
 	}
 	limit := envar.GetInt64("REQUESTS_LIMIT", 400)
 	result.metrics, _ = cache.CallMetrics(result.key, limit)
+	result.OverLimit = result.metrics.OverLimit
 	return result
 }
 

@@ -253,7 +253,7 @@ func (s *T) HttpFoo(w http.ResponseWriter, r *http.Request) {
 | `claim` | `SECRET` (required: `getSecret` calls `logs.Fatal` without it) |
 | `validator` | `LANG` |
 | `jwf` | `MAX_AUDIT_LOG` (1000) |
-| `middleware` | `REQUESTS_LIMIT` (400 per second, the 429 of `ettp/v2`), `LATENCY_LIMIT` (1000 ms) |
+| `middleware` | `REQUESTS_LIMIT` (400 requests per second per method + exact path; above it `ettp/v2` answers 429 since 2026-10-27), `LATENCY_LIMIT` (1000 ms) |
 | `jwt` | `JWT_EPHEMERAL_DURATION` (15 minutes) |
 | `ettp/v1`, `ettp/v2` | `PRODUCTION` (`true`) |
 | `ettp/v2` | `COMPANY`, `WEB`, `HELP` (shown by the gateway root route) |

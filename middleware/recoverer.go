@@ -74,7 +74,8 @@ func (s prettyStack) parse(debugStack []byte, rvr interface{}) ([]byte, error) {
 	// locate panic line, as we may have nested panics
 	for i := len(stack) - 1; i > 0; i-- {
 		lines = append(lines, stack[i])
-		if strings.HasPrefix(stack[i], "panic(0x") {
+		// Go escribe "panic({0x...})" desde 1.17 y "panic(0x...)" antes
+		if strings.HasPrefix(stack[i], "panic(") {
 			lines = lines[0 : len(lines)-2] // remove boilerplate
 			break
 		}
@@ -125,17 +126,15 @@ func (s prettyStack) decorateFuncCallLine(line string, num int) (string, error) 
 	addr := line[idx:]
 	method := ""
 
-	idx = strings.LastIndex(pkg, string(os.PathSeparator))
-	if idx < 0 {
-		idx = strings.Index(pkg, ".")
-		method = pkg[idx:]
-		pkg = pkg[0:idx]
+	// paquete y método se separan por el primer "." después de la última "/"; una
+	// función sin paquete (panic, un builtin) queda entera como método
+	slash := strings.LastIndex(pkg, "/") + 1
+	if dot := strings.Index(pkg[slash:], "."); dot >= 0 {
+		method = pkg[slash+dot:]
+		pkg = pkg[0 : slash+dot]
 	} else {
-		method = pkg[idx+1:]
-		pkg = pkg[0 : idx+1]
-		idx = strings.Index(method, ".")
-		pkg += method[0:idx]
-		method = method[idx:]
+		method = pkg
+		pkg = ""
 	}
 	w := new(string)
 	pkgColor := lg.Yellow

@@ -590,7 +590,7 @@ func (s *Condition) applyOpBetween(val any) bool {
 }
 
 /**
-* applyOpNotBetween: As SQL, a null value or a range that cannot be compared is false in both BETWEEN and NOT BETWEEN
+* applyOpNotBetween: As SQL, nil or an unreadable range is false
 * @param val any
 * @return bool
 **/
@@ -600,8 +600,7 @@ func (s *Condition) applyOpNotBetween(val any) bool {
 }
 
 /**
-* between: Whether val is inside the range of the condition; ok is false when val is nil or the range is missing or
-* not comparable with val
+* between: Whether val is inside the range; ok is false with nil or a range that does not compare
 * @param val any
 * @return in bool, ok bool
 **/
@@ -629,8 +628,7 @@ func (s *Condition) between(val any) (in bool, ok bool) {
 }
 
 /**
-* ToBetween: The range of a between value: a BetweenValue, {min, max} (also {Min, Max}, as a BetweenValue is
-* encoded) or a list of two [min, max]
+* ToBetween: Reads the range: a BetweenValue, {min, max} or [min, max]
 * @param v any
 * @return BetweenValue, bool
 **/
@@ -780,8 +778,7 @@ func (s *Condition) ApplyToIndex(keys []string) []string {
 }
 
 /**
-* evaluate: Combines the conditions as SQL does: AND binds tighter than OR (a OR b AND c is a OR (b AND c)), and a
-* condition without connector after the first one is an AND. apply is only called while it can change the result.
+* evaluate: Combines the conditions with SQL precedence (AND before OR).
 * @param conditions []*Condition, apply func(*Condition) bool
 * @return bool
 **/
@@ -807,8 +804,7 @@ func evaluate(conditions []*Condition, apply func(*Condition) bool) bool {
 }
 
 /**
-* EvaluateObject: Evalúa las condiciones sobre un objeto con la precedencia de SQL (AND antes que OR; sin conector
-* después de la primera = AND).
+* EvaluateObject: Evaluates the conditions on an object, with SQL precedence.
 * @param obj Json, conditions []*Condition
 * @return bool
 **/
@@ -817,7 +813,7 @@ func EvaluateObject(obj Json, conditions []*Condition) bool {
 }
 
 /**
-* EvaluateValue: Evalúa las condiciones sobre un valor, con la misma precedencia que EvaluateObject.
+* EvaluateValue: Evaluates the conditions on a value, with SQL precedence.
 * @param value any, conditions []*Condition
 * @return bool
 **/
@@ -922,8 +918,7 @@ func (n number) float() float64 {
 }
 
 /**
-* compareNumbers: Compares two numbers; integers (also beyond 2^53) are compared exactly, signed against unsigned
-* included, and a float only goes through float64 when it has decimals. NaN does not compare.
+* compareNumbers: Compares two numbers, integers exactly; NaN does not compare.
 * @param a any, b any
 * @return int, bool
 **/
@@ -965,8 +960,7 @@ func compareNumbers(a, b any) (int, bool) {
 }
 
 /**
-* MatchLike: Matches value against a SQL LIKE pattern, case insensitive as every jsql driver does it: % is any
-* text, _ is one character and \\ escapes the next one; * is kept as an alias of %.
+* MatchLike: SQL LIKE, case insensitive (%, _, \\ escapes; * as %).
 * @param value string, pattern string
 * @return bool
 **/
@@ -1024,7 +1018,6 @@ func MatchLike(value, pattern string) bool {
 * @return bool, error
 **/
 func equalsAny(a, b any) (bool, error) {
-	// time.Time
 	if ta, ok := a.(time.Time); ok {
 		tb, ok := b.(time.Time)
 		if !ok {
@@ -1033,7 +1026,6 @@ func equalsAny(a, b any) (bool, error) {
 		return ta.Equal(tb), nil
 	}
 
-	// string
 	if sa, ok := a.(string); ok {
 		sb, ok := b.(string)
 		if !ok {
@@ -1042,13 +1034,12 @@ func equalsAny(a, b any) (bool, error) {
 		return sa == sb, nil
 	}
 
-	// numbers, integers compared exactly
 	if _, ok := numberOf(a); ok {
 		c, ok := compareNumbers(a, b)
 		return ok && c == 0, nil
 	}
 
-	// fallback: solo para tipos comparables
+	// fallback: comparable values of the same type
 	ra := reflect.ValueOf(a)
 	rb := reflect.ValueOf(b)
 
@@ -1056,12 +1047,10 @@ func equalsAny(a, b any) (bool, error) {
 		return false, nil
 	}
 
-	// si no son comparables, no se puede hacer ==
 	if !ra.Type().Comparable() || !rb.Type().Comparable() {
 		return false, nil
 	}
 
-	// si son tipos distintos pero comparables, no son iguales
 	if ra.Type() != rb.Type() {
 		return false, nil
 	}
@@ -1075,7 +1064,6 @@ func equalsAny(a, b any) (bool, error) {
 * @return int, bool
 **/
 func compareAnyOrdered(a, b any) (int, bool) {
-	// time.Time
 	if ta, ok := a.(time.Time); ok {
 		tb, ok := b.(time.Time)
 		if !ok {
@@ -1090,7 +1078,6 @@ func compareAnyOrdered(a, b any) (int, bool) {
 		return 0, true
 	}
 
-	// string
 	if sa, ok := a.(string); ok {
 		sb, ok := b.(string)
 		if !ok {
@@ -1105,7 +1092,6 @@ func compareAnyOrdered(a, b any) (int, bool) {
 		return 0, true
 	}
 
-	// numbers, integers compared exactly
 	return compareNumbers(a, b)
 }
 
@@ -1115,12 +1101,11 @@ func compareAnyOrdered(a, b any) (int, bool) {
 * @return min any, max any, ok bool
 **/
 func getBetweenRange(v any) (min any, max any, ok bool) {
-	// Caso 1: BetweenValue
 	if r, ok := v.(BetweenValue); ok {
 		return r.Min, r.Max, true
 	}
 
-	// Caso 2: {"min":X,"max":Y} o {"Min":X,"Max":Y}, como se codifica un BetweenValue
+	// {min, max} or {Min, Max}
 	if m, ok := asJson(v); ok {
 		min, okMin := m["min"]
 		if !okMin {
@@ -1133,7 +1118,7 @@ func getBetweenRange(v any) (min any, max any, ok bool) {
 		return min, max, okMin && okMax
 	}
 
-	// Caso 3: slice/array de 2 elementos: []any{min,max}
+	// [min, max]
 	rv := reflect.ValueOf(v)
 	if !rv.IsValid() {
 		return nil, nil, false

@@ -8,8 +8,7 @@ import (
 )
 
 /**
-* TestEvaluatePrecedence: AND binds tighter than OR, as in SQL, and a condition without connector after the first
-* one is an AND; EvaluateObject, EvaluateValue and Wheres give the same result.
+* TestEvaluatePrecedence: AND before OR, the same in EvaluateObject, EvaluateValue and Wheres.
 **/
 func TestEvaluatePrecedence(t *testing.T) {
 	obj := Json{"a": 1, "b": 0, "c": 0}
@@ -55,8 +54,7 @@ func (s *Wheres) whereAll(conditions []*Condition) []Json {
 }
 
 /**
-* TestCompareNumbers: Integers compare exactly (also beyond 2^53 and signed against unsigned); a float with
-* decimals goes through float64; NaN does not compare.
+* TestCompareNumbers: Exact integers, floats with decimals and NaN.
 **/
 func TestCompareNumbers(t *testing.T) {
 	cases := []struct {

@@ -69,9 +69,7 @@ func ExpireCtx(ctx context.Context, key string, expiration time.Duration) error 
 }
 
 /**
-* incrScript: INCR plus its expiration in one atomic step. The TTL is set whenever the key has none (PTTL < 0), not
-* only when the counter is born: if that first PEXPIRE was lost, a counter without TTL kept growing forever (it
-* left a route of et/router answering 429 for good).
+* incrScript: INCR and, when the key has no TTL (PTTL < 0), PEXPIRE, in one atomic step
 **/
 var incrScript = redis.NewScript(`
 local n = redis.call('INCR', KEYS[1])
@@ -82,8 +80,7 @@ return n
 `)
 
 /**
-* IncrCtx: Increments key by one and makes sure it expires after expiration (also when a previous expiration was
-* lost); 0 when the cache is not available
+* IncrCtx: Increments key by one and makes sure it expires after expiration; 0 without cache
 * @params ctx context.Context, key string, expiration time.Duration
 * @return int64
 **/

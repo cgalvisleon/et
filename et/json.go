@@ -964,9 +964,7 @@ func deepEqualValue(a, b interface{}) bool {
 }
 
 /**
-* equalScalar: Compares the common scalar values (nil, texts, bools, numbers) without encoding them; ok is false
-* for anything else (objects, lists, times), left to the JSON comparison. Numbers compare by value as JSON does
-* (1 and 1.0 are equal) and integers exactly.
+* equalScalar: Compares scalars without encoding them; ok is false for objects, lists and times.
 * @param a, b interface{}
 * @return equal bool, ok bool
 **/
@@ -1065,8 +1063,7 @@ func (s Json) Clear() Json {
 }
 
 /**
-* Put: Replaces the content of s with the one of val (the same map, so whoever shares it sees it); putting s
-* into itself, or into a nil Json (which cannot be written), does nothing
+* Put: Replaces the content of s with val, in the same map; into itself or a nil Json it does nothing
 * @param val Json
 * @return Json
 **/
@@ -1156,8 +1153,7 @@ func (j Json) SetNested(keys []string, value interface{}) {
 }
 
 /**
-* Set a value in the key ("a->b" sets a nested one). Like any Go map, a nil Json cannot be written: start it with
-* Json{} first.
+* Set a value in the key ("a->b" sets a nested one); a nil Json cannot be written.
 * @param key string
 * @param val interface{}
 **/
@@ -1416,8 +1412,7 @@ func parseJSON(src string, dest any) error {
 }
 
 /**
-* decodeFresh: decodeJSON into a new value of dest's type, assigned to dest only when it decodes, so a failed
-* attempt leaves nothing half written (a map would keep the keys read before the error)
+* decodeFresh: decodeJSON into a new value; dest only changes when it decodes
 * @param data []byte, dest any
 * @return error
 **/

@@ -159,9 +159,7 @@ func (s *Model) defineColumn(name string, tpColumn TypeColumn, tpData et.TypeDat
 }
 
 /**
-* withEntry: Returns a copy of m with key set to value. Definitions replace the maps of a model instead of
-* writing into them, so a query that is reading them (the drivers read them without locks) never sees a
-* map being written, which would make the runtime fail with "concurrent map read and map write".
+* withEntry: Returns a copy of m with key set to value (copy on write: the drivers read the maps without locks).
 * @param m map[string]V, key string, value V
 * @return map[string]V
 **/

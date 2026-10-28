@@ -1144,10 +1144,8 @@ func (s *Query) setCalcFuns(tx *Tx, item et.Json) {
 }
 
 /**
-* setCalc: Runs the JS scripts of the CALC fields (defined with DefineCalc) over the item, which they
-* receive as "item", and returns the item they leave. runners keeps one runtime per model for the whole
-* query (built on the first row), so the bindings are not rebuilt and the scripts not compiled for every row;
-* each script runs inside a function, so its declarations do not clash from one row to the next.
+* setCalc: Runs the CALC scripts over the item (as "item") and returns the item they leave; runners reuses
+* one runtime per model for the whole query.
 * @param tx *Tx, item et.Json, runners map[*Model]*jwf.Runner
 * @return et.Json, error
 **/
@@ -1444,9 +1442,7 @@ func (s *Query) loadQuery(query et.Json) (*Query, error) {
 	}
 	s.Conditions = conditions
 
-	// "and" / "or" at the first level add conditions joined with that connector: each one without its own
-	// connector takes it ("or": [a, b] is OR a OR b), so they are read one by one and not with ToConditions,
-	// which would give b an AND.
+	// "and"/"or" at the first level: each condition takes the connector of the group.
 	for _, group := range []struct {
 		key       string
 		connector et.Connector

@@ -183,10 +183,7 @@ func rollupWhere(where []*et.Condition) []*et.Condition {
 }
 
 /**
-* rollupConditions: Joins the key conditions of a rollup to its where so that an OR in the where cannot drop
-* them. The drivers write conditions in order without parentheses and SQL evaluates AND before OR, so the
-* where is split into its OR terms and the keys are repeated in each one: keys AND (a AND b OR c) is written
-* keys AND a AND b OR keys AND c. The conditions are copies; the definition is not changed.
+* rollupConditions: Repeats the keys in every OR term of the where, so an OR cannot drop them (copies).
 * @param keys, where []*et.Condition
 * @return []*et.Condition
 **/
@@ -561,10 +558,7 @@ func firstOf(list []et.Json) et.Json {
 }
 
 /**
-* setRelations: Resolves the details, masters and rollups the query asked for over every resulting row.
-* With more than one row, a relation with one key is resolved with one query per batchSize parents
-* (WHERE fk IN (...)) instead of one per row; a relation with several keys, a master without selects and
-* a rollup whose where reads fields of the row are resolved row by row. Any error is returned.
+* setRelations: Resolves details, masters and rollups; with several rows, single-key relations go in batches.
 * @param tx *Tx, items []et.Json
 * @return error
 **/
@@ -771,10 +765,7 @@ func (s *QueryRollups) hasRowRefs() bool {
 }
 
 /**
-* setRollup: Sets item[name] for every item: an aggregate (count, sum, avg, min, max; a value for one
-* select, an object for several) or the first related record (row: the value of its single field; object:
-* the record). In a batch, aggregates are grouped by the key (GROUP BY) and a parent without related
-* records gets 0 for count and sum and null otherwise, as the query of a single row gives.
+* setRollup: Sets item[name] to the aggregate or the first related record; a batch groups by the key.
 * @param tx *Tx, items []et.Json, name string, rollup *QueryRollups
 * @return error
 **/
@@ -847,8 +838,7 @@ func (s *Query) setRollup(tx *Tx, items []et.Json, name string, rollup *QueryRol
 			}
 		case aggregate:
 			if first == nil {
-				// Without related records count and sum give 0 (the drivers wrap SUM in COALESCE) and
-				// avg, min and max null, as the query of a single row does.
+				// Without records: count and sum give 0, avg, min and max null.
 				first = et.Json{}
 				for _, alias := range aliases {
 					first[alias] = nil

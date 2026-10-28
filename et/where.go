@@ -703,8 +703,7 @@ func Joingy(left, right Iterator, keys map[string]string, joinType JoinType) Ite
 	rightAs := strings.ToLower(right.As())
 	leftAs := strings.ToLower(left.As())
 
-	// indexar RIGHT: prefijamos y guardamos cada ítem en rightItems para
-	// no depender del estado del iterador después de consumirlo.
+	// RIGHT: prefix and index every item
 	for {
 		r, ok := right.Next()
 		if !ok {
@@ -717,7 +716,7 @@ func Joingy(left, right Iterator, keys map[string]string, joinType JoinType) Ite
 		rightIndex[key] = append(rightIndex[key], i)
 	}
 
-	// recorrer LEFT
+	// LEFT: match each item
 	for {
 		l, ok := left.Next()
 		if !ok {
@@ -739,7 +738,7 @@ func Joingy(left, right Iterator, keys map[string]string, joinType JoinType) Ite
 		}
 	}
 
-	// RIGHT JOIN o FULL JOIN: filas del lado derecho sin emparejamiento
+	// RIGHT/FULL: unmatched right rows
 	if joinType == RightJoin || joinType == FullJoin {
 		for i, r := range rightItems {
 			if !matchedRight[i] {

@@ -43,8 +43,7 @@ var placeholder = regexp.MustCompile(`\$\d+`)
 
 /**
 * quoted: Returns val formatted as a SQL literal (quoted string, bare number, NULL, etc.).
-* Pointers are dereferenced (nil is NULL); lists and any other value go as their JSON text in a quoted
-* literal, never as Go's %v of the value (which is not SQL).
+* Pointers are dereferenced (nil is NULL); anything else goes as its JSON text, quoted.
 * @param val any
 * @return any
 **/

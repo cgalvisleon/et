@@ -12,8 +12,7 @@ import (
 )
 
 /**
-* TestQuoted: Every value becomes a SQL literal: strings escaped, numbers bare, pointers dereferenced,
-* lists and unknown values as quoted JSON (never Go's %v), nil as NULL.
+* TestQuoted: Every kind of value becomes a valid SQL literal.
 **/
 func TestQuoted(t *testing.T) {
 	now := time.Date(2026, 10, 27, 13, 4, 5, 0, time.UTC)
@@ -206,8 +205,7 @@ func TestBatchHelpers(t *testing.T) {
 }
 
 /**
-* TestSchemasConcurrent: Models are looked up and defined from many goroutines (run with -race); looking up
-* a model of a schema that does not exist does not create the schema.
+* TestSchemasConcurrent: Concurrent lookups and definitions (-race); a lookup never creates a schema.
 **/
 func TestSchemasConcurrent(t *testing.T) {
 	db := &DB{Name: "test", Schemas: map[string]*Schema{}}
@@ -234,8 +232,7 @@ func TestSchemasConcurrent(t *testing.T) {
 }
 
 /**
-* TestDefineConcurrent: Definitions on one model from many goroutines are serialized (run with -race): none is
-* lost and the columns slice is never seen half replaced.
+* TestDefineConcurrent: Concurrent definitions on one model (-race); none is lost.
 **/
 func TestDefineConcurrent(t *testing.T) {
 	db := &DB{Name: "test", Schemas: map[string]*Schema{}}

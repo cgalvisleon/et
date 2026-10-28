@@ -873,8 +873,7 @@ func (s *Items) Last() (Item, error) {
 }
 
 /**
-* at: The item at index idx (0-based) of Result, or nil when it is out of range, so the accessors give their default
-* value instead of a panic
+* at: The item idx of Result, or nil when it is out of range
 * @param idx int
 * @return Json
 **/

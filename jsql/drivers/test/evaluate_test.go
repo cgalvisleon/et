@@ -9,9 +9,7 @@ import (
 )
 
 /**
-* TestMemoryMatchesSql: The same where gives the same rows in SQL (every driver) and in memory (et.EvaluateObject,
-* the evaluator of jwf scripts and et.From): AND binds tighter than OR, a condition without connector after the
-* first one is an AND, like uses % and _ without telling case apart and between takes [min, max] or {min, max}.
+* TestMemoryMatchesSql: The same where gives the same rows in SQL (every driver) and in memory.
 **/
 func TestMemoryMatchesSql(t *testing.T) {
 	rows := []et.Json{

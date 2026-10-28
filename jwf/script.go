@@ -33,8 +33,7 @@ func Run(code string, bindings map[string]any, reads ...string) (any, et.Json, e
 }
 
 /**
-* Runner: A runtime with its bindings set once, to run scripts many times (e.g. once per row) without
-* building a new runtime each time. Globals a script leaves stay for the next run. Not safe for concurrent use.
+* Runner: A runtime with fixed bindings to run scripts many times; globals persist; not concurrent.
 **/
 type Runner struct {
 	vm       *goja.Runtime

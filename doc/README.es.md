@@ -8,7 +8,7 @@ Requiere Go 1.25. Agrega el módulo e importa solo los paquetes que uses:
 
 ```bash
 go get github.com/cgalvisleon/et@latest
-go get github.com/cgalvisleon/et@v1.0.49
+go get github.com/cgalvisleon/et@v1.0.50
 ```
 
 ```go
@@ -27,7 +27,7 @@ Una librería modular para microservicios, CLIs y aplicaciones web en Go. Cada d
 
 Los paquetes de infraestructura (`cache`, `event`, `jsql`) leen su configuración de variables de entorno y se conectan una sola vez en `Load()`; las llamadas siguientes no hacen nada.
 
-## Actualizar a v1.0.49
+## Actualizar a v1.0.50
 
 - `router.Publish` / `router.With` ya no anteponen `Route.PackageName` a `Route.Path`: pon la ruta completa en la ruta.
 - Los modelos de `jsql` exigen un esquema. En SQLite, MySQL y Oracle la tabla se llama `schema_nombre` (antes SQLite usaba el nombre a secas), así que las bases SQLite existentes necesitan renombrar sus tablas.
@@ -36,7 +36,7 @@ Los paquetes de infraestructura (`cache`, `event`, `jsql`) leen su configuració
 - Scripts de jsql (goja): `where` de un modelo, consulta o comando recibe una condición en JSON o una lista (`[{status: {eq: "active"}}, {and: {age: {more: 18}}}]`); ya no hay `and`/`or`. Sirve un objeto a secas (`{status: {eq: "active"}}`) o dentro de `where`.
 - `router.Api.Public` / `Session` / `Protected` reciben `group` primero.
 
-## Cambios después de v1.0.49
+## Cambios después de v1.0.50
 
 - Las condiciones se evalúan en memoria como en SQL: `AND` liga más que `OR`, y una condición sin conector después de la primera es un `AND` (antes se ignoraba en memoria). Revisa los filtros en memoria que dependían del orden de izquierda a derecha.
 - `like` en memoria acepta `%` y `_` y no distingue mayúsculas; `*` sigue valiendo como `%`.

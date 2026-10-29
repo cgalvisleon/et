@@ -606,10 +606,13 @@ func (s *Instance) next() bool {
 		return s.setCurrent(connection)
 	} else {
 		if s.Current.Source.Index != s.goTo {
+			// La salida elegida con goTo sin conexión termina la ejecución en ese paso (no sigue por la salida 0)
 			connection, exists := s.flow.getOutput(s.Current.Source.StepId, s.goTo)
-			if exists {
-				s.setCurrent(connection)
+			if !exists {
+				s.Done()
+				return false
 			}
+			s.setCurrent(connection)
 		}
 		connection, exists := s.flow.getOutput(s.Current.Target.StepId, s.goTo)
 		if !exists {

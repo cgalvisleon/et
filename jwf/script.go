@@ -1,6 +1,8 @@
 package jwf
 
 import (
+	"errors"
+
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/strs"
 	"github.com/dop251/goja"
@@ -86,7 +88,7 @@ func (s *Runner) Run(code string, set map[string]any, reads ...string) (any, et.
 
 	result, err := s.vm.RunProgram(program)
 	if err != nil {
-		return et.Json{}, globals, err
+		return et.Json{}, globals, scriptError(err)
 	}
 
 	for _, name := range reads {
@@ -132,4 +134,38 @@ func RunScripts(scripts []*Script, ctx et.Json, bindings map[string]any) (any, e
 	}
 
 	return RunCode(script, ctx, bindings)
+}
+
+/**
+* scriptError: The error of a script as its message: a thrown Error (or a Go error of a binding) gives its message, a
+* ReferenceError, TypeError… "name: message", any other thrown value its text; without the "at <eval>:line:col" of goja,
+* which points into the scripts joined and means nothing to whoever reads it. An error that is not a thrown exception (an
+* interrupt) stays as it is
+* @param err error
+* @return error
+**/
+func scriptError(err error) error {
+	var exception *goja.Exception
+	if !errors.As(err, &exception) {
+		return err
+	}
+
+	value := exception.Value()
+	if object, ok := value.(*goja.Object); ok {
+		message := object.Get("message")
+		if message != nil && !goja.IsUndefined(message) && !goja.IsNull(message) {
+			name := ""
+			if value := object.Get("name"); value != nil && !goja.IsUndefined(value) {
+				name = value.String()
+			}
+			if name == "" || name == "Error" || name == "GoError" {
+				return errors.New(message.String())
+			}
+			return errors.New(name + ": " + message.String())
+		}
+	}
+	if value == nil || goja.IsUndefined(value) || goja.IsNull(value) {
+		return err
+	}
+	return errors.New(value.String())
 }

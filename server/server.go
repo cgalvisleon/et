@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"github.com/cgalvisleon/et/msg"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/cgalvisleon/et/logs"
@@ -29,6 +32,7 @@ type Ettp struct {
 	name    string
 	onClose []func()
 	onStart []func()
+	stop    chan os.Signal
 }
 
 /**
@@ -43,7 +47,11 @@ func New(name string, port int) *Ettp {
 		name:    name,
 		onClose: make([]func(), 0),
 		onStart: make([]func(), 0),
+		stop:    make(chan os.Signal, 1),
 	}
+	// From here, not from Start: a SIGTERM while the app loads (between New and Start)
+	// waits for Start instead of ending the process without running OnClose
+	signal.Notify(result.stop, os.Interrupt, syscall.SIGTERM)
 
 	if result.port != 0 {
 		result.Mux = chi.NewRouter()
@@ -187,7 +195,7 @@ func (s *Ettp) Start() {
 	}
 	s.printRoutes()
 	s.banner()
-	utility.AppWait()
+	<-s.stop
 }
 
 /**

@@ -31,7 +31,7 @@ var keywordsQuery = []string{
 }
 
 var (
-	errJsonInvalid        = errors.New("invalid sql: the descriptor has no query, command or define key")
+	errJsonInvalid        = errors.New("invalid sql: the descriptor has no query, command, administration or define key")
 	errJsonManyCommands   = errors.New("invalid sql: the descriptor has more than one command")
 	errJsonFromRequired   = errors.New("invalid sql: from is required")
 	errJsonBulkData       = errors.New("invalid sql: bulk requires data as a list of objects")
@@ -50,7 +50,7 @@ func (s *DB) queryJson(sql et.Json) (et.Items, error) {
 /**
 * queryJsonTx: Runs a query, command or definition described in JSON inside a transaction.
 * The kind is chosen in a fixed order: a command key (insert, update, delete, upsert, bulk), then
-* define, then a query (select or from). Keys are case-insensitive.
+* an administration key (drop, truncate, create, alter; admin.go), then define, then a query (select or from). Keys are case-insensitive.
 * @param tx *Tx, sql et.Json
 * @return et.Items, error
 **/
@@ -72,6 +72,12 @@ func (s *DB) queryJsonTx(tx *Tx, sql et.Json) (et.Items, error) {
 	}
 	if found != "" {
 		return s.parseCommand(tx, found, sql[keys[found]])
+	}
+
+	for _, op := range keywordsAdmin {
+		if original, ok := keys[op]; ok {
+			return s.parseAdmin(op, sql[original])
+		}
 	}
 
 	for _, kind := range keywordsDDL {

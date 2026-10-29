@@ -600,10 +600,6 @@ func (s *suite) ddl() {
 			return nil, err
 		}
 		if err := db.RemoveModel(s.schema, tmp.Name); err != nil {
-			// Josefina does not drop models through SQL: RemoveModel answers ErrCannotDrop
-			if s.tg.name == jsql.DriverJosefina && errors.Is(err, josefina.ErrCannotDrop) {
-				return "ok", nil
-			}
 			return nil, err
 		}
 		if _, err := db.GetModel(s.schema, tmp.Name); err == nil {

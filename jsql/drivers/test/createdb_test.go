@@ -45,10 +45,28 @@ func TestCreateDropDB(t *testing.T) {
 				t.Skipf("%s not available: %v", tg.name, err)
 			}
 
+			// Josefina: its databases are created with its API, not through SQL: CreateDB only checks that it answers;
+			// DropDB sends DROP DATABASE from admin_database (josefina), which refuses the database of the session
+			if tg.name == jsql.DriverJosefina {
+				if err := jsql.CreateDB(&tg.params, timeout); err != nil {
+					t.Fatalf("CreateDB: %v", err)
+				}
+				db, err := jsql.NewDB(tg.params)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := jsql.DropDB(db, timeout); err == nil {
+					t.Fatal("DropDB dropped the database it connects through")
+				}
+				if err := jsql.TestConnection(ctx, server, ""); err != nil {
+					t.Fatalf("the database is gone after a refused DropDB: %v", err)
+				}
+				return
+			}
+
 			// Oracle: the service is not created nor dropped from a connection (spec §9): CreateDB only checks that it
 			// answers and DropDB fails with MSG_DRIVER_CANNOT_DROP_DB
-			// Josefina: the same (its databases are created with its API, not through SQL)
-			if tg.name == jsql.DriverOracle || tg.name == jsql.DriverJosefina {
+			if tg.name == jsql.DriverOracle {
 				if err := jsql.CreateDB(&tg.params, timeout); err != nil {
 					t.Fatalf("CreateDB: %v", err)
 				}

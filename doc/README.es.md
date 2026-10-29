@@ -53,7 +53,7 @@ Cada tabla lista la API pública principal de cada paquete. `go doc github.com/c
 | Paquete | API pública | Ejemplo |
 | --- | --- | --- |
 | `et` | `Json` (`Str`, `Int`, `Bool`, `Num`, `Time`, `Json`, `ArrayStr`, `ArrayJson`, `ValStr`, `ValInt`, `Set`, `Put`, `Clear`, `Get`, `Update`, `Clone`, `DeepClone`, `ToString`, `ToObject`), `ToJS`/`FromJS`/`JsonOf`/`GoArg` (un `Json` en scripts de goja: un objeto sobre el mismo mapa, claves como propiedades y sus métodos con su nombre de Go), `Item`, `Items`, `List`, condiciones (`Eq`, `More`, `In`, `Between`, `ToCondition`, `AddCondition`, `EvaluateObject`, `EvaluateValue`, `Fld` (una referencia a un campo, `{field: "nombre"}` en JSON)), `From(items).Where(...).All()` | `data.ValStr("Cali", "user", "city")` |
-| `jsql` | `Load`, `LoadTo`, `ConnectTo`, `CreateDB`, `DropDB`, `TestConnection`; `DB.Define`, `DefineModel`, `Query`, `Sql`; `Model.Insert`, `Update`, `Upsert`, `Delete`, `Bulk`, `Select`, `Where`, `WhereByJson`; `Query.All`, `One`, `Limit`, `Count`; `NewTx`, `DefineSeries` (`GenSerie`, `GenSerieTx`, `GenValue`, `GenValueTx`); `Bind(source, vars)` (variables `{{name}}`); `Wrapper`, `BindWrapper`, `ToJsMapWrapper` (goja) | `users.Where(jsql.Eq("id", id)).One()` |
+| `jsql` | `Load`, `LoadTo`, `ConnectTo`, `CreateDB`, `DropDB`, `TestConnection`; `DB.Define`, `DefineModel`, `Query` (JSON: consultas, comandos, `define`, y `drop`/`truncate`/`create`/`alter` de modelos, schemas, bases y usuarios), `Sql`; `Model.Insert`, `Update`, `Upsert`, `Delete`, `Bulk`, `Select`, `Where`, `WhereByJson`; `Query.All`, `One`, `Limit`, `Count`; `NewTx`, `DefineSeries` (`GenSerie`, `GenSerieTx`, `GenValue`, `GenValueTx`); `Bind(source, vars)` (variables `{{name}}`); `Wrapper`, `BindWrapper`, `ToJsMapWrapper` (goja) | `users.Where(jsql.Eq("id", id)).One()` |
 | `stores` | `DefineInstance` (`Set`, `Get`, `Delete`, `Query`), `DefineAuthorization` (`SetAuthor`, `Author`, `RemoveAuthor`), `DefineConfig` (`SetConfig`, `Get`), `DefineFormState` | `ok, _ := auth.Author(profileId, "GET", "/users")` |
 | `mem` | `Set`, `Get`, `GetStr`, `GetInt`, `GetJson`, `Delete`, `Exists`, `Keys`, `Clear` | `mem.Set("k", "v", time.Minute)` |
 | `ephemeral` | `NewInstance(expiration)`, `Set`, `Get`, `Del` | `e := ephemeral.NewInstance(time.Minute)` |
@@ -184,7 +184,7 @@ items, _ := db.Query(et.Json{
 })
 ```
 
-Drivers: `postgres`, `sqlite` (sin CGO), `oracle` 19c+, `mysql` 8.0+, `mssql` 2022+ y `josefina` (protocolo Postgres de Josefina; no crea ni elimina bases, y guarda los atributos de un modelo en la raíz del documento en lugar de en `_source`). El comportamiento completo está en [`jsql/spec.md`](../jsql/spec.md); la API pública está reunida en [`jsql/catalog.go`](../jsql/catalog.go).
+Drivers: `postgres`, `sqlite` (sin CGO), `oracle` 19c+, `mysql` 8.0+, `mssql` 2022+ y `josefina` (protocolo Postgres de Josefina; no crea bases, y guarda los atributos de un modelo en la raíz del documento en lugar de en `_source`). El comportamiento completo está en [`jsql/spec.md`](../jsql/spec.md); la API pública está reunida en [`jsql/catalog.go`](../jsql/catalog.go).
 
 ### API HTTP con `router`
 

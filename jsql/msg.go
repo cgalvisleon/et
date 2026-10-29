@@ -35,6 +35,8 @@ var (
 	MSG_NO_COLUMNS_UPDATE        = "no columns to update in %s"
 	MSG_REFUSE_WITHOUT_WHERE     = "refusing to %s %s without a WHERE clause (no primary key value and no conditions)"
 	MSG_UNSUPPORTED_COMMAND      = "unsupported command type: %s"
+	MSG_ADMIN_UNSUPPORTED        = "the driver %s does not support %s"
+	MSG_ADMIN_INVALID            = "invalid sql: %s takes {%s}"
 )
 
 func init() {
@@ -73,5 +75,7 @@ func init() {
 		MSG_NO_COLUMNS_UPDATE = "no hay columnas para actualizar en %s"
 		MSG_REFUSE_WITHOUT_WHERE = "se rechaza %s %s sin cláusula WHERE (sin valor de clave primaria ni condiciones)"
 		MSG_UNSUPPORTED_COMMAND = "tipo de comando no soportado: %s"
+		MSG_ADMIN_UNSUPPORTED = "el driver %s no soporta %s"
+		MSG_ADMIN_INVALID = "sql inválido: %s recibe {%s}"
 	}
 }

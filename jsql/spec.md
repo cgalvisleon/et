@@ -358,6 +358,22 @@ En los scripts, los registros están en `NEW` (con los valores que se van a guar
 - **Consulta**: `from` (obligatorio) más las claves de §5.4. Cada clave admite también su forma SQL: `select` (= `selects`), `group by` / `group_by` (= `groups`), `having` (= `havings`), `order by` / `order_by` (= `orders`), `left join` / `right join` / `full join` (= `left_join`…). Además acepta `offset` y las claves `and` / `or` de primer nivel, que agregan condiciones con ese conector después del `where`. El resultado son las filas de la consulta.
 - **Definición**: `define` con la estructura `Define` (§4.1) en JSON (`schema`, `name`, `columns`, `primary_keys`, `source_field`, `details`, `masters` —también se lee `master`—, `rollups`…). Define el modelo, crea la tabla si no existe y devuelve la definición del modelo.
 
+### 8.3 Administración (`admin.go`)
+
+Un descriptor con `drop`, `truncate`, `create` o `alter` borra, vacía o administra usuarios (se revisa después de los comandos de §8.1 y antes de `define`):
+
+| Descriptor | SQL que genera |
+| --- | --- |
+| `{"drop": {"model": "schema.modelo"}}` | `DROP TABLE` (con la tabla del modelo si la `DB` lo conoce, que además lo olvida) |
+| `{"truncate": {"model": "schema.modelo"}}` | `TRUNCATE TABLE` (sqlite: `DELETE FROM`) |
+| `{"drop": {"schema": "nombre", "cascade": true}}` | `DROP SCHEMA … [CASCADE]` (la `DB` olvida sus modelos) |
+| `{"truncate": {"schema": "nombre"}}`, `{"truncate": {"database": "<la de la conexión>"}}` | un `TRUNCATE TABLE` de las tablas de `information_schema.tables` del schema, o de todos los schemas de usuario |
+| `{"drop": {"database": "nombre"}}` | `DROP DATABASE` |
+| `{"create": {"user": "nombre", "password": "x"}}`, `{"alter": {"user": "nombre", "password": "x"}}` | `CREATE`/`ALTER USER … WITH PASSWORD` (mysql `IDENTIFIED BY`, mssql `LOGIN … WITH PASSWORD =`) |
+| `{"drop": {"user": "nombre"}}` | `DROP USER` (mssql `DROP LOGIN`) |
+
+`"if_exists": true` agrega `IF EXISTS` donde el motor lo tiene. postgres y josefina generan todo; mysql y mssql, modelos, bases y usuarios; sqlite y oracle, solo modelos. Lo que un motor no tiene responde `MSG_ADMIN_UNSUPPORTED`; un descriptor sin `model`/`schema`/`database`/`user`, `MSG_ADMIN_INVALID`. El resultado es `{op, <tipo>: nombre, ok: true}`. Josefina exige ser el administrador y responde `409` para un modelo en uso, la base de la sesión, el administrador o el propio usuario (josefina spec §6.5). `TestAdmin` de `drivers/test`.
+
 ## 9. Drivers
 
 El driver recibe un `Model` para el DDL, un `Query` para el SQL de consulta y un `Command` para el SQL de comando:
@@ -425,7 +441,7 @@ type Driver interface {
 
 - Paquete `jsql/drivers/josefina` (`DriverJosefina`): Josefina (base de datos de documentos del espacio de trabajo) habla el protocolo de PostgreSQL en su `PG_PORT` y entiende SQL con su lenguaje `jql`, que la conexión elige con `options=-c language=jql`. El driver embebe al de Postgres: el SQL es el mismo salvo dónde viven los atributos, y la conexión es la de `lib/pq` con `PgConection` (por omisión `sslmode=disable`; usar `require` con un usuario de Josefina sin verificador SCRAM).
 - **Atributos en la raíz** (2026-10-28; spec de Josefina §22, D52–D54): Josefina es una base de documentos, así que un `ATTRIB` de un modelo con `SourceField` se guarda en la raíz del documento y no dentro de `_source`. El driver implementa `jsql.RootAttribs` y el generador de Postgres pregunta `jsql.AttribsAtRoot(model)`: `WHERE`/`ORDER BY`/`GROUP BY` nombran el atributo por su nombre citado o su ruta (`A."color"`, `A."meta"->'a'->>'b'`, con los mismos *casts* que dentro de `_source`); `INSERT` lo escribe como campo propio (`"lastName"`, objetos y listas como `jsonb`); `UPDATE` hace `SET "color" = …` y, para una ruta, `"meta" = jsonb_set(COALESCE("meta", '{}'), …)` (si el mismo `data` trae la raíz entera —un update lleva el registro fusionado—, las rutas se aplican sobre ese valor); el `SELECT` sin campos y `RETURNING` leen la fila con `to_jsonb(<alias o tabla>)` sin `jid` ni los ocultos, unida a las columnas; `Load` no crea `_source`. `IsStrict` lo sigue aplicando `jsql` (un modelo estricto descarta lo que no es columna). El modelo y la aplicación no cambian: contra Postgres los atributos siguen en `_source`.
-- Josefina no crea ni borra bases ni modelos por SQL: `Connect` y `CreateDB` solo comprueban que la base exista (se crea con la API de Josefina), `DropDB` responde `MSG_DRIVER_CANNOT_DROP_DB` (como Oracle) y `Drop` de un modelo responde `josefina.ErrCannotDrop`.
+- Josefina no crea bases por SQL: `Connect` y `CreateDB` solo comprueban que la base exista (se crea con la API de Josefina). Desde el 2026-10-28 borra modelos (`Drop` es el de Postgres, `DROP TABLE IF EXISTS`) y bases: `DropDB` manda `DROP DATABASE IF EXISTS` desde otra base del mismo Josefina (`admin_database` de los parámetros, por omisión `josefina`), porque Josefina no borra la base de la sesión. Antes respondían `MSG_DRIVER_CANNOT_DROP_DB` y `josefina.ErrCannotDrop`, que ya no existe.
 - Lo que PostgreSQL verifica y Josefina no (el padre de una llave foránea, una llave primaria compuesta repetida) lo verifica el lenguaje de Josefina al insertar, leyendo antes de escribir.
 - Probado con `jsql/drivers/test` contra un nodo de Josefina (`JOSEFINA_HOST`, `JOSEFINA_PORT` (5433, el clúster de docker compose), `JOSEFINA_SSLMODE` (`require`), `JOSEFINA_USER`, `JOSEFINA_PASSWORD`, `JOSEFINA_DATABASE`): `TestCatalog` 106 de 106 (el caso de `RemoveModel` espera `ErrCannotDrop`), `TestInsertUpdate`, `TestJoinGroupHaving`, `TestFieldValue`, `TestCreateDropDB`, `TestMemoryMatchesSql` y `TestAttribsAtRoot` (atributos, rutas, update anidado, ocultos y modelo estricto en cada motor; en Josefina, además, el documento guardado sin `_source`). Cada corrida usa un schema nuevo (`jsql_t<n>`): Josefina no borra schemas.
 
@@ -489,6 +505,8 @@ El caso omitido es `Load`/`LoadTo`, que lee el entorno. `go build ./...` y `go v
 **Revisado el 2026-10-27** (revisión del núcleo `et`, ver `et/spec.md` §7): un `where` JSON con una condición sin conector después de la primera armaba SQL inválido (`... AND x = 1 A.y = 2`): `et.ToConditions` le pone ahora `AND`. `between`/`not_between` con `[min, max]` o `{min, max}` desde JSON devolvían `""` (SQL roto): los cinco drivers leen el rango con `et.ToBetween` y uno ilegible da `1 = 0`. El `AuditLog` del `DB` y del modelo se recorta con `et.SafeData.Trim` (antes borraba la entrada recién agregada al llegar a `MAX_AUDIT_LOG`). Nuevo `TestMemoryMatchesSql` (`drivers/test/evaluate_test.go`): el mismo where da las mismas filas en SQL y en memoria (precedencia, sin conector, `like`, `between`); con toda la batería pasa en los seis motores: sqlite, postgres, josefina, oracle, mysql y mssql (contenedores desechables `jsql-oracle`, `jsql-mysql`, `jsql-mssql`).
 
 **Revisado el 2026-10-28** (atributos en la raíz con el driver josefina, §9.4): `jsql.RootAttribs` / `jsql.AttribsAtRoot` y el generador de Postgres con los atributos en la raíz cuando el driver lo pide; nuevo `TestAttribsAtRoot`; el resumen de `TestCatalog` tenía la tabla por sección sin la columna `josefina` (los valores se corrían una columna). Batería verde en sqlite, postgres (16, contenedor desechable) y josefina, con `TestCatalog` 106 de 106 en los tres y `TestAttribsAtRoot` comprobando `_source` en postgres y la raíz en josefina; oracle, mysql y mssql no estaban disponibles (sus drivers no cambiaron).
+
+**Revisado el 2026-10-28** (administración en JSON, §8.3): `admin.go` con `drop`/`truncate` de modelos, schemas y bases y `create`/`alter`/`drop` de usuarios en el dialecto de cada motor; el driver josefina borra modelos y bases (§9.4). `TestAdmin` pasa en sqlite y Josefina, y la batería completa de `drivers/test` contra Josefina y sqlite (postgres no se corrió: la base local del espacio de trabajo no se toca).
 
 **Brecha:** ninguna abierta. Cerradas el 2026-10-27: B5 (driver para josefina, §9.4), B14 y B15.
 

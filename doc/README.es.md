@@ -68,7 +68,7 @@ Cada tabla lista la API pública principal de cada paquete. `go doc github.com/c
 | `server` | `New(name, port)` → `Ettp` (`Mount`, `HandleFunc`, `Use`, `Start`, `Close`); `NewApi` | `srv := server.New("api", 3000); srv.Start()` |
 | `ettp/v2` | `New(name, *Config)` → `Server` (`Public`, `Private`, `SetRouter`, `Use`, `Start`, `Save`, `Reset`) | `ettp.New("gateway", &ettp.Config{Port: 3300})` |
 | `ettp/v1` | Gateway anterior: `New(*Config)`, `SetRouter`, `SetProxy`, `SetPortForward`, `PublicRoute`, `PrivateRoute` | — |
-| `middleware` | `Authentication`, `Logger`, `Recoverer`, `RequestID`, `AllowAll`, `GetBearerToken`, `NewMetric` | `r.Use(middleware.Logger)` |
+| `middleware` | `Authentication`, `Logger`, `Recoverer`, `RequestID`, `AllowAll`, `GetBearerToken`, `NewMetric`, `SetTelemetryOutput` | `r.Use(middleware.Logger)` |
 | `request` | Entrada: `GetBody`, `URLParam`, `Query`, `UserID`, `TenantID`; salida: `Get`, `Post`, `Put`, `Delete`, `Fetch`, `…WithTimeout`, `…WithTls` | `body, status := request.Get(url, header)` |
 | `response` | `ITEM`, `ITEMS`, `LIST`, `JSON`, `RESULT`, `HTTPError`, `Unauthorized`, `Forbidden`, `Stream` | `response.ITEM(w, r, 200, item)` |
 | `jrpc` | `Mount(host, port, services, packageName)`, `Start`, `Call`, `CallJson`, `CallItem`, `CallItems` | `jrpc.CallJson("Users.Get", et.Json{"id": id})` |
@@ -209,6 +209,24 @@ func getUser(w http.ResponseWriter, r *http.Request) {
     response.ITEM(w, r, http.StatusOK, item)
 }
 ```
+
+### Telemetría de peticiones y Grafana
+
+`middleware.Logger` (lo usan `router` y `server`) escribe una línea por petición en stdout. `TELEMETRY_FORMAT` elige cuál: `text` (la línea con colores), `json` (un objeto JSON por petición, para Loki/Grafana) u `off`; sin definir, es `text` en una terminal y `json` en otro caso (un contenedor). `TELEMETRY_LOG=errors` escribe solo las peticiones fallidas o lentas (estado ≥ 500 o latencia ≥ `LATENCY_LIMIT` ms; por defecto `all`). `SetTelemetryOutput(w, format, filter)` cambia el destino, el formato y el filtro en tiempo de ejecución (vacío = la variable). El query string nunca se escribe. Con `off` y sin NATS el middleware no hace nada (sin métrica ni cabecera `ServiceId`); los contadores de `cache.CallMetrics` solo corren para la línea de texto, NATS o `NewMetric` (el 429 de `ettp`).
+
+```json
+{"time":"2026-10-29T15:04:05.123-05:00","level":"INFO","msg":"http.request","http.request.method":"GET","http.route":"/users/{id}","url.path":"/users/123","url.scheme":"http","http.response.status_code":200,"duration_ms":12.84,"response_time_ms":11.9,"search_time_ms":0,"http.request.body.size":0,"http.response.body.size":2048,"client.address":"10.0.0.4","server.address":"pod-1","user_agent.original":"curl/8.7.1","trace_id":"","service_id":"…","app_name":"…"}
+```
+
+`level` es `ERROR` en un 5xx y `WARN` en un 4xx o con una latencia mayor a `LATENCY_LIMIT` ms. `http.route` es el patrón de la ruta (el de chi, o el que pone `ettp`), así que no crece con los ids. Grafana Alloy o Promtail llevan el stdout del contenedor a Loki; deja como etiquetas de Loki solo el servicio y `level`, y consulta el resto desde el JSON (el parser `json` cambia los puntos por `_`):
+
+```logql
+sum by (http_route) (rate({service="tenants"} | json [1m]))                                        # peticiones por segundo
+quantile_over_time(0.95, {service="tenants"} | json | unwrap duration_ms [5m]) by (http_route)     # latencia p95
+sum(rate({service="tenants"} | json | http_response_status_code >= 500 [5m]))                      # 5xx por segundo
+```
+
+Con NATS conectado se siguen publicando los eventos `telemetry`, `telemetry:log` y `telemetry:overflow`.
 
 ### Caché y eventos
 
@@ -377,6 +395,7 @@ hits, _ := index.Search(ctx, tenantId, projectId, "reset the router", 5, 0.3, em
 | `jwsp` | `WHATSAPP_API_URL` |
 | `store` | `RELSEG_SIZE` (MB por segmento, 128), `SYNC_ON_WRITE` (true), `MIN_THRESHOLD_COMPACT` (1000) |
 | `validator` | `LANG` |
+| `middleware` | `TELEMETRY_FORMAT` (`text` en una terminal, `json` en otro caso, `off`), `TELEMETRY_LOG` (`all`, `errors`), `LATENCY_LIMIT` (1000 ms, `WARN` por encima), `REQUESTS_LIMIT` (400 por segundo por método y ruta) |
 
 ## Binarios CLI
 

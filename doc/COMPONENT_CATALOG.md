@@ -1725,6 +1725,7 @@ func PushTokenLastUse(data et.Json)
 func Recoverer(next http.Handler) http.Handler
 func RequestID(next http.Handler) http.Handler
 func RequestLogger(f LogFormatter) func(next http.Handler) http.Handler
+func SetTelemetryOutput(w io.Writer, format, filter string)
 func WithLogEntry(r *http.Request, entry LogEntry) *http.Request
 func (l *DefaultLogFormatter) NewLogEntry(r *http.Request) LogEntry
 func GetLogEntry(r *http.Request) LogEntry
@@ -1744,6 +1745,9 @@ func (s *Metrics) RESULT(w http.ResponseWriter, r *http.Request, statusCode int,
 func (s *Metrics) SetPath(val string)
 func (s *Metrics) ToJson() et.Json
 func (s *Metrics) WriteResponse(w http.ResponseWriter, r *http.Request, statusCode int, e []byte) error
+func (rw *ResponseWriterWrapper) Flush()
+func (rw *ResponseWriterWrapper) Hijack() (net.Conn, *bufio.ReadWriter, error)
+func (rw *ResponseWriterWrapper) Unwrap() http.ResponseWriter
 func (rw *ResponseWriterWrapper) Write(b []byte) (int, error)
 func (rw *ResponseWriterWrapper) WriteHeader(code int)
 func NewWrapResponseWriter(w http.ResponseWriter, protoMajor int) WrapResponseWriter

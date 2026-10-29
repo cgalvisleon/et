@@ -242,7 +242,8 @@ func (s *Rag) replaceDocument(tx *jsql.Tx, row et.Json, chunks []string, vectors
 /**
 * Search: The chunks of a tenant and project closest to query (cosine similarity with embed), best first: at most topK
 * (0: the Config's) and only with score >= minScore (and > 0). Each result: chunk_id, document_id, document (its name),
-* source, source_id, idx, content and score. It does not call a chat model.
+* source, source_id, idx, content and score. It does not call a chat model; a project without chunks gives none without
+* embedding the query.
 * @param ctx context.Context, tenantId, projectId, query string, topK int, minScore float64, embed Embedder
 * @return []et.Json, error
 **/
@@ -258,6 +259,15 @@ func (s *Rag) Search(ctx context.Context, tenantId, projectId, query string, top
 	}
 	if embed == nil {
 		return nil, errors.New(MSG_EMBEDDER_REQUIRED)
+	}
+
+	// Sin fragmentos (una base sin indexar) no hay qué buscar: no se paga el embedding de la pregunta
+	indexed, err := scope(s.chunks, tenantId, projectId).Exists()
+	if err != nil {
+		return nil, err
+	}
+	if !indexed {
+		return []et.Json{}, nil
 	}
 
 	topK = cmp.Or(topK, s.cnf.TopK)

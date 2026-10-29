@@ -68,7 +68,7 @@ Each table lists the main public API of every package. `go doc github.com/cgalvi
 | `server` | `New(name, port)` → `Ettp` (`Mount`, `HandleFunc`, `Use`, `Start`, `Close`); `NewApi` | `srv := server.New("api", 3000); srv.Start()` |
 | `ettp/v2` | `New(name, *Config)` → `Server` (`Public`, `Private`, `SetRouter`, `Use`, `Start`, `Save`, `Reset`) | `ettp.New("gateway", &ettp.Config{Port: 3300})` |
 | `ettp/v1` | Older gateway: `New(*Config)`, `SetRouter`, `SetProxy`, `SetPortForward`, `PublicRoute`, `PrivateRoute` | — |
-| `middleware` | `Authentication`, `Logger`, `Recoverer`, `RequestID`, `AllowAll`, `GetBearerToken`, `NewMetric` | `r.Use(middleware.Logger)` |
+| `middleware` | `Authentication`, `Logger`, `Recoverer`, `RequestID`, `AllowAll`, `GetBearerToken`, `NewMetric`, `SetTelemetryOutput` | `r.Use(middleware.Logger)` |
 | `request` | Inbound: `GetBody`, `URLParam`, `Query`, `UserID`, `TenantID`; outbound: `Get`, `Post`, `Put`, `Delete`, `Fetch`, `…WithTimeout`, `…WithTls` | `body, status := request.Get(url, header)` |
 | `response` | `ITEM`, `ITEMS`, `LIST`, `JSON`, `RESULT`, `HTTPError`, `Unauthorized`, `Forbidden`, `Stream` | `response.ITEM(w, r, 200, item)` |
 | `jrpc` | `Mount(host, port, services, packageName)`, `Start`, `Call`, `CallJson`, `CallItem`, `CallItems` | `jrpc.CallJson("Users.Get", et.Json{"id": id})` |
@@ -209,6 +209,24 @@ func getUser(w http.ResponseWriter, r *http.Request) {
     response.ITEM(w, r, http.StatusOK, item)
 }
 ```
+
+### Request telemetry and Grafana
+
+`middleware.Logger` (used by `router` and `server`) writes one line per request to stdout. `TELEMETRY_FORMAT` picks it: `text` (the colored line), `json` (one JSON object per request, for Loki/Grafana) or `off`; unset, it is `text` on a terminal and `json` elsewhere (a container). `TELEMETRY_LOG=errors` writes only the failed or slow requests (status ≥ 500 or latency ≥ `LATENCY_LIMIT` ms; default `all`). `SetTelemetryOutput(w, format, filter)` changes the writer, format and filter at runtime (empty = the variable). The query string is never written. With `off` and no NATS the middleware does nothing (no metric, no `ServiceId` header); the request counters of `cache.CallMetrics` run only for the text line, NATS or `NewMetric` (the 429 of `ettp`).
+
+```json
+{"time":"2026-10-29T15:04:05.123-05:00","level":"INFO","msg":"http.request","http.request.method":"GET","http.route":"/users/{id}","url.path":"/users/123","url.scheme":"http","http.response.status_code":200,"duration_ms":12.84,"response_time_ms":11.9,"search_time_ms":0,"http.request.body.size":0,"http.response.body.size":2048,"client.address":"10.0.0.4","server.address":"pod-1","user_agent.original":"curl/8.7.1","trace_id":"","service_id":"…","app_name":"…"}
+```
+
+`level` is `ERROR` for a 5xx, `WARN` for a 4xx or a latency over `LATENCY_LIMIT` ms. `http.route` is the route pattern (chi's, or the one set by `ettp`), so it does not grow with ids. Grafana Alloy or Promtail ship the container's stdout to Loki; keep the Loki labels to the service and `level`, and query the rest from the JSON (the `json` parser turns dots into `_`):
+
+```logql
+sum by (http_route) (rate({service="tenants"} | json [1m]))                                        # requests per second
+quantile_over_time(0.95, {service="tenants"} | json | unwrap duration_ms [5m]) by (http_route)     # p95 latency
+sum(rate({service="tenants"} | json | http_response_status_code >= 500 [5m]))                      # 5xx per second
+```
+
+With NATS connected, the `telemetry`, `telemetry:log` and `telemetry:overflow` events are still published.
 
 ### Cache and events
 
@@ -377,6 +395,7 @@ hits, _ := index.Search(ctx, tenantId, projectId, "reset the router", 5, 0.3, em
 | `jwsp` | `WHATSAPP_API_URL` |
 | `store` | `RELSEG_SIZE` (segment MB, 128), `SYNC_ON_WRITE` (true), `MIN_THRESHOLD_COMPACT` (1000) |
 | `validator` | `LANG` |
+| `middleware` | `TELEMETRY_FORMAT` (`text` on a terminal, `json` elsewhere, `off`), `TELEMETRY_LOG` (`all`, `errors`), `LATENCY_LIMIT` (1000 ms, `WARN` above it), `REQUESTS_LIMIT` (400 per second per method and path) |
 
 ## CLI binaries
 

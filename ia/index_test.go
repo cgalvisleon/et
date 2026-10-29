@@ -128,9 +128,13 @@ func TestIngestTextHashAndSearch(t *testing.T) {
 		t.Fatalf("missing score or document name: %v", results[0])
 	}
 
+	before = calls
 	none, err := rag.Search(ctx, "t2", "p1", "gatos", 2, 0, embed)
 	if err != nil || len(none) != 0 {
 		t.Fatalf("another tenant must not see the chunks: %v %v", none, err)
+	}
+	if calls != before {
+		t.Fatalf("a project without chunks must not embed the query (calls %d → %d)", before, calls)
 	}
 
 	deleted, err := rag.DeleteDocumentsOf("t1", "p1", "src2")

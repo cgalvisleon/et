@@ -3,15 +3,14 @@ package middleware
 import (
 	"bytes"
 	"context"
-	"log"
 	"net/http"
-	"os"
-	"runtime"
 	"sync"
 	"time"
 
+	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/request"
 	lg "github.com/cgalvisleon/et/stdrout"
+	"github.com/go-chi/chi/v5"
 )
 
 /**
@@ -44,26 +43,54 @@ func Logger(next http.Handler) http.Handler {
 }
 
 /**
-* RequestLogger returns a middleware that logs requests using the given LogFormatter.
+* requestLogger: Measures each request and writes one telemetry line when it ends
+* (TELEMETRY_FORMAT, TELEMETRY_LOG). The Metrics goes in the context, so GetMetrics reuses it.
+* With the output off and no NATS it does nothing: no Metrics, no ServiceId header.
+* @param next http.Handler
+* @return http.Handler
+**/
+func requestLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		out := telemetryOutput()
+		if out.format == FormatOff && !event.IsLoad() {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		metric := newMetric(r, out.format == FormatText || event.IsLoad())
+		w.Header().Set("ServiceId", metric.ServiceId)
+		ww := &ResponseWriterWrapper{ResponseWriter: w, StatusCode: http.StatusOK}
+		r = r.WithContext(context.WithValue(r.Context(), MetricKey, metric))
+
+		next.ServeHTTP(ww, r)
+		if metric.Route == "" {
+			metric.Route = routePattern(r)
+		}
+		metric.DoneHTTP(ww)
+	})
+}
+
+/**
+* routePattern: The chi route that served the request ("/users/{id}"), empty outside chi.
+* @param r *http.Request
+* @return string
+**/
+func routePattern(r *http.Request) string {
+	rctx := chi.RouteContext(r.Context())
+	if rctx == nil {
+		return ""
+	}
+	return rctx.RoutePattern()
+}
+
+/**
+* RequestLogger returns the telemetry middleware.
+* Deprecated: the formatter is not used; use Logger (TELEMETRY_FORMAT picks the output).
 * @param f LogFormatter
 * @return func(next http.Handler) http.Handler
 **/
 func RequestLogger(f LogFormatter) func(next http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		fn := func(w http.ResponseWriter, r *http.Request) {
-			metric := NewMetric(r)
-			metric.CallSearchTime()
-			w.Header().Set("ServiceId", metric.ServiceId)
-			ww := &ResponseWriterWrapper{ResponseWriter: w, StatusCode: http.StatusOK}
-			entry := f.NewLogEntry(r)
-			wr := WithLogEntry(r, entry)
-
-			next.ServeHTTP(ww, wr)
-			metric.DoneHTTP(ww)
-		}
-
-		return http.HandlerFunc(fn)
-	}
+	return requestLogger
 }
 
 /**
@@ -205,9 +232,5 @@ func (l *defaultLogEntry) Panic(v interface{}, stack []byte) {
 }
 
 func init() {
-	color := true
-	if runtime.GOOS == "windows" {
-		color = false
-	}
-	DefaultLogger = RequestLogger(&DefaultLogFormatter{Logger: log.New(os.Stdout, "", log.LstdFlags), NoColor: !color})
+	DefaultLogger = requestLogger
 }

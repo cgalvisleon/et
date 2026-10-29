@@ -1,8 +1,11 @@
 package middleware
 
 import (
+	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -52,13 +55,47 @@ func (rw *ResponseWriterWrapper) WriteHeader(code int) {
 
 /**
 * Write: Delegates to the underlying writer and accumulates the bytes written.
+* A write without WriteHeader is a 200, as net/http sends it.
 * @param b []byte
 * @return int, error
 **/
 func (rw *ResponseWriterWrapper) Write(b []byte) (int, error) {
+	if rw.StatusCode == 0 {
+		rw.StatusCode = http.StatusOK
+	}
 	size, err := rw.ResponseWriter.Write(b)
 	rw.Size += size
 	return size, err
+}
+
+/**
+* Flush: Sends any buffered data to the client, when the underlying writer can (streaming, SSE).
+**/
+func (rw *ResponseWriterWrapper) Flush() {
+	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+/**
+* Hijack: Hands over the connection, for the upgrade to a WebSocket.
+* @return net.Conn, *bufio.ReadWriter, error
+**/
+func (rw *ResponseWriterWrapper) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := rw.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("http: the response writer does not support hijacking")
+	}
+	rw.StatusCode = http.StatusSwitchingProtocols
+	return h.Hijack()
+}
+
+/**
+* Unwrap: Returns the underlying writer, for http.ResponseController.
+* @return http.ResponseWriter
+**/
+func (rw *ResponseWriterWrapper) Unwrap() http.ResponseWriter {
+	return rw.ResponseWriter
 }
 
 /**
@@ -78,13 +115,15 @@ type Metrics struct {
 	ServerAddress string `json:"server_address"`
 	// http.request.method
 	Method string `json:"method"`
-	// url.path
+	// url.path — the raw path, or the route set by SetPath
 	Path string `json:"path"`
+	// http.route — the route pattern (SetPath or chi's pattern); empty when unknown
+	Route string `json:"route"`
 	// url.query — raw query string
 	Query string `json:"query"`
 	// http.response.status_code
 	StatusCode int `json:"status_code"`
-	// http.request.body.size — bytes received
+	// http.request.body.size — bytes received (0 when unknown)
 	RequestSize int `json:"request_size"`
 	// http.response.body.size — bytes sent
 	ResponseSize int `json:"response_size"`
@@ -107,6 +146,8 @@ type Metrics struct {
 	key     string
 	mark    time.Time
 	metrics cache.Metrics
+	listed  bool
+	done    bool
 }
 
 /**
@@ -122,6 +163,7 @@ func (s *Metrics) ToJson() et.Json {
 		"server_address":   s.ServerAddress,
 		"method":           s.Method,
 		"path":             s.Path,
+		"route":            s.Route,
 		"query":            s.Query,
 		"status_code":      s.StatusCode,
 		"request_size":     s.RequestSize,
@@ -181,12 +223,23 @@ func PushTokenLastUse(data et.Json) {
 }
 
 /**
-* NewMetric: Creates a Metrics instance populated from the incoming HTTP request.
+* NewMetric: Creates a Metrics instance populated from the incoming HTTP request,
+* with its request counters (cache.CallMetrics, which sets OverLimit).
 * Client IP resolution order: X-Forwarded-For → X-Real-IP → RemoteAddr.
 * @param r *http.Request
 * @return *Metrics
 **/
 func NewMetric(r *http.Request) *Metrics {
+	return newMetric(r, true)
+}
+
+/**
+* newMetric: NewMetric; without counters it skips cache.CallMetrics (4 increments per
+* request), needed only by the text line, the NATS events and the 429 of ettp.
+* @param r *http.Request, counters bool
+* @return *Metrics
+**/
+func newMetric(r *http.Request, counters bool) *Metrics {
 	clientAddr := r.Header.Get("X-Forwarded-For")
 	if clientAddr == "" {
 		clientAddr = r.Header.Get("X-Real-IP")
@@ -230,13 +283,15 @@ func NewMetric(r *http.Request) *Metrics {
 		UserAgent:     r.UserAgent(),
 		TraceID:       traceID,
 		AppName:       appName,
-		RequestSize:   int(r.ContentLength),
+		RequestSize:   max(int(r.ContentLength), 0),
 		mark:          now,
 		key:           fmt.Sprintf(`%s:%s`, r.Method, r.URL.Path),
 	}
-	limit := envar.GetInt64("REQUESTS_LIMIT", 400)
-	result.metrics, _ = cache.CallMetrics(result.key, limit)
-	result.OverLimit = result.metrics.OverLimit
+	if counters {
+		limit := envar.GetInt64("REQUESTS_LIMIT", 400)
+		result.metrics, _ = cache.CallMetrics(result.key, limit)
+		result.OverLimit = result.metrics.OverLimit
+	}
 	return result
 }
 
@@ -284,14 +339,25 @@ func (s *Metrics) SetPath(val string) {
 		return
 	}
 	s.Path = val
+	s.Route = val
 	s.setRequest(false)
+	s.listed = true
+}
+
+/**
+* msSince: Milliseconds elapsed since t, with decimals (a p95 needs sub-millisecond values).
+* @param t time.Time
+* @return float64
+**/
+func msSince(t time.Time) float64 {
+	return float64(time.Since(t)) / float64(time.Millisecond)
 }
 
 /**
 * CallSearchTime: Records the duration of the search/query phase in milliseconds.
 **/
 func (s *Metrics) CallSearchTime() {
-	s.SearchTime = float64(time.Since(s.mark).Milliseconds())
+	s.SearchTime = msSince(s.mark)
 	s.mark = timezone.Now()
 }
 
@@ -299,7 +365,7 @@ func (s *Metrics) CallSearchTime() {
 * CallResponseTime: Records the handler processing duration in milliseconds.
 **/
 func (s *Metrics) CallResponseTime() {
-	s.ResponseTime = float64(time.Since(s.mark).Milliseconds())
+	s.ResponseTime = msSince(s.mark)
 	s.mark = timezone.Now()
 }
 
@@ -307,14 +373,39 @@ func (s *Metrics) CallResponseTime() {
 * CallLatency: Records the total end-to-end latency in milliseconds.
 **/
 func (s *Metrics) CallLatency() {
-	s.Latency = float64(time.Since(s.TimeStamp).Milliseconds())
+	s.Latency = msSince(s.TimeStamp)
 }
 
 /**
-* logRequest: Prints a color-coded summary line to stdout and publishes the log event.
-* @return et.Json
+* logRequest: Writes the request line to the telemetry output when it accepts it
+* (format and TELEMETRY_LOG) and, with NATS connected, publishes the text line on telemetry:log.
 **/
-func (s *Metrics) logRequest() et.Json {
+func (s *Metrics) logRequest() {
+	if s.listed {
+		s.setRequest(true)
+	}
+	out := telemetryOutput()
+	write := out.accepts(s)
+	if write && out.format == FormatJson {
+		out.writeJson(s)
+	}
+	text := write && out.format == FormatText
+	if !text && !event.IsLoad() {
+		return
+	}
+
+	line := s.textLine()
+	if text {
+		out.writeText(line)
+	}
+	PushTelemetryLog(line)
+}
+
+/**
+* textLine: The color-coded summary line of the request, for people reading a terminal.
+* @return string
+**/
+func (s *Metrics) textLine() string {
 	w := lg.Color(nil, lg.Reset, "%s", timezone.NowStr())
 	lg.Color(w, lg.Purple, " [%s]: ", s.Method)
 	lg.Color(w, lg.Cyan, "%s", s.Path)
@@ -337,12 +428,10 @@ func (s *Metrics) logRequest() et.Json {
 	size := float64(s.ResponseSize) / 1024
 	lg.Color(w, lg.Cyan, " Size:%.2fKB", size)
 
-	limitLatency := time.Duration(envar.GetInt("LATENCY_LIMIT", 1000)) * time.Millisecond
-	latencyDur := time.Duration(s.Latency * float64(time.Millisecond))
 	switch {
-	case latencyDur >= 5*time.Second:
+	case s.Latency >= 5000:
 		lg.Color(w, lg.Red, " Latency:%.2fms", s.Latency)
-	case latencyDur >= limitLatency:
+	case s.Latency >= telemetryOutput().latencyLimit:
 		lg.Color(w, lg.Yellow, " Latency:%.2fms", s.Latency)
 	default:
 		lg.Color(w, lg.Green, " Latency:%.2fms", s.Latency)
@@ -368,25 +457,24 @@ func (s *Metrics) logRequest() et.Json {
 		lg.Color(w, lg.Cyan, " [TraceId]:%s", s.TraceID)
 	}
 	lg.Color(w, lg.White, " [AppName]:%s", s.AppName)
-	println(*w)
-
-	s.setRequest(true)
-	PushTelemetryLog(*w)
-
-	return s.ToJson()
+	return *w
 }
 
 /**
-* telemetry: Emits the final telemetry events and returns the combined result.
+* telemetry: Emits the final telemetry events (only with NATS connected) and returns the combined result.
 * @return et.Json
 **/
 func (s *Metrics) telemetry() et.Json {
+	metric := s.metrics.ToJson()
 	result := s.ToJson()
-	result["metric"] = s.metrics.ToJson()
+	result["metric"] = metric
+	if !event.IsLoad() {
+		return result
+	}
 
 	payload := et.Json{
 		"response": s.ToJson(),
-		"metric":   s.metrics.ToJson(),
+		"metric":   metric,
 	}
 	PushTelemetry(payload)
 
@@ -398,11 +486,16 @@ func (s *Metrics) telemetry() et.Json {
 }
 
 /**
-* DoneHTTP: Finalizes metrics after an HTTP response has been written.
+* DoneHTTP: Finalizes metrics after an HTTP response has been written. Only the first
+* call counts (a handler and the Logger middleware may both call it): one line per request.
 * @param rw *ResponseWriterWrapper
 * @return et.Json
 **/
 func (s *Metrics) DoneHTTP(rw *ResponseWriterWrapper) et.Json {
+	if s.done {
+		return s.ToJson()
+	}
+	s.done = true
 	s.StatusCode = rw.StatusCode
 	s.ResponseSize = rw.Size
 	s.CallResponseTime()
@@ -412,11 +505,15 @@ func (s *Metrics) DoneHTTP(rw *ResponseWriterWrapper) et.Json {
 }
 
 /**
-* DoneRpc: Finalizes metrics after an RPC call has returned.
+* DoneRpc: Finalizes metrics after an RPC call has returned. Only the first call counts.
 * @param r any
 * @return et.Json
 **/
 func (s *Metrics) DoneRpc(r any) et.Json {
+	if s.done {
+		return s.ToJson()
+	}
+	s.done = true
 	switch v := r.(type) {
 	case string:
 		s.ResponseSize = len(v)

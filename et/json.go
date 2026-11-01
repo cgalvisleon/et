@@ -11,6 +11,7 @@ import (
 	"maps"
 	"math"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1140,6 +1141,22 @@ func (s Json) Delete(keys []string) bool {
 		if _, ok := s[key]; ok {
 			delete(s, key)
 			result = true
+		}
+	}
+
+	return result
+}
+
+/**
+* Omit: A copy of s without the keys (s does not change); in scripts, obj.Omit("password", "token")
+* @param keys ...string
+* @return Json
+**/
+func (s Json) Omit(keys ...string) Json {
+	result := make(Json, len(s))
+	for key, value := range s {
+		if !slices.Contains(keys, key) {
+			result[key] = value
 		}
 	}
 

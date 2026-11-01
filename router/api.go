@@ -9,6 +9,7 @@ import (
 
 	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
@@ -35,20 +36,47 @@ var (
 * limited and published to the gateway and to the endpoint catalog.
 **/
 type Api struct {
-	Name                string
-	Path                string
-	Version             int
-	Host                string
-	Port                int
-	Rpc                 int
-	Addr                string
-	Router              *chi.Mux
-	LimitRate           int64
-	authentication      []func(http.Handler) http.Handler
-	idempotency         []func(http.Handler) http.Handler
-	authorization       func(method, path string) func(http.Handler) http.Handler
-	registerEndpoint    func(packageName, group, method, path, name string) error
-	errorStatusNotFound []string
+	Name                string                                                           `json:"name"`
+	Path                string                                                           `json:"path"`
+	Version             int                                                              `json:"version"`
+	Host                string                                                           `json:"host"`
+	Port                int                                                              `json:"port"`
+	Rpc                 int                                                              `json:"rpc"`
+	Addr                string                                                           `json:"addr"`
+	Router              *chi.Mux                                                         `json:"router"`
+	LimitRate           int64                                                            `json:"limitRate"`
+	AppId               string                                                           `json:"appId"`
+	authentication      []func(http.Handler) http.Handler                                `json:"-"`
+	idempotency         []func(http.Handler) http.Handler                                `json:"-"`
+	authorization       func(method, path string) func(http.Handler) http.Handler        `json:"-"`
+	registerEndpoint    func(packageName, group, method, path, name, appId string) error `json:"-"`
+	errorStatusNotFound []string                                                         `json:"-"`
+	endpoints           []Endpoint                                                       `json:"-"`
+}
+
+/**
+* Endpoint: A route mounted by the Api (Public, Session or Protected), with the path already prefixed.
+**/
+type Endpoint struct {
+	PackageName string `json:"packageName"`
+	Group       string `json:"group"`
+	Method      string `json:"method"`
+	Path        string `json:"path"`
+	Name        string `json:"name"`
+}
+
+/**
+* ToJson: Convert the Endpoint to a JSON object.
+* @return et.Json
+**/
+func (s *Endpoint) ToJson() et.Json {
+	return et.Json{
+		"packageName": s.PackageName,
+		"group":       s.Group,
+		"method":      s.Method,
+		"path":        s.Path,
+		"name":        s.Name,
+	}
 }
 
 /**
@@ -142,7 +170,7 @@ func (s *Api) getPath(path string) string {
 * UseRegisterEndpoint
 * @param registerEndpoint func(packageName, group, method, path, name string) error
 **/
-func (s *Api) UseRegisterEndpoint(registerEndpoint func(packageName, group, method, path, name string) error) {
+func (s *Api) UseRegisterEndpoint(registerEndpoint func(packageName, group, method, path, name, appId string) error) {
 	s.registerEndpoint = registerEndpoint
 }
 
@@ -152,10 +180,37 @@ func (s *Api) UseRegisterEndpoint(registerEndpoint func(packageName, group, meth
 * @return error
 **/
 func (s *Api) RegisterEndpoint(packageName, group, method, path, name string) error {
-	if s.registerEndpoint != nil {
-		return s.registerEndpoint(packageName, group, method, path, name)
+	s.endpoints = append(s.endpoints, Endpoint{PackageName: packageName, Group: group, Method: method, Path: path, Name: name})
+	if s.registerEndpoint == nil {
+		return nil
 	}
-	return nil
+
+	// Public, Session and Protected drop the error: log it so a route missing from the catalog is visible
+	err := s.registerEndpoint(packageName, group, method, path, name, s.AppId)
+	if err != nil {
+		logs.Alert(err)
+	}
+	return err
+}
+
+/**
+* Endpoints: The routes mounted by the Api, in the order they were mounted.
+* @return []Endpoint
+**/
+func (s *Api) Endpoints() []Endpoint {
+	return slices.Clone(s.endpoints)
+}
+
+/**
+* ListEndpoints: List the endpoints of the Api.
+* @return et.Items
+**/
+func (s *Api) ListEndpoints(r *http.Request, body et.Json) (et.Items, error) {
+	items := et.Items{}
+	for _, endpoint := range s.Endpoints() {
+		items.Add(endpoint.ToJson())
+	}
+	return items, nil
 }
 
 /**

@@ -809,6 +809,7 @@ func (s *Schema) newModel(id, name string, version int, userId string) *Model {
 		afterUpdates:  make([]TriggerFunction, 0),
 		afterDeletes:  make([]TriggerFunction, 0),
 		db:            s.db,
+		schema:        s,
 	}
 	result.setTable()
 	result.defaultTrigger()

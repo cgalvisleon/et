@@ -254,3 +254,25 @@ func TestJsonGoja(t *testing.T) {
 		t.Errorf("exported as is: %v", got)
 	}
 }
+
+func TestJsonOmit(t *testing.T) {
+	data := Json{"user": "ana", "password": "x", "token": "y", "age": 30}
+	result := data.Omit("password", "token")
+	if len(result) != 2 || result.Str("user") != "ana" || result.Int("age") != 30 {
+		t.Errorf("Omit = %v", result)
+	}
+	if _, ok := data["password"]; !ok {
+		t.Error("Omit cambió el original")
+	}
+
+	// En un script: obj.Omit(...) devuelve otro objeto con los métodos de Json
+	vm := goja.New()
+	vm.Set("data", ToJS(vm, data))
+	got, err := vm.RunString(`const safe = data.Omit("password", "token"); [Object.keys(safe).join(","), safe.Str("user"), data.Str("password")].join("|")`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.String() != "age,user|ana|x" {
+		t.Errorf("script = %s", got.String())
+	}
+}

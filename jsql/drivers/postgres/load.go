@@ -217,6 +217,9 @@ func (s *Postgres) Drop(model *jsql.Model, timeout ...time.Duration) error {
 	return err
 }
 
+// ddlLock: the transaction lock every DDL of jsql takes first; it is released when the DDL ends
+const ddlLock = "SELECT pg_advisory_xact_lock(hashtext('et.jsql.ddl'));"
+
 /**
 * Load: Generates the DDL SQL to create the schema, table, primary key,
 * unique indexes, regular indexes, and foreign key constraints for the given model.
@@ -226,6 +229,11 @@ func (s *Postgres) Drop(model *jsql.Model, timeout ...time.Duration) error {
 **/
 func (s *Postgres) Load(model *jsql.Model, timeout ...time.Duration) (string, error) {
 	var sb strings.Builder
+
+	// The DDL runs as one implicit transaction: the advisory lock serializes services that start at the same time, since
+	// CREATE SCHEMA/TABLE IF NOT EXISTS are not atomic across sessions (duplicate key in pg_namespace or pg_type)
+	sb.WriteString(ddlLock)
+	sb.WriteString("\n\n")
 
 	if schema := ddlSchema(model); schema != "" {
 		sb.WriteString(schema)

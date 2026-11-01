@@ -81,6 +81,15 @@ func NewAuthentication(app, device, userId, name string, duration time.Duration)
 * @return string, error
 **/
 func NewAuthorization(app, device, userId, name, tenantId, roleId string, duration time.Duration) (string, error) {
+	return NewAuthorizationWith(app, device, userId, name, tenantId, roleId, et.Json{}, duration)
+}
+
+/**
+* NewAuthorizationWith: NewAuthorization with a payload in the claim (the middleware puts it in request.Payload)
+* @param app, device, userId, name, tenantId, roleId string, payload et.Json, duration time.Duration
+* @return string, error
+**/
+func NewAuthorizationWith(app, device, userId, name, tenantId, roleId string, payload et.Json, duration time.Duration) (string, error) {
 	if app == "" {
 		return "", fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "app")
 	}
@@ -103,7 +112,7 @@ func NewAuthorization(app, device, userId, name, tenantId, roleId string, durati
 		return "", errors.New(msg.MSG_NOT_CACHE_SERVICE)
 	}
 
-	result, err := claim.NewToken(app, device, userId, tenantId, roleId, name, et.Json{}, duration)
+	result, err := claim.NewToken(app, device, userId, tenantId, roleId, name, payload, duration)
 	if err != nil {
 		return "", err
 	}

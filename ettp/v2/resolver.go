@@ -90,6 +90,7 @@ func newResolver(r *http.Request, solver *Solver, params map[string]string) (*Re
 		r.SetPathValue(name, value)
 		url = strings.Replace(url, k, v, 1)
 	}
+	url = withQuery(url, r.URL.RawQuery)
 
 	switch solver.TypeHeader {
 	case TpJoinHeader:
@@ -137,6 +138,22 @@ func newResolver(r *http.Request, solver *Solver, params map[string]string) (*Re
 	result.setStatus(TpStatusPending)
 
 	return result, nil
+}
+
+/**
+* withQuery: The url of the service with the query string of the request (?a=1&b=2), so the service receives it: an url
+* that already has its own query keeps it and the request's goes after
+* @param url, query string
+* @return string
+**/
+func withQuery(url, query string) string {
+	if query == "" {
+		return url
+	}
+	if strings.Contains(url, "?") {
+		return url + "&" + query
+	}
+	return url + "?" + query
 }
 
 /**

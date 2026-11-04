@@ -150,6 +150,9 @@ type Query struct {
 	isDebug        bool                     `json:"-"`
 	isTest         bool                     `json:"-"`
 	relationKeys   []string                 `json:"-"`
+	templates      []*queryTemplate         `json:"-"` // the TEMPLATE columns it returns (prepareTemplates)
+	templateKeys   []string                 `json:"-"` // the fields added only to build them
+	templateStar   bool                     `json:"-"` // it added "*" to bring the columns besides a relation
 	err            error                    `json:"-"`
 	unlimited      bool                     `json:"-"`
 }
@@ -1023,6 +1026,9 @@ func (s *Query) allTx(tx *Tx) (et.Items, error) {
 	if s.Rows == 0 && !s.unlimited {
 		s.Rows = s.MaxRows
 	}
+	if err := s.prepareTemplates(); err != nil {
+		return et.Items{}, err
+	}
 	s.addRelationKeys()
 
 	sql, err := s.db.query(s)
@@ -1057,6 +1063,7 @@ func (s *Query) allTx(tx *Tx) (et.Items, error) {
 		if err != nil {
 			return et.Items{}, err
 		}
+		s.setTemplates(item)
 		result.Result[i] = item
 	}
 

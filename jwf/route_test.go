@@ -2,6 +2,7 @@ package jwf
 
 import (
 	"testing"
+	"time"
 
 	"github.com/cgalvisleon/et/et"
 )
@@ -65,6 +66,84 @@ func TestGoToWithoutConnection(t *testing.T) {
 		}
 		if instance.Status != DONE {
 			t.Errorf("ok=%v: status = %v, want %v", tc.ok, instance.Status, DONE)
+		}
+	}
+}
+
+/**
+* TestGoToFromLastStep: a condition whose output 0 has no connection is the last step until it runs; if it chooses with
+* goTo an output that has one (only the false branch connected), the run follows it
+**/
+func TestGoToFromLastStep(t *testing.T) {
+	step := func(id string, kind Kind, outputs int, code string) et.Json {
+		definition := []any{et.Json{"code": code, "language": LANGUAGE_JAVASCRIPT}}
+		return et.Json{"id": id, "kind": kind, "tag": id, "version": "1.0.0", "title": id, "definition": definition, "params": et.Json{}, "inputs": 1, "outputs": outputs}
+	}
+	conn := func(id, from string, index int, to string) et.Json {
+		return et.Json{
+			"id":     id,
+			"kind":   PortOutput,
+			"source": et.Json{"steper_id": from, "port": PortOutput, "index": index},
+			"target": et.Json{"steper_id": to, "port": "input", "index": 0},
+		}
+	}
+	for _, tc := range []struct {
+		ok     bool
+		wantNo bool
+	}{
+		{true, false},
+		{false, true},
+	} {
+		flow, err := LoadFlow(et.Json{
+			"id":      "flow:route:false",
+			"tag":     "route",
+			"name":    "route",
+			"version": "1.0.0",
+			"steps": et.Json{
+				"start": step("start", KindTrigger, 1, ``),
+				"check": step("check", KindCondition, 2, `goTo(ctx.Bool("ok") ? 0 : 1)`),
+				"no":    step("no", KindAction, 1, `ctx.Set("no", true)`),
+			},
+			"connections": []any{conn("c1", "start", 0, "check"), conn("c2", "check", 1, "no")},
+			"triggers":    []any{et.Json{"tag": "start", "start_id": "start"}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		instance := flow.NewInstance("", "", flow.Name, et.Json{}, flow.Triggers[0], "")
+		if _, err := instance.Run(et.Json{"ok": tc.ok}, true); err != nil {
+			t.Fatalf("ok=%v: %v", tc.ok, err)
+		}
+		if got := instance.Ctx.Bool("no"); got != tc.wantNo {
+			t.Errorf("ok=%v: no = %v, want %v", tc.ok, got, tc.wantNo)
+		}
+		if instance.Status != DONE {
+			t.Errorf("ok=%v: status = %v, want %v", tc.ok, instance.Status, DONE)
+		}
+	}
+}
+
+/**
+* TestInstanceError: a step that fails leaves its message in the instance's Error, awaited or in the background (before,
+* only the step had it and Error stayed empty)
+**/
+func TestInstanceError(t *testing.T) {
+	for _, await := range []bool{true, false} {
+		flow := routeFlow(t)
+		flow.Steps["yes"].Definition[0].Code = `throw new Error("no se pudo escribir")`
+		instance := flow.NewInstance("", "", flow.Name, et.Json{}, flow.Triggers[0], "")
+		_, err := instance.Run(et.Json{"ok": true}, await)
+		if await && err == nil {
+			t.Fatalf("await=%v: no error", await)
+		}
+		for range 100 {
+			if instance.getStatus() == FAILED {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if instance.Error != "no se pudo escribir" {
+			t.Errorf("await=%v: Error = %q (status %v)", await, instance.Error, instance.getStatus())
 		}
 	}
 }

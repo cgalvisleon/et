@@ -149,6 +149,7 @@ COLUMN   TypeColumn = "column"
 	ROLLUP   TypeColumn = "rollup"
 	CALCFUNC TypeColumn = "calc_func"
 	CALC     TypeColumn = "calc"
+	TEMPLATE TypeColumn = "template"
 ```
 
 - COLUMN: corresponde a las columnas que se crean en la tabla.

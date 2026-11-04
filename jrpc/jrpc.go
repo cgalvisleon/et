@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
@@ -25,8 +26,13 @@ var (
 func init() {
 	os = runtime.GOOS
 	rpcs = make(map[string]et.Json)
+	// gob only carries inside an interface the types registered here: the lists of a Json (coordinates, tags…) and dates too
 	gob.Register(map[string]interface{}{})
+	gob.Register([]interface{}{})
+	gob.Register([]map[string]interface{}{})
+	gob.Register(time.Time{})
 	gob.Register(et.Json{})
+	gob.Register([]et.Json{})
 	gob.Register(et.Item{})
 	gob.Register(et.Items{})
 	gob.Register(et.List{})

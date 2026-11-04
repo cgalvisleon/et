@@ -1,7 +1,11 @@
 package jrpc
 
 import (
+	"bytes"
+	"encoding/gob"
+	"fmt"
 	"net"
+	"net/rpc"
 	"sync"
 	"testing"
 	"time"
@@ -123,4 +127,72 @@ func freePort(t *testing.T) int {
 	port := l.Addr().(*net.TCPAddr).Port
 	l.Close()
 	return port
+}
+
+// ResolvedService is served by this process but not mounted in its package: only the resolver knows where it is
+type ResolvedService struct{}
+
+func (ResolvedService) Hello(args et.Json, reply *et.Json) error {
+	*reply = et.Json{"hello": args.Str("name")}
+	return nil
+}
+
+// TestResolver: a method that the local package does not have is found through the resolver (another service)
+func TestResolver(t *testing.T) {
+	savedPkg := pkg
+	pkg = nil
+	defer func() { pkg = savedPkg; SetResolver(nil) }()
+
+	port := freePort(t)
+	if err := rpc.Register(new(ResolvedService)); err != nil {
+		t.Fatal(err)
+	}
+	if err := Start(port); err != nil {
+		t.Fatal(err)
+	}
+	defer Close()
+
+	SetResolver(func(method string) (*Solver, error) {
+		if method != "ResolvedService.Hello" {
+			return nil, fmt.Errorf("unknown %s", method)
+		}
+		return &Solver{Host: "localhost", Port: port}, nil
+	})
+	reply, err := CallJson("ResolvedService.Hello", et.Json{"name": "eam"})
+	if err != nil || reply.Str("hello") != "eam" {
+		t.Fatalf("CallJson = %v, %v", reply, err)
+	}
+	if _, err := GetSolver("Other.Method"); err == nil {
+		t.Fatal("expected the resolver error")
+	}
+}
+
+// TestMethods: the mounted methods with their package, host and port, as GET /rpcs lists them
+func TestMethods(t *testing.T) {
+	savedPkg := pkg
+	pkg = newPackage("eam", "eam-host", 4512)
+	defer func() { pkg = savedPkg }()
+
+	pkg.Add("Eam.New", []string{"et.Json"}, []string{"error"})
+	methods := Methods()
+	if len(methods) != 1 || methods[0].Str("packageName") != "eam" || methods[0].Str("method") != "Eam.New" || methods[0].Int("port") != 4512 {
+		t.Fatalf("Methods = %v", methods)
+	}
+}
+
+// TestGobLists: a Json with lists, nested objects and dates goes through gob (the args and replies of the methods)
+func TestGobLists(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	value := et.Json{"geometry": et.Json{"type": "Point", "coordinates": []any{-74.08, 4.6}}, "rows": []et.Json{{"a": 1}}, "at": now}
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(value); err != nil {
+		t.Fatal(err)
+	}
+	var out et.Json
+	if err := gob.NewDecoder(&buf).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Json("geometry").Array("coordinates")) != 2 || len(out.ArrayJson("rows")) != 1 || !out.Time("at").Equal(now) {
+		t.Fatalf("decoded %v", out)
+	}
 }

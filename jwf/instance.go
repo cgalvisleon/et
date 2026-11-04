@@ -589,8 +589,16 @@ func (s *Instance) next() bool {
 	}
 
 	if s.IsEnd {
-		s.Done()
-		return false
+		// El último paso sin salida 0 conectada pudo elegir con goTo otra que sí lo está (un if con solo la rama falsa)
+		connection, exists := s.flow.getOutput(s.StepId, s.goTo)
+		if !exists {
+			s.Done()
+			return false
+		}
+		s.mu.Lock()
+		s.IsEnd = false
+		s.mu.Unlock()
+		return s.follow(connection)
 	}
 
 	status := s.getStatus()
@@ -614,16 +622,28 @@ func (s *Instance) next() bool {
 			}
 			s.setCurrent(connection)
 		}
-		connection, exists := s.flow.getOutput(s.Current.Target.StepId, s.goTo)
-		if !exists {
-			step, exists := s.flow.GetStep(s.Current.Target.StepId)
-			if !exists {
-				return false
-			}
-			return s.setEnd(step, s.Current.Target.StepId)
-		}
-		return s.setCurrent(connection)
+		return s.follow(s.Current)
 	}
+}
+
+/**
+* follow: Pasa al paso destino de connection: con su salida 0 conectada, esa conexión es la actual; sin ella, el paso es
+* el último (setEnd), y su goTo todavía puede seguir por otra salida
+* @param connection *Connection
+* @return bool
+**/
+func (s *Instance) follow(connection *Connection) bool {
+	stepId := connection.Target.StepId
+	next, exists := s.flow.getOutput(stepId, 0)
+	if exists {
+		return s.setCurrent(next)
+	}
+
+	step, exists := s.flow.GetStep(stepId)
+	if !exists {
+		return false
+	}
+	return s.setEnd(step, stepId)
 }
 
 /**
@@ -712,7 +732,7 @@ func (s *Instance) Run(ctx et.Json, await bool) (et.Json, error) {
 }
 
 /**
-* running: Runs the instance
+* running: Runs the instance; a failure is kept in s.Error (the instance's error), also when it runs in the background
 * @param ctx et.Json
 * @return (et.Json, error)
 **/
@@ -722,12 +742,10 @@ func (s *Instance) running(ctx et.Json) (et.Json, error) {
 	for s.next() {
 		step := s.Step
 		if step == nil {
-			return et.Json{}, errors.New(MSG_STEP_NOT_FOUND)
+			err = errors.New(MSG_STEP_NOT_FOUND)
+			s.setError(err)
+			return et.Json{}, err
 		}
-
-		step.OnStatus(func(status Status) {
-			s.setStatus(status)
-		})
 
 		ctx = s.setCtx(ctx)
 		result, err = step.Run(s, ctx)
@@ -740,6 +758,7 @@ func (s *Instance) running(ctx et.Json) (et.Json, error) {
 
 		s.setResult(result, err)
 		if err != nil {
+			s.setError(err)
 			return result, err
 		}
 	}
@@ -816,9 +835,6 @@ func (s *Instance) runError(ctx et.Json, err error) (et.Json, error) {
 		return et.Json{}, err
 	}
 
-	step.OnStatus(func(status Status) {
-		s.setStatus(status)
-	})
 	result, errStep := step.Run(s, ctx)
 	if errStep != nil {
 		return et.Json{}, errStep

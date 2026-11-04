@@ -1,6 +1,7 @@
 package router
 
 import (
+	"cmp"
 	"fmt"
 	"net/http"
 	"slices"
@@ -8,7 +9,9 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/cache"
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
+	"github.com/cgalvisleon/et/jrpc"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
 	"github.com/cgalvisleon/et/request"
@@ -52,6 +55,7 @@ type Api struct {
 	registerEndpoint    func(packageName, group, method, path, name, appId string) error `json:"-"`
 	errorStatusNotFound []string                                                         `json:"-"`
 	endpoints           []Endpoint                                                       `json:"-"`
+	rpcStarted          bool                                                             `json:"-"`
 }
 
 /**
@@ -210,6 +214,45 @@ func (s *Api) ListEndpoints(r *http.Request, body et.Json) (et.Items, error) {
 	for _, endpoint := range s.Endpoints() {
 		items.Add(endpoint.ToJson())
 	}
+	return items, nil
+}
+
+/**
+* MountRpc: Mounts the methods of services (net/rpc, "Struct.Method") in the RPC server of the Api, on its Rpc port, and
+* starts it the first time; with Rpc 0 it does nothing. The host announced to the others is RPC_HOST, the Host of the Api
+* or localhost: the address where the other services reach it
+* @param services any
+* @return error
+**/
+func (s *Api) MountRpc(services any) error {
+	if s.Rpc <= 0 {
+		return nil
+	}
+
+	host := cmp.Or(envar.GetStr("RPC_HOST", ""), s.Host, "localhost")
+	if _, err := jrpc.Mount(host, s.Rpc, services, s.Name); err != nil {
+		return err
+	}
+
+	if s.rpcStarted {
+		return nil
+	}
+
+	if err := jrpc.Start(s.Rpc); err != nil {
+		return err
+	}
+	s.rpcStarted = true
+	return nil
+}
+
+/**
+* ListRpcs: The RPC methods mounted by the service (GET /rpcs): {packageName, method, host, port, inputs, output}
+* @param r *http.Request, body et.Json
+* @return et.Items, error
+**/
+func (s *Api) ListRpcs(r *http.Request, body et.Json) (et.Items, error) {
+	items := et.Items{}
+	items.Add(jrpc.Methods()...)
 	return items, nil
 }
 

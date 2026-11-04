@@ -459,6 +459,17 @@ func (s *Model) DefineCalc(name, script string) *Model {
 }
 
 /**
+* DefineTemplate: Defines a TEMPLATE column: a text built from other fields of the row when it is read, not stored in the
+* table ("Código: {{code}}, {{name|upper}}; Clase: {{clase.name|default:\"—\"}}"). It is read like a column; it cannot
+* be filtered or ordered by. Define it after the fields it uses.
+* @param name, template string
+* @return *Model, error
+**/
+func (s *Model) DefineTemplate(name, template string) (*Model, error) {
+	return s.defineTemplate(name, template)
+}
+
+/**
 * DetailKeys: The keys of a DETAIL relation: the parent key mapped to the foreign key of the detail.
 * @param key, foreignKey string
 * @return map[string]string

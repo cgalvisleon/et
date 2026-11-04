@@ -3,6 +3,7 @@ package jwf
 import (
 	"encoding/json"
 	"errors"
+	"maps"
 	"time"
 
 	"github.com/cgalvisleon/et/et"
@@ -208,6 +209,19 @@ func (s *Step) setStatus(status Status) {
 }
 
 /**
+* statusFor: Reports a status of a run of the step: to its instance when it runs in one (the step is shared by every run
+* of its flow, so it keeps no callback of a run) or, alone (a Test), to its own hooks
+* @param instance *Instance, status Status
+**/
+func (s *Step) statusFor(instance *Instance, status Status) {
+	if instance != nil {
+		instance.setStatus(status)
+		return
+	}
+	s.setStatus(status)
+}
+
+/**
 * SetBinding
 * @param name string, value interface{}
 * @return *Step
@@ -229,39 +243,37 @@ func (s *Step) RunFunction(instance *Instance, ctx et.Json) (et.Json, error) {
 	if s.fn == nil {
 		return et.Json{}, nil
 	}
-	s.setStatus(RUNNING)
+	s.statusFor(instance, RUNNING)
 	result, err := s.fn(instance, ctx)
 	if err != nil {
-		s.setStatus(FAILED)
+		s.statusFor(instance, FAILED)
 		return et.Json{}, err
 	}
 	return result, nil
 }
 
 /**
-* RunScript
-* @param ctx et.Json
+* RunScript: Runs the definition with the bindings of the step plus those of the run (its instance: UserId, InstanceId,
+* ctx, goTo…), in a map of this run: the step is shared by every run of its flow and is never written here
+* @param instance *Instance, ctx et.Json
 * @return et.Json, error
 **/
 func (s *Step) RunScript(instance *Instance, ctx et.Json) (et.Json, error) {
 	result := et.Json{}
-	s.setStatus(RUNNING)
+	s.statusFor(instance, RUNNING)
+	bindings := make(map[string]any, len(s.bindings)+16)
+	maps.Copy(bindings, s.bindings)
 	if instance != nil {
-		if instance.bindings == nil {
-			instance.bindings = make(map[string]any, 0)
-		}
-		for key, value := range instance.bindings {
-			s.SetBinding(key, value)
-		}
+		maps.Copy(bindings, instance.bindings)
 	} else if s.onLog != nil {
-		s.SetBinding("console", consoleOf("", func(line et.Json) {
+		bindings["console"] = consoleOf("", func(line et.Json) {
 			line["step_id"] = s.ID
 			s.onLog(line)
-		}))
+		})
 	}
-	value, err := RunScripts(s.Definition, ctx, s.bindings)
+	value, err := RunScripts(s.Definition, ctx, bindings)
 	if err != nil {
-		s.setStatus(FAILED)
+		s.statusFor(instance, FAILED)
 		return et.Json{}, err
 	}
 	if instance != nil {

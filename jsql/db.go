@@ -519,7 +519,13 @@ func (s *DB) define(define Define) (*Model, error) {
 		result.DefineIdxField()
 	}
 
+	// The TEMPLATE columns go last: they use the other fields, the relations included
+	templates := []Column{}
 	for _, column := range define.Columns {
+		if column.TypeColumn == TEMPLATE {
+			templates = append(templates, column)
+			continue
+		}
 		_, err := defColumns(result, column)
 		if err != nil {
 			return nil, err
@@ -657,6 +663,12 @@ func (s *DB) define(define Define) (*Model, error) {
 			for _, order := range rollup.OrderBy {
 				defined.OrderBy(order.Name, order.Sorted)
 			}
+		}
+	}
+
+	for _, column := range templates {
+		if _, err := result.DefineTemplate(column.Name, column.Template); err != nil {
+			return nil, err
 		}
 	}
 

@@ -464,6 +464,24 @@ func (s *Model) defineCalc(name, script string) *Model {
 }
 
 /**
+* defineTemplate: Defines a TEMPLATE column: a text built from other fields of the row ({{field|format}}), not stored
+* in the table. Its fields and formats are checked here, so it goes after the fields it uses.
+* @param name, template string
+* @return *Model, error
+**/
+func (s *Model) defineTemplate(name, template string) (*Model, error) {
+	if err := s.templateOk(name, template); err != nil {
+		return s, err
+	}
+
+	column := s.defineColumn(name, TEMPLATE, et.TEXT, nil)
+	s.muDef.Lock()
+	column.Template = template
+	s.muDef.Unlock()
+	return s, nil
+}
+
+/**
 * defineBeforeInsert: Defines a JavaScript before insert hook for the model; a hook with the same name is replaced.
 * @param name, code string, version int
 * @return *Model
@@ -702,6 +720,7 @@ const (
 	ROLLUP   TypeColumn = "rollup"
 	CALCFUNC TypeColumn = "calc_func"
 	CALC     TypeColumn = "calc"
+	TEMPLATE TypeColumn = "template"
 )
 
 const (
@@ -761,6 +780,7 @@ type Column struct {
 	TypeColumn TypeColumn  `json:"type_column"`
 	TypeData   et.TypeData `json:"type_data"`
 	Default    any         `json:"default"`
+	Template   string      `json:"template,omitempty"` // TEMPLATE: the text with {{field|format}} it builds
 	model      *Model      `json:"-"`
 }
 
@@ -777,10 +797,14 @@ type Index struct {
 * @return et.Json
 **/
 func (s *Column) toJson() et.Json {
-	return et.Json{
+	result := et.Json{
 		"name":        s.Name,
 		"type_column": s.TypeColumn,
 		"type_data":   s.TypeData,
 		"default":     s.Default,
 	}
+	if s.Template != "" {
+		result["template"] = s.Template
+	}
+	return result
 }

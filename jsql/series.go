@@ -82,7 +82,8 @@ func (s *Series) exists(tag string) (bool, error) {
 }
 
 /**
-* newSeries: Creates the series tag with value 0 when it does not exist (format "%08d" by default).
+* newSeries: Creates the series tag with value 0 when it does not exist (format "%08d" by default); if another process
+* creates it at the same time, the duplicate key is not an error
 * @param tag, format string
 * @return error
 **/
@@ -107,6 +108,16 @@ func (s *Series) newSeries(tag, format string) error {
 			"value":  0, // the first GenSerie returns 1
 		}).
 		Exec()
+	if err == nil {
+		return nil
+	}
+
+	// Another process created it between exists and the insert (services that start at the same time): not an error
+	created, existsErr := s.exists(tag)
+	if existsErr == nil && created {
+		return nil
+	}
+
 	return err
 }
 

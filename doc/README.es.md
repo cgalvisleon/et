@@ -43,6 +43,9 @@ Los paquetes de infraestructura (`cache`, `event`, `jsql`) leen su configuració
 - `et.Wheres.AdddResult` queda obsoleto: usa `AddResult`.
 - Las claves del límite de peticiones de `router` son `ratelimit:<MÉTODO>:<ruta>`; las claves viejas sin TTL se pueden borrar a mano.
 - `jsql` tiene un sexto driver, `josefina`, que se conecta al protocolo Postgres de Josefina.
+- `db.Query` con `from` (y el `to` de los joins) alcanza cualquier tabla de la base: un modelo que este proceso no definió se lee del catálogo de la base cuando la referencia trae esquema (`schema.model`), para consultas y para `insert`/`update`/`delete`/`upsert`/`bulk`.
+- `db.Query` corre programas: `{"steps": {"const", "vars", "do": [...]}}` ejecuta una lista de descriptores en una transacción con `{{variables}}`, `as`, `set`, `if`/`then`/`else`, `for` al estilo de Go (range, contador, while, `break`, `continue`, con tope), subconsultas `{"query": {...}}` como valores, `script` (JavaScript) y `return`/`error`.
+- Un `select` con dos campos que dan el mismo nombre (`C.name`, `P.name`) ahora falla en lugar de que un valor pise al otro sin avisar: nombra uno con `campo:alias`.
 
 ## Paquetes
 
@@ -182,6 +185,24 @@ items, _ := db.Query(et.Json{
     "group by": []any{"U.name"},
     "limit":    20,
 })
+```
+
+`from` y el `to` de los joins pueden nombrar cualquier tabla de la base, definida en este proceso o no: con esquema (`"sales.clients:C"`), una tabla que el proceso no definió se lee del catálogo de la base, con los atributos de `_source`, y también puede ser el destino de `insert`, `update`, `delete`, `upsert` y `bulk`. Dos campos seleccionados no pueden dar el mismo nombre en el resultado; usa `campo:alias` (`"P.name:product"`).
+
+Varios descriptores pueden correr como un programa, en una transacción (ver [`jsql/spec.md`](../jsql/spec.md) §8.4):
+
+```go
+items, _ := db.Query(et.Json{"steps": et.Json{
+    "vars": et.Json{"client": "c1"},
+    "do": []any{
+        et.Json{"as": "orders", "select": []any{"id", "total"}, "from": "sales.orders", "where": []any{et.Json{"client_id": et.Json{"eq": "{{client}}"}}}},
+        et.Json{"for": et.Json{"range": "{{orders}}", "value": "o"}, "do": []any{
+            et.Json{"if": et.Json{"data": "{{o}}", "where": []any{et.Json{"total": et.Json{"eq": 0}}}}, "then": []any{et.Json{"continue": true}}},
+            et.Json{"update": et.Json{"from": "sales.orders", "data": et.Json{"state": "billed"}, "where": []any{et.Json{"id": et.Json{"eq": "{{o.id}}"}}}}},
+        }},
+        et.Json{"return": et.Json{"orders": "{{orders}}"}},
+    },
+}})
 ```
 
 Drivers: `postgres`, `sqlite` (sin CGO), `oracle` 19c+, `mysql` 8.0+, `mssql` 2022+ y `josefina` (protocolo Postgres de Josefina; no crea bases, y guarda los atributos de un modelo en la raíz del documento en lugar de en `_source`). El comportamiento completo está en [`jsql/spec.md`](../jsql/spec.md); la API pública está reunida en [`jsql/catalog.go`](../jsql/catalog.go).
@@ -430,6 +451,7 @@ Guías adicionales (en español) en [`doc/`](.):
 - [`COMPONENT_CATALOG.md`](COMPONENT_CATALOG.md) — API pública completa, generada desde `go doc`.
 - [`AI_USAGE_GUIDE.md`](AI_USAGE_GUIDE.md) — reglas y trampas para asistentes de IA.
 - [`NEW_PROJECT_GUIDE.md`](NEW_PROJECT_GUIDE.md) — plantillas para arrancar un proyecto nuevo sobre `et`.
+- [`CHANGELOG.md`](CHANGELOG.md) — historial de arreglos: qué cambió, cuándo y cómo se probó.
 
 ## Licencia
 

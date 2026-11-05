@@ -1731,7 +1731,7 @@ func (s *Model) AddAuditLog(userId string, action string) {
 }
 
 // =============================================================================
-// 11. Utilidades (22)
+// 11. Utilidades (23)
 // =============================================================================
 
 /**
@@ -1740,6 +1740,16 @@ func (s *Model) AddAuditLog(userId string, action string) {
 **/
 func (s TypeColumn) Str() string {
 	return s.str()
+}
+
+/**
+* DescribeRows: Reads the rows of a driver's catalog query (two columns: name and type) as described columns;
+* the drivers use it to implement Describer.
+* @param rows *sql.Rows, err error
+* @return []DescribedColumn, error
+**/
+func DescribeRows(rows *sql.Rows, err error) ([]DescribedColumn, error) {
+	return describeRows(rows, err)
 }
 
 /**

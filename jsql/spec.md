@@ -28,7 +28,7 @@ El SQL concreto lo genera un `Driver` por motor (ver §9); el núcleo de `jsql` 
 | Comando       | `*jsql.Command` (`command.go`)                              | SQL de tipo comando: `INSERT`, `UPDATE`, `DELETE`, `UPSERT`, `BULK`.                                                                                                          |
 | Transacción   | `*jsql.Tx` (`db.go`)                                        | Envoltura de `*sql.Tx`; `nil` = transacción propia con auto-commit.                                                                                                           |
 
-Archivos del paquete (13) y qué contiene cada uno:
+Archivos del paquete (17) y qué contiene cada uno:
 
 | Archivo | Contenido |
 |---|---|
@@ -41,6 +41,10 @@ Archivos del paquete (13) y qué contiene cada uno:
 | `query.go` | `Query`, `From`, `Field`, `JoinType`, armado y ejecución de consultas. |
 | `command.go` | `Command`: insert/update/delete/upsert/bulk, triggers y `runTrigger`. |
 | `jquery.go` | Consultas, comandos y definiciones descritos en JSON sobre la `DB`. |
+| `admin.go` | Administración en JSON (`drop`, `truncate`, `create`, `alter`) en el dialecto de cada motor (§8.3). |
+| `program.go` | Programas `steps` (§8.4): pasos, variables, `if`, `for`, subconsultas como valor y `script`. |
+| `describe.go` | Modelos leídos del catálogo de la base (`reflectModel`, `typeDataOf`, `DescribeRows`) para un `from` de una tabla que el proceso no definió. |
+| `template.go` | Columnas `TEMPLATE`: plantillas `{{campo|formato}}` armadas al consultar. |
 | `helpers.go` | Constructores de condiciones (`Eq`, `More`, …), `Quoted`, `Bind`, `ArgWithAs`/`ArgWithSchema`, `addAuditLog`. |
 | `series.go` | `Series`: generador de series y códigos. |
 | `wrapper.go` | `Wrapper(db)`, `BindWrapper`, `ToJsMapWrapper`: jsql para los scripts de goja (`jsql.d.ts` lo declara). |
@@ -259,8 +263,10 @@ Los campos ocultos (`Model.Hiddens` y `Query.Hiddens`) se excluyen cuando el sel
 }
 ```
 
-- `from` es el origen. **Forma estándar (feature.md):** un objeto `{database, schema, model, as}`; `database` es la base donde está el modelo (sin él, la de la conexión), sin `schema` el modelo se busca en todos los esquemas y debe ser único, y sin `as` el origen principal es `A`. **Forma corta:** el texto `schema.tabla:alias`, `tabla:alias` (usa el esquema del modelo que ejecuta la consulta), `schema.tabla` o `tabla` (alias `A`). `database`, si viene, debe ser la base de la conexión; si no, es un error (`MSG_INVALID_DATABASE`). También acepta una lista: la primera referencia reemplaza al origen principal y las demás se agregan como orígenes adicionales (`FROM a, b`). En ese caso los orígenes se relacionan en el `where`, donde un valor de texto `alias.campo` que nombra un campo de la consulta se toma como columna, igual que en el `on` de un join. El modelo debe estar definido en la `DB`.
-- `to` en los joins es obligatorio, con la misma estructura de `from` (objeto o forma corta `schema.tabla:alias`), y el alias es obligatorio; el modelo destino debe estar definido en la `DB`. Sin `schema`, se usa el del origen principal.
+- `from` es el origen. **Forma estándar (feature.md):** un objeto `{database, schema, model, as}`; `database` es la base donde está el modelo (sin él, la de la conexión), sin `schema` el modelo se busca en todos los esquemas (entre los modelos definidos) y debe ser único, y sin `as` el origen principal es `A`. **Forma corta:** el texto `schema.tabla:alias`, `tabla:alias` (usa el esquema del modelo que ejecuta la consulta), `schema.tabla` o `tabla` (alias `A`). `database`, si viene, debe ser la base de la conexión; si no, es un error (`MSG_INVALID_DATABASE`). También acepta una lista: la primera referencia reemplaza al origen principal y las demás se agregan como orígenes adicionales (`FROM a, b`). En ese caso los orígenes se relacionan en el `where`, donde un valor de texto `alias.campo` que nombra un campo de la consulta se toma como columna, igual que en el `on` de un join.
+- **Cualquier tabla de la base** (`describe.go`): si el modelo no está definido en la `DB` y la referencia trae esquema (o lo toma del origen principal), se lee del catálogo de la base con el `Describer` del driver (§9) y se registra en su esquema, así que las siguientes consultas y comandos lo encuentran sin volver al catálogo. Las columnas `_source` e `_idx` pasan a ser el `SourceField` y el `IdxField`, de modo que los atributos de una tabla de jsql también se consultan; los tipos se traducen con `typeDataOf` (`bigint` → `INT`, `NUMBER(19,0)` → `INT`, `tinyint(1)` → `BOOL`, `nvarchar(max)` → `MEMO`…). El modelo queda iniciado: su tabla nunca se crea ni se cambia, y no tiene llaves, índices, relaciones ni triggers propios. Sin esquema y sin un modelo definido con ese nombre, el error es `MSG_FROM_SCHEMA_REQUIRED`; una tabla que no existe da `MSG_INVALID_FROM`. Si la tabla cambia después, el modelo leído no se actualiza (hay que reiniciar el proceso o definir el modelo).
+- `to` en los joins es obligatorio, con la misma estructura de `from` (objeto o forma corta `schema.tabla:alias`), y el alias es obligatorio; el modelo destino se resuelve como el de `from` (definido o leído del catálogo). Sin `schema`, se usa el del origen principal.
+- **Nombres repetidos en el `select`:** cada fila es un objeto, así que dos campos que dan el mismo nombre (`C.name` y `P.name`, o `count(a)` y `count(b)`) se pisarían. La consulta falla con `MSG_SELECT_DUPLICATED`; se resuelve con un alias (`P.name:product`, `count(b):n`). Lo comprueba `Query.checkSelectNames` en toda consulta, fluida o en JSON.
 - Si el descriptor tiene un error (un `from` o un `to` que no existe, una condición inválida), la consulta lo devuelve al ejecutarse (`All`, `One`, `Count`, `Exists`…) en lugar de correr con lo que se pudo leer.
 - Las claves también se aceptan con su forma SQL (`select`, `group by`, `order by`, `having`…, ver §8.2), además de `offset` y las claves `and` / `or` de primer nivel.
 - `limit` por defecto: `DB.RecordLimit` (`DB_RECORD_LIMIT`, 1000). `page` calcula el `OFFSET`; `offset` lo fija directamente.
@@ -313,7 +319,7 @@ Reglas:
 
 `DB.Query(json)` / `DB.QueryTx(tx, json)` reciben un descriptor JSON independiente de un modelo: el modelo se indica en el propio JSON (`from`). Según la clave principal, el descriptor es un comando (`insert`, `update`, `delete`, `upsert`, `bulk`), una definición (`define`) o una consulta (`select`, `from`); se revisan en ese orden, sin distinguir mayúsculas, y un descriptor con dos comandos o sin ninguna de esas claves devuelve error. El descriptor se traduce a las mismas estructuras de `jsql` (`Query`, `Command`, `Define`), así que sigue las reglas de `SourceField`, `RETURNING` y triggers de las secciones anteriores.
 
-En `from` va el modelo, como objeto `{database, schema, model}` (forma estándar) o como texto `schema.tabla`; sin esquema, la tabla se busca en todos los esquemas de la `DB` y debe ser única.
+En `from` va el modelo, como objeto `{database, schema, model}` (forma estándar) o como texto `schema.tabla`; sin esquema, la tabla se busca en todos los esquemas de la `DB` y debe ser única. Con esquema, una tabla que el proceso no definió se lee del catálogo de la base (§5.4), también para los comandos: `insert`, `update`, `delete`, `upsert` y `bulk` corren sobre ella sin triggers ni validaciones propias del modelo, solo con los scripts que traiga el descriptor.
 
 ### 8.1 Comandos
 
@@ -376,6 +382,37 @@ Un descriptor con `drop`, `truncate`, `create` o `alter` borra, vacía o adminis
 
 `"if_exists": true` agrega `IF EXISTS` donde el motor lo tiene. postgres y josefina generan todo; mysql y mssql, modelos, bases y usuarios; sqlite y oracle, solo modelos. Lo que un motor no tiene responde `MSG_ADMIN_UNSUPPORTED`; un descriptor sin `model`/`schema`/`database`/`user`, `MSG_ADMIN_INVALID`. El resultado es `{op, <tipo>: nombre, ok: true}`. Josefina exige ser el administrador y responde `409` para un modelo en uso, la base de la sesión, el administrador o el propio usuario (josefina spec §6.5). `TestAdmin` de `drivers/test`.
 
+### 8.4 Programas: `steps` (`program.go`)
+
+Un descriptor `steps` corre una lista de pasos en **una sola transacción** (la de `QueryTx` o una nueva que se confirma al final; cualquier error la deshace). Fuente: `feature.md` › «Programas». Pruebas: `TestProgram` y `TestProgramSubqueryLimit` (`drivers/test/program_test.go`).
+
+```json
+{ "steps": {
+  "const": { "LIMITE": 500 },
+  "vars":  { "cliente_id": "c1" },
+  "max_steps": 10000,
+  "do": [
+    { "as": "pedidos", "select": ["id", "total"], "from": "ventas.pedidos",
+      "where": [{ "cliente_id": { "eq": "{{cliente_id}}" } }], "limit": "{{LIMITE}}" },
+    { "for": { "range": "{{pedidos}}", "value": "p" }, "do": [
+      { "if": { "data": "{{p}}", "where": [{ "total": { "eq": 0 } }] }, "then": [{ "continue": true }] },
+      { "update": { "from": "ventas.pedidos", "data": { "estado": "facturado" }, "where": [{ "id": { "eq": "{{p.id}}" } }] } }
+    ]},
+    { "return": { "procesados": "{{pedidos}}" } }
+  ]
+}}
+```
+
+- **Pasos.** Un paso es cualquier descriptor de §8 (consulta, comando, `define`, administración, incluso otro `steps`) o un paso de control: `if`, `for`, `set`, `break`, `continue`, `return`, `error`, `script`. El programa se valida antes de correr: cada paso es un objeto, la profundidad no pasa de 32, ningún `as`, `set`, `key`, `value` o `var` usa el nombre de una constante (`MSG_STEPS_CONST`) y `break`/`continue` están dentro de un `for`. Más de `max_steps` pasos ejecutados (10000 por defecto) es `MSG_STEPS_MAX`.
+- **Variables y constantes.** Antes de ejecutar cada paso se aplica `Bind` con `vars` y `const` (las constantes ganan). En un descriptor de §8 no se reemplazan los scripts (`before_*`, `after_*`): un valor llega a un script por `NEW`/`OLD`/`vars`, nunca escrito en su código. Una variable desconocida queda como texto.
+- **`as` / `one`.** Guardan el resultado del paso en una variable: las filas (lista) o, con `"one": true`, la primera fila (`nil` sin filas).
+- **`set`** asigna (`{"set": {"total": "{{p.total}}"}}`), con variables y subconsultas resueltas; no hay aritmética. **`return`** fija lo que devuelve el programa (un objeto es una fila, una lista de objetos son filas, otro valor va en `{value}`); sin `return`, el resultado del último paso. **`error`** aborta con su texto (con variables) y deshace la transacción.
+- **`if`** `{value|data|query, where, match, exists}` con `then` y `else` (listas de pasos): `value` se evalúa con `et.EvaluateValue` (la condición sobre el nombre `value`; `{field: "x"}` se lee de las variables), `data` con `et.EvaluateObject` (un objeto; una lista se trata como filas) y `query` corre la consulta en la transacción y evalúa sus filas. Con filas: `match` `"any"` (por defecto) o `"all"`; sin filas no se cumple ninguno. `exists: true|false` compara si alguna fila cumple el `where` (sin `where`, si hay filas). Un único comando escrito dentro del objeto `if` (`insert`, `update`…) es su `then` cuando no hay `then`.
+- **`for`** con sus formas de Go, siempre con tope `max` (por defecto `DB_RECORD_LIMIT`; pasarlo es `MSG_FOR_MAX`): `range` sobre una lista (`key` índice, `value` elemento), un objeto (claves ordenadas) o un entero `n` (`0..n-1`); contador `{var, from, to, step}` (`to` excluido, `step` entero distinto de 0, también negativo); `while` (condiciones sobre las variables con `EvaluateObject`, revisadas antes de cada vuelta, con las variables aplicadas en cada una; `key` es el número de vuelta). `break` y `continue` actúan sobre el ciclo más cercano. `key`, `value` y `var` solo existen dentro de `do` (al salir recuperan su valor anterior); `set` escribe en las variables de afuera.
+- **Subconsultas como valor.** En los valores de un paso, un objeto con solo las claves `query` (un descriptor con `from`) y `one` se reemplaza por su resultado, en la transacción del programa: con una sola columna, la lista de sus valores (sirve para `in`); si no, la lista de filas; con `"one": true`, la primera fila o su único valor. Sin `limit` propio, más de `DB_RECORD_LIMIT` filas es un error (`MSG_SUBQUERY_MAX`) en lugar de cortar. Se resuelven en Go, no en SQL; solo dentro de un programa.
+- **`script`** corre JavaScript con `jwf` y los bindings estándar, el `Wrapper` de la `DB`, `TX` (la transacción del programa: lo que escriba el script debe ir en ella), `vars` (las variables: lo que el script cambie queda) y `consts` (una copia). El código no pasa por `Bind`. Su último valor es el resultado del paso (`as`).
+- **No incluido:** subconsultas en SQL (`IN (SELECT …)`): los cinco drivers devuelven cada fila de una consulta como un objeto (sqlite con `json_object`, postgres con `_source` como un JSON) y MySQL no admite `LIMIT` dentro de un `IN`, así que exige un generador de subconsultas por motor; las subconsultas en Go cubren el caso con un tope explícito. Tampoco hay aritmética, funciones de usuario ni `while` sin tope: para eso, `script` y los flujos de jwf.
+
 ## 9. Drivers
 
 El driver recibe un `Model` para el DDL, un `Query` para el SQL de consulta y un `Command` para el SQL de comando:
@@ -399,6 +436,7 @@ type Driver interface {
 - **Timeout:** cada método recibe un `timeout` opcional y el driver arma su contexto con `jsql.TimeoutContext(timeout...)`: sin timeout o con `0` no hay límite, así que la operación nunca falla por timeout; con un valor mayor falla con `context.DeadlineExceeded` al vencerse. El núcleo pasa el `Timeout` de `ConnectParams` (`DB.timeout`). `Load`, `Query` y `Command` solo generan SQL y no lo usan.
 - `CreateDB` y `DropDB` (expuestos como `jsql.CreateDB(connection, timeout...)` y `jsql.DropDB(db, timeout...)`, que antes cierra el pool) son idempotentes. En postgres, mysql y mssql crean/eliminan la base `database` desde la base del servidor (`postgres`, sin base, `master`), y `Connect` usa `CreateDB`; en sqlite crean/borran el archivo (con sus `-wal` y `-shm`); en oracle el servicio no se crea ni se elimina desde una conexión: `CreateDB` solo comprueba que responde y `DropDB` devuelve `MSG_DRIVER_CANNOT_DROP_DB`. Probado en los cinco drivers (`TestCreateDropDB`).
 - **Nombre de tabla** (`Model.Table`): lo asigna el núcleo al crear el modelo y en `Model.Init`, según `Driver.UseSchema()`. Con esquemas (postgres, mssql) es `schema.nombre`; sin ellos (sqlite, mysql, oracle) es `schema_nombre`, en la base o el usuario de la conexión. El esquema es obligatorio en `Define` (`MSG_SCHEMA_REQUIRED`). En sqlite, una tabla de antes de v1.0.36 (llamada solo `nombre`) se renombra a `schema_nombre` al iniciar su modelo. Los drivers arman el SQL con `Table` (`From.Table`); mssql cita sus partes como `[schema].[nombre]`.
+- **`Describer`** (opcional, `connection.go`): `Describe(db, model, timeout...) ([]DescribedColumn, error)` lee las columnas (`name`, `type`) de `model.Table` del catálogo; vacío = la tabla no existe. Lo usa `DB.modelOf` para un `from` de una tabla no definida (§5.4); los drivers arman la lista con `jsql.DescribeRows`. postgres (`information_schema.columns`, sin distinguir mayúsculas), sqlite (`pragma_table_info`), mysql (`information_schema.columns` con `column_type` de la base de la conexión), mssql (`INFORMATION_SCHEMA.COLUMNS`, `(max)` en el tipo) y oracle (`ALL_TAB_COLUMNS` del esquema actual, `NUMBER(p,s)`); josefina hereda el de postgres.
 - La conexión se describe con `jsql.Connection` (`ID`, `SetId`, `GetParams`, `SetDatabase`, `GetDatabase`, `SetPassword`; los drivers la implementan completa; `josefina` usa la de Postgres, `PgConection`), creada según `DB_DRIVER` en `conection.go`.
 
 | Driver                           | Constante        | Estado                                                                 |
@@ -509,6 +547,10 @@ El caso omitido es `Load`/`LoadTo`, que lee el entorno. `go build ./...` y `go v
 **Revisado el 2026-10-28** (atributos en la raíz con el driver josefina, §9.4): `jsql.RootAttribs` / `jsql.AttribsAtRoot` y el generador de Postgres con los atributos en la raíz cuando el driver lo pide; nuevo `TestAttribsAtRoot`; el resumen de `TestCatalog` tenía la tabla por sección sin la columna `josefina` (los valores se corrían una columna). Batería verde en sqlite, postgres (16, contenedor desechable) y josefina, con `TestCatalog` 106 de 106 en los tres y `TestAttribsAtRoot` comprobando `_source` en postgres y la raíz en josefina; oracle, mysql y mssql no estaban disponibles (sus drivers no cambiaron).
 
 **Revisado el 2026-10-28** (administración en JSON, §8.3): `admin.go` con `drop`/`truncate` de modelos, schemas y bases y `create`/`alter`/`drop` de usuarios en el dialecto de cada motor; el driver josefina borra modelos y bases (§9.4). `TestAdmin` pasa en sqlite y Josefina, y la batería completa de `drivers/test` contra Josefina y sqlite (postgres no se corrió: la base local del espacio de trabajo no se toca).
+
+**Revisado el 2026-11-05** (`from` sobre cualquier tabla, §5.4 y §9): `Describer` en los cinco drivers, `DB.reflectModel` y `MSG_FROM_SCHEMA_REQUIRED`; nombres repetidos en el `select` dan `MSG_SELECT_DUPLICATED` (antes un valor pisaba al otro sin error). Nuevo `TestReflectModel` (una segunda `DB` que no definió nada consulta, cruza, inserta, actualiza, hace upsert y borra sobre las tablas de la primera; atributos de `_source` incluidos) y `TestTypeDataOf` (`jsql/describe_test.go`, sin base: tipos de los cinco catálogos). La batería completa pasa en sqlite y postgres; oracle, mysql, mssql y josefina no estaban disponibles, así que su `Describe` está sin probar contra el motor.
+
+**Revisado el 2026-11-05** (programas, §8.4): `steps` con `const`/`vars`, `as`/`one`, `set`, `return`, `error`, `if` (`value`, `data`, `query`, `match`, `exists`, atajo), `for` (`range`, contador, `while`, `break`, `continue`, `max`), subconsultas como valor y `script`. `TestProgram` y `TestProgramSubqueryLimit` pasan en sqlite y postgres, con la batería completa; oracle, mysql, mssql y josefina no estaban disponibles (el programa no genera SQL propio: usa los descriptores de §8 de cada driver). Las subconsultas en SQL quedan fuera (ver §8.4).
 
 **Brecha:** ninguna abierta. Cerradas el 2026-10-27: B5 (driver para josefina, §9.4), B14 y B15.
 

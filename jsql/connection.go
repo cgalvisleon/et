@@ -703,6 +703,24 @@ type Tester interface {
 }
 
 /**
+* Describer: A driver that reads the columns of an existing table from the database catalog, so a JSON query
+* or command can use a table that this process did not define (DB.modelOf). The table is model.Table, named
+* as the driver names it (schema.name or schema_name).
+**/
+type Describer interface {
+	Describe(db *sql.DB, model *Model, timeout ...time.Duration) ([]DescribedColumn, error)
+}
+
+/**
+* DescribedColumn: A column read from the catalog: its name and its SQL type as the catalog gives it
+* (e.g. "bigint", "tinyint(1)", "NUMBER(19,0)"); TypeDataOf turns it into an et.TypeData.
+**/
+type DescribedColumn struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+/**
 * RootAttribs: A driver of a document database that keeps the ATTRIB fields of a model with a SourceField at the
 * root of the document instead of inside the SourceField (josefina). The model and the application do not change.
 **/

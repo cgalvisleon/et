@@ -213,3 +213,21 @@ func (s *Mssql) Load(model *jsql.Model, timeout ...time.Duration) (string, error
 	stmts = append(stmts, ddlForeignKeys(model, table)...)
 	return strings.Join(stmts, ";\n") + ";", nil
 }
+
+/**
+* Describe: Reads the columns of the model's table from INFORMATION_SCHEMA (jsql.Describer); a (MAX)
+* length is kept in the type, so NVARCHAR(MAX) maps to MEMO.
+* @param db *sql.DB, model *jsql.Model, timeout ...time.Duration
+* @return []jsql.DescribedColumn (empty when the table does not exist), error
+**/
+func (s *Mssql) Describe(db *sql.DB, model *jsql.Model, timeout ...time.Duration) ([]jsql.DescribedColumn, error) {
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
+
+	query := `SELECT COLUMN_NAME AS [name],
+	CASE WHEN CHARACTER_MAXIMUM_LENGTH = -1 THEN DATA_TYPE + '(max)' ELSE DATA_TYPE END AS [type]
+	FROM INFORMATION_SCHEMA.COLUMNS
+	WHERE TABLE_SCHEMA = @p1 AND TABLE_NAME = @p2
+	ORDER BY ORDINAL_POSITION`
+	return jsql.DescribeRows(db.QueryContext(ctx, query, model.Schema, model.Name))
+}

@@ -281,6 +281,26 @@ func (s *Query) getField(field string) (*Field, bool) {
 }
 
 /**
+* checkSelectNames: Fails when two fields of the select list give the same name in the result (e.g. "C.name" and
+* "P.name"): each row is an object, so one value would silently replace the other.
+* @return error
+**/
+func (s *Query) checkSelectNames() error {
+	seen := map[string]string{}
+	for _, field := range s.Selects {
+		def, ok := et.ToField(field)
+		if !ok {
+			continue
+		}
+		if prev, ok := seen[def.As]; ok {
+			return fmt.Errorf(MSG_SELECT_DUPLICATED, prev, field, def.As)
+		}
+		seen[def.As] = field
+	}
+	return nil
+}
+
+/**
 * getSelectField: Returns the field of the select list whose alias is name (e.g. "n" for
 * "count(id):n"), so ORDER BY can refer to a selected field or aggregate by its alias.
 * @param name string
@@ -805,7 +825,8 @@ func fromRefs(value any) ([]jsonFrom, error) {
 /**
 * modelOf: Resolves the model of a reference. Its database, when given, must be the one of the
 * connection. Without schema, defaultSchema is used; when that is empty too, the model is looked up
-* in every schema of the DB and must be unique.
+* in every schema of the DB and must be unique. With a schema, a model this process did not define is
+* read from the database catalog (reflectModel), so any table of the database can be used.
 * @param ref jsonFrom, defaultSchema string
 * @return *Model, error
 **/
@@ -818,8 +839,14 @@ func (s *DB) modelOf(ref jsonFrom, defaultSchema string) (*Model, error) {
 		schema = defaultSchema
 	}
 	if schema != "" {
-		model, err := s.GetModel(schema, ref.Model)
+		if model, err := s.GetModel(schema, ref.Model); err == nil {
+			return model, nil
+		}
+		model, err := s.reflectModel(schema, ref.Model)
 		if err != nil {
+			return nil, err
+		}
+		if model == nil {
 			return nil, fmt.Errorf(MSG_INVALID_FROM, ref)
 		}
 		return model, nil
@@ -837,7 +864,7 @@ func (s *DB) modelOf(ref jsonFrom, defaultSchema string) (*Model, error) {
 		result = model
 	}
 	if result == nil {
-		return nil, fmt.Errorf(MSG_INVALID_FROM, ref)
+		return nil, fmt.Errorf(MSG_FROM_SCHEMA_REQUIRED, ref)
 	}
 	return result, nil
 }
@@ -1025,6 +1052,9 @@ func (s *Query) allTx(tx *Tx) (et.Items, error) {
 	}
 	if s.Rows == 0 && !s.unlimited {
 		s.Rows = s.MaxRows
+	}
+	if err := s.checkSelectNames(); err != nil {
+		return et.Items{}, err
 	}
 	if err := s.prepareTemplates(); err != nil {
 		return et.Items{}, err

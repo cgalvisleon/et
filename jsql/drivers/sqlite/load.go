@@ -246,3 +246,16 @@ func (s *Sqlite) Load(model *jsql.Model, timeout ...time.Duration) (string, erro
 
 	return sb.String(), nil
 }
+
+/**
+* Describe: Reads the columns of the model's table with pragma_table_info (jsql.Describer).
+* @param db *sql.DB, model *jsql.Model, timeout ...time.Duration
+* @return []jsql.DescribedColumn (empty when the table does not exist), error
+**/
+func (s *Sqlite) Describe(db *sql.DB, model *jsql.Model, timeout ...time.Duration) ([]jsql.DescribedColumn, error) {
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
+
+	query := `SELECT name, type FROM pragma_table_info(?) ORDER BY cid;`
+	return jsql.DescribeRows(db.QueryContext(ctx, query, ddlTable(model)))
+}

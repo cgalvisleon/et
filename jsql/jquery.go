@@ -60,6 +60,10 @@ func (s *DB) queryJsonTx(tx *Tx, sql et.Json) (et.Items, error) {
 		keys[strings.ToLower(strings.TrimSpace(k))] = k
 	}
 
+	if original, ok := keys[programKey]; ok {
+		return s.runProgram(tx, sql[original])
+	}
+
 	found := ""
 	for _, kind := range keywordsCommand {
 		if _, ok := keys[kind]; !ok {

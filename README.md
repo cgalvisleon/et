@@ -43,6 +43,9 @@ Infrastructure packages (`cache`, `event`, `jsql`) read their configuration from
 - `et.Wheres.AdddResult` is deprecated: use `AddResult`.
 - The `router` rate limit keys are `ratelimit:<METHOD>:<path>`; old keys without TTL can be deleted by hand.
 - `jsql` has a sixth driver, `josefina`, that connects to Josefina's Postgres protocol.
+- `db.Query` with `from` (and join `to`) reaches any table of the database: a model this process did not define is read from the database catalog when the reference has a schema (`schema.model`), for queries and for `insert`/`update`/`delete`/`upsert`/`bulk`.
+- `db.Query` runs programs: `{"steps": {"const", "vars", "do": [...]}}` runs a list of descriptors in one transaction with `{{variables}}`, `as`, `set`, `if`/`then`/`else`, Go-like `for` (range, counter, while, `break`, `continue`, with a cap), `{"query": {...}}` subqueries as values, `script` (JavaScript) and `return`/`error`.
+- A `select` with two fields that give the same name (`C.name`, `P.name`) now fails instead of one value silently replacing the other: name one with `field:as`.
 
 ## Packages
 
@@ -182,6 +185,24 @@ items, _ := db.Query(et.Json{
     "group by": []any{"U.name"},
     "limit":    20,
 })
+```
+
+`from` and the join `to` can name any table of the database, defined in this process or not: with a schema (`"sales.clients:C"`), a table the process did not define is read from the database catalog, its `_source` attributes included, and it can also be the target of `insert`, `update`, `delete`, `upsert` and `bulk`. Two selected fields cannot give the same name in the result; use `field:as` (`"P.name:product"`).
+
+Several descriptors can run as one program, in one transaction (see [`jsql/spec.md`](jsql/spec.md) §8.4):
+
+```go
+items, _ := db.Query(et.Json{"steps": et.Json{
+    "vars": et.Json{"client": "c1"},
+    "do": []any{
+        et.Json{"as": "orders", "select": []any{"id", "total"}, "from": "sales.orders", "where": []any{et.Json{"client_id": et.Json{"eq": "{{client}}"}}}},
+        et.Json{"for": et.Json{"range": "{{orders}}", "value": "o"}, "do": []any{
+            et.Json{"if": et.Json{"data": "{{o}}", "where": []any{et.Json{"total": et.Json{"eq": 0}}}}, "then": []any{et.Json{"continue": true}}},
+            et.Json{"update": et.Json{"from": "sales.orders", "data": et.Json{"state": "billed"}, "where": []any{et.Json{"id": et.Json{"eq": "{{o.id}}"}}}}},
+        }},
+        et.Json{"return": et.Json{"orders": "{{orders}}"}},
+    },
+}})
 ```
 
 Drivers: `postgres`, `sqlite` (no CGO), `oracle` 19c+, `mysql` 8.0+, `mssql` 2022+ and `josefina` (Josefina's Postgres protocol; it does not create databases, and it keeps a model's attributes at the root of the document instead of in `_source`). The full behavior is in [`jsql/spec.md`](jsql/spec.md); the public API is gathered in [`jsql/catalog.go`](jsql/catalog.go).
@@ -430,6 +451,7 @@ More guides (in Spanish) in [`doc/`](doc/):
 - [`COMPONENT_CATALOG.md`](doc/COMPONENT_CATALOG.md) — full public API, generated from `go doc`.
 - [`AI_USAGE_GUIDE.md`](doc/AI_USAGE_GUIDE.md) — rules and pitfalls for AI assistants.
 - [`NEW_PROJECT_GUIDE.md`](doc/NEW_PROJECT_GUIDE.md) — templates for starting a new project on `et`.
+- [`CHANGELOG.md`](doc/CHANGELOG.md) — history of fixes: what changed, when and how it was tested.
 
 ## License
 

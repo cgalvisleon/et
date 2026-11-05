@@ -312,3 +312,119 @@ before_insert y after_insert son listas de código javascript que goja ejecuta a
 Drivers
 
 Cada motor de base de datos tiene su driver en jsql/drivers/<nombre>, que se registra solo al importarlo y únicamente genera el sql; ejecutarlo, manejar las transacciones y correr los triggers es trabajo del paquete jsql. Los drivers soportados son postgres, sqlite, oracle (19c o superior), mysql (8.0 o superior) y mssql (SQL Server 2022 o superior), y se elige con la variable DB_DRIVER. Los motores que no tienen RETURNING (oracle, mysql y mssql) lo simulan devolviendo las filas afectadas en el mismo comando.
+
+Programas: pasos, condiciones, ciclos y jsql anidados (propuesta del 2026-11-05; implementada el mismo día en `program.go`, ver `spec.md` §8.4, salvo las subconsultas en SQL —C—)
+
+Un programa describe en un solo JSON una operación de varios pasos —leer, decidir, escribir y devolver— que corre en una sola transacción. Se apoya en lo que jsql ya soporta y no busca ser un lenguaje general: la lógica libre queda en los scripts de jwf y la orquestación entre servicios o en el tiempo, en los flujos de jwf.
+
+Lo que se reutiliza:
+
+| Pieza | Dónde está | Uso en el programa |
+|---|---|---|
+| `where` como lista de condiciones (`[{id: {eq: 1}}, {or: {...}}]`) | `et.ToConditions`, `et.AddCondition` | Única forma de escribir condiciones en `if` y `for` |
+| Evaluación en memoria con la semántica de SQL | `et.EvaluateObject(obj, conds)`, `et.EvaluateValue(value, conds)` | `if` sobre `data` y `value`, `for` con `while` |
+| Referencia a otro campo `{field: "n"}` | `et/evaluate.go` | Condiciones entre variables (`i < n`) |
+| Variables `{{x}}`, `{{a.b}}`; una lista se expande en una lista | `jsql.Bind` | Variables y constantes (reemplaza valores, no claves) |
+| Despacho por clave y transacción | `DB.queryJsonTx(tx, json)`, `jsql.NewTx()` | Cada paso en la transacción del programa |
+| Resultados anidados al leer | columnas `DETAIL`, `MASTER`, `ROLLUP` | Filas hijas dentro de cada fila, sin nada nuevo |
+| Lógica libre en JS | scripts de jwf | Lo que no conviene expresar en JSON |
+
+1. Contenedor: steps
+
+```json
+{
+  "steps": {
+    "const": { "LIMITE": 500 },
+    "vars": { "params": {} },
+    "do": [],
+    "max_steps": 10000
+  }
+}
+```
+
+- Un paso es cualquier descriptor que ya existe (consulta, insert, update, delete, upsert, bulk, define) o un paso de control: if, for, set, break, continue, return, error.
+- Los pasos corren en orden dentro de una transacción (la que recibe `QueryTx` o una nueva con `NewTx`); un error en cualquier paso la deshace toda.
+- Antes de ejecutar cada paso se aplica `jsql.Bind(paso, vars ∪ const)`, así cada paso ve lo que dejaron los anteriores. Los valores llegan a la base como datos, nunca como SQL armado a mano.
+- `"as": "nombre"` en cualquier paso guarda su resultado en esa variable: por defecto el `Result` completo (una lista); con `"one": true`, solo la primera fila como objeto.
+- `const` no se puede reasignar: un `as` o un `set` con el nombre de una constante es un error al validar el programa, antes de ejecutar nada.
+- `return` decide qué devuelve el programa; sin `return`, el resultado del último paso. `error` aborta con su mensaje y deshace la transacción.
+
+2. if
+
+Una sola forma de condición (`where`, como en jsql), tres fuentes y dos ramas:
+
+```json
+{ "if": { "value": "{{params.total}}", "where": [{ "value": { "more": 100 } }] },
+  "then": [], "else": [] }
+
+{ "if": { "data": "{{cliente}}", "where": [{ "status": { "eq": "active" } }] },
+  "then": [] }
+
+{ "if": { "query": { "select": ["id", "total"], "from": "ventas.pedidos",
+                     "where": [{ "cliente_id": { "eq": "{{cliente.id}}" } }] },
+          "where": [{ "total": { "more": 0 } }],
+          "match": "any" },
+  "then": [] }
+```
+
+- `value` se evalúa con `EvaluateValue` en su formato (la condición sobre el nombre `value`); las referencias `{field: "x"}` se leen de las variables. El valor va como valor, nunca como clave: las claves no se reemplazan con `Bind` y en JSON siempre son texto.
+- `data` se evalúa con `EvaluateObject`.
+- `query` corre la consulta en la transacción del programa y evalúa sus filas: `match: "any"` (por defecto) o `"all"`; sin `where`, `exists: true|false` pregunta solo si hay filas.
+- `then` y `else` son listas de pasos. Atajo: un único comando dentro del `if` vale como `then` de un paso.
+- "Insertar si no existe" ya es `upsert`; el `if` con `query` sirve cuando la condición no es la llave o la acción es sobre otra tabla.
+
+3. jsql anidados
+
+- A. Pasos con nombre (primera opción): una consulta con `as` y los pasos siguientes la usan con `{{nombre}}`. No toca los drivers; son varias idas a la base.
+- B. Subconsulta como valor, resuelta en Go: donde va un valor, `{"query": {...}}` se ejecuta antes del paso y se reemplaza por su resultado (una columna → lista, útil para `in`; una columna y una fila → valor). No toca los drivers; las filas pasan por Go, con tope (`DB_RECORD_LIMIT`) y error al pasarlo.
+
+```json
+{ "update": { "from": "ventas.pedidos", "data": { "estado": "cerrado" },
+  "where": [{ "cliente_id": { "in": { "query": { "select": ["id"], "from": "ventas.clientes",
+                                                  "where": [{ "ciudad": { "eq": "Cali" } }] } } } }] } }
+```
+
+- C. Subconsulta en SQL: la misma forma que B, traducida por cada driver a `IN (SELECT …)` / `EXISTS (…)`. Una sola ida y sin tope, pero cambia los cinco drivers; solo si B queda corta.
+- D. Para leer filas hijas ya existen `DETAIL`, `MASTER` y `ROLLUP` (por lotes).
+
+4. for, con las formas de Go
+
+| Go | jsql | Notas |
+|---|---|---|
+| `for i, v := range lista {}` | `{"for": {"range": "{{pedidos}}", "key": "i", "value": "p"}, "do": []}` | La principal: recorrer filas; `key` opcional |
+| `for k, v := range mapa {}` | `{"for": {"range": "{{cliente}}", "key": "k", "value": "v"}}` | Claves en orden, para un resultado reproducible |
+| `for i := range 10 {}` | `{"for": {"range": 10, "key": "i"}}` | |
+| `for i := 0; i < n; i += 2 {}` | `{"for": {"var": "i", "from": 0, "to": "{{n}}", "step": 2}}` | `to` excluido, como `i < n`; sin aritmética general |
+| `for cond {}` | `{"for": {"while": [{"pendientes": {"more": 0}}]}, "do": []}` | Se evalúa sobre las variables con `EvaluateObject`; admite `{field: "x"}` |
+| `for {}` | no se permite | siempre hay tope |
+| `break` / `continue` | `{"break": true}`, `{"continue": true}` | Del ciclo más cercano; pueden ir dentro de un `if` |
+
+- Cada ciclo tiene `max` (por defecto `DB_RECORD_LIMIT`); pasarlo es un error, no un corte silencioso.
+- Un `while` solo avanza si un paso cambia sus variables (`as` o `set`); si no, choca con `max`.
+- `key` y `value` existen solo dentro de `do`; `set` escribe en la variable de afuera, para acumular.
+- `set` asigna valores ya resueltos (`{"set": {"total": "{{p.total}}"}}`), sin aritmética: para sumar o contar, una consulta (`sum(...)`, `count(...)`) o, más adelante, un paso `script` de jwf.
+
+Ejemplo:
+
+```json
+{ "steps": {
+  "const": { "LIMITE": 500 },
+  "do": [
+    { "as": "pedidos", "select": ["id", "total"], "from": "ventas.pedidos",
+      "where": [{ "estado": { "eq": "abierto" } }], "limit": "{{LIMITE}}" },
+    { "for": { "range": "{{pedidos}}", "value": "p", "max": "{{LIMITE}}" }, "do": [
+      { "if": { "data": "{{p}}", "where": [{ "total": { "eq": 0 } }] }, "then": [{ "continue": true }] },
+      { "update": { "from": "ventas.pedidos", "data": { "estado": "facturado" },
+                    "where": [{ "id": { "eq": "{{p.id}}" } }] } }
+    ]},
+    { "return": { "procesados": "{{pedidos}}" } }
+  ]
+}}
+```
+
+5. Límites y alcance
+
+- Límites: `max_steps` (pasos ejecutados en total), profundidad máxima de anidamiento, `max` de cada ciclo y el `timeout` de la `DB`.
+- Fuera de alcance a propósito: aritmética general, funciones de usuario y `while` sin tope (para eso, scripts y flujos de jwf).
+
+Orden de implementación: (1) `steps` con `as`, `vars`/`const`, `Bind`, transacción, `return` y `error`; (2) `if`; (3) `for` (range, contador, while) con `break`/`continue`; (4) subconsultas como valor (B); (5) si hace falta, subconsultas en SQL (C) y paso `script`. Cada fase con su prueba en `jsql/drivers/test` y su sección en `jsql/spec.md` (§8.4).

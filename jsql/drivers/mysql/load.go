@@ -198,3 +198,17 @@ func (s *Mysql) Load(model *jsql.Model, timeout ...time.Duration) (string, error
 	stmts = append(stmts, ddlForeignKeys(model, table)...)
 	return strings.Join(stmts, ";\n") + ";", nil
 }
+
+/**
+* Describe: Reads the columns of the model's table from information_schema (jsql.Describer); the type is
+* COLUMN_TYPE, so TINYINT(1) is told apart as a boolean.
+* @param db *sql.DB, model *jsql.Model, timeout ...time.Duration
+* @return []jsql.DescribedColumn (empty when the table does not exist), error
+**/
+func (s *Mysql) Describe(db *sql.DB, model *jsql.Model, timeout ...time.Duration) ([]jsql.DescribedColumn, error) {
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
+
+	query := "SELECT column_name AS `name`, column_type AS `type` FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? ORDER BY ordinal_position"
+	return jsql.DescribeRows(db.QueryContext(ctx, query, sanitizeIdent(model.Table)))
+}

@@ -269,3 +269,21 @@ func (s *Postgres) Load(model *jsql.Model, timeout ...time.Duration) (string, er
 
 	return sb.String(), nil
 }
+
+/**
+* Describe: Reads the columns of the model's table from information_schema (jsql.Describer).
+* @param db *sql.DB, model *jsql.Model, timeout ...time.Duration
+* @return []jsql.DescribedColumn (empty when the table does not exist), error
+**/
+func (s *Postgres) Describe(db *sql.DB, model *jsql.Model, timeout ...time.Duration) ([]jsql.DescribedColumn, error) {
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
+
+	query := `
+	SELECT column_name AS name, CASE WHEN data_type = 'ARRAY' THEN 'array' ELSE data_type END AS type
+	FROM information_schema.columns
+	WHERE UPPER(table_schema) = UPPER($1)
+	AND UPPER(table_name) = UPPER($2)
+	ORDER BY ordinal_position;`
+	return jsql.DescribeRows(db.QueryContext(ctx, query, model.Schema, model.Name))
+}

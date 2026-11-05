@@ -784,6 +784,18 @@ func (s *Schema) getModel(name string) (*Model, error) {
 * @return *Model
 **/
 func (s *Schema) newModel(id, name string, version int, userId string) *Model {
+	result := s.buildModel(id, name, version)
+	s.db.addAuditLog(userId, "new_model")
+	s.addModel(result)
+	return result
+}
+
+/**
+* buildModel: Constructs a Model of this schema (table name and default triggers set) without registering it.
+* @param id string, name string, version int
+* @return *Model
+**/
+func (s *Schema) buildModel(id, name string, version int) *Model {
 	name = utility.Normalize(name)
 	id = reg.GetUUID(id)
 	result := &Model{
@@ -825,8 +837,6 @@ func (s *Schema) newModel(id, name string, version int, userId string) *Model {
 	}
 	result.setTable()
 	result.defaultTrigger()
-	s.db.addAuditLog(userId, "new_model")
-	s.addModel(result)
 	return result
 }
 

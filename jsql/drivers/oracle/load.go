@@ -227,3 +227,23 @@ func (s *Oracle) Load(model *jsql.Model, timeout ...time.Duration) (string, erro
 	sb.WriteString("END;")
 	return sb.String(), nil
 }
+
+/**
+* Describe: Reads the columns of the model's table from ALL_TAB_COLUMNS of the current schema
+* (jsql.Describer); a NUMBER carries its precision and scale, so NUMBER(19,0) maps to INT.
+* @param db *sql.DB, model *jsql.Model, timeout ...time.Duration
+* @return []jsql.DescribedColumn (empty when the table does not exist), error
+**/
+func (s *Oracle) Describe(db *sql.DB, model *jsql.Model, timeout ...time.Duration) ([]jsql.DescribedColumn, error) {
+	ctx, cancel := jsql.TimeoutContext(timeout...)
+	defer cancel()
+
+	query := fmt.Sprintf(`SELECT COLUMN_NAME AS "name",
+	CASE WHEN DATA_TYPE = 'NUMBER' AND DATA_PRECISION IS NOT NULL
+	THEN 'NUMBER(' || DATA_PRECISION || ',' || NVL(DATA_SCALE, 0) || ')' ELSE DATA_TYPE END AS "type"
+	FROM ALL_TAB_COLUMNS
+	WHERE OWNER = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+	AND TABLE_NAME = '%s'
+	ORDER BY COLUMN_ID`, jsql.EscapeSQLString(sanitizeIdent(model.Table)))
+	return jsql.DescribeRows(db.QueryContext(ctx, query))
+}

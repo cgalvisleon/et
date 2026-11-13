@@ -23,6 +23,7 @@ GOWORK=off go build ./...            # if go.work lists a missing module, build 
 
 go run ./cmd/server   # TCP echo node (port 1377, -port flag); cmd/client is its stdin console
 go run ./cmd/jsql     # jsql driver demo
+go run ./cmd/store    # store usage example (temp dir unless -dir)
 go run ./cmd/ia       # RAG HTTP API (PORT, default 3300)
 go run ./cmd/create   # scaffolds Project/Microservice/Modelo/Rpc (`create modelo` prints a manual wiring step: file.MakeFile never overwrites)
 docker compose up -d  # optional local Ollama on 11434

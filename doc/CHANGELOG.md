@@ -101,3 +101,7 @@ Historial de cambios que antes vivía en `CLAUDE.md` (movido el 2026-11-05). Las
 ## Cambios del 2026-11-12 (documentación)
 
 - Se eliminaron `jsql/feature.md` y `store/spec.md`. `jsql/spec.md` queda como única fuente de `jsql` (la propuesta de programas está implementada en su §8.4); para `store/`, la referencia es la sección de `CLAUDE.md` y su GoDoc. Se quitaron las referencias a los dos archivos en `CLAUDE.md`, `README.md`, `doc/README.es.md`, `jsql/spec.md` y el plan `spec.md`. Nuevo `feature.md` en la raíz con los principios de trabajo de los agentes en `et`.
+
+## Cambios del 2026-11-13 (ejemplo)
+
+- Nuevo `cmd/store`: ejemplo ejecutable del paquete `store` (`Open`, `Sync`, `Insert`/`Update`/`Delete` con sus casos `false`, `Deferred` + `WaitDurable`, `Get`, `GetVersion` con concurrencia optimista, `IsExist`, `Count`, `Keys`, `ForEach`, `Compact`, `ToString`). Sin `-dir` usa un directorio temporal que borra al terminar. Probado con `go vet ./cmd/store` y `go run ./cmd/store`. Listado en `README.md`, `doc/README.es.md` y `CLAUDE.md`; lo enlaza el capítulo `learn/et-store.html`.

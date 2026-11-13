@@ -335,7 +335,7 @@ defer q.Close()
 
 ### Embedded key/value store
 
-`store` is a single-node, append-only store of `id → []byte` in segment files, with an in-memory index; it repairs itself on `Open` after a crash. There is no upsert: call `Update`, then `Insert` if the id did not exist. Format and guarantees: `store/spec.md`.
+`store` is a single-node, append-only store of `id → []byte` in segment files, with an in-memory index; it repairs itself on `Open` after a crash. There is no upsert: call `Update`, then `Insert` if the id did not exist. Public API: [`store/catalog.go`](store/catalog.go).
 
 ```go
 fs, err := store.Open("./data/collections", "./data/wal", "customers", store.ReadWrite)
@@ -440,7 +440,7 @@ go run ./test/storebench -d 10s      # load on store (workers, readers)
 ./version.sh --minor                 # bump the git tag, update the READMEs and push
 ```
 
-The jsql suite skips any engine it cannot reach, so check the `SKIP` lines. `cache`, `aws` and `brevo` tests need live services. Each package with a spec (`et/spec.md`, `jsql/spec.md`, `store/spec.md`, `tcp/spec.md`, `websocket/spec.md`) is updated in the same change as its code.
+The jsql suite skips any engine it cannot reach, so check the `SKIP` lines. `cache`, `aws` and `brevo` tests need live services. Each package with a spec (`et/spec.md`, `jsql/spec.md`, `tcp/spec.md`, `websocket/spec.md`) is updated in the same change as its code.
 
 ## Documentation
 

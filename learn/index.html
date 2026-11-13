@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learn</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  :root {
+    --bg: #fbfaf7; --fg: #1f2328; --muted: #5b6168; --card: #ffffff;
+    --line: #e3e0d8; --accent: #2f6db5; --accent-soft: #e6eef8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16181b; --fg: #e6e6e3; --muted: #a0a4a9; --card: #1f2226;
+      --line: #33373c; --accent: #7aaef0; --accent-soft: #1f2d40;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16181b; --fg: #e6e6e3; --muted: #a0a4a9; --card: #1f2226;
+    --line: #33373c; --accent: #7aaef0; --accent-soft: #1f2d40;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 40px 16px 80px; }
+  header { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+  header img { width: 48px; height: 48px; }
+  h1 { font-size: 2rem; margin: 0; }
+  .lead { color: var(--muted); margin: 0 0 32px; }
+  .topics { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+  .topic a {
+    display: block; text-decoration: none; color: inherit;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px; transition: border-color .15s, transform .15s;
+  }
+  .topic a:hover, .topic a:focus-visible { border-color: var(--accent); transform: translateY(-1px); }
+  .topic h2 { font-size: 1.15rem; margin: 0 0 4px; color: var(--accent); }
+  .topic p { margin: 0; color: var(--muted); font-size: .95rem; }
+  .tags { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .tags span { background: var(--accent-soft); color: var(--accent); font-size: .78rem; padding: 2px 10px; border-radius: 999px; }
+  footer { color: var(--muted); font-size: .9rem; margin-top: 48px; border-top: 1px solid var(--line); padding-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="favicon.svg" alt="">
+    <h1>Learn</h1>
+  </header>
+  <p class="lead">Temas de estudio explicados de manera sencilla.</p>
+
+  <!-- Para agregar un tema: copia un <li class="topic"> y cambia enlace, título, descripción y etiquetas. -->
+  <ul class="topics">
+    <li class="topic">
+      <a href="postgresql-store.html">
+        <h2>¿Cómo guarda PostgreSQL tus datos?</h2>
+        <p>El motor de almacenamiento: archivos, páginas de 8 KB, tuplas, TOAST, shared buffers, WAL, MVCC, VACUUM, índices y recuperación tras una caída.</p>
+        <div class="tags"><span>Bases de datos</span><span>PostgreSQL</span><span>Almacenamiento</span></div>
+      </a>
+    </li>
+  </ul>
+
+  <footer>Carpeta <code>learn/</code> del repositorio <code>et</code>.</footer>
+</main>
+</body>
+</html>

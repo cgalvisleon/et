@@ -1,0 +1,9 @@
+## Principios de trabajo
+
+Reglas obligatorias para los agentes de IA que trabajan en la librería `et` (`github.com/cgalvisleon/et`). Los detalles del repo (comandos, arquitectura, pruebas) están en `CLAUDE.md`.
+
+1. **Código para humanos**: entendible, mantenible y escalable por una persona. Sigue el patrón del paquete que tocas (el estilo de GoDoc del archivo, la API pública en `catalog.go` en `jsql/`, `store/`, `tcp/` y `websocket/`); sin abstracciones ni dependencias innecesarias.
+2. **Cambios pequeños, de raíz**: corrige la causa, no el síntoma, en el paquete donde está. `et` es la base de los demás proyectos: el `go.work` del espacio de trabajo les lleva el cambio en vivo, pero los que compilan con `GOWORK=off` o con imagen Docker necesitan un tag nuevo y subir el `go.mod`; avísalo. Al terminar, di qué verificaste y qué no (en `jsql/drivers/test`, qué motores corrieron y cuáles se omitieron).
+3. **Los commits los hago yo**: el agente no hace commit, push ni tags, ni ejecuta `version.sh`, salvo pedido explícito.
+4. **Servicios sobre et**: `et` es la base de todo servicio Go. Los proyectos, microservicios, modelos y RPC nuevos se generan con `go run github.com/cgalvisleon/et/cmd/create go project|micro|modelo|rpc` (pide los datos por consola) y respetan su estructura (`cmd/`, `internal/`, `pkg/`); `doc/NEW_PROJECT_GUIDE.md` tiene las plantillas verificadas.
+5. **Spec primero**: antes de cambiar un paquete, lee su spec (`et/spec.md`, `jsql/spec.md`, `tcp/spec.md`, `websocket/spec.md`); después, actualiza su estado y la fecha de revisión (o la «Versión del documento»), la brecha (`jsql/spec.md` §12, `brecha.md` en `tcp/` y `websocket/`), `README.md` con `doc/README.es.md` y `doc/CHANGELOG.md`. Una funcionalidad nueva empieza en el `feature.md` del paquete (como `tcp/feature.md` o `websocket/feature.md`) y pasa a su spec.

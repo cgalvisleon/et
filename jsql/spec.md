@@ -1,6 +1,6 @@
 # Especificación del paquete `jsql`
 
-> Fuente original: [`feature.md`](feature.md). Este documento la formaliza y la contrasta con el código actual de `jsql/` y sus drivers (`jsql/drivers/`). La sección [Brechas](#12-brechas-entre-la-especificación-y-el-código) lista lo que la especificación pide y el código todavía no cumple.
+> Este documento especifica `jsql/` y sus drivers (`jsql/drivers/`) y lo contrasta con el código actual. La sección [Brechas](#12-brechas-entre-la-especificación-y-el-código) lista lo que la especificación pide y el código todavía no cumple.
 
 ## 1. Objetivo
 
@@ -263,7 +263,7 @@ Los campos ocultos (`Model.Hiddens` y `Query.Hiddens`) se excluyen cuando el sel
 }
 ```
 
-- `from` es el origen. **Forma estándar (feature.md):** un objeto `{database, schema, model, as}`; `database` es la base donde está el modelo (sin él, la de la conexión), sin `schema` el modelo se busca en todos los esquemas (entre los modelos definidos) y debe ser único, y sin `as` el origen principal es `A`. **Forma corta:** el texto `schema.tabla:alias`, `tabla:alias` (usa el esquema del modelo que ejecuta la consulta), `schema.tabla` o `tabla` (alias `A`). `database`, si viene, debe ser la base de la conexión; si no, es un error (`MSG_INVALID_DATABASE`). También acepta una lista: la primera referencia reemplaza al origen principal y las demás se agregan como orígenes adicionales (`FROM a, b`). En ese caso los orígenes se relacionan en el `where`, donde un valor de texto `alias.campo` que nombra un campo de la consulta se toma como columna, igual que en el `on` de un join.
+- `from` es el origen. **Forma estándar:** un objeto `{database, schema, model, as}`; `database` es la base donde está el modelo (sin él, la de la conexión), sin `schema` el modelo se busca en todos los esquemas (entre los modelos definidos) y debe ser único, y sin `as` el origen principal es `A`. **Forma corta:** el texto `schema.tabla:alias`, `tabla:alias` (usa el esquema del modelo que ejecuta la consulta), `schema.tabla` o `tabla` (alias `A`). `database`, si viene, debe ser la base de la conexión; si no, es un error (`MSG_INVALID_DATABASE`). También acepta una lista: la primera referencia reemplaza al origen principal y las demás se agregan como orígenes adicionales (`FROM a, b`). En ese caso los orígenes se relacionan en el `where`, donde un valor de texto `alias.campo` que nombra un campo de la consulta se toma como columna, igual que en el `on` de un join.
 - **Cualquier tabla de la base** (`describe.go`): si el modelo no está definido en la `DB` y la referencia trae esquema (o lo toma del origen principal), se lee del catálogo de la base con el `Describer` del driver (§9) y se registra en su esquema, así que las siguientes consultas y comandos lo encuentran sin volver al catálogo. Las columnas `_source` e `_idx` pasan a ser el `SourceField` y el `IdxField`, de modo que los atributos de una tabla de jsql también se consultan; los tipos se traducen con `typeDataOf` (`bigint` → `INT`, `NUMBER(19,0)` → `INT`, `tinyint(1)` → `BOOL`, `nvarchar(max)` → `MEMO`…). El modelo queda iniciado: su tabla nunca se crea ni se cambia, y no tiene llaves, índices, relaciones ni triggers propios. Sin esquema y sin un modelo definido con ese nombre, el error es `MSG_FROM_SCHEMA_REQUIRED`; una tabla que no existe da `MSG_INVALID_FROM`. Si la tabla cambia después, el modelo leído no se actualiza (hay que reiniciar el proceso o definir el modelo).
 - `to` en los joins es obligatorio, con la misma estructura de `from` (objeto o forma corta `schema.tabla:alias`), y el alias es obligatorio; el modelo destino se resuelve como el de `from` (definido o leído del catálogo). Sin `schema`, se usa el del origen principal.
 - **Nombres repetidos en el `select`:** cada fila es un objeto, así que dos campos que dan el mismo nombre (`C.name` y `P.name`, o `count(a)` y `count(b)`) se pisarían. La consulta falla con `MSG_SELECT_DUPLICATED`; se resuelve con un alias (`P.name:product`, `count(b):n`). Lo comprueba `Query.checkSelectNames` en toda consulta, fluida o en JSON.
@@ -384,7 +384,7 @@ Un descriptor con `drop`, `truncate`, `create` o `alter` borra, vacía o adminis
 
 ### 8.4 Programas: `steps` (`program.go`)
 
-Un descriptor `steps` corre una lista de pasos en **una sola transacción** (la de `QueryTx` o una nueva que se confirma al final; cualquier error la deshace). Fuente: `feature.md` › «Programas». Pruebas: `TestProgram` y `TestProgramSubqueryLimit` (`drivers/test/program_test.go`).
+Un descriptor `steps` corre una lista de pasos en **una sola transacción** (la de `QueryTx` o una nueva que se confirma al final; cualquier error la deshace). Pruebas: `TestProgram` y `TestProgramSubqueryLimit` (`drivers/test/program_test.go`).
 
 ```json
 { "steps": {

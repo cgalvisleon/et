@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Docs**: only `README.md` at the root; the rest in `doc/` — `doc/README.es.md` (Spanish translation, keep both in sync: same sections, same order, installation first), `doc/LIBRARY_CONTEXT.md` (copied into consumers by `go run ./cmd/install`), `doc/ARCHITECTURE_SUMMARY.md`, `doc/COMPONENT_CATALOG.md` (generated from `go doc` — regenerate, don't hand-edit), `doc/AI_USAGE_GUIDE.md` (these four come from the `lib-ctx-gen` skill and can drift), `doc/NEW_PROJECT_GUIDE.md` (verified templates for a new HTTP microservice or CLI on `et`), `doc/CHANGELOG.md`. The root `spec.md` is the stability plan (phases 0–5, detail in `doc/review-2026-10-27/`), not a library spec.
 
-**After a code change**: update `README.md` + `doc/README.es.md` together, the touched package's spec (`jsql/spec.md` §12 gaps, `et/spec.md` §7 core, `store/spec.md`, `tcp/spec.md`, `websocket/spec.md`), and add an entry to `doc/CHANGELOG.md`. Changes to `et` reach consumers live through `go.work`; for consumers built with `GOWORK=off` or Docker images, publish a tag and bump their `go.mod`.
+**After a code change**: update `README.md` + `doc/README.es.md` together, the touched package's spec (`jsql/spec.md` §12 gaps, `et/spec.md` §7 core, `tcp/spec.md`, `websocket/spec.md`), and add an entry to `doc/CHANGELOG.md`. Changes to `et` reach consumers live through `go.work`; for consumers built with `GOWORK=off` or Docker images, publish a tag and bump their `go.mod`.
 
 ## Commands
 
@@ -60,7 +60,7 @@ Modular utility library for Go microservices: every directory is an independent 
 
 ### SQL builder / ORM: `jsql/`
 
-- `jsql.Load()` / `jsql.LoadTo(dbName, hostName...)` → `*DB`, config read via `envar`. `jsql/catalog.go` is the whole public API (`TestCatalog` checks its sections). `jsql/spec.md` is the formal spec with a numbered gap list (`B<n>`); `feature.md` is its source.
+- `jsql.Load()` / `jsql.LoadTo(dbName, hostName...)` → `*DB`, config read via `envar`. `jsql/catalog.go` is the whole public API (`TestCatalog` checks its sections). `jsql/spec.md` is the formal spec with a numbered gap list (`B<n>`).
 - **Drivers** in `jsql/drivers/<name>/`, self-registering via `init()` (import for side effect): `postgres`, `sqlite`, `mysql`, `mssql`, `oracle`, each with the same files (`connect`, `load` = DDL, `query`, `command`, `quoted`, `types`, `test`), plus `josefina` (embeds postgres over Josefina's Postgres protocol; implements `jsql.RootAttribs` so ATTRIB fields live at the document root, not `_source`; cannot create databases). **A change to SQL generation usually has to be mirrored in all five** (josefina inherits postgres).
 - **`Driver` interface** (`connection.go`): `UseSchema()`, `CreateDB`, `DropDB`, `Connect`, `ExistModel`, `Load(model)` (DDL text), `Drop`, `Query` (SELECT text), `Command` (DML text); all but `UseSchema` take `timeout ...time.Duration` (none or 0 = no timeout, via `jsql.TimeoutContext`). `CreateDB`/`DropDB` are idempotent; postgres/mysql/mssql `Connect` creates the DB if missing; oracle never creates/drops. Optional `jsql.Tester`: `jsql.TestConnection(ctx, conn, query)` opens, pings, queries and closes **without creating the DB**. Postgres `Load` takes an advisory lock so concurrent services can run DDL at startup.
 - **Table names**: `Model.Table` is `schema.name` (postgres/mssql) or `schema_name` (sqlite/mysql/oracle — no `CREATE SCHEMA`). Drivers build SQL from `model.Table`, so raw SQL against sqlite must use the prefixed name (`main_tasks`). A schema is mandatory in `Define`.
@@ -105,7 +105,7 @@ _, _ = model.Insert(et.Json{...}).ExecTx(nil)
 
 ### `store/` — append-only WAL key/value store
 
-Single-node, concurrency-safe `id → []byte` store (from josefina). Replication lives *above* it (`WalSince` / `ApplyWalEntry` / `Sync` hook). **`store/spec.md` is the reference (format, guarantees, compaction, recovery); every change must update it (bump its version) plus the README store section.**
+Single-node, concurrency-safe `id → []byte` store (from josefina). Replication lives *above* it (`WalSince` / `ApplyWalEntry` / `Sync` hook). It has no spec (`store/spec.md` was removed on 2026-11-12): this section and the GoDoc of `store/` are the reference (format, guarantees, invariants); every change must keep them and the README store section up to date.
 
 - API (`catalog.go`): `Open(pathData, pathWald, name, mode)` (self-repairs the active segment after a crash), `Close`, `Empty`, `Insert` (only if absent), `Update` (only if present and bytes differ), `Delete`, `Deferred()` + `WaitDurable()` (write now, fsync later), `Get`, `GetVersion` (LSN for optimistic concurrency), `IsExist`, `Count`, `Keys`, `ForEach` (`fn` runs sequentially in key order on the caller's goroutine, no lock held), `Stats`, `OnStats`, `Sync(fn)` (called under `writeMu` in exact LSN order — must be fast and must not write to the store), `Compact`, `WalSince`, `ApplyWalEntry`, `Recover` (offline repair). **No upsert by design**: `Update`, then `Insert`, then `Update` again if the insert lost a race. The private `recover` shadows Go's builtin inside the package.
 - Record `[LSN:8][DataLen:4][CRC:4][IDLen:2][ID][Status:1][Data]`, big-endian, CRC over Data only; segments rotate at `RELSEG_SIZE` MB; snapshot is optional (rebuilt by scanning).

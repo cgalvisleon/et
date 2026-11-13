@@ -335,7 +335,7 @@ defer q.Close()
 
 ### Store embebido clave/valor
 
-`store` es un store de un solo nodo, de solo agregado, que guarda `id → []byte` en archivos de segmento con un índice en memoria; `Open` se repara solo después de una caída. No hay upsert: se llama `Update` y, si el id no existía, `Insert`. Formato y garantías: `store/spec.md`.
+`store` es un store de un solo nodo, de solo agregado, que guarda `id → []byte` en archivos de segmento con un índice en memoria; `Open` se repara solo después de una caída. No hay upsert: se llama `Update` y, si el id no existía, `Insert`. API pública: [`store/catalog.go`](../store/catalog.go).
 
 ```go
 fs, err := store.Open("./data/collections", "./data/wal", "customers", store.ReadWrite)
@@ -440,7 +440,7 @@ go run ./test/storebench -d 10s      # carga sobre store (escritores, lectores)
 ./version.sh --minor                 # sube el tag de git, actualiza los README y hace push
 ```
 
-La suite de jsql omite cualquier motor al que no pueda conectarse, así que revisa las líneas `SKIP`. Las pruebas de `cache`, `aws` y `brevo` necesitan servicios en vivo. Cada paquete con spec (`et/spec.md`, `jsql/spec.md`, `store/spec.md`, `tcp/spec.md`, `websocket/spec.md`) se actualiza en el mismo cambio que su código.
+La suite de jsql omite cualquier motor al que no pueda conectarse, así que revisa las líneas `SKIP`. Las pruebas de `cache`, `aws` y `brevo` necesitan servicios en vivo. Cada paquete con spec (`et/spec.md`, `jsql/spec.md`, `tcp/spec.md`, `websocket/spec.md`) se actualiza en el mismo cambio que su código.
 
 ## Documentación
 

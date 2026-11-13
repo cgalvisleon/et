@@ -477,6 +477,8 @@ borrar usuarios.segments.old</code></pre>
   <li>Sin tests en el repositorio; se prueba con segmentos pequeños, <code>SYNC_ON_WRITE=false</code> y <code>-race</code> (ver <code>CLAUDE.md</code> de <code>et</code>).</li>
 </ul>
 
+<p>¿Cómo quitar el límite de un escritor a la vez? Lee la <a href="store-concurrente.html">propuesta de store con escritura y lectura concurrentes</a>.</p>
+
 <p>Temas relacionados: <a href="postgresql-store.html">¿Cómo guarda PostgreSQL tus datos?</a> · <a href="cockroachdb-store.html">¿Cómo guarda CockroachDB tus datos?</a></p>
 
 <footer>Documento de aprendizaje · carpeta <code>learn/</code> del repositorio <code>et</code> · noviembre de 2026. Basado en el código de <code>store/</code> a esta fecha (<code>catalog.go</code>, <code>store.go</code>, <code>segment.go</code>, <code>index.go</code>, <code>commit.go</code>, <code>compact.go</code>, <code>snapshot.go</code>, <code>recover.go</code>, <code>wal.go</code>, <code>notify.go</code>).</footer>

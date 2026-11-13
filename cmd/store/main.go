@@ -27,7 +27,9 @@ func main() {
 	fmt.Println("datos en:", root)
 
 	// ---- Abrir ----
-	s, err := store.Open(filepath.Join(root, "data"), filepath.Join(root, "wal"), "usuarios", store.ReadWrite)
+	pathData := filepath.Join(root, "data") // segmentos con los registros
+	pathWal := filepath.Join(root, "wal")   // snapshot, compactación y cuarentena
+	s, err := store.Open(pathData, pathWal, "usuarios", store.ReadWrite)
 	check(err)
 	defer s.Close()
 

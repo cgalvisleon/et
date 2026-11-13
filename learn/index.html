@@ -74,6 +74,20 @@
         <p>El paquete store de esta librería: log de solo anexar por segmentos, índice en memoria, group commit, compactación sin bloquear, snapshot, recuperación tras una caída y replicación, con un simulador.</p>
         <div class="tags"><span>Bases de datos</span><span>et</span><span>Go</span><span>Log append-only</span><span>Interactivo</span></div>
       </a>
+    </li>
+    <li class="topic">
+      <a href="store-concurrente.html">
+        <h2>Propuesta: un store con escritura y lectura concurrentes</h2>
+        <p>Cómo llevar et/store de un escritor a muchos sin cambiar la API ni el formato: reservar, escribir en paralelo y publicar en orden con una marca de agua, locks por clave, índice ordenado y un plan por fases.</p>
+        <div class="tags"><span>Propuesta</span><span>et</span><span>Concurrencia</span><span>Go</span><span>Interactivo</span></div>
+      </a>
+    </li>
+    <li class="topic">
+      <a href="ids-ordenables.html">
+        <h2>IDs universales cortos y ordenables</h2>
+        <p>UUID, ULID, XID y Snowflake comparados, y SID (<code>reg.SID()</code>): 64 bits (tiempo + nodo + secuencia) en 11 caracteres base62 que se ordenan por fecha, con un generador interactivo.</p>
+        <div class="tags"><span>Algoritmos</span><span>Identificadores</span><span>Go</span><span>Interactivo</span></div>
+      </a>
     </li>  </ul>
 
   <footer>Carpeta <code>learn/</code> del repositorio <code>et</code>.</footer>

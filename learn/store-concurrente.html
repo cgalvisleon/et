@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Store concurrente: propuesta</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  :root {
+    --bg: #fbfaf7; --fg: #1f2328; --muted: #5b6168; --card: #ffffff;
+    --line: #e3e0d8; --accent: #2f6db5; --accent-soft: #e6eef8;
+    --ok: #2e7d4f; --ok-soft: #e4f3ea; --warn: #a15c00; --warn-soft: #fbf0df;
+    --bad: #b3261e; --bad-soft: #f9e4e2; --code: #f3f1ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16181b; --fg: #e6e6e3; --muted: #a0a4a9; --card: #1f2226;
+      --line: #33373c; --accent: #7aaef0; --accent-soft: #1f2d40;
+      --ok: #6cc592; --ok-soft: #1b3226; --warn: #e3a857; --warn-soft: #3a2c17;
+      --bad: #ef8a83; --bad-soft: #3b1f1d; --code: #25292e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16181b; --fg: #e6e6e3; --muted: #a0a4a9; --card: #1f2226;
+    --line: #33373c; --accent: #7aaef0; --accent-soft: #1f2d40;
+    --ok: #6cc592; --ok-soft: #1b3226; --warn: #e3a857; --warn-soft: #3a2c17;
+    --bad: #ef8a83; --bad-soft: #3b1f1d; --code: #25292e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 17px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 80px; }
+  a { color: var(--accent); }
+  .back { display: inline-block; margin-bottom: 16px; text-decoration: none; font-size: .95rem; }
+  .back:hover { text-decoration: underline; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 8px; }
+  h2 { font-size: 1.4rem; margin: 56px 0 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.1rem; margin: 28px 0 8px; }
+  p { margin: 0 0 14px; }
+  .lead { color: var(--muted); font-size: 1.1rem; }
+  .badge { display: inline-block; background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn); border-radius: 999px; font-size: .8rem; padding: 1px 10px; margin-bottom: 10px; }
+  code { background: var(--code); padding: 1px 6px; border-radius: 4px; font-size: .9em; }
+  pre { background: var(--code); padding: 14px 16px; border-radius: 8px; overflow-x: auto; font-size: .86rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; }
+  nav.toc { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 20px; margin: 24px 0; }
+  nav.toc ol { margin: 6px 0 0; padding-left: 20px; columns: 2; column-gap: 32px; }
+  nav.toc a { text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  @media (max-width: 600px) { nav.toc ol { columns: 1; } }
+  .analogy { background: var(--accent-soft); border-left: 4px solid var(--accent); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+  .note { background: var(--warn-soft); border-left: 4px solid var(--warn); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+  .key { background: var(--ok-soft); border-left: 4px solid var(--ok); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+  .risk { background: var(--bad-soft); border-left: 4px solid var(--bad); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+  .analogy b, .note b, .key b, .risk b { display: block; margin-bottom: 4px; }
+  figure { margin: 20px 0; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption { color: var(--muted); font-size: .9rem; margin-top: 10px; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: .95rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .table-wrap { overflow-x: auto; }
+  .steps { counter-reset: s; list-style: none; padding: 0; }
+  .steps li { counter-increment: s; position: relative; padding: 0 0 12px 40px; }
+  .steps li::before {
+    content: counter(s); position: absolute; left: 0; top: 0; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--accent); color: var(--bg); font-weight: 700; font-size: .85rem;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .s-box { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
+  .s-acc { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+  .s-ok { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1.5; }
+  .s-warn { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1.5; }
+  .s-bad { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 1.5; }
+  .s-txt { fill: var(--fg); font: 13px system-ui, sans-serif; }
+  .s-sm { fill: var(--muted); font: 11px system-ui, sans-serif; }
+  .s-b { font-weight: 700; }
+  .s-arrow { stroke: var(--muted); stroke-width: 1.6; fill: none; marker-end: url(#arr); }
+  .s-arrowhead { fill: var(--muted); }
+
+  /* Simulador */
+  .sim { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin: 20px 0; }
+  .sim-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  .sim button { font: inherit; font-size: .9rem; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; }
+  .sim button:hover { border-color: var(--accent); }
+  .sim button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .sim label { font-size: .9rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .sim h4 { margin: 12px 0 6px; font-size: .85rem; color: var(--muted); font-weight: 600; }
+  .slots { display: flex; flex-wrap: wrap; gap: 4px; min-height: 44px; }
+  .slot { width: 46px; height: 40px; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; font: 11px ui-monospace, Menlo, monospace; border: 1.5px solid var(--line); background: var(--bg); position: relative; }
+  .slot b { font-size: 12px; }
+  .slot.reserved { border-color: var(--warn); background: var(--warn-soft); }
+  .slot.written { border-color: var(--accent); background: var(--accent-soft); }
+  .slot.published { border-color: var(--ok); background: var(--ok-soft); }
+  .slot.durable { border-color: var(--ok); background: var(--ok); color: var(--bg); }
+  .slot.durable b { color: var(--bg); }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .8rem; color: var(--muted); margin-top: 8px; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; border: 1.5px solid; }
+  .lg-r::before { border-color: var(--warn) !important; background: var(--warn-soft); }
+  .lg-w::before { border-color: var(--accent) !important; background: var(--accent-soft); }
+  .lg-p::before { border-color: var(--ok) !important; background: var(--ok-soft); }
+  .lg-d::before { border-color: var(--ok) !important; background: var(--ok); }
+  .sim-log { margin-top: 12px; background: var(--code); border-radius: 8px; padding: 10px 12px; font: 12.5px/1.5 ui-monospace, Menlo, monospace; max-height: 180px; overflow-y: auto; }
+  .sim-stats { display: flex; flex-wrap: wrap; gap: 16px; font-size: .85rem; color: var(--muted); margin-top: 10px; }
+  .sim-stats b { color: var(--fg); }
+  footer { color: var(--muted); font-size: .9rem; margin-top: 60px; border-top: 1px solid var(--line); padding-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="s-arrowhead"/></marker></defs>
+</svg>
+
+<a class="back" href="index.html">← Todos los temas</a>
+<div class="badge">Propuesta · no implementada</div>
+<h1>Propuesta: un <code>store</code> con escritura y lectura concurrentes</h1>
+<p class="lead">Cómo podría evolucionar <a href="et-store.html"><code>et/store</code></a> —un almacén de pares <b><code>id → []byte</code></b>— para que varias escrituras avancen a la vez sin perder lo que hoy lo hace confiable: semántica exacta de <code>Insert/Update/Delete</code>, LSN en orden, recuperación tras una caída y el mismo formato en disco. Es un diseño basado en técnicas conocidas (reserva de espacio en el log, marca de agua, locks por clave, group commit), no código probado.</p>
+
+<nav class="toc">
+  <strong>Contenido</strong>
+  <ol>
+    <li><a href="#hoy">Dónde está el cuello de botella hoy</a></li>
+    <li><a href="#objetivos">Objetivos y reglas que no se rompen</a></li>
+    <li><a href="#opciones">Dos caminos posibles</a></li>
+    <li><a href="#idea">La idea: reservar, escribir, publicar</a></li>
+    <li><a href="#clave">Locks por clave</a></li>
+    <li><a href="#marca">La marca de agua</a></li>
+    <li><a href="#codigo">El camino de escritura en Go</a></li>
+    <li><a href="#simulador">Simulador de la marca de agua</a></li>
+    <li><a href="#lectura">Lecturas más rápidas</a></li>
+    <li><a href="#bordes">Rotación, compactación y cierre</a></li>
+    <li><a href="#caida">¿Sigue siendo seguro ante una caída?</a></li>
+    <li><a href="#riesgos">Riesgos y costos</a></li>
+    <li><a href="#plan">Plan por fases y cómo medirlo</a></li>
+  </ol>
+</nav>
+
+<!-- 1 -->
+<h2 id="hoy">1. Dónde está el cuello de botella hoy</h2>
+<p>En el <code>store</code> actual, <b>las lecturas ya son concurrentes</b>: el índice está en 64 fragmentos, los segmentos se leen por mmap y nadie hace I/O con un lock tomado. El límite está en las <b>escrituras</b>: todas pasan por un solo <code>writeMu</code>, y dentro de él ocurre todo esto, una escritura detrás de otra:</p>
+<figure>
+<svg viewBox="0 0 760 170" role="img" aria-label="Trabajo bajo writeMu hoy">
+  <text x="20" y="22" class="s-sm">HOY: todo lo de dentro del recuadro, una escritura a la vez</text>
+  <rect x="20" y="32" width="720" height="70" rx="10" class="s-bad" style="fill-opacity:.35"/>
+  <text x="32" y="50" class="s-sm">writeMu</text>
+  <rect x="40" y="58" width="120" height="34" rx="6" class="s-box"/><text x="100" y="80" text-anchor="middle" class="s-txt">¿existe id?</text>
+  <rect x="170" y="58" width="130" height="34" rx="6" class="s-box"/><text x="235" y="80" text-anchor="middle" class="s-txt">CRC + codificar</text>
+  <rect x="310" y="58" width="130" height="34" rx="6" class="s-box"/><text x="375" y="80" text-anchor="middle" class="s-txt">write() al archivo</text>
+  <rect x="450" y="58" width="130" height="34" rx="6" class="s-box"/><text x="515" y="80" text-anchor="middle" class="s-txt">índice</text>
+  <rect x="590" y="58" width="130" height="34" rx="6" class="s-box"/><text x="655" y="80" text-anchor="middle" class="s-txt">hooks de Sync</text>
+  <rect x="20" y="118" width="720" height="34" rx="6" class="s-ok"/>
+  <text x="380" y="140" text-anchor="middle" class="s-txt">fuera del lock: fsync compartido (group commit) ✓</text>
+</svg>
+<figcaption>El fsync ya se comparte. Lo que no escala es el trabajo de CPU y la llamada <code>write</code>, aunque toquen claves distintas.</figcaption>
+</figure>
+<p>Con claves y valores pequeños esto es rápido. Pero con valores grandes (calcular el CRC y copiar 100 KB), muchos núcleos, un disco NVMe que acepta escrituras en paralelo, o con <code>Deferred</code>/<code>SYNC_ON_WRITE=false</code> (donde ya no se espera el fsync), <code>writeMu</code> se vuelve el techo: <b>un núcleo trabajando y el resto esperando</b>.</p>
+
+<!-- 2 -->
+<h2 id="objetivos">2. Objetivos y reglas que no se rompen</h2>
+<div class="table-wrap"><table>
+  <tr><th>Objetivo</th><th>Cómo se reconoce</th></tr>
+  <tr><td>Sigue siendo un almacén <b><code>id → []byte</code></b></td><td>Claves <code>string</code>, valores de bytes opacos: el store no interpreta los datos (ni JSON, ni columnas), y cada operación toca un solo id.</td></tr>
+  <tr><td>Escrituras de <b>claves distintas</b> en paralelo</td><td>El rendimiento crece con los núcleos en <code>test/storebench</code>.</td></tr>
+  <tr><td>Escrituras de <b>la misma clave</b> en orden</td><td>Dos <code>Insert("u1")</code> a la vez: exactamente uno da <code>true</code>.</td></tr>
+  <tr><td><b>Mismo formato en disco</b></td><td>Un store creado hoy se abre con la versión nueva y viceversa.</td></tr>
+  <tr><td><b>Misma API</b></td><td><code>catalog.go</code> no cambia; los consumidores no se enteran.</td></tr>
+  <tr><td><b>LSN global y en orden</b></td><td><code>Sync</code> recibe los cambios con LSN 1, 2, 3… sin huecos ni desorden; <code>WalSince</code> sigue sirviendo a las réplicas.</td></tr>
+  <tr><td><b>Misma garantía ante caídas</b></td><td>Lo que retornó <code>true</code> con <code>SYNC_ON_WRITE</code> sobrevive; lo cortado se pone en cuarentena.</td></tr>
+</table></div>
+
+<!-- 3 -->
+<h2 id="opciones">3. Dos caminos posibles</h2>
+<h3>Camino A: particionar (varios stores)</h3>
+<p>Repartir las claves en <b>N stores independientes</b> por <code>hash(id) % N</code>, cada uno con su <code>writeMu</code>, sus segmentos y su LSN. Es lo más simple: casi no hay código nuevo y escala casi lineal.</p>
+<p>Pero rompe dos cosas: <b>ya no hay un LSN global</b> (cada partición cuenta el suyo, y la replicación tendría que llevar N posiciones), y <code>Keys</code>/<code>ForEach</code> ordenados tendrían que mezclar N listas. Cambia la API de replicación, que josefina y otros consumidores usan.</p>
+<h3>Camino B: un solo log con reserva de espacio (recomendado)</h3>
+<p>Mantener <b>un log y un LSN</b>, pero sacar del lock casi todo el trabajo: el lock solo sirve para <b>reservar</b> un LSN y un lugar en el archivo (unos nanosegundos), y cada escritor codifica y escribe <b>en paralelo</b> en su hueco. Es la técnica de los logs de bases de datos modernas (el <em>Aether</em> de Shore-MT, el log de InnoDB 8.0, el anillo de LMAX Disruptor).</p>
+<div class="key"><b>Recomendación</b>El camino B: conserva la API, el formato y el LSN global, que es lo que hace útil al store para replicar. El resto del documento lo desarrolla. El camino A queda como plan de respaldo si B resultara demasiado complejo.</div>
+
+<!-- 4 -->
+<h2 id="idea">4. La idea: reservar, escribir, publicar</h2>
+<p>Cada escritura pasa por tres pasos. Solo el primero es serial:</p>
+<figure>
+<svg viewBox="0 0 760 250" role="img" aria-label="Reservar, escribir y publicar">
+  <rect x="20" y="20" width="200" height="90" rx="10" class="s-warn"/>
+  <text x="120" y="46" text-anchor="middle" class="s-txt s-b">① Reservar</text>
+  <text x="120" y="66" text-anchor="middle" class="s-sm">lock diminuto (ns)</text>
+  <text x="120" y="84" text-anchor="middle" class="s-sm">LSN = next++</text>
+  <text x="120" y="100" text-anchor="middle" class="s-sm">offset = tail; tail += tamaño</text>
+  <path d="M220 65 L268 65" class="s-arrow"/>
+  <rect x="270" y="20" width="220" height="90" rx="10" class="s-acc"/>
+  <text x="380" y="46" text-anchor="middle" class="s-txt s-b">② Escribir</text>
+  <text x="380" y="66" text-anchor="middle" class="s-sm">EN PARALELO, sin locks globales</text>
+  <text x="380" y="84" text-anchor="middle" class="s-sm">CRC + codificar +</text>
+  <text x="380" y="100" text-anchor="middle" class="s-sm">WriteAt(buf, offset)</text>
+  <path d="M490 65 L538 65" class="s-arrow"/>
+  <rect x="540" y="20" width="200" height="90" rx="10" class="s-ok"/>
+  <text x="640" y="46" text-anchor="middle" class="s-txt s-b">③ Publicar</text>
+  <text x="640" y="66" text-anchor="middle" class="s-sm">en orden de LSN</text>
+  <text x="640" y="84" text-anchor="middle" class="s-sm">avanza la marca de agua,</text>
+  <text x="640" y="100" text-anchor="middle" class="s-sm">índice, Sync, fsync</text>
+  <text x="20" y="146" class="s-txt s-b">El archivo, mientras tanto:</text>
+  <rect x="20" y="158" width="90" height="36" class="s-ok"/><text x="65" y="181" text-anchor="middle" class="s-txt">LSN 7</text>
+  <rect x="110" y="158" width="140" height="36" class="s-ok"/><text x="180" y="181" text-anchor="middle" class="s-txt">LSN 8</text>
+  <rect x="250" y="158" width="70" height="36" class="s-warn"/><text x="285" y="181" text-anchor="middle" class="s-txt">9 …</text>
+  <rect x="320" y="158" width="160" height="36" class="s-acc"/><text x="400" y="181" text-anchor="middle" class="s-txt">LSN 10 (listo)</text>
+  <rect x="480" y="158" width="100" height="36" class="s-acc"/><text x="530" y="181" text-anchor="middle" class="s-txt">LSN 11</text>
+  <rect x="580" y="158" width="80" height="36" class="s-warn"/><text x="620" y="181" text-anchor="middle" class="s-txt">12 …</text>
+  <path d="M250 214 L250 196" class="s-arrow"/>
+  <text x="140" y="232" class="s-sm">marca de agua: todo antes de aquí está completo</text>
+</svg>
+<figcaption>El 10 y el 11 ya están escritos, pero no se publican hasta que termine el 9: los cambios siempre se hacen visibles en orden de LSN.</figcaption>
+</figure>
+<div class="analogy"><b>Analogía: la fila del banco con turnos</b>Al llegar tomas un <b>turno</b> numerado (reservar: instantáneo). Varios cajeros atienden <b>a la vez</b> (escribir en paralelo). Pero el tablero de "atendidos" solo avanza en orden: si el turno 9 sigue en caja, el 10 y el 11 esperan aunque ya terminaron (publicar en orden). Nadie se salta la fila del tablero, y aun así los cajeros nunca están ociosos.</div>
+
+<!-- 5 -->
+<h2 id="clave">5. Locks por clave: para que la semántica siga exacta</h2>
+<p>Como el modelo es <code>id → []byte</code> y cada operación toca un solo id, el único conflicto posible es entre escrituras del <b>mismo id</b>: no hay transacciones de varias claves que coordinar. Eso es lo que hace viable la concurrencia sin un lock global. <code>Insert</code> solo escribe si la clave no existe; <code>Update</code> solo si existe y el valor cambió. Esa comprobación y la escritura deben ser <b>atómicas para la misma clave</b>; para claves distintas, no importa.</p>
+<p>Por eso <code>writeMu</code> se reemplaza por <b>locks por clave</b> (<em>lock striping</em>): un arreglo fijo de, por ejemplo, 1.024 mutex, y cada id usa el de <code>hash(id) % 1024</code>.</p>
+<ul>
+  <li>Dos escrituras de <code>u1</code> toman el <b>mismo</b> mutex: se ordenan entre sí y la comprobación sigue siendo exacta.</li>
+  <li>Escrituras de <code>u1</code> y <code>u2</code> casi siempre toman mutex distintos y van en paralelo. Si chocan en el mismo (1 en 1.024), solo esperan un poco: es correcto igual.</li>
+  <li>El escritor <b>sostiene su lock de clave hasta publicar</b>. Así, para una misma clave, el orden del índice es el orden del LSN.</li>
+</ul>
+<div class="note"><b>¿Por qué no un lock por cada clave en un mapa?</b>Un <code>map[string]*sync.Mutex</code> crece sin límite y necesita su propio lock para insertar y limpiar entradas. Un arreglo fijo de mutex no ocupa memoria extra por clave y nunca se limpia. El precio es algún choque ocasional entre claves distintas, que es inofensivo.</div>
+
+<!-- 6 -->
+<h2 id="marca">6. La marca de agua: orden sin un lock grande</h2>
+<p>La <b>marca de agua</b> (<em>watermark</em>) es un número: el LSN más alto tal que <b>todos</b> los anteriores ya están escritos. Hay dos:</p>
+<div class="table-wrap"><table>
+  <tr><th>Marca</th><th>Significa</th><th>Quién la usa</th></tr>
+  <tr><td><code>published</code></td><td>Todo LSN ≤ este está escrito en el archivo (aún quizá no en disco).</td><td>Índice, hooks de <code>Sync</code>, límite <code>visible</code> de los lectores.</td></tr>
+  <tr><td><code>durable</code></td><td>Todo LSN ≤ este ya pasó por fsync.</td><td>El escritor retorna cuando <code>durable ≥ su LSN</code> (group commit, como hoy).</td></tr>
+</table></div>
+<p>¿Cómo avanza <code>published</code> sin un lock grande? Cada escritor, al terminar su <code>WriteAt</code>, marca su LSN como hecho en un <b>anillo</b> de banderas atómicas (posición <code>LSN % tamaño</code>). Luego intenta avanzar la marca: mientras la bandera del siguiente LSN esté puesta, la limpia y suma uno. Quien logre avanzarla <b>publica</b> esos cambios en orden (índice y <code>Sync</code>) y despierta a los que esperaban.</p>
+<p>Para no complicarlo de entrada, la primera versión puede hacer este avance bajo un <code>publishMu</code> pequeño: el trabajo pesado (CRC, copia, <code>WriteAt</code>) ya quedó fuera, y publicar es solo actualizar punteros en memoria.</p>
+
+<!-- 7 -->
+<h2 id="codigo">7. El camino de escritura en Go (borrador)</h2>
+<p>Así quedaría <code>Update</code>. Los nombres siguen el estilo del paquete; es un borrador para discutir, no código compilado:</p>
+<pre><code>func (s *FileStore) update(id string, data []byte, wait bool) (bool, error) {
+    if err := s.checkWrite(id); err != nil {
+        return false, err
+    }
+    s.gate.RLock()                 // la compactación toma gate.Lock para detener a todos
+    defer s.gate.RUnlock()
+
+    mu := s.keyLock(id)            // &s.keyLocks[hash(id) % 1024]
+    mu.Lock()
+    defer mu.Unlock()              // se suelta después de publicar
+
+    ref, exists := s.getIndex(id)
+    if !exists {
+        return false, nil
+    }
+    if !ref.differs(data) {        // igual que hoy: CRC primero, bytes si hace falta
+        old, err := s.readPinned(ref, id)
+        if err != nil {
+            return false, err
+        }
+        if bytes.Equal(old, data) {
+            return false, nil
+        }
+    }
+
+    // ① Reservar: único paso serial, unos nanosegundos.
+    res, err := s.reserve(recordSize(id, data))   // {lsn, seg, offset}
+    if err != nil {
+        return false, err
+    }
+
+    // ② Escribir en paralelo con los demás escritores.
+    buf := encodeRecord(res.lsn, id, data, Active) // CRC + encabezado + datos
+    if err := res.seg.writeAt(buf, res.offset); err != nil {
+        s.abandon(res)                             // ver "Riesgos"
+        return false, err
+    }
+
+    // ③ Publicar en orden y esperar la durabilidad.
+    s.complete(res, Change{Op: OpUpdate, ID: id, Data: data, LSN: res.lsn},
+        &recordRef{segment: res.seg.n, offset: res.offset, length: uint32(len(data)), crc: checksum(data), hasCRC: true})
+    s.waitPublished(res.lsn)                       // ya está en el índice y Sync lo vio
+    if wait && s.SyncOnWrite {
+        return true, s.waitDurable(res.lsn)       // group commit, como hoy
+    }
+    return true, nil
+}</code></pre>
+<p>Y la reserva, el único punto serial:</p>
+<pre><code>func (s *FileStore) reserve(size int64) (reservation, error) {
+    s.reserveMu.Lock()
+    defer s.reserveMu.Unlock()
+    if s.tail+size > s.MaxSegment {
+        if err := s.rotateLocked(); err != nil {   // ver "Rotación"
+            return reservation{}, err
+        }
+    }
+    r := reservation{lsn: s.WAL.inc(), seg: s.active, offset: s.tail}
+    s.tail += size
+    return r, nil
+}</code></pre>
+<div class="note"><b>Orden de locks nuevo</b><code>compactMu → gate → keyLock(id) → reserveMu → publishMu → indexMu → fragmentos</code>. <code>reserveMu</code> y <code>publishMu</code> nunca se sostienen mientras se hace I/O ni mientras se espera a otro.</div>
+
+<!-- 8 -->
+<h2 id="simulador">8. Simulador de la marca de agua</h2>
+<p>Llegan varias escrituras a la vez. Cada una <b>reserva</b> su LSN al instante (naranja), termina de <b>escribir</b> en un tiempo al azar (azul), y solo se <b>publica</b> (verde claro) cuando todas las anteriores terminaron. Después, un fsync compartido las vuelve <b>durables</b> (verde fuerte).</p>
+<div class="sim">
+  <div class="sim-controls">
+    <button class="primary" id="btn-burst">Llegan escrituras</button>
+    <label>cuántas <input id="n" type="range" min="2" max="12" value="6"> <span id="n-val">6</span></label>
+    <label><input id="slow" type="checkbox"> una escritura muy lenta</label>
+    <button id="btn-reset">Reiniciar</button>
+  </div>
+  <div class="slots" id="v-slots"></div>
+  <div class="legend"><span class="lg-r">reservada</span><span class="lg-w">escrita, esperando turno</span><span class="lg-p">publicada (visible)</span><span class="lg-d">durable (fsync)</span></div>
+  <div class="sim-stats" id="v-stats"></div>
+  <div class="sim-log" id="v-log" aria-live="polite"></div>
+</div>
+<p>Activa "una escritura muy lenta": verás cómo las de detrás terminan de escribir pero esperan su turno para publicarse. Ese es el costo del orden global, y la razón de abandonar con rapidez una escritura que falla (sección 12).</p>
+
+<!-- 9 -->
+<h2 id="lectura">9. Lecturas más rápidas</h2>
+<p><code>Get</code> ya es concurrente y no necesita cambios: el índice solo apunta a registros publicados, y los lectores leen hasta <code>visible = offset de published</code>. Las mejoras propuestas para lectura son otras:</p>
+<h3>9.1 Índice ordenado para <code>Keys</code> y <code>ForEach</code></h3>
+<p>Hoy cada llamada <b>ordena todas las claves</b> (O(n log n)). Si cada fragmento del índice guardara además un <b>árbol ordenado</b> (por ejemplo un B-tree en memoria como <code>github.com/google/btree</code>, que tiene copias baratas <em>copy-on-write</em>), <code>Keys(asc, offset, limit)</code> recorrería solo lo pedido: <code>Keys(true, 0, 10)</code> costaría lo mismo con mil claves que con diez millones. Como el reparto en fragmentos es por hash, haría falta mezclar los 64 árboles con un <em>heap</em>, que solo toma los primeros <code>offset + limit</code>.</p>
+<h3>9.2 Lecturas sin lock (RCU)</h3>
+<p>Cada fragmento podría guardar su mapa detrás de un <code>atomic.Pointer</code>: los lectores lo cargan sin lock alguno y los escritores publican una versión nueva. Copiar un mapa entero en cada escritura es caro, así que conviene <b>solo si las lecturas dominan</b> por mucho; con el árbol <em>copy-on-write</em> del punto anterior la copia es parcial y barata.</p>
+<h3>9.3 Lecturas consistentes de varias claves</h3>
+<p>Con la marca de agua aparece algo nuevo gratis: <b>un instante consistente</b>. Un <code>ForEach</code> que anote <code>published</code> al empezar puede ignorar cualquier registro con LSN mayor, y así ve el store exactamente como estaba en ese LSN, aunque otros sigan escribiendo. Requiere guardar el LSN en el <code>recordRef</code> (8 bytes más por clave) y conservar la referencia anterior mientras haya lecturas abiertas, una forma simple de MVCC.</p>
+
+<!-- 10 -->
+<h2 id="bordes">10. Rotación, compactación y cierre</h2>
+<ul>
+  <li><b>Rotación:</b> quien reserva y no cabe, crea el segmento nuevo dentro de <code>reserveMu</code>. El viejo no se sella (fsync + solo lectura) hasta que <code>published</code> alcanza su último LSN: puede haber escritores todavía escribiendo en él. Un contador de escrituras pendientes por segmento lo resuelve.</li>
+  <li><b>Compactación:</b> sus fases 1 y 3 hoy toman <code>writeMu</code> para "congelar" el log. Con la propuesta toman <code>gate.Lock()</code>, que espera a que terminen las escrituras en curso y frena las nuevas. La fase 2, la lenta, sigue sin locks.</li>
+  <li><b>Close:</b> toma <code>gate.Lock()</code>, espera <code>published == WAL</code>, hace fsync y retira los segmentos, como hoy.</li>
+  <li><b>Hooks de <code>Sync</code>:</b> se llaman al publicar, en orden de LSN, bajo <code>publishMu</code>. Siguen debiendo ser rápidos y no escribir en el store.</li>
+</ul>
+
+<!-- 11 -->
+<h2 id="caida">11. ¿Sigue siendo seguro ante una caída?</h2>
+<p>Con escrituras en paralelo, un corte de luz puede dejar <b>huecos</b>: el registro 10 escrito, el 9 a medias. Al abrir, <code>scan</code> recorre el segmento y <b>se detiene en el primer registro inválido</b> (el 9), así que el 10 se pierde aunque esté completo. ¿Es un problema?</p>
+<div class="key"><b>No, por la marca de agua</b>Un escritor solo retorna cuando <code>durable ≥ su LSN</code>, y <code>durable</code> nunca pasa un hueco. Si el 9 no terminó, el 10 <b>nunca retornó <code>true</code></b> ni llegó a <code>Sync</code>: perderlo es correcto. Todo lo confirmado está antes del primer hueco. <code>repairTail</code> lleva el resto a cuarentena como hoy.</div>
+<p>Un detalle: si el segmento se preasigna o el hueco queda en ceros, <code>scan</code> lee <code>IDLen = 0</code> y se detiene por esa regla, que ya existe. <b>No hace falta cambiar el formato ni la recuperación.</b></p>
+
+<!-- 12 -->
+<h2 id="riesgos">12. Riesgos y costos</h2>
+<div class="risk"><b>Una escritura que falla bloquea a las siguientes</b>Si el <code>WriteAt</code> del LSN 9 falla (disco lleno), su hueco nunca se llena y la marca de agua se detiene: todo lo posterior espera para siempre. Hay que <b>abandonar</b> el LSN: escribir en su hueco un registro de relleno válido (un tombstone de un id reservado como <code>"\x00pad"</code>, que <code>rebuildIndex</code> ignore) y marcarlo hecho. Si ni eso se puede escribir, el store pasa a un estado de error permanente, como ya hace hoy <code>segment.writeErr</code>.</div>
+<div class="risk"><b>Más complejidad</b>Hoy la corrección se explica con "un escritor a la vez". La propuesta agrega reservas, dos marcas de agua, un anillo, locks por clave y una compuerta. Cada pieza es conocida, pero el conjunto es más difícil de razonar. Hay que acompañarla de pruebas con <code>-race</code> y de pruebas de caída (matar el proceso en mitad de escrituras y reabrir).</div>
+<div class="note"><b>La ganancia depende de la carga</b>Si cada escritura espera su fsync y el disco es lento, el fsync manda y el group commit ya lo comparte: la mejora será modesta. La ganancia grande aparece con valores medianos o grandes, muchos núcleos, NVMe, <code>Deferred</code> o <code>SYNC_ON_WRITE=false</code>. Por eso hay que <b>medir primero</b>.</div>
+<div class="table-wrap"><table>
+  <tr><th>Aspecto</th><th>Hoy</th><th>Propuesta</th></tr>
+  <tr><td>Escritores simultáneos</td><td>1</td><td>Tantos como claves distintas (hasta el disco)</td></tr>
+  <tr><td>Sección serial por escritura</td><td>Todo: comprobar, CRC, write, índice, Sync</td><td>Reservar (LSN + offset) y publicar (punteros)</td></tr>
+  <tr><td>Formato en disco</td><td colspan="2">Igual</td></tr>
+  <tr><td>API pública</td><td colspan="2">Igual</td></tr>
+  <tr><td>LSN global en orden</td><td>Sí</td><td>Sí (marca de agua)</td></tr>
+  <tr><td>Memoria extra</td><td>—</td><td>1.024 mutex + anillo de banderas (unos KB)</td></tr>
+  <tr><td>Complejidad</td><td>Baja</td><td>Media-alta</td></tr>
+</table></div>
+
+<!-- 13 -->
+<h2 id="plan">13. Plan por fases y cómo medirlo</h2>
+<ul class="steps">
+  <li><b>Medir la línea base</b> con <code>go run ./test/storebench -d 30s -w 1000</code>: escrituras/s, latencia p99 y uso de CPU, con valores de 100 B, 4 KB y 64 KB, con y sin <code>SYNC_ON_WRITE</code>. Si la CPU de un solo núcleo no es el techo, parar aquí.</li>
+  <li><b>Fase 1: sacar trabajo del lock sin cambiar la estructura.</b> Calcular el CRC y armar el buffer <em>antes</em> de tomar <code>writeMu</code> (el registro solo necesita el LSN, que se escribe en los primeros 8 bytes al reservar). Es un cambio pequeño y seguro que ya reduce la sección serial.</li>
+  <li><b>Fase 2: locks por clave + reserva + marca de agua</b> con <code>publishMu</code> simple. Pruebas: dos <code>Insert</code> del mismo id a la vez (exactamente un <code>true</code>), <code>Sync</code> recibe LSN 1…N sin huecos, matar el proceso a mitad y reabrir.</li>
+  <li><b>Fase 3: índice ordenado</b> para <code>Keys</code>/<code>ForEach</code>, medido con 1 y 10 millones de claves.</li>
+  <li><b>Fase 4 (opcional):</b> lecturas consistentes por LSN y publicación sin <code>publishMu</code> (anillo atómico), solo si las mediciones lo justifican.</li>
+</ul>
+<p>Cada fase debe dejar el store compatible con los archivos existentes y actualizar la sección <code>store/</code> de <code>CLAUDE.md</code>, el GoDoc, el README y <code>doc/CHANGELOG.md</code>, como pide el proyecto.</p>
+
+<p>Temas relacionados: <a href="et-store.html">¿Cómo guarda et/store tus datos?</a> (el diseño actual) · <a href="postgresql-store.html">PostgreSQL</a> (WAL con group commit) · <a href="cockroachdb-store.html">CockroachDB</a> (LSM y compactación).</p>
+
+<footer>Documento de aprendizaje · carpeta <code>learn/</code> del repositorio <code>et</code> · noviembre de 2026. Propuesta de diseño basada en técnicas publicadas (reserva de espacio en el log y marca de agua, como en Aether/Shore-MT, InnoDB 8.0 y LMAX Disruptor; lock striping; group commit). No está implementada ni medida en este repositorio.</footer>
+</main>
+
+<script>
+(function () {
+  let slots, nextLsn, published, durable, logLines, timers, syncing;
+  const $ = id => document.getElementById(id);
+
+  function reset() {
+    (timers || []).forEach(clearTimeout);
+    slots = []; nextLsn = 1; published = 0; durable = 0; logLines = []; timers = []; syncing = false;
+    log("Esperando escrituras. Pulsa «Llegan escrituras».");
+    render();
+  }
+  function log(m) { logLines.unshift(m); if (logLines.length > 40) logLines.pop(); }
+  function later(fn, ms) { timers.push(setTimeout(() => { fn(); render(); }, ms)); }
+
+  function burst() {
+    const n = +$("n").value;
+    const slowIdx = $("slow").checked ? Math.floor(Math.random() * Math.min(3, n)) : -1;
+    const first = nextLsn;
+    for (let i = 0; i < n; i++) {
+      const slot = { lsn: nextLsn++, state: "reserved" };
+      slots.push(slot);
+      const ms = i === slowIdx ? 3200 : 300 + Math.random() * 1400;
+      later(() => written(slot), ms);
+    }
+    log(`① ${n} escrituras reservan LSN ${first}…${nextLsn - 1} al instante (reserveMu, nanosegundos)`);
+    if (slowIdx >= 0) log(`   (la LSN ${first + slowIdx} será lenta: un valor grande o un disco ocupado)`);
+    render();
+  }
+
+  function written(slot) {
+    slot.state = "written";
+    log(`② LSN ${slot.lsn} terminó WriteAt` + (slot.lsn > published + 1 ? ` — espera: falta la ${published + 1}` : ""));
+    advance();
+  }
+
+  function advance() {
+    const from = published + 1;
+    while (true) {
+      const s = slots.find(x => x.lsn === published + 1);
+      if (!s || s.state !== "written") break;
+      s.state = "published"; published++;
+    }
+    if (published >= from) {
+      log(`③ marca de agua → ${published}: publica LSN ${from}…${published} en orden (índice + Sync)`);
+      scheduleSync();
+    }
+  }
+
+  function scheduleSync() {
+    if (syncing) return;
+    syncing = true;
+    later(() => {
+      const target = published;
+      if (target > durable) {
+        slots.forEach(s => { if (s.lsn <= target && s.state === "published") s.state = "durable"; });
+        log(`   fsync compartido: durable → ${target} (retornan LSN ${durable + 1}…${target})`);
+        durable = target;
+      }
+      syncing = false;
+      if (published > durable) scheduleSync();
+    }, 450);
+  }
+
+  function render() {
+    $("n-val").textContent = $("n").value;
+    const shown = slots.slice(-36);
+    $("v-slots").innerHTML = shown.length
+      ? shown.map(s => `<div class="slot ${s.state}"><b>${s.lsn}</b>${{reserved:"…",written:"listo",published:"visible",durable:"fsync"}[s.state]}</div>`).join("")
+      : `<span style="color:var(--muted);font-size:.85rem;font-style:italic">sin escrituras</span>`;
+    const pending = slots.filter(s => s.state === "reserved").length;
+    const waiting = slots.filter(s => s.state === "written").length;
+    $("v-stats").innerHTML =
+      `<span>Último LSN reservado: <b>${nextLsn - 1}</b></span>` +
+      `<span>published: <b>${published}</b></span>` +
+      `<span>durable: <b>${durable}</b></span>` +
+      `<span>Escribiendo: <b>${pending}</b></span>` +
+      `<span>Listas esperando turno: <b>${waiting}</b></span>`;
+    $("v-log").innerHTML = logLines.map(l => `<div>${l}</div>`).join("");
+  }
+
+  $("btn-burst").onclick = burst;
+  $("btn-reset").onclick = reset;
+  $("n").oninput = render;
+  reset();
+})();
+</script>
+</body>
+</html>

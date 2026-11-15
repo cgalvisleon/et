@@ -318,7 +318,11 @@ func indexJson(index *Index) any {
 	if index == nil {
 		return nil
 	}
-	return map[string]any{"name": index.Name, "sorted": index.Sorted}
+	result := map[string]any{"name": index.Name, "sorted": index.Sorted}
+	if index.Method != "" {
+		result["method"] = index.Method
+	}
+	return result
 }
 
 /**
@@ -430,6 +434,7 @@ func wrapPackage() map[string]any {
 		"more":       More,
 		"moreEq":     MoreEq,
 		"like":       Like,
+		"search":     Search,
 		"in":         In,
 		"notIn":      NotIn,
 		"is":         Is,
@@ -616,6 +621,30 @@ func wrapModel(m *Model) map[string]any {
 			return chain(m.DefineCalcFunc(name, calc))
 		},
 		"defineCalc": func(name, script string) map[string]any { return chain(m.DefineCalc(name, script)) },
+		"defineSearch": func(name, lang string, fields ...string) (map[string]any, error) {
+			if _, err := m.DefineSearch(name, lang, fields...); err != nil {
+				return nil, err
+			}
+			return self, nil
+		},
+		"defineSearchLangs": func(name, lang string, langs ...string) (map[string]any, error) {
+			if _, err := m.DefineSearchLangs(name, lang, langs...); err != nil {
+				return nil, err
+			}
+			return self, nil
+		},
+		"defineFullText": func(fields ...string) (map[string]any, error) {
+			if _, err := m.DefineFullText(fields...); err != nil {
+				return nil, err
+			}
+			return self, nil
+		},
+		"defineFullTextLang": func(lang string, langs ...string) (map[string]any, error) {
+			if _, err := m.DefineFullTextLang(lang, langs...); err != nil {
+				return nil, err
+			}
+			return self, nil
+		},
 		// Triggers: a script (code) the model keeps and runs with jwf on every insert, update or delete, with OLD and
 		// NEW (it can change NEW before saving; a throw cancels). Not a JavaScript function: the model is shared and
 		// outlives this script's runtime
@@ -764,6 +793,8 @@ func wrapQuery(q *Query) map[string]any {
 		"groupBy":      func(fields ...string) map[string]any { return chain(q.GroupBy(fields...)) },
 		"having":       func(cond *et.Condition) map[string]any { return chain(q.Having(cond)) },
 		"page":         func(page int) map[string]any { return chain(q.Page(page)) },
+		// Text in the full_text of the model, with AND over the where; lang is an ISO code (es, en…)
+		"search": func(text string, lang ...string) map[string]any { return chain(q.Search(text, lang...)) },
 		"orderBy": func(field string, sorted ...bool) map[string]any {
 			return chain(q.OrderBy(field, sorted...))
 		},

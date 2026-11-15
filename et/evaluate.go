@@ -57,6 +57,8 @@ func (s *Condition) ApplyToValue(val any) bool {
 		return tmp.applyOpBetween(val)
 	case NOT_BETWEEN:
 		return tmp.applyOpNotBetween(val)
+	case SEARCH:
+		return tmp.applyOpSearch(val)
 	default:
 		return false
 	}
@@ -468,6 +470,20 @@ func (s *Condition) applyOpLike(val any) bool {
 		}
 		return invalidType()
 	}
+}
+
+/**
+* applyOpSearch: Whether val (a text or a list of texts) has the search text of the condition (MatchSearch); a value
+* {"text", "lang"} searches its text (in memory the lang does not change anything).
+* @param val any
+* @return bool
+**/
+func (s *Condition) applyOpSearch(val any) bool {
+	text, _, ok := SearchValue(s.Value.Value)
+	if val == nil || !ok {
+		return false
+	}
+	return MatchSearch(val, text)
 }
 
 /**

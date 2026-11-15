@@ -70,7 +70,9 @@ type JsqlOperator =
   | "null"
   | "not_null"
   | "between"
-  | "not_between";
+  | "not_between"
+  /** Text search (web syntax: words, "phrase", -excluded, or) over a search of the model or a field; the value is the text or {text, lang} (ISO code). */
+  | "search";
 
 /** Aggregate of a rollup. */
 type JsqlRollupOperation =
@@ -101,6 +103,24 @@ type JsqlKeys = { [field: string]: string };
 interface JsqlIndex {
   name: string;
   sorted: boolean;
+  /** "trgm": a pg_trgm index in Postgres, so like '%x%' uses it. */
+  method?: string;
+}
+
+/** Text search of a model: a virtual field (no column, only its index) over columns and attributes. */
+interface JsqlSearch {
+  name: string;
+  fields: string[];
+  /** Lang of its queries: an ISO code (es, en, pt…) or a Postgres configuration (simple, spanish…); by default DB_SEARCH_LANG or spanish; an unknown one is simple. */
+  lang?: string;
+  /** Langs it is also indexed in (one GIN index per lang in Postgres); a query in another lang works without index. */
+  langs?: string[];
+}
+
+/** The text of a search with its lang (ISO code): {"search": {"text": "bomba", "lang": "en"}}. */
+interface JsqlSearchValue {
+  text: string;
+  lang?: string;
 }
 
 interface JsqlColumn {
@@ -190,8 +210,10 @@ interface JsqlTx {
   rollback(): void;
 }
 
-/** Query descriptor of db.query / model.query (see jsql/feature.md). */
+/** A JSQL query (the query described in JSON of db.query / model.query; jsql/spec.md §5.4). */
 interface JsqlQueryDescriptor {
+  /** Text in the full_text of the model, with AND over the where; without orders it sorts by relevance. */
+  search?: string | JsqlSearchValue;
   [key: string]: any;
 }
 
@@ -268,7 +290,8 @@ interface JsqlDefine {
     on_delete_cascade?: boolean;
     on_update_cascade?: boolean;
   }[];
-  indexes?: { name: string; sorted?: boolean }[];
+  /** method "trgm": a pg_trgm index in Postgres (like '%x%'). */
+  indexes?: { name: string; sorted?: boolean; method?: string }[];
   unique?: { name: string; sorted?: boolean }[];
   required?: { name: string; sorted?: boolean }[];
   columns?: {
@@ -313,6 +336,14 @@ interface JsqlDefine {
     /** Order that picks the first record of a row or object rollup. */
     order_by?: { name: string; sorted: boolean }[];
   }[];
+  /** Text searches: {"fts": {"search": "a -b"}} in a where, {"fts": false} in orders for relevance. */
+  searches?: JsqlSearch[];
+  /** The search of the model, full_text, over these fields: the key "search" of a JSQL query. Not also in searches. */
+  full_text?: string[];
+  /** Lang of full_text (ISO code: es, en…); by default DB_SEARCH_LANG or spanish. */
+  full_text_lang?: string;
+  /** Langs full_text is also indexed in, besides full_text_lang. */
+  full_text_langs?: string[];
   user_id?: string;
 }
 
@@ -325,7 +356,7 @@ interface JsqlDB {
   /** Runs raw SQL; `$1`, `$2`… are replaced by args. */
   sql(query: string, ...args: any[]): JsqlItems;
   sqlTx(tx: JsqlTx | null, query: string, ...args: any[]): JsqlItems;
-  /** Runs a JSON descriptor (query, command or define). */
+  /** Runs a JSQL query or command (or a define) described in JSON. */
   query(query: JsqlQueryDescriptor): JsqlItems;
   queryTx(tx: JsqlTx | null, query: JsqlQueryDescriptor): JsqlItems;
   newModel(
@@ -438,6 +469,14 @@ interface JsqlModel {
     rows?: number,
   ): JsqlModel;
   defineCalcFunc(name: string, calc: JsqlCalcFunction): JsqlModel;
+  /** Text search over fields (columns or attributes); lang "" = DB_SEARCH_LANG or simple. */
+  defineSearch(name: string, lang: string, ...fields: string[]): JsqlModel;
+  /** The langs a search is also indexed in; lang "" keeps the lang of the search. */
+  defineSearchLangs(name: string, lang: string, ...langs: string[]): JsqlModel;
+  /** The search of the model, full_text (query.search(text) and the key "search"), over fields. */
+  defineFullText(...fields: string[]): JsqlModel;
+  /** Lang of full_text ("" keeps it) and the langs it is also indexed in; fails without full_text. */
+  defineFullTextLang(lang: string, ...langs: string[]): JsqlModel;
   /** Calc field computed by a script that sets `item.<name>`. */
   defineCalc(name: string, script: string): JsqlModel;
 
@@ -519,6 +558,8 @@ interface JsqlQuery {
   groupBy(...fields: string[]): JsqlQuery;
   having(cond: JsqlCondition): JsqlQuery;
   page(page: number): JsqlQuery;
+  /** Text (words, "phrase", -excluded, or) in the full_text of the model, with AND over the where, in lang (ISO code); without orderBy, by relevance. */
+  search(text: string, lang?: string): JsqlQuery;
   /** sorted: true (default) ascending, false descending. */
   orderBy(field: string, sorted?: boolean): JsqlQuery;
   allTx(tx: JsqlTx | null): JsqlItems;
@@ -619,6 +660,8 @@ interface JsqlPackage {
   more(field: string, value: any): JsqlCondition;
   moreEq(field: string, value: any): JsqlCondition;
   like(field: string, value: any): JsqlCondition;
+  /** Text search: words, "phrase", -excluded, or; over a search of the model (its index) or a field. */
+  search(field: string, value: string | JsqlSearchValue): JsqlCondition;
   in(field: string, values: any[]): JsqlCondition;
   notIn(field: string, values: any[]): JsqlCondition;
   is(field: string, value: any): JsqlCondition;

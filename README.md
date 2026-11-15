@@ -46,6 +46,9 @@ Infrastructure packages (`cache`, `event`, `jsql`) read their configuration from
 - `db.Query` with `from` (and join `to`) reaches any table of the database: a model this process did not define is read from the database catalog when the reference has a schema (`schema.model`), for queries and for `insert`/`update`/`delete`/`upsert`/`bulk`.
 - `db.Query` runs programs: `{"steps": {"const", "vars", "do": [...]}}` runs a list of descriptors in one transaction with `{{variables}}`, `as`, `set`, `if`/`then`/`else`, Go-like `for` (range, counter, while, `break`, `continue`, with a cap), `{"query": {...}}` subqueries as values, `script` (JavaScript) and `return`/`error`.
 - A `select` with two fields that give the same name (`C.name`, `P.name`) now fails instead of one value silently replacing the other: name one with `field:as`.
+- Text search: a model declares `searches` (`{"name": "fts", "fields": ["name", "tags"], "lang": "simple"}`, or `model.DefineSearch`) and a where asks `{"fts": {"search": "pump water -diesel"}}` (words, `"phrase"`, `-excluded`, `or`); `"orders": [{"fts": false}]` sorts by relevance. Postgres uses a GIN `tsvector` index and `ts_rank`, MySQL a `FULLTEXT` index and `MATCH`; the other engines search with `LIKE`. The index is also created on a table that already exists. `"indexes": [{"name": "name", "method": "trgm"}]` adds a `pg_trgm` index for `like '%x%'` in Postgres. Details in `jsql/spec.md` §6.1.
+- `full_text`, the search of a model: `"full_text": ["code", "name", "description", "tags"]`, `"full_text_lang": "es"`, `"full_text_langs": ["en"]` (or `model.DefineFullText(fields...)`, `DefineFullTextLang(lang, langs...)`), and a JSQL query (the query described in JSON) asks `"search": "pump water"` or `"search": {"text": "pumps", "lang": "en"}` (`Query.Search(text, lang...)`, `.search(text, lang)` in scripts): joined with `AND` to the whole where and, without `orders`, sorted by relevance. Without `full_text` the query fails with `MSG_FULLTEXT_UNDEFINED`. The lang is an ISO code (`es` → `spanish`, `en` → `english`…; an unknown one is `simple`), also in the operator: `{"fts": {"search": {"text": "…", "lang": "en"}}}`.
+- **Behavior change:** the default lang of a search is `spanish` (it was `simple`; `DB_SEARCH_LANG` changes it). Postgres builds one GIN index per declared lang, creates and drops them with `CREATE/DROP INDEX CONCURRENTLY` outside a transaction (without blocking writes), rebuilds an invalid one and drops the search indexes jsql made that no search uses any more; MySQL uses `ALGORITHM=INPLACE, LOCK=SHARED` (writes wait while a `FULLTEXT` is built). `DB_SEARCH_INDEXES=off` turns that off at start and `db.ApplySearchIndexes(model)` applies them by hand.
 
 ## Packages
 
@@ -56,7 +59,7 @@ Each table lists the main public API of every package. `go doc github.com/cgalvi
 | Package | Public API | Example |
 | --- | --- | --- |
 | `et` | `Json` (`Str`, `Int`, `Bool`, `Num`, `Time`, `Json`, `ArrayStr`, `ArrayJson`, `ValStr`, `ValInt`, `Set`, `Put`, `Clear`, `Get`, `Update`, `Clone`, `DeepClone`, `ToString`, `ToObject`), `ToJS`/`FromJS`/`JsonOf`/`GoArg` (a `Json` in goja scripts: an object over the same map, keys as properties and its methods by their Go names), `Item`, `Items`, `List`, conditions (`Eq`, `More`, `In`, `Between`, `ToCondition`, `AddCondition`, `EvaluateObject`, `EvaluateValue`, `Fld` (a field reference, `{field: "name"}` in JSON)), `From(items).Where(...).All()` | `data.ValStr("Cali", "user", "city")` |
-| `jsql` | `Load`, `LoadTo`, `ConnectTo`, `CreateDB`, `DropDB`, `TestConnection`; `DB.Define`, `DefineModel`, `Query` (JSON: queries, commands, `define`, and `drop`/`truncate`/`create`/`alter` of models, schemas, databases and users), `Sql`; `Model.Insert`, `Update`, `Upsert`, `Delete`, `Bulk`, `Select`, `Where`, `WhereByJson`; `Query.All`, `One`, `Limit`, `Count`; `NewTx`, `DefineSeries` (`GenSerie`, `GenSerieTx`, `GenValue`, `GenValueTx`); `Bind(source, vars)` (`{{name}}` variables); `Wrapper`, `BindWrapper`, `ToJsMapWrapper` (goja) | `users.Where(jsql.Eq("id", id)).One()` |
+| `jsql` | `Load`, `LoadTo`, `ConnectTo`, `CreateDB`, `DropDB`, `TestConnection`; `DB.Define`, `DefineModel`, `Query` (JSQL, queries and commands in JSON: queries, commands, `define`, and `drop`/`truncate`/`create`/`alter` of models, schemas, databases and users), `Sql`; `Model.Insert`, `Update`, `Upsert`, `Delete`, `Bulk`, `Select`, `Where`, `WhereByJson`; `Query.All`, `One`, `Limit`, `Count`; `NewTx`, `DefineSeries` (`GenSerie`, `GenSerieTx`, `GenValue`, `GenValueTx`); `Bind(source, vars)` (`{{name}}` variables); `Wrapper`, `BindWrapper`, `ToJsMapWrapper` (goja) | `users.Where(jsql.Eq("id", id)).One()` |
 | `stores` | `DefineInstance` (`Set`, `Get`, `Delete`, `Query`), `DefineAuthorization` (`SetAuthor`, `Author`, `RemoveAuthor`), `DefineConfig` (`SetConfig`, `Get`), `DefineFormState` | `ok, _ := auth.Author(profileId, "GET", "/users")` |
 | `mem` | `Set`, `Get`, `GetStr`, `GetInt`, `GetJson`, `Delete`, `Exists`, `Keys`, `Clear` | `mem.Set("k", "v", time.Minute)` |
 | `ephemeral` | `NewInstance(expiration)`, `Set`, `Get`, `Del` | `e := ephemeral.NewInstance(time.Minute)` |
@@ -86,7 +89,7 @@ Each table lists the main public API of every package. `go doc github.com/cgalvi
 | `event` | `Load`, `Publish`, `Subscribe`, `Queue`, `Stack`, `Source`, `On`, `Unsubscribe`, `Close` | `event.Publish("user:created", data)` |
 | `graph` | `Load()` → `Conn` (`HealthCheck`, `Close`) | `conn, _ := graph.Load()` |
 | `queue` | `New[T](size, maxEvents, period, handler)`, `Push`, `Len`, `Close` | `q.Push(item)` |
-| `crontab` | `Load(tag, store)`, `CronJob`, `ScheduleJob`, `HttpStartJob`, `HttpStopJob`, `HttpRemoveJob` | `crontab.CronJob(tag, owner, "0 * * * *", 0, nil, fn)` |
+| `crontab` | `New(tag, store)` (instance) or `Load` (global), `CronJob`, `ScheduleJob`, `StopJob`, `StartJob`, `RemoveJob`, `GetJob`, `Http*`; states `pending`→`scheduled`⇄`running`→`finished`/`failed`, `paused`, `missed`, `canceled`; `LastRun`, `WithRetries`, `WithTimeout`; replicas with the same tag elect a leader and fail over | `crontab.CronJob(tag, owner, "0 * * * *", 0, nil, fn)` |
 | `resilience` | `New()`, `LoadInstance(Params)`, `Instance.Run`, `IsDone`, `IsFailed`, `Stop` | `inst, _ := r.LoadInstance(resilience.Params{Fn: send, TotalAttempts: 3})` |
 | `store` | `Open(pathData, pathWal, name, mode)` → `FileStore` (`Insert`, `Update`, `Delete`, `Get`, `GetVersion`, `ForEach`, `Keys`, `Deferred`/`WaitDurable`, `Compact`, `Sync`, `WalSince`/`ApplyWalEntry`, `Stats`), `Recover` | `fs, _ := store.Open("./data", "./wal", "customers", store.ReadWrite)` |
 
@@ -175,7 +178,7 @@ users.Update(et.Json{"addr->zip": "76001"}).Where(jsql.Eq("id", "u1")).One()
 items, _ := users.Select("id", "name", "city").Where(jsql.Eq("city", "Cali")).OrderBy("name", true).Limit(1, 20)
 ```
 
-Queries and commands can also be described in JSON:
+Queries and commands can also be described in JSON (the **JSQL** format: a JSQL query, a JSQL command):
 
 ```go
 items, _ := db.Query(et.Json{
@@ -381,6 +384,15 @@ job, err := crontab.CronJob("billing", ownerId, "0 2 * * *", 0, et.Json{},
     func(params et.Json) error { return runBilling() }) // id = tag; registering it again replaces it
 crontab.ScheduleJob("billing:once", ownerId, time.Now().Add(time.Hour), et.Json{}, fn)
 crontab.RemoveJob("billing")
+
+// An instance of its own (several per process); replicas (processes) with the same tag elect the oldest as leader,
+// which schedules every job; another one takes over if it stops. The Store reloads the jobs on start.
+c, _ := crontab.New("reports", store)
+defer c.Close()
+c.CronJob("daily", ownerId, "0 6 * * *", 0, nil, fn, // fn's error or panic → last_run "failed"
+    crontab.WithRetries(3, time.Minute))             // retried up to 3 times; registering it again keeps its state
+c.StopJob("daily")                                    // → paused; StartJob → scheduled
+job, _ := c.GetJob("daily")                           // job.Str("status"), job.Json("last_run")
 ```
 
 ### JavaScript scripts and AI
@@ -405,7 +417,7 @@ hits, _ := index.Search(ctx, tenantId, projectId, "reset the router", 5, 0.3, em
 
 | Package | Variables |
 | --- | --- |
-| `jsql` | `DB_DRIVER` (`postgres`), `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_RECORD_LIMIT` (1000), `DB_IS_DEBUG`, `DB_APP_NAME`; postgres `DB_SSLMODE`; oracle `DB_SSL`, `DB_SSL_VERIFY`; every connection `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_LIFETIME`, `DB_POOL_IDLE_TIME` |
+| `jsql` | `DB_DRIVER` (`postgres`), `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_RECORD_LIMIT` (1000), `DB_IS_DEBUG`, `DB_APP_NAME`; postgres `DB_SSLMODE`; oracle `DB_SSL`, `DB_SSL_VERIFY`; every connection `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_LIFETIME`, `DB_POOL_IDLE_TIME`; search `DB_SEARCH_LANG` (`spanish`), `DB_SEARCH_INDEXES` (`on`) |
 | `cache` | `REDIS_HOST`, `REDIS_PASSWORD`, `REDIS_DB` |
 | `event` | `NATS_HOST`, `NATS_USER`, `NATS_PASSWORD` |
 | `graph` | `NEO4J_HOST`, `NEO4J_USER`, `NEO4J_PASSWORD` |

@@ -33,6 +33,9 @@ func TestMemoryMatchesSql(t *testing.T) {
 		{"between list", []et.Json{{"b": et.Json{"between": []any{1, 2}}}}},
 		{"not_between object", []et.Json{{"c": et.Json{"not_between": et.Json{"min": 1, "max": 1}}}, {"or": et.Json{"a": et.Json{"eq": 1}}}}},
 		{"like OR more", []et.Json{{"name": et.Json{"like": "b%"}}, {"or": et.Json{"c": et.Json{"more": 0}}}, {"and": et.Json{"a": et.Json{"less": 1}}}}},
+		// search over a field alone: whole words in memory and postgres, LIKE elsewhere; the words avoid the parts of words
+		{"search excluded", []et.Json{{"name": et.Json{"search": "ana -maria"}}}},
+		{"search phrase or", []et.Json{{"name": et.Json{"search": `bob or "ana maria"`}}}},
 	}
 
 	for _, tg := range targets() {

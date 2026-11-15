@@ -52,6 +52,9 @@ var (
 	MSG_UNSUPPORTED_COMMAND      = "unsupported command type: %s"
 	MSG_ADMIN_UNSUPPORTED        = "the driver %s does not support %s"
 	MSG_ADMIN_INVALID            = "invalid sql: %s takes {%s}"
+	MSG_SEARCH_INVALID           = "invalid search %s: %s"
+	MSG_SEARCH_ONLY_SEARCH       = "the field %s is a search: it goes only in a search condition or in the order by"
+	MSG_FULLTEXT_UNDEFINED       = "the model %s has no full_text: define its fields to search it"
 )
 
 func init() {
@@ -107,5 +110,8 @@ func init() {
 		MSG_UNSUPPORTED_COMMAND = "tipo de comando no soportado: %s"
 		MSG_ADMIN_UNSUPPORTED = "el driver %s no soporta %s"
 		MSG_ADMIN_INVALID = "sql inválido: %s recibe {%s}"
+		MSG_SEARCH_INVALID = "búsqueda %s inválida: %s"
+		MSG_SEARCH_ONLY_SEARCH = "el campo %s es una búsqueda: solo va en una condición search o en el order by"
+		MSG_FULLTEXT_UNDEFINED = "el modelo %s no tiene full_text: define sus campos para buscar en él"
 	}
 }

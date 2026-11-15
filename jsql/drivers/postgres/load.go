@@ -108,6 +108,9 @@ func ddlIndexes(model *jsql.Model, table string) []string {
 	base := strings.ReplaceAll(table, ".", "_")
 	stmts := make([]string, 0, len(model.Indexes))
 	for _, idx := range model.Indexes {
+		if idx.Method == jsql.INDEX_TRGM {
+			continue // ApplyIndexes builds it (pgTrgmIndexes)
+		}
 		idxName := fmt.Sprintf("%s_%s_idx", base, idx.Name)
 		method := "HASH"
 		if idx.Sorted {

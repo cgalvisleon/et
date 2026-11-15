@@ -14,6 +14,7 @@ import (
 type DefIndex struct {
 	Name   string `json:"name"`
 	Sorted bool   `json:"sorted"`
+	Method string `json:"method,omitempty"` // trgm: a pg_trgm index in Postgres (like '%x%'); the others, their usual index
 }
 
 type DefTo struct {
@@ -77,7 +78,13 @@ type Define struct {
 	Details     []DefDetail      `json:"details"`
 	Masters     []DefMaster      `json:"masters"`
 	Rollups     []DefRollup      `json:"rollups"`
-	UserId      string           `json:"user_id"`
+	Searches    []DefSearch      `json:"searches"`
+	// The search of the model (spec §6.1): the search full_text over these fields, in FullTextLang (ISO code or
+	// engine name; empty: DB_SEARCH_LANG or spanish) and indexed in FullTextLang plus FullTextLangs
+	FullText      []string `json:"full_text"`
+	FullTextLang  string   `json:"full_text_lang"`
+	FullTextLangs []string `json:"full_text_langs"`
+	UserId        string   `json:"user_id"`
 }
 
 /**
@@ -721,6 +728,7 @@ const (
 	CALCFUNC TypeColumn = "calc_func"
 	CALC     TypeColumn = "calc"
 	TEMPLATE TypeColumn = "template"
+	SEARCH   TypeColumn = "search" // a search of the model (Model.Searches): only in a search condition or the order by
 )
 
 const (
@@ -790,6 +798,7 @@ type Column struct {
 type Index struct {
 	Name   string `json:"name"`
 	Sorted bool   `json:"sorted"`
+	Method string `json:"method,omitempty"` // trgm: a pg_trgm index in Postgres (built by the driver's Indexer)
 }
 
 /**

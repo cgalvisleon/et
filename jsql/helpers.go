@@ -405,6 +405,15 @@ func like(field string, value interface{}) *et.Condition {
 }
 
 /**
+* search: Returns a text search condition (the web syntax of et.ToSearch).
+* @param field string, value interface{}
+* @return *et.Condition
+**/
+func search(field string, value interface{}) *et.Condition {
+	return et.Search(field, value)
+}
+
+/**
 * in: Returns an inclusion condition (field IN (values...)).
 * @param field string, value []interface{}
 * @return *et.Condition

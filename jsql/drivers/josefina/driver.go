@@ -157,6 +157,50 @@ func (s *Josefina) RootAttribs() bool {
 }
 
 /**
+* LikeSearch: Josefina searches with LIKE (jsql.LikeSearch): its SQL has no tsvector and its fulltext extension cannot be
+* reached from jsql (CREATE INDEX takes neither a gin method nor an expression, and fulltext.match looks in one field,
+* is pushed down only over a column and rejects a text with a single quote; jsql/spec.md, B16).
+* @return bool
+**/
+func (s *Josefina) LikeSearch() bool {
+	return true
+}
+
+/**
+* LoadIndexes: Josefina has no pg_trgm: an index with method trgm is a plain sorted index of its column, and a search
+* has no index (jsql.Indexer).
+* @param model *jsql.Model, timeout ...time.Duration
+* @return string, error
+**/
+func (s *Josefina) LoadIndexes(model *jsql.Model, timeout ...time.Duration) (string, error) {
+	base := strings.ReplaceAll(model.Table, ".", "_")
+	stmts := []string{}
+	for _, idx := range model.Indexes {
+		col, ok := model.GetColumn(idx.Name)
+		if idx.Method != jsql.INDEX_TRGM || !ok || col.TypeColumn != jsql.COLUMN {
+			continue
+		}
+		stmts = append(stmts, fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s_%s_idx ON %s USING BTREE (%s);", base, idx.Name, model.Table, idx.Name))
+	}
+	return strings.Join(stmts, "\n"), nil
+}
+
+/**
+* ApplyIndexes: Runs the DDL of LoadIndexes in a transaction (jsql.IndexApplier): Josefina has no CONCURRENTLY nor
+* search indexes, so it does not take the path of the Postgres driver it embeds.
+* @param model *jsql.Model, timeout ...time.Duration
+* @return error
+**/
+func (s *Josefina) ApplyIndexes(model *jsql.Model, timeout ...time.Duration) error {
+	sql, err := s.LoadIndexes(model, timeout...)
+	if err != nil || sql == "" || model.Db() == nil {
+		return err
+	}
+	_, err = model.Db().SqlTx(nil, sql)
+	return err
+}
+
+/**
 * Test: Tests a connection (jsql.Tester): opens the database and runs the query
 * @param ctx context.Context, connection jsql.Connection, query string
 * @return error

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>F-1 · crontab: instancias, estados, relevo entre réplicas y pruebas</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232f6feb'/%3E%3Crect x='14' y='14' width='36' height='40' rx='5' fill='%23fff'/%3E%3Crect x='24' y='10' width='16' height='8' rx='3' fill='%23f4c542'/%3E%3Cpath d='M20 28l3 3 6-6M20 42l3 3 6-6' fill='none' stroke='%231a7f37' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M33 29h11M33 43h11' stroke='%238c959f' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top"><a href="index.html">Mesa de trabajo</a><span class="sep">›</span><span>F-1 · crontab: instancias, estados, relevo entre réplicas y pruebas</span><span class="spacer"></span><a href="ideas.html">Ideas</a><a href="todos.html">Acumulado</a></header>
+<main>
+<article>
+<h1 id="crontab"><span class="ref-num">F-1</span> crontab: instancias, estados, relevo entre réplicas y pruebas</h1>
+<div class="meta"><span class="badge s-hecho">Hecho</span>  <span class="chip">et/crontab</span> <span class="muted">Inicio 2026-11-14 · Actualizado 2026-11-14</span></div>
+<div class="row"><div class="progress" title="17 de 17 tareas"><div style="width:100%"></div></div><span class="muted">17/17</span></div>
+<h2>Objetivo</h2>
+<p>Que un job (<code>CronJob</code> repetitivo o <code>ScheduleJob</code> de una vez) diga en todo momento en qué está y cómo le fue a su última corrida: hoy un solo <code>Status</code> mezcla las dos cosas, <code>Failed</code> se sobrescribe en la línea siguiente y <code>Running</code> solo significa «evento publicado».</p>
+<p>Que un job no se pierda: hoy solo lo programa la instancia que lo registró, no se recarga al reiniciar y dos réplicas que lo registran a la vez pueden quitarse mutuamente y dejarlo sin programador.</p>
+<p>Que se pueda crear una <strong>instancia individual</strong> de <code>Crontab</code> (varias en un mismo proceso, cada una con su tag, su Store y sus jobs) y no solo la global de <code>Load</code>: hoy <code>New</code> existe, pero <code>CronJob</code>, <code>ScheduleJob</code>, <code>RemoveJob</code> y los HTTP solo usan la variable global <code>crontab</code>, y los nombres de evento <code>EVENT_CRONTAB_*</code> son globales que cada <code>New</code> reescribe.</p>
+<p>Hoy ningún consumidor del workspace llama a <code>CronJob</code> ni a <code>ScheduleJob</code> (solo <code>ParseSpec</code> y <code>NextOf</code> en core-studio/api y josefina): se puede rediseñar sin romper a nadie.</p>
+<h2>Plan de tareas</h2>
+<table class="plan"><thead><tr><th>#</th><th>Tarea</th><th>Estado</th></tr></thead><tbody>
+<tr><td class="num">1</td><td>Revisión del paquete: <code>crontab.go</code>, <code>job.go</code>, <code>event.go</code>, <code>handler.go</code>, <code>msg.go</code>, tests y consumidores</td><td><span class="badge s-hecho">Hecho</span></td></tr>
+<tr><td class="num">2</td><td>Instancias individuales: <code>CronJob</code>, <code>ScheduleJob</code>, <code>RemoveJob</code>, <code>StopJob</code>, <code>StartJob</code> y los HTTP como métodos de <code>*Crontab</code>; las funciones del paquete quedan como envoltorios sobre la instancia global de <code>Load</code>. Nombres de evento y canales <code>job:&lt;tag&gt;</code> por instancia (con el tag del <code>Crontab</code>), sin variables globales; <code>Close()</code> que detiene el cron y cancela las suscripciones<div class="muted note">Canales <code>crontab:&lt;tag&gt;:remove|stop|start|done</code> y <code>crontab:&lt;tag&gt;:job:&lt;job&gt;</code>; los HTTP también como métodos (<code>c.HttpStopJob</code>…).</div></td><td><span class="badge s-hecho">Hecho</span></td></tr>
+<tr><td class="num">3</td><td>Estados del ciclo de vida como constantes públicas: <code>pending</code>, <code>scheduled</code>, <code>running</code>, <code>paused</code>, <code>finished</code>, <code>missed</code>, <code>failed</code> (y <code>canceled</code> si el Store guarda historial); quitar <code>Done</code> y <code>Awaiting</code><div class="muted note"><code>canceled</code> se guarda en el Store al reemplazar o quitar un job.</div></td><td><span class="badge s-hecho">Hecho</span></td></tr>
+<tr><td class="num">4</td><td><code>LastRun</code> por corrida (<code>id</code>, <code>status</code> dispatched/succeeded/failed/timeout/skipped/retrying, <code>started_at</code>, <code>ended_at</code>, <code>error</code>) y respuesta del worker (<code>job:&lt;tag&gt;:done</code> con <code>run_id</code>)<div class="muted note"><code>retrying</code> queda para cuando haya reintentos (tarea 6); <code>skipped</code> es el contador <code>Job.Skipped</code>, no una corrida. Timeout: <code>CRONTAB_RUN_TIMEOUT</code> (1h) o <code>SetRunTimeout</code>.</div></td><td><span class="badge s-hecho">Hecho</span></td></tr>
+<tr><td class="num">5</td><td><code>trigger</code>: no sobrescribir <code>Failed</code>; <code>stop</code> pasa a <code>paused</code>; <code>start</code> de un job terminado reinicia el conteo o se rechaza; schedule vencido pasa a <code>missed</code><div class="muted note"><code>start</code> de un job en estado final se rechaza: se registra de nuevo.</div></td><td><span class="badge s-hecho">Hecho</span></td></tr>
+<tr><td class="num">6</td><td>Renombrar <code>Attempts</code> (cuenta corridas) a <code>Runs</code> y dejar <code>Attempts</code> para reintentos de la corrida actual<div class="muted note"><code>Job.Attempts</code> → <code>Job.Runs</code>; <code>WithRetries(n, delay)</code> y <code>Run.Attempt</code>; la corrida pasa por <code>retrying</code>.</div></td><td><span class="badge s-hecho">Hecho</span></td></tr>
+<tr><td class="num">7</td><td>Un solo programador por tag con relevo, en vez de <code>remove(keep=rev)</code>, que deja el job sin programador si dos réplicas arrancan a la vez<div class="muted note">Sin Redis: líder por heartbeat sobre NATS (<code>crontab:&lt;tag&gt;:hello</code>/<code>bye</code>), la réplica más antigua viva; copias difundidas en <code>crontab:&lt;tag&gt;:job</code>. Con la red partida cada lado elige líder.</div></td><td><span class="badge s-hecho">Hecho</span></td></tr>
+<tr><td class="num">8</td><td>Recargar los jobs del Store al arrancar y borrarlos al quitarlos (hoy <code>Get</code>, <code>Delete</code> y <code>Query</code> de la interfaz no se usan)<div class="muted note"><code>Query({&quot;collection&quot;: &quot;jobs&quot;, &quot;crontab&quot;: tag})</code>, clave <code>&lt;crontab&gt;:&lt;job&gt;</code>; registrar la misma definición conserva el estado.</div></td><td><span class="badge s-hecho">Hecho</span></td></tr>
+<tr><td class="num">9</td><td>Concurrencia del job: <code>Attempts</code>, <code>Status</code>, <code>idx</code>, <code>shot</code> y <code>save()</code> bajo un solo lock o un solo dueño<div class="muted note">Hecho junto con 2 a 5: orden de locks <code>Job.mu</code> → <code>Crontab.mu</code>.</div></td><td><span class="badge s-hecho">Hecho</span></td></tr>
+<tr><td class="num">10</td><td>Errores: <code>New</code>/<code>Load</code> devuelven el de <code>eventInit</code>; los HTTP devuelven el error de <code>Publish</code> y validan el id; un segundo <code>New</code> no duplica suscripciones<div class="muted note">Hecho junto con 2 a 5.</div></td><td><span class="badge s-hecho">Hecho</span></td></tr>
+<tr><td class="num">11</td><td>Identidad: decidir si el id incluye <code>OwnerId</code> (hoy dos tenants con el mismo tag se reemplazan)<div class="muted note">Decidido: el id sigue siendo el tag dentro de la instancia; para separar tenants, un tag o una instancia por tenant.</div></td><td><span class="badge s-hecho">Hecho</span></td></tr>
+<tr><td class="num">12</td><td>Separar <code>Spec</code> (cron) de la fecha del schedule (<code>At</code>), sin perder milisegundos<div class="muted note"><code>Job.At</code> con nanosegundos; <code>Spec</code> solo en los cron.</div></td><td><span class="badge s-hecho">Hecho</span></td></tr>
+<tr><td class="num">13</td><td>Menos escrituras por disparo: no guardar el <code>AuditLog</code> completo (hasta 1000 entradas) dos veces por corrida<div class="muted note">Solo la líder escribe: una vez por corrida y en los cambios de ciclo de vida; la auditoría no registra <code>scheduled ⇄ running</code>.</div></td><td><span class="badge s-hecho">Hecho</span></td></tr>
+<tr><td class="num">14</td><td>Limpieza: <code>EVENT_CRONTAB_SET</code>/<code>eventSet</code> (nadie lo publica), <code>EVENT_INSTANCE_SET</code>, <code>Crontab.running</code>, <code>Crontab.Jobs</code> exportado, GoDoc de <code>addJob</code><div class="muted note">Quedan sin uso algunos <code>MSG_*</code> exportados (<code>MSG_JOB_NOT_FOUND</code>, <code>MSG_ERROR_ADDING_JOB</code>…).</div></td><td><span class="badge s-hecho">Hecho</span></td></tr>
+<tr><td class="num">15</td><td>Pruebas sin NATS (event inyectable o falso) con <code>-race</code>: estados, stop/start, reemplazo concurrente, repeticiones, schedule vencido<div class="muted note">Bus en memoria con varias réplicas; solo <code>TestJobs</code> necesita NATS.</div></td><td><span class="badge s-hecho">Hecho</span></td></tr>
+<tr><td class="num">16</td><td>Pruebas con dos instancias en el mismo proceso: cada una dispara solo sus jobs y <code>RemoveJob</code>/<code>stop</code> de una no toca a la otra</td><td><span class="badge s-hecho">Hecho</span></td></tr>
+<tr><td class="num">17</td><td>Documentación: <code>et/CLAUDE.md</code> (crontab), <code>README.md</code> + <code>doc/README.es.md</code>, <code>doc/CHANGELOG.md</code></td><td><span class="badge s-hecho">Hecho</span></td></tr>
+</tbody></table>
+
+
+
+<h2>Tareas ejecutadas</h2>
+<ul class="log">
+<li><time>2026-11-14</time> Tareas 6, 7, 8, 11, 12, 13, 15 y 17 hechas: líder entre réplicas con relevo (<code>cluster.go</code>), copias difundidas, recarga y borrado en el Store, <code>WithRetries</code>/<code>WithTimeout</code>, <code>Runs</code>, <code>At</code>, una escritura por corrida y bus inyectable. <code>go test ./crontab -race</code> en verde cuatro veces sin NATS y <code>TestJobs</code> con NATS; core-studio/api y josefina compilan.</li>
+<li><time>2026-11-14</time> Tareas 2 a 5 hechas (y de paso 9, 10, 14 y 16): <code>crontab.New</code> con métodos por instancia, estados nuevos, <code>Run</code>/<code>LastRun</code> con respuesta en <code>crontab:&lt;tag&gt;:done</code>, timeout, skipped, paused/missed/canceled. <code>NATS_HOST=localhost:4222 go test ./crontab -race</code> en verde tres veces; core-studio/api y josefina compilan.</li>
+<li><time>2026-11-14</time> Alcance ampliado: crear instancias individuales de <code>Crontab</code>, no solo la global.</li>
+<li><time>2026-11-14</time> Revisión completa del paquete: 15 hallazgos. Los graves: arranque concurrente de réplicas que deja el job sin programador, sin relevo si muere la instancia, <code>Failed</code> sobrescrito y carreras sobre <code>Attempts</code>/<code>idx</code>/<code>shot</code>. <code>go build</code> y <code>go vet</code> limpios; <code>TestJobs</code> necesita NATS.</li>
+<li><time>2026-11-14</time> Propuesta de estados: ciclo de vida del job aparte del resultado de cada corrida.</li>
+</ul>
+<h2>Decisiones</h2>
+<ul>
+<li>Aceptadas el 2026-11-14 las propuestas: estados del ciclo de vida, <code>LastRun</code> con respuesta del worker, canal por instancia y empezar por las tareas 2 a 5.</li>
+<li>La instancia global de <code>Load</code> se conserva: las funciones del paquete la envuelven, así que nadie se rompe.</li>
+<li>El job termina <code>finished</code> si su última corrida salió bien y <code>failed</code> si no; una corrida fallida de un cron que sigue no cambia el ciclo de vida (queda en <code>LastRun</code>).</li>
+<li>Un disparo con la corrida anterior en curso se omite y se cuenta (<code>Skipped</code>), en vez de lanzar otra encima.</li>
+<li>Se quitaron <code>Done</code>, <code>Awaiting</code>, <code>EVENT_CRONTAB_*</code>, <code>eventSet</code> y el mapa <code>Crontab.Jobs</code>: sin usos en el workspace (core-studio/api y josefina solo usan <code>ParseSpec</code>/<code>NextOf</code>).</li>
+<li>Relevo sin dependencias nuevas: líder por heartbeat sobre NATS (la réplica más antigua viva) en vez de un lease en Redis o en el Store (la interfaz <code>Store</code> no tiene una escritura atómica para el lease).</li>
+<li>Una definición distinta con el mismo tag gana por <code>Rev</code> mayor (UUID v7); la misma definición conserva el job y su estado, para que un servicio registre sus jobs en cada arranque.</li>
+<li>Al tomar el relevo, un schedule atrasado menos de <code>CRONTAB_CATCH_UP</code> (1h) corre ya; uno reanudado tarde queda <code>missed</code>.</li>
+<li>El id del job sigue siendo su tag dentro de la instancia (no incluye <code>OwnerId</code>).</li>
+</ul>
+<h2>Referencias</h2>
+<ul class="refs">
+<li><code>crontab/job.go</code> — estados, <code>trigger</code>, <code>start</code>/<code>stop</code></li>
+<li><code>crontab/handler.go</code> — <code>register</code>, <code>CronJob</code>, <code>ScheduleJob</code>, HTTP</li>
+<li><code>crontab/event.go</code> — eventos <code>crontab:*:&lt;tag&gt;</code></li>
+<li><code>crontab/crontab_test.go</code> — <code>TestJobs</code> (necesita <code>NATS_HOST</code>)</li>
+<li><code>doc/CHANGELOG.md</code> — 2026-11-14, crontab: instancias y estados</li>
+<li><code>crontab/cluster.go</code> — líder entre réplicas</li>
+</ul>
+</article>
+</main>
+<footer class="muted">Generado con <code>node features/build.mjs</code> desde <code>features/data/*.json</code>; no edites este HTML a mano.</footer>
+</body>
+</html>

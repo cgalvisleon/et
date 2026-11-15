@@ -311,6 +311,9 @@ func oraCondValueType(getField func(string) (*jsql.Field, bool), val et.Value) e
 * @return string
 **/
 func oraCondExpr(getField func(string) (*jsql.Field, bool), cond *et.Condition, alias string, isJoin bool) string {
+	if cond.Operator == et.SEARCH {
+		return oraSearchExpr(getField, cond)
+	}
 	var fieldExpr string
 	tp := et.ANY
 	if fld, ok := getField(cond.Field.String()); ok && fld.Agg != nil {
@@ -677,8 +680,8 @@ func (s *Oracle) Query(query *jsql.Query, timeout ...time.Duration) (string, err
 			if !ok {
 				fld, ok = query.GetField(idx.Name)
 			}
-			if !ok {
-				continue
+			if !ok || fld.TypeColumn == jsql.SEARCH {
+				continue // a search has no relevance without text search
 			}
 			dir := "ASC"
 			if !idx.Sorted {

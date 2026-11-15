@@ -344,6 +344,16 @@ func (s *DB) query(query *Query) (string, error) {
 		logs.Debugf("query:%s", query.ToJson().ToEscapeHTML())
 	}
 
+	restore, err := query.withFullText()
+	if err != nil {
+		return "", err
+	}
+	defer restore()
+
+	if err := query.checkSearches(); err != nil {
+		return "", err
+	}
+
 	return s.driver.Query(query, s.timeout)
 }
 
@@ -543,6 +553,7 @@ func (s *DB) define(define Define) (*Model, error) {
 		result.Indexes = append(result.Indexes, &Index{
 			Name:   index.Name,
 			Sorted: index.Sorted,
+			Method: index.Method,
 		})
 	}
 
@@ -602,6 +613,7 @@ func (s *DB) define(define Define) (*Model, error) {
 			detail.Indexes = append(detail.Indexes, &Index{
 				Name:   index.Name,
 				Sorted: index.Sorted,
+				Method: index.Method,
 			})
 		}
 
@@ -670,6 +682,16 @@ func (s *DB) define(define Define) (*Model, error) {
 		if _, err := result.DefineTemplate(column.Name, column.Template); err != nil {
 			return nil, err
 		}
+	}
+
+	// The searches go last: their fields may be attributes of the SourceField
+	for _, search := range define.Searches {
+		if _, err := result.defineSearch(search.Name, search.Lang, search.Langs, search.Fields...); err != nil {
+			return nil, err
+		}
+	}
+	if err := result.defineFullTextOf(define); err != nil {
+		return nil, err
 	}
 
 	result.IsDebug = s.isDebug

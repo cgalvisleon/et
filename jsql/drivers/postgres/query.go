@@ -283,6 +283,9 @@ func pgFieldValueRef(getField func(string) (*jsql.Field, bool), useSourceField b
 * @return string
 **/
 func pgCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bool, cond *et.Condition, alias string, isJoin bool) string {
+	if cond.Operator == et.SEARCH {
+		return pgSearchExpr(getField, cond)
+	}
 	var fieldExpr string
 	fld, ok := getField(cond.Field.String())
 	if ok && fld.Agg != nil {
@@ -817,7 +820,9 @@ func (s *Postgres) Query(query *jsql.Query, timeout ...time.Duration) (string, e
 			}
 			parts = append(parts, fmt.Sprintf("%s %s", expr, dir))
 		}
-		sb.WriteString("\nORDER BY " + strings.Join(parts, ", "))
+		if len(parts) > 0 {
+			sb.WriteString("\nORDER BY " + strings.Join(parts, ", "))
+		}
 	}
 
 	// LIMIT / OFFSET
@@ -864,6 +869,9 @@ func pgOrderExpr(query *jsql.Query, name string) (string, bool) {
 	}
 	if !ok {
 		return "", false
+	}
+	if fld.TypeColumn == jsql.SEARCH {
+		return pgSearchRank(query, name)
 	}
 	if fld.Agg != nil {
 		return pgAggExpr(fld)

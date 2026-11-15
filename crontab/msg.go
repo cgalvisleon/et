@@ -19,6 +19,12 @@ var (
 	MSG_SEND_JOB_REMOVED        = "send job to be removed"
 	MSG_SEND_JOB_STOPPED        = "send job to be stopped"
 	MSG_SEND_JOB_STARTED        = "send job to be started"
+	MSG_JOB_ENDED               = "job %s is %s and cannot be started again; register it again"
+	MSG_ERROR_RUN_TIMEOUT       = "no response from the worker in %s"
+	MSG_ERROR_JOB_PANIC         = "job panic: %v"
+	MSG_ERROR_JOB_INVALID       = "job without id or rev"
+	MSG_ERROR_OUT_FULL          = "crontab %s: outgoing queue full, message dropped"
+	MSG_LEADER                  = "crontab:%s | replica:%s | leader:%v"
 )
 
 func init() {
@@ -41,5 +47,11 @@ func init() {
 		MSG_SEND_JOB_REMOVED = "enviar job para eliminar"
 		MSG_SEND_JOB_STOPPED = "enviar job para detener"
 		MSG_SEND_JOB_STARTED = "enviar job para iniciar"
+		MSG_JOB_ENDED = "el job %s está %s y no se puede iniciar de nuevo; regístralo otra vez"
+		MSG_ERROR_RUN_TIMEOUT = "el worker no respondió en %s"
+		MSG_ERROR_JOB_PANIC = "panic en el job: %v"
+		MSG_ERROR_JOB_INVALID = "job sin id o rev"
+		MSG_ERROR_OUT_FULL = "crontab %s: cola de salida llena, mensaje descartado"
+		MSG_LEADER = "crontab:%s | réplica:%s | líder:%v"
 	}
 }

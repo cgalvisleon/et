@@ -69,6 +69,20 @@
       </a>
     </li>
     <li class="topic">
+      <a href="mongodb-store.html">
+        <h2>¿Cómo guarda MongoDB tus datos?</h2>
+        <p>Documentos BSON sobre WiredTiger: colecciones e índices como árboles B con copy-on-write y compresión, la caché y el desalojo, MVCC con history store, journal y checkpoints, oplog y recuperación tras una caída, con un simulador.</p>
+        <div class="tags"><span>Bases de datos</span><span>MongoDB</span><span>WiredTiger</span><span>Almacenamiento</span><span>Interactivo</span></div>
+      </a>
+    </li>
+    <li class="topic">
+      <a href="cobol-store.html">
+        <h2>¿Cómo guarda COBOL tus datos?</h2>
+        <p>Archivos en vez de base de datos: registros de largo fijo descritos por el copybook, decimales COMP-3 y EBCDIC, archivos secuenciales, relativos e indexados, y el VSAM KSDS a fondo (CI, CA, sequence set, divisiones, FILE STATUS, CICS y recuperación), con un simulador.</p>
+        <div class="tags"><span>Bases de datos</span><span>COBOL</span><span>Mainframe</span><span>VSAM</span><span>Interactivo</span></div>
+      </a>
+    </li>
+    <li class="topic">
       <a href="et-store.html">
         <h2>¿Cómo guarda et/store tus datos?</h2>
         <p>El paquete store de esta librería: log de solo anexar por segmentos, índice en memoria, group commit, compactación sin bloquear, snapshot, recuperación tras una caída y replicación, con un simulador.</p>
@@ -88,7 +102,15 @@
         <p>UUID, ULID, XID y Snowflake comparados, y SID (<code>reg.SID()</code>): 64 bits (tiempo + nodo + secuencia) en 11 caracteres base62 que se ordenan por fecha, con un generador interactivo.</p>
         <div class="tags"><span>Algoritmos</span><span>Identificadores</span><span>Go</span><span>Interactivo</span></div>
       </a>
-    </li>  </ul>
+    </li>
+    <li class="topic">
+      <a href="operaciones-archivo.html">
+        <h2>¿Qué se puede hacer con un archivo?</h2>
+        <p>Las operaciones del sistema sobre archivos con ejemplos en Go: open y sus banderas, read/pread, write/pwrite, seek, truncate, fsync y la page cache, mmap, metadatos, rename atómico, enlaces, bloqueos y cómo las usa et/store, con un simulador de cortes de luz.</p>
+        <div class="tags"><span>Sistemas operativos</span><span>Archivos</span><span>Go</span><span>Durabilidad</span><span>Interactivo</span></div>
+      </a>
+    </li>
+  </ul>
 
   <footer>Carpeta <code>learn/</code> del repositorio <code>et</code>.</footer>
 </main>

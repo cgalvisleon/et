@@ -1,6 +1,6 @@
 # Especificación del paquete `et`
 
-Versión del documento: 1.2 (2026-10-27: §3.2 aclara que las fechas solo se convierten frente a un valor escalar; `IsDifferent` y `Exist` delega en `IsExist`; versión 1.1: archivos reagrupados, ver §8; `MatchLike` pública)
+Versión del documento: 1.4 (2026-11-14: el valor de `search` puede llevar su idioma, `{"text", "lang"}`, `SearchValue`, §3.7; versión 1.3, 2026-11-14: operador `search`, §3.2 y §3.7; versión 1.2, 2026-10-27: §3.2 aclara que las fechas solo se convierten frente a un valor escalar; `IsDifferent` y `Exist` delega en `IsExist`; versión 1.1: archivos reagrupados, ver §8; `MatchLike` pública)
 
 `et` es el núcleo de la librería: el tipo `Json`, los resultados (`Item`, `Items`, `List`), las condiciones (`Condition`) y su evaluación en memoria (`EvaluateObject`, `EvaluateValue`, `From(...).Where(...)`). Las mismas condiciones las traduce `jsql` a SQL; la regla de este documento es que **una condición da el mismo resultado en memoria que en SQL**. Lo comprueba `TestMemoryMatchesSql` (`jsql/drivers/test/evaluate_test.go`) en cada motor disponible.
 
@@ -35,6 +35,7 @@ Una condición es `{campo: {operador: valor}}`, precedida opcionalmente por un c
 | `is`, `is_not` | Igualdad que acepta nil a ambos lados. |
 | `null`, `not_null` | El valor es (o no) nil. |
 | `between`, `not_between` | Ver 3.4. |
+| `search` | Ver 3.7. |
 
 Un valor nil a la izquierda es `false` en todo operador salvo `null`, `is` y los negados (`neg`, `not_in`, `is_not`), que dan `true`. Diferencia conocida con SQL: allí `NULL <> x` y `NULL NOT IN (...)` no son verdaderos.
 
@@ -58,6 +59,16 @@ Los enteros se comparan **exactamente**, también más allá de 2^53 (IDs Snowfl
 
 Un valor `{field: "nombre"}` (`et.FIELD`, `Fld`) se lee del mismo objeto (rutas `a->b`, agregaciones `sum(items->price)`, `extract_year(...)`). `ApplyToValue` con una referencia y sin objeto es `false`. Detalle en el `CLAUDE.md` de la librería («Referencias a campos»).
 
+### 3.7 `search` (2026-11-14)
+
+`Search(field, texto)` (`SEARCH`, `"search"`) busca un texto con la sintaxis web de `websearch_to_tsquery` de Postgres, que lee `ToSearch(texto)` (`search.go`): palabras, `"frase"`, `-excluida` y `or` entre términos; el resultado son grupos unidos por `OR` de términos unidos por `AND`, y un texto vacío no da grupos (no encuentra nada).
+
+**Valor con idioma** (2026-11-14): el valor también puede ser `{"text": "…", "lang": "en"}`, con el idioma de la búsqueda como código ISO (`{"fts": {"search": {"text": "pumps", "lang": "en"}}}`). `SearchValue(valor)` da el texto, el idioma (vacío si no viene) y si el valor es de una de las dos formas; cualquier otro valor no encuentra nada. En memoria el idioma no cambia nada; en SQL lo usa `jsql` (§6.1 de su spec).
+
+En memoria (`MatchSearch`): el valor es un texto, una lista de textos (unidos por un espacio) o cualquier otro valor como texto; nil es `false`. Se compara por **palabras enteras** (secuencias de letras y dígitos) sin mayúsculas ni tildes (`FoldText`: `Canción` → `cancion`): una palabra tiene que estar, una frase son sus palabras seguidas y una excluida no tiene que estar. Un grupo cuyos términos no tienen palabras no encuentra nada.
+
+En SQL lo traduce `jsql` (spec de `jsql`, §6.1): en Postgres con `to_tsvector`/`websearch_to_tsquery`, que también compara palabras enteras pero no quita tildes con `simple` y saca la raíz con otra configuración (`spanish`); en MySQL con `MATCH … AGAINST`; en los demás con `LIKE '%término%'` (`SearchPattern`, que escapa `\`, `%`, `_` y `[`), que encuentra partes de palabras. Por eso `TestMemoryMatchesSql` usa palabras que no son parte de otras. Sobre un objeto, el campo es un atributo del objeto: las búsquedas de un modelo de `jsql` (varios campos) no existen en memoria.
+
 ## 4. Consultas en memoria (`Wheres`)
 
 `From(items, as...)` antepone el alias a cada clave (`a.` por defecto; `""` sin prefijo, las claves en minúsculas): las condiciones, el orden y las llaves de un `Join` usan esos nombres (`{"u.id": "o.user_id"}`). `Where`/`And`/`Or` agregan condiciones, `Join`/`LeftJoin`/`RightJoin`/`FullJoin` cruzan listas, `Asc`/`Desc` ordenan (estable), `Limit(page, rows)` pagina, `Select`/`Hidden` eligen claves. `AddResult` (antes `AdddResult`, que queda como alias obsoleto) agrega un resultado y dice si cabe otro.
@@ -74,7 +85,7 @@ go test -race ./et/                                                # json, goja,
 cd jsql/drivers/test && go test -v -run TestMemoryMatchesSql .     # memoria = SQL en cada motor disponible
 ```
 
-`et/condition_test.go`: `ToWhere`, índices fuera de rango en `Items`, precedencia, números, `like`, cada operador, `Wheres`, `SafeData`, `Put`/`SetNested`/`DeepClone`, `deepEqualValue` y `parseJSON`.
+`et/condition_test.go`: `ToWhere`, índices fuera de rango en `Items`, precedencia, números, `like`, `search` (`TestSearch`: sintaxis web, palabras enteras, tildes, listas, `ToSearch`, `SearchPattern`, el valor con idioma y `SearchValue`), cada operador, `Wheres`, `SafeData`, `Put`/`SetNested`/`DeepClone`, `deepEqualValue` y `parseJSON`.
 
 ## 7. Brechas
 
@@ -100,6 +111,7 @@ Reagrupados el 2026-10-27 (de 13 a 8, más 4 de pruebas; solo se movió código)
 | `result.go` | `Item`, `Items` (`at`: un índice fuera de rango da el valor por defecto), `List` |
 | `condition.go` | Tipos (`Operator`, `TypeData`, `Value`, `Field`, `Aggregate`, `Connector`, `Condition`, `Command`), constructores, `ToCondition`, `ToConditions`, `AddCondition`, `ToWhere` |
 | `evaluate.go` | Referencias a campos, `ApplyToValue`/`ApplyToObject`, `evaluate`, números exactos (`numberOf`, `compareNumbers`), `MatchLike`, `ToBetween` |
+| `search.go` | Búsqueda de texto (2026-11-14): `SearchTerm`, `ToSearch`, `FoldText`, `MatchSearch`, `SearchPattern`, `SearchValue` |
 | `where.go` | `Wheres`, `Source`, `From`, joins y selección |
 | `goja.go` | `ToJS`/`FromJS`/`JsonOf`/`GoArg` y los wrappers de scripts (`evaluateObject`, `evaluateValue`, `field`…) |
 | `safemap.go`, `msg.go` | `SafeData`/`SafeMap`; mensajes |

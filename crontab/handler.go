@@ -8,85 +8,53 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/event"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
-	"github.com/cgalvisleon/et/request"
 	"github.com/cgalvisleon/et/response"
-	"github.com/cgalvisleon/et/timezone"
 	"github.com/robfig/cron/v3"
 )
 
+// crontab: la instancia global de Load, detrás de las funciones del paquete.
 var crontab *Crontab
-
-// QUEUE_JOBS: la cola de job:<tag>; entre varias instancias, cada disparo lo atiende una sola
-const QUEUE_JOBS = "crontab:jobs"
 
 // specParser: el formato de los jobs cron (con segundos, como cron.WithSeconds) y los descriptores (@daily, @every 1h)
 var specParser = cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
 
 /**
-* channelOf: El canal en que se publica cada disparo de un job
-* @param tag string
-* @return string
-**/
-func channelOf(tag string) string {
-	return fmt.Sprintf("job:%s", tag)
-}
-
-/**
-* listen: Atiende los disparos de un job con fn, en la cola QUEUE_JOBS y con una sola suscripción por tag
-* @param job *Job, fn func(params et.Json) error
-* @return error
-**/
-func listen(job *Job, fn func(params et.Json) error) error {
-	channel := channelOf(job.Tag)
-	// event guarda una suscripción por canal: la anterior se cancela antes, o quedaría viva y repetiría cada disparo
-	if err := event.Unsubscribe(channel); err != nil {
-		return err
-	}
-
-	return event.Queue(channel, QUEUE_JOBS, func(msg event.Message) {
-		params := msg.Data
-		err := fn(params)
-		if err != nil {
-			logs.Log(packageName, fmt.Sprintf(MSG_ERROR_EXECUTING_JOB, job.Type, job.Tag, err))
-		}
-	})
-}
-
-/**
-* register: Escucha los disparos del job y lo programa en esta instancia (la que lo registra, así quien lleva su estado
-* es quien lo tiene); las demás quitan el registro anterior con el mismo tag (salvo esta revisión)
-* @param job *Job, fn func(params et.Json) error
-* @return error
-**/
-func register(job *Job, fn func(params et.Json) error) error {
-	if err := listen(job, fn); err != nil {
-		return err
-	}
-
-	replaced := et.Json{"id": job.ID, "keep": job.Rev}
-	if err := event.Publish(EVENT_CRONTAB_REMOVE, replaced); err != nil {
-		return err
-	}
-
-	return crontab.addJob(job)
-}
-
-/**
-* Load
-* @params tag string, store Store
+* Load: Crea la instancia global (la que usan CronJob, ScheduleJob…); si ya había una, la cierra antes.
+* @param tag string, store Store
 * @return error
 **/
 func Load(tag string, store Store) error {
-	var err error
-	crontab, err = New(tag, store)
+	if crontab != nil {
+		crontab.Close()
+		crontab = nil
+	}
+
+	result, err := New(tag, store)
 	if err != nil {
 		return err
 	}
-
+	crontab = result
 	return nil
+}
+
+/**
+* Default: La instancia global de Load, o nil si no se cargó.
+* @return *Crontab
+**/
+func Default() *Crontab {
+	return crontab
+}
+
+/**
+* global: La instancia global o el error de que no está cargada.
+* @return *Crontab, error
+**/
+func global() (*Crontab, error) {
+	if crontab == nil {
+		return nil, errors.New(msg.MSG_CRONTAB_UNLOAD)
+	}
+	return crontab, nil
 }
 
 /**
@@ -129,124 +97,116 @@ func NextOf(spec string, from time.Time) (time.Time, error) {
 }
 
 /**
-* CronJob: Programa un job repetitivo; el id del job es tag y registrarlo de nuevo lo reemplaza. En cada disparo fn
-* recibe params (en una sola instancia); repetitions 0 es sin límite
-* @param tag, ownerId, spec string, repetitions int, params et.Json, fn func(params et.Json) error
+* CronJob: Crontab.CronJob en la instancia global.
+* @param tag, ownerId, spec string, repetitions int, params et.Json, fn func(params et.Json) error, opts ...JobOption
 * @return *Job, error
 **/
-func CronJob(tag, ownerId, spec string, repetitions int, params et.Json, fn func(params et.Json) error) (*Job, error) {
-	if crontab == nil {
-		return nil, errors.New(msg.MSG_CRONTAB_UNLOAD)
-	}
-
-	tag = strings.TrimSpace(tag)
-	if tag == "" {
-		return nil, errors.New(MSG_ERROR_TAG_REQUIRED)
-	}
-
-	spec, err := ParseSpec(spec)
+func CronJob(tag, ownerId, spec string, repetitions int, params et.Json, fn func(params et.Json) error, opts ...JobOption) (*Job, error) {
+	c, err := global()
 	if err != nil {
 		return nil, err
 	}
-
-	job := newJob(CRONJOB, tag, ownerId, spec, params, repetitions)
-	return job, register(job, fn)
+	return c.CronJob(tag, ownerId, spec, repetitions, params, fn, opts...)
 }
 
 /**
-* ScheduleJob: Programa un job de una sola vez en at (futura); el id del job es tag y registrarlo de nuevo lo reemplaza
-* @param tag, ownerId string, at time.Time, params et.Json, fn func(params et.Json) error
+* ScheduleJob: Crontab.ScheduleJob en la instancia global.
+* @param tag, ownerId string, at time.Time, params et.Json, fn func(params et.Json) error, opts ...JobOption
 * @return *Job, error
 **/
-func ScheduleJob(tag, ownerId string, at time.Time, params et.Json, fn func(params et.Json) error) (*Job, error) {
-	if crontab == nil {
-		return nil, errors.New(msg.MSG_CRONTAB_UNLOAD)
+func ScheduleJob(tag, ownerId string, at time.Time, params et.Json, fn func(params et.Json) error, opts ...JobOption) (*Job, error) {
+	c, err := global()
+	if err != nil {
+		return nil, err
 	}
-
-	tag = strings.TrimSpace(tag)
-	if tag == "" {
-		return nil, errors.New(MSG_ERROR_TAG_REQUIRED)
-	}
-
-	if !at.After(timezone.Now()) {
-		return nil, fmt.Errorf(MSG_ERROR_SCHEDULE_PAST, at.Format(time.RFC3339))
-	}
-
-	job := newJob(SCHEDULEJOB, tag, ownerId, at.Format(time.RFC3339), params, 0)
-	return job, register(job, fn)
+	return c.ScheduleJob(tag, ownerId, at, params, fn, opts...)
 }
 
 /**
-* RemoveJob: Quita el job de tag en todas las instancias y deja de atender sus disparos en esta
+* RemoveJob: Crontab.RemoveJob en la instancia global.
 * @param tag string
 * @return error
 **/
 func RemoveJob(tag string) error {
-	if crontab == nil {
-		return errors.New(msg.MSG_CRONTAB_UNLOAD)
-	}
-
-	channel := channelOf(tag)
-	if err := event.Unsubscribe(channel); err != nil {
+	c, err := global()
+	if err != nil {
 		return err
 	}
-
-	return event.Publish(EVENT_CRONTAB_REMOVE, et.Json{"id": tag})
+	return c.RemoveJob(tag)
 }
 
 /**
-* HttpRemoveJob
-* @params w http.ResponseWriter, r *http.Request
+* StopJob: Crontab.StopJob en la instancia global.
+* @param tag string
+* @return error
+**/
+func StopJob(tag string) error {
+	c, err := global()
+	if err != nil {
+		return err
+	}
+	return c.StopJob(tag)
+}
+
+/**
+* StartJob: Crontab.StartJob en la instancia global.
+* @param tag string
+* @return error
+**/
+func StartJob(tag string) error {
+	c, err := global()
+	if err != nil {
+		return err
+	}
+	return c.StartJob(tag)
+}
+
+/**
+* GetJob: Crontab.GetJob en la instancia global.
+* @param tag string
+* @return et.Json, bool
+**/
+func GetJob(tag string) (et.Json, bool) {
+	c, err := global()
+	if err != nil {
+		return nil, false
+	}
+	return c.GetJob(tag)
+}
+
+/**
+* HttpRemoveJob: Crontab.HttpRemoveJob en la instancia global.
+* @param w http.ResponseWriter, r *http.Request
 **/
 func HttpRemoveJob(w http.ResponseWriter, r *http.Request) {
-	if crontab == nil {
-		response.HTTPError(w, r, http.StatusBadRequest, msg.MSG_CRONTAB_UNLOAD)
-		return
-	}
-
-	id := request.URLParam(r, "id").Str()
-	event.Publish(EVENT_CRONTAB_REMOVE, et.Json{"id": id})
-
-	response.ITEM(w, r, http.StatusOK, et.Item{
-		Ok:     true,
-		Result: et.Json{"message": MSG_SEND_JOB_REMOVED},
-	})
+	httpGlobal(w, r, (*Crontab).HttpRemoveJob)
 }
 
 /**
-* HttpStopJob
-* @params w http.ResponseWriter, r *http.Request
+* HttpStopJob: Crontab.HttpStopJob en la instancia global.
+* @param w http.ResponseWriter, r *http.Request
 **/
 func HttpStopJob(w http.ResponseWriter, r *http.Request) {
-	if crontab == nil {
-		response.HTTPError(w, r, http.StatusBadRequest, msg.MSG_CRONTAB_UNLOAD)
-		return
-	}
-
-	id := request.URLParam(r, "id").Str()
-	event.Publish(EVENT_CRONTAB_STOP, et.Json{"id": id})
-
-	response.ITEM(w, r, http.StatusOK, et.Item{
-		Ok:     true,
-		Result: et.Json{"message": MSG_SEND_JOB_STOPPED},
-	})
+	httpGlobal(w, r, (*Crontab).HttpStopJob)
 }
 
 /**
-* HttpStartJob
-* @params w http.ResponseWriter, r *http.Request
+* HttpStartJob: Crontab.HttpStartJob en la instancia global.
+* @param w http.ResponseWriter, r *http.Request
 **/
 func HttpStartJob(w http.ResponseWriter, r *http.Request) {
-	if crontab == nil {
-		response.HTTPError(w, r, http.StatusBadRequest, msg.MSG_CRONTAB_UNLOAD)
+	httpGlobal(w, r, (*Crontab).HttpStartJob)
+}
+
+/**
+* httpGlobal: Responde 400 si la instancia global no está cargada; si lo está, llama a handler.
+* @param w http.ResponseWriter, r *http.Request, handler func(*Crontab, http.ResponseWriter, *http.Request)
+**/
+func httpGlobal(w http.ResponseWriter, r *http.Request, handler func(*Crontab, http.ResponseWriter, *http.Request)) {
+	c, err := global()
+	if err != nil {
+		response.HTTPError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-
-	id := request.URLParam(r, "id").Str()
-	event.Publish(EVENT_CRONTAB_START, et.Json{"id": id})
-
-	response.ITEM(w, r, http.StatusOK, et.Item{
-		Ok:     true,
-		Result: et.Json{"message": MSG_SEND_JOB_STARTED},
-	})
+	handler(c, w, r)
 }

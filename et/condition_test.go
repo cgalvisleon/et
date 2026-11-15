@@ -374,3 +374,77 @@ func TestItemsOutOfRange(t *testing.T) {
 		t.Errorf("One beyond the result with a wrong Count")
 	}
 }
+
+/**
+* TestSearch: The web syntax of the operator search in memory: every word, "phrase", -excluded and or, without case
+* nor accents and by whole words.
+**/
+func TestSearch(t *testing.T) {
+	obj := Json{"name": "Bomba de agua sumergible", "tags": []any{"Riego", "Jardín"}, "code": 125}
+	cases := []struct {
+		field, text string
+		want        bool
+	}{
+		{"name", "bomba agua", true},
+		{"name", "BOMBA AGUA", true},
+		{"name", "bomba aire", false},
+		{"name", "bomba -sumergible", false},
+		{"name", "bomba -diesel", true},
+		{"name", `"bomba de agua"`, true},
+		{"name", `"agua de bomba"`, false},
+		{"name", "diesel or agua", true},
+		{"name", "diesel or aire", false},
+		{"name", "bom", false},
+		{"name", "", false},
+		{"name", "or", false},
+		{"name", "-diesel", true},
+		{"tags", "jardin", true},
+		{"tags", "riego -jardin", false},
+		{"code", "125", true},
+		{"missing", "bomba", false},
+	}
+	for _, c := range cases {
+		cond := Search(c.field, c.text)
+		if got := EvaluateObject(obj, []*Condition{cond}); got != c.want {
+			t.Errorf("search %s %q = %v, want %v", c.field, c.text, got, c.want)
+		}
+	}
+
+	cond, err := ToCondition(Json{"name": Json{"search": "agua"}})
+	if err != nil || cond.Operator != SEARCH || ToOperator("SEARCH") != SEARCH {
+		t.Fatalf("ToCondition search = %v, %v", cond, err)
+	}
+
+	groups := ToSearch(`bomba "de agua" -diesel or motor`)
+	want := [][]SearchTerm{
+		{{Text: "bomba"}, {Text: "de agua", Phrase: true}, {Text: "diesel", Exclude: true}},
+		{{Text: "motor"}},
+	}
+	if fmt.Sprint(groups) != fmt.Sprint(want) {
+		t.Errorf("ToSearch = %v, want %v", groups, want)
+	}
+	if got := SearchPattern(SearchTerm{Text: `50%_a\b[c`}); got != `%50\%\_a\\b\[c%` {
+		t.Errorf("SearchPattern = %s", got)
+	}
+	// The value with its lang: {"text", "lang"}; the lang does not change the search in memory
+	withLang, err := ToCondition(Json{"name": Json{"search": Json{"text": "bomba -diesel", "lang": "es"}}})
+	if err != nil || !EvaluateObject(obj, []*Condition{withLang}) {
+		t.Errorf("search with lang = %v, %v", withLang, err)
+	}
+	for _, c := range []struct {
+		val        any
+		text, lang string
+		ok         bool
+	}{
+		{"agua", "agua", "", true},
+		{Json{"text": "agua", "lang": " en "}, "agua", "en", true},
+		{map[string]any{"text": "agua"}, "agua", "", true},
+		{Json{"lang": "en"}, "", "", false},
+		{125, "", "", false},
+	} {
+		text, lang, ok := SearchValue(c.val)
+		if text != c.text || lang != c.lang || ok != c.ok {
+			t.Errorf("SearchValue(%v) = %q %q %v", c.val, text, lang, ok)
+		}
+	}
+}

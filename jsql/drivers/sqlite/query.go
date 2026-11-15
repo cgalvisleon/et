@@ -215,6 +215,9 @@ func sqliteFieldValueRef(getField func(string) (*jsql.Field, bool), useSourceFie
 * @return string
 **/
 func sqliteCondExpr(getField func(string) (*jsql.Field, bool), useSourceField bool, cond *et.Condition, alias string, isJoin bool) string {
+	if cond.Operator == et.SEARCH {
+		return sqliteSearchExpr(getField, useSourceField, cond)
+	}
 	var fieldExpr string
 	if fld, ok := getField(cond.Field.String()); ok && fld.Agg != nil {
 		fieldExpr, _ = sqliteAggExpr(fld)
@@ -690,7 +693,9 @@ func (s *Sqlite) Query(query *jsql.Query, timeout ...time.Duration) (string, err
 			}
 			parts = append(parts, fmt.Sprintf("%s %s", expr, dir))
 		}
-		sb.WriteString("\nORDER BY " + strings.Join(parts, ", "))
+		if len(parts) > 0 {
+			sb.WriteString("\nORDER BY " + strings.Join(parts, ", "))
+		}
 	}
 
 	if query.Rows > 0 {
@@ -733,8 +738,8 @@ func sqliteOrderExpr(query *jsql.Query, name string) (string, bool) {
 	if !ok {
 		fld, ok = query.GetField(name)
 	}
-	if !ok {
-		return "", false
+	if !ok || fld.TypeColumn == jsql.SEARCH {
+		return "", false // a search has no relevance without text search
 	}
 	if fld.Agg != nil {
 		return sqliteAggExpr(fld)

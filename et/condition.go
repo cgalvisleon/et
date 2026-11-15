@@ -40,6 +40,7 @@ const (
 	NOT_NULL    Operator = "not_null"
 	BETWEEN     Operator = "between"
 	NOT_BETWEEN Operator = "not_between"
+	SEARCH      Operator = "search"
 )
 
 /**
@@ -73,6 +74,7 @@ func ToOperator(s string) Operator {
 		"not_null":    NOT_NULL,
 		"between":     BETWEEN,
 		"not_between": NOT_BETWEEN,
+		"search":      SEARCH,
 	}
 
 	result, ok := values[s]
@@ -1076,6 +1078,16 @@ func MoreEq(field, value interface{}) *Condition {
 **/
 func Like(field, value interface{}) *Condition {
 	return condition(field, value, LIKE)
+}
+
+/**
+* Search: Text search condition: value is a text with the web syntax (words, "phrase", -excluded, or; see ToSearch)
+* or {"text": "…", "lang": "en"} with the lang of the search (SearchValue).
+* @param field, value interface{}
+* @return Condition
+**/
+func Search(field, value interface{}) *Condition {
+	return condition(field, value, SEARCH)
 }
 
 /**

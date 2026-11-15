@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Archivos en COBOL</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  :root {
+    --bg: #fbfaf7; --fg: #1f2328; --muted: #5b6168; --card: #ffffff;
+    --line: #e3e0d8; --accent: #2f6db5; --accent-soft: #e6eef8;
+    --ok: #2e7d4f; --ok-soft: #e4f3ea; --warn: #a15c00; --warn-soft: #fbf0df;
+    --bad: #b3261e; --bad-soft: #f9e4e2; --code: #f3f1ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16181b; --fg: #e6e6e3; --muted: #a0a4a9; --card: #1f2226;
+      --line: #33373c; --accent: #7aaef0; --accent-soft: #1f2d40;
+      --ok: #6cc592; --ok-soft: #1b3226; --warn: #e3a857; --warn-soft: #3a2c17;
+      --bad: #ef8a83; --bad-soft: #3b1f1d; --code: #25292e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16181b; --fg: #e6e6e3; --muted: #a0a4a9; --card: #1f2226;
+    --line: #33373c; --accent: #7aaef0; --accent-soft: #1f2d40;
+    --ok: #6cc592; --ok-soft: #1b3226; --warn: #e3a857; --warn-soft: #3a2c17;
+    --bad: #ef8a83; --bad-soft: #3b1f1d; --code: #25292e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 17px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 8px; }
+  h2 { font-size: 1.4rem; margin: 56px 0 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.1rem; margin: 28px 0 8px; }
+  p { margin: 0 0 14px; }
+  .lead { color: var(--muted); font-size: 1.1rem; }
+  code { background: var(--code); padding: 1px 6px; border-radius: 4px; font-size: .9em; }
+  pre { background: var(--code); padding: 14px 16px; border-radius: 8px; overflow-x: auto; font-size: .88rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; }
+  nav.toc { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 20px; margin: 24px 0; }
+  nav.toc ol { margin: 6px 0 0; padding-left: 20px; columns: 2; column-gap: 32px; }
+  nav.toc a { color: var(--accent); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  @media (max-width: 600px) { nav.toc ol { columns: 1; } }
+  .analogy { background: var(--accent-soft); border-left: 4px solid var(--accent); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+  .note { background: var(--warn-soft); border-left: 4px solid var(--warn); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+  .key { background: var(--ok-soft); border-left: 4px solid var(--ok); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+  .analogy b, .note b, .key b { display: block; margin-bottom: 4px; }
+  figure { margin: 20px 0; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption { color: var(--muted); font-size: .9rem; margin-top: 10px; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: .95rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .table-wrap { overflow-x: auto; }
+  .steps { counter-reset: s; list-style: none; padding: 0; }
+  .steps li { counter-increment: s; position: relative; padding: 0 0 12px 40px; }
+  .steps li::before {
+    content: counter(s); position: absolute; left: 0; top: 0; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--accent); color: var(--bg); font-weight: 700; font-size: .85rem;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .s-box { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
+  .s-acc { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+  .s-ok { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1.5; }
+  .s-warn { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1.5; }
+  .s-txt { fill: var(--fg); font: 13px system-ui, sans-serif; }
+  .s-sm { fill: var(--muted); font: 11px system-ui, sans-serif; }
+  .s-mono { fill: var(--fg); font: 12px ui-monospace, Menlo, monospace; }
+  .s-b { font-weight: 700; }
+  .s-arrow { stroke: var(--muted); stroke-width: 1.6; fill: none; marker-end: url(#arr); }
+  .s-arrowhead { fill: var(--muted); }
+  /* Simulador */
+  .sim { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin: 20px 0; }
+  .sim-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  .sim button, .sim input {
+    font: inherit; font-size: .9rem; padding: 6px 12px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+  }
+  .sim button { cursor: pointer; }
+  .sim button:hover { border-color: var(--accent); }
+  .sim button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .sim input { width: 80px; }
+  .sim-grid { display: grid; grid-template-columns: 1fr 220px; gap: 16px; }
+  @media (max-width: 640px) { .sim-grid { grid-template-columns: 1fr; } }
+  .sim h4 { margin: 0 0 6px; font-size: .85rem; color: var(--muted); font-weight: 600; }
+  .ca { border: 1.5px solid var(--warn); background: var(--warn-soft); border-radius: 8px; padding: 6px; margin-bottom: 8px; }
+  .ca-name { font: 11px ui-monospace, Menlo, monospace; color: var(--muted); margin-bottom: 4px; }
+  .cis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .ci { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 4px; min-height: 64px; }
+  .ci.free { background: transparent; border-style: dashed; }
+  .ci.hit { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .ci-name { font: 10px ui-monospace, Menlo, monospace; color: var(--muted); }
+  .slots { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 2px; }
+  .slot { font: 12px ui-monospace, Menlo, monospace; padding: 1px 4px; border-radius: 3px; background: var(--ok-soft); }
+  .slot.empty { background: transparent; color: var(--muted); }
+  .idx { font: 12px ui-monospace, Menlo, monospace; background: var(--code); border-radius: 8px; padding: 8px; margin-bottom: 10px; }
+  .idx div { display: flex; justify-content: space-between; gap: 6px; }
+  .stats { font-size: .85rem; color: var(--muted); }
+  .sim-log { margin-top: 12px; background: var(--code); border-radius: 8px; padding: 10px 12px; font: 12.5px/1.5 ui-monospace, Menlo, monospace; max-height: 200px; overflow-y: auto; }
+  footer { color: var(--muted); font-size: .9rem; margin-top: 60px; border-top: 1px solid var(--line); padding-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+
+<a href="index.html" style="display:inline-block;margin-bottom:16px;color:var(--accent);text-decoration:none;font-size:.95rem">← Todos los temas</a>
+<h1>¿Cómo guarda COBOL tus datos?</h1>
+<p class="lead">COBOL no trae una base de datos: un programa declara <b>archivos</b> y el sistema operativo los guarda. Aquí se explica cómo: registros de largo fijo descritos por un <em>copybook</em>, archivos secuenciales, relativos e indexados, y a fondo el más usado en los mainframes, el <b>VSAM KSDS</b>, con un simulador de sus divisiones.</p>
+
+<nav class="toc">
+  <strong>Contenido</strong>
+  <ol>
+    <li><a href="#vista">La vista general</a></li>
+    <li><a href="#registro">El registro y el copybook</a></li>
+    <li><a href="#numeros">Cómo se guardan los números</a></li>
+    <li><a href="#secuencial">Archivos secuenciales</a></li>
+    <li><a href="#relativo">Archivos relativos</a></li>
+    <li><a href="#indexado">Archivos indexados (VSAM KSDS)</a></li>
+    <li><a href="#splits">Insertar: divisiones de CI y CA</a></li>
+    <li><a href="#sim">Simulador</a></li>
+    <li><a href="#programa">El programa: verbos y FILE STATUS</a></li>
+    <li><a href="#concurrencia">Concurrencia y bloqueos</a></li>
+    <li><a href="#crash">¿Qué pasa si se va la luz?</a></li>
+    <li><a href="#mantenimiento">Mantenimiento: REORG y respaldos</a></li>
+    <li><a href="#fuera">COBOL fuera del mainframe</a></li>
+    <li><a href="#resumen">Resumen y comparación</a></li>
+  </ol>
+</nav>
+
+<!-- 1 -->
+<h2 id="vista">1. La vista general</h2>
+<p>En una base de datos moderna el motor sabe qué columnas tiene cada fila. En COBOL no: el archivo es una sucesión de <b>bytes</b> agrupados en <b>registros</b>, y el único que sabe qué significa cada byte es el programa, gracias a una descripción que se copia en cada programa que usa el archivo (el <em>copybook</em>).</p>
+<p>El programa elige una de tres <b>organizaciones</b> y el sistema de archivos hace el resto. En el mainframe (z/OS) eso es <b>QSAM</b> para los secuenciales y <b>VSAM</b> para los relativos e indexados; en Linux o Windows es un manejador de archivos indexados del compilador (Micro Focus, GnuCOBOL con Berkeley DB o VBISAM).</p>
+
+<figure>
+<svg viewBox="0 0 760 300" role="img" aria-label="Capas: programa COBOL, método de acceso, disco">
+  <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="s-arrowhead"/></marker></defs>
+  <rect x="20" y="10" width="720" height="70" rx="10" class="s-acc"/>
+  <text x="36" y="30" class="s-sm">PROGRAMA COBOL</text>
+  <text x="380" y="50" text-anchor="middle" class="s-txt s-b">SELECT … ORGANIZATION IS INDEXED · FD + copybook · READ / WRITE / REWRITE</text>
+  <text x="380" y="68" text-anchor="middle" class="s-sm">el programa conoce el formato del registro; el archivo no</text>
+  <path d="M380 80 L380 110" class="s-arrow"/>
+  <rect x="20" y="114" width="720" height="80" rx="10" class="s-ok"/>
+  <text x="36" y="134" class="s-sm">MÉTODO DE ACCESO (sistema operativo)</text>
+  <rect x="40" y="142" width="200" height="42" rx="8" class="s-box"/>
+  <text x="140" y="168" text-anchor="middle" class="s-txt s-b">QSAM: secuencial</text>
+  <rect x="280" y="142" width="200" height="42" rx="8" class="s-box"/>
+  <text x="380" y="168" text-anchor="middle" class="s-txt s-b">VSAM RRDS: relativo</text>
+  <rect x="520" y="142" width="200" height="42" rx="8" class="s-box"/>
+  <text x="620" y="168" text-anchor="middle" class="s-txt s-b">VSAM KSDS: indexado</text>
+  <path d="M380 194 L380 224" class="s-arrow"/>
+  <rect x="20" y="228" width="720" height="62" rx="10" class="s-warn"/>
+  <text x="36" y="248" class="s-sm">DISCO (DASD)</text>
+  <text x="380" y="272" text-anchor="middle" class="s-txt">bloques / control intervals en pistas y cilindros, registrados en el catálogo del sistema</text>
+</svg>
+<figcaption>COBOL habla con un método de acceso; el método de acceso decide cómo quedan los bytes en el disco.</figcaption>
+</figure>
+
+<div class="analogy"><b>La analogía</b>Un archivo COBOL es un <b>libro de contabilidad con renglones de ancho fijo</b>. El libro no dice qué es cada columna: eso está en una hoja aparte (el copybook) que cada contador tiene fotocopiada. Si alguien cambia la hoja y no las fotocopias, los números se leen mal sin que nadie lo note.</div>
+
+<!-- 2 -->
+<h2 id="registro">2. El registro y el copybook</h2>
+<p>El programa declara el archivo en dos partes: en la <code>ENVIRONMENT DIVISION</code> dice cómo se organiza y se accede, y en la <code>DATA DIVISION</code> (la <code>FD</code>) describe el registro campo por campo con cláusulas <code>PIC</code>:</p>
+<pre><code>       ENVIRONMENT DIVISION.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+           SELECT CLIENTES ASSIGN TO CLIMAST
+               ORGANIZATION IS INDEXED
+               ACCESS MODE  IS DYNAMIC
+               RECORD KEY   IS CLI-ID
+               ALTERNATE RECORD KEY IS CLI-NOMBRE WITH DUPLICATES
+               FILE STATUS  IS WS-ESTADO.
+
+       DATA DIVISION.
+       FILE SECTION.
+       FD  CLIENTES.
+           COPY CLIREG.            *> el copybook: el "esquema"
+
+      *> CLIREG.cpy
+       01  CLI-REGISTRO.
+           05 CLI-ID          PIC 9(8).            *>  8 bytes
+           05 CLI-NOMBRE      PIC X(30).           *> 30 bytes
+           05 CLI-SALDO       PIC S9(9)V99 COMP-3. *>  6 bytes
+           05 CLI-ALTA        PIC 9(8).            *>  8 bytes (AAAAMMDD)
+           05 FILLER          PIC X(28).           *> 28 bytes de reserva
+      *>                                       total  80 bytes</code></pre>
+<p>Cada registro mide siempre <b>80 bytes</b>, y cada campo está en una posición fija: <code>CLI-NOMBRE</code> son los bytes 9 a 38 de todos los registros. No hay separadores, ni nombres de campo, ni nulos: un campo vacío son espacios o ceros. El <code>FILLER</code> deja espacio para campos futuros sin cambiar el largo del registro, porque cambiarlo obliga a convertir el archivo y a recompilar todos los programas que lo usan.</p>
+<div class="key"><b>El esquema vive en el programa</b>El archivo no guarda su estructura. Dos programas con copybooks distintos leen los mismos bytes de forma distinta. Por eso, en las empresas que usan COBOL, el copybook se versiona y se controla como si fuera la definición de una tabla.</div>
+
+<!-- 3 -->
+<h2 id="numeros">3. Cómo se guardan los números</h2>
+<p>COBOL nació para dinero, así que sus números son <b>decimales exactos</b>, no flotantes. La cláusula <code>USAGE</code> decide cómo se guardan:</p>
+<div class="table-wrap"><table>
+  <tr><th>Formato</th><th>Declaración</th><th>Valor −1234,50 en bytes</th><th>Uso</th></tr>
+  <tr><td>Zoned (DISPLAY)</td><td><code>PIC S9(5)V99</code></td><td>7 bytes: un dígito por byte; el signo va en la mitad alta del último (<code>F0 F1 F2 F3 F4 F5 D0</code> en EBCDIC)</td><td>Legible en un volcado; el más común en archivos</td></tr>
+  <tr><td>Empaquetado</td><td><code>PIC S9(5)V99 COMP-3</code></td><td>4 bytes: dos dígitos por byte y el signo en el último medio byte (<code>01 23 45 0D</code>)</td><td>Montos: ocupa la mitad y el procesador lo suma directo</td></tr>
+  <tr><td>Binario</td><td><code>PIC S9(5)V99 COMP</code></td><td>4 bytes: entero binario −123450</td><td>Contadores, índices</td></tr>
+</table></div>
+<p>La coma decimal (<code>V</code>) <b>no se guarda</b>: es implícita, y solo el copybook dice que los dos últimos dígitos son centavos. Un empaquetado de <code>n</code> dígitos ocupa <code>⌈(n+1)/2⌉</code> bytes. En el mainframe el texto es <b>EBCDIC</b> (la "A" es <code>C1</code>, no <code>41</code>), así que copiar un archivo a Linux con una conversión de texto destruye los campos <code>COMP-3</code>: hay que convertir campo por campo con el copybook.</p>
+
+<!-- 4 -->
+<h2 id="secuencial">4. Archivos secuenciales</h2>
+<p>Un archivo secuencial (<code>ORGANIZATION IS SEQUENTIAL</code>, QSAM en z/OS) es la organización más simple: los registros van uno tras otro en el orden en que se escribieron. Para no hacer una operación de disco por registro, se agrupan en <b>bloques</b>: con registros de 80 bytes (<code>LRECL=80</code>) y bloques de 27 920 bytes (<code>BLKSIZE</code>), cada lectura física trae 349 registros. <code>RECFM=FB</code> significa largo fijo y bloqueado; <code>VB</code>, largo variable con 4 bytes de largo delante de cada registro y de cada bloque.</p>
+<p>Solo se puede leer de principio a fin y escribir al final (<code>OPEN EXTEND</code>). No hay "actualizar el cliente 42": la forma clásica es el <b>proceso batch de maestro viejo y maestro nuevo</b>:</p>
+<figure>
+<svg viewBox="0 0 760 170" role="img" aria-label="Maestro viejo más transacciones ordenadas producen un maestro nuevo">
+  <rect x="20" y="20" width="200" height="50" rx="8" class="s-box"/>
+  <text x="120" y="42" text-anchor="middle" class="s-txt s-b">Maestro viejo</text>
+  <text x="120" y="60" text-anchor="middle" class="s-sm">ordenado por cliente</text>
+  <rect x="20" y="100" width="200" height="50" rx="8" class="s-box"/>
+  <text x="120" y="122" text-anchor="middle" class="s-txt s-b">Transacciones del día</text>
+  <text x="120" y="140" text-anchor="middle" class="s-sm">ordenadas por SORT</text>
+  <path d="M220 45 L300 78" class="s-arrow"/>
+  <path d="M220 125 L300 92" class="s-arrow"/>
+  <rect x="304" y="60" width="160" height="50" rx="8" class="s-acc"/>
+  <text x="384" y="82" text-anchor="middle" class="s-txt s-b">Programa de cruce</text>
+  <text x="384" y="100" text-anchor="middle" class="s-sm">avanza por los dos a la vez</text>
+  <path d="M464 85 L534 85" class="s-arrow"/>
+  <rect x="538" y="60" width="200" height="50" rx="8" class="s-ok"/>
+  <text x="638" y="82" text-anchor="middle" class="s-txt s-b">Maestro nuevo</text>
+  <text x="638" y="100" text-anchor="middle" class="s-sm">el viejo queda de respaldo</text>
+</svg>
+<figcaption>Con los dos archivos ordenados por la misma llave, un solo recorrido aplica altas, bajas y cambios. El maestro viejo no se toca: es el respaldo natural.</figcaption>
+</figure>
+<p>Es lento para buscar un registro, pero rapidísimo para procesar millones: el disco solo lee hacia adelante y en bloques grandes. Por eso los cierres mensuales y la nómina siguen siendo batch secuencial.</p>
+
+<!-- 5 -->
+<h2 id="relativo">5. Archivos relativos</h2>
+<p>Un archivo relativo (<code>ORGANIZATION IS RELATIVE</code>, VSAM RRDS) es un arreglo de <b>casillas numeradas</b> de largo fijo. La llave es el número de casilla (<code>RELATIVE KEY</code>), y la posición sale de una cuenta: el registro <code>n</code> está en el byte <code>(n − 1) × largo</code>. No hay índice: leer la casilla 5000 es ir directo a ella.</p>
+<p>Sirve cuando la llave ya es un número pequeño y denso (número de sucursal, día del año). Si la llave es dispersa (una cédula), quedan millones de casillas vacías, y por eso se usa poco.</p>
+
+<!-- 6 -->
+<h2 id="indexado">6. Archivos indexados: VSAM KSDS</h2>
+<p>El archivo indexado (<code>ORGANIZATION IS INDEXED</code>) permite leer por llave <em>y</em> recorrer en orden. En z/OS es un <b>KSDS</b> (<em>Key-Sequenced Data Set</em>) de VSAM, y está hecho de dos componentes: <b>datos</b> e <b>índice</b>.</p>
+
+<h3>El componente de datos: CI y CA</h3>
+<ul>
+  <li>Un <b>Control Interval (CI)</b> es la unidad que VSAM lee y escribe de una vez, de 512 bytes a 32 KB (típico 4 KB). Dentro de él los registros están <b>ordenados por llave</b>, seguidos de espacio libre y, al final, la información de control: un descriptor por registro (RDF, 3 bytes) y el del CI (CIDF, 4 bytes).</li>
+  <li>Una <b>Control Area (CA)</b> es un grupo de CI contiguos en el disco, normalmente un cilindro.</li>
+</ul>
+
+<h3>El componente de índice: un árbol B+</h3>
+<ul>
+  <li>El <b>sequence set</b> es el nivel más bajo: un registro de índice por CA, con una entrada por cada CI que dice "la llave más alta de este CI es tal". Encadena las CA en orden, así que leer en secuencia es recorrerlo.</li>
+  <li>El <b>index set</b> son los niveles de arriba: cada entrada dice "la llave más alta de esta CA es tal". Con uno o dos niveles se cubren millones de registros.</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 760 340" role="img" aria-label="Estructura de un KSDS: index set, sequence set, CA y CI">
+  <defs><marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="s-arrowhead"/></marker></defs>
+  <rect x="280" y="10" width="200" height="44" rx="8" class="s-acc"/>
+  <text x="380" y="30" text-anchor="middle" class="s-txt s-b">Index set</text>
+  <text x="380" y="46" text-anchor="middle" class="s-mono">CA1 ≤ 450 · CA2 ≤ 999</text>
+  <path d="M330 54 L190 92" class="s-arrow" style="marker-end:url(#arr2)"/>
+  <path d="M430 54 L570 92" class="s-arrow" style="marker-end:url(#arr2)"/>
+  <rect x="40" y="96" width="300" height="44" rx="8" class="s-acc"/>
+  <text x="190" y="116" text-anchor="middle" class="s-txt s-b">Sequence set de CA1</text>
+  <text x="190" y="132" text-anchor="middle" class="s-mono">CI1 ≤ 150 · CI2 ≤ 300 · CI3 ≤ 450 · CI4 libre</text>
+  <rect x="420" y="96" width="300" height="44" rx="8" class="s-acc"/>
+  <text x="570" y="116" text-anchor="middle" class="s-txt s-b">Sequence set de CA2</text>
+  <text x="570" y="132" text-anchor="middle" class="s-mono">CI1 ≤ 600 · CI2 ≤ 999 · …</text>
+  <path d="M340 118 L420 118" class="s-arrow" style="marker-end:url(#arr2)"/>
+  <text x="380" y="110" text-anchor="middle" class="s-sm">enlace</text>
+  <path d="M190 140 L190 172" class="s-arrow" style="marker-end:url(#arr2)"/>
+  <rect x="20" y="176" width="720" height="150" rx="10" class="s-warn"/>
+  <text x="36" y="196" class="s-sm">CA1 (un cilindro) · datos</text>
+  <rect x="36" y="206" width="160" height="108" rx="6" class="s-box"/>
+  <text x="116" y="224" text-anchor="middle" class="s-sm">CI1 · 4 KB</text>
+  <text x="48" y="246" class="s-mono">100 · 120 · 150</text>
+  <rect x="44" y="256" width="144" height="22" rx="3" class="s-ok"/>
+  <text x="116" y="271" text-anchor="middle" class="s-sm">espacio libre</text>
+  <text x="48" y="304" class="s-sm">RDF RDF RDF · CIDF</text>
+  <rect x="212" y="206" width="160" height="108" rx="6" class="s-box"/>
+  <text x="292" y="224" text-anchor="middle" class="s-sm">CI2</text>
+  <text x="224" y="246" class="s-mono">170 · 230 · 300</text>
+  <rect x="388" y="206" width="160" height="108" rx="6" class="s-box"/>
+  <text x="468" y="224" text-anchor="middle" class="s-sm">CI3</text>
+  <text x="400" y="246" class="s-mono">320 · 400 · 450</text>
+  <rect x="564" y="206" width="160" height="108" rx="6" class="s-box" style="stroke-dasharray:5 4"/>
+  <text x="644" y="224" text-anchor="middle" class="s-sm">CI4</text>
+  <text x="644" y="262" text-anchor="middle" class="s-sm">libre (FREESPACE de CA)</text>
+</svg>
+<figcaption>Buscar la llave 230: el index set manda a CA1, su sequence set manda a CI2, y se lee un solo CI de 4 KB donde se busca el registro.</figcaption>
+</figure>
+
+<p>El espacio libre se reserva al cargar el archivo con <code>FREESPACE(ci% ca%)</code>: un porcentaje de cada CI y un porcentaje de CI enteros de cada CA quedan vacíos para las inserciones futuras. Se define con la utilidad <code>IDCAMS</code>:</p>
+<pre><code>  DEFINE CLUSTER (NAME(PROD.CLIENTES.KSDS)  -
+                  INDEXED                   -
+                  KEYS(8 0)                 -  /* llave: 8 bytes desde la posición 0 */
+                  RECORDSIZE(80 80)         -
+                  FREESPACE(20 10)          -  /* 20 % de cada CI, 10 % de los CI de cada CA */
+                  SHAREOPTIONS(2 3)         -
+                  CYLINDERS(500 100))       -
+         DATA   (NAME(PROD.CLIENTES.KSDS.DATA) CONTROLINTERVALSIZE(4096)) -
+         INDEX  (NAME(PROD.CLIENTES.KSDS.INDEX))</code></pre>
+
+<h3>Índices alternos</h3>
+<p>Para buscar por otro campo (<code>ALTERNATE RECORD KEY</code>) se define un <b>AIX</b>: otro KSDS cuya llave es el campo alterno y cuyo contenido son las llaves primarias que lo tienen (varias si admite duplicados). Un <code>PATH</code> une el AIX con el archivo base, y con <code>UPGRADE</code> VSAM lo mantiene al escribir el base. Buscar por el alterno cuesta dos búsquedas: AIX → llave primaria → registro.</p>
+
+<!-- 7 -->
+<h2 id="splits">7. Insertar: divisiones de CI y de CA</h2>
+<p>Como los registros de un CI están ordenados, insertar la llave 160 en un CI que tiene <code>100 · 150 · 200</code> desplaza el 200 a la derecha. Mientras haya espacio libre en el CI, eso es todo: se reescribe un CI.</p>
+<ol class="steps">
+  <li><b>Hay espacio en el CI:</b> el registro entra en su lugar. Una escritura.</li>
+  <li><b>El CI está lleno → CI split:</b> VSAM toma un CI libre de la misma CA, mueve allí la mitad de arriba de los registros, inserta el nuevo y actualiza el sequence set. Ahora el orden lógico de los CI ya no es el físico: el sequence set dice cuál sigue.</li>
+  <li><b>No hay CI libres en la CA → CA split:</b> VSAM toma una CA vacía al final del archivo (o amplía el archivo), mueve allí la mitad de los CI, actualiza el index set y luego hace el CI split. Es caro: mueve un cilindro entero mientras el registro espera.</li>
+</ol>
+<div class="note"><b>Por qué importa el FREESPACE</b>Con poco espacio libre las inserciones provocan divisiones, y las divisiones dejan el archivo desordenado en el disco: una lectura secuencial salta de un lado a otro. Con demasiado espacio libre, el archivo ocupa el doble y lee bloques medio vacíos. Se ajusta según cuánto se inserta entre una reorganización y la siguiente.</div>
+<p>Borrar (<code>DELETE</code>) quita el registro y corre los siguientes hacia la izquierda dentro del CI; un CI que queda vacío vuelve a estar libre. VSAM nunca une CI o CA medio vacíos: eso lo arregla la reorganización.</p>
+
+<!-- 8 -->
+<h2 id="sim">8. Simulador de un KSDS</h2>
+<p>Un KSDS de juguete: CI de <b>4 registros</b>, CA de <b>4 CI</b>. Se cargó con <code>FREESPACE(25 25)</code>: 3 registros por CI y un CI libre por CA. Inserta llaves cercanas (por ejemplo 11, 12, 13, 14) para ver un CI split, y sigue hasta provocar un CA split. <b>REORG</b> descarga y vuelve a cargar el archivo, como un <code>REPRO</code>.</p>
+
+<div class="sim" id="sim">
+  <div class="sim-controls">
+    <input id="k" type="number" min="1" max="9999" value="11" aria-label="Llave">
+    <button class="primary" id="bWrite">WRITE</button>
+    <button id="bRead">READ</button>
+    <button id="bDelete">DELETE</button>
+    <button id="bRandom">Insertar 5 al azar</button>
+    <button id="bReorg">REORG</button>
+    <button id="bReset">Reiniciar</button>
+  </div>
+  <div class="sim-grid">
+    <div><h4>Componente de datos (orden físico)</h4><div id="data"></div></div>
+    <div>
+      <h4>Index set</h4><div class="idx" id="iset"></div>
+      <h4>Sequence set</h4><div class="idx" id="sset"></div>
+      <div class="stats" id="stats"></div>
+    </div>
+  </div>
+  <div class="sim-log" id="log"></div>
+</div>
+
+<!-- 9 -->
+<h2 id="programa">9. El programa: verbos y FILE STATUS</h2>
+<p>El programa abre el archivo en un modo y usa unos pocos verbos. El <code>ACCESS MODE</code> decide cuáles: <code>SEQUENTIAL</code> (en orden), <code>RANDOM</code> (por llave) o <code>DYNAMIC</code> (los dos).</p>
+<div class="table-wrap"><table>
+  <tr><th>Verbo</th><th>Qué hace</th></tr>
+  <tr><td><code>OPEN INPUT | OUTPUT | I-O | EXTEND</code></td><td>Leer, crear desde cero, leer y modificar, agregar al final.</td></tr>
+  <tr><td><code>READ … KEY IS</code></td><td>Lee el registro de la llave puesta en <code>CLI-ID</code>.</td></tr>
+  <tr><td><code>START … KEY &gt;= </code></td><td>Se posiciona en la primera llave mayor o igual, sin leer.</td></tr>
+  <tr><td><code>READ … NEXT</code></td><td>Lee el siguiente en orden de llave (recorre el sequence set).</td></tr>
+  <tr><td><code>WRITE</code></td><td>Inserta un registro nuevo.</td></tr>
+  <tr><td><code>REWRITE</code></td><td>Reemplaza el último registro leído (la llave no puede cambiar).</td></tr>
+  <tr><td><code>DELETE</code></td><td>Borra el registro de la llave.</td></tr>
+</table></div>
+<pre><code>           MOVE 12345678 TO CLI-ID
+           READ CLIENTES KEY IS CLI-ID
+           EVALUATE WS-ESTADO
+             WHEN "00"  ADD WS-ABONO TO CLI-SALDO
+                        REWRITE CLI-REGISTRO
+             WHEN "23"  DISPLAY "Cliente no existe"
+             WHEN OTHER DISPLAY "Error de archivo " WS-ESTADO
+           END-EVALUATE</code></pre>
+<p>Después de cada verbo, el método de acceso deja un código de dos caracteres en el <code>FILE STATUS</code>. No hay excepciones: si el programa no lo revisa, el error pasa de largo.</p>
+<div class="table-wrap"><table>
+  <tr><th>Código</th><th>Significado</th></tr>
+  <tr><td><code>00</code></td><td>Correcto.</td></tr>
+  <tr><td><code>02</code></td><td>Correcto, y hay otro registro con la misma llave alterna.</td></tr>
+  <tr><td><code>10</code></td><td>Fin del archivo en una lectura secuencial.</td></tr>
+  <tr><td><code>22</code></td><td>Llave duplicada al escribir.</td></tr>
+  <tr><td><code>23</code></td><td>Registro no encontrado.</td></tr>
+  <tr><td><code>35</code></td><td>El archivo no existe al abrirlo.</td></tr>
+  <tr><td><code>93</code> / <code>9x</code></td><td>Recurso no disponible (bloqueado por otro) u otro error del sistema.</td></tr>
+</table></div>
+
+<!-- 10 -->
+<h2 id="concurrencia">10. Concurrencia y bloqueos</h2>
+<p>VSAM por sí solo protege poco. <code>SHAREOPTIONS</code> dice quién puede abrir el archivo a la vez: con <code>(2 x)</code>, un solo programa escribe y varios leen, y los lectores pueden ver un CI a medio dividir. Por eso, en la práctica, hay dos mundos:</p>
+<ul>
+  <li><b>Batch:</b> el job abre el archivo en exclusiva (<code>DISP=OLD</code> en el JCL). No hay concurrencia y no hace falta bloquear.</li>
+  <li><b>En línea (CICS):</b> el monitor de transacciones abre el archivo una vez para todos, bloquea cada registro que una transacción lee para actualizar (<code>READ UPDATE</code>) hasta su <code>SYNCPOINT</code>, y lleva un log para deshacer. Las transacciones ACID las da CICS, no el archivo. Con <b>RLS</b> (Record Level Sharing) el bloqueo por registro lo hace el Coupling Facility para varios sistemas a la vez.</li>
+</ul>
+<p>Fuera del mainframe, los compiladores tienen bloqueo por registro propio (<code>LOCK MODE IS AUTOMATIC</code> o <code>MANUAL</code> con <code>WITH LOCK</code>), y el estado <code>9D</code> o <code>51</code> avisa de un registro bloqueado.</p>
+
+<!-- 11 -->
+<h2 id="crash">11. ¿Qué pasa si se va la luz?</h2>
+<p>Un KSDS <b>no tiene un log</b> como el WAL de PostgreSQL. VSAM guarda CI modificados en buffers y los escribe cuando necesita el buffer o al cerrar. Si el programa o el sistema se caen a mitad de camino:</p>
+<ul>
+  <li>Puede faltar lo que estaba solo en los buffers, y no hay cómo saberlo desde el archivo.</li>
+  <li>El catálogo puede tener un fin de datos viejo. Al abrir, VSAM lo detecta y hace un <b>VERIFY</b> implícito (o se corre <code>IDCAMS VERIFY</code>), que corrige el catálogo leyendo el archivo; no recupera registros perdidos.</li>
+  <li>Un split a medio hacer puede dejar registros duplicados en dos CI o el índice desalineado. Se detecta con <code>EXAMINE</code> y se arregla reconstruyendo.</li>
+</ul>
+<p>Por eso la recuperación se apoya en otras capas: en batch, el job se vuelve a correr desde el respaldo del inicio (el maestro viejo, o una copia tomada antes del paso); en CICS, el log de la transacción deshace lo no confirmado, y para recuperar un archivo dañado se restaura el último respaldo y se le aplican los <b>logs de recuperación hacia adelante</b> (<em>forward recovery</em>, CICS VR).</p>
+<div class="key"><b>La durabilidad no es del archivo</b>En COBOL, "no perder datos" es una disciplina de operación: respaldos antes de cada paso batch, jobs que se pueden volver a correr y logs de CICS. El formato del archivo, por sí solo, no promete nada si el proceso se cae.</div>
+
+<!-- 12 -->
+<h2 id="mantenimiento">12. Mantenimiento: REORG y respaldos</h2>
+<p>Con el uso, un KSDS se llena de CI y CA divididos y de espacio libre mal repartido. La reorganización es descargarlo y volverlo a cargar:</p>
+<pre><code>  REPRO INFILE(KSDS) OUTFILE(SECUENCIAL)   /* descarga en orden de llave */
+  DELETE PROD.CLIENTES.KSDS CLUSTER
+  DEFINE CLUSTER (…)                       /* mismo DEFINE, quizá con otro FREESPACE */
+  REPRO INFILE(SECUENCIAL) OUTFILE(KSDS)   /* carga: CI llenos hasta el FREESPACE */</code></pre>
+<p>La descarga sirve además de respaldo lógico. Los respaldos físicos se toman con DFSMSdss (copia de volúmenes o de data sets), y en los sistemas grandes con <em>FlashCopy</em> del almacenamiento para que el archivo esté cerrado solo un instante.</p>
+
+<!-- 13 -->
+<h2 id="fuera">13. COBOL fuera del mainframe</h2>
+<p>Las mismas tres organizaciones existen en Linux y Windows, pero el formato lo pone el compilador:</p>
+<ul>
+  <li><b>Micro Focus / Rocket:</b> un indexado son dos archivos, <code>.dat</code> con los registros e <code>.idx</code> con árboles B por cada llave (formato elegido con <code>IDXFORMAT</code>). Tiene su propio log de transacciones opcional (<em>Fileshare</em>).</li>
+  <li><b>GnuCOBOL:</b> según cómo se compile, guarda los indexados en Berkeley DB, VBISAM (un clon de C-ISAM) o LMDB. El programa no cambia; el archivo no es compatible entre ellos.</li>
+  <li>En los dos, un secuencial de línea (<code>LINE SEQUENTIAL</code>) es un archivo de texto con saltos de línea, y el texto es ASCII, no EBCDIC.</li>
+</ul>
+<p>Muchas migraciones mueven estos archivos a una base de datos relacional: cada copybook se vuelve una tabla, cada <code>COMP-3</code> un <code>NUMERIC</code>, y cada <code>OCCURS</code> (arreglos dentro del registro) una tabla hija o un campo JSON.</p>
+
+<!-- 14 -->
+<h2 id="resumen">14. Resumen y comparación</h2>
+<div class="table-wrap"><table>
+  <tr><th>Pieza</th><th>En una frase</th></tr>
+  <tr><td>Copybook</td><td>El esquema: posición, largo y tipo de cada campo; vive en el programa, no en el archivo.</td></tr>
+  <tr><td>Registro</td><td>Bytes de largo fijo sin separadores ni nulos; números decimales exactos (zoned, COMP-3, COMP).</td></tr>
+  <tr><td>Secuencial (QSAM)</td><td>Registros en bloques, de principio a fin; se actualiza escribiendo un maestro nuevo.</td></tr>
+  <tr><td>Relativo (RRDS)</td><td>Casillas numeradas: posición = (n − 1) × largo.</td></tr>
+  <tr><td>Indexado (KSDS)</td><td>CI ordenados por llave dentro de CA, con un índice B+ (sequence set + index set).</td></tr>
+  <tr><td>FREESPACE</td><td>Espacio libre reservado al cargar para insertar sin dividir.</td></tr>
+  <tr><td>CI / CA split</td><td>Cómo crece un KSDS cuando se llena un CI o una CA.</td></tr>
+  <tr><td>FILE STATUS</td><td>El código que deja cada operación; el programa debe revisarlo.</td></tr>
+  <tr><td>CICS</td><td>Da bloqueos por registro, transacciones y logs que el archivo no tiene.</td></tr>
+  <tr><td>REPRO / REORG</td><td>Descargar y volver a cargar: respaldo lógico y reorganización.</td></tr>
+</table></div>
+
+<h3>Frente a PostgreSQL y a un árbol LSM</h3>
+<div class="table-wrap"><table>
+  <tr><th>Idea</th><th>VSAM KSDS</th><th>PostgreSQL</th><th>LSM (Pebble, <code>et/store</code>)</th></tr>
+  <tr><td>Esquema</td><td>En el programa (copybook).</td><td>En el catálogo de la base.</td><td>Ninguno: claves y valores en bytes.</td></tr>
+  <tr><td>Orden físico</td><td>Registros ordenados por llave dentro del CI (índice agrupado).</td><td>Heap sin orden; el índice apunta a la fila.</td><td>Ordenado dentro de cada archivo; se mezcla al compactar.</td></tr>
+  <tr><td>Actualizar</td><td>En sitio, reescribiendo el CI.</td><td>Una versión nueva de la fila (MVCC).</td><td>Una entrada nueva; la vieja se borra al compactar.</td></tr>
+  <tr><td>Crecer</td><td>CI split y CA split.</td><td>Páginas nuevas al final.</td><td>Archivos nuevos y compactación.</td></tr>
+  <tr><td>Durabilidad</td><td>Fuera del archivo: respaldos, jobs repetibles, logs de CICS.</td><td>WAL con fsync al confirmar.</td><td>WAL con fsync al confirmar.</td></tr>
+  <tr><td>Concurrencia</td><td>Exclusiva en batch; bloqueo por registro en CICS.</td><td>MVCC: lectores y escritores no se bloquean.</td><td>Instantáneas: cada lectura ve un estado fijo.</td></tr>
+  <tr><td>Mantenimiento</td><td>REORG periódico.</td><td>VACUUM.</td><td>Compactación en segundo plano.</td></tr>
+</table></div>
+<p>El KSDS es, en el fondo, un <b>árbol B+ agrupado</b> de los años 70: muy rápido para leer por llave y recorrer en orden, con el costo de las divisiones al insertar y de dejar la seguridad de los datos a la operación y a CICS.</p>
+
+<footer>Documento de aprendizaje · carpeta <code>learn/</code> del repositorio <code>et</code> · noviembre de 2026.</footer>
+</main>
+
+<script>
+(function () {
+  const CAP = 4, CIS = 4, LOAD_CI = 3, LOAD_CIS = 3;
+  let cas, caOrder, logLines, hit, ciSplits, caSplits;
+  const $ = (id) => document.getElementById(id);
+
+  function log(m) { logLines.unshift(m); if (logLines.length > 60) logLines.pop(); }
+
+  function newCA() {
+    const ca = { id: cas.length + 1, cis: [], order: [] };
+    for (let i = 0; i < CIS; i++) ca.cis.push({ id: i + 1, recs: [], free: true });
+    cas.push(ca);
+    return ca;
+  }
+
+  function load(keys) {
+    cas = []; caOrder = []; hit = null;
+    keys = keys.slice().sort((a, b) => a - b);
+    let i = 0;
+    while (i < keys.length || caOrder.length === 0) {
+      const ca = newCA(); caOrder.push(ca);
+      for (let c = 0; c < LOAD_CIS && (i < keys.length || ca.order.length === 0); c++) {
+        const ci = ca.cis[c];
+        ci.free = false; ci.recs = keys.slice(i, i + LOAD_CI); i += LOAD_CI;
+        ca.order.push(c);
+      }
+    }
+  }
+
+  function reset() {
+    logLines = []; ciSplits = 0; caSplits = 0;
+    const keys = []; for (let k = 10; k <= 180; k += 10) keys.push(k);
+    load(keys);
+    log("KSDS cargado con FREESPACE(25 25): 3 registros por CI y un CI libre por CA.");
+    render();
+  }
+
+  function ciHigh(ca, pos) { const r = ca.cis[ca.order[pos]].recs; return r.length ? r[r.length - 1] : -Infinity; }
+  function caHigh(ca) { return ciHigh(ca, ca.order.length - 1); }
+
+  function locate(k) {
+    let cpos = caOrder.findIndex((ca) => caHigh(ca) >= k);
+    if (cpos < 0) cpos = caOrder.length - 1;
+    const ca = caOrder[cpos];
+    let pos = 0;
+    while (pos < ca.order.length - 1 && ciHigh(ca, pos) < k) pos++;
+    return { cpos, ca, pos, ci: ca.cis[ca.order[pos]] };
+  }
+
+  function name(ca, ci) { return `CA${ca.id}·CI${ci.id}`; }
+
+  function write(k) {
+    let at = locate(k);
+    if (at.ci.recs.includes(k)) { log(`WRITE ${k} → FILE STATUS 22 (llave duplicada)`); hit = at.ci; return; }
+    if (at.ci.recs.length < CAP) {
+      at.ci.recs.push(k); at.ci.recs.sort((a, b) => a - b); hit = at.ci;
+      log(`WRITE ${k} → ${name(at.ca, at.ci)} tenía espacio: se reescribe 1 CI. STATUS 00`);
+      return;
+    }
+    let freeIdx = at.ca.cis.findIndex((c) => c.free);
+    if (freeIdx < 0) {
+      caSplit(at);
+      at = locate(k);
+      freeIdx = at.ca.cis.findIndex((c) => c.free);
+    }
+    const all = at.ci.recs.concat([k]).sort((a, b) => a - b);
+    const half = Math.ceil(all.length / 2);
+    const target = at.ca.cis[freeIdx];
+    at.ci.recs = all.slice(0, half);
+    target.free = false; target.recs = all.slice(half);
+    at.ca.order.splice(at.pos + 1, 0, freeIdx);
+    ciSplits++; hit = all.indexOf(k) < half ? at.ci : target;
+    log(`WRITE ${k} → ${name(at.ca, at.ci)} lleno: CI SPLIT, la mitad de arriba (${target.recs.join(", ")}) pasa a ${name(at.ca, target)}; sequence set actualizado. STATUS 00`);
+  }
+
+  function caSplit(at) {
+    const old = at.ca, fresh = newCA();
+    const moveFrom = Math.floor(old.order.length / 2);
+    const moving = old.order.slice(moveFrom);
+    old.order = old.order.slice(0, moveFrom);
+    moving.forEach((idx, j) => {
+      fresh.cis[j].free = false; fresh.cis[j].recs = old.cis[idx].recs;
+      old.cis[idx].free = true; old.cis[idx].recs = [];
+      fresh.order.push(j);
+    });
+    caOrder.splice(at.cpos + 1, 0, fresh);
+    caSplits++;
+    log(`  CA${old.id} sin CI libres: CA SPLIT, ${moving.length} CI se mueven a la CA${fresh.id} nueva al final del archivo; index set actualizado`);
+  }
+
+  function read(k) {
+    const at = locate(k); hit = at.ci;
+    const found = at.ci.recs.includes(k);
+    log(`READ ${k}: index set → CA${at.ca.id}; sequence set → CI${at.ci.id}; 1 lectura de CI → ${found ? "STATUS 00" : "STATUS 23 (no existe)"}`);
+  }
+
+  function del(k) {
+    const at = locate(k); hit = at.ci;
+    const i = at.ci.recs.indexOf(k);
+    if (i < 0) { log(`DELETE ${k} → STATUS 23 (no existe)`); return; }
+    at.ci.recs.splice(i, 1);
+    let extra = "";
+    if (at.ci.recs.length === 0 && at.ca.order.length > 1) {
+      at.ca.order.splice(at.pos, 1); at.ci.free = true; hit = null;
+      extra = `; ${name(at.ca, at.ci)} quedó vacío y vuelve a estar libre`;
+    }
+    log(`DELETE ${k} → se corre el resto del CI a la izquierda${extra}. STATUS 00`);
+  }
+
+  function reorg() {
+    const keys = [];
+    caOrder.forEach((ca) => ca.order.forEach((i) => keys.push(...ca.cis[i].recs)));
+    const before = cas.length;
+    load(keys);
+    log(`REORG (REPRO): ${keys.length} registros descargados en orden y recargados con FREESPACE(25 25); ${before} CA → ${cas.length} CA, sin divisiones`);
+    ciSplits = 0; caSplits = 0;
+  }
+
+  function render() {
+    $("data").innerHTML = cas.map((ca) => {
+      const logical = caOrder.indexOf(ca) + 1;
+      return `<div class="ca"><div class="ca-name">CA${ca.id} · posición lógica ${logical}</div><div class="cis">` +
+        ca.cis.map((ci) => {
+          const pos = ca.order.indexOf(ca.cis.indexOf(ci));
+          const slots = [];
+          for (let s = 0; s < CAP; s++) {
+            const v = ci.recs[s];
+            slots.push(v === undefined ? `<span class="slot empty">·</span>` : `<span class="slot">${v}</span>`);
+          }
+          return `<div class="ci${ci.free ? " free" : ""}${ci === hit ? " hit" : ""}"><div class="ci-name">CI${ci.id}${ci.free ? " libre" : " · #" + (pos + 1)}</div><div class="slots">${ci.free ? "" : slots.join("")}</div></div>`;
+        }).join("") + `</div></div>`;
+    }).join("");
+    $("iset").innerHTML = caOrder.map((ca, i) =>
+      `<div><span>CA${ca.id}</span><span>≤ ${i === caOrder.length - 1 ? "HIGH" : caHigh(ca)}</span></div>`).join("");
+    $("sset").innerHTML = caOrder.map((ca, ci) => ca.order.map((idx, p) => {
+      const last = ci === caOrder.length - 1 && p === ca.order.length - 1;
+      return `<div><span>CA${ca.id}·CI${idx + 1}</span><span>≤ ${last ? "HIGH" : ciHigh(ca, p)}</span></div>`;
+    }).join("")).join("");
+    const used = cas.reduce((n, ca) => n + ca.cis.filter((c) => !c.free).length, 0);
+    const recs = cas.reduce((n, ca) => n + ca.cis.reduce((m, c) => m + c.recs.length, 0), 0);
+    $("stats").innerHTML = `${recs} registros · ${used} CI usados de ${cas.length * CIS}<br>CI splits: ${ciSplits} · CA splits: ${caSplits}`;
+    $("log").innerHTML = logLines.map((l) => `<div>${l}</div>`).join("");
+  }
+
+  function key() {
+    const k = parseInt($("k").value, 10);
+    if (!(k >= 1 && k <= 9999)) { log("Escribe una llave entre 1 y 9999."); render(); return null; }
+    return k;
+  }
+
+  $("bWrite").onclick = () => { const k = key(); if (k !== null) { write(k); $("k").value = k + 1; render(); } };
+  $("bRead").onclick = () => { const k = key(); if (k !== null) { read(k); render(); } };
+  $("bDelete").onclick = () => { const k = key(); if (k !== null) { del(k); render(); } };
+  $("bRandom").onclick = () => { for (let i = 0; i < 5; i++) write(1 + Math.floor(Math.random() * 200)); render(); };
+  $("bReorg").onclick = () => { reorg(); render(); };
+  $("bReset").onclick = reset;
+  $("k").addEventListener("keydown", (e) => { if (e.key === "Enter") $("bWrite").click(); });
+  reset();
+})();
+</script>
+</body>
+</html>

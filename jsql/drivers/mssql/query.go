@@ -336,6 +336,9 @@ func msCondValueType(getField func(string) (*jsql.Field, bool), val et.Value) et
 * @return string
 **/
 func msCondExpr(getField func(string) (*jsql.Field, bool), cond *et.Condition, alias string, refs bool) string {
+	if cond.Operator == et.SEARCH {
+		return msSearchExpr(getField, cond)
+	}
 	var fieldExpr string
 	tp := et.ANY
 	if fld, ok := getField(cond.Field.String()); ok && fld.Agg != nil {
@@ -697,8 +700,8 @@ func msOrderExpr(query *jsql.Query, name string) (string, bool) {
 	if !ok {
 		fld, ok = query.GetField(name)
 	}
-	if !ok {
-		return "", false
+	if !ok || fld.TypeColumn == jsql.SEARCH {
+		return "", false // a search has no relevance without text search
 	}
 	if fld.Agg != nil {
 		expr, _, ok := msAggExpr(fld)

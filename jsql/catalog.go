@@ -11,26 +11,27 @@ import (
 // here as a thin wrapper over its private implementation in the rest of the package,
 // so the whole surface of the package can be read in one place, grouped by functionality.
 //
-// Índice de la API pública (funciones y métodos por sección; cuenta del 2026-10-27):
+// Índice de la API pública (funciones y métodos por sección; cuenta del 2026-11-14):
 //
 //	#   Sección                         Cantidad
 //	1   Conexión y base de datos        18
-//	2   Definición de modelos (DDL)     24
+//	2   Definición de modelos (DDL)     29
 //	3   Relaciones y campos calculados  21
-//	4   Consultas                       48
-//	5   Condiciones                     18
+//	4   Consultas                       50
+//	5   Condiciones                     19
 //	6   Comandos                        18
 //	7   Triggers                        22
 //	8   Transacciones                   4
 //	9   Series                          10
 //	10  Auditoría                       3
-//	11  Utilidades                      22
-//	    Total                           208
+//	11  Utilidades                      30
+//	    Total                           224
 //
 // Exportan directo, fuera de este archivo, lo que es de su propio archivo: connection.go (los tipos de
 // conexión, ConnectionFromJson, TimeoutContext, Tester, TestConnection, Probe, RootAttribs, AttribsAtRoot), wrapper.go (Wrapper,
-// BindWrapper, ToJsMapWrapper), define.go (ToArrayAny), helpers.go (Bind), model.go (Replace) y
-// query.go (HasStar, StarFields, SourceHiddens).
+// BindWrapper, ToJsMapWrapper), define.go (ToArrayAny), helpers.go (Bind), model.go (Replace),
+// query.go (HasStar, StarFields, SourceHiddens) y search.go (TextSearch, DefSearch, Indexer, IndexApplier, LikeSearch,
+// INDEX_TRGM, FULL_TEXT, SEARCH_LANG_SIMPLE).
 
 // =============================================================================
 // 1. Conexión y base de datos (18)
@@ -192,7 +193,7 @@ func DropDB(db *DB, timeout ...time.Duration) error {
 }
 
 // =============================================================================
-// 2. Definición de modelos (DDL) (24)
+// 2. Definición de modelos (DDL) (29)
 // =============================================================================
 
 /**
@@ -223,6 +224,16 @@ func (s *DB) GetModel(schema, name string) (*Model, error) {
 }
 
 /**
+* ApplySearchIndexes: Creates the missing or invalid search and trgm indexes of the model and drops the orphan search
+* indexes jsql made, even with DB_SEARCH_INDEXES=off (for a maintenance window); in Postgres without blocking writes.
+* @param model *Model
+* @return error
+**/
+func (s *DB) ApplySearchIndexes(model *Model) error {
+	return s.applySearchIndexes(model)
+}
+
+/**
 * Define: Creates (or replaces) a model from a declarative definition.
 * @param define Define
 * @return *Model, error
@@ -245,6 +256,47 @@ func (s *Model) DefineSource() *Column {
 **/
 func (s *Model) DefineIdxField() *Index {
 	return s.defineIdxField()
+}
+
+/**
+* DefineSearch: Defines a text search of the model (spec §6.1): a virtual field name over fields (columns or attributes
+* of the SourceField) with the lang of its queries (ISO code or engine configuration; empty: DB_SEARCH_LANG or
+* spanish), indexed by the driver.
+* @param name, lang string, fields ...string
+* @return *TextSearch, error
+**/
+func (s *Model) DefineSearch(name, lang string, fields ...string) (*TextSearch, error) {
+	return s.defineSearch(name, lang, nil, fields...)
+}
+
+/**
+* DefineSearchLangs: Sets the langs a search of the model is indexed in besides its lang (one index per lang in
+* Postgres); lang, when it is not empty, also replaces the lang of the search.
+* @param name, lang string, langs ...string
+* @return *TextSearch, error
+**/
+func (s *Model) DefineSearchLangs(name, lang string, langs ...string) (*TextSearch, error) {
+	return s.defineSearchLangs(name, lang, langs...)
+}
+
+/**
+* DefineFullText: Defines the search of the model, full_text (the key "search" of a query), over fields; a full_text
+* already defined keeps its langs.
+* @param fields ...string
+* @return *TextSearch, error
+**/
+func (s *Model) DefineFullText(fields ...string) (*TextSearch, error) {
+	return s.defineFullText(fields...)
+}
+
+/**
+* DefineFullTextLang: Sets the lang of the full_text of the model (empty keeps it) and the langs it is indexed in
+* besides it; MSG_FULLTEXT_UNDEFINED without full_text.
+* @param lang string, langs ...string
+* @return *TextSearch, error
+**/
+func (s *Model) DefineFullTextLang(lang string, langs ...string) (*TextSearch, error) {
+	return s.defineSearchLangs(FULL_TEXT, lang, langs...)
 }
 
 /**
@@ -612,7 +664,7 @@ func (s *QueryDetail) GetQuery(item et.Json) *Query {
 }
 
 // =============================================================================
-// 4. Consultas (48)
+// 4. Consultas (50)
 // =============================================================================
 
 /**
@@ -902,6 +954,27 @@ func (s *Query) GetSelectField(name string) (*Field, bool) {
 }
 
 /**
+* Search: Searches text (web syntax) in the full_text of the model of the query, in lang (ISO code; empty: the lang
+* of the full_text), with AND over the whole where; without orders it sorts by relevance. Without full_text the query
+* fails with MSG_FULLTEXT_UNDEFINED.
+* @param text string, lang ...string
+* @return *Query
+**/
+func (s *Query) Search(text string, lang ...string) *Query {
+	return s.setSearch(text, lang...)
+}
+
+/**
+* SearchCondition: The search condition of the where over the search field name, whose text orders by relevance
+* ("orders": [{"fts": false}]); without it, ordering by a search is ignored.
+* @param name string
+* @return *et.Condition, bool
+**/
+func (s *Query) SearchCondition(name string) (*et.Condition, bool) {
+	return s.searchCondition(name)
+}
+
+/**
 * GroupBy: Adds one or more fields to the GROUP BY clause.
 * @param fields ...string
 * @return *Query
@@ -1043,7 +1116,7 @@ func (s *Query) Count() (int, error) {
 }
 
 // =============================================================================
-// 5. Condiciones (18)
+// 5. Condiciones (19)
 // =============================================================================
 
 /**
@@ -1134,6 +1207,16 @@ func MoreEq(field string, value interface{}) *et.Condition {
 **/
 func Like(field string, value interface{}) *et.Condition {
 	return like(field, value)
+}
+
+/**
+* Search: Returns a text search condition over a search of the model or a field: value has the web syntax (words,
+* "phrase", -excluded, or), or is {"text": "…", "lang": "en"} with the lang of the search.
+* @param field string, value interface{}
+* @return *et.Condition
+**/
+func Search(field string, value interface{}) *et.Condition {
+	return search(field, value)
 }
 
 /**
@@ -1731,7 +1814,7 @@ func (s *Model) AddAuditLog(userId string, action string) {
 }
 
 // =============================================================================
-// 11. Utilidades (23)
+// 11. Utilidades (30)
 // =============================================================================
 
 /**
@@ -1750,6 +1833,72 @@ func (s TypeColumn) Str() string {
 **/
 func DescribeRows(rows *sql.Rows, err error) ([]DescribedColumn, error) {
 	return describeRows(rows, err)
+}
+
+/**
+* SearchFields: The fields a search condition looks in: the ones of a search of the model, with the origin of field,
+* or field itself (search nil); the drivers use it to render the operator search.
+* @param getField func(string) (*Field, bool), field string
+* @return []*Field, *TextSearch, bool
+**/
+func SearchFields(getField func(string) (*Field, bool), field string) ([]*Field, *TextSearch, bool) {
+	return searchFields(getField, field)
+}
+
+/**
+* SearchLike: The LIKE form of a search text over exprs, for the engines without text search; like renders
+* "expr LIKE pattern" in the dialect of the driver, quoting the pattern.
+* @param exprs []string, text string, like func(expr, pattern string) string
+* @return string
+**/
+func SearchLike(exprs []string, text string, like func(expr, pattern string) string) string {
+	return searchLike(exprs, text, like)
+}
+
+/**
+* SearchByLike: Whether the driver of the model's DB renders searches with LIKE (LikeSearch: josefina).
+* @param model *Model
+* @return bool
+**/
+func SearchByLike(model *Model) bool {
+	return searchByLike(model)
+}
+
+/**
+* SearchLang: The lang of a search without lang: DB_SEARCH_LANG, or spanish.
+* @return string
+**/
+func SearchLang() string {
+	return searchDefaultLang()
+}
+
+/**
+* SearchConfig: The text search configuration of a lang (es → spanish, en → english, pt-BR → portuguese, spanish →
+* spanish; empty: SearchLang; unknown: simple); always a known one, safe in SQL.
+* @param lang string
+* @return string
+**/
+func SearchConfig(lang string) string {
+	return searchConfig(lang)
+}
+
+/**
+* SearchIndexConfigs: The configurations a search is indexed in: its lang and its langs, without repeating.
+* @param search *TextSearch
+* @return []string
+**/
+func SearchIndexConfigs(search *TextSearch) []string {
+	return search.indexConfigs()
+}
+
+/**
+* SearchOf: The text and the lang of a search condition (et.SearchValue): {"search": "text"} or {"search": {"text",
+* "lang"}}; false when its value is neither.
+* @param cond *et.Condition
+* @return string, string, bool (text, lang, ok)
+**/
+func SearchOf(cond *et.Condition) (string, string, bool) {
+	return et.SearchValue(cond.Value.Value)
 }
 
 /**

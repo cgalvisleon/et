@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -30,8 +31,8 @@ type CalcFunction func(tx *Tx, data et.Json)
 *
 * Concurrency (the one place for these rules):
 *   - DB.muSchemas guards DB.Schemas and DB.muAudit the DB audit log; getModel never creates a schema.
-*   - Model.muDef serializes definitions. Columns, Details, Masters, Rollups and the calcs are copy on
-*     write (defineColumn, defineDetail, defineMaster, defineRollup, defineCalc, defineCalcFunc, withEntry):
+*   - Model.muDef serializes definitions. Columns, Details, Masters, Rollups, Searches and the calcs are copy on
+*     write (defineColumn, defineDetail, defineMaster, defineRollup, defineSearch, defineCalc, defineCalcFunc, withEntry):
 *     a query that already read them keeps a consistent value, because the drivers read without locks.
 *   - Not copy on write yet (append in place, without muDef): Indexes, PrimaryKeys, Unique, Required,
 *     ForeignKeys, Hiddens, OmitUpdates, IdxField and the before/after trigger scripts. Define them before the
@@ -57,6 +58,7 @@ type Model struct {
 	Details       map[string]*Detail      `json:"details"`
 	Masters       map[string]*Master      `json:"master"`
 	Rollups       map[string]*Rollups     `json:"rollups"`
+	Searches      map[string]*TextSearch  `json:"searches"`
 	OmitUpdates   []string                `json:"omit_updates"`
 	IsStrict      bool                    `json:"is_strict"`
 	Version       int                     `json:"version"`
@@ -96,13 +98,26 @@ func (s *Model) UnmarshalJSON(data []byte) error {
 	type plain Model
 	value := struct {
 		*plain
-		Masters map[string]*Master `json:"masters"`
+		Masters       map[string]*Master `json:"masters"`
+		FullText      []string           `json:"full_text"`
+		FullTextLang  string             `json:"full_text_lang"`
+		FullTextLangs []string           `json:"full_text_langs"`
 	}{plain: (*plain)(s)}
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
 	if len(s.Masters) == 0 && len(value.Masters) > 0 {
 		s.Masters = value.Masters
+	}
+	if len(value.FullText) > 0 {
+		if _, ok := s.Searches[FULL_TEXT]; ok {
+			return fmt.Errorf(MSG_SEARCH_INVALID, FULL_TEXT, "it is defined twice, in full_text and in searches")
+		}
+		search := &TextSearch{Name: FULL_TEXT, Fields: value.FullText, Lang: value.FullTextLang, Langs: value.FullTextLangs}
+		if search.Lang == "" {
+			search.Lang = searchDefaultLang()
+		}
+		s.Searches = withEntry(s.Searches, FULL_TEXT, search)
 	}
 	return nil
 }
@@ -202,6 +217,7 @@ func (s *Model) Replace(other *Model) {
 	s.Details = other.Details
 	s.Masters = other.Masters
 	s.Rollups = other.Rollups
+	s.Searches = other.Searches
 	s.OmitUpdates = other.OmitUpdates
 	s.IsStrict = other.IsStrict
 	s.Version = other.Version
@@ -278,7 +294,13 @@ func (s *Model) toJson() et.Json {
 		columns = append(columns, column.ToJson())
 	}
 
-	return et.Json{
+	// The full_text goes by its own keys, as in a Define, and not in searches
+	searches := make(map[string]*TextSearch, len(s.Searches))
+	maps.Copy(searches, s.Searches)
+	fullText, hasFullText := searches[FULL_TEXT]
+	delete(searches, FULL_TEXT)
+
+	result := et.Json{
 		"kind":           s.Kind,
 		"id":             s.ID,
 		"schema":         s.Schema,
@@ -298,6 +320,7 @@ func (s *Model) toJson() et.Json {
 		"masters":        s.Masters,
 		"master":         s.Masters, // the key before "masters", still read by its consumers (core-studio)
 		"rollups":        s.Rollups,
+		"searches":       searches,
 		"is_strict":      s.IsStrict,
 		"version":        s.Version,
 		"before_inserts": s.BeforeInserts,
@@ -308,6 +331,12 @@ func (s *Model) toJson() et.Json {
 		"after_deletes":  s.AfterDeletes,
 		"audit_log":      s.AuditLog.All(),
 	}
+	if hasFullText {
+		result["full_text"] = fullText.Fields
+		result["full_text_lang"] = fullText.Lang
+		result["full_text_langs"] = fullText.Langs
+	}
+	return result
 }
 
 /**
@@ -399,6 +428,11 @@ func (s *Model) init() error {
 	s.setTable()
 	_, err := s.initModel(s.db)
 	if err != nil {
+		return err
+	}
+
+	// The searches and the indexes with a method also reach a table that already exists
+	if err := s.db.loadIndexes(s); err != nil {
 		return err
 	}
 
@@ -519,6 +553,14 @@ func (s *Model) getColumn(name string) (*Column, bool) {
 * @return *Field, bool
 **/
 func (s *Model) getField(name string) (*Field, bool) {
+	if _, ok := s.getSearch(name); ok {
+		return &Field{
+			Field:      et.Field{Name: name, As: name},
+			TypeColumn: SEARCH,
+			TypeData:   et.TEXT,
+			From:       getFrom(s, ""),
+		}, true
+	}
 	col, ok := s.GetColumn(name)
 	if !ok {
 		return nil, false

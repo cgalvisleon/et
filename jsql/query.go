@@ -155,6 +155,7 @@ type Query struct {
 	templateStar   bool                     `json:"-"` // it added "*" to bring the columns besides a relation
 	err            error                    `json:"-"`
 	unlimited      bool                     `json:"-"`
+	fullText       *et.Condition            `json:"-"` // the search of the key "search" (setSearch), joined with AND when it runs
 }
 
 /**
@@ -265,6 +266,15 @@ func (s *Query) getField(field string) (*Field, bool) {
 	from := s.getFrom(def.Source)
 	if from == nil {
 		return nil, false
+	}
+
+	if _, ok := from.Model.getSearch(def.Name); ok && def.Agg == nil {
+		return &Field{
+			Field:      def,
+			TypeColumn: SEARCH,
+			TypeData:   et.TEXT,
+			From:       from,
+		}, true
 	}
 
 	col, ok := from.Model.GetColumn(def.Name)
@@ -1362,6 +1372,14 @@ func (s *Query) loadQuery(query et.Json) (*Query, error) {
 			v := order.ValBool(true, k)
 			s.OrderBy(k, v)
 		}
+	}
+
+	if value, ok := query["search"]; ok && value != nil {
+		text, lang, ok := et.SearchValue(value)
+		if !ok {
+			return s, fmt.Errorf(MSG_SEARCH_INVALID, FULL_TEXT, `"search" takes a text or {"text", "lang"}`)
+		}
+		s.setSearch(text, lang)
 	}
 
 	return s, nil

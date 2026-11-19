@@ -448,7 +448,7 @@ go run ./cmd/create      # scaffolding: proyecto, microservicio, modelo, rpc
 go run ./cmd/apigateway  # API gateway (ettp)
 go run ./cmd/server      # nodo TCP (puerto 1377); ./cmd/client se conecta a él
 go run ./cmd/ia          # API HTTP de RAG (PORT, por defecto 3300)
-go run ./cmd/store       # ejemplo de store: Open, Put, Close
+go run ./cmd/store       # ejemplo de store: Put, Read, Insert, Update, Delete, Remove
 ```
 
 También `cmd/et`, `cmd/daemon`, `cmd/jsql`, `cmd/install`, `cmd/watcher`, `cmd/resilience`, `cmd/wsp` y `cmd/jwf`.

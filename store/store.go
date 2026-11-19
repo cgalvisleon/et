@@ -50,6 +50,7 @@ type Store struct {
 	segments atomic.Pointer[[]*segment] // copia al escribir: rotate publica una lista nueva
 	active   atomic.Pointer[segment]    // el segmento donde se reserva
 	closed   atomic.Bool
+	mapsMu   *readLock // Read lo toma para leer de los mapas; close lo toma para escribir antes de deshacerlos
 
 	// pubMu: qué escrituras terminaron.
 	pubMu     sync.Mutex
@@ -79,7 +80,8 @@ func open(dir string, opts options) (*Store, error) {
 		return nil, err
 	}
 
-	s := &Store{dir: dir, opts: opts, lock: lock, index: newIndex(), pending: newPending(), finished: map[uint64]bool{}}
+	s := &Store{dir: dir, opts: opts, lock: lock, index: newIndex(), pending: newPending(), mapsMu: newReadLock(),
+		finished: map[uint64]bool{}}
 	s.segments.Store(&[]*segment{})
 	s.pubCond = sync.NewCond(&s.pubMu)
 	if err := s.recover(); err != nil {
@@ -101,7 +103,7 @@ func (s *Store) recover() error {
 		return err
 	}
 	if len(nums) == 0 {
-		seg, err := createSegment(s.dir, 1)
+		seg, err := createSegment(s.dir, 1, s.opts.segmentSize)
 		if err != nil {
 			return err
 		}
@@ -110,7 +112,7 @@ func (s *Store) recover() error {
 	}
 
 	for i, num := range nums {
-		seg, err := openSegment(s.dir, num)
+		seg, err := openSegment(s.dir, num, s.opts.segmentSize)
 		if err != nil {
 			return err
 		}
@@ -160,14 +162,20 @@ func (s *Store) segmentAt(num int) *segment {
 }
 
 /**
-* load: Pasa al índice los registros de un segmento y fija su tamaño. Ver recover.
+* load: Pasa al índice los registros de un segmento y fija su tamaño. Cada registro debe tener el lsn siguiente al
+* último aplicado (lsn contiguos y crecientes en todo el log, ver doc.go, «Recuperación»): uno fuera de orden, aunque
+* su crc sea válido (por ejemplo, la copia de un registro viejo), cuenta como inválido. Ver recover.
 * @param seg *segment, last bool
 * @return error
 **/
 func (s *Store) load(seg *segment, last bool) error {
-	end, reached, err := seg.scan(func(rec scanned) {
+	end, reached, err := seg.scan(func(rec scanned) bool {
+		if rec.ref.lsn != s.lastLSN+1 {
+			return false
+		}
 		s.apply(rec)
-		s.lastLSN = max(s.lastLSN, rec.ref.lsn)
+		s.lastLSN = rec.ref.lsn
+		return true
 	})
 	if err != nil {
 		return err
@@ -277,7 +285,7 @@ func (s *Store) rotate() (*segment, error) {
 		return nil, err
 	}
 	s.fsyncs.Add(1)
-	seg, err := createSegment(s.dir, old.num+1)
+	seg, err := createSegment(s.dir, old.num+1, s.opts.segmentSize)
 	if err != nil {
 		return nil, err
 	}
@@ -426,6 +434,7 @@ func (s *Store) close() error {
 	}
 	s.closed.Store(true)
 
+	s.waitReaders()
 	err := s.active.Load().seal()
 	if err == nil {
 		// Lo publicado ya está en disco: quien espera su fsync no debe tocar un archivo cerrado.
@@ -434,6 +443,15 @@ func (s *Store) close() error {
 		s.syncMu.Unlock()
 	}
 	return errors.Join(err, s.closeFiles())
+}
+
+/**
+* waitReaders: Espera a que terminen las lecturas que están usando los mapas. Se llama con closed ya en true, así que
+* ninguna lectura nueva entra (ver readRef): tomar y soltar mapsMu para escribir basta.
+**/
+func (s *Store) waitReaders() {
+	s.mapsMu.lock()
+	s.mapsMu.unlock()
 }
 
 /**

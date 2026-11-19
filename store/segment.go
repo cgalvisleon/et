@@ -17,7 +17,8 @@ const segmentExt = ".seg"
 
 /**
 * segment: Un archivo del log. size es dónde va la próxima reserva (lo protege writeMu del Store); inflight cuenta las
-* escrituras reservadas que aún no terminan, para poder sellarlo.
+* escrituras reservadas que aún no terminan, para poder sellarlo. mapped es el archivo mapeado a memoria, de donde lee
+* Read (ver mapSegment); nil fuera de unix.
 **/
 type segment struct {
 	num      int
@@ -25,6 +26,7 @@ type segment struct {
 	file     *os.File
 	size     int64
 	inflight sync.WaitGroup
+	mapped   []byte
 }
 
 /**
@@ -37,11 +39,12 @@ func segmentName(num int) string {
 }
 
 /**
-* createSegment: Crea el archivo del segmento num en dir y hace durable su nombre (fsync del directorio).
-* @param dir string, num int
+* createSegment: Crea el archivo del segmento num en dir, hace durable su nombre (fsync del directorio) y lo mapea con
+* capacity bytes (el tamaño de segmento: hasta ahí crece).
+* @param dir string, num int, capacity int64
 * @return *segment, error
 **/
-func createSegment(dir string, num int) (*segment, error) {
+func createSegment(dir string, num int, capacity int64) (*segment, error) {
 	path := filepath.Join(dir, segmentName(num))
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o644)
 	if err != nil {
@@ -51,21 +54,45 @@ func createSegment(dir string, num int) (*segment, error) {
 		file.Close()
 		return nil, err
 	}
-	return &segment{num: num, path: path, file: file}, nil
+	return mapSegment(&segment{num: num, path: path, file: file}, capacity)
 }
 
 /**
-* openSegment: Abre un segmento existente para leerlo y, si es el activo, seguir escribiendo.
-* @param dir string, num int
+* openSegment: Abre un segmento existente para leerlo y, si es el activo, seguir escribiendo, y lo mapea con capacity
+* bytes o con su largo si es mayor.
+* @param dir string, num int, capacity int64
 * @return *segment, error
 **/
-func openSegment(dir string, num int) (*segment, error) {
+func openSegment(dir string, num int, capacity int64) (*segment, error) {
 	path := filepath.Join(dir, segmentName(num))
 	file, err := os.OpenFile(path, os.O_RDWR, 0o644)
 	if err != nil {
 		return nil, err
 	}
-	return &segment{num: num, path: path, file: file}, nil
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return nil, err
+	}
+	return mapSegment(&segment{num: num, path: path, file: file}, max(capacity, info.Size()))
+}
+
+/**
+* mapSegment: Mapea a memoria los primeros capacity bytes del archivo de seg, para que Read lea sin llamada al
+* sistema. Con pread, todas las lecturas en paralelo pasaban por el kernel y no escalaban con los núcleos (el 99% del
+* tiempo de BenchmarkRead con 10 núcleos era el pread; ver doc.go, «Lectura»). El mapa se hace una vez y no cambia
+* hasta cerrar: si se hiciera al sellar, habría que rehacerlo con lectores encima.
+* @param seg *segment, capacity int64
+* @return *segment, error (cierra el archivo si falla)
+**/
+func mapSegment(seg *segment, capacity int64) (*segment, error) {
+	mapped, err := mapFile(seg.file, capacity)
+	if err != nil {
+		seg.file.Close()
+		return nil, err
+	}
+	seg.mapped = mapped
+	return seg, nil
 }
 
 /**
@@ -120,7 +147,22 @@ func (s *segment) seal() error {
 }
 
 /**
-* readAt: Lee len(buf) bytes desde off (pread: no mueve la posición del archivo, así varios lectores van en paralelo).
+* view: Los size bytes desde off, como una vista del mapa (sin copiar ni llamar al sistema), si caben en él. Solo se
+* pide lo que ya está escrito: un registro al que apunta el índice (ver doc.go, «Lectura»).
+* @param off int64, size int
+* @return []byte, bool (false si no hay mapa o el rango se sale de él)
+**/
+func (s *segment) view(off int64, size int) ([]byte, bool) {
+	end := off + int64(size)
+	if off < 0 || end > int64(len(s.mapped)) {
+		return nil, false
+	}
+	return s.mapped[off:end:end], true
+}
+
+/**
+* readAt: Lee len(buf) bytes desde off (pread). Es el respaldo de view: fuera de unix, o para un registro más grande
+* que el tamaño de segmento, que no cabe en el mapa.
 * @param buf []byte, off int64
 * @return error
 **/
@@ -130,11 +172,13 @@ func (s *segment) readAt(buf []byte, off int64) error {
 }
 
 /**
-* close: Cierra el archivo.
+* close: Deshace el mapa y cierra el archivo. Ninguna lectura puede estar usando el mapa (ver readers.go).
 * @return error
 **/
 func (s *segment) close() error {
-	return s.file.Close()
+	err := unmapFile(s.mapped)
+	s.mapped = nil
+	return errors.Join(err, s.file.Close())
 }
 
 /**
@@ -147,28 +191,34 @@ type scanned struct {
 
 /**
 * scan: Recorre el segmento desde el principio y llama a fn con cada registro válido, en orden. Se detiene en el
-* primer registro inválido o incompleto y devuelve dónde termina la parte válida; reached indica si se llegó al final
-* del archivo sin encontrar nada inválido.
-* @param fn func(rec scanned)
+* primer registro inválido o incompleto, o en el que fn rechaza (devuelve false), y devuelve dónde termina la parte
+* válida; reached indica si se llegó al final del archivo sin encontrar nada inválido. Un registro que no cabe en lo
+* que queda del archivo es incompleto y se detecta antes de asignar memoria: un dataLen con basura (hasta 1 GiB) no
+* debe hacer que Open pida esa memoria por un archivo de pocos bytes. El búfer se reutiliza entre registros: recuperar
+* no asigna uno por registro.
+* @param fn func(rec scanned) bool (false: el registro no vale y el recorrido termina ahí)
 * @return int64 (fin de la parte válida), bool (reached), error (solo de lectura del disco)
 **/
-func (s *segment) scan(fn func(rec scanned)) (int64, bool, error) {
+func (s *segment) scan(fn func(rec scanned) bool) (int64, bool, error) {
+	info, err := s.file.Stat()
+	if err != nil {
+		return 0, false, err
+	}
 	if _, err := s.file.Seek(0, io.SeekStart); err != nil {
 		return 0, false, err
 	}
 	r := bufio.NewReaderSize(s.file, 1<<20)
 	var off int64
-	head := make([]byte, headerSize)
+	buf := make([]byte, headerSize, 4096)
 	for {
-		if _, err := io.ReadFull(r, head); err != nil {
+		if _, err := io.ReadFull(r, buf[:headerSize]); err != nil {
 			return off, errors.Is(err, io.EOF), readError(err)
 		}
-		h := decodeHeader(head)
-		if h.idLen == 0 || h.dataLen > maxDataLen {
+		h := decodeHeader(buf)
+		if h.idLen == 0 || h.dataLen > maxDataLen || off+int64(h.size()) > info.Size() {
 			return off, false, nil
 		}
-		buf := make([]byte, h.size())
-		copy(buf, head)
+		buf = grow(buf, h.size())
 		if _, err := io.ReadFull(r, buf[headerSize:]); err != nil {
 			return off, false, readError(err)
 		}
@@ -176,9 +226,25 @@ func (s *segment) scan(fn func(rec scanned)) (int64, bool, error) {
 			return off, false, nil
 		}
 		at := ref{segment: s.num, offset: off, size: uint32(h.size()), deleted: h.kind == kindDelete, lsn: h.lsn}
-		fn(scanned{id: recordID(h, buf), ref: at})
+		if !fn(scanned{id: recordID(h, buf), ref: at}) {
+			return off, false, nil
+		}
 		off += int64(h.size())
 	}
+}
+
+/**
+* grow: buf con largo size, conservando sus primeros bytes; solo asigna si no cabe en su capacidad.
+* @param buf []byte, size int
+* @return []byte
+**/
+func grow(buf []byte, size int) []byte {
+	if size <= cap(buf) {
+		return buf[:size]
+	}
+	bigger := make([]byte, size)
+	copy(bigger, buf)
+	return bigger
 }
 
 /**

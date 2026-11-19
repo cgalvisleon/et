@@ -1,10 +1,6 @@
 package store
 
-import (
-	"sync"
-
-	"github.com/google/btree"
-)
+import "github.com/google/btree"
 
 // btreeDegree: cuántos elementos agrupa cada nodo del árbol B. 32 es el valor habitual: nodos que caben en pocas
 // líneas de caché y un árbol de pocos niveles (10 M de ids son unos 5).
@@ -45,7 +41,7 @@ func lessEntry(a, b entry) bool {
 * que existen (sin lápidas).
 **/
 type index struct {
-	mu   sync.RWMutex
+	mu   *readLock // repartido: los lectores no comparten un contador (ver readlock.go)
 	tree *btree.BTreeG[entry]
 	live int
 }
@@ -55,7 +51,7 @@ type index struct {
 * @return *index
 **/
 func newIndex() *index {
-	return &index{tree: btree.NewG(btreeDegree, lessEntry)}
+	return &index{mu: newReadLock(), tree: btree.NewG(btreeDegree, lessEntry)}
 }
 
 /**
@@ -63,14 +59,39 @@ func newIndex() *index {
 * @param id string, r ref
 **/
 func (x *index) set(id string, r ref) {
-	x.mu.Lock()
-	defer x.mu.Unlock()
+	x.mu.lock()
+	defer x.mu.unlock()
+	x.setLocked(id, r)
+}
+
+/**
+* setLocked: set, con el lock ya tomado.
+* @param id string, r ref
+**/
+func (x *index) setLocked(id string, r ref) {
 	old, had := x.tree.Get(entry{id: id})
 	if had && old.ref.lsn > r.lsn {
 		return
 	}
 	x.tree.ReplaceOrInsert(entry{id: id, ref: r})
 	x.live += liveDelta(had && !old.ref.deleted, !r.deleted)
+}
+
+/**
+* finish: Una escritura de id terminó: guarda su ref si se escribió y, si era la última pendiente del id, quita la
+* lápida que quede (ver doc.go, «Borrados»). Las dos cosas en un solo lock, porque el lock de escritura del índice
+* toma todas sus franjas (ver readlock.go).
+* @param id string, r ref, written bool (si WriteAt terminó bien), last bool (si no quedan escrituras pendientes de id)
+**/
+func (x *index) finish(id string, r ref, written, last bool) {
+	x.mu.lock()
+	defer x.mu.unlock()
+	if written {
+		x.setLocked(id, r)
+	}
+	if last {
+		x.dropTombstoneLocked(id)
+	}
 }
 
 /**
@@ -93,20 +114,18 @@ func liveDelta(before, after bool) int {
 * @param id string
 **/
 func (x *index) remove(id string) {
-	x.mu.Lock()
-	defer x.mu.Unlock()
+	x.mu.lock()
+	defer x.mu.unlock()
 	if old, had := x.tree.Delete(entry{id: id}); had && !old.ref.deleted {
 		x.live--
 	}
 }
 
 /**
-* dropTombstone: Quita id si lo que hay es una lápida (cuando ya no quedan escrituras pendientes de ese id).
+* dropTombstoneLocked: Quita id si lo que hay es una lápida. Con el lock ya tomado.
 * @param id string
 **/
-func (x *index) dropTombstone(id string) {
-	x.mu.Lock()
-	defer x.mu.Unlock()
+func (x *index) dropTombstoneLocked(id string) {
 	if e, ok := x.tree.Get(entry{id: id}); ok && e.ref.deleted {
 		x.tree.Delete(e)
 	}
@@ -131,8 +150,7 @@ func (x *index) get(id string) (ref, bool) {
 * @return ref, bool
 **/
 func (x *index) lookup(id string) (ref, bool) {
-	x.mu.RLock()
-	defer x.mu.RUnlock()
+	defer x.mu.runlock(x.mu.rlock())
 	e, ok := x.tree.Get(entry{id: id})
 	return e.ref, ok
 }
@@ -142,8 +160,7 @@ func (x *index) lookup(id string) (ref, bool) {
 * @return int
 **/
 func (x *index) count() int {
-	x.mu.RLock()
-	defer x.mu.RUnlock()
+	defer x.mu.runlock(x.mu.rlock())
 	return x.live
 }
 
@@ -152,7 +169,6 @@ func (x *index) count() int {
 * @return int
 **/
 func (x *index) entries() int {
-	x.mu.RLock()
-	defer x.mu.RUnlock()
+	defer x.mu.runlock(x.mu.rlock())
 	return x.tree.Len()
 }

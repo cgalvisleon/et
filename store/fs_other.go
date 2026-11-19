@@ -21,3 +21,21 @@ func syncDir(dir string) error {
 func lockDir(path string) (*os.File, error) {
 	return os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
 }
+
+/**
+* mapFile: Fuera de unix no se mapea: Read lee con pread (ReadAt).
+* @param f *os.File, size int64
+* @return []byte, error
+**/
+func mapFile(f *os.File, size int64) ([]byte, error) {
+	return nil, nil
+}
+
+/**
+* unmapFile: Fuera de unix no hay mapa que deshacer.
+* @param data []byte
+* @return error
+**/
+func unmapFile(data []byte) error {
+	return nil
+}

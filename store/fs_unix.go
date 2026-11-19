@@ -49,3 +49,30 @@ func lockDir(path string) (*os.File, error) {
 	}
 	return f, nil
 }
+
+/**
+* mapFile: Mapea a memoria, solo para leer, los primeros size bytes de f (MAP_SHARED: lo que se escribe en el archivo
+* con WriteAt se ve en el mapa, porque los dos son la misma página de la caché del sistema). size puede pasar del
+* largo actual del archivo: el archivo crece después, y solo se lee lo que ya está escrito (leer más allá del final
+* del archivo daría SIGBUS).
+* @param f *os.File, size int64
+* @return []byte, error
+**/
+func mapFile(f *os.File, size int64) ([]byte, error) {
+	if size <= 0 {
+		return nil, nil
+	}
+	return syscall.Mmap(int(f.Fd()), 0, int(size), syscall.PROT_READ, syscall.MAP_SHARED)
+}
+
+/**
+* unmapFile: Deshace el mapa de mapFile. Nadie puede estar leyéndolo (ver readers.go).
+* @param data []byte
+* @return error
+**/
+func unmapFile(data []byte) error {
+	if data == nil {
+		return nil
+	}
+	return syscall.Munmap(data)
+}

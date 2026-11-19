@@ -38,22 +38,51 @@ func (s *Store) read(id string) ([]byte, bool, error) {
 * @return []byte (el valor), error
 **/
 func (s *Store) readRef(id string, r ref) ([]byte, error) {
+	// closed se mira con mapsMu tomado: close lo marca antes de esperar a los lectores (waitReaders), así que o esta
+	// lectura ve closed, o close espera a que termine antes de deshacer los mapas.
+	defer s.mapsMu.runlock(s.mapsMu.rlock())
+	if s.closed.Load() {
+		return nil, errors.New(MSG_CLOSED)
+	}
+
 	seg := s.segmentAt(r.segment)
 	if seg == nil {
 		return nil, fmt.Errorf(MSG_BAD_REF, id, r.segment)
 	}
+	rec, mapped, err := readRecord(seg, r)
+	if err != nil {
+		return nil, err
+	}
+	h := decodeHeader(rec)
+	if h.size() != len(rec) || !validRecord(h, rec) || h.lsn != r.lsn || !sameID(h, rec, id) {
+		return nil, fmt.Errorf(MSG_CORRUPTED_READ, id, seg.path, r.offset)
+	}
+	data := recordData(h, rec)
+	if mapped {
+		// La vista es del mapa, que se deshace al cerrar: el llamador recibe su propia copia.
+		data = append(make([]byte, 0, len(data)), data...)
+	}
+	return data, nil
+}
+
+/**
+* readRecord: Los bytes del registro de r: una vista del mapa del segmento si cabe en él (sin llamada al sistema), o
+* un pread si no (fuera de unix, o un registro más grande que el tamaño de segmento).
+* @param seg *segment, r ref
+* @return []byte, bool (si es una vista del mapa), error
+**/
+func readRecord(seg *segment, r ref) ([]byte, bool, error) {
+	if rec, ok := seg.view(r.offset, int(r.size)); ok {
+		return rec, true, nil
+	}
 	buf := make([]byte, r.size)
 	if err := seg.readAt(buf, r.offset); err != nil {
 		if errors.Is(err, os.ErrClosed) {
-			return nil, errors.New(MSG_CLOSED)
+			return nil, false, errors.New(MSG_CLOSED)
 		}
-		return nil, err
+		return nil, false, err
 	}
-	h := decodeHeader(buf)
-	if h.size() != len(buf) || !validRecord(h, buf) || h.lsn != r.lsn || !sameID(h, buf, id) {
-		return nil, fmt.Errorf(MSG_CORRUPTED_READ, id, seg.path, r.offset)
-	}
-	return recordData(h, buf), nil
+	return buf, false, nil
 }
 
 /**

@@ -396,3 +396,46 @@ func TestOpenCreatesMissingDirs(t *testing.T) {
 		t.Fatal("abrió un store debajo de un archivo")
 	}
 }
+
+// TestRecoverRejectsOutOfOrderLSN: una copia de un registro viejo (crc válido, lsn que no es el siguiente) no entra al
+// índice. Anexada al segmento activo, se corta ahí y el id no revive; anexada a un segmento sellado, Open falla.
+func TestRecoverRejectsOutOfOrderLSN(t *testing.T) {
+	dir := t.TempDir()
+	s := openTest(t, dir, testOptions(256, false))
+	s.Put("viejo", []byte("v1"))
+	r, _ := s.index.get("viejo")
+	for i := range 20 {
+		s.Put(fmt.Sprintf("k%02d", i), bytes.Repeat([]byte("v"), 40))
+	}
+	s.Remove("viejo")
+	s.Close()
+
+	first := filepath.Join(dir, segmentName(1))
+	data, _ := os.ReadFile(first)
+	old := data[r.offset : r.offset+int64(r.size)] // el Put de «viejo», lsn 1
+
+	path := lastSegment(t, dir)
+	info, _ := os.Stat(path)
+	f, _ := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o644)
+	f.Write(old)
+	f.Close()
+	s = openTest(t, dir, testOptions(256, false))
+	if _, ok := value(t, s, "viejo"); ok {
+		t.Fatal("la copia del registro viejo revivió el id")
+	}
+	if after, _ := os.Stat(path); after.Size() != info.Size() {
+		t.Fatalf("no se cortó la copia: %d, antes %d", after.Size(), info.Size())
+	}
+	if s.lastLSN != 22 {
+		t.Fatalf("lsn al reabrir: %d", s.lastLSN)
+	}
+	s.Close()
+
+	f, _ = os.OpenFile(first, os.O_WRONLY|os.O_APPEND, 0o644)
+	f.Write(old)
+	f.Close()
+	if s, err := open(dir, testOptions(256, false)); err == nil {
+		s.Close()
+		t.Fatal("abrió un segmento sellado con un lsn fuera de orden")
+	}
+}

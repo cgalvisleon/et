@@ -73,17 +73,15 @@ func (p *pending) state(id string, x *index) (current, bool) {
 func (p *pending) finish(id string, r ref, written bool, x *index) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if written {
-		x.set(id, r)
-	}
 	op := p.ops[id]
 	op.count--
-	if op.count > 0 {
+	last := op.count == 0
+	if last {
+		delete(p.ops, id)
+	} else {
 		p.ops[id] = op
-		return
 	}
-	delete(p.ops, id)
-	x.dropTombstone(id)
+	x.finish(id, r, written, last)
 }
 
 /**

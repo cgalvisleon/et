@@ -11,4 +11,6 @@ const (
 	MSG_CORRUPTED       = "store: corrupted record in sealed segment %s at offset %d"
 	MSG_BAD_SEGMENT     = "store: invalid segment file name %s"
 	MSG_SEGMENT_MISSING = "store: segment %d is missing (found %d after %d)"
+	MSG_CORRUPTED_READ  = "store: corrupted record for id %q in %s at offset %d"
+	MSG_BAD_REF         = "store: index points id %q to unknown segment %d"
 )

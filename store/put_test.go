@@ -27,22 +27,14 @@ func openTest(t *testing.T, dir string, opts options) *Store {
 	return s
 }
 
-// value lee del disco el último valor de id, por el índice (Read todavía no existe: esto lo reemplaza en las pruebas).
+// value lee el último valor de id con Read y falla la prueba si hay error.
 func value(t *testing.T, s *Store, id string) ([]byte, bool) {
 	t.Helper()
-	r, ok := s.index.get(id)
-	if !ok {
-		return nil, false
-	}
-	buf := make([]byte, r.size)
-	if _, err := s.segments[r.segment-1].file.ReadAt(buf, r.offset); err != nil {
+	data, ok, err := s.Read(id)
+	if err != nil {
 		t.Fatal(err)
 	}
-	h := decodeHeader(buf)
-	if !validRecord(h, buf) || string(buf[headerSize:headerSize+h.idLen]) != id {
-		t.Fatalf("registro inválido para %q", id)
-	}
-	return buf[headerSize+h.idLen:], true
+	return data, ok
 }
 
 // lastSegment: la ruta del último segmento de dir.
@@ -60,7 +52,7 @@ func TestPutAndReopen(t *testing.T) {
 	dir := t.TempDir()
 	s := openTest(t, dir, testOptions(1<<20, false))
 	for i := range 1000 {
-		if err := s.Put(fmt.Sprintf("k%04d", i), []byte(fmt.Sprintf("v%d", i))); err != nil {
+		if err := s.Put(fmt.Sprintf("k%04d", i), fmt.Appendf(nil, "v%d", i)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -118,7 +110,7 @@ func TestPutConcurrent(t *testing.T) {
 					t.Error(err)
 					return
 				}
-				if err := s.Put("común", []byte(fmt.Sprintf("g%02d-%03d", g, i))); err != nil {
+				if err := s.Put("común", fmt.Appendf(nil, "g%02d-%03d", g, i)); err != nil {
 					t.Error(err)
 					return
 				}
@@ -129,8 +121,8 @@ func TestPutConcurrent(t *testing.T) {
 	if n := s.index.count(); n != 16*500+1 {
 		t.Fatalf("ids: %d", n)
 	}
-	if len(s.segments) < 2 {
-		t.Fatalf("no rotó: %d segmentos", len(s.segments))
+	if len(s.segmentList()) < 2 {
+		t.Fatalf("no rotó: %d segmentos", len(s.segmentList()))
 	}
 	want, _ := value(t, s, "común")
 	if err := s.Close(); err != nil {
@@ -372,4 +364,35 @@ func BenchmarkPutSync(b *testing.B) {
 		}
 	})
 	b.ReportMetric(float64(s.fsyncs.Load())/float64(b.N), "fsyncs/op")
+}
+
+// TestOpenCreatesMissingDirs: Open crea los directorios que faltan en la ruta, del más alto al más bajo (cada uno con
+// el fsync de su padre), y abre igual un directorio que ya existe.
+func TestOpenCreatesMissingDirs(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "a", "b", "store")
+	missing, err := missingDirs(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{filepath.Join(root, "a"), filepath.Join(root, "a", "b"), dir}
+	if strings.Join(missing, "|") != strings.Join(want, "|") {
+		t.Fatalf("faltan %v, quería %v", missing, want)
+	}
+
+	s := openTest(t, dir, testOptions(1<<20, false))
+	if err := s.Put("k", []byte("v")); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	if missing, _ := missingDirs(dir); len(missing) != 0 {
+		t.Fatalf("siguen faltando: %v", missing)
+	}
+	openTest(t, dir, testOptions(1<<20, false)).Close()
+
+	file := filepath.Join(root, "archivo")
+	os.WriteFile(file, []byte("x"), 0o644)
+	if _, err := open(filepath.Join(file, "store"), testOptions(1<<20, false)); err == nil {
+		t.Fatal("abrió un store debajo de un archivo")
+	}
 }

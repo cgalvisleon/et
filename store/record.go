@@ -12,7 +12,8 @@ import (
 type kind byte
 
 const (
-	kindPut kind = 1 // guarda data para id
+	kindPut    kind = 1 // guarda data para id
+	kindDelete kind = 2 // borra id; su data va vacía (dataLen 0)
 )
 
 const (
@@ -43,20 +44,42 @@ func (h header) size() int {
 }
 
 /**
-* checkPut: Valida id y data antes de escribir.
-* @param id string, data []byte
+* checkID: Valida un id: de 1 a maxIDLen bytes.
+* @param id string
 * @return error
 **/
-func checkPut(id string, data []byte) error {
+func checkID(id string) error {
 	switch {
 	case id == "":
 		return errors.New(MSG_ID_REQUIRED)
 	case len(id) > maxIDLen:
 		return fmt.Errorf(MSG_ID_TOO_LONG, maxIDLen)
-	case len(data) > maxDataLen:
+	}
+	return nil
+}
+
+/**
+* checkPut: Valida id y data antes de escribir.
+* @param id string, data []byte
+* @return error
+**/
+func checkPut(id string, data []byte) error {
+	if err := checkID(id); err != nil {
+		return err
+	}
+	if len(data) > maxDataLen {
 		return fmt.Errorf(MSG_DATA_TOO_LONG, maxDataLen)
 	}
 	return nil
+}
+
+/**
+* recordSize: Largo en disco del registro de id y data, sin armarlo (para reservar antes de asignar memoria).
+* @param id string, data []byte
+* @return int
+**/
+func recordSize(id string, data []byte) int {
+	return headerSize + len(id) + len(data)
 }
 
 /**
@@ -65,7 +88,7 @@ func checkPut(id string, data []byte) error {
 * @return []byte
 **/
 func encodeRecord(k kind, id string, data []byte) []byte {
-	buf := make([]byte, headerSize+len(id)+len(data))
+	buf := make([]byte, recordSize(id, data))
 	buf[12] = byte(k)
 	binary.BigEndian.PutUint16(buf[13:15], uint16(len(id)))
 	binary.BigEndian.PutUint32(buf[15:19], uint32(len(data)))
@@ -99,10 +122,33 @@ func decodeHeader(buf []byte) header {
 }
 
 /**
-* validRecord: El registro completo pasa la verificación: crc correcto, lsn distinto de cero y tipo conocido.
+* validRecord: El registro completo pasa la verificación: crc correcto, lsn distinto de cero y tipo conocido (un
+* borrado, además, sin data).
 * @param h header, buf []byte (el registro completo)
 * @return bool
 **/
 func validRecord(h header, buf []byte) bool {
-	return h.lsn != 0 && h.kind == kindPut && crc32.Checksum(buf[4:], castagnoli) == h.crc
+	knownKind := h.kind == kindPut || (h.kind == kindDelete && h.dataLen == 0)
+	return h.lsn != 0 && knownKind && crc32.Checksum(buf[4:], castagnoli) == h.crc
+}
+
+/**
+* recordID: El id guardado en un registro completo.
+* @param h header, buf []byte
+* @return string
+**/
+func recordID(h header, buf []byte) string {
+	return string(buf[headerSize : headerSize+h.idLen])
+}
+
+/**
+* recordData: La data de un registro completo, como una vista de buf sin copiar (con la capacidad recortada, para que
+* un append de quien la recibe no pise nada).
+* @param h header, buf []byte
+* @return []byte
+**/
+func recordData(h header, buf []byte) []byte {
+	start := headerSize + h.idLen
+	end := start + h.dataLen
+	return buf[start:end:end]
 }

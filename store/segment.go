@@ -120,6 +120,16 @@ func (s *segment) seal() error {
 }
 
 /**
+* readAt: Lee len(buf) bytes desde off (pread: no mueve la posición del archivo, así varios lectores van en paralelo).
+* @param buf []byte, off int64
+* @return error
+**/
+func (s *segment) readAt(buf []byte, off int64) error {
+	_, err := s.file.ReadAt(buf, off)
+	return err
+}
+
+/**
 * close: Cierra el archivo.
 * @return error
 **/
@@ -165,8 +175,8 @@ func (s *segment) scan(fn func(rec scanned)) (int64, bool, error) {
 		if !validRecord(h, buf) {
 			return off, false, nil
 		}
-		id := string(buf[headerSize : headerSize+h.idLen])
-		fn(scanned{id: id, ref: ref{segment: s.num, offset: off, size: uint32(h.size()), lsn: h.lsn}})
+		at := ref{segment: s.num, offset: off, size: uint32(h.size()), deleted: h.kind == kindDelete, lsn: h.lsn}
+		fn(scanned{id: recordID(h, buf), ref: at})
 		off += int64(h.size())
 	}
 }

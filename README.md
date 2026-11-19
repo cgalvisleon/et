@@ -466,7 +466,7 @@ go run ./cmd/create      # scaffolding: project, microservice, model, rpc
 go run ./cmd/apigateway  # API gateway (ettp)
 go run ./cmd/server      # TCP node (port 1377); ./cmd/client connects to it
 go run ./cmd/ia          # RAG HTTP API (PORT, default 3300)
-go run ./cmd/store       # store example: Put one by one and from goroutines, reopen, list segments (-dir to keep the data)
+go run ./cmd/store       # store example: Open, Put, Close
 ```
 
 Also `cmd/et`, `cmd/daemon`, `cmd/jsql`, `cmd/install`, `cmd/watcher`, `cmd/resilience`, `cmd/wsp` and `cmd/jwf`.

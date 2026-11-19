@@ -51,4 +51,7 @@
 //
 // Un archivo LOCK dentro del directorio, con un bloqueo exclusivo (flock), impide que dos procesos abran el mismo
 // store para escribir.
+//
+// Open crea el directorio si no existe, con los intermedios que falten, y hace fsync del padre de cada uno que crea:
+// el nombre de un directorio nuevo, como el de un archivo nuevo, solo es durable tras el fsync de su padre.
 package store

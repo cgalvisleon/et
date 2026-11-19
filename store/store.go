@@ -36,19 +36,20 @@ func envOptions() options {
 * Store: Un store abierto. Los campos de cada bloque los protege el lock de su comentario (orden en doc.go).
 **/
 type Store struct {
-	dir   string
-	opts  options
-	lock  *os.File
-	index *index
+	dir     string
+	opts    options
+	lock    *os.File
+	index   *index
+	pending *pending // escrituras reservadas sin terminar, por id (ver pending.go)
 
 	// writeMu: reservas (lsn y lugar en el log), rotación y cierre.
-	writeMu  sync.Mutex
-	lastLSN  uint64
-	segments []*segment
-	closed   bool
+	writeMu sync.Mutex
+	lastLSN uint64
 
-	// active: el segmento donde se reserva; se cambia bajo writeMu y se lee sin él al confirmar.
-	active atomic.Pointer[segment]
+	// segments, active y closed se cambian bajo writeMu y se leen sin él: Read no toma writeMu.
+	segments atomic.Pointer[[]*segment] // copia al escribir: rotate publica una lista nueva
+	active   atomic.Pointer[segment]    // el segmento donde se reserva
+	closed   atomic.Bool
 
 	// pubMu: qué escrituras terminaron.
 	pubMu     sync.Mutex
@@ -70,10 +71,7 @@ type Store struct {
 * @return *Store, error
 **/
 func open(dir string, opts options) (*Store, error) {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, err
-	}
-	if err := syncDir(filepath.Dir(dir)); err != nil {
+	if err := mkdirAll(dir); err != nil {
 		return nil, err
 	}
 	lock, err := lockDir(filepath.Join(dir, lockName))
@@ -81,7 +79,8 @@ func open(dir string, opts options) (*Store, error) {
 		return nil, err
 	}
 
-	s := &Store{dir: dir, opts: opts, lock: lock, index: newIndex(), finished: map[uint64]bool{}}
+	s := &Store{dir: dir, opts: opts, lock: lock, index: newIndex(), pending: newPending(), finished: map[uint64]bool{}}
+	s.segments.Store(&[]*segment{})
 	s.pubCond = sync.NewCond(&s.pubMu)
 	if err := s.recover(); err != nil {
 		s.closeFiles()
@@ -106,8 +105,7 @@ func (s *Store) recover() error {
 		if err != nil {
 			return err
 		}
-		s.segments = []*segment{seg}
-		s.active.Store(seg)
+		s.addSegment(seg)
 		return nil
 	}
 
@@ -116,14 +114,49 @@ func (s *Store) recover() error {
 		if err != nil {
 			return err
 		}
-		s.segments = append(s.segments, seg)
+		s.addSegment(seg)
 		last := i == len(nums)-1
 		if err := s.load(seg, last); err != nil {
 			return err
 		}
 	}
-	s.active.Store(s.segments[len(s.segments)-1])
 	return nil
+}
+
+/**
+* addSegment: Agrega seg al final de la lista y lo deja como activo. Con writeMu tomado (o al abrir): la lista se
+* copia, así quien lee la anterior sin lock nunca la ve cambiar.
+* @param seg *segment
+**/
+func (s *Store) addSegment(seg *segment) {
+	list := append(append([]*segment{}, s.segmentList()...), seg)
+	s.segments.Store(&list)
+	s.active.Store(seg)
+}
+
+/**
+* segmentList: Los segmentos abiertos, en orden. La lista no cambia: rotate publica otra.
+* @return []*segment
+**/
+func (s *Store) segmentList() []*segment {
+	return *s.segments.Load()
+}
+
+/**
+* segmentAt: El segmento número num, o nil si no está. Los números son contiguos desde el primero de la lista.
+* @param num int
+* @return *segment
+**/
+func (s *Store) segmentAt(num int) *segment {
+	list := s.segmentList()
+	if len(list) == 0 {
+		return nil
+	}
+	i := num - list[0].num
+	if i < 0 || i >= len(list) {
+		return nil
+	}
+	return list[i]
 }
 
 /**
@@ -133,7 +166,7 @@ func (s *Store) recover() error {
 **/
 func (s *Store) load(seg *segment, last bool) error {
 	end, reached, err := seg.scan(func(rec scanned) {
-		s.index.set(rec.id, rec.ref)
+		s.apply(rec)
 		s.lastLSN = max(s.lastLSN, rec.ref.lsn)
 	})
 	if err != nil {
@@ -152,30 +185,71 @@ func (s *Store) load(seg *segment, last bool) error {
 }
 
 /**
+* apply: Pasa al índice un registro leído al recuperar. Los segmentos se recorren en orden de lsn (ver doc.go), así
+* que un borrado simplemente quita el id: no hace falta guardar la lápida.
+* @param rec scanned
+**/
+func (s *Store) apply(rec scanned) {
+	if rec.ref.deleted {
+		s.index.remove(rec.id)
+		return
+	}
+	s.index.set(rec.id, rec.ref)
+}
+
+/**
 * reservation: El lugar de una escritura en el log.
 **/
 type reservation struct {
 	lsn    uint64
 	seg    *segment
 	offset int64
+	size   int
 }
 
 /**
-* reserve: Toma el siguiente lsn y el lugar para un registro de size bytes; si no cabe en el segmento activo, lo
-* sella y crea el siguiente. Un registro más grande que un segmento va solo en uno nuevo.
-* @param size int
-* @return reservation, error
+* condition: Decide, con el estado lógico del id, si una escritura condicional se hace. nil = escritura ciega.
 **/
-func (s *Store) reserve(size int) (reservation, error) {
+type condition func(cur current) bool
+
+/**
+* reserve: Bajo writeMu, mira la condición contra el estado lógico de id y, si se cumple, toma el siguiente lsn y el
+* lugar para un registro de size bytes y anota la escritura como pendiente de id. Comprobar y reservar en el mismo
+* lock es lo que hace atómicas a Insert, Update y Delete frente a cualquier otro escritor del mismo id.
+* @param id string, deleted bool (es un borrado), size int, cond condition (nil: siempre)
+* @return reservation, bool (si la condición se cumplió), error
+**/
+func (s *Store) reserve(id string, deleted bool, size int, cond condition) (reservation, bool, error) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 
-	if s.closed {
-		return reservation{}, errors.New(MSG_CLOSED)
+	if s.closed.Load() {
+		return reservation{}, false, errors.New(MSG_CLOSED)
 	}
 	if err := s.failed(); err != nil {
-		return reservation{}, err
+		return reservation{}, false, err
 	}
+	if cond != nil {
+		cur, _ := s.pending.state(id, s.index)
+		if !cond(cur) {
+			return reservation{}, false, nil
+		}
+	}
+	r, err := s.allocate(size)
+	if err != nil {
+		return reservation{}, false, err
+	}
+	s.pending.add(id, r.lsn, deleted)
+	return r, true, nil
+}
+
+/**
+* allocate: Toma el siguiente lsn y size bytes del segmento activo; si no caben, lo sella y crea el siguiente. Un
+* registro más grande que un segmento va solo en uno nuevo. Con writeMu tomado.
+* @param size int
+* @return reservation, error
+**/
+func (s *Store) allocate(size int) (reservation, error) {
 	active := s.active.Load()
 	if active.size > 0 && active.size+int64(size) > s.opts.segmentSize {
 		var err error
@@ -186,7 +260,7 @@ func (s *Store) reserve(size int) (reservation, error) {
 	}
 
 	s.lastLSN++
-	r := reservation{lsn: s.lastLSN, seg: active, offset: active.size}
+	r := reservation{lsn: s.lastLSN, seg: active, offset: active.size, size: size}
 	active.size += int64(size)
 	active.inflight.Add(1)
 	return r, nil
@@ -207,42 +281,40 @@ func (s *Store) rotate() (*segment, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.segments = append(s.segments, seg)
-	s.active.Store(seg)
+	s.addSegment(seg)
 	return seg, nil
 }
 
 /**
-* put: Guarda data para id sin mirar lo que había: reserva, escribe, publica y, con sync, espera el fsync.
-* @param id string, data []byte
-* @return error
+* write: El camino de toda escritura: reserva (si cond se cumple), arma el registro, lo escribe en su lugar, pasa la
+* ref al índice, publica y, con sync, espera el fsync. El registro se arma después de reservar: una condicional que
+* no se cumple no asigna memoria.
+* @param id string, k kind, data []byte, cond condition (nil: escritura ciega)
+* @return bool (si escribió), error
 **/
-func (s *Store) put(id string, data []byte) error {
-	if err := checkPut(id, data); err != nil {
-		return err
+func (s *Store) write(id string, k kind, data []byte, cond condition) (bool, error) {
+	deleted := k == kindDelete
+	r, ok, err := s.reserve(id, deleted, recordSize(id, data), cond)
+	if err != nil || !ok {
+		return false, err
 	}
-	buf := encodeRecord(kindPut, id, data)
-	r, err := s.reserve(len(buf))
-	if err != nil {
-		return err
-	}
+	buf := encodeRecord(k, id, data)
 	sealRecord(buf, r.lsn)
 
 	err = r.seg.writeAt(buf, r.offset)
-	if err == nil {
-		s.index.set(id, ref{segment: r.seg.num, offset: r.offset, size: uint32(len(buf)), lsn: r.lsn})
-	}
+	at := ref{segment: r.seg.num, offset: r.offset, size: uint32(r.size), deleted: deleted, lsn: r.lsn}
+	s.pending.finish(id, at, err == nil, s.index)
 	r.seg.inflight.Done()
 	if err != nil {
 		s.fail(err)
-		return err
+		return false, err
 	}
 
 	s.publish(r.lsn)
 	if s.opts.sync {
-		return s.waitDurable(r.lsn)
+		return true, s.waitDurable(r.lsn)
 	}
-	return nil
+	return true, nil
 }
 
 /**
@@ -349,10 +421,10 @@ func (s *Store) failed() error {
 func (s *Store) close() error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
-	if s.closed {
+	if s.closed.Load() {
 		return nil
 	}
-	s.closed = true
+	s.closed.Store(true)
 
 	err := s.active.Load().seal()
 	if err == nil {
@@ -370,7 +442,7 @@ func (s *Store) close() error {
 **/
 func (s *Store) closeFiles() error {
 	var errs []error
-	for _, seg := range s.segments {
+	for _, seg := range s.segmentList() {
 		errs = append(errs, seg.close())
 	}
 	if s.lock != nil {

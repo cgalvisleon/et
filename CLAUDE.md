@@ -25,7 +25,7 @@ GOWORK=off go build ./...            # if go.work lists a missing module, build 
 
 go run ./cmd/server   # TCP echo node (port 1377, -port flag); cmd/client is its stdin console
 go run ./cmd/jsql     # jsql driver demo
-go run ./cmd/store    # store example: Put one by one and from goroutines, reopen, list segments (temp dir unless -dir; -n, -w, -size)
+go run ./cmd/store    # store example: Open, Put, Close (temp dir)
 go run ./cmd/ia       # RAG HTTP API (PORT, default 3300)
 go run ./cmd/create   # scaffolds Project/Microservice/Modelo/Rpc (`create modelo` prints a manual wiring step: file.MakeFile never overwrites)
 docker compose up -d  # optional local Ollama on 11434
@@ -111,11 +111,11 @@ _, _ = model.Insert(et.Json{...}).ExecTx(nil)
 
 The old package (`FileStore`, `Insert`/`Update`/`Get`…, compaction, snapshot, replication) was deleted by the user on 2026-11-19 and is being rewritten by phases following F-23's decisions (`../features/data/et-store-motor.json`): API `Open`, `Put`, `Remove`, `Read`, `Insert`, `Update`, `Delete` (`Put`/`Remove` blind, the rest conditional), ordered in-memory index (`github.com/google/btree`), several segment files of `RELSEG_SIZE` MB (128), concurrent writers (P-4), atomic batches, snapshots later. **Done so far: `Open`, `Close`, `Put`.** The package doc (`store/doc.go`) is the reference for the format, the design and the invariants; keep it up to date with every change. Comments in Spanish.
 
-- Layout: a directory with `0000000001.seg`, `0000000002.seg`… and `LOCK` (exclusive non-blocking `flock`; second opener, even in the same process, gets `MSG_LOCKED`; no lock outside unix). Record `[crc:4][lsn:8][kind:1][idLen:2][dataLen:4][id][data]`, big-endian, CRC-32C over everything after the crc; id 1–65.535 bytes, data up to 1 GiB.
+- Layout: `Open` creates the directory and any missing parent (`mkdirAll` in `dir.go`, fsync of the parent of each one it creates); a directory with `0000000001.seg`, `0000000002.seg`… and `LOCK` (exclusive non-blocking `flock`; second opener, even in the same process, gets `MSG_LOCKED`; no lock outside unix). Record `[crc:4][lsn:8][kind:1][idLen:2][dataLen:4][id][data]`, big-endian, CRC-32C over everything after the crc; id 1–65.535 bytes, data up to 1 GiB.
 - Write path (`store.go`): `reserve` (under `writeMu`: next lsn, segment and offset; rotates when the active segment would pass `RELSEG_SIZE`) → `WriteAt` outside the lock, in parallel → index update (the greater lsn wins) → `publish` (`published` advances only over contiguous lsn) → with `SYNC_ON_WRITE` (true), `waitDurable`: one fsync confirms everything published while waiting for `syncMu` (group commit; 64 writers × 20 puts → ~50 fsync). A segment is sealed (in-flight writes done + fsync) before the next one is created, and every new file is followed by an fsync of its directory.
 - **Invariants**: lock order `writeMu` → `pubMu`, `writeMu` → `syncMu`, `syncMu` → `pubMu`, never the reverse; the index lock is a leaf. `durable ≤ published`. A failed write leaves a hole `published` cannot skip: the store refuses writes until reopened.
 - Recovery (`Open`): every segment is scanned verifying the crc; the last one is cut at its first invalid record or hole (unconfirmed writes); an invalid record in a sealed segment is real corruption and `Open` fails.
-- Tests: `store/put_test.go` (`go test ./store -race`): reopen, replace, 16 concurrent writers with rotation, record larger than a segment, torn tail, hole, corrupt sealed segment, lock, rejects, group commit, failure; `BenchmarkPut`, `BenchmarkPutSync`. `go run ./cmd/store` is the usage example (Open, Put, Close, reopen); `test/storebench` was removed by the user.
+- Tests: `store/put_test.go` (`go test ./store -race`): reopen, replace, 16 concurrent writers with rotation, record larger than a segment, torn tail, hole, corrupt sealed segment, lock, rejects, group commit, failure; `BenchmarkPut`, `BenchmarkPutSync`. `go run ./cmd/store` is the usage example (Open, Put, Close); `test/storebench` was removed by the user.
 
 ### `jwf/` (workflows and scripts)
 

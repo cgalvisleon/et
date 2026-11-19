@@ -618,3 +618,88 @@ func TestOpenConfig(t *testing.T) {
 		t.Fatal("ringLen")
 	}
 }
+
+// stallSmgr detiene la primera escritura del bloque stall hasta que se cierre release, y avisa en started cuando
+// empieza: así una escritura queda en curso (copiada, todavía sin llegar al disco) el tiempo que la prueba quiera.
+type stallSmgr struct {
+	smgr.Manager
+	stall   page.BlockNumber
+	once    sync.Once
+	started chan struct{}
+	release chan struct{}
+}
+
+func (m *stallSmgr) Write(file smgr.FileNo, fork smgr.Fork, block page.BlockNumber, buf page.Page) error {
+	if block == m.stall {
+		m.once.Do(func() {
+			close(m.started)
+			<-m.release
+		})
+	}
+	return m.Manager.Write(file, fork, block, buf)
+}
+
+// TestFlushAllWaitsWriteInFlight: una página sucia que otro (el reemplazo, el escritor de fondo) está escribiendo
+// cuando empieza un checkpoint tiene que estar en el disco cuando FlushAll vuelve. Si se marcara limpia al empezar
+// a escribirla, FlushAll no la vería, el fsync del checkpoint (SyncAll) llegaría antes que la escritura y, tras un
+// corte, la página volvería a su versión vieja aunque el punto de rehacer ya pasó su cambio.
+func TestFlushAllWaitsWriteInFlight(t *testing.T) {
+	fs := crashfs.New()
+	e := newEnv(t, fs, "/db", 8)
+	p := e.openPool(t, 8, -1) // sin escritor de fondo: nadie más toca p.smgr
+	e.pool = p
+	blk := e.newBlock(t, 1, 777)
+	stall := &stallSmgr{Manager: e.smgr, stall: blk, started: make(chan struct{}), release: make(chan struct{})}
+	p.smgr = stall
+
+	// Una escritura del bloque queda en curso, como la de un reemplazo o del escritor de fondo.
+	d := &p.descs[mustLookup(t, p, tag1(blk))]
+	if !p.pinIfTag(d, tag1(blk)) {
+		t.Fatal("pinIfTag")
+	}
+	writing := make(chan error, 1)
+	go func() {
+		writing <- p.flush(d)
+		p.unpin(d)
+	}()
+	<-stall.started
+
+	// El checkpoint: FlushAll y fsync. La escritura en curso se suelta si FlushAll se queda esperándola.
+	flushed := make(chan error, 1)
+	go func() { flushed <- p.FlushAll(nil) }()
+	select {
+	case err := <-flushed:
+		mustNil(t, err)
+		mustNil(t, e.smgr.SyncAll())
+		close(stall.release)
+	case <-time.After(100 * time.Millisecond):
+		close(stall.release)
+		mustNil(t, <-flushed)
+		mustNil(t, e.smgr.SyncAll())
+	}
+	mustNil(t, <-writing)
+
+	fs.Crash(crashfs.LoseUnsynced, 1)
+	after := newEnv(t, fs, "/db", 8)
+	if got := marker(t, after.pool, tag1(blk)); got != 777 {
+		t.Fatalf("tras el checkpoint y el corte, el bloque %d tiene %d: la escritura en curso no entró en el checkpoint", blk, got)
+	}
+}
+
+// mustLookup devuelve el búfer que tiene tag en la caché.
+func mustLookup(t *testing.T, p *pool, tag Tag) int32 {
+	t.Helper()
+	id, ok := p.lookup(tag)
+	if !ok {
+		t.Fatalf("%s no está en la caché", tag)
+	}
+	return id
+}
+
+// mustNil falla la prueba si err no es nil.
+func mustNil(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
+	}
+}

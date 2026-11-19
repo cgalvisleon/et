@@ -13,10 +13,11 @@ import (
 )
 
 /**
-* flush escribe el búfer al disco si está sucio (FlushBuffer): bajo d.io, lo marca limpio, copia la página bajo
-* bloqueo compartido, espera al WAL durable hasta el pd_lsn de la copia, calcula la suma sobre la copia y la escribe.
-* Se marca limpio antes de copiar para no perder una marca de visibilidad puesta durante la copia: esa vuelve a
-* ensuciarlo. Un fallo deja la caché inutilizable.
+* flush escribe el búfer al disco si está sucio (FlushBuffer): bajo d.io, borra justDirtied, copia la página bajo
+* bloqueo compartido, espera al WAL durable hasta el pd_lsn de la copia, calcula la suma sobre la copia, la escribe
+* y recién entonces lo marca limpio, salvo que alguien lo haya vuelto a ensuciar mientras tanto (justDirtied: un
+* cambio o una marca de visibilidad posterior a la copia). Mientras dura la escritura el búfer sigue sucio: así
+* FlushAll lo anota y espera a que termine (d.io) en vez de saltearlo. Un fallo deja la caché inutilizable.
 * @param d *desc: fijado por quien llama
 * @return error
 **/
@@ -32,8 +33,7 @@ func (p *pool) flush(d *desc) error {
 		d.mu.Unlock()
 		return nil
 	}
-	d.dirty = false
-	p.dirty.Add(-1)
+	d.justDirtied = false
 	tag := d.tag
 	d.mu.Unlock()
 
@@ -47,6 +47,13 @@ func (p *pool) flush(d *desc) error {
 		return p.fail(err)
 	}
 	p.written.Add(1)
+
+	d.mu.Lock()
+	if !d.justDirtied {
+		d.dirty = false
+		p.dirty.Add(-1)
+	}
+	d.mu.Unlock()
 	return nil
 }
 
@@ -92,7 +99,9 @@ type pending struct {
 
 /**
 * FlushAll escribe todas las páginas que estaban sucias al llamarlo (BufferSync), en orden de archivo y bloque, y
-* llama a pace tras cada una. Una que ya cambió de página o se limpió mientras tanto ya llegó al disco.
+* llama a pace tras cada una. Una que ya cambió de página o se limpió mientras tanto ya llegó al disco; una que otro
+* está escribiendo sigue sucia hasta que la escritura termina, y flush la espera (d.io). Al volver, todas están en el
+* disco (falta el fsync de smgr).
 * @param pace func(written, total int): reparte el vaciado en el tiempo; nil = sin pausa
 * @return error: el fallo de escritura (la caché queda inutilizable)
 **/
@@ -176,7 +185,7 @@ func (p *pool) DropFile(file smgr.FileNo) {
 			if d.dirty {
 				p.dirty.Add(-1)
 			}
-			d.tag, d.state, d.usage, d.dirty = Tag{}, stateEmpty, 0, false
+			d.tag, d.state, d.usage, d.dirty, d.justDirtied = Tag{}, stateEmpty, 0, false, false
 		}
 		d.mu.Unlock()
 		d.io.Unlock()

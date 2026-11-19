@@ -19,7 +19,8 @@
 //	 20   8 pd_prune_xid        el xid más viejo que una limpieza podría quitar de la página, 0 si ninguno
 //	 28   4 reservado           en cero
 //
-// pd_prune_xid es de 64 bits (en PostgreSQL 32), como todos los xid del motor.
+// pd_prune_xid es de 64 bits (en PostgreSQL 32), como todos los xid del motor. En una página de desborde
+// pd_prune_xid es el xid de la versión dueña.
 //
 // # Punteros a ítems (ItemIDSize = 4 bytes)
 //

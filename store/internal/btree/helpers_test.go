@@ -12,6 +12,7 @@ import (
 
 	"github.com/cgalvisleon/et/store/internal/buffer"
 	"github.com/cgalvisleon/et/store/internal/fsm"
+	"github.com/cgalvisleon/et/store/internal/overflow"
 	"github.com/cgalvisleon/et/store/internal/page"
 	"github.com/cgalvisleon/et/store/internal/smgr"
 	"github.com/cgalvisleon/et/store/internal/vfs"
@@ -54,6 +55,7 @@ type env struct {
 	log  *wal.WAL
 	pool buffer.Pool
 	free *fsm.Manager
+	ov   *overflow.Manager
 }
 
 /**
@@ -74,6 +76,18 @@ func openEnv(t testing.TB, fsys vfs.FS, redo wal.Position, buffers int) *env {
 **/
 func openEnvWith(t testing.TB, fsys vfs.FS, redo wal.Position, buffers int, bgDelay time.Duration) *env {
 	t.Helper()
+	return openEnvHook(t, fsys, redo, buffers, bgDelay, nil)
+}
+
+/**
+* openEnvHook es openEnvWith con una función que ve además cada registro rehecho (las pruebas rearman con ella los
+* estados de las transacciones desde sus KindCommit).
+* @param t testing.TB, fsys vfs.FS, redo wal.Position, buffers int, bgDelay time.Duration
+* @param hook func(rec *wal.Record): o nil
+* @return *env
+**/
+func openEnvHook(t testing.TB, fsys vfs.FS, redo wal.Position, buffers int, bgDelay time.Duration, hook func(rec *wal.Record)) *env {
+	t.Helper()
 	sm, err := smgr.Open(fsys, testDir, 16)
 	if err != nil {
 		t.Fatal(err)
@@ -84,6 +98,9 @@ func openEnvWith(t testing.TB, fsys vfs.FS, redo wal.Position, buffers int, bgDe
 		t.Fatal(err)
 	}
 	log, _, err := wal.Open(fsys, testDir, testOptions, redo, func(rec *wal.Record) error {
+		if hook != nil {
+			hook(rec)
+		}
 		return redoAny(pool, sm, rec)
 	})
 	if err != nil {
@@ -95,11 +112,12 @@ func openEnvWith(t testing.TB, fsys vfs.FS, redo wal.Position, buffers int, bgDe
 		log.Close()
 		sm.Close()
 	})
-	return &env{fs: fsys, sm: sm, log: log, pool: pool, free: fsm.New(pool, sm, log)}
+	free := fsm.New(pool, sm, log)
+	return &env{fs: fsys, sm: sm, log: log, pool: pool, free: free, ov: overflow.New(pool, free, log)}
 }
 
 /**
-* redoAny manda cada registro a su dueño: btree (16–31) o fsm (40–47).
+* redoAny manda cada registro a su dueño: btree (16–31), overflow (32) o fsm (40–47); los del motor se saltan.
 * @param pool buffer.Pool, sm smgr.Manager, rec *wal.Record
 * @return error
 **/
@@ -107,8 +125,12 @@ func redoAny(pool buffer.Pool, sm smgr.Manager, rec *wal.Record) error {
 	switch {
 	case rec.Kind >= wal.KindLeafWrite && rec.Kind <= wal.KindSetHints:
 		return Redo(pool, sm, rec)
+	case rec.Kind == wal.KindOverflowWrite:
+		return overflow.Redo(pool, sm, rec)
 	case rec.Kind >= wal.KindFreePush && rec.Kind <= wal.KindVMClear:
 		return fsm.Redo(pool, sm, rec)
+	case rec.Kind == wal.KindCommit || rec.Kind == wal.KindAbort:
+		return nil
 	}
 	return fmt.Errorf("unexpected kind %d", rec.Kind)
 }

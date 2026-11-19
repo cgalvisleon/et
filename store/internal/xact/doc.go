@@ -36,7 +36,9 @@
 // registro en el WAL no se pega a un xid que se vuelve a asignar. Un fallo de escritura o fsync deja todo en error.
 //
 // Transactions (NewManager) guarda solo las transacciones en curso: cada una con un canal que End cierra (Wait) y el
-// Xmin de su primer snapshot (OldestActive).
+// Xmin de su primer snapshot (OldestActive). Los snapshots de solo lectura (TakeSnapshot, sin xid) se registran
+// aparte, por número, hasta ReleaseSnapshot: su Xmin también cuenta en OldestActive, así la limpieza no quita lo que
+// pueden ver.
 //
 // # Visibilidad
 //

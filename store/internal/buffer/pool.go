@@ -330,14 +330,18 @@ func (p *pool) unpin(d *desc) {
 }
 
 /**
-* setDirty marca el búfer sucio (si sigue teniendo su página).
+* setDirty marca el búfer sucio (si sigue teniendo su página) y anota justDirtied: una escritura en curso no lo
+* marcará limpio al terminar, porque su copia puede no tener este cambio.
 * @param d *desc: fijado
 **/
 func (p *pool) setDirty(d *desc) {
 	d.mu.Lock()
-	if d.state == stateValid && !d.dirty {
-		d.dirty = true
-		p.dirty.Add(1)
+	if d.state == stateValid {
+		if !d.dirty {
+			d.dirty = true
+			p.dirty.Add(1)
+		}
+		d.justDirtied = true
 	}
 	d.mu.Unlock()
 }

@@ -52,7 +52,11 @@ const (
 	EntryXidCommitted EntryFlags = 1 << 2 // marca: su transacción confirmó y el WAL es durable hasta la confirmación
 	EntryXidAborted   EntryFlags = 1 << 3 // marca: su transacción abortó
 	EntryFrozen       EntryFlags = 1 << 4 // marca: visible para todos (fase 2)
+	EntryFreeing      EntryFlags = 1 << 5 // versión muerta cuya cadena de desborde se está liberando (pregunta 58)
 )
+
+// hintFlags son las marcas de visibilidad que pone una lectura (KindSetHints).
+const hintFlags = EntryXidCommitted | EntryXidAborted
 
 // PivotHasLSN: el pivote lleva el lsn.
 const PivotHasLSN uint16 = 1 << 0
@@ -97,8 +101,9 @@ type Write struct {
 	// Check decide con la hoja bloqueada (nil = Apply siempre: Put, Remove). No puede bloquear ni esperar.
 	Check func(latest Latest) Action
 
-	// UnderLock se pasa a wal.Log.Reserve (los contadores de una operación suelta).
-	UnderLock func(lsn page.LSN)
+	// UnderLock corre bajo el writeMu del WAL al reservar el registro de la hoja, con su lsn y cómo cambia la
+	// cantidad de ids vivos (+1, -1 o 0): así el motor suma los contadores de Count en orden de lsn.
+	UnderLock func(lsn page.LSN, countDelta int)
 }
 
 // Result es lo que hizo una escritura.
@@ -116,6 +121,28 @@ type WaitError struct {
 
 func (e *WaitError) Error() string {
 	return fmt.Sprintf("btree: id is being written by transaction %d", e.XID)
+}
+
+// VacuumOptions es lo que necesita la limpieza de un store.
+type VacuumOptions struct {
+	// Horizon es el xid vivo más viejo (xact.Manager.OldestActive): toda transacción con xid menor terminó y todo
+	// snapshot abierto ve sus versiones confirmadas.
+	Horizon page.XID
+
+	// XID es el de la limpieza: va en sus registros del WAL (0 vale).
+	XID page.XID
+
+	// Free libera lo que queda de la cadena de desborde de una versión muerta, de la última página a la primera
+	// (overflow.Manager.FreeTail con v.Overflow y v.XID). Tiene que poder repetirse tras un corte. nil = las versiones
+	// con desborde no se tocan.
+	Free func(v Version) error
+}
+
+// VacuumStats es lo que hizo una limpieza.
+type VacuumStats struct {
+	Leaves  int // hojas recorridas
+	Removed int // versiones quitadas de las hojas
+	Freed   int // cadenas de desborde liberadas
 }
 
 // Tree es el árbol de un store.

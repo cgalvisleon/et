@@ -96,6 +96,12 @@ type Manager interface {
 	// Snapshot toma la foto actual para la transacción own (0 = solo lectura).
 	Snapshot(own page.XID) Snapshot
 
+	// TakeSnapshot toma una foto de solo lectura y la registra en el horizonte hasta ReleaseSnapshot(id).
+	TakeSnapshot() (Snapshot, uint64)
+
+	// ReleaseSnapshot quita del horizonte el snapshot de solo lectura id.
+	ReleaseSnapshot(id uint64)
+
 	// Wait espera a que xid termine, hasta timeout (ErrWaitTimeout). Nunca se llama con una página bloqueada.
 	Wait(xid page.XID, timeout time.Duration) error
 

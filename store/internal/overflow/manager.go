@@ -17,6 +17,10 @@ type Manager struct {
 	pool buffer.Pool
 	free fsm.FreeList
 	log  wal.Log
+
+	// afterFree, si no es nil, corre en FreeTail tras liberar cada página con cuántas lleva; si devuelve error,
+	// FreeTail para ahí (solo para las pruebas: simula un corte a mitad de la liberación).
+	afterFree func(freed int) error
 }
 
 // Comprobación en compilación de que Manager cumple la interfaz.
@@ -87,7 +91,7 @@ func (m *Manager) writePage(file smgr.FileNo, xid page.XID, next page.BlockNumbe
 		return 0, err
 	}
 	p := h.Page()
-	applyErr := apply(p, next, uint32(seq), chunk)
+	applyErr := apply(p, xid, next, uint32(seq), chunk)
 	if applyErr == nil {
 		p.SetLSN(res.LSN())
 		h.MarkDirty(res.LSN())
@@ -133,6 +137,97 @@ func (m *Manager) Free(file smgr.FileNo, ref Ref, xid page.XID) error {
 		return err
 	}
 	return m.freeFrom(file, ref.First, 0, ref.Len, xid)
+}
+
+/**
+* FreeTail libera lo que queda de la cadena ref de una versión de owner, de la última página a la primera (pregunta
+* 58). Primero junta las páginas que siguen siendo de la versión —de desborde, en su posición, con owner en
+* pd_prune_xid y con su trozo— desde la primera, y después las libera desde el final. Un corte a mitad deja liberada
+* una cola y entero el resto: llamarla otra vez libera solo lo que falta, y si no queda nada no hace nada. Una página
+* ya liberada (o reutilizada por otra versión, que tiene otro xid) no es de owner, así que nunca se libera dos veces.
+* @param file smgr.FileNo, ref Ref
+* @param owner page.XID: el xid de la versión (distinto de 0), xid page.XID: el de la limpieza
+* @return int: páginas liberadas, error: ErrBadRef, ErrBadChain (una página de la versión dañada) o el error de fsm,
+* de la caché o del WAL
+**/
+func (m *Manager) FreeTail(file smgr.FileNo, ref Ref, owner, xid page.XID) (int, error) {
+	if err := checkRef(file, ref); err != nil {
+		return 0, err
+	}
+	if owner == 0 {
+		return 0, fmt.Errorf(MSG_BAD_REF, ErrBadRef, file, ref.First, ref.Len)
+	}
+	blocks, err := m.ownedPrefix(file, ref, owner)
+	if err != nil {
+		return 0, err
+	}
+	freed := 0
+	for i := len(blocks) - 1; i >= 0; i-- {
+		if err := m.free.Free(file, blocks[i], xid); err != nil {
+			return freed, err
+		}
+		freed++
+		if m.afterFree != nil {
+			if err := m.afterFree(freed); err != nil {
+				return freed, err
+			}
+		}
+	}
+	return freed, nil
+}
+
+/**
+* ownedPrefix junta, desde la primera, las páginas de la cadena ref que siguen siendo de owner: la cadena entera, o el
+* prefijo que dejó una liberación desde el final cortada a mitad.
+* @param file smgr.FileNo, ref Ref, owner page.XID
+* @return []page.BlockNumber: en orden de la cadena, error
+**/
+func (m *Manager) ownedPrefix(file smgr.FileNo, ref Ref, owner page.XID) ([]page.BlockNumber, error) {
+	var blocks []page.BlockNumber
+	block := ref.First
+	for seq := 0; seq < pagesOf(ref.Len); seq++ {
+		next, owned, err := m.ownPage(file, block, seq, ref.Len, owner)
+		if err != nil || !owned {
+			return blocks, err
+		}
+		blocks = append(blocks, block)
+		block = next
+	}
+	return blocks, nil
+}
+
+/**
+* ownPage dice si la página block es todavía la página seq de la cadena de owner (un valor de total bytes) y, si lo
+* es, la valida como readPage.
+* @param file smgr.FileNo, block page.BlockNumber, seq int, total uint32, owner page.XID
+* @return page.BlockNumber: la siguiente, bool: si es de owner, error: ErrBadChain si es suya y está dañada
+**/
+func (m *Manager) ownPage(file smgr.FileNo, block page.BlockNumber, seq int, total uint32, owner page.XID) (page.BlockNumber, bool, error) {
+	h, err := m.pool.Pin(buffer.Tag{File: file, Fork: smgr.ForkMain, Block: block}, buffer.Normal)
+	if err != nil {
+		return 0, false, err
+	}
+	h.Lock(buffer.Share)
+	defer release(h)
+
+	p := h.Page()
+	if p.IsNew() {
+		return 0, false, nil
+	}
+	o, err := p.Opaque()
+	if err != nil || o.Flags != page.OpaqueOverflow || o.Level != uint32(seq) || p.PruneXID() != owner {
+		return 0, false, nil
+	}
+	last := seq == pagesOf(total)-1
+	switch {
+	case p.Lower() != page.HeaderSize+chunkLen(seq, total):
+		return 0, false, badChain(file, block, seq, "chunk length does not match the value length")
+	case last && o.Next != 0:
+		return 0, false, badChain(file, block, seq, "chain is longer than the value")
+	case !last && (o.Next == 0 || o.Next == block):
+		return 0, false, badChain(file, block, seq, "chain ends before the value")
+	}
+	return o.Next, true, nil
 }
 
 /**

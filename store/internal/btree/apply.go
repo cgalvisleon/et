@@ -25,6 +25,10 @@ func applyBlock(kind wal.Kind, i int, p page.Page, delta []byte, lsn page.LSN) e
 		return initTreePage(p, page.Opaque{Flags: page.OpaqueLeaf | page.OpaqueRoot})
 	case kind == wal.KindLeafWrite:
 		return applyLeafWrite(p, delta, lsn)
+	case kind == wal.KindLeafVacuum:
+		return applyLeafVacuum(p, delta)
+	case kind == wal.KindSetHints:
+		return applySetHints(p, delta)
 	case kind == wal.KindSplit && i == 0:
 		return applySplitLeft(p, delta)
 	case kind == wal.KindSplit && i == 1:

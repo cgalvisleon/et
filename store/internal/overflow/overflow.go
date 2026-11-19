@@ -28,8 +28,12 @@ type Chains interface {
 	// Read devuelve una copia del valor completo, verificando que la cadena tenga ref.Len bytes.
 	Read(file smgr.FileNo, ref Ref) ([]byte, error)
 
-	// Free devuelve todas las páginas de la cadena a la lista de libres (limpieza).
+	// Free devuelve todas las páginas de la cadena a la lista de libres (una cadena que nadie apunta).
 	Free(file smgr.FileNo, ref Ref, xid page.XID) error
+
+	// FreeTail libera lo que queda de la cadena de una versión de owner, de la última página a la primera; se puede
+	// repetir tras un corte (limpieza, pregunta 58). Devuelve cuántas páginas liberó.
+	FreeTail(file smgr.FileNo, ref Ref, owner, xid page.XID) (int, error)
 }
 
 /**

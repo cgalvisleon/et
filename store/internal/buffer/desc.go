@@ -38,6 +38,10 @@ type desc struct {
 	pins  int32
 	usage uint8
 	dirty bool
+	// justDirtied se pone en cada MarkDirty o MarkDirtyHint y lo borra flush antes de copiar la página (como
+	// BM_JUST_DIRTIED de PostgreSQL): si al terminar la escritura sigue puesto, el búfer cambió después de la copia y
+	// queda sucio.
+	justDirtied bool
 }
 
 // handle es un búfer fijado por quien llamó a Pin o PinNew. Lo usa una sola goroutine.

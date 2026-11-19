@@ -97,7 +97,7 @@ Each table lists the main public API of every package. `go doc github.com/cgalvi
 | `queue`      | `New[T](size, maxEvents, period, handler)`, `Push`, `Len`, `Close`                                                                                                                                                                                                                                                             | `q.Push(item)`                                                             |
 | `crontab`    | `New(tag, store, opts...)` (instance; `WithHandler`) or `Load` (global), `CronJob`, `ScheduleJob`, `StopJob`, `StartJob`, `RemoveJob`, `GetJob`, `Http*`; states `pending`→`scheduled`⇄`running`→`finished`/`failed`, `paused`, `missed`, `canceled`; `LastRun`, `WithRetries`, `WithTimeout`; replicas with the same tag elect a leader and fail over | `crontab.CronJob(tag, owner, "0 * * * *", 0, nil, fn)`                     |
 | `resilience` | `New()`, `LoadInstance(Params)`, `Instance.Run`, `IsDone`, `IsFailed`, `Stop`                                                                                                                                                                                                                                                  | `inst, _ := r.LoadInstance(resilience.Params{Fn: send, TotalAttempts: 3})` |
-| `store`      | being rewritten (F-23): storage engine modeled on PostgreSQL; no public API yet | see `store/doc.go` |
+| `store`      | `Open(dir)` → `Engine` (`Store`, `DropStore`, `Stores`, `Checkpoint`, `Close`) → `Store` (`Put`, `Remove`, `Insert`, `Update`, `Delete`, `Read`, `Count`); PostgreSQL-style engine (F-23) | `s, _ := e.Store("users"); s.Put("id", data)` |
 
 ### Security
 
@@ -367,7 +367,24 @@ defer q.Close()
 
 ### Embedded key/value store
 
-`store` is being rewritten from scratch (F-23) as a storage engine for databases, modeled on PostgreSQL's storage: a B+tree on disk in 8 KB pages, a fixed-size page cache (nothing of the index lives in RAM), a page-level WAL with full-page images after each checkpoint, MVCC with 64-bit transaction ids, checkpoints, and a recovery that only replays the WAL since the last checkpoint. The previous log-with-in-memory-index implementation was removed on 2026-11-19, so **the package has no public API yet**: it arrives with the engine (phase 1A). Done so far, as internal packages with tests and fuzzers: the 8 KB page, the real and the crash-simulating file systems, per-store data files, the control file and store catalog, the WAL and the transaction status file. Design, formats and the planned API: [`store/doc.go`](store/doc.go).
+`store` is a storage engine for building databases on, modeled on PostgreSQL's storage (F-23): a B+tree on disk in 8 KB pages, a fixed-size page cache (nothing of the index lives in RAM), a page-level WAL with full-page images after each checkpoint, checkpoints in the background, and a recovery that only replays the WAL since the last checkpoint. An engine is a directory (one process at a time) holding several stores of `(id string, data []byte)`; values that don't fit in a leaf go to overflow pages (up to 64 MiB). Each single operation is its own transaction and, with `SYNC_ON_WRITE` (default), returns once the WAL is on disk (writers share each fsync). Available now (phase 1A): `Open`, `Close`, `Store`, `DropStore`, `Stores`, `Checkpoint`; `Put`, `Remove` (blind), `Insert`, `Update`, `Delete` (return whether they wrote), `Read` and `Count`. Batches, snapshots and scans come next. Design and formats: [`store/doc.go`](store/doc.go).
+
+```go
+engine, err := store.Open("./data")
+if err != nil {
+    return err
+}
+defer engine.Close() // final checkpoint
+
+customers, err := engine.Store("customers") // opens or creates it
+err = customers.Put("c-001", []byte(`{"name":"Ana"}`))
+data, found, err := customers.Read("c-001")
+created, err := customers.Insert("c-002", []byte(`{"name":"Luis"}`)) // false if c-002 already exists
+changed, err := customers.Update("c-001", []byte(`{"name":"Ana M."}`)) // false if missing or unchanged
+deleted, err := customers.Delete("c-002")                             // false if missing
+err = customers.Remove("c-003")                                       // blind delete
+n := customers.Count()
+```
 
 ### Workflows with `jwf`
 
@@ -445,7 +462,7 @@ hits, _ := index.Search(ctx, tenantId, projectId, "reset the router", 5, 0.3, em
 | `dt`          | `PRODUCTION` (`true` stores in Redis)                                                                                                                                                                                                                                                                                                                                   |
 | `jwf`, `jsql` | `MAX_AUDIT_LOG` (1000)                                                                                                                                                                                                                                                                                                                                                  |
 | `jwsp`        | `WHATSAPP_API_URL`                                                                                                                                                                                                                                                                                                                                                      |
-| `store`       | planned: `WAL_SEGMENT_SIZE` (MB, 128), `STORE_CACHE_SIZE`, `CHECKPOINT_TIMEOUT`, `MAX_WAL_SIZE`… (`store/doc.go`)                                                                                                                                                                                                                                                                                 |
+| `store`       | `STORE_CACHE_SIZE` (MB, 128), `WAL_SEGMENT_SIZE` (MB, 128), `SYNC_ON_WRITE` (true), `CHECKPOINT_TIMEOUT` (s, 300), `MAX_WAL_SIZE` (MB, 1024), `LOCK_TIMEOUT` (s, 5)                                                                                                                                                                                                                                                                                 |
 | `validator`   | `LANG`                                                                                                                                                                                                                                                                                                                                                                  |
 | `middleware`  | `TELEMETRY_FORMAT` (`text` on a terminal, `json` elsewhere, `off`), `TELEMETRY_LOG` (`all`, `errors`), `LATENCY_LIMIT` (1000 ms, `WARN` above it), `REQUESTS_LIMIT` (400 per second per method and path)                                                                                                                                                                |
 
@@ -456,7 +473,7 @@ go run ./cmd/create      # scaffolding: project, microservice, model, rpc
 go run ./cmd/apigateway  # API gateway (ettp)
 go run ./cmd/server      # TCP node (port 1377); ./cmd/client connects to it
 go run ./cmd/ia          # RAG HTTP API (PORT, default 3300)
-go run ./cmd/store       # store example (returns with the new API, F-23)
+go run ./cmd/store       # store example: Open, Store, Put, Read, Insert, Update, Delete, Remove, Close
 ```
 
 Also `cmd/et`, `cmd/daemon`, `cmd/jsql`, `cmd/install`, `cmd/watcher`, `cmd/resilience`, `cmd/wsp` and `cmd/jwf`.

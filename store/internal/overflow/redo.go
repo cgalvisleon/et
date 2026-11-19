@@ -34,7 +34,7 @@ func Redo(pool buffer.Pool, sm smgr.Manager, rec *wal.Record) error {
 
 	next, seq := decodeMain(rec.Main)
 	p := h.Page()
-	if err := apply(p, next, seq, b.Delta); err != nil {
+	if err := apply(p, rec.XID, next, seq, b.Delta); err != nil {
 		return err
 	}
 	p.SetLSN(rec.LSN)

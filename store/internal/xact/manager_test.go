@@ -111,3 +111,32 @@ func TestWait(t *testing.T) {
 		t.Fatalf("unknown xid: %v", err)
 	}
 }
+
+// Un snapshot de solo lectura retiene el horizonte con su Xmin hasta ReleaseSnapshot, aunque las transacciones que
+// estaban en curso al tomarlo terminen; soltarlo dos veces no hace nada.
+func TestTakeSnapshot(t *testing.T) {
+	m := NewManager(20)
+	a := m.Begin() // 20
+	v, id := m.TakeSnapshot()
+	if v.Own != 0 || v.Xmin != a || v.Xmax != 21 || !slices.Equal(v.InProgress, []page.XID{a}) {
+		t.Fatalf("snapshot = %+v", v)
+	}
+	w, id2 := m.TakeSnapshot()
+	if id2 == id || w.Xmin != a {
+		t.Fatalf("second snapshot = %+v, id %d", w, id2)
+	}
+	m.End(a)
+	m.Begin() // 21
+	if m.OldestActive() != a {
+		t.Fatalf("OldestActive = %d, want %d (held by the snapshots)", m.OldestActive(), a)
+	}
+	m.ReleaseSnapshot(id)
+	if m.OldestActive() != a {
+		t.Fatalf("OldestActive = %d, want %d (held by the second snapshot)", m.OldestActive(), a)
+	}
+	m.ReleaseSnapshot(id2)
+	m.ReleaseSnapshot(id2)
+	if m.OldestActive() != 21 || len(m.readers) != 0 {
+		t.Fatalf("OldestActive = %d, readers %d", m.OldestActive(), len(m.readers))
+	}
+}

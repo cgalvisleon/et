@@ -14,11 +14,12 @@
 // El código del diseño anterior (un log append-only con todas las claves en un índice en RAM) se borró al integrar
 // la ola 1 (2026-11-19); lo que servía de él (lsn contiguos, reserva bajo writeMu, escritura en paralelo, published,
 // group commit, CRC-32C, recuperación con corte en el primer registro inválido) vive ahora en store/internal/wal.
-// Hasta la ola 4 este paquete no tiene API pública: solo esta documentación.
 //
 // Implementaciones por olas: 0 formatos e interfaces; 1 page, vfs, crashfs, smgr, control, wal, xact (hechas,
 // con pruebas y fuzzers); 2 buffer, fsm; 3 btree, overflow; 4 checkpoints, recuperación, el motor y la API de la fase
-// 1A; 5 MVCC, transacciones, esperas, limpieza.
+// 1A (hecha: ver «Implementación del motor»); 5 MVCC, transacciones, esperas, limpieza (5A, lotes y snapshots de la
+// fase 1B, hecha: ver «Lotes y snapshots»; 5B, marcas de visibilidad y limpieza en btree y overflow, hecha; 5C, la
+// limpieza y las marcas conectadas al motor, hecha: ver «Limpieza en el motor»). Con la 5C queda cerrada la fase 1B.
 //
 // Disco: vfs.OS() es el sistema de archivos real (fsync con F_FULLFSYNC en macOS, fdatasync en Linux; Lock devuelve
 // vfs.ErrLocked si otro tiene el LOCK, y el error público del motor lo envuelve); crashfs.New() es el disco simulado
@@ -94,7 +95,8 @@
 // Entrada de hoja (una versión): flags(4) idLen(2) reservado(2) lsn(8) xid(8) valueLen(4) = 28 B, más el id, más el
 // valor en línea o la referencia a desborde (primer bloque, 4). Clave: (id ascendente, lsn descendente). Va en línea
 // si 28 + id + valor ≤ 2.032 B; si no, a desborde. Con el puntero y la alineación, una versión ocupa ~32 B + id +
-// valor.
+// valor. flags: EntryTombstone, EntryOverflow, las marcas de visibilidad (EntryXidCommitted, EntryXidAborted,
+// EntryFrozen) y EntryFreeing (versión muerta cuya cadena de desborde se está liberando).
 //
 // Pivote (páginas internas y claves altas): keyLen(2) flags(2) downlink(4) lsn(8) = 16 B, más el prefijo truncado
 // del id.
@@ -104,17 +106,24 @@
 //
 // Página de desborde: encabezado, el trozo del valor desde el byte 32 hasta pd_lower (hasta 8.144 B), espacio
 // especial con flags = desborde, next = la siguiente de la cadena y level = la posición de la página en la cadena
-// (detecta orden cambiado, bucles y saltos a otra cadena). Cada cadena es de una sola versión.
+// (detecta orden cambiado, bucles y saltos a otra cadena); pd_prune_xid = xid de la versión dueña. Cada cadena es de
+// una sola versión.
 //
 // Archivo de estados: páginas de 8.192 B sin encabezado, 2 bits por xid (0 en curso, 1 confirmada, 2 abortada),
 // 4.096 páginas por archivo. El lsn de confirmación por grupo de 32 xids vive en memoria con cada página en caché.
 //
+// Registros del motor (datos principales, sin bloques): KindCheckpoint redoSegment(8) redoOffset(8) redoLSN(8)
+// nextXID(8) oldestActiveXID(8) time(8); KindCreateStore y KindDropStore fileNo(4) nameLen(2) name; KindCommit time(8)
+// storeCount(4) y storeCount × [fileNo(4) delta(8)] (fase 1B). KindEmptyStore (fase 2) todavía no se escribe y la
+// recuperación lo rechaza. KindPageImage queda reservado: las marcas de visibilidad van como KindSetHints de btree (la
+// imagen de la hoja más el delta de las marcas).
+//
 // Registro del WAL: crc(4) lsn(8) totalLen(4) xid(8) kind(1) flags(1) blockCount(1) reservado(1) mainLen(4) = 32 B;
 // por bloque fileNo(4) fork(1) flags(1) reservado(2) block(4) imageLen(2) deltaLen(2) = 16 B, la imagen y el delta;
 // al final los datos principales. Tipos (wal/kind.go): checkpoint, confirmación (con lo que suma a Count de cada
-// store), aborto, página entera (marcas de visibilidad), versión nueva en hoja (que es también el cambio lógico:
+// store), aborto, página entera (reservado), versión nueva en hoja (que es también el cambio lógico:
 // id, xid y valor; con FlagCommit es una operación suelta que nace confirmada), partición, enlace en el padre, raíz
-// nueva, store nuevo, limpieza de hoja, página de desborde, lista de libres y mapa de visibilidad. La imagen de página
+// nueva, store nuevo, limpieza de hoja, marcas de visibilidad (KindSetHints), página de desborde, lista de libres y mapa de visibilidad. La imagen de página
 // entera es la página antes del cambio, sin el hueco entre pd_lower y pd_upper, comprimida con S2 si achica.
 //
 // # Límites
@@ -179,9 +188,17 @@
 //     puede tener mientras tanto.
 //   - Los locks del mapa de la caché, de la caché del archivo de estados y del catálogo en memoria son hojas: no se
 //     toma otro con ellos tomados. El catálogo nunca se toca con una página bloqueada.
-//   - Marcas de visibilidad: con bloqueo compartido, por OR atómico (y leídas con atomic.LoadUint32); la escritura de la página al disco calcula la
-//     suma sobre una copia. La marca de confirmada solo se pone si el WAL es durable hasta el lsn de confirmación del
-//     grupo de su xid (pregunta 49). La primera marca en una página tras un checkpoint se anota como KindPageImage.
+//   - Locks del motor: closeMu (lectura) → ddlMu → Store.mu; closeMu (lectura) → Store.mu (lectura) → commitMu
+//     (lectura) → página → writeMu → contadores (hoja); ckptMu → commitMu (escritura); ckptMu → ddlMu; ckptMu →
+//     HintGate (escritura) → writeMu. Una operación suelta suelta commitMu antes de esperar a otra transacción.
+//   - Marcas de visibilidad: con bloqueo compartido, por OR atómico (y leídas con atomic.LoadUint32); la escritura de
+//     la página al disco calcula la suma sobre una copia. La marca de confirmada solo se pone si el WAL es durable hasta el lsn de confirmación del
+//     grupo de su xid (pregunta 49). La primera marca en una página tras un checkpoint se anota como KindSetHints
+//     (con la imagen de la hoja), con la hoja bloqueada en exclusivo después de soltar el bloqueo compartido de la
+//     lectura; la lectura toma HintGate en compartido para decidir y marcar, y el checkpoint la toma en exclusivo
+//     alrededor de BeginCheckpoint (como DELAY_CHKPT_START): página → HintGate; HintGate → writeMu.
+//   - Limpieza: Store.vacuumMu → closeMu (lectura) → Store.mu (lectura) → páginas (una hoja a la vez) → writeMu; la
+//     cadena de desborde se libera con la hoja ya soltada.
 //
 // # Checkpoint
 //
@@ -192,7 +209,9 @@
 //     nextXID, el xid vivo más viejo y los contadores de Count (consistentes con ese lsn, porque se suman bajo
 //     writeMu). Desde ese momento la primera escritura de cada página lleva su imagen entera.
 //  2. Escribir las páginas sucias, repartido en el 90 % del intervalo (CHECKPOINT_COMPLETION_TARGET = 0,9), cada una
-//     tras el WAL durable hasta su pd_lsn; las páginas del archivo de estados; smgr.SyncAll y fsync de xact.
+//     tras el WAL durable hasta su pd_lsn; las páginas del archivo de estados; smgr.SyncAll y fsync de xact. Una
+//     página que otro (reemplazo, escritor de fondo) está escribiendo sigue sucia hasta que su escritura termina, y
+//     FlushAll la espera: el fsync nunca se adelanta a una escritura en curso (buffer/doc.go).
 //  3. Guardar el catálogo con los contadores y countLSN = el lsn del punto de rehacer (la copia del catálogo y de los
 //     contadores se toma en el paso 1, en el mismo instante, bajo writeMu; si no, la recuperación contaría dos veces).
 //  4. Escribir el registro KindCheckpoint y esperar su fsync.
@@ -203,6 +222,13 @@
 // Un corte entre 3 y 5 deja el control con el punto de rehacer anterior y el catálogo con el nuevo: la recuperación
 // suma a los contadores solo las confirmaciones con lsn ≥ countLSN, así que no cuenta dos veces. Close hace un
 // checkpoint final con state = cerrado bien.
+//
+// Entre los pasos 1 y 2 el checkpoint espera a las operaciones que reservaron su registro antes del punto de rehacer
+// y todavía no anotaron su estado en el archivo de estados (commitMu, como delayChkpt de PostgreSQL): si no, su
+// confirmación quedaría antes del punto de rehacer y fuera del archivo de estados guardado, y tras un corte se leería
+// como abortada. El catálogo que guardan crear y borrar un store (fuera del checkpoint) lleva los contadores del
+// último checkpoint con su countLSN, nunca los vivos: así sigue siendo coherente. El checkpointer de fondo mira cada
+// segundo si toca uno; el de Checkpoint(), el de Close y el de fin de recuperación no se reparten.
 //
 // # Recuperación (Open)
 //
@@ -225,12 +251,25 @@
 //  5. Checkpoint de fin de recuperación y state = en producción. Las particiones incompletas las termina la próxima
 //     inserción que las encuentre.
 //
+// Detalles de la ola 4: un motor es nuevo si no tiene archivo de control, o si su control no tiene copias válidas y
+// el catálogo no tiene stores (un Create cortado); el control lo crea el checkpoint de fin de recuperación (paso 5
+// con control.Create). La caché y el archivo de estados se abren antes que el WAL (los usa el rehacer), con un
+// Flusher que cuenta todo como durable hasta que wal.Open termina. Las escrituras sueltas (KindLeafWrite con
+// FlagCommit) anotan confirmada su xid al rehacerlas. El borrado de un store, al rehacerse, borra los archivos del
+// número si ya no es de ningún store (los números no se reutilizan), también los que dejó un corte. Un store del
+// catálogo cuya página meta no existe o está en ceros (su KindInitStore no llegó a ser durable) se crea de nuevo al
+// abrirlo con Store: ningún registro durable apunta a sus páginas.
+//
 // # Fallos de escritura
 //
 // Si falla una escritura o un fsync del WAL, de una página, del archivo de estados o del control, el motor queda
 // inutilizable (como el PANIC de PostgreSQL): toda operación devuelve el error, no se escriben más páginas sucias y
 // el fsync no se reintenta (tras un fsync fallido el sistema operativo puede haber descartado las páginas: reintentar
 // daría un éxito falso). Se recupera cerrando y abriendo: la recuperación reconstruye desde el WAL durable.
+//
+// En la ola 4 cualquier error de una escritura (también uno de disco lleno al extender un archivo) deja el motor
+// inutilizable, y una lectura que encuentra la caché o el WAL fallados también; Close no escribe nada y devuelve el
+// fallo. Un error de lectura por una página dañada se devuelve sin inutilizar el motor.
 //
 // # Variables de entorno
 //
@@ -241,6 +280,8 @@
 //	CHECKPOINT_TIMEOUT       300          segundos entre checkpoints (pregunta 28)
 //	MAX_WAL_SIZE             1024         MB de WAL que acotan la recuperación; dispara a MAX_WAL_SIZE / 1,9
 //	TRANSACTION_TIMEOUT      600          segundos que puede durar un lote o un snapshot (pregunta 35)
+//	VACUUM_INTERVAL          60           segundos entre vueltas de la limpieza de fondo; 0 = apagada (a confirmar)
+//	VACUUM_THRESHOLD         1000         escrituras desde la última limpieza de fondo para correr otra (a confirmar)
 //	LOCK_TIMEOUT             5            segundos que una escritura espera a otra transacción (pregunta 33)
 //	MAX_SLOT_WAL_KEEP_SIZE   4096         MB de WAL que puede retener una ranura (fase 3, pregunta 48)
 //
@@ -249,7 +290,13 @@
 //
 // # API pública (ola 4 en adelante)
 //
-// Reemplaza a la actual (Open(dir) (*Store, error) del diseño anterior). Las fases dicen cuándo llega cada método.
+// Las fases dicen cuándo llega cada método. Hecho en la ola 4 (store/catalog.go): Open, Close, Store, DropStore,
+// Stores, Checkpoint y las operaciones sueltas Put, Remove, Insert, Update, Delete y Read; además Store.Name y, por
+// adelantado, Store.Count (el contador vivo: incluye las escrituras que se están confirmando, a confirmar en la fase
+// 2). Hecho en la ola 5A: NewBatch, Commit, Rollback, PutIn, RemoveIn, InsertIn, UpdateIn, DeleteIn, ReadIn,
+// Snapshot, SnapshotFor, Snapshot.Close y ReadAt. Hecho en la ola 5C: Vacuum. Errores públicos en msg.go: ErrLocked, ErrClosed, ErrFailed,
+// ErrBadID, ErrValueTooLarge, ErrBadName, ErrStoreNotFound, ErrStoreDropped, ErrConflict, ErrSerialization,
+// ErrTimeout, ErrTxDone, ErrOtherEngine, ErrCorrupt.
 //
 //	// Motor
 //	func Open(dir string) (*Engine, error)                    // 1A: control + WAL desde el último checkpoint
@@ -257,14 +304,14 @@
 //	func (e *Engine) Store(name string) (*Store, error)       // 1A: abre el store, o lo crea si no existe
 //	func (e *Engine) DropStore(name string) error             // 1A
 //	func (e *Engine) Stores() []string                        // 1A
-//	func (e *Engine) NewBatch() *Batch                        // 1B: una transacción
-//	func (b *Batch) Commit() error                            // 1B
-//	func (b *Batch) Rollback() error                          // 1B
-//	func (e *Engine) Snapshot() *Snapshot                     // 1B: tiempo máximo TRANSACTION_TIMEOUT
-//	func (e *Engine) SnapshotFor(timeout time.Duration) *Snapshot // 1B: tiempo propio; 0 = sin tiempo máximo
-//	func (v *Snapshot) Close() error                          // 1B
+//	func (e *Engine) NewBatch() *Batch                        // 1B (5A): una transacción
+//	func (b *Batch) Commit() error                            // 1B (5A)
+//	func (b *Batch) Rollback() error                          // 1B (5A)
+//	func (e *Engine) Snapshot() *Snapshot                     // 1B (5A): tiempo máximo TRANSACTION_TIMEOUT
+//	func (e *Engine) SnapshotFor(timeout time.Duration) *Snapshot // 1B (5A): tiempo propio; 0 = sin tiempo máximo
+//	func (v *Snapshot) Close() error                          // 1B (5A)
 //	func (e *Engine) Checkpoint() error                       // 1A
-//	func (e *Engine) Vacuum() error                           // 1B
+//	func (e *Engine) Vacuum() error                           // 1B (5C)
 //	func (e *Engine) Verify() error                           // 3
 //	func (e *Engine) Repair() error                           // 3
 //	func (e *Engine) Stats() et.Json                          // 3 (también OnStats)
@@ -280,7 +327,7 @@
 //	func (s *Store) Count() int64                            // 2
 //	func (s *Store) Empty() error                            // 2
 //
-//	// Store: dentro de un lote
+//	// Store: dentro de un lote (1B, ola 5A salvo ExistsIn)
 //	func (s *Store) PutIn(tx *Batch, id string, data []byte) error
 //	func (s *Store) RemoveIn(tx *Batch, id string) error
 //	func (s *Store) InsertIn(tx *Batch, id string, data []byte) (bool, error)
@@ -289,7 +336,7 @@
 //	func (s *Store) ReadIn(tx *Batch, id string) ([]byte, bool, error)
 //	func (s *Store) ExistsIn(tx *Batch, id string) (bool, error)   // 2
 //
-//	// Store: sobre un snapshot
+//	// Store: sobre un snapshot (ReadAt: 1B, ola 5A)
 //	func (s *Store) ReadAt(v *Snapshot, id string) ([]byte, bool, error)
 //	func (s *Store) ExistsAt(v *Snapshot, id string) (bool, error)  // 2
 //	func (s *Store) ForEachAt(v *Snapshot, fn func(id string, data []byte) (bool, error), asc bool, offset, limit int) error // 2
@@ -310,10 +357,122 @@
 //   - Un lote es una transacción con aislamiento por snapshot (como Repeatable Read, pregunta 34): ve una foto fija
 //     tomada al crearlo más sus propios cambios. Escribir un id que otra transacción confirmó después de esa foto
 //     devuelve ErrSerialization (también Put y Remove); esperar a otra más de LOCK_TIMEOUT devuelve ErrConflict; pasar
-//     TRANSACTION_TIMEOUT aborta el lote (ErrTimeout). Tras un error de esos el lote solo admite Rollback. Commit es
-//     todo o nada, también tras una caída, con un fsync para todo el lote.
+//     TRANSACTION_TIMEOUT aborta el lote (ErrTimeout). Tras un error de esos el lote queda abortado enseguida (no
+//     retiene sus ids): sus operaciones devuelven ese error, Commit lo devuelve y Rollback lo acepta. Commit es todo
+//     o nada, también tras una caída, con un fsync para todo el lote. Usar un lote terminado devuelve ErrTxDone, y un
+//     lote o snapshot de otro motor, ErrOtherEngine.
 //   - Un snapshot es una foto fija de todos los stores del motor para leer y recorrer, sin bloquear a los escritores.
 //     Mientras siga abierto (igual que un lote), la limpieza no quita las versiones que podría ver.
 //   - Lo devuelto por Read es del llamador. Los callbacks de recorridos no pueden escribir en el store.
 //   - Si el motor quedó inutilizable (ver «Fallos de escritura»), todo devuelve ErrFailed hasta reabrirlo.
+//
+// # Lotes y snapshots (ola 5A)
+//
+//	archivo        qué tiene
+//	batch.go       Batch: newBatch, writeIn/batchLoop, readIn, putIn…updateIn, commit, rollback, aborto por tiempo
+//	snapshot.go    Snapshot: snapshotFor, release, readAt
+//
+// Un lote toma su xid (xact Begin) y su snapshot (xact Snapshot(xid), cuyo Xmin cuenta en OldestActive) al crearlo.
+// Cada escritura es la suelta con Commit = false, el xid y el snapshot del lote: btree devuelve la propia versión o
+// la última confirmada (ErrSerialization si no es visible para el snapshot), y WaitError si otra en curso tiene el
+// id; se espera sin páginas bloqueadas hasta LOCK_TIMEOUT sin pasar el tiempo del lote (ErrConflict o ErrTimeout).
+// Las versiones van al árbol desde la primera escritura; en RAM el lote solo guarda la suma de Count por número de
+// archivo. Commit: con commitMu en lectura, reserva KindCommit (time y las sumas, que se suman a los contadores bajo
+// writeMu en el underLock de Reserve), lo escribe, espera el WAL durable (un solo fsync, SYNC_ON_WRITE), anota
+// confirmada con ese lsn, suelta commitMu y End. Rollback igual con KindAbort, sin fsync (una transacción sin
+// registro de confirmación cuenta como abortada tras una caída). Un lote sin escrituras no escribe nada en el WAL.
+// Un error de serialización, conflicto o tiempo aborta el lote enseguida (KindAbort); un temporizador lo aborta al
+// pasar TRANSACTION_TIMEOUT aunque nadie lo use. Las operaciones de un lote corren de a una (Batch.mu).
+//
+// Un snapshot es una foto de solo lectura sin xid (xact TakeSnapshot, registrada por número para que su Xmin cuente
+// en OldestActive hasta ReleaseSnapshot); ReadAt es Lookup con esa foto. Close o su tiempo lo sueltan; una lectura
+// en curso termina antes (Snapshot.mu).
+//
+// Orden de locks: Batch.mu → closeMu (lectura) → Store.mu → páginas…; Batch.mu → closeMu (lectura) → commitMu
+// (lectura) → writeMu; Snapshot.mu (lectura) → closeMu (lectura) → Store.mu. Ninguno de los del motor toma Batch.mu
+// ni Snapshot.mu.
+//
+// Desvío de la ola 4: el lote toma commitMu solo desde reservar su KindCommit o KindAbort hasta anotar el estado, no
+// desde su primer registro: las versiones de un lote no confirman nada, así que un registro de hoja anterior al punto
+// de rehacer no necesita estar en el archivo de estados; lo que importa es su confirmación. Tomarlo desde el primer
+// registro frenaría todos los checkpoints (y, con el RWMutex, a todos los escritores) mientras dure un lote.
+//
+// A confirmar (ola 5A): Close no espera a los lotes abiertos ni los deshace (quedan inservibles con ErrClosed y se
+// leen abortados al reabrir); el xid de un lote sin escrituras queda «en curso» en el archivo de estados, como el de
+// una operación suelta sin efecto; InsertIn no mira antes si el id existe con un valor grande (esa lectura con el
+// snapshot ocultaría un cambio confirmado después, que debe dar ErrSerialization), así que puede escribir y liberar
+// el desborde en vano; no hay detección de interbloqueos entre lotes: dos que se esperan mutuamente salen por
+// LOCK_TIMEOUT con ErrConflict. Las cadenas de desborde de un lote deshecho (o de versiones propias que otra del
+// mismo lote reemplazó) no se liberan al deshacer: las libera la limpieza (ola 5B) al quitar esas versiones.
+//
+// # Limpieza en el motor (ola 5C)
+//
+//	archivo        qué tiene
+//	vacuum.go      Engine.vacuum, Store.vacuum (serializado por store), freeDead, la limpieza de fondo (vacuumer)
+//
+// Vacuum toma el horizonte (xact OldestActive: el xid en curso más viejo o el Xmin más viejo de un lote o snapshot
+// abierto) una vez al empezar y limpia los stores del catálogo de a uno con btree.Vacuum(Horizon, XID 0, Free =
+// overflow.Manager.FreeTail de la versión muerta). Un lote o snapshot que empiece después tiene Xmin ≥ ese horizonte,
+// así que nada de lo que se quita le hace falta. Cada store se limpia con Store.vacuumMu (btree no admite dos
+// limpiezas del mismo árbol) y con el store tomado en lectura como cualquier operación: un DropStore que llega espera
+// a que termine (y frena mientras tanto las operaciones nuevas del store, por el RWMutex), y un store ya borrado se
+// salta; un store que se borró entre la lista y su turno no se vuelve a crear (Engine.existing). Si un store falla
+// (una página dañada) se sigue con los demás y se devuelve el primer error; un fallo de escritura del WAL o de la
+// caché deja el motor inutilizable como cualquier escritura, y con el motor cerrado o inutilizable se detiene.
+//
+// La limpieza de fondo (como autovacuum, con un criterio simple, a confirmar) mira cada VACUUM_INTERVAL si hubo al
+// menos VACUUM_THRESHOLD escrituras aplicadas (sueltas o de lotes, también las deshechas: dejan versiones muertas)
+// desde su última vuelta y, si las hubo, corre Vacuum. Close marca el motor cerrado (espera a la limpieza del store en
+// curso; la siguiente ve ErrClosed), detiene la de fondo y recién después hace el checkpoint final; si el motor quedó
+// inutilizable, la de fondo termina sola.
+//
+// Checkpoint: tras fijar el punto de rehacer, espera el WAL durable hasta el lsn anterior (Engine.waitChanges). Cada
+// cambio de página reserva su registro, aplica, marca sucia y recién después escribe el registro; sin esa espera, un
+// cambio reservado antes del punto de rehacer y marcado sucio después de que FlushAll juntó las sucias quedaba fuera
+// del checkpoint y no se rehacía (PostgreSQL lo evita marcando sucia antes de insertar el registro).
+//
+// Marcas de visibilidad: todos los árboles reciben el mismo HintGate (Engine.hintGate, un sync.RWMutex) y el paso 1
+// del checkpoint lo toma en exclusivo alrededor de wal.BeginCheckpoint. Los registros KindLeafVacuum (21) y
+// KindSetHints (22) los rehace btree.Redo: la recuperación le manda todo el rango 16–31.
+//
+// A confirmar (ola 5C): los valores de VACUUM_INTERVAL y VACUUM_THRESHOLD y el criterio por cantidad de escrituras
+// (PostgreSQL usa la fracción de tuplas muertas por tabla); una cadena de desborde escrita antes de un corte sin que
+// llegara su hoja queda huérfana (ninguna versión la nombra y la limpieza no la ve; la prueba de modelo las cuenta):
+// recuperarlas es de la fase 2 o 3; DropStore espera a la limpieza del store en curso en vez de cortarla.
+//
+// # Implementación del motor (ola 4)
+//
+//	archivo        qué tiene
+//	catalog.go     la API pública: envolturas delgadas
+//	engine.go      Engine, open, close, enter/leave, fail/failed, logRecord
+//	recovery.go    recover: control, catálogo, piezas, rehacer cada Kind con su dueño, fin de recuperación
+//	checkpoint.go  checkpoint (pasos 1–6), pacer (reparto en el 90 %), checkpointer de fondo
+//	ddl.go         Store (abre o crea), DropStore, Stores, openTree
+//	store.go       Store y las operaciones sueltas: write, writeLoop, commit, update
+//	counts.go      contadores vivos de Count y walProxy
+//	records.go     formato de KindCheckpoint, KindCreateStore, KindDropStore y KindCommit
+//	config.go      variables de entorno
+//
+// Una operación suelta es una transacción con su xid (xact.Transactions.Begin): si el valor no cabe en línea escribe
+// antes su cadena de desborde con ese xid; toma commitMu en lectura; btree.Write con Commit (FlagCommit), la
+// condición y un UnderLock que suma su delta al contador bajo writeMu; si btree devuelve WaitError suelta commitMu,
+// espera a esa transacción hasta LOCK_TIMEOUT (si vence, ErrConflict) y repite; si escribió, espera el WAL durable
+// (SYNC_ON_WRITE) y anota confirmada en el archivo de estados; suelta commitMu y termina la transacción (End
+// despierta a quien espera). Las lecturas y las escrituras de otros no ven la versión hasta que su xid figura
+// confirmada (Read Committed real, no solo «escrita en la hoja»). Si la condición no se cumple y el valor había ido a
+// desborde, la cadena se libera; el xid de una operación que no escribió queda «en curso» en el archivo de estados y
+// se lee abortado tras reabrir (no hay versiones con él).
+//
+// Lo que deja listo para la fase 1B: los xid, el archivo de estados, la espera entre transacciones, KindCommit y
+// KindAbort al rehacer (con las sumas de Count por número de archivo), commitMu (un lote lo tomaría desde su primer
+// registro hasta anotar su estado) y la lectura con snapshot de btree. Falta: Batch (PutIn…, Commit con KindCommit
+// y un solo fsync, Rollback con KindAbort), Snapshot, TRANSACTION_TIMEOUT, KindPageImage para las marcas de
+// visibilidad, y la limpieza (Vacuum, que libera las cadenas de desborde de versiones muertas). Batch, Snapshot y
+// TRANSACTION_TIMEOUT llegaron en la ola 5A; las marcas (como KindSetHints, no KindPageImage) y la limpieza, en las
+// olas 5B y 5C.
+//
+// A confirmar (ola 4): el Flusher de la recuperación cuenta como durable lo leído del WAL (como PostgreSQL); cualquier
+// error de escritura inutiliza el motor, también el disco lleno al extender; Count incluye escrituras que todavía se
+// están confirmando; el xid de una operación sin efecto queda en curso hasta reabrir; DropStore espera a las
+// operaciones en curso del store (hasta LOCK_TIMEOUT si una espera a otra transacción).
 package store

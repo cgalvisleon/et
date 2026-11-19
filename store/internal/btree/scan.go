@@ -35,8 +35,10 @@ func (t *BTree) Scan(from string, snap *xact.Snapshot, fn func(v Version) (bool,
 	var cur []byte // id de las versiones que se están mirando; puede seguir en la hoja siguiente
 	decided := false
 	var batch []Version
+	var hs hints
 	for err == nil {
 		batch = batch[:0]
+		hs.at(h)
 		for ; off <= n.maxOff() && err == nil; off++ {
 			var e entry
 			if e, err = n.entryAt(off); err != nil {
@@ -49,7 +51,7 @@ func (t *BTree) Scan(from string, snap *xact.Snapshot, fn func(v Version) (bool,
 				continue
 			}
 			var ok bool
-			if ok, err = t.visible(e, snap); ok {
+			if ok, err = t.visible(e, snap, &hs); ok {
 				decided = true
 				if !e.tombstone() {
 					batch = append(batch, e.version())
@@ -62,6 +64,8 @@ func (t *BTree) Scan(from string, snap *xact.Snapshot, fn func(v Version) (bool,
 		last, next := n.rightmost(), n
 		h.Release()
 		h = nil
+		hs.at(nil)
+		t.flushHints(&hs)
 		if stop, ferr := emit(batch, fn); stop || ferr != nil {
 			return ferr
 		}
@@ -127,15 +131,19 @@ func (t *BTree) ScanBackward(to string, snap *xact.Snapshot, fn func(v Version) 
 	end, err := n.lowerBound(k)
 	var pending *group
 	var batch []Version
+	var hs hints
 	for err == nil {
 		var groups []group
-		if groups, err = t.pageGroups(n, end-1, snap); err != nil {
+		hs.at(h)
+		if groups, err = t.pageGroups(n, end-1, snap, &hs); err != nil {
 			break
 		}
 		batch, pending = backwardBatch(batch[:0], groups, pending, n.o.Prev == 0)
 		cur := n
 		h.Release()
 		h = nil
+		hs.at(nil)
+		t.flushHints(&hs)
 		if stop, ferr := emit(batch, fn); stop || ferr != nil {
 			return ferr
 		}
@@ -155,10 +163,10 @@ func (t *BTree) ScanBackward(to string, snap *xact.Snapshot, fn func(v Version) 
 /**
 * pageGroups agrupa por id las entradas de datos de la hoja hasta last (incluido), en orden, con la primera versión
 * visible de cada grupo.
-* @param n node, last page.OffsetNumber, snap *xact.Snapshot
+* @param n node, last page.OffsetNumber, snap *xact.Snapshot, hs *hints: dónde marcar
 * @return []group, error
 **/
-func (t *BTree) pageGroups(n node, last page.OffsetNumber, snap *xact.Snapshot) ([]group, error) {
+func (t *BTree) pageGroups(n node, last page.OffsetNumber, snap *xact.Snapshot, hs *hints) ([]group, error) {
 	var groups []group
 	for off := n.firstData(); off <= last; off++ {
 		e, err := n.entryAt(off)
@@ -172,7 +180,7 @@ func (t *BTree) pageGroups(n node, last page.OffsetNumber, snap *xact.Snapshot) 
 		if g.found {
 			continue
 		}
-		ok, err := t.visible(e, snap)
+		ok, err := t.visible(e, snap, hs)
 		if err != nil {
 			return nil, err
 		}

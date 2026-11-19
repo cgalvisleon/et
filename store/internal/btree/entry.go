@@ -14,7 +14,7 @@ import (
 var le = binary.LittleEndian
 
 // knownEntryFlags son las marcas que el formato conoce; cualquier otra es daño.
-const knownEntryFlags = EntryTombstone | EntryOverflow | EntryXidCommitted | EntryXidAborted | EntryFrozen
+const knownEntryFlags = EntryTombstone | EntryOverflow | EntryXidCommitted | EntryXidAborted | EntryFrozen | EntryFreeing
 
 // entry es una entrada de hoja (una versión) ya validada por parseEntry. Es una vista: si viene de una página, vale
 // mientras la página siga bloqueada.
@@ -38,11 +38,13 @@ func parseEntry(b []byte) (entry, error) {
 	want := EntryHeaderSize + idLen
 	switch {
 	case flags&EntryTombstone != 0:
-		if valueLen != 0 || flags&EntryOverflow != 0 {
+		if valueLen != 0 || flags&(EntryOverflow|EntryFreeing) != 0 {
 			return nil, corrupt("tombstone with a value")
 		}
 	case flags&EntryOverflow != 0:
 		want += OverflowRefSize
+	case flags&EntryFreeing != 0:
+		return nil, corrupt("freeing entry without overflow")
 	default:
 		want += valueLen
 	}
@@ -66,6 +68,25 @@ func (e entry) flags() EntryFlags {
 	}
 	return EntryFlags(atomic.LoadUint32((*uint32)(p)))
 }
+
+/**
+* orFlags agrega marcas a una entrada de una página con un OR atómico (con bloqueo compartido otro lector puede estar
+* haciendo lo mismo, y la escritura de la página al disco la copia con cargas atómicas). Una entrada desalineada no
+* viene de una página: no se marca.
+* @param add EntryFlags
+* @return bool: si se marcó
+**/
+func (e entry) orFlags(add EntryFlags) bool {
+	p := unsafe.Pointer(&e[OffEntryFlags])
+	if uintptr(p)%4 != 0 {
+		return false
+	}
+	atomic.OrUint32((*uint32)(p), uint32(add))
+	return true
+}
+
+// freeing dice si la versión está muerta y su cadena de desborde se está liberando.
+func (e entry) freeing() bool { return e.flags()&EntryFreeing != 0 }
 
 // id es la vista del id.
 func (e entry) id() []byte {

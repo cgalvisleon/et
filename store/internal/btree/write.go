@@ -26,6 +26,8 @@ func (t *BTree) Write(id string, w Write) (Result, error) {
 	}
 	item := encodeEntry([]byte(id), w)
 	k := searchKey([]byte(id))
+	var hs hints
+	defer t.flushHints(&hs)
 	for {
 		h, n, rootLevel, err := t.leafForWrite(k, len(item))
 		var fe *finishError
@@ -38,7 +40,7 @@ func (t *BTree) Write(id string, w Write) (Result, error) {
 		if err != nil {
 			return Result{}, err
 		}
-		res, done, err := t.writeLeaf(h, n, k, item, w, rootLevel)
+		res, done, err := t.writeLeaf(h, n, k, item, w, rootLevel, &hs)
 		if err != nil || done {
 			return res, err
 		}
@@ -87,15 +89,18 @@ func (t *BTree) tryFastLeaf(k key, size int) (buffer.Handle, node, bool) {
 * writeLeaf hace los pasos 3 a 9 sobre la hoja ya bloqueada, y la suelta.
 * @param h buffer.Handle, n node: la hoja, bloqueada en exclusivo
 * @param k key: searchKey(id), item []byte: la entrada sin lsn, w Write, rootLevel uint32
+* @param hs *hints: las marcas de visibilidad que se ponen al mirar las versiones
 * @return Result, bool: false si la hoja se partió y hay que volver a bajar, error
 **/
-func (t *BTree) writeLeaf(h buffer.Handle, n node, k key, item []byte, w Write, rootLevel uint32) (Result, bool, error) {
+func (t *BTree) writeLeaf(h buffer.Handle, n node, k key, item []byte, w Write, rootLevel uint32, hs *hints) (Result, bool, error) {
 	pos, err := n.lowerBound(k)
 	if err != nil {
 		h.Release()
 		return Result{}, true, err
 	}
-	latest, err := t.latest(n, pos, k.id, w)
+	hs.at(h)
+	latest, err := t.latest(n, pos, k.id, w, hs)
+	hs.at(nil)
 	if err != nil {
 		h.Release()
 		return Result{}, true, err
@@ -114,7 +119,7 @@ func (t *BTree) writeLeaf(h buffer.Handle, n node, k key, item []byte, w Write, 
 		flags |= wal.FlagCommit
 	}
 	refs := []wal.BlockRef{{Delta: itemDelta(pos, item)}}
-	res, err := t.logChange(wal.KindLeafWrite, w.XID, flags, refs, []buffer.Handle{h}, w.UnderLock)
+	res, err := t.logChange(wal.KindLeafWrite, w.XID, flags, refs, []buffer.Handle{h}, underLockOf(w, delta))
 	h.Release()
 	if err != nil {
 		return Result{}, true, err
@@ -127,6 +132,18 @@ func (t *BTree) writeLeaf(h buffer.Handle, n node, k key, item []byte, w Write, 
 		t.fastLeaf.Store(uint32(n.blk))
 	}
 	return Result{Applied: true, LSN: lsn, CountDelta: delta}, true, nil
+}
+
+/**
+* underLockOf adapta Write.UnderLock a la firma de wal.Log.Reserve, con el delta de Count ya decidido.
+* @param w Write, delta int
+* @return func(lsn page.LSN): nil si w no tiene UnderLock
+**/
+func underLockOf(w Write, delta int) func(lsn page.LSN) {
+	if w.UnderLock == nil {
+		return nil
+	}
+	return func(lsn page.LSN) { w.UnderLock(lsn, delta) }
 }
 
 /**
@@ -164,9 +181,10 @@ func countChange(wasLive, isLive bool) (wal.Flags, int) {
 * bloquea en compartido con la hoja todavía bloqueada (de izquierda a derecha, como _bt_check_unique), y la suelta
 * antes de volver.
 * @param n node: la hoja, bloqueada en exclusivo; pos page.OffsetNumber, id []byte, w Write
+* @param hs *hints: apunta a la hoja; al seguir a la derecha, a la hermana
 * @return Latest, error: *WaitError o ErrSerialization
 **/
-func (t *BTree) latest(n node, pos page.OffsetNumber, id []byte, w Write) (Latest, error) {
+func (t *BTree) latest(n node, pos page.OffsetNumber, id []byte, w Write, hs *hints) (Latest, error) {
 	var right buffer.Handle
 	defer func() { releaseAll(right) }()
 	cur, off := n, pos
@@ -181,6 +199,7 @@ func (t *BTree) latest(n node, pos page.OffsetNumber, id []byte, w Write) (Lates
 			if right = h; err != nil {
 				return Latest{}, err
 			}
+			hs.at(h)
 			if nn.o.Level != level {
 				return Latest{}, corruptAt(next, "right sibling at level %d, expected %d", nn.o.Level, level)
 			}
@@ -191,7 +210,7 @@ func (t *BTree) latest(n node, pos page.OffsetNumber, id []byte, w Write) (Lates
 		if err != nil || !bytes.Equal(e.id(), id) {
 			return Latest{}, err
 		}
-		if l, done, err := t.counts(e, w); done || err != nil {
+		if l, done, err := t.counts(e, w, hs); done || err != nil {
 			return l, err
 		}
 		off++
@@ -199,11 +218,14 @@ func (t *BTree) latest(n node, pos page.OffsetNumber, id []byte, w Write) (Lates
 }
 
 /**
-* counts decide si una versión es la que cuenta para la escritura w.
-* @param e entry, w Write
+* counts decide si una versión es la que cuenta para la escritura w. Una «liberándose» nunca cuenta.
+* @param e entry, w Write, hs *hints
 * @return Latest, bool: si la búsqueda termina acá, error: *WaitError o ErrSerialization
 **/
-func (t *BTree) counts(e entry, w Write) (Latest, bool, error) {
+func (t *BTree) counts(e entry, w Write, hs *hints) (Latest, bool, error) {
+	if e.freeing() {
+		return Latest{}, false, nil
+	}
 	own := w.XID
 	if w.Snapshot != nil && w.Snapshot.Own != 0 {
 		own = w.Snapshot.Own
@@ -211,7 +233,7 @@ func (t *BTree) counts(e entry, w Write) (Latest, bool, error) {
 	if own != 0 && e.xid() == own {
 		return Latest{Version: e.version(), Live: !e.tombstone()}, true, nil
 	}
-	st, err := t.statusOf(e)
+	st, err := t.statusOf(e, hs)
 	switch {
 	case err != nil:
 		return Latest{}, true, err

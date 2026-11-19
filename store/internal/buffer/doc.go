@@ -38,10 +38,16 @@
 // página que se está cargando espera a que termine. Una lectura fallida (suma mala, bloque inexistente) devuelve el
 // error con el tag y deja el búfer libre.
 //
-// Escribir un búfer (reemplazo, escritor de fondo, FlushAll) con io tomado: marcarlo limpio, copiarlo bajo bloqueo
-// compartido, WaitDurable hasta el pd_lsn de la copia, suma sobre la copia (una página en ceros se escribe en ceros)
-// y smgr.Write. Se marca limpio antes de copiar: una marca puesta durante la copia lo vuelve a ensuciar. Un fallo de
-// la escritura o de WaitDurable deja la caché inutilizable (ErrFailed con la causa) y no se escribe nada más.
+// Escribir un búfer (reemplazo, escritor de fondo, FlushAll) con io tomado: borrar justDirtied, copiarlo bajo
+// bloqueo compartido, WaitDurable hasta el pd_lsn de la copia, suma sobre la copia (una página en ceros se escribe en
+// ceros), smgr.Write y recién entonces marcarlo limpio, salvo que justDirtied se haya vuelto a poner (como
+// BM_JUST_DIRTIED de PostgreSQL: MarkDirty o MarkDirtyHint durante o después de la copia, que la copia puede no
+// tener). El búfer sigue sucio mientras dura la escritura: FlushAll lo anota y lo espera (io) en vez de saltearlo, así
+// al volver toda página que estaba sucia está en el disco, también la que otro estaba escribiendo. Si se marcara
+// limpio al empezar, un checkpoint que llega con una escritura en curso (esperando al WAL, por ejemplo) no la vería,
+// haría el fsync antes de que llegue al disco y movería el punto de rehacer más allá de su cambio: tras un corte la
+// página volvería a su versión vieja sin nada que rehacer. Un fallo de la escritura o de WaitDurable deja la caché
+// inutilizable (ErrFailed con la causa) y no se escribe nada más.
 //
 // El escritor de fondo, cada BgWriterDelay, recorre una vuelta desde la manecilla y escribe hasta BgWriterMaxPages
 // búferes sucios sin pins y con uso 0. FlushAll anota los sucios, los ordena por tag y escribe los que siguen con la

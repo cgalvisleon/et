@@ -205,6 +205,10 @@ func checkDelta(kind wal.Kind, i int, delta []byte) error {
 		_, err = parseSplitRight(delta)
 	case kind == wal.KindNewRoot && i == 0:
 		_, err = parseNewRoot(delta)
+	case kind == wal.KindLeafVacuum:
+		_, _, err = parseVacuum(delta)
+	case kind == wal.KindSetHints:
+		_, err = parseHints(delta)
 	default:
 		err = checkFixedDelta(kind, i, delta)
 	}

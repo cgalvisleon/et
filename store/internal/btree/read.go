@@ -8,14 +8,18 @@ import (
 )
 
 /**
-* statusOf devuelve el estado de la transacción que escribió una versión: primero sus marcas de visibilidad, después
-* el archivo de estados. Sin archivo de estados (Config.Status nil) o con xid 0, cuenta como confirmada.
-* @param e entry
+* statusOf devuelve el estado de la transacción que escribió una versión: primero sus marcas, después el archivo de
+* estados. Una versión «liberándose» cuenta como abortada (ya nadie la ve). Sin archivo de estados (Config.Status
+* nil) o con xid 0, cuenta como confirmada. Si el archivo de estados da un estado definitivo —abortada, o confirmada con
+* el WAL durable hasta el lsn de confirmación de su grupo (pregunta 49)—, lo anota en la versión (hint).
+* @param e entry, hs *hints: dónde marcar (nil = no marcar)
 * @return xact.Status, error
 **/
-func (t *BTree) statusOf(e entry) (xact.Status, error) {
+func (t *BTree) statusOf(e entry, hs *hints) (xact.Status, error) {
 	flags := e.flags()
 	switch {
+	case flags&EntryFreeing != 0:
+		return xact.StatusAborted, nil
 	case flags&(EntryXidCommitted|EntryFrozen) != 0:
 		return xact.StatusCommitted, nil
 	case flags&EntryXidAborted != 0:
@@ -23,18 +27,30 @@ func (t *BTree) statusOf(e entry) (xact.Status, error) {
 	case t.status == nil || e.xid() == 0:
 		return xact.StatusCommitted, nil
 	}
-	st, _, err := t.status.Status(e.xid())
-	return st, err
+	st, commitLSN, err := t.status.Status(e.xid())
+	if err != nil {
+		return st, err
+	}
+	switch {
+	case st == xact.StatusAborted:
+		t.hint(hs, e, EntryXidAborted)
+	case xact.HintAllowed(st, commitLSN, t.log.Durable()):
+		t.hint(hs, e, EntryXidCommitted)
+	}
+	return st, nil
 }
 
 /**
-* visible dice si una lectura ve la versión: sin snapshot (Read suelto, pregunta 41), si está confirmada; con
-* snapshot, la regla de xact.Snapshot.Visible.
-* @param e entry, snap *xact.Snapshot
+* visible dice si una lectura ve la versión: nunca si está «liberándose»; sin snapshot (Read suelto, pregunta 41), si
+* está confirmada; con snapshot, la regla de xact.Snapshot.Visible.
+* @param e entry, snap *xact.Snapshot, hs *hints: dónde marcar (nil = no marcar)
 * @return bool, error
 **/
-func (t *BTree) visible(e entry, snap *xact.Snapshot) (bool, error) {
-	st, err := t.statusOf(e)
+func (t *BTree) visible(e entry, snap *xact.Snapshot, hs *hints) (bool, error) {
+	if e.freeing() {
+		return false, nil
+	}
+	st, err := t.statusOf(e, hs)
 	if err != nil {
 		return false, err
 	}
@@ -58,11 +74,14 @@ func (t *BTree) Lookup(id string, snap *xact.Snapshot) (Version, bool, error) {
 	if err := checkID(id); err != nil {
 		return Version{}, false, err
 	}
+	var hs hints
+	defer t.flushHints(&hs)
 	k := searchKey([]byte(id))
 	h, n, _, err := t.descend(k, 0, buffer.Share, false)
 	if err != nil {
 		return Version{}, false, err
 	}
+	hs.at(h)
 	off, err := n.lowerBound(k)
 	for err == nil {
 		if off > n.maxOff() {
@@ -72,6 +91,7 @@ func (t *BTree) Lookup(id string, snap *xact.Snapshot) (Version, bool, error) {
 			if h, n, err = t.stepRight(h, n); err != nil {
 				return Version{}, false, err
 			}
+			hs.at(h)
 			off = n.firstData()
 			continue
 		}
@@ -80,10 +100,10 @@ func (t *BTree) Lookup(id string, snap *xact.Snapshot) (Version, bool, error) {
 			break
 		}
 		var ok bool
-		if ok, err = t.visible(e, snap); err == nil && ok {
-			v := e.version()
+		if ok, err = t.visible(e, snap, &hs); err == nil && ok {
+			v := e.version() // copia: e apunta a la página, que no se toca después de soltarla
 			h.Release()
-			return v, !e.tombstone(), nil
+			return v, v.Flags&EntryTombstone == 0, nil
 		}
 		off++
 	}

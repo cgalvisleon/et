@@ -8,7 +8,7 @@ const (
 	KindCheckpoint  Kind = 1
 	KindCommit      Kind = 2
 	KindAbort       Kind = 3
-	KindPageImage   Kind = 4
+	KindPageImage   Kind = 4 // reservado: las marcas de visibilidad van como KindSetHints
 	KindCreateStore Kind = 5 // alta de un store en el catálogo: nombre y número de archivo (pregunta 56)
 	KindDropStore   Kind = 6 // baja de un store: nombre y número de archivo esperado; se saca del catálogo y se borran sus archivos
 	KindEmptyStore  Kind = 7 // vaciado: nombre, número de archivo viejo y nuevo; los archivos viejos se borran
@@ -22,7 +22,7 @@ const (
 	KindNewRoot     Kind = 19 // raíz nueva y página meta
 	KindInitStore   Kind = 20 // página meta y hoja raíz vacía de un store nuevo (BlockWillInit)
 	KindLeafVacuum  Kind = 21 // limpieza: quita versiones muertas de una hoja (fase 1B)
-	KindSetHints    Kind = 22 // reservado: marcas de visibilidad sin imagen (hoy van como KindPageImage)
+	KindSetHints    Kind = 22 // marcas de visibilidad: la primera marca tras un checkpoint, con la imagen de la hoja
 )
 
 // De overflow (32–39).

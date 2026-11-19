@@ -11,15 +11,14 @@ import (
 )
 
 /**
-* Redo rehace un registro de btree (KindInitStore, KindLeafWrite, KindSplit, KindInsertPivot, KindNewRoot) durante la
-* recuperación. Por cada bloque: si el fork es más corto, lo extiende; con imagen, la restaura sin condiciones y
+* Redo rehace un registro de btree (KindInitStore, KindLeafWrite, KindSplit, KindInsertPivot, KindNewRoot,
+* KindLeafVacuum, KindSetHints) durante la recuperación. Por cada bloque: si el fork es más corto, lo extiende; con imagen, la restaura sin condiciones y
 * aplica el delta; con BlockWillInit, inicia la página entera; si no, aplica el delta solo si pd_lsn < lsn del
 * registro. Así es idempotente. Los bloques con imagen o BlockWillInit se fijan con buffer.Pool.PinZero: la página en
 * disco puede estar rota por el corte. Es una función del paquete porque corre dentro de wal.Open.
 * @param pool buffer.Pool, sm smgr.Manager: la caché y los archivos de datos del motor en recuperación
 * @param rec *wal.Record: el registro leído (válido solo durante la llamada)
-* @return error: ErrBadRecord si no tiene la forma de su Kind (KindLeafVacuum y KindSetHints todavía no existen), o
-* el error de la caché
+* @return error: ErrBadRecord si no tiene la forma de su Kind, o el error de la caché
 **/
 func Redo(pool buffer.Pool, sm smgr.Manager, rec *wal.Record) error {
 	if err := checkShape(rec); err != nil {
@@ -47,6 +46,8 @@ var shapes = map[wal.Kind][]blockRule{
 	wal.KindSplit:       {{}, {willInit: true}, {}},
 	wal.KindInsertPivot: {{}, {}},
 	wal.KindNewRoot:     {{willInit: true}, {meta: true}, {}},
+	wal.KindLeafVacuum:  {{}},
+	wal.KindSetHints:    {{}},
 }
 
 /**
@@ -58,7 +59,7 @@ var shapes = map[wal.Kind][]blockRule{
 func checkShape(rec *wal.Record) error {
 	rules, ok := shapes[rec.Kind]
 	if !ok {
-		return badRecord(rec.Kind, "not a btree kind (or not implemented yet)")
+		return badRecord(rec.Kind, "not a btree kind")
 	}
 	n := len(rec.Blocks)
 	if n != len(rules) && !(rec.Kind == wal.KindSplit && n == 2) {

@@ -28,9 +28,21 @@ type Config struct {
 	Free fsm.FreeList // de donde salen las páginas nuevas
 	Log  wal.Log      // el WAL del motor
 
-	// Status es el archivo de estados; nil = toda versión cuenta como confirmada (fase 1A, solo operaciones
-	// sueltas que nacen confirmadas; a confirmar con el motor de la ola 4).
+	// Status es el archivo de estados; nil = toda versión cuenta como confirmada (solo pruebas: el motor siempre lo
+	// pasa, y una versión se ve cuando su xid figura confirmada).
 	Status StatusReader
+
+	// HintGate, si no es nil, es la compuerta de las marcas de visibilidad sin WAL: la lectura la toma en compartido
+	// para decidir y poner una marca, y el checkpoint en exclusivo alrededor de wal.Log.BeginCheckpoint (como
+	// DELAY_CHKPT_START de PostgreSQL). Sin ella, una marca puesta justo cuando empieza un checkpoint se anota en el
+	// WAL después (ver «Marcas de visibilidad» en doc.go). *sync.RWMutex la cumple.
+	HintGate HintGate
+}
+
+// HintGate es la compuerta entre las marcas de visibilidad y el comienzo de un checkpoint.
+type HintGate interface {
+	RLock()
+	RUnlock()
 }
 
 // BTree es el árbol de un store: implementa Tree. No guarda nada del árbol en memoria salvo la pista de la hoja de más
@@ -42,6 +54,7 @@ type BTree struct {
 	free   fsm.FreeList
 	log    wal.Log
 	status StatusReader
+	gate   HintGate
 
 	// fastLeaf es la pista de la inserción rápida: la última hoja de más a la derecha donde se escribió (0 = ninguna).
 	// Solo es una pista: se comprueba con la hoja bloqueada antes de usarla.
@@ -64,7 +77,8 @@ func Open(cfg Config) (*BTree, error) {
 	if cfg.File == 0 || cfg.Pool == nil || cfg.Smgr == nil || cfg.Free == nil || cfg.Log == nil {
 		return nil, ErrConfig
 	}
-	return &BTree{file: cfg.File, pool: cfg.Pool, sm: cfg.Smgr, free: cfg.Free, log: cfg.Log, status: cfg.Status}, nil
+	return &BTree{file: cfg.File, pool: cfg.Pool, sm: cfg.Smgr, free: cfg.Free, log: cfg.Log, status: cfg.Status,
+		gate: cfg.HintGate}, nil
 }
 
 /**

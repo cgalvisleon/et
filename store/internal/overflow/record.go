@@ -61,16 +61,18 @@ func checkShape(rec *wal.Record) error {
 }
 
 /**
-* apply deja p como la página de desborde número seq de su cadena, con el trozo chunk y la siguiente next, sin tocar
-* pd_lsn. Es la misma función en el camino normal y al rehacer: así las dos llegan a la misma página.
+* apply deja p como la página de desborde número seq de su cadena, con el trozo chunk, la siguiente next y su dueño
+* (el xid de la versión, en pd_prune_xid), sin tocar pd_lsn. Es la misma función en el camino normal y al rehacer:
+* así las dos llegan a la misma página.
 * @param p page.Page: bloqueada en exclusivo; se pisa entera
-* @param next page.BlockNumber, seq uint32, chunk []byte: de 1 a ChunkSize bytes
+* @param owner page.XID, next page.BlockNumber, seq uint32, chunk []byte: de 1 a ChunkSize bytes
 * @return error: solo si p no mide page.Size
 **/
-func apply(p page.Page, next page.BlockNumber, seq uint32, chunk []byte) error {
+func apply(p page.Page, owner page.XID, next page.BlockNumber, seq uint32, chunk []byte) error {
 	if err := p.Init(page.OpaqueSize); err != nil {
 		return err
 	}
+	p.SetPruneXID(owner)
 	copy(p[page.HeaderSize:], chunk)
 	if err := p.SetLower(page.HeaderSize + len(chunk)); err != nil {
 		return err

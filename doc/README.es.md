@@ -97,7 +97,7 @@ Cada tabla lista la API pública principal de cada paquete. `go doc github.com/c
 | `queue` | `New[T](size, maxEvents, period, handler)`, `Push`, `Len`, `Close` | `q.Push(item)` |
 | `crontab` | `New(tag, store, opts...)` (instancia; `WithHandler`) o `Load` (global), `CronJob`, `ScheduleJob`, `StopJob`, `StartJob`, `RemoveJob`, `GetJob`, `Http*`; estados `pending`→`scheduled`⇄`running`→`finished`/`failed`, `paused`, `missed`, `canceled`; `LastRun`, `WithRetries`, `WithTimeout`; las réplicas con el mismo tag eligen una líder y la relevan | `crontab.CronJob(tag, owner, "0 * * * *", 0, nil, fn)` |
 | `resilience` | `New()`, `LoadInstance(Params)`, `Instance.Run`, `IsDone`, `IsFailed`, `Stop` | `inst, _ := r.LoadInstance(resilience.Params{Fn: send, TotalAttempts: 3})` |
-| `store` | `Open(pathData, pathWal, name, mode)` → `FileStore` (`Insert`, `Update`, `Delete`, `Get`, `GetVersion`, `ForEach`, `Keys`, `Deferred`/`WaitDurable`, `Compact`, `Sync`, `WalSince`/`ApplyWalEntry`, `Stats`), `Recover` | `fs, _ := store.Open("./data", "./wal", "customers", store.ReadWrite)` |
+| `store` | `Open(dir)` → `Store` (`Put`, `Close`; en reescritura, F-23) | `s, _ := store.Open("./data"); s.Put("id", data)` |
 
 ### Seguridad
 
@@ -344,21 +344,16 @@ defer q.Close()
 
 ### Store embebido clave/valor
 
-`store` es un store de un solo nodo, de solo agregado, que guarda `id → []byte` en archivos de segmento con un índice en memoria; `Open` se repara solo después de una caída. No hay upsert: se llama `Update` y, si el id no existía, `Insert`. API pública: [`store/catalog.go`](../store/catalog.go). Un store `ReadWrite` solo lo abre uno a la vez (`flock` sobre `<pathData>/segments/<name>-LOCK`, que libera `Close`; solo en unix, en las demás plataformas avisa en el log), y cada archivo creado o renombrado va seguido del fsync de su directorio.
+`store` se está reescribiendo como base para construir persistencia de datos de alto rendimiento (F-23): `(id string, data []byte)` en varios archivos de segmento (`RELSEG_SIZE` MB, 128 por omisión) con un índice ordenado en memoria; los escritores concurrentes comparten cada fsync (group commit) y `Open` corta la cola sin confirmar tras una caída. Un directorio lo abre un solo proceso a la vez (`flock` sobre `LOCK`). Disponible hoy: `Open`, `Put` (escritura ciega: crea o reemplaza sin leer) y `Close`; siguen `Read`, `Remove`, `Insert`, `Update` y `Delete`. Diseño y formato: [`store/doc.go`](../store/doc.go).
 
 ```go
-fs, err := store.Open("./data/collections", "./data/wal", "customers", store.ReadWrite)
+s, err := store.Open("./data/customers")
 if err != nil {
     return err
 }
-defer fs.Close()
+defer s.Close()
 
-ok, err := fs.Insert("c-001", []byte(`{"name":"Ana"}`)) // false si ya existía
-ok, err = fs.Update("c-001", []byte(`{"name":"Ana María"}`))
-data, exists, err := fs.Get("c-001")
-err = fs.ForEach(func(id string, data []byte) (bool, error) {
-    return true, nil // false detiene el recorrido
-}, true, 0, 100)
+err = s.Put("c-001", []byte(`{"name":"Ana"}`)) // con SYNC_ON_WRITE (por omisión) vuelve cuando está en disco
 ```
 
 ### Workflows con `jwf`
@@ -437,7 +432,7 @@ hits, _ := index.Search(ctx, tenantId, projectId, "reset the router", 5, 0.3, em
 | `dt` | `PRODUCTION` (`true` guarda en Redis) |
 | `jwf`, `jsql` | `MAX_AUDIT_LOG` (1000) |
 | `jwsp` | `WHATSAPP_API_URL` |
-| `store` | `RELSEG_SIZE` (MB por segmento, 128), `SYNC_ON_WRITE` (true), `MIN_THRESHOLD_COMPACT` (1000) |
+| `store` | `RELSEG_SIZE` (MB por segmento, 128), `SYNC_ON_WRITE` (true) |
 | `validator` | `LANG` |
 | `middleware` | `TELEMETRY_FORMAT` (`text` en una terminal, `json` en otro caso, `off`), `TELEMETRY_LOG` (`all`, `errors`), `LATENCY_LIMIT` (1000 ms, `WARN` por encima), `REQUESTS_LIMIT` (400 por segundo por método y ruta) |
 
@@ -448,7 +443,7 @@ go run ./cmd/create      # scaffolding: proyecto, microservicio, modelo, rpc
 go run ./cmd/apigateway  # API gateway (ettp)
 go run ./cmd/server      # nodo TCP (puerto 1377); ./cmd/client se conecta a él
 go run ./cmd/ia          # API HTTP de RAG (PORT, por defecto 3300)
-go run ./cmd/store       # ejemplo de store: abrir, escribir, leer, recorrer, compactar (-dir para conservar los datos)
+go run ./cmd/store       # ejemplo de store: Put uno a uno y desde goroutines, reabrir, listar segmentos (-dir para conservar los datos)
 ```
 
 También `cmd/et`, `cmd/daemon`, `cmd/jsql`, `cmd/install`, `cmd/watcher`, `cmd/resilience`, `cmd/wsp` y `cmd/jwf`.
@@ -460,7 +455,6 @@ gofmt -w .
 go build ./... && go vet ./...
 go test -race ./et/ ./jsql/ ./jwf/   # núcleo, helpers de jsql y scripts (sin servicios)
 cd jsql/drivers/test && go test -v   # jsql contra cada driver disponible
-go run ./test/storebench -d 10s      # carga sobre store (escritores, lectores)
 ./version.sh --minor                 # sube el tag de git, actualiza los README y hace push
 ```
 

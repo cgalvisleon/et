@@ -97,7 +97,7 @@ Each table lists the main public API of every package. `go doc github.com/cgalvi
 | `queue`      | `New[T](size, maxEvents, period, handler)`, `Push`, `Len`, `Close`                                                                                                                                                                                                                                                             | `q.Push(item)`                                                             |
 | `crontab`    | `New(tag, store, opts...)` (instance; `WithHandler`) or `Load` (global), `CronJob`, `ScheduleJob`, `StopJob`, `StartJob`, `RemoveJob`, `GetJob`, `Http*`; states `pending`→`scheduled`⇄`running`→`finished`/`failed`, `paused`, `missed`, `canceled`; `LastRun`, `WithRetries`, `WithTimeout`; replicas with the same tag elect a leader and fail over | `crontab.CronJob(tag, owner, "0 * * * *", 0, nil, fn)`                     |
 | `resilience` | `New()`, `LoadInstance(Params)`, `Instance.Run`, `IsDone`, `IsFailed`, `Stop`                                                                                                                                                                                                                                                  | `inst, _ := r.LoadInstance(resilience.Params{Fn: send, TotalAttempts: 3})` |
-| `store`      | `Open(pathData, pathWal, name, mode)` → `FileStore` (`Insert`, `Update`, `Delete`, `Get`, `GetVersion`, `ForEach`, `Keys`, `Deferred`/`WaitDurable`, `Compact`, `Sync`, `WalSince`/`ApplyWalEntry`, `Stats`), `Recover`                                                                                                        | `fs, _ := store.Open("./data", "./wal", "customers", store.ReadWrite)`     |
+| `store`      | `Open(dir)` → `Store` (`Put`, `Close`; being rewritten, F-23) | `s, _ := store.Open("./data"); s.Put("id", data)` |
 
 ### Security
 
@@ -367,21 +367,16 @@ defer q.Close()
 
 ### Embedded key/value store
 
-`store` is a single-node, append-only store of `id → []byte` in segment files, with an in-memory index; it repairs itself on `Open` after a crash. There is no upsert: call `Update`, then `Insert` if the id did not exist. Public API: [`store/catalog.go`](store/catalog.go). A `ReadWrite` store is locked to one opener (`flock` on `<pathData>/segments/<name>-LOCK`, released by `Close`; unix only, elsewhere it logs a warning), and every created or renamed file is followed by an fsync of its directory.
+`store` is being rewritten as the base for high-performance data persistence (F-23): `(id string, data []byte)` in several segment files (`RELSEG_SIZE` MB, 128 by default) with an ordered in-memory index; concurrent writers share each fsync (group commit), and `Open` cuts an unconfirmed tail after a crash. A directory can be opened by one process at a time (`flock` on `LOCK`). Available today: `Open`, `Put` (blind write: creates or replaces without reading) and `Close`; `Read`, `Remove`, `Insert`, `Update` and `Delete` come next. Design and format: [`store/doc.go`](store/doc.go).
 
 ```go
-fs, err := store.Open("./data/collections", "./data/wal", "customers", store.ReadWrite)
+s, err := store.Open("./data/customers")
 if err != nil {
     return err
 }
-defer fs.Close()
+defer s.Close()
 
-ok, err := fs.Insert("c-001", []byte(`{"name":"Ana"}`)) // false if it already existed
-ok, err = fs.Update("c-001", []byte(`{"name":"Ana María"}`))
-data, exists, err := fs.Get("c-001")
-err = fs.ForEach(func(id string, data []byte) (bool, error) {
-    return true, nil // false stops
-}, true, 0, 100)
+err = s.Put("c-001", []byte(`{"name":"Ana"}`)) // with SYNC_ON_WRITE (default) it returns once on disk
 ```
 
 ### Workflows with `jwf`
@@ -460,7 +455,7 @@ hits, _ := index.Search(ctx, tenantId, projectId, "reset the router", 5, 0.3, em
 | `dt`          | `PRODUCTION` (`true` stores in Redis)                                                                                                                                                                                                                                                                                                                                   |
 | `jwf`, `jsql` | `MAX_AUDIT_LOG` (1000)                                                                                                                                                                                                                                                                                                                                                  |
 | `jwsp`        | `WHATSAPP_API_URL`                                                                                                                                                                                                                                                                                                                                                      |
-| `store`       | `RELSEG_SIZE` (segment MB, 128), `SYNC_ON_WRITE` (true), `MIN_THRESHOLD_COMPACT` (1000)                                                                                                                                                                                                                                                                                 |
+| `store`       | `RELSEG_SIZE` (segment MB, 128), `SYNC_ON_WRITE` (true)                                                                                                                                                                                                                                                                                 |
 | `validator`   | `LANG`                                                                                                                                                                                                                                                                                                                                                                  |
 | `middleware`  | `TELEMETRY_FORMAT` (`text` on a terminal, `json` elsewhere, `off`), `TELEMETRY_LOG` (`all`, `errors`), `LATENCY_LIMIT` (1000 ms, `WARN` above it), `REQUESTS_LIMIT` (400 per second per method and path)                                                                                                                                                                |
 
@@ -471,7 +466,7 @@ go run ./cmd/create      # scaffolding: project, microservice, model, rpc
 go run ./cmd/apigateway  # API gateway (ettp)
 go run ./cmd/server      # TCP node (port 1377); ./cmd/client connects to it
 go run ./cmd/ia          # RAG HTTP API (PORT, default 3300)
-go run ./cmd/store       # store example: open, write, read, iterate, compact (-dir to keep the data)
+go run ./cmd/store       # store example: Put one by one and from goroutines, reopen, list segments (-dir to keep the data)
 ```
 
 Also `cmd/et`, `cmd/daemon`, `cmd/jsql`, `cmd/install`, `cmd/watcher`, `cmd/resilience`, `cmd/wsp` and `cmd/jwf`.
@@ -483,7 +478,6 @@ gofmt -w .
 go build ./... && go vet ./...
 go test -race ./et/ ./jsql/ ./jwf/   # core, jsql helpers and scripts (no services)
 cd jsql/drivers/test && go test -v   # jsql against every available driver
-go run ./test/storebench -d 10s      # load on store (workers, readers)
 ./version.sh --minor                 # bump the git tag, update the READMEs and push
 ```
 

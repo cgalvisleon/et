@@ -1,194 +1,90 @@
 package store
 
 import (
-	"hash/maphash"
-	"maps"
-	"slices"
 	"sync"
+
+	"github.com/google/btree"
 )
 
-const indexShards = 64
+// btreeDegree: cuántos elementos agrupa cada nodo del árbol B. 32 es el valor habitual: nodos que caben en pocas
+// líneas de caché y un árbol de pocos niveles (10 M de ids son unos 5).
+const btreeDegree = 32
 
 /**
-* indexShard: Fragmento del índice con su propio lock.
+* ref: Dónde está el último registro de un id: segmento, posición y largo en disco, y su lsn (para que gane el más
+* nuevo aunque dos escrituras publiquen en otro orden).
 **/
-type indexShard struct {
-	mu sync.RWMutex
-	m  map[string]*recordRef
+type ref struct {
+	segment int
+	offset  int64
+	size    uint32
+	lsn     uint64
 }
 
 /**
-* shardedIndex: Índice en memoria repartido en fragmentos por hash del id, para que una
-* escritura bloquee solo su fragmento y no a todos los lectores. Las operaciones sobre un id
-* toman el lock de su fragmento; las que recorren todo toman todos, en orden.
+* entry: Un elemento del índice.
 **/
-type shardedIndex struct {
-	seed   maphash.Seed
-	shards [indexShards]indexShard
+type entry struct {
+	id  string
+	ref ref
 }
 
 /**
-* newShardedIndex: Crea un índice vacío, o con el contenido de from.
-* @param from map[string]*recordRef
-* @return *shardedIndex
-**/
-func newShardedIndex(from map[string]*recordRef) *shardedIndex {
-	result := &shardedIndex{seed: maphash.MakeSeed()}
-	for i := range result.shards {
-		result.shards[i].m = make(map[string]*recordRef, len(from)/indexShards)
-	}
-	for id, ref := range from {
-		result.shard(id).m[id] = ref
-	}
-	return result
-}
-
-/**
-* shard: Retorna el fragmento de id.
-* @param id string
-* @return *indexShard
-**/
-func (s *shardedIndex) shard(id string) *indexShard {
-	return &s.shards[maphash.String(s.seed, id)%indexShards]
-}
-
-/**
-* get: Retorna la referencia de id.
-* @param id string
-* @return *recordRef, bool
-**/
-func (s *shardedIndex) get(id string) (*recordRef, bool) {
-	sh := s.shard(id)
-	sh.mu.RLock()
-	defer sh.mu.RUnlock()
-	ref, exists := sh.m[id]
-	return ref, exists
-}
-
-/**
-* set: Guarda la referencia de id; retorna true si ya existía.
-* @param id string, ref *recordRef
+* lessEntry: El orden del índice: por id, byte a byte.
+* @param a, b entry
 * @return bool
 **/
-func (s *shardedIndex) set(id string, ref *recordRef) bool {
-	sh := s.shard(id)
-	sh.mu.Lock()
-	defer sh.mu.Unlock()
-	_, exists := sh.m[id]
-	sh.m[id] = ref
-	return exists
+func lessEntry(a, b entry) bool {
+	return a.id < b.id
 }
 
 /**
-* remove: Quita id; retorna true si existía.
+* index: El índice ordenado en memoria (un árbol B), seguro entre goroutines.
+**/
+type index struct {
+	mu   sync.RWMutex
+	tree *btree.BTreeG[entry]
+}
+
+/**
+* newIndex: Un índice vacío.
+* @return *index
+**/
+func newIndex() *index {
+	return &index{tree: btree.NewG(btreeDegree, lessEntry)}
+}
+
+/**
+* set: Guarda la referencia de id si es más nueva (mayor lsn) que la que había.
+* @param id string, r ref
+**/
+func (x *index) set(id string, r ref) {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	if old, ok := x.tree.Get(entry{id: id}); ok && old.ref.lsn > r.lsn {
+		return
+	}
+	x.tree.ReplaceOrInsert(entry{id: id, ref: r})
+}
+
+/**
+* get: La referencia de id.
 * @param id string
-* @return bool
+* @return ref, bool
 **/
-func (s *shardedIndex) remove(id string) bool {
-	sh := s.shard(id)
-	sh.mu.Lock()
-	defer sh.mu.Unlock()
-	if _, exists := sh.m[id]; !exists {
-		return false
-	}
-	delete(sh.m, id)
-	return true
+func (x *index) get(id string) (ref, bool) {
+	x.mu.RLock()
+	defer x.mu.RUnlock()
+	e, ok := x.tree.Get(entry{id: id})
+	return e.ref, ok
 }
 
 /**
-* rlockAll: Toma todos los fragmentos para lectura, en orden: el índice queda fijo.
-**/
-func (s *shardedIndex) rlockAll() {
-	for i := range s.shards {
-		s.shards[i].mu.RLock()
-	}
-}
-
-/**
-* runlockAll: Suelta lo tomado por rlockAll.
-**/
-func (s *shardedIndex) runlockAll() {
-	for i := range s.shards {
-		s.shards[i].mu.RUnlock()
-	}
-}
-
-/**
-* len: Retorna el número de claves.
+* count: Cuántos ids hay.
 * @return int
 **/
-func (s *shardedIndex) len() int {
-	s.rlockAll()
-	defer s.runlockAll()
-	result := 0
-	for i := range s.shards {
-		result += len(s.shards[i].m)
-	}
-	return result
-}
-
-/**
-* clone: Retorna una copia del índice completo, tomada en un solo instante.
-* @return map[string]*recordRef
-**/
-func (s *shardedIndex) clone() map[string]*recordRef {
-	s.rlockAll()
-	defer s.runlockAll()
-	result := make(map[string]*recordRef)
-	for i := range s.shards {
-		maps.Copy(result, s.shards[i].m)
-	}
-	return result
-}
-
-/**
-* sorted: Retorna las claves ordenadas asc/desc con offset y limit (limit <= 0 sin límite)
-* y sus referencias, tomadas en un solo instante.
-* @param asc bool, offset int, limit int
-* @return []string, []*recordRef
-**/
-func (s *shardedIndex) sorted(asc bool, offset, limit int) ([]string, []*recordRef) {
-	s.rlockAll()
-	defer s.runlockAll()
-	keys := []string{}
-	for i := range s.shards {
-		keys = slices.AppendSeq(keys, maps.Keys(s.shards[i].m))
-	}
-
-	offset = max(offset, 0)
-	if offset >= len(keys) {
-		return []string{}, []*recordRef{}
-	}
-
-	slices.Sort(keys)
-	if !asc {
-		slices.Reverse(keys)
-	}
-
-	end := len(keys)
-	if limit > 0 {
-		end = min(offset+limit, end)
-	}
-
-	keys = keys[offset:end]
-	refs := make([]*recordRef, len(keys))
-	for i, id := range keys {
-		refs[i] = s.shard(id).m[id]
-	}
-	return keys, refs
-}
-
-/**
-* each: Llama a fn por cada clave con el índice fijo (todos los fragmentos tomados).
-* fn no debe usar el índice.
-* @param fn func(id string, ref *recordRef)
-**/
-func (s *shardedIndex) each(fn func(id string, ref *recordRef)) {
-	s.rlockAll()
-	defer s.runlockAll()
-	for i := range s.shards {
-		for id, ref := range s.shards[i].m {
-			fn(id, ref)
-		}
-	}
+func (x *index) count() int {
+	x.mu.RLock()
+	defer x.mu.RUnlock()
+	return x.tree.Len()
 }

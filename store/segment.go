@@ -1,504 +1,196 @@
 package store
 
 import (
-	"encoding/binary"
+	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
-	"sync/atomic"
-
-	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/msg"
 )
 
+const segmentExt = ".seg"
+
 /**
-* recordHeader: Encabezado de un registro del log: LSN, tamaño y CRC de los datos, id
-* y estado (Active o Deleted).
+* segment: Un archivo del log. size es dónde va la próxima reserva (lo protege writeMu del Store); inflight cuenta las
+* escrituras reservadas que aún no terminan, para poder sellarlo.
 **/
-type recordHeader struct {
-	LSN     uint64 `json:"lsn"`
-	DataLen uint32 `json:"data_len"`
-	CRC     uint32 `json:"crc"`
-	IDLen   uint16 `json:"id_len"`
-	ID      string `json:"id"`
-	Status  byte   `json:"status"`
+type segment struct {
+	num      int
+	path     string
+	file     *os.File
+	size     int64
+	inflight sync.WaitGroup
 }
 
 /**
-* headerSize: Tamaño del encabezado, incluido el id.
-* @return int64
-**/
-func (s *recordHeader) headerSize() int64 {
-	return int64(fixedHeaderSize) + int64(s.IDLen)
-}
-
-/**
-* recordSize: Tamaño total del registro (encabezado + datos).
-* @return int64
-**/
-func (s *recordHeader) recordSize() int64 {
-	return s.headerSize() + int64(s.DataLen)
-}
-
-/**
-* recordRef: Ubicación de la versión vigente de un id en los segmentos (entrada del
-* índice en memoria).
-**/
-type recordRef struct {
-	segment int
-	offset  int64
-	length  uint32
-	crc     uint32 // CRC de los datos; vale solo con hasCRC
-	hasCRC  bool   // false si la referencia vino del snapshot (no guarda el CRC)
-}
-
-/**
-* differs: Indica, sin leer el disco, que data es distinto de lo guardado en la referencia.
-* false no asegura que sea igual: hay que comparar los bytes.
-* @param data []byte
-* @return bool
-**/
-func (s *recordRef) differs(data []byte) bool {
-	return s.hasCRC && (s.length != uint32(len(data)) || s.crc != checksum(data))
-}
-
-/**
-* toJson: Retorna la referencia como JSON.
-* @return et.Json
-**/
-func (s *recordRef) toJson() et.Json {
-	return et.Json{
-		"segment": s.segment,
-		"offset":  s.offset,
-		"length":  s.length,
-	}
-}
-
-/**
-* toString: Retorna la referencia como texto.
+* segmentName: El nombre del archivo del segmento num: diez dígitos, así el orden alfabético es el numérico.
+* @param num int
 * @return string
 **/
-func (s *recordRef) toString() string {
-	return s.toJson().ToString()
-}
-
-type segment struct {
-	file      *os.File
-	size      int64
-	name      string
-	readOnly  bool
-	writeErr  error
-	errMu     sync.Mutex
-	closeOnce sync.Once
-	readers   atomic.Int32           // lectores en curso (Get/Read/ForEach) que no sostienen indexMu
-	retired   atomic.Bool            // fuera del store (compaction/close): se cierra con el último lector
-	mapped    atomic.Pointer[[]byte] // contenido mapeado en memoria (sellado, o activo con capacidad MaxSegment); nil = ReadAt
-	visible   atomic.Int64           // bytes ya escritos con write: lo que se puede leer del mapeo
+func segmentName(num int) string {
+	return fmt.Sprintf("%010d%s", num, segmentExt)
 }
 
 /**
-* mapReadOnly: Mapea en memoria el segmento, que ya no recibe escrituras: las lecturas pasan a
-* ser copias de memoria en vez de llamadas al sistema. Si no se puede, se sigue con ReadAt.
+* createSegment: Crea el archivo del segmento num en dir y hace durable su nombre (fsync del directorio).
+* @param dir string, num int
+* @return *segment, error
 **/
-func (s *segment) mapReadOnly() {
-	if s.file == nil || s.size == 0 || s.mapped.Load() != nil {
-		return
-	}
-	b, err := mapFile(s.file, s.size)
+func createSegment(dir string, num int) (*segment, error) {
+	path := filepath.Join(dir, segmentName(num))
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o644)
 	if err != nil {
-		return
+		return nil, err
 	}
-	s.mapped.Store(&b)
+	if err := syncDir(dir); err != nil {
+		file.Close()
+		return nil, err
+	}
+	return &segment{num: num, path: path, file: file}, nil
 }
 
 /**
-* mapActive: Mapea en memoria el segmento activo con capacidad para capacity bytes (o su tamaño
-* actual, si es mayor). El mapeo es compartido: lo que write agrega se ve en él, y readAt solo lee
-* de él hasta visible; lo que queda fuera (un registro mayor que la capacidad) se lee con ReadAt.
-* @param capacity int64
+* openSegment: Abre un segmento existente para leerlo y, si es el activo, seguir escribiendo.
+* @param dir string, num int
+* @return *segment, error
 **/
-func (s *segment) mapActive(capacity int64) {
-	if s.file == nil || s.mapped.Load() != nil {
-		return
-	}
-	size := max(capacity, s.size)
-	if size <= 0 {
-		return
-	}
-	b, err := mapFile(s.file, size)
+func openSegment(dir string, num int) (*segment, error) {
+	path := filepath.Join(dir, segmentName(num))
+	file, err := os.OpenFile(path, os.O_RDWR, 0o644)
 	if err != nil {
-		return
+		return nil, err
 	}
-	s.mapped.Store(&b)
+	return &segment{num: num, path: path, file: file}, nil
 }
 
 /**
-* acquire: Registra un lector; solo se llama mientras el segmento sigue en el store (bajo indexMu).
+* listSegments: Los números de los segmentos de dir, en orden; falla si falta uno en medio.
+* @param dir string
+* @return []int, error
 **/
-func (s *segment) acquire() {
-	s.readers.Add(1)
-}
-
-/**
-* release: Libera un lector y cierra el archivo si el segmento fue retirado y era el último.
-**/
-func (s *segment) release() {
-	if s.readers.Add(-1) == 0 && s.retired.Load() {
-		s.close()
+func listSegments(dir string) ([]int, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
 	}
-}
-
-/**
-* retire: Saca el segmento del store; el archivo se cierra cuando no quedan lectores.
-**/
-func (s *segment) retire() {
-	s.retired.Store(true)
-	if s.readers.Load() == 0 {
-		s.close()
+	var nums []int
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, segmentExt) {
+			continue
+		}
+		num, err := strconv.Atoi(strings.TrimSuffix(name, segmentExt))
+		if err != nil || num <= 0 {
+			return nil, fmt.Errorf(MSG_BAD_SEGMENT, name)
+		}
+		nums = append(nums, num)
 	}
-}
-
-/**
-* newSegment: Crea un segmento de escritura.
-* @param file *os.File, size int64, name string
-* @return *segment
-**/
-func newSegment(file *os.File, size int64, name string) *segment {
-	result := &segment{
-		file:     file,
-		size:     size,
-		name:     name,
-		readOnly: false,
+	sort.Ints(nums)
+	for i := 1; i < len(nums); i++ {
+		if nums[i] != nums[i-1]+1 {
+			return nil, fmt.Errorf(MSG_SEGMENT_MISSING, nums[i-1]+1, nums[i], nums[i-1])
+		}
 	}
-	result.visible.Store(size)
-	return result
+	return nums, nil
 }
 
 /**
-* newReadOnlySegment: Crea un segmento que no acepta escrituras.
-* @param file *os.File, size int64, name string
-* @return *segment
-**/
-func newReadOnlySegment(file *os.File, size int64, name string) *segment {
-	result := &segment{
-		file:     file,
-		size:     size,
-		name:     name,
-		readOnly: true,
-	}
-	result.visible.Store(size)
-	return result
-}
-
-/**
-* flush: Fuerza a disco lo escrito (fsync).
+* writeAt: Escribe un registro completo en su lugar reservado.
+* @param buf []byte, off int64
 * @return error
 **/
-func (s *segment) flush() error {
-	if s.readOnly {
-		return nil
-	}
-	if s.file == nil {
-		return errors.New(msg.MSG_STORE_FILE_IS_NIL)
-	}
+func (s *segment) writeAt(buf []byte, off int64) error {
+	_, err := s.file.WriteAt(buf, off)
+	return err
+}
+
+/**
+* seal: Espera a que terminen las escrituras reservadas y hace fsync: desde aquí el segmento no cambia.
+* Se llama con writeMu tomado (nadie puede reservar mientras tanto).
+* @return error
+**/
+func (s *segment) seal() error {
+	s.inflight.Wait()
 	return s.file.Sync()
 }
 
 /**
-* seal: Hace fsync y deja el segmento en solo lectura sin cerrar el archivo.
-* @return error
-**/
-func (s *segment) seal() error {
-	if s.readOnly {
-		return nil
-	}
-
-	if err := s.writeError(); err != nil {
-		return err
-	}
-	if err := s.file.Sync(); err != nil {
-		return err
-	}
-
-	s.readOnly = true
-	s.mapReadOnly()
-	return nil
-}
-
-/**
-* close: Hace fsync si es de escritura y cierra el archivo.
+* close: Cierra el archivo.
 * @return error
 **/
 func (s *segment) close() error {
-	var closeErr error
-	s.closeOnce.Do(func() {
-		if s.file == nil {
-			return
-		}
-		// Sin lectores (retire/release): nadie usa el mapeo.
-		if b := s.mapped.Swap(nil); b != nil {
-			unmapFile(*b)
-		}
-		if s.readOnly {
-			closeErr = s.file.Close()
-			return
-		}
-		if err := s.flush(); err != nil {
-			closeErr = err
-			return
-		}
-		closeErr = s.file.Close()
-	})
-
-	return closeErr
+	return s.file.Close()
 }
 
 /**
-* toJson: Retorna el segmento como JSON.
-* @return et.Json
+* scanned: Un registro válido encontrado al recorrer un segmento.
 **/
-func (s *segment) toJson() et.Json {
-	return et.Json{
-		"file": s.file.Name(),
-		"size": s.size,
-		"name": s.name,
-	}
+type scanned struct {
+	id  string
+	ref ref
 }
 
 /**
-* toString: Retorna el segmento como texto.
-* @return string
+* scan: Recorre el segmento desde el principio y llama a fn con cada registro válido, en orden. Se detiene en el
+* primer registro inválido o incompleto y devuelve dónde termina la parte válida; reached indica si se llegó al final
+* del archivo sin encontrar nada inválido.
+* @param fn func(rec scanned)
+* @return int64 (fin de la parte válida), bool (reached), error (solo de lectura del disco)
 **/
-func (s *segment) toString() string {
-	return s.toJson().ToString()
-}
-
-/**
-* readAt: Lee len(b) bytes desde off.
-* @param b []byte, off int64
-* @return int, error
-**/
-func (s *segment) readAt(b []byte, off int64) (int, error) {
-	// Del mapeo solo lo que ya se escribió (más allá del archivo el acceso fallaría); el resto,
-	// incluido leer pasado el final (io.EOF), con ReadAt.
-	if m := s.mapped.Load(); m != nil {
-		end := min(s.visible.Load(), int64(len(*m)))
-		if off >= 0 && off+int64(len(b)) <= end {
-			return copy(b, (*m)[off:]), nil
-		}
+func (s *segment) scan(fn func(rec scanned)) (int64, bool, error) {
+	if _, err := s.file.Seek(0, io.SeekStart); err != nil {
+		return 0, false, err
 	}
-	if s.file == nil {
-		return 0, errors.New(msg.MSG_STORE_FILE_IS_NIL)
-	}
-	return s.file.ReadAt(b, off)
-}
-
-/**
-* write: Escribe b de forma síncrona; tras el primer error, toda escritura falla con ese error.
-* @param b []byte
-* @return error
-**/
-func (s *segment) write(b []byte) error {
-	if s.file == nil {
-		return errors.New(msg.MSG_STORE_FILE_IS_NIL)
-	}
-	if s.readOnly {
-		return errors.New(msg.MSG_STORE_IS_READ_ONLY)
-	}
-	if err := s.writeError(); err != nil {
-		return err
-	}
-
-	if _, err := s.file.Write(b); err != nil {
-		s.errMu.Lock()
-		s.writeErr = err
-		s.errMu.Unlock()
-		return err
-	}
-	s.visible.Add(int64(len(b)))
-
-	return nil
-}
-
-/**
-* writeError: Retorna el primer error de escritura, si lo hubo.
-* @return error
-**/
-func (s *segment) writeError() error {
-	s.errMu.Lock()
-	defer s.errMu.Unlock()
-	return s.writeErr
-}
-
-/**
-* writeRecord: Escribe encabezado y datos de un registro en una sola escritura.
-* @param lsn uint64, id string, data []byte, status byte
-* @return *recordRef, error
-**/
-func (s *segment) writeRecord(lsn uint64, id string, data []byte, status byte) (*recordRef, error) {
-	h, header, err := newRecordHeaderAt(lsn, id, data, status)
-	if err != nil {
-		return nil, err
-	}
-
-	// Encabezado y datos en una sola escritura: nunca se lee uno sin el otro.
-	offset := s.size
-	record := make([]byte, 0, len(header)+len(data))
-	record = append(record, header...)
-	record = append(record, data...)
-	if err := s.write(record); err != nil {
-		return nil, err
-	}
-
-	s.size += h.recordSize()
-	return &recordRef{
-		offset: offset,
-		length: h.DataLen,
-		crc:    h.CRC,
-		hasCRC: true,
-	}, nil
-}
-
-/**
-* decodeFixedHeader: Decodifica la parte fija del encabezado.
-* Formato: [LSN:8][DataLen:4][CRC:4][IDLen:2][ID][Status:1][Data]
-* @param b []byte (al menos 18 bytes)
-* @return recordHeader
-**/
-func decodeFixedHeader(b []byte) recordHeader {
-	return recordHeader{
-		LSN:     binary.BigEndian.Uint64(b[0:8]),
-		DataLen: getUint32(b[8:12]),
-		CRC:     getUint32(b[12:16]),
-		IDLen:   getUint16(b[16:18]),
-	}
-}
-
-/**
-* decodeRecord: Valida un registro completo (id, longitud, estado Active y CRC) y retorna sus datos.
-* @param buf []byte, ref *recordRef, id string
-* @return []byte, error
-**/
-func decodeRecord(buf []byte, ref *recordRef, id string) ([]byte, error) {
-	h := decodeFixedHeader(buf)
-	idLen := int(h.IDLen)
-	if idLen != len(id) || h.DataLen != ref.length || len(buf) != int(fixedHeaderSize)+idLen+int(h.DataLen) {
-		return nil, errors.New(msg.MSG_STORE_CORRUPTED_RECORD)
-	}
-	if string(buf[18:18+idLen]) != id || buf[18+idLen] != Active {
-		return nil, errors.New(msg.MSG_STORE_CORRUPTED_RECORD)
-	}
-
-	data := buf[int(fixedHeaderSize)+idLen:]
-	if checksum(data) != h.CRC {
-		return nil, errors.New(msg.MSG_STORE_CORRUPTED_RECORD)
-	}
-
-	return data, nil
-}
-
-/**
-* readRecord: Lee el registro de id con una sola lectura a disco.
-* @param ref *recordRef, id string
-* @return []byte, error
-**/
-func (s *segment) readRecord(ref *recordRef, id string) ([]byte, error) {
-	buf := make([]byte, int(fixedHeaderSize)+len(id)+int(ref.length))
-	if _, err := s.readAt(buf, ref.offset); err != nil {
-		return nil, err
-	}
-
-	return decodeRecord(buf, ref, id)
-}
-
-/**
-* readVersion: readRecord más el LSN del registro (su versión).
-* @param ref *recordRef, id string
-* @return []byte, uint64, error
-**/
-func (s *segment) readVersion(ref *recordRef, id string) ([]byte, uint64, error) {
-	buf := make([]byte, int(fixedHeaderSize)+len(id)+int(ref.length))
-	if _, err := s.readAt(buf, ref.offset); err != nil {
-		return nil, 0, err
-	}
-
-	data, err := decodeRecord(buf, ref, id)
-	if err != nil {
-		return nil, 0, err
-	}
-	return data, decodeFixedHeader(buf).LSN, nil
-}
-
-/**
-* read: Lee el registro de ref cuando no se conoce el id (dos lecturas).
-* @param ref *recordRef
-* @return []byte, error
-**/
-func (s *segment) read(ref *recordRef) ([]byte, error) {
-	head := make([]byte, 18)
-	if _, err := s.readAt(head, ref.offset); err != nil {
-		return nil, err
-	}
-
-	idLen := int(getUint16(head[16:18]))
-	buf := make([]byte, int(fixedHeaderSize)+idLen+int(ref.length))
-	if _, err := s.readAt(buf, ref.offset); err != nil {
-		return nil, err
-	}
-
-	return decodeRecord(buf, ref, string(buf[18:18+idLen]))
-}
-
-/**
-* scan: Recorre los registros desde offset en orden de escritura; se detiene en silencio
-* al final del archivo o en el primer registro corrupto.
-* @param offset int64, fn func(offset int64, h recordHeader, data []byte) error
-* @return error
-**/
-func (s *segment) scan(offset int64, fn func(offset int64, h recordHeader, data []byte) error) error {
+	r := bufio.NewReaderSize(s.file, 1<<20)
+	var off int64
+	head := make([]byte, headerSize)
 	for {
-		fixed := make([]byte, fixedHeaderSize)
-		n, err := s.readAt(fixed, offset)
-		if err != nil {
-			if errors.Is(err, io.EOF) || n < len(fixed) {
-				return nil
-			}
-			return err
+		if _, err := io.ReadFull(r, head); err != nil {
+			return off, errors.Is(err, io.EOF), readError(err)
 		}
-
-		h := decodeFixedHeader(fixed)
-		if h.IDLen == 0 || h.IDLen > maxIdLen {
-			return nil // corrupción → parar seguro
+		h := decodeHeader(head)
+		if h.idLen == 0 || h.dataLen > maxDataLen {
+			return off, false, nil
 		}
-
-		idBytes := make([]byte, h.IDLen)
-		if _, err := s.readAt(idBytes, offset+18); err != nil {
-			return nil
+		buf := make([]byte, h.size())
+		copy(buf, head)
+		if _, err := io.ReadFull(r, buf[headerSize:]); err != nil {
+			return off, false, readError(err)
 		}
-		h.ID = string(idBytes)
-
-		statusByte := make([]byte, 1)
-		if _, err := s.readAt(statusByte, offset+18+int64(h.IDLen)); err != nil {
-			return nil
+		if !validRecord(h, buf) {
+			return off, false, nil
 		}
-		h.Status = statusByte[0]
-
-		var data []byte
-		if h.DataLen > 0 {
-			data = make([]byte, h.DataLen)
-			if _, err := s.readAt(data, offset+18+int64(h.IDLen)+1); err != nil {
-				return nil
-			}
-			if checksum(data) != h.CRC {
-				return nil // registro corrupto → detener el escaneo
-			}
-		}
-
-		if err := fn(offset, h, data); err != nil {
-			return err
-		}
-
-		offset += h.recordSize()
+		id := string(buf[headerSize : headerSize+h.idLen])
+		fn(scanned{id: id, ref: ref{segment: s.num, offset: off, size: uint32(h.size()), lsn: h.lsn}})
+		off += int64(h.size())
 	}
+}
+
+/**
+* readError: Un final de archivo (completo o a medias) no es un error de lectura: es donde termina el log.
+* @param err error
+* @return error
+**/
+func readError(err error) error {
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return nil
+	}
+	return err
+}
+
+/**
+* truncate: Corta el segmento en off y hace fsync: lo que seguía no se había confirmado.
+* @param off int64
+* @return error
+**/
+func (s *segment) truncate(off int64) error {
+	if err := s.file.Truncate(off); err != nil {
+		return err
+	}
+	return s.file.Sync()
 }

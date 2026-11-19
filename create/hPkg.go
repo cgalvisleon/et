@@ -20,58 +20,58 @@ func MakePkg(projectName, name, schema string) error {
 		return err
 	}
 
-	_, err = file.MakeFile(pathPkg, "event.go", template.ModelEvent, name)
+	_, err = makeFile(pathPkg, "event.go", template.ModelEvent, name)
 	if err != nil {
 		return err
 	}
 
-	_, err = file.MakeFile(pathPkg, "config.go", template.ModelConfig, name)
+	_, err = makeFile(pathPkg, "config.go", template.ModelConfig, name)
 	if err != nil {
 		return err
 	}
 
-	_, err = file.MakeFile(pathPkg, "rpc.go", template.ModelRpc, name)
+	_, err = makeFile(pathPkg, "rpc.go", template.ModelRpc, name)
 	if err != nil {
 		return err
 	}
 
 	if len(schema) > 0 {
-		_, err = file.MakeFile(pathPkg, "controller.go", template.ModelDbController, name)
+		_, err = makeFile(pathPkg, "controller.go", template.ModelDbController, name)
 		if err != nil {
 			return err
 		}
 
 		modelo := strs.Titlecase(name)
-		_, err = file.MakeFile(pathPkg, "model.go", template.ModelModel, name, schema, projectName, modelo)
+		_, err = makeFile(pathPkg, "model.go", template.ModelModel, name, schema, projectName, modelo)
 		if err != nil {
 			return err
 		}
 
 		fileName := fmt.Sprintf(`router-%s.go`, strs.Lowcase(name))
-		_, err = file.MakeFile(pathPkg, fileName, template.ModelDbHandler, name, modelo, projectName, schema)
+		_, err = makeFile(pathPkg, fileName, template.ModelDbHandler, name, modelo, projectName, schema)
 		if err != nil {
 			return err
 		}
 
 		title := strs.Titlecase(name)
-		_, err = file.MakeFile(pathPkg, "router.go", template.ModelDbRouter, name, title)
+		_, err = makeFile(pathPkg, "router.go", template.ModelDbRouter, name, title)
 		if err != nil {
 			return err
 		}
 	} else {
-		_, err = file.MakeFile(pathPkg, "controller.go", template.ModelController, name)
+		_, err = makeFile(pathPkg, "controller.go", template.ModelController, name)
 		if err != nil {
 			return err
 		}
 
 		modelo := strs.Titlecase(name)
 		fileName := fmt.Sprintf(`h%s.go`, modelo)
-		_, err = file.MakeFile(pathPkg, fileName, template.ModelHandler, name, toCamelCase(modelo))
+		_, err = makeFile(pathPkg, fileName, template.ModelHandler, name, toCamelCase(modelo))
 		if err != nil {
 			return err
 		}
 
-		_, err = file.MakeFile(pathPkg, "router.go", template.ModelRouter, name, toCamelCase(modelo))
+		_, err = makeFile(pathPkg, "router.go", template.ModelRouter, name, toCamelCase(modelo))
 		if err != nil {
 			return err
 		}
@@ -96,14 +96,14 @@ func MakeModel(projectName, packageName, modelo, schema string) error {
 		// manual step the caller is reminded about (see CmdModelo's Run in hCommand.go).
 
 		fileName := fmt.Sprintf(`router-%s.go`, strs.Lowcase(modelo))
-		_, err := file.MakeFile(pathPkg, fileName, template.ModelDbHandler, packageName, toCamelCase(modelo), projectName, schema)
+		_, err := makeFile(pathPkg, fileName, template.ModelDbHandler, packageName, toCamelCase(modelo), projectName, schema)
 		if err != nil {
 			return err
 		}
 	} else {
 		modelo = strs.Titlecase(modelo)
 		fileName := fmt.Sprintf(`h%s.go`, modelo)
-		_, err := file.MakeFile(pathPkg, fileName, template.ModelHandler, packageName, toCamelCase(modelo), projectName)
+		_, err := makeFile(pathPkg, fileName, template.ModelHandler, packageName, toCamelCase(modelo), projectName)
 		if err != nil {
 			return err
 		}
@@ -123,7 +123,7 @@ func MakeRpc(name string) error {
 		return err
 	}
 
-	_, err = file.MakeFile(path, "hRpc.go", template.ModelhRpc, name)
+	_, err = makeFile(path, "hRpc.go", template.ModelhRpc, name)
 	if err != nil {
 		return err
 	}

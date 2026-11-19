@@ -238,7 +238,8 @@ func (s *Router) findResolver(req *http.Request) (*Resolver, error) {
 }
 
 /**
-* delete
+* delete: Quits the solver of the path and prunes the nodes left without a solver or children; a node that still
+* solves another route (/a when /a/b is deleted) or has children (/a/b when /a is deleted) stays
 * @param path string
 * @return bool, error
 **/
@@ -248,15 +249,14 @@ func (s *Router) delete(path string) (bool, error) {
 		return false, err
 	}
 
-	ok := target.owner != nil
-	for ok {
+	target.Solver = nil
+	for target.owner != nil && target.Solver == nil && len(target.Router) == 0 {
 		owner := target.owner
 		delete(owner.Router, target.Tag)
-		if len(owner.Router) > 0 {
-			break
+		if owner.Param == target.Tag {
+			owner.Param = ""
 		}
 		target = owner
-		ok = target.owner != nil
 	}
 
 	return true, nil

@@ -54,7 +54,7 @@ func MkProject(packageName, name, author, schema string) error {
 * @return error
 **/
 func MakeReadme(moduleName, name string) error {
-	_, _ = file.MakeFile(".", "README.md", template.ModelReadme, name, moduleName, "```")
+	_, _ = makeFile(".", "README.md", template.ModelReadme, name, moduleName, "```")
 
 	return nil
 }
@@ -65,11 +65,11 @@ func MakeReadme(moduleName, name string) error {
 * @return error
 **/
 func MakeEnv(packageName string) error {
-	_, _ = file.MakeFile(".", ".env", template.ModelEnvar, packageName)
+	_, _ = makeFile(".", ".env", template.ModelEnvar, packageName)
 
-	_, _ = file.MakeFile(".", ".env.prd", template.ModelEnvar, packageName)
+	_, _ = makeFile(".", ".env.prd", template.ModelEnvar, packageName)
 
-	_, _ = file.MakeFile(".", ".env.qa", template.ModelEnvar, packageName)
+	_, _ = makeFile(".", ".env.qa", template.ModelEnvar, packageName)
 
 	return nil
 }
@@ -80,7 +80,7 @@ func MakeEnv(packageName string) error {
 * @return error
 **/
 func MakeVersion(name string) error {
-	_, _ = file.MakeFile(".", "version.sh", template.Version, name)
+	_, _ = makeFile(".", "version.sh", template.Version, name)
 
 	return nil
 }
@@ -91,7 +91,7 @@ func MakeVersion(name string) error {
 * @return error
 **/
 func MakeDeploy(name string) error {
-	_, _ = file.MakeFile(".", "deploy.sh", template.Deploy, name)
+	_, _ = makeFile(".", "deploy.sh", template.Deploy, name)
 
 	return nil
 }

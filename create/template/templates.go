@@ -107,8 +107,8 @@ func New(rpcPort int) http.Handler {
 
 func Close() {
 	jrpc.Close()
-	// cache.Close()/event.Close() no cierran limpio (bug conocido de recursión
-	// infinita en et/cache y et/event) — no se llaman aquí a propósito.
+	event.Close()
+	cache.Close()
 }
 `
 
@@ -154,8 +154,8 @@ func New(rpcPort int) http.Handler {
 
 func Close() {
 	jrpc.Close()
-	// cache.Close()/event.Close() no cierran limpio (bug conocido de recursión
-	// infinita en et/cache y et/event) — no se llaman aquí a propósito.
+	event.Close()
+	cache.Close()
 }
 `
 

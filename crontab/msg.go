@@ -25,6 +25,7 @@ var (
 	MSG_ERROR_JOB_INVALID       = "job without id or rev"
 	MSG_ERROR_OUT_FULL          = "crontab %s: outgoing queue full, message dropped"
 	MSG_LEADER                  = "crontab:%s | replica:%s | leader:%v"
+	MSG_ERROR_HANDLER_REQUIRED  = "job %s without fn and the crontab has no handler (WithHandler)"
 )
 
 func init() {
@@ -53,5 +54,6 @@ func init() {
 		MSG_ERROR_JOB_INVALID = "job sin id o rev"
 		MSG_ERROR_OUT_FULL = "crontab %s: cola de salida llena, mensaje descartado"
 		MSG_LEADER = "crontab:%s | réplica:%s | líder:%v"
+		MSG_ERROR_HANDLER_REQUIRED = "el job %s no tiene fn y el crontab no tiene handler (WithHandler)"
 	}
 }

@@ -16,12 +16,14 @@ import (
 )
 
 /**
-* Conn: The NATS connection of the package plus its id and one subscription per channel.
+* Conn: The NATS connection of the package plus its id, one subscription per channel (Subscribe, Queue, Stack) and
+* one per key (SubscribeWith, QueueWith, StackWith), kept apart so a key never takes the place of a channel.
 **/
 type Conn struct {
 	*nats.Conn
 	id     string
 	events map[string]*nats.Subscription
+	keyed  map[string]*nats.Subscription
 	mutex  *sync.RWMutex
 }
 
@@ -92,17 +94,25 @@ func New() (*Conn, error) {
 		id:     utility.UUID(),
 		Conn:   client,
 		events: map[string]*nats.Subscription{},
+		keyed:  map[string]*nats.Subscription{},
 		mutex:  &sync.RWMutex{},
 	}, nil
 }
 
 /**
-* Close unsubscribes all active subscriptions and closes the NATS connection.
+* Close unsubscribes all active subscriptions (by channel and by key) and closes the NATS connection.
 **/
 func (s *Conn) Close() {
+	s.mutex.Lock()
 	for _, sub := range s.events {
 		sub.Unsubscribe()
 	}
+	for _, sub := range s.keyed {
+		sub.Unsubscribe()
+	}
+	s.events = map[string]*nats.Subscription{}
+	s.keyed = map[string]*nats.Subscription{}
+	s.mutex.Unlock()
 
 	s.Conn.Close()
 

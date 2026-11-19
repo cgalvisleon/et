@@ -2,6 +2,7 @@ package event
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
@@ -15,7 +16,10 @@ import (
 * One subscription per channel: Subscribe and Queue store the new subscription under the channel
 * without unsubscribing the previous one, which keeps receiving; call Unsubscribe before
 * subscribing the same channel again.
-* Close iterates the subscriptions without taking the mutex: do not subscribe while closing.
+* One subscription per key: SubscribeWith, QueueWith and StackWith store it under a key of the
+* caller (its own map, apart from the channels), so several listeners of one channel live side by
+* side; the same key again replaces (unsubscribes) the previous one, and UnsubscribeKey cuts only
+* that one. Without a connection they return MSG_ERR_NOT_CONNECT.
 * Log and Overflow are fire-and-forget through a buffer of 256 messages (asyncPublishBufSize):
 * when it is full the message is dropped.
 * Publish and Subscribe are no-ops without a connection (Load not called or failed); Queue and
@@ -148,6 +152,35 @@ func Unsubscribe(channel string) error {
 }
 
 /**
+* handlerOf: The NATS handler of a subscription: decodes the message, sets Myself and calls f, recovering a panic of f
+* @param channel, panicMsg string, f func(Message)
+* @return nats.MsgHandler
+**/
+func handlerOf(channel, panicMsg string, f func(Message)) nats.MsgHandler {
+	return func(m *nats.Msg) {
+		defer func() {
+			if r := recover(); r != nil {
+				logs.Errorf(panicMsg, channel, r)
+			}
+		}()
+
+		if m == nil {
+			return
+		}
+
+		msg, err := DecodeMessage(m.Data)
+		if err != nil {
+			return
+		}
+
+		msg.Myself = conn != nil && msg.FromId == conn.id
+		if f != nil {
+			f(msg)
+		}
+	}
+}
+
+/**
 * Subscribe
 * @param channel string, f func(Message)
 * @return error
@@ -161,29 +194,7 @@ func Subscribe(channel string, f func(Message)) (err error) {
 		return
 	}
 
-	subscribe, err := conn.Subscribe(channel,
-		func(m *nats.Msg) {
-			defer func() {
-				if r := recover(); r != nil {
-					logs.Errorf(MSG_PANIC_IN_SUBSCRIBE, channel, r)
-				}
-			}()
-
-			if m == nil {
-				return
-			}
-
-			msg, err := DecodeMessage(m.Data)
-			if err != nil {
-				return
-			}
-
-			msg.Myself = msg.FromId == conn.id
-			if f != nil {
-				f(msg)
-			}
-		},
-	)
+	subscribe, err := conn.Subscribe(channel, handlerOf(channel, MSG_PANIC_IN_SUBSCRIBE, f))
 	if err != nil {
 		return err
 	}
@@ -209,32 +220,7 @@ func Queue(channel, queue string, f func(Message)) (err error) {
 		return nil
 	}
 
-	subscribe, err := conn.QueueSubscribe(
-		channel,
-		queue,
-		func(m *nats.Msg) {
-			defer func() {
-				if r := recover(); r != nil {
-					logs.Errorf(MSG_PANIC_IN_QUEUE, channel, r)
-				}
-			}()
-
-			if m == nil {
-				return
-			}
-
-			msg, err := DecodeMessage(m.Data)
-			if err != nil {
-				return
-			}
-
-			msg.Myself = msg.FromId == conn.id
-
-			if f != nil {
-				f(msg)
-			}
-		},
-	)
+	subscribe, err := conn.QueueSubscribe(channel, queue, handlerOf(channel, MSG_PANIC_IN_QUEUE, f))
 	if err != nil {
 		return err
 	}
@@ -244,6 +230,118 @@ func Queue(channel, queue string, f func(Message)) (err error) {
 	conn.mutex.Unlock()
 
 	return nil
+}
+
+/**
+* subscribeWith: Subscribes channel (every replica receives) or, with queue, the queue group of channel (one replica of
+* the group receives), under key: the same key again unsubscribes the previous one
+* @param key, channel, queue string, f func(Message)
+* @return error
+**/
+func subscribeWith(key, channel, queue string, f func(Message)) error {
+	if conn == nil {
+		return errors.New(msg.MSG_ERR_NOT_CONNECT)
+	}
+
+	if len(key) == 0 {
+		return errors.New(msg.MSG_KEY_REQUIRED)
+	}
+
+	if len(channel) == 0 {
+		return errors.New(msg.MSG_ERR_CHANNEL_REQUIRED)
+	}
+
+	conn.mutex.Lock()
+	defer conn.mutex.Unlock()
+
+	var subscribe *nats.Subscription
+	var err error
+	if queue == "" {
+		subscribe, err = conn.Subscribe(channel, handlerOf(channel, MSG_PANIC_IN_SUBSCRIBE, f))
+	} else {
+		subscribe, err = conn.QueueSubscribe(channel, queue, handlerOf(channel, MSG_PANIC_IN_QUEUE, f))
+	}
+	if err != nil {
+		return err
+	}
+
+	if previous, ok := conn.keyed[key]; ok {
+		previous.Unsubscribe()
+	}
+	conn.keyed[key] = subscribe
+
+	return nil
+}
+
+/**
+* SubscribeWith: Subscribe under a key of the caller: several listeners of one channel do not replace each other, and
+* UnsubscribeKey cuts only this one; the same key again replaces the previous subscription
+* @param key, channel string, f func(Message)
+* @return error
+**/
+func SubscribeWith(key, channel string, f func(Message)) error {
+	return subscribeWith(key, channel, "", f)
+}
+
+/**
+* QueueWith: Queue under a key of the caller (one replica of the queue group receives each message); see SubscribeWith
+* @param key, channel, queue string, f func(Message)
+* @return error
+**/
+func QueueWith(key, channel, queue string, f func(Message)) error {
+	if len(queue) == 0 {
+		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "queue")
+	}
+
+	return subscribeWith(key, channel, queue, f)
+}
+
+/**
+* StackWith: QueueWith on the queue group QUEUE_STACK (shared by every StackWith and Stack of the channel)
+* @param key, channel string, f func(Message)
+* @return error
+**/
+func StackWith(key, channel string, f func(Message)) error {
+	return QueueWith(key, channel, QUEUE_STACK, f)
+}
+
+/**
+* UnsubscribeKey: Cuts the subscription of key (SubscribeWith, QueueWith, StackWith); an unknown key is not an error
+* @param key string
+* @return error
+**/
+func UnsubscribeKey(key string) error {
+	if conn == nil {
+		return errors.New(msg.MSG_ERR_NOT_CONNECT)
+	}
+
+	conn.mutex.Lock()
+	defer conn.mutex.Unlock()
+
+	subscribe, ok := conn.keyed[key]
+	if !ok {
+		return nil
+	}
+
+	delete(conn.keyed, key)
+	return subscribe.Unsubscribe()
+}
+
+/**
+* HasKey: Whether there is a subscription under key
+* @param key string
+* @return bool
+**/
+func HasKey(key string) bool {
+	if conn == nil {
+		return false
+	}
+
+	conn.mutex.RLock()
+	defer conn.mutex.RUnlock()
+
+	_, ok := conn.keyed[key]
+	return ok
 }
 
 /**

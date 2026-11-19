@@ -18,12 +18,12 @@ func MakeCmd(packageName, name string) error {
 		return err
 	}
 
-	_, err = file.MakeFile(path, "Dockerfile", template.ModelDockerfile, name)
+	_, err = makeFile(path, "Dockerfile", template.ModelDockerfile, name)
 	if err != nil {
 		return err
 	}
 
-	_, err = file.MakeFile(path, "main.go", template.ModelMain, packageName, name)
+	_, err = makeFile(path, "main.go", template.ModelMain, packageName, name)
 	if err != nil {
 		return err
 	}

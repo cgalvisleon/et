@@ -159,6 +159,17 @@ func Name(r *http.Request) string {
 }
 
 /**
+* Token: El token de la sesión que guarda middleware.Authentication ya validado (sin el prefijo «Bearer »); vacío si
+* la petición no pasó por la autenticación
+* @param r *http.Request
+* @return string
+**/
+func Token(r *http.Request) string {
+	ctx := r.Context()
+	return TokenKey.String(ctx, "")
+}
+
+/**
 * SetDuration
 * @param ctx context.Context, duration time.Duration
 * @return context.Context
@@ -237,4 +248,13 @@ func SetRoleID(ctx context.Context, roleId string) context.Context {
 **/
 func SetName(ctx context.Context, name string) context.Context {
 	return context.WithValue(ctx, NameKey, name)
+}
+
+/**
+* SetToken: Guarda el token de la sesión (sin el prefijo «Bearer »), el que lee Token
+* @param ctx context.Context, token string
+* @return context.Context
+**/
+func SetToken(ctx context.Context, token string) context.Context {
+	return context.WithValue(ctx, TokenKey, token)
 }

@@ -248,9 +248,9 @@ func (s *counter) of(v string) int {
 }
 
 // replica: una réplica de tag sobre net, cerrada al terminar la prueba
-func replica(t *testing.T, net *memNet, tag string, store Store) *Crontab {
+func replica(t *testing.T, net *memNet, tag string, store Store, opts ...Option) *Crontab {
 	t.Helper()
-	c, err := newCrontab(tag, store, net.client(), testHeartbeat)
+	c, err := newCrontab(tag, store, net.client(), testHeartbeat, opts...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -575,6 +575,115 @@ func TestReload(t *testing.T) {
 		t.Fatalf("la misma definición creó otra revisión: %s → %s", rev, again.Rev)
 	}
 	waitFor(t, 3*time.Second, "sigue la cuenta", func() bool { j, _ := second.GetJob("p"); return j.Int("runs") > runs })
+}
+
+// TestHandlerCatchUp: un schedule que quedó programado en el Store y cuya hora pasó con todas las réplicas caídas corre
+// una vez al arrancar otra con WithHandler (catch-up dentro de New) y queda finished; registrarlo de nuevo con la
+// fecha pasada conserva el job, y una fecha pasada sin ese job sigue siendo un error.
+func TestHandlerCatchUp(t *testing.T) {
+	store := newMemStore()
+	net := newMemNet()
+	before := newCounter()
+	first := replica(t, net, "catchup", store, WithHandler(before.fn))
+	at := soon(400 * time.Millisecond)
+	params := et.Json{"v": "s"}
+	job, err := first.ScheduleJob("s", "", at, params, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rev := job.Rev
+	waitFor(t, time.Second, "guardado programado", func() bool {
+		doc, ok := store.get("catchup:s")
+		return ok && doc.Str("status") == string(Scheduled)
+	})
+	first.Close()
+	time.Sleep(time.Until(at) + 200*time.Millisecond)
+	if before.of("s") != 0 {
+		t.Fatal("la réplica cerrada disparó")
+	}
+
+	count := newCounter()
+	second := replica(t, net, "catchup", store, WithHandler(count.fn)).SetRunTimeout(time.Second)
+	got := waitStatus(t, second, "s", Finished, 2*time.Second)
+	if count.of("s") != 1 || got.Int("runs") != 1 || got.Json("last_run").Str("status") != string(RunSucceeded) {
+		t.Fatalf("catch-up: %v, disparos %d", got, count.of("s"))
+	}
+
+	again, err := second.ScheduleJob("s", "", at, params, nil)
+	if err != nil {
+		t.Fatalf("la misma definición con la fecha pasada: %v", err)
+	}
+	if again.Rev != rev || again.ToJson().Str("status") != string(Finished) {
+		t.Fatalf("no conservó el job: rev %s → %s, %s", rev, again.Rev, again.ToJson().Str("status"))
+	}
+	if _, err := second.ScheduleJob("s", "", at, et.Json{"v": "otro"}, nil); err == nil {
+		t.Fatal("otra definición con la fecha pasada aceptada")
+	}
+	if _, err := second.ScheduleJob("nuevo", "", at, params, nil); err == nil {
+		t.Fatal("un schedule nuevo con la fecha pasada aceptado")
+	}
+	time.Sleep(300 * time.Millisecond)
+	if count.of("s") != 1 {
+		t.Fatalf("corrió otra vez: %d", count.of("s"))
+	}
+}
+
+// TestHandlerStartup: un cron recargado del Store que dispara justo al arrancar (sin que nadie lo registre otra vez)
+// lo atiende el handler; y una réplica que recibe el job de la líder también lo atiende.
+func TestHandlerStartup(t *testing.T) {
+	store := newMemStore()
+	net := newMemNet()
+	first := replica(t, net, "startup", store, WithHandler(newCounter().fn))
+	if _, err := first.CronJob("c", "", "* * * * * *", 0, et.Json{"v": "c"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 3*time.Second, "una corrida", func() bool { j, _ := first.GetJob("c"); return j.Int("runs") >= 1 })
+	first.Close()
+
+	a, b := newCounter(), newCounter()
+	leader := replica(t, net, "startup", store, WithHandler(a.fn)).SetRunTimeout(500 * time.Millisecond)
+	waitFor(t, 2500*time.Millisecond, "la líder sola atiende el job recargado", func() bool {
+		j, _ := leader.GetJob("c")
+		return a.of("c") >= 1 && j.Json("last_run").Str("status") == string(RunSucceeded)
+	})
+	follower := replica(t, net, "startup", store, WithHandler(b.fn))
+	if !leader.IsLeader() || follower.IsLeader() {
+		t.Fatalf("líder: %v %v", leader.IsLeader(), follower.IsLeader())
+	}
+	time.Sleep(3500 * time.Millisecond)
+	job, _ := leader.GetJob("c")
+	if a.of("c")+b.of("c") < 3 || job.Int("skipped") != 0 || job.Json("last_run").Str("status") == string(RunTimeout) {
+		t.Fatalf("disparos sin atender: líder %d, réplica %d, %v", a.of("c"), b.of("c"), job)
+	}
+	if b.of("c") == 0 {
+		t.Fatal("la réplica no atiende el job que le difundió la líder")
+	}
+}
+
+// TestHandlerRequired: sin fn ni handler, CronJob y ScheduleJob fallan con un error claro; un fn propio sigue valiendo
+// en una instancia con handler.
+func TestHandlerRequired(t *testing.T) {
+	net := newMemNet()
+	c := replica(t, net, "nohandler", nil)
+	if _, err := c.CronJob("x", "", "* * * * * *", 0, nil, nil); err == nil || !strings.Contains(err.Error(), "WithHandler") {
+		t.Fatalf("CronJob sin fn: %v", err)
+	}
+	if _, err := c.ScheduleJob("y", "", soon(time.Minute), nil, nil); err == nil || !strings.Contains(err.Error(), "WithHandler") {
+		t.Fatalf("ScheduleJob sin fn: %v", err)
+	}
+	if _, ok := c.GetJob("x"); ok {
+		t.Fatal("quedó el job sin quien lo atienda")
+	}
+
+	handler, own := newCounter(), newCounter()
+	h := replica(t, net, "withhandler", nil, WithHandler(handler.fn))
+	if _, err := h.CronJob("z", "", "* * * * * *", 0, et.Json{"v": "z"}, own.fn); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 3*time.Second, "fn propio", func() bool { return own.of("z") >= 1 })
+	if handler.of("z") != 0 {
+		t.Fatal("el handler atendió un job con fn propio")
+	}
 }
 
 // ---- Con NATS ----

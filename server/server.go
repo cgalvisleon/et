@@ -1,15 +1,17 @@
 package server
 
 import (
+	"context"
 	"fmt"
-	"github.com/cgalvisleon/et/msg"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/cgalvisleon/et/logs"
+	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/response"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/dimiro1/banner"
@@ -26,14 +28,18 @@ var packageName = "Ettp"
 **/
 type Ettp struct {
 	*chi.Mux
-	http    *http.Server
-	port    int
-	pidFile string
-	name    string
-	onClose []func()
-	onStart []func()
-	stop    chan os.Signal
+	http      *http.Server
+	port      int
+	pidFile   string
+	name      string
+	onClose   []func()
+	onStart   []func()
+	stop      chan os.Signal
+	closeOnce sync.Once
 }
+
+// shutdownTimeout: cuánto espera Close a que terminen las peticiones en curso antes de cortar el HTTP.
+const shutdownTimeout = 10 * time.Second
 
 /**
 * New
@@ -84,14 +90,25 @@ func (s *Ettp) banner() {
 }
 
 /**
-* Close
+* Close: Stops the HTTP server (waiting up to shutdownTimeout for the requests in flight) and then runs the OnClose
+* hooks, once: Start calls it on SIGINT/SIGTERM, and calling it again does nothing.
 **/
 func (s *Ettp) Close() {
-	for _, fn := range s.onClose {
-		fn()
-	}
+	s.closeOnce.Do(func() {
+		logs.Log(packageName, "Shutting down server...")
+		signal.Stop(s.stop)
+		if s.http != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+			defer cancel()
+			if err := s.http.Shutdown(ctx); err != nil {
+				logs.Logf(packageName, "Http shutdown: %s", err)
+			}
+		}
 
-	logs.Log(packageName, "Shutting down server...")
+		for _, fn := range s.onClose {
+			fn()
+		}
+	})
 }
 
 /**
@@ -186,7 +203,8 @@ func (s *Ettp) start() {
 }
 
 /**
-* Start
+* Start: Serves HTTP, runs the OnStart hooks and blocks until SIGINT/SIGTERM; then Close (HTTP shutdown and the
+* OnClose hooks) before returning.
 **/
 func (s *Ettp) Start() {
 	go s.start()
@@ -196,6 +214,7 @@ func (s *Ettp) Start() {
 	s.printRoutes()
 	s.banner()
 	<-s.stop
+	s.Close()
 }
 
 /**

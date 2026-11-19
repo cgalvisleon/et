@@ -10,7 +10,7 @@
 
 ## Nota: `create/` / `cmd/create` ya está corregido
 
-Hasta 2026-09 el generador de proyectos que trae este repo (`go run ./cmd/create`, paquete `create/`) estaba obsoleto: sus plantillas (`create/template/templates.go`) importaban `github.com/cgalvisleon/et/config` (paquete eliminado) y un módulo `github.com/cgalvisleon/jdb` inexistente, y llamaban funciones que ya no existen (`envar.Reload()`) o con firmas viejas. Fue corregido y reverificado contra el `et` actual — hoy `go run ./cmd/create` (interactivo: elige "Project"/"Microservice"/"Modelo"/"Rpc") es la forma más rápida de obtener el esqueleto de §3/§4 sin copiar nada a mano. Si necesitas invocarlo sin el menú interactivo, sus funciones son públicas: `create.MkProject(modulePath, name, author, schema)`, `create.MkMicroservice(modulePath, name, schema)`, `create.MkMolue(modulePath, packageName, modelo, schema)`, `create.MkRpc(name)` (`schema == ""` genera la variante sin base de datos).
+Hasta 2026-09 el generador de proyectos que trae este repo (`go run ./cmd/create`, paquete `create/`) estaba obsoleto: sus plantillas (`create/template/templates.go`) importaban `github.com/cgalvisleon/et/config` (paquete eliminado) y un módulo `github.com/cgalvisleon/jdb` inexistente, y llamaban funciones que ya no existen (`envar.Reload()`) o con firmas viejas. Fue corregido y reverificado contra el `et` actual — hoy `go run ./cmd/create` (interactivo: elige "Project"/"Microservice"/"Modelo"/"Rpc") es la forma más rápida de obtener el esqueleto de §3/§4 sin copiar nada a mano. Si necesitas invocarlo sin el menú interactivo, sus funciones son públicas: `create.MkProject(modulePath, name, author, schema)`, `create.MkMicroservice(modulePath, name, schema)`, `create.MkModel(modulePath, packageName, modelo, schema)`, `create.MkRpc(name)` (`schema == ""` genera la variante sin base de datos). Cada `.go` generado sale ya con formato `gofmt` (imports ordenados según el nombre del módulo).
 
 Sigue siendo cierto que `create modelo` (agregar un segundo recurso a un servicio ya generado) no reescribe automáticamente `model.go`/`router.go` — `file.MakeFile` nunca sobreescribe un archivo existente, así que el comando termina imprimiendo el fragmento exacto a copiar a mano (wiring de `Define<Modelo>(db)` en `initModels`, y las rutas nuevas en `Routes()`). Si ves ese mensaje, es el flujo esperado, no un fallo.
 
@@ -152,8 +152,8 @@ func New() http.Handler {
 
 func Close() {
 	jrpc.Close()
-	// cache.Close()/event.Close() tienen un bug conocido de recursión infinita
-	// (ver LIBRARY_CONTEXT.md, Anti-Patrones #9) — no dependas de que cierren limpio.
+	event.Close()
+	cache.Close()
 }
 ```
 

@@ -147,3 +147,44 @@ func TestInstanceError(t *testing.T) {
 		}
 	}
 }
+
+/**
+* TestErrorPortByNodeKey: the error port of a node runs its target also when the node's id is the catalog step's
+* (error:throw) and not its key in the flow (the connections name the key), and the run stays failed
+**/
+func TestErrorPortByNodeKey(t *testing.T) {
+	script := func(code string) []any {
+		return []any{et.Json{"code": code, "language": LANGUAGE_JAVASCRIPT}}
+	}
+	node := func(id string, kind Kind, code string) et.Json {
+		return et.Json{"id": id, "kind": kind, "tag": id, "version": "1.0.0", "title": id, "definition": script(code), "params": et.Json{}, "inputs": 1, "outputs": 1}
+	}
+	flow, err := LoadFlow(et.Json{
+		"id":      "flow:error:port",
+		"tag":     "error-port",
+		"name":    "error port",
+		"version": "1.0.0",
+		"steps": et.Json{
+			"start":  node("start:trigger", KindTrigger, ``),
+			"boom":   node("error:throw", KindAction, `throw new Error("boom")`),
+			"caught": node("data:set", KindAction, `ctx.Set("caught", true)`),
+		},
+		"connections": []any{
+			et.Json{"id": "c1", "kind": PortOutput, "source": et.Json{"steper_id": "start", "port": PortOutput, "index": 0}, "target": et.Json{"steper_id": "boom", "port": "input", "index": 0}},
+			et.Json{"id": "c2", "kind": PortError, "source": et.Json{"steper_id": "boom", "port": PortError, "index": 0}, "target": et.Json{"steper_id": "caught", "port": "input", "index": 0}},
+		},
+		"triggers": []any{et.Json{"tag": "start:trigger", "start_id": "start"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	instance := flow.NewInstance("", "", flow.Name, et.Json{}, flow.Triggers[0], "")
+	_, err = instance.Run(et.Json{}, true)
+	if err == nil || err.Error() != "boom" {
+		t.Fatalf("err = %v", err)
+	}
+	if !instance.Ctx.Bool("caught") || instance.getStatus() != FAILED {
+		t.Errorf("caught = %v, status %v", instance.Ctx["caught"], instance.getStatus())
+	}
+}

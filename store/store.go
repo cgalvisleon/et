@@ -150,6 +150,7 @@ type FileStore struct {
 	syncing             bool            `json:"-"` // hay un líder haciendo fsync
 	synced              uint64          `json:"-"` // último appended que ya está en disco
 	syncErr             error           `json:"-"` // primer error de fsync (pegajoso)
+	lock                *os.File        `json:"-"` // archivo LOCK con el flock del store (nil en ReadOnly o sin soporte)
 }
 
 /**
@@ -280,6 +281,13 @@ func (s *FileStore) newSegment() error {
 
 	fd, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
+		return err
+	}
+
+	// Sin el fsync del directorio el archivo nuevo (y lo que se confirme en él) puede perderse
+	// tras una caída. Si falla, el activo sigue sellado y la próxima escritura reintenta la rotación.
+	if err := syncDir(s.Path); err != nil {
+		fd.Close()
 		return err
 	}
 
@@ -538,10 +546,35 @@ func (s *FileStore) repairTail(validEnd int64) error {
 }
 
 /**
-* close: Espera la compactación, hace fsync y retira todos los segmentos.
+* close: Espera la compactación, hace fsync, retira todos los segmentos y libera el bloqueo del directorio.
 * @return error
 **/
 func (s *FileStore) close() error {
+	closeErr := s.closeSegments()
+	if err := s.unlock(); err != nil && closeErr == nil {
+		closeErr = err
+	}
+	return closeErr
+}
+
+/**
+* unlock: Libera el bloqueo del directorio (flock del archivo LOCK); una segunda llamada no hace nada.
+* @return error
+**/
+func (s *FileStore) unlock() error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	f := s.lock
+	s.lock = nil
+	return unlockDir(f)
+}
+
+/**
+* closeSegments: Espera la compactación, hace fsync y retira todos los segmentos.
+* @return error
+**/
+func (s *FileStore) closeSegments() error {
 	s.stopStats()
 	s.compactWg.Wait()
 
@@ -572,7 +605,10 @@ func (s *FileStore) close() error {
 * @return error
 **/
 func (s *FileStore) empty() error {
-	err := s.close()
+	// El bloqueo se libera al final: nadie abre el store mientras se borran sus datos.
+	defer s.unlock()
+
+	err := s.closeSegments()
 	if err != nil {
 		return err
 	}
@@ -589,7 +625,49 @@ func (s *FileStore) empty() error {
 	if err := s.removeSnapshot(); err != nil {
 		return err
 	}
-	return os.RemoveAll(s.Path)
+	if err := os.RemoveAll(s.Path); err != nil {
+		return err
+	}
+	return syncDir(filepath.Dir(s.Path))
+}
+
+/**
+* lockPath: Retorna la ruta del archivo de bloqueo del store. Va junto al directorio de segmentos
+* y no dentro: la compactación renombra ese directorio, Empty lo borra y Open lee como segmento
+* todo archivo que haya en él. El guion no puede aparecer en un nombre normalizado, así que
+* no choca con otro store.
+* @return string
+**/
+func (s *FileStore) lockPath() string {
+	return filepath.Join(filepath.Dir(s.Path), s.Name+"-LOCK")
+}
+
+/**
+* mkdirAll: Como os.MkdirAll, pero hace fsync del padre de cada directorio que crea para que
+* sobreviva a una caída.
+* @param path string
+* @return error
+**/
+func mkdirAll(path string) error {
+	var created []string
+	for dir := filepath.Clean(path); !exists(dir); dir = filepath.Dir(dir) {
+		created = append(created, dir)
+		if filepath.Dir(dir) == dir {
+			break
+		}
+	}
+
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return err
+	}
+
+	// Del más profundo al más alto: cada padre ya contiene al hijo cuando se sincroniza.
+	for _, dir := range created {
+		if err := syncDir(filepath.Dir(dir)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 /**
@@ -1000,64 +1078,92 @@ func newFileStore(pathData, pathWald, name string, mode Mode) *FileStore {
 **/
 func open(pathData, pathWald, name string, mode Mode) (*FileStore, error) {
 	fs := newFileStore(pathData, pathWald, name, mode)
+	if err := fs.load(); err != nil {
+		// Lo abierto hasta el error se suelta: segmentos y bloqueo del directorio.
+		for _, seg := range fs.segments {
+			seg.retire()
+		}
+		fs.unlock()
+		return nil, err
+	}
 
+	return fs, nil
+}
+
+/**
+* load: Toma el bloqueo del directorio (ReadWrite), repara, crea los directorios, abre los
+* segmentos y arma el índice.
+* @return error
+**/
+func (s *FileStore) load() error {
+	mode := s.mode
 	if mode == ReadOnly {
-		if _, err := os.Stat(fs.Path); os.IsNotExist(err) {
-			return nil, fmt.Errorf("%w: store not found at %s", errors.New(msg.MSG_STORE_NOT_FOUND), fs.Path)
+		if _, err := os.Stat(s.Path); os.IsNotExist(err) {
+			return fmt.Errorf("%w: store not found at %s", errors.New(msg.MSG_STORE_NOT_FOUND), s.Path)
 		}
 	} else {
+		// Dos procesos escribiendo el mismo store lo corrompen: el bloqueo va antes de reparar nada.
+		if err := mkdirAll(filepath.Dir(s.Path)); err != nil {
+			return err
+		}
+		lock, err := lockDir(s.lockPath())
+		if err != nil {
+			return err
+		}
+		s.lock = lock
+
 		// Una compactación interrumpida deja los segmentos a medio renombrar: se restauran antes
 		// de crear el directorio, o Open arrancaría vacío.
-		restored, removedOld, _, err := fs.repairCompaction()
+		restored, removedOld, _, err := s.repairCompaction()
 		if err != nil {
-			return nil, fmt.Errorf("repairCompaction: %w", err)
+			return fmt.Errorf("repairCompaction: %w", err)
 		}
 		if restored || removedOld {
-			logs.Log(packageName, "open:repair:", fs.Path, ":restored:", restored, ":removed_old:", removedOld)
+			logs.Log(packageName, "open:repair:", s.Path, ":restored:", restored, ":removed_old:", removedOld)
 		}
 		if restored {
-			if err := fs.removeSnapshot(); err != nil {
-				return nil, err
+			if err := s.removeSnapshot(); err != nil {
+				return err
 			}
 		}
 
-		if err := os.MkdirAll(fs.Path, 0755); err != nil {
-			return nil, err
+		if err := mkdirAll(s.Path); err != nil {
+			return err
 		}
-		if err := os.MkdirAll(fs.PathSnapshot, 0755); err != nil {
-			return nil, err
+		if err := mkdirAll(s.PathSnapshot); err != nil {
+			return err
 		}
-		if err := os.MkdirAll(fs.PathCompact, 0755); err != nil {
-			return nil, err
+		if err := mkdirAll(s.PathCompact); err != nil {
+			return err
 		}
 	}
 
-	if err := fs.loadSegments(); err != nil {
-		return nil, fmt.Errorf("loadSegments: %w", err)
+	if err := s.loadSegments(); err != nil {
+		return fmt.Errorf("loadSegments: %w", err)
 	}
 
 	// Con snapshot solo se aplica el último segmento; sin snapshot se recorren todos.
-	snapshotLoaded, snapErr := fs.tryLoadSnapshot()
-	if snapErr != nil && fs.debug {
+	snapshotLoaded, snapErr := s.tryLoadSnapshot()
+	if snapErr != nil && s.debug {
 		logs.Debug("snapshot unavailable, full rebuild:", snapErr)
 	}
 	var validEnd int64
 	var err error
 	if snapshotLoaded {
-		if validEnd, err = fs.buildIndex(); err != nil {
-			return nil, fmt.Errorf("buildIndex: %w", err)
+		if validEnd, err = s.buildIndex(); err != nil {
+			return fmt.Errorf("buildIndex: %w", err)
 		}
 	} else {
-		if validEnd, err = fs.rebuildIndexes(); err != nil {
-			return nil, fmt.Errorf("rebuildIndexes: %w", err)
+		if validEnd, err = s.rebuildIndexes(); err != nil {
+			return fmt.Errorf("rebuildIndexes: %w", err)
 		}
 	}
 
 	if mode == ReadWrite {
-		if err := fs.repairTail(validEnd); err != nil {
-			return nil, fmt.Errorf("repairTail: %w", err)
+		if err := s.repairTail(validEnd); err != nil {
+			return fmt.Errorf("repairTail: %w", err)
 		}
 	}
 
-	return fs, nil
+	return nil
 }

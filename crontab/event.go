@@ -61,12 +61,23 @@ func (s *Crontab) unsubscribe() error {
 
 /**
 * listen: Atiende los disparos del job tag con fn en la cola QUEUE_JOBS (una sola réplica por disparo) y responde
-* el resultado en el canal done. Reemplaza la suscripción anterior del mismo canal.
+* el resultado en el canal done. Reemplaza la suscripción anterior del mismo canal. fn nil usa el handler de la
+* instancia; si el canal ya lo atiende el handler, no se toca (no hay un hueco entre cancelar y suscribir).
 * @param tag string, fn func(params et.Json) error
 * @return error
 **/
 func (s *Crontab) listen(tag string, fn func(params et.Json) error) error {
 	channel := s.jobChannel(tag)
+	byHandler := fn == nil
+	if byHandler {
+		if s.handler == nil {
+			return fmt.Errorf(MSG_ERROR_HANDLER_REQUIRED, tag)
+		}
+		if s.listensByHandler(tag) {
+			return nil
+		}
+		fn = s.handler
+	}
 	// una suscripción por canal: la anterior se cancela antes, o quedaría viva y repetiría cada disparo
 	if err := s.bus.Unsubscribe(channel); err != nil {
 		return err
@@ -88,9 +99,45 @@ func (s *Crontab) listen(tag string, fn func(params et.Json) error) error {
 	}
 
 	s.mu.Lock()
-	s.listening[channel] = true
+	if s.closed {
+		// Close ya canceló las suscripciones (o lo hará sin ver esta): se cancela aquí para no dejarla viva
+		s.mu.Unlock()
+		return s.bus.Unsubscribe(channel)
+	}
+	s.listening[channel] = byHandler
 	s.mu.Unlock()
 	return nil
+}
+
+/**
+* listensByHandler: El canal del job tag lo atiende en esta réplica el handler de la instancia.
+* @param tag string
+* @return bool
+**/
+func (s *Crontab) listensByHandler(tag string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	byHandler, ok := s.listening[s.jobChannel(tag)]
+	return ok && byHandler
+}
+
+/**
+* listenHandler: Con handler, atiende el job tag si esta réplica no lo atiende ya (con el handler o con un fn).
+* @param tag string
+**/
+func (s *Crontab) listenHandler(tag string) {
+	if s.handler == nil {
+		return
+	}
+	s.mu.Lock()
+	_, ok := s.listening[s.jobChannel(tag)]
+	s.mu.Unlock()
+	if ok {
+		return
+	}
+	if err := s.listen(tag, nil); err != nil {
+		logs.Error(err)
+	}
 }
 
 /**
@@ -134,6 +181,9 @@ func (s *Crontab) eventJob(data et.Json) {
 		logs.Error(err)
 		return
 	}
+
+	// con handler, el job que llega de la líder queda atendido antes de que esta réplica pueda dispararlo
+	s.listenHandler(incoming.Tag)
 
 	current := s.job(incoming.ID)
 	if current != nil && current.Rev == incoming.Rev {

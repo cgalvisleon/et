@@ -4,7 +4,6 @@ go 1.25.0
 
 require (
 	github.com/aws/aws-sdk-go v1.55.7
-	github.com/bwmarrin/snowflake v0.3.0
 	github.com/dimiro1/banner v1.1.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-chi/chi/v5 v5.2.1

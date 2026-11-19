@@ -21,16 +21,16 @@ var specParser = cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom
 
 /**
 * Load: Crea la instancia global (la que usan CronJob, ScheduleJob…); si ya había una, la cierra antes.
-* @param tag string, store Store
+* @param tag string, store Store, opts ...Option
 * @return error
 **/
-func Load(tag string, store Store) error {
+func Load(tag string, store Store, opts ...Option) error {
 	if crontab != nil {
 		crontab.Close()
 		crontab = nil
 	}
 
-	result, err := New(tag, store)
+	result, err := New(tag, store, opts...)
 	if err != nil {
 		return err
 	}

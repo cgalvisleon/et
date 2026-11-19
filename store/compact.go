@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -243,6 +244,10 @@ func (s *FileStore) compact() error {
 	if err := w.current.flush(); err != nil {
 		return err
 	}
+	// Las entradas de los segmentos nuevos, en disco antes de que el directorio pase a ser el del store.
+	if err := syncDir(tmpDir); err != nil {
+		return err
+	}
 
 	// El snapshot describe el layout viejo: se borra antes del intercambio.
 	if err := s.removeSnapshot(); err != nil {
@@ -264,11 +269,22 @@ func (s *FileStore) compact() error {
 	}
 	swapped = true
 
+	// Los dos rename en disco: el padre del store (cambian s.Path y oldDir) y el de la
+	// compactación (sale el temporal). El intercambio ya ocurrió: si el fsync falla, el store
+	// sigue con los segmentos nuevos, oldDir se conserva (Open lo borra después) y el error se
+	// retorna al final. Borrar oldDir no necesita fsync: si reaparece, Open lo borra.
+	dirErr := syncDir(filepath.Dir(s.Path))
+	if err := syncDir(s.PathCompact); err != nil && dirErr == nil {
+		dirErr = err
+	}
+
 	// Retirar en vez de cerrar: los lectores en curso terminan antes de cerrar el archivo.
 	for _, seg := range s.segments {
 		seg.retire()
 	}
-	os.RemoveAll(oldDir)
+	if dirErr == nil {
+		os.RemoveAll(oldDir)
+	}
 
 	// Activar nuevos segmentos
 	s.index = newShardedIndex(newIndex)
@@ -282,7 +298,7 @@ func (s *FileStore) compact() error {
 	indexLocked = false
 
 	// writeMu sigue tomado: ninguna escritura entra entre el intercambio y el nuevo snapshot.
-	return s.createSnapshot()
+	return errors.Join(dirErr, s.createSnapshot())
 }
 
 /**

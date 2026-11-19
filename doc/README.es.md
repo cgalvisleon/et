@@ -8,7 +8,13 @@ Requiere Go 1.25. Agrega el módulo e importa solo los paquetes que uses:
 
 ```bash
 go get github.com/cgalvisleon/et@latest
-go get github.com/cgalvisleon/et@v1.0.51
+go get github.com/cgalvisleon/et@v1.0.52
+```
+
+Para crear un servicio nuevo, corre el generador dentro de una carpeta que ya tenga su `go.mod` (`go mod init <módulo>`); pregunta qué crear (Project, Microservice, Modelo, Rpc) y al final corre `go mod tidy`:
+
+```bash
+go run github.com/cgalvisleon/et/cmd/create@latest go
 ```
 
 ```go
@@ -27,7 +33,7 @@ Una librería modular para microservicios, CLIs y aplicaciones web en Go. Cada d
 
 Los paquetes de infraestructura (`cache`, `event`, `jsql`) leen su configuración de variables de entorno y se conectan una sola vez en `Load()`; las llamadas siguientes no hacen nada.
 
-## Actualizar a v1.0.51
+## Actualizar a v1.0.52
 
 - `router.Publish` / `router.With` ya no anteponen `Route.PackageName` a `Route.Path`: pon la ruta completa en la ruta.
 - Los modelos de `jsql` exigen un esquema. En SQLite, MySQL y Oracle la tabla se llama `schema_nombre` (antes SQLite usaba el nombre a secas), así que las bases SQLite existentes necesitan renombrar sus tablas.
@@ -36,7 +42,7 @@ Los paquetes de infraestructura (`cache`, `event`, `jsql`) leen su configuració
 - Scripts de jsql (goja): `where` de un modelo, consulta o comando recibe una condición en JSON o una lista (`[{status: {eq: "active"}}, {and: {age: {more: 18}}}]`); ya no hay `and`/`or`. Sirve un objeto a secas (`{status: {eq: "active"}}`) o dentro de `where`.
 - `router.Api.Public` / `Session` / `Protected` reciben `group` primero.
 
-## Cambios después de v1.0.51
+## Cambios después de v1.0.52
 
 - Las condiciones se evalúan en memoria como en SQL: `AND` liga más que `OR`, y una condición sin conector después de la primera es un `AND` (antes se ignoraba en memoria). Revisa los filtros en memoria que dependían del orden de izquierda a derecha.
 - `like` en memoria acepta `%` y `_` y no distingue mayúsculas; `*` sigue valiendo como `%`.
@@ -86,10 +92,10 @@ Cada tabla lista la API pública principal de cada paquete. `go doc github.com/c
 | Paquete | API pública | Ejemplo |
 | --- | --- | --- |
 | `cache` | `Load`, `Set`, `Get`, `GetStr`, `GetInt`, `GetJson`, `GetObject`, `SetObject`, `Delete`, `DeleteByPrefix`, `Incr`, `Exists`, `Expire`, `LPush`, `LRange`, `ObjectSet`/`ObjectGet`, `CollectionPut`/`CollectionFind` | `v, ok, err := cache.Get("key", "")` |
-| `event` | `Load`, `Publish`, `Subscribe`, `Queue`, `Stack`, `Source`, `On`, `Unsubscribe`, `Close` | `event.Publish("user:created", data)` |
+| `event` | `Load`, `Publish`, `Subscribe`, `Queue`, `Stack`, `Source`, `On`, `Unsubscribe`, `SubscribeWith`, `QueueWith`, `StackWith` (por clave: varios oyentes por canal), `UnsubscribeKey`, `HasKey`, `Close` | `event.Publish("user:created", data)` |
 | `graph` | `Load()` → `Conn` (`HealthCheck`, `Close`) | `conn, _ := graph.Load()` |
 | `queue` | `New[T](size, maxEvents, period, handler)`, `Push`, `Len`, `Close` | `q.Push(item)` |
-| `crontab` | `New(tag, store)` (instancia) o `Load` (global), `CronJob`, `ScheduleJob`, `StopJob`, `StartJob`, `RemoveJob`, `GetJob`, `Http*`; estados `pending`→`scheduled`⇄`running`→`finished`/`failed`, `paused`, `missed`, `canceled`; `LastRun`, `WithRetries`, `WithTimeout`; las réplicas con el mismo tag eligen una líder y la relevan | `crontab.CronJob(tag, owner, "0 * * * *", 0, nil, fn)` |
+| `crontab` | `New(tag, store, opts...)` (instancia; `WithHandler`) o `Load` (global), `CronJob`, `ScheduleJob`, `StopJob`, `StartJob`, `RemoveJob`, `GetJob`, `Http*`; estados `pending`→`scheduled`⇄`running`→`finished`/`failed`, `paused`, `missed`, `canceled`; `LastRun`, `WithRetries`, `WithTimeout`; las réplicas con el mismo tag eligen una líder y la relevan | `crontab.CronJob(tag, owner, "0 * * * *", 0, nil, fn)` |
 | `resilience` | `New()`, `LoadInstance(Params)`, `Instance.Run`, `IsDone`, `IsFailed`, `Stop` | `inst, _ := r.LoadInstance(resilience.Params{Fn: send, TotalAttempts: 3})` |
 | `store` | `Open(pathData, pathWal, name, mode)` → `FileStore` (`Insert`, `Update`, `Delete`, `Get`, `GetVersion`, `ForEach`, `Keys`, `Deferred`/`WaitDurable`, `Compact`, `Sync`, `WalSince`/`ApplyWalEntry`, `Stats`), `Recover` | `fs, _ := store.Open("./data", "./wal", "customers", store.ReadWrite)` |
 
@@ -128,7 +134,7 @@ Cada tabla lista la API pública principal de cada paquete. `go doc github.com/c
 | `logs` | `Info`, `Infof`, `Debug`, `Warn`, `Alert`, `Alertf`, `Error`, `Errorf`, `Fatal`, `Panic` | `logs.Errorf("failed: %v", err)` |
 | `stdrout`, `color` | `Printl`, `Traces`, `SetStdout`; `Red`, `Green`, `Yellow`, `Blue`… | `fmt.Println(color.Green("ok"))` |
 | `validator` | `New()`, `Field`, `Required`, `NotEmpty`, `Min`, `Max`, `Between`, `MinLength`, `MaxLength`, `Pattern`, `Values`, `IsEmail`, `IsPhone`, `Validate`, `ByJson`, `ToJson`, `Wrapper` (goja) | `validator.New().Field("email").Required().IsEmail().Validate(body)` |
-| `reg` | `UUID` (v7, ordenable), `ULID`, `XID`, `SID` (11 caracteres, ordenable; nodo de `SID_NODE`), `SIDInt`, `EncodeSID`/`DecodeSID`/`SIDParts`, `NewSIDGenerator(nodo)`, `GenSnowflake`, `GetUUID(id)`, `GenULID(tag)`, `TagULID` | `id := reg.SID() // "0S2ZTw7OCm0"` |
+| `reg` | `UUID` (v7, ordenable), `ULID`, `XID`, `SID` (11 caracteres, ordenable; nodo de `SID_NODE`), `SIDInt`, `EncodeSID`/`DecodeSID`/`SIDParts`, `NewSIDGenerator(nodo)`, `GenSnowflake` (el SID en 19 dígitos), `GetUUID(id)`, `GenULID(tag)`, `TagULID` | `id := reg.SID() // "0S2ZTw7OCm0"` |
 | `strs` | `Format`, `Parse`, `Titlecase`, `Lowcase`, `RemoveAccents`, `Split`, `IsEmpty`, `HtmlToText` | `strs.Parse("Hi {{name}}", vars)` |
 | `timezone` | `Now`, `NowStr`, `Add`, `Format`, `Parse`, `Location` | `t := timezone.Now()` |
 | `units` | `NewQuantity(val, unit)`, `Load`, `To`, `ToStr` | `q.To(units.UnityKilometer)` |
@@ -338,7 +344,7 @@ defer q.Close()
 
 ### Store embebido clave/valor
 
-`store` es un store de un solo nodo, de solo agregado, que guarda `id → []byte` en archivos de segmento con un índice en memoria; `Open` se repara solo después de una caída. No hay upsert: se llama `Update` y, si el id no existía, `Insert`. API pública: [`store/catalog.go`](../store/catalog.go).
+`store` es un store de un solo nodo, de solo agregado, que guarda `id → []byte` en archivos de segmento con un índice en memoria; `Open` se repara solo después de una caída. No hay upsert: se llama `Update` y, si el id no existía, `Insert`. API pública: [`store/catalog.go`](../store/catalog.go). Un store `ReadWrite` solo lo abre uno a la vez (`flock` sobre `<pathData>/segments/<name>-LOCK`, que libera `Close`; solo en unix, en las demás plataformas avisa en el log), y cada archivo creado o renombrado va seguido del fsync de su directorio.
 
 ```go
 fs, err := store.Open("./data/collections", "./data/wal", "customers", store.ReadWrite)
@@ -393,6 +399,11 @@ c.CronJob("daily", ownerId, "0 6 * * *", 0, nil, fn, // error o panic de fn → 
     crontab.WithRetries(3, time.Minute))             // hasta 3 reintentos; registrarlo de nuevo conserva su estado
 c.StopJob("daily")                                    // → paused; StartJob → scheduled
 job, _ := c.GetJob("daily")                           // job.Str("status"), job.Json("last_run")
+
+// Un handler para todos los jobs de la instancia, suscrito antes de que pueda liderar: los jobs recargados del Store
+// (y el disparo de catch-up de un schedule atrasado) se atienden sin registrarlos otra vez. fn nil lo usa; sin ninguno, error.
+c, _ = crontab.New("engine:"+tenantId, store, crontab.WithHandler(func(params et.Json) error { return run(params) }))
+c.ScheduleJob("once", ownerId, at, et.Json{"job": "once"}, nil) // una fecha pasada solo vale si ya existe ese mismo job
 ```
 
 ### Scripts JavaScript e IA

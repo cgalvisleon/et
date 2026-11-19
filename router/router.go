@@ -2,7 +2,9 @@ package router
 
 import (
 	"fmt"
+	"maps"
 	"net/http"
+	"sync"
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
@@ -57,10 +59,13 @@ const (
 
 var (
 	router *Routes
+	// mu: guards router; PushApiGateway and RemoveApiGateway may run at any time from several goroutines (routes published
+	// while the service runs) while eventActionReset walks the routes
+	mu sync.RWMutex
 )
 
 /**
-* initRouter
+* initRouter: With mu held
 * @param name string
 **/
 func initRouter(name string) {
@@ -85,11 +90,15 @@ func initRouter(name string) {
 * @param m event.Message
 **/
 func eventActionReset(m event.Message) {
+	mu.RLock()
 	if router == nil {
+		mu.RUnlock()
 		return
 	}
+	routes := maps.Clone(router.Routes)
+	mu.RUnlock()
 
-	for _, v := range router.Routes {
+	for _, v := range routes {
 		logs.Logf("Apigateway", `[RESET] %s:%s`, v.Str("method"), v.Str("path"))
 		event.Publish(APIGATEWAY_SET_ROUTER, v)
 		event.Publish(APIGATEWAY_SET_RESOLVE, v)
@@ -150,9 +159,10 @@ func ToTpHeader(tp int) TpHeader {
 * @param method, path, resolve string, header et.Json, tpHeader TpHeader, excludeHeader []string, params, body et.Json, version int, packageName string
 **/
 func PushApiGateway(method, path, resolve string, tpHeader TpHeader, header et.Json, excludeHeader []string, params, body et.Json, version int, packageName string) {
+	mu.Lock()
 	initRouter(packageName)
 	key := fmt.Sprintf("%s:%s", method, path)
-	router.Routes[key] = et.Json{
+	route := et.Json{
 		"_id":            key,
 		"id":             key,
 		"kind":           "api",
@@ -167,9 +177,11 @@ func PushApiGateway(method, path, resolve string, tpHeader TpHeader, header et.J
 		"version":        version,
 		"package_name":   packageName,
 	}
+	router.Routes[key] = route
+	mu.Unlock()
 
-	event.Publish(APIGATEWAY_SET_ROUTER, router.Routes[key])
-	event.Publish(APIGATEWAY_SET_RESOLVE, router.Routes[key])
+	event.Publish(APIGATEWAY_SET_ROUTER, route)
+	event.Publish(APIGATEWAY_SET_RESOLVE, route)
 }
 
 /**
@@ -177,25 +189,31 @@ func PushApiGateway(method, path, resolve string, tpHeader TpHeader, header et.J
 * @param id string
 **/
 func RemoveApiGateway(id string) {
+	mu.Lock()
 	if router == nil {
+		mu.Unlock()
 		return
 	}
 
 	delete(router.Routes, id)
+	mu.Unlock()
 	event.Publish(APIGATEWAY_REMOVE_ROUTER, et.Json{"id": id})
 	event.Publish(APIGATEWAY_DELETE_RESOLVE, et.Json{"id": id})
 }
 
 /**
-* GetRoutes
+* GetRoutes: A copy of the routes published to the gateway
 * @return map[string]et.Json
 **/
 func GetRoutes() map[string]et.Json {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	if router == nil {
 		return map[string]et.Json{}
 	}
 
-	return router.Routes
+	return maps.Clone(router.Routes)
 }
 
 /**

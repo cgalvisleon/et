@@ -24,14 +24,14 @@ func MakeInternal(projectName, name, schema string) error {
 	}
 
 	path, _ := file.MakeFolder("internal", "services", name)
-	_, _ = file.MakeFile(path, "service.go", template.ModelService, projectName, name)
+	_, _ = makeFile(path, "service.go", template.ModelService, projectName, name)
 
 	path, _ = file.MakeFolder("internal", "services", name, "v1")
 
 	if len(schema) > 0 {
-		_, _ = file.MakeFile(path, "api.go", template.ModelDbApi, projectName, name)
+		_, _ = makeFile(path, "api.go", template.ModelDbApi, projectName, name)
 	} else {
-		_, _ = file.MakeFile(path, "api.go", template.ModelApi, projectName, name)
+		_, _ = makeFile(path, "api.go", template.ModelApi, projectName, name)
 	}
 
 	return nil
@@ -45,12 +45,12 @@ func MakeInternal(projectName, name, schema string) error {
 func MakeInternalModel(name, schema string) error {
 	path, _ := file.MakeFolder("internal", "models", schema)
 
-	_, _ = file.MakeFile(path, "msg.go", template.ModelMsg, schema)
+	_, _ = makeFile(path, "msg.go", template.ModelMsg, schema)
 
 	modelo := strs.Titlecase(name)
 	fileName := fmt.Sprintf(`%s.go`, name)
 	tableName := tableName(name)
-	_, err := file.MakeFile(path, fileName, template.ModelData, name, toCamelCase(modelo), tableName, schema)
+	_, err := makeFile(path, fileName, template.ModelData, name, toCamelCase(modelo), tableName, schema)
 	if err != nil {
 		return err
 	}

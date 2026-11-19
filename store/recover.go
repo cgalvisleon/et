@@ -23,12 +23,23 @@ import (
 *  3. Recorre cada segmento: si tiene bytes que no forman registros válidos (escritura
 *     cortada o corrupción), los copia a PathRecover y trunca el segmento en el último
 *     registro válido. No se borra nada sin dejar copia.
+* Toma el mismo bloqueo del directorio que Open: falla si el store está abierto.
 * Después de Recover, abrir el store con Open.
 * @param pathData, pathWald, name string
 * @return et.Json, error
 **/
 func recover(pathData, pathWald, name string) (et.Json, error) {
 	s := newFileStore(pathData, pathWald, name, ReadWrite)
+
+	// Con el store abierto en otro proceso Recover lo corrompería: toma el mismo bloqueo que Open.
+	if exists(filepath.Dir(s.Path)) {
+		lock, err := lockDir(s.lockPath())
+		if err != nil {
+			return nil, err
+		}
+		defer unlockDir(lock)
+	}
+
 	report := et.Json{
 		"name":                 s.Name,
 		"restored_segments":    false,
@@ -159,6 +170,10 @@ func (s *FileStore) repairCompaction() (bool, bool, bool, error) {
 		if err := os.Rename(oldDir, s.Path); err != nil {
 			return false, false, false, err
 		}
+		// Sin el fsync del padre, una caída podría deshacer la restauración.
+		if err := syncDir(filepath.Dir(s.Path)); err != nil {
+			return false, false, false, err
+		}
 		restored = true
 	case pathExists && exists(oldDir):
 		if err := os.RemoveAll(oldDir); err != nil {
@@ -188,11 +203,11 @@ func (s *FileStore) quarantineTail(fd *os.File, name string, validEnd, size int6
 	if n, err := fd.ReadAt(tail, validEnd); err != nil && !(errors.Is(err, io.EOF) && n == len(tail)) {
 		return "", err
 	}
-	if err := os.MkdirAll(s.PathRecover, 0755); err != nil {
+	if err := mkdirAll(s.PathRecover); err != nil {
 		return "", err
 	}
 	quarantine := filepath.Join(s.PathRecover, fmt.Sprintf("%s.%s.corrupt", name, stamp))
-	if err := os.WriteFile(quarantine, tail, 0644); err != nil {
+	if err := writeFileSync(quarantine, tail); err != nil {
 		return "", err
 	}
 
@@ -204,6 +219,31 @@ func (s *FileStore) quarantineTail(fd *os.File, name string, validEnd, size int6
 	}
 
 	return quarantine, nil
+}
+
+/**
+* writeFileSync: Escribe data en path con fsync del archivo y de su directorio, antes de que
+* quien llama descarte el original.
+* @param path string, data []byte
+* @return error
+**/
+func writeFileSync(path string, data []byte) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return syncDir(filepath.Dir(path))
 }
 
 /**

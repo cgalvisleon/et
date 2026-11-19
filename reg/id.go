@@ -2,11 +2,8 @@ package reg
 
 import (
 	"fmt"
-	"math/rand"
 	"strings"
-	"time"
 
-	"github.com/bwmarrin/snowflake"
 	"github.com/cgalvisleon/et/timezone"
 	"github.com/cgalvisleon/et/utility"
 	"github.com/google/uuid"
@@ -139,12 +136,12 @@ func GenIndex() int64 {
 }
 
 /**
-* GenSnowflake
+* GenSnowflake: A snowflake id in decimal: the process SID (ms since SIDEpoch, node, sequence; see SID) as 19 digits
+* with leading zeros, so its text order is its numeric and creation order. Unique across processes with distinct nodes.
 * @return string
 **/
 func GenSnowflake() string {
-	ms := timezone.Now().UnixMilli()
-	return fmt.Sprintf("%d%03d", ms, rand.Intn(1000))
+	return fmt.Sprintf("%019d", SIDInt())
 }
 
 /**
@@ -194,9 +191,4 @@ func TagXID(tag, id string) string {
 	}
 
 	return id
-}
-
-func init() {
-	epoch := time.Date(2020, 1, 1, 0, 0, 0, 0, timezone.Now().Location())
-	snowflake.Epoch = epoch.UnixNano() / 1e6
 }

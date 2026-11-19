@@ -26,14 +26,26 @@ func (s *FileStore) snapshotPath() string {
 **/
 func (s *FileStore) removeSnapshot() error {
 	err := os.Remove(s.snapshotPath())
-	if err != nil && !os.IsNotExist(err) {
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
 		return err
 	}
-	return nil
+
+	// Un snapshot borrado que reaparece tras una caída describiría segmentos que ya no son.
+	return syncDir(s.PathSnapshot)
+}
+
+// closeFile: cierra un archivo; variable para que las pruebas inyecten el error del Close.
+var closeFile = func(f *os.File) error {
+	return f.Close()
 }
 
 /**
-* createSnapshot: Guarda en el snapshot el índice de los segmentos cerrados y el WAL.
+* createSnapshot: Guarda en el snapshot el índice de los segmentos cerrados y el WAL: lo
+* escribe en un temporal con fsync, lo cierra (un error del Close aborta y deja el temporal),
+* lo renombra y hace fsync del directorio para que el rename sobreviva a una caída.
 * @return error
 **/
 func (s *FileStore) createSnapshot() error {
@@ -47,7 +59,30 @@ func (s *FileStore) createSnapshot() error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+
+	if err := s.writeSnapshot(f); err != nil {
+		f.Close()
+		return err
+	}
+
+	if err := closeFile(f); err != nil {
+		return err
+	}
+
+	// reemplazo atómico
+	if err := os.Rename(tmp, path); err != nil {
+		return err
+	}
+
+	return syncDir(s.PathSnapshot)
+}
+
+/**
+* writeSnapshot: Escribe en f el snapshot (encabezado, entradas y CRC) y hace fsync (requiere indexMu).
+* @param f *os.File
+* @return error
+**/
+func (s *FileStore) writeSnapshot(f *os.File) error {
 
 	// ---- Entradas ----
 	// Solo los registros fuera del segmento activo; el contador del encabezado
@@ -90,12 +125,7 @@ func (s *FileStore) createSnapshot() error {
 		return err
 	}
 
-	if err := f.Sync(); err != nil {
-		return err
-	}
-
-	// reemplazo atómico
-	return os.Rename(tmp, path)
+	return f.Sync()
 }
 
 /**

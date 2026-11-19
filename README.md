@@ -8,7 +8,13 @@ Requires Go 1.25. Add the module and import only the packages you use:
 
 ```bash
 go get github.com/cgalvisleon/et@latest
-go get github.com/cgalvisleon/et@v1.0.51
+go get github.com/cgalvisleon/et@v1.0.52
+```
+
+To scaffold a new service, run the generator inside a folder that already has its `go.mod` (`go mod init <module>`); it asks what to create (Project, Microservice, Modelo, Rpc) and runs `go mod tidy` at the end:
+
+```bash
+go run github.com/cgalvisleon/et/cmd/create@latest go
 ```
 
 ```go
@@ -27,7 +33,7 @@ A modular library for Go microservices, CLIs and web apps. Every directory is an
 
 Infrastructure packages (`cache`, `event`, `jsql`) read their configuration from environment variables and connect once in `Load()`; later calls are no-ops.
 
-## Upgrading to v1.0.51
+## Upgrading to v1.0.52
 
 - `router.Publish` / `router.With` no longer prefix `Route.PackageName` onto `Route.Path`: put the full path in the route.
 - `jsql` models require a schema. On SQLite, MySQL and Oracle the table is `schema_name` (before, SQLite used the bare name), so existing SQLite databases need their tables renamed.
@@ -36,7 +42,7 @@ Infrastructure packages (`cache`, `event`, `jsql`) read their configuration from
 - jsql scripts (goja): `where` of a model, query or command takes a JSON condition or a list (`[{status: {eq: "active"}}, {and: {age: {more: 18}}}]`); `and`/`or` are gone. A bare object (`{status: {eq: "active"}}`) or one wrapped in `where` both work.
 - `router.Api.Public` / `Session` / `Protected` take `group` first.
 
-## Changes after v1.0.51
+## Changes after v1.0.52
 
 - Conditions evaluate in memory as in SQL: `AND` binds tighter than `OR`, and a condition without connector after the first one is an `AND` (before, it was ignored in memory). Review in-memory filters that relied on left-to-right order.
 - `like` in memory takes `%` and `_` and ignores case; `*` still works as `%`.
@@ -56,86 +62,86 @@ Each table lists the main public API of every package. `go doc github.com/cgalvi
 
 ### Core data
 
-| Package | Public API | Example |
-| --- | --- | --- |
-| `et` | `Json` (`Str`, `Int`, `Bool`, `Num`, `Time`, `Json`, `ArrayStr`, `ArrayJson`, `ValStr`, `ValInt`, `Set`, `Put`, `Clear`, `Get`, `Update`, `Clone`, `DeepClone`, `ToString`, `ToObject`), `ToJS`/`FromJS`/`JsonOf`/`GoArg` (a `Json` in goja scripts: an object over the same map, keys as properties and its methods by their Go names), `Item`, `Items`, `List`, conditions (`Eq`, `More`, `In`, `Between`, `ToCondition`, `AddCondition`, `EvaluateObject`, `EvaluateValue`, `Fld` (a field reference, `{field: "name"}` in JSON)), `From(items).Where(...).All()` | `data.ValStr("Cali", "user", "city")` |
-| `jsql` | `Load`, `LoadTo`, `ConnectTo`, `CreateDB`, `DropDB`, `TestConnection`; `DB.Define`, `DefineModel`, `Query` (JSQL, queries and commands in JSON: queries, commands, `define`, and `drop`/`truncate`/`create`/`alter` of models, schemas, databases and users), `Sql`; `Model.Insert`, `Update`, `Upsert`, `Delete`, `Bulk`, `Select`, `Where`, `WhereByJson`; `Query.All`, `One`, `Limit`, `Count`; `NewTx`, `DefineSeries` (`GenSerie`, `GenSerieTx`, `GenValue`, `GenValueTx`); `Bind(source, vars)` (`{{name}}` variables); `Wrapper`, `BindWrapper`, `ToJsMapWrapper` (goja) | `users.Where(jsql.Eq("id", id)).One()` |
-| `stores` | `DefineInstance` (`Set`, `Get`, `Delete`, `Query`), `DefineAuthorization` (`SetAuthor`, `Author`, `RemoveAuthor`), `DefineConfig` (`SetConfig`, `Get`), `DefineFormState` | `ok, _ := auth.Author(profileId, "GET", "/users")` |
-| `mem` | `Set`, `Get`, `GetStr`, `GetInt`, `GetJson`, `Delete`, `Exists`, `Keys`, `Clear` | `mem.Set("k", "v", time.Minute)` |
-| `ephemeral` | `NewInstance(expiration)`, `Set`, `Get`, `Del` | `e := ephemeral.NewInstance(time.Minute)` |
-| `dt` | `Up(key, data)`, `Get(key).Json()`, `GetObject`, `Drop` | `dt.Up("cfg", et.Json{"a": 1})` |
-| `race` | `NewValue(v)`, `Get`, `Set`, `Int`, `Increase`, `Map`, `Range` | `c := race.NewValue(0); c.Increase(1)` |
+| Package     | Public API                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Example                                            |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `et`        | `Json` (`Str`, `Int`, `Bool`, `Num`, `Time`, `Json`, `ArrayStr`, `ArrayJson`, `ValStr`, `ValInt`, `Set`, `Put`, `Clear`, `Get`, `Update`, `Clone`, `DeepClone`, `ToString`, `ToObject`), `ToJS`/`FromJS`/`JsonOf`/`GoArg` (a `Json` in goja scripts: an object over the same map, keys as properties and its methods by their Go names), `Item`, `Items`, `List`, conditions (`Eq`, `More`, `In`, `Between`, `ToCondition`, `AddCondition`, `EvaluateObject`, `EvaluateValue`, `Fld` (a field reference, `{field: "name"}` in JSON)), `From(items).Where(...).All()`            | `data.ValStr("Cali", "user", "city")`              |
+| `jsql`      | `Load`, `LoadTo`, `ConnectTo`, `CreateDB`, `DropDB`, `TestConnection`; `DB.Define`, `DefineModel`, `Query` (JSQL, queries and commands in JSON: queries, commands, `define`, and `drop`/`truncate`/`create`/`alter` of models, schemas, databases and users), `Sql`; `Model.Insert`, `Update`, `Upsert`, `Delete`, `Bulk`, `Select`, `Where`, `WhereByJson`; `Query.All`, `One`, `Limit`, `Count`; `NewTx`, `DefineSeries` (`GenSerie`, `GenSerieTx`, `GenValue`, `GenValueTx`); `Bind(source, vars)` (`{{name}}` variables); `Wrapper`, `BindWrapper`, `ToJsMapWrapper` (goja) | `users.Where(jsql.Eq("id", id)).One()`             |
+| `stores`    | `DefineInstance` (`Set`, `Get`, `Delete`, `Query`), `DefineAuthorization` (`SetAuthor`, `Author`, `RemoveAuthor`), `DefineConfig` (`SetConfig`, `Get`), `DefineFormState`                                                                                                                                                                                                                                                                                                                                                                                                       | `ok, _ := auth.Author(profileId, "GET", "/users")` |
+| `mem`       | `Set`, `Get`, `GetStr`, `GetInt`, `GetJson`, `Delete`, `Exists`, `Keys`, `Clear`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `mem.Set("k", "v", time.Minute)`                   |
+| `ephemeral` | `NewInstance(expiration)`, `Set`, `Get`, `Del`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `e := ephemeral.NewInstance(time.Minute)`          |
+| `dt`        | `Up(key, data)`, `Get(key).Json()`, `GetObject`, `Drop`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `dt.Up("cfg", et.Json{"a": 1})`                    |
+| `race`      | `NewValue(v)`, `Get`, `Set`, `Int`, `Increase`, `Map`, `Range`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `c := race.NewValue(0); c.Increase(1)`             |
 
 ### HTTP and RPC
 
-| Package | Public API | Example |
-| --- | --- | --- |
-| `router` | `NewApi(name, path, host, port, rpc, version)`, `Api.Public`, `Protected`, `Session`, `Item`, `Items`, `List`, `UseAuthentication`, `UseAuthorization`, `UseLimitRate` | `api.Protected("users", router.GET, "/users/{id}", "Get user", api.Item(200, getUser))` |
-| `server` | `New(name, port)` → `Ettp` (`Mount`, `HandleFunc`, `Use`, `Start`, `Close`); `NewApi` | `srv := server.New("api", 3000); srv.Start()` |
-| `ettp/v2` | `New(name, *Config)` → `Server` (`Public`, `Private`, `SetRouter`, `Use`, `Start`, `Save`, `Reset`) | `ettp.New("gateway", &ettp.Config{Port: 3300})` |
-| `ettp/v1` | Older gateway: `New(*Config)`, `SetRouter`, `SetProxy`, `SetPortForward`, `PublicRoute`, `PrivateRoute` | — |
-| `middleware` | `Authentication`, `Logger`, `Recoverer`, `RequestID`, `AllowAll`, `GetBearerToken`, `NewMetric`, `SetTelemetryOutput` | `r.Use(middleware.Logger)` |
-| `request` | Inbound: `GetBody`, `URLParam`, `Query`, `UserID`, `TenantID`; outbound: `Get`, `Post`, `Put`, `Delete`, `Fetch`, `…WithTimeout`, `…WithTls` | `body, status := request.Get(url, header)` |
-| `response` | `ITEM`, `ITEMS`, `LIST`, `JSON`, `RESULT`, `HTTPError`, `Unauthorized`, `Forbidden`, `Stream` | `response.ITEM(w, r, 200, item)` |
-| `jrpc` | `Mount(host, port, services, packageName)`, `Start`, `Call`, `CallJson`, `CallItem`, `CallItems` | `jrpc.CallJson("Users.Get", et.Json{"id": id})` |
-| `tcp` | `NewServer(id, name)` / `NewClient(id, name)` (`Listen`, `ConnectTo`, `Send`, `Request`, streams), `NewHub(id, name)` (`LoadServer`, `ConnectTo`, `Send`, `SendTo`, `Heartbeat`), `SetSecurity`, `NewTLS` | `srv, _ := tcp.NewServer("", "api"); srv.Listen(":1377")` |
-| `websocket` | `NewServer()` (topics, queues, `OnConnect`/`OnSubscribe` with rejection), `NewClient`/`Connect` → `Client` (`Subscribe`, `Publish`) | `srv.Publish("orders", msg)` |
+| Package      | Public API                                                                                                                                                                                                | Example                                                                                 |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `router`     | `NewApi(name, path, host, port, rpc, version)`, `Api.Public`, `Protected`, `Session`, `Item`, `Items`, `List`, `UseAuthentication`, `UseAuthorization`, `UseLimitRate`                                    | `api.Protected("users", router.GET, "/users/{id}", "Get user", api.Item(200, getUser))` |
+| `server`     | `New(name, port)` → `Ettp` (`Mount`, `HandleFunc`, `Use`, `Start`, `Close`); `NewApi`                                                                                                                     | `srv := server.New("api", 3000); srv.Start()`                                           |
+| `ettp/v2`    | `New(name, *Config)` → `Server` (`Public`, `Private`, `SetRouter`, `Use`, `Start`, `Save`, `Reset`)                                                                                                       | `ettp.New("gateway", &ettp.Config{Port: 3300})`                                         |
+| `ettp/v1`    | Older gateway: `New(*Config)`, `SetRouter`, `SetProxy`, `SetPortForward`, `PublicRoute`, `PrivateRoute`                                                                                                   | —                                                                                       |
+| `middleware` | `Authentication`, `Logger`, `Recoverer`, `RequestID`, `AllowAll`, `GetBearerToken`, `NewMetric`, `SetTelemetryOutput`                                                                                     | `r.Use(middleware.Logger)`                                                              |
+| `request`    | Inbound: `GetBody`, `URLParam`, `Query`, `UserID`, `TenantID`; outbound: `Get`, `Post`, `Put`, `Delete`, `Fetch`, `…WithTimeout`, `…WithTls`                                                              | `body, status := request.Get(url, header)`                                              |
+| `response`   | `ITEM`, `ITEMS`, `LIST`, `JSON`, `RESULT`, `HTTPError`, `Unauthorized`, `Forbidden`, `Stream`                                                                                                             | `response.ITEM(w, r, 200, item)`                                                        |
+| `jrpc`       | `Mount(host, port, services, packageName)`, `Start`, `Call`, `CallJson`, `CallItem`, `CallItems`                                                                                                          | `jrpc.CallJson("Users.Get", et.Json{"id": id})`                                         |
+| `tcp`        | `NewServer(id, name)` / `NewClient(id, name)` (`Listen`, `ConnectTo`, `Send`, `Request`, streams), `NewHub(id, name)` (`LoadServer`, `ConnectTo`, `Send`, `SendTo`, `Heartbeat`), `SetSecurity`, `NewTLS` | `srv, _ := tcp.NewServer("", "api"); srv.Listen(":1377")`                               |
+| `websocket`  | `NewServer()` (topics, queues, `OnConnect`/`OnSubscribe` with rejection), `NewClient`/`Connect` → `Client` (`Subscribe`, `Publish`)                                                                       | `srv.Publish("orders", msg)`                                                            |
 
 ### Infrastructure
 
-| Package | Public API | Example |
-| --- | --- | --- |
-| `cache` | `Load`, `Set`, `Get`, `GetStr`, `GetInt`, `GetJson`, `GetObject`, `SetObject`, `Delete`, `DeleteByPrefix`, `Incr`, `Exists`, `Expire`, `LPush`, `LRange`, `ObjectSet`/`ObjectGet`, `CollectionPut`/`CollectionFind` | `v, ok, err := cache.Get("key", "")` |
-| `event` | `Load`, `Publish`, `Subscribe`, `Queue`, `Stack`, `Source`, `On`, `Unsubscribe`, `Close` | `event.Publish("user:created", data)` |
-| `graph` | `Load()` → `Conn` (`HealthCheck`, `Close`) | `conn, _ := graph.Load()` |
-| `queue` | `New[T](size, maxEvents, period, handler)`, `Push`, `Len`, `Close` | `q.Push(item)` |
-| `crontab` | `New(tag, store)` (instance) or `Load` (global), `CronJob`, `ScheduleJob`, `StopJob`, `StartJob`, `RemoveJob`, `GetJob`, `Http*`; states `pending`→`scheduled`⇄`running`→`finished`/`failed`, `paused`, `missed`, `canceled`; `LastRun`, `WithRetries`, `WithTimeout`; replicas with the same tag elect a leader and fail over | `crontab.CronJob(tag, owner, "0 * * * *", 0, nil, fn)` |
-| `resilience` | `New()`, `LoadInstance(Params)`, `Instance.Run`, `IsDone`, `IsFailed`, `Stop` | `inst, _ := r.LoadInstance(resilience.Params{Fn: send, TotalAttempts: 3})` |
-| `store` | `Open(pathData, pathWal, name, mode)` → `FileStore` (`Insert`, `Update`, `Delete`, `Get`, `GetVersion`, `ForEach`, `Keys`, `Deferred`/`WaitDurable`, `Compact`, `Sync`, `WalSince`/`ApplyWalEntry`, `Stats`), `Recover` | `fs, _ := store.Open("./data", "./wal", "customers", store.ReadWrite)` |
+| Package      | Public API                                                                                                                                                                                                                                                                                                                     | Example                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| `cache`      | `Load`, `Set`, `Get`, `GetStr`, `GetInt`, `GetJson`, `GetObject`, `SetObject`, `Delete`, `DeleteByPrefix`, `Incr`, `Exists`, `Expire`, `LPush`, `LRange`, `ObjectSet`/`ObjectGet`, `CollectionPut`/`CollectionFind`                                                                                                            | `v, ok, err := cache.Get("key", "")`                                       |
+| `event`      | `Load`, `Publish`, `Subscribe`, `Queue`, `Stack`, `Source`, `On`, `Unsubscribe`, `SubscribeWith`, `QueueWith`, `StackWith` (by key: several listeners per channel), `UnsubscribeKey`, `HasKey`, `Close`                                                                                                                        | `event.Publish("user:created", data)`                                      |
+| `graph`      | `Load()` → `Conn` (`HealthCheck`, `Close`)                                                                                                                                                                                                                                                                                     | `conn, _ := graph.Load()`                                                  |
+| `queue`      | `New[T](size, maxEvents, period, handler)`, `Push`, `Len`, `Close`                                                                                                                                                                                                                                                             | `q.Push(item)`                                                             |
+| `crontab`    | `New(tag, store, opts...)` (instance; `WithHandler`) or `Load` (global), `CronJob`, `ScheduleJob`, `StopJob`, `StartJob`, `RemoveJob`, `GetJob`, `Http*`; states `pending`→`scheduled`⇄`running`→`finished`/`failed`, `paused`, `missed`, `canceled`; `LastRun`, `WithRetries`, `WithTimeout`; replicas with the same tag elect a leader and fail over | `crontab.CronJob(tag, owner, "0 * * * *", 0, nil, fn)`                     |
+| `resilience` | `New()`, `LoadInstance(Params)`, `Instance.Run`, `IsDone`, `IsFailed`, `Stop`                                                                                                                                                                                                                                                  | `inst, _ := r.LoadInstance(resilience.Params{Fn: send, TotalAttempts: 3})` |
+| `store`      | `Open(pathData, pathWal, name, mode)` → `FileStore` (`Insert`, `Update`, `Delete`, `Get`, `GetVersion`, `ForEach`, `Keys`, `Deferred`/`WaitDurable`, `Compact`, `Sync`, `WalSince`/`ApplyWalEntry`, `Stats`), `Recover`                                                                                                        | `fs, _ := store.Open("./data", "./wal", "customers", store.ReadWrite)`     |
 
 ### Security
 
-| Package | Public API | Example |
-| --- | --- | --- |
-| `jwt` | `NewToken`, `NewAuthentication`, `NewAuthorization`, `NewAppToken`, `NewEphemeralToken`, `Validate`, `RenewToken`, `DeleteToken` | `claim, err := jwt.Validate(token)` |
-| `claim` | `NewToken`, `NewAuthenticationToken`, `ParseToken`, `Claim.ToJson` | `c, _ := claim.ParseToken(token)` |
+| Package   | Public API                                                                                                                                         | Example                             |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `jwt`     | `NewToken`, `NewAuthentication`, `NewAuthorization`, `NewAppToken`, `NewEphemeralToken`, `Validate`, `RenewToken`, `DeleteToken`                   | `claim, err := jwt.Validate(token)` |
+| `claim`   | `NewToken`, `NewAuthenticationToken`, `ParseToken`, `Claim.ToJson`                                                                                 | `c, _ := claim.ParseToken(token)`   |
 | `service` | `LoadSend(tenantId, name, email)` → `Send` (`SendOTPEmail`, `SendOTPSMS`, `VerifyOTP`, `SendEmail`, `SendSMS`, `SendWhatsapp`); `LoadLocalStorage` | `ok, _ := send.VerifyOTP(key, otp)` |
-| `utility` | `Hash`/`Match` (bcrypt), `EncryptAES`/`DecryptAES`, `HashSHA256`, `GetOTP`, `ValidEmail`, `ValidPhone`, `ToBase64` | `h, _ := utility.Hash(password)` |
+| `utility` | `Hash`/`Match` (bcrypt), `EncryptAES`/`DecryptAES`, `HashSHA256`, `GetOTP`, `ValidEmail`, `ValidPhone`, `ToBase64`                                 | `h, _ := utility.Hash(password)`    |
 
 ### Scripting, workflows and AI
 
-| Package | Public API | Example |
-| --- | --- | --- |
-| `jwf` | `New(id)` → `WorkFlow` (`NewFlow`, `Run`, `GetInstance`, `RunInstance`, `StopInstance`, `OnChange`); `Flow.Step`, `Error`, `AddStep`; `LoadFlow`, `Run` (code, bindings, reads → last value and the globals read back), `RunCode`, `RunScripts`, `Bindings` (the standard bindings: console, fetch, cache, event, jrpc…), `Binder`, `GoValue` (a Go value for scripts); `Instance.OnLog` / `Step.OnLog` (console); script `ctx`/`params` (`set`, `put`, `view`, `omit`, `get`…) and status bindings (`statusActive`, `statusList()`…); `evaluateObject`/`evaluateValue` and field references (`field`, `sum`, `year`…) | `wf.Run("signup", "signup", "", "", ctx, nil, true, userId)` |
-| `jia` | `New(tag, store, userId)`, `Load(id, store)` → `Ia` (`SetModelAgent`, `SetContextAgent`, `SetSkillAgent`, `Conversation`, `Embed`, `LoadRouter`); `NewApiSkill` | `conv, _ := ai.Conversation(ctx, "support", to, name, prompt)` |
-| `ia` | `Load(db, schema, Config)` → `Rag` (`IngestFile`, `IngestSQL`, `Ask`, `ListDocuments`, `DeleteDocument`, `ListMessages`, `LoadRouter`); `LoadIndex` → `IngestText`, `Search`, `DeleteDocumentsOf`, `DeleteProject` with an `Embedder` (`HttpEmbedder`); `ExtractFile`, `RowsText` | `rag.Ask(ctx, tenant, project, conv, user, "question")` |
-| `cmds` | `NewStage`, `NewStep`, `AppendCmd`, `RunOS`, `RunSSH`, `Load(file)` | `cmds.NewStep("build", "").AppendCmd("go build ./...")` |
+| Package | Public API                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Example                                                        |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `jwf`   | `New(id)` → `WorkFlow` (`NewFlow`, `Run`, `GetInstance`, `RunInstance`, `StopInstance`, `OnChange`); `Flow.Step`, `Error`, `AddStep`; `LoadFlow`, `Run` (code, bindings, reads → last value and the globals read back), `RunCode`, `RunScripts`, `Bindings` (the standard bindings: console, fetch, cache, event, jrpc…), `Binder`, `GoValue` (a Go value for scripts); `Instance.OnLog` / `Step.OnLog` (console); script `ctx`/`params` (`set`, `put`, `view`, `omit`, `get`…) and status bindings (`statusActive`, `statusList()`…); `evaluateObject`/`evaluateValue` and field references (`field`, `sum`, `year`…) | `wf.Run("signup", "signup", "", "", ctx, nil, true, userId)`   |
+| `jia`   | `New(tag, store, userId)`, `Load(id, store)` → `Ia` (`SetModelAgent`, `SetContextAgent`, `SetSkillAgent`, `Conversation`, `Embed`, `LoadRouter`); `NewApiSkill`                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `conv, _ := ai.Conversation(ctx, "support", to, name, prompt)` |
+| `ia`    | `Load(db, schema, Config)` → `Rag` (`IngestFile`, `IngestSQL`, `Ask`, `ListDocuments`, `DeleteDocument`, `ListMessages`, `LoadRouter`); `LoadIndex` → `IngestText`, `Search`, `DeleteDocumentsOf`, `DeleteProject` with an `Embedder` (`HttpEmbedder`); `ExtractFile`, `RowsText`                                                                                                                                                                                                                                                                                                                                      | `rag.Ask(ctx, tenant, project, conv, user, "question")`        |
+| `cmds`  | `NewStage`, `NewStep`, `AppendCmd`, `RunOS`, `RunSSH`, `Load(file)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `cmds.NewStep("build", "").AppendCmd("go build ./...")`        |
 
 ### Messaging
 
-| Package | Public API | Example |
-| --- | --- | --- |
-| `aws` | `NewS3AWS(Params)` (`Uploader`, `UploaderB64`, `UploaderFile`, `Download`, `Delete`; `UploadStream`, `List` and `Open` for large files in a stream; `Params.Endpoint`/`PathStyle` for S3-compatible services such as MinIO or SeaweedFS), `NewSenderAWS(Params).SendSMS` | `s3.Uploader(bucket, name, "image/png", data)` |
-| `brevo` | `SendEmail…`, `SendSms…`, `SendWhatsapp…` (`Transactional` / `Promotional`) | `brevo.SendEmailTransactional(sender, to, subject, html, params)` |
-| `infobip` | `NewSenderInfobip(Params)` (`SendSMS`, `SendEmail`, `SendWhatsApp`) | `s.SendSMS([]string{"+57..."}, "Hi {{name}}", params, "Transactional")` |
-| `jwsp` | `NewSender(token, phoneId)` → `Whatsapp` (`SendTextMessage`, `SendTemplate`, `SendImageMessageByURL`, `SendDocumentByURL`, `SendList`, `Webhooks`) | `wa.SendTextMessage("57300...", "Hello")` |
+| Package   | Public API                                                                                                                                                                                                                                                               | Example                                                                 |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| `aws`     | `NewS3AWS(Params)` (`Uploader`, `UploaderB64`, `UploaderFile`, `Download`, `Delete`; `UploadStream`, `List` and `Open` for large files in a stream; `Params.Endpoint`/`PathStyle` for S3-compatible services such as MinIO or SeaweedFS), `NewSenderAWS(Params).SendSMS` | `s3.Uploader(bucket, name, "image/png", data)`                          |
+| `brevo`   | `SendEmail…`, `SendSms…`, `SendWhatsapp…` (`Transactional` / `Promotional`)                                                                                                                                                                                              | `brevo.SendEmailTransactional(sender, to, subject, html, params)`       |
+| `infobip` | `NewSenderInfobip(Params)` (`SendSMS`, `SendEmail`, `SendWhatsApp`)                                                                                                                                                                                                      | `s.SendSMS([]string{"+57..."}, "Hi {{name}}", params, "Transactional")` |
+| `jwsp`    | `NewSender(token, phoneId)` → `Whatsapp` (`SendTextMessage`, `SendTemplate`, `SendImageMessageByURL`, `SendDocumentByURL`, `SendList`, `Webhooks`)                                                                                                                       | `wa.SendTextMessage("57300...", "Hello")`                               |
 
 ### Utilities
 
-| Package | Public API | Example |
-| --- | --- | --- |
-| `envar` | `GetStr`, `GetInt`, `GetInt64`, `GetBool`, `GetFloat`, `GetDuration`, `Set*`, `Arg*`, `Validate` | `port := envar.GetInt("PORT", 3000)` |
-| `logs` | `Info`, `Infof`, `Debug`, `Warn`, `Alert`, `Alertf`, `Error`, `Errorf`, `Fatal`, `Panic` | `logs.Errorf("failed: %v", err)` |
-| `stdrout`, `color` | `Printl`, `Traces`, `SetStdout`; `Red`, `Green`, `Yellow`, `Blue`… | `fmt.Println(color.Green("ok"))` |
-| `validator` | `New()`, `Field`, `Required`, `NotEmpty`, `Min`, `Max`, `Between`, `MinLength`, `MaxLength`, `Pattern`, `Values`, `IsEmail`, `IsPhone`, `Validate`, `ByJson`, `ToJson`, `Wrapper` (goja) | `validator.New().Field("email").Required().IsEmail().Validate(body)` |
-| `reg` | `UUID` (v7, ordered), `ULID`, `XID`, `SID` (11 chars, sortable; node from `SID_NODE`), `SIDInt`, `EncodeSID`/`DecodeSID`/`SIDParts`, `NewSIDGenerator(node)`, `GenSnowflake`, `GetUUID(id)`, `GenULID(tag)`, `TagULID` | `id := reg.SID() // "0S2ZTw7OCm0"` |
-| `strs` | `Format`, `Parse`, `Titlecase`, `Lowcase`, `RemoveAccents`, `Split`, `IsEmpty`, `HtmlToText` | `strs.Parse("Hi {{name}}", vars)` |
-| `timezone` | `Now`, `NowStr`, `Add`, `Format`, `Parse`, `Location` | `t := timezone.Now()` |
-| `units` | `NewQuantity(val, unit)`, `Load`, `To`, `ToStr` | `q.To(units.UnityKilometer)` |
-| `xls`, `csv` | `ReadXls*` / `ReadCsv*` (`GetSheet`, `GetData`, `GetRows`); `NewXls` / `NewCsv` (`ToFile`, `ToWriter`, `ToHttp`) | `csv.NewCsv(rows).ToHttp(w, "report.csv")` |
-| `file` | `Load[T]`, `Save`, `LoadOrSave[T]`, `MakeFile`, `MakeFolder`, `NewWatcher` (`OnWrite`, `OnCreate`, `Load`) | `file.Save("cfg.json", cfg)` |
-| `iterate` | `Start`, `Segment`, `End` (timings) | `iterate.Start("load")` |
-| `msg` | Shared message constants | — |
+| Package            | Public API                                                                                                                                                                                                             | Example                                                              |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `envar`            | `GetStr`, `GetInt`, `GetInt64`, `GetBool`, `GetFloat`, `GetDuration`, `Set*`, `Arg*`, `Validate`                                                                                                                       | `port := envar.GetInt("PORT", 3000)`                                 |
+| `logs`             | `Info`, `Infof`, `Debug`, `Warn`, `Alert`, `Alertf`, `Error`, `Errorf`, `Fatal`, `Panic`                                                                                                                               | `logs.Errorf("failed: %v", err)`                                     |
+| `stdrout`, `color` | `Printl`, `Traces`, `SetStdout`; `Red`, `Green`, `Yellow`, `Blue`…                                                                                                                                                     | `fmt.Println(color.Green("ok"))`                                     |
+| `validator`        | `New()`, `Field`, `Required`, `NotEmpty`, `Min`, `Max`, `Between`, `MinLength`, `MaxLength`, `Pattern`, `Values`, `IsEmail`, `IsPhone`, `Validate`, `ByJson`, `ToJson`, `Wrapper` (goja)                               | `validator.New().Field("email").Required().IsEmail().Validate(body)` |
+| `reg`              | `UUID` (v7, ordered), `ULID`, `XID`, `SID` (11 chars, sortable; node from `SID_NODE`), `SIDInt`, `EncodeSID`/`DecodeSID`/`SIDParts`, `NewSIDGenerator(node)`, `GenSnowflake` (the SID as 19 digits), `GetUUID(id)`, `GenULID(tag)`, `TagULID` | `id := reg.SID() // "0S2ZTw7OCm0"`                                   |
+| `strs`             | `Format`, `Parse`, `Titlecase`, `Lowcase`, `RemoveAccents`, `Split`, `IsEmpty`, `HtmlToText`                                                                                                                           | `strs.Parse("Hi {{name}}", vars)`                                    |
+| `timezone`         | `Now`, `NowStr`, `Add`, `Format`, `Parse`, `Location`                                                                                                                                                                  | `t := timezone.Now()`                                                |
+| `units`            | `NewQuantity(val, unit)`, `Load`, `To`, `ToStr`                                                                                                                                                                        | `q.To(units.UnityKilometer)`                                         |
+| `xls`, `csv`       | `ReadXls*` / `ReadCsv*` (`GetSheet`, `GetData`, `GetRows`); `NewXls` / `NewCsv` (`ToFile`, `ToWriter`, `ToHttp`)                                                                                                       | `csv.NewCsv(rows).ToHttp(w, "report.csv")`                           |
+| `file`             | `Load[T]`, `Save`, `LoadOrSave[T]`, `MakeFile`, `MakeFolder`, `NewWatcher` (`OnWrite`, `OnCreate`, `Load`)                                                                                                             | `file.Save("cfg.json", cfg)`                                         |
+| `iterate`          | `Start`, `Segment`, `End` (timings)                                                                                                                                                                                    | `iterate.Start("load")`                                              |
+| `msg`              | Shared message constants                                                                                                                                                                                               | —                                                                    |
 
 ## Usage examples
 
@@ -239,7 +245,27 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 `middleware.Logger` (used by `router` and `server`) writes one line per request to stdout. `TELEMETRY_FORMAT` picks it: `text` (the colored line), `json` (one JSON object per request, for Loki/Grafana) or `off`; unset, it is `text` on a terminal and `json` elsewhere (a container). `TELEMETRY_LOG=errors` writes only the failed or slow requests (status ≥ 500 or latency ≥ `LATENCY_LIMIT` ms; default `all`). `SetTelemetryOutput(w, format, filter)` changes the writer, format and filter at runtime (empty = the variable). The query string is never written. With `off` and no NATS the middleware does nothing (no metric, no `ServiceId` header); the request counters of `cache.CallMetrics` run only for the text line, NATS or `NewMetric` (the 429 of `ettp`).
 
 ```json
-{"time":"2026-10-29T15:04:05.123-05:00","level":"INFO","msg":"http.request","http.request.method":"GET","http.route":"/users/{id}","url.path":"/users/123","url.scheme":"http","http.response.status_code":200,"duration_ms":12.84,"response_time_ms":11.9,"search_time_ms":0,"http.request.body.size":0,"http.response.body.size":2048,"client.address":"10.0.0.4","server.address":"pod-1","user_agent.original":"curl/8.7.1","trace_id":"","service_id":"…","app_name":"…"}
+{
+  "time": "2026-10-29T15:04:05.123-05:00",
+  "level": "INFO",
+  "msg": "http.request",
+  "http.request.method": "GET",
+  "http.route": "/users/{id}",
+  "url.path": "/users/123",
+  "url.scheme": "http",
+  "http.response.status_code": 200,
+  "duration_ms": 12.84,
+  "response_time_ms": 11.9,
+  "search_time_ms": 0,
+  "http.request.body.size": 0,
+  "http.response.body.size": 2048,
+  "client.address": "10.0.0.4",
+  "server.address": "pod-1",
+  "user_agent.original": "curl/8.7.1",
+  "trace_id": "",
+  "service_id": "…",
+  "app_name": "…"
+}
 ```
 
 `level` is `ERROR` for a 5xx, `WARN` for a 4xx or a latency over `LATENCY_LIMIT` ms. `http.route` is the route pattern (chi's, or the one set by `ettp`), so it does not grow with ids. Grafana Alloy or Promtail ship the container's stdout to Loki; keep the Loki labels to the service and `level`, and query the rest from the JSON (the `json` parser turns dots into `_`):
@@ -299,7 +325,10 @@ over, _ := budgets.Query(et.Json{
 In jwf and jsql scripts, `field`, `sum`, `count`, `year`… build the reference:
 
 ```js
-evaluateObject(params, [{age: {more_eq: field("min_age")}}, {and: {total: {eq: sum("items->price")}}}])
+evaluateObject(params, [
+  { age: { more_eq: field("min_age") } },
+  { and: { total: { eq: sum("items->price") } } },
+]);
 ```
 
 ### Validation
@@ -338,7 +367,7 @@ defer q.Close()
 
 ### Embedded key/value store
 
-`store` is a single-node, append-only store of `id → []byte` in segment files, with an in-memory index; it repairs itself on `Open` after a crash. There is no upsert: call `Update`, then `Insert` if the id did not exist. Public API: [`store/catalog.go`](store/catalog.go).
+`store` is a single-node, append-only store of `id → []byte` in segment files, with an in-memory index; it repairs itself on `Open` after a crash. There is no upsert: call `Update`, then `Insert` if the id did not exist. Public API: [`store/catalog.go`](store/catalog.go). A `ReadWrite` store is locked to one opener (`flock` on `<pathData>/segments/<name>-LOCK`, released by `Close`; unix only, elsewhere it logs a warning), and every created or renamed file is followed by an fsync of its directory.
 
 ```go
 fs, err := store.Open("./data/collections", "./data/wal", "customers", store.ReadWrite)
@@ -393,6 +422,11 @@ c.CronJob("daily", ownerId, "0 6 * * *", 0, nil, fn, // fn's error or panic → 
     crontab.WithRetries(3, time.Minute))             // retried up to 3 times; registering it again keeps its state
 c.StopJob("daily")                                    // → paused; StartJob → scheduled
 job, _ := c.GetJob("daily")                           // job.Str("status"), job.Json("last_run")
+
+// One handler for every job of the instance, subscribed before it can lead: the jobs reloaded from the Store (and a
+// late schedule's catch-up fire) are served without registering them again. fn nil uses it; neither → error.
+c, _ = crontab.New("engine:"+tenantId, store, crontab.WithHandler(func(params et.Json) error { return run(params) }))
+c.ScheduleJob("once", ownerId, at, et.Json{"job": "once"}, nil) // a past at is accepted only if that same job exists
 ```
 
 ### JavaScript scripts and AI
@@ -415,20 +449,20 @@ hits, _ := index.Search(ctx, tenantId, projectId, "reset the router", 5, 0.3, em
 
 ## Environment variables
 
-| Package | Variables |
-| --- | --- |
-| `jsql` | `DB_DRIVER` (`postgres`), `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_RECORD_LIMIT` (1000), `DB_IS_DEBUG`, `DB_APP_NAME`; postgres `DB_SSLMODE`; oracle `DB_SSL`, `DB_SSL_VERIFY`; every connection `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_LIFETIME`, `DB_POOL_IDLE_TIME`; search `DB_SEARCH_LANG` (`spanish`), `DB_SEARCH_INDEXES` (`on`) |
-| `cache` | `REDIS_HOST`, `REDIS_PASSWORD`, `REDIS_DB` |
-| `event` | `NATS_HOST`, `NATS_USER`, `NATS_PASSWORD` |
-| `graph` | `NEO4J_HOST`, `NEO4J_USER`, `NEO4J_PASSWORD` |
-| `claim` | `SECRET` (default `"1977"`) |
-| `jia`, `ia` | `OPENAI_API_KEY` (not needed by `ia.LoadIndex`); `ia` also `IA_EMBEDDING_MODEL`, `IA_CHAT_MODEL`, `IA_CHUNK_SIZE`, `IA_CHUNK_OVERLAP`, `IA_TOP_K` |
-| `dt` | `PRODUCTION` (`true` stores in Redis) |
-| `jwf`, `jsql` | `MAX_AUDIT_LOG` (1000) |
-| `jwsp` | `WHATSAPP_API_URL` |
-| `store` | `RELSEG_SIZE` (segment MB, 128), `SYNC_ON_WRITE` (true), `MIN_THRESHOLD_COMPACT` (1000) |
-| `validator` | `LANG` |
-| `middleware` | `TELEMETRY_FORMAT` (`text` on a terminal, `json` elsewhere, `off`), `TELEMETRY_LOG` (`all`, `errors`), `LATENCY_LIMIT` (1000 ms, `WARN` above it), `REQUESTS_LIMIT` (400 per second per method and path) |
+| Package       | Variables                                                                                                                                                                                                                                                                                                                                                               |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `jsql`        | `DB_DRIVER` (`postgres`), `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_RECORD_LIMIT` (1000), `DB_IS_DEBUG`, `DB_APP_NAME`; postgres `DB_SSLMODE`; oracle `DB_SSL`, `DB_SSL_VERIFY`; every connection `DB_POOL_MAX_OPEN`, `DB_POOL_MAX_IDLE`, `DB_POOL_LIFETIME`, `DB_POOL_IDLE_TIME`; search `DB_SEARCH_LANG` (`spanish`), `DB_SEARCH_INDEXES` (`on`) |
+| `cache`       | `REDIS_HOST`, `REDIS_PASSWORD`, `REDIS_DB`                                                                                                                                                                                                                                                                                                                              |
+| `event`       | `NATS_HOST`, `NATS_USER`, `NATS_PASSWORD`                                                                                                                                                                                                                                                                                                                               |
+| `graph`       | `NEO4J_HOST`, `NEO4J_USER`, `NEO4J_PASSWORD`                                                                                                                                                                                                                                                                                                                            |
+| `claim`       | `SECRET` (default `"1977"`)                                                                                                                                                                                                                                                                                                                                             |
+| `jia`, `ia`   | `OPENAI_API_KEY` (not needed by `ia.LoadIndex`); `ia` also `IA_EMBEDDING_MODEL`, `IA_CHAT_MODEL`, `IA_CHUNK_SIZE`, `IA_CHUNK_OVERLAP`, `IA_TOP_K`                                                                                                                                                                                                                       |
+| `dt`          | `PRODUCTION` (`true` stores in Redis)                                                                                                                                                                                                                                                                                                                                   |
+| `jwf`, `jsql` | `MAX_AUDIT_LOG` (1000)                                                                                                                                                                                                                                                                                                                                                  |
+| `jwsp`        | `WHATSAPP_API_URL`                                                                                                                                                                                                                                                                                                                                                      |
+| `store`       | `RELSEG_SIZE` (segment MB, 128), `SYNC_ON_WRITE` (true), `MIN_THRESHOLD_COMPACT` (1000)                                                                                                                                                                                                                                                                                 |
+| `validator`   | `LANG`                                                                                                                                                                                                                                                                                                                                                                  |
+| `middleware`  | `TELEMETRY_FORMAT` (`text` on a terminal, `json` elsewhere, `off`), `TELEMETRY_LOG` (`all`, `errors`), `LATENCY_LIMIT` (1000 ms, `WARN` above it), `REQUESTS_LIMIT` (400 per second per method and path)                                                                                                                                                                |
 
 ## CLI binaries
 

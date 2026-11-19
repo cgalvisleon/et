@@ -10,7 +10,6 @@ import (
 
 var dependencies = []string{
 	"github.com/fsnotify/fsnotify@v1.9.0",
-	"github.com/bwmarrin/snowflake@v0.3.0",
 	"github.com/joho/godotenv/autoload@v1.5.1",
 	"github.com/google/uuid@v1.6.0",
 	"github.com/matoous/go-nanoid/v2@latest",

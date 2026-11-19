@@ -825,7 +825,12 @@ func (s *Instance) runError(ctx et.Json, err error) (et.Json, error) {
 		return et.Json{}, err
 	}
 
-	connection, exists := s.flow.getError(s.Step.ID)
+	// The connections name the node by its key in the flow (StepId); its ID can be the catalog step's (error:throw)
+	stepId := s.StepId
+	if stepId == "" {
+		stepId = s.Step.ID
+	}
+	connection, exists := s.flow.getError(stepId)
 	if !exists {
 		return et.Json{}, err
 	}
@@ -836,6 +841,8 @@ func (s *Instance) runError(ctx et.Json, err error) (et.Json, error) {
 	}
 
 	result, errStep := step.Run(s, ctx)
+	// The step of the error port leaves the run running: it ends failed with the original error
+	s.setStatus(FAILED)
 	if errStep != nil {
 		return et.Json{}, errStep
 	}

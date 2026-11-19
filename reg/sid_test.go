@@ -3,6 +3,7 @@ package reg
 import (
 	"math/rand"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -180,4 +181,48 @@ func BenchmarkSID(b *testing.B) {
 	for b.Loop() {
 		_ = g.NewString()
 	}
+}
+
+/**
+* TestGenSnowflake: 200.000 seguidos (la versión con rand(1000) repetía el 87,7%) y 8 goroutines a la vez: sin
+* repetidos, 19 dígitos, el texto en orden y el mismo número que su SID.
+**/
+func TestGenSnowflake(t *testing.T) {
+	prev := ""
+	seen := make(map[string]bool, 200_000)
+	for range 200_000 {
+		s := GenSnowflake()
+		if len(s) != 19 || s <= prev || seen[s] {
+			t.Fatalf("snowflake %q después de %q (repetido: %v)", s, prev, seen[s])
+		}
+		seen[s] = true
+		prev = s
+	}
+	n, err := strconv.ParseInt(prev, 10, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, node, _ := SIDParts(n); node != SIDNode() {
+		t.Fatalf("nodo %d, el del proceso es %d", node, SIDNode())
+	}
+
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			ids := make([]string, 20_000)
+			for i := range ids {
+				ids[i] = GenSnowflake()
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			for _, id := range ids {
+				if seen[id] {
+					t.Errorf("repetido %s", id)
+				}
+				seen[id] = true
+			}
+		})
+	}
+	wg.Wait()
 }

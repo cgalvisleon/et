@@ -97,7 +97,7 @@ Each table lists the main public API of every package. `go doc github.com/cgalvi
 | `queue`      | `New[T](size, maxEvents, period, handler)`, `Push`, `Len`, `Close`                                                                                                                                                                                                                                                             | `q.Push(item)`                                                             |
 | `crontab`    | `New(tag, store, opts...)` (instance; `WithHandler`) or `Load` (global), `CronJob`, `ScheduleJob`, `StopJob`, `StartJob`, `RemoveJob`, `GetJob`, `Http*`; states `pending`→`scheduled`⇄`running`→`finished`/`failed`, `paused`, `missed`, `canceled`; `LastRun`, `WithRetries`, `WithTimeout`; replicas with the same tag elect a leader and fail over | `crontab.CronJob(tag, owner, "0 * * * *", 0, nil, fn)`                     |
 | `resilience` | `New()`, `LoadInstance(Params)`, `Instance.Run`, `IsDone`, `IsFailed`, `Stop`                                                                                                                                                                                                                                                  | `inst, _ := r.LoadInstance(resilience.Params{Fn: send, TotalAttempts: 3})` |
-| `store`      | `Open(dir)` → `Store` (`Put`, `Close`; being rewritten, F-23) | `s, _ := store.Open("./data"); s.Put("id", data)` |
+| `store`      | `Open(dir)` → `Store` (`Put`, `Remove`, `Read`, `Insert`, `Update`, `Delete`, `Close`; being rewritten, F-23) | `s, _ := store.Open("./data"); s.Put("id", data)` |
 
 ### Security
 
@@ -367,7 +367,7 @@ defer q.Close()
 
 ### Embedded key/value store
 
-`store` is being rewritten as the base for high-performance data persistence (F-23): `(id string, data []byte)` in several segment files (`RELSEG_SIZE` MB, 128 by default) with an ordered in-memory index; concurrent writers share each fsync (group commit), and `Open` cuts an unconfirmed tail after a crash. A directory can be opened by one process at a time (`flock` on `LOCK`). Available today: `Open`, `Put` (blind write: creates or replaces without reading) and `Close`; `Read`, `Remove`, `Insert`, `Update` and `Delete` come next. Design and format: [`store/doc.go`](store/doc.go).
+`store` is being rewritten as the base for high-performance data persistence (F-23): `(id string, data []byte)` in several segment files (`RELSEG_SIZE` MB, 128 by default) with an ordered in-memory index; concurrent writers share each fsync (group commit), and `Open` cuts an unconfirmed tail after a crash. A directory can be opened by one process at a time (`flock` on `LOCK`). Available today: `Open`, `Close`; `Put` and `Remove` (blind: they write without reading what was there; `Remove` of a missing id is not an error); `Insert` (only if absent), `Update` (only if present and the value changed) and `Delete` (only if present), which return whether they wrote and are atomic against other writers of the same id; and `Read`, which does not wait for writers and verifies the record's crc. Batches, ordered scans and the rest come next. Design and format: [`store/doc.go`](store/doc.go).
 
 ```go
 s, err := store.Open("./data/customers")
@@ -377,6 +377,11 @@ if err != nil {
 defer s.Close()
 
 err = s.Put("c-001", []byte(`{"name":"Ana"}`)) // with SYNC_ON_WRITE (default) it returns once on disk
+data, found, err := s.Read("c-001")
+created, err := s.Insert("c-002", []byte(`{"name":"Luis"}`)) // false if c-002 already exists
+changed, err := s.Update("c-001", []byte(`{"name":"Ana M."}`)) // false if missing or unchanged
+deleted, err := s.Delete("c-002")                             // false if missing
+err = s.Remove("c-003")                                       // blind delete, idempotent
 ```
 
 ### Workflows with `jwf`

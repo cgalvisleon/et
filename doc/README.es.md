@@ -97,7 +97,7 @@ Cada tabla lista la API pública principal de cada paquete. `go doc github.com/c
 | `queue` | `New[T](size, maxEvents, period, handler)`, `Push`, `Len`, `Close` | `q.Push(item)` |
 | `crontab` | `New(tag, store, opts...)` (instancia; `WithHandler`) o `Load` (global), `CronJob`, `ScheduleJob`, `StopJob`, `StartJob`, `RemoveJob`, `GetJob`, `Http*`; estados `pending`→`scheduled`⇄`running`→`finished`/`failed`, `paused`, `missed`, `canceled`; `LastRun`, `WithRetries`, `WithTimeout`; las réplicas con el mismo tag eligen una líder y la relevan | `crontab.CronJob(tag, owner, "0 * * * *", 0, nil, fn)` |
 | `resilience` | `New()`, `LoadInstance(Params)`, `Instance.Run`, `IsDone`, `IsFailed`, `Stop` | `inst, _ := r.LoadInstance(resilience.Params{Fn: send, TotalAttempts: 3})` |
-| `store` | `Open(dir)` → `Store` (`Put`, `Close`; en reescritura, F-23) | `s, _ := store.Open("./data"); s.Put("id", data)` |
+| `store` | `Open(dir)` → `Store` (`Put`, `Remove`, `Read`, `Insert`, `Update`, `Delete`, `Close`; en reescritura, F-23) | `s, _ := store.Open("./data"); s.Put("id", data)` |
 
 ### Seguridad
 
@@ -344,7 +344,7 @@ defer q.Close()
 
 ### Store embebido clave/valor
 
-`store` se está reescribiendo como base para construir persistencia de datos de alto rendimiento (F-23): `(id string, data []byte)` en varios archivos de segmento (`RELSEG_SIZE` MB, 128 por omisión) con un índice ordenado en memoria; los escritores concurrentes comparten cada fsync (group commit) y `Open` corta la cola sin confirmar tras una caída. Un directorio lo abre un solo proceso a la vez (`flock` sobre `LOCK`). Disponible hoy: `Open`, `Put` (escritura ciega: crea o reemplaza sin leer) y `Close`; siguen `Read`, `Remove`, `Insert`, `Update` y `Delete`. Diseño y formato: [`store/doc.go`](../store/doc.go).
+`store` se está reescribiendo como base para construir persistencia de datos de alto rendimiento (F-23): `(id string, data []byte)` en varios archivos de segmento (`RELSEG_SIZE` MB, 128 por omisión) con un índice ordenado en memoria; los escritores concurrentes comparten cada fsync (group commit) y `Open` corta la cola sin confirmar tras una caída. Un directorio lo abre un solo proceso a la vez (`flock` sobre `LOCK`). Disponible hoy: `Open`, `Close`; `Put` y `Remove` (ciegos: escriben sin leer lo que había; `Remove` de un id que no existe no es error); `Insert` (solo si no existe), `Update` (solo si existe y el valor cambió) y `Delete` (solo si existe), que devuelven si escribieron y son atómicos frente a otros escritores del mismo id; y `Read`, que no espera a los escritores y verifica el crc del registro. Siguen los lotes, los recorridos ordenados y lo demás. Diseño y formato: [`store/doc.go`](../store/doc.go).
 
 ```go
 s, err := store.Open("./data/customers")
@@ -354,6 +354,11 @@ if err != nil {
 defer s.Close()
 
 err = s.Put("c-001", []byte(`{"name":"Ana"}`)) // con SYNC_ON_WRITE (por omisión) vuelve cuando está en disco
+data, found, err := s.Read("c-001")
+created, err := s.Insert("c-002", []byte(`{"name":"Luis"}`)) // false si c-002 ya existe
+changed, err := s.Update("c-001", []byte(`{"name":"Ana M."}`)) // false si no existe o no cambió
+deleted, err := s.Delete("c-002")                             // false si no existe
+err = s.Remove("c-003")                                       // borrado ciego, idempotente
 ```
 
 ### Workflows con `jwf`

@@ -68,6 +68,11 @@ type Pool interface {
 	// PinNew extiende el fork con una página en ceros y la devuelve fijada y bloqueada en exclusivo.
 	PinNew(file smgr.FileNo, fork smgr.Fork) (Handle, error)
 
+	// PinZero fija la página tag sin leerla del disco, en ceros y bloqueada en exclusivo (como RBM_ZERO_AND_LOCK de
+	// PostgreSQL). Es para rehacer un registro que la pisa entera (imagen o BlockWillInit): la página en disco puede
+	// estar rota por un corte y leerla fallaría por la suma. El bloque tiene que existir en el fork.
+	PinZero(tag Tag) (Handle, error)
+
 	// FlushAll escribe todas las páginas que estaban sucias al llamarlo, al ritmo que da pace (nil = sin pausa), y
 	// devuelve; el fsync de los archivos lo hace el checkpoint con smgr.SyncAll.
 	FlushAll(pace func(written, total int)) error

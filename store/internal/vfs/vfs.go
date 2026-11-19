@@ -1,6 +1,12 @@
 package vfs
 
-import "io"
+import (
+	"errors"
+	"io"
+)
+
+// ErrLocked es el error de Lock cuando otro ya tiene el bloqueo (se compara con errors.Is).
+var ErrLocked = errors.New("vfs: locked by another holder")
 
 // File es un archivo abierto. Las escrituras no son durables hasta que Sync vuelve sin error.
 type File interface {
@@ -39,7 +45,7 @@ type FS interface {
 	// ReadDir lista los nombres (sin ruta) de las entradas de un directorio, en orden alfabético.
 	ReadDir(dir string) ([]string, error)
 
-	// Lock toma un bloqueo exclusivo y sin espera del archivo name (flock en unix); falla si otro lo tiene, también
-	// en el mismo proceso. Cerrar lo devuelto lo suelta.
+	// Lock toma un bloqueo exclusivo y sin espera del archivo name, creándolo si falta (flock en unix); si otro lo
+	// tiene, también en el mismo proceso, falla con ErrLocked. Cerrar lo devuelto lo suelta.
 	Lock(name string) (io.Closer, error)
 }

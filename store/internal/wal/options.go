@@ -1,0 +1,21 @@
+package wal
+
+import "github.com/cgalvisleon/et/envar"
+
+// Options es lo configurable del WAL. EnvOptions las lee del entorno; las pruebas las fijan a mano.
+type Options struct {
+	// SegmentSize es el tamaño máximo de un segmento en bytes (WAL_SEGMENT_SIZE). Al menos MaxRecordSize.
+	SegmentSize int64
+
+	// Spares es cuántos segmentos reciclados (renombrados a números futuros) se guardan para reutilizar; Recycle
+	// borra los demás.
+	Spares int
+}
+
+// EnvOptions lee las opciones de WAL_SEGMENT_SIZE (MB, mínimo 1) y MAX_WAL_SIZE (MB): se guardan como repuesto los
+// segmentos que llenan la mitad de MAX_WAL_SIZE (a confirmar), al menos uno.
+func EnvOptions() Options {
+	segment := max(envar.GetInt64("WAL_SEGMENT_SIZE", 128), MinSegmentSize>>20) << 20
+	maxWAL := max(envar.GetInt64("MAX_WAL_SIZE", 1024), 1) << 20
+	return Options{SegmentSize: segment, Spares: int(max(maxWAL/2/segment, 1))}
+}

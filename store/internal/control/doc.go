@@ -53,4 +53,20 @@
 //	 24   n name
 //	cola
 //	  0   4 crc         CRC-32C de todo lo anterior
+//
+// # Implementación
+//
+// NewControlFile y NewCatalogFile dan las implementaciones sobre un vfs.FS. Lo leído se valida entero sin confiar en
+// los bytes (CRC, magia, versión, ceros reservados, rangos, que cada entrada quepa antes de leerla) y lo aceptado se
+// vuelve a codificar igual byte a byte. Una copia del control solo vale en el lugar que le toca por su seq. Tras un
+// fallo de escritura o de Sync, Write, Create y Save devuelven ErrFailed hasta reabrir (no se reintenta un fsync).
+// Create nunca pisa un control con una copia válida. Load rechaza un catálogo de más de 1 GiB (a confirmar).
+//
+// Stores es el catálogo en memoria (nombre → Entry), seguro con varias goroutines y con un lock hoja. Los números de
+// archivo empiezan en FirstFileNo = 1 y no se reutilizan (AllocFileNo). Create, Drop y Empty son idempotentes para
+// rehacerlos desde el WAL: Create no hace nada si el nombre existe; Drop y Empty nombran el número de archivo que
+// esperan y no hacen nada si el store no está o tiene otro, así un registro viejo no toca un store que después se
+// borró, se vació o se volvió a crear. Rehacer desde el punto de rehacer sobre un catálogo guardado en cualquier
+// momento posterior termina en el mismo catálogo. AddCount suma por número de archivo (el de un store borrado se
+// ignora). Catalog() da la copia para Save: el motor la toma con CountLSN del mismo instante que los contadores.
 package control

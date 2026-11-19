@@ -22,6 +22,22 @@
 // confirmada en una versión (pregunta 49) y antes de escribir la página al disco. Tras abrir, todo lo que dice el
 // archivo ya es durable y el lsn de grupo empieza en 0.
 //
+// # Implementación (Statuses y Transactions)
+//
+// Statuses (Open) es el archivo con su caché: CachePages ranuras fijas (DefaultCachePages = 128, 1 MB), cada una con
+// su página y el lsn de sus 1.024 grupos. Se reemplaza la menos usada últimamente que no esté en E/S; si está sucia,
+// se escribe antes, después de wal.Flusher.WaitDurable(el mayor lsn de sus grupos). Un solo mutex hoja guarda las
+// ranuras y se suelta durante toda E/S y toda espera al WAL (la ranura queda marcada como cargándose o
+// escribiéndose). Leer una página más allá del final del archivo da ceros (en curso); escribirla extiende el
+// archivo. Flush escribe las sucias y hace fsync de los archivos escritos y del directorio. Truncate borra los
+// archivos enteros por debajo del horizonte y después Status devuelve ErrTruncated; al abrir, el primer archivo que
+// queda marca ese límite. Recover(next), al terminar la recuperación, fija el horizonte y pone en cero los estados
+// desde next (resto de su página, páginas y archivos siguientes), como TrimCLOG: así un estado que llegó al disco sin
+// registro en el WAL no se pega a un xid que se vuelve a asignar. Un fallo de escritura o fsync deja todo en error.
+//
+// Transactions (NewManager) guarda solo las transacciones en curso: cada una con un canal que End cierra (Wait) y el
+// Xmin de su primer snapshot (OldestActive).
+//
 // # Visibilidad
 //
 // Un Snapshot es (Xmin, Xmax, InProgress): el xid más viejo en curso al tomarlo, el siguiente xid a asignar y la

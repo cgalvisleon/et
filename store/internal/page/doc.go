@@ -49,4 +49,31 @@
 // (una página escrita en otro lugar no pasa), plegado a 16 bits: uint16(c) ^ uint16(c>>16). Se calcula al escribir la
 // página al disco, sobre una copia, y se verifica al leerla. Una página toda en ceros es válida y nueva (como
 // PageIsNew): el archivo pudo extenderse sin que la página llegara a escribirse.
+//
+// # Funciones (ola 1)
+//
+// Todas trabajan sobre un Page de Size bytes, sin asignar memoria, y quien llama tiene el bloqueo de contenido.
+//
+//	función                          de PostgreSQL               qué hace
+//	Init(specialSize)                PageInit                    página vacía con su espacio especial
+//	Verify(b, blk)                   PageIsVerified              largo, suma y encabezado de una página leída
+//	CheckItems()                     (PageRepairFragmentation)   punteros en su lugar, sin pisarse
+//	AddItem(item)                    PageAddItem sin número      reusa un puntero libre o agrega al final
+//	InsertItem(item, off)            PageAddItem con número      inserta en off y corre los siguientes
+//	Item(off), ItemID(off)           PageGetItem, PageGetItemId  bytes del ítem (sin copiar) y su puntero
+//	ReplaceItem(off, item)           PageIndexTupleOverwrite     cambia el contenido, de cualquier largo
+//	DeleteItem(off), DeleteItems     PageIndexTupleDelete, …Multi… quita ítem y puntero, cierra el hueco
+//	MarkDead(off), SetUnused(off)    ItemIdMarkDead, …SetUnused  marca muerto; libera el puntero
+//	Repair()                         PageRepairFragmentation     junta el hueco, pone FlagHasFreeLines
+//	FreeSpace(), ExactFreeSpace()    PageGetFreeSpace, …Exact…   espacio para un ítem nuevo; hueco
+//	Opaque(), SetOpaque(o)           PageGetSpecialPointer       espacio especial de las páginas de un store
+//	ComputeChecksum, SetChecksum     pg_checksum_page            la suma de arriba
+//
+// Verify solo mira el encabezado (como PostgreSQL), porque la meta y las de desborde no tienen punteros a ítems y
+// guardan sus datos desde el byte 32 hasta pd_lower (SetLower). Aun sobre punteros dañados ningún método entra en
+// pánico ni lee fuera de la página: Item revisa los límites de cada ítem y las funciones que cambian la página
+// validan el encabezado y el ítem que tocan; quien lee del disco una página de ítems puede llamar a CheckItems.
+//
+// Decisiones a confirmar: LineRedirect se trata como daño (no se usa); un puntero libre debe estar en cero; AddItem
+// no prende FlagPageFull (lo decide quien llama); los bytes de alineación de cada ítem quedan en cero.
 package page

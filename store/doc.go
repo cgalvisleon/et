@@ -11,18 +11,19 @@
 //
 // # Estado del código
 //
-// IMPORTANTE: la implementación que hoy tiene este paquete (store.go, ops.go, segment.go, record.go, pending.go,
-// index.go, readlock.go, dir.go, fs_*.go, catalog.go) es del DISEÑO ANTERIOR: un log append-only de segmentos con
-// todas las claves en un índice ordenado en RAM, que se rehace al abrir recorriendo el log. No cumple las dos reglas
-// de abajo y se reemplaza en la ola 4 por el motor descrito aquí. Hasta entonces sigue compilando y sus pruebas
-// sirven de especificación del comportamiento de la API; su diseño está escrito en legacy.go. Lo que pasa de ella al motor nuevo es el log como base del
-// WAL (store/internal/wal): lsn contiguos, reserva de lsn y lugar bajo writeMu, escritura en paralelo, published
-// (avanza solo sobre lsn contiguos), group commit, CRC-32C, recuperación con corte en el primer registro inválido o
-// fuera de orden, fsync del directorio y el LOCK.
+// El código del diseño anterior (un log append-only con todas las claves en un índice en RAM) se borró al integrar
+// la ola 1 (2026-11-19); lo que servía de él (lsn contiguos, reserva bajo writeMu, escritura en paralelo, published,
+// group commit, CRC-32C, recuperación con corte en el primer registro inválido) vive ahora en store/internal/wal.
+// Hasta la ola 4 este paquete no tiene API pública: solo esta documentación.
 //
-// Los paquetes internos de la ola 0 solo tienen formatos, tipos e interfaces; sus implementaciones llegan por olas:
-// 1 page, smgr, control, wal, xact, crashfs (y vfs); 2 buffer, fsm; 3 btree, overflow; 4 checkpoints, recuperación,
-// el motor y la API de la fase 1A; 5 MVCC, transacciones, esperas, limpieza.
+// Implementaciones por olas: 0 formatos e interfaces; 1 page, vfs, crashfs, smgr, control, wal, xact (hechas,
+// con pruebas y fuzzers); 2 buffer, fsm; 3 btree, overflow; 4 checkpoints, recuperación, el motor y la API de la fase
+// 1A; 5 MVCC, transacciones, esperas, limpieza.
+//
+// Disco: vfs.OS() es el sistema de archivos real (fsync con F_FULLFSYNC en macOS, fdatasync en Linux; Lock devuelve
+// vfs.ErrLocked si otro tiene el LOCK, y el error público del motor lo envuelve); crashfs.New() es el disco simulado
+// de las pruebas con cortes (pierde, reordena o rompe por sectores lo que no tuvo fsync; un fsync fallido olvida lo
+// pendiente, como Linux).
 //
 // # Las dos reglas
 //
@@ -102,7 +103,8 @@
 // fastLevel(4) freeHead(4) reservado(4) frozenXID(8) reservado(8) = 48 B.
 //
 // Página de desborde: encabezado, el trozo del valor desde el byte 32 hasta pd_lower (hasta 8.144 B), espacio
-// especial con flags = desborde y next = la siguiente de la cadena.
+// especial con flags = desborde, next = la siguiente de la cadena y level = la posición de la página en la cadena
+// (detecta orden cambiado, bucles y saltos a otra cadena). Cada cadena es de una sola versión.
 //
 // Archivo de estados: páginas de 8.192 B sin encabezado, 2 bits por xid (0 en curso, 1 confirmada, 2 abortada),
 // 4.096 páginas por archivo. El lsn de confirmación por grupo de 32 xids vive en memoria con cada página en caché.
@@ -117,8 +119,8 @@
 //
 // # Límites
 //
-//   - id: de 1 a 2.000 B (pregunta 37). Nombre de un store: de 1 a 255 B.
-//   - valor: hasta MaxValueLen = 64 MiB. Un valor grande se guarda en páginas de desborde y cada una es un registro
+//   - id: de 1 a 2.000 B (pregunta 37). Nombre de un store: texto UTF-8 válido sin el carácter nulo, de 1 a 255 B (pregunta 57).
+//   - valor: hasta overflow.MaxValueLen = 64 MiB. Un valor grande se guarda en páginas de desborde y cada una es un registro
 //     del WAL de ~8 KB, así que el tamaño del valor no cambia el de los registros: ningún registro pasa de 64 KiB y
 //     ninguno cruza segmentos del WAL (si no cabe en el activo, se rota). El tope existe porque el valor se recibe y
 //     se devuelve entero en memoria y pasa entero por el WAL: 64 MiB es un octavo del volumen que dispara un
@@ -146,9 +148,10 @@
 //     checkpoint empezó y falta la imagen, devuelve ErrNeedImage: se agrega con la hoja todavía bloqueada y se
 //     repite), asigna el lsn y el lugar, y en una operación suelta suma su delta al contador de Count del store.
 //  8. Aplicar el cambio en la página con la clave (id, lsn), poner pd_lsn = lsn, marcarla sucia, soltar la hoja.
-//  9. Escribir el registro en su lugar del WAL (en paralelo con otros) y publicarlo.
+//  9. Escribir el registro en su lugar del WAL (en paralelo con otros) y publicarlo. Toda reserva se escribe, también
+//     si la operación falla después de reservar: una reserva sin escribir frena published y deja Close esperando.
 //  10. Confirmar: una operación suelta ya lleva FlagCommit; un lote escribe su KindCommit (con la suma de Count por
-//     store, sumada bajo writeMu al reservar). Con SYNC_ON_WRITE esperar a que el WAL sea durable hasta ese lsn
+//     número de archivo de store, no por nombre, sumada bajo writeMu al reservar). Con SYNC_ON_WRITE esperar a que el WAL sea durable hasta ese lsn
 //     (group commit). Después anotar confirmada en el archivo de estados con ese lsn y quitar la transacción de las en
 //     curso (despierta a quien la espera).
 //
@@ -161,13 +164,22 @@
 //
 // # Orden de los bloqueos
 //
-//   - Entre páginas: de izquierda a derecha, de hija a padre; nunca al revés.
+//   - Entre páginas: de izquierda a derecha, de hija a padre; nunca al revés. Páginas del árbol → página meta → página
+//     libre (fsm); página de datos → su página del mapa de visibilidad.
+//   - Pedir una página (buffer.Pool.Pin) puede esperar al WAL (reemplazar una víctima sucia). Al bajar o moverse a la
+//     derecha se suelta la página antes de pedir la siguiente (Lehman-Yao). Pedirla con otra bloqueada solo se hace
+//     como nbtree, en el orden de arriba (al partir: la página nueva de fsm y la antigua hermana derecha; al terminar
+//     una partición: el padre y la meta; en la raíz nueva: la meta; en Latest: la hermana derecha), y nunca entre
+//     Reserve y Write de un registro: así esa espera no puede cerrar un ciclo, solo alargar el bloqueo.
+//   - Consultar el estado de una transacción (xact) con una hoja bloqueada en compartido puede leer el disco o esperar
+//     al WAL (como clog en PostgreSQL); con un bloqueo exclusivo, igual.
+//   - Dentro de un búfer: io (escritura al disco) → contenido → encabezado.
 //   - Página (bloqueo de contenido) → writeMu → pubMu; writeMu → syncMu; syncMu → pubMu. Nunca writeMu → página.
 //   - Nunca se espera a otra transacción (xact.Manager.Wait) ni a un fsync con una página bloqueada. Un pin sí se
 //     puede tener mientras tanto.
 //   - Los locks del mapa de la caché, de la caché del archivo de estados y del catálogo en memoria son hojas: no se
 //     toma otro con ellos tomados. El catálogo nunca se toca con una página bloqueada.
-//   - Marcas de visibilidad: con bloqueo compartido, por OR atómico; la escritura de la página al disco calcula la
+//   - Marcas de visibilidad: con bloqueo compartido, por OR atómico (y leídas con atomic.LoadUint32); la escritura de la página al disco calcula la
 //     suma sobre una copia. La marca de confirmada solo se pone si el WAL es durable hasta el lsn de confirmación del
 //     grupo de su xid (pregunta 49). La primera marca en una página tras un checkpoint se anota como KindPageImage.
 //
@@ -181,10 +193,12 @@
 //     writeMu). Desde ese momento la primera escritura de cada página lleva su imagen entera.
 //  2. Escribir las páginas sucias, repartido en el 90 % del intervalo (CHECKPOINT_COMPLETION_TARGET = 0,9), cada una
 //     tras el WAL durable hasta su pd_lsn; las páginas del archivo de estados; smgr.SyncAll y fsync de xact.
-//  3. Guardar el catálogo con los contadores y countLSN = el lsn del punto de rehacer.
+//  3. Guardar el catálogo con los contadores y countLSN = el lsn del punto de rehacer (la copia del catálogo y de los
+//     contadores se toma en el paso 1, en el mismo instante, bajo writeMu; si no, la recuperación contaría dos veces).
 //  4. Escribir el registro KindCheckpoint y esperar su fsync.
 //  5. Escribir el control (seq + 1) con el punto de rehacer, checkpointLSN, nextXID y el xid vivo más viejo.
-//  6. Reciclar los segmentos del WAL anteriores al punto de rehacer (respetando las ranuras, fase 3).
+//  6. Reciclar los segmentos del WAL anteriores al punto de rehacer (respetando las ranuras, fase 3): se renombran como
+//     repuestos hasta wal.Options.Spares (MAX_WAL_SIZE / 2 / WAL_SEGMENT_SIZE, 4 por omisión) y el resto se borra.
 //
 // Un corte entre 3 y 5 deja el control con el punto de rehacer anterior y el catálogo con el nuevo: la recuperación
 // suma a los contadores solo las confirmaciones con lsn ≥ countLSN, así que no cuenta dos veces. Close hace un
@@ -192,17 +206,22 @@
 //
 // # Recuperación (Open)
 //
-//  1. Tomar LOCK; leer el control (la copia válida más nueva) y el catálogo.
-//  2. Recorrer el WAL desde el punto de rehacer (wal.Reader.Scan) y debe aparecer el registro del checkpoint. Por cada
-//     registro: crear, vaciar y borrar un store se rehacen sobre el catálogo (idempotentes: un store que ya existe o
-//     ya no está se deja como está); los bloques de un store borrado se saltan; con imagen, se restaura sin
-//     condiciones y se aplica el delta; sin imagen, se aplica solo si el pd_lsn de la página es menor que el lsn del
+//  1. Tomar LOCK; leer el control (la copia válida más nueva) y el catálogo. Sin control, el motor es nuevo: guardar un
+//     catálogo vacío, crear el control y abrir el WAL desde wal.Start (segmento 1, desplazamiento 0, lsn 1).
+//     xact.Open antes de rehacer.
+//  2. Abrir el WAL con wal.Open(fs, dir, wal.EnvOptions(), redo, rehacer), que recorre desde el punto de rehacer y debe aparecer el registro del checkpoint. Por cada
+//     registro: crear, vaciar y borrar un store se rehacen sobre el catálogo (idempotentes: borrar y vaciar llevan el número
+//     de archivo esperado, y solo actúan si el store todavía lo tiene); los bloques de un store borrado se saltan; con imagen, se restaura sin
+//     condiciones y se aplica el delta (los bloques con imagen o BlockWillInit se fijan con buffer.Pool.PinZero, sin
+//     leer la página del disco, que puede estar rota por el corte); sin imagen, se aplica solo si el pd_lsn de la página es menor que el lsn del
 //     registro (idempotente), con la función de rehacer del dueño del Kind; confirmaciones y abortos van al archivo de
-//     estados, y una confirmación con lsn ≥ countLSN suma a los contadores.
-//  3. Cortar el WAL en su primer registro inválido. Un hueco seguido de registros confirmados es corrupción: Open
-//     falla.
+//     estados (xact SetStatus), y una confirmación con lsn ≥ countLSN suma a los contadores.
+//  3. wal.Open corta el WAL en su primer registro inválido y deja en largo 0 los segmentos siguientes (un registro viejo
+//     nunca confirmado no puede pasar por válido después). Un registro inválido en un segmento sellado es corrupción:
+//     Open falla.
 //  4. nextXID = el mayor entre el del control y el mayor xid visto + 1. Los xid menores en estado «en curso» se leen
-//     como abortados (eran transacciones en curso al caerse), sin marcarlos uno por uno.
+//     como abortados (eran transacciones en curso al caerse), sin marcarlos uno por uno: xact Recover(nextXID) fija ese
+//     horizonte y pone en cero los estados desde nextXID (como TrimCLOG de PostgreSQL).
 //  5. Checkpoint de fin de recuperación y state = en producción. Las particiones incompletas las termina la próxima
 //     inserción que las encuentre.
 //

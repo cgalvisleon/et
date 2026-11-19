@@ -97,7 +97,7 @@ Each table lists the main public API of every package. `go doc github.com/cgalvi
 | `queue`      | `New[T](size, maxEvents, period, handler)`, `Push`, `Len`, `Close`                                                                                                                                                                                                                                                             | `q.Push(item)`                                                             |
 | `crontab`    | `New(tag, store, opts...)` (instance; `WithHandler`) or `Load` (global), `CronJob`, `ScheduleJob`, `StopJob`, `StartJob`, `RemoveJob`, `GetJob`, `Http*`; states `pending`→`scheduled`⇄`running`→`finished`/`failed`, `paused`, `missed`, `canceled`; `LastRun`, `WithRetries`, `WithTimeout`; replicas with the same tag elect a leader and fail over | `crontab.CronJob(tag, owner, "0 * * * *", 0, nil, fn)`                     |
 | `resilience` | `New()`, `LoadInstance(Params)`, `Instance.Run`, `IsDone`, `IsFailed`, `Stop`                                                                                                                                                                                                                                                  | `inst, _ := r.LoadInstance(resilience.Params{Fn: send, TotalAttempts: 3})` |
-| `store`      | `Open(dir)` → `Store` (`Put`, `Remove`, `Read`, `Insert`, `Update`, `Delete`, `Close`; being rewritten, F-23) | `s, _ := store.Open("./data"); s.Put("id", data)` |
+| `store`      | being rewritten (F-23): storage engine modeled on PostgreSQL; no public API yet | see `store/doc.go` |
 
 ### Security
 
@@ -367,22 +367,7 @@ defer q.Close()
 
 ### Embedded key/value store
 
-`store` is being rewritten as the base for high-performance data persistence (F-23): `(id string, data []byte)` in several segment files (`RELSEG_SIZE` MB, 128 by default) with an ordered in-memory index; concurrent writers share each fsync (group commit), and `Open` cuts an unconfirmed tail after a crash. A directory can be opened by one process at a time (`flock` on `LOCK`). Available today: `Open`, `Close`; `Put` and `Remove` (blind: they write without reading what was there; `Remove` of a missing id is not an error); `Insert` (only if absent), `Update` (only if present and the value changed) and `Delete` (only if present), which return whether they wrote and are atomic against other writers of the same id; and `Read`, which does not wait for writers and verifies the record's crc. Batches, ordered scans and the rest come next. Design and format: [`store/doc.go`](store/doc.go).
-
-```go
-s, err := store.Open("./data/customers")
-if err != nil {
-    return err
-}
-defer s.Close()
-
-err = s.Put("c-001", []byte(`{"name":"Ana"}`)) // with SYNC_ON_WRITE (default) it returns once on disk
-data, found, err := s.Read("c-001")
-created, err := s.Insert("c-002", []byte(`{"name":"Luis"}`)) // false if c-002 already exists
-changed, err := s.Update("c-001", []byte(`{"name":"Ana M."}`)) // false if missing or unchanged
-deleted, err := s.Delete("c-002")                             // false if missing
-err = s.Remove("c-003")                                       // blind delete, idempotent
-```
+`store` is being rewritten from scratch (F-23) as a storage engine for databases, modeled on PostgreSQL's storage: a B+tree on disk in 8 KB pages, a fixed-size page cache (nothing of the index lives in RAM), a page-level WAL with full-page images after each checkpoint, MVCC with 64-bit transaction ids, checkpoints, and a recovery that only replays the WAL since the last checkpoint. The previous log-with-in-memory-index implementation was removed on 2026-11-19, so **the package has no public API yet**: it arrives with the engine (phase 1A). Done so far, as internal packages with tests and fuzzers: the 8 KB page, the real and the crash-simulating file systems, per-store data files, the control file and store catalog, the WAL and the transaction status file. Design, formats and the planned API: [`store/doc.go`](store/doc.go).
 
 ### Workflows with `jwf`
 
@@ -460,7 +445,7 @@ hits, _ := index.Search(ctx, tenantId, projectId, "reset the router", 5, 0.3, em
 | `dt`          | `PRODUCTION` (`true` stores in Redis)                                                                                                                                                                                                                                                                                                                                   |
 | `jwf`, `jsql` | `MAX_AUDIT_LOG` (1000)                                                                                                                                                                                                                                                                                                                                                  |
 | `jwsp`        | `WHATSAPP_API_URL`                                                                                                                                                                                                                                                                                                                                                      |
-| `store`       | `RELSEG_SIZE` (segment MB, 128), `SYNC_ON_WRITE` (true)                                                                                                                                                                                                                                                                                 |
+| `store`       | planned: `WAL_SEGMENT_SIZE` (MB, 128), `STORE_CACHE_SIZE`, `CHECKPOINT_TIMEOUT`, `MAX_WAL_SIZE`… (`store/doc.go`)                                                                                                                                                                                                                                                                                 |
 | `validator`   | `LANG`                                                                                                                                                                                                                                                                                                                                                                  |
 | `middleware`  | `TELEMETRY_FORMAT` (`text` on a terminal, `json` elsewhere, `off`), `TELEMETRY_LOG` (`all`, `errors`), `LATENCY_LIMIT` (1000 ms, `WARN` above it), `REQUESTS_LIMIT` (400 per second per method and path)                                                                                                                                                                |
 
@@ -471,7 +456,7 @@ go run ./cmd/create      # scaffolding: project, microservice, model, rpc
 go run ./cmd/apigateway  # API gateway (ettp)
 go run ./cmd/server      # TCP node (port 1377); ./cmd/client connects to it
 go run ./cmd/ia          # RAG HTTP API (PORT, default 3300)
-go run ./cmd/store       # store example: Put, Read, Insert, Update, Delete, Remove
+go run ./cmd/store       # store example (returns with the new API, F-23)
 ```
 
 Also `cmd/et`, `cmd/daemon`, `cmd/jsql`, `cmd/install`, `cmd/watcher`, `cmd/resilience`, `cmd/wsp` and `cmd/jwf`.

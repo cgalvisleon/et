@@ -1,32 +1,66 @@
 package crashfs
 
-import "github.com/cgalvisleon/et/store/internal/vfs"
+import (
+	"errors"
+
+	"github.com/cgalvisleon/et/store/internal/vfs"
+)
 
 // Mode dice qué hace un corte con lo que no era durable.
 type Mode int
 
 const (
-	// LoseUnsynced pierde todo lo escrito desde el último Sync de cada archivo y los cambios de directorio desde el
-	// último SyncDir. Las escrituras anteriores al corte quedan enteras o no quedan.
+	// LoseUnsynced pierde todo lo escrito desde el último Sync de cada archivo y todos los cambios de directorio
+	// desde el último SyncDir: el disco queda exactamente en su estado durable.
 	LoseUnsynced Mode = iota
 
-	// TornWrites además rompe, al azar, las escrituras sin Sync en sectores de SectorSize: de una página de 8 KB
-	// puede quedar una mezcla de sectores viejos y nuevos (lo que protegen las páginas enteras en el WAL).
+	// TornWrites deja sobrevivir al azar parte de lo no durable y rompe las escrituras por sectores: cada sector de
+	// cada escritura sin Sync queda o no, por separado, así que de una página de 8 KB puede quedar una mezcla de
+	// sectores viejos y nuevos (lo que protegen las páginas enteras en el WAL), y una escritura posterior puede quedar
+	// sin una anterior (reordenamiento). El sector es SectorSize o LargeSectorSize, elegido al azar en cada corte.
 	TornWrites
+
+	// ReorderUnsynced deja sobrevivir al azar, enteras, algunas de las escrituras sin Sync, en cualquier
+	// combinación (una posterior puede quedar sin una anterior). Cada escritura queda entera o no queda.
+	ReorderUnsynced
 )
 
 // SectorSize es la unidad que un disco escribe de forma atómica en la simulación de escrituras rotas.
 const SectorSize = 512
 
+// LargeSectorSize es el sector de los discos de 4 KB; TornWrites lo usa en la mitad de los cortes.
+const LargeSectorSize = 4096
+
+var (
+	// ErrIO es la falla de E/S que inyectan FailAfter y FailSyncAfter.
+	ErrIO = errors.New("crashfs: input/output error")
+
+	// ErrNoSpace es la falla de disco lleno que inyecta SetCapacity.
+	ErrNoSpace = errors.New("crashfs: no space left on device")
+
+	// ErrCrashed es el error de un archivo abierto antes de un corte.
+	ErrCrashed = errors.New("crashfs: file opened before a crash")
+)
+
 // FS es el sistema de archivos simulado.
 type FS interface {
 	vfs.FS
 
-	// Crash simula un corte: aplica mode a lo que no era durable, suelta todos los bloqueos y deja inválidos los
-	// archivos abiertos (cualquier operación sobre ellos falla). Después se puede volver a abrir el motor encima.
+	// Crash simula un corte: aplica mode a lo que no era durable, suelta todos los bloqueos, deja inválidos los
+	// archivos abiertos (cualquier operación sobre ellos falla con ErrCrashed) y quita las fallas de FailAfter y
+	// FailSyncAfter (la capacidad de SetCapacity sigue). La misma historia con la misma seed da el mismo disco.
+	// Después se puede volver a abrir el motor encima.
 	Crash(mode Mode, seed int64)
 
-	// FailAfter hace que, después de n operaciones de escritura o Sync más, todas fallen con un error de E/S (para
-	// probar que el motor queda inutilizable y no reintenta el fsync). n < 0 lo desactiva.
+	// FailAfter hace que, después de n operaciones de escritura (WriteAt, Truncate) o Sync (Sync, SyncDir) más,
+	// todas fallen con ErrIO (para probar que el motor queda inutilizable y no reintenta el fsync). n < 0 lo
+	// desactiva.
 	FailAfter(n int)
+
+	// FailSyncAfter es como FailAfter pero cuenta solo Sync y SyncDir: las escrituras siguen funcionando.
+	FailSyncAfter(n int)
+
+	// SetCapacity fija el tamaño del disco en bytes (la suma de los largos de los archivos con nombre): una escritura
+	// o un Truncate que lo pasen fallan con ErrNoSpace sin escribir nada. n <= 0 es sin límite.
+	SetCapacity(n int64)
 }

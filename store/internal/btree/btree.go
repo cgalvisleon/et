@@ -28,10 +28,10 @@ const (
 	MetaSize = 48
 
 	// MetaMagic identifica la página meta de un store.
-	MetaMagic = 0x45544254 // "ETBT"
+	MetaMagic = page.MetaMagic // "ETBT"
 
 	// MetaBlock es el bloque de la página meta.
-	MetaBlock page.BlockNumber = 0
+	MetaBlock = page.MetaBlock
 )
 
 // Posiciones de los campos de una entrada de hoja.
@@ -127,7 +127,7 @@ type Tree interface {
 	// Write escribe una versión nueva de id (ver el orden de un cambio en store/doc.go).
 	Write(id string, w Write) (Result, error)
 
-	// Scan recorre en orden de id, desde from, la versión que ve snap de cada id (fase 2). fn devuelve false para
-	// parar; no puede escribir en el store.
+	// Scan recorre en orden de id, desde from, la versión que ve snap de cada id. fn devuelve false para parar; no
+	// puede escribir en el store. BTree tiene además ScanBackward (en orden descendente).
 	Scan(from string, snap *xact.Snapshot, fn func(v Version) (bool, error)) error
 }

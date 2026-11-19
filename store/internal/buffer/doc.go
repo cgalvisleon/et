@@ -20,5 +20,33 @@
 // Un lector con bloqueo compartido puede poner marcas de visibilidad en una entrada de hoja con un OR atómico sobre
 // su uint32 de marcas (los ítems están alineados a page.ItemAlign y los búferes a 8) y llamar a MarkDirtyHint. Por
 // eso escribir una página al disco copia la página (bajo bloqueo compartido) y calcula la suma sobre la copia, nunca
-// sobre el búfer.
+// sobre el búfer. La copia se hace con cargas atómicas de 32 bits; quien lea esas marcas con bloqueo compartido
+// también tiene que leerlas con atomic.LoadUint32, o -race verá una carrera con el OR de otro lector.
+//
+// # Implementación (ola 2)
+//
+// Open(Config) reserva los búferes en un solo arena (Buffers, o STORE_CACHE_SIZE con EnvBuffers) y arranca el
+// escritor de fondo (BgWriterDelay; negativo = sin él). Cada búfer tiene un descriptor con tres locks, en este orden:
+// io (serializa sus escrituras al disco: dos escritores nunca escriben el mismo búfer a la vez) → content (el
+// bloqueo de contenido) → mu (encabezado: tag, estado, pins, uso, sucia; corto). Las NumPartitions particiones del
+// mapa se toman solas: buscar en el mapa y fijar el búfer son dos pasos, y si el búfer cambió de página entre medio
+// se repite.
+//
+// Cargar una página sigue BufferAlloc: elegir una víctima (fijada y limpia; si estaba sucia se escribe antes),
+// publicar el tag nuevo en el mapa (si otro ya lo publicó, se usa el suyo), cambiar el tag bajo mu (si alguien fijó
+// la víctima mientras tanto, se busca otra), quitar el tag viejo del mapa y leer fuera de todo lock; quien fija una
+// página que se está cargando espera a que termine. Una lectura fallida (suma mala, bloque inexistente) devuelve el
+// error con el tag y deja el búfer libre.
+//
+// Escribir un búfer (reemplazo, escritor de fondo, FlushAll) con io tomado: marcarlo limpio, copiarlo bajo bloqueo
+// compartido, WaitDurable hasta el pd_lsn de la copia, suma sobre la copia (una página en ceros se escribe en ceros)
+// y smgr.Write. Se marca limpio antes de copiar: una marca puesta durante la copia lo vuelve a ensuciar. Un fallo de
+// la escritura o de WaitDurable deja la caché inutilizable (ErrFailed con la causa) y no se escribe nada más.
+//
+// El escritor de fondo, cada BgWriterDelay, recorre una vuelta desde la manecilla y escribe hasta BgWriterMaxPages
+// búferes sucios sin pins y con uso 0. FlushAll anota los sucios, los ordena por tag y escribe los que siguen con la
+// misma página. El anillo es uno por caché, compartido por los recorridos con Ring (a confirmar). PinNew serializa
+// las extensiones con un solo lock por caché (a confirmar). Reemplazar una página sucia espera al WAL: con el
+// escritor de fondo es raro, pero quien llama a Pin no debería tener otra página bloqueada (ver «Orden de los
+// bloqueos» en store/doc.go). No se llama a FlushAll ni a DropFile con un bloqueo de contenido tomado.
 package buffer

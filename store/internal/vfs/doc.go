@@ -5,6 +5,10 @@
 // Qué hace: define FS y File. Qué no hace: no sabe de páginas, registros ni formatos. No depende de ningún otro
 // paquete del motor.
 //
-// Implementaciones (ola 1, agente de crashfs): la real, sobre el sistema operativo —con Sync durable de verdad:
-// F_FULLFSYNC en macOS, fsync en Linux— y la simulada, en crashfs.
+// Implementaciones: la real es OS(), sobre el sistema operativo, con Sync durable de verdad (F_FULLFSYNC en macOS,
+// fdatasync en Linux), fsync de directorios y flock para Lock; fuera de unix no hay fsync de directorios ni flock
+// (SyncDir no hace nada y Lock solo crea el archivo). La simulada, que pierde lo que no tuvo fsync, es crashfs.New().
+//
+// Lo que no hace: no usa F_NOCACHE en macOS (la caché del sistema se suma a la del motor; a confirmar si hace falta,
+// pediría una marca nueva en OpenFile) ni mmap.
 package vfs

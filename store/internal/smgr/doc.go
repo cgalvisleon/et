@@ -15,5 +15,12 @@
 // Qué no hace: no verifica sumas ni interpreta páginas (eso es de buffer y page), no sabe del WAL ni de la regla «WAL
 // antes que la página» (la cumple buffer antes de llamar a Write). Depende de vfs y page.
 //
-// Implementación: ola 1.
+// Implementación (ola 1): Open(fs, dir, maxFiles) devuelve el Manager. Por fork guarda en memoria si existe y cuántos
+// bloques tiene (se lee de los archivos la primera vez; todos menos el último deben medir 1 GB, si no ErrShortFile).
+// Los descriptores van en una caché LRU de maxFiles (DefaultMaxFiles = 256): expulsar un archivo con escrituras sin
+// fsync le hace fsync antes de cerrarlo, y sigue marcado para el próximo Sync. Sync quita las marcas y después hace
+// fsync; un fsync fallido deja el gestor inutilizable (todo devuelve ese error). Unlink borra del último archivo al
+// primero. Un Extend que hace nacer un archivo hace fsync de los anteriores (ya llenos) antes de crearlo y de data/
+// después: así un corte nunca deja un archivo corto en el medio del fork (lo encontró TestExtendNewFileCrash). Bloqueos: el fork (RWMutex: exclusivo para Create, Extend y Unlink) → el mutex del gestor y el de la caché,
+// que son hojas.
 package smgr

@@ -62,6 +62,15 @@
 //
 // Los demás Kind de btree, overflow y fsm están en kind.go.
 //
+// # Abrir y recuperar
+//
+// Open(fs, dir, opts, redo, fn) recorre el WAL desde redo (el punto de rehacer del control, o Start = segmento 1,
+// desplazamiento 0, lsn 1 en un motor nuevo) llamando a fn con cada registro, corta la cola (el resto del último
+// segmento válido y los segmentos siguientes enteros: un registro viejo nunca confirmado podría quedar justo donde
+// termina uno nuevo) y deja el WAL listo para escribir a continuación. NewReader da un Reader para recorrer sin
+// escribir. Options.Spares es cuántos segmentos reciclados se guardan; Recycle borra el resto. MakeImage y
+// RestoreImage (o BlockRef.SetImage y BlockRef.RestoreImage) arman y restauran las imágenes de página entera.
+//
 // # Escribir un registro
 //
 // Ver store/doc.go («El orden de un cambio»). En resumen: quien cambia una página la tiene bloqueada en exclusivo,

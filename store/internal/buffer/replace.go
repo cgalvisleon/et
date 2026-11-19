@@ -1,0 +1,123 @@
+package buffer
+
+import "sync"
+
+// ring es el anillo de los recorridos grandes (Strategy Ring): ringLen búferes que esos recorridos reutilizan en
+// vez de pasar por el clock-sweep, para no vaciar la caché de todos. Es uno por caché, compartido por todos los
+// recorridos (a confirmar: PostgreSQL da uno a cada recorrido, pero Pin no recibe un objeto de estrategia).
+type ring struct {
+	mu    sync.Mutex
+	slots []int32 // búfer de cada lugar; -1 = todavía ninguno
+	next  int
+}
+
+/**
+* init deja el anillo con n lugares vacíos.
+* @param n int
+**/
+func (r *ring) init(n int) {
+	r.slots = make([]int32, n)
+	for i := range r.slots {
+		r.slots[i] = -1
+	}
+}
+
+/**
+* advance toma el próximo lugar del anillo.
+* @return int: el lugar, int32: su búfer (-1 = ninguno)
+**/
+func (r *ring) advance() (int, int32) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	slot := r.next
+	r.next = (r.next + 1) % len(r.slots)
+	return slot, r.slots[slot]
+}
+
+/**
+* set anota el búfer de un lugar.
+* @param slot int, id int32
+**/
+func (r *ring) set(slot int, id int32) {
+	r.mu.Lock()
+	r.slots[slot] = id
+	r.mu.Unlock()
+}
+
+/**
+* victim devuelve un búfer fijado (pins = 1) y limpio para cargar otra página: del anillo si la estrategia es Ring
+* y el búfer de su lugar está libre y poco usado (uso ≤ 1, como GetBufferFromRing), si no del clock-sweep. Si estaba
+* sucio lo escribe antes, cumpliendo «WAL antes que la página».
+* @param strategy Strategy
+* @return *desc, error: ErrNoBuffers, o el fallo de escritura
+**/
+func (p *pool) victim(strategy Strategy) (*desc, error) {
+	slot, id := -1, int32(-1)
+	if strategy == Ring {
+		slot, id = p.ring.advance()
+	}
+
+	var d *desc
+	if id >= 0 && p.tryPin(&p.descs[id], 1) {
+		d = &p.descs[id]
+	} else {
+		var err error
+		if d, err = p.clockSweep(); err != nil {
+			return nil, err
+		}
+		if slot >= 0 {
+			p.ring.set(slot, d.id)
+		}
+	}
+
+	if err := p.flush(d); err != nil {
+		p.unpin(d)
+		return nil, err
+	}
+	return d, nil
+}
+
+/**
+* tryPin fija el búfer si nadie lo tiene fijado y su uso no pasa de maxUsage.
+* @param d *desc, maxUsage uint8
+* @return bool
+**/
+func (p *pool) tryPin(d *desc, maxUsage uint8) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.pins != 0 || d.usage > maxUsage {
+		return false
+	}
+	d.pins = 1
+	return true
+}
+
+/**
+* clockSweep recorre los búferes desde la manecilla: baja el contador de uso de los que no están fijados y fija el
+* primero que encuentra libre con uso 0 (StrategyGetBuffer). Si da una vuelta entera sin bajar ningún contador,
+* todos están fijados.
+* @return *desc: fijado (pins = 1), error: ErrNoBuffers
+**/
+func (p *pool) clockSweep() (*desc, error) {
+	n := uint64(len(p.descs))
+	tries := n
+	for {
+		d := &p.descs[(p.hand.Add(1)-1)%n]
+		d.mu.Lock()
+		switch {
+		case d.pins == 0 && d.usage == 0:
+			d.pins = 1
+			d.mu.Unlock()
+			return d, nil
+		case d.pins == 0:
+			d.usage--
+			tries = n
+		default:
+			tries--
+		}
+		d.mu.Unlock()
+		if tries == 0 {
+			return nil, ErrNoBuffers
+		}
+	}
+}

@@ -2,6 +2,7 @@ package xact
 
 import (
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/cgalvisleon/et/store/internal/page"
@@ -46,6 +47,27 @@ type Snapshot struct {
 	Xmin       page.XID   // el xid más viejo en curso al tomarlo (o Xmax si ninguno)
 	Xmax       page.XID   // el siguiente xid a asignar al tomarlo
 	InProgress []page.XID // los que estaban en curso, ordenados
+}
+
+// Visible dice si una versión con xid y estado status es visible para el snapshot: es de la propia transacción, o
+// es anterior a Xmax, no estaba en curso al tomarlo y está confirmada.
+func (s Snapshot) Visible(xid page.XID, status Status) bool {
+	if s.Own != 0 && xid == s.Own {
+		return true
+	}
+	if xid >= s.Xmax {
+		return false
+	}
+	if _, found := slices.BinarySearch(s.InProgress, xid); found {
+		return false
+	}
+	return status == StatusCommitted
+}
+
+// HintAllowed dice si se puede anotar la marca de confirmada: el estado es confirmada y el WAL es durable hasta el
+// lsn de confirmación de su grupo (0 = ya durable; pregunta 49).
+func HintAllowed(status Status, commitLSN, durable page.LSN) bool {
+	return status == StatusCommitted && commitLSN <= durable
 }
 
 // StatusFile es el archivo de estados con su caché.

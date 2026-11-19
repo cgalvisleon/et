@@ -97,7 +97,7 @@ Cada tabla lista la API pública principal de cada paquete. `go doc github.com/c
 | `queue` | `New[T](size, maxEvents, period, handler)`, `Push`, `Len`, `Close` | `q.Push(item)` |
 | `crontab` | `New(tag, store, opts...)` (instancia; `WithHandler`) o `Load` (global), `CronJob`, `ScheduleJob`, `StopJob`, `StartJob`, `RemoveJob`, `GetJob`, `Http*`; estados `pending`→`scheduled`⇄`running`→`finished`/`failed`, `paused`, `missed`, `canceled`; `LastRun`, `WithRetries`, `WithTimeout`; las réplicas con el mismo tag eligen una líder y la relevan | `crontab.CronJob(tag, owner, "0 * * * *", 0, nil, fn)` |
 | `resilience` | `New()`, `LoadInstance(Params)`, `Instance.Run`, `IsDone`, `IsFailed`, `Stop` | `inst, _ := r.LoadInstance(resilience.Params{Fn: send, TotalAttempts: 3})` |
-| `store` | `Open(dir)` → `Store` (`Put`, `Remove`, `Read`, `Insert`, `Update`, `Delete`, `Close`; en reescritura, F-23) | `s, _ := store.Open("./data"); s.Put("id", data)` |
+| `store` | en reescritura (F-23): motor de almacenamiento al estilo PostgreSQL; todavía sin API pública | ver `store/doc.go` |
 
 ### Seguridad
 
@@ -344,22 +344,7 @@ defer q.Close()
 
 ### Store embebido clave/valor
 
-`store` se está reescribiendo como base para construir persistencia de datos de alto rendimiento (F-23): `(id string, data []byte)` en varios archivos de segmento (`RELSEG_SIZE` MB, 128 por omisión) con un índice ordenado en memoria; los escritores concurrentes comparten cada fsync (group commit) y `Open` corta la cola sin confirmar tras una caída. Un directorio lo abre un solo proceso a la vez (`flock` sobre `LOCK`). Disponible hoy: `Open`, `Close`; `Put` y `Remove` (ciegos: escriben sin leer lo que había; `Remove` de un id que no existe no es error); `Insert` (solo si no existe), `Update` (solo si existe y el valor cambió) y `Delete` (solo si existe), que devuelven si escribieron y son atómicos frente a otros escritores del mismo id; y `Read`, que no espera a los escritores y verifica el crc del registro. Siguen los lotes, los recorridos ordenados y lo demás. Diseño y formato: [`store/doc.go`](../store/doc.go).
-
-```go
-s, err := store.Open("./data/customers")
-if err != nil {
-    return err
-}
-defer s.Close()
-
-err = s.Put("c-001", []byte(`{"name":"Ana"}`)) // con SYNC_ON_WRITE (por omisión) vuelve cuando está en disco
-data, found, err := s.Read("c-001")
-created, err := s.Insert("c-002", []byte(`{"name":"Luis"}`)) // false si c-002 ya existe
-changed, err := s.Update("c-001", []byte(`{"name":"Ana M."}`)) // false si no existe o no cambió
-deleted, err := s.Delete("c-002")                             // false si no existe
-err = s.Remove("c-003")                                       // borrado ciego, idempotente
-```
+`store` se está reescribiendo desde cero (F-23) como motor de almacenamiento para bases de datos, tomando como referencia el almacenamiento de PostgreSQL: un árbol B+ en disco en páginas de 8 KB, una caché de páginas de tamaño fijo (nada del índice vive en RAM), un WAL por página con imágenes enteras tras cada checkpoint, MVCC con xid de 64 bits, checkpoints y una recuperación que solo reproduce el WAL desde el último checkpoint. La implementación anterior (log con índice en memoria) se borró el 2026-11-19, así que **el paquete todavía no tiene API pública**: llega con el motor (fase 1A). Hecho hasta ahora, como paquetes internos con pruebas y fuzzers: la página de 8 KB, el sistema de archivos real y el que simula cortes, los archivos de datos por store, el archivo de control y el catálogo de stores, el WAL y el archivo de estados de las transacciones. Diseño, formatos y la API prevista: [`store/doc.go`](../store/doc.go).
 
 ### Workflows con `jwf`
 
@@ -437,7 +422,7 @@ hits, _ := index.Search(ctx, tenantId, projectId, "reset the router", 5, 0.3, em
 | `dt` | `PRODUCTION` (`true` guarda en Redis) |
 | `jwf`, `jsql` | `MAX_AUDIT_LOG` (1000) |
 | `jwsp` | `WHATSAPP_API_URL` |
-| `store` | `RELSEG_SIZE` (MB por segmento, 128), `SYNC_ON_WRITE` (true) |
+| `store` | previstas: `WAL_SEGMENT_SIZE` (MB, 128), `STORE_CACHE_SIZE`, `CHECKPOINT_TIMEOUT`, `MAX_WAL_SIZE`… (`store/doc.go`) |
 | `validator` | `LANG` |
 | `middleware` | `TELEMETRY_FORMAT` (`text` en una terminal, `json` en otro caso, `off`), `TELEMETRY_LOG` (`all`, `errors`), `LATENCY_LIMIT` (1000 ms, `WARN` por encima), `REQUESTS_LIMIT` (400 por segundo por método y ruta) |
 
@@ -448,7 +433,7 @@ go run ./cmd/create      # scaffolding: proyecto, microservicio, modelo, rpc
 go run ./cmd/apigateway  # API gateway (ettp)
 go run ./cmd/server      # nodo TCP (puerto 1377); ./cmd/client se conecta a él
 go run ./cmd/ia          # API HTTP de RAG (PORT, por defecto 3300)
-go run ./cmd/store       # ejemplo de store: Put, Read, Insert, Update, Delete, Remove
+go run ./cmd/store       # ejemplo de store (vuelve con la API nueva, F-23)
 ```
 
 También `cmd/et`, `cmd/daemon`, `cmd/jsql`, `cmd/install`, `cmd/watcher`, `cmd/resilience`, `cmd/wsp` y `cmd/jwf`.

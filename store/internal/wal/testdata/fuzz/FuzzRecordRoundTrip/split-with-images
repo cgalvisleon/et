@@ -1,0 +1,9 @@
+go test fuzz v1
+uint64(9)
+uint8(17)
+uint8(0)
+uint8(4)
+uint8(4)
+[]byte("delta")
+[]byte("main")
+bool(true)

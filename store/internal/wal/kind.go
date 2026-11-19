@@ -5,10 +5,13 @@ type Kind uint8
 
 // Del motor (1–15): los formatos están en doc.go.
 const (
-	KindCheckpoint Kind = 1
-	KindCommit     Kind = 2
-	KindAbort      Kind = 3
-	KindPageImage  Kind = 4
+	KindCheckpoint  Kind = 1
+	KindCommit      Kind = 2
+	KindAbort       Kind = 3
+	KindPageImage   Kind = 4
+	KindCreateStore Kind = 5 // alta de un store en el catálogo: nombre y número de archivo (pregunta 56)
+	KindDropStore   Kind = 6 // baja de un store: nombre y número de archivo esperado; se saca del catálogo y se borran sus archivos
+	KindEmptyStore  Kind = 7 // vaciado: nombre, número de archivo viejo y nuevo; los archivos viejos se borran
 )
 
 // De btree (16–31): formato de sus deltas en store/internal/btree.

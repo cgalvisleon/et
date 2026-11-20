@@ -59,9 +59,19 @@ type Stats struct {
 	ArchiveGap      uint64 // primer segmento tras la última pérdida de continuidad (0 = nunca): un respaldo anterior no llega más allá
 	ArchiveLost     int64  // veces que WAL_ARCHIVE_MAX_SIZE soltó WAL sin archivar desde Open
 
+	// Replicación
+	Replica           bool   // el motor es una réplica (OpenReplica)
+	ReplayLSN         uint64 // en una réplica, el último lsn aplicado
+	RecoveryConflicts int64  // en una réplica, snapshots cancelados por el aplicador (ErrRecoveryConflict)
+	Slots             int    // ranuras de retención
+	SlotsInvalid      int    // de ellas, invalidadas (necesitan empezar de nuevo)
+	SlotRetained      int64  // bytes de WAL que retiene la ranura válida más atrasada
+	SlotLag           uint64 // registros sin confirmar de la ranura válida más atrasada
+	SlotsInvalidated  int64  // ranuras invalidadas por MAX_SLOT_WAL_KEEP_SIZE desde Open
+
 	// Presión (Engine.Pressure)
 	Pressure      float64       // qué tan cerca está de frenar a los escritores: 0 = nada, ≥ 1 = ya frena
-	PressureCause PressureCause // la razón mayor: wal, deferred, dirty, read_only, failed (vacía si todas son 0)
+	PressureCause PressureCause // la razón mayor: wal, archive, slot, deferred, dirty, read_only, failed (vacía si todas son 0)
 
 	// Latencias
 	CommitLatency Latency // confirmar: el registro (en un lote), la espera del fsync y el archivo de estados
@@ -173,6 +183,7 @@ func (e *Engine) stats() Stats {
 		ReadLatency:   latencyOf(m.readLatency.Summary()),
 		FsyncLatency:  latencyOf(e.log.SyncLatency()),
 	}
+	e.replicationStats(&st)
 	st.Pressure, st.PressureCause = e.pressure()
 	if st.Archive {
 		st.ArchivedSegment = e.archive.next.Load() - 1
@@ -237,5 +248,26 @@ func (e *Engine) statsLoop(interval time.Duration, fn func(Stats), quit chan str
 		default:
 		}
 		fn(e.stats())
+	}
+}
+
+/**
+* replicationStats completa la parte de replicación de Stats: la réplica y las ranuras (slots.mu, una hoja).
+* @param st *Stats
+**/
+func (e *Engine) replicationStats(st *Stats) {
+	if rs := e.replica; rs != nil {
+		st.Replica, st.ReplayLSN = true, rs.applied.Load()
+		st.RecoveryConflicts = rs.conflicts.Load()
+	}
+	st.SlotsInvalidated = e.slots.invalidated.Load()
+	for _, s := range e.slotsInfo() {
+		st.Slots++
+		if s.Invalid {
+			st.SlotsInvalid++
+			continue
+		}
+		st.SlotRetained = max(st.SlotRetained, s.Retained)
+		st.SlotLag = max(st.SlotLag, s.Lag)
 	}
 }

@@ -167,3 +167,22 @@ func RecordFrozenXID(rec *wal.Record) (page.XID, bool) {
 	}
 	return 0, false
 }
+
+/**
+* DecodeLeafWrite lee el cambio lógico de un KindLeafWrite (el decodificado lógico de la réplica): la versión que
+* escribe, con su lsn, su xid, sus marcas, el valor en línea copiado o la referencia a desborde.
+* @param rec *wal.Record: un KindLeafWrite leído del WAL
+* @return Version, error: ErrBadRecord si no tiene la forma del formato
+**/
+func DecodeLeafWrite(rec *wal.Record) (Version, error) {
+	if rec.Kind != wal.KindLeafWrite || len(rec.Blocks) != 1 || len(rec.Blocks[0].Delta) <= offsetDeltaSize {
+		return Version{}, badRecord(rec.Kind, "not a leaf write")
+	}
+	e, err := parseEntry(rec.Blocks[0].Delta[offsetDeltaSize:])
+	if err != nil {
+		return Version{}, badRecord(rec.Kind, err.Error())
+	}
+	v := e.version()
+	v.LSN = rec.LSN
+	return v, nil
+}

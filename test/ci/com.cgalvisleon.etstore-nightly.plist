@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Corrida nocturna de et/store en IA (tarea 48 de F-23). Plantilla: install-nightly.sh cambia __HOME__ por el
+     home de IA y la deja en ~/Library/LaunchAgents/. Sin RunAtLoad ni KeepAlive: solo a las 03:00. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.cgalvisleon.etstore-nightly</string>
+  <key>ProgramArguments</key>
+  <array><string>/bin/bash</string><string>__HOME__/etstore-ci/bin/nightly.sh</string></array>
+  <key>WorkingDirectory</key><string>__HOME__/etstore-ci</string>
+  <key>StartCalendarInterval</key>
+  <dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>__HOME__/etstore-ci/nightly-launchd.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/etstore-ci/nightly-launchd.log</string>
+</dict>
+</plist>

@@ -9,6 +9,7 @@ const (
 	PressureNone     PressureCause = ""          // ninguna razón pesa (todas en 0)
 	PressureWAL      PressureCause = "wal"       // el WAL sin reciclar frente al tope de throttle
 	PressureArchive  PressureCause = "archive"   // el WAL que espera al archivador frente al tope de throttle (sin WAL_ARCHIVE_MAX_SIZE)
+	PressureSlot     PressureCause = "slot"      // el WAL que retiene la ranura más atrasada: frente a MAX_SLOT_WAL_KEEP_SIZE (≥ 1 = se invalida) o, sin tope, frente al de throttle
 	PressureDeferred PressureCause = "deferred"  // los registros sin fsync frente al tope de deferredBrake
 	PressureDirty    PressureCause = "dirty"     // las páginas sucias frente al tamaño de la caché
 	PressureReadOnly PressureCause = "read_only" // el motor quedó de solo lectura por un disco lleno
@@ -16,8 +17,9 @@ const (
 )
 
 /**
-* pressure dice qué tan cerca está el motor de frenar a los escritores: el máximo de cuatro razones (WAL sin reciclar /
-* walBacklogFactor × MAX_WAL_SIZE, WAL sin archivar / el mismo tope si el archivo frena, registros sin fsync /
+* pressure dice qué tan cerca está el motor de frenar a los escritores: el máximo de cinco razones (WAL sin reciclar /
+* walBacklogFactor × MAX_WAL_SIZE, WAL sin archivar / el mismo tope si el archivo frena, WAL de la ranura más atrasada
+* / MAX_SLOT_WAL_KEEP_SIZE (o el tope de throttle sin él), registros sin fsync /
 * maxDeferredLag, páginas sucias / búferes de la caché), o 1 si
 * el motor quedó de solo lectura o inutilizable. Solo lee atómicos (y failMu, una hoja): no frena a nadie.
 * @return float64: 0 = sin presión, ≥ 1 = ya frena; PressureCause: la razón mayor
@@ -37,6 +39,11 @@ func (e *Engine) pressure() (float64, PressureCause) {
 	}
 	consider(ratioOf(e.walBacklog(), e.cfg.maxWALSize*walBacklogFactor), PressureWAL)
 	consider(ratioOf(e.archiveBacklog(), e.cfg.maxWALSize*walBacklogFactor), PressureArchive)
+	if e.cfg.slotKeepSize > 0 {
+		consider(ratioOf(e.slotRetained(), e.cfg.slotKeepSize), PressureSlot)
+	} else {
+		consider(ratioOf(e.slotBacklog(), e.cfg.maxWALSize*walBacklogFactor), PressureSlot)
+	}
 	consider(ratioOf(int64(e.log.Published())-int64(e.log.Durable()), maxDeferredLag), PressureDeferred)
 	cache := e.pool.Stats()
 	consider(ratioOf(cache.Dirty, int64(cache.Buffers)), PressureDirty)

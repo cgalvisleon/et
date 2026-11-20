@@ -83,6 +83,36 @@ var (
 	// del respaldo: la copia no es consistente y Open no la abre (ni la cambia).
 	ErrBackupIncomplete = errors.New("store: incomplete backup: its WAL does not reach the backup end")
 
+	// ErrReadOnly: una escritura (o Checkpoint de un lote, Vacuum, Repair, Backup…) en una réplica (OpenReplica):
+	// la réplica solo aplica el WAL del primario. Se escribe en el primario.
+	ErrReadOnly = errors.New("store: the engine is a read-only replica")
+
+	// ErrNotReplica: ApplyWal en un motor que no se abrió con OpenReplica, u OpenReplica de un directorio sin motor
+	// (una réplica empieza de una copia de Backup).
+	ErrNotReplica = errors.New("store: the engine is not a replica")
+
+	// ErrWalGap: ApplyWal recibió un registro que no es el siguiente del WAL de la réplica (falta alguno, o su
+	// posición no es la del primario). No aplicó nada de ahí en adelante: se pide de nuevo desde ReplayLSN.
+	ErrWalGap = errors.New("store: the WAL entry does not follow the replica's WAL")
+
+	// ErrWalRemoved: el WAL pedido (WalSince, Changes, una ranura) ya se recicló, o la ranura se invalidó por pasar
+	// MAX_SLOT_WAL_KEEP_SIZE. La réplica necesita una copia nueva (Backup); el consumidor lógico, empezar de nuevo.
+	ErrWalRemoved = errors.New("store: the requested WAL was already removed")
+
+	// ErrSlotNotFound: la ranura no existe.
+	ErrSlotNotFound = errors.New("store: replication slot not found")
+
+	// ErrSlotExists: CreateSlot con un nombre que ya tiene una ranura.
+	ErrSlotExists = errors.New("store: replication slot already exists")
+
+	// ErrSlotLimit: CreateSlot con todas las ranuras en uso (maxSlots), o un nombre que no mide de 1 a 64 bytes.
+	ErrSlotLimit = errors.New("store: too many replication slots, or a bad slot name")
+
+	// ErrRecoveryConflict: un snapshot de la réplica se canceló porque el aplicador necesitaba rehacer un cambio que
+	// el snapshot no debía ver (una confirmación, una limpieza o un DDL) y esperó más de replicaConflictDelay. Se
+	// reintenta con un snapshot nuevo.
+	ErrRecoveryConflict = errors.New("store: the replica snapshot was canceled to apply the primary's WAL")
+
 	// ErrCorrupt: el WAL, el control o el catálogo no son coherentes (falta el registro del checkpoint, un registro
 	// del motor está mal formado…).
 	ErrCorrupt = errors.New("store: corrupted engine")
@@ -121,6 +151,16 @@ const (
 	MSG_TARGET_EARLY     = "%w: lsn %d is before lsn %d (the backup end or the control checkpoint)"
 	MSG_TARGET_LATE      = "%w: the WAL ends at lsn %d, before lsn %d"
 	MSG_TARGET_WAL       = "%w: cannot read the WAL up to lsn %d: %w"
+
+	MSG_REPLICA_FRESH = "%w: OpenReplica needs a Backup copy in %s"
+	MSG_WAL_GAP       = "%w: entry lsn %d, the replica expects lsn %d"
+	MSG_WAL_REMOVED   = "%w: lsn %d: %w"
+	MSG_SLOT_NAME     = "%w: %q"
+	MSG_SLOT_INVALID  = "%w: slot %q was invalidated (MAX_SLOT_WAL_KEEP_SIZE)"
+	MSG_SLOT_FILE     = "%w: the slots file is damaged"
+	MSG_SLOT_BUSY     = "%w: transactions older than the logical slot %q did not finish"
+	MSG_SLOT_BACKWARD = "%w: slot %q is at lsn %d, cannot confirm lsn %d (ahead of the WAL at %d)"
+	MSG_SPILL         = "store: logical decoding spill file: %w"
 )
 
 // Mensajes del informe de Verify y Repair (report.go, verify.go, repair.go).

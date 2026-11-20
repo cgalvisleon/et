@@ -120,4 +120,15 @@
 // arma el Record (con la imagen previa si page.LSN < RedoPoint().LSN), llama a Reserve —que bajo writeMu vuelve a
 // decidir la página entera contra el punto de rehacer vigente y devuelve ErrNeedImage si falta una, toma el lsn y el
 // lugar, y llama a underLock—, aplica el cambio con ese lsn, suelta la página y llama a Write.
+//
+// # Réplica
+//
+// Para la replicación del motor (tarea 46; stream.go): Read recorre desde una posición exacta hasta un lsn y un tope
+// de bytes y entrega cada registro con su posición y sus bytes tal cual; Locate ubica un lsn (el segmento cuyo primer
+// registro es ≤ lsn, recorrido hasta él) y SegmentOf solo su segmento (lee el primer registro de cada uno); los dos dan
+// ErrRemoved si ya se recicló, igual que Scan desde un segmento que no está. En la réplica, Append escribe un registro
+// ya armado en la misma posición que en el primario (el final del activo, o el principio del siguiente: rota), así el
+// WAL es una copia byte a byte; un lsn o una posición que no siguen dan ErrOutOfOrder sin escribir nada. SetRedo fija
+// el punto de rehacer sin escribir (los restartpoints) y Decode lee un registro entero. Los recorridos reusan sus
+// búferes (sync.Pool).
 package wal

@@ -17,9 +17,9 @@
 // limpieza), la 2 (recorridos, Exists, Empty, escritura diferida, versiones, congelado y truncado del archivo de
 // estados, la prueba del diseño recursivo) y, de la 3, Verify y Repair con cmd/storecheck, Stats y OnStats, Pressure y
 // DirUsage, el disco lleno o lento, el DDL dentro de un lote, el respaldo en caliente con su restauración y el archivo
-// continuo del WAL con la recuperación a un punto en el tiempo. Pendiente: la réplica (Sync, WalSince, ApplyWalEntry y
-// las ranuras del control, tarea 46) y el borrado de páginas del árbol (las hojas vacías no se devuelven a la lista de
-// libres).
+// continuo del WAL con la recuperación a un punto en el tiempo, y la replicación (tarea 46: réplica física, ranuras de
+// retención y flujo lógico de cambios). Pendiente: el borrado de páginas del árbol (las hojas vacías no se devuelven a
+// la lista de libres).
 //
 // El código del diseño anterior (un log append-only con todas las claves en un índice en RAM) se borró el 2026-11-19;
 // lo que servía de él (lsn contiguos, reserva bajo writeMu, escritura en paralelo, published, group commit, CRC-32C,
@@ -55,11 +55,13 @@
 //	  wal/0000000001.seg…     segmentos del WAL de WAL_SEGMENT_SIZE (wal)
 //	  backup_label            solo en una copia de Backup hasta restaurarla: el inicio y el fin del respaldo
 //	  archive_status          con WAL_ARCHIVE=on: el último segmento archivado y la última pérdida de continuidad
+//	  slots                   las ranuras de retención del WAL (si se creó alguna)
+//	  replslot/*.spill        derrames del búfer de reordenamiento de un ChangeReader abierto (se borran solos)
 //
 // Un motor es un directorio, con una caché y un WAL para todos sus stores; un proceso puede abrir varios motores
 // (pregunta 32). Cada store es un árbol propio con sus archivos, como el relfilenode de PostgreSQL (pregunta 43):
 // vaciarlo o borrarlo es cambiar el catálogo y borrar archivos. Crear, vaciar y borrar un store pasan por el WAL
-// (pregunta 56): el registro va primero, después el catálogo y los archivos, así una réplica (WalSince, planeada) los
+// (pregunta 56): el registro va primero, después el catálogo y los archivos, así una réplica (WalSince) los
 // ve y la recuperación los rehace en orden con los demás cambios. Los números de archivo no se reutilizan.
 //
 // # Paquetes internos
@@ -117,6 +119,10 @@
 //	backup.go      BackupInfo, backups (retenciones y borrados que esperan), unlinkData, backupRun (los pasos)
 //	restore.go     el marcador backup_label, checkBackupWAL, removeBackupLabel, checkTarget (el objetivo de OpenAt)
 //	archive.go     archiveState, startArchive, PendingArchive, SetArchived, SwitchWAL, el tope, archive_status
+//	walsince.go    WalReader (WalSince, Next): leer el WAL durable desde un lsn, del disco
+//	replica.go     WalEntry, replicaState, startReplica, applyWal (conflictos con snapshots), restartpoint
+//	slots.go       slotState, CreateSlot, DropSlot, AdvanceSlot, checkpointSlots (el tope), el archivo slots
+//	decode.go      ChangeReader: búfer de reordenamiento por xid con derrame a disco, Next, Confirm
 //
 // # Formatos en disco (little-endian; versión del formato 1)
 //
@@ -126,8 +132,8 @@
 // Control, cada copia de 512 B (copia A en el byte 0, B en el 512; se escribe la que no tiene la última versión; al
 // leer gana la válida con mayor seq): magic(4) version(4) seq(8) state(4) pageSize(4) blocksPerFile(4)
 // reservado(4) checkpointTime(8) redoSegment(8) redoOffset(8) redoLSN(8) checkpointLSN(8) nextXID(8)
-// oldestActiveXID(8) frozenXID(8) slots(8 × [nombre(24) restartLSN(8)], reservado para la réplica, hoy en cero)
-// reservado(156) crc(4). frozenXID es el del motor: el menor de los stores al checkpoint; el archivo de estados se
+// oldestActiveXID(8) frozenXID(8) slots(8 × [nombre(24) restartLSN(8)], reservado y en cero: las ranuras viven en
+// el archivo slots, que admite dos lsn y marcas por ranura) reservado(156) crc(4). frozenXID es el del motor: el menor de los stores al checkpoint; el archivo de estados se
 // trunca por debajo.
 //
 // Catálogo (se reescribe entero: catalog.tmp, fsync, rename, fsync del directorio): encabezado magic(4) version(4)
@@ -198,6 +204,16 @@
 //
 // Estado del archivo continuo archive_status (32 B en la raíz, solo con WAL_ARCHIVE=on; archive_status.tmp, fsync,
 // rename, fsync del directorio): magic(4) "ETAR" version(4) archived(8) gap(8) reservado(4) crc(4).
+//
+// Ranuras slots (en la raíz; slots.tmp, fsync, rename, fsync del directorio; se reescribe entero al crear, borrar o
+// invalidar una ranura y en cada checkpoint con avances): magic(4) "ETSL" version(4) count(4) reservado(4); por ranura
+// nameLen(1) flags(1: bit 0 lógica, bit 1 invalidada) reservado(6) restartLSN(8) confirmedLSN(8) name(nameLen, 1 a
+// 64 B); al final crc(4) de todo lo anterior. Hasta 16 ranuras.
+//
+// Derrame del búfer de reordenamiento replslot/<nombre en hex>-<n>.spill (no es durable: se borra al entregar o
+// descartar la transacción, al cerrar el lector y al abrir otro de la misma ranura): una tras otra, largo(4) + kind(1)
+// file(4) a(4) b(4) idLen(2) dataLen(4) id data, con kind 1 trozo de desborde (a = bloque, b = siguiente), 2 versión
+// (a = 1 lápida, b = primer bloque de desborde y data su largo, o data el valor), 3 store creado en el lote (id).
 //
 // Los magic se guardan como uint32 little-endian del texto leído de izquierda a derecha (0x4554424B = "ETBK"), como
 // los de control, catálogo y página meta.
@@ -297,15 +313,31 @@
 //	func (e *Engine) SetArchived(seg uint64) error
 //	func (e *Engine) SwitchWAL() (uint64, error)               // sella el segmento activo
 //
+//	// Replicación (ver «Replicación»)
+//	func OpenReplica(dir string) (*Engine, error)              // una copia de Backup como réplica de solo lectura
+//	func (e *Engine) WalSince(lsn uint64) (*WalReader, error)  // el WAL durable desde lsn + 1, del disco
+//	func (r *WalReader) Next(maxBytes int) ([]WalEntry, error)
+//	func (e *Engine) ApplyWal(entries []WalEntry) error        // en la réplica; ApplyWalEntry, uno solo
+//	func (e *Engine) ReplayLSN() uint64                        // lo aplicado por la réplica
+//	func (e *Engine) CreateSlot(name string) (SlotInfo, error) // física; CreateLogicalSlot, lógica
+//	func (e *Engine) DropSlot(name string) error
+//	func (e *Engine) Slots() []SlotInfo
+//	func (e *Engine) AdvanceSlot(name string, lsn uint64) error
+//	func (e *Engine) Changes(slot string) (*ChangeReader, error)
+//	func (r *ChangeReader) Next(maxTx int, fn func(tx TxInfo, c Change) error) (int, error)
+//	func (r *ChangeReader) Confirm() error
+//	func (r *ChangeReader) Close() error
+//
 // Tipos: Engine, Store, Batch, Snapshot, Deferred, Report y Finding (report.go), Stats y Latency (stats.go),
-// PressureCause (pressure.go), DiskUsage (usage.go), BackupInfo (backup.go), WALSegment (archive.go); constantes
+// PressureCause (pressure.go), DiskUsage (usage.go), BackupInfo (backup.go), WALSegment (archive.go), WalReader
+// (walsince.go), WalEntry (replica.go), SlotInfo (slots.go), ChangeReader, Change, ChangeOp y TxInfo (decode.go); constantes
 // MaxIDLen, MaxValueLen y MaxNameLen. Errores públicos (msg.go): ErrLocked, ErrClosed, ErrFailed, ErrBadID,
 // ErrValueTooLarge, ErrBadName, ErrStoreNotFound, ErrStoreDropped, ErrConflict, ErrSerialization, ErrTimeout,
 // ErrTxDone, ErrOtherEngine, ErrBusy, ErrStorePending, ErrDiskFull, ErrThrottled, ErrArchiveOff, ErrNotSealed,
-// ErrRecoveryTarget, ErrBackupDir, ErrBackupIncomplete, ErrCorrupt; se comparan con errors.Is.
+// ErrRecoveryTarget, ErrBackupDir, ErrBackupIncomplete, ErrReadOnly, ErrNotReplica, ErrWalGap, ErrWalRemoved,
+// ErrSlotNotFound, ErrSlotExists, ErrSlotLimit, ErrRecoveryConflict, ErrCorrupt; se comparan con errors.Is.
 //
-// Planeado: Sync, WalSince y ApplyWalEntry para la réplica (tarea 46, por transacción confirmada y en orden de
-// confirmación). Decidido no hacer: un recorrido dentro de un lote (ForEachIn, pregunta 64: se recorre con un snapshot
+// Sync de josefina (un gancho por cambio aplicado) queda cubierto por Changes (el flujo lógico). Decidido no hacer: un recorrido dentro de un lote (ForEachIn, pregunta 64: se recorre con un snapshot
 // y dentro del lote se lee por id con ReadIn).
 //
 // Semántica:
@@ -363,12 +395,15 @@
 //	WAL_ARCHIVE              off          on (o true, 1, yes) = archivo continuo: retiene los segmentos sellados
 //	                                      hasta SetArchived (tarea 66)
 //	WAL_ARCHIVE_MAX_SIZE     0            MB que puede retener el archivo; 0 = sin tope (frena a los escritores)
+//	MAX_SLOT_WAL_KEEP_SIZE   4096         MB de WAL que puede retener una ranura antes de invalidarse (pregunta 48);
+//	                                      0 = sin tope (la ranura frena a los escritores, como el archivo)
 //
 // Constantes, sin variable: archivos de datos de 1 GB, CHECKPOINT_COMPLETION_TARGET = 0,9, FREEZE_MIN_AGE = 0,
 // FREEZE_TABLE_AGE = un archivo de estados (134.217.728 xids; ver «Congelado y truncado del archivo de estados»), el
-// freno del WAL en 2 × MAX_WAL_SIZE (walBacklogFactor) y el de las diferidas en 8.192 registros (maxDeferredLag).
-// MAX_SLOT_WAL_KEEP_SIZE (4096 MB, pregunta 48) es de las ranuras de la réplica (tarea 46): hoy no se lee. RELSEG_SIZE
-// (del diseño anterior) dejó de usarse.
+// freno del WAL en 2 × MAX_WAL_SIZE (walBacklogFactor), el de las diferidas en 8.192 registros (maxDeferredLag), la
+// espera de la réplica a sus snapshots antes de cancelarlos en 30 s (replicaConflictDelay, como
+// max_standby_streaming_delay) y la memoria del búfer de reordenamiento en 16 MB (logicalWorkMem, como
+// logical_decoding_work_mem). RELSEG_SIZE (del diseño anterior) dejó de usarse.
 //
 // # El orden de un cambio
 //
@@ -671,7 +706,10 @@
 //     solo para repetir el conteo) → páginas. Backup: ckptMu → writeMu (wal.ForceImages, wal.Hold) y el checkpoint →
 //     ddlMu (catálogo y lista de data/); sin closeMu (cuenta en Engine.bg); backups.mu es una hoja. Archivo continuo:
 //     closeMu (lectura) → archive.mu → writeMu (SetArchived, wal.Hold); ckptMu → archive.mu → writeMu (el tope, en el
-//     paso 6); recover → archive.mu → writeMu (wal.Switch).
+//     paso 6); recover → archive.mu → writeMu (wal.Switch). Ranuras: closeMu (lectura) → slots.mu → writeMu (Hold);
+//     ckptMu → slots.mu (paso 6). Réplica: applyMu → txGate (escritura, para un registro que choca con los
+//     snapshots) → replayMu (escritura) → ddlMu → Store.mu; las lecturas de páginas closeMu (lectura) → replayMu
+//     (lectura) → Store.mu (Store.begin); Verify y el restartpoint toman applyMu.
 //   - Marcas de visibilidad: con bloqueo compartido, por OR atómico (y leídas con atomic.LoadUint32); la escritura de
 //     la página al disco calcula la suma sobre una copia. La marca de confirmada solo se pone si el WAL es durable
 //     hasta el lsn de confirmación del grupo de su xid (pregunta 49). La primera marca en una página tras un checkpoint
@@ -706,8 +744,9 @@
 //  5. Escribir el control (seq + 1) con el punto de rehacer, checkpointLSN, nextXID, el xid vivo más viejo y el
 //     frozenXID del motor (tomado al empezar el paso 1, antes del punto de rehacer).
 //  6. Con el archivo continuo y WAL_ARCHIVE_MAX_SIZE, aplicar su tope (enforceArchiveCap). Reciclar los segmentos del
-//     WAL anteriores al punto de rehacer (respetando los segmentos que retienen un respaldo en curso y el archivo
-//     continuo, wal.Hold; las ranuras de la réplica, tarea 46, todavía no existen): se renombran como repuestos hasta
+//     WAL anteriores al punto de rehacer (respetando los segmentos que retienen un respaldo en curso, el archivo
+//     continuo y las ranuras, wal.Hold; antes, checkpointSlots invalida las que pasan MAX_SLOT_WAL_KEEP_SIZE y guarda
+//     el archivo slots con los avances): se renombran como repuestos hasta
 //     wal.Options.Spares (MAX_WAL_SIZE / 2 / WAL_SEGMENT_SIZE, 4 por omisión) y el resto se borra.
 //  7. Truncar el archivo de estados por debajo de ese frozenXID (xact Truncate: los archivos enteros, de menor a
 //     mayor), o del frozenXID del control de un respaldo en curso si es menor.
@@ -762,7 +801,8 @@
 //  5. wal.Open corta el WAL en su primer registro inválido (o tras el registro del objetivo de OpenAt,
 //     wal.Options.StopLSN) y deja en largo 0 los segmentos siguientes (un registro viejo nunca confirmado no puede
 //     pasar por válido después). Un registro inválido en un segmento sellado es corrupción: Open falla.
-//  6. Con WAL_ARCHIVE=on, startArchive lee archive_status, retiene desde lo no archivado y sella el segmento en que el
+//  6. loadSlots lee el archivo slots y pone sus retenciones (una cuyo lsn ya no está en el WAL queda invalidada). Con
+//     WAL_ARCHIVE=on (no en una réplica), startArchive lee archive_status, retiene desde lo no archivado y sella el segmento en que el
 //     WAL quedó (ver «Archivo continuo del WAL y recuperación a un punto en el tiempo»).
 //  7. Borrar los stores que siguen con FlagPendingCreate (los creó un lote cuyo KindCommit no llegó a ser durable),
 //     con sus archivos, sin escribir en el WAL (redoState.dropPending; ver «DDL dentro de un lote»).
@@ -1220,7 +1260,7 @@
 // A confirmar (tarea 44): copiar los segmentos sellados enteros (con lo preasignado: hasta WAL_SEGMENT_SIZE de más);
 // los archivos que espera un respaldo cortado quedan para Repair; no hay Restore aparte ni VerifyBackup (Open restaura
 // y Verify revisa); la copia no se comprime ni se envía a un io.Writer; mientras dura no hay tope al WAL retenido (las
-// ranuras con MAX_SLOT_WAL_KEEP_SIZE son de la réplica, tarea 46).
+// ranuras, con MAX_SLOT_WAL_KEEP_SIZE, son aparte: ver «Replicación»).
 //
 // # Archivo continuo del WAL y recuperación a un punto en el tiempo
 //
@@ -1304,6 +1344,123 @@
 // de nuevo); un comando que haga de archivador (copiar a un directorio u objeto) y un Restore que traiga los
 // segmentos; comprimir los segmentos archivados; el tope con un aviso además de Stats (el motor no escribe registros
 // de log).
+//
+// # Replicación
+//
+// Tarea 46 de F-23 (fase 3; walsince.go, replica.go, slots.go, decode.go; en wal, stream.go). Tres piezas, como en
+// PostgreSQL: la réplica física (streaming), las ranuras de retención (replication slots con max_slot_wal_keep_size,
+// pregunta 48) y el flujo lógico de cambios (decodificado lógico, preguntas 31 y 50). El transporte no es del motor:
+// josefina lleva los WalEntry y los Change por su hub TCP; las pruebas conectan primario y réplica en el mismo proceso.
+//
+// Leer el WAL (WalSince). WalReader guarda solo la posición del próximo registro; Next lo ubica la primera vez
+// (wal.Locate: el segmento cuyo primer registro es ≤ lsn, recorrido hasta él) y después lee con wal.Read del disco,
+// no de la memoria, hasta Durable (una réplica nunca tiene algo que el primario puede perder en un corte) y hasta
+// maxBytes por tanda. Cada WalEntry es el registro tal cual (encabezado, bloques y datos, con su crc) con su lsn,
+// segmento y desplazamiento. Si el segmento ya no está (se recicló), ErrWalRemoved: la réplica necesita un Backup
+// nuevo. WalSince no retiene nada; para eso, una ranura. Los recorridos reusan sus búferes (un sync.Pool en wal).
+//
+// Réplica física. Se arma así: CreateSlot en el primario, Backup del primario (la copia trae el WAL hasta su fin),
+// OpenReplica(copia) y un bucle WalSince(ReplayLSN) → Next → ApplyWal → WaitDurable → AdvanceSlot(ReplayLSN) en el
+// primario. Decisiones:
+//
+//   - WAL idéntico byte a byte: ApplyWal escribe cada registro en el WAL local en la misma posición (wal.Append: el
+//     final del segmento activo, o el principio del siguiente si el primario selló antes; otra posición o un lsn que
+//     no sigue es ErrWalGap sin escribir nada) y recién después lo rehace con el mismo redoState de la recuperación
+//     (cada Kind a su dueño). Así los puntos de rehacer de los KindCheckpoint del primario sirven tal cual en la réplica.
+//     Los ya aplicados (lsn ≤ ReplayLSN) se saltan: reenviar es seguro.
+//   - La réplica no escribe registros propios. Sus checkpoints son restartpoints: toman el último KindCheckpoint
+//     rehecho, escriben las páginas sucias y el archivo de estados (todo lo aplicado, que incluye lo anterior a su
+//     punto de rehacer), guardan el catálogo con los contadores a lo aplicado (countLSN = aplicado + 1), el control con
+//     ese punto de rehacer y su lsn (wal.SetRedo), reciclan el WAL anterior y truncan el archivo de estados por debajo
+//     del frozenXID tomado al rehacer el KindCheckpoint anterior (lo que lo justifica queda antes del punto de rehacer
+//     del siguiente; los KindSetFrozen y KindInitStore rehechos ponen el frozenXID de su store). Sin un checkpoint
+//     nuevo no hacen nada. Las lecturas no ponen marcas de visibilidad (btree.Config.NoHints): una marca anotaría un
+//     KindSetHints en el WAL, y sin WAL rompería la suma de una página a medio escribir tras un restartpoint.
+//   - OpenReplica recupera como Open, salvo: un directorio sin motor es ErrNotReplica (se empieza de un Backup); no
+//     borra los stores de lotes sin confirmar ni fija el horizonte del archivo de estados (esas transacciones pueden
+//     confirmar después en el primario); no arranca el archivo continuo ni la limpieza de fondo; termina con un
+//     restartpoint. Un corte de la réplica se recupera igual que uno del primario: reabrir sigue desde lo durable.
+//     Promover: Open sobre el directorio de la réplica (deshace lo que seguía en curso y es un motor más; no hay líneas
+//     de tiempo, así que el primario viejo no puede seguirla).
+//   - Solo lectura: enter devuelve ErrReadOnly (escrituras, NewBatch, Vacuum, Repair, Backup, SetArchived); Store de
+//     un store que no existe es ErrStoreNotFound, y uno creado por un lote sin confirmar o cuyo KindInitStore todavía
+//     no llegó, ErrStorePending. Read, Exists, GetVersion, Count, los recorridos, Snapshot, Verify y Checkpoint (un
+//     restartpoint) andan.
+//   - Concurrencia con las lecturas: aplicar toma replayMu en escritura por tanda; cada lectura de páginas (Store.begin,
+//     también cada hoja de un recorrido) lo toma en lectura. Así una lectura nunca ve un registro a medias (una
+//     partición toca tres páginas) y un DDL rehecho cambia el catálogo y los *Store abiertos (syncHandles: uno borrado
+//     da ErrStoreDropped, uno vaciado espera su KindInitStore) sin lecturas en curso. Un DDL espera antes el fsync del
+//     WAL local: el catálogo y los archivos nunca se adelantan a él.
+//   - Snapshots estables: un snapshot de la réplica ve lo confirmado al tomarlo. Antes de rehacer un registro que
+//     cambiaría lo que ve (una confirmación —KindCommit o una escritura suelta—, una limpieza, una liberación de
+//     páginas o un DDL) el aplicador cierra la entrada de snapshots nuevos (txGate) y espera a que se cierren los
+//     abiertos, hasta replicaConflictDelay (30 s); los que queden se cancelan con ErrRecoveryConflict
+//     (Stats.RecoveryConflicts). Se eligió esperar y no llevar la lista de transacciones en curso del primario (las
+//     KnownAssignedXids de PostgreSQL): los xid sin escrituras no aparecen en el WAL y esa lista crecería sin tope.
+//     El costo: con snapshots largos en la réplica el aplicador se atrasa (lo acota el plazo) y ApplyWal por tandas
+//     espera una vez por tanda.
+//   - Durabilidad: ApplyWal no hace fsync; WaitDurable en la réplica hace durable lo aplicado (también el escritor de
+//     fondo del WAL). Lo que se confirma en la ranura del primario es ReplayLSN después de WaitDurable.
+//
+// Ranuras (slots.go). Cada ranura tiene RestartLSN (lo más viejo que retiene) y ConfirmedLSN (hasta dónde confirmó su
+// consumidor), y retiene con wal.Hold el segmento de RestartLSN (wal.SegmentOf: solo lee el primer registro de cada
+// segmento). CreateSlot la crea con ConfirmedLSN = lo escrito y la guarda enseguida (antes del Backup de la réplica,
+// así la copia y lo que sigue quedan retenidos); DropSlot la borra; Slots las describe (SlotInfo: Retained = segmentos
+// desde el retenido, Lag = registros sin confirmar). AdvanceSlot mueve la retención enseguida (y despierta a los
+// escritores frenados) pero se guarda en el paso 6 del siguiente checkpoint o en Close, como en PostgreSQL: tras un
+// corte del primario la ranura puede volver al valor del último checkpoint, y lo que se recicló siempre sale de lo
+// guardado (el archivo se guarda antes de reciclar), así nunca falta WAL que la ranura guardada promete. El consumidor
+// recibe de nuevo lo posterior: la réplica lo salta por lsn y el lógico por TxInfo.CommitLSN. Nunca retrocede.
+// Tope: en el paso 6, una ranura que retiene más de MAX_SLOT_WAL_KEEP_SIZE se invalida (suelta su retención, queda
+// marcada en el archivo, Stats.SlotsInvalidated y SlotsInvalid); AdvanceSlot, WalSince y Changes de ella dan
+// ErrWalRemoved y su consumidor necesita empezar de nuevo (Backup o una ranura lógica nueva); el motor sigue sano.
+// Sin tope (0), la ranura más atrasada suma al freno de los escritores (ErrThrottled), como el archivo continuo sin
+// tope. Pressure considera la ranura (PressureSlot: con tope, lo retenido sobre el tope; sin tope, sobre el del
+// freno). Las ranuras andan también en una réplica (para encadenar réplicas), salvo las lógicas (ErrReadOnly).
+//
+// Flujo lógico (decode.go). El registro de inserción en la hoja (KindLeafWrite) ya es el cambio lógico: id, xid,
+// lápida y el valor en línea o la referencia a desborde (decisión 38: no se repite el valor). Un valor en desborde se
+// arma con los KindOverflowWrite de su cadena, que van antes en el WAL con el mismo xid (cada uno trae su bloque, el
+// siguiente y el trozo); por eso no hizo falta ningún registro lógico adicional: el costo es leer los trozos del WAL
+// en vez de un solo registro. Los nombres de los stores salen del catálogo al abrir el lector y de los registros de
+// DDL que lee (un store borrado antes de abrirlo da Store "").
+//
+//   - CreateLogicalSlot espera (hasta TRANSACTION_TIMEOUT, si no ErrBusy) a que terminen las transacciones en curso
+//     al crearla: sus primeros cambios pueden estar antes de lo que la ranura retiene. Su ConfirmedLSN queda en lo
+//     escrito después, así nunca entrega una transacción a medias.
+//   - Changes(slot) lee desde RestartLSN; ChangeReader.Next pasa cada registro por un búfer de reordenamiento por xid
+//     y, en cada confirmación (KindCommit, o una escritura suelta con FlagCommit), entrega a fn sus cambios en el orden
+//     del WAL (put con el valor nuevo, delete, create de StoreIn, drop de la cola de DDL), con TxInfo{XID, CommitLSN}.
+//     Las confirmaciones salen en el orden del WAL, que es el de confirmación. Lo confirmado hasta ConfirmedLSN se
+//     salta. KindAbort descarta; una transacción que nunca confirmó (murió con un corte del primario, o no escribió) se
+//     descarta en el primer KindCheckpoint cuyo xid vivo más viejo la supera. Los DDL sueltos (Store, DropStore, Empty)
+//     salen como una transacción propia de xid 0.
+//   - Memoria: cada cambio se guarda codificado; si lo que el lector tiene en memoria pasa de logicalWorkMem (16 MB),
+//     la transacción más grande pasa a disco (replslot/, formato en «Formatos en disco») y sus cambios siguientes se
+//     agregan detrás. Al entregarla se recorre su archivo con un búfer fijo y después lo de memoria; el archivo se
+//     borra al entregarla o descartarla. Lo que vive en RAM: hasta logicalWorkMem, una entrada por transacción en curso
+//     y los trozos de la cadena del valor que se está armando (un valor, como Read).
+//   - Confirm deja la ranura en ConfirmedLSN = el último registro leído y RestartLSN = el primer registro de la
+//     transacción más vieja todavía en el búfer: un lector nuevo de la ranura (otro proceso, otro Open) relee desde ahí
+//     y salta lo ya entregado, sin repetidos ni huecos. Si fn devuelve un error, el lector queda inservible (la
+//     transacción salió a medias): se cierra y se abre otro.
+//
+// Pruebas (replica_test.go, slots_test.go, decode_test.go; en wal, TestReadAppendCopy): TestReplicaCatchUp (escritores
+// sueltos, diferidos y en lotes, DDL suelto y en lote, Empty y checkpoints que reciclan en el primario; lectores con
+// snapshots estables en la réplica; al final mismo contenido, Count y Verify limpio; reabrir la réplica sigue;
+// promoverla con Open), TestReplicaCrash (corte de la réplica en un punto al azar de una tanda, en los tres modos de
+// crashfs, 5 semillas: reabre, alcanza y coincide), TestReplicaNotFromScratch, TestSlotRetains (retiene tras varios
+// checkpoints, recicla al avanzar, errores, Stats y Pressure), TestSlotCap (invalidación por el tope con el motor sano;
+// sin tope frena), TestSlotPersist (Close/Open y corte en los tres modos), TestChangesOrder (orden de confirmación,
+// nunca un lote deshecho, modelo = motor), TestChangesSpill (una transacción de 1.500 cambios con desborde pasa a disco
+// con 64 KB de memoria), TestChangesRestart (un consumidor que confirma y reabre, también con Close/Open del motor y un
+// lote abierto que cruza la confirmación, recibe lo mismo que uno que nunca paró).
+//
+// A confirmar (tarea 46): esperar a los snapshots de la réplica en vez de llevar las transacciones en curso del
+// primario; replicaConflictDelay y logicalWorkMem como constantes; los avances de una ranura se guardan en el
+// checkpoint (entrega al menos una vez tras un corte del primario); 16 ranuras de hasta 64 bytes; la réplica no
+// archiva ni admite ranuras lógicas; no hay réplica síncrona (el primario no espera a la réplica al confirmar) ni
+// filtros por store en el flujo lógico; Sync de josefina (gancho en proceso) se arma sobre Changes.
 //
 // # Diseño recursivo
 //

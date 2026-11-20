@@ -31,6 +31,9 @@ func (e *Engine) recover() error {
 	if err != nil {
 		return err
 	}
+	if e.cfg.replica && fresh {
+		return fmt.Errorf(MSG_REPLICA_FRESH, ErrNotReplica, e.dir)
+	}
 	if restoring {
 		if fresh {
 			return fmt.Errorf(MSG_BACKUP_UNFINISHED, ErrBackupIncomplete)
@@ -63,10 +66,11 @@ func (e *Engine) recover() error {
 		return err
 	}
 
-	r := &redoState{e: e, countLSN: e.cat.CountLSN(), checkpointLSN: ctl.CheckpointLSN, nextXID: ctl.NextXID}
+	r := &redoState{e: e, countLSN: e.cat.CountLSN(), checkpointLSN: ctl.CheckpointLSN, nextXID: ctl.NextXID,
+		replica: e.cfg.replica, sample: ctl.FrozenXID}
 	opts := e.cfg.wal
 	opts.StopLSN = e.cfg.stopLSN
-	log, _, err := wal.Open(e.fs, e.dir, opts, redo, r.apply)
+	log, end, err := wal.Open(e.fs, e.dir, opts, redo, r.apply)
 	if err != nil {
 		return err
 	}
@@ -75,10 +79,15 @@ func (e *Engine) recover() error {
 	if !fresh && !r.sawCheckpoint {
 		return fmt.Errorf(MSG_NO_CHECKPOINT, ErrCorrupt, ctl.CheckpointLSN)
 	}
-	if err := e.startArchive(); err != nil {
+	if err := e.loadSlots(); err != nil {
 		return err
 	}
-	if err := e.finishRecovery(r); err != nil {
+	if !e.cfg.replica {
+		if err := e.startArchive(); err != nil { // una réplica no archiva: lo hace el primario
+			return err
+		}
+	}
+	if err := e.finishRecovery(r, end); err != nil {
 		return err
 	}
 	if restoring {
@@ -152,10 +161,14 @@ func (e *Engine) openPieces() error {
 /**
 * finishRecovery borra los stores de lotes que no confirmaron, fija el siguiente xid (el mayor entre el del control y el mayor visto + 1), el horizonte del
 * archivo de estados, arma las piezas que escriben y hace el checkpoint de fin de recuperación.
-* @param r *redoState: lo que dejó el recorrido del WAL
+* En una réplica sigue startReplica.
+* @param r *redoState: lo que dejó el recorrido del WAL, end wal.Position: el final del WAL
 * @return error
 **/
-func (e *Engine) finishRecovery(r *redoState) error {
+func (e *Engine) finishRecovery(r *redoState, end wal.Position) error {
+	if e.cfg.replica {
+		return e.startReplica(r, end)
+	}
 	if err := r.dropPending(); err != nil {
 		return err
 	}
@@ -179,6 +192,11 @@ type redoState struct {
 	nextXID       page.XID // el mayor nextXID de los checkpoints vistos (y del control)
 	maxXID        page.XID // el mayor xid visto en un registro
 	replayed      int      // registros rehechos, sin contar los checkpoints
+
+	// Solo en una réplica (OpenReplica), que sigue rehaciendo después de abrir (replica.go).
+	replica bool
+	last    ckptMark // el último KindCheckpoint rehecho: el punto de rehacer del próximo restartpoint
+	sample  page.XID // el frozenXID del motor al rehacer el último KindCheckpoint
 }
 
 /**
@@ -190,6 +208,9 @@ func (r *redoState) apply(rec *wal.Record) error {
 	r.maxXID = max(r.maxXID, rec.XID)
 	if frozen, ok := btree.RecordFrozenXID(rec); ok {
 		r.nextXID = max(r.nextXID, frozen) // ningún xid nuevo por debajo del frozenXID de un store
+		if r.replica {
+			r.e.frozen.set(rec.Blocks[0].File, frozen)
+		}
 	}
 	if rec.Kind != wal.KindCheckpoint {
 		r.replayed++
@@ -246,6 +267,9 @@ func (r *redoState) checkpoint(rec *wal.Record) error {
 		r.sawCheckpoint = true
 	}
 	r.nextXID = max(r.nextXID, info.nextXID)
+	if r.replica {
+		r.noteCheckpoint(info, rec.LSN)
+	}
 	return nil
 }
 

@@ -8,7 +8,11 @@ const (
 	MSG_FAILED          = "wal: a previous write or fsync failed, reopen the engine: %w"
 	MSG_BAD_SEGMENT     = "wal: invalid segment file name %s"
 	MSG_SEGMENT_MISSING = "wal: segment %d is missing (found %d after %d)"
-	MSG_SEGMENT_GONE    = "wal: segment %d does not exist"
+	MSG_SEGMENT_GONE    = "wal: %w: segment %d does not exist"
+	MSG_LSN_GONE        = "wal: %w: lsn %d is before the oldest segment"
+	MSG_LSN_MISSING     = "wal: lsn %d is not in the WAL (it ends at lsn %d)"
+	MSG_APPEND_ORDER    = "wal: %w: record lsn %d at %+v, the next goes at segment %d offset %d lsn %d"
+	MSG_APPEND_RAW      = "wal: %w: not one valid record"
 	MSG_WAL_MISSING     = "wal: no segments but the redo point is %+v"
 	MSG_GAP             = "wal: %w: segment %d starts at lsn %d, expected %d"
 	MSG_BAD_POSITION    = "wal: invalid position %+v"
@@ -32,4 +36,10 @@ var (
 	// ErrNoRoom: no se pudo preasignar lugar en el disco para el WAL (Room, o una reserva que tuvo que preasignar);
 	// envuelve el error de disco lleno. No deja el WAL inutilizable.
 	ErrNoRoom = errors.New("wal: no room on disk for the WAL")
+
+	// ErrRemoved: lo pedido está en un segmento que ya no existe (se recicló o se borró).
+	ErrRemoved = errors.New("wal: segment removed")
+
+	// ErrOutOfOrder: Append recibió un registro que no es el siguiente (lsn o posición) del WAL de la réplica.
+	ErrOutOfOrder = errors.New("wal: record out of order")
 )

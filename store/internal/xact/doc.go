@@ -60,4 +60,6 @@
 //
 // La visibilidad «última confirmada» (Read suelto sin snapshot, pregunta 41) es: la versión más nueva de su id cuyo
 // estado es confirmada.
+//
+// Transactions.Advance sube el siguiente xid sin asignar ninguno: la réplica (tarea 46) lo usa con cada xid que rehace.
 package xact

@@ -19,6 +19,9 @@ import (
 * @return error
 **/
 func (e *Engine) checkpoint(state control.State, spread bool) error {
+	if e.replica != nil {
+		return e.restartpoint(state)
+	}
 	e.ckptMu.Lock()
 	defer e.ckptMu.Unlock()
 	_, _, err := e.checkpointLocked(state, spread)
@@ -64,7 +67,10 @@ func (e *Engine) checkpointLocked(state control.State, spread bool) (checkpointI
 	if err := e.enforceArchiveCap(info.redo.Segment); err != nil && !isCleanDiskFull(err) {
 		return info, 0, err // ya dejó el motor inutilizable
 	}
-	if err := e.log.Recycle(info.redo); err != nil { // respeta lo que retienen un respaldo y el archivo (wal.Hold)
+	if err := e.checkpointSlots(); err != nil && !isCleanDiskFull(err) {
+		return info, 0, err
+	}
+	if err := e.log.Recycle(info.redo); err != nil { // respeta lo que retienen un respaldo, el archivo y las ranuras (wal.Hold)
 		return info, 0, e.fail(err)
 	}
 	e.stepDone(6)
@@ -77,6 +83,22 @@ func (e *Engine) checkpointLocked(state control.State, spread bool) (checkpointI
 	e.metrics.checkpoints.Add(1)
 	e.checkpointFinished(info.wal)
 	return info, lsn, nil
+}
+
+/**
+* checkpointNow es Checkpoint: en una réplica, un restartpoint (no escribe en el WAL).
+* @return error
+**/
+func (e *Engine) checkpointNow() error {
+	enter := e.enter
+	if e.replica != nil {
+		enter = e.enterSlots
+	}
+	if err := enter(); err != nil {
+		return err
+	}
+	defer e.leave()
+	return e.checkpoint(control.StateInProduction, false)
 }
 
 /**

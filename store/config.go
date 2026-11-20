@@ -40,6 +40,10 @@ const (
 
 	// vacuumXids: la limpieza de fondo corre también cada medio archivo de estados de xids asignados.
 	vacuumXids = xact.XidsPerFile / 2
+
+	// replicaConflictDelay: cuánto espera el aplicador de una réplica a los snapshots abiertos antes de cancelarlos
+	// para rehacer un cambio que no deben ver (como max_standby_streaming_delay de PostgreSQL, constante).
+	replicaConflictDelay = 30 * time.Second
 )
 
 // config es lo configurable del motor: Open la lee del entorno y las pruebas la fijan a mano.
@@ -62,6 +66,10 @@ type config struct {
 	archive           bool          // WAL_ARCHIVE: archivo continuo del WAL (retiene los segmentos hasta SetArchived)
 	archiveMaxSize    int64         // WAL_ARCHIVE_MAX_SIZE, en bytes: tope del WAL retenido por el archivo (0 = sin tope: frena)
 	stopLSN           page.LSN      // objetivo de la recuperación de OpenAt (0 = rehacer todo el WAL)
+	slotKeepSize      int64         // MAX_SLOT_WAL_KEEP_SIZE, en bytes: tope del WAL que retiene una ranura (0 = sin tope: frena)
+	replica           bool          // OpenReplica: el motor es una réplica de solo lectura que aplica el WAL del primario
+	conflictDelay     time.Duration // replicaConflictDelay (las pruebas lo acortan)
+	decodeWorkMem     int           // memoria del búfer de reordenamiento de un ChangeReader (0 = logicalWorkMem)
 
 	// Solo pruebas: páginas por archivo de estados (0 = xact.PagesPerFile) y primer xid de un motor nuevo (0 = 1).
 	xactFilePages int
@@ -90,6 +98,8 @@ func envConfig() config {
 		freezeTableAge:    freezeTableAge,
 		archive:           archiveOn(envar.GetStr("WAL_ARCHIVE", "off")),
 		archiveMaxSize:    max(envar.GetInt64("WAL_ARCHIVE_MAX_SIZE", 0), 0) << 20,
+		slotKeepSize:      max(envar.GetInt64("MAX_SLOT_WAL_KEEP_SIZE", 4096), 0) << 20,
+		conflictDelay:     replicaConflictDelay,
 	}
 }
 

@@ -77,7 +77,7 @@ func (w *WAL) SegmentInfo(num uint64) (SegmentInfo, error) {
 	}
 	if !known {
 		start := Position{Segment: num, Offset: 0, LSN: first}
-		if end, err = s.records(w.fs, w.dir, start, func(*Record) error { return nil }); err != nil {
+		if end, err = s.records(w.fs, w.dir, start, func(Position, []byte, *Record) error { return nil }); err != nil {
 			return SegmentInfo{}, err
 		}
 		w.writeMu.Lock()

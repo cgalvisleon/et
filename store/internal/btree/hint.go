@@ -50,7 +50,7 @@ func (hs *hints) at(h buffer.Handle) {
 * @param hs *hints, e entry: de la página hs.h, flag EntryFlags: EntryXidCommitted o EntryXidAborted
 **/
 func (t *BTree) hint(hs *hints, e entry, flag EntryFlags) {
-	if hs == nil || hs.h == nil {
+	if hs == nil || hs.h == nil || t.noHints {
 		return
 	}
 	if t.hintUnlogged(hs.h, func() { e.orFlags(flag) }) {

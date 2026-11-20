@@ -67,6 +67,9 @@ func (e *Engine) handle(name string, create bool) (*Store, error) {
 	if err != nil || s != nil || !create {
 		return s, err
 	}
+	if e.replica != nil { // una réplica no crea stores: llegan con el WAL del primario
+		return nil, fmt.Errorf(MSG_STORE_NAME, ErrStoreNotFound, name)
+	}
 	if err := e.writable(); err != nil {
 		return nil, err
 	}
@@ -89,6 +92,9 @@ func (e *Engine) openLocked(name string) (*Store, error) {
 	entry, ok := e.cat.Get(name)
 	if !ok {
 		return nil, nil
+	}
+	if e.replica != nil && entry.Flags&control.FlagPendingCreate != 0 {
+		return nil, fmt.Errorf(MSG_STORE_PENDING, ErrStorePending, name) // lo crea un lote que no confirmó
 	}
 	return e.openEntry(entry)
 }
@@ -118,7 +124,7 @@ func (e *Engine) openEntry(entry control.Entry) (*Store, error) {
 * @return error
 **/
 func (e *Engine) treeError(err error) error {
-	if errors.Is(err, ErrFailed) || errors.Is(err, ErrDiskFull) {
+	if errors.Is(err, ErrFailed) || errors.Is(err, ErrDiskFull) || errors.Is(err, ErrStorePending) {
 		return err
 	}
 	return e.writeError(err)
@@ -199,6 +205,9 @@ func (e *Engine) openTree(file smgr.FileNo) (*btree.BTree, error) {
 	if ready {
 		return e.openExisting(cfg)
 	}
+	if e.replica != nil { // su KindInitStore todavía no llegó
+		return nil, fmt.Errorf(MSG_STORE_PENDING, ErrStorePending, fmt.Sprint(file))
+	}
 	if err := e.failed(); err != nil {
 		return nil, err // de solo lectura: no se crea nada
 	}
@@ -223,7 +232,7 @@ func (e *Engine) openTree(file smgr.FileNo) (*btree.BTree, error) {
 func (e *Engine) treeConfig(file smgr.FileNo) btree.Config {
 	return btree.Config{
 		File: file, Pool: e.pool, Smgr: e.sm, Free: e.free, Log: e.log, Status: e.status, HintGate: &e.hintGate,
-		VM: e.free, FrozenXID: e.txs.OldestActive(),
+		VM: e.free, FrozenXID: e.txs.OldestActive(), NoHints: e.replica != nil,
 	}
 }
 

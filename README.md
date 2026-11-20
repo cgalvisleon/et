@@ -97,7 +97,7 @@ Each table lists the main public API of every package. `go doc github.com/cgalvi
 | `queue`      | `New[T](size, maxEvents, period, handler)`, `Push`, `Len`, `Close`                                                                                                                                                                                                                                                             | `q.Push(item)`                                                             |
 | `crontab`    | `New(tag, store, opts...)` (instance; `WithHandler`) or `Load` (global), `CronJob`, `ScheduleJob`, `StopJob`, `StartJob`, `RemoveJob`, `GetJob`, `Http*`; states `pending`→`scheduled`⇄`running`→`finished`/`failed`, `paused`, `missed`, `canceled`; `LastRun`, `WithRetries`, `WithTimeout`; replicas with the same tag elect a leader and fail over | `crontab.CronJob(tag, owner, "0 * * * *", 0, nil, fn)`                     |
 | `resilience` | `New()`, `LoadInstance(Params)`, `Instance.Run`, `IsDone`, `IsFailed`, `Stop`                                                                                                                                                                                                                                                  | `inst, _ := r.LoadInstance(resilience.Params{Fn: send, TotalAttempts: 3})` |
-| `store`      | `Open(dir)` → `Engine` (`Store`, `DropStore`, `Stores`, `Checkpoint`, `Vacuum`, `NewBatch`, `Snapshot`, `SnapshotFor`, `WaitDurable`, `Verify`, `Repair`, `Stats`, `OnStats`, `Pressure`, `DirUsage`, `StoreIn`, `DropStoreIn`, `Backup`, `PendingArchive`, `SetArchived`, `SwitchWAL`, `Close`; `OpenAt(dir, lsn)`) → `Store` (`Put`, `Remove`, `Insert`, `Update`, `Delete`, `Read`, `GetVersion`, `Exists`, `Count`, `Empty`, `Deferred`, `Keys`, `KeysAfter`, `KeysPrefix`, `ForEach`, `ForEachPrefix`, `ForEachRange`, `ForEachBorrowed`, their `…In(batch, …)` forms, `ReadAt`/`GetVersionAt`/`ExistsAt`/`ForEachAt`/`CountAt(snapshot, …)`); `Batch` (`Commit`, `CommitDeferred`, `Rollback`); PostgreSQL-style engine with MVCC (F-23) | `s, _ := e.Store("users"); s.Put("id", data)` |
+| `store`      | `Open(dir)` → `Engine` (`Store`, `DropStore`, `Stores`, `Checkpoint`, `Vacuum`, `NewBatch`, `Snapshot`, `SnapshotFor`, `WaitDurable`, `Verify`, `Repair`, `Stats`, `OnStats`, `Pressure`, `DirUsage`, `StoreIn`, `DropStoreIn`, `Backup`, `PendingArchive`, `SetArchived`, `SwitchWAL`, `WalSince`, `ApplyWal`, `ReplayLSN`, `CreateSlot`, `CreateLogicalSlot`, `DropSlot`, `Slots`, `AdvanceSlot`, `Changes`, `Close`; `OpenAt(dir, lsn)`, `OpenReplica(dir)`) → `Store` (`Name`, `Put`, `Remove`, `Insert`, `Update`, `Delete`, `Read`, `GetVersion`, `Exists`, `Count`, `Empty`, `Deferred`, `DirUsage`, `Keys`, `KeysAfter`, `KeysPrefix`, `ForEach`, `ForEachPrefix`, `ForEachRange`, `ForEachBorrowed`, their `…In(batch, …)` forms, `ReadAt`/`GetVersionAt`/`ExistsAt`/`ForEachAt`/`CountAt(snapshot, …)`); `Batch` (`Commit`, `CommitDeferred`, `Rollback`); PostgreSQL-style engine with MVCC (F-23) | `s, _ := e.Store("users"); s.Put("id", data)` |
 
 ### Security
 
@@ -389,6 +389,8 @@ defer q.Close()
 
 **WAL archiving and point-in-time recovery.** With `WAL_ARCHIVE=on`, no sealed WAL segment is recycled until your archiver calls `engine.SetArchived(seg)`; `engine.PendingArchive()` lists the sealed segments not yet archived (with `Size`, the bytes worth copying) and `engine.SwitchWAL()` seals the active one early. A late archiver throttles writers, unless `WAL_ARCHIVE_MAX_SIZE` caps the retained WAL (the break shows in `Stats.ArchiveGap`). A `Backup` copy plus the archived segments copied into its `wal/` restores up to the end of the archive with `Open`, or up to an LSN with `store.OpenAt(dir, lsn)` (`ErrRecoveryTarget` if it cannot be reached).
 
+**Replication.** A replica starts from a `Backup` copy opened with `store.OpenReplica(dir)`: it is read-only for users (`ErrReadOnly`) and applies the primary's WAL byte for byte, `primary.WalSince(replica.ReplayLSN())` → `Next` → `replica.ApplyWal`, then `replica.WaitDurable()` and `primary.AdvanceSlot(name, replica.ReplayLSN())`. The transport is yours. A slot (`CreateSlot`, before the backup) keeps the WAL the replica still needs until `MAX_SLOT_WAL_KEEP_SIZE` (then it is invalidated and the replica needs a new backup; `Stats` and `Pressure` show slots, lag and retained WAL). For a change feed by id, `CreateLogicalSlot` + `engine.Changes(slot)` delivers each committed transaction in commit order (put, delete, create, drop, empty), never an aborted one; large transactions spill to disk. `Open` on a replica's directory promotes it.
+
 **Configuration.** The environment variables (sizes in MB, times in seconds unless noted) are in the `store` row of [Environment variables](#environment-variables); they are read when the engine opens.
 
 ```go
@@ -486,6 +488,30 @@ for _, seg := range segments {
 }
 // Point in time: the backup copy plus the archived segments in its wal/, replayed up to an LSN
 pitr, err := store.OpenAt("/backups/2026-11-20", targetLSN)
+
+// Replication: slot first, then the backup the replica starts from
+_, _ = primary.CreateSlot("replica-1")
+_, _ = primary.Backup("/replica")
+replica, err := store.OpenReplica("/replica")
+reader, _ := primary.WalSince(replica.ReplayLSN())
+for {
+    entries, err := reader.Next(1 << 20) // durable records only; ErrWalRemoved = new backup needed
+    if err != nil || len(entries) == 0 {
+        break // ask again later
+    }
+    _ = replica.ApplyWal(entries) // ships over your transport in a real setup
+}
+_ = replica.WaitDurable()
+_ = primary.AdvanceSlot("replica-1", replica.ReplayLSN())
+
+// Logical change feed: committed transactions, in commit order
+_, _ = primary.CreateLogicalSlot("search-index")
+feed, _ := primary.Changes("search-index")
+_, err = feed.Next(0, func(tx store.TxInfo, c store.Change) error {
+    fmt.Println(tx.CommitLSN, c.Op, c.Store, c.ID, len(c.Data))
+    return nil
+})
+_ = feed.Confirm() // the next reader of the slot resumes here
 ```
 
 ### Workflows with `jwf`
@@ -564,7 +590,7 @@ hits, _ := index.Search(ctx, tenantId, projectId, "reset the router", 5, 0.3, em
 | `dt`          | `PRODUCTION` (`true` stores in Redis)                                                                                                                                                                                                                                                                                                                                   |
 | `jwf`, `jsql` | `MAX_AUDIT_LOG` (1000)                                                                                                                                                                                                                                                                                                                                                  |
 | `jwsp`        | `WHATSAPP_API_URL`                                                                                                                                                                                                                                                                                                                                                      |
-| `store`       | `STORE_CACHE_SIZE` (MB, 128), `WAL_SEGMENT_SIZE` (MB, 128), `SYNC_ON_WRITE` (true), `CHECKPOINT_TIMEOUT` (s, 300), `MAX_WAL_SIZE` (MB, 1024), `LOCK_TIMEOUT` (s, 5), `TRANSACTION_TIMEOUT` (s, 600), `VACUUM_INTERVAL` (s, 60; 0 = off), `VACUUM_THRESHOLD` (writes, 1000), `WAL_WRITER_DELAY` (ms, 200; 0 = off), `WAL_ARCHIVE` (off), `WAL_ARCHIVE_MAX_SIZE` (MB, 0 = no cap: throttle)                                                                                                                                                                                                                                                                               |
+| `store`       | `STORE_CACHE_SIZE` (MB, 128), `WAL_SEGMENT_SIZE` (MB, 128), `SYNC_ON_WRITE` (true), `CHECKPOINT_TIMEOUT` (s, 300), `MAX_WAL_SIZE` (MB, 1024), `LOCK_TIMEOUT` (s, 5), `TRANSACTION_TIMEOUT` (s, 600; 0 = no limit), `VACUUM_INTERVAL` (s, 60; 0 = off), `VACUUM_THRESHOLD` (writes, 1000), `WAL_WRITER_DELAY` (ms, 200; 0 = off), `WAL_ARCHIVE` (`off`; `on`/`true`/`1`/`yes` turn it on), `WAL_ARCHIVE_MAX_SIZE` (MB, 0 = no cap: throttle), `MAX_SLOT_WAL_KEEP_SIZE` (MB, 4096; 0 = no cap: throttle)                                                                                                                                                                                                                                                                               |
 | `validator`   | `LANG`                                                                                                                                                                                                                                                                                                                                                                  |
 | `middleware`  | `TELEMETRY_FORMAT` (`text` on a terminal, `json` elsewhere, `off`), `TELEMETRY_LOG` (`all`, `errors`), `LATENCY_LIMIT` (1000 ms, `WARN` above it), `REQUESTS_LIMIT` (400 per second per method and path)                                                                                                                                                                |
 
@@ -588,6 +614,7 @@ gofmt -w .
 go build ./... && go vet ./...
 go test -race ./et/ ./jsql/ ./jwf/   # core, jsql helpers and scripts (no services)
 cd jsql/drivers/test && go test -v   # jsql against every available driver
+go test -p 1 ./store/...             # the store engine, offline (one test binary at a time)
 ./version.sh --minor                 # bump the git tag, update the READMEs and push
 ```
 

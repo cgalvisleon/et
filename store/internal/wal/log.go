@@ -93,7 +93,7 @@ func Open(fsys vfs.FS, dir string, opts Options, redo Position, fn func(rec *Rec
 	}
 
 	sizes := map[uint64]Position{}
-	end, err := scan(fsys, walDir, redo, opts.StopLSN, fn, func(end Position) { sizes[end.Segment] = end })
+	end, err := scan(fsys, walDir, redo, opts.StopLSN, recordsOnly(fn), func(end Position) { sizes[end.Segment] = end })
 	if err != nil {
 		return nil, end, err
 	}
@@ -150,7 +150,7 @@ func cutTail(fsys vfs.FS, dir string, end Position, nums []uint64) error {
 
 // Scan implementa Reader sobre los segmentos de este WAL.
 func (w *WAL) Scan(from Position, fn func(rec *Record) error) (Position, error) {
-	return scan(w.fs, w.dir, from, 0, fn, nil)
+	return scan(w.fs, w.dir, from, 0, recordsOnly(fn), nil)
 }
 
 // reservation es el lugar reservado de un registro ya codificado (sin lsn ni crc).

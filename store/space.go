@@ -151,12 +151,12 @@ func (e *Engine) walBacklog() int64 {
 }
 
 /**
-* retainedBacklog es lo que mira el freno: el mayor entre el WAL desde el último checkpoint terminado y el que espera
-* al archivador (sin tope de archivo).
+* retainedBacklog es lo que mira el freno: el mayor entre el WAL desde el último checkpoint terminado, el que espera
+* al archivador (sin tope de archivo) y el que retiene la ranura más atrasada (sin MAX_SLOT_WAL_KEEP_SIZE).
 * @return int64: bytes
 **/
 func (e *Engine) retainedBacklog() int64 {
-	return max(e.walBacklog(), e.archiveBacklog())
+	return max(e.walBacklog(), e.archiveBacklog(), e.slotBacklog())
 }
 
 /**

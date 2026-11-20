@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cgalvisleon/et/store/internal/control"
 	"github.com/cgalvisleon/et/store/internal/page"
 	"github.com/cgalvisleon/et/store/internal/vfs"
 )
@@ -140,11 +139,7 @@ func (e *Engine) SnapshotFor(timeout time.Duration) *Snapshot {
 * @return error: ErrClosed, ErrFailed
 **/
 func (e *Engine) Checkpoint() error {
-	if err := e.enter(); err != nil {
-		return err
-	}
-	defer e.leave()
-	return e.checkpoint(control.StateInProduction, false)
+	return e.checkpointNow()
 }
 
 /**
@@ -711,4 +706,159 @@ func (e *Engine) DirUsage() (DiskUsage, error) {
 **/
 func (s *Store) DirUsage() (int64, error) {
 	return s.dirUsage()
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Replicación (tarea 46): réplica física, ranuras de retención y flujo lógico de cambios
+// ---------------------------------------------------------------------------------------------------------------
+
+/**
+* OpenReplica abre como réplica una copia de Backup del primario (o una réplica ya abierta antes): recupera como Open
+* pero no deshace lo que sigue en curso en el primario, y queda de solo lectura para el usuario (las escrituras,
+* NewBatch, Vacuum, Repair y Backup dan ErrReadOnly) aplicando lo que llega con ApplyWal. Open sobre el mismo
+* directorio la promueve a primario.
+* @param dir string
+* @return *Engine, error: ErrNotReplica (directorio sin motor), los de Open
+**/
+func OpenReplica(dir string) (*Engine, error) {
+	cfg := envConfig()
+	cfg.replica = true
+	return open(vfs.OS(), dir, cfg)
+}
+
+/**
+* WalSince abre un lector del WAL desde el registro siguiente a lsn (el ReplayLSN de la réplica): Next entrega los
+* registros ya durables de a tandas. No retiene el WAL: para eso, una ranura.
+* @param lsn uint64
+* @return *WalReader, error: ErrClosed, ErrFailed
+**/
+func (e *Engine) WalSince(lsn uint64) (*WalReader, error) {
+	return e.walSince(lsn)
+}
+
+/**
+* Next devuelve los registros siguientes ya durables, hasta maxBytes (al menos uno si hay); ninguno si no hay nada
+* nuevo todavía (se vuelve a pedir).
+* @param maxBytes int: ≤ 0 = 1 MiB
+* @return []WalEntry, error: ErrWalRemoved (el WAL desde ahí se recicló: la réplica necesita un Backup nuevo)
+**/
+func (r *WalReader) Next(maxBytes int) ([]WalEntry, error) {
+	return r.next(maxBytes)
+}
+
+/**
+* ApplyWal aplica en la réplica los registros del primario, en orden: salta los ya aplicados y no aplica nada desde
+* el primero que no sigue. No espera el fsync (WaitDurable lo hace).
+* @param entries []WalEntry
+* @return error: ErrNotReplica, ErrWalGap, ErrCorrupt, ErrClosed, ErrFailed
+**/
+func (e *Engine) ApplyWal(entries []WalEntry) error {
+	return e.applyWal(entries)
+}
+
+/**
+* ApplyWalEntry es ApplyWal de un solo registro.
+* @param entry WalEntry
+* @return error
+**/
+func (e *Engine) ApplyWalEntry(entry WalEntry) error {
+	return e.applyWal([]WalEntry{entry})
+}
+
+/**
+* ReplayLSN es el último lsn que aplicó la réplica (0 en un primario): desde ahí pide WalSince y, tras WaitDurable,
+* lo que confirma con AdvanceSlot en el primario.
+* @return uint64
+**/
+func (e *Engine) ReplayLSN() uint64 {
+	return e.replayLSN()
+}
+
+/**
+* CreateSlot crea una ranura de retención para una réplica física: el WAL desde el próximo registro no se recicla
+* hasta que AdvanceSlot lo confirme, o hasta pasar MAX_SLOT_WAL_KEEP_SIZE (la ranura se invalida). Crearla antes del
+* Backup de la réplica.
+* @param name string: de 1 a 64 bytes
+* @return SlotInfo, error: ErrSlotExists, ErrSlotLimit, ErrDiskFull, ErrClosed, ErrFailed
+**/
+func (e *Engine) CreateSlot(name string) (SlotInfo, error) {
+	return e.createSlot(name, false)
+}
+
+/**
+* CreateLogicalSlot crea una ranura para un consumidor lógico (Changes): espera a que terminen las transacciones en
+* curso (hasta TRANSACTION_TIMEOUT) y entrega lo confirmado después.
+* @param name string
+* @return SlotInfo, error: los de CreateSlot, ErrBusy (no terminaron), ErrReadOnly (en una réplica)
+**/
+func (e *Engine) CreateLogicalSlot(name string) (SlotInfo, error) {
+	return e.createSlot(name, true)
+}
+
+/**
+* DropSlot borra una ranura: el próximo checkpoint recicla lo que retenía.
+* @param name string
+* @return error: ErrSlotNotFound, ErrDiskFull, ErrClosed, ErrFailed
+**/
+func (e *Engine) DropSlot(name string) error {
+	return e.dropSlot(name)
+}
+
+/**
+* Slots describe las ranuras, por nombre: lsn confirmado y retenido, atraso, WAL retenido y si se invalidó.
+* @return []SlotInfo
+**/
+func (e *Engine) Slots() []SlotInfo {
+	return e.slotsInfo()
+}
+
+/**
+* AdvanceSlot anota que la réplica de la ranura ya tiene durable todo hasta lsn: el WAL anterior se puede reciclar.
+* Se guarda en el próximo checkpoint (tras un corte del primario puede volver atrás hasta ese valor: la réplica salta
+* lo repetido). Nunca retrocede.
+* @param name string, lsn uint64
+* @return error: ErrSlotNotFound, ErrWalRemoved (invalidada), ErrWalGap (lsn después del WAL), ErrClosed, ErrFailed
+**/
+func (e *Engine) AdvanceSlot(name string, lsn uint64) error {
+	return e.advanceSlot(name, page.LSN(lsn), 0, false)
+}
+
+/**
+* Changes abre un lector del flujo lógico de la ranura lógica name (CreateLogicalSlot): entrega por transacción
+* confirmada y en orden de confirmación lo confirmado después de su ConfirmedLSN.
+* @param name string
+* @return *ChangeReader, error: ErrSlotNotFound, ErrWalRemoved (invalidada), ErrClosed, ErrFailed
+**/
+func (e *Engine) Changes(name string) (*ChangeReader, error) {
+	return e.changes(name)
+}
+
+/**
+* Next lee el WAL durable y llama a fn con cada cambio de cada transacción que confirma, en orden de confirmación,
+* hasta maxTx transacciones (≤ 0 = hasta alcanzar el WAL). Las abortadas o sin confirmar no salen; una transacción
+* grande pasa a disco mientras espera su confirmación. fn no debe cerrar el motor; si devuelve un error, el lector
+* queda inservible (se abre otro con Changes y sigue desde la ranura).
+* @param maxTx int, fn func(tx TxInfo, c Change) error
+* @return int: transacciones entregadas, error: el de fn, ErrWalRemoved, ErrClosed
+**/
+func (r *ChangeReader) Next(maxTx int, fn func(tx TxInfo, c Change) error) (int, error) {
+	return r.next(maxTx, fn)
+}
+
+/**
+* Confirm anota en la ranura que todo lo entregado ya se procesó: el próximo lector de la ranura sigue desde ahí, sin
+* repetir ni saltar nada (tras un corte del motor puede repetir lo posterior a su último checkpoint: TxInfo.CommitLSN
+* sirve para descartarlo).
+* @return error: los de AdvanceSlot
+**/
+func (r *ChangeReader) Confirm() error {
+	return r.confirm()
+}
+
+/**
+* Close suelta el búfer del lector y borra sus archivos de derrame.
+* @return error
+**/
+func (r *ChangeReader) Close() error {
+	return r.close()
 }

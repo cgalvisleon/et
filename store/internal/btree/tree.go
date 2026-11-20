@@ -45,6 +45,11 @@ type Config struct {
 	// FrozenXID es el frozenXID que Create pone en la meta de un store nuevo: ninguna versión del store puede tener un
 	// xid menor (el motor pasa el xid vivo más viejo al crearlo).
 	FrozenXID page.XID
+
+	// NoHints: las lecturas no ponen marcas de visibilidad (la réplica: su WAL es copia del primario y no escribe
+	// registros propios, y una marca sin WAL tras un restartpoint podría romper la suma de una página a medio
+	// escribir). El estado se lee siempre del archivo de estados.
+	NoHints bool
 }
 
 // HintGate es la compuerta entre las marcas de visibilidad y el comienzo de un checkpoint.
@@ -56,14 +61,15 @@ type HintGate interface {
 // BTree es el árbol de un store: implementa Tree. No guarda nada del árbol en memoria salvo la pista de la hoja de más
 // a la derecha (regla 1). Es seguro usarlo desde varias goroutines.
 type BTree struct {
-	file   smgr.FileNo
-	pool   buffer.Pool
-	sm     smgr.Manager
-	free   fsm.FreeList
-	log    wal.Log
-	status StatusReader
-	gate   HintGate
-	vm     fsm.VisibilityMap
+	file    smgr.FileNo
+	pool    buffer.Pool
+	sm      smgr.Manager
+	free    fsm.FreeList
+	log     wal.Log
+	status  StatusReader
+	gate    HintGate
+	vm      fsm.VisibilityMap
+	noHints bool
 
 	// fastLeaf es la pista de la inserción rápida: la última hoja de más a la derecha donde se escribió (0 = ninguna).
 	// Solo es una pista: se comprueba con la hoja bloqueada antes de usarla.
@@ -87,7 +93,7 @@ func Open(cfg Config) (*BTree, error) {
 		return nil, ErrConfig
 	}
 	return &BTree{file: cfg.File, pool: cfg.Pool, sm: cfg.Smgr, free: cfg.Free, log: cfg.Log, status: cfg.Status,
-		gate: cfg.HintGate, vm: cfg.VM}, nil
+		gate: cfg.HintGate, vm: cfg.VM, noHints: cfg.NoHints}, nil
 }
 
 /**

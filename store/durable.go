@@ -48,6 +48,9 @@ func (e *Engine) noteCommit(lsn page.LSN) {
 * @return error: ErrClosed, ErrFailed
 **/
 func (e *Engine) waitDurable() error {
+	if e.replica != nil {
+		return e.replicaWaitDurable()
+	}
 	if err := e.enter(); err != nil {
 		return err
 	}

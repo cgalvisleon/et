@@ -123,6 +123,14 @@ func (m *Transactions) Wait(xid page.XID, timeout time.Duration) error {
 	}
 }
 
+// Advance sube el siguiente xid a asignar hasta next (nunca lo baja): la réplica lo usa con cada xid que ve en el
+// WAL del primario, así su NextXID y el Xmax de sus snapshots cubren todo lo rehecho.
+func (m *Transactions) Advance(next page.XID) {
+	m.mu.Lock()
+	m.next = max(m.next, next)
+	m.mu.Unlock()
+}
+
 // NextXID es el siguiente xid a asignar.
 func (m *Transactions) NextXID() page.XID {
 	m.mu.Lock()

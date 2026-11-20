@@ -79,3 +79,18 @@ func apply(p page.Page, owner page.XID, next page.BlockNumber, seq uint32, chunk
 	}
 	return p.SetOpaque(page.Opaque{Next: next, Level: seq, Flags: page.OpaqueOverflow})
 }
+
+/**
+* DecodeWrite lee de un KindOverflowWrite el trozo de una cadena (el decodificado lógico arma con ellos el valor de
+* una versión en desborde): su bloque, el siguiente de la cadena (0 = el último), su posición y el trozo.
+* @param rec *wal.Record
+* @return page.BlockNumber: el bloque, page.BlockNumber: el siguiente, uint32: la posición, []byte: el trozo (vista
+* de rec), error: ErrBadRecord
+**/
+func DecodeWrite(rec *wal.Record) (page.BlockNumber, page.BlockNumber, uint32, []byte, error) {
+	if err := checkShape(rec); err != nil {
+		return 0, 0, 0, nil, err
+	}
+	next, seq := decodeMain(rec.Main)
+	return rec.Blocks[0].Block, next, seq, rec.Blocks[0].Delta, nil
+}

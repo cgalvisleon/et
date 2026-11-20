@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 
 	"github.com/cgalvisleon/et/store/internal/page"
 	"github.com/cgalvisleon/et/store/internal/vfs"
@@ -33,13 +34,13 @@ func NewReader(fsys vfs.FS, dir string) Reader {
 
 // Scan implementa Reader (ver su documentación en wal.go).
 func (r *reader) Scan(from Position, fn func(rec *Record) error) (Position, error) {
-	return scan(r.fs, r.dir, from, 0, fn, nil)
+	return scan(r.fs, r.dir, from, 0, recordsOnly(fn), nil)
 }
 
 // scan recorre el WAL de dir desde from (ver Reader.Scan). Con stop > 0 termina antes del primer registro de lsn
 // mayor que stop (el objetivo de una recuperación, Options.StopLSN), como si el WAL terminara ahí. onEnd, si no es
 // nil, recibe dónde termina la parte válida de cada segmento recorrido (Open lo usa para SizeSince y SegmentInfo).
-func scan(fsys vfs.FS, dir string, from Position, stop page.LSN, fn func(rec *Record) error, onEnd func(end Position)) (Position, error) {
+func scan(fsys vfs.FS, dir string, from Position, stop page.LSN, fn visitFunc, onEnd func(end Position)) (Position, error) {
 	if from.LSN == 0 || from.Segment == 0 || from.Offset < 0 {
 		return from, fmt.Errorf(MSG_BAD_POSITION, from)
 	}
@@ -48,10 +49,11 @@ func scan(fsys vfs.FS, dir string, from Position, stop page.LSN, fn func(rec *Re
 		return from, err
 	}
 	if !slices.Contains(nums, from.Segment) {
-		return from, fmt.Errorf(MSG_SEGMENT_GONE, from.Segment)
+		return from, fmt.Errorf(MSG_SEGMENT_GONE, ErrRemoved, from.Segment)
 	}
 
-	s := newSegmentScanner()
+	s := getScanner()
+	defer putScanner(s)
 	s.stop = stop
 	pos := from
 	for {
@@ -103,9 +105,35 @@ func newSegmentScanner() *segmentScanner {
 	return &segmentScanner{buf: make([]byte, MaxRecordSize), rd: bufio.NewReaderSize(nil, scanBufferSize)}
 }
 
+// scanners guarda los búferes de los recorridos terminados para reutilizarlos: un lector que pide el WAL a cada rato
+// (WalSince, las ranuras) no asigna 1 MiB por pedido.
+var scanners = sync.Pool{New: func() any { return newSegmentScanner() }}
+
+// getScanner toma un recorrido de scanners; putScanner lo devuelve (sin referencias al último archivo).
+func getScanner() *segmentScanner {
+	s := scanners.Get().(*segmentScanner)
+	s.stop = 0
+	return s
+}
+
+// putScanner devuelve s a scanners.
+func putScanner(s *segmentScanner) {
+	s.rd.Reset(nil)
+	scanners.Put(s)
+}
+
+// visitFunc recibe cada registro de un recorrido con su posición y sus bytes tal como están en el segmento (raw y
+// rec valen solo durante la llamada).
+type visitFunc func(at Position, raw []byte, rec *Record) error
+
+// recordsOnly adapta una función que solo mira el registro a visitFunc.
+func recordsOnly(fn func(rec *Record) error) visitFunc {
+	return func(_ Position, _ []byte, rec *Record) error { return fn(rec) }
+}
+
 // records llama a fn con cada registro válido del segmento pos.Segment desde pos.Offset, mientras cada uno tenga el
 // lsn esperado, y devuelve la posición siguiente al último válido.
-func (s *segmentScanner) records(fsys vfs.FS, dir string, pos Position, fn func(rec *Record) error) (Position, error) {
+func (s *segmentScanner) records(fsys vfs.FS, dir string, pos Position, fn visitFunc) (Position, error) {
 	file, err := fsys.OpenFile(segmentPath(dir, pos.Segment), os.O_RDONLY)
 	if err != nil {
 		return pos, err
@@ -125,7 +153,7 @@ func (s *segmentScanner) records(fsys vfs.FS, dir string, pos Position, fn func(
 		if err != nil || !ok || s.rec.LSN != pos.LSN {
 			return pos, err
 		}
-		if err := fn(&s.rec); err != nil {
+		if err := fn(pos, s.buf[:n], &s.rec); err != nil {
 			return pos, err
 		}
 		pos.Offset += int64(n)

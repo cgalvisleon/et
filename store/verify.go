@@ -23,10 +23,17 @@ import (
 **/
 func (e *Engine) check(repair bool) (Report, error) {
 	var r Report
+	if rs := e.replica; rs != nil {
+		if repair {
+			return r, ErrReadOnly
+		}
+		rs.applyMu.Lock() // la réplica no aplica nada mientras se revisa
+		defer rs.applyMu.Unlock()
+	}
 	if err := e.checkFiles(&r, repair); err != nil {
 		return r, err
 	}
-	if err := e.enter(); err != nil {
+	if err := e.enterCheck(); err != nil {
 		return r, err
 	}
 	names := e.cat.Names()
@@ -40,13 +47,24 @@ func (e *Engine) check(repair bool) (Report, error) {
 }
 
 /**
+* enterCheck es enter para Verify y Repair; en una réplica (solo Verify, con applyMu) deja pasar como una lectura.
+* @return error
+**/
+func (e *Engine) enterCheck() error {
+	if e.replica != nil {
+		return e.enterRead()
+	}
+	return e.enter()
+}
+
+/**
 * checkFiles revisa el control, el catálogo guardado y los archivos de data/, con ckptMu (ningún checkpoint escribe
 * el control ni el catálogo mientras tanto) y ddlMu (ningún store se crea, vacía ni borra).
 * @param r *Report, repair bool: borra los archivos huérfanos
 * @return error
 **/
 func (e *Engine) checkFiles(r *Report, repair bool) error {
-	if err := e.enter(); err != nil {
+	if err := e.enterCheck(); err != nil {
 		return err
 	}
 	defer e.leave()
@@ -261,13 +279,13 @@ func (e *Engine) checkStore(r *Report, name string, repair bool) error {
 	}
 	s.vacuumMu.Lock()
 	defer s.vacuumMu.Unlock()
-	if err := e.enter(); err != nil {
+	if err := e.enterCheck(); err != nil {
 		return err
 	}
 	defer e.leave()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.dropped {
+	if s.dropped || s.tree == nil {
 		return nil
 	}
 	return newStoreCheck(s, r, repair).run()
@@ -280,7 +298,7 @@ func (e *Engine) checkStore(r *Report, name string, repair bool) error {
 * @return *Store: nil si no hay que revisarlo, error: ErrClosed o ErrFailed
 **/
 func (e *Engine) checkHandle(r *Report, name string) (*Store, error) {
-	if err := e.enter(); err != nil {
+	if err := e.enterCheck(); err != nil {
 		return nil, err
 	}
 	defer e.leave()

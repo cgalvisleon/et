@@ -122,6 +122,12 @@ type Engine struct {
 
 	archive archiveState // el archivo continuo del WAL (archive.go)
 
+	slots slotState // las ranuras de retención del WAL por réplica o consumidor (slots.go)
+
+	// replica no es nil en un motor abierto con OpenReplica: de solo lectura para el usuario, aplica el WAL que le
+	// llega del primario (replica.go).
+	replica *replicaState
+
 	// afterBackupStep, si no es nil, corre en cada paso del respaldo (backupStep). Solo para las pruebas.
 	afterBackupStep func(step string)
 
@@ -172,7 +178,7 @@ func open(base vfs.FS, dir string, cfg config) (*Engine, error) {
 		e.bg.Add(1)
 		go e.walWriter()
 	}
-	if cfg.vacuumEvery > 0 {
+	if cfg.vacuumEvery > 0 && !cfg.replica { // una réplica rehace la limpieza del primario
 		e.bg.Add(1)
 		go e.vacuumer()
 	}
@@ -228,13 +234,17 @@ func (e *Engine) closeResources() error {
 /**
 * enter deja pasar una operación que escribe si el motor está abierto y usable; quien entra llama a leave al
 * terminar. Una caché que falló (al hacer lugar para una lectura, por ejemplo) deja el motor inutilizable aquí.
-* @return error: ErrClosed o ErrFailed (con ErrDiskFull si el fallo fue de disco lleno)
+* @return error: ErrClosed, ErrReadOnly (una réplica) o ErrFailed (con ErrDiskFull si el fallo fue de disco lleno)
 **/
 func (e *Engine) enter() error {
 	e.closeMu.RLock()
 	if e.closed {
 		e.closeMu.RUnlock()
 		return ErrClosed
+	}
+	if e.replica != nil {
+		e.closeMu.RUnlock()
+		return ErrReadOnly
 	}
 	if err := e.checkFailed(); err != nil {
 		e.closeMu.RUnlock()

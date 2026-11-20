@@ -68,4 +68,7 @@
 // Qué no hace: no decide cuándo un valor va a desborde (eso lo dice btree.MaxEntrySize), ni la visibilidad. Depende
 // de page, smgr, buffer, fsm y wal por sus interfaces. Manager (New) implementa Chains; ninguna estructura en RAM
 // crece con el tamaño de la base (un valor sí ocupa su largo al leerlo: se devuelve entero).
+//
+// DecodeWrite lee de un KindOverflowWrite su bloque, el siguiente, la posición y el trozo: con ellos el flujo lógico
+// del motor (tarea 46) arma el valor de una versión en desborde sin leer páginas.
 package overflow

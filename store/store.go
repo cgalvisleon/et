@@ -73,13 +73,19 @@ func (s *Store) enterWith(enter func() error) error {
 	if err := enter(); err != nil {
 		return err
 	}
+	s.e.replica.readLock()
 	s.mu.RLock()
-	if s.dropped {
-		s.mu.RUnlock()
-		s.e.leave()
-		return ErrStoreDropped
+	var err error
+	switch {
+	case s.dropped:
+		err = ErrStoreDropped
+	case s.tree == nil: // una réplica que rehízo el vaciado y todavía no el KindInitStore del archivo nuevo
+		err = fmt.Errorf(MSG_STORE_PENDING, ErrStorePending, s.name)
 	}
-	return nil
+	if err != nil {
+		s.end()
+	}
+	return err
 }
 
 /**
@@ -87,6 +93,7 @@ func (s *Store) enterWith(enter func() error) error {
 **/
 func (s *Store) end() {
 	s.mu.RUnlock()
+	s.e.replica.readUnlock()
 	s.e.leave()
 }
 

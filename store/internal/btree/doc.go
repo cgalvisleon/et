@@ -224,4 +224,8 @@
 // página nueva de fsm, la antigua hermana derecha, la meta, el padre); siempre de izquierda a derecha, de hija a
 // padre, árbol → meta, y nunca se espera a nada entre Reserve y Write, así que expulsar una página sucia (que espera
 // al WAL) no puede cerrar un ciclo (es el orden de store/doc.go, «Orden de los bloqueos»).
+//
+// Réplica (tarea 46): Config.NoHints apaga las marcas de visibilidad de las lecturas (la réplica no escribe registros
+// propios); DecodeLeafWrite lee de un KindLeafWrite la versión que escribe (el cambio lógico que entrega el flujo de
+// cambios del motor).
 package btree

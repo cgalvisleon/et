@@ -97,7 +97,7 @@ Cada tabla lista la API pública principal de cada paquete. `go doc github.com/c
 | `queue` | `New[T](size, maxEvents, period, handler)`, `Push`, `Len`, `Close` | `q.Push(item)` |
 | `crontab` | `New(tag, store, opts...)` (instancia; `WithHandler`) o `Load` (global), `CronJob`, `ScheduleJob`, `StopJob`, `StartJob`, `RemoveJob`, `GetJob`, `Http*`; estados `pending`→`scheduled`⇄`running`→`finished`/`failed`, `paused`, `missed`, `canceled`; `LastRun`, `WithRetries`, `WithTimeout`; las réplicas con el mismo tag eligen una líder y la relevan | `crontab.CronJob(tag, owner, "0 * * * *", 0, nil, fn)` |
 | `resilience` | `New()`, `LoadInstance(Params)`, `Instance.Run`, `IsDone`, `IsFailed`, `Stop` | `inst, _ := r.LoadInstance(resilience.Params{Fn: send, TotalAttempts: 3})` |
-| `store` | `Open(dir)` → `Engine` (`Store`, `DropStore`, `Stores`, `Checkpoint`, `Vacuum`, `NewBatch`, `Snapshot`, `SnapshotFor`, `WaitDurable`, `Verify`, `Repair`, `Stats`, `OnStats`, `Pressure`, `DirUsage`, `StoreIn`, `DropStoreIn`, `Backup`, `PendingArchive`, `SetArchived`, `SwitchWAL`, `Close`; `OpenAt(dir, lsn)`) → `Store` (`Put`, `Remove`, `Insert`, `Update`, `Delete`, `Read`, `GetVersion`, `Exists`, `Count`, `Empty`, `Deferred`, `Keys`, `KeysAfter`, `KeysPrefix`, `ForEach`, `ForEachPrefix`, `ForEachRange`, `ForEachBorrowed`, sus formas `…In(lote, …)`, `ReadAt`/`GetVersionAt`/`ExistsAt`/`ForEachAt`/`CountAt(snapshot, …)`); `Batch` (`Commit`, `CommitDeferred`, `Rollback`); motor al estilo PostgreSQL con MVCC (F-23) | `s, _ := e.Store("users"); s.Put("id", data)` |
+| `store` | `Open(dir)` → `Engine` (`Store`, `DropStore`, `Stores`, `Checkpoint`, `Vacuum`, `NewBatch`, `Snapshot`, `SnapshotFor`, `WaitDurable`, `Verify`, `Repair`, `Stats`, `OnStats`, `Pressure`, `DirUsage`, `StoreIn`, `DropStoreIn`, `Backup`, `PendingArchive`, `SetArchived`, `SwitchWAL`, `WalSince`, `ApplyWal`, `ReplayLSN`, `CreateSlot`, `CreateLogicalSlot`, `DropSlot`, `Slots`, `AdvanceSlot`, `Changes`, `Close`; `OpenAt(dir, lsn)`, `OpenReplica(dir)`) → `Store` (`Name`, `Put`, `Remove`, `Insert`, `Update`, `Delete`, `Read`, `GetVersion`, `Exists`, `Count`, `Empty`, `Deferred`, `DirUsage`, `Keys`, `KeysAfter`, `KeysPrefix`, `ForEach`, `ForEachPrefix`, `ForEachRange`, `ForEachBorrowed`, sus formas `…In(lote, …)`, `ReadAt`/`GetVersionAt`/`ExistsAt`/`ForEachAt`/`CountAt(snapshot, …)`); `Batch` (`Commit`, `CommitDeferred`, `Rollback`); motor al estilo PostgreSQL con MVCC (F-23) | `s, _ := e.Store("users"); s.Put("id", data)` |
 
 ### Seguridad
 
@@ -366,6 +366,8 @@ defer q.Close()
 
 **Archivo continuo del WAL y recuperación a un punto en el tiempo.** Con `WAL_ARCHIVE=on` ningún segmento sellado del WAL se recicla hasta que tu archivador llame a `engine.SetArchived(seg)`; `engine.PendingArchive()` lista los sellados sin archivar (con `Size`, los bytes que vale la pena copiar) y `engine.SwitchWAL()` sella antes el activo. Un archivador atrasado frena a los escritores, salvo que `WAL_ARCHIVE_MAX_SIZE` ponga tope al WAL retenido (el corte se ve en `Stats.ArchiveGap`). Una copia de `Backup` más los segmentos archivados copiados a su `wal/` se restaura hasta el final de lo archivado con `Open`, o hasta un LSN con `store.OpenAt(dir, lsn)` (`ErrRecoveryTarget` si no se puede alcanzar).
 
+**Replicación.** Una réplica empieza de una copia de `Backup` abierta con `store.OpenReplica(dir)`: es de solo lectura para el usuario (`ErrReadOnly`) y aplica el WAL del primario byte a byte, `primary.WalSince(replica.ReplayLSN())` → `Next` → `replica.ApplyWal`, después `replica.WaitDurable()` y `primary.AdvanceSlot(nombre, replica.ReplayLSN())`. El transporte es tuyo. Una ranura (`CreateSlot`, antes del respaldo) retiene el WAL que la réplica todavía necesita hasta `MAX_SLOT_WAL_KEEP_SIZE` (después se invalida y la réplica necesita un respaldo nuevo; `Stats` y `Pressure` muestran ranuras, atraso y WAL retenido). Para un flujo de cambios por id, `CreateLogicalSlot` + `engine.Changes(ranura)` entrega cada transacción confirmada en orden de confirmación (put, delete, create, drop, empty), nunca una abortada; las transacciones grandes pasan a disco. `Open` sobre el directorio de una réplica la promueve.
+
 **Configuración.** Las variables de entorno (tamaños en MB y tiempos en segundos, salvo que se diga otra cosa) están en la fila `store` de [Variables de entorno](#variables-de-entorno); se leen al abrir el motor.
 
 ```go
@@ -463,6 +465,30 @@ for _, seg := range segments {
 }
 // A un punto en el tiempo: la copia del respaldo más los segmentos archivados en su wal/, hasta un LSN
 pitr, err := store.OpenAt("/backups/2026-11-20", targetLSN)
+
+// Replicación: primero la ranura, después el respaldo del que parte la réplica
+_, _ = primary.CreateSlot("replica-1")
+_, _ = primary.Backup("/replica")
+replica, err := store.OpenReplica("/replica")
+reader, _ := primary.WalSince(replica.ReplayLSN())
+for {
+    entries, err := reader.Next(1 << 20) // solo lo durable; ErrWalRemoved = hace falta un respaldo nuevo
+    if err != nil || len(entries) == 0 {
+        break // se vuelve a pedir después
+    }
+    _ = replica.ApplyWal(entries) // en la vida real viaja por tu transporte
+}
+_ = replica.WaitDurable()
+_ = primary.AdvanceSlot("replica-1", replica.ReplayLSN())
+
+// Flujo lógico de cambios: transacciones confirmadas, en orden de confirmación
+_, _ = primary.CreateLogicalSlot("search-index")
+feed, _ := primary.Changes("search-index")
+_, err = feed.Next(0, func(tx store.TxInfo, c store.Change) error {
+    fmt.Println(tx.CommitLSN, c.Op, c.Store, c.ID, len(c.Data))
+    return nil
+})
+_ = feed.Confirm() // el próximo lector de la ranura sigue desde acá
 ```
 
 ### Workflows con `jwf`
@@ -541,7 +567,7 @@ hits, _ := index.Search(ctx, tenantId, projectId, "reset the router", 5, 0.3, em
 | `dt` | `PRODUCTION` (`true` guarda en Redis) |
 | `jwf`, `jsql` | `MAX_AUDIT_LOG` (1000) |
 | `jwsp` | `WHATSAPP_API_URL` |
-| `store` | `STORE_CACHE_SIZE` (MB, 128), `WAL_SEGMENT_SIZE` (MB, 128), `SYNC_ON_WRITE` (true), `CHECKPOINT_TIMEOUT` (s, 300), `MAX_WAL_SIZE` (MB, 1024), `LOCK_TIMEOUT` (s, 5), `TRANSACTION_TIMEOUT` (s, 600), `VACUUM_INTERVAL` (s, 60; 0 = apagada), `VACUUM_THRESHOLD` (escrituras, 1000), `WAL_WRITER_DELAY` (ms, 200; 0 = apagado), `WAL_ARCHIVE` (off), `WAL_ARCHIVE_MAX_SIZE` (MB, 0 = sin tope: frena) |
+| `store` | `STORE_CACHE_SIZE` (MB, 128), `WAL_SEGMENT_SIZE` (MB, 128), `SYNC_ON_WRITE` (true), `CHECKPOINT_TIMEOUT` (s, 300), `MAX_WAL_SIZE` (MB, 1024), `LOCK_TIMEOUT` (s, 5), `TRANSACTION_TIMEOUT` (s, 600; 0 = sin tope), `VACUUM_INTERVAL` (s, 60; 0 = apagada), `VACUUM_THRESHOLD` (escrituras, 1000), `WAL_WRITER_DELAY` (ms, 200; 0 = apagado), `WAL_ARCHIVE` (`off`; `on`/`true`/`1`/`yes` lo activan), `WAL_ARCHIVE_MAX_SIZE` (MB, 0 = sin tope: frena), `MAX_SLOT_WAL_KEEP_SIZE` (MB, 4096; 0 = sin tope: frena) |
 | `validator` | `LANG` |
 | `middleware` | `TELEMETRY_FORMAT` (`text` en una terminal, `json` en otro caso, `off`), `TELEMETRY_LOG` (`all`, `errors`), `LATENCY_LIMIT` (1000 ms, `WARN` por encima), `REQUESTS_LIMIT` (400 por segundo por método y ruta) |
 
@@ -565,6 +591,7 @@ gofmt -w .
 go build ./... && go vet ./...
 go test -race ./et/ ./jsql/ ./jwf/   # núcleo, helpers de jsql y scripts (sin servicios)
 cd jsql/drivers/test && go test -v   # jsql contra cada driver disponible
+go test -p 1 ./store/...             # el motor store, sin servicios (un binario de prueba a la vez)
 ./version.sh --minor                 # sube el tag de git, actualiza los README y hace push
 ```
 

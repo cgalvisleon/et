@@ -9,6 +9,7 @@
 //	go run ./test/storebench -n 1000000
 //	go run ./test/storebench -n 10000000 -batch 20000
 //	go run ./test/storebench -n 1000000 -reopen=false   # un solo motor: el RSS es el de una apertura
+//	go run ./test/storebench -n 1000000 -dir d -load=false # reabre y lee lo ya cargado en d (repite la medida de Open)
 //	go run ./test/storebench -n 0 -rate 2s              # solo Put/s durable vs diferido con 1, 8 y 64 escritores
 //	go run ./test/storebench -n 0 -rate 2s -writers 1,8 # otros números de escritores
 package main
@@ -38,6 +39,7 @@ func main() {
 	size := flag.Int("value", 100, "bytes por valor")
 	dir := flag.String("dir", "", "directorio del motor (vacío = uno temporal que se borra)")
 	reopen := flag.Bool("reopen", true, "cerrar, volver a abrir y leer (false = solo cargar)")
+	doLoad := flag.Bool("load", true, "cargar las n claves (false = usar las que ya hay en -dir)")
 	rate := flag.Duration("rate", 0, "si no es 0, mide Put/s durable y diferido durante ese tiempo por medida")
 	writers := flag.String("writers", "1,8,64", "escritores de cada medida de -rate, separados por coma")
 	flag.Parse()
@@ -56,15 +58,17 @@ func main() {
 	if *n <= 0 {
 		return
 	}
-	start := time.Now()
-	load(path, *n, *batch, *size)
-	fmt.Printf("carga: %d claves en %v (%.0f claves/s)\n", *n, since(start), float64(*n)/time.Since(start).Seconds())
-	fmt.Printf("disco: %d MB\n", dirSize(path)>>20)
+	if *doLoad {
+		start := time.Now()
+		load(path, *n, *batch, *size)
+		fmt.Printf("carga: %d claves en %v (%.0f claves/s)\n", *n, since(start), float64(*n)/time.Since(start).Seconds())
+		fmt.Printf("disco: %d MB\n", dirSize(path)>>20)
+	}
 	if !*reopen {
 		return
 	}
 
-	start = time.Now()
+	start := time.Now()
 	engine, err := store.Open(path)
 	check(err)
 	openTime := time.Since(start)

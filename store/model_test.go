@@ -318,12 +318,17 @@ type writer interface {
 
 /**
 * runBatch hace el lote o: cada operación dentro de un Batch, comparando lo que devuelve con o.wants (una lectura
-* compara si encontró el id), y Commit o Rollback.
+* compara si encontró el id), y Commit o Rollback. Si una operación falla, deshace el lote antes de volver.
 * @param e *Engine
 * @return error: el del motor, o la primera diferencia con el modelo
 **/
-func (o op) runBatch(e *Engine) error {
+func (o op) runBatch(e *Engine) (err error) {
 	tx := e.NewBatch()
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
 	for i, sub := range o.sub {
 		s, err := e.Store(sub.store)
 		if err != nil {

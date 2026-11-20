@@ -26,9 +26,12 @@ type WAL struct {
 	active  *segment         // se cambia con writeMu y syncMu tomados: WaitDurable lo lee solo con syncMu
 	sizes   map[uint64]int64 // fin de lo escrito en cada segmento anterior al activo (para SizeSince)
 	maxNum  uint64           // el mayor segmento que existe: los mayores que el activo son repuestos reciclados
-	lastLSN atomic.Uint64    // último lsn reservado; se escribe con writeMu
-	redo    atomic.Pointer[Position]
-	closed  atomic.Bool // se pone con writeMu y syncMu tomados
+	// nextReady: el segmento siguiente al activo existe y está preasignado entero (Options.Preallocate).
+	nextReady bool
+	written   atomic.Int64  // bytes reservados desde Open (Written); se escribe con writeMu
+	lastLSN   atomic.Uint64 // último lsn reservado; se escribe con writeMu
+	redo      atomic.Pointer[Position]
+	closed    atomic.Bool // se pone con writeMu y syncMu tomados
 
 	// pubMu: qué escrituras terminaron.
 	pubMu     sync.Mutex
@@ -96,11 +99,15 @@ func Open(fsys vfs.FS, dir string, opts Options, redo Position, fn func(rec *Rec
 	}
 	delete(sizes, end.Segment)
 
+	allocated := opts.SegmentSize // sin preasignación nunca se rellena con ceros
+	if opts.Preallocate {
+		allocated = end.Offset // el resto lo preasigna Room (o la primera reserva que lo necesite)
+	}
 	w := &WAL{
 		fs:       fsys,
 		dir:      walDir,
 		opts:     opts,
-		active:   &segment{num: end.Segment, file: file, size: end.Offset},
+		active:   &segment{num: end.Segment, file: file, size: end.Offset, allocated: allocated},
 		sizes:    sizes,
 		maxNum:   nums[len(nums)-1],
 		finished: map[page.LSN]bool{},
@@ -217,27 +224,41 @@ func (w *WAL) writable() error {
 	return nil
 }
 
-// allocate toma size bytes del segmento activo; si no caben, lo sella y sigue en el siguiente. Con writeMu tomado.
+// allocate toma size bytes del segmento activo; si no caben, lo sella y sigue en el siguiente. Con preasignación, si
+// el lugar todavía no está preasignado lo preasigna ahora: con el disco lleno devuelve ErrNoRoom sin dejar el WAL
+// inutilizable (no se asignó lsn). Con writeMu tomado.
 func (w *WAL) allocate(size int64) (*segment, int64, error) {
 	if w.active.size+size > w.opts.SegmentSize {
 		if err := w.rotate(); err != nil {
-			w.fail(err)
-			return nil, 0, failedError(err)
+			return nil, 0, w.reserveError(err)
+		}
+	}
+	if w.active.size+size > w.active.allocated {
+		if err := w.fillActive(); err != nil {
+			return nil, 0, w.reserveError(err)
 		}
 	}
 	seg := w.active
 	offset := seg.size
 	seg.size += size
+	w.written.Add(size)
 	seg.inflight.Add(1)
 	return seg, offset, nil
 }
 
 // rotate sella el segmento activo (sus escrituras terminadas y fsync) y pasa al siguiente: un repuesto reciclado si
-// lo hay, o uno nuevo. Con writeMu tomado.
+// lo hay, o uno nuevo. Con preasignación, antes de sellar deja el siguiente preasignado: si el disco está lleno
+// devuelve ese error sin tocar nada. Un fsync o una apertura fallidos dejan el WAL inutilizable. Con writeMu tomado.
 func (w *WAL) rotate() error {
+	if w.opts.Preallocate {
+		if err := w.prepareNext(); err != nil {
+			return err
+		}
+	}
 	old := w.active
 	if err := old.seal(); err != nil {
-		return err
+		w.fail(err)
+		return failedError(err)
 	}
 	num := old.num + 1
 	var file vfs.File
@@ -248,13 +269,15 @@ func (w *WAL) rotate() error {
 		file, err = createSegment(w.fs, w.dir, num)
 	}
 	if err != nil {
-		return err
+		w.fail(err)
+		return failedError(err)
 	}
 	w.maxNum = max(w.maxNum, num)
 
 	// El cambio de activo va con syncMu: un WaitDurable que leyó el viejo termina su fsync antes de que se cierre.
 	w.syncMu.Lock()
-	w.active = &segment{num: num, file: file}
+	w.active = &segment{num: num, file: file, allocated: w.opts.SegmentSize}
+	w.nextReady = false
 	w.syncMu.Unlock()
 	w.sizes[old.num] = old.size
 	return old.file.Close()
@@ -411,6 +434,12 @@ func (w *WAL) recycleOne(num uint64) error {
 		return nil
 	}
 	return w.fs.Remove(segmentPath(w.dir, num))
+}
+
+// Written es cuántos bytes de registros se reservaron desde Open, sin candados: la diferencia entre dos lecturas es
+// el WAL escrito entre ellas (lo mismo que mide SizeSince, sin recorrer los segmentos).
+func (w *WAL) Written() int64 {
+	return w.written.Load()
 }
 
 // SizeSince es cuántos bytes de WAL hay escritos o reservados desde from hasta el final.

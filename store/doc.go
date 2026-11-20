@@ -23,8 +23,9 @@
 // De la fase 2 están hechos los recorridos, Exists y Empty (ver «Recorridos, Exists y Empty»), la escritura diferida
 // y las versiones (ver «Escritura diferida y versiones») y el congelado con el truncado del archivo de estados (ver
 // «Congelado y truncado del archivo de estados»), y la prueba del diseño recursivo (ver «Diseño recursivo»). De la
-// fase 3 están hechos Verify y Repair (tarea 45, ver «Verificación y reparación»), el comando cmd/storecheck y las
-// estadísticas Stats y OnStats (tarea 43, ver «Estadísticas»).
+// fase 3 están hechos Verify y Repair (tarea 45, ver «Verificación y reparación»), el comando cmd/storecheck, las
+// estadísticas Stats y OnStats (tarea 43, ver «Estadísticas») y el disco lleno o lento (tarea 47, ver «Disco lleno o
+// lento»).
 //
 // Disco: vfs.OS() es el sistema de archivos real (fsync con F_FULLFSYNC en macOS, fdatasync en Linux; Lock devuelve
 // vfs.ErrLocked si otro tiene el LOCK, y el error público del motor lo envuelve); crashfs.New() es el disco simulado
@@ -157,6 +158,8 @@
 //
 // Una escritura (Put, Insert… sueltas o en un lote) hace, como PostgreSQL:
 //
+//  0. Sin nada tomado, el freno del WAL (throttle); con el motor tomado, la entrada de lugar (admit: el WAL tiene
+//     medio segmento preasignado). Si falta lugar, ErrDiskFull sin escribir nada (ver «Disco lleno o lento»).
 //  1. Si el valor no cabe en línea, escribir antes su cadena de desborde (con el xid de la transacción).
 //  2. Bajar por el árbol con Lehman-Yao (una página bloqueada en compartido a la vez; si la clave pasa la clave alta,
 //     seguir a la derecha) y bloquear la hoja en exclusivo. Si la hoja tiene OpaqueIncompleteSplit, terminar antes
@@ -227,8 +230,11 @@
 //
 // # Checkpoint
 //
-// Se dispara cada CHECKPOINT_TIMEOUT (5 min) o cuando el WAL desde el punto de rehacer pasa MAX_WAL_SIZE / (1 + 0,9)
-// (con 1 GB, ~539 MiB): así lo que hay que reproducir tras una caída ronda MAX_WAL_SIZE (pregunta 28). Pasos:
+// Se dispara cada CHECKPOINT_TIMEOUT (5 min) o cuando el WAL desde el punto de rehacer del último checkpoint terminado
+// pasa MAX_WAL_SIZE / (1 + 0,9) (con 1 GB, ~539 MiB): así lo que hay que reproducir tras una caída ronda MAX_WAL_SIZE
+// (pregunta 28). Un fallo en cualquier paso deja el motor inutilizable, salvo el disco lleno limpio en los pasos 2
+// (archivo de estados) y 3 (catalog.tmp): el checkpoint no cuenta y se reintenta (ver «Disco lleno o lento»). Al
+// terminar despierta a los escritores frenados por el WAL sin reciclar. Pasos:
 //
 //  1. wal.Log.BeginCheckpoint, bajo writeMu: el punto de rehacer pasa a la posición del próximo registro; ahí se toman
 //     nextXID, el xid vivo más viejo y los contadores de Count (consistentes con ese lsn, porque se suman bajo
@@ -298,9 +304,108 @@
 // el fsync no se reintenta (tras un fsync fallido el sistema operativo puede haber descartado las páginas: reintentar
 // daría un éxito falso). Se recupera cerrando y abriendo: la recuperación reconstruye desde el WAL durable.
 //
-// En la ola 4 cualquier error de una escritura (también uno de disco lleno al extender un archivo) deja el motor
-// inutilizable, y una lectura que encuentra la caché o el WAL fallados también; Close no escribe nada y devuelve el
-// fallo. Un error de lectura por una página dañada se devuelve sin inutilizar el motor.
+// Hasta la tarea 47 cualquier error de una escritura, también uno de disco lleno al extender un archivo, dejaba el
+// motor inutilizable. Ahora un disco lleno donde no se escribió nada irreversible devuelve ErrDiskFull y el motor
+// sigue; uno donde ya no se puede volver atrás lo deja inutilizable igual, pero de solo lectura (ver «Disco lleno o
+// lento»). Una operación que encuentra la caché o el WAL fallados también deja el motor inutilizable (de solo
+// lectura si la causa fue de disco lleno); Close no escribe nada y devuelve el fallo. Un error de lectura por una
+// página dañada se devuelve sin inutilizar el motor.
+//
+// # Disco lleno o lento (fase 3, tarea 47)
+//
+// Disco lleno. vfs.IsNoSpace reconoce ENOSPC, EDQUOT y el disco lleno simulado (vfs.ErrNoSpace, el de crashfs). Como
+// PostgreSQL, el motor distingue dónde falta el lugar:
+//
+//	dónde                                  qué pasa
+//	entrada de una escritura (admit)       ErrDiskFull, el motor sigue: no se escribió nada (ni se asignó xid)
+//	extender un archivo de datos           ErrDiskFull, el motor sigue: la página nueva no existe ni se referencia
+//	página del archivo de estados          queda sucia en su caché; el checkpoint aborta con ErrDiskFull y se reintenta
+//	catalog.tmp (checkpoint o DDL)         el catálogo anterior sigue entero: el checkpoint aborta; el DDL sigue
+//	WAL en medio de una operación          solo lectura (wal.ErrNoRoom fuera de admit)
+//	registro del WAL ya reservado          solo lectura (no pasa con los segmentos preasignados, salvo copia en escritura)
+//	página sucia (checkpoint, reemplazo)   solo lectura (sobrescribe un bloque ya extendido: idem)
+//	control                                solo lectura (dos copias fijas que se sobrescriben: idem)
+//	cualquier fsync                        solo lectura (volumen fino, NFS, asignación diferida)
+//
+// Entrada de lugar: toda escritura (suelta, de un lote, crear un store, la limpieza) llama antes de escribir nada a
+// admit → wal.Room, que exige al menos medio segmento preasignado entre el resto del segmento activo y el siguiente.
+// Con wal.Options.Preallocate (el motor lo usa siempre, como wal_init_zero) cada segmento se escribe entero con
+// ceros y fsync antes de recibir registros: Room rellena el resto del activo (el que dejó Open al cortar la cola) y,
+// pasada la mitad, prepara el siguiente (un repuesto reciclado, o uno nuevo). Lo hace bajo writeMu, frenando a los
+// demás lo que tarde en escribir un segmento (como el XLogFileInit de PostgreSQL). Si no hay lugar, la operación
+// devuelve ErrDiskFull y el motor sigue; la próxima entrada vuelve a intentar desde donde quedó, así que al liberar
+// espacio las escrituras vuelven solas, sin reabrir. Lo que ya está preasignado alcanza para las operaciones en curso.
+//
+// Archivos de datos: buffer.PinNew escribe la página nueva en ceros (smgr.Extend) antes de usarla, como smgrextend,
+// así el disco lleno sale ahí y no al escribir la página sucia después. Quien la pidió vuelve sin dejar nada a
+// medias: una partición no empieza (o queda incompleta, que es un estado válido que termina el próximo que pase),
+// una cadena de desborde libera los trozos ya escritos; la escritura devuelve ErrDiskFull, libera el desborde que
+// había preparado y un lote aborta (txError). Crear un store cuya página meta no entra devuelve ErrDiskFull: el store
+// queda en el catálogo sin páginas válidas y el próximo Store lo crea de nuevo (como tras un corte antes de su
+// KindInitStore). La limpieza cortada por el disco lleno devuelve ErrDiskFull: cada paso suyo es un cambio completo.
+//
+// Archivo de estados y catálogo: una página de estados que no se puede escribir queda sucia en su caché (xact no
+// queda fallado; el reemplazo prefiere ranuras limpias, y un archivo de estados que no se puede crear se lee en
+// ceros); catalog.tmp sin lugar deja el catálogo anterior entero y CatalogFile no queda fallado. En el checkpoint
+// (pasos 2 y 3) eso aborta el checkpoint con ErrDiskFull: el control sigue en el anterior, no se recicla nada y el
+// checkpointer lo reintenta en su próxima vuelta (el punto de rehacer que movió el paso 1 solo hace pedir más
+// imágenes de página). Tras un cambio de stores ya durable en el WAL (crear, borrar, vaciar) el catálogo se guarda en
+// el próximo checkpoint (Engine.catalogBehind; Verify no compara el guardado mientras tanto): si hay un corte antes,
+// la recuperación rehace el cambio desde el WAL.
+//
+// «Limpio» exige además que ningún fsync haya fallado (syncGuard envuelve el disco del motor y anota cada Sync y
+// SyncDir fallidos), que el WAL y la caché sigan sanos y que no sea la falta de lugar del WAL en medio de una
+// operación (Engine.cleanNoSpace). Una reserva del WAL que tiene que preasignar en medio de una operación y no puede
+// devuelve wal.ErrNoRoom sin dejar el WAL inutilizable, pero el motor sí queda de solo lectura: la operación pudo
+// haber pedido una página (de la lista de libres o extendiendo) que quedaría sin dueño.
+//
+// Solo lectura: donde ya no se puede volver atrás rige «Fallos de escritura» (no se reintenta ningún fsync), pero si
+// la causa es de disco lleno el motor queda de solo lectura (Engine.readOnly, Stats.ReadOnly): las lecturas siguen
+// (Read, Exists, GetVersion, los recorridos, Snapshot y Store de uno que existe, por enterRead); las escrituras,
+// NewBatch, Checkpoint, Vacuum, WaitDurable y crear un store devuelven ErrDiskFull junto con ErrFailed. La caché de
+// solo lectura (buffer.Pool.Failed con causa de disco lleno) sigue dando páginas, pero no escribe ninguna: para hacer
+// lugar reusa solo búferes limpios y las páginas sucias se quedan en ella con su cambio (si todas están sucias, la
+// lectura falla). Close no escribe nada (sin checkpoint final) y no se cuelga; Open después, con lugar, recupera todo
+// lo confirmado desde el WAL durable. Recuperar sin reabrir no se intenta (decisión conservadora: tras un fsync
+// fallido nada de lo escrito sin fsync es seguro).
+//
+// Qué se pierde en solo lectura: nada confirmado y durable. La operación que encontró el fallo no se confirmó (no se
+// anotó su estado, no se ve), salvo que su registro haya llegado al disco: entonces aparece al reabrir, como un corte
+// entre el registro y la respuesta. Las confirmaciones diferidas sin fsync se ven mientras dura el motor de solo
+// lectura y al reabrir pueden faltar (siempre un prefijo en el orden del WAL, como tras un corte). Count puede incluir
+// la operación que falló (se suma bajo el writeMu del WAL al reservar). Open con el disco todavía lleno recupera o
+// falla con ErrDiskFull (el checkpoint que cierra la recuperación necesita lugar), nunca corrompe.
+//
+// Disco lento. Lo que puede crecer si el fsync o la escritura tardan, y cómo se acota:
+//
+//   - Group commit: cada escritor espera su fsync en su goroutine; un fsync confirma todo lo publicado. La única cola
+//     del WAL (finished, las escrituras terminadas por encima de published) la acotan las escrituras en curso.
+//   - Páginas sucias: la caché es fija; si las reemplazables están sucias, quien necesita un búfer escribe una (y
+//     espera al WAL) antes de seguir.
+//   - WAL sin reciclar: antes de cada escritura, sin nada tomado (ni closeMu), throttle frena al escritor mientras el
+//     WAL desde el punto de rehacer del último checkpoint terminado (log.Written() − doneWAL) pase de 2 × MAX_WAL_SIZE
+//     (walBacklogFactor, constante): espera a que termine un checkpoint, hasta LOCK_TIMEOUT, y al vencer devuelve
+//     ErrThrottled sin escribir nada (un lote aborta). El checkpointer dispara por ese mismo volumen (uno que no
+//     terminó no cuenta) y su reparto ya se apura cuando el WAL va adelantado. Close despierta a los frenados.
+//   - Escrituras diferidas (Deferred, CommitDeferred, SYNC_ON_WRITE=false): no esperan el fsync, salvo que haya más
+//     de maxDeferredLag = 8.192 registros sin fsync: entonces la confirmación espera el fsync hasta su lsn − 8.192
+//     (deferredBrake). Lo que un corte puede perder queda acotado aunque el escritor de fondo del WAL no dé abasto.
+//
+// Nada de esto crece en el heap de Go con lo escrito (TestSlowDisk: 16 escritores sobre un disco con fsync lento).
+// Stats.DiskFull cuenta las operaciones rechazadas con ErrDiskFull limpio y Stats.Throttled las escrituras frenadas.
+//
+// Pruebas: crashfs.SetCapacity da ErrNoSpace en escrituras y Truncate que crecen, al crear un archivo con el disco
+// lleno y, con la capacidad por debajo de lo usado, en el Sync con escrituras pendientes; subirla vuelve a dejar
+// escribir. crashfs.SetDelay demora escrituras y Sync. diskfull_test.go (TestDiskFull: el disco se llena a mitad de
+// una carga al azar con cuatro cupos, las lecturas siguen, Verify limpio, Count coincide, al liberar espacio se sigue
+// sin reabrir; TestDiskFullFsync y TestDiskFullDeferred: solo lectura y WaitDurable; TestDiskFullCrash: un corte tras
+// un ErrDiskFull no pierde nada confirmado), slowdisk_test.go (TestSlowDisk, TestDeferredBrake,
+// TestWALBacklogThrottle), wal/space_test.go, TestReadOnlyAfterDiskFull (buffer), TestDiskFull (xact) y
+// TestCatalogSaveDiskFull (control).
+//
+// A confirmar: la prueba con un disco real lleno (un loop device chico en la máquina virtual Linux; en APFS, con
+// copia en escritura, sobrescribir un bloque preasignado podría pedir lugar nuevo y dejar el motor de solo lectura);
+// preasignar en segundo plano en vez de bajo writeMu (Stats.Pressure ya está: ver «Presión y uso de disco»).
 //
 // # Variables de entorno
 //
@@ -309,7 +414,8 @@
 //	WAL_SEGMENT_SIZE         128          tamaño de cada segmento del WAL, en MB, mínimo 1 (pregunta 27)
 //	SYNC_ON_WRITE            true         una confirmación espera el fsync del WAL (false = todas diferidas)
 //	CHECKPOINT_TIMEOUT       300          segundos entre checkpoints (pregunta 28)
-//	MAX_WAL_SIZE             1024         MB de WAL que acotan la recuperación; dispara a MAX_WAL_SIZE / 1,9
+//	MAX_WAL_SIZE             1024         MB de WAL que acotan la recuperación; dispara a MAX_WAL_SIZE / 1,9; con
+//	                                      más de 2 × MAX_WAL_SIZE sin reciclar los escritores esperan un checkpoint
 //	TRANSACTION_TIMEOUT      600          segundos que puede durar un lote o un snapshot (pregunta 35)
 //	VACUUM_INTERVAL          60           segundos entre vueltas de la limpieza de fondo; 0 = apagada (a confirmar)
 //	VACUUM_THRESHOLD         1000         escrituras desde la última limpieza de fondo para correr otra (a confirmar)
@@ -332,7 +438,8 @@
 // ForEachPrefix, ForEachRange, ForEachBorrowed y sus variantes …At), y Store.Deferred (Put, Remove, Insert, Update,
 // Delete), Batch.CommitDeferred, Engine.WaitDurable, GetVersion, GetVersionIn y GetVersionAt. Hecho en la fase 3:
 // Engine.Verify y Engine.Repair (con Report y Finding, report.go), Engine.Stats y Engine.OnStats (con Stats y
-// Latency, stats.go). Errores públicos en msg.go: ErrLocked,
+// Latency, stats.go), Engine.Pressure (con PressureCause, pressure.go), Engine.DirUsage y Store.DirUsage (con
+// DiskUsage, usage.go). Errores públicos en msg.go: ErrLocked,
 // ErrClosed, ErrFailed, ErrBadID, ErrValueTooLarge, ErrBadName, ErrStoreNotFound, ErrStoreDropped, ErrConflict,
 // ErrSerialization, ErrTimeout, ErrTxDone, ErrOtherEngine, ErrBusy, ErrCorrupt.
 //
@@ -432,7 +539,10 @@
 //     puede perderlo, siempre entero y en el orden del WAL, hasta que Engine.WaitDurable vuelva (o una confirmación
 //     durable posterior, o el escritor de fondo del WAL). GetVersion, GetVersionIn y GetVersionAt son Read, ReadIn y
 //     ReadAt con la versión: el lsn de la versión devuelta (0 si no existe).
-//   - Si el motor quedó inutilizable (ver «Fallos de escritura»), todo devuelve ErrFailed hasta reabrirlo.
+//   - Si el motor quedó inutilizable (ver «Fallos de escritura»), todo devuelve ErrFailed hasta reabrirlo; si fue por
+//     disco lleno, las lecturas siguen y las escrituras devuelven además ErrDiskFull. Un ErrDiskFull sin ErrFailed es
+//     una operación rechazada sin efecto, y ErrThrottled una frenada por el WAL sin reciclar (ver «Disco lleno o
+//     lento»): las dos se reintentan.
 //
 // # Lotes y snapshots (ola 5A)
 //
@@ -817,6 +927,8 @@
 //	                                                              …In/…At; no los recorridos); escrituras aplicadas;
 //	                                                              confirmaciones (suelta aplicada o Commit con
 //	                                                              escrituras)
+//	disco          ReadOnly, DiskFull, Throttled                  readOnly; rechazos con ErrDiskFull limpio; frenadas
+//	                                                              por el WAL sin reciclar (ver «Disco lleno o lento»)
 //	latencias      CommitLatency, ReadLatency, FsyncLatency       metric.Histogram: confirmar (registro del lote,
 //	                                                              espera del fsync y archivo de estados), una lectura
 //	                                                              puntual, cada fsync del group commit del WAL
@@ -837,9 +949,43 @@
 // (se esperaría a sí misma). Con el motor cerrado, OnStats no arranca nada. El Add a bg va con closeMu en lectura y
 // Close marca closed con closeMu en escritura antes de bg.Wait: ningún Add llega tarde.
 //
-// A confirmar (fase 3): Metrics (el et.Json del diseño anterior), Pressure (qué tan cerca está de frenar a los
-// escritores) y DirUsage (uso de disco por store) de la tabla de la propuesta, que no son de esta tarea; la edad de
-// los snapshots en tiempo (hoy solo su cantidad y el horizonte en xids).
+// A confirmar (fase 3): Metrics (el et.Json del diseño anterior); la edad de los snapshots en tiempo (hoy solo su
+// cantidad y el horizonte en xids).
+//
+// # Presión y uso de disco (fase 3)
+//
+// Engine.Pressure (tarea 65 de F-23, como pebble.Pressure de josefina) dice qué tan cerca está el motor de frenar a
+// los escritores: un float64, 0 = sin presión, ≥ 1 = ya frena. Es el máximo de tres razones, y la mayor es la causa
+// (Stats.Pressure y Stats.PressureCause; Pressure da solo el valor):
+//
+//	causa      razón                                                  qué frena al llegar a 1
+//	wal        WAL sin reciclar (walBacklog) / 2 × MAX_WAL_SIZE        throttle: espera un checkpoint, ErrThrottled
+//	deferred   registros sin fsync (Published − Durable) / 8.192       deferredBrake: la diferida espera un fsync
+//	dirty      páginas sucias / búferes de la caché                    nadie en el motor: un escritor que necesita
+//	                                                                  un búfer escribe antes una página sucia
+//	read_only  el motor quedó de solo lectura por un disco lleno (= 1) toda escritura: ErrDiskFull con ErrFailed
+//	failed     el motor quedó inutilizable por otro fallo (= 1)         toda escritura: ErrFailed
+//
+// Solo lee atómicos (y failMu, una hoja): no toma candados largos ni recorre el árbol, así se puede preguntar antes
+// de cada escritura masiva, como hace la admisión de josefina. A diferencia de josefina no guarda el valor 50 ms:
+// calcularlo cuesta lo mismo que leerlo.
+//
+// Engine.DirUsage (como pebble.DirUsage) mide lo que ocupa el motor, en bytes (DiskUsage): Control (los archivos de
+// la raíz: control, catalog, LOCK y un catalog.tmp a medias), Data (data/), WAL (wal/: los segmentos con lo
+// preasignado y los repuestos, que ocupan el disco aunque no tengan registros), Xact (xact/), Total (la suma) y
+// Stores (por nombre). Los cuatro primeros salen del largo de cada archivo (ReadDir + OpenFile(O_RDONLY) + Size por
+// el vfs, así funciona con crashfs; un archivo que se borra en el medio no cuenta); Stores, de smgr.NBlocks de los
+// dos forks de cada store × 8 KB, con ddlMu tomado para que ningún store se cree, borre o vacíe a la vez. No lee
+// páginas: el costo es un open y un stat por archivo (los segmentos de 1 GB y del WAL son pocos). No es una foto
+// atómica: Data puede diferir de la suma de Stores si en el medio una escritura extendió un archivo, o si hay
+// huérfanos (los que Repair borraría). Store.DirUsage es la parte de un store (lo mismo que DiskUsage.Stores[name]),
+// con el store tomado en lectura: ErrStoreDropped si se borró. DropStore y Empty borran los archivos enseguida, así
+// el store borrado o el contenido viejo dejan de contar al volver.
+//
+// Pruebas (pressure_test.go): TestPressureWAL, TestPressureDeferred, TestPressureDirty, TestPressureReadOnly
+// (crashfs.SetCapacity), TestDirUsage (Total = la suma de las partes = crashfs.Used, Data = la suma de Stores, tras
+// cargar, DropStore y Empty), TestDirUsageOS (Total = lo que mide el directorio real) y TestPressureUsageConcurrent
+// (con -race).
 //
 // # Implementación del motor (ola 4)
 //
@@ -854,6 +1000,9 @@
 //	records.go     formato de KindCheckpoint, KindCreateStore, KindDropStore y KindCommit
 //	config.go      variables de entorno
 //	stats.go       Stats, Latency, engineMetrics, stats, onStats (ver «Estadísticas»)
+//	space.go       syncGuard, cleanNoSpace, writeError, admit, throttle, deferredBrake (ver «Disco lleno o lento»)
+//	pressure.go    PressureCause, pressure (ver «Presión y uso de disco»)
+//	usage.go       DiskUsage, dirUsage, Store.dirUsage (ver «Presión y uso de disco»)
 //
 // Una operación suelta es una transacción con su xid (xact.Transactions.Begin): si el valor no cabe en línea escribe
 // antes su cadena de desborde con ese xid; toma commitMu en lectura; btree.Write con Commit (FlagCommit), la
@@ -874,7 +1023,7 @@
 // olas 5B y 5C.
 //
 // A confirmar (ola 4): el Flusher de la recuperación cuenta como durable lo leído del WAL (como PostgreSQL); cualquier
-// error de escritura inutiliza el motor, también el disco lleno al extender; Count incluye escrituras que todavía se
+// error de escritura inutiliza el motor (salvo el disco lleno limpio desde la tarea 47); Count incluye escrituras que todavía se
 // están confirmando; el xid de una operación sin efecto queda en curso hasta reabrir; DropStore espera a las
 // operaciones en curso del store (hasta LOCK_TIMEOUT si una espera a otra transacción).
 package store

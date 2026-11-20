@@ -9,6 +9,11 @@ import (
 
 // Catálogo de la API pública (fases 1A, 1B, 2 y 3): envolturas delgadas; la implementación vive en los demás archivos del
 // paquete con el mismo nombre en minúscula. Ver doc.go para la semántica de cada método.
+//
+// Disco lleno o lento (doc.go): toda escritura puede devolver ErrDiskFull (sin ErrFailed: no hizo nada y se
+// reintenta cuando haya lugar; con ErrFailed: el motor quedó de solo lectura hasta reabrirlo) y ErrThrottled (el WAL
+// sin reciclar pasa de 2 × MAX_WAL_SIZE: no hizo nada y se reintenta). Con el motor de solo lectura las lecturas,
+// los recorridos y los snapshots siguen.
 
 // ---------------------------------------------------------------------------------------------------------------
 // Motor
@@ -17,7 +22,8 @@ import (
 /**
 * Open abre el motor del directorio dir (lo crea si no existe): toma LOCK y recupera desde el último checkpoint.
 * @param dir string
-* @return *Engine, error: ErrLocked si otro motor tiene el directorio, ErrCorrupt
+* @return *Engine, error: ErrLocked si otro motor tiene el directorio, ErrCorrupt, ErrDiskFull (sin lugar para el
+* checkpoint que cierra la recuperación: se reintenta con lugar)
 **/
 func Open(dir string) (*Engine, error) {
 	return open(vfs.OS(), dir, envConfig())
@@ -586,4 +592,36 @@ func (e *Engine) Stats() Stats {
 **/
 func (e *Engine) OnStats(interval time.Duration, fn func(Stats)) func() {
 	return e.onStats(interval, fn)
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Presión y uso de disco
+// ---------------------------------------------------------------------------------------------------------------
+
+/**
+* Pressure dice qué tan cerca está el motor de frenar a los escritores, como pebble.Pressure de josefina: el máximo
+* entre el WAL sin reciclar y el tope de throttle, los registros sin fsync y el de las diferidas, y las páginas sucias
+* y la caché; 1 con el motor de solo lectura o inutilizable. Barato: solo atómicos. Stats trae también la causa.
+* @return float64: 0 = sin presión, ≥ 1 = ya frena
+**/
+func (e *Engine) Pressure() float64 {
+	value, _ := e.pressure()
+	return value
+}
+
+/**
+* DirUsage mide lo que ocupa el motor en disco (datos, WAL con lo preasignado, archivos de estados, control y
+* catálogo) y cada store, con el largo de los archivos, sin leer páginas.
+* @return DiskUsage, error: ErrClosed
+**/
+func (e *Engine) DirUsage() (DiskUsage, error) {
+	return e.dirUsage()
+}
+
+/**
+* DirUsage son los bytes en disco del store (su árbol con el desborde y su mapa de visibilidad), sin leer páginas.
+* @return int64, error: ErrClosed, ErrStoreDropped
+**/
+func (s *Store) DirUsage() (int64, error) {
+	return s.dirUsage()
 }

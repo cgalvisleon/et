@@ -112,6 +112,8 @@ const maxCatalogSize = 1 << 30
 
 // Save escribe c en catalog.tmp, hace Sync, lo renombra a catalog y hace SyncDir: un corte deja el catálogo anterior
 // o el nuevo, nunca una mezcla. Tras un fallo de escritura o de Sync no reintenta: devuelve ErrFailed hasta reabrir.
+// El disco lleno al crear o escribir catalog.tmp es la excepción: el catálogo anterior sigue entero, así que devuelve
+// el error y se puede volver a guardar.
 func (f *catalogFile) Save(c Catalog) error {
 	b, err := encodeCatalog(c)
 	if err != nil {
@@ -123,6 +125,9 @@ func (f *catalogFile) Save(c Catalog) error {
 		return fmt.Errorf("%w: %v", ErrFailed, f.failed)
 	}
 	if err := f.writeTemp(b); err != nil {
+		if errors.Is(err, errTempNoSpace) {
+			return err
+		}
 		return f.fail(err)
 	}
 	if err := f.fs.Rename(f.tmpPath, f.path); err != nil {
@@ -134,19 +139,22 @@ func (f *catalogFile) Save(c Catalog) error {
 	return nil
 }
 
+// errTempNoSpace marca el disco lleno al crear o escribir catalog.tmp (antes de su Sync): Save no queda fallado.
+var errTempNoSpace = errors.New("control: no space for the catalog")
+
 // writeTemp crea catalog.tmp con b (vacía lo que hubiera), hace Sync y lo cierra.
 func (f *catalogFile) writeTemp(b []byte) error {
 	file, err := f.fs.OpenFile(f.tmpPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC)
 	if err != nil {
-		return fmt.Errorf("control: create %s: %w", f.tmpPath, err)
+		return tempError(fmt.Errorf("control: create %s: %w", f.tmpPath, err))
 	}
 	if err := file.Truncate(int64(len(b))); err != nil {
 		file.Close()
-		return fmt.Errorf("control: truncate %s: %w", f.tmpPath, err)
+		return tempError(fmt.Errorf("control: truncate %s: %w", f.tmpPath, err))
 	}
 	if _, err := file.WriteAt(b, 0); err != nil {
 		file.Close()
-		return fmt.Errorf("control: write %s: %w", f.tmpPath, err)
+		return tempError(fmt.Errorf("control: write %s: %w", f.tmpPath, err))
 	}
 	if err := file.Sync(); err != nil {
 		file.Close()
@@ -156,6 +164,14 @@ func (f *catalogFile) writeTemp(b []byte) error {
 		return fmt.Errorf("control: close %s: %w", f.tmpPath, err)
 	}
 	return nil
+}
+
+// tempError marca con errTempNoSpace un error de disco lleno al escribir catalog.tmp.
+func tempError(err error) error {
+	if vfs.IsNoSpace(err) {
+		return fmt.Errorf("%w: %w", errTempNoSpace, err)
+	}
+	return err
 }
 
 // fail anota err como el primer fallo y lo devuelve.

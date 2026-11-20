@@ -17,6 +17,7 @@ const (
 	MSG_WRITTEN_TWICE   = "wal: reservation %d already written"
 	MSG_KEEP_AHEAD      = "wal: keep segment %d is past the active segment %d"
 	MSG_BAD_IMAGE       = "wal: invalid page image: %s"
+	MSG_NO_ROOM         = "%w: %d bytes ready, %d needed: %w"
 )
 
 var (
@@ -25,4 +26,8 @@ var (
 
 	// ErrCorrupted: faltan registros confirmados (un segmento empieza después de un hueco).
 	ErrCorrupted = errors.New("wal: corrupted")
+
+	// ErrNoRoom: no se pudo preasignar lugar en el disco para el WAL (Room, o una reserva que tuvo que preasignar);
+	// envuelve el error de disco lleno. No deja el WAL inutilizable.
+	ErrNoRoom = errors.New("wal: no room on disk for the WAL")
 )

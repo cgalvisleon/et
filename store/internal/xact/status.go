@@ -330,8 +330,10 @@ func (s *Statuses) getSlot(pageNo uint64) (int, error) {
 			continue
 		}
 		if s.slots[v].dirty {
-			s.writeSlot(v) // si falla, failed corta el ciclo; si no, se vuelve a mirar todo
-			continue
+			if err := s.writeSlot(v); err != nil {
+				return -1, err // disco lleno: la ranura sigue sucia en la caché
+			}
+			continue // se vuelve a mirar todo
 		}
 		if err := s.loadSlot(v, pageNo); err != nil {
 			return -1, err
@@ -351,9 +353,10 @@ func (s *Statuses) find(pageNo uint64) int {
 	return -1
 }
 
-// victim elige la ranura a reemplazar: una libre o la válida usada hace más tiempo, nunca una ocupada en E/S.
+// victim elige la ranura a reemplazar: una libre, si no la limpia usada hace más tiempo, si no la sucia usada hace más
+// tiempo (con el disco lleno, así las lecturas siguen sin tener que escribir); nunca una ocupada en E/S.
 func (s *Statuses) victim() int {
-	best := -1
+	clean, dirty := -1, -1
 	for i := range s.slots {
 		sl := &s.slots[i]
 		if sl.writing || sl.state == slotReading {
@@ -362,11 +365,18 @@ func (s *Statuses) victim() int {
 		if sl.state == slotEmpty {
 			return i
 		}
-		if best < 0 || sl.lastUsed < s.slots[best].lastUsed {
-			best = i
+		best := &clean
+		if sl.dirty {
+			best = &dirty
+		}
+		if *best < 0 || sl.lastUsed < s.slots[*best].lastUsed {
+			*best = i
 		}
 	}
-	return best
+	if clean >= 0 {
+		return clean
+	}
+	return dirty
 }
 
 // touch marca la ranura i como recién usada.
@@ -399,7 +409,8 @@ func (s *Statuses) loadSlot(i int, pageNo uint64) error {
 
 // writeSlot escribe una copia de la ranura sucia i al disco, después de esperar al WAL. Suelta mu durante la
 // espera y la escritura; los cambios que lleguen mientras tanto la dejan sucia otra vez. Un fallo deja el archivo
-// de estados inutilizable.
+// de estados inutilizable, salvo el de disco lleno: la página sigue sucia en la caché (no se perdió nada) y se
+// vuelve a intentar en el próximo Flush o reemplazo.
 func (s *Statuses) writeSlot(i int) error {
 	sl := &s.slots[i]
 	sl.writing = true
@@ -415,7 +426,7 @@ func (s *Statuses) writeSlot(i int) error {
 	sl.writing = false
 	if err != nil {
 		sl.dirty = true
-		if s.failed == nil {
+		if s.failed == nil && !vfs.IsNoSpace(err) {
 			s.failed = err
 		}
 	}
@@ -443,9 +454,14 @@ func (s *Statuses) discardPages(match func(pageNo uint64) bool) {
 	}
 }
 
-// readPage lee la página pageNo en buf; lo que falta en el archivo (o el archivo entero) se lee como ceros.
+// readPage lee la página pageNo en buf; lo que falta en el archivo (o el archivo entero) se lee como ceros. Un
+// archivo que no existe y no se puede crear por disco lleno también se lee como ceros.
 func (s *Statuses) readPage(pageNo uint64, buf []byte) error {
 	f, err := s.file(s.fileOf(pageNo))
+	if vfs.IsNoSpace(err) {
+		clear(buf)
+		return nil
+	}
 	if err != nil {
 		return err
 	}

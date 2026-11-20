@@ -34,6 +34,7 @@ type checkpointInfo struct {
 	oldest  page.XID
 	time    int64
 	frozen  page.XID // el frozenXID del motor que guarda el control (no va en el registro)
+	wal     int64    // log.Written() en el punto de rehacer (no va en el registro; ver checkpointFinished)
 }
 
 /**

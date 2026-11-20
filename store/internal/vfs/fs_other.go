@@ -3,9 +3,16 @@
 package vfs
 
 import (
+	"errors"
 	"io"
 	"os"
+	"syscall"
 )
+
+// isNoSpaceErrno dice si err es ENOSPC del sistema operativo (fuera de unix, el que traduce Go).
+func isNoSpaceErrno(err error) bool {
+	return errors.Is(err, syscall.ENOSPC)
+}
 
 // syncDir fuera de unix no hace nada: no hay fsync de directorios.
 func syncDir(dir string) error {

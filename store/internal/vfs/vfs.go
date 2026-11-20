@@ -8,6 +8,16 @@ import (
 // ErrLocked es el error de Lock cuando otro ya tiene el bloqueo (se compara con errors.Is).
 var ErrLocked = errors.New("vfs: locked by another holder")
 
+// ErrNoSpace es el disco lleno de un sistema de archivos simulado (crashfs). El real devuelve ENOSPC o EDQUOT del
+// sistema operativo; IsNoSpace reconoce los tres.
+var ErrNoSpace = errors.New("vfs: no space left on device")
+
+// IsNoSpace dice si err (o alguno de los que envuelve) es de disco lleno: ErrNoSpace, ENOSPC o EDQUOT (cupo del
+// usuario agotado).
+func IsNoSpace(err error) bool {
+	return err != nil && (errors.Is(err, ErrNoSpace) || isNoSpaceErrno(err))
+}
+
 // File es un archivo abierto. Las escrituras no son durables hasta que Sync vuelve sin error.
 type File interface {
 	io.ReaderAt

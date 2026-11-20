@@ -36,12 +36,12 @@ func (e *Engine) existing(name string) (*Store, error) {
 
 /**
 * handle devuelve el *Store abierto de name, o abre su árbol; si no está en el catálogo lo crea (create) o devuelve
-* nil.
+* nil. Abrir uno que existe también anda con el motor de solo lectura; crearlo necesita el motor usable y lugar.
 * @param name string, create bool
 * @return *Store, error
 **/
 func (e *Engine) handle(name string, create bool) (*Store, error) {
-	if err := e.enter(); err != nil {
+	if err := e.enterRead(); err != nil {
 		return nil, err
 	}
 	defer e.leave()
@@ -55,6 +55,9 @@ func (e *Engine) handle(name string, create bool) (*Store, error) {
 		return nil, nil
 	}
 	if !ok {
+		if err := e.writable(); err != nil {
+			return nil, err
+		}
 		var err error
 		if entry, err = e.createStore(name); err != nil {
 			return nil, e.fail(err)
@@ -62,11 +65,45 @@ func (e *Engine) handle(name string, create bool) (*Store, error) {
 	}
 	tree, err := e.openTree(entry.File)
 	if err != nil {
-		return nil, err
+		return nil, e.treeError(err)
 	}
 	s := &Store{e: e, name: name, file: entry.File, tree: tree}
 	e.handles[name] = s
 	return s, nil
+}
+
+/**
+* treeError trata el error de abrir o crear el árbol de un store del catálogo: un disco lleno limpio al crearlo
+* vuelve como ErrDiskFull sin dejar el motor inutilizable (el store queda en el catálogo sin páginas válidas, y el
+* próximo Store lo crea de nuevo, como tras un corte antes de su KindInitStore); otro fallo de escritura sí lo deja.
+* Los errores de lectura ya vienen tratados por openTree.
+* @param err error
+* @return error
+**/
+func (e *Engine) treeError(err error) error {
+	if errors.Is(err, ErrFailed) || errors.Is(err, ErrDiskFull) {
+		return err
+	}
+	return e.writeError(err)
+}
+
+/**
+* storeCatalog guarda el catálogo tras un cambio de stores ya durable en el WAL (crear, borrar, vaciar). Con el disco
+* lleno al escribir catalog.tmp (limpio) no falla: el catálogo anterior sigue entero, la recuperación rehace el cambio
+* desde el WAL (como tras un corte antes de guardarlo) y el próximo checkpoint guarda el catálogo antes de reciclar ese
+* WAL.
+* @return error
+**/
+func (e *Engine) storeCatalog() error {
+	err := e.catFile.Save(e.cat.Catalog())
+	switch {
+	case err == nil:
+		e.catalogBehind.Store(false)
+	case e.cleanNoSpace(err):
+		e.catalogBehind.Store(true)
+		return nil
+	}
+	return err
 }
 
 /**
@@ -96,7 +133,7 @@ func (e *Engine) createStore(name string) (control.Entry, error) {
 		return control.Entry{}, err
 	}
 	e.counts.set(file, 0)
-	if err := e.catFile.Save(e.cat.Catalog()); err != nil {
+	if err := e.storeCatalog(); err != nil {
 		return control.Entry{}, err
 	}
 	return control.Entry{Name: name, File: file}, nil
@@ -119,13 +156,16 @@ func (e *Engine) openTree(file smgr.FileNo) (*btree.BTree, error) {
 	if ready {
 		return e.openExisting(cfg)
 	}
+	if err := e.failed(); err != nil {
+		return nil, err // de solo lectura: no se crea nada
+	}
 	e.pool.DropFile(file)
 	if err := e.sm.Unlink(file); err != nil {
 		return nil, e.fail(err)
 	}
 	tree, err := btree.Create(cfg)
 	if err != nil {
-		return nil, e.fail(err)
+		return nil, err // quien llama decide: handle admite el disco lleno (ver treeError), Empty no
 	}
 	e.frozen.set(file, cfg.FrozenXID)
 	return tree, nil
@@ -223,7 +263,7 @@ func (e *Engine) dropFiles(entry control.Entry) error {
 	e.cat.Drop(entry.Name, entry.File)
 	e.counts.remove(entry.File)
 	e.frozen.forget(entry.File)
-	if err := e.catFile.Save(e.cat.Catalog()); err != nil {
+	if err := e.storeCatalog(); err != nil {
 		return err
 	}
 	e.pool.DropFile(entry.File)

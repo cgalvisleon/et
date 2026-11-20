@@ -46,6 +46,15 @@ type Stats struct {
 	Writes  int64 // escrituras aplicadas (sueltas y de lotes)
 	Commits int64 // confirmaciones: cada escritura suelta aplicada y cada Commit de un lote que escribió
 
+	// Disco lleno o lento
+	ReadOnly  bool  // el motor quedó de solo lectura por un disco lleno: hay que cerrarlo y abrirlo
+	DiskFull  int64 // operaciones rechazadas con ErrDiskFull sin tocar el motor (se pueden reintentar)
+	Throttled int64 // escrituras frenadas: esperaron a un checkpoint porque el WAL pasaba de 2 × MAX_WAL_SIZE
+
+	// Presión (Engine.Pressure)
+	Pressure      float64       // qué tan cerca está de frenar a los escritores: 0 = nada, ≥ 1 = ya frena
+	PressureCause PressureCause // la razón mayor: wal, deferred, dirty, read_only, failed (vacía si todas son 0)
+
 	// Latencias
 	CommitLatency Latency // confirmar: el registro (en un lote), la espera del fsync y el archivo de estados
 	ReadLatency   Latency // una lectura puntual entera
@@ -72,6 +81,8 @@ type engineMetrics struct {
 	vacuumWrites   atomic.Int64 // Engine.writes al empezar la última limpieza
 	openBatches    atomic.Int64
 	openSnapshots  atomic.Int64
+	diskFull       atomic.Int64 // operaciones rechazadas con ErrDiskFull sin tocar el motor
+	throttled      atomic.Int64 // escrituras que tuvieron que esperar a un checkpoint (throttle)
 	commitLatency  metric.Histogram
 	readLatency    metric.Histogram
 }
@@ -140,10 +151,15 @@ func (e *Engine) stats() Stats {
 		Writes:  e.writes.Load(),
 		Commits: m.commits.Load(),
 
+		ReadOnly:  e.readOnly(),
+		DiskFull:  m.diskFull.Load(),
+		Throttled: m.throttled.Load(),
+
 		CommitLatency: latencyOf(m.commitLatency.Summary()),
 		ReadLatency:   latencyOf(m.readLatency.Summary()),
 		FsyncLatency:  latencyOf(e.log.SyncLatency()),
 	}
+	st.Pressure, st.PressureCause = e.pressure()
 	if oldest > frozen {
 		st.FrozenAge = uint64(oldest - frozen)
 	}

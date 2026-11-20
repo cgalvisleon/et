@@ -49,6 +49,16 @@ var (
 	// lote podría tener versiones sin confirmar en él). Se reintenta cuando terminen.
 	ErrBusy = errors.New("store: cannot empty the store while batches or snapshots are open")
 
+	// ErrDiskFull: el disco se llenó. Si viene solo, la operación no hizo nada y el motor sigue: se puede reintentar
+	// cuando haya lugar. Si viene con ErrFailed, el disco se llenó donde ya no se podía volver atrás (una escritura
+	// del WAL ya reservada o un fsync): el motor quedó de solo lectura (las lecturas siguen, las escrituras dan este
+	// error) hasta cerrarlo y abrirlo, que recupera todo lo confirmado (ver «Disco lleno o lento» en doc.go).
+	ErrDiskFull = errors.New("store: no space left on device")
+
+	// ErrThrottled: el disco no da abasto: el WAL desde el último checkpoint pasa de 2 × MAX_WAL_SIZE y no bajó en
+	// LOCK_TIMEOUT. La operación no hizo nada; se reintenta.
+	ErrThrottled = errors.New("store: the disk is not keeping up: too much WAL since the last checkpoint")
+
 	// ErrCorrupt: el WAL, el control o el catálogo no son coherentes (falta el registro del checkpoint, un registro
 	// del motor está mal formado…).
 	ErrCorrupt = errors.New("store: corrupted engine")
@@ -58,6 +68,9 @@ var (
 const (
 	MSG_LOCKED          = "%w: %s: %w"
 	MSG_FAILED          = "%w: %w"
+	MSG_FAILED_FULL     = "%w: %w: %w"
+	MSG_DISK_FULL       = "%w: %w"
+	MSG_THROTTLED       = "%w: %d bytes of WAL since the last checkpoint, limit %d"
 	MSG_OPEN            = "store: open %s: %w"
 	MSG_NO_CHECKPOINT   = "%w: the checkpoint record at lsn %d is missing from the WAL"
 	MSG_BAD_RECORD      = "%w: wal record lsn %d kind %d: %s"

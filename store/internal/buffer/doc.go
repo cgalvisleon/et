@@ -64,7 +64,12 @@
 // limpio al empezar, un checkpoint que llega con una escritura en curso (esperando al WAL, por ejemplo) no la vería,
 // haría el fsync antes de que llegue al disco y movería el punto de rehacer más allá de su cambio: tras un corte la
 // página volvería a su versión vieja sin nada que rehacer. Un fallo de la escritura o de WaitDurable deja la caché
-// inutilizable (ErrFailed con la causa) y no se escribe nada más.
+// inutilizable (ErrFailed con la causa, Pool.Failed) y no se escribe nada más. Si la causa es de disco lleno
+// (vfs.IsNoSpace) la caché queda de solo lectura: Pin sigue (readable), el reemplazo saltea los búferes sucios (se
+// quedan con su cambio) y reusa solo los limpios, y si en una vuelta entera no encuentra uno devuelve el fallo;
+// PinNew y PinZero fallan. Un flush de un búfer limpio tras el fallo no hace nada y no es error. PinNew escribe la
+// página nueva en el disco (smgr.Extend) antes de darla, como smgrextend: un disco lleno ahí se devuelve sin dejar la
+// caché inutilizable y la página no existe.
 //
 // El escritor de fondo, cada BgWriterDelay, recorre una vuelta desde la manecilla y escribe hasta BgWriterMaxPages
 // búferes sucios sin pins y con uso 0. FlushAll anota los sucios, los ordena por tag y escribe los que siguen con la

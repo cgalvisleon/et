@@ -53,6 +53,7 @@ func (f *file) ReadAt(p []byte, off int64) (int, error) {
 
 // WriteAt escribe p en off (extendiendo con ceros si off pasa del final); no es durable hasta Sync.
 func (f *file) WriteAt(p []byte, off int64) (int, error) {
+	delay(&f.fs.writeDelay)
 	f.fs.mu.Lock()
 	defer f.fs.mu.Unlock()
 	if err := f.writable("write", off); err != nil {
@@ -67,6 +68,7 @@ func (f *file) WriteAt(p []byte, off int64) (int, error) {
 
 // Truncate fija el largo del archivo; no es durable hasta Sync.
 func (f *file) Truncate(size int64) error {
+	delay(&f.fs.writeDelay)
 	f.fs.mu.Lock()
 	defer f.fs.mu.Unlock()
 	if err := f.writable("truncate", size); err != nil {
@@ -93,14 +95,20 @@ func (f *file) writable(op string, off int64) error {
 	return nil
 }
 
-// Sync vuelve durable lo escrito. Si falla, olvida lo pendiente sin volverlo durable (ver doc.go).
+// Sync vuelve durable lo escrito. Si falla, olvida lo pendiente sin volverlo durable (ver doc.go); con el disco por
+// encima de su capacidad, un Sync con escrituras pendientes falla con ErrNoSpace.
 func (f *file) Sync() error {
+	delay(&f.fs.syncDelay)
 	f.fs.mu.Lock()
 	defer f.fs.mu.Unlock()
 	if err := f.check("sync"); err != nil {
 		return err
 	}
-	if err := f.fs.inject(true); err != nil {
+	err := f.fs.inject(true)
+	if err == nil && len(f.node.pending) > 0 && f.fs.overCapacity() {
+		err = ErrNoSpace
+	}
+	if err != nil {
 		f.node.dropPending()
 		return &fs.PathError{Op: "sync", Path: f.name, Err: err}
 	}

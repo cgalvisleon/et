@@ -37,11 +37,29 @@ type change struct {
 }
 
 /**
-* begin deja pasar una operación sobre el store; quien entra llama a end al terminar.
+* begin deja pasar una operación que solo lee el store (también con el motor de solo lectura); quien entra llama a
+* end al terminar.
 * @return error: ErrClosed, ErrFailed o ErrStoreDropped
 **/
 func (s *Store) begin() error {
-	if err := s.e.enter(); err != nil {
+	return s.enterWith(s.e.enterRead)
+}
+
+/**
+* beginWrite es begin para una operación que escribe: el motor tiene que estar usable.
+* @return error: ErrClosed, ErrFailed o ErrStoreDropped
+**/
+func (s *Store) beginWrite() error {
+	return s.enterWith(s.e.enter)
+}
+
+/**
+* enterWith entra al motor con enter (o enterRead) y toma el store en lectura.
+* @param enter func() error
+* @return error
+**/
+func (s *Store) enterWith(enter func() error) error {
+	if err := enter(); err != nil {
 		return err
 	}
 	s.mu.RLock()
@@ -107,9 +125,11 @@ func inline(id string, data []byte) bool {
 }
 
 /**
-* write hace una escritura suelta (el orden de un cambio en doc.go): su propia transacción, el valor grande en
-* desborde antes que la hoja, la condición con la hoja bloqueada, la espera a otra transacción sin páginas
-* bloqueadas y la confirmación al volver. Un fallo de escritura deja el motor inutilizable.
+* write hace una escritura suelta (el orden de un cambio en doc.go): el freno del WAL y la entrada de lugar, su
+* propia transacción, el valor grande en desborde antes que la hoja, la condición con la hoja bloqueada, la espera a
+* otra transacción sin páginas bloqueadas y la confirmación al volver. Un disco lleno antes de escribir la hoja
+* devuelve ErrDiskFull sin tocar nada (el desborde ya escrito se libera); otro fallo de escritura deja el motor
+* inutilizable.
 * @param id string, c change
 * @return bool: si escribió, error
 **/
@@ -117,19 +137,25 @@ func (s *Store) write(id string, c change) (bool, error) {
 	if err := checkWrite(id, c.data); err != nil {
 		return false, err
 	}
-	if err := s.begin(); err != nil {
+	if err := s.e.throttle(); err != nil {
+		return false, err
+	}
+	if err := s.beginWrite(); err != nil {
 		return false, err
 	}
 	defer s.end()
+	if err := s.e.admit(); err != nil {
+		return false, err
+	}
 
 	xid := s.e.txs.Begin()
 	defer s.e.txs.End(xid)
 	w, err := s.prepare(xid, id, c)
 	if err != nil {
-		return false, s.e.fail(err)
+		return false, s.e.writeError(err)
 	}
 	applied, err := s.writeLoop(id, w, c.deferred)
-	unused := err == nil || errors.Is(err, ErrConflict)
+	unused := err == nil || errors.Is(err, ErrConflict) || isCleanDiskFull(err)
 	if !applied && unused && w.Overflow != nil {
 		if ferr := s.e.chains.Free(s.file, *w.Overflow, xid); ferr != nil {
 			return false, s.e.fail(ferr)
@@ -180,7 +206,7 @@ func (s *Store) countUnderLock(_ page.LSN, delta int) {
 * writeLoop escribe la versión y confirma; si otra transacción en curso tiene el id, la espera (hasta LOCK_TIMEOUT)
 * sin páginas bloqueadas y repite. commitMu va en lectura desde antes de reservar hasta anotar el estado.
 * @param id string, w btree.Write, deferred bool: confirmar sin esperar el fsync del WAL
-* @return bool: si escribió, error: ErrConflict, o ErrFailed con la causa
+* @return bool: si escribió, error: ErrConflict, ErrDiskFull, o ErrFailed con la causa
 **/
 func (s *Store) writeLoop(id string, w btree.Write, deferred bool) (bool, error) {
 	for {
@@ -197,7 +223,11 @@ func (s *Store) writeLoop(id string, w btree.Write, deferred bool) (bool, error)
 			}
 			continue
 		}
-		if err == nil && res.Applied {
+		if err != nil {
+			s.e.commitMu.RUnlock()
+			return false, s.e.writeError(err) // la hoja no se escribió: un disco lleno limpio no deja nada
+		}
+		if res.Applied {
 			s.e.writes.Add(1)
 			err = s.e.commit(w.XID, res.LSN, deferred)
 		}

@@ -25,6 +25,11 @@ func syncDir(dir string) error {
 	return err
 }
 
+// isNoSpaceErrno dice si err es ENOSPC o EDQUOT del sistema operativo.
+func isNoSpaceErrno(err error) bool {
+	return errors.Is(err, syscall.ENOSPC) || errors.Is(err, syscall.EDQUOT)
+}
+
 // lockFile toma un flock exclusivo y sin espera sobre name, creándolo si falta. Otro proceso, o el mismo con otra
 // apertura, que lo intente recibe ErrLocked. Se suelta al cerrar lo devuelto o si el proceso muere.
 func lockFile(name string) (io.Closer, error) {

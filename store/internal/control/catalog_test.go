@@ -192,6 +192,34 @@ func TestCatalogSaveCut(t *testing.T) {
 	}
 }
 
+// TestCatalogSaveDiskFull: un Save que no encuentra lugar para catalog.tmp deja el catálogo anterior y no queda
+// fallado: con lugar, el siguiente Save anda.
+func TestCatalogSaveDiskFull(t *testing.T) {
+	const dir = "/db"
+	fs := newCutFS(t, dir)
+	f := NewCatalogFile(fs, dir)
+	old := sampleCatalog()
+	if err := f.Save(old); err != nil {
+		t.Fatal(err)
+	}
+	next := sampleCatalog()
+	next.Entries = next.Entries[:1]
+	fs.SetCapacity(fs.Used() + 1)
+	if err := f.Save(next); !vfs.IsNoSpace(err) || errors.Is(err, ErrFailed) {
+		t.Fatalf("Save with the disk full: %v", err)
+	}
+	if got, err := NewCatalogFile(fs, dir).Load(); err != nil || !reflect.DeepEqual(got, old) {
+		t.Fatalf("after the full Save: %+v, %v", got, err)
+	}
+	fs.SetCapacity(0)
+	if err := f.Save(next); err != nil {
+		t.Fatalf("Save with room: %v", err)
+	}
+	if got, err := NewCatalogFile(fs, dir).Load(); err != nil || !reflect.DeepEqual(got, next) {
+		t.Fatalf("after the Save with room: %+v, %v", got, err)
+	}
+}
+
 // TestCatalogCrashDuringSave corta la luz en el Sync de catalog.tmp y en el SyncDir tras el rename, en los tres
 // modos: queda el catálogo anterior o el nuevo, entero; antes del rename, siempre el anterior. Un Save confirmado
 // sobrevive al corte.

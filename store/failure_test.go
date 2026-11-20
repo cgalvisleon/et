@@ -12,18 +12,16 @@ import (
 	"github.com/cgalvisleon/et/store/internal/crashfs"
 	"github.com/cgalvisleon/et/store/internal/smgr"
 	"github.com/cgalvisleon/et/store/internal/wal"
-	"github.com/cgalvisleon/et/store/internal/xact"
 )
 
-// TestFailures inyecta fallas de escritura (FailAfter), de fsync (FailSyncAfter) y de disco lleno (SetCapacity) en
-// un momento al azar: la operación que la encuentra devuelve ErrFailed, desde ahí todo devuelve ErrFailed y Close no
-// se cuelga. Al reabrir sin corte el contenido es el confirmado (o con la operación en curso) y los árboles están
-// sanos; tras un corte, lo mismo.
+// TestFailures inyecta fallas de escritura (FailAfter) y de fsync (FailSyncAfter) en un momento al azar: la
+// operación que la encuentra devuelve ErrFailed, desde ahí todo devuelve ErrFailed y Close no se cuelga. Al reabrir
+// sin corte el contenido es el confirmado (o con la operación en curso) y los árboles están sanos; tras un corte, lo
+// mismo. El disco lleno, que casi siempre no deja el motor inutilizable, lo prueba diskfull_test.go.
 func TestFailures(t *testing.T) {
 	faults := map[string]func(fs crashfs.FS, n int){
 		"write": func(fs crashfs.FS, n int) { fs.FailAfter(n) },
 		"sync":  func(fs crashfs.FS, n int) { fs.FailSyncAfter(n) },
-		"full":  func(fs crashfs.FS, n int) { fs.SetCapacity(diskSize(t, fs) + int64(n)*2048) },
 	}
 	for name, inject := range faults {
 		for seed := range 6 {
@@ -135,30 +133,6 @@ func checkFailed(t *testing.T, e *Engine) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("Close of the failed engine hung")
 	}
-}
-
-/**
-* diskSize suma el largo de los archivos del motor (para fijar la capacidad del disco un poco más arriba).
-* @param t *testing.T, fsys crashfs.FS
-* @return int64
-**/
-func diskSize(t *testing.T, fsys crashfs.FS) int64 {
-	var total int64
-	for _, dir := range []string{testDir, filepath.Join(testDir, smgr.DataDir), filepath.Join(testDir, wal.Dir),
-		filepath.Join(testDir, xact.Dir)} {
-		names, err := fsys.ReadDir(dir)
-		mustOK(t, err)
-		for _, name := range names {
-			f, err := fsys.OpenFile(filepath.Join(dir, name), os.O_RDONLY)
-			if err != nil {
-				continue // un subdirectorio
-			}
-			n, _ := f.Size()
-			f.Close()
-			total += n
-		}
-	}
-	return total
 }
 
 // TestCutCreate: un Create del control cortado (archivo de control sin copias válidas) con un catálogo vacío es un

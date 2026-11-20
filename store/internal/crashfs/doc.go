@@ -3,7 +3,8 @@
 //
 // Qué hace: New() implementa vfs.FS guardando, por archivo y por directorio, lo escrito y lo durable por separado.
 // Crash descarta lo que no tuvo fsync y, según el Mode, deja sobrevivir parte, entera o rota por sectores.
-// FailAfter, FailSyncAfter y SetCapacity inyectan fallas de E/S y de disco lleno. Qué no hace: no es rápido ni sirve
+// FailAfter, FailSyncAfter y SetCapacity inyectan fallas de E/S y de disco lleno; SetDelay simula un disco lento.
+// Qué no hace: no es rápido ni sirve
 // fuera de pruebas. Depende solo de vfs.
 //
 // # Modelo
@@ -29,6 +30,19 @@
 // aunque las lecturas las sigan viendo: como Linux, que tras un fsync fallido marca las páginas limpias y un fsync
 // posterior devuelve éxito sin escribirlas. Por eso el motor no debe reintentar un fsync. Una escritura que falla no
 // escribe nada.
+//
+// # Disco lleno y disco lento
+//
+// SetCapacity acota la suma de los largos de los archivos con nombre. Lo que la pasaría falla con ErrNoSpace (que es
+// vfs.ErrNoSpace) sin escribir nada: una escritura o un Truncate que agrandan un archivo y la creación de un archivo
+// con el disco ya lleno; sobrescribir lo que ya existe no pide lugar. Si la capacidad se baja por debajo de lo usado
+// (un volumen fino o la asignación diferida, que prometieron lugar y no lo tenían), también falla con ErrNoSpace el
+// Sync de un archivo con escrituras pendientes (las olvida, como todo Sync fallido) y el SyncDir de un directorio con
+// cambios pendientes. Subir la capacidad (o quitarla con 0) vuelve a dejar escribir. Used da lo usado, para fijar un
+// cupo relativo.
+//
+// SetDelay agrega una demora a cada escritura y a cada Sync, antes de tomar el mutex del disco: el resto de las
+// operaciones sigue sin esperar.
 //
 // # Lo que no simula
 //

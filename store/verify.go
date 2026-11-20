@@ -90,7 +90,8 @@ func (e *Engine) checkControl(r *Report) {
 
 /**
 * checkCatalog lee el catálogo del disco sin tocarlo y lo compara con el de memoria: los mismos stores con los mismos
-* números de archivo (los contadores pueden diferir: el guardado es el del último checkpoint).
+* números de archivo (los contadores pueden diferir: el guardado es el del último checkpoint). Si un cambio de stores
+* no pudo guardarlo por disco lleno (catalogBehind), el guardado está atrás a propósito y solo se comprueba que se lea.
 * @param r *Report
 **/
 func (e *Engine) checkCatalog(r *Report) {
@@ -101,6 +102,9 @@ func (e *Engine) checkCatalog(r *Report) {
 	if err != nil {
 		add(MSG_CHECK_CATALOG_READ, err)
 		return
+	}
+	if e.catalogBehind.Load() {
+		return // el WAL tiene los cambios que le faltan: la recuperación los rehace
 	}
 	mem := e.cat.Catalog()
 	if len(saved.Entries) != len(mem.Entries) {

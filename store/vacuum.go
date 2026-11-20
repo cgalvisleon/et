@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/store/internal/btree"
+	"github.com/cgalvisleon/et/store/internal/buffer"
 	"github.com/cgalvisleon/et/store/internal/page"
+	"github.com/cgalvisleon/et/store/internal/vfs"
 )
 
 /**
@@ -60,16 +62,35 @@ func (e *Engine) vacuumStore(name string, horizon page.XID) error {
 * tomado en lectura: un DropStore espera a que termine, y uno que ya empezó deja el store en ErrStoreDropped y no se
 * limpia.
 * @param horizon page.XID: el xid vivo más viejo al empezar la limpieza del motor
-* @return error: ErrStoreDropped, ErrClosed, ErrFailed o el error de una página dañada
+* @return error: ErrStoreDropped, ErrClosed, ErrFailed, ErrDiskFull (no hay lugar para el WAL) o el error de una
+* página dañada
 **/
 func (s *Store) vacuum(horizon page.XID) error {
 	s.vacuumMu.Lock()
 	defer s.vacuumMu.Unlock()
-	if err := s.begin(); err != nil {
+	if err := s.beginWrite(); err != nil {
 		return err
 	}
 	defer s.end()
-	return s.e.readError(s.freezeStore(horizon))
+	if err := s.e.admit(); err != nil {
+		return err
+	}
+	return s.e.vacuumError(s.freezeStore(horizon))
+}
+
+/**
+* vacuumError trata el error de una limpieza: cada paso de la limpieza es un cambio completo y repetible, así que un
+* disco lleno a mitad (también la falta de lugar del WAL) la corta con ErrDiskFull sin dejar nada a medias, si el WAL,
+* la caché y los fsync siguen sanos. Lo demás, como una lectura (readError).
+* @param err error
+* @return error
+**/
+func (e *Engine) vacuumError(err error) error {
+	if vfs.IsNoSpace(err) && !errors.Is(err, buffer.ErrFailed) && !errors.Is(err, ErrFailed) &&
+		e.log.Failed() == nil && !e.guard.failed.Load() {
+		return e.diskFull(err)
+	}
+	return e.readError(err)
 }
 
 /**

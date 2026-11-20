@@ -13,6 +13,7 @@ import (
 	"github.com/cgalvisleon/et/store/internal/crashfs"
 	"github.com/cgalvisleon/et/store/internal/page"
 	"github.com/cgalvisleon/et/store/internal/smgr"
+	"github.com/cgalvisleon/et/store/internal/vfs"
 )
 
 // TestPinNewFlushRead: una página nueva cambiada y vaciada se lee igual desde otra caché; Stats cuenta.
@@ -525,6 +526,37 @@ func TestWaitDurableFailure(t *testing.T) {
 	}
 	if _, err := e.pool.Pin(tag1(0), Normal); !errors.Is(err, ErrFailed) {
 		t.Fatalf("Pin tras el fallo: %v", err)
+	}
+}
+
+// TestReadOnlyAfterDiskFull: tras un fallo de disco lleno la caché queda de solo lectura: Failed lo dice, las
+// lecturas siguen (también de páginas que no estaban, reusando solo búferes limpios), la página sucia se queda en la
+// caché con su cambio, no se escribe nada más y PinNew falla.
+func TestReadOnlyAfterDiskFull(t *testing.T) {
+	e := newEnv(t, crashfs.New(), "/db", 4)
+	e.writeDisk(t, 8)
+	dirty := e.newBlock(t, 1, 100)
+	e.flusher.fail(fmt.Errorf("wal: fsync: %w", vfs.ErrNoSpace))
+	err := e.pool.FlushAll(nil)
+	if !errors.Is(err, ErrFailed) || !vfs.IsNoSpace(err) || e.pool.Failed() == nil {
+		t.Fatalf("FlushAll: %v, Failed %v", err, e.pool.Failed())
+	}
+	writes := e.smgr.writesOf(1)
+	for round := range 3 {
+		for b := range page.BlockNumber(8) {
+			if got := marker(t, e.pool, tag1(b)); got != page.XID(b)+1 {
+				t.Fatalf("round %d block %d: marker %d", round, b, got)
+			}
+		}
+		if got := marker(t, e.pool, tag1(dirty)); got != 100 {
+			t.Fatalf("the dirty page lost its change: marker %d", got)
+		}
+	}
+	if e.smgr.writesOf(1) != writes {
+		t.Fatal("the read-only cache wrote a page")
+	}
+	if _, err := e.pool.PinNew(1, smgr.ForkMain); !errors.Is(err, ErrFailed) {
+		t.Fatalf("PinNew on the read-only cache: %v", err)
 	}
 }
 

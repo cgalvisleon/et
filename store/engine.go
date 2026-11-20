@@ -57,7 +57,21 @@ type Engine struct {
 	closed  bool
 
 	failMu  sync.Mutex
-	failErr error // el primer fallo de escritura o fsync: el motor queda inutilizable
+	failErr error // el primer fallo de escritura o fsync: el motor queda inutilizable (de solo lectura si es de disco lleno)
+
+	guard *syncGuard // el disco del motor: anota si algún fsync falló (ver space.go)
+
+	// doneWAL es log.Written() en el punto de rehacer del último checkpoint terminado: Written() − doneWAL es el WAL
+	// que todavía no se puede reciclar (lo que mira el freno de los escritores, ver space.go).
+	doneWAL atomic.Int64
+
+	// catalogBehind: un cambio de stores no pudo guardar el catálogo por disco lleno (storeCatalog); el guardado
+	// quedó atrás del de memoria hasta el próximo guardado (el del checkpoint, a más tardar).
+	catalogBehind atomic.Bool
+
+	// sigMu y ckptDone: los escritores frenados esperan en ckptDone, que se cierra al terminar cada checkpoint.
+	sigMu    sync.Mutex
+	ckptDone chan struct{}
 
 	// ddlMu serializa crear, abrir y borrar stores y cada guardado del catálogo.
 	ddlMu   sync.Mutex
@@ -109,12 +123,14 @@ type Engine struct {
 }
 
 /**
-* open abre (o crea) el motor de dir sobre fsys: toma LOCK, recupera desde el último checkpoint y arranca el
-* checkpointer y la limpieza de fondo (si VACUUM_INTERVAL no es 0).
-* @param fsys vfs.FS, dir string, cfg config
+* open abre (o crea) el motor de dir sobre base (envuelto en un syncGuard): toma LOCK, recupera desde el último
+* checkpoint y arranca el checkpointer y la limpieza de fondo (si VACUUM_INTERVAL no es 0).
+* @param base vfs.FS, dir string, cfg config
 * @return *Engine, error: ErrLocked si otro motor tiene el directorio
 **/
-func open(fsys vfs.FS, dir string, cfg config) (*Engine, error) {
+func open(base vfs.FS, dir string, cfg config) (*Engine, error) {
+	guard := &syncGuard{FS: base}
+	fsys := vfs.FS(guard)
 	if err := fsys.MkdirAll(dir); err != nil {
 		return nil, fmt.Errorf(MSG_OPEN, dir, err)
 	}
@@ -128,6 +144,7 @@ func open(fsys vfs.FS, dir string, cfg config) (*Engine, error) {
 	e := &Engine{
 		dir:     dir,
 		fs:      fsys,
+		guard:   guard,
 		cfg:     cfg,
 		lock:    lock,
 		ctl:     control.NewControlFile(fsys, dir),
@@ -201,8 +218,9 @@ func (e *Engine) closeResources() error {
 }
 
 /**
-* enter deja pasar una operación si el motor está abierto y usable; quien entra llama a leave al terminar.
-* @return error: ErrClosed o ErrFailed
+* enter deja pasar una operación que escribe si el motor está abierto y usable; quien entra llama a leave al
+* terminar. Una caché que falló (al hacer lugar para una lectura, por ejemplo) deja el motor inutilizable aquí.
+* @return error: ErrClosed o ErrFailed (con ErrDiskFull si el fallo fue de disco lleno)
 **/
 func (e *Engine) enter() error {
 	e.closeMu.RLock()
@@ -210,11 +228,53 @@ func (e *Engine) enter() error {
 		e.closeMu.RUnlock()
 		return ErrClosed
 	}
-	if err := e.failed(); err != nil {
+	if err := e.checkFailed(); err != nil {
 		e.closeMu.RUnlock()
 		return err
 	}
 	return nil
+}
+
+/**
+* enterRead es enter para una operación que solo lee: también deja pasar con el motor de solo lectura (un fallo de
+* disco lleno).
+* @return error: ErrClosed o ErrFailed
+**/
+func (e *Engine) enterRead() error {
+	e.closeMu.RLock()
+	if e.closed {
+		e.closeMu.RUnlock()
+		return ErrClosed
+	}
+	if err := e.checkFailed(); err != nil && !e.readOnly() {
+		e.closeMu.RUnlock()
+		return err
+	}
+	return nil
+}
+
+/**
+* checkFailed devuelve el fallo del motor; si la caché falló y el motor todavía no, lo deja inutilizable con ese
+* fallo.
+* @return error
+**/
+func (e *Engine) checkFailed() error {
+	if e.pool != nil {
+		if err := e.pool.Failed(); err != nil {
+			return e.fail(err)
+		}
+	}
+	return e.failed()
+}
+
+/**
+* readOnly dice si el motor quedó de solo lectura: inutilizable por un fallo de disco lleno.
+* @return bool
+**/
+func (e *Engine) readOnly() bool {
+	e.failMu.Lock()
+	defer e.failMu.Unlock()
+	return e.failErr != nil && vfs.IsNoSpace(e.failErr)
 }
 
 /**
@@ -239,19 +299,24 @@ func (e *Engine) fail(err error) error {
 }
 
 /**
-* failed devuelve ErrFailed con la causa si el motor quedó inutilizable, o nil.
+* failed devuelve ErrFailed con la causa si el motor quedó inutilizable, o nil. Si la causa es de disco lleno, el
+* error es también ErrDiskFull.
 * @return error
 **/
 func (e *Engine) failed() error {
 	e.failMu.Lock()
 	defer e.failMu.Unlock()
-	if e.failErr == nil {
+	err := e.failErr
+	switch {
+	case err == nil:
 		return nil
+	case !errors.Is(err, ErrFailed):
+		err = fmt.Errorf(MSG_FAILED, ErrFailed, err)
 	}
-	if errors.Is(e.failErr, ErrFailed) {
-		return e.failErr
+	if vfs.IsNoSpace(err) && !errors.Is(err, ErrDiskFull) {
+		err = fmt.Errorf(MSG_DISK_FULL, ErrDiskFull, err)
 	}
-	return fmt.Errorf(MSG_FAILED, ErrFailed, e.failErr)
+	return err
 }
 
 /**
@@ -306,4 +371,16 @@ func (e *Engine) openTxn(kind *atomic.Int64) {
 func (e *Engine) closeTxn(kind *atomic.Int64) {
 	kind.Add(-1)
 	e.openTx.Add(-1)
+}
+
+/**
+* writable dice si se puede empezar a escribir (con el motor ya tomado con enter o enterRead): no falló y el WAL
+* tiene lugar preasignado (admit).
+* @return error: ErrFailed o ErrDiskFull
+**/
+func (e *Engine) writable() error {
+	if err := e.failed(); err != nil {
+		return err
+	}
+	return e.admit()
 }

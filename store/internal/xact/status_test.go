@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/cgalvisleon/et/store/internal/crashfs"
 	"github.com/cgalvisleon/et/store/internal/page"
 	"github.com/cgalvisleon/et/store/internal/vfs"
 )
@@ -398,4 +399,36 @@ func TestCloseWithoutFlush(t *testing.T) {
 	s = openTest(t, vfs.OS(), dir, fl, 2)
 	defer s.Close()
 	wantStatus(t, s, 3, StatusInProgress)
+}
+
+// TestDiskFull: con el disco lleno, escribir una página de estados falla sin dejar el archivo de estados inutilizable:
+// la página sigue sucia en la caché, Status sigue (también de un archivo que no existe y no se puede crear), y al
+// liberar espacio Flush la escribe y sobrevive a reabrir.
+func TestDiskFull(t *testing.T) {
+	fs := crashfs.New()
+	fl := &fakeFlusher{}
+	s, err := Open(Config{FS: fs, Dir: "/db", Flusher: fl, CachePages: 2, FilePages: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetStatus(XidsPerPage+1, StatusCommitted, 5); err != nil {
+		t.Fatal(err)
+	}
+	fs.SetCapacity(fs.Used() + 1) // 0 sería sin límite
+	if err := s.Flush(); !vfs.IsNoSpace(err) {
+		t.Fatalf("Flush with the disk full: %v", err)
+	}
+	wantStatus(t, s, XidsPerPage+1, StatusCommitted)
+	wantStatus(t, s, 3*XidsPerPage+1, StatusInProgress) // su archivo no existe
+
+	fs.SetCapacity(0)
+	if err := errors.Join(s.Flush(), s.Close()); err != nil {
+		t.Fatal(err)
+	}
+	s, err = Open(Config{FS: fs, Dir: "/db", Flusher: fl, CachePages: 2, FilePages: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	wantStatus(t, s, XidsPerPage+1, StatusCommitted)
 }

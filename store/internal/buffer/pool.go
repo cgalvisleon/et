@@ -9,6 +9,7 @@ import (
 
 	"github.com/cgalvisleon/et/store/internal/page"
 	"github.com/cgalvisleon/et/store/internal/smgr"
+	"github.com/cgalvisleon/et/store/internal/vfs"
 	"github.com/cgalvisleon/et/store/internal/wal"
 )
 
@@ -174,8 +175,12 @@ var zeroPage = make(page.Page, page.Size)
 * @return *desc: fijado y válido, error
 **/
 func (p *pool) pin(tag Tag, strategy Strategy, fresh bool) (*desc, error) {
+	check := p.readable
+	if fresh {
+		check = p.usable // una página nueva o pisada entera es para escribir
+	}
 	for {
-		if err := p.usable(); err != nil {
+		if err := check(); err != nil {
 			return nil, err
 		}
 		if d, found := p.pinExisting(tag, strategy); found {
@@ -394,6 +399,42 @@ func (p *pool) usable() error {
 		return ErrClosed
 	}
 	return nil
+}
+
+/**
+* Failed devuelve el primer fallo de escritura, o nil (ver Pool.Failed).
+* @return error
+**/
+func (p *pool) Failed() error {
+	if err := p.failed.Load(); err != nil {
+		return *err
+	}
+	return nil
+}
+
+/**
+* readable dice si se puede fijar una página para leerla. Tras un fallo de disco lleno la caché queda de solo
+* lectura: sigue dando páginas (las que tiene y las que lee del disco en búferes limpios) pero no escribe ninguna
+* más; tras otro fallo, nada.
+* @return error: nil, ErrClosed o ErrFailed con la causa
+**/
+func (p *pool) readable() error {
+	if p.readOnly() {
+		if p.closed.Load() {
+			return ErrClosed
+		}
+		return nil
+	}
+	return p.usable()
+}
+
+/**
+* readOnly dice si la caché falló por disco lleno (de solo lectura, ver readable).
+* @return bool
+**/
+func (p *pool) readOnly() bool {
+	err := p.failed.Load()
+	return err != nil && vfs.IsNoSpace(*err)
 }
 
 /**

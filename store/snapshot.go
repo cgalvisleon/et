@@ -30,7 +30,7 @@ type Snapshot struct {
 **/
 func (e *Engine) snapshotFor(timeout time.Duration) *Snapshot {
 	v := &Snapshot{e: e}
-	if err := e.enter(); err != nil {
+	if err := e.enterRead(); err != nil {
 		v.err = err
 		return v
 	}

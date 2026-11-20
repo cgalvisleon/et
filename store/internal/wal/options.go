@@ -10,12 +10,17 @@ type Options struct {
 	// Spares es cuántos segmentos reciclados (renombrados a números futuros) se guardan para reutilizar; Recycle
 	// borra los demás.
 	Spares int
+
+	// Preallocate escribe cada segmento entero con ceros (y fsync) antes de poner registros en él, así un registro
+	// reservado nunca pide lugar nuevo en el disco y el disco lleno sale en Room, antes de empezar una operación (ver
+	// «Preasignación» en doc.go). El motor lo usa siempre; las pruebas del paquete, según el caso.
+	Preallocate bool
 }
 
 // EnvOptions lee las opciones de WAL_SEGMENT_SIZE (MB, mínimo 1) y MAX_WAL_SIZE (MB): se guardan como repuesto los
-// segmentos que llenan la mitad de MAX_WAL_SIZE (a confirmar), al menos uno.
+// segmentos que llenan la mitad de MAX_WAL_SIZE (a confirmar), al menos uno. Siempre con preasignación.
 func EnvOptions() Options {
 	segment := max(envar.GetInt64("WAL_SEGMENT_SIZE", 128), MinSegmentSize>>20) << 20
 	maxWAL := max(envar.GetInt64("MAX_WAL_SIZE", 1024), 1) << 20
-	return Options{SegmentSize: segment, Spares: int(max(maxWAL/2/segment, 1))}
+	return Options{SegmentSize: segment, Spares: int(max(maxWAL/2/segment, 1)), Preallocate: true}
 }

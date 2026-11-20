@@ -60,6 +60,8 @@
 // los bytes (CRC, magia, versión, ceros reservados, rangos, que cada entrada quepa antes de leerla) y lo aceptado se
 // vuelve a codificar igual byte a byte. Una copia del control solo vale en el lugar que le toca por su seq. Tras un
 // fallo de escritura o de Sync, Write, Create y Save devuelven ErrFailed hasta reabrir (no se reintenta un fsync).
+// Excepción: el disco lleno al crear, extender o escribir catalog.tmp (antes de su Sync) deja el catálogo anterior
+// entero y Save no queda fallado (el motor reintenta en el próximo checkpoint).
 // Create nunca pisa un control con una copia válida. CatalogFile.Read lee y valida el catálogo como Load sin borrar
 // un catalog.tmp sobrante (Verify del motor no cambia nada). Load rechaza un catálogo de más de 1 GiB (a confirmar).
 //

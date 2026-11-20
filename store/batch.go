@@ -260,23 +260,28 @@ func (b *Batch) logEnd(commit, deferred bool) error {
 }
 
 /**
-* txError dice si err aborta el lote (error de serialización, conflicto o tiempo).
+* txError dice si err aborta el lote (error de serialización, conflicto, tiempo, freno o disco lleno sin tocar el
+* motor).
 * @param err error
 * @return bool
 **/
 func txError(err error) bool {
-	return errors.Is(err, ErrSerialization) || errors.Is(err, ErrConflict) || errors.Is(err, ErrTimeout)
+	return errors.Is(err, ErrSerialization) || errors.Is(err, ErrConflict) || errors.Is(err, ErrTimeout) ||
+		errors.Is(err, ErrThrottled) || isCleanDiskFull(err)
 }
 
 /**
 * writeIn hace una escritura dentro del lote b: como la suelta, pero con el xid y el snapshot del lote y sin
 * confirmar (Commit = false); lo que suma a Count queda en el lote hasta Commit. Un error de serialización,
-* conflicto o tiempo aborta el lote. Si no escribió, la cadena de desborde que había preparado se libera.
+* conflicto, tiempo o disco lleno aborta el lote. Si no escribió, la cadena de desborde que había preparado se libera.
 * @param b *Batch, id string, c change
 * @return bool: si escribió, error
 **/
 func (s *Store) writeIn(b *Batch, id string, c change) (bool, error) {
 	if err := checkWrite(id, c.data); err != nil {
+		return false, err
+	}
+	if err := s.e.throttle(); err != nil {
 		return false, err
 	}
 	if err := b.acquire(s.e); err != nil {
@@ -296,13 +301,16 @@ func (s *Store) writeIn(b *Batch, id string, c change) (bool, error) {
 * @return bool, error
 **/
 func (s *Store) writeInLocked(b *Batch, id string, c change) (bool, error) {
-	if err := s.begin(); err != nil {
+	if err := s.beginWrite(); err != nil {
 		return false, err
 	}
 	defer s.end()
+	if err := s.e.admit(); err != nil {
+		return false, err
+	}
 	w, err := s.prepare(b.xid, id, c)
 	if err != nil {
-		return false, s.e.fail(err)
+		return false, s.e.writeError(err)
 	}
 	w.Commit, w.UnderLock, w.Snapshot = false, nil, &b.snap
 	applied, err := s.batchLoop(b, id, w)
@@ -320,7 +328,7 @@ func (s *Store) writeInLocked(b *Batch, id string, c change) (bool, error) {
 * pasar el tiempo del lote) sin páginas bloqueadas y repite. No toma commitMu: las versiones de un lote no confirman
 * nada hasta su KindCommit.
 * @param b *Batch, id string, w btree.Write
-* @return bool: si escribió, error: ErrSerialization, ErrConflict, ErrTimeout o ErrFailed con la causa
+* @return bool: si escribió, error: ErrSerialization, ErrConflict, ErrTimeout, ErrDiskFull o ErrFailed con la causa
 **/
 func (s *Store) batchLoop(b *Batch, id string, w btree.Write) (bool, error) {
 	for {
@@ -341,7 +349,7 @@ func (s *Store) batchLoop(b *Batch, id string, w btree.Write) (bool, error) {
 		case errors.Is(err, btree.ErrSerialization):
 			return false, ErrSerialization
 		case err != nil:
-			return false, s.e.fail(err)
+			return false, s.e.writeError(err)
 		}
 		if res.Applied {
 			s.e.writes.Add(1)

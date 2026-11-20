@@ -2,6 +2,7 @@ package crashfs
 
 import (
 	"errors"
+	"time"
 
 	"github.com/cgalvisleon/et/store/internal/vfs"
 )
@@ -35,8 +36,8 @@ var (
 	// ErrIO es la falla de E/S que inyectan FailAfter y FailSyncAfter.
 	ErrIO = errors.New("crashfs: input/output error")
 
-	// ErrNoSpace es la falla de disco lleno que inyecta SetCapacity.
-	ErrNoSpace = errors.New("crashfs: no space left on device")
+	// ErrNoSpace es la falla de disco lleno que inyecta SetCapacity: es vfs.ErrNoSpace, así vfs.IsNoSpace la reconoce.
+	ErrNoSpace = vfs.ErrNoSpace
 
 	// ErrCrashed es el error de un archivo abierto antes de un corte.
 	ErrCrashed = errors.New("crashfs: file opened before a crash")
@@ -61,6 +62,16 @@ type FS interface {
 	FailSyncAfter(n int)
 
 	// SetCapacity fija el tamaño del disco en bytes (la suma de los largos de los archivos con nombre): una escritura
-	// o un Truncate que lo pasen fallan con ErrNoSpace sin escribir nada. n <= 0 es sin límite.
+	// o un Truncate que lo pasen fallan con ErrNoSpace sin escribir nada, y crear un archivo con el disco lleno
+	// también. Con la capacidad por debajo de lo usado (un disco que prometió lugar y no lo tenía, como un volumen
+	// fino o la asignación diferida), además falla con ErrNoSpace el Sync de un archivo con escrituras pendientes, que
+	// las olvida como cualquier Sync fallido. Subir la capacidad vuelve a dejar escribir. n <= 0 es sin límite.
 	SetCapacity(n int64)
+
+	// Used es lo que ocupa el disco en bytes: la suma de los largos de los archivos con nombre.
+	Used() int64
+
+	// SetDelay agrega una demora a cada escritura (WriteAt, Truncate) y a cada Sync o SyncDir, antes de hacerlos y
+	// sin bloquear el resto del disco: un disco lento. 0 la quita.
+	SetDelay(write, sync time.Duration)
 }

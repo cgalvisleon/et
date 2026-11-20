@@ -62,7 +62,8 @@ type Handle interface {
 
 // Pool es la caché de páginas.
 type Pool interface {
-	// Pin fija la página tag, leyéndola del disco si no está (y verificando su suma).
+	// Pin fija la página tag, leyéndola del disco si no está (y verificando su suma). Tras un fallo de disco lleno
+	// sigue andando, de solo lectura (ver Failed).
 	Pin(tag Tag, strategy Strategy) (Handle, error)
 
 	// PinNew extiende el fork con una página en ceros y la devuelve fijada y bloqueada en exclusivo.
@@ -82,6 +83,11 @@ type Pool interface {
 
 	// Stats: aciertos, fallos, sucias y escritas desde Open.
 	Stats() Stats
+
+	// Failed es el primer fallo de escritura (ErrFailed con la causa), o nil. Desde un fallo la caché no escribe nada
+	// más; si fue de disco lleno queda de solo lectura: Pin sigue (reusa solo búferes limpios) y PinNew y PinZero
+	// fallan.
+	Failed() error
 
 	// Close detiene el escritor de fondo. No escribe nada: el motor hace antes su checkpoint final.
 	Close() error

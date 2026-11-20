@@ -125,6 +125,7 @@ func (p *testPool) flush(keep func(buffer.Tag) bool) error {
 
 func (p *testPool) DropFile(smgr.FileNo) {}
 func (p *testPool) Stats() buffer.Stats  { return buffer.Stats{} }
+func (p *testPool) Failed() error        { return nil }
 func (p *testPool) Close() error         { return nil }
 
 func (h *testHandle) Tag() buffer.Tag    { return h.buf.tag }

@@ -91,7 +91,8 @@ type Log interface {
 	// Reserve, bajo writeMu: comprueba que cada bloque con PageLSN < RedoPoint().LSN traiga su imagen (si no,
 	// ErrNeedImage y no reserva nada), asigna el lsn siguiente y el lugar (sellando el segmento activo si no cabe),
 	// llama a underLock(lsn) si no es nil y suelta writeMu. underLock corre con writeMu tomado: corto, sin bloqueos
-	// salvo hojas (lo usa el motor para sumar los contadores de Count en orden de lsn de confirmación).
+	// salvo hojas (lo usa el motor para sumar los contadores de Count en orden de lsn de confirmación). Con
+	// preasignación, si el lugar no está preasignado y el disco está lleno devuelve ErrNoRoom sin reservar nada.
 	Reserve(rec *Record, underLock func(lsn page.LSN)) (Reservation, error)
 
 	// Published es el mayor lsn tal que todos los anteriores están escritos.

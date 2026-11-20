@@ -17,21 +17,23 @@ import (
 * bloqueo compartido, espera al WAL durable hasta el pd_lsn de la copia, calcula la suma sobre la copia, la escribe
 * y recién entonces lo marca limpio, salvo que alguien lo haya vuelto a ensuciar mientras tanto (justDirtied: un
 * cambio o una marca de visibilidad posterior a la copia). Mientras dura la escritura el búfer sigue sucio: así
-* FlushAll lo anota y espera a que termine (d.io) en vez de saltearlo. Un fallo deja la caché inutilizable.
+* FlushAll lo anota y espera a que termine (d.io) en vez de saltearlo. Un fallo deja la caché inutilizable (o de
+* solo lectura, si es de disco lleno: ver readable); tras él, un búfer sucio devuelve ese fallo y uno limpio, nil.
 * @param d *desc: fijado por quien llama
 * @return error
 **/
 func (p *pool) flush(d *desc) error {
 	d.io.Lock()
 	defer d.io.Unlock()
-	if err := p.failed.Load(); err != nil {
-		return *err // no se escribe más nada tras un fallo
-	}
 
 	d.mu.Lock()
 	if d.state != stateValid || !d.dirty {
 		d.mu.Unlock()
 		return nil
+	}
+	if err := p.failed.Load(); err != nil {
+		d.mu.Unlock()
+		return *err // no se escribe más nada tras un fallo (uno limpio no hace falta escribirlo)
 	}
 	d.justDirtied = false
 	tag := d.tag

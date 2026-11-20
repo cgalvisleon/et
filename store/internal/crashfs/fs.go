@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/cgalvisleon/et/store/internal/vfs"
 )
@@ -31,6 +33,8 @@ type memFS struct {
 	failAfter     int                   // escrituras o Sync que faltan para fallar; < 0 sin falla
 	failSyncAfter int                   // Sync que faltan para fallar; < 0 sin falla
 	capacity      int64                 // bytes del disco; <= 0 sin límite
+
+	writeDelay, syncDelay atomic.Int64 // demoras de SetDelay, en nanosegundos (se leen sin el mutex)
 }
 
 // FailAfter programa la falla de E/S (ver FS.FailAfter).
@@ -52,6 +56,32 @@ func (m *memFS) SetCapacity(n int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.capacity = n
+}
+
+// Used devuelve lo que ocupa el disco (ver FS.Used).
+func (m *memFS) Used() int64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.used()
+}
+
+// SetDelay fija las demoras de escritura y de Sync (ver FS.SetDelay).
+func (m *memFS) SetDelay(write, sync time.Duration) {
+	m.writeDelay.Store(int64(write))
+	m.syncDelay.Store(int64(sync))
+}
+
+// delay duerme la demora d (en nanosegundos) fuera del mutex: un disco lento no frena a los demás archivos.
+func delay(d *atomic.Int64) {
+	if n := d.Load(); n > 0 {
+		time.Sleep(time.Duration(n))
+	}
+}
+
+// overCapacity dice si el disco usa más que su capacidad (se la bajó por debajo de lo usado): los Sync con
+// escrituras pendientes fallan con ErrNoSpace.
+func (m *memFS) overCapacity() bool {
+	return m.capacity > 0 && m.used() > m.capacity
 }
 
 // inject cuenta una escritura (o un Sync si isSync) y dice si debe fallar con ErrIO.
@@ -136,6 +166,9 @@ func (m *memFS) openFile(name string, flag int) (*file, error) {
 	case node == nil && flag&os.O_CREATE == 0:
 		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
 	case node == nil:
+		if m.capacity > 0 && m.used() >= m.capacity {
+			return nil, &fs.PathError{Op: "open", Path: name, Err: ErrNoSpace}
+		}
 		node = &inode{}
 		d.change(entryChange{name: base, node: node})
 	case flag&os.O_CREATE != 0 && flag&os.O_EXCL != 0:
@@ -227,6 +260,7 @@ func (m *memFS) MkdirAll(dir string) error {
 
 // SyncDir vuelve durables los cambios de las entradas de dir.
 func (m *memFS) SyncDir(dir string) error {
+	delay(&m.syncDelay)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	dir = filepath.Clean(dir)
@@ -236,6 +270,9 @@ func (m *memFS) SyncDir(dir string) error {
 	}
 	if err := m.inject(true); err != nil {
 		return &fs.PathError{Op: "fsync", Path: dir, Err: err}
+	}
+	if len(d.pending) > 0 && m.overCapacity() {
+		return &fs.PathError{Op: "fsync", Path: dir, Err: ErrNoSpace}
 	}
 	d.sync()
 	return nil

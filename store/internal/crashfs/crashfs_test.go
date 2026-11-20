@@ -11,6 +11,7 @@ import (
 	"slices"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/cgalvisleon/et/store/internal/vfs"
 )
@@ -458,6 +459,66 @@ func TestCapacity(t *testing.T) {
 	write(t, f, fill('z', 60), 0) // sobrescribir no crece
 	if size, _ := g.Size(); size != 40 {
 		t.Fatalf("size = %d", size)
+	}
+}
+
+// TestCapacityCreateSync: con el disco lleno no se puede crear un archivo; con la capacidad por debajo de lo usado,
+// el Sync de un archivo con escrituras pendientes falla con ErrNoSpace (y las olvida) y el de uno sin pendientes no;
+// subir la capacidad vuelve a dejar escribir. vfs.IsNoSpace reconoce el error.
+func TestCapacityCreateSync(t *testing.T) {
+	m := newDisk(t)
+	f := open(t, m, "data")
+	write(t, f, fill('x', 100), 0)
+	if err := errors.Join(f.Sync(), m.SyncDir(dir)); err != nil {
+		t.Fatal(err)
+	}
+	m.SetCapacity(m.Used())
+	if _, err := m.OpenFile(filepath.Join(dir, "new"), os.O_RDWR|os.O_CREATE); !vfs.IsNoSpace(err) {
+		t.Fatalf("create on a full disk = %v; want ErrNoSpace", err)
+	}
+	if _, err := m.OpenFile(filepath.Join(dir, "data"), os.O_RDWR|os.O_CREATE); err != nil {
+		t.Fatalf("open an existing file on a full disk: %v", err)
+	}
+
+	m.SetCapacity(m.Used() - 1)
+	if err := f.Sync(); err != nil {
+		t.Fatalf("Sync without pending writes = %v", err)
+	}
+	write(t, f, fill('y', 100), 0) // sobrescribir no crece: entra igual
+	if err := f.Sync(); !errors.Is(err, ErrNoSpace) {
+		t.Fatalf("Sync over capacity = %v; want ErrNoSpace", err)
+	}
+	m.Crash(LoseUnsynced, 1)
+	if got, _ := contents(t, m, "data"); !bytes.Equal(got, fill('x', 100)) {
+		t.Fatalf("after the failed Sync and a crash = %q; want the old content", got)
+	}
+
+	m.SetCapacity(0)
+	g := open(t, m, "new")
+	write(t, g, fill('z', 10), 0)
+	if err := g.Sync(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestDelay: SetDelay demora cada escritura y cada Sync, y 0 la quita.
+func TestDelay(t *testing.T) {
+	m := newDisk(t)
+	f := open(t, m, "data")
+	m.SetDelay(20*time.Millisecond, 30*time.Millisecond)
+	start := time.Now()
+	write(t, f, fill('x', 10), 0)
+	if err := f.Sync(); err != nil {
+		t.Fatal(err)
+	}
+	if took := time.Since(start); took < 50*time.Millisecond {
+		t.Fatalf("write + Sync took %v; want at least 50ms", took)
+	}
+	m.SetDelay(0, 0)
+	start = time.Now()
+	write(t, f, fill('x', 10), 0)
+	if took := time.Since(start); took > 20*time.Millisecond {
+		t.Fatalf("write without delay took %v", took)
 	}
 }
 

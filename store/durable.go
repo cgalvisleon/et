@@ -16,14 +16,15 @@ type Deferred struct {
 
 /**
 * syncCommit es la espera de una confirmación: con SYNC_ON_WRITE y si no es diferida, el WAL durable hasta lsn (group
-* commit). Siempre anota lsn como confirmado (noteCommit) antes de volver, para que WaitDurable lo cubra.
+* commit); si no, solo el freno de las diferidas (deferredBrake). Siempre anota lsn como confirmado (noteCommit) antes
+* de volver, para que WaitDurable lo cubra.
 * @param lsn page.LSN: el del registro que confirma, deferred bool
 * @return error
 **/
 func (e *Engine) syncCommit(lsn page.LSN, deferred bool) error {
 	e.noteCommit(lsn)
 	if deferred || !e.cfg.syncOnWrite {
-		return nil
+		return e.deferredBrake(lsn)
 	}
 	return e.log.WaitDurable(lsn)
 }

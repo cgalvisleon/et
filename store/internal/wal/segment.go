@@ -15,13 +15,15 @@ import (
 // segmentExt es la extensión de los archivos de segmento.
 const segmentExt = ".seg"
 
-// segment es el segmento activo (o el que se está sellando). size es dónde va la próxima reserva (bajo writeMu);
-// inflight cuenta las escrituras reservadas que no terminaron, para poder sellarlo.
+// segment es el segmento activo (o el que se está sellando). size es dónde va la próxima reserva y allocated hasta
+// dónde el archivo ya está escrito (con ceros o registros), así que escribir por debajo no pide lugar nuevo en el
+// disco (los dos bajo writeMu); inflight cuenta las escrituras reservadas que no terminaron, para poder sellarlo.
 type segment struct {
-	num      uint64
-	file     vfs.File
-	size     int64
-	inflight sync.WaitGroup
+	num       uint64
+	file      vfs.File
+	size      int64
+	allocated int64
+	inflight  sync.WaitGroup
 }
 
 // segmentName es el nombre del segmento num: diez dígitos, así el orden alfabético es el numérico.

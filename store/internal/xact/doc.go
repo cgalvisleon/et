@@ -39,7 +39,10 @@
 // (store/doc.go, «Congelado y truncado del archivo de estados»). Config.FilePages cambia las páginas por archivo
 // (solo pruebas: con 1, un archivo son 32.768 xids y el truncado se ve con pocas transacciones; cambia el formato). Recover(next), al terminar la recuperación, fija el horizonte y pone en cero los estados
 // desde next (resto de su página, páginas y archivos siguientes), como TrimCLOG: así un estado que llegó al disco sin
-// registro en el WAL no se pega a un xid que se vuelve a asignar. Un fallo de escritura o fsync deja todo en error.
+// registro en el WAL no se pega a un xid que se vuelve a asignar. Un fallo de escritura o fsync deja todo en error,
+// salvo el disco lleno al escribir una página (al extender un archivo o crearlo): la página sigue sucia en la caché,
+// Flush o el reemplazo devuelven el error y se reintenta la próxima vez. El reemplazo prefiere las ranuras limpias
+// (así las lecturas siguen con el disco lleno) y un archivo que no existe y no se puede crear se lee en ceros.
 //
 // Transactions (NewManager) guarda solo las transacciones en curso: cada una con un canal que End cierra (Wait) y el
 // Xmin de su primer snapshot (OldestActive). Los snapshots de solo lectura (TakeSnapshot, sin xid) se registran

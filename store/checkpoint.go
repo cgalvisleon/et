@@ -11,7 +11,9 @@ import (
 
 /**
 * checkpoint hace un checkpoint (pasos 1–7 de «Checkpoint» en doc.go; el 7 trunca el archivo de estados por debajo
-* del frozenXID que guardó el control). Cualquier fallo deja el motor inutilizable.
+* del frozenXID que guardó el control). Cualquier fallo deja el motor inutilizable, salvo un disco lleno limpio al
+* escribir el archivo de estados o catalog.tmp (pasos 2 y 3): ese checkpoint no cuenta (el control sigue en el
+* anterior), devuelve ErrDiskFull y se reintenta después. Al terminar despierta a los escritores frenados.
 * @param state control.State: StateInProduction, o StateShutdown en el de Close
 * @param spread bool: repartir la escritura de páginas en el 90 % del intervalo (el checkpoint de fondo)
 * @return error
@@ -33,11 +35,11 @@ func (e *Engine) checkpoint(state control.State, spread bool) error {
 	e.stepDone(1)
 	e.waitCommits()
 	if err := e.flushData(spread, info.redo, start); err != nil {
-		return e.fail(err)
+		return e.writeError(err)
 	}
 	e.stepDone(2)
 	if err := e.saveCatalog(counts, info.redo.LSN); err != nil {
-		return e.fail(err)
+		return e.writeError(err)
 	}
 	e.stepDone(3)
 	lsn, err := e.logRecord(wal.KindCheckpoint, encodeCheckpoint(info))
@@ -60,6 +62,7 @@ func (e *Engine) checkpoint(state control.State, spread bool) error {
 	e.lastCheckpoint.Store(start.UnixNano())
 	e.metrics.checkpointTook.Store(int64(time.Since(start)))
 	e.metrics.checkpoints.Add(1)
+	e.checkpointFinished(info.wal)
 	return nil
 }
 
@@ -87,6 +90,7 @@ func (e *Engine) beginCheckpoint(now time.Time) (checkpointInfo, map[smgr.FileNo
 	e.hintGate.Lock()
 	defer e.hintGate.Unlock()
 	redo, err := e.log.BeginCheckpoint(func(wal.Position) {
+		info.wal = e.log.Written()
 		counts = e.counts.snapshot()
 		info.nextXID = e.txs.NextXID()
 		if oldest := e.txs.OldestActive(); oldest < info.nextXID {
@@ -124,7 +128,8 @@ func (e *Engine) waitCommits() {
 
 /**
 * flushData es el paso 2: escribe las páginas sucias (repartidas si spread), las del archivo de estados y hace
-* fsync de los archivos de datos.
+* fsync de los archivos de datos. Solo el disco lleno al escribir el archivo de estados vuelve sin dejar el motor
+* inutilizable (la página sigue sucia en su caché); un fallo de la caché o de un fsync sí lo deja.
 * @param spread bool, redo wal.Position, start time.Time
 * @return error
 **/
@@ -134,12 +139,15 @@ func (e *Engine) flushData(spread bool, redo wal.Position, start time.Time) erro
 		pace = e.pacer(redo, start)
 	}
 	if err := e.pool.FlushAll(pace); err != nil {
-		return err
+		return e.fail(err)
 	}
 	if err := e.status.Flush(); err != nil {
 		return err
 	}
-	return e.sm.SyncAll()
+	if err := e.sm.SyncAll(); err != nil {
+		return e.fail(err)
+	}
+	return nil
 }
 
 /**
@@ -158,7 +166,11 @@ func (e *Engine) saveCatalog(counts map[smgr.FileNo]int64, redoLSN page.LSN) err
 		}
 	}
 	e.cat.SetCountLSN(redoLSN)
-	return e.catFile.Save(e.cat.Catalog())
+	if err := e.catFile.Save(e.cat.Catalog()); err != nil {
+		return err
+	}
+	e.catalogBehind.Store(false)
+	return nil
 }
 
 /**
@@ -215,7 +227,8 @@ func (e *Engine) pacer(redo wal.Position, start time.Time) func(written, total i
 
 /**
 * checkpointer es el proceso de fondo: cada checkEvery mira si toca un checkpoint (por tiempo o por volumen de WAL) y
-* lo hace repartido. Termina con Close o cuando un checkpoint falla (el motor quedó inutilizable).
+* lo hace repartido. Termina con Close o cuando un checkpoint deja el motor inutilizable; uno que no pudo por disco
+* lleno (ErrDiskFull limpio) se reintenta en la próxima vuelta.
 **/
 func (e *Engine) checkpointer() {
 	defer e.bg.Done()
@@ -229,7 +242,7 @@ func (e *Engine) checkpointer() {
 			if !e.checkpointDue() {
 				continue
 			}
-			if err := e.checkpoint(control.StateInProduction, true); err != nil {
+			if err := e.checkpoint(control.StateInProduction, true); err != nil && !isCleanDiskFull(err) {
 				return
 			}
 		}
@@ -237,11 +250,11 @@ func (e *Engine) checkpointer() {
 }
 
 /**
-* checkpointDue dice si pasó CHECKPOINT_TIMEOUT desde el último checkpoint o si el WAL desde el punto de rehacer pasó
-* MAX_WAL_SIZE / 1,9.
+* checkpointDue dice si pasó CHECKPOINT_TIMEOUT desde el último checkpoint o si el WAL desde el punto de rehacer del
+* último checkpoint terminado pasó MAX_WAL_SIZE / 1,9 (uno que no terminó por disco lleno no cuenta).
 * @return bool
 **/
 func (e *Engine) checkpointDue() bool {
 	since := time.Since(time.Unix(0, e.lastCheckpoint.Load()))
-	return since >= e.cfg.checkpointTimeout || e.log.SizeSince(e.log.RedoPoint()) >= e.cfg.walTrigger()
+	return since >= e.cfg.checkpointTimeout || e.walBacklog() >= e.cfg.walTrigger()
 }

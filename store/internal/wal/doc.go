@@ -73,6 +73,22 @@
 // escribir. Options.Spares es cuántos segmentos reciclados se guardan; Recycle borra el resto. MakeImage y
 // RestoreImage (o BlockRef.SetImage y BlockRef.RestoreImage) arman y restauran las imágenes de página entera.
 //
+// # Preasignación
+//
+// Con Options.Preallocate (el motor la usa siempre) cada segmento se escribe entero con ceros y fsync antes de
+// recibir registros, como wal_init_zero de PostgreSQL: así escribir un registro reservado sobrescribe bloques que ya
+// existen y no pide lugar nuevo, y el disco lleno sale antes de empezar una operación. segment.allocated es hasta
+// dónde está escrito el activo (Open lo deja en el final válido: el resto se rellena después) y nextReady dice si el
+// siguiente ya existe entero. Room, que el motor llama al entrar cada escritura, exige medio segmento preasignado
+// entre el resto del activo y el siguiente: si falta, rellena el activo y prepara el siguiente (un repuesto reciclado
+// o uno nuevo, creado con O_EXCL y fsync del directorio) bajo writeMu. Si no hay lugar devuelve ErrNoRoom (con el
+// error de disco lleno dentro) sin dejar el WAL inutilizable; el próximo intento sigue desde el largo del archivo. Una
+// reserva que necesita rotar o rellenar y no puede devuelve también ErrNoRoom, sin asignar lsn. Un segmento a medio
+// rellenar empieza en ceros (o con registros viejos de lsn menor): Scan lo toma por el final del WAL. Lo que deja el
+// WAL inutilizable sigue igual: un fsync fallido (también el de la preasignación), una escritura de un registro
+// reservado que falla, o un fallo de escritura que no es de disco lleno. Written da los bytes reservados desde Open,
+// sin candados (el motor mide con él el WAL sin reciclar).
+//
 // # Escribir un registro
 //
 // Ver store/doc.go («El orden de un cambio»). En resumen: quien cambia una página la tiene bloqueada en exclusivo,

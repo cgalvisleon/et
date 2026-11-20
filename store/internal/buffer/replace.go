@@ -45,13 +45,37 @@ func (r *ring) set(slot int, id int32) {
 }
 
 /**
-* victim devuelve un búfer fijado (pins = 1) y limpio para cargar otra página: del anillo si la estrategia es Ring
-* y el búfer de su lugar está libre y poco usado (uso ≤ 1, como GetBufferFromRing), si no del clock-sweep. Si estaba
-* sucio lo escribe antes, cumpliendo «WAL antes que la página».
+* victim devuelve un búfer fijado (pins = 1) y limpio para cargar otra página (ver candidate). Si estaba sucio lo
+* escribe antes, cumpliendo «WAL antes que la página». Con la caché de solo lectura (un fallo de disco lleno) no
+* escribe nada: saltea los sucios, que se quedan en la caché con su cambio, y si en una vuelta entera no encuentra
+* uno limpio devuelve el fallo.
 * @param strategy Strategy
 * @return *desc, error: ErrNoBuffers, o el fallo de escritura
 **/
 func (p *pool) victim(strategy Strategy) (*desc, error) {
+	for skipped := 0; ; skipped++ {
+		d, err := p.candidate(strategy)
+		if err != nil {
+			return nil, err
+		}
+		err = p.flush(d)
+		if err == nil {
+			return d, nil
+		}
+		p.unpin(d)
+		if !p.readOnly() || skipped >= len(p.descs) {
+			return nil, err
+		}
+	}
+}
+
+/**
+* candidate elige un búfer fijado (pins = 1) para reemplazar, sin escribirlo: del anillo si la estrategia es Ring y
+* el búfer de su lugar está libre y poco usado (uso ≤ 1, como GetBufferFromRing), si no del clock-sweep.
+* @param strategy Strategy
+* @return *desc, error: ErrNoBuffers, ErrClosed
+**/
+func (p *pool) candidate(strategy Strategy) (*desc, error) {
 	slot, id := -1, int32(-1)
 	if strategy == Ring {
 		slot, id = p.ring.advance()
@@ -68,11 +92,6 @@ func (p *pool) victim(strategy Strategy) (*desc, error) {
 		if slot >= 0 {
 			p.ring.set(slot, d.id)
 		}
-	}
-
-	if err := p.flush(d); err != nil {
-		p.unpin(d)
-		return nil, err
 	}
 	return d, nil
 }
